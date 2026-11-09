@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.compiler }} ${{ matrix.preset }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { compiler: gcc,   cc: gcc,   cxx: g++,     preset: debug }
+          - { compiler: gcc,   cc: gcc,   cxx: g++,     preset: release }
+          - { compiler: clang, cc: clang, cxx: clang++, preset: debug }
+          - { compiler: gcc,   cc: gcc,   cxx: g++,     preset: asan }
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxss-dev libxfixes-dev libxtst-dev libgl-dev libegl-dev libgles-dev xvfb
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DAGR_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Unit tests
+        run: ctest --preset ${{ matrix.preset }}
+      - name: Sandbox smoke test (headless)
+        working-directory: build/${{ matrix.preset }}
+        run: ./bin/agr_sandbox --headless --frames 120
+      - name: Sandbox smoke test (X11 window + OpenGL)
+        working-directory: build/${{ matrix.preset }}
+        run: xvfb-run -a ./bin/agr_sandbox --frames 120
+      - name: Benchmarks
+        if: matrix.preset == 'release'
+        run: ./build/release/bin/agr_benchmarks
+
+  windows:
+    name: Windows MSVC
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        run: cmake --preset release
+      - name: Build
+        run: cmake --build --preset release
+      - name: Unit tests
+        run: ctest --preset release

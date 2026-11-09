@@ -1,0 +1,11 @@
+agr_add_module(scene
+    SOURCES
+        src/Reflection.cpp
+        src/Components.cpp
+        src/Scene.cpp
+        src/SceneSerializer.cpp
+    PUBLIC_DEPS
+        agr::core
+        agr::math
+        agr::ecs
+        nlohmann_json::nlohmann_json)

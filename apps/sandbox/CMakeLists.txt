@@ -1,0 +1,6 @@
+add_executable(agr_sandbox main.cpp)
+target_link_libraries(agr_sandbox PRIVATE agr::platform agr::runtime agr::compiler_options)
+set_target_properties(agr_sandbox PROPERTIES FOLDER "Apps")
+if(AGR_BUILD_PLUGINS)
+    add_dependencies(agr_sandbox agr_plugin_spin)
+endif()

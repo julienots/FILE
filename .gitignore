@@ -1,0 +1,10 @@
+build/
+out/
+.cache/
+.vs/
+.vscode/
+.idea/
+*.user
+compile_commands.json
+user/
+imgui.ini

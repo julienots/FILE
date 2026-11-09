@@ -1,0 +1,11 @@
+agr_add_module(runtime
+    SOURCES
+        src/EngineConfig.cpp
+        src/Input.cpp
+        src/PluginManager.cpp
+        src/Engine.cpp
+    PUBLIC_DEPS
+        agr::core
+        agr::math
+        agr::ecs
+        agr::scene)
