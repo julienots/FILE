@@ -25,6 +25,7 @@ object Reminders {
     const val CHANNEL_ALARM = "alarm"
     private const val REQ_RITUAL = 41
     private const val REQ_ALARM = 42
+    private const val REQ_SNOOZE = 45
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -80,6 +81,19 @@ object Reminders {
             )
             am.setAlarmClock(AlarmManager.AlarmClockInfo(nextTrigger(snap.alarm.minutes, snap.alarm.days), show), alarmPi)
         }
+    }
+
+    /** Répétition du réveil dans [minutes]. */
+    fun snooze(context: Context, minutes: Int) {
+        if (!canScheduleExact(context)) return
+        val am = context.getSystemService(AlarmManager::class.java)
+        val pi = PendingIntent.getActivity(
+            context, REQ_SNOOZE,
+            Intent(context, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val at = System.currentTimeMillis() + minutes * 60_000L
+        am.setAlarmClock(AlarmManager.AlarmClockInfo(at, pi), pi)
     }
 
     fun canScheduleExact(context: Context): Boolean {
