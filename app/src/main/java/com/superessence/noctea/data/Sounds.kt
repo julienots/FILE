@@ -1,6 +1,6 @@
 package com.superessence.noctea.data
 
-/** Bibliothèque des ambiances sonores embarquées (assets/sounds/*.ogg, boucles parfaites). */
+/** Bibliothèque des ambiances sonores embarquées (dossier assets « sounds », boucles parfaites). */
 data class AmbientSound(val id: String, val name: String, val group: String, val description: String)
 
 object Sounds {

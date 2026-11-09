@@ -150,7 +150,7 @@ fun NocteaRoot(app: NocteaApp, activity: MainActivity, skipSplash: Boolean) {
                 } else if (!snap.settings.onboardingDone) {
                     OnboardingScreen()
                 } else {
-                    MainScaffold(activity)
+                    MainScaffold(activity.pendingRoute)
                 }
             }
         }
@@ -158,26 +158,26 @@ fun NocteaRoot(app: NocteaApp, activity: MainActivity, skipSplash: Boolean) {
 }
 
 @Composable
-private fun MainScaffold(activity: MainActivity) {
+internal fun MainScaffold(pendingRoute: androidx.compose.runtime.MutableState<String?>, start: String = Routes.HOME) {
     val nav = rememberNavController()
     val app = LocalApp.current
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val pending by activity.pendingRoute
+    val pending by pendingRoute
     LaunchedEffect(pending) {
         pending?.let {
             when (it) {
                 "player" -> if (app.engine.ui.value.playable != null) nav.navigate(Routes.PLAYER) { launchSingleTop = true }
                 "ritual" -> nav.navigate(Routes.RITUAL) { launchSingleTop = true }
             }
-            activity.pendingRoute.value = null
+            pendingRoute.value = null
         }
     }
     val showBars = route in tabs.map { it.route }
     CompositionLocalProvider(LocalNav provides nav) {
         Box(Modifier.fillMaxSize().background(LocalPalette.current.sky2)) {
             NavHost(
-                nav, startDestination = Routes.HOME, modifier = Modifier.fillMaxSize(),
+                nav, startDestination = start, modifier = Modifier.fillMaxSize(),
                 enterTransition = { fadeIn(tween(450)) + slideInVertically(tween(450)) { it / 24 } },
                 exitTransition = { fadeOut(tween(300)) },
                 popEnterTransition = { fadeIn(tween(400)) },
@@ -207,6 +207,7 @@ private fun MainScaffold(activity: MainActivity) {
             if (showBars) {
                 Column(Modifier.align(Alignment.BottomCenter)) {
                     MiniPlayer()
+                    Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(Color.Transparent, LocalPalette.current.sky1.copy(alpha = 0.97f)))))
                     BottomBar(route, nav)
                 }
             }
@@ -220,7 +221,7 @@ private fun BottomBar(route: String?, nav: NavHostController) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(p.sky2.copy(alpha = 0.0f), p.sky2.copy(alpha = 0.96f), p.sky2)))
+            .background(Brush.verticalGradient(listOf(p.sky1.copy(alpha = 0.97f), p.sky2)))
             .navigationBarsPadding()
             .padding(top = 6.dp, bottom = 6.dp),
     ) {

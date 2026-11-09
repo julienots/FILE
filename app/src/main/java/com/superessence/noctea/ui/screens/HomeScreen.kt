@@ -102,8 +102,8 @@ fun HomeScreen() {
             }
             // ------------------------------------------------ héros
             item {
-                Box(Modifier.fillMaxWidth().height(300.dp)) {
-                    MoonMark(210.dp, Modifier.align(Alignment.TopEnd).padding(end = 4.dp).graphicsLayer { translationY = float })
+                Box(Modifier.fillMaxWidth().height(330.dp)) {
+                    MoonMark(165.dp, Modifier.align(Alignment.TopEnd).padding(end = 12.dp).graphicsLayer { translationY = float })
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp)) {
                         Text(Discovery.greeting(hour, snap.settings.userName), style = MaterialTheme.typography.displayMedium)
                         Spacer(Modifier.height(6.dp))
@@ -170,11 +170,10 @@ fun HomeScreen() {
             // ------------------------------------------------ rituel + mixeur + aléatoire
             item {
                 Spacer(Modifier.height(22.dp))
-                Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QuickTile("Mon rituel", "Ce soir à ${"%02d:%02d".format(snap.ritual.bedtimeMinutes / 60, snap.ritual.bedtimeMinutes % 60)}", Icons.Filled.Bedtime, Modifier.weight(1f)) { nav.navigate(Routes.RITUAL) }
-                    QuickTile("Mixeur nocturne", "Compose ton ambiance", Icons.Filled.GraphicEq, Modifier.weight(1f)) { nav.navigate(Routes.MIXER) }
-                }
-                Spacer(Modifier.height(12.dp))
+                QuickTile("Mon rituel du soir", "Coucher prévu à ${"%02d:%02d".format(snap.ritual.bedtimeMinutes / 60, snap.ritual.bedtimeMinutes % 60)} · ${snap.ritual.steps.size} étapes", Icons.Filled.Bedtime, Modifier.padding(horizontal = 20.dp).fillMaxWidth()) { nav.navigate(Routes.RITUAL) }
+                Spacer(Modifier.height(10.dp))
+                QuickTile("Mixeur nocturne", "Compose ton propre environnement sonore", Icons.Filled.GraphicEq, Modifier.padding(horizontal = 20.dp).fillMaxWidth()) { nav.navigate(Routes.MIXER) }
+                Spacer(Modifier.height(10.dp))
                 QuickTile("Méditation aléatoire", "Laisse la nuit choisir pour toi", Icons.Filled.Shuffle, Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
                     playTrack(app, nav, catalog.tracks.random().id)
                 }
