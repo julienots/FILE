@@ -8,6 +8,10 @@
 
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/render/SpriteSheet.hpp"
+#include "agr/twod/Particles2D.hpp"
+#include "agr/twod/SpriteAnimator.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 namespace agr::editor {
 
@@ -127,7 +131,7 @@ Edit drawField(EditorShared& s, const FieldInfo& f, void* comp, std::unordered_m
                     ImGui::SameLine();
                 }
                 ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::InputTextWithHint("##v", "Glisser une image ici", &str);
+                ImGui::InputTextWithHint("##v", "Glisser un asset ici", &str);
                 e.track();
                 if (ImGui::BeginDragDropTarget()) {
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
@@ -162,6 +166,9 @@ Edit drawField(EditorShared& s, const FieldInfo& f, void* comp, std::unordered_m
             }
             break;
         }
+        case FieldType::IntArray:
+            ImGui::TextDisabled("%zu valeurs", f.ref<std::vector<i32>>(comp).size());
+            break;
         case FieldType::Enum: {
             i32& v = f.ref<i32>(comp);
             const char* current = "?";
@@ -182,6 +189,186 @@ Edit drawField(EditorShared& s, const FieldInfo& f, void* comp, std::unordered_m
     ImGui::EndDisabled();
     ImGui::PopID();
     return e;
+}
+
+/// Sheet referenced by a component, or a message explaining why there is none.
+const SpriteSheet* sheetOrMessage(EditorShared& s, const std::string& uri) {
+    if (uri.empty()) return nullptr;
+    SpriteSheetLibrary* lib = s.sheets();
+    const SpriteSheet* sheet = lib ? lib->get(uri) : nullptr;
+    if (!sheet) {
+        ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kWarning));
+        ImGui::TextWrapped("Feuille de sprites introuvable ou invalide : %s (détails dans la console)", uri.c_str());
+        ImGui::PopStyleColor();
+    }
+    return sheet;
+}
+
+/// One frame of a sheet as an ImGui image (UV rectangle of the sheet texture).
+void frameImage(EditorShared& s, const SpriteSheet& sheet, u32 frame, float size) {
+    const math::Vec4 uv = sheet.uv(frame);
+    const SpriteFrame& f = sheet.frames[frame];
+    const float aspect = f.h ? static_cast<float>(f.w) / static_cast<float>(f.h) : 1.0f;
+    const ImVec2 sz = aspect >= 1.0f ? ImVec2{size, size / aspect} : ImVec2{size * aspect, size};
+    ImGui::Image(ImTextureRef(s.thumbnail(sheet.texture)), sz, {uv.x, uv.y}, {uv.z, uv.w});
+}
+
+/// Extra tools under the reflected fields of 2D components. Returns the edit made.
+Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, ecs::Entity e) {
+    Edit edit;
+    Scene& scene = s.ctx.scene();
+    auto& reg = scene.registry();
+    if (info.name == "SpriteRenderer") {
+        auto& sr = *static_cast<SpriteRendererComponent*>(comp);
+        const SpriteSheet* sheet = sheetOrMessage(s, sr.sheet);
+        if (!sheet) return edit;
+        ImGui::PushID("spriteTools");
+        if (sr.frame >= 0 && sheet->validFrame(sr.frame)) {
+            frameImage(s, *sheet, static_cast<u32>(sr.frame), ImGui::GetFrameHeight() * 2.5f);
+            ImGui::SameLine();
+        }
+        ImGui::BeginGroup();
+        const std::string current = sheet->validFrame(sr.frame) ? sheet->frames[static_cast<u32>(sr.frame)].name : std::string("(aucune)");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##frame", current.c_str(), ImGuiComboFlags_HeightLarge)) {
+            for (u32 i = 0; i < sheet->frames.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                const bool sel = static_cast<i32>(i) == sr.frame;
+                if (ImGui::Selectable("##f", sel, 0, {0, ImGui::GetFrameHeight()})) {
+                    sr.frame = static_cast<i32>(i);
+                    edit.changed = edit.committed = true;
+                }
+                ImGui::SameLine();
+                frameImage(s, *sheet, i, ImGui::GetFrameHeight());
+                ImGui::SameLine();
+                ImGui::TextUnformatted(sheet->frames[i].name.c_str());
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Taille native") && sheet->validFrame(sr.frame)) {
+            const SpriteFrame& f = sheet->frames[static_cast<u32>(sr.frame)];
+            sr.size = {static_cast<float>(f.w) / sheet->pixelsPerUnit, static_cast<float>(f.h) / sheet->pixelsPerUnit};
+            edit.changed = edit.committed = true;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+            ImGui::SetTooltip("Taille = pixels de la frame / pixels par unité de la feuille (%.0f)", sheet->pixelsPerUnit);
+        ImGui::SameLine();
+        ImGui::TextDisabled("%zu frames, %zu clips", sheet->frames.size(), sheet->clips.size());
+        ImGui::EndGroup();
+        ImGui::PopID();
+    } else if (info.name == "SpriteAnimator") {
+        auto& anim = *static_cast<SpriteAnimatorComponent*>(comp);
+        const auto* sr = reg.tryGet<SpriteRendererComponent>(e);
+        if (!sr || sr->sheet.empty()) {
+            ImGui::TextColored(palette::toVec4(palette::kWarning), "Nécessite un SpriteRenderer avec une feuille de sprites.");
+            return edit;
+        }
+        const SpriteSheet* sheet = sheetOrMessage(s, sr->sheet);
+        if (!sheet) return edit;
+        ImGui::PushID("animTools");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##clip", anim.clip.empty() ? "(choisir un clip)" : anim.clip.c_str())) {
+            for (const SpriteClip& c : sheet->clips) {
+                char label[160];
+                std::snprintf(label, sizeof label, "%s  (%zu frames, %.0f i/s%s)", c.name.c_str(), c.frames.size(), c.fps, c.loop ? ", boucle" : "");
+                if (ImGui::Selectable(label, c.name == anim.clip)) {
+                    anim.clip = c.name;
+                    edit.changed = edit.committed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (!anim.clip.empty() && !sheet->findClip(anim.clip))
+            ImGui::TextColored(palette::toVec4(palette::kWarning), "Clip « %s » absent de la feuille.", anim.clip.c_str());
+        if (sheet->clips.empty()) ImGui::TextDisabled("Cette feuille ne définit aucun clip (champ \"clips\" du .agrsheet).");
+        ImGui::TextDisabled("L'animation se joue en mode Jeu.");
+        ImGui::PopID();
+    } else if (info.name == "Tilemap") {
+        auto& tm = *static_cast<TilemapComponent*>(comp);
+        ImGui::PushID("tilemapTools");
+        u32 painted = 0;
+        for (i32 t : tm.tiles) painted += t >= 0 ? 1u : 0u;
+        ImGui::TextDisabled("%u x %u cellules, %u peintes", tm.width, tm.height, painted);
+        const SpriteSheet* sheet = sheetOrMessage(s, tm.tileset);
+        if (!sheet) {
+            if (tm.tileset.empty()) ImGui::TextDisabled("Déposez une feuille (.agrsheet) dans « Tileset » pour peindre.");
+            ImGui::PopID();
+            return edit;
+        }
+        TilemapBrush& brush = s.brush;
+        const bool editMode = s.ctx.playState() == PlayState::Edit;
+        ImGui::BeginDisabled(!editMode);
+        const bool wasActive = brush.active;  // style pushes must match even if the button toggles it
+        if (wasActive) {
+            ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kAmber));
+            ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kGraphite950));
+        }
+        if (ImGui::Button(brush.active ? "Arrêter de peindre (Échap)" : "Peindre dans la vue", {-FLT_MIN, 0})) {
+            brush.active = !brush.active;
+            s.focusViewport = brush.active;
+        }
+        if (wasActive) ImGui::PopStyleColor(2);
+        ImGui::EndDisabled();
+        struct ToolDef {
+            TilemapBrush::Tool tool;
+            const char* label;
+            const char* tip;
+        };
+        static const ToolDef tools[] = {{TilemapBrush::Tool::Paint, "Pinceau", "Peindre (glisser pour tracer) - B"},
+                                        {TilemapBrush::Tool::Erase, "Gomme", "Effacer - E"},
+                                        {TilemapBrush::Tool::Rect, "Rectangle", "Remplir un rectangle (glisser) - U"},
+                                        {TilemapBrush::Tool::Fill, "Remplissage", "Remplir la zone contiguë - G"},
+                                        {TilemapBrush::Tool::Pick, "Pipette", "Prendre la tuile cliquée - I"}};
+        for (const ToolDef& t : tools) {
+            const bool sel = brush.tool == t.tool;
+            if (sel) ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kSelect));
+            if (ImGui::SmallButton(t.label)) {
+                brush.tool = t.tool;
+                if (editMode) brush.active = true;
+            }
+            if (sel) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", t.tip);
+            ImGui::SameLine();
+        }
+        ImGui::NewLine();
+        // Palette: every frame of the tileset; the selected one is outlined in amber.
+        const float cell = 34.0f;
+        const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / (cell + ImGui::GetStyle().ItemSpacing.x)));
+        ImGui::BeginChild("##palette", {0, std::min(220.0f, (cell + 6.0f) * std::ceil(static_cast<float>(sheet->frames.size()) / static_cast<float>(columns)) + 8.0f)},
+                          ImGuiChildFlags_Borders);
+        for (u32 i = 0; i < sheet->frames.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (i % static_cast<u32>(columns)) ImGui::SameLine();
+            const math::Vec4 uv = sheet->uv(i);
+            const bool sel = brush.tile == static_cast<i32>(i);
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+            if (ImGui::ImageButton("##t", ImTextureRef(s.thumbnail(sheet->texture)), {cell, cell}, {uv.x, uv.y}, {uv.z, uv.w})) {
+                brush.tile = static_cast<i32>(i);
+                if (brush.tool == TilemapBrush::Tool::Erase || brush.tool == TilemapBrush::Tool::Pick) brush.tool = TilemapBrush::Tool::Paint;
+                if (editMode) brush.active = true;
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s (%u)", sheet->frames[i].name.c_str(), i);
+            if (sel) {
+                const ImVec2 q = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRect(p, q, palette::kAmber, 3.0f, 2.0f);
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+        if (ImGui::Button("Tout effacer") && painted > 0) {
+            std::fill(tm.tiles.begin(), tm.tiles.end(), -1);
+            edit.changed = edit.committed = true;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Annulable avec Ctrl+Z");
+        ImGui::PopID();
+    } else if (info.name == "ParticleEmitter2D") {
+        const auto* state = reg.tryGet<ParticleState2DComponent>(e);
+        ImGui::TextDisabled("%zu particules actives", state ? state->particles.size() : usize{0});
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Redémarrer")) restartParticles2D(scene, e);
+    }
+    return edit;
 }
 
 bool beginPropertyTable(const char* id) {
@@ -271,6 +458,7 @@ void InspectorPanel::draw(EditorShared& s) {
             for (const FieldInfo& f : info.fields) total.merge(drawField(s, f, comp, m_eulerCache, id.value() ^ info.id));
             ImGui::EndTable();
         }
+        if (open && !remove) total.merge(drawComponentTools(s, info, comp, e));
         ImGui::PopID();
         if (remove) s.ctx.removeComponent(e, info.name);
         return remove;

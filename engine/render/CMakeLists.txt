@@ -2,6 +2,7 @@ agr_add_module(render
     SOURCES
         src/RenderComponents.cpp
         src/Primitives.cpp
+        src/SpriteSheet.cpp
         src/GraphicsProfile.cpp
         src/Renderer.cpp
         src/RenderPlugin.cpp

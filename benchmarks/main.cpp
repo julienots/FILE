@@ -12,8 +12,12 @@
 #include "agr/core/Time.hpp"
 #include "agr/ecs/Registry.hpp"
 #include "agr/math/Math.hpp"
+#include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Scene.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/twod/Atlas.hpp"
+#include "agr/twod/Particles2D.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 using namespace agr;
 
@@ -137,6 +141,46 @@ int main() {
             (void)SceneSerializer::fromString(loaded, text);
         });
         std::printf("    (scene JSON size: %.1f MB)\n", static_cast<double>(text.size()) / (1024.0 * 1024.0));
+    }
+
+    // -------------------------------------------------------------- 2D
+    {
+        registerRenderComponents();
+        Scene scene;
+        const auto e = scene.createEntity("Emitter");
+        auto& em = scene.registry().emplace<ParticleEmitter2DComponent>(e);
+        em.rate = 0.0f;
+        em.burst = em.maxParticles = 10000;
+        em.lifetimeMin = em.lifetimeMax = 1000.0f;
+        em.drag = 0.5f;
+        em.seed = 3;
+        scene.updateTransforms();
+        simulateParticles2D(scene, 0.016f);
+        bench("2d: simulate 10k particles (one step)", 10000, 50, [&] { simulateParticles2D(scene, 0.016f); });
+
+        Scene maps;
+        const auto m = maps.createEntity("Map");
+        auto& tm = maps.registry().emplace<TilemapComponent>(m);
+        tm.width = tm.height = 1000;
+        tilemapEnsureLayout(tm);
+        for (u32 y = 0; y < 1000; ++y)  // ground-like data: long runs of equal tiles
+            for (u32 x = 0; x < 1000; ++x) tm.tiles[y * 1000 + x] = y < 300 ? 1 : y == 300 ? 0 : (x / 40) % 7 == 0 && y < 305 ? 5 : -1;
+        std::string text;
+        bench("2d: serialize 1000x1000 tilemap (RLE)", 1000000, 5, [&] { text = SceneSerializer::toString(maps, -1); });
+        bench("2d: load 1000x1000 tilemap (RLE)", 1000000, 5, [&] {
+            Scene loaded;
+            (void)SceneSerializer::fromString(loaded, text);
+        });
+        std::printf("    (tilemap scene JSON size: %.1f KB)\n", static_cast<double>(text.size()) / 1024.0);
+
+        std::vector<AtlasInput> inputs(256);
+        for (usize i = 0; i < inputs.size(); ++i) {
+            inputs[i].name = std::to_string(i);
+            inputs[i].image.width = 16 + static_cast<u32>(i % 5) * 8;
+            inputs[i].image.height = 16 + static_cast<u32>(i % 3) * 8;
+            inputs[i].image.pixels.assign(static_cast<usize>(inputs[i].image.width) * inputs[i].image.height * 4, static_cast<u8>(i));
+        }
+        bench("2d: pack atlas of 256 images", 256, 10, [&] { (void)packAtlas(inputs); });
     }
     return 0;
 }

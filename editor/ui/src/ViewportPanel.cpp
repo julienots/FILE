@@ -9,6 +9,8 @@
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/render/SpriteSheet.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 namespace agr::editor {
 
@@ -200,7 +202,7 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
 
     // Selection bounds.
     for (ecs::Entity e : s.ctx.selection().entities(scene)) {
-        const math::Aabb b = worldBounds(scene, e);
+        const math::Aabb b = worldBounds(scene, e, s.sheets());
         if (!b.valid()) continue;
         Vec3 corners[8];
         for (int i = 0; i < 8; ++i) corners[i] = {(i & 1) ? b.max.x : b.min.x, (i & 2) ? b.max.y : b.min.y, (i & 4) ? b.max.z : b.min.z};
@@ -244,9 +246,12 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
         dl->AddRect(origin, {origin.x + size.x, origin.y + size.y}, s.ctx.playState() == PlayState::Playing ? palette::kAmber : palette::kTextMuted, 0.0f, 3.0f);
     if (Renderer* r = s.renderer()) {
         const auto& st = r->stats();
-        char text[160];
-        std::snprintf(text, sizeof text, "%u draws  %llu tris  %u+%u visibles  %u éliminés", st.drawCalls,
-                      static_cast<unsigned long long>(st.triangles), st.meshesVisible, st.spritesVisible, st.meshesCulled + st.spritesCulled);
+        char text[224];
+        int n = std::snprintf(text, sizeof text, "%u draws  %llu tris  %u+%u visibles  %u éliminés", st.drawCalls,
+                              static_cast<unsigned long long>(st.triangles), st.meshesVisible, st.spritesVisible, st.meshesCulled + st.spritesCulled);
+        if (n > 0 && (st.tilesVisible || st.particlesVisible || st.lights2D))
+            std::snprintf(text + n, sizeof text - static_cast<usize>(n), "  |  %u tuiles  %u particules  %u lumières 2D", st.tilesVisible,
+                          st.particlesVisible, st.lights2D);
         const ImVec2 ts = ImGui::CalcTextSize(text);
         dl->AddText({origin.x + size.x - ts.x - 10, origin.y + size.y - ts.y - 8}, IM_COL32(230, 228, 223, 150), text);
     }
@@ -315,7 +320,7 @@ void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     if (hit.isNull()) {
         const float aspect = size.x / std::max(size.y, 1.0f);
         const ImVec2 uv{(io.MousePos.x - origin.x) / size.x, (io.MousePos.y - origin.y) / size.y};
-        if (auto h = pick(scene, rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), uv))) hit = h->entity;
+        if (auto h = pick(scene, rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), uv), s.sheets())) hit = h->entity;
     }
     Selection& sel = s.ctx.selection();
     if (hit.isNull()) {
@@ -327,11 +332,119 @@ void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     }
 }
 
+bool ViewportPanel::handleTilemapPainting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered) {
+    TilemapBrush& brush = s.brush;
+    Scene& scene = s.ctx.scene();
+    const ecs::Entity e = scene.findByUuid(s.ctx.selection().primary());
+    TilemapComponent* tm = brush.active && !e.isNull() ? scene.registry().tryGet<TilemapComponent>(e) : nullptr;
+    if (!tm || s.ctx.playState() != PlayState::Edit) {
+        brush.active = false;  // selection changed or play mode: painting stops
+        m_painting = false;
+        return false;
+    }
+    ImGuiIO& io = ImGui::GetIO();
+    if (hovered && !io.WantTextInput && !io.KeyCtrl) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            brush.active = false;
+            m_painting = false;
+            return false;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_B, false)) brush.tool = TilemapBrush::Tool::Paint;
+        if (ImGui::IsKeyPressed(ImGuiKey_E, false)) brush.tool = TilemapBrush::Tool::Erase;
+        if (ImGui::IsKeyPressed(ImGuiKey_U, false)) brush.tool = TilemapBrush::Tool::Rect;
+        if (ImGui::IsKeyPressed(ImGuiKey_G, false)) brush.tool = TilemapBrush::Tool::Fill;
+        if (ImGui::IsKeyPressed(ImGuiKey_I, false)) brush.tool = TilemapBrush::Tool::Pick;
+    }
+    const Mat4 world = scene.registry().get<WorldTransformComponent>(e).matrix;
+    const float aspect = size.x / std::max(size.y, 1.0f);
+    const Mat4 vp = projectionGL(s, aspect) * viewMatrix(s);
+    const math::Ray ray = rayFromScreen(vp, {(io.MousePos.x - origin.x) / size.x, (io.MousePos.y - origin.y) / size.y});
+    const auto cell = tilemapCellAt(world, *tm, ray);
+    const i32 paintValue = brush.tool == TilemapBrush::Tool::Erase ? -1 : brush.tile;
+
+    // Outline of a cell range (inclusive) in the tilemap plane.
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto outline = [&](i32 x0, i32 y0, i32 x1, i32 y1, ImU32 color, float thickness) {
+        if (x0 > x1) std::swap(x0, x1);
+        if (y0 > y1) std::swap(y0, y1);
+        const float ax = static_cast<float>(x0) * tm->cellSize.x, ay = static_cast<float>(y0) * tm->cellSize.y;
+        const float bx = static_cast<float>(x1 + 1) * tm->cellSize.x, by = static_cast<float>(y1 + 1) * tm->cellSize.y;
+        ImVec2 p[4];
+        const Vec3 corners[4] = {{ax, ay, 0}, {bx, ay, 0}, {bx, by, 0}, {ax, by, 0}};
+        for (int i = 0; i < 4; ++i)
+            if (!project(vp, world.transformPoint(corners[i]), origin, size, p[i])) return;
+        dl->AddQuad(p[0], p[1], p[2], p[3], color, thickness);
+    };
+    outline(0, 0, static_cast<i32>(tm->width) - 1, static_cast<i32>(tm->height) - 1, IM_COL32(245, 165, 36, 110), 1.0f);
+    if (m_painting && brush.tool == TilemapBrush::Tool::Rect) outline(m_strokeStart.first, m_strokeStart.second, m_strokeLast.first, m_strokeLast.second, palette::kAmber, 2.0f);
+    else if (cell && hovered) outline(cell->first, cell->second, cell->first, cell->second,
+                                      brush.tool == TilemapBrush::Tool::Erase ? palette::kError : palette::kAmber, 2.0f);
+
+    const bool inside = cell && tilemapContains(*tm, cell->first, cell->second);
+    if (hovered && !io.KeyAlt && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && cell) {
+        switch (brush.tool) {
+            case TilemapBrush::Tool::Paint:
+            case TilemapBrush::Tool::Erase:
+            case TilemapBrush::Tool::Rect:
+                m_painting = true;
+                m_strokeChanged = brush.tool != TilemapBrush::Tool::Rect && tilemapSet(*tm, cell->first, cell->second, paintValue);
+                m_strokeStart = m_strokeLast = *cell;
+                break;
+            case TilemapBrush::Tool::Fill:
+                if (inside && tilemapFloodFill(*tm, cell->first, cell->second, paintValue) > 0) s.ctx.commit("Fill Tilemap");
+                break;
+            case TilemapBrush::Tool::Pick:
+                if (inside) {
+                    const i32 t = tm->tileAt(static_cast<u32>(cell->first), static_cast<u32>(cell->second));
+                    if (t >= 0) brush.tile = t;
+                    brush.tool = t >= 0 ? TilemapBrush::Tool::Paint : TilemapBrush::Tool::Erase;
+                }
+                break;
+        }
+    }
+    if (m_painting) {
+        if (cell && *cell != m_strokeLast) {
+            if (brush.tool != TilemapBrush::Tool::Rect) {
+                // Bresenham from the previous cell: fast drags leave no gaps.
+                i32 x = m_strokeLast.first, y = m_strokeLast.second;
+                const i32 dx = std::abs(cell->first - x), dy = -std::abs(cell->second - y);
+                const i32 sx = x < cell->first ? 1 : -1, sy = y < cell->second ? 1 : -1;
+                i32 err = dx + dy;
+                while (true) {
+                    m_strokeChanged |= tilemapSet(*tm, x, y, paintValue);
+                    if (x == cell->first && y == cell->second) break;
+                    const i32 e2 = 2 * err;
+                    if (e2 >= dy) { err += dy; x += sx; }
+                    if (e2 <= dx) { err += dx; y += sy; }
+                }
+            }
+            m_strokeLast = *cell;
+        }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (brush.tool == TilemapBrush::Tool::Rect)
+                m_strokeChanged = tilemapFillRect(*tm, m_strokeStart.first, m_strokeStart.second, m_strokeLast.first, m_strokeLast.second, paintValue) > 0;
+            if (m_strokeChanged) s.ctx.commit(brush.tool == TilemapBrush::Tool::Erase ? "Erase Tiles" : "Paint Tiles");
+            m_painting = false;
+        }
+    }
+
+    static const char* toolNames[] = {"Pinceau", "Gomme", "Rectangle", "Remplissage", "Pipette"};
+    char hint[160];
+    std::snprintf(hint, sizeof hint, "Peinture de tuiles : %s, tuile %d%s   (Échap pour quitter)", toolNames[static_cast<int>(brush.tool)], brush.tile,
+                  inside ? "" : "   - hors de la carte");
+    dl->AddText({origin.x + 12, origin.y + 40}, palette::kAmber, hint);
+    return true;
+}
+
 void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
     if (!ImGui::BeginDragDropTargetCustom(ImRect(origin, {origin.x + size.x, origin.y + size.y}), ImGui::GetID("##viewportDrop"))) return;
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
         const std::string uri = static_cast<const char*>(p->Data);
-        if (isImageFile(uri)) {
+        const bool sheetFile = uri.size() > 9 && uri.compare(uri.size() - 9, 9, ".agrsheet") == 0;
+        const SpriteSheet* sheet = sheetFile && s.sheets() ? s.sheets()->get(uri) : nullptr;
+        if (sheetFile && !sheet) {
+            s.notify("Feuille de sprites invalide : " + uri + " (voir la console)");
+        } else if (isImageFile(uri) || sheet) {
             const ImVec2 m = ImGui::GetIO().MousePos;
             const float aspect = size.x / std::max(size.y, 1.0f);
             const math::Ray ray = rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), {(m.x - origin.x) / size.x, (m.y - origin.y) / size.y});
@@ -340,9 +453,9 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
             if (auto h = flat ? std::nullopt : pick(s.ctx.scene(), ray)) pos = h->point;
             else if (float t = intersectPlane(ray, flat ? Vec3{0, 0, 1} : Vec3{0, 1, 0}, 0.0f); t >= 0.0f) pos = ray.at(t);
             if (!flat) pos.y += 0.5f;  // stand on the surface (sprites are 1 unit tall)
-            s.ctx.createSprite(uri, pos);
+            s.ctx.createSprite(uri, pos, {}, sheet);
         } else {
-            s.notify("Seules les images peuvent être déposées dans la scène pour l'instant");
+            s.notify("Seules les images et les feuilles de sprites peuvent être déposées dans la scène pour l'instant");
         }
     }
     ImGui::EndDragDropTarget();
@@ -377,12 +490,17 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
 
     handleCamera(s, time, hovered);
     drawOverlays(s, origin, size);
-    drawGizmo(s, origin, size);
-    handlePicking(s, origin, size);
+    const bool painting = handleTilemapPainting(s, origin, size, hovered);
+    if (!painting) {
+        drawGizmo(s, origin, size);
+        handlePicking(s, origin, size);
+    } else {
+        m_pressed = false;
+    }
     handleDrop(s, origin, size);
 
     // Keyboard: gizmo modes and focus (viewport hovered, not flying, not typing).
-    if (hovered && !m_flying && !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl) {
+    if (hovered && !painting && !m_flying && !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl) {
         if (ImGui::IsKeyPressed(ImGuiKey_W, false)) gizmoOp = GizmoOp::Translate;
         if (ImGui::IsKeyPressed(ImGuiKey_E, false)) gizmoOp = GizmoOp::Rotate;
         if (ImGui::IsKeyPressed(ImGuiKey_R, false)) gizmoOp = GizmoOp::Scale;

@@ -68,13 +68,12 @@ Result<Project> Project::create(const fs::path& folder, const ProjectSettings& s
     fs::create_directories(folder / "scenes", ec);
     if (ec) return makeError(Error::Code::IOError, "cannot create project folders: " + ec.message());
 
-    // Template textures (original AGR assets) so the startup scene is not empty.
+    // Template assets (original AGR art) so the startup scene is not empty. The whole
+    // template tree (textures/, 2d/, ...) is copied into the project's assets/ folder.
     if (fs::is_directory(templateAssetsDir, ec)) {
-        for (const auto& entry : fs::directory_iterator(templateAssetsDir, ec)) {
-            if (!entry.is_regular_file()) continue;
-            fs::copy_file(entry.path(), folder / "assets" / "textures" / entry.path().filename(),
-                          fs::copy_options::overwrite_existing, ec);
-        }
+        fs::copy(templateAssetsDir, folder / "assets",
+                 fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+        if (ec) return makeError(Error::Code::IOError, "cannot copy template assets: " + ec.message());
     } else {
         AGR_LOG_WARN("Editor", "template assets not found in '{}'", templateAssetsDir.string());
     }

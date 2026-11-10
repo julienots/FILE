@@ -9,12 +9,19 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/runtime/Engine.hpp"
 
+namespace agr {
+struct SpriteSheet;
+}
+
 namespace agr::editor {
 
 enum class PlayState : u8 { Edit, Playing, Paused };
 
 /// What "Create" menus can add.
-enum class CreateKind : u8 { Empty, Cube, Sphere, Plane, Quad, Sprite, Camera, DirectionalLight, Environment };
+enum class CreateKind : u8 {
+    Empty, Cube, Sphere, Plane, Quad, Sprite, Camera, DirectionalLight, Environment,
+    Tilemap, Particles2D, Light2D, ParallaxLayer
+};
 const char* createKindName(CreateKind kind);
 
 /// The editing session: open project, current scene, selection, undo history and
@@ -52,8 +59,10 @@ public:
     bool redo();
 
     ecs::Entity create(CreateKind kind, ecs::Entity parent = {});
-    /// Sprite showing an image asset, placed at `position`.
-    ecs::Entity createSprite(const std::string& textureUri, math::Vec3 position, ecs::Entity parent = {});
+    /// Sprite showing an image asset, placed at `position`. With `sheet` (the loaded
+    /// .agrsheet `uri` points to), the sprite shows its first frame at native size and
+    /// gets a SpriteAnimator playing the first clip when the sheet has clips.
+    ecs::Entity createSprite(const std::string& uri, math::Vec3 position, ecs::Entity parent = {}, const SpriteSheet* sheet = nullptr);
     void deleteSelection();
     void duplicateSelection();
     /// Creates an empty "Group" at the center of the selection and moves the selected

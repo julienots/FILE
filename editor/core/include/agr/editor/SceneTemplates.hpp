@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+
 #include "agr/editor/Project.hpp"
 #include "agr/scene/Scene.hpp"
 
@@ -8,6 +10,10 @@ namespace agr::editor {
 /// playable as is: a camera, lighting where relevant and visible content.
 void buildSceneTemplate(Scene& scene, SceneTemplate tmpl);
 SceneTemplate defaultTemplateFor(ProjectMode mode);
+/// Templates offered for a project mode (the default first).
+std::vector<SceneTemplate> templatesFor(ProjectMode mode);
+/// Every template, for menus and tests.
+std::vector<SceneTemplate> allTemplates();
 const char* templateName(SceneTemplate tmpl);
 const char* templateDescription(SceneTemplate tmpl);
 

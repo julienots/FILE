@@ -23,7 +23,7 @@
         │                                     │
         ├──► agr::platform (SDL3) ──┐         │
         │                           ▼         │
-        └──► agr::render ──► agr::runtime ◄───┘
+        └──► agr::twod ──► agr::render ──► agr::runtime ◄───┘
                │    │              │
                │    └──► agr::assets ──► stb_image
                │              │
@@ -45,13 +45,14 @@
 | `agr::runtime` | statique | `Engine` (services + boucle + registre de services), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
 | `agr::rhi` | statique | Interface GPU neutre + backends Vulkan 1.1 et OpenGL 3.3 / OpenGL ES 3.0, traducteur du dialecte de shaders |
 | `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud) |
-| `agr::render` | statique | Composants de rendu, primitives, profils graphiques, `Renderer` forward, `RenderPlugin` |
+| `agr::render` | statique | Composants de rendu (dont 2D : tilemaps, lumières 2D, parallaxe, émetteurs de particules), primitives, profils graphiques, feuilles de sprites, `Renderer` forward, `RenderPlugin` |
+| `agr::twod` | statique | Systèmes 2D : animation image par image, simulation des particules, édition de tilemaps, atlas ; `TwoDPlugin` ([2D.md](2D.md)) |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 
 Détails du rendu : [RENDERING.md](RENDERING.md).
 
 Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
-`agr::ui`, `agr::animation`, puis l'application `agr_editor`.
+`agr::ui`, `agr::animation`.
 
 ## Boucle principale
 

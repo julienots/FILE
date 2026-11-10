@@ -7,14 +7,19 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phases 1 et 2 terminées, phase 3 (éditeur) fondations terminées.**
-> Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel. Les systèmes 2D avancés,
-> la 3D complète, la physique, le scripting et l'export Android sont les phases suivantes.
+> **État actuel : phases 1 et 2 terminées, phase 3 (éditeur) fondations terminées, phase 4 (2D) cœur terminé.**
+> Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel, systèmes 2D (feuilles de
+> sprites, animation, tilemaps peintes dans l'éditeur, parallaxe, lumières et particules 2D, écrans mobiles).
+> La 3D complète, la physique, le scripting et l'export Android sont les phases suivantes.
 > L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Éditeur AGR](docs/images/editor.png)
 
 *L'éditeur AGR (Vulkan). Capture produite par le test automatisé de bout en bout.*
+
+![Vitrine 2D](docs/images/editor_2d.png)
+
+*Le modèle « Vitrine 2D » pendant la peinture de tuiles (même test automatisé). Toutes les images sont originales.*
 
 ## Ce qui fonctionne aujourd'hui
 
@@ -34,10 +39,13 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
   automatiquement, temps GPU, captures d'écran ([détails](docs/RENDERING.md)).
 - Un **gestionnaire de ressources** : chargement asynchrone, cache, budget d'upload par image,
   rechargement à chaud.
+- Des **systèmes 2D** ([guide](docs/2D.md)) : feuilles de sprites et atlas, animation image par image,
+  tilemaps (rendu limité à l'écran, enregistrement compressé) peintes directement dans l'éditeur,
+  parallaxe, lumières 2D, particules 2D, modes d'échelle pour tous les formats d'écran.
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **82 tests unitaires, 16 tests GPU au pixel près et un test de bout en bout de l'éditeur**, tous
+- **94 tests unitaires, 22 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D et 2D), tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
@@ -108,11 +116,13 @@ engine/
   runtime/    moteur, boucle, entrées, configuration, gestionnaire de plugins
   rhi/        interface GPU neutre + backends Vulkan et OpenGL / OpenGL ES
   assets/     images, gestionnaire de ressources
-  render/     composants de rendu, renderer, profils graphiques
+  render/     composants de rendu, renderer, profils graphiques, feuilles de sprites
+  twod/       systèmes 2D : animation, particules, édition de tilemaps, atlas
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
-editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices)
+editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices, assets des modèles)
 plugins/spin/ plugin dynamique d'exemple
-apps/sandbox/ application de démonstration (scène 3D + 2D, assets originaux)
+apps/sandbox/ application de démonstration (scène 3D + 2D)
+tools/        comparaison d'images, suppressions LSan, génération de l'art original des modèles
 tests/        tests unitaires ; tests/gpu : tests de rendu au pixel près
 benchmarks/   micro-benchmarks CPU ; benchmarks/gpu : benchmarks du renderer
 docs/         architecture, ADR, feuille de route, identité visuelle
@@ -123,6 +133,7 @@ docs/         architecture, ADR, feuille de route, identité visuelle
 - [Architecture](docs/ARCHITECTURE.md)
 - [Rendu et ressources](docs/RENDERING.md)
 - [Éditeur](docs/EDITOR.md)
+- [Systèmes 2D](docs/2D.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

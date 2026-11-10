@@ -27,6 +27,21 @@ json writeField(const Scene& scene, const FieldInfo& f, void* comp) {
             const Entity target = f.ref<Entity>(comp);
             return scene.valid(target) ? json(scene.uuidOf(target).toString()) : json(nullptr);
         }
+        case FieldType::IntArray: {
+            // Run-length encoded as [value, count, value, count, ...]: tile maps are mostly runs.
+            const auto& v = f.ref<std::vector<i32>>(comp);
+            json rle = json::array();
+            for (usize i = 0; i < v.size();) {
+                usize n = 1;
+                while (i + n < v.size() && v[i + n] == v[i]) ++n;
+                rle.push_back(v[i]);
+                rle.push_back(n);
+                i += n;
+            }
+            json out = json::object();
+            out["rle"] = std::move(rle);
+            return out;
+        }
         case FieldType::Enum: {
             const i32 value = f.ref<i32>(comp);
             for (const auto& e : f.enumEntries)
@@ -75,6 +90,27 @@ bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs:
             if (!j.is_string()) return false;
             refs.push_back({owner, cid, &f, Uuid::fromString(j.get<std::string>())});
             return true;
+        case FieldType::IntArray: {
+            std::vector<i32> out;
+            if (j.is_array()) {  // plain array also accepted (hand-written files)
+                for (const auto& x : j) {
+                    if (!x.is_number_integer()) return false;
+                    out.push_back(x.get<i32>());
+                }
+            } else if (j.is_object() && j.contains("rle") && j["rle"].is_array() && j["rle"].size() % 2 == 0) {
+                const json& r = j["rle"];
+                for (usize i = 0; i < r.size(); i += 2) {
+                    if (!r[i].is_number_integer() || !r[i + 1].is_number_unsigned()) return false;
+                    const u64 count = r[i + 1].get<u64>();
+                    if (count > (1u << 26) || out.size() + count > (1u << 26)) return false;  // 64 M cells: corrupt file guard
+                    out.insert(out.end(), static_cast<usize>(count), r[i].get<i32>());
+                }
+            } else {
+                return false;
+            }
+            f.ref<std::vector<i32>>(comp) = std::move(out);
+            return true;
+        }
         case FieldType::Enum:
             if (j.is_number_integer()) { f.ref<i32>(comp) = j.get<i32>(); return true; }
             if (j.is_string()) {

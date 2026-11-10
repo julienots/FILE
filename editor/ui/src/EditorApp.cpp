@@ -15,6 +15,7 @@
 #include "agr/editor/SceneTemplates.hpp"
 #include "agr/runtime/Engine.hpp"
 #include "agr/runtime/Events.hpp"
+#include "agr/twod/SpriteAnimator.hpp"
 
 namespace agr::editor {
 
@@ -77,6 +78,8 @@ Status EditorApp::onStart(Engine& engine) {
     m_shared = std::make_unique<EditorShared>(EditorShared{engine, *m_ctx});
     m_shared->platform = m_platform;
     m_shared->render = render;
+    m_shared->twod = engine.service<TwoDPlugin>();
+    if (m_shared->twod) m_shared->twod->setPreviewWhilePaused(true);  // particles animate in edit mode
 
     // Settings live in the per-user preference folder.
     if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
@@ -117,7 +120,7 @@ Status EditorApp::onStart(Engine& engine) {
         ProjectSettings settings;
         settings.name = "Smoke Test";
         auto project = Project::create(fs::path(m_options.smokeTestDir) / "SmokeProject", settings, SceneTemplate::Empty3D,
-                                       m_options.resourcesDir + "/templates/textures");
+                                       m_options.resourcesDir + "/templates/assets");
         if (!project) return project.error();
         openProject(project.value().root().string());
     } else if (!m_options.projectPath.empty()) {
@@ -169,7 +172,7 @@ void EditorApp::createProject() {
     settings.targetDesktop = w.desktop;
     settings.targetAndroid = w.android;
     const fs::path folder = fs::path(w.location) / w.name;
-    auto project = Project::create(folder, settings, defaultTemplateFor(w.mode), m_options.resourcesDir + "/templates/textures");
+    auto project = Project::create(folder, settings, w.tmpl, m_options.resourcesDir + "/templates/assets");
     if (!project) {
         w.error = project.error().message;
         return;
@@ -202,6 +205,7 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
         m_shared = std::make_unique<EditorShared>(EditorShared{*m_engine, *m_ctx});
         m_shared->platform = m_platform;
         m_shared->render = render;
+        m_shared->twod = m_engine->service<TwoDPlugin>();
         m_shared->fonts = fonts;
     }
     m_viewport.beginFrame(*m_shared);
@@ -349,7 +353,10 @@ void EditorApp::drawHub() {
         ImGui::PushID(static_cast<int>(m));
         const bool sel = w.mode == m;
         const ImVec2 p = ImGui::GetCursorScreenPos();
-        if (ImGui::InvisibleButton("##card", {cardW, 96})) w.mode = m;
+        if (ImGui::InvisibleButton("##card", {cardW, 96})) {
+            w.mode = m;
+            w.tmpl = defaultTemplateFor(m);
+        }
         ImDrawList* cdl = ImGui::GetWindowDrawList();
         cdl->AddRectFilled(p, {p.x + cardW, p.y + 96}, ImGui::IsItemHovered() ? palette::kGraphite700 : palette::kGraphite800, 6.0f);
         if (sel) cdl->AddRect(p, {p.x + cardW, p.y + 96}, palette::kAmber, 6.0f, 2.0f);
@@ -361,9 +368,9 @@ void EditorApp::drawHub() {
     ImGui::NewLine();
     ImGui::Spacing();
     ImGui::TextDisabled("2. Modèle");
-    const SceneTemplate tmpl = defaultTemplateFor(w.mode);
-    ImGui::Selectable(templateName(tmpl), true);
-    ImGui::TextWrapped("%s", templateDescription(tmpl));
+    for (SceneTemplate t : templatesFor(w.mode))
+        if (ImGui::Selectable(templateName(t), w.tmpl == t)) w.tmpl = t;
+    ImGui::TextWrapped("%s", templateDescription(w.tmpl));
     ImGui::TextDisabled("Les modèles de jeux complets (plateforme, RPG, tower defense, course...) arrivent en phase 9.");
     ImGui::Spacing();
     ImGui::TextDisabled("3. Nom et emplacement");
@@ -485,7 +492,7 @@ void EditorApp::drawMenuBar() {
     EditorContext& ctx = *m_ctx;
     if (ImGui::BeginMenu("Fichier")) {
         if (ImGui::BeginMenu("Nouvelle scène")) {
-            for (SceneTemplate t : {SceneTemplate::Empty2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D})
+            for (SceneTemplate t : allTemplates())
                 if (ImGui::MenuItem(templateName(t))) m_shared->runGuarded([this, t] { m_ctx->newScene(t); });
             ImGui::EndMenu();
         }
@@ -524,12 +531,17 @@ void EditorApp::drawMenuBar() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Créer")) {
+        // nullptr label = separator
         static const std::pair<const char*, CreateKind> items[] = {
-            {"Entité vide", CreateKind::Empty}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere}, {"Plan", CreateKind::Plane},
-            {"Quad", CreateKind::Quad}, {"Sprite", CreateKind::Sprite}, {"Caméra", CreateKind::Camera},
+            {"Entité vide", CreateKind::Empty}, {nullptr, {}}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere},
+            {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}, {nullptr, {}}, {"Sprite", CreateKind::Sprite},
+            {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
+            {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Environnement", CreateKind::Environment}};
-        for (const auto& [label, kind] : items)
-            if (ImGui::MenuItem(label)) ctx.create(kind);
+        for (const auto& [label, kind] : items) {
+            if (!label) ImGui::Separator();
+            else if (ImGui::MenuItem(label)) ctx.create(kind);
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Affichage")) {
@@ -831,6 +843,66 @@ void EditorApp::smokeTest(const FrameTime&) {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor.png", ec), "editor screenshot written");
             check(!ctx.dirty(), "no unsaved changes after save");
+            // ---- 2D: showcase template, tile painting with real mouse events, animation in play mode.
+            ctx.newScene(SceneTemplate::Showcase2D);  // replaces the scene: `scene` is stale from here
+            Scene& showcase = ctx.scene();
+            ctx.camera().mode2D = true;
+            ctx.camera().position2D = {0.0f, 0.0f};
+            ctx.camera().orthoSize = 6.0f;
+            const auto ground = showcase.findByName("Ground");
+            check(!ground.isNull() && showcase.registry().has<TilemapComponent>(ground), "showcase tilemap created");
+            ctx.selection().set(showcase.uuidOf(ground));
+            m_shared->brush.active = true;
+            m_shared->brush.tool = TilemapBrush::Tool::Paint;
+            m_shared->brush.tile = 18;  // crate
+            // Ground at (-20, -5): cell (x, y) is centered on (x - 19.5, y - 4.5).
+            check(m_viewport.worldToScreen(*m_shared, {0.5f, 1.5f, 0.0f}, m_smokeClick), "tile cell visible in the 2D view");
+            pushMouse(SDL_EVENT_MOUSE_MOTION, m_smokeClick);
+            break;
+        }
+        case 61: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 62: {
+            ImVec2 p;
+            check(m_viewport.worldToScreen(*m_shared, {2.5f, 1.5f, 0.0f}, p), "second tile cell visible");
+            pushMouse(SDL_EVENT_MOUSE_MOTION, p);  // drag: Bresenham fills the cell in between
+            m_smokeClick = p;
+            break;
+        }
+        case 63: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, m_smokeClick); break;
+        case 65: {
+            const auto& tm = scene.registry().get<TilemapComponent>(scene.findByName("Ground"));
+            check(tm.tileAt(20, 6) == 18 && tm.tileAt(21, 6) == 18 && tm.tileAt(22, 6) == 18, "a mouse drag paints a line of tiles");
+            check(ctx.undoStack().undoLabel() == "Paint Tiles", "one undo entry per paint stroke");
+            check(ctx.selection().primary() == scene.uuidOf(scene.findByName("Ground")), "painting does not change the selection");
+            const Renderer* renderer = m_shared->renderer();
+            check(renderer && renderer->stats().tilesVisible > 100 && renderer->stats().lights2D >= 1 && renderer->stats().particlesVisible > 0,
+                  "tilemap, 2D light and particles rendered");
+            check(m_shared->twod && m_shared->twod->particleStats().particles > 0, "particles preview in edit mode");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_2d.png").string());
+            break;
+        }
+        case 67:
+            check(ctx.undo(), "undo the paint stroke");
+            check(scene.registry().get<TilemapComponent>(scene.findByName("Ground")).tileAt(21, 6) == -1, "undo erases the painted tiles");
+            m_shared->brush.active = false;
+            startPlay();
+            break;
+        case 90: {
+            const auto hero = scene.findByName("Hero");
+            check(!hero.isNull(), "hero present in play mode");
+            if (!hero.isNull()) {
+                const i32 frame = scene.registry().get<SpriteRendererComponent>(hero).frame;
+                check(scene.registry().get<SpriteAnimatorComponent>(hero).time > 0.0f && frame >= 4 && frame <= 9,
+                      "the sprite animator plays the run clip");
+            }
+            stopPlay();
+            const auto restored = scene.findByName("Hero");
+            check(!restored.isNull() && scene.registry().get<SpriteRendererComponent>(restored).frame == 4, "stop restores the animated frame");
+            break;
+        }
+        case 92: {
+            std::error_code ec;
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_2d.png", ec), "2D editor screenshot written");
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

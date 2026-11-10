@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     config.window.width = 1600;
     config.window.height = 900;
     config.pluginsDirectory = exeDir.string();
-    config.assetsDirectory = (exeDir / "editor_resources" / "templates").string();
+    config.assetsDirectory = (exeDir / "editor_resources" / "templates" / "assets").string();
     editor::EditorOptions options;
     options.resourcesDir = (exeDir / "editor_resources").string();
     for (int i = 1; i < argc; ++i) {
@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
 
     Engine engine(config);
     engine.plugins().addStatic(std::make_unique<RenderPlugin>());
+    engine.plugins().addStatic(std::make_unique<TwoDPlugin>());
     auto platform = std::make_unique<SdlPlatform>();
     SdlPlatform* window = platform.get();
     if (Status s = engine.initialize(std::move(platform)); !s) {

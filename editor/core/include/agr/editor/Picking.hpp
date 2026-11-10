@@ -4,6 +4,10 @@
 #include "agr/math/Geometry.hpp"
 #include "agr/scene/Scene.hpp"
 
+namespace agr {
+class SpriteSheetLibrary;
+}
+
 namespace agr::editor {
 
 struct PickHit {
@@ -12,13 +16,14 @@ struct PickHit {
     math::Vec3 point;
 };
 
-/// Nearest visible renderable (mesh or sprite) hit by the ray. Meshes use their
-/// world bounding box, sprites their exact quad. Entities hidden in the editor,
-/// locked or inactive are ignored.
-std::optional<PickHit> pick(Scene& scene, const math::Ray& ray);
+/// Nearest visible renderable (mesh, sprite or tilemap) hit by the ray. Meshes use
+/// their world bounding box, sprites their exact quad, tilemaps their painted cells.
+/// Entities hidden in the editor, locked or inactive are ignored. With `sheets`,
+/// sprites using a sheet frame are placed with the frame pivot, as the renderer does.
+std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, SpriteSheetLibrary* sheets = nullptr);
 
-/// World-space bounds of an entity's renderable (empty box when none).
-math::Aabb worldBounds(Scene& scene, ecs::Entity e);
+/// World-space bounds of an entity's renderable (a unit box at its position when none).
+math::Aabb worldBounds(Scene& scene, ecs::Entity e, SpriteSheetLibrary* sheets = nullptr);
 
 /// Intersection of a ray with the plane dot(n, p) = d. Negative when parallel or behind.
 float intersectPlane(const math::Ray& ray, math::Vec3 normal, float d);

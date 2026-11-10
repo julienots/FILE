@@ -8,8 +8,9 @@ add_executable(agr_tests
     test_runtime.cpp
     test_assets.cpp
     test_render.cpp
-    test_shader_dialect.cpp)
-target_link_libraries(agr_tests PRIVATE agr::render agr::compiler_options doctest::doctest)
+    test_shader_dialect.cpp
+    test_twod.cpp)
+target_link_libraries(agr_tests PRIVATE agr::twod agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_PLUGIN_PATH="$<TARGET_FILE:agr_plugin_spin>")
@@ -21,5 +22,5 @@ set_tests_properties(agr_tests PROPERTIES ENVIRONMENT "LSAN_OPTIONS=suppressions
 if(AGR_BUILD_EDITOR)
     target_sources(agr_tests PRIVATE test_editor.cpp)
     target_link_libraries(agr_tests PRIVATE agr::editor_core)
-    target_compile_definitions(agr_tests PRIVATE AGR_TEST_TEMPLATE_ASSETS="${PROJECT_SOURCE_DIR}/apps/sandbox/assets/textures")
+    target_compile_definitions(agr_tests PRIVATE AGR_TEST_TEMPLATE_ASSETS="${PROJECT_SOURCE_DIR}/editor/resources/templates/assets")
 endif()

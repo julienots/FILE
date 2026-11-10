@@ -11,7 +11,7 @@ add_library(agr_editor_core STATIC
     core/src/Picking.cpp
     core/src/EditorContext.cpp)
 target_include_directories(agr_editor_core PUBLIC core/include)
-target_link_libraries(agr_editor_core PUBLIC agr::render PRIVATE agr::compiler_options)
+target_link_libraries(agr_editor_core PUBLIC agr::render agr::twod PRIVATE agr::compiler_options)
 add_library(agr::editor_core ALIAS agr_editor_core)
 set_target_properties(agr_editor_core PROPERTIES FOLDER "Editor")
 
@@ -37,9 +37,7 @@ if(AGR_BUILD_PLUGINS)
 endif()
 # Fonts and template assets are shipped next to the executable.
 add_custom_command(TARGET agr_editor POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources $<TARGET_FILE_DIR:agr_editor>/editor_resources
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/apps/sandbox/assets/textures
-            $<TARGET_FILE_DIR:agr_editor>/editor_resources/templates/textures)
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources $<TARGET_FILE_DIR:agr_editor>/editor_resources)
 
 # End-to-end editor tests (need a display; CI runs them under xvfb-run).
 if(AGR_BUILD_TESTS)

@@ -10,6 +10,7 @@
 #include "agr/editor/ui/Theme.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/render/RenderPlugin.hpp"
+#include "agr/twod/TwoDPlugin.hpp"
 
 namespace agr::editor {
 
@@ -17,17 +18,29 @@ namespace agr::editor {
 inline constexpr const char* kPayloadEntity = "AGR_ENTITY";  ///< u64 Uuid
 inline constexpr const char* kPayloadAsset = "AGR_ASSET";    ///< null-terminated "assets://..." URI
 
+/// Tilemap painting (inspector palette + viewport). Painting applies to the primary
+/// selection when it has a Tilemap, in edit mode only.
+struct TilemapBrush {
+    enum class Tool : u8 { Paint, Erase, Rect, Fill, Pick };
+    bool active = false;
+    Tool tool = Tool::Paint;
+    i32 tile = 0;  ///< Frame of the tileset painted by Paint / Rect / Fill.
+};
+
 /// State shared by every panel of the editor window.
 struct EditorShared {
     Engine& engine;
     EditorContext& ctx;
     SdlPlatform* platform = nullptr;
     RenderPlugin* render = nullptr;
+    TwoDPlugin* twod = nullptr;
     EditorFonts fonts;
+    TilemapBrush brush;
 
     rhi::Device* device() const { return render ? render->device() : nullptr; }
     Renderer* renderer() const { return render ? render->renderer() : nullptr; }
     AssetManager* assets() const { return render ? render->assets() : nullptr; }
+    SpriteSheetLibrary* sheets() const { return render ? render->spriteSheets() : nullptr; }
 
     // --- status bar
     std::string status;

@@ -1,9 +1,9 @@
 add_executable(agr_benchmarks main.cpp)
-target_link_libraries(agr_benchmarks PRIVATE agr::scene agr::compiler_options)
+target_link_libraries(agr_benchmarks PRIVATE agr::scene agr::twod agr::compiler_options)
 set_target_properties(agr_benchmarks PROPERTIES FOLDER "Benchmarks")
 
 if(AGR_BUILD_PLATFORM)
     add_executable(agr_gpu_benchmarks gpu/main.cpp)
-    target_link_libraries(agr_gpu_benchmarks PRIVATE agr::platform agr::render agr::compiler_options)
+    target_link_libraries(agr_gpu_benchmarks PRIVATE agr::platform agr::render agr::twod agr::compiler_options)
     set_target_properties(agr_gpu_benchmarks PROPERTIES FOLDER "Benchmarks")
 endif()

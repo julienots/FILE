@@ -7,6 +7,8 @@
 #include <imgui_stdlib.h>
 
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/render/SpriteSheet.hpp"
+#include "agr/twod/Atlas.hpp"
 
 namespace agr::editor {
 
@@ -36,6 +38,19 @@ std::string uniqueName(const fs::path& dir, const std::string& base) {
     for (int i = 2; fs::exists(dir / name, ec); ++i) name = base + " " + std::to_string(i);
     return name;
 }
+
+/// "stem" + ext, or "stem_2" + ext... so generated files never overwrite existing assets.
+std::string uniqueFile(const fs::path& dir, const std::string& stem, const std::vector<std::string>& extensions) {
+    std::error_code ec;
+    for (int i = 1;; ++i) {
+        const std::string candidate = i == 1 ? stem : stem + "_" + std::to_string(i);
+        bool free = true;
+        for (const std::string& ext : extensions) free &= !fs::exists(dir / (candidate + ext), ec);
+        if (free) return candidate;
+    }
+}
+
+bool isSheetFile(const std::string& name) { return fs::path(name).extension() == ".agrsheet"; }
 
 } // namespace
 
@@ -120,6 +135,10 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         fs::create_directories(dir / uniqueName(dir, "Nouveau dossier"), ec);
     }
     ImGui::SameLine();
+    if (ImGui::Button("Créer un atlas...")) m_atlasOpen = true;
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Regrouper les images du dossier courant dans une seule texture + une feuille de sprites (.agrsheet)");
+    ImGui::SameLine();
     if (ImGui::Button("Ouvrir dans l'explorateur")) {
         const std::string url = "file://" + fs::absolute(absoluteAsset(s, s.assetFolder), ec).generic_string();
         if (!SDL_OpenURL(url.c_str())) s.notify(std::string("Impossible d'ouvrir le dossier : ") + SDL_GetError());
@@ -194,9 +213,19 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 const bool hovered = ImGui::IsItemHovered();
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 dl->AddRectFilled(p, {p.x + tile, p.y + tile}, hovered ? palette::kGraphite700 : palette::kGraphite800, 4.0f);
+                const SpriteSheet* sheet = !folder && isSheetFile(name) && s.sheets() ? s.sheets()->get(uri) : nullptr;
                 if (!folder && isImageFile(name)) {
                     const float pad = 6.0f;
                     dl->AddImage(ImTextureRef(s.thumbnail(uri)), {p.x + pad, p.y + pad}, {p.x + tile - pad, p.y + tile - pad});
+                } else if (sheet && !sheet->frames.empty()) {
+                    // Sprite sheet: its first frame, with a frame counter.
+                    const float pad = 10.0f;
+                    const math::Vec4 uv = sheet->uv(0);
+                    dl->AddImage(ImTextureRef(s.thumbnail(sheet->texture)), {p.x + pad, p.y + pad}, {p.x + tile - pad, p.y + tile - pad},
+                                 {uv.x, uv.y}, {uv.z, uv.w});
+                    char count[32];
+                    std::snprintf(count, sizeof count, "%zu", sheet->frames.size());
+                    dl->AddText({p.x + 5, p.y + tile - ImGui::GetFontSize() - 3}, palette::kAmber, count);
                 } else {
                     icons::draw(dl, iconFor(name, folder), {p.x + tile * 0.5f, p.y + tile * 0.5f}, tile * 0.45f,
                                 folder ? palette::kAmber : palette::kTextMuted);
@@ -207,9 +236,14 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     ImGui::Text("%s", name.c_str());
                     ImGui::EndDragDropSource();
                 }
-                if (hovered) ImGui::SetTooltip("%s", uri.c_str());
+                if (hovered) {
+                    if (sheet) ImGui::SetTooltip("%s\nFeuille de sprites : %zu frames, %zu clips\nGlisser dans la scène pour créer un sprite", uri.c_str(),
+                                                 sheet->frames.size(), sheet->clips.size());
+                    else ImGui::SetTooltip("%s", uri.c_str());
+                }
                 if (ImGui::BeginPopupContextItem("##ctx")) {
                     if (ImGui::MenuItem("Copier le chemin")) ImGui::SetClipboardText(uri.c_str());
+                    if (!folder && isImageFile(name) && ImGui::MenuItem("Découper en grille (feuille de sprites)...")) m_sliceTarget = rel;
                     if (ImGui::MenuItem("Renommer...")) {
                         m_renameTarget = rel;
                         m_renameBuffer = name;
@@ -265,6 +299,78 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         ImGui::SameLine();
         if (ImGui::Button("Annuler", {120, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_renameTarget.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    // ---- sprite sheet tools
+    if (!m_sliceTarget.empty()) ImGui::OpenPopup("Découper en grille");
+    if (ImGui::BeginPopupModal("Découper en grille", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Image : assets/%s", m_sliceTarget.c_str());
+        ImGui::SetNextItemWidth(200);
+        ImGui::InputInt("Largeur de cellule (px)", &m_sliceW);
+        ImGui::SetNextItemWidth(200);
+        ImGui::InputInt("Hauteur de cellule (px)", &m_sliceH);
+        ImGui::SetNextItemWidth(200);
+        ImGui::InputInt("Marge (px)", &m_sliceMargin);
+        ImGui::SetNextItemWidth(200);
+        ImGui::InputInt("Espacement (px)", &m_sliceSpacing);
+        ImGui::Checkbox("Pixel art (filtrage net)", &m_slicePixelArt);
+        m_sliceW = std::clamp(m_sliceW, 1, 8192);
+        m_sliceH = std::clamp(m_sliceH, 1, 8192);
+        m_sliceMargin = std::clamp(m_sliceMargin, 0, 4096);
+        m_sliceSpacing = std::clamp(m_sliceSpacing, 0, 4096);
+        const fs::path imagePath(m_sliceTarget);
+        const std::string folderRel = imagePath.parent_path().generic_string();
+        const std::string outStem = uniqueFile(absoluteAsset(s, folderRel), imagePath.stem().string(), {".agrsheet"});
+        const std::string outRel = join(folderRel, outStem + ".agrsheet");
+        ImGui::TextDisabled("Crée assets/%s (une frame par cellule, 1 cellule = 1 unité).", outRel.c_str());
+        if (ImGui::Button("Créer", {120, 0})) {
+            auto sheet = buildGridSheetFile(s.engine.vfs(), "assets://" + m_sliceTarget, static_cast<u32>(m_sliceW), static_cast<u32>(m_sliceH),
+                                            "assets://" + outRel, static_cast<u32>(m_sliceMargin), static_cast<u32>(m_sliceSpacing), m_slicePixelArt);
+            if (sheet) s.notify("Feuille créée : assets/" + outRel + " (" + std::to_string(sheet.value().frames.size()) + " frames)");
+            else s.notify("Découpe impossible : " + sheet.error().message);
+            m_sliceTarget.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Annuler", {120, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_sliceTarget.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    if (m_atlasOpen) ImGui::OpenPopup("Créer un atlas");
+    if (ImGui::BeginPopupModal("Créer un atlas", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::vector<std::string> images;
+        if (auto list = s.engine.vfs().list("assets://" + s.assetFolder))
+            for (const std::string& entry : list.value())
+                if (!entry.empty() && entry.back() != '/' && isImageFile(entry)) images.push_back("assets://" + join(s.assetFolder, entry));
+        ImGui::Text("%zu image(s) dans assets/%s", images.size(), s.assetFolder.c_str());
+        ImGui::SetNextItemWidth(200);
+        ImGui::InputText("Nom", &m_atlasName);
+        ImGui::SetNextItemWidth(200);
+        ImGui::DragFloat("Pixels par unité", &m_atlasPpu, 1.0f, 1.0f, 4096.0f, "%.0f");
+        ImGui::Checkbox("Pixel art (filtrage net)", &m_atlasPixelArt);
+        const bool validName = !m_atlasName.empty() && m_atlasName.find_first_of("/\\.") == std::string::npos;
+        const std::string stem = validName ? uniqueFile(absoluteAsset(s, s.assetFolder), m_atlasName, {".png", ".agrsheet"}) : std::string();
+        if (validName) ImGui::TextDisabled("Crée assets/%s.png et .agrsheet (frames nommées d'après les fichiers).", join(s.assetFolder, stem).c_str());
+        else ImGui::TextColored(palette::toVec4(palette::kWarning), "Nom invalide.");
+        ImGui::BeginDisabled(images.size() < 1 || !validName);
+        if (ImGui::Button("Créer", {120, 0})) {
+            const std::string base = "assets://" + join(s.assetFolder, stem);
+            auto sheet = buildAtlasFiles(s.engine.vfs(), images, base + ".png", base + ".agrsheet", m_atlasPpu, m_atlasPixelArt);
+            if (sheet)
+                s.notify("Atlas créé : " + base + ".agrsheet (" + std::to_string(sheet.value().textureWidth) + "x" +
+                         std::to_string(sheet.value().textureHeight) + ", " + std::to_string(sheet.value().frames.size()) + " frames)");
+            else s.notify("Atlas impossible : " + sheet.error().message);
+            m_atlasOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Annuler", {120, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_atlasOpen = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

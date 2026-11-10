@@ -189,9 +189,14 @@ premier lancement).
 
 ## Statistiques (profiler)
 
-`Renderer::stats()` : draw calls, triangles, maillages et sprites visibles ou éliminés, lots de sprites,
-résolution interne, MSAA, temps CPU (collecte et soumission séparées), **temps GPU** (requêtes
-`GL_TIME_ELAPSED`, ou `EXT_disjoint_timer_query` sur mobile ; −1 si indisponible), mémoire GPU.
+`Renderer::stats()` : draw calls, triangles, maillages et sprites visibles ou éliminés (les sprites
+comptent aussi les tuiles et particules, détaillées dans `tilesVisible` / `particlesVisible`), lumières 2D,
+lots de sprites, résolution interne, MSAA, temps CPU (collecte et soumission séparées), attente du GPU
+pendant la soumission (`gpuWaitMs`) et sur toute l'image avec la présentation (`frameWaitMs`, rempli
+par `render()`), **temps GPU** (requêtes `GL_TIME_ELAPSED`, ou `EXT_disjoint_timer_query` sur mobile ;
+−1 si indisponible), mémoire GPU.
+
+Rendu 2D (feuilles, tilemaps, lumières 2D, particules, parallaxe, modes d'échelle) : [2D.md](2D.md).
 
 ## Captures d'écran
 

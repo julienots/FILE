@@ -67,6 +67,7 @@ if(AGR_BUILD_PLATFORM)
 endif()
 add_subdirectory(engine/runtime)
 add_subdirectory(engine/render)
+add_subdirectory(engine/twod)
 
 if(AGR_BUILD_PLUGINS)
     add_subdirectory(plugins/spin)

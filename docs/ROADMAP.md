@@ -72,9 +72,30 @@ Rien n'est coché sans code compilé, tests qui passent et un exemple qui l'util
 | Prefabs en fichiers, éditeurs de matériaux / shaders / terrain / particules / animation / UI | ⬜ | phases 4, 5, 7, 9 |
 | Panneaux détachables en fenêtres système | ⬜ | rendu multi-fenêtres à ajouter à la RHI |
 
-## Phase 4 — 2D ⬜
-Sprites, sprite sheets, tilemaps, calques, caméras 2D, parallaxe, animation par images et
-squelettique, particules, éclairage et ombres 2D, canvas UI, gestion des résolutions mobiles.
+## Phase 4 — Systèmes 2D 🟡 (cœur 2D terminé ; physique, squelettes, UI et ombres dans d'autres phases)
+
+Guide : [2D.md](2D.md).
+
+| Élément | État | Où |
+|---|---|---|
+| Feuilles de sprites `.agrsheet` (frames, pivots, clips), cache, rechargement à chaud, validation | ✅ | `render/SpriteSheet` |
+| Découpe en grille et atlas (empaquetage, bordures répétées) depuis l'explorateur d'assets | ✅ | `twod/Atlas`, `AssetBrowserPanel` |
+| Sprites sur frames de feuille, pivot par frame, sélection de frame et taille native dans l'inspecteur | ✅ | `Renderer`, `InspectorPanel` |
+| Animation image par image (`SpriteAnimator`) | ✅ | `twod/SpriteAnimator` |
+| Tilemaps : rendu limité aux cellules visibles, sérialisation RLE, redimensionnement | ✅ | `TilemapComponent`, `SceneSerializer` |
+| Peinture de tilemaps dans la vue : pinceau, gomme, rectangle, remplissage, pipette, palette, annulation par geste | ✅ | `ViewportPanel`, `twod/TilemapEditing` |
+| Parallaxe | ✅ | `ParallaxComponent` |
+| Lumières 2D ponctuelles (16 visibles), sprites / tilemaps éclairés | ✅ | `Light2DComponent`, shader `sprite.lit` |
+| Particules 2D (CPU), mélange additif, aperçu en mode édition | ✅ | `twod/Particles2D` |
+| Modes d'échelle pour écrans mobiles (hauteur / largeur fixe, tout voir, rogner) | ✅ | `CameraComponent::scaleMode` |
+| Menu Créer › 2D (Tilemap, Particules 2D, Lumière 2D, Couche de parallaxe), dépôt de feuilles dans la scène | ✅ | éditeur |
+| Modèle « Vitrine 2D » avec art original reproductible | ✅ | `SceneTemplates`, `tools/generate_template_2d_art.py` |
+| Tests : 9 unitaires 2D + 5 éditeur, 6 GPU au pixel près × 3 API, test de bout en bout (peinture à la souris, animation en jeu) | ✅ | `tests/test_twod.cpp`, `tests/gpu/test_renderer2d.cpp` |
+| Collisions / physique 2D, formes de collision des tilemaps | ⬜ | phase 6 |
+| Animation squelettique 2D, timeline | ⬜ | phase 7 |
+| Canvas UI | ⬜ | phase 7 |
+| Ombres 2D, normal maps 2D | ⬜ | non planifié en détail |
+| Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
 
 ## Phase 5 — 3D ⬜
 Import glTF/GLB/OBJ/FBX, matériaux PBR avec aperçu, squelettes et animations, lumières, ombres,

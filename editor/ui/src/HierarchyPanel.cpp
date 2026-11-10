@@ -45,7 +45,9 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
     };
     static const Item basic[] = {{"Entité vide", CreateKind::Empty}};
     static const Item shapes[] = {{"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere}, {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}};
-    static const Item twoD[] = {{"Sprite", CreateKind::Sprite}};
+    static const Item twoD[] = {{"Sprite", CreateKind::Sprite}, {"Tilemap", CreateKind::Tilemap},
+                                {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
+                                {"Couche de parallaxe", CreateKind::ParallaxLayer}};
     static const Item scene[] = {{"Caméra", CreateKind::Camera}, {"Lumière directionnelle", CreateKind::DirectionalLight},
                                  {"Environnement (ambiance)", CreateKind::Environment}};
     auto items = [&](const Item* list, usize n) {
@@ -59,7 +61,7 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("2D")) {
-        items(twoD, 1);
+        items(twoD, 5);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Caméra et lumières")) {

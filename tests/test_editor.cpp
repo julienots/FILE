@@ -1,12 +1,16 @@
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <filesystem>
 
 #include "agr/core/Uuid.hpp"
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/twod/SpriteAnimator.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 using namespace agr;
 using namespace agr::editor;
@@ -56,6 +60,8 @@ TEST_CASE("projects are created with folders, assets and a playable startup scen
     const fs::path game = f.root / "game";
     CHECK(fs::exists(game / Project::kFileName));
     CHECK(fs::exists(game / "assets/textures/agr_mark.png"));
+    CHECK(fs::exists(game / "assets/2d/hero.agrsheet"));
+    CHECK(fs::exists(game / "assets/2d/forest_tiles.png"));
     CHECK(fs::exists(game / "scenes/main.agrscene"));
     CHECK(f.ctx->scenePath() == "scenes/main.agrscene");
     CHECK_FALSE(f.scene().findByName("Main Camera").isNull());
@@ -73,7 +79,7 @@ TEST_CASE("projects are created with folders, assets and a playable startup scen
 }
 
 TEST_CASE("every template contains a primary camera") {
-    for (SceneTemplate t : {SceneTemplate::Empty2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D}) {
+    for (SceneTemplate t : allTemplates()) {
         Scene s;
         buildSceneTemplate(s, t);
         bool primary = false;
@@ -83,6 +89,105 @@ TEST_CASE("every template contains a primary camera") {
     Scene s2d;
     buildSceneTemplate(s2d, SceneTemplate::Empty2D);
     CHECK(s2d.registry().get<CameraComponent>(s2d.findByName("Main Camera")).projection == Projection::Orthographic);
+}
+
+TEST_CASE("the 2D showcase template only references shipped, valid 2D assets") {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    Scene& scene = f.scene();
+    auto& reg = scene.registry();
+    SpriteSheetLibrary sheets(f.engine->vfs());
+
+    const ecs::Entity ground = scene.findByName("Ground");
+    REQUIRE_FALSE(ground.isNull());
+    const auto& tm = reg.get<TilemapComponent>(ground);
+    const SpriteSheet* tiles = sheets.get(tm.tileset);
+    REQUIRE(tiles != nullptr);
+    u32 painted = 0;
+    for (u32 y = 0; y < tm.height; ++y)
+        for (u32 x = 0; x < tm.width; ++x)
+            if (const i32 t = tm.tileAt(x, y); t >= 0) {
+                ++painted;
+                CHECK(tiles->validFrame(t));
+            }
+    CHECK(painted > 100);
+
+    const ecs::Entity hero = scene.findByName("Hero");
+    const auto& sr = reg.get<SpriteRendererComponent>(hero);
+    const SpriteSheet* heroSheet = sheets.get(sr.sheet);
+    REQUIRE(heroSheet != nullptr);
+    CHECK(heroSheet->findClip(reg.get<SpriteAnimatorComponent>(hero).clip) != nullptr);
+    CHECK(f.engine->vfs().exists(heroSheet->texture));
+    reg.view<SpriteRendererComponent>().each([&](ecs::Entity, SpriteRendererComponent& s) {
+        if (!s.texture.empty()) CHECK(f.engine->vfs().exists(s.texture));
+    });
+
+    // Survives a save / load round trip (RLE tiles, 2D components).
+    const std::string text = SceneSerializer::toString(scene);
+    Scene copy;
+    REQUIRE(SceneSerializer::fromString(copy, text));
+    const auto& tm2 = copy.registry().get<TilemapComponent>(copy.findByName("Ground"));
+    CHECK(tm2.tiles == tm.tiles);
+    CHECK(copy.registry().get<SpriteAnimatorComponent>(copy.findByName("Hero")).clip == "run");
+}
+
+TEST_CASE("picking: tilemaps on painted cells, sprites with sheet frame pivots") {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Empty2D);
+    Scene& scene = f.scene();
+    auto& reg = scene.registry();
+    const ecs::Entity map = scene.createEntity("Map");
+    reg.get<TransformComponent>(map).position = {-10.0f, -10.0f, -1.0f};
+    auto& tm = reg.emplace<TilemapComponent>(map);
+    tm.tileset = "assets://2d/forest_tiles.agrsheet";
+    tilemapEnsureLayout(tm);
+    tilemapSet(tm, 2, 3, 1);
+    scene.updateTransforms();
+    auto rayAt = [](float x, float y) { return math::Ray{{x, y, 50.0f}, {0.0f, 0.0f, -1.0f}}; };
+    auto hit = pick(scene, rayAt(-7.5f, -6.5f));  // cell (2, 3)
+    REQUIRE(hit);
+    CHECK(hit->entity == map);
+    CHECK(hit->point.z == doctest::Approx(-1.0f));
+    CHECK_FALSE(pick(scene, rayAt(-6.5f, -6.5f)));  // empty cell: nothing behind
+
+    // Hero frames have their pivot at the feet: the quad is above the entity.
+    const ecs::Entity hero = scene.createEntity("Hero");
+    reg.get<TransformComponent>(hero).position = {20.0f, 0.0f, 0.0f};
+    auto& sr = reg.emplace<SpriteRendererComponent>(hero);
+    sr.sheet = "assets://2d/hero.agrsheet";
+    sr.frame = 0;
+    scene.updateTransforms();
+    SpriteSheetLibrary sheets(f.engine->vfs());
+    CHECK(pick(scene, rayAt(20.0f, 0.75f), &sheets));
+    CHECK_FALSE(pick(scene, rayAt(20.0f, -0.25f), &sheets));
+    CHECK(pick(scene, rayAt(20.0f, -0.25f)));  // without sheets the component pivot (center) is used
+    CHECK(worldBounds(scene, map).max.x == doctest::Approx(6.0f));
+}
+
+TEST_CASE("dropping a sprite sheet creates an animated sprite at native size") {
+    EditorFixture f(ProjectMode::Mode2D);
+    SpriteSheetLibrary sheets(f.engine->vfs());
+    const SpriteSheet* sheet = sheets.get("assets://2d/hero.agrsheet");
+    REQUIRE(sheet != nullptr);
+    const auto e = f.ctx->createSprite("assets://2d/hero.agrsheet", {1.0f, 2.0f, 0.0f}, {}, sheet);
+    auto& reg = f.scene().registry();
+    const auto& sr = reg.get<SpriteRendererComponent>(e);
+    CHECK(sr.sheet == "assets://2d/hero.agrsheet");
+    CHECK(sr.texture.empty());
+    CHECK(sr.frame == 0);
+    CHECK(sr.pixelArt);
+    CHECK(sr.size.x == doctest::Approx(1.0f));  // 32 px at 32 px per unit
+    REQUIRE(reg.has<SpriteAnimatorComponent>(e));
+    CHECK(reg.get<SpriteAnimatorComponent>(e).clip == "idle");
+    CHECK(f.ctx->undoStack().undoLabel() == "Create Sprite");
+    for (CreateKind k : {CreateKind::Tilemap, CreateKind::Particles2D, CreateKind::Light2D, CreateKind::ParallaxLayer}) {
+        const auto c = f.ctx->create(k);
+        CHECK(f.scene().nameOf(c) == createKindName(k));
+    }
+    const auto tmE = f.scene().findByName("Tilemap");
+    const auto& tm = reg.get<TilemapComponent>(tmE);
+    CHECK(tm.tiles.size() == static_cast<usize>(tm.width) * tm.height);
+    CHECK(reg.get<TransformComponent>(tmE).position.x == std::floor(reg.get<TransformComponent>(tmE).position.x));
 }
 
 TEST_CASE("create, rename, undo and redo") {

@@ -10,6 +10,7 @@
 #include "agr/math/Geometry.hpp"
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/Primitives.hpp"
+#include "agr/render/SpriteSheet.hpp"
 #include "agr/rhi/Rhi.hpp"
 #include "agr/scene/Scene.hpp"
 
@@ -25,6 +26,8 @@ struct RenderView {
     float nearPlane = 0.1f;
     float farPlane = 500.0f;
     math::Color clearColor{0.055f, 0.063f, 0.075f, 1.0f};
+    ScaleMode scaleMode = ScaleMode::FixedHeight;
+    float referenceAspect = 16.0f / 9.0f;
     bool editorView = false;  ///< Skips entities flagged hiddenInEditor.
 
     /// Projection matrix for an aspect ratio, in the clip space of the given backend.
@@ -41,12 +44,17 @@ struct RenderStats {
     u32 spritesVisible = 0;
     u32 spritesCulled = 0;
     u32 spriteBatches = 0;
+    u32 tilesVisible = 0;
+    u32 particlesVisible = 0;
+    u32 lights2D = 0;
     u32 renderWidth = 0, renderHeight = 0;  ///< Internal 3D resolution.
     u32 msaaSamples = 1;
     f64 cpuMs = 0.0;         ///< Total CPU time of render().
     f64 collectMs = 0.0;     ///< Scene traversal, culling, sorting, uniform packing (engine code).
     f64 submitMs = 0.0;      ///< Upload + draw submission (mostly graphics driver time), includes gpuWaitMs.
     f64 gpuWaitMs = 0.0;     ///< Part of submitMs spent blocked on the GPU (Vulkan only).
+    f64 frameWaitMs = 0.0;   ///< render() only: CPU time blocked on the GPU or presentation over the whole
+                             ///< device frame (beginFrame .. endFrame). In OpenGL the wait is in SwapBuffers (not measured).
     f64 gpuTimeMs = -1.0;    ///< -1 when the device has no GPU timers.
     u64 gpuMemoryBytes = 0;  ///< Buffers + textures + render targets.
     bool hasCamera = false;
@@ -83,7 +91,10 @@ public:
     const RenderStats& stats() const { return m_stats; }
 
     /// Cached texture for a component asset URI (shared between components).
-    rhi::TextureHandle resolveTexture(const std::string& uri, bool pixelArt);
+    rhi::TextureHandle resolveTexture(std::string_view uri, bool pixelArt);
+    /// Sprite sheets used by sprites (sheet + frame) and tilemaps.
+    void setSpriteSheets(SpriteSheetLibrary* sheets) { m_sheets = sheets; }
+    static constexpr u32 kMaxLights2D = 16;
     /// Number of distinct texture URIs referenced recently by components.
     usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size(); }
 
@@ -110,6 +121,7 @@ private:
         math::Vec3 corners[4];  // bl, br, tr, tl
         math::Vec4 uv;          // u0, v0, u1, v1
         u32 color;
+        u32 pipeline = 0;       // 0 = alpha, 1 = lit (2D lights), 2 = additive
     };
     struct CachedTexture {
         TextureAsset asset;
@@ -118,6 +130,7 @@ private:
     struct SortKey {
         i32 layer, order;
         float depth;
+        u32 pipeline;
         u32 texture;
         u32 index;
     };
@@ -145,7 +158,12 @@ private:
     u64 m_frame = 0;
     bool m_glClipSpace = true;
 
-    rhi::PipelineHandle m_meshPipeline, m_spritePipeline;
+    rhi::PipelineHandle m_meshPipeline, m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline;
+    rhi::TextureHandle m_softParticle;  // default particle texture (procedural)
+    SpriteSheetLibrary* m_sheets = nullptr;
+    std::unordered_map<u32, math::Vec3> m_parallax;  // entity index -> world offset
+    std::vector<math::Vec4> m_tileUvs;
+    u32 m_lightsOffset = 0;
     GpuMesh m_meshes[4];
 
     rhi::BufferHandle m_uniformBuffer;

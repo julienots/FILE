@@ -14,6 +14,9 @@
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/render/SpriteSheet.hpp"
+#include "agr/twod/Particles2D.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 using namespace agr;
 
@@ -27,6 +30,7 @@ struct Bench {
     VirtualFileSystem vfs;
     JobSystem jobs{2};
     std::unique_ptr<AssetManager> assets;
+    std::unique_ptr<SpriteSheetLibrary> sheets;
     std::filesystem::path root = std::filesystem::temp_directory_path() / ("agr_gpubench_" + Uuid::generate().toString());
 };
 
@@ -41,9 +45,11 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build) {
     GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
     p.renderScale = 1.0f;
     renderer.setProfile(p);
+    renderer.setSpriteSheets(b.sheets.get());
     Scene scene;
     build(scene);
     scene.updateTransforms();
+    simulateParticles2D(scene, 0.016f);  // spawns burst particles (no-op without emitters)
     for (int i = 0; i < 5; ++i) {  // warm-up + texture uploads
         b.assets->waitAll();
         renderer.render(scene, W, H);
@@ -55,12 +61,12 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build) {
         b.platform.present();
         collect.push_back(renderer.stats().collectMs);
         submit.push_back(renderer.stats().submitMs - renderer.stats().gpuWaitMs);
-        wait.push_back(renderer.stats().gpuWaitMs);
+        wait.push_back(renderer.stats().frameWaitMs);
     }
     const auto& s = renderer.stats();
     std::printf("%-40s collect %6.3f ms  submit %7.3f ms  wait %7.3f ms  draws %5u  batches %4u  visible %6u  culled %6u\n",
                 name, median(collect), median(submit), median(wait), s.drawCalls, s.spriteBatches,
-                s.meshesVisible + s.spritesVisible, s.meshesCulled + s.spritesCulled);
+                s.meshesVisible + s.spritesVisible, s.meshesCulled + s.spritesCulled);  // sprites include tiles and particles
 }
 
 void orthoCamera(Scene& s, float halfHeight) {
@@ -139,6 +145,8 @@ int main(int argc, char** argv) {
         (void)b.vfs.writeBytes(std::string("assets://") + name, png.value().data(), png.value().size());
     }
     b.assets = std::make_unique<AssetManager>(b.vfs, b.jobs, b.device.get());
+    b.sheets = std::make_unique<SpriteSheetLibrary>(b.vfs);
+    (void)b.vfs.writeText("assets://tiles.agrsheet", SpriteSheet::grid("assets://a.png", 16, 16, 8, 8).toJson());
     registerRenderComponents();
     std::printf("AGR ENGINE renderer benchmarks — %s on %s, %ux%u\n", rhi::enumName(b.device->info().backend),
                 b.device->info().renderer.c_str(), W, H);
@@ -163,7 +171,41 @@ int main(int argc, char** argv) {
     run(b, "2D: 10k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 64); });
     run(b, "2D: 50k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 12); spriteGrid(s, 50000, 64); });
     run(b, "2D: 50k sprites, 75% off-screen", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 50000, 64); });
+    run(b, "2D: tilemap 1000x1000, ~16k cells shown", [](Scene& s) {
+        orthoCamera(s, 48);
+        const auto e = s.createEntity("Map");
+        s.registry().get<TransformComponent>(e).position = {-500, -500, 0};
+        auto& tm = s.registry().emplace<TilemapComponent>(e);
+        tm.tileset = "assets://tiles.agrsheet";
+        tm.width = tm.height = 1000;
+        tilemapEnsureLayout(tm);
+        for (usize i = 0; i < tm.tiles.size(); ++i) tm.tiles[i] = static_cast<i32>(i % 4);
+    });
+    run(b, "2D: 10k particles, additive", [](Scene& s) {
+        orthoCamera(s, 6);
+        const auto e = s.createEntity("Emitter");
+        auto& em = s.registry().emplace<ParticleEmitter2DComponent>(e);
+        em.rate = 0.0f;
+        em.burst = em.maxParticles = 10000;
+        em.lifetimeMin = em.lifetimeMax = 1000.0f;
+        em.spawnRadius = 5.0f;
+        em.speedMin = em.speedMax = 0.0f;
+        em.startSize = em.endSize = 0.2f;
+        em.additive = true;
+        em.seed = 7;
+    });
+    run(b, "2D: 10k lit sprites, 16 lights", [](Scene& s) {
+        orthoCamera(s, 6);
+        spriteGrid(s, 10000, 1u << 30);
+        s.registry().view<SpriteRendererComponent>().each([](ecs::Entity, SpriteRendererComponent& sr) { sr.lit = true; });
+        for (int i = 0; i < 16; ++i) {
+            const auto l = s.createEntity("L");
+            s.registry().get<TransformComponent>(l).position = {static_cast<float>(i % 4) * 3.0f - 4.5f, static_cast<float>(i / 4) * 3.0f - 4.5f, 0};
+            s.registry().emplace<Light2DComponent>(l).radius = 3.0f;
+        }
+    });
 
+    b.sheets.reset();
     b.assets.reset();
     b.device.reset();
     b.platform.shutdown();

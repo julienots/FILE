@@ -78,5 +78,43 @@ AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1
 section par section a montré qu'il s'agissait de `vkQueuePresentKHR`, synchrone avec lavapipe sur X11.
 D'où la colonne `wait` (`FrameStats::cpuWaitMs`), qui sert aussi au profiler.
 
+## Systèmes 2D (phase 4)
+
+CPU (`agr_benchmarks`, même machine) :
+
+```
+2d: simulate 10k particles (one step)             0.015 ms       1.46 ns/item
+2d: serialize 1000x1000 tilemap (RLE)             0.320 ms       0.32 ns/item
+2d: load 1000x1000 tilemap (RLE)                  0.345 ms       0.34 ns/item
+    (tilemap scene JSON size: 0.7 KB)
+2d: pack atlas of 256 images                      0.300 ms    1173.36 ns/item
+```
+
+Renderer 2D (`agr_gpu_benchmarks`, mêmes conditions que ci-dessus) :
+
+```
+AGR ENGINE renderer benchmarks — OpenGL on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+2D: tilemap 1000x1000, ~16k cells shown  collect  0.731 ms  submit   5.665 ms  wait   0.000 ms  draws     1  batches    1  visible  16684  culled      0
+2D: 10k particles, additive              collect  0.707 ms  submit   2.761 ms  wait   0.000 ms  draws     1  batches    1  visible  10000  culled      0
+2D: 10k lit sprites, 16 lights           collect  1.036 ms  submit   2.328 ms  wait   0.000 ms  draws     1  batches    1  visible  10000  culled      0
+AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+2D: tilemap 1000x1000, ~16k cells shown  collect  0.824 ms  submit   1.069 ms  wait  22.392 ms  draws     1  batches    1  visible  16684  culled      0
+2D: 10k particles, additive              collect  0.773 ms  submit   0.618 ms  wait  21.733 ms  draws     1  batches    1  visible  10000  culled      0
+2D: 10k lit sprites, 16 lights           collect  1.121 ms  submit   0.570 ms  wait  21.680 ms  draws     1  batches    1  visible  10000  culled      0
+```
+
+| Mesure | Analyse |
+|---|---|
+| Tilemap 1000 × 1000 : seules les ~16 700 cellules visibles sont générées | Coût proportionnel à l'écran, pas à la carte : 0,8 ms de collecte, 1 draw call. |
+| Tilemap enregistrée en RLE : 0,7 Ko pour 1 M de cellules (données de type « sol + ciel ») | Une carte très variée (bruit) compresse mal : jusqu'à ~2 entiers par cellule dans le JSON. |
+| 10 000 particules : ~0,015 ms de simulation, ~0,7 ms de collecte | La collecte (coins, couleurs, tri) domine, comme pour les sprites. |
+| 10 000 sprites éclairés par 16 lumières : même coût CPU que des sprites normaux | L'éclairage est calculé dans le shader de fragments ; son coût GPU réel sera mesuré sur téléphones (phase 8). |
+| Atlas de 256 images : 0,3 ms | Empaquetage par étagères ; suffisant pour l'éditeur (pas fait à l'exécution). |
+
+**Correction de mesure (phase 4) :** depuis la phase 3, `render()` remplaçait `gpuWaitMs` (attente pendant
+la soumission) par l'attente de toute l'image, présentation comprise ; la colonne `submit` de ce
+benchmark devenait négative en Vulkan. Les deux valeurs sont maintenant séparées : `gpuWaitMs`
+(dans la soumission) et `frameWaitMs` (toute l'image), affichée dans la colonne `wait`.
+
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
 téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.

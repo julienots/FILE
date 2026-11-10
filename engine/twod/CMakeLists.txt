@@ -1,0 +1,9 @@
+agr_add_module(twod
+    SOURCES
+        src/SpriteAnimator.cpp
+        src/Particles2D.cpp
+        src/TilemapEditing.cpp
+        src/Atlas.cpp
+        src/TwoDPlugin.cpp
+    PUBLIC_DEPS
+        agr::render)

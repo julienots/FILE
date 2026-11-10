@@ -54,9 +54,12 @@ Status RenderPlugin::onLoad(Engine& engine) {
 
     m_assets = std::make_unique<AssetManager>(engine.vfs(), engine.jobs(), m_device.get());
     engine.registerService<AssetManager>(m_assets.get());
+    m_sheets = std::make_unique<SpriteSheetLibrary>(engine.vfs());
+    engine.registerService<SpriteSheetLibrary>(m_sheets.get());
 
     if (m_device) {
         m_renderer = std::make_unique<Renderer>(*m_device, *m_assets);
+        m_renderer->setSpriteSheets(m_sheets.get());
         if (Status s = m_renderer->initialize(); !s) {
             m_renderer.reset();
             return s;
@@ -113,6 +116,7 @@ void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
         if (m_hotReloadTimer >= m_hotReloadInterval) {
             m_hotReloadTimer = 0.0;
             m_assets->reloadChanged();
+            m_sheets->reloadChanged();
         }
     }
     m_assets->update();
@@ -144,7 +148,9 @@ void RenderPlugin::onUnload(Engine& engine) {
     engine.registerService<Renderer>(nullptr);
     engine.registerService<rhi::Device>(nullptr);
     engine.registerService<AssetManager>(nullptr);
+    engine.registerService<SpriteSheetLibrary>(nullptr);
     m_renderer.reset();
+    m_sheets.reset();
     m_assets.reset();
     m_device.reset();
 }

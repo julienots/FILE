@@ -64,6 +64,8 @@ private:
     void drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size);
+    /// Tilemap brush: returns true while it owns the left mouse button (no picking, no gizmo).
+    bool handleTilemapPainting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered);
     math::Mat4 viewMatrix(EditorShared& s) const;
     math::Mat4 projectionGL(EditorShared& s, float aspect) const;
 
@@ -76,6 +78,9 @@ private:
     ImVec2 m_pressPos{};
     bool m_pressed = false;
     std::vector<std::pair<ecs::Entity, ImVec2>> m_iconHits;
+    bool m_painting = false;          // tilemap stroke in progress
+    bool m_strokeChanged = false;
+    std::pair<i32, i32> m_strokeStart{}, m_strokeLast{};
     ImVec2 m_lastOrigin{}, m_lastSize{};
 };
 
@@ -89,6 +94,15 @@ private:
     std::string m_filter;
     std::string m_pendingDelete;
     std::string m_renameTarget, m_renameBuffer;
+    // "Slice as grid" dialog (image -> .agrsheet)
+    std::string m_sliceTarget;
+    int m_sliceW = 32, m_sliceH = 32, m_sliceMargin = 0, m_sliceSpacing = 0;
+    bool m_slicePixelArt = true;
+    // "Create atlas" dialog (images of the current folder -> one texture + .agrsheet)
+    bool m_atlasOpen = false;
+    std::string m_atlasName = "atlas";
+    float m_atlasPpu = 100.0f;
+    bool m_atlasPixelArt = false;
     float m_tileSize = 84.0f;
     std::mutex m_importMutex;
     std::vector<std::string> m_importQueue;  // filled by the native file dialog callback

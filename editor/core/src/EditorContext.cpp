@@ -1,11 +1,15 @@
 #include "agr/editor/EditorContext.hpp"
 
+#include <cmath>
 #include <filesystem>
 
 #include "agr/core/Log.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/twod/SpriteAnimator.hpp"
+#include "agr/twod/TilemapEditing.hpp"
 
 namespace agr::editor {
 
@@ -22,12 +26,17 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::Camera: return "Camera";
         case CreateKind::DirectionalLight: return "Directional Light";
         case CreateKind::Environment: return "Environment";
+        case CreateKind::Tilemap: return "Tilemap";
+        case CreateKind::Particles2D: return "Particles 2D";
+        case CreateKind::Light2D: return "Light 2D";
+        case CreateKind::ParallaxLayer: return "Parallax Layer";
     }
     return "Entity";
 }
 
 EditorContext::EditorContext(Engine& engine) : m_engine(engine) {
     registerRenderComponents();
+    registerSpriteAnimatorComponent();
     m_engine.setTimeScale(0.0);  // edit mode: gameplay systems are frozen
     m_undo.reset(scene(), {});
 }
@@ -144,6 +153,18 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             t.rotation = math::Quat::fromEuler({math::radians(-50.0f), math::radians(35.0f), 0.0f});
             break;
         case CreateKind::Environment: reg.emplace<EnvironmentComponent>(e); break;
+        case CreateKind::Tilemap: {
+            // Cells stay aligned on the grid; the tileset is chosen in the inspector.
+            auto& tm = reg.emplace<TilemapComponent>(e);
+            tilemapEnsureLayout(tm);
+            if (parent.isNull())
+                t.position = {std::floor(t.position.x - static_cast<float>(tm.width) * 0.5f),
+                              std::floor(t.position.y - static_cast<float>(tm.height) * 0.5f), 0.0f};
+            break;
+        }
+        case CreateKind::Particles2D: reg.emplace<ParticleEmitter2DComponent>(e); break;
+        case CreateKind::Light2D: reg.emplace<Light2DComponent>(e); break;
+        case CreateKind::ParallaxLayer: reg.emplace<ParallaxComponent>(e); break;
     }
     s.updateTransforms();
     m_selection.set(s.uuidOf(e));
@@ -151,12 +172,24 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
     return e;
 }
 
-ecs::Entity EditorContext::createSprite(const std::string& uri, Vec3 position, ecs::Entity parent) {
+ecs::Entity EditorContext::createSprite(const std::string& uri, Vec3 position, ecs::Entity parent, const SpriteSheet* sheet) {
     Scene& s = scene();
     const std::string name = std::filesystem::path(uri.substr(uri.find("://") == std::string::npos ? 0 : uri.find("://") + 3)).stem().string();
     const ecs::Entity e = s.createEntity(name.empty() ? "Sprite" : name, parent);
     s.registry().get<TransformComponent>(e).position = position;
-    s.registry().emplace<SpriteRendererComponent>(e).texture = uri;
+    {
+        auto& sr = s.registry().emplace<SpriteRendererComponent>(e);
+        if (sheet && !sheet->frames.empty()) {
+            sr.sheet = uri;
+            sr.frame = 0;
+            sr.pixelArt = sheet->pixelArt;
+            sr.size = {static_cast<float>(sheet->frames[0].w) / sheet->pixelsPerUnit,
+                       static_cast<float>(sheet->frames[0].h) / sheet->pixelsPerUnit};
+        } else {
+            sr.texture = uri;
+        }
+    }  // the reference above is invalidated by the next emplace
+    if (sheet && !sheet->clips.empty()) s.registry().emplace<SpriteAnimatorComponent>(e).clip = sheet->clips.front().name;
     s.updateTransforms();
     m_selection.set(s.uuidOf(e));
     commit("Create Sprite");

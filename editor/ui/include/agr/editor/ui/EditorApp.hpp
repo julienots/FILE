@@ -78,6 +78,7 @@ private:
     // project hub
     struct Wizard {
         ProjectMode mode = ProjectMode::Mode3D;
+        SceneTemplate tmpl = SceneTemplate::Empty3D;
         std::string name = "Mon Jeu";
         std::string location;
         bool desktop = true;
