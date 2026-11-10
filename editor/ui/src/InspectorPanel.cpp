@@ -1,14 +1,19 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <map>
 
+#include <SDL3/SDL.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/ModelLibrary.hpp"
+#include "agr/script/ScriptComponent.hpp"
+#include "agr/script/ScriptPlugin.hpp"
+#include <nlohmann/json.hpp>
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -214,6 +219,8 @@ void frameImage(EditorShared& s, const SpriteSheet& sheet, u32 frame, float size
     ImGui::Image(ImTextureRef(s.thumbnail(sheet.texture)), sz, {uv.x, uv.y}, {uv.z, uv.w});
 }
 
+bool beginPropertyTable(const char* id);
+
 /// Extra tools under the reflected fields of 2D components. Returns the edit made.
 Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, ecs::Entity e) {
     Edit edit;
@@ -398,6 +405,77 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
             s.inspectedAsset = mr.material;
             s.ctx.selection().clear();
         }
+        ImGui::PopID();
+    } else if (info.name == "Script") {
+        auto& sc = *static_cast<ScriptComponent*>(comp);
+        auto* plugin = s.engine.service<ScriptPlugin>();
+        if (sc.script.empty() || !plugin) {
+            ImGui::TextDisabled("Glissez un fichier .lua dans « Script ».");
+            return edit;
+        }
+        ImGui::PushID("scriptTools");
+        const ScriptInfo si = plugin->scripts()->describe(sc.script);
+        if (!si.valid) {
+            ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));
+            ImGui::TextWrapped("%s", si.error.empty() ? "Script introuvable" : si.error.c_str());
+            ImGui::PopStyleColor();
+        } else {
+            nlohmann::json values = nlohmann::json::parse(sc.properties.empty() ? "{}" : sc.properties, nullptr, false);
+            if (!values.is_object()) values = nlohmann::json::object();
+            bool changed = false, commit = false;
+            if (!si.properties.empty() && beginPropertyTable("##scriptProps")) {
+                for (const ScriptProperty& p : si.properties) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    label(p.name.c_str(), "Propriété déclarée par le script (properties = { ... })");
+                    ImGui::PushID(p.name.c_str());
+                    const auto it = values.find(p.name);
+                    switch (p.type) {
+                        case ScriptProperty::Type::Number: {
+                            float v = static_cast<float>(it != values.end() && it->is_number() ? it->get<double>() : p.number);
+                            if (ImGui::DragFloat("##v", &v, 0.05f)) {
+                                values[p.name] = v;
+                                changed = true;
+                            }
+                            commit |= ImGui::IsItemDeactivatedAfterEdit();
+                            break;
+                        }
+                        case ScriptProperty::Type::Boolean: {
+                            bool v = it != values.end() && it->is_boolean() ? it->get<bool>() : p.boolean;
+                            if (ImGui::Checkbox("##v", &v)) {
+                                values[p.name] = v;
+                                changed = commit = true;
+                            }
+                            break;
+                        }
+                        case ScriptProperty::Type::String: {
+                            std::string v = it != values.end() && it->is_string() ? it->get<std::string>() : p.string;
+                            if (ImGui::InputText("##v", &v)) {
+                                values[p.name] = v;
+                                changed = true;
+                            }
+                            commit |= ImGui::IsItemDeactivatedAfterEdit();
+                            break;
+                        }
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            if (changed) sc.properties = values.dump();
+            edit.changed |= changed;
+            edit.committed |= commit;
+            std::string callbacks;
+            for (const std::string& c : si.callbacks) callbacks += (callbacks.empty() ? "" : ", ") + c;
+            ImGui::TextDisabled("Fonctions : %s", callbacks.empty() ? "(aucune)" : callbacks.c_str());
+        }
+        if (ImGui::SmallButton("Ouvrir le fichier") && s.ctx.hasProject()) {
+            const std::string rel = sc.script.rfind("assets://", 0) == 0 ? sc.script.substr(9) : sc.script;
+            const std::string url = "file://" + std::filesystem::absolute(s.ctx.project().assetsDirectory() / rel).generic_string();
+            if (!SDL_OpenURL(url.c_str())) s.notify(std::string("Impossible d'ouvrir : ") + SDL_GetError());
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+            ImGui::SetTooltip("Ouvre le script dans l'éditeur de texte du système ; il est rechargé à chaud quand vous l'enregistrez");
         ImGui::PopID();
     } else if (info.name == "ParticleEmitter2D") {
         const auto* state = reg.tryGet<ParticleState2DComponent>(e);

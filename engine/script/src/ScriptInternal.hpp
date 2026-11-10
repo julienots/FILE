@@ -34,6 +34,7 @@ struct ScriptEngine::Impl {
     VirtualFileSystem& vfs;
     lua_State* L = nullptr;
     const Input* input = nullptr;
+    math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run

@@ -7,7 +7,12 @@
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/physics2d/Physics2DComponents.hpp"
 #include "agr/render/ModelLibrary.hpp"
+#include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/script/ScriptComponent.hpp"
+#include "agr/script/ScriptEngine.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -130,7 +135,9 @@ TEST_CASE("the 2D showcase template only references shipped, valid 2D assets") {
     REQUIRE(SceneSerializer::fromString(copy, text));
     const auto& tm2 = copy.registry().get<TilemapComponent>(copy.findByName("Ground"));
     CHECK(tm2.tiles == tm.tiles);
-    CHECK(copy.registry().get<SpriteAnimatorComponent>(copy.findByName("Hero")).clip == "run");
+    CHECK(copy.registry().get<SpriteAnimatorComponent>(copy.findByName("Hero")).clip == "idle");
+    CHECK(copy.registry().get<ScriptComponent>(copy.findByName("Hero")).script == "assets://scripts/platformer_hero.lua");
+    CHECK(copy.registry().has<TilemapCollider2DComponent>(copy.findByName("Ground")));
 }
 
 TEST_CASE("picking: tilemaps on painted cells, sprites with sheet frame pivots") {
@@ -234,6 +241,84 @@ TEST_CASE("the 3D showcase references shipped models and materials; models insta
     const math::Aabb b = worldBounds(f.scene(), node, {nullptr, &models});
     CHECK(b.min.y == doctest::Approx(0.0f).epsilon(0.01));  // the crate sits on its origin
     CHECK(b.max.y == doctest::Approx(1.0f).epsilon(0.01));
+}
+
+TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ball launcher") {
+    EditorFixture f(ProjectMode::Mode2D);
+    for (const char* uri : {"assets://scripts/platformer_hero.lua", "assets://scripts/camera_follow.lua", "assets://scripts/collectible.lua",
+                            "assets://scripts/ball_launcher.lua"}) {
+        ScriptEngine probe(f.engine->vfs());
+        const ScriptInfo info = probe.describe(uri);
+        CHECK_MESSAGE(info.valid, uri << ": " << info.error);
+    }
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    Scene& scene = f.scene();
+    Input input;
+    ScriptEngine scripts(f.engine->vfs());
+    Physics2DWorld physics;
+    scripts.setInput(&input);
+    scripts.setPhysics2D(&physics);
+    FrameTime time;
+    time.deltaSeconds = 1.0 / 60.0;
+    time.fixedDeltaSeconds = 1.0 / 60.0;
+    auto frame = [&] {
+        physics.step(scene, 1.0f / 60.0f);
+        for (const auto& ev : physics.events()) scripts.dispatchCollision(scene, ev);
+        scripts.update(scene, time);
+        scene.flushDestroyed();
+        scene.updateTransforms();
+        input.beginFrame();
+    };
+    const ecs::Entity hero = scene.findByName("Hero");
+    for (int i = 0; i < 60; ++i) frame();  // lands on the ground
+    const Vec3 start = scene.registry().get<TransformComponent>(hero).position;
+    CHECK(start.y == doctest::Approx(-1.0f).epsilon(0.02));
+    CHECK(scripts.field(hero, "grounded").value() == "true");
+    input.setKey(Key::Left, true);  // walk to the first mushroom (x = -14)
+    for (int i = 0; i < 150; ++i) frame();
+    input.setKey(Key::Left, false);
+    const Vec3 walked = scene.registry().get<TransformComponent>(hero).position;
+    CHECK(walked.x < start.x - 8.0f);
+    CHECK(scene.registry().get<SpriteRendererComponent>(hero).flipX);
+    CHECK(scene.findByName("Mushroom 1").isNull());  // collected (trigger + script call)
+    CHECK(scripts.field(hero, "collected").value() == "1");
+    input.setKey(Key::Space, true);
+    frame();
+    input.setKey(Key::Space, false);
+    float top = walked.y;
+    for (int i = 0; i < 30; ++i) {
+        frame();
+        top = std::max(top, scene.registry().get<TransformComponent>(hero).position.y);
+    }
+    CHECK(top > walked.y + 3.0f);  // jumps more than 3 m
+    CHECK(scripts.stats().errors == 0);
+    CHECK(scripts.stats().faulted == 0);
+
+    // 3D: Space throws a ball that the physics moves.
+    f.ctx->newScene(SceneTemplate::Showcase3D);
+    Scene& scene3 = f.scene();
+    Physics3DWorld physics3;
+    scripts.setPhysics3D(&physics3);
+    const usize before = scene3.entityCount();
+    scripts.update(scene3, time);
+    input.setKey(Key::Space, true);
+    scripts.update(scene3, time);
+    input.beginFrame();
+    input.setKey(Key::Space, false);
+    scene3.updateTransforms();
+    CHECK(scene3.entityCount() == before + 1);
+    const ecs::Entity ball = scene3.findByName("Ball 1");
+    REQUIRE_FALSE(ball.isNull());
+    const Vec3 b0 = scene3.registry().get<TransformComponent>(ball).position;
+    for (int i = 0; i < 30; ++i) {
+        physics3.step(scene3, 1.0f / 60.0f);
+        scripts.update(scene3, time);
+        scene3.updateTransforms();
+    }
+    const Vec3 b1 = scene3.registry().get<TransformComponent>(ball).position;
+    CHECK(b1.z < b0.z - 3.0f);  // flew toward the scene (camera looks down -Z)
+    CHECK(physics3.stats().bodies > 15);
+    CHECK(scripts.stats().errors == 0);
 }
 
 TEST_CASE("create point and spot lights") {

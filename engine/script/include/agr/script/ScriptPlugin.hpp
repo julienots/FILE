@@ -22,6 +22,8 @@ public:
     /// Off: scripts are not run (editor edit mode); turning it off destroys the instances.
     void setRunning(bool running);
     bool running() const { return m_running; }
+    /// Paused: instances are kept but no callback runs (editor pause).
+    void setPaused(bool paused) { m_paused = paused; }
     /// Polls script files for changes (editor / development).
     void setHotReload(bool enabled) { m_hotReload = enabled; }
 
@@ -31,6 +33,7 @@ private:
     SubscriptionId m_collisions, m_collisions3D;
     Engine* m_engine = nullptr;
     bool m_running = true;
+    bool m_paused = false;
     bool m_hotReload = false;
     f64 m_reloadTimer = 0.0;
 };

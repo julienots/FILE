@@ -26,6 +26,7 @@ public:
     void present() override;
     bool canRender() const override { return m_window && !m_backgrounded && !m_minimized; }
     math::Vec2 framebufferSize() const override;
+    math::Vec2 windowSize() const override;
     const char* name() const override { return "SDL3"; }
     GraphicsApi graphicsApi() const override;
     void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }

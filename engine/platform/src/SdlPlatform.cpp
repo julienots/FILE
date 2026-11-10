@@ -283,6 +283,13 @@ void SdlPlatform::present() {
 
 GraphicsApi SdlPlatform::graphicsApi() const { return m_api; }
 
+math::Vec2 SdlPlatform::windowSize() const {
+    if (!m_window) return {};
+    int w = 0, h = 0;
+    SDL_GetWindowSize(m_window, &w, &h);
+    return {static_cast<float>(w), static_cast<float>(h)};
+}
+
 math::Vec2 SdlPlatform::framebufferSize() const {
     int w = 0, h = 0;
     if (m_window) SDL_GetWindowSizeInPixels(m_window, &w, &h);

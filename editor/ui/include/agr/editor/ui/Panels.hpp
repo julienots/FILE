@@ -78,11 +78,13 @@ public:
     float snapTranslate = 0.5f, snapRotate = 15.0f, snapScale = 0.1f;
     bool showGrid = true;
     bool showIcons = true;
+    bool showColliders = true;  ///< Outlines of 2D / 3D colliders (green; triggers in amber).
     float flySpeed = 6.0f;
 
 private:
     void handleCamera(EditorShared& s, const FrameTime& time, bool hovered);
     void drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size);
+    void drawColliders(EditorShared& s, ImVec2 origin, ImVec2 size, const math::Mat4& viewProj);
     void drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size);

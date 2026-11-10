@@ -244,6 +244,13 @@ int e_worldPosition(lua_State* L) {
     lua_pushnumber(L, p.z);
     return 3;
 }
+int e_forward(lua_State* L) {  // world direction of the entity's -Z axis (cameras, lights look along it)
+    const math::Vec3 f = math::normalize(sceneOf(L).worldMatrix(checkEntity(L, 1)).transformVector({0, 0, -1}));
+    lua_pushnumber(L, f.x);
+    lua_pushnumber(L, f.y);
+    lua_pushnumber(L, f.z);
+    return 3;
+}
 int e_rotation(lua_State* L) {
     const math::Vec3 r = transformOf(L, checkEntity(L, 1)).rotation.toEuler();
     lua_pushnumber(L, math::degrees(r.x));
@@ -535,6 +542,12 @@ int i_axis(lua_State* L) {  // "horizontal" / "vertical": arrows and WASD / ZQSD
     lua_pushnumber(L, v);
     return 1;
 }
+int s_size(lua_State* L) {
+    const math::Vec2 sz = implOf(L).screenSize;
+    lua_pushnumber(L, sz.x);
+    lua_pushnumber(L, sz.y);
+    return 2;
+}
 int t_delta(lua_State* L) {
     lua_pushnumber(L, implOf(L).time.deltaSeconds);
     return 1;
@@ -669,7 +682,7 @@ void openAgrLibrary(lua_State* L) {
     luaL_newmetatable(L, kEntityMeta);
     static const luaL_Reg methods[] = {
         {"isValid", e_isValid}, {"name", e_name}, {"setName", e_setName}, {"position", e_position}, {"setPosition", e_setPosition},
-        {"translate", e_translate}, {"worldPosition", e_worldPosition}, {"rotation", e_rotation}, {"setRotation", e_setRotation},
+        {"translate", e_translate}, {"worldPosition", e_worldPosition}, {"forward", e_forward}, {"rotation", e_rotation}, {"setRotation", e_setRotation},
         {"rotate", e_rotate}, {"scale", e_scale}, {"setScale", e_setScale}, {"get", e_get}, {"set", e_set}, {"has", e_has},
         {"add", e_add}, {"remove", e_remove}, {"parent", e_parent}, {"children", e_children}, {"find", e_find},
         {"destroy", e_destroy}, {"script", e_script}, {"velocity", e_velocity}, {"setVelocity", e_setVelocity},
@@ -705,6 +718,10 @@ void openAgrLibrary(lua_State* L) {
     lua_newtable(L);
     setFuncs(L, physics);
     lua_setfield(L, -2, "physics2d");
+    static const luaL_Reg screen[] = {{"size", s_size}, {nullptr, nullptr}};
+    lua_newtable(L);
+    setFuncs(L, screen);
+    lua_setfield(L, -2, "screen");
     static const luaL_Reg physics3[] = {{"raycast", p3_raycast}, {"setGravity", p3_setGravity}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, physics3);

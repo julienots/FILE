@@ -23,6 +23,8 @@ public:
     /// False while the app is in background (mobile): skip rendering.
     virtual bool canRender() const = 0;
     virtual math::Vec2 framebufferSize() const = 0;
+    /// Window size in the units of mouse and touch positions (differs from the framebuffer on HiDPI).
+    virtual math::Vec2 windowSize() const { return framebufferSize(); }
     virtual const char* name() const = 0;
 
     /// Graphics API of the context created by the platform (None when headless).

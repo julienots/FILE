@@ -57,6 +57,8 @@ public:
     ScriptEngine& operator=(const ScriptEngine&) = delete;
 
     void setInput(const Input* input);
+    /// Window size in input units (agr.screen.size()); 0 x 0 when headless.
+    void setScreenSize(math::Vec2 size);
     void setPhysics2D(Physics2DWorld* world);
     void setPhysics3D(Physics3DWorld* world);
     /// Maximum run time of one callback before it is stopped (infinite loops).

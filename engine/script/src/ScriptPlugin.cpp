@@ -18,10 +18,10 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_scripts->setInput(&engine.input());
     engine.registerService<ScriptPlugin>(this);
     m_collisions = engine.events().subscribe<Collision2DEvent>([this](const Collision2DEvent& e) {
-        if (m_running && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
     });
     m_collisions3D = engine.events().subscribe<Collision3DEvent>([this](const Collision3DEvent& e) {
-        if (m_running && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
     });
     return {};
 }
@@ -48,7 +48,7 @@ void ScriptPlugin::setRunning(bool running) {
 }
 
 void ScriptPlugin::onFixedUpdate(Engine& engine, const FrameTime& time) {
-    if (!m_running) return;
+    if (!m_running || m_paused) return;
     // Physics may have been registered after this plugin: look it up lazily.
     bindPhysics(engine);
     m_scripts->fixedUpdate(engine.scene(), time);
@@ -62,8 +62,9 @@ void ScriptPlugin::onUpdate(Engine& engine, const FrameTime& time) {
             m_scripts->reloadChanged();
         }
     }
-    if (!m_running) return;
+    if (!m_running || m_paused) return;
     bindPhysics(engine);
+    m_scripts->setScreenSize(engine.platform().windowSize());
     m_scripts->update(engine.scene(), time);
 }
 

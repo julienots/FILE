@@ -16,6 +16,8 @@
 #include "agr/runtime/Engine.hpp"
 #include "agr/runtime/Events.hpp"
 #include "agr/render/ModelLibrary.hpp"
+#include "agr/physics3d/Physics3DPlugin.hpp"
+#include "agr/script/ScriptPlugin.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 
 namespace agr::editor {
@@ -81,6 +83,10 @@ Status EditorApp::onStart(Engine& engine) {
     m_shared->render = render;
     m_shared->twod = engine.service<TwoDPlugin>();
     if (m_shared->twod) m_shared->twod->setPreviewWhilePaused(true);  // particles animate in edit mode
+    if (auto* scripts = engine.service<ScriptPlugin>()) {
+        scripts->setRunning(false);  // scripts run in play mode only
+        scripts->setHotReload(true);
+    }
 
     // Settings live in the per-user preference folder.
     if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
@@ -197,6 +203,11 @@ void EditorApp::onShutdown(Engine&) {
 // =================================================================== frame
 void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     ++m_frame;
+    if (auto* scripts = m_engine->service<ScriptPlugin>()) {  // scripts follow the play state
+        const PlayState ps = m_ctx->playState();
+        if (scripts->running() != (ps != PlayState::Edit)) scripts->setRunning(ps != PlayState::Edit);
+        scripts->setPaused(ps == PlayState::Paused);
+    }
     if (m_closeProjectRequested) {
         m_closeProjectRequested = false;
         m_viewport.release(*m_shared);
@@ -476,6 +487,8 @@ void EditorApp::startPlay() {
 
 void EditorApp::stopPlay() {
     if (m_ctx->playState() == PlayState::Edit) return;
+    // Scripts get onDestroy while the played scene still exists, before it is restored.
+    if (auto* scripts = m_engine->service<ScriptPlugin>()) scripts->setRunning(false);
     m_ctx->stop();
     m_viewport.gameView = m_gameViewBeforePlay;
 }
@@ -895,17 +908,29 @@ void EditorApp::smokeTest(const FrameTime&) {
             m_shared->brush.active = false;
             startPlay();
             break;
+        // Play mode: real key events drive the Lua hero through 2D physics.
+        case 72:
+            m_smokeHeroX = scene.registry().get<TransformComponent>(scene.findByName("Hero")).position.x;
+            pushKey(SDLK_RIGHT, SDL_SCANCODE_RIGHT, SDL_KMOD_NONE, true);
+            break;
+        case 86: {
+            const auto hero = scene.findByName("Hero");
+            check(!hero.isNull() && scene.registry().get<SpriteAnimatorComponent>(hero).clip == "run", "the hero script plays the run clip");
+            const i32 frame = hero.isNull() ? -1 : scene.registry().get<SpriteRendererComponent>(hero).frame;
+            check(frame >= 4 && frame <= 9, "the sprite animator shows run frames");
+            pushKey(SDLK_RIGHT, SDL_SCANCODE_RIGHT, SDL_KMOD_NONE, false);
+            break;
+        }
         case 90: {
             const auto hero = scene.findByName("Hero");
-            check(!hero.isNull(), "hero present in play mode");
-            if (!hero.isNull()) {
-                const i32 frame = scene.registry().get<SpriteRendererComponent>(hero).frame;
-                check(scene.registry().get<SpriteAnimatorComponent>(hero).time > 0.0f && frame >= 4 && frame <= 9,
-                      "the sprite animator plays the run clip");
-            }
+            check(!hero.isNull() && scene.registry().get<TransformComponent>(hero).position.x > m_smokeHeroX + 0.5f,
+                  "the Right key moves the scripted hero (input -> Lua -> physics)");
+            auto* scripts = m_engine->service<ScriptPlugin>();
+            check(scripts && scripts->scripts()->stats().instances >= 5 && scripts->scripts()->stats().errors == 0, "scripts run without errors");
             stopPlay();
             const auto restored = scene.findByName("Hero");
-            check(!restored.isNull() && scene.registry().get<SpriteRendererComponent>(restored).frame == 4, "stop restores the animated frame");
+            check(!restored.isNull() && scene.registry().get<TransformComponent>(restored).position.x == -3.0f,
+                  "stop restores the scene (hero back at its start)");
             break;
         }
         case 92: {
@@ -938,6 +963,21 @@ void EditorApp::smokeTest(const FrameTime&) {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_3d.png", ec), "3D editor screenshot written");
             check(static_cast<bool>(m_materialPreview.texture(*m_shared)), "material preview rendered");
+            check(ctx.undo(), "undo the added model");  // back to the template, then play it
+            startPlay();
+            break;
+        }
+        case 128: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
+        case 130: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
+        case 140: {
+            check(!scene.findByName("Ball 1").isNull(), "Space throws a ball (Lua spawns a physics entity)");
+            auto* p3 = m_engine->service<Physics3DPlugin>();
+            check(p3 && p3->world().stats().bodies > 15, "3D physics bodies are simulated in play mode");
+            stopPlay();
+            check(scene.findByName("Ball 1").isNull(), "stop removes what the game spawned");
+            break;
+        }
+        case 142: {
             m_viewport.gameView = false;
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");

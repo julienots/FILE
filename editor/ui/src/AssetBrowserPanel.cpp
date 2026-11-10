@@ -74,7 +74,8 @@ void AssetBrowserPanel::importFiles(EditorShared& s, const std::vector<std::stri
         }
         ++imported;
         const std::string fname = src.filename().string();
-        if (!isImageFile(fname) && !isModelFile(fname) && src.extension() != kMaterialExtension && src.extension() != ".agrsheet")
+        if (!isImageFile(fname) && !isModelFile(fname) && src.extension() != kMaterialExtension && src.extension() != ".agrsheet" &&
+            src.extension() != ".lua")
             AGR_LOG_WARN("Editor", "'{}' copied, but this file type has no importer yet", fname);
         if (src.extension() == ".gltf")
             AGR_LOG_INFO("Editor", "'{}': a .gltf file references its .bin and textures; import them too (same folder layout)", fname);
@@ -155,6 +156,28 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         }
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Matériau PBR (.agrmat) modifiable dans l'inspecteur");
+    ImGui::SameLine();
+    if (ImGui::Button("Nouveau script")) {
+        const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouveau_script", {".lua"});
+        const std::string uri = "assets://" + join(s.assetFolder, stem + ".lua");
+        static const char* kTemplate =
+            "-- Script AGR ENGINE (Lua 5.4). Glisser ce fichier sur une entité de la scène pour l'y attacher.\n"
+            "-- Guide : docs/SCRIPTING.md\n"
+            "local Script = {\n"
+            "    -- Valeurs modifiables dans l'inspecteur.\n"
+            "    properties = { speed = 2 },\n"
+            "}\n\n"
+            "function Script:onStart()\n"
+            "end\n\n"
+            "function Script:onUpdate(dt)\n"
+            "    local h = agr.input.axis(\"horizontal\")\n"
+            "    self.entity:translate(h * self.speed * dt, 0, 0)\n"
+            "end\n\n"
+            "return Script\n";
+        if (Status st = s.engine.vfs().writeText(uri, kTemplate); st) s.notify("Script créé : " + uri);
+        else s.notify("Création impossible : " + st.error().message);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Script Lua : glisser sur une entité de la vue pour l'attacher");
     ImGui::SameLine();
     if (ImGui::Button("Créer un atlas...")) m_atlasOpen = true;
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
@@ -267,6 +290,7 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     if (sheet) ImGui::SetTooltip("%s\nFeuille de sprites : %zu frames, %zu clips\nGlisser dans la scène pour créer un sprite", uri.c_str(),
                                                  sheet->frames.size(), sheet->clips.size());
                     else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
+                    else if (fs::path(name).extension() == ".lua") ImGui::SetTooltip("%s\nScript : glisser sur une entité de la vue pour l'attacher", uri.c_str());
                     else if (isMaterial) ImGui::SetTooltip("%s\nMatériau : cliquer pour le modifier, glisser sur un MeshRenderer", uri.c_str());
                     else ImGui::SetTooltip("%s", uri.c_str());
                 }

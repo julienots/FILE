@@ -99,6 +99,7 @@ private:
     u64 m_frame = 0;
     std::vector<std::string> m_failures;
     ImVec2 m_smokeClick{};
+    float m_smokeHeroX = 0.0f;
     Uuid m_smokeDeleted;
 };
 

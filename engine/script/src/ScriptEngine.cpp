@@ -135,10 +135,12 @@ void ScriptEngine::Impl::destroyInstance(Instance& inst, bool callOnDestroy) {
 }
 
 void ScriptEngine::Impl::resetInstances() {
+    // onDestroy only while the instances' scene is still loaded (not after a reload in place).
+    const bool alive = scene && scene->generation() == sceneGeneration;
     std::vector<u64> keys;
     for (auto& [k, inst] : instances) keys.push_back(k);
     std::sort(keys.begin(), keys.end());
-    for (u64 k : keys) destroyInstance(instances[k], scene != nullptr);
+    for (u64 k : keys) destroyInstance(instances[k], alive && scene->valid(instances[k].entity));
     instances.clear();
 }
 
@@ -147,6 +149,7 @@ ScriptEngine::ScriptEngine(VirtualFileSystem& vfs) : m(std::make_unique<Impl>(vf
 ScriptEngine::~ScriptEngine() = default;
 
 void ScriptEngine::setInput(const Input* input) { m->input = input; }
+void ScriptEngine::setScreenSize(math::Vec2 size) { m->screenSize = size; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }

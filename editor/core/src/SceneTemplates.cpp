@@ -1,6 +1,9 @@
 #include "agr/editor/SceneTemplates.hpp"
 
 #include "agr/render/RenderComponents.hpp"
+#include "agr/physics2d/Physics2DComponents.hpp"
+#include "agr/physics3d/Physics3DComponents.hpp"
+#include "agr/script/ScriptComponent.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 #include "agr/twod/TilemapEditing.hpp"
 
@@ -45,11 +48,11 @@ const char* templateDescription(SceneTemplate t) {
         case SceneTemplate::Empty25D: return "Caméra perspective inclinée, sol 3D et sprites : base d'un jeu 2.5D (stratégie, tower defense...).";
         case SceneTemplate::Empty3D: return "Caméra, soleil, ambiance et sol texturé : base d'un jeu 3D.";
         case SceneTemplate::Showcase2D:
-            return "Décor de nuit en pixel art : tilemap, héros animé, fonds en parallaxe, lampe (lumière 2D) et lucioles "
-                   "(particules). Montre les systèmes 2D ; pas encore de gameplay (scripts et physique : phase 6).";
+            return "Petit jeu de plateforme jouable en pixel art : héros scripté (Lua) avec physique 2D, caisse à pousser, "
+                   "champignons à ramasser, tilemap solide, parallaxe, lumière 2D et lucioles. Flèches + Espace ou tactile.";
         case SceneTemplate::Showcase3D:
-            return "Matériaux PBR (métal, rugosité), modèles glTF importés, soleil avec ombres, lampe et projecteur, ciel "
-                   "procédural et brume. Montre le rendu 3D ; pas encore de gameplay (phase 6).";
+            return "Matériaux PBR, modèles glTF importés, ombres, lumières, ciel et brume, avec physique 3D : en jeu, "
+                   "Espace / clic / toucher lance des balles sur les caisses (script Lua).";
     }
     return "";
 }
@@ -119,39 +122,98 @@ void buildShowcase2D(Scene& scene) {
     enum : i32 { GrassTop = 0, Dirt = 1, DarkDirt = 2, Stone = 3, StoneTop = 4, Plank = 5, Leaves = 6,
                  GrassLeft = 8, GrassRight = 9, Flowers = 10, Rock = 11, Bush = 12, Water = 16, WaterTop = 17, Crate = 18,
                  Sign = 19, Mushroom = 20 };
+    // Two tilemaps: "Ground" is solid (TilemapCollider2D), "Decor" is drawn over it without collision.
     const auto ground = scene.createEntity("Ground");
     reg.get<TransformComponent>(ground).position = {-20.0f, -5.0f, 0.0f};
-    auto& tm = reg.emplace<TilemapComponent>(ground);
-    tm.tileset = "assets://2d/forest_tiles.agrsheet";
-    tm.width = 40;
-    tm.height = 9;
-    tm.lit = true;
-    tilemapEnsureLayout(tm);
-    tilemapFillRect(tm, 0, 0, 39, 0, DarkDirt);
-    tilemapFillRect(tm, 0, 1, 39, 2, Dirt);
-    tilemapFillRect(tm, 0, 3, 39, 3, GrassTop);
-    tilemapFillRect(tm, 24, 1, 27, 3, -1);  // pond
-    tilemapFillRect(tm, 24, 1, 27, 1, Water);
-    tilemapFillRect(tm, 24, 2, 27, 2, WaterTop);
-    tilemapSet(tm, 23, 3, GrassRight);
-    tilemapSet(tm, 28, 3, GrassLeft);
-    tilemapFillRect(tm, 30, 4, 33, 5, Stone);
-    tilemapFillRect(tm, 30, 6, 33, 6, StoneTop);
-    tilemapFillRect(tm, 9, 7, 13, 7, Plank);
-    tilemapFillRect(tm, 3, 6, 4, 7, Leaves);
-    for (auto [x, tile] : {std::pair{1, Bush}, {6, Flowers}, {11, Rock}, {15, Mushroom}, {17, Flowers}, {21, Crate}, {29, Sign},
-                           {35, Bush}, {38, Flowers}})
-        tilemapSet(tm, x, 4, tile);
+    {
+        auto& tm = reg.emplace<TilemapComponent>(ground);
+        tm.tileset = "assets://2d/forest_tiles.agrsheet";
+        tm.width = 40;
+        tm.height = 9;
+        tm.lit = true;
+        tilemapEnsureLayout(tm);
+        tilemapFillRect(tm, 0, 0, 39, 0, DarkDirt);
+        tilemapFillRect(tm, 0, 1, 39, 2, Dirt);
+        tilemapFillRect(tm, 0, 3, 39, 3, GrassTop);
+        tilemapFillRect(tm, 24, 0, 27, 3, -1);  // pond: falling in sends the hero back to the start
+        tilemapSet(tm, 23, 3, GrassRight);
+        tilemapSet(tm, 28, 3, GrassLeft);
+        tilemapFillRect(tm, 30, 4, 33, 5, Stone);
+        tilemapFillRect(tm, 30, 6, 33, 6, StoneTop);
+        tilemapFillRect(tm, 9, 7, 13, 7, Plank);
+    }
+    reg.emplace<TilemapCollider2DComponent>(ground).friction = 0.8f;
+    const auto decor = scene.createEntity("Decor");
+    reg.get<TransformComponent>(decor).position = {-20.0f, -5.0f, 0.0f};
+    {
+        auto& tm = reg.emplace<TilemapComponent>(decor);
+        tm.tileset = "assets://2d/forest_tiles.agrsheet";
+        tm.width = 40;
+        tm.height = 9;
+        tm.lit = true;
+        tm.orderInLayer = 1;
+        tilemapEnsureLayout(tm);
+        tilemapFillRect(tm, 24, 0, 27, 1, Water);
+        tilemapFillRect(tm, 24, 2, 27, 2, WaterTop);
+        tilemapFillRect(tm, 3, 6, 4, 7, Leaves);
+        for (auto [x, tile] : {std::pair{1, Bush}, {6, Flowers}, {11, Rock}, {17, Flowers}, {29, Sign}, {35, Bush}, {38, Flowers}})
+            tilemapSet(tm, x, 4, tile);
+    }
 
+    // Playable hero: Lua script + 2D physics (capsule whose bottom is at the feet).
     const auto hero = scene.createEntity("Hero");
     reg.get<TransformComponent>(hero).position = {-3.0f, -1.0f, 0.0f};
-    auto& hs = reg.emplace<SpriteRendererComponent>(hero);
-    hs.sheet = "assets://2d/hero.agrsheet";
-    hs.frame = 4;
-    hs.size = {1.5f, 1.5f};
-    hs.lit = true;
-    hs.sortingLayer = 1;
-    reg.emplace<SpriteAnimatorComponent>(hero).clip = "run";
+    {
+        auto& hs = reg.emplace<SpriteRendererComponent>(hero);
+        hs.sheet = "assets://2d/hero.agrsheet";
+        hs.frame = 0;
+        hs.size = {1.5f, 1.5f};
+        hs.lit = true;
+        hs.sortingLayer = 1;
+    }
+    reg.emplace<SpriteAnimatorComponent>(hero).clip = "idle";
+    {
+        auto& rb = reg.emplace<RigidBody2DComponent>(hero);
+        rb.fixedRotation = true;
+        rb.gravityScale = 2.0f;
+    }
+    {
+        auto& col = reg.emplace<Collider2DComponent>(hero);
+        col.shape = ColliderShape2D::Capsule;
+        col.size = {0.7f, 1.3f};
+        col.offset = {0.0f, 0.65f};
+        col.friction = 0.0f;  // does not stick to walls
+    }
+    reg.emplace<ScriptComponent>(hero).script = "assets://scripts/platformer_hero.lua";
+    reg.emplace<ScriptComponent>(cam).script = "assets://scripts/camera_follow.lua";
+
+    // A crate to push (dynamic body) and mushrooms to collect (triggers).
+    const auto crate = scene.createEntity("Crate");
+    reg.get<TransformComponent>(crate).position = {-6.0f, 1.0f, 0.0f};
+    {
+        auto& cs = reg.emplace<SpriteRendererComponent>(crate);
+        cs.sheet = "assets://2d/forest_tiles.agrsheet";
+        cs.frame = Crate;
+        cs.lit = true;
+        cs.sortingLayer = 1;
+    }
+    reg.emplace<RigidBody2DComponent>(crate);
+    reg.emplace<Collider2DComponent>(crate).density = 0.5f;
+    const math::Vec2 mushrooms[] = {{-14.0f, -0.4f}, {-8.5f, 3.6f}, {12.0f, 2.6f}};
+    for (int i = 0; i < 3; ++i) {
+        const auto m = scene.createEntity("Mushroom " + std::to_string(i + 1));
+        reg.get<TransformComponent>(m).position = {mushrooms[i].x, mushrooms[i].y, 0.0f};
+        auto& ms = reg.emplace<SpriteRendererComponent>(m);
+        ms.sheet = "assets://2d/forest_tiles.agrsheet";
+        ms.frame = Mushroom;
+        ms.lit = true;
+        ms.sortingLayer = 1;
+        auto& col = reg.emplace<Collider2DComponent>(m);
+        col.shape = ColliderShape2D::Circle;
+        col.radius = 0.35f;
+        col.isTrigger = true;
+        reg.emplace<ScriptComponent>(m).script = "assets://scripts/collectible.lua";
+    }
 
     const auto lamp = scene.createEntity("Lamp");
     reg.get<TransformComponent>(lamp).position = {2.0f, -1.0f, 0.0f};
@@ -196,6 +258,7 @@ void buildShowcase3D(Scene& scene) {
     const auto cam = scene.createEntity("Main Camera");
     reg.emplace<CameraComponent>(cam).fieldOfView = math::radians(50.0f);
     lookAt(scene, cam, {0.0f, 3.6f, 9.5f}, {0.0f, 0.5f, 0.0f});
+    reg.emplace<ScriptComponent>(cam).script = "assets://scripts/ball_launcher.lua";  // Space / click / tap: throw balls
 
     const auto sunE = scene.createEntity("Sun");
     auto& sunL = reg.emplace<DirectionalLightComponent>(sunE);
@@ -218,6 +281,9 @@ void buildShowcase3D(Scene& scene) {
         gm.texture = "assets://textures/grid.png";
         gm.uvScale = {20.0f, 20.0f};
         gm.roughness = 0.9f;
+        auto& gc = reg.emplace<ColliderComponent>(ground);  // static: no RigidBody
+        gc.size = {1.0f, 0.2f, 1.0f};
+        gc.offset = {0.0f, -0.1f, 0.0f};
     }
 
     // Material spheres: metallic row (back) and dielectric row (front), roughness 0 -> 1.
@@ -232,6 +298,7 @@ void buildShowcase3D(Scene& scene) {
             m.color = row ? math::Color{1.0f, 0.78f, 0.34f, 1.0f} : math::Color{0.85f, 0.12f, 0.10f, 1.0f};
             m.metallic = row ? 1.0f : 0.0f;
             m.roughness = 0.05f + 0.225f * static_cast<float>(i);
+            reg.emplace<ColliderComponent>(s).shape = ColliderShape3D::Sphere;
         }
     }
     // Imported glTF models and .agrmat materials.
@@ -253,8 +320,16 @@ void buildShowcase3D(Scene& scene) {
         t.position = p.position;
         t.rotation = Quat::fromAxisAngle(Vec3::up(), math::radians(p.yaw));
         t.scale = Vec3{p.scale};
-        auto& m = reg.emplace<MeshRendererComponent>(e);
-        m.model = p.model;
+        reg.emplace<MeshRendererComponent>(e).model = p.model;
+        auto& c = reg.emplace<ColliderComponent>(e);
+        if (p.name[0] == 'C') {  // crates fall and get pushed; their model has its origin at the bottom
+            c.offset = {0.0f, 0.5f, 0.0f};
+            c.density = 300.0f;  // wood
+            reg.emplace<RigidBodyComponent>(e);
+        } else {                 // rocks: static, approximated by a box
+            c.size = {1.6f, 0.8f, 1.3f};
+            c.offset = {0.0f, 0.4f, 0.0f};
+        }
     }
     const char* materials[] = {"gold", "copper", "plastic_red", "rubber", "ceramic"};
     const auto shelf = scene.createEntity("Materials");
@@ -266,6 +341,7 @@ void buildShowcase3D(Scene& scene) {
         auto& m = reg.emplace<MeshRendererComponent>(e);
         m.mesh = i % 2 ? PrimitiveMesh::Cube : PrimitiveMesh::Sphere;
         m.material = std::string("assets://3d/") + materials[i] + ".agrmat";
+        reg.emplace<ColliderComponent>(e).shape = i % 2 ? ColliderShape3D::Box : ColliderShape3D::Sphere;
     }
 
     // Local lights: warm lamp over the crates, cool spot on the spheres, neon bar.
@@ -300,6 +376,9 @@ void buildShowcase3D(Scene& scene) {
 void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
     registerRenderComponents();
     registerSpriteAnimatorComponent();
+    registerPhysics2DComponents();
+    registerPhysics3DComponents();
+    registerScriptComponent();
     auto& reg = scene.registry();
     const char* mark = "assets://textures/agr_mark.png";
     const char* grid = "assets://textures/grid.png";

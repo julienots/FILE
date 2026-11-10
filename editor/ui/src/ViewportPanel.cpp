@@ -11,6 +11,9 @@
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
+#include "agr/physics2d/Physics2DComponents.hpp"
+#include "agr/physics3d/Physics3DComponents.hpp"
+#include "agr/script/ScriptComponent.hpp"
 #include "agr/twod/TilemapEditing.hpp"
 
 namespace agr::editor {
@@ -216,6 +219,8 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
         for (auto& ed : edges) dl->AddLine(sp[ed[0]], sp[ed[1]], col, 1.5f);
     }
 
+    if (showColliders) drawColliders(s, origin, size, vp);
+
     // Icons for entities without geometry (cameras, lights).
     m_iconHits.clear();
     if (showIcons) {
@@ -260,6 +265,106 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
         const ImVec2 ts = ImGui::CalcTextSize(text);
         dl->AddText({origin.x + size.x - ts.x - 10, origin.y + size.y - ts.y - 8}, IM_COL32(230, 228, 223, 150), text);
     }
+}
+
+void ViewportPanel::drawColliders(EditorShared& s, ImVec2 origin, ImVec2 size, const Mat4& vp) {
+    Scene& scene = s.ctx.scene();
+    auto& reg = scene.registry();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    constexpr ImU32 kSolid = IM_COL32(80, 220, 120, 200), kTrigger = IM_COL32(245, 165, 36, 220);
+    auto line = [&](const Mat4& w, Vec3 a, Vec3 b, ImU32 col) {
+        ImVec2 pa, pb;
+        if (project(vp, w.transformPoint(a), origin, size, pa) && project(vp, w.transformPoint(b), origin, size, pb)) dl->AddLine(pa, pb, col, 1.5f);
+    };
+    auto loop = [&](const Mat4& w, const std::vector<Vec3>& pts, ImU32 col) {
+        for (usize i = 0; i < pts.size(); ++i) line(w, pts[i], pts[(i + 1) % pts.size()], col);
+    };
+    // Circle of radius r around c in the plane spanned by axes u, v (local space).
+    auto circle = [&](const Mat4& w, Vec3 c, Vec3 u, Vec3 v, float r, ImU32 col, float from = 0.0f, float to = 2.0f * math::kPi, bool closed = true) {
+        std::vector<Vec3> pts;
+        const int n = 24;
+        for (int i = 0; i <= n; ++i) {
+            const float a = from + (to - from) * static_cast<float>(i) / n;
+            pts.push_back(c + u * (std::cos(a) * r) + v * (std::sin(a) * r));
+        }
+        for (usize i = 0; i + 1 < pts.size(); ++i) line(w, pts[i], pts[i + 1], col);
+        if (closed) line(w, pts.back(), pts.front(), col);
+    };
+    auto visible = [&](ecs::Entity e) {
+        const auto* w = reg.tryGet<WorldTransformComponent>(e);
+        const auto* st = reg.tryGet<StateComponent>(e);
+        return w && w->activeInHierarchy && !(st && st->hiddenInEditor);
+    };
+    reg.view<Collider2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, Collider2DComponent& c, WorldTransformComponent& w) {
+        if (!visible(e)) return;
+        const ImU32 col = c.isTrigger ? kTrigger : kSolid;
+        const Vec3 o{c.offset.x, c.offset.y, 0.0f};
+        switch (c.shape) {
+            case ColliderShape2D::Box: {
+                const float hx = c.size.x * 0.5f, hy = c.size.y * 0.5f;
+                loop(w.matrix, {o + Vec3{-hx, -hy, 0}, o + Vec3{hx, -hy, 0}, o + Vec3{hx, hy, 0}, o + Vec3{-hx, hy, 0}}, col);
+                break;
+            }
+            case ColliderShape2D::Circle: circle(w.matrix, o, {1, 0, 0}, {0, 1, 0}, c.radius, col); break;
+            case ColliderShape2D::Capsule: {
+                const float r = c.size.x * 0.5f, half = std::max(c.size.y * 0.5f - r, 0.0f);
+                circle(w.matrix, o + Vec3{0, half, 0}, {1, 0, 0}, {0, 1, 0}, r, col, 0.0f, math::kPi, false);
+                circle(w.matrix, o + Vec3{0, -half, 0}, {1, 0, 0}, {0, 1, 0}, r, col, math::kPi, 2.0f * math::kPi, false);
+                line(w.matrix, o + Vec3{-r, -half, 0}, o + Vec3{-r, half, 0}, col);
+                line(w.matrix, o + Vec3{r, -half, 0}, o + Vec3{r, half, 0}, col);
+                break;
+            }
+        }
+    });
+    reg.view<TilemapCollider2DComponent, TilemapComponent, WorldTransformComponent>().each(
+        [&](ecs::Entity e, TilemapCollider2DComponent&, TilemapComponent& tm, WorldTransformComponent& w) {
+            if (!visible(e)) return;
+            for (u32 y = 0; y < tm.height; ++y) {
+                u32 x = 0;
+                while (x < tm.width) {
+                    if (tm.tileAt(x, y) < 0) {
+                        ++x;
+                        continue;
+                    }
+                    const u32 start = x;
+                    while (x < tm.width && tm.tileAt(x, y) >= 0) ++x;
+                    const float x0 = static_cast<float>(start) * tm.cellSize.x, x1 = static_cast<float>(x) * tm.cellSize.x;
+                    const float y0 = static_cast<float>(y) * tm.cellSize.y, y1 = static_cast<float>(y + 1) * tm.cellSize.y;
+                    loop(w.matrix, {{x0, y0, 0}, {x1, y0, 0}, {x1, y1, 0}, {x0, y1, 0}}, kSolid);
+                }
+            }
+        });
+    reg.view<ColliderComponent, WorldTransformComponent>().each([&](ecs::Entity e, ColliderComponent& c, WorldTransformComponent& w) {
+        if (!visible(e)) return;
+        const ImU32 col = c.isTrigger ? kTrigger : kSolid;
+        switch (c.shape) {
+            case ColliderShape3D::Box: {
+                const Vec3 h = c.size * 0.5f;
+                Vec3 p[8];
+                for (int i = 0; i < 8; ++i) p[i] = c.offset + Vec3{(i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z};
+                static const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+                for (auto& ed : edges) line(w.matrix, p[ed[0]], p[ed[1]], col);
+                break;
+            }
+            case ColliderShape3D::Sphere:
+                circle(w.matrix, c.offset, {1, 0, 0}, {0, 1, 0}, c.radius, col);
+                circle(w.matrix, c.offset, {1, 0, 0}, {0, 0, 1}, c.radius, col);
+                circle(w.matrix, c.offset, {0, 1, 0}, {0, 0, 1}, c.radius, col);
+                break;
+            case ColliderShape3D::Capsule: {
+                const float r = c.radius, half = std::max(c.height * 0.5f - r, 0.0f);
+                const Vec3 top = c.offset + Vec3{0, half, 0}, bottom = c.offset - Vec3{0, half, 0};
+                circle(w.matrix, top, {1, 0, 0}, {0, 0, 1}, r, col);
+                circle(w.matrix, bottom, {1, 0, 0}, {0, 0, 1}, r, col);
+                circle(w.matrix, top, {1, 0, 0}, {0, 1, 0}, r, col, 0.0f, math::kPi, false);
+                circle(w.matrix, bottom, {1, 0, 0}, {0, 1, 0}, r, col, math::kPi, 2.0f * math::kPi, false);
+                circle(w.matrix, top, {0, 0, 1}, {0, 1, 0}, r, col, 0.0f, math::kPi, false);
+                circle(w.matrix, bottom, {0, 0, 1}, {0, 1, 0}, r, col, math::kPi, 2.0f * math::kPi, false);
+                for (Vec3 d : {Vec3{r, 0, 0}, Vec3{-r, 0, 0}, Vec3{0, 0, r}, Vec3{0, 0, -r}}) line(w.matrix, bottom + d, top + d, col);
+                break;
+            }
+        }
+    });
 }
 
 void ViewportPanel::drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size) {
@@ -449,6 +554,20 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
         const float dropAspect = size.x / std::max(size.y, 1.0f);
         const math::Ray dropRay = rayFromScreen(projectionGL(s, dropAspect) * viewMatrix(s),
                                                 {(mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y});
+        if (uri.size() > 4 && uri.compare(uri.size() - 4, 4, ".lua") == 0) {  // attach the script to the entity under the cursor
+            auto hit = pick(s.ctx.scene(), dropRay, s.pickAssets());
+            if (hit) {
+                auto& reg = s.ctx.scene().registry();
+                if (!reg.has<ScriptComponent>(hit->entity)) reg.emplace<ScriptComponent>(hit->entity);
+                reg.get<ScriptComponent>(hit->entity).script = uri;
+                s.ctx.selection().set(s.ctx.scene().uuidOf(hit->entity));
+                s.ctx.commit("Attach Script");
+            } else {
+                s.notify("Déposez le script sur un objet de la scène (ou utilisez « Ajouter un composant › Script »)");
+            }
+            ImGui::EndDragDropTarget();
+            return;
+        }
         const bool materialFile = uri.size() > 7 && uri.compare(uri.size() - 7, 7, kMaterialExtension) == 0;
         if (materialFile) {  // onto the mesh under the cursor
             auto hit = pick(s.ctx.scene(), dropRay, s.pickAssets());
@@ -559,6 +678,7 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     if (toolButton(cam.mode2D ? "2D" : "3D", false, "Basculer la vue 2D / 3D")) cam.mode2D = !cam.mode2D;
     if (toolButton("Grille", showGrid, nullptr)) showGrid = !showGrid;
     if (toolButton("Icônes", showIcons, nullptr)) showIcons = !showIcons;
+    if (toolButton("Collisions", showColliders, "Afficher les formes de collision (vert ; déclencheurs en ambre)")) showColliders = !showColliders;
     if (toolButton("Vue jeu", gameView, "Voir la scène depuis la caméra principale du jeu")) gameView = !gameView;
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
