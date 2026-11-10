@@ -1,0 +1,2 @@
+-keep class com.superessence.tagforge.hce.** { *; }
+-dontwarn com.google.zxing.**

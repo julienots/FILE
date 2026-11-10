@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TagForge NFC</string>
+    <string name="hce_description">TagForge – émulation de tag NFC</string>
+</resources>

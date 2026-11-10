@@ -1,3 +1,5 @@
+> 📡 **Nouveau : TagForge NFC**, l'appli de tags NFC (lecture, écriture de 39 types de contenu, voix Google à l'approche sans appli, automatisations, mot de passe, émulation). APK : [`release/TagForge-NFC.apk`](release/TagForge-NFC.apk) · détails : [`nfc-app/README.md`](nfc-app/README.md)
+
 # 🌙 NOCTÉA — by Superessence Studio
 
 **Retrouvez le calme. Retrouvez le sommeil.**
