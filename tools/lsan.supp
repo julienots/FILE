@@ -9,3 +9,6 @@ leak:X11_VideoInit
 leak:SDL_VideoInit
 # Xlib text-property conversion used by SDL_SetWindowTitle on X11.
 leak:_Xutf8TextListToTextProperty
+# System audio libraries (JACK, PulseAudio, ALSA) that miniaudio loads at run time with dlopen:
+# their static constructors allocate process-lifetime data.
+leak:ma_dlopen

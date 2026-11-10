@@ -20,6 +20,10 @@
 #include "agr/assets/Model.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/animation/AnimationSystem.hpp"
+#include "agr/audio/AudioSystem.hpp"
+#include "agr/audio/Wav.hpp"
+#include "agr/ui/UISystem.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/twod/Atlas.hpp"
@@ -259,5 +263,97 @@ int main() {
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     }
+
+    // -------------------------------------------------------------- audio, UI, animation
+    const auto root = std::filesystem::temp_directory_path() / "agr_bench_p7";
+    std::filesystem::create_directories(root / "fonts");
+    std::filesystem::copy_file(AGR_BENCH_FONT, root / "fonts" / "Inter-Regular.ttf", std::filesystem::copy_options::overwrite_existing);
+    VirtualFileSystem vfs;
+    vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
+    {
+        std::vector<float> tone(48000);
+        for (usize i = 0; i < tone.size(); ++i) tone[i] = 0.3f * std::sin(static_cast<float>(i) * 0.05f);
+        const ByteBuffer wav = encodeWav16(tone.data(), 48000, 1, 44100);  // resampled to 48 kHz
+        (void)vfs.writeBytes("assets://tone.wav", wav.data(), wav.size());
+        AudioSystem audio(vfs);
+        (void)audio.initialize({.output = AudioOutput::Manual});
+        for (int i = 0; i < 32; ++i) {
+            PlayParams p;
+            p.loop = true;
+            p.pitch = 0.8f + 0.01f * static_cast<float>(i);
+            p.spatial = i % 2 == 0;
+            p.position = {static_cast<float>(i % 8) - 4.0f, 0.0f, -static_cast<float>(i / 8)};
+            (void)audio.play("assets://tone.wav", p);
+        }
+        std::vector<float> out(512 * 2);
+        bench("audio: mix 32 voices (16 spatial, resampled), 512 frames", 512, 400, [&] { audio.mix(out.data(), 512); });
+        std::printf("    (512 frames = 10.7 ms of sound at 48 kHz)\n");
+    }
+    {
+        registerUIComponents();
+        Scene scene;
+        const auto canvas = scene.createEntity("Canvas");
+        scene.registry().emplace<UICanvasComponent>(canvas);
+        const auto column = scene.createEntity("Column", canvas);
+        auto& cr = scene.registry().emplace<UIRectComponent>(column);
+        cr.anchorMin = {0, 0};
+        cr.anchorMax = {1, 1};
+        cr.size = {0, 0};
+        scene.registry().emplace<UILayoutComponent>(column).type = UILayoutType::Grid;
+        for (int i = 0; i < 100; ++i) {
+            const auto b = scene.createEntity("Button", column);
+            scene.registry().emplace<UIRectComponent>(b);
+            scene.registry().emplace<UIImageComponent>(b);
+            scene.registry().emplace<UIButtonComponent>(b);
+            const auto t = scene.createEntity("Label", b);
+            auto& tr = scene.registry().emplace<UIRectComponent>(t);
+            tr.anchorMin = {0, 0};
+            tr.anchorMax = {1, 1};
+            tr.size = {0, 0};
+            scene.registry().emplace<UITextComponent>(t).text = "Item " + std::to_string(i);
+            for (int k = 0; k < 3; ++k) {
+                const auto img = scene.createEntity("Icon", b);
+                scene.registry().emplace<UIRectComponent>(img).size = {20, 20};
+                scene.registry().emplace<UIImageComponent>(img);
+            }
+        }
+        UISystem ui(vfs);
+        OverlayDrawList list;
+        ui.buildOverlay(scene, 1920, 1080, list);  // glyphs rasterized once
+        bench("ui: layout + overlay of 501 elements (100 buttons with text)", 501, 200, [&] {
+            list.clear();
+            ui.buildOverlay(scene, 1920, 1080, list);
+        });
+        std::printf("    (%u quads)\n", ui.stats().quads);
+        std::vector<UIPointer> pointers{{0, {500, 300}, true}};
+        bench("ui: pointer input (hit test, top element first) over 501 elements", 1, 2000, [&] { ui.processInput(scene, pointers); });
+    }
+    {
+        registerAnimationComponents();
+        AnimationClip clip;
+        for (int ch = 0; ch < 3; ++ch) {
+            Curve& c = clip.track("", "Transform", "position", ch).curve;
+            for (int k = 0; k <= 8; ++k) c.setKey(static_cast<float>(k) * 0.25f, static_cast<float>((k * 7 + ch) % 5));
+        }
+        clip.duration = 2.0f;
+        (void)vfs.writeText("assets://move.agranim", clip.toJson());
+        AnimatorController ctrl;
+        ctrl.parameters = {{"speed", ParameterType::Float, 0.0f}};
+        ctrl.states = {{"A", "assets://move.agranim", "", 1.0f, {}}, {"B", "assets://move.agranim", "", 1.5f, {}}};
+        ctrl.transitions = {{"A", "B", {{"speed", ConditionOp::Greater, 0.5f}}, -1.0f, 0.2f}, {"B", "A", {}, 1.0f, 0.2f}};
+        (void)vfs.writeText("assets://sm.agrctrl", ctrl.toJson());
+        Scene scene;
+        for (int i = 0; i < 1000; ++i) {
+            const auto e = scene.createEntity("A");
+            auto& a = scene.registry().emplace<AnimatorComponent>(e);
+            if (i % 2) a.controller = "assets://sm.agrctrl";
+            else a.clip = "assets://move.agranim";
+        }
+        AnimationSystem anim(vfs);
+        anim.update(scene, 0.016f);
+        bench("animation: 1000 animators (500 state machines), 3 curves each", 1000, 100, [&] { anim.update(scene, 0.016f); });
+    }
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
     return 0;
 }

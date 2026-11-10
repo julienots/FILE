@@ -1,5 +1,6 @@
 add_executable(agr_benchmarks main.cpp)
-target_link_libraries(agr_benchmarks PRIVATE agr::scene agr::twod agr::physics2d agr::physics3d agr::script agr::compiler_options)
+target_link_libraries(agr_benchmarks PRIVATE agr::audio agr::ui agr::animation agr::scene agr::twod agr::physics2d agr::physics3d agr::script agr::compiler_options)
+target_compile_definitions(agr_benchmarks PRIVATE AGR_BENCH_FONT="${PROJECT_SOURCE_DIR}/editor/resources/fonts/Inter-Regular.ttf")
 set_target_properties(agr_benchmarks PROPERTIES FOLDER "Benchmarks")
 
 if(AGR_BUILD_PLATFORM)
