@@ -6,6 +6,8 @@
 //
 // Usage: agr_sandbox [--headless] [--frames N] [--gles] [--profile NAME]
 //                    [--screenshot user://shot.png] [--plugins DIR] [--sprites N]
+//                    [--vulkan | --opengl | --gles] [--validation]   (default: auto = Vulkan, else OpenGL)
+//                    [--freeze]   time scale 0: deterministic frames for cross-backend image comparison
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -218,13 +220,18 @@ int main(int argc, char** argv) {
     config.assetsDirectory = exeDir + "/assets";
     std::string screenshot;
     u32 stressSprites = 0;
+    bool freeze = false;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--headless")) config.headless = true;
         else if (!std::strcmp(argv[i], "--gles")) config.window.graphics = GraphicsApi::OpenGLES;
+        else if (!std::strcmp(argv[i], "--opengl")) config.window.graphics = GraphicsApi::OpenGL;
+        else if (!std::strcmp(argv[i], "--vulkan")) config.window.graphics = GraphicsApi::Vulkan;
+        else if (!std::strcmp(argv[i], "--validation")) config.window.graphicsValidation = true;
         else if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) config.maxFrames = std::strtoull(argv[++i], nullptr, 10);
         else if (!std::strcmp(argv[i], "--profile") && i + 1 < argc) config.graphicsProfile = argv[++i];
         else if (!std::strcmp(argv[i], "--screenshot") && i + 1 < argc) screenshot = argv[++i];
         else if (!std::strcmp(argv[i], "--plugins") && i + 1 < argc) config.pluginsDirectory = argv[++i];
+        else if (!std::strcmp(argv[i], "--freeze")) freeze = true;
         else if (!std::strcmp(argv[i], "--sprites") && i + 1 < argc) stressSprites = static_cast<u32>(std::strtoul(argv[++i], nullptr, 10));
     }
 
@@ -238,6 +245,7 @@ int main(int argc, char** argv) {
     }
     if (Status s = engine.initialize(std::move(sdl)); !s) return 1;
 
+    if (freeze) engine.setTimeScale(0.0);
     SandboxApp app(sdlRaw, screenshot, stressSprites);
     if (config.maxFrames > 0 && config.maxFrames <= app.m_screenshotFrame) app.m_screenshotFrame = config.maxFrames / 2;
     return engine.run(app);

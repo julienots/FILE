@@ -1,6 +1,6 @@
 # ADR 0004 — Backends graphiques
 
-**Statut :** accepté. Backend OpenGL / OpenGL ES implémenté en phase 2 ; backend Vulkan à venir.
+**Statut :** accepté et implémenté (phase 2) : backends OpenGL / OpenGL ES et Vulkan 1.1.
 
 ## Décision
 
@@ -22,7 +22,7 @@
 3. Il est **testable en CI** sans GPU : Mesa llvmpipe fournit OpenGL 4.5 et OpenGL ES 3.2 logiciels,
    et les tests GPU lisent les pixels réels dans les deux dialectes.
 
-## Choix de conception qui préparent Vulkan
+## Choix de conception communs aux deux backends
 
 - Uniformes en blocs std140 sur des slots numérotés, textures sur des unités numérotées ➜ descriptor sets.
 - Données par objet dans un buffer unique par image avec offsets alignés ➜ *dynamic uniform buffers*.

@@ -25,7 +25,7 @@
                │    │              │
                │    └──► agr::assets ──► stb_image
                │              │
-               └──────► agr::rhi (GL / GLES ; Vulkan à venir)
+               └──────► agr::rhi (Vulkan ; GL / GLES) ──► volk, VMA, glslang
                                    │
                 agr::scene ──► nlohmann/json
               ┌─────┴─────┐
@@ -41,14 +41,14 @@
 | `agr::ecs` | en-têtes | ECS à *sparse sets* : `Registry`, `Pool<T>`, `View<Ts...>`, hooks de construction/destruction, accès typé ou effacé |
 | `agr::scene` | statique | `Scene` (hiérarchie, transformations monde, état actif hérité, UUID persistants, duplication), réflexion des composants, sérialisation JSON (`.agrscene`) et fragments (copier/coller, futurs prefabs) |
 | `agr::runtime` | statique | `Engine` (services + boucle + registre de services), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
-| `agr::rhi` | statique | Interface GPU neutre + backend OpenGL 3.3 / OpenGL ES 3.0 avec chargeur intégré |
+| `agr::rhi` | statique | Interface GPU neutre + backends Vulkan 1.1 et OpenGL 3.3 / OpenGL ES 3.0, traducteur du dialecte de shaders |
 | `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud) |
 | `agr::render` | statique | Composants de rendu, primitives, profils graphiques, `Renderer` forward, `RenderPlugin` |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 
 Détails du rendu : [RENDERING.md](RENDERING.md).
 
-Modules prévus (voir la [feuille de route](ROADMAP.md)) : backend Vulkan de `agr::rhi`, `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
+Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
 `agr::ui`, `agr::animation`, puis l'application `agr_editor`.
 
 ## Boucle principale

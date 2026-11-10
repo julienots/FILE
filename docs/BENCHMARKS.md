@@ -40,30 +40,43 @@ scene: load 100k entities from JSON             805.276 ms    8052.76 ns/item
 
 ## Renderer (phase 2)
 
-`agr_gpu_benchmarks` (preset `release`, fenêtre cachée 1280×720, médiane sur 60 images).
-GPU : **Mesa llvmpipe**, un rasteriseur *logiciel* qui exécute le travail du GPU sur le CPU.
+`agr_gpu_benchmarks [gl|vulkan]` (preset `release`, fenêtre cachée 1280×720, médiane sur 60 images).
+GPU : **Mesa llvmpipe / lavapipe**, rastériseurs *logiciels* qui exécutent le travail du GPU sur le CPU.
 
 ```
-AGR ENGINE renderer benchmarks — llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
-3D: 120 lit cubes                      collect   0.020 ms   submit   1.893 ms   draws   120   batches     0   visible    120   culled      0
-3D: 2000 lit cubes (half culled)       collect   0.203 ms   submit   7.077 ms   draws  1665   batches     0   visible   1665   culled    335
-2D: 10k sprites, 1 texture             collect   0.945 ms   submit   2.264 ms   draws     1   batches     1   visible  10000   culled      0
-2D: 10k sprites, 2 textures interleaved collect   1.006 ms   submit   2.328 ms   draws     2   batches     2   visible  10000   culled      0
-2D: 50k sprites, 2 textures interleaved collect   5.371 ms   submit  11.957 ms   draws     2   batches     2   visible  50000   culled      0
-2D: 50k sprites, 75% off-screen        collect   3.530 ms   submit   8.778 ms   draws     2   batches     2   visible  26015   culled  23985
+AGR ENGINE renderer benchmarks — OpenGL on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+3D: 120 lit cubes                        collect  0.021 ms  submit   2.200 ms  wait   0.000 ms  draws   120  batches    0  visible    120  culled      0
+3D: 2000 lit cubes (half culled)         collect  0.244 ms  submit  12.004 ms  wait   0.000 ms  draws  1665  batches    0  visible   1665  culled    335
+2D: 10k sprites, 1 texture               collect  1.029 ms  submit   2.556 ms  wait   0.000 ms  draws     1  batches    1  visible  10000  culled      0
+2D: 10k sprites, 2 textures interleaved  collect  1.025 ms  submit   2.475 ms  wait   0.000 ms  draws     2  batches    2  visible  10000  culled      0
+2D: 50k sprites, 2 textures interleaved  collect  5.681 ms  submit  13.477 ms  wait   0.000 ms  draws     2  batches    2  visible  50000  culled      0
+2D: 50k sprites, 75% off-screen          collect  3.777 ms  submit   9.794 ms  wait   0.000 ms  draws     2  batches    2  visible  26015  culled  23985
+
+AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+3D: 120 lit cubes                        collect  0.025 ms  submit   0.189 ms  wait   5.226 ms  draws   120  batches    0  visible    120  culled      0
+3D: 2000 lit cubes (half culled)         collect  0.260 ms  submit   1.773 ms  wait  29.995 ms  draws  1665  batches    0  visible   1665  culled    335
+2D: 10k sprites, 1 texture               collect  1.128 ms  submit   0.623 ms  wait  12.495 ms  draws     1  batches    1  visible  10000  culled      0
+2D: 10k sprites, 2 textures interleaved  collect  1.088 ms  submit   0.658 ms  wait  12.897 ms  draws     2  batches    2  visible  10000  culled      0
+2D: 50k sprites, 2 textures interleaved  collect  6.160 ms  submit   3.162 ms  wait  23.453 ms  draws     2  batches    2  visible  50000  culled      0
+2D: 50k sprites, 75% off-screen          collect  3.975 ms  submit   1.768 ms  wait  30.235 ms  draws     2  batches    2  visible  26015  culled  23985
 ```
 
 | Colonne | Signification |
 |---|---|
 | `collect` | Code du moteur : parcours de la scène, culling, tri, préparation des uniformes et des sommets |
-| `submit` | Upload et soumission des commandes. Avec llvmpipe, cela inclut une partie du travail « GPU » ; sur un vrai pilote, compter environ 1 à 5 µs par draw call |
+| `submit` | Envoi des données et des commandes au pilote, hors attente |
+| `wait` | Temps bloqué sur le GPU ou la présentation (Vulkan uniquement ; en OpenGL cette attente se produit dans `SwapBuffers`, hors mesure) |
 
 | Mesure | Analyse |
 |---|---|
-| ~0,17 µs par maillage, ~0,1 µs par sprite (`collect`) | 50 000 sprites préparés en ~5 ms sur un cœur de ce Xeon. Prochaines optimisations si nécessaire : collecte parallèle sur le `JobSystem`, cache des coins de sprites statiques. |
+| ~0,17 µs par maillage, ~0,1 µs par sprite (`collect`) | 50 000 sprites préparés en ~6 ms sur un cœur de ce Xeon. Pistes si nécessaire : collecte parallèle sur le `JobSystem`, cache des coins de sprites statiques. |
+| Soumission Vulkan ~1 µs par draw contre ~7 µs en OpenGL | 1 665 draw calls soumis en 1,8 ms (Vulkan) contre 12 ms (OpenGL) sur ce pilote. Le temps total reste borné par le rastériseur logiciel (colonne `wait`). |
 | 10 000 sprites, 2 textures alternées ➜ 2 draw calls | En orthographique, le tri regroupe par texture à profondeur égale. |
 | Perspective | Le tri de l'arrière vers l'avant des sprites transparents limite les lots (mesuré dans la sandbox : `--sprites 10000` ➜ ~2 000 lots). Correct visuellement ; les atlas (phase 4) réduiront ce coût. |
-| Profils sur la sandbox (llvmpipe) | ultra-mobile 640×360 limité à 30 FPS ; low 960×540 ; high 1280×720 MSAA x4. |
 
-Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances
-sur téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.
+**Méthode :** la première version de ce tableau attribuait le surcoût Vulkan à la soumission. Une mesure
+section par section a montré qu'il s'agissait de `vkQueuePresentKHR`, synchrone avec lavapipe sur X11.
+D'où la colonne `wait` (`FrameStats::cpuWaitMs`), qui sert aussi au profiler.
+
+Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
+téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.

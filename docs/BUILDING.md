@@ -47,6 +47,7 @@ Tous les binaires (exécutables, plugins) sont produits dans `build/<preset>/bin
 | `AGR_BUILD_PLUGINS` | ON | Plugins d'exemple (`libagr_plugin_spin`) |
 | `AGR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` (activé en CI) |
 | `AGR_ENABLE_ASAN` | OFF | Sanitizers |
+| `AGR_ENABLE_VULKAN` | ON | Backend Vulkan (Vulkan-Headers, volk, VMA et glslang sont téléchargés) |
 
 ## Lancer
 
@@ -54,17 +55,33 @@ Tous les binaires (exécutables, plugins) sont produits dans `build/<preset>/bin
 cd build/debug
 ./bin/agr_tests                        # tests unitaires (sans GPU)
 ./bin/agr_gpu_tests                    # tests de rendu (OpenGL) — nécessite un affichage
-AGR_TEST_GLES=1 ./bin/agr_gpu_tests    # mêmes tests en OpenGL ES 3.0
+AGR_TEST_API=gles ./bin/agr_gpu_tests  # mêmes tests en OpenGL ES 3.0
+AGR_TEST_API=vulkan ./bin/agr_gpu_tests  # mêmes tests en Vulkan, validation layers actives
 ./bin/agr_sandbox                      # Échap : quitter · 1-5 : profils · F12 : capture
+./bin/agr_sandbox --vulkan --validation # Vulkan avec validation layers
 ./bin/agr_sandbox --gles --profile low --screenshot user://shot.png --frames 120
+./bin/agr_sandbox --freeze --opengl --screenshot user://gl.png --frames 20   # image déterministe
 ./bin/agr_sandbox --sprites 10000      # test de charge des sprites
 ./bin/agr_sandbox --headless --frames 120
 ./bin/agr_benchmarks                   # benchmarks CPU (preset release)
-./bin/agr_gpu_benchmarks               # benchmarks du renderer (preset release, affichage requis)
+./bin/agr_gpu_benchmarks vulkan        # benchmarks du renderer : gl | gles | vulkan (preset release)
 ```
 
 La sandbox lit ses textures dans `bin/assets/` (copiées au build, montage `assets://`) et écrit
 `user/sandbox.agrscene` et les captures dans le dossier courant (montage `user://`).
+
+### Vulkan
+
+Le chargeur Vulkan (`libvulkan.so.1`, `vulkan-1.dll`) et un pilote sont fournis par le système. Pour les
+*validation layers* sous Ubuntu : `sudo apt-get install vulkan-validationlayers`. Sans GPU, Mesa
+**lavapipe** (`mesa-vulkan-drivers`) fournit Vulkan en logiciel ; c'est ce qu'utilise la CI.
+
+### Sanitizers
+
+`ctest --preset asan` applique `tools/lsan.supp`, qui ne masque que des allocations de SDL et de Xlib
+faites une fois au démarrage. Pour la suite GPU Vulkan, la détection de fuites est désactivée : les
+threads internes de lavapipe laissent deux allocations (112 octets) sans aucune frame du moteur dans leur
+pile. AddressSanitizer et UBSan restent actifs.
 
 ### Sans écran (serveur, CI)
 

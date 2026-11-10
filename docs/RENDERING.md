@@ -16,7 +16,7 @@ AssetManager (agr::assets) URI ➜ textures (cache, async, budget d'upload, rech
 rhi::Device (agr::rhi)    API GPU neutre : buffers, textures, pipelines, cibles, passes
    │  implémentée par
 GLDevice                  OpenGL 3.3 core (desktop) / OpenGL ES 3.0 (Android)   ✅
-VulkanDevice              Vulkan 1.1                                            ⬜ prochaine étape
+VulkanDevice              Vulkan 1.1                                            ✅
 ```
 
 `RenderPlugin` relie le tout au moteur : il crée le device sur le contexte de la plateforme,
@@ -55,8 +55,13 @@ Les shaders sont écrits dans le sous-ensemble commun GLSL 3.30 / GLSL ES 3.00, 
 mobile). Entrées de vertex et sorties de fragment en `layout(location = N)`, blocs d'uniformes
 `std140`. Une erreur de compilation renvoie le journal complet du compilateur.
 
-Le backend Vulkan compilera les mêmes sources en SPIR-V (glslang), ce qui évitera de maintenir deux
-jeux de shaders.
+Le backend Vulkan compile les **mêmes sources** en SPIR-V (glslang, à la création du pipeline) après
+une traduction automatique (`agr/rhi/ShaderDialect.hpp`) : en-tête `#version 450`, `set`/`binding`
+explicites pour les blocs (slot *i* ➜ binding *i*) et les samplers (unité *i* ➜ binding 8 + *i*),
+`location` des varyings attribuées dans l'ordre des sorties du vertex shader et appariées **par nom**
+dans le fragment shader. Règles du dialecte qui en découlent : une déclaration par ligne, blocs écrits
+`layout(std140) uniform Nom`, pas d'`uniform` hors bloc sauf `sampler2D`. Les violations sont signalées
+avec le nom du symbole fautif.
 
 ### Conventions
 
@@ -67,6 +72,38 @@ jeux de shaders.
 | Textures | Première ligne = haut de l'image ; UV (0,0) = coin haut-gauche (identique sur GL et Vulkan) |
 | Profondeur | [−1, 1] en GL, [0, 1] en Vulkan : choisie par le renderer selon le backend |
 | Couleur | Couleurs des composants en sRGB ; éclairage calculé en linéaire ; textures couleur en `RGBA8_sRGB` ; sortie encodée gamma dans une cible 8 bits |
+
+## Sélection du backend
+
+| `window.graphics` | Comportement |
+|---|---|
+| `auto` (défaut) | Vulkan si le chargeur Vulkan est présent et qu'un GPU Vulkan 1.1 avec présentation est trouvé ; sinon OpenGL (OpenGL ES sur Android) |
+| `vulkan` | Vulkan, avec le même repli si aucun device ne peut être créé (message d'avertissement) |
+| `opengl` / `gles` | Forcé (GLES sur desktop permet de valider le chemin mobile) |
+
+Le repli a lieu à deux niveaux : la plateforme choisit OpenGL si le chargeur Vulkan est absent, et
+`RenderPlugin` recrée la fenêtre en OpenGL (`PlatformLayer::setGraphicsApi`) si la création du device
+Vulkan échoue. `window.graphicsValidation = true` active les *validation layers* Khronos quand elles sont
+installées ; chaque erreur est journalisée et comptée (`Device::validationErrorCount`).
+
+Sandbox : `--vulkan`, `--opengl`, `--gles`, `--validation`.
+
+## Backend Vulkan
+
+| Choix | Raison |
+|---|---|
+| Vulkan **1.1** et *render passes* classiques | Le *dynamic rendering* (1.3) est rare sur les Android visés ; les pipelines sont déclinés à la demande par signature de passe (format couleur, format de profondeur, échantillons) et mis en cache |
+| **Viewport de hauteur négative** | Même espace de découpe, même sens des faces et même orientation des textures qu'en OpenGL : le renderer ne contient aucun cas particulier par backend |
+| volk + VulkanMemoryAllocator | Chargement des fonctions sans édition des liens avec `libvulkan`, allocations groupées |
+| Un seul *descriptor set layout* (8 uniform buffers dynamiques + 8 textures) | Correspond 1:1 au modèle de la RHI. Les sets sont réutilisés tant que les ressources liées ne changent pas ; seuls les *offsets* dynamiques varient entre objets |
+| Buffers dynamiques en anneau (une copie par image en vol) | Écriture CPU sans attendre le GPU, comme l'« orphaning » OpenGL |
+| Destruction différée | Une ressource n'est libérée qu'une fois terminées les images qui l'utilisaient |
+| Profondeur jamais stockée (`STORE_OP_DONT_CARE`) | Économie de bande passante sur les GPU mobiles à tuiles |
+| *Backbuffer* interne copié dans la swapchain en fin d'image | Captures et tests fiables, conversion de format (swapchains BGRA) gratuite. Coût : une copie plein écran par image, à supprimer quand aucune capture n'est demandée (optimisation prévue) |
+
+**Parité vérifiée :** sur la même image figée (`agr_sandbox --freeze`), OpenGL, OpenGL ES et Vulkan donnent
+des images **identiques au pixel près** sans MSAA, et diffèrent sur 0,02 % des pixels (bords) avec MSAA x4,
+où l'emplacement des échantillons dépend de l'API (`tools/compare_images.py`, exécuté en CI).
 
 ## Renderer
 
@@ -163,7 +200,10 @@ résolution interne, MSAA, temps CPU (collecte et soumission séparées), **temp
 
 ## Limites actuelles
 
-- Pas encore de backend Vulkan (la RHI est prête à le recevoir ; c'est l'étape suivante).
+- Shaders compilés à l'exécution par glslang : un cache SPIR-V hors ligne (temps de démarrage, taille de
+  l'APK) est prévu en phase 10.
+- Barrières d'images Vulkan volontairement larges (toutes étapes) : correctes, mais à affiner après
+  profilage sur GPU mobiles réels.
 - Pas de maillages importés, de PBR, d'ombres, de post-traitement, d'instancing ni de LOD (phase 5).
 - Pas d'éditeur de matériaux ou de shaders (phases 5 et 9).
 - Contexte GL perdu sur Android lors d'une mise en arrière-plan : la recréation des ressources est

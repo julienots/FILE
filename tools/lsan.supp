@@ -1,0 +1,9 @@
+# LeakSanitizer suppressions for third-party allocations that live for the whole
+# process. Never add engine code here: fix the leak instead.
+#
+# SDL3's X11 backend and Xlib allocate caches during SDL_Init (display modes,
+# keyboard maps) that are intentionally never freed.
+leak:X11_InitModes
+leak:X11_InitKeyboard
+leak:X11_VideoInit
+leak:SDL_VideoInit

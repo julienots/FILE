@@ -22,4 +22,11 @@ u32 bytesPerPixel(TextureFormat format) {
     return 4;
 }
 
+#if !defined(AGR_RHI_VULKAN)
+bool vulkanBackendCompiled() { return false; }
+Result<std::unique_ptr<Device>> createVulkanDevice(const VulkanPlatform&) {
+    return makeError(Error::Code::Unsupported, "engine built without the Vulkan backend (AGR_ENABLE_VULKAN=OFF)");
+}
+#endif
+
 } // namespace agr::rhi

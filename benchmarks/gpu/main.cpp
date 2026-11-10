@@ -49,17 +49,18 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build) {
         renderer.render(scene, W, H);
         b.platform.present();
     }
-    std::vector<double> collect, submit;
+    std::vector<double> collect, submit, wait;
     for (int i = 0; i < 60; ++i) {
         renderer.render(scene, W, H);
         b.platform.present();
         collect.push_back(renderer.stats().collectMs);
-        submit.push_back(renderer.stats().submitMs);
+        submit.push_back(renderer.stats().submitMs - renderer.stats().gpuWaitMs);
+        wait.push_back(renderer.stats().gpuWaitMs);
     }
     const auto& s = renderer.stats();
-    std::printf("%-38s collect %7.3f ms   submit %7.3f ms   draws %5u   batches %5u   visible %6u   culled %6u\n", name,
-                median(collect), median(submit), s.drawCalls, s.spriteBatches, s.meshesVisible + s.spritesVisible,
-                s.meshesCulled + s.spritesCulled);
+    std::printf("%-40s collect %6.3f ms  submit %7.3f ms  wait %7.3f ms  draws %5u  batches %4u  visible %6u  culled %6u\n",
+                name, median(collect), median(submit), median(wait), s.drawCalls, s.spriteBatches,
+                s.meshesVisible + s.spritesVisible, s.meshesCulled + s.spritesCulled);
 }
 
 void orthoCamera(Scene& s, float halfHeight) {
@@ -95,17 +96,40 @@ void spriteGrid(Scene& s, u32 count, u32 texturesEvery) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     Log::setLevel(LogLevel::Warning);
     Bench b;
+    // Usage: agr_gpu_benchmarks [gl | gles | vulkan]   (default gl)
+    const std::string apiName = argc > 1 ? argv[1] : "gl";
+    const GraphicsApi api = apiName == "vulkan" ? GraphicsApi::Vulkan : apiName == "gles" ? GraphicsApi::OpenGLES : GraphicsApi::OpenGL;
     EngineConfig cfg;
-    cfg.window = {"bench", static_cast<i32>(W), static_cast<i32>(H), false, false, false, false, true, GraphicsApi::OpenGL};
-    if (Status st = b.platform.initialize(cfg); !st) {
-        std::fprintf(stderr, "no display: %s\n", st.error().message.c_str());
+    cfg.window.title = "bench";
+    cfg.window.width = static_cast<i32>(W);
+    cfg.window.height = static_cast<i32>(H);
+    cfg.window.resizable = false;
+    cfg.window.vsync = false;
+    cfg.window.highDpi = false;
+    cfg.window.hidden = true;
+    cfg.window.graphics = api;
+    if (Status st = b.platform.initialize(cfg); !st || b.platform.graphicsApi() != api) {
+        std::fprintf(stderr, "cannot create a %s window\n", apiName.c_str());
         return 1;
     }
-    auto dev = rhi::createOpenGLDevice([&](const char* n) { return b.platform.graphicsProcAddress(n); }, false);
-    if (!dev) return 1;
+    Result<std::unique_ptr<rhi::Device>> dev = makeError(Error::Code::Unknown, "");
+    if (api == GraphicsApi::Vulkan) {
+        rhi::VulkanPlatform vp;
+        vp.instanceExtensions = b.platform.vulkanInstanceExtensions();
+        vp.getInstanceProcAddr = b.platform.vulkanGetInstanceProcAddr();
+        vp.createSurface = [&](void* instance) { return b.platform.createVulkanSurface(instance); };
+        vp.vsync = false;
+        dev = rhi::createVulkanDevice(vp);
+    } else {
+        dev = rhi::createOpenGLDevice([&](const char* n) { return b.platform.graphicsProcAddress(n); }, api == GraphicsApi::OpenGLES);
+    }
+    if (!dev) {
+        std::fprintf(stderr, "device creation failed: %s\n", dev.error().message.c_str());
+        return 1;
+    }
     b.device = std::move(dev.value());
     std::filesystem::create_directories(b.root);
     b.vfs.mount("assets", std::make_unique<NativeFileProvider>(b.root.string(), false));
@@ -116,7 +140,8 @@ int main() {
     }
     b.assets = std::make_unique<AssetManager>(b.vfs, b.jobs, b.device.get());
     registerRenderComponents();
-    std::printf("AGR ENGINE renderer benchmarks — %s, %ux%u\n", b.device->info().renderer.c_str(), W, H);
+    std::printf("AGR ENGINE renderer benchmarks — %s on %s, %ux%u\n", rhi::enumName(b.device->info().backend),
+                b.device->info().renderer.c_str(), W, H);
 
     run(b, "3D: 120 lit cubes", [](Scene& s) {
         perspectiveCamera(s);

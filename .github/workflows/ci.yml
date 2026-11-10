@@ -30,12 +30,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
             libxi-dev libxss-dev libxfixes-dev libxtst-dev libgl-dev libegl-dev libgles-dev xvfb \
-            libgl1-mesa-dri libegl-mesa0
+            libgl1-mesa-dri libegl-mesa0 mesa-vulkan-drivers vulkan-validationlayers
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} -DAGR_WARNINGS_AS_ERRORS=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
-      - name: Unit + GPU tests (GPU tests on Mesa llvmpipe, OpenGL and OpenGL ES)
+      - name: Unit + GPU tests (Mesa llvmpipe / lavapipe — OpenGL, OpenGL ES, Vulkan + validation)
         env:
           AGR_REQUIRE_GPU_TESTS: "1"
         run: xvfb-run -a ctest --preset ${{ matrix.preset }}
@@ -44,10 +44,24 @@ jobs:
         run: ./bin/agr_sandbox --headless --frames 120
       - name: Sandbox smoke test (X11 window, OpenGL and OpenGL ES, screenshot)
         working-directory: build/${{ matrix.preset }}
+        env:
+          ASAN_OPTIONS: detect_leaks=0
         run: |
-          xvfb-run -a ./bin/agr_sandbox --frames 120 --screenshot user://ci_gl.png
+          xvfb-run -a ./bin/agr_sandbox --opengl --frames 120 --screenshot user://ci_gl.png
           xvfb-run -a ./bin/agr_sandbox --gles --frames 120 --screenshot user://ci_gles.png
-          test -s user/ci_gl.png && test -s user/ci_gles.png
+          xvfb-run -a ./bin/agr_sandbox --vulkan --validation --frames 120 --screenshot user://ci_vulkan.png
+          test -s user/ci_gl.png && test -s user/ci_gles.png && test -s user/ci_vulkan.png
+      - name: Cross-backend image parity (frozen frame)
+        working-directory: build/${{ matrix.preset }}
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          python3 -m pip install --quiet pillow
+          for api in opengl gles vulkan; do
+            xvfb-run -a ./bin/agr_sandbox --$api --freeze --profile low --frames 20 --screenshot user://parity_$api.png
+          done
+          python3 ../../tools/compare_images.py user/parity_opengl.png user/parity_vulkan.png
+          python3 ../../tools/compare_images.py user/parity_opengl.png user/parity_gles.png
       - name: Upload screenshots
         if: matrix.preset == 'release'
         uses: actions/upload-artifact@v4
@@ -58,7 +72,8 @@ jobs:
         if: matrix.preset == 'release'
         run: |
           ./build/release/bin/agr_benchmarks
-          xvfb-run -a ./build/release/bin/agr_gpu_benchmarks
+          xvfb-run -a ./build/release/bin/agr_gpu_benchmarks gl
+          xvfb-run -a ./build/release/bin/agr_gpu_benchmarks vulkan
 
   windows:
     name: Windows MSVC

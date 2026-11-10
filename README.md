@@ -7,13 +7,14 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phase 1 terminée, phase 2 en grande partie terminée.**
-> Le rendu OpenGL 3.3 / OpenGL ES 3.0 fonctionne. Le backend Vulkan est la prochaine étape, et il n'y a
-> pas encore d'éditeur visuel (phase 3). L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
+> **État actuel : phases 1 et 2 terminées** (socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources).
+> Il n'y a pas encore d'éditeur visuel : c'est la phase 3. L'avancement détaillé et honnête est dans
+> [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Sandbox AGR ENGINE](docs/images/sandbox.png)
 
-*Image rendue par AGR ENGINE (sandbox, profil « high », MSAA x4).*
+*Image rendue par AGR ENGINE (sandbox, profil « high », MSAA x4). Vulkan, OpenGL et OpenGL ES produisent
+la même image.*
 
 ## Ce qui fonctionne aujourd'hui
 
@@ -27,14 +28,15 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
   clavier, souris, multi-touch, cycle de vie mobile.
 - Un **système de plugins** statiques et dynamiques avec dépendances ; le plugin d'exemple `Spin`
   ajoute un composant et son système sans toucher au moteur.
-- Un **renderer** sur une couche GPU neutre (RHI) : backend OpenGL 3.3 core / OpenGL ES 3.0,
-  caméras, lumière directionnelle, maillages intégrés éclairés, sprites triés et regroupés en lots,
+- Un **renderer** sur une couche GPU neutre (RHI) : backends **Vulkan 1.1** (choisi par défaut) et
+  OpenGL 3.3 core / OpenGL ES 3.0 (repli automatique), caméras, lumière directionnelle, maillages intégrés éclairés, sprites triés et regroupés en lots,
   frustum culling, MSAA, échelle de rendu, **profils graphiques Ultra ➜ Ultra mobile** choisis
   automatiquement, temps GPU, captures d'écran ([détails](docs/RENDERING.md)).
 - Un **gestionnaire de ressources** : chargement asynchrone, cache, budget d'upload par image,
   rechargement à chaud.
-- **68 tests unitaires + 15 tests GPU au pixel près** (exécutés en OpenGL et en OpenGL ES), sanitizers
-  (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
+- **71 tests unitaires + 16 tests GPU au pixel près**, exécutés en Vulkan (avec *validation layers*),
+  OpenGL et OpenGL ES, contrôle de parité des images entre API, sanitizers (ASan/UBSan), benchmarks
+  CPU et GPU, CI GCC/Clang/MSVC.
 
 ## Démarrage rapide
 
@@ -100,7 +102,7 @@ engine/
   ecs/        entités, composants, vues
   scene/      scène, hiérarchie, réflexion, sérialisation
   runtime/    moteur, boucle, entrées, configuration, gestionnaire de plugins
-  rhi/        interface GPU neutre + backend OpenGL / OpenGL ES
+  rhi/        interface GPU neutre + backends Vulkan et OpenGL / OpenGL ES
   assets/     images, gestionnaire de ressources
   render/     composants de rendu, renderer, profils graphiques
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)

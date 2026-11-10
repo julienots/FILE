@@ -162,6 +162,10 @@ struct FrameStats {
     u32 textureBinds = 0;
     u64 uploadedBytes = 0;
     f64 gpuTimeMs = -1.0;  ///< Latest available measurement (a few frames old); -1 = unavailable.
+    /// CPU time spent blocked on the GPU or the presentation engine (frame fences,
+    /// swapchain acquire / present). Vulkan only: with OpenGL the equivalent blocking
+    /// happens inside SwapBuffers (PlatformLayer::present) or arbitrary driver calls.
+    f64 cpuWaitMs = 0.0;
 };
 
 struct MemoryStats {
@@ -225,6 +229,8 @@ public:
 
     virtual const FrameStats& frameStats() const = 0;
     virtual MemoryStats memoryStats() const = 0;
+    /// Errors reported by API validation (Vulkan validation layers when enabled). 0 otherwise.
+    virtual u64 validationErrorCount() const { return 0; }
 };
 
 /// Resolves OpenGL entry points (SDL_GL_GetProcAddress, eglGetProcAddress...).
@@ -232,5 +238,22 @@ using GLProcLoader = std::function<void*(const char* name)>;
 
 /// Creates the OpenGL 3.3 core / OpenGL ES 3.0 backend on the current context.
 Result<std::unique_ptr<Device>> createOpenGLDevice(const GLProcLoader& loader, bool gles);
+
+/// What the platform layer provides to create a Vulkan device (no Vulkan types
+/// leak into this header: handles are passed as void* / u64).
+struct VulkanPlatform {
+    std::string appName = "AGR Application";
+    std::vector<std::string> instanceExtensions;  ///< Required by the window system (surface).
+    void* getInstanceProcAddr = nullptr;          ///< PFN_vkGetInstanceProcAddr of the loader.
+    /// Creates the window surface for a VkInstance; returns a VkSurfaceKHR (0 on failure).
+    std::function<u64(void* instance)> createSurface;
+    bool vsync = true;
+    bool validation = false;  ///< Enables VK_LAYER_KHRONOS_validation when installed.
+};
+
+/// True when the engine was built with the Vulkan backend.
+bool vulkanBackendCompiled();
+/// Creates the Vulkan 1.1 backend (fails cleanly when no suitable GPU / driver exists).
+Result<std::unique_ptr<Device>> createVulkanDevice(const VulkanPlatform& platform);
 
 } // namespace agr::rhi

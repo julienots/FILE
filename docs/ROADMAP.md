@@ -28,14 +28,14 @@ Rien n'est coché sans code compilé, tests qui passent et un exemple qui l'util
 | Tests unitaires, sanitizers, benchmarks, CI | ✅ | `tests/`, `benchmarks/`, `.github/workflows` |
 | Identité visuelle (logo, palette, typographie) | ✅ | `docs/brand` |
 
-## Phase 2 — Renderer et ressources 🟡 (backend GL/GLES terminé, Vulkan à faire)
+## Phase 2 — Renderer et ressources ✅
 
 | Élément | État | Où |
 |---|---|---|
 | RHI neutre (buffers, textures, pipelines, cibles, passes, blits, handles générationnels) | ✅ | `engine/rhi/include/agr/rhi/Rhi.hpp` |
 | Backend OpenGL 3.3 core / OpenGL ES 3.0, chargeur intégré | ✅ | `engine/rhi/src/gl` — testé sur Mesa en GL et GLES |
 | Dialecte de shaders unique GL / GLES, erreurs de compilation détaillées | ✅ | `RENDERING.md` |
-| Backend Vulkan 1.1 | ⬜ | **prochaine étape** |
+| Backend Vulkan 1.1 (volk, VMA, glslang), sélection automatique et repli vers OpenGL | ✅ | `engine/rhi/src/vk` — tests GPU avec *validation layers*, parité d'image avec GL |
 | Gestionnaire de ressources : cache, références, chargement asynchrone, budget d'upload, rechargement à chaud | ✅ | `engine/assets` |
 | Images PNG / JPG / TGA / BMP / PSD / GIF / HDR | ✅ | stb_image |
 | Images WEBP, SVG | ⬜ | libwebp, nanosvg |
@@ -46,7 +46,7 @@ Rien n'est coché sans code compilé, tests qui passent et un exemple qui l'util
 | Profils graphiques (échelle 3D, MSAA, taille de texture, limite FPS, budget d'upload) + sélection automatique | ✅ | `GraphicsProfile.hpp` |
 | Statistiques : draw calls, triangles, culling, lots, temps CPU, temps GPU, mémoire GPU | ✅ | `RenderStats` |
 | Captures d'écran PNG | ✅ | `RenderPlugin::requestScreenshot` |
-| Tests GPU au pixel près (15 cas × GL et GLES), benchmarks du renderer | ✅ | `tests/gpu`, `benchmarks/gpu` |
+| Tests GPU au pixel près (16 cas × OpenGL, OpenGL ES et Vulkan), benchmarks du renderer | ✅ | `tests/gpu`, `benchmarks/gpu` |
 | Instancing, LOD, occlusion culling | ⬜ | phase 5 |
 | Recréation des ressources après perte du contexte Android | ⬜ | phase 8 |
 

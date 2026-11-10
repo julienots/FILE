@@ -111,3 +111,49 @@ TEST_CASE("RenderPlugin in headless mode provides CPU assets and services") {
 }
 
 }  // TEST_SUITE
+
+namespace {
+/// Claims a Vulkan window whose device creation will fail, and records API switches.
+class FakeVulkanPlatform final : public PlatformLayer {
+public:
+    GraphicsApi current = GraphicsApi::Vulkan;
+    std::vector<GraphicsApi> switches;
+    Status initialize(const EngineConfig&) override { return {}; }
+    void shutdown() override {}
+    bool pollEvents(EventBus&, Input&) override { return true; }
+    void present() override {}
+    bool canRender() const override { return false; }
+    math::Vec2 framebufferSize() const override { return {64, 64}; }
+    const char* name() const override { return "FakeVulkan"; }
+    GraphicsApi graphicsApi() const override { return current; }
+    Status setGraphicsApi(GraphicsApi api) override {
+        switches.push_back(api);
+        current = api;
+        return {};
+    }
+};
+}  // namespace
+
+TEST_CASE("RenderPlugin falls back from Vulkan to OpenGL when no device can be created") {
+    EngineConfig c;
+    c.workerThreads = 1;
+    c.maxFrames = 1;
+    c.userDirectory = (std::filesystem::temp_directory_path() / ("agr_fb_" + Uuid::generate().toString())).string();
+    c.assetsDirectory = c.userDirectory;
+    Engine engine(c);
+    engine.plugins().addStatic(std::make_unique<RenderPlugin>());
+    auto platform = std::make_unique<FakeVulkanPlatform>();
+    FakeVulkanPlatform* fake = platform.get();
+    REQUIRE(engine.initialize(std::move(platform)));
+    // Vulkan failed (no loader entry point) -> the window was switched to OpenGL...
+    REQUIRE(fake->switches.size() == 1);
+    CHECK(fake->switches[0] == GraphicsApi::OpenGL);
+    // ...and the OpenGL attempt also failed here (fake platform has no GL functions),
+    // so the plugin reports an error instead of running without a device.
+    CHECK_FALSE(engine.plugins().isLoaded("Render"));
+    bool reported = false;
+    for (const auto& e : engine.plugins().entries())
+        if (e.info.name == "Render") reported = e.error.find("OpenGL functions missing") != std::string::npos;
+    CHECK(reported);
+    std::filesystem::remove_all(c.userDirectory);
+}

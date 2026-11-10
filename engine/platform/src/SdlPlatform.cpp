@@ -1,6 +1,9 @@
 #include "agr/platform/SdlPlatform.hpp"
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+
+#include <cstring>
 
 #include "agr/core/Log.hpp"
 #include "agr/core/Platform.hpp"
@@ -38,12 +41,31 @@ Key toKey(SDL_Scancode sc) {
 SdlPlatform::~SdlPlatform() { shutdown(); }
 
 Status SdlPlatform::initialize(const EngineConfig& config) {
+    m_config = config;
     SDL_SetAppMetadata(config.appName.c_str(), nullptr, nullptr);
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return makeError(Error::Code::Unsupported, std::string("SDL_Init failed: ") + SDL_GetError());
     m_sdlInitialized = true;
 
-    const WindowConfig& wc = config.window;
+    GraphicsApi api = config.window.graphics;
+    if (api == GraphicsApi::Auto || api == GraphicsApi::Vulkan) {
+        m_vulkanLoaded = SDL_Vulkan_LoadLibrary(nullptr);
+        if (!m_vulkanLoaded) {
+            AGR_LOG_INFO("Platform", "Vulkan loader unavailable ({}); using OpenGL", SDL_GetError());
+#if defined(AGR_PLATFORM_ANDROID)
+            api = GraphicsApi::OpenGLES;
+#else
+            api = GraphicsApi::OpenGL;
+#endif
+        } else {
+            api = GraphicsApi::Vulkan;
+        }
+    }
+    return createWindow(api);
+}
+
+Status SdlPlatform::createWindow(GraphicsApi api) {
+    const WindowConfig& wc = m_config.window;
     SDL_WindowFlags flags = 0;
     if (wc.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (wc.highDpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
@@ -54,12 +76,13 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
     if (wc.fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
 #endif
 
-    if (wc.graphics != GraphicsApi::None) {
+    const bool gl = api == GraphicsApi::OpenGL || api == GraphicsApi::OpenGLES;
+    if (gl) {
         flags |= SDL_WINDOW_OPENGL;
 #if defined(AGR_PLATFORM_ANDROID)
         m_gles = true;
 #else
-        m_gles = wc.graphics == GraphicsApi::OpenGLES;
+        m_gles = api == GraphicsApi::OpenGLES;
 #endif
         const bool es = m_gles;
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, es ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
@@ -68,12 +91,14 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    } else if (api == GraphicsApi::Vulkan) {
+        flags |= SDL_WINDOW_VULKAN;
     }
 
     m_window = SDL_CreateWindow(wc.title.c_str(), wc.width, wc.height, flags);
     if (!m_window) return makeError(Error::Code::Unsupported, std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 
-    if (wc.graphics != GraphicsApi::None) {
+    if (gl) {
         m_glContext = SDL_GL_CreateContext(m_window);
         if (!m_glContext)
             return makeError(Error::Code::Unsupported, std::string("OpenGL context creation failed: ") + SDL_GetError());
@@ -90,14 +115,15 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
                          reinterpret_cast<const char*>(getString(kVendor)));
         }
     }
+    m_api = api;
 
     const math::Vec2 fb = framebufferSize();
-    AGR_LOG_INFO("Platform", "window {}x{} (framebuffer {}x{}), video driver '{}'", wc.width, wc.height,
-                 static_cast<int>(fb.x), static_cast<int>(fb.y), SDL_GetCurrentVideoDriver());
+    AGR_LOG_INFO("Platform", "window {}x{} (framebuffer {}x{}), video driver '{}', graphics {}", wc.width, wc.height,
+                 static_cast<int>(fb.x), static_cast<int>(fb.y), SDL_GetCurrentVideoDriver(), enumName(api));
     return {};
 }
 
-void SdlPlatform::shutdown() {
+void SdlPlatform::destroyWindow() {
     if (m_glContext) {
         SDL_GL_DestroyContext(m_glContext);
         m_glContext = nullptr;
@@ -106,10 +132,55 @@ void SdlPlatform::shutdown() {
         SDL_DestroyWindow(m_window);
         m_window = nullptr;
     }
+    m_api = GraphicsApi::None;
+}
+
+Status SdlPlatform::setGraphicsApi(GraphicsApi api) {
+    if (api == m_api) return {};
+    if (api == GraphicsApi::Auto) return makeError(Error::Code::InvalidArgument, "setGraphicsApi needs a concrete API");
+    if (api == GraphicsApi::Vulkan && !m_vulkanLoaded) {
+        m_vulkanLoaded = SDL_Vulkan_LoadLibrary(nullptr);
+        if (!m_vulkanLoaded) return makeError(Error::Code::Unsupported, std::string("Vulkan loader: ") + SDL_GetError());
+    }
+    destroyWindow();
+    return createWindow(api);
+}
+
+void SdlPlatform::shutdown() {
+    destroyWindow();
+    if (m_vulkanLoaded) {
+        SDL_Vulkan_UnloadLibrary();
+        m_vulkanLoaded = false;
+    }
     if (m_sdlInitialized) {
         SDL_Quit();
         m_sdlInitialized = false;
     }
+}
+
+std::vector<std::string> SdlPlatform::vulkanInstanceExtensions() const {
+    Uint32 count = 0;
+    char const* const* names = SDL_Vulkan_GetInstanceExtensions(&count);
+    std::vector<std::string> out;
+    for (Uint32 i = 0; names && i < count; ++i) out.emplace_back(names[i]);
+    return out;
+}
+
+void* SdlPlatform::vulkanGetInstanceProcAddr() const {
+    return m_vulkanLoaded ? reinterpret_cast<void*>(SDL_Vulkan_GetVkGetInstanceProcAddr()) : nullptr;
+}
+
+u64 SdlPlatform::createVulkanSurface(void* vkInstance) const {
+    if (!m_window || m_api != GraphicsApi::Vulkan) return 0;
+    VkSurfaceKHR surface{};
+    if (!SDL_Vulkan_CreateSurface(m_window, static_cast<VkInstance>(vkInstance), nullptr, &surface)) {
+        AGR_LOG_ERROR("Platform", "SDL_Vulkan_CreateSurface: {}", SDL_GetError());
+        return 0;
+    }
+    u64 out = 0;
+    static_assert(sizeof(surface) <= sizeof(out));
+    std::memcpy(&out, &surface, sizeof(surface));
+    return out;
 }
 
 bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
@@ -209,10 +280,7 @@ void SdlPlatform::present() {
     if (m_glContext) SDL_GL_SwapWindow(m_window);
 }
 
-GraphicsApi SdlPlatform::graphicsApi() const {
-    if (!m_glContext) return GraphicsApi::None;
-    return m_gles ? GraphicsApi::OpenGLES : GraphicsApi::OpenGL;
-}
+GraphicsApi SdlPlatform::graphicsApi() const { return m_api; }
 
 math::Vec2 SdlPlatform::framebufferSize() const {
     int w = 0, h = 0;

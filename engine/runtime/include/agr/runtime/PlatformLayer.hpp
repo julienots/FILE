@@ -1,4 +1,7 @@
 #pragma once
+#include <string>
+#include <vector>
+
 #include "agr/core/EventBus.hpp"
 #include "agr/core/Result.hpp"
 #include "agr/runtime/EngineConfig.hpp"
@@ -26,6 +29,20 @@ public:
     virtual GraphicsApi graphicsApi() const { return GraphicsApi::None; }
     /// Resolves a graphics entry point (OpenGL functions) of the current context.
     virtual void* graphicsProcAddress(const char* name) const { (void)name; return nullptr; }
+
+    // Vulkan (graphicsApi() == Vulkan)
+    virtual std::vector<std::string> vulkanInstanceExtensions() const { return {}; }
+    /// PFN_vkGetInstanceProcAddr of the Vulkan loader.
+    virtual void* vulkanGetInstanceProcAddr() const { return nullptr; }
+    /// Creates a VkSurfaceKHR for the window; returns 0 on failure.
+    virtual u64 createVulkanSurface(void* vkInstance) const { (void)vkInstance; return 0; }
+
+    /// Recreates the window for another graphics API (fallback when a device cannot
+    /// be created). Every GPU object of the previous API must be destroyed first.
+    virtual Status setGraphicsApi(GraphicsApi api) {
+        (void)api;
+        return makeError(Error::Code::Unsupported, "this platform cannot switch graphics API");
+    }
 };
 
 /// No window, no input: used by tests, CI and dedicated servers.

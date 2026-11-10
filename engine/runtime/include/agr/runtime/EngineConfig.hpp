@@ -6,9 +6,11 @@
 
 namespace agr {
 
-/// OpenGL = desktop GL 3.3 core (GLES 3.0 on Android). OpenGLES forces GLES 3.0
-/// on desktop too, to validate the mobile shader path without a device.
-enum class GraphicsApi : u8 { None, OpenGL, OpenGLES };
+/// Auto     = Vulkan when available, otherwise OpenGL (OpenGL ES on Android).
+/// OpenGL   = desktop GL 3.3 core (GLES 3.0 on Android).
+/// OpenGLES = forces GLES 3.0 on desktop too, to validate the mobile path without a device.
+enum class GraphicsApi : u8 { None, OpenGL, OpenGLES, Vulkan, Auto };
+const char* enumName(GraphicsApi api);
 
 struct WindowConfig {
     std::string title = "AGR ENGINE";
@@ -19,7 +21,8 @@ struct WindowConfig {
     bool vsync = true;
     bool highDpi = true;
     bool hidden = false;       ///< Off-screen window (tests, thumbnails).
-    GraphicsApi graphics = GraphicsApi::OpenGL;
+    GraphicsApi graphics = GraphicsApi::Auto;
+    bool graphicsValidation = false;  ///< Vulkan validation layers (development builds).
 };
 
 /// Startup configuration. Loaded from "engine.json" in the project, or built in code.

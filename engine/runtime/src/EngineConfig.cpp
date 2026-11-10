@@ -6,6 +6,17 @@ namespace agr {
 
 using nlohmann::json;
 
+const char* enumName(GraphicsApi api) {
+    switch (api) {
+        case GraphicsApi::None: return "none";
+        case GraphicsApi::OpenGL: return "opengl";
+        case GraphicsApi::OpenGLES: return "gles";
+        case GraphicsApi::Vulkan: return "vulkan";
+        case GraphicsApi::Auto: return "auto";
+    }
+    return "?";
+}
+
 Result<EngineConfig> EngineConfig::fromJson(std::string_view text) {
     json j = json::parse(text, nullptr, false);
     if (j.is_discarded() || !j.is_object()) return makeError(Error::Code::ParseError, "engine config is not a JSON object");
@@ -35,8 +46,11 @@ Result<EngineConfig> EngineConfig::fromJson(std::string_view text) {
             c.window.vsync = w.value("vsync", c.window.vsync);
             c.window.highDpi = w.value("highDpi", c.window.highDpi);
             c.window.hidden = w.value("hidden", c.window.hidden);
-            const std::string api = w.value("graphics", std::string("opengl"));
-            if (api == "opengl") c.window.graphics = GraphicsApi::OpenGL;
+            c.window.graphicsValidation = w.value("graphicsValidation", c.window.graphicsValidation);
+            const std::string api = w.value("graphics", std::string("auto"));
+            if (api == "auto") c.window.graphics = GraphicsApi::Auto;
+            else if (api == "vulkan") c.window.graphics = GraphicsApi::Vulkan;
+            else if (api == "opengl") c.window.graphics = GraphicsApi::OpenGL;
             else if (api == "gles") c.window.graphics = GraphicsApi::OpenGLES;
             else if (api == "none") c.window.graphics = GraphicsApi::None;
             else return makeError(Error::Code::InvalidArgument, "unknown graphics api '" + api + "'");
@@ -71,9 +85,8 @@ std::string EngineConfig::toJson() const {
                    {"resizable", window.resizable}, {"fullscreen", window.fullscreen},
                    {"vsync", window.vsync},         {"highDpi", window.highDpi},
                    {"hidden", window.hidden},
-                   {"graphics", window.graphics == GraphicsApi::OpenGL     ? "opengl"
-                                 : window.graphics == GraphicsApi::OpenGLES ? "gles"
-                                                                            : "none"}};
+                   {"graphicsValidation", window.graphicsValidation},
+                   {"graphics", enumName(window.graphics)}};
     return j.dump(2);
 }
 

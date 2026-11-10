@@ -44,3 +44,47 @@ FetchContent_MakeAvailable(stb)
 add_library(agr_stb INTERFACE)
 target_include_directories(agr_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 add_library(agr::stb ALIAS agr_stb)
+
+# --- Vulkan backend: headers (Apache-2.0/MIT), volk loader (MIT),
+#     VulkanMemoryAllocator (MIT), glslang GLSL -> SPIR-V (BSD/MIT-like). -----
+if(AGR_ENABLE_VULKAN)
+    set(AGR_VULKAN_SDK_TAG vulkan-sdk-1.4.350.0)
+    FetchContent_Declare(VulkanHeaders
+        GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+        GIT_TAG        ${AGR_VULKAN_SDK_TAG}
+        GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(VulkanHeaders)
+
+    # volk and VMA are compiled into agr_rhi directly: only fetch the sources.
+    FetchContent_Declare(volk
+        GIT_REPOSITORY https://github.com/zeux/volk.git
+        GIT_TAG        ${AGR_VULKAN_SDK_TAG}
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  agr-do-not-add)
+    FetchContent_Declare(VulkanMemoryAllocator
+        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+        GIT_TAG        v3.4.0
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  agr-do-not-add)
+    FetchContent_MakeAvailable(volk VulkanMemoryAllocator)
+
+    set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_RTTI ON CACHE BOOL "" FORCE)  # UBSan (-fsanitize=vptr) needs typeinfo
+    set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+    set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+    set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glslang
+        GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+        GIT_TAG        ${AGR_VULKAN_SDK_TAG}
+        GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(glslang)
+    # Third-party sources: their warnings are not actionable here and would hide ours.
+    foreach(t glslang glslang-default-resource-limits)
+        if(TARGET ${t} AND NOT MSVC)
+            target_compile_options(${t} PRIVATE -w)
+        endif()
+    endforeach()
+endif()

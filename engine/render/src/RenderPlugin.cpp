@@ -17,10 +17,35 @@ Status RenderPlugin::onLoad(Engine& engine) {
     registerRenderComponents();
     PlatformLayer& platform = engine.platform();
     const GraphicsApi api = platform.graphicsApi();
+#if defined(AGR_PLATFORM_MOBILE)
+    constexpr GraphicsApi kGLFallback = GraphicsApi::OpenGLES;
+#else
+    constexpr GraphicsApi kGLFallback = GraphicsApi::OpenGL;
+#endif
+    auto createDevice = [&](GraphicsApi which) -> Result<std::unique_ptr<rhi::Device>> {
+        if (which == GraphicsApi::Vulkan) {
+            rhi::VulkanPlatform vp;
+            vp.appName = engine.config().appName;
+            vp.instanceExtensions = platform.vulkanInstanceExtensions();
+            vp.getInstanceProcAddr = platform.vulkanGetInstanceProcAddr();
+            vp.createSurface = [&platform](void* instance) { return platform.createVulkanSurface(instance); };
+            vp.vsync = engine.config().window.vsync;
+            vp.validation = engine.config().window.graphicsValidation;
+            return rhi::createVulkanDevice(vp);
+        }
+        return rhi::createOpenGLDevice([&platform](const char* name) { return platform.graphicsProcAddress(name); },
+                                       which == GraphicsApi::OpenGLES);
+    };
 
     if (api != GraphicsApi::None) {
-        auto device = rhi::createOpenGLDevice([&platform](const char* name) { return platform.graphicsProcAddress(name); },
-                                              api == GraphicsApi::OpenGLES);
+        auto device = createDevice(api);
+        if (!device && api == GraphicsApi::Vulkan) {
+            // Vulkan is preferred, never required: fall back to OpenGL (ES) on the same window.
+            AGR_LOG_WARN("Render", "Vulkan device unavailable ({}); falling back to {}", device.error().message,
+                         enumName(kGLFallback));
+            if (Status s = platform.setGraphicsApi(kGLFallback); !s) return s;
+            device = createDevice(kGLFallback);
+        }
         if (!device) return device.error();
         m_device = std::move(device.value());
     } else {

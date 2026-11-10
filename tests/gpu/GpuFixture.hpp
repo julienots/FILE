@@ -15,7 +15,7 @@ inline constexpr u32 kHeight = 64;
 struct GpuContext {
     std::unique_ptr<SdlPlatform> platform;
     std::unique_ptr<rhi::Device> device;
-    bool gles = false;
+    GraphicsApi api = GraphicsApi::OpenGL;  ///< AGR_TEST_API = gl | gles | vulkan
 };
 
 /// Created by main.cpp before the tests run.

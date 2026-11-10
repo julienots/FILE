@@ -7,7 +7,8 @@ add_executable(agr_tests
     test_scene.cpp
     test_runtime.cpp
     test_assets.cpp
-    test_render.cpp)
+    test_render.cpp
+    test_shader_dialect.cpp)
 target_link_libraries(agr_tests PRIVATE agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
@@ -15,3 +16,4 @@ if(AGR_BUILD_PLUGINS)
 endif()
 set_target_properties(agr_tests PROPERTIES FOLDER "Tests")
 add_test(NAME agr_tests COMMAND agr_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(agr_tests PROPERTIES ENVIRONMENT "LSAN_OPTIONS=suppressions=${PROJECT_SOURCE_DIR}/tools/lsan.supp")

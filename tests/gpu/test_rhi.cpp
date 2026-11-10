@@ -50,7 +50,10 @@ TEST_SUITE("gpu.rhi") {
 
 TEST_CASE("device reports sane capabilities") {
     const auto& info = gpu().device->info();
-    CHECK(info.backend == (gpu().gles ? rhi::Backend::OpenGLES : rhi::Backend::OpenGL));
+    const rhi::Backend expected = gpu().api == GraphicsApi::Vulkan     ? rhi::Backend::Vulkan
+                                  : gpu().api == GraphicsApi::OpenGLES ? rhi::Backend::OpenGLES
+                                                                       : rhi::Backend::OpenGL;
+    CHECK(info.backend == expected);
     CHECK(info.maxTextureSize >= 2048);
     CHECK(info.uniformBufferAlignment >= 1);
     CHECK_FALSE(info.renderer.empty());
@@ -212,6 +215,23 @@ TEST_CASE("render targets, MSAA resolve and scaled blit") {
         d.destroyRenderTarget(rt.value());
     }
     CHECK(d.memoryStats().renderTargets == 0);
+}
+
+TEST_CASE("the backbuffer follows the size given to beginFrame") {
+    auto& d = *gpu().device;
+    d.beginFrame(32, 16);
+    d.beginPass({}, {true, {0.0f, 1.0f, 0.0f, 1.0f}, true, 1.0f});
+    d.endPass();
+    d.endFrame();
+    CHECK(near(pixel(d, 31, 15), 0, 255, 0));
+    std::vector<u8> out;
+    CHECK_FALSE(d.readBackbuffer(0, 0, 33, 16, out));
+    // Back to the window size: later tests rely on it.
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass({}, {true, {0, 0, 0, 1}, true, 1.0f});
+    d.endPass();
+    d.endFrame();
+    CHECK(near(pixel(d, 63, 63), 0, 0, 0));
 }
 
 TEST_CASE("stale handles are rejected") {

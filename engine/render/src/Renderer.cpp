@@ -386,6 +386,7 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
     m_stats.drawCalls = ds.drawCalls;
     m_stats.triangles = ds.triangles;
     m_stats.gpuTimeMs = ds.gpuTimeMs;
+    m_stats.gpuWaitMs = ds.cpuWaitMs;
     m_stats.renderWidth = renderW;
     m_stats.renderHeight = renderH;
     m_stats.msaaSamples = samples;

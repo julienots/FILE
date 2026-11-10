@@ -26,7 +26,8 @@ struct RenderStats {
     u32 msaaSamples = 1;
     f64 cpuMs = 0.0;         ///< Total CPU time of render().
     f64 collectMs = 0.0;     ///< Scene traversal, culling, sorting, uniform packing (engine code).
-    f64 submitMs = 0.0;      ///< Upload + draw submission (mostly graphics driver time).
+    f64 submitMs = 0.0;      ///< Upload + draw submission (mostly graphics driver time), includes gpuWaitMs.
+    f64 gpuWaitMs = 0.0;     ///< Part of submitMs spent blocked on the GPU (Vulkan only).
     f64 gpuTimeMs = -1.0;    ///< -1 when the device has no GPU timers.
     u64 gpuMemoryBytes = 0;  ///< Buffers + textures + render targets.
     bool hasCamera = false;

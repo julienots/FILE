@@ -27,6 +27,10 @@ public:
     const char* name() const override { return "SDL3"; }
     GraphicsApi graphicsApi() const override;
     void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }
+    std::vector<std::string> vulkanInstanceExtensions() const override;
+    void* vulkanGetInstanceProcAddr() const override;
+    u64 createVulkanSurface(void* vkInstance) const override;
+    Status setGraphicsApi(GraphicsApi api) override;
 
     SDL_Window* window() const { return m_window; }
     /// Resolves an OpenGL entry point of the current context.
@@ -37,6 +41,12 @@ public:
     void setTextInput(bool enabled);
 
 private:
+    Status createWindow(GraphicsApi api);
+    void destroyWindow();
+
+    EngineConfig m_config;
+    GraphicsApi m_api = GraphicsApi::None;
+    bool m_vulkanLoaded = false;
     SDL_Window* m_window = nullptr;
     SDL_GLContextState* m_glContext = nullptr;
     bool m_gles = false;
