@@ -86,6 +86,15 @@ Result<Project> Project::create(const fs::path& folder, const ProjectSettings& s
     Scene scene(settings.name);
     buildSceneTemplate(scene, tmpl);
     if (Status s = writeFile(folder / settings.startupScene, SceneSerializer::toString(scene)); !s) return s.error();
+    // Version control: exports and local saves are generated; signing keys must not be published.
+    if (Status s = writeFile(folder / ".gitignore",
+                             "# AGR ENGINE project\n"
+                             "build/\n"
+                             "user/\n"
+                             "# Release keystore: keep private backups, never in a public repository.\n"
+                             "keys/\n");
+        !s)
+        return s.error();
     AGR_LOG_INFO("Editor", "project '{}' created in {}", settings.name, folder.string());
     return p;
 }

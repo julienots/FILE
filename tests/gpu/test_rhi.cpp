@@ -1,6 +1,10 @@
 #include <cstring>
 
+#include <filesystem>
+#include <fstream>
+
 #include "GpuFixture.hpp"
+#include "agr/platform/SdlFileProvider.hpp"
 
 using namespace agr;
 using namespace agr::test;
@@ -391,4 +395,22 @@ TEST_CASE("the window surface can be released and restored (mobile background / 
     d.endFrame();
     CHECK(near(pixel(d, 5, 5), 0, 255, 0));
     CHECK(d.validationErrorCount() == 0);
+}
+
+TEST_CASE("SDL file provider reads game data (the Android APK path, here from a folder)") {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "agr_sdl_provider";
+    fs::create_directories(dir / "assets");
+    { std::ofstream(dir / "assets" / "data.bin", std::ios::binary) << std::string(100000, 'x') << "end"; }
+    SdlFileProvider p(dir.string());
+    CHECK(p.exists("assets/data.bin"));
+    CHECK_FALSE(p.exists("assets/none.bin"));
+    auto bytes = p.read("assets/data.bin");
+    REQUIRE(bytes);
+    CHECK(bytes.value().size() == 100003);
+    CHECK(bytes.value().back() == 'd');
+    CHECK_FALSE(p.read("missing.txt"));
+    CHECK_FALSE(p.write("x.txt", "a", 1));  // read-only
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }

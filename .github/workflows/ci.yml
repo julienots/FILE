@@ -89,3 +89,40 @@ jobs:
         run: cmake --build --preset release
       - name: Unit tests (GPU tests skip without a desktop session)
         run: ctest --preset release
+
+  android:
+    name: Android (export templates, debug APK of the 2D showcase)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxfixes-dev libxtst-dev libgl-dev libegl-dev libgles-dev
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.14.3" }
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.1" "ndk;28.2.13676358"
+      - name: Export templates (player + SDL for arm64-v8a and x86_64)
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+        run: tools/build_android_templates.sh build/export_templates
+      - name: Editor (command line) and debug APK
+        env:
+          AGR_EXPORT_TEMPLATES: ${{ github.workspace }}/build/export_templates
+        run: |
+          cmake --preset release -DAGR_BUILD_TESTS=OFF -DAGR_BUILD_BENCHMARKS=OFF -DAGR_BUILD_SANDBOX=OFF
+          cmake --build --preset release --target agr_editor
+          ./build/release/bin/agr_editor --create-project "$RUNNER_TEMP/Showcase" --template showcase2d \
+            --export android-apk --output "$RUNNER_TEMP/apk"
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify "$RUNNER_TEMP"/apk/*.apk
+          "$ANDROID_HOME/build-tools/35.0.1/zipalign" -c -P 16 4 "$RUNNER_TEMP"/apk/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ runner.temp }}/apk/*.apk
