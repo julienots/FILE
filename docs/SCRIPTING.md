@@ -1,4 +1,4 @@
-# Scripts Lua (phase 6)
+# Scripts Lua (phases 6 et 7)
 
 Le gameplay s'écrit en **Lua 5.4** : un script est un fichier `.lua` attaché à une entité par le
 composant `Script`. Ce guide décrit le modèle d'exécution, l'API complète et ses limites. Tout ce qui
@@ -26,6 +26,10 @@ function Player:onFixedUpdate(dt) end            -- au pas fixe (60 Hz), avant l
 function Player:onCollision(other, began) end    -- contact physique commencé / terminé
 function Player:onTrigger(other, began) end      -- entrée / sortie d'un déclencheur
 function Player:onDestroy() end                  -- composant retiré, entité détruite, arrêt du jeu
+function Player:onClick() end                    -- UIButton de cette entité cliqué
+function Player:onValueChanged(v) end            -- UISlider de cette entité modifié
+function Player:onAnimationEvent(name) end       -- événement d'un clip de l'Animator
+function Player:onStateEnter(name) end           -- la machine à états de l'Animator change d'état
 
 return Player
 ```
@@ -71,6 +75,10 @@ return Player
 | `destroy()` | détruit l'entité et ses enfants à la fin de l'image |
 | `script()` | la table `self` du script de cette entité, ou `nil` |
 | `velocity()`, `setVelocity(...)`, `applyForce(...)`, `applyImpulse(...)`, `setAngularVelocity(...)` | corps physique : 2D (`x, y` ; angulaire en rad/s) ou 3D (`x, y, z`) selon que l'entité a un `RigidBody2D` ou un `RigidBody` |
+| `setActive(bool)`, `isActive()` | active / désactive l'entité (et ses enfants) : menus, objets cachés |
+| `playSound()`, `stopSound([fondu])`, `isSoundPlaying()` | `AudioSource` de l'entité ([AUDIO.md](AUDIO.md)) |
+| `setText(valeur)`, `text()` | `UIText` de l'entité (les nombres sont convertis) ([UI.md](UI.md)) |
+| `setParameter(nom, nombre \| booléen)`, `setTrigger(nom)`, `getParameter(nom)`, `playState(nom [, fondu])`, `currentState()` | `Animator` et sa machine à états ([ANIMATION.md](ANIMATION.md)) |
 
 `get` / `set` convertissent : booléens, nombres, textes ; vecteurs et couleurs en tables
 `{x=, y=, z=, w=}` (en écriture aussi `{r=, g=, b=, a=}` ou `{1, 2, 3}`) ; rotations en degrés ;
@@ -95,6 +103,11 @@ composant).
 | `agr.physics2d.gravity()`, `setGravity(x, y)` | gravité 2D (−9,81 m/s² par défaut) |
 | `agr.physics3d.raycast(ox, oy, oz, dx, dy, dz [, distance])` | `{entity, x, y, z, nx, ny, nz, distance}` ou `nil` |
 | `agr.physics3d.setGravity(x, y, z)` | gravité 3D |
+| `agr.audio.play(uri [, options])` → voix ou `nil, message` | options : `volume`, `pitch`, `pan`, `loop`, `bus`, `stream`, `fadeIn`, `x`/`y`/`z` (voix spatiale), `minDistance`, `maxDistance` |
+| `agr.audio.stop(voix [, fondu])`, `isPlaying(voix)`, `setVolume(voix, v)`, `setPitch(voix, v)` | contrôle d'une voix |
+| `agr.audio.setBusVolume(bus, v)`, `busVolume(bus)`, `setBusMuted(bus, b)`, `busMuted(bus)` | bus `"Master"`, `"Music"`, `"Effects"`, `"Ambient"`, `"Interface"`, `"Voice"` |
+| `agr.ui.pointerOverUI()` | vrai si la souris / un doigt est sur l'interface (le gameplay l'ignore alors) |
+| `agr.ui.isPressed(entité)` | bouton maintenu (commandes tactiles) |
 
 ## Dans l'éditeur
 
@@ -109,8 +122,9 @@ composant).
 ## Exemples livrés
 
 Dans les projets créés par l'éditeur (`assets/scripts/`) : `platformer_hero.lua` (déplacement, saut avec
-détection du sol par rayon, animation, commandes tactiles), `camera_follow.lua`, `collectible.lua`
-(déclencheur), `ball_launcher.lua` (crée des entités physiques 3D).
+détection du sol par rayon, paramètres de la machine à états, boutons tactiles de l'interface, son de
+saut, score affiché), `camera_follow.lua`, `collectible.lua` (déclencheur, son), `ball_launcher.lua`
+(crée des entités physiques 3D, son de lancer, compteur et curseur de vitesse de l'interface).
 
 ## Performances
 
@@ -123,5 +137,5 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
   prévu en phase 6 et reste à faire.
 - Pas de débogueur pas à pas ni de points d'arrêt ; pas d'autocomplétion intégrée (éditeur de texte externe).
 - Un script par entité ; pas de types statiques (Lua 5.4 standard, pas Luau).
-- Pas encore d'API pour l'audio, l'interface, le chargement de scènes ou les préfabriqués (phases 7 et
-  suivantes) ; la création d'entités se fait composant par composant.
+- Pas encore d'API pour le chargement de scènes ni les préfabriqués ; la création d'entités se fait
+  composant par composant.

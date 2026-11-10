@@ -7,12 +7,12 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phases 1 et 2 terminées ; éditeur (3), 2D (4), 3D (5), physique et scripts (6) : cœur terminé.**
-> Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel, systèmes 2D (feuilles de
-> sprites, animation, tilemaps peintes dans l'éditeur, parallaxe, lumières et particules 2D, écrans mobiles),
-> 3D (import glTF / OBJ / FBX, matériaux PBR, ombres, lumières, ciel, instanciation), physique 2D (Box2D) et
-> 3D (Jolt), scripts Lua ; les deux modèles « Vitrine » sont jouables. Éditeur de logique visuelle, animation,
-> audio, interface et export Android sont les étapes suivantes.
+> **État actuel : phases 1 et 2 terminées ; éditeur (3), 2D (4), 3D (5), physique et scripts (6), animation, audio et interface (7) : cœur terminé.**
+> Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel, systèmes 2D, 3D,
+> physique 2D (Box2D) et 3D (Jolt), scripts Lua, **audio** (miniaudio), **interface de jeu** avec UI
+> Builder et **animation** (courbes, timeline, machines à états) ; les deux modèles « Vitrine » sont
+> jouables avec sons, musique, HUD et commandes tactiles. L'éditeur de logique visuelle et l'export
+> Android (phase 8) sont les étapes suivantes.
 > L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Éditeur AGR](docs/images/editor.png)
@@ -22,6 +22,15 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 ![Vitrine 3D](docs/images/editor_3d.png)
 
 *Le modèle « Vitrine 3D » : matériaux PBR, modèles glTF importés, ombres, éditeur de matériau avec aperçu.*
+
+![Vitrine 2D en jeu](docs/images/editor_play_2d.png)
+
+*La « Vitrine 2D » en mode Jeu : HUD et boutons tactiles (le test automatisé clique sur « Saut »), machine à
+états du héros (état courant en rouge), paramètres de l'Animator dans l'inspecteur.*
+
+![Timeline d'animation](docs/images/editor_animation.png)
+
+*La timeline d'animation : pistes, clés et règle temporelle d'un clip de propriétés.*
 
 ![Vitrine 2D](docs/images/editor_2d.png)
 
@@ -55,10 +64,16 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
   tilemaps solides, rayons, synchronisés avec la scène.
 - Des **scripts Lua 5.4** ([guide](docs/SCRIPTING.md)) : propriétés éditables, accès à tous les composants,
   entrées clavier / tactiles, physique, rechargement à chaud, erreurs localisées, bac à sable.
+- De l'**audio** ([guide](docs/AUDIO.md)) : WAV / Ogg / MP3 / FLAC, bus de mixage (musique, effets,
+  ambiance, interface, voix), audio spatial, sources dans la scène, vumètre.
+- Une **interface de jeu** ([guide](docs/UI.md)) : canvas adaptatif à tous les écrans, ancres, images
+  9-slice, textes TrueType, boutons, curseurs, mises en page, multi-touch ; **UI Builder** dans l'éditeur.
+- De l'**animation** ([guide](docs/ANIMATION.md)) : clips de courbes sur n'importe quel champ, événements,
+  machines à états avec fondus ; **timeline** et **éditeur de graphe** dans l'éditeur.
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **123 tests unitaires, 30 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu), tous
+- **146 tests unitaires, 32 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu, HUD, UI Builder), tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
@@ -133,11 +148,12 @@ engine/
   twod/       systèmes 2D : animation, particules, édition de tilemaps, atlas
   physics2d/  physique 2D (Box2D)       physics3d/  physique 3D (Jolt)
   script/     scripts Lua 5.4
+  audio/      audio (miniaudio)          ui/  interface de jeu          animation/  clips et machines à états
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
 editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices, assets des modèles)
 plugins/spin/ plugin dynamique d'exemple
 apps/sandbox/ application de démonstration (scène 3D + 2D)
-tools/        comparaison d'images, suppressions LSan, génération des ressources originales des modèles (2D, 3D)
+tools/        comparaison d'images, suppressions LSan, génération des ressources originales des modèles (2D, 3D, sons)
 tests/        tests unitaires ; tests/gpu : tests de rendu au pixel près
 benchmarks/   micro-benchmarks CPU ; benchmarks/gpu : benchmarks du renderer
 docs/         architecture, ADR, feuille de route, identité visuelle
@@ -151,6 +167,7 @@ docs/         architecture, ADR, feuille de route, identité visuelle
 - [Systèmes 2D](docs/2D.md)
 - [Rendu 3D](docs/3D.md)
 - [Physique](docs/PHYSICS.md) · [Scripts Lua](docs/SCRIPTING.md)
+- [Audio](docs/AUDIO.md) · [Interface de jeu](docs/UI.md) · [Animation](docs/ANIMATION.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

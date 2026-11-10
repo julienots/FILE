@@ -135,9 +135,30 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Joints, contrôleur de personnage, formes maillage / convexes 3D, couches de collision | ⬜ | à planifier |
 | Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
 
-## Phase 7 — Animation, audio, UI ⬜
-Timeline et courbes, machines à états, mixage audio avec bus et audio spatial (miniaudio),
-UI Builder avec ancres et mise en page responsive.
+## Phase 7 — Animation, audio, UI 🟡 (audio, interface et animation de propriétés terminés ; squelettes, effets audio et widgets avancés à venir)
+
+Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
+
+| Élément | État | Où |
+|---|---|---|
+| Audio miniaudio : WAV / Ogg / MP3 / FLAC, clips décodés ou en flux, voix (volume, hauteur, panoramique, boucle, fondus, limite) | ✅ | `agr::audio` |
+| Bus (Master, Music, Effects, Ambient, Interface, Voice), coupure, pause du jeu, vumètre | ✅ | `AudioSystem` |
+| Audio spatial (atténuation, panoramique) relatif à `AudioListener` ou à la caméra ; `AudioSource` piloté par la scène | ✅ | |
+| Sortie absente (serveur, CI) : mixage silencieux en temps réel ; arrière-plan mobile : sortie suspendue | ✅ | testé sous Linux ; Android en phase 8 |
+| Interface : canvas adaptatif (résolution de référence, largeur / hauteur), ancres, pivot, images 9-slice, textes TrueType UTF-8, boutons, curseurs, colonnes / lignes / grilles | ✅ | `agr::ui` |
+| Pointeurs souris et multi-touch (plusieurs boutons maintenus), événements vers les scripts, `pointerOverUI` | ✅ | `UISystem`, `UIPlugin` |
+| Rendu de l'interface en surimpression (pleine résolution, même avec échelle de rendu / MSAA) sur Vulkan, OpenGL, OpenGL ES | ✅ | `Renderer` (overlay) |
+| Clips de propriétés : courbes (constante, linéaire, lissée, tangentes), tout champ réfléchi, enfants, événements | ✅ | `agr::animation` |
+| Machines à états : paramètres, déclencheurs, conditions, tout état, instant de sortie, fondus, clips de sprite | ✅ | `AnimationSystem` |
+| API Lua : `agr.audio`, `agr.ui`, textes, `setActive`, paramètres d'animation, rappels `onClick`, `onValueChanged`, `onAnimationEvent`, `onStateEnter` | ✅ | `agr::script` |
+| Éditeur : UI Builder dans la vue Jeu, préréglages d'ancres, timeline, machine à états, mixeur, aperçu audio | ✅ | `editor/ui` |
+| Modèles : sons générés, musique, HUD, boutons tactiles, héros à machine à états, objets animés | ✅ | `SceneTemplates`, `tools/generate_template_audio.py` |
+| Tests : 7 audio, 6 interface, 6 animation, 3 scripts, 2 GPU (surimpression), modèles et bout en bout | ✅ | `tests/` |
+| Animation squelettique (skinning glTF), arbres de mélange, couches, IK | ⬜ | à planifier |
+| Effets audio (réverbération, filtres), Doppler, occlusion | ⬜ | à planifier |
+| UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | ⬜ | zones sûres en phase 8 ; le reste à planifier |
+| Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |
+| **Éditeur de logique visuelle** (reporté de la phase 6) | ⬜ | **non réalisé** |
 
 ## Phase 8 — Android ⬜
 Projet Gradle généré, NDK, export APK/AAB, signature, permissions, capteurs, vibrations,

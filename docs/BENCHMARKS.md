@@ -169,5 +169,25 @@ script: onUpdate of 1000 entities (translate)      0.250 ms     250.04 ns/item
 | Jolt, 1 000 boîtes en tas : ~10 ms par pas | Simulation mono-thread : à 60 Hz, ~1 000 corps actifs empilés restent dans le budget d'un cœur de ce Xeon, pas forcément d'un téléphone d'entrée de gamme. Le multi-thread (JobSystem) est la piste d'optimisation. |
 | Lua, `onUpdate` de 1 000 entités : 0,25 à 0,4 ms selon les exécutions | 0,25 à 0,4 µs par appel, accès au Transform compris. |
 
+## Audio, interface et animation (phase 7)
+
+`agr_benchmarks` (même machine, un cœur) :
+
+```
+audio: mix 32 voices (16 spatial, resampled), 512 frames      0.147 ms     287.50 ns/item
+    (512 frames = 10.7 ms of sound at 48 kHz)
+ui: layout + overlay of 501 elements (100 buttons with text)      0.110 ms     218.78 ns/item
+    (990 quads)
+ui: pointer input (hit test, top element first) over 501 elements      0.000 ms     378.00 ns/item
+animation: 1000 animators (500 state machines), 3 curves each      0.188 ms     188.41 ns/item
+```
+
+| Mesure | Analyse |
+|---|---|
+| Mixage de 32 voix : ~0,14 ms pour 10,7 ms de son | ~1,3 % d'un cœur ; le mixage tourne sur le thread audio, pas sur celui du jeu. |
+| Interface de 501 éléments : ~0,1 ms par image | Mise en page, mise en forme des 100 textes et génération des ~1 000 quadrilatères, refaits à chaque image (pas de cache) ; les glyphes ne sont rasterisés qu'une fois. |
+| Entrées de l'interface : < 1 µs | Recherche de l'élément touché depuis le haut de la pile. |
+| 1 000 Animators : ~0,19 ms | Évaluation des courbes, transitions et écriture par réflexion ; ~0,2 µs par entité animée. |
+
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
 téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.

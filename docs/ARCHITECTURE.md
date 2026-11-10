@@ -49,12 +49,17 @@
 | `agr::physics2d` | statique | Physique 2D (Box2D v3) : `RigidBody2D`, `Collider2D`, `TilemapCollider2D`, `Physics2DWorld`, `Physics2DPlugin` ([PHYSICS.md](PHYSICS.md)) |
 | `agr::physics3d` | statique | Physique 3D (Jolt) : `RigidBody`, `Collider`, `Physics3DWorld`, `Physics3DPlugin` |
 | `agr::script` | statique | Scripts Lua 5.4 : composant `Script`, `ScriptEngine` (bac à sable, API, rechargement à chaud), `ScriptPlugin` ([SCRIPTING.md](SCRIPTING.md)) |
+| `agr::audio` | statique | Audio (miniaudio) : clips, voix, bus, audio spatial, `AudioSource` / `AudioListener`, `AudioPlugin` ([AUDIO.md](AUDIO.md)) |
+| `agr::ui` | statique | Interface de jeu : `UICanvas`, `UIRect`, images, textes (polices TrueType), boutons, curseurs, mises en page, pointeurs multi-touch, surimpression du renderer, `UIPlugin` ([UI.md](UI.md)) |
+| `agr::animation` | statique | Clips de propriétés (courbes, événements), machines à états, `Animator`, `AnimationPlugin` ([ANIMATION.md](ANIMATION.md)) |
 | `agr::twod` | statique | Systèmes 2D : animation image par image, simulation des particules, édition de tilemaps, atlas ; `TwoDPlugin` ([2D.md](2D.md)) |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 
 Détails du rendu : [RENDERING.md](RENDERING.md).
 
-Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::audio`, `agr::ui`, `agr::animation`.
+Ordre des plugins d'un jeu (celui de l'éditeur) : `RenderPlugin`, `TwoDPlugin`, `UIPlugin` (entrées de
+l'interface avant les scripts), `ScriptPlugin`, `AnimationPlugin` (après les scripts, qui règlent ses
+paramètres), `Physics2DPlugin`, `Physics3DPlugin`, `AudioPlugin`.
 
 ## Boucle principale
 

@@ -46,6 +46,10 @@ Les projets récents sont mémorisés dans le dossier de préférences de l'util
 | **Scène** | Rendu de la scène par le moteur (même renderer que le jeu), caméra d'édition 3D (orbite, survol, panoramique, zoom) ou 2D, gizmos déplacer / pivoter / échelle (repère local ou monde, magnétisme), sélection par clic (lancer de rayon), icônes des caméras et lumières, cadres de sélection, grille, **vue jeu** (caméra principale), dépôt d'images, statistiques de rendu |
 | **Inspecteur** | Généré par la réflexion : chaque champ reçoit le bon widget (cases à cocher, champs X/Y/Z aux couleurs des axes, couleurs, listes d'énumérations, angles en degrés, chemins d'assets avec aperçu et glisser-déposer, références d'entités par glisser-déposer). « Ajouter un composant » liste tous les composants par catégorie, y compris ceux des plugins. Outils 2D : choix de frame avec aperçu et taille native (sprites), choix de clip (animateur), palette et outils de peinture (tilemaps), redémarrage (particules). 3D : état et avertissements du modèle. Un matériau `.agrmat` sélectionné dans l'explorateur s'y édite avec une sphère d'aperçu ([3D.md](3D.md)) |
 | **Assets** | Dossiers, vignettes des images et des feuilles de sprites, recherche, import (sélecteur natif ou glisser-déposer de fichiers sur la fenêtre), nouveau dossier, renommer, supprimer (toujours avec confirmation), ouvrir dans l'explorateur, liste des scènes (double-clic pour ouvrir), découpe d'une image en grille, création d'atlas, nouveau matériau ; glisser un modèle 3D dans la vue l'ajoute à la scène, glisser un matériau sur un objet le lui applique |
+| **Interface (UI Builder)** | Dans la **vue Jeu** : l'interface s'affiche à la taille de la vue ; cliquer sélectionne un élément, le glisser le déplace, ses poignées le redimensionnent (annulable) ; ancres marquées ; préréglages d'ancres dans l'inspecteur ; *Créer › Interface (UI)* ([UI.md](UI.md)) |
+| **Animation** | Timeline des clips de l'Animator sélectionné : pistes, clés, interpolations, courbe, événements, aperçu par la tête de lecture, enregistrement de la pose (*Clé*) ([ANIMATION.md](ANIMATION.md)) |
+| **Machine à états** | Graphe des états et transitions de l'Animator : conditions, instant de sortie, fondus, paramètres, état courant en mode Jeu |
+| **Mixeur audio** | Volume et coupure des bus, vumètre, voix et mémoire ; bouton *Écouter* des sources dans l'inspecteur ([AUDIO.md](AUDIO.md)) |
 | **Scripts et physique** | En mode Jeu seulement : scripts Lua (inspecteur : erreurs, propriétés, fonctions, *Ouvrir le fichier*), corps physiques ; bouton *Collisions* de la vue ; *Nouveau script* et glisser un `.lua` sur un objet ([SCRIPTING.md](SCRIPTING.md), [PHYSICS.md](PHYSICS.md)) |
 | **Console** | Journal du moteur, filtres par niveau avec compteurs, recherche, copie d'une ligne |
 | **Statistiques** | FPS, courbe des temps d'image, backend et GPU, draw calls, triangles, culling, lots de sprites, temps GPU, mémoire GPU et CPU par catégorie |
@@ -57,6 +61,8 @@ La disposition est entièrement ancrable (docking) et mémorisée ; « Affichage
 **Jouer** (Ctrl+P) sauvegarde la scène en mémoire, lance la simulation (les plugins et systèmes
 reçoivent un temps qui avance) et bascule la vue sur la caméra du jeu. **Pause** fige le temps.
 **Arrêter** restaure exactement la scène d'avant : rien de ce qui se passe en jeu n'est enregistré.
+Les scripts, la physique, les sources audio, les Animators et les clics sur l'interface (vue Jeu)
+n'agissent qu'en mode Jeu.
 En mode édition, le temps du jeu est à zéro : les systèmes de gameplay ne modifient pas la scène.
 
 ## Annuler / rétablir
@@ -110,20 +116,23 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
 - Toutes les opérations d'édition passent par `EditorContext`, testé sans interface (`tests/test_editor.cpp`).
 - Le test de bout en bout (`--smoke-test`) pilote l'éditeur réel par des **événements SDL injectés**
   (clic de souris dans la vue, touche Suppr, Ctrl+Z, trait de peinture de tuiles à la souris), vérifie
-  le résultat (en mode Jeu : le héros scripté avance avec la flèche droite et anime sa course, la barre
-  d'espace lance une balle physique en 3D, *Arrêter* restaure la scène ; modèles glTF, instanciation GPU,
-  aperçu de matériau) et enregistre trois captures (3D de base, 2D, vitrine 3D).
+  le résultat (en mode Jeu : le héros scripté avance avec la flèche droite, sa machine à états passe en
+  course, la musique joue, le HUD est dessiné, un clic de souris sur le bouton « Saut » du HUD le fait
+  sauter, la barre d'espace lance une balle physique en 3D et met à jour le compteur, le cube animé
+  tourne, *Arrêter* restaure la scène et coupe le son ; en édition : glisser un élément d'interface
+  dans la vue Jeu ; modèles glTF, instanciation GPU, aperçu de matériau) et enregistre cinq captures.
 
 ## Limites actuelles
 
 - Une seule fenêtre : les panneaux ne se détachent pas en fenêtres système (*multi-viewports* d'ImGui
   non activés, car ils nécessitent un rendu multi-fenêtres dans la RHI).
-- Pas encore d'éditeurs de shaders, de terrain, d'animation ni d'UI (phases 7 et 9) ; les particules et
+- Pas encore d'éditeurs de shaders ni de terrain (phase 9), ni d'éditeur de logique visuelle ; les particules et
   les feuilles de sprites se règlent dans l'inspecteur et l'explorateur d'assets ; pas de prefabs enregistrés en fichiers (les fragments d'entités existent déjà
   dans le sérialiseur).
 - Pas de mode « 2.5D » dédié dans la vue : un projet 2.5D utilise la vue 3D.
 - Importeurs : images (PNG, JPEG, TGA, BMP, PSD, GIF, HDR) et modèles (glTF / GLB, OBJ, FBX) ; les
   feuilles de sprites et les matériaux sont créés dans l'éditeur ou écrits à la main. Les modifications de
-  matériaux sont enregistrées dans leur fichier et ne sont pas dans l'historique Ctrl+Z de la scène. Les autres fichiers sont copiés dans le
+  matériaux, de clips d'animation et de machines à états sont enregistrées dans leur fichier et ne sont pas
+  dans l'historique Ctrl+Z de la scène. Les autres fichiers sont copiés dans le
   projet, avec un avertissement qu'aucun importeur n'existe encore pour eux.
 - L'inspecteur modifie l'entité principale ; l'édition simultanée de plusieurs entités passe par le gizmo.
