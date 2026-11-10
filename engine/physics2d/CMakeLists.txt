@@ -1,0 +1,10 @@
+agr_add_module(physics2d
+    SOURCES
+        src/Physics2DComponents.cpp
+        src/Physics2DWorld.cpp
+        src/Physics2DPlugin.cpp
+    PUBLIC_DEPS
+        agr::render
+        agr::runtime
+    PRIVATE_DEPS
+        box2d)

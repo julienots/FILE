@@ -11,6 +11,8 @@ third-party components, fetched at configure time at pinned versions
 | [stb_image / stb_image_write](https://github.com/nothings/stb) | 2.30 / 1.16 (commit `2c980bb`) | Public domain or MIT | `agr::assets` (image decoding, PNG screenshots) |
 | [cgltf](https://github.com/jkuhlmann/cgltf) | 1.15 | MIT | `agr::assets` (glTF 2.0 / GLB import) |
 | [ufbx](https://github.com/ufbx/ufbx) | 0.23.1 | MIT or public domain | `agr::assets` (FBX import) |
+| [Box2D](https://github.com/erincatto/box2d) | 3.1.1 | MIT | `agr::physics2d` (2D physics) |
+| [Lua](https://www.lua.org) | 5.4.9 | MIT | `agr::script` (gameplay scripts) |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | vulkan-sdk-1.4.350.0 | Apache-2.0 OR MIT | `agr::rhi` Vulkan backend |
 | [volk](https://github.com/zeux/volk) | vulkan-sdk-1.4.350.0 | MIT | Vulkan function loader |
 | [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | 3.4.0 | MIT | Vulkan memory allocation |

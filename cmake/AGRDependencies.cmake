@@ -67,6 +67,40 @@ if(NOT MSVC)
 endif()
 add_library(agr::ufbx ALIAS agr_ufbx)
 
+# --- 2D physics: Box2D v3.1.1 (MIT).
+set(BOX2D_SAMPLES OFF CACHE BOOL "" FORCE)
+set(BOX2D_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(BOX2D_DOCS OFF CACHE BOOL "" FORCE)
+set(BOX2D_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BOX2D_VALIDATE OFF CACHE BOOL "" FORCE)
+set(BOX2D_PROFILE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(box2d
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG        8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3)
+FetchContent_MakeAvailable(box2d)
+set_target_properties(box2d PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+
+# --- Scripting: Lua 5.4.9 (MIT), compiled from the official sources (interpreter and tests excluded).
+FetchContent_Declare(lua
+    GIT_REPOSITORY https://github.com/lua/lua.git
+    GIT_TAG        312b9efaa1061c2c4cad08554dbc1351c3270eef
+    SOURCE_SUBDIR  agr-do-not-add)
+FetchContent_MakeAvailable(lua)
+set(_lua_sources lapi lauxlib lbaselib lcode lcorolib lctype ldblib ldebug ldo ldump lfunc lgc linit liolib llex lmathlib
+    lmem loadlib lobject lopcodes loslib lparser lstate lstring lstrlib ltable ltablib ltm lundump lutf8lib lvm lzio)
+list(TRANSFORM _lua_sources PREPEND ${lua_SOURCE_DIR}/)
+list(TRANSFORM _lua_sources APPEND .c)
+add_library(agr_lua STATIC ${_lua_sources})
+target_include_directories(agr_lua SYSTEM PUBLIC ${lua_SOURCE_DIR})
+set_target_properties(agr_lua PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE C)
+if(NOT MSVC)
+    target_compile_options(agr_lua PRIVATE -w)
+endif()
+if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android|Darwin")
+    target_compile_definitions(agr_lua PRIVATE LUA_USE_POSIX)  # mkstemp etc.; dynamic C modules stay disabled
+endif()
+add_library(agr::lua ALIAS agr_lua)
+
 # --- Vulkan backend: headers (Apache-2.0/MIT), volk loader (MIT),
 #     VulkanMemoryAllocator (MIT), glslang GLSL -> SPIR-V (BSD/MIT-like). -----
 if(AGR_ENABLE_VULKAN)

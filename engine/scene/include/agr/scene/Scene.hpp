@@ -80,6 +80,9 @@ public:
 
     /// Removes every entity.
     void clear();
+    /// Unique per Scene instance and changed by clear() (hence by loading a scene into it):
+    /// runtime systems keeping per-entity state (physics bodies, script instances) reset when it changes.
+    u64 generation() const { return m_generation; }
 
 private:
     template <typename Fn>
@@ -101,6 +104,7 @@ private:
     Entity m_lastRoot{};
     std::unordered_map<Uuid, Entity> m_uuidMap;
     std::vector<Entity> m_pendingDestroy;
+    u64 m_generation = 0;
 };
 
 } // namespace agr

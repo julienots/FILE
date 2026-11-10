@@ -1,3 +1,4 @@
+#include <atomic>
 #include "agr/scene/Scene.hpp"
 
 #include <algorithm>
@@ -9,7 +10,11 @@ namespace agr {
 
 using ecs::Entity;
 
-Scene::Scene(std::string name) : m_name(std::move(name)) {
+namespace {
+std::atomic<u64> g_sceneGeneration{0};
+} // namespace
+
+Scene::Scene(std::string name) : m_name(std::move(name)), m_generation(++g_sceneGeneration) {
     registerSceneComponents();
     // Make sure core pools exist so const lookups never return null.
     m_hierarchy = &m_registry.pool<HierarchyComponent>();
@@ -233,6 +238,7 @@ void Scene::clear() {
     m_firstRoot = m_lastRoot = Entity{};
     m_uuidMap.clear();
     m_pendingDestroy.clear();
+    m_generation = ++g_sceneGeneration;
 }
 
 } // namespace agr

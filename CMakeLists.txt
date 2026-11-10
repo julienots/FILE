@@ -68,6 +68,7 @@ endif()
 add_subdirectory(engine/runtime)
 add_subdirectory(engine/render)
 add_subdirectory(engine/twod)
+add_subdirectory(engine/physics2d)
 
 if(AGR_BUILD_PLUGINS)
     add_subdirectory(plugins/spin)

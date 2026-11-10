@@ -10,8 +10,9 @@ add_executable(agr_tests
     test_render.cpp
     test_shader_dialect.cpp
     test_twod.cpp
-    test_models.cpp)
-target_link_libraries(agr_tests PRIVATE agr::twod agr::render agr::compiler_options doctest::doctest)
+    test_models.cpp
+    test_physics2d.cpp)
+target_link_libraries(agr_tests PRIVATE agr::physics2d agr::twod agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_PLUGIN_PATH="$<TARGET_FILE:agr_plugin_spin>")
