@@ -208,14 +208,14 @@ void Renderer::ensureTargets(u32 w, u32 h, u32 samples, bool needResolve) {
     const bool haveResolve = static_cast<bool>(m_resolveTarget);
     if (m_sceneTarget && w == m_targetW && h == m_targetH && samples == m_targetSamples && haveResolve == needResolve) return;
     releaseTargets();
-    auto scene = m_device.createRenderTarget({w, h, rhi::TextureFormat::RGBA8, true, samples, "agr.scene"});
+    auto scene = m_device.createRenderTarget({.width = w, .height = h, .colorFormat = rhi::TextureFormat::RGBA8, .depth = true, .samples = samples, .debugName = "agr.scene"});
     if (!scene) {
         AGR_LOG_ERROR("Render", "cannot create scene target: {}", scene.error().message);
         return;
     }
     m_sceneTarget = scene.value();
     if (needResolve) {
-        auto resolve = m_device.createRenderTarget({w, h, rhi::TextureFormat::RGBA8, false, 1, "agr.resolve"});
+        auto resolve = m_device.createRenderTarget({.width = w, .height = h, .colorFormat = rhi::TextureFormat::RGBA8, .depth = false, .samples = 1, .debugName = "agr.resolve"});
         if (resolve) m_resolveTarget = resolve.value();
     }
     m_targetW = w;

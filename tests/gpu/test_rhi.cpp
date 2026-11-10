@@ -192,7 +192,7 @@ TEST_CASE("render targets, MSAA resolve and scaled blit") {
     auto& d = *gpu().device;
     for (u32 samples : {1u, 4u}) {
         CAPTURE(samples);
-        auto rt = d.createRenderTarget({32, 32, rhi::TextureFormat::RGBA8, true, samples, "rt"});
+        auto rt = d.createRenderTarget({.width = 32, .height = 32, .colorFormat = rhi::TextureFormat::RGBA8, .depth = true, .samples = samples, .debugName = "rt"});
         REQUIRE_MESSAGE(rt, (rt ? "" : rt.error().message));
         CHECK(static_cast<bool>(d.renderTargetTexture(rt.value())) == (samples == 1 || d.info().maxSamples == 1));
         d.beginFrame(kWidth, kHeight);
@@ -201,7 +201,7 @@ TEST_CASE("render targets, MSAA resolve and scaled blit") {
         d.beginPass(rt.value(), {true, {0.0f, 0.0f, 1.0f, 1.0f}, true, 1.0f});
         d.endPass();
         if (samples > 1) {
-            auto resolve = d.createRenderTarget({32, 32, rhi::TextureFormat::RGBA8, false, 1, "resolve"});
+            auto resolve = d.createRenderTarget({.width = 32, .height = 32, .colorFormat = rhi::TextureFormat::RGBA8, .depth = false, .samples = 1, .debugName = "resolve"});
             REQUIRE(resolve);
             d.blit(rt.value(), resolve.value(), rhi::Filter::Nearest);
             d.blit(resolve.value(), {}, rhi::Filter::Linear);
@@ -232,6 +232,134 @@ TEST_CASE("the backbuffer follows the size given to beginFrame") {
     d.endPass();
     d.endFrame();
     CHECK(near(pixel(d, 63, 63), 0, 0, 0));
+}
+
+TEST_CASE("instanced draws read a per-instance vertex stream") {
+    auto& d = *gpu().device;
+    // Small quad (indexed) drawn 3 times: per-instance offset + color.
+    const V2 quad[4] = {{-0.1f, -0.1f, 0, 0}, {0.1f, -0.1f, 0, 0}, {0.1f, 0.1f, 0, 0}, {-0.1f, 0.1f, 0, 0}};
+    const u16 indices[6] = {0, 1, 2, 0, 2, 3};
+    struct Instance {
+        float x, y;
+        u8 color[4];
+    };
+    const Instance inst[3] = {{-0.5f, 0.0f, {255, 0, 0, 255}}, {0.0f, 0.0f, {0, 255, 0, 255}}, {0.5f, 0.0f, {0, 0, 255, 255}}};
+    auto vb = d.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, sizeof quad, quad, "quad"});
+    auto ib = d.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static, sizeof indices, indices, "quad.ib"});
+    auto instances = d.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Dynamic, sizeof inst, inst, "instances"});
+    REQUIRE((vb && ib && instances));
+    rhi::PipelineDesc p;
+    p.shader.vertex = R"(
+layout(location = 0) in vec2 a_pos;
+layout(location = 2) in vec2 i_offset;
+layout(location = 3) in vec4 i_color;
+out vec4 v_color;
+void main() { v_color = i_color; gl_Position = vec4(a_pos + i_offset, 0.0, 1.0); }
+)";
+    p.shader.fragment = R"(
+in vec4 v_color;
+layout(location = 0) out vec4 o_color;
+void main() { o_color = v_color; }
+)";
+    p.layout = layoutV2();
+    p.layout.attributes.resize(1);  // position only; uv unused
+    p.instanceLayout.stride = sizeof(Instance);
+    p.instanceLayout.attributes = {{2, rhi::VertexFormat::Float2, 0}, {3, rhi::VertexFormat::UByte4Norm, 8}};
+    p.cull = rhi::CullMode::None;
+    p.depthTest = false;
+    p.debugName = "instanced";
+    auto pipe = d.createPipeline(p);
+    REQUIRE_MESSAGE(pipe, (pipe ? "" : pipe.error().message));
+
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass({}, {true, {0, 0, 0, 1}, true, 1.0f});
+    d.bindPipeline(pipe.value());
+    d.bindVertexBuffer(vb.value());
+    d.bindIndexBuffer(ib.value(), rhi::IndexType::U16);
+    d.bindInstanceBuffer(instances.value());
+    d.drawIndexedInstanced(6, 3);
+    // Second draw: one instance, starting at the third record (offset into the stream).
+    d.bindInstanceBuffer(instances.value(), sizeof(Instance) * 2);
+    d.drawIndexedInstanced(6, 1);
+    d.endPass();
+    d.endFrame();
+    CHECK(d.frameStats().drawCalls == 2);
+    CHECK(d.frameStats().triangles == 8);
+    CHECK_MESSAGE(near(pixel(d, 16, 32), 255, 0, 0), pixel(d, 16, 32));
+    CHECK_MESSAGE(near(pixel(d, 32, 32), 0, 255, 0), pixel(d, 32, 32));
+    CHECK_MESSAGE(near(pixel(d, 48, 32), 0, 0, 255), pixel(d, 48, 32));
+    CHECK(near(pixel(d, 32, 10), 0, 0, 0));
+
+    d.destroyPipeline(pipe.value());
+    d.destroyBuffer(vb.value());
+    d.destroyBuffer(ib.value());
+    d.destroyBuffer(instances.value());
+}
+
+TEST_CASE("depth-only targets: depth is kept and sampled in a later pass") {
+    auto& d = *gpu().device;
+    auto shadow = d.createRenderTarget({.width = 32, .height = 32, .color = false, .depth = true, .sampleableDepth = true,
+                                        .debugName = "shadow"});
+    REQUIRE_MESSAGE(shadow, (shadow ? "" : shadow.error().message));
+    const rhi::TextureHandle depthTex = d.renderTargetDepthTexture(shadow.value());
+    REQUIRE(depthTex);
+    CHECK_FALSE(d.renderTargetTexture(shadow.value()));
+    CHECK_FALSE(d.createRenderTarget({.width = 8, .height = 8, .color = false, .depth = false}));
+    if (d.info().maxSamples > 1) {
+        const bool msaaDepthAccepted = static_cast<bool>(d.createRenderTarget({.width = 8, .height = 8, .sampleableDepth = true, .samples = 4}));
+        CHECK_FALSE(msaaDepthAccepted);
+    }
+
+    // Left half at depth 0.25, right half untouched (cleared to 1). Clip-space z differs
+    // per API (GL: [-1, 1], Vulkan: [0, 1]), the stored depth does not.
+    const float z = d.info().backend == rhi::Backend::Vulkan ? 0.25f : -0.5f;
+    const V2 left[6] = {{-1, -1, z, 0}, {0, -1, z, 0}, {0, 1, z, 0}, {-1, -1, z, 0}, {0, 1, z, 0}, {-1, 1, z, 0}};
+    auto vb = d.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, sizeof left, left, "left"});
+    auto quad = d.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, sizeof kQuad, kQuad, "quad"});
+    REQUIRE((vb && quad));
+    rhi::PipelineDesc dp;
+    dp.shader.vertex = R"(
+layout(location = 0) in vec2 a_pos;
+layout(location = 1) in vec2 a_uv;
+void main() { gl_Position = vec4(a_pos, a_uv.x, 1.0); }
+)";
+    dp.shader.fragment = "void main() {}\n";
+    dp.layout = layoutV2();
+    dp.cull = rhi::CullMode::None;
+    dp.colorOutput = false;
+    dp.debugName = "depth-only";
+    auto depthPipe = d.createPipeline(dp);
+    REQUIRE_MESSAGE(depthPipe, (depthPipe ? "" : depthPipe.error().message));
+    const auto show = makePipeline(d, R"(
+uniform sampler2D u_depth;
+in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() { o_color = vec4(vec3(texture(u_depth, v_uv).r), 1.0); }
+)", {}, {"u_depth"});
+
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass(shadow.value(), {true, {0, 0, 0, 1}, true, 1.0f});
+    d.bindPipeline(depthPipe.value());
+    d.bindVertexBuffer(vb.value());
+    d.draw(6);
+    d.endPass();
+    d.prepareTextureForSampling(depthTex);
+    d.beginPass({}, {true, {0, 0, 0, 1}, true, 1.0f});
+    d.bindPipeline(show);
+    d.bindVertexBuffer(quad.value());
+    d.bindTexture(0, depthTex);
+    d.draw(6);
+    d.endPass();
+    d.endFrame();
+    CHECK_MESSAGE(near(pixel(d, 16, 32), 64, 64, 64, 3), pixel(d, 16, 32));
+    CHECK_MESSAGE(near(pixel(d, 48, 32), 255, 255, 255, 3), pixel(d, 48, 32));
+    CHECK(d.validationErrorCount() == 0);
+
+    d.destroyPipeline(depthPipe.value());
+    d.destroyPipeline(show);
+    d.destroyBuffer(vb.value());
+    d.destroyBuffer(quad.value());
+    d.destroyRenderTarget(shadow.value());
 }
 
 TEST_CASE("stale handles are rejected") {

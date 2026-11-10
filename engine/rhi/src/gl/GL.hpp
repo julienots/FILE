@@ -41,7 +41,7 @@ constexpr GLenum GL_TEXTURE_2D = 0x0DE1;
 constexpr GLenum GL_UNSIGNED_BYTE = 0x1401, GL_UNSIGNED_SHORT = 0x1403, GL_UNSIGNED_INT = 0x1405,
                  GL_FLOAT = 0x1406, GL_HALF_FLOAT = 0x140B;
 constexpr GLenum GL_COLOR = 0x1800, GL_DEPTH = 0x1801, GL_STENCIL = 0x1802;
-constexpr GLenum GL_RED = 0x1903, GL_RGBA = 0x1908;
+constexpr GLenum GL_DEPTH_COMPONENT = 0x1902, GL_RED = 0x1903, GL_RGBA = 0x1908;
 constexpr GLenum GL_VENDOR = 0x1F00, GL_RENDERER = 0x1F01, GL_VERSION = 0x1F02, GL_EXTENSIONS = 0x1F03;
 constexpr GLenum GL_NEAREST = 0x2600, GL_LINEAR = 0x2601, GL_NEAREST_MIPMAP_NEAREST = 0x2700,
                  GL_LINEAR_MIPMAP_NEAREST = 0x2701, GL_NEAREST_MIPMAP_LINEAR = 0x2702, GL_LINEAR_MIPMAP_LINEAR = 0x2703;
@@ -49,6 +49,7 @@ constexpr GLenum GL_TEXTURE_MAG_FILTER = 0x2800, GL_TEXTURE_MIN_FILTER = 0x2801,
                  GL_TEXTURE_WRAP_S = 0x2802, GL_TEXTURE_WRAP_T = 0x2803;
 constexpr GLenum GL_REPEAT = 0x2901, GL_CLAMP_TO_EDGE = 0x812F, GL_MIRRORED_REPEAT = 0x8370;
 constexpr GLenum GL_FUNC_ADD = 0x8006, GL_RGBA8 = 0x8058;
+constexpr GLenum GL_DEPTH_COMPONENT16 = 0x81A5, GL_DEPTH_ATTACHMENT = 0x8D00;
 constexpr GLenum GL_DEPTH_STENCIL_ATTACHMENT = 0x821A, GL_NUM_EXTENSIONS = 0x821D, GL_R8 = 0x8229;
 constexpr GLenum GL_TEXTURE0 = 0x84C0, GL_DEPTH_STENCIL = 0x84F9, GL_UNSIGNED_INT_24_8 = 0x84FA;
 constexpr GLenum GL_QUERY_RESULT = 0x8866, GL_QUERY_RESULT_AVAILABLE = 0x8867;
@@ -126,6 +127,9 @@ constexpr GLuint GL_INVALID_INDEX = 0xFFFFFFFFu;
     X(void, glUniform1i, (GLint, GLint))                                                                    \
     X(void, glDrawArrays, (GLenum, GLint, GLsizei))                                                         \
     X(void, glDrawElements, (GLenum, GLsizei, GLenum, const void*))                                         \
+    X(void, glDrawElementsInstanced, (GLenum, GLsizei, GLenum, const void*, GLsizei))                       \
+    X(void, glVertexAttribDivisor, (GLuint, GLuint))                                                        \
+    X(void, glDrawBuffers, (GLsizei, const GLenum*))                                                        \
     X(void, glGenFramebuffers, (GLsizei, GLuint*))                                                          \
     X(void, glDeleteFramebuffers, (GLsizei, const GLuint*))                                                 \
     X(void, glBindFramebuffer, (GLenum, GLuint))                                                            \

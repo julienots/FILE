@@ -18,6 +18,7 @@ u32 bytesPerPixel(TextureFormat format) {
         case TextureFormat::Depth24Stencil8: return 4;
         case TextureFormat::R8: return 1;
         case TextureFormat::RGBA16F: return 8;
+        case TextureFormat::Depth16: return 2;
     }
     return 4;
 }

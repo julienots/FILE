@@ -109,7 +109,7 @@ void ViewportPanel::beginFrame(EditorShared& s) {
     if (!d || m_wantWidth == 0 || m_wantHeight == 0) return;
     if (m_target && m_wantWidth == m_width && m_wantHeight == m_height) return;
     d->destroyRenderTarget(m_target);
-    auto rt = d->createRenderTarget({m_wantWidth, m_wantHeight, rhi::TextureFormat::RGBA8, true, 1, "agr.editor.viewport"});
+    auto rt = d->createRenderTarget({.width = m_wantWidth, .height = m_wantHeight, .colorFormat = rhi::TextureFormat::RGBA8, .depth = true, .samples = 1, .debugName = "agr.editor.viewport"});
     if (!rt) {
         AGR_LOG_ERROR("Editor", "viewport target: {}", rt.error().message);
         m_target = {};

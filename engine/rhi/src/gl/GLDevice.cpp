@@ -14,7 +14,7 @@ namespace {
 
 using namespace gl;
 
-constexpr u32 kMaxAttributes = 8;
+constexpr u32 kMaxAttributes = 16;  // minimum guaranteed by GL 3.3, GLES 3.0 and Vulkan
 constexpr u32 kMaxTextureUnits = 8;
 constexpr u32 kMaxUniformSlots = 8;
 constexpr u32 kTimerQueries = 4;
@@ -38,6 +38,7 @@ struct GLTexture {
 struct GLPipeline {
     GLuint program = 0;
     VertexLayout layout;
+    VertexLayout instanceLayout;
     Topology topology = Topology::Triangles;
     CullMode cull = CullMode::Back;
     BlendMode blend = BlendMode::Opaque;
@@ -50,8 +51,10 @@ struct GLRenderTarget {
     GLuint colorRenderbuffer = 0;  // MSAA color
     GLuint depthRenderbuffer = 0;
     TextureHandle colorTexture;    // single-sampled color
+    TextureHandle depthTexture;    // sampleable depth (shadow maps)
     u32 width = 0, height = 0, samples = 1;
     TextureFormat colorFormat = TextureFormat::RGBA8;
+    bool color = true;
     bool depth = false;
 };
 
@@ -66,6 +69,7 @@ FormatInfo toGL(TextureFormat f) {
         case TextureFormat::R8: return {GL_R8, GL_RED, GL_UNSIGNED_BYTE};
         case TextureFormat::RGBA16F: return {GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT};
         case TextureFormat::Depth24Stencil8: return {GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8};
+        case TextureFormat::Depth16: return {GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT};
     }
     return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE};
 }
@@ -215,6 +219,7 @@ public:
         if (GLBuffer* b = m_buffers.get(h)) {
             if (m_boundVertexBuffer == h) m_boundVertexBuffer = {};
             if (m_boundIndexBuffer == h) m_boundIndexBuffer = {};
+            if (m_boundInstanceBuffer == h) m_boundInstanceBuffer = {};
             m_gl.glDeleteBuffers(1, &b->id);
             m_bufferBytes -= b->size;
             m_buffers.release(h);
@@ -230,7 +235,7 @@ public:
         t.width = d.width;
         t.height = d.height;
         t.format = d.format;
-        t.mips = d.generateMips && d.format != TextureFormat::Depth24Stencil8;
+        t.mips = d.generateMips && !isDepthFormat(d.format);
         const u64 base = static_cast<u64>(d.width) * d.height * bytesPerPixel(d.format);
         t.bytes = t.mips ? base * 4 / 3 : base;
         m_gl.glGenTextures(1, &t.id);
@@ -326,7 +331,7 @@ public:
             return makeError(Error::Code::ParseError, "pipeline '" + std::string(d.debugName) + "' failed to link:\n" + log);
         }
         if (d.uniformBlocks.size() > kMaxUniformSlots || d.samplers.size() > kMaxTextureUnits ||
-            d.layout.attributes.size() > kMaxAttributes) {
+            d.layout.attributes.size() + d.instanceLayout.attributes.size() > kMaxAttributes) {
             m_gl.glDeleteProgram(p.program);
             return makeError(Error::Code::InvalidArgument, "too many uniform blocks, samplers or attributes");
         }
@@ -343,6 +348,7 @@ public:
         m_gl.glUseProgram(0);
         m_boundPipeline = {};
         p.layout = d.layout;
+        p.instanceLayout = d.instanceLayout;
         p.topology = d.topology;
         p.cull = d.cull;
         p.blend = d.blend;
@@ -368,11 +374,19 @@ public:
         rt.height = d.height;
         rt.samples = std::clamp<u32>(d.samples, 1, m_info.maxSamples);
         rt.colorFormat = d.colorFormat;
-        rt.depth = d.depth;
+        rt.color = d.color;
+        rt.depth = d.depth || d.sampleableDepth;
+        if (d.sampleableDepth && rt.samples > 1)
+            return makeError(Error::Code::InvalidArgument, "sampleable depth requires a single-sampled target");
+        if (!d.color && !rt.depth) return makeError(Error::Code::InvalidArgument, "render target without color nor depth");
         m_gl.glGenFramebuffers(1, &rt.fbo);
         m_gl.glBindFramebuffer(GL_FRAMEBUFFER, rt.fbo);
         const FormatInfo fi = toGL(d.colorFormat);
-        if (rt.samples > 1) {
+        if (!d.color) {
+            const GLenum none = GL_NONE;  // depth-only: no draw / read buffer (completeness on desktop GL)
+            m_gl.glDrawBuffers(1, &none);
+            m_gl.glReadBuffer(GL_NONE);
+        } else if (rt.samples > 1) {
             m_gl.glGenRenderbuffers(1, &rt.colorRenderbuffer);
             m_gl.glBindRenderbuffer(GL_RENDERBUFFER, rt.colorRenderbuffer);
             m_gl.glRenderbufferStorageMultisample(GL_RENDERBUFFER, static_cast<GLsizei>(rt.samples), fi.internal,
@@ -396,7 +410,27 @@ public:
             m_gl.glBindFramebuffer(GL_FRAMEBUFFER, rt.fbo);
             m_gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->id, 0);
         }
-        if (d.depth) {
+        if (d.sampleableDepth) {
+            TextureDesc td;
+            td.width = d.width;
+            td.height = d.height;
+            td.format = TextureFormat::Depth16;
+            td.generateMips = false;
+            td.sampler = {Filter::Nearest, Filter::Nearest, false, Wrap::Clamp, Wrap::Clamp};
+            td.debugName = d.debugName;
+            auto tex = createTexture(td);
+            if (!tex) {
+                if (rt.colorTexture) releaseTexture(rt.colorTexture);
+                if (rt.colorRenderbuffer) m_gl.glDeleteRenderbuffers(1, &rt.colorRenderbuffer);
+                m_gl.glDeleteFramebuffers(1, &rt.fbo);
+                return tex.error();
+            }
+            rt.depthTexture = tex.value();
+            GLTexture* t = m_textures.get(rt.depthTexture);
+            t->ownedByTarget = true;
+            m_gl.glBindFramebuffer(GL_FRAMEBUFFER, rt.fbo);
+            m_gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, t->id, 0);
+        } else if (d.depth) {
             m_gl.glGenRenderbuffers(1, &rt.depthRenderbuffer);
             m_gl.glBindRenderbuffer(GL_RENDERBUFFER, rt.depthRenderbuffer);
             // 0 (not 1) for single-sampled targets: a 1-sample renderbuffer is "multisampled"
@@ -416,7 +450,8 @@ public:
         }
         // Single-sampled color is already counted as a texture; add renderbuffers only.
         const u64 pixels = static_cast<u64>(d.width) * d.height * rt.samples;
-        m_targetBytes[handle.index] = (rt.samples > 1 ? pixels * bytesPerPixel(d.colorFormat) : 0) + (d.depth ? pixels * 4 : 0);
+        m_targetBytes[handle.index] = (rt.samples > 1 && d.color ? pixels * bytesPerPixel(d.colorFormat) : 0) +
+                                      (rt.depthRenderbuffer ? pixels * 4 : 0);
         return handle;
     }
 
@@ -424,6 +459,7 @@ public:
         GLRenderTarget* rt = m_targets.get(h);
         if (!rt) return;
         if (rt->colorTexture) releaseTexture(rt->colorTexture);
+        if (rt->depthTexture) releaseTexture(rt->depthTexture);
         if (rt->colorRenderbuffer) m_gl.glDeleteRenderbuffers(1, &rt->colorRenderbuffer);
         if (rt->depthRenderbuffer) m_gl.glDeleteRenderbuffers(1, &rt->depthRenderbuffer);
         m_gl.glDeleteFramebuffers(1, &rt->fbo);
@@ -434,6 +470,10 @@ public:
     TextureHandle renderTargetTexture(RenderTargetHandle h) const override {
         const GLRenderTarget* rt = m_targets.get(h);
         return rt ? rt->colorTexture : TextureHandle{};
+    }
+    TextureHandle renderTargetDepthTexture(RenderTargetHandle h) const override {
+        const GLRenderTarget* rt = m_targets.get(h);
+        return rt ? rt->depthTexture : TextureHandle{};
     }
 
     // ------------------------------------------------------------ frame
@@ -474,6 +514,7 @@ public:
         u32 w = m_backbufferW, h = m_backbufferH;
         GLuint fbo = 0;
         bool hasDepth = true;  // the default framebuffer is created with depth + stencil
+        bool hasColor = true, keepDepth = false;
         if (target) {
             GLRenderTarget* rt = m_targets.get(target);
             if (!rt) {
@@ -484,13 +525,17 @@ public:
             w = rt->width;
             h = rt->height;
             hasDepth = rt->depth;
+            hasColor = rt->color;
+            keepDepth = static_cast<bool>(rt->depthTexture);
         }
         m_gl.glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         m_passTarget = target;
         m_passHasDepth = hasDepth;
+        m_passHasColor = hasColor;
+        m_passKeepsDepth = keepDepth;
         setViewport(0, 0, w, h);
         setScissor(false, 0, 0, 0, 0);
-        if (clear.clearColor) {
+        if (clear.clearColor && hasColor) {
             m_gl.glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             const GLfloat c[4] = {clear.color.x, clear.color.y, clear.color.z, clear.color.w};
             m_gl.glClearBufferfv(GL_COLOR, 0, c);
@@ -498,13 +543,14 @@ public:
         if (clear.clearDepth && m_passHasDepth) {
             m_gl.glDepthMask(GL_TRUE);
             m_state.depthWrite = true;
-            m_gl.glClearBufferfi(GL_DEPTH_STENCIL, 0, clear.depth, 0);
+            if (keepDepth) m_gl.glClearBufferfv(GL_DEPTH, 0, &clear.depth);
+            else m_gl.glClearBufferfi(GL_DEPTH_STENCIL, 0, clear.depth, 0);
         }
     }
 
     void endPass() override {
         // Tile-based mobile GPUs: tell the driver depth / stencil need not be stored to memory.
-        if (m_gl.glInvalidateFramebuffer && m_passHasDepth) {
+        if (m_gl.glInvalidateFramebuffer && m_passHasDepth && !m_passKeepsDepth) {
             if (m_passTarget) {
                 const GLenum att[] = {GL_DEPTH_STENCIL_ATTACHMENT};
                 m_gl.glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, att);
@@ -551,6 +597,14 @@ public:
         }
     }
 
+    void bindInstanceBuffer(BufferHandle h, usize offset) override {
+        if (h != m_boundInstanceBuffer || offset != m_instanceOffset) {
+            m_boundInstanceBuffer = h;
+            m_instanceOffset = offset;
+            m_attribsDirty = true;
+        }
+    }
+
     void bindIndexBuffer(BufferHandle h, IndexType type, usize offset) override {
         GLBuffer* b = m_buffers.get(h);
         if (!b) return;
@@ -592,6 +646,17 @@ public:
         m_gl.glDrawElements(p->topology == Topology::Lines ? GL_LINES : GL_TRIANGLES, static_cast<GLsizei>(indexCount),
                             m_indexType == IndexType::U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, offset);
         count(*p, indexCount);
+    }
+
+    void drawIndexedInstanced(u32 indexCount, u32 instanceCount, u32 firstIndex, i32 baseVertex) override {
+        GLPipeline* p = m_pipelines.get(m_boundPipeline);
+        if (!p || instanceCount == 0 || !m_buffers.valid(m_boundIndexBuffer) || !prepareAttributes(*p, baseVertex)) return;
+        const usize indexSize = m_indexType == IndexType::U16 ? 2 : 4;
+        const auto* offset = reinterpret_cast<const void*>(m_indexOffset + static_cast<usize>(firstIndex) * indexSize);
+        m_gl.glDrawElementsInstanced(p->topology == Topology::Lines ? GL_LINES : GL_TRIANGLES, static_cast<GLsizei>(indexCount),
+                                     m_indexType == IndexType::U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, offset,
+                                     static_cast<GLsizei>(instanceCount));
+        count(*p, indexCount * instanceCount);
     }
 
     void blit(RenderTargetHandle src, RenderTargetHandle dst, Filter filter) override {
@@ -755,12 +820,34 @@ private:
         m_gl.glBindBuffer(GL_ARRAY_BUFFER, vb->id);
         u32 enabledMask = 0;
         const usize base = m_vertexOffset + static_cast<usize>(static_cast<i64>(baseVertex) * p.layout.stride);
+        u32 instancedMask = 0;
         for (const VertexAttribute& a : p.layout.attributes) {
             const AttribFormat f = toGL(a.format);
             m_gl.glVertexAttribPointer(a.location, f.components, f.type, f.normalized,
                                        static_cast<GLsizei>(p.layout.stride), reinterpret_cast<const void*>(base + a.offset));
             enabledMask |= 1u << a.location;
         }
+        if (p.instanceLayout.stride > 0) {
+            GLBuffer* ib = m_buffers.get(m_boundInstanceBuffer);
+            if (!ib) {
+                AGR_LOG_ERROR("RHI", "instanced pipeline drawn without a valid instance buffer");
+                m_attribsDirty = true;
+                return false;
+            }
+            m_gl.glBindBuffer(GL_ARRAY_BUFFER, ib->id);
+            for (const VertexAttribute& a : p.instanceLayout.attributes) {
+                const AttribFormat f = toGL(a.format);
+                m_gl.glVertexAttribPointer(a.location, f.components, f.type, f.normalized, static_cast<GLsizei>(p.instanceLayout.stride),
+                                           reinterpret_cast<const void*>(m_instanceOffset + a.offset));
+                enabledMask |= 1u << a.location;
+                instancedMask |= 1u << a.location;
+            }
+        }
+        for (u32 i = 0; i < kMaxAttributes; ++i) {  // per-instance attributes advance once per instance
+            const bool want = instancedMask & (1u << i), have = m_instancedAttribs & (1u << i);
+            if (want != have) m_gl.glVertexAttribDivisor(i, want ? 1 : 0);
+        }
+        m_instancedAttribs = instancedMask;
         for (u32 i = 0; i < kMaxAttributes; ++i) {
             const bool want = enabledMask & (1u << i), have = m_enabledAttribs & (1u << i);
             if (want && !have) m_gl.glEnableVertexAttribArray(i);
@@ -792,15 +879,18 @@ private:
     GLuint m_vao = 0;
     CachedState m_state;
     PipelineHandle m_boundPipeline;
-    BufferHandle m_boundVertexBuffer, m_boundIndexBuffer;
-    usize m_vertexOffset = 0, m_indexOffset = 0;
+    BufferHandle m_boundVertexBuffer, m_boundIndexBuffer, m_boundInstanceBuffer;
+    usize m_vertexOffset = 0, m_indexOffset = 0, m_instanceOffset = 0;
     IndexType m_indexType = IndexType::U16;
     bool m_attribsDirty = true;
     i32 m_lastBaseVertex = 0;
     u32 m_enabledAttribs = 0;
+    u32 m_instancedAttribs = 0;  // attributes with divisor 1
     std::array<TextureHandle, kMaxTextureUnits> m_textureUnits{};
     RenderTargetHandle m_passTarget;
     bool m_passHasDepth = true;
+    bool m_passHasColor = true;
+    bool m_passKeepsDepth = false;  // sampleable depth: must not be invalidated
     u32 m_backbufferW = 0, m_backbufferH = 0;
 
     std::array<GLuint, kTimerQueries> m_queries{};

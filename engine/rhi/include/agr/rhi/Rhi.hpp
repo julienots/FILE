@@ -54,7 +54,9 @@ enum class TextureFormat : u8 {
     R8,
     RGBA16F,
     Depth24Stencil8,
+    Depth16,    ///< Sampleable depth (shadow maps): supported everywhere (Vulkan, GL 3.3, GLES 3.0).
 };
+inline bool isDepthFormat(TextureFormat f) { return f == TextureFormat::Depth24Stencil8 || f == TextureFormat::Depth16; }
 u32 bytesPerPixel(TextureFormat format);
 
 enum class Filter : u8 { Nearest, Linear };
@@ -109,12 +111,17 @@ struct ShaderSource {
 struct PipelineDesc {
     ShaderSource shader;
     VertexLayout layout;
+    /// Optional second vertex stream advanced once per instance (stride 0 = none);
+    /// bound with Device::bindInstanceBuffer. Locations must not overlap `layout`.
+    VertexLayout instanceLayout;
     Topology topology = Topology::Triangles;
     CullMode cull = CullMode::Back;
     BlendMode blend = BlendMode::Opaque;
     bool depthTest = true;
     bool depthWrite = true;
     CompareOp depthCompare = CompareOp::LessEqual;
+    /// false: depth-only pipeline (shadow maps), used with targets that have no color.
+    bool colorOutput = true;
     /// uniformBlocks[i] is bound to uniform slot i; samplers[i] to texture unit i.
     std::vector<std::string> uniformBlocks;
     std::vector<std::string> samplers;
@@ -125,8 +132,12 @@ struct PipelineDesc {
 struct RenderTargetDesc {
     u32 width = 1;
     u32 height = 1;
+    bool color = true;  ///< false = depth-only target (shadow maps).
     TextureFormat colorFormat = TextureFormat::RGBA8;
     bool depth = true;
+    /// Depth is a Depth16 texture kept after the pass and readable in shaders
+    /// (renderTargetDepthTexture); single-sampled targets only.
+    bool sampleableDepth = false;
     u32 samples = 1;  ///< > 1 = MSAA; resolve with blit().
     const char* debugName = "";
 };
@@ -205,6 +216,9 @@ public:
     virtual void destroyRenderTarget(RenderTargetHandle target) = 0;
     /// Color texture of a single-sampled target (sampleable). Null for MSAA targets.
     virtual TextureHandle renderTargetTexture(RenderTargetHandle target) const = 0;
+    /// Depth texture of a target created with sampleableDepth (null otherwise). Call
+    /// prepareTextureForSampling on it after the pass that wrote it.
+    virtual TextureHandle renderTargetDepthTexture(RenderTargetHandle target) const = 0;
 
     // ------------------------------------------------------- frame commands
     virtual void beginFrame(u32 backbufferWidth, u32 backbufferHeight) = 0;
@@ -219,6 +233,8 @@ public:
     virtual void bindPipeline(PipelineHandle pipeline) = 0;
     virtual void bindVertexBuffer(BufferHandle buffer, usize offset = 0) = 0;
     virtual void bindIndexBuffer(BufferHandle buffer, IndexType type, usize offset = 0) = 0;
+    /// Per-instance vertex stream of pipelines with an instanceLayout.
+    virtual void bindInstanceBuffer(BufferHandle buffer, usize offset = 0) = 0;
     virtual void bindUniformBuffer(u32 slot, BufferHandle buffer, usize offset, usize size) = 0;
     virtual void bindTexture(u32 unit, TextureHandle texture) = 0;
     /// Must be called outside a pass before sampling a render-target texture in a later
@@ -227,6 +243,8 @@ public:
 
     virtual void draw(u32 vertexCount, u32 firstVertex = 0) = 0;
     virtual void drawIndexed(u32 indexCount, u32 firstIndex = 0, i32 baseVertex = 0) = 0;
+    /// Instance i reads the instance stream at offset + i * instanceLayout.stride.
+    virtual void drawIndexedInstanced(u32 indexCount, u32 instanceCount, u32 firstIndex = 0, i32 baseVertex = 0) = 0;
 
     /// Copies (and resolves MSAA / rescales) `src` into `dst` (null = backbuffer).
     virtual void blit(RenderTargetHandle src, RenderTargetHandle dst, Filter filter) = 0;

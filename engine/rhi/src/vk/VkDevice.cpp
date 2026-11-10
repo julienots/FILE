@@ -98,6 +98,8 @@ struct VkPipelineRes {
 
 struct VkTargetRes {
     TextureHandle colorTexture;  // single-sampled color (sampleable)
+    TextureHandle depthTexture;  // sampleable depth (shadow maps)
+    bool hasColor = true;
     Image msaaColor;             // multisampled color
     Image depth;
     bool hasDepth = false;
@@ -128,6 +130,7 @@ VkFormat toVk(TextureFormat f, VkFormat depthFormat) {
         case TextureFormat::R8: return VK_FORMAT_R8_UNORM;
         case TextureFormat::RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
         case TextureFormat::Depth24Stencil8: return depthFormat;
+        case TextureFormat::Depth16: return VK_FORMAT_D16_UNORM;  // mandatory: depth attachment + sampled
     }
     return VK_FORMAT_R8G8B8A8_UNORM;
 }
@@ -168,8 +171,11 @@ bool hasStencil(VkFormat f) {
     return f == VK_FORMAT_D24_UNORM_S8_UINT || f == VK_FORMAT_D32_SFLOAT_S8_UINT || f == VK_FORMAT_D16_UNORM_S8_UINT;
 }
 
-u64 compatKey(VkFormat color, VkFormat depth, u32 samples) {
-    return static_cast<u64>(color) | (static_cast<u64>(depth) << 20) | (static_cast<u64>(samples) << 40);
+/// Render pass compatibility key: color format (UNDEFINED = depth-only), depth format,
+/// samples, and whether depth is stored for sampling (bit 48).
+u64 compatKey(VkFormat color, VkFormat depth, u32 samples, bool storeDepth = false) {
+    return static_cast<u64>(color) | (static_cast<u64>(depth) << 20) | (static_cast<u64>(samples) << 40) |
+           (static_cast<u64>(storeDepth) << 48);
 }
 
 const char* vendorName(u32 id) {
@@ -297,6 +303,7 @@ public:
         for (auto& s : m_slots)
             if (s.buffer == h) s = {};
         if (m_vertexBuffer == h) m_vertexBuffer = {};
+        if (m_instanceBuffer == h) m_instanceBuffer = {};
         if (m_indexBuffer == h) m_indexBuffer = {};
         m_descriptorKeyValid = false;
     }
@@ -309,7 +316,7 @@ public:
         VkTextureRes t;
         t.format = d.format;
         const VkFormat format = toVk(d.format, m_depthFormat);
-        const bool depth = d.format == TextureFormat::Depth24Stencil8;
+        const bool depth = isDepthFormat(d.format);
         u32 mips = 1;
         if (d.generateMips && !depth && canBlitLinear(format)) {
             while ((std::max(d.width, d.height) >> mips) > 0) ++mips;
@@ -380,7 +387,8 @@ public:
         p.state.shader = {};
         // Create the variant for the backbuffer now so obvious errors surface early.
         const auto handle = m_pipelines.create(std::move(p));
-        if (!variant(*m_pipelines.get(handle), m_backbufferCompat)) {
+        const u64 warmCompat = d.colorOutput ? m_backbufferCompat : compatKey(VK_FORMAT_UNDEFINED, VK_FORMAT_D16_UNORM, 1, true);
+        if (!variant(*m_pipelines.get(handle), warmCompat)) {
             destroyPipeline(handle);
             return makeError(Error::Code::Unknown, std::string("vkCreateGraphicsPipelines failed for '") + d.debugName + "'");
         }
@@ -411,6 +419,7 @@ public:
         const VkTargetRes copy = *rt;
         if (!copy.internal) m_targetBytes -= copy.bytes;
         if (copy.colorTexture) releaseTexture(copy.colorTexture);
+        if (copy.depthTexture) releaseTexture(copy.depthTexture);
         defer([this, copy] {
             vkDestroyFramebuffer(m_device, copy.framebuffer, nullptr);
             Image msaa = copy.msaaColor, depth = copy.depth;
@@ -423,6 +432,10 @@ public:
     TextureHandle renderTargetTexture(RenderTargetHandle h) const override {
         const VkTargetRes* rt = m_targets.get(h);
         return rt && !rt->internal ? rt->colorTexture : TextureHandle{};
+    }
+    TextureHandle renderTargetDepthTexture(RenderTargetHandle h) const override {
+        const VkTargetRes* rt = m_targets.get(h);
+        return rt ? rt->depthTexture : TextureHandle{};
     }
 
     // ------------------------------------------------------------------ frame
@@ -459,6 +472,10 @@ public:
         m_vertexBuffer = h;
         m_vertexOffset = offset;
         m_vertexDirty = true;
+    }
+    void bindInstanceBuffer(BufferHandle h, usize offset) override {
+        m_instanceBuffer = h;
+        m_instanceOffset = offset;
     }
     void bindIndexBuffer(BufferHandle h, IndexType type, usize offset) override {
         m_indexBuffer = h;
@@ -501,6 +518,11 @@ public:
         if (!prepareDraw(true)) return;
         vkCmdDrawIndexed(cmd(), indexCount, 1, firstIndex, baseVertex, 0);
         count(indexCount);
+    }
+    void drawIndexedInstanced(u32 indexCount, u32 instanceCount, u32 firstIndex, i32 baseVertex) override {
+        if (instanceCount == 0 || !prepareDraw(true)) return;
+        vkCmdDrawIndexed(cmd(), indexCount, instanceCount, firstIndex, baseVertex, 0);
+        count(indexCount * instanceCount);
     }
 
     void blit(RenderTargetHandle src, RenderTargetHandle dst, Filter filter) override;
@@ -623,8 +645,8 @@ private:
     PipelineHandle m_pipeline;
     bool m_pipelineDirty = true;
     VkPipeline m_boundVkPipeline = VK_NULL_HANDLE;
-    BufferHandle m_vertexBuffer, m_indexBuffer;
-    usize m_vertexOffset = 0, m_indexOffset = 0;
+    BufferHandle m_vertexBuffer, m_indexBuffer, m_instanceBuffer;
+    usize m_vertexOffset = 0, m_indexOffset = 0, m_instanceOffset = 0;
     IndexType m_indexType = IndexType::U16;
     bool m_vertexDirty = true, m_indexDirty = true;
     std::array<SlotBinding, kMaxUniformSlots> m_slots{};
@@ -1105,6 +1127,7 @@ VkRenderPass VulkanDevice::renderPass(u64 compat, bool clearColor, bool clearDep
     const auto color = static_cast<VkFormat>(compat & 0xFFFFF);
     const auto depth = static_cast<VkFormat>((compat >> 20) & 0xFFFFF);
     const auto samples = static_cast<VkSampleCountFlagBits>((compat >> 40) & 0xFF);
+    const bool storeDepth = (compat >> 48) & 1;
     VkAttachmentDescription att[2]{};
     att[0].format = color;
     att[0].samples = samples;
@@ -1118,21 +1141,23 @@ VkRenderPass VulkanDevice::renderPass(u64 compat, bool clearColor, bool clearDep
     att[1].format = depth;
     att[1].samples = samples;
     att[1].loadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-    att[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    att[1].storeOp = storeDepth ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
     att[1].stencilLoadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     att[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     att[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     att[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    const bool hasColor = color != VK_FORMAT_UNDEFINED;
+    const bool hasDepth = depth != VK_FORMAT_UNDEFINED;
     VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-    VkAttachmentReference depthRef{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference depthRef{hasColor ? 1u : 0u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
     VkSubpassDescription sub{};
     sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    sub.colorAttachmentCount = 1;
-    sub.pColorAttachments = &colorRef;
-    sub.pDepthStencilAttachment = depth != VK_FORMAT_UNDEFINED ? &depthRef : nullptr;
+    sub.colorAttachmentCount = hasColor ? 1 : 0;
+    sub.pColorAttachments = hasColor ? &colorRef : nullptr;
+    sub.pDepthStencilAttachment = hasDepth ? &depthRef : nullptr;
     VkRenderPassCreateInfo rp{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-    rp.attachmentCount = depth != VK_FORMAT_UNDEFINED ? 2 : 1;
-    rp.pAttachments = att;
+    rp.attachmentCount = (hasColor ? 1u : 0u) + (hasDepth ? 1u : 0u);
+    rp.pAttachments = hasColor ? att : att + 1;
     rp.subpassCount = 1;
     rp.pSubpasses = &sub;
     VkRenderPass out = VK_NULL_HANDLE;
@@ -1150,12 +1175,19 @@ VkPipeline VulkanDevice::variant(VkPipelineRes& p, u64 compat) {
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, p.vs, "main", nullptr};
     stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, p.fs, "main", nullptr};
-    VkVertexInputBindingDescription binding{0, d.layout.stride, VK_VERTEX_INPUT_RATE_VERTEX};
+    std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> attrs;
-    for (const auto& a : d.layout.attributes) attrs.push_back({a.location, 0, toVk(a.format), a.offset});
+    if (d.layout.stride) {
+        bindings.push_back({0, d.layout.stride, VK_VERTEX_INPUT_RATE_VERTEX});
+        for (const auto& a : d.layout.attributes) attrs.push_back({a.location, 0, toVk(a.format), a.offset});
+    }
+    if (d.instanceLayout.stride) {
+        bindings.push_back({1, d.instanceLayout.stride, VK_VERTEX_INPUT_RATE_INSTANCE});
+        for (const auto& a : d.instanceLayout.attributes) attrs.push_back({a.location, 1, toVk(a.format), a.offset});
+    }
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vi.vertexBindingDescriptionCount = d.layout.stride ? 1 : 0;
-    vi.pVertexBindingDescriptions = &binding;
+    vi.vertexBindingDescriptionCount = static_cast<u32>(bindings.size());
+    vi.pVertexBindingDescriptions = bindings.data();
     vi.vertexAttributeDescriptionCount = static_cast<u32>(attrs.size());
     vi.pVertexAttributeDescriptions = attrs.data();
     VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
@@ -1202,7 +1234,7 @@ VkPipeline VulkanDevice::variant(VkPipelineRes& p, u64 compat) {
             break;
     }
     VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
+    cb.attachmentCount = (compat & 0xFFFFF) != 0 ? 1 : 0;  // depth-only passes have no color attachment
     cb.pAttachments = &blend;
     const VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dy{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
@@ -1236,11 +1268,17 @@ Result<RenderTargetHandle> VulkanDevice::createTarget(const RenderTargetDesc& d,
     rt.width = d.width;
     rt.height = d.height;
     rt.samples = std::clamp<u32>(d.samples, 1, m_info.maxSamples);
-    rt.hasDepth = d.depth;
+    rt.hasDepth = d.depth || d.sampleableDepth;
+    rt.hasColor = d.color;
     rt.internal = internal;
-    rt.colorFormat = toVk(d.colorFormat, m_depthFormat);
-    VkImageView colorView;
-    if (rt.samples > 1) {
+    if (d.sampleableDepth && rt.samples > 1)
+        return makeError(Error::Code::InvalidArgument, "sampleable depth requires a single-sampled target");
+    if (!rt.hasColor && !rt.hasDepth) return makeError(Error::Code::InvalidArgument, "render target without color nor depth");
+    rt.colorFormat = rt.hasColor ? toVk(d.colorFormat, m_depthFormat) : VK_FORMAT_UNDEFINED;
+    VkImageView colorView = VK_NULL_HANDLE;
+    if (!rt.hasColor) {
+        // depth-only target
+    } else if (rt.samples > 1) {
         auto img = createImage(d.width, d.height, 1, rt.samples, rt.colorFormat,
                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
         if (!img) return img.error();
@@ -1262,7 +1300,26 @@ Result<RenderTargetHandle> VulkanDevice::createTarget(const RenderTargetDesc& d,
         rt.colorTexture = m_textures.create(t);
         colorView = t.img.view;
     }
-    if (rt.hasDepth) {
+    VkFormat depthFormat = m_depthFormat;
+    VkImageView depthView = VK_NULL_HANDLE;
+    if (d.sampleableDepth) {
+        depthFormat = VK_FORMAT_D16_UNORM;
+        auto img = createImage(d.width, d.height, 1, 1, depthFormat,
+                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+        if (!img) {
+            if (rt.colorTexture) releaseTexture(rt.colorTexture);
+            return img.error();
+        }
+        VkTextureRes t;
+        t.img = img.value();
+        t.format = TextureFormat::Depth16;
+        t.ownedByTarget = true;
+        t.sampler = sampler({Filter::Nearest, Filter::Nearest, false, Wrap::Clamp, Wrap::Clamp}, false);
+        t.bytes = static_cast<u64>(d.width) * d.height * 2;
+        m_textureBytes += t.bytes;
+        rt.depthTexture = m_textures.create(t);
+        depthView = t.img.view;
+    } else if (rt.hasDepth) {
         auto img = createImage(d.width, d.height, 1, rt.samples, m_depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                VK_IMAGE_ASPECT_DEPTH_BIT | (hasStencil(m_depthFormat) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0));
         if (!img) {
@@ -1271,24 +1328,30 @@ Result<RenderTargetHandle> VulkanDevice::createTarget(const RenderTargetDesc& d,
             return img.error();
         }
         rt.depth = img.value();
+        depthView = rt.depth.view;
     }
-    rt.compat = compatKey(rt.colorFormat, rt.hasDepth ? m_depthFormat : VK_FORMAT_UNDEFINED, rt.samples);
-    VkImageView views[2] = {colorView, rt.depth.view};
+    rt.compat = compatKey(rt.colorFormat, rt.hasDepth ? depthFormat : VK_FORMAT_UNDEFINED, rt.samples, d.sampleableDepth);
+    VkImageView views[2];
+    u32 viewCount = 0;
+    if (rt.hasColor) views[viewCount++] = colorView;
+    if (rt.hasDepth) views[viewCount++] = depthView;
     VkFramebufferCreateInfo fi{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
     fi.renderPass = renderPass(rt.compat, true, true);
-    fi.attachmentCount = rt.hasDepth ? 2 : 1;
+    fi.attachmentCount = viewCount;
     fi.pAttachments = views;
     fi.width = d.width;
     fi.height = d.height;
     fi.layers = 1;
     if (vkCreateFramebuffer(m_device, &fi, nullptr, &rt.framebuffer) != VK_SUCCESS) {
         if (rt.colorTexture) releaseTexture(rt.colorTexture);
+        if (rt.depthTexture) releaseTexture(rt.depthTexture);
         destroyImageNow(rt.msaaColor);
         destroyImageNow(rt.depth);
         return makeError(Error::Code::Unknown, "vkCreateFramebuffer failed");
     }
     const u64 pixels = static_cast<u64>(d.width) * d.height * rt.samples;
-    rt.bytes = (rt.samples > 1 ? pixels * bytesPerPixel(d.colorFormat) : 0) + (rt.hasDepth ? pixels * 4 : 0);
+    rt.bytes = (rt.samples > 1 && rt.hasColor ? pixels * bytesPerPixel(d.colorFormat) : 0) +
+               (rt.hasDepth && !d.sampleableDepth ? pixels * 4 : 0);
     if (!internal) m_targetBytes += rt.bytes;
     return m_targets.create(rt);
 }
@@ -1415,7 +1478,7 @@ Status VulkanDevice::createSwapchain(u32 width, u32 height) {
 void VulkanDevice::ensureBackbuffer(u32 w, u32 h) {
     if (const VkTargetRes* bb = m_targets.get(m_backbuffer); bb && bb->width == w && bb->height == h) return;
     if (m_backbuffer) destroyRenderTarget(m_backbuffer);
-    auto bb = createTarget({w, h, TextureFormat::RGBA8, true, 1, "agr.vk.backbuffer"}, true);
+    auto bb = createTarget({.width = w, .height = h, .colorFormat = TextureFormat::RGBA8, .depth = true, .samples = 1, .debugName = "agr.vk.backbuffer"}, true);
     if (!bb) {
         AGR_LOG_ERROR("RHI", "backbuffer creation failed: {}", bb.error().message);
         m_backbuffer = {};
@@ -1567,17 +1630,21 @@ void VulkanDevice::beginPass(RenderTargetHandle target, const ClearValues& clear
         return;
     }
     VkCommandBuffer c = cmd();
-    Image& color = rt->samples > 1 ? rt->msaaColor : m_textures.get(rt->colorTexture)->img;
-    transition(c, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    if (rt->hasDepth) transition(c, rt->depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    if (rt->hasColor) {
+        Image& color = rt->samples > 1 ? rt->msaaColor : m_textures.get(rt->colorTexture)->img;
+        transition(c, color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+    if (rt->depthTexture) transition(c, m_textures.get(rt->depthTexture)->img, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    else if (rt->hasDepth) transition(c, rt->depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     VkClearValue values[2]{};
-    values[0].color = {{clear.color.x, clear.color.y, clear.color.z, clear.color.w}};
-    values[1].depthStencil = {clear.depth, 0};
+    u32 clearCount = 0;
+    if (rt->hasColor) values[clearCount++].color = {{clear.color.x, clear.color.y, clear.color.z, clear.color.w}};
+    if (rt->hasDepth) values[clearCount++].depthStencil = {clear.depth, 0};
     VkRenderPassBeginInfo bi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     bi.renderPass = renderPass(rt->compat, clear.clearColor, clear.clearDepth);
     bi.framebuffer = rt->framebuffer;
     bi.renderArea = {{0, 0}, {rt->width, rt->height}};
-    bi.clearValueCount = rt->hasDepth ? 2 : 1;
+    bi.clearValueCount = clearCount;
     bi.pClearValues = values;
     vkCmdBeginRenderPass(c, &bi, VK_SUBPASS_CONTENTS_INLINE);
     m_inPass = true;
@@ -1621,6 +1688,16 @@ bool VulkanDevice::prepareDraw(bool indexed) {
     vb->lastUsedFrame[vb->active] = m_frame;
     const VkDeviceSize vOffset = m_vertexOffset;
     vkCmdBindVertexBuffers(c, 0, 1, &vb->buffer[vb->active], &vOffset);
+    if (p->state.instanceLayout.stride) {
+        VkBufferRes* inst = m_buffers.get(m_instanceBuffer);
+        if (!inst) {
+            AGR_LOG_ERROR("RHI", "instanced pipeline drawn without a valid instance buffer");
+            return false;
+        }
+        inst->lastUsedFrame[inst->active] = m_frame;
+        const VkDeviceSize iOffset = m_instanceOffset;
+        vkCmdBindVertexBuffers(c, 1, 1, &inst->buffer[inst->active], &iOffset);
+    }
     if (indexed) {
         VkBufferRes* ib = m_buffers.get(m_indexBuffer);
         if (!ib) {
