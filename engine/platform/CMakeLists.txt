@@ -7,6 +7,7 @@ endif()
 agr_add_module(platform
     SOURCES
         src/SdlPlatform.cpp
+        src/SdlFileProvider.cpp
     PUBLIC_DEPS
         agr::runtime
     PRIVATE_DEPS

@@ -19,11 +19,89 @@
 #include "agr/script/ScriptPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
+#include "agr/editor/GameExport.hpp"
+
+namespace {
+
+/// Command-line tasks without a window (continuous integration, scripts):
+///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d] [--name NAME]
+///   agr_editor --project DIR --export desktop --output DIR
+/// Returns -1 when no command-line task was given (the editor opens).
+int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {
+    using namespace agr;
+    using namespace agr::editor;
+    namespace fs = std::filesystem;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output;
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
+        if (a == "--create-project") create = next();
+        else if (a == "--template") tmplName = next();
+        else if (a == "--name") name = next();
+        else if (a == "--project") projectDir = next();
+        else if (a == "--export") exportKind = next();
+        else if (a == "--output") output = next();
+    }
+    if (create.empty() && exportKind.empty()) return -1;
+    Log::addSink(std::make_shared<ConsoleSink>());
+    if (!create.empty()) {
+        struct Named {
+            const char* name;
+            SceneTemplate tmpl;
+            ProjectMode mode;
+        };
+        static const Named templates[] = {{"empty2d", SceneTemplate::Empty2D, ProjectMode::Mode2D},
+                                          {"empty25d", SceneTemplate::Empty25D, ProjectMode::Mode25D},
+                                          {"empty3d", SceneTemplate::Empty3D, ProjectMode::Mode3D},
+                                          {"showcase2d", SceneTemplate::Showcase2D, ProjectMode::Mode2D},
+                                          {"showcase3d", SceneTemplate::Showcase3D, ProjectMode::Mode3D}};
+        const Named* chosen = nullptr;
+        for (const Named& t : templates)
+            if (tmplName == t.name) chosen = &t;
+        if (!chosen) {
+            AGR_LOG_ERROR("Editor", "unknown template '{}'", tmplName);
+            return 2;
+        }
+        ProjectSettings settings;
+        settings.name = name.empty() ? fs::path(create).filename().string() : name;
+        settings.mode = chosen->mode;
+        auto project = Project::create(create, settings, chosen->tmpl, exeDir / "editor_resources" / "templates" / "assets");
+        if (!project) {
+            AGR_LOG_ERROR("Editor", "{}", project.error().message);
+            return 1;
+        }
+        if (projectDir.empty()) projectDir = create;
+    }
+    if (exportKind.empty()) return 0;
+    auto project = Project::open(projectDir);
+    if (!project) {
+        AGR_LOG_ERROR("Editor", "{}", project.error().message);
+        return 1;
+    }
+    if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
+    Result<ExportReport> report = makeError(Error::Code::InvalidArgument, "unknown export '" + exportKind + "' (desktop)");
+#if defined(_WIN32)
+    const fs::path player = exeDir / "agr_player.exe";
+#else
+    const fs::path player = exeDir / "agr_player";
+#endif
+    if (exportKind == "desktop") report = exportDesktop(project.value(), output, player);
+    if (!report) {
+        AGR_LOG_ERROR("Export", "{}", report.error().message);
+        return 1;
+    }
+    for (const std::string& w : report.value().warnings) AGR_LOG_WARN("Export", "{}", w);
+    AGR_LOG_INFO("Export", "done: {}", report.value().output.string());
+    return 0;
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
     using namespace agr;
     namespace fs = std::filesystem;
     const fs::path exeDir = fs::path(argc > 0 ? argv[0] : ".").parent_path();
+    if (const int code = runCommandLine(argc, argv, exeDir); code >= 0) return code;
 
     EngineConfig config;
     config.appName = "AGR Editor";

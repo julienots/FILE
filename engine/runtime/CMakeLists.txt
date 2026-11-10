@@ -4,6 +4,7 @@ agr_add_module(runtime
         src/Input.cpp
         src/PluginManager.cpp
         src/Engine.cpp
+        src/GameManifest.cpp
     PUBLIC_DEPS
         agr::core
         agr::math

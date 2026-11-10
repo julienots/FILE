@@ -1,4 +1,7 @@
 #pragma once
+#include <vector>
+
+#include "agr/runtime/GameManifest.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -15,14 +18,34 @@ Result<ProjectMode> parseProjectMode(std::string_view text);
 /// Scene templates that exist today (game templates arrive in phase 9).
 enum class SceneTemplate : u8 { Empty2D, Empty25D, Empty3D, Showcase2D, Showcase3D };
 
+/// Export settings (game identity, mobile behavior, Android build). Signing passwords are
+/// never stored: they are asked for at export time.
+struct ExportSettings {
+    std::string organization = "Superessence Studio";
+    std::string version = "1.0.0";
+    u32 versionCode = 1;
+    std::string packageId;  ///< Android application id; empty = derived from the organization and the name.
+    ScreenOrientation orientation = ScreenOrientation::Landscape;
+    u32 targetFps = 0;
+    bool vibration = true;
+    bool keepScreenOn = true;
+    bool backQuits = true;
+    u32 minSdk = 26;     ///< Android 8.0
+    u32 targetSdk = 35;
+    std::vector<std::string> abis{"arm64-v8a"};
+    std::string keystorePath;  ///< Release keystore (empty = debug signing only).
+    std::string keyAlias;
+};
+
 struct ProjectSettings {
     std::string name = "New Project";
     ProjectMode mode = ProjectMode::Mode3D;
     bool targetDesktop = true;
-    bool targetAndroid = false;  ///< Stored now; APK / AAB export arrives in phase 8.
+    bool targetAndroid = false;
     std::string startupScene = "scenes/main.agrscene";
     std::string graphicsProfile = "auto";
     std::string engineVersion;  ///< Written on save.
+    ExportSettings exportSettings;
 };
 
 /// A project folder:

@@ -9,7 +9,8 @@ add_library(agr_editor_core STATIC
     core/src/UndoStack.cpp
     core/src/EditorCamera.cpp
     core/src/Picking.cpp
-    core/src/EditorContext.cpp)
+    core/src/EditorContext.cpp
+    core/src/GameExport.cpp)
 target_include_directories(agr_editor_core PUBLIC core/include)
 target_link_libraries(agr_editor_core PUBLIC agr::render agr::twod agr::script agr::physics2d agr::physics3d agr::audio agr::ui agr::animation PRIVATE agr::compiler_options)
 add_library(agr::editor_core ALIAS agr_editor_core)
@@ -36,6 +37,7 @@ set_target_properties(agr_editor_ui PROPERTIES FOLDER "Editor")
 add_executable(agr_editor app/main.cpp)
 target_link_libraries(agr_editor PRIVATE agr_editor_ui agr::compiler_options)
 set_target_properties(agr_editor PROPERTIES FOLDER "Editor")
+add_dependencies(agr_editor agr_player)  # desktop export copies the player next to the game
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_editor agr_plugin_spin)
 endif()
@@ -45,6 +47,12 @@ add_custom_command(TARGET agr_editor POST_BUILD
 
 # End-to-end editor tests (need a display; CI runs them under xvfb-run).
 if(AGR_BUILD_TESTS)
+    # Command-line export of a template project, then the exported game runs in the player.
+    set(_export ${CMAKE_BINARY_DIR}/player_test)
+    add_test(NAME agr_export_desktop
+             COMMAND ${CMAKE_COMMAND} -DEDITOR=$<TARGET_FILE:agr_editor> -DOUT=${_export}
+                     -P ${PROJECT_SOURCE_DIR}/cmake/ExportTest.cmake)
+    set_tests_properties(agr_export_desktop PROPERTIES FIXTURES_SETUP agr_exported_game TIMEOUT 120)
     set(_apis opengl gles)
     if(AGR_ENABLE_VULKAN)
         list(APPEND _apis vulkan)
@@ -58,5 +66,9 @@ if(AGR_BUILD_TESTS)
             set(_env "LSAN_OPTIONS=suppressions=${PROJECT_SOURCE_DIR}/tools/lsan.supp")
         endif()
         set_tests_properties(agr_editor_smoke_${api} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300 ENVIRONMENT "${_env}")
+        add_test(NAME agr_player_${api}
+                 COMMAND ${_export}/out/Showcase/Showcase --${api} --frames 240 --autotest --user ${_export}/user_${api}
+                         --screenshot user://player.png)
+        set_tests_properties(agr_player_${api} PROPERTIES FIXTURES_REQUIRED agr_exported_game TIMEOUT 120 ENVIRONMENT "${_env}")
     endforeach()
 endif()

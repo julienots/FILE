@@ -104,6 +104,29 @@ Result<Project> Project::open(const fs::path& folder) {
     s.startupScene = j.value("startupScene", s.startupScene);
     s.graphicsProfile = j.value("graphicsProfile", s.graphicsProfile);
     s.engineVersion = j.value("engineVersion", std::string());
+    if (j.contains("export") && j["export"].is_object()) {
+        const json& e = j["export"];
+        ExportSettings& x = s.exportSettings;
+        x.organization = e.value("organization", x.organization);
+        x.version = e.value("version", x.version);
+        x.versionCode = e.value("versionCode", x.versionCode);
+        x.packageId = e.value("packageId", x.packageId);
+        const std::string o = e.value("orientation", std::string("landscape"));
+        x.orientation = o == "portrait" ? ScreenOrientation::Portrait : o == "sensor" ? ScreenOrientation::Sensor : ScreenOrientation::Landscape;
+        x.targetFps = e.value("targetFps", x.targetFps);
+        x.vibration = e.value("vibration", x.vibration);
+        x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
+        x.backQuits = e.value("backQuits", x.backQuits);
+        x.minSdk = e.value("minSdk", x.minSdk);
+        x.targetSdk = e.value("targetSdk", x.targetSdk);
+        if (e.contains("abis") && e["abis"].is_array()) {
+            x.abis.clear();
+            for (const auto& a : e["abis"])
+                if (a.is_string()) x.abis.push_back(a.get<std::string>());
+        }
+        x.keystorePath = e.value("keystore", x.keystorePath);
+        x.keyAlias = e.value("keyAlias", x.keyAlias);
+    }
     s.targetDesktop = s.targetAndroid = false;
     if (j.contains("targets") && j["targets"].is_array()) {
         for (const auto& t : j["targets"]) {
@@ -128,6 +151,12 @@ Status Project::save() const {
     j["targets"] = targets;
     j["startupScene"] = m_settings.startupScene;
     j["graphicsProfile"] = m_settings.graphicsProfile;
+    const ExportSettings& x = m_settings.exportSettings;
+    j["export"] = {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
+                   {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps},
+                   {"vibration", x.vibration},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
+                   {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
+                   {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias}};
     return writeFile(m_root / kFileName, j.dump(2));
 }
 
