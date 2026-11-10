@@ -1,0 +1,12 @@
+agr_add_module(script
+    SOURCES
+        src/ScriptComponent.cpp
+        src/ScriptEngine.cpp
+        src/ScriptBindings.cpp
+        src/ScriptPlugin.cpp
+    PUBLIC_DEPS
+        agr::runtime
+        agr::physics2d
+    PRIVATE_DEPS
+        agr::lua
+        nlohmann_json::nlohmann_json)

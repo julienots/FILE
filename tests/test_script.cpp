@@ -1,0 +1,254 @@
+#include <doctest/doctest.h>
+
+#include <chrono>
+#include <filesystem>
+
+#include "agr/core/Uuid.hpp"
+#include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/render/RenderComponents.hpp"
+#include "agr/script/ScriptComponent.hpp"
+#include "agr/script/ScriptEngine.hpp"
+
+using namespace agr;
+namespace fs = std::filesystem;
+
+namespace {
+
+struct ScriptFixture {
+    fs::path root = fs::temp_directory_path() / ("agr_script_" + Uuid::generate().toString());
+    VirtualFileSystem vfs;
+    Scene scene;
+    Input input;
+    ScriptEngine scripts{vfs};
+    FrameTime time;
+
+    ScriptFixture() {
+        fs::create_directories(root);
+        vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
+        registerRenderComponents();
+        registerPhysics2DComponents();
+        registerScriptComponent();
+        scripts.setInput(&input);
+        time.deltaSeconds = 0.1;
+        time.fixedDeltaSeconds = 1.0 / 60.0;
+    }
+    ~ScriptFixture() {
+        std::error_code ec;
+        fs::remove_all(root, ec);
+    }
+    void write(const std::string& uri, const std::string& code) { REQUIRE(vfs.writeText(uri, code)); }
+    /// Rewrites a file and moves its date forward (hot reload detection).
+    void rewrite(const std::string& relative, const std::string& code) {
+        write("assets://" + relative, code);
+        const fs::path p = root / relative;
+        fs::last_write_time(p, fs::last_write_time(p) + std::chrono::seconds(5));
+    }
+    ecs::Entity scripted(const char* name, const std::string& uri, const std::string& properties = "") {
+        const auto e = scene.createEntity(name);
+        auto& s = scene.registry().emplace<ScriptComponent>(e);
+        s.script = uri;
+        s.properties = properties;
+        return e;
+    }
+    void update(int frames = 1) {
+        for (int i = 0; i < frames; ++i) {
+            scripts.update(scene, time);
+            scene.flushDestroyed();
+            scene.updateTransforms();
+        }
+    }
+};
+
+}  // namespace
+
+TEST_SUITE("script") {
+
+TEST_CASE("lifecycle, properties overridden from the component, entity transform") {
+    ScriptFixture f;
+    f.write("assets://s/mover.lua", R"lua(
+local Mover = { properties = { speed = 2, label = "a", active = true } }
+function Mover:onStart() self.starts = (self.starts or 0) + 1 end
+function Mover:onUpdate(dt) if self.active then self.entity:translate(self.speed * dt, 0) end end
+function Mover:onDestroy() agr.find("Witness"):setName("destroyed " .. self.label) end
+return Mover
+)lua");
+    f.scene.createEntity("Witness");
+    const auto e = f.scripted("Mover", "assets://s/mover.lua", R"({"speed": 4, "label": "b"})");
+    f.update(10);
+    CHECK(f.scene.registry().get<TransformComponent>(e).position.x == doctest::Approx(4.0f));
+    CHECK(f.scripts.field(e, "starts").value() == "1");
+    CHECK(f.scripts.field(e, "label").value() == "b");
+    CHECK(f.scripts.stats().instances == 1);
+    f.scene.registry().remove<ScriptComponent>(e);
+    f.update();
+    CHECK_FALSE(f.scene.findByName("destroyed b").isNull());
+    CHECK(f.scripts.stats().instances == 0);
+}
+
+TEST_CASE("describe lists properties and callbacks; compile errors carry the line") {
+    ScriptFixture f;
+    f.write("assets://s/p.lua", "local P = { properties = { speed = 3.5, jump = true, tag = 'hero', ignored = {} } }\n"
+                                "function P:onUpdate(dt) end\nfunction P:onStart() end\nreturn P\n");
+    const ScriptInfo info = f.scripts.describe("assets://s/p.lua");
+    REQUIRE(info.valid);
+    REQUIRE(info.properties.size() == 3);
+    CHECK(info.properties[0].name == "jump");
+    CHECK(info.properties[1].name == "speed");
+    CHECK(info.properties[1].number == doctest::Approx(3.5));
+    CHECK(info.properties[2].string == "hero");
+    CHECK(info.callbacks == std::vector<std::string>{"onStart", "onUpdate"});
+
+    f.write("assets://s/bad.lua", "local B = {}\nfunction B:onUpdate(dt)\n  local x = = 1\nend\nreturn B\n");
+    const ScriptInfo bad = f.scripts.describe("assets://s/bad.lua");
+    CHECK_FALSE(bad.valid);
+    CHECK(bad.error.find("assets://s/bad.lua:3:") != std::string::npos);
+    f.write("assets://s/notable.lua", "return 42\n");
+    CHECK_FALSE(f.scripts.describe("assets://s/notable.lua").valid);
+    CHECK_FALSE(f.scripts.describe("assets://s/missing.lua").valid);
+}
+
+TEST_CASE("runtime errors pause the instance, report once, and do not stop others") {
+    ScriptFixture f;
+    f.write("assets://s/boom.lua", "local B = {}\nfunction B:onUpdate(dt)\n  local t = nil\n  t.x = 1\nend\nreturn B\n");
+    f.write("assets://s/ok.lua", "local O = {}\nfunction O:onUpdate(dt) self.entity:translate(1, 0) end\nreturn O\n");
+    f.scripted("Boom", "assets://s/boom.lua");
+    const auto ok = f.scripted("Ok", "assets://s/ok.lua");
+    f.update(5);
+    CHECK(f.scripts.stats().errors == 1);
+    CHECK(f.scripts.stats().faulted == 1);
+    CHECK(f.scene.registry().get<TransformComponent>(ok).position.x == doctest::Approx(5.0f));
+    // Fixing the file resumes it (hot reload).
+    f.rewrite("s/boom.lua", "local B = {}\nfunction B:onUpdate(dt) self.fixed = true end\nreturn B\n");
+    CHECK(f.scripts.reloadChanged() == 1);
+    f.update();
+    CHECK(f.scripts.stats().faulted == 0);
+    CHECK(f.scripts.field(f.scene.findByName("Boom"), "fixed").value() == "true");
+}
+
+TEST_CASE("sandbox: no file, OS, debug or bytecode access; require through the VFS") {
+    ScriptFixture f;
+    CHECK(f.scripts.run("assert(io == nil and os == nil and debug == nil and package == nil)"));
+    CHECK(f.scripts.run("assert(load == nil and loadfile == nil and dofile == nil and string.dump == nil)"));
+    f.write("assets://s/util.lua", "local U = {}\nfunction U.twice(x) return x * 2 end\nU.loads = (U.loads or 0) + 1\nreturn U\n");
+    CHECK(f.scripts.run("local u = require('assets://s/util.lua'); local v = require('assets://s/util.lua')\n"
+                        "assert(u.twice(21) == 42 and u == v)"));
+    const Status missing = f.scripts.run("require('assets://s/none.lua')");
+    CHECK_FALSE(missing);
+    CHECK(missing.error().message.find("none.lua") != std::string::npos);
+}
+
+TEST_CASE("the watchdog stops infinite loops") {
+    ScriptFixture f;
+    f.scripts.setCallbackBudget(0.05);
+    f.write("assets://s/loop.lua", "local L = {}\nfunction L:onStart() while true do end end\nreturn L\n");
+    f.scripted("Loop", "assets://s/loop.lua");
+    f.update();
+    CHECK(f.scripts.stats().faulted == 1);
+    const Status s = f.scripts.run("while true do end");
+    CHECK_FALSE(s);
+    CHECK(s.error().message.find("infinite loop") != std::string::npos);
+}
+
+TEST_CASE("components through reflection: get, set, add, has, remove") {
+    ScriptFixture f;
+    const auto e = f.scene.createEntity("Hero");
+    CHECK(f.scripts.run(R"lua(
+local e = agr.find("Hero")
+e:add("SpriteRenderer")
+assert(e:has("SpriteRenderer") and not e:has("Camera"))
+e:set("SpriteRenderer", "color", {r = 1, g = 0.5, b = 0, a = 1})
+e:set("SpriteRenderer", "size", {2, 3})
+e:set("Transform", "rotation", {x = 0, y = 0, z = 90})
+local c = e:get("SpriteRenderer", "color")
+assert(math.abs(c.y - 0.5) < 1e-6)
+assert(e:get("SpriteRenderer", "size").y == 3)
+e:add("Camera")
+assert(e:get("Camera", "projection") == "Perspective")
+e:set("Camera", "projection", "Orthographic")
+e:remove("Camera")
+local child = agr.spawn("Child", e)
+assert(e:find("Child") == child and child:parent() == e and #e:children() == 1)
+assert(tostring(e) == "Entity(Hero)")
+)lua", &f.scene));
+    CHECK(f.scene.registry().get<SpriteRendererComponent>(e).size.y == 3.0f);
+    const math::Vec3 euler = f.scene.registry().get<TransformComponent>(e).rotation.toEuler();
+    CHECK(math::degrees(euler.z) == doctest::Approx(90.0f).epsilon(0.001));
+    CHECK_FALSE(f.scene.registry().has<CameraComponent>(e));
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):get('Nope', 'x')", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):set('Camera', 'projection', 'Fisheye')", &f.scene));
+    // Destroyed entities raise clean errors instead of crashing.
+    CHECK(f.scripts.run("local c = agr.find('Child'); c:destroy()", &f.scene));
+    f.scene.flushDestroyed();
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):children()[1]:name()", &f.scene));
+}
+
+TEST_CASE("hot reload keeps instance fields and swaps functions") {
+    ScriptFixture f;
+    f.write("assets://s/counter.lua", "local C = {}\nfunction C:onUpdate(dt) self.n = (self.n or 0) + 1 end\nreturn C\n");
+    const auto e = f.scripted("Counter", "assets://s/counter.lua");
+    f.update(3);
+    CHECK(f.scripts.field(e, "n").value() == "3");
+    f.rewrite("s/counter.lua", "local C = {}\nfunction C:onUpdate(dt) self.n = (self.n or 0) + 100 end\nreturn C\n");
+    f.scripts.reloadChanged();
+    f.update();
+    CHECK(f.scripts.field(e, "n").value() == "103");
+    // A broken edit keeps the previous code running.
+    f.rewrite("s/counter.lua", "local C = {\n");
+    CHECK(f.scripts.reloadChanged() == 0);
+    f.update();
+    CHECK(f.scripts.field(e, "n").value() == "203");
+}
+
+TEST_CASE("input, time and physics bindings; collision callbacks") {
+    ScriptFixture f;
+    Physics2DWorld physics;
+    f.scripts.setPhysics2D(&physics);
+    f.write("assets://s/player.lua", R"lua(
+local P = { properties = { speed = 3 } }
+function P:onUpdate(dt)
+  self.axis = agr.input.axis("horizontal")
+  self.jump = agr.input.keyPressed("Space")
+  local vx, vy = self.entity:velocity()
+  self.entity:setVelocity(self.axis * self.speed, vy)
+  local hit = agr.physics2d.raycast(0, 10, 0, -1, 50)
+  self.groundY = hit and hit.y or -1
+end
+function P:onCollision(other, began) if began then self.touched = other:name() end end
+return P
+)lua");
+    const auto ground = f.scene.createEntity("Ground");
+    f.scene.registry().emplace<Collider2DComponent>(ground).size = {20, 1};
+    const auto player = f.scripted("Player", "assets://s/player.lua");
+    f.scene.registry().get<TransformComponent>(player).position = {0, 3, 0};
+    f.scene.registry().emplace<RigidBody2DComponent>(player).fixedRotation = true;
+    f.scene.registry().emplace<Collider2DComponent>(player);
+    f.input.beginFrame();
+    f.input.setKey(Key::Right, true);
+    f.input.setKey(Key::Space, true);
+    physics.step(f.scene, 1.0f / 60.0f);
+    f.update();
+    CHECK(f.scripts.field(player, "axis").value() == "1.0");
+    CHECK(f.scripts.field(player, "jump").value() == "true");
+    CHECK(std::stod(f.scripts.field(player, "groundY").value()) == doctest::Approx(3.5).epsilon(0.01));  // top of the player's own box
+    for (int i = 0; i < 120; ++i) {
+        physics.step(f.scene, 1.0f / 60.0f);
+        for (const auto& ev : physics.events()) f.scripts.dispatchCollision(f.scene, ev);
+        f.update();
+    }
+    CHECK(f.scripts.field(player, "touched").value() == "Ground");
+    CHECK(f.scene.registry().get<TransformComponent>(player).position.x > 2.0f);  // moved right at 3 m/s
+    CHECK(f.scripts.run("assert(agr.time.delta() > 0.09)", &f.scene));
+}
+
+TEST_CASE("reloading the scene in place drops its script instances") {
+    ScriptFixture f;
+    f.write("assets://s/a.lua", "local A = {}\nfunction A:onUpdate() end\nreturn A\n");
+    f.scripted("A", "assets://s/a.lua");
+    f.update();
+    CHECK(f.scripts.stats().instances == 1);
+    f.scene.clear();
+    f.update();
+    CHECK(f.scripts.stats().instances == 0);
+}
+
+}  // TEST_SUITE
