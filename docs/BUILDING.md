@@ -48,11 +48,14 @@ Tous les binaires (exécutables, plugins) sont produits dans `build/<preset>/bin
 | `AGR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` (activé en CI) |
 | `AGR_ENABLE_ASAN` | OFF | Sanitizers |
 | `AGR_ENABLE_VULKAN` | ON | Backend Vulkan (Vulkan-Headers, volk, VMA et glslang sont téléchargés) |
+| `AGR_BUILD_EDITOR` | ON | Éditeur (Dear ImGui et ImGuizmo sont téléchargés ; nécessite la plateforme) |
 
 ## Lancer
 
 ```bash
 cd build/debug
+./bin/agr_editor                       # éditeur (voir docs/EDITOR.md)
+./bin/agr_editor --vulkan --smoke-test /tmp/agr_smoke   # test de bout en bout + capture
 ./bin/agr_tests                        # tests unitaires (sans GPU)
 ./bin/agr_gpu_tests                    # tests de rendu (OpenGL) — nécessite un affichage
 AGR_TEST_API=gles ./bin/agr_gpu_tests  # mêmes tests en OpenGL ES 3.0

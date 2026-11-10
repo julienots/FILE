@@ -28,6 +28,7 @@ enum FieldFlags : u32 {
     FieldFlag_Hidden = 1u << 2,       ///< Not shown in the inspector.
     FieldFlag_Transient = 1u << 3,    ///< Not serialized.
     FieldFlag_Angle = 1u << 4,        ///< Float stored in radians, shown in degrees.
+    FieldFlag_AssetPath = 1u << 5,    ///< String holding an asset URI (drag & drop, preview).
 };
 
 struct EnumEntry {

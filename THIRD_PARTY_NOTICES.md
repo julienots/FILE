@@ -13,6 +13,10 @@ third-party components, fetched at configure time at pinned versions
 | [volk](https://github.com/zeux/volk) | vulkan-sdk-1.4.350.0 | MIT | Vulkan function loader |
 | [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | 3.4.0 | MIT | Vulkan memory allocation |
 | [glslang](https://github.com/KhronosGroup/glslang) | vulkan-sdk-1.4.350.0 | BSD-3-Clause / BSD-2-Clause / MIT / Apache-2.0 (per file) | GLSL ➜ SPIR-V compilation |
+| [Dear ImGui](https://github.com/ocornut/imgui) (docking branch) | 1.92.9 | MIT | editor UI |
+| [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) | commit `18cef5e` | MIT | editor gizmos |
+| [Inter](https://github.com/rsms/inter) | 4.1 | SIL Open Font License 1.1 | editor font (`editor/resources/fonts`, license included) |
+| [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | 2.304 | SIL Open Font License 1.1 | editor console font (license included) |
 | [doctest](https://github.com/doctest/doctest) | 2.4.11 | MIT | unit tests only (not shipped) |
 
 MIT-licensed components require their copyright notice to be included with

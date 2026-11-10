@@ -88,3 +88,39 @@ if(AGR_ENABLE_VULKAN)
         endif()
     endforeach()
 endif()
+
+# --- Editor UI: Dear ImGui docking branch (MIT) + ImGuizmo gizmos (MIT) --------
+if(AGR_BUILD_EDITOR)
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        v1.92.9-docking
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  agr-do-not-add)
+    FetchContent_Declare(imguizmo
+        GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+        GIT_TAG        18cef5e031d8c6973d80284c67f60549fafd78c1
+        SOURCE_SUBDIR  agr-do-not-add)
+    FetchContent_MakeAvailable(imgui imguizmo)
+
+    add_library(agr_imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+        ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp)
+    target_include_directories(agr_imgui SYSTEM PUBLIC
+        ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp ${imguizmo_SOURCE_DIR}/src)
+    target_compile_definitions(agr_imgui PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS IMGUI_DEFINE_MATH_OPERATORS)
+    if(TARGET SDL3::SDL3-static)
+        target_link_libraries(agr_imgui PUBLIC SDL3::SDL3-static)
+    else()
+        target_link_libraries(agr_imgui PUBLIC SDL3::SDL3)
+    endif()
+    if(NOT MSVC)
+        target_compile_options(agr_imgui PRIVATE -w)
+    endif()
+    add_library(agr::imgui ALIAS agr_imgui)
+endif()

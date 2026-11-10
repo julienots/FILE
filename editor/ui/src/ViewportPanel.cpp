@@ -1,0 +1,417 @@
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+
+#include <imgui.h>
+#include <ImGuizmo.h>
+#include <imgui_internal.h>
+
+#include "agr/editor/Picking.hpp"
+#include "agr/editor/ui/ImGuiRenderer.hpp"
+#include "agr/editor/ui/Panels.hpp"
+
+namespace agr::editor {
+
+using math::Mat4;
+using math::Vec3;
+using math::Vec4;
+
+namespace {
+
+/// World -> screen for overlays. Returns false behind the camera.
+bool project(const Mat4& viewProj, Vec3 p, ImVec2 origin, ImVec2 size, ImVec2& out) {
+    const Vec4 c = viewProj * Vec4(p, 1.0f);
+    if (c.w <= 1e-4f) return false;
+    out = {origin.x + (c.x / c.w * 0.5f + 0.5f) * size.x, origin.y + (0.5f - c.y / c.w * 0.5f) * size.y};
+    return true;
+}
+
+math::Ray rayFromScreen(const Mat4& viewProjGL, ImVec2 uv) {
+    const Mat4 inv = math::inverse(viewProjGL);
+    const float nx = uv.x * 2.0f - 1.0f, ny = 1.0f - uv.y * 2.0f;
+    const Vec3 a = inv.transformPoint({nx, ny, -1.0f});
+    const Vec3 b = inv.transformPoint({nx, ny, 1.0f});
+    return {a, math::normalize(b - a)};
+}
+
+/// Editor grid drawn with ImDrawList: spacing adapts to the zoom level, lines fade
+/// with the distance to the focus point and are clipped at the near plane (no
+/// aliasing band at the horizon).
+void drawGrid(ImDrawList* dl, const Mat4& view, const Mat4& proj, ImVec2 origin, ImVec2 size, bool plane2D, Vec3 focus, float zoom) {
+    const float spacing = std::pow(10.0f, std::floor(std::log10(std::max(zoom, 0.5f) / 3.0f)));
+    const int cells = 40;
+    const float extent = spacing * static_cast<float>(cells);
+    const float snap = spacing * 10.0f;
+    const float cx = std::round((plane2D ? focus.x : focus.x) / snap) * snap;
+    const float cy = std::round((plane2D ? focus.y : focus.z) / snap) * snap;
+    auto toWorld = [&](float u, float v) { return plane2D ? Vec3{u, v, 0.0f} : Vec3{u, 0.0f, v}; };
+    auto line = [&](Vec3 a, Vec3 b, ImU32 color, float baseAlpha, float thickness) {
+        constexpr int kSteps = 10;
+        for (int i = 0; i < kSteps; ++i) {
+            Vec3 p0 = a + (b - a) * (static_cast<float>(i) / kSteps), p1 = a + (b - a) * (static_cast<float>(i + 1) / kSteps);
+            const Vec3 mid = (p0 + p1) * 0.5f;
+            const float d = math::length(Vec3{mid.x - (plane2D ? focus.x : focus.x), plane2D ? mid.y - focus.y : 0.0f,
+                                              plane2D ? 0.0f : mid.z - focus.z}) / extent;
+            const float alpha = baseAlpha * std::clamp(1.0f - d, 0.0f, 1.0f) * std::clamp(1.0f - d, 0.0f, 1.0f);
+            if (alpha < 0.01f) continue;
+            // Clip against the near plane in view space.
+            Vec3 v0 = view.transformPoint(p0), v1 = view.transformPoint(p1);
+            const float nearZ = -0.05f;
+            if (v0.z > nearZ && v1.z > nearZ) continue;
+            if (v0.z > nearZ) v0 = v0 + (v1 - v0) * ((nearZ - v0.z) / (v1.z - v0.z));
+            if (v1.z > nearZ) v1 = v1 + (v0 - v1) * ((nearZ - v1.z) / (v0.z - v1.z));
+            auto toScreen = [&](Vec3 v) {
+                const Vec4 c = proj * Vec4(v, 1.0f);
+                return ImVec2{origin.x + (c.x / c.w * 0.5f + 0.5f) * size.x, origin.y + (0.5f - c.y / c.w * 0.5f) * size.y};
+            };
+            const ImU32 col = (color & 0x00FFFFFFu) | (static_cast<ImU32>(alpha * 255.0f) << 24);
+            dl->AddLine(toScreen(v0), toScreen(v1), col, thickness);
+        }
+    };
+    for (int i = -cells; i <= cells; ++i) {
+        const float o = static_cast<float>(i) * spacing;
+        const bool major = (static_cast<int>(std::round((cx + o) / spacing)) % 10) == 0;
+        const float along = cx + o, across = cy + o;
+        const bool axisU = std::fabs(across) < spacing * 0.5f;  // line on the U axis (v = 0)
+        const bool axisV = std::fabs(along) < spacing * 0.5f;   // line on the V axis (u = 0)
+        line(toWorld(cx - extent, across), toWorld(cx + extent, across), axisU ? palette::kAxisX : IM_COL32(255, 255, 255, 255),
+             axisU ? 0.8f : (major ? 0.22f : 0.09f), axisU ? 1.5f : 1.0f);
+        line(toWorld(along, cy - extent), toWorld(along, cy + extent), axisV ? (plane2D ? palette::kAxisY : palette::kAxisZ) : IM_COL32(255, 255, 255, 255),
+             axisV ? 0.8f : (major ? 0.22f : 0.09f), axisV ? 1.5f : 1.0f);
+    }
+}
+
+bool toolButton(const char* label, bool active, const char* tooltip) {
+    if (active) ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(245, 165, 36, 90));
+    const bool clicked = ImGui::SmallButton(label);
+    if (active) ImGui::PopStyleColor();
+    if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tooltip);
+    ImGui::SameLine(0, 3);
+    return clicked;
+}
+
+} // namespace
+
+rhi::TextureHandle ViewportPanel::texture(EditorShared& s) const {
+    return s.device() ? s.device()->renderTargetTexture(m_target) : rhi::TextureHandle{};
+}
+
+bool ViewportPanel::worldToScreen(EditorShared& s, Vec3 world, ImVec2& out) const {
+    if (m_lastSize.x <= 0.0f || m_lastSize.y <= 0.0f) return false;
+    const float aspect = m_lastSize.x / m_lastSize.y;
+    return project(projectionGL(s, aspect) * viewMatrix(s), world, m_lastOrigin, m_lastSize, out);
+}
+
+void ViewportPanel::beginFrame(EditorShared& s) {
+    rhi::Device* d = s.device();
+    if (!d || m_wantWidth == 0 || m_wantHeight == 0) return;
+    if (m_target && m_wantWidth == m_width && m_wantHeight == m_height) return;
+    d->destroyRenderTarget(m_target);
+    auto rt = d->createRenderTarget({m_wantWidth, m_wantHeight, rhi::TextureFormat::RGBA8, true, 1, "agr.editor.viewport"});
+    if (!rt) {
+        AGR_LOG_ERROR("Editor", "viewport target: {}", rt.error().message);
+        m_target = {};
+        return;
+    }
+    m_target = rt.value();
+    m_width = m_wantWidth;
+    m_height = m_wantHeight;
+}
+
+void ViewportPanel::release(EditorShared& s) {
+    if (s.device()) s.device()->destroyRenderTarget(m_target);
+    m_target = {};
+}
+
+Mat4 ViewportPanel::viewMatrix(EditorShared& s) const {
+    if (gameView)
+        if (auto v = RenderView::fromPrimaryCamera(s.ctx.scene())) return v->view;
+    return s.ctx.camera().renderView().view;
+}
+
+Mat4 ViewportPanel::projectionGL(EditorShared& s, float aspect) const {
+    if (gameView)
+        if (auto v = RenderView::fromPrimaryCamera(s.ctx.scene())) return v->projectionMatrix(aspect, true);
+    return s.ctx.camera().renderView().projectionMatrix(aspect, true);
+}
+
+void ViewportPanel::renderScene(EditorShared& s) {
+    Renderer* r = s.renderer();
+    if (!r || !m_visible || !m_target) return;
+    std::optional<RenderView> view;
+    if (gameView) view = RenderView::fromPrimaryCamera(s.ctx.scene());
+    else view = s.ctx.camera().renderView();
+    if (!view) {  // game view without camera: clear to a neutral color
+        RenderView empty;
+        empty.clearColor = {0.03f, 0.03f, 0.035f, 1.0f};
+        empty.farPlane = 0.2f;  // nothing visible
+        view = empty;
+    }
+    r->renderView(s.ctx.scene(), *view, m_target, m_width, m_height);
+}
+
+void ViewportPanel::handleCamera(EditorShared& s, const FrameTime& time, bool hovered) {
+    if (gameView) return;
+    ImGuiIO& io = ImGui::GetIO();
+    EditorCamera& cam = s.ctx.camera();
+    const float dt = static_cast<float>(time.unscaledDeltaSeconds);
+    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) m_flying = true;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) m_flying = false;
+
+    if (cam.mode2D) {
+        if ((m_flying || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) && (hovered || m_flying))
+            cam.pan({io.MouseDelta.x, io.MouseDelta.y}, static_cast<float>(m_height ? m_height : 1) / io.DisplayFramebufferScale.y);
+        if (hovered && io.MouseWheel != 0.0f) cam.zoom(io.MouseWheel);
+        return;
+    }
+    if (m_flying) {
+        cam.look(-io.MouseDelta.x * 0.004f, -io.MouseDelta.y * 0.004f);
+        Vec3 dir{};
+        // Physical keys: WASD on QWERTY, ZQSD on AZERTY.
+        if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_Z)) dir.z += 1;
+        if (ImGui::IsKeyDown(ImGuiKey_S)) dir.z -= 1;
+        if (ImGui::IsKeyDown(ImGuiKey_D)) dir.x += 1;
+        if (ImGui::IsKeyDown(ImGuiKey_A) || ImGui::IsKeyDown(ImGuiKey_Q)) dir.x -= 1;
+        if (ImGui::IsKeyDown(ImGuiKey_E)) dir.y += 1;
+        if (ImGui::IsKeyDown(ImGuiKey_C)) dir.y -= 1;
+        if (math::lengthSquared(dir) > 0.0f) cam.move(math::normalize(dir), flySpeed * dt * (io.KeyShift ? 3.0f : 1.0f));
+        if (io.MouseWheel != 0.0f) flySpeed = std::clamp(flySpeed * std::pow(1.2f, io.MouseWheel), 0.5f, 500.0f);
+        return;
+    }
+    if (hovered || ImGui::IsMouseDragging(ImGuiMouseButton_Middle) || (io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left))) {
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) cam.pan({io.MouseDelta.x, io.MouseDelta.y}, static_cast<float>(m_height) / io.DisplayFramebufferScale.y);
+        if (io.KeyAlt && ImGui::IsMouseDown(ImGuiMouseButton_Left)) cam.orbit(-io.MouseDelta.x * 0.006f, -io.MouseDelta.y * 0.006f);
+    }
+    if (hovered && io.MouseWheel != 0.0f) cam.zoom(io.MouseWheel);
+}
+
+void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
+    Scene& scene = s.ctx.scene();
+    auto& reg = scene.registry();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float aspect = size.x / std::max(size.y, 1.0f);
+    const Mat4 view = viewMatrix(s), proj = projectionGL(s, aspect), vp = proj * view;
+
+    if (showGrid && !gameView) {
+        const EditorCamera& cam = s.ctx.camera();
+        const Vec3 focus = cam.mode2D ? Vec3{cam.position2D.x, cam.position2D.y, 0.0f} : cam.target;
+        drawGrid(dl, view, proj, origin, size, cam.mode2D, focus, cam.mode2D ? cam.orthoSize * 2.0f : cam.distance);
+    }
+
+    // Selection bounds.
+    for (ecs::Entity e : s.ctx.selection().entities(scene)) {
+        const math::Aabb b = worldBounds(scene, e);
+        if (!b.valid()) continue;
+        Vec3 corners[8];
+        for (int i = 0; i < 8; ++i) corners[i] = {(i & 1) ? b.max.x : b.min.x, (i & 2) ? b.max.y : b.min.y, (i & 4) ? b.max.z : b.min.z};
+        ImVec2 sp[8];
+        bool ok = true;
+        for (int i = 0; i < 8 && ok; ++i) ok = project(vp, corners[i], origin, size, sp[i]);
+        if (!ok) continue;
+        static const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        const ImU32 col = e == scene.findByUuid(s.ctx.selection().primary()) ? palette::kSelect : IM_COL32(61, 139, 253, 140);
+        for (auto& ed : edges) dl->AddLine(sp[ed[0]], sp[ed[1]], col, 1.5f);
+    }
+
+    // Icons for entities without geometry (cameras, lights).
+    m_iconHits.clear();
+    if (showIcons) {
+        auto drawIcon = [&](ecs::Entity e, icons::Kind kind) {
+            const auto& w = reg.get<WorldTransformComponent>(e);
+            if (!w.activeInHierarchy) return;
+            ImVec2 p;
+            if (!project(vp, w.matrix.translation(), origin, size, p)) return;
+            const bool sel = s.ctx.selection().contains(scene.uuidOf(e));
+            dl->AddCircleFilled(p, 13.0f, IM_COL32(14, 16, 19, 200));
+            dl->AddCircle(p, 13.0f, sel ? palette::kSelect : palette::kGraphite700, 20, 1.5f);
+            icons::draw(dl, kind, p, 15.0f, sel ? palette::kSelect : palette::kText);
+            m_iconHits.emplace_back(e, p);
+            if (kind == icons::Kind::Light) {  // light direction
+                ImVec2 q;
+                if (project(vp, w.matrix.translation() + math::normalize(w.matrix.transformVector({0, 0, -1})) * 1.5f, origin, size, q))
+                    dl->AddLine(p, q, palette::kAmber, 2.0f);
+            }
+        };
+        reg.view<CameraComponent, WorldTransformComponent>().each([&](ecs::Entity e, CameraComponent&, WorldTransformComponent&) {
+            if (!gameView) drawIcon(e, icons::Kind::Camera);
+        });
+        reg.view<DirectionalLightComponent, WorldTransformComponent>().each(
+            [&](ecs::Entity e, DirectionalLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light); });
+    }
+
+    // Play mode frame and statistics.
+    if (s.ctx.playState() != PlayState::Edit)
+        dl->AddRect(origin, {origin.x + size.x, origin.y + size.y}, s.ctx.playState() == PlayState::Playing ? palette::kAmber : palette::kTextMuted, 0.0f, 3.0f);
+    if (Renderer* r = s.renderer()) {
+        const auto& st = r->stats();
+        char text[160];
+        std::snprintf(text, sizeof text, "%u draws  %llu tris  %u+%u visibles  %u éliminés", st.drawCalls,
+                      static_cast<unsigned long long>(st.triangles), st.meshesVisible, st.spritesVisible, st.meshesCulled + st.spritesCulled);
+        const ImVec2 ts = ImGui::CalcTextSize(text);
+        dl->AddText({origin.x + size.x - ts.x - 10, origin.y + size.y - ts.y - 8}, IM_COL32(230, 228, 223, 150), text);
+    }
+}
+
+void ViewportPanel::drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size) {
+    Scene& scene = s.ctx.scene();
+    const ecs::Entity primary = scene.findByUuid(s.ctx.selection().primary());
+    const bool editing = s.ctx.playState() == PlayState::Edit || s.ctx.playState() == PlayState::Paused;
+    if (primary.isNull() || !editing) {
+        m_gizmoWasUsing = false;
+        return;
+    }
+    if (const auto* st = scene.registry().tryGet<StateComponent>(primary); st && st->lockedInEditor) return;
+    const float aspect = size.x / std::max(size.y, 1.0f);
+    const Mat4 view = viewMatrix(s), proj = projectionGL(s, aspect);
+    const bool ortho = gameView ? (RenderView::fromPrimaryCamera(scene) && RenderView::fromPrimaryCamera(scene)->projection == Projection::Orthographic)
+                                : s.ctx.camera().mode2D;
+    ImGuizmo::SetOrthographic(ortho);
+    ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+    ImGuizmo::SetRect(origin.x, origin.y, size.x, size.y);
+    const ImGuizmo::OPERATION op = gizmoOp == GizmoOp::Translate ? ImGuizmo::TRANSLATE
+                                   : gizmoOp == GizmoOp::Rotate  ? ImGuizmo::ROTATE
+                                                                 : ImGuizmo::SCALE;
+    const ImGuizmo::MODE mode = (gizmoLocal || gizmoOp == GizmoOp::Scale) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+    const bool doSnap = snap || ImGui::GetIO().KeyCtrl;
+    const float snapValue = gizmoOp == GizmoOp::Translate ? snapTranslate : gizmoOp == GizmoOp::Rotate ? snapRotate : snapScale;
+    const float snapValues[3] = {snapValue, snapValue, snapValue};
+
+    const Mat4 before = scene.worldMatrix(primary);
+    Mat4 after = before;
+    if (ImGuizmo::Manipulate(view.data(), proj.data(), op, mode, &after.c[0].x, nullptr, doSnap ? snapValues : nullptr)) {
+        const Mat4 delta = after * math::inverse(before);
+        scene.setWorldMatrix(primary, after);
+        // Other selected entities follow (unless an ancestor of theirs is selected too).
+        for (ecs::Entity e : s.ctx.selection().entities(scene)) {
+            if (e == primary) continue;
+            bool ancestorSelected = false;
+            for (ecs::Entity p = scene.parent(e); !p.isNull(); p = scene.parent(p)) ancestorSelected |= s.ctx.selection().contains(scene.uuidOf(p));
+            if (!ancestorSelected) scene.setWorldMatrix(e, delta * scene.worldMatrix(e));
+        }
+        scene.updateTransforms();
+    }
+    const bool using_ = ImGuizmo::IsUsing();
+    if (m_gizmoWasUsing && !using_) s.ctx.commit(gizmoOp == GizmoOp::Translate ? "Move" : gizmoOp == GizmoOp::Rotate ? "Rotate" : "Scale");
+    m_gizmoWasUsing = using_;
+}
+
+void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && !ImGuizmo::IsOver()) {
+        m_pressed = true;
+        m_pressPos = io.MousePos;
+    }
+    if (!m_pressed || !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) return;
+    m_pressed = false;
+    const float dx = io.MousePos.x - m_pressPos.x, dy = io.MousePos.y - m_pressPos.y;
+    if (dx * dx + dy * dy > 16.0f || ImGuizmo::IsUsing()) return;  // that was a drag
+
+    Scene& scene = s.ctx.scene();
+    ecs::Entity hit{};
+    for (auto& [e, p] : m_iconHits) {  // icons win: they are drawn on top
+        const float ix = io.MousePos.x - p.x, iy = io.MousePos.y - p.y;
+        if (ix * ix + iy * iy <= 14.0f * 14.0f) hit = e;
+    }
+    if (hit.isNull()) {
+        const float aspect = size.x / std::max(size.y, 1.0f);
+        const ImVec2 uv{(io.MousePos.x - origin.x) / size.x, (io.MousePos.y - origin.y) / size.y};
+        if (auto h = pick(scene, rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), uv))) hit = h->entity;
+    }
+    Selection& sel = s.ctx.selection();
+    if (hit.isNull()) {
+        if (!io.KeyCtrl) sel.clear();
+    } else if (io.KeyCtrl) {
+        sel.toggle(scene.uuidOf(hit));
+    } else {
+        sel.set(scene.uuidOf(hit));
+    }
+}
+
+void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
+    if (!ImGui::BeginDragDropTargetCustom(ImRect(origin, {origin.x + size.x, origin.y + size.y}), ImGui::GetID("##viewportDrop"))) return;
+    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
+        const std::string uri = static_cast<const char*>(p->Data);
+        if (isImageFile(uri)) {
+            const ImVec2 m = ImGui::GetIO().MousePos;
+            const float aspect = size.x / std::max(size.y, 1.0f);
+            const math::Ray ray = rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), {(m.x - origin.x) / size.x, (m.y - origin.y) / size.y});
+            Vec3 pos{};
+            const bool flat = s.ctx.camera().mode2D;
+            if (auto h = flat ? std::nullopt : pick(s.ctx.scene(), ray)) pos = h->point;
+            else if (float t = intersectPlane(ray, flat ? Vec3{0, 0, 1} : Vec3{0, 1, 0}, 0.0f); t >= 0.0f) pos = ray.at(t);
+            if (!flat) pos.y += 0.5f;  // stand on the surface (sprites are 1 unit tall)
+            s.ctx.createSprite(uri, pos);
+        } else {
+            s.notify("Seules les images peuvent être déposées dans la scène pour l'instant");
+        }
+    }
+    ImGui::EndDragDropTarget();
+}
+
+void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    const bool open = ImGui::Begin("Scène", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar();
+    m_visible = open;
+    if (!open) {
+        ImGui::End();
+        return;
+    }
+    if (s.focusViewport) {
+        ImGui::SetWindowFocus();
+        s.focusViewport = false;
+    }
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 size = ImGui::GetContentRegionAvail();
+    m_lastOrigin = origin;
+    m_lastSize = size;
+    const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
+    m_wantWidth = static_cast<u32>(std::max(1.0f, size.x * scale.x));
+    m_wantHeight = static_cast<u32>(std::max(1.0f, size.y * scale.y));
+
+    const rhi::TextureHandle tex = texture(s);
+    const bool flip = s.device() && s.device()->info().renderTargetsFlipY;
+    if (tex) ImGui::Image(ImTextureRef(ImGuiRenderer::toImTexture(tex)), size, {0, flip ? 1.0f : 0.0f}, {1, flip ? 0.0f : 1.0f});
+    else ImGui::Dummy(size);
+    const bool hovered = ImGui::IsItemHovered();
+
+    handleCamera(s, time, hovered);
+    drawOverlays(s, origin, size);
+    drawGizmo(s, origin, size);
+    handlePicking(s, origin, size);
+    handleDrop(s, origin, size);
+
+    // Keyboard: gizmo modes and focus (viewport hovered, not flying, not typing).
+    if (hovered && !m_flying && !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl) {
+        if (ImGui::IsKeyPressed(ImGuiKey_W, false)) gizmoOp = GizmoOp::Translate;
+        if (ImGui::IsKeyPressed(ImGuiKey_E, false)) gizmoOp = GizmoOp::Rotate;
+        if (ImGui::IsKeyPressed(ImGuiKey_R, false)) gizmoOp = GizmoOp::Scale;
+        if (ImGui::IsKeyPressed(ImGuiKey_F, false)) s.ctx.focusSelection();
+    }
+
+    // Toolbar overlay.
+    ImGui::SetCursorScreenPos({origin.x + 8, origin.y + 8});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {7, 3});
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(21, 24, 29, 220));
+    if (toolButton("Déplacer", gizmoOp == GizmoOp::Translate, "Déplacer (W)")) gizmoOp = GizmoOp::Translate;
+    if (toolButton("Pivoter", gizmoOp == GizmoOp::Rotate, "Pivoter (E)")) gizmoOp = GizmoOp::Rotate;
+    if (toolButton("Échelle", gizmoOp == GizmoOp::Scale, "Mettre à l'échelle (R)")) gizmoOp = GizmoOp::Scale;
+    ImGui::SameLine(0, 10);
+    if (toolButton(gizmoLocal ? "Local" : "Monde", false, "Repère du gizmo")) gizmoLocal = !gizmoLocal;
+    if (toolButton("Magnétisme", snap, "Aligner sur la grille (ou maintenir Ctrl)")) snap = !snap;
+    ImGui::SameLine(0, 10);
+    EditorCamera& cam = s.ctx.camera();
+    if (toolButton(cam.mode2D ? "2D" : "3D", false, "Basculer la vue 2D / 3D")) cam.mode2D = !cam.mode2D;
+    if (toolButton("Grille", showGrid, nullptr)) showGrid = !showGrid;
+    if (toolButton("Icônes", showIcons, nullptr)) showIcons = !showIcons;
+    if (toolButton("Vue jeu", gameView, "Voir la scène depuis la caméra principale du jeu")) gameView = !gameView;
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    if (gameView && !RenderView::fromPrimaryCamera(s.ctx.scene())) {
+        ImGui::SetCursorScreenPos({origin.x + 12, origin.y + 40});
+        ImGui::TextColored(palette::toVec4(palette::kWarning), "Aucune caméra principale active dans la scène.");
+    }
+    ImGui::End();
+}
+
+} // namespace agr::editor

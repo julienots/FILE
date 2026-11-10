@@ -482,6 +482,16 @@ public:
         }
     }
 
+    void prepareTextureForSampling(TextureHandle h) override {
+        VkTextureRes* t = m_textures.get(h);
+        if (!t || t->img.layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) return;
+        if (!m_recording || m_inPass) {
+            AGR_LOG_ERROR("RHI", "prepareTextureForSampling must be called inside a frame, outside a pass");
+            return;
+        }
+        transition(cmd(), t->img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+
     void draw(u32 vertexCount, u32 firstVertex) override {
         if (!prepareDraw(false)) return;
         vkCmdDraw(cmd(), vertexCount, 1, firstVertex, 0);

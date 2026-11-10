@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -13,6 +14,24 @@
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
+
+/// A camera independent of the scene (editor viewports, previews, split screen).
+struct RenderView {
+    math::Mat4 view = math::Mat4::identity();  ///< World -> view space (camera looks down -Z).
+    math::Vec3 position{0.0f};
+    Projection projection = Projection::Perspective;
+    float fieldOfView = math::radians(60.0f);
+    float orthographicSize = 5.0f;
+    float nearPlane = 0.1f;
+    float farPlane = 500.0f;
+    math::Color clearColor{0.055f, 0.063f, 0.075f, 1.0f};
+    bool editorView = false;  ///< Skips entities flagged hiddenInEditor.
+
+    /// Projection matrix for an aspect ratio, in the clip space of the given backend.
+    math::Mat4 projectionMatrix(float aspect, bool glClipSpace) const;
+    /// View of the scene's first active primary camera, if any.
+    static std::optional<RenderView> fromPrimaryCamera(Scene& scene);
+};
 
 struct RenderStats {
     u32 drawCalls = 0;
@@ -53,8 +72,14 @@ public:
     void setProfile(const GraphicsProfile& profile) { m_profile = profile; }
     const GraphicsProfile& profile() const { return m_profile; }
 
-    /// Renders the scene's primary camera into the backbuffer (width x height pixels).
+    /// Complete frame: renders the scene's primary camera into the backbuffer
+    /// (begins and ends the device frame).
     void render(Scene& scene, u32 width, u32 height);
+    /// Renders `view` into `target` (null = backbuffer) of width x height pixels.
+    /// Must be called between Device::beginFrame and Device::endFrame; a render target
+    /// must have a depth buffer.
+    void renderView(Scene& scene, const RenderView& view, rhi::RenderTargetHandle target, u32 width, u32 height);
+    bool glClipSpace() const { return m_glClipSpace; }
     const RenderStats& stats() const { return m_stats; }
 
     /// Cached texture for a component asset URI (shared between components).

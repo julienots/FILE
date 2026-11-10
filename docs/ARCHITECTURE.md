@@ -14,9 +14,11 @@
 5. **Erreurs explicites.** `Result<T>` / `Status` plutôt que des exceptions dans le moteur ;
    un fichier corrompu produit un message, pas un crash.
 
-## Graphe des modules (phase 2)
+## Graphe des modules
 
 ```
+   editor (agr_editor ➜ agr_editor_ui ➜ agr_editor_core)        voir docs/EDITOR.md
+        │
    apps/sandbox                         plugins/spin (bibliothèque dynamique)
         │                                     │
         ├──► agr::platform (SDL3) ──┐         │

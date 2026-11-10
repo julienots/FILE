@@ -132,6 +132,7 @@ public:
         GLint v = 0;
         m_gl.glGetIntegerv(GL_MAX_TEXTURE_SIZE, &v);
         m_info.maxTextureSize = static_cast<u32>(std::max(v, 64));
+        m_info.renderTargetsFlipY = true;
         v = 1;
         m_gl.glGetIntegerv(GL_MAX_SAMPLES, &v);
         m_info.maxSamples = static_cast<u32>(std::max(v, 1));

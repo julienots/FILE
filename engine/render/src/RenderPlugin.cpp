@@ -119,7 +119,7 @@ void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
 }
 
 void RenderPlugin::onRender(Engine& engine, const FrameTime&) {
-    if (!m_renderer) return;
+    if (!m_renderer || !m_autoRender) return;
     const math::Vec2 fb = engine.platform().framebufferSize();
     const u32 w = static_cast<u32>(fb.x), h = static_cast<u32>(fb.y);
     m_renderer->render(engine.scene(), w, h);

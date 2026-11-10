@@ -187,6 +187,7 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
     bool keepRunning = true;
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        if (m_rawHook) m_rawHook(&e);
         switch (e.type) {
             case SDL_EVENT_QUIT:
                 keepRunning = false;

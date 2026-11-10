@@ -35,7 +35,7 @@ jobs:
         run: cmake --preset ${{ matrix.preset }} -DAGR_WARNINGS_AS_ERRORS=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
-      - name: Unit + GPU tests (Mesa llvmpipe / lavapipe — OpenGL, OpenGL ES, Vulkan + validation)
+      - name: Unit, GPU and editor tests (Mesa llvmpipe / lavapipe — OpenGL, OpenGL ES, Vulkan + validation)
         env:
           AGR_REQUIRE_GPU_TESTS: "1"
         run: xvfb-run -a ctest --preset ${{ matrix.preset }}
@@ -62,12 +62,14 @@ jobs:
           done
           python3 ../../tools/compare_images.py user/parity_opengl.png user/parity_vulkan.png
           python3 ../../tools/compare_images.py user/parity_opengl.png user/parity_gles.png
-      - name: Upload screenshots
+      - name: Upload screenshots (sandbox + editor)
         if: matrix.preset == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: sandbox-screenshots
-          path: build/release/user/*.png
+          name: screenshots
+          path: |
+            build/release/user/*.png
+            build/release/editor_smoke/*/editor.png
       - name: Benchmarks
         if: matrix.preset == 'release'
         run: |

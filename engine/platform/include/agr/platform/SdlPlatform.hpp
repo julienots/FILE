@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+
 #include "agr/runtime/PlatformLayer.hpp"
 
 struct SDL_Window;
@@ -39,12 +41,16 @@ public:
     void setTitle(const std::string& title);
     /// Shows the on-screen keyboard on mobile.
     void setTextInput(bool enabled);
+    /// Called with every raw SDL_Event* before the engine translates it (UI toolkits).
+    using RawEventHook = std::function<void(const void* sdlEvent)>;
+    void setRawEventHook(RawEventHook hook) { m_rawHook = std::move(hook); }
 
 private:
     Status createWindow(GraphicsApi api);
     void destroyWindow();
 
     EngineConfig m_config;
+    RawEventHook m_rawHook;
     GraphicsApi m_api = GraphicsApi::None;
     bool m_vulkanLoaded = false;
     SDL_Window* m_window = nullptr;

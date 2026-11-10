@@ -38,7 +38,7 @@ void registerRenderComponents() {
         .description("Draws a built-in mesh with a color and an optional texture.")
         .field("mesh", &MeshRendererComponent::mesh,
                {.enumEntries = {{"Cube", 0}, {"Sphere", 1}, {"Plane", 2}, {"Quad", 3}}})
-        .field("texture", &MeshRendererComponent::texture, {.tooltip = "Asset URI, e.g. assets://textures/crate.png"})
+        .field("texture", &MeshRendererComponent::texture, {.tooltip = "Asset URI, e.g. assets://textures/crate.png", .flags = FieldFlag_AssetPath})
         .field("color", &MeshRendererComponent::color, {.flags = FieldFlag_Color})
         .field("uvScale", &MeshRendererComponent::uvScale, {.speed = 0.01f})
         .field("visible", &MeshRendererComponent::visible);
@@ -46,7 +46,7 @@ void registerRenderComponents() {
     reg.add<SpriteRendererComponent>("SpriteRenderer")
         .category("Rendering")
         .description("Textured quad for 2D games, batched automatically.")
-        .field("texture", &SpriteRendererComponent::texture, {.tooltip = "Asset URI, e.g. assets://sprites/hero.png"})
+        .field("texture", &SpriteRendererComponent::texture, {.tooltip = "Asset URI, e.g. assets://sprites/hero.png", .flags = FieldFlag_AssetPath})
         .field("color", &SpriteRendererComponent::color, {.flags = FieldFlag_Color})
         .field("size", &SpriteRendererComponent::size, {.speed = 0.01f})
         .field("pivot", &SpriteRendererComponent::pivot, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})

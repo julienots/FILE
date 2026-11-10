@@ -1,0 +1,845 @@
+#include "agr/editor/ui/EditorApp.hpp"
+
+#include <SDL3/SDL.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_internal.h>
+#include <imgui.h>
+#include <imgui_stdlib.h>
+#include <ImGuizmo.h>
+
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+#include "agr/editor/SceneTemplates.hpp"
+#include "agr/runtime/Engine.hpp"
+#include "agr/runtime/Events.hpp"
+
+namespace agr::editor {
+
+namespace fs = std::filesystem;
+
+namespace {
+
+std::string readText(const fs::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+void writeText(const fs::path& p, const std::string& text) {
+    std::error_code ec;
+    fs::create_directories(p.parent_path(), ec);
+    std::ofstream(p, std::ios::binary) << text;
+}
+
+std::string defaultProjectsFolder() {
+    const char* docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
+    const fs::path base = docs ? fs::path(docs) : fs::current_path();
+    return (base / "AGR Projects").string();
+}
+
+const char* modeLabel(ProjectMode m) {
+    switch (m) {
+        case ProjectMode::Mode2D: return "2D";
+        case ProjectMode::Mode25D: return "2.5D";
+        case ProjectMode::Mode3D: return "3D";
+    }
+    return "";
+}
+
+const char* modeDescription(ProjectMode m) {
+    switch (m) {
+        case ProjectMode::Mode2D: return "Sprites, caméra orthographique.\nPlateforme, puzzle, cartes, idle...";
+        case ProjectMode::Mode25D: return "Monde 3D vu de haut, sprites.\nStratégie, tower defense, RPG...";
+        case ProjectMode::Mode3D: return "Maillages, lumières, caméra libre.\nAction, course, simulation...";
+    }
+    return "";
+}
+
+} // namespace
+
+EditorApp::EditorApp(SdlPlatform* platform, EditorOptions options) : m_platform(platform), m_options(std::move(options)) {}
+EditorApp::~EditorApp() = default;
+
+// ================================================================== startup
+Status EditorApp::onStart(Engine& engine) {
+    m_engine = &engine;
+    auto* render = engine.service<RenderPlugin>();
+    if (!m_platform || !render || !render->device())
+        return makeError(Error::Code::Unsupported, "the editor needs a window and a GPU device");
+    render->setAutoRender(false);  // the editor drives frames: scene view target, then UI
+    render->setHotReload(true);
+
+    m_ctx = std::make_unique<EditorContext>(engine);
+    m_shared = std::make_unique<EditorShared>(EditorShared{engine, *m_ctx});
+    m_shared->platform = m_platform;
+    m_shared->render = render;
+
+    // Settings live in the per-user preference folder.
+    if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
+        m_settingsDir = pref;
+        SDL_free(pref);
+    } else {
+        m_settingsDir = (fs::temp_directory_path() / "agr_editor").string();
+    }
+    if (!m_options.smokeTestDir.empty()) m_settingsDir = (fs::path(m_options.smokeTestDir) / "settings").string() + "/";
+    m_iniPath = m_settingsDir + "imgui.ini";
+    loadSettings();
+    m_wizard.location = defaultProjectsFolder();
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    io.IniFilename = m_iniPath.c_str();
+    m_layoutBuilt = fs::exists(m_iniPath);
+    ImGui_ImplSDL3_InitForOther(m_platform->window());
+    m_platform->setRawEventHook([](const void* e) { ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(e)); });
+    const float dpi = SDL_GetWindowDisplayScale(m_platform->window());
+    m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi > 0.0f ? dpi : 1.0f);
+
+    m_imgui = std::make_unique<ImGuiRenderer>(*render->device());
+    if (Status s = m_imgui->initialize(); !s) return s;
+
+    engine.events().subscribe<FileDroppedEvent>([this](const FileDroppedEvent& e) {
+        if (m_ctx->hasProject()) m_assets.importFiles(*m_shared, {e.path});
+    });
+    engine.setCloseRequestHandler([this] {
+        if (!m_ctx->hasProject() || !m_ctx->dirty()) return true;
+        m_shared->runGuarded([this] { m_engine->requestQuit(); });
+        return false;  // the "unsaved changes" dialog decides
+    });
+
+    if (!m_options.smokeTestDir.empty()) {
+        ProjectSettings settings;
+        settings.name = "Smoke Test";
+        auto project = Project::create(fs::path(m_options.smokeTestDir) / "SmokeProject", settings, SceneTemplate::Empty3D,
+                                       m_options.resourcesDir + "/templates/textures");
+        if (!project) return project.error();
+        openProject(project.value().root().string());
+    } else if (!m_options.projectPath.empty()) {
+        openProject(m_options.projectPath);
+    }
+    AGR_LOG_INFO("Editor", "AGR Editor ready ({} UI on {})", ImGui::GetVersion(), rhi::enumName(render->device()->info().backend));
+    return {};
+}
+
+void EditorApp::loadSettings() {
+    m_recent = RecentProjects::fromJson(readText(fs::path(m_settingsDir) / "editor_settings.json"));
+}
+
+void EditorApp::saveSettings() { writeText(fs::path(m_settingsDir) / "editor_settings.json", m_recent.toJson()); }
+
+void EditorApp::openProject(const std::string& path) {
+    auto project = Project::open(path);
+    if (!project) {
+        m_shared->notify("Projet introuvable : " + project.error().message);
+        m_recent.remove(path);
+        saveSettings();
+        return;
+    }
+    m_shared->releaseThumbnails();
+    m_shared->assetFolder.clear();
+    if (Status s = m_ctx->openProject(std::move(project.value())); !s) {
+        m_shared->notify("Ouverture impossible : " + s.error().message);
+        return;
+    }
+    m_recent.touch(fs::absolute(path).string());
+    saveSettings();
+    m_shared->notify("Projet ouvert : " + m_ctx->project().settings().name);
+}
+
+void EditorApp::createProject() {
+    Wizard& w = m_wizard;
+    w.error.clear();
+    if (w.name.empty() || w.name.find_first_of("/\\:*?\"<>|") != std::string::npos) {
+        w.error = "Nom invalide (caractères interdits : / \\ : * ? \" < > |).";
+        return;
+    }
+    if (!w.desktop && !w.android) {
+        w.error = "Choisissez au moins une plateforme cible.";
+        return;
+    }
+    ProjectSettings settings;
+    settings.name = w.name;
+    settings.mode = w.mode;
+    settings.targetDesktop = w.desktop;
+    settings.targetAndroid = w.android;
+    const fs::path folder = fs::path(w.location) / w.name;
+    auto project = Project::create(folder, settings, defaultTemplateFor(w.mode), m_options.resourcesDir + "/templates/textures");
+    if (!project) {
+        w.error = project.error().message;
+        return;
+    }
+    openProject(folder.string());
+}
+
+void EditorApp::onShutdown(Engine&) {
+    if (!ImGui::GetCurrentContext()) return;
+    m_viewport.release(*m_shared);
+    m_shared->releaseThumbnails();
+    m_imgui->shutdown();
+    m_imgui.reset();  // GPU objects must go while the device still exists (plugins unload after onShutdown)
+    ImGui_ImplSDL3_Shutdown();
+    if (m_platform) m_platform->setRawEventHook(nullptr);
+    ImGui::DestroyContext();
+    saveSettings();
+}
+
+// =================================================================== frame
+void EditorApp::onUpdate(Engine&, const FrameTime& time) {
+    ++m_frame;
+    if (m_closeProjectRequested) {
+        m_closeProjectRequested = false;
+        m_viewport.release(*m_shared);
+        m_shared->releaseThumbnails();
+        RenderPlugin* render = m_shared->render;
+        const EditorFonts fonts = m_shared->fonts;
+        m_ctx = std::make_unique<EditorContext>(*m_engine);
+        m_shared = std::make_unique<EditorShared>(EditorShared{*m_engine, *m_ctx});
+        m_shared->platform = m_platform;
+        m_shared->render = render;
+        m_shared->fonts = fonts;
+    }
+    m_viewport.beginFrame(*m_shared);
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
+    {  // native folder dialog results (may arrive from another thread)
+        std::lock_guard lock(m_dialogMutex);
+        if (!m_dialogFolder.empty()) {
+            if (m_dialogTarget == 1) m_wizard.location = m_dialogFolder;
+            else if (m_dialogTarget == 2) {
+                const std::string path = m_dialogFolder;
+                m_shared->runGuarded([this, path] { openProject(path); });
+            }
+            m_dialogFolder.clear();
+        }
+    }
+    if (m_ctx->hasProject()) {
+        m_ctx->update();
+        drawEditor(time);
+    } else {
+        drawHub();
+    }
+    drawModals();
+    if (m_showDemo) ImGui::ShowDemoWindow(&m_showDemo);
+    if (!m_options.smokeTestDir.empty()) smokeTest(time);
+    if (!m_options.hubScreenshot.empty() && m_frame == 8) captureNextFrame(m_options.hubScreenshot);
+    if (!m_options.hubScreenshot.empty() && m_frame == 10) m_engine->requestQuit();
+    ImGui::Render();
+    updateWindowTitle();
+}
+
+void EditorApp::onRender(Engine& engine, const FrameTime&) {
+    rhi::Device* device = m_shared->device();
+    if (!device) return;
+    const math::Vec2 fb = engine.platform().framebufferSize();
+    const u32 w = static_cast<u32>(fb.x), h = static_cast<u32>(fb.y);
+    if (w == 0 || h == 0) return;
+    device->beginFrame(w, h);
+    if (m_ctx->hasProject()) m_viewport.renderScene(*m_shared);
+    m_imgui->render(ImGui::GetDrawData(), true);
+    device->endFrame();
+    if (!m_capturePath.empty()) {
+        std::vector<u8> pixels;
+        if (device->readBackbuffer(0, 0, w, h, pixels)) {
+            if (auto png = encodePng(w, h, pixels)) {
+                writeText(m_capturePath, std::string(png.value().begin(), png.value().end()));
+                AGR_LOG_INFO("Editor", "screenshot saved to {}", m_capturePath);
+            }
+        }
+        m_capturePath.clear();
+    }
+}
+
+void EditorApp::updateWindowTitle() {
+    std::string title = "AGR ENGINE";
+    if (m_ctx->hasProject()) {
+        title += " — " + m_ctx->project().settings().name + " — ";
+        title += m_ctx->scenePath().empty() ? std::string("(scène non enregistrée)") : fs::path(m_ctx->scenePath()).stem().string();
+        if (m_ctx->dirty()) title += " *";
+    }
+    if (title != m_title && m_platform) {
+        m_title = title;
+        m_platform->setTitle(title);
+    }
+}
+
+// ============================================================= project hub
+void EditorApp::drawHub() {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, palette::toVec4(palette::kGraphite950));
+    ImGui::Begin("##hub", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::PopStyleColor();
+    const float pad = 40.0f;
+    ImGui::SetCursorPos({pad, pad});
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 logoPos = ImGui::GetCursorScreenPos();
+    icons::drawAgrMark(dl, logoPos, 64.0f);
+    ImGui::SetCursorPos({pad + 80.0f, pad + 4.0f});
+    ImGui::PushFont(m_shared->fonts.semibold, 30.0f);
+    ImGui::TextUnformatted("AGR ENGINE");
+    ImGui::PopFont();
+    ImGui::SetCursorPos({pad + 82.0f, pad + 42.0f});
+    ImGui::TextColored(palette::toVec4(palette::kAmber), "BUILD BEYOND LIMITS.");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  Superessence Studio — version %d.%d.%d", AGR_VERSION_MAJOR, AGR_VERSION_MINOR, AGR_VERSION_PATCH);
+
+    ImGui::SetCursorPos({pad, pad + 100.0f});
+    const float columnH = ImGui::GetContentRegionAvail().y - pad;
+    // ---- recent projects
+    ImGui::BeginChild("##recent", {std::max(320.0f, ImGui::GetContentRegionAvail().x * 0.36f), columnH}, ImGuiChildFlags_Borders);
+    ImGui::PushFont(m_shared->fonts.semibold, 0.0f);
+    ImGui::TextUnformatted("Projets récents");
+    ImGui::PopFont();
+    ImGui::Separator();
+    if (m_recent.paths.empty()) ImGui::TextDisabled("Aucun projet récent.");
+    std::string toOpen, toForget;
+    for (const std::string& p : m_recent.paths) {
+        ImGui::PushID(p.c_str());
+        const std::string name = fs::path(p).filename().string();
+        if (ImGui::Selectable("##p", false, ImGuiSelectableFlags_AllowDoubleClick, {0, 40})) toOpen = p;
+        const ImVec2 a = ImGui::GetItemRectMin();
+        icons::draw(ImGui::GetWindowDrawList(), icons::Kind::Folder, {a.x + 18, a.y + 20}, 18, palette::kAmber);
+        ImGui::GetWindowDrawList()->AddText({a.x + 38, a.y + 3}, palette::kText, name.c_str());
+        ImGui::GetWindowDrawList()->AddText({a.x + 38, a.y + 21}, palette::kTextMuted, p.c_str());
+        if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::MenuItem("Retirer de la liste")) toForget = p;
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    if (!toOpen.empty()) openProject(toOpen);
+    if (!toForget.empty()) {
+        m_recent.remove(toForget);
+        saveSettings();
+    }
+    ImGui::Spacing();
+    if (ImGui::Button("Ouvrir un projet...", {-FLT_MIN, 0})) {
+        m_dialogTarget = 2;
+        SDL_ShowOpenFolderDialog(
+            [](void* user, const char* const* files, int) {
+                auto* app = static_cast<EditorApp*>(user);
+                if (files && files[0]) {
+                    std::lock_guard lock(app->m_dialogMutex);
+                    app->m_dialogFolder = files[0];
+                }
+            },
+            this, m_platform->window(), nullptr, false);
+    }
+    ImGui::EndChild();
+
+    // ---- new project wizard
+    ImGui::SameLine(0, 24.0f);
+    ImGui::BeginChild("##wizard", {0, columnH}, ImGuiChildFlags_Borders);
+    ImGui::PushFont(m_shared->fonts.semibold, 0.0f);
+    ImGui::TextUnformatted("Nouveau projet");
+    ImGui::PopFont();
+    ImGui::Separator();
+    Wizard& w = m_wizard;
+    ImGui::TextDisabled("1. Type de jeu");
+    const float cardW = (ImGui::GetContentRegionAvail().x - 2 * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
+    for (ProjectMode m : {ProjectMode::Mode2D, ProjectMode::Mode25D, ProjectMode::Mode3D}) {
+        ImGui::PushID(static_cast<int>(m));
+        const bool sel = w.mode == m;
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        if (ImGui::InvisibleButton("##card", {cardW, 96})) w.mode = m;
+        ImDrawList* cdl = ImGui::GetWindowDrawList();
+        cdl->AddRectFilled(p, {p.x + cardW, p.y + 96}, ImGui::IsItemHovered() ? palette::kGraphite700 : palette::kGraphite800, 6.0f);
+        if (sel) cdl->AddRect(p, {p.x + cardW, p.y + 96}, palette::kAmber, 6.0f, 2.0f);
+        cdl->AddText(m_shared->fonts.semibold, 26.0f, {p.x + 14, p.y + 10}, sel ? palette::kAmber : palette::kText, modeLabel(m));
+        cdl->AddText({p.x + 14, p.y + 48}, palette::kTextMuted, modeDescription(m));
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+    ImGui::NewLine();
+    ImGui::Spacing();
+    ImGui::TextDisabled("2. Modèle");
+    const SceneTemplate tmpl = defaultTemplateFor(w.mode);
+    ImGui::Selectable(templateName(tmpl), true);
+    ImGui::TextWrapped("%s", templateDescription(tmpl));
+    ImGui::TextDisabled("Les modèles de jeux complets (plateforme, RPG, tower defense, course...) arrivent en phase 9.");
+    ImGui::Spacing();
+    ImGui::TextDisabled("3. Nom et emplacement");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##name", &w.name);
+    ImGui::SetNextItemWidth(-110.0f);
+    ImGui::InputText("##location", &w.location);
+    ImGui::SameLine();
+    if (ImGui::Button("Parcourir...", {-FLT_MIN, 0})) {
+        m_dialogTarget = 1;
+        SDL_ShowOpenFolderDialog(
+            [](void* user, const char* const* files, int) {
+                auto* app = static_cast<EditorApp*>(user);
+                if (files && files[0]) {
+                    std::lock_guard lock(app->m_dialogMutex);
+                    app->m_dialogFolder = files[0];
+                }
+            },
+            this, m_platform->window(), w.location.c_str(), false);
+    }
+    ImGui::TextDisabled("Dossier du projet : %s", (fs::path(w.location) / w.name).string().c_str());
+    ImGui::Spacing();
+    ImGui::TextDisabled("4. Plateformes cibles");
+    ImGui::Checkbox("Windows / Linux", &w.desktop);
+    ImGui::SameLine();
+    ImGui::Checkbox("Android", &w.android);
+    if (w.android) ImGui::TextColored(palette::toVec4(palette::kWarning), "Enregistré dans le projet ; l'export APK / AAB arrive en phase 8.");
+    ImGui::Spacing();
+    if (!w.error.empty()) ImGui::TextColored(palette::toVec4(palette::kError), "%s", w.error.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kAmber));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.72f, 0.25f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kGraphite950));
+    if (ImGui::Button("Créer et ouvrir", {220, 38})) createProject();
+    ImGui::PopStyleColor(3);
+    ImGui::EndChild();
+    ImGui::End();
+}
+
+// ================================================================== editor
+void EditorApp::buildDefaultLayout(unsigned int dockspace) {
+    ImGui::DockBuilderRemoveNode(dockspace);
+    ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspace, ImGui::GetMainViewport()->WorkSize);
+    ImGuiID center = dockspace;
+    const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.18f, nullptr, &center);
+    const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.26f, nullptr, &center);
+    const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.30f, nullptr, &center);
+    ImGui::DockBuilderDockWindow("Hiérarchie", left);
+    ImGui::DockBuilderDockWindow("Inspecteur", right);
+    ImGui::DockBuilderDockWindow("Statistiques", right);
+    ImGui::DockBuilderDockWindow("Assets", bottom);
+    ImGui::DockBuilderDockWindow("Console", bottom);
+    ImGui::DockBuilderDockWindow("Scène", center);
+    ImGui::DockBuilderFinish(dockspace);
+}
+
+void EditorApp::drawEditor(const FrameTime& time) {
+    drawMenuBar();
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const float toolbarH = ImGui::GetFrameHeight() + 14.0f, statusH = ImGui::GetFrameHeight() + 4.0f;
+    drawToolbar(toolbarH);
+
+    ImGui::SetNextWindowPos({vp->WorkPos.x, vp->WorkPos.y + toolbarH});
+    ImGui::SetNextWindowSize({vp->WorkSize.x, vp->WorkSize.y - toolbarH - statusH});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    ImGui::Begin("##dockhost", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                     ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking);
+    ImGui::PopStyleVar();
+    const ImGuiID dockspace = ImGui::GetID("AgrDockspace");
+    if (!m_layoutBuilt || m_resetLayout) {
+        buildDefaultLayout(dockspace);
+        m_layoutBuilt = true;
+        m_resetLayout = false;
+    }
+    ImGui::DockSpace(dockspace);
+    ImGui::End();
+
+    m_viewport.draw(*m_shared, time);
+    m_hierarchy.draw(*m_shared);
+    m_inspector.draw(*m_shared);
+    m_assets.draw(*m_shared);
+    m_console.draw(*m_shared);
+    m_stats.draw(*m_shared, time);
+    drawStatusBar(statusH);
+    handleShortcuts();
+}
+
+void EditorApp::startPlay() {
+    if (m_ctx->playState() == PlayState::Edit) {
+        m_gameViewBeforePlay = m_viewport.gameView;
+        m_viewport.gameView = true;
+    }
+    m_ctx->play();
+}
+
+void EditorApp::stopPlay() {
+    if (m_ctx->playState() == PlayState::Edit) return;
+    m_ctx->stop();
+    m_viewport.gameView = m_gameViewBeforePlay;
+}
+
+void EditorApp::saveOrSaveAs() {
+    if (m_ctx->playState() != PlayState::Edit) {
+        m_shared->notify("Arrêtez le jeu avant d'enregistrer.");
+        return;
+    }
+    if (m_ctx->scenePath().empty()) {
+        m_saveAsName = m_ctx->scene().name();
+        m_shared->openSaveAsPopup = true;
+        return;
+    }
+    if (Status s = m_ctx->saveScene(); !s) m_shared->notify("Enregistrement impossible : " + s.error().message);
+    else m_shared->notify("Scène enregistrée : " + m_ctx->scenePath());
+}
+
+void EditorApp::drawMenuBar() {
+    if (!ImGui::BeginMainMenuBar()) return;
+    EditorContext& ctx = *m_ctx;
+    if (ImGui::BeginMenu("Fichier")) {
+        if (ImGui::BeginMenu("Nouvelle scène")) {
+            for (SceneTemplate t : {SceneTemplate::Empty2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D})
+                if (ImGui::MenuItem(templateName(t))) m_shared->runGuarded([this, t] { m_ctx->newScene(t); });
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Ouvrir une scène")) {
+            for (const std::string& scene : ctx.project().listScenes())
+                if (ImGui::MenuItem(scene.c_str(), nullptr, scene == ctx.scenePath()))
+                    m_shared->runGuarded([this, scene] {
+                        if (Status s = m_ctx->loadScene(scene); !s) m_shared->notify("Ouverture impossible : " + s.error().message);
+                    });
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Enregistrer", "Ctrl+S")) saveOrSaveAs();
+        if (ImGui::MenuItem("Enregistrer sous...", "Ctrl+Maj+S")) {
+            m_saveAsName = ctx.scene().name();
+            m_shared->openSaveAsPopup = true;
+        }
+        ImGui::Separator();
+        // Applied at the start of the next frame: panels still use the context this frame.
+        if (ImGui::MenuItem("Fermer le projet")) m_shared->runGuarded([this] { m_closeProjectRequested = true; });
+        if (ImGui::MenuItem("Quitter")) m_shared->runGuarded([this] { m_engine->requestQuit(); });
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Édition")) {
+        const std::string undoLabel = "Annuler " + ctx.undoStack().undoLabel();
+        const std::string redoLabel = "Rétablir " + ctx.undoStack().redoLabel();
+        if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, ctx.undoStack().canUndo())) ctx.undo();
+        if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, ctx.undoStack().canRedo())) ctx.redo();
+        ImGui::Separator();
+        const bool any = !ctx.selection().empty();
+        if (ImGui::MenuItem("Dupliquer", "Ctrl+D", false, any)) ctx.duplicateSelection();
+        if (ImGui::MenuItem("Grouper", "Ctrl+G", false, any)) ctx.groupSelection();
+        if (ImGui::MenuItem("Supprimer", "Suppr", false, any)) ctx.deleteSelection();
+        if (ImGui::MenuItem("Renommer", "F2", false, any)) m_shared->renameSelection = true;
+        if (ImGui::MenuItem("Tout sélectionner", "Ctrl+A")) ctx.selectAll();
+        if (ImGui::MenuItem("Cadrer la sélection", "F", false, any)) ctx.focusSelection();
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Créer")) {
+        static const std::pair<const char*, CreateKind> items[] = {
+            {"Entité vide", CreateKind::Empty}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere}, {"Plan", CreateKind::Plane},
+            {"Quad", CreateKind::Quad}, {"Sprite", CreateKind::Sprite}, {"Caméra", CreateKind::Camera},
+            {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Environnement", CreateKind::Environment}};
+        for (const auto& [label, kind] : items)
+            if (ImGui::MenuItem(label)) ctx.create(kind);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Affichage")) {
+        if (ImGui::MenuItem("Réinitialiser la disposition")) m_resetLayout = true;
+        ImGui::MenuItem("Vue jeu", nullptr, &m_viewport.gameView);
+        ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
+        ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Graphismes")) {
+        if (auto* r = m_shared->renderer()) {
+            for (int t = 4; t >= 0; --t) {
+                const auto tier = static_cast<GraphicsTier>(t);
+                const GraphicsProfile p = graphicsProfile(tier);
+                if (ImGui::MenuItem(p.name, nullptr, r->profile().tier == tier)) m_shared->render->applyProfile(*m_engine, tier);
+            }
+            ImGui::Separator();
+            if (const rhi::Device* d = m_shared->device()) ImGui::TextDisabled("Backend : %s", rhi::enumName(d->info().backend));
+        }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Aide")) {
+        ImGui::TextDisabled("Raccourcis");
+        ImGui::BulletText("Clic droit + WASD / ZQSD, E / C : survol de la vue");
+        ImGui::BulletText("Alt + clic gauche : orbite   Molette : zoom   Clic molette : panoramique");
+        ImGui::BulletText("W / E / R : déplacer / pivoter / échelle   F : cadrer");
+        ImGui::BulletText("Ctrl+Z / Ctrl+Y : annuler / rétablir   Ctrl+D : dupliquer   Ctrl+G : grouper   Suppr : supprimer");
+        ImGui::BulletText("Ctrl+P : jouer / arrêter   Ctrl+S : enregistrer   F12 : capture de l'éditeur");
+        ImGui::Separator();
+        ImGui::TextDisabled("Documentation : dossier docs/ du moteur (EDITOR.md, RENDERING.md...)");
+        ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+}
+
+void EditorApp::drawToolbar(float height) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize({vp->WorkSize.x, height});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, palette::toVec4(palette::kGraphite950));
+    ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking |
+                                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::PopStyleColor();
+    icons::drawAgrMark(ImGui::GetWindowDrawList(), {ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y - 2}, height - 12.0f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + height);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(m_ctx->project().settings().name.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("/ %s%s", m_ctx->scenePath().empty() ? "scène non enregistrée" : m_ctx->scenePath().c_str(),
+                        m_ctx->dirty() ? " *" : "");
+
+    const float btn = ImGui::GetFrameHeight();
+    ImGui::SameLine(vp->WorkSize.x * 0.5f - btn * 1.5f);
+    const PlayState ps = m_ctx->playState();
+    if (icons::button("##play", icons::Kind::Play, btn, ps == PlayState::Playing ? palette::kAmber : palette::kText,
+                      "Jouer (Ctrl+P)", ps == PlayState::Playing))
+        startPlay();
+    ImGui::SameLine(0, 2);
+    if (icons::button("##pause", icons::Kind::Pause, btn, ps == PlayState::Paused ? palette::kAmber : palette::kText, "Pause",
+                      ps == PlayState::Paused))
+        m_ctx->pause();
+    ImGui::SameLine(0, 2);
+    ImGui::BeginDisabled(ps == PlayState::Edit);
+    if (icons::button("##stop", icons::Kind::Stop, btn, palette::kText, "Arrêter et restaurer la scène")) stopPlay();
+    ImGui::EndDisabled();
+    ImGui::End();
+}
+
+void EditorApp::drawStatusBar(float height) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos({vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - height});
+    ImGui::SetNextWindowSize({vp->WorkSize.x, height});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 2});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, palette::toVec4(palette::kGraphite950));
+    ImGui::Begin("##status", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking |
+                                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    ImGui::AlignTextToFramePadding();
+    if (!m_shared->status.empty() && ImGui::GetTime() - m_shared->statusTime < 6.0) ImGui::TextUnformatted(m_shared->status.c_str());
+    else ImGui::TextDisabled("Prêt");
+    char right[200];
+    const auto* device = m_shared->device();
+    std::snprintf(right, sizeof right, "%s  ·  %s  ·  %.0f FPS  ·  %zu entités", device ? rhi::enumName(device->info().backend) : "-",
+                  device ? device->info().renderer.c_str() : "-", m_engine->stats().fps, m_ctx->scene().entityCount());
+    ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(right).x - 14.0f);
+    ImGui::TextDisabled("%s", right);
+    ImGui::End();
+}
+
+void EditorApp::handleShortcuts() {
+    EditorContext& ctx = *m_ctx;
+    const ImGuiInputFlags global = ImGuiInputFlags_RouteGlobal;
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, global)) saveOrSaveAs();
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, global)) {
+        m_saveAsName = ctx.scene().name();
+        m_shared->openSaveAsPopup = true;
+    }
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, global)) ctx.undo();
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y, global) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, global)) ctx.redo();
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, global)) {
+        if (ctx.playState() == PlayState::Edit) startPlay();
+        else stopPlay();
+    }
+    if (ImGui::Shortcut(ImGuiKey_F12, global)) {
+        const auto stamp = static_cast<long long>(SDL_GetTicks());
+        captureNextFrame((ctx.project().root() / "screenshots" / ("editor-" + std::to_string(stamp) + ".png")).string());
+    }
+    if (ImGui::GetIO().WantTextInput) return;  // the keys below are text while typing
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, global)) ctx.duplicateSelection();
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_G, global)) ctx.groupSelection();
+    if (ImGui::Shortcut(ImGuiKey_Delete, global)) ctx.deleteSelection();
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_A, global)) ctx.selectAll();
+    if (ImGui::Shortcut(ImGuiKey_F2, global)) m_shared->renameSelection = true;
+}
+
+void EditorApp::drawModals() {
+    EditorShared& s = *m_shared;
+    if (s.openUnsavedPopup) {
+        ImGui::OpenPopup("Modifications non enregistrées");
+        s.openUnsavedPopup = false;
+    }
+    if (ImGui::BeginPopupModal("Modifications non enregistrées", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("La scène « %s » contient des modifications non enregistrées.", m_ctx->scene().name().c_str());
+        ImGui::Spacing();
+        if (ImGui::Button("Enregistrer", {150, 0})) {
+            ImGui::CloseCurrentPopup();
+            if (m_ctx->scenePath().empty()) {
+                m_runPendingAfterSaveAs = true;
+                m_saveAsName = m_ctx->scene().name();
+                s.openSaveAsPopup = true;
+            } else if (Status st = m_ctx->saveScene(); st) {
+                if (s.pendingAction) s.pendingAction();
+                s.pendingAction = nullptr;
+            } else {
+                s.notify("Enregistrement impossible : " + st.error().message);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Ne pas enregistrer", {150, 0})) {
+            ImGui::CloseCurrentPopup();
+            if (s.pendingAction) s.pendingAction();
+            s.pendingAction = nullptr;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Annuler", {150, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ImGui::CloseCurrentPopup();
+            s.pendingAction = nullptr;
+        }
+        ImGui::EndPopup();
+    }
+
+    if (s.openSaveAsPopup) {
+        ImGui::OpenPopup("Enregistrer la scène sous");
+        s.openSaveAsPopup = false;
+    }
+    if (ImGui::BeginPopupModal("Enregistrer la scène sous", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ImGui::SetNextItemWidth(320);
+        const bool enter = ImGui::InputText("##name", &m_saveAsName, ImGuiInputTextFlags_EnterReturnsTrue);
+        const std::string path = "scenes/" + m_saveAsName + ".agrscene";
+        ImGui::TextDisabled("%s", path.c_str());
+        const bool valid = !m_saveAsName.empty() && m_saveAsName.find_first_of("/\\:*?\"<>|") == std::string::npos;
+        std::error_code ec;
+        if (valid && m_ctx->hasProject() && fs::exists(m_ctx->project().root() / path, ec) && path != m_ctx->scenePath())
+            ImGui::TextColored(palette::toVec4(palette::kWarning), "Ce fichier existe déjà et sera remplacé.");
+        ImGui::BeginDisabled(!valid);
+        if (ImGui::Button("Enregistrer", {150, 0}) || (enter && valid)) {
+            if (Status st = m_ctx->saveSceneAs(path); !st) {
+                s.notify("Enregistrement impossible : " + st.error().message);
+            } else {
+                s.notify("Scène enregistrée : " + path);
+                if (m_runPendingAfterSaveAs && s.pendingAction) s.pendingAction();
+                s.pendingAction = nullptr;
+            }
+            m_runPendingAfterSaveAs = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Annuler", {150, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_runPendingAfterSaveAs = false;
+            s.pendingAction = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// ============================================================== smoke test
+void EditorApp::pushMouse(u32 type, ImVec2 pos) {
+    SDL_Event e{};
+    e.type = type;
+    const SDL_WindowID window = SDL_GetWindowID(m_platform->window());
+    if (type == SDL_EVENT_MOUSE_MOTION) {
+        e.motion.windowID = window;
+        e.motion.x = pos.x;
+        e.motion.y = pos.y;
+    } else {
+        e.button.windowID = window;
+        e.button.button = SDL_BUTTON_LEFT;
+        e.button.down = type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+        e.button.clicks = 1;
+        e.button.x = pos.x;
+        e.button.y = pos.y;
+    }
+    SDL_PushEvent(&e);
+}
+
+void EditorApp::pushKey(u32 key, u32 scancode, u16 mod, bool down) {
+    SDL_Event e{};
+    e.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    e.key.windowID = SDL_GetWindowID(m_platform->window());
+    e.key.key = key;
+    e.key.scancode = static_cast<SDL_Scancode>(scancode);
+    e.key.mod = mod;
+    e.key.down = down;
+    SDL_PushEvent(&e);
+}
+
+void EditorApp::check(bool condition, const char* what) {
+    if (!condition) {
+        m_failures.emplace_back(what);
+        AGR_LOG_ERROR("SmokeTest", "FAILED: {}", what);
+    }
+}
+
+/// Scripted end-to-end session driven through the same calls as the UI, with a
+/// screenshot of the real editor window. Used by CI on every graphics backend.
+void EditorApp::smokeTest(const FrameTime&) {
+    EditorContext& ctx = *m_ctx;
+    Scene& scene = ctx.scene();
+    static Uuid cubeId, spriteId;
+    switch (m_frame) {
+        case 3: {
+            check(ctx.hasProject(), "project opened");
+            const auto cube = ctx.create(CreateKind::Cube);
+            scene.registry().get<TransformComponent>(cube).position = {2.0f, 0.5f, 0.0f};
+            ctx.rename(cube, "Smoke Cube");
+            cubeId = scene.uuidOf(cube);
+            check(ctx.addComponent(cube, "Spin") || !ComponentRegistry::instance().find("Spin"), "Spin plugin component added");
+            const auto sprite = ctx.createSprite("assets://textures/agr_mark.png", {-2.0f, 1.0f, 0.0f});
+            spriteId = scene.uuidOf(sprite);
+            break;
+        }
+        case 6:
+            check(ctx.undo(), "undo create sprite");
+            check(scene.findByUuid(spriteId).isNull(), "sprite removed by undo");
+            check(ctx.redo(), "redo create sprite");
+            check(!scene.findByUuid(spriteId).isNull(), "sprite restored by redo");
+            ctx.selection().assign({spriteId, cubeId});
+            ctx.focusSelection();
+            break;
+        case 10: startPlay(); break;
+        case 40: {
+            check(ctx.playState() == PlayState::Playing, "playing");
+            const auto cube = scene.findByUuid(cubeId);
+            if (ComponentRegistry::instance().find("Spin") && !cube.isNull())
+                check(!math::nearlyEqual(scene.registry().get<TransformComponent>(cube).rotation, math::Quat::identity()),
+                      "the Spin system ran during play");
+            stopPlay();
+            check(ctx.playState() == PlayState::Edit, "stopped");
+            const auto restored = scene.findByUuid(cubeId);
+            check(!restored.isNull() && math::nearlyEqual(scene.registry().get<TransformComponent>(restored).rotation, math::Quat::identity()),
+                  "stop restored the edited scene");
+            break;
+        }
+        case 44: check(ctx.saveScene().ok(), "scene saved"); break;
+        // ---- Real input path: SDL events -> ImGui -> viewport picking / shortcuts.
+        case 46: {
+            ctx.selection().clear();
+            ImVec2 p;
+            const auto cube = scene.findByName("Cube");  // template cube at (0, 0.5, 0)
+            check(!cube.isNull() && m_viewport.worldToScreen(*m_shared, {0.0f, 0.5f, 0.0f}, p), "template cube visible in the viewport");
+            m_smokeClick = p;
+            pushMouse(SDL_EVENT_MOUSE_MOTION, p);
+            break;
+        }
+        case 47: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 48: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, m_smokeClick); break;
+        case 50: {
+            const auto cube = scene.findByName("Cube");
+            check(!cube.isNull() && ctx.selection().primary() == scene.uuidOf(cube), "a click in the viewport selects the cube (picking)");
+            m_smokeDeleted = ctx.selection().primary();
+            pushKey(SDLK_DELETE, SDL_SCANCODE_DELETE, SDL_KMOD_NONE, true);
+            break;
+        }
+        case 51: pushKey(SDLK_DELETE, SDL_SCANCODE_DELETE, SDL_KMOD_NONE, false); break;
+        case 53:
+            check(scene.findByUuid(m_smokeDeleted).isNull(), "the Delete key deletes the selection");
+            pushKey(SDLK_Z, SDL_SCANCODE_Z, SDL_KMOD_LCTRL, true);
+            break;
+        case 54: pushKey(SDLK_Z, SDL_SCANCODE_Z, SDL_KMOD_LCTRL, false); break;
+        case 56:
+            check(!scene.findByUuid(m_smokeDeleted).isNull(), "Ctrl+Z restores the deleted entity");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor.png").string());
+            break;
+        case 60: {
+            std::error_code ec;
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor.png", ec), "editor screenshot written");
+            check(!ctx.dirty(), "no unsaved changes after save");
+            const rhi::Device* device = m_shared->device();
+            check(device && device->validationErrorCount() == 0, "no graphics API validation error");
+            m_exitCode = m_failures.empty() ? 0 : 1;
+            AGR_LOG_INFO("SmokeTest", "{} ({} failure(s))", m_failures.empty() ? "SMOKE TEST PASSED" : "SMOKE TEST FAILED", m_failures.size());
+            m_engine->requestQuit();
+            break;
+        }
+        default: break;
+    }
+}
+
+} // namespace agr::editor

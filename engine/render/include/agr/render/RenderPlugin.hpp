@@ -36,6 +36,9 @@ public:
     GraphicsProfile applyProfile(Engine& engine, GraphicsTier tier);
     /// Saves the next rendered frame as PNG (e.g. "user://screenshot.png").
     void requestScreenshot(std::string uri) { m_screenshotUri = std::move(uri); }
+    /// When false, onRender does nothing: the application drives frames itself
+    /// (the editor renders scene views into render targets, then its UI).
+    void setAutoRender(bool enabled) { m_autoRender = enabled; }
     /// Polls asset files for changes (editor / development builds).
     void setHotReload(bool enabled, f64 intervalSeconds = 1.0);
 
@@ -45,6 +48,7 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::string m_screenshotUri;
     bool m_hotReload = false;
+    bool m_autoRender = true;
     f64 m_hotReloadInterval = 1.0;
     f64 m_hotReloadTimer = 0.0;
     u32 m_appliedFpsCap = 0;

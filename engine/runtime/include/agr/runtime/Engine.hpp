@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -44,6 +45,9 @@ public:
     /// Runs the main loop until quit. Returns the process exit code.
     int run(Application& app);
     void requestQuit() { m_quitRequested = true; }
+    /// Called when the user closes the window. Return false to keep running (e.g. the
+    /// editor asks to save first, then calls requestQuit()).
+    void setCloseRequestHandler(std::function<bool()> handler) { m_closeHandler = std::move(handler); }
     bool quitRequested() const { return m_quitRequested; }
 
     // ------------------------------------------------------------- services
@@ -100,6 +104,7 @@ private:
     FrameTime m_time;
     FrameStats m_stats;
     std::unordered_map<u64, void*> m_services;
+    std::function<bool()> m_closeHandler;
     f64 m_accumulator = 0.0;
     f64 m_statsWindowTime = 0.0;
     u32 m_statsWindowFrames = 0;

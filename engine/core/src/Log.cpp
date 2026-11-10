@@ -89,6 +89,7 @@ RingBufferSink::RingBufferSink(usize capacity) : m_capacity(std::max<usize>(capa
 
 void RingBufferSink::write(const LogMessage& m) {
     std::lock_guard lock(m_mutex);
+    ++m_total;
     Entry e{m.level, std::string(m.channel), std::string(m.text), m.timeSeconds};
     if (m_entries.size() < m_capacity) {
         m_entries.push_back(std::move(e));
@@ -108,8 +109,14 @@ std::vector<RingBufferSink::Entry> RingBufferSink::snapshot() const {
     return out;
 }
 
+u64 RingBufferSink::totalWritten() const {
+    std::lock_guard lock(m_mutex);
+    return m_total;
+}
+
 void RingBufferSink::clear() {
     std::lock_guard lock(m_mutex);
+    ++m_total;  // observers refresh
     m_entries.clear();
     m_head = 0;
     m_wrapped = false;

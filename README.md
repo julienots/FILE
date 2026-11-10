@@ -7,14 +7,14 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phases 1 et 2 terminées** (socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources).
-> Il n'y a pas encore d'éditeur visuel : c'est la phase 3. L'avancement détaillé et honnête est dans
-> [docs/ROADMAP.md](docs/ROADMAP.md).
+> **État actuel : phases 1 et 2 terminées, phase 3 (éditeur) fondations terminées.**
+> Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel. Les systèmes 2D avancés,
+> la 3D complète, la physique, le scripting et l'export Android sont les phases suivantes.
+> L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
-![Sandbox AGR ENGINE](docs/images/sandbox.png)
+![Éditeur AGR](docs/images/editor.png)
 
-*Image rendue par AGR ENGINE (sandbox, profil « high », MSAA x4). Vulkan, OpenGL et OpenGL ES produisent
-la même image.*
+*L'éditeur AGR (Vulkan). Capture produite par le test automatisé de bout en bout.*
 
 ## Ce qui fonctionne aujourd'hui
 
@@ -34,9 +34,12 @@ la même image.*
   automatiquement, temps GPU, captures d'écran ([détails](docs/RENDERING.md)).
 - Un **gestionnaire de ressources** : chargement asynchrone, cache, budget d'upload par image,
   rechargement à chaud.
-- **71 tests unitaires + 16 tests GPU au pixel près**, exécutés en Vulkan (avec *validation layers*),
-  OpenGL et OpenGL ES, contrôle de parité des images entre API, sanitizers (ASan/UBSan), benchmarks
-  CPU et GPU, CI GCC/Clang/MSVC.
+- Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
+  gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
+  annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
+- **82 tests unitaires, 16 tests GPU au pixel près et un test de bout en bout de l'éditeur**, tous
+  exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
+  entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
 ## Démarrage rapide
 
@@ -44,7 +47,8 @@ la même image.*
 cmake --preset release
 cmake --build --preset release
 ctest --preset release
-./build/release/bin/agr_sandbox          # Échap : quitter · 1-5 : profils graphiques · F12 : capture
+./build/release/bin/agr_editor           # l'éditeur (hub de projets)
+./build/release/bin/agr_sandbox          # démo runtime · Échap : quitter · 1-5 : profils · F12 : capture
 ```
 
 Prérequis et options : [docs/BUILDING.md](docs/BUILDING.md).
@@ -106,6 +110,7 @@ engine/
   assets/     images, gestionnaire de ressources
   render/     composants de rendu, renderer, profils graphiques
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
+editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices)
 plugins/spin/ plugin dynamique d'exemple
 apps/sandbox/ application de démonstration (scène 3D + 2D, assets originaux)
 tests/        tests unitaires ; tests/gpu : tests de rendu au pixel près
@@ -117,6 +122,7 @@ docs/         architecture, ADR, feuille de route, identité visuelle
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Rendu et ressources](docs/RENDERING.md)
+- [Éditeur](docs/EDITOR.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

@@ -199,59 +199,88 @@ void Renderer::uploadUniforms() {
     (void)m_device.updateBuffer(m_uniformBuffer, 0, m_uniformStaging.data(), size);
 }
 
-void Renderer::render(Scene& scene, u32 width, u32 height) {
-    Stopwatch cpu;
-    ++m_frame;
-    m_stats = {};
-    if (width == 0 || height == 0) return;
-    auto& reg = scene.registry();
+Mat4 RenderView::projectionMatrix(float aspect, bool glClipSpace) const {
+    const auto range = glClipSpace ? Mat4::DepthRange::NegativeOneToOne : Mat4::DepthRange::ZeroToOne;
+    const float nearZ = std::max(nearPlane, 1e-4f), farZ = std::max(farPlane, nearZ + 1e-3f);
+    if (projection == Projection::Orthographic) {
+        const float hh = std::max(orthographicSize, 1e-4f), hw = hh * aspect;
+        return Mat4::orthographic(-hw, hw, -hh, hh, nearZ, farZ, range);
+    }
+    return Mat4::perspective(std::clamp(fieldOfView, 0.01f, 3.1f), aspect, nearZ, farZ, range);
+}
 
-    // ------------------------------------------------------------ camera
+std::optional<RenderView> RenderView::fromPrimaryCamera(Scene& scene) {
+    auto& reg = scene.registry();
     ecs::Entity cameraEntity{};
     reg.view<CameraComponent, WorldTransformComponent>().each([&](ecs::Entity e, CameraComponent& c, WorldTransformComponent&) {
         if (!c.primary || !scene.isActiveInHierarchy(e)) return;
         if (cameraEntity.isNull() || e.index < cameraEntity.index) cameraEntity = e;  // deterministic choice
     });
+    if (cameraEntity.isNull()) return std::nullopt;
+    const CameraComponent& cam = reg.get<CameraComponent>(cameraEntity);
+    Vec3 pos, scale;
+    math::Quat rot;
+    math::decompose(reg.get<WorldTransformComponent>(cameraEntity).matrix, pos, rot, scale);
+    RenderView v;
+    v.view = math::inverse(Mat4::trs(pos, rot, Vec3{1.0f}));  // camera scale is ignored
+    v.position = pos;
+    v.projection = cam.projection;
+    v.fieldOfView = cam.fieldOfView;
+    v.orthographicSize = cam.orthographicSize;
+    v.nearPlane = cam.nearPlane;
+    v.farPlane = cam.farPlane;
+    v.clearColor = cam.clearColor;
+    return v;
+}
+
+void Renderer::render(Scene& scene, u32 width, u32 height) {
+    if (width == 0 || height == 0) return;
+    const std::optional<RenderView> view = RenderView::fromPrimaryCamera(scene);
+    m_device.beginFrame(width, height);
+    if (view) {
+        renderView(scene, *view, {}, width, height);
+    } else {
+        // Nothing to render from: clear to the AGR background so the frame is defined.
+        Stopwatch cpu;
+        m_stats = {};
+        m_device.beginPass({}, {true, {0.055f, 0.063f, 0.075f, 1.0f}, true, 1.0f});
+        m_device.endPass();
+        m_stats.cpuMs = cpu.elapsedMilliseconds();
+    }
+    m_device.endFrame();
+    m_stats.gpuTimeMs = m_device.frameStats().gpuTimeMs;
+    m_stats.gpuWaitMs = m_device.frameStats().cpuWaitMs;
+}
+
+void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetHandle outputTarget, u32 width, u32 height) {
+    Stopwatch cpu;
+    ++m_frame;
+    m_stats = {};
+    if (width == 0 || height == 0) return;
+    auto& reg = scene.registry();
+    m_stats.hasCamera = true;
 
     const u32 samples = std::clamp<u32>(m_profile.msaaSamples, 1, m_device.info().maxSamples);
     const float scale = std::clamp(m_profile.renderScale, 0.25f, 2.0f);
     const u32 renderW = std::max(1u, static_cast<u32>(std::lround(static_cast<float>(width) * scale)));
     const u32 renderH = std::max(1u, static_cast<u32>(std::lround(static_cast<float>(height) * scale)));
 
-    if (cameraEntity.isNull()) {
-        // Nothing to render from: clear to the AGR background so the frame is defined.
-        m_device.beginFrame(width, height);
-        m_device.beginPass({}, {true, {0.055f, 0.063f, 0.075f, 1.0f}, true, 1.0f});
-        m_device.endPass();
-        m_device.endFrame();
-        m_stats.drawCalls = 0;
-        m_stats.gpuTimeMs = m_device.frameStats().gpuTimeMs;
-        m_stats.cpuMs = cpu.elapsedMilliseconds();
-        return;
-    }
-    m_stats.hasCamera = true;
-    const CameraComponent& cam = reg.get<CameraComponent>(cameraEntity);
-    Vec3 camPos, camScale;
-    math::Quat camRot;
-    math::decompose(reg.get<WorldTransformComponent>(cameraEntity).matrix, camPos, camRot, camScale);
-    const Mat4 view = math::inverse(Mat4::trs(camPos, camRot, Vec3{1.0f}));
+    const Mat4 view = rv.view;
     const float aspect = static_cast<float>(renderW) / static_cast<float>(renderH);
     const auto range = m_glClipSpace ? Mat4::DepthRange::NegativeOneToOne : Mat4::DepthRange::ZeroToOne;
-    const float nearZ = std::max(cam.nearPlane, 1e-4f), farZ = std::max(cam.farPlane, nearZ + 1e-3f);
-    Mat4 proj;
-    if (cam.projection == Projection::Orthographic) {
-        const float hh = std::max(cam.orthographicSize, 1e-4f), hw = hh * aspect;
-        proj = Mat4::orthographic(-hw, hw, -hh, hh, nearZ, farZ, range);
-    } else {
-        proj = Mat4::perspective(std::clamp(cam.fieldOfView, 0.01f, 3.1f), aspect, nearZ, farZ, range);
-    }
-    const Mat4 viewProj = proj * view;
+    const Mat4 viewProj = rv.projectionMatrix(aspect, m_glClipSpace) * view;
     const math::Frustum frustum = math::Frustum::fromMatrix(viewProj, range);
+    auto* states = reg.findPool<StateComponent>();
+    auto hiddenInEditor = [&](ecs::Entity e) {
+        if (!rv.editorView || !states) return false;
+        const StateComponent* st = states->tryGet(e);
+        return st && st->hiddenInEditor;
+    };
 
     // ------------------------------------------------------------ lights
     FrameUniforms frame;
     frame.viewProj = viewProj;
-    frame.cameraPos = Vec4(camPos, 1.0f);
+    frame.cameraPos = Vec4(rv.position, 1.0f);
     frame.lightDir = Vec4(0, -1, 0, 0);
     frame.lightColor = Vec4(0, 0, 0, 0);
     {
@@ -279,8 +308,8 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
     // ------------------------------------------------------------ meshes
     m_meshDraws.clear();
     reg.view<MeshRendererComponent, WorldTransformComponent>().each(
-        [&](ecs::Entity, MeshRendererComponent& mr, WorldTransformComponent& w) {
-            if (!mr.visible || !w.activeInHierarchy) return;
+        [&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
+            if (!mr.visible || !w.activeInHierarchy || hiddenInEditor(e)) return;
             const int type = std::clamp(static_cast<int>(mr.mesh), 0, 3);
             if (!frustum.intersects(m_meshes[type].bounds.transformed(w.matrix))) {
                 ++m_stats.meshesCulled;
@@ -306,8 +335,8 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
     bool lastPixelArt = false, lastHandleValid = false;
     rhi::TextureHandle lastHandle;
     reg.view<SpriteRendererComponent, WorldTransformComponent>().each(
-        [&](ecs::Entity, SpriteRendererComponent& s, WorldTransformComponent& w) {
-            if (!s.visible || !w.activeInHierarchy) return;
+        [&](ecs::Entity e, SpriteRendererComponent& s, WorldTransformComponent& w) {
+            if (!s.visible || !w.activeInHierarchy || hiddenInEditor(e)) return;
             SpriteItem item;
             const float x0 = -s.pivot.x * s.size.x, x1 = (1.0f - s.pivot.x) * s.size.x;
             const float y0 = -s.pivot.y * s.size.y, y1 = (1.0f - s.pivot.y) * s.size.y;
@@ -357,14 +386,14 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
 
     m_stats.collectMs = cpu.elapsedMilliseconds();
     Stopwatch submit;
-    m_device.beginFrame(width, height);
+    const rhi::FrameStats before = m_device.frameStats();
     uploadUniforms();
 
     // ------------------------------------------------------------ passes
     const bool offscreen = samples > 1 || renderW != width || renderH != height;
     if (offscreen) ensureTargets(renderW, renderH, samples, samples > 1 && (renderW != width || renderH != height));
-    const rhi::RenderTargetHandle target = offscreen ? m_sceneTarget : rhi::RenderTargetHandle{};
-    m_device.beginPass(target, {true, cam.clearColor, true, 1.0f});
+    const rhi::RenderTargetHandle target = offscreen ? m_sceneTarget : outputTarget;
+    m_device.beginPass(target, {true, rv.clearColor, true, 1.0f});
     if (m_uniformCapacity > 0) {
         drawMeshes(m_meshDraws);
         drawSprites(m_spriteItems);
@@ -373,18 +402,17 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
     if (offscreen && m_sceneTarget) {
         if (m_resolveTarget) {
             m_device.blit(m_sceneTarget, m_resolveTarget, rhi::Filter::Nearest);  // MSAA resolve
-            m_device.blit(m_resolveTarget, {}, rhi::Filter::Linear);              // upscale
+            m_device.blit(m_resolveTarget, outputTarget, rhi::Filter::Linear);    // upscale
         } else {
-            m_device.blit(m_sceneTarget, {}, rhi::Filter::Linear);
+            m_device.blit(m_sceneTarget, outputTarget, rhi::Filter::Linear);
         }
     }
-    m_device.endFrame();
     m_stats.submitMs = submit.elapsedMilliseconds();
 
     if (m_frame % 300 == 0) sweepTextureCache();
     const rhi::FrameStats& ds = m_device.frameStats();
-    m_stats.drawCalls = ds.drawCalls;
-    m_stats.triangles = ds.triangles;
+    m_stats.drawCalls = ds.drawCalls - before.drawCalls;
+    m_stats.triangles = ds.triangles - before.triangles;
     m_stats.gpuTimeMs = ds.gpuTimeMs;
     m_stats.gpuWaitMs = ds.cpuWaitMs;
     m_stats.renderWidth = renderW;

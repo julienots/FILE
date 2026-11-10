@@ -152,6 +152,9 @@ struct DeviceInfo {
     u32 maxUniformBlockSize = 16384;
     bool gpuTimers = false;        ///< GPU frame time measurement available.
     bool softwareRenderer = false; ///< llvmpipe, SwiftShader... (affects profile selection).
+    /// True when render-target textures are stored bottom row first (OpenGL): sample them
+    /// with v flipped. False on Vulkan (negative-height viewport stores the top row first).
+    bool renderTargetsFlipY = false;
 };
 
 struct FrameStats {
@@ -218,6 +221,9 @@ public:
     virtual void bindIndexBuffer(BufferHandle buffer, IndexType type, usize offset = 0) = 0;
     virtual void bindUniformBuffer(u32 slot, BufferHandle buffer, usize offset, usize size) = 0;
     virtual void bindTexture(u32 unit, TextureHandle texture) = 0;
+    /// Must be called outside a pass before sampling a render-target texture in a later
+    /// pass (Vulkan layout transition; no-op on OpenGL).
+    virtual void prepareTextureForSampling(TextureHandle texture) { (void)texture; }
 
     virtual void draw(u32 vertexCount, u32 firstVertex = 0) = 0;
     virtual void drawIndexed(u32 indexCount, u32 firstIndex = 0, i32 baseVertex = 0) = 0;

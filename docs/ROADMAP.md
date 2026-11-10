@@ -50,12 +50,27 @@ Rien n'est coché sans code compilé, tests qui passent et un exemple qui l'util
 | Instancing, LOD, occlusion culling | ⬜ | phase 5 |
 | Recréation des ressources après perte du contexte Android | ⬜ | phase 8 |
 
-## Phase 3 — Éditeur visuel ⬜
+## Phase 3 — Éditeur visuel 🟡 (fondations complètes ; outils spécialisés dans les phases suivantes)
 
-Application `agr_editor` (Dear ImGui docking + thème AGR) : assistant de création de projet,
-viewport 2D/3D avec gizmos, Hierarchy (glisser-déposer, verrouillage, masquage), Inspector
-généré par la réflexion, Asset Browser, Console (déjà alimentée par `RingBufferSink`), undo/redo,
-mode Play/Pause/Stop sur une copie de la scène.
+| Élément | État | Où |
+|---|---|---|
+| Hub de projets : projets récents, assistant (2D / 2.5D / 3D, modèle, nom, emplacement, cibles) | ✅ | `editor/ui/src/EditorApp.cpp` |
+| Format de projet (dossier, `project.agrproject`, assets, scènes) | ✅ | `editor/core` |
+| Interface Dear ImGui (docking) rendue par la RHI : Vulkan, OpenGL, OpenGL ES | ✅ | `ImGuiRenderer` |
+| Thème AGR, polices Inter / JetBrains Mono, icônes vectorielles | ✅ | `Theme.cpp` |
+| Vue de scène 3D et 2D, caméra d'édition (orbite, survol, panoramique, zoom, cadrage) | ✅ | `ViewportPanel` |
+| Vue 2.5D dédiée | ⬜ | un projet 2.5D utilise la vue 3D |
+| Gizmos déplacer / pivoter / échelle, local / monde, magnétisme, multi-sélection | ✅ | ImGuizmo |
+| Grille adaptative, sélection par clic, icônes caméras / lumières, vue jeu | ✅ | |
+| Hiérarchie : création, parentage, réordonnancement, renommage, masquage, verrouillage, suppression, glisser-déposer, recherche, groupes / dossiers | ✅ | `HierarchyPanel` |
+| Inspecteur généré par la réflexion, ajout / retrait de composants (plugins compris) | ✅ | `InspectorPanel` |
+| Explorateur d'assets : dossiers, vignettes, recherche, import, renommer, supprimer avec confirmation | ✅ | `AssetBrowserPanel` |
+| Console, statistiques | ✅ | |
+| Annuler / rétablir, indicateur de modifications, confirmation avant perte | ✅ | `UndoStack` (instantanés) |
+| Jouer / pause / arrêter dans l'éditeur | ✅ | `EditorContext::play` |
+| Tests : logique d'édition (11 cas) + test de bout en bout par entrées réelles sur 3 API, sous ASan | ✅ | `tests/test_editor.cpp`, `--smoke-test` |
+| Prefabs en fichiers, éditeurs de matériaux / shaders / terrain / particules / animation / UI | ⬜ | phases 4, 5, 7, 9 |
+| Panneaux détachables en fenêtres système | ⬜ | rendu multi-fenêtres à ajouter à la RHI |
 
 ## Phase 4 — 2D ⬜
 Sprites, sprite sheets, tilemaps, calques, caméras 2D, parallaxe, animation par images et

@@ -55,7 +55,9 @@ Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
     m_scene = std::make_unique<Scene>("Untitled");
 
     // 6. Engine-level event wiring.
-    m_events.subscribe<WindowCloseRequestedEvent>([this](const WindowCloseRequestedEvent&) { requestQuit(); });
+    m_events.subscribe<WindowCloseRequestedEvent>([this](const WindowCloseRequestedEvent&) {
+        if (!m_closeHandler || m_closeHandler()) requestQuit();
+    });
     m_events.subscribe<AppLifecycleEvent>([this](const AppLifecycleEvent& e) {
         if (e.state == LifecycleState::DidEnterBackground) m_input.reset();
         if (e.state == LifecycleState::Terminating) requestQuit();

@@ -64,6 +64,8 @@ public:
     /// Copies the entries, oldest first (thread-safe).
     std::vector<Entry> snapshot() const;
     void clear();
+    /// Number of messages ever written (cheap change detection for UIs).
+    u64 totalWritten() const;
 
 private:
     mutable std::mutex m_mutex;
@@ -71,6 +73,7 @@ private:
     usize m_capacity;
     usize m_head = 0;
     bool m_wrapped = false;
+    u64 m_total = 0;
 };
 
 /// Global, thread-safe logger.
