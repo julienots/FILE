@@ -404,4 +404,49 @@ return H
     CHECK_FALSE(f.scripts.run("agr.find('Play'):setText('x')", &f.scene));  // no UIText: clear error
 }
 
+TEST_CASE("animation API: parameters, triggers, states and animation events") {
+    ScriptFixture f;
+    registerAnimationComponents();
+    AnimationSystem anim(f.vfs);
+    f.scripts.setAnimation(&anim);
+    AnimationClip run;
+    run.track("", "Transform", "position", 1).curve.setKey(0.0f, 3.0f);
+    run.events = {{0.05f, "step"}};
+    REQUIRE(f.vfs.writeText("assets://run.agranim", run.toJson()));
+    AnimatorController ctrl;
+    ctrl.parameters = {{"speed", ParameterType::Float, 0.0f}, {"hit", ParameterType::Trigger, 0.0f}};
+    ctrl.states = {{"Idle", "", "", 1.0f, {}}, {"Run", "assets://run.agranim", "", 1.0f, {}}};
+    ctrl.transitions = {{"Idle", "Run", {{"speed", ConditionOp::Greater, 0.5f}}, -1.0f, 0.0f}};
+    REQUIRE(f.vfs.writeText("assets://hero.agrctrl", ctrl.toJson()));
+    f.write("assets://s/anim.lua", R"lua(
+local A = { }
+function A:onStart()
+    self.entity:setParameter("speed", 1)
+    self.speed = self.entity:getParameter("speed")
+    self.bad = not pcall(function() self.entity:setParameter("nope", 1) end)
+    self.events = ""
+end
+function A:onStateEnter(name) self.events = self.events .. "enter:" .. name .. ";" end
+function A:onAnimationEvent(name) self.events = self.events .. name .. ";"; self.state = self.entity:currentState() end
+return A
+)lua");
+    const auto e = f.scripted("Hero", "assets://s/anim.lua");
+    f.scene.registry().emplace<AnimatorComponent>(e).controller = "assets://hero.agrctrl";
+    auto frame = [&] {
+        f.update();
+        anim.update(f.scene, 0.1f);
+        for (const AnimationEvent& ev : anim.takeEvents()) f.scripts.dispatchAnimation(f.scene, ev);
+    };
+    frame();
+    frame();
+    CHECK(f.scripts.field(e, "speed").value() == "1.0");
+    CHECK(f.scripts.field(e, "bad").value() == "true");
+    CHECK(f.scripts.field(e, "events").value() == "enter:Idle;enter:Run;step;");
+    CHECK(f.scripts.field(e, "state").value() == "Run");
+    CHECK(f.scene.registry().get<TransformComponent>(e).position.y == doctest::Approx(3.0f));
+    CHECK(f.scripts.run("agr.find('Hero'):playState('Idle')", &f.scene));
+    CHECK(anim.currentState(e) == "Idle");
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):playState('Fly')", &f.scene));
+}
+
 }  // TEST_SUITE

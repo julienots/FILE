@@ -1,0 +1,11 @@
+agr_add_module(animation
+    SOURCES
+        src/AnimationClip.cpp
+        src/AnimatorController.cpp
+        src/AnimationSystem.cpp
+        src/AnimationPlugin.cpp
+    PUBLIC_DEPS
+        agr::runtime
+        agr::twod
+    PRIVATE_DEPS
+        nlohmann_json::nlohmann_json)

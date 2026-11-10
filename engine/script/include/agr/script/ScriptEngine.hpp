@@ -5,6 +5,7 @@
 
 #include "agr/core/FileSystem.hpp"
 #include "agr/core/Time.hpp"
+#include "agr/animation/AnimationSystem.hpp"
 #include "agr/audio/AudioSystem.hpp"
 #include "agr/ui/UISystem.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
@@ -65,6 +66,7 @@ public:
     void setPhysics3D(Physics3DWorld* world);
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
+    void setAnimation(AnimationSystem* animation);
     /// Maximum run time of one callback before it is stopped (infinite loops).
     void setCallbackBudget(f64 seconds);
 
@@ -78,6 +80,8 @@ public:
     void dispatchUI(Scene& scene, const UIClickEvent& event);
     /// UI: `onValueChanged(value)` on the slider's script, then `message(slider, value)` on its target's.
     void dispatchUI(Scene& scene, const UIValueChangedEvent& event);
+    /// Animation: onAnimationEvent(name) / onStateEnter(name) on the animated entity's script.
+    void dispatchAnimation(Scene& scene, const AnimationEvent& event);
     /// Destroys every instance (onDestroy is called) — scene unloaded.
     void reset();
     u32 reloadChanged();

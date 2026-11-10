@@ -761,6 +761,7 @@ void openAgrLibrary(lua_State* L) {
     lua_setglobal(L, "require");
     openAudioBindings(L);
     openUIBindings(L);
+    openAnimationBindings(L);
 }
 
 } // namespace agr

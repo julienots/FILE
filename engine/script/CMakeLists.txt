@@ -6,10 +6,12 @@ agr_add_module(script
         src/ScriptPlugin.cpp
         src/ScriptAudio.cpp
         src/ScriptUI.cpp
+        src/ScriptAnimation.cpp
     PUBLIC_DEPS
         agr::runtime
         agr::audio
         agr::ui
+        agr::animation
         agr::physics2d
         agr::physics3d
     PRIVATE_DEPS

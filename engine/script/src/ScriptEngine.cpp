@@ -154,6 +154,7 @@ void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
 void ScriptEngine::setUI(UISystem* ui) { m->ui = ui; }
+void ScriptEngine::setAnimation(AnimationSystem* animation) { m->animation = animation; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }
 
 void ScriptEngine::reset() {
@@ -327,6 +328,18 @@ void ScriptEngine::dispatchUI(Scene& scene, const UIValueChangedEvent& e) {
     m->callOn(scene, e.entity, "onValueChanged", {}, true, e.value);
     if (const auto* sl = scene.registry().tryGet<UISliderComponent>(e.entity))
         m->callOn(scene, sl->target, sl->message, e.entity, true, e.value);
+}
+
+void ScriptEngine::dispatchAnimation(Scene& scene, const AnimationEvent& e) {
+    if (scene.generation() != m->sceneGeneration || !scene.valid(e.entity)) return;
+    m->scene = &scene;
+    auto it = m->instances.find(e.entity.packed());
+    if (it == m->instances.end() || !it->second.started) return;
+    const char* fn = e.kind == AnimationEvent::Kind::StateEnter ? "onStateEnter" : "onAnimationEvent";
+    m->call(it->second, fn, [&] {
+        lua_pushstring(m->L, e.name.c_str());
+        return 1;
+    });
 }
 
 void ScriptEngine::dispatchCollision(Scene& scene, const Collision2DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }

@@ -38,6 +38,7 @@ struct ScriptEngine::Impl {
     Physics3DWorld* physics3d = nullptr;
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
+    AnimationSystem* animation = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run
     FrameTime time;
     u64 sceneGeneration = 0;
@@ -87,5 +88,6 @@ void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs);
 /// API extensions, one file each: agr.audio and Entity:playSound()...
 void openAudioBindings(lua_State* L);
 void openUIBindings(lua_State* L);
+void openAnimationBindings(lua_State* L);
 
 } // namespace agr

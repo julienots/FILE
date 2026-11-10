@@ -30,7 +30,7 @@ public:
 private:
     std::unique_ptr<ScriptEngine> m_scripts;
     void bindPhysics(Engine& engine);
-    SubscriptionId m_collisions, m_collisions3D, m_uiClicks, m_uiValues;
+    SubscriptionId m_collisions, m_collisions3D, m_uiClicks, m_uiValues, m_animEvents;
     Engine* m_engine = nullptr;
     bool m_running = true;
     bool m_paused = false;

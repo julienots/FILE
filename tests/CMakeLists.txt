@@ -15,8 +15,9 @@ add_executable(agr_tests
     test_script.cpp
     test_physics3d.cpp
     test_audio.cpp
-    test_ui.cpp)
-target_link_libraries(agr_tests PRIVATE agr::ui agr::audio agr::physics3d agr::script agr::physics2d agr::twod agr::render agr::compiler_options doctest::doctest)
+    test_ui.cpp
+    test_animation.cpp)
+target_link_libraries(agr_tests PRIVATE agr::animation agr::ui agr::audio agr::physics3d agr::script agr::physics2d agr::twod agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_PLUGIN_PATH="$<TARGET_FILE:agr_plugin_spin>")
