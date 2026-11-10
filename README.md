@@ -81,7 +81,7 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **150 tests unitaires, 34 tests GPU au pixel près, un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu, HUD, UI Builder, aperçu mobile) **et le test d'un jeu exporté**, tous
+- **149 tests unitaires (+ 1 test d'export Android réel, à activer), 34 tests GPU au pixel près, un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu, HUD, UI Builder, aperçu mobile) **et le test d'un jeu exporté**, tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
