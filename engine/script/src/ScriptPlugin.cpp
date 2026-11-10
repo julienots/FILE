@@ -1,6 +1,7 @@
 #include "agr/script/ScriptPlugin.hpp"
 
 #include "agr/audio/AudioPlugin.hpp"
+#include "agr/ui/UIPlugin.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
@@ -24,12 +25,20 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_collisions3D = engine.events().subscribe<Collision3DEvent>([this](const Collision3DEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
     });
+    m_uiClicks = engine.events().subscribe<UIClickEvent>([this](const UIClickEvent& e) {
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchUI(m_engine->scene(), e);
+    });
+    m_uiValues = engine.events().subscribe<UIValueChangedEvent>([this](const UIValueChangedEvent& e) {
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchUI(m_engine->scene(), e);
+    });
     return {};
 }
 
 void ScriptPlugin::onUnload(Engine& engine) {
     engine.events().unsubscribe(m_collisions);
     engine.events().unsubscribe(m_collisions3D);
+    engine.events().unsubscribe(m_uiClicks);
+    engine.events().unsubscribe(m_uiValues);
     engine.registerService<ScriptPlugin>(nullptr);
     m_scripts.reset();
     m_engine = nullptr;
@@ -43,6 +52,8 @@ void ScriptPlugin::bindPhysics(Engine& engine) {
     m_scripts->setPhysics3D(p3 ? &p3->world() : nullptr);
     auto* audio = engine.service<AudioPlugin>();
     m_scripts->setAudio(audio ? &audio->audio() : nullptr);
+    auto* ui = engine.service<UIPlugin>();
+    m_scripts->setUI(ui ? &ui->ui() : nullptr);
 }
 
 void ScriptPlugin::setRunning(bool running) {

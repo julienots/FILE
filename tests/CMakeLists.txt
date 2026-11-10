@@ -14,12 +14,14 @@ add_executable(agr_tests
     test_physics2d.cpp
     test_script.cpp
     test_physics3d.cpp
-    test_audio.cpp)
-target_link_libraries(agr_tests PRIVATE agr::audio agr::physics3d agr::script agr::physics2d agr::twod agr::render agr::compiler_options doctest::doctest)
+    test_audio.cpp
+    test_ui.cpp)
+target_link_libraries(agr_tests PRIVATE agr::ui agr::audio agr::physics3d agr::script agr::physics2d agr::twod agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_PLUGIN_PATH="$<TARGET_FILE:agr_plugin_spin>")
 endif()
+target_compile_definitions(agr_tests PRIVATE AGR_TEST_FONT="${PROJECT_SOURCE_DIR}/editor/resources/fonts/Inter-Regular.ttf")
 set_target_properties(agr_tests PROPERTIES FOLDER "Tests")
 add_test(NAME agr_tests COMMAND agr_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(agr_tests PROPERTIES ENVIRONMENT "LSAN_OPTIONS=suppressions=${PROJECT_SOURCE_DIR}/tools/lsan.supp")

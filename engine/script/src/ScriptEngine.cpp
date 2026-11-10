@@ -153,6 +153,7 @@ void ScriptEngine::setScreenSize(math::Vec2 size) { m->screenSize = size; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
+void ScriptEngine::setUI(UISystem* ui) { m->ui = ui; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }
 
 void ScriptEngine::reset() {
@@ -294,6 +295,38 @@ void ScriptEngine::Impl::dispatch(Scene& s, ecs::Entity a, ecs::Entity b, bool b
     };
     notify(a, b);
     notify(b, a);
+}
+
+void ScriptEngine::Impl::callOn(Scene& s, ecs::Entity target, const std::string& function, ecs::Entity sender, bool withValue, double value) {
+    if (s.generation() != sceneGeneration || function.empty() || target.isNull() || !s.valid(target)) return;
+    scene = &s;
+    auto it = instances.find(target.packed());
+    if (it == instances.end() || !it->second.started) return;
+    call(it->second, function.c_str(), [&] {
+        int n = 0;
+        if (!sender.isNull()) {
+            pushEntity(L, sender);
+            ++n;
+        }
+        if (withValue) {
+            lua_pushnumber(L, value);
+            ++n;
+        }
+        return n;
+    });
+}
+
+void ScriptEngine::dispatchUI(Scene& scene, const UIClickEvent& e) {
+    if (!scene.valid(e.entity)) return;
+    m->callOn(scene, e.entity, "onClick", {}, false, 0.0);
+    if (const auto* b = scene.registry().tryGet<UIButtonComponent>(e.entity)) m->callOn(scene, b->target, b->message, e.entity, false, 0.0);
+}
+
+void ScriptEngine::dispatchUI(Scene& scene, const UIValueChangedEvent& e) {
+    if (!scene.valid(e.entity)) return;
+    m->callOn(scene, e.entity, "onValueChanged", {}, true, e.value);
+    if (const auto* sl = scene.registry().tryGet<UISliderComponent>(e.entity))
+        m->callOn(scene, sl->target, sl->message, e.entity, true, e.value);
 }
 
 void ScriptEngine::dispatchCollision(Scene& scene, const Collision2DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }

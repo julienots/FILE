@@ -37,12 +37,51 @@ struct RenderView {
     /// Renders directly into the target: no render scale, no MSAA (thumbnails, previews;
     /// avoids reallocating the off-screen targets shared with the main view).
     bool direct = false;
+    /// Draws the overlay (game UI) on top of the scene when an overlay source is set.
+    bool overlay = true;
 
     /// Projection matrix for an aspect ratio, in the clip space of the given backend.
     math::Mat4 projectionMatrix(float aspect, bool glClipSpace) const;
     /// View of the scene's first active primary camera, if any.
     static std::optional<RenderView> fromPrimaryCamera(Scene& scene);
 };
+
+/// Screen-space geometry drawn on top of the scene (game UI), in pixels of the
+/// output with the origin at the top-left corner. Same vertex layout as sprites.
+struct OverlayVertex {
+    math::Vec3 position;  ///< x, y in pixels; z unused (0).
+    math::Vec2 uv;
+    u32 color;            ///< RGBA8, sRGB.
+};
+struct OverlayCommand {
+    rhi::TextureHandle texture;  ///< Null = white.
+    u32 firstIndex = 0;
+    u32 indexCount = 0;
+};
+struct OverlayDrawList {
+    std::vector<OverlayVertex> vertices;
+    std::vector<u32> indices;
+    std::vector<OverlayCommand> commands;
+
+    void clear() {
+        vertices.clear();
+        indices.clear();
+        commands.clear();
+    }
+    bool empty() const { return indices.empty(); }
+    /// Axis-aligned quad from `min` to `max` (pixels) with texture coordinates `uv` (u0, v0, u1, v1).
+    void quad(math::Vec2 min, math::Vec2 max, math::Vec4 uv, u32 color, rhi::TextureHandle texture);
+};
+/// Produces the overlay of a view (implemented by the UI module).
+class OverlaySource {
+public:
+    virtual ~OverlaySource() = default;
+    /// Called once per rendered view, before any pass of the frame (texture uploads are allowed).
+    virtual void buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList& out) = 0;
+};
+
+/// Packs an RGBA color (0..1, sRGB) into the RGBA8 vertex format of sprites and overlays.
+u32 packColor(math::Vec4 color);
 
 struct RenderStats {
     u32 drawCalls = 0;
@@ -54,6 +93,7 @@ struct RenderStats {
     u32 spriteBatches = 0;
     u32 tilesVisible = 0;
     u32 particlesVisible = 0;
+    u32 overlayQuads = 0;    ///< Game UI quads (overlay).
     u32 lights2D = 0;
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
@@ -104,10 +144,13 @@ public:
     /// lives in shared dynamic buffers): create another Renderer for extra views.
     void renderView(Scene& scene, const RenderView& view, rhi::RenderTargetHandle target, u32 width, u32 height);
     bool glClipSpace() const { return m_glClipSpace; }
+    rhi::Device& device() { return m_device; }
     const RenderStats& stats() const { return m_stats; }
 
     /// Cached texture for a component asset URI (shared between components).
     rhi::TextureHandle resolveTexture(std::string_view uri, bool pixelArt);
+    /// Same, with the texture's information (size; state Loading / Failed); null info for uri "".
+    rhi::TextureHandle resolveTexture(std::string_view uri, bool pixelArt, const TextureInfo*& info);
     /// Linear (non-sRGB) texture: normal, metallic-roughness and occlusion maps.
     rhi::TextureHandle resolveDataTexture(std::string_view uri);
     /// Imported models and .agrmat materials used by mesh renderers.
@@ -115,6 +158,9 @@ public:
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
     /// Depth texture of the last shadow pass (null when shadows are off). Debug views.
     rhi::TextureHandle shadowMap() const;
+    /// Game UI drawn over every view with RenderView::overlay (null = none).
+    void setOverlaySource(OverlaySource* source) { m_overlaySource = source; }
+    OverlaySource* overlaySource() const { return m_overlaySource; }
     /// Sprite sheets used by sprites (sheet + frame) and tilemaps.
     void setSpriteSheets(SpriteSheetLibrary* sheets) { m_sheets = sheets; }
     static constexpr u32 kMaxLights2D = 16;
@@ -197,6 +243,7 @@ private:
     u32 pushUniforms(const void* data, usize size);
     void uploadUniforms();
     void drawSprites(const std::vector<SpriteItem>& items);
+    void drawOverlay();
     void sweepTextureCache();
 
     rhi::Device& m_device;
@@ -208,7 +255,12 @@ private:
     bool m_warnedSecondView = false;
     bool m_glClipSpace = true;
 
-    rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline;
+    rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
+    OverlaySource* m_overlaySource = nullptr;
+    OverlayDrawList m_overlay;
+    rhi::BufferHandle m_overlayVertices, m_overlayIndices;
+    usize m_overlayVertexCapacity = 0, m_overlayIndexCapacity = 0;
+    u32 m_overlayFrameOffset = 0;
     rhi::PipelineHandle m_pbrPipelines[6];  // [alphaMode * 2 + doubleSided]
     rhi::PipelineHandle m_shadowPipeline, m_shadowMaskPipeline, m_skyPipeline;
     rhi::BufferHandle m_skyVertices;

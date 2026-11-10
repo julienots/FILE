@@ -1,0 +1,11 @@
+agr_add_module(ui
+    SOURCES
+        src/UIComponents.cpp
+        src/Font.cpp
+        src/UISystem.cpp
+        src/UIPlugin.cpp
+    PUBLIC_DEPS
+        agr::render
+        agr::runtime
+    PRIVATE_DEPS
+        agr::stb)

@@ -337,4 +337,71 @@ return T
     CHECK(audio.stats().voices == 1);
 }
 
+TEST_CASE("UI API: clicks, slider changes, target messages, texts and visibility") {
+    ScriptFixture f;
+    registerUIComponents();
+    UISystem ui(f.vfs);
+    f.scripts.setUI(&ui);
+    f.write("assets://s/button.lua", R"lua(
+local B = {}
+function B:onClick() self.clicks = (self.clicks or 0) + 1 end
+return B
+)lua");
+    f.write("assets://s/hud.lua", R"lua(
+local H = {}
+function H:onStart() self.label = agr.find("Label") end
+function H:play(button) self.played = button:name(); self.label:setText(42) end
+function H:volume(slider, v) self.level = v end
+function H:onUpdate() self.over = agr.ui.pointerOverUI(); self.held = agr.ui.isPressed(agr.find("Play")) end
+function H:hide() self.label:setActive(false); self.visible = self.label:isActive() end
+return H
+)lua");
+    const auto canvas = f.scene.createEntity("Canvas");
+    f.scene.registry().emplace<UICanvasComponent>(canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto hud = f.scripted("HUD", "assets://s/hud.lua");
+    auto rect = [&](const char* name, math::Vec2 pos, math::Vec2 size) {
+        const auto e = f.scene.createEntity(name, canvas);
+        auto& r = f.scene.registry().emplace<UIRectComponent>(e);
+        r.anchorMin = r.anchorMax = r.pivot = {0, 0};
+        r.position = pos;
+        r.size = size;
+        return e;
+    };
+    const auto play = rect("Play", {0, 0}, {100, 50});
+    f.scene.registry().emplace<UIImageComponent>(play);
+    auto& b = f.scene.registry().emplace<UIButtonComponent>(play);
+    b.target = hud;
+    b.message = "play";
+    f.scene.registry().emplace<ScriptComponent>(play).script = "assets://s/button.lua";
+    const auto slider = rect("Volume", {0, 100}, {220, 20});
+    auto& sl = f.scene.registry().emplace<UISliderComponent>(slider);
+    sl.target = hud;
+    sl.message = "volume";
+    const auto label = rect("Label", {0, 200}, {100, 40});
+    f.scene.registry().emplace<UITextComponent>(label).text = "0";
+    f.update();
+    ui.layout(f.scene, 800, 600);
+
+    auto pump = [&](std::initializer_list<UIPointer> p) {
+        ui.processInput(f.scene, std::span<const UIPointer>(p.begin(), p.size()));
+        for (const UIEvent& e : ui.takeEvents()) {
+            if (e.type == UIEventType::Click) f.scripts.dispatchUI(f.scene, UIClickEvent{e.entity});
+            else f.scripts.dispatchUI(f.scene, UIValueChangedEvent{e.entity, e.value});
+        }
+        f.update();
+    };
+    pump({{0, {50, 25}, true}});
+    CHECK(f.scripts.field(hud, "over").value() == "true");
+    CHECK(f.scripts.field(hud, "held").value() == "true");
+    pump({{0, {50, 25}, false}});
+    CHECK(f.scripts.field(play, "clicks").value() == "1");
+    CHECK(f.scripts.field(hud, "played").value() == "Play");
+    CHECK(f.scene.registry().get<UITextComponent>(label).text == "42");
+    pump({{0, {60, 110}, true}});  // usable range 10 .. 210
+    CHECK(f.scripts.field(hud, "level").value() == "0.25");
+    CHECK(f.scripts.run("local h = agr.find('HUD'):script(); h:hide(); assert(h.visible == false)", &f.scene));
+    CHECK_FALSE(f.scene.registry().get<StateComponent>(label).active);
+    CHECK_FALSE(f.scripts.run("agr.find('Play'):setText('x')", &f.scene));  // no UIText: clear error
+}
+
 }  // TEST_SUITE

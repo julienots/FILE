@@ -221,9 +221,14 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
             }
             case SDL_EVENT_TEXT_INPUT: input.appendText(e.text.text); break;
 
-            case SDL_EVENT_MOUSE_MOTION: input.setMousePosition({e.motion.x, e.motion.y}); break;
+            // Mouse events synthesized by SDL from touches are ignored: touches are reported as such
+            // (otherwise one finger would act twice, as a touch and as the mouse).
+            case SDL_EVENT_MOUSE_MOTION:
+                if (e.motion.which != SDL_TOUCH_MOUSEID) input.setMousePosition({e.motion.x, e.motion.y});
+                break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP: {
+                if (e.button.which == SDL_TOUCH_MOUSEID) break;
                 const MouseButton b = toMouseButton(e.button.button);
                 input.setMouseButton(b, e.button.down);
                 input.setMousePosition({e.button.x, e.button.y});

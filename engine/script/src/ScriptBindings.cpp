@@ -356,6 +356,18 @@ int e_destroy(lua_State* L) {
     sceneOf(L).destroyDeferred(checkEntity(L, 1));  // at the end of the frame: safe during callbacks
     return 0;
 }
+int e_setActive(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    sceneOf(L).registry().get<StateComponent>(e).active = lua_toboolean(L, 2) != 0;
+    return 0;
+}
+int e_isActive(lua_State* L) {  // the entity's own flag (not its parents')
+    const ecs::Entity e = checkEntity(L, 1);
+    const auto* st = sceneOf(L).registry().tryGet<StateComponent>(e);
+    lua_pushboolean(L, !st || st->active);
+    return 1;
+}
 int e_script(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
     auto& m = implOf(L);
@@ -703,7 +715,7 @@ void openAgrLibrary(lua_State* L) {
         {"add", e_add}, {"remove", e_remove}, {"parent", e_parent}, {"children", e_children}, {"find", e_find},
         {"destroy", e_destroy}, {"script", e_script}, {"velocity", e_velocity}, {"setVelocity", e_setVelocity},
         {"applyForce", e_applyForce}, {"applyImpulse", e_applyImpulse}, {"setAngularVelocity", e_setAngularVelocity},
-        {nullptr, nullptr}};
+        {"setActive", e_setActive}, {"isActive", e_isActive}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, methods);
     lua_setfield(L, -2, "__index");
@@ -748,6 +760,7 @@ void openAgrLibrary(lua_State* L) {
     lua_pushcfunction(L, a_require);
     lua_setglobal(L, "require");
     openAudioBindings(L);
+    openUIBindings(L);
 }
 
 } // namespace agr

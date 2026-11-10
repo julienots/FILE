@@ -37,6 +37,7 @@ struct ScriptEngine::Impl {
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
     AudioSystem* audio = nullptr;
+    UISystem* ui = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run
     FrameTime time;
     u64 sceneGeneration = 0;
@@ -60,6 +61,8 @@ struct ScriptEngine::Impl {
     void reportError(const std::string& where, const char* message);
     void resetInstances();
     void dispatch(Scene& scene, ecs::Entity a, ecs::Entity b, bool begin, bool trigger);
+    /// Calls target_script:function([sender], [value]) if the target has a started script defining it.
+    void callOn(Scene& scene, ecs::Entity target, const std::string& function, ecs::Entity sender, bool withValue, double value);
 };
 
 /// Registry key of the Impl pointer (light userdata).
@@ -83,5 +86,6 @@ void addEntityMethods(lua_State* L, const luaL_Reg* methods);
 void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs);
 /// API extensions, one file each: agr.audio and Entity:playSound()...
 void openAudioBindings(lua_State* L);
+void openUIBindings(lua_State* L);
 
 } // namespace agr

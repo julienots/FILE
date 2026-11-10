@@ -34,11 +34,6 @@ static_assert(sizeof(Lights2DUniforms) == 528);
 
 using detail::srgbToLinear;
 
-u32 packColor(Vec4 c) {
-    auto b = [](float v) { return static_cast<u32>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
-    return b(c.x) | (b(c.y) << 8) | (b(c.z) << 16) | (b(c.w) << 24);
-}
-
 } // namespace
 
 Renderer::Renderer(rhi::Device& device, AssetManager& assets) : m_device(device), m_assets(assets) {}
@@ -66,6 +61,9 @@ Renderer::~Renderer() {
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);
+    m_device.destroyPipeline(m_overlayPipeline);
+    m_device.destroyBuffer(m_overlayVertices);
+    m_device.destroyBuffer(m_overlayIndices);
     m_device.destroyTexture(m_softParticle);
 }
 
@@ -102,6 +100,13 @@ Status Renderer::createPipelines() {
     auto ap = m_device.createPipeline(additive);
     if (!ap) return ap.error();
     m_spriteAdditivePipeline = ap.value();
+
+    rhi::PipelineDesc overlay = sprite;
+    overlay.debugName = "agr.overlay";
+    overlay.depthTest = false;  // drawn last, over everything
+    auto op = m_device.createPipeline(overlay);
+    if (!op) return op.error();
+    m_overlayPipeline = op.value();
 
     rhi::PipelineDesc lit = sprite;
     lit.debugName = "agr.sprite.lit";
@@ -149,6 +154,12 @@ Status Renderer::createMeshes() {
 }
 
 rhi::TextureHandle Renderer::resolveTexture(std::string_view uri, bool pixelArt) {
+    const TextureInfo* info = nullptr;
+    return resolveTexture(uri, pixelArt, info);
+}
+
+rhi::TextureHandle Renderer::resolveTexture(std::string_view uri, bool pixelArt, const TextureInfo*& info) {
+    info = nullptr;
     if (uri.empty()) return m_assets.whiteTexture();
     TextureCache& cache = pixelArt ? m_pixelTextureCache : m_textureCache;
     auto it = cache.find(uri);  // no allocation on the hot path
@@ -158,6 +169,7 @@ rhi::TextureHandle Renderer::resolveTexture(std::string_view uri, bool pixelArt)
         it = cache.emplace(std::string(uri), CachedTexture{m_assets.loadTexture(uri, o), 0}).first;
     }
     it->second.lastUsedFrame = m_frame;
+    info = m_assets.texture(it->second.asset);
     return m_assets.gpuTexture(it->second.asset);
 }
 
@@ -555,6 +567,18 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         return a.index < b.index;  // deterministic
     });
 
+    // Overlay (game UI): built by its source, drawn in pixels with its own projection.
+    m_overlay.clear();
+    if (m_overlaySource && rv.overlay) {
+        m_overlaySource->buildOverlay(scene, width, height, m_overlay);
+        if (!m_overlay.empty()) {
+            FrameUniforms ui = frame;
+            ui.viewProj = Mat4::orthographic(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f, range);
+            m_overlayFrameOffset = pushUniforms(&ui, sizeof ui);
+            m_stats.overlayQuads = static_cast<u32>(m_overlay.indices.size() / 6);
+        }
+    }
+
     m_stats.collectMs = cpu.elapsedMilliseconds();
     Stopwatch submit;
     const rhi::FrameStats before = m_device.frameStats();
@@ -573,6 +597,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         drawMeshItems(m_transparentItems, static_cast<u32>(m_opaqueItems.size()), false);
         drawSprites(m_spriteItems);
     }
+    if (!offscreen) drawOverlay();  // same pass: the overlay ignores depth
     m_device.endPass();
     if (offscreen && m_sceneTarget) {
         if (m_resolveTarget) {
@@ -580,6 +605,12 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             m_device.blit(m_resolveTarget, outputTarget, rhi::Filter::Linear);    // upscale
         } else {
             m_device.blit(m_sceneTarget, outputTarget, rhi::Filter::Linear);
+        }
+        if (!m_overlay.empty()) {
+            // At full output resolution (crisp text), without MSAA.
+            m_device.beginPass(outputTarget, {false, {}, false, 1.0f});
+            drawOverlay();
+            m_device.endPass();
         }
     }
     m_stats.submitMs = submit.elapsedMilliseconds();
@@ -655,6 +686,54 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
             batchStart = i;
         }
     }
+}
+
+void Renderer::drawOverlay() {
+    if (m_overlay.empty() || m_uniformCapacity == 0) return;
+    const usize vbytes = m_overlay.vertices.size() * sizeof(OverlayVertex), ibytes = m_overlay.indices.size() * sizeof(u32);
+    if (vbytes > m_overlayVertexCapacity || ibytes > m_overlayIndexCapacity) {
+        m_device.destroyBuffer(m_overlayVertices);
+        m_device.destroyBuffer(m_overlayIndices);
+        m_overlayVertexCapacity = std::max<usize>(64 * 1024, std::bit_ceil(vbytes));
+        m_overlayIndexCapacity = std::max<usize>(32 * 1024, std::bit_ceil(ibytes));
+        auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Dynamic, m_overlayVertexCapacity, nullptr, "agr.overlay.vb"});
+        auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Dynamic, m_overlayIndexCapacity, nullptr, "agr.overlay.ib"});
+        if (!vb || !ib) {
+            AGR_LOG_ERROR("Render", "overlay buffer allocation failed");
+            m_overlayVertexCapacity = m_overlayIndexCapacity = 0;
+            return;
+        }
+        m_overlayVertices = vb.value();
+        m_overlayIndices = ib.value();
+    }
+    (void)m_device.updateBuffer(m_overlayVertices, 0, m_overlay.vertices.data(), vbytes);
+    (void)m_device.updateBuffer(m_overlayIndices, 0, m_overlay.indices.data(), ibytes);
+    m_device.bindPipeline(m_overlayPipeline);
+    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, m_overlayFrameOffset, sizeof(FrameUniforms));
+    m_device.bindVertexBuffer(m_overlayVertices);
+    m_device.bindIndexBuffer(m_overlayIndices, rhi::IndexType::U32);
+    for (const OverlayCommand& c : m_overlay.commands) {
+        if (c.indexCount == 0) continue;
+        m_device.bindTexture(0, c.texture ? c.texture : m_assets.whiteTexture());
+        m_device.drawIndexed(c.indexCount, c.firstIndex);
+    }
+}
+
+void OverlayDrawList::quad(math::Vec2 mn, math::Vec2 mx, math::Vec4 uv, u32 color, rhi::TextureHandle texture) {
+    const u32 base = static_cast<u32>(vertices.size());
+    vertices.push_back({{mn.x, mn.y, 0.0f}, {uv.x, uv.y}, color});
+    vertices.push_back({{mx.x, mn.y, 0.0f}, {uv.z, uv.y}, color});
+    vertices.push_back({{mx.x, mx.y, 0.0f}, {uv.z, uv.w}, color});
+    vertices.push_back({{mn.x, mx.y, 0.0f}, {uv.x, uv.w}, color});
+    if (commands.empty() || commands.back().texture != texture)
+        commands.push_back({texture, static_cast<u32>(indices.size()), 0});
+    for (u32 i : {0u, 1u, 2u, 0u, 2u, 3u}) indices.push_back(base + i);
+    commands.back().indexCount += 6;
+}
+
+u32 packColor(math::Vec4 c) {
+    auto b = [](float v) { return static_cast<u32>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+    return b(c.x) | (b(c.y) << 8) | (b(c.z) << 16) | (b(c.w) << 24);
 }
 
 } // namespace agr
