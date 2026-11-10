@@ -32,6 +32,8 @@ public:
     AssetManager* assets() const { return m_assets.get(); }
     Renderer* renderer() const { return m_renderer.get(); }
     SpriteSheetLibrary* spriteSheets() const { return m_sheets.get(); }
+    ModelLibrary* models() const { return m_models.get(); }
+    MaterialLibrary* materials() const { return m_materials.get(); }
 
     /// Switches quality at runtime (settings menu). Returns the applied profile.
     GraphicsProfile applyProfile(Engine& engine, GraphicsTier tier);
@@ -47,6 +49,8 @@ private:
     std::unique_ptr<rhi::Device> m_device;
     std::unique_ptr<AssetManager> m_assets;
     std::unique_ptr<SpriteSheetLibrary> m_sheets;
+    std::unique_ptr<ModelLibrary> m_models;
+    std::unique_ptr<MaterialLibrary> m_materials;
     std::unique_ptr<Renderer> m_renderer;
     std::string m_screenshotUri;
     bool m_hotReload = false;

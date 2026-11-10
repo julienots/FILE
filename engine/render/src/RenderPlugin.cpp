@@ -56,10 +56,16 @@ Status RenderPlugin::onLoad(Engine& engine) {
     engine.registerService<AssetManager>(m_assets.get());
     m_sheets = std::make_unique<SpriteSheetLibrary>(engine.vfs());
     engine.registerService<SpriteSheetLibrary>(m_sheets.get());
+    m_models = std::make_unique<ModelLibrary>(engine.vfs(), engine.jobs(), m_device.get());
+    engine.registerService<ModelLibrary>(m_models.get());
+    m_materials = std::make_unique<MaterialLibrary>(engine.vfs());
+    engine.registerService<MaterialLibrary>(m_materials.get());
 
     if (m_device) {
         m_renderer = std::make_unique<Renderer>(*m_device, *m_assets);
         m_renderer->setSpriteSheets(m_sheets.get());
+        m_renderer->setModels(m_models.get());
+        m_renderer->setMaterials(m_materials.get());
         if (Status s = m_renderer->initialize(); !s) {
             m_renderer.reset();
             return s;
@@ -117,9 +123,12 @@ void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
             m_hotReloadTimer = 0.0;
             m_assets->reloadChanged();
             m_sheets->reloadChanged();
+            m_models->reloadChanged();
+            m_materials->reloadChanged();
         }
     }
     m_assets->update();
+    m_models->update();
 }
 
 void RenderPlugin::onRender(Engine& engine, const FrameTime&) {
@@ -149,7 +158,11 @@ void RenderPlugin::onUnload(Engine& engine) {
     engine.registerService<rhi::Device>(nullptr);
     engine.registerService<AssetManager>(nullptr);
     engine.registerService<SpriteSheetLibrary>(nullptr);
+    engine.registerService<ModelLibrary>(nullptr);
+    engine.registerService<MaterialLibrary>(nullptr);
     m_renderer.reset();
+    m_models.reset();  // before the device: owns GPU buffers
+    m_materials.reset();
     m_sheets.reset();
     m_assets.reset();
     m_device.reset();

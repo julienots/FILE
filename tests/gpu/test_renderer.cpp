@@ -145,20 +145,20 @@ TEST_CASE("lit meshes: back-face culling, lighting and frustum culling") {
     m.color = {1, 0, 0, 1};
     f.scene.registry().get<TransformComponent>(quad).scale = Vec3{2.0f};
     const auto far = f.scene.createEntity("Behind camera");
-    f.scene.registry().emplace<MeshRendererComponent>(far);
+    f.scene.registry().emplace<MeshRendererComponent>(far).castShadows = false;  // would shadow the quad (tested separately)
     f.scene.registry().get<TransformComponent>(far).position = {0, 0, 50};
 
     f.frame();
     CHECK(f.renderer.stats().meshesVisible == 1);
     CHECK(f.renderer.stats().meshesCulled == 1);
     const Rgba lit = pixel(*gpu().device, 32, 32);
-    CHECK_MESSAGE(lit.r > 240, lit);  // fully lit red...
-    // ...plus a white Blinn-Phong highlight (camera faces the light): equal green and blue.
+    CHECK_MESSAGE(lit.r > 225, lit);  // fully lit red (ACES maps 1.0 to ~0.8 before gamma)...
+    // ...plus a white GGX highlight (camera faces the light): equal green and blue.
     CHECK_MESSAGE(std::abs(int(lit.g) - int(lit.b)) <= 2, lit);
-    CHECK(lit.g > 60);
-    // Away from the highlight centre the surface is pure diffuse red.
+    CHECK_MESSAGE(lit.g > 40, lit);
+    // Away from the highlight centre the surface is mostly diffuse red.
     const Rgba edge = pixel(*gpu().device, 14, 32);
-    CHECK_MESSAGE(edge.r > 240, edge);
+    CHECK_MESSAGE(edge.r > 215, edge);
     CHECK_MESSAGE(edge.g < lit.g, edge);
 
     // Rotated 180 degrees the quad shows its back face: culled, background visible.

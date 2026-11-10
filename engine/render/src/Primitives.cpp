@@ -12,17 +12,19 @@ namespace {
 void addFace(MeshData& m, Vec3 n, Vec3 t, float halfSize, bool centreOnOrigin) {
     const Vec3 b = math::cross(n, t);  // guarantees counter-clockwise winding seen from +n
     const Vec3 c = centreOnOrigin ? Vec3{} : n * halfSize;
-    const auto base = static_cast<u16>(m.vertices.size());
-    m.vertices.push_back({c + (-t - b) * halfSize, n, {0, 1}});
-    m.vertices.push_back({c + (t - b) * halfSize, n, {1, 1}});
-    m.vertices.push_back({c + (t + b) * halfSize, n, {1, 0}});
-    m.vertices.push_back({c + (-t + b) * halfSize, n, {0, 0}});
-    for (u16 i : {0, 1, 2, 0, 2, 3}) m.indices.push_back(static_cast<u16>(base + i));
+    const auto base = static_cast<u32>(m.vertices.size());
+    const math::Vec4 tangent(t, 1.0f);
+    m.vertices.push_back({c + (-t - b) * halfSize, n, tangent, {0, 1}});
+    m.vertices.push_back({c + (t - b) * halfSize, n, tangent, {1, 1}});
+    m.vertices.push_back({c + (t + b) * halfSize, n, tangent, {1, 0}});
+    m.vertices.push_back({c + (-t + b) * halfSize, n, tangent, {0, 0}});
+    for (u32 i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
 }
 
-void computeBounds(MeshData& m) {
-    m.bounds = {};
-    for (const auto& v : m.vertices) m.bounds.expand(v.position);
+/// One submesh covering every index (default material slot).
+void finish(MeshData& m) {
+    m.submeshes = {{0, static_cast<u32>(m.indices.size()), -1}};
+    computeBounds(m);
 }
 
 } // namespace
@@ -35,21 +37,21 @@ MeshData makeCube() {
     addFace(m, {0, -1, 0}, {1, 0, 0}, 0.5f, false);
     addFace(m, {0, 0, 1}, {1, 0, 0}, 0.5f, false);
     addFace(m, {0, 0, -1}, {-1, 0, 0}, 0.5f, false);
-    computeBounds(m);
+    finish(m);
     return m;
 }
 
 MeshData makePlane() {
     MeshData m;
     addFace(m, {0, 1, 0}, {1, 0, 0}, 0.5f, true);
-    computeBounds(m);
+    finish(m);
     return m;
 }
 
 MeshData makeQuad() {
     MeshData m;
     addFace(m, {0, 0, 1}, {1, 0, 0}, 0.5f, true);
-    computeBounds(m);
+    finish(m);
     return m;
 }
 
@@ -62,19 +64,19 @@ MeshData makeSphere(u32 segments, u32 rings) {
         for (u32 j = 0; j <= segments; ++j) {
             const float phi = 2.0f * math::kPi * static_cast<float>(j) / static_cast<float>(segments);
             const Vec3 n{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi)};
-            m.vertices.push_back({n * 0.5f, n, {static_cast<float>(j) / segments, static_cast<float>(i) / rings}});
+            m.vertices.push_back({n * 0.5f, n, {}, {static_cast<float>(j) / segments, static_cast<float>(i) / rings}});
         }
     }
     const u32 stride = segments + 1;
     for (u32 i = 0; i < rings; ++i) {
         for (u32 j = 0; j < segments; ++j) {
-            const auto a = static_cast<u16>(i * stride + j);
-            const auto b = static_cast<u16>(a + stride);
-            for (u16 idx : {a, static_cast<u16>(a + 1), b, static_cast<u16>(a + 1), static_cast<u16>(b + 1), b})
-                m.indices.push_back(idx);
+            const u32 a = i * stride + j;
+            const u32 b = a + stride;
+            for (u32 idx : {a, a + 1, b, a + 1, b + 1, b}) m.indices.push_back(idx);
         }
     }
-    computeBounds(m);
+    generateTangents(m);
+    finish(m);
     return m;
 }
 

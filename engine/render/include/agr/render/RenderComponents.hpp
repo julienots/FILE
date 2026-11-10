@@ -34,27 +34,71 @@ struct CameraComponent {
 /// Visible orthographic half extents for a screen aspect ratio (see ScaleMode).
 math::Vec2 orthographicHalfExtents(ScaleMode mode, float orthographicSize, float referenceAspect, float screenAspect);
 
-/// Sun-like light shining along the entity's forward axis (-Z).
+/// Sun-like light shining along the entity's forward axis (-Z). The first active
+/// one lights the scene and, when castShadows is on, casts shadows (shadow map).
 struct DirectionalLightComponent {
     math::Color color{1.0f, 0.97f, 0.92f, 1.0f};
     float intensity = 1.0f;
+    bool castShadows = true;
+    float shadowDistance = 40.0f;  ///< Shadows are drawn up to this distance from the camera.
+    float shadowStrength = 1.0f;   ///< 0 = no darkening, 1 = full shadow.
 };
 
-/// Scene-wide ambient light (the first active one is used).
+/// Light radiating in every direction from the entity, up to `range` meters.
+struct PointLightComponent {
+    math::Color color{1.0f, 0.95f, 0.85f, 1.0f};
+    float intensity = 5.0f;
+    float range = 10.0f;
+};
+
+/// Cone of light along the entity's forward axis (-Z).
+struct SpotLightComponent {
+    math::Color color{1.0f, 0.95f, 0.85f, 1.0f};
+    float intensity = 10.0f;
+    float range = 15.0f;
+    float innerAngle = math::radians(20.0f);  ///< Half angle of the fully lit cone.
+    float outerAngle = math::radians(30.0f);  ///< Half angle where the light reaches zero.
+};
+
+enum class SkyMode : i32 {
+    CameraColor = 0,  ///< Background = the camera clear color; flat ambient light.
+    Gradient = 1,     ///< Procedural sky (zenith, horizon, ground, sun disc); hemisphere ambient light.
+};
+
+/// Scene-wide ambient light, sky, fog and exposure (the first active one is used).
 struct EnvironmentComponent {
-    math::Color ambientColor{0.55f, 0.6f, 0.7f, 1.0f};
+    math::Color ambientColor{0.55f, 0.6f, 0.7f, 1.0f};  ///< Flat ambient (CameraColor sky).
     float ambientIntensity = 0.35f;
+    SkyMode sky = SkyMode::CameraColor;
+    math::Color skyColor{0.30f, 0.50f, 0.82f, 1.0f};
+    math::Color horizonColor{0.78f, 0.84f, 0.90f, 1.0f};
+    math::Color groundColor{0.30f, 0.28f, 0.26f, 1.0f};
+    bool sunDisc = true;
+    bool fog = false;
+    math::Color fogColor{0.75f, 0.80f, 0.86f, 1.0f};
+    float fogStart = 20.0f;
+    float fogEnd = 150.0f;
+    float exposure = 1.0f;  ///< Multiplier before tone mapping (ACES).
 };
 
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };
 
-/// Draws a built-in mesh (imported meshes arrive in phase 5).
+/// Draws a built-in mesh or one mesh of an imported model with PBR materials.
+/// Material choice: `material` (.agrmat) if set, else the model's own materials,
+/// else a built-in material made of texture / metallic / roughness. `color` tints
+/// all of them (per instance: instancing still applies).
 struct MeshRendererComponent {
     PrimitiveMesh mesh = PrimitiveMesh::Cube;
-    std::string texture;               ///< Asset URI, e.g. "assets://textures/crate.png". Empty = none.
+    std::string texture;               ///< Built-in material: base color texture. Empty = none.
     math::Color color{1.0f, 1.0f, 1.0f, 1.0f};  ///< sRGB tint.
     math::Vec2 uvScale{1.0f, 1.0f};    ///< Texture tiling.
     bool visible = true;
+    std::string model;                 ///< Imported model (.gltf, .glb, .obj, .fbx). Empty = built-in mesh.
+    i32 meshIndex = 0;                 ///< Mesh of the model.
+    std::string material;              ///< Optional .agrmat replacing every material of the mesh.
+    float metallic = 0.0f;             ///< Built-in material.
+    float roughness = 0.5f;            ///< Built-in material.
+    bool castShadows = true;
 };
 
 /// Textured quad in the entity's XY plane. Sorted by layer, then order, then depth.

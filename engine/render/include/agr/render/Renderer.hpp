@@ -9,12 +9,17 @@
 #include "agr/assets/AssetManager.hpp"
 #include "agr/math/Geometry.hpp"
 #include "agr/render/GraphicsProfile.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/rhi/Rhi.hpp"
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
+
+namespace detail {
+struct FrameUniforms;
+}
 
 /// A camera independent of the scene (editor viewports, previews, split screen).
 struct RenderView {
@@ -47,6 +52,10 @@ struct RenderStats {
     u32 tilesVisible = 0;
     u32 particlesVisible = 0;
     u32 lights2D = 0;
+    u32 lights = 0;          ///< Point / spot lights shading this frame.
+    u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
+    u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map.
+    u32 modelsLoading = 0;   ///< Mesh renderers waiting for their model.
     u32 renderWidth = 0, renderHeight = 0;  ///< Internal 3D resolution.
     u32 msaaSamples = 1;
     f64 cpuMs = 0.0;         ///< Total CPU time of render().
@@ -60,14 +69,17 @@ struct RenderStats {
     bool hasCamera = false;
 };
 
-/// Forward renderer (phase 2): lit built-in meshes + batched sprites, frustum
-/// culling, render scale and MSAA from the graphics profile.
+/// Forward renderer: PBR meshes (built-in and imported) with directional, point and
+/// spot lights, a directional shadow map, procedural sky, fog and ACES tone mapping,
+/// plus batched 2D sprites, tilemaps and particles. Render scale, MSAA, shadow
+/// quality and light count come from the graphics profile.
 ///
 /// Frame structure:
-///   1. collect visible meshes / sprites from the scene, cull against the camera frustum
-///   2. write frame + per-object uniforms into one buffer (single upload)
-///   3. pass: opaque meshes (sorted by mesh then texture), then sprites
-///      (sorted by layer, order, depth back-to-front, texture) in as few batches as possible
+///   1. collect visible mesh parts (camera frustum) and shadow casters (light frustum),
+///      sprites, lights; one uniform buffer upload and one instance buffer upload
+///   2. shadow pass (depth only) when a directional light casts shadows
+///   3. main pass: opaque and alpha-tested meshes sorted by pipeline / material / mesh and
+///      merged into instanced draws, sky, transparent meshes back to front, sprites
 ///   4. MSAA resolve and/or upscale to the backbuffer when rendering off-screen
 class Renderer {
 public:
@@ -92,11 +104,18 @@ public:
 
     /// Cached texture for a component asset URI (shared between components).
     rhi::TextureHandle resolveTexture(std::string_view uri, bool pixelArt);
+    /// Linear (non-sRGB) texture: normal, metallic-roughness and occlusion maps.
+    rhi::TextureHandle resolveDataTexture(std::string_view uri);
+    /// Imported models and .agrmat materials used by mesh renderers.
+    void setModels(ModelLibrary* models) { m_models = models; }
+    void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
+    /// Depth texture of the last shadow pass (null when shadows are off). Debug views.
+    rhi::TextureHandle shadowMap() const;
     /// Sprite sheets used by sprites (sheet + frame) and tilemaps.
     void setSpriteSheets(SpriteSheetLibrary* sheets) { m_sheets = sheets; }
     static constexpr u32 kMaxLights2D = 16;
     /// Number of distinct texture URIs referenced recently by components.
-    usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size(); }
+    usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size() + m_dataTextureCache.size(); }
 
 private:
     struct GpuMesh {
@@ -104,10 +123,27 @@ private:
         u32 indexCount = 0;
         math::Aabb bounds;
     };
-    struct MeshDraw {
-        PrimitiveMesh mesh;
-        rhi::TextureHandle texture;
-        u32 uniformOffset;
+    /// Material resolved for this frame: uniforms, textures, pipeline.
+    struct FrameMaterial {
+        u32 uniformOffset = 0;
+        rhi::TextureHandle textures[5];  // base color, metallic-roughness, normal, occlusion, emissive
+        u32 pipeline = 0;                // alphaMode * 2 + doubleSided
+    };
+    /// Per-instance vertex stream of the 3D pipelines (locations 4..11).
+    struct InstanceData {
+        math::Mat4 model;
+        math::Vec4 normal[3];  ///< Columns of the normal matrix (xyz).
+        math::Vec4 color;      ///< Linear tint.
+    };
+    static_assert(sizeof(InstanceData) == 128);
+    /// One submesh of one entity.
+    struct MeshItem {
+        rhi::BufferHandle vertices, indices;
+        u32 firstIndex = 0, indexCount = 0;
+        u32 material = 0;  // index into m_frameMaterials
+        u32 pipeline = 0;
+        u32 instance = 0;  // index into m_instances
+        float depth = 0.0f;
     };
     struct SpriteVertex {
         math::Vec3 position;
@@ -142,12 +178,20 @@ private:
     using TextureCache = std::unordered_map<std::string, CachedTexture, StringHash, std::equal_to<>>;
 
     Status createPipelines();
+    Status create3DPipelines();
     Status createMeshes();
+    /// 3D part of a frame (Renderer3D.cpp).
+    void collect3D(Scene& scene, const RenderView& rv, const math::Mat4& view, const math::Mat4& viewProj, const math::Frustum& frustum,
+                   float aspect, const std::function<bool(ecs::Entity)>& hidden, detail::FrameUniforms& frame);
+    u32 materialSlot(u64 key, const MaterialData& material, math::Vec2 uvScale);
+    void uploadInstances();
+    void drawShadowPass();
+    void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow);
+    void drawSky();
     void ensureTargets(u32 renderW, u32 renderH, u32 samples, bool needResolve);
     void releaseTargets();
     u32 pushUniforms(const void* data, usize size);
     void uploadUniforms();
-    void drawMeshes(const std::vector<MeshDraw>& draws);
     void drawSprites(const std::vector<SpriteItem>& items);
     void sweepTextureCache();
 
@@ -158,13 +202,31 @@ private:
     u64 m_frame = 0;
     bool m_glClipSpace = true;
 
-    rhi::PipelineHandle m_meshPipeline, m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline;
+    rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline;
+    rhi::PipelineHandle m_pbrPipelines[6];  // [alphaMode * 2 + doubleSided]
+    rhi::PipelineHandle m_shadowPipeline, m_shadowMaskPipeline, m_skyPipeline;
+    rhi::BufferHandle m_skyVertices;
+    rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map
+    ModelLibrary* m_models = nullptr;
+    MaterialLibrary* m_materials = nullptr;
     rhi::TextureHandle m_softParticle;  // default particle texture (procedural)
     SpriteSheetLibrary* m_sheets = nullptr;
     std::unordered_map<u32, math::Vec3> m_parallax;  // entity index -> world offset
     std::vector<math::Vec4> m_tileUvs;
     u32 m_lightsOffset = 0;
     GpuMesh m_meshes[4];
+    // 3D frame data
+    std::vector<MeshItem> m_opaqueItems, m_transparentItems, m_shadowItems;
+    std::vector<InstanceData> m_instances, m_instanceStaging;
+    std::vector<FrameMaterial> m_frameMaterials;
+    std::unordered_map<u64, u32> m_materialSlots;
+    rhi::BufferHandle m_instanceBuffer;
+    usize m_instanceCapacity = 0;
+    rhi::RenderTargetHandle m_shadowTarget;
+    u32 m_shadowSize = 0;
+    bool m_shadowsActive = false;
+    bool m_drawSky = false;
+    u32 m_frameOffset = 0, m_shadowFrameOffset = 0, m_lights3DOffset = 0;
 
     rhi::BufferHandle m_uniformBuffer;
     usize m_uniformCapacity = 0;
@@ -180,8 +242,8 @@ private:
 
     TextureCache m_textureCache;       ///< Linear filtering.
     TextureCache m_pixelTextureCache;  ///< pixelArt = true (nearest filtering).
+    TextureCache m_dataTextureCache;   ///< Linear data (normal / metallic-roughness / occlusion maps).
     std::vector<SortKey> m_spriteKeys;
-    std::vector<MeshDraw> m_meshDraws;
     std::vector<SpriteItem> m_spriteItems;
 };
 

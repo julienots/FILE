@@ -5,6 +5,8 @@ agr_add_module(render
         src/SpriteSheet.cpp
         src/GraphicsProfile.cpp
         src/Renderer.cpp
+        src/Renderer3D.cpp
+        src/ModelLibrary.cpp
         src/RenderPlugin.cpp
     PUBLIC_DEPS
         agr::runtime

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "RenderUniforms.hpp"
 #include "Shaders.inl"
 #include "agr/core/Log.hpp"
 #include "agr/core/Time.hpp"
@@ -19,25 +20,9 @@ using math::Vec4;
 
 namespace {
 
-struct FrameUniforms {
-    Mat4 viewProj;
-    Vec4 cameraPos;
-    Vec4 lightDir;
-    Vec4 lightColor;
-    Vec4 ambient;
-};
-static_assert(sizeof(FrameUniforms) == 128);
-
-struct ObjectUniforms {
-    Mat4 model;
-    Mat4 normalMatrix;
-    Vec4 color;
-    Vec4 uvScale;
-};
-static_assert(sizeof(ObjectUniforms) == 160);
+using detail::FrameUniforms;
 
 constexpr u32 kSlotFrame = 0;
-constexpr u32 kSlotObject = 1;
 constexpr u32 kSlotLights2D = 1;  // sprite pipelines: FrameData, Lights2D
 
 struct Lights2DUniforms {
@@ -47,8 +32,7 @@ struct Lights2DUniforms {
 };
 static_assert(sizeof(Lights2DUniforms) == 528);
 
-float srgbToLinear(float c) { return std::pow(std::clamp(c, 0.0f, 1.0f), 2.2f); }
-Vec3 srgbToLinear(Vec4 c) { return {srgbToLinear(c.x), srgbToLinear(c.y), srgbToLinear(c.z)}; }
+using detail::srgbToLinear;
 
 u32 packColor(Vec4 c) {
     auto b = [](float v) { return static_cast<u32>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
@@ -62,6 +46,7 @@ Renderer::Renderer(rhi::Device& device, AssetManager& assets) : m_device(device)
 Renderer::~Renderer() {
     for (auto& [uri, cached] : m_textureCache) m_assets.release(cached.asset);
     for (auto& [uri, cached] : m_pixelTextureCache) m_assets.release(cached.asset);
+    for (auto& [uri, cached] : m_dataTextureCache) m_assets.release(cached.asset);
     releaseTargets();
     for (auto& m : m_meshes) {
         m_device.destroyBuffer(m.vertices);
@@ -70,7 +55,14 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_uniformBuffer);
     m_device.destroyBuffer(m_spriteVertices);
     m_device.destroyBuffer(m_spriteIndices);
-    m_device.destroyPipeline(m_meshPipeline);
+    for (auto p : m_pbrPipelines) m_device.destroyPipeline(p);
+    m_device.destroyPipeline(m_shadowPipeline);
+    m_device.destroyPipeline(m_shadowMaskPipeline);
+    m_device.destroyPipeline(m_skyPipeline);
+    m_device.destroyBuffer(m_skyVertices);
+    m_device.destroyBuffer(m_instanceBuffer);
+    m_device.destroyTexture(m_flatNormal);
+    m_device.destroyRenderTarget(m_shadowTarget);
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);
@@ -81,25 +73,12 @@ Status Renderer::initialize() {
     m_uniformAlign = std::max(16u, m_device.info().uniformBufferAlignment);
     m_glClipSpace = m_device.info().backend != rhi::Backend::Vulkan;
     if (Status s = createPipelines(); !s) return s;
+    if (Status s = create3DPipelines(); !s) return s;
     if (Status s = createMeshes(); !s) return s;
     return {};
 }
 
 Status Renderer::createPipelines() {
-    rhi::PipelineDesc mesh;
-    mesh.debugName = "agr.mesh.lit";
-    mesh.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kObjectBlock + shaders::kMeshVertex;
-    mesh.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kObjectBlock + shaders::kMeshFragment;
-    mesh.layout.stride = sizeof(MeshVertex);
-    mesh.layout.attributes = {{0, rhi::VertexFormat::Float3, offsetof(MeshVertex, position)},
-                              {1, rhi::VertexFormat::Float3, offsetof(MeshVertex, normal)},
-                              {2, rhi::VertexFormat::Float2, offsetof(MeshVertex, uv)}};
-    mesh.uniformBlocks = {"FrameData", "ObjectData"};
-    mesh.samplers = {"u_albedo"};
-    auto mp = m_device.createPipeline(mesh);
-    if (!mp) return mp.error();
-    m_meshPipeline = mp.value();
-
     rhi::PipelineDesc sprite;
     sprite.debugName = "agr.sprite";
     sprite.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kSpriteVertex;
@@ -161,7 +140,7 @@ Status Renderer::createMeshes() {
         auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static,
                                          data.vertices.size() * sizeof(MeshVertex), data.vertices.data(), "agr.primitive.vb"});
         auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static,
-                                         data.indices.size() * sizeof(u16), data.indices.data(), "agr.primitive.ib"});
+                                         data.indices.size() * sizeof(u32), data.indices.data(), "agr.primitive.ib"});
         if (!vb) return vb.error();
         if (!ib) return ib.error();
         m_meshes[i] = {vb.value(), ib.value(), static_cast<u32>(data.indices.size()), data.bounds};
@@ -185,7 +164,7 @@ rhi::TextureHandle Renderer::resolveTexture(std::string_view uri, bool pixelArt)
 void Renderer::sweepTextureCache() {
     // Release textures no component referenced for ~10 s at 60 FPS.
     constexpr u64 kUnusedFrames = 600;
-    for (TextureCache* cache : {&m_textureCache, &m_pixelTextureCache}) {
+    for (TextureCache* cache : {&m_textureCache, &m_pixelTextureCache, &m_dataTextureCache}) {
         for (auto it = cache->begin(); it != cache->end();) {
             if (m_frame - it->second.lastUsedFrame > kUnusedFrames) {
                 m_assets.release(it->second.asset);
@@ -326,9 +305,10 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         return st && st->hiddenInEditor;
     };
 
-    // ------------------------------------------------------------ lights
-    FrameUniforms frame;
+    // ------------------------------------------------------------ frame: light, environment
+    FrameUniforms frame{};
     frame.viewProj = viewProj;
+    frame.invViewProj = math::inverse(viewProj);
     frame.cameraPos = Vec4(rv.position, 1.0f);
     frame.lightDir = Vec4(0, -1, 0, 0);
     frame.lightColor = Vec4(0, 0, 0, 0);
@@ -349,34 +329,20 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 envFound = true;
             }
         });
-        frame.ambient = Vec4(srgbToLinear(env.ambientColor) * env.ambientIntensity, 0.0f);
+        const bool gradient = env.sky == SkyMode::Gradient;
+        const Vec3 sky = srgbToLinear(env.skyColor), ground = srgbToLinear(env.groundColor);
+        // Sprites lit by 2D lights use one flat ambient: with a gradient sky, its average.
+        frame.ambient = gradient ? Vec4((sky + ground) * 0.5f * env.ambientIntensity, 0.0f)
+                                 : Vec4(srgbToLinear(env.ambientColor) * env.ambientIntensity, 0.0f);
+        frame.skyColor = Vec4(sky, gradient ? 1.0f : 0.0f);
+        frame.groundColor = Vec4(ground, env.ambientIntensity);
+        frame.horizonColor = Vec4(srgbToLinear(env.horizonColor), env.sunDisc ? 1.0f : 0.0f);
+        frame.fogColor = Vec4(srgbToLinear(env.fogColor), env.fog ? 1.0f : 0.0f);
+        frame.fogParams = Vec4(env.fogStart, std::max(env.fogEnd, env.fogStart + 0.01f), std::max(env.exposure, 0.0f), 0.0f);
+        m_drawSky = gradient && rv.projection == Projection::Perspective;
     }
     m_uniformStaging.clear();
-    pushUniforms(&frame, sizeof frame);
-
-    // ------------------------------------------------------------ meshes
-    m_meshDraws.clear();
-    reg.view<MeshRendererComponent, WorldTransformComponent>().each(
-        [&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
-            if (!mr.visible || !w.activeInHierarchy || hiddenInEditor(e)) return;
-            const int type = std::clamp(static_cast<int>(mr.mesh), 0, 3);
-            if (!frustum.intersects(m_meshes[type].bounds.transformed(w.matrix))) {
-                ++m_stats.meshesCulled;
-                return;
-            }
-            ObjectUniforms obj;
-            obj.model = w.matrix;
-            obj.normalMatrix = math::transpose(math::inverse(w.matrix));
-            obj.color = Vec4(srgbToLinear(mr.color), mr.color.w);
-            obj.uvScale = Vec4(mr.uvScale.x, mr.uvScale.y, 0, 0);
-            m_meshDraws.push_back({static_cast<PrimitiveMesh>(type), resolveTexture(mr.texture, false),
-                                   pushUniforms(&obj, sizeof obj)});
-        });
-    m_stats.meshesVisible = static_cast<u32>(m_meshDraws.size());
-    std::sort(m_meshDraws.begin(), m_meshDraws.end(), [](const MeshDraw& a, const MeshDraw& b) {
-        if (a.mesh != b.mesh) return a.mesh < b.mesh;
-        return a.texture.index < b.texture.index;
-    });
+    collect3D(scene, rv, view, viewProj, frustum, aspect, hiddenInEditor, frame);  // pushes the frame uniforms first
 
     // ------------------------------------------------------------ parallax
     // Offsets applied at draw time to Parallax entities and their descendants
@@ -584,6 +550,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     Stopwatch submit;
     const rhi::FrameStats before = m_device.frameStats();
     uploadUniforms();
+    uploadInstances();
+    if (m_uniformCapacity > 0) drawShadowPass();
 
     // ------------------------------------------------------------ passes
     const bool offscreen = samples > 1 || renderW != width || renderH != height;
@@ -591,7 +559,9 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     const rhi::RenderTargetHandle target = offscreen ? m_sceneTarget : outputTarget;
     m_device.beginPass(target, {true, rv.clearColor, true, 1.0f});
     if (m_uniformCapacity > 0) {
-        drawMeshes(m_meshDraws);
+        drawMeshItems(m_opaqueItems, 0, false);
+        drawSky();
+        drawMeshItems(m_transparentItems, static_cast<u32>(m_opaqueItems.size()), false);
         drawSprites(m_spriteItems);
     }
     m_device.endPass();
@@ -617,24 +587,6 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     const rhi::MemoryStats mem = m_device.memoryStats();
     m_stats.gpuMemoryBytes = mem.bufferBytes + mem.textureBytes;
     m_stats.cpuMs = cpu.elapsedMilliseconds();
-}
-
-void Renderer::drawMeshes(const std::vector<MeshDraw>& draws) {
-    if (draws.empty()) return;
-    m_device.bindPipeline(m_meshPipeline);
-    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, 0, sizeof(FrameUniforms));
-    int boundMesh = -1;
-    for (const MeshDraw& d : draws) {
-        const int type = static_cast<int>(d.mesh);
-        if (type != boundMesh) {
-            m_device.bindVertexBuffer(m_meshes[type].vertices);
-            m_device.bindIndexBuffer(m_meshes[type].indices, rhi::IndexType::U16);
-            boundMesh = type;
-        }
-        m_device.bindTexture(0, d.texture);
-        m_device.bindUniformBuffer(kSlotObject, m_uniformBuffer, d.uniformOffset, sizeof(ObjectUniforms));
-        m_device.drawIndexed(m_meshes[type].indexCount);
-    }
 }
 
 void Renderer::drawSprites(const std::vector<SpriteItem>& items) {

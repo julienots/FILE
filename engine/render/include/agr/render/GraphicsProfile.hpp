@@ -19,6 +19,9 @@ struct GraphicsProfile {
     u32 maxTextureSize = 4096;   ///< Larger textures are downscaled at load time.
     u32 targetFps = 0;           ///< Frame cap (0 = vsync / uncapped).
     u64 uploadBudgetBytes = 16ull * 1024 * 1024;  ///< Texture bytes uploaded per frame at most.
+    u32 shadowMapSize = 2048;    ///< Directional light shadow map (0 = no shadows).
+    bool softShadows = true;     ///< 3x3 PCF filtering (9 taps) instead of 1 tap.
+    u32 maxLights = 8;           ///< Point / spot lights shading each pixel (nearest to the camera first), <= 8.
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

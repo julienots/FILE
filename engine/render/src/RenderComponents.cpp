@@ -44,24 +44,71 @@ void registerRenderComponents() {
 
     reg.add<DirectionalLightComponent>("DirectionalLight")
         .category("Rendering")
-        .description("Light shining along the entity's forward (-Z) axis, like the sun.")
+        .description("Light shining along the entity's forward (-Z) axis, like the sun. Casts shadows.")
         .field("color", &DirectionalLightComponent::color, {.flags = FieldFlag_Color})
-        .field("intensity", &DirectionalLightComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f});
+        .field("intensity", &DirectionalLightComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f})
+        .field("castShadows", &DirectionalLightComponent::castShadows)
+        .field("shadowDistance", &DirectionalLightComponent::shadowDistance,
+               {.tooltip = "Shadows are drawn up to this distance from the camera (smaller = sharper)",
+                .rangeMin = 1.0f, .rangeMax = 1000.0f, .speed = 0.1f})
+        .field("shadowStrength", &DirectionalLightComponent::shadowStrength, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f});
+
+    reg.add<PointLightComponent>("PointLight")
+        .category("Rendering")
+        .description("Light radiating in every direction, up to its range (bulbs, torches).")
+        .field("color", &PointLightComponent::color, {.flags = FieldFlag_Color})
+        .field("intensity", &PointLightComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("range", &PointLightComponent::range, {.rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f});
+
+    reg.add<SpotLightComponent>("SpotLight")
+        .category("Rendering")
+        .description("Cone of light along the entity's forward (-Z) axis (flashlights, street lamps).")
+        .field("color", &SpotLightComponent::color, {.flags = FieldFlag_Color})
+        .field("intensity", &SpotLightComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("range", &SpotLightComponent::range, {.rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("innerAngle", &SpotLightComponent::innerAngle,
+               {.flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = math::radians(89.0f), .speed = 0.01f})
+        .field("outerAngle", &SpotLightComponent::outerAngle,
+               {.flags = FieldFlag_Angle, .rangeMin = math::radians(1.0f), .rangeMax = math::radians(89.0f), .speed = 0.01f});
 
     reg.add<EnvironmentComponent>("Environment")
         .category("Rendering")
-        .description("Ambient light of the scene.")
-        .field("ambientColor", &EnvironmentComponent::ambientColor, {.flags = FieldFlag_Color})
-        .field("ambientIntensity", &EnvironmentComponent::ambientIntensity, {.rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f});
+        .description("Ambient light, sky, fog and exposure of the scene.")
+        .field("ambientColor", &EnvironmentComponent::ambientColor,
+               {.tooltip = "Flat ambient light (sky = CameraColor)", .flags = FieldFlag_Color})
+        .field("ambientIntensity", &EnvironmentComponent::ambientIntensity, {.rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f})
+        .field("sky", &EnvironmentComponent::sky,
+               {.tooltip = "Gradient: procedural sky and hemisphere ambient light from its colors",
+                .enumEntries = {{"CameraColor", 0}, {"Gradient", 1}}})
+        .field("skyColor", &EnvironmentComponent::skyColor, {.flags = FieldFlag_Color})
+        .field("horizonColor", &EnvironmentComponent::horizonColor, {.flags = FieldFlag_Color})
+        .field("groundColor", &EnvironmentComponent::groundColor, {.flags = FieldFlag_Color})
+        .field("sunDisc", &EnvironmentComponent::sunDisc, {.tooltip = "Draws the sun of the directional light in the gradient sky"})
+        .field("fog", &EnvironmentComponent::fog)
+        .field("fogColor", &EnvironmentComponent::fogColor, {.flags = FieldFlag_Color})
+        .field("fogStart", &EnvironmentComponent::fogStart, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.1f})
+        .field("fogEnd", &EnvironmentComponent::fogEnd, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.1f})
+        .field("exposure", &EnvironmentComponent::exposure, {.rangeMin = 0.01f, .rangeMax = 16.0f, .speed = 0.01f});
 
     reg.add<MeshRendererComponent>("MeshRenderer")
         .category("Rendering")
-        .description("Draws a built-in mesh with a color and an optional texture.")
+        .description("Draws a built-in mesh or a mesh of an imported model (glTF, OBJ, FBX) with PBR materials.")
         .field("mesh", &MeshRendererComponent::mesh,
-               {.enumEntries = {{"Cube", 0}, {"Sphere", 1}, {"Plane", 2}, {"Quad", 3}}})
-        .field("texture", &MeshRendererComponent::texture, {.tooltip = "Asset URI, e.g. assets://textures/crate.png", .flags = FieldFlag_AssetPath})
-        .field("color", &MeshRendererComponent::color, {.flags = FieldFlag_Color})
+               {.tooltip = "Built-in mesh (used when no model is set)", .enumEntries = {{"Cube", 0}, {"Sphere", 1}, {"Plane", 2}, {"Quad", 3}}})
+        .field("model", &MeshRendererComponent::model,
+               {.tooltip = "Imported model: assets://models/robot.glb", .flags = FieldFlag_AssetPath})
+        .field("meshIndex", &MeshRendererComponent::meshIndex, {.tooltip = "Mesh of the model", .rangeMin = 0.0f, .rangeMax = 100000.0f})
+        .field("material", &MeshRendererComponent::material,
+               {.tooltip = "Optional .agrmat material replacing the mesh materials", .flags = FieldFlag_AssetPath})
+        .field("texture", &MeshRendererComponent::texture,
+               {.tooltip = "Built-in material: base color texture", .flags = FieldFlag_AssetPath})
+        .field("color", &MeshRendererComponent::color, {.tooltip = "Tint applied to any material", .flags = FieldFlag_Color})
         .field("uvScale", &MeshRendererComponent::uvScale, {.speed = 0.01f})
+        .field("metallic", &MeshRendererComponent::metallic,
+               {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("roughness", &MeshRendererComponent::roughness,
+               {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("castShadows", &MeshRendererComponent::castShadows)
         .field("visible", &MeshRendererComponent::visible);
 
     reg.add<SpriteRendererComponent>("SpriteRenderer")
