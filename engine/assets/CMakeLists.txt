@@ -2,8 +2,13 @@ agr_add_module(assets
     SOURCES
         src/Image.cpp
         src/AssetManager.cpp
+        src/Material.cpp
+        src/Model.cpp
     PUBLIC_DEPS
         agr::core
         agr::rhi
     PRIVATE_DEPS
-        agr::stb)
+        agr::stb
+        agr::cgltf
+        agr::ufbx
+        nlohmann_json::nlohmann_json)

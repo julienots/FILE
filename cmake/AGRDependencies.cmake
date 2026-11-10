@@ -45,6 +45,28 @@ add_library(agr_stb INTERFACE)
 target_include_directories(agr_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 add_library(agr::stb ALIAS agr_stb)
 
+# --- 3D model import: cgltf (glTF 2.0 / GLB, MIT) and ufbx (FBX, MIT or public domain).
+#     Pinned to release commits (cgltf v1.15, ufbx v0.23.1).
+FetchContent_Declare(cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG        360db1a95480fe102ae9c69b27c5d101167ff5ba
+    SOURCE_SUBDIR  agr-do-not-add)
+FetchContent_Declare(ufbx
+    GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+    GIT_TAG        26a482ae66871d7de36eb722aa060bce95bce274
+    SOURCE_SUBDIR  agr-do-not-add)
+FetchContent_MakeAvailable(cgltf ufbx)
+add_library(agr_cgltf INTERFACE)  # header-only; the implementation is compiled in agr::assets
+target_include_directories(agr_cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
+add_library(agr::cgltf ALIAS agr_cgltf)
+add_library(agr_ufbx STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
+target_include_directories(agr_ufbx SYSTEM PUBLIC ${ufbx_SOURCE_DIR})
+set_target_properties(agr_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "ThirdParty")
+if(NOT MSVC)
+    target_compile_options(agr_ufbx PRIVATE -w)  # third-party code: not held to the engine warning level
+endif()
+add_library(agr::ufbx ALIAS agr_ufbx)
+
 # --- Vulkan backend: headers (Apache-2.0/MIT), volk loader (MIT),
 #     VulkanMemoryAllocator (MIT), glslang GLSL -> SPIR-V (BSD/MIT-like). -----
 if(AGR_ENABLE_VULKAN)

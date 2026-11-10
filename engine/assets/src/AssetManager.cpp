@@ -1,4 +1,5 @@
 #include "agr/assets/AssetManager.hpp"
+#include "agr/assets/Model.hpp"
 
 #include <algorithm>
 #include <format>
@@ -6,6 +7,11 @@
 #include "agr/core/Log.hpp"
 
 namespace agr {
+
+namespace {
+/// File part of an asset URI ("a.glb#image0" -> "a.glb").
+std::string_view fileOf(std::string_view uri) { return uri.substr(0, uri.find('#')); }
+} // namespace
 
 AssetManager::AssetManager(VirtualFileSystem& vfs, JobSystem& jobs, rhi::Device* device)
     : m_vfs(vfs), m_jobs(jobs), m_device(device) {
@@ -81,8 +87,10 @@ void AssetManager::startLoad(TextureAsset h, LoadMode mode) {
     const u32 version = ++e->info.version;
     const std::string uri = e->info.uri;
     auto work = [this, h, version, uri] {
-        Decoded d{h, version, makeError(Error::Code::Unknown, "not loaded"), m_vfs.modifiedTime(uri)};
-        auto bytes = m_vfs.readBytes(uri);
+        // "model.glb#image3": image embedded in a model file (the file's date drives hot reload).
+        const bool embedded = uri.find("#image") != std::string::npos;
+        Decoded d{h, version, makeError(Error::Code::Unknown, "not loaded"), m_vfs.modifiedTime(fileOf(uri))};
+        auto bytes = embedded ? readEmbeddedImage(m_vfs, uri) : m_vfs.readBytes(uri);
         if (!bytes) d.image = bytes.error();
         else d.image = decodeImage(bytes.value(), uri);
         std::lock_guard lock(m_doneMutex);
@@ -225,7 +233,7 @@ u32 AssetManager::reloadChanged() {
     std::vector<TextureAsset> changed;
     m_entries.forEach([&](TextureAsset h, Entry& e) {
         if (e.info.state == AssetState::Loading) return;
-        const i64 t = m_vfs.modifiedTime(e.info.uri);
+        const i64 t = m_vfs.modifiedTime(fileOf(e.info.uri));
         if (t != 0 && t != e.info.modifiedTime) changed.push_back(h);
     });
     for (TextureAsset h : changed) {

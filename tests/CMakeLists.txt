@@ -9,7 +9,8 @@ add_executable(agr_tests
     test_assets.cpp
     test_render.cpp
     test_shader_dialect.cpp
-    test_twod.cpp)
+    test_twod.cpp
+    test_models.cpp)
 target_link_libraries(agr_tests PRIVATE agr::twod agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
