@@ -1,0 +1,9 @@
+agr_add_module(physics3d
+    SOURCES
+        src/Physics3DComponents.cpp
+        src/Physics3DWorld.cpp
+        src/Physics3DPlugin.cpp
+    PUBLIC_DEPS
+        agr::runtime
+    PRIVATE_DEPS
+        Jolt)

@@ -6,6 +6,7 @@
 #include "agr/core/FileSystem.hpp"
 #include "agr/core/Time.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/runtime/Input.hpp"
 #include "agr/scene/Scene.hpp"
 
@@ -57,6 +58,7 @@ public:
 
     void setInput(const Input* input);
     void setPhysics2D(Physics2DWorld* world);
+    void setPhysics3D(Physics3DWorld* world);
     /// Maximum run time of one callback before it is stopped (infinite loops).
     void setCallbackBudget(f64 seconds);
 
@@ -65,6 +67,7 @@ public:
     void update(Scene& scene, const FrameTime& time);
     void fixedUpdate(Scene& scene, const FrameTime& time);
     void dispatchCollision(Scene& scene, const Collision2DEvent& event);
+    void dispatchCollision(Scene& scene, const Collision3DEvent& event);
     /// Destroys every instance (onDestroy is called) — scene unloaded.
     void reset();
     u32 reloadChanged();

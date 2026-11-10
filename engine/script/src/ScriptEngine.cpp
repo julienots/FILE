@@ -148,6 +148,7 @@ ScriptEngine::~ScriptEngine() = default;
 
 void ScriptEngine::setInput(const Input* input) { m->input = input; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
+void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }
 
 void ScriptEngine::reset() {
@@ -274,22 +275,25 @@ void ScriptEngine::fixedUpdate(Scene& scene, const FrameTime& time) {
     }
 }
 
-void ScriptEngine::dispatchCollision(Scene& scene, const Collision2DEvent& event) {
-    if (scene.generation() != m->sceneGeneration) return;
-    m->scene = &scene;
-    const char* callback = event.trigger ? "onTrigger" : "onCollision";
+void ScriptEngine::Impl::dispatch(Scene& s, ecs::Entity a, ecs::Entity b, bool begin, bool trigger) {
+    if (s.generation() != sceneGeneration) return;
+    scene = &s;
+    const char* callback = trigger ? "onTrigger" : "onCollision";
     auto notify = [&](ecs::Entity self, ecs::Entity other) {
-        auto it = m->instances.find(self.packed());
-        if (it == m->instances.end() || !it->second.started) return;
-        m->call(it->second, callback, [&] {
-            pushEntity(m->L, other);
-            lua_pushboolean(m->L, event.begin);
+        auto it = instances.find(self.packed());
+        if (it == instances.end() || !it->second.started) return;
+        call(it->second, callback, [&] {
+            pushEntity(L, other);
+            lua_pushboolean(L, begin);
             return 2;
         });
     };
-    notify(event.a, event.b);
-    notify(event.b, event.a);
+    notify(a, b);
+    notify(b, a);
 }
+
+void ScriptEngine::dispatchCollision(Scene& scene, const Collision2DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }
+void ScriptEngine::dispatchCollision(Scene& scene, const Collision3DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }
 
 u32 ScriptEngine::reloadChanged() {
     u32 n = 0;

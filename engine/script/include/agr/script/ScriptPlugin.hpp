@@ -27,7 +27,8 @@ public:
 
 private:
     std::unique_ptr<ScriptEngine> m_scripts;
-    SubscriptionId m_collisions;
+    void bindPhysics(Engine& engine);
+    SubscriptionId m_collisions, m_collisions3D;
     Engine* m_engine = nullptr;
     bool m_running = true;
     bool m_hotReload = false;

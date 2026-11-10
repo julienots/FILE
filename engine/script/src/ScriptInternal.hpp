@@ -35,6 +35,7 @@ struct ScriptEngine::Impl {
     lua_State* L = nullptr;
     const Input* input = nullptr;
     Physics2DWorld* physics2d = nullptr;
+    Physics3DWorld* physics3d = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run
     FrameTime time;
     u64 sceneGeneration = 0;
@@ -57,6 +58,7 @@ struct ScriptEngine::Impl {
     bool call(Instance& inst, const char* name, PushArgs&& pushArgs);
     void reportError(const std::string& where, const char* message);
     void resetInstances();
+    void dispatch(Scene& scene, ecs::Entity a, ecs::Entity b, bool begin, bool trigger);
 };
 
 /// Registry key of the Impl pointer (light userdata).

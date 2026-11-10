@@ -12,6 +12,7 @@ third-party components, fetched at configure time at pinned versions
 | [cgltf](https://github.com/jkuhlmann/cgltf) | 1.15 | MIT | `agr::assets` (glTF 2.0 / GLB import) |
 | [ufbx](https://github.com/ufbx/ufbx) | 0.23.1 | MIT or public domain | `agr::assets` (FBX import) |
 | [Box2D](https://github.com/erincatto/box2d) | 3.1.1 | MIT | `agr::physics2d` (2D physics) |
+| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 5.6.0 | MIT | `agr::physics3d` (3D physics) |
 | [Lua](https://www.lua.org) | 5.4.9 | MIT | `agr::script` (gameplay scripts) |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | vulkan-sdk-1.4.350.0 | Apache-2.0 OR MIT | `agr::rhi` Vulkan backend |
 | [volk](https://github.com/zeux/volk) | vulkan-sdk-1.4.350.0 | MIT | Vulkan function loader |

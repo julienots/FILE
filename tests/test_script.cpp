@@ -5,6 +5,7 @@
 
 #include "agr/core/Uuid.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/script/ScriptEngine.hpp"
@@ -238,6 +239,43 @@ return P
     CHECK(f.scripts.field(player, "touched").value() == "Ground");
     CHECK(f.scene.registry().get<TransformComponent>(player).position.x > 2.0f);  // moved right at 3 m/s
     CHECK(f.scripts.run("assert(agr.time.delta() > 0.09)", &f.scene));
+}
+
+TEST_CASE("scripts drive 3D bodies through the same entity methods") {
+    ScriptFixture f;
+    registerPhysics3DComponents();
+    Physics3DWorld physics;
+    f.scripts.setPhysics3D(&physics);
+    f.write("assets://s/ball.lua", R"lua(
+local B = {}
+function B:onStart() self.entity:applyImpulse(0, 0, -5) end
+function B:onUpdate(dt)
+  local vx, vy, vz = self.entity:velocity()
+  self.vz = vz
+  local hit = agr.physics3d.raycast(0, 10, -100, 0, -1, 0, 50)
+  self.floor = hit and hit.y or -99
+end
+function B:onCollision(other, began) if began then self.hit = other:name() end end
+return B
+)lua");
+    const auto floor = f.scene.createEntity("Floor");
+    f.scene.registry().emplace<ColliderComponent>(floor).size = {400, 1, 400};
+    const auto ball = f.scripted("Ball", "assets://s/ball.lua");
+    f.scene.registry().get<TransformComponent>(ball).position = {0, 2, 0};
+    f.scene.registry().emplace<RigidBodyComponent>(ball).linearDamping = 0.0f;
+    auto& col = f.scene.registry().emplace<ColliderComponent>(ball);
+    col.shape = ColliderShape3D::Sphere;
+    col.density = 1.0f / (4.0f / 3.0f * math::kPi * 0.125f);  // 1 kg sphere of radius 0.5: the impulse gives 5 m/s
+    physics.step(f.scene, 1.0f / 60.0f);
+    f.update();
+    for (int i = 0; i < 60; ++i) {
+        physics.step(f.scene, 1.0f / 60.0f);
+        for (const auto& ev : physics.events()) f.scripts.dispatchCollision(f.scene, ev);
+        f.update();
+    }
+    CHECK(std::stod(f.scripts.field(ball, "vz").value()) < -1.0);
+    CHECK(f.scripts.field(ball, "hit").value() == "Floor");
+    CHECK(std::stod(f.scripts.field(ball, "floor").value()) == doctest::Approx(0.5).epsilon(0.01));
 }
 
 TEST_CASE("reloading the scene in place drops its script instances") {

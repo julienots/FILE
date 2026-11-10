@@ -1,6 +1,7 @@
 #include "agr/script/ScriptPlugin.hpp"
 
 #include "agr/physics2d/Physics2DPlugin.hpp"
+#include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 #include "agr/script/ScriptComponent.hpp"
 
@@ -19,14 +20,26 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_collisions = engine.events().subscribe<Collision2DEvent>([this](const Collision2DEvent& e) {
         if (m_running && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
     });
+    m_collisions3D = engine.events().subscribe<Collision3DEvent>([this](const Collision3DEvent& e) {
+        if (m_running && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
+    });
     return {};
 }
 
 void ScriptPlugin::onUnload(Engine& engine) {
     engine.events().unsubscribe(m_collisions);
+    engine.events().unsubscribe(m_collisions3D);
     engine.registerService<ScriptPlugin>(nullptr);
     m_scripts.reset();
     m_engine = nullptr;
+}
+
+void ScriptPlugin::bindPhysics(Engine& engine) {
+    // The physics plugins may be registered after this one: looked up lazily.
+    auto* p2 = engine.service<Physics2DPlugin>();
+    auto* p3 = engine.service<Physics3DPlugin>();
+    m_scripts->setPhysics2D(p2 ? &p2->world() : nullptr);
+    m_scripts->setPhysics3D(p3 ? &p3->world() : nullptr);
 }
 
 void ScriptPlugin::setRunning(bool running) {
@@ -37,7 +50,7 @@ void ScriptPlugin::setRunning(bool running) {
 void ScriptPlugin::onFixedUpdate(Engine& engine, const FrameTime& time) {
     if (!m_running) return;
     // Physics may have been registered after this plugin: look it up lazily.
-    if (auto* p = engine.service<Physics2DPlugin>()) m_scripts->setPhysics2D(&p->world());
+    bindPhysics(engine);
     m_scripts->fixedUpdate(engine.scene(), time);
 }
 
@@ -50,7 +63,7 @@ void ScriptPlugin::onUpdate(Engine& engine, const FrameTime& time) {
         }
     }
     if (!m_running) return;
-    if (auto* p = engine.service<Physics2DPlugin>()) m_scripts->setPhysics2D(&p->world());
+    bindPhysics(engine);
     m_scripts->update(engine.scene(), time);
 }
 

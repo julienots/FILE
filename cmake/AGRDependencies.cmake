@@ -80,6 +80,23 @@ FetchContent_Declare(box2d
 FetchContent_MakeAvailable(box2d)
 set_target_properties(box2d PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
 
+# --- 3D physics: Jolt Physics v5.6.0 (MIT). Portable instruction set (SSE4.2 on x86, NEON on ARM),
+#     no debug renderer / profiler / GPU compute, RTTI on (sanitizer builds check virtual calls).
+foreach(_opt USE_AVX USE_AVX2 USE_AVX512 USE_LZCNT USE_TZCNT USE_F16C USE_FMADD INTERPROCEDURAL_OPTIMIZATION
+        FLOATING_POINT_EXCEPTIONS_ENABLED ENABLE_ALL_WARNINGS DEBUG_RENDERER_IN_DEBUG_AND_RELEASE PROFILER_IN_DEBUG_AND_RELEASE
+        ENABLE_OBJECT_STREAM ENABLE_INSTALL JPH_USE_DX12 JPH_USE_VK JPH_USE_MTL JPH_USE_CPU_COMPUTE OVERRIDE_CXX_FLAGS
+        TARGET_UNIT_TESTS TARGET_HELLO_WORLD TARGET_PERFORMANCE_TEST TARGET_SAMPLES TARGET_VIEWER GENERATE_DEBUG_SYMBOLS)
+    set(${_opt} OFF CACHE BOOL "" FORCE)
+endforeach()
+set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+FetchContent_Declare(JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG        e77f175595e64cb44218cc9d9d56fc365ad0e36a
+    GIT_SHALLOW    FALSE
+    SOURCE_SUBDIR  Build)
+FetchContent_MakeAvailable(JoltPhysics)
+set_target_properties(Jolt PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+
 # --- Scripting: Lua 5.4.9 (MIT), compiled from the official sources (interpreter and tests excluded).
 FetchContent_Declare(lua
     GIT_REPOSITORY https://github.com/lua/lua.git

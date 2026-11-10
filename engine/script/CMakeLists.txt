@@ -7,6 +7,7 @@ agr_add_module(script
     PUBLIC_DEPS
         agr::runtime
         agr::physics2d
+        agr::physics3d
     PRIVATE_DEPS
         agr::lua
         nlohmann_json::nlohmann_json)

@@ -7,6 +7,7 @@
 #include "ScriptInternal.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/scene/Reflection.hpp"
+#include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
 
 namespace agr {
@@ -366,29 +367,58 @@ Physics2DWorld& physics2d(lua_State* L) {
     if (!m.physics2d) luaL_error(L, "2D physics is not enabled (Physics2DPlugin)");
     return *m.physics2d;
 }
+Physics3DWorld& physics3d(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.physics3d) luaL_error(L, "3D physics is not enabled (Physics3DPlugin)");
+    return *m.physics3d;
+}
+/// Entity methods drive the 3D body when the entity has a RigidBody, else the 2D one.
+bool is3D(lua_State* L, ecs::Entity e) { return sceneOf(L).registry().has<RigidBodyComponent>(e); }
+math::Vec3 vecArgs(lua_State* L, int first, bool three) {
+    return {static_cast<float>(luaL_checknumber(L, first)), static_cast<float>(luaL_checknumber(L, first + 1)),
+            three ? static_cast<float>(luaL_optnumber(L, first + 2, 0.0)) : 0.0f};
+}
 int e_velocity(lua_State* L) {
-    const auto v = physics2d(L).velocity(checkEntity(L, 1));
-    lua_pushnumber(L, v ? v->x : 0.0);
-    lua_pushnumber(L, v ? v->y : 0.0);
+    const ecs::Entity e = checkEntity(L, 1);
+    if (is3D(L, e)) {
+        const auto v = physics3d(L).velocity(e).value_or(math::Vec3{});
+        lua_pushnumber(L, v.x);
+        lua_pushnumber(L, v.y);
+        lua_pushnumber(L, v.z);
+        return 3;
+    }
+    const auto v = physics2d(L).velocity(e).value_or(math::Vec2{});
+    lua_pushnumber(L, v.x);
+    lua_pushnumber(L, v.y);
     return 2;
 }
 int e_setVelocity(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
-    lua_pushboolean(L, physics2d(L).setVelocity(e, {static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3))}));
+    const bool three = is3D(L, e);
+    const math::Vec3 v = vecArgs(L, 2, three);
+    lua_pushboolean(L, three ? physics3d(L).setVelocity(e, v) : physics2d(L).setVelocity(e, {v.x, v.y}));
     return 1;
 }
 int e_applyForce(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
-    lua_pushboolean(L, physics2d(L).applyForce(e, {static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3))}));
+    const bool three = is3D(L, e);
+    const math::Vec3 v = vecArgs(L, 2, three);
+    lua_pushboolean(L, three ? physics3d(L).applyForce(e, v) : physics2d(L).applyForce(e, {v.x, v.y}));
     return 1;
 }
 int e_applyImpulse(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
-    lua_pushboolean(L, physics2d(L).applyImpulse(e, {static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3))}));
+    const bool three = is3D(L, e);
+    const math::Vec3 v = vecArgs(L, 2, three);
+    lua_pushboolean(L, three ? physics3d(L).applyImpulse(e, v) : physics2d(L).applyImpulse(e, {v.x, v.y}));
     return 1;
 }
 int e_setAngularVelocity(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
+    if (is3D(L, e)) {
+        lua_pushboolean(L, physics3d(L).setAngularVelocity(e, vecArgs(L, 2, true)));
+        return 1;
+    }
     lua_pushboolean(L, physics2d(L).setAngularVelocity(e, static_cast<float>(luaL_checknumber(L, 2))));
     return 1;
 }
@@ -541,6 +571,31 @@ int p_raycast(lua_State* L) {
     }
     return 1;
 }
+int p3_raycast(lua_State* L) {
+    const math::Vec3 o{static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3))};
+    const math::Vec3 d{static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)), static_cast<float>(luaL_checknumber(L, 6))};
+    const auto hit = physics3d(L).raycast(o, d, static_cast<float>(luaL_optnumber(L, 7, 1000.0)));
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 8);
+    if (sceneOf(L).valid(hit->entity)) {
+        pushEntity(L, hit->entity);
+        lua_setfield(L, -2, "entity");
+    }
+    for (auto [name, value] : {std::pair{"x", hit->point.x}, {"y", hit->point.y}, {"z", hit->point.z}, {"nx", hit->normal.x},
+                               {"ny", hit->normal.y}, {"nz", hit->normal.z}, {"distance", hit->distance}}) {
+        lua_pushnumber(L, value);
+        lua_setfield(L, -2, name);
+    }
+    return 1;
+}
+int p3_setGravity(lua_State* L) {
+    physics3d(L).setGravity({static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)),
+                             static_cast<float>(luaL_checknumber(L, 3))});
+    return 0;
+}
 int p_setGravity(lua_State* L) {
     physics2d(L).setGravity({static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2))});
     return 0;
@@ -650,6 +705,10 @@ void openAgrLibrary(lua_State* L) {
     lua_newtable(L);
     setFuncs(L, physics);
     lua_setfield(L, -2, "physics2d");
+    static const luaL_Reg physics3[] = {{"raycast", p3_raycast}, {"setGravity", p3_setGravity}, {nullptr, nullptr}};
+    lua_newtable(L);
+    setFuncs(L, physics3);
+    lua_setfield(L, -2, "physics3d");
     lua_setglobal(L, "agr");
     lua_pushcfunction(L, a_log);
     lua_setglobal(L, "print");
