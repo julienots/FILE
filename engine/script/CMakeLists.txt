@@ -4,8 +4,10 @@ agr_add_module(script
         src/ScriptEngine.cpp
         src/ScriptBindings.cpp
         src/ScriptPlugin.cpp
+        src/ScriptAudio.cpp
     PUBLIC_DEPS
         agr::runtime
+        agr::audio
         agr::physics2d
         agr::physics3d
     PRIVATE_DEPS

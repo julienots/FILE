@@ -121,6 +121,36 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android|Darwin")
 endif()
 add_library(agr::lua ALIAS agr_lua)
 
+# --- Audio: miniaudio 0.11.25 (public domain / MIT-0) with stb_vorbis for Ogg Vorbis.
+#     Built from the single-file sources; the resource manager is not used (clips are decoded by AGR).
+FetchContent_Declare(miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG        9634bedb5b5a2ca38c1ee7108a9358a4e233f14d
+    SOURCE_SUBDIR  agr-do-not-add)
+FetchContent_MakeAvailable(miniaudio)
+file(CONFIGURE OUTPUT ${CMAKE_BINARY_DIR}/agr_miniaudio/miniaudio_impl.c CONTENT [=[
+#define STB_VORBIS_HEADER_ONLY
+#include "extras/stb_vorbis.c"
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+#undef STB_VORBIS_HEADER_ONLY
+#include "extras/stb_vorbis.c"
+]=])
+add_library(agr_miniaudio STATIC ${CMAKE_BINARY_DIR}/agr_miniaudio/miniaudio_impl.c)
+target_include_directories(agr_miniaudio SYSTEM PUBLIC ${miniaudio_SOURCE_DIR})
+# Must be identical in every translation unit that includes miniaudio.h (structure layouts).
+target_compile_definitions(agr_miniaudio PUBLIC MA_NO_RESOURCE_MANAGER MA_NO_ENCODING)
+find_package(Threads REQUIRED)
+target_link_libraries(agr_miniaudio PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+if(UNIX AND NOT APPLE)
+    target_link_libraries(agr_miniaudio PUBLIC m)
+endif()
+if(NOT MSVC)
+    target_compile_options(agr_miniaudio PRIVATE -w)
+endif()
+set_target_properties(agr_miniaudio PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+add_library(agr::miniaudio ALIAS agr_miniaudio)
+
 # --- Vulkan backend: headers (Apache-2.0/MIT), volk loader (MIT),
 #     VulkanMemoryAllocator (MIT), glslang GLSL -> SPIR-V (BSD/MIT-like). -----
 if(AGR_ENABLE_VULKAN)

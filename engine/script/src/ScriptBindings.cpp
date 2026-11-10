@@ -16,12 +16,6 @@ namespace {
 
 constexpr const char* kEntityMeta = "agr.Entity";
 
-Scene& sceneOf(lua_State* L) {
-    auto& m = implOf(L);
-    if (!m.scene) luaL_error(L, "no scene is running");
-    return *m.scene;
-}
-
 // --------------------------------------------------------------- values
 void pushVec(lua_State* L, const float* v, int n) {
     static const char* keys[] = {"x", "y", "z", "w"};
@@ -647,6 +641,27 @@ void setFuncs(lua_State* L, const luaL_Reg* funcs) { luaL_setfuncs(L, funcs, 0);
 
 } // namespace
 
+Scene& sceneOf(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.scene) luaL_error(L, "no scene is running");
+    return *m.scene;
+}
+
+void addEntityMethods(lua_State* L, const luaL_Reg* methods) {
+    luaL_getmetatable(L, kEntityMeta);
+    lua_getfield(L, -1, "__index");
+    luaL_setfuncs(L, methods, 0);
+    lua_pop(L, 2);
+}
+
+void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs) {
+    lua_getglobal(L, "agr");
+    lua_newtable(L);
+    luaL_setfuncs(L, funcs, 0);
+    lua_setfield(L, -2, name);
+    lua_pop(L, 1);
+}
+
 void pushEntity(lua_State* L, ecs::Entity e) {
     auto* ud = static_cast<LuaEntity*>(lua_newuserdatauv(L, sizeof(LuaEntity), 0));
     ud->packed = e.packed();
@@ -732,6 +747,7 @@ void openAgrLibrary(lua_State* L) {
     lua_setglobal(L, "print");
     lua_pushcfunction(L, a_require);
     lua_setglobal(L, "require");
+    openAudioBindings(L);
 }
 
 } // namespace agr

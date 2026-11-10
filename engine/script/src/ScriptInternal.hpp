@@ -36,6 +36,7 @@ struct ScriptEngine::Impl {
     math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
+    AudioSystem* audio = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run
     FrameTime time;
     u64 sceneGeneration = 0;
@@ -75,5 +76,12 @@ void pushEntity(lua_State* L, ecs::Entity e);
 ecs::Entity checkEntity(lua_State* L, int idx);
 /// Installs the `agr` API, the Entity type and the sandboxed standard library.
 void openAgrLibrary(lua_State* L);
+/// The running scene (raises a Lua error outside of a scene update).
+Scene& sceneOf(lua_State* L);
+/// Adds methods to the Entity type / a sub-table agr.<name> (called after openAgrLibrary's core setup).
+void addEntityMethods(lua_State* L, const luaL_Reg* methods);
+void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs);
+/// API extensions, one file each: agr.audio and Entity:playSound()...
+void openAudioBindings(lua_State* L);
 
 } // namespace agr

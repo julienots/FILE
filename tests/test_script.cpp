@@ -3,6 +3,7 @@
 #include <chrono>
 #include <filesystem>
 
+#include "agr/audio/Wav.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
@@ -287,6 +288,53 @@ TEST_CASE("reloading the scene in place drops its script instances") {
     f.scene.clear();
     f.update();
     CHECK(f.scripts.stats().instances == 0);
+}
+
+TEST_CASE("audio API: one-shots, buses, entity sources and errors") {
+    ScriptFixture f;
+    registerAudioComponents();
+    AudioSystem audio(f.vfs);
+    REQUIRE(audio.initialize({.output = AudioOutput::Manual}));
+    f.scripts.setAudio(&audio);
+    std::vector<float> samples(4800, 0.25f);
+    const ByteBuffer wav = encodeWav16(samples.data(), 4800, 1, 48000);
+    REQUIRE(f.vfs.writeBytes("assets://a.wav", wav.data(), wav.size()));
+    f.write("assets://s/sound.lua", R"lua(
+local T = {}
+function T:onStart()
+    self.voice = agr.audio.play("assets://a.wav", { bus = "Music", volume = 0.5, loop = true })
+    self.missing, self.err = agr.audio.play("assets://none.wav")
+    agr.audio.setBusVolume("music", 0.25)
+    self.volume = agr.audio.busVolume("Music")
+    agr.audio.setBusMuted("Effects", true)
+    self.muted = agr.audio.busMuted("Effects")
+    self.played = self.entity:playSound()
+    self.playing = self.entity:isSoundPlaying() and agr.audio.isPlaying(self.voice)
+    self.badBus = not pcall(agr.audio.setBusVolume, "Nope", 1)
+    self.noSource = not pcall(function() agr.find("Other"):playSound() end)
+end
+return T
+)lua");
+    const auto e = f.scripted("Speaker", "assets://s/sound.lua");
+    auto& src = f.scene.registry().emplace<AudioSourceComponent>(e);
+    src.clip = "assets://a.wav";
+    src.playOnStart = false;
+    f.scene.createEntity("Other");
+    f.update();
+    CHECK(f.scripts.field(e, "voice").value() == "1");
+    CHECK(f.scripts.field(e, "missing").value() == "nil");
+    CHECK(f.scripts.field(e, "err").value().find("none.wav") != std::string::npos);
+    CHECK(f.scripts.field(e, "volume").value() == "0.25");
+    CHECK(f.scripts.field(e, "muted").value() == "true");
+    CHECK(f.scripts.field(e, "played").value() == "true");
+    CHECK(f.scripts.field(e, "playing").value() == "true");
+    CHECK(f.scripts.field(e, "badBus").value() == "true");
+    CHECK(f.scripts.field(e, "noSource").value() == "true");
+    CHECK(audio.stats().voices == 2);
+    CHECK(audio.busVolume(AudioBus::Music) == doctest::Approx(0.25f));
+    CHECK(f.scripts.run("agr.audio.stop(1)", &f.scene));
+    audio.update(0.0);
+    CHECK(audio.stats().voices == 1);
 }
 
 }  // TEST_SUITE

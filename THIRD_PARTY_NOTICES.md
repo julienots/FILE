@@ -14,6 +14,8 @@ third-party components, fetched at configure time at pinned versions
 | [Box2D](https://github.com/erincatto/box2d) | 3.1.1 | MIT | `agr::physics2d` (2D physics) |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 5.6.0 | MIT | `agr::physics3d` (3D physics) |
 | [Lua](https://www.lua.org) | 5.4.9 | MIT | `agr::script` (gameplay scripts) |
+| [miniaudio](https://miniaud.io) | 0.11.25 | Public domain (Unlicense) or MIT-0 | `agr::audio` (mixing, audio output, WAV / MP3 / FLAC decoding) |
+| [stb_vorbis](https://github.com/nothings/stb) (bundled with miniaudio) | 1.22 | Public domain or MIT | `agr::audio` (Ogg Vorbis decoding) |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | vulkan-sdk-1.4.350.0 | Apache-2.0 OR MIT | `agr::rhi` Vulkan backend |
 | [volk](https://github.com/zeux/volk) | vulkan-sdk-1.4.350.0 | MIT | Vulkan function loader |
 | [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | 3.4.0 | MIT | Vulkan memory allocation |

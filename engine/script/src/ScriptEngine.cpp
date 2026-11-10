@@ -152,6 +152,7 @@ void ScriptEngine::setInput(const Input* input) { m->input = input; }
 void ScriptEngine::setScreenSize(math::Vec2 size) { m->screenSize = size; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
+void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }
 
 void ScriptEngine::reset() {

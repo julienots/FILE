@@ -5,6 +5,7 @@
 
 #include "agr/core/FileSystem.hpp"
 #include "agr/core/Time.hpp"
+#include "agr/audio/AudioSystem.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/runtime/Input.hpp"
@@ -61,6 +62,7 @@ public:
     void setScreenSize(math::Vec2 size);
     void setPhysics2D(Physics2DWorld* world);
     void setPhysics3D(Physics3DWorld* world);
+    void setAudio(AudioSystem* audio);
     /// Maximum run time of one callback before it is stopped (infinite loops).
     void setCallbackBudget(f64 seconds);
 

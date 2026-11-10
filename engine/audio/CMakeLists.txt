@@ -1,0 +1,11 @@
+agr_add_module(audio
+    SOURCES
+        src/AudioComponents.cpp
+        src/AudioSystem.cpp
+        src/AudioPlugin.cpp
+        src/Wav.cpp
+    PUBLIC_DEPS
+        agr::render
+        agr::runtime
+    PRIVATE_DEPS
+        agr::miniaudio)

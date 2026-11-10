@@ -1,5 +1,6 @@
 #include "agr/script/ScriptPlugin.hpp"
 
+#include "agr/audio/AudioPlugin.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
@@ -40,6 +41,8 @@ void ScriptPlugin::bindPhysics(Engine& engine) {
     auto* p3 = engine.service<Physics3DPlugin>();
     m_scripts->setPhysics2D(p2 ? &p2->world() : nullptr);
     m_scripts->setPhysics3D(p3 ? &p3->world() : nullptr);
+    auto* audio = engine.service<AudioPlugin>();
+    m_scripts->setAudio(audio ? &audio->audio() : nullptr);
 }
 
 void ScriptPlugin::setRunning(bool running) {
