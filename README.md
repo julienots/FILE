@@ -7,11 +7,12 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phases 1 et 2 terminées ; éditeur (3), 2D (4) et 3D (5) : cœur terminé.**
+> **État actuel : phases 1 et 2 terminées ; éditeur (3), 2D (4), 3D (5), physique et scripts (6) : cœur terminé.**
 > Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel, systèmes 2D (feuilles de
 > sprites, animation, tilemaps peintes dans l'éditeur, parallaxe, lumières et particules 2D, écrans mobiles),
-> 3D (import glTF / OBJ / FBX, matériaux PBR, ombres, lumières, ciel, instanciation).
-> Squelettes, post-traitement, physique, scripting et export Android sont les étapes suivantes.
+> 3D (import glTF / OBJ / FBX, matériaux PBR, ombres, lumières, ciel, instanciation), physique 2D (Box2D) et
+> 3D (Jolt), scripts Lua ; les deux modèles « Vitrine » sont jouables. Éditeur de logique visuelle, animation,
+> audio, interface et export Android sont les étapes suivantes.
 > L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Éditeur AGR](docs/images/editor.png)
@@ -50,10 +51,14 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 - De la **3D** ([guide](docs/3D.md)) : import glTF / GLB, OBJ et FBX, matériaux PBR `.agrmat` (métal,
   rugosité, normal maps, émission, transparence), soleil avec ombres, lumières ponctuelles et projecteurs,
   ciel procédural, brume, tone mapping ACES, instanciation automatique.
+- De la **physique** ([guide](docs/PHYSICS.md)) 2D (Box2D) et 3D (Jolt) : corps, formes, déclencheurs,
+  tilemaps solides, rayons, synchronisés avec la scène.
+- Des **scripts Lua 5.4** ([guide](docs/SCRIPTING.md)) : propriétés éditables, accès à tous les composants,
+  entrées clavier / tactiles, physique, rechargement à chaud, erreurs localisées, bac à sable.
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **101 tests unitaires, 30 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D), tous
+- **123 tests unitaires, 30 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu), tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
@@ -126,6 +131,8 @@ engine/
   assets/     images, gestionnaire de ressources, import de modèles (glTF, OBJ, FBX), matériaux
   render/     composants de rendu, renderer (PBR, ombres, sprites), profils, modèles, feuilles de sprites
   twod/       systèmes 2D : animation, particules, édition de tilemaps, atlas
+  physics2d/  physique 2D (Box2D)       physics3d/  physique 3D (Jolt)
+  script/     scripts Lua 5.4
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
 editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices, assets des modèles)
 plugins/spin/ plugin dynamique d'exemple
@@ -143,6 +150,7 @@ docs/         architecture, ADR, feuille de route, identité visuelle
 - [Éditeur](docs/EDITOR.md)
 - [Systèmes 2D](docs/2D.md)
 - [Rendu 3D](docs/3D.md)
+- [Physique](docs/PHYSICS.md) · [Scripts Lua](docs/SCRIPTING.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

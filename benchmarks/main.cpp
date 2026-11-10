@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -17,6 +18,10 @@
 #include "agr/scene/Scene.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/assets/Model.hpp"
+#include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/script/ScriptComponent.hpp"
+#include "agr/script/ScriptEngine.hpp"
 #include "agr/twod/Atlas.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/TilemapEditing.hpp"
@@ -201,6 +206,58 @@ int main() {
                        std::to_string(d) + "/" + std::to_string(d) + " " + std::to_string(b) + "/" + std::to_string(b) + "\n";
             }
         bench("3d: import OBJ 20k triangles (+normals, tangents)", 20000, 5, [&] { (void)importObj(obj, "assets://grid.obj", nullptr); });
+    }
+
+    // -------------------------------------------------------------- physics & scripts
+    {
+        registerPhysics2DComponents();
+        Scene scene;
+        const auto ground = scene.createEntity("Ground");
+        scene.registry().emplace<Collider2DComponent>(ground).size = {200, 1};
+        for (int i = 0; i < 1000; ++i) {
+            const auto e = scene.createEntity("Box");
+            scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 50) * 1.1f - 27.0f, 1.0f + static_cast<float>(i / 50) * 1.1f, 0};
+            scene.registry().emplace<RigidBody2DComponent>(e);
+            scene.registry().emplace<Collider2DComponent>(e);
+        }
+        Physics2DWorld world;
+        for (int i = 0; i < 60; ++i) world.step(scene, 1.0f / 60.0f);  // bodies created, pile settling
+        bench("physics2d: step, 1000 boxes piling up", 1000, 60, [&] { world.step(scene, 1.0f / 60.0f); });
+    }
+    {
+        registerPhysics3DComponents();
+        Scene scene;
+        const auto ground = scene.createEntity("Ground");
+        scene.registry().emplace<ColliderComponent>(ground).size = {200, 1, 200};
+        for (int i = 0; i < 1000; ++i) {
+            const auto e = scene.createEntity("Box");
+            scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 10) * 1.1f - 5.0f, 1.0f + static_cast<float>(i / 100) * 1.1f,
+                                                                    static_cast<float>((i / 10) % 10) * 1.1f - 5.0f};
+            scene.registry().emplace<RigidBodyComponent>(e);
+            scene.registry().emplace<ColliderComponent>(e);
+        }
+        Physics3DWorld world;
+        for (int i = 0; i < 60; ++i) world.step(scene, 1.0f / 60.0f);
+        bench("physics3d: step, 1000 boxes piling up", 1000, 60, [&] { world.step(scene, 1.0f / 60.0f); });
+    }
+    {
+        registerScriptComponent();
+        const auto root = std::filesystem::temp_directory_path() / "agr_bench_scripts";
+        std::filesystem::create_directories(root);
+        VirtualFileSystem vfs;
+        vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
+        (void)vfs.writeText("assets://mover.lua", "local M = { properties = { speed = 1 } }\n"
+                                                  "function M:onUpdate(dt) self.entity:translate(self.speed * dt, 0, 0) end\nreturn M\n");
+        Scene scene;
+        for (int i = 0; i < 1000; ++i) scene.registry().emplace<ScriptComponent>(scene.createEntity("S")).script = "assets://mover.lua";
+        ScriptEngine scripts(vfs);
+        FrameTime time;
+        time.deltaSeconds = 1.0 / 60.0;
+        scripts.update(scene, time);  // instances created
+        bench("script: onUpdate of 1000 entities (translate)", 1000, 30, [&] { scripts.update(scene, time); });
+        std::printf("    (Lua heap: %zu KB)\n", scripts.stats().memoryKb);
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
     }
     return 0;
 }

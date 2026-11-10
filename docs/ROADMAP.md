@@ -118,9 +118,22 @@ Guide : [3D.md](3D.md).
 | Ombres des lumières locales, cascades multiples | ⬜ | à planifier |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
-## Phase 6 — Physique et scripting ⬜
-Jolt (3D) et Box2D v3 (2D) reliés à l'ECS ; Lua/Luau avec liaisons générées depuis la réflexion ;
-éditeur de logique visuelle (événements, conditions, variables, actions, boucles, minuteurs).
+## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D et Lua terminés ; éditeur de logique visuelle non réalisé)
+
+Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
+
+| Élément | État | Où |
+|---|---|---|
+| Physique 2D Box2D v3 : corps statiques / cinématiques / dynamiques, boîtes, cercles, capsules, composés, déclencheurs, tilemaps solides, rayons, forces | ✅ | `agr::physics2d` |
+| Physique 3D Jolt : corps, boîtes, sphères, capsules, composés, déclencheurs, masse imposée, rotation bloquée, rayons, forces | ✅ | `agr::physics3d` |
+| Synchronisation scène ↔ physique (téléportations, plateformes cinématiques, reconstruction à l'édition), événements de contact | ✅ | |
+| Scripts Lua 5.4 : cycle de vie, propriétés dans l'inspecteur, API entité / composants (réflexion) / entrées / temps / physique, bac à sable, chien de garde, erreurs localisées, rechargement à chaud | ✅ | `agr::script` |
+| Éditeur : scripts et physique en mode Jeu, inspecteur de script, nouveau script, glisser un script sur un objet, affichage des collisions | ✅ | `editor/ui` |
+| Modèles jouables : Vitrine 2D (plateforme, clavier et tactile), Vitrine 3D (lancer de balles) | ✅ | `SceneTemplates`, `assets/scripts` |
+| Tests : 7 cas 2D, 4 cas 3D, 10 cas scripts, jeu des modèles sans écran, mode Jeu piloté au clavier dans le test de bout en bout | ✅ | `tests/` |
+| **Éditeur de logique visuelle** (événements, conditions, variables, actions, boucles, minuteurs) | ⬜ | **non réalisé** : à reprendre |
+| Joints, contrôleur de personnage, formes maillage / convexes 3D, couches de collision | ⬜ | à planifier |
+| Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
 
 ## Phase 7 — Animation, audio, UI ⬜
 Timeline et courbes, machines à états, mixage audio avec bus et audio spatial (miniaudio),

@@ -75,7 +75,6 @@ void releaseJolt() {
 namespace Layers {
 constexpr JPH::ObjectLayer kStatic = 0;
 constexpr JPH::ObjectLayer kMoving = 1;
-constexpr JPH::uint kCount = 2;
 } // namespace Layers
 
 class BroadPhaseLayers final : public JPH::BroadPhaseLayerInterface {

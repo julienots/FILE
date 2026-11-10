@@ -4,11 +4,10 @@
 #include <unordered_map>
 #include <vector>
 
-extern "C" {
+// Lua is compiled as C++ (see AGRDependencies.cmake): no extern "C", errors are C++ exceptions.
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-}
 
 #include "agr/core/Time.hpp"
 #include "agr/script/ScriptEngine.hpp"

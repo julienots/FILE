@@ -321,7 +321,8 @@ int e_add(lua_State* L) {
 int e_remove(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
     const ComponentRef c = component(L, e, luaL_checkstring(L, 2), false);
-    if (c.data) sceneOf(L).registry().findPool(c.info->id)->remove(sceneOf(L).registry(), e);
+    auto& reg = sceneOf(L).registry();
+    if (ecs::PoolBase* pool = c.data ? reg.findPool(c.info->id) : nullptr) pool->remove(reg, e);
     return 0;
 }
 int e_parent(lua_State* L) {

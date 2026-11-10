@@ -107,9 +107,12 @@ set(_lua_sources lapi lauxlib lbaselib lcode lcorolib lctype ldblib ldebug ldo l
     lmem loadlib lobject lopcodes loslib lparser lstate lstring lstrlib ltable ltablib ltm lundump lutf8lib lvm lzio)
 list(TRANSFORM _lua_sources PREPEND ${lua_SOURCE_DIR}/)
 list(TRANSFORM _lua_sources APPEND .c)
+# Compiled as C++: Lua errors then unwind with exceptions, so C++ objects in engine bindings that raise
+# Lua errors are destroyed properly (with C, longjmp would skip their destructors).
+set_source_files_properties(${_lua_sources} PROPERTIES LANGUAGE CXX)
 add_library(agr_lua STATIC ${_lua_sources})
 target_include_directories(agr_lua SYSTEM PUBLIC ${lua_SOURCE_DIR})
-set_target_properties(agr_lua PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE C)
+set_target_properties(agr_lua PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE CXX)
 if(NOT MSVC)
     target_compile_options(agr_lua PRIVATE -w)
 endif()

@@ -46,13 +46,15 @@
 | `agr::rhi` | statique | Interface GPU neutre + backends Vulkan 1.1 et OpenGL 3.3 / OpenGL ES 3.0, traducteur du dialecte de shaders |
 | `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud, images intégrées aux modèles), import de modèles glTF / OBJ / FBX, matériaux PBR `.agrmat` |
 | `agr::render` | statique | Composants de rendu 3D (maillages, lumières, environnement) et 2D (tilemaps, lumières 2D, parallaxe, particules), primitives, profils graphiques, feuilles de sprites, `ModelLibrary` / `MaterialLibrary`, `Renderer` forward (PBR, ombres, instanciation, sprites), `RenderPlugin` |
+| `agr::physics2d` | statique | Physique 2D (Box2D v3) : `RigidBody2D`, `Collider2D`, `TilemapCollider2D`, `Physics2DWorld`, `Physics2DPlugin` ([PHYSICS.md](PHYSICS.md)) |
+| `agr::physics3d` | statique | Physique 3D (Jolt) : `RigidBody`, `Collider`, `Physics3DWorld`, `Physics3DPlugin` |
+| `agr::script` | statique | Scripts Lua 5.4 : composant `Script`, `ScriptEngine` (bac à sable, API, rechargement à chaud), `ScriptPlugin` ([SCRIPTING.md](SCRIPTING.md)) |
 | `agr::twod` | statique | Systèmes 2D : animation image par image, simulation des particules, édition de tilemaps, atlas ; `TwoDPlugin` ([2D.md](2D.md)) |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 
 Détails du rendu : [RENDERING.md](RENDERING.md).
 
-Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
-`agr::ui`, `agr::animation`.
+Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::audio`, `agr::ui`, `agr::animation`.
 
 ## Boucle principale
 

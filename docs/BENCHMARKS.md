@@ -152,5 +152,22 @@ AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1
 | 8 lumières ponctuelles : coût CPU négligeable | Les lumières sont évaluées par pixel dans le shader (forward) ; le profil limite leur nombre. |
 | Import OBJ 20 000 triangles : 6 à 8 ms (jusqu'à 12 ms selon la charge de la machine) | Analyse du texte, déduplication des sommets, normales et tangentes ; fait hors du thread principal. |
 
+## Physique et scripts (phase 6)
+
+`agr_benchmarks` (même machine, un cœur) :
+
+```
+physics2d: step, 1000 boxes piling up             2.592 ms    2591.99 ns/item
+physics3d: step, 1000 boxes piling up            10.835 ms   10834.80 ns/item
+script: onUpdate of 1000 entities (translate)      0.250 ms     250.04 ns/item
+    (Lua heap: 259 KB)
+```
+
+| Mesure | Analyse |
+|---|---|
+| Box2D, 1 000 boîtes en tas : ~2,8 ms par pas | Synchronisation scène ↔ corps comprise (hachage des paramètres pour détecter les modifications, écriture des transformations). |
+| Jolt, 1 000 boîtes en tas : ~10 ms par pas | Simulation mono-thread : à 60 Hz, ~1 000 corps actifs empilés restent dans le budget d'un cœur de ce Xeon, pas forcément d'un téléphone d'entrée de gamme. Le multi-thread (JobSystem) est la piste d'optimisation. |
+| Lua, `onUpdate` de 1 000 entités : 0,25 à 0,4 ms selon les exécutions | 0,25 à 0,4 µs par appel, accès au Transform compris. |
+
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
 téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.
