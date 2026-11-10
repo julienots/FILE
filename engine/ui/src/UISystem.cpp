@@ -155,6 +155,20 @@ ecs::Entity UISystem::hitTest(Vec2 p) const {
     return {};
 }
 
+ecs::Entity UISystem::elementAt(Vec2 p) const {
+    for (auto pass = m_passes.rbegin(); pass != m_passes.rend(); ++pass)
+        for (auto el = pass->elements.rbegin(); el != pass->elements.rend(); ++el)
+            if (el->entity != pass->canvas && contains(el->rect, p)) return el->entity;
+    return {};
+}
+
+ecs::Entity UISystem::canvasOf(ecs::Entity element) const {
+    for (const CanvasPass& pass : m_passes)
+        for (const Element& el : pass.elements)
+            if (el.entity == element) return pass.canvas;
+    return {};
+}
+
 bool UISystem::isPointerOverUI(Vec2 p) const { return !hitTest(p).isNull(); }
 
 bool UISystem::isPressed(ecs::Entity e) const {

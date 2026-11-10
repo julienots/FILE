@@ -1,7 +1,8 @@
 -- Objet à ramasser : un déclencheur (Collider2D « isTrigger ») qui disparaît au contact du héros
--- et prévient son script (fonction Hero:collect). Il flotte doucement en attendant.
+-- et prévient son script (fonction Hero:collect). Il flotte doucement en attendant ; son Animator
+-- (mushroom_pulse.agranim) le fait aussi « respirer ».
 local Collectible = {
-    properties = { collector = "Hero", bob = 0.15 },
+    properties = { collector = "Hero", bob = 0.15, sound = "assets://audio/coin.wav" },
 }
 
 function Collectible:onStart()
@@ -18,6 +19,7 @@ function Collectible:onTrigger(other, began)
     if not began or other:name() ~= self.collector then return end
     local script = other:script()
     if script and script.collect then script:collect(self.entity:name()) end
+    if self.sound ~= "" then agr.audio.play(self.sound) end
     self.entity:destroy()
 end
 

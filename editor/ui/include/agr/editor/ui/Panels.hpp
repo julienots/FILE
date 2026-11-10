@@ -7,6 +7,7 @@
 
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
+#include "agr/animation/AnimationSystem.hpp"
 
 namespace agr::editor {
 
@@ -71,6 +72,8 @@ public:
     rhi::TextureHandle texture(EditorShared& s) const;
     /// Screen position (window pixels) of a world point in the last drawn viewport.
     bool worldToScreen(EditorShared& s, math::Vec3 world, ImVec2& out) const;
+    /// Window position of a point of the game UI (pixels of the view, as in UIRect::screenRect).
+    bool uiToScreen(math::Vec2 uiPixels, ImVec2& out) const;
     bool gameView = false;
     GizmoOp gizmoOp = GizmoOp::Translate;
     bool gizmoLocal = false;
@@ -88,6 +91,9 @@ private:
     void drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size);
+    /// Game view in edit mode: selects, moves and resizes UI elements (UI builder). Returns
+    /// true while it owns the left mouse button (no picking, no gizmo).
+    bool handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered);
     /// Tilemap brush: returns true while it owns the left mouse button (no picking, no gizmo).
     bool handleTilemapPainting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered);
     math::Mat4 viewMatrix(EditorShared& s) const;
@@ -106,6 +112,12 @@ private:
     bool m_strokeChanged = false;
     std::pair<i32, i32> m_strokeStart{}, m_strokeLast{};
     ImVec2 m_lastOrigin{}, m_lastSize{};
+    // UI builder drag: 0 none, 1 move, 2 resize (m_uiHandle = edge signs)
+    int m_uiDrag = 0;
+    math::Vec2 m_uiHandle{0.0f, 0.0f};
+    ImVec2 m_uiDragStart{};
+    math::Vec2 m_uiStartPos{}, m_uiStartSize{};
+    bool m_uiChanged = false;
 };
 
 class AssetBrowserPanel {
@@ -142,6 +154,68 @@ private:
     bool m_showInfo = true, m_showWarn = true, m_showError = true, m_showDebug = false;
     bool m_autoScroll = true;
     std::string m_filter;
+};
+
+/// Audio mixer: output state, bus volumes and mutes, master level meter.
+class MixerPanel {
+public:
+    void draw(EditorShared& s, const FrameTime& time);
+
+private:
+    float m_level[2] = {0.0f, 0.0f};
+};
+
+/// Animation timeline: tracks of a clip (.agranim) of the selected Animator, keys on a
+/// time ruler, key properties, curve view, events, preview by scrubbing in edit mode.
+class AnimationPanel {
+public:
+    void draw(EditorShared& s, const FrameTime& time);
+    /// Restores the values changed by the preview (play mode, panel closed, other entity).
+    void endPreview(EditorShared& s);
+
+private:
+    void loadClip(EditorShared& s, const std::string& uri);
+    bool saveClip(EditorShared& s);
+    void applyPreview(EditorShared& s);
+    void keyTracks(EditorShared& s, bool selectedOnly);
+    void addTrackPopup(EditorShared& s);
+
+    std::string m_uri;          // clip being edited
+    AnimationClip m_clip;
+    bool m_dirty = false;
+    Uuid m_entity;              // animated root
+    float m_time = 0.0f;
+    bool m_playing = false;
+    bool m_previewing = false;
+    std::vector<std::pair<AnimationTrack, float>> m_restore;  // values before the preview
+    int m_track = -1;           // selected track
+    int m_key = -1;             // selected key of the selected track
+    int m_event = -1;           // selected event
+    bool m_draggingKey = false, m_scrubbing = false;
+    float m_zoom = 200.0f;      // pixels per second
+    std::string m_newClipName = "clip";
+    // add-track popup
+    int m_addTarget = 0, m_addComponent = 0, m_addField = 0;
+};
+
+/// State machine (.agrctrl) graph of the selected Animator: states, transitions,
+/// conditions, parameters.
+class StateMachinePanel {
+public:
+    void draw(EditorShared& s);
+
+private:
+    void load(EditorShared& s, const std::string& uri);
+    bool save(EditorShared& s);
+    void drawProperties(EditorShared& s);
+
+    std::string m_uri;
+    AnimatorController m_ctrl;
+    bool m_dirty = false;
+    int m_state = -1, m_transition = -1;
+    int m_dragState = -1;
+    ImVec2 m_pan{240.0f, 50.0f};
+    std::string m_newName = "controller";
 };
 
 class StatsPanel {

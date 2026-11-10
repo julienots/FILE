@@ -12,6 +12,9 @@
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/script/ScriptComponent.hpp"
+#include "agr/animation/AnimationSystem.hpp"
+#include "agr/audio/AudioComponents.hpp"
+#include "agr/ui/UIComponents.hpp"
 #include "agr/script/ScriptPlugin.hpp"
 #include <nlohmann/json.hpp>
 #include "agr/render/SpriteSheet.hpp"
@@ -476,6 +479,117 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
             ImGui::SetTooltip("Ouvre le script dans l'éditeur de texte du système ; il est rechargé à chaud quand vous l'enregistrez");
+        ImGui::PopID();
+    } else if (info.name == "AudioSource") {
+        auto& as = *static_cast<AudioSourceComponent*>(comp);
+        ImGui::PushID("audioTools");
+        if (!s.audio || !s.audio->audio().initialized()) {
+            ImGui::TextDisabled("Audio indisponible.");
+        } else if (as.clip.empty()) {
+            ImGui::TextDisabled("Glissez un fichier audio (.wav, .ogg, .mp3, .flac) dans « Clip ».");
+        } else {
+            AudioSystem& audio = s.audio->audio();
+            static VoiceId preview = 0;  // one preview at a time, on the Interface bus
+            auto duration = audio.clipDuration(as.clip);
+            if (!duration) {
+                ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));
+                ImGui::TextWrapped("%s", duration.error().message.c_str());
+                ImGui::PopStyleColor();
+            } else {
+                const bool playing = preview != 0 && audio.isPlaying(preview);
+                if (ImGui::SmallButton(playing ? "Arrêter" : "Écouter")) {
+                    if (playing) {
+                        audio.stop(preview);
+                        preview = 0;
+                    } else {
+                        PlayParams p;
+                        p.bus = AudioBus::Interface;
+                        p.volume = as.volume;
+                        p.pitch = as.pitch;
+                        p.stream = as.stream;
+                        auto v = audio.play(as.clip, p);
+                        preview = v ? v.value() : 0;
+                        if (!v) s.notify(v.error().message);
+                    }
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%.2f s%s", duration.value(), as.loop ? ", en boucle" : "");
+            }
+        }
+        ImGui::PopID();
+    } else if (info.name == "UIRect") {
+        auto& r = *static_cast<UIRectComponent*>(comp);
+        ImGui::PushID("uiRectTools");
+        ImGui::TextDisabled("Ancres (colonne : gauche, centre, droite, étirer ; ligne : haut, milieu, bas, étirer)");
+        static const float stops[4] = {0.0f, 0.5f, 1.0f, -1.0f};  // -1 = stretch
+        const float cell = ImGui::GetFrameHeight();
+        auto isPreset = [&](float sx, float sy) {
+            auto axis = [](float stop, float mn, float mx) { return stop < 0 ? (mn == 0.0f && mx == 1.0f) : (mn == stop && mx == stop); };
+            return axis(sx, r.anchorMin.x, r.anchorMax.x) && axis(sy, r.anchorMin.y, r.anchorMax.y);
+        };
+        float scale = 1.0f;
+        if (s.ui) scale = std::max(1e-3f, s.ui->ui().canvasScale(s.ui->ui().canvasOf(e)));
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                if (col) ImGui::SameLine(0, 2);
+                ImGui::PushID(row * 4 + col);
+                const bool active = isPreset(stops[col], stops[row]);
+                if (active) ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kAmber));
+                const char* glyph = stops[col] < 0 && stops[row] < 0 ? "+" : stops[col] < 0 ? "-" : stops[row] < 0 ? "|" : ".";
+                if (ImGui::Button(glyph, {cell, cell})) {
+                    // Keeps the element's on-screen size where possible.
+                    const math::Vec2 pixelSize{r.screenRect.z / scale, r.screenRect.w / scale};
+                    for (int axis = 0; axis < 2; ++axis) {
+                        const float stop = stops[axis == 0 ? col : row];
+                        float& mn = axis == 0 ? r.anchorMin.x : r.anchorMin.y;
+                        float& mx = axis == 0 ? r.anchorMax.x : r.anchorMax.y;
+                        float& pv = axis == 0 ? r.pivot.x : r.pivot.y;
+                        float& pos = axis == 0 ? r.position.x : r.position.y;
+                        float& sz = axis == 0 ? r.size.x : r.size.y;
+                        const bool wasStretch = mn != mx;
+                        if (stop < 0) {
+                            mn = 0.0f, mx = 1.0f, pv = 0.5f, pos = 0.0f, sz = 0.0f;
+                        } else {
+                            if (wasStretch) sz = axis == 0 ? pixelSize.x : pixelSize.y;
+                            mn = mx = pv = stop;
+                            pos = 0.0f;
+                        }
+                    }
+                    edit.changed = edit.committed = true;
+                }
+                if (active) ImGui::PopStyleColor();
+                ImGui::PopID();
+            }
+        }
+        if (r.screenRect.z > 0.0f)
+            ImGui::TextDisabled("À l'écran : %.0f x %.0f px (vue Jeu)", r.screenRect.z, r.screenRect.w);
+        else
+            ImGui::TextDisabled("Placez cet élément sous un Canvas ; il s'affiche dans la vue Jeu.");
+        ImGui::PopID();
+    } else if (info.name == "Animator") {
+        auto& an = *static_cast<AnimatorComponent*>(comp);
+        ImGui::PushID("animatorTools");
+        if (s.animation && !an.controller.empty()) {
+            auto ctrl = s.animation->animation().library().controller(an.controller);
+            if (!ctrl) {
+                ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));
+                ImGui::TextWrapped("%s", ctrl.error().message.c_str());
+                ImGui::PopStyleColor();
+            } else {
+                for (const std::string& problem : ctrl.value()->validate())
+                    ImGui::TextColored(palette::toVec4(palette::kWarning), "%s", problem.c_str());
+                if (s.ctx.playState() != PlayState::Edit) {
+                    ImGui::Text("État : %s (%.1f s)", s.animation->animation().currentState(e).c_str(), s.animation->animation().stateTime(e));
+                    for (const AnimatorParameter& p : ctrl.value()->parameters) {
+                        const auto v = s.animation->animation().parameter(scene, e, p.name);
+                        ImGui::BulletText("%s = %.2f", p.name.c_str(), v.value_or(0.0f));
+                    }
+                }
+            }
+        }
+        if (ImGui::SmallButton("Timeline")) s.showAnimation = true;
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Machine à états")) s.showStateMachine = true;
         ImGui::PopID();
     } else if (info.name == "ParticleEmitter2D") {
         const auto* state = reg.tryGet<ParticleState2DComponent>(e);

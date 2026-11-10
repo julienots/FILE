@@ -1,13 +1,15 @@
 -- Héros de plateforme 2D (AGR ENGINE, Lua 5.4).
 -- Clavier : flèches / WASD / ZQSD pour marcher, Espace ou Haut pour sauter.
--- Tactile : toucher le tiers gauche ou droit de l'écran pour marcher, le tiers central pour sauter.
+-- Tactile : boutons de l'interface « Left », « Right » et « Jump » (maintenus).
 -- L'entité a un RigidBody2D (rotation bloquée), un Collider2D capsule dont le bas est aux pieds,
--- un SpriteRenderer avec la feuille du héros et un SpriteAnimator (clips "idle" et "run").
+-- un SpriteRenderer, un SpriteAnimator et un Animator dont la machine à états (hero.agrctrl)
+-- choisit l'animation selon les paramètres « speed » et « grounded » réglés ici.
 local Hero = {
     properties = {
         speed = 4.5,       -- m/s
         jumpSpeed = 13.5,  -- m/s vers le haut au départ du saut
         fallLimit = -12,   -- en dessous : retour au point de départ
+        total = 3,         -- objets à ramasser (affichage)
     },
 }
 
@@ -16,24 +18,19 @@ function Hero:onStart()
     self.facing = 1
     self.grounded = false
     self.collected = 0
+    self.jumpHeld = false
+    self.score = agr.find("Score")  -- texte de l'interface (peut ne pas exister)
+    self:showScore()
 end
 
--- Commandes tactiles : renvoie le déplacement (-1, 0, 1) et le saut (début de toucher au centre).
-local function touchControls()
-    local width = agr.screen.size()
-    if width <= 0 then return 0, false end
-    local move, jump = 0, false
-    for i = 1, agr.input.touchCount() do
-        local x, _, phase = agr.input.touch(i)
-        if x < width / 3 then
-            move = -1
-        elseif x > width * 2 / 3 then
-            move = 1
-        elseif phase == "began" then
-            jump = true
-        end
-    end
-    return move, jump
+function Hero:showScore()
+    if self.score then self.score:setText("Champignons : " .. self.collected .. " / " .. self.total) end
+end
+
+-- Boutons tactiles de l'interface : déplacement (-1, 0, 1) et saut (au moment de l'appui).
+local function held(name)
+    local b = agr.find(name)
+    return b ~= nil and agr.ui.isPressed(b)
 end
 
 function Hero:onUpdate(dt)
@@ -46,20 +43,25 @@ function Hero:onUpdate(dt)
     self.grounded = hit ~= nil and hit.entity ~= e
 
     local move = agr.input.axis("horizontal")
+    if held("Left") then move = -1 elseif held("Right") then move = 1 end
+    local jumpButton = held("Jump")
     local jump = agr.input.keyPressed("Space") or agr.input.keyPressed("Up")
               or agr.input.keyPressed("W") or agr.input.keyPressed("Z")
-    local touchMove, touchJump = touchControls()
-    if touchMove ~= 0 then move = touchMove end
-    jump = jump or touchJump
+              or (jumpButton and not self.jumpHeld)
+    self.jumpHeld = jumpButton
 
     local _, vy = e:velocity()
-    if jump and self.grounded then vy = self.jumpSpeed end
+    if jump and self.grounded then
+        vy = self.jumpSpeed
+        agr.audio.play("assets://audio/jump.wav", { volume = 0.7 })
+    end
     e:setVelocity(move * self.speed, vy)
 
     if move ~= 0 then self.facing = move > 0 and 1 or -1 end
     e:set("SpriteRenderer", "flipX", self.facing < 0)
-    local running = move ~= 0 and self.grounded
-    e:set("SpriteAnimator", "clip", running and "run" or "idle")
+    -- La machine à états (Idle / Run / Air) choisit le clip de sprite.
+    e:setParameter("speed", math.abs(move))
+    e:setParameter("grounded", self.grounded)
 
     if y < self.fallLimit then  -- tombé dans l'eau ou hors du monde
         e:setPosition(self.startX, self.startY)
@@ -70,7 +72,9 @@ end
 -- Appelé par les objets à ramasser (collectible.lua).
 function Hero:collect(what)
     self.collected = self.collected + 1
+    self:showScore()
     agr.log("Ramassé : " .. what .. " (" .. self.collected .. ")")
+    if self.collected >= self.total and self.score then self.score:setText("Bravo, tout est ramassé !") end
 end
 
 return Hero

@@ -11,10 +11,13 @@
 
 #include "agr/editor/ui/EditorApp.hpp"
 #include "agr/platform/SdlPlatform.hpp"
+#include "agr/animation/AnimationPlugin.hpp"
+#include "agr/audio/AudioPlugin.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
+#include "agr/ui/UIPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 
 int main(int argc, char** argv) {
@@ -59,9 +62,12 @@ int main(int argc, char** argv) {
     Engine engine(config);
     engine.plugins().addStatic(std::make_unique<RenderPlugin>());
     engine.plugins().addStatic(std::make_unique<TwoDPlugin>());
+    engine.plugins().addStatic(std::make_unique<UIPlugin>());  // after RenderPlugin (draws over its views), before scripts (input first)
     engine.plugins().addStatic(std::make_unique<ScriptPlugin>());  // before physics: scripts move bodies, then physics steps
+    engine.plugins().addStatic(std::make_unique<AnimationPlugin>());  // after scripts: they set animator parameters
     engine.plugins().addStatic(std::make_unique<Physics2DPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics3DPlugin>());
+    engine.plugins().addStatic(std::make_unique<AudioPlugin>());
     auto platform = std::make_unique<SdlPlatform>();
     SdlPlatform* window = platform.get();
     if (Status s = engine.initialize(std::move(platform)); !s) {

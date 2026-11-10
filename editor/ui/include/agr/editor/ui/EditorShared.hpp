@@ -12,6 +12,9 @@
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/twod/TwoDPlugin.hpp"
+#include "agr/animation/AnimationPlugin.hpp"
+#include "agr/audio/AudioPlugin.hpp"
+#include "agr/ui/UIPlugin.hpp"
 
 namespace agr::editor {
 
@@ -35,6 +38,9 @@ struct EditorShared {
     SdlPlatform* platform = nullptr;
     RenderPlugin* render = nullptr;
     TwoDPlugin* twod = nullptr;
+    AudioPlugin* audio = nullptr;
+    UIPlugin* ui = nullptr;
+    AnimationPlugin* animation = nullptr;
     EditorFonts fonts;
     TilemapBrush brush;
 
@@ -61,6 +67,9 @@ struct EditorShared {
     bool openSaveAsPopup = false;
     bool renameSelection = false;  ///< Hierarchy starts inline rename of the primary selection.
     bool focusViewport = false;
+    bool showMixer = false;        ///< Audio mixer panel.
+    bool showAnimation = false;    ///< Animation timeline panel.
+    bool showStateMachine = false; ///< State machine graph panel.
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).
     std::string previewMaterial;   ///< Material the preview renders this frame (set by the inspector).

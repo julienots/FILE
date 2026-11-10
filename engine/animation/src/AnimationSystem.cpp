@@ -513,6 +513,21 @@ std::optional<float> AnimationSystem::readTrack(Scene& scene, ecs::Entity root, 
     return readChannel(c, *b[0].field, track.channel);
 }
 
+std::optional<std::string> AnimationSystem::readTrackText(Scene& scene, ecs::Entity root, const AnimationTrack& track) {
+    AnimationClip one;
+    one.tracks.push_back(track);
+    const std::vector<Binding> b = bindTracks(scene, root, one);
+    void* c = componentPtr(scene, b[0]);
+    if (!c || b[0].field->type != FieldType::String) return std::nullopt;
+    return b[0].field->ref<std::string>(c);
+}
+
+bool AnimationSystem::isTextTrack(const AnimationTrack& track) {
+    const ComponentInfo* info = ComponentRegistry::instance().find(track.component);
+    const FieldInfo* f = info ? info->field(track.field) : nullptr;
+    return f && f->type == FieldType::String;
+}
+
 void registerAnimationComponents() {
     auto& reg = ComponentRegistry::instance();
     if (reg.find<AnimatorComponent>()) return;

@@ -7,7 +7,8 @@
 namespace agr {
 
 /// Game UI: UICanvas hierarchies drawn over the scene by the Renderer, driven by the
-/// mouse and multi-touch. Static plugin, registered after RenderPlugin:
+/// mouse and multi-touch. Static plugin, registered after RenderPlugin and before
+/// ScriptPlugin (scripts then see this frame's UI state: pointerOverUI, isPressed):
 ///     engine.plugins().addStatic(std::make_unique<UIPlugin>());
 /// Clicks and slider changes are published as UIClickEvent / UIValueChangedEvent.
 class UIPlugin final : public Plugin {

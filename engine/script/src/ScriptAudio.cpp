@@ -6,11 +6,8 @@ namespace agr {
 
 namespace {
 
-AudioSystem& audioOf(lua_State* L) {
-    auto& m = implOf(L);
-    if (!m.audio) luaL_error(L, "audio is not enabled (AudioPlugin)");
-    return *m.audio;
-}
+/// Without AudioPlugin (dedicated servers, tests) the audio functions do nothing.
+AudioSystem* audioOf(lua_State* L) { return implOf(L).audio; }
 
 AudioBus checkBus(lua_State* L, int idx) {
     AudioBus bus{};
@@ -59,7 +56,13 @@ int au_play(lua_State* L) {
     } else if (!lua_isnoneornil(L, 2)) {
         luaL_checktype(L, 2, LUA_TTABLE);
     }
-    auto voice = audioOf(L).play(uri, p);
+    AudioSystem* audio = audioOf(L);
+    if (!audio) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "audio is not enabled");
+        return 2;
+    }
+    auto voice = audio->play(uri, p);
     if (!voice) {
         lua_pushnil(L);
         lua_pushstring(L, voice.error().message.c_str());
@@ -69,39 +72,49 @@ int au_play(lua_State* L) {
     return 1;
 }
 int au_stop(lua_State* L) {
-    audioOf(L).stop(checkVoice(L, 1), static_cast<float>(luaL_optnumber(L, 2, 0.0)));
+    const VoiceId v = checkVoice(L, 1);
+    if (AudioSystem* a = audioOf(L)) a->stop(v, static_cast<float>(luaL_optnumber(L, 2, 0.0)));
     return 0;
 }
 int au_isPlaying(lua_State* L) {
-    lua_pushboolean(L, audioOf(L).isPlaying(checkVoice(L, 1)));
+    const VoiceId v = checkVoice(L, 1);
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->isPlaying(v));
     return 1;
 }
 int au_setVolume(lua_State* L) {
-    audioOf(L).setVolume(checkVoice(L, 1), static_cast<float>(luaL_checknumber(L, 2)));
+    const VoiceId v = checkVoice(L, 1);
+    const float x = static_cast<float>(luaL_checknumber(L, 2));
+    if (AudioSystem* a = audioOf(L)) a->setVolume(v, x);
     return 0;
 }
 int au_setPitch(lua_State* L) {
-    audioOf(L).setPitch(checkVoice(L, 1), static_cast<float>(luaL_checknumber(L, 2)));
+    const VoiceId v = checkVoice(L, 1);
+    const float x = static_cast<float>(luaL_checknumber(L, 2));
+    if (AudioSystem* a = audioOf(L)) a->setPitch(v, x);
     return 0;
 }
 int au_setBusVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
-    audioOf(L).setBusVolume(bus, static_cast<float>(luaL_checknumber(L, 2)));
+    const float x = static_cast<float>(luaL_checknumber(L, 2));
+    if (AudioSystem* a = audioOf(L)) a->setBusVolume(bus, x);
     return 0;
 }
 int au_busVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
-    lua_pushnumber(L, audioOf(L).busVolume(bus));
+    AudioSystem* a = audioOf(L);
+    lua_pushnumber(L, a ? a->busVolume(bus) : 1.0);
     return 1;
 }
 int au_setBusMuted(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
-    audioOf(L).setBusMuted(bus, lua_toboolean(L, 2) != 0);
+    if (AudioSystem* a = audioOf(L)) a->setBusMuted(bus, lua_toboolean(L, 2) != 0);
     return 0;
 }
 int au_busMuted(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
-    lua_pushboolean(L, audioOf(L).busMuted(bus));
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->busMuted(bus));
     return 1;
 }
 
@@ -109,17 +122,20 @@ int e_playSound(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
     Scene& scene = sceneOf(L);
     if (!scene.registry().has<AudioSourceComponent>(e)) luaL_error(L, "the entity has no AudioSource");
-    lua_pushboolean(L, audioOf(L).playSource(scene, e) != 0);
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->playSource(scene, e) != 0);
     return 1;
 }
 int e_stopSound(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
-    audioOf(L).stopSource(e, static_cast<float>(luaL_optnumber(L, 2, 0.0)));
+    const float fade = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    if (AudioSystem* a = audioOf(L)) a->stopSource(e, fade);
     return 0;
 }
 int e_isSoundPlaying(lua_State* L) {
     const ecs::Entity e = checkEntity(L, 1);
-    lua_pushboolean(L, audioOf(L).sourcePlaying(e));
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->sourcePlaying(e));
     return 1;
 }
 

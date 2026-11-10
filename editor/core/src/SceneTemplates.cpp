@@ -6,6 +6,9 @@
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 #include "agr/twod/TilemapEditing.hpp"
+#include "agr/animation/AnimationSystem.hpp"
+#include "agr/audio/AudioComponents.hpp"
+#include "agr/ui/UIComponents.hpp"
 
 namespace agr::editor {
 
@@ -13,6 +16,65 @@ using math::Quat;
 using math::Vec3;
 
 namespace {
+
+// ------------------------------------------------------------------ UI helpers
+ecs::Entity uiCanvas(Scene& scene) {
+    const auto c = scene.createEntity("HUD");
+    auto& cv = scene.registry().emplace<UICanvasComponent>(c);
+    cv.referenceResolution = {1920.0f, 1080.0f};
+    cv.match = 0.5f;
+    return c;
+}
+
+ecs::Entity uiElement(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size) {
+    const auto e = scene.createEntity(name, parent);
+    auto& r = scene.registry().emplace<UIRectComponent>(e);
+    r.anchorMin = r.anchorMax = r.pivot = anchor;
+    r.position = position;
+    r.size = size;
+    return e;
+}
+
+/// Text filling its parent.
+ecs::Entity uiLabel(Scene& scene, const std::string& name, ecs::Entity parent, const std::string& text, float fontSize, math::Vec4 color) {
+    const auto e = scene.createEntity(name, parent);
+    auto& r = scene.registry().emplace<UIRectComponent>(e);
+    r.anchorMin = {0.0f, 0.0f};
+    r.anchorMax = {1.0f, 1.0f};
+    r.size = {0.0f, 0.0f};
+    auto& t = scene.registry().emplace<UITextComponent>(e);
+    t.text = text;
+    t.fontSize = fontSize;
+    t.color = color;
+    return e;
+}
+
+ecs::Entity uiPanel(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size) {
+    const auto e = uiElement(scene, name, parent, anchor, position, size);
+    scene.registry().emplace<UIImageComponent>(e).color = {0.05f, 0.06f, 0.08f, 0.62f};
+    return e;
+}
+
+ecs::Entity uiButton(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size,
+                     const std::string& label) {
+    const auto e = uiElement(scene, name, parent, anchor, position, size);
+    scene.registry().emplace<UIImageComponent>(e).color = {1.0f, 1.0f, 1.0f, 0.22f};
+    auto& b = scene.registry().emplace<UIButtonComponent>(e);
+    b.pressedColor = {2.2f, 1.6f, 0.6f, 2.2f};  // brighter, warmer while held
+    uiLabel(scene, "Label", e, label, size.y * 0.42f, {1.0f, 1.0f, 1.0f, 0.9f});
+    return e;
+}
+
+ecs::Entity audioSource(Scene& scene, const std::string& name, const std::string& clip, AudioBus bus, float volume) {
+    const auto e = scene.createEntity(name);
+    auto& a = scene.registry().emplace<AudioSourceComponent>(e);
+    a.clip = clip;
+    a.bus = bus;
+    a.volume = volume;
+    a.loop = true;
+    a.stream = true;
+    return e;
+}
 
 void lookAt(Scene& scene, ecs::Entity e, Vec3 eye, Vec3 target) {
     auto& t = scene.registry().get<TransformComponent>(e);
@@ -49,10 +111,12 @@ const char* templateDescription(SceneTemplate t) {
         case SceneTemplate::Empty3D: return "Caméra, soleil, ambiance et sol texturé : base d'un jeu 3D.";
         case SceneTemplate::Showcase2D:
             return "Petit jeu de plateforme jouable en pixel art : héros scripté (Lua) avec physique 2D, caisse à pousser, "
-                   "champignons à ramasser, tilemap solide, parallaxe, lumière 2D et lucioles. Flèches + Espace ou tactile.";
+                   "champignons à ramasser, tilemap solide, parallaxe, lumière 2D, lucioles, musique et sons, animations (machine à "
+                   "états) et interface (score, boutons tactiles). Flèches + Espace ou boutons à l'écran.";
         case SceneTemplate::Showcase3D:
             return "Matériaux PBR, modèles glTF importés, ombres, lumières, ciel et brume, avec physique 3D : en jeu, "
-                   "Espace / clic / toucher lance des balles sur les caisses (script Lua).";
+                   "Espace / clic / toucher lance des balles sur les caisses (script Lua), avec sons, ambiance, objets animés et "
+                   "interface (compteur, curseur de vitesse).";
     }
     return "";
 }
@@ -185,6 +249,7 @@ void buildShowcase2D(Scene& scene) {
         col.friction = 0.0f;  // does not stick to walls
     }
     reg.emplace<ScriptComponent>(hero).script = "assets://scripts/platformer_hero.lua";
+    reg.emplace<AnimatorComponent>(hero).controller = "assets://animations/hero.agrctrl";  // Idle / Run / Air
     reg.emplace<ScriptComponent>(cam).script = "assets://scripts/camera_follow.lua";
 
     // A crate to push (dynamic body) and mushrooms to collect (triggers).
@@ -213,6 +278,7 @@ void buildShowcase2D(Scene& scene) {
         col.radius = 0.35f;
         col.isTrigger = true;
         reg.emplace<ScriptComponent>(m).script = "assets://scripts/collectible.lua";
+        reg.emplace<AnimatorComponent>(m).clip = "assets://animations/mushroom_pulse.agranim";
     }
 
     const auto lamp = scene.createEntity("Lamp");
@@ -250,6 +316,15 @@ void buildShowcase2D(Scene& scene) {
     p.endSize = 0.08f;
     p.additive = true;
     p.sortingLayer = 2;
+
+    // Music, and the HUD: score, touch controls (held buttons read by the hero script).
+    audioSource(scene, "Music", "assets://audio/music.wav", AudioBus::Music, 0.4f);
+    const auto hud = uiCanvas(scene);
+    const auto panel = uiPanel(scene, "Score Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {520.0f, 84.0f});
+    uiLabel(scene, "Score", panel, "Champignons : 0 / 3", 40.0f, {1.0f, 0.93f, 0.75f, 1.0f});
+    uiButton(scene, "Left", hud, {0.0f, 1.0f}, {40.0f, -40.0f}, {190.0f, 170.0f}, "<");
+    uiButton(scene, "Right", hud, {0.0f, 1.0f}, {260.0f, -40.0f}, {190.0f, 170.0f}, ">");
+    uiButton(scene, "Jump", hud, {1.0f, 1.0f}, {-40.0f, -40.0f}, {260.0f, 170.0f}, "Saut");
 }
 
 /// Daylight scene built from the original assets in assets/3d (tools/generate_template_3d_art.py).
@@ -342,6 +417,10 @@ void buildShowcase3D(Scene& scene) {
         m.mesh = i % 2 ? PrimitiveMesh::Cube : PrimitiveMesh::Sphere;
         m.material = std::string("assets://3d/") + materials[i] + ".agrmat";
         reg.emplace<ColliderComponent>(e).shape = i % 2 ? ColliderShape3D::Box : ColliderShape3D::Sphere;
+        if (i == 1) {  // the copper cube turns (animation) and pushes the balls (kinematic body)
+            reg.emplace<AnimatorComponent>(e).clip = "assets://animations/spin.agranim";
+            reg.emplace<RigidBodyComponent>(e).type = BodyType3D::Kinematic;
+        }
     }
 
     // Local lights: warm lamp over the crates, cool spot on the spheres, neon bar.
@@ -360,6 +439,7 @@ void buildShowcase3D(Scene& scene) {
     sl.range = 8.0f;
     sl.innerAngle = math::radians(25.0f);
     sl.outerAngle = math::radians(40.0f);
+    reg.emplace<AnimatorComponent>(lamp).clip = "assets://animations/lamp_flicker.agranim";
     const auto neon = scene.createEntity("Neon");
     auto& nt = reg.get<TransformComponent>(neon);
     nt.position = {0.0f, 0.05f, 2.2f};
@@ -369,6 +449,31 @@ void buildShowcase3D(Scene& scene) {
         nm.material = "assets://3d/neon.agrmat";
         nm.castShadows = false;
     }
+
+    // Ambience, and the HUD: ball counter, launch speed slider (calls the camera script).
+    audioSource(scene, "Ambience", "assets://audio/ambient.wav", AudioBus::Ambient, 0.35f);
+    const auto hud = uiCanvas(scene);
+    const auto panel = uiPanel(scene, "Counter Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {760.0f, 80.0f});
+    uiLabel(scene, "Counter", panel, "Balles : 0 / 25", 36.0f, {1.0f, 1.0f, 1.0f, 1.0f});
+    const auto hint = uiElement(scene, "Hint", hud, {1.0f, 0.0f}, {-30.0f, 30.0f}, {700.0f, 80.0f});
+    {
+        auto& t = reg.emplace<UITextComponent>(hint);
+        t.text = "Espace, clic ou toucher : lancer une balle";
+        t.fontSize = 30.0f;
+        t.hAlign = UIHAlign::Right;
+        t.color = {1.0f, 1.0f, 1.0f, 0.8f};
+    }
+    const auto powerPanel = uiPanel(scene, "Power Panel", hud, {0.5f, 1.0f}, {0.0f, -30.0f}, {640.0f, 120.0f});
+    const auto title = uiElement(scene, "Power Label", powerPanel, {0.5f, 0.0f}, {0.0f, 8.0f}, {600.0f, 44.0f});
+    reg.emplace<UITextComponent>(title).text = "Vitesse de lancer";
+    reg.get<UITextComponent>(title).fontSize = 30.0f;
+    const auto power = uiElement(scene, "Power", powerPanel, {0.5f, 1.0f}, {0.0f, -16.0f}, {560.0f, 44.0f});
+    auto& slider = reg.emplace<UISliderComponent>(power);
+    slider.minValue = 6.0f;
+    slider.maxValue = 30.0f;
+    slider.value = 14.0f;
+    slider.target = cam;
+    slider.message = "setPower";
 }
 
 } // namespace
@@ -379,6 +484,9 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
     registerPhysics2DComponents();
     registerPhysics3DComponents();
     registerScriptComponent();
+    registerAudioComponents();
+    registerUIComponents();
+    registerAnimationComponents();
     auto& reg = scene.registry();
     const char* mark = "assets://textures/agr_mark.png";
     const char* grid = "assets://textures/grid.png";

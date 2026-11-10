@@ -66,6 +66,9 @@ private:
     AssetBrowserPanel m_assets;
     ConsolePanel m_console;
     StatsPanel m_stats;
+    MixerPanel m_mixer;
+    AnimationPanel m_animation;
+    StateMachinePanel m_stateMachine;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;
     bool m_layoutBuilt = false;
@@ -100,6 +103,8 @@ private:
     std::vector<std::string> m_failures;
     ImVec2 m_smokeClick{};
     float m_smokeHeroX = 0.0f;
+    float m_smokeHeroY = 0.0f;
+    math::Vec2 m_smokeUiPos{};
     Uuid m_smokeDeleted;
 };
 

@@ -91,6 +91,10 @@ public:
     void preview(Scene& scene, ecs::Entity root, const AnimationClip& clip, float time);
     /// Reads the current value of a track's field channel on `root` (for keying in the editor).
     std::optional<float> readTrack(Scene& scene, ecs::Entity root, const AnimationTrack& track);
+    /// Same for string fields.
+    std::optional<std::string> readTrackText(Scene& scene, ecs::Entity root, const AnimationTrack& track);
+    /// True when the track's field is a string (keys hold text).
+    static bool isTextTrack(const AnimationTrack& track);
 
     AnimationLibrary& library() { return m_library; }
     const AnimationStats& stats() const { return m_stats; }

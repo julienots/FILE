@@ -13,6 +13,9 @@
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/script/ScriptEngine.hpp"
+#include "agr/animation/AnimationSystem.hpp"
+#include "agr/audio/AudioSystem.hpp"
+#include "agr/ui/UISystem.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -138,6 +141,23 @@ TEST_CASE("the 2D showcase template only references shipped, valid 2D assets") {
     CHECK(copy.registry().get<SpriteAnimatorComponent>(copy.findByName("Hero")).clip == "idle");
     CHECK(copy.registry().get<ScriptComponent>(copy.findByName("Hero")).script == "assets://scripts/platformer_hero.lua");
     CHECK(copy.registry().has<TilemapCollider2DComponent>(copy.findByName("Ground")));
+
+    // Phase 7 assets: audio files, animation files, font, HUD.
+    reg.view<AudioSourceComponent>().each([&](ecs::Entity, AudioSourceComponent& a) { CHECK(f.engine->vfs().exists(a.clip)); });
+    VirtualFileSystem& vfs = f.engine->vfs();
+    for (const char* uri : {"assets://audio/jump.wav", "assets://audio/coin.wav", "assets://fonts/Inter-Regular.ttf"}) CHECK_MESSAGE(vfs.exists(uri), uri);
+    AnimationLibrary anims(vfs);
+    auto ctrl = anims.controller(reg.get<AnimatorComponent>(hero).controller);
+    REQUIRE(ctrl);
+    CHECK(ctrl.value()->validate().empty());
+    for (const AnimatorState& st : ctrl.value()->states) {
+        CHECK(anims.clip(st.clip));
+        CHECK(heroSheet->findClip(st.spriteClip) != nullptr);
+    }
+    CHECK(anims.clip(reg.get<AnimatorComponent>(scene.findByName("Mushroom 1")).clip));
+    CHECK(reg.get<UITextComponent>(scene.findByName("Score")).text == "Champignons : 0 / 3");
+    for (const char* b : {"Left", "Right", "Jump"}) CHECK(reg.has<UIButtonComponent>(scene.findByName(b)));
+    CHECK(copy.registry().get<UIRectComponent>(copy.findByName("Jump")).anchorMin.x == doctest::Approx(1.0f));
 }
 
 TEST_CASE("picking: tilemaps on painted cells, sprites with sheet frame pivots") {
@@ -256,15 +276,31 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     Input input;
     ScriptEngine scripts(f.engine->vfs());
     Physics2DWorld physics;
+    AudioSystem audio(f.engine->vfs());
+    REQUIRE(audio.initialize({.output = AudioOutput::Manual}));
+    AnimationSystem anim(f.engine->vfs());
+    UISystem ui(f.engine->vfs());
     scripts.setInput(&input);
     scripts.setPhysics2D(&physics);
+    scripts.setAudio(&audio);
+    scripts.setAnimation(&anim);
+    scripts.setUI(&ui);
     FrameTime time;
     time.deltaSeconds = 1.0 / 60.0;
     time.fixedDeltaSeconds = 1.0 / 60.0;
+    std::vector<UIPointer> pointers;
+    std::vector<float> mixBuffer(800 * 2);
     auto frame = [&] {
         physics.step(scene, 1.0f / 60.0f);
         for (const auto& ev : physics.events()) scripts.dispatchCollision(scene, ev);
+        ui.layout(scene, 1920, 1080);
+        ui.processInput(scene, pointers);
         scripts.update(scene, time);
+        anim.update(scene, 1.0f / 60.0f);
+        for (const AnimationEvent& ev : anim.takeEvents()) scripts.dispatchAnimation(scene, ev);
+        audio.updateScene(scene, true);
+        audio.mix(mixBuffer.data(), 800);
+        audio.update(0.0);
         scene.flushDestroyed();
         scene.updateTransforms();
         input.beginFrame();
@@ -282,6 +318,13 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     CHECK(scene.registry().get<SpriteRendererComponent>(hero).flipX);
     CHECK(scene.findByName("Mushroom 1").isNull());  // collected (trigger + script call)
     CHECK(scripts.field(hero, "collected").value() == "1");
+    CHECK(scene.registry().get<UITextComponent>(scene.findByName("Score")).text == "Champignons : 1 / 3");  // HUD
+    CHECK(audio.sourcePlaying(scene.findByName("Music")));
+    CHECK(audio.stats().clips >= 2);  // music + coin (and jump later)
+    frame();
+    frame();
+    CHECK(anim.currentState(hero) == "Idle");  // stopped walking: back to Idle via the state machine
+    CHECK(scene.registry().get<SpriteAnimatorComponent>(hero).clip == "idle");
     input.setKey(Key::Space, true);
     frame();
     input.setKey(Key::Space, false);
@@ -291,6 +334,20 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
         top = std::max(top, scene.registry().get<TransformComponent>(hero).position.y);
     }
     CHECK(top > walked.y + 3.0f);  // jumps more than 3 m
+    // Touch controls: holding the on-screen "Right" button walks right.
+    const math::Vec4 right = scene.registry().get<UIRectComponent>(scene.findByName("Right")).screenRect;
+    REQUIRE(right.z > 0.0f);
+    for (int i = 0; i < 40; ++i) frame();  // lands
+    const float beforeX = scene.registry().get<TransformComponent>(hero).position.x;
+    pointers = {{7, {right.x + right.z * 0.5f, right.y + right.w * 0.5f}, true}};
+    for (int i = 0; i < 20; ++i) frame();
+    CHECK(anim.currentState(hero) == "Run");
+    CHECK(scene.registry().get<SpriteAnimatorComponent>(hero).clip == "run");
+    pointers = {{7, {right.x + right.z * 0.5f, right.y + right.w * 0.5f}, false}};
+    frame();
+    pointers.clear();
+    CHECK(scene.registry().get<TransformComponent>(hero).position.x > beforeX + 1.0f);
+    CHECK_FALSE(scene.registry().get<SpriteRendererComponent>(hero).flipX);
     CHECK(scripts.stats().errors == 0);
     CHECK(scripts.stats().faulted == 0);
 
@@ -299,6 +356,8 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     Scene& scene3 = f.scene();
     Physics3DWorld physics3;
     scripts.setPhysics3D(&physics3);
+    ui.layout(scene3, 1920, 1080);
+    ui.processInput(scene3, {});  // no pointer over the UI: Space fires
     const usize before = scene3.entityCount();
     scripts.update(scene3, time);
     input.setKey(Key::Space, true);
@@ -318,6 +377,10 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     const Vec3 b1 = scene3.registry().get<TransformComponent>(ball).position;
     CHECK(b1.z < b0.z - 3.0f);  // flew toward the scene (camera looks down -Z)
     CHECK(physics3.stats().bodies > 15);
+    CHECK(scene3.registry().get<UITextComponent>(scene3.findByName("Counter")).text.find("Balles : 1 / 25") == 0);
+    // The speed slider calls the launcher script (target message).
+    scripts.dispatchUI(scene3, UIValueChangedEvent{scene3.findByName("Power"), 20.0f});
+    CHECK(scripts.field(scene3.findByName("Main Camera"), "speed").value() == "20.0");
     CHECK(scripts.stats().errors == 0);
 }
 
@@ -518,3 +581,25 @@ TEST_CASE("recent projects list") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("create UI elements: a canvas is created or reused, buttons get a label") {
+    EditorFixture f;
+    auto& reg = f.scene().registry();
+    const auto text = f.ctx->create(CreateKind::UIText);
+    const ecs::Entity canvas = f.scene().parent(text);
+    REQUIRE_FALSE(canvas.isNull());
+    CHECK(reg.has<UICanvasComponent>(canvas));
+    CHECK(reg.has<UIRectComponent>(text));
+    const auto button = f.ctx->create(CreateKind::UIButton);
+    CHECK(f.scene().parent(button) == canvas);  // reused
+    CHECK(reg.has<UIButtonComponent>(button));
+    REQUIRE(f.scene().children(button).size() == 1);
+    CHECK(reg.get<UITextComponent>(f.scene().children(button)[0]).text == "Button");
+    const auto inner = f.ctx->create(CreateKind::UISlider, button);  // under a UI parent: kept
+    CHECK(f.scene().parent(inner) == button);
+    const auto outside = f.ctx->create(CreateKind::UIPanel, f.ctx->create(CreateKind::Cube));
+    CHECK(f.scene().parent(outside) == canvas);  // a 3D object is not a UI parent
+    CHECK(reg.has<UILayoutComponent>(f.ctx->create(CreateKind::UIColumn)));
+    CHECK(reg.has<AudioSourceComponent>(f.ctx->create(CreateKind::AudioSource)));
+    CHECK(f.ctx->undo());  // every creation is undoable
+}

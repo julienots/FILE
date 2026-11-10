@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "duration": 1.2,
+  "loop": true,
+  "tracks": [
+    { "target": "", "component": "SpriteRenderer", "field": "size", "channel": 0,
+      "keys": [ { "t": 0.0, "v": 1.0, "interp": "smooth" }, { "t": 0.6, "v": 1.12, "interp": "smooth" }, { "t": 1.2, "v": 1.0, "interp": "smooth" } ] },
+    { "target": "", "component": "SpriteRenderer", "field": "size", "channel": 1,
+      "keys": [ { "t": 0.0, "v": 1.0, "interp": "smooth" }, { "t": 0.6, "v": 1.12, "interp": "smooth" }, { "t": 1.2, "v": 1.0, "interp": "smooth" } ] }
+  ],
+  "events": []
+}

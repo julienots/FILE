@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "duration": 6.0,
+  "loop": true,
+  "tracks": [
+    { "target": "", "component": "Transform", "field": "rotation", "channel": 1,
+      "keys": [ { "t": 0.0, "v": 0.0, "interp": "linear" }, { "t": 6.0, "v": 360.0, "interp": "linear" } ] }
+  ],
+  "events": []
+}

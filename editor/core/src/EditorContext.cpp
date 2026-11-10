@@ -1,5 +1,9 @@
 #include "agr/editor/EditorContext.hpp"
 
+#include "agr/animation/AnimationSystem.hpp"
+#include "agr/audio/AudioComponents.hpp"
+#include "agr/ui/UIComponents.hpp"
+
 #include <cmath>
 #include <filesystem>
 
@@ -33,6 +37,13 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::ParallaxLayer: return "Parallax Layer";
         case CreateKind::PointLight: return "Point Light";
         case CreateKind::SpotLight: return "Spot Light";
+        case CreateKind::UICanvas: return "Canvas";
+        case CreateKind::UIPanel: return "Panel";
+        case CreateKind::UIText: return "Text";
+        case CreateKind::UIButton: return "Button";
+        case CreateKind::UISlider: return "Slider";
+        case CreateKind::UIColumn: return "Column";
+        case CreateKind::AudioSource: return "Audio Source";
     }
     return "Entity";
 }
@@ -40,6 +51,9 @@ const char* createKindName(CreateKind kind) {
 EditorContext::EditorContext(Engine& engine) : m_engine(engine) {
     registerRenderComponents();
     registerSpriteAnimatorComponent();
+    registerAudioComponents();
+    registerUIComponents();
+    registerAnimationComponents();
     m_engine.setTimeScale(0.0);  // edit mode: gameplay systems are frozen
     m_undo.reset(scene(), {});
 }
@@ -125,10 +139,33 @@ bool EditorContext::redo() {
     return true;
 }
 
+ecs::Entity EditorContext::uiParentFor(ecs::Entity parent) {
+    Scene& s = scene();
+    auto& reg = s.registry();
+    // Under the given parent if it is (inside) a canvas, else under the first canvas, else a new one.
+    for (ecs::Entity p = parent; !p.isNull(); p = s.parent(p))
+        if (reg.has<UICanvasComponent>(p)) return parent;
+    ecs::Entity canvas;
+    reg.view<UICanvasComponent>().each([&](ecs::Entity c, UICanvasComponent&) {
+        if (canvas.isNull()) canvas = c;
+    });
+    if (!canvas.isNull()) return canvas;
+    canvas = s.createEntity("Canvas");
+    reg.emplace<UICanvasComponent>(canvas);
+    return canvas;
+}
+
 ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
     Scene& s = scene();
     auto& reg = s.registry();
+    const bool ui = kind >= CreateKind::UIPanel && kind <= CreateKind::UIColumn;
+    if (ui) parent = uiParentFor(parent);
     const ecs::Entity e = s.createEntity(createKindName(kind), parent);
+    auto uiRect = [&](math::Vec2 size) -> UIRectComponent& {
+        auto& r = reg.emplace<UIRectComponent>(e);
+        r.size = size;
+        return r;
+    };
     auto& t = reg.get<TransformComponent>(e);
     if (parent.isNull()) {
         t.position = m_camera.mode2D ? Vec3{m_camera.position2D.x, m_camera.position2D.y, 0.0f} : m_camera.target;
@@ -177,6 +214,43 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             if (parent.isNull()) t.position.y += 3.0f;
             t.rotation = math::Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});  // pointing down
             break;
+        case CreateKind::UICanvas: reg.emplace<UICanvasComponent>(e); break;
+        case CreateKind::UIPanel: {
+            uiRect({400, 300});
+            reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.85f};
+            break;
+        }
+        case CreateKind::UIText: {
+            uiRect({400, 60});
+            reg.emplace<UITextComponent>(e);
+            break;
+        }
+        case CreateKind::UIButton: {
+            uiRect({260, 70});
+            reg.emplace<UIImageComponent>(e).color = {0.98f, 0.55f, 0.16f, 1.0f};
+            reg.emplace<UIButtonComponent>(e);
+            const ecs::Entity label = s.createEntity("Label", e);
+            auto& lr = reg.emplace<UIRectComponent>(label);
+            lr.anchorMin = {0, 0};
+            lr.anchorMax = {1, 1};
+            lr.size = {0, 0};
+            auto& lt = reg.emplace<UITextComponent>(label);
+            lt.text = "Button";
+            lt.color = {0.07f, 0.07f, 0.08f, 1.0f};
+            break;
+        }
+        case CreateKind::UISlider: {
+            uiRect({360, 36});
+            reg.emplace<UISliderComponent>(e);
+            break;
+        }
+        case CreateKind::UIColumn: {
+            uiRect({320, 400});
+            reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.6f};
+            reg.emplace<UILayoutComponent>(e);
+            break;
+        }
+        case CreateKind::AudioSource: reg.emplace<AudioSourceComponent>(e); break;
     }
     s.updateTransforms();
     m_selection.set(s.uuidOf(e));

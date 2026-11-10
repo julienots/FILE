@@ -68,6 +68,11 @@ public:
     bool isHovered(ecs::Entity e) const { return m_hovered.count(e.packed()) > 0; }
     /// Topmost element under a point that blocks pointers (image, button, slider), or null.
     ecs::Entity hitTest(math::Vec2 position) const;
+    /// Topmost laid out element under a point, whatever its components (editor picking);
+    /// canvases themselves are not returned.
+    ecs::Entity elementAt(math::Vec2 position) const;
+    /// The root canvas an element was laid out under (null if not laid out).
+    ecs::Entity canvasOf(ecs::Entity element) const;
     /// Forgets pointer state (game stopped / scene changed).
     void reset();
 

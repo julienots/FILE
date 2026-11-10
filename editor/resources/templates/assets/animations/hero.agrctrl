@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "entry": "Idle",
+  "parameters": [
+    { "name": "speed", "type": "float", "default": 0.0 },
+    { "name": "grounded", "type": "bool", "default": 1.0 }
+  ],
+  "states": [
+    { "name": "Idle", "clip": "assets://animations/hero_ground.agranim", "spriteClip": "idle", "speed": 1.0, "position": [0, 0] },
+    { "name": "Run", "clip": "assets://animations/hero_ground.agranim", "spriteClip": "run", "speed": 1.0, "position": [240, 0] },
+    { "name": "Air", "clip": "assets://animations/hero_air.agranim", "spriteClip": "idle", "speed": 1.0, "position": [120, 120] }
+  ],
+  "transitions": [
+    { "from": "Idle", "to": "Run", "conditions": [ { "param": "speed", "op": ">", "value": 0.1 } ], "exitTime": -1.0, "duration": 0.0 },
+    { "from": "Run", "to": "Idle", "conditions": [ { "param": "speed", "op": "<", "value": 0.1 } ], "exitTime": -1.0, "duration": 0.0 },
+    { "from": "*", "to": "Air", "conditions": [ { "param": "grounded", "op": "false", "value": 0.0 } ], "exitTime": -1.0, "duration": 0.05 },
+    { "from": "Air", "to": "Idle", "conditions": [ { "param": "grounded", "op": "true", "value": 0.0 } ], "exitTime": -1.0, "duration": 0.08 }
+  ]
+}

@@ -21,7 +21,8 @@ enum class PlayState : u8 { Edit, Playing, Paused };
 /// What "Create" menus can add.
 enum class CreateKind : u8 {
     Empty, Cube, Sphere, Plane, Quad, Sprite, Camera, DirectionalLight, Environment,
-    Tilemap, Particles2D, Light2D, ParallaxLayer, PointLight, SpotLight
+    Tilemap, Particles2D, Light2D, ParallaxLayer, PointLight, SpotLight,
+    UICanvas, UIPanel, UIText, UIButton, UISlider, UIColumn, AudioSource
 };
 const char* createKindName(CreateKind kind);
 
@@ -60,6 +61,9 @@ public:
     bool redo();
 
     ecs::Entity create(CreateKind kind, ecs::Entity parent = {});
+    /// Parent for a new UI element: `parent` when it is inside a canvas, else the first
+    /// canvas of the scene, else a new canvas.
+    ecs::Entity uiParentFor(ecs::Entity parent);
     /// Sprite showing an image asset, placed at `position`. With `sheet` (the loaded
     /// .agrsheet `uri` points to), the sprite shows its first frame at native size and
     /// gets a SpriteAnimator playing the first clip when the sheet has clips.

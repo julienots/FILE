@@ -69,6 +69,13 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
         items(scene, 5);
         ImGui::EndMenu();
     }
+    static const Item ui[] = {{"Canvas", CreateKind::UICanvas}, {"Panneau", CreateKind::UIPanel}, {"Texte", CreateKind::UIText},
+                              {"Bouton", CreateKind::UIButton}, {"Curseur", CreateKind::UISlider}, {"Colonne (mise en page)", CreateKind::UIColumn}};
+    if (ImGui::BeginMenu("Interface (UI)")) {
+        items(ui, 6);
+        ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem("Source audio")) s.ctx.create(CreateKind::AudioSource, parent);
 }
 
 void HierarchyPanel::contextMenu(EditorShared& s, ecs::Entity e) {

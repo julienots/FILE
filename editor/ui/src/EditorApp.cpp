@@ -18,6 +18,10 @@
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
+#include "agr/animation/AnimationPlugin.hpp"
+#include "agr/audio/AudioPlugin.hpp"
+#include "agr/ui/UIPlugin.hpp"
+#include "agr/ui/UIComponents.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 
 namespace agr::editor {
@@ -82,6 +86,12 @@ Status EditorApp::onStart(Engine& engine) {
     m_shared->platform = m_platform;
     m_shared->render = render;
     m_shared->twod = engine.service<TwoDPlugin>();
+    m_shared->audio = engine.service<AudioPlugin>();
+    m_shared->ui = engine.service<UIPlugin>();
+    m_shared->animation = engine.service<AnimationPlugin>();
+    if (m_shared->audio) m_shared->audio->setRunning(false);  // sources play in play mode only
+    if (m_shared->ui) m_shared->ui->setRunning(false);
+    if (m_shared->animation) m_shared->animation->setRunning(false);
     if (m_shared->twod) m_shared->twod->setPreviewWhilePaused(true);  // particles animate in edit mode
     if (auto* scripts = engine.service<ScriptPlugin>()) {
         scripts->setRunning(false);  // scripts run in play mode only
@@ -208,6 +218,16 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
         if (scripts->running() != (ps != PlayState::Edit)) scripts->setRunning(ps != PlayState::Edit);
         scripts->setPaused(ps == PlayState::Paused);
     }
+    {  // audio, animation and UI input follow the play state too
+        const PlayState ps = m_ctx->playState();
+        const bool playing = ps != PlayState::Edit;
+        if (auto* a = m_engine->service<AudioPlugin>()) {
+            a->setRunning(playing);
+            a->setPaused(ps == PlayState::Paused);
+        }
+        if (auto* an = m_engine->service<AnimationPlugin>()) an->setRunning(playing);  // paused: time scale 0 freezes it
+        if (auto* ui = m_engine->service<UIPlugin>()) ui->setRunning(ps == PlayState::Playing && m_viewport.gameView);
+    }
     if (m_closeProjectRequested) {
         m_closeProjectRequested = false;
         m_viewport.release(*m_shared);
@@ -220,6 +240,9 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
         m_shared->platform = m_platform;
         m_shared->render = render;
         m_shared->twod = m_engine->service<TwoDPlugin>();
+        m_shared->audio = m_engine->service<AudioPlugin>();
+        m_shared->ui = m_engine->service<UIPlugin>();
+        m_shared->animation = m_engine->service<AnimationPlugin>();
         m_shared->fonts = fonts;
     }
     m_viewport.beginFrame(*m_shared);
@@ -440,6 +463,9 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Statistiques", right);
     ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow("Console", bottom);
+    ImGui::DockBuilderDockWindow("Animation", bottom);
+    ImGui::DockBuilderDockWindow("Machine à états", bottom);
+    ImGui::DockBuilderDockWindow("Mixeur audio", bottom);
     ImGui::DockBuilderDockWindow("Scène", center);
     ImGui::DockBuilderFinish(dockspace);
 }
@@ -473,11 +499,15 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_assets.draw(*m_shared);
     m_console.draw(*m_shared);
     m_stats.draw(*m_shared, time);
+    m_mixer.draw(*m_shared, time);
+    m_animation.draw(*m_shared, time);
+    m_stateMachine.draw(*m_shared);
     drawStatusBar(statusH);
     handleShortcuts();
 }
 
 void EditorApp::startPlay() {
+    m_animation.endPreview(*m_shared);  // the game starts from the edited values
     if (m_ctx->playState() == PlayState::Edit) {
         m_gameViewBeforePlay = m_viewport.gameView;
         m_viewport.gameView = true;
@@ -489,11 +519,15 @@ void EditorApp::stopPlay() {
     if (m_ctx->playState() == PlayState::Edit) return;
     // Scripts get onDestroy while the played scene still exists, before it is restored.
     if (auto* scripts = m_engine->service<ScriptPlugin>()) scripts->setRunning(false);
+    if (auto* a = m_engine->service<AudioPlugin>()) a->setRunning(false);
+    if (auto* an = m_engine->service<AnimationPlugin>()) an->setRunning(false);
+    if (auto* ui = m_engine->service<UIPlugin>()) ui->setRunning(false);
     m_ctx->stop();
     m_viewport.gameView = m_gameViewBeforePlay;
 }
 
 void EditorApp::saveOrSaveAs() {
+    m_animation.endPreview(*m_shared);  // previewed values are not part of the scene
     if (m_ctx->playState() != PlayState::Edit) {
         m_shared->notify("Arrêtez le jeu avant d'enregistrer.");
         return;
@@ -558,7 +592,10 @@ void EditorApp::drawMenuBar() {
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
             {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
-            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}};
+            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {nullptr, {}},
+            {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
+            {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
+            {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
         for (const auto& [label, kind] : items) {
             if (!label) ImGui::Separator();
             else if (ImGui::MenuItem(label)) ctx.create(kind);
@@ -568,6 +605,11 @@ void EditorApp::drawMenuBar() {
     if (ImGui::BeginMenu("Affichage")) {
         if (ImGui::MenuItem("Réinitialiser la disposition")) m_resetLayout = true;
         ImGui::MenuItem("Vue jeu", nullptr, &m_viewport.gameView);
+        ImGui::Separator();
+        ImGui::MenuItem("Animation (timeline)", nullptr, &m_shared->showAnimation);
+        ImGui::MenuItem("Machine à états", nullptr, &m_shared->showStateMachine);
+        ImGui::MenuItem("Mixeur audio", nullptr, &m_shared->showMixer);
+        ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
         ImGui::EndMenu();
@@ -909,13 +951,18 @@ void EditorApp::smokeTest(const FrameTime&) {
             startPlay();
             break;
         // Play mode: real key events drive the Lua hero through 2D physics.
-        case 72:
+        case 72: {
             m_smokeHeroX = scene.registry().get<TransformComponent>(scene.findByName("Hero")).position.x;
             pushKey(SDLK_RIGHT, SDL_SCANCODE_RIGHT, SDL_KMOD_NONE, true);
+            // The animation tools draw while the game runs (state machine highlights the current state).
+            ctx.selection().set(scene.uuidOf(scene.findByName("Hero")));
+            m_shared->showAnimation = m_shared->showStateMachine = m_shared->showMixer = true;
             break;
+        }
         case 86: {
             const auto hero = scene.findByName("Hero");
-            check(!hero.isNull() && scene.registry().get<SpriteAnimatorComponent>(hero).clip == "run", "the hero script plays the run clip");
+            check(!hero.isNull() && scene.registry().get<SpriteAnimatorComponent>(hero).clip == "run", "the state machine plays the run clip");
+            check(m_shared->animation && m_shared->animation->animation().currentState(hero) == "Run", "the hero's Animator is in the Run state");
             const i32 frame = hero.isNull() ? -1 : scene.registry().get<SpriteRendererComponent>(hero).frame;
             check(frame >= 4 && frame <= 9, "the sprite animator shows run frames");
             pushKey(SDLK_RIGHT, SDL_SCANCODE_RIGHT, SDL_KMOD_NONE, false);
@@ -927,22 +974,55 @@ void EditorApp::smokeTest(const FrameTime&) {
                   "the Right key moves the scripted hero (input -> Lua -> physics)");
             auto* scripts = m_engine->service<ScriptPlugin>();
             check(scripts && scripts->scripts()->stats().instances >= 5 && scripts->scripts()->stats().errors == 0, "scripts run without errors");
+            check(m_shared->audio && m_shared->audio->audio().sourcePlaying(scene.findByName("Music")), "the music plays in play mode");
+            const Renderer* renderer = m_shared->renderer();
+            check(renderer && renderer->stats().overlayQuads > 10, "the game UI (HUD) is drawn in the game view");
+            // Real mouse on the on-screen "Jump" button of the HUD.
+            const auto jump = scene.findByName("Jump");
+            check(!jump.isNull() && m_viewport.uiToScreen({scene.registry().get<UIRectComponent>(jump).screenRect.x + 20.0f,
+                                                            scene.registry().get<UIRectComponent>(jump).screenRect.y + 20.0f},
+                                                           m_smokeClick),
+                  "the Jump button is laid out in the game view");
+            m_smokeHeroY = hero.isNull() ? 0.0f : scene.registry().get<TransformComponent>(hero).position.y;
+            pushMouse(SDL_EVENT_MOUSE_MOTION, m_smokeClick);
+            break;
+        }
+        case 92: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 96: {
+            check(m_shared->ui && m_shared->ui->ui().isPressed(scene.findByName("Jump")), "a mouse press holds the UI button");
+            check(m_shared->animation && m_shared->animation->animation().currentState(scene.findByName("Hero")) == "Air",
+                  "the hero jumps (button -> Lua -> physics) and the state machine switches to Air");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_play_2d.png").string());
+            break;
+        }
+        case 98: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, m_smokeClick); break;
+        case 100: {
+            const auto hero = scene.findByName("Hero");
+            check(!hero.isNull() && scene.registry().get<TransformComponent>(hero).position.y > m_smokeHeroY + 0.5f, "the hero rose");
+            check(m_shared->audio && m_shared->audio->audio().stats().clips >= 2, "music and jump sound decoded");
             stopPlay();
             const auto restored = scene.findByName("Hero");
             check(!restored.isNull() && scene.registry().get<TransformComponent>(restored).position.x == -3.0f,
                   "stop restores the scene (hero back at its start)");
+            check(m_shared->audio && !m_shared->audio->audio().sourcePlaying(scene.findByName("Music")), "stop silences the scene's sounds");
+            // Animation timeline of a collectible (single clip), shown for the documentation screenshot.
+            ctx.selection().set(scene.uuidOf(scene.findByName("Mushroom 2")));
+            ImGui::SetWindowFocus("Animation");
             break;
         }
-        case 92: {
+        case 103: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_animation.png").string()); break;
+        case 105: m_shared->showAnimation = m_shared->showStateMachine = m_shared->showMixer = false; break;
+        case 112: {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_2d.png", ec), "2D editor screenshot written");
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_play_2d.png", ec), "2D play screenshot written");
             // ---- 3D: showcase template (glTF models, .agrmat materials, lights, shadows, sky).
             ctx.newScene(SceneTemplate::Showcase3D);
             ctx.camera().mode2D = false;
             m_viewport.gameView = true;  // frame it like the game camera
             break;
         }
-        case 120: {
+        case 140: {
             Renderer* renderer = m_shared->renderer();
             check(renderer && renderer->stats().modelsLoading == 0, "glTF models of the showcase loaded");
             check(renderer && renderer->stats().lights >= 2 && renderer->stats().shadowCasters > 10, "point / spot lights and shadow casters");
@@ -958,26 +1038,55 @@ void EditorApp::smokeTest(const FrameTime&) {
             m_shared->inspectedAsset = "assets://3d/gold.agrmat";  // material editor + preview sphere
             break;
         }
-        case 122: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_3d.png").string()); break;
-        case 124: {
+        case 142: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_3d.png").string()); break;
+        case 144: {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_3d.png", ec), "3D editor screenshot written");
             check(static_cast<bool>(m_materialPreview.texture(*m_shared)), "material preview rendered");
-            check(ctx.undo(), "undo the added model");  // back to the template, then play it
+            check(ctx.undo(), "undo the added model");
+            break;
+        }
+        case 146: {
+            // UI builder: drag the HUD's counter text in the game view (edit mode); a click picks the
+            // topmost element (the text over its panel).
+            const auto panel = scene.findByName("Counter");
+            const math::Vec4 r = panel.isNull() ? math::Vec4{} : scene.registry().get<UIRectComponent>(panel).screenRect;
+            check(r.z > 0.0f && m_viewport.uiToScreen({r.x + r.z * 0.5f, r.y + r.w * 0.5f}, m_smokeClick), "HUD laid out in the edit-mode game view");
+            m_smokeUiPos = panel.isNull() ? math::Vec2{} : scene.registry().get<UIRectComponent>(panel).position;
+            pushMouse(SDL_EVENT_MOUSE_MOTION, m_smokeClick);
+            break;
+        }
+        case 147: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 149: pushMouse(SDL_EVENT_MOUSE_MOTION, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
+        case 151: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
+        case 153: {
+            const auto panel = scene.findByName("Counter");
+            check(!panel.isNull() && ctx.selection().primary() == scene.uuidOf(panel), "a click in the game view selects the UI element");
+            const math::Vec2 moved = panel.isNull() ? math::Vec2{} : scene.registry().get<UIRectComponent>(panel).position;
+            check(moved.x > m_smokeUiPos.x + 20.0f && moved.y > m_smokeUiPos.y + 10.0f, "dragging moves the UI element (UIRect position)");
+            check(ctx.undoStack().undoLabel() == "Move UI Element", "one undo entry per UI drag");
+            check(ctx.undo(), "undo the UI move");
+            ctx.selection().clear();
             startPlay();
             break;
         }
-        case 128: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
-        case 130: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
-        case 140: {
+        case 157: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
+        case 159: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
+        case 169: {
             check(!scene.findByName("Ball 1").isNull(), "Space throws a ball (Lua spawns a physics entity)");
             auto* p3 = m_engine->service<Physics3DPlugin>();
             check(p3 && p3->world().stats().bodies > 15, "3D physics bodies are simulated in play mode");
+            const auto counter = scene.findByName("Counter");
+            check(!counter.isNull() && scene.registry().get<UITextComponent>(counter).text.rfind("Balles : 1", 0) == 0,
+                  "the HUD counter is updated by the script");
+            const auto cube = scene.findByName("copper");
+            check(!cube.isNull() && !math::nearlyEqual(scene.registry().get<TransformComponent>(cube).rotation, math::Quat::identity()),
+                  "the spin animation turns the kinematic cube");
             stopPlay();
             check(scene.findByName("Ball 1").isNull(), "stop removes what the game spawned");
             break;
         }
-        case 142: {
+        case 171: {
             m_viewport.gameView = false;
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");

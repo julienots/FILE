@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "duration": 2.0,
+  "loop": true,
+  "tracks": [
+    { "target": "", "component": "PointLight", "field": "intensity", "channel": -1,
+      "keys": [ { "t": 0.0, "v": 6.0, "interp": "smooth" }, { "t": 0.4, "v": 5.1, "interp": "smooth" }, { "t": 0.9, "v": 6.5, "interp": "smooth" },
+                { "t": 1.4, "v": 5.6, "interp": "smooth" }, { "t": 2.0, "v": 6.0, "interp": "smooth" } ] }
+  ],
+  "events": []
+}

@@ -1,5 +1,7 @@
 -- Lance des balles physiques depuis la caméra (Espace, clic gauche ou toucher) — AGR ENGINE.
 -- Chaque balle est une entité créée par le script : MeshRenderer + RigidBody + Collider.
+-- L'interface affiche le nombre de balles (texte « Counter ») et règle la vitesse avec un
+-- curseur (UISlider « Power », qui appelle setPower) ; un clic sur l'interface ne tire pas.
 local Launcher = {
     properties = {
         speed = 14,          -- m/s
@@ -12,6 +14,20 @@ local Launcher = {
 function Launcher:onStart()
     self.balls = {}
     self.count = 0
+    self.counter = agr.find("Counter")
+    self:showCount()
+end
+
+function Launcher:showCount()
+    if self.counter then
+        self.counter:setText("Balles : " .. #self.balls .. " / " .. self.maxBalls .. "   Vitesse : " .. math.floor(self.speed + 0.5) .. " m/s")
+    end
+end
+
+-- Appelé par le curseur de l'interface (UISlider, message « setPower »).
+function Launcher:setPower(slider, value)
+    self.speed = value
+    self:showCount()
 end
 
 function Launcher:fire()
@@ -37,9 +53,12 @@ function Launcher:fire()
         local old = table.remove(self.balls, 1)
         if old:isValid() then old:destroy() end
     end
+    agr.audio.play("assets://audio/launch.wav", { volume = 0.6, pitch = 0.9 + math.random() * 0.2 })
+    self:showCount()
 end
 
 function Launcher:onUpdate(dt)
+    if agr.ui.pointerOverUI() then return end  -- le curseur de l'interface a la priorité
     local fire = agr.input.keyPressed("Space") or agr.input.mousePressed(0)
     for i = 1, agr.input.touchCount() do
         local _, _, phase = agr.input.touch(i)

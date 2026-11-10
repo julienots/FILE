@@ -15,6 +15,7 @@
 #include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/twod/TilemapEditing.hpp"
+#include "agr/ui/UIComponents.hpp"
 
 namespace agr::editor {
 
@@ -147,6 +148,7 @@ void ViewportPanel::renderScene(EditorShared& s) {
     std::optional<RenderView> view;
     if (gameView) view = RenderView::fromPrimaryCamera(s.ctx.scene());
     else view = s.ctx.camera().renderView();
+    if (view) view->overlay = gameView;  // the game UI shows in the game view only
     if (!view) {  // game view without camera: clear to a neutral color
         RenderView empty;
         empty.clearColor = {0.03f, 0.03f, 0.035f, 1.0f};
@@ -376,6 +378,7 @@ void ViewportPanel::drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size) {
         return;
     }
     if (const auto* st = scene.registry().tryGet<StateComponent>(primary); st && st->lockedInEditor) return;
+    if (scene.registry().has<UIRectComponent>(primary) || scene.registry().has<UICanvasComponent>(primary)) return;  // UI: edited in the game view
     const float aspect = size.x / std::max(size.y, 1.0f);
     const Mat4 view = viewMatrix(s), proj = projectionGL(s, aspect);
     const bool ortho = gameView ? (RenderView::fromPrimaryCamera(scene) && RenderView::fromPrimaryCamera(scene)->projection == Projection::Orthographic)
@@ -440,6 +443,127 @@ void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     } else {
         sel.set(scene.uuidOf(hit));
     }
+}
+
+bool ViewportPanel::uiToScreen(math::Vec2 px, ImVec2& out) const {
+    if (m_width == 0 || m_lastSize.x < 1.0f) return false;
+    const float k = static_cast<float>(m_width) / m_lastSize.x;
+    out = {m_lastOrigin.x + px.x / k, m_lastOrigin.y + px.y / k};
+    return true;
+}
+
+bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered) {
+    if (!gameView || !s.ui || s.ctx.playState() != PlayState::Edit || size.x < 1.0f || size.y < 1.0f) {
+        m_uiDrag = 0;
+        return false;
+    }
+    Scene& scene = s.ctx.scene();
+    auto& reg = scene.registry();
+    UISystem& ui = s.ui->ui();
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float k = static_cast<float>(m_width) / size.x;  // UI pixels per window unit
+    auto toScreen = [&](float x, float y) { return ImVec2{origin.x + x / k, origin.y + y / k}; };
+    const math::Vec2 mouse{(io.MousePos.x - origin.x) * k, (io.MousePos.y - origin.y) * k};
+
+    // Selected element: outline, anchor markers, resize handles.
+    const ecs::Entity sel = scene.findByUuid(s.ctx.selection().primary());
+    UIRectComponent* rect = sel.isNull() ? nullptr : reg.tryGet<UIRectComponent>(sel);
+    const bool laidOut = rect && !ui.canvasOf(sel).isNull() && !reg.has<UICanvasComponent>(sel);
+    const ImU32 accent = IM_COL32(250, 140, 40, 255);
+    struct Handle {
+        math::Vec2 sign;
+        ImVec2 pos;
+    };
+    std::vector<Handle> handles;
+    if (laidOut) {
+        const math::Vec4 r = rect->screenRect;
+        const ImVec2 a = toScreen(r.x, r.y), b = toScreen(r.x + r.z, r.y + r.w);
+        dl->AddRect(a, b, accent, 0.0f, 1.5f);
+        // Anchors: small triangles at the anchor points in the parent's rectangle.
+        math::Vec4 pr{0, 0, static_cast<float>(m_width), static_cast<float>(m_height)};
+        if (const auto* parentRect = reg.tryGet<UIRectComponent>(scene.parent(sel)); parentRect && !reg.has<UICanvasComponent>(scene.parent(sel)))
+            pr = parentRect->screenRect;
+        for (const math::Vec2 an : {rect->anchorMin, math::Vec2{rect->anchorMax.x, rect->anchorMin.y}, math::Vec2{rect->anchorMin.x, rect->anchorMax.y}, rect->anchorMax}) {
+            const ImVec2 p = toScreen(pr.x + pr.z * an.x, pr.y + pr.w * an.y);
+            dl->AddTriangleFilled({p.x, p.y}, {p.x - 5, p.y - 9}, {p.x + 5, p.y - 9}, IM_COL32(255, 255, 255, 200));
+        }
+        for (float hy = -1; hy <= 1; ++hy)
+            for (float hx = -1; hx <= 1; ++hx) {
+                if (hx == 0 && hy == 0) continue;
+                const ImVec2 p{(a.x + b.x) * 0.5f + hx * (b.x - a.x) * 0.5f, (a.y + b.y) * 0.5f + hy * (b.y - a.y) * 0.5f};
+                handles.push_back({{hx, hy}, p});
+                dl->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, accent);
+            }
+    }
+
+    // Press: a handle of the selection, else the element under the mouse.
+    if (m_uiDrag == 0 && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt) {
+        for (const Handle& h : handles)
+            if (std::fabs(io.MousePos.x - h.pos.x) <= 6 && std::fabs(io.MousePos.y - h.pos.y) <= 6) {
+                m_uiDrag = 2;
+                m_uiHandle = h.sign;
+            }
+        if (m_uiDrag == 0) {
+            const ecs::Entity hit = ui.elementAt(mouse);
+            if (hit.isNull()) return false;  // nothing of the UI here: regular picking
+            if (io.KeyCtrl) {
+                s.ctx.selection().toggle(scene.uuidOf(hit));
+                return true;
+            }
+            s.ctx.selection().set(scene.uuidOf(hit));
+            rect = reg.tryGet<UIRectComponent>(hit);
+            m_uiDrag = rect ? 1 : 0;
+        }
+        if (m_uiDrag != 0) {
+            m_uiDragStart = io.MousePos;
+            m_uiStartPos = rect->position;
+            m_uiStartSize = rect->size;
+            m_uiChanged = false;
+        }
+        return true;
+    }
+    if (m_uiDrag == 0) return false;
+
+    const ecs::Entity target = scene.findByUuid(s.ctx.selection().primary());
+    rect = target.isNull() ? nullptr : reg.tryGet<UIRectComponent>(target);
+    if (!rect) {
+        m_uiDrag = 0;
+        return false;
+    }
+    const float scale = std::max(1e-3f, ui.canvasScale(ui.canvasOf(target)));
+    const math::Vec2 d{(io.MousePos.x - m_uiDragStart.x) * k / scale, (io.MousePos.y - m_uiDragStart.y) * k / scale};
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        if (std::fabs(d.x) + std::fabs(d.y) > 0.0f) m_uiChanged = true;
+        const float snapStep = (snap || io.KeyCtrl) ? 10.0f : 0.0f;
+        auto snapValue = [&](float v) { return snapStep > 0.0f ? std::round(v / snapStep) * snapStep : std::round(v); };
+        if (m_uiDrag == 1) {
+            rect->position = {snapValue(m_uiStartPos.x + d.x), snapValue(m_uiStartPos.y + d.y)};
+        } else {
+            math::Vec2 size2 = m_uiStartSize, pos = m_uiStartPos;
+            const float* sign = &m_uiHandle.x;
+            for (int axis = 0; axis < 2; ++axis) {
+                const float delta = axis == 0 ? d.x : d.y, pivot = axis == 0 ? rect->pivot.x : rect->pivot.y;
+                float& sz = axis == 0 ? size2.x : size2.y;
+                float& p = axis == 0 ? pos.x : pos.y;
+                if (sign[axis] > 0) {
+                    sz += delta;
+                    p += delta * pivot;
+                } else if (sign[axis] < 0) {
+                    sz -= delta;
+                    p += delta * (1.0f - pivot);
+                }
+            }
+            rect->size = {snapValue(size2.x), snapValue(size2.y)};
+            rect->position = {snapValue(pos.x), snapValue(pos.y)};
+        }
+        if (reg.has<UILayoutComponent>(scene.parent(target)) && m_uiDrag == 1)
+            ImGui::SetTooltip("Placé par la mise en page (UILayout) du parent : la position est ignorée");
+        return true;
+    }
+    if (m_uiChanged) s.ctx.commit(m_uiDrag == 1 ? "Move UI Element" : "Resize UI Element");
+    m_uiDrag = 0;
+    return true;
 }
 
 bool ViewportPanel::handleTilemapPainting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered) {
@@ -647,11 +771,17 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     handleCamera(s, time, hovered);
     drawOverlays(s, origin, size);
     const bool painting = handleTilemapPainting(s, origin, size, hovered);
-    if (!painting) {
+    const bool uiEditing = !painting && handleUIEditing(s, origin, size, hovered);
+    if (!painting && !uiEditing) {
         drawGizmo(s, origin, size);
         handlePicking(s, origin, size);
     } else {
         m_pressed = false;
+    }
+    // Play mode, game view: the game UI receives the mouse relative to this view.
+    if (s.ui) {
+        if (gameView) s.ui->setViewport({origin.x, origin.y, size.x, size.y}, m_width, m_height);
+        else s.ui->clearViewport();
     }
     handleDrop(s, origin, size);
 
