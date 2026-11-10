@@ -298,3 +298,38 @@ TEST_CASE("alpha mask cuts, alpha blend mixes") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("skinned model: the mesh follows its joints (GPU skinning)") {
+    Render3DFixture f;
+    std::filesystem::create_directories(f.root / "3d");
+    std::filesystem::copy_file(std::filesystem::path(AGR_TEST_TEMPLATE_ASSETS) / "3d" / "sprout.glb", f.root / "3d" / "sprout.glb");
+    MaterialData orange;
+    orange.baseColor = {1.0f, 0.5f, 0.0f, 1.0f};
+    orange.unlit = true;
+    REQUIRE(f.materials.save("assets://orange.agrmat", orange));
+    f.camera({0, 0.4f, 6}, {0, 0.4f, 0});
+    const ModelAsset* model = f.models.load("assets://3d/sprout.glb");
+    REQUIRE(model);
+    REQUIRE(model->state == AssetState::Ready);
+    REQUIRE(model->skins.size() == 1);
+    CHECK(model->animationNames.size() == 2);
+    const ecs::Entity root = instantiateModel(f.scene, *model);
+    f.scene.registry().view<MeshRendererComponent>().each([](ecs::Entity, MeshRendererComponent& m) {
+        CHECK(m.skin == 0);
+        m.material = "assets://orange.agrmat";
+    });
+    f.settle();
+    const Vec3 head{0.0f, 1.23f, 0.0f};
+    CHECK_MESSAGE(near(f.at(head), 255, 128, 0, 6), f.at(head));       // bind pose: the head is up
+    CHECK_MESSAGE(near(f.at({-1.23f, 0.0f, 0.0f}), 0, 0, 0), f.at({-1.23f, 0.0f, 0.0f}));
+
+    // Bend the whole stem: rotating the root joint by 90 degrees moves the head to the left.
+    const ecs::Entity joint = f.scene.findByName("Root");
+    REQUIRE_FALSE(joint.isNull());
+    CHECK(f.scene.parent(f.scene.parent(joint)) == root);
+    f.scene.registry().get<TransformComponent>(joint).rotation = math::Quat::fromAxisAngle({0, 0, 1}, math::radians(90.0f));
+    f.frame();
+    CHECK_MESSAGE(near(f.at({-1.23f, 0.0f, 0.0f}), 255, 128, 0, 6), f.at({-1.23f, 0.0f, 0.0f}));
+    CHECK_MESSAGE(near(f.at(head), 0, 0, 0), f.at(head));
+    CHECK(gpu().device->validationErrorCount() == 0);
+}

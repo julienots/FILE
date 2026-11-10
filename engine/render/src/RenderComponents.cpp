@@ -98,6 +98,7 @@ void registerRenderComponents() {
         .field("model", &MeshRendererComponent::model,
                {.tooltip = "Imported model: assets://models/robot.glb", .flags = FieldFlag_AssetPath})
         .field("meshIndex", &MeshRendererComponent::meshIndex, {.tooltip = "Mesh of the model", .rangeMin = 0.0f, .rangeMax = 100000.0f})
+        .field("skin", &MeshRendererComponent::skin, {.tooltip = "Skin of the model (-1 = none): the mesh follows the joints of its skeleton"})
         .field("material", &MeshRendererComponent::material,
                {.tooltip = "Optional .agrmat material replacing the mesh materials", .flags = FieldFlag_AssetPath})
         .field("texture", &MeshRendererComponent::texture,

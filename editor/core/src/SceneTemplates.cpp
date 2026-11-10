@@ -116,7 +116,7 @@ const char* templateDescription(SceneTemplate t) {
         case SceneTemplate::Showcase3D:
             return "Matériaux PBR, modèles glTF importés, ombres, lumières, ciel et brume, avec physique 3D : en jeu, "
                    "Espace / clic / toucher lance des balles sur les caisses (script Lua), avec sons, ambiance, objets animés et "
-                   "interface (compteur, curseur de vitesse).";
+                   "interface (compteur, curseur de vitesse), et un personnage animé (squelette glTF) qui danse quand une balle le touche.";
     }
     return "";
 }
@@ -440,6 +440,33 @@ void buildShowcase3D(Scene& scene) {
     sl.innerAngle = math::radians(25.0f);
     sl.outerAngle = math::radians(40.0f);
     reg.emplace<AnimatorComponent>(lamp).clip = "assets://animations/lamp_flicker.agranim";
+
+    // Animated character (skinned glTF): the hierarchy instantiateModel creates for sprout.glb,
+    // its state machine (Idle / Dance) and a script that makes it dance when a ball hits it.
+    const auto sproutRoot = scene.createEntity("Sprout");
+    {
+        auto& t = reg.get<TransformComponent>(sproutRoot);
+        t.position = {3.3f, 0.0f, 2.8f};
+        t.scale = Vec3{1.3f};
+        reg.emplace<AnimatorComponent>(sproutRoot).controller = "assets://animations/sprout.agrctrl";
+        reg.emplace<ScriptComponent>(sproutRoot).script = "assets://scripts/sprout_dance.lua";
+        auto& c = reg.emplace<ColliderComponent>(sproutRoot);  // static: no RigidBody
+        c.size = {0.6f, 1.5f, 0.6f};
+        c.offset = {0.0f, 0.75f, 0.0f};
+        const auto node = scene.createEntity("Sprout", sproutRoot);
+        const auto body = scene.createEntity("Body", node);
+        auto& mr = reg.emplace<MeshRendererComponent>(body);
+        mr.model = "assets://3d/sprout.glb";
+        mr.meshIndex = 0;
+        mr.skin = 0;
+        ecs::Entity parent = node;
+        bool first = true;
+        for (const char* joint : {"Root", "Stem1", "Stem2", "Top"}) {
+            parent = scene.createEntity(joint, parent);
+            reg.get<TransformComponent>(parent).position = {0.0f, first ? 0.0f : 0.35f, 0.0f};
+            first = false;
+        }
+    }
     const auto neon = scene.createEntity("Neon");
     auto& nt = reg.get<TransformComponent>(neon);
     nt.position = {0.0f, 0.05f, 2.2f};

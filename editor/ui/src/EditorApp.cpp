@@ -1127,6 +1127,9 @@ void EditorApp::smokeTest(const FrameTime&) {
             const auto cube = scene.findByName("copper");
             check(!cube.isNull() && !math::nearlyEqual(scene.registry().get<TransformComponent>(cube).rotation, math::Quat::identity()),
                   "the spin animation turns the kinematic cube");
+            check(m_shared->renderer() && m_shared->renderer()->stats().skinnedMeshes > 0, "the skinned character is drawn (GPU skinning)");
+            check(m_shared->animation && m_shared->animation->animation().currentState(scene.findByName("Sprout")) == "Idle",
+                  "the character plays its imported Idle clip");
             stopPlay();
             check(scene.findByName("Ball 1").isNull(), "stop removes what the game spawned");
             break;

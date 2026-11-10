@@ -43,7 +43,10 @@ struct AnimationStats {
 class AnimationLibrary {
 public:
     explicit AnimationLibrary(VirtualFileSystem& vfs) : m_vfs(vfs) {}
+    /// .agranim file, or "<model>#<clip>" for an animation imported with a model (glTF).
     Result<std::shared_ptr<const AnimationClip>> clip(std::string_view uri);
+    /// Names of the animations of a model file ("Idle", "Walk"...), empty if none or unreadable.
+    std::vector<std::string> modelClipNames(std::string_view modelUri);
     Result<std::shared_ptr<const AnimatorController>> controller(std::string_view uri);
     /// Drops cached files modified on disk; returns how many.
     u32 reloadChanged();
@@ -56,6 +59,8 @@ private:
         std::shared_ptr<const T> value;
         i64 modified = 0;
     };
+    /// "assets://hero.glb#Walk": the clip "Walk" of an imported model, as transform tracks.
+    Result<std::shared_ptr<const AnimationClip>> modelClip(const std::string& uri);
     VirtualFileSystem& m_vfs;
     std::unordered_map<std::string, Entry<AnimationClip>> m_clips;
     std::unordered_map<std::string, Entry<AnimatorController>> m_controllers;

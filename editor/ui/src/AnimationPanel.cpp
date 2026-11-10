@@ -259,12 +259,14 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
     auto& animator = scene.registry().get<AnimatorComponent>(root);
 
     // Clips of this animator: its own clip and the clips of its state machine's states.
+    // Clips edited here are .agranim files; clips imported with a model ("x.glb#Walk") are read-only.
     std::vector<std::string> clips;
-    if (!animator.clip.empty()) clips.push_back(animator.clip);
+    if (!animator.clip.empty() && animator.clip.find('#') == std::string::npos) clips.push_back(animator.clip);
     if (!animator.controller.empty() && s.animation)
         if (auto ctrl = s.animation->animation().library().controller(animator.controller))
             for (const AnimatorState& st : ctrl.value()->states)
-                if (!st.clip.empty() && std::find(clips.begin(), clips.end(), st.clip) == clips.end()) clips.push_back(st.clip);
+                if (!st.clip.empty() && st.clip.find('#') == std::string::npos && std::find(clips.begin(), clips.end(), st.clip) == clips.end())
+                    clips.push_back(st.clip);
     if (m_uri.empty() && !clips.empty()) loadClip(s, clips.front());
 
     ImGui::TextUnformatted(scene.nameOf(root).c_str());

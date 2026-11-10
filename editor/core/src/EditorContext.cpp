@@ -286,6 +286,8 @@ ecs::Entity EditorContext::instantiateModel(const ModelAsset& model, Vec3 positi
     Scene& s = scene();
     const ecs::Entity root = agr::instantiateModel(s, model, parent);
     if (root.isNull()) return root;
+    // Animated model: an Animator playing its first clip ("<model>#<clip>").
+    if (!model.animationNames.empty()) s.registry().emplace<AnimatorComponent>(root).clip = model.uri + "#" + model.animationNames.front();
     s.registry().get<TransformComponent>(root).position = position;
     s.updateTransforms();
     m_selection.set(s.uuidOf(root));

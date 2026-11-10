@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "agr/animation/AnimationSystem.hpp"
+#include "agr/assets/Model.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -306,5 +307,82 @@ TEST_CASE("missing or broken animation files are reported without crashing") {
     CHECK(f.anim.currentState(c) == "S");  // runs, without a clip
     CHECK(f.anim.stats().animators == 1);
 }
+
+#ifdef AGR_TEST_TEMPLATE_ASSETS
+TEST_CASE("skeletal clips: imported from a glTF model, played and crossfaded by a state machine") {
+    AnimFixture f;
+    fs::create_directories(f.root / "3d");
+    fs::copy_file(fs::path(AGR_TEST_TEMPLATE_ASSETS) / "3d" / "sprout.glb", f.root / "3d" / "sprout.glb");
+
+    // Import: skin, weights, clips.
+    auto model = importModel(f.vfs, "assets://3d/sprout.glb");
+    REQUIRE(model);
+    const ModelData& m = model.value();
+    REQUIRE(m.skins.size() == 1);
+    CHECK(m.skins[0].joints.size() == 4);
+    CHECK(m.skins[0].inverseBind[1].c[3].y == doctest::Approx(-0.35f));
+    REQUIRE(m.meshes.size() == 1);
+    REQUIRE(m.meshes[0].skinWeights.size() == m.meshes[0].vertices.size());
+    for (const ModelSkinWeights& w : m.meshes[0].skinWeights) CHECK(w.weights.x + w.weights.y + w.weights.z + w.weights.w == doctest::Approx(1.0f));
+    REQUIRE(m.animations.size() == 2);
+    CHECK(m.animations[0].name == "Idle");
+    CHECK(m.animations[0].duration == doctest::Approx(3.0f));
+    CHECK(m.animations[1].duration == doctest::Approx(1.2f));
+    CHECK(modelNodePath(m.nodes, {"Sprout"}, static_cast<usize>(m.skins[0].joints[2])) == "Sprout/Root/Stem1/Stem2");
+    CHECK(f.anim.library().modelClipNames("assets://3d/sprout.glb") == std::vector<std::string>{"Idle", "Dance"});
+
+    // The entity hierarchy instantiateModel would build: root > Sprout > Root > Stem1 > Stem2 > Top.
+    const auto root = f.scene.createEntity("sprout");
+    const auto sprout = f.scene.createEntity("Sprout", root);
+    ecs::Entity parent = sprout;
+    std::vector<ecs::Entity> joints;
+    for (const char* name : {"Root", "Stem1", "Stem2", "Top"}) {
+        parent = f.scene.createEntity(name, parent);
+        joints.push_back(parent);
+    }
+    auto clip = f.anim.library().clip("assets://3d/sprout.glb#Dance");
+    REQUIRE(clip);
+    CHECK(clip.value()->transformTracks.size() == 4);
+    CHECK(clip.value()->duration == doctest::Approx(1.2f));
+    CHECK_FALSE(f.anim.library().clip("assets://3d/sprout.glb#Fly"));
+
+    // A single clip: the joints follow the samples (shortest-arc slerp between keys).
+    f.scene.registry().emplace<AnimatorComponent>(root).clip = "assets://3d/sprout.glb#Dance";
+    f.step(0.3f);
+    const TransformTrack* stem1 = nullptr;
+    for (const TransformTrack& t : clip.value()->transformTracks)
+        if (t.target == "Sprout/Root/Stem1" && t.path == TransformTrack::Path::Rotation) stem1 = &t;
+    REQUIRE(stem1 != nullptr);
+    const math::Vec4 expected = stem1->sample(0.3f);
+    const math::Quat q = f.scene.registry().get<TransformComponent>(joints[1]).rotation;
+    CHECK(q.x == doctest::Approx(expected.x).epsilon(1e-4));
+    CHECK(q.z == doctest::Approx(expected.z).epsilon(1e-4));
+    CHECK(q.w == doctest::Approx(expected.w).epsilon(1e-4));
+    CHECK(std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w) == doctest::Approx(1.0f));
+    CHECK(f.scene.registry().get<TransformComponent>(joints[0]).position.y > 0.0f);  // the bounce moves the root
+
+    // State machine Idle -> Dance with a crossfade: halfway, the pose lies between both clips.
+    AnimatorController ctrl;
+    ctrl.parameters = {{"party", ParameterType::Bool, 0.0f}};
+    ctrl.states = {{"Idle", "assets://3d/sprout.glb#Idle", "", 1.0f, {}}, {"Dance", "assets://3d/sprout.glb#Dance", "", 1.0f, {}}};
+    ctrl.transitions = {{"Idle", "Dance", {{"party", ConditionOp::IsTrue, 0.0f}}, -1.0f, 0.4f}};
+    f.save("assets://sprout.agrctrl", ctrl);
+    f.scene.registry().get<AnimatorComponent>(root) = {"assets://sprout.agrctrl", "", 1.0f, true};
+    f.step(0.0f);
+    CHECK(f.anim.currentState(root) == "Idle");
+    f.anim.setBool(f.scene, root, "party", true);
+    f.step(0.0f);
+    CHECK(f.anim.currentState(root) == "Dance");
+    f.step(0.2f);
+    const float rootY = f.scene.registry().get<TransformComponent>(joints[0]).position.y;
+    CHECK(rootY > 0.0f);  // Idle does not bounce, Dance does: half of Dance's bounce at 0.2 s
+    const auto danceAt = [&](float t) {
+        for (const TransformTrack& tr : clip.value()->transformTracks)
+            if (tr.target == "Sprout/Root" && tr.path == TransformTrack::Path::Translation) return tr.sample(t).y;
+        return -1.0f;
+    };
+    CHECK(rootY == doctest::Approx(danceAt(0.2f) * 0.5f).epsilon(0.02));
+}
+#endif
 
 }  // TEST_SUITE

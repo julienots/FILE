@@ -57,6 +57,21 @@ struct AnimationTrack {
     std::string label() const;
 };
 
+/// Sampled transform animation of one entity (imported skeletal / node animations).
+/// Rotations are quaternions interpolated along the shortest arc.
+struct TransformTrack {
+    enum class Path : u8 { Translation, Rotation, Scale };
+    std::string target;  ///< Path below the animated entity (as AnimationTrack::target).
+    Path path = Path::Translation;
+    bool step = false;
+    std::vector<float> times;
+    std::vector<math::Vec4> values;  ///< xyz, or quaternion xyzw.
+
+    math::Vec4 sample(float time) const;
+};
+/// Blends two samples of the same path (lerp, or shortest-arc normalized lerp for rotations).
+math::Vec4 blendTransform(TransformTrack::Path path, math::Vec4 a, math::Vec4 b, float t);
+
 /// Named moment of a clip; scripts receive onAnimationEvent(name).
 struct AnimationEventKey {
     float time = 0.0f;
@@ -68,6 +83,7 @@ struct AnimationClip {
     float duration = 1.0f;  ///< Seconds; keys past the end are ignored when looping.
     bool loop = true;
     std::vector<AnimationTrack> tracks;
+    std::vector<TransformTrack> transformTracks;  ///< From imported models ("model.glb#Clip"); not saved in .agranim.
     std::vector<AnimationEventKey> events;
 
     AnimationTrack* findTrack(std::string_view target, std::string_view component, std::string_view field, i32 channel);

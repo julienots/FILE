@@ -90,9 +90,18 @@ void ModelLibrary::finish(Pending& p) {
         m.vertexCount = static_cast<u32>(src.vertices.size());
         m.submeshes = src.submeshes;
         m.bounds = src.bounds;
+        m.skinned = src.skinWeights.size() == src.vertices.size() && !src.vertices.empty();
         if (m_device && !src.vertices.empty()) {
-            auto vb = m_device->createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, src.vertices.size() * sizeof(ModelVertex),
-                                              src.vertices.data(), "agr.model.vb"});
+            // Skinned meshes: interleaved vertex + joints / weights (80 bytes).
+            std::vector<SkinnedModelVertex> skinned;
+            if (m.skinned) {
+                skinned.resize(src.vertices.size());
+                for (usize i = 0; i < skinned.size(); ++i) skinned[i] = {src.vertices[i], src.skinWeights[i]};
+            }
+            auto vb = m.skinned ? m_device->createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, skinned.size() * sizeof(SkinnedModelVertex),
+                                                          skinned.data(), "agr.model.skinned.vb"})
+                                : m_device->createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, src.vertices.size() * sizeof(ModelVertex),
+                                                          src.vertices.data(), "agr.model.vb"});
             auto ib = m_device->createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static, src.indices.size() * sizeof(u32),
                                               src.indices.data(), "agr.model.ib"});
             if (!vb || !ib) {
@@ -116,6 +125,9 @@ void ModelLibrary::finish(Pending& p) {
     a.meshes = std::move(meshes);
     a.nodes = std::move(data.nodes);
     a.materials = std::move(data.materials);
+    a.skins = std::move(data.skins);
+    a.animationNames.clear();
+    for (const ModelAnimation& an : data.animations) a.animationNames.push_back(an.name);
     a.warnings = std::move(data.warnings);
     a.error.clear();
     a.state = AssetState::Ready;
@@ -228,14 +240,13 @@ ecs::Entity instantiateModel(Scene& scene, const ModelAsset& model, ecs::Entity 
     }
     const ecs::Entity root = scene.createEntity(name.empty() ? "Model" : name, parent);
     std::vector<ecs::Entity> created(model.nodes.size());
+    std::vector<std::string> meshNames;
+    for (const auto& m : model.meshes) meshNames.push_back(m.name);
     for (usize i = 0; i < model.nodes.size(); ++i) {
         const ModelNode& n = model.nodes[i];
         const ecs::Entity p = n.parent >= 0 ? created[static_cast<usize>(n.parent)] : root;
-        std::string nodeName = n.name;
-        if (nodeName.empty()) nodeName = n.mesh >= 0 && static_cast<usize>(n.mesh) < model.meshes.size() && !model.meshes[n.mesh].name.empty()
-                                             ? model.meshes[static_cast<usize>(n.mesh)].name
-                                             : "Node " + std::to_string(i);
-        const ecs::Entity e = scene.createEntity(nodeName, p);
+        // Same naming as animation tracks and skin joints (modelNodeName).
+        const ecs::Entity e = scene.createEntity(modelNodeName(model.nodes, meshNames, i), p);
         auto& t = scene.registry().get<TransformComponent>(e);
         t.position = n.position;
         t.rotation = n.rotation;
@@ -244,6 +255,7 @@ ecs::Entity instantiateModel(Scene& scene, const ModelAsset& model, ecs::Entity 
             auto& mr = scene.registry().emplace<MeshRendererComponent>(e);
             mr.model = model.uri;
             mr.meshIndex = n.mesh;
+            mr.skin = n.skin;
         }
         created[i] = e;
     }

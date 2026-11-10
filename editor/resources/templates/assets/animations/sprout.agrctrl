@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "entry": "Idle",
+  "parameters": [ { "name": "dance", "type": "bool", "default": 0.0 } ],
+  "states": [
+    { "name": "Idle", "clip": "assets://3d/sprout.glb#Idle", "spriteClip": "", "speed": 1.0, "position": [0, 0] },
+    { "name": "Dance", "clip": "assets://3d/sprout.glb#Dance", "spriteClip": "", "speed": 1.0, "position": [240, 0] }
+  ],
+  "transitions": [
+    { "from": "Idle", "to": "Dance", "conditions": [ { "param": "dance", "op": "true", "value": 0.0 } ], "exitTime": -1.0, "duration": 0.3 },
+    { "from": "Dance", "to": "Idle", "conditions": [ { "param": "dance", "op": "false", "value": 0.0 } ], "exitTime": -1.0, "duration": 0.6 }
+  ]
+}

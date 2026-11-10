@@ -24,6 +24,8 @@ using detail::MaterialUniforms;
 namespace {
 
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
+constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
+constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
 constexpr u32 kShadowUnit = 5;
 
 u64 mix64(u64 h, u64 v) {
@@ -39,6 +41,14 @@ rhi::VertexLayout modelVertexLayout() {
                     {1, rhi::VertexFormat::Float3, offsetof(ModelVertex, normal)},
                     {2, rhi::VertexFormat::Float4, offsetof(ModelVertex, tangent)},
                     {3, rhi::VertexFormat::Float2, offsetof(ModelVertex, uv)}};
+    return l;
+}
+
+rhi::VertexLayout skinnedVertexLayout() {
+    rhi::VertexLayout l = modelVertexLayout();
+    l.stride = sizeof(SkinnedModelVertex);
+    l.attributes.push_back({12, rhi::VertexFormat::Float4, offsetof(SkinnedModelVertex, skin) + offsetof(ModelSkinWeights, joints)});
+    l.attributes.push_back({13, rhi::VertexFormat::Float4, offsetof(SkinnedModelVertex, skin) + offsetof(ModelSkinWeights, weights)});
     return l;
 }
 
@@ -62,43 +72,49 @@ const MaterialData& defaultMaterial() {
 
 Status Renderer::create3DPipelines() {
     const std::string common = std::string(shaders::kFrameBlock) + shaders::kMaterialBlock;
-    for (u32 alpha = 0; alpha < 3; ++alpha) {
-        for (u32 twoSided = 0; twoSided < 2; ++twoSided) {
-            rhi::PipelineDesc p;
-            p.debugName = "agr.pbr";
-            const std::string defines = alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "";
-            p.shader.vertex = defines + common + shaders::kPbrVertex;
-            p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kPbrFragment;
-            p.layout = modelVertexLayout();
-            p.instanceLayout = instanceLayout(true);
-            p.cull = twoSided ? rhi::CullMode::None : rhi::CullMode::Back;
-            if (alpha == 2) {  // blend: sorted back to front, no depth write
-                p.blend = rhi::BlendMode::Alpha;
-                p.depthWrite = false;
+    for (u32 skinned = 0; skinned < 2; ++skinned) {
+        const std::string skinDefine = skinned ? "#define AGR_SKINNED 1\n" : "";
+        for (u32 alpha = 0; alpha < 3; ++alpha) {
+            for (u32 twoSided = 0; twoSided < 2; ++twoSided) {
+                rhi::PipelineDesc p;
+                p.debugName = skinned ? "agr.pbr.skinned" : "agr.pbr";
+                const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "");
+                p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kPbrVertex;
+                p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kPbrFragment;
+                p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
+                p.instanceLayout = instanceLayout(true);
+                p.cull = twoSided ? rhi::CullMode::None : rhi::CullMode::Back;
+                if (alpha == 2) {  // blend: sorted back to front, no depth write
+                    p.blend = rhi::BlendMode::Alpha;
+                    p.depthWrite = false;
+                }
+                p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
+                if (skinned) p.uniformBlocks.push_back("SkinData");
+                p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap"};
+                auto r = m_device.createPipeline(p);
+                if (!r) return r.error();
+                (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines)[alpha * 2 + twoSided] = r.value();
             }
-            p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
-            p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap"};
+        }
+        for (u32 mask = 0; mask < 2; ++mask) {
+            rhi::PipelineDesc p;
+            p.debugName = mask ? "agr.shadow.mask" : "agr.shadow";
+            const std::string defines = skinDefine + (mask ? "#define AGR_SHADOW_MASK 1\n" : "");
+            p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kShadowVertex;
+            p.shader.fragment = defines + common + shaders::kShadowFragment;
+            p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
+            p.instanceLayout = instanceLayout(false);
+            p.instanceLayout.stride = 128;
+            p.cull = rhi::CullMode::None;  // thin and open meshes still cast
+            p.colorOutput = false;
+            p.uniformBlocks = {"FrameData", "MaterialData"};
+            if (skinned) p.uniformBlocks.push_back("SkinData");
+            p.samplers = {"u_baseColorMap"};
             auto r = m_device.createPipeline(p);
             if (!r) return r.error();
-            m_pbrPipelines[alpha * 2 + twoSided] = r.value();
+            if (skinned) m_shadowSkinnedPipelines[mask] = r.value();
+            else (mask ? m_shadowMaskPipeline : m_shadowPipeline) = r.value();
         }
-    }
-    for (u32 mask = 0; mask < 2; ++mask) {
-        rhi::PipelineDesc p;
-        p.debugName = mask ? "agr.shadow.mask" : "agr.shadow";
-        const std::string defines = mask ? "#define AGR_SHADOW_MASK 1\n" : "";
-        p.shader.vertex = defines + common + shaders::kShadowVertex;
-        p.shader.fragment = defines + common + shaders::kShadowFragment;
-        p.layout = modelVertexLayout();
-        p.instanceLayout = instanceLayout(false);
-        p.instanceLayout.stride = 128;
-        p.cull = rhi::CullMode::None;  // thin and open meshes still cast
-        p.colorOutput = false;
-        p.uniformBlocks = {"FrameData", "MaterialData"};
-        p.samplers = {"u_baseColorMap"};
-        auto r = m_device.createPipeline(p);
-        if (!r) return r.error();
-        (mask ? m_shadowMaskPipeline : m_shadowPipeline) = r.value();
     }
     {
         rhi::PipelineDesc p;
@@ -260,6 +276,11 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     }
 
     // ------------------------------------------------------------ meshes
+    if (m_frame % 300 == 0)  // forget the joints of skinned meshes that no longer exist
+        for (auto it = m_skinJoints.begin(); it != m_skinJoints.end();) {
+            const ecs::Entity owner{static_cast<u32>(it->first), static_cast<u32>(it->first >> 32)};
+            it = scene.valid(owner) ? std::next(it) : m_skinJoints.erase(it);
+        }
     const Vec3 camPos = rv.position;
     const Vec3 camForward = -Vec3{view.c[0].z, view.c[1].z, view.c[2].z};  // third row of the view matrix
     reg.view<MeshRendererComponent, WorldTransformComponent>().each([&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
@@ -270,6 +291,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         const std::vector<ModelSubmesh>* submeshes = nullptr;
         static thread_local std::vector<ModelSubmesh> primitiveSubmesh(1);
         const ModelAsset* model = nullptr;
+        bool skinnedMesh = false;
         if (!mr.model.empty()) {
             model = m_models ? m_models->get(mr.model) : nullptr;
             if (!model || model->state != AssetState::Ready || mr.meshIndex < 0 || static_cast<usize>(mr.meshIndex) >= model->meshes.size()) {
@@ -281,6 +303,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             ib = mesh.indices;
             bounds = mesh.bounds;
             submeshes = &mesh.submeshes;
+            skinnedMesh = mesh.skinned;
         } else {
             const GpuMesh& mesh = m_meshes[std::clamp(static_cast<int>(mr.mesh), 0, 3)];
             vb = mesh.vertices;
@@ -290,7 +313,9 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             submeshes = &primitiveSubmesh;
         }
         if (!vb || !ib) return;
-        const math::Aabb worldBounds = bounds.transformed(w.matrix);
+        math::Aabb worldBounds = bounds.transformed(w.matrix);
+        u32 skinOffset = ~0u;
+        if (skinnedMesh) skinOffset = skinPalette(scene, e, mr, *model, w.matrix, bounds, worldBounds);
         const bool visible = frustum.intersects(worldBounds);
         const bool caster = m_shadowsActive && mr.castShadows && lightFrustum.intersects(worldBounds);
         if (!visible) ++m_stats.meshesCulled;
@@ -339,6 +364,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             item.pipeline = m_frameMaterials[slot].pipeline;
             item.instance = instance;
             item.depth = depth;
+            item.skinOffset = skinOffset;
             const bool blend = mat->alphaMode == AlphaMode::Blend;
             if (visible) (blend ? m_transparentItems : m_opaqueItems).push_back(item);
             if (caster && !blend) m_shadowItems.push_back(item);
@@ -350,6 +376,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         if (a.material != b.material) return a.material < b.material;
         if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
         if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
+        if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
         return a.instance < b.instance;
     };
     std::sort(m_opaqueItems.begin(), m_opaqueItems.end(), byState);
@@ -359,6 +386,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         if (am && a.material != b.material) return a.material < b.material;
         if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
         if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
+        if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
         return a.instance < b.instance;
     });
     // Transparent: back to front.
@@ -430,6 +458,68 @@ void Renderer::uploadInstances() {
     (void)m_device.updateBuffer(m_instanceBuffer, 0, m_instanceStaging.data(), bytes);
 }
 
+u32 Renderer::skinPalette(Scene& scene, ecs::Entity e, const MeshRendererComponent& mr, const ModelAsset& model, const Mat4& world,
+                          math::Aabb bindBounds, math::Aabb& worldBounds) {
+    m_palette.assign(kMaxSkinJoints, Mat4::identity());
+    ++m_stats.skinnedMeshes;
+    if (mr.skin < 0 || static_cast<usize>(mr.skin) >= model.skins.size()) return pushUniforms(m_palette.data(), kPaletteBytes);  // bind pose
+    const ModelSkin& skin = model.skins[static_cast<usize>(mr.skin)];
+    // Joints: entities named like the model's nodes, found below the model root (the
+    // entity instantiateModel created, an ancestor of this mesh). Cached, revalidated.
+    auto& joints = m_skinJoints[e.packed()];
+    bool valid = joints.size() == skin.joints.size();
+    for (usize i = 0; valid && i < joints.size(); ++i) valid = joints[i].isNull() || scene.valid(joints[i]);
+    if (!valid) {
+        joints.assign(skin.joints.size(), ecs::Entity{});
+        std::vector<std::string> meshNames;
+        for (const auto& m : model.meshes) meshNames.push_back(m.name);
+        // Depth of this mesh's node gives the model root.
+        i32 meshNode = -1;
+        for (usize n = 0; n < model.nodes.size() && meshNode < 0; ++n)
+            if (model.nodes[n].mesh == mr.meshIndex && model.nodes[n].skin == mr.skin) meshNode = static_cast<i32>(n);
+        ecs::Entity root = e;
+        for (i32 p = meshNode; p >= 0 && !root.isNull(); p = model.nodes[static_cast<usize>(p)].parent) root = scene.parent(root);
+        if (!root.isNull() && meshNode >= 0) {
+            for (usize j = 0; j < skin.joints.size(); ++j) {
+                if (skin.joints[j] < 0) continue;
+                const std::string path = modelNodePath(model.nodes, meshNames, static_cast<usize>(skin.joints[j]));
+                ecs::Entity cur = root;
+                usize start = 0;
+                while (!cur.isNull() && start <= path.size()) {
+                    const usize slash = path.find('/', start);
+                    const std::string name = path.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+                    ecs::Entity found;
+                    if (cur.isNull()) break;
+                    scene.forEachChild(cur, [&](ecs::Entity c) {
+                        if (found.isNull() && scene.nameOf(c) == name) found = c;
+                    });
+                    cur = found;
+                    if (slash == std::string::npos) break;
+                    start = slash + 1;
+                }
+                joints[j] = cur;
+            }
+        }
+    }
+    // Palette: inverse(mesh world) * joint world * inverse bind; bounds from the joint positions.
+    const Mat4 invWorld = math::inverse(world);
+    auto* worlds = scene.registry().findPool<WorldTransformComponent>();
+    const Vec3 ext = bindBounds.extents();
+    const float pad = std::max({ext.x, ext.y, ext.z});
+    math::Aabb deformed = worldBounds;
+    const usize count = std::min(joints.size(), kMaxSkinJoints);
+    for (usize j = 0; j < count; ++j) {
+        const WorldTransformComponent* jw = joints[j].isNull() || !worlds ? nullptr : worlds->tryGet(joints[j]);
+        if (!jw) continue;
+        m_palette[j] = invWorld * jw->matrix * skin.inverseBind[j];
+        const Vec3 p = jw->matrix.translation();
+        deformed.expand(p - Vec3{pad});
+        deformed.expand(p + Vec3{pad});
+    }
+    worldBounds = deformed;
+    return pushUniforms(m_palette.data(), kPaletteBytes);
+}
+
 void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow) {
     if (items.empty() || !m_instanceBuffer) return;
     m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? m_shadowFrameOffset : m_frameOffset, sizeof(FrameUniforms));
@@ -445,16 +535,21 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
         usize end = i + 1;
         const bool masked = first.pipeline / 2 == 1;
         while (end < items.size() && items[end].vertices == first.vertices && items[end].firstIndex == first.firstIndex &&
-               items[end].indexCount == first.indexCount &&
+               items[end].indexCount == first.indexCount && items[end].skinOffset == first.skinOffset && first.skinOffset == ~0u &&
                (shadow ? (!masked || items[end].material == first.material) && (items[end].pipeline / 2 == 1) == masked
                        : items[end].material == first.material && items[end].pipeline == first.pipeline))
             ++end;
-        const u32 pipeline = shadow ? (masked ? 1u : 0u) : first.pipeline;
+        const bool skinned = first.skinOffset != ~0u;
+        const u32 pipeline = (shadow ? (masked ? 1u : 0u) : first.pipeline) + (skinned ? 100u : 0u);
         if (pipeline != boundPipeline) {
-            m_device.bindPipeline(shadow ? (masked ? m_shadowMaskPipeline : m_shadowPipeline) : m_pbrPipelines[pipeline]);
+            rhi::PipelineHandle h;
+            if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
+            else h = skinned ? m_pbrSkinnedPipelines[first.pipeline] : m_pbrPipelines[first.pipeline];
+            m_device.bindPipeline(h);
             boundPipeline = pipeline;
             boundMaterial = ~0u;
         }
+        if (skinned) m_device.bindUniformBuffer(shadow ? kSlotShadowSkin : kSlotSkin, m_uniformBuffer, first.skinOffset, kPaletteBytes);
         if (first.material != boundMaterial) {  // opaque casters ignore it, but the block must be bound
             const FrameMaterial& m = m_frameMaterials[first.material];
             m_device.bindUniformBuffer(kSlotMaterial, m_uniformBuffer, m.uniformOffset, sizeof(MaterialUniforms));

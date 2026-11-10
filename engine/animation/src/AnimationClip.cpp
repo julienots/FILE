@@ -98,6 +98,36 @@ void Curve::sort() {
     std::stable_sort(keys.begin(), keys.end(), [](const Keyframe& a, const Keyframe& b) { return a.time < b.time; });
 }
 
+math::Vec4 TransformTrack::sample(float t) const {
+    if (times.empty()) return path == Path::Rotation ? math::Vec4{0, 0, 0, 1} : math::Vec4{0, 0, 0, 0};
+    if (t <= times.front() || times.size() == 1) return values.front();
+    if (t >= times.back()) return values.back();
+    const auto it = std::upper_bound(times.begin(), times.end(), t);
+    const usize i = static_cast<usize>(it - times.begin()) - 1;
+    if (step) return values[i];
+    const float span = times[i + 1] - times[i];
+    const float u = span > 0.0f ? (t - times[i]) / span : 0.0f;
+    return blendTransform(path, values[i], values[i + 1], u);
+}
+
+math::Vec4 blendTransform(TransformTrack::Path path, math::Vec4 a, math::Vec4 b, float t) {
+    if (path != TransformTrack::Path::Rotation) return a + (b - a) * t;
+    // Shortest arc: q and -q are the same rotation.
+    const float d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    if (d < 0.0f) b = b * -1.0f;
+    const float cosTheta = std::fabs(d);
+    math::Vec4 r;
+    if (cosTheta > 0.9995f) {
+        r = a + (b - a) * t;  // nearly identical: normalized lerp
+    } else {
+        const float theta = std::acos(std::clamp(cosTheta, -1.0f, 1.0f));
+        const float sinTheta = std::sin(theta);
+        r = a * (std::sin((1.0f - t) * theta) / sinTheta) + b * (std::sin(t * theta) / sinTheta);
+    }
+    const float len = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
+    return len > 0.0f ? r * (1.0f / len) : math::Vec4{0, 0, 0, 1};
+}
+
 std::string AnimationTrack::label() const {
     static const char* xyzw[] = {"x", "y", "z", "w"};
     std::string s = target.empty() ? "" : target + ": ";
@@ -131,6 +161,8 @@ void AnimationClip::fitDuration() {
     float end = 0.01f;
     for (const AnimationTrack& t : tracks) end = std::max(end, t.curve.duration());
     for (const AnimationEventKey& e : events) end = std::max(end, e.time);
+    for (const TransformTrack& t : transformTracks)
+        if (!t.times.empty()) end = std::max(end, t.times.back());
     duration = end;
 }
 

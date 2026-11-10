@@ -8,6 +8,7 @@
 #include "agr/core/Time.hpp"
 #include "agr/scene/Components.hpp"
 #include "agr/scene/Reflection.hpp"
+#include "agr/assets/Model.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 
 namespace agr {
@@ -117,9 +118,50 @@ void writeField(FieldWrite& w) {
 } // namespace
 
 // ------------------------------------------------------------------ library
+Result<std::shared_ptr<const AnimationClip>> AnimationLibrary::modelClip(const std::string& key) {
+    const usize hash = key.find('#');
+    const std::string modelUri = key.substr(0, hash), name = key.substr(hash + 1);
+    auto model = importModel(m_vfs, modelUri);
+    if (!model) return makeError(model.error().code, modelUri + ": " + model.error().message);
+    const ModelData& data = model.value();
+    std::vector<std::string> meshNames;
+    for (const ModelMesh& m : data.meshes) meshNames.push_back(m.name);
+    // Every clip of the file is converted at once (a model is imported a single time).
+    std::shared_ptr<const AnimationClip> wanted;
+    for (const ModelAnimation& an : data.animations) {
+        auto c = std::make_shared<AnimationClip>();
+        c->loop = true;
+        for (const ModelAnimationChannel& ch : an.channels) {
+            if (ch.node < 0 || static_cast<usize>(ch.node) >= data.nodes.size()) continue;
+            TransformTrack t;
+            t.target = modelNodePath(data.nodes, meshNames, static_cast<usize>(ch.node));
+            t.path = static_cast<TransformTrack::Path>(static_cast<u8>(ch.path));
+            t.step = ch.step;
+            t.times = ch.times;
+            t.values = ch.values;
+            c->transformTracks.push_back(std::move(t));
+        }
+        c->fitDuration();
+        const std::string clipKey = modelUri + "#" + an.name;
+        m_clips[clipKey] = {c, m_vfs.modifiedTime(modelUri)};
+        if (an.name == name) wanted = c;
+    }
+    if (!wanted) return makeError(Error::Code::NotFound, modelUri + " has no animation named '" + name + "'");
+    return wanted;
+}
+
+std::vector<std::string> AnimationLibrary::modelClipNames(std::string_view modelUri) {
+    std::vector<std::string> names;
+    auto model = importModel(m_vfs, modelUri);
+    if (model)
+        for (const ModelAnimation& an : model.value().animations) names.push_back(an.name);
+    return names;
+}
+
 Result<std::shared_ptr<const AnimationClip>> AnimationLibrary::clip(std::string_view uri) {
     const std::string key(uri);
     if (auto it = m_clips.find(key); it != m_clips.end()) return it->second.value;
+    if (key.find('#') != std::string::npos) return modelClip(key);
     auto text = m_vfs.readText(uri);
     if (!text) return text.error();
     auto parsed = AnimationClip::fromJson(text.value());
@@ -144,7 +186,7 @@ Result<std::shared_ptr<const AnimatorController>> AnimationLibrary::controller(s
 u32 AnimationLibrary::reloadChanged() {
     u32 n = 0;
     for (auto it = m_clips.begin(); it != m_clips.end();) {
-        if (m_vfs.modifiedTime(it->first) != it->second.modified) {
+        if (m_vfs.modifiedTime(it->first.substr(0, it->first.find('#'))) != it->second.modified) {
             it = m_clips.erase(it);
             ++n;
         } else {
@@ -167,6 +209,7 @@ struct AnimationSystem::Runtime {
     struct Playback {
         std::shared_ptr<const AnimationClip> clip;
         std::vector<Binding> bindings;  // parallel to clip->tracks
+        std::vector<ecs::Entity> transformBindings;  // parallel to clip->transformTracks
         float time = 0.0f;
         float speed = 1.0f;
         std::string state;
@@ -269,6 +312,40 @@ void AnimationSystem::apply(Scene& scene, ecs::Entity root, Runtime* rt, const A
     }
     for (FieldWrite& w : writes) writeField(w);
     m_stats.tracksApplied += static_cast<u32>(to.tracks.size());
+
+    // Transform tracks (imported skeletal / node animations).
+    if (!to.transformTracks.empty()) {
+        const bool cached = rt && rt->current.clip.get() == &to && rt->current.transformBindings.size() == to.transformTracks.size();
+        auto& reg = scene.registry();
+        const float fromSample = from ? sampleTime(*from, fromTime) : 0.0f;
+        for (usize i = 0; i < to.transformTracks.size(); ++i) {
+            const TransformTrack& track = to.transformTracks[i];
+            ecs::Entity target = cached ? rt->current.transformBindings[i] : resolvePath(scene, root, track.target);
+            if (target.isNull() || !scene.valid(target)) continue;
+            auto* tr = reg.tryGet<TransformComponent>(target);
+            if (!tr) continue;
+            math::Vec4 v = track.sample(ts);
+            if (weight < 1.0f) {
+                // Crossfade from the previous clip's value for the same target, else from the current pose.
+                math::Vec4 base;
+                const TransformTrack* old = nullptr;
+                if (from)
+                    for (const TransformTrack& o : from->transformTracks)
+                        if (o.path == track.path && o.target == track.target) old = &o;
+                if (old) base = old->sample(fromSample);
+                else if (track.path == TransformTrack::Path::Translation) base = math::Vec4(tr->position, 0.0f);
+                else if (track.path == TransformTrack::Path::Scale) base = math::Vec4(tr->scale, 0.0f);
+                else base = {tr->rotation.x, tr->rotation.y, tr->rotation.z, tr->rotation.w};
+                v = blendTransform(track.path, base, v, weight);
+            }
+            switch (track.path) {
+                case TransformTrack::Path::Translation: tr->position = {v.x, v.y, v.z}; break;
+                case TransformTrack::Path::Scale: tr->scale = {v.x, v.y, v.z}; break;
+                case TransformTrack::Path::Rotation: tr->rotation = {v.x, v.y, v.z, v.w}; break;
+            }
+        }
+        m_stats.tracksApplied += static_cast<u32>(to.transformTracks.size());
+    }
 }
 
 AnimationSystem::Runtime* AnimationSystem::runtime(Scene& scene, ecs::Entity e) {
@@ -313,6 +390,7 @@ AnimationSystem::Runtime* AnimationSystem::runtime(Scene& scene, ecs::Entity e) 
         }
         rt.current.clip = c.value();
         rt.current.bindings = bindTracks(scene, e, *rt.current.clip);
+        for (const TransformTrack& t : rt.current.clip->transformTracks) rt.current.transformBindings.push_back(resolvePath(scene, e, t.target));
         rt.valid = true;
     }
     return slot.get();
@@ -336,6 +414,7 @@ void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const
         if (auto c = m_library.clip(state->clip)) {
             rt.current.clip = c.value();
             rt.current.bindings = bindTracks(scene, e, *rt.current.clip);
+            for (const TransformTrack& t : rt.current.clip->transformTracks) rt.current.transformBindings.push_back(resolvePath(scene, e, t.target));
         } else {
             AGR_LOG_ERROR("Animation", "state '{}': {}", state->name, c.error().message);
         }

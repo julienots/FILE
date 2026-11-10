@@ -14,6 +14,13 @@
 
 namespace agr {
 
+/// GPU vertex of skinned meshes.
+struct SkinnedModelVertex {
+    ModelVertex vertex;
+    ModelSkinWeights skin;
+};
+static_assert(sizeof(SkinnedModelVertex) == 80);
+
 /// A model ready to draw: GPU buffers per mesh, plus the CPU data editors and
 /// gameplay need (hierarchy, materials, bounds).
 struct ModelAsset {
@@ -23,7 +30,8 @@ struct ModelAsset {
         u32 indexCount = 0;
         u32 vertexCount = 0;
         std::vector<ModelSubmesh> submeshes;
-        math::Aabb bounds;
+        math::Aabb bounds;   ///< Bind pose.
+        bool skinned = false;  ///< Vertex buffer of SkinnedModelVertex (deformed by a skin).
     };
     std::string uri;
     AssetState state = AssetState::Loading;
@@ -31,6 +39,8 @@ struct ModelAsset {
     std::vector<Mesh> meshes;
     std::vector<ModelNode> nodes;
     std::vector<MaterialData> materials;
+    std::vector<ModelSkin> skins;
+    std::vector<std::string> animationNames;  ///< Clips, played as "<uri>#<name>" by an Animator.
     std::vector<std::string> warnings;
     u32 version = 0;  ///< Incremented on every (re)load.
     i64 modifiedTime = 0;

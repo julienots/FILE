@@ -95,6 +95,7 @@ struct MeshRendererComponent {
     bool visible = true;
     std::string model;                 ///< Imported model (.gltf, .glb, .obj, .fbx). Empty = built-in mesh.
     i32 meshIndex = 0;                 ///< Mesh of the model.
+    i32 skin = -1;                     ///< Skin of the model deforming the mesh (-1 = none); joints are found by name below the model's root.
     std::string material;              ///< Optional .agrmat replacing every material of the mesh.
     float metallic = 0.0f;             ///< Built-in material.
     float roughness = 0.5f;            ///< Built-in material.

@@ -34,6 +34,16 @@ vec3 agrToneMap(vec3 c) {
 }
 )";
 
+/// Declarations of skinned vertex shaders (only in the skinned pipeline variants: the
+/// shader translator does not evaluate #ifdef around declarations).
+inline constexpr const char* kSkinBlock = R"(
+layout(location = 12) in vec4 a_joints;
+layout(location = 13) in vec4 a_weights;
+layout(std140) uniform SkinData {
+    mat4 u_joints[128];  // inverse(mesh world) * joint world * inverse bind
+};
+)";
+
 inline constexpr const char* kPbrVertex = R"(
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
@@ -54,10 +64,21 @@ out vec2 v_uv;
 out vec4 v_color;
 void main() {
     mat4 model = mat4(i_model0, i_model1, i_model2, i_model3);
-    vec4 world = model * vec4(a_position, 1.0);
+#ifdef AGR_SKINNED
+    mat4 skin = a_weights.x * u_joints[int(a_joints.x)] + a_weights.y * u_joints[int(a_joints.y)] +
+                a_weights.z * u_joints[int(a_joints.z)] + a_weights.w * u_joints[int(a_joints.w)];
+    vec3 position = (skin * vec4(a_position, 1.0)).xyz;
+    vec3 normal = mat3(skin) * a_normal;
+    vec3 tangent = mat3(skin) * a_tangent.xyz;
+#else
+    vec3 position = a_position;
+    vec3 normal = a_normal;
+    vec3 tangent = a_tangent.xyz;
+#endif
+    vec4 world = model * vec4(position, 1.0);
     v_worldPos = world.xyz;
-    v_normal = mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * a_normal;
-    v_tangent = vec4(mat3(model) * a_tangent.xyz, a_tangent.w);
+    v_normal = mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * normal;
+    v_tangent = vec4(mat3(model) * tangent, a_tangent.w);
     v_uv = a_uv * u_uvTransform.xy + u_uvTransform.zw;
     v_color = i_color;
     gl_Position = u_viewProj * world;
@@ -211,7 +232,14 @@ layout(location = 7) in vec4 i_model3;
 out vec2 v_uv;
 void main() {
     v_uv = a_uv * u_uvTransform.xy + u_uvTransform.zw;
-    gl_Position = u_viewProj * (mat4(i_model0, i_model1, i_model2, i_model3) * vec4(a_position, 1.0));
+#ifdef AGR_SKINNED
+    mat4 skin = a_weights.x * u_joints[int(a_joints.x)] + a_weights.y * u_joints[int(a_joints.y)] +
+                a_weights.z * u_joints[int(a_joints.z)] + a_weights.w * u_joints[int(a_joints.w)];
+    vec4 position = skin * vec4(a_position, 1.0);
+#else
+    vec4 position = vec4(a_position, 1.0);
+#endif
+    gl_Position = u_viewProj * (mat4(i_model0, i_model1, i_model2, i_model3) * position);
 }
 )";
 

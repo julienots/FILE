@@ -1,7 +1,7 @@
 # GPU tests: need a display (X11 / Wayland / Windows desktop). In CI they run under xvfb-run.
 add_executable(agr_gpu_tests main.cpp test_rhi.cpp test_renderer.cpp test_renderer2d.cpp test_renderer3d.cpp test_overlay.cpp)
 target_link_libraries(agr_gpu_tests PRIVATE agr::platform agr::ui agr::render agr::twod agr::compiler_options doctest::doctest)
-target_compile_definitions(agr_gpu_tests PRIVATE AGR_TEST_FONT="${PROJECT_SOURCE_DIR}/editor/resources/fonts/Inter-Regular.ttf")
+target_compile_definitions(agr_gpu_tests PRIVATE AGR_TEST_TEMPLATE_ASSETS="${PROJECT_SOURCE_DIR}/editor/resources/templates/assets" AGR_TEST_FONT="${PROJECT_SOURCE_DIR}/editor/resources/fonts/Inter-Regular.ttf")
 set_target_properties(agr_gpu_tests PROPERTIES FOLDER "Tests")
 add_test(NAME agr_gpu_tests_gl COMMAND agr_gpu_tests)
 add_test(NAME agr_gpu_tests_gles COMMAND agr_gpu_tests)

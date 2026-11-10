@@ -397,6 +397,23 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     // The speed slider calls the launcher script (target message).
     scripts.dispatchUI(scene3, UIValueChangedEvent{scene3.findByName("Power"), 20.0f});
     CHECK(scripts.field(scene3.findByName("Main Camera"), "speed").value() == "20.0");
+
+    // The skinned sprout: its state machine plays the model's Idle clip; a ball hitting it makes it dance.
+    const ecs::Entity sprout = scene3.findByName("Sprout");
+    REQUIRE_FALSE(sprout.isNull());
+    for (int i = 0; i < 5; ++i) {
+        scripts.update(scene3, time);
+        anim.update(scene3, 1.0f / 60.0f);
+        for (const AnimationEvent& ev : anim.takeEvents()) scripts.dispatchAnimation(scene3, ev);
+    }
+    CHECK(anim.currentState(sprout) == "Idle");
+    const ecs::Entity stem = scene3.findByName("Stem1");
+    REQUIRE_FALSE(stem.isNull());
+    CHECK_FALSE(math::nearlyEqual(scene3.registry().get<TransformComponent>(stem).rotation, math::Quat::identity()));
+    scripts.dispatchCollision(scene3, Collision3DEvent{sprout, ball, true, false});
+    scripts.update(scene3, time);
+    anim.update(scene3, 1.0f / 60.0f);
+    CHECK(anim.currentState(sprout) == "Dance");
     CHECK(scripts.stats().errors == 0);
 }
 

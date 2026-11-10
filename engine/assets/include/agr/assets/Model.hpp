@@ -27,9 +27,20 @@ struct ModelSubmesh {
     i32 material = -1;  ///< Index into ModelData::materials; -1 = default material.
 };
 
+/// Joints animated per skin (size of the joint palette uploaded to the GPU).
+inline constexpr usize kMaxSkinJoints = 128;
+
+/// Skinning data of a vertex: up to 4 joints (indices into the skin's joint list) and weights.
+struct ModelSkinWeights {
+    math::Vec4 joints{0.0f, 0.0f, 0.0f, 0.0f};  ///< Joint indices stored as floats (exact up to 2^24).
+    math::Vec4 weights{1.0f, 0.0f, 0.0f, 0.0f};
+};
+static_assert(sizeof(ModelSkinWeights) == 32);
+
 struct ModelMesh {
     std::string name;
     std::vector<ModelVertex> vertices;
+    std::vector<ModelSkinWeights> skinWeights;  ///< Empty, or one per vertex (skinned mesh).
     std::vector<u32> indices;  ///< Triangles, counter-clockwise front faces.
     std::vector<ModelSubmesh> submeshes;
     math::Aabb bounds;
@@ -43,6 +54,29 @@ struct ModelNode {
     math::Quat rotation = math::Quat::identity();
     math::Vec3 scale{1.0f};
     i32 mesh = -1;
+    i32 skin = -1;  ///< Skin deforming this node's mesh.
+};
+
+/// Skeleton binding: the nodes acting as joints and their inverse bind matrices.
+struct ModelSkin {
+    std::string name;
+    std::vector<i32> joints;  ///< Node indices.
+    std::vector<math::Mat4> inverseBind;
+};
+
+/// Animation of node transforms (imported clip).
+struct ModelAnimationChannel {
+    enum class Path : u8 { Translation, Rotation, Scale };
+    i32 node = -1;
+    Path path = Path::Translation;
+    bool step = false;            ///< Constant between keys (else linear / spherical).
+    std::vector<float> times;     ///< Seconds, increasing.
+    std::vector<math::Vec4> values;  ///< xyz (translation, scale) or quaternion xyzw.
+};
+struct ModelAnimation {
+    std::string name;
+    float duration = 0.0f;
+    std::vector<ModelAnimationChannel> channels;
 };
 
 /// CPU result of an import. Engine conventions: right-handed, +Y up, meters,
@@ -52,11 +86,19 @@ struct ModelData {
     std::vector<ModelMesh> meshes;
     std::vector<ModelNode> nodes;
     std::vector<MaterialData> materials;
+    std::vector<ModelSkin> skins;
+    std::vector<ModelAnimation> animations;
     std::vector<std::string> warnings;  ///< Non-fatal: unsupported features that were skipped.
 
     usize vertexCount() const;
     usize triangleCount() const;
 };
+
+/// Name an instantiated node gets: its own, else its mesh's, else "Node <index>".
+/// Animation tracks address nodes by paths of these names.
+std::string modelNodeName(const std::vector<ModelNode>& nodes, const std::vector<std::string>& meshNames, usize index);
+/// Path of a node below the model's root entity ("Armature/Hips/Spine").
+std::string modelNodePath(const std::vector<ModelNode>& nodes, const std::vector<std::string>& meshNames, usize index);
 
 /// .gltf, .glb, .obj, .fbx (case-insensitive).
 bool isModelFile(std::string_view name);

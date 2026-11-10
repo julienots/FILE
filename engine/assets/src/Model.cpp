@@ -192,13 +192,15 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
             out.warnings.push_back("mesh '" + mesh.name + "': non-triangle primitive skipped");
             continue;
         }
-        const cgltf_accessor *pos = nullptr, *nrm = nullptr, *tan = nullptr, *uv = nullptr;
+        const cgltf_accessor *pos = nullptr, *nrm = nullptr, *tan = nullptr, *uv = nullptr, *joints = nullptr, *weights = nullptr;
         for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
             const cgltf_attribute& at = prim.attributes[a];
             if (at.type == cgltf_attribute_type_position) pos = at.data;
             else if (at.type == cgltf_attribute_type_normal) nrm = at.data;
             else if (at.type == cgltf_attribute_type_tangent) tan = at.data;
             else if (at.type == cgltf_attribute_type_texcoord && at.index == 0) uv = at.data;
+            else if (at.type == cgltf_attribute_type_joints && at.index == 0) joints = at.data;
+            else if (at.type == cgltf_attribute_type_weights && at.index == 0) weights = at.data;
         }
         if (!pos) return makeError(Error::Code::ParseError, "mesh '" + mesh.name + "' has a primitive without positions");
         if (prim.targets_count) out.warnings.push_back("mesh '" + mesh.name + "': morph targets are not imported");
@@ -214,6 +216,23 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
             if (tan) cgltf_accessor_read_float(tan, i, &v.tangent.x, 4);
             else v.tangent = {1, 0, 0, 1};
             if (uv) cgltf_accessor_read_float(uv, i, &v.uv.x, 2);
+        }
+        if (joints && weights) {
+            // Skinned primitive: earlier primitives without skinning get a neutral entry.
+            mesh.skinWeights.resize(base);
+            for (usize i = 0; i < count; ++i) {
+                ModelSkinWeights w;
+                cgltf_uint j[4] = {0, 0, 0, 0};
+                cgltf_accessor_read_uint(joints, i, j, 4);
+                cgltf_accessor_read_float(weights, i, &w.weights.x, 4);
+                const float sum = w.weights.x + w.weights.y + w.weights.z + w.weights.w;
+                if (sum > 1e-6f) w.weights = w.weights * (1.0f / sum);
+                else w.weights = {1.0f, 0.0f, 0.0f, 0.0f};
+                w.joints = {static_cast<float>(j[0]), static_cast<float>(j[1]), static_cast<float>(j[2]), static_cast<float>(j[3])};
+                mesh.skinWeights.push_back(w);
+            }
+        } else if (!mesh.skinWeights.empty()) {
+            mesh.skinWeights.resize(base + count);
         }
         ModelSubmesh sub;
         sub.firstIndex = static_cast<u32>(mesh.indices.size());
@@ -236,7 +255,7 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
     return mesh;
 }
 
-void gltfNode(const cgltf_data* data, const cgltf_node* node, i32 parent, ModelData& out) {
+void gltfNode(const cgltf_data* data, const cgltf_node* node, i32 parent, ModelData& out, std::unordered_map<const cgltf_node*, i32>& index) {
     ModelNode n;
     n.name = node->name ? node->name : "";
     n.parent = parent;
@@ -250,9 +269,11 @@ void gltfNode(const cgltf_data* data, const cgltf_node* node, i32 parent, ModelD
         if (node->has_scale) n.scale = {node->scale[0], node->scale[1], node->scale[2]};
     }
     n.mesh = node->mesh ? static_cast<i32>(cgltf_mesh_index(data, node->mesh)) : -1;
+    n.skin = node->skin && node->mesh ? static_cast<i32>(cgltf_skin_index(data, node->skin)) : -1;
     const i32 self = static_cast<i32>(out.nodes.size());
+    index[node] = self;
     out.nodes.push_back(std::move(n));
-    for (cgltf_size c = 0; c < node->children_count; ++c) gltfNode(data, node->children[c], self, out);
+    for (cgltf_size c = 0; c < node->children_count; ++c) gltfNode(data, node->children[c], self, out, index);
 }
 
 // =================================================================== OBJ
@@ -397,6 +418,21 @@ usize ModelData::triangleCount() const {
     return n;
 }
 
+std::string modelNodeName(const std::vector<ModelNode>& nodes, const std::vector<std::string>& meshNames, usize index) {
+    const ModelNode& n = nodes[index];
+    if (!n.name.empty()) return n.name;
+    if (n.mesh >= 0 && static_cast<usize>(n.mesh) < meshNames.size() && !meshNames[static_cast<usize>(n.mesh)].empty())
+        return meshNames[static_cast<usize>(n.mesh)];
+    return "Node " + std::to_string(index);
+}
+
+std::string modelNodePath(const std::vector<ModelNode>& nodes, const std::vector<std::string>& meshNames, usize index) {
+    std::string path = modelNodeName(nodes, meshNames, index);
+    for (i32 p = nodes[index].parent; p >= 0; p = nodes[static_cast<usize>(p)].parent)
+        path = modelNodeName(nodes, meshNames, static_cast<usize>(p)) + "/" + path;
+    return path;
+}
+
 bool isModelFile(std::string_view name) {
     const std::string ext = extensionOf(name);
     return ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx";
@@ -469,16 +505,75 @@ Result<ModelData> importGltf(std::span<const u8> bytes, std::string_view uri, Vi
         out.meshes.push_back(std::move(mesh.value()));
     }
     const cgltf_scene* scene = data->scene ? data->scene : (data->scenes_count ? &data->scenes[0] : nullptr);
+    std::unordered_map<const cgltf_node*, i32> nodeIndex;
     if (scene) {
-        for (cgltf_size i = 0; i < scene->nodes_count; ++i) gltfNode(data, scene->nodes[i], -1, out);
+        for (cgltf_size i = 0; i < scene->nodes_count; ++i) gltfNode(data, scene->nodes[i], -1, out, nodeIndex);
     } else {
         for (cgltf_size i = 0; i < data->nodes_count; ++i)
-            if (!data->nodes[i].parent) gltfNode(data, &data->nodes[i], -1, out);
+            if (!data->nodes[i].parent) gltfNode(data, &data->nodes[i], -1, out, nodeIndex);
     }
+    // Skins: joints as node indices, inverse bind matrices (identity when absent).
+    for (cgltf_size si = 0; si < data->skins_count; ++si) {
+        const cgltf_skin& sk = data->skins[si];
+        ModelSkin skin;
+        skin.name = sk.name ? sk.name : "";
+        for (cgltf_size j = 0; j < sk.joints_count; ++j) {
+            auto it = nodeIndex.find(sk.joints[j]);
+            skin.joints.push_back(it == nodeIndex.end() ? -1 : it->second);
+            math::Mat4 ib = math::Mat4::identity();
+            if (sk.inverse_bind_matrices) cgltf_accessor_read_float(sk.inverse_bind_matrices, j, &ib.c[0].x, 16);
+            skin.inverseBind.push_back(ib);
+        }
+        if (std::find(skin.joints.begin(), skin.joints.end(), -1) != skin.joints.end())
+            out.warnings.push_back("skin '" + skin.name + "' uses joints outside the scene: they stay in their rest pose");
+        if (skin.joints.size() > kMaxSkinJoints)
+            out.warnings.push_back("skin '" + skin.name + "' has " + std::to_string(skin.joints.size()) + " joints; only the first " +
+                                   std::to_string(kMaxSkinJoints) + " are animated");
+        out.skins.push_back(std::move(skin));
+    }
+    // Animations of node transforms (morph-target weights are not supported).
+    bool cubic = false, morph = false;
+    for (cgltf_size ai = 0; ai < data->animations_count; ++ai) {
+        const cgltf_animation& an = data->animations[ai];
+        ModelAnimation anim;
+        anim.name = an.name && *an.name ? an.name : "Animation " + std::to_string(ai);
+        for (cgltf_size ci = 0; ci < an.channels_count; ++ci) {
+            const cgltf_animation_channel& ch = an.channels[ci];
+            if (!ch.target_node || !ch.sampler) continue;
+            auto it = nodeIndex.find(ch.target_node);
+            if (it == nodeIndex.end()) continue;
+            ModelAnimationChannel c;
+            c.node = it->second;
+            switch (ch.target_path) {
+                case cgltf_animation_path_type_translation: c.path = ModelAnimationChannel::Path::Translation; break;
+                case cgltf_animation_path_type_rotation: c.path = ModelAnimationChannel::Path::Rotation; break;
+                case cgltf_animation_path_type_scale: c.path = ModelAnimationChannel::Path::Scale; break;
+                default: morph = true; continue;
+            }
+            const cgltf_animation_sampler& sm = *ch.sampler;
+            c.step = sm.interpolation == cgltf_interpolation_type_step;
+            const bool spline = sm.interpolation == cgltf_interpolation_type_cubic_spline;
+            cubic |= spline;
+            const cgltf_size keys = sm.input->count;
+            const int comps = c.path == ModelAnimationChannel::Path::Rotation ? 4 : 3;
+            for (cgltf_size k = 0; k < keys; ++k) {
+                float t = 0.0f;
+                cgltf_accessor_read_float(sm.input, k, &t, 1);
+                math::Vec4 v{0.0f, 0.0f, 0.0f, 1.0f};
+                // Cubic spline outputs are (in-tangent, value, out-tangent): keep the values.
+                cgltf_accessor_read_float(sm.output, spline ? k * 3 + 1 : k, &v.x, static_cast<cgltf_size>(comps));
+                c.times.push_back(t);
+                c.values.push_back(v);
+                anim.duration = std::max(anim.duration, t);
+            }
+            if (!c.times.empty()) anim.channels.push_back(std::move(c));
+        }
+        if (!anim.channels.empty()) out.animations.push_back(std::move(anim));
+    }
+    if (cubic) out.warnings.push_back("cubic spline animation curves are played as linear between their keys");
+    if (morph) out.warnings.push_back("morph target (blend shape) animations are not imported");
     if (out.nodes.empty())  // a file with meshes but no scene: one node per mesh
         for (usize i = 0; i < out.meshes.size(); ++i) out.nodes.push_back({out.meshes[i].name, -1, {}, math::Quat::identity(), Vec3{1.0f}, static_cast<i32>(i)});
-    if (data->skins_count) out.warnings.push_back("skins are not imported yet (meshes are imported in their bind pose)");
-    if (data->animations_count) out.warnings.push_back(std::to_string(data->animations_count) + " animation(s) not imported yet");
     if (data->cameras_count || data->lights_count) out.warnings.push_back("cameras and lights of the file are not imported");
     return out;
 }

@@ -98,6 +98,7 @@ struct RenderStats {
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map.
+    u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 modelsLoading = 0;   ///< Mesh renderers waiting for their model.
     u32 renderWidth = 0, renderHeight = 0;  ///< Internal 3D resolution.
     u32 msaaSamples = 1;
@@ -194,6 +195,7 @@ private:
         u32 pipeline = 0;
         u32 instance = 0;  // index into m_instances
         float depth = 0.0f;
+        u32 skinOffset = ~0u;  // joint palette in the uniform buffer (skinned meshes only)
     };
     struct SpriteVertex {
         math::Vec3 position;
@@ -234,6 +236,10 @@ private:
     void collect3D(Scene& scene, const RenderView& rv, const math::Mat4& view, const math::Mat4& viewProj, const math::Frustum& frustum,
                    float aspect, const std::function<bool(ecs::Entity)>& hidden, detail::FrameUniforms& frame);
     u32 materialSlot(u64 key, const MaterialData& material, math::Vec2 uvScale);
+    /// Uploads the joint palette of a skinned mesh entity; returns its uniform offset and
+    /// the world bounds covering the deformed mesh.
+    u32 skinPalette(Scene& scene, ecs::Entity e, const MeshRendererComponent& mr, const ModelAsset& model, const math::Mat4& world,
+                    math::Aabb bindBounds, math::Aabb& worldBounds);
     void uploadInstances();
     void drawShadowPass();
     void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow);
@@ -262,6 +268,11 @@ private:
     usize m_overlayVertexCapacity = 0, m_overlayIndexCapacity = 0;
     u32 m_overlayFrameOffset = 0;
     rhi::PipelineHandle m_pbrPipelines[6];  // [alphaMode * 2 + doubleSided]
+    rhi::PipelineHandle m_pbrSkinnedPipelines[6];
+    rhi::PipelineHandle m_shadowSkinnedPipelines[2];  // [alpha mask]
+    /// Joint entities of skinned meshes (resolved by name, revalidated every frame).
+    std::unordered_map<u64, std::vector<ecs::Entity>> m_skinJoints;
+    std::vector<math::Mat4> m_palette;
     rhi::PipelineHandle m_shadowPipeline, m_shadowMaskPipeline, m_skyPipeline;
     rhi::BufferHandle m_skyVertices;
     rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map

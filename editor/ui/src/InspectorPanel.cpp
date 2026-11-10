@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <map>
 
 #include <SDL3/SDL.h>
@@ -585,6 +586,31 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
                         ImGui::BulletText("%s = %.2f", p.name.c_str(), v.value_or(0.0f));
                     }
                 }
+            }
+        }
+        // Clips of an imported model below this entity ("<model>#<clip>").
+        std::string modelUri;
+        std::function<void(ecs::Entity)> findModel = [&](ecs::Entity x) {
+            if (!modelUri.empty()) return;
+            if (const auto* mr = reg.tryGet<MeshRendererComponent>(x); mr && !mr->model.empty()) modelUri = mr->model;
+            scene.forEachChild(x, [&](ecs::Entity c) { findModel(c); });
+        };
+        findModel(e);
+        if (!modelUri.empty() && s.models()) {
+            const ModelAsset* model = s.models()->get(modelUri);
+            if (model && !model->animationNames.empty()) {
+                const std::string current = an.clip.rfind(modelUri + "#", 0) == 0 ? an.clip.substr(modelUri.size() + 1) : std::string("(autre)");
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##modelClips", ("Clip du modèle : " + current).c_str())) {
+                    for (const std::string& name : model->animationNames)
+                        if (ImGui::Selectable(name.c_str(), name == current)) {
+                            an.clip = modelUri + "#" + name;
+                            edit.changed = edit.committed = true;
+                        }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Animations importées avec le modèle ; utilisables aussi dans une machine à états (%s#Nom)", modelUri.c_str());
             }
         }
         if (ImGui::SmallButton("Timeline")) s.showAnimation = true;
