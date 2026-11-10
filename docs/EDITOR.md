@@ -50,6 +50,8 @@ Les projets récents sont mémorisés dans le dossier de préférences de l'util
 | **Animation** | Timeline des clips de l'Animator sélectionné : pistes, clés, interpolations, courbe, événements, aperçu par la tête de lecture, enregistrement de la pose (*Clé*) ([ANIMATION.md](ANIMATION.md)) |
 | **Machine à états** | Graphe des états et transitions de l'Animator : conditions, instant de sortie, fondus, paramètres, état courant en mode Jeu |
 | **Mixeur audio** | Volume et coupure des bus, vumètre, voix et mémoire ; bouton *Écouter* des sources dans l'inspecteur ([AUDIO.md](AUDIO.md)) |
+| **Export** | *Fichier › Exporter le jeu...* : PC, APK, AAB, signature, réglages Android ([EXPORT.md](EXPORT.md)) |
+| **Aperçu mobile** | Vue Jeu : formats téléphone (20:9, 16:9) et tablette (4:3) en paysage ou portrait, zones sûres simulées (bandes sombres), bouton *Tactile* (en mode Jeu, la souris agit comme un doigt) |
 | **Scripts et physique** | En mode Jeu seulement : scripts Lua (inspecteur : erreurs, propriétés, fonctions, *Ouvrir le fichier*), corps physiques ; bouton *Collisions* de la vue ; *Nouveau script* et glisser un `.lua` sur un objet ([SCRIPTING.md](SCRIPTING.md), [PHYSICS.md](PHYSICS.md)) |
 | **Console** | Journal du moteur, filtres par niveau avec compteurs, recherche, copie d'une ligne |
 | **Statistiques** | FPS, courbe des temps d'image, backend et GPU, draw calls, triangles, culling, lots de sprites, temps GPU, mémoire GPU et CPU par catégorie |

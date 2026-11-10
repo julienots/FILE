@@ -160,9 +160,25 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |
 | **Éditeur de logique visuelle** (reporté de la phase 6) | ⬜ | **non réalisé** |
 
-## Phase 8 — Android ⬜
-Projet Gradle généré, NDK, export APK/AAB, signature, permissions, capteurs, vibrations,
-sauvegarde locale, aperçu mobile dans l'éditeur, mesures sur appareils réels.
+## Phase 8 — Android 🟡 (export APK / AAB et fonctions mobiles terminés ; aucun essai sur appareil réel)
+
+Guide : [EXPORT.md](EXPORT.md).
+
+| Élément | État | Où |
+|---|---|---|
+| Lecteur de jeu (`agr_player`) : exécute un jeu exporté avec tous les plugins ; exécutable PC, `libmain.so` Android | ✅ | `apps/player` |
+| Format de jeu exporté (`game.json`, assets, scènes), lecture dans l'APK (`SdlFileProvider`) | ✅ | `GameManifest`, `agr::platform` |
+| Export PC (dossier) depuis l'éditeur et en ligne de commande, vérifié par le test automatique du lecteur | ✅ | `GameExport`, test `agr_player_*` |
+| Compilation croisée NDK (arm64-v8a, x86_64, API 26+, pages de 16 Ko) et modèles d'export | ✅ | presets `android-*`, `tools/build_android_templates.sh` |
+| Projet Gradle généré (manifeste, activité, icônes, permissions, orientation), APK debug, APK signé, AAB | ✅ | `AndroidExport` ; vérifiés par `aapt2`, `apksigner`, `zipalign` |
+| Signature : création de keystore, mots de passe jamais enregistrés | ✅ | |
+| Fenêtre d'export de l'éditeur, export en arrière-plan avec journal ; job Android en CI | ✅ | `ExportPanel`, `.github/workflows/ci.yml` |
+| Fonctions mobiles : sauvegarde locale, vibration, accéléromètre, gyroscope, zones sûres, orientation, écran allumé, bouton Retour | ✅ | `SaveStore`, `SdlPlatform`, API Lua |
+| Arrière-plan : son suspendu, sauvegarde écrite, surface Vulkan libérée puis recréée | ✅ | testé sur bureau (libération / recréation de surface) ; pas sur appareil |
+| Aperçu mobile dans l'éditeur (formats, zones sûres simulées, souris = doigt) | ✅ | vue Jeu |
+| **Exécution sur appareil réel / émulateur, mesures** (démarrage, FPS, mémoire, batterie, thermique) | ⬜ | **non réalisé** : pas d'appareil ni de virtualisation dans l'environnement de développement |
+| Icônes adaptatives, écran de démarrage, compression de textures ETC2 / ASTC, Play Asset Delivery | ⬜ | à planifier |
+| Lancement direct sur un appareil connecté (adb) depuis l'éditeur | ⬜ | à planifier |
 
 ## Phase 9 — Templates, outils, plugins ⬜
 Templates jouables (platformer 2D, RPG 2D/3D, tower defense, cartes, idle, racing…),

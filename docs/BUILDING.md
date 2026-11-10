@@ -95,7 +95,15 @@ est défini (c'est le cas en CI) : l'absence d'affichage devient alors un échec
 
 ## Android
 
-La chaîne Android (NDK r27+, Gradle, APK/AAB) est l'objet de la **phase 8**. Le code est déjà
-écrit pour être portable : aucune dépendance desktop dans `core/ecs/scene/runtime`, logs vers logcat,
-contexte OpenGL ES 3.0 sur Android dans `SdlPlatform`, gestion du cycle de vie mobile.
-Rien de tout cela n'a encore été compilé pour Android : ne le considérez pas comme validé.
+Le moteur se compile pour Android (NDK r27 ou plus récent, testé avec r28c) sous la forme du **lecteur
+de jeu** `libmain.so` et de `libSDL3.so` :
+
+```bash
+export ANDROID_NDK_HOME=/chemin/vers/ndk/28.2.13676358
+cmake --preset android-arm64 && cmake --build --preset android-arm64     # ou android-x86_64
+tools/build_android_templates.sh build/export_templates                  # les deux ABI, allégées, + Java de SDL
+```
+
+Ce sont les **modèles d'export** : l'éditeur les assemble avec les données d'un jeu dans un projet Gradle,
+sans recompiler de C++ à chaque export. Construction d'un APK / AAB : [EXPORT.md](EXPORT.md).
+API 26 minimum (Android 8.0), libc++ statique, pages de 16 Ko (exigence de Google Play pour Android 15).

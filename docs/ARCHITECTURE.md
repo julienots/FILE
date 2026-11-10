@@ -57,6 +57,11 @@
 
 Détails du rendu : [RENDERING.md](RENDERING.md).
 
+Applications : `apps/player` (le **lecteur de jeu** : exécute un jeu exporté ; exécutable sur PC,
+`libmain.so` sur Android), `apps/sandbox` (démonstration), `editor/`. Le runtime fournit aussi
+`GameManifest` (`game.json`) et `SaveStore` (sauvegarde locale) ; la plateforme, `SdlFileProvider`
+(lecture des données dans l'APK).
+
 Ordre des plugins d'un jeu (celui de l'éditeur) : `RenderPlugin`, `TwoDPlugin`, `UIPlugin` (entrées de
 l'interface avant les scripts), `ScriptPlugin`, `AnimationPlugin` (après les scripts, qui règlent ses
 paramètres), `Physics2DPlugin`, `Physics3DPlugin`, `AudioPlugin`.

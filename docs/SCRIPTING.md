@@ -108,6 +108,11 @@ composant).
 | `agr.audio.setBusVolume(bus, v)`, `busVolume(bus)`, `setBusMuted(bus, b)`, `busMuted(bus)` | bus `"Master"`, `"Music"`, `"Effects"`, `"Ambient"`, `"Interface"`, `"Voice"` |
 | `agr.ui.pointerOverUI()` | vrai si la souris / un doigt est sur l'interface (le gameplay l'ignore alors) |
 | `agr.ui.isPressed(entité)` | bouton maintenu (commandes tactiles) |
+| `agr.input.accelerometer()` → x, y, z ou `nil` ; `agr.input.gyroscope()` | capteurs de mouvement (m/s², rad/s), `nil` sans capteur |
+| `agr.save.set(clé, valeur)`, `get(clé [, défaut])`, `has`, `remove`, `clear`, `flush()` | sauvegarde locale : nombres, textes, booléens, tableaux et tables imbriquées ; écrite automatiquement quand l'application passe en arrière-plan ou se ferme |
+| `agr.device.platform()`, `isMobile()` | `"Android"`, `"Linux"`, `"Windows"`... |
+| `agr.device.vibrate(secondes [, force])`, `canVibrate()` | vibreur du téléphone (sans effet ailleurs) |
+| `agr.device.safeArea()` → gauche, haut, droite, bas | marges de l'encoche et des barres système |
 
 ## Dans l'éditeur
 

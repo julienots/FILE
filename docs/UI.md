@@ -12,7 +12,8 @@ des modèles et test de bout en bout de l'éditeur.
   de référence (1920 × 1080) ; `match` choisit de suivre la largeur (0), la hauteur (1) ou un
   mélange — le même HUD tient sur un téléphone en portrait, en paysage et sur une tablette.
   `ConstantPixelSize` : 1 unité = `pixelScale` pixels. `sortOrder` : les canvas les plus hauts sont
-  dessinés par-dessus.
+  dessinés par-dessus. `respectSafeArea` (activé) place les enfants dans la **zone sûre** de l'écran
+  (hors encoche, coins arrondis et barre de gestes) ; à désactiver pour un fond plein écran.
 - `UIRect` : **ancres** (`anchorMin`, `anchorMax`, de (0, 0) en haut à gauche à (1, 1) en bas à
   droite du parent), **pivot**, `position`, `size`. Ancres confondues : taille fixe placée au point
   d'ancrage ; ancres écartées : l'élément s'étire avec son parent (`size` s'ajoute à la zone).
@@ -79,7 +80,6 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 - Pas de masques / zones défilantes, de champs de saisie de texte, de cases à cocher, de listes
   déroulantes ni de texte enrichi.
 - Pas de rotation ni d'échelle des éléments, pas de navigation clavier / manette.
-- Pas de prise en compte des **zones sûres** (encoches) : phase 8 (Android).
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent
   (il est alors vidé et reconstruit, avec un avertissement si cela ne suffit pas).
 - UI Builder : un élément à la fois (pas de sélection multiple déplacée ensemble), pas de guides

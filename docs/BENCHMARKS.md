@@ -189,5 +189,15 @@ animation: 1000 animators (500 state machines), 3 curves each      0.188 ms     
 | Entrées de l'interface : < 1 µs | Recherche de l'élément touché depuis le haut de la pile. |
 | 1 000 Animators : ~0,19 ms | Évaluation des courbes, transitions et écriture par réflexion ; ~0,2 µs par entité animée. |
 
+## Export (phase 8)
+
+| Mesure | Valeur |
+|---|---|
+| Lecteur Android `libmain.so` (moteur complet, allégé) | ~10 Mo pour arm64-v8a ; `libSDL3.so` ~2,4 Mo |
+| APK de test de la Vitrine 2D (arm64-v8a, assets compris) | 13,1 Mo |
+| Export Android (Gradle, plugin déjà téléchargé) | ~35 s ; le premier export télécharge le plugin Android (~1 min de plus) |
+| Lecteur PC : démarrage jusqu'à la scène chargée (Vitrine 2D, Vulkan logiciel) | ~0,8 s |
+
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
-téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.
+téléphone : aucun appareil Android réel n'a encore été disponible pour les mesurer (démarrage, images par
+seconde, mémoire, batterie, échauffement).

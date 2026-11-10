@@ -34,8 +34,12 @@ namespace {
 fs::path tempPath(const char* tag) { return fs::temp_directory_path() / (std::string("agr_ed_") + tag + "_" + Uuid::generate().toString()); }
 
 std::string readTextFile(const fs::path& p) {
-    std::ifstream in(p, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::ifstream in(p, std::ios::binary | std::ios::ate);
+    if (!in) return {};
+    std::string text(static_cast<usize>(in.tellg()), '\0');
+    in.seekg(0);
+    in.read(text.data(), static_cast<std::streamsize>(text.size()));
+    return text;
 }
 void writeTextFile(const fs::path& p, const std::string& text) {
     fs::create_directories(p.parent_path());

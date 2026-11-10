@@ -332,8 +332,12 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
     {
         fs::path iconSource = project.assetsDirectory() / "icon.png";
         if (!fs::is_regular_file(iconSource, ec)) iconSource = project.assetsDirectory() / "textures" / "agr_mark.png";
-        std::ifstream in(iconSource, std::ios::binary);
-        const ByteBuffer bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        ByteBuffer bytes;
+        if (std::ifstream in(iconSource, std::ios::binary | std::ios::ate); in) {
+            bytes.resize(static_cast<usize>(in.tellg()));
+            in.seekg(0);
+            in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        }
         static const std::pair<const char*, u32> densities[] = {{"mdpi", 48}, {"hdpi", 72}, {"xhdpi", 96}, {"xxhdpi", 144}, {"xxxhdpi", 192}};
         for (const auto& [density, size] : densities) {
             auto png = bytes.empty() ? Result<ByteBuffer>(makeError(Error::Code::NotFound, "no icon image")) : makeLauncherIcon(bytes, size);
