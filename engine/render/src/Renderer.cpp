@@ -281,6 +281,15 @@ void Renderer::render(Scene& scene, u32 width, u32 height) {
 }
 
 void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetHandle outputTarget, u32 width, u32 height) {
+    // Per-frame GPU data (uniforms, instances, sprites) is written once per device frame:
+    // a second view in the same frame would overwrite the first one's data on Vulkan.
+    const u64 deviceFrame = m_device.frameStats().frameIndex;
+    if (deviceFrame != 0 && deviceFrame == m_lastViewFrame) {
+        if (!m_warnedSecondView) AGR_LOG_ERROR("Render", "renderView called twice in one frame on the same Renderer: use one Renderer per view");
+        m_warnedSecondView = true;
+        return;
+    }
+    m_lastViewFrame = deviceFrame;
     Stopwatch cpu;
     ++m_frame;
     m_stats = {};
@@ -288,8 +297,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     auto& reg = scene.registry();
     m_stats.hasCamera = true;
 
-    const u32 samples = std::clamp<u32>(m_profile.msaaSamples, 1, m_device.info().maxSamples);
-    const float scale = std::clamp(m_profile.renderScale, 0.25f, 2.0f);
+    const u32 samples = rv.direct ? 1u : std::clamp<u32>(m_profile.msaaSamples, 1, m_device.info().maxSamples);
+    const float scale = rv.direct ? 1.0f : std::clamp(m_profile.renderScale, 0.25f, 2.0f);
     const u32 renderW = std::max(1u, static_cast<u32>(std::lround(static_cast<float>(width) * scale)));
     const u32 renderH = std::max(1u, static_cast<u32>(std::lround(static_cast<float>(height) * scale)));
 

@@ -205,6 +205,22 @@ void draw(ImDrawList* dl, Kind kind, ImVec2 c, float s, ImU32 col) {
                 dl->AddLine({c.x + ca * h * 0.6f, c.y + sa * h * 0.6f}, {c.x + ca * h * 0.9f, c.y + sa * h * 0.9f}, col, t);
             }
             break;
+        case Kind::Model: {  // solid isometric cube (imported model)
+            const ImVec2 top{c.x, c.y - h * 0.8f}, l{c.x - h * 0.75f, c.y - h * 0.4f}, r{c.x + h * 0.75f, c.y - h * 0.4f}, mid{c.x, c.y},
+                bl{c.x - h * 0.75f, c.y + h * 0.45f}, br{c.x + h * 0.75f, c.y + h * 0.45f}, bot{c.x, c.y + h * 0.85f};
+            const ImVec2 topFace[] = {top, r, mid, l};
+            const ImVec2 leftFace[] = {l, mid, bot, bl};
+            const ImVec2 rightFace[] = {mid, r, br, bot};
+            dl->AddConvexPolyFilled(topFace, 4, col);
+            dl->AddConvexPolyFilled(leftFace, 4, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.75f) << 24));
+            dl->AddConvexPolyFilled(rightFace, 4, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.5f) << 24));
+            break;
+        }
+        case Kind::Material:  // shaded sphere
+            dl->AddCircleFilled(c, h * 0.8f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.55f) << 24), 24);
+            dl->AddCircleFilled({c.x - h * 0.15f, c.y - h * 0.15f}, h * 0.55f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.8f) << 24), 24);
+            dl->AddCircleFilled({c.x - h * 0.32f, c.y - h * 0.32f}, h * 0.18f, col, 12);
+            break;
         case Kind::Plus:
             dl->AddLine({c.x - h * 0.6f, c.y}, {c.x + h * 0.6f, c.y}, col, t * 1.4f);
             dl->AddLine({c.x, c.y - h * 0.6f}, {c.x, c.y + h * 0.6f}, col, t * 1.4f);

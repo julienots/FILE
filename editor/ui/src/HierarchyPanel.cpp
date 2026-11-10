@@ -49,7 +49,8 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
                                 {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
                                 {"Couche de parallaxe", CreateKind::ParallaxLayer}};
     static const Item scene[] = {{"Caméra", CreateKind::Camera}, {"Lumière directionnelle", CreateKind::DirectionalLight},
-                                 {"Environnement (ambiance)", CreateKind::Environment}};
+                                 {"Lumière ponctuelle", CreateKind::PointLight}, {"Projecteur (spot)", CreateKind::SpotLight},
+                                 {"Environnement (ciel, ambiance)", CreateKind::Environment}};
     auto items = [&](const Item* list, usize n) {
         for (usize i = 0; i < n; ++i)
             if (ImGui::MenuItem(list[i].label)) s.ctx.create(list[i].kind, parent);
@@ -65,7 +66,7 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Caméra et lumières")) {
-        items(scene, 3);
+        items(scene, 5);
         ImGui::EndMenu();
     }
 }

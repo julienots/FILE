@@ -7,6 +7,7 @@
 
 #include "agr/assets/AssetManager.hpp"
 #include "agr/editor/EditorContext.hpp"
+#include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/Theme.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/render/RenderPlugin.hpp"
@@ -41,6 +42,9 @@ struct EditorShared {
     Renderer* renderer() const { return render ? render->renderer() : nullptr; }
     AssetManager* assets() const { return render ? render->assets() : nullptr; }
     SpriteSheetLibrary* sheets() const { return render ? render->spriteSheets() : nullptr; }
+    ModelLibrary* models() const { return render ? render->models() : nullptr; }
+    MaterialLibrary* materials() const { return render ? render->materials() : nullptr; }
+    PickAssets pickAssets() const { return {sheets(), models()}; }
 
     // --- status bar
     std::string status;
@@ -58,6 +62,8 @@ struct EditorShared {
     bool renameSelection = false;  ///< Hierarchy starts inline rename of the primary selection.
     bool focusViewport = false;
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
+    std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).
+    std::string previewMaterial;   ///< Material the preview renders this frame (set by the inspector).
 
     // --- thumbnails (asset browser, inspector): kept loaded until releaseThumbnails()
     std::unordered_map<std::string, TextureAsset> thumbnails;

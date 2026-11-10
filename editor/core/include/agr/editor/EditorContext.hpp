@@ -11,6 +11,7 @@
 
 namespace agr {
 struct SpriteSheet;
+struct ModelAsset;
 }
 
 namespace agr::editor {
@@ -20,7 +21,7 @@ enum class PlayState : u8 { Edit, Playing, Paused };
 /// What "Create" menus can add.
 enum class CreateKind : u8 {
     Empty, Cube, Sphere, Plane, Quad, Sprite, Camera, DirectionalLight, Environment,
-    Tilemap, Particles2D, Light2D, ParallaxLayer
+    Tilemap, Particles2D, Light2D, ParallaxLayer, PointLight, SpotLight
 };
 const char* createKindName(CreateKind kind);
 
@@ -63,6 +64,8 @@ public:
     /// .agrsheet `uri` points to), the sprite shows its first frame at native size and
     /// gets a SpriteAnimator playing the first clip when the sheet has clips.
     ecs::Entity createSprite(const std::string& uri, math::Vec3 position, ecs::Entity parent = {}, const SpriteSheet* sheet = nullptr);
+    /// Adds a loaded model's hierarchy (root at `position`), selected, as one undo step.
+    ecs::Entity instantiateModel(const ModelAsset& model, math::Vec3 position, ecs::Entity parent = {});
     void deleteSelection();
     void duplicateSelection();
     /// Creates an empty "Group" at the center of the selection and moves the selected

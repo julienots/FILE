@@ -23,6 +23,7 @@ add_library(agr_editor_ui STATIC
     ui/src/InspectorPanel.cpp
     ui/src/ViewportPanel.cpp
     ui/src/AssetBrowserPanel.cpp
+    ui/src/MaterialPreview.cpp
     ui/src/ConsolePanel.cpp
     ui/src/EditorApp.cpp)
 target_include_directories(agr_editor_ui PUBLIC ui/include)

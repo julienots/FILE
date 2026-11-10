@@ -62,6 +62,7 @@ private:
     HierarchyPanel m_hierarchy;
     InspectorPanel m_inspector;
     ViewportPanel m_viewport;
+    MaterialPreview m_materialPreview;
     AssetBrowserPanel m_assets;
     ConsolePanel m_console;
     StatsPanel m_stats;

@@ -7,6 +7,7 @@
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -61,6 +62,7 @@ TEST_CASE("projects are created with folders, assets and a playable startup scen
     CHECK(fs::exists(game / Project::kFileName));
     CHECK(fs::exists(game / "assets/textures/agr_mark.png"));
     CHECK(fs::exists(game / "assets/2d/hero.agrsheet"));
+    CHECK(fs::exists(game / "assets/3d/crate.glb"));
     CHECK(fs::exists(game / "assets/2d/forest_tiles.png"));
     CHECK(fs::exists(game / "scenes/main.agrscene"));
     CHECK(f.ctx->scenePath() == "scenes/main.agrscene");
@@ -158,8 +160,8 @@ TEST_CASE("picking: tilemaps on painted cells, sprites with sheet frame pivots")
     sr.frame = 0;
     scene.updateTransforms();
     SpriteSheetLibrary sheets(f.engine->vfs());
-    CHECK(pick(scene, rayAt(20.0f, 0.75f), &sheets));
-    CHECK_FALSE(pick(scene, rayAt(20.0f, -0.25f), &sheets));
+    CHECK(pick(scene, rayAt(20.0f, 0.75f), {&sheets}));
+    CHECK_FALSE(pick(scene, rayAt(20.0f, -0.25f), {&sheets}));
     CHECK(pick(scene, rayAt(20.0f, -0.25f)));  // without sheets the component pivot (center) is used
     CHECK(worldBounds(scene, map).max.x == doctest::Approx(6.0f));
 }
@@ -188,6 +190,61 @@ TEST_CASE("dropping a sprite sheet creates an animated sprite at native size") {
     const auto& tm = reg.get<TilemapComponent>(tmE);
     CHECK(tm.tiles.size() == static_cast<usize>(tm.width) * tm.height);
     CHECK(reg.get<TransformComponent>(tmE).position.x == std::floor(reg.get<TransformComponent>(tmE).position.x));
+}
+
+TEST_CASE("the 3D showcase references shipped models and materials; models instantiate as one undo step") {
+    EditorFixture f(ProjectMode::Mode3D);
+    f.ctx->newScene(SceneTemplate::Showcase3D);
+    auto& reg = f.scene().registry();
+    ModelLibrary models(f.engine->vfs(), f.engine->jobs(), nullptr);
+    MaterialLibrary materials(f.engine->vfs());
+    usize meshRenderers = 0;
+    reg.view<MeshRendererComponent>().each([&](ecs::Entity, MeshRendererComponent& m) {
+        ++meshRenderers;
+        if (!m.model.empty()) {
+            const ModelAsset* a = models.load(m.model);
+            REQUIRE(a);
+            CHECK_MESSAGE(a->state == AssetState::Ready, m.model << ": " << a->error);
+            CHECK(static_cast<usize>(m.meshIndex) < a->meshes.size());
+        }
+        if (!m.material.empty()) CHECK_MESSAGE(materials.get(m.material) != nullptr, m.material);
+        if (!m.texture.empty()) CHECK(f.engine->vfs().exists(m.texture));
+    });
+    CHECK(meshRenderers > 15);
+    usize pointLights = 0;
+    reg.view<PointLightComponent>().each([&](ecs::Entity, PointLightComponent&) { ++pointLights; });
+    CHECK(pointLights >= 1);
+    const ModelAsset* crate = models.load("assets://3d/crate.glb");
+    REQUIRE(crate);
+    REQUIRE(crate->state == AssetState::Ready);
+    CHECK(crate->materials.size() == 1);
+    CHECK(crate->materials[0].normalTexture == "assets://3d/crate.glb#image1");
+    const usize before = f.scene().entityCount();
+    const ecs::Entity root = f.ctx->instantiateModel(*crate, {1.0f, 0.0f, 2.0f});
+    REQUIRE_FALSE(root.isNull());
+    CHECK(f.scene().entityCount() == before + 2);  // root + the crate node
+    CHECK(f.ctx->selection().primary() == f.scene().uuidOf(root));
+    CHECK(reg.get<TransformComponent>(root).position.z == doctest::Approx(2.0f));
+    CHECK(f.ctx->undoStack().undoLabel() == "Add Model");
+    REQUIRE(f.ctx->undo());
+    CHECK(f.scene().entityCount() == before);
+    // Model bounds drive picking once loaded (unit box before).
+    REQUIRE(f.ctx->redo());
+    const ecs::Entity node = f.scene().children(f.scene().findByUuid(f.ctx->selection().primary())).front();
+    const math::Aabb b = worldBounds(f.scene(), node, {nullptr, &models});
+    CHECK(b.min.y == doctest::Approx(0.0f).epsilon(0.01));  // the crate sits on its origin
+    CHECK(b.max.y == doctest::Approx(1.0f).epsilon(0.01));
+}
+
+TEST_CASE("create point and spot lights") {
+    EditorFixture f;
+    const auto p = f.ctx->create(CreateKind::PointLight);
+    const auto sp = f.ctx->create(CreateKind::SpotLight);
+    CHECK(f.scene().registry().has<PointLightComponent>(p));
+    REQUIRE(f.scene().registry().has<SpotLightComponent>(sp));
+    // The spot points down by default.
+    const Vec3 dir = f.scene().worldMatrix(sp).transformVector({0, 0, -1});
+    CHECK(dir.y == doctest::Approx(-1.0f).epsilon(0.001));
 }
 
 TEST_CASE("create, rename, undo and redo") {

@@ -15,6 +15,7 @@
 #include "agr/editor/SceneTemplates.hpp"
 #include "agr/runtime/Engine.hpp"
 #include "agr/runtime/Events.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 
 namespace agr::editor {
@@ -183,6 +184,7 @@ void EditorApp::createProject() {
 void EditorApp::onShutdown(Engine&) {
     if (!ImGui::GetCurrentContext()) return;
     m_viewport.release(*m_shared);
+    m_materialPreview.release(*m_shared);
     m_shared->releaseThumbnails();
     m_imgui->shutdown();
     m_imgui.reset();  // GPU objects must go while the device still exists (plugins unload after onShutdown)
@@ -198,6 +200,7 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     if (m_closeProjectRequested) {
         m_closeProjectRequested = false;
         m_viewport.release(*m_shared);
+        m_materialPreview.release(*m_shared);
         m_shared->releaseThumbnails();
         RenderPlugin* render = m_shared->render;
         const EditorFonts fonts = m_shared->fonts;
@@ -245,7 +248,10 @@ void EditorApp::onRender(Engine& engine, const FrameTime&) {
     const u32 w = static_cast<u32>(fb.x), h = static_cast<u32>(fb.y);
     if (w == 0 || h == 0) return;
     device->beginFrame(w, h);
-    if (m_ctx->hasProject()) m_viewport.renderScene(*m_shared);
+    if (m_ctx->hasProject()) {
+        m_materialPreview.render(*m_shared);  // before the scene view: the stats panel shows the scene's frame
+        m_viewport.renderScene(*m_shared);
+    }
     m_imgui->render(ImGui::GetDrawData(), true);
     device->endFrame();
     if (!m_capturePath.empty()) {
@@ -451,7 +457,8 @@ void EditorApp::drawEditor(const FrameTime& time) {
 
     m_viewport.draw(*m_shared, time);
     m_hierarchy.draw(*m_shared);
-    m_inspector.draw(*m_shared);
+    m_shared->previewMaterial.clear();  // the inspector sets it again while it shows a material
+    m_inspector.draw(*m_shared, m_materialPreview);
     m_assets.draw(*m_shared);
     m_console.draw(*m_shared);
     m_stats.draw(*m_shared, time);
@@ -537,7 +544,8 @@ void EditorApp::drawMenuBar() {
             {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}, {nullptr, {}}, {"Sprite", CreateKind::Sprite},
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
             {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
-            {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Environnement", CreateKind::Environment}};
+            {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
+            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}};
         for (const auto& [label, kind] : items) {
             if (!label) ImGui::Separator();
             else if (ImGui::MenuItem(label)) ctx.create(kind);
@@ -903,6 +911,34 @@ void EditorApp::smokeTest(const FrameTime&) {
         case 92: {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_2d.png", ec), "2D editor screenshot written");
+            // ---- 3D: showcase template (glTF models, .agrmat materials, lights, shadows, sky).
+            ctx.newScene(SceneTemplate::Showcase3D);
+            ctx.camera().mode2D = false;
+            m_viewport.gameView = true;  // frame it like the game camera
+            break;
+        }
+        case 120: {
+            Renderer* renderer = m_shared->renderer();
+            check(renderer && renderer->stats().modelsLoading == 0, "glTF models of the showcase loaded");
+            check(renderer && renderer->stats().lights >= 2 && renderer->stats().shadowCasters > 10, "point / spot lights and shadow casters");
+            check(renderer && renderer->stats().meshBatches > 0 && renderer->stats().meshBatches < renderer->stats().meshesVisible,
+                  "identical meshes are instanced");
+            const ModelAsset* rock = m_shared->models() ? m_shared->models()->load("assets://3d/rock.glb") : nullptr;
+            check(rock && rock->state == AssetState::Ready, "model loads through the editor (drag and drop path)");
+            if (rock && rock->state == AssetState::Ready) {
+                const auto root = ctx.instantiateModel(*rock, {-2.0f, 0.0f, 3.2f});
+                check(!root.isNull() && ctx.undoStack().undoLabel() == "Add Model", "model instantiated as one undo step");
+            }
+            ctx.selection().clear();
+            m_shared->inspectedAsset = "assets://3d/gold.agrmat";  // material editor + preview sphere
+            break;
+        }
+        case 122: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_3d.png").string()); break;
+        case 124: {
+            std::error_code ec;
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_3d.png", ec), "3D editor screenshot written");
+            check(static_cast<bool>(m_materialPreview.texture(*m_shared)), "material preview rendered");
+            m_viewport.gameView = false;
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

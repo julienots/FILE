@@ -481,8 +481,10 @@ public:
         m_backbufferW = w;
         m_backbufferH = h;
         const f64 lastGpu = m_stats.gpuTimeMs;
+        const u64 frameIndex = m_stats.frameIndex + 1;
         m_stats = {};
         m_stats.gpuTimeMs = lastGpu;
+        m_stats.frameIndex = frameIndex;
         if (m_info.gpuTimers) {
             m_gl.glBeginQuery(GL_TIME_ELAPSED, m_queries[m_frame % kTimerQueries]);
             m_queryActive = true;

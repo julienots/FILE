@@ -169,6 +169,7 @@ struct DeviceInfo {
 };
 
 struct FrameStats {
+    u64 frameIndex = 0;  ///< Incremented by every beginFrame (1 = first frame).
     u32 drawCalls = 0;
     u64 triangles = 0;
     u64 vertices = 0;

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "agr/editor/ui/EditorShared.hpp"
+#include "agr/assets/Material.hpp"
 
 namespace agr::editor {
 
@@ -26,11 +27,32 @@ private:
     Uuid m_pendingRangeEnd;
 };
 
-class InspectorPanel {
+/// Sphere lit by a sun and a sky, showing the material the inspector edits.
+class MaterialPreview {
 public:
-    void draw(EditorShared& s);
+    /// Inside the device frame, before the UI pass: renders EditorShared::previewMaterial.
+    void render(EditorShared& s);
+    /// Texture to display (null until rendered once); `flipY` for OpenGL render targets.
+    rhi::TextureHandle texture(EditorShared& s) const;
+    void release(EditorShared& s);
+    static constexpr u32 kSize = 256;
 
 private:
+    std::unique_ptr<Renderer> m_renderer;  // own frame data: the scene view renders in the same frame
+    std::unique_ptr<Scene> m_scene;
+    ecs::Entity m_sphere;
+    rhi::RenderTargetHandle m_target;
+    bool m_rendered = false;
+};
+
+class InspectorPanel {
+public:
+    void draw(EditorShared& s, const MaterialPreview& preview);
+
+private:
+    void drawMaterialAsset(EditorShared& s, const MaterialPreview& preview);
+    std::string m_materialUri;  // material being edited
+    MaterialData m_material;
     std::unordered_map<u64, math::Vec3> m_eulerCache;  // stable Euler angles while editing a rotation
     std::string m_componentFilter;
 };

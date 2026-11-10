@@ -86,6 +86,8 @@ public:
     const MaterialData* get(const std::string& uri);
     /// Writes a material file and refreshes the cache (editor).
     Status save(const std::string& uri, const MaterialData& material);
+    /// Replaces the cached material without writing the file (live editing preview).
+    void preview(const std::string& uri, const MaterialData& material);
     void invalidate(const std::string& uri) { m_entries.erase(uri); }
     u32 reloadChanged();
     void clear() { m_entries.clear(); }

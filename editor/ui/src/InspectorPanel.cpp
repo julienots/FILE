@@ -8,6 +8,7 @@
 
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -362,6 +363,42 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Annulable avec Ctrl+Z");
         ImGui::PopID();
+    } else if (info.name == "MeshRenderer") {
+        auto& mr = *static_cast<MeshRendererComponent*>(comp);
+        ImGui::PushID("meshTools");
+        if (!mr.model.empty()) {
+            const ModelAsset* model = s.models() ? s.models()->get(mr.model) : nullptr;
+            if (!model || model->state == AssetState::Loading) {
+                ImGui::TextDisabled("Modèle en cours de chargement...");
+            } else if (model->state == AssetState::Failed) {
+                ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));
+                ImGui::TextWrapped("Modèle non chargé : %s", model->error.c_str());
+                ImGui::PopStyleColor();
+            } else {
+                const bool valid = mr.meshIndex >= 0 && static_cast<usize>(mr.meshIndex) < model->meshes.size();
+                if (valid) {
+                    const ModelAsset::Mesh& mesh = model->meshes[static_cast<usize>(mr.meshIndex)];
+                    ImGui::TextDisabled("Maillage « %s » : %u sommets, %u triangles, %zu matériau(x)", mesh.name.c_str(), mesh.vertexCount,
+                                        mesh.indexCount / 3, mesh.submeshes.size());
+                } else {
+                    ImGui::TextColored(palette::toVec4(palette::kWarning), "meshIndex hors limites (le modèle a %zu maillage(s))",
+                                       model->meshes.size());
+                }
+                if (!model->warnings.empty()) {
+                    ImGui::TextColored(palette::toVec4(palette::kWarning), "%zu avertissement(s) d'import", model->warnings.size());
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::BeginTooltip();
+                        for (const std::string& w : model->warnings) ImGui::BulletText("%s", w.c_str());
+                        ImGui::EndTooltip();
+                    }
+                }
+            }
+        }
+        if (!mr.material.empty() && ImGui::SmallButton("Modifier le matériau")) {
+            s.inspectedAsset = mr.material;
+            s.ctx.selection().clear();
+        }
+        ImGui::PopID();
     } else if (info.name == "ParticleEmitter2D") {
         const auto* state = reg.tryGet<ParticleState2DComponent>(e);
         ImGui::TextDisabled("%zu particules actives", state ? state->particles.size() : usize{0});
@@ -389,15 +426,165 @@ bool containsCaseless(std::string text, std::string needle) {
 
 } // namespace
 
-void InspectorPanel::draw(EditorShared& s) {
+namespace {
+
+/// Texture slot of a material: thumbnail, URI, drop target, clear button. Returns true when changed.
+bool textureSlot(EditorShared& s, const char* label, std::string& uri, const char* tooltip) {
+    bool changed = false;
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::PushID(label);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tooltip);
+    ImGui::TableNextColumn();
+    const float thumb = ImGui::GetFrameHeight();
+    if (!uri.empty()) {
+        ImGui::Image(ImTextureRef(s.thumbnail(uri)), {thumb, thumb});
+        ImGui::SameLine();
+    }
+    ImGui::SetNextItemWidth(-thumb - ImGui::GetStyle().ItemSpacing.x);
+    ImGui::InputTextWithHint("##uri", "Glisser une image ici", &uri);
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
+            uri = static_cast<const char*>(p->Data);
+            changed = true;
+        }
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("x", {thumb, 0}) && !uri.empty()) {
+        uri.clear();
+        changed = true;
+    }
+    ImGui::PopID();
+    return changed;
+}
+
+} // namespace
+
+void InspectorPanel::drawMaterialAsset(EditorShared& s, const MaterialPreview& preview) {
+    const std::string uri = s.inspectedAsset;
+    MaterialLibrary* lib = s.materials();
+    if (!lib) {
+        ImGui::TextDisabled("Pas de rendu : matériaux indisponibles.");
+        return;
+    }
+    if (m_materialUri != uri) {
+        const MaterialData* m = lib->get(uri);
+        if (!m) {
+            ImGui::TextColored(palette::toVec4(palette::kWarning), "Matériau illisible : %s (voir la console)", uri.c_str());
+            return;
+        }
+        m_material = *m;
+        m_materialUri = uri;
+    }
+    s.previewMaterial = uri;
+    ImGui::PushFont(s.fonts.semibold, 0.0f);
+    ImGui::TextUnformatted(uri.substr(uri.find_last_of('/') + 1).c_str());
+    ImGui::PopFont();
+    ImGui::TextDisabled("Matériau PBR (métal / rugosité)");
+    // Preview sphere (rendered by MaterialPreview before the UI pass).
+    if (const rhi::TextureHandle tex = preview.texture(s)) {
+        const float w = std::min(ImGui::GetContentRegionAvail().x, 220.0f);
+        const bool flip = s.device() && s.device()->info().renderTargetsFlipY;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - w) * 0.5f);
+        ImGui::Image(ImTextureRef(ImGuiRenderer::toImTexture(tex)), {w, w}, {0, flip ? 1.0f : 0.0f}, {1, flip ? 0.0f : 1.0f});
+    }
+    MaterialData& m = m_material;
+    bool changed = false, commit = false;
+    auto track = [&] {
+        changed |= ImGui::IsItemEdited();
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+    };
+    auto row = [](const char* label, const char* tip = nullptr) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        if (tip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tip);
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+    };
+    if (beginPropertyTable("##material")) {
+        row("Nom");
+        ImGui::InputText("##name", &m.name);
+        track();
+        row("Couleur de base");
+        ImGui::ColorEdit4("##base", &m.baseColor.x, ImGuiColorEditFlags_AlphaPreviewHalf);
+        track();
+        commit |= textureSlot(s, "Texture de base", m.baseColorTexture, "Couleur (sRGB), alpha = opacité");
+        row("Métallique");
+        ImGui::SliderFloat("##metal", &m.metallic, 0.0f, 1.0f, "%.2f");
+        track();
+        row("Rugosité");
+        ImGui::SliderFloat("##rough", &m.roughness, 0.0f, 1.0f, "%.2f");
+        track();
+        commit |= textureSlot(s, "Métal / rugosité", m.metallicRoughnessTexture, "Texture linéaire : vert = rugosité, bleu = métal (glTF)");
+        commit |= textureSlot(s, "Normal map", m.normalTexture, "Espace tangent, vert vers le haut (convention OpenGL / glTF)");
+        row("Intensité normale");
+        ImGui::SliderFloat("##nscale", &m.normalScale, 0.0f, 2.0f, "%.2f");
+        track();
+        commit |= textureSlot(s, "Occlusion", m.occlusionTexture, "Texture linéaire : rouge = occlusion ambiante");
+        row("Force occlusion");
+        ImGui::SliderFloat("##ao", &m.occlusionStrength, 0.0f, 1.0f, "%.2f");
+        track();
+        row("Émission");
+        ImGui::ColorEdit3("##emissive", &m.emissive.x);
+        track();
+        row("Intensité émission");
+        ImGui::DragFloat("##eint", &m.emissiveIntensity, 0.05f, 0.0f, 100.0f, "%.2f");
+        track();
+        commit |= textureSlot(s, "Texture émission", m.emissiveTexture, nullptr);
+        row("Transparence");
+        static const char* modes[] = {"Opaque", "Découpe (alpha test)", "Fondu (transparent)"};
+        int mode = static_cast<int>(m.alphaMode);
+        if (ImGui::Combo("##alpha", &mode, modes, 3)) {
+            m.alphaMode = static_cast<AlphaMode>(mode);
+            commit = true;
+        }
+        if (m.alphaMode == AlphaMode::Mask) {
+            row("Seuil alpha");
+            ImGui::SliderFloat("##cutoff", &m.alphaCutoff, 0.0f, 1.0f, "%.2f");
+            track();
+        }
+        row("Double face", "Affiche aussi l'arrière des faces (feuillages, tissus)");
+        commit |= ImGui::Checkbox("##double", &m.doubleSided);
+        row("Sans éclairage", "Affiche la couleur telle quelle (interfaces 3D, écrans)");
+        commit |= ImGui::Checkbox("##unlit", &m.unlit);
+        row("Répétition UV");
+        dragAxes("uvs", &m.uvScale.x, 2, 0.01f, 0.0f, 0.0f, "%.2f");
+        track();
+        row("Décalage UV");
+        dragAxes("uvo", &m.uvOffset.x, 2, 0.01f, 0.0f, 0.0f, "%.2f");
+        track();
+        ImGui::EndTable();
+    }
+    if (changed) lib->preview(uri, m);  // live preview while dragging
+    if (commit) {
+        if (Status st = lib->save(uri, m); !st) s.notify("Enregistrement impossible : " + st.error().message);
+    }
+    ImGui::Spacing();
+    ImGui::TextDisabled("Enregistré automatiquement dans le fichier.");
+    ImGui::TextDisabled("Non annulable avec Ctrl+Z (Ctrl+Z annule les modifications de scène).");
+    ImGui::TextDisabled("Glissez le matériau sur un objet de la scène pour l'appliquer.");
+}
+
+void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
     if (!ImGui::Begin("Inspecteur")) {
         ImGui::End();
         return;
     }
     Scene& scene = s.ctx.scene();
     const auto selected = s.ctx.selection().entities(scene);
+    if (!selected.empty()) {
+        s.inspectedAsset.clear();
+        m_materialUri.clear();
+    }
     if (selected.empty()) {
-        ImGui::TextDisabled("Sélectionnez une entité dans la hiérarchie ou la vue.");
+        if (!s.inspectedAsset.empty() && s.inspectedAsset.ends_with(kMaterialExtension)) drawMaterialAsset(s, preview);
+        else ImGui::TextDisabled("Sélectionnez une entité dans la hiérarchie ou la vue.");
         ImGui::End();
         return;
     }

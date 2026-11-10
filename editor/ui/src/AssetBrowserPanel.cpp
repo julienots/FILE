@@ -29,6 +29,8 @@ icons::Kind iconFor(const std::string& name, bool folder) {
     if (folder) return icons::Kind::Folder;
     if (isImageFile(name)) return icons::Kind::Image;
     if (fs::path(name).extension() == ".agrscene") return icons::Kind::Scene;
+    if (isModelFile(name)) return icons::Kind::Model;
+    if (fs::path(name).extension() == kMaterialExtension) return icons::Kind::Material;
     return icons::Kind::File;
 }
 
@@ -71,9 +73,11 @@ void AssetBrowserPanel::importFiles(EditorShared& s, const std::vector<std::stri
             continue;
         }
         ++imported;
-        if (!isImageFile(src.filename().string()))
-            AGR_LOG_WARN("Editor", "'{}' copied, but this file type has no importer yet (images only in this version)",
-                         src.filename().string());
+        const std::string fname = src.filename().string();
+        if (!isImageFile(fname) && !isModelFile(fname) && src.extension() != kMaterialExtension && src.extension() != ".agrsheet")
+            AGR_LOG_WARN("Editor", "'{}' copied, but this file type has no importer yet", fname);
+        if (src.extension() == ".gltf")
+            AGR_LOG_INFO("Editor", "'{}': a .gltf file references its .bin and textures; import them too (same folder layout)", fname);
     }
     if (imported) s.notify(std::to_string(imported) + " fichier(s) importé(s) dans assets/" + s.assetFolder);
 }
@@ -117,7 +121,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         };
         static Ctx ctx;
         ctx = {&s, this};
-        static const SDL_DialogFileFilter filters[] = {{"Images", "png;jpg;jpeg;tga;bmp;psd;gif;hdr"}, {"Tous les fichiers", "*"}};
+        static const SDL_DialogFileFilter filters[] = {{"Images et modèles 3D", "png;jpg;jpeg;tga;bmp;psd;gif;hdr;gltf;glb;bin;obj;mtl;fbx"},
+                                                       {"Tous les fichiers", "*"}};
         // SDL may call back from another thread: queue the paths for the main thread.
         SDL_ShowOpenFileDialog(
             [](void* user, const char* const* files, int) {
@@ -134,6 +139,22 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         const fs::path dir = absoluteAsset(s, s.assetFolder);
         fs::create_directories(dir / uniqueName(dir, "Nouveau dossier"), ec);
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Nouveau matériau")) {
+        const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "Nouveau matériau", {kMaterialExtension});
+        const std::string uri = "assets://" + join(s.assetFolder, stem + kMaterialExtension);
+        MaterialData m;
+        m.name = stem;
+        const Status st = s.materials() ? s.materials()->save(uri, m) : s.engine.vfs().writeText(uri, materialToJson(m));
+        if (st) {
+            s.inspectedAsset = uri;
+            s.ctx.selection().clear();
+            s.notify("Matériau créé : " + uri);
+        } else {
+            s.notify("Création impossible : " + st.error().message);
+        }
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Matériau PBR (.agrmat) modifiable dans l'inspecteur");
     ImGui::SameLine();
     if (ImGui::Button("Créer un atlas...")) m_atlasOpen = true;
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
@@ -231,6 +252,12 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                                 folder ? palette::kAmber : palette::kTextMuted);
                 }
                 if (folder && hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) s.assetFolder = rel;
+                const bool isMaterial = !folder && fs::path(name).extension() == kMaterialExtension;
+                if (isMaterial && ImGui::IsItemClicked(ImGuiMouseButton_Left)) {  // edit it in the inspector
+                    s.inspectedAsset = uri;
+                    s.ctx.selection().clear();
+                }
+                if (isMaterial && s.inspectedAsset == uri) dl->AddRect(p, {p.x + tile, p.y + tile}, palette::kSelect, 4.0f, 2.0f);
                 if (!folder && ImGui::BeginDragDropSource()) {
                     ImGui::SetDragDropPayload(kPayloadAsset, uri.c_str(), uri.size() + 1);
                     ImGui::Text("%s", name.c_str());
@@ -239,6 +266,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (hovered) {
                     if (sheet) ImGui::SetTooltip("%s\nFeuille de sprites : %zu frames, %zu clips\nGlisser dans la scène pour créer un sprite", uri.c_str(),
                                                  sheet->frames.size(), sheet->clips.size());
+                    else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
+                    else if (isMaterial) ImGui::SetTooltip("%s\nMatériau : cliquer pour le modifier, glisser sur un MeshRenderer", uri.c_str());
                     else ImGui::SetTooltip("%s", uri.c_str());
                 }
                 if (ImGui::BeginPopupContextItem("##ctx")) {

@@ -34,6 +34,7 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::Empty25D: return "Scène 2.5D vide";
         case SceneTemplate::Empty3D: return "Scène 3D vide";
         case SceneTemplate::Showcase2D: return "Vitrine 2D";
+        case SceneTemplate::Showcase3D: return "Vitrine 3D";
     }
     return "?";
 }
@@ -46,6 +47,9 @@ const char* templateDescription(SceneTemplate t) {
         case SceneTemplate::Showcase2D:
             return "Décor de nuit en pixel art : tilemap, héros animé, fonds en parallaxe, lampe (lumière 2D) et lucioles "
                    "(particules). Montre les systèmes 2D ; pas encore de gameplay (scripts et physique : phase 6).";
+        case SceneTemplate::Showcase3D:
+            return "Matériaux PBR (métal, rugosité), modèles glTF importés, soleil avec ombres, lampe et projecteur, ciel "
+                   "procédural et brume. Montre le rendu 3D ; pas encore de gameplay (phase 6).";
     }
     return "";
 }
@@ -61,11 +65,12 @@ SceneTemplate defaultTemplateFor(ProjectMode mode) {
 
 std::vector<SceneTemplate> templatesFor(ProjectMode mode) {
     if (mode == ProjectMode::Mode2D) return {SceneTemplate::Empty2D, SceneTemplate::Showcase2D};
+    if (mode == ProjectMode::Mode3D) return {SceneTemplate::Empty3D, SceneTemplate::Showcase3D};
     return {defaultTemplateFor(mode)};
 }
 
 std::vector<SceneTemplate> allTemplates() {
-    return {SceneTemplate::Empty2D, SceneTemplate::Showcase2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D};
+    return {SceneTemplate::Empty2D, SceneTemplate::Showcase2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D, SceneTemplate::Showcase3D};
 }
 
 namespace {
@@ -185,6 +190,111 @@ void buildShowcase2D(Scene& scene) {
     p.sortingLayer = 2;
 }
 
+/// Daylight scene built from the original assets in assets/3d (tools/generate_template_3d_art.py).
+void buildShowcase3D(Scene& scene) {
+    auto& reg = scene.registry();
+    const auto cam = scene.createEntity("Main Camera");
+    reg.emplace<CameraComponent>(cam).fieldOfView = math::radians(50.0f);
+    lookAt(scene, cam, {0.0f, 3.6f, 9.5f}, {0.0f, 0.5f, 0.0f});
+
+    const auto sunE = scene.createEntity("Sun");
+    auto& sunL = reg.emplace<DirectionalLightComponent>(sunE);
+    sunL.intensity = 1.7f;
+    sunL.shadowDistance = 30.0f;
+    reg.get<TransformComponent>(sunE).rotation = Quat::fromEuler({math::radians(-42.0f), math::radians(38.0f), 0.0f});
+    auto& env = reg.emplace<EnvironmentComponent>(sunE);
+    env.sky = SkyMode::Gradient;
+    env.ambientIntensity = 0.5f;
+    env.fog = true;
+    env.fogStart = 25.0f;
+    env.fogEnd = 120.0f;
+    env.fogColor = env.horizonColor;
+
+    const auto ground = scene.createEntity("Ground");
+    reg.get<TransformComponent>(ground).scale = {40.0f, 1.0f, 40.0f};
+    {
+        auto& gm = reg.emplace<MeshRendererComponent>(ground);
+        gm.mesh = PrimitiveMesh::Plane;
+        gm.texture = "assets://textures/grid.png";
+        gm.uvScale = {20.0f, 20.0f};
+        gm.roughness = 0.9f;
+    }
+
+    // Material spheres: metallic row (back) and dielectric row (front), roughness 0 -> 1.
+    const auto spheres = scene.createEntity("Roughness Spheres");
+    for (int row = 0; row < 2; ++row) {
+        for (int i = 0; i < 5; ++i) {
+            const auto s = scene.createEntity(row ? "Metal" : "Dielectric", spheres);
+            auto& t = reg.get<TransformComponent>(s);
+            t.position = {-3.0f + static_cast<float>(i) * 1.5f, 0.5f, row ? -2.6f : -1.2f};
+            auto& m = reg.emplace<MeshRendererComponent>(s);
+            m.mesh = PrimitiveMesh::Sphere;
+            m.color = row ? math::Color{1.0f, 0.78f, 0.34f, 1.0f} : math::Color{0.85f, 0.12f, 0.10f, 1.0f};
+            m.metallic = row ? 1.0f : 0.0f;
+            m.roughness = 0.05f + 0.225f * static_cast<float>(i);
+        }
+    }
+    // Imported glTF models and .agrmat materials.
+    struct Prop {
+        const char* name;
+        const char* model;
+        Vec3 position;
+        float yaw, scale;
+    };
+    const Prop props[] = {{"Crate", "assets://3d/crate.glb", {4.4f, 0.0f, 0.2f}, 20.0f, 1.0f},
+                          {"Crate", "assets://3d/crate.glb", {5.1f, 0.0f, 1.5f}, -35.0f, 0.8f},
+                          {"Crate", "assets://3d/crate.glb", {4.5f, 1.0f, 0.3f}, 60.0f, 0.7f},
+                          {"Rock", "assets://3d/rock.glb", {-4.6f, 0.0f, 0.6f}, 0.0f, 1.1f},
+                          {"Rock", "assets://3d/rock.glb", {-5.4f, 0.0f, -0.9f}, 90.0f, 0.7f}};
+    const auto propsRoot = scene.createEntity("Props");
+    for (const Prop& p : props) {
+        const auto e = scene.createEntity(p.name, propsRoot);
+        auto& t = reg.get<TransformComponent>(e);
+        t.position = p.position;
+        t.rotation = Quat::fromAxisAngle(Vec3::up(), math::radians(p.yaw));
+        t.scale = Vec3{p.scale};
+        auto& m = reg.emplace<MeshRendererComponent>(e);
+        m.model = p.model;
+    }
+    const char* materials[] = {"gold", "copper", "plastic_red", "rubber", "ceramic"};
+    const auto shelf = scene.createEntity("Materials");
+    for (int i = 0; i < 5; ++i) {
+        const auto e = scene.createEntity(materials[i], shelf);
+        auto& t = reg.get<TransformComponent>(e);
+        t.position = {-2.4f + static_cast<float>(i) * 1.2f, 0.4f, 0.6f};
+        t.scale = Vec3{0.8f};
+        auto& m = reg.emplace<MeshRendererComponent>(e);
+        m.mesh = i % 2 ? PrimitiveMesh::Cube : PrimitiveMesh::Sphere;
+        m.material = std::string("assets://3d/") + materials[i] + ".agrmat";
+    }
+
+    // Local lights: warm lamp over the crates, cool spot on the spheres, neon bar.
+    const auto lamp = scene.createEntity("Lamp");
+    reg.get<TransformComponent>(lamp).position = {3.6f, 2.0f, 1.6f};
+    auto& pl = reg.emplace<PointLightComponent>(lamp);
+    pl.color = {1.0f, 0.72f, 0.4f, 1.0f};
+    pl.intensity = 6.0f;
+    pl.range = 6.0f;
+    const auto spot = scene.createEntity("Spot");
+    reg.get<TransformComponent>(spot).position = {0.0f, 4.0f, -1.9f};
+    reg.get<TransformComponent>(spot).rotation = Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});
+    auto& sl = reg.emplace<SpotLightComponent>(spot);
+    sl.color = {0.55f, 0.75f, 1.0f, 1.0f};
+    sl.intensity = 14.0f;
+    sl.range = 8.0f;
+    sl.innerAngle = math::radians(25.0f);
+    sl.outerAngle = math::radians(40.0f);
+    const auto neon = scene.createEntity("Neon");
+    auto& nt = reg.get<TransformComponent>(neon);
+    nt.position = {0.0f, 0.05f, 2.2f};
+    nt.scale = {4.0f, 0.1f, 0.1f};
+    {
+        auto& nm = reg.emplace<MeshRendererComponent>(neon);
+        nm.material = "assets://3d/neon.agrmat";
+        nm.castShadows = false;
+    }
+}
+
 } // namespace
 
 void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
@@ -241,6 +351,7 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
             break;
         }
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
+        case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
     }
     scene.updateTransforms();
 }

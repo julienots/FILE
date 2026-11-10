@@ -189,6 +189,12 @@ Status MaterialLibrary::save(const std::string& uri, const MaterialData& materia
     return {};
 }
 
+void MaterialLibrary::preview(const std::string& uri, const MaterialData& material) {
+    Entry& e = m_entries[uri];
+    if (e.data) *e.data = material;
+    else e.data = std::make_unique<MaterialData>(material);
+}
+
 u32 MaterialLibrary::reloadChanged() {
     std::vector<std::string> changed;
     for (const auto& [uri, e] : m_entries) {

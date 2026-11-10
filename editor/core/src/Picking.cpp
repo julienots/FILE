@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/SpriteSheet.hpp"
@@ -18,6 +19,17 @@ const math::Aabb& primitiveBounds(PrimitiveMesh type) {
     static const std::array<math::Aabb, 4> bounds = {makeCube().bounds, makeSphere().bounds, makePlane().bounds,
                                                      makeQuad().bounds};
     return bounds[static_cast<usize>(std::clamp(static_cast<int>(type), 0, 3))];
+}
+
+/// Local bounds of a mesh renderer: built-in mesh or loaded model mesh.
+math::Aabb meshBounds(const MeshRendererComponent& mr, ModelLibrary* models) {
+    if (!mr.model.empty()) {
+        const ModelAsset* m = models ? models->get(mr.model) : nullptr;
+        if (m && m->state == AssetState::Ready && mr.meshIndex >= 0 && static_cast<usize>(mr.meshIndex) < m->meshes.size())
+            return m->meshes[static_cast<usize>(mr.meshIndex)].bounds;
+        return primitiveBounds(PrimitiveMesh::Cube);
+    }
+    return primitiveBounds(mr.mesh);
 }
 
 bool pickable(Scene& scene, ecs::Entity e) {
@@ -47,7 +59,8 @@ float intersectPlane(const math::Ray& ray, Vec3 n, float d) {
     return t >= 0.0f ? t : -1.0f;
 }
 
-std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, SpriteSheetLibrary* sheets) {
+std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, PickAssets assets) {
+    SpriteSheetLibrary* sheets = assets.sheets;
     std::optional<PickHit> best;
     auto consider = [&](ecs::Entity e, float t) {
         if (t >= 0.0f && (!best || t < best->distance)) best = PickHit{e, t, ray.at(t)};
@@ -56,7 +69,7 @@ std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, SpriteSheetLibra
     reg.view<MeshRendererComponent, WorldTransformComponent>().each(
         [&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
             if (!mr.visible || !pickable(scene, e)) return;
-            consider(e, math::intersect(ray, primitiveBounds(mr.mesh).transformed(w.matrix)));
+            consider(e, math::intersect(ray, meshBounds(mr, assets.models).transformed(w.matrix)));
         });
     reg.view<SpriteRendererComponent, WorldTransformComponent>().each(
         [&](ecs::Entity e, SpriteRendererComponent& s, WorldTransformComponent& w) {
@@ -85,12 +98,13 @@ std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, SpriteSheetLibra
     return best;
 }
 
-math::Aabb worldBounds(Scene& scene, ecs::Entity e, SpriteSheetLibrary* sheets) {
+math::Aabb worldBounds(Scene& scene, ecs::Entity e, PickAssets assets) {
+    SpriteSheetLibrary* sheets = assets.sheets;
     math::Aabb box;
     auto& reg = scene.registry();
     const auto* w = reg.tryGet<WorldTransformComponent>(e);
     if (!w) return box;
-    if (const auto* mr = reg.tryGet<MeshRendererComponent>(e)) box = primitiveBounds(mr->mesh).transformed(w->matrix);
+    if (const auto* mr = reg.tryGet<MeshRendererComponent>(e)) box = meshBounds(*mr, assets.models).transformed(w->matrix);
     if (const auto* s = reg.tryGet<SpriteRendererComponent>(e))
         for (const Vec3& c : spriteCorners(*s, w->matrix, sheets)) box.expand(c);
     if (const auto* tm = reg.tryGet<TilemapComponent>(e)) {

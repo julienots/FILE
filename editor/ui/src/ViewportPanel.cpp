@@ -9,6 +9,7 @@
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/TilemapEditing.hpp"
 
@@ -202,7 +203,7 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
 
     // Selection bounds.
     for (ecs::Entity e : s.ctx.selection().entities(scene)) {
-        const math::Aabb b = worldBounds(scene, e, s.sheets());
+        const math::Aabb b = worldBounds(scene, e, s.pickAssets());
         if (!b.valid()) continue;
         Vec3 corners[8];
         for (int i = 0; i < 8; ++i) corners[i] = {(i & 1) ? b.max.x : b.min.x, (i & 2) ? b.max.y : b.min.y, (i & 4) ? b.max.z : b.min.z};
@@ -218,7 +219,7 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
     // Icons for entities without geometry (cameras, lights).
     m_iconHits.clear();
     if (showIcons) {
-        auto drawIcon = [&](ecs::Entity e, icons::Kind kind) {
+        auto drawIcon = [&](ecs::Entity e, icons::Kind kind, bool direction) {
             const auto& w = reg.get<WorldTransformComponent>(e);
             if (!w.activeInHierarchy) return;
             ImVec2 p;
@@ -228,17 +229,21 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
             dl->AddCircle(p, 13.0f, sel ? palette::kSelect : palette::kGraphite700, 20, 1.5f);
             icons::draw(dl, kind, p, 15.0f, sel ? palette::kSelect : palette::kText);
             m_iconHits.emplace_back(e, p);
-            if (kind == icons::Kind::Light) {  // light direction
+            if (direction) {  // light direction
                 ImVec2 q;
                 if (project(vp, w.matrix.translation() + math::normalize(w.matrix.transformVector({0, 0, -1})) * 1.5f, origin, size, q))
                     dl->AddLine(p, q, palette::kAmber, 2.0f);
             }
         };
         reg.view<CameraComponent, WorldTransformComponent>().each([&](ecs::Entity e, CameraComponent&, WorldTransformComponent&) {
-            if (!gameView) drawIcon(e, icons::Kind::Camera);
+            if (!gameView) drawIcon(e, icons::Kind::Camera, false);
         });
         reg.view<DirectionalLightComponent, WorldTransformComponent>().each(
-            [&](ecs::Entity e, DirectionalLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light); });
+            [&](ecs::Entity e, DirectionalLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light, true); });
+        reg.view<PointLightComponent, WorldTransformComponent>().each(
+            [&](ecs::Entity e, PointLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light, false); });
+        reg.view<SpotLightComponent, WorldTransformComponent>().each(
+            [&](ecs::Entity e, SpotLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light, true); });
     }
 
     // Play mode frame and statistics.
@@ -320,7 +325,7 @@ void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     if (hit.isNull()) {
         const float aspect = size.x / std::max(size.y, 1.0f);
         const ImVec2 uv{(io.MousePos.x - origin.x) / size.x, (io.MousePos.y - origin.y) / size.y};
-        if (auto h = pick(scene, rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), uv), s.sheets())) hit = h->entity;
+        if (auto h = pick(scene, rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), uv), s.pickAssets())) hit = h->entity;
     }
     Selection& sel = s.ctx.selection();
     if (hit.isNull()) {
@@ -440,6 +445,38 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
     if (!ImGui::BeginDragDropTargetCustom(ImRect(origin, {origin.x + size.x, origin.y + size.y}), ImGui::GetID("##viewportDrop"))) return;
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
         const std::string uri = static_cast<const char*>(p->Data);
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        const float dropAspect = size.x / std::max(size.y, 1.0f);
+        const math::Ray dropRay = rayFromScreen(projectionGL(s, dropAspect) * viewMatrix(s),
+                                                {(mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y});
+        const bool materialFile = uri.size() > 7 && uri.compare(uri.size() - 7, 7, kMaterialExtension) == 0;
+        if (materialFile) {  // onto the mesh under the cursor
+            auto hit = pick(s.ctx.scene(), dropRay, s.pickAssets());
+            auto* mr = hit ? s.ctx.scene().registry().tryGet<MeshRendererComponent>(hit->entity) : nullptr;
+            if (mr) {
+                mr->material = uri;
+                s.ctx.selection().set(s.ctx.scene().uuidOf(hit->entity));
+                s.ctx.commit("Assign Material");
+            } else {
+                s.notify("Déposez un matériau sur un objet 3D (MeshRenderer)");
+            }
+            ImGui::EndDragDropTarget();
+            return;
+        }
+        if (isModelFile(uri)) {
+            const ModelAsset* model = s.models() ? s.models()->load(uri) : nullptr;
+            if (!model || model->state != AssetState::Ready) {
+                s.notify("Import impossible : " + (model ? model->error : std::string("pas de bibliothèque de modèles")));
+            } else {
+                Vec3 pos{};
+                if (auto h = pick(s.ctx.scene(), dropRay, s.pickAssets())) pos = h->point;
+                else if (float t = intersectPlane(dropRay, Vec3{0, 1, 0}, 0.0f); t >= 0.0f) pos = dropRay.at(t);
+                s.ctx.instantiateModel(*model, pos);
+                if (!model->warnings.empty()) s.notify(std::to_string(model->warnings.size()) + " avertissement(s) d'import : voir la console");
+            }
+            ImGui::EndDragDropTarget();
+            return;
+        }
         const bool sheetFile = uri.size() > 9 && uri.compare(uri.size() - 9, 9, ".agrsheet") == 0;
         const SpriteSheet* sheet = sheetFile && s.sheets() ? s.sheets()->get(uri) : nullptr;
         if (sheetFile && !sheet) {
@@ -450,12 +487,12 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
             const math::Ray ray = rayFromScreen(projectionGL(s, aspect) * viewMatrix(s), {(m.x - origin.x) / size.x, (m.y - origin.y) / size.y});
             Vec3 pos{};
             const bool flat = s.ctx.camera().mode2D;
-            if (auto h = flat ? std::nullopt : pick(s.ctx.scene(), ray)) pos = h->point;
+            if (auto h = flat ? std::nullopt : pick(s.ctx.scene(), ray, s.pickAssets())) pos = h->point;
             else if (float t = intersectPlane(ray, flat ? Vec3{0, 0, 1} : Vec3{0, 1, 0}, 0.0f); t >= 0.0f) pos = ray.at(t);
             if (!flat) pos.y += 0.5f;  // stand on the surface (sprites are 1 unit tall)
             s.ctx.createSprite(uri, pos, {}, sheet);
         } else {
-            s.notify("Seules les images et les feuilles de sprites peuvent être déposées dans la scène pour l'instant");
+            s.notify("Ce type de fichier ne peut pas être déposé dans la scène");
         }
     }
     ImGui::EndDragDropTarget();

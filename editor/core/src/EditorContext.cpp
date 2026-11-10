@@ -6,6 +6,7 @@
 #include "agr/core/Log.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
@@ -30,6 +31,8 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::Particles2D: return "Particles 2D";
         case CreateKind::Light2D: return "Light 2D";
         case CreateKind::ParallaxLayer: return "Parallax Layer";
+        case CreateKind::PointLight: return "Point Light";
+        case CreateKind::SpotLight: return "Spot Light";
     }
     return "Entity";
 }
@@ -165,6 +168,15 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
         case CreateKind::Particles2D: reg.emplace<ParticleEmitter2DComponent>(e); break;
         case CreateKind::Light2D: reg.emplace<Light2DComponent>(e); break;
         case CreateKind::ParallaxLayer: reg.emplace<ParallaxComponent>(e); break;
+        case CreateKind::PointLight:
+            reg.emplace<PointLightComponent>(e);
+            if (parent.isNull()) t.position.y += 2.0f;
+            break;
+        case CreateKind::SpotLight:
+            reg.emplace<SpotLightComponent>(e);
+            if (parent.isNull()) t.position.y += 3.0f;
+            t.rotation = math::Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});  // pointing down
+            break;
     }
     s.updateTransforms();
     m_selection.set(s.uuidOf(e));
@@ -194,6 +206,17 @@ ecs::Entity EditorContext::createSprite(const std::string& uri, Vec3 position, e
     m_selection.set(s.uuidOf(e));
     commit("Create Sprite");
     return e;
+}
+
+ecs::Entity EditorContext::instantiateModel(const ModelAsset& model, Vec3 position, ecs::Entity parent) {
+    Scene& s = scene();
+    const ecs::Entity root = agr::instantiateModel(s, model, parent);
+    if (root.isNull()) return root;
+    s.registry().get<TransformComponent>(root).position = position;
+    s.updateTransforms();
+    m_selection.set(s.uuidOf(root));
+    commit("Add Model");
+    return root;
 }
 
 void EditorContext::deleteSelection() {
@@ -287,7 +310,7 @@ void EditorContext::selectAll() {
 void EditorContext::focusSelection() {
     math::Aabb box;
     for (ecs::Entity e : m_selection.entities(scene())) {
-        const math::Aabb b = worldBounds(scene(), e);
+        const math::Aabb b = worldBounds(scene(), e, {m_engine.service<SpriteSheetLibrary>(), m_engine.service<ModelLibrary>()});
         if (b.valid()) {
             box.expand(b.min);
             box.expand(b.max);

@@ -1,0 +1,39 @@
+{
+  "format": "agr.material",
+  "version": 1,
+  "name": "Caoutchouc",
+  "baseColor": [
+    0.08,
+    0.08,
+    0.09,
+    1.0
+  ],
+  "baseColorTexture": "",
+  "metallic": 0.0,
+  "roughness": 0.95,
+  "metallicRoughnessTexture": "",
+  "normalTexture": "",
+  "normalScale": 1.0,
+  "occlusionTexture": "",
+  "occlusionStrength": 1.0,
+  "emissive": [
+    0,
+    0,
+    0,
+    1.0
+  ],
+  "emissiveIntensity": 1.0,
+  "emissiveTexture": "",
+  "alphaMode": "opaque",
+  "alphaCutoff": 0.5,
+  "doubleSided": false,
+  "unlit": false,
+  "uvScale": [
+    1.0,
+    1.0
+  ],
+  "uvOffset": [
+    0.0,
+    0.0
+  ]
+}

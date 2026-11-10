@@ -34,6 +34,9 @@ struct RenderView {
     ScaleMode scaleMode = ScaleMode::FixedHeight;
     float referenceAspect = 16.0f / 9.0f;
     bool editorView = false;  ///< Skips entities flagged hiddenInEditor.
+    /// Renders directly into the target: no render scale, no MSAA (thumbnails, previews;
+    /// avoids reallocating the off-screen targets shared with the main view).
+    bool direct = false;
 
     /// Projection matrix for an aspect ratio, in the clip space of the given backend.
     math::Mat4 projectionMatrix(float aspect, bool glClipSpace) const;
@@ -97,7 +100,8 @@ public:
     void render(Scene& scene, u32 width, u32 height);
     /// Renders `view` into `target` (null = backbuffer) of width x height pixels.
     /// Must be called between Device::beginFrame and Device::endFrame; a render target
-    /// must have a depth buffer.
+    /// must have a depth buffer. One view per device frame per Renderer (its frame data
+    /// lives in shared dynamic buffers): create another Renderer for extra views.
     void renderView(Scene& scene, const RenderView& view, rhi::RenderTargetHandle target, u32 width, u32 height);
     bool glClipSpace() const { return m_glClipSpace; }
     const RenderStats& stats() const { return m_stats; }
@@ -200,6 +204,8 @@ private:
     GraphicsProfile m_profile = graphicsProfile(GraphicsTier::High);
     RenderStats m_stats;
     u64 m_frame = 0;
+    u64 m_lastViewFrame = 0;
+    bool m_warnedSecondView = false;
     bool m_glClipSpace = true;
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline;

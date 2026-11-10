@@ -1514,9 +1514,11 @@ void VulkanDevice::beginFrame(u32 width, u32 height) {
     for (auto pool : f.descriptorPools) vkResetDescriptorPool(m_device, pool, 0);
     f.poolIndex = 0;
     const f64 gpu = m_stats.gpuTimeMs;
+    const u64 frameIndex = m_stats.frameIndex + 1;
     m_stats = {};
     m_stats.gpuTimeMs = gpu;
     m_stats.cpuWaitMs = waited;
+    m_stats.frameIndex = frameIndex;
 
     ensureBackbuffer(std::max(1u, width), std::max(1u, height));
     vkResetCommandPool(m_device, f.pool, 0);

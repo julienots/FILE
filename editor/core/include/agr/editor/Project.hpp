@@ -13,7 +13,7 @@ const char* enumName(ProjectMode mode);  ///< "2d", "2.5d", "3d"
 Result<ProjectMode> parseProjectMode(std::string_view text);
 
 /// Scene templates that exist today (game templates arrive in phase 9).
-enum class SceneTemplate : u8 { Empty2D, Empty25D, Empty3D, Showcase2D };
+enum class SceneTemplate : u8 { Empty2D, Empty25D, Empty3D, Showcase2D, Showcase3D };
 
 struct ProjectSettings {
     std::string name = "New Project";
