@@ -7,15 +7,20 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phases 1 et 2 terminées, phase 3 (éditeur) fondations terminées, phase 4 (2D) cœur terminé.**
+> **État actuel : phases 1 et 2 terminées ; éditeur (3), 2D (4) et 3D (5) : cœur terminé.**
 > Socle technique, rendu Vulkan / OpenGL / OpenGL ES, ressources, éditeur visuel, systèmes 2D (feuilles de
-> sprites, animation, tilemaps peintes dans l'éditeur, parallaxe, lumières et particules 2D, écrans mobiles).
-> La 3D complète, la physique, le scripting et l'export Android sont les phases suivantes.
+> sprites, animation, tilemaps peintes dans l'éditeur, parallaxe, lumières et particules 2D, écrans mobiles),
+> 3D (import glTF / OBJ / FBX, matériaux PBR, ombres, lumières, ciel, instanciation).
+> Squelettes, post-traitement, physique, scripting et export Android sont les étapes suivantes.
 > L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ![Éditeur AGR](docs/images/editor.png)
 
 *L'éditeur AGR (Vulkan). Capture produite par le test automatisé de bout en bout.*
+
+![Vitrine 3D](docs/images/editor_3d.png)
+
+*Le modèle « Vitrine 3D » : matériaux PBR, modèles glTF importés, ombres, éditeur de matériau avec aperçu.*
 
 ![Vitrine 2D](docs/images/editor_2d.png)
 
@@ -42,10 +47,13 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 - Des **systèmes 2D** ([guide](docs/2D.md)) : feuilles de sprites et atlas, animation image par image,
   tilemaps (rendu limité à l'écran, enregistrement compressé) peintes directement dans l'éditeur,
   parallaxe, lumières 2D, particules 2D, modes d'échelle pour tous les formats d'écran.
+- De la **3D** ([guide](docs/3D.md)) : import glTF / GLB, OBJ et FBX, matériaux PBR `.agrmat` (métal,
+  rugosité, normal maps, émission, transparence), soleil avec ombres, lumières ponctuelles et projecteurs,
+  ciel procédural, brume, tone mapping ACES, instanciation automatique.
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **94 tests unitaires, 22 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D et 2D), tous
+- **101 tests unitaires, 30 tests GPU au pixel près et un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D), tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
@@ -115,14 +123,14 @@ engine/
   scene/      scène, hiérarchie, réflexion, sérialisation
   runtime/    moteur, boucle, entrées, configuration, gestionnaire de plugins
   rhi/        interface GPU neutre + backends Vulkan et OpenGL / OpenGL ES
-  assets/     images, gestionnaire de ressources
-  render/     composants de rendu, renderer, profils graphiques, feuilles de sprites
+  assets/     images, gestionnaire de ressources, import de modèles (glTF, OBJ, FBX), matériaux
+  render/     composants de rendu, renderer (PBR, ombres, sprites), profils, modèles, feuilles de sprites
   twod/       systèmes 2D : animation, particules, édition de tilemaps, atlas
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
 editor/       éditeur : core (logique testée), ui (panneaux ImGui), app, resources (polices, assets des modèles)
 plugins/spin/ plugin dynamique d'exemple
 apps/sandbox/ application de démonstration (scène 3D + 2D)
-tools/        comparaison d'images, suppressions LSan, génération de l'art original des modèles
+tools/        comparaison d'images, suppressions LSan, génération des ressources originales des modèles (2D, 3D)
 tests/        tests unitaires ; tests/gpu : tests de rendu au pixel près
 benchmarks/   micro-benchmarks CPU ; benchmarks/gpu : benchmarks du renderer
 docs/         architecture, ADR, feuille de route, identité visuelle
@@ -134,6 +142,7 @@ docs/         architecture, ADR, feuille de route, identité visuelle
 - [Rendu et ressources](docs/RENDERING.md)
 - [Éditeur](docs/EDITOR.md)
 - [Systèmes 2D](docs/2D.md)
+- [Rendu 3D](docs/3D.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

@@ -97,9 +97,26 @@ Guide : [2D.md](2D.md).
 | Ombres 2D, normal maps 2D | ⬜ | non planifié en détail |
 | Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
 
-## Phase 5 — 3D ⬜
-Import glTF/GLB/OBJ/FBX, matériaux PBR avec aperçu, squelettes et animations, lumières, ombres,
-skybox, terrain, eau, végétation, post-traitement, culling (frustum, occlusion), LOD, instancing.
+## Phase 5 — 3D 🟡 (rendu PBR, import et éditeur terminés ; squelettes, post-traitement et monde ouvert à venir)
+
+Guide : [3D.md](3D.md).
+
+| Élément | État | Où |
+|---|---|---|
+| Import glTF 2.0 / GLB (cgltf), OBJ + MTL, FBX (ufbx) : maillages, hiérarchie, matériaux, textures intégrées | ✅ | `assets/Model` |
+| Normales et tangentes générées, avertissements d'import explicites | ✅ | `assets/Model` |
+| Chargement asynchrone des modèles, upload GPU, rechargement à chaud, `instantiateModel` | ✅ | `render/ModelLibrary` |
+| Matériaux PBR métal / rugosité `.agrmat` (couleur, métal-rugosité, normal, occlusion, émission, alpha mask / blend, double face, sans éclairage) | ✅ | `assets/Material`, shaders PBR |
+| Lumière directionnelle avec ombres (carte stable, PCF selon le profil), points et projecteurs (8 max) | ✅ | `Renderer3D.cpp` |
+| Ciel procédural, ambiance hémisphérique, brume, exposition, tone mapping ACES | ✅ | |
+| Instanciation automatique (flux par instance sur les 3 API) | ✅ | RHI `instanceLayout`, renderer |
+| Éditeur : glisser un modèle dans la scène, éditeur de matériau avec aperçu, lumières dans les menus | ✅ | `editor/ui` |
+| Modèle « Vitrine 3D » avec ressources originales reproductibles | ✅ | `SceneTemplates`, `tools/generate_template_3d_art.py` |
+| Tests : importeurs (5 cas), 6 cas GPU 3D × 3 API, éditeur, test de bout en bout | ✅ | `tests/test_models.cpp`, `tests/gpu/test_renderer3d.cpp` |
+| Squelettes, skinning, animations des modèles | ⬜ | phase 7 (animation) |
+| Post-traitement plein écran (bloom, SSAO, FXAA/TAA), IBL / sondes de réflexion, skybox cubemap | ⬜ | à planifier |
+| Ombres des lumières locales, cascades multiples | ⬜ | à planifier |
+| Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
 ## Phase 6 — Physique et scripting ⬜
 Jolt (3D) et Box2D v3 (2D) reliés à l'ECS ; Lua/Luau avec liaisons générées depuis la réflexion ;

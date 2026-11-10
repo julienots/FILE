@@ -2,6 +2,7 @@
 //   cmake --preset release && cmake --build --preset release && ./build/release/bin/agr_benchmarks
 // Results are recorded in docs/BENCHMARKS.md.
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -15,6 +16,7 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Scene.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/assets/Model.hpp"
 #include "agr/twod/Atlas.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/TilemapEditing.hpp"
@@ -181,6 +183,24 @@ int main() {
             inputs[i].image.pixels.assign(static_cast<usize>(inputs[i].image.width) * inputs[i].image.height * 4, static_cast<u8>(i));
         }
         bench("2d: pack atlas of 256 images", 256, 10, [&] { (void)packAtlas(inputs); });
+    }
+
+    // -------------------------------------------------------------- 3D import
+    {
+        // OBJ sphere-like grid (~20k triangles) parsed from text; tangents generated.
+        std::string obj;
+        const int n = 100;
+        for (int y = 0; y <= n; ++y)
+            for (int x = 0; x <= n; ++x)
+                obj += "v " + std::to_string(x * 0.1f) + " " + std::to_string(std::sin(x * 0.3f) * std::cos(y * 0.2f)) + " " + std::to_string(y * 0.1f) +
+                       "\nvt " + std::to_string(x / float(n)) + " " + std::to_string(y / float(n)) + "\n";
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) {
+                const int a = y * (n + 1) + x + 1, b = a + 1, c = a + n + 1, d = c + 1;
+                obj += "f " + std::to_string(a) + "/" + std::to_string(a) + " " + std::to_string(c) + "/" + std::to_string(c) + " " +
+                       std::to_string(d) + "/" + std::to_string(d) + " " + std::to_string(b) + "/" + std::to_string(b) + "\n";
+            }
+        bench("3d: import OBJ 20k triangles (+normals, tangents)", 20000, 5, [&] { (void)importObj(obj, "assets://grid.obj", nullptr); });
     }
     return 0;
 }

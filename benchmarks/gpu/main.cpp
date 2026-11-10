@@ -39,11 +39,14 @@ double median(std::vector<double> v) {
     return v[v.size() / 2];
 }
 
-void run(Bench& b, const char* name, const std::function<void(Scene&)>& build) {
+void run(Bench& b, const char* name, const std::function<void(Scene&)>& build,
+         const std::function<void(GraphicsProfile&)>& tweak = nullptr) {
     Renderer renderer(*b.device, *b.assets);
     if (!renderer.initialize()) return;
     GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
     p.renderScale = 1.0f;
+    p.shadowMapSize = 0;  // 3D cases enable shadows explicitly
+    if (tweak) tweak(p);
     renderer.setProfile(p);
     renderer.setSpriteSheets(b.sheets.get());
     Scene scene;
@@ -65,7 +68,7 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build) {
     }
     const auto& s = renderer.stats();
     std::printf("%-40s collect %6.3f ms  submit %7.3f ms  wait %7.3f ms  draws %5u  batches %4u  visible %6u  culled %6u\n",
-                name, median(collect), median(submit), median(wait), s.drawCalls, s.spriteBatches,
+                name, median(collect), median(submit), median(wait), s.drawCalls, s.spriteBatches + s.meshBatches,
                 s.meshesVisible + s.spritesVisible, s.meshesCulled + s.spritesCulled);  // sprites include tiles and particles
 }
 
@@ -167,6 +170,45 @@ int main(int argc, char** argv) {
             s.registry().emplace<MeshRendererComponent>(e);
         }
     });
+    run(b, "3D: 10k cubes (instanced)", [](Scene& s) {
+        perspectiveCamera(s);
+        for (int i = 0; i < 10000; ++i) {
+            const auto e = s.createEntity("C");
+            s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 100 - 50) * 0.6f, 0,
+                                                                static_cast<float>(i / 100) * -0.6f + 20.0f};
+            s.registry().get<TransformComponent>(e).scale = math::Vec3{0.4f};
+            s.registry().emplace<MeshRendererComponent>(e).color = i % 2 ? math::Color{1, 0.6f, 0.1f, 1} : math::Color{0.4f, 0.4f, 0.45f, 1};
+        }
+    });
+    auto shadowScene = [](Scene& s) {
+        perspectiveCamera(s);
+        const auto g = s.createEntity("Ground");
+        s.registry().get<TransformComponent>(g).scale = math::Vec3{80.0f};
+        s.registry().emplace<MeshRendererComponent>(g).mesh = PrimitiveMesh::Plane;
+        for (int i = 0; i < 2000; ++i) {
+            const auto e = s.createEntity("C");
+            s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 50 - 25) * 2.0f, 0.5f, static_cast<float>(i / 50) * -2.0f + 20.0f};
+            s.registry().emplace<MeshRendererComponent>(e);
+        }
+    };
+    run(b, "3D: 2000 cubes + ground, no shadows", shadowScene);
+    run(b, "3D: same, shadows 2048 + PCF", shadowScene, [](GraphicsProfile& p) {
+        p.shadowMapSize = 2048;
+        p.softShadows = true;
+    });
+    run(b, "3D: 120 cubes, 8 point lights", [](Scene& s) {
+        perspectiveCamera(s);
+        for (int i = 0; i < 120; ++i) {
+            const auto e = s.createEntity("C");
+            s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 12 - 6) * 2.0f, 0, static_cast<float>(i / 12) * -2.0f};
+            s.registry().emplace<MeshRendererComponent>(e);
+        }
+        for (int i = 0; i < 8; ++i) {
+            const auto l = s.createEntity("L");
+            s.registry().get<TransformComponent>(l).position = {static_cast<float>(i % 4) * 6.0f - 9.0f, 2.0f, static_cast<float>(i / 4) * -8.0f};
+            s.registry().emplace<PointLightComponent>(l).range = 8.0f;
+        }
+    }, [](GraphicsProfile& p) { p.maxLights = 8; });
     run(b, "2D: 10k sprites, 1 texture", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 1u << 30); });
     run(b, "2D: 10k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 64); });
     run(b, "2D: 50k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 12); spriteGrid(s, 50000, 64); });

@@ -40,7 +40,8 @@ scene: load 100k entities from JSON             805.276 ms    8052.76 ns/item
 
 ## Renderer (phase 2)
 
-`agr_gpu_benchmarks [gl|vulkan]` (preset `release`, fenêtre cachée 1280×720, médiane sur 60 images).
+`agr_gpu_benchmarks [gl|gles|vulkan]` (preset `release`, fenêtre cachée 1280×720, médiane sur 60 images).
+Les tableaux de cette section datent de la phase 2 (avant l'instanciation de la phase 5).
 GPU : **Mesa llvmpipe / lavapipe**, rastériseurs *logiciels* qui exécutent le travail du GPU sur le CPU.
 
 ```
@@ -115,6 +116,41 @@ AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1
 la soumission) par l'attente de toute l'image, présentation comprise ; la colonne `submit` de ce
 benchmark devenait négative en Vulkan. Les deux valeurs sont maintenant séparées : `gpuWaitMs`
 (dans la soumission) et `frameWaitMs` (toute l'image), affichée dans la colonne `wait`.
+
+## Rendu 3D (phase 5)
+
+Import (`agr_benchmarks`) :
+
+```
+3d: import OBJ 20k triangles (+normals, tangents)      7.703 ms     385.17 ns/item
+```
+
+Renderer 3D (`agr_gpu_benchmarks`, profil « low » sans ombres sauf mention, mêmes conditions) :
+
+```
+AGR ENGINE renderer benchmarks — OpenGL on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+3D: 120 lit cubes                        collect  0.026 ms  submit   0.240 ms  wait   0.000 ms  draws     1  batches    1  visible    120  culled      0
+3D: 2000 lit cubes (half culled)         collect  0.250 ms  submit   2.477 ms  wait   0.000 ms  draws     1  batches    1  visible   1665  culled    335
+3D: 10k cubes (instanced)                collect  1.493 ms  submit  16.465 ms  wait   0.000 ms  draws     1  batches    1  visible   9299  culled    701
+3D: 2000 cubes + ground, no shadows      collect  0.245 ms  submit   1.935 ms  wait   0.000 ms  draws     2  batches    2  visible   1662  culled    339
+3D: same, shadows 2048 + PCF             collect  0.350 ms  submit  12.209 ms  wait   0.000 ms  draws     4  batches    2  visible   1662  culled    339
+3D: 120 cubes, 8 point lights            collect  0.042 ms  submit   0.346 ms  wait   0.000 ms  draws     1  batches    1  visible    120  culled      0
+AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1280x720
+3D: 120 lit cubes                        collect  0.030 ms  submit   0.039 ms  wait   4.415 ms  draws     1  batches    1  visible    120  culled      0
+3D: 2000 lit cubes (half culled)         collect  0.268 ms  submit   0.106 ms  wait  15.839 ms  draws     1  batches    1  visible   1665  culled    335
+3D: 10k cubes (instanced)                collect  1.699 ms  submit   0.801 ms  wait  41.575 ms  draws     1  batches    1  visible   9299  culled    701
+3D: 2000 cubes + ground, no shadows      collect  0.286 ms  submit   0.112 ms  wait  17.047 ms  draws     2  batches    2  visible   1662  culled    339
+3D: same, shadows 2048 + PCF             collect  0.404 ms  submit   0.284 ms  wait  38.867 ms  draws     4  batches    2  visible   1662  culled    339
+3D: 120 cubes, 8 point lights            collect  0.043 ms  submit   0.046 ms  wait   5.253 ms  draws     1  batches    1  visible    120  culled      0
+```
+
+| Mesure | Analyse |
+|---|---|
+| 2 000 cubes : 1 665 draw calls en phase 2, **1** maintenant | Instanciation automatique (même maillage + même matériau ; la teinte est par instance). Soumission OpenGL : 12 ms ➜ ~2,4 ms sur ce pilote. |
+| 10 000 cubes instanciés : 1,5 ms de collecte | ~0,15 µs par objet (culling, matrice normale, tri). La collecte parallèle reste une piste si nécessaire. |
+| Ombres 2048 + PCF : 2 passes, ~2× le temps GPU de cette scène | Coût dominé par le rastériseur logiciel ; à mesurer sur GPU mobiles (phase 8). Le profil ultra-mobile les désactive. |
+| 8 lumières ponctuelles : coût CPU négligeable | Les lumières sont évaluées par pixel dans le shader (forward) ; le profil limite leur nombre. |
+| Import OBJ 20 000 triangles : 6 à 8 ms (jusqu'à 12 ms selon la charge de la machine) | Analyse du texte, déduplication des sommets, normales et tangentes ; fait hors du thread principal. |
 
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
 téléphone : elles seront mesurées en phase 8 sur des appareils Android réels.

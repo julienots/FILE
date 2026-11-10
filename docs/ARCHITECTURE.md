@@ -25,7 +25,7 @@
         │                           ▼         │
         └──► agr::twod ──► agr::render ──► agr::runtime ◄───┘
                │    │              │
-               │    └──► agr::assets ──► stb_image
+               │    └──► agr::assets ──► stb_image, cgltf, ufbx
                │              │
                └──────► agr::rhi (Vulkan ; GL / GLES) ──► volk, VMA, glslang
                                    │
@@ -44,8 +44,8 @@
 | `agr::scene` | statique | `Scene` (hiérarchie, transformations monde, état actif hérité, UUID persistants, duplication), réflexion des composants, sérialisation JSON (`.agrscene`) et fragments (copier/coller, futurs prefabs) |
 | `agr::runtime` | statique | `Engine` (services + boucle + registre de services), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
 | `agr::rhi` | statique | Interface GPU neutre + backends Vulkan 1.1 et OpenGL 3.3 / OpenGL ES 3.0, traducteur du dialecte de shaders |
-| `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud) |
-| `agr::render` | statique | Composants de rendu (dont 2D : tilemaps, lumières 2D, parallaxe, émetteurs de particules), primitives, profils graphiques, feuilles de sprites, `Renderer` forward, `RenderPlugin` |
+| `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud, images intégrées aux modèles), import de modèles glTF / OBJ / FBX, matériaux PBR `.agrmat` |
+| `agr::render` | statique | Composants de rendu 3D (maillages, lumières, environnement) et 2D (tilemaps, lumières 2D, parallaxe, particules), primitives, profils graphiques, feuilles de sprites, `ModelLibrary` / `MaterialLibrary`, `Renderer` forward (PBR, ombres, instanciation, sprites), `RenderPlugin` |
 | `agr::twod` | statique | Systèmes 2D : animation image par image, simulation des particules, édition de tilemaps, atlas ; `TwoDPlugin` ([2D.md](2D.md)) |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 

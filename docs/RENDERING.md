@@ -1,8 +1,8 @@
-# Rendu et ressources (phase 2)
+# Rendu et ressources
 
 ![Sandbox AGR ENGINE](images/sandbox.png)
 
-*La sandbox en profil « high » : maillages éclairés, sol texturé, sprites alpha triés et regroupés,
+*La sandbox en profil « high » : maillages PBR, ombres, sol texturé, sprites alpha triés et regroupés,
 hiérarchie animée par le plugin dynamique Spin. Capture produite par le moteur lui-même
 (`agr_sandbox --profile high --screenshot user://shot.png`).*
 
@@ -107,37 +107,42 @@ où l'emplacement des échantillons dépend de l'API (`tools/compare_images.py`,
 
 ## Renderer
 
-Un renderer *forward* :
+Un renderer *forward* (détails 3D : [3D.md](3D.md), 2D : [2D.md](2D.md)) :
 
 1. Sélection de la caméra : la première caméra `primary` active (indice d'entité le plus bas en cas d'égalité).
-2. Collecte des `MeshRenderer` et des `SpriteRenderer` visibles, **frustum culling** par AABB.
-3. Tri : maillages opaques par maillage puis texture ; sprites par calque, ordre, profondeur
-   (de l'arrière vers l'avant) puis texture.
-4. Une passe : maillages, puis sprites (test de profondeur actif, écriture désactivée : un sprite est
-   caché par la géométrie 3D placée devant lui).
-5. Si le profil demande du MSAA ou une échelle de rendu ≠ 1 : rendu hors écran, *resolve* MSAA, puis
+2. Collecte des parties de maillage visibles (frustum culling par AABB), des **projeteurs d'ombre**
+   (frustum de la lumière), des lumières ponctuelles et projecteurs, des sprites, tuiles et particules.
+3. Tri : maillages opaques par pipeline, matériau puis maillage, et **regroupement en draws instanciés** ;
+   transparents de l'arrière vers l'avant ; sprites par calque, ordre, profondeur puis texture.
+4. Passe d'ombre (profondeur seule) si la lumière directionnelle projette des ombres.
+5. Passe principale : opaques, ciel procédural, transparents, sprites (test de profondeur actif,
+   écriture désactivée : un sprite est caché par la géométrie 3D placée devant lui).
+6. Si le profil demande du MSAA ou une échelle de rendu ≠ 1 : rendu hors écran, *resolve* MSAA, puis
    mise à l'échelle bilinéaire vers l'écran. Sinon, rendu direct dans le backbuffer, ce qui économise
    la bande passante sur mobile.
 
-**Éclairage actuel :** Lambert + reflet Blinn-Phong, une lumière directionnelle et une ambiance.
-Il sera remplacé par le PBR, les ombres et plusieurs lumières en phase 5.
+**Éclairage :** PBR métal / rugosité (GGX), une lumière directionnelle avec ombres, jusqu'à 8 lumières
+ponctuelles / projecteurs par image, ambiance plate ou hémisphérique (ciel), brume, exposition et
+*tone mapping* ACES. Un `Renderer` produit **une vue par image** (ses données d'image sont dans des
+buffers dynamiques partagés) : une vue supplémentaire (aperçu, écran partagé) utilise un autre `Renderer`.
 
 **Lots de sprites :** un seul vertex buffer dynamique par image et un index buffer de quads fixe.
-Un lot se termine à chaque changement de texture. Avec une caméra orthographique (jeux 2D), les sprites
-d'un même plan ont la même profondeur : le tri les regroupe par texture (10 000 sprites sur 2 textures
-alternées = 2 draw calls). Avec une caméra perspective, l'ordre de l'arrière vers l'avant, nécessaire
-à une transparence correcte, limite les regroupements. Les atlas de textures (phase 4) supprimeront
-la plupart des changements de texture.
+Un lot se termine à chaque changement de texture ou de mode (normal, éclairé, additif). Avec une caméra
+orthographique (jeux 2D), les sprites d'un même plan ont la même profondeur : le tri les regroupe par
+texture (10 000 sprites sur 2 textures alternées = 2 draw calls). Avec une caméra perspective, l'ordre de
+l'arrière vers l'avant, nécessaire à une transparence correcte, limite les regroupements ; les atlas
+([2D.md](2D.md)) suppriment la plupart des changements de texture.
 
 ### Composants
 
 | Composant | Champs principaux |
 |---|---|
-| `Camera` | projection (perspective / orthographique), champ de vision, taille ortho, plans proche/lointain, couleur de fond, primaire |
-| `DirectionalLight` | couleur, intensité (direction = axe −Z de l'entité) |
-| `Environment` | couleur et intensité ambiantes |
-| `MeshRenderer` | maillage intégré (Cube, Sphere, Plane, Quad), texture, couleur, répétition UV, visible |
-| `SpriteRenderer` | texture, couleur, taille, pivot, rectangle UV (sprite sheets), miroir X/Y, calque, ordre, pixel art, visible |
+| `Camera` | projection (perspective / orthographique), champ de vision, taille ortho, plans proche/lointain, couleur de fond, primaire, mode d'échelle |
+| `DirectionalLight` | couleur, intensité, ombres (distance, force) ; direction = axe −Z de l'entité |
+| `PointLight` / `SpotLight` | couleur, intensité, portée ; angles intérieur / extérieur pour le projecteur |
+| `Environment` | ambiance, ciel (couleur de fond ou dégradé procédural avec soleil), brume, exposition |
+| `MeshRenderer` | maillage intégré ou modèle importé (`model`, `meshIndex`), matériau `.agrmat`, texture / métal / rugosité du matériau intégré, teinte, répétition UV, projette des ombres, visible |
+| `SpriteRenderer` | texture ou feuille + frame, couleur, taille, pivot, rectangle UV, miroir X/Y, calque, ordre, pixel art, éclairé, visible |
 
 Tous sont réfléchis : ils sont sauvegardés dans les scènes et seront éditables dans l'inspecteur.
 
@@ -209,7 +214,8 @@ Rendu 2D (feuilles, tilemaps, lumières 2D, particules, parallaxe, modes d'éche
   l'APK) est prévu en phase 10.
 - Barrières d'images Vulkan volontairement larges (toutes étapes) : correctes, mais à affiner après
   profilage sur GPU mobiles réels.
-- Pas de maillages importés, de PBR, d'ombres, de post-traitement, d'instancing ni de LOD (phase 5).
-- Pas d'éditeur de matériaux ou de shaders (phases 5 et 9).
+- Pas de post-traitement plein écran (bloom, SSAO, anti-crénelage FXAA/TAA), d'IBL / sondes de réflexion,
+  de LOD ni d'occlusion culling ([3D.md](3D.md)).
+- Pas d'éditeur de shaders (phase 9).
 - Contexte GL perdu sur Android lors d'une mise en arrière-plan : la recréation des ressources est
   prévue en phase 8.
