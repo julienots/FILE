@@ -115,6 +115,7 @@ int Engine::run(Application& app) {
         m_stats.cpuMs = cpu.elapsedMilliseconds();
 
         if (m_platform->canRender()) {
+            m_plugins.render(*this, m_time);
             app.onRender(*this, m_time);
             m_platform->present();
         } else if (!m_config.headless) {

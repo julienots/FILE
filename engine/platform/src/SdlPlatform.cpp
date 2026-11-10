@@ -47,24 +47,24 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
     SDL_WindowFlags flags = 0;
     if (wc.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (wc.highDpi) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (wc.hidden) flags |= SDL_WINDOW_HIDDEN;
 #if defined(AGR_PLATFORM_MOBILE)
     flags |= SDL_WINDOW_FULLSCREEN;
 #else
     if (wc.fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
 #endif
 
-    if (wc.graphics == GraphicsApi::OpenGL) {
+    if (wc.graphics != GraphicsApi::None) {
         flags |= SDL_WINDOW_OPENGL;
 #if defined(AGR_PLATFORM_ANDROID)
         m_gles = true;
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        m_gles = wc.graphics == GraphicsApi::OpenGLES;
 #endif
+        const bool es = m_gles;
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, es ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, es ? 0 : 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
@@ -73,7 +73,7 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
     m_window = SDL_CreateWindow(wc.title.c_str(), wc.width, wc.height, flags);
     if (!m_window) return makeError(Error::Code::Unsupported, std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 
-    if (wc.graphics == GraphicsApi::OpenGL) {
+    if (wc.graphics != GraphicsApi::None) {
         m_glContext = SDL_GL_CreateContext(m_window);
         if (!m_glContext)
             return makeError(Error::Code::Unsupported, std::string("OpenGL context creation failed: ") + SDL_GetError());
@@ -207,6 +207,11 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
 
 void SdlPlatform::present() {
     if (m_glContext) SDL_GL_SwapWindow(m_window);
+}
+
+GraphicsApi SdlPlatform::graphicsApi() const {
+    if (!m_glContext) return GraphicsApi::None;
+    return m_gles ? GraphicsApi::OpenGLES : GraphicsApi::OpenGL;
 }
 
 math::Vec2 SdlPlatform::framebufferSize() const {

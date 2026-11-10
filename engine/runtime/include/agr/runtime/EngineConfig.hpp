@@ -6,7 +6,9 @@
 
 namespace agr {
 
-enum class GraphicsApi : u8 { None, OpenGL };
+/// OpenGL = desktop GL 3.3 core (GLES 3.0 on Android). OpenGLES forces GLES 3.0
+/// on desktop too, to validate the mobile shader path without a device.
+enum class GraphicsApi : u8 { None, OpenGL, OpenGLES };
 
 struct WindowConfig {
     std::string title = "AGR ENGINE";
@@ -16,6 +18,7 @@ struct WindowConfig {
     bool fullscreen = false;   ///< Always true on Android.
     bool vsync = true;
     bool highDpi = true;
+    bool hidden = false;       ///< Off-screen window (tests, thumbnails).
     GraphicsApi graphics = GraphicsApi::OpenGL;
 };
 
@@ -35,6 +38,8 @@ struct EngineConfig {
     std::string userDirectory = "user";      ///< Mounted as user:// (saves, settings).
     std::string pluginsDirectory = "";       ///< Dynamic plugins folder ("" = next to the executable).
     std::string logFile = "";                ///< Optional log file path.
+    /// "auto", "ultra", "high", "medium", "low" or "ultra-mobile" (consumed by agr::render).
+    std::string graphicsProfile = "auto";
 
     static Result<EngineConfig> fromJson(std::string_view text);
     std::string toJson() const;

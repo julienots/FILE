@@ -15,6 +15,7 @@ public:
     void onUnload(agr::Engine& engine) override;             // tout désenregistrer
     void onFixedUpdate(agr::Engine&, const agr::FrameTime&) override;  // gameplay, physique
     void onUpdate(agr::Engine&, const agr::FrameTime&) override;       // une fois par image
+    void onRender(agr::Engine&, const agr::FrameTime&) override;       // après les transformations, si l'écran est visible
 };
 AGR_DEFINE_PLUGIN(MyPlugin)   // uniquement pour un plugin dynamique
 ```
@@ -33,7 +34,8 @@ Le déchargement se fait dans l'ordre inverse.
 ## Règles des plugins dynamiques
 
 1. **Même compilateur et même version du moteur que l'hôte.** La fonction exportée
-   `agrPluginApiVersion` est vérifiée avant toute autre chose (`kPluginApiVersion`).
+   `agrPluginApiVersion` est vérifiée avant toute autre chose (`kPluginApiVersion`, actuellement 2 :
+   la version 2 a ajouté `onRender`).
 2. **Tout ce qui est enregistré dans `onLoad` doit être retiré dans `onUnload`** : le code des
    composants, des callbacks et des pools vit dans la bibliothèque, qui est fermée ensuite.
    ```cpp
@@ -48,6 +50,19 @@ Le déchargement se fait dans l'ordre inverse.
    vers ceux de l'hôte par `AGR_DEFINE_PLUGIN` : les messages apparaissent dans la console du moteur.
 4. Compiler avec une visibilité cachée (`CXX_VISIBILITY_PRESET hidden`) : seuls les trois points
    d'entrée sont exportés.
+
+## Services
+
+Un plugin peut publier un sous-système pour les autres plugins et le jeu :
+
+```cpp
+engine.registerService<MySystem>(&m_system);   // onLoad
+auto* renderer = engine.service<agr::Renderer>(); // n'importe où
+engine.registerService<MySystem>(nullptr);     // onUnload
+```
+
+Le moteur lui-même est découpé ainsi : le rendu est le plugin statique `agr::RenderPlugin`, qui publie
+`rhi::Device`, `AssetManager` et `Renderer`.
 
 ## CMake
 

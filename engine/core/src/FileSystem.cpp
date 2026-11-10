@@ -47,6 +47,12 @@ Status NativeFileProvider::write(std::string_view relativePath, const void* data
     return {};
 }
 
+i64 NativeFileProvider::modifiedTime(std::string_view relativePath) const {
+    std::error_code ec;
+    const auto t = fs::last_write_time(fs::path(m_root) / fs::path(relativePath), ec);
+    return ec ? 0 : static_cast<i64>(t.time_since_epoch().count());
+}
+
 Result<std::vector<std::string>> NativeFileProvider::list(std::string_view relativeDir) const {
     const fs::path dir = fs::path(m_root) / fs::path(relativeDir);
     std::error_code ec;
@@ -140,6 +146,12 @@ Status VirtualFileSystem::writeBytes(std::string_view uri, const void* data, usi
 
 Status VirtualFileSystem::writeText(std::string_view uri, std::string_view text) {
     return writeBytes(uri, text.data(), text.size());
+}
+
+i64 VirtualFileSystem::modifiedTime(std::string_view uri) const {
+    std::string path;
+    auto p = resolve(uri, path);
+    return p ? p.value()->modifiedTime(path) : 0;
 }
 
 Result<std::vector<std::string>> VirtualFileSystem::list(std::string_view uriDir) const {

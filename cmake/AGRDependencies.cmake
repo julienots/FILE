@@ -34,3 +34,13 @@ if(AGR_BUILD_TESTS)
         GIT_SHALLOW    TRUE)
     FetchContent_MakeAvailable(doctest)
 endif()
+
+# --- stb_image / stb_image_write : PNG, JPG, TGA, BMP decoding; PNG screenshots
+#     (public domain / MIT). stb has no release tags: pinned to a commit.
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20)
+FetchContent_MakeAvailable(stb)
+add_library(agr_stb INTERFACE)
+target_include_directories(agr_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
+add_library(agr::stb ALIAS agr_stb)

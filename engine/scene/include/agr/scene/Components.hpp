@@ -38,6 +38,8 @@ struct TransformComponent {
 /// World matrix computed by Scene::updateTransforms() (runtime only).
 struct WorldTransformComponent {
     math::Mat4 matrix{};
+    /// Entity and all its ancestors active, as of the last updateTransforms().
+    bool activeInHierarchy = true;
 };
 
 /// Intrusive tree links. Managed exclusively by Scene; never edit directly.

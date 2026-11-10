@@ -29,22 +29,36 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
-            libxi-dev libxss-dev libxfixes-dev libxtst-dev libgl-dev libegl-dev libgles-dev xvfb
+            libxi-dev libxss-dev libxfixes-dev libxtst-dev libgl-dev libegl-dev libgles-dev xvfb \
+            libgl1-mesa-dri libegl-mesa0
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} -DAGR_WARNINGS_AS_ERRORS=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
-      - name: Unit tests
-        run: ctest --preset ${{ matrix.preset }}
+      - name: Unit + GPU tests (GPU tests on Mesa llvmpipe, OpenGL and OpenGL ES)
+        env:
+          AGR_REQUIRE_GPU_TESTS: "1"
+        run: xvfb-run -a ctest --preset ${{ matrix.preset }}
       - name: Sandbox smoke test (headless)
         working-directory: build/${{ matrix.preset }}
         run: ./bin/agr_sandbox --headless --frames 120
-      - name: Sandbox smoke test (X11 window + OpenGL)
+      - name: Sandbox smoke test (X11 window, OpenGL and OpenGL ES, screenshot)
         working-directory: build/${{ matrix.preset }}
-        run: xvfb-run -a ./bin/agr_sandbox --frames 120
+        run: |
+          xvfb-run -a ./bin/agr_sandbox --frames 120 --screenshot user://ci_gl.png
+          xvfb-run -a ./bin/agr_sandbox --gles --frames 120 --screenshot user://ci_gles.png
+          test -s user/ci_gl.png && test -s user/ci_gles.png
+      - name: Upload screenshots
+        if: matrix.preset == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-screenshots
+          path: build/release/user/*.png
       - name: Benchmarks
         if: matrix.preset == 'release'
-        run: ./build/release/bin/agr_benchmarks
+        run: |
+          ./build/release/bin/agr_benchmarks
+          xvfb-run -a ./build/release/bin/agr_gpu_benchmarks
 
   windows:
     name: Windows MSVC
@@ -56,5 +70,5 @@ jobs:
         run: cmake --preset release
       - name: Build
         run: cmake --build --preset release
-      - name: Unit tests
+      - name: Unit tests (GPU tests skip without a desktop session)
         run: ctest --preset release

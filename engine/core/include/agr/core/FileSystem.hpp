@@ -22,6 +22,8 @@ public:
     virtual Status write(std::string_view relativePath, const void* data, usize size) = 0;
     virtual Result<std::vector<std::string>> list(std::string_view relativeDir) const = 0;
     virtual bool readOnly() const = 0;
+    /// Last modification time (opaque, monotonic per file) or 0 if unknown. Used for hot reload.
+    virtual i64 modifiedTime(std::string_view relativePath) const { (void)relativePath; return 0; }
 };
 
 /// Maps a directory of the host file system.
@@ -33,6 +35,7 @@ public:
     Status write(std::string_view relativePath, const void* data, usize size) override;
     Result<std::vector<std::string>> list(std::string_view relativeDir) const override;
     bool readOnly() const override { return m_readOnly; }
+    i64 modifiedTime(std::string_view relativePath) const override;
     const std::string& root() const { return m_root; }
 
 private:
@@ -41,6 +44,8 @@ private:
 };
 
 /// Virtual file system addressed with URIs: "<mount>://relative/path".
+/// Thread safety: mount()/unmount() are main-thread only and must not race with
+/// reads; read operations may run concurrently from worker threads (asset loading).
 /// Typical mounts: assets:// (read-only game data), user:// (saves, settings),
 /// project:// (editor only).
 class VirtualFileSystem {
@@ -55,6 +60,7 @@ public:
     Status writeBytes(std::string_view uri, const void* data, usize size);
     Status writeText(std::string_view uri, std::string_view text);
     Result<std::vector<std::string>> list(std::string_view uriDir) const;
+    i64 modifiedTime(std::string_view uri) const;
 
     struct ParsedUri {
         std::string scheme;

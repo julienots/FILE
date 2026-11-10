@@ -21,6 +21,11 @@ public:
     virtual bool canRender() const = 0;
     virtual math::Vec2 framebufferSize() const = 0;
     virtual const char* name() const = 0;
+
+    /// Graphics API of the context created by the platform (None when headless).
+    virtual GraphicsApi graphicsApi() const { return GraphicsApi::None; }
+    /// Resolves a graphics entry point (OpenGL functions) of the current context.
+    virtual void* graphicsProcAddress(const char* name) const { (void)name; return nullptr; }
 };
 
 /// No window, no input: used by tests, CI and dedicated servers.

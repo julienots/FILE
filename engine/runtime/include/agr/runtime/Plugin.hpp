@@ -25,7 +25,7 @@ namespace agr {
 class Engine;
 
 /// Bumped whenever the Plugin interface or HostApi layout changes.
-inline constexpr u32 kPluginApiVersion = 1;
+inline constexpr u32 kPluginApiVersion = 2;  // v2: Plugin::onRender
 
 struct PluginInfo {
     std::string name;
@@ -43,6 +43,8 @@ public:
     virtual void onUnload(Engine& engine) { (void)engine; }
     virtual void onFixedUpdate(Engine& engine, const FrameTime& time) { (void)engine; (void)time; }
     virtual void onUpdate(Engine& engine, const FrameTime& time) { (void)engine; (void)time; }
+    /// Once per frame after transforms, only when the platform can render, before Application::onRender.
+    virtual void onRender(Engine& engine, const FrameTime& time) { (void)engine; (void)time; }
 };
 
 /// Host services handed to dynamic plugins so they share the host's singletons.

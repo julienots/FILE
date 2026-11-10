@@ -1,0 +1,11 @@
+agr_add_module(render
+    SOURCES
+        src/RenderComponents.cpp
+        src/Primitives.cpp
+        src/GraphicsProfile.cpp
+        src/Renderer.cpp
+        src/RenderPlugin.cpp
+    PUBLIC_DEPS
+        agr::runtime
+        agr::rhi
+        agr::assets)

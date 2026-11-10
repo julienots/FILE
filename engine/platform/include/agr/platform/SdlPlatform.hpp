@@ -25,6 +25,8 @@ public:
     bool canRender() const override { return m_window && !m_backgrounded && !m_minimized; }
     math::Vec2 framebufferSize() const override;
     const char* name() const override { return "SDL3"; }
+    GraphicsApi graphicsApi() const override;
+    void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }
 
     SDL_Window* window() const { return m_window; }
     /// Resolves an OpenGL entry point of the current context.

@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "agr/core/EventBus.hpp"
 #include "agr/core/FileSystem.hpp"
@@ -58,7 +59,23 @@ public:
     const FrameStats& stats() const { return m_stats; }
     const std::shared_ptr<RingBufferSink>& consoleLog() const { return m_consoleSink; }
 
+    /// Frame cap (0 = uncapped / vsync). Graphics profiles lower it on weak devices.
+    void setTargetFps(u32 fps) { m_config.targetFps = fps; }
     void setTimeScale(f64 scale) { m_time.timeScale = scale < 0.0 ? 0.0 : scale; }
+
+    // -------------------------------------------------------------- services
+    /// Publishes a subsystem owned elsewhere (renderer, asset manager, physics...)
+    /// so gameplay code and plugins can find it. Keyed by type name: works across plugins.
+    template <typename T>
+    void registerService(T* service) {
+        if (service) m_services[typeHash<T>()] = service;
+        else m_services.erase(typeHash<T>());
+    }
+    template <typename T>
+    T* service() const {
+        auto it = m_services.find(typeHash<T>());
+        return it == m_services.end() ? nullptr : static_cast<T*>(it->second);
+    }
 
     // ---------------------------------------------------------------- scenes
     /// Replaces the active scene.
@@ -82,6 +99,7 @@ private:
     PluginManager m_plugins;
     FrameTime m_time;
     FrameStats m_stats;
+    std::unordered_map<u64, void*> m_services;
     f64 m_accumulator = 0.0;
     f64 m_statsWindowTime = 0.0;
     u32 m_statsWindowFrames = 0;

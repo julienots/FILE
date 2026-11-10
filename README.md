@@ -7,9 +7,13 @@
 AGR ENGINE vise la place entre Godot et Unity : plus simple à prendre en main qu'Unity, assez puissant
 pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, avec un éditeur sur PC.
 
-> **État actuel : phase 1 sur 10 terminée** — architecture et socle technique.
-> Il n'y a pas encore de rendu de géométrie ni d'éditeur visuel : ce sont les phases 2 et 3.
-> L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
+> **État actuel : phase 1 terminée, phase 2 en grande partie terminée.**
+> Le rendu OpenGL 3.3 / OpenGL ES 3.0 fonctionne. Le backend Vulkan est la prochaine étape, et il n'y a
+> pas encore d'éditeur visuel (phase 3). L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
+
+![Sandbox AGR ENGINE](docs/images/sandbox.png)
+
+*Image rendue par AGR ENGINE (sandbox, profil « high », MSAA x4).*
 
 ## Ce qui fonctionne aujourd'hui
 
@@ -23,7 +27,14 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
   clavier, souris, multi-touch, cycle de vie mobile.
 - Un **système de plugins** statiques et dynamiques avec dépendances ; le plugin d'exemple `Spin`
   ajoute un composant et son système sans toucher au moteur.
-- **58 tests** unitaires, builds sanitizers (ASan/UBSan), benchmarks, CI GCC/Clang/MSVC.
+- Un **renderer** sur une couche GPU neutre (RHI) : backend OpenGL 3.3 core / OpenGL ES 3.0,
+  caméras, lumière directionnelle, maillages intégrés éclairés, sprites triés et regroupés en lots,
+  frustum culling, MSAA, échelle de rendu, **profils graphiques Ultra ➜ Ultra mobile** choisis
+  automatiquement, temps GPU, captures d'écran ([détails](docs/RENDERING.md)).
+- Un **gestionnaire de ressources** : chargement asynchrone, cache, budget d'upload par image,
+  rechargement à chaud.
+- **68 tests unitaires + 15 tests GPU au pixel près** (exécutés en OpenGL et en OpenGL ES), sanitizers
+  (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 
 ## Démarrage rapide
 
@@ -31,7 +42,7 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 cmake --preset release
 cmake --build --preset release
 ctest --preset release
-./build/release/bin/agr_sandbox          # fenêtre de démonstration, Échap pour quitter
+./build/release/bin/agr_sandbox          # Échap : quitter · 1-5 : profils graphiques · F12 : capture
 ```
 
 Prérequis et options : [docs/BUILDING.md](docs/BUILDING.md).
@@ -39,15 +50,31 @@ Prérequis et options : [docs/BUILDING.md](docs/BUILDING.md).
 ## Exemple
 
 ```cpp
-#include "agr/runtime/Engine.hpp"
 #include "agr/platform/SdlPlatform.hpp"
+#include "agr/render/RenderComponents.hpp"
+#include "agr/render/RenderPlugin.hpp"
+#include "agr/runtime/Engine.hpp"
 
 struct MyGame : agr::Application {
     agr::Status onStart(agr::Engine& engine) override {
         auto& scene = engine.scene();
+        auto& reg = scene.registry();
+
+        auto camera = scene.createEntity("Camera");
+        reg.emplace<agr::CameraComponent>(camera);
+        reg.get<agr::TransformComponent>(camera).position = {0.0f, 1.0f, 6.0f};
+
+        auto sun = scene.createEntity("Sun");
+        reg.emplace<agr::DirectionalLightComponent>(sun);
+        reg.get<agr::TransformComponent>(sun).rotation = agr::math::Quat::fromEuler({-0.8f, 0.4f, 0.0f});
+
         auto player = scene.createEntity("Player");
-        auto weapon = scene.createEntity("Sword", player);   // enfant de Player
-        scene.registry().get<agr::TransformComponent>(weapon).position = {0.5f, 1.0f, 0.0f};
+        reg.emplace<agr::MeshRendererComponent>(player).color = {0.96f, 0.65f, 0.14f, 1.0f};
+        reg.get<agr::TransformComponent>(player).rotation = agr::math::Quat::fromEuler({0.4f, 0.7f, 0.0f});
+        auto badge = scene.createEntity("Badge", player);     // enfant de Player
+        reg.get<agr::TransformComponent>(badge).position = {0.0f, 1.2f, 0.0f};
+        reg.emplace<agr::SpriteRendererComponent>(badge).texture = "assets://textures/agr_mark.png";
+
         return engine.saveScene("user://level1.agrscene");
     }
     void onUpdate(agr::Engine& engine, const agr::FrameTime&) override {
@@ -57,6 +84,7 @@ struct MyGame : agr::Application {
 
 int main() {
     agr::Engine engine({});
+    engine.plugins().addStatic(std::make_unique<agr::RenderPlugin>());
     if (!engine.initialize(std::make_unique<agr::SdlPlatform>())) return 1;
     MyGame game;
     return engine.run(game);
@@ -72,17 +100,21 @@ engine/
   ecs/        entités, composants, vues
   scene/      scène, hiérarchie, réflexion, sérialisation
   runtime/    moteur, boucle, entrées, configuration, gestionnaire de plugins
+  rhi/        interface GPU neutre + backend OpenGL / OpenGL ES
+  assets/     images, gestionnaire de ressources
+  render/     composants de rendu, renderer, profils graphiques
   platform/   implémentation SDL3 (fenêtre, contexte GL, événements)
 plugins/spin/ plugin dynamique d'exemple
-apps/sandbox/ application de démonstration runtime
-tests/        tests unitaires (doctest)
-benchmarks/   micro-benchmarks
+apps/sandbox/ application de démonstration (scène 3D + 2D, assets originaux)
+tests/        tests unitaires ; tests/gpu : tests de rendu au pixel près
+benchmarks/   micro-benchmarks CPU ; benchmarks/gpu : benchmarks du renderer
 docs/         architecture, ADR, feuille de route, identité visuelle
 ```
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Rendu et ressources](docs/RENDERING.md)
 - [Compilation](docs/BUILDING.md)
 - [Feuille de route](docs/ROADMAP.md)
 - [Écrire un plugin](docs/PLUGINS.md)

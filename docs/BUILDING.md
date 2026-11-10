@@ -52,13 +52,26 @@ Tous les binaires (exécutables, plugins) sont produits dans `build/<preset>/bin
 
 ```bash
 cd build/debug
-./bin/agr_tests                        # 58 cas de test
-./bin/agr_sandbox                      # fenêtre OpenGL, Échap pour quitter
+./bin/agr_tests                        # tests unitaires (sans GPU)
+./bin/agr_gpu_tests                    # tests de rendu (OpenGL) — nécessite un affichage
+AGR_TEST_GLES=1 ./bin/agr_gpu_tests    # mêmes tests en OpenGL ES 3.0
+./bin/agr_sandbox                      # Échap : quitter · 1-5 : profils · F12 : capture
+./bin/agr_sandbox --gles --profile low --screenshot user://shot.png --frames 120
+./bin/agr_sandbox --sprites 10000      # test de charge des sprites
 ./bin/agr_sandbox --headless --frames 120
-./bin/agr_benchmarks                   # utiliser le preset release
+./bin/agr_benchmarks                   # benchmarks CPU (preset release)
+./bin/agr_gpu_benchmarks               # benchmarks du renderer (preset release, affichage requis)
 ```
 
-La sandbox crée `user/sandbox.agrscene` dans le dossier courant (montage `user://`).
+La sandbox lit ses textures dans `bin/assets/` (copiées au build, montage `assets://`) et écrit
+`user/sandbox.agrscene` et les captures dans le dossier courant (montage `user://`).
+
+### Sans écran (serveur, CI)
+
+Les tests GPU ont besoin d'un affichage. Sous Linux sans écran : `xvfb-run -a ./bin/agr_gpu_tests`
+(rendu logiciel Mesa llvmpipe, OpenGL 4.5 et OpenGL ES 3.2). Sans affichage, `agr_gpu_tests`
+s'arrête avec le message « GPU tests skipped » et le code 0, sauf si `AGR_REQUIRE_GPU_TESTS=1`
+est défini (c'est le cas en CI) : l'absence d'affichage devient alors un échec.
 
 ## Android
 

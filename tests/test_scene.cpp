@@ -230,3 +230,18 @@ TEST_CASE("entity snippets instantiate with fresh ids (prefab / paste)") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("updateTransforms caches activeInHierarchy") {
+    Scene s;
+    const Entity root = s.createEntity("Root");
+    const Entity child = s.createEntity("Child", root);
+    const Entity grandChild = s.createEntity("GrandChild", child);
+    s.updateTransforms();
+    CHECK(s.registry().get<WorldTransformComponent>(grandChild).activeInHierarchy);
+    s.registry().get<StateComponent>(child).active = false;
+    s.updateTransforms();
+    CHECK(s.registry().get<WorldTransformComponent>(root).activeInHierarchy);
+    CHECK_FALSE(s.registry().get<WorldTransformComponent>(child).activeInHierarchy);
+    CHECK_FALSE(s.registry().get<WorldTransformComponent>(grandChild).activeInHierarchy);
+    CHECK(s.isActiveInHierarchy(grandChild) == s.registry().get<WorldTransformComponent>(grandChild).activeInHierarchy);
+}

@@ -5,8 +5,10 @@ add_executable(agr_tests
     test_math.cpp
     test_ecs.cpp
     test_scene.cpp
-    test_runtime.cpp)
-target_link_libraries(agr_tests PRIVATE agr::runtime agr::compiler_options doctest::doctest)
+    test_runtime.cpp
+    test_assets.cpp
+    test_render.cpp)
+target_link_libraries(agr_tests PRIVATE agr::render agr::compiler_options doctest::doctest)
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_tests agr_plugin_spin)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_PLUGIN_PATH="$<TARGET_FILE:agr_plugin_spin>")

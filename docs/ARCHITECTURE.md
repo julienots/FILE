@@ -14,20 +14,24 @@
 5. **Erreurs explicites.** `Result<T>` / `Status` plutôt que des exceptions dans le moteur ;
    un fichier corrompu produit un message, pas un crash.
 
-## Graphe des modules (phase 1)
+## Graphe des modules (phase 2)
 
 ```
-                 apps/sandbox            plugins/spin (bibliothèque dynamique)
-                      │                         │
-               agr::platform (SDL3)             │
-                      │                         │
-                      └──────► agr::runtime ◄───┘
-                                    │
-                               agr::scene ──► nlohmann/json
-                              ┌─────┴─────┐
-                          agr::ecs    agr::math
-                              └─────┬─────┘
-                                agr::core
+   apps/sandbox                         plugins/spin (bibliothèque dynamique)
+        │                                     │
+        ├──► agr::platform (SDL3) ──┐         │
+        │                           ▼         │
+        └──► agr::render ──► agr::runtime ◄───┘
+               │    │              │
+               │    └──► agr::assets ──► stb_image
+               │              │
+               └──────► agr::rhi (GL / GLES ; Vulkan à venir)
+                                   │
+                agr::scene ──► nlohmann/json
+              ┌─────┴─────┐
+          agr::ecs    agr::math
+              └─────┬─────┘
+                agr::core
 ```
 
 | Module | Type | Rôle |
@@ -35,12 +39,16 @@
 | `agr::core` | statique | Types, assertions, `Result`, logs (console, fichier, tampon circulaire pour la console de l'éditeur, logcat), allocateurs (heap, linéaire, pool, double tampon par frame) avec statistiques par catégorie, handles générationnels, `JobSystem`, `EventBus`, système de fichiers virtuel, UUID, chargement de bibliothèques dynamiques |
 | `agr::math` | en-têtes | Vec2/3/4, Quat, Mat4 (colonne majeure, main droite, +Y en haut), perspective/ortho avec plage de profondeur GL ou Vulkan, AABB, rayon, plan, frustum |
 | `agr::ecs` | en-têtes | ECS à *sparse sets* : `Registry`, `Pool<T>`, `View<Ts...>`, hooks de construction/destruction, accès typé ou effacé |
-| `agr::scene` | statique | `Scene` (hiérarchie, transformations monde, UUID persistants, duplication), réflexion des composants, sérialisation JSON (`.agrscene`) et fragments (copier/coller, futurs prefabs) |
-| `agr::runtime` | statique | `Engine` (services + boucle), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
+| `agr::scene` | statique | `Scene` (hiérarchie, transformations monde, état actif hérité, UUID persistants, duplication), réflexion des composants, sérialisation JSON (`.agrscene`) et fragments (copier/coller, futurs prefabs) |
+| `agr::runtime` | statique | `Engine` (services + boucle + registre de services), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
+| `agr::rhi` | statique | Interface GPU neutre + backend OpenGL 3.3 / OpenGL ES 3.0 avec chargeur intégré |
+| `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud) |
+| `agr::render` | statique | Composants de rendu, primitives, profils graphiques, `Renderer` forward, `RenderPlugin` |
 | `agr::platform` | statique | Implémentation SDL3 de `PlatformLayer` : fenêtre, contexte OpenGL 3.3 core / OpenGL ES 3.0, clavier, souris, multi-touch, cycle de vie mobile |
 
-Modules prévus (voir la [feuille de route](ROADMAP.md)) : `agr::rhi` + backends `vulkan` / `gles`,
-`agr::render`, `agr::assets`, `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
+Détails du rendu : [RENDERING.md](RENDERING.md).
+
+Modules prévus (voir la [feuille de route](ROADMAP.md)) : backend Vulkan de `agr::rhi`, `agr::physics2d`, `agr::physics3d`, `agr::audio`, `agr::script`,
 `agr::ui`, `agr::animation`, puis l'application `agr_editor`.
 
 ## Boucle principale
@@ -53,8 +61,9 @@ Engine::run
  ├─ pas fixes (0..maxFixedStepsPerFrame)   plugins puis application ; physique en phase 6
  ├─ update variable                        plugins puis application
  ├─ Scene::flushDestroyed()                destructions différées
- ├─ Scene::updateTransforms()              matrices monde
- ├─ onRender + present                     seulement si la plateforme peut rendre (pas en arrière-plan)
+ ├─ Scene::updateTransforms()              matrices monde + état actif hérité
+ ├─ Plugin::onRender (RenderPlugin)        rendu de la scène, seulement si la plateforme peut rendre
+ ├─ Application::onRender + present        (pas en arrière-plan sur mobile)
  └─ limiteur d'images (targetFps)          économise la batterie
 ```
 

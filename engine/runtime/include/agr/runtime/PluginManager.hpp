@@ -31,6 +31,7 @@ public:
 
     void fixedUpdate(Engine& engine, const FrameTime& time);
     void update(Engine& engine, const FrameTime& time);
+    void render(Engine& engine, const FrameTime& time);
 
     struct Entry {
         PluginInfo info;

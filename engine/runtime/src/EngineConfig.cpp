@@ -24,6 +24,7 @@ Result<EngineConfig> EngineConfig::fromJson(std::string_view text) {
         c.userDirectory = j.value("userDirectory", c.userDirectory);
         c.pluginsDirectory = j.value("pluginsDirectory", c.pluginsDirectory);
         c.logFile = j.value("logFile", c.logFile);
+        c.graphicsProfile = j.value("graphicsProfile", c.graphicsProfile);
         if (j.contains("window")) {
             const json& w = j["window"];
             c.window.title = w.value("title", c.window.title);
@@ -33,8 +34,10 @@ Result<EngineConfig> EngineConfig::fromJson(std::string_view text) {
             c.window.fullscreen = w.value("fullscreen", c.window.fullscreen);
             c.window.vsync = w.value("vsync", c.window.vsync);
             c.window.highDpi = w.value("highDpi", c.window.highDpi);
+            c.window.hidden = w.value("hidden", c.window.hidden);
             const std::string api = w.value("graphics", std::string("opengl"));
             if (api == "opengl") c.window.graphics = GraphicsApi::OpenGL;
+            else if (api == "gles") c.window.graphics = GraphicsApi::OpenGLES;
             else if (api == "none") c.window.graphics = GraphicsApi::None;
             else return makeError(Error::Code::InvalidArgument, "unknown graphics api '" + api + "'");
         }
@@ -63,10 +66,14 @@ std::string EngineConfig::toJson() const {
     j["userDirectory"] = userDirectory;
     j["pluginsDirectory"] = pluginsDirectory;
     j["logFile"] = logFile;
+    j["graphicsProfile"] = graphicsProfile;
     j["window"] = {{"title", window.title},         {"width", window.width},   {"height", window.height},
                    {"resizable", window.resizable}, {"fullscreen", window.fullscreen},
                    {"vsync", window.vsync},         {"highDpi", window.highDpi},
-                   {"graphics", window.graphics == GraphicsApi::OpenGL ? "opengl" : "none"}};
+                   {"hidden", window.hidden},
+                   {"graphics", window.graphics == GraphicsApi::OpenGL     ? "opengl"
+                                 : window.graphics == GraphicsApi::OpenGLES ? "gles"
+                                                                            : "none"}};
     return j.dump(2);
 }
 

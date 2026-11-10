@@ -162,6 +162,10 @@ void PluginManager::update(Engine& engine, const FrameTime& time) {
     for (Record* r : m_loadOrder) r->plugin->onUpdate(engine, time);
 }
 
+void PluginManager::render(Engine& engine, const FrameTime& time) {
+    for (Record* r : m_loadOrder) r->plugin->onRender(engine, time);
+}
+
 std::vector<PluginManager::Entry> PluginManager::entries() const {
     std::vector<Entry> out;
     for (const auto& r : m_records) out.push_back(Entry{r->info, r->dynamic, r->loaded, r->path, r->error});

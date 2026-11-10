@@ -1,0 +1,25 @@
+#include "agr/rhi/Rhi.hpp"
+
+namespace agr::rhi {
+
+const char* enumName(Backend backend) {
+    switch (backend) {
+        case Backend::OpenGL: return "OpenGL";
+        case Backend::OpenGLES: return "OpenGL ES";
+        case Backend::Vulkan: return "Vulkan";
+    }
+    return "?";
+}
+
+u32 bytesPerPixel(TextureFormat format) {
+    switch (format) {
+        case TextureFormat::RGBA8:
+        case TextureFormat::RGBA8_sRGB:
+        case TextureFormat::Depth24Stencil8: return 4;
+        case TextureFormat::R8: return 1;
+        case TextureFormat::RGBA16F: return 8;
+    }
+    return 4;
+}
+
+} // namespace agr::rhi

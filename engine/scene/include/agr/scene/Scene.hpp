@@ -66,7 +66,7 @@ public:
     }
 
     // ------------------------------------------------------------ transforms
-    /// Recomputes every WorldTransformComponent from local transforms.
+    /// Recomputes every WorldTransformComponent (matrix + activeInHierarchy) from local data.
     void updateTransforms();
     math::Mat4 worldMatrix(Entity e) const;
     /// Sets the local transform such that the entity lands at `world`.
@@ -92,7 +92,7 @@ private:
     void link(Entity e, Entity parent, Entity before);
     void destroyRecursive(Entity e);
     Entity duplicateRecursive(Entity src, Entity parent, Entity before);
-    void updateTransformRecursive(Entity e, const math::Mat4& parentWorld);
+    void updateTransformRecursive(Entity e, const math::Mat4& parentWorld, bool parentActive);
 
     std::string m_name;
     mutable ecs::Registry m_registry;

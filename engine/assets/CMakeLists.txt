@@ -1,0 +1,9 @@
+agr_add_module(assets
+    SOURCES
+        src/Image.cpp
+        src/AssetManager.cpp
+    PUBLIC_DEPS
+        agr::core
+        agr::rhi
+    PRIVATE_DEPS
+        agr::stb)
