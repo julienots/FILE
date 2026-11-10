@@ -113,8 +113,9 @@ Guide : [3D.md](3D.md).
 | Éditeur : glisser un modèle dans la scène, éditeur de matériau avec aperçu, lumières dans les menus | ✅ | `editor/ui` |
 | Modèle « Vitrine 3D » avec ressources originales reproductibles | ✅ | `SceneTemplates`, `tools/generate_template_3d_art.py` |
 | Tests : importeurs (5 cas), 6 cas GPU 3D × 3 API, éditeur, test de bout en bout | ✅ | `tests/test_models.cpp`, `tests/gpu/test_renderer3d.cpp` |
-| Squelettes, skinning, animations des modèles | ⬜ | phase 7 (animation) |
-| Post-traitement plein écran (bloom, SSAO, FXAA/TAA), IBL / sondes de réflexion, skybox cubemap | ⬜ | à planifier |
+| Squelettes, skinning, animations des modèles | ✅ | glTF skins + clips, skinning GPU, testés sur les 3 API |
+| Post-traitement HDR : bloom, FXAA, étalonnage, vignettage (selon le profil) | ✅ | `Renderer.cpp`, composant `PostProcess` |
+| SSAO, profondeur de champ, TAA, IBL / sondes de réflexion, skybox image | ⬜ | à planifier |
 | Ombres des lumières locales, cascades multiples | ⬜ | à planifier |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
@@ -154,7 +155,8 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Éditeur : UI Builder dans la vue Jeu, préréglages d'ancres, timeline, machine à états, mixeur, aperçu audio | ✅ | `editor/ui` |
 | Modèles : sons générés, musique, HUD, boutons tactiles, héros à machine à états, objets animés | ✅ | `SceneTemplates`, `tools/generate_template_audio.py` |
 | Tests : 7 audio, 6 interface, 6 animation, 3 scripts, 2 GPU (surimpression), modèles et bout en bout | ✅ | `tests/` |
-| Animation squelettique (skinning glTF), arbres de mélange, couches, IK | ⬜ | à planifier |
+| Animation squelettique (skinning glTF) | ✅ | voir ANIMATION.md |
+| Arbres de mélange, couches, IK, morph targets | ⬜ | à planifier |
 | Effets audio (réverbération, filtres), Doppler, occlusion | ⬜ | à planifier |
 | UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | ⬜ | zones sûres en phase 8 ; le reste à planifier |
 | Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |

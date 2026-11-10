@@ -45,6 +45,23 @@ end
 function Hero:onAnimationEvent(name) if name == "step" then agr.audio.play("assets://audio/step.wav") end end
 ```
 
+## Animation squelettique (modèles glTF)
+
+- **Import** : les *skins* glTF (articulations, matrices de liaison inverses, `JOINTS_0` /
+  `WEIGHTS_0`, 4 influences par sommet, poids normalisés) et les **animations** (translation,
+  rotation, échelle ; interpolation pas à pas ou linéaire ; les splines cubiques sont lues par leurs
+  valeurs, sans tangentes, avec un avertissement). Les poids de *morph targets* ne sont pas importés.
+- **Instanciation** : les nœuds du modèle deviennent des entités (le squelette est une hiérarchie
+  d'entités ordinaires, visible et modifiable) ; un `MeshRenderer` à peau référence son skin.
+- **Clips** : une animation importée est un clip nommé `"<modèle>#<animation>"`
+  (`assets://3d/sprout.glb#Dance`), utilisable comme `clip` d'un Animator ou d'un état de machine à
+  états, avec fondus entre clips (interpolation sphérique des rotations). Glisser un modèle animé dans
+  la scène lui ajoute un Animator qui joue sa première animation ; l'inspecteur liste ses clips.
+- **Rendu** : skinning sur GPU (palette de 128 articulations maximum par maillage, buffer uniforme),
+  ombres comprises, sur Vulkan, OpenGL et GLES ; les volumes englobants sont élargis pour le culling.
+- **Vitrine 3D** : la plante `sprout.glb` (4 articulations, clips *Idle* et *Dance* générés par
+  `tools/generate_template_character.py`) danse quand une balle la touche (script + machine à états).
+
 ## Dans l'éditeur
 
 - **Timeline** (*Affichage › Animation*, ou bouton *Timeline* de l'Animator) : clips de l'Animator
@@ -71,8 +88,9 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- **Pas d'animation squelettique** (os, skinning des modèles glTF), d'arbres de mélange (*blend trees*),
-  de couches ni de masques d'animation, ni de cinématique inverse.
+- Pas d'arbres de mélange (*blend trees*), de couches ni de masques d'animation, ni de cinématique
+  inverse ; pas de *morph targets* ; au plus 128 articulations par maillage, 4 influences par sommet.
+- Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.
 - Timeline : pas de sélection de plusieurs clés, de copier-coller ni de poignées de tangentes à
   glisser (valeurs numériques) ; les modifications d'un clip ou d'une machine à états ne passent pas

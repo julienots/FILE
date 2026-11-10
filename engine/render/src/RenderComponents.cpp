@@ -90,6 +90,19 @@ void registerRenderComponents() {
         .field("fogEnd", &EnvironmentComponent::fogEnd, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.1f})
         .field("exposure", &EnvironmentComponent::exposure, {.rangeMin = 0.01f, .rangeMax = 16.0f, .speed = 0.01f});
 
+    reg.add<PostProcessComponent>("PostProcess")
+        .category("Rendering")
+        .description("Image effects: bloom, anti-aliasing (FXAA), tone mapping, color grading, vignette.")
+        .field("bloom", &PostProcessComponent::bloom, {.tooltip = "Glow around bright areas (needs a graphics profile that allows it)"})
+        .field("bloomIntensity", &PostProcessComponent::bloomIntensity, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("bloomThreshold", &PostProcessComponent::bloomThreshold, {.tooltip = "Brightness above which pixels glow", .rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("bloomRadius", &PostProcessComponent::bloomRadius, {.rangeMin = 0.25f, .rangeMax = 4.0f, .speed = 0.01f})
+        .field("fxaa", &PostProcessComponent::fxaa, {.tooltip = "Smooths jagged edges (cheap anti-aliasing)"})
+        .field("filmicToneMapping", &PostProcessComponent::filmicToneMapping, {.tooltip = "ACES filmic curve; off for flat 2D colors"})
+        .field("contrast", &PostProcessComponent::contrast, {.rangeMin = 0.0f, .rangeMax = 3.0f, .speed = 0.01f})
+        .field("saturation", &PostProcessComponent::saturation, {.rangeMin = 0.0f, .rangeMax = 3.0f, .speed = 0.01f})
+        .field("colorFilter", &PostProcessComponent::colorFilter, {.flags = FieldFlag_Color})
+        .field("vignette", &PostProcessComponent::vignette, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f});
     reg.add<MeshRendererComponent>("MeshRenderer")
         .category("Rendering")
         .description("Draws a built-in mesh or a mesh of an imported model (glTF, OBJ, FBX) with PBR materials.")

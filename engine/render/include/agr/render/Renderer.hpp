@@ -99,6 +99,9 @@ struct RenderStats {
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
+    bool postProcessing = false;  ///< PostProcess active this frame.
+    bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
+    u32 bloomLevels = 0;
     u32 modelsLoading = 0;   ///< Mesh renderers waiting for their model.
     u32 renderWidth = 0, renderHeight = 0;  ///< Internal 3D resolution.
     u32 msaaSamples = 1;
@@ -250,6 +253,16 @@ private:
     void uploadUniforms();
     void drawSprites(const std::vector<SpriteItem>& items);
     void drawOverlay();
+    // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
+    struct PostPass {
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa } kind;
+        rhi::RenderTargetHandle source, target;  // target null = output
+        u32 uniformOffset = 0;
+    };
+    Status createPostPipelines();
+    bool ensurePostTargets(u32 renderW, u32 renderH, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa);
+    void releasePostTargets();
+    void runPost(rhi::RenderTargetHandle output);
     void sweepTextureCache();
 
     rhi::Device& m_device;
@@ -263,6 +276,13 @@ private:
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
+    rhi::PipelineHandle m_postPipelines[5];  // PostPass::Kind
+    rhi::RenderTargetHandle m_postScene, m_postResolve, m_postLdr;
+    std::vector<rhi::RenderTargetHandle> m_bloomLevels;
+    std::vector<std::pair<u32, u32>> m_bloomSizes;
+    u32 m_postW = 0, m_postH = 0, m_postSamples = 0, m_postOutW = 0, m_postOutH = 0;
+    bool m_postHdr = false, m_postBloom = false, m_postFxaa = false;
+    std::vector<PostPass> m_postPasses;
     OverlayDrawList m_overlay;
     rhi::BufferHandle m_overlayVertices, m_overlayIndices;
     usize m_overlayVertexCapacity = 0, m_overlayIndexCapacity = 0;

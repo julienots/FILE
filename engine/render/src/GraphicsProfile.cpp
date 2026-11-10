@@ -9,19 +9,19 @@ GraphicsProfile graphicsProfile(GraphicsTier tier) {
     p.tier = tier;
     switch (tier) {
         case GraphicsTier::Ultra:
-            p = {tier, "ultra", 1.0f, 8, 8192, 0, 64ull << 20, 4096, true, 8};
+            p = {tier, "ultra", 1.0f, 8, 8192, 0, 64ull << 20, 4096, true, 8, true, true, 4};
             break;
         case GraphicsTier::High:
-            p = {tier, "high", 1.0f, 4, 4096, 0, 32ull << 20, 2048, true, 8};
+            p = {tier, "high", 1.0f, 4, 4096, 0, 32ull << 20, 2048, true, 8, true, true, 3};
             break;
         case GraphicsTier::Medium:
-            p = {tier, "medium", 1.0f, 2, 2048, 0, 16ull << 20, 1024, true, 4};
+            p = {tier, "medium", 1.0f, 2, 2048, 0, 16ull << 20, 1024, true, 4, true, true, 2};
             break;
         case GraphicsTier::Low:
-            p = {tier, "low", 0.75f, 1, 1024, 60, 8ull << 20, 1024, false, 4};
+            p = {tier, "low", 0.75f, 1, 1024, 60, 8ull << 20, 1024, false, 4, false, true, 1};
             break;
         case GraphicsTier::UltraMobile:
-            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2};
+            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2, false, false, 1};
             break;
     }
     return p;

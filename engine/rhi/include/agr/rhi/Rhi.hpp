@@ -166,6 +166,9 @@ struct DeviceInfo {
     /// True when render-target textures are stored bottom row first (OpenGL): sample them
     /// with v flipped. False on Vulkan (negative-height viewport stores the top row first).
     bool renderTargetsFlipY = false;
+    /// RGBA16F render targets (HDR post-processing). Always on Vulkan and desktop OpenGL; on
+    /// OpenGL ES 3.0 only with EXT_color_buffer_(half_)float.
+    bool halfFloatRenderTargets = false;
 };
 
 struct FrameStats {
@@ -254,7 +257,8 @@ public:
 
     virtual const FrameStats& frameStats() const = 0;
     virtual MemoryStats memoryStats() const = 0;
-    /// Errors reported by API validation (Vulkan validation layers when enabled). 0 otherwise.
+    /// Errors reported by API validation (Vulkan validation layers when enabled) and misuse of
+    /// the RHI detected by the backend (layout transitions inside a pass...). 0 otherwise.
     virtual u64 validationErrorCount() const { return 0; }
     /// Mobile: the window surface goes away when the app enters the background and comes back
     /// on return. Vulkan destroys / recreates its surface and swapchain; OpenGL needs nothing

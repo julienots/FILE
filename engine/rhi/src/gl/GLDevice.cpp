@@ -149,12 +149,17 @@ public:
 
         GLint extCount = 0;
         m_gl.glGetIntegerv(GL_NUM_EXTENSIONS, &extCount);
-        bool disjointTimer = false;
+        bool disjointTimer = false, halfFloatTargets = false;
         for (GLint i = 0; i < extCount; ++i) {
             const GLubyte* e = m_gl.glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i));
-            if (e && std::strcmp(reinterpret_cast<const char*>(e), "GL_EXT_disjoint_timer_query") == 0) disjointTimer = true;
+            if (!e) continue;
+            const char* name = reinterpret_cast<const char*>(e);
+            if (std::strcmp(name, "GL_EXT_disjoint_timer_query") == 0) disjointTimer = true;
+            if (std::strcmp(name, "GL_EXT_color_buffer_half_float") == 0 || std::strcmp(name, "GL_EXT_color_buffer_float") == 0)
+                halfFloatTargets = true;
         }
         const bool gles = m_info.backend == Backend::OpenGLES;
+        m_info.halfFloatRenderTargets = !gles || halfFloatTargets;
         m_info.gpuTimers = m_gl.glGetQueryObjectui64v && (!gles || disjointTimer);
         for (const char* sw : {"llvmpipe", "softpipe", "SwiftShader", "Software Rasterizer", "Microsoft Basic"})
             if (m_info.renderer.find(sw) != std::string::npos) m_info.softwareRenderer = true;

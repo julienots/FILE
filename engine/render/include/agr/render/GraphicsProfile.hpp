@@ -22,6 +22,9 @@ struct GraphicsProfile {
     u32 shadowMapSize = 2048;    ///< Directional light shadow map (0 = no shadows).
     bool softShadows = true;     ///< 3x3 PCF filtering (9 taps) instead of 1 tap.
     u32 maxLights = 8;           ///< Point / spot lights shading each pixel (nearest to the camera first), <= 8.
+    bool bloom = true;           ///< PostProcess bloom allowed (glow of bright areas).
+    bool fxaa = true;            ///< PostProcess FXAA allowed (anti-aliasing filter).
+    u32 shadowCascades = 3;      ///< Directional shadow cascades (1..4).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

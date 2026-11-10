@@ -1128,6 +1128,12 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(!cube.isNull() && !math::nearlyEqual(scene.registry().get<TransformComponent>(cube).rotation, math::Quat::identity()),
                   "the spin animation turns the kinematic cube");
             check(m_shared->renderer() && m_shared->renderer()->stats().skinnedMeshes > 0, "the skinned character is drawn (GPU skinning)");
+            if (const Renderer* r = m_shared->renderer()) {
+                // Bloom depends on the graphics profile (off on Low / Ultra Mobile, e.g. software GPUs).
+                check(r->stats().postProcessing && (r->stats().bloomLevels > 0) == r->profile().bloom,
+                      "the camera's post-processing (HDR, bloom per profile) runs");
+                AGR_LOG_INFO("SmokeTest", "post-processing: profile {}, HDR {}, bloom levels {}", r->profile().name, r->stats().hdr, r->stats().bloomLevels);
+            }
             check(m_shared->animation && m_shared->animation->animation().currentState(scene.findByName("Sprout")) == "Idle",
                   "the character plays its imported Idle clip");
             stopPlay();

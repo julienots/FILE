@@ -333,3 +333,81 @@ TEST_CASE("skinned model: the mesh follows its joints (GPU skinning)") {
     CHECK_MESSAGE(near(f.at(head), 0, 0, 0), f.at(head));
     CHECK(gpu().device->validationErrorCount() == 0);
 }
+
+TEST_CASE("post-processing: HDR bloom, color grading, vignette, FXAA, UI untouched") {
+    Render3DFixture f;
+    f.camera({0, 0, 5}, {0, 0, 0});
+    // A very bright (emissive) small sphere on black.
+    MaterialData glow;
+    glow.baseColor = {0, 0, 0, 1};
+    glow.emissive = {1.0f, 0.6f, 0.2f, 1.0f};
+    glow.emissiveIntensity = 8.0f;
+    REQUIRE(f.materials.save("assets://glow.agrmat", glow));
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, 0}, Vec3{0.8f});
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://glow.agrmat";
+    f.settle();
+    const Vec3 edgePoint{0.75f, 0.0f, 0.0f};  // just outside the sphere's silhouette
+    CHECK_MESSAGE(near(f.at(edgePoint), 0, 0, 0, 2), f.at(edgePoint));
+    CHECK_FALSE(f.renderer.stats().postProcessing);
+
+    const auto cam = f.scene.findByName("Camera");
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(cam);
+    post.vignette = 0.0f;
+    post.fxaa = false;
+    f.frame();
+    CHECK(f.renderer.stats().postProcessing);
+    CHECK(f.renderer.stats().hdr == gpu().device->info().halfFloatRenderTargets);
+    CHECK(f.renderer.stats().bloomLevels >= 3);
+    const Rgba halo = f.at(edgePoint);
+    CHECK_MESSAGE(halo.r > 25, halo);  // the glow spreads past the edge
+    CHECK(halo.r >= halo.b);
+    CHECK_MESSAGE(f.at({0, 0, 0}).r > 240, f.at({0, 0, 0}));  // the core stays saturated
+
+    // Grading: no saturation = gray; a red filter keeps only red.
+    post.bloom = false;
+    post.saturation = 0.0f;
+    f.frame();
+    const Rgba gray = f.at({0, 0, 0});
+    CHECK_MESSAGE((std::abs(gray.r - gray.g) < 3 && std::abs(gray.g - gray.b) < 3 && gray.r > 100), gray);
+    post.saturation = 1.0f;
+    post.colorFilter = {1, 0, 0, 1};
+    f.frame();
+    const Rgba red = f.at({0, 0, 0});
+    CHECK_MESSAGE((red.r > 200 && red.g < 5 && red.b < 5), red);
+
+    // Vignette darkens the corners of a uniform background.
+    post.colorFilter = {1, 1, 1, 1};
+    f.scene.registry().get<CameraComponent>(cam).clearColor = {0.5f, 0.5f, 0.5f, 1.0f};
+    post.vignette = 1.0f;
+    post.filmicToneMapping = false;
+    f.frame();
+    auto& d = *gpu().device;
+    CHECK(pixel(d, 1, 1).r + 30 < pixel(d, kWidth / 2, 2).r);
+
+    // FXAA blends the jagged edge of a white quad on black (MSAA is off in this fixture).
+    post.vignette = 0.0f;
+    f.scene.registry().get<CameraComponent>(cam).clearColor = {0, 0, 0, 1};
+    f.scene.registry().get<MeshRendererComponent>(ball).material.clear();
+    f.scene.registry().get<MeshRendererComponent>(ball).color = {1, 1, 1, 1};
+    MaterialData white;
+    white.baseColor = {1, 1, 1, 1};
+    white.unlit = true;
+    REQUIRE(f.materials.save("assets://white.agrmat", white));
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://white.agrmat";
+    auto countMid = [&] {
+        std::vector<u8> px;
+        REQUIRE(d.readBackbuffer(0, 0, kWidth, kHeight, px));
+        int mid = 0;
+        for (usize i = 0; i < px.size(); i += 4)
+            if (px[i] > 30 && px[i] < 225) ++mid;
+        return mid;
+    };
+    post.fxaa = false;
+    f.frame();
+    const int hard = countMid();
+    post.fxaa = true;
+    f.frame();
+    const int smooth = countMid();
+    CHECK_MESSAGE(smooth > hard + 10, "edge pixels without FXAA: " << hard << ", with: " << smooth);
+    CHECK(d.validationErrorCount() == 0);
+}

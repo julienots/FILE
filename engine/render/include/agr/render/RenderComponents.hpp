@@ -81,6 +81,21 @@ struct EnvironmentComponent {
     float exposure = 1.0f;  ///< Multiplier before tone mapping (ACES).
 };
 
+/// Full-screen effects of the camera's image (first active one in the scene). Rendering
+/// then goes through an HDR target (when the GPU supports it) and a composite pass.
+struct PostProcessComponent {
+    bool bloom = true;              ///< Glow around bright areas (emissive materials, sun on metal...).
+    float bloomIntensity = 0.6f;
+    float bloomThreshold = 1.0f;    ///< Linear brightness above which pixels glow.
+    float bloomRadius = 1.0f;       ///< Spread of the glow.
+    bool fxaa = true;               ///< Anti-aliasing filter on edges (cheap; complements or replaces MSAA).
+    bool filmicToneMapping = true;  ///< ACES curve (3D); off: colors are kept as they are (2D, flat art).
+    float contrast = 1.0f;
+    float saturation = 1.0f;
+    math::Color colorFilter{1.0f, 1.0f, 1.0f, 1.0f};
+    float vignette = 0.2f;          ///< Darkened corners, 0..1.
+};
+
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };
 
 /// Draws a built-in mesh or one mesh of an imported model with PBR materials.

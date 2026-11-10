@@ -494,7 +494,10 @@ public:
         ++m_stats.textureBinds;
         VkTextureRes* t = m_textures.get(h);
         if (t && t->img.layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-            if (m_inPass) AGR_LOG_ERROR("RHI", "texture bound inside a pass is not in a readable layout (bind it before beginPass)");
+            if (m_inPass) {
+                AGR_LOG_ERROR("RHI", "texture bound inside a pass is not in a readable layout (bind it before beginPass)");
+                ++m_validationErrors;
+            }
             else if (m_recording) transition(cmd(), t->img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
     }
@@ -504,6 +507,7 @@ public:
         if (!t || t->img.layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) return;
         if (!m_recording || m_inPass) {
             AGR_LOG_ERROR("RHI", "prepareTextureForSampling must be called inside a frame, outside a pass");
+            ++m_validationErrors;
             return;
         }
         transition(cmd(), t->img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -800,6 +804,7 @@ Status VulkanDevice::initialize(const VulkanPlatform& platform) {
     const VkSampleCountFlags sc = m_props.limits.framebufferColorSampleCounts & m_props.limits.framebufferDepthSampleCounts;
     m_info.maxSamples = (sc & VK_SAMPLE_COUNT_8_BIT) ? 8 : (sc & VK_SAMPLE_COUNT_4_BIT) ? 4 : (sc & VK_SAMPLE_COUNT_2_BIT) ? 2 : 1;
     m_info.backend = Backend::Vulkan;
+    m_info.halfFloatRenderTargets = true;  // R16G16B16A16_SFLOAT color attachments are mandatory in Vulkan
     m_info.apiVersion = "Vulkan " + std::to_string(VK_API_VERSION_MAJOR(m_props.apiVersion)) + "." +
                         std::to_string(VK_API_VERSION_MINOR(m_props.apiVersion)) + "." +
                         std::to_string(VK_API_VERSION_PATCH(m_props.apiVersion));

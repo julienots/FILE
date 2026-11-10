@@ -334,6 +334,15 @@ void buildShowcase3D(Scene& scene) {
     reg.emplace<CameraComponent>(cam).fieldOfView = math::radians(50.0f);
     lookAt(scene, cam, {0.0f, 3.6f, 9.5f}, {0.0f, 0.5f, 0.0f});
     reg.emplace<ScriptComponent>(cam).script = "assets://scripts/ball_launcher.lua";  // Space / click / tap: throw balls
+    {
+        // HDR: the neon bar and the sun's highlights glow; slight vignette and contrast.
+        auto& pp = reg.emplace<PostProcessComponent>(cam);
+        pp.bloomIntensity = 0.5f;
+        pp.bloomThreshold = 1.2f;
+        pp.contrast = 1.05f;
+        pp.saturation = 1.08f;
+        pp.vignette = 0.25f;
+    }
 
     const auto sunE = scene.createEntity("Sun");
     auto& sunL = reg.emplace<DirectionalLightComponent>(sunE);

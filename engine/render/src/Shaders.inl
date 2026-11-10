@@ -58,7 +58,8 @@ void main() {
         float att = clamp(1.0 - length(d) / u_lightPosRadius[i].w, 0.0, 1.0);
         light += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w);
     }
-    o_color = vec4(pow(clamp(c.rgb * light, 0.0, 1.0), vec3(1.0 / 2.2)), c.a);
+    vec3 lit = c.rgb * light;
+    o_color = vec4(u_fogParams.w > 0.5 ? lit : pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2)), c.a);
 }
 )";
 
@@ -69,7 +70,126 @@ in vec4 v_color;
 layout(location = 0) out vec4 o_color;
 void main() {
     vec4 c = texture(u_texture, v_uv) * v_color;
-    o_color = vec4(pow(c.rgb, vec3(1.0 / 2.2)), c.a);
+    o_color = vec4(u_fogParams.w > 0.5 ? c.rgb : pow(c.rgb, vec3(1.0 / 2.2)), c.a);  // linear for the HDR post chain
+}
+)";
+
+// ----------------------------------------------------------------- post-processing
+// Full-screen triangle; texture coordinates come from gl_FragCoord (same convention for
+// render targets on every backend).
+inline constexpr const char* kPostVertex = R"(
+layout(location = 0) in vec2 a_position;
+void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
+)";
+
+inline constexpr const char* kPostBlock = R"(
+layout(std140) uniform PostData {
+    vec4 u_texel;      // 1 / source size (xy), 1 / target size (zw)
+    vec4 u_bloom;      // threshold, soft knee, intensity, upsample radius
+    vec4 u_grade;      // contrast, saturation, vignette, 1 = filmic tone mapping (HDR input)
+    vec4 u_filter;     // color filter (rgb), 1 = HDR input
+};
+)";
+
+/// Bright pass + first half-resolution downsample (soft threshold, firefly clamp).
+inline constexpr const char* kBloomPrefilter = R"(
+uniform sampler2D u_source;
+layout(location = 0) out vec4 o_color;
+vec3 sampleBox(vec2 uv) {
+    vec2 d = u_texel.xy;
+    return 0.25 * (texture(u_source, uv + vec2(-d.x, -d.y)).rgb + texture(u_source, uv + vec2(d.x, -d.y)).rgb +
+                   texture(u_source, uv + vec2(-d.x, d.y)).rgb + texture(u_source, uv + vec2(d.x, d.y)).rgb);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec3 c = min(sampleBox(uv), vec3(64.0));
+    float b = max(c.r, max(c.g, c.b));
+    float knee = u_bloom.x * u_bloom.y;
+    float soft = clamp(b - u_bloom.x + knee, 0.0, 2.0 * knee);
+    soft = soft * soft / (4.0 * knee + 1e-5);
+    float contribution = max(soft, b - u_bloom.x) / max(b, 1e-5);
+    o_color = vec4(c * contribution, 1.0);
+}
+)";
+
+inline constexpr const char* kBloomDownsample = R"(
+uniform sampler2D u_source;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec2 d = u_texel.xy;
+    vec3 c = 0.5 * texture(u_source, uv).rgb;
+    c += 0.125 * (texture(u_source, uv + vec2(-d.x, -d.y)).rgb + texture(u_source, uv + vec2(d.x, -d.y)).rgb +
+                  texture(u_source, uv + vec2(-d.x, d.y)).rgb + texture(u_source, uv + vec2(d.x, d.y)).rgb);
+    o_color = vec4(c, 1.0);
+}
+)";
+
+/// 3x3 tent filter of the smaller level, added (blending) to the larger one.
+inline constexpr const char* kBloomUpsample = R"(
+uniform sampler2D u_source;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec2 d = u_texel.xy * u_bloom.w;
+    vec3 c = 4.0 * texture(u_source, uv).rgb;
+    c += 2.0 * (texture(u_source, uv + vec2(d.x, 0.0)).rgb + texture(u_source, uv - vec2(d.x, 0.0)).rgb +
+                texture(u_source, uv + vec2(0.0, d.y)).rgb + texture(u_source, uv - vec2(0.0, d.y)).rgb);
+    c += texture(u_source, uv + d).rgb + texture(u_source, uv - d).rgb + texture(u_source, uv + vec2(d.x, -d.y)).rgb +
+         texture(u_source, uv + vec2(-d.x, d.y)).rgb;
+    o_color = vec4(c / 16.0, 1.0);
+}
+)";
+
+/// Scene + bloom, tone mapping (HDR), color grading, vignette; luma in alpha for FXAA.
+inline constexpr const char* kComposite = R"(
+uniform sampler2D u_scene;
+uniform sampler2D u_bloomTex;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec3 c = texture(u_scene, uv).rgb;
+    if (u_bloom.z > 0.0) c += texture(u_bloomTex, uv).rgb * u_bloom.z;
+    if (u_filter.w > 0.5) {  // HDR input: linear light -> display
+        c *= u_filter.rgb;
+        if (u_grade.w > 0.5) c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+        c = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+    } else {
+        c *= u_filter.rgb;
+    }
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));
+    c = mix(vec3(luma), c, u_grade.y);
+    c = (c - 0.5) * u_grade.x + 0.5;
+    vec2 v = uv - 0.5;
+    c *= 1.0 - u_grade.z * smoothstep(0.35, 0.95, length(v) * 1.414);
+    c = clamp(c, 0.0, 1.0);
+    o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+}
+)";
+
+/// FXAA (Lottes, "FXAA 3.11 PC" reduced form): luma from alpha.
+inline constexpr const char* kFxaa = R"(
+uniform sampler2D u_source;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec2 rcp = u_texel.xy;
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    float lumaNW = texture(u_source, uv + vec2(-1.0, -1.0) * rcp).a;
+    float lumaNE = texture(u_source, uv + vec2(1.0, -1.0) * rcp).a;
+    float lumaSW = texture(u_source, uv + vec2(-1.0, 1.0) * rcp).a;
+    float lumaSE = texture(u_source, uv + vec2(1.0, 1.0) * rcp).a;
+    vec4 center = texture(u_source, uv);
+    float lumaM = center.a;
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    vec2 dir = vec2(-((lumaNW + lumaNE) - (lumaSW + lumaSE)), (lumaNW + lumaSW) - (lumaNE + lumaSE));
+    float reduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 / 8.0), 1.0 / 128.0);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
+    dir = clamp(dir * rcpDirMin, vec2(-8.0), vec2(8.0)) * rcp;
+    vec3 a = 0.5 * (texture(u_source, uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture(u_source, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+    vec3 b = a * 0.5 + 0.25 * (texture(u_source, uv - dir * 0.5).rgb + texture(u_source, uv + dir * 0.5).rgb);
+    float lumaB = dot(b, vec3(0.299, 0.587, 0.114));
+    o_color = vec4((lumaB < lumaMin || lumaB > lumaMax) ? a : b, 1.0);
 }
 )";
 

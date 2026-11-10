@@ -254,6 +254,12 @@ TEST_CASE("the 3D showcase references shipped models and materials; models insta
         if (!m.texture.empty()) CHECK(f.engine->vfs().exists(m.texture));
     });
     CHECK(meshRenderers > 15);
+    usize postEffects = 0;
+    reg.view<CameraComponent, PostProcessComponent>().each([&](ecs::Entity, CameraComponent&, PostProcessComponent& pp) {
+        ++postEffects;
+        CHECK(pp.bloom);
+    });
+    CHECK(postEffects == 1);
     usize pointLights = 0;
     reg.view<PointLightComponent>().each([&](ecs::Entity, PointLightComponent&) { ++pointLights; });
     CHECK(pointLights >= 1);

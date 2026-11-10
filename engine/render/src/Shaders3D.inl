@@ -26,11 +26,18 @@ layout(std140) uniform LightData {
 
 /// Shared: tone mapping and output encoding.
 inline constexpr const char* kToneMapping = R"(
+// u_fogParams.z = exposure; u_fogParams.w = 1 when post-processing tone maps the frame (HDR
+// target): shaders then output linear light.
 vec3 agrToneMap(vec3 c) {
     c *= u_fogParams.z;  // exposure
+    if (u_fogParams.w > 0.5) return c;
     // ACES filmic curve (Narkowicz 2015 fit).
     vec3 m = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
     return pow(m, vec3(1.0 / 2.2));
+}
+vec3 agrUnlit(vec3 c) {
+    if (u_fogParams.w > 0.5) return c;
+    return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
 }
 )";
 
@@ -161,7 +168,7 @@ void main() {
     base.a = 1.0;
 #endif
     if (u_flags.y > 0.5) {  // unlit
-        o_color = vec4(pow(clamp(base.rgb, 0.0, 1.0), vec3(1.0 / 2.2)), base.a);
+        o_color = vec4(agrUnlit(base.rgb), base.a);
         return;
     }
     vec4 mr = texture(u_metalRoughMap, v_uv);

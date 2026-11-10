@@ -16,6 +16,7 @@ namespace agr {
 
 using math::Mat4;
 using math::Vec3;
+using math::Vec2;
 using math::Vec4;
 
 namespace {
@@ -64,6 +65,8 @@ Renderer::~Renderer() {
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);
     m_device.destroyPipeline(m_overlayPipeline);
+    for (auto p : m_postPipelines) m_device.destroyPipeline(p);
+    releasePostTargets();
     m_device.destroyBuffer(m_overlayVertices);
     m_device.destroyBuffer(m_overlayIndices);
     m_device.destroyTexture(m_softParticle);
@@ -74,6 +77,7 @@ Status Renderer::initialize() {
     m_glClipSpace = m_device.info().backend != rhi::Backend::Vulkan;
     if (Status s = createPipelines(); !s) return s;
     if (Status s = create3DPipelines(); !s) return s;
+    if (Status s = createPostPipelines(); !s) return s;
     if (Status s = createMeshes(); !s) return s;
     return {};
 }
@@ -82,7 +86,7 @@ Status Renderer::createPipelines() {
     rhi::PipelineDesc sprite;
     sprite.debugName = "agr.sprite";
     sprite.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kSpriteVertex;
-    sprite.shader.fragment = shaders::kSpriteFragment;
+    sprite.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kSpriteFragment;
     sprite.layout.stride = sizeof(SpriteVertex);
     sprite.layout.attributes = {{0, rhi::VertexFormat::Float3, offsetof(SpriteVertex, position)},
                                 {1, rhi::VertexFormat::Float2, offsetof(SpriteVertex, uv)},
@@ -364,6 +368,18 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         frame.fogParams = Vec4(env.fogStart, std::max(env.fogEnd, env.fogStart + 0.01f), std::max(env.exposure, 0.0f), 0.0f);
         m_drawSky = gradient && rv.projection == Projection::Perspective;
     }
+    // Post-processing: first active PostProcess component (not for direct previews).
+    PostProcessComponent post;
+    bool postActive = false;
+    if (!rv.direct)
+        reg.view<PostProcessComponent>().each([&](ecs::Entity e, PostProcessComponent& c) {
+            if (!postActive && scene.isActiveInHierarchy(e)) {
+                post = c;
+                postActive = true;
+            }
+        });
+    const bool postHdr = postActive && m_device.info().halfFloatRenderTargets;
+    frame.fogParams.w = postHdr ? 1.0f : 0.0f;  // shaders output linear light; the composite pass tone maps
     m_uniformStaging.clear();
     collect3D(scene, rv, view, viewProj, frustum, aspect, hiddenInEditor, frame);  // pushes the frame uniforms first
 
@@ -576,8 +592,42 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         if (!m_overlay.empty()) {
             FrameUniforms ui = frame;
             ui.viewProj = Mat4::orthographic(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, -1.0f, 1.0f, range);
+            ui.fogParams.w = 0.0f;  // the UI is drawn after post-processing, in display colors
             m_overlayFrameOffset = pushUniforms(&ui, sizeof ui);
             m_stats.overlayQuads = static_cast<u32>(m_overlay.indices.size() / 6);
+        }
+    }
+
+    // Post passes: targets and their uniforms (before the uniform upload).
+    m_postPasses.clear();
+    if (postActive) {
+        const bool bloom = post.bloom && m_profile.bloom && post.bloomIntensity > 0.0f;
+        const bool fxaa = post.fxaa && m_profile.fxaa;
+        if (ensurePostTargets(renderW, renderH, samples, width, height, postHdr, bloom, fxaa)) {
+            struct PostUniforms {
+                Vec4 texel, bloom, grade, filter;
+            };
+            const rhi::RenderTargetHandle sceneColor = m_postResolve ? m_postResolve : m_postScene;
+            auto add = [&](PostPass::Kind kind, rhi::RenderTargetHandle src, rhi::RenderTargetHandle dst, Vec2 srcSize, Vec2 dstSize) {
+                PostUniforms u;
+                u.texel = Vec4(1.0f / srcSize.x, 1.0f / srcSize.y, 1.0f / dstSize.x, 1.0f / dstSize.y);
+                u.bloom = Vec4(std::max(0.0f, post.bloomThreshold), 0.5f, bloom ? post.bloomIntensity : 0.0f, std::clamp(post.bloomRadius, 0.25f, 4.0f));
+                u.grade = Vec4(post.contrast, post.saturation, std::clamp(post.vignette, 0.0f, 1.0f), post.filmicToneMapping ? 1.0f : 0.0f);
+                u.filter = Vec4(post.colorFilter.x, post.colorFilter.y, post.colorFilter.z, postHdr ? 1.0f : 0.0f);
+                m_postPasses.push_back({kind, src, dst, pushUniforms(&u, sizeof u)});
+            };
+            const Vec2 renderSize{static_cast<float>(renderW), static_cast<float>(renderH)}, outSize{static_cast<float>(width), static_cast<float>(height)};
+            auto levelSize = [&](usize i) { return Vec2{static_cast<float>(m_bloomSizes[i].first), static_cast<float>(m_bloomSizes[i].second)}; };
+            if (bloom && !m_bloomLevels.empty()) {
+                add(PostPass::Prefilter, sceneColor, m_bloomLevels[0], renderSize, levelSize(0));
+                for (usize i = 1; i < m_bloomLevels.size(); ++i) add(PostPass::Down, m_bloomLevels[i - 1], m_bloomLevels[i], levelSize(i - 1), levelSize(i));
+                for (usize i = m_bloomLevels.size() - 1; i >= 1; --i) add(PostPass::Up, m_bloomLevels[i], m_bloomLevels[i - 1], levelSize(i), levelSize(i - 1));
+            }
+            add(PostPass::Composite, sceneColor, fxaa ? m_postLdr : outputTarget, renderSize, outSize);
+            if (fxaa) add(PostPass::Fxaa, m_postLdr, outputTarget, outSize, outSize);
+            m_stats.postProcessing = true;
+            m_stats.hdr = postHdr;
+            m_stats.bloomLevels = bloom ? static_cast<u32>(m_bloomLevels.size()) : 0u;
         }
     }
 
@@ -589,9 +639,10 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     if (m_uniformCapacity > 0) drawShadowPass();
 
     // ------------------------------------------------------------ passes
-    const bool offscreen = samples > 1 || renderW != width || renderH != height;
+    const bool postPath = !m_postPasses.empty();
+    const bool offscreen = !postPath && (samples > 1 || renderW != width || renderH != height);
     if (offscreen) ensureTargets(renderW, renderH, samples, samples > 1 && (renderW != width || renderH != height));
-    const rhi::RenderTargetHandle target = offscreen ? m_sceneTarget : outputTarget;
+    const rhi::RenderTargetHandle target = postPath ? m_postScene : offscreen ? m_sceneTarget : outputTarget;
     m_device.beginPass(target, {true, rv.clearColor, true, 1.0f});
     if (m_uniformCapacity > 0) {
         drawMeshItems(m_opaqueItems, 0, false);
@@ -599,8 +650,17 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         drawMeshItems(m_transparentItems, static_cast<u32>(m_opaqueItems.size()), false);
         drawSprites(m_spriteItems);
     }
-    if (!offscreen) drawOverlay();  // same pass: the overlay ignores depth
+    if (!offscreen && !postPath) drawOverlay();  // same pass: the overlay ignores depth
     m_device.endPass();
+    if (postPath) {
+        if (m_postResolve) m_device.blit(m_postScene, m_postResolve, rhi::Filter::Nearest);  // MSAA resolve
+        runPost(outputTarget);
+        if (!m_overlay.empty()) {
+            m_device.beginPass(outputTarget, {false, {}, false, 1.0f});
+            drawOverlay();
+            m_device.endPass();
+        }
+    }
     if (offscreen && m_sceneTarget) {
         if (m_resolveTarget) {
             m_device.blit(m_sceneTarget, m_resolveTarget, rhi::Filter::Nearest);  // MSAA resolve
@@ -736,6 +796,94 @@ void OverlayDrawList::quad(math::Vec2 mn, math::Vec2 mx, math::Vec4 uv, u32 colo
 u32 packColor(math::Vec4 c) {
     auto b = [](float v) { return static_cast<u32>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
     return b(c.x) | (b(c.y) << 8) | (b(c.z) << 16) | (b(c.w) << 24);
+}
+
+Status Renderer::createPostPipelines() {
+    const char* fragments[5] = {shaders::kBloomPrefilter, shaders::kBloomDownsample, shaders::kBloomUpsample, shaders::kComposite, shaders::kFxaa};
+    const char* names[5] = {"agr.post.prefilter", "agr.post.down", "agr.post.up", "agr.post.composite", "agr.post.fxaa"};
+    for (int k = 0; k < 5; ++k) {
+        rhi::PipelineDesc p;
+        p.debugName = names[k];
+        p.shader.vertex = shaders::kPostVertex;
+        p.shader.fragment = std::string(shaders::kPostBlock) + fragments[k];
+        p.layout.stride = sizeof(math::Vec2);
+        p.layout.attributes = {{0, rhi::VertexFormat::Float2, 0}};
+        p.cull = rhi::CullMode::None;
+        p.depthTest = false;
+        p.depthWrite = false;
+        p.blend = k == PostPass::Up ? rhi::BlendMode::Additive : rhi::BlendMode::Opaque;
+        p.uniformBlocks = {"PostData"};
+        p.samplers = k == PostPass::Composite ? std::vector<std::string>{"u_scene", "u_bloomTex"} : std::vector<std::string>{"u_source"};
+        auto r = m_device.createPipeline(p);
+        if (!r) return r.error();
+        m_postPipelines[k] = r.value();
+    }
+    return {};
+}
+
+void Renderer::releasePostTargets() {
+    for (rhi::RenderTargetHandle t : {m_postScene, m_postResolve, m_postLdr}) m_device.destroyRenderTarget(t);
+    for (rhi::RenderTargetHandle t : m_bloomLevels) m_device.destroyRenderTarget(t);
+    m_postScene = m_postResolve = m_postLdr = {};
+    m_bloomLevels.clear();
+    m_bloomSizes.clear();
+    m_postW = m_postH = m_postSamples = m_postOutW = m_postOutH = 0;
+}
+
+bool Renderer::ensurePostTargets(u32 w, u32 h, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa) {
+    if (m_postScene && w == m_postW && h == m_postH && samples == m_postSamples && outW == m_postOutW && outH == m_postOutH && hdr == m_postHdr &&
+        bloom == m_postBloom && fxaa == m_postFxaa)
+        return true;
+    releasePostTargets();
+    const rhi::TextureFormat color = hdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8;
+    auto make = [&](u32 tw, u32 th, rhi::TextureFormat f, bool depth, u32 s, const char* name) -> rhi::RenderTargetHandle {
+        auto t = m_device.createRenderTarget({.width = std::max(1u, tw), .height = std::max(1u, th), .colorFormat = f, .depth = depth, .samples = s, .debugName = name});
+        if (!t) {
+            AGR_LOG_ERROR("Render", "post-processing target '{}': {}", name, t.error().message);
+            return {};
+        }
+        return t.value();
+    };
+    m_postScene = make(w, h, color, true, samples, "agr.post.scene");
+    if (samples > 1) m_postResolve = make(w, h, color, false, 1, "agr.post.resolve");
+    if (fxaa) m_postLdr = make(outW, outH, rhi::TextureFormat::RGBA8, false, 1, "agr.post.ldr");
+    if (bloom) {
+        u32 bw = std::max(1u, w / 2), bh = std::max(1u, h / 2);
+        for (int level = 0; level < 6 && std::min(bw, bh) >= 8; ++level) {
+            m_bloomLevels.push_back(make(bw, bh, color, false, 1, "agr.post.bloom"));
+            m_bloomSizes.push_back({bw, bh});
+            bw = std::max(1u, bw / 2);
+            bh = std::max(1u, bh / 2);
+        }
+    }
+    const bool ok = m_postScene && (samples == 1 || m_postResolve) && (!fxaa || m_postLdr) &&
+                    std::all_of(m_bloomLevels.begin(), m_bloomLevels.end(), [](rhi::RenderTargetHandle t) { return static_cast<bool>(t); });
+    if (!ok) {
+        releasePostTargets();
+        return false;  // the frame is drawn without post-processing
+    }
+    m_postW = w, m_postH = h, m_postSamples = samples, m_postOutW = outW, m_postOutH = outH;
+    m_postHdr = hdr, m_postBloom = bloom, m_postFxaa = fxaa;
+    return true;
+}
+
+void Renderer::runPost(rhi::RenderTargetHandle output) {
+    rhi::TextureHandle bloom = m_bloomLevels.empty() ? m_assets.whiteTexture() : m_device.renderTargetTexture(m_bloomLevels[0]);
+    for (const PostPass& pass : m_postPasses) {
+        const rhi::TextureHandle src = m_device.renderTargetTexture(pass.source);
+        m_device.prepareTextureForSampling(src);
+        const bool composite = pass.kind == PostPass::Composite;
+        if (composite && !m_bloomLevels.empty()) m_device.prepareTextureForSampling(bloom);
+        // Upsampling adds into the target: keep its content (loaded); other passes overwrite every pixel.
+        m_device.beginPass(pass.target ? pass.target : output, {false, {}, false, 1.0f});
+        m_device.bindPipeline(m_postPipelines[pass.kind]);
+        m_device.bindUniformBuffer(0, m_uniformBuffer, pass.uniformOffset, sizeof(Vec4) * 4);
+        m_device.bindTexture(0, src);
+        if (composite) m_device.bindTexture(1, bloom);
+        m_device.bindVertexBuffer(m_skyVertices);
+        m_device.draw(3);
+        m_device.endPass();
+    }
 }
 
 } // namespace agr
