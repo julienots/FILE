@@ -19,11 +19,15 @@ struct FrameUniforms {
     math::Vec4 horizonColor;
     math::Vec4 fogColor;
     math::Vec4 fogParams;
-    math::Mat4 shadowMatrix;
-    math::Vec4 shadowParams;
-    math::Vec4 shadowParams2;
+    math::Mat4 shadowMatrix[4];   // world -> atlas uv + depth, per cascade
+    math::Vec4 shadowRect[4];     // atlas uv bounds of each cascade (min u, min v, max u, max v)
+    math::Vec4 shadowSplits;      // view depth where each cascade ends
+    math::Vec4 shadowOffsets;     // normal offset (world units) per cascade
+    math::Vec4 shadowView;        // camera forward (xyz)
+    math::Vec4 shadowParams;      // cascade count (0 = off), depth bias, blend band (fraction), strength
+    math::Vec4 shadowParams2;     // atlas texel size (uv), PCF radius, -, -
 };
-static_assert(sizeof(FrameUniforms) == 368);
+static_assert(sizeof(FrameUniforms) == 672);
 
 struct MaterialUniforms {
     math::Vec4 baseColor;

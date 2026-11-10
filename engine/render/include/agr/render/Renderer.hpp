@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <functional>
 #include <optional>
 #include <string>
@@ -97,7 +98,8 @@ struct RenderStats {
     u32 lights2D = 0;
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
-    u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map.
+    u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map (all cascades).
+    u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     bool postProcessing = false;  ///< PostProcess active this frame.
     bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
@@ -160,7 +162,8 @@ public:
     /// Imported models and .agrmat materials used by mesh renderers.
     void setModels(ModelLibrary* models) { m_models = models; }
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
-    /// Depth texture of the last shadow pass (null when shadows are off). Debug views.
+    /// Depth texture of the last shadow pass (null when shadows are off): an atlas of the
+    /// cascades, 2 x 2 tiles when there is more than one. Debug views.
     rhi::TextureHandle shadowMap() const;
     /// Game UI drawn over every view with RenderView::overlay (null = none).
     void setOverlaySource(OverlaySource* source) { m_overlaySource = source; }
@@ -245,7 +248,7 @@ private:
                     math::Aabb bindBounds, math::Aabb& worldBounds);
     void uploadInstances();
     void drawShadowPass();
-    void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow);
+    void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade = 0);
     void drawSky();
     void ensureTargets(u32 renderW, u32 renderH, u32 samples, bool needResolve);
     void releaseTargets();
@@ -305,17 +308,22 @@ private:
     u32 m_lightsOffset = 0;
     GpuMesh m_meshes[4];
     // 3D frame data
-    std::vector<MeshItem> m_opaqueItems, m_transparentItems, m_shadowItems;
+    static constexpr u32 kMaxCascades = 4;
+    std::vector<MeshItem> m_opaqueItems, m_transparentItems;
+    std::array<std::vector<MeshItem>, kMaxCascades> m_shadowItems;  // casters per cascade
     std::vector<InstanceData> m_instances, m_instanceStaging;
     std::vector<FrameMaterial> m_frameMaterials;
     std::unordered_map<u64, u32> m_materialSlots;
     rhi::BufferHandle m_instanceBuffer;
     usize m_instanceCapacity = 0;
     rhi::RenderTargetHandle m_shadowTarget;
-    u32 m_shadowSize = 0;
+    u32 m_shadowSize = 0;     // atlas size (texels)
+    u32 m_shadowCascades = 0; // cascades this frame
+    std::array<math::Vec4, kMaxCascades> m_cascadeViewports{};  // x, y, w, h in the atlas (bottom-left origin)
     bool m_shadowsActive = false;
     bool m_drawSky = false;
-    u32 m_frameOffset = 0, m_shadowFrameOffset = 0, m_lights3DOffset = 0;
+    u32 m_frameOffset = 0, m_lights3DOffset = 0;
+    std::array<u32, kMaxCascades> m_shadowFrameOffsets{};
 
     rhi::BufferHandle m_uniformBuffer;
     usize m_uniformCapacity = 0;

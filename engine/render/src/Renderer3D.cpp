@@ -194,11 +194,12 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     const auto range = m_glClipSpace ? Mat4::DepthRange::NegativeOneToOne : Mat4::DepthRange::ZeroToOne;
     m_opaqueItems.clear();
     m_transparentItems.clear();
-    m_shadowItems.clear();
+    for (auto& list : m_shadowItems) list.clear();
     m_instances.clear();
     m_frameMaterials.clear();
     m_materialSlots.clear();
     m_shadowsActive = false;
+    m_shadowCascades = 0;
 
     // ------------------------------------------------------------ shadow setup
     const DirectionalLightComponent* sun = nullptr;
@@ -207,16 +208,20 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             if (sun || !w.activeInHierarchy) return;
             sun = &l;
         });
-    Mat4 lightViewProj;
-    math::Frustum lightFrustum;
+    std::array<Mat4, kMaxCascades> lightViewProj{};
+    std::array<math::Frustum, kMaxCascades> lightFrustum{};
     const bool wantShadows = sun && sun->castShadows && sun->intensity > 0.0f && m_profile.shadowMapSize > 0 &&
                              rv.projection == Projection::Perspective &&
                              frame.lightColor.x + frame.lightColor.y + frame.lightColor.z > 0.0f;
     if (wantShadows) {
-        const u32 size = std::clamp<u32>(m_profile.shadowMapSize, 256, std::min<u32>(4096, m_device.info().maxTextureSize));
+        // One depth atlas: a single map, or 2 x 2 tiles for 2 to 4 cascades (at most 4096 texels).
+        const u32 cascades = std::clamp<u32>(m_profile.shadowCascades, 1, kMaxCascades);
+        const u32 maxAtlas = std::min<u32>(4096, m_device.info().maxTextureSize);
+        const u32 size = std::clamp<u32>(cascades > 1 ? m_profile.shadowMapSize * 2 : m_profile.shadowMapSize, 256, maxAtlas);
         if (!m_shadowTarget || m_shadowSize != size) {
             m_device.destroyRenderTarget(m_shadowTarget);
             m_shadowTarget = {};
+            m_shadowSize = 0;
             auto rt = m_device.createRenderTarget({.width = size, .height = size, .color = false, .depth = true, .sampleableDepth = true,
                                                    .debugName = "agr.shadowmap"});
             if (rt) {
@@ -227,53 +232,85 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             }
         }
         if (m_shadowTarget) {
-            // Bounding sphere of the camera frustum slice [near, shadowDistance]: its size does not
-            // change when the camera turns, so shadows do not swim.
-            RenderView slice = rv;
-            slice.farPlane = std::clamp(sun->shadowDistance, rv.nearPlane + 0.01f, rv.farPlane);
-            const Mat4 invSlice = math::inverse(slice.projectionMatrix(aspect, m_glClipSpace) * view);
-            const float zNear = m_glClipSpace ? -1.0f : 0.0f;
-            Vec3 corners[8];
-            Vec3 center{};
-            for (int i = 0; i < 8; ++i) {
-                const Vec4 c = invSlice * Vec4((i & 1) ? 1.0f : -1.0f, (i & 2) ? 1.0f : -1.0f, (i & 4) ? 1.0f : zNear, 1.0f);
-                corners[i] = Vec3{c.x, c.y, c.z} / c.w;
-                center = center + corners[i] * 0.125f;
+            const u32 tile = cascades > 1 ? m_shadowSize / 2 : m_shadowSize;
+            const float tileUv = static_cast<float>(tile) / static_cast<float>(m_shadowSize);
+            // Split distances: mix of logarithmic (detail near the camera) and uniform.
+            const float nearZ = std::max(rv.nearPlane, 0.05f);
+            const float farZ = std::clamp(sun->shadowDistance, nearZ + 0.01f, rv.farPlane);
+            std::array<float, kMaxCascades + 1> splits{};
+            splits[0] = nearZ;
+            for (u32 i = 1; i <= cascades; ++i) {
+                const float f = static_cast<float>(i) / static_cast<float>(cascades);
+                const float logSplit = nearZ * std::pow(farZ / nearZ, f);
+                const float uniformSplit = nearZ + (farZ - nearZ) * f;
+                splits[i] = 0.75f * logSplit + 0.25f * uniformSplit;
             }
-            float radius = 0.0f;
-            for (const Vec3& c : corners) radius = std::max(radius, math::length(c - center));
-            radius = std::ceil(radius * 16.0f) / 16.0f;
+            splits[cascades] = farZ;
             const Vec3 L = math::normalize(Vec3{frame.lightDir.x, frame.lightDir.y, frame.lightDir.z});
-            const float back = std::max(radius, 30.0f);  // casters between the light and the visible area
             const Vec3 up = std::fabs(L.y) > 0.99f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
-            const Mat4 lightView = Mat4::lookAt(center - L * (radius + back), center, up);
-            Mat4 lightProj = Mat4::orthographic(-radius, radius, -radius, radius, 0.0f, 2.0f * radius + back, range);
-            // Snap to whole shadow-map texels (stable edges while the camera moves).
-            const Vec4 origin = lightProj * (lightView * Vec4(0, 0, 0, 1));
-            const float half = static_cast<float>(m_shadowSize) * 0.5f;
-            lightProj.c[3].x += (std::round(origin.x * half) - origin.x * half) / half;
-            lightProj.c[3].y += (std::round(origin.y * half) - origin.y * half) / half;
-            lightViewProj = lightProj * lightView;
-            lightFrustum = math::Frustum::fromMatrix(lightViewProj, range);
+            const float zNear = m_glClipSpace ? -1.0f : 0.0f;
             // Clip space -> texture space: GL stores render targets bottom row first.
-            Mat4 bias;
-            bias.c[0] = {0.5f, 0, 0, 0};
-            bias.c[1] = {0, m_device.info().renderTargetsFlipY ? 0.5f : -0.5f, 0, 0};
-            bias.c[2] = {0, 0, m_glClipSpace ? 0.5f : 1.0f, 0};
-            bias.c[3] = {0.5f, 0.5f, m_glClipSpace ? 0.5f : 0.0f, 1};
-            frame.shadowMatrix = bias * lightViewProj;
-            const float worldTexel = 2.0f * radius / static_cast<float>(m_shadowSize);
-            frame.shadowParams = Vec4(1.0f, 0.0008f, worldTexel * 1.5f, std::clamp(sun->shadowStrength, 0.0f, 1.0f));
+            const bool flipY = m_device.info().renderTargetsFlipY;
+            frame.shadowSplits = Vec4(1e30f, 1e30f, 1e30f, 1e30f);
+            for (u32 c = 0; c < cascades; ++c) {
+                // Bounding sphere of the camera frustum slice: its size does not change when the
+                // camera turns, so shadows do not swim.
+                RenderView slice = rv;
+                slice.nearPlane = splits[c];
+                slice.farPlane = splits[c + 1];
+                const Mat4 invSlice = math::inverse(slice.projectionMatrix(aspect, m_glClipSpace) * view);
+                Vec3 corners[8];
+                Vec3 center{};
+                for (int i = 0; i < 8; ++i) {
+                    const Vec4 p = invSlice * Vec4((i & 1) ? 1.0f : -1.0f, (i & 2) ? 1.0f : -1.0f, (i & 4) ? 1.0f : zNear, 1.0f);
+                    corners[i] = Vec3{p.x, p.y, p.z} / p.w;
+                    center = center + corners[i] * 0.125f;
+                }
+                float radius = 0.0f;
+                for (const Vec3& corner : corners) radius = std::max(radius, math::length(corner - center));
+                radius = std::ceil(radius * 16.0f) / 16.0f;
+                const float back = std::max(radius, 30.0f);  // casters between the light and the visible area
+                const Mat4 lightView = Mat4::lookAt(center - L * (radius + back), center, up);
+                Mat4 lightProj = Mat4::orthographic(-radius, radius, -radius, radius, 0.0f, 2.0f * radius + back, range);
+                // Snap to whole shadow-map texels (stable edges while the camera moves).
+                const Vec4 origin = lightProj * (lightView * Vec4(0, 0, 0, 1));
+                const float half = static_cast<float>(tile) * 0.5f;
+                lightProj.c[3].x += (std::round(origin.x * half) - origin.x * half) / half;
+                lightProj.c[3].y += (std::round(origin.y * half) - origin.y * half) / half;
+                lightViewProj[c] = lightProj * lightView;
+                lightFrustum[c] = math::Frustum::fromMatrix(lightViewProj[c], range);
+                // Tile of the atlas: viewport (bottom-left origin) and where it lands in uv space.
+                const u32 col = cascades > 1 ? c & 1u : 0u, row = cascades > 1 ? c >> 1 : 0u;
+                m_cascadeViewports[c] = Vec4(static_cast<float>(col * tile), static_cast<float>(row * tile), static_cast<float>(tile),
+                                             static_cast<float>(tile));
+                const float u0 = static_cast<float>(col) * tileUv;
+                const float v0 = flipY ? static_cast<float>(row) * tileUv : 1.0f - static_cast<float>(row + 1) * tileUv;
+                Mat4 bias;
+                bias.c[0] = {0.5f * tileUv, 0, 0, 0};
+                bias.c[1] = {0, (flipY ? 0.5f : -0.5f) * tileUv, 0, 0};
+                bias.c[2] = {0, 0, m_glClipSpace ? 0.5f : 1.0f, 0};
+                bias.c[3] = {u0 + 0.5f * tileUv, v0 + 0.5f * tileUv, m_glClipSpace ? 0.5f : 0.0f, 1};
+                frame.shadowMatrix[c] = bias * lightViewProj[c];
+                frame.shadowRect[c] = Vec4(u0, v0, u0 + tileUv, v0 + tileUv);
+                frame.shadowSplits[static_cast<int>(c)] = splits[c + 1];
+                const float worldTexel = 2.0f * radius / static_cast<float>(tile);
+                frame.shadowOffsets[static_cast<int>(c)] = worldTexel * 1.5f;
+            }
+            const Vec3 forward = -Vec3{view.c[0].z, view.c[1].z, view.c[2].z};  // third row of the view matrix
+            frame.shadowView = Vec4(forward, 0.0f);
+            frame.shadowParams = Vec4(static_cast<float>(cascades), 0.0008f, cascades > 1 ? 0.1f : 0.0f, std::clamp(sun->shadowStrength, 0.0f, 1.0f));
             frame.shadowParams2 = Vec4(1.0f / static_cast<float>(m_shadowSize), m_profile.softShadows ? 1.0f : 0.0f, 0, 0);
+            m_shadowCascades = cascades;
             m_shadowsActive = true;
         }
     }
     m_frameOffset = pushUniforms(&frame, sizeof frame);  // first push: offset 0 (sprites rely on it)
-    if (m_shadowsActive) {
+    for (u32 c = 0; c < m_shadowCascades; ++c) {
         FrameUniforms shadowFrame = frame;
-        shadowFrame.viewProj = lightViewProj;
-        m_shadowFrameOffset = pushUniforms(&shadowFrame, sizeof shadowFrame);
+        shadowFrame.viewProj = lightViewProj[c];
+        m_shadowFrameOffsets[c] = pushUniforms(&shadowFrame, sizeof shadowFrame);
     }
+    m_stats.shadowCascades = m_shadowCascades;
 
     // ------------------------------------------------------------ meshes
     if (m_frame % 300 == 0)  // forget the joints of skinned meshes that no longer exist
@@ -317,10 +354,13 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         u32 skinOffset = ~0u;
         if (skinnedMesh) skinOffset = skinPalette(scene, e, mr, *model, w.matrix, bounds, worldBounds);
         const bool visible = frustum.intersects(worldBounds);
-        const bool caster = m_shadowsActive && mr.castShadows && lightFrustum.intersects(worldBounds);
+        u32 casterMask = 0;  // cascades whose light volume contains the mesh
+        if (m_shadowsActive && mr.castShadows)
+            for (u32 c = 0; c < m_shadowCascades; ++c)
+                if (lightFrustum[c].intersects(worldBounds)) casterMask |= 1u << c;
         if (!visible) ++m_stats.meshesCulled;
         else ++m_stats.meshesVisible;
-        if (!visible && !caster) return;
+        if (!visible && !casterMask) return;
 
         InstanceData inst;
         inst.model = w.matrix;
@@ -367,7 +407,9 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             item.skinOffset = skinOffset;
             const bool blend = mat->alphaMode == AlphaMode::Blend;
             if (visible) (blend ? m_transparentItems : m_opaqueItems).push_back(item);
-            if (caster && !blend) m_shadowItems.push_back(item);
+            if (!blend)
+                for (u32 c = 0; c < m_shadowCascades; ++c)
+                    if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
         }
     });
     // Opaque: group identical draws (instancing) and limit state changes.
@@ -380,21 +422,24 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         return a.instance < b.instance;
     };
     std::sort(m_opaqueItems.begin(), m_opaqueItems.end(), byState);
-    std::sort(m_shadowItems.begin(), m_shadowItems.end(), [](const MeshItem& a, const MeshItem& b) {
-        const bool am = a.pipeline / 2 == 1, bm = b.pipeline / 2 == 1;  // alpha-tested casters need their material
-        if (am != bm) return am < bm;
-        if (am && a.material != b.material) return a.material < b.material;
-        if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
-        if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
-        if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
-        return a.instance < b.instance;
-    });
+    m_stats.shadowCasters = 0;
+    for (auto& list : m_shadowItems) {
+        std::sort(list.begin(), list.end(), [](const MeshItem& a, const MeshItem& b) {
+            const bool am = a.pipeline / 2 == 1, bm = b.pipeline / 2 == 1;  // alpha-tested casters need their material
+            if (am != bm) return am < bm;
+            if (am && a.material != b.material) return a.material < b.material;
+            if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
+            if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
+            if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
+            return a.instance < b.instance;
+        });
+        m_stats.shadowCasters += static_cast<u32>(list.size());
+    }
     // Transparent: back to front.
     std::sort(m_transparentItems.begin(), m_transparentItems.end(), [](const MeshItem& a, const MeshItem& b) {
         if (a.depth != b.depth) return a.depth > b.depth;
         return a.instance < b.instance;
     });
-    m_stats.shadowCasters = static_cast<u32>(m_shadowItems.size());
 
     // ------------------------------------------------------------ point / spot lights
     struct Candidate {
@@ -437,10 +482,12 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
 }
 
 void Renderer::uploadInstances() {
-    // Instance records in draw order: opaque, transparent, shadow casters.
+    // Instance records in draw order: opaque, transparent, shadow casters of each cascade.
     m_instanceStaging.clear();
-    for (const auto* list : {&m_opaqueItems, &m_transparentItems, &m_shadowItems})
+    for (const auto* list : {&m_opaqueItems, &m_transparentItems})
         for (const MeshItem& it : *list) m_instanceStaging.push_back(m_instances[it.instance]);
+    for (const auto& list : m_shadowItems)
+        for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
     if (m_instanceStaging.empty()) return;
     const usize bytes = m_instanceStaging.size() * sizeof(InstanceData);
     if (bytes > m_instanceCapacity) {
@@ -520,9 +567,9 @@ u32 Renderer::skinPalette(Scene& scene, ecs::Entity e, const MeshRendererCompone
     return pushUniforms(m_palette.data(), kPaletteBytes);
 }
 
-void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow) {
+void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade) {
     if (items.empty() || !m_instanceBuffer) return;
-    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? m_shadowFrameOffset : m_frameOffset, sizeof(FrameUniforms));
+    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? m_shadowFrameOffsets[cascade] : m_frameOffset, sizeof(FrameUniforms));
     if (!shadow) {
         m_device.bindUniformBuffer(kSlotLights, m_uniformBuffer, m_lights3DOffset, sizeof(LightUniforms));
         m_device.bindTexture(kShadowUnit, m_shadowsActive ? m_device.renderTargetDepthTexture(m_shadowTarget) : m_assets.whiteTexture());
@@ -572,7 +619,13 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
 void Renderer::drawShadowPass() {
     if (!m_shadowsActive) return;
     m_device.beginPass(m_shadowTarget, {false, {}, true, 1.0f});
-    drawMeshItems(m_shadowItems, static_cast<u32>(m_opaqueItems.size() + m_transparentItems.size()), true);
+    u32 first = static_cast<u32>(m_opaqueItems.size() + m_transparentItems.size());
+    for (u32 c = 0; c < m_shadowCascades; ++c) {
+        const Vec4& vp = m_cascadeViewports[c];
+        m_device.setViewport(static_cast<i32>(vp.x), static_cast<i32>(vp.y), static_cast<u32>(vp.z), static_cast<u32>(vp.w));
+        drawMeshItems(m_shadowItems[c], first, true, c);
+        first += static_cast<u32>(m_shadowItems[c].size());
+    }
     m_device.endPass();
     m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_shadowTarget));
 }

@@ -116,7 +116,8 @@ Guide : [3D.md](3D.md).
 | Squelettes, skinning, animations des modèles | ✅ | glTF skins + clips, skinning GPU, testés sur les 3 API |
 | Post-traitement HDR : bloom, FXAA, étalonnage, vignettage (selon le profil) | ✅ | `Renderer.cpp`, composant `PostProcess` |
 | SSAO, profondeur de champ, TAA, IBL / sondes de réflexion, skybox image | ⬜ | à planifier |
-| Ombres des lumières locales, cascades multiples | ⬜ | à planifier |
+| Ombres en cascades (1 à 4 selon le profil, atlas, fondu entre cascades) | ✅ | `Renderer3D.cpp` |
+| Ombres des lumières locales | ⬜ | à planifier |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
 ## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D et Lua terminés ; éditeur de logique visuelle non réalisé)

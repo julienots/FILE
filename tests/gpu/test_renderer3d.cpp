@@ -141,6 +141,52 @@ TEST_CASE("directional shadows: casters darken receivers, can be disabled") {
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("cascaded shadows: sharp near the camera, far casters, cascade count per profile") {
+    Render3DFixture f;
+    f.camera({0, 5, 2}, {0, 0, -10});
+    f.darkEnvironment().ambientIntensity = 0.2f;
+    const auto sunE = f.sun({-50, 90, 0});  // travels down and toward -X: shadows fall on the -X side
+    f.scene.registry().get<DirectionalLightComponent>(sunE).shadowDistance = 60.0f;
+    f.mesh(PrimitiveMesh::Plane, {0, 0, -30}, Vec3{200.0f});
+    f.mesh(PrimitiveMesh::Cube, {0.3f, 0.5f, -3.0f}, {0.15f, 0.15f, 1.2f});  // thin slab near the camera
+    f.mesh(PrimitiveMesh::Cube, {5.0f, 2.0f, -30.0f}, {2.0f, 4.0f, 12.0f});  // big block far away
+    const Vec3 nearShadow{-0.12f, 0.0f, -3.0f}, nearLit{-0.9f, 0.0f, -3.0f};
+    const Vec3 farShadow{2.3f, 0.0f, -30.0f}, farLit{-2.5f, 0.0f, -30.0f};
+    auto measure = [&](u32 cascades, u32 mapSize) {
+        GraphicsProfile p = f.renderer.profile();
+        p.shadowCascades = cascades;
+        p.shadowMapSize = mapSize;
+        f.renderer.setProfile(p);
+        f.frame();
+        CHECK(f.renderer.stats().shadowCascades == cascades);
+        struct R {
+            int nearShadow, nearLit, farShadow, farLit;
+        };
+        const R r{luminance(f.at(nearShadow)), luminance(f.at(nearLit)), luminance(f.at(farShadow)), luminance(f.at(farLit))};
+        MESSAGE(cascades << " cascade(s), " << mapSize << ": near " << r.nearShadow << "/" << r.nearLit << ", far " << r.farShadow << "/" << r.farLit);
+        return r;
+    };
+    // A single 2048 map stretched over 60 m blurs the thin caster away; four 512 cascades (a
+    // 1024 atlas, a quarter of the memory) resolve it, and the far block still casts its shadow.
+    const auto single = measure(1, 2048);
+    const auto four = measure(4, 512);
+    CHECK(four.nearShadow * 2 < four.nearLit);
+    CHECK(four.nearShadow + 150 < single.nearShadow);
+    CHECK(single.farShadow * 2 < single.farLit);
+    CHECK(four.farShadow * 2 < four.farLit);
+    for (u32 n : {2u, 3u}) {
+        const auto r = measure(n, 1024);
+        CHECK(r.nearShadow * 2 < r.nearLit);
+        CHECK(r.farShadow * 2 < r.farLit);
+    }
+    // Beyond the shadow distance nothing is shadowed.
+    f.scene.registry().get<DirectionalLightComponent>(sunE).shadowDistance = 10.0f;
+    const auto shortRange = measure(3, 1024);
+    CHECK(shortRange.nearShadow * 2 < shortRange.nearLit);
+    CHECK(std::abs(shortRange.farShadow - shortRange.farLit) < 12);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

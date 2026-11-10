@@ -140,26 +140,45 @@ vec3 hemisphere(vec3 n) {
     if (u_skyColor.w > 0.5) return mix(u_groundColor.rgb, u_skyColor.rgb, n.y * 0.5 + 0.5) * u_groundColor.w;
     return u_ambient.rgb;
 }
-float shadowFactor(vec3 N, vec3 L) {
-    if (u_shadowParams.x < 0.5) return 1.0;
+// Lit fraction (0..1) of the point in cascade i of the shadow atlas.
+float cascadeLit(int i, vec3 N, float NoL) {
     // Normal offset: pushes the lookup along the normal, more at grazing angles.
-    float NoL = clamp(dot(N, L), 0.0, 1.0);
-    vec3 p = v_worldPos + N * u_shadowParams.z * (1.0 - NoL * 0.5);
-    vec4 s = u_shadowMatrix * vec4(p, 1.0);
+    vec3 p = v_worldPos + N * u_shadowOffsets[i] * (1.0 - NoL * 0.5);
+    vec4 s = u_shadowMatrix[i] * vec4(p, 1.0);
     vec3 c = s.xyz / s.w;
-    if (c.x <= 0.0 || c.x >= 1.0 || c.y <= 0.0 || c.y >= 1.0 || c.z >= 1.0) return 1.0;
+    vec4 rect = u_shadowRect[i];
+    if (c.x <= rect.x || c.x >= rect.z || c.y <= rect.y || c.y >= rect.w || c.z >= 1.0) return 1.0;
     float depth = c.z - u_shadowParams.y;
     int radius = int(u_shadowParams2.y);
+    // PCF taps stay inside the cascade's tile.
+    vec2 lo = rect.xy + vec2(u_shadowParams2.x * 0.5);
+    vec2 hi = rect.zw - vec2(u_shadowParams2.x * 0.5);
     float lit = 0.0;
     float taps = 0.0;
     for (int y = -radius; y <= radius; ++y) {
         for (int x = -radius; x <= radius; ++x) {
-            float stored = texture(u_shadowMap, c.xy + vec2(float(x), float(y)) * u_shadowParams2.x).r;
+            float stored = texture(u_shadowMap, clamp(c.xy + vec2(float(x), float(y)) * u_shadowParams2.x, lo, hi)).r;
             lit += depth <= stored ? 1.0 : 0.0;
             taps += 1.0;
         }
     }
-    return mix(1.0, lit / taps, u_shadowParams.w);
+    return lit / taps;
+}
+float shadowFactor(vec3 N, vec3 L) {
+    int count = int(u_shadowParams.x + 0.5);
+    if (count == 0) return 1.0;
+    float viewDepth = dot(v_worldPos - u_cameraPos.xyz, u_shadowView.xyz);
+    int i = 0;
+    while (i < count && viewDepth > u_shadowSplits[i]) ++i;
+    if (i >= count) return 1.0;  // beyond the shadow distance
+    float NoL = clamp(dot(N, L), 0.0, 1.0);
+    float lit = cascadeLit(i, N, NoL);
+    // Blend into the next cascade near the end of this one (no visible seam).
+    float start = i == 0 ? 0.0 : u_shadowSplits[i - 1];
+    float band = (u_shadowSplits[i] - start) * u_shadowParams.z;
+    float t = band > 0.0 ? clamp((viewDepth - (u_shadowSplits[i] - band)) / band, 0.0, 1.0) : 0.0;
+    if (t > 0.0) lit = mix(lit, i + 1 < count ? cascadeLit(i + 1, N, NoL) : 1.0, t);
+    return mix(1.0, lit, u_shadowParams.w);
 }
 void main() {
     vec4 base = texture(u_baseColorMap, v_uv) * u_baseColor * v_color;

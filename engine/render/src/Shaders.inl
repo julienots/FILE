@@ -16,9 +16,13 @@ layout(std140) uniform FrameData {
     vec4 u_horizonColor;  // linear rgb; w = 1: sun disc
     vec4 u_fogColor;      // linear rgb; w = 1: fog enabled
     vec4 u_fogParams;     // start, end, exposure, -
-    mat4 u_shadowMatrix;  // world -> shadow map (uv, depth)
-    vec4 u_shadowParams;  // enabled, depth bias, normal offset (world), strength
-    vec4 u_shadowParams2; // texel size (uv), PCF radius (0 or 1), -, -
+    mat4 u_shadowMatrix[4]; // world -> shadow atlas (uv, depth), per cascade
+    vec4 u_shadowRect[4];   // atlas uv bounds of each cascade
+    vec4 u_shadowSplits;    // view depth where each cascade ends
+    vec4 u_shadowOffsets;   // normal offset (world) per cascade
+    vec4 u_shadowView;      // camera forward
+    vec4 u_shadowParams;    // cascade count (0 = off), depth bias, blend band (fraction), strength
+    vec4 u_shadowParams2;   // atlas texel size (uv), PCF radius (0 or 1), -, -
 };
 )";
 
