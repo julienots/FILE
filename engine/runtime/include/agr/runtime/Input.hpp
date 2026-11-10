@@ -55,6 +55,13 @@ public:
     const Touch* findTouch(u64 id) const;
     const std::string& textInput() const { return m_text; }
 
+    /// Motion sensors (phones, tablets). Accelerometer in m/s^2 including gravity, in the
+    /// device's natural orientation (x right, y up, z out of the screen); gyroscope in rad/s.
+    bool hasAccelerometer() const { return m_hasAccel; }
+    math::Vec3 accelerometer() const { return m_accel; }
+    bool hasGyroscope() const { return m_hasGyro; }
+    math::Vec3 gyroscope() const { return m_gyro; }
+
     // ----------------------------------------------- platform interface
     /// Starts a new frame: snapshots previous state, clears deltas, drops ended touches.
     void beginFrame();
@@ -66,6 +73,8 @@ public:
     void touchMove(u64 id, math::Vec2 position, float pressure);
     void touchUp(u64 id, math::Vec2 position);
     void appendText(std::string_view utf8) { m_text += utf8; }
+    void setAccelerometer(math::Vec3 v) { m_accel = v, m_hasAccel = true; }
+    void setGyroscope(math::Vec3 v) { m_gyro = v, m_hasGyro = true; }
     /// Releases everything (focus lost, app backgrounded).
     void reset();
 
@@ -80,6 +89,8 @@ private:
     bool m_hasMousePos = false;
     std::vector<Touch> m_touches;
     std::string m_text;
+    math::Vec3 m_accel{0.0f}, m_gyro{0.0f};
+    bool m_hasAccel = false, m_hasGyro = false;
 };
 
 } // namespace agr

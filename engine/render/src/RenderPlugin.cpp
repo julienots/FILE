@@ -3,6 +3,7 @@
 #include "agr/core/Platform.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/runtime/Engine.hpp"
+#include "agr/runtime/Events.hpp"
 
 namespace agr {
 
@@ -15,6 +16,13 @@ PluginInfo RenderPlugin::info() const {
 
 Status RenderPlugin::onLoad(Engine& engine) {
     registerRenderComponents();
+    // Mobile: the window surface is destroyed in the background and recreated on return.
+    m_lifecycle = engine.events().subscribe<AppLifecycleEvent>([this](const AppLifecycleEvent& e) {
+        if (!m_device) return;
+        if (e.state == LifecycleState::DidEnterBackground) m_device->releaseSurface();
+        else if (e.state == LifecycleState::DidEnterForeground)
+            if (Status s = m_device->restoreSurface(); !s) AGR_LOG_ERROR("Render", "{}", s.error().message);
+    });
     PlatformLayer& platform = engine.platform();
     const GraphicsApi api = platform.graphicsApi();
 #if defined(AGR_PLATFORM_MOBILE)
@@ -153,6 +161,7 @@ void RenderPlugin::onRender(Engine& engine, const FrameTime&) {
 }
 
 void RenderPlugin::onUnload(Engine& engine) {
+    engine.events().unsubscribe(m_lifecycle);
     engine.registerService<RenderPlugin>(nullptr);
     engine.registerService<Renderer>(nullptr);
     engine.registerService<rhi::Device>(nullptr);

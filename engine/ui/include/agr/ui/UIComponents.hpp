@@ -22,6 +22,8 @@ struct UICanvasComponent {
     float match = 0.5f;       ///< ScaleWithScreen: 0 = follow the width, 1 = the height (between: blend).
     float pixelScale = 1.0f;  ///< ConstantPixelSize.
     i32 sortOrder = 0;
+    /// Children are laid out inside the safe area (away from notches and system bars).
+    bool respectSafeArea = true;
 };
 
 /// Rectangle of a UI element relative to its parent (Unity-like RectTransform).

@@ -26,6 +26,8 @@ public:
     /// pixelWidth x pixelHeight; pointers are made relative to it.
     void setViewport(math::Vec4 windowRect, u32 pixelWidth, u32 pixelHeight);
     void clearViewport() { m_viewport.reset(); }
+    /// Editor device preview: simulated safe-area insets in pixels of the view (none = the platform's).
+    void setSafeAreaOverride(std::optional<math::Vec4> insets) { m_safeOverride = insets; }
 
 private:
     struct Viewport {
@@ -37,6 +39,7 @@ private:
     std::unique_ptr<UISystem> m_ui;
     Renderer* m_renderer = nullptr;
     std::optional<Viewport> m_viewport;
+    std::optional<math::Vec4> m_safeOverride;
     bool m_running = true;
 };
 

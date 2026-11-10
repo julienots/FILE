@@ -26,6 +26,12 @@ public:
     /// Window size in the units of mouse and touch positions (differs from the framebuffer on HiDPI).
     virtual math::Vec2 windowSize() const { return framebufferSize(); }
     virtual const char* name() const = 0;
+    /// Screen areas hidden by notches, rounded corners or system bars: left, top, right,
+    /// bottom insets in window units (0 on desktop).
+    virtual math::Vec4 safeAreaInsets() const { return {0.0f, 0.0f, 0.0f, 0.0f}; }
+    /// Device vibration (phones) for `seconds` at `strength` (0..1); no-op without a vibrator.
+    virtual void vibrate(float seconds, float strength) { (void)seconds; (void)strength; }
+    virtual bool canVibrate() const { return false; }
 
     /// Graphics API of the context created by the platform (None when headless).
     virtual GraphicsApi graphicsApi() const { return GraphicsApi::None; }

@@ -39,6 +39,8 @@ struct ScriptEngine::Impl {
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
     AnimationSystem* animation = nullptr;
+    PlatformLayer* platform = nullptr;
+    SaveStore* save = nullptr;
     Scene* scene = nullptr;          // valid during update / fixedUpdate / dispatch / run
     FrameTime time;
     u64 sceneGeneration = 0;
@@ -85,9 +87,12 @@ Scene& sceneOf(lua_State* L);
 /// Adds methods to the Entity type / a sub-table agr.<name> (called after openAgrLibrary's core setup).
 void addEntityMethods(lua_State* L, const luaL_Reg* methods);
 void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs);
+/// Adds functions to an existing table agr.<name> (e.g. "input").
+void extendAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs);
 /// API extensions, one file each: agr.audio and Entity:playSound()...
 void openAudioBindings(lua_State* L);
 void openUIBindings(lua_State* L);
 void openAnimationBindings(lua_State* L);
+void openMobileBindings(lua_State* L);
 
 } // namespace agr

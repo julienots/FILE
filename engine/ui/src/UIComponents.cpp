@@ -14,7 +14,8 @@ void registerUIComponents() {
         .field("referenceResolution", &UICanvasComponent::referenceResolution, {.tooltip = "Design resolution (ScaleWithScreen)", .speed = 1.0f})
         .field("match", &UICanvasComponent::match, {.tooltip = "0 = follow the width, 1 = follow the height", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("pixelScale", &UICanvasComponent::pixelScale, {.tooltip = "Pixels per unit (ConstantPixelSize)", .rangeMin = 0.1f, .rangeMax = 10.0f, .speed = 0.01f})
-        .field("sortOrder", &UICanvasComponent::sortOrder, {.tooltip = "Higher canvases are drawn on top"});
+        .field("sortOrder", &UICanvasComponent::sortOrder, {.tooltip = "Higher canvases are drawn on top"})
+        .field("respectSafeArea", &UICanvasComponent::respectSafeArea, {.tooltip = "Keep the UI away from notches and system bars (phones)"});
     reg.add<UIRectComponent>("UIRect")
         .category("UI")
         .description("Position and size of a UI element relative to its parent (anchors, pivot).")

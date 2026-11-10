@@ -1,4 +1,5 @@
 #pragma once
+#include "agr/core/EventBus.hpp"
 #include <memory>
 #include <string>
 
@@ -46,6 +47,7 @@ public:
     void setHotReload(bool enabled, f64 intervalSeconds = 1.0);
 
 private:
+    SubscriptionId m_lifecycle{};
     std::unique_ptr<rhi::Device> m_device;
     std::unique_ptr<AssetManager> m_assets;
     std::unique_ptr<SpriteSheetLibrary> m_sheets;

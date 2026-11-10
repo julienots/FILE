@@ -155,6 +155,8 @@ void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
 void ScriptEngine::setUI(UISystem* ui) { m->ui = ui; }
 void ScriptEngine::setAnimation(AnimationSystem* animation) { m->animation = animation; }
+void ScriptEngine::setPlatform(PlatformLayer* platform) { m->platform = platform; }
+void ScriptEngine::setSaveStore(SaveStore* save) { m->save = save; }
 void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(seconds, 0.001); }
 
 void ScriptEngine::reset() {

@@ -5,6 +5,8 @@
 
 #include "agr/audio/Wav.hpp"
 #include "agr/core/Uuid.hpp"
+#include "agr/runtime/PlatformLayer.hpp"
+#include "agr/runtime/SaveStore.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -447,6 +449,63 @@ return A
     CHECK(f.scripts.run("agr.find('Hero'):playState('Idle')", &f.scene));
     CHECK(anim.currentState(e) == "Idle");
     CHECK_FALSE(f.scripts.run("agr.find('Hero'):playState('Fly')", &f.scene));
+}
+
+TEST_CASE("mobile API: local save, device services, motion sensors") {
+    ScriptFixture f;
+    f.vfs.mount("user", std::make_unique<NativeFileProvider>((f.root / "user").string(), false));
+    SaveStore save(f.vfs, "user://save.json");
+    f.scripts.setSaveStore(&save);
+    struct FakePhone final : PlatformLayer {
+        Status initialize(const EngineConfig&) override { return {}; }
+        void shutdown() override {}
+        bool pollEvents(EventBus&, Input&) override { return true; }
+        void present() override {}
+        bool canRender() const override { return false; }
+        math::Vec2 framebufferSize() const override { return {1080, 2400}; }
+        const char* name() const override { return "Fake"; }
+        math::Vec4 safeAreaInsets() const override { return {0, 90, 0, 40}; }
+        void vibrate(float seconds, float strength) override { vibrated += seconds * strength; }
+        bool canVibrate() const override { return true; }
+        float vibrated = 0.0f;
+    } phone;
+    f.scripts.setPlatform(&phone);
+
+    CHECK(f.scripts.run(R"lua(
+        agr.save.set("level", 3)
+        agr.save.set("name", "Héros")
+        agr.save.set("best", 12.5)
+        agr.save.set("unlocked", { "forest", "cave" })
+        agr.save.set("options", { music = 0.5, haptics = true, keys = { jump = "Space" } })
+        assert(agr.save.get("level") == 3 and math.type(agr.save.get("level")) == "integer")
+        assert(agr.save.get("missing") == nil and agr.save.get("missing", 7) == 7)
+        assert(agr.save.has("name") and not agr.save.has("missing"))
+        assert(agr.save.get("unlocked")[2] == "cave")
+        assert(agr.save.get("options").keys.jump == "Space")
+        agr.save.set("temp", 1); agr.save.remove("temp"); assert(not agr.save.has("temp"))
+        assert(not pcall(agr.save.set, "bad", function() end))
+        assert(agr.save.flush())
+    )lua"));
+    CHECK(f.vfs.exists("user://save.json"));
+    save.reload();  // as after restarting the game
+    CHECK(save.get("best").get<double>() == doctest::Approx(12.5));
+    CHECK(save.get("name").get<std::string>() == "Héros");
+    CHECK(save.get("options")["haptics"].get<bool>());
+    REQUIRE(f.vfs.writeText("user://save.json", "{ damaged"));
+    save.reload();
+    CHECK_FALSE(save.has("level"));  // a damaged file starts an empty save instead of failing
+
+    CHECK(f.scripts.run(R"lua(
+        local l, t, r, b = agr.device.safeArea()
+        assert(t == 90 and b == 40 and l == 0)
+        assert(agr.device.canVibrate())
+        agr.device.vibrate(0.2, 0.5)
+        assert(type(agr.device.platform()) == "string")
+        assert(agr.input.accelerometer() == nil)
+    )lua"));
+    CHECK(phone.vibrated == doctest::Approx(0.1f));
+    f.input.setAccelerometer({0.0f, -9.81f, 0.5f});
+    CHECK(f.scripts.run("local x, y, z = agr.input.accelerometer(); assert(math.abs(y + 9.81) < 1e-4 and z == 0.5)"));
 }
 
 }  // TEST_SUITE

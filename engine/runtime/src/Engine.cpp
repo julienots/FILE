@@ -40,6 +40,7 @@ Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
         std::filesystem::create_directories(m_config.userDirectory, ec);
         m_vfs.mount("user", std::make_unique<NativeFileProvider>(m_config.userDirectory, false));
     }
+    m_save = std::make_unique<SaveStore>(m_vfs, "user://save.json");
 
     // 4. Platform.
     if (m_config.headless || !platform) platform = std::make_unique<HeadlessPlatform>();
@@ -60,6 +61,9 @@ Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
     });
     m_events.subscribe<AppLifecycleEvent>([this](const AppLifecycleEvent& e) {
         if (e.state == LifecycleState::DidEnterBackground) m_input.reset();
+        // The OS may kill a background app without notice: write the save now.
+        if (e.state == LifecycleState::WillEnterBackground || e.state == LifecycleState::Terminating)
+            if (Status s = m_save->flush(); !s) AGR_LOG_ERROR("Engine", "save: {}", s.error().message);
         if (e.state == LifecycleState::Terminating) requestQuit();
     });
 
@@ -185,6 +189,8 @@ void Engine::shutdown(Application* app) {
     if (!m_initialized) return;
     if (app) app->onShutdown(*this);
     m_plugins.unloadAll(*this);
+    if (m_save)
+        if (Status s = m_save->flush(); !s) AGR_LOG_ERROR("Engine", "save: {}", s.error().message);
     m_scene.reset();
     if (m_platform) m_platform->shutdown();
     m_platform.reset();

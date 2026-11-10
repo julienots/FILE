@@ -256,6 +256,11 @@ public:
     virtual MemoryStats memoryStats() const = 0;
     /// Errors reported by API validation (Vulkan validation layers when enabled). 0 otherwise.
     virtual u64 validationErrorCount() const { return 0; }
+    /// Mobile: the window surface goes away when the app enters the background and comes back
+    /// on return. Vulkan destroys / recreates its surface and swapchain; OpenGL needs nothing
+    /// (SDL manages the EGL surface). Frames rendered without a surface are not presented.
+    virtual void releaseSurface() {}
+    virtual Status restoreSurface() { return {}; }
 };
 
 /// Resolves OpenGL entry points (SDL_GL_GetProcAddress, eglGetProcAddress...).

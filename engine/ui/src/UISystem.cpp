@@ -82,7 +82,12 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
         const auto* img = reg.tryGet<UIImageComponent>(e);
         root.blocks = img && img->color.w > 0.0f;
         pass.elements.push_back(root);
-        layoutChildren(scene, e, screen, pass.scale, pass);
+        Vec4 content = screen;
+        if (c.respectSafeArea) {
+            const Vec4 in = m_safeArea;
+            content = {in.x, in.y, std::max(0.0f, screen.z - in.x - in.z), std::max(0.0f, screen.w - in.y - in.w)};
+        }
+        layoutChildren(scene, e, content, pass.scale, pass);
         m_passes.push_back(std::move(pass));
     });
     std::stable_sort(m_passes.begin(), m_passes.end(), [](const CanvasPass& a, const CanvasPass& b) {

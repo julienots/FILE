@@ -43,6 +43,17 @@ void UIPlugin::setViewport(math::Vec4 rect, u32 w, u32 h) { m_viewport = Viewpor
 
 void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
     bindRenderer(engine);
+    // Safe area in UI pixels (also used when drawing in edit mode).
+    if (m_safeOverride) {
+        m_ui->setSafeArea(*m_safeOverride);
+    } else if (!m_viewport) {
+        const math::Vec2 win = engine.platform().windowSize(), fb = engine.platform().framebufferSize();
+        const math::Vec4 in = engine.platform().safeAreaInsets();
+        const float kx = win.x > 0.0f ? fb.x / win.x : 1.0f, ky = win.y > 0.0f ? fb.y / win.y : 1.0f;
+        m_ui->setSafeArea({in.x * kx, in.y * ky, in.z * kx, in.w * ky});
+    } else {
+        m_ui->setSafeArea({0.0f, 0.0f, 0.0f, 0.0f});
+    }
     if (!m_running) return;
     Scene& scene = engine.scene();
     const math::Vec2 window = engine.platform().windowSize();

@@ -12,8 +12,14 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # --- SDL3 : windowing, input, touch, sensors on every platform (zlib) ---------
 if(AGR_BUILD_PLATFORM)
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_STATIC ON  CACHE BOOL "" FORCE)
+    if(ANDROID)
+        # Android: SDL's Java activity loads libSDL3.so, then the game's libmain.so.
+        set(SDL_SHARED ON  CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    else()
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON  CACHE BOOL "" FORCE)
+    endif()
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
     set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)

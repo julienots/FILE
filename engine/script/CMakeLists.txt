@@ -7,6 +7,7 @@ agr_add_module(script
         src/ScriptAudio.cpp
         src/ScriptUI.cpp
         src/ScriptAnimation.cpp
+        src/ScriptMobile.cpp
     PUBLIC_DEPS
         agr::runtime
         agr::audio

@@ -300,4 +300,18 @@ TEST_CASE("canvas sort order decides what is on top") {
     CHECK(f.ui.hitTest({100, 100}) == over);
 }
 
+TEST_CASE("safe area: canvases keep their children away from notches") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto top = f.element("Top bar", f.canvas, {0, 0}, {1, 0}, {0.5f, 0}, {0, 0}, {0, 100});
+    const auto corner = f.element("Pause", f.canvas, {1, 1}, {1, 1}, {1, 1}, {0, 0}, {80, 80});
+    f.ui.setSafeArea({0, 120, 30, 60});  // notch at the top, rounded corner, gesture bar
+    f.ui.layout(f.scene, 1080, 2400);
+    checkRect(f.rect(top), {0, 120, 1050, 100});
+    checkRect(f.rect(corner), {1050 - 80, 2400 - 60 - 80, 80, 80});
+    f.scene.registry().get<UICanvasComponent>(f.canvas).respectSafeArea = false;  // full-screen backgrounds
+    f.ui.layout(f.scene, 1080, 2400);
+    checkRect(f.rect(top), {0, 0, 1080, 100});
+}
+
 }  // TEST_SUITE

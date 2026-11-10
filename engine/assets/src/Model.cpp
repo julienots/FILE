@@ -285,10 +285,15 @@ std::vector<std::string_view> tokens(std::string_view line) {
     return out;
 }
 
+/// Locale-independent number parsing ("1.5e-3"). Not std::from_chars: Android's libc++
+/// has no floating-point overloads.
 float toFloat(std::string_view s) {
-    float v = 0.0f;
-    std::from_chars(s.data(), s.data() + s.size(), v);
-    return v;
+    char buf[64];
+    const usize n = std::min(s.size(), sizeof(buf) - 1);
+    std::memcpy(buf, s.data(), n);
+    buf[n] = '\0';
+    // strtof follows the C locale, which the engine never changes ('.' decimal point).
+    return std::strtof(buf, nullptr);
 }
 
 /// MTL options ("-bm 0.5 file.png"): the file name is the last token.

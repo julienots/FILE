@@ -54,6 +54,10 @@ public:
     void setRenderer(Renderer* renderer);
     Renderer* renderer() const { return m_renderer; }
 
+    /// Screen insets (left, top, right, bottom, in pixels of the UI screen) hidden by notches or
+    /// system bars; canvases with respectSafeArea keep their children inside.
+    void setSafeArea(math::Vec4 insets) { m_safeArea = insets; }
+    math::Vec4 safeArea() const { return m_safeArea; }
     /// Computes UIRect::screenRect of every element for a width x height pixel screen.
     void layout(Scene& scene, u32 width, u32 height);
     /// Applies pointers (positions in the same pixels as the last layout). Produces events.
@@ -122,6 +126,7 @@ private:
     std::unordered_set<std::string> m_reportedFonts;
     std::vector<PendingText> m_texts;
     bool m_pointerOverUI = false;
+    math::Vec4 m_safeArea{0.0f, 0.0f, 0.0f, 0.0f};
     UIStats m_stats;
 };
 

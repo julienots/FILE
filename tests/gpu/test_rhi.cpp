@@ -375,3 +375,20 @@ TEST_CASE("stale handles are rejected") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("the window surface can be released and restored (mobile background / foreground)") {
+    auto& d = *gpu().device;
+    d.releaseSurface();
+    // A frame without a surface is recorded but not presented, without errors.
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass({}, {true, {1, 0, 0, 1}, true, 1.0f});
+    d.endPass();
+    d.endFrame();
+    REQUIRE(d.restoreSurface());
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass({}, {true, {0, 1, 0, 1}, true, 1.0f});
+    d.endPass();
+    d.endFrame();
+    CHECK(near(pixel(d, 5, 5), 0, 255, 0));
+    CHECK(d.validationErrorCount() == 0);
+}

@@ -6,6 +6,9 @@
 struct SDL_Window;
 struct SDL_GLContextState;
 
+struct SDL_Sensor;
+struct SDL_Haptic;
+
 namespace agr {
 
 /// SDL3 implementation of the platform layer: window, OpenGL / OpenGL ES
@@ -28,6 +31,9 @@ public:
     math::Vec2 framebufferSize() const override;
     math::Vec2 windowSize() const override;
     const char* name() const override { return "SDL3"; }
+    math::Vec4 safeAreaInsets() const override;
+    void vibrate(float seconds, float strength) override;
+    bool canVibrate() const override { return m_haptic != nullptr; }
     GraphicsApi graphicsApi() const override;
     void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }
     std::vector<std::string> vulkanInstanceExtensions() const override;
@@ -49,6 +55,7 @@ public:
 private:
     Status createWindow(GraphicsApi api);
     void destroyWindow();
+    void openDevices();  ///< Motion sensors and vibrator (phones, tablets).
 
     EngineConfig m_config;
     RawEventHook m_rawHook;
@@ -60,6 +67,10 @@ private:
     bool m_backgrounded = false;
     bool m_minimized = false;
     bool m_sdlInitialized = false;
+    ::SDL_Sensor* m_accel = nullptr;
+    ::SDL_Sensor* m_gyro = nullptr;
+    ::SDL_Haptic* m_haptic = nullptr;
+    u32 m_accelId = 0, m_gyroId = 0;
 };
 
 } // namespace agr

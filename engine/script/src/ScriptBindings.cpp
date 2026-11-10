@@ -674,6 +674,13 @@ void addAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs) {
     lua_pop(L, 1);
 }
 
+void extendAgrLibrary(lua_State* L, const char* name, const luaL_Reg* funcs) {
+    lua_getglobal(L, "agr");
+    lua_getfield(L, -1, name);
+    luaL_setfuncs(L, funcs, 0);
+    lua_pop(L, 2);
+}
+
 void pushEntity(lua_State* L, ecs::Entity e) {
     auto* ud = static_cast<LuaEntity*>(lua_newuserdatauv(L, sizeof(LuaEntity), 0));
     ud->packed = e.packed();
@@ -762,6 +769,7 @@ void openAgrLibrary(lua_State* L) {
     openAudioBindings(L);
     openUIBindings(L);
     openAnimationBindings(L);
+    openMobileBindings(L);
 }
 
 } // namespace agr

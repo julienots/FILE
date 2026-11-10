@@ -19,6 +19,8 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_engine = &engine;
     m_scripts = std::make_unique<ScriptEngine>(engine.vfs());
     m_scripts->setInput(&engine.input());
+    m_scripts->setPlatform(&engine.platform());
+    m_scripts->setSaveStore(&engine.save());
     engine.registerService<ScriptPlugin>(this);
     m_collisions = engine.events().subscribe<Collision2DEvent>([this](const Collision2DEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);

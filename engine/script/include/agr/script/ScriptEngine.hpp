@@ -7,6 +7,8 @@
 #include "agr/core/Time.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/audio/AudioSystem.hpp"
+#include "agr/runtime/PlatformLayer.hpp"
+#include "agr/runtime/SaveStore.hpp"
 #include "agr/ui/UISystem.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
@@ -67,6 +69,10 @@ public:
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
     void setAnimation(AnimationSystem* animation);
+    /// Device services for agr.device (vibration, safe area); null = desktop defaults.
+    void setPlatform(PlatformLayer* platform);
+    /// Local save for agr.save (null = the functions fail with a message).
+    void setSaveStore(SaveStore* save);
     /// Maximum run time of one callback before it is stopped (infinite loops).
     void setCallbackBudget(f64 seconds);
 

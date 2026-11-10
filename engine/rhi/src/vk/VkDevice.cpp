@@ -569,6 +569,8 @@ private:
             m_stats.triangles += vertices / 3;
     }
     Status createSwapchain(u32 width, u32 height);
+    void releaseSurface() override;
+    Status restoreSurface() override;
     void destroySwapchain(VkSwapchainKHR swapchain);
     void ensureBackbuffer(u32 w, u32 h);
     void waitForFrame(u64 frame);
@@ -584,6 +586,7 @@ private:
     VkInstance m_instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_messenger = VK_NULL_HANDLE;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+    bool m_surfaceLost = false;
     VkPhysicalDevice m_physical = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties m_props{};
     VkDevice m_device = VK_NULL_HANDLE;
@@ -1399,7 +1402,35 @@ void VulkanDevice::destroySwapchain(VkSwapchainKHR swapchain) {
     if (swapchain == m_swapchain) m_swapchain = VK_NULL_HANDLE;
 }
 
+void VulkanDevice::releaseSurface() {
+    if (!m_surface) return;
+    vkDeviceWaitIdle(m_device);
+    if (m_swapchain) destroySwapchain(m_swapchain);
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    m_surface = VK_NULL_HANDLE;
+    AGR_LOG_INFO("RHI", "Vulkan surface released (background)");
+}
+
+Status VulkanDevice::restoreSurface() {
+    if (m_surface) return {};
+    if (!m_platform.createSurface) return makeError(Error::Code::Unsupported, "no surface factory");
+    m_surface = reinterpret_cast<VkSurfaceKHR>(m_platform.createSurface(m_instance));
+    if (!m_surface) return makeError(Error::Code::Unsupported, "Vulkan surface recreation failed");
+    VkBool32 present = VK_FALSE;
+    vkGetPhysicalDeviceSurfaceSupportKHR(m_physical, m_queueFamily, m_surface, &present);
+    if (!present) {
+        vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+        m_surface = VK_NULL_HANDLE;
+        return makeError(Error::Code::Unsupported, "the new surface cannot be presented by the queue in use");
+    }
+    m_swapchainDirty = true;  // created at the next frame
+    m_surfaceLost = false;
+    AGR_LOG_INFO("RHI", "Vulkan surface restored");
+    return {};
+}
+
 Status VulkanDevice::createSwapchain(u32 width, u32 height) {
+    if (!m_surface) return makeError(Error::Code::Unsupported, "no surface (application in background)");
     vkDeviceWaitIdle(m_device);
     VkSurfaceCapabilitiesKHR caps;
     AGR_VK_TRY(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical, m_surface, &caps), "surface capabilities");
@@ -1546,14 +1577,19 @@ void VulkanDevice::endFrame() {
 
     u32 imageIndex = ~0u;
     if (bb) {
-        if (m_swapchainDirty || !m_swapchain) {
+        if (m_surfaceLost && !m_surface) (void)restoreSurface();
+        if (m_surface && (m_swapchainDirty || !m_swapchain)) {
             if (Status s = createSwapchain(bb->width, bb->height); !s) AGR_LOG_WARN("RHI", "swapchain: {}", s.error().message);
         }
         if (m_swapchain) {
             Stopwatch wait;
             VkResult r = vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, f.imageAvailable, VK_NULL_HANDLE, &imageIndex);
             m_stats.cpuWaitMs += wait.elapsedMilliseconds();
-            if (r == VK_ERROR_OUT_OF_DATE_KHR) {
+            if (r == VK_ERROR_SURFACE_LOST_KHR) {  // the window went away: recreate everything next frame
+                imageIndex = ~0u;
+                releaseSurface();
+                m_surfaceLost = true;
+            } else if (r == VK_ERROR_OUT_OF_DATE_KHR) {
                 imageIndex = ~0u;
                 m_swapchainDirty = true;
             } else if (r == VK_SUBOPTIMAL_KHR) {

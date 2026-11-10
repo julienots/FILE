@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
@@ -8,27 +12,135 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}"
     },
-    { "name": "debug",   "inherits": "base", "displayName": "Debug",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
-    { "name": "release", "inherits": "base", "displayName": "Release", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
     {
-      "name": "asan", "inherits": "base", "displayName": "Debug + Address/UB sanitizers",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "AGR_ENABLE_ASAN": "ON" }
+      "name": "debug",
+      "inherits": "base",
+      "displayName": "Debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     },
     {
-      "name": "headless", "inherits": "base", "displayName": "Core only (no SDL3, CI / servers)",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "AGR_BUILD_PLATFORM": "OFF" }
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "displayName": "Debug + Address/UB sanitizers",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AGR_ENABLE_ASAN": "ON"
+      }
+    },
+    {
+      "name": "headless",
+      "inherits": "base",
+      "displayName": "Core only (no SDL3, CI / servers)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "AGR_BUILD_PLATFORM": "OFF"
+      }
+    },
+    {
+      "name": "android-arm64",
+      "inherits": "base",
+      "displayName": "Android arm64-v8a (game player, needs ANDROID_NDK_HOME)",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-26",
+        "ANDROID_STL": "c++_static",
+        "AGR_BUILD_TESTS": "OFF",
+        "AGR_BUILD_BENCHMARKS": "OFF",
+        "AGR_BUILD_SANDBOX": "OFF",
+        "AGR_BUILD_EDITOR": "OFF",
+        "AGR_BUILD_PLUGINS": "OFF"
+      }
+    },
+    {
+      "name": "android-x86_64",
+      "inherits": "base",
+      "displayName": "Android x86_64 (game player, needs ANDROID_NDK_HOME)",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "x86_64",
+        "ANDROID_PLATFORM": "android-26",
+        "ANDROID_STL": "c++_static",
+        "AGR_BUILD_TESTS": "OFF",
+        "AGR_BUILD_BENCHMARKS": "OFF",
+        "AGR_BUILD_SANDBOX": "OFF",
+        "AGR_BUILD_EDITOR": "OFF",
+        "AGR_BUILD_PLUGINS": "OFF"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "debug",    "configurePreset": "debug" },
-    { "name": "release",  "configurePreset": "release" },
-    { "name": "asan",     "configurePreset": "asan" },
-    { "name": "headless", "configurePreset": "headless" }
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "headless",
+      "configurePreset": "headless"
+    },
+    {
+      "name": "android-arm64",
+      "configurePreset": "android-arm64",
+      "targets": [
+        "agr_player"
+      ]
+    },
+    {
+      "name": "android-x86_64",
+      "configurePreset": "android-x86_64",
+      "targets": [
+        "agr_player"
+      ]
+    }
   ],
   "testPresets": [
-    { "name": "debug",    "configurePreset": "debug",    "output": { "outputOnFailure": true } },
-    { "name": "release",  "configurePreset": "release",  "output": { "outputOnFailure": true } },
-    { "name": "asan",     "configurePreset": "asan",     "output": { "outputOnFailure": true } },
-    { "name": "headless", "configurePreset": "headless", "output": { "outputOnFailure": true } }
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "headless",
+      "configurePreset": "headless",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

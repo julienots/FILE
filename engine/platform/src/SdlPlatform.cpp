@@ -46,6 +46,7 @@ Status SdlPlatform::initialize(const EngineConfig& config) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return makeError(Error::Code::Unsupported, std::string("SDL_Init failed: ") + SDL_GetError());
     m_sdlInitialized = true;
+    openDevices();
 
     GraphicsApi api = config.window.graphics;
     if (api == GraphicsApi::Auto || api == GraphicsApi::Vulkan) {
@@ -146,7 +147,62 @@ Status SdlPlatform::setGraphicsApi(GraphicsApi api) {
     return createWindow(api);
 }
 
+void SdlPlatform::openDevices() {
+    // Optional subsystems: a failure only means the device has no sensor / vibrator.
+    if (SDL_InitSubSystem(SDL_INIT_SENSOR)) {
+        int count = 0;
+        if (SDL_SensorID* ids = SDL_GetSensors(&count)) {
+            for (int i = 0; i < count; ++i) {
+                const SDL_SensorType type = SDL_GetSensorTypeForID(ids[i]);
+                if (type == SDL_SENSOR_ACCEL && !m_accel) {
+                    m_accel = SDL_OpenSensor(ids[i]);
+                    m_accelId = ids[i];
+                } else if (type == SDL_SENSOR_GYRO && !m_gyro) {
+                    m_gyro = SDL_OpenSensor(ids[i]);
+                    m_gyroId = ids[i];
+                }
+            }
+            SDL_free(ids);
+        }
+        if (m_accel || m_gyro) AGR_LOG_INFO("Platform", "motion sensors: accelerometer {}, gyroscope {}", m_accel ? "yes" : "no", m_gyro ? "yes" : "no");
+    }
+#if defined(AGR_PLATFORM_MOBILE)
+    // The device vibrator is exposed as a haptic device on Android.
+    if (SDL_InitSubSystem(SDL_INIT_HAPTIC)) {
+        int count = 0;
+        if (SDL_HapticID* ids = SDL_GetHaptics(&count)) {
+            if (count > 0) m_haptic = SDL_OpenHaptic(ids[0]);
+            SDL_free(ids);
+        }
+        if (m_haptic && !SDL_InitHapticRumble(m_haptic)) {
+            SDL_CloseHaptic(m_haptic);
+            m_haptic = nullptr;
+        }
+    }
+#endif
+}
+
+math::Vec4 SdlPlatform::safeAreaInsets() const {
+    if (!m_window) return {0.0f, 0.0f, 0.0f, 0.0f};
+    SDL_Rect safe{};
+    int w = 0, h = 0;
+    if (!SDL_GetWindowSafeArea(m_window, &safe) || !SDL_GetWindowSize(m_window, &w, &h) || safe.w <= 0 || safe.h <= 0)
+        return {0.0f, 0.0f, 0.0f, 0.0f};
+    return {static_cast<float>(safe.x), static_cast<float>(safe.y), static_cast<float>(w - safe.x - safe.w),
+            static_cast<float>(h - safe.y - safe.h)};
+}
+
+void SdlPlatform::vibrate(float seconds, float strength) {
+    if (!m_haptic || seconds <= 0.0f) return;
+    SDL_PlayHapticRumble(m_haptic, std::clamp(strength, 0.0f, 1.0f), static_cast<Uint32>(seconds * 1000.0f));
+}
+
 void SdlPlatform::shutdown() {
+    if (m_accel) SDL_CloseSensor(m_accel);
+    if (m_gyro) SDL_CloseSensor(m_gyro);
+    if (m_haptic) SDL_CloseHaptic(m_haptic);
+    m_accel = m_gyro = nullptr;
+    m_haptic = nullptr;
     destroyWindow();
     if (m_vulkanLoaded) {
         SDL_Vulkan_UnloadLibrary();
@@ -252,6 +308,11 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
                 events.publish(TouchEvent{id, phase, pos});
                 break;
             }
+
+            case SDL_EVENT_SENSOR_UPDATE:
+                if (m_accel && e.sensor.which == m_accelId) input.setAccelerometer({e.sensor.data[0], e.sensor.data[1], e.sensor.data[2]});
+                else if (m_gyro && e.sensor.which == m_gyroId) input.setGyroscope({e.sensor.data[0], e.sensor.data[1], e.sensor.data[2]});
+                break;
 
             case SDL_EVENT_DROP_FILE:
                 if (e.drop.data) events.publish(FileDroppedEvent{e.drop.data});
