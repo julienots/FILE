@@ -19,13 +19,15 @@
 #include "agr/script/ScriptPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
+#include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/GameExport.hpp"
 
 namespace {
 
 /// Command-line tasks without a window (continuous integration, scripts):
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d] [--name NAME]
-///   agr_editor --project DIR --export desktop --output DIR
+///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
+///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
 int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {
     using namespace agr;
@@ -79,13 +81,24 @@ int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {
         return 1;
     }
     if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
-    Result<ExportReport> report = makeError(Error::Code::InvalidArgument, "unknown export '" + exportKind + "' (desktop)");
+    Result<ExportReport> report = makeError(Error::Code::InvalidArgument,
+                                            "unknown export '" + exportKind + "' (desktop, android-apk, android-release-apk, android-aab)");
 #if defined(_WIN32)
     const fs::path player = exeDir / "agr_player.exe";
 #else
     const fs::path player = exeDir / "agr_player";
 #endif
     if (exportKind == "desktop") report = exportDesktop(project.value(), output, player);
+    if (exportKind.rfind("android", 0) == 0) {
+        AndroidBuildOptions o;
+        o.kind = exportKind == "android-aab" ? AndroidBuildKind::ReleaseBundle
+                 : exportKind == "android-release-apk" ? AndroidBuildKind::ReleaseApk
+                                                       : AndroidBuildKind::DebugApk;
+        if (const char* p = std::getenv("AGR_STORE_PASSWORD")) o.storePassword = p;
+        if (const char* p = std::getenv("AGR_KEY_PASSWORD")) o.keyPassword = p;
+        const AndroidToolchain tools = findAndroidToolchain(exeDir);
+        report = buildAndroid(project.value(), tools, output, o, [](const std::string& line) { std::printf("%s\n", line.c_str()); });
+    }
     if (!report) {
         AGR_LOG_ERROR("Export", "{}", report.error().message);
         return 1;

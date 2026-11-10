@@ -2,8 +2,11 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 #include "agr/core/Uuid.hpp"
+#include "agr/assets/Image.hpp"
+#include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
@@ -29,6 +32,15 @@ namespace fs = std::filesystem;
 namespace {
 
 fs::path tempPath(const char* tag) { return fs::temp_directory_path() / (std::string("agr_ed_") + tag + "_" + Uuid::generate().toString()); }
+
+std::string readTextFile(const fs::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+void writeTextFile(const fs::path& p, const std::string& text) {
+    fs::create_directories(p.parent_path());
+    std::ofstream(p, std::ios::binary) << text;
+}
 
 struct EditorFixture {
     fs::path root = tempPath("proj");
@@ -509,7 +521,7 @@ TEST_CASE("play mode runs the simulation and stop restores the edited scene") {
 TEST_CASE("scenes save, load and save-as") {
     EditorFixture f;
     f.ctx->create(CreateKind::Sphere);
-    REQUIRE(f.ctx->saveScene());
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
     CHECK_FALSE(f.ctx->dirty());
     REQUIRE(f.ctx->saveSceneAs("scenes/level2"));
     CHECK(f.ctx->scenePath() == "scenes/level2.agrscene");
@@ -602,4 +614,113 @@ TEST_CASE("create UI elements: a canvas is created or reused, buttons get a labe
     CHECK(reg.has<UILayoutComponent>(f.ctx->create(CreateKind::UIColumn)));
     CHECK(reg.has<AudioSourceComponent>(f.ctx->create(CreateKind::AudioSource)));
     CHECK(f.ctx->undo());  // every creation is undoable
+}
+
+TEST_CASE("game export: data package, desktop folder safety, Android Gradle project") {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    Project& project = f.ctx->project();
+    project.settings().exportSettings.organization = "Studio Ünïcode";
+    CHECK(defaultPackageId(project.settings()) == "com.studioncode.testgame");
+    CHECK(GameManifest::validPackageId("com.studio.game"));
+    CHECK_FALSE(GameManifest::validPackageId("game"));
+    CHECK_FALSE(GameManifest::validPackageId("com.1studio.game"));
+
+    // Game data.
+    const fs::path out = f.root / "export";
+    auto data = packageGameData(project, out / "game");
+    REQUIRE(data);
+    CHECK(data.value().files > 20);
+    CHECK(fs::exists(out / "game" / "assets" / "audio" / "music.wav"));
+    auto manifest = GameManifest::fromJson(readTextFile(out / "game" / "game.json"));
+    REQUIRE(manifest);
+    CHECK(manifest.value().startupScene == project.settings().startupScene);
+    CHECK(fs::exists(out / "game" / manifest.value().startupScene));
+    // A folder that is not an export output is never emptied.
+    fs::create_directories(out / "mine");
+    writeTextFile(out / "mine" / "notes.txt", "keep me");
+    CHECK_FALSE(prepareExportFolder(out / "mine"));
+    CHECK(fs::exists(out / "mine" / "notes.txt"));
+    CHECK(prepareExportFolder(out / "game"));  // a previous export: replaced
+    CHECK_FALSE(fs::exists(out / "game" / "game.json"));
+
+    // Android project with stand-in templates (no SDK needed to generate it).
+    const fs::path templates = f.root / "templates";
+    for (const char* lib : {"libmain.so", "libSDL3.so"}) writeTextFile(templates / "android" / "arm64-v8a" / lib, "elf");
+    writeTextFile(templates / "android" / "java" / "org" / "libsdl" / "app" / "SDLActivity.java", "package org.libsdl.app;");
+    AndroidToolchain tools;
+    tools.templates = templates;
+    tools.gradle = "/usr/bin/true";
+    tools.sdk = f.root / "sdk";
+    CHECK_FALSE(checkAndroidExport(project, tools).empty());  // no SDK platform
+    writeTextFile(tools.sdk / "platforms" / "android-35" / "android.jar", "jar");
+    CHECK(checkAndroidExport(project, tools).empty());
+    project.settings().exportSettings.orientation = ScreenOrientation::Portrait;
+    project.settings().exportSettings.versionCode = 7;
+    auto gradle = generateAndroidProject(project, tools, out / "android");
+    REQUIRE(gradle);
+    const fs::path main = out / "android" / "app" / "src" / "main";
+    const std::string manifestXml = readTextFile(main / "AndroidManifest.xml");
+    CHECK(manifestXml.find("sensorPortrait") != std::string::npos);
+    CHECK(manifestXml.find("android.permission.VIBRATE") != std::string::npos);
+    const std::string appGradle = readTextFile(out / "android" / "app" / "build.gradle");
+    CHECK(appGradle.find("applicationId 'com.studioncode.testgame'") != std::string::npos);
+    CHECK(appGradle.find("versionCode 7") != std::string::npos);
+    CHECK(appGradle.find("signingConfigs") == std::string::npos);  // no keystore: debug signing only
+    CHECK(fs::exists(main / "assets" / "game" / "game.json"));
+    CHECK(fs::exists(main / "jniLibs" / "arm64-v8a" / "libmain.so"));
+    CHECK(fs::exists(main / "java" / "com" / "studioncode" / "testgame" / "AgrActivity.java"));
+    CHECK(fs::exists(main / "res" / "mipmap-xxxhdpi" / "ic_launcher.png"));
+    project.settings().exportSettings.abis = {"arm64-v8a", "x86_64"};
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].find("x86_64") != std::string::npos);
+
+    // Icons: square, transparent margins.
+    const std::string mark = readTextFile(fs::path(AGR_TEST_TEMPLATE_ASSETS) / "textures" / "agr_mark.png");
+    auto icon = makeLauncherIcon(std::span(reinterpret_cast<const u8*>(mark.data()), mark.size()), 96);
+    REQUIRE(icon);
+    auto decoded = decodeImage(icon.value());
+    REQUIRE(decoded);
+    CHECK(decoded.value().width == 96);
+    CHECK(decoded.value().pixels[3] == 0);  // corner pixel transparent
+}
+
+// Real Android builds: needs the Android SDK (ANDROID_HOME), Gradle, a JDK, the export templates
+// (AGR_EXPORT_TEMPLATES) and network access for Gradle. Enabled with AGR_ANDROID_EXPORT_TESTS=1.
+TEST_CASE("Android export: signed release APK and App Bundle" * doctest::skip(std::getenv("AGR_ANDROID_EXPORT_TESTS") == nullptr)) {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    Project& project = f.ctx->project();
+    const AndroidToolchain tools = findAndroidToolchain(".");
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE_MESSAGE(problems.empty(), problems.front());
+    REQUIRE(createKeystore(tools, f.root / "keys" / "release.p12", "game", "s3cret-pass", "AGR Test"));
+    CHECK_FALSE(createKeystore(tools, f.root / "keys" / "release.p12", "game", "s3cret-pass", "AGR Test"));  // never overwritten
+    project.settings().exportSettings.keystorePath = (f.root / "keys" / "release.p12").string();
+    project.settings().exportSettings.keyAlias = "game";
+    AndroidBuildOptions o;
+    o.kind = AndroidBuildKind::ReleaseBundle;
+    CHECK_FALSE(buildAndroid(project, tools, f.root / "android", o));  // password required
+    o.storePassword = "s3cret-pass";
+    auto aab = buildAndroid(project, tools, f.root / "android", o);
+    REQUIRE_MESSAGE(aab, (aab ? "" : aab.error().message));
+    CHECK(aab.value().output.extension() == ".aab");
+    CHECK(fs::file_size(aab.value().output) > 5u * 1024 * 1024);
+    o.kind = AndroidBuildKind::ReleaseApk;
+    auto apk = buildAndroid(project, tools, f.root / "android", o);
+    REQUIRE(apk);
+    const fs::path apksigner = tools.sdk / "build-tools" / "35.0.1" / "apksigner";
+    if (fs::exists(apksigner)) {
+        const std::string cmd = apksigner.string() + " verify --print-certs '" + apk.value().output.string() + "' 2>&1";
+        FILE* p = popen(cmd.c_str(), "r");
+        std::string outText;
+        char buf[512];
+        while (p && std::fgets(buf, sizeof buf, p)) outText += buf;
+        const int code = p ? pclose(p) : -1;
+        CHECK(code == 0);
+        CHECK(outText.find("CN=AGR Test") != std::string::npos);  // our key, not the debug key
+    }
 }

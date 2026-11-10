@@ -88,6 +88,21 @@ void drawGrid(ImDrawList* dl, const Mat4& view, const Mat4& proj, ImVec2 origin,
     }
 }
 
+struct DevicePreset {
+    const char* name;
+    float width, height;
+    math::Vec4 insets;  ///< left, top, right, bottom (device pixels): notch, gesture bar
+};
+constexpr DevicePreset kDevices[] = {
+    {"Libre", 0, 0, {0, 0, 0, 0}},
+    {"Téléphone 20:9 paysage", 2400, 1080, {110, 0, 0, 50}},
+    {"Téléphone 20:9 portrait", 1080, 2400, {0, 110, 0, 50}},
+    {"Téléphone 16:9 paysage", 1920, 1080, {0, 0, 0, 0}},
+    {"Tablette 4:3 paysage", 2048, 1536, {0, 0, 0, 40}},
+    {"Tablette 4:3 portrait", 1536, 2048, {0, 0, 0, 40}},
+};
+constexpr int kDeviceCount = static_cast<int>(sizeof(kDevices) / sizeof(kDevices[0]));
+
 bool toolButton(const char* label, bool active, const char* tooltip) {
     if (active) ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(245, 165, 36, 90));
     const bool clicked = ImGui::SmallButton(label);
@@ -425,6 +440,10 @@ void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     if (dx * dx + dy * dy > 16.0f || ImGuizmo::IsUsing()) return;  // that was a drag
 
     Scene& scene = s.ctx.scene();
+    if (gameView && s.ui && m_lastSize.x > 0.0f) {  // a click on the game UI is not a pick in the scene
+        const float k = static_cast<float>(m_width) / m_lastSize.x;
+        if (s.ui->ui().isPointerOverUI({(io.MousePos.x - origin.x) * k, (io.MousePos.y - origin.y) * k})) return;
+    }
     ecs::Entity hit{};
     for (auto& [e, p] : m_iconHits) {  // icons win: they are drawn on top
         const float ix = io.MousePos.x - p.x, iy = io.MousePos.y - p.y;
@@ -754,8 +773,19 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
         ImGui::SetWindowFocus();
         s.focusViewport = false;
     }
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
-    const ImVec2 size = ImGui::GetContentRegionAvail();
+    const ImVec2 panelOrigin = ImGui::GetCursorScreenPos();
+    const ImVec2 panelSize = ImGui::GetContentRegionAvail();
+    ImVec2 origin = panelOrigin, size = panelSize;
+    // Device preview: the game view keeps the device's aspect ratio (letterboxed).
+    const DevicePreset& device = kDevices[std::clamp(devicePreset, 0, kDeviceCount - 1)];
+    const bool preview = gameView && devicePreset > 0;
+    if (preview) {
+        const float k = std::min(panelSize.x / device.width, panelSize.y / device.height);
+        size = {std::floor(device.width * k), std::floor(device.height * k)};
+        origin = {std::floor(panelOrigin.x + (panelSize.x - size.x) * 0.5f), std::floor(panelOrigin.y + (panelSize.y - size.y) * 0.5f)};
+        ImGui::GetWindowDrawList()->AddRectFilled(panelOrigin, {panelOrigin.x + panelSize.x, panelOrigin.y + panelSize.y}, IM_COL32(8, 9, 11, 255));
+        ImGui::SetCursorScreenPos(origin);
+    }
     m_lastOrigin = origin;
     m_lastSize = size;
     const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
@@ -769,10 +799,50 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     const bool hovered = ImGui::IsItemHovered();
 
     handleCamera(s, time, hovered);
+    if (preview) {
+        // Simulated safe area: hatched bands where the notch and the gesture bar are.
+        const float k = size.x / device.width;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImU32 band = IM_COL32(0, 0, 0, 120);
+        const math::Vec4 in = device.insets;
+        if (in.x > 0) dl->AddRectFilled(origin, {origin.x + in.x * k, origin.y + size.y}, band);
+        if (in.y > 0) dl->AddRectFilled(origin, {origin.x + size.x, origin.y + in.y * k}, band);
+        if (in.z > 0) dl->AddRectFilled({origin.x + size.x - in.z * k, origin.y}, {origin.x + size.x, origin.y + size.y}, band);
+        if (in.w > 0) dl->AddRectFilled({origin.x, origin.y + size.y - in.w * k}, {origin.x + size.x, origin.y + size.y}, band);
+        dl->AddRect(origin, {origin.x + size.x, origin.y + size.y}, IM_COL32(255, 255, 255, 40));
+    }
+    if (s.ui) {
+        if (preview) {
+            const float px = static_cast<float>(m_width) / device.width;  // device pixels -> view pixels
+            s.ui->setSafeAreaOverride(math::Vec4{device.insets.x * px, device.insets.y * px, device.insets.z * px, device.insets.w * px});
+        } else {
+            s.ui->setSafeAreaOverride(gameView ? std::optional<math::Vec4>(math::Vec4{0, 0, 0, 0}) : std::nullopt);
+        }
+    }
+    // Play mode: the mouse acts as a finger (touch controls, multi-touch code paths).
+    {
+        Input& input = s.engine.input();
+        const ImGuiIO& io = ImGui::GetIO();
+        const bool playing = s.ctx.playState() == PlayState::Playing && gameView && simulateTouch;
+        constexpr u64 kFinger = 0x46494E47;  // "FING"
+        const math::Vec2 p{io.MousePos.x, io.MousePos.y};
+        if (playing && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            input.touchDown(kFinger, p, 1.0f);
+            m_touching = true;
+        } else if (m_touching && (!playing || !ImGui::IsMouseDown(ImGuiMouseButton_Left))) {
+            input.touchUp(kFinger, p);
+            m_touching = false;
+        } else if (m_touching) {
+            input.touchMove(kFinger, p, 1.0f);
+        }
+    }
+    // Overlays stay inside the (possibly letterboxed) view.
+    ImGui::PushClipRect(origin, {origin.x + size.x, origin.y + size.y}, true);
     drawOverlays(s, origin, size);
     const bool painting = handleTilemapPainting(s, origin, size, hovered);
     const bool uiEditing = !painting && handleUIEditing(s, origin, size, hovered);
-    if (!painting && !uiEditing) {
+    const bool fingerMode = gameView && simulateTouch && s.ctx.playState() != PlayState::Edit;  // clicks are touches, not picks
+    if (!painting && !uiEditing && !fingerMode) {
         drawGizmo(s, origin, size);
         handlePicking(s, origin, size);
     } else {
@@ -784,6 +854,7 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
         else s.ui->clearViewport();
     }
     handleDrop(s, origin, size);
+    ImGui::PopClipRect();
 
     // Keyboard: gizmo modes and focus (viewport hovered, not flying, not typing).
     if (hovered && !painting && !m_flying && !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl) {
@@ -794,7 +865,7 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     }
 
     // Toolbar overlay.
-    ImGui::SetCursorScreenPos({origin.x + 8, origin.y + 8});
+    ImGui::SetCursorScreenPos({panelOrigin.x + 8, panelOrigin.y + 8});
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {7, 3});
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(21, 24, 29, 220));
     if (toolButton("Déplacer", gizmoOp == GizmoOp::Translate, "Déplacer (W)")) gizmoOp = GizmoOp::Translate;
@@ -810,6 +881,18 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     if (toolButton("Icônes", showIcons, nullptr)) showIcons = !showIcons;
     if (toolButton("Collisions", showColliders, "Afficher les formes de collision (vert ; déclencheurs en ambre)")) showColliders = !showColliders;
     if (toolButton("Vue jeu", gameView, "Voir la scène depuis la caméra principale du jeu")) gameView = !gameView;
+    if (gameView) {
+        ImGui::SameLine(0, 10);
+        ImGui::SetNextItemWidth(190);
+        if (ImGui::BeginCombo("##device", kDevices[devicePreset].name)) {
+            for (int i = 0; i < kDeviceCount; ++i)
+                if (ImGui::Selectable(kDevices[i].name, i == devicePreset)) devicePreset = i;
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aperçu d'un format d'écran, avec ses zones sûres (encoche, barre de gestes)");
+        ImGui::SameLine();
+        if (toolButton("Tactile", simulateTouch, "En mode Jeu, la souris agit comme un doigt")) simulateTouch = !simulateTouch;
+    }
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
     if (gameView && !RenderView::fromPrimaryCamera(s.ctx.scene())) {

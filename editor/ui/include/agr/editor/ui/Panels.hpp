@@ -1,5 +1,7 @@
 #pragma once
+#include <atomic>
 #include <deque>
+#include <thread>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -83,6 +85,10 @@ public:
     bool showIcons = true;
     bool showColliders = true;  ///< Outlines of 2D / 3D colliders (green; triggers in amber).
     float flySpeed = 6.0f;
+    /// Game view device preview: 0 = free (panel size), else a phone / tablet format with its
+    /// aspect ratio and simulated safe area.
+    int devicePreset = 0;
+    bool simulateTouch = false;  ///< Play mode: the mouse acts as a finger.
 
 private:
     void handleCamera(EditorShared& s, const FrameTime& time, bool hovered);
@@ -112,6 +118,7 @@ private:
     bool m_strokeChanged = false;
     std::pair<i32, i32> m_strokeStart{}, m_strokeLast{};
     ImVec2 m_lastOrigin{}, m_lastSize{};
+    bool m_touching = false;
     // UI builder drag: 0 none, 1 move, 2 resize (m_uiHandle = edge signs)
     int m_uiDrag = 0;
     math::Vec2 m_uiHandle{0.0f, 0.0f};
@@ -216,6 +223,31 @@ private:
     int m_dragState = -1;
     ImVec2 m_pan{240.0f, 50.0f};
     std::string m_newName = "controller";
+};
+
+/// Export window: target (PC folder, Android APK / AAB), game settings (identity, version,
+/// orientation, Android levels and ABIs), signing (keystore creation, passwords asked here
+/// and never stored), tool checks, and the export itself on a background thread with its log.
+class ExportPanel {
+public:
+    ~ExportPanel();
+    void draw(EditorShared& s, const std::string& editorDirectory);
+    bool open = false;
+    bool busy() const { return m_running.load(); }
+
+private:
+    void start(EditorShared& s, const std::string& editorDirectory);
+    int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle
+    std::string m_output;
+    std::string m_storePassword, m_keyPassword;
+    std::string m_newAlias = "game", m_newOwner, m_newPassword;
+    std::thread m_thread;
+    std::atomic<bool> m_running{false};
+    std::mutex m_mutex;
+    std::vector<std::string> m_log;  // guarded by m_mutex
+    std::string m_result;            // guarded by m_mutex
+    bool m_resultOk = false;
+    std::string m_resultPath;
 };
 
 class StatsPanel {

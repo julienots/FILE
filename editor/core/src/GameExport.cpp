@@ -18,8 +18,9 @@ std::string lower(std::string s) {
     return s;
 }
 
-/// Prepares an output folder: creates it, or empties it if (and only if) a previous export wrote it.
-Status prepareOutput(const fs::path& dir) {
+} // namespace
+
+Status prepareExportFolder(const fs::path& dir) {
     std::error_code ec;
     if (fs::exists(dir, ec)) {
         const bool empty = fs::is_directory(dir, ec) && fs::directory_iterator(dir, ec) == fs::directory_iterator();
@@ -39,6 +40,8 @@ Status prepareOutput(const fs::path& dir) {
     }
     return {};
 }
+
+namespace {
 
 Status copyFile(const fs::path& from, const fs::path& to, ExportReport& report) {
     std::error_code ec;
@@ -96,7 +99,7 @@ Result<ExportReport> packageGameData(const Project& project, const fs::path& gam
     std::error_code ec;
     if (!fs::is_regular_file(startup, ec))
         return makeError(Error::Code::NotFound, "the startup scene '" + project.settings().startupScene + "' does not exist (save it first)");
-    if (Status s = prepareOutput(gameDir); !s) return s.error();
+    if (Status s = prepareExportFolder(gameDir); !s) return s.error();
 
     // Assets (hidden files and folders skipped).
     const fs::path assets = project.assetsDirectory();
@@ -140,7 +143,7 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
     if (!fs::is_regular_file(playerExecutable, ec))
         return makeError(Error::Code::NotFound, "game player not found: " + playerExecutable.string());
     const fs::path dir = outputDir / GameManifest::safeName(project.settings().name);
-    if (Status s = prepareOutput(dir); !s) return s.error();
+    if (Status s = prepareExportFolder(dir); !s) return s.error();
     auto data = packageGameData(project, dir / "game");
     if (!data) return data.error();
     ExportReport report = std::move(data.value());

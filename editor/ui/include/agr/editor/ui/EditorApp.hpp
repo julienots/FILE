@@ -69,6 +69,7 @@ private:
     MixerPanel m_mixer;
     AnimationPanel m_animation;
     StateMachinePanel m_stateMachine;
+    ExportPanel m_export;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;
     bool m_layoutBuilt = false;

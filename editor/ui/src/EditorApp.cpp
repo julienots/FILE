@@ -502,6 +502,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_mixer.draw(*m_shared, time);
     m_animation.draw(*m_shared, time);
     m_stateMachine.draw(*m_shared);
+    m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
     handleShortcuts();
 }
@@ -563,6 +564,8 @@ void EditorApp::drawMenuBar() {
             m_saveAsName = ctx.scene().name();
             m_shared->openSaveAsPopup = true;
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Exporter le jeu...", nullptr, false, ctx.playState() == PlayState::Edit)) m_export.open = true;
         ImGui::Separator();
         // Applied at the start of the next frame: panels still use the context this frame.
         if (ImGui::MenuItem("Fermer le projet")) m_shared->runGuarded([this] { m_closeProjectRequested = true; });
@@ -1000,6 +1003,40 @@ void EditorApp::smokeTest(const FrameTime&) {
             const auto hero = scene.findByName("Hero");
             check(!hero.isNull() && scene.registry().get<TransformComponent>(hero).position.y > m_smokeHeroY + 0.5f, "the hero rose");
             check(m_shared->audio && m_shared->audio->audio().stats().clips >= 2, "music and jump sound decoded");
+            // Mobile preview: portrait phone with a notch, the mouse acting as a finger.
+            m_viewport.devicePreset = 2;
+            m_viewport.simulateTouch = true;
+            break;
+        }
+        case 104: {
+            const auto panel = scene.findByName("Score Panel");
+            const auto right = scene.findByName("Right");
+            const math::Vec4 pr = panel.isNull() ? math::Vec4{} : scene.registry().get<UIRectComponent>(panel).screenRect;
+            check(m_shared->ui && m_shared->ui->ui().safeArea().y > 0.0f && pr.y >= m_shared->ui->ui().safeArea().y,
+                  "the HUD avoids the simulated notch of the portrait phone");
+            const math::Vec4 rr = right.isNull() ? math::Vec4{} : scene.registry().get<UIRectComponent>(right).screenRect;
+            check(rr.z > 0.0f && m_viewport.uiToScreen({rr.x + rr.z * 0.5f, rr.y + rr.w * 0.5f}, m_smokeClick), "touch button visible in the preview");
+            m_smokeHeroX = scene.registry().get<TransformComponent>(scene.findByName("Hero")).position.x;
+            pushMouse(SDL_EVENT_MOUSE_MOTION, m_smokeClick);
+            break;
+        }
+        case 105: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 115: {
+            check(!m_engine->input().touches().empty(), "the mouse press became a touch");
+            check(m_shared->ui && m_shared->ui->ui().isPressed(scene.findByName("Right")), "the simulated finger holds the Right button");
+            pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, m_smokeClick);
+            break;
+        }
+        case 117: {
+            check(scene.registry().get<TransformComponent>(scene.findByName("Hero")).position.x > m_smokeHeroX + 0.3f,
+                  "the touch button moves the hero right");
+            check(ctx.selection().primary() == scene.uuidOf(scene.findByName("Hero")), "clicks on the game UI do not select scene objects");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_mobile.png").string());
+            break;
+        }
+        case 121: {
+            m_viewport.devicePreset = 0;
+            m_viewport.simulateTouch = false;
             stopPlay();
             const auto restored = scene.findByName("Hero");
             check(!restored.isNull() && scene.registry().get<TransformComponent>(restored).position.x == -3.0f,
@@ -1010,19 +1047,27 @@ void EditorApp::smokeTest(const FrameTime&) {
             ImGui::SetWindowFocus("Animation");
             break;
         }
-        case 103: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_animation.png").string()); break;
-        case 105: m_shared->showAnimation = m_shared->showStateMachine = m_shared->showMixer = false; break;
-        case 112: {
+        case 125: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_animation.png").string()); break;
+        case 127:
+            m_shared->showAnimation = m_shared->showStateMachine = m_shared->showMixer = false;
+            m_export.open = true;  // the export window draws (target: Android debug APK)
+            break;
+        case 131:
+            check(!m_export.busy(), "the export window is idle until asked");
+            m_export.open = false;
+            break;
+        case 134: {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_2d.png", ec), "2D editor screenshot written");
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_play_2d.png", ec), "2D play screenshot written");
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_mobile.png", ec), "mobile preview screenshot written");
             // ---- 3D: showcase template (glTF models, .agrmat materials, lights, shadows, sky).
             ctx.newScene(SceneTemplate::Showcase3D);
             ctx.camera().mode2D = false;
             m_viewport.gameView = true;  // frame it like the game camera
             break;
         }
-        case 140: {
+        case 162: {
             Renderer* renderer = m_shared->renderer();
             check(renderer && renderer->stats().modelsLoading == 0, "glTF models of the showcase loaded");
             check(renderer && renderer->stats().lights >= 2 && renderer->stats().shadowCasters > 10, "point / spot lights and shadow casters");
@@ -1038,15 +1083,15 @@ void EditorApp::smokeTest(const FrameTime&) {
             m_shared->inspectedAsset = "assets://3d/gold.agrmat";  // material editor + preview sphere
             break;
         }
-        case 142: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_3d.png").string()); break;
-        case 144: {
+        case 164: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_3d.png").string()); break;
+        case 166: {
             std::error_code ec;
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_3d.png", ec), "3D editor screenshot written");
             check(static_cast<bool>(m_materialPreview.texture(*m_shared)), "material preview rendered");
             check(ctx.undo(), "undo the added model");
             break;
         }
-        case 146: {
+        case 168: {
             // UI builder: drag the HUD's counter text in the game view (edit mode); a click picks the
             // topmost element (the text over its panel).
             const auto panel = scene.findByName("Counter");
@@ -1056,10 +1101,10 @@ void EditorApp::smokeTest(const FrameTime&) {
             pushMouse(SDL_EVENT_MOUSE_MOTION, m_smokeClick);
             break;
         }
-        case 147: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
-        case 149: pushMouse(SDL_EVENT_MOUSE_MOTION, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
-        case 151: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
-        case 153: {
+        case 169: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, m_smokeClick); break;
+        case 171: pushMouse(SDL_EVENT_MOUSE_MOTION, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
+        case 173: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, {m_smokeClick.x + 60.0f, m_smokeClick.y + 40.0f}); break;
+        case 175: {
             const auto panel = scene.findByName("Counter");
             check(!panel.isNull() && ctx.selection().primary() == scene.uuidOf(panel), "a click in the game view selects the UI element");
             const math::Vec2 moved = panel.isNull() ? math::Vec2{} : scene.registry().get<UIRectComponent>(panel).position;
@@ -1070,9 +1115,9 @@ void EditorApp::smokeTest(const FrameTime&) {
             startPlay();
             break;
         }
-        case 157: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
-        case 159: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
-        case 169: {
+        case 179: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
+        case 181: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
+        case 191: {
             check(!scene.findByName("Ball 1").isNull(), "Space throws a ball (Lua spawns a physics entity)");
             auto* p3 = m_engine->service<Physics3DPlugin>();
             check(p3 && p3->world().stats().bodies > 15, "3D physics bodies are simulated in play mode");
@@ -1086,7 +1131,7 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(scene.findByName("Ball 1").isNull(), "stop removes what the game spawned");
             break;
         }
-        case 171: {
+        case 193: {
             m_viewport.gameView = false;
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");

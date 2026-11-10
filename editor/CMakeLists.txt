@@ -10,9 +10,10 @@ add_library(agr_editor_core STATIC
     core/src/EditorCamera.cpp
     core/src/Picking.cpp
     core/src/EditorContext.cpp
-    core/src/GameExport.cpp)
+    core/src/GameExport.cpp
+    core/src/AndroidExport.cpp)
 target_include_directories(agr_editor_core PUBLIC core/include)
-target_link_libraries(agr_editor_core PUBLIC agr::render agr::twod agr::script agr::physics2d agr::physics3d agr::audio agr::ui agr::animation PRIVATE agr::compiler_options)
+target_link_libraries(agr_editor_core PUBLIC agr::render agr::twod agr::script agr::physics2d agr::physics3d agr::audio agr::ui agr::animation agr::assets PRIVATE agr::compiler_options)
 add_library(agr::editor_core ALIAS agr_editor_core)
 set_target_properties(agr_editor_core PROPERTIES FOLDER "Editor")
 
@@ -29,6 +30,7 @@ add_library(agr_editor_ui STATIC
     ui/src/MixerPanel.cpp
     ui/src/AnimationPanel.cpp
     ui/src/StateMachinePanel.cpp
+    ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)
 target_include_directories(agr_editor_ui PUBLIC ui/include)
 target_link_libraries(agr_editor_ui PUBLIC agr_editor_core agr::platform agr::imgui PRIVATE agr::compiler_options)
