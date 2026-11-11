@@ -1,0 +1,14 @@
+{
+  "name": "superessence-street-legends",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SUPERESSENCE: STREET LEGENDS — jeu mobile 3D de course en monde ouvert, by Superessence Studio",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --outfile=www/game.js",
+    "dev": "esbuild src/main.js --bundle --format=iife --sourcemap --target=es2020 --outfile=www/game.js --servedir=www --serve=8080",
+    "test": "node tests/logic.test.mjs && node tests/e2e.mjs"
+  },
+  "dependencies": { "three": "0.170.0" },
+  "devDependencies": { "esbuild": "^0.24.0" }
+}
