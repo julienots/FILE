@@ -24,7 +24,7 @@ async function register(base) {
   if (!r.ok) throw new Error(`Relais injoignable (${r.status}). Vérifiez l'adresse et que la fonction est déployée avec « Verify JWT » désactivé.`);
   const j = await r.json();
   if (!j.secret || !j.mcp_url) throw new Error("Réponse du relais invalide.");
-  set(K.secret, j.secret); set(K.url, j.mcp_url); set(K.base, base);
+  set(K.secret, j.secret); set(K.url, `${base}/mcp/${j.secret}`); set(K.base, base);
   return j;
 }
 
@@ -99,7 +99,7 @@ export function openClaude() {
     root.append(h("div", { class: "it", style: "display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px" },
       h("div", {}, h("b", {}, dot, "Connecté à Claude"), h("div", { class: "muted" }, state.status)),
       h("button", { class: `btn ${on ? "acc" : "pri"}`, onclick: () => { on ? stop() : start(); draw(); } }, on ? "Désactiver" : "Activer")));
-    const url = get(K.url);
+    const url = get(K.base) && get(K.secret) ? `${get(K.base)}/mcp/${get(K.secret)}` : get(K.url);
     if (url) {
       root.append(h("b", {}, "Ajouter SUPERESSENCE dans Claude"),
         h("p", { class: "muted" }, "Copiez cette adresse et ajoutez-la comme connecteur personnalisé dans Claude (une seule fois) :"),

@@ -119,7 +119,8 @@ Deno.serve(async (req) => {
       const bytes = crypto.getRandomValues(new Uint8Array(24));
       const secret = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
       await db("se_devices", { method: "POST", body: JSON.stringify({ secret }) });
-      const base = `${url.origin}${url.pathname.replace(/\/device\/register$/, "")}`;
+      // derrière la passerelle Supabase, req.url est interne (http, sans /functions/v1) : adresse publique reconstruite
+      const base = `${URL_.replace(/^http:/, "https:").replace(/\/$/, "")}/functions/v1/superessence`;
       return json({ secret, mcp_url: `${base}/mcp/${secret}` });
     }
     if (p[0] === "device" && p[1] && p[2] === "wait") {
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
       await db(`se_commands?id=eq.${Number(b.id)}&secret=eq.${p[1]}`, { method: "PATCH", body: JSON.stringify({ status: b.ok ? "done" : "error", result: b.ok ? b.result : { error: b.error }, done_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
       return json({ ok: true });
     }
-    if (p.length === 0) return json({ app: "superessence3d-relay", version: "0.3.0" });
+    if (p.length === 0) return json({ app: "superessence3d-relay", version: "0.3.1" });
     return json({ error: "introuvable" }, 404);
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
