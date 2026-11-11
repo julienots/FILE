@@ -107,3 +107,20 @@ surv.dawn,"Le jour se lève : {1} nuit(s) survécue(s)","Dawn: {1} night(s) surv
 surv.nowood,"Il faut {1} bois pour un feu","You need {1} wood for a fire","Necesitas {1} de madera para un fuego"
 surv.won,"Vous avez survécu à {1} nuits !","You survived {1} nights!","¡Sobreviviste {1} noches!"
 surv.dead,"Vous n'avez pas survécu ({1} nuit(s))","You did not survive ({1} night(s))","No sobreviviste ({1} noche(s))"
+rpg3d.quest.none,"Quête : parler à l'ancien du village","Quest: talk to the village elder","Misión: habla con el anciano del pueblo"
+rpg3d.quest.active,"Quête : rapporter 3 orbes de lumière ({1} / 3)","Quest: bring back 3 light orbs ({1} / 3)","Misión: trae 3 orbes de luz ({1} / 3)"
+rpg3d.quest.done,"Quête terminée : la lumière est revenue !","Quest complete: the light is back!","Misión cumplida: ¡la luz ha vuelto!"
+rpg3d.npc.intro,"Ancien : « Les golems ont dispersé {1} orbes de lumière dans les collines. Rapporte-les ! »","Elder: “The golems scattered {1} light orbs across the hills. Bring them back!”","Anciano: «Los gólems dispersaron {1} orbes de luz por las colinas. ¡Tráelos!»"
+rpg3d.npc.remind,"Ancien : « {1} orbe(s) sur {2}. Cherche sur les hauteurs. »","Elder: “{1} of {2} orbs. Search the heights.”","Anciano: «{1} de {2} orbes. Busca en las alturas.»"
+rpg3d.npc.thanks,"Ancien : « Merci ! Voici {1} XP. »","Elder: “Thank you! Here are {1} XP.”","Anciano: «¡Gracias! Aquí tienes {1} XP.»"
+rpg3d.npc.done,"Ancien : « Le village brille à nouveau. »","Elder: “The village shines again.”","Anciano: «El pueblo vuelve a brillar.»"
+strat.worker,Ouvrier (50),Worker (50),Obrero (50)
+strat.soldier,Soldat (80),Soldier (80),Soldado (80)
+strat.army,Armée,Army,Ejército
+strat.crystals,"Cristaux : {1}","Crystals: {1}","Cristales: {1}"
+strat.army.count,"Ouvriers : {1}   Soldats : {2}","Workers: {1}   Soldiers: {2}","Obreros: {1}   Soldados: {2}"
+strat.bases,"Base bleue {1}   —   Base rouge {2}","Blue base {1}   —   Red base {2}","Base azul {1}   —   Base roja {2}"
+strat.hint,"Touchez une unité pour la sélectionner, puis le sol pour l'envoyer","Tap a unit to select it, then the ground to send it","Toca una unidad para seleccionarla y luego el suelo para enviarla"
+strat.nocrystals,Pas assez de cristaux,Not enough crystals,No hay suficientes cristales
+strat.won,"La base rouge est détruite ! ({1} victoire(s))","The red base is destroyed! ({1} win(s))","¡La base roja ha caído! ({1} victoria(s))"
+strat.lost,Votre base est tombée…,Your base has fallen…,Tu base ha caído…

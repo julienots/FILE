@@ -119,6 +119,9 @@ struct Builder {
     UITextComponent& buttonText(ecs::Entity button) { return reg.get<UITextComponent>(scene.children(button).front()); }
 };
 
+/// RPG HUD (health, level, quest, dialog, Attack / Talk buttons), shared by RPG 2D and 3D.
+void rpgHud(Builder& b, ecs::Entity hero);
+
 void buildPlatformer(Scene& scene);
 void buildRpg2D(Scene& scene);
 void buildRpg3D(Scene& scene);

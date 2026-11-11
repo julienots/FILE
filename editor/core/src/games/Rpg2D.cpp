@@ -12,6 +12,32 @@ enum : i32 { Grass = 0, Tufts = 1, Path = 2, Water = 3, Wall = 4, Sand = 5, Fore
 constexpr int kW = 40, kH = 30;
 }
 
+// HUD shared by the RPG templates (2D and 3D): health, level, quest, dialog, sword and talk buttons.
+void rpgHud(Builder& b, ecs::Entity hero) {
+    Scene& scene = b.scene;
+    auto& reg = b.reg;
+    const auto hud = b.hud();
+    const auto stats = b.panel("Stats Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {600.0f, 170.0f});
+    b.label("HpText", stats, {0.0f, 0.0f}, {24.0f, 10.0f}, {560.0f, 50.0f}, "PV : 10 / 10", 38.0f);
+    b.panel("HpBar", stats, {0.0f, 0.0f}, {24.0f, 66.0f}, {552.0f, 26.0f}, {0.2f, 0.05f, 0.05f, 0.9f});
+    b.panel("HpFill", stats, {0.0f, 0.0f}, {24.0f, 66.0f}, {552.0f, 26.0f}, {0.85f, 0.2f, 0.25f, 1.0f});
+    b.label("LevelText", stats, {0.0f, 0.0f}, {24.0f, 104.0f}, {560.0f, 50.0f}, "Niveau 1 — XP 0 / 5", 34.0f);
+    const auto quest = b.panel("Quest Panel", hud, {1.0f, 0.0f}, {-30.0f, 30.0f}, {640.0f, 120.0f});
+    b.label("QuestText", quest, {0.0f, 0.0f}, {20.0f, 10.0f}, {600.0f, 100.0f}, "", 32.0f);
+    const auto dialog = b.panel("Dialog", hud, {0.5f, 1.0f}, {0.0f, -230.0f}, {1200.0f, 230.0f}, {0.06f, 0.05f, 0.1f, 0.88f});
+    b.label("DialogText", dialog, {0.0f, 0.0f}, {30.0f, 20.0f}, {1140.0f, 190.0f}, "", 36.0f);
+    b.hide(dialog);
+    b.label("Hint", hud, {0.5f, 1.0f}, {0.0f, -40.0f}, {800.0f, 60.0f}, "", 34.0f, UIHAlign::Center, {1.0f, 0.95f, 0.6f, 1.0f});
+    b.label("Message", hud, {0.5f, 0.3f}, {0.0f, 0.0f}, {1400.0f, 120.0f}, "", 64.0f, UIHAlign::Center, {1.0f, 0.9f, 0.5f, 1.0f});
+    const auto restart = b.button("Restart", hud, {0.5f, 0.55f}, {0.0f, 0.0f}, {420.0f, 120.0f}, "Rejouer", hero, "restart");
+    b.buttonText(restart).localizationKey = "game.restart";
+    b.hide(restart);
+    const auto attack = templates::uiButton(scene, "Attack", hud, {1.0f, 1.0f}, {-40.0f, -40.0f}, {230.0f, 200.0f}, "Épée");
+    reg.get<UITextComponent>(scene.children(attack).front()).localizationKey = "rpg.attack";
+    const auto talk = templates::uiButton(scene, "Talk", hud, {1.0f, 1.0f}, {-300.0f, -40.0f}, {230.0f, 200.0f}, "Parler");
+    reg.get<UITextComponent>(scene.children(talk).front()).localizationKey = "rpg.talk";
+}
+
 void buildRpg2D(Scene& scene) {
     Builder b(scene);
     auto& reg = b.reg;
@@ -110,27 +136,7 @@ void buildRpg2D(Scene& scene) {
 
     templates::audioSource(scene, "Music", "assets://audio/ambient.wav", AudioBus::Music, 0.4f);
 
-    // HUD.
-    const auto hud = b.hud();
-    const auto stats = b.panel("Stats Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {600.0f, 170.0f});
-    b.label("HpText", stats, {0.0f, 0.0f}, {24.0f, 10.0f}, {560.0f, 50.0f}, "PV : 10 / 10", 38.0f);
-    b.panel("HpBar", stats, {0.0f, 0.0f}, {24.0f, 66.0f}, {552.0f, 26.0f}, {0.2f, 0.05f, 0.05f, 0.9f});
-    b.panel("HpFill", stats, {0.0f, 0.0f}, {24.0f, 66.0f}, {552.0f, 26.0f}, {0.85f, 0.2f, 0.25f, 1.0f});
-    b.label("LevelText", stats, {0.0f, 0.0f}, {24.0f, 104.0f}, {560.0f, 50.0f}, "Niveau 1 — XP 0 / 5", 34.0f);
-    const auto quest = b.panel("Quest Panel", hud, {1.0f, 0.0f}, {-30.0f, 30.0f}, {640.0f, 120.0f});
-    b.label("QuestText", quest, {0.0f, 0.0f}, {20.0f, 10.0f}, {600.0f, 100.0f}, "", 32.0f);
-    const auto dialog = b.panel("Dialog", hud, {0.5f, 1.0f}, {0.0f, -230.0f}, {1200.0f, 230.0f}, {0.06f, 0.05f, 0.1f, 0.88f});
-    b.label("DialogText", dialog, {0.0f, 0.0f}, {30.0f, 20.0f}, {1140.0f, 190.0f}, "", 36.0f);
-    b.hide(dialog);
-    b.label("Hint", hud, {0.5f, 1.0f}, {0.0f, -40.0f}, {800.0f, 60.0f}, "", 34.0f, UIHAlign::Center, {1.0f, 0.95f, 0.6f, 1.0f});
-    b.label("Message", hud, {0.5f, 0.3f}, {0.0f, 0.0f}, {1400.0f, 120.0f}, "", 64.0f, UIHAlign::Center, {1.0f, 0.9f, 0.5f, 1.0f});
-    const auto restart = b.button("Restart", hud, {0.5f, 0.55f}, {0.0f, 0.0f}, {420.0f, 120.0f}, "Rejouer", hero, "restart");
-    b.buttonText(restart).localizationKey = "game.restart";
-    b.hide(restart);
-    const auto attack = templates::uiButton(scene, "Attack", hud, {1.0f, 1.0f}, {-40.0f, -40.0f}, {230.0f, 200.0f}, "Épée");
-    reg.get<UITextComponent>(scene.children(attack).front()).localizationKey = "rpg.attack";
-    const auto talk = templates::uiButton(scene, "Talk", hud, {1.0f, 1.0f}, {-300.0f, -40.0f}, {230.0f, 200.0f}, "Parler");
-    reg.get<UITextComponent>(scene.children(talk).front()).localizationKey = "rpg.talk";
+    rpgHud(b, hero);
 }
 
 } // namespace agr::editor::games

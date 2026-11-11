@@ -13,6 +13,8 @@ add_library(agr_editor_core STATIC
     core/src/GameExport.cpp
     core/src/AndroidExport.cpp
     core/src/games/Platformer.cpp
+    core/src/games/Strategy.cpp
+    core/src/games/Rpg3D.cpp
     core/src/games/Survival.cpp
     core/src/games/Tycoon.cpp
     core/src/games/Idle.cpp

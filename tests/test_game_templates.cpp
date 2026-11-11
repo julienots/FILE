@@ -571,4 +571,96 @@ TEST_CASE("survival: hunger, berries, wood, campfire, zombies at night chase and
     h.noScriptErrors();
 }
 
+
+TEST_CASE("RPG 3D: walk on the terrain relative to the camera, quest orbs, golems chase on the navmesh, sword, levels") {
+    GameHarness h(SceneTemplate::GameRpg3D);
+    h.seconds(1.0);  // the hero settles on the terrain
+    const math::Vec3 start = h.position("Hero");
+    h.holdKey(Key::Up, 1.0);  // forward = away from the camera (-Z)
+    CHECK(h.position("Hero").z < start.z - 2.5f);
+    CHECK(std::abs(h.position("Hero").y - start.y) < 1.0f);  // still on the ground
+    // Quest from the elder.
+    h.lua(R"(local x, y, z = agr.find("Sage"):position(); agr.find("Hero"):setPosition(x + 1.5, y + 0.2, z))");
+    h.frames(5);
+    h.pressKey(Key::E);
+    CHECK(h.field("Hero", "quest") == "active");
+    // Orbs: 3D triggers.
+    for (const char* o : {"Orb 1", "Orb 2", "Orb 3"}) {
+        h.lua(std::string("local x, y, z = agr.find('") + o + "'):position(); agr.find('Hero'):setPosition(x, y - 1.1, z); agr.find('Hero'):setVelocity(0, 0, 0)");
+        h.frames(10);
+        CHECK_MESSAGE(!h.active(o), o);
+    }
+    CHECK(h.number("Hero", "gems") == 3);
+    h.lua(R"(local x, y, z = agr.find("Sage"):position(); agr.find("Hero"):setPosition(x + 1.5, y + 0.2, z))");
+    h.frames(10);
+    h.pressKey(Key::E);
+    CHECK(h.field("Hero", "quest") == "done");
+    CHECK(h.number("Hero", "level") == 2);
+    // A golem walks to the hero along the navigation mesh and strikes.
+    h.lua(R"(local x, y, z = agr.find("Golem 1"):position(); agr.find("Hero"):setPosition(x - 7, y + 0.3, z))");
+    const double hp = h.number("Hero", "hp");
+    const math::Vec3 g0 = h.position("Golem 1");
+    for (int k = 0; k < 16 && h.number("Hero", "hp") >= hp; ++k) h.seconds(0.5);
+    CHECK(math::length(h.position("Golem 1") - g0) > 2.0f);
+    CHECK(h.number("Hero", "hp") < hp);
+    // Sword until it falls.
+    const double xp = h.number("Hero", "xp");
+    for (int i = 0; i < 8 && h.active("Golem 1"); ++i) {
+        h.lua(R"(local x, y, z = agr.find("Hero"):position(); agr.find("Golem 1"):setPosition(x + 1, y, z))");
+        h.pressKey(Key::Space);
+        h.seconds(0.45);
+    }
+    CHECK_FALSE(h.active("Golem 1"));
+    CHECK(h.number("Hero", "xp") == xp + 3);
+    CHECK(h.engine->save().get("rpg3d.quest") == "done");
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("strategy: workers mine, training, tap to select and send, combat, red AI attacks, base destroyed") {
+    GameHarness h(SceneTemplate::GameStrategy);
+    h.frames(10);
+    auto blue = [&]() -> double {
+        const ecs::Entity c = h.scene().createEntity("__c");
+        h.lua("agr.find('__c'):setName(tostring(math.floor(agr.find('Game'):script().bank.blue)))");
+        const double v = std::stod(h.scene().nameOf(c));
+        h.scene().destroyEntity(c);
+        return v;
+    };
+    CHECK(blue() == 100);
+    h.seconds(25.0);  // workers walk to a mine, dig, come back
+    CHECK(blue() > 100);
+    h.clickUI("TrainSoldier");
+    h.frames(3);
+    CHECK(h.text("ArmyText").find("Soldats : 3") != std::string::npos);
+    // Select one soldier by tapping it, send it to the middle.
+    h.lua(R"(_G.sol = nil; for _, u in ipairs(agr.find("Game"):script().units.blue) do if u:script().kind == "soldier" then _G.sol = u end end; _G.sol:setName("Picked"))");
+    h.frames(2);
+    const math::Vec3 p0 = h.position("Picked");
+    h.clickWorld(p0.x, 0.0f, p0.z);
+    CHECK(h.scripts().run("assert(agr.find('Picked'):script().selected == true and agr.find('Picked'):find('Ring'):isActive())", &h.scene()));
+    h.clickWorld(-8.0f, 0.0f, 3.0f);
+    h.seconds(5.0);
+    const math::Vec3 p1 = h.position("Picked");
+    CHECK(std::abs(p1.x - -8.0f) < 1.5f);
+    CHECK(std::abs(p1.z - 3.0f) < 1.5f);
+    // A red soldier next to it: they fight to the death.
+    h.lua(R"(local g = agr.find("Game"):script(); local r = g:spawn("red", "soldier"); r:setName("Foe"); local x, y, z = agr.find("Picked"):position(); r:setPosition(x + 1.2, 0, z))");
+    h.seconds(12.0);
+    const bool foeDead = h.scene().findByName("Foe").isNull(), pickedDead = h.scene().findByName("Picked").isNull();
+    CHECK((foeDead || pickedDead));
+    // The red AI attacks the blue base once it has an army.
+    h.lua(R"(local g = agr.find("Game"):script(); for i = 1, 4 do local r = g:spawn("red", "soldier"); r:setPosition(-12 + i * 0.5, 0, -2) end; for _, u in ipairs(g.units.blue) do if u:script() and u:script().kind == "soldier" then u:destroy() end end)");
+    h.seconds(14.0);
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().baseHp.blue < 60)", &h.scene()));
+    // Victory: the red base falls.
+    h.lua(R"(local g = agr.find("Game"):script(); g.baseHp.red = 1; local s = g:spawn("blue", "soldier"); s:setPosition(14.6, 0, 0))");
+    for (int k = 0; k < 20 && h.field("Game", "state") == "playing"; ++k) h.seconds(0.5);
+    CHECK(h.field("Game", "state") != "playing");
+    CHECK(h.active("Restart"));
+    h.clickUI("Restart");
+    CHECK(h.field("Game", "state") == "playing");
+    h.noScriptErrors();
+}
+
 }

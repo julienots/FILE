@@ -36,6 +36,8 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameIdle: return "Jeu : Idle (mine de cristaux)";
         case SceneTemplate::GameTycoon: return "Jeu : Tycoon (rue commerçante)";
         case SceneTemplate::GameSurvival: return "Jeu : Survie";
+        case SceneTemplate::GameRpg3D: return "Jeu : RPG 3D";
+        case SceneTemplate::GameStrategy: return "Jeu : Stratégie (temps réel)";
     }
     return "?";
 }
@@ -70,6 +72,10 @@ const char* templateDescription(SceneTemplate t) {
             return "Gestion : construisez des boutiques le long d'une rue, améliorez-les (service plus rapide, prix plus élevé). Les clients arrivent selon votre réputation, choisissent la file la plus courte, paient ou repartent mécontents si l'attente est trop longue. Objectif : 2000 pièces (record de jours sauvegardé).";
         case SceneTemplate::GameSurvival:
             return "Survie vue de dessus : la faim baisse sans cesse, mangez des baies, coupez du bois, allumez des feux de camp et alimentez-les. La nuit, des zombies vous traquent (recherche de chemin) ; le feu les repousse et les brûle. Survivez 3 nuits. Espace / E : action, C : feu, ou boutons tactiles.";
+        case SceneTemplate::GameRpg3D:
+            return "Aventure 3D à la troisième personne sur un terrain sculpté (ciel en image, ombres) : parlez à l'ancien du village, rapportez 3 orbes de lumière, affrontez des golems qui vous poursuivent sur le maillage de navigation, gagnez expérience et niveaux (sauvegardés). ZQSD / flèches, Espace : épée, E : parler, Q / R : caméra.";
+        case SceneTemplate::GameStrategy:
+            return "Stratégie en temps réel en 3D : les ouvriers récoltent les cristaux, formez ouvriers et soldats, sélectionnez des unités en les touchant et envoyez-les sur la carte (recherche de chemin autour des rochers). L'IA rouge produit une armée et attaque ; détruisez sa base avant qu'elle ne détruise la vôtre.";
     }
     return "";
 }
@@ -88,6 +94,8 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameStrategy: return ProjectMode::Mode3D;
+        case SceneTemplate::GameRpg3D: return ProjectMode::Mode3D;
         case SceneTemplate::GameSurvival: return ProjectMode::Mode2D;
         case SceneTemplate::GameTycoon: return ProjectMode::Mode2D;
         case SceneTemplate::GameIdle: return ProjectMode::Mode2D;
@@ -106,7 +114,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameSurvival); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameStrategy); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -560,6 +568,8 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameStrategy: games::buildStrategy(scene); break;
+        case SceneTemplate::GameRpg3D: games::buildRpg3D(scene); break;
         case SceneTemplate::GameSurvival: games::buildSurvival(scene); break;
         case SceneTemplate::GameTycoon: games::buildTycoon(scene); break;
         case SceneTemplate::GameIdle: games::buildIdle(scene); break;
