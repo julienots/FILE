@@ -3,7 +3,16 @@
 import * as THREE from "three";
 import { edgeTable, triTable } from "../vendor/three/addons/objects/MarchingCubes.js";
 
-// capsule : { a:[x,y,z], b:[x,y,z], ra, rb, bone }
+// primitive : capsule effilée { a, b, ra, rb, bone } ou ellipsoïde { type:"ellipsoid", c, r:[rx,ry,rz], bone }
+// sub:true = volume creusé (soustraction douce : bouche, orbites, creux)
+export function primDist(px, py, pz, c) {
+  if (c.type === "ellipsoid") {
+    const x = (px - c.c[0]) / c.r[0], y = (py - c.c[1]) / c.r[1], z = (pz - c.c[2]) / c.r[2];
+    return (Math.sqrt(x * x + y * y + z * z) - 1) * Math.min(c.r[0], c.r[1], c.r[2]);
+  }
+  return capsuleDist(px, py, pz, c);
+}
+
 function capsuleDist(px, py, pz, c) {
   const abx = c.b[0] - c.a[0], aby = c.b[1] - c.a[1], abz = c.b[2] - c.a[2];
   const apx = px - c.a[0], apy = py - c.a[1], apz = pz - c.a[2];
@@ -23,13 +32,14 @@ function smin(a, b, k) {
 export function buildOrganic(capsules, { resolution = 72, blend = null, smooth = 2, detail = null } = {}) {
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   let rmax = 0;
+  const bounds = (c) => c.type === "ellipsoid"
+    ? [c.c.map((v, i) => v - c.r[i]), c.c.map((v, i) => v + c.r[i]), Math.max(...c.r)]
+    : [[0, 1, 2].map((i) => Math.min(c.a[i], c.b[i]) - Math.max(c.ra, c.rb)), [0, 1, 2].map((i) => Math.max(c.a[i], c.b[i]) + Math.max(c.ra, c.rb)), Math.max(c.ra, c.rb)];
   for (const c of capsules) {
-    const r = Math.max(c.ra, c.rb);
+    if (c.sub) continue;
+    const [l, hh, r] = bounds(c);
     rmax = Math.max(rmax, r);
-    for (let k = 0; k < 3; k++) {
-      lo[k] = Math.min(lo[k], c.a[k] - r, c.b[k] - r);
-      hi[k] = Math.max(hi[k], c.a[k] + r, c.b[k] + r);
-    }
+    for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], l[k]); hi[k] = Math.max(hi[k], hh[k]); }
   }
   const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
   const cell = size / resolution;
@@ -39,19 +49,22 @@ export function buildOrganic(capsules, { resolution = 72, blend = null, smooth =
   const nx = Math.ceil((hi[0] - lo[0]) / cell) + 1, ny = Math.ceil((hi[1] - lo[1]) / cell) + 1, nz = Math.ceil((hi[2] - lo[2]) / cell) + 1;
   const field = new Float32Array(nx * ny * nz).fill(cell * 6);
   const idx = (x, y, z) => x + nx * (y + ny * z);
-  for (const c of capsules) {
-    const r = Math.max(c.ra, c.rb) + k + cell;
-    const x0 = Math.max(0, Math.floor((Math.min(c.a[0], c.b[0]) - r - lo[0]) / cell)), x1 = Math.min(nx - 1, Math.ceil((Math.max(c.a[0], c.b[0]) + r - lo[0]) / cell));
-    const y0 = Math.max(0, Math.floor((Math.min(c.a[1], c.b[1]) - r - lo[1]) / cell)), y1 = Math.min(ny - 1, Math.ceil((Math.max(c.a[1], c.b[1]) + r - lo[1]) / cell));
-    const z0 = Math.max(0, Math.floor((Math.min(c.a[2], c.b[2]) - r - lo[2]) / cell)), z1 = Math.min(nz - 1, Math.ceil((Math.max(c.a[2], c.b[2]) + r - lo[2]) / cell));
+  const ordered = [...capsules.filter((c) => !c.sub), ...capsules.filter((c) => c.sub)];
+  for (const c of ordered) {
+    const [l, hh] = bounds(c);
+    const kk = c.blend ?? k;
+    const m = kk + cell;
+    const x0 = Math.max(0, Math.floor((l[0] - m - lo[0]) / cell)), x1 = Math.min(nx - 1, Math.ceil((hh[0] + m - lo[0]) / cell));
+    const y0 = Math.max(0, Math.floor((l[1] - m - lo[1]) / cell)), y1 = Math.min(ny - 1, Math.ceil((hh[1] + m - lo[1]) / cell));
+    const z0 = Math.max(0, Math.floor((l[2] - m - lo[2]) / cell)), z1 = Math.min(nz - 1, Math.ceil((hh[2] + m - lo[2]) / cell));
     for (let z = z0; z <= z1; z++) {
       const pz = lo[2] + z * cell;
       for (let y = y0; y <= y1; y++) {
         const py = lo[1] + y * cell;
         let i = idx(x0, y, z);
         for (let x = x0; x <= x1; x++, i++) {
-          const d = capsuleDist(lo[0] + x * cell, py, pz, c);
-          field[i] = smin(field[i], d, k);
+          const d = primDist(lo[0] + x * cell, py, pz, c);
+          field[i] = c.sub ? -smin(-field[i], d, kk) : smin(field[i], d, kk);
         }
       }
     }
@@ -146,7 +159,8 @@ export function skinWeights(geometry, capsules) {
     const perBone = new Map();
     for (const c of capsules) {
       if (c.bone == null) continue;
-      const d = capsuleDist(x, y, z, c);
+      if (c.sub) continue;
+      const d = primDist(x, y, z, c);
       const cur = perBone.get(c.bone);
       if (cur === undefined || d < cur) perBone.set(c.bone, d);
     }

@@ -8,6 +8,8 @@ import { makeMaterial, PRESETS } from "./materials.js";
 import { makeClip, makeObjectClip, MOTIONS, OBJECT_MOTIONS } from "./anim.js";
 import { cloneDeep, deserialize, exportGLB, exportOBJ, exportSTL, History, saveFile, serialize, store, verify } from "./io.js";
 import { imageToModel } from "./image3d.js";
+import { buildOrganicModel, deformMesh, makePart } from "./gen/custom.js";
+import { paintMesh, sculptMesh } from "./viewport.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const h = (tag, attrs = {}, ...kids) => {
@@ -655,6 +657,154 @@ window.SEAPI = {
   },
   undo() { if (!history.canUndo()) return { undone: false }; const l = history.stack[history.index].label; history.restore(history.index - 1, vp.content); afterRestore(`Annulé : ${l}`); return { undone: l }; },
 };
+
+// --- modélisation libre (outils avancés pour Claude)
+const parseColorWord = (c) => parsePrompt(`objet ${c}`).colors.primary || null;
+function findPart(o, part) {
+  if (!part) return null;
+  let found = null;
+  o.traverse((x) => { if (!found && (x.name === part || x.userData.part === part)) found = x; });
+  if (!found) { const names = []; o.traverse((x) => { if (x !== o && (x.isMesh || x.userData.part)) names.push(x.name); }); throw new Error(`Partie introuvable : « ${part} ». Parties : ${[...new Set(names)].slice(0, 60).join(", ")}`); }
+  return found;
+}
+function meshesOf(o) { const m = []; o.traverse((x) => { if (x.isMesh) m.push(x); }); return m; }
+function nearestNormal(o, wp) {
+  let best = Infinity, n = new THREE.Vector3(0, 1, 0);
+  const tmp = new THREE.Vector3(), nn = new THREE.Vector3();
+  for (const m of meshesOf(o)) {
+    const pos = m.geometry.attributes.position, nor = m.geometry.attributes.normal;
+    if (!nor) continue;
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += step) {
+      tmp.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      const d = tmp.distanceToSquared(wp);
+      if (d < best) { best = d; nn.fromBufferAttribute(nor, i).transformDirection(m.matrixWorld); n.copy(nn); }
+    }
+  }
+  return n;
+}
+async function multiView(o, views) {
+  const sheet = $("#sheet").className;
+  $("#sheet").className = "closed";
+  vp.box.visible = false; vp.gizmo.detach();
+  await nextFrame();
+  const cam = vp.camera.clone(), target = vp.controls.target.clone();
+  const tiles = [];
+  for (const v of views) { vp.view(v); vp.frame(o); vp.controls.update(); await nextFrame(); tiles.push(vp.snapshot(360)); }
+  vp.camera.position.copy(cam.position); vp.controls.target.copy(target); vp.camera.updateProjectionMatrix();
+  $("#sheet").className = sheet;
+  if (vp.selection) { vp.box.visible = true; vp._attach(); }
+  const cols = tiles.length > 1 ? 2 : 1, rows = Math.ceil(tiles.length / cols);
+  const cv = document.createElement("canvas"); cv.width = 360 * cols; cv.height = 360 * rows;
+  const g = cv.getContext("2d");
+  const imgs = await Promise.all(tiles.map((src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = src; })));
+  imgs.forEach((im, i) => { g.drawImage(im, (i % cols) * 360, Math.floor(i / cols) * 360); g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect((i % cols) * 360, Math.floor(i / cols) * 360, 90, 22); g.fillStyle = "#fff"; g.font = "14px sans-serif"; g.fillText(views[i], (i % cols) * 360 + 6, Math.floor(i / cols) * 360 + 16); });
+  return cv.toDataURL("image/jpeg", 0.85).split(",")[1];
+}
+Object.assign(window.SEAPI, {
+  async build_organic(def) {
+    busy("Claude modélise…");
+    await nextFrame();
+    try {
+      const root = buildOrganicModel(def, parseColorWord, def.quality || S.quality);
+      const existing = vp.content.children.find((x) => x.name === root.name);
+      if (existing && def.replace !== false) { root.position.copy(existing.position); vp.content.remove(existing); }
+      else { root.name = uniqueName(root.name); placeBeside(root); }
+      storeRest(root); vp.add(root); vp.frame(root);
+      after(`Claude modélise ${root.name}`);
+      return describe(root);
+    } finally { busy(null); }
+  },
+  add_part(p) {
+    let model = p.model ? vp.content.children.find((x) => x.name === p.model) : null;
+    let isNew = false;
+    if (p.model && !model) { model = new THREE.Group(); model.name = p.model; isNew = true; }
+    const part = makePart(p, parseColorWord);
+    if (model) {
+      const parentBone = p.bone ? findPart(model, p.bone) : null;
+      if (parentBone && parentBone.isBone) {
+        model.updateMatrixWorld(true);
+        const inv = parentBone.matrixWorld.clone().invert().multiply(model.matrixWorld);
+        part.applyMatrix4(inv);
+        parentBone.add(part);
+      } else model.add(part);
+      if (isNew) { placeBeside(model); vp.content.add(model); }
+    } else { part.name = uniqueName(part.name); placeBeside(part); vp.content.add(part); }
+    vp.select(model || part);
+    after(`Claude : pièce ${part.name}`);
+    return { added: part.name, model: model?.name || null, parts: model ? model.children.length : 1 };
+  },
+  remove_part({ name, part }) { const o = findObj(name), x = findPart(o, part); x.parent.remove(x); after("Claude : retirer une pièce"); return { removed: part }; },
+  transform_part({ name, part, position, rotation, scale }) {
+    const x = findPart(findObj(name), part);
+    if (position) x.position.set(...position.map(Number));
+    if (rotation) x.rotation.set(...rotation.map((d) => THREE.MathUtils.degToRad(+d)));
+    if (scale !== undefined) Array.isArray(scale) ? x.scale.set(...scale.map(Number)) : x.scale.setScalar(+scale);
+    after("Claude : ajuster une pièce");
+    return { part, position: x.position.toArray(), scale: x.scale.toArray() };
+  },
+  get_object_details({ name }) {
+    const o = findObj(name);
+    const parts = [], bones = [];
+    o.updateMatrixWorld(true);
+    o.traverse((x) => {
+      if (x.isBone) bones.push({ name: x.name, role: x.userData.role || "", world: x.getWorldPosition(new THREE.Vector3()).toArray().map((v) => +v.toFixed(3)) });
+      else if (x.isMesh) { const b = new THREE.Box3().setFromObject(x); parts.push({ name: x.name, min: b.min.toArray().map((v) => +v.toFixed(3)), max: b.max.toArray().map((v) => +v.toFixed(3)), material: x.material.userData?.preset || null, vertices: x.geometry.attributes.position.count }); }
+    });
+    return { ...describe(o), parts: parts.slice(0, 80), bones: bones.slice(0, 120), definition: o.userData.def || null };
+  },
+  sculpt({ name, part, points, brush = "draw", radius = 0.1, strength = 0.6, invert = false, symmetry = false, repeat = 1 }) {
+    const o = findObj(name);
+    const target = part ? findPart(o, part) : o;
+    if (!Array.isArray(points) || !points.length) throw new Error("points [[x,y,z], ...] requis (coordonnées monde)");
+    vp.stop();
+    o.updateMatrixWorld(true);
+    const b = { kind: brush, radius: +radius, strength: +strength, invert: !!invert };
+    let n = 0;
+    for (let k = 0; k < Math.min(10, repeat); k++) for (const q of points) {
+      const pts = [new THREE.Vector3(+q[0], +q[1], +q[2])];
+      if (symmetry) pts.push(new THREE.Vector3(2 * o.position.x - q[0], +q[1], +q[2]));
+      for (const wp of pts) { const nrm = q.length >= 6 ? new THREE.Vector3(+q[3], +q[4], +q[5]).normalize() : nearestNormal(target, wp); for (const m of meshesOf(target)) sculptMesh(m, wp, nrm, b); n++; }
+    }
+    after("Claude : sculpter");
+    return { strokes: n, brush };
+  },
+  paint({ name, part, points, color, radius = 0.1, strength = 1, fill = false }) {
+    const o = findObj(name);
+    const target = part ? findPart(o, part) : o;
+    const c = colorArg(color);
+    if (!c) throw new Error("couleur invalide");
+    const hexc = "#" + c.map((x) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, "0")).join("");
+    o.updateMatrixWorld(true);
+    if (fill) for (const m of meshesOf(target)) { m.geometry.deleteAttribute("color"); m.material = m.material.clone(); m.material.vertexColors = false; m.material.color.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); }
+    else for (const q of points || []) for (const m of meshesOf(target)) paintMesh(m, new THREE.Vector3(+q[0], +q[1], +q[2]), { color: hexc, radius: +radius, strength: +strength });
+    after("Claude : peindre");
+    return { painted: part || name };
+  },
+  deform({ name, part, operation, amount = 1, axis = "y" }) {
+    const o = findObj(name);
+    const target = part ? findPart(o, part) : o;
+    for (const m of meshesOf(target)) deformMesh(m, operation, +amount, axis);
+    after(`Claude : ${operation}`);
+    return { deformed: part || name, operation };
+  },
+  async view_scene({ name, view, views }) {
+    const o = name ? findObj(name) : null;
+    const list = views && views.length ? views : view ? [view] : ["persp", "front", "right", "top"];
+    return { image: await multiView(o, list), views: list, objects: vp.content.children.map((x) => x.name) };
+  },
+  set_material({ name, part, preset, color, description, emissive, roughness, metallic }) {
+    const o = findObj(name);
+    const target = part ? findPart(o, part) : o;
+    let mat;
+    if (description) { const r = parseMaterialText(description); mat = makeMaterial(r.preset, r.params); }
+    else { mat = makeMaterial(preset || "plain", { color: colorArg(color) || undefined, roughness, metallic, emission: emissive ? colorArg(emissive === true ? color : emissive) : null, emission_strength: emissive ? 2 : 0 }); }
+    target.traverse((x) => { if (x.isMesh) { if (x.geometry.attributes.color) x.geometry.deleteAttribute("color"); x.material = mat; } });
+    after("Claude : matériau");
+    return { name, part: part || null, material: mat.userData.preset };
+  },
+});
+
 window.SEUI = { toast, render, showModal, closeModal };
 
 // ------------------------------------------------------------------ démarrage

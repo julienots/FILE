@@ -29,8 +29,12 @@ Avec la CLI, au lieu des étapes 2 et 3 : `supabase functions deploy superessenc
 
 **Gardez l'application SUPERESSENCE ouverte** pendant que Claude travaille. Android met en pause les applications en arrière-plan. Le plus pratique est l'écran partagé, ou une tablette.
 
-## Outils disponibles pour Claude (15)
-`get_scene_info`, `generate_model`, `modify_model`, `set_material`, `transform_object`, `animate`, `stop_animation`, `add_shape`, `duplicate_object`, `delete_object` (avec confirmation), `set_lighting`, `view_scene` (renvoie une image de la vue), `save_to_library`, `export_model` (vous choisissez où enregistrer le fichier), `undo`.
+## Outils disponibles pour Claude (23)
+**Modélisation libre :** `build_organic` construit n'importe quelle créature os par os, avec des volumes ajoutés ou creusés, des yeux, des pièces et un squelette animable. `add_part` assemble n'importe quel objet pièce par pièce (tubes courbés, profils tournés, contours extrudés, sections, membranes, formes de base, symétrie). Viennent ensuite `transform_part`, `remove_part`, `sculpt`, `paint`, `deform` (lisser, relief, gonfler, effiler, tordre, courber, étirer) et `get_object_details`.
+**Vérification :** `view_scene` renvoie une mosaïque de 4 vues (perspective, face, profil, dessus).
+**Rapide :** `generate_model`, `modify_model`, `set_material`, `transform_object`, `animate`, `stop_animation`, `add_shape`, `duplicate_object`, `delete_object` (avec confirmation), `set_lighting`, `save_to_library`, `export_model`, `undo`, `get_scene_info`.
+
+Exemple de demande : « Invente une créature originale : un prédateur reptilien bipède avec une crête orange, modélise-la toi-même avec build_organic, vérifie sous 4 angles et corrige jusqu'à ce qu'elle soit réussie, puis fais-la marcher. »
 
 ## Sécurité
 - L'adresse du connecteur contient un secret de 32 caractères propre à votre téléphone. Ne la partagez pas. En cas de doute, touchez **Régénérer** et mettez à jour le connecteur dans Claude.

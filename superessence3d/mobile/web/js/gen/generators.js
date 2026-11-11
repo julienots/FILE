@@ -5,7 +5,7 @@ import { buildOrganic, skinWeights } from "../organic.js";
 import { V, box, curvePoints, cylinder, ellipseSection, ellipsoid, fanMembrane, lathe, loft, merge, place, sweep, taper } from "../geom.js";
 import { applyPattern, boxUV, canvasTexture, fbm, makeMaterial } from "../materials.js";
 
-export const QUALITY = { draft: 56, standard: 84, high: 112, ultra: 140 };
+export const QUALITY = { draft: 60, standard: 96, high: 128, ultra: 160 };
 
 const DEFAULT_HEIGHTS = {
   "creature/dragon": 2.5, "creature/hydra": 3, "creature/kraken": 4, "creature/blob": 1.2, "creature/demon": 2.4,
@@ -604,16 +604,24 @@ function assembleOrganic(o, quality) {
   root.name = o.name;
   // échelle & pose au sol (avant skinning)
   const box3 = new THREE.Box3();
-  for (const c of o.caps) { box3.expandByPoint(V(...c.a).subScalar(c.ra)); box3.expandByPoint(V(...c.b).addScalar(c.rb)); box3.expandByPoint(V(...c.a).addScalar(c.ra)); box3.expandByPoint(V(...c.b).subScalar(c.rb)); }
+  for (const c of o.caps) {
+    if (c.sub) continue;
+    if (c.type === "ellipsoid") { box3.expandByPoint(V(...c.c).sub(V(...c.r))); box3.expandByPoint(V(...c.c).add(V(...c.r))); }
+    else { box3.expandByPoint(V(...c.a).subScalar(c.ra)); box3.expandByPoint(V(...c.b).addScalar(c.rb)); box3.expandByPoint(V(...c.a).addScalar(c.ra)); box3.expandByPoint(V(...c.b).subScalar(c.rb)); }
+  }
   for (const p of [...o.rigid, ...o.skinned]) { p.geo.computeBoundingBox(); box3.union(p.geo.boundingBox); }
   let target = o.spec.height || DEFAULT_HEIGHTS[`${o.spec.category}/${o.spec.subtype}`] || 1.8;
   if (!o.spec.height && o.spec.size_hint === "big") target *= 2.5;
   if (!o.spec.height && o.spec.size_hint === "small") target *= 0.5;
   const cur = Math.max(box3.max.y - box3.min.y, 1e-3);
-  const k = target / cur;
-  const shift = -box3.min.y * k;
+  const k = o.noRescale ? 1 : target / cur;
+  const shift = o.noRescale ? 0 : -box3.min.y * k;
+  if (o.noRescale) target = cur;
   const tf = (v) => [v[0] * k, v[1] * k + shift, v[2] * k];
-  for (const c of o.caps) { c.a = tf(c.a); c.b = tf(c.b); c.ra *= k; c.rb *= k; }
+  for (const c of o.caps) {
+    if (c.type === "ellipsoid") { c.c = tf(c.c); c.r = c.r.map((v) => v * k); }
+    else { c.a = tf(c.a); c.b = tf(c.b); c.ra *= k; c.rb *= k; }
+  }
   for (const b of o.bones) { b.head.multiplyScalar(k).y += shift; b.tail.multiplyScalar(k).y += shift; }
   const M = new THREE.Matrix4().makeScale(k, k, k).premultiply(new THREE.Matrix4().makeTranslation(0, shift, 0));
   for (const p of [...o.rigid, ...o.skinned]) { p.geo.applyMatrix4(M); p.geo.computeVertexNormals(); }
@@ -654,10 +662,10 @@ function assembleOrganic(o, quality) {
     const fieldCaps = o.caps.filter((c) => c.field);
     const sizeY = target;
     const minR = sizeY / res * 0.9;
-    for (const c of fieldCaps) { c.ra = Math.max(c.ra, minR); c.rb = Math.max(c.rb, minR); }
-    const geo = buildOrganic(fieldCaps, { resolution: res, smooth: 2 });
+    for (const c of fieldCaps) if (c.type !== "ellipsoid" && !c.sub) { c.ra = Math.max(c.ra, minR); c.rb = Math.max(c.rb, minR); }
+    const geo = buildOrganic(fieldCaps, { resolution: o.resolution || res, smooth: o.smooth ?? 2, blend: o.blend ?? null });
     const relief = o.spec.detail === "high" || ["scales", "stone", "bark"].includes(o.bodyPreset) ? target * 0.004 : 0;
-    applyPattern(geo, o.bodyPreset, o.bodyParams, { scale: 1.6 / Math.max(target, 0.2), relief });
+    applyPattern(geo, o.bodyPreset, o.bodyParams, { scale: (o.patternScale || 1) * 1.6 / Math.max(target, 0.2), relief: o.relief ?? relief });
     const mat = makeMaterial(o.bodyPreset, o.bodyParams);
     mat.vertexColors = true;
     mat.color.set(0xffffff);
@@ -1088,3 +1096,5 @@ export function generate(spec, params = {}) {
   root.traverse((c) => { if (c.isMesh) tris += (c.geometry.index ? c.geometry.index.count : c.geometry.attributes.position.count) / 3; });
   return { root, stats: { triangles: Math.round(tris), ms: Math.round(performance.now() - t0) } };
 }
+
+export { Organic, assembleOrganic, addEyes };
