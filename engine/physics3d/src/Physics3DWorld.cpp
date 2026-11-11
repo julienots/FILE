@@ -477,7 +477,12 @@ struct Physics3DWorld::Impl {
             const Pose p = poseOf(s.worldMatrix(body.entity));
             const Vec3 d = p.position - body.lastPosition;
             const bool moved = math::dot(d, d) > 1e-10f || std::fabs(math::dot(p.rotation, body.lastRotation)) < 0.999999f;
-            if (!moved) continue;
+            if (!moved) {
+                // A kinematic body keeps the velocity MoveKinematic gave it: without a new target
+                // (several fixed steps in one frame) it must stop where it is, not drift on.
+                if (body.type == BodyType3D::Kinematic) bi.SetLinearAndAngularVelocity(body.id, JPH::Vec3::sZero(), JPH::Vec3::sZero());
+                continue;
+            }
             if (body.type == BodyType3D::Kinematic && dt > 0.0f) {
                 bi.MoveKinematic(body.id, JPH::RVec3(p.position.x, p.position.y, p.position.z), toJ(math::normalize(p.rotation)), dt);
             } else {

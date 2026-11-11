@@ -10,6 +10,7 @@ namespace {
 
 ecs::Entity unitPrototype(Builder& b, const std::string& name, ecs::Entity parent, Vec4 color, bool soldier, const std::string& properties) {
     const auto root = b.entity(name, {}, parent);
+    b.reg.get<TransformComponent>(root).scale = Vec3{1.4f};  // readable from the high camera
     const float s = soldier ? 1.0f : 0.8f;
     b.mesh("Body", PrimitiveMesh::Cube, {0.0f, 0.45f * s, 0.0f}, Vec3{0.6f, 0.9f, 0.6f} * s, color, root);
     b.mesh("Head", PrimitiveMesh::Sphere, {0.0f, 1.05f * s, 0.0f}, Vec3{0.45f} * s, {0.95f, 0.85f, 0.75f, 1.0f}, root);
@@ -34,9 +35,9 @@ void buildStrategy(Scene& scene) {
     const auto sunLight = templates::sun(scene);
     reg.get<EnvironmentComponent>(sunLight).sky = SkyMode::Gradient;
 
-    const auto ground = b.mesh("Ground", PrimitiveMesh::Plane, {}, {44.0f, 1.0f, 28.0f}, {0.55f, 0.7f, 0.45f, 1.0f});
-    reg.get<MeshRendererComponent>(ground).texture = "assets://textures/grid.png";
-    reg.get<MeshRendererComponent>(ground).uvScale = {22.0f, 14.0f};
+    const auto ground = b.mesh("Ground", PrimitiveMesh::Plane, {}, {44.0f, 1.0f, 28.0f}, {0.9f, 1.0f, 0.85f, 1.0f});
+    reg.get<MeshRendererComponent>(ground).texture = "assets://terrain/grass.png";
+    reg.get<MeshRendererComponent>(ground).uvScale = {11.0f, 7.0f};
     reg.emplace<RigidBodyComponent>(ground).type = BodyType3D::Static;
     {
         auto& col = reg.emplace<ColliderComponent>(ground);
@@ -69,7 +70,7 @@ void buildStrategy(Scene& scene) {
     const Vec3 mineAt[] = {{-9.0f, 0.6f, -8.0f}, {-9.0f, 0.6f, 8.0f}, {9.0f, 0.6f, -8.0f}, {9.0f, 0.6f, 8.0f}};
     n = 0;
     for (Vec3 p : mineAt) {
-        const auto m = b.mesh("Mine " + std::to_string(++n), PrimitiveMesh::Sphere, p, {1.2f, 1.4f, 1.2f}, {0.7f, 0.45f, 1.0f, 1.0f}, mines);
+        const auto m = b.mesh("Mine " + std::to_string(++n), PrimitiveMesh::Sphere, {p.x, 1.1f, p.z}, {2.2f, 2.6f, 2.2f}, {0.7f, 0.45f, 1.0f, 1.0f}, mines);
         reg.get<MeshRendererComponent>(m).roughness = 0.15f;
         auto& light = reg.emplace<PointLightComponent>(m);
         light.color = {0.7f, 0.5f, 1.0f, 1.0f};

@@ -17,7 +17,7 @@ function Game:restart()
     for _, team in pairs(self.units) do for _, u in ipairs(team) do if u:isValid() then u:destroy() end end end
     self.units = { blue = {}, red = {} }
     self.bank = { blue = self.crystals, red = 60 }
-    self.baseHp = { blue = self.baseHp, red = self.baseHp }
+    self.hpOf = { blue = self.baseHp, red = self.baseHp }
     self.selected = {}
     self.state = "playing"
     self.redTimer, self.waveTimer = 8, 60
@@ -59,10 +59,10 @@ function Game:deposit(team, amount)
 end
 function Game:hitBase(team, damage)
     if self.state ~= "playing" then return end
-    self.baseHp[team] = math.max(0, self.baseHp[team] - damage)
+    self.hpOf[team] = math.max(0, self.hpOf[team] - damage)
     local base = self:base(team)
     if base then base:find("Roof"):set("MeshRenderer", "color", { 1, 0.6, 0.5, 1 }) end
-    if self.baseHp[team] <= 0 then self:finish(team == "red") end
+    if self.hpOf[team] <= 0 then self:finish(team == "red") end
     self:hud()
 end
 
@@ -91,7 +91,7 @@ end
 function Game:hud()
     G.text("CrystalsText", agr.tr("strat.crystals", math.floor(self.bank.blue)))
     G.text("ArmyText", agr.tr("strat.army.count", self:count("blue", "worker"), self:count("blue", "soldier")))
-    G.text("BasesText", agr.tr("strat.bases", self.baseHp.blue, self.baseHp.red))
+    G.text("BasesText", agr.tr("strat.bases", self.hpOf.blue, self.hpOf.red))
 end
 
 -- Boutons TrainWorker / TrainSoldier.

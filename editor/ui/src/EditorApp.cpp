@@ -9,6 +9,8 @@
 #include <imgui_stdlib.h>
 #include <ImGuizmo.h>
 
+#include <cctype>
+#include <cstdlib>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -109,6 +111,7 @@ Status EditorApp::onStart(Engine& engine) {
         m_settingsDir = (fs::temp_directory_path() / "agr_editor").string();
     }
     if (!m_options.smokeTestDir.empty()) m_settingsDir = (fs::path(m_options.smokeTestDir) / "settings").string() + "/";
+    if (!m_options.galleryDir.empty()) m_settingsDir = (fs::path(m_options.galleryDir) / "settings").string() + "/";
     m_iniPath = m_settingsDir + "imgui.ini";
     loadSettings();
     m_wizard.location = defaultProjectsFolder();
@@ -140,6 +143,13 @@ Status EditorApp::onStart(Engine& engine) {
         ProjectSettings settings;
         settings.name = "Smoke Test";
         auto project = Project::create(fs::path(m_options.smokeTestDir) / "SmokeProject", settings, SceneTemplate::Empty3D,
+                                       m_options.resourcesDir + "/templates/assets");
+        if (!project) return project.error();
+        openProject(project.value().root().string());
+    } else if (!m_options.galleryDir.empty()) {
+        ProjectSettings settings;
+        settings.name = "Template Gallery";
+        auto project = Project::create(fs::path(m_options.galleryDir) / "GalleryProject", settings, SceneTemplate::Empty2D,
                                        m_options.resourcesDir + "/templates/assets");
         if (!project) return project.error();
         openProject(project.value().root().string());
@@ -274,6 +284,7 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     drawModals();
     if (m_showDemo) ImGui::ShowDemoWindow(&m_showDemo);
     if (!m_options.smokeTestDir.empty()) smokeTest(time);
+    if (!m_options.galleryDir.empty()) templateGallery();
     if (!m_options.hubScreenshot.empty() && m_frame == 8) captureNextFrame(m_options.hubScreenshot);
     if (!m_options.hubScreenshot.empty() && m_frame == 10) m_engine->requestQuit();
     ImGui::Render();
@@ -851,6 +862,43 @@ void EditorApp::check(bool condition, const char* what) {
 
 /// Scripted end-to-end session driven through the same calls as the UI, with a
 /// screenshot of the real editor window. Used by CI on every graphics backend.
+/// --template-gallery: each game template is opened, played for two seconds and its game view
+/// captured (visual check of the templates), then the editor quits.
+void EditorApp::templateGallery() {
+    static std::vector<SceneTemplate> games;
+    if (games.empty()) {
+        for (SceneTemplate t : allTemplates())
+            if (isGameTemplate(t)) games.push_back(t);
+        if (const char* only = std::getenv("AGR_GALLERY_ONLY")) {  // one template (1-based), for debugging
+            const usize i = static_cast<usize>(std::atoi(only));
+            if (i >= 1 && i <= games.size()) games = {games[i - 1]};
+        }
+    }
+    constexpr u64 kStart = 10, kPerTemplate = 150;
+    if (m_frame < kStart || !m_ctx->hasProject()) return;
+    if (m_engine->localization().language() != "fr") m_engine->localization().setLanguage("fr");
+    const u64 index = (m_frame - kStart) / kPerTemplate, phase = (m_frame - kStart) % kPerTemplate;
+    if (index >= games.size()) {
+        if (phase == 5) m_engine->requestQuit();
+        return;
+    }
+    const SceneTemplate t = games[index];
+    if (phase == 0) {
+        stopPlay();
+        m_ctx->newScene(t);
+        m_ctx->camera().mode2D = templateMode(t) == ProjectMode::Mode2D;
+        m_viewport.gameView = true;
+    } else if (phase == 3) {
+        startPlay();
+    } else if (phase == 125) {
+        std::string name = templateName(t);
+        for (char& c : name)
+            if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
+        captureNextFrame((fs::path(m_options.galleryDir) / (std::to_string(index + 1) + "_" + name + ".png")).string());
+        AGR_LOG_INFO("Gallery", "captured {}", templateName(t));
+    }
+}
+
 void EditorApp::smokeTest(const FrameTime&) {
     EditorContext& ctx = *m_ctx;
     Scene& scene = ctx.scene();

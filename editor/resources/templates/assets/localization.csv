@@ -124,3 +124,26 @@ strat.hint,"Touchez une unité pour la sélectionner, puis le sol pour l'envoyer
 strat.nocrystals,Pas assez de cristaux,Not enough crystals,No hay suficientes cristales
 strat.won,"La base rouge est détruite ! ({1} victoire(s))","The red base is destroyed! ({1} win(s))","¡La base roja ha caído! ({1} victoria(s))"
 strat.lost,Votre base est tombée…,Your base has fallen…,Tu base ha caído…
+race.gas,Gaz,Gas,Gas
+race.brake,Frein,Brake,Freno
+race.lap,"Tour {1} / {2}","Lap {1} / {2}","Vuelta {1} / {2}"
+race.time,"Temps : {1} s","Time: {1} s","Tiempo: {1} s"
+race.best,"Meilleur tour : {1} s","Best lap: {1} s","Mejor vuelta: {1} s"
+race.speed,"{1} km/h","{1} km/h","{1} km/h"
+race.first,1re place,1st place,1.er puesto
+race.secondpos,2e place,2nd place,2.º puesto
+race.go,Partez !,Go!,¡Ya!
+race.won,"Victoire ! {1} s","Victory! {1} s","¡Victoria! {1} s"
+race.second,"Deuxième… {1} s","Second… {1} s","Segundo… {1} s"
+arena.local,2 joueurs (local),2 players (local),2 jugadores (local)
+arena.host,Héberger,Host,Alojar
+arena.join,Rejoindre,Join,Unirse
+arena.score,"Joueur {1} : {2}","Player {1}: {2}","Jugador {1}: {2}"
+arena.status.local,"Local : joueur 1 ZQSD / WASD, joueur 2 flèches (ou manettes)","Local: player 1 WASD, player 2 arrows (or gamepads)","Local: jugador 1 WASD, jugador 2 flechas (o mandos)"
+arena.status.hosting,"Hôte sur le port {1} : en attente de joueurs","Hosting on port {1}: waiting for players","Anfitrión en el puerto {1}: esperando jugadores"
+arena.status.players,"Hôte : {1} joueur(s) connecté(s)","Host: {1} player(s) connected","Anfitrión: {1} jugador(es) conectado(s)"
+arena.status.joining,"Connexion à {1}…","Connecting to {1}…","Conectando a {1}…"
+arena.status.joined,"Connecté : vous êtes le joueur {1}","Connected: you are player {1}","Conectado: eres el jugador {1}"
+arena.status.lost,"Connexion perdue : retour au jeu local","Connection lost: back to local play","Conexión perdida: vuelta al juego local"
+arena.status.error,"Réseau : {1}","Network: {1}","Red: {1}"
+arena.won,"Le joueur {1} gagne !","Player {1} wins!","¡Gana el jugador {1}!"

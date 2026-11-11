@@ -14,6 +14,7 @@ struct EditorOptions {
     std::string resourcesDir;    ///< fonts/ and templates/ (copied next to the executable)
     std::string projectPath;     ///< Open this project at startup (otherwise: project hub)
     std::string smokeTestDir;    ///< Non-empty: run the scripted end-to-end test in this folder
+    std::string galleryDir;      ///< Non-empty: play every game template and capture its game view here, then quit
     std::string hubScreenshot;   ///< Non-empty: capture the project hub to this PNG and quit
 };
 
@@ -49,6 +50,7 @@ private:
     void saveSettings();
     void captureNextFrame(std::string path) { m_capturePath = std::move(path); }
     void smokeTest(const FrameTime& time);
+    void templateGallery();
     void check(bool condition, const char* what);
     void pushMouse(u32 sdlEventType, ImVec2 pos);
     void pushKey(u32 sdlKey, u32 scancode, u16 mod, bool down);

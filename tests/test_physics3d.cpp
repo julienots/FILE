@@ -93,6 +93,19 @@ TEST_CASE("triggers report enter / exit; compound bodies from children") {
     CHECK(w2.physics.mass(body).value() == doctest::Approx(20.0f).epsilon(0.01));
 }
 
+TEST_CASE("a kinematic body moved by a script stops at its target when a frame has several fixed steps") {
+    World3D w;
+    const auto k = w.box("Floating", {0, 1, 0}, {1, 1, 1}, BodyType3D::Kinematic);
+    w.run(0.1f);
+    // A slow frame: the script moves the body once, then physics steps three times.
+    for (int frame = 0; frame < 60; ++frame) {
+        w.scene.registry().get<TransformComponent>(k).position.y = 1.0f + std::sin(static_cast<float>(frame) * 0.2f) * 0.25f;
+        for (int stepI = 0; stepI < 3; ++stepI) w.physics.step(w.scene, 1.0f / 60.0f);
+        const float expected = 1.0f + std::sin(static_cast<float>(frame) * 0.2f) * 0.25f;
+        REQUIRE(w.position(k).y == doctest::Approx(expected).epsilon(0.01));
+    }
+}
+
 TEST_CASE("kinematic platforms, teleports, impulses, frozen rotation, raycasts") {
     World3D w;
     const auto platform = w.box("Platform", {0, 0, 0}, {4, 0.5f, 4}, BodyType3D::Kinematic);

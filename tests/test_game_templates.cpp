@@ -15,6 +15,8 @@
 #include "agr/editor/SceneTemplates.hpp"
 #include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/net/NetPlugin.hpp"
+#include "agr/net/NetSession.hpp"
+#include <nlohmann/json.hpp>
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -269,7 +271,7 @@ TEST_CASE("RPG 2D: quest, gems, bats chase along the grid, sword, experience, de
     CHECK_FALSE(h.active("Bat 1"));
     CHECK(h.number("Hero", "xp") == xp + 2);
     // Progress is saved.
-    h.engine->save().flush();
+    CHECK(h.engine->save().flush());
     CHECK(h.engine->save().get("rpg2d.level") == 2);
     CHECK(h.engine->save().get("rpg2d.quest") == "done");
     // Death and restart.
@@ -652,14 +654,130 @@ TEST_CASE("strategy: workers mine, training, tap to select and send, combat, red
     // The red AI attacks the blue base once it has an army.
     h.lua(R"(local g = agr.find("Game"):script(); for i = 1, 4 do local r = g:spawn("red", "soldier"); r:setPosition(-12 + i * 0.5, 0, -2) end; for _, u in ipairs(g.units.blue) do if u:script() and u:script().kind == "soldier" then u:destroy() end end)");
     h.seconds(14.0);
-    CHECK(h.scripts().run("assert(agr.find('Game'):script().baseHp.blue < 60)", &h.scene()));
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().hpOf.blue < 60)", &h.scene()));
     // Victory: the red base falls.
-    h.lua(R"(local g = agr.find("Game"):script(); g.baseHp.red = 1; local s = g:spawn("blue", "soldier"); s:setPosition(14.6, 0, 0))");
+    h.lua(R"(local g = agr.find("Game"):script(); g.hpOf.red = 1; local s = g:spawn("blue", "soldier"); s:setPosition(14.6, 0, 0))");
     for (int k = 0; k < 20 && h.field("Game", "state") == "playing"; ++k) h.seconds(0.5);
     CHECK(h.field("Game", "state") != "playing");
     CHECK(h.active("Restart"));
     h.clickUI("Restart");
     CHECK(h.field("Game", "state") == "playing");
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("racing: countdown, throttle and steering, off-road slowdown, AI follows the circuit, laps, finish, best lap saved") {
+    GameHarness h(SceneTemplate::GameRacing);
+    h.frames(5);
+    CHECK(h.field("Race", "state") == "countdown");
+    h.key(Key::Up, true);
+    h.seconds(1.0);
+    CHECK(std::abs(h.position("Player Car").x - -17.0f) < 0.2f);  // held at the line
+    h.key(Key::Up, false);
+    h.seconds(2.2);
+    CHECK(h.field("Race", "state") == "racing");
+    const math::Vec3 ai0 = h.position("Rival Car");
+    h.holdKey(Key::Up, 2.0);
+    CHECK(h.number("Player Car", "speed") > 15);
+    CHECK(h.position("Player Car").x > -10.0f);  // heading +X along the straight
+    CHECK(std::abs(h.position("Player Car").z - 14.5f) < 1.0f);
+    CHECK(h.position("Rival Car").x > ai0.x + 20.0f);
+    CHECK(h.text("SpeedText").find("km/h") != std::string::npos);
+    // Steering turns the car.
+    h.lua(R"(_G.y0 = agr.find("Player Car"):script().yaw)");
+    h.key(Key::Up, true);
+    h.holdKey(Key::Right, 0.5);
+    h.key(Key::Up, false);
+    CHECK(h.scripts().run("assert(math.abs(agr.find('Player Car'):script().yaw - _G.y0) > 10)", &h.scene()));
+    // Off the road: speed capped.
+    h.lua(R"(local c = agr.find("Player Car"); c:setPosition(0, 0.3, 0); c:script().speed = 26)");
+    h.holdKey(Key::Up, 2.0);
+    CHECK(h.field("Player Car", "offRoad") == "true");
+    CHECK(h.number("Player Car", "speed") <= 26 * 0.45 + 0.5);
+    // Laps: drive the waypoints in order (teleporting along the circuit), three times.
+    for (int lap = 0; lap < 3; ++lap)
+        for (int w = 2; w <= 25; ++w) {
+            const int wp = (w - 1) % 24 + 1;
+            h.lua("local w = agr.find('WP " + std::to_string(wp) + "'); local x, y, z = w:position(); local c = agr.find('Player Car'); c:setPosition(x, 0.3, z)");
+            h.frames(2);
+        }
+    CHECK(h.field("Race", "state") == "finished");
+    CHECK(h.active("Restart"));
+    CHECK(h.engine->save().get("racing.bestLap").is_number());
+    CHECK(h.text("Message").find("s") != std::string::npos);
+    h.clickUI("Restart");
+    CHECK(h.field("Race", "state") == "countdown");
+    CHECK(std::abs(h.position("Player Car").x - -17.0f) < 0.5f);
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("arena: two local players race for coins; network host simulates a remote player and broadcasts the state") {
+    GameHarness h(SceneTemplate::GameArena);
+    h.frames(5);
+    CHECK(h.active("Player 1"));
+    CHECK(h.active("Player 2"));
+    CHECK_FALSE(h.active("Player 3"));
+    const math::Vec3 a0 = h.position("Player 1"), b0 = h.position("Player 2");
+    h.key(Key::D, true);
+    h.key(Key::Left, true);
+    h.seconds(0.5);
+    h.key(Key::D, false);
+    h.key(Key::Left, false);
+    h.frames(1);
+    CHECK(h.position("Player 1").x > a0.x + 2.0f);
+    CHECK(h.position("Player 2").x < b0.x - 2.0f);
+    // Coin: put it on player 1.
+    h.lua(R"(local g = agr.find("Game"):script(); local p = g.players[1]; g.coinX, g.coinY = p.x, p.y)");
+    h.frames(2);
+    CHECK(h.text("Score1") == "Joueur 1 : 1");
+    h.lua(R"(local g = agr.find("Game"):script(); g.players[2].score = 9; local p = g.players[2]; g.coinX, g.coinY = p.x, p.y)");
+    h.frames(2);
+    CHECK(h.text("Message") == "Le joueur 2 gagne !");
+    h.seconds(3.5);
+    CHECK(h.text("Score2") == "Joueur 2 : 0");  // next round
+
+    // Network: host on a free port (the game's port may be in use on this machine).
+    h.lua(R"(agr.find("Game"):script().port = 0)");
+    h.clickUI("Host");
+    CHECK(h.field("Game", "mode") == "host");
+    CHECK_FALSE(h.active("Player 2"));
+    h.lua(R"(_G.__port = agr.net.port())");
+    const ecs::Entity carrier = h.scene().createEntity("__c");
+    h.lua("agr.find('__c'):setName(tostring(_G.__port))");
+    const u16 port = static_cast<u16>(std::stoi(h.scene().nameOf(carrier)));
+    h.scene().destroyEntity(carrier);
+    REQUIRE(port != 0);
+    net::NetSession client;
+    REQUIRE(client.join("127.0.0.1", port));
+    f64 now = 0.0;
+    std::vector<net::NetEvent> received;
+    for (int i = 0; i < 120 && !client.connected(); ++i) {
+        h.frames(1);
+        client.update(now += 1.0 / 60.0);
+    }
+    REQUIRE(client.connected());
+    CHECK(client.localId() == 2);
+    // The remote player holds "right": the host moves player 2 and broadcasts positions.
+    h.frames(2);
+    const float x0 = h.position("Player 2").x;
+    for (int i = 0; i < 40; ++i) {
+        client.send(net::NetSession::kHostId, R"({"t":"in","x":1,"y":0})", false);
+        h.frames(1);
+        client.update(now += 1.0 / 60.0);
+        for (auto& e : client.takeEvents()) received.push_back(std::move(e));
+    }
+    CHECK(h.active("Player 2"));
+    CHECK(h.position("Player 2").x > x0 + 1.0f);
+    REQUIRE(received.size() >= 5);  // about 20 states per second
+    const auto st = nlohmann::json::parse(received.back().data);
+    CHECK(st["t"] == "st");
+    CHECK(st["p"][1][3] == 1);                                 // player 2 active
+    CHECK(st["p"][1][0].get<double>() > x0 + 1.0);             // its position
+    CHECK(h.text("Status").find("2 joueur") != std::string::npos);
+    client.close();
+    for (int i = 0; i < 10; ++i) h.frames(1);
+    CHECK_FALSE(h.active("Player 2"));  // left
     h.noScriptErrors();
 }
 

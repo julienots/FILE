@@ -135,12 +135,20 @@ int main(int argc, char** argv) {
         else if (a == "--validation") config.window.graphicsValidation = true;
         else if (a == "--smoke-test" && i + 1 < argc) options.smokeTestDir = argv[++i];
         else if (a == "--hub-screenshot" && i + 1 < argc) options.hubScreenshot = argv[++i];
+        else if (a == "--template-gallery" && i + 1 < argc) options.galleryDir = argv[++i];
         else if (!a.empty() && a[0] != '-') options.projectPath = a;
     }
     // User data (settings, scratch) lives in the per-user preference folder.
     if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
         config.userDirectory = std::string(pref) + "user";
         SDL_free(pref);
+    }
+    if (!options.galleryDir.empty()) {
+        const fs::path previous = fs::path(options.galleryDir) / "GalleryProject";
+        std::error_code ec;
+        if (fs::exists(previous / "project.agrproject", ec)) fs::remove_all(previous, ec);
+        fs::remove_all(fs::path(options.galleryDir) / "settings", ec);  // default window layout
+        config.userDirectory = (fs::path(options.galleryDir) / "user").string();
     }
     if (!options.smokeTestDir.empty()) {
         // Re-runs start clean, but only a folder this test created is ever removed.

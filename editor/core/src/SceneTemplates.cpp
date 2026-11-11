@@ -38,6 +38,8 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameSurvival: return "Jeu : Survie";
         case SceneTemplate::GameRpg3D: return "Jeu : RPG 3D";
         case SceneTemplate::GameStrategy: return "Jeu : Stratégie (temps réel)";
+        case SceneTemplate::GameRacing: return "Jeu : Course";
+        case SceneTemplate::GameArena: return "Jeu : Multijoueur (arène)";
     }
     return "?";
 }
@@ -76,6 +78,10 @@ const char* templateDescription(SceneTemplate t) {
             return "Aventure 3D à la troisième personne sur un terrain sculpté (ciel en image, ombres) : parlez à l'ancien du village, rapportez 3 orbes de lumière, affrontez des golems qui vous poursuivent sur le maillage de navigation, gagnez expérience et niveaux (sauvegardés). ZQSD / flèches, Espace : épée, E : parler, Q / R : caméra.";
         case SceneTemplate::GameStrategy:
             return "Stratégie en temps réel en 3D : les ouvriers récoltent les cristaux, formez ouvriers et soldats, sélectionnez des unités en les touchant et envoyez-les sur la carte (recherche de chemin autour des rochers). L'IA rouge produit une armée et attaque ; détruisez sa base avant qu'elle ne détruise la vôtre.";
+        case SceneTemplate::GameRacing:
+            return "Course arcade en 3D : trois tours d'un circuit contre une voiture pilotée par l'ordinateur, compte à rebours, chronos, classement en direct, meilleur tour sauvegardé, ralentissement hors piste et caméra de poursuite. Flèches / ZQSD, manette ou pédales tactiles.";
+        case SceneTemplate::GameArena:
+            return "Arène multijoueur : ramassez la pièce, le premier à 10 gagne. À deux sur le même clavier ou avec deux manettes, ou en réseau jusqu'à 4 (Héberger / Rejoindre, module agr.net : l'hôte simule la partie et la diffuse, les clients envoient leurs commandes). Base extensible pour d'autres jeux en ligne.";
     }
     return "";
 }
@@ -94,6 +100,8 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameArena: return ProjectMode::Mode2D;
+        case SceneTemplate::GameRacing: return ProjectMode::Mode3D;
         case SceneTemplate::GameStrategy: return ProjectMode::Mode3D;
         case SceneTemplate::GameRpg3D: return ProjectMode::Mode3D;
         case SceneTemplate::GameSurvival: return ProjectMode::Mode2D;
@@ -114,7 +122,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameStrategy); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameArena); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -568,6 +576,8 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameArena: games::buildArena(scene); break;
+        case SceneTemplate::GameRacing: games::buildRacing(scene); break;
         case SceneTemplate::GameStrategy: games::buildStrategy(scene); break;
         case SceneTemplate::GameRpg3D: games::buildRpg3D(scene); break;
         case SceneTemplate::GameSurvival: games::buildSurvival(scene); break;
