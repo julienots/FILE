@@ -1,0 +1,13 @@
+agr_add_module(navigation
+    SOURCES
+        src/NavGrid.cpp
+        src/NavMesh.cpp
+        src/NavigationSystem.cpp
+        src/NavigationPlugin.cpp
+    PUBLIC_DEPS
+        agr::render
+        agr::runtime
+        agr::physics2d
+        agr::physics3d
+    PRIVATE_DEPS
+        agr::recast)

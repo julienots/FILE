@@ -11,6 +11,7 @@
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
+#include "agr/navigation/NavigationSystem.hpp"
 #include "agr/runtime/InputActions.hpp"
 #include "agr/runtime/Localization.hpp"
 #include "agr/scene/Prefab.hpp"
@@ -598,4 +599,36 @@ assert(not agr.locale.set("xx"))
 assert(agr.tr("not.a.key") == "not.a.key")
 )lua", &f.scene));
     CHECK(remembered == "en");
+}
+
+TEST_CASE("navigation from Lua: navigateTo, status, agr.nav.path") {
+    ScriptFixture f;
+    registerPhysics3DComponents();
+    registerNavigationComponents();
+    NavigationSystem nav;
+    f.scripts.setNavigation(&nav);
+    const auto ground = f.scene.createEntity("Ground");
+    f.scene.registry().get<TransformComponent>(ground).position = {0, -0.5f, 0};
+    f.scene.registry().emplace<ColliderComponent>(ground).size = {20, 1, 20};
+    const auto guard = f.scene.createEntity("Guard");
+    f.scene.registry().emplace<NavAgentComponent>(guard).speed = 10.0f;
+    f.scene.updateTransforms();
+    CHECK(f.scripts.run(R"lua(
+local g = agr.find("Guard")
+assert(g:navigationStatus() == "idle")
+assert(g:navigateTo(4, 0, 3))
+assert(g:navigationStatus() == "moving")
+local p = g:navigationPath()
+assert(#p >= 1 and math.abs(p[#p].x - 4) < 0.1)
+local route = agr.nav.path(-5, 0, -5, 5, 0, 5)
+assert(route and #route >= 2)
+assert(agr.nav.path(-5, 0, -5, 500, 0, 500) == nil or #agr.nav.path(-5, 0, -5, 500, 0, 500) >= 1)
+)lua", &f.scene));
+    for (int i = 0; i < 120; ++i) {
+        nav.update(f.scene, 1.0f / 60.0f);
+        f.scene.updateTransforms();
+    }
+    CHECK(f.scripts.run(R"lua(assert(agr.find("Guard"):navigationStatus() == "arrived"))lua", &f.scene));
+    CHECK(f.scene.registry().get<TransformComponent>(guard).position.x == doctest::Approx(4.0f).epsilon(0.05));
+    CHECK_FALSE(f.scripts.run(R"lua(agr.find("Ground"):navigateTo(1, 0, 1))lua", &f.scene));  // no NavAgent
 }

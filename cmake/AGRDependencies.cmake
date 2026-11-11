@@ -103,6 +103,22 @@ FetchContent_Declare(JoltPhysics
 FetchContent_MakeAvailable(JoltPhysics)
 set_target_properties(Jolt PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
 
+# --- Navigation: Recast & Detour v1.6.0 (zlib), compiled from the sources (no demo, no tests).
+#     Recast builds navigation meshes from triangles; Detour answers path queries on them.
+FetchContent_Declare(recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG        6dc1667f580357e8a2154c28b7867bea7e8ad3a7
+    SOURCE_SUBDIR  agr-do-not-add)
+FetchContent_MakeAvailable(recastnavigation)
+file(GLOB _recast_sources ${recastnavigation_SOURCE_DIR}/Recast/Source/*.cpp ${recastnavigation_SOURCE_DIR}/Detour/Source/*.cpp)
+add_library(agr_recast STATIC ${_recast_sources})
+target_include_directories(agr_recast SYSTEM PUBLIC ${recastnavigation_SOURCE_DIR}/Recast/Include ${recastnavigation_SOURCE_DIR}/Detour/Include)
+set_target_properties(agr_recast PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(agr_recast PRIVATE -w)
+endif()
+add_library(agr::recast ALIAS agr_recast)
+
 # --- Scripting: Lua 5.4.9 (MIT), compiled from the official sources (interpreter and tests excluded).
 FetchContent_Declare(lua
     GIT_REPOSITORY https://github.com/lua/lua.git

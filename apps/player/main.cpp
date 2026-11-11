@@ -17,6 +17,7 @@
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
+#include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/platform/SdlFileProvider.hpp"
 #include "agr/platform/SdlPlatform.hpp"
@@ -185,6 +186,7 @@ int main(int argc, char** argv) {
     engine.plugins().addStatic(std::make_unique<UIPlugin>());
     engine.plugins().addStatic(std::make_unique<ScriptPlugin>());
     engine.plugins().addStatic(std::make_unique<AnimationPlugin>());
+    engine.plugins().addStatic(std::make_unique<NavigationPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics2DPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics3DPlugin>());
     engine.plugins().addStatic(std::make_unique<AudioPlugin>());

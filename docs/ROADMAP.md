@@ -195,7 +195,7 @@ plugins / paquets et documentation intégrée.
 | **Prefabs** : instances liées (référence + différences), prefabs imbriqués, identifiants dérivés stables, appliquer / rétablir / dissocier, rechargement à chaud, `agr.instantiate` | ✅ | `scene/Prefab`, éditeur, [PREFABS.md](PREFABS.md) |
 | Manettes (SDL3, 4 maximum) et **actions d'entrée** (clavier, souris, manette, zones et joystick tactiles), panneau Entrées, `agr.input.down/value` | ✅ | `runtime/InputActions`, [INPUT.md](INPUT.md) |
 | **Localisation** : table CSV, langue du système, `UIText.localizationKey`, `agr.tr`, panneau Localisation, HUD des modèles en fr / en / es | ✅ | `runtime/Localization`, [LOCALIZATION.md](LOCALIZATION.md) |
-| Navigation : A* sur grille 2D, navmesh 3D, agents | ⬜ | étape 1 |
+| **Navigation** : A* sur grille 2D (tilemaps, colliders 2D), maillage 3D Recast / Detour (colliders 3D), reconstruction automatique, agents `NavAgent`, API Lua, affichage dans la vue | ✅ | `navigation`, [NAVIGATION.md](NAVIGATION.md) |
 | Éditeurs de terrain, eau, particules, shaders | ⬜ | étape 2 |
 | Templates : platformer 2D, RPG 2D/3D, tower defense, cartes, simulation, stratégie, survie, course, idle, tycoon, multijoueur extensible | ⬜ | étape 3 |
 | Gestionnaire de plugins / paquets, documentation intégrée | ⬜ | étape 4 |

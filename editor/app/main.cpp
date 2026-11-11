@@ -13,6 +13,7 @@
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
+#include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/render/RenderPlugin.hpp"
@@ -156,6 +157,7 @@ int main(int argc, char** argv) {
     engine.plugins().addStatic(std::make_unique<UIPlugin>());  // after RenderPlugin (draws over its views), before scripts (input first)
     engine.plugins().addStatic(std::make_unique<ScriptPlugin>());  // before physics: scripts move bodies, then physics steps
     engine.plugins().addStatic(std::make_unique<AnimationPlugin>());  // after scripts: they set animator parameters
+    engine.plugins().addStatic(std::make_unique<NavigationPlugin>());  // after scripts (destinations), before physics
     engine.plugins().addStatic(std::make_unique<Physics2DPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics3DPlugin>());
     engine.plugins().addStatic(std::make_unique<AudioPlugin>());

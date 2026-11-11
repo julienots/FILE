@@ -19,6 +19,8 @@
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/assets/Environment.hpp"
 #include "agr/assets/Model.hpp"
+#include "agr/navigation/NavGrid.hpp"
+#include "agr/navigation/NavMesh.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/animation/AnimationSystem.hpp"
@@ -223,6 +225,35 @@ int main() {
             auto env = buildEnvironmentMap(sky, 2048);
             g_sink = env ? env.value().average.x : 0.0f;
         });
+    }
+    {
+        // Navigation: A* on a 512 x 512 grid with random obstacles; navmesh of a 100 x 100 m floor with 200 boxes.
+        NavGrid grid;
+        grid.reset({0, 0}, 1.0f, 512, 512);
+        u32 seed = 12345;
+        for (int i = 0; i < 40000; ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            grid.setBlocked(static_cast<i32>(seed % 512), static_cast<i32>((seed >> 9) % 512), true);
+        }
+        std::vector<math::Vec2> path;
+        bench("nav: A* 512x512 grid, corner to corner (+ smoothing)", 1, 5, [&] { g_sink = grid.findPath({1.5f, 1.5f}, {510.5f, 510.5f}, path) ? 1.0f : 0.0f; });
+        std::printf("    (%zu points, %u cells expanded)\n", path.size(), grid.lastExpanded());
+        std::vector<math::Vec3> verts{{-50, 0, -50}, {50, 0, -50}, {50, 0, 50}, {-50, 0, 50}};
+        std::vector<u32> idx{0, 2, 1, 0, 3, 2};
+        for (int b = 0; b < 200; ++b) {
+            seed = seed * 1664525u + 1013904223u;
+            const float x = static_cast<float>(seed % 90) - 45.0f, z = static_cast<float>((seed >> 8) % 90) - 45.0f;
+            const u32 base = static_cast<u32>(verts.size());
+            for (int i = 0; i < 8; ++i) verts.push_back({x + ((i & 1) ? 1.0f : -1.0f), (i & 2) ? 2.0f : 0.0f, z + ((i & 4) ? 1.0f : -1.0f)});
+            const u32 f[12][3] = {{2, 6, 7}, {2, 7, 3}, {0, 1, 5}, {0, 5, 4}, {0, 2, 3}, {0, 3, 1}, {4, 5, 7}, {4, 7, 6}, {0, 4, 6}, {0, 6, 2}, {1, 3, 7}, {1, 7, 5}};
+            for (const auto& t : f)
+                for (u32 k2 : t) idx.push_back(base + k2);
+        }
+        NavMesh mesh;
+        bench("nav: build navmesh 100x100 m, 200 boxes (Recast)", 1, 3, [&] { g_sink = mesh.build(verts, idx, {}) ? 1.0f : 0.0f; });
+        std::printf("    (%u polygons)\n", mesh.stats().polygons);
+        std::vector<math::Vec3> route;
+        bench("nav: navmesh path across (Detour)", 1, 20, [&] { g_sink = mesh.findPath({-48, 0, -48}, {48, 0, 48}, route) ? 1.0f : 0.0f; });
     }
 
     // -------------------------------------------------------------- physics & scripts

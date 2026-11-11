@@ -17,6 +17,7 @@
 #include "agr/runtime/Engine.hpp"
 #include "agr/runtime/Events.hpp"
 #include "agr/render/ModelLibrary.hpp"
+#include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -1122,6 +1123,16 @@ void EditorApp::smokeTest(const FrameTime&) {
             startPlay();
             break;
         }
+        case 177: {  // navigation during play: an agent walks on the showcase's navigation mesh
+            auto* nav = m_engine->service<NavigationPlugin>();
+            const auto agent = scene.createEntity("Smoke Agent");
+            scene.registry().get<TransformComponent>(agent).position = {-1.0f, 0.0f, 4.0f};
+            scene.registry().emplace<NavAgentComponent>(agent).speed = 30.0f;
+            scene.updateTransforms();
+            check(nav && nav->navigation().navigateTo(scene, agent, {3.0f, 0.0f, 5.0f}), "a path is found on the 3D navigation mesh");
+            check(nav && nav->navigation().stats().meshPolygons > 0, "the navigation mesh is built from the static colliders");
+            break;
+        }
         case 179: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, true); break;
         case 181: pushKey(SDLK_SPACE, SDL_SCANCODE_SPACE, SDL_KMOD_NONE, false); break;
         case 191: {
@@ -1136,6 +1147,10 @@ void EditorApp::smokeTest(const FrameTime&) {
                   "the spin animation turns the kinematic cube");
             check(m_shared->renderer() && m_shared->renderer()->stats().skinnedMeshes > 0, "the skinned character is drawn (GPU skinning)");
             check(m_shared->renderer() && m_shared->renderer()->stats().imageSky, "the HDR image sky lights the scene");
+            {
+                const auto agent = scene.findByName("Smoke Agent");
+                check(!agent.isNull() && scene.registry().get<TransformComponent>(agent).position.x > -0.5f, "the navigation agent walks");
+            }
             if (const Renderer* r = m_shared->renderer()) {
                 // Bloom depends on the graphics profile (off on Low / Ultra Mobile, e.g. software GPUs).
                 check(r->stats().postProcessing && (r->stats().bloomLevels > 0) == r->profile().bloom,
@@ -1189,9 +1204,12 @@ void EditorApp::smokeTest(const FrameTime&) {
                   "texts with a localization key follow the language");
             m_viewport.gameView = false;
             m_engine->localization().setLanguage("fr");
+            m_viewport.showNavigation = true;
             break;
         }
-        case 199: {
+        case 199: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_navigation.png").string()); break;
+        case 201: {
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_navigation.png"), "navigation overlay screenshot written");
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

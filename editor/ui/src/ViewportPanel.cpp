@@ -9,6 +9,7 @@
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
+#include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/physics2d/Physics2DComponents.hpp"
@@ -237,6 +238,7 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
     }
 
     if (showColliders) drawColliders(s, origin, size, vp);
+    if (showNavigation) drawNavigation(s, origin, size, vp);
 
     // Icons for entities without geometry (cameras, lights).
     m_iconHits.clear();
@@ -282,6 +284,46 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
         const ImVec2 ts = ImGui::CalcTextSize(text);
         dl->AddText({origin.x + size.x - ts.x - 10, origin.y + size.y - ts.y - 8}, IM_COL32(230, 228, 223, 150), text);
     }
+}
+
+void ViewportPanel::drawNavigation(EditorShared& s, ImVec2 origin, ImVec2 size, const Mat4& vp) {
+    auto* plugin = s.ctx.engine().service<NavigationPlugin>();
+    if (!plugin) return;
+    NavigationSystem& nav = plugin->navigation();
+    Scene& scene = s.ctx.scene();
+    nav.ensureBuilt(scene);  // also in edit mode (rebuilt when static colliders change)
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto line = [&](Vec3 a, Vec3 b, ImU32 col, float t) {
+        ImVec2 pa, pb;
+        if (project(vp, a, origin, size, pa) && project(vp, b, origin, size, pb)) dl->AddLine(pa, pb, col, t);
+    };
+    const std::vector<Vec3> edges = nav.mesh().debugEdges();
+    for (usize i = 0; i + 1 < edges.size(); i += 2) line(edges[i] + Vec3{0, 0.03f, 0}, edges[i + 1] + Vec3{0, 0.03f, 0}, IM_COL32(60, 210, 230, 170), 1.2f);
+    const NavGrid& g = nav.grid();
+    if (!g.empty() && nav.stats().gridBlocked <= 20000) {
+        const float h = g.cellSize() * 0.5f;
+        for (u32 y = 0; y < g.height(); ++y)
+            for (u32 x = 0; x < g.width(); ++x) {
+                if (!g.blocked(static_cast<i32>(x), static_cast<i32>(y))) continue;
+                const math::Vec2 c = g.cellCenter(static_cast<i32>(x), static_cast<i32>(y));
+                ImVec2 a, b;
+                if (project(vp, {c.x - h, c.y - h, 0.0f}, origin, size, a) && project(vp, {c.x + h, c.y + h, 0.0f}, origin, size, b))
+                    dl->AddRectFilled({std::min(a.x, b.x), std::min(a.y, b.y)}, {std::max(a.x, b.x), std::max(a.y, b.y)}, IM_COL32(230, 70, 60, 55));
+            }
+    }
+    scene.registry().view<NavAgentComponent>().each([&](ecs::Entity e, NavAgentComponent&) {
+        const auto path = nav.path(e);
+        Vec3 prev = scene.worldMatrix(e).transformPoint({0, 0, 0});
+        for (const Vec3& p : path) {
+            line(prev, p, IM_COL32(250, 200, 50, 230), 2.0f);
+            prev = p;
+        }
+    });
+    const NavigationStats& st = nav.stats();
+    char text[256];
+    std::snprintf(text, sizeof text, "Navigation : %u polygones 3D, grille %ux%u (%u bloquées)%s%s", st.meshPolygons, g.width(), g.height(),
+                  st.gridBlocked, st.lastError.empty() ? "" : " - ", st.lastError.c_str());
+    dl->AddText({origin.x + 12, origin.y + size.y - 44}, st.lastError.empty() ? IM_COL32(60, 210, 230, 255) : palette::kWarning, text);
 }
 
 void ViewportPanel::drawColliders(EditorShared& s, ImVec2 origin, ImVec2 size, const Mat4& vp) {
@@ -889,6 +931,8 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     if (toolButton("Grille", showGrid, nullptr)) showGrid = !showGrid;
     if (toolButton("Icônes", showIcons, nullptr)) showIcons = !showIcons;
     if (toolButton("Collisions", showColliders, "Afficher les formes de collision (vert ; déclencheurs en ambre)")) showColliders = !showColliders;
+    if (toolButton("Navigation", showNavigation, "Maillage de navigation 3D (cyan), cases bloquées de la grille 2D (rouge), chemins des agents (jaune)"))
+        showNavigation = !showNavigation;
     if (toolButton("Vue jeu", gameView, "Voir la scène depuis la caméra principale du jeu")) gameView = !gameView;
     if (gameView) {
         ImGui::SameLine(0, 10);

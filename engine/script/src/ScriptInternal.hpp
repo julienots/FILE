@@ -16,6 +16,7 @@
 #include "agr/script/ScriptEngine.hpp"
 
 namespace agr {
+class NavigationSystem;
 
 struct ScriptEngine::Impl {
     struct Class {
@@ -42,6 +43,7 @@ struct ScriptEngine::Impl {
     math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
+    NavigationSystem* navigation = nullptr;
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
     AnimationSystem* animation = nullptr;
@@ -100,5 +102,6 @@ void openAudioBindings(lua_State* L);
 void openUIBindings(lua_State* L);
 void openAnimationBindings(lua_State* L);
 void openMobileBindings(lua_State* L);
+void openNavigationBindings(lua_State* L);
 
 } // namespace agr

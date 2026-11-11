@@ -4,6 +4,7 @@
 #include "agr/ui/UIPlugin.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
+#include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 #include "agr/script/ScriptComponent.hpp"
@@ -59,6 +60,8 @@ void ScriptPlugin::bindPhysics(Engine& engine) {
     auto* p3 = engine.service<Physics3DPlugin>();
     m_scripts->setPhysics2D(p2 ? &p2->world() : nullptr);
     m_scripts->setPhysics3D(p3 ? &p3->world() : nullptr);
+    auto* nav = engine.service<NavigationPlugin>();
+    m_scripts->setNavigation(nav ? &nav->navigation() : nullptr);
     auto* audio = engine.service<AudioPlugin>();
     m_scripts->setAudio(audio ? &audio->audio() : nullptr);
     auto* ui = engine.service<UIPlugin>();

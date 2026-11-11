@@ -84,6 +84,7 @@ public:
     bool showGrid = true;
     bool showIcons = true;
     bool showColliders = true;  ///< Outlines of 2D / 3D colliders (green; triggers in amber).
+    bool showNavigation = false;  ///< Navigation mesh, blocked 2D grid cells and agents' paths.
     float flySpeed = 6.0f;
     /// Game view device preview: 0 = free (panel size), else a phone / tablet format with its
     /// aspect ratio and simulated safe area.
@@ -94,6 +95,7 @@ private:
     void handleCamera(EditorShared& s, const FrameTime& time, bool hovered);
     void drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size);
     void drawColliders(EditorShared& s, ImVec2 origin, ImVec2 size, const math::Mat4& viewProj);
+    void drawNavigation(EditorShared& s, ImVec2 origin, ImVec2 size, const math::Mat4& viewProj);
     void drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size);

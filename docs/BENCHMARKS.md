@@ -223,3 +223,19 @@ animation: 1000 animators (500 state machines), 3 curves each      0.188 ms     
 Ces chiffres valident l'architecture (lots, culling, coût par objet) mais **pas** les performances sur
 téléphone : aucun appareil Android réel n'a encore été disponible pour les mesurer (démarrage, images par
 seconde, mémoire, batterie, échauffement).
+
+## Navigation (phase 9)
+
+```
+nav: A* 512x512 grid, corner to corner (+ smoothing)     10.419 ms
+    (87 points, 56461 cells expanded)
+nav: build navmesh 100x100 m, 200 boxes (Recast)     50.965 ms
+    (674 polygons)
+nav: navmesh path across (Detour)                 0.020 ms
+```
+
+| Mesure | Analyse |
+|---|---|
+| A* 512 × 512 : ~10 ms | Grille de 262 144 cases dont 15 % d'obstacles aléatoires, ~56 000 cases visitées. Pour des cartes de cette taille, préférer des cases plus grandes ou espacer les recherches entre les images. |
+| Construction Recast : ~51 ms | Faite au chargement et quand les obstacles statiques changent (pas à chaque image). |
+| Requête Detour : ~0,02 ms | Des centaines d'agents peuvent recalculer leur chemin dans la même image. |

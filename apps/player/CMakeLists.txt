@@ -1,6 +1,6 @@
 # The game player: runs exported games. On Android it is the native library (libmain.so)
 # loaded by the activity; elsewhere an executable.
-set(_player_libs agr::platform agr::render agr::twod agr::ui agr::script agr::animation agr::physics2d agr::physics3d agr::audio)
+set(_player_libs agr::platform agr::render agr::twod agr::ui agr::script agr::animation agr::physics2d agr::physics3d agr::navigation agr::audio)
 if(ANDROID)
     add_library(agr_player SHARED main.cpp)
     set_target_properties(agr_player PROPERTIES OUTPUT_NAME main)

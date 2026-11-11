@@ -19,6 +19,7 @@
 
 namespace agr {
 class InputActions;
+class NavigationSystem;
 class Localization;
 
 /// A property declared by a script (`properties = { speed = 6 }`), shown in the inspector.
@@ -75,6 +76,8 @@ public:
     void setScreenSize(math::Vec2 size);
     void setPhysics2D(Physics2DWorld* world);
     void setPhysics3D(Physics3DWorld* world);
+    /// Paths and agents for entity:navigateTo and agr.nav.
+    void setNavigation(NavigationSystem* navigation);
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
     void setAnimation(AnimationSystem* animation);
