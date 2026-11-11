@@ -11,7 +11,7 @@ namespace agr::rhi {
 /// Descriptor binding layout shared by every Vulkan pipeline (set 0):
 /// uniform slot i -> binding i, texture unit i -> binding kTextureBindingBase + i.
 inline constexpr u32 kMaxUniformSlots = 8;
-inline constexpr u32 kMaxTextureUnits = 8;
+inline constexpr u32 kMaxTextureUnits = 12;
 inline constexpr u32 kTextureBindingBase = kMaxUniformSlots;
 
 enum class ShaderStage : u8 { Vertex, Fragment };

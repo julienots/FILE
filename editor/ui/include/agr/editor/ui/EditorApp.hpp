@@ -63,6 +63,8 @@ private:
     InspectorPanel m_inspector;
     ViewportPanel m_viewport;
     MaterialPreview m_materialPreview;
+    MaterialPreview m_shaderPreview;  // sphere of the shader editor
+    ShaderEditorPanel m_shaderEditor;
     AssetBrowserPanel m_assets;
     ConsolePanel m_console;
     StatsPanel m_stats;

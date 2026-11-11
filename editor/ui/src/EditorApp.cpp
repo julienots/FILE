@@ -204,6 +204,7 @@ void EditorApp::onShutdown(Engine&) {
     if (!ImGui::GetCurrentContext()) return;
     m_viewport.release(*m_shared);
     m_materialPreview.release(*m_shared);
+    m_shaderPreview.release(*m_shared);
     m_shared->releaseThumbnails();
     m_imgui->shutdown();
     m_imgui.reset();  // GPU objects must go while the device still exists (plugins unload after onShutdown)
@@ -235,6 +236,7 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
         m_closeProjectRequested = false;
         m_viewport.release(*m_shared);
         m_materialPreview.release(*m_shared);
+        m_shaderPreview.release(*m_shared);
         m_shared->releaseThumbnails();
         RenderPlugin* render = m_shared->render;
         const EditorFonts fonts = m_shared->fonts;
@@ -286,7 +288,8 @@ void EditorApp::onRender(Engine& engine, const FrameTime&) {
     if (w == 0 || h == 0) return;
     device->beginFrame(w, h);
     if (m_ctx->hasProject()) {
-        m_materialPreview.render(*m_shared);  // before the scene view: the stats panel shows the scene's frame
+        m_materialPreview.render(*m_shared, m_shared->previewMaterial);  // before the scene view: the stats panel shows the scene's frame
+        m_shaderPreview.render(*m_shared, m_shared->shaderPreviewMaterial);
         m_viewport.renderScene(*m_shared);
     }
     m_imgui->render(ImGui::GetDrawData(), true);
@@ -469,6 +472,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Animation", bottom);
     ImGui::DockBuilderDockWindow("Machine à états", bottom);
     ImGui::DockBuilderDockWindow("Mixeur audio", bottom);
+    ImGui::DockBuilderDockWindow("Shader", center);
     ImGui::DockBuilderDockWindow("Scène", center);
     ImGui::DockBuilderFinish(dockspace);
 }
@@ -499,6 +503,8 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_hierarchy.draw(*m_shared);
     m_shared->previewMaterial.clear();  // the inspector sets it again while it shows a material
     m_inspector.draw(*m_shared, m_materialPreview);
+    m_shared->shaderPreviewMaterial.clear();  // the shader editor sets it again while it is visible
+    m_shaderEditor.draw(*m_shared, m_shaderPreview);
     m_assets.draw(*m_shared);
     m_console.draw(*m_shared);
     m_stats.draw(*m_shared, time);
@@ -619,6 +625,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Mixeur audio", nullptr, &m_shared->showMixer);
         ImGui::MenuItem("Entrées (actions)", nullptr, &m_shared->showInput);
         ImGui::MenuItem("Localisation (traductions)", nullptr, &m_shared->showLocalization);
+        ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -1254,6 +1261,51 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(m_shared->renderer() && m_shared->renderer()->stats().waterSurfaces > 0, "the water is drawn");
             check(m_shared->renderer() && m_shared->renderer()->stats().particlesVisible > 0, "3D particles are previewed in edit mode");
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_terrain.png"), "terrain screenshot written");
+            // Custom shader: new file from the template, used by a material on a sphere by the lake.
+            ShaderLibrary* shaders = m_shared->shaders();
+            MaterialLibrary* materials = m_shared->materials();
+            check(shaders && materials, "shader and material libraries");
+            if (!shaders || !materials) break;
+            check(static_cast<bool>(shaders->save("assets://fx/pulse.agrshader", defaultCustomShaderSource())), "new shader saved");
+            MaterialData m;
+            m.name = "Pulse";
+            m.shader = "assets://fx/pulse.agrshader";
+            m.shaderParams["tint"] = {0.3f, 0.8f, 1.0f, 1.0f};
+            check(static_cast<bool>(materials->save("assets://fx/pulse.agrmat", m)), "material using the shader saved");
+            const auto ball = ctx.create(CreateKind::Sphere);
+            scene.registry().get<TransformComponent>(ball).position = {0.0f, 3.0f, -90.0f};
+            scene.registry().get<TransformComponent>(ball).scale = {3.0f, 3.0f, 3.0f};
+            scene.registry().get<MeshRendererComponent>(ball).material = "assets://fx/pulse.agrmat";
+            ctx.commit("Shader Sphere");
+            m_shared->openShaderRequest = "assets://fx/pulse.agrshader";  // as a click in the asset browser
+            break;
+        }
+        case 207: {
+            check(m_shared->showShaderEditor && m_shaderEditor.uri() == "assets://fx/pulse.agrshader", "the shader opens in the shader editor");
+            check(m_shaderEditor.status().usable, "the template shader compiles");
+            ImGui::SetWindowFocus("Shader");  // tab in front of the scene view
+            // A typo: reported on its line, the material falls back to the standard shader.
+            std::string broken = defaultCustomShaderSource();
+            const usize at = broken.find("s.baseColor *= tint.rgb;");
+            check(at != std::string::npos, "template has the tint line");
+            if (at != std::string::npos) broken.replace(at, 24, "s.baseColor *= tnit.rgb;");
+            m_shaderEditor.edit(*m_shared, broken, true);
+            const auto& st = m_shaderEditor.status();
+            const u32 expected = static_cast<u32>(std::count(broken.begin(), broken.begin() + static_cast<std::ptrdiff_t>(at), '\n')) + 1;
+            check(!st.usable && !st.diagnostics.empty() && st.diagnostics[0].line == expected, "compile error reported on the typo's line");
+            check(m_shared->shaderDirty, "unsaved shader changes are tracked");
+            break;
+        }
+        case 209: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader_error.png").string()); break;
+        case 211: {
+            m_shaderEditor.revertChanges(*m_shared);
+            check(!m_shared->shaderDirty && m_shaderEditor.status().usable, "revert restores the compiling shader");
+            break;
+        }
+        case 214: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader.png").string()); break;
+        case 216: {
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_shader.png"), "shader editor screenshot written");
+            check(static_cast<bool>(m_shaderPreview.texture(*m_shared)), "shader preview sphere rendered");
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

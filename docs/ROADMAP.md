@@ -69,7 +69,7 @@ Rien n'est coché sans code compilé, tests qui passent et un exemple qui l'util
 | Annuler / rétablir, indicateur de modifications, confirmation avant perte | ✅ | `UndoStack` (instantanés) |
 | Jouer / pause / arrêter dans l'éditeur | ✅ | `EditorContext::play` |
 | Tests : logique d'édition (11 cas) + test de bout en bout par entrées réelles sur 3 API, sous ASan | ✅ | `tests/test_editor.cpp`, `--smoke-test` |
-| Prefabs en fichiers, éditeurs de matériaux / shaders / terrain / particules / animation / UI | ⬜ | phases 4, 5, 7, 9 |
+| Prefabs en fichiers, éditeurs de matériaux / shaders / terrain / particules / animation / UI | ✅ | phases 4, 5, 7, 9 (éditeur de shaders en code ; pas de graphe de nœuds) |
 | Panneaux détachables en fenêtres système | ⬜ | rendu multi-fenêtres à ajouter à la RHI |
 
 ## Phase 4 — Systèmes 2D 🟡 (cœur 2D terminé ; physique, squelettes, UI et ombres dans d'autres phases)
@@ -199,7 +199,7 @@ plugins / paquets et documentation intégrée.
 | **Terrain** : relief + 4 couches peintes (rendu PBR, ombres), collision Jolt, source de navigation, pinceaux (élever, abaisser, lisser, aplanir, peindre), textures originales | ✅ | `scene/Terrain`, [TERRAIN.md](TERRAIN.md) |
 | **Eau** : vagues sur GPU, reflet du ciel (Fresnel), reflet du soleil, transparence | ✅ | composant `Water`, [TERRAIN.md](TERRAIN.md) |
 | **Particules 3D** : formes d'émission (point, sphère, boîte, cône), gravité, traînée, espace local / monde, 7 préréglages, billboards face caméra (alpha ou additif), aperçu en mode édition | ✅ | `twod/Particles3D`, [3D.md](3D.md) |
-| Shaders personnalisés et éditeur de shaders | ⬜ | étape 2 |
+| **Shaders personnalisés** (`.agrshader`) : fonctions `surface` / `vertex` branchées sur le PBR (ombres comprises), paramètres réglables par matériau (valeurs, couleurs, textures), rechargement à chaud, repli sur le shader standard en cas d'erreur ; **éditeur de shaders** avec aperçu en direct et erreurs à la ligne | ✅ | `assets/CustomShader`, `render/ShaderLibrary`, [SHADERS.md](SHADERS.md) |
 | Templates : platformer 2D, RPG 2D/3D, tower defense, cartes, simulation, stratégie, survie, course, idle, tycoon, multijoueur extensible | ⬜ | étape 3 |
 | Gestionnaire de plugins / paquets, documentation intégrée | ⬜ | étape 4 |
 

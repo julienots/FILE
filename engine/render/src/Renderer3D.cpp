@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <format>
 
 #include "RenderUniforms.hpp"
 #include "Shaders.inl"
@@ -33,6 +34,13 @@ u64 mix64(u64 h, u64 v) {
     return h;
 }
 u64 bits(float f) { return std::bit_cast<u32>(f); }
+
+// Pipeline ids: 0..5 standard PBR (alphaMode * 2 + doubleSided), 6 terrain, 7 water,
+// kCustomBase + set * kCustomStride + variant for custom shaders (see Renderer.hpp).
+constexpr u32 kCustomBase = 1000, kCustomStride = 8, kCustomUnit = 7;
+u32 pipelineVariant(u32 p) { return p < 6 ? p : p >= kCustomBase ? (p - kCustomBase) % kCustomStride : 0u; }
+bool pipelineMasked(u32 p) { return pipelineVariant(p) / 2 == 1; }
+u32 customSetOf(u32 p) { return p >= kCustomBase ? (p - kCustomBase) / kCustomStride : ~0u; }
 
 rhi::VertexLayout modelVertexLayout() {
     rhi::VertexLayout l;
@@ -207,13 +215,30 @@ u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale) {
     u.uvTransform = Vec4(m.uvScale.x * uvScale.x, m.uvScale.y * uvScale.y, m.uvOffset.x, m.uvOffset.y);
     u.flags = Vec4(m.alphaCutoff, m.unlit ? 1.0f : 0.0f, 0.0f, 0.0f);
     FrameMaterial fm;
+    fm.pipeline = static_cast<u32>(m.alphaMode) * 2 + (m.doubleSided ? 1u : 0u);
+    if (const u32 set = m.shader.empty() ? ~0u : customShaderSet(m.shader); set != ~0u) {
+        const CustomShader& cs = m_shaders->get(m.shader)->parsed;  // usable set: the asset exists
+        for (const ShaderParam& p : cs.params) {
+            if (p.type == ShaderParamType::Texture) {
+                const auto it = m.shaderTextures.find(p.name);
+                const std::string& uri = it != m.shaderTextures.end() && !it->second.empty() ? it->second : p.defaultTexture;
+                fm.custom[p.slot] = uri.empty() ? m_assets.whiteTexture() : p.srgb ? resolveTexture(uri, false) : resolveDataTexture(uri);
+                continue;
+            }
+            const auto it = m.shaderParams.find(p.name);
+            Vec4 v = it != m.shaderParams.end() ? it->second : p.defaultValue;
+            if (p.type == ShaderParamType::Color) v = Vec4(detail::srgbToLinear(v), v.w);
+            u.custom[p.slot] = v;
+        }
+        fm.customCount = cs.textureCount;
+        fm.pipeline += kCustomBase + set * kCustomStride;
+    }
     fm.uniformOffset = pushUniforms(&u, sizeof u);
     fm.textures[0] = resolveTexture(m.baseColorTexture, false);
     fm.textures[1] = resolveDataTexture(m.metallicRoughnessTexture);
     fm.textures[2] = m.normalTexture.empty() ? m_flatNormal : resolveDataTexture(m.normalTexture);
     fm.textures[3] = resolveDataTexture(m.occlusionTexture);
     fm.textures[4] = m.emissiveTexture.empty() ? m_assets.whiteTexture() : resolveTexture(m.emissiveTexture, false);
-    fm.pipeline = static_cast<u32>(m.alphaMode) * 2 + (m.doubleSided ? 1u : 0u);
     const u32 slot = static_cast<u32>(m_frameMaterials.size());
     m_frameMaterials.push_back(fm);
     m_materialSlots.emplace(key, slot);
@@ -564,10 +589,10 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     std::sort(m_opaqueItems.begin(), m_opaqueItems.end(), byState);
     m_stats.shadowCasters = 0;
     for (auto& list : m_shadowItems) {
-        std::sort(list.begin(), list.end(), [](const MeshItem& a, const MeshItem& b) {
-            const bool am = a.pipeline / 2 == 1, bm = b.pipeline / 2 == 1;  // alpha-tested casters need their material
-            if (am != bm) return am < bm;
-            if (am && a.material != b.material) return a.material < b.material;
+        std::sort(list.begin(), list.end(), [this](const MeshItem& a, const MeshItem& b) {
+            const u32 ak = shadowKey(a.pipeline), bk = shadowKey(b.pipeline);  // alpha-tested casters need their material
+            if (ak != bk) return ak < bk;
+            if ((ak & 1u) && a.material != b.material) return a.material < b.material;
             if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
             if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
             if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
@@ -812,20 +837,29 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
     while (i < items.size()) {
         const MeshItem& first = items[i];
         usize end = i + 1;
-        const bool masked = first.pipeline / 2 == 1;
+        const bool masked = pipelineMasked(first.pipeline);
+        const u32 firstShadowKey = shadow ? shadowKey(first.pipeline) : 0u;
         while (end < items.size() && items[end].vertices == first.vertices && items[end].firstIndex == first.firstIndex &&
                items[end].indexCount == first.indexCount && items[end].skinOffset == first.skinOffset && first.skinOffset == ~0u &&
-               (shadow ? (!masked || items[end].material == first.material) && (items[end].pipeline / 2 == 1) == masked
+               (shadow ? (!masked || items[end].material == first.material) && shadowKey(items[end].pipeline) == firstShadowKey
                        : items[end].material == first.material && items[end].pipeline == first.pipeline))
             ++end;
         const bool skinned = first.skinOffset != ~0u;
-        const u32 pipeline = (shadow ? (masked ? 1u : 0u) : first.pipeline) + (skinned ? 100u : 0u);
+        const u32 pipeline = (shadow ? firstShadowKey : first.pipeline) | (skinned ? 0x80000000u : 0u);
         if (pipeline != boundPipeline) {
             rhi::PipelineHandle h;
-            if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
-            else if (first.pipeline == kTerrainPipeline) h = m_terrainPipeline;
-            else if (first.pipeline == kWaterPipeline) h = m_waterPipeline;
-            else h = skinned ? m_pbrSkinnedPipelines[first.pipeline] : m_pbrPipelines[first.pipeline];
+            const u32 set = customSetOf(first.pipeline);
+            if (set != ~0u && (!shadow || firstShadowKey >= kCustomBase))  // custom shader (falls back below)
+                h = customPipeline(set, shadow ? (masked ? 1u : 0u) : pipelineVariant(first.pipeline), skinned, shadow);
+            if (!h) {
+                if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
+                else if (first.pipeline == kTerrainPipeline) h = m_terrainPipeline;
+                else if (first.pipeline == kWaterPipeline) h = m_waterPipeline;
+                else {
+                    const u32 v = pipelineVariant(first.pipeline);
+                    h = skinned ? m_pbrSkinnedPipelines[v] : m_pbrPipelines[v];
+                }
+            }
             m_device.bindPipeline(h);
             boundPipeline = pipeline;
             boundMaterial = ~0u;
@@ -837,6 +871,8 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
             const u32 textures = shadow ? 1u : 5u;
             for (u32 t = 0; t < textures; ++t) m_device.bindTexture(t, m.textures[t]);
             if (!shadow && m.pipeline == kTerrainPipeline) m_device.bindTexture(kSplatUnit, m.splat ? m.splat : m_assets.whiteTexture());
+            if (!shadow)
+                for (u32 t = 0; t < m.customCount; ++t) m_device.bindTexture(kCustomUnit + t, m.custom[t] ? m.custom[t] : m_assets.whiteTexture());
             boundMaterial = first.material;
         }
         if (first.vertices != boundVb) {
@@ -872,6 +908,135 @@ void Renderer::drawSky() {
     m_device.bindTexture(0, m_envTexture ? m_envTexture : m_assets.whiteTexture());
     m_device.bindVertexBuffer(m_skyVertices);
     m_device.draw(3);
+}
+
+// ------------------------------------------------------------- custom shaders
+u32 Renderer::shadowKey(u32 pipeline) const {
+    const u32 masked = pipelineMasked(pipeline) ? 1u : 0u;
+    const u32 set = customSetOf(pipeline);
+    if (set < m_customSets.size() && m_customSets[set].usable && m_customSets[set].hasVertex)
+        return kCustomBase + set * kCustomStride + masked;
+    return masked;
+}
+
+void Renderer::destroyCustomPipelines(CustomPipelines& set) {
+    for (auto& row : set.pbr)
+        for (rhi::PipelineHandle& h : row) {
+            m_device.destroyPipeline(h);
+            h = {};
+        }
+    for (auto& row : set.shadow)
+        for (rhi::PipelineHandle& h : row) {
+            m_device.destroyPipeline(h);
+            h = {};
+        }
+    for (auto& row : set.tried) std::fill(std::begin(row), std::end(row), false);
+    for (auto& row : set.shadowTried) std::fill(std::begin(row), std::end(row), false);
+}
+
+u32 Renderer::customShaderSet(const std::string& uri) {
+    static_assert(kCustomPipelineBase == kCustomBase && kCustomStride == Renderer::kCustomStride);
+    if (!m_shaders) return ~0u;
+    const ShaderAsset* asset = m_shaders->get(uri);
+    u32 index;
+    if (auto it = m_customIndex.find(uri); it != m_customIndex.end()) {
+        index = it->second;
+    } else {
+        index = static_cast<u32>(m_customSets.size());
+        m_customSets.emplace_back().uri = uri;
+        m_customIndex.emplace(uri, index);
+    }
+    CustomPipelines& set = m_customSets[index];
+    const u64 version = asset ? asset->version : ~0ull;
+    if (set.version != version) {
+        destroyCustomPipelines(set);
+        set.version = version;
+        set.usable = asset && asset->parsed.valid();
+        set.hasVertex = asset && asset->parsed.hasVertex;
+        set.textureCount = asset ? asset->parsed.textureCount : 0;
+        set.diagnostics = asset ? asset->parsed.errors : std::vector<ShaderDiagnostic>{{0, "the file cannot be read"}};
+    }
+    return set.usable ? index : ~0u;
+}
+
+rhi::PipelineHandle Renderer::customPipeline(u32 index, u32 variant, bool skinned, bool shadow) {
+    if (index >= m_customSets.size()) return {};
+    CustomPipelines& set = m_customSets[index];
+    rhi::PipelineHandle& slot = shadow ? set.shadow[skinned][variant & 1u] : set.pbr[skinned][variant];
+    bool& tried = shadow ? set.shadowTried[skinned][variant & 1u] : set.tried[skinned][variant];
+    if (slot || tried || !set.usable || !m_shaders) return slot;
+    tried = true;
+    const ShaderAsset* asset = m_shaders->get(set.uri);
+    if (!asset || asset->version != set.version) return {};  // changed since this frame's lookup
+    const CustomShader& cs = asset->parsed;
+    const std::string common = std::string(shaders::kFrameBlock) + shaders::kMaterialBlock;
+    const std::string skinDefine = skinned ? "#define AGR_SKINNED 1\n" : "";
+    const std::string vertexDefine = cs.hasVertex ? "#define AGR_CUSTOM_VERTEX 1\n" : "";
+    // The user's code follows `#line 1 1`: compiler messages about it carry its own line numbers.
+    // Each part starts on its own line (preprocessor directives must start a line).
+    const std::string vertexCode = "\n" + shaderParamDefines(cs, false) + "#line 1 1\n" + blankFunction(cs.code, "surface");
+    rhi::PipelineDesc p;
+    p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
+    p.uniformBlocks = {"FrameData", "MaterialData"};
+    if (shadow) {
+        const bool mask = (variant & 1u) != 0;
+        p.debugName = "agr.custom.shadow";
+        const std::string defines = skinDefine + vertexDefine + (mask ? "#define AGR_SHADOW_MASK 1\n" : "");
+        p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kCustomBlock + shaders::kShadowNormalBlock +
+                          shaders::kShadowVertex + vertexCode;
+        p.shader.fragment = defines + common + shaders::kShadowFragment;
+        p.instanceLayout = instanceLayout(false);
+        p.colorOutput = false;
+        p.cull = rhi::CullMode::None;
+        if (skinned) p.uniformBlocks.push_back("SkinData");
+        p.samplers = {"u_baseColorMap"};
+    } else {
+        const u32 alpha = variant / 2, twoSided = variant & 1u;
+        p.debugName = "agr.custom";
+        const std::string defines = skinDefine + vertexDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") +
+                                    (cs.hasSurface ? "#define AGR_CUSTOM_SURFACE 1\n" : "");
+        std::string samplers;
+        for (u32 t = 0; t < cs.textureCount; ++t) samplers += std::format("uniform sampler2D u_customMap{};\n", t);
+        p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kCustomBlock + shaders::kPbrVertex +
+                          (cs.hasVertex ? vertexCode : std::string());
+        p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kEnvBlock + samplers +
+                            shaders::kCustomBlock + shaders::kPbrFragment + "\n" + shaderParamDefines(cs, true) + "#line 1 1\n" +
+                            blankFunction(cs.code, "vertex");
+        p.instanceLayout = instanceLayout(true);
+        p.cull = twoSided ? rhi::CullMode::None : rhi::CullMode::Back;
+        if (alpha == 2) {
+            p.blend = rhi::BlendMode::Alpha;
+            p.depthWrite = false;
+        }
+        p.uniformBlocks.push_back("LightData");
+        if (skinned) p.uniformBlocks.push_back("SkinData");
+        p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap"};
+        for (u32 t = 0; t < cs.textureCount; ++t) p.samplers.push_back(std::format("u_customMap{}", t));
+    }
+    auto r = m_device.createPipeline(p);
+    if (!r) {
+        set.usable = false;
+        set.diagnostics = parseShaderLog(r.error().message);
+        if (set.diagnostics.empty()) set.diagnostics.push_back({0, r.error().message});
+        AGR_LOG_ERROR("Render", "shader '{}' does not compile ({} message(s)); its materials use the standard shader", set.uri,
+                      set.diagnostics.size());
+        for (const ShaderDiagnostic& d : set.diagnostics) AGR_LOG_ERROR("Render", "  line {}: {}", d.line, d.message);
+        return {};
+    }
+    slot = r.value();
+    return slot;
+}
+
+Renderer::ShaderStatus Renderer::shaderStatus(const std::string& uri) {
+    const u32 index = customShaderSet(uri);
+    if (index != ~0u) {
+        customPipeline(index, 0, false, false);
+        if (m_customSets[index].hasVertex) customPipeline(index, 0, false, true);
+    }
+    const auto it = m_customIndex.find(uri);
+    if (it == m_customIndex.end()) return {false, {{0, "no shader library"}}};
+    const CustomPipelines& set = m_customSets[it->second];
+    return {set.usable, set.diagnostics};
 }
 
 } // namespace agr

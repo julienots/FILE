@@ -58,6 +58,7 @@ struct EditorShared {
     SpriteSheetLibrary* sheets() const { return render ? render->spriteSheets() : nullptr; }
     ModelLibrary* models() const { return render ? render->models() : nullptr; }
     MaterialLibrary* materials() const { return render ? render->materials() : nullptr; }
+    ShaderLibrary* shaders() const { return render ? render->shaders() : nullptr; }
     PickAssets pickAssets() const { return {sheets(), models()}; }
 
     // --- status bar
@@ -83,6 +84,12 @@ struct EditorShared {
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).
     std::string previewMaterial;   ///< Material the preview renders this frame (set by the inspector).
+    // --- shader editor
+    bool showShaderEditor = false;
+    std::string openShaderRequest;      ///< .agrshader to open in the shader editor (asset browser, inspector).
+    std::string shaderPreviewMaterial;  ///< Material of the shader editor's preview sphere this frame.
+    bool shaderDirty = false;           ///< The shader editor has unsaved changes.
+    std::function<void()> shaderPendingAction;  ///< Guarded action waiting for the shader editor's answer.
 
     // --- thumbnails (asset browser, inspector): kept loaded until releaseThumbnails()
     std::unordered_map<std::string, TextureAsset> thumbnails;

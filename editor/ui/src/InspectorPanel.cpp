@@ -865,6 +865,87 @@ void InspectorPanel::drawMaterialAsset(EditorShared& s, const MaterialPreview& p
         row("Décalage UV");
         dragAxes("uvo", &m.uvOffset.x, 2, 0.01f, 0.0f, 0.0f, "%.2f");
         track();
+        // ---- custom shader (.agrshader) and its parameters
+        row("Shader", "Shader de surface (.agrshader) : code GLSL appliqué après les réglages ci-dessus");
+        {
+            const float button = ImGui::CalcTextSize("Éditer").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            ImGui::SetNextItemWidth(-(button + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x * 2.0f));
+            ImGui::InputTextWithHint("##shader", "Standard (glisser un .agrshader ici)", &m.shader);
+            commit |= ImGui::IsItemDeactivatedAfterEdit();
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
+                    const std::string dropped = static_cast<const char*>(p->Data);
+                    if (dropped.ends_with(kShaderExtension)) {
+                        m.shader = dropped;
+                        commit = true;
+                    } else {
+                        s.notify("Seuls les fichiers .agrshader sont des shaders");
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            ImGui::SameLine();
+            ImGui::BeginDisabled(m.shader.empty());
+            if (ImGui::Button("Éditer")) s.openShaderRequest = m.shader;
+            ImGui::SameLine();
+            if (ImGui::Button("x", {ImGui::GetFrameHeight(), 0})) {
+                m.shader.clear();
+                commit = true;
+            }
+            ImGui::EndDisabled();
+        }
+        const ShaderAsset* shader = m.shader.empty() || !s.shaders() ? nullptr : s.shaders()->get(m.shader);
+        if (!m.shader.empty() && !shader) {
+            row("");
+            ImGui::TextColored(palette::toVec4(palette::kWarning), "Shader introuvable : rendu standard");
+        }
+        if (shader) {
+            const Renderer::ShaderStatus status = s.renderer() ? s.renderer()->shaderStatus(m.shader) : Renderer::ShaderStatus{};
+            if (!status.usable) {
+                row("");
+                ImGui::TextColored(palette::toVec4(palette::kWarning), "%zu erreur(s) dans le shader : rendu standard",
+                                   status.diagnostics.size());
+            }
+            for (const ShaderParam& p : shader->parsed.params) {
+                ImGui::PushID(p.name.c_str());
+                if (p.type == ShaderParamType::Texture) {
+                    std::string image = m.shaderTextures.count(p.name) ? m.shaderTextures[p.name] : p.defaultTexture;
+                    if (textureSlot(s, p.name.c_str(), image, p.srgb ? "Image en couleur (sRGB)" : "Image de données (linéaire)")) {
+                        if (image == p.defaultTexture) m.shaderTextures.erase(p.name);
+                        else m.shaderTextures[p.name] = image;
+                        commit = true;
+                    }
+                    ImGui::PopID();
+                    continue;
+                }
+                const auto found = m.shaderParams.find(p.name);
+                math::Vec4 v = found != m.shaderParams.end() ? found->second : p.defaultValue;
+                row(p.name.c_str(), found != m.shaderParams.end() ? "Valeur propre à ce matériau (clic droit : valeur du shader)"
+                                                                  : "Valeur par défaut du shader");
+                bool edited = false;
+                switch (p.type) {
+                    case ShaderParamType::Float:
+                        if (p.rangeMax > p.rangeMin) edited = ImGui::SliderFloat("##v", &v.x, p.rangeMin, p.rangeMax, "%.3f");
+                        else edited = ImGui::DragFloat("##v", &v.x, 0.01f, 0.0f, 0.0f, "%.3f");
+                        break;
+                    case ShaderParamType::Vec2: edited = dragAxes("v", &v.x, 2, 0.01f, 0.0f, 0.0f, "%.3f"); break;
+                    case ShaderParamType::Vec3: edited = dragAxes("v", &v.x, 3, 0.01f, 0.0f, 0.0f, "%.3f"); break;
+                    case ShaderParamType::Vec4: edited = dragAxes("v", &v.x, 4, 0.01f, 0.0f, 0.0f, "%.3f"); break;
+                    case ShaderParamType::Color: edited = ImGui::ColorEdit4("##v", &v.x, ImGuiColorEditFlags_AlphaPreviewHalf); break;
+                    case ShaderParamType::Texture: break;
+                }
+                track();
+                if (edited) m.shaderParams[p.name] = v;
+                if (found != m.shaderParams.end() && ImGui::BeginPopupContextItem("##reset")) {
+                    if (ImGui::MenuItem("Revenir à la valeur du shader")) {
+                        m.shaderParams.erase(p.name);
+                        commit = true;
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+            }
+        }
         ImGui::EndTable();
     }
     if (changed) lib->preview(uri, m);  // live preview while dragging

@@ -8,6 +8,7 @@ agr_add_module(render
         src/Renderer3D.cpp
         src/EnvironmentLibrary.cpp
         src/ModelLibrary.cpp
+        src/ShaderLibrary.cpp
         src/RenderPlugin.cpp
     PUBLIC_DEPS
         agr::runtime

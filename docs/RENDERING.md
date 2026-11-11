@@ -95,7 +95,7 @@ Sandbox : `--vulkan`, `--opengl`, `--gles`, `--validation`.
 | Vulkan **1.1** et *render passes* classiques | Le *dynamic rendering* (1.3) est rare sur les Android visés ; les pipelines sont déclinés à la demande par signature de passe (format couleur, format de profondeur, échantillons) et mis en cache |
 | **Viewport de hauteur négative** | Même espace de découpe, même sens des faces et même orientation des textures qu'en OpenGL : le renderer ne contient aucun cas particulier par backend |
 | volk + VulkanMemoryAllocator | Chargement des fonctions sans édition des liens avec `libvulkan`, allocations groupées |
-| Un seul *descriptor set layout* (8 uniform buffers dynamiques + 8 textures) | Correspond 1:1 au modèle de la RHI. Les sets sont réutilisés tant que les ressources liées ne changent pas ; seuls les *offsets* dynamiques varient entre objets |
+| Un seul *descriptor set layout* (8 uniform buffers dynamiques + 12 textures) | Correspond 1:1 au modèle de la RHI. Les sets sont réutilisés tant que les ressources liées ne changent pas ; seuls les *offsets* dynamiques varient entre objets |
 | Buffers dynamiques en anneau (une copie par image en vol) | Écriture CPU sans attendre le GPU, comme l'« orphaning » OpenGL |
 | Destruction différée | Une ressource n'est libérée qu'une fois terminées les images qui l'utilisaient |
 | Profondeur jamais stockée (`STORE_OP_DONT_CARE`) | Économie de bande passante sur les GPU mobiles à tuiles |

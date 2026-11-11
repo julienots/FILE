@@ -17,6 +17,10 @@ void EditorShared::notify(std::string message) {
 }
 
 void EditorShared::runGuarded(std::function<void()> action) {
+    if (shaderDirty) {  // the shader editor asks first, then runs the guard again
+        shaderPendingAction = std::move(action);
+        return;
+    }
     if (ctx.dirty()) {
         pendingAction = std::move(action);
         openUnsavedPopup = true;

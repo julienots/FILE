@@ -33,8 +33,8 @@ private:
 /// Sphere lit by a sun and a sky, showing the material the inspector edits.
 class MaterialPreview {
 public:
-    /// Inside the device frame, before the UI pass: renders EditorShared::previewMaterial.
-    void render(EditorShared& s);
+    /// Inside the device frame, before the UI pass: renders `material` (nothing when empty).
+    void render(EditorShared& s, const std::string& material);
     /// Texture to display (null until rendered once); `flipY` for OpenGL render targets.
     rhi::TextureHandle texture(EditorShared& s) const;
     void release(EditorShared& s);
@@ -46,6 +46,39 @@ private:
     ecs::Entity m_sphere;
     rhi::RenderTargetHandle m_target;
     bool m_rendered = false;
+};
+
+/// `.agrshader` code editor: line numbers, live preview (scene and preview sphere) while
+/// typing, compile errors with their line (click to jump), save / revert.
+class ShaderEditorPanel {
+public:
+    void draw(EditorShared& s, const MaterialPreview& preview);
+    const std::string& uri() const { return m_uri; }
+    const Renderer::ShaderStatus& status() const { return m_status; }
+    /// Replaces the code as if typed (automated tests); `compileNow` skips the typing delay.
+    void edit(EditorShared& s, std::string text, bool compileNow);
+    /// Discards unsaved changes (reloads the file).
+    void revertChanges(EditorShared& s) { revert(s); }
+    static constexpr const char* kPreviewMaterial = "memory://shader_preview.agrmat";
+
+private:
+    enum class After : u8 { None, Open, Close, Action };
+    void open(EditorShared& s, const std::string& uri);
+    void save(EditorShared& s);
+    void revert(EditorShared& s);
+    void compile(EditorShared& s);
+    void drawCode(EditorShared& s, float height);
+    void drawUnsavedPopup(EditorShared& s);
+    std::string m_uri, m_text, m_saved;
+    Renderer::ShaderStatus m_status;
+    bool m_pendingCompile = false;
+    f64 m_editTime = 0.0;
+    int m_gotoLine = 0;          // 1-based line to move the cursor to (0 = none)
+    int m_cursorLine = 1;
+    bool m_followCursor = false;
+    After m_after = After::None;
+    std::string m_afterUri;
+    bool m_openPopup = false;
 };
 
 class InspectorPanel {

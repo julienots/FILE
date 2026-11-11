@@ -1,3 +1,4 @@
+#include <array>
 #include "agr/editor/ui/Theme.hpp"
 
 #include <cmath>
@@ -231,6 +232,13 @@ void draw(ImDrawList* dl, Kind kind, ImVec2 c, float s, ImU32 col) {
             dl->AddCircleFilled(c, h * 0.8f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.55f) << 24), 24);
             dl->AddCircleFilled({c.x - h * 0.15f, c.y - h * 0.15f}, h * 0.55f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.8f) << 24), 24);
             dl->AddCircleFilled({c.x - h * 0.32f, c.y - h * 0.32f}, h * 0.18f, col, 12);
+            break;
+        case Kind::Shader:  // "</>"
+            dl->AddPolyline(std::array<ImVec2, 3>{ImVec2{c.x - h * 0.3f, c.y - h * 0.5f}, ImVec2{c.x - h * 0.8f, c.y}, ImVec2{c.x - h * 0.3f, c.y + h * 0.5f}}.data(),
+                            3, col, t * 1.3f, ImDrawFlags_None);
+            dl->AddPolyline(std::array<ImVec2, 3>{ImVec2{c.x + h * 0.3f, c.y - h * 0.5f}, ImVec2{c.x + h * 0.8f, c.y}, ImVec2{c.x + h * 0.3f, c.y + h * 0.5f}}.data(),
+                            3, col, t * 1.3f, ImDrawFlags_None);
+            dl->AddLine({c.x + h * 0.15f, c.y - h * 0.7f}, {c.x - h * 0.15f, c.y + h * 0.7f}, col, t * 1.3f);
             break;
         case Kind::Plus:
             dl->AddLine({c.x - h * 0.6f, c.y}, {c.x + h * 0.6f, c.y}, col, t * 1.4f);

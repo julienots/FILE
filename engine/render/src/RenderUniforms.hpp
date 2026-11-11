@@ -38,8 +38,9 @@ struct MaterialUniforms {
     math::Vec4 pbr;
     math::Vec4 uvTransform;
     math::Vec4 flags;
+    math::Vec4 custom[8];  // custom shader parameters
 };
-static_assert(sizeof(MaterialUniforms) == 80);
+static_assert(sizeof(MaterialUniforms) == 208);
 
 inline constexpr u32 kMaxLights3D = 8;
 struct LightUniforms {

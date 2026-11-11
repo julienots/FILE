@@ -15,6 +15,7 @@ add_executable(agr_tests
     test_prefab.cpp
     test_input_actions.cpp
     test_localization.cpp
+    test_custom_shader.cpp
     test_navigation.cpp
     test_terrain.cpp
     test_physics2d.cpp

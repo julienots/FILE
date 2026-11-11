@@ -13,6 +13,7 @@
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
+#include "agr/render/ShaderLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/rhi/Rhi.hpp"
 #include "agr/scene/Scene.hpp"
@@ -168,6 +169,15 @@ public:
     /// Imported models and .agrmat materials used by mesh renderers.
     void setModels(ModelLibrary* models) { m_models = models; }
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
+    /// Custom surface shaders (`.agrshader`) referenced by materials.
+    void setShaders(ShaderLibrary* shaders) { m_shaders = shaders; }
+    struct ShaderStatus {
+        bool usable = false;                       ///< Parsed and compiled: materials use it.
+        std::vector<ShaderDiagnostic> diagnostics;  ///< Parse and compile errors (user line numbers).
+    };
+    /// Compiles the standard variant of a custom shader if needed (opaque, one-sided,
+    /// with its vertex hook in the shadow pass) and returns its state. Editor validation.
+    ShaderStatus shaderStatus(const std::string& uri);
     /// Sky images (Environment sky = Image). Without it, image skies fall back to the gradient.
     void setEnvironments(EnvironmentLibrary* environments) { m_environments = environments; }
     /// Depth texture of the last shadow pass (null when shadows are off): an atlas of the
@@ -196,6 +206,8 @@ private:
         rhi::TextureHandle textures[5];  // base color, metallic-roughness, normal, occlusion, emissive
         u32 pipeline = 0;                // alphaMode * 2 + doubleSided, or kTerrainPipeline
         rhi::TextureHandle splat;        // terrain layer weights
+        rhi::TextureHandle custom[kMaxShaderTextures];  // custom shader textures (units 7..)
+        u32 customCount = 0;
     };
     /// Per-instance vertex stream of the 3D pipelines (locations 4..11).
     struct InstanceData {
@@ -334,6 +346,31 @@ private:
     rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map
     ModelLibrary* m_models = nullptr;
     MaterialLibrary* m_materials = nullptr;
+    ShaderLibrary* m_shaders = nullptr;
+    // Custom shaders: pipeline ids kCustomPipelineBase + set * kCustomStride + variant
+    // (alphaMode * 2 + doubleSided); compiled on first use, rebuilt when the source changes.
+    static constexpr u32 kCustomPipelineBase = 1000, kCustomStride = 8;
+    struct CustomPipelines {
+        std::string uri;
+        u64 version = 0;
+        bool usable = false;
+        bool hasVertex = false;
+        u32 textureCount = 0;
+        rhi::PipelineHandle pbr[2][6];     // [skinned][variant]
+        bool tried[2][6]{};
+        rhi::PipelineHandle shadow[2][2];  // [skinned][alpha mask] (vertex hook only)
+        bool shadowTried[2][2]{};
+        std::vector<ShaderDiagnostic> diagnostics;
+    };
+    std::vector<CustomPipelines> m_customSets;
+    std::unordered_map<std::string, u32> m_customIndex;
+    /// Index of the shader's pipeline set, ~0u when it cannot be used (missing, errors).
+    u32 customShaderSet(const std::string& uri);
+    /// Cached or newly compiled pipeline; null on failure (the set becomes unusable).
+    rhi::PipelineHandle customPipeline(u32 set, u32 variant, bool skinned, bool shadow);
+    void destroyCustomPipelines(CustomPipelines& set);
+    /// Shadow pass grouping: standard casters (0 / 1 = alpha mask) or a custom vertex hook.
+    u32 shadowKey(u32 pipeline) const;
     EnvironmentLibrary* m_environments = nullptr;
     rhi::TextureHandle m_envTexture;  // image sky of this frame (null: none)
     rhi::TextureHandle m_softParticle;  // default particle texture (procedural)

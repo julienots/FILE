@@ -15,7 +15,7 @@ namespace {
 using namespace gl;
 
 constexpr u32 kMaxAttributes = 16;  // minimum guaranteed by GL 3.3, GLES 3.0 and Vulkan
-constexpr u32 kMaxTextureUnits = 8;
+constexpr u32 kMaxTextureUnits = 12;  // GLES 3.0 guarantees 16 fragment units
 constexpr u32 kMaxUniformSlots = 8;
 constexpr u32 kTimerQueries = 4;
 

@@ -72,6 +72,17 @@ Result<MaterialData> parseMaterial(std::string_view text) {
         m.unlit = j.value("unlit", false);
         m.uvScale = readVec2(j.value("uvScale", json()), m.uvScale);
         m.uvOffset = readVec2(j.value("uvOffset", json()), m.uvOffset);
+        m.shader = j.value("shader", std::string());
+        if (const auto it = j.find("shaderParams"); it != j.end() && it->is_object())
+            for (const auto& [name, v] : it->items()) {
+                if (!v.is_array() || v.empty() || v.size() > 4) continue;
+                math::Vec4 value;
+                for (usize i = 0; i < v.size(); ++i) (&value.x)[i] = v[i].get<float>();
+                m.shaderParams[name] = value;
+            }
+        if (const auto it = j.find("shaderTextures"); it != j.end() && it->is_object())
+            for (const auto& [name, v] : it->items())
+                if (v.is_string()) m.shaderTextures[name] = v.get<std::string>();
     } catch (const std::exception& e) {
         return makeError(Error::Code::ParseError, std::string("material: ") + e.what());
     }
@@ -101,6 +112,15 @@ std::string materialToJson(const MaterialData& m) {
     j["unlit"] = m.unlit;
     j["uvScale"] = {m.uvScale.x, m.uvScale.y};
     j["uvOffset"] = {m.uvOffset.x, m.uvOffset.y};
+    if (!m.shader.empty()) {
+        j["shader"] = m.shader;
+        json params = json::object();
+        for (const auto& [name, v] : m.shaderParams) params[name] = {v.x, v.y, v.z, v.w};
+        j["shaderParams"] = params;
+        json textures = json::object();
+        for (const auto& [name, uri] : m.shaderTextures) textures[name] = uri;
+        j["shaderTextures"] = textures;
+    }
     return j.dump(2);
 }
 

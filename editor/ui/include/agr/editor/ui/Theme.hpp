@@ -37,7 +37,7 @@ EditorFonts applyAgrTheme(const std::string& fontsDir, float uiScale);
 
 /// Vector icons drawn with ImDrawList: crisp at any DPI, no icon font needed.
 namespace icons {
-enum class Kind { Play, Pause, Stop, Eye, EyeClosed, Lock, Unlock, Folder, File, Image, Scene, Entity, Camera, Light, Plus, Search, Model, Material, Prefab };
+enum class Kind { Play, Pause, Stop, Eye, EyeClosed, Lock, Unlock, Folder, File, Image, Scene, Entity, Camera, Light, Plus, Search, Model, Material, Prefab, Shader };
 void draw(ImDrawList* dl, Kind kind, ImVec2 center, float size, ImU32 color);
 /// Icon-sized button; returns true when clicked.
 bool button(const char* id, Kind kind, float size, ImU32 color, const char* tooltip = nullptr, bool active = false);

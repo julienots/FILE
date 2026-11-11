@@ -11,6 +11,7 @@
 #include "agr/scene/Terrain.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/render/ShaderLibrary.hpp"
 
 using namespace agr;
 using namespace agr::test;
@@ -26,6 +27,7 @@ struct Render3DFixture {
     AssetManager assets{vfs, jobs, gpu().device.get()};
     ModelLibrary models{vfs, jobs, gpu().device.get()};
     MaterialLibrary materials{vfs};
+    ShaderLibrary shaders{vfs};
     EnvironmentLibrary environments{vfs, jobs, gpu().device.get()};
     Renderer renderer{*gpu().device, assets};
     Scene scene;
@@ -41,6 +43,7 @@ struct Render3DFixture {
         renderer.setProfile(p);
         renderer.setModels(&models);
         renderer.setMaterials(&materials);
+        renderer.setShaders(&shaders);
         renderer.setEnvironments(&environments);
     }
     ~Render3DFixture() { std::filesystem::remove_all(root); }
@@ -595,6 +598,92 @@ TEST_CASE("skinned model: the mesh follows its joints (GPU skinning)") {
     CHECK_MESSAGE(near(f.at({-1.23f, 0.0f, 0.0f}), 255, 128, 0, 6), f.at({-1.23f, 0.0f, 0.0f}));
     CHECK_MESSAGE(near(f.at(head), 0, 0, 0), f.at(head));
     CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("custom shaders: parameters, textures, vertex hook, live edits, errors fall back") {
+    Render3DFixture f;
+    f.camera({0, 0, 4}, {0, 0, 0});
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, 0});
+    // Unlit material: the shader's base color reaches the screen unchanged.
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "param color tint = (1, 0, 0, 1);\n"
+                                                           "void surface(inout Surface s) {\n"
+                                                           "    s.baseColor = tint.rgb;\n"
+                                                           "}\n"));
+    MaterialData m;
+    m.unlit = true;
+    m.shader = "assets://fx/tint.agrshader";
+    REQUIRE(f.materials.save("assets://fx/tint.agrmat", m));
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://fx/tint.agrmat";
+    f.frame();
+    CHECK_MESSAGE(near(f.at({0, 0, 0}), 255, 0, 0), f.at({0, 0, 0}));
+    const auto status = f.renderer.shaderStatus("assets://fx/tint.agrshader");
+    CHECK(status.usable);
+    CHECK(status.diagnostics.empty());
+
+    // The material overrides the parameter (sRGB color, like every color of the editor).
+    m.shaderParams["tint"] = {0, 1, 0, 1};
+    REQUIRE(f.materials.save("assets://fx/tint.agrmat", m));
+    f.frame();
+    CHECK_MESSAGE(near(f.at({0, 0, 0}), 0, 255, 0), f.at({0, 0, 0}));
+
+    // Live edit (editor preview): new code on the next frame, without writing the file.
+    f.shaders.preview("assets://fx/tint.agrshader", "param color tint = (1, 0, 0, 1);\n"
+                                                    "void surface(inout Surface s) { s.baseColor = vec3(0.0, 0.0, 1.0); }\n");
+    f.frame();
+    CHECK_MESSAGE(near(f.at({0, 0, 0}), 0, 0, 255), f.at({0, 0, 0}));
+
+    // Texture parameter (default image of the shader, sRGB).
+    {
+        std::vector<u8> px(4 * 4 * 4);
+        for (usize i = 0; i < px.size(); i += 4) px[i] = 200, px[i + 1] = 100, px[i + 2] = 20, px[i + 3] = 255;
+        auto png = encodePng(4, 4, px);
+        REQUIRE(png);
+        REQUIRE(f.vfs.writeBytes("assets://fx/orange.png", png.value().data(), png.value().size()));
+    }
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "param texture pattern = \"assets://fx/orange.png\" srgb;\n"
+                                                           "void surface(inout Surface s) { s.baseColor = texture(pattern, s.uv).rgb; }\n"));
+    f.settle();
+    { const Rgba px = f.at({0, 0, 0}); CHECK_MESSAGE(near(px, 200, 100, 20, 8), int(px.r), " ", int(px.g), " ", int(px.b)); }
+
+    // Vertex hook: the sphere moves 1.5 to the right in world space.
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "param float offset = 1.5;\n"
+                                                           "void vertex(inout Vertex v) { v.position.x += offset; }\n"
+                                                           "void surface(inout Surface s) { s.baseColor = vec3(1.0); }\n"));
+    f.frame();
+    CHECK_MESSAGE(near(f.at({0, 0, 0}), 0, 0, 0), f.at({0, 0, 0}));
+    CHECK_MESSAGE(near(f.at({1.5f, 0, 0}), 255, 255, 255), f.at({1.5f, 0, 0}));
+    CHECK(f.renderer.shaderStatus("assets://fx/tint.agrshader").usable);  // shadow variant compiles too
+
+    // Compile error: reported on the user's line; the material falls back to the standard shader.
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "param float offset = 1.5;\n"
+                                                           "void surface(inout Surface s) {\n"
+                                                           "    s.baseColor = notDeclared;\n"
+                                                           "}\n"));
+    f.frame();
+    const auto broken = f.renderer.shaderStatus("assets://fx/tint.agrshader");
+    CHECK_FALSE(broken.usable);
+    REQUIRE_FALSE(broken.diagnostics.empty());
+    CHECK_MESSAGE(broken.diagnostics[0].line == 3, broken.diagnostics[0].message);
+    CHECK_MESSAGE(near(f.at({0, 0, 0}), 255, 255, 255), f.at({0, 0, 0}));  // standard unlit white
+
+    // Parse error (bad param): not compiled, line given.
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "void surface(inout Surface s) {}\nparam float x = (1, 2);\n"));
+    const auto parse = f.renderer.shaderStatus("assets://fx/tint.agrshader");
+    CHECK_FALSE(parse.usable);
+    REQUIRE(parse.diagnostics.size() == 1);
+    CHECK(parse.diagnostics[0].line == 2);
+
+    // Lit shader: metallic / roughness / emissive from the hook go through the lighting.
+    REQUIRE(f.shaders.save("assets://fx/tint.agrshader", "param color glow = (0, 0, 0, 1);\n"
+                                                           "void surface(inout Surface s) { s.baseColor = vec3(0.0); s.emissive = glow.rgb; }\n"));
+    m.unlit = false;
+    m.shaderParams.clear();
+    m.shaderParams["glow"] = {1, 0, 1, 1};
+    REQUIRE(f.materials.save("assets://fx/tint.agrmat", m));
+    f.darkEnvironment();
+    f.frame();
+    const Rgba glow = f.at({0, 0, 0});
+    CHECK_MESSAGE((glow.r > 200 && glow.b > 200 && glow.g < 40), glow);
 }
 
 TEST_CASE("post-processing: HDR bloom, color grading, vignette, FXAA, UI untouched") {

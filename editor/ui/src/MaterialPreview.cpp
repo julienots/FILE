@@ -1,12 +1,14 @@
+#include <imgui.h>
+
 #include "agr/core/Log.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/RenderComponents.hpp"
 
 namespace agr::editor {
 
-void MaterialPreview::render(EditorShared& s) {
+void MaterialPreview::render(EditorShared& s, const std::string& material) {
     rhi::Device* device = s.device();
-    if (s.previewMaterial.empty() || !device || !s.assets()) return;
+    if (material.empty() || !device || !s.assets()) return;
     if (!m_renderer) {
         m_renderer = std::make_unique<Renderer>(*device, *s.assets());
         if (Status st = m_renderer->initialize(); !st) {
@@ -16,8 +18,10 @@ void MaterialPreview::render(EditorShared& s) {
         }
         m_renderer->setModels(s.models());
         m_renderer->setMaterials(s.materials());
+        m_renderer->setShaders(s.shaders());
     }
     Renderer* renderer = m_renderer.get();
+    renderer->setTime(ImGui::GetTime());  // animated shaders (TIME) move in the preview too
     if (!m_scene) {
         registerRenderComponents();
         m_scene = std::make_unique<Scene>("Material Preview");
@@ -45,7 +49,7 @@ void MaterialPreview::render(EditorShared& s) {
         m_sphere = m_scene->createEntity("Sphere");
         reg.emplace<MeshRendererComponent>(m_sphere).mesh = PrimitiveMesh::Sphere;
     }
-    m_scene->registry().get<MeshRendererComponent>(m_sphere).material = s.previewMaterial;
+    m_scene->registry().get<MeshRendererComponent>(m_sphere).material = material;
     if (!m_target) {
         auto rt = device->createRenderTarget({.width = kSize, .height = kSize, .depth = true, .debugName = "agr.editor.material"});
         if (!rt) {

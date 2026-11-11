@@ -32,6 +32,7 @@ icons::Kind iconFor(const std::string& name, bool folder) {
     if (isModelFile(name)) return icons::Kind::Model;
     if (isPrefabFile(name)) return icons::Kind::Prefab;
     if (fs::path(name).extension() == kMaterialExtension) return icons::Kind::Material;
+    if (fs::path(name).extension() == kShaderExtension) return icons::Kind::Shader;
     return icons::Kind::File;
 }
 
@@ -75,7 +76,7 @@ void AssetBrowserPanel::importFiles(EditorShared& s, const std::vector<std::stri
         }
         ++imported;
         const std::string fname = src.filename().string();
-        if (!isImageFile(fname) && !isModelFile(fname) && src.extension() != kMaterialExtension && src.extension() != ".agrsheet" &&
+        if (!isImageFile(fname) && !isModelFile(fname) && src.extension() != kMaterialExtension && src.extension() != ".agrsheet" && src.extension() != kShaderExtension &&
             src.extension() != ".lua")
             AGR_LOG_WARN("Editor", "'{}' copied, but this file type has no importer yet", fname);
         if (src.extension() == ".gltf")
@@ -157,6 +158,21 @@ void AssetBrowserPanel::draw(EditorShared& s) {
         }
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Matériau PBR (.agrmat) modifiable dans l'inspecteur");
+    ImGui::SameLine();
+    if (ImGui::Button("Nouveau shader")) {
+        const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouveau_shader", {kShaderExtension});
+        const std::string uri = "assets://" + join(s.assetFolder, stem + kShaderExtension);
+        const std::string source = defaultCustomShaderSource();
+        const Status st = s.shaders() ? s.shaders()->save(uri, source) : s.engine.vfs().writeText(uri, source);
+        if (st) {
+            s.openShaderRequest = uri;
+            s.notify("Shader créé : " + uri + " (à choisir dans un matériau)");
+        } else {
+            s.notify("Création impossible : " + st.error().message);
+        }
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Shader de surface (.agrshader) : code GLSL branché sur le rendu PBR, avec aperçu en direct");
     ImGui::SameLine();
     if (ImGui::Button("Nouveau script")) {
         const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouveau_script", {".lua"});
@@ -282,6 +298,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     s.ctx.selection().clear();
                 }
                 if (isMaterial && s.inspectedAsset == uri) dl->AddRect(p, {p.x + tile, p.y + tile}, palette::kSelect, 4.0f, 2.0f);
+                const bool isShader = !folder && fs::path(name).extension() == kShaderExtension;
+                if (isShader && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderRequest = uri;  // shader editor
                 if (!folder && ImGui::BeginDragDropSource()) {
                     ImGui::SetDragDropPayload(kPayloadAsset, uri.c_str(), uri.size() + 1);
                     ImGui::Text("%s", name.c_str());
@@ -293,6 +311,7 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
                     else if (fs::path(name).extension() == ".lua") ImGui::SetTooltip("%s\nScript : glisser sur une entité de la vue pour l'attacher", uri.c_str());
                     else if (isMaterial) ImGui::SetTooltip("%s\nMatériau : cliquer pour le modifier, glisser sur un MeshRenderer", uri.c_str());
+                    else if (isShader) ImGui::SetTooltip("%s\nShader : cliquer pour l'éditer, glisser sur le champ Shader d'un matériau", uri.c_str());
                     else ImGui::SetTooltip("%s", uri.c_str());
                 }
                 if (ImGui::BeginPopupContextItem("##ctx")) {

@@ -68,6 +68,8 @@ Status RenderPlugin::onLoad(Engine& engine) {
     engine.registerService<ModelLibrary>(m_models.get());
     m_materials = std::make_unique<MaterialLibrary>(engine.vfs());
     engine.registerService<MaterialLibrary>(m_materials.get());
+    m_shaders = std::make_unique<ShaderLibrary>(engine.vfs());
+    engine.registerService<ShaderLibrary>(m_shaders.get());
     m_environments = std::make_unique<EnvironmentLibrary>(engine.vfs(), engine.jobs(), m_device.get());
     engine.registerService<EnvironmentLibrary>(m_environments.get());
 
@@ -76,6 +78,7 @@ Status RenderPlugin::onLoad(Engine& engine) {
         m_renderer->setSpriteSheets(m_sheets.get());
         m_renderer->setModels(m_models.get());
         m_renderer->setMaterials(m_materials.get());
+        m_renderer->setShaders(m_shaders.get());
         m_renderer->setEnvironments(m_environments.get());
         if (Status s = m_renderer->initialize(); !s) {
             m_renderer.reset();
@@ -139,6 +142,7 @@ void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
             m_sheets->reloadChanged();
             m_models->reloadChanged();
             m_materials->reloadChanged();
+            m_shaders->reloadChanged();
             m_environments->reloadChanged();
         }
     }
@@ -178,10 +182,12 @@ void RenderPlugin::onUnload(Engine& engine) {
     engine.registerService<ModelLibrary>(nullptr);
     engine.registerService<EnvironmentLibrary>(nullptr);
     engine.registerService<MaterialLibrary>(nullptr);
+    engine.registerService<ShaderLibrary>(nullptr);
     m_renderer.reset();
     m_models.reset();  // before the device: owns GPU buffers
     m_environments.reset();
     m_materials.reset();
+    m_shaders.reset();
     m_sheets.reset();
     m_assets.reset();
     m_device.reset();

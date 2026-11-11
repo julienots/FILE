@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -38,6 +39,11 @@ struct MaterialData {
     bool unlit = false;                    ///< Shows the base color as is (no lighting).
     math::Vec2 uvScale{1.0f, 1.0f};
     math::Vec2 uvOffset{0.0f, 0.0f};
+    /// Custom surface shader (`.agrshader`, empty = standard PBR) and the values of its
+    /// parameters that differ from the shader's defaults (colors in sRGB, like other colors).
+    std::string shader;
+    std::map<std::string, math::Vec4> shaderParams;
+    std::map<std::string, std::string> shaderTextures;
 
     bool operator==(const MaterialData&) const = default;
 };

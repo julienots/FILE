@@ -45,7 +45,7 @@
 | `agr::runtime` | statique | `Engine` (services + boucle + registre de services), `Application`, `EngineConfig`, `Input`, événements moteur, `PluginManager`, interface `PlatformLayer` |
 | `agr::rhi` | statique | Interface GPU neutre + backends Vulkan 1.1 et OpenGL 3.3 / OpenGL ES 3.0, traducteur du dialecte de shaders |
 | `agr::assets` | statique | Décodage / encodage d'images, `AssetManager` (cache, références, asynchrone, budget d'upload, rechargement à chaud, images intégrées aux modèles), import de modèles glTF / OBJ / FBX, matériaux PBR `.agrmat` |
-| `agr::render` | statique | Composants de rendu 3D (maillages, lumières, environnement) et 2D (tilemaps, lumières 2D, parallaxe, particules), primitives, profils graphiques, feuilles de sprites, `ModelLibrary` / `MaterialLibrary`, `Renderer` forward (PBR, ombres, instanciation, sprites), `RenderPlugin` |
+| `agr::render` | statique | Composants de rendu 3D (maillages, lumières, environnement) et 2D (tilemaps, lumières 2D, parallaxe, particules), primitives, profils graphiques, feuilles de sprites, `ModelLibrary` / `MaterialLibrary` / `ShaderLibrary` (shaders personnalisés), `Renderer` forward (PBR, ombres, instanciation, sprites), `RenderPlugin` |
 | `agr::physics2d` | statique | Physique 2D (Box2D v3) : `RigidBody2D`, `Collider2D`, `TilemapCollider2D`, `Physics2DWorld`, `Physics2DPlugin` ([PHYSICS.md](PHYSICS.md)) |
 | `agr::physics3d` | statique | Physique 3D (Jolt) : `RigidBody`, `Collider`, `Physics3DWorld`, `Physics3DPlugin` |
 | `agr::script` | statique | Scripts Lua 5.4 : composant `Script`, `ScriptEngine` (bac à sable, API, rechargement à chaud), `ScriptPlugin` ([SCRIPTING.md](SCRIPTING.md)) |

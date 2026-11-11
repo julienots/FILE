@@ -11,6 +11,7 @@ layout(std140) uniform MaterialData {
     vec4 u_pbr;          // metallic, roughness, normal scale, occlusion strength
     vec4 u_uvTransform;  // scale xy, offset zw
     vec4 u_flags;        // alpha cutoff, unlit, -, -
+    vec4 u_custom[8];    // custom shader parameters (.agrshader)
 };
 )";
 
@@ -83,11 +84,24 @@ void main() {
     vec3 tangent = a_tangent.xyz;
 #endif
     vec4 world = model * vec4(position, 1.0);
-    v_worldPos = world.xyz;
     v_normal = mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * normal;
     v_tangent = vec4(mat3(model) * tangent, a_tangent.w);
     v_uv = a_uv * u_uvTransform.xy + u_uvTransform.zw;
     v_color = i_color;
+#ifdef AGR_CUSTOM_VERTEX
+    Vertex vtx;
+    vtx.position = world.xyz;
+    vtx.normal = normalize(v_normal);
+    vtx.uv = v_uv;
+    vtx.color = v_color;
+    vtx.localPosition = position;
+    vertex(vtx);
+    world = vec4(vtx.position, 1.0);
+    v_normal = vtx.normal;
+    v_uv = vtx.uv;
+    v_color = vtx.color;
+#endif
+    v_worldPos = world.xyz;
     gl_Position = u_viewProj * world;
 }
 )";
@@ -292,6 +306,7 @@ void main() {
 #else
     vec4 base = texture(u_baseColorMap, v_uv) * u_baseColor * v_color;
 #endif
+#ifndef AGR_CUSTOM_SURFACE
 #ifdef AGR_ALPHA_MASK
     if (base.a < u_flags.x) discard;
     base.a = 1.0;
@@ -300,6 +315,7 @@ void main() {
         o_color = vec4(agrUnlit(base.rgb), base.a);
         return;
     }
+#endif
 #ifdef AGR_TERRAIN
     vec4 mr = vec4(1.0);
 #else
@@ -307,7 +323,6 @@ void main() {
 #endif
     float metallic = clamp(u_pbr.x * mr.b, 0.0, 1.0);
     float roughness = clamp(u_pbr.y * mr.g, 0.045, 1.0);
-    float a = roughness * roughness;
 
     vec3 N = normalize(v_normal);
     if (!gl_FrontFacing) N = -N;  // double-sided materials
@@ -320,6 +335,42 @@ void main() {
         N = normalize(T * tn.x + B * tn.y + N * max(tn.z, 1e-3));
     }
     vec3 V = normalize(u_cameraPos.xyz - v_worldPos);
+    float occlusion = mix(1.0, texture(u_occlusionMap, v_uv).r, u_pbr.w);
+#ifdef AGR_TERRAIN
+    vec3 emissive = vec3(0.0);
+#else
+    vec3 emissive = u_emissive.rgb * texture(u_emissiveMap, v_uv).rgb;
+#endif
+#ifdef AGR_CUSTOM_SURFACE
+    Surface s;
+    s.baseColor = base.rgb;
+    s.alpha = base.a;
+    s.metallic = metallic;
+    s.roughness = roughness;
+    s.normal = N;
+    s.emissive = emissive;
+    s.occlusion = occlusion;
+    s.worldPos = v_worldPos;
+    s.viewDir = V;
+    s.uv = v_uv;
+    s.color = v_color;
+    surface(s);
+    base = vec4(s.baseColor, s.alpha);
+    metallic = clamp(s.metallic, 0.0, 1.0);
+    roughness = clamp(s.roughness, 0.045, 1.0);
+    N = dot(s.normal, s.normal) > 1e-12 ? normalize(s.normal) : N;
+    emissive = s.emissive;
+    occlusion = clamp(s.occlusion, 0.0, 1.0);
+#ifdef AGR_ALPHA_MASK
+    if (base.a < u_flags.x) discard;
+    base.a = 1.0;
+#endif
+    if (u_flags.y > 0.5) {  // unlit
+        o_color = vec4(agrUnlit(base.rgb + emissive), base.a);
+        return;
+    }
+#endif
+    float a = roughness * roughness;
     vec3 diffuseColor = base.rgb * (1.0 - metallic);
     vec3 f0 = mix(vec3(0.04), base.rgb, metallic);
 
@@ -351,16 +402,13 @@ void main() {
     float a004 = min(rr.x * rr.x, exp2(-9.28 * NoV)) * rr.x + rr.y;
     vec2 ab = vec2(-1.04, 1.04) * a004 + rr.zw;
     vec3 envSpecular = f0 * ab.x + ab.y;
-    float occlusion = mix(1.0, texture(u_occlusionMap, v_uv).r, u_pbr.w);
     if (u_envParams.x > 0.5) {  // image sky: SH irradiance + prefiltered reflections
         vec3 R = reflect(-V, N);
         color += (diffuseColor * agrEnvIrradiance(N) + envSpecular * agrEnvRadiance(R, roughness)) * occlusion * u_groundColor.w;
     } else {
         color += (diffuseColor * hemisphere(N) + envSpecular * hemisphere(reflect(-V, N))) * occlusion;
     }
-#ifndef AGR_TERRAIN
-    color += u_emissive.rgb * texture(u_emissiveMap, v_uv).rgb;
-#endif
+    color += emissive;
     if (u_fogColor.w > 0.5) {
         float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
         color = mix(color, u_fogColor.rgb, f);
@@ -386,7 +434,25 @@ void main() {
 #else
     vec4 position = vec4(a_position, 1.0);
 #endif
-    gl_Position = u_viewProj * (mat4(i_model0, i_model1, i_model2, i_model3) * position);
+    mat4 model = mat4(i_model0, i_model1, i_model2, i_model3);
+    vec4 world = model * position;
+#ifdef AGR_CUSTOM_VERTEX
+#ifdef AGR_SKINNED
+    vec3 localNormal = mat3(skin) * a_normal;
+#else
+    vec3 localNormal = a_normal;
+#endif
+    Vertex vtx;
+    vtx.position = world.xyz;
+    vtx.normal = normalize(mat3(model) * localNormal);
+    vtx.uv = v_uv;
+    vtx.color = vec4(1.0);
+    vtx.localPosition = position.xyz;
+    vertex(vtx);
+    world = vec4(vtx.position, 1.0);
+    v_uv = vtx.uv;
+#endif
+    gl_Position = u_viewProj * world;
 }
 )";
 
@@ -426,6 +492,39 @@ void main() {
     if (u_fogColor.w > 0.5 && u_envParams.x < 0.5) color = mix(color, u_fogColor.rgb, clamp(1.0 - abs(dir.y) * 4.0, 0.0, 1.0));
     o_color = vec4(agrToneMap(color), 1.0);
 }
+)";
+
+/// Custom shaders (.agrshader): the hook API, then the user's code after `#line 1 1`.
+inline constexpr const char* kCustomBlock = R"(
+struct Surface {
+    vec3 baseColor;
+    float alpha;
+    float metallic;
+    float roughness;
+    vec3 normal;
+    vec3 emissive;
+    float occlusion;
+    vec3 worldPos;
+    vec3 viewDir;
+    vec2 uv;
+    vec4 color;
+};
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec2 uv;
+    vec4 color;
+    vec3 localPosition;
+};
+#define TIME (u_time.x)
+void surface(inout Surface s);
+void vertex(inout Vertex v);
+)";
+
+/// Shadow pass of a custom vertex hook: the normal attribute (separate block: the Vulkan
+/// translator reads declarations without preprocessing).
+inline constexpr const char* kShadowNormalBlock = R"(
+layout(location = 1) in vec3 a_normal;
 )";
 
 } // namespace agr::shaders
