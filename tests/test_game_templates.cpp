@@ -386,4 +386,127 @@ TEST_CASE("cards: play cards with energy, armor, enemy intents and turns, victor
     h.noScriptErrors();
 }
 
+
+TEST_CASE("farm simulation: sow, water, growth while moist, withering, rain, harvest at market price, goal") {
+    GameHarness h(SceneTemplate::GameFarm);
+    h.frames(5);
+    CHECK(h.number("Game", "coinsNow") == 20);
+    const math::Vec3 plot = h.position("Plot 1-1");
+    h.clickWorld(plot.x, plot.y);  // the seed tool is selected at start
+    CHECK(h.number("Game", "coinsNow") == 18);
+    CHECK(h.active("Crop"));
+    h.lua(R"(local g = agr.find("Game"):script(); g.rainy = false)");
+    h.seconds(9.0);  // dry soil: no growth
+    h.lua(R"(_G.stage = agr.find("Game"):script().plots[1].stage)");
+    CHECK(h.scripts().run("assert(_G.stage == 0)", &h.scene()));
+    h.clickUI("ToolWater");
+    h.clickWorld(plot.x, plot.y);
+    CHECK(h.scene().registry().get<SpriteRendererComponent>(h.find("Plot 1-1")).frame == 10);  // wet soil
+    h.seconds(17.0);  // two growth steps of 8 s
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().plots[1].stage == 2)", &h.scene()));
+    h.pressKey(Key::Num3);  // harvest tool: unripe crops stay
+    h.clickWorld(plot.x, plot.y);
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().plots[1].stage == 2)", &h.scene()));
+    // Ripe: sold at the day's price.
+    h.lua(R"(local g = agr.find("Game"):script(); g:setStage(g.plots[1], 3); g.price = 7)");
+    const double coins = h.number("Game", "coinsNow");
+    h.clickWorld(plot.x, plot.y);
+    CHECK(h.number("Game", "coinsNow") == coins + 7);
+    CHECK_FALSE(h.active("Crop"));
+    // Forgotten crops wither; rain waters every plot.
+    h.lua(R"(local g = agr.find("Game"):script(); g.rainy = false; local p = g.plots[2]; g:setStage(p, 1); p.water = 0; p.dry = 39.5)");
+    h.seconds(1.0);
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().plots[2].stage == 'withered')", &h.scene()));
+    h.lua(R"(local g = agr.find("Game"):script(); g.rainy = true)");
+    h.frames(2);
+    CHECK(h.scripts().run("for _, p in ipairs(agr.find('Game'):script().plots) do assert(p.water > 0) end", &h.scene()));
+    // Days pass.
+    h.lua(R"(local g = agr.find("Game"):script(); g.clock = g.dayLength - 0.05)");
+    h.frames(5);
+    CHECK(h.number("Game", "day") == 2);
+    CHECK(h.text("DayText").find("Jour 2") != std::string::npos);
+    // Goal.
+    h.lua(R"(local g = agr.find("Game"):script(); g.coinsNow = 198; g:setStage(g.plots[5], 3); g.price = 4)");
+    const math::Vec3 p5 = h.position("Plot 1-5");
+    h.clickWorld(p5.x, p5.y);
+    CHECK(h.field("Game", "state") == "won");
+    CHECK(h.active("Restart"));
+    h.clickUI("Restart");
+    CHECK(h.number("Game", "coinsNow") == 20);
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("idle: tap the crystal, buy generators with growing prices, production, pickaxe, offline progress, prestige") {
+    GameHarness h(SceneTemplate::GameIdle);
+    h.frames(5);
+    const math::Vec3 crystal = h.position("Crystal");
+    for (int i = 0; i < 3; ++i) h.clickWorld(crystal.x, crystal.y);
+    CHECK(h.number("Game", "crystals") == doctest::Approx(3.0));
+    h.clickUI("BuyMiner");  // 15 needed
+    CHECK(h.text("Message") == "Pas assez de cristaux");
+    h.lua(R"(agr.find("Game"):script().crystals = 100)");
+    h.clickUI("BuyMiner");
+    CHECK(h.number("Game", "crystals") == doctest::Approx(85.0).epsilon(0.01));
+    h.clickUI("BuyMiner");  // 15 * 1.15 = 17
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().owned.miner == 2)", &h.scene()));
+    const double before = h.number("Game", "crystals");
+    h.seconds(10.0);  // 2 miners x 0.5 / s
+    CHECK(h.number("Game", "crystals") == doctest::Approx(before + 10.0).epsilon(0.02));
+    CHECK(h.text("RateText").find("1 / s") != std::string::npos);
+    // Pickaxe: taps worth 2.
+    h.lua(R"(agr.find("Game"):script().crystals = 60)");
+    h.clickUI("BuyPickaxe");
+    const double c0 = h.number("Game", "crystals");
+    h.clickWorld(crystal.x, crystal.y);
+    CHECK(h.number("Game", "crystals") == doctest::Approx(c0 + 2.0).epsilon(0.01));
+    // Offline progress: the save says the player left one hour ago.
+    h.lua(R"(local g = agr.find("Game"):script(); g:save(); local s = agr.save.get("idle"); s.time = agr.time.now() - 3600; s.crystals = 0; agr.save.set("idle", s); g:load())");
+    CHECK(h.number("Game", "offline") == doctest::Approx(3600.0).epsilon(0.01));  // 1 crystal / s
+    // Prestige: +25 % production.
+    h.lua(R"(agr.find("Game"):script().crystals = 100000)");
+    h.clickUI("Prestige");
+    CHECK(h.number("Game", "prestige") == 1);
+    CHECK(h.number("Game", "crystals") == 0);
+    CHECK(h.scripts().run("assert(agr.find('Game'):script():tapValue() == 1.25)", &h.scene()));
+    CHECK(h.engine->save().get("idle")["prestige"] == 1);
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("tycoon: build shops, customers queue and pay, impatience hurts reputation, upgrades, goal") {
+    GameHarness h(SceneTemplate::GameTycoon);
+    h.frames(5);
+    CHECK(h.number("Game", "moneyNow") == 250);
+    const math::Vec3 plot = h.position("Plot 2");
+    h.clickWorld(plot.x, plot.y);
+    CHECK(h.number("Game", "moneyNow") == 150);
+    CHECK(h.scripts().run("assert(agr.find('Game'):script().shops[2].level == 1)", &h.scene()));
+    // Customers come, queue and pay 8 each.
+    h.seconds(40.0);
+    CHECK(h.number("Game", "served") >= 2);
+    CHECK(h.number("Game", "moneyNow") >= 150 + 16);
+    CHECK(h.text("DayText").find("servis") != std::string::npos);
+    // Upgrade: faster and pricier.
+    h.lua(R"(agr.find("Game"):script().moneyNow = 1000)");
+    h.clickWorld(plot.x, plot.y);
+    CHECK(h.number("Game", "moneyNow") == 1000 - 120);
+    CHECK(h.scripts().run("local g = agr.find('Game'):script(); assert(g.shops[2].level == 2 and g:price(g.shops[2]) == 12)", &h.scene()));
+    // Endless service: customers give up and reputation drops.
+    h.lua(R"(local g = agr.find("Game"):script(); g.serviceTime = function() return 1000 end; g.patience = 2)");
+    const double rep = h.number("Game", "reputation");
+    h.seconds(30.0);
+    CHECK(h.number("Game", "unhappy") >= 1);
+    CHECK(h.number("Game", "reputation") < rep);
+    // Goal.
+    h.lua(R"(agr.find("Game"):script().moneyNow = 2000)");
+    h.frames(2);
+    CHECK(h.field("Game", "state") == "won");
+    h.clickUI("Restart");
+    CHECK(h.number("Game", "moneyNow") == 250);
+    h.frames(2);
+    CHECK(h.scene().findByName("Customer").isNull());
+    h.noScriptErrors();
+}
+
 }

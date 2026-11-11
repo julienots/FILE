@@ -105,6 +105,7 @@ composant).
 | `agr.input.touchCount()`, `agr.input.touch(i)` → x, y, phase | phase : `"began"`, `"moved"`, `"stationary"`, `"ended"` |
 | `agr.screen.size()` → largeur, hauteur | taille de la fenêtre dans les unités du toucher / de la souris |
 | `agr.time.delta()`, `fixedDelta()`, `total()`, `frame()` | temps (secondes) |
+| `agr.time.now()` | heure réelle en secondes depuis 1970 (gains hors ligne, récompenses quotidiennes) |
 | `agr.physics2d.raycast(ox, oy, dx, dy [, distance])` | table `{entity, x, y, nx, ny, distance}` ou `nil` |
 | `agr.physics2d.gravity()`, `setGravity(x, y)` | gravité 2D (−9,81 m/s² par défaut) |
 | `agr.physics3d.raycast(ox, oy, oz, dx, dy, dz [, distance])` | `{entity, x, y, z, nx, ny, nz, distance}` ou `nil` |

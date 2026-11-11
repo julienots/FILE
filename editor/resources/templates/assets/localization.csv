@@ -60,3 +60,37 @@ cards.log.foehit,"Le golem frappe : {1} dégâts.","The golem strikes: {1} damag
 cards.log.foedefend,"Le golem se protège (+{1} armure).","The golem defends (+{1} armor).","El gólem se protege (+{1} armadura)."
 cards.won,"Victoire ! ({1} duel(s) gagné(s))","Victory! ({1} duel(s) won)","¡Victoria! ({1} duelo(s) ganado(s))"
 cards.lost,Le golem l'emporte…,The golem wins…,El gólem gana…
+farm.tool.seed,Semer,Sow,Sembrar
+farm.tool.water,Arroser,Water,Regar
+farm.tool.harvest,Récolter,Harvest,Cosechar
+farm.coins,"Pièces : {1}","Coins: {1}","Monedas: {1}"
+farm.day.sun,"Jour {1} — soleil","Day {1} — sunny","Día {1} — soleado"
+farm.day.rain,"Jour {1} — pluie (tout est arrosé)","Day {1} — rain (everything is watered)","Día {1} — lluvia (todo regado)"
+farm.market,"Prix du marché : {1} pièces la récolte","Market price: {1} coins per crop","Precio de mercado: {1} monedas por cosecha"
+farm.goal,"Objectif : {1} pièces","Goal: {1} coins","Objetivo: {1} monedas"
+farm.hint,"Choisissez un outil puis touchez une parcelle","Pick a tool, then tap a plot","Elige una herramienta y toca una parcela"
+farm.nocoins,Pas assez de pièces pour des graines,Not enough coins for seeds,No hay monedas para semillas
+farm.won,"Ferme prospère en {1} jour(s) ! (record : {2})","Thriving farm in {1} day(s)! (best: {2})","¡Granja próspera en {1} día(s)! (récord: {2})"
+idle.crystals,"{1} cristaux","{1} crystals","{1} cristales"
+idle.rate,"{1} / s   —   {2} par toucher","{1} / s   —   {2} per tap","{1} / s   —   {2} por toque"
+idle.gen.miner,"Mineur ({1})","Miner ({1})","Minero ({1})"
+idle.gen.drill,"Foreuse ({1})","Drill ({1})","Taladro ({1})"
+idle.gen.factory,"Usine ({1})","Factory ({1})","Fábrica ({1})"
+idle.gen.info,"Prix : {1}   +{2} / s","Cost: {1}   +{2} / s","Precio: {1}   +{2} / s"
+idle.pickaxe,"Pioche niveau {1}","Pickaxe level {1}","Pico nivel {1}"
+idle.pickaxe.info,"Prix : {1}   toucher x2","Cost: {1}   tap x2","Precio: {1}   toque x2"
+idle.prestige,"Renaissance ({1})","Rebirth ({1})","Renacer ({1})"
+idle.prestige.info,"À {1} cristaux : tout recommencer, +25 % pour toujours","At {1} crystals: start over, +25 % forever","Con {1} cristales: reiniciar, +25 % para siempre"
+idle.prestige.locked,"Il faut {1} cristaux pour renaître","You need {1} crystals to be reborn","Necesitas {1} cristales para renacer"
+idle.reborn,"Renaissance ! Production à {1} %","Rebirth! Production at {1} %","¡Renaciste! Producción al {1} %"
+idle.notenough,Pas assez de cristaux,Not enough crystals,No hay suficientes cristales
+idle.offline,"Pendant votre absence : +{1} cristaux","While you were away: +{1} crystals","Mientras no estabas: +{1} cristales"
+idle.hint,"Touchez le cristal, achetez des machines","Tap the crystal, buy machines","Toca el cristal, compra máquinas"
+tycoon.money,"Argent : {1}","Money: {1}","Dinero: {1}"
+tycoon.reputation,"Réputation : {1}","Reputation: {1}","Reputación: {1}"
+tycoon.day,"Jour {1} — {2} servis, {3} mécontents","Day {1} — {2} served, {3} unhappy","Día {1} — {2} atendidos, {3} descontentos"
+tycoon.goal,"Objectif : {1} pièces","Goal: {1} coins","Objetivo: {1} monedas"
+tycoon.hint,"Touchez une parcelle pour construire une boutique ({1}), une boutique pour l'améliorer","Tap a plot to build a shop ({1}), a shop to upgrade it","Toca una parcela para construir una tienda ({1}), una tienda para mejorarla"
+tycoon.nomoney,Pas assez d'argent,Not enough money,No hay suficiente dinero
+tycoon.upgraded,"Boutique niveau {1} : {2} pièces par client","Shop level {1}: {2} coins per customer","Tienda nivel {1}: {2} monedas por cliente"
+tycoon.won,"Empire commercial en {1} jour(s) ! (record : {2})","Business empire in {1} day(s)! (best: {2})","¡Imperio comercial en {1} día(s)! (récord: {2})"

@@ -82,7 +82,10 @@ function G.short(n)
         n = n / 1000
         i = i + 1
     end
-    if i == 1 then return tostring(math.floor(n)) end
+    if i == 1 then
+        if n == math.floor(n) or math.abs(n) >= 100 then return tostring(math.floor(n)) end
+        return string.format("%.1f", n)
+    end
     return string.format("%.2f%s", n, units[i])
 end
 

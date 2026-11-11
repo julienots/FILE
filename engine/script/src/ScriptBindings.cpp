@@ -1,6 +1,8 @@
 // The Lua API: `agr.*` functions and the Entity type. Every function checks its
 // arguments (luaL_check*) and raises Lua errors (caught by the engine, reported
 // with file:line) instead of crashing the game.
+#include <chrono>
+#include <cmath>
 #include <cstring>
 #include <string_view>
 
@@ -664,6 +666,12 @@ int t_frame(lua_State* L) {
     lua_pushinteger(L, static_cast<lua_Integer>(implOf(L).time.frameIndex));
     return 1;
 }
+/// agr.time.now(): wall-clock seconds since 1970 (offline progress, daily rewards).
+int t_now(lua_State* L) {
+    const auto since = std::chrono::system_clock::now().time_since_epoch();
+    lua_pushnumber(L, std::chrono::duration<double>(since).count());
+    return 1;
+}
 int p_raycast(lua_State* L) {
     const math::Vec2 o{static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2))};
     const math::Vec2 d{static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4))};
@@ -837,7 +845,7 @@ void openAgrLibrary(lua_State* L) {
                                      {"value", i_value},             {"gamepadCount", i_gamepadCount}, {"gamepadDown", i_gamepadDown},
                                      {"gamepadPressed", i_gamepadPressed}, {"gamepadAxis", i_gamepadAxis},
                                      {nullptr, nullptr}};
-    static const luaL_Reg time[] = {{"delta", t_delta}, {"fixedDelta", t_fixedDelta}, {"total", t_total}, {"frame", t_frame}, {nullptr, nullptr}};
+    static const luaL_Reg time[] = {{"delta", t_delta}, {"fixedDelta", t_fixedDelta}, {"total", t_total}, {"frame", t_frame}, {"now", t_now}, {nullptr, nullptr}};
     static const luaL_Reg physics[] = {{"raycast", p_raycast}, {"setGravity", p_setGravity}, {"gravity", p_gravity}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, agr);

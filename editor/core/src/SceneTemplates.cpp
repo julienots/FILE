@@ -32,6 +32,9 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameRpg2D: return "Jeu : RPG 2D";
         case SceneTemplate::GameTowerDefense: return "Jeu : Tower defense";
         case SceneTemplate::GameCards: return "Jeu : Cartes (duel)";
+        case SceneTemplate::GameFarm: return "Jeu : Simulation (ferme)";
+        case SceneTemplate::GameIdle: return "Jeu : Idle (mine de cristaux)";
+        case SceneTemplate::GameTycoon: return "Jeu : Tycoon (rue commerçante)";
     }
     return "?";
 }
@@ -58,6 +61,12 @@ const char* templateDescription(SceneTemplate t) {
             return "Dix vagues de créatures suivent une route sinueuse : touchez un emplacement pour construire une tour (50 or), touchez une tour pour l'améliorer (3 niveaux). Les tours visent la créature la plus avancée ; chaque victoire rapporte de l'or. Bouton Vague suivante, N ou Espace.";
         case SceneTemplate::GameCards:
             return "Duel de cartes contre un golem : chaque tour, 3 énergie et une main de 5 cartes (frappes, coups lourds, boucliers, potions, éclairs perçants). L'adversaire annonce son intention ; l'armure absorbe les dégâts. Clic, toucher ou touches 1 à 5, Entrée pour finir le tour ; victoires comptées dans la sauvegarde.";
+        case SceneTemplate::GameFarm:
+            return "Simulation agricole : semer, arroser et récolter 32 parcelles. Les plantes poussent en 4 stades tant que la terre est humide et fanent si on les oublie ; cycle jour / nuit, jours de pluie, prix du marché variable. Objectif : 200 pièces le plus vite possible (record sauvegardé). Outils : boutons ou touches 1 à 3.";
+        case SceneTemplate::GameIdle:
+            return "Jeu incrémental : touchez le cristal, achetez mineurs, foreuses et usines qui produisent seuls (prix croissants), améliorez la pioche, gagnez pendant votre absence (jusqu'à 8 h), puis renaissez pour un bonus permanent. Sauvegarde automatique.";
+        case SceneTemplate::GameTycoon:
+            return "Gestion : construisez des boutiques le long d'une rue, améliorez-les (service plus rapide, prix plus élevé). Les clients arrivent selon votre réputation, choisissent la file la plus courte, paient ou repartent mécontents si l'attente est trop longue. Objectif : 2000 pièces (record de jours sauvegardé).";
     }
     return "";
 }
@@ -76,6 +85,9 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameTycoon: return ProjectMode::Mode2D;
+        case SceneTemplate::GameIdle: return ProjectMode::Mode2D;
+        case SceneTemplate::GameFarm: return ProjectMode::Mode2D;
         case SceneTemplate::GameCards: return ProjectMode::Mode2D;
         case SceneTemplate::GameTowerDefense: return ProjectMode::Mode2D;
         case SceneTemplate::GameRpg2D: return ProjectMode::Mode2D;
@@ -90,7 +102,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameCards); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameTycoon); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -544,6 +556,9 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameTycoon: games::buildTycoon(scene); break;
+        case SceneTemplate::GameIdle: games::buildIdle(scene); break;
+        case SceneTemplate::GameFarm: games::buildFarm(scene); break;
         case SceneTemplate::GameCards: games::buildCards(scene); break;
         case SceneTemplate::GameTowerDefense: games::buildTowerDefense(scene); break;
         case SceneTemplate::GameRpg2D: games::buildRpg2D(scene); break;
