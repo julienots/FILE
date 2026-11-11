@@ -8,3 +8,4 @@ out/
 compile_commands.json
 user/
 imgui.ini
+dist/

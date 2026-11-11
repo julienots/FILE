@@ -848,3 +848,25 @@ TEST_CASE("editor prefab workflow: create, place, apply to every instance, undo,
     f.ctx->unpackPrefab(any);
     CHECK_FALSE(prefab::isInstanceRoot(f.scene(), any));
 }
+
+// Builds the mobile demo (the platformer template) as a signed release APK at $AGR_DEMO_APK.
+TEST_CASE("demo game APK" * doctest::skip(std::getenv("AGR_DEMO_APK") == nullptr)) {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::GamePlatformer);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    Project& project = f.ctx->project();
+    project.settings().name = "AGR Demo";
+    const AndroidToolchain tools = findAndroidToolchain(".");
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE_MESSAGE(problems.empty(), problems.front());
+    REQUIRE(createKeystore(tools, f.root / "keys" / "demo.p12", "demo", "agr-demo-pass", "AGR Demo"));
+    project.settings().exportSettings.keystorePath = (f.root / "keys" / "demo.p12").string();
+    project.settings().exportSettings.keyAlias = "demo";
+    AndroidBuildOptions o;
+    o.kind = AndroidBuildKind::ReleaseApk;
+    o.storePassword = "agr-demo-pass";
+    auto apk = buildAndroid(project, tools, f.root / "android", o);
+    REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
+    fs::copy_file(apk.value().output, std::getenv("AGR_DEMO_APK"), fs::copy_options::overwrite_existing);
+    CHECK(fs::file_size(std::getenv("AGR_DEMO_APK")) > 1024u * 1024u);
+}
