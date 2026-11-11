@@ -41,6 +41,8 @@ Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
         m_vfs.mount("user", std::make_unique<NativeFileProvider>(m_config.userDirectory, false));
     }
     m_save = std::make_unique<SaveStore>(m_vfs, "user://save.json");
+    m_prefabs = std::make_unique<PrefabLibrary>(m_vfs);
+    m_prefabs->install();
 
     // 4. Platform.
     if (m_config.headless || !platform) platform = std::make_unique<HeadlessPlatform>();
@@ -192,6 +194,10 @@ void Engine::shutdown(Application* app) {
     if (m_save)
         if (Status s = m_save->flush(); !s) AGR_LOG_ERROR("Engine", "save: {}", s.error().message);
     m_scene.reset();
+    if (m_prefabs) {
+        setPrefabResolver(nullptr);
+        m_prefabs.reset();
+    }
     if (m_platform) m_platform->shutdown();
     m_platform.reset();
     m_jobs.reset();

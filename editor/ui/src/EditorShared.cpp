@@ -1,5 +1,7 @@
 #include "agr/editor/ui/EditorShared.hpp"
 
+#include "agr/scene/Prefab.hpp"
+
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 
 #include <algorithm>
@@ -46,5 +48,7 @@ bool isImageFile(const std::string& name) {
     return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".psd" ||
            ext == ".gif" || ext == ".hdr";
 }
+
+bool isPrefabFile(const std::string& name) { return std::filesystem::path(name).extension() == prefab::kExtension; }
 
 } // namespace agr::editor

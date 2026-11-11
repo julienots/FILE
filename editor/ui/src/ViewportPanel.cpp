@@ -725,6 +725,15 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
             ImGui::EndDragDropTarget();
             return;
         }
+        if (isPrefabFile(uri)) {
+            Vec3 pos{};
+            const bool flat = s.ctx.camera().mode2D;
+            if (auto h = flat ? std::nullopt : pick(s.ctx.scene(), dropRay, s.pickAssets())) pos = h->point;
+            else if (float t = intersectPlane(dropRay, flat ? Vec3{0, 0, 1} : Vec3{0, 1, 0}, 0.0f); t >= 0.0f) pos = dropRay.at(t);
+            if (auto r = s.ctx.instantiatePrefab(uri, pos); !r) s.notify("Échec : " + r.error().message);
+            ImGui::EndDragDropTarget();
+            return;
+        }
         if (isModelFile(uri)) {
             const ModelAsset* model = s.models() ? s.models()->load(uri) : nullptr;
             if (!model || model->state != AssetState::Ready) {

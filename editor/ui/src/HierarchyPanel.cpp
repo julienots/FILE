@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "agr/scene/Prefab.hpp"
 #include "agr/editor/ui/Panels.hpp"
 
 namespace agr::editor {
@@ -97,6 +98,22 @@ void HierarchyPanel::contextMenu(EditorShared& s, ecs::Entity e) {
     if (ImGui::MenuItem("Cadrer dans la vue", "F")) s.ctx.focusSelection();
     if (!scene.parent(e).isNull() && ImGui::MenuItem("Détacher du parent")) s.ctx.reparent(e, {});
     ImGui::Separator();
+    // Prefabs.
+    const bool playing = s.ctx.playState() != PlayState::Edit;
+    if (prefab::isInstanceRoot(scene, e)) {
+        if (ImGui::MenuItem("Appliquer au prefab", nullptr, false, !playing)) {
+            if (Status st = s.ctx.applyPrefab(e); st) s.notify("Prefab mis à jour");
+            else s.notify("Échec : " + st.error().message);
+        }
+        if (ImGui::MenuItem("Rétablir le prefab")) {
+            if (Status st = s.ctx.revertPrefab(e); !st) s.notify("Échec : " + st.error().message);
+        }
+        if (ImGui::MenuItem("Dissocier du prefab")) s.ctx.unpackPrefab(e);
+    } else if (ImGui::MenuItem("Créer un prefab", nullptr, false, !playing)) {
+        if (auto uri = s.ctx.createPrefab(e)) s.notify("Prefab créé : " + uri.value());
+        else s.notify("Échec : " + uri.error().message);
+    }
+    ImGui::Separator();
     if (ImGui::MenuItem("Supprimer", "Suppr")) s.ctx.deleteSelection();
 }
 
@@ -177,6 +194,9 @@ void HierarchyPanel::drawEntity(EditorShared& s, ecs::Entity e) {
         if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
             const std::string uri = static_cast<const char*>(p->Data);
             if (isImageFile(uri)) s.ctx.createSprite(uri, {}, e);
+            else if (isPrefabFile(uri)) {
+                if (auto r = s.ctx.instantiatePrefab(uri, {}, e); !r) s.notify("Échec : " + r.error().message);
+            }
         }
         ImGui::EndDragDropTarget();
     }
@@ -198,7 +218,13 @@ void HierarchyPanel::drawEntity(EditorShared& s, ecs::Entity e) {
         if (done) s.ctx.rename(e, m_renameBuffer);
         if (done || ImGui::IsItemDeactivated()) m_renaming = {};
     } else {
-        dl->AddText({textX, labelPos.y + ImGui::GetStyle().FramePadding.y}, ImGui::GetColorU32(ImGuiCol_Text), scene.nameOf(e).c_str());
+        // Prefab instances: root in blue, its entities in a lighter blue.
+        ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+        if (!inactive) {
+            if (prefab::isInstanceRoot(scene, e)) color = IM_COL32(110, 170, 255, 255);
+            else if (!prefab::instanceRootOf(scene, e).isNull()) color = IM_COL32(160, 200, 255, 255);
+        }
+        dl->AddText({textX, labelPos.y + ImGui::GetStyle().FramePadding.y}, color, scene.nameOf(e).c_str());
     }
     if (inactive) ImGui::PopStyleColor();
 
@@ -280,6 +306,9 @@ void HierarchyPanel::draw(EditorShared& s) {
         if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
             const std::string uri = static_cast<const char*>(p->Data);
             if (isImageFile(uri)) s.ctx.createSprite(uri, {});
+            else if (isPrefabFile(uri)) {
+                if (auto r = s.ctx.instantiatePrefab(uri, {}); !r) s.notify("Échec : " + r.error().message);
+            }
         }
         ImGui::EndDragDropTarget();
     }

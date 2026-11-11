@@ -1,5 +1,6 @@
 #include "agr/scene/Components.hpp"
 
+#include "agr/scene/Prefab.hpp"
 #include "agr/scene/Reflection.hpp"
 
 namespace agr {
@@ -30,6 +31,7 @@ void registerSceneComponents() {
         .field("scale", &TransformComponent::scale, {.speed = 0.01f});
 
     // Hierarchy / world transform / id are handled by the Scene itself.
+    registerPrefabComponents();
 }
 
 } // namespace agr

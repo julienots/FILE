@@ -106,6 +106,7 @@ private:
     float m_smokeHeroX = 0.0f;
     float m_smokeHeroY = 0.0f;
     math::Vec2 m_smokeUiPos{};
+    std::string m_smokePrefab;
     Uuid m_smokeDeleted;
 };
 

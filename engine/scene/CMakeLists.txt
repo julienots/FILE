@@ -4,6 +4,7 @@ agr_add_module(scene
         src/Components.cpp
         src/Scene.cpp
         src/SceneSerializer.cpp
+        src/Prefab.cpp
     PUBLIC_DEPS
         agr::core
         agr::math

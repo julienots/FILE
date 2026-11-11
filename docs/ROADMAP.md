@@ -184,9 +184,20 @@ Guide : [EXPORT.md](EXPORT.md).
 | Icônes adaptatives, écran de démarrage, compression de textures ETC2 / ASTC, Play Asset Delivery | ⬜ | à planifier |
 | Lancement direct sur un appareil connecté (adb) depuis l'éditeur | ⬜ | à planifier |
 
-## Phase 9 — Templates, outils, plugins ⬜
-Templates jouables (platformer 2D, RPG 2D/3D, tower defense, cartes, idle, racing…),
-éditeurs de terrain / matériaux / particules / shaders, navmesh, localisation, gestionnaire de paquets.
+## Phase 9 — Templates, outils, plugins 🟡 (en cours)
+
+Étapes : 1. fondations de gameplay (prefabs, actions d'entrée, localisation, navigation) ;
+2. éditeurs avancés (terrain, eau, particules, shaders) ; 3. templates jouables ; 4. gestionnaire de
+plugins / paquets et documentation intégrée.
+
+| Élément | État | Où |
+|---|---|---|
+| **Prefabs** : instances liées (référence + différences), prefabs imbriqués, identifiants dérivés stables, appliquer / rétablir / dissocier, rechargement à chaud, `agr.instantiate` | ✅ | `scene/Prefab`, éditeur, [PREFABS.md](PREFABS.md) |
+| Actions d'entrée (clavier, souris, manette, tactile) et localisation | ⬜ | étape 1 |
+| Navigation : A* sur grille 2D, navmesh 3D, agents | ⬜ | étape 1 |
+| Éditeurs de terrain, eau, particules, shaders | ⬜ | étape 2 |
+| Templates : platformer 2D, RPG 2D/3D, tower defense, cartes, simulation, stratégie, survie, course, idle, tycoon, multijoueur extensible | ⬜ | étape 3 |
+| Gestionnaire de plugins / paquets, documentation intégrée | ⬜ | étape 4 |
 
 ## Phase 10 — Tests, optimisation, livraison ⬜
 Format de scène binaire, empaquetage des assets, profilage sur appareils, installeur de l'éditeur,

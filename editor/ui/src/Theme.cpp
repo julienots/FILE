@@ -216,6 +216,17 @@ void draw(ImDrawList* dl, Kind kind, ImVec2 c, float s, ImU32 col) {
             dl->AddConvexPolyFilled(rightFace, 4, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.5f) << 24));
             break;
         }
+        case Kind::Prefab: {  // outlined cube in prefab blue (reusable hierarchy)
+            const ImU32 blue = (col & 0xFF000000u) | IM_COL32(110, 170, 255, 0);
+            const ImVec2 top{c.x, c.y - h * 0.8f}, l{c.x - h * 0.75f, c.y - h * 0.4f}, r{c.x + h * 0.75f, c.y - h * 0.4f}, mid{c.x, c.y},
+                bl{c.x - h * 0.75f, c.y + h * 0.45f}, br{c.x + h * 0.75f, c.y + h * 0.45f}, bot{c.x, c.y + h * 0.85f};
+            const ImVec2 outline[] = {top, r, br, bot, bl, l};
+            dl->AddPolyline(outline, 6, blue, t * 1.2f, ImDrawFlags_Closed);
+            dl->AddLine(l, mid, blue, t);
+            dl->AddLine(mid, r, blue, t);
+            dl->AddLine(mid, bot, blue, t);
+            break;
+        }
         case Kind::Material:  // shaded sphere
             dl->AddCircleFilled(c, h * 0.8f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.55f) << 24), 24);
             dl->AddCircleFilled({c.x - h * 0.15f, c.y - h * 0.15f}, h * 0.55f, (col & 0x00FFFFFF) | (static_cast<ImU32>(((col >> 24) & 0xFF) * 0.8f) << 24), 24);

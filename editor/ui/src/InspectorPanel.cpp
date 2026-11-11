@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "agr/scene/Prefab.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/ModelLibrary.hpp"
@@ -842,6 +843,54 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
     total.track();
     ImGui::Spacing();
 
+    // ---- Prefab instance: source, number of changes, apply / revert / unpack.
+    if (const auto* pic = reg.tryGet<PrefabInstanceComponent>(e)) {
+        static Uuid countFor{};
+        static u32 countFrame = 0, cachedCount = 0;
+        if (countFor != id || ++countFrame >= 30) {  // the diff expands the prefab: not every frame
+            cachedCount = prefab::overrideCount(s.ctx.scene(), e);
+            countFor = id;
+            countFrame = 0;
+        }
+        const std::string uri = pic->prefab;  // copied: the actions below rebuild the entity
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.43f, 0.67f, 1.0f, 1.0f));
+        ImGui::TextUnformatted(("Prefab : " + std::filesystem::path(uri).filename().string()).c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", uri.c_str());
+        ImGui::SameLine();
+        if (!pic->unresolved.empty()) ImGui::TextDisabled("(fichier introuvable : modifications conservées)");
+        else ImGui::TextDisabled(cachedCount == 0 ? "(aucune modification)" : "(%u modification%s)", cachedCount, cachedCount > 1 ? "s" : "");
+        const bool editing = s.ctx.playState() == PlayState::Edit && pic->unresolved.empty();
+        ImGui::BeginDisabled(!editing);
+        if (ImGui::SmallButton("Appliquer")) {
+            if (Status st = s.ctx.applyPrefab(e); st) s.notify("Prefab mis à jour : " + uri);
+            else s.notify("Échec : " + st.error().message);
+            countFor = {};
+            ImGui::EndDisabled();
+            return;  // the entity was rebuilt
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Les modifications de cette instance deviennent celles du prefab (toutes les instances)");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Rétablir")) {
+            if (Status st = s.ctx.revertPrefab(e); !st) s.notify("Échec : " + st.error().message);
+            countFor = {};
+            ImGui::EndDisabled();
+            return;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Dissocier")) {
+            s.ctx.unpackPrefab(e);
+            ImGui::EndDisabled();
+            return;
+        }
+        ImGui::EndDisabled();
+        ImGui::Spacing();
+    } else if (const ecs::Entity owner = prefab::instanceRootOf(s.ctx.scene(), e); !owner.isNull()) {
+        ImGui::TextDisabled("Fait partie de l'instance de prefab « %s »", s.ctx.scene().nameOf(owner).c_str());
+        ImGui::Spacing();
+    }
+
     const auto& catalogue = ComponentRegistry::instance();
     // ---- Transform first, then the other components in catalogue order
     auto drawComponent = [&](const ComponentInfo& info, void* comp, bool removable) {
@@ -872,7 +921,7 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
     if (const ComponentInfo* t = catalogue.find<TransformComponent>())
         drawComponent(*t, &reg.get<TransformComponent>(e), false);
     for (const ComponentInfo* info : catalogue.all()) {
-        if (info->name == "Name" || info->name == "State" || info->name == "Transform") continue;
+        if (info->name == "Name" || info->name == "State" || info->name == "Transform" || info->name == "PrefabInstance") continue;
         ecs::PoolBase* pool = reg.findPool(info->id);
         if (!pool || !pool->contains(e)) continue;
         if (drawComponent(*info, pool->getRaw(e), true)) break;  // pools changed: redraw next frame

@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -37,6 +38,8 @@ public:
 
     /// Deep copy (components + children) placed right after the source sibling.
     Entity duplicate(Entity e);
+    /// Calls fn for e and every descendant (pre-order).
+    void traverseSubtree(Entity e, const std::function<void(Entity)>& fn) const;
 
     // ------------------------------------------------------------ hierarchy
     /// Re-parents `child` under `parent` (null = root), inserted before `before`
@@ -76,6 +79,8 @@ public:
     Entity findByUuid(Uuid id) const;
     Entity findByName(std::string_view name) const;
     Uuid uuidOf(Entity e) const;
+    /// Changes an entity's persistent id (prefab linking). False if the id is null or taken.
+    bool setUuid(Entity e, Uuid id);
     const std::string& nameOf(Entity e) const;
 
     /// Removes every entity.

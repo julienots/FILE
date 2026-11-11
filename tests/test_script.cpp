@@ -11,6 +11,7 @@
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
+#include "agr/scene/Prefab.hpp"
 #include "agr/script/ScriptEngine.hpp"
 
 using namespace agr;
@@ -509,3 +510,44 @@ TEST_CASE("mobile API: local save, device services, motion sensors") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("agr.instantiate spawns prefab instances whose scripts run") {
+    ScriptFixture f;
+    PrefabLibrary prefabs(f.vfs);
+    prefabs.install();
+    f.write("assets://coin.lua", R"lua(
+local Coin = {}
+function Coin:onStart() self.entity:set("Transform", "scale", {2, 2, 2}) end
+return Coin
+)lua");
+    {
+        Scene author;
+        const auto coin = author.createEntity("Coin");
+        author.registry().emplace<ScriptComponent>(coin).script = "assets://coin.lua";
+        author.createEntity("Sparkle", coin);
+        REQUIRE(prefabs.save("assets://coin.agrprefab", prefab::fromEntity(author, coin)));
+    }
+    f.write("assets://spawner.lua", R"lua(
+local Spawner = {}
+function Spawner:onStart()
+    for i = 1, 3 do
+        local c = agr.instantiate("assets://coin.agrprefab", self.entity)
+        c:set("Transform", "position", {i, 0, 0})
+    end
+    local none, err = agr.instantiate("assets://missing.agrprefab")
+    assert(none == nil and err:find("missing"))
+end
+return Spawner
+)lua");
+    const auto spawner = f.scripted("Spawner", "assets://spawner.lua");
+    f.update(3);
+    const auto kids = f.scene.children(spawner);
+    REQUIRE(kids.size() == 3);
+    for (auto c : kids) {
+        CHECK(prefab::isInstanceRoot(f.scene, c));
+        CHECK(f.scene.children(c).size() == 1);
+        CHECK(f.scene.registry().get<TransformComponent>(c).scale.x == doctest::Approx(2.0f));  // its script started
+    }
+    CHECK(f.scripts.stats().errors == 0);
+    setPrefabResolver(nullptr);
+}

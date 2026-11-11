@@ -93,6 +93,7 @@ composant).
 | `agr.log(...)`, `agr.warn(...)`, `agr.error(...)` (et `print`) | console de l'éditeur, logcat sur Android |
 | `agr.find(nom)` | première entité de ce nom, ou `nil` |
 | `agr.spawn([nom [, parent]])` | nouvelle entité (ajouter ensuite ses composants avec `add` / `set`) |
+| `agr.instantiate(uri [, parent])` | nouvelle instance d'un prefab (`assets://enemy.agrprefab`) avec ses enfants et ses scripts ; `nil, message` si le prefab manque ([PREFABS.md](PREFABS.md)) |
 | `agr.input.keyDown(t)`, `keyPressed(t)`, `keyReleased(t)` | touches : `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Return"`, `"Escape"`, `"Left"`, `"Right"`, `"Up"`, `"Down"`, `"LeftShift"`, `"LeftCtrl"`, `"F1"`–`"F12"`, `"Back"` (Android)... |
 | `agr.input.axis("horizontal" \| "vertical")` | −1..1 depuis les flèches, WASD et ZQSD |
 | `agr.input.mouseDown(b)`, `mousePressed(b)`, `mousePosition()` | `b` : 0 gauche, 1 milieu, 2 droit ; position en pixels de fenêtre |

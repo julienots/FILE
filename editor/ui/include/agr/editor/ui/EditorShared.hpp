@@ -83,5 +83,6 @@ struct EditorShared {
 
 /// Image asset extensions the engine can import today.
 bool isImageFile(const std::string& name);
+bool isPrefabFile(const std::string& name);
 
 } // namespace agr::editor

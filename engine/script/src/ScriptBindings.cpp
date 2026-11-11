@@ -6,6 +6,7 @@
 
 #include "ScriptInternal.hpp"
 #include "agr/core/Log.hpp"
+#include "agr/scene/Prefab.hpp"
 #include "agr/scene/Reflection.hpp"
 #include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
@@ -487,6 +488,21 @@ int a_spawn(lua_State* L) {
     pushEntity(L, s.createEntity(luaL_optstring(L, 1, "Entity"), parent));
     return 1;
 }
+/// agr.instantiate(uri [, parent]) -> entity of a new prefab instance, or nil and an error message.
+int a_instantiate(lua_State* L) {
+    Scene& s = sceneOf(L);
+    const char* uri = luaL_checkstring(L, 1);
+    const ecs::Entity parent = lua_isnoneornil(L, 2) ? ecs::Entity{} : checkEntity(L, 2);
+    auto e = prefab::instantiate(s, uri, parent);
+    if (!e) {
+        lua_pushnil(L);
+        lua_pushstring(L, e.error().message.c_str());
+        return 2;
+    }
+    s.updateTransforms();
+    pushEntity(L, e.value());
+    return 1;
+}
 int i_keyDown(lua_State* L) {
     lua_pushboolean(L, inputOf(L).keyDown(checkKey(L, 1)));
     return 1;
@@ -735,7 +751,7 @@ void openAgrLibrary(lua_State* L) {
     lua_pop(L, 1);
 
     // agr.*
-    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {nullptr, nullptr}};
+    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {"instantiate", a_instantiate}, {nullptr, nullptr}};
     static const luaL_Reg input[] = {{"keyDown", i_keyDown},         {"keyPressed", i_keyPressed}, {"keyReleased", i_keyReleased},
                                      {"mouseDown", i_mouseDown},     {"mousePressed", i_mousePressed}, {"mousePosition", i_mousePosition},
                                      {"touchCount", i_touchCount},   {"touch", i_touch},           {"axis", i_axis},

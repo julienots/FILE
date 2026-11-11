@@ -4,6 +4,7 @@
 
 #include "agr/core/Log.hpp"
 #include "agr/scene/Reflection.hpp"
+#include "SerializerInternal.hpp"
 
 namespace agr {
 
@@ -65,12 +66,9 @@ bool readFloats(const json& j, V& out) {
 }
 
 /// Entity references are resolved after every entity exists.
-struct PendingRef {
-    Entity owner;
-    ecs::ComponentTypeId component;
-    const FieldInfo* field;
-    Uuid target;
-};
+} // namespace
+
+namespace detail {
 
 bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs::ComponentTypeId cid,
                std::vector<PendingRef>& refs) {
@@ -88,7 +86,7 @@ bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs:
             f.ref<Entity>(comp) = Entity{};
             if (j.is_null()) return true;
             if (!j.is_string()) return false;
-            refs.push_back({owner, cid, &f, Uuid::fromString(j.get<std::string>())});
+            refs.push_back({owner, cid, &f, j.get<std::string>()});
             return true;
         case FieldType::IntArray: {
             std::vector<i32> out;
@@ -125,7 +123,6 @@ bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs:
 json componentsToJson(const Scene& scene, Entity e) {
     auto& registry = const_cast<Scene&>(scene).registry();
     json comps = json::object();
-    // Iterate through the reflection catalogue for a deterministic order.
     for (const ComponentInfo* info : ComponentRegistry::instance().all()) {
         if (!info->serializable) continue;
         ecs::PoolBase* pool = registry.findPool(info->id);
@@ -141,75 +138,96 @@ json componentsToJson(const Scene& scene, Entity e) {
     return comps;
 }
 
-void collectSubtree(const Scene& scene, Entity e, json& out, bool includeParent) {
+void collectSubtree(const Scene& scene, Entity e, json& out, bool includeParent, bool plainRoot) {
     json entry;
     entry["id"] = scene.uuidOf(e).toString();
     if (includeParent) {
         const Entity p = scene.parent(e);
         entry["parent"] = p.isNull() ? json(nullptr) : json(scene.uuidOf(p).toString());
     }
+    // Prefab instance: a reference and its differences, not the expanded entities.
+    if (!plainRoot && writeInstanceEntry(scene, e, entry)) {
+        out.push_back(std::move(entry));
+        return;
+    }
     entry["components"] = componentsToJson(scene, e);
     out.push_back(std::move(entry));
-    for (Entity c : scene.children(e)) collectSubtree(scene, c, out, true);
+    for (Entity c : scene.children(e)) collectSubtree(scene, c, out, true, false);
 }
 
-/// Creates entities from an "entities" array. `remap` = true assigns new UUIDs.
-Status loadEntities(Scene& scene, const json& entities, bool remap, Entity rootParent, Entity* firstCreated) {
-    if (!entities.is_array()) return makeError(Error::Code::ParseError, "'entities' must be an array");
-    std::unordered_map<std::string, Entity> byFileId;
-    std::vector<PendingRef> refs;
-    auto& registry = scene.registry();
-    const auto& catalogue = ComponentRegistry::instance();
+Entity LoadContext::lookup(const std::string& key) const {
+    if (auto it = byFileId.find(key); it != byFileId.end()) return it->second;
+    if (remap) return {};
+    return scene.findByUuid(Uuid::fromString(key));
+}
 
+void resolveRefs(LoadContext& ctx) {
+    auto& registry = ctx.scene.registry();
+    for (const PendingRef& r : ctx.refs) {
+        if (!ctx.scene.valid(r.owner)) continue;
+        const Entity target = ctx.lookup(r.target);
+        if (ecs::PoolBase* pool = registry.findPool(r.component))
+            if (void* comp = pool->getRaw(r.owner)) r.field->ref<Entity>(comp) = target;
+    }
+    ctx.refs.clear();
+}
+
+bool readComponent(LoadContext& ctx, Entity e, const std::string& compName, const json& fields) {
+    const ComponentInfo* info = ComponentRegistry::instance().find(compName);
+    if (!info) {
+        AGR_LOG_WARN("Serializer", "unknown component '{}' skipped", compName);
+        return false;
+    }
+    auto& registry = ctx.scene.registry();
+    ecs::PoolBase& pool = registry.ensurePool(info->id, info->makePool);
+    void* comp = pool.contains(e) ? pool.getRaw(e) : pool.emplaceDefault(registry, e);
+    if (!comp) {
+        AGR_LOG_WARN("Serializer", "component '{}' is not default constructible", compName);
+        return false;
+    }
+    if (!fields.is_object()) return true;
+    for (const auto& f : info->fields) {
+        if ((f.flags & FieldFlag_Transient) || !fields.contains(f.name)) continue;
+        if (!readField(f, comp, fields[f.name], e, info->id, ctx.refs))
+            AGR_LOG_WARN("Serializer", "field '{}.{}' has an invalid value; default kept", compName, f.name);
+    }
+    return true;
+}
+
+Status createEntries(LoadContext& ctx, const json& entities, Entity rootParent, const IdFn& idFor, Entity* firstCreated) {
+    if (!entities.is_array()) return makeError(Error::Code::ParseError, "'entities' must be an array");
     for (const json& item : entities) {
         if (!item.is_object() || !item.contains("id") || !item["id"].is_string())
             return makeError(Error::Code::ParseError, "entity entry without a valid 'id'");
         const std::string fileId = item["id"].get<std::string>();
         Entity parent = rootParent;
         if (item.contains("parent") && item["parent"].is_string()) {
-            auto it = byFileId.find(item["parent"].get<std::string>());
-            if (it == byFileId.end())
-                return makeError(Error::Code::ParseError, "entity " + fileId + " references a parent defined later or missing");
-            parent = it->second;
+            parent = ctx.lookup(item["parent"].get<std::string>());
+            if (parent.isNull()) {
+                if (ctx.strictParents)
+                    return makeError(Error::Code::ParseError, "entity " + fileId + " references a parent defined later or missing");
+                parent = rootParent;
+            }
         }
-        const Uuid id = remap ? Uuid{} : Uuid::fromString(fileId);
-        const Entity e = scene.createEntity("Entity", parent, id);
-        byFileId[fileId] = e;
+        const Uuid id = idFor ? idFor(fileId) : Uuid{};
+        Entity e{};
+        if (item.contains("prefab") && item["prefab"].is_string()) {
+            Status s = loadInstanceEntry(ctx, item, parent, id.isNull() ? Uuid::generate() : id, &e);
+            if (!s) return s;
+        } else {
+            e = ctx.scene.createEntity("Entity", parent, id);
+            if (item.contains("components"))
+                for (const auto& [compName, fields] : item["components"].items()) readComponent(ctx, e, compName, fields);
+        }
+        ctx.byFileId[fileId] = e;
         if (firstCreated && firstCreated->isNull()) *firstCreated = e;
-
-        if (!item.contains("components")) continue;
-        for (const auto& [compName, fields] : item["components"].items()) {
-            const ComponentInfo* info = catalogue.find(compName);
-            if (!info) {
-                AGR_LOG_WARN("Serializer", "unknown component '{}' on entity {} skipped", compName, fileId);
-                continue;
-            }
-            ecs::PoolBase& pool = registry.ensurePool(info->id, info->makePool);
-            void* comp = pool.emplaceDefault(registry, e);
-            if (!comp) {
-                AGR_LOG_WARN("Serializer", "component '{}' is not default constructible", compName);
-                continue;
-            }
-            for (const auto& f : info->fields) {
-                if ((f.flags & FieldFlag_Transient) || !fields.contains(f.name)) continue;
-                if (!readField(f, comp, fields[f.name], e, info->id, refs))
-                    AGR_LOG_WARN("Serializer", "field '{}.{}' has an invalid value; default kept", compName, f.name);
-            }
-        }
-    }
-
-    // Resolve entity references (to ids inside the file first, then the scene).
-    for (const PendingRef& r : refs) {
-        Entity target{};
-        auto it = byFileId.find(r.target.toString());
-        if (it != byFileId.end()) target = it->second;
-        else if (!remap) target = scene.findByUuid(r.target);
-        if (void* comp = registry.findPool(r.component)->getRaw(r.owner)) r.field->ref<Entity>(comp) = target;
     }
     return {};
 }
 
-} // namespace
+} // namespace detail
+
+using namespace detail;
 
 json SceneSerializer::toJson(const Scene& scene) {
     json root;
@@ -217,7 +235,7 @@ json SceneSerializer::toJson(const Scene& scene) {
     root["version"] = kFormatVersion;
     root["name"] = scene.name();
     json entities = json::array();
-    for (Entity r : scene.roots()) collectSubtree(scene, r, entities, true);
+    for (Entity r : scene.roots()) collectSubtree(scene, r, entities, true, false);
     root["entities"] = std::move(entities);
     return root;
 }
@@ -233,7 +251,9 @@ Status SceneSerializer::fromJson(Scene& scene, const json& j) {
     scene.clear();
     scene.setName(j.value("name", std::string("Untitled")));
     if (!j.contains("entities")) return {};
-    Status s = loadEntities(scene, j["entities"], false, Entity{}, nullptr);
+    LoadContext ctx{scene};
+    Status s = createEntries(ctx, j["entities"], Entity{}, [](const std::string& id) { return Uuid::fromString(id); }, nullptr);
+    resolveRefs(ctx);
     if (s) scene.updateTransforms();
     return s;
 }
@@ -252,7 +272,7 @@ json SceneSerializer::entityToJson(const Scene& scene, Entity root) {
     if (scene.valid(root)) {
         // The root is written without parent so it can be re-parented anywhere.
         json tmp = json::array();
-        collectSubtree(scene, root, tmp, true);
+        collectSubtree(scene, root, tmp, true, false);
         tmp[0].erase("parent");
         entities = std::move(tmp);
     }
@@ -264,7 +284,10 @@ Result<Entity> SceneSerializer::instantiate(Scene& scene, const json& j, Entity 
     if (!j.is_object() || j.value("format", "") != "agr.entity" || !j.contains("entities"))
         return makeError(Error::Code::ParseError, "not an AGR entity snippet");
     Entity first{};
-    Status s = loadEntities(scene, j["entities"], true, parent, &first);
+    LoadContext ctx{scene};
+    ctx.remap = true;
+    Status s = createEntries(ctx, j["entities"], parent, nullptr, &first);
+    resolveRefs(ctx);
     if (!s) return s.error();
     if (first.isNull()) return makeError(Error::Code::ParseError, "snippet is empty");
     return first;

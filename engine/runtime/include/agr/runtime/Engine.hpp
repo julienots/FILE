@@ -11,6 +11,7 @@
 #include "agr/core/Time.hpp"
 #include "agr/runtime/Application.hpp"
 #include "agr/runtime/SaveStore.hpp"
+#include "agr/scene/Prefab.hpp"
 #include "agr/runtime/EngineConfig.hpp"
 #include "agr/runtime/Input.hpp"
 #include "agr/runtime/PlatformLayer.hpp"
@@ -58,6 +59,8 @@ public:
     VirtualFileSystem& vfs() { return m_vfs; }
     /// Local save (user://save.json), written when the app goes to the background and at shutdown.
     SaveStore& save() { return *m_save; }
+    /// Prefab files (.agrprefab); also the resolver scenes use to expand instances.
+    PrefabLibrary& prefabs() { return *m_prefabs; }
     PluginManager& plugins() { return m_plugins; }
     Input& input() { return m_input; }
     PlatformLayer& platform() { return *m_platform; }
@@ -101,6 +104,7 @@ private:
     EventBus m_events;
     VirtualFileSystem m_vfs;
     std::unique_ptr<SaveStore> m_save;
+    std::unique_ptr<PrefabLibrary> m_prefabs;
     Input m_input;
     std::unique_ptr<PlatformLayer> m_platform;
     std::unique_ptr<Scene> m_scene;

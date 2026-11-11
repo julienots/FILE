@@ -58,6 +58,12 @@ Les projets récents sont mémorisés dans le dossier de préférences de l'util
 
 La disposition est entièrement ancrable (docking) et mémorisée ; « Affichage › Réinitialiser la disposition ».
 
+## Prefabs
+
+Clic droit sur une entité › *Créer un prefab* ; glisser un `.agrprefab` dans la vue ou la hiérarchie
+pour le placer ; *Appliquer*, *Rétablir*, *Dissocier* dans l'inspecteur d'une instance (bleue dans la
+hiérarchie). Détails : [PREFABS.md](PREFABS.md).
+
 ## Jouer dans l'éditeur
 
 **Jouer** (Ctrl+P) sauvegarde la scène en mémoire, lance la simulation (les plugins et systèmes

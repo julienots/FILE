@@ -81,6 +81,21 @@ public:
     bool addComponent(ecs::Entity e, const std::string& componentName);
     bool removeComponent(ecs::Entity e, const std::string& componentName);
     void selectAll();
+
+    // ----------------------------------------------------------- prefabs
+    /// Saves `e` and its subtree as assets://prefabs/<name>.agrprefab (unique name) and makes
+    /// `e` its first instance. Returns the prefab URI.
+    Result<std::string> createPrefab(ecs::Entity e);
+    /// New instance of a prefab at `position`, selected, one undo step.
+    Result<ecs::Entity> instantiatePrefab(const std::string& uri, math::Vec3 position, ecs::Entity parent = {});
+    /// Writes the instance's changes into its prefab and updates the other instances.
+    Status applyPrefab(ecs::Entity instanceRoot);
+    /// Drops the instance's changes (position and name kept).
+    Status revertPrefab(ecs::Entity instanceRoot);
+    void unpackPrefab(ecs::Entity instanceRoot);
+    /// Reloads prefabs modified on disk and updates their instances (polled by update()).
+    u32 reloadChangedPrefabs();
+
     /// Frames the selection with the editor camera.
     void focusSelection();
 
@@ -97,6 +112,7 @@ public:
 
 private:
     Engine& m_engine;
+    f64 m_prefabPollTimer = 0.0;
     std::optional<Project> m_project;
     std::string m_scenePath;
     Selection m_selection;

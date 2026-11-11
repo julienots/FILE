@@ -30,6 +30,7 @@ icons::Kind iconFor(const std::string& name, bool folder) {
     if (isImageFile(name)) return icons::Kind::Image;
     if (fs::path(name).extension() == ".agrscene") return icons::Kind::Scene;
     if (isModelFile(name)) return icons::Kind::Model;
+    if (isPrefabFile(name)) return icons::Kind::Prefab;
     if (fs::path(name).extension() == kMaterialExtension) return icons::Kind::Material;
     return icons::Kind::File;
 }

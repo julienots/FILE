@@ -1,6 +1,9 @@
 #include <atomic>
 #include "agr/scene/Scene.hpp"
 
+#include "agr/scene/Prefab.hpp"
+#include "agr/scene/SceneSerializer.hpp"
+
 #include <algorithm>
 
 #include "agr/core/Log.hpp"
@@ -159,7 +162,25 @@ bool Scene::isActiveInHierarchy(Entity e) const {
 // ----------------------------------------------------------------- duplicate
 Entity Scene::duplicate(Entity e) {
     if (!valid(e)) return {};
+    // Prefab instances inside: copy through the serializer, which re-identifies instances
+    // (a component-wise copy would keep ids that no longer match the new instance).
+    bool hasInstance = false;
+    traverseSubtree(e, [&](Entity x) { hasInstance |= m_registry.tryGet<PrefabInstanceComponent>(x) != nullptr; });
+    if (hasInstance) {
+        auto copy = SceneSerializer::instantiate(*this, SceneSerializer::entityToJson(*this, e), parent(e));
+        if (!copy) {
+            AGR_LOG_WARN("Scene", "duplicate failed: {}", copy.error().message);
+            return {};
+        }
+        setParent(copy.value(), parent(e), hierarchy(e).nextSibling, false);
+        return copy.value();
+    }
     return duplicateRecursive(e, parent(e), hierarchy(e).nextSibling);
+}
+
+void Scene::traverseSubtree(Entity e, const std::function<void(Entity)>& fn) const {
+    fn(e);
+    for (Entity c : children(e)) traverseSubtree(c, fn);
 }
 
 Entity Scene::duplicateRecursive(Entity src, Entity newParent, Entity before) {
@@ -209,6 +230,17 @@ void Scene::setWorldMatrix(Entity e, const math::Mat4& world) {
 }
 
 // -------------------------------------------------------------------- lookup
+bool Scene::setUuid(Entity e, Uuid id) {
+    if (!valid(e) || id.isNull()) return false;
+    const Uuid old = uuidOf(e);
+    if (old == id) return true;
+    if (m_uuidMap.contains(id)) return false;
+    m_uuidMap.erase(old);
+    m_uuidMap.emplace(id, e);
+    m_registry.get<IdComponent>(e).id = id;
+    return true;
+}
+
 Entity Scene::findByUuid(Uuid id) const {
     auto it = m_uuidMap.find(id);
     return it == m_uuidMap.end() ? Entity{} : it->second;

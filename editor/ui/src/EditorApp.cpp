@@ -1,3 +1,4 @@
+#include "agr/scene/Prefab.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 
 #include <SDL3/SDL.h>
@@ -1141,8 +1142,40 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(scene.findByName("Ball 1").isNull(), "stop removes what the game spawned");
             break;
         }
-        case 193: {
+        case 193: {  // prefabs: a rock of the showcase becomes a prefab, placed a second time
             m_viewport.gameView = false;
+            const ecs::Entity rock = scene.findByName("Rock");
+            auto uri = rock.isNull() ? Result<std::string>(makeError(Error::Code::NotFound, "no rock")) : ctx.createPrefab(rock);
+            check(static_cast<bool>(uri), "an entity becomes a prefab (assets://prefabs/...)");
+            if (uri) {
+                m_smokePrefab = uri.value();
+                auto copy = ctx.instantiatePrefab(uri.value(), {0.0f, 0.0f, 6.0f});
+                check(copy && prefab::isInstanceRoot(scene, copy.value()) && scene.registry().has<MeshRendererComponent>(copy.value()) &&
+                          scene.registry().has<ColliderComponent>(copy.value()),
+                      "the prefab is placed again with its components");
+                // A light added to the first rock, then applied: the copy gets it too.
+                scene.registry().emplace<PointLightComponent>(scene.findByName("Rock"));
+                ctx.commit("Add Component");
+            }
+            break;
+        }
+        case 195: {
+            const ecs::Entity rock = scene.findByName("Rock");
+            check(!rock.isNull() && ctx.applyPrefab(rock), "an instance's changes are applied to its prefab");
+            usize lit = 0;
+            scene.registry().view<PrefabInstanceComponent, PointLightComponent>().each(
+                [&](ecs::Entity, PrefabInstanceComponent& p, PointLightComponent&) { lit += p.prefab == m_smokePrefab; });
+            check(lit == 2, "every instance of the prefab follows");
+            ctx.selection().set(scene.uuidOf(scene.findByName("Rock")));  // inspector shows the prefab bar
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_prefab.png").string());
+            break;
+        }
+        case 197: {
+            for (int i = 0; i < 4; ++i) ctx.undo();  // apply, add component, add prefab, create prefab
+            check(!prefab::isInstanceRoot(scene, scene.findByName("Rock")), "undo restores the scene before the prefab");
+            break;
+        }
+        case 199: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

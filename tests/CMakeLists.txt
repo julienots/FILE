@@ -12,6 +12,7 @@ add_executable(agr_tests
     test_twod.cpp
     test_models.cpp
     test_environment.cpp
+    test_prefab.cpp
     test_physics2d.cpp
     test_script.cpp
     test_physics3d.cpp

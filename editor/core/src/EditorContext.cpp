@@ -1,4 +1,7 @@
 #include "agr/editor/EditorContext.hpp"
+#include "agr/scene/Prefab.hpp"
+
+#include <cctype>
 
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/audio/AudioComponents.hpp"
@@ -430,6 +433,79 @@ void EditorContext::stop() {
     AGR_LOG_INFO("Editor", "stop: scene restored");
 }
 
-void EditorContext::update() { m_selection.prune(scene()); }
+void EditorContext::update() {
+    m_selection.prune(scene());
+    // Prefab files changed by another tool: refresh the open scene's instances (once a second).
+    m_prefabPollTimer += 1.0 / 60.0;
+    if (m_prefabPollTimer >= 1.0) {
+        m_prefabPollTimer = 0.0;
+        reloadChangedPrefabs();
+    }
+}
+
+// ------------------------------------------------------------------ prefabs
+Result<std::string> EditorContext::createPrefab(ecs::Entity e) {
+    Scene& s = scene();
+    if (!s.valid(e)) return makeError(Error::Code::InvalidArgument, "no entity");
+    if (m_playState != PlayState::Edit) return makeError(Error::Code::InvalidArgument, "stop the game to create a prefab");
+    // File name from the entity name, made unique.
+    std::string base;
+    for (char c : s.nameOf(e)) base += (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') ? c : '_';
+    if (base.empty()) base = "prefab";
+    std::string uri = "assets://prefabs/" + base + prefab::kExtension;
+    for (int i = 2; m_engine.vfs().exists(uri); ++i) uri = "assets://prefabs/" + base + "_" + std::to_string(i) + prefab::kExtension;
+    auto saved = m_engine.prefabs().save(uri, prefab::fromEntity(s, e));
+    if (!saved) return saved.error();
+    if (Status st = prefab::link(s, e, uri); !st) return st.error();
+    commit("Create Prefab");
+    return uri;
+}
+
+Result<ecs::Entity> EditorContext::instantiatePrefab(const std::string& uri, Vec3 position, ecs::Entity parent) {
+    Scene& s = scene();
+    auto e = prefab::instantiate(s, uri, parent);
+    if (!e) return e.error();
+    s.registry().get<TransformComponent>(e.value()).position = position;
+    s.updateTransforms();
+    m_selection.set(s.uuidOf(e.value()));
+    commit("Add Prefab");
+    return e.value();
+}
+
+Status EditorContext::applyPrefab(ecs::Entity root) {
+    Scene& s = scene();
+    if (m_playState != PlayState::Edit) return makeError(Error::Code::InvalidArgument, "stop the game to apply a prefab");
+    const auto* pic = s.registry().tryGet<PrefabInstanceComponent>(root);
+    if (!pic) return makeError(Error::Code::InvalidArgument, "not a prefab instance");
+    const std::string uri = pic->prefab;
+    auto content = prefab::applyContent(s, root);
+    if (!content) return content.error();
+    auto previous = m_engine.prefabs().save(uri, content.value());
+    if (!previous) return previous.error();
+    if (Status st = prefab::link(s, root, uri); !st) return st;
+    prefab::refreshAll(s, uri, previous.value(), root);
+    commit("Apply Prefab");
+    return {};
+}
+
+Status EditorContext::revertPrefab(ecs::Entity root) {
+    Status st = prefab::revert(scene(), root);
+    if (st) commit("Revert Prefab");
+    return st;
+}
+
+void EditorContext::unpackPrefab(ecs::Entity root) {
+    if (!prefab::isInstanceRoot(scene(), root)) return;
+    prefab::unpack(scene(), root);
+    commit("Unpack Prefab");
+}
+
+u32 EditorContext::reloadChangedPrefabs() {
+    const auto changed = m_engine.prefabs().reloadChanged();
+    u32 n = 0;
+    for (const auto& [uri, previous] : changed) n += prefab::refreshAll(scene(), uri, previous);
+    if (n > 0 && m_playState == PlayState::Edit) commit("Prefab Updated");
+    return n;
+}
 
 } // namespace agr::editor

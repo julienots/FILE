@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -12,6 +13,8 @@
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/scene/Prefab.hpp"
+#include <nlohmann/json.hpp>
 #include "agr/physics2d/Physics2DComponents.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
@@ -768,4 +771,67 @@ TEST_CASE("Android export: signed release APK and App Bundle" * doctest::skip(st
         CHECK(code == 0);
         CHECK(outText.find("CN=AGR Test") != std::string::npos);  // our key, not the debug key
     }
+}
+
+TEST_CASE("editor prefab workflow: create, place, apply to every instance, undo, save and reopen") {
+    EditorFixture f(ProjectMode::Mode3D);
+    f.ctx->newScene(SceneTemplate::Empty3D);
+    Scene& s = f.scene();
+    const auto tower = s.createEntity("Tower");
+    s.registry().emplace<MeshRendererComponent>(tower).mesh = PrimitiveMesh::Cube;
+    const auto flag = s.createEntity("Flag", tower);
+    s.registry().get<TransformComponent>(flag).position = {0, 2, 0};
+    f.ctx->commit("Setup");
+
+    auto uri = f.ctx->createPrefab(tower);
+    REQUIRE(uri);
+    CHECK(uri.value() == "assets://prefabs/Tower.agrprefab");
+    CHECK(fs::exists(f.root / "game/assets/prefabs/Tower.agrprefab"));
+    CHECK(f.ctx->undoStack().undoLabel() == "Create Prefab");
+    auto second = f.ctx->instantiatePrefab(uri.value(), {5, 0, 0});
+    REQUIRE(second);
+    CHECK(s.registry().get<TransformComponent>(second.value()).position.x == doctest::Approx(5.0f));
+    const Uuid secondId = s.uuidOf(second.value());
+
+    // Change the first tower's flag height and apply: the second tower follows.
+    const auto firstFlag = s.findByUuid(s.uuidOf(s.children(s.findByName("Tower"))[0]));
+    s.registry().get<TransformComponent>(firstFlag).position.y = 4.0f;
+    f.ctx->commit("Move");  // as the inspector / gizmo do
+    REQUIRE(f.ctx->applyPrefab(s.findByName("Tower")));
+    const auto secondNow = s.findByUuid(secondId);
+    REQUIRE(s.valid(secondNow));
+    CHECK(s.registry().get<TransformComponent>(s.children(secondNow)[0]).position.y == doctest::Approx(4.0f));
+    CHECK(s.registry().get<TransformComponent>(secondNow).position.x == doctest::Approx(5.0f));  // its own place
+
+    // Undo restores the scene (the prefab file keeps its new content, like materials).
+    REQUIRE(f.ctx->undo());
+    CHECK(f.ctx->undoStack().redoLabel() == "Apply Prefab");
+    REQUIRE(f.ctx->redo());
+
+    // Save, reopen: two instances, children expanded from the prefab file.
+    REQUIRE(f.ctx->saveSceneAs("scenes/towers.agrscene"));
+    REQUIRE(f.ctx->loadScene("scenes/towers.agrscene"));
+    usize instances = 0;
+    f.scene().registry().view<PrefabInstanceComponent>().each([&](ecs::Entity e, PrefabInstanceComponent& p) {
+        ++instances;
+        CHECK(p.prefab == uri.value());
+        CHECK(f.scene().children(e).size() == 1);
+    });
+    CHECK(instances == 2);
+
+    // A prefab edited outside the editor is reloaded and the instances refreshed.
+    nlohmann::ordered_json content = *f.engine->prefabs().get(uri.value());
+    content["entities"][1]["components"]["Transform"]["position"] = {0.0f, 7.0f, 0.0f};
+    std::ofstream(f.root / "game/assets/prefabs/Tower.agrprefab") << content.dump(2);
+    fs::last_write_time(f.root / "game/assets/prefabs/Tower.agrprefab",
+                        fs::last_write_time(f.root / "game/assets/prefabs/Tower.agrprefab") + std::chrono::seconds(5));
+    CHECK(f.ctx->reloadChangedPrefabs() == 2);
+    f.scene().registry().view<PrefabInstanceComponent>().each([&](ecs::Entity e, PrefabInstanceComponent&) {
+        CHECK(f.scene().registry().get<TransformComponent>(f.scene().children(e)[0]).position.y == doctest::Approx(7.0f));
+    });
+
+    // Unpack: ordinary entities.
+    const auto any = f.scene().findByName("Tower");
+    f.ctx->unpackPrefab(any);
+    CHECK_FALSE(prefab::isInstanceRoot(f.scene(), any));
 }
