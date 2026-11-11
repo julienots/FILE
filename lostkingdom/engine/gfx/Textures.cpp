@@ -108,8 +108,8 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                 case 3: {  // snow: soft drifts, cold blue in hollows
                     float n1 = tileFbm(u * 4, v * 4, 4, 5, 401) * 0.5f + 0.5f;
                     float n2 = tileNoise(u * 48, v * 48, 48, 403) * 0.5f + 0.5f;
-                    c = lerp(hexColor(0xb7c6dc), hexColor(0xf4f7fb), n1);
-                    c = c * (0.97f + n2 * 0.06f);
+                    c = lerp(hexColor(0x9fb0c8), hexColor(0xe6ecf3), n1);
+                    c = c * (0.94f + n2 * 0.08f);
                     h = 0.4f + n1 * 0.5f;
                     break;
                 }
@@ -152,7 +152,7 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                 H[(size_t)y * S + x] = clampf(h, 0, 1);
             }
         // normals from height (wrap-around Sobel)
-        float strength = (l == 6) ? 5.f : (l == 2 ? 4.f : (l == 3 ? 1.2f : 2.5f));
+        float strength = (l == 6) ? 5.f : (l == 2 ? 4.f : (l == 3 ? 2.2f : 2.5f));
         for (int y = 0; y < S; y++)
             for (int x = 0; x < S; x++) {
                 auto hh = [&](int xx, int yy) { return H[(size_t)pmod(yy, S) * S + pmod(xx, S)]; };

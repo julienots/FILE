@@ -282,5 +282,7 @@ inline Color8 toColor8(vec3 c, float a = 1) {
 }
 inline vec3 hexColor(uint32_t hex) { return {((hex >> 16) & 255) / 255.f, ((hex >> 8) & 255) / 255.f, (hex & 255) / 255.f}; }
 inline vec3 mix3(vec3 a, vec3 b, float t) { return lerp(a, b, t); }
+// sRGB-authored colour to linear (lighting, fog, water and sky parameters are linear)
+inline vec3 srgb(uint32_t hex) { vec3 c = hexColor(hex); return {std::pow(c.x, 2.2f), std::pow(c.y, 2.2f), std::pow(c.z, 2.2f)}; }
 
 }  // namespace agr

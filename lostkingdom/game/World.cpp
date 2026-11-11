@@ -294,6 +294,11 @@ void World::buildPlan() {
                 float a = i * TAU / 6 + 0.1f;
                 S(S_LANTERN, p.pos + vec2(std::cos(a), std::sin(a)) * (p.radius * 0.38f), 0, pi);
             }
+            for (int i = 0; i < 10; i++) {
+                float a = rng.range(0, TAU), d = rng.range(15.f, p.radius * 0.45f);
+                vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
+                S(i % 3 == 0 ? S_LANTERN : S_STALL, q, rng.range(0, TAU), pi, 1.f, -1 - (i % 3));  // variant<0 = clutter
+            }
             if (p.type == PoiType::Mill) {
                 S(S_WINDMILL, p.pos + vec2(26, -18), 0.6f, pi);
                 for (int i = 0; i < 4; i++) S(S_FIELD, p.pos + vec2(-40.f + i * 22.f, 52.f), 0.f, pi, 1.f, i);
@@ -674,7 +679,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                         const Poi& p = pois[pi];
                         if (p.type != PoiType::Village && p.type != PoiType::Monastery && p.type != PoiType::Castle && p.type != PoiType::Mill && p.type != PoiType::BossArena) continue;
                         float d = length(vec2(x, z) - p.pos);
-                        float pr = p.type == PoiType::Castle ? p.radius * 0.7f : (p.type == PoiType::BossArena ? p.radius * 0.8f : 19.f);
+                        float pr = p.type == PoiType::Castle ? p.radius * 0.7f : (p.type == PoiType::BossArena ? p.radius * 0.8f : 13.f);
                         plaza = std::max(plaza, 1.f - smoothstepf(pr - 3.f, pr + 2.f, d + 2.f * fbm2(x * 0.2f, z * 0.2f, 2, 5)));
                         // packed dirt around houses
                         if (p.type != PoiType::BossArena) wDirt += (1.f - smoothstepf(p.radius * 0.45f, p.radius * 0.85f, d)) * 0.45f * smoothstepf(0.35f, 0.65f, n1);
@@ -882,7 +887,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // ---- grass & flowers (instanced, near LOD only)
     if (lod == 0) {
         Rng g(hash2i(k.x, k.z, 777));
-        float spacing = 0.85f / std::sqrt(std::max(0.05f, grassDensity));
+        float spacing = 0.9f / std::sqrt(std::max(0.05f, grassDensity));
         int GN = (int)(CHUNK / spacing);
         for (int j = 0; j < GN; j++)
             for (int i = 0; i < GN; i++) {
@@ -975,12 +980,16 @@ void World::uploadChunk(ChunkBuild& b) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer
         static MeshBuilder blade, flower;
         if (blade.v.empty()) {
+            // a clump of 7 blades (one instance) - denser look for fewer instances
             Mat root(hexColor(0x3a5f22), 0.9f, 0, 0, 0.f), tip(hexColor(0x9cc25a), 0.7f, 0, 0, 1.f);
-            for (int i = 0; i < 3; i++) {
-                float a = i * TAU / 3 + 0.3f;
+            Rng br(5);
+            for (int i = 0; i < 7; i++) {
+                float a = i * TAU / 7 + br.range(-0.3f, 0.3f);
                 vec3 side{std::cos(a), 0, std::sin(a)};
-                vec3 lean = vec3(-side.z, 0, side.x) * 0.12f;
-                blade.blade({0, 0, 0}, vec3(0, 0.55f, 0) + lean, 0.11f, side, root, tip);
+                vec2 off = br.inDisk() * 0.28f;
+                vec3 base{off.x, 0, off.y};
+                vec3 lean = vec3(off.x, 0, off.y) * 0.6f + vec3(-side.z, 0, side.x) * 0.1f;
+                blade.blade(base, base + vec3(0, br.range(0.45f, 0.75f), 0) + lean, 0.12f, side, root, tip);
             }
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f);
             flower.blade({0, 0, 0}, {0, 0.42f, 0}, 0.05f, {1, 0, 0}, stem, stem.withWind(0.8f));
@@ -989,8 +998,14 @@ void World::uploadChunk(ChunkBuild& b) {
                 vec3 d{std::cos(a), 0.35f, std::sin(a)};
                 flower.blade({0, 0.42f, 0}, vec3(0, 0.42f, 0) + d * 0.12f, 0.09f, vec3(-d.z, 0, d.x), petal, petal);
             }
-            for (auto& v : blade.v) { v.r = v.g = v.b = (uint8_t)clampf(80 + v.py * 300, 0, 255); }  // tinted per instance (x2 in shader)
-            for (auto& v : flower.v) if (v.py < 0.4f) { v.r = 70; v.g = 120; v.b = 50; }
+            for (auto& v : blade.v) {
+                v.r = v.g = v.b = (uint8_t)clampf(150 + v.py * 160, 0, 255);  // tinted per instance (x2 in shader)
+                // ground-like normals so blades shade like the terrain they grow on (no dark "hairs")
+                vec3 n = normalize(unpackNormal(v) * 0.25f + vec3(0, 1, 0));
+                v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
+                v.a = (uint8_t)clampf(140 + v.py * 200, 0, 255);  // AO darker at the root
+            }
+            for (auto& v : flower.v) { if (v.py < 0.4f) { v.r = 70; v.g = 120; v.b = 50; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
         }
         if (!b.grass.empty()) { blade.upload(c.grass); c.grass.setInstances(b.grass); }
         if (!b.flowers.empty()) { flower.upload(c.flowers); c.flowers.setInstances(b.flowers); }

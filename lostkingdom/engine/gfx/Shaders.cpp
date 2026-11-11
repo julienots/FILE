@@ -245,7 +245,8 @@ void main() {
 #else
     vec3 N = normalize(vNormal);
     vec3 V = normalize(uCamPos.xyz - vWorld);
-    vec3 albedo = vColor.rgb * uTint.rgb;
+    // vertex colours are authored in sRGB: convert to linear for lighting
+    vec3 albedo = pow(max(vColor.rgb * uTint.rgb, vec3(0.0)), vec3(2.2));
     float ao = vColor.a;
     float rough = vMat.r, metal = vMat.g;
     float emis = vMat.b * 4.0;
@@ -291,7 +292,16 @@ void main() {
         tn += sampleNrm(i, i == 2 ? mix(vWorld.xz * 0.22, ruv, cliff) : uv) * w;
   #endif
     }
-    albedo = alb * vColor.rgb * 2.0;  // vertex colour is a regional tint around 0.5
+    emis = 0.0;
+    albedo = pow(alb, vec3(2.2)) * vColor.rgb * 2.0;  // texture sRGB -> linear; vertex colour is a regional tint around 0.5
+    // macro variation breaks texture tiling at gameplay distance
+    float macro = texture(uNoiseTex, vWorld.xz * 0.0045).g * 0.7 + texture(uNoiseTex, vWorld.xz * 0.019).r * 0.3;
+    albedo *= 0.78 + macro * 0.44;
+    albedo = mix(albedo, albedo * vec3(1.08, 1.0, 0.85), smoothstep(0.55, 0.75, macro) * wGrass);  // sun-dried patches
+    // volcanic veins glowing through the ash
+    float vn = texture(uNoiseTex, vWorld.xz * 0.033).g;
+    float vein = smoothstep(0.012, 0.0, abs(vn - 0.5)) * smoothstep(0.3, 0.6, wAsh) * smoothstep(0.55, 0.7, texture(uNoiseTex, vWorld.xz * 0.006).b);
+    emis += vein * (0.6 + 0.4 * sin(uCamPos.w * 1.7 + vWorld.x * 0.1)) * 1.6;
     rough = rgh;
     metal = 0.0;
     ao = mix(0.55, 1.0, hsum) * vColor.a;
@@ -341,8 +351,12 @@ void main() {
     float trans = pow(max(dot(-V, uSunDir.xyz), 0.0), 3.0) * vMat.a;
     col += albedo * uSunColor.rgb * trans * 0.6 * sh;
 #endif
+#ifdef TERRAIN
+    col += vec3(1.0, 0.28, 0.05) * emis;
+#else
     float nightOnly = vSkin.w > 0.5 ? uFogParams.w : 1.0;
     col += albedo * emis * (1.0 + uFx.w) * nightOnly;
+#endif
 #ifdef DISSOLVE
     col += uDissolveColor.rgb * edge * 6.0;
 #endif
