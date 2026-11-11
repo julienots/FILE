@@ -90,7 +90,7 @@ export function applyPattern(geometry, preset, p = {}, { scale = 1, relief = 0 }
   const pos = geometry.attributes.position, nrm = geometry.attributes.normal;
   const n = pos.count;
   const c1 = p.color || DEFAULT_COLOR[preset] || DEFAULT_COLOR.plain;
-  const c2 = p.color2 || c1.map((x) => x * 0.45);
+  const c2 = p.color2 || c1.map((x) => x * (preset === "scales" ? 0.55 : 0.45));
   const vein = p.veins || null;
   const out = new Float32Array(n * 3);
   const tmp = new THREE.Color();
@@ -99,7 +99,16 @@ export function applyPattern(geometry, preset, p = {}, { scale = 1, relief = 0 }
     const x = pos.getX(i) * s, y = pos.getY(i) * s, z = pos.getZ(i) * s;
     let t = 0.5, v = 0, h = 0;
     switch (preset) {
-      case "scales": { const [d1, d2] = voronoi(x * 9, y * 9, z * 9); t = Math.min(1, (d2 - d1) * 2.2); h = t; t = 1 - t; break; }
+      case "scales": {
+        // hiérarchie des reptiles : grandes plaques en couleurs de sommets (le détail fin est dans le shader),
+        // écailles ventrales (scutes) en bandes sur la face inférieure
+        const [d1, d2] = voronoi(x * 3.2, y * 3.2, z * 3.2);
+        const edge = Math.min(1, (d2 - d1) * 3);
+        const ny = nrm ? nrm.getY(i) : 0;
+        t = 0.35 + 0.65 * edge * (0.75 + 0.25 * fbm(x * 1.5, y * 1.5, z * 1.5, 2));
+        if (ny < -0.35) { const band = 0.5 + 0.5 * Math.cos(z * 22); t = 0.75 + 0.25 * band * Math.min(1, (-ny - 0.35) * 3); }
+        h = edge; break;
+      }
       case "stone": case "ground": { t = fbm(x * 3, y * 3, z * 3, 5); const [d1, d2] = voronoi(x * 2, y * 2, z * 2); if (d2 - d1 < 0.05) t *= 0.5; h = t; break; }
       case "wood": case "bark": { const r = Math.hypot(x, z) * 14 + fbm(x * 2, y * 0.5, z * 2) * 4; t = 0.5 + 0.5 * Math.sin(r); h = t; break; }
       case "fur": t = fbm(x * 18, y * 4, z * 18, 3); break;
@@ -125,6 +134,61 @@ export function applyPattern(geometry, preset, p = {}, { scale = 1, relief = 0 }
   }
   geometry.setAttribute("color", new THREE.BufferAttribute(out, 3));
   if (relief) geometry.computeVertexNormals();
+}
+
+/** Ombrage « cuit » dans les couleurs de sommets, selon les méthodes des artistes 3D :
+ * - occlusion ambiante et cavités (creux assombris, plis plus chauds pour la peau : diffusion sous la surface) ;
+ * - arêtes et bosses légèrement éclaircies (usure, lumière rasante) ;
+ * - contre-ombrage (countershading) : dos plus sombre, ventre plus clair, comme chez la plupart des animaux ;
+ * - variation de teinte à basse fréquence (« color breakup ») pour casser l'uniformité ;
+ * - extrémités au sol légèrement assombries ;
+ * - albédo borné aux valeurs physiques (≈ 0.02–0.85 linéaire : rien n'est noir pur ni blanc pur). */
+export function bakeShading(geometry, preset, { countershade = 0.3, ao = 1, cavity = 1, height = 1, ground = 0 } = {}) {
+  const col = geometry.attributes.color, nrm = geometry.attributes.normal, pos = geometry.attributes.position;
+  if (!col || !nrm) return;
+  const A = geometry.attributes.seAO, C = geometry.attributes.seCurv;
+  const fleshy = ["skin", "organic", "leather", "scales", "fur"].includes(preset);
+  const hard = ["stone", "metal", "rust", "gold", "bark", "wood"].includes(preset);
+  const s = 2.2 / Math.max(height, 0.2);
+  for (let i = 0; i < col.count; i++) {
+    let r = col.getX(i), g = col.getY(i), b = col.getZ(i);
+    const warm = r >= g * 0.95 && r >= b;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // variation de teinte et de valeur
+    const v1 = fbm(x * s + 11.3, y * s, z * s, 3) - 0.5, v2 = fbm(x * s * 0.6, y * s * 0.6 + 7.1, z * s * 0.6, 2) - 0.5;
+    const val = 1 + v1 * 0.22;
+    r *= val * (1 + v2 * 0.12); g *= val; b *= val * (1 - v2 * 0.12);
+    // contre-ombrage : la face inférieure tend vers un ton clair désaturé, le dos s'assombrit
+    const ny = nrm.getY(i);
+    if (countershade) {
+      if (ny < 0) {
+        const t = Math.min(1, -ny * 1.2) * countershade;
+        const pale = Math.min(0.8, lum * 1.9 + 0.16);
+        r += (pale * 1.02 - r) * t; g += (pale * 0.98 - g) * t; b += (pale * 0.9 - b) * t;
+      } else { const d = 1 - Math.pow(ny, 1.5) * countershade * 0.6; r *= d; g *= d; b *= d; }
+    }
+    // assombrissement près du sol (pieds, ventre bas) : ancre le modèle
+    if (ground !== null) { const t = Math.max(0, 1 - (y - ground) / (height * 0.12)); const d = 1 - t * 0.22; r *= d; g *= d; b *= d; }
+    // cavités / arêtes
+    if (C) {
+      const c = C.getX(i) * cavity;
+      if (c < 0) {
+        const t = Math.min(1, -c * 1.4);
+        const d = 1 - t * (hard ? 0.55 : 0.4);
+        if (fleshy && warm) { r *= d * (1 + t * 0.35); g *= d * (1 - t * 0.05); b *= d * (1 - t * 0.1); }
+        else if (fleshy) { const m = (r + g + b) / 3; r = (r + (r - m) * t * 0.5) * d; g = (g + (g - m) * t * 0.5) * d; b = (b + (b - m) * t * 0.5) * d; }
+        else { r *= d; g *= d; b *= d; }
+      } else { const e = 1 + Math.min(1, c * 1.2) * (hard ? 0.35 : 0.18); r = r * e + 0.01 * c; g = g * e + 0.01 * c; b = b * e + 0.01 * c; }
+    }
+    // occlusion ambiante
+    if (A) { const o = 1 - (1 - A.getX(i)) * ao; const d = 0.35 + 0.65 * o; r *= d; g *= d * (fleshy ? 0.97 + 0.03 * o : 1); b *= d * (fleshy ? 0.94 + 0.06 * o : 1); }
+    const lo = 0.018, hi = 0.85;
+    col.setXYZ(i, Math.min(hi, Math.max(lo, r)), Math.min(hi, Math.max(lo, g)), Math.min(hi, Math.max(lo, b)));
+  }
+  col.needsUpdate = true;
+  geometry.deleteAttribute("seAO");
+  geometry.deleteAttribute("seCurv");
 }
 
 /** Texture dessinée (briques, planches, tuiles, dalles, panneaux métal) pour les surfaces dures. */
@@ -193,7 +257,7 @@ export function boxUV(geometry, scale = 1) {
 // Relief (normale perturbée), variation de couleur et de rugosité calculés par pixel dans l'espace de
 // l'objet : les écailles, pores et grains restent collés à la peau même pendant l'animation.
 const DETAIL = {
-  scales: { scale: 18, bump: 0.8, color: 0.28, rough: 0.3, mode: 1 },
+  scales: { scale: 18, bump: 0.5, color: 0.22, rough: 0.25, mode: 1 },
   skin: { scale: 22, bump: 0.12, color: 0.06, rough: 0.2, mode: 0 },
   organic: { scale: 30, bump: 0.6, color: 0.22, rough: 0.3, mode: 2 },
   leather: { scale: 30, bump: 0.35, color: 0.12, rough: 0.3, mode: 1 },
@@ -224,7 +288,7 @@ vec2 seVoronoi(vec3 x){ vec3 p = floor(x); vec3 f = fract(x); float d1 = 8.0, d2
     if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
   return vec2(sqrt(d1), sqrt(d2)); }
 float seHeight(vec3 p){
-  if (seMode == 1){ vec2 v = seVoronoi(p); float edge = smoothstep(0.0, 0.18, v.y - v.x); return edge*0.85 + seNoise(p*3.0)*0.15; }
+  if (seMode == 1){ vec2 v = seVoronoi(p); float edge = smoothstep(0.0, 0.32, v.y - v.x); return edge*0.85 + seNoise(p*3.0)*0.15; }
   if (seMode == 2){ vec2 v = seVoronoi(p*0.4 + seFbm(p*0.3)); return seFbm(p)*0.6 + smoothstep(0.0, 0.06, v.y - v.x)*0.4; }
   if (seMode == 3){ vec2 v = seVoronoi(p*0.6); return seFbm(p)*0.7 + smoothstep(0.0, 0.08, v.y - v.x)*0.3; }
   if (seMode == 4){ return 0.5 + 0.5*sin(length(p.xz)*3.0 + seFbm(p*vec3(1.0,0.15,1.0))*6.0) * 0.6 + seNoise(p*vec3(4.0,0.3,4.0))*0.4; }
@@ -246,7 +310,7 @@ export function addDetail(material, kind, opts = {}) {
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\n" + NOISE_GLSL)
       .replace("#include <color_fragment>", `#include <color_fragment>
         float seFw = length(fwidth(vSeObj * seScale));
-        float seFade = 1.0 - smoothstep(0.18, 0.6, seFw);
+        float seFade = 1.0 - smoothstep(0.1, 0.35, seFw);
         float seH = mix(0.5, seHeight(vSeObj * seScale), seFade);
         float seC = seFbm(vSeObj * seScale * 0.15);
         diffuseColor.rgb *= mix(1.0 - seColor, 1.0 + seColor * 0.6, mix(seH, seC, 0.5 + 0.5 * (1.0 - seFade)));`)

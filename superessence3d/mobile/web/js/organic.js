@@ -29,7 +29,7 @@ function smin(a, b, k) {
 }
 
 /** Construit la géométrie d'un corps organique. resolution = nombre de cellules sur le plus grand axe. */
-export function buildOrganic(capsules, { resolution = 72, blend = null, smooth = 2, detail = null } = {}) {
+export function buildOrganic(capsules, { resolution = 72, blend = null, smooth = 2, detail = null, bake = true } = {}) {
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   let rmax = 0;
   const bounds = (c) => c.type === "ellipsoid"
@@ -117,9 +117,46 @@ export function buildOrganic(capsules, { resolution = 72, blend = null, smooth =
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   g.setIndex(indices);
   g.computeVertexNormals();
+  if (bake) bakeField(g, field, nx, ny, nz, lo, cell);
   g.computeBoundingBox();
   g.computeBoundingSphere();
   return g;
+}
+
+/** « Cuisson » comme pour un vrai asset : occlusion ambiante (échantillonnage du champ le long de la normale,
+ * à deux échelles) et courbure moyenne (laplacien du champ : >0 = bosse/arête, <0 = creux/pli).
+ * Résultats en attributs temporaires seAO / seCurv, consommés par bakeShading(). */
+function bakeField(g, field, nx, ny, nz, lo, cell) {
+  const far = cell * 5.9;
+  const sample = (x, y, z) => {
+    let fx = (x - lo[0]) / cell, fy = (y - lo[1]) / cell, fz = (z - lo[2]) / cell;
+    if (fx < 0 || fy < 0 || fz < 0 || fx >= nx - 1 || fy >= ny - 1 || fz >= nz - 1) return far;
+    const x0 = fx | 0, y0 = fy | 0, z0 = fz | 0;
+    fx -= x0; fy -= y0; fz -= z0;
+    const i = x0 + nx * (y0 + ny * z0), sy = nx, sz = nx * ny;
+    const L = (a, b, t) => a + (b - a) * t;
+    return L(L(L(field[i], field[i + 1], fx), L(field[i + sy], field[i + sy + 1], fx), fy),
+      L(L(field[i + sz], field[i + sz + 1], fx), L(field[i + sz + sy], field[i + sz + sy + 1], fx), fy), fz);
+  };
+  const pos = g.attributes.position, nrm = g.attributes.normal, n = pos.count;
+  const ao = new Float32Array(n), curv = new Float32Array(n);
+  const h = cell * 1.5;
+  for (let i = 0; i < n; i++) {
+    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+    const qx = nrm.getX(i), qy = nrm.getY(i), qz = nrm.getZ(i);
+    let occ = 0, w = 0.5;
+    for (let k = 1; k <= 5; k++) {
+      const d = cell * 1.15 * k;
+      const s = sample(px + qx * d, py + qy * d, pz + qz * d);
+      if (s < far) occ += Math.max(0, d - s) / d * w;
+      w *= 0.62;
+    }
+    ao[i] = Math.max(0, 1 - occ * 1.6);
+    const lap = sample(px + h, py, pz) + sample(px - h, py, pz) + sample(px, py + h, pz) + sample(px, py - h, pz) + sample(px, py, pz + h) + sample(px, py, pz - h) - 6 * sample(px, py, pz);
+    curv[i] = Math.max(-1, Math.min(1, lap / h * 0.6));
+  }
+  g.setAttribute("seAO", new THREE.BufferAttribute(ao, 1));
+  g.setAttribute("seCurv", new THREE.BufferAttribute(curv, 1));
 }
 
 /** Lissage de Taubin (ne rétrécit pas le volume). */

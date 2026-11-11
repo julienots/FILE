@@ -155,7 +155,7 @@ export function buildOrganicModel(def, parse, quality = "standard") {
     else o.caps.push({ type: "ellipsoid", c: bl.center, r: rr, bone, field: true, sub: !!bl.subtract, blend: bl.smoothness });
   }
   o.bodyPreset = def.material || "organic";
-  o.bodyParams = { color: colorArg(def.color, parse) || [0.5, 0.3, 0.3], color2: colorArg(def.color2, parse) || undefined, veins: colorArg(def.veins, parse) || undefined, wet: def.wet ? 0.6 : 0 };
+  o.bodyParams = { color: colorArg(def.color, parse) || [0.5, 0.3, 0.3], color2: colorArg(def.color2, parse) || undefined, veins: colorArg(def.veins, parse) || undefined, wet: def.wet ? 0.6 : 0, countershade: def.countershade !== undefined ? +def.countershade : undefined, ao: def.ao !== undefined ? +def.ao : undefined, cavity: def.cavity !== undefined ? +def.cavity : undefined };
   for (const e of def.eyes || []) {
     const bone = e.bone && names.has(e.bone) ? e.bone : "racine";
     const c = colorArg(e.color, parse) || [0.95, 0.75, 0.1];

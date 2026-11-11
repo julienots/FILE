@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { buildOrganic, skinWeights } from "../organic.js";
 import { V, box, curvePoints, cylinder, ellipseSection, ellipsoid, fanMembrane, lathe, loft, merge, place, sweep, taper } from "../geom.js";
-import { applyPattern, boxUV, canvasTexture, eyeGeometry, eyeMaterial, fbm, makeMaterial } from "../materials.js";
+import { applyPattern, bakeShading, boxUV, canvasTexture, eyeGeometry, eyeMaterial, fbm, makeMaterial } from "../materials.js";
 
 export const QUALITY = { draft: 60, standard: 96, high: 128, ultra: 160 };
 
@@ -719,6 +719,10 @@ function assembleOrganic(o, quality) {
     const geo = buildOrganic(fieldCaps, { resolution: o.resolution || res, smooth: o.smooth ?? 2, blend: o.blend ?? null });
     const relief = o.spec.detail === "high" || ["scales", "stone", "bark"].includes(o.bodyPreset) ? target * 0.004 : 0;
     applyPattern(geo, o.bodyPreset, o.bodyParams, { scale: (o.patternScale || 1) * 1.6 / Math.max(target, 0.2), relief: o.relief ?? relief });
+    const cat = o.spec.category;
+    const cs = o.bodyParams.countershade ?? (cat === "character" ? 0.08 : cat === "animal" ? 0.65 : 0.35);
+    geo.computeBoundingBox();
+    bakeShading(geo, o.bodyPreset, { countershade: cs, height: geo.boundingBox.max.y - geo.boundingBox.min.y, ground: geo.boundingBox.min.y, ao: o.bodyParams.ao ?? 1, cavity: o.bodyParams.cavity ?? 1 });
     const mat = makeMaterial(o.bodyPreset, o.bodyParams);
     mat.vertexColors = true;
     mat.color.set(0xffffff);
