@@ -49,6 +49,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIColumn: return "Column";
         case CreateKind::AudioSource: return "Audio Source";
         case CreateKind::Terrain: return "Terrain";
+        case CreateKind::Water: return "Water";
     }
     return "Entity";
 }
@@ -216,6 +217,7 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             reg.emplace<PointLightComponent>(e);
             if (parent.isNull()) t.position.y += 2.0f;
             break;
+        case CreateKind::Water: reg.emplace<WaterComponent>(e); break;
         case CreateKind::Terrain: {
             auto& tc = reg.emplace<TerrainComponent>(e);
             // The project's terrain textures when it has them (projects created from the templates do).

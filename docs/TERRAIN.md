@@ -38,6 +38,25 @@ roche, terre, sable, originales, générées par `tools/generate_template_terrai
 Chaque trait est une étape d'annulation. *Tout aplanir* remet le terrain à zéro. Échap quitte l'outil.
 Un clic sur le terrain le sélectionne (intersection exacte avec le relief).
 
+## Eau
+
+Composant `Water` (*Créer › Eau*) : une surface animée dans le plan XZ de son entité.
+
+| Champ | Rôle |
+|---|---|
+| `size`, `resolution` | dimensions (m) et nombre de cases de la grille déformée par les vagues |
+| `shallowColor`, `deepColor`, `opacity` | couleur vue de face / en rasant, transparence vue de haut |
+| `waveHeight`, `waveLength`, `waveSpeed`, `waveDirection` | trois vagues (direction principale et deux obliques plus courtes), vitesse de propagation physique (√(g·k)) |
+| `reflectivity` | intensité du reflet du ciel |
+
+Le shader calcule les vagues et leurs normales sur le GPU, reflète le ciel (image HDR ou dégradé) selon
+l'effet de Fresnel (l'eau devient miroir en vue rasante), ajoute le reflet du soleil et le brouillard.
+L'eau est transparente (dessinée après les objets opaques, triée par distance) et bouge aussi dans
+l'éditeur. Test GPU sur les 3 API (transparence, mouvement, Fresnel).
+
+Limites : effet visuel seulement (pas de flottaison physique ni de collision), pas de réfraction ni
+d'écume au contact des rives (il faudrait la profondeur de la scène), pas de reflets des objets.
+
 ## Limites actuelles
 
 - Un seul maillage par terrain, sans niveaux de détail (LOD) ni découpage en morceaux pour le culling :

@@ -600,7 +600,7 @@ void EditorApp::drawMenuBar() {
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
             {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
-            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {nullptr, {}},
+            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
             {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
             {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
@@ -1233,6 +1233,11 @@ void EditorApp::smokeTest(const FrameTime&) {
             b.layer = 3;
             b.radius = 9.0f;
             terrain::applyBrush(tc, {10.0f, -10.0f}, b);
+            {
+                const auto lake = ctx.create(CreateKind::Water, t);  // a lake between the hills
+                scene.registry().get<TransformComponent>(lake).position = {0.0f, 1.2f, 0.0f};
+                scene.registry().get<WaterComponent>(lake).size = {38.0f, 38.0f};
+            }
             scene.updateTransforms();
             ctx.commit("Sculpt Terrain");
             ctx.selection().set(scene.uuidOf(t));
@@ -1243,6 +1248,7 @@ void EditorApp::smokeTest(const FrameTime&) {
         case 203: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_terrain.png").string()); break;
         case 205: {
             check(!scene.findByUuid(s_terrainId).isNull() && m_shared->renderer() && m_shared->renderer()->stats().terrains > 0, "the terrain is drawn");
+            check(m_shared->renderer() && m_shared->renderer()->stats().waterSurfaces > 0, "the water is drawn");
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_terrain.png"), "terrain screenshot written");
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");

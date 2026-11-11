@@ -51,7 +51,7 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
                                 {"Couche de parallaxe", CreateKind::ParallaxLayer}};
     static const Item scene[] = {{"Caméra", CreateKind::Camera}, {"Lumière directionnelle", CreateKind::DirectionalLight},
                                  {"Lumière ponctuelle", CreateKind::PointLight}, {"Projecteur (spot)", CreateKind::SpotLight},
-                                 {"Environnement (ciel, ambiance)", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}};
+                                 {"Environnement (ciel, ambiance)", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}};
     auto items = [&](const Item* list, usize n) {
         for (usize i = 0; i < n; ++i)
             if (ImGui::MenuItem(list[i].label)) s.ctx.create(list[i].kind, parent);

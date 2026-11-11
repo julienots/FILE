@@ -95,6 +95,20 @@ void registerRenderComponents() {
         .field("fogEnd", &EnvironmentComponent::fogEnd, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.1f})
         .field("exposure", &EnvironmentComponent::exposure, {.rangeMin = 0.01f, .rangeMax = 16.0f, .speed = 0.01f});
 
+    reg.add<WaterComponent>("Water")
+        .category("Rendering")
+        .description("Animated water surface: waves, sky reflection, sun highlight, transparency.")
+        .field("size", &WaterComponent::size, {.speed = 0.5f})
+        .field("resolution", &WaterComponent::resolution, {.tooltip = "Grid cells per side", .rangeMin = 2, .rangeMax = 512, .speed = 1})
+        .field("shallowColor", &WaterComponent::shallowColor, {.flags = FieldFlag_Color})
+        .field("deepColor", &WaterComponent::deepColor, {.flags = FieldFlag_Color})
+        .field("opacity", &WaterComponent::opacity, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("waveHeight", &WaterComponent::waveHeight, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("waveLength", &WaterComponent::waveLength, {.rangeMin = 0.1f, .rangeMax = 200.0f, .speed = 0.05f})
+        .field("waveSpeed", &WaterComponent::waveSpeed, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f})
+        .field("waveDirection", &WaterComponent::waveDirection, {.flags = FieldFlag_Angle})
+        .field("reflectivity", &WaterComponent::reflectivity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.01f});
+
     reg.add<PostProcessComponent>("PostProcess")
         .category("Rendering")
         .description("Image effects: bloom, anti-aliasing (FXAA), tone mapping, color grading, vignette.")

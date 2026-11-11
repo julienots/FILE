@@ -111,6 +111,22 @@ Status Renderer::create3DPipelines() {
             if (!r) return r.error();
             m_terrainPipeline = r.value();
         }
+        {  // water: transparent, waves in the vertex shader, sky reflection (u_envMap in unit 0)
+            rhi::PipelineDesc p;
+            p.debugName = "agr.water";
+            p.shader.vertex = common + shaders::kWaterVertex;
+            p.shader.fragment = common + shaders::kToneMapping + shaders::kEnvBlock + shaders::kWaterFragment;
+            p.layout = modelVertexLayout();
+            p.instanceLayout = instanceLayout(true);
+            p.cull = rhi::CullMode::None;
+            p.blend = rhi::BlendMode::Alpha;
+            p.depthWrite = false;
+            p.uniformBlocks = {"FrameData", "MaterialData"};
+            p.samplers = {"u_envMap"};
+            auto r = m_device.createPipeline(p);
+            if (!r) return r.error();
+            m_waterPipeline = r.value();
+        }
         for (u32 mask = 0; mask < 2; ++mask) {
             rhi::PipelineDesc p;
             p.debugName = mask ? "agr.shadow.mask" : "agr.shadow";
@@ -481,6 +497,51 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
         ++m_stats.terrains;
     });
+    // ------------------------------------------------------------ water
+    reg.view<WaterComponent, WorldTransformComponent>().each([&](ecs::Entity e, WaterComponent& wc, WorldTransformComponent& w) {
+        if (!w.activeInHierarchy || hidden(e)) return;
+        const u32 res = std::clamp<u32>(wc.resolution, 2, 512);
+        const WaterGrid* grid = waterGrid(res);
+        if (!grid) return;
+        const Mat4 model = w.matrix * Mat4::trs(Vec3{0.0f}, math::Quat::identity(), {std::max(wc.size.x, 0.01f), 1.0f, std::max(wc.size.y, 0.01f)});
+        const float amp = std::max(wc.waveHeight, 0.0f);
+        const math::Aabb bounds = math::Aabb{{-0.5f, -amp, -0.5f}, {0.5f, amp, 0.5f}}.transformed(model);
+        if (!frustum.intersects(bounds)) {
+            ++m_stats.meshesCulled;
+            return;
+        }
+        ++m_stats.meshesVisible;
+        InstanceData inst;
+        inst.model = model;
+        for (int i = 0; i < 3; ++i) inst.normal[i] = Vec4(i == 0 ? 1.0f : 0.0f, i == 1 ? 1.0f : 0.0f, i == 2 ? 1.0f : 0.0f, 0.0f);
+        inst.color = Vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        const u32 instance = static_cast<u32>(m_instances.size());
+        m_instances.push_back(inst);
+        MaterialUniforms u;
+        u.baseColor = Vec4(detail::srgbToLinear(wc.shallowColor), std::clamp(wc.opacity, 0.0f, 1.0f));
+        u.emissive = Vec4(detail::srgbToLinear(wc.deepColor), amp);
+        u.pbr = Vec4(wc.waveLength, wc.waveSpeed, wc.waveDirection, std::max(wc.reflectivity, 0.0f));
+        u.uvTransform = Vec4(1.0f, 1.0f, 0.0f, 0.0f);
+        u.flags = Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        FrameMaterial fm;
+        fm.uniformOffset = pushUniforms(&u, sizeof u);
+        fm.textures[0] = m_envTexture ? m_envTexture : m_assets.whiteTexture();
+        for (int i = 1; i < 5; ++i) fm.textures[i] = m_assets.whiteTexture();
+        fm.pipeline = kWaterPipeline;
+        const u32 slot = static_cast<u32>(m_frameMaterials.size());
+        m_frameMaterials.push_back(fm);
+        MeshItem item;
+        item.vertices = grid->vertices;
+        item.indices = grid->indices;
+        item.indexCount = grid->indexCount;
+        item.material = slot;
+        item.pipeline = kWaterPipeline;
+        item.instance = instance;
+        item.depth = math::dot(bounds.center() - camPos, camForward);
+        m_transparentItems.push_back(item);
+        ++m_stats.waterSurfaces;
+    });
+
     if (m_frame % 300 == 0)  // GPU data of terrains that no longer exist
         for (auto it = m_terrains.begin(); it != m_terrains.end();) {
             if (m_frame > it->second.lastFrame + 300) {
@@ -704,6 +765,32 @@ Renderer::TerrainGpu* Renderer::terrainGpu(ecs::Entity e, TerrainComponent& t) {
     return &g;
 }
 
+const Renderer::WaterGrid* Renderer::waterGrid(u32 n) {
+    if (auto it = m_waterGrids.find(n); it != m_waterGrids.end()) return &it->second;
+    std::vector<ModelVertex> verts;
+    std::vector<u32> idx;
+    verts.reserve(static_cast<usize>(n + 1) * (n + 1));
+    for (u32 z = 0; z <= n; ++z)
+        for (u32 x = 0; x <= n; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(n), v = static_cast<float>(z) / static_cast<float>(n);
+            verts.push_back({{u - 0.5f, 0.0f, v - 0.5f}, {0, 1, 0}, Vec4(1, 0, 0, 1), {u, v}});
+        }
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const u32 a = z * (n + 1) + x, b = a + 1, c = a + n + 1, d = c + 1;
+            idx.insert(idx.end(), {a, c, b, b, c, d});
+        }
+    auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, verts.size() * sizeof(ModelVertex), verts.data(), "agr.water.vb"});
+    auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static, idx.size() * sizeof(u32), idx.data(), "agr.water.ib"});
+    if (!vb || !ib) {
+        if (vb) m_device.destroyBuffer(vb.value());
+        if (ib) m_device.destroyBuffer(ib.value());
+        AGR_LOG_ERROR("Render", "water grid buffers could not be created");
+        return nullptr;
+    }
+    return &(m_waterGrids[n] = WaterGrid{vb.value(), ib.value(), static_cast<u32>(idx.size())});
+}
+
 void Renderer::releaseTerrain(TerrainGpu& g) {
     m_device.destroyBuffer(g.vertices);
     m_device.destroyBuffer(g.indices);
@@ -737,6 +824,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
             rhi::PipelineHandle h;
             if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
             else if (first.pipeline == kTerrainPipeline) h = m_terrainPipeline;
+            else if (first.pipeline == kWaterPipeline) h = m_waterPipeline;
             else h = skinned ? m_pbrSkinnedPipelines[first.pipeline] : m_pbrPipelines[first.pipeline];
             m_device.bindPipeline(h);
             boundPipeline = pipeline;

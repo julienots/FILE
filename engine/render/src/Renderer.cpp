@@ -52,6 +52,11 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_spriteVertices);
     m_device.destroyBuffer(m_spriteIndices);
     for (auto& [key, g] : m_terrains) releaseTerrain(g);
+    for (auto& [n, w] : m_waterGrids) {
+        m_device.destroyBuffer(w.vertices);
+        m_device.destroyBuffer(w.indices);
+    }
+    m_device.destroyPipeline(m_waterPipeline);
     m_device.destroyPipeline(m_terrainPipeline);
     for (auto p : m_pbrPipelines) m_device.destroyPipeline(p);
     for (auto p : m_pbrSkinnedPipelines) m_device.destroyPipeline(p);
@@ -336,6 +341,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
 
     // ------------------------------------------------------------ frame: light, environment
     FrameUniforms frame{};
+    frame.time = Vec4(static_cast<float>(std::fmod(m_time, 3600.0)), 0.0f, 0.0f, 0.0f);
     frame.viewProj = viewProj;
     frame.invViewProj = math::inverse(viewProj);
     frame.cameraPos = Vec4(rv.position, 1.0f);

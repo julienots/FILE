@@ -25,6 +25,7 @@ layout(std140) uniform FrameData {
     vec4 u_shadowParams2;   // atlas texel size (uv), PCF radius (0 or 1), -, -
     vec4 u_envSH[9];        // image sky: irradiance / pi, SH9
     vec4 u_envParams;       // image sky ready, intensity, rotation (radians), last mip level
+    vec4 u_time;            // seconds (wrapped every hour)
 };
 )";
 

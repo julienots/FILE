@@ -28,8 +28,9 @@ struct FrameUniforms {
     math::Vec4 shadowParams2;     // atlas texel size (uv), PCF radius, -, -
     math::Vec4 envSH[9];          // image sky: irradiance / pi (SH9, rgb)
     math::Vec4 envParams;         // image sky ready, intensity, rotation (radians), last mip level
+    math::Vec4 time;              // seconds (wrapped every hour), -, -, -
 };
-static_assert(sizeof(FrameUniforms) == 832);
+static_assert(sizeof(FrameUniforms) == 848);
 
 struct MaterialUniforms {
     math::Vec4 baseColor;

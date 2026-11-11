@@ -309,6 +309,53 @@ TEST_CASE("terrain: heights lit by the sun, layers blended by the splat map, upd
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("water: transparent body over the ground, sky reflection at grazing angles, moving waves") {
+    Render3DFixture f;
+    auto& env = f.darkEnvironment();
+    env.sky = SkyMode::Gradient;
+    env.ambientIntensity = 0.5f;
+    env.skyColor = {0.9f, 0.9f, 0.9f, 1.0f};
+    env.horizonColor = {0.9f, 0.9f, 0.9f, 1.0f};
+    f.sun({-60, 30, 0});
+    f.camera({0, 12, 0.01f}, {0, 0, 0});
+    const auto ground = f.mesh(PrimitiveMesh::Plane, {0, -1, 0}, Vec3{30.0f}, {1, 0, 0, 1});  // red floor below the water
+    (void)ground;
+    f.frame();
+    const Rgba dry = f.at({0, -1, 0});
+    const auto w = f.scene.createEntity("Water");
+    auto& wc = f.scene.registry().emplace<WaterComponent>(w);
+    wc.size = {30, 30};
+    wc.shallowColor = {0.0f, 0.4f, 1.0f, 1.0f};
+    wc.opacity = 0.7f;
+    wc.waveHeight = 0.3f;
+    f.renderer.setTime(0.0);
+    f.frame();
+    CHECK(f.renderer.stats().waterSurfaces == 1);
+    const Rgba wet = f.at({0, 0, 0});
+    CHECK_MESSAGE((wet.b > wet.r && dry.r > dry.b * 2), "dry " << dry << " wet " << wet);  // blue body over red
+    CHECK(wet.r > 5);  // the floor shows through (transparent)
+
+    // Waves move with time.
+    std::vector<u8> a, b;
+    REQUIRE(gpu().device->readBackbuffer(0, 0, kWidth, kHeight, a));
+    f.renderer.setTime(1.3);
+    f.frame();
+    REQUIRE(gpu().device->readBackbuffer(0, 0, kWidth, kHeight, b));
+    int changed = 0;
+    for (usize i = 0; i < a.size(); i += 4) changed += std::abs(int(a[i + 2]) - int(b[i + 2])) > 2;
+    CHECK(changed > 20);
+
+    // Grazing view: Fresnel reflects the bright sky.
+    f.renderer.setTime(0.0);
+    auto& cam = f.scene.registry().get<TransformComponent>(f.scene.findByName("Camera"));
+    cam.position = {0, 0.6f, 14};
+    cam.rotation = math::Quat::fromAxisAngle({1, 0, 0}, math::radians(-4.0f));
+    f.frame();
+    const Rgba far = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 4);
+    CHECK_MESSAGE(luminance(far) > luminance(wet), far << " vs " << wet);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

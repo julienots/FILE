@@ -85,6 +85,21 @@ struct EnvironmentComponent {
     float exposure = 1.0f;  ///< Multiplier before tone mapping (ACES).
 };
 
+/// Animated water surface (local XZ plane, centered on the entity): waves, sky reflection
+/// (Fresnel), sun highlight, transparency from shallow to deep color. Visual only.
+struct WaterComponent {
+    math::Vec2 size{40.0f, 40.0f};
+    u32 resolution = 96;            ///< Grid cells per side (vertex waves need enough of them).
+    math::Color shallowColor{0.20f, 0.55f, 0.60f, 1.0f};
+    math::Color deepColor{0.02f, 0.12f, 0.22f, 1.0f};
+    float opacity = 0.75f;          ///< Seen from above; grazing angles reflect the sky.
+    float waveHeight = 0.15f;       ///< Meters.
+    float waveLength = 6.0f;        ///< Meters, longest wave.
+    float waveSpeed = 1.0f;
+    float waveDirection = 0.0f;     ///< Radians around Y.
+    float reflectivity = 1.0f;
+};
+
 /// Full-screen effects of the camera's image (first active one in the scene). Rendering
 /// then goes through an HDR target (when the GPU supports it) and a composite pass.
 struct PostProcessComponent {

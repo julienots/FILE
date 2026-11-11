@@ -104,6 +104,7 @@ struct RenderStats {
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
+    u32 waterSurfaces = 0;
     bool postProcessing = false;  ///< PostProcess active this frame.
     bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
     bool imageSky = false;        ///< An image sky lit and filled the background.
@@ -174,6 +175,8 @@ public:
     rhi::TextureHandle shadowMap() const;
     /// Game UI drawn over every view with RenderView::overlay (null = none).
     void setOverlaySource(OverlaySource* source) { m_overlaySource = source; }
+    /// Clock of animated materials (water), in seconds; the render plugin advances it.
+    void setTime(f64 seconds) { m_time = seconds; }
     OverlaySource* overlaySource() const { return m_overlaySource; }
     /// Sprite sheets used by sprites (sheet + frame) and tilemaps.
     void setSpriteSheets(SpriteSheetLibrary* sheets) { m_sheets = sheets; }
@@ -311,6 +314,15 @@ private:
         u64 lastFrame = 0;
     };
     std::unordered_map<u64, TerrainGpu> m_terrains;  // by entity
+    f64 m_time = 0.0;
+    static constexpr u32 kWaterPipeline = 7;
+    rhi::PipelineHandle m_waterPipeline;
+    struct WaterGrid {
+        rhi::BufferHandle vertices, indices;
+        u32 indexCount = 0;
+    };
+    std::unordered_map<u32, WaterGrid> m_waterGrids;  // by resolution
+    const WaterGrid* waterGrid(u32 resolution);
     TerrainGpu* terrainGpu(ecs::Entity e, TerrainComponent& t);
     void releaseTerrain(TerrainGpu& g);
     rhi::PipelineHandle m_shadowSkinnedPipelines[2];  // [alpha mask]

@@ -92,6 +92,78 @@ void main() {
 }
 )";
 
+/// Water: grid displaced by 3 directional waves (vertex), Fresnel sky reflection + body color.
+/// MaterialData: u_baseColor = shallow (a = opacity), u_emissive = deep (a = wave height),
+/// u_pbr = wave length, speed, direction (radians), reflectivity.
+inline constexpr const char* kWaterVertex = R"(
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec4 a_tangent;
+layout(location = 3) in vec2 a_uv;
+layout(location = 4) in vec4 i_model0;
+layout(location = 5) in vec4 i_model1;
+layout(location = 6) in vec4 i_model2;
+layout(location = 7) in vec4 i_model3;
+layout(location = 8) in vec4 i_normal0;
+layout(location = 9) in vec4 i_normal1;
+layout(location = 10) in vec4 i_normal2;
+layout(location = 11) in vec4 i_color;
+out vec3 v_worldPos;
+out vec3 v_normal;
+void main() {
+    mat4 model = mat4(i_model0, i_model1, i_model2, i_model3);
+    vec4 world = model * vec4(a_position, 1.0);
+    float amp = u_emissive.w;
+    float t = u_time.x * u_pbr.y;
+    vec3 n = vec3(0.0, 1.0, 0.0);
+    // Three waves: the main direction and two at +-40 degrees, shorter.
+    for (int i = 0; i < 3; ++i) {
+        float angle = u_pbr.z + (i == 0 ? 0.0 : (i == 1 ? 0.7 : -0.7));
+        vec2 dir = vec2(cos(angle), sin(angle));
+        float len = max(u_pbr.x, 0.1) * (i == 0 ? 1.0 : 0.47 * float(i));
+        float k = 6.2831853 / len;
+        float a = amp * (i == 0 ? 0.6 : 0.2);
+        float phase = k * dot(dir, world.xz) - t * sqrt(9.81 * k);
+        world.y += a * sin(phase);
+        float d = a * k * cos(phase);
+        n.x -= dir.x * d;
+        n.z -= dir.y * d;
+    }
+    v_worldPos = world.xyz;
+    v_normal = normalize(n);
+    gl_Position = u_viewProj * world;
+}
+)";
+
+inline constexpr const char* kWaterFragment = R"(
+in vec3 v_worldPos;
+in vec3 v_normal;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec3 N = normalize(v_normal);
+    vec3 V = normalize(u_cameraPos.xyz - v_worldPos);
+    if (dot(N, V) < 0.0) N = -N;  // seen from below
+    float NoV = clamp(dot(N, V), 0.0, 1.0);
+    float fresnel = 0.02 + 0.98 * pow(1.0 - NoV, 5.0);
+    vec3 R = reflect(-V, N);
+    vec3 sky;
+    if (u_envParams.x > 0.5) sky = agrEnvRadiance(R, 0.04);
+    else if (u_skyColor.w > 0.5) sky = mix(u_horizonColor.rgb, u_skyColor.rgb, clamp(R.y, 0.0, 1.0));
+    else sky = u_ambient.rgb * 2.0;
+    vec3 body = mix(u_baseColor.rgb, u_emissive.rgb, clamp(1.0 - NoV, 0.0, 1.0)) * (u_ambient.rgb + max(dot(N, -u_lightDir.xyz), 0.0) * u_lightColor.rgb * 0.5 + 0.2);
+    vec3 color = mix(body, sky * u_pbr.w, fresnel);
+    // Sun glint (tight specular).
+    vec3 H = normalize(V - u_lightDir.xyz);
+    color += u_lightColor.rgb * pow(max(dot(N, H), 0.0), 400.0) * 2.0;
+    float alpha = mix(u_baseColor.a, 1.0, fresnel);
+    if (u_fogColor.w > 0.5) {
+        float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
+        color = mix(color, u_fogColor.rgb, f);
+    }
+    o_color = vec4(agrToneMap(color), alpha);
+}
+)";
+
 /// Declarations of the terrain variant of the PBR fragment (splat map: layer weights).
 inline constexpr const char* kTerrainBlock = R"(
 uniform sampler2D u_splatMap;

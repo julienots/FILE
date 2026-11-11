@@ -129,6 +129,8 @@ void RenderPlugin::setHotReload(bool enabled, f64 intervalSeconds) {
 
 void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
     if (!m_assets) return;
+    m_clock += time.unscaledDeltaSeconds;  // water keeps moving in the editor too
+    if (m_renderer) m_renderer->setTime(m_clock);
     if (m_hotReload) {
         m_hotReloadTimer += time.unscaledDeltaSeconds;
         if (m_hotReloadTimer >= m_hotReloadInterval) {

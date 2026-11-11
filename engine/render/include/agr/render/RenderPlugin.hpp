@@ -58,6 +58,7 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::string m_screenshotUri;
     bool m_hotReload = false;
+    f64 m_clock = 0.0;
     bool m_autoRender = true;
     f64 m_hotReloadInterval = 1.0;
     f64 m_hotReloadTimer = 0.0;
