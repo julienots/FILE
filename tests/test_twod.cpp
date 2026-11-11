@@ -239,3 +239,73 @@ TEST_CASE("orthographic scale modes adapt to screen shapes") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("3D particles: shapes, gravity, lifetime, local / world space, seed, presets") {
+    registerRenderComponents();
+    Scene s;
+    const auto e = s.createEntity("Fx");
+    s.registry().get<TransformComponent>(e).position = {10, 0, 0};
+    auto& em = s.registry().emplace<ParticleEmitter3DComponent>(e);
+    em.rate = 0.0f;
+    em.burst = 200;
+    em.shape = EmitterShape3D::Cone;
+    em.coneAngle = math::radians(20.0f);
+    em.shapeRadius = 0.0f;
+    em.speedMin = em.speedMax = 2.0f;
+    em.lifetimeMin = em.lifetimeMax = 1.0f;
+    em.seed = 7;
+    s.updateTransforms();
+    simulateParticles3D(s, 0.0f);
+    auto& st = s.registry().get<ParticleState3DComponent>(e);
+    REQUIRE(st.particles.size() == 200);
+    for (const Particle3D& p : st.particles) {
+        const math::Vec3 d = math::normalize(p.velocity);
+        CHECK(d.y >= std::cos(math::radians(20.0f)) - 1e-4f);  // inside the cone around +Y
+        CHECK(p.position.x == doctest::Approx(10.0f));         // world space: at the emitter
+    }
+    // Gravity bends, lifetime removes.
+    em.gravity = {0, -10, 0};
+    simulateParticles3D(s, 0.5f);
+    CHECK(st.particles[0].velocity.y < 2.0f);
+    simulateParticles3D(s, 0.6f);
+    CHECK(st.particles.empty());
+
+    // Same seed, same particles.
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    const auto first = st.particles[3].velocity;
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    CHECK(st.particles[3].velocity.x == doctest::Approx(first.x));
+
+    // Box shape and local space: positions in the emitter's frame, inside the box.
+    em.shape = EmitterShape3D::Box;
+    em.boxSize = {2, 0, 4};
+    em.worldSpace = false;
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    for (const Particle3D& p : st.particles) {
+        CHECK(std::abs(p.position.x) <= 1.0f);
+        CHECK(std::abs(p.position.z) <= 2.0f);
+    }
+    // Sphere: within the radius.
+    em.shape = EmitterShape3D::Sphere;
+    em.shapeRadius = 0.5f;
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    for (const Particle3D& p : st.particles) CHECK(math::length(p.position) <= 0.5f + 1e-4f);
+
+    // Every preset is a valid looking emitter that produces particles.
+    for (ParticlePreset preset : kParticlePresets) {
+        applyParticlePreset(em, preset);
+        em.seed = 3;
+        restartParticles3D(s, e);
+        usize most = 0;
+        for (int i = 0; i < 30; ++i) {
+            simulateParticles3D(s, 1.0f / 30.0f);
+            most = std::max(most, st.particles.size());
+        }
+        CHECK_MESSAGE(most > 0, particlePresetName(preset));
+        CHECK(std::string(particlePresetName(preset)).size() > 2);
+    }
+}

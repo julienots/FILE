@@ -231,6 +231,47 @@ struct ParticleState2DComponent {
     bool started = false;
 };
 
+enum class EmitterShape3D : i32 { Point = 0, Sphere = 1, Box = 2, Cone = 3 };
+
+/// 3D particle emitter (camera-facing billboards), simulated by the 2D / effects module
+/// (simulateParticles3D). Emits along its local +Y axis.
+struct ParticleEmitter3DComponent {
+    bool emitting = true;
+    bool loop = true;
+    float duration = 2.0f;
+    float rate = 40.0f;             ///< Particles per second.
+    u32 burst = 0;                  ///< Emitted at the start of each cycle.
+    u32 maxParticles = 800;
+    float lifetimeMin = 0.8f, lifetimeMax = 1.6f;
+    float speedMin = 1.0f, speedMax = 3.0f;
+    EmitterShape3D shape = EmitterShape3D::Cone;
+    float shapeRadius = 0.3f;       ///< Sphere, cone base.
+    math::Vec3 boxSize{1.0f, 0.1f, 1.0f};
+    float coneAngle = math::radians(25.0f);  ///< Half angle around +Y (cone); sphere / box emit outward / up.
+    math::Vec3 gravity{0.0f, 0.0f, 0.0f};    ///< World units / s^2.
+    float drag = 0.0f;
+    math::Color startColor{1.0f, 1.0f, 1.0f, 1.0f};
+    math::Color endColor{1.0f, 1.0f, 1.0f, 0.0f};
+    float startSize = 0.3f, endSize = 0.1f;
+    float angularVelocity = 0.0f;   ///< Radians / s, random sign.
+    std::string texture;            ///< Empty = soft round particle.
+    bool additive = false;
+    bool worldSpace = true;
+    u32 seed = 0;                   ///< 0 = random.
+};
+struct Particle3D {
+    math::Vec3 position, velocity;
+    float age = 0.0f, lifetime = 1.0f;
+    float rotation = 0.0f, angularVelocity = 0.0f;
+};
+struct ParticleState3DComponent {
+    std::vector<Particle3D> particles;
+    float time = 0.0f;
+    float emitAccumulator = 0.0f;
+    u32 rng = 0;
+    bool started = false;
+};
+
 /// Registers reflection data for the render components (idempotent).
 void registerRenderComponents();
 

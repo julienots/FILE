@@ -17,6 +17,7 @@
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/twod/Particles2D.hpp"
 #include "agr/twod/SpriteAnimator.hpp"
 #include "agr/twod/TilemapEditing.hpp"
 
@@ -50,6 +51,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::AudioSource: return "Audio Source";
         case CreateKind::Terrain: return "Terrain";
         case CreateKind::Water: return "Water";
+        case CreateKind::Particles3D: return "Particles 3D";
     }
     return "Entity";
 }
@@ -218,6 +220,7 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             if (parent.isNull()) t.position.y += 2.0f;
             break;
         case CreateKind::Water: reg.emplace<WaterComponent>(e); break;
+        case CreateKind::Particles3D: applyParticlePreset(reg.emplace<ParticleEmitter3DComponent>(e), ParticlePreset::Fire); break;
         case CreateKind::Terrain: {
             auto& tc = reg.emplace<TerrainComponent>(e);
             // The project's terrain textures when it has them (projects created from the templates do).

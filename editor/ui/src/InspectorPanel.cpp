@@ -298,6 +298,26 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
         if (sheet->clips.empty()) ImGui::TextDisabled("Cette feuille ne définit aucun clip (champ \"clips\" du .agrsheet).");
         ImGui::TextDisabled("L'animation se joue en mode Jeu.");
         ImGui::PopID();
+    } else if (info.name == "ParticleEmitter3D") {
+        auto& em = *static_cast<ParticleEmitter3DComponent*>(comp);
+        ImGui::PushID("particles3D");
+        const auto* st = s.ctx.scene().registry().tryGet<ParticleState3DComponent>(e);
+        ImGui::TextDisabled("%zu particules en vie%s", st ? st->particles.size() : usize{0},
+                            s.ctx.playState() == PlayState::Edit ? " (aperçu en direct dans la vue)" : "");
+        if (ImGui::SmallButton("Rejouer")) restartParticles3D(s.ctx.scene(), e);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Recommencer l'émission (utile pour les rafales)");
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Préréglages :");
+        for (ParticlePreset preset : kParticlePresets) {
+            ImGui::SameLine();
+            if (ImGui::GetContentRegionAvail().x < 70.0f) ImGui::NewLine();
+            if (ImGui::SmallButton(particlePresetName(preset))) {
+                applyParticlePreset(em, preset);
+                restartParticles3D(s.ctx.scene(), e);
+                edit.changed = edit.committed = true;
+            }
+        }
+        ImGui::PopID();
     } else if (info.name == "Terrain") {
         auto& tc = *static_cast<TerrainComponent*>(comp);
         ImGui::PushID("terrainTools");

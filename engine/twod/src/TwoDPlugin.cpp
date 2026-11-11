@@ -23,6 +23,10 @@ void TwoDPlugin::onUpdate(Engine& engine, const FrameTime& time) {
     if (auto* sheets = engine.service<SpriteSheetLibrary>()) updateSpriteAnimators(engine.scene(), *sheets, dt);
     const float particleDt = (dt == 0.0f && m_preview) ? static_cast<float>(time.unscaledDeltaSeconds) : dt;
     m_stats = simulateParticles2D(engine.scene(), particleDt);
+    const ParticleStats2D s3 = simulateParticles3D(engine.scene(), particleDt);
+    m_stats.emitters += s3.emitters;
+    m_stats.particles += s3.particles;
+    m_stats.spawned += s3.spawned;
 }
 
 } // namespace agr

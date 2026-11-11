@@ -9,6 +9,7 @@
 #include "agr/assets/Image.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Terrain.hpp"
+#include "agr/twod/Particles2D.hpp"
 #include "agr/render/Renderer.hpp"
 
 using namespace agr;
@@ -353,6 +354,53 @@ TEST_CASE("water: transparent body over the ground, sky reflection at grazing an
     f.frame();
     const Rgba far = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 4);
     CHECK_MESSAGE(luminance(far) > luminance(wet), far << " vs " << wet);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("3D particles: camera-facing billboards, additive brighter, hidden behind walls") {
+    Render3DFixture f;
+    f.camera({0, 0, 6}, {0, 0, 0});
+    f.darkEnvironment();
+    const auto fx = f.scene.createEntity("Fx");
+    auto& em = f.scene.registry().emplace<ParticleEmitter3DComponent>(fx);
+    em.rate = 0.0f;
+    em.burst = 1;
+    em.shape = EmitterShape3D::Point;
+    em.speedMin = em.speedMax = 0.0f;
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.startSize = em.endSize = 2.0f;
+    em.startColor = em.endColor = {0.6f, 0.2f, 0.1f, 1.0f};
+    f.scene.updateTransforms();
+    simulateParticles3D(f.scene, 0.0f);
+    f.settle();
+    CHECK(f.renderer.stats().particlesVisible == 1);
+    const Rgba alpha = f.at({0, 0, 0});
+    CHECK_MESSAGE(alpha.r > 60, alpha);
+    // Seen from the side, a billboard still faces the camera.
+    const auto camera = f.scene.findByName("Camera");
+    auto place = [&](Vec3 p, float yawDegrees) {  // looked up each time: creating entities moves components
+        auto& t = f.scene.registry().get<TransformComponent>(camera);
+        t.position = p;
+        t.rotation = math::Quat::fromAxisAngle({0, 1, 0}, math::radians(yawDegrees));
+    };
+    place({6, 0, 0}, 90.0f);
+    f.frame();
+    CHECK(f.at({0, 0, 0}).r > 60);
+    // Over a lit wall behind it: additive adds to the wall, alpha covers it.
+    const auto wall = f.mesh(PrimitiveMesh::Cube, {-2, 0, 0}, {0.2f, 6, 6}, {0.5f, 0.5f, 0.5f, 1});
+    (void)wall;
+    f.sun({0, 90, 0});  // travels toward -X: lights the wall's face toward the camera
+    f.frame();
+    const Rgba covered = f.at({0, 0, 0});
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).additive = true;
+    f.frame();
+    const Rgba add = f.at({0, 0, 0});
+    CHECK_MESSAGE(add.g > covered.g + 20, add << " vs " << covered);  // the wall's light shows through
+    // Behind the wall: hidden (depth test against opaque geometry).
+    place({-6, 0, 0}, -90.0f);
+    f.frame();
+    const Rgba hiddenPx = f.at({-2.1f, 0, 0});
+    CHECK_MESSAGE(hiddenPx.r < 40, hiddenPx);  // the unlit back of the wall, no particle
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

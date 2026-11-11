@@ -591,6 +591,38 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 ++m_stats.particlesVisible;
             }
         });
+    // 3D particles: billboards facing the camera, sorted per particle with the sprites.
+    {
+        const Vec3 right{view.c[0].x, view.c[1].x, view.c[2].x}, up{view.c[0].y, view.c[1].y, view.c[2].y};
+        reg.view<ParticleEmitter3DComponent, ParticleState3DComponent, WorldTransformComponent>().each(
+            [&](ecs::Entity e, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
+                if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty()) return;
+                const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
+                const Vec4 c0 = em.startColor, c1 = em.endColor;
+                for (const Particle3D& p : st.particles) {
+                    const float t = std::clamp(p.age / std::max(p.lifetime, 1e-4f), 0.0f, 1.0f);
+                    const float half = math::lerp(em.startSize, em.endSize, t) * 0.5f;
+                    if (half <= 0.0f) continue;
+                    const Vec3 center = em.worldSpace ? p.position : w.matrix.transformPoint(p.position);
+                    const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
+                    const Vec3 dx = right * cs + up * sn, dy = up * cs - right * sn;
+                    SpriteItem item;
+                    item.corners[0] = center - dx - dy;
+                    item.corners[1] = center + dx - dy;
+                    item.corners[2] = center + dx + dy;
+                    item.corners[3] = center - dx + dy;
+                    item.layer = 0;
+                    item.order = 0;
+                    item.depth = view.transformPoint(center).z;
+                    item.uv = {0, 0, 1, 1};
+                    item.color = packColor(Vec4{math::lerp(c0.x, c1.x, t), math::lerp(c0.y, c1.y, t), math::lerp(c0.z, c1.z, t), math::lerp(c0.w, c1.w, t)});
+                    item.pipeline = em.additive ? 2u : 0u;
+                    item.texture = tex;
+                    m_spriteItems.push_back(item);
+                    ++m_stats.particlesVisible;
+                }
+            });
+    }
     m_stats.spritesVisible = static_cast<u32>(m_spriteItems.size());
     // Painter's order: layer, order, then back to front; texture only breaks ties.
     // Small keys are sorted instead of the 80-byte items.

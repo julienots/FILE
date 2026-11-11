@@ -198,7 +198,8 @@ plugins / paquets et documentation intégrée.
 | **Navigation** : A* sur grille 2D (tilemaps, colliders 2D), maillage 3D Recast / Detour (colliders 3D), reconstruction automatique, agents `NavAgent`, API Lua, affichage dans la vue | ✅ | `navigation`, [NAVIGATION.md](NAVIGATION.md) |
 | **Terrain** : relief + 4 couches peintes (rendu PBR, ombres), collision Jolt, source de navigation, pinceaux (élever, abaisser, lisser, aplanir, peindre), textures originales | ✅ | `scene/Terrain`, [TERRAIN.md](TERRAIN.md) |
 | **Eau** : vagues sur GPU, reflet du ciel (Fresnel), reflet du soleil, transparence | ✅ | composant `Water`, [TERRAIN.md](TERRAIN.md) |
-| Particules 3D, shaders personnalisés | ⬜ | étape 2 |
+| **Particules 3D** : formes d'émission (point, sphère, boîte, cône), gravité, traînée, espace local / monde, 7 préréglages, billboards face caméra (alpha ou additif), aperçu en mode édition | ✅ | `twod/Particles3D`, [3D.md](3D.md) |
+| Shaders personnalisés et éditeur de shaders | ⬜ | étape 2 |
 | Templates : platformer 2D, RPG 2D/3D, tower defense, cartes, simulation, stratégie, survie, course, idle, tycoon, multijoueur extensible | ⬜ | étape 3 |
 | Gestionnaire de plugins / paquets, documentation intégrée | ⬜ | étape 4 |
 
