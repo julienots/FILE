@@ -1,5 +1,6 @@
 #include "agr/editor/EditorContext.hpp"
 #include "agr/scene/Prefab.hpp"
+#include "agr/scene/Terrain.hpp"
 
 #include <cctype>
 
@@ -47,6 +48,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UISlider: return "Slider";
         case CreateKind::UIColumn: return "Column";
         case CreateKind::AudioSource: return "Audio Source";
+        case CreateKind::Terrain: return "Terrain";
     }
     return "Entity";
 }
@@ -214,6 +216,16 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             reg.emplace<PointLightComponent>(e);
             if (parent.isNull()) t.position.y += 2.0f;
             break;
+        case CreateKind::Terrain: {
+            auto& tc = reg.emplace<TerrainComponent>(e);
+            // The project's terrain textures when it has them (projects created from the templates do).
+            const char* layers[] = {"assets://terrain/grass.png", "assets://terrain/rock.png", "assets://terrain/dirt.png", "assets://terrain/sand.png"};
+            std::string* slots[] = {&tc.layer0, &tc.layer1, &tc.layer2, &tc.layer3};
+            for (int i = 0; i < 4; ++i)
+                if (m_engine.vfs().exists(layers[i])) *slots[i] = layers[i];
+            terrain::ensureData(tc);
+            break;
+        }
         case CreateKind::SpotLight:
             reg.emplace<SpotLightComponent>(e);
             if (parent.isNull()) t.position.y += 3.0f;

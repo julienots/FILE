@@ -26,7 +26,7 @@ namespace {
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
 constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
 constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
-constexpr u32 kShadowUnit = 5, kEnvUnit = 6;
+constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7;
 
 u64 mix64(u64 h, u64 v) {
     h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -95,6 +95,21 @@ Status Renderer::create3DPipelines() {
                 if (!r) return r.error();
                 (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines)[alpha * 2 + twoSided] = r.value();
             }
+        }
+        {  // terrain: opaque PBR blending 4 layers through a splat map
+            rhi::PipelineDesc p;
+            p.debugName = "agr.terrain";
+            p.shader.vertex = common + shaders::kPbrVertex;
+            p.shader.fragment = std::string("#define AGR_TERRAIN 1\n") + common + shaders::kLightBlock + shaders::kToneMapping +
+                                shaders::kEnvBlock + shaders::kTerrainBlock + shaders::kPbrFragment;
+            p.layout = modelVertexLayout();
+            p.instanceLayout = instanceLayout(true);
+            p.cull = rhi::CullMode::Back;
+            p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
+            p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap", "u_splatMap"};
+            auto r = m_device.createPipeline(p);
+            if (!r) return r.error();
+            m_terrainPipeline = r.value();
         }
         for (u32 mask = 0; mask < 2; ++mask) {
             rhi::PipelineDesc p;
@@ -413,6 +428,69 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                     if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
         }
     });
+    // ------------------------------------------------------------ terrains
+    reg.view<TerrainComponent, WorldTransformComponent>().each([&](ecs::Entity e, TerrainComponent& t, WorldTransformComponent& w) {
+        if (!w.activeInHierarchy || hidden(e)) return;
+        TerrainGpu* g = terrainGpu(e, t);
+        if (!g) return;
+        const math::Aabb worldBounds = terrain::localBounds(t).transformed(w.matrix);
+        const bool visible = frustum.intersects(worldBounds);
+        u32 casterMask = 0;
+        if (m_shadowsActive && t.castShadows)
+            for (u32 c = 0; c < m_shadowCascades; ++c)
+                if (lightFrustum[c].intersects(worldBounds)) casterMask |= 1u << c;
+        if (visible) ++m_stats.meshesVisible;
+        else ++m_stats.meshesCulled;
+        if (!visible && !casterMask) return;
+        InstanceData inst;
+        inst.model = w.matrix;
+        const Mat4 normalMatrix = math::transpose(math::inverse(w.matrix));
+        for (int i = 0; i < 3; ++i) inst.normal[i] = Vec4(normalMatrix.c[i].x, normalMatrix.c[i].y, normalMatrix.c[i].z, 0.0f);
+        inst.color = Vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        const u32 instance = static_cast<u32>(m_instances.size());
+        m_instances.push_back(inst);
+        // Material: layers in units 0, 1, 3, 4 (sRGB), splat map in unit 7, tiling in u_emissive.
+        MaterialUniforms u;
+        u.baseColor = Vec4(detail::srgbToLinear(t.color), 1.0f);
+        u.emissive = t.tiling;
+        u.pbr = Vec4(0.0f, std::clamp(t.roughness, 0.045f, 1.0f), 0.0f, 0.0f);
+        u.uvTransform = Vec4(1.0f, 1.0f, 0.0f, 0.0f);
+        u.flags = Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        FrameMaterial fm;
+        fm.uniformOffset = pushUniforms(&u, sizeof u);
+        auto layer = [&](const std::string& uri) { return uri.empty() ? m_assets.whiteTexture() : resolveTexture(uri, false); };
+        fm.textures[0] = layer(t.layer0);
+        fm.textures[1] = layer(t.layer1);
+        fm.textures[2] = m_flatNormal;
+        fm.textures[3] = layer(t.layer2);
+        fm.textures[4] = layer(t.layer3);
+        fm.pipeline = kTerrainPipeline;
+        fm.splat = g->splat;
+        const u32 slot = static_cast<u32>(m_frameMaterials.size());
+        m_frameMaterials.push_back(fm);
+        MeshItem item;
+        item.vertices = g->vertices;
+        item.indices = g->indices;
+        item.indexCount = g->indexCount;
+        item.material = slot;
+        item.pipeline = kTerrainPipeline;
+        item.instance = instance;
+        item.depth = math::dot(worldBounds.center() - camPos, camForward);
+        if (visible) m_opaqueItems.push_back(item);
+        for (u32 c = 0; c < m_shadowCascades; ++c)
+            if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
+        ++m_stats.terrains;
+    });
+    if (m_frame % 300 == 0)  // GPU data of terrains that no longer exist
+        for (auto it = m_terrains.begin(); it != m_terrains.end();) {
+            if (m_frame > it->second.lastFrame + 300) {
+                releaseTerrain(it->second);
+                it = m_terrains.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
     // Opaque: group identical draws (instancing) and limit state changes.
     auto byState = [](const MeshItem& a, const MeshItem& b) {
         if (a.pipeline != b.pipeline) return a.pipeline < b.pipeline;
@@ -568,6 +646,71 @@ u32 Renderer::skinPalette(Scene& scene, ecs::Entity e, const MeshRendererCompone
     return pushUniforms(m_palette.data(), kPaletteBytes);
 }
 
+// ------------------------------------------------------------------ terrain GPU data
+Renderer::TerrainGpu* Renderer::terrainGpu(ecs::Entity e, TerrainComponent& t) {
+    terrain::ensureData(t);
+    TerrainGpu& g = m_terrains[e.packed()];
+    g.lastFrame = m_frame;
+    const u64 hh = terrain::heightsHash(t);
+    if (!g.vertices || hh != g.heightsHash) {
+        std::vector<Vec3> positions, normals;
+        std::vector<math::Vec2> uvs;
+        std::vector<u32> indices;
+        terrain::buildMesh(t, positions, indices, &normals, &uvs);
+        std::vector<ModelVertex> verts(positions.size());
+        for (usize i = 0; i < verts.size(); ++i) verts[i] = {positions[i], normals[i], Vec4(1.0f, 0.0f, 0.0f, 1.0f), uvs[i]};
+        const usize vbytes = verts.size() * sizeof(ModelVertex), ibytes = indices.size() * sizeof(u32);
+        if (g.vertices && g.indexCount == indices.size()) {  // same resolution: update in place (sculpting)
+            (void)m_device.updateBuffer(g.vertices, 0, verts.data(), vbytes);
+        } else {
+            m_device.destroyBuffer(g.vertices);
+            m_device.destroyBuffer(g.indices);
+            auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Dynamic, vbytes, verts.data(), "agr.terrain.vb"});
+            auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static, ibytes, indices.data(), "agr.terrain.ib"});
+            if (!vb || !ib) {
+                AGR_LOG_ERROR("Render", "terrain buffers: {}", !vb ? vb.error().message : ib.error().message);
+                g.vertices = vb ? vb.value() : rhi::BufferHandle{};
+                g.indices = ib ? ib.value() : rhi::BufferHandle{};
+                return nullptr;
+            }
+            g.vertices = vb.value();
+            g.indices = ib.value();
+            g.indexCount = static_cast<u32>(indices.size());
+        }
+        g.heightsHash = hh;
+    }
+    const u64 sh = terrain::splatHash(t);
+    const u32 n = terrain::resolution(t);
+    if (!g.splat || sh != g.splatHash || g.splatSize != n) {
+        // RGBA8 weights, little-endian packing: byte 0 = layer 0.
+        static_assert(std::endian::native == std::endian::little);
+        if (g.splat && g.splatSize == n) {
+            (void)m_device.updateTexture(g.splat, t.splat.data());
+        } else {
+            m_device.destroyTexture(g.splat);
+            rhi::TextureDesc d;
+            d.width = d.height = n;
+            d.format = rhi::TextureFormat::RGBA8;
+            d.generateMips = false;
+            d.sampler = {rhi::Filter::Linear, rhi::Filter::Linear, false, rhi::Wrap::Clamp, rhi::Wrap::Clamp};
+            d.data = t.splat.data();
+            d.debugName = "agr.terrain.splat";
+            auto tex = m_device.createTexture(d);
+            g.splat = tex ? tex.value() : rhi::TextureHandle{};
+            g.splatSize = n;
+        }
+        g.splatHash = sh;
+    }
+    return &g;
+}
+
+void Renderer::releaseTerrain(TerrainGpu& g) {
+    m_device.destroyBuffer(g.vertices);
+    m_device.destroyBuffer(g.indices);
+    m_device.destroyTexture(g.splat);
+    g = {};
+}
+
 void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade) {
     if (items.empty() || !m_instanceBuffer) return;
     m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? m_shadowFrameOffsets[cascade] : m_frameOffset, sizeof(FrameUniforms));
@@ -593,6 +736,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
         if (pipeline != boundPipeline) {
             rhi::PipelineHandle h;
             if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
+            else if (first.pipeline == kTerrainPipeline) h = m_terrainPipeline;
             else h = skinned ? m_pbrSkinnedPipelines[first.pipeline] : m_pbrPipelines[first.pipeline];
             m_device.bindPipeline(h);
             boundPipeline = pipeline;
@@ -604,6 +748,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
             m_device.bindUniformBuffer(kSlotMaterial, m_uniformBuffer, m.uniformOffset, sizeof(MaterialUniforms));
             const u32 textures = shadow ? 1u : 5u;
             for (u32 t = 0; t < textures; ++t) m_device.bindTexture(t, m.textures[t]);
+            if (!shadow && m.pipeline == kTerrainPipeline) m_device.bindTexture(kSplatUnit, m.splat ? m.splat : m_assets.whiteTexture());
             boundMaterial = first.material;
         }
         if (first.vertices != boundVb) {

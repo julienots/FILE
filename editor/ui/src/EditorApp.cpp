@@ -1,4 +1,5 @@
 #include "agr/scene/Prefab.hpp"
+#include "agr/scene/Terrain.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 
 #include <SDL3/SDL.h>
@@ -599,7 +600,7 @@ void EditorApp::drawMenuBar() {
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
             {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
-            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {nullptr, {}},
+            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
             {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
             {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
@@ -846,7 +847,7 @@ void EditorApp::check(bool condition, const char* what) {
 void EditorApp::smokeTest(const FrameTime&) {
     EditorContext& ctx = *m_ctx;
     Scene& scene = ctx.scene();
-    static Uuid cubeId, spriteId;
+    static Uuid cubeId, spriteId, s_terrainId;
     // Texts are checked in French, whatever the machine's language (switched to English at the end).
     if (m_frame < 197 && m_engine->localization().language() != "fr") m_engine->localization().setLanguage("fr");
     switch (m_frame) {
@@ -1208,8 +1209,41 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 199: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_navigation.png").string()); break;
-        case 201: {
+        case 201: {  // terrain: created with the project's layers, sculpted and painted, drawn, collides
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_navigation.png"), "navigation overlay screenshot written");
+            m_viewport.showNavigation = false;
+            const auto t = ctx.create(CreateKind::Terrain);
+            scene.registry().get<TransformComponent>(t).position = {0.0f, 0.0f, -90.0f};
+            auto& tc = scene.registry().get<TerrainComponent>(t);
+            check(tc.layer1 == "assets://terrain/rock.png", "a new terrain uses the project's terrain textures");
+            tc.size = 40.0f;
+            tc.resolution = 81;
+            terrain::ensureData(tc);
+            terrain::BrushSettings b;
+            b.radius = 7.0f;
+            b.strength = 5.0f;
+            terrain::applyBrush(tc, {-6.0f, -4.0f}, b);
+            b.radius = 4.0f;
+            terrain::applyBrush(tc, {8.0f, 6.0f}, b);
+            b.brush = terrain::Brush::Paint;
+            b.layer = 1;
+            b.radius = 6.0f;
+            b.strength = 1.0f;
+            terrain::applyBrush(tc, {-6.0f, -4.0f}, b);
+            b.layer = 3;
+            b.radius = 9.0f;
+            terrain::applyBrush(tc, {10.0f, -10.0f}, b);
+            scene.updateTransforms();
+            ctx.commit("Sculpt Terrain");
+            ctx.selection().set(scene.uuidOf(t));
+            ctx.focusSelection();
+            s_terrainId = scene.uuidOf(t);
+            break;
+        }
+        case 203: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_terrain.png").string()); break;
+        case 205: {
+            check(!scene.findByUuid(s_terrainId).isNull() && m_shared->renderer() && m_shared->renderer()->stats().terrains > 0, "the terrain is drawn");
+            check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_terrain.png"), "terrain screenshot written");
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

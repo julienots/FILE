@@ -627,6 +627,67 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
     return true;
 }
 
+bool ViewportPanel::handleTerrainSculpting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered) {
+    TerrainTool& tool = s.terrainTool;
+    Scene& scene = s.ctx.scene();
+    const ecs::Entity e = scene.findByUuid(s.ctx.selection().primary());
+    TerrainComponent* tc = tool.active && !e.isNull() ? scene.registry().tryGet<TerrainComponent>(e) : nullptr;
+    auto endStroke = [&] {
+        if (m_sculpting && m_sculptChanged) s.ctx.commit(tool.settings.brush == terrain::Brush::Paint ? "Paint Terrain" : "Sculpt Terrain");
+        m_sculpting = m_sculptChanged = false;
+    };
+    if (!tc || s.ctx.playState() != PlayState::Edit) {
+        endStroke();
+        tool.active = false;
+        return false;
+    }
+    ImGuiIO& io = ImGui::GetIO();
+    if (hovered && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+        endStroke();
+        tool.active = false;
+        return false;
+    }
+    const Mat4 world = scene.worldMatrix(e), inv = math::inverse(world);
+    const float aspect = size.x / std::max(size.y, 1.0f);
+    const Mat4 vp = projectionGL(s, aspect) * viewMatrix(s);
+    const math::Ray ray = rayFromScreen(vp, {(io.MousePos.x - origin.x) / size.x, (io.MousePos.y - origin.y) / size.y});
+    const math::Ray local{inv.transformPoint(ray.origin), math::normalize(inv.transformVector(ray.direction))};
+    float dist = 0.0f;
+    const bool hit = hovered && terrain::raycast(*tc, local, 10000.0f, dist);
+    const Vec3 p = local.at(dist);
+    if (hit) {  // brush outline on the ground
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 pts[48];
+        bool ok = true;
+        for (int i = 0; i < 48 && ok; ++i) {
+            const float a = static_cast<float>(i) / 48.0f * 2.0f * math::kPi;
+            const float x = p.x + std::cos(a) * tool.settings.radius, z = p.z + std::sin(a) * tool.settings.radius;
+            ok = project(vp, world.transformPoint({x, terrain::heightAt(*tc, x, z) + 0.05f, z}), origin, size, pts[i]);
+        }
+        if (ok) dl->AddPolyline(pts, 48, tool.settings.brush == terrain::Brush::Lower ? palette::kError : palette::kAmber, 2.0f, ImDrawFlags_Closed);
+    }
+    if (hit && !io.KeyAlt && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (io.KeyCtrl && tool.settings.brush == terrain::Brush::Flatten) {
+            tool.settings.targetHeight = terrain::heightAt(*tc, p.x, p.z);  // pick the height
+        } else {
+            m_sculpting = true;
+            m_sculptChanged = false;
+        }
+    }
+    if (m_sculpting && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        if (hit) {
+            terrain::BrushSettings b = tool.settings;
+            const float dt = std::min(io.DeltaTime, 0.1f);
+            const bool height = b.brush == terrain::Brush::Raise || b.brush == terrain::Brush::Lower;
+            b.strength = height ? b.strength * dt : std::min(1.0f, b.strength * dt * 6.0f);  // per second
+            m_sculptChanged |= terrain::applyBrush(*tc, {p.x, p.z}, b);
+        }
+    } else if (m_sculpting) {
+        endStroke();
+    }
+    return true;
+}
+
 bool ViewportPanel::handleTilemapPainting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered) {
     TilemapBrush& brush = s.brush;
     Scene& scene = s.ctx.scene();
@@ -890,7 +951,7 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     // Overlays stay inside the (possibly letterboxed) view.
     ImGui::PushClipRect(origin, {origin.x + size.x, origin.y + size.y}, true);
     drawOverlays(s, origin, size);
-    const bool painting = handleTilemapPainting(s, origin, size, hovered);
+    const bool painting = handleTilemapPainting(s, origin, size, hovered) || handleTerrainSculpting(s, origin, size, hovered);
     const bool uiEditing = !painting && handleUIEditing(s, origin, size, hovered);
     const bool fingerMode = gameView && simulateTouch && s.ctx.playState() != PlayState::Edit;  // clicks are touches, not picks
     if (!painting && !uiEditing && !fingerMode) {

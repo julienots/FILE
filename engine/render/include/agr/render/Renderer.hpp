@@ -16,6 +16,7 @@
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/rhi/Rhi.hpp"
 #include "agr/scene/Scene.hpp"
+#include "agr/scene/Terrain.hpp"
 
 namespace agr {
 
@@ -102,6 +103,7 @@ struct RenderStats {
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map (all cascades).
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
+    u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
     bool postProcessing = false;  ///< PostProcess active this frame.
     bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
     bool imageSky = false;        ///< An image sky lit and filled the background.
@@ -189,7 +191,8 @@ private:
     struct FrameMaterial {
         u32 uniformOffset = 0;
         rhi::TextureHandle textures[5];  // base color, metallic-roughness, normal, occlusion, emissive
-        u32 pipeline = 0;                // alphaMode * 2 + doubleSided
+        u32 pipeline = 0;                // alphaMode * 2 + doubleSided, or kTerrainPipeline
+        rhi::TextureHandle splat;        // terrain layer weights
     };
     /// Per-instance vertex stream of the 3D pipelines (locations 4..11).
     struct InstanceData {
@@ -297,6 +300,19 @@ private:
     u32 m_overlayFrameOffset = 0;
     rhi::PipelineHandle m_pbrPipelines[6];  // [alphaMode * 2 + doubleSided]
     rhi::PipelineHandle m_pbrSkinnedPipelines[6];
+    static constexpr u32 kTerrainPipeline = 6;
+    rhi::PipelineHandle m_terrainPipeline;
+    struct TerrainGpu {
+        rhi::BufferHandle vertices, indices;
+        u32 indexCount = 0;
+        rhi::TextureHandle splat;
+        u32 splatSize = 0;
+        u64 heightsHash = 0, splatHash = 0;
+        u64 lastFrame = 0;
+    };
+    std::unordered_map<u64, TerrainGpu> m_terrains;  // by entity
+    TerrainGpu* terrainGpu(ecs::Entity e, TerrainComponent& t);
+    void releaseTerrain(TerrainGpu& g);
     rhi::PipelineHandle m_shadowSkinnedPipelines[2];  // [alpha mask]
     /// Joint entities of skinned meshes (resolved by name, revalidated every frame).
     std::unordered_map<u64, std::vector<ecs::Entity>> m_skinJoints;

@@ -51,6 +51,8 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_uniformBuffer);
     m_device.destroyBuffer(m_spriteVertices);
     m_device.destroyBuffer(m_spriteIndices);
+    for (auto& [key, g] : m_terrains) releaseTerrain(g);
+    m_device.destroyPipeline(m_terrainPipeline);
     for (auto p : m_pbrPipelines) m_device.destroyPipeline(p);
     for (auto p : m_pbrSkinnedPipelines) m_device.destroyPipeline(p);
     for (auto p : m_shadowSkinnedPipelines) m_device.destroyPipeline(p);

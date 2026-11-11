@@ -11,6 +11,7 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Components.hpp"
 #include "agr/scene/Reflection.hpp"
+#include "agr/scene/Terrain.hpp"
 
 namespace agr {
 
@@ -148,6 +149,11 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
         for (i32 t : tm.tiles) h = mix(h, static_cast<u64>(t >= 0));
         mat(e);
     });
+    reg.view<TerrainComponent>().each([&](ecs::Entity e, TerrainComponent& t) {
+        if (!t.collision || !s.isActiveInHierarchy(e)) return;
+        h = mix(h, terrain::heightsHash(t));
+        mat(e);
+    });
     const NavigationSettingsComponent st = settingsOf(s);
     for (float f : {st.gridCellSize, st.agentRadius2D, st.cellSize, st.agentRadius, st.agentHeight, st.agentMaxClimb, st.agentMaxSlope}) h = mixf(h, f);
     return h;
@@ -265,6 +271,17 @@ void NavigationSystem::rebuild(Scene& s) {
                           std::max(c.height * 0.5f - c.radius, 0.0f));
                 break;
         }
+        ++m_stats.sourceShapes3D;
+    });
+    reg.view<TerrainComponent>().each([&](ecs::Entity e, TerrainComponent& t) {
+        if (!t.collision || !s.isActiveInHierarchy(e)) return;
+        std::vector<Vec3> positions;
+        std::vector<u32> indices;
+        terrain::buildMesh(t, positions, indices);
+        const Mat4 world = s.worldMatrix(e);
+        const u32 base = static_cast<u32>(verts.size());
+        for (const Vec3& p : positions) verts.push_back(world.transformPoint(p));
+        for (u32 i : indices) idx.push_back(base + i);
         ++m_stats.sourceShapes3D;
     });
     m_mesh.clear();

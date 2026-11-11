@@ -1,5 +1,7 @@
 #include "agr/editor/Picking.hpp"
 
+#include "agr/scene/Terrain.hpp"
+
 #include <array>
 #include <cmath>
 
@@ -84,6 +86,17 @@ std::optional<PickHit> pick(Scene& scene, const math::Ray& ray, PickAssets asset
             const float u = math::dot(p, e1) / math::dot(e1, e1), v = math::dot(p, e3) / math::dot(e3, e3);
             if (u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f) consider(e, t);
         });
+    // Terrains: exact surface hit (ray marched in the terrain's local space).
+    reg.view<TerrainComponent, WorldTransformComponent>().each([&](ecs::Entity e, TerrainComponent& t, WorldTransformComponent& w) {
+        if (!pickable(scene, e)) return;
+        const math::Mat4 inv = math::inverse(w.matrix);
+        const math::Ray local{inv.transformPoint(ray.origin), math::normalize(inv.transformVector(ray.direction))};
+        float d = 0.0f;
+        if (terrain::raycast(t, local, 100000.0f, d)) {
+            const Vec3 hit = w.matrix.transformPoint(local.at(d));
+            consider(e, math::length(hit - ray.origin));
+        }
+    });
     // Tilemaps are picked on painted cells only, so empty areas select what lies behind.
     reg.view<TilemapComponent, WorldTransformComponent>().each(
         [&](ecs::Entity e, TilemapComponent& tm, WorldTransformComponent& w) {
@@ -113,6 +126,11 @@ math::Aabb worldBounds(Scene& scene, ecs::Entity e, PickAssets assets) {
             box.expand(tb.min);
             box.expand(tb.max);
         }
+    }
+    if (const auto* t = reg.tryGet<TerrainComponent>(e)) {
+        const math::Aabb tb = terrain::localBounds(*t).transformed(w->matrix);
+        box.expand(tb.min);
+        box.expand(tb.max);
     }
     if (!box.valid()) box = math::Aabb::fromCenterExtents(w->matrix.translation(), Vec3{0.5f});
     return box;

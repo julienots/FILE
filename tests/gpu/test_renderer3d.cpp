@@ -6,7 +6,9 @@
 #include "agr/assets/AssetManager.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/render/ModelLibrary.hpp"
+#include "agr/assets/Image.hpp"
 #include "agr/render/RenderComponents.hpp"
+#include "agr/scene/Terrain.hpp"
 #include "agr/render/Renderer.hpp"
 
 using namespace agr;
@@ -262,6 +264,49 @@ TEST_CASE("image sky: background, diffuse and reflected light, rotation, loading
     REQUIRE(missing);
     CHECK(missing->state == AssetState::Failed);
     CHECK(d.validationErrorCount() == 0);
+}
+
+TEST_CASE("terrain: heights lit by the sun, layers blended by the splat map, updates after sculpting") {
+    Render3DFixture f;
+    auto solid = [&](const char* uri, u8 r, u8 g, u8 b) {
+        std::vector<u8> px(4 * 4 * 4);
+        for (usize i = 0; i < px.size(); i += 4) px[i] = r, px[i + 1] = g, px[i + 2] = b, px[i + 3] = 255;
+        auto png = encodePng(4, 4, px);
+        REQUIRE(png);
+        REQUIRE(f.vfs.writeBytes(uri, png.value().data(), png.value().size()));
+    };
+    solid("assets://red.png", 220, 40, 40);
+    solid("assets://blue.png", 40, 60, 230);
+    f.camera({0, 30, 0.01f}, {0, 0, 0});
+    f.darkEnvironment().ambientIntensity = 0.3f;
+    f.sun({-90, 0, 0});  // straight down
+    const auto e = f.scene.createEntity("Terrain");
+    auto& t = f.scene.registry().emplace<TerrainComponent>(e);
+    t.size = 32.0f;
+    t.resolution = 33;
+    t.layer0 = "assets://red.png";
+    t.layer1 = "assets://blue.png";
+    t.tiling = {1, 1, 1, 1};
+    terrain::ensureData(t);
+    // Paint layer 1 (blue) on the +X half.
+    for (u32 z = 0; z < 33; ++z)
+        for (u32 x = 18; x < 33; ++x) t.splat[z * 33 + x] = 0x0000FF00;  // g = 255
+    f.settle();
+    CHECK(f.renderer.stats().terrains == 1);
+    const Rgba left = f.at({-8, 0, 0}), right = f.at({8, 0, 0});
+    CHECK_MESSAGE((left.r > left.b * 2 && left.r > 120), left);
+    CHECK_MESSAGE((right.b > right.r * 2 && right.b > 120), right);
+
+    // A hill: the flat top stays as bright, its slopes are darker (sun from above).
+    terrain::BrushSettings raise;
+    raise.radius = 8.0f;
+    raise.strength = 6.0f;
+    REQUIRE(terrain::applyBrush(t, {-8, 8}, raise));
+    f.frame();
+    const Rgba slope = f.at({-8 + 4.5f, terrain::heightAt(t, -3.5f, 8), 8});
+    const Rgba flat = f.at({-8, 0, -8});
+    CHECK_MESSAGE(luminance(slope) + 30 < luminance(flat), slope << " vs " << flat);
+    CHECK(gpu().device->validationErrorCount() == 0);
 }
 
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {

@@ -92,6 +92,11 @@ void main() {
 }
 )";
 
+/// Declarations of the terrain variant of the PBR fragment (splat map: layer weights).
+inline constexpr const char* kTerrainBlock = R"(
+uniform sampler2D u_splatMap;
+)";
+
 // Image sky (equirectangular, prefiltered mips): shared by the PBR and sky fragments.
 inline constexpr const char* kEnvBlock = R"(
 uniform sampler2D u_envMap;
@@ -205,7 +210,16 @@ float shadowFactor(vec3 N, vec3 L) {
     return mix(1.0, lit, u_shadowParams.w);
 }
 void main() {
+#ifdef AGR_TERRAIN
+    // Terrain: 4 layers (units 0, 1, 3, 4) blended by the splat map; tiling per layer in u_emissive.
+    vec4 sw = texture(u_splatMap, v_uv);
+    sw /= max(sw.r + sw.g + sw.b + sw.a, 1e-4);
+    vec4 base = (texture(u_baseColorMap, v_uv * u_emissive.x) * sw.r + texture(u_metalRoughMap, v_uv * u_emissive.y) * sw.g +
+                 texture(u_occlusionMap, v_uv * u_emissive.z) * sw.b + texture(u_emissiveMap, v_uv * u_emissive.w) * sw.a) *
+                u_baseColor * v_color;
+#else
     vec4 base = texture(u_baseColorMap, v_uv) * u_baseColor * v_color;
+#endif
 #ifdef AGR_ALPHA_MASK
     if (base.a < u_flags.x) discard;
     base.a = 1.0;
@@ -214,7 +228,11 @@ void main() {
         o_color = vec4(agrUnlit(base.rgb), base.a);
         return;
     }
+#ifdef AGR_TERRAIN
+    vec4 mr = vec4(1.0);
+#else
     vec4 mr = texture(u_metalRoughMap, v_uv);
+#endif
     float metallic = clamp(u_pbr.x * mr.b, 0.0, 1.0);
     float roughness = clamp(u_pbr.y * mr.g, 0.045, 1.0);
     float a = roughness * roughness;
@@ -268,7 +286,9 @@ void main() {
     } else {
         color += (diffuseColor * hemisphere(N) + envSpecular * hemisphere(reflect(-V, N))) * occlusion;
     }
+#ifndef AGR_TERRAIN
     color += u_emissive.rgb * texture(u_emissiveMap, v_uv).rgb;
+#endif
     if (u_fogColor.w > 0.5) {
         float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
         color = mix(color, u_fogColor.rgb, f);

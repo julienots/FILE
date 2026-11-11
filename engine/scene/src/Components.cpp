@@ -2,6 +2,7 @@
 
 #include "agr/scene/Prefab.hpp"
 #include "agr/scene/Reflection.hpp"
+#include "agr/scene/Terrain.hpp"
 
 namespace agr {
 
@@ -32,6 +33,7 @@ void registerSceneComponents() {
 
     // Hierarchy / world transform / id are handled by the Scene itself.
     registerPrefabComponents();
+    registerTerrainComponents();
 }
 
 } // namespace agr

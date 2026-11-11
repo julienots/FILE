@@ -16,6 +16,7 @@ add_executable(agr_tests
     test_input_actions.cpp
     test_localization.cpp
     test_navigation.cpp
+    test_terrain.cpp
     test_physics2d.cpp
     test_script.cpp
     test_physics3d.cpp

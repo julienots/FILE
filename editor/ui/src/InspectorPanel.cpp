@@ -10,6 +10,7 @@
 #include <imgui_stdlib.h>
 
 #include "agr/scene/Prefab.hpp"
+#include "agr/scene/Terrain.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/ModelLibrary.hpp"
@@ -296,6 +297,72 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
             ImGui::TextColored(palette::toVec4(palette::kWarning), "Clip « %s » absent de la feuille.", anim.clip.c_str());
         if (sheet->clips.empty()) ImGui::TextDisabled("Cette feuille ne définit aucun clip (champ \"clips\" du .agrsheet).");
         ImGui::TextDisabled("L'animation se joue en mode Jeu.");
+        ImGui::PopID();
+    } else if (info.name == "Terrain") {
+        auto& tc = *static_cast<TerrainComponent*>(comp);
+        ImGui::PushID("terrainTools");
+        const u32 n = terrain::resolution(tc);
+        const math::Aabb b = terrain::localBounds(tc);
+        ImGui::TextDisabled("%u x %u sommets, %.2f m entre deux, hauteurs %.1f à %.1f m", n, n, static_cast<double>(terrain::spacing(tc)),
+                            static_cast<double>(b.min.y), static_cast<double>(b.max.y));
+        TerrainTool& tool = s.terrainTool;
+        const bool editMode = s.ctx.playState() == PlayState::Edit;
+        ImGui::BeginDisabled(!editMode);
+        const bool wasActive = tool.active;
+        if (wasActive) {
+            ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kAmber));
+            ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kGraphite950));
+        }
+        if (ImGui::Button(tool.active ? "Arrêter (Échap)" : "Sculpter / peindre dans la vue", {-FLT_MIN, 0})) {
+            tool.active = !tool.active;
+            s.focusViewport = tool.active;
+        }
+        if (wasActive) ImGui::PopStyleColor(2);
+        struct BrushDef {
+            terrain::Brush brush;
+            const char* label;
+            const char* tip;
+        };
+        static const BrushDef brushes[] = {{terrain::Brush::Raise, "Élever", "Monter le sol sous le pinceau (maintenir le clic)"},
+                                           {terrain::Brush::Lower, "Abaisser", "Creuser"},
+                                           {terrain::Brush::Smooth, "Lisser", "Adoucir les reliefs"},
+                                           {terrain::Brush::Flatten, "Aplanir", "Ramener à la hauteur cible (Ctrl + clic : prendre la hauteur)"},
+                                           {terrain::Brush::Paint, "Peindre", "Peindre la couche choisie"}};
+        for (const BrushDef& bd : brushes) {
+            const bool sel = tool.settings.brush == bd.brush;
+            if (sel) ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kSelect));
+            if (ImGui::SmallButton(bd.label)) {
+                tool.settings.brush = bd.brush;
+                if (editMode) tool.active = true;
+            }
+            if (sel) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", bd.tip);
+            ImGui::SameLine();
+        }
+        ImGui::NewLine();
+        ImGui::SliderFloat("Rayon", &tool.settings.radius, 0.5f, std::max(2.0f, tc.size * 0.5f), "%.1f m");
+        const bool heightBrush = tool.settings.brush == terrain::Brush::Raise || tool.settings.brush == terrain::Brush::Lower;
+        ImGui::SliderFloat(heightBrush ? "Force (m/s)" : "Force", &tool.settings.strength, heightBrush ? 0.1f : 0.05f, heightBrush ? 20.0f : 1.0f, "%.2f");
+        if (tool.settings.brush == terrain::Brush::Flatten) ImGui::DragFloat("Hauteur cible", &tool.settings.targetHeight, 0.05f, -1000.0f, 1000.0f, "%.2f m");
+        if (tool.settings.brush == terrain::Brush::Paint) {
+            const std::string* layers[] = {&tc.layer0, &tc.layer1, &tc.layer2, &tc.layer3};
+            for (u32 l = 0; l < 4; ++l) {
+                const std::string name = layers[l]->empty() ? "(vide)" : std::filesystem::path(*layers[l]).stem().string();
+                if (ImGui::RadioButton((std::to_string(l) + " : " + name).c_str(), tool.settings.layer == l)) tool.settings.layer = l;
+                if (l % 2 == 0) ImGui::SameLine();
+            }
+        }
+        if (ImGui::Button("Tout aplanir")) ImGui::OpenPopup("##flattenAll");
+        if (ImGui::BeginPopup("##flattenAll")) {
+            ImGui::TextUnformatted("Remettre tout le terrain à plat (hauteur 0) ?");
+            if (ImGui::Button("Aplanir")) {
+                std::fill(tc.heights.begin(), tc.heights.end(), 0);
+                s.ctx.commit("Flatten Terrain");
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::EndDisabled();
         ImGui::PopID();
     } else if (info.name == "Tilemap") {
         auto& tm = *static_cast<TilemapComponent*>(comp);

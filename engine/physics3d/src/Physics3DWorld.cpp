@@ -22,6 +22,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
@@ -30,6 +31,7 @@
 
 #include "agr/core/Log.hpp"
 #include "agr/core/Time.hpp"
+#include "agr/scene/Terrain.hpp"
 
 namespace agr {
 
@@ -146,6 +148,11 @@ public:
 } // namespace
 
 struct Physics3DWorld::Impl {
+    struct TerrainBody {
+        JPH::BodyID id;
+        u64 hash = 0;
+    };
+    std::unordered_map<u64, TerrainBody> terrainBodies;
     struct Body {
         JPH::BodyID id;
         ecs::Entity entity;
@@ -201,6 +208,11 @@ struct Physics3DWorld::Impl {
             bi.DestroyBody(body.id);
         }
         bodies.clear();
+        for (auto& [key, t] : terrainBodies) {
+            bi.RemoveBody(t.id);
+            bi.DestroyBody(t.id);
+        }
+        terrainBodies.clear();
         byBodyId.clear();
         activePairs.clear();
         pairIsSensor.clear();
@@ -389,6 +401,70 @@ struct Physics3DWorld::Impl {
             byBodyId[body.id.GetIndex()] = o;
             bodies.emplace(key, body);
             ++stats.rebuilt;
+        }
+        syncTerrains(s);
+    }
+
+    /// Terrains with collision: static triangle meshes, rebuilt when their shape or place changes.
+    void syncTerrains(Scene& s) {
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        auto& reg = s.registry();
+        std::unordered_map<u64, bool> seen;
+        reg.view<TerrainComponent>().each([&](ecs::Entity e, TerrainComponent& t) {
+            if (!t.collision || !s.isActiveInHierarchy(e)) return;
+            seen[e.packed()] = true;
+            const Pose p = poseOf(s.worldMatrix(e));
+            u64 h = terrain::heightsHash(t);
+            for (float f : {p.position.x, p.position.y, p.position.z, p.rotation.x, p.rotation.y, p.rotation.z, p.rotation.w, p.scale.x, p.scale.y,
+                            p.scale.z})
+                h = mixq(h, f);
+            auto it = terrainBodies.find(e.packed());
+            if (it != terrainBodies.end() && it->second.hash == h) return;
+            if (it != terrainBodies.end()) {
+                byBodyId.erase(it->second.id.GetIndex());
+                bi.RemoveBody(it->second.id);
+                bi.DestroyBody(it->second.id);
+                terrainBodies.erase(it);
+            }
+            terrain::ensureData(t);
+            std::vector<Vec3> positions;
+            std::vector<u32> indices;
+            terrain::buildMesh(t, positions, indices);
+            JPH::TriangleList triangles;
+            triangles.reserve(indices.size() / 3);
+            auto v = [&](u32 i) {
+                const Vec3 q{positions[i].x * p.scale.x, positions[i].y * p.scale.y, positions[i].z * p.scale.z};
+                return JPH::Float3(q.x, q.y, q.z);
+            };
+            for (usize i = 0; i + 2 < indices.size(); i += 3) triangles.push_back(JPH::Triangle(v(indices[i]), v(indices[i + 1]), v(indices[i + 2])));
+            JPH::MeshShapeSettings settings(triangles);
+            JPH::ShapeSettings::ShapeResult r = settings.Create();
+            if (r.HasError()) {
+                AGR_LOG_ERROR("Physics3D", "'{}': terrain collision failed: {}", s.nameOf(e), r.GetError().c_str());
+                return;
+            }
+            JPH::BodyCreationSettings bs(r.Get(), JPH::RVec3(p.position.x, p.position.y, p.position.z), toJ(math::normalize(p.rotation)),
+                                         JPH::EMotionType::Static, Layers::kStatic);
+            bs.mUserData = e.packed();
+            bs.mFriction = 0.8f;
+            const JPH::BodyID id = bi.CreateAndAddBody(bs, JPH::EActivation::DontActivate);
+            if (id.IsInvalid()) {
+                AGR_LOG_ERROR("Physics3D", "too many bodies: terrain '{}' has no collision", s.nameOf(e));
+                return;
+            }
+            byBodyId[id.GetIndex()] = e;
+            terrainBodies[e.packed()] = {id, h};
+            ++stats.rebuilt;
+        });
+        for (auto it = terrainBodies.begin(); it != terrainBodies.end();) {
+            if (seen.contains(it->first)) {
+                ++it;
+                continue;
+            }
+            byBodyId.erase(it->second.id.GetIndex());
+            bi.RemoveBody(it->second.id);
+            bi.DestroyBody(it->second.id);
+            it = terrainBodies.erase(it);
         }
     }
 

@@ -96,6 +96,10 @@ private:
     void drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size);
     void drawColliders(EditorShared& s, ImVec2 origin, ImVec2 size, const math::Mat4& viewProj);
     void drawNavigation(EditorShared& s, ImVec2 origin, ImVec2 size, const math::Mat4& viewProj);
+    /// Terrain brushes; true while the tool owns the mouse (no picking / gizmo).
+    bool handleTerrainSculpting(EditorShared& s, ImVec2 origin, ImVec2 size, bool hovered);
+    bool m_sculpting = false;
+    bool m_sculptChanged = false;
     void drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size);
     void handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size);

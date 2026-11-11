@@ -13,6 +13,7 @@
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/twod/TwoDPlugin.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
+#include "agr/scene/Terrain.hpp"
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
 
@@ -31,6 +32,12 @@ struct TilemapBrush {
     i32 tile = 0;  ///< Frame of the tileset painted by Paint / Rect / Fill.
 };
 
+/// Terrain sculpting / painting (inspector settings + viewport), on the primary selection.
+struct TerrainTool {
+    bool active = false;
+    terrain::BrushSettings settings;
+};
+
 /// State shared by every panel of the editor window.
 struct EditorShared {
     Engine& engine;
@@ -43,6 +50,7 @@ struct EditorShared {
     AnimationPlugin* animation = nullptr;
     EditorFonts fonts;
     TilemapBrush brush;
+    TerrainTool terrainTool;
 
     rhi::Device* device() const { return render ? render->device() : nullptr; }
     Renderer* renderer() const { return render ? render->renderer() : nullptr; }
