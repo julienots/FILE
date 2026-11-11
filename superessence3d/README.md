@@ -94,6 +94,20 @@ Fonctionnement :
 - `render_scene` renvoie l'image à Claude, qui peut donc vérifier visuellement son travail et le corriger.
 - L'exécution de code Python arbitraire (`run_python`) est **désactivée par défaut** (Paramètres › Préférences).
 
+### Claude sur téléphone (connecteur MCP distant)
+L'application Claude mobile ne lance pas de serveur MCP local. Elle utilise des **connecteurs** distants, appelés en HTTPS par les serveurs d'Anthropic. Le studio tourne donc sur l'ordinateur et devient joignable par une adresse HTTPS secrète :
+
+1. Sur l'ordinateur, lancez **`start_claude_mobile_windows.bat`** (ou `./start_claude_mobile.sh`). Le script installe `cloudflared` si besoin (tunnel HTTPS gratuit de Cloudflare, sans compte), démarre le studio et affiche une **URL de connecteur** du type `https://xxxx.trycloudflare.com/<secret>/mcp`. Une copie est enregistrée dans `~/SuperEssence3D/claude_mobile_connecteur.txt`.
+2. Sur claude.ai (ou dans l'app) : **Paramètres › Connecteurs › Ajouter un connecteur personnalisé**. Collez l'URL et donnez-lui le nom « SUPERESSENCE ». Selon votre offre Claude, le nombre de connecteurs personnalisés peut être limité.
+3. Dans l'app Claude du téléphone, activez le connecteur dans une conversation, puis demandez : « Crée un dragon noir… et montre-moi un rendu ».
+4. Pour **voir le résultat en direct sur le même téléphone**, ouvrez l'APK SUPERESSENCE 3D › menu ⋮ › « Se connecter au studio PC » (même Wi-Fi), puis passez d'une application à l'autre.
+
+Remarques :
+- L'ordinateur et cette fenêtre doivent rester ouverts.
+- L'adresse du tunnel gratuit change à chaque lancement : mettez à jour le connecteur, ou utilisez un tunnel Cloudflare nommé si vous avez un compte.
+- Ne partagez pas l'URL, qui contient le secret d'accès. Pour en générer une nouvelle : `--renew`.
+- Le mode autonome de l'APK (sans ordinateur) ne peut pas être piloté par Claude : les serveurs d'Anthropic ne peuvent pas joindre un téléphone directement.
+
 ### Exemples de demandes à Claude
 - « Crée un dragon noir de 2 mètres, avec quatre ailes, des cornes, des écailles détaillées, des yeux rouges et une queue avec des pointes. »
 - « Agrandis ses ailes, ajoute six tentacules et remplace les yeux par des yeux blancs lumineux. »

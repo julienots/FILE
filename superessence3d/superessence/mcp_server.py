@@ -103,7 +103,8 @@ def ensure_studio() -> None:
     else:
         kwargs["start_new_session"] = True
     env = dict(os.environ, SUPERESSENCE_NO_BROWSER="1")
-    _started_proc = subprocess.Popen([sys.executable, "-m", "superessence", "--no-browser"], cwd=root, stdout=log,
+    args = [sys.executable, "-m", "superessence", "--no-browser"] + (["--lan"] if os.environ.get("SUPERESSENCE_LAN") else [])
+    _started_proc = subprocess.Popen(args, cwd=root, stdout=log,
                                      stderr=log, stdin=subprocess.DEVNULL, env=env, **kwargs)
     for _ in range(180):
         time.sleep(0.5)
