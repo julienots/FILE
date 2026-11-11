@@ -94,7 +94,10 @@ Fonctionnement :
 - `render_scene` renvoie l'image à Claude, qui peut donc vérifier visuellement son travail et le corriger.
 - L'exécution de code Python arbitraire (`run_python`) est **désactivée par défaut** (Paramètres › Préférences).
 
-### Claude sur téléphone (connecteur MCP distant)
+### Claude sur téléphone, directement dans l'application (sans ordinateur)
+Même principe que CUTTINX : un petit relais Supabase gratuit fait le lien entre l'app Claude et SUPERESSENCE 3D Mobile. Installation pas à pas : **[supabase/GUIDE.md](supabase/GUIDE.md)**. Dans l'application, l'écran se trouve dans le menu ⋮ › ✦ Claude.
+
+### Claude sur téléphone (connecteur MCP distant) — variante avec l'ordinateur
 L'application Claude mobile ne lance pas de serveur MCP local. Elle utilise des **connecteurs** distants, appelés en HTTPS par les serveurs d'Anthropic. Le studio tourne donc sur l'ordinateur et devient joignable par une adresse HTTPS secrète :
 
 1. Sur l'ordinateur, lancez **`start_claude_mobile_windows.bat`** (ou `./start_claude_mobile.sh`). Le script installe `cloudflared` si besoin (tunnel HTTPS gratuit de Cloudflare, sans compte), démarre le studio et affiche une **URL de connecteur** du type `https://xxxx.trycloudflare.com/<secret>/mcp`. Une copie est enregistrée dans `~/SuperEssence3D/claude_mobile_connecteur.txt`.

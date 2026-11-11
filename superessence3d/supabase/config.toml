@@ -1,0 +1,3 @@
+# Utilisé seulement si vous déployez avec la CLI Supabase (supabase functions deploy superessence).
+[functions.superessence]
+verify_jwt = false

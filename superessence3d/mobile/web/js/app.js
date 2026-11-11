@@ -502,8 +502,160 @@ $("#menu").onclick = () => showModal("SUPERESSENCE 3D Mobile", h("div", {},
     h("div", { class: "it", onclick: () => { closeModal(); newProject(); } }, "Nouveau projet"),
     h("div", { class: "it", onclick: () => { closeModal(); openProject(); } }, "Ouvrir un projet"),
     h("div", { class: "it", onclick: () => { closeModal(); saveProjectAs(); } }, "Enregistrer le projet"),
+    h("div", { class: "it", onclick: () => { closeModal(); import("./claude.js").then((m) => m.openClaude()); } }, "✦ Claude (piloter l'app avec Claude)"),
     window.Android?.connectPc ? h("div", { class: "it", onclick: () => window.Android.connectPc() }, "Se connecter au studio PC (Blender)") : null),
   h("p", { class: "muted" }, "Version 0.2.0 — moteur 3D embarqué, fonctionne hors ligne. Génération procédurale (algorithmes), pas d'IA neuronale. Pour le moteur Blender complet et Claude (MCP), utilisez le studio PC.")), [["Fermer", closeModal]]);
+
+
+// ------------------------------------------------------------------ API utilisée par Claude (relais MCP)
+const findObj = (name) => {
+  const o = vp.content.children.find((x) => x.name === name) || vp.content.children.find((x) => x.name.toLowerCase() === String(name || "").toLowerCase());
+  if (!o) throw new Error(`Objet introuvable : « ${name} ». Objets : ${vp.content.children.map((x) => x.name).join(", ") || "aucun"}`);
+  return o;
+};
+const colorArg = (c) => {
+  if (!c) return null;
+  if (Array.isArray(c)) return c.map(Number);
+  if (/^#?[0-9a-f]{6}$/i.test(c)) return rgb(c.startsWith("#") ? c : `#${c}`);
+  const p = parsePrompt(`objet ${c}`);
+  return p.colors.primary || null;
+};
+function normSpec(spec) {
+  for (const [k, v] of Object.entries(spec.colors || {})) spec.colors[k] = colorArg(v) || v;
+  return spec;
+}
+function describe(o) {
+  let tris = 0; o.traverse((m) => { if (m.isMesh) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; });
+  const sz = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+  return { name: o.name, generated: !!o.userData.generated, triangles: Math.round(tris), size_m: [sz.x, sz.y, sz.z].map((v) => +v.toFixed(3)), position: o.position.toArray().map((v) => +v.toFixed(3)), rigged: !!o.getObjectByProperty("isBone", true), animation: o.userData.clip?.name || null, spec: o.userData.spec ? { category: o.userData.spec.category, subtype: o.userData.spec.subtype, prompt: o.userData.spec.prompt, height: o.userData.spec.height, features: o.userData.spec.features, colors: o.userData.spec.colors } : null };
+}
+async function genAndAdd(spec, quality, replace = null) {
+  busy("Claude génère…");
+  await nextFrame();
+  try {
+    const { root, stats } = generate(spec, { quality: quality || S.quality });
+    if (replace) {
+      root.name = replace.name; root.position.copy(replace.position); root.rotation.copy(replace.rotation); root.scale.copy(replace.scale);
+      vp.content.remove(replace);
+    } else { root.name = uniqueName(root.name); placeBeside(root); }
+    storeRest(root);
+    vp.add(root);
+    vp.frame(root);
+    return { root, stats };
+  } finally { busy(null); }
+}
+const after = (label) => { commit(label); render(); updatePlay(); };
+window.SEAPI = {
+  get_scene_info: () => ({ objects: vp.content.children.map(describe), lighting: vp.lightPreset, selected: vp.selection?.name || null, project: S.project.name }),
+  async generate_model({ prompt, quality, spec_overrides }) {
+    if (!prompt) throw new Error("prompt manquant");
+    const spec = parsePrompt(prompt);
+    if (spec_overrides) for (const [k, v] of Object.entries(spec_overrides)) spec[k] = v && typeof v === "object" && !Array.isArray(v) ? { ...(spec[k] || {}), ...v } : v;
+    normSpec(spec);
+    const { root, stats } = await genAndAdd(spec, quality);
+    after(`Claude : ${root.name}`);
+    return { created: root.name, triangles: stats.triangles, ms: stats.ms, interpretation: { category: spec.category, subtype: spec.subtype, features: spec.features, colors: spec.colors, height: spec.height, notes: spec.notes } };
+  },
+  async modify_model({ name, instruction, changes }) {
+    const o = findObj(name);
+    if (!o.userData.spec) throw new Error("Cet objet n'a pas été généré : modification par texte impossible.");
+    let spec = JSON.parse(JSON.stringify(o.userData.spec)), list = [];
+    if (instruction) [spec, list] = parseModification(instruction, spec);
+    if (changes) for (const [k, v] of Object.entries(changes)) { spec[k] = v && typeof v === "object" && !Array.isArray(v) ? { ...(spec[k] || {}), ...v } : v; list.push(`${k} : ${JSON.stringify(v)}`); }
+    if (!list.length) throw new Error("Aucune modification reconnue.");
+    normSpec(spec);
+    await genAndAdd(spec, o.userData.params?.quality, o);
+    after(`Claude modifie ${name}`);
+    return { modified: name, changes: list };
+  },
+  set_material({ name, preset, color, description }) {
+    const o = findObj(name);
+    let mat;
+    if (description) { const r = parseMaterialText(description); mat = makeMaterial(r.preset, r.params); }
+    else mat = makeMaterial(preset || "plain", { color: colorArg(color) || undefined });
+    o.traverse((x) => { if (x.isMesh) { if (x.geometry.attributes.color) x.geometry.deleteAttribute("color"); x.material = mat; } });
+    after("Claude : matériau");
+    return { name, material: mat.userData.preset };
+  },
+  transform_object({ name, position, rotation_y, scale }) {
+    const o = findObj(name);
+    if (position) o.position.set(...position.map(Number));
+    if (rotation_y != null) o.rotation.y = THREE.MathUtils.degToRad(+rotation_y);
+    if (scale) o.scale.setScalar(Math.max(0.001, +scale));
+    after("Claude : transformer");
+    return describe(o);
+  },
+  animate({ name, motions, object_motion, amplitude }) {
+    const o = findObj(name);
+    vp.stop();
+    let clip;
+    if (object_motion) clip = makeObjectClip(o, object_motion, { amplitude: amplitude || 1 });
+    else {
+      const ms = (motions || ["idle"]).filter((m) => MOTIONS[m]);
+      if (!ms.length) throw new Error(`Mouvements possibles : ${Object.keys(MOTIONS).join(", ")}`);
+      clip = makeClip(o, ms, { amplitude: amplitude || 1, seconds: ms.includes("walk") ? 1.2 : ms.includes("run") ? 0.8 : 1.6 });
+      if (!clip) throw new Error("Cet objet n'a pas de squelette : utilisez object_motion (spin, bounce, float, pulse, sway).");
+    }
+    o.userData.clip = clip;
+    vp.select(o);
+    vp.play(o, clip);
+    after("Claude : animation");
+    return { name, animation: clip.name, tracks: clip.tracks.length };
+  },
+  stop_animation() { vp.stop(); updatePlay(); return { stopped: true }; },
+  add_shape({ shape, color, name }) {
+    const labels = { box: "Cube", sphere: "Sphère", cylinder: "Cylindre", cone: "Cône", torus: "Tore", plane: "Plan" };
+    if (!labels[shape]) throw new Error(`Formes : ${Object.keys(labels).join(", ")}`);
+    addPrimitive(shape, name || labels[shape]);
+    const o = vp.content.children.at(-1);
+    if (color) o.material = makeMaterial("plain", { color: colorArg(color) });
+    render();
+    return describe(o);
+  },
+  duplicate_object({ name }) {
+    const o = findObj(name);
+    const c = cloneDeep(o); c.name = uniqueName(o.name);
+    c.position.x += new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3()).x + 0.3;
+    storeRest(c); vp.add(c); after("Claude : dupliquer");
+    return { created: c.name };
+  },
+  delete_object({ name, confirm }) {
+    const o = findObj(name);
+    if (!confirm) return { confirmation_required: true, message: `Supprimer « ${name} » ? Demandez l'accord de l'utilisateur puis relancez avec confirm=true.` };
+    vp.content.remove(o); vp.select(null); after("Claude : supprimer");
+    return { deleted: name };
+  },
+  set_lighting({ preset, background }) {
+    if (background) vp.customBg = background.startsWith("#") ? background : `#${background}`;
+    vp.setLighting(preset || vp.lightPreset);
+    render();
+    return { lighting: vp.lightPreset };
+  },
+  async view_scene({ name, view }) {
+    const o = name ? findObj(name) : null;
+    if (view) vp.view(view);
+    const sheet = $("#sheet").className;
+    $("#sheet").className = "closed";
+    await nextFrame();
+    vp.frame(o);
+    await nextFrame();
+    const img = vp.snapshot(640).split(",")[1];
+    $("#sheet").className = sheet;
+    return { image: img, objects: vp.content.children.length };
+  },
+  async save_to_library({ name }) { await saveToLibrary(findObj(name)); return { saved: name }; },
+  async export_model({ name, format = "glb" }) {
+    const target = name ? findObj(name) : vp.content;
+    const g = target === vp.content ? target : (() => { const gg = new THREE.Group(); gg.name = "Scène"; gg.add(cloneDeep(target)); return gg; })();
+    vp.stop();
+    const buf = format === "obj" ? exportOBJ(g) : format === "stl" ? exportSTL(g) : await exportGLB(g);
+    const info = verify(buf, format);
+    saveFile(`${name || S.project.name}.${format}`, { glb: "model/gltf-binary", obj: "text/plain", stl: "model/stl" }[format] || "application/octet-stream", buf);
+    return { verified: info, note: "L'utilisateur choisit l'emplacement d'enregistrement sur son téléphone." };
+  },
+  undo() { if (!history.canUndo()) return { undone: false }; const l = history.stack[history.index].label; history.restore(history.index - 1, vp.content); afterRestore(`Annulé : ${l}`); return { undone: l }; },
+};
+window.SEUI = { toast, render, showModal, closeModal };
 
 // ------------------------------------------------------------------ démarrage
 async function boot() {
@@ -520,4 +672,5 @@ async function boot() {
 window.addEventListener("beforeunload", () => autosave());
 document.addEventListener("visibilitychange", () => { if (document.hidden) autosave(); });
 boot();
+import("./claude.js").then((m) => m.autoStart());
 window.SE = { vp, S, generate, parsePrompt };
