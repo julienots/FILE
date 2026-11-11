@@ -28,7 +28,8 @@ button, input, select, textarea { font:inherit; color:inherit; }
 #sheet.full { height:calc(100vh - 52px - 62px - var(--safe-b)); }
 #grip { height:30px; display:grid; place-items:center; flex:none; cursor:pointer; }
 #grip i { width:44px; height:5px; border-radius:3px; background:var(--line); display:block; }
-#sheetbody { overflow:auto; padding:0 14px 18px; flex:1; -webkit-overflow-scrolling:touch; }
+#sheetbody { overflow:auto; padding:0 14px 18px; flex:1; min-height:0; -webkit-overflow-scrolling:touch; }
+#sheet { overflow:hidden; }
 #tabs { position:fixed; left:0; right:0; bottom:0; height:calc(62px + var(--safe-b)); padding-bottom:var(--safe-b); display:flex; background:var(--bg2); border-top:1px solid var(--line); z-index:20; }
 #tabs button { flex:1; border:0; background:none; color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:12px; }
 #tabs button b { font-size:19px; font-weight:400; }

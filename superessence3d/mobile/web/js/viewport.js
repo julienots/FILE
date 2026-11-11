@@ -102,6 +102,16 @@ export class Viewport {
     this.hooks.selected?.(obj);
   }
 
+  selectPart(p) {
+    // une pièce précise (maillage ou groupe) d'un modèle
+    if (p && p.isMesh && p.parent && p.parent.userData.part && !p.userData.part) p = p.parent;
+    this.selection = p;
+    this.box.visible = !!p;
+    if (p) this.box.setFromObject(p);
+    this._attach();
+    this.hooks.selected?.(p);
+  }
+
   setTool(t) {
     this.tool = t;
     this.cursor.visible = false;
@@ -163,8 +173,10 @@ export class Viewport {
       const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
       down = null;
       if (moved > 8 || this.gizmo.dragging || this.gizmo.axis) return;
+      if (this.placeMode) { const hp = this.pick(ev); if (hp) this.placeMode(hp); return; }
       if (this.tool === "sculpt" || this.tool === "paint") return;
       const h = this.pick(ev);
+      if (this.tool === "part") { this.selectPart(h ? h.object : null); return; }
       this.select(h ? this.topLevel(h.object) : null);
     });
   }

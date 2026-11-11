@@ -10,6 +10,7 @@ import { cloneDeep, deserialize, exportGLB, exportOBJ, exportSTL, History, saveF
 import { imageToModel } from "./image3d.js";
 import { buildOrganicModel, deformMesh, makePart } from "./gen/custom.js";
 import { paintMesh, sculptMesh } from "./viewport.js";
+import { BODY_PARAMS, objectWorkshop, workshopUI } from "./workshop.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const h = (tag, attrs = {}, ...kids) => {
@@ -79,7 +80,7 @@ async function autosave() {
 }
 
 // ------------------------------------------------------------------ outils
-const TOOLS = [["select", "☝", "Sélection"], ["move", "✥", "Déplacer"], ["rotate", "⟳", "Tourner"], ["scale", "⤡", "Échelle"], ["sculpt", "✎", "Sculpter"], ["paint", "🖌", "Peindre"]];
+const TOOLS = [["select", "☝", "Sélection"], ["part", "◫", "Pièce"], ["move", "✥", "Déplacer"], ["rotate", "⟳", "Tourner"], ["scale", "⤡", "Échelle"], ["sculpt", "✎", "Sculpter"], ["paint", "🖌", "Peindre"]];
 function buildTools() {
   const t = $("#tools");
   t.innerHTML = "";
@@ -90,10 +91,20 @@ function setTool(id) {
   if (id === "sculpt" || id === "paint") vp.stop();
   vp.setTool(id);
   buildTools();
-  $("#hint").textContent = { sculpt: "Glissez un doigt pour sculpter · deux doigts pour tourner/zoomer", paint: "Glissez un doigt pour peindre · deux doigts pour tourner/zoomer", move: "Faites glisser les flèches du gizmo", rotate: "Faites glisser les anneaux du gizmo", scale: "Faites glisser les poignées du gizmo" }[id] || "";
+  $("#hint").textContent = { part: "Touchez une pièce d'un modèle pour la sélectionner seule", sculpt: "Glissez un doigt pour sculpter · deux doigts pour tourner/zoomer", paint: "Glissez un doigt pour peindre · deux doigts pour tourner/zoomer", move: "Faites glisser les flèches du gizmo", rotate: "Faites glisser les anneaux du gizmo", scale: "Faites glisser les poignées du gizmo" }[id] || "";
   if (id === "sculpt" || id === "paint") { S.tab = "object"; setSheet("half"); render(); }
 }
-document.querySelectorAll("#views button").forEach((b) => (b.onclick = () => (b.dataset.v === "frame" ? vp.frame(vp.selection) : vp.view(b.dataset.v))));
+document.querySelectorAll("#views button").forEach((b) => (b.onclick = async () => {
+  if (b.dataset.v === "frame") return vp.frame(vp.selection);
+  if (b.dataset.v === "four") {
+    if (!vp.content.children.length) return toast("Scène vide.");
+    busy("Vues…");
+    const img = await window.SEAPI.view_scene({ name: vp.selection && vp.selection.parent === vp.content ? vp.selection.name : undefined });
+    busy(null);
+    return showModal("Vérification — 4 vues", h("img", { src: `data:image/jpeg;base64,${img.image}`, style: "width:100%;border-radius:10px" }), [["Fermer", closeModal]]);
+  }
+  vp.view(b.dataset.v);
+}));
 
 function updatePlay() {
   const sel = vp.selection;
@@ -125,6 +136,11 @@ function render() {
   body.scrollTop = st;
 }
 
+function wctx() {
+  return { h, field, chips, S, vp, toast, busy, render, commit, placeBeside, uniqueName, storeRest, setTool, BODY_PARAMS,
+    parseColor: (c) => parsePrompt(`objet ${c}`).colors.primary || null,
+    setSheet, hint: (t) => { $("#hint").textContent = t; } };
+}
 const field = (label, input) => h("div", { class: "field" }, h("label", {}, label), input);
 const chips = (items, isOn, onTap) => h("div", { class: "chips" }, items.map(([id, label]) => h("button", { class: `chip ${isOn(id) ? "on" : ""}`, onclick: () => onTap(id) }, label)));
 
@@ -143,6 +159,7 @@ function renderCreate(body) {
     h("button", { class: "btn", onclick: () => { if (!ta.value.trim()) return toast("Écrivez une description."); S.spec = parsePrompt(ta.value); render(); } }, "Analyser"),
     h("button", { class: "btn pri", onclick: () => doGenerate() }, "✦ Générer")));
   if (S.spec) body.append(specEditor());
+  body.append(workshopUI(wctx()));
   body.append(h("h4", {}, "Photo → 3D"),
     h("div", { class: "note" }, "Méthode géométrique (pas une IA) : la silhouette de la photo est gonflée en volume et texturée. Utilisez une photo sur fond uni."),
     h("button", { class: "btn full", onclick: () => $("#photo").click() }, "📷 Choisir une photo"));
@@ -264,8 +281,12 @@ function renderObject(body) {
   const o = vp.selection;
   if (!o) { body.append(h("h3", {}, "Objet"), h("p", { class: "muted" }, "Touchez un modèle dans la vue 3D pour le sélectionner.")); return; }
   const name = h("input", { type: "text", value: o.name });
-  name.onchange = () => { o.name = uniqueName(name.value.trim() || o.name); commit("Renommer"); render(); };
+  name.onchange = () => { o.name = o.parent === vp.content ? uniqueName(name.value.trim() || o.name) : (name.value.trim() || o.name); commit("Renommer"); render(); };
   body.append(h("h3", {}, o.name), field("Nom", name));
+  if (o.parent !== vp.content) {
+    body.append(h("div", { class: "note" }, "Pièce sélectionnée : déplacez-la, tournez-la ou redimensionnez-la avec les outils de gauche."),
+      h("button", { class: "btn full", onclick: () => { setTool("select"); vp.select(vp.topLevel(o)); render(); } }, "← Sélectionner le modèle entier"));
+  }
   if (vp.tool === "sculpt" || vp.tool === "paint") body.append(brushPanel());
   // transformations
   const num = (v, fn, step = 0.1) => { const i = h("input", { type: "number", step, value: +v.toFixed(3) }); i.onchange = () => { fn(parseFloat(i.value) || 0); commit("Transformer"); }; return i; };
@@ -274,6 +295,7 @@ function renderObject(body) {
     num(THREE.MathUtils.radToDeg(o.rotation.y), (v) => (o.rotation.y = THREE.MathUtils.degToRad(v)), 15),
     num(o.scale.x, (v) => o.scale.setScalar(Math.max(0.001, v)), 0.1),
     h("button", { class: "btn", onclick: () => { o.position.y -= new THREE.Box3().setFromObject(o).min.y; commit("Poser au sol"); render(); } }, "Au sol")));
+  if (o.parent === vp.content) body.append(objectWorkshop(wctx(), o));
   // modification par texte
   if (o.userData.generated && o.userData.spec) {
     const ta = h("textarea", { placeholder: "Ex. : agrandis ses ailes, ajoute six tentacules et remplace les yeux par des yeux blancs lumineux" });
