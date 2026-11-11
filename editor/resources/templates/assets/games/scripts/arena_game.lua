@@ -41,8 +41,16 @@ function Arena:hud()
 end
 
 function Arena:moveCoin()
-    self.coinX = (math.random() * 2 - 1) * (self.halfW - 1)
-    self.coinY = (math.random() * 2 - 1) * (self.halfH - 1)
+    -- Ailleurs que sous un joueur (sinon il la reprendrait aussitôt).
+    for _ = 1, 30 do
+        self.coinX = (math.random() * 2 - 1) * (self.halfW - 1)
+        self.coinY = (math.random() * 2 - 1) * (self.halfH - 1)
+        local free = true
+        for _, p in ipairs(self.players or {}) do
+            if p.active and G.distance(p.x, p.y, self.coinX, self.coinY) < 2.5 then free = false end
+        end
+        if free then break end
+    end
     local c = agr.find("Coin")
     if c then c:setPosition(self.coinX, self.coinY, 0) end
 end
