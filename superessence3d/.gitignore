@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+claude_desktop_config.json
+*.blend1
+*.egg-info/

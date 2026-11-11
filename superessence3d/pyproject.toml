@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "superessence3d"
+version = "0.1.0"
+description = "SUPERESSENCE 3D STUDIO — studio 3D local (Blender) avec génération procédurale et serveur MCP pour Claude"
+requires-python = ">=3.13,<3.14"
+license = { text = "GPL-3.0-or-later" }
+dependencies = [
+  "bpy==5.3.0",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "websockets>=12",
+  "python-multipart>=0.0.9",
+  "mcp>=1.9",
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+superessence = "superessence.__main__:main"
+superessence-mcp = "superessence.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["superessence*"]
+
+[tool.setuptools.package-data]
+superessence = ["web/*.html", "web/css/*.css", "web/js/*.js", "web/vendor/three/*", "web/vendor/three/addons/*/*.js"]
