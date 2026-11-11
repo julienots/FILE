@@ -63,8 +63,11 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
   tilemaps (rendu limité à l'écran, enregistrement compressé) peintes directement dans l'éditeur,
   parallaxe, lumières 2D, particules 2D, modes d'échelle pour tous les formats d'écran.
 - De la **3D** ([guide](docs/3D.md)) : import glTF / GLB, OBJ et FBX, matériaux PBR `.agrmat` (métal,
-  rugosité, normal maps, émission, transparence), soleil avec ombres, lumières ponctuelles et projecteurs,
-  ciel procédural, brume, tone mapping ACES, instanciation automatique.
+  rugosité, normal maps, émission, transparence), **animation squelettique** (skins et clips glTF,
+  skinning GPU), soleil avec **ombres en cascades**, lumières ponctuelles et projecteurs, ciel procédural
+  ou **ciel en image HDR avec éclairage par l'image** (harmoniques sphériques + reflets préfiltrés),
+  **post-traitement HDR** (bloom, FXAA, étalonnage, vignettage), brume, tone mapping ACES,
+  instanciation automatique.
 - De la **physique** ([guide](docs/PHYSICS.md)) 2D (Box2D) et 3D (Jolt) : corps, formes, déclencheurs,
   tilemaps solides, rayons, synchronisés avec la scène.
 - Des **scripts Lua 5.4** ([guide](docs/SCRIPTING.md)) : propriétés éditables, accès à tous les composants,
@@ -81,7 +84,7 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 - Un **éditeur visuel** ([guide](docs/EDITOR.md)) : hub et assistant de projets, vue de scène 2D/3D avec
   gizmos, hiérarchie, inspecteur généré automatiquement, explorateur d'assets, console, statistiques,
   annuler/rétablir, mode jeu, rendu par le moteur sur les trois API.
-- **149 tests unitaires (+ 1 test d'export Android réel, à activer), 34 tests GPU au pixel près, un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu, HUD, UI Builder, aperçu mobile) **et le test d'un jeu exporté**, tous
+- **159 tests unitaires (+ 1 test d'export Android réel, à activer), 39 tests GPU au pixel près, un test de bout en bout de l'éditeur** (3D, 2D, vitrine 3D, mode Jeu, HUD, UI Builder, aperçu mobile) **et le test d'un jeu exporté**, tous
   exécutés en Vulkan (avec *validation layers*), OpenGL et OpenGL ES ; contrôle de parité des images
   entre API, sanitizers (ASan/UBSan), benchmarks CPU et GPU, CI GCC/Clang/MSVC.
 

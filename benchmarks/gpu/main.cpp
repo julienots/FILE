@@ -31,6 +31,7 @@ struct Bench {
     JobSystem jobs{2};
     std::unique_ptr<AssetManager> assets;
     std::unique_ptr<SpriteSheetLibrary> sheets;
+    std::unique_ptr<EnvironmentLibrary> environments;
     std::filesystem::path root = std::filesystem::temp_directory_path() / ("agr_gpubench_" + Uuid::generate().toString());
 };
 
@@ -49,26 +50,34 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build,
     if (tweak) tweak(p);
     renderer.setProfile(p);
     renderer.setSpriteSheets(b.sheets.get());
+    renderer.setEnvironments(b.environments.get());
     Scene scene;
     build(scene);
     scene.updateTransforms();
     simulateParticles2D(scene, 0.016f);  // spawns burst particles (no-op without emitters)
     for (int i = 0; i < 5; ++i) {  // warm-up + texture uploads
         b.assets->waitAll();
+        b.environments->waitAll();
+        b.environments->update();
         renderer.render(scene, W, H);
         b.platform.present();
     }
-    std::vector<double> collect, submit, wait;
+    std::vector<double> collect, submit, wait, gpuMs;
     for (int i = 0; i < 60; ++i) {
         renderer.render(scene, W, H);
         b.platform.present();
         collect.push_back(renderer.stats().collectMs);
         submit.push_back(renderer.stats().submitMs - renderer.stats().gpuWaitMs);
         wait.push_back(renderer.stats().frameWaitMs);
+        gpuMs.push_back(renderer.stats().gpuTimeMs);
     }
     const auto& s = renderer.stats();
-    std::printf("%-40s collect %6.3f ms  submit %7.3f ms  wait %7.3f ms  draws %5u  batches %4u  visible %6u  culled %6u\n",
-                name, median(collect), median(submit), median(wait), s.drawCalls, s.spriteBatches + s.meshBatches,
+    const double gpu = median(gpuMs);
+    char gpuText[32];
+    if (gpu >= 0.0) std::snprintf(gpuText, sizeof gpuText, "%7.2f ms", gpu);
+    else std::snprintf(gpuText, sizeof gpuText, "%10s", "-");
+    std::printf("%-40s collect %6.3f ms  submit %7.3f ms  wait %7.3f ms  gpu %s  draws %5u  batches %4u  visible %6u  culled %6u\n",
+                name, median(collect), median(submit), median(wait), gpuText, s.drawCalls, s.spriteBatches + s.meshBatches,
                 s.meshesVisible + s.spritesVisible, s.meshesCulled + s.spritesCulled);  // sprites include tiles and particles
 }
 
@@ -149,6 +158,19 @@ int main(int argc, char** argv) {
     }
     b.assets = std::make_unique<AssetManager>(b.vfs, b.jobs, b.device.get());
     b.sheets = std::make_unique<SpriteSheetLibrary>(b.vfs);
+    b.environments = std::make_unique<EnvironmentLibrary>(b.vfs, b.jobs, b.device.get());
+    {
+        // 2048 x 1024 HDR sky: gradient + bright sun.
+        std::vector<float> sky(2048u * 1024u * 3u);
+        for (u32 y = 0; y < 1024; ++y)
+            for (u32 x = 0; x < 2048; ++x) {
+                const float t = 1.0f - static_cast<float>(y) / 1024.0f;
+                const bool sun = (x - 1400u) * (x - 1400u) + (y - 300u) * (y - 300u) < 36u;
+                for (u32 c = 0; c < 3; ++c) sky[(y * 2048u + x) * 3u + c] = sun ? 50.0f : 0.2f + 0.6f * t * (c == 2 ? 1.0f : 0.6f);
+            }
+        auto hdr = encodeHdr(2048, 1024, sky);
+        if (hdr) (void)b.vfs.writeBytes("assets://sky.hdr", hdr.value().data(), hdr.value().size());
+    }
     (void)b.vfs.writeText("assets://tiles.agrsheet", SpriteSheet::grid("assets://a.png", 16, 16, 8, 8).toJson());
     registerRenderComponents();
     std::printf("AGR ENGINE renderer benchmarks — %s on %s, %ux%u\n", rhi::enumName(b.device->info().backend),
@@ -195,6 +217,32 @@ int main(int argc, char** argv) {
     run(b, "3D: same, shadows 2048 + PCF", shadowScene, [](GraphicsProfile& p) {
         p.shadowMapSize = 2048;
         p.softShadows = true;
+    });
+    run(b, "3D: same, 3 cascades x 2048 + PCF", shadowScene, [](GraphicsProfile& p) {
+        p.shadowMapSize = 2048;
+        p.shadowCascades = 3;
+        p.softShadows = true;
+    });
+    auto litCubes = [](Scene& s) {
+        perspectiveCamera(s);
+        for (int i = 0; i < 120; ++i) {
+            const auto e = s.createEntity("C");
+            s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 12 - 6) * 2.0f, 0, static_cast<float>(i / 12) * -2.0f};
+            s.registry().emplace<MeshRendererComponent>(e);
+        }
+    };
+    run(b, "3D: 120 cubes, post (HDR, bloom, FXAA)", [&](Scene& s) {
+        litCubes(s);
+        s.registry().emplace<PostProcessComponent>(s.findByName("Camera"));
+    }, [](GraphicsProfile& p) {
+        p.bloom = true;
+        p.fxaa = true;
+    });
+    run(b, "3D: 120 cubes, image sky + IBL", [&](Scene& s) {
+        litCubes(s);
+        auto& env = s.registry().emplace<EnvironmentComponent>(s.createEntity("Env"));
+        env.sky = SkyMode::Image;
+        env.skyTexture = "assets://sky.hdr";
     });
     run(b, "3D: 120 cubes, 8 point lights", [](Scene& s) {
         perspectiveCamera(s);
@@ -247,6 +295,7 @@ int main(int argc, char** argv) {
         }
     });
 
+    b.environments.reset();
     b.sheets.reset();
     b.assets.reset();
     b.device.reset();

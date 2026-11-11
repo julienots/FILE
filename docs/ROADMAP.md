@@ -97,7 +97,7 @@ Guide : [2D.md](2D.md).
 | Ombres 2D, normal maps 2D | ⬜ | non planifié en détail |
 | Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
 
-## Phase 5 — 3D 🟡 (rendu PBR, import et éditeur terminés ; squelettes, post-traitement et monde ouvert à venir)
+## Phase 5 — 3D 🟡 (rendu terminé : PBR, squelettes, ombres en cascades, post-traitement HDR, ciel en image + IBL ; terrain, eau, végétation, LOD et occlusion à venir)
 
 Guide : [3D.md](3D.md).
 

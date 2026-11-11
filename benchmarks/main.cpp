@@ -17,6 +17,7 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Scene.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/assets/Environment.hpp"
 #include "agr/assets/Model.hpp"
 #include "agr/physics2d/Physics2DWorld.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
@@ -210,6 +211,18 @@ int main() {
                        std::to_string(d) + "/" + std::to_string(d) + " " + std::to_string(b) + "/" + std::to_string(b) + "\n";
             }
         bench("3d: import OBJ 20k triangles (+normals, tangents)", 20000, 5, [&] { (void)importObj(obj, "assets://grid.obj", nullptr); });
+    }
+    {
+        // Image sky: 2048 x 1024 HDR -> prefiltered mip chain + SH9 (worker thread at load time).
+        ImageF sky;
+        sky.width = 2048;
+        sky.height = 1024;
+        sky.rgb.resize(2048u * 1024u * 3u);
+        for (usize i = 0; i < sky.rgb.size(); ++i) sky.rgb[i] = 0.2f + static_cast<float>((i * 2654435761u) % 1000u) * 0.001f;
+        bench("3d: environment map 2048x1024 (mips + SH9)", 2048u * 1024u, 3, [&] {
+            auto env = buildEnvironmentMap(sky, 2048);
+            g_sink = env ? env.value().average.x : 0.0f;
+        });
     }
 
     // -------------------------------------------------------------- physics & scripts

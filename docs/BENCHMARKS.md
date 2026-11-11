@@ -152,6 +152,28 @@ AGR ENGINE renderer benchmarks — Vulkan on llvmpipe (LLVM 20.1.2, 256 bits), 1
 | 8 lumières ponctuelles : coût CPU négligeable | Les lumières sont évaluées par pixel dans le shader (forward) ; le profil limite leur nombre. |
 | Import OBJ 20 000 triangles : 6 à 8 ms (jusqu'à 12 ms selon la charge de la machine) | Analyse du texte, déduplication des sommets, normales et tangentes ; fait hors du thread principal. |
 
+### Compléments 3D : ombres en cascades, post-traitement, ciel en image
+
+Mesures Vulkan sur llvmpipe (rastériseur **logiciel** : chaque passe plein écran coûte cher au
+processeur ; un GPU matériel les exécute en une fraction de milliseconde). La colonne `gpu` vient des
+requêtes de temps Vulkan ; celle d'OpenGL n'est pas fiable sur ce pilote et n'est pas reprise.
+
+```
+3D: same, shadows 2048 + PCF             collect  0.368 ms  submit   0.283 ms  wait  31.056 ms  gpu   30.90 ms  draws     4
+3D: same, 3 cascades x 2048 + PCF        collect  0.601 ms  submit   0.259 ms  wait  42.728 ms  gpu   42.78 ms  draws     7
+3D: 120 lit cubes (référence)            collect  0.031 ms  submit   0.041 ms  wait   4.604 ms  gpu    4.41 ms  draws     1
+3D: 120 cubes, post (HDR, bloom, FXAA)   collect  0.046 ms  submit   0.124 ms  wait  22.040 ms  gpu   21.82 ms  draws    14
+3D: 120 cubes, image sky + IBL           collect  0.035 ms  submit   0.052 ms  wait   9.955 ms  gpu    9.80 ms  draws     2
+3d: environment map 2048x1024 (mips + SH9)      133.969 ms      63.88 ns/item     (agr_benchmarks, CPU)
+```
+
+| Mesure | Analyse |
+|---|---|
+| 3 cascades : +0,25 ms de collecte, +38 % de temps GPU ici | Les objets sont triés et dessinés dans chaque cascade qu'ils touchent (7 draws au lieu de 4). Le profil low n'a qu'une cascade, ultra-mobile aucune. |
+| Post-traitement : 13 passes de plus (bloom 6 niveaux, composition, FXAA) | Coût presque entièrement GPU (remplissage plein écran), ~17 ms ici en logiciel. À mesurer sur téléphones ; le profil low coupe le bloom, ultra-mobile aussi le FXAA. |
+| Ciel en image : +1 draw (fond), un échantillon de texture et 9 coefficients SH par pixel | ~5 ms de plus ici en logiciel, dont le ciel plein écran. |
+| Préparation d'un ciel 2048 × 1024 : ~134 ms sur un thread de travail | Rééchantillonnage, chaîne de mips floutée, projection SH. Une fois au chargement ; le dégradé s'affiche en attendant. |
+
 ## Physique et scripts (phase 6)
 
 `agr_benchmarks` (même machine, un cœur) :
