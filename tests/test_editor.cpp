@@ -905,3 +905,43 @@ TEST_CASE("engine showcase APK (all game templates)" * doctest::skip(std::getenv
     REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
     fs::copy_file(apk.value().output, std::getenv("AGR_ENGINE_APK"), fs::copy_options::overwrite_existing);
 }
+
+// The editor itself as an Android app (tools/build_android_editor.sh): resources packed under
+// assets/editor_resources with a files.txt index, signed release APK at $AGR_EDITOR_APK.
+TEST_CASE("Android editor APK" * doctest::skip(std::getenv("AGR_EDITOR_APK") == nullptr)) {
+    EditorFixture f(ProjectMode::Mode2D);
+    Project& project = f.ctx->project();
+    // This temporary packaging project only carries the editor's resources.
+    const fs::path assets = project.assetsDirectory();
+    fs::remove_all(assets);
+    const fs::path resources = fs::path(AGR_TEST_TEMPLATE_ASSETS).parent_path().parent_path();
+    const fs::path packed = assets / "editor_resources";
+    std::string index;
+    u64 hash = 1469598103934665603ull;
+    for (const auto& entry : fs::recursive_directory_iterator(resources)) {
+        if (!entry.is_regular_file()) continue;
+        const std::string rel = fs::relative(entry.path(), resources).generic_string();
+        fs::create_directories((packed / rel).parent_path());
+        fs::copy_file(entry.path(), packed / rel);
+        index += rel + "\n";
+        for (char c : rel + std::to_string(entry.file_size())) hash = (hash ^ static_cast<u8>(c)) * 1099511628211ull;
+    }
+    writeTextFile(packed / "files.txt", std::to_string(hash) + "\n" + index);
+    fs::copy_file(resources / "templates" / "assets" / "textures" / "agr_mark.png", assets / "icon.png");  // launcher icon
+    project.settings().name = "AGR ENGINE Editor";
+    project.settings().exportSettings.packageId = "com.superessence.agrengine.editor";
+    project.settings().exportSettings.network = true;
+    project.settings().exportSettings.backQuits = false;
+    const AndroidToolchain tools = findAndroidToolchain(".");
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE_MESSAGE(problems.empty(), problems.front());
+    REQUIRE(createKeystore(tools, f.root / "keys" / "editor.p12", "agr", "agr-editor-pass", "AGR ENGINE"));
+    project.settings().exportSettings.keystorePath = (f.root / "keys" / "editor.p12").string();
+    project.settings().exportSettings.keyAlias = "agr";
+    AndroidBuildOptions o;
+    o.kind = AndroidBuildKind::ReleaseApk;
+    o.storePassword = "agr-editor-pass";
+    auto apk = buildAndroid(project, tools, f.root / "android", o, [](const std::string& line) { std::printf("%s\n", line.c_str()); });
+    REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
+    fs::copy_file(apk.value().output, std::getenv("AGR_EDITOR_APK"), fs::copy_options::overwrite_existing);
+}

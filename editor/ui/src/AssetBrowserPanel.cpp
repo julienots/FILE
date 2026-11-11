@@ -117,7 +117,12 @@ void AssetBrowserPanel::draw(EditorShared& s) {
     if (!fs::is_directory(absoluteAsset(s, s.assetFolder), ec)) s.assetFolder.clear();
 
     // ---- toolbar
-    if (ImGui::Button("Importer...")) {
+    ImGui::BeginDisabled(!kDesktopFileAccess);
+    const bool importClicked = ImGui::Button("Importer...");
+    ImGui::EndDisabled();
+    if (!kDesktopFileAccess && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Pas encore sur Android : copiez les fichiers dans le dossier assets du projet");
+    if (importClicked) {
         struct Ctx {
             EditorShared* shared;
             AssetBrowserPanel* panel;
@@ -200,7 +205,10 @@ void AssetBrowserPanel::draw(EditorShared& s) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         ImGui::SetTooltip("Regrouper les images du dossier courant dans une seule texture + une feuille de sprites (.agrsheet)");
     ImGui::SameLine();
-    if (ImGui::Button("Ouvrir dans l'explorateur")) {
+    ImGui::BeginDisabled(!kDesktopFileAccess);
+    const bool openClicked = ImGui::Button("Ouvrir dans l'explorateur");
+    ImGui::EndDisabled();
+    if (openClicked) {
         const std::string url = "file://" + fs::absolute(absoluteAsset(s, s.assetFolder), ec).generic_string();
         if (!SDL_OpenURL(url.c_str())) s.notify(std::string("Impossible d'ouvrir le dossier : ") + SDL_GetError());
     }

@@ -57,17 +57,18 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    compression des assets, profilage sur appareils, installeur de l'éditeur (Windows / Linux /
    macOS), CI (GitHub Actions) exécutant les suites, jeu mobile de démonstration finalisé (le menu
    des 12 modèles en tient lieu pour l'instant).
-7. **Éditeur sur Android** (demande prioritaire de l'utilisateur : « le moteur sur mobile ») —
-   **commencé, pas fonctionnel** : preset CMake `android-editor-arm64` et cible `agr_editor` compilée
-   en `libmain.so` sur Android (`editor/CMakeLists.txt`). La compilation n'a pas encore été menée à
-   terme. Reste : (a) faire compiler l'éditeur avec le NDK ; (b) dans `editor/app/main.cpp`, sous
-   Android, extraire `editor_resources` (polices, modèles) des assets de l'APK vers
-   `SDL_GetPrefPath` au premier lancement (liste de fichiers générée à l'empaquetage), dossier des
-   projets dans le stockage interne ; (c) échelle d'interface adaptée au téléphone / tablette,
-   orientation paysage, clavier virtuel (ImGui + SDL3) ; (d) masquer sur Android ce qui ne peut pas
-   marcher (export Gradle, « Ouvrir dans l'explorateur », import par sélecteur natif) ou le
-   remplacer ; (e) empaqueter l'APK de l'éditeur (réutiliser le générateur Gradle d'AndroidExport
-   avec l'éditeur comme `libmain.so`) ; (f) tester sur appareil.
+7. **Éditeur sur Android** (demande prioritaire : « le moteur sur mobile ») — **compilé et empaqueté,
+   jamais lancé sur un appareil** : `tools/build_android_editor.sh` produit
+   `dist/AGR-ENGINE-Editor-Android.apk` (éditeur = `libmain.so`, preset `android-editor-arm64`).
+   Au premier lancement, `editor/app/main.cpp` extrait les ressources (`assets/game/assets/
+   editor_resources`, index `files.txt`) dans le stockage interne ; les projets sont dans
+   `<stockage de l'app>/Projects` ; orientation paysage ; échelle d'interface = densité x 0,8 ;
+   import par sélecteur natif, « Ouvrir dans l'explorateur », « Parcourir » et l'export sont grisés
+   avec une explication (`kDesktopFileAccess`). À faire : **tester sur téléphone / tablette** ;
+   gestes tactiles (défilement au doigt, appui long = clic droit pour les menus contextuels,
+   pincer pour zoomer dans la vue) ; mise en page adaptée aux petits écrans ; import de fichiers
+   (sélecteur Android, URI content://) ; partage / export d'un projet (zip) vers un PC ; lancer le
+   jeu en plein écran depuis l'éditeur.
 
 Limites connues documentées dans chaque fichier `docs/*.md` (sections « Limites actuelles »).
 Points d'attention : `agr.loadScene` dans l'éditeur en mode Jeu remplace la scène jouée (prévu pour

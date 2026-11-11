@@ -49,6 +49,13 @@ void writeText(const fs::path& p, const std::string& text) {
 }
 
 std::string defaultProjectsFolder() {
+#if defined(AGR_PLATFORM_ANDROID)
+    if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {  // the app's internal storage
+        const std::string out = (fs::path(pref) / "Projects").string();
+        SDL_free(pref);
+        return out;
+    }
+#endif
     const char* docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
     const fs::path base = docs ? fs::path(docs) : fs::current_path();
     return (base / "AGR Projects").string();
@@ -124,8 +131,13 @@ Status EditorApp::onStart(Engine& engine) {
     m_layoutBuilt = fs::exists(m_iniPath);
     ImGui_ImplSDL3_InitForOther(m_platform->window());
     m_platform->setRawEventHook([](const void* e) { ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(e)); });
-    const float dpi = SDL_GetWindowDisplayScale(m_platform->window());
-    m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi > 0.0f ? dpi : 1.0f);
+    float dpi = SDL_GetWindowDisplayScale(m_platform->window());
+    if (dpi <= 0.0f) dpi = 1.0f;
+#if defined(AGR_PLATFORM_ANDROID)
+    dpi *= 0.8f;  // phones and tablets: a little denser than the system scale, to fit the panels
+    ImGui::GetStyle().TouchExtraPadding = {4.0f * dpi, 4.0f * dpi};  // easier to hit with a finger
+#endif
+    m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi);
 
     m_imgui = std::make_unique<ImGuiRenderer>(*render->device());
     if (Status s = m_imgui->initialize(); !s) return s;
@@ -436,7 +448,12 @@ void EditorApp::drawHub() {
     ImGui::SetNextItemWidth(-110.0f);
     ImGui::InputText("##location", &w.location);
     ImGui::SameLine();
-    if (ImGui::Button("Parcourir...", {-FLT_MIN, 0})) {
+    ImGui::BeginDisabled(!kDesktopFileAccess);
+    const bool browse = ImGui::Button("Parcourir...", {-FLT_MIN, 0});
+    ImGui::EndDisabled();
+    if (!kDesktopFileAccess && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Sur Android, les projets sont dans le stockage de l'application");
+    if (browse) {
         m_dialogTarget = 1;
         SDL_ShowOpenFolderDialog(
             [](void* user, const char* const* files, int) {
@@ -587,7 +604,9 @@ void EditorApp::drawMenuBar() {
             m_shared->openSaveAsPopup = true;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Exporter le jeu...", nullptr, false, ctx.playState() == PlayState::Edit)) m_export.open = true;
+        if (ImGui::MenuItem("Exporter le jeu...", nullptr, false, ctx.playState() == PlayState::Edit && kDesktopFileAccess)) m_export.open = true;
+        if (!kDesktopFileAccess && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("L'export (PC, APK, AAB) se fait avec l'éditeur sur ordinateur (SDK Android, JDK, Gradle)");
         ImGui::Separator();
         // Applied at the start of the next frame: panels still use the context this frame.
         if (ImGui::MenuItem("Fermer le projet")) m_shared->runGuarded([this] { m_closeProjectRequested = true; });

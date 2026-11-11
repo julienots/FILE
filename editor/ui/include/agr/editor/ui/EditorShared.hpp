@@ -6,6 +6,7 @@
 #include <imgui.h>
 
 #include "agr/assets/AssetManager.hpp"
+#include "agr/core/Platform.hpp"
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/Theme.hpp"
@@ -18,6 +19,14 @@
 #include "agr/ui/UIPlugin.hpp"
 
 namespace agr::editor {
+
+/// Native file dialogs, file manager and export toolchains (false on Android: those buttons are
+/// shown disabled with an explanation).
+#if defined(AGR_PLATFORM_ANDROID)
+inline constexpr bool kDesktopFileAccess = false;
+#else
+inline constexpr bool kDesktopFileAccess = true;
+#endif
 
 /// Drag & drop payload identifiers.
 inline constexpr const char* kPayloadEntity = "AGR_ENTITY";  ///< u64 Uuid

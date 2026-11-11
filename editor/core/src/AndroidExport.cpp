@@ -339,6 +339,12 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
             in.seekg(0);
             in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         }
+        if (bytes.empty()) {  // no image: a plain amber icon (the manifest always references one)
+            std::vector<u8> px(64 * 64 * 4);
+            for (usize i = 0; i < px.size(); i += 4) px[i] = 240, px[i + 1] = 165, px[i + 2] = 36, px[i + 3] = 255;
+            if (auto plain = encodePng(64, 64, px)) bytes = std::move(plain.value());
+            report.warnings.push_back("launcher icon: no assets/icon.png nor textures/agr_mark.png, a plain icon is used");
+        }
         static const std::pair<const char*, u32> densities[] = {{"mdpi", 48}, {"hdpi", 72}, {"xhdpi", 96}, {"xxhdpi", 144}, {"xxxhdpi", 192}};
         for (const auto& [density, size] : densities) {
             auto png = bytes.empty() ? Result<ByteBuffer>(makeError(Error::Code::NotFound, "no icon image")) : makeLauncherIcon(bytes, size);

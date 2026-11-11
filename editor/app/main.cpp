@@ -8,7 +8,10 @@
 #include <string>
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#include <fstream>
 
+#include "agr/core/Platform.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -31,7 +34,7 @@ namespace {
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
-int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {
+[[maybe_unused]] int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {  // desktop only
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
@@ -110,13 +113,74 @@ int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {
     return 0;
 }
 
+#if defined(AGR_PLATFORM_ANDROID)
+/// The editor's resources (fonts, project templates) travel in the APK assets under
+/// game/assets/editor_resources, listed in files.txt (first line: content version). The editor
+/// works with real files: they are copied to internal storage once per version.
+bool extractAndroidResources(const std::filesystem::path& dest) {
+    namespace fs = std::filesystem;
+    const std::string root = "game/assets/editor_resources/";
+    size_t size = 0;
+    void* data = SDL_LoadFile((root + "files.txt").c_str(), &size);
+    if (!data) {
+        SDL_Log("AGR editor: no packed resources (%s)", SDL_GetError());
+        return fs::exists(dest / "fonts");
+    }
+    const std::string list(static_cast<const char*>(data), size);
+    SDL_free(data);
+    const std::size_t firstEnd = list.find('\n');
+    const std::string version = list.substr(0, firstEnd);
+    std::error_code ec;
+    {
+        std::ifstream stamp(dest / ".version");
+        std::string current;
+        std::getline(stamp, current);
+        if (current == version && fs::exists(dest / "fonts", ec)) return true;
+    }
+    std::size_t pos = firstEnd == std::string::npos ? list.size() : firstEnd + 1, copied = 0;
+    while (pos < list.size()) {
+        std::size_t end = list.find('\n', pos);
+        if (end == std::string::npos) end = list.size();
+        const std::string rel = list.substr(pos, end - pos);
+        pos = end + 1;
+        if (rel.empty()) continue;
+        void* bytes = SDL_LoadFile((root + rel).c_str(), &size);
+        if (!bytes) {
+            SDL_Log("AGR editor: missing packed resource %s", rel.c_str());
+            continue;
+        }
+        const fs::path out = dest / rel;
+        fs::create_directories(out.parent_path(), ec);
+        std::ofstream(out, std::ios::binary).write(static_cast<const char*>(bytes), static_cast<std::streamsize>(size));
+        SDL_free(bytes);
+        ++copied;
+    }
+    std::ofstream(dest / ".version") << version << "\n";
+    SDL_Log("AGR editor: %zu resource files extracted", copied);
+    return copied > 0;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv) {
     using namespace agr;
     namespace fs = std::filesystem;
+#if defined(AGR_PLATFORM_ANDROID)
+    // Internal storage: resources extracted from the APK, projects, settings.
+    fs::path exeDir;
+    if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
+        exeDir = pref;
+        SDL_free(pref);
+    }
+    if (!extractAndroidResources(exeDir / "editor_resources")) SDL_Log("AGR editor: resources could not be prepared");
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    (void)argc;
+    (void)argv;
+#else
     const fs::path exeDir = fs::path(argc > 0 ? argv[0] : ".").parent_path();
     if (const int code = runCommandLine(argc, argv, exeDir); code >= 0) return code;
+#endif
 
     EngineConfig config;
     config.appName = "AGR Editor";
