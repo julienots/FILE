@@ -105,6 +105,8 @@ public:
     bool blocking = false;
     bool aiming = false;
     float breath = 1.f;       // breathing intensity (exertion)
+    int stance = 0;           // archetype-specific (weapon stance for humanoids)
+    float aux[4] = {0, 0, 0, 0};  // archetype-specific parameters (e.g. fly height, aggression)
     BodyState state = BodyState::Locomotion;
     // Outputs
     Pose pose;
