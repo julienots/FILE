@@ -41,15 +41,25 @@ Il faut une connexion Internet pour l'installation seulement, puis tout fonction
 - Option `--lan` : accès depuis une tablette ou un téléphone du même réseau Wi-Fi, avec le jeton affiché au démarrage.
 
 ### 1 bis. Application Android (APK)
-`release/SUPERESSENCE3D-Mobile.apk` (Android 6.0 et plus, environ 30 Ko, signée).
+`release/SUPERESSENCE3D-Mobile.apk` (version 0.2.0, environ 360 Ko, signée). Android 7 ou plus recommandé, avec « Android System WebView » à jour via le Play Store.
 
-1. Sur l'ordinateur, lancez **`start_mobile_windows.bat`** (ou `./start_mobile.sh`). Si le pare-feu Windows le demande, autorisez Python sur les réseaux privés.
-2. Dans le studio : **Paramètres › Connexion mobile (APK)**. Un code à 6 chiffres s'affiche (valable 5 minutes, à usage unique).
-3. Sur le téléphone : installez l'APK (autorisez « sources inconnues »), ouvrez **SUPERESSENCE 3D**, touchez **Rechercher le studio sur le Wi-Fi**, entrez le code, puis **Se connecter**.
+**Mode autonome (par défaut) : fonctionne seul sur le téléphone, hors ligne, sans ordinateur.** L'application embarque son propre moteur 3D (three.js) et un portage mobile des générateurs procéduraux :
+- **Créer** : description en français ou en anglais (ou exemples en un toucher), interprétation modifiable (catégorie, hauteur, couleurs, ailes, cornes, tentacules, yeux…), qualité de Brouillon à Ultra. Toutes les catégories sont disponibles : créatures, personnages, animaux, bâtiments, véhicules, armes fictives, objets, décors. Aussi : photo vers 3D (silhouette gonflée et texturée, méthode géométrique) et formes de base.
+- **Corps organiques** : surfaces lisses construites autour d'un vrai squelette d'os (champ de distance et marching cubes). Ils sont donc **animables** et s'exportent avec leur squelette.
+- **Objet** : déplacer, tourner, mettre à l'échelle avec le gizmo tactile. **Sculpter** (dessiner, gonfler, lisser, aplatir, pincer, pli, avec symétrie) et **peindre** au doigt. Modification par texte (« agrandis ses ailes, ajoute six tentacules… »), variantes, matériaux (22 préréglages ou description texte), **animations** combinables (repos, respiration, marche, course, saut, attaque, vol, battement d'ailes, queue, regard, tentacules, reptation), duplication.
+- **Scène** : liste des objets, éclairages (studio, extérieur, dramatique, nuit), fond, grille.
+- **Biblio** : modèles enregistrés avec miniature, à réutiliser dans n'importe quel projet.
+- **Export** : **GLB** (géométrie, couleurs, matériaux, squelette, animations ; vérifié dans Blender), **OBJ**, **STL** (Z vers le haut, pour l'impression). Chaque fichier est vérifié puis enregistré où vous voulez sur le téléphone. Projets : nouveau, enregistrer, ouvrir, import GLB, sauvegarde automatique de la session.
+- Annuler et rétablir (20 étapes).
 
-Le téléphone affiche alors l'interface complète : viewport 3D tactile, génération, sculpture, matériaux, bibliothèque. Il peut aussi envoyer des photos (image vers 3D) et télécharger les exports dans Téléchargements/SuperEssence3D. La connexion reste sur votre réseau local, protégée par le jeton secret obtenu à l'appairage.
+Ce que le mode autonome **n'a pas** par rapport au studio PC : le moteur Blender (modificateurs Blender, rendu Cycles, cuisson PBR, mode édition polygonal, FBX, profils moteurs de jeu) et Claude via MCP (l'application Claude mobile ne permet pas de brancher un serveur MCP local). La qualité des modèles est comparable à la génération procédurale du PC : stylisée, pas photoréaliste.
 
-Reconstruire l'APK : `android/build_apk.sh` (SDK Android de Debian/Ubuntu : `android-sdk android-sdk-platform-23 dalvik-exchange apksigner zipalign`).
+**Mode studio PC (facultatif)**, depuis le menu ⋮ › « Se connecter au studio PC » :
+1. Sur l'ordinateur, lancez `start_mobile_windows.bat` (ou `./start_mobile.sh`), et autorisez Python dans le pare-feu.
+2. Dans le studio : **Paramètres › Connexion mobile (APK)**. Un code à 6 chiffres s'affiche.
+3. Dans l'application : **Rechercher le studio sur le Wi-Fi**, entrez le code. Vous obtenez le studio Blender complet sur le téléphone.
+
+Reconstruire l'APK : `android/build_apk.sh`. Il embarque `mobile/web` et utilise le SDK Android de Debian/Ubuntu : `android-sdk android-sdk-platform-23 dalvik-exchange apksigner zipalign`. Pour tester l'application dans un navigateur : `cd mobile/web && python3 -m http.server`, puis ouvrez `http://127.0.0.1:8000/`.
 
 ---
 
@@ -176,7 +186,7 @@ Le studio exécute la commande en arrière-plan, vérifie le fichier produit et 
 ## 6. Limites connues (honnêtes)
 
 - **Qualité** : les générateurs produisent des modèles stylisés et cohérents (bons pour du prototypage, des assets de jeux stylisés et une base à retravailler), pas des sculptures détaillées comparables à une IA neuronale ou à un artiste.
-- **Android** : Blender n'existe pas sur Android. L'APK `release/SUPERESSENCE3D-Mobile.apk` est donc une **application compagnon** : elle affiche le studio complet sur le téléphone, mais les calculs restent sur l'ordinateur, qui doit être allumé et sur le même Wi-Fi (voir section 1 bis).
+- **Android** : Blender n'existe pas sur Android. L'APK fonctionne donc seule avec un moteur 3D mobile plus léger (voir section 1 bis), et peut aussi se connecter au studio PC pour disposer de Blender.
 - **Viewport** : il affiche la géométrie exacte de Blender, avec des matériaux simplifiés en mode Matériau. L'aspect final est donné par le bouton **Rendu** (Cycles).
 - **Undo** : chaque étape enregistre la scène entière. Sur des scènes très lourdes, chaque opération prend un peu plus de temps.
 - **Sculpture** : elle agit sur le maillage de base. Pour des détails fins, densifiez d'abord avec « Densifier le maillage ». Ce n'est pas le Dyntopo de Blender.

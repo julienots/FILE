@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#121318">
+<title>SUPERESSENCE 3D</title>
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.min.js" } }</script>
+</head>
+<body>
+<header id="top">
+  <div class="brand"><svg viewBox="0 0 32 32" width="22" height="22"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="#7c5cff"/><path d="M16 9l7 4v8l-7 4-7-4v-8z" fill="#ff9a3c"/></svg><span id="pname">Sans titre</span></div>
+  <div class="acts">
+    <button id="undo" class="ib" title="Annuler">↶</button>
+    <button id="redo" class="ib" title="Rétablir">↷</button>
+    <button id="menu" class="ib" title="Menu">⋮</button>
+  </div>
+</header>
+<main id="vp">
+  <div id="tools"></div>
+  <div id="views">
+    <button data-v="frame">Cadrer</button><button data-v="persp">3D</button><button data-v="front">Face</button><button data-v="top">Dessus</button>
+  </div>
+  <button id="playbtn" class="fab hidden">▶</button>
+  <div id="busy" class="hidden"><div class="spin"></div><span>Génération…</span></div>
+  <div id="hint"></div>
+</main>
+<section id="sheet" class="half">
+  <div id="grip"><i></i></div>
+  <div id="sheetbody"></div>
+</section>
+<nav id="tabs">
+  <button data-t="create" class="on"><b>✦</b>Créer</button>
+  <button data-t="scene"><b>☰</b>Scène</button>
+  <button data-t="object"><b>◈</b>Objet</button>
+  <button data-t="library"><b>▦</b>Biblio</button>
+  <button data-t="export"><b>⇪</b>Export</button>
+</nav>
+<div id="modal"></div>
+<div id="toasts"></div>
+<input type="file" id="photo" accept="image/*" hidden>
+<input type="file" id="glbin" accept=".glb,model/gltf-binary" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

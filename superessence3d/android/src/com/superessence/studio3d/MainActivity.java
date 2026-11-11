@@ -26,7 +26,9 @@ import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -48,6 +50,9 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import android.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -82,20 +87,139 @@ public class MainActivity extends Activity {
     private EditText codeField;
     private TextView status;
     private LinearLayout found;
+    private static final int SAVE_REQUEST = 43;
+    private static final String LOCAL = "https://appassets.androidplatform.net/";
+    private byte[] pendingSave;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("se3d", MODE_PRIVATE);
-        String host = prefs.getString("host", "");
-        String token = prefs.getString("token", "");
-        if (host.length() > 0 && token.length() > 0) {
-            showConnect(null);
-            setStatus("Connexion au studio " + host + "…", false);
-            checkAndOpen(host, token);
-        } else {
-            showConnect(null);
+        openLocalApp();
+    }
+
+    // ------------------------------------------------------------------ application autonome (moteur 3D embarqué)
+    /** Pont JavaScript : enregistrement des exports et accès au mode studio PC. */
+    public class Bridge {
+        @JavascriptInterface
+        public void saveFile(String name, String mime, String base64) {
+            pendingSave = Base64.decode(base64, Base64.DEFAULT);
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType(mime == null || mime.length() == 0 ? "application/octet-stream" : mime);
+            i.putExtra(Intent.EXTRA_TITLE, name);
+            try {
+                startActivityForResult(i, SAVE_REQUEST);
+            } catch (ActivityNotFoundException e) {
+                toast("Aucune application de fichiers disponible.");
+            }
         }
+
+        @JavascriptInterface
+        public void connectPc() {
+            ui.post(new Runnable() {
+                @Override
+                public void run() {
+                    showConnect(null);
+                }
+            });
+        }
+    }
+
+    private void toast(final String s) {
+        ui.post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, s, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private static String mimeOf(String path) {
+        String p = path.toLowerCase();
+        if (p.endsWith(".html")) return "text/html";
+        if (p.endsWith(".js")) return "text/javascript";
+        if (p.endsWith(".css")) return "text/css";
+        if (p.endsWith(".png")) return "image/png";
+        if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+        if (p.endsWith(".svg")) return "image/svg+xml";
+        if (p.endsWith(".json")) return "application/json";
+        return "application/octet-stream";
+    }
+
+    private void openLocalApp() {
+        destroyWeb();
+        web = new WebView(this);
+        configureWeb(web);
+        web.addJavascriptInterface(new Bridge(), "Android");
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                if (!url.startsWith(LOCAL)) return null;
+                String path = url.substring(LOCAL.length());
+                int q = path.indexOf('?');
+                if (q >= 0) path = path.substring(0, q);
+                if (path.length() == 0) path = "index.html";
+                try {
+                    InputStream in = getAssets().open("web/" + path);
+                    Map<String, String> headers = new HashMap<String, String>();
+                    headers.put("Cache-Control", "no-cache");
+                    return new WebResourceResponse(mimeOf(path), "UTF-8", 200, "OK", headers, in);
+                } catch (Exception e) {
+                    return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", new HashMap<String, String>(), null);
+                }
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.startsWith(LOCAL)) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (ActivityNotFoundException ignored) {
+                }
+                return true;
+            }
+        });
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(BG);
+        root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        web.loadUrl(LOCAL + "index.html");
+    }
+
+    private void configureWeb(WebView w) {
+        WebSettings s = w.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setLoadWithOverviewMode(true);
+        s.setUseWideViewPort(true);
+        s.setSupportZoom(false);
+        s.setBuiltInZoomControls(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(true);
+        w.setBackgroundColor(BG);
+        w.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                String[] types = params.getAcceptTypes();
+                String t = types != null && types.length > 0 && types[0] != null && types[0].startsWith("image") ? "image/*" : "*/*";
+                i.setType(t);
+                try {
+                    startActivityForResult(Intent.createChooser(i, "Choisir un fichier"), FILE_REQUEST);
+                } catch (ActivityNotFoundException e) {
+                    fileCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
     }
 
     // ------------------------------------------------------------------ écran de connexion
@@ -165,7 +289,7 @@ public class MainActivity extends Activity {
         TextView brand = text("SUPERESSENCE", 28, TEXT, true);
         brand.setLetterSpacing(0.08f);
         col.addView(brand);
-        TextView sub = text("3D STUDIO · MOBILE", 15, ACCENT2, true);
+        TextView sub = text("CONNEXION AU STUDIO PC", 15, ACCENT2, true);
         sub.setLetterSpacing(0.12f);
         col.addView(sub);
 
@@ -174,8 +298,8 @@ public class MainActivity extends Activity {
         card.setBackground(box(PANEL, LINE, 12));
         card.setPadding(dp(16), dp(14), dp(16), dp(16));
         col.addView(card, lp(22));
-        card.addView(text("Comment ça marche", 15, TEXT, true));
-        card.addView(text("1. Sur l'ordinateur, lancez le studio en mode mobile : start_mobile_windows.bat "
+        card.addView(text("Mode studio PC (facultatif)", 15, TEXT, true));
+        card.addView(text("Ce mode utilise le moteur Blender complet de votre ordinateur (et Claude via MCP). L'application fonctionne aussi seule, sans ordinateur.\n\n1. Sur l'ordinateur, lancez le studio en mode mobile : start_mobile_windows.bat "
                 + "(ou ./start_mobile.sh).\n2. Dans le studio : Paramètres › Connexion mobile, un code à 6 chiffres "
                 + "s'affiche.\n3. Ici : touchez « Rechercher », puis entrez le code.\n\nLe téléphone et l'ordinateur "
                 + "doivent être sur le même Wi-Fi. Blender calcule sur l'ordinateur ; ce téléphone affiche le studio "
@@ -215,11 +339,36 @@ public class MainActivity extends Activity {
         });
         col.addView(go, lp(18));
 
+        final String savedHost = prefs.getString("host", "");
+        final String savedToken = prefs.getString("token", "");
+        if (savedHost.length() > 0 && savedToken.length() > 0) {
+            Button again = button("Reconnecter au studio " + savedHost, PANEL, ACCENT2);
+            again.setBackground(box(PANEL, ACCENT2, 10));
+            again.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    setStatus("Connexion au studio " + savedHost + "…", false);
+                    checkAndOpen(savedHost, savedToken);
+                }
+            });
+            col.addView(again, lp(10));
+        }
+
         status = text("", 14, MUTED, false);
         col.addView(status, lp(14));
         if (message != null) setStatus(message, true);
 
-        TextView note = text("Version 0.1.0 · Aucune donnée n'est envoyée sur Internet : la connexion reste sur votre "
+        Button back = button("← Revenir à l'application autonome", PANEL, TEXT);
+        back.setBackground(box(PANEL, LINE, 10));
+        back.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openLocalApp();
+            }
+        });
+        col.addView(back, lp(18));
+
+        TextView note = text("Version 0.2.0 · Aucune donnée n'est envoyée sur Internet : la connexion reste sur votre "
                 + "réseau local.", 12, Color.parseColor("#6B7184"), false);
         col.addView(note, lp(26));
         setContentView(scroll);
@@ -496,6 +645,20 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == SAVE_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingSave != null) {
+                try {
+                    OutputStream os = getContentResolver().openOutputStream(data.getData());
+                    os.write(pendingSave);
+                    os.close();
+                    toast("Fichier enregistré (" + (pendingSave.length / 1024) + " Ko)");
+                } catch (Exception e) {
+                    toast("Enregistrement impossible : " + e.getMessage());
+                }
+            }
+            pendingSave = null;
+            return;
+        }
         if (requestCode == FILE_REQUEST && fileCallback != null) {
             Uri[] result = null;
             if (resultCode == RESULT_OK && data != null) {
@@ -525,27 +688,21 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (web == null) {
-            super.onBackPressed();
+            openLocalApp();
             return;
         }
-        if (web.canGoBack()) {
-            web.goBack();
+        String url = web.getUrl();
+        if (url != null && !url.startsWith(LOCAL)) {
+            openLocalApp();
             return;
         }
         new AlertDialog.Builder(this)
                 .setTitle("SUPERESSENCE 3D")
-                .setMessage("Quitter le studio mobile ?")
+                .setMessage("Quitter l'application ? Votre scène est enregistrée automatiquement.")
                 .setPositiveButton("Quitter", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         finish();
-                    }
-                })
-                .setNeutralButton("Changer de studio", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        prefs.edit().remove("token").apply();
-                        showConnect(null);
                     }
                 })
                 .setNegativeButton("Annuler", null)
