@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -124,9 +125,21 @@ struct GameHarness {
         input().setMouseButton(MouseButton::Left, false);
         frames(1);
     }
+    /// Screen point of a world position through the game's camera (asked to Lua: agr.camera).
+    math::Vec2 worldToScreen(float x, float y, float z = 0.0f) {
+        const ecs::Entity carrier = scene().createEntity("__carrier");
+        lua("local sx, sy = agr.camera.worldToScreen(" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) +
+            "); agr.find('__carrier'):setName(string.format('%.3f %.3f', sx, sy))");
+        float sx = 0.0f, sy = 0.0f;
+        REQUIRE(std::sscanf(scene().nameOf(carrier).c_str(), "%f %f", &sx, &sy) == 2);
+        scene().destroyEntity(carrier);
+        return {sx, sy};
+    }
+    void clickWorld(float x, float y, float z = 0.0f) { click(worldToScreen(x, y, z)); }
     /// Click on a UI element (center of its laid-out rectangle).
     void clickUI(std::string_view name) {
         const ecs::Entity e = find(name);
+        frames(1);  // laid out if it was just shown
         const math::Vec4 r = scene().registry().get<UIRectComponent>(e).screenRect;
         REQUIRE_MESSAGE(r.z > 0.0f, name << " is not laid out (inactive?)");
         click({r.x + r.z * 0.5f, r.y + r.w * 0.5f});
@@ -240,10 +253,10 @@ TEST_CASE("RPG 2D: quest, gems, bats chase along the grid, sword, experience, de
     CHECK(h.number("Hero", "level") == 2);  // 10 XP: level 1 needs 5
     CHECK(h.text("LevelText").find("Niveau 2") != std::string::npos);
     // A bat notices the hero and flies to him around obstacles, then hurts him.
-    const math::Vec3 bat0 = h.position("Bat 1");
-    h.lua(R"(local x, y = agr.find("Bat 1"):position(); agr.find("Hero"):setPosition(x - 4, y))");
+    const math::Vec3 bat0{10.0f, -5.0f, 0.0f};
+    h.lua(R"(local b = agr.find("Bat 1"); b:stopNavigation(); b:setPosition(10, -5); agr.find("Hero"):setPosition(6, -5.5))");
     const double hp = h.number("Hero", "hp");
-    h.seconds(3.0);
+    for (int k = 0; k < 16 && h.number("Hero", "hp") >= hp; ++k) h.seconds(0.5);  // it may detour around obstacles
     CHECK(std::abs(h.position("Bat 1").x - bat0.x) > 1.0f);
     CHECK(h.number("Hero", "hp") < hp);
     // Sword: three hits (level 2 deals 1) defeat it; experience goes up.
@@ -280,6 +293,97 @@ TEST_CASE("the harness reports script errors") {
     bool found = false;
     for (const auto& line : h.engine->consoleLog()->snapshot()) found |= line.level >= LogLevel::Error && line.text.find("boom") != std::string::npos;
     CHECK(found);
+}
+
+
+TEST_CASE("tower defense: build and upgrade towers, waves, kills pay gold, leaks, defeat and victory") {
+    GameHarness h(SceneTemplate::GameTowerDefense);
+    h.frames(10);
+    CHECK(h.number("Game", "goldNow") == 100);
+    const math::Vec3 slot = h.position("Slot 2");
+    h.clickWorld(slot.x, slot.y);
+    h.frames(2);
+    CHECK(h.number("Game", "goldNow") == 50);
+    CHECK_FALSE(h.scene().findByName("Tower Slot 2").isNull());
+    const math::Vec3 slot4 = h.position("Slot 4");
+    h.clickWorld(slot4.x, slot4.y);
+    CHECK(h.number("Game", "goldNow") == 0);
+    h.clickUI("NextWave");
+    CHECK(h.number("Game", "wave") == 1);
+    h.seconds(25.0);
+    CHECK(h.number("Game", "kills") >= 3);  // the tower shot creeps
+    CHECK(h.number("Game", "goldNow") >= 40);  // spent 100, then 5 + 1 gold per kill
+    CHECK(h.text("GoldText").find("Or") != std::string::npos);
+    // Upgrade: tap the tower.
+    const double gold = h.number("Game", "goldNow");
+    h.clickWorld(slot.x, slot.y);
+    h.frames(2);
+    CHECK(h.number("Game", "goldNow") == gold - 40);
+    CHECK(h.number("Tower Slot 2", "level") == 2);
+    // Defeat: no defense and one life left.
+    h.lua(R"(local g = agr.find("Game"):script(); g.livesNow = 1; for _, t in pairs(g.towers) do t:destroy() end; g.towers = {})");
+    h.frames(2);
+    h.pressKey(Key::N);
+    h.seconds(45.0);  // the road is about 60 m long
+    CHECK(h.field("Game", "state") == "lost");
+    CHECK(h.active("Restart"));
+    h.clickUI("Restart");
+    CHECK(h.field("Game", "state") == "playing");
+    CHECK(h.number("Game", "wave") == 0);
+    CHECK(h.number("Game", "goldNow") == 100);
+    h.frames(2);
+    CHECK(h.scene().findByName("Creep").isNull());
+    // Victory: last wave against strong towers everywhere.
+    h.lua(R"(local g = agr.find("Game"):script(); g.goldNow = 100000; for _, s in ipairs(agr.find("Slots"):children()) do g:build(s) end)");
+    h.frames(2);
+    h.lua(R"(local g = agr.find("Game"):script(); for _, t in pairs(g.towers) do t:script().damage = 50; t:script().range = 30 end; g.wave = g.waves - 1; g:nextWave())");
+    h.seconds(40.0);
+    CHECK(h.field("Game", "state") == "won");
+    CHECK(h.text("Message").find("vagues") != std::string::npos);
+    h.noScriptErrors();
+}
+
+
+TEST_CASE("cards: play cards with energy, armor, enemy intents and turns, victory saved, defeat") {
+    GameHarness h(SceneTemplate::GameCards);
+    h.frames(5);
+    CHECK(h.number("Game", "energy") == 3);
+    CHECK(h.active("Card 5"));
+    CHECK(h.text("EnergyText") == "Énergie 3 / 3");
+    // Known hand for the test: strike, shield, heavy, potion, bolt.
+    h.lua(R"(local g = agr.find("Game"):script(); g.hand = {"strike", "shield", "heavy", "potion", "bolt"}; g.intent = {kind = "attack", value = 8}; g:refresh())");
+    h.frames(2);
+    CHECK(h.text("Name").size() > 0);
+    h.clickUI("Card 1");  // strike: 5 damage
+    CHECK(h.number("Game", "energy") == 2);
+    h.lua(R"(_G.foeHp = agr.find("Game"):script().foe.hp)");
+    CHECK(h.text("Log").find("5") != std::string::npos);
+    h.clickUI("Card 1");  // the shield moved to slot 1: +6 armor
+    CHECK(h.text("PlayerStats").find("Armure 6") != std::string::npos);
+    h.clickUI("Card 1");  // heavy costs 2: refused with 1 energy left
+    CHECK(h.text("Log") == "Pas assez d'énergie");
+    CHECK(h.number("Game", "energy") == 1);
+    const double hp = 30;
+    h.clickUI("EndTurn");  // the golem attacks for 8: 6 absorbed by armor
+    CHECK(h.text("PlayerStats").find("PV 28 / 30") != std::string::npos);
+    CHECK(h.number("Game", "energy") == 3);
+    CHECK(h.active("Card 5"));  // drew back to five
+    (void)hp;
+    // Victory.
+    h.lua(R"(local g = agr.find("Game"):script(); g.foe.hp = 3; g.foe.armor = 0; g.hand = {"strike"}; g:refresh())");
+    h.frames(2);
+    h.clickUI("Card 1");
+    CHECK(h.field("Game", "state") == "won");
+    CHECK(h.engine->save().get("cards.wins") == 1);
+    CHECK_FALSE(h.active("Card 1"));
+    h.clickUI("Restart");
+    CHECK(h.field("Game", "state") == "playing");
+    // Defeat.
+    h.lua(R"(local g = agr.find("Game"):script(); g.player.hp = 2; g.intent = {kind = "heavy", value = 14})");
+    h.clickUI("EndTurn");
+    CHECK(h.field("Game", "state") == "lost");
+    CHECK(h.text("Message").find("golem") != std::string::npos);
+    h.noScriptErrors();
 }
 
 }

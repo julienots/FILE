@@ -10,11 +10,12 @@ namespace agr {
 namespace {
 
 /// agr.clone(entity [, parent]) -> copy of the entity and its children (components and
-/// scripts), active, placed under `parent` (default: the original's parent).
+/// scripts), active, placed under `parent`: an entity, false for the scene root, or nothing
+/// for the original's parent.
 int a_clone(lua_State* L) {
     Scene& s = sceneOf(L);
     const ecs::Entity src = checkEntity(L, 1);
-    const ecs::Entity parent = lua_isnoneornil(L, 2) ? s.parent(src) : checkEntity(L, 2);
+    const ecs::Entity parent = lua_isnoneornil(L, 2) ? s.parent(src) : (lua_isboolean(L, 2) && !lua_toboolean(L, 2)) ? ecs::Entity{} : checkEntity(L, 2);
     const ecs::Entity copy = s.duplicate(src);
     if (copy.isNull()) return luaL_error(L, "agr.clone: the entity cannot be copied");
     if (parent != s.parent(copy)) s.setParent(copy, parent, {}, false);

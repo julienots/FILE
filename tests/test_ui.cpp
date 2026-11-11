@@ -133,6 +133,31 @@ TEST_CASE("layouts: column, row and grid") {
     checkRect(f.rect(items[2]), {110, 120 + 65, 100, 60});
 }
 
+TEST_CASE("an icon or a label inside a button forwards the click to the button") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto card = f.button("Card", {200, 200}, {200, 300});
+    const auto icon = f.element("Icon", card, {0.5f, 0.5f}, {0.5f, 0.5f}, {0.5f, 0.5f}, {0, 0}, {120, 120});
+    f.scene.registry().emplace<UIImageComponent>(icon);  // an image drawn over the button: hit first
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {200, 200}, false}});
+    CHECK(f.ui.isHovered(card));
+    f.pointers({{0, {200, 200}, true}});
+    CHECK(f.ui.isPressed(card));
+    f.pointers({{0, {205, 205}, false}});
+    const auto events = f.ui.takeEvents();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].entity == card);
+    // A plain image outside any button still blocks the game behind without clicking anything.
+    const auto panel = f.element("Panel", f.canvas, {0, 0}, {0, 0}, {0.5f, 0.5f}, {600, 400}, {100, 100});
+    f.scene.registry().emplace<UIImageComponent>(panel);
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {600, 400}, true}});
+    CHECK(f.ui.pointerOverUI());
+    f.pointers({{0, {600, 400}, false}});
+    CHECK(f.ui.takeEvents().empty());
+}
+
 TEST_CASE("buttons: click, cancel, hover, disabled and multi-touch") {
     UIFixture f;
     f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;

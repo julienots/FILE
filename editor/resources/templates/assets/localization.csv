@@ -26,3 +26,37 @@ rpg.dead,"Vous êtes tombé…","You fell…","Has caído…"
 rpg.hint.talk,"E / Parler : discuter avec le sage","E / Talk: speak with the sage","E / Hablar: hablar con el sabio"
 rpg.attack,Épée,Sword,Espada
 rpg.talk,Parler,Talk,Hablar
+td.gold,"Or : {1}","Gold: {1}","Oro: {1}"
+td.lives,"Vies : {1}","Lives: {1}","Vidas: {1}"
+td.wave,"Vague {1} / {2}","Wave {1} / {2}","Oleada {1} / {2}"
+td.next,Vague suivante,Next wave,Siguiente oleada
+td.hint,"Touchez un emplacement pour construire une tour ({1} or), une tour pour l'améliorer ({2} or)","Tap a spot to build a tower ({1} gold), a tower to upgrade it ({2} gold)","Toca un lugar para construir una torre ({1} oro), una torre para mejorarla ({2} oro)"
+td.nogold,Pas assez d'or,Not enough gold,No hay suficiente oro
+td.lost,"La base est tombée à la vague {1}","The base fell at wave {1}","La base cayó en la oleada {1}"
+td.won,"Toutes les vagues repoussées ! Vies restantes : {1} (record d'ennemis : {2})","All waves repelled! Lives left: {1} (best kills: {2})","¡Todas las oleadas rechazadas! Vidas: {1} (récord: {2})"
+cards.endturn,Fin du tour,End turn,Fin del turno
+cards.start,"Jouez vos cartes (clic, toucher ou touches 1 à 5), puis « Fin du tour ».","Play your cards (click, tap or keys 1 to 5), then “End turn”.","Juega tus cartas (clic, toque o teclas 1 a 5) y luego «Fin del turno»."
+cards.stats,"PV {1} / {2}   Armure {3}","HP {1} / {2}   Armor {3}","PV {1} / {2}   Armadura {3}"
+cards.energy,"Énergie {1} / {2}","Energy {1} / {2}","Energía {1} / {2}"
+cards.intent.attack,"Intention : attaque ({1})","Intent: attack ({1})","Intención: ataque ({1})"
+cards.intent.heavy,"Intention : coup écrasant ({1})","Intent: crushing blow ({1})","Intención: golpe aplastante ({1})"
+cards.intent.defend,"Intention : se protéger (+{1} armure)","Intent: defend (+{1} armor)","Intención: defenderse (+{1} armadura)"
+cards.name.strike,Frappe,Strike,Golpe
+cards.name.heavy,Coup lourd,Heavy blow,Golpe pesado
+cards.name.shield,Bouclier,Shield,Escudo
+cards.name.potion,Potion,Potion,Poción
+cards.name.bolt,Éclair,Lightning,Rayo
+cards.text.strike,"{1} dégâts","{1} damage","{1} de daño"
+cards.text.heavy,"{1} dégâts","{1} damage","{1} de daño"
+cards.text.shield,"+{1} armure","+{1} armor","+{1} armadura"
+cards.text.potion,"Soigne {1} PV","Heal {1} HP","Cura {1} PV"
+cards.text.bolt,"{1} dégâts perçants, pioche 1","{1} piercing damage, draw 1","{1} de daño perforante, roba 1"
+cards.noenergy,Pas assez d'énergie,Not enough energy,No hay suficiente energía
+cards.log.hit,"Vous infligez {1} dégâts.","You deal {1} damage.","Infliges {1} de daño."
+cards.log.armor,"+{1} armure.","+{1} armor.","+{1} de armadura."
+cards.log.heal,"Vous récupérez {1} PV.","You recover {1} HP.","Recuperas {1} PV."
+cards.log.bolt,"L'éclair traverse l'armure : {1} dégâts.","Lightning pierces armor: {1} damage.","El rayo atraviesa la armadura: {1} de daño."
+cards.log.foehit,"Le golem frappe : {1} dégâts.","The golem strikes: {1} damage.","El gólem golpea: {1} de daño."
+cards.log.foedefend,"Le golem se protège (+{1} armure).","The golem defends (+{1} armor).","El gólem se protege (+{1} armadura)."
+cards.won,"Victoire ! ({1} duel(s) gagné(s))","Victory! ({1} duel(s) won)","¡Victoria! ({1} duelo(s) ganado(s))"
+cards.lost,Le golem l'emporte…,The golem wins…,El gólem gana…

@@ -13,6 +13,8 @@ add_library(agr_editor_core STATIC
     core/src/GameExport.cpp
     core/src/AndroidExport.cpp
     core/src/games/Platformer.cpp
+    core/src/games/Cards.cpp
+    core/src/games/TowerDefense.cpp
     core/src/games/Rpg2D.cpp)
 target_include_directories(agr_editor_core PUBLIC core/include)
 target_link_libraries(agr_editor_core PUBLIC agr::render agr::twod agr::script agr::physics2d agr::physics3d agr::navigation agr::audio agr::ui agr::animation agr::assets PRIVATE agr::compiler_options)

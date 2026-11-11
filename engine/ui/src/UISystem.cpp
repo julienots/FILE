@@ -214,8 +214,16 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
     for (const UIPointer& p : pointers) {
         seen.insert(p.id);
         const bool wasDown = m_pointerDown[p.id];
-        const ecs::Entity top = hitTest(p.position);
+        ecs::Entity top = hitTest(p.position);
         if (!top.isNull()) m_pointerOverUI = true;
+        // Images and texts inside a button or slider (icons, labels) forward the press to it.
+        for (ecs::Entity e = top; !e.isNull() && reg.valid(e); e = scene.parent(e)) {
+            if (reg.has<UIButtonComponent>(e) || reg.has<UISliderComponent>(e)) {
+                top = e;
+                break;
+            }
+            if (reg.has<UICanvasComponent>(e)) break;
+        }
         const bool topInteractive = !top.isNull() && (reg.has<UIButtonComponent>(top) || reg.has<UISliderComponent>(top));
         auto pressedIt = m_pressed.find(p.id);
         if (pressedIt != m_pressed.end() && !reg.valid(pressedIt->second)) {

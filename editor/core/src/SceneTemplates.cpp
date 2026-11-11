@@ -30,6 +30,8 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::Showcase3D: return "Vitrine 3D";
         case SceneTemplate::GamePlatformer: return "Jeu : Plateforme 2D";
         case SceneTemplate::GameRpg2D: return "Jeu : RPG 2D";
+        case SceneTemplate::GameTowerDefense: return "Jeu : Tower defense";
+        case SceneTemplate::GameCards: return "Jeu : Cartes (duel)";
     }
     return "?";
 }
@@ -52,6 +54,10 @@ const char* templateDescription(SceneTemplate t) {
                    "3 vies, record sauvegardé, boutons tactiles. Flèches / ZQSD + Espace, manette ou écran.";
         case SceneTemplate::GameRpg2D:
             return "Aventure vue de dessus : explorer la carte, parler au sage, retrouver 3 gemmes, combattre des chauves-souris qui vous poursuivent (recherche de chemin), gagner expérience et niveaux, progression sauvegardée. ZQSD / flèches, Espace : épée, E : parler, ou commandes tactiles.";
+        case SceneTemplate::GameTowerDefense:
+            return "Dix vagues de créatures suivent une route sinueuse : touchez un emplacement pour construire une tour (50 or), touchez une tour pour l'améliorer (3 niveaux). Les tours visent la créature la plus avancée ; chaque victoire rapporte de l'or. Bouton Vague suivante, N ou Espace.";
+        case SceneTemplate::GameCards:
+            return "Duel de cartes contre un golem : chaque tour, 3 énergie et une main de 5 cartes (frappes, coups lourds, boucliers, potions, éclairs perçants). L'adversaire annonce son intention ; l'armure absorbe les dégâts. Clic, toucher ou touches 1 à 5, Entrée pour finir le tour ; victoires comptées dans la sauvegarde.";
     }
     return "";
 }
@@ -70,6 +76,8 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameCards: return ProjectMode::Mode2D;
+        case SceneTemplate::GameTowerDefense: return ProjectMode::Mode2D;
         case SceneTemplate::GameRpg2D: return ProjectMode::Mode2D;
         case SceneTemplate::Empty25D: return ProjectMode::Mode25D;
         case SceneTemplate::Empty3D:
@@ -82,7 +90,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameRpg2D); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameCards); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -536,6 +544,8 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameCards: games::buildCards(scene); break;
+        case SceneTemplate::GameTowerDefense: games::buildTowerDefense(scene); break;
         case SceneTemplate::GameRpg2D: games::buildRpg2D(scene); break;
     }
     scene.updateTransforms();
