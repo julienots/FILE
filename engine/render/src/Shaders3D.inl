@@ -92,6 +92,30 @@ void main() {
 }
 )";
 
+// Image sky (equirectangular, prefiltered mips): shared by the PBR and sky fragments.
+inline constexpr const char* kEnvBlock = R"(
+uniform sampler2D u_envMap;
+vec3 agrEnvRotate(vec3 d) {
+    float c = cos(u_envParams.z), s = sin(u_envParams.z);
+    return vec3(c * d.x - s * d.z, d.y, s * d.x + c * d.z);  // world -> image: rotation by -angle around Y
+}
+vec2 agrEnvUv(vec3 d) {
+    return vec2(0.5 + atan(d.x, -d.z) * 0.15915494, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
+}
+vec3 agrEnvRadiance(vec3 dir, float roughness) {
+    return textureLod(u_envMap, agrEnvUv(agrEnvRotate(normalize(dir))), roughness * u_envParams.w).rgb * u_envParams.y;
+}
+vec3 agrEnvIrradiance(vec3 n) {
+    n = agrEnvRotate(n);
+    vec3 e = u_envSH[0].rgb * 0.282095
+           + u_envSH[1].rgb * (0.488603 * n.y) + u_envSH[2].rgb * (0.488603 * n.z) + u_envSH[3].rgb * (0.488603 * n.x)
+           + u_envSH[4].rgb * (1.092548 * n.x * n.y) + u_envSH[5].rgb * (1.092548 * n.y * n.z)
+           + u_envSH[6].rgb * (0.315392 * (3.0 * n.z * n.z - 1.0)) + u_envSH[7].rgb * (1.092548 * n.x * n.z)
+           + u_envSH[8].rgb * (0.546274 * (n.x * n.x - n.y * n.y));
+    return max(e, vec3(0.0)) * u_envParams.y;
+}
+)";
+
 inline constexpr const char* kPbrFragment = R"(
 uniform sampler2D u_baseColorMap;
 uniform sampler2D u_metalRoughMap;
@@ -238,7 +262,12 @@ void main() {
     vec2 ab = vec2(-1.04, 1.04) * a004 + rr.zw;
     vec3 envSpecular = f0 * ab.x + ab.y;
     float occlusion = mix(1.0, texture(u_occlusionMap, v_uv).r, u_pbr.w);
-    color += (diffuseColor * hemisphere(N) + envSpecular * hemisphere(reflect(-V, N))) * occlusion;
+    if (u_envParams.x > 0.5) {  // image sky: SH irradiance + prefiltered reflections
+        vec3 R = reflect(-V, N);
+        color += (diffuseColor * agrEnvIrradiance(N) + envSpecular * agrEnvRadiance(R, roughness)) * occlusion * u_groundColor.w;
+    } else {
+        color += (diffuseColor * hemisphere(N) + envSpecular * hemisphere(reflect(-V, N))) * occlusion;
+    }
     color += u_emissive.rgb * texture(u_emissiveMap, v_uv).rgb;
     if (u_fogColor.w > 0.5) {
         float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
@@ -296,11 +325,13 @@ void main() {
     vec3 dir = normalize(p.xyz / p.w - u_cameraPos.xyz);
     vec3 color = dir.y >= 0.0 ? mix(u_horizonColor.rgb, u_skyColor.rgb, pow(clamp(dir.y, 0.0, 1.0), 0.6))
                               : mix(u_horizonColor.rgb, u_groundColor.rgb, pow(clamp(-dir.y * 3.0, 0.0, 1.0), 0.5));
-    if (u_horizonColor.w > 0.5 && dot(u_lightColor.rgb, u_lightColor.rgb) > 0.0) {
+    if (u_envParams.x > 0.5) color = agrEnvRadiance(dir, 0.0);  // the image holds its own sun
+    else if (u_horizonColor.w > 0.5 && dot(u_lightColor.rgb, u_lightColor.rgb) > 0.0) {
         float s = dot(dir, -u_lightDir.xyz);
         color += u_lightColor.rgb * (smoothstep(0.9993, 0.9997, s) * 6.0 + pow(max(s, 0.0), 48.0) * 0.25);
     }
-    if (u_fogColor.w > 0.5) color = mix(color, u_fogColor.rgb, clamp(1.0 - abs(dir.y) * 4.0, 0.0, 1.0));
+    // Horizon haze for the procedural sky (an image sky carries its own).
+    if (u_fogColor.w > 0.5 && u_envParams.x < 0.5) color = mix(color, u_fogColor.rgb, clamp(1.0 - abs(dir.y) * 4.0, 0.0, 1.0));
     o_color = vec4(agrToneMap(color), 1.0);
 }
 )";

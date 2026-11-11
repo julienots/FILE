@@ -78,8 +78,13 @@ void registerRenderComponents() {
                {.tooltip = "Flat ambient light (sky = CameraColor)", .flags = FieldFlag_Color})
         .field("ambientIntensity", &EnvironmentComponent::ambientIntensity, {.rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f})
         .field("sky", &EnvironmentComponent::sky,
-               {.tooltip = "Gradient: procedural sky and hemisphere ambient light from its colors",
-                .enumEntries = {{"CameraColor", 0}, {"Gradient", 1}}})
+               {.tooltip = "Gradient: procedural sky and hemisphere ambient light from its colors; Image: an equirectangular "
+                           "image lights the scene (diffuse + reflections)",
+                .enumEntries = {{"CameraColor", 0}, {"Gradient", 1}, {"Image", 2}}})
+        .field("skyTexture", &EnvironmentComponent::skyTexture,
+               {.tooltip = "Image sky: equirectangular 2:1 image (.hdr for real light levels, or .png / .jpg)", .flags = FieldFlag_AssetPath})
+        .field("skyIntensity", &EnvironmentComponent::skyIntensity, {.rangeMin = 0.0f, .rangeMax = 16.0f, .speed = 0.01f})
+        .field("skyRotation", &EnvironmentComponent::skyRotation, {.tooltip = "Image sky: turn around the vertical axis", .flags = FieldFlag_Angle})
         .field("skyColor", &EnvironmentComponent::skyColor, {.flags = FieldFlag_Color})
         .field("horizonColor", &EnvironmentComponent::horizonColor, {.flags = FieldFlag_Color})
         .field("groundColor", &EnvironmentComponent::groundColor, {.flags = FieldFlag_Color})

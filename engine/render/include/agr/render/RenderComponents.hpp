@@ -63,6 +63,7 @@ struct SpotLightComponent {
 enum class SkyMode : i32 {
     CameraColor = 0,  ///< Background = the camera clear color; flat ambient light.
     Gradient = 1,     ///< Procedural sky (zenith, horizon, ground, sun disc); hemisphere ambient light.
+    Image = 2,        ///< Equirectangular image (.hdr, .png...): background, diffuse and reflected light.
 };
 
 /// Scene-wide ambient light, sky, fog and exposure (the first active one is used).
@@ -74,6 +75,9 @@ struct EnvironmentComponent {
     math::Color horizonColor{0.78f, 0.84f, 0.90f, 1.0f};
     math::Color groundColor{0.30f, 0.28f, 0.26f, 1.0f};
     bool sunDisc = true;
+    std::string skyTexture;     ///< Image sky: equirectangular (2:1) image, e.g. assets://sky/day.hdr.
+    float skyIntensity = 1.0f;  ///< Image sky brightness (background and lighting).
+    float skyRotation = 0.0f;   ///< Image sky: turn around the vertical axis (radians).
     bool fog = false;
     math::Color fogColor{0.75f, 0.80f, 0.86f, 1.0f};
     float fogStart = 20.0f;

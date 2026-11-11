@@ -23,6 +23,7 @@ struct Render3DFixture {
     AssetManager assets{vfs, jobs, gpu().device.get()};
     ModelLibrary models{vfs, jobs, gpu().device.get()};
     MaterialLibrary materials{vfs};
+    EnvironmentLibrary environments{vfs, jobs, gpu().device.get()};
     Renderer renderer{*gpu().device, assets};
     Scene scene;
 
@@ -37,6 +38,7 @@ struct Render3DFixture {
         renderer.setProfile(p);
         renderer.setModels(&models);
         renderer.setMaterials(&materials);
+        renderer.setEnvironments(&environments);
     }
     ~Render3DFixture() { std::filesystem::remove_all(root); }
 
@@ -83,12 +85,14 @@ struct Render3DFixture {
         scene.updateTransforms();
         models.update();
         assets.update();
+        environments.update();
         renderer.render(scene, kWidth, kHeight);
     }
     void settle() {
         frame();
         models.waitAll();
         assets.waitAll();
+        environments.waitAll();
         frame();
         assets.waitAll();
         frame();
@@ -185,6 +189,79 @@ TEST_CASE("cascaded shadows: sharp near the camera, far casters, cascade count p
     CHECK(shortRange.nearShadow * 2 < shortRange.nearLit);
     CHECK(std::abs(shortRange.farShadow - shortRange.farLit) < 12);
     CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("image sky: background, diffuse and reflected light, rotation, loading fallback") {
+    Render3DFixture f;
+    // Equirect test sky: upper hemisphere red (HDR 2.0), lower blue; +X quarter of the horizon band green.
+    const u32 w = 128, h = 64;
+    std::vector<float> rgb(w * h * 3);
+    for (u32 y = 0; y < h; ++y)
+        for (u32 x = 0; x < w; ++x) {
+            const Vec3 d = equirectDirection((x + 0.5f) / w, (y + 0.5f) / h);
+            Vec3 c = d.y > 0.0f ? Vec3{2.0f, 0.0f, 0.0f} : Vec3{0.0f, 0.0f, 0.5f};
+            if (std::abs(d.y) < 0.35f && d.x > 0.7f) c = {0.0f, 1.0f, 0.0f};
+            rgb[(y * w + x) * 3] = c.x, rgb[(y * w + x) * 3 + 1] = c.y, rgb[(y * w + x) * 3 + 2] = c.z;
+        }
+    auto hdr = encodeHdr(w, h, rgb);
+    REQUIRE(hdr);
+    REQUIRE(f.vfs.writeBytes("assets://sky.hdr", hdr.value().data(), hdr.value().size()));
+
+    f.camera({0, 0, 0}, {0, 0.2f, -1});
+    auto& env = f.darkEnvironment();
+    env.sky = SkyMode::Image;
+    env.skyTexture = "assets://sky.hdr";
+    env.ambientIntensity = 1.0f;
+    MaterialData rough;
+    rough.baseColor = {1, 1, 1, 1};
+    rough.roughness = 1.0f;
+    REQUIRE(f.materials.save("assets://rough.agrmat", rough));
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0.2f, -4}, Vec3{1.6f});
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://rough.agrmat";
+
+    f.frame();  // first frame: the image is still loading, the gradient stands in
+    CHECK(f.renderer.stats().environmentLoading);
+    CHECK_FALSE(f.renderer.stats().imageSky);
+    f.settle();
+    REQUIRE(f.renderer.stats().imageSky);
+    CHECK_FALSE(f.renderer.stats().environmentLoading);
+    auto& d = *gpu().device;
+    const Rgba skyUp = pixel(d, kWidth / 2, 2), skyDown = pixel(d, kWidth / 2, kHeight - 2);
+    CHECK_MESSAGE((skyUp.r > 200 && skyUp.g < 40 && skyUp.b < 40), skyUp);
+    CHECK_MESSAGE((skyDown.b > 100 && skyDown.r < 40), skyDown);
+    // Diffuse (SH irradiance): the top of the rough ball is lit red, the bottom blue.
+    const Rgba top = f.at({0, 0.2f + 0.65f, -4 + 0.3f}), bottom = f.at({0, 0.2f - 0.65f, -4 + 0.3f});
+    CHECK_MESSAGE((top.r > 120 && top.r > top.b * 2), top);
+    CHECK_MESSAGE((bottom.b > bottom.r), bottom);
+
+    // A mirror ball reflects the sky: its right side shows the green band of +X.
+    MaterialData mirror;
+    mirror.baseColor = {1, 1, 1, 1};
+    mirror.metallic = 1.0f;
+    mirror.roughness = 0.05f;
+    REQUIRE(f.materials.save("assets://mirror.agrmat", mirror));
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://mirror.agrmat";
+    f.frame();
+    const Rgba right = f.at({0.62f, 0.2f, -4 + 0.5f});
+    CHECK_MESSAGE((right.g > 100 && right.g > right.r), right);
+    // Rotated by half a turn, +X now shows what was at -X (no green).
+    f.scene.registry().get<EnvironmentComponent>(f.scene.findByName("Env")).skyRotation = math::radians(180.0f);
+    f.frame();
+    const Rgba rotated = f.at({0.62f, 0.2f, -4 + 0.5f});
+    CHECK_MESSAGE(rotated.g < 60, rotated);
+    // Intensity scales background and light.
+    f.scene.registry().get<EnvironmentComponent>(f.scene.findByName("Env")).skyIntensity = 0.1f;
+    f.frame();
+    CHECK(pixel(d, kWidth / 2, 2).r < skyUp.r - 60);
+
+    // A missing image falls back to the gradient without errors.
+    f.scene.registry().get<EnvironmentComponent>(f.scene.findByName("Env")).skyTexture = "assets://none.hdr";
+    f.settle();
+    CHECK_FALSE(f.renderer.stats().imageSky);
+    const EnvironmentAsset* missing = f.environments.get("assets://none.hdr");
+    REQUIRE(missing);
+    CHECK(missing->state == AssetState::Failed);
+    CHECK(d.validationErrorCount() == 0);
 }
 
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {

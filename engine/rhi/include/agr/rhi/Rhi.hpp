@@ -77,6 +77,10 @@ struct TextureDesc {
     bool generateMips = true;
     SamplerDesc sampler;
     const void* data = nullptr;  ///< Tightly packed rows, top row first. May be null.
+    /// Explicit mip levels 1..n (each half the previous size, at least 1 texel), for chains the
+    /// caller filters itself (environment maps). Replaces generateMips; requires `data`. Such
+    /// textures cannot be updated with updateTexture.
+    std::vector<const void*> mipData;
     const char* debugName = "";
 };
 

@@ -350,8 +350,11 @@ void buildShowcase3D(Scene& scene) {
     sunL.shadowDistance = 30.0f;
     reg.get<TransformComponent>(sunE).rotation = Quat::fromEuler({math::radians(-42.0f), math::radians(38.0f), 0.0f});
     auto& env = reg.emplace<EnvironmentComponent>(sunE);
-    env.sky = SkyMode::Gradient;
-    env.ambientIntensity = 0.5f;
+    // Image sky (original procedural HDR): background, diffuse light and reflections. The
+    // gradient colors stand in while it loads.
+    env.sky = SkyMode::Image;
+    env.skyTexture = "assets://sky/afternoon.hdr";
+    env.ambientIntensity = 0.8f;
     env.fog = true;
     env.fogStart = 25.0f;
     env.fogEnd = 120.0f;

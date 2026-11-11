@@ -107,6 +107,9 @@ Quat fromJ(JPH::Quat q) { return {q.GetX(), q.GetY(), q.GetZ(), q.GetW()}; }
 
 u64 mix(u64 h, u64 v) { return h ^ (v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2)); }
 u64 mixf(u64 h, float f) { return mix(h, std::bit_cast<u32>(f)); }
+/// Hash of a derived value (relative pose): rounded so float noise from a moving body does not
+/// look like a shape change (which would rebuild the body every frame).
+u64 mixq(u64 h, float f) { return mix(h, static_cast<u64>(static_cast<i64>(std::llround(static_cast<double>(f) * 1e4)))); }
 
 struct Pose {
     Vec3 position;
@@ -270,13 +273,16 @@ struct Physics3DWorld::Impl {
             };
             std::vector<Placed> placed;
             for (ecs::Entity c : cols) {
-                const Pose rel = poseOf(frameInv * s.worldMatrix(c));
+                // The body's own collider sits exactly at its frame (only the world scale applies).
+                const Pose rel = c == o ? Pose{Vec3{0.0f}, Quat::identity(), op.scale} : poseOf(frameInv * s.worldMatrix(c));
                 const ColliderComponent& col = reg.get<ColliderComponent>(c);
                 placed.push_back({&col, rel});
                 h = mix(h, c.packed());
                 for (float f : {rel.position.x, rel.position.y, rel.position.z, rel.rotation.x, rel.rotation.y, rel.rotation.z, rel.rotation.w,
-                                rel.scale.x, rel.scale.y, rel.scale.z, col.size.x, col.size.y, col.size.z, col.radius, col.height, col.offset.x,
-                                col.offset.y, col.offset.z, col.density, col.friction, col.restitution})
+                                rel.scale.x, rel.scale.y, rel.scale.z})
+                    h = mixq(h, f);
+                for (float f : {col.size.x, col.size.y, col.size.z, col.radius, col.height, col.offset.x, col.offset.y, col.offset.z, col.density,
+                                col.friction, col.restitution})
                     h = mixf(h, f);
                 h = mix(h, static_cast<u64>(col.shape) | (static_cast<u64>(col.isTrigger) << 8));
             }
@@ -363,8 +369,15 @@ struct Physics3DWorld::Impl {
                     bs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
                     bs.mMassPropertiesOverride.mMass = rb->mass;
                 }
-                bs.mLinearVelocity = toJ(keep ? keepVel : rb->initialVelocity);
-                bs.mAngularVelocity = toJ(keepAng);
+                // Carried over from a rebuilt body: Jolt clamps velocities to exactly its limits, so
+                // the length recomputed here can exceed them by rounding; keep a margin.
+                auto clampLength = [](Vec3 v, float maxLength) {
+                    const float len = math::length(v);
+                    const float limit = maxLength * 0.999f;
+                    return len > limit ? v * (limit / len) : v;
+                };
+                bs.mLinearVelocity = toJ(clampLength(keep ? keepVel : rb->initialVelocity, bs.mMaxLinearVelocity));
+                bs.mAngularVelocity = toJ(clampLength(keepAng, bs.mMaxAngularVelocity));
             }
             body.id = bi.CreateAndAddBody(bs, JPH::EActivation::Activate);
             if (body.id.IsInvalid()) {

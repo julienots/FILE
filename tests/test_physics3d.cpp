@@ -130,6 +130,34 @@ TEST_CASE("kinematic platforms, teleports, impulses, frozen rotation, raycasts")
     CHECK(f.position(b).x < -4.5f);
 }
 
+TEST_CASE("turning bodies are not rebuilt; a rebuilt fast body keeps a valid velocity") {
+    World3D w;
+    const auto spinner = w.box("Spinner", {0, 0, 0}, {2, 0.5f, 2}, BodyType3D::Kinematic);
+    w.scene.registry().get<TransformComponent>(spinner).scale = {1.5f, 1.0f, 1.5f};
+    const auto child = w.scene.createEntity("Arm", spinner);  // compound: a collider on a child
+    w.scene.registry().get<TransformComponent>(child).position = {2, 0, 0};
+    w.scene.registry().emplace<ColliderComponent>(child).shape = ColliderShape3D::Sphere;
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    u32 rebuilt = 0;
+    for (int i = 0; i < 120; ++i) {
+        // Fast arbitrary turns (above the engine's maximum angular velocity for new bodies).
+        auto& t = w.scene.registry().get<TransformComponent>(spinner);
+        t.rotation = math::normalize(math::Quat::fromAxisAngle(math::normalize(Vec3{0.3f, 1.0f, 0.01f * static_cast<float>(i)}),
+                                                               math::radians(70.0f + 0.7f * static_cast<float>(i))) * t.rotation);
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        rebuilt += w.physics.stats().rebuilt;
+    }
+    CHECK(rebuilt == 0);
+    // A real shape change while turning rebuilds it, carrying the (clamped) velocity over.
+    auto& t = w.scene.registry().get<TransformComponent>(spinner);
+    t.rotation = math::normalize(math::Quat::fromAxisAngle({0, 1, 0}, math::radians(90.0f)) * t.rotation);
+    w.scene.registry().get<ColliderComponent>(spinner).size.x = 3.0f;
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    CHECK(w.physics.stats().rebuilt == 1);
+    w.run(0.1f);
+    CHECK(w.physics.stats().bodies == 1);
+}
+
 TEST_CASE("destroyed entities and reloaded scenes drop their bodies; deterministic") {
     World3D w;
     const auto a = w.box("A", {0, 0, 0}, {1, 1, 1}, BodyType3D::Dynamic);

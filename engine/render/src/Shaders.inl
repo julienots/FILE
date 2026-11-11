@@ -23,6 +23,8 @@ layout(std140) uniform FrameData {
     vec4 u_shadowView;      // camera forward
     vec4 u_shadowParams;    // cascade count (0 = off), depth bias, blend band (fraction), strength
     vec4 u_shadowParams2;   // atlas texel size (uv), PCF radius (0 or 1), -, -
+    vec4 u_envSH[9];        // image sky: irradiance / pi, SH9
+    vec4 u_envParams;       // image sky ready, intensity, rotation (radians), last mip level
 };
 )";
 

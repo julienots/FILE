@@ -6,6 +6,7 @@ agr_add_module(render
         src/GraphicsProfile.cpp
         src/Renderer.cpp
         src/Renderer3D.cpp
+        src/EnvironmentLibrary.cpp
         src/ModelLibrary.cpp
         src/RenderPlugin.cpp
     PUBLIC_DEPS

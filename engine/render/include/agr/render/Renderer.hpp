@@ -9,6 +9,7 @@
 
 #include "agr/assets/AssetManager.hpp"
 #include "agr/math/Geometry.hpp"
+#include "agr/render/EnvironmentLibrary.hpp"
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
@@ -103,6 +104,8 @@ struct RenderStats {
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     bool postProcessing = false;  ///< PostProcess active this frame.
     bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
+    bool imageSky = false;        ///< An image sky lit and filled the background.
+    bool environmentLoading = false;  ///< The Environment's sky image is still loading.
     u32 bloomLevels = 0;
     u32 modelsLoading = 0;   ///< Mesh renderers waiting for their model.
     u32 renderWidth = 0, renderHeight = 0;  ///< Internal 3D resolution.
@@ -162,6 +165,8 @@ public:
     /// Imported models and .agrmat materials used by mesh renderers.
     void setModels(ModelLibrary* models) { m_models = models; }
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
+    /// Sky images (Environment sky = Image). Without it, image skies fall back to the gradient.
+    void setEnvironments(EnvironmentLibrary* environments) { m_environments = environments; }
     /// Depth texture of the last shadow pass (null when shadows are off): an atlas of the
     /// cascades, 2 x 2 tiles when there is more than one. Debug views.
     rhi::TextureHandle shadowMap() const;
@@ -301,6 +306,8 @@ private:
     rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map
     ModelLibrary* m_models = nullptr;
     MaterialLibrary* m_materials = nullptr;
+    EnvironmentLibrary* m_environments = nullptr;
+    rhi::TextureHandle m_envTexture;  // image sky of this frame (null: none)
     rhi::TextureHandle m_softParticle;  // default particle texture (procedural)
     SpriteSheetLibrary* m_sheets = nullptr;
     std::unordered_map<u32, math::Vec3> m_parallax;  // entity index -> world offset

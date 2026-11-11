@@ -57,8 +57,16 @@ public:
     }
 
     void onUpdate(Engine& engine, const FrameTime& time) override {
-        if (!m_options.screenshot.empty() && time.frameIndex == m_screenshotFrame)
-            if (auto* rp = engine.service<RenderPlugin>()) rp->requestScreenshot(m_options.screenshot);
+        // Screenshot from frame 60, once models and the sky image have loaded (frame 600 at most).
+        if (!m_options.screenshot.empty() && !m_screenshotTaken && time.frameIndex >= m_screenshotFrame)
+            if (auto* rp = engine.service<RenderPlugin>()) {
+                const Renderer* r = rp->renderer();
+                const bool loading = r && (r->stats().modelsLoading > 0 || r->stats().environmentLoading);
+                if (!loading || time.frameIndex >= 600) {
+                    rp->requestScreenshot(m_options.screenshot);
+                    m_screenshotTaken = true;
+                }
+            }
         if (m_options.autotest && engine.config().maxFrames > 0 && time.frameIndex + 2 == engine.config().maxFrames) autotest(engine);
         if (m_options.autotest && time.frameIndex == 30) m_rendered = renderedSomething(engine);
     }
@@ -97,6 +105,7 @@ private:
     Options m_options;
     SubscriptionId m_back{};
     u64 m_screenshotFrame = 60;
+    bool m_screenshotTaken = false;
     bool m_rendered = false;
     int m_failures = 0;
 };

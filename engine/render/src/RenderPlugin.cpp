@@ -68,12 +68,15 @@ Status RenderPlugin::onLoad(Engine& engine) {
     engine.registerService<ModelLibrary>(m_models.get());
     m_materials = std::make_unique<MaterialLibrary>(engine.vfs());
     engine.registerService<MaterialLibrary>(m_materials.get());
+    m_environments = std::make_unique<EnvironmentLibrary>(engine.vfs(), engine.jobs(), m_device.get());
+    engine.registerService<EnvironmentLibrary>(m_environments.get());
 
     if (m_device) {
         m_renderer = std::make_unique<Renderer>(*m_device, *m_assets);
         m_renderer->setSpriteSheets(m_sheets.get());
         m_renderer->setModels(m_models.get());
         m_renderer->setMaterials(m_materials.get());
+        m_renderer->setEnvironments(m_environments.get());
         if (Status s = m_renderer->initialize(); !s) {
             m_renderer.reset();
             return s;
@@ -104,6 +107,7 @@ GraphicsProfile RenderPlugin::applyProfile(Engine& engine, GraphicsTier tier) {
     GraphicsProfile p = graphicsProfile(tier);
     if (m_device) p.maxTextureSize = std::min(p.maxTextureSize, m_device->info().maxTextureSize);
     if (m_renderer) m_renderer->setProfile(p);
+    if (m_environments) m_environments->setMaxWidth(std::clamp<u32>(p.maxTextureSize, 512, 2048));  // next loads
     if (m_assets) {
         m_assets->setMaxTextureSize(p.maxTextureSize);
         m_assets->setUploadBudget(p.uploadBudgetBytes);
@@ -133,10 +137,12 @@ void RenderPlugin::onUpdate(Engine&, const FrameTime& time) {
             m_sheets->reloadChanged();
             m_models->reloadChanged();
             m_materials->reloadChanged();
+            m_environments->reloadChanged();
         }
     }
     m_assets->update();
     m_models->update();
+    m_environments->update();
 }
 
 void RenderPlugin::onRender(Engine& engine, const FrameTime&) {
@@ -168,9 +174,11 @@ void RenderPlugin::onUnload(Engine& engine) {
     engine.registerService<AssetManager>(nullptr);
     engine.registerService<SpriteSheetLibrary>(nullptr);
     engine.registerService<ModelLibrary>(nullptr);
+    engine.registerService<EnvironmentLibrary>(nullptr);
     engine.registerService<MaterialLibrary>(nullptr);
     m_renderer.reset();
     m_models.reset();  // before the device: owns GPU buffers
+    m_environments.reset();
     m_materials.reset();
     m_sheets.reset();
     m_assets.reset();

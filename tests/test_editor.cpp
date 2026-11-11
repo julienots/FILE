@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 
 #include "agr/core/Uuid.hpp"
+#include "agr/assets/Environment.hpp"
 #include "agr/assets/Image.hpp"
 #include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/EditorContext.hpp"
@@ -260,6 +262,22 @@ TEST_CASE("the 3D showcase references shipped models and materials; models insta
         CHECK(pp.bloom);
     });
     CHECK(postEffects == 1);
+    usize imageSkies = 0;
+    reg.view<EnvironmentComponent>().each([&](ecs::Entity, EnvironmentComponent& env) {
+        if (env.sky != SkyMode::Image) return;
+        ++imageSkies;
+        auto bytes = f.engine->vfs().readBytes(env.skyTexture);
+        REQUIRE(bytes);
+        auto img = decodeImageLinear(bytes.value(), env.skyTexture);
+        REQUIRE(img);
+        CHECK(img.value().width == 2 * img.value().height);
+        auto map = buildEnvironmentMap(img.value(), 1024);
+        REQUIRE(map);
+        // The sun (above 1: an HDR image) and a brighter sky above than ground below.
+        CHECK(*std::max_element(img.value().rgb.begin(), img.value().rgb.end()) > 10.0f);
+        CHECK(evaluateIrradiance(map.value().sh, {0, 1, 0}).z > evaluateIrradiance(map.value().sh, {0, -1, 0}).z);
+    });
+    CHECK(imageSkies == 1);
     usize pointLights = 0;
     reg.view<PointLightComponent>().each([&](ecs::Entity, PointLightComponent&) { ++pointLights; });
     CHECK(pointLights >= 1);

@@ -356,17 +356,33 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 envFound = true;
             }
         });
-        const bool gradient = env.sky == SkyMode::Gradient;
+        // Image sky: the environment map once loaded (the gradient stands in while it loads).
+        m_envTexture = {};
+        const EnvironmentAsset* image = nullptr;
+        if (env.sky == SkyMode::Image && m_environments) {
+            image = m_environments->get(env.skyTexture);
+            if (image && image->state == AssetState::Loading) m_stats.environmentLoading = true;
+            if (image && (image->state != AssetState::Ready || !image->texture)) image = nullptr;
+        }
+        const bool gradient = env.sky == SkyMode::Gradient || (env.sky == SkyMode::Image && !image);
         const Vec3 sky = srgbToLinear(env.skyColor), ground = srgbToLinear(env.groundColor);
         // Sprites lit by 2D lights use one flat ambient: with a gradient sky, its average.
         frame.ambient = gradient ? Vec4((sky + ground) * 0.5f * env.ambientIntensity, 0.0f)
                                  : Vec4(srgbToLinear(env.ambientColor) * env.ambientIntensity, 0.0f);
+        if (image) {
+            m_envTexture = image->texture;
+            const float intensity = std::max(env.skyIntensity, 0.0f);
+            for (usize i = 0; i < 9; ++i) frame.envSH[i] = Vec4(image->sh[i], 0.0f);
+            frame.envParams = Vec4(1.0f, intensity, env.skyRotation, static_cast<float>(image->levels > 0 ? image->levels - 1 : 0));
+            frame.ambient = Vec4(image->average * intensity * env.ambientIntensity, 0.0f);
+            m_stats.imageSky = true;
+        }
         frame.skyColor = Vec4(sky, gradient ? 1.0f : 0.0f);
         frame.groundColor = Vec4(ground, env.ambientIntensity);
         frame.horizonColor = Vec4(srgbToLinear(env.horizonColor), env.sunDisc ? 1.0f : 0.0f);
         frame.fogColor = Vec4(srgbToLinear(env.fogColor), env.fog ? 1.0f : 0.0f);
         frame.fogParams = Vec4(env.fogStart, std::max(env.fogEnd, env.fogStart + 0.01f), std::max(env.exposure, 0.0f), 0.0f);
-        m_drawSky = gradient && rv.projection == Projection::Perspective;
+        m_drawSky = (gradient || image) && rv.projection == Projection::Perspective;
     }
     // Post-processing: first active PostProcess component (not for direct previews).
     PostProcessComponent post;

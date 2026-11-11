@@ -26,7 +26,7 @@ namespace {
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
 constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
 constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
-constexpr u32 kShadowUnit = 5;
+constexpr u32 kShadowUnit = 5, kEnvUnit = 6;
 
 u64 mix64(u64 h, u64 v) {
     h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -80,7 +80,7 @@ Status Renderer::create3DPipelines() {
                 p.debugName = skinned ? "agr.pbr.skinned" : "agr.pbr";
                 const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "");
                 p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kPbrVertex;
-                p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kPbrFragment;
+                p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kEnvBlock + shaders::kPbrFragment;
                 p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
                 p.instanceLayout = instanceLayout(true);
                 p.cull = twoSided ? rhi::CullMode::None : rhi::CullMode::Back;
@@ -90,7 +90,7 @@ Status Renderer::create3DPipelines() {
                 }
                 p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
                 if (skinned) p.uniformBlocks.push_back("SkinData");
-                p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap"};
+                p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap"};
                 auto r = m_device.createPipeline(p);
                 if (!r) return r.error();
                 (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines)[alpha * 2 + twoSided] = r.value();
@@ -120,13 +120,14 @@ Status Renderer::create3DPipelines() {
         rhi::PipelineDesc p;
         p.debugName = "agr.sky";
         p.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kSkyVertex;
-        p.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kToneMapping + shaders::kSkyFragment;
+        p.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kToneMapping + shaders::kEnvBlock + shaders::kSkyFragment;
         p.layout.stride = sizeof(math::Vec2);
         p.layout.attributes = {{0, rhi::VertexFormat::Float2, 0}};
         p.cull = rhi::CullMode::None;
         p.depthWrite = false;
         p.depthCompare = rhi::CompareOp::LessEqual;
         p.uniformBlocks = {"FrameData"};
+        p.samplers = {"u_envMap"};
         auto r = m_device.createPipeline(p);
         if (!r) return r.error();
         m_skyPipeline = r.value();
@@ -573,6 +574,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
     if (!shadow) {
         m_device.bindUniformBuffer(kSlotLights, m_uniformBuffer, m_lights3DOffset, sizeof(LightUniforms));
         m_device.bindTexture(kShadowUnit, m_shadowsActive ? m_device.renderTargetDepthTexture(m_shadowTarget) : m_assets.whiteTexture());
+        m_device.bindTexture(kEnvUnit, m_envTexture ? m_envTexture : m_assets.whiteTexture());
     }
     u32 boundPipeline = ~0u, boundMaterial = ~0u;
     rhi::BufferHandle boundVb;
@@ -634,6 +636,7 @@ void Renderer::drawSky() {
     if (!m_drawSky) return;
     m_device.bindPipeline(m_skyPipeline);
     m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, m_frameOffset, sizeof(FrameUniforms));
+    m_device.bindTexture(0, m_envTexture ? m_envTexture : m_assets.whiteTexture());
     m_device.bindVertexBuffer(m_skyVertices);
     m_device.draw(3);
 }

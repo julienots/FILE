@@ -26,8 +26,10 @@ struct FrameUniforms {
     math::Vec4 shadowView;        // camera forward (xyz)
     math::Vec4 shadowParams;      // cascade count (0 = off), depth bias, blend band (fraction), strength
     math::Vec4 shadowParams2;     // atlas texel size (uv), PCF radius, -, -
+    math::Vec4 envSH[9];          // image sky: irradiance / pi (SH9, rgb)
+    math::Vec4 envParams;         // image sky ready, intensity, rotation (radians), last mip level
 };
-static_assert(sizeof(FrameUniforms) == 672);
+static_assert(sizeof(FrameUniforms) == 832);
 
 struct MaterialUniforms {
     math::Vec4 baseColor;

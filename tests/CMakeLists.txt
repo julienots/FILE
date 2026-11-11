@@ -11,6 +11,7 @@ add_executable(agr_tests
     test_shader_dialect.cpp
     test_twod.cpp
     test_models.cpp
+    test_environment.cpp
     test_physics2d.cpp
     test_script.cpp
     test_physics3d.cpp

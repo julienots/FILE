@@ -87,6 +87,7 @@ struct VkTextureRes {
     VkSampler sampler = VK_NULL_HANDLE;
     TextureFormat format = TextureFormat::RGBA8;
     bool ownedByTarget = false;
+    bool explicitMips = false;
     u64 bytes = 0;
 };
 
@@ -317,8 +318,13 @@ public:
         t.format = d.format;
         const VkFormat format = toVk(d.format, m_depthFormat);
         const bool depth = isDepthFormat(d.format);
+        if (!d.mipData.empty() && (!d.data || depth))
+            return makeError(Error::Code::InvalidArgument, "explicit mip levels need level 0 data and a color format");
         u32 mips = 1;
-        if (d.generateMips && !depth && canBlitLinear(format)) {
+        if (!d.mipData.empty()) {
+            mips = 1 + static_cast<u32>(d.mipData.size());
+            t.explicitMips = true;
+        } else if (d.generateMips && !depth && canBlitLinear(format)) {
             while ((std::max(d.width, d.height) >> mips) > 0) ++mips;
         }
         VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -331,7 +337,15 @@ public:
         t.sampler = sampler(d.sampler, mips > 1);
         const u64 base = static_cast<u64>(d.width) * d.height * bytesPerPixel(d.format);
         t.bytes = mips > 1 ? base * 4 / 3 : base;
-        if (d.data) {
+        if (t.explicitMips) {
+            std::vector<const void*> levels{d.data};
+            levels.insert(levels.end(), d.mipData.begin(), d.mipData.end());
+            if (Status s = uploadImageLevels(t.img, levels, bytesPerPixel(d.format)); !s) {
+                destroyImageNow(t.img);
+                return s.error();
+            }
+            m_stats.uploadedBytes += t.bytes;
+        } else if (d.data) {
             if (Status s = uploadImage(t.img, d.data, base); !s) {
                 destroyImageNow(t.img);
                 return s.error();
@@ -350,6 +364,7 @@ public:
     Status updateTexture(TextureHandle h, const void* data) override {
         VkTextureRes* t = m_textures.get(h);
         if (!t || !data) return makeError(Error::Code::InvalidArgument, "invalid texture or data");
+        if (t->explicitMips) return makeError(Error::Code::Unsupported, "texture with explicit mip levels cannot be updated");
         vkDeviceWaitIdle(m_device);
         const u64 base = static_cast<u64>(t->img.width) * t->img.height * bytesPerPixel(t->format);
         m_stats.uploadedBytes += base;
@@ -559,6 +574,8 @@ private:
     Status immediate(const std::function<void(VkCommandBuffer)>& record);
     Status uploadToBuffer(VkBuffer dst, usize offset, const void* data, usize size);
     Status uploadImage(Image& img, const void* data, u64 bytes);
+    /// Every mip level given by the caller (level i is max(1, size >> i)).
+    Status uploadImageLevels(Image& img, const std::vector<const void*>& levels, u32 pixelBytes);
     bool canBlitLinear(VkFormat format) const;
     VkSampler sampler(const SamplerDesc& s, bool hasMips);
     VkRenderPass renderPass(u64 compat, bool clearColor, bool clearDepth);
@@ -1105,6 +1122,46 @@ Status VulkanDevice::uploadImage(Image& img, const void* data, u64 bytes) {
                                  1, &b);
         }
         img.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    });
+    vmaDestroyBuffer(m_allocator, staging, alloc);
+    return s;
+}
+
+Status VulkanDevice::uploadImageLevels(Image& img, const std::vector<const void*>& levels, u32 pixelBytes) {
+    std::vector<VkBufferImageCopy> regions;
+    u64 total = 0;
+    u32 w = img.width, h = img.height;
+    for (usize level = 0; level < levels.size(); ++level) {
+        VkBufferImageCopy r{};
+        r.bufferOffset = total;
+        r.imageSubresource = {img.aspect, static_cast<u32>(level), 0, 1};
+        r.imageExtent = {w, h, 1};
+        regions.push_back(r);
+        total += static_cast<u64>(w) * h * pixelBytes;
+        total = (total + 15) & ~u64{15};  // keep offsets aligned for every texel size
+        w = std::max(1u, w / 2);
+        h = std::max(1u, h / 2);
+    }
+    VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    bi.size = total;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo ai{};
+    ai.usage = VMA_MEMORY_USAGE_AUTO;
+    ai.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VkBuffer staging;
+    VmaAllocation alloc;
+    VmaAllocationInfo info{};
+    AGR_VK_TRY(vmaCreateBuffer(m_allocator, &bi, &ai, &staging, &alloc, &info), "staging buffer");
+    for (usize level = 0; level < levels.size(); ++level) {
+        const VkExtent3D e = regions[level].imageExtent;
+        std::memcpy(static_cast<u8*>(info.pMappedData) + regions[level].bufferOffset, levels[level],
+                    static_cast<usize>(e.width) * e.height * pixelBytes);
+    }
+    vmaFlushAllocation(m_allocator, alloc, 0, VK_WHOLE_SIZE);
+    Status s = immediate([&](VkCommandBuffer c) {
+        transition(c, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        vkCmdCopyBufferToImage(c, staging, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+        transition(c, img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     });
     vmaDestroyBuffer(m_allocator, staging, alloc);
     return s;

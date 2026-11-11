@@ -1,6 +1,11 @@
 #include <doctest/doctest.h>
 
+#include <cmath>
+#include <cstdint>
+#include <limits>
+
 #include "agr/math/Geometry.hpp"
+#include "agr/math/Half.hpp"
 #include "agr/math/Math.hpp"
 
 using namespace agr::math;
@@ -104,3 +109,22 @@ TEST_CASE("ray / box intersection and box transform") {
 }
 
 }  // TEST_SUITE
+
+TEST_CASE("half floats: exact values, rounding, range") {
+    using agr::math::floatToHalf;
+    using agr::math::halfToFloat;
+    CHECK(floatToHalf(0.0f) == 0x0000);
+    CHECK(floatToHalf(-0.0f) == 0x8000);
+    CHECK(floatToHalf(1.0f) == 0x3c00);
+    CHECK(floatToHalf(-2.0f) == 0xc000);
+    CHECK(floatToHalf(65504.0f) == 0x7bff);
+    CHECK(floatToHalf(1e6f) == 0x7c00);                    // overflow -> infinity
+    CHECK(floatToHalf(std::numeric_limits<float>::quiet_NaN()) == 0x7e00);
+    CHECK(floatToHalf(5.9604645e-8f) == 0x0001);           // smallest subnormal
+    CHECK(floatToHalf(1e-9f) == 0x0000);
+    for (float v : {0.1f, 0.5f, 3.14159f, 100.0f, 1e-5f, 20000.0f, -7.25f}) {
+        const float back = halfToFloat(floatToHalf(v));
+        CHECK(std::abs(back - v) <= std::abs(v) * 0.001f + 6e-8f);
+    }
+    for (std::uint32_t h = 0; h < 0x7c00; ++h) CHECK_EQ(floatToHalf(halfToFloat(static_cast<std::uint16_t>(h))), h);
+}

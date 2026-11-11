@@ -31,6 +31,7 @@ struct GLTexture {
     u32 width = 0, height = 0;
     TextureFormat format = TextureFormat::RGBA8;
     bool mips = false;
+    bool explicitMips = false;
     u64 bytes = 0;
     bool ownedByTarget = false;
 };
@@ -240,7 +241,10 @@ public:
         t.width = d.width;
         t.height = d.height;
         t.format = d.format;
-        t.mips = d.generateMips && !isDepthFormat(d.format);
+        if (!d.mipData.empty() && (!d.data || isDepthFormat(d.format)))
+            return makeError(Error::Code::InvalidArgument, "explicit mip levels need level 0 data and a color format");
+        t.explicitMips = !d.mipData.empty();
+        t.mips = t.explicitMips || (d.generateMips && !isDepthFormat(d.format));
         const u64 base = static_cast<u64>(d.width) * d.height * bytesPerPixel(d.format);
         t.bytes = t.mips ? base * 4 / 3 : base;
         m_gl.glGenTextures(1, &t.id);
@@ -249,7 +253,18 @@ public:
         const FormatInfo fi = toGL(d.format);
         m_gl.glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(fi.internal), static_cast<GLsizei>(d.width),
                           static_cast<GLsizei>(d.height), 0, fi.format, fi.type, d.data);
-        if (t.mips && d.data) m_gl.glGenerateMipmap(GL_TEXTURE_2D);
+        if (t.explicitMips) {
+            u32 w = d.width, h = d.height;
+            for (usize level = 0; level < d.mipData.size(); ++level) {
+                w = std::max(1u, w / 2);
+                h = std::max(1u, h / 2);
+                m_gl.glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level + 1), static_cast<GLint>(fi.internal), static_cast<GLsizei>(w),
+                                  static_cast<GLsizei>(h), 0, fi.format, fi.type, d.mipData[level]);
+            }
+            m_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(d.mipData.size()));
+        } else if (t.mips && d.data) {
+            m_gl.glGenerateMipmap(GL_TEXTURE_2D);
+        }
         applySampler(d.sampler, t.mips);
         m_textureUnits[0] = {};  // unit 0 binding changed behind the cache
         if (GLenum err = m_gl.glGetError(); err != GL_NO_ERROR) {
@@ -265,6 +280,7 @@ public:
     Status updateTexture(TextureHandle h, const void* data) override {
         GLTexture* t = m_textures.get(h);
         if (!t || !data) return makeError(Error::Code::InvalidArgument, "invalid texture or data");
+        if (t->explicitMips) return makeError(Error::Code::Unsupported, "texture with explicit mip levels cannot be updated");
         const FormatInfo fi = toGL(t->format);
         m_gl.glActiveTexture(GL_TEXTURE0);
         m_gl.glBindTexture(GL_TEXTURE_2D, t->id);

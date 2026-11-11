@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include "GpuFixture.hpp"
+#include "agr/math/Half.hpp"
 #include "agr/platform/SdlFileProvider.hpp"
 
 using namespace agr;
@@ -121,6 +122,54 @@ void main() { o_color = texture(u_tex, v_uv); }
     CHECK_MESSAGE(near(pixel(d, 8, 56), 0, 0, 255), pixel(d, 8, 56));    // bottom-left
     CHECK_MESSAGE(near(pixel(d, 56, 56), 255, 255, 255), pixel(d, 56, 56));
 
+    d.destroyPipeline(pipe);
+    d.destroyBuffer(vb.value());
+    d.destroyTexture(tex.value());
+}
+
+TEST_CASE("explicit mip levels (RGBA16F): each level holds the caller's data") {
+    auto& d = *gpu().device;
+    // 4x2 level 0 red (value 2.0, beyond 8-bit range), level 1 (2x1) green, level 2 (1x1) blue.
+    auto fill = [](u32 count, float r, float g, float b) {
+        std::vector<u16> v;
+        for (u32 i = 0; i < count; ++i)
+            for (float c : {r, g, b, 1.0f}) v.push_back(math::floatToHalf(c));
+        return v;
+    };
+    const auto l0 = fill(8, 2.0f, 0, 0), l1 = fill(2, 0, 1, 0), l2 = fill(1, 0, 0, 1);
+    rhi::TextureDesc td;
+    td.width = 4;
+    td.height = 2;
+    td.format = rhi::TextureFormat::RGBA16F;
+    td.sampler = {rhi::Filter::Linear, rhi::Filter::Linear, true, rhi::Wrap::Repeat, rhi::Wrap::Clamp};
+    td.data = l0.data();
+    td.mipData = {l1.data(), l2.data()};
+    auto tex = d.createTexture(td);
+    REQUIRE_MESSAGE(tex, (tex ? "" : tex.error().message));
+    CHECK_FALSE(d.updateTexture(tex.value(), l0.data()));  // not supported on explicit chains
+    auto vb = d.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, sizeof kQuad, kQuad, "quad"});
+    REQUIRE(vb);
+    const auto pipe = makePipeline(d, R"(
+uniform sampler2D u_tex;
+in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() {
+    float lod = floor(v_uv.x * 3.0);
+    o_color = textureLod(u_tex, vec2(0.5, 0.5), lod) * vec4(0.5, 1.0, 1.0, 1.0);
+}
+)", {}, {"u_tex"});
+    d.beginFrame(kWidth, kHeight);
+    d.beginPass({}, {true, {0, 0, 0, 1}, true, 1.0f});
+    d.bindPipeline(pipe);
+    d.bindVertexBuffer(vb.value());
+    d.bindTexture(0, tex.value());
+    d.draw(6);
+    d.endPass();
+    d.endFrame();
+    CHECK_MESSAGE(near(pixel(d, 8, 32), 255, 0, 0), pixel(d, 8, 32));  // 2.0 * 0.5: half floats keep values > 1
+    CHECK_MESSAGE(near(pixel(d, 32, 32), 0, 255, 0), pixel(d, 32, 32));
+    CHECK_MESSAGE(near(pixel(d, 56, 32), 0, 0, 255), pixel(d, 56, 32));
+    CHECK(d.validationErrorCount() == 0);
     d.destroyPipeline(pipe);
     d.destroyBuffer(vb.value());
     d.destroyTexture(tex.value());

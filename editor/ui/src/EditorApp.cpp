@@ -1128,6 +1128,7 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(!cube.isNull() && !math::nearlyEqual(scene.registry().get<TransformComponent>(cube).rotation, math::Quat::identity()),
                   "the spin animation turns the kinematic cube");
             check(m_shared->renderer() && m_shared->renderer()->stats().skinnedMeshes > 0, "the skinned character is drawn (GPU skinning)");
+            check(m_shared->renderer() && m_shared->renderer()->stats().imageSky, "the HDR image sky lights the scene");
             if (const Renderer* r = m_shared->renderer()) {
                 // Bloom depends on the graphics profile (off on Low / Ultra Mobile, e.g. software GPUs).
                 check(r->stats().postProcessing && (r->stats().bloomLevels > 0) == r->profile().bloom,
