@@ -51,16 +51,26 @@ target_include_directories(agr_editor_ui PUBLIC ui/include)
 target_link_libraries(agr_editor_ui PUBLIC agr_editor_core agr::platform agr::imgui PRIVATE agr::compiler_options)
 set_target_properties(agr_editor_ui PROPERTIES FOLDER "Editor")
 
-add_executable(agr_editor app/main.cpp)
-target_link_libraries(agr_editor PRIVATE agr_editor_ui agr::compiler_options)
+if(ANDROID)
+    # On Android the editor is the native library (libmain.so) loaded by the activity; its
+    # resources travel in the APK and are extracted on first launch (app/main.cpp).
+    add_library(agr_editor SHARED app/main.cpp)
+    set_target_properties(agr_editor PROPERTIES OUTPUT_NAME main LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/editor_lib)
+    target_link_libraries(agr_editor PRIVATE agr_editor_ui agr::compiler_options android log)
+else()
+    add_executable(agr_editor app/main.cpp)
+    target_link_libraries(agr_editor PRIVATE agr_editor_ui agr::compiler_options)
+endif()
 set_target_properties(agr_editor PROPERTIES FOLDER "Editor")
 add_dependencies(agr_editor agr_player)  # desktop export copies the player next to the game
 if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_editor agr_plugin_spin)
 endif()
 # Fonts and template assets are shipped next to the executable.
+if(NOT ANDROID)
 add_custom_command(TARGET agr_editor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources $<TARGET_FILE_DIR:agr_editor>/editor_resources)
+endif()
 
 # End-to-end editor tests (need a display; CI runs them under xvfb-run).
 if(AGR_BUILD_TESTS)

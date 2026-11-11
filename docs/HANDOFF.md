@@ -57,8 +57,17 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    compression des assets, profilage sur appareils, installeur de l'éditeur (Windows / Linux /
    macOS), CI (GitHub Actions) exécutant les suites, jeu mobile de démonstration finalisé (le menu
    des 12 modèles en tient lieu pour l'instant).
-7. **Éditeur sur Android** : non prévu à ce jour (l'éditeur ImGui vise souris + clavier). Une
-   version tablette demanderait une interface tactile dédiée.
+7. **Éditeur sur Android** (demande prioritaire de l'utilisateur : « le moteur sur mobile ») —
+   **commencé, pas fonctionnel** : preset CMake `android-editor-arm64` et cible `agr_editor` compilée
+   en `libmain.so` sur Android (`editor/CMakeLists.txt`). La compilation n'a pas encore été menée à
+   terme. Reste : (a) faire compiler l'éditeur avec le NDK ; (b) dans `editor/app/main.cpp`, sous
+   Android, extraire `editor_resources` (polices, modèles) des assets de l'APK vers
+   `SDL_GetPrefPath` au premier lancement (liste de fichiers générée à l'empaquetage), dossier des
+   projets dans le stockage interne ; (c) échelle d'interface adaptée au téléphone / tablette,
+   orientation paysage, clavier virtuel (ImGui + SDL3) ; (d) masquer sur Android ce qui ne peut pas
+   marcher (export Gradle, « Ouvrir dans l'explorateur », import par sélecteur natif) ou le
+   remplacer ; (e) empaqueter l'APK de l'éditeur (réutiliser le générateur Gradle d'AndroidExport
+   avec l'éditeur comme `libmain.so`) ; (f) tester sur appareil.
 
 Limites connues documentées dans chaque fichier `docs/*.md` (sections « Limites actuelles »).
 Points d'attention : `agr.loadScene` dans l'éditeur en mode Jeu remplace la scène jouée (prévu pour

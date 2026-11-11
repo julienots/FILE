@@ -79,6 +79,14 @@
         "AGR_BUILD_EDITOR": "OFF",
         "AGR_BUILD_PLUGINS": "OFF"
       }
+    },
+    {
+      "name": "android-editor-arm64",
+      "inherits": "android-arm64",
+      "displayName": "Android arm64 editor (AGR ENGINE on mobile, needs ANDROID_NDK_HOME)",
+      "cacheVariables": {
+        "AGR_BUILD_EDITOR": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -110,6 +118,13 @@
       "configurePreset": "android-x86_64",
       "targets": [
         "agr_player"
+      ]
+    },
+    {
+      "name": "android-editor-arm64",
+      "configurePreset": "android-editor-arm64",
+      "targets": [
+        "agr_editor"
       ]
     }
   ],
