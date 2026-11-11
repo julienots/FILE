@@ -94,3 +94,16 @@ tycoon.hint,"Touchez une parcelle pour construire une boutique ({1}), une boutiq
 tycoon.nomoney,Pas assez d'argent,Not enough money,No hay suficiente dinero
 tycoon.upgraded,"Boutique niveau {1} : {2} pièces par client","Shop level {1}: {2} coins per customer","Tienda nivel {1}: {2} monedas por cliente"
 tycoon.won,"Empire commercial en {1} jour(s) ! (record : {2})","Business empire in {1} day(s)! (best: {2})","¡Imperio comercial en {1} día(s)! (récord: {2})"
+surv.action,Action,Action,Acción
+surv.craft,Feu,Fire,Fuego
+surv.health,"Santé : {1} / {2}","Health: {1} / {2}","Salud: {1} / {2}"
+surv.hunger,"Faim : {1} %","Food: {1} %","Comida: {1} %"
+surv.wood,"Bois : {1}   (feu : {2})","Wood: {1}   (fire: {2})","Madera: {1}   (fuego: {2})"
+surv.day,"Jour {1}","Day {1}","Día {1}"
+surv.night,"Nuit {1} — les zombies rôdent","Night {1} — zombies roam","Noche {1} — los zombis acechan"
+surv.intro,"Mangez des baies, coupez du bois, allumez un feu avant la nuit (Espace / E, C)","Eat berries, chop wood, light a fire before nightfall (Space / E, C)","Come bayas, corta leña, enciende un fuego antes de la noche (Espacio / E, C)"
+surv.nightfalls,La nuit tombe…,Night falls…,Cae la noche…
+surv.dawn,"Le jour se lève : {1} nuit(s) survécue(s)","Dawn: {1} night(s) survived","Amanece: {1} noche(s) sobrevivida(s)"
+surv.nowood,"Il faut {1} bois pour un feu","You need {1} wood for a fire","Necesitas {1} de madera para un fuego"
+surv.won,"Vous avez survécu à {1} nuits !","You survived {1} nights!","¡Sobreviviste {1} noches!"
+surv.dead,"Vous n'avez pas survécu ({1} nuit(s))","You did not survive ({1} night(s))","No sobreviviste ({1} noche(s))"

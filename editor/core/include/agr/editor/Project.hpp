@@ -19,7 +19,7 @@ Result<ProjectMode> parseProjectMode(std::string_view text);
 /// Scene templates: empty bases, showcases, and complete playable games (Phase 9, docs/TEMPLATES.md).
 enum class SceneTemplate : u8 {
     Empty2D, Empty25D, Empty3D, Showcase2D, Showcase3D,
-    GamePlatformer, GameRpg2D, GameTowerDefense, GameCards, GameFarm, GameIdle, GameTycoon,
+    GamePlatformer, GameRpg2D, GameTowerDefense, GameCards, GameFarm, GameIdle, GameTycoon, GameSurvival,
 };
 
 /// Export settings (game identity, mobile behavior, Android build). Signing passwords are

@@ -509,4 +509,66 @@ TEST_CASE("tycoon: build shops, customers queue and pay, impatience hurts reputa
     h.noScriptErrors();
 }
 
+
+TEST_CASE("survival: hunger, berries, wood, campfire, zombies at night chase and burn, dawn, three nights") {
+    GameHarness h(SceneTemplate::GameSurvival);
+    h.frames(5);
+    CHECK(h.number("Survivor", "health") == 10);
+    h.seconds(5.0);
+    CHECK(h.number("Survivor", "hunger") < 97);  // 0.8 / s
+    // Berries.
+    h.lua(R"(local b = agr.find("Bush 1"); local x, y = b:position(); agr.find("Survivor"):setPosition(x + 0.8, y))");
+    h.frames(3);
+    const double hunger = h.number("Survivor", "hunger");
+    h.pressKey(Key::E);
+    CHECK(h.number("Survivor", "hunger") == doctest::Approx(std::min(100.0, hunger + 25)).epsilon(0.02));
+    // Wood: three hits fell a tree.
+    h.lua(R"(local t = agr.find("Tree 1"); local x, y = t:position(); agr.find("Survivor"):setPosition(x + 1.0, y))");
+    h.seconds(0.4);  // action cooldown
+    for (int i = 0; i < 3; ++i) {
+        h.pressKey(Key::Space);
+        h.seconds(0.4);
+    }
+    CHECK_FALSE(h.active("Tree 1"));
+    CHECK(h.number("Survivor", "wood") == 4);
+    h.pressKey(Key::C);  // not enough wood
+    CHECK(h.text("Message").find("bois") != std::string::npos);
+    h.lua(R"(agr.find("Survivor"):script().wood = 5; agr.find("Survivor"):setPosition(0, -0.5))");
+    h.pressKey(Key::C);
+    CHECK_FALSE(h.scene().findByName("Campfire").isNull());
+    CHECK(h.number("Survivor", "wood") == 0);
+    // Night: zombies spawn and chase.
+    h.lua(R"(local s = agr.find("Survivor"):script(); s.clock = s.dayLength - 0.05; s.hunger = 100)");
+    h.seconds(2.0);
+    CHECK(h.field("Survivor", "night") == "true");
+    CHECK_FALSE(h.scene().findByName("Zombie").isNull());
+    // Away from the fire, a zombie reaches the survivor.
+    h.lua(R"(agr.find("Survivor"):setPosition(-12, 0); local z = agr.find("Zombie"); z:setPosition(-9, 0))");
+    const double health = h.number("Survivor", "health");
+    for (int k = 0; k < 16 && h.number("Survivor", "health") >= health; ++k) h.seconds(0.5);
+    CHECK(h.number("Survivor", "health") < health);
+    // A zombie next to the fire burns.
+    h.lua(R"(local f = agr.find("Campfire"); local x, y = f:position(); local z = agr.find("Zombie"); z:setPosition(x + 1, y); z:script().life = 1)");
+    h.seconds(1.5);
+    h.lua(R"(_G.zombies = 0; for _, z in ipairs(agr.find("Survivor"):script().zombies) do if z:isValid() then _G.zombies = _G.zombies + 1 end end)");
+    // Dawn after the night: zombies gone, one night survived.
+    h.lua(R"(local s = agr.find("Survivor"):script(); s.clock = s.nightLength - 0.05; s.health = 10)");
+    h.frames(3);
+    CHECK(h.number("Survivor", "survived") == 1);
+    h.frames(2);
+    CHECK(h.scene().findByName("Zombie").isNull());
+    // Three nights: victory.
+    h.lua(R"(local s = agr.find("Survivor"):script(); s.survived = 2; s.night = true; s.clock = s.nightLength - 0.05)");
+    h.frames(3);
+    CHECK(h.field("Survivor", "state") == "won");
+    h.clickUI("Restart");
+    CHECK(h.field("Survivor", "state") == "playing");
+    CHECK(h.active("Tree 1"));
+    // Starvation kills.
+    h.lua(R"(local s = agr.find("Survivor"):script(); s.hunger = 0; s.health = 0.2)");
+    h.seconds(1.0);
+    CHECK(h.field("Survivor", "state") == "dead");
+    h.noScriptErrors();
+}
+
 }

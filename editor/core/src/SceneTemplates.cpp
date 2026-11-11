@@ -35,6 +35,7 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameFarm: return "Jeu : Simulation (ferme)";
         case SceneTemplate::GameIdle: return "Jeu : Idle (mine de cristaux)";
         case SceneTemplate::GameTycoon: return "Jeu : Tycoon (rue commerçante)";
+        case SceneTemplate::GameSurvival: return "Jeu : Survie";
     }
     return "?";
 }
@@ -67,6 +68,8 @@ const char* templateDescription(SceneTemplate t) {
             return "Jeu incrémental : touchez le cristal, achetez mineurs, foreuses et usines qui produisent seuls (prix croissants), améliorez la pioche, gagnez pendant votre absence (jusqu'à 8 h), puis renaissez pour un bonus permanent. Sauvegarde automatique.";
         case SceneTemplate::GameTycoon:
             return "Gestion : construisez des boutiques le long d'une rue, améliorez-les (service plus rapide, prix plus élevé). Les clients arrivent selon votre réputation, choisissent la file la plus courte, paient ou repartent mécontents si l'attente est trop longue. Objectif : 2000 pièces (record de jours sauvegardé).";
+        case SceneTemplate::GameSurvival:
+            return "Survie vue de dessus : la faim baisse sans cesse, mangez des baies, coupez du bois, allumez des feux de camp et alimentez-les. La nuit, des zombies vous traquent (recherche de chemin) ; le feu les repousse et les brûle. Survivez 3 nuits. Espace / E : action, C : feu, ou boutons tactiles.";
     }
     return "";
 }
@@ -85,6 +88,7 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameSurvival: return ProjectMode::Mode2D;
         case SceneTemplate::GameTycoon: return ProjectMode::Mode2D;
         case SceneTemplate::GameIdle: return ProjectMode::Mode2D;
         case SceneTemplate::GameFarm: return ProjectMode::Mode2D;
@@ -102,7 +106,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameTycoon); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameSurvival); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -556,6 +560,7 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameSurvival: games::buildSurvival(scene); break;
         case SceneTemplate::GameTycoon: games::buildTycoon(scene); break;
         case SceneTemplate::GameIdle: games::buildIdle(scene); break;
         case SceneTemplate::GameFarm: games::buildFarm(scene); break;
