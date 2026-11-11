@@ -934,7 +934,7 @@ function buildMenus() {
     "Animation": [["Squelette & animations", () => { S.propTab = "rig"; renderProps(); }], ["Lire l'animation", playPreview, "Espace"], ["Arrêter la lecture", () => vp.stopAnimation()]],
     "Export": [["GLB", () => quickExport({ format: "glb" })], ["FBX", () => quickExport({ format: "fbx" })], ["OBJ", () => quickExport({ format: "obj" })], ["STL", () => quickExport({ format: "stl" })], ["PLY", () => quickExport({ format: "ply" })], ["BLEND", () => quickExport({ format: "blend" })], "-",
       ["Profil Unity", () => quickExport({ profile: "unity" })], ["Profil Unreal Engine", () => quickExport({ profile: "unreal" })], ["Profil Godot", () => quickExport({ profile: "godot" })], ["Profil mobile", () => quickExport({ profile: "mobile" })], ["Profil impression 3D", () => quickExport({ profile: "print3d" })], ["Profil haute qualité", () => quickExport({ profile: "high_quality" })]],
-    "Paramètres": [["Préférences…", settingsDialog], ["Connexion Claude (MCP)…", mcpDialog], ["Moteurs IA facultatifs…", aiDialog], ["Raccourcis clavier", shortcutsDialog], ["À propos", aboutDialog]],
+    "Paramètres": [["Préférences…", settingsDialog], ["Connexion Claude (MCP)…", mcpDialog], ["Connexion mobile (APK)…", mobileDialog], ["Moteurs IA facultatifs…", aiDialog], ["Raccourcis clavier", shortcutsDialog], ["À propos", aboutDialog]],
   };
   const bar = $("#menubar");
   bar.innerHTML = "";
@@ -1001,6 +1001,27 @@ function mcpDialog() {
       h("li", {}, "Redémarrez Claude Desktop : l'icône d'outils affiche « superessence ».")),
     h("p", { class: "hint" }, "Le studio démarre automatiquement si Claude l'appelle alors qu'il est fermé. Les opérations destructrices demandent une confirmation (confirm=true). Documentation complète : README.md, section « Connexion à Claude »."),
     h("pre", {}, '{\n  "mcpServers": {\n    "superessence": {\n      "command": "<dossier>/superessence3d/.venv/bin/python",\n      "args": ["-m", "superessence.mcp_server"],\n      "env": { "PYTHONPATH": "<dossier>/superessence3d" }\n    }\n  }\n}')), [["Fermer", null]], { wide: true });
+}
+
+async function mobileDialog() {
+  let r;
+  try {
+    const resp = await fetch("/api/pair/start", { method: "POST", headers: { "X-SE-Token": window.SE_TOKEN } });
+    r = await resp.json();
+  } catch (e) { return toast(e.message, "error"); }
+  const content = h("div", { style: { display: "grid", gap: "10px" } },
+    h("p", { style: { margin: 0 } }, "L'application Android SUPERESSENCE 3D Mobile affiche ce studio sur votre téléphone ou tablette. Les calculs (Blender) restent sur cet ordinateur : il doit rester allumé, sur le même Wi-Fi."));
+  if (!r.lan) {
+    content.append(h("div", { class: "warnbox" }, "Le studio n'est pas en mode réseau local. Fermez-le puis relancez-le avec start_mobile_windows.bat (Windows) ou ./start_mobile.sh (Mac/Linux)."));
+  } else {
+    content.append(
+      h("div", { class: "hint" }, "Dans l'application, touchez « Rechercher » (ou saisissez l'adresse), puis entrez ce code :"),
+      h("div", { style: { fontSize: "44px", fontFamily: "var(--mono)", letterSpacing: ".3em", textAlign: "center", color: "var(--accent2)" } }, r.code),
+      h("div", { class: "hint", style: { textAlign: "center" } }, "Valable 5 minutes, utilisable une seule fois."),
+      h("div", { class: "kv" }, h("span", {}, "Adresse(s)"), h("span", { style: { fontFamily: "var(--mono)" } }, (r.addresses || []).join("  ·  ") || "inconnue")),
+      h("div", { class: "hint" }, "Si le téléphone ne trouve pas le studio : vérifiez le même réseau Wi-Fi et autorisez Python dans le pare-feu."));
+  }
+  modal("Connexion mobile (APK)", content, [["Fermer", null]]);
 }
 
 async function aiDialog() {

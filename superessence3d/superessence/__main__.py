@@ -75,8 +75,8 @@ def main(argv=None):
     print(f"[SUPERESSENCE] Studio prêt : {url}", flush=True)
     print(f"[SUPERESSENCE] Dossier de travail : {config.home()}", flush=True)
     if lan:
-        print(f"[SUPERESSENCE] Mode réseau local : ouvrez http://<ip-de-cet-ordinateur>:{args.port}/?token={token}",
-              flush=True)
+        print("[SUPERESSENCE] Mode réseau local actif : dans le studio, Paramètres › Connexion mobile affiche le code "
+              "d'appairage pour l'application Android.", flush=True)
     if not args.no_browser and not os.environ.get("SUPERESSENCE_NO_BROWSER"):
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try:

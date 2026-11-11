@@ -40,6 +40,17 @@ Il faut une connexion Internet pour l'installation seulement, puis tout fonction
 - Le dossier de travail est `~/SuperEssence3D` : projets, exports, rendus, textures, bibliothèque, réglages.
 - Option `--lan` : accès depuis une tablette ou un téléphone du même réseau Wi-Fi, avec le jeton affiché au démarrage.
 
+### 1 bis. Application Android (APK)
+`release/SUPERESSENCE3D-Mobile.apk` (Android 6.0 et plus, environ 30 Ko, signée).
+
+1. Sur l'ordinateur, lancez **`start_mobile_windows.bat`** (ou `./start_mobile.sh`). Si le pare-feu Windows le demande, autorisez Python sur les réseaux privés.
+2. Dans le studio : **Paramètres › Connexion mobile (APK)**. Un code à 6 chiffres s'affiche (valable 5 minutes, à usage unique).
+3. Sur le téléphone : installez l'APK (autorisez « sources inconnues »), ouvrez **SUPERESSENCE 3D**, touchez **Rechercher le studio sur le Wi-Fi**, entrez le code, puis **Se connecter**.
+
+Le téléphone affiche alors l'interface complète : viewport 3D tactile, génération, sculpture, matériaux, bibliothèque. Il peut aussi envoyer des photos (image vers 3D) et télécharger les exports dans Téléchargements/SuperEssence3D. La connexion reste sur votre réseau local, protégée par le jeton secret obtenu à l'appairage.
+
+Reconstruire l'APK : `android/build_apk.sh` (SDK Android de Debian/Ubuntu : `android-sdk android-sdk-platform-23 dalvik-exchange apksigner zipalign`).
+
 ---
 
 ## 2. Connexion à Claude
@@ -165,7 +176,7 @@ Le studio exécute la commande en arrière-plan, vérifie le fichier produit et 
 ## 6. Limites connues (honnêtes)
 
 - **Qualité** : les générateurs produisent des modèles stylisés et cohérents (bons pour du prototypage, des assets de jeux stylisés et une base à retravailler), pas des sculptures détaillées comparables à une IA neuronale ou à un artiste.
-- **Pas d'APK Android** : Blender n'existe pas sur Android, et le module `bpy` n'a pas de version Android. Un studio dont le moteur est le vrai Blender ne peut donc pas tenir dans une APK. Avec l'option `--lan`, une tablette ou un téléphone peut utiliser l'interface pendant que l'ordinateur fait le calcul. Une application Android compagnon (télécommande) est envisageable dans une étape suivante.
+- **Android** : Blender n'existe pas sur Android. L'APK `release/SUPERESSENCE3D-Mobile.apk` est donc une **application compagnon** : elle affiche le studio complet sur le téléphone, mais les calculs restent sur l'ordinateur, qui doit être allumé et sur le même Wi-Fi (voir section 1 bis).
 - **Viewport** : il affiche la géométrie exacte de Blender, avec des matériaux simplifiés en mode Matériau. L'aspect final est donné par le bouton **Rendu** (Cycles).
 - **Undo** : chaque étape enregistre la scène entière. Sur des scènes très lourdes, chaque opération prend un peu plus de temps.
 - **Sculpture** : elle agit sur le maillage de base. Pour des détails fins, densifiez d'abord avec « Densifier le maillage ». Ce n'est pas le Dyntopo de Blender.

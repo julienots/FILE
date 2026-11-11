@@ -89,11 +89,73 @@ def create_app(engine_box: dict, executor, token: str, lan: bool = False) -> Fas
         return await asyncio.wrap_future(fut)
 
     # -- interface -------------------------------------------------------------
+    def is_local_client(request) -> bool:
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0]
+        client = request.client.host if request.client else ""
+        return host in allowed_hosts and client in ("127.0.0.1", "::1", "localhost")
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
+        # Sur le réseau local, la page n'est servie qu'avec le jeton (obtenu par appairage).
+        if not is_local_client(request) and not token_ok(request):
+            return HTMLResponse("<h3>SUPERESSENCE 3D STUDIO</h3><p>Accès refusé : appairez l'appareil avec le code "
+                                "affiché dans le studio (Paramètres › Connexion mobile).</p>", status_code=401)
         html = (WEB / "index.html").read_text(encoding="utf-8")
-        # le jeton n'est injecté que pour un client local (même origine)
         return HTMLResponse(html.replace("__SE_TOKEN__", token).replace("__SE_VERSION__", __version__))
+
+    # -- appairage mobile (application Android compagnon) ------------------------
+    pairing: dict = {"code": None, "expires": 0.0, "attempts": 0}
+
+    def lan_addresses() -> list[str]:
+        import socket
+        ips = set()
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("10.255.255.255", 1))  # aucun paquet envoyé : sert à choisir l'interface
+                ips.add(s.getsockname()[0])
+        except OSError:
+            pass
+        try:
+            for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                ips.add(info[4][0])
+        except OSError:
+            pass
+        return sorted(ip for ip in ips if not ip.startswith("127."))
+
+    @app.get("/ping")
+    async def ping():
+        """Détection du studio sur le réseau local (aucune donnée sensible)."""
+        return {"app": "superessence3d", "version": __version__, "lan": lan}
+
+    @app.post("/api/pair/start")
+    async def pair_start(request: Request):
+        port = request.url.port or 8765
+        pairing["code"] = f"{secrets.randbelow(1_000_000):06d}"
+        pairing["expires"] = time.time() + 300
+        pairing["attempts"] = 0
+        return {"ok": True, "code": pairing["code"], "expires_in": 300, "lan": lan,
+                "addresses": [f"{ip}:{port}" for ip in lan_addresses()]}
+
+    @app.post("/pair")
+    async def pair(request: Request):
+        if not lan:
+            return JSONResponse({"ok": False, "error": "Le studio n'est pas en mode réseau local (--lan)."}, status_code=403)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        code = str(body.get("code", "")).strip()
+        if not pairing["code"] or time.time() > pairing["expires"]:
+            return JSONResponse({"ok": False, "error": "Aucun code actif : affichez un code dans le studio."}, status_code=403)
+        pairing["attempts"] += 1
+        if pairing["attempts"] > 5:
+            pairing["code"] = None
+            return JSONResponse({"ok": False, "error": "Trop d'essais : générez un nouveau code."}, status_code=429)
+        if not secrets.compare_digest(code, pairing["code"]):
+            return JSONResponse({"ok": False, "error": "Code incorrect."}, status_code=403)
+        pairing["code"] = None  # usage unique
+        broadcast({"type": "log", "level": "info", "message": "Appareil mobile appairé.", "time": time.time()})
+        return {"ok": True, "token": token, "version": __version__}
 
     @app.get("/web/{path:path}")
     async def static(path: str):

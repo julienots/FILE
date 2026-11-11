@@ -242,9 +242,33 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.45; }
   #layout[data-ws="generate"] #right { display: none; }
 }
 @media (max-width: 760px) {
-  #layout, #layout[data-ws="generate"] { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto 160px; grid-template-areas: "gen" "center" "right" "bottom"; overflow: auto; }
-  #toolbar { display: none; }
-  #right { grid-template-rows: auto auto; }
+  html, body { overflow: auto; }
+  #topbar { height: auto; flex-wrap: wrap; padding: 6px 8px; gap: 6px; }
   .brand span { display: none; }
-  #menubar { overflow-x: auto; }
+  #menubar { order: 3; width: 100%; overflow-x: auto; }
+  .menu > button { padding: 6px 8px; white-space: nowrap; }
+  #workspaces { margin-left: 0; }
+  #workspaces button { padding: 5px 9px; }
+  #status { margin-left: auto; }
+  #layout, #layout[data-ws="generate"], #layout[data-ws="library"] { height: auto; min-height: calc(100vh - 80px); grid-template-columns: 100%;
+    grid-template-rows: auto auto 62vh auto auto; grid-template-areas: "tools" "gen" "center" "right" "bottom"; overflow: visible; }
+  #layout[data-ws="library"] { grid-template-rows: auto auto auto 200px; grid-template-areas: "tools" "lib" "gen" "bottom"; }
+  #toolbar { flex-direction: row; overflow-x: auto; padding: 4px 6px; border-right: 0; border-bottom: 1px solid var(--line); justify-content: flex-start; }
+  .tool-sep { width: 1px; height: 26px; margin: 0 4px; }
+  .tool[data-tip]:hover::after { display: none; }
+  #layout:not([data-ws="generate"]) #gen-panel { display: none; }
+  #gen-panel { border-right: 0; }
+  #right { grid-template-rows: 240px auto; border-left: 0; }
+  #props { min-height: 420px; }
+  #bottom { height: 200px; }
+  .overlay-bar { flex-wrap: nowrap; overflow-x: auto; }
+  #view-switch { margin-left: 0; }
+  .seg button { padding: 6px 9px; }
+  .overlay-panel { width: calc(100% - 16px); max-width: 300px; }
+  #timeline { flex-wrap: wrap; height: auto; padding: 6px 10px; }
+  #timeline label, #timeline input[type=number] { display: none; }
+  .row { grid-template-columns: 110px 1fr; }
+  .lib-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .modal { max-height: calc(100vh - 30px); }
+  input, select, textarea { font-size: 16px; }
 }
