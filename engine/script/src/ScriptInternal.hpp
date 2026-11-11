@@ -49,6 +49,7 @@ struct ScriptEngine::Impl {
     Physics3DWorld* physics3d = nullptr;
     NavigationSystem* navigation = nullptr;
     net::NetSession* net = nullptr;
+    std::function<void(std::string)> sceneLoader;
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
     AnimationSystem* animation = nullptr;

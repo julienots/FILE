@@ -107,6 +107,10 @@ public:
     /// Replaces the active scene.
     void setScene(std::unique_ptr<Scene> scene);
     Status loadScene(std::string_view uri);
+    /// Loads a scene at the end of the current frame (safe from scripts and callbacks).
+    void requestScene(std::string uri) { m_pendingScene = std::move(uri); }
+    /// URI of the last scene loaded with loadScene() ("" for scenes set otherwise).
+    const std::string& sceneUri() const { return m_sceneUri; }
     Status saveScene(std::string_view uri);
 
 private:
@@ -114,6 +118,7 @@ private:
     void shutdown(Application* app);
 
     EngineConfig m_config;
+    std::string m_pendingScene, m_sceneUri;
     std::shared_ptr<RingBufferSink> m_consoleSink;
     std::shared_ptr<FileSink> m_fileSink;
     std::unique_ptr<JobSystem> m_jobs;

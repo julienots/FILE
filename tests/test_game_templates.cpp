@@ -13,6 +13,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/editor/Project.hpp"
 #include "agr/editor/SceneTemplates.hpp"
+#include "agr/scene/SceneSerializer.hpp"
 #include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/net/NetPlugin.hpp"
 #include "agr/net/NetSession.hpp"
@@ -778,6 +779,23 @@ TEST_CASE("arena: two local players race for coins; network host simulates a rem
     client.close();
     for (int i = 0; i < 10; ++i) h.frames(1);
     CHECK_FALSE(h.active("Player 2"));  // left
+    h.noScriptErrors();
+}
+
+TEST_CASE("launcher menu: a button opens its game scene (agr.loadScene)") {
+    GameHarness h(SceneTemplate::GamePlatformer);
+    Scene game;
+    buildSceneTemplate(game, SceneTemplate::GameCards);
+    std::ofstream(h.root / "game" / "scenes" / "cards.agrscene") << SceneSerializer::toString(game);
+    Scene menu;
+    buildLauncherScene(menu, "AGR ENGINE", {{"Cartes", "game://scenes/cards.agrscene"}});
+    std::ofstream(h.root / "game" / "scenes" / "menu.agrscene") << SceneSerializer::toString(menu);
+    REQUIRE(h.engine->loadScene("game://scenes/menu.agrscene"));
+    h.frames(3);
+    h.clickUI("Game 1");
+    h.frames(2);
+    CHECK(h.engine->sceneUri() == "game://scenes/cards.agrscene");
+    CHECK_FALSE(h.scene().findByName("Card 1").isNull());
     h.noScriptErrors();
 }
 

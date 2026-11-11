@@ -123,6 +123,7 @@ composant).
 | `agr.clone(entité [, parent])` | copie active d'une entité et de ses enfants (composants, scripts) : ennemis, projectiles et cartes à partir d'un **prototype** caché dans la scène ; `parent` : une entité, `false` pour la racine de la scène, rien pour le parent de l'original (son script démarre à l'image suivante) |
 | `agr.camera.screenToWorld(x, y [, hauteur])` → x, y, z | point du jeu sous un clic ou un doigt : plan z = 0 pour une caméra orthographique (2D), sinon sol horizontal y = hauteur (0 par défaut) ; `nil` si le rayon le manque |
 | `agr.camera.worldToScreen(x, y, z)` → x, y, visible ; `agr.camera.ray(x, y)` → origine, direction | sens inverse (barres de vie au-dessus des unités) et rayon de la caméra (avec `agr.physics3d.raycast`) |
+| `agr.loadScene(uri)` | change de scène à la fin de l'image (`"game://scenes/niveau2.agrscene"`) ; dans le player, Retour / Échap ramène à la scène de départ |
 | `agr.net.*` | multijoueur en réseau : héberger, rejoindre, envoyer des tables, événements ; voir [NETWORK.md](NETWORK.md) |
 
 ## Dans l'éditeur

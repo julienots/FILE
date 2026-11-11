@@ -53,7 +53,10 @@ public:
         }
         AGR_LOG_INFO("Player", "'{}' {} started ({} entities)", m_manifest.name, m_manifest.version, engine.scene().entityCount());
         m_back = engine.events().subscribe<KeyEvent>([this, &engine](const KeyEvent& e) {
-            if (e.pressed && e.key == Key::AndroidBack && m_manifest.backQuits) engine.requestQuit();
+            if (!e.pressed || (e.key != Key::AndroidBack && e.key != Key::Escape)) return;
+            const std::string startup = "game://" + m_manifest.startupScene;
+            if (engine.sceneUri() != startup) engine.requestScene(startup);  // back to the menu / first scene
+            else if (e.key == Key::AndroidBack && m_manifest.backQuits) engine.requestQuit();
         });
         return {};
     }

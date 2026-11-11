@@ -109,12 +109,23 @@ int c_worldToScreen(lua_State* L) {
     return 3;
 }
 
+/// agr.loadScene(uri): switches to another scene at the end of the frame (menus, levels).
+int a_loadScene(lua_State* L) {
+    const char* uri = luaL_checkstring(L, 1);
+    auto& m = implOf(L);
+    if (!m.sceneLoader) return luaL_error(L, "agr.loadScene: scene loading is not available here");
+    m.sceneLoader(uri);
+    return 0;
+}
+
 } // namespace
 
 void openGameBindings(lua_State* L) {
     lua_getglobal(L, "agr");
     lua_pushcfunction(L, a_clone);
     lua_setfield(L, -2, "clone");
+    lua_pushcfunction(L, a_loadScene);
+    lua_setfield(L, -2, "loadScene");
     lua_pop(L, 1);
     static const luaL_Reg camera[] = {{"ray", c_ray}, {"screenToWorld", c_screenToWorld}, {"worldToScreen", c_worldToScreen}, {nullptr, nullptr}};
     addAgrLibrary(L, "camera", camera);

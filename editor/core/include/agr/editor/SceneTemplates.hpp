@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "agr/editor/Project.hpp"
@@ -20,5 +22,7 @@ ProjectMode templateMode(SceneTemplate tmpl);
 /// Complete playable games (as opposed to empty bases and showcases).
 bool isGameTemplate(SceneTemplate tmpl);
 const char* templateDescription(SceneTemplate tmpl);
+/// Menu scene: one button per (title, scene URI) that opens the scene (games/scripts/launcher.lua).
+void buildLauncherScene(Scene& scene, const std::string& title, const std::vector<std::pair<std::string, std::string>>& entries);
 
 } // namespace agr::editor

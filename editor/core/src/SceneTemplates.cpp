@@ -591,4 +591,29 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
     scene.updateTransforms();
 }
 
+void buildLauncherScene(Scene& scene, const std::string& title, const std::vector<std::pair<std::string, std::string>>& entries) {
+    registerRenderComponents();
+    registerScriptComponent();
+    registerUIComponents();
+    registerAudioComponents();
+    games::Builder b(scene);
+    b.camera2D(5.0f, {0.07f, 0.08f, 0.12f, 1.0f});
+    const auto logo = b.sprite("AGR Mark", "assets://textures/agr_mark.png", {0.0f, 3.2f, 0.0f}, {1.6f, 1.6f}, 0);
+    (void)logo;
+    std::string uris;
+    for (const auto& e : entries) uris += e.second + ";";
+    const auto menu = b.entity("Launcher");
+    b.script(menu, "assets://games/scripts/launcher.lua", std::string(R"({"scenes": ")") + uris + "\"}");
+    const auto hud = b.hud();
+    b.label("Title", hud, {0.5f, 0.0f}, {0.0f, 250.0f}, {1600.0f, 90.0f}, title, 72.0f, UIHAlign::Center, {1.0f, 0.8f, 0.3f, 1.0f});
+    const int cols = 4;
+    for (usize i = 0; i < entries.size(); ++i) {
+        const float x = (static_cast<float>(i % cols) - 1.5f) * 440.0f, y = 380.0f + static_cast<float>(i / cols) * 160.0f;
+        b.button("Game " + std::to_string(i + 1), hud, {0.5f, 0.0f}, {x, y}, {420.0f, 140.0f}, entries[i].first, menu, "open");
+    }
+    b.label("Hint", hud, {0.5f, 1.0f}, {0.0f, -40.0f}, {1600.0f, 60.0f}, "Retour / Échap : revenir au menu", 32.0f, UIHAlign::Center,
+            {0.8f, 0.8f, 0.85f, 1.0f});
+    scene.updateTransforms();
+}
+
 } // namespace agr::editor

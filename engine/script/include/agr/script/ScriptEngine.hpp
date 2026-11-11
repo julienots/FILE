@@ -83,6 +83,8 @@ public:
     void setNavigation(NavigationSystem* navigation);
     /// Multiplayer session for agr.net (null: agr.net raises an error).
     void setNet(net::NetSession* session);
+    /// agr.loadScene(uri): asks the host to switch scenes at the end of the frame.
+    void setSceneLoader(std::function<void(std::string)> loader);
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
     void setAnimation(AnimationSystem* animation);

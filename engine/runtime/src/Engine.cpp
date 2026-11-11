@@ -1,5 +1,7 @@
 #include "agr/runtime/Engine.hpp"
 
+#include <utility>
+
 #include <algorithm>
 #include <filesystem>
 #include <thread>
@@ -90,6 +92,7 @@ Status Engine::loadScene(std::string_view uri) {
     if (Status s = SceneSerializer::fromString(*scene, text.value()); !s) return s;
     AGR_LOG_INFO("Engine", "scene '{}' loaded from {} ({} entities)", scene->name(), uri, scene->entityCount());
     m_scene = std::move(scene);
+    m_sceneUri = std::string(uri);
     return {};
 }
 
@@ -187,6 +190,10 @@ void Engine::tick(Application& app, f64 rawDelta) {
     m_plugins.update(*this, m_time);
     app.onUpdate(*this, m_time);
     m_scene->flushDestroyed();
+    if (!m_pendingScene.empty()) {
+        const std::string uri = std::exchange(m_pendingScene, {});
+        if (Status s = loadScene(uri); !s) AGR_LOG_ERROR("Engine", "cannot load scene '{}': {}", uri, s.error().message);
+    }
     m_scene->updateTransforms();
 
     ++m_time.frameIndex;
