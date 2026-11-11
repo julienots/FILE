@@ -18,6 +18,9 @@
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
+namespace net {
+class NetSession;
+}
 class InputActions;
 class NavigationSystem;
 class Localization;
@@ -78,6 +81,8 @@ public:
     void setPhysics3D(Physics3DWorld* world);
     /// Paths and agents for entity:navigateTo and agr.nav.
     void setNavigation(NavigationSystem* navigation);
+    /// Multiplayer session for agr.net (null: agr.net raises an error).
+    void setNet(net::NetSession* session);
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
     void setAnimation(AnimationSystem* animation);

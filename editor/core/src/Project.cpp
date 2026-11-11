@@ -124,6 +124,7 @@ Result<Project> Project::open(const fs::path& folder) {
         x.orientation = o == "portrait" ? ScreenOrientation::Portrait : o == "sensor" ? ScreenOrientation::Sensor : ScreenOrientation::Landscape;
         x.targetFps = e.value("targetFps", x.targetFps);
         x.vibration = e.value("vibration", x.vibration);
+        x.network = e.value("network", x.network);
         x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
         x.backQuits = e.value("backQuits", x.backQuits);
         x.minSdk = e.value("minSdk", x.minSdk);
@@ -163,7 +164,7 @@ Status Project::save() const {
     const ExportSettings& x = m_settings.exportSettings;
     j["export"] = {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
                    {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps},
-                   {"vibration", x.vibration},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
+                   {"vibration", x.vibration}, {"network", x.network},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
                    {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
                    {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias}};
     return writeFile(m_root / kFileName, j.dump(2));

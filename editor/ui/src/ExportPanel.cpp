@@ -122,6 +122,7 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         changed |= ImGui::InputTextWithHint("Identifiant", defaultPackageId(ps).c_str(), &x.packageId);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Identifiant unique de l'application (com.studio.jeu) ; vide = généré");
         changed |= ImGui::Checkbox("Vibration (permission VIBRATE)", &x.vibration);
+        changed |= ImGui::Checkbox("Réseau / multijoueur (permission INTERNET)", &x.network);
         int minSdk = static_cast<int>(x.minSdk), targetSdk = static_cast<int>(x.targetSdk);
         ImGui::SetNextItemWidth(120);
         if (ImGui::InputInt("API minimale", &minSdk)) x.minSdk = static_cast<u32>(std::clamp(minSdk, 26, 40)), changed = true;

@@ -860,6 +860,8 @@ void openAgrLibrary(lua_State* L) {
     openAnimationBindings(L);
     openMobileBindings(L);
     openNavigationBindings(L);
+    openGameBindings(L);
+    openNetBindings(L);
 }
 
 } // namespace agr

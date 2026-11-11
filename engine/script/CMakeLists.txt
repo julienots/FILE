@@ -9,6 +9,8 @@ agr_add_module(script
         src/ScriptAnimation.cpp
         src/ScriptMobile.cpp
         src/ScriptNavigation.cpp
+        src/ScriptGame.cpp
+        src/ScriptNet.cpp
     PUBLIC_DEPS
         agr::runtime
         agr::audio
@@ -17,6 +19,8 @@ agr_add_module(script
         agr::physics2d
         agr::physics3d
         agr::navigation
+        agr::render
+        agr::net
     PRIVATE_DEPS
         agr::lua
         nlohmann_json::nlohmann_json)

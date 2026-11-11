@@ -33,6 +33,7 @@ private:
     SubscriptionId m_collisions, m_collisions3D, m_uiClicks, m_uiValues, m_animEvents;
     Engine* m_engine = nullptr;
     bool m_running = true;
+    class NetPlugin* m_net = nullptr;
     bool m_paused = false;
     bool m_hotReload = false;
     f64 m_reloadTimer = 0.0;

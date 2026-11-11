@@ -146,6 +146,25 @@ int Engine::run(Application& app) {
     return 0;
 }
 
+Status Engine::start(Application& app) {
+    if (!m_initialized) return makeError(Error::Code::InvalidArgument, "start() called before a successful initialize()");
+    if (Status s = app.onStart(*this); !s) return s;
+    m_events.publish(EngineStartedEvent{});
+    return {};
+}
+
+void Engine::advance(Application& app, f64 delta) {
+    m_actions.update(m_input, m_platform->windowSize());
+    m_events.dispatchQueued();
+    tick(app, delta);
+    if (m_platform->canRender()) {
+        m_plugins.render(*this, m_time);
+        app.onRender(*this, m_time);
+        m_platform->present();
+    }
+    m_input.beginFrame();  // this frame's presses become "held" for the next one
+}
+
 void Engine::tick(Application& app, f64 rawDelta) {
     const f64 delta = std::clamp(rawDelta, 0.0, m_config.maxFrameDelta);
     m_time.unscaledDeltaSeconds = delta;

@@ -6,18 +6,17 @@
 
 namespace agr {
 
-namespace {
-
 // ---------------------------------------------------------- Lua <-> JSON
+// (shared with agr.net: declared in ScriptInternal.hpp)
 nlohmann::json toJson(lua_State* L, int idx, int depth) {
     idx = lua_absindex(L, idx);
-    if (depth > 32) luaL_error(L, "agr.save: value nested too deeply");
+    if (depth > 32) luaL_error(L, "value nested too deeply (saved / sent tables)");
     switch (lua_type(L, idx)) {
         case LUA_TNIL: return nullptr;
         case LUA_TBOOLEAN: return lua_toboolean(L, idx) != 0;
         case LUA_TNUMBER:
             if (lua_isinteger(L, idx)) return static_cast<i64>(lua_tointeger(L, idx));
-            if (!std::isfinite(lua_tonumber(L, idx))) luaL_error(L, "agr.save: numbers must be finite");
+            if (!std::isfinite(lua_tonumber(L, idx))) luaL_error(L, "saved / sent numbers must be finite");
             return lua_tonumber(L, idx);
         case LUA_TSTRING: return std::string(lua_tostring(L, idx));
         case LUA_TTABLE: {
@@ -44,19 +43,19 @@ nlohmann::json toJson(lua_State* L, int idx, int depth) {
                 std::string key;
                 if (lua_type(L, -2) == LUA_TSTRING) key = lua_tostring(L, -2);
                 else if (lua_isinteger(L, -2)) key = std::to_string(lua_tointeger(L, -2));
-                else luaL_error(L, "agr.save: table keys must be strings or integers");
+                else luaL_error(L, "table keys must be strings or integers (saved / sent tables)");
                 obj[key] = toJson(L, -1, depth + 1);
                 lua_pop(L, 1);
             }
             return obj;
         }
-        default: luaL_error(L, "agr.save: cannot save a %s", luaL_typename(L, idx));
+        default: luaL_error(L, "cannot save or send a %s", luaL_typename(L, idx));
     }
     return nullptr;
 }
 
 void pushJson(lua_State* L, const nlohmann::json& j) {
-    luaL_checkstack(L, 4, "agr.save");
+    luaL_checkstack(L, 4, "pushJson");
     if (j.is_null()) lua_pushnil(L);
     else if (j.is_boolean()) lua_pushboolean(L, j.get<bool>());
     else if (j.is_number_integer()) lua_pushinteger(L, static_cast<lua_Integer>(j.get<i64>()));
@@ -77,6 +76,8 @@ void pushJson(lua_State* L, const nlohmann::json& j) {
         }
     }
 }
+
+namespace {
 
 SaveStore& saveOf(lua_State* L) {
     auto& m = implOf(L);

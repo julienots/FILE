@@ -11,11 +11,15 @@
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+#include <nlohmann/json.hpp>
 
 #include "agr/core/Time.hpp"
 #include "agr/script/ScriptEngine.hpp"
 
 namespace agr {
+namespace net {
+class NetSession;
+}
 class NavigationSystem;
 
 struct ScriptEngine::Impl {
@@ -44,6 +48,7 @@ struct ScriptEngine::Impl {
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
     NavigationSystem* navigation = nullptr;
+    net::NetSession* net = nullptr;
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
     AnimationSystem* animation = nullptr;
@@ -103,5 +108,10 @@ void openUIBindings(lua_State* L);
 void openAnimationBindings(lua_State* L);
 void openMobileBindings(lua_State* L);
 void openNavigationBindings(lua_State* L);
+void openGameBindings(lua_State* L);
+void openNetBindings(lua_State* L);
+/// Lua value <-> JSON (agr.save, agr.net): numbers, strings, booleans, arrays, string-keyed tables.
+nlohmann::json toJson(lua_State* L, int idx, int depth = 0);
+void pushJson(lua_State* L, const nlohmann::json& j);
 
 } // namespace agr

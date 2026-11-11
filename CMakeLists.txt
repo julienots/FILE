@@ -74,6 +74,7 @@ add_subdirectory(engine/animation)
 add_subdirectory(engine/physics2d)
 add_subdirectory(engine/physics3d)
 add_subdirectory(engine/navigation)
+add_subdirectory(engine/net)
 add_subdirectory(engine/script)
 
 if(AGR_BUILD_PLUGINS)

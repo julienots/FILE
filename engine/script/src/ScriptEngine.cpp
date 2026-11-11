@@ -159,6 +159,7 @@ void ScriptEngine::setScreenSize(math::Vec2 size) { m->screenSize = size; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setNavigation(NavigationSystem* navigation) { m->navigation = navigation; }
+void ScriptEngine::setNet(net::NetSession* session) { m->net = session; }
 void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
 void ScriptEngine::setUI(UISystem* ui) { m->ui = ui; }
 void ScriptEngine::setAnimation(AnimationSystem* animation) { m->animation = animation; }

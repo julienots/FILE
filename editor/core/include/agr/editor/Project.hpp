@@ -28,6 +28,7 @@ struct ExportSettings {
     ScreenOrientation orientation = ScreenOrientation::Landscape;
     u32 targetFps = 0;
     bool vibration = true;
+    bool network = false;  ///< Android INTERNET permission (multiplayer: agr.net).
     bool keepScreenOn = true;
     bool backQuits = true;
     u32 minSdk = 26;     ///< Android 8.0

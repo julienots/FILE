@@ -48,6 +48,11 @@ public:
     Status initialize(std::unique_ptr<PlatformLayer> platform);
     /// Runs the main loop until quit. Returns the process exit code.
     int run(Application& app);
+    /// Automated tests and tools: starts `app` as run() does, without entering the loop;
+    /// then each advance() runs one frame of `delta` seconds (fixed steps, updates, render)
+    /// with the input set since the previous frame. The engine shuts down when destroyed.
+    Status start(Application& app);
+    void advance(Application& app, f64 delta);
     void requestQuit() { m_quitRequested = true; }
     /// Called when the user closes the window. Return false to keep running (e.g. the
     /// editor asks to save first, then calls requestQuit()).

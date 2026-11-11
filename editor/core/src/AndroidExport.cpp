@@ -304,6 +304,7 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
         "    <uses-feature android:name=\"android.hardware.gamepad\" android:required=\"false\" />\n"
         "    <uses-feature android:name=\"android.hardware.type.pc\" android:required=\"false\" />\n";
     if (x.vibration) manifest += "    <uses-permission android:name=\"android.permission.VIBRATE\" />\n";
+    if (x.network) manifest += "    <uses-permission android:name=\"android.permission.INTERNET\" />\n";
     manifest +=
         "    <application android:label=\"@string/app_name\" android:icon=\"@mipmap/ic_launcher\" android:allowBackup=\"true\"\n"
         "        android:isGame=\"true\" android:appCategory=\"game\" android:hardwareAccelerated=\"true\"\n"

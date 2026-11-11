@@ -16,6 +16,8 @@
 #include "agr/runtime/Localization.hpp"
 #include "agr/scene/Prefab.hpp"
 #include "agr/script/ScriptEngine.hpp"
+#include "agr/net/NetSession.hpp"
+#include <nlohmann/json.hpp>
 
 using namespace agr;
 namespace fs = std::filesystem;
@@ -631,4 +633,129 @@ assert(agr.nav.path(-5, 0, -5, 500, 0, 500) == nil or #agr.nav.path(-5, 0, -5, 5
     CHECK(f.scripts.run(R"lua(assert(agr.find("Guard"):navigationStatus() == "arrived"))lua", &f.scene));
     CHECK(f.scene.registry().get<TransformComponent>(guard).position.x == doctest::Approx(4.0f).epsilon(0.05));
     CHECK_FALSE(f.scripts.run(R"lua(agr.find("Ground"):navigateTo(1, 0, 1))lua", &f.scene));  // no NavAgent
+}
+
+TEST_CASE("agr.clone copies prototypes with their scripts; agr.camera maps screen and world") {
+    ScriptFixture f;
+    f.write("assets://s/coin.lua", R"lua(
+local Coin = { properties = { value = 1 } }
+function Coin:onStart() self.started = true end
+return Coin
+)lua");
+    f.write("assets://s/game.lua", R"lua(
+local Game = {}
+function Game:onStart()
+    local proto = agr.find("CoinProto")
+    self.copies = {}
+    for i = 1, 3 do
+        local c = agr.clone(proto)
+        c:setName("Coin" .. i)
+        c:setPosition(i, 0, 0)
+        self.copies[i] = c
+    end
+    self.wx, self.wy, self.wz = agr.camera.screenToWorld(960, 540)
+    self.rx = agr.camera.screenToWorld(1920, 540)
+    self.sx, self.sy, self.visible = agr.camera.worldToScreen(0, 0, 0)
+end
+return Game
+)lua");
+    const auto cam = f.scene.createEntity("Camera");
+    auto& c = f.scene.registry().emplace<CameraComponent>(cam);
+    c.projection = Projection::Orthographic;
+    c.orthographicSize = 5.0f;
+    f.scene.registry().get<TransformComponent>(cam).position = {0.0f, 0.0f, 10.0f};
+    const auto proto = f.scripted("CoinProto", "assets://s/coin.lua", R"({"value": 5})");
+    f.scene.registry().get<StateComponent>(proto).active = false;  // hidden prototype
+    f.scene.createEntity("Child", proto);
+    const auto game = f.scripted("Game", "assets://s/game.lua");
+    f.scripts.setScreenSize({1920.0f, 1080.0f});
+    f.scene.updateTransforms();
+    f.update(2);
+    for (int i = 1; i <= 3; ++i) {
+        const auto copy = f.scene.findByName("Coin" + std::to_string(i));
+        REQUIRE_FALSE(copy.isNull());
+        CHECK(f.scene.registry().get<StateComponent>(copy).active);
+        CHECK(f.scene.children(copy).size() == 1);
+        CHECK(f.scene.registry().get<ScriptComponent>(copy).properties == R"({"value": 5})");
+        CHECK(f.scripts.field(copy, "started").value() == "true");
+        CHECK(std::stod(f.scripts.field(copy, "value").value()) == 5.0);
+    }
+    CHECK_FALSE(static_cast<bool>(f.scripts.field(proto, "started")));  // the inactive prototype does not run
+    CHECK(std::stod(f.scripts.field(game, "wx").value()) == doctest::Approx(0.0).epsilon(1e-4));
+    CHECK(std::stod(f.scripts.field(game, "wz").value()) == doctest::Approx(0.0).epsilon(1e-4));
+    CHECK(std::stod(f.scripts.field(game, "rx").value()) == doctest::Approx(5.0 * 1920.0 / 1080.0).epsilon(1e-3));
+    CHECK(std::stod(f.scripts.field(game, "sx").value()) == doctest::Approx(960.0).epsilon(1e-3));
+    CHECK(f.scripts.field(game, "visible").value() == "true");
+
+    // Perspective camera above the ground: a tap at the center hits the point it looks at.
+    f.scene.registry().get<CameraComponent>(cam).projection = Projection::Perspective;
+    math::Vec3 sc;
+    auto& t = f.scene.registry().get<TransformComponent>(cam);
+    math::decompose(math::inverse(math::Mat4::lookAt({0, 10, 10}, {2, 0, 3}, {0, 1, 0})), t.position, t.rotation, sc);
+    f.scene.updateTransforms();
+    f.write("assets://s/probe.lua", R"lua(
+local P = {}
+function P:onStart() self.x, self.y, self.z = agr.camera.screenToWorld(960, 540) ; self.miss = agr.camera.screenToWorld(960, 0, 50) == nil end
+return P
+)lua");
+    const auto probe = f.scripted("Probe", "assets://s/probe.lua");
+    f.update();
+    CHECK(std::stod(f.scripts.field(probe, "x").value()) == doctest::Approx(2.0).epsilon(1e-3));
+    CHECK(std::stod(f.scripts.field(probe, "y").value()) == doctest::Approx(0.0).epsilon(1e-3));
+    CHECK(std::stod(f.scripts.field(probe, "z").value()) == doctest::Approx(3.0).epsilon(1e-3));
+    CHECK(f.scripts.field(probe, "miss").value() == "true");  // plane above the camera: behind the ray
+}
+
+TEST_CASE("agr.net: a scripted client joins a host and exchanges tables") {
+    ScriptFixture f;
+    net::NetSession host, client;
+    REQUIRE(host.host(0, 4));
+    f.scripts.setNet(&client);
+    f.write("assets://s/client.lua", R"lua(
+local C = { properties = { port = 0 } }
+function C:onStart()
+    self.ok = agr.net.join("127.0.0.1", self.port)
+    self.received = 0
+end
+function C:onUpdate(dt)
+    for _, e in ipairs(agr.net.poll()) do
+        if e.type == "connected" then
+            self.id = agr.net.id()
+            self.role = agr.net.role()
+            agr.net.send(1, { kind = "hello", name = "Ana", pos = { 1.5, 2 } }, true)
+        elseif e.type == "message" then
+            self.received = self.received + 1
+            self.lastScore = e.data.score
+        end
+    end
+end
+return C
+)lua");
+    const auto c = f.scripted("Client", "assets://s/client.lua", "{\"port\": " + std::to_string(host.port()) + "}");
+    f64 now = 0.0;
+    std::vector<net::NetEvent> hostEvents;
+    for (int i = 0; i < 300 && hostEvents.size() < 2; ++i) {
+        now += 0.01;
+        host.update(now);
+        client.update(now);
+        f.update();
+        for (auto& e : host.takeEvents()) hostEvents.push_back(std::move(e));
+    }
+    CHECK(f.scripts.field(c, "ok").value() == "true");
+    CHECK(f.scripts.field(c, "role").value() == "client");
+    REQUIRE(hostEvents.size() == 2);
+    CHECK(hostEvents[1].type == net::NetEvent::Type::Message);
+    const auto msg = nlohmann::json::parse(hostEvents[1].data);
+    CHECK(msg["kind"] == "hello");
+    CHECK(msg["pos"][0].get<double>() == doctest::Approx(1.5));
+    host.send(net::NetSession::kBroadcast, R"({"score": 42})", true);
+    for (int i = 0; i < 50; ++i) {
+        now += 0.01;
+        host.update(now);
+        client.update(now);
+        f.update();
+    }
+    CHECK(f.scripts.field(c, "received").value() == "1");
+    CHECK(f.scripts.field(c, "lastScore").value() == "42");
+    client.close();
 }

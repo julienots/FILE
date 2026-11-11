@@ -1,5 +1,7 @@
 #include "agr/script/ScriptPlugin.hpp"
 
+#include "agr/net/NetPlugin.hpp"
+
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -68,10 +70,15 @@ void ScriptPlugin::bindPhysics(Engine& engine) {
     m_scripts->setUI(ui ? &ui->ui() : nullptr);
     auto* anim = engine.service<AnimationPlugin>();
     m_scripts->setAnimation(anim ? &anim->animation() : nullptr);
+    m_net = engine.service<NetPlugin>();
+    m_scripts->setNet(m_net ? &m_net->session() : nullptr);
 }
 
 void ScriptPlugin::setRunning(bool running) {
-    if (m_running && !running && m_scripts) m_scripts->reset();
+    if (m_running && !running && m_scripts) {
+        m_scripts->reset();
+        if (m_net) m_net->session().close();  // the game stopped (editor): leave its session
+    }
     m_running = running;
 }
 

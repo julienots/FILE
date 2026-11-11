@@ -721,6 +721,10 @@ TEST_CASE("game export: data package, desktop folder safety, Android Gradle proj
     const std::string manifestXml = readTextFile(main / "AndroidManifest.xml");
     CHECK(manifestXml.find("sensorPortrait") != std::string::npos);
     CHECK(manifestXml.find("android.permission.VIBRATE") != std::string::npos);
+    CHECK(manifestXml.find("android.permission.INTERNET") == std::string::npos);  // only for network games
+    project.settings().exportSettings.network = true;
+    REQUIRE(generateAndroidProject(project, tools, out / "android_net"));
+    CHECK(readTextFile(out / "android_net" / "app" / "src" / "main" / "AndroidManifest.xml").find("android.permission.INTERNET") != std::string::npos);
     const std::string appGradle = readTextFile(out / "android" / "app" / "build.gradle");
     CHECK(appGradle.find("applicationId 'com.studioncode.testgame'") != std::string::npos);
     CHECK(appGradle.find("versionCode 7") != std::string::npos);
