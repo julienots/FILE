@@ -3,6 +3,12 @@ import * as THREE from "three";
 import { OrbitControls } from "../vendor/three/addons/controls/OrbitControls.js";
 import { TransformControls } from "../vendor/three/addons/controls/TransformControls.js";
 import { RoomEnvironment } from "../vendor/three/addons/utils/RoomEnvironment.js";
+import { EffectComposer } from "../vendor/three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "../vendor/three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "../vendor/three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "../vendor/three/addons/postprocessing/UnrealBloomPass.js";
+import { SMAAPass } from "../vendor/three/addons/postprocessing/SMAAPass.js";
+import { OutputPass } from "../vendor/three/addons/postprocessing/OutputPass.js";
 
 export class Viewport {
   constructor(el, hooks) {
@@ -31,6 +37,13 @@ export class Viewport {
     this.setLighting("studio");
     this.grid = new THREE.GridHelper(40, 40, 0x555a6a, 0x2c2f3a);
     this.scene.add(this.grid);
+    // sol qui reçoit les ombres (ombres de contact réalistes)
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: 0.38 }));
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.receiveShadow = true;
+    this.ground.renderOrder = -1;
+    this.scene.add(this.ground);
+    this.realistic = true;
     this.content = new THREE.Group();
     this.content.name = "Scène";
     this.scene.add(this.content);
@@ -58,15 +71,57 @@ export class Viewport {
     this._events();
     new ResizeObserver(() => this.resize()).observe(el);
     this.resize();
+    this._initComposer();
     const loop = () => {
       requestAnimationFrame(loop);
       const dt = this.clock.getDelta();
       if (this.playing) for (const m of this.mixers.values()) m.update(dt);
       this.controls.update();
       if (this.selection) this.box.update();
-      r.render(this.scene, this.camera);
+      this.draw();
     };
     loop();
+  }
+
+  _initComposer() {
+    try {
+      const w = Math.max(1, this.el.clientWidth), h = Math.max(1, this.el.clientHeight);
+      const c = this.composer = new EffectComposer(this.renderer);
+      c.addPass(new RenderPass(this.scene, this.camera));
+      this.gtao = new GTAOPass(this.scene, this.camera, w, h);
+      this.gtao.output = GTAOPass.OUTPUT.Default;
+      this.gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1.2, scale: 1.0, samples: 12 });
+      this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      c.addPass(this.gtao);
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.45, 0.4, 0.92);
+      c.addPass(this.bloom);
+      c.addPass(new OutputPass());
+      this.smaa = new SMAAPass(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+      c.addPass(this.smaa);
+    } catch (e) { console.warn("rendu réaliste indisponible", e); this.composer = null; this.realistic = false; }
+  }
+
+  setRealistic(on) { this.realistic = on && !!this.composer; this.ground.visible = true; }
+
+  draw() {
+    // le cadre de sélection et le gizmo ne doivent pas recevoir d'occlusion : rendu réaliste puis superposition
+    if (this.realistic && this.composer) {
+      const helpers = [this.box, this.cursor];
+      const gz = this.gizmo.getHelper ? this.gizmo.getHelper() : this.gizmo;
+      const vis = helpers.map((x) => x.visible), gv = gz.visible;
+      helpers.forEach((x) => (x.visible = false)); gz.visible = false;
+      this.composer.render();
+      helpers.forEach((x, i) => (x.visible = vis[i])); gz.visible = gv;
+      // superposition des aides (grille, sélection, gizmo) par-dessus l'image finale
+      const bg = this.scene.background, env = this.scene.environment, content = this.content.visible, ground = this.ground.visible, lights = this.lights.visible;
+      const gridVis = this.grid.visible;
+      this.scene.background = null; this.content.visible = false; this.ground.visible = false; this.grid.visible = false;
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = true;
+      this.scene.background = bg; this.scene.environment = env; this.content.visible = content; this.ground.visible = ground; this.lights.visible = lights; this.grid.visible = gridVis;
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   resize() {
@@ -75,6 +130,7 @@ export class Viewport {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.composer) { this.composer.setSize(w, h); }
   }
 
   setLighting(preset) {
@@ -241,7 +297,9 @@ export class Viewport {
   snapshot(size = 256) {
     const prev = this.box.visible, g = this.gizmo.object;
     this.box.visible = false; this.gizmo.detach(); this.cursor.visible = false;
-    this.renderer.render(this.scene, this.camera);
+    const gridVis = this.grid.visible; this.grid.visible = false;
+    if (this.realistic && this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
+    this.grid.visible = gridVis;
     const src = this.renderer.domElement;
     const cv = document.createElement("canvas"); cv.width = cv.height = size;
     const s = Math.min(src.width, src.height);

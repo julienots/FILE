@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { Organic, assembleOrganic, addEyes } from "./generators.js";
 import { V, box, curvePoints, cylinder, doubleSided, ellipsoid, fanMembrane, lathe, loft, ellipseSection, sweep, taper } from "../geom.js";
-import { applyPattern, boxUV, canvasTexture, fbm, makeMaterial } from "../materials.js";
+import { applyPattern, boxUV, canvasTexture, eyeGeometry, eyeMaterial, fbm, makeMaterial } from "../materials.js";
 import { taubin } from "../organic.js";
 
 const v3 = (a, d = [0, 0, 0]) => (Array.isArray(a) && a.length === 3 ? V(+a[0], +a[1], +a[2]) : V(...d));
@@ -159,14 +159,12 @@ export function buildOrganicModel(def, parse, quality = "standard") {
   for (const e of def.eyes || []) {
     const bone = e.bone && names.has(e.bone) ? e.bone : "racine";
     const c = colorArg(e.color, parse) || [0.95, 0.75, 0.1];
-    const mat = makeMaterial("eye", { color: c, emission: e.glow ? c : null, emission_strength: e.glow ? 3 : 0 });
+    const mat = eyeMaterial(c, !!e.glow);
     const rad = num(e.radius, 0.05);
-    for (const pos of e.mirror_x === false ? [e.position] : [e.position, [-e.position[0], e.position[1], e.position[2]]]) {
-      o.rigid.push({ geo: new THREE.SphereGeometry(rad, 16, 12).translate(+pos[0], +pos[1], +pos[2]), mat, bone, name: "Œil" });
-      if (!e.glow) {
-        const d = v3(e.look || [0, 0, 1]).normalize();
-        o.rigid.push({ geo: new THREE.SphereGeometry(rad * 0.48, 12, 8).translate(+pos[0] + d.x * rad * 0.72, +pos[1] + d.y * rad * 0.72, +pos[2] + d.z * rad * 0.72), mat: makeMaterial("plain", { color: [0.02, 0.02, 0.02], roughness: 0.2 }), bone, name: "Pupille" });
-      }
+    const look = v3(e.look || [0, 0, 1]).normalize();
+    const mirror = e.mirror_x !== false && Math.abs(+e.position[0]) > 1e-4;
+    for (const [pos, lk] of mirror ? [[e.position, look], [[-e.position[0], e.position[1], e.position[2]], V(-look.x, look.y, look.z)]] : [[e.position, look]]) {
+      o.rigid.push({ geo: eyeGeometry(rad, lk, c, !!e.glow).translate(+pos[0], +pos[1], +pos[2]), mat, bone, name: "Œil" });
     }
   }
   for (const p of def.parts || []) {

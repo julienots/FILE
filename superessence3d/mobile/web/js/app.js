@@ -274,6 +274,7 @@ function renderScene(body) {
   const bg = h("input", { type: "color", value: "#" + vp.scene.background.getHexString() });
   bg.onchange = () => { vp.customBg = bg.value; vp.scene.background = new THREE.Color(bg.value); };
   body.append(h("div", { class: "row2" }, field("Fond", bg), field("Grille", h("button", { class: "btn", onclick: () => { vp.grid.visible = !vp.grid.visible; render(); } }, vp.grid.visible ? "Masquer" : "Afficher"))));
+  body.append(h("h4", {}, "Qualité d'affichage"), chips([["real", "Réaliste (ombres, occlusion, halo)"], ["fast", "Rapide"]], (k) => (k === "real") === vp.realistic, (k) => { vp.setRealistic(k === "real"); render(); }));
 }
 
 // ------------------------------------------------------------------ Objet

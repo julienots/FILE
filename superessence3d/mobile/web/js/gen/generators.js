@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { buildOrganic, skinWeights } from "../organic.js";
 import { V, box, curvePoints, cylinder, ellipseSection, ellipsoid, fanMembrane, lathe, loft, merge, place, sweep, taper } from "../geom.js";
-import { applyPattern, boxUV, canvasTexture, fbm, makeMaterial } from "../materials.js";
+import { applyPattern, boxUV, canvasTexture, eyeGeometry, eyeMaterial, fbm, makeMaterial } from "../materials.js";
 
 export const QUALITY = { draft: 60, standard: 96, high: 128, ultra: 160 };
 
@@ -43,6 +43,8 @@ class Organic {
   mat(key, preset, p) { return (this.mats[key] ||= makeMaterial(preset, p)); }
 }
 
+function addBlob(o, c, r, bone) { o.caps.push({ type: "ellipsoid", c: c.toArray ? c.toArray() : c, r, bone, field: true }); }
+
 function bodyMaterialParams(spec, defPreset, defColor) {
   const preset = spec.material || (spec.features?.scales ? "scales" : spec.features?.fur ? "fur" : defPreset);
   const p = { color: c3(spec.colors?.primary, defColor) };
@@ -62,7 +64,7 @@ function hornMat(o) {
   return o.spec.glow && o.spec.colors?.horns ? o.mat("cornes", "emission", { color: c }) : o.mat("cornes", "plain", { color: c, roughness: 0.4 });
 }
 
-function addEyes(o, hc, hr, fwd, count, bone, size = 0.2, spread = 0.55, height = 0.3) {
+function addEyes(o, hc, hr, fwd, count, bone, size = 0.2, spread = 0.55, height = 0.3, depth = 0.78, lookFwd = 0.45) {
   if (count <= 0) return;
   const r = hr * size * S(o.spec, "eyes");
   const side = V(1, 0, 0), up = V(0, 1, 0);
@@ -70,13 +72,12 @@ function addEyes(o, hc, hr, fwd, count, bone, size = 0.2, spread = 0.55, height 
   for (let row = 0; k < count; row++) {
     const n = Math.min(2, count - k);
     for (const s of n === 2 ? [1, -1] : [0]) {
-      const p = hc.clone().addScaledVector(fwd, hr * 0.78).addScaledVector(side, s * hr * spread * (1 - row * 0.1)).addScaledVector(up, hr * (height - row * 0.35));
+      const p = hc.clone().addScaledVector(fwd, hr * depth).addScaledVector(side, s * hr * spread * (1 - row * 0.1)).addScaledVector(up, hr * (height - row * 0.35));
       p.add(p.clone().sub(hc).normalize().multiplyScalar(r * 0.15));
-      o.rigid.push({ geo: place(ellipsoid(r, r, r, 14, 10), { pos: p }), mat: eyeMat(o), bone, name: "Œil" });
-      if (!o.spec.glow_eyes) {
-        const d = p.clone().sub(hc).normalize().multiplyScalar(0.6).add(fwd.clone().multiplyScalar(0.4)).normalize();
-        o.rigid.push({ geo: place(ellipsoid(r * 0.45, r * 0.45, r * 0.45, 10, 8), { pos: p.clone().addScaledVector(d, r * 0.75) }), mat: o.mat("pupille", "plain", { color: [0.02, 0.02, 0.02], roughness: 0.2 }), bone, name: "Pupille" });
-      }
+      const look = p.clone().sub(hc).normalize().multiplyScalar(1 - lookFwd).add(fwd.clone().multiplyScalar(lookFwd)).normalize();
+      const irisC = c3(o.spec.colors?.eyes, [0.95, 0.75, 0.1]);
+      o.eyeMat ||= eyeMaterial(irisC, !!o.spec.glow_eyes);
+      o.rigid.push({ geo: eyeGeometry(r, look, irisC, !!o.spec.glow_eyes).translate(p.x, p.y, p.z), mat: o.eyeMat, bone, name: "Œil" });
       k++;
     }
   }
@@ -277,8 +278,21 @@ function quadruped(o, preset) {
       feet.push(foot);
     }
   }
+  // anatomie : cage thoracique, épaules, croupe, ventre, têtes
+  addBlob(o, V(0, y + R * 0.05, L / 6), [R * 1.02, R * 1.08, L * 0.36], "torse");
+  addBlob(o, V(0, y - R * 0.45, 0), [R * 0.78, R * 0.55, L * 0.34], "colonne");
+  for (const sd of [1, -1]) {
+    addBlob(o, V(sd * R * 0.62, y - R * 0.12, L * 0.36), [R * 0.38, R * 0.58, R * 0.46], "torse");
+    addBlob(o, V(sd * R * 0.56, y - R * 0.05, -L * 0.36), [R * 0.42, R * 0.62, R * 0.52], "bassin");
+  }
+  for (const { hc, hr: r, sd, hb } of headInfo) {
+    addBlob(o, hc.clone().addScaledVector(sd, r * 0.55).add(V(0, -r * 0.38, 0)), [r * 0.55, r * 0.3, r * 0.75], hb);
+    addBlob(o, hc.clone().add(V(0, r * 0.42, r * 0.3)), [r * 0.66, r * 0.2, r * 0.32], hb);
+    for (const s2 of [1, -1]) addBlob(o, hc.clone().add(V(s2 * r * 0.55, -r * 0.1, r * 0.25)), [r * 0.3, r * 0.26, r * 0.32], hb);
+  }
   const [preset2, mp] = bodyMaterialParams(spec, P.mat, c3(null, P.color));
   o.bodyPreset = preset2; o.bodyParams = mp;
+  o.blend = R * 0.22;
   for (const { hc, hr: r, sd, hb, snout } of headInfo) {
     addEyes(o, hc, r, sd, f.eyes ?? 2, hb, ["cat", "rabbit"].includes(preset) || spec.style === "cartoon" ? 0.24 : 0.2, 0.6, 0.35);
     if (f.horns) addHorns(o, hc, r, +f.horns, hb, spec.subtype === "demon" ? "ram" : "curved");
@@ -346,6 +360,19 @@ function humanoid(o) {
   o.cap(neck, hc, 0.06 * w, hr * 0.9, "tete");
   o.cap(hc, top, hr * 0.9, hr * 0.6, "tete");
   o.cap(hc.clone().add(V(0, -hr * 0.1, hr * 0.85)), hc.clone().add(V(0, -hr * 0.2, hr * 0.95)), hr * 0.14, hr * 0.1, "tete");
+  // anatomie de la tête et du tronc
+  addBlob(o, hc.clone().add(V(0, 0.03 * hr, -0.08 * hr)), [0.93 * hr, 0.97 * hr, 1.0 * hr], "tete");
+  addBlob(o, hc.clone().add(V(0, -0.55 * hr, 0.42 * hr)), [0.55 * hr, 0.33 * hr, 0.45 * hr], "tete");
+  addBlob(o, hc.clone().add(V(0, 0.28 * hr, 0.78 * hr)), [0.62 * hr, 0.12 * hr, 0.16 * hr], "tete");
+  addBlob(o, hc.clone().add(V(0, -0.18 * hr, 1.0 * hr)), [0.13 * hr, 0.13 * hr, 0.15 * hr], "tete");
+  for (const sd of [1, -1]) addBlob(o, hc.clone().add(V(sd * 0.5 * hr, -0.12 * hr, 0.6 * hr)), [0.24 * hr, 0.17 * hr, 0.2 * hr], "tete");
+  addBlob(o, V(0, H * 0.7, 0.07 * w), [0.15 * w, 0.17 * H * 0.5, 0.09 * w], "torse");
+  addBlob(o, V(0, H * 0.645, 0.06 * w), [0.13 * w, 0.085 * H, 0.08 * w], "bassin");
+  for (const sd of [1, -1]) {
+    addBlob(o, V(sd * 0.085 * w, H * 0.765, 0.075 * w), [0.1 * w, 0.075, 0.06 * w], "torse");
+    addBlob(o, V(sd * 0.11 * w, H * 0.815, -0.04), [0.1 * w, 0.055, 0.07 * w], "torse");
+    addBlob(o, V(sd * 0.085 * w, hip + 0.02, -0.08 * w), [0.1 * w, 0.1, 0.085 * w], "bassin");
+  }
   const hands = [];
   const pairs = Math.max(1, Math.floor((+f.arms || 2) / 2));
   for (let k = 0; k < pairs; k++) {
@@ -359,8 +386,19 @@ function humanoid(o) {
       const b0 = o.bone(`epaule_${sn}${suf}`, chest.clone().add(V(side * 0.05, 0.05 + dy, 0)), sh, "torse", `shoulder_${sk}`, 0.07 * w, 0.065 * w);
       const b1 = o.bone(`bras_${sn}${suf}`, sh, el, b0, `arm_${sk}_upper`, 0.062 * w, 0.045 * w);
       const b2 = o.bone(`avantbras_${sn}${suf}`, el, wr, b1, `arm_${sk}_lower`, 0.045 * w, 0.032 * w);
-      o.bone(`main_${sn}${suf}`, wr, hd, b2, `arm_${sk}_hand`, 0.04, 0.03);
+      const hb = o.bone(`main_${sn}${suf}`, wr, hd, b2, `arm_${sk}_hand`, 0.035, 0.03);
       hands.push(hd);
+      // muscles du bras et main avec doigts
+      addBlob(o, sh.clone().add(V(side * 0.01, -0.01, 0)), [0.075 * w, 0.07, 0.08 * w], b0);
+      addBlob(o, sh.clone().lerp(el, 0.5).add(V(0, 0, 0.02)), [0.055 * w, 0.09 * arm, 0.055 * w], b1);
+      addBlob(o, el.clone().lerp(wr, 0.3), [0.05 * w, 0.08 * arm, 0.05 * w], b2);
+      addBlob(o, hd.clone().add(V(0, 0.02, 0.01)), [0.03, 0.045, 0.018], hb);
+      for (let fi = 0; fi < 4; fi++) {
+        const base = hd.clone().add(V(side * 0.004, -0.03, -0.022 + fi * 0.015));
+        o.cap(base, base.clone().add(V(side * 0.006, -0.065 + Math.abs(fi - 1.5) * 0.008, 0.008)), 0.0085, 0.0065, hb);
+      }
+      const tb = hd.clone().add(V(-side * 0.012, 0.01, 0.025));
+      o.cap(tb, tb.clone().add(V(-side * 0.01, -0.04, 0.03)), 0.01, 0.008, hb);
     }
   }
   for (const side of [1, -1]) {
@@ -368,13 +406,19 @@ function humanoid(o) {
     const sn = side > 0 ? "G" : "D", sk = side > 0 ? "L" : "R";
     const b1 = o.bone(`cuisse_${sn}`, hp, kn, "bassin", `leg_${sk}_upper`, 0.095 * w, 0.06 * w);
     const b2 = o.bone(`tibia_${sn}`, kn, an, b1, `leg_${sk}_lower`, 0.06 * w, 0.045 * w);
-    o.bone(`pied_${sn}`, an, toe, b2, `leg_${sk}_foot`, 0.05, 0.035);
+    const fb2 = o.bone(`pied_${sn}`, an, toe, b2, `leg_${sk}_foot`, 0.045, 0.035);
+    addBlob(o, hp.clone().lerp(kn, 0.45).add(V(0, 0, 0.03)), [0.085 * w, 0.16, 0.08 * w], b1);
+    addBlob(o, kn.clone().lerp(an, 0.3).add(V(0, 0, -0.035)), [0.06 * w, 0.12, 0.065 * w], b2);
+    addBlob(o, V(side * 0.11 * w, 0.045, 0.06), [0.045, 0.035, 0.11], fb2);
   }
   const bodyMat = ["metal", "gold", "rust"].includes(spec.material) ? null : spec.material;
   const preset = bodyMat || tr.material || (spec.category === "creature" ? "organic" : "skin");
   const [p2, mp] = bodyMaterialParams({ ...spec, material: f.scales ? "scales" : preset }, preset, tr.color || [0.82, 0.6, 0.48]);
   o.bodyPreset = p2; o.bodyParams = mp;
-  addEyes(o, hc, hr, V(0, 0, 1), f.eyes ?? 2, "tete", cartoon ? 0.24 : 0.17, 0.42, 0.12);
+  addEyes(o, hc, hr, V(0, 0, 1), f.eyes ?? 2, "tete", cartoon ? 0.24 : 0.13, 0.38, 0.1, cartoon ? 0.85 : 0.86, 0.85);
+  // orbites creusées autour des yeux
+  if (!cartoon) for (const sd of [1, -1]) o.caps.push({ type: "ellipsoid", c: hc.clone().add(V(sd * 0.4 * hr, 0.1 * hr, 0.98 * hr)).toArray(), r: [0.2 * hr, 0.15 * hr, 0.16 * hr], bone: "tete", field: true, sub: true, blend: 0.05 * hr });
+  o.blend = 0.03;
   for (const side of [1, -1]) {
     const b = hc.clone().add(V(side * hr * 0.86, -hr * 0.05, -0.02));
     if (tr.ears === "pointed") o.cap(b, b.clone().add(V(side * hr * 0.55, hr * 0.7, -hr * 0.3)), hr * 0.18, hr * 0.03, "tete");
@@ -382,9 +426,18 @@ function humanoid(o) {
   }
   const hairC = c3(spec.colors?.secondary, [0.12, 0.07, 0.04]);
   if (spec.category === "character" && !["squelette", "skeleton", "zombie", "alien"].includes(spec.keyword) && !tr.hat && !tr.armor) {
-    const g = ellipsoid(hr * 1.06, hr * 0.9, hr * 1.1, 20, 12, 0);
-    cutBelow(g, 0);
-    o.rigid.push({ geo: place(g, { pos: hc.clone().add(V(0, hr * 0.18, -hr * 0.1)) }), mat: o.mat("cheveux", "fur", { color: hairC }), bone: "tete", name: "Cheveux" });
+    // chevelure : calotte qui épouse le crâne, dégagée sur le front et les tempes, plus longue derrière
+    const g = ellipsoid(hr * 1.07, hr * 1.02, hr * 1.12, 28, 18);
+    const gp = g.attributes.position;
+    for (let i = 0; i < gp.count; i++) {
+      const x = gp.getX(i), y = gp.getY(i), z = gp.getZ(i);
+      const front = z / (hr * 1.12);
+      const limit = front > 0.25 ? hr * (0.28 + 0.25 * front) : -hr * 0.55 * (1 - Math.max(0, front) * 2);
+      if (y < limit) gp.setY(i, limit + (y - limit) * 0.05);
+      gp.setX(i, x * (1 + 0.04 * Math.sin(y * 40 / hr)));
+    }
+    g.computeVertexNormals();
+    o.rigid.push({ geo: place(g, { pos: hc.clone().add(V(0, hr * 0.12, -hr * 0.1)) }), mat: o.mat("cheveux", "fur", { color: hairC, detailScale: 2.5, detailBump: 1.5 }), bone: "tete", name: "Cheveux" });
   }
   if (tr.beard) o.rigid.push({ geo: sweep([hc.clone().add(V(0, -hr * 0.45, hr * 0.6)), hc.clone().add(V(0, -hr, hr * 0.75)), hc.clone().add(V(0, -hr * 1.7, hr * 0.6))], [hr * 0.55, hr * 0.45, 0], { sides: 10, tip: true, flatten: 0.6 }), mat: o.mat("barbe", "fur", { color: c3(spec.colors?.secondary, [0.55, 0.52, 0.5]) }), bone: "tete", name: "Barbe" });
   if (tr.tusks) for (const side of [1, -1]) {

@@ -5,6 +5,14 @@ import { OBJExporter } from "../vendor/three/addons/exporters/OBJExporter.js";
 import { STLExporter } from "../vendor/three/addons/exporters/STLExporter.js";
 import { GLTFLoader } from "../vendor/three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "../vendor/three/addons/utils/SkeletonUtils.js";
+import { addDetail } from "./materials.js";
+
+function redetail(m) {
+  const kind = m.userData?.seDetail?.kind || m.userData?.preset;
+  if (!kind) return m;
+  delete m.userData.seDetail;
+  return addDetail(m, kind);
+}
 
 // ------------------------------------------------------------------ export
 function clipsOf(root) {
@@ -116,6 +124,7 @@ export async function deserialize(buf) {
   const scene = gltf.scene;
   const root = scene.children.length === 1 && scene.children[0].name === "Scène" ? scene.children[0] : scene;
   const objs = [...root.children];
+  root.traverse((o) => { if (o.isMesh && !Array.isArray(o.material)) redetail(o.material); });
   for (const clip of gltf.animations) {
     // rattache chaque clip à l'objet qui contient ses pistes
     const first = clip.tracks[0]?.name.split(".")[0];
@@ -131,7 +140,7 @@ export function cloneDeep(obj) {
   c.traverse((o) => {
     if (o.isMesh) {
       o.geometry = o.geometry.clone();
-      o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
+      o.material = Array.isArray(o.material) ? o.material.map((m) => redetail(m.clone())) : redetail(o.material.clone());
     }
   });
   c.userData = JSON.parse(JSON.stringify({ ...obj.userData, clip: undefined, skeleton: undefined }));
