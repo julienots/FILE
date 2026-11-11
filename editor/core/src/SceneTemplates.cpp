@@ -1,5 +1,8 @@
 #include "agr/editor/SceneTemplates.hpp"
 
+#include "GameTemplates.hpp"
+#include "TemplateHelpers.hpp"
+
 #include "agr/render/RenderComponents.hpp"
 #include "agr/physics2d/Physics2DComponents.hpp"
 #include "agr/physics3d/Physics3DComponents.hpp"
@@ -9,89 +12,14 @@
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/audio/AudioComponents.hpp"
 #include "agr/ui/UIComponents.hpp"
+#include "agr/navigation/NavigationComponents.hpp"
 
 namespace agr::editor {
 
 using math::Quat;
 using math::Vec3;
 
-namespace {
-
-// ------------------------------------------------------------------ UI helpers
-ecs::Entity uiCanvas(Scene& scene) {
-    const auto c = scene.createEntity("HUD");
-    auto& cv = scene.registry().emplace<UICanvasComponent>(c);
-    cv.referenceResolution = {1920.0f, 1080.0f};
-    cv.match = 0.5f;
-    return c;
-}
-
-ecs::Entity uiElement(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size) {
-    const auto e = scene.createEntity(name, parent);
-    auto& r = scene.registry().emplace<UIRectComponent>(e);
-    r.anchorMin = r.anchorMax = r.pivot = anchor;
-    r.position = position;
-    r.size = size;
-    return e;
-}
-
-/// Text filling its parent.
-ecs::Entity uiLabel(Scene& scene, const std::string& name, ecs::Entity parent, const std::string& text, float fontSize, math::Vec4 color) {
-    const auto e = scene.createEntity(name, parent);
-    auto& r = scene.registry().emplace<UIRectComponent>(e);
-    r.anchorMin = {0.0f, 0.0f};
-    r.anchorMax = {1.0f, 1.0f};
-    r.size = {0.0f, 0.0f};
-    auto& t = scene.registry().emplace<UITextComponent>(e);
-    t.text = text;
-    t.fontSize = fontSize;
-    t.color = color;
-    return e;
-}
-
-ecs::Entity uiPanel(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size) {
-    const auto e = uiElement(scene, name, parent, anchor, position, size);
-    scene.registry().emplace<UIImageComponent>(e).color = {0.05f, 0.06f, 0.08f, 0.62f};
-    return e;
-}
-
-ecs::Entity uiButton(Scene& scene, const std::string& name, ecs::Entity parent, math::Vec2 anchor, math::Vec2 position, math::Vec2 size,
-                     const std::string& label) {
-    const auto e = uiElement(scene, name, parent, anchor, position, size);
-    scene.registry().emplace<UIImageComponent>(e).color = {1.0f, 1.0f, 1.0f, 0.22f};
-    auto& b = scene.registry().emplace<UIButtonComponent>(e);
-    b.pressedColor = {2.2f, 1.6f, 0.6f, 2.2f};  // brighter, warmer while held
-    uiLabel(scene, "Label", e, label, size.y * 0.42f, {1.0f, 1.0f, 1.0f, 0.9f});
-    return e;
-}
-
-ecs::Entity audioSource(Scene& scene, const std::string& name, const std::string& clip, AudioBus bus, float volume) {
-    const auto e = scene.createEntity(name);
-    auto& a = scene.registry().emplace<AudioSourceComponent>(e);
-    a.clip = clip;
-    a.bus = bus;
-    a.volume = volume;
-    a.loop = true;
-    a.stream = true;
-    return e;
-}
-
-void lookAt(Scene& scene, ecs::Entity e, Vec3 eye, Vec3 target) {
-    auto& t = scene.registry().get<TransformComponent>(e);
-    Vec3 s;
-    math::decompose(math::inverse(math::Mat4::lookAt(eye, target, Vec3::up())), t.position, t.rotation, s);
-}
-
-ecs::Entity sun(Scene& scene) {
-    const auto light = scene.createEntity("Sun Light");
-    scene.registry().emplace<DirectionalLightComponent>(light).intensity = 1.1f;
-    scene.registry().emplace<EnvironmentComponent>(light);
-    scene.registry().get<TransformComponent>(light).rotation =
-        Quat::fromEuler({math::radians(-50.0f), math::radians(35.0f), 0.0f});
-    return light;
-}
-
-} // namespace
+using namespace templates;
 
 const char* templateName(SceneTemplate t) {
     switch (t) {
@@ -100,6 +28,8 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::Empty3D: return "Scène 3D vide";
         case SceneTemplate::Showcase2D: return "Vitrine 2D";
         case SceneTemplate::Showcase3D: return "Vitrine 3D";
+        case SceneTemplate::GamePlatformer: return "Jeu : Plateforme 2D";
+        case SceneTemplate::GameRpg2D: return "Jeu : RPG 2D";
     }
     return "?";
 }
@@ -117,6 +47,11 @@ const char* templateDescription(SceneTemplate t) {
             return "Matériaux PBR, modèles glTF importés, ombres, lumières, ciel et brume, avec physique 3D : en jeu, "
                    "Espace / clic / toucher lance des balles sur les caisses (script Lua), avec sons, ambiance, objets animés et "
                    "interface (compteur, curseur de vitesse), et un personnage animé (squelette glTF) qui danse quand une balle le touche.";
+        case SceneTemplate::GamePlatformer:
+            return "Niveau complet : courir, sauter, écraser les slimes, ramasser 12 pièces, point de passage et drapeau d'arrivée, "
+                   "3 vies, record sauvegardé, boutons tactiles. Flèches / ZQSD + Espace, manette ou écran.";
+        case SceneTemplate::GameRpg2D:
+            return "Aventure vue de dessus : explorer la carte, parler au sage, retrouver 3 gemmes, combattre des chauves-souris qui vous poursuivent (recherche de chemin), gagner expérience et niveaux, progression sauvegardée. ZQSD / flèches, Espace : épée, E : parler, ou commandes tactiles.";
     }
     return "";
 }
@@ -130,14 +65,32 @@ SceneTemplate defaultTemplateFor(ProjectMode mode) {
     return SceneTemplate::Empty3D;
 }
 
-std::vector<SceneTemplate> templatesFor(ProjectMode mode) {
-    if (mode == ProjectMode::Mode2D) return {SceneTemplate::Empty2D, SceneTemplate::Showcase2D};
-    if (mode == ProjectMode::Mode3D) return {SceneTemplate::Empty3D, SceneTemplate::Showcase3D};
-    return {defaultTemplateFor(mode)};
+ProjectMode templateMode(SceneTemplate t) {
+    switch (t) {
+        case SceneTemplate::Empty2D:
+        case SceneTemplate::Showcase2D:
+        case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameRpg2D: return ProjectMode::Mode2D;
+        case SceneTemplate::Empty25D: return ProjectMode::Mode25D;
+        case SceneTemplate::Empty3D:
+        case SceneTemplate::Showcase3D: return ProjectMode::Mode3D;
+    }
+    return ProjectMode::Mode3D;
 }
 
+bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<u8>(SceneTemplate::GamePlatformer); }
+
 std::vector<SceneTemplate> allTemplates() {
-    return {SceneTemplate::Empty2D, SceneTemplate::Showcase2D, SceneTemplate::Empty25D, SceneTemplate::Empty3D, SceneTemplate::Showcase3D};
+    std::vector<SceneTemplate> out;
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameRpg2D); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    return out;
+}
+
+std::vector<SceneTemplate> templatesFor(ProjectMode mode) {
+    std::vector<SceneTemplate> out{defaultTemplateFor(mode)};
+    for (SceneTemplate t : allTemplates())
+        if (t != out.front() && templateMode(t) == mode) out.push_back(t);
+    return out;
 }
 
 namespace {
@@ -529,6 +482,7 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
     registerAudioComponents();
     registerUIComponents();
     registerAnimationComponents();
+    registerNavigationComponents();
     auto& reg = scene.registry();
     const char* mark = "assets://textures/agr_mark.png";
     const char* grid = "assets://textures/grid.png";
@@ -581,6 +535,8 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         }
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
+        case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameRpg2D: games::buildRpg2D(scene); break;
     }
     scene.updateTransforms();
 }

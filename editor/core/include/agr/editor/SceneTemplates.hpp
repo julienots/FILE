@@ -15,6 +15,10 @@ std::vector<SceneTemplate> templatesFor(ProjectMode mode);
 /// Every template, for menus and tests.
 std::vector<SceneTemplate> allTemplates();
 const char* templateName(SceneTemplate tmpl);
+/// Project mode a template is made for (2D, 2.5D, 3D).
+ProjectMode templateMode(SceneTemplate tmpl);
+/// Complete playable games (as opposed to empty bases and showcases).
+bool isGameTemplate(SceneTemplate tmpl);
 const char* templateDescription(SceneTemplate tmpl);
 
 } // namespace agr::editor

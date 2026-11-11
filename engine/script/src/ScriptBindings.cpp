@@ -591,7 +591,18 @@ Localization& localizationOf(lua_State* L) {
 int a_tr(lua_State* L) {
     const char* key = luaL_checkstring(L, 1);
     std::vector<std::string> args;
-    for (int i = 2; i <= lua_gettop(L); ++i) args.emplace_back(luaL_tolstring(L, i, nullptr)), lua_pop(L, 1);
+    for (int i = 2; i <= lua_gettop(L); ++i) {
+        // Whole numbers print without ".0" (counters often come from JSON properties as floats).
+        if (lua_type(L, i) == LUA_TNUMBER && !lua_isinteger(L, i)) {
+            const lua_Number n = lua_tonumber(L, i);
+            if (std::isfinite(n) && n == std::floor(n) && std::abs(n) < 1e15) {
+                args.push_back(std::to_string(static_cast<long long>(n)));
+                continue;
+            }
+        }
+        args.emplace_back(luaL_tolstring(L, i, nullptr));
+        lua_pop(L, 1);
+    }
     const std::string text = localizationOf(L).format(key, args);
     lua_pushlstring(L, text.data(), text.size());
     return 1;

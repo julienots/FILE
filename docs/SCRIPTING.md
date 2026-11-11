@@ -75,7 +75,7 @@ return Player
 | `destroy()` | détruit l'entité et ses enfants à la fin de l'image |
 | `script()` | la table `self` du script de cette entité, ou `nil` |
 | `velocity()`, `setVelocity(...)`, `applyForce(...)`, `applyImpulse(...)`, `setAngularVelocity(...)` | corps physique : 2D (`x, y` ; angulaire en rad/s) ou 3D (`x, y, z`) selon que l'entité a un `RigidBody2D` ou un `RigidBody` |
-| `setActive(bool)`, `isActive()` | active / désactive l'entité (et ses enfants) : menus, objets cachés |
+| `setActive(bool)`, `isActive()` | active / désactive l'entité (et ses enfants) : menus, objets cachés. Désactiver une entité détruit l'instance de son script (`onDestroy`) ; la réactiver en crée une nouvelle (`onStart`, propriétés d'origine) |
 | `playSound()`, `stopSound([fondu])`, `isSoundPlaying()` | `AudioSource` de l'entité ([AUDIO.md](AUDIO.md)) |
 | `setText(valeur)`, `text()` | `UIText` de l'entité (les nombres sont convertis) ([UI.md](UI.md)) |
 | `setParameter(nom, nombre \| booléen)`, `setTrigger(nom)`, `getParameter(nom)`, `playState(nom [, fondu])`, `currentState()` | `Animator` et sa machine à états ([ANIMATION.md](ANIMATION.md)) |

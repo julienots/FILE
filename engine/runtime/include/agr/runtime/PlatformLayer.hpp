@@ -55,16 +55,24 @@ public:
     }
 };
 
-/// No window, no input: used by tests, CI and dedicated servers.
+/// No window, no input events: used by tests, CI and dedicated servers. It reports a virtual
+/// screen of the configured window size so UI layout, screen <-> world conversions and touch
+/// zones behave as on a device (automated tests feed input directly).
 class HeadlessPlatform final : public PlatformLayer {
 public:
-    Status initialize(const EngineConfig&) override { return {}; }
+    Status initialize(const EngineConfig& config) override {
+        m_size = {static_cast<float>(config.window.width), static_cast<float>(config.window.height)};
+        return {};
+    }
     void shutdown() override {}
     bool pollEvents(EventBus&, Input&) override { return true; }
     void present() override {}
     bool canRender() const override { return false; }
-    math::Vec2 framebufferSize() const override { return {}; }
+    math::Vec2 framebufferSize() const override { return m_size; }
     const char* name() const override { return "Headless"; }
+
+private:
+    math::Vec2 m_size{};
 };
 
 } // namespace agr

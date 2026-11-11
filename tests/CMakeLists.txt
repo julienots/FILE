@@ -36,7 +36,7 @@ add_test(NAME agr_tests COMMAND agr_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINA
 set_tests_properties(agr_tests PROPERTIES ENVIRONMENT "LSAN_OPTIONS=suppressions=${PROJECT_SOURCE_DIR}/tools/lsan.supp")
 
 if(AGR_BUILD_EDITOR)
-    target_sources(agr_tests PRIVATE test_editor.cpp)
+    target_sources(agr_tests PRIVATE test_editor.cpp test_game_templates.cpp)
     target_link_libraries(agr_tests PRIVATE agr::editor_core)
     target_compile_definitions(agr_tests PRIVATE AGR_TEST_TEMPLATE_ASSETS="${PROJECT_SOURCE_DIR}/editor/resources/templates/assets")
 endif()

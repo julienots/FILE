@@ -417,7 +417,7 @@ void EditorApp::drawHub() {
     for (SceneTemplate t : templatesFor(w.mode))
         if (ImGui::Selectable(templateName(t), w.tmpl == t)) w.tmpl = t;
     ImGui::TextWrapped("%s", templateDescription(w.tmpl));
-    ImGui::TextDisabled("Les modèles de jeux complets (plateforme, RPG, tower defense, course...) arrivent en phase 9.");
+    ImGui::TextDisabled("Les modèles « Jeu : » sont des jeux complets et jouables, à modifier librement.");
     ImGui::Spacing();
     ImGui::TextDisabled("3. Nom et emplacement");
     ImGui::SetNextItemWidth(-FLT_MIN);

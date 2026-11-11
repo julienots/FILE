@@ -5,3 +5,24 @@ hud.speed,Vitesse de lancer,Throw speed,Velocidad de lanzamiento
 hud.jump,Saut,Jump,Saltar
 hud.mushrooms,Champignons : {1} / {2},Mushrooms: {1} / {2},Setas: {1} / {2}
 hud.all_collected,"Bravo, tout est ramassé !","Well done, you got them all!","¡Bien hecho, las tienes todas!"
+game.restart,Rejouer,Play again,Jugar de nuevo
+game.over,Partie terminée,Game over,Fin de la partida
+game.won,Victoire !,You win!,¡Victoria!
+plat.coins,"Pièces : {1} / {2}","Coins: {1} / {2}","Monedas: {1} / {2}"
+plat.lives,"Vies : {1}","Lives: {1}","Vidas: {1}"
+plat.checkpoint,Point de passage !,Checkpoint!,¡Punto de control!
+plat.won,"Arrivée ! {1} / {2} pièces (record : {3})","Finish! {1} / {2} coins (best: {3})","¡Meta! {1} / {2} monedas (récord: {3})"
+rpg.hp,"PV : {1} / {2}","HP: {1} / {2}","PV: {1} / {2}"
+rpg.level,"Niveau {1} — XP {2} / {3}","Level {1} — XP {2} / {3}","Nivel {1} — XP {2} / {3}"
+rpg.quest.none,"Quête : parler au sage (au nord du carrefour)","Quest: talk to the sage (north of the crossroads)","Misión: habla con el sabio (al norte del cruce)"
+rpg.quest.active,"Quête : trouver 3 gemmes ({1} / 3), puis revenir voir le sage","Quest: find 3 gems ({1} / 3), then return to the sage","Misión: encuentra 3 gemas ({1} / 3) y vuelve con el sabio"
+rpg.quest.done,"Quête terminée : le royaume est sauvé !","Quest complete: the kingdom is saved!","Misión cumplida: ¡el reino está a salvo!"
+rpg.npc.intro,"Sage : « Des chauves-souris ont volé {1} gemmes sacrées. Retrouve-les et rapporte-les-moi ! »","Sage: “Bats stole {1} sacred gems. Find them and bring them back to me!”","Sabio: «Unos murciélagos robaron {1} gemas sagradas. ¡Encuéntralas y tráemelas!»"
+rpg.npc.remind,"Sage : « Tu as {1} gemme(s) sur {2}. Cherche près du lac, de la forêt et au sud. »","Sage: “You have {1} of {2} gems. Look by the lake, the forest and the south.”","Sabio: «Tienes {1} de {2} gemas. Busca junto al lago, el bosque y el sur.»"
+rpg.npc.thanks,"Sage : « Merci, héros ! Voici ta récompense : {1} XP. »","Sage: “Thank you, hero! Here is your reward: {1} XP.”","Sabio: «¡Gracias, héroe! Tu recompensa: {1} XP.»"
+rpg.npc.done,"Sage : « Le royaume te remercie. Les chauves-souris rôdent encore… »","Sage: “The kingdom thanks you. Bats still roam…”","Sabio: «El reino te lo agradece. Los murciélagos siguen rondando…»"
+rpg.levelup,"Niveau {1} !","Level {1}!","¡Nivel {1}!"
+rpg.dead,"Vous êtes tombé…","You fell…","Has caído…"
+rpg.hint.talk,"E / Parler : discuter avec le sage","E / Talk: speak with the sage","E / Hablar: hablar con el sabio"
+rpg.attack,Épée,Sword,Espada
+rpg.talk,Parler,Talk,Hablar
