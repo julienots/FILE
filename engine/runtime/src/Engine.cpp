@@ -53,6 +53,7 @@ Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
         return s;
     }
     AGR_LOG_INFO("Engine", "platform layer: {}", m_platform->name());
+    reloadGameSettings();
 
     // 5. Scene.
     m_scene = std::make_unique<Scene>("Untitled");
@@ -118,6 +119,7 @@ int Engine::run(Application& app) {
         Stopwatch cpu;
         m_input.beginFrame();
         if (!m_platform->pollEvents(m_events, m_input)) m_quitRequested = true;
+        m_actions.update(m_input, m_platform->windowSize());
         m_events.dispatchQueued();
         tick(app, rawDelta);
         m_stats.cpuMs = cpu.elapsedMilliseconds();
@@ -185,6 +187,28 @@ void Engine::tick(Application& app, f64 rawDelta) {
         m_statsWindowFrames = 0;
         m_statsWindowWorst = 0.0;
     }
+}
+
+void Engine::reloadGameSettings() {
+    if (Status s = m_actions.load(m_vfs); !s) {
+        AGR_LOG_ERROR("Engine", "input actions: {} (defaults used)", s.error().message);
+        m_actions.setMap(InputMap::defaults());
+    }
+    if (Status s = m_localization.load(m_vfs); !s) AGR_LOG_ERROR("Engine", "{}", s.error().message);
+    std::vector<std::string> preferred;
+    if (m_save && m_save->has("agr.language") && m_save->get("agr.language").is_string())
+        preferred.push_back(m_save->get("agr.language").get<std::string>());
+    if (m_platform)
+        for (auto& l : m_platform->preferredLanguages()) preferred.push_back(std::move(l));
+    m_localization.chooseLanguage(preferred);
+    if (!m_localization.languages().empty())
+        AGR_LOG_INFO("Engine", "language: {} ({} available)", m_localization.language(), m_localization.languages().size());
+}
+
+bool Engine::setLanguage(std::string_view code) {
+    if (!m_localization.setLanguage(code)) return false;
+    if (m_save) m_save->set("agr.language", m_localization.language());
+    return true;
 }
 
 void Engine::shutdown(Application* app) {

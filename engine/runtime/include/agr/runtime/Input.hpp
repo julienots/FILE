@@ -26,6 +26,21 @@ enum class Key : u16 {
 
 enum class MouseButton : u8 { Left = 0, Middle, Right, X1, X2, Count };
 
+/// Gamepad buttons by position (South = A on Xbox, Cross on PlayStation, B on Nintendo).
+enum class GamepadButton : u8 {
+    South = 0, East, West, North, Back, Guide, Start, LeftStick, RightStick, LeftShoulder, RightShoulder,
+    DpadUp, DpadDown, DpadLeft, DpadRight, Count
+};
+/// Sticks: -1..1 (y down is positive, as reported by controllers); triggers: 0..1.
+enum class GamepadAxis : u8 { LeftX = 0, LeftY, RightX, RightY, LeftTrigger, RightTrigger, Count };
+inline constexpr u32 kMaxGamepads = 4;
+const char* enumName(GamepadButton b);
+const char* enumName(GamepadAxis a);
+GamepadButton parseGamepadButton(std::string_view name);  ///< Count if unknown.
+GamepadAxis parseGamepadAxis(std::string_view name);      ///< Count if unknown.
+const char* keyName(Key k);       ///< "A", "Space", "Left"... ("" if unnamed).
+Key parseKey(std::string_view name);  ///< Unknown if not recognized.
+
 enum class TouchPhase : u8 { Began, Moved, Stationary, Ended };
 
 struct Touch {
@@ -34,6 +49,7 @@ struct Touch {
     math::Vec2 delta;     ///< Movement since last frame, pixels.
     float pressure = 1.0f;
     TouchPhase phase = TouchPhase::Began;
+    math::Vec2 start;     ///< Where the finger touched down.
 };
 
 /// Frame-coherent input state. Filled by the platform layer, read by gameplay.
@@ -62,6 +78,18 @@ public:
     bool hasGyroscope() const { return m_hasGyro; }
     math::Vec3 gyroscope() const { return m_gyro; }
 
+    /// Gamepads by slot (0..3, in connection order; a slot is reused after a disconnection).
+    bool gamepadConnected(u32 pad) const { return pad < kMaxGamepads && m_pads[pad].connected; }
+    u32 gamepadCount() const;
+    bool gamepadDown(u32 pad, GamepadButton b) const;
+    bool gamepadPressed(u32 pad, GamepadButton b) const;
+    bool gamepadReleased(u32 pad, GamepadButton b) const;
+    float gamepadAxis(u32 pad, GamepadAxis a) const;  ///< 0 for a disconnected pad.
+    /// Any connected pad.
+    bool anyGamepadDown(GamepadButton b) const;
+    bool anyGamepadPressed(GamepadButton b) const;
+    const std::string& gamepadName(u32 pad) const;
+
     // ----------------------------------------------- platform interface
     /// Starts a new frame: snapshots previous state, clears deltas, drops ended touches.
     void beginFrame();
@@ -75,6 +103,11 @@ public:
     void appendText(std::string_view utf8) { m_text += utf8; }
     void setAccelerometer(math::Vec3 v) { m_accel = v, m_hasAccel = true; }
     void setGyroscope(math::Vec3 v) { m_gyro = v, m_hasGyro = true; }
+    /// Returns the slot given to the pad (kMaxGamepads when all slots are used).
+    u32 gamepadConnect(u64 deviceId, std::string name);
+    void gamepadDisconnect(u64 deviceId);
+    void setGamepadButton(u64 deviceId, GamepadButton b, bool down);
+    void setGamepadAxis(u64 deviceId, GamepadAxis a, float value);
     /// Releases everything (focus lost, app backgrounded).
     void reset();
 
@@ -91,6 +124,15 @@ private:
     std::string m_text;
     math::Vec3 m_accel{0.0f}, m_gyro{0.0f};
     bool m_hasAccel = false, m_hasGyro = false;
+    struct Pad {
+        bool connected = false;
+        u64 device = 0;
+        std::string name;
+        std::array<bool, static_cast<usize>(GamepadButton::Count)> buttons{}, prev{};
+        std::array<float, static_cast<usize>(GamepadAxis::Count)> axes{};
+    };
+    std::array<Pad, kMaxGamepads> m_pads{};
+    Pad* padFor(u64 deviceId);
 };
 
 } // namespace agr

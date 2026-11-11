@@ -28,6 +28,8 @@ add_library(agr_editor_ui STATIC
     ui/src/MaterialPreview.cpp
     ui/src/ConsolePanel.cpp
     ui/src/MixerPanel.cpp
+    ui/src/InputPanel.cpp
+    ui/src/LocalizationPanel.cpp
     ui/src/AnimationPanel.cpp
     ui/src/StateMachinePanel.cpp
     ui/src/ExportPanel.cpp

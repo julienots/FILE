@@ -324,7 +324,8 @@ void buildShowcase2D(Scene& scene) {
     uiLabel(scene, "Score", panel, "Champignons : 0 / 3", 40.0f, {1.0f, 0.93f, 0.75f, 1.0f});
     uiButton(scene, "Left", hud, {0.0f, 1.0f}, {40.0f, -40.0f}, {190.0f, 170.0f}, "<");
     uiButton(scene, "Right", hud, {0.0f, 1.0f}, {260.0f, -40.0f}, {190.0f, 170.0f}, ">");
-    uiButton(scene, "Jump", hud, {1.0f, 1.0f}, {-40.0f, -40.0f}, {260.0f, 170.0f}, "Saut");
+    const auto jump = uiButton(scene, "Jump", hud, {1.0f, 1.0f}, {-40.0f, -40.0f}, {260.0f, 170.0f}, "Saut");
+    reg.get<UITextComponent>(scene.children(jump).front()).localizationKey = "hud.jump";
 }
 
 /// Daylight scene built from the original assets in assets/3d (tools/generate_template_3d_art.py).
@@ -498,6 +499,7 @@ void buildShowcase3D(Scene& scene) {
     {
         auto& t = reg.emplace<UITextComponent>(hint);
         t.text = "Espace, clic ou toucher : lancer une balle";
+        t.localizationKey = "hud.hint.launch";  // assets://localization.csv
         t.fontSize = 30.0f;
         t.hAlign = UIHAlign::Right;
         t.color = {1.0f, 1.0f, 1.0f, 0.8f};
@@ -505,6 +507,7 @@ void buildShowcase3D(Scene& scene) {
     const auto powerPanel = uiPanel(scene, "Power Panel", hud, {0.5f, 1.0f}, {0.0f, -30.0f}, {640.0f, 120.0f});
     const auto title = uiElement(scene, "Power Label", powerPanel, {0.5f, 0.0f}, {0.0f, 8.0f}, {600.0f, 44.0f});
     reg.emplace<UITextComponent>(title).text = "Vitesse de lancer";
+    reg.get<UITextComponent>(title).localizationKey = "hud.speed";
     reg.get<UITextComponent>(title).fontSize = 30.0f;
     const auto power = uiElement(scene, "Power", powerPanel, {0.5f, 1.0f}, {0.0f, -16.0f}, {560.0f, 44.0f});
     auto& slider = reg.emplace<UISliderComponent>(power);

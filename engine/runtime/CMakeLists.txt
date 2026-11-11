@@ -2,6 +2,8 @@ agr_add_module(runtime
     SOURCES
         src/EngineConfig.cpp
         src/Input.cpp
+        src/InputActions.cpp
+        src/Localization.cpp
         src/PluginManager.cpp
         src/Engine.cpp
         src/GameManifest.cpp

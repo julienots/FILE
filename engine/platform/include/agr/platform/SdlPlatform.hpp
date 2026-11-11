@@ -8,6 +8,7 @@ struct SDL_GLContextState;
 
 struct SDL_Sensor;
 struct SDL_Haptic;
+struct SDL_Gamepad;
 
 namespace agr {
 
@@ -34,6 +35,7 @@ public:
     math::Vec4 safeAreaInsets() const override;
     void vibrate(float seconds, float strength) override;
     bool canVibrate() const override { return m_haptic != nullptr; }
+    std::vector<std::string> preferredLanguages() const override;
     GraphicsApi graphicsApi() const override;
     void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }
     std::vector<std::string> vulkanInstanceExtensions() const override;
@@ -70,6 +72,7 @@ private:
     ::SDL_Sensor* m_accel = nullptr;
     ::SDL_Sensor* m_gyro = nullptr;
     ::SDL_Haptic* m_haptic = nullptr;
+    std::vector<::SDL_Gamepad*> m_gamepads;
     u32 m_accelId = 0, m_gyroId = 0;
 };
 

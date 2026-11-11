@@ -163,6 +163,28 @@ private:
     std::string m_filter;
 };
 
+/// Input actions (assets://input.agrinput): actions, their bindings, key / button capture,
+/// live values while the game runs. Every change is saved.
+class InputPanel {
+public:
+    void draw(EditorShared& s);
+
+private:
+    int m_selected = 0;
+    int m_capture = -1;  ///< Binding index waiting for a key / button, -1 = none.
+    std::string m_newName;
+};
+
+/// Localization table (assets://localization.csv): keys x languages, editable cells, preview
+/// language for the edited scene's texts. Changes are saved when a cell is left.
+class LocalizationPanel {
+public:
+    void draw(EditorShared& s);
+
+private:
+    std::string m_newKey, m_newLanguage, m_filter;
+};
+
 /// Audio mixer: output state, bus volumes and mutes, master level meter.
 class MixerPanel {
 public:

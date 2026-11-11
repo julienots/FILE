@@ -10,6 +10,7 @@
 #include "agr/ui/UIComponents.hpp"
 
 namespace agr {
+class Localization;
 
 /// A mouse or a finger, in pixels of the UI screen (origin top-left).
 struct UIPointer {
@@ -52,6 +53,8 @@ public:
 
     /// Textures (images) and the glyph atlas device come from the renderer (null = headless).
     void setRenderer(Renderer* renderer);
+    /// Texts with a localizationKey take their translation from it (null = keys ignored).
+    void setLocalization(const Localization* localization) { m_localization = localization; }
     Renderer* renderer() const { return m_renderer; }
 
     /// Screen insets (left, top, right, bottom, in pixels of the UI screen) hidden by notches or
@@ -115,6 +118,7 @@ private:
 
     VirtualFileSystem& m_vfs;
     Renderer* m_renderer = nullptr;
+    const Localization* m_localization = nullptr;
     FontLibrary m_fonts;
     Scene* m_layoutScene = nullptr;
     u64 m_layoutGeneration = 0;

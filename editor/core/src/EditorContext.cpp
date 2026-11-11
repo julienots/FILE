@@ -70,6 +70,8 @@ Status EditorContext::openProject(Project project) {
     vfs.mount("assets", std::make_unique<NativeFileProvider>(project.assetsDirectory().string(), false));
     vfs.mount("project", std::make_unique<NativeFileProvider>(project.root().string(), false));
     m_project = std::move(project);
+    m_engine.prefabs().clear();  // another project's prefabs share URIs
+    m_engine.reloadGameSettings();  // input actions and texts of this project
     m_camera = EditorCamera{};
     m_camera.mode2D = m_project->settings().mode == ProjectMode::Mode2D;
     if (Status s = loadScene(m_project->settings().startupScene); !s) {

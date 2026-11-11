@@ -56,6 +56,9 @@ enum class UIVAlign : i32 { Top = 0, Middle = 1, Bottom = 2 };
 /// Text (UTF-8) with a TrueType font. `fontSize` is the line height in canvas units.
 struct UITextComponent {
     std::string text = "Text";
+    /// Key in the localization table (assets://localization.csv): when set, `text` is replaced by
+    /// the translation in the current language.
+    std::string localizationKey;
     std::string font = "assets://fonts/Inter-Regular.ttf";
     float fontSize = 32.0f;
     math::Vec4 color{1.0f, 1.0f, 1.0f, 1.0f};

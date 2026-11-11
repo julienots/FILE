@@ -38,6 +38,8 @@ void registerUIComponents() {
         .category("UI")
         .description("Text with a TrueType font, aligned in its rectangle.")
         .field("text", &UITextComponent::text)
+        .field("localizationKey", &UITextComponent::localizationKey,
+               {.tooltip = "Clé de traduction (Affichage > Localisation) : remplace le texte selon la langue"})
         .field("font", &UITextComponent::font, {.tooltip = "TrueType font (.ttf)", .flags = FieldFlag_AssetPath})
         .field("fontSize", &UITextComponent::fontSize, {.tooltip = "Line height (canvas units)", .rangeMin = 1.0f, .rangeMax = 500.0f, .speed = 0.5f})
         .field("color", &UITextComponent::color, {.flags = FieldFlag_Color})

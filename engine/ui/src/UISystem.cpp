@@ -1,5 +1,7 @@
 #include "agr/ui/UISystem.hpp"
 
+#include "agr/runtime/Localization.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -61,6 +63,13 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
         m_layoutGeneration = scene.generation();
     }
     m_passes.clear();
+    if (m_localization)  // translated texts follow the current language (and table edits)
+        reg.view<UITextComponent>().each([&](ecs::Entity, UITextComponent& t) {
+            if (!t.localizationKey.empty()) {
+                const std::string& tr = m_localization->tr(t.localizationKey);
+                if (t.text != tr) t.text = tr;
+            }
+        });
     const Vec4 screen{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)};
     reg.view<UICanvasComponent>().each([&](ecs::Entity e, UICanvasComponent& c) {
         if (!scene.isActiveInHierarchy(e)) return;

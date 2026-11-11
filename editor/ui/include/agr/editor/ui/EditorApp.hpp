@@ -67,6 +67,8 @@ private:
     ConsolePanel m_console;
     StatsPanel m_stats;
     MixerPanel m_mixer;
+    InputPanel m_inputPanel;
+    LocalizationPanel m_localizationPanel;
     AnimationPanel m_animation;
     StateMachinePanel m_stateMachine;
     ExportPanel m_export;

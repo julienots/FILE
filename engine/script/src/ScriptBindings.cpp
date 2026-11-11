@@ -48,31 +48,7 @@ void readVec(lua_State* L, int idx, float* out, int n) {
     }
 }
 
-Key keyFromName(std::string_view n) {
-    if (n.size() == 1) {
-        const char c = static_cast<char>(n[0] >= 'a' && n[0] <= 'z' ? n[0] - 32 : n[0]);
-        if (c >= 'A' && c <= 'Z') return static_cast<Key>(static_cast<int>(Key::A) + (c - 'A'));
-        if (c >= '1' && c <= '9') return static_cast<Key>(static_cast<int>(Key::Num1) + (c - '1'));
-        if (c == '0') return Key::Num0;
-    }
-    struct Named {
-        std::string_view name;
-        Key key;
-    };
-    static const Named table[] = {{"Space", Key::Space},     {"Return", Key::Return},     {"Enter", Key::Return},
-                                  {"Escape", Key::Escape},   {"Backspace", Key::Backspace}, {"Tab", Key::Tab},
-                                  {"Left", Key::Left},       {"Right", Key::Right},       {"Up", Key::Up},
-                                  {"Down", Key::Down},       {"LeftShift", Key::LeftShift}, {"RightShift", Key::RightShift},
-                                  {"LeftCtrl", Key::LeftCtrl}, {"RightCtrl", Key::RightCtrl}, {"LeftAlt", Key::LeftAlt},
-                                  {"Back", Key::AndroidBack}};
-    for (const Named& k : table)
-        if (k.name == n) return k.key;
-    if (n.size() >= 2 && (n[0] == 'F') && n.size() <= 3) {
-        const int f = std::atoi(std::string(n.substr(1)).c_str());
-        if (f >= 1 && f <= 12) return static_cast<Key>(static_cast<int>(Key::F1) + f - 1);
-    }
-    return Key::Unknown;
-}
+Key keyFromName(std::string_view n) { return parseKey(n); }
 
 Key checkKey(lua_State* L, int idx) {
     const char* name = luaL_checkstring(L, idx);
@@ -549,6 +525,96 @@ int i_touch(lua_State* L) {
     lua_pushstring(L, phases[static_cast<int>(t.phase)]);
     return 3;
 }
+// ---- named actions (assets://input.agrinput)
+const ActionState& actionOf(lua_State* L) {
+    auto& m = implOf(L);
+    const char* name = luaL_checkstring(L, 1);
+    if (!m.actions) luaL_error(L, "input actions are not available");
+    if (!m.actions->has(name))
+        luaL_error(L, "unknown action '%s' (actions are defined in View > Input, file assets://input.agrinput)", name);
+    return m.actions->state(name);
+}
+int i_down(lua_State* L) {
+    lua_pushboolean(L, actionOf(L).down);
+    return 1;
+}
+int i_pressed(lua_State* L) {
+    lua_pushboolean(L, actionOf(L).pressed);
+    return 1;
+}
+int i_released(lua_State* L) {
+    lua_pushboolean(L, actionOf(L).released);
+    return 1;
+}
+int i_value(lua_State* L) {
+    lua_pushnumber(L, actionOf(L).value);
+    return 1;
+}
+// ---- gamepads
+u32 checkPad(lua_State* L, int idx) {
+    const lua_Integer p = luaL_optinteger(L, idx, 1);
+    if (p < 1 || p > static_cast<lua_Integer>(kMaxGamepads)) luaL_error(L, "gamepad must be 1..%d", static_cast<int>(kMaxGamepads));
+    return static_cast<u32>(p - 1);
+}
+int i_gamepadCount(lua_State* L) {
+    lua_pushinteger(L, static_cast<lua_Integer>(inputOf(L).gamepadCount()));
+    return 1;
+}
+int i_gamepadDown(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    const GamepadButton b = parseGamepadButton(name);
+    if (b == GamepadButton::Count) luaL_error(L, "unknown gamepad button '%s' (South, East, West, North, Start, DpadUp...)", name);
+    lua_pushboolean(L, lua_isnoneornil(L, 2) ? inputOf(L).anyGamepadDown(b) : inputOf(L).gamepadDown(checkPad(L, 2), b));
+    return 1;
+}
+int i_gamepadPressed(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    const GamepadButton b = parseGamepadButton(name);
+    if (b == GamepadButton::Count) luaL_error(L, "unknown gamepad button '%s'", name);
+    lua_pushboolean(L, lua_isnoneornil(L, 2) ? inputOf(L).anyGamepadPressed(b) : inputOf(L).gamepadPressed(checkPad(L, 2), b));
+    return 1;
+}
+int i_gamepadAxis(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    const GamepadAxis a = parseGamepadAxis(name);
+    if (a == GamepadAxis::Count) luaL_error(L, "unknown gamepad axis '%s' (LeftX, LeftY, RightX, RightY, LeftTrigger, RightTrigger)", name);
+    lua_pushnumber(L, inputOf(L).gamepadAxis(checkPad(L, 2), a));
+    return 1;
+}
+// ---- localization
+Localization& localizationOf(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.localization) luaL_error(L, "localization is not available");
+    return *m.localization;
+}
+/// agr.tr(key, ...) -> translated text with {1}, {2}... replaced by the extra arguments.
+int a_tr(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    std::vector<std::string> args;
+    for (int i = 2; i <= lua_gettop(L); ++i) args.emplace_back(luaL_tolstring(L, i, nullptr)), lua_pop(L, 1);
+    const std::string text = localizationOf(L).format(key, args);
+    lua_pushlstring(L, text.data(), text.size());
+    return 1;
+}
+int l_get(lua_State* L) {
+    const std::string& l = localizationOf(L).language();
+    lua_pushlstring(L, l.data(), l.size());
+    return 1;
+}
+int l_set(lua_State* L) {
+    localizationOf(L);
+    lua_pushboolean(L, implOf(L).setLanguage(luaL_checkstring(L, 1)));
+    return 1;
+}
+int l_list(lua_State* L) {
+    const auto& langs = localizationOf(L).languages();
+    lua_createtable(L, static_cast<int>(langs.size()), 0);
+    for (usize i = 0; i < langs.size(); ++i) {
+        lua_pushlstring(L, langs[i].data(), langs[i].size());
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    return 1;
+}
 int i_axis(lua_State* L) {  // "horizontal" / "vertical": arrows and WASD / ZQSD, -1..1
     const Input& in = inputOf(L);
     const std::string_view axis = luaL_checkstring(L, 1);
@@ -751,10 +817,14 @@ void openAgrLibrary(lua_State* L) {
     lua_pop(L, 1);
 
     // agr.*
-    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {"instantiate", a_instantiate}, {nullptr, nullptr}};
+    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {"instantiate", a_instantiate}, {"tr", a_tr}, {nullptr, nullptr}};
+    static const luaL_Reg locale[] = {{"get", l_get}, {"set", l_set}, {"list", l_list}, {nullptr, nullptr}};
     static const luaL_Reg input[] = {{"keyDown", i_keyDown},         {"keyPressed", i_keyPressed}, {"keyReleased", i_keyReleased},
                                      {"mouseDown", i_mouseDown},     {"mousePressed", i_mousePressed}, {"mousePosition", i_mousePosition},
                                      {"touchCount", i_touchCount},   {"touch", i_touch},           {"axis", i_axis},
+                                     {"down", i_down},               {"pressed", i_pressed},       {"released", i_released},
+                                     {"value", i_value},             {"gamepadCount", i_gamepadCount}, {"gamepadDown", i_gamepadDown},
+                                     {"gamepadPressed", i_gamepadPressed}, {"gamepadAxis", i_gamepadAxis},
                                      {nullptr, nullptr}};
     static const luaL_Reg time[] = {{"delta", t_delta}, {"fixedDelta", t_fixedDelta}, {"total", t_total}, {"frame", t_frame}, {nullptr, nullptr}};
     static const luaL_Reg physics[] = {{"raycast", p_raycast}, {"setGravity", p_setGravity}, {"gravity", p_gravity}, {nullptr, nullptr}};
@@ -763,6 +833,9 @@ void openAgrLibrary(lua_State* L) {
     lua_newtable(L);
     setFuncs(L, input);
     lua_setfield(L, -2, "input");
+    lua_newtable(L);
+    setFuncs(L, locale);
+    lua_setfield(L, -2, "locale");
     lua_newtable(L);
     setFuncs(L, time);
     lua_setfield(L, -2, "time");

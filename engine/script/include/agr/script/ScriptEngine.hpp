@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+#include <string_view>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,6 +18,8 @@
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
+class InputActions;
+class Localization;
 
 /// A property declared by a script (`properties = { speed = 6 }`), shown in the inspector.
 struct ScriptProperty {
@@ -62,6 +66,11 @@ public:
     ScriptEngine& operator=(const ScriptEngine&) = delete;
 
     void setInput(const Input* input);
+    /// Named actions for agr.input.down / pressed / released / value.
+    void setActions(const InputActions* actions);
+    /// Texts for agr.tr / agr.locale; `setLanguage` changes and remembers the language
+    /// (defaults to Localization::setLanguage).
+    void setLocalization(Localization* localization, std::function<bool(std::string_view)> setLanguage = {});
     /// Window size in input units (agr.screen.size()); 0 x 0 when headless.
     void setScreenSize(math::Vec2 size);
     void setPhysics2D(Physics2DWorld* world);

@@ -501,6 +501,8 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_console.draw(*m_shared);
     m_stats.draw(*m_shared, time);
     m_mixer.draw(*m_shared, time);
+    m_inputPanel.draw(*m_shared);
+    m_localizationPanel.draw(*m_shared);
     m_animation.draw(*m_shared, time);
     m_stateMachine.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
@@ -613,6 +615,8 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Animation (timeline)", nullptr, &m_shared->showAnimation);
         ImGui::MenuItem("Machine à états", nullptr, &m_shared->showStateMachine);
         ImGui::MenuItem("Mixeur audio", nullptr, &m_shared->showMixer);
+        ImGui::MenuItem("Entrées (actions)", nullptr, &m_shared->showInput);
+        ImGui::MenuItem("Localisation (traductions)", nullptr, &m_shared->showLocalization);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -842,6 +846,8 @@ void EditorApp::smokeTest(const FrameTime&) {
     EditorContext& ctx = *m_ctx;
     Scene& scene = ctx.scene();
     static Uuid cubeId, spriteId;
+    // Texts are checked in French, whatever the machine's language (switched to English at the end).
+    if (m_frame < 197 && m_engine->localization().language() != "fr") m_engine->localization().setLanguage("fr");
     switch (m_frame) {
         case 3: {
             check(ctx.hasProject(), "project opened");
@@ -1173,6 +1179,16 @@ void EditorApp::smokeTest(const FrameTime&) {
         case 197: {
             for (int i = 0; i < 4; ++i) ctx.undo();  // apply, add component, add prefab, create prefab
             check(!prefab::isInstanceRoot(scene, scene.findByName("Rock")), "undo restores the scene before the prefab");
+            check(m_engine->localization().setLanguage("en"), "the template has English texts");
+            m_viewport.gameView = true;  // the HUD is laid out in the game view
+            break;
+        }
+        case 198: {
+            const auto hint = scene.findByName("Hint");
+            check(!hint.isNull() && scene.registry().get<UITextComponent>(hint).text == "Space, click or tap: throw a ball",
+                  "texts with a localization key follow the language");
+            m_viewport.gameView = false;
+            m_engine->localization().setLanguage("fr");
             break;
         }
         case 199: {

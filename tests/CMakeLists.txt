@@ -13,6 +13,8 @@ add_executable(agr_tests
     test_models.cpp
     test_environment.cpp
     test_prefab.cpp
+    test_input_actions.cpp
+    test_localization.cpp
     test_physics2d.cpp
     test_script.cpp
     test_physics3d.cpp

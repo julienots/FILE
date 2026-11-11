@@ -24,7 +24,7 @@ function Hero:onStart()
 end
 
 function Hero:showScore()
-    if self.score then self.score:setText("Champignons : " .. self.collected .. " / " .. self.total) end
+    if self.score then self.score:setText(agr.tr("hud.mushrooms", self.collected, self.total)) end
 end
 
 -- Boutons tactiles de l'interface : déplacement (-1, 0, 1) et saut (au moment de l'appui).
@@ -42,10 +42,11 @@ function Hero:onUpdate(dt)
     local hit = agr.physics2d.raycast(x, y + 0.05, 0, -1, 0.15)
     self.grounded = hit ~= nil and hit.entity ~= e
 
-    local move = agr.input.axis("horizontal")
+    -- Actions (Affichage > Entrées) : clavier, manette et joystick tactile ; plus les boutons du HUD.
+    local move = agr.input.value("move_x")
     if held("Left") then move = -1 elseif held("Right") then move = 1 end
     local jumpButton = held("Jump")
-    local jump = agr.input.keyPressed("Space") or agr.input.keyPressed("Up")
+    local jump = agr.input.pressed("jump") or agr.input.keyPressed("Up")
               or agr.input.keyPressed("W") or agr.input.keyPressed("Z")
               or (jumpButton and not self.jumpHeld)
     self.jumpHeld = jumpButton
@@ -74,7 +75,7 @@ function Hero:collect(what)
     self.collected = self.collected + 1
     self:showScore()
     agr.log("Ramassé : " .. what .. " (" .. self.collected .. ")")
-    if self.collected >= self.total and self.score then self.score:setText("Bravo, tout est ramassé !") end
+    if self.collected >= self.total and self.score then self.score:setText(agr.tr("hud.all_collected")) end
 end
 
 return Hero

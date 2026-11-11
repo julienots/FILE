@@ -323,7 +323,12 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     REQUIRE(audio.initialize({.output = AudioOutput::Manual}));
     AnimationSystem anim(f.engine->vfs());
     UISystem ui(f.engine->vfs());
+    InputActions actions;  // as the engine: the project's actions, evaluated every frame
+    REQUIRE(actions.load(f.engine->vfs()));
     scripts.setInput(&input);
+    scripts.setActions(&actions);
+    scripts.setLocalization(&f.engine->localization());
+    ui.setLocalization(&f.engine->localization());
     scripts.setPhysics2D(&physics);
     scripts.setAudio(&audio);
     scripts.setAnimation(&anim);
@@ -334,6 +339,7 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     std::vector<UIPointer> pointers;
     std::vector<float> mixBuffer(800 * 2);
     auto frame = [&] {
+        actions.update(input, {1920.0f, 1080.0f});
         physics.step(scene, 1.0f / 60.0f);
         for (const auto& ev : physics.events()) scripts.dispatchCollision(scene, ev);
         ui.layout(scene, 1920, 1080);
@@ -402,8 +408,10 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     ui.layout(scene3, 1920, 1080);
     ui.processInput(scene3, {});  // no pointer over the UI: Space fires
     const usize before = scene3.entityCount();
+    actions.update(input, {1920.0f, 1080.0f});
     scripts.update(scene3, time);
     input.setKey(Key::Space, true);
+    actions.update(input, {1920.0f, 1080.0f});  // "jump" pressed
     scripts.update(scene3, time);
     input.beginFrame();
     input.setKey(Key::Space, false);
@@ -413,6 +421,7 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     REQUIRE_FALSE(ball.isNull());
     const Vec3 b0 = scene3.registry().get<TransformComponent>(ball).position;
     for (int i = 0; i < 30; ++i) {
+        actions.update(input, {1920.0f, 1080.0f});  // every frame, as the engine
         physics3.step(scene3, 1.0f / 60.0f);
         scripts.update(scene3, time);
         scene3.updateTransforms();
@@ -420,7 +429,7 @@ TEST_CASE("template gameplay runs headless: platformer hero, collectibles, 3D ba
     const Vec3 b1 = scene3.registry().get<TransformComponent>(ball).position;
     CHECK(b1.z < b0.z - 3.0f);  // flew toward the scene (camera looks down -Z)
     CHECK(physics3.stats().bodies > 15);
-    CHECK(scene3.registry().get<UITextComponent>(scene3.findByName("Counter")).text.find("Balles : 1 / 25") == 0);
+    CHECK_MESSAGE(scene3.registry().get<UITextComponent>(scene3.findByName("Counter")).text.find("Balles : 1 / 25") == 0, scene3.registry().get<UITextComponent>(scene3.findByName("Counter")).text);
     // The speed slider calls the launcher script (target message).
     scripts.dispatchUI(scene3, UIValueChangedEvent{scene3.findByName("Power"), 20.0f});
     CHECK(scripts.field(scene3.findByName("Main Camera"), "speed").value() == "20.0");

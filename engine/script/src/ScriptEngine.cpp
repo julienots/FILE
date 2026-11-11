@@ -149,6 +149,12 @@ ScriptEngine::ScriptEngine(VirtualFileSystem& vfs) : m(std::make_unique<Impl>(vf
 ScriptEngine::~ScriptEngine() = default;
 
 void ScriptEngine::setInput(const Input* input) { m->input = input; }
+void ScriptEngine::setActions(const InputActions* actions) { m->actions = actions; }
+void ScriptEngine::setLocalization(Localization* localization, std::function<bool(std::string_view)> setLanguage) {
+    m->localization = localization;
+    m->setLanguage = setLanguage ? std::move(setLanguage)
+                                 : std::function<bool(std::string_view)>([localization](std::string_view c) { return localization && localization->setLanguage(c); });
+}
 void ScriptEngine::setScreenSize(math::Vec2 size) { m->screenSize = size; }
 void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }

@@ -20,7 +20,8 @@ end
 
 function Launcher:showCount()
     if self.counter then
-        self.counter:setText("Balles : " .. #self.balls .. " / " .. self.maxBalls .. "   Vitesse : " .. math.floor(self.speed + 0.5) .. " m/s")
+        -- Texte traduit (Affichage > Localisation, assets/localization.csv) avec ses valeurs {1}, {2}, {3}.
+        self.counter:setText(agr.tr("hud.balls", #self.balls, self.maxBalls, math.floor(self.speed + 0.5)))
     end
 end
 
@@ -59,7 +60,8 @@ end
 
 function Launcher:onUpdate(dt)
     if agr.ui.pointerOverUI() then return end  -- le curseur de l'interface a la priorité
-    local fire = agr.input.keyPressed("Space") or agr.input.mousePressed(0)
+    -- Actions « jump » (Espace, bouton A) et « fire » (clic, Ctrl, bouton X) ; tout toucher lance aussi.
+    local fire = agr.input.pressed("jump") or agr.input.pressed("fire")
     for i = 1, agr.input.touchCount() do
         local _, _, phase = agr.input.touch(i)
         if phase == "began" then fire = true end

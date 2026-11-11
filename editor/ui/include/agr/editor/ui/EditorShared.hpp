@@ -68,6 +68,8 @@ struct EditorShared {
     bool renameSelection = false;  ///< Hierarchy starts inline rename of the primary selection.
     bool focusViewport = false;
     bool showMixer = false;        ///< Audio mixer panel.
+    bool showInput = false;        ///< Input actions panel.
+    bool showLocalization = false; ///< Localization table panel.
     bool showAnimation = false;    ///< Animation timeline panel.
     bool showStateMachine = false; ///< State machine graph panel.
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://

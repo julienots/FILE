@@ -148,7 +148,9 @@ Status SdlPlatform::setGraphicsApi(GraphicsApi api) {
 }
 
 void SdlPlatform::openDevices() {
-    // Optional subsystems: a failure only means the device has no sensor / vibrator.
+    // Optional subsystems: a failure only means the device has no sensor / vibrator / gamepad.
+    // Gamepads already plugged in arrive as SDL_EVENT_GAMEPAD_ADDED events.
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) AGR_LOG_WARN("Platform", "gamepads unavailable: {}", SDL_GetError());
     if (SDL_InitSubSystem(SDL_INIT_SENSOR)) {
         int count = 0;
         if (SDL_SensorID* ids = SDL_GetSensors(&count)) {
@@ -182,6 +184,21 @@ void SdlPlatform::openDevices() {
 #endif
 }
 
+std::vector<std::string> SdlPlatform::preferredLanguages() const {
+    std::vector<std::string> out;
+    int count = 0;
+    if (SDL_Locale** locales = SDL_GetPreferredLocales(&count)) {
+        for (int i = 0; i < count && locales[i]; ++i) {
+            std::string code = locales[i]->language ? locales[i]->language : "";
+            if (code.empty()) continue;
+            if (locales[i]->country) code += std::string("-") + locales[i]->country;
+            out.push_back(std::move(code));
+        }
+        SDL_free(locales);
+    }
+    return out;
+}
+
 math::Vec4 SdlPlatform::safeAreaInsets() const {
     if (!m_window) return {0.0f, 0.0f, 0.0f, 0.0f};
     SDL_Rect safe{};
@@ -198,6 +215,8 @@ void SdlPlatform::vibrate(float seconds, float strength) {
 }
 
 void SdlPlatform::shutdown() {
+    for (SDL_Gamepad* pad : m_gamepads) SDL_CloseGamepad(pad);
+    m_gamepads.clear();
     if (m_accel) SDL_CloseSensor(m_accel);
     if (m_gyro) SDL_CloseSensor(m_gyro);
     if (m_haptic) SDL_CloseHaptic(m_haptic);
@@ -309,6 +328,44 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
                 break;
             }
 
+            case SDL_EVENT_GAMEPAD_ADDED: {
+                if (SDL_Gamepad* pad = SDL_OpenGamepad(e.gdevice.which)) {
+                    const char* name = SDL_GetGamepadName(pad);
+                    const u32 slot = input.gamepadConnect(e.gdevice.which, name ? name : "Gamepad");
+                    if (slot < kMaxGamepads) {
+                        m_gamepads.push_back(pad);
+                        AGR_LOG_INFO("Platform", "gamepad {} connected: {}", slot, name ? name : "?");
+                    } else {
+                        SDL_CloseGamepad(pad);
+                    }
+                }
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_REMOVED: {
+                input.gamepadDisconnect(e.gdevice.which);
+                for (auto it = m_gamepads.begin(); it != m_gamepads.end(); ++it)
+                    if (SDL_GetGamepadID(*it) == e.gdevice.which) {
+                        SDL_CloseGamepad(*it);
+                        m_gamepads.erase(it);
+                        break;
+                    }
+                AGR_LOG_INFO("Platform", "gamepad disconnected");
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            case SDL_EVENT_GAMEPAD_BUTTON_UP: {
+                // SDL button order: SOUTH, EAST, WEST, NORTH, BACK, GUIDE, START, LEFT_STICK, RIGHT_STICK,
+                // LEFT_SHOULDER, RIGHT_SHOULDER, DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT (same as GamepadButton).
+                if (e.gbutton.button < static_cast<u8>(GamepadButton::Count))
+                    input.setGamepadButton(e.gbutton.which, static_cast<GamepadButton>(e.gbutton.button), e.gbutton.down);
+                break;
+            }
+            case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+                // SDL axis order: LEFTX, LEFTY, RIGHTX, RIGHTY, LEFT_TRIGGER, RIGHT_TRIGGER (same as GamepadAxis).
+                if (e.gaxis.axis < static_cast<u8>(GamepadAxis::Count))
+                    input.setGamepadAxis(e.gaxis.which, static_cast<GamepadAxis>(e.gaxis.axis), static_cast<float>(e.gaxis.value) / 32767.0f);
+                break;
+            }
             case SDL_EVENT_SENSOR_UPDATE:
                 if (m_accel && e.sensor.which == m_accelId) input.setAccelerometer({e.sensor.data[0], e.sensor.data[1], e.sensor.data[2]});
                 else if (m_gyro && e.sensor.which == m_gyroId) input.setGyroscope({e.sensor.data[0], e.sensor.data[1], e.sensor.data[2]});

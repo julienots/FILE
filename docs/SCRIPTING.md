@@ -96,6 +96,10 @@ composant).
 | `agr.instantiate(uri [, parent])` | nouvelle instance d'un prefab (`assets://enemy.agrprefab`) avec ses enfants et ses scripts ; `nil, message` si le prefab manque ([PREFABS.md](PREFABS.md)) |
 | `agr.input.keyDown(t)`, `keyPressed(t)`, `keyReleased(t)` | touches : `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Return"`, `"Escape"`, `"Left"`, `"Right"`, `"Up"`, `"Down"`, `"LeftShift"`, `"LeftCtrl"`, `"F1"`–`"F12"`, `"Back"` (Android)... |
 | `agr.input.axis("horizontal" \| "vertical")` | −1..1 depuis les flèches, WASD et ZQSD |
+| `agr.input.down(action)`, `pressed(action)`, `released(action)`, `value(action)` | **actions** du jeu (`"jump"`, `"move_x"`…) liées au clavier, à la souris, aux manettes et à l'écran tactile ; voir [INPUT.md](INPUT.md) |
+| `agr.input.gamepadCount()`, `gamepadDown(bouton [, n])`, `gamepadPressed(bouton [, n])`, `gamepadAxis(axe [, n])` | manettes 1 à 4 ; boutons `"South"`, `"East"`, `"West"`, `"North"`, `"Start"`, `"DpadUp"`… ; axes `"LeftX"`, `"LeftY"`, `"RightX"`, `"RightY"`, `"LeftTrigger"`, `"RightTrigger"` |
+| `agr.tr(clé, ...)` | texte traduit dans la langue courante, `{1}`, `{2}`… remplacés par les arguments ; voir [LOCALIZATION.md](LOCALIZATION.md) |
+| `agr.locale.get()`, `agr.locale.set(code)`, `agr.locale.list()` | langue courante, changement (mémorisé dans la sauvegarde locale), langues disponibles |
 | `agr.input.mouseDown(b)`, `mousePressed(b)`, `mousePosition()` | `b` : 0 gauche, 1 milieu, 2 droit ; position en pixels de fenêtre |
 | `agr.input.touchCount()`, `agr.input.touch(i)` → x, y, phase | phase : `"began"`, `"moved"`, `"stationary"`, `"ended"` |
 | `agr.screen.size()` → largeur, hauteur | taille de la fenêtre dans les unités du toucher / de la souris |

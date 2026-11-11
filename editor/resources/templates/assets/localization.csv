@@ -1,0 +1,7 @@
+key,fr,en,es
+hud.balls,"Balles : {1} / {2}   Vitesse : {3} m/s","Balls: {1} / {2}   Speed: {3} m/s","Bolas: {1} / {2}   Velocidad: {3} m/s"
+hud.hint.launch,"Espace, clic ou toucher : lancer une balle","Space, click or tap: throw a ball","Espacio, clic o toque: lanzar una bola"
+hud.speed,Vitesse de lancer,Throw speed,Velocidad de lanzamiento
+hud.jump,Saut,Jump,Saltar
+hud.mushrooms,Champignons : {1} / {2},Mushrooms: {1} / {2},Setas: {1} / {2}
+hud.all_collected,"Bravo, tout est ramassé !","Well done, you got them all!","¡Bien hecho, las tienes todas!"

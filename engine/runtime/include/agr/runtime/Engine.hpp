@@ -10,6 +10,8 @@
 #include "agr/core/Log.hpp"
 #include "agr/core/Time.hpp"
 #include "agr/runtime/Application.hpp"
+#include "agr/runtime/InputActions.hpp"
+#include "agr/runtime/Localization.hpp"
 #include "agr/runtime/SaveStore.hpp"
 #include "agr/scene/Prefab.hpp"
 #include "agr/runtime/EngineConfig.hpp"
@@ -63,6 +65,15 @@ public:
     PrefabLibrary& prefabs() { return *m_prefabs; }
     PluginManager& plugins() { return m_plugins; }
     Input& input() { return m_input; }
+    /// Named actions ("jump", "move_x"), evaluated every frame from assets://input.agrinput.
+    InputActions& actions() { return m_actions; }
+    /// Translated texts (assets://localization.csv), language chosen at start from the saved
+    /// choice or the system languages.
+    Localization& localization() { return m_localization; }
+    /// Changes the language and remembers the choice in the local save. False if unknown.
+    bool setLanguage(std::string_view code);
+    /// Reloads input actions and texts (after the asset folder changed: editor projects).
+    void reloadGameSettings();
     PlatformLayer& platform() { return *m_platform; }
     Scene& scene() { return *m_scene; }
     const FrameTime& time() const { return m_time; }
@@ -106,6 +117,8 @@ private:
     std::unique_ptr<SaveStore> m_save;
     std::unique_ptr<PrefabLibrary> m_prefabs;
     Input m_input;
+    InputActions m_actions;
+    Localization m_localization;
     std::unique_ptr<PlatformLayer> m_platform;
     std::unique_ptr<Scene> m_scene;
     PluginManager m_plugins;

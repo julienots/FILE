@@ -11,6 +11,8 @@
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/script/ScriptComponent.hpp"
+#include "agr/runtime/InputActions.hpp"
+#include "agr/runtime/Localization.hpp"
 #include "agr/scene/Prefab.hpp"
 #include "agr/script/ScriptEngine.hpp"
 
@@ -550,4 +552,50 @@ return Spawner
     }
     CHECK(f.scripts.stats().errors == 0);
     setPrefabResolver(nullptr);
+}
+
+TEST_CASE("input actions and gamepads from Lua") {
+    ScriptFixture f;
+    InputActions actions;
+    actions.setMap(InputMap::defaults());
+    f.scripts.setActions(&actions);
+    f.input.setKey(Key::Space, true);
+    f.input.gamepadConnect(5, "Pad");
+    f.input.setGamepadAxis(5, GamepadAxis::LeftX, -1.0f);
+    f.input.setGamepadButton(5, GamepadButton::North, true);
+    actions.update(f.input, {800, 600});
+    CHECK(f.scripts.run(R"lua(
+assert(agr.input.down("jump") and agr.input.pressed("jump") and not agr.input.released("jump"))
+assert(agr.input.value("move_x") == -1)
+assert(agr.input.gamepadCount() == 1)
+assert(agr.input.gamepadDown("North") and agr.input.gamepadDown("North", 1) and not agr.input.gamepadDown("South"))
+assert(agr.input.gamepadAxis("LeftX") == -1)
+)lua", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.input.down('teleport')", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.input.gamepadDown('Z')", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.input.gamepadAxis('LeftX', 9)", &f.scene));
+}
+
+TEST_CASE("agr.tr and agr.locale") {
+    ScriptFixture f;
+    Localization l;
+    REQUIRE(l.parse("key,fr,en\nhud.score,Score : {1} / {2},Score: {1} / {2}\nhello,Bonjour,Hello\n"));
+    std::string remembered;
+    f.scripts.setLocalization(&l, [&](std::string_view c) {
+        if (!l.setLanguage(c)) return false;
+        remembered = l.language();
+        return true;
+    });
+    CHECK(f.scripts.run(R"lua(
+assert(agr.tr("hello") == "Bonjour")
+assert(agr.tr("hud.score", 3, 10) == "Score : 3 / 10")
+assert(agr.locale.get() == "fr")
+local langs = agr.locale.list()
+assert(#langs == 2 and langs[2] == "en")
+assert(agr.locale.set("en-GB") and agr.locale.get() == "en")
+assert(agr.tr("hello") == "Hello")
+assert(not agr.locale.set("xx"))
+assert(agr.tr("not.a.key") == "not.a.key")
+)lua", &f.scene));
+    CHECK(remembered == "en");
 }

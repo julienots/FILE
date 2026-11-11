@@ -12,6 +12,7 @@ PluginInfo UIPlugin::info() const {
 Status UIPlugin::onLoad(Engine& engine) {
     registerUIComponents();
     m_ui = std::make_unique<UISystem>(engine.vfs());
+    m_ui->setLocalization(&engine.localization());
     engine.registerService<UIPlugin>(this);
     bindRenderer(engine);
     return {};
