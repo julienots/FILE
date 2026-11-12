@@ -59,8 +59,9 @@ class AppFlowTest {
         assertNotNull(s)
         val current = s!!.accounts.first { it.type == AccountType.CURRENT }
         val savings = s.accounts.first { it.type == AccountType.SAVINGS }
-        kotlinx.coroutines.runBlocking { vm.exec { transferInternal(it, current.id, savings.id, Money.units(100), "Test UI") } }
-        rule.waitForIdle()
+        var done = false
+        vm.run(onOk = { done = true }) { transferInternal(it, current.id, savings.id, Money.units(100), "Test UI") }
+        rule.waitUntil(10_000) { done }
 
         // Recréation de l'activité : le profil et le virement sont toujours là.
         rule.activityRule.scenario.recreate()

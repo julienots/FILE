@@ -7,10 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -43,19 +40,20 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = android.app.Application::class)
 class ScreensTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     private val app: android.app.Application = ApplicationProvider.getApplicationContext()
     private val container = AppContainer(BankDatabase(AndroidSqlDriver(app, "screens.db")), InMemorySecuritySettings().apply { setPin("2580") })
-    private val vm = AppViewModel(app, container).also {
-        runBlocking {
-            container.repository.replaceAll(DemoData.create(container.engine.clock, container.engine.ids, container.market))
-            container.repository.load()
-        }
+    private val vm: AppViewModel = run {
+        // Base remplie AVANT la création du ViewModel (pas de blocage du fil principal).
+        container.database.replaceAll(DemoData.create(container.engine.clock, container.engine.ids, container.market))
+        AppViewModel(app, container).also { awaitMain { it.state.value != null } }
     }
     private val shots = System.getProperty("essabank.screenshots") == "true"
 
     private fun screen(name: String, content: @Composable (Nav) -> Unit) {
+        // Horloge manuelle : certaines animations sont infinies (effet de chargement, cartes flottantes).
+        rule.mainClock.autoAdvance = false
         rule.setContent {
             val prefs = vm.state.value!!.profile.preferences
             val nav = Nav(rememberNavController())
@@ -65,11 +63,15 @@ class ScreensTest {
                 }
             }
         }
-        rule.mainClock.advanceTimeBy(3_000)
-        rule.waitForIdle()
+        repeat(60) { rule.mainClock.advanceTimeBy(50) }
         if (shots) {
+            var bmp: Bitmap? = null
+            rule.activityRule.scenario.onActivity { act ->
+                val v = act.window.decorView.rootView
+                bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888).also { v.draw(android.graphics.Canvas(it)) }
+            }
             val dir = File("build/screenshots").apply { mkdirs() }
-            File(dir, "$name.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+            File(dir, "$name.png").outputStream().use { bmp!!.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
 
