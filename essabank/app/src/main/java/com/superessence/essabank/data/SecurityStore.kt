@@ -38,7 +38,7 @@ abstract class BaseSecuritySettings : SecuritySettings {
 
     override fun setPin(pin: String) {
         require(PinHasher.isValidPin(pin))
-        put(mapOf(KEY_PIN to PinHasher.hash(pin), KEY_FAILURES to 0, KEY_LOCK_UNTIL to 0L))
+        put(mapOf(KEY_PIN to PinHasher.hash(pin), KEY_FAILURES to 0L, KEY_LOCK_UNTIL to 0L))
     }
 
     override fun check(pin: String, now: Long): PinCheck {
@@ -46,12 +46,13 @@ abstract class BaseSecuritySettings : SecuritySettings {
         if (until > now) return PinCheck.Locked(until - now)
         val stored = getString(KEY_PIN) ?: return PinCheck.Wrong(0, 0)
         return if (PinHasher.verify(pin, stored)) {
-            put(mapOf(KEY_FAILURES to 0, KEY_LOCK_UNTIL to 0L))
+            put(mapOf(KEY_FAILURES to 0L, KEY_LOCK_UNTIL to 0L))
             PinCheck.Ok
         } else {
-            val failures = getInt(KEY_FAILURES, 0) + 1
+            // Compteur stocké en Long (types homogènes dans les SharedPreferences).
+            val failures = getLong(KEY_FAILURES, 0L).toInt() + 1
             val delay = PinLockout.delayMillis(failures)
-            put(mapOf(KEY_FAILURES to failures, KEY_LOCK_UNTIL to if (delay > 0) now + delay else 0L))
+            put(mapOf(KEY_FAILURES to failures.toLong(), KEY_LOCK_UNTIL to if (delay > 0) now + delay else 0L))
             if (delay > 0) PinCheck.Locked(delay) else PinCheck.Wrong(failures, PinLockout.FREE_ATTEMPTS - failures)
         }
     }

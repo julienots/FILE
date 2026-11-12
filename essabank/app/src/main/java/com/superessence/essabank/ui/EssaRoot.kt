@@ -167,9 +167,9 @@ fun EssaRoot(vm: AppViewModel, onSecureChanged: (Boolean) -> Unit) {
     val loaded by vm.loaded.collectAsStateWithLifecycle()
     val locked by vm.locked.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val pinReady by vm.pinReady.collectAsStateWithLifecycle()
     val prefs = state?.profile?.preferences ?: Preferences(theme = ThemeMode.DARK)
     var introDone by rememberSaveable { mutableStateOf(false) }
-    var pinRequired by rememberSaveable { mutableStateOf(false) }
 
     CompositionLocalProvider(LocalLang provides prefs.language, LocalPrefs provides prefs) {
         EssaTheme(prefs.theme, prefs.accent) {
@@ -187,7 +187,7 @@ fun EssaRoot(vm: AppViewModel, onSecureChanged: (Boolean) -> Unit) {
                     !introDone -> "intro"
                     !loaded -> "loading"
                     state == null -> "onboarding"
-                    !vm.security.hasPin || pinRequired -> "pin"
+                    !pinReady -> "pin"
                     locked -> "lock"
                     else -> "app"
                 }
@@ -199,8 +199,8 @@ fun EssaRoot(vm: AppViewModel, onSecureChanged: (Boolean) -> Unit) {
                     when (s) {
                         "intro" -> IntroScreen(onDone = { introDone = true })
                         "loading" -> SkeletonHome()
-                        "onboarding" -> OnboardingScreen(vm, onCreated = { pinRequired = true })
-                        "pin" -> PinSetupScreen(vm, onDone = { pinRequired = false })
+                        "onboarding" -> OnboardingScreen(vm, onCreated = { })
+                        "pin" -> PinSetupScreen(vm, onDone = { vm.finishPinSetup() })
                         "lock" -> LockScreen(vm)
                         else -> MainNavigation(vm, onSecureChanged)
                     }

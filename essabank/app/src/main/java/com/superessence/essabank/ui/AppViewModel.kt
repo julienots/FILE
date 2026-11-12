@@ -47,6 +47,10 @@ class AppViewModel(app: Application, val container: AppContainer) : AndroidViewM
     private val _locked = MutableStateFlow(true)
     val locked: StateFlow<Boolean> = _locked.asStateFlow()
 
+    /** Vrai quand le code PIN est créé ET l'étape de configuration (biométrie) terminée. Observable par l'interface. */
+    private val _pinReady = MutableStateFlow(container.security.hasPin)
+    val pinReady: StateFlow<Boolean> = _pinReady.asStateFlow()
+
     private val _message = MutableStateFlow<UiMessage?>(null)
     val message: StateFlow<UiMessage?> = _message.asStateFlow()
 
@@ -124,6 +128,7 @@ class AppViewModel(app: Application, val container: AppContainer) : AndroidViewM
         repo.wipe()
         security.clear()
         security.introSeen = true
+        _pinReady.value = false
         _locked.value = false
         onDone()
     }
@@ -131,6 +136,9 @@ class AppViewModel(app: Application, val container: AppContainer) : AndroidViewM
     // ------------------------------------------------------------------ sécurité
 
     fun setPin(pin: String) { security.setPin(pin); _locked.value = false }
+
+    /** Fin de la configuration de sécurité : l'application peut afficher l'espace client. */
+    fun finishPinSetup() { if (security.hasPin) _pinReady.value = true }
 
     fun checkPin(pin: String): PinCheck {
         val r = security.check(pin)

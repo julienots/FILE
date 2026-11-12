@@ -11,27 +11,35 @@
 
 ---
 
-## État de la livraison (à lire)
+## Télécharger
 
-| Élément | État |
+**APK : [`release/ESSABANK-SUPERESSENCE.apk`](release/ESSABANK-SUPERESSENCE.apk)** — Android 8.0+, version release minifiée (R8), signée (certificat « ESSABANK, Superessence Studio »), environ 2,6 Mo, aucune permission Internet.
+
+<p align="center">
+<img src="branding/screens/04-home.jpg" width="200"/> <img src="branding/screens/05-cards.jpg" width="200"/> <img src="branding/screens/09-transfer.jpg" width="200"/>
+<img src="branding/screens/10-stats.jpg" width="200"/> <img src="branding/screens/17-goal.jpg" width="200"/> <img src="branding/screens/18-invest.jpg" width="200"/>
+</p>
+
+## Vérifications effectuées
+
+| Vérification | Résultat |
 |---|---|
-| Moteur financier, base SQLite, sécurité, PDF (`core/`) | **Compilé et testé : 50 tests automatisés, tous verts** (JVM, vraie base SQLite) |
-| Code de l'application Android (`app/`, 33 écrans) | **Écrit en entier.** Vérifié par compilation de toute l'interface contre Compose Multiplatform 1.8.2 (mêmes API que Compose Android 1.8, Material 3 1.3, mêmes icônes). **Pas encore compilé avec le plugin Android** (voir ci-dessous). |
-| Tests Android (Robolectric, `app/src/test`) | Écrits (persistance SQLite Android, PIN, parcours complet dans l'activité, rendu des 32 écrans + captures). **Pas encore exécutés.** |
-| **APK `release/ESSABANK-SUPERESSENCE.apk`** | **Non généré.** Le fichier n'existe pas encore. |
+| Moteur financier, base SQLite, sécurité, PDF (`core`) | 50 tests, **tous verts** |
+| Tests Android Robolectric (`app`) | 35 tests, **tous verts** : persistance sur SQLite Android après fermeture, PIN haché et délai après échecs, **parcours complet dans la vraie activité** (introduction → profil de démonstration → création du PIN → accueil → virement → recréation de l'activité, données conservées), rendu sans plantage des 32 écrans avec captures |
+| APK release | Compilé, minifié, signé et vérifié (`apksigner`, `aapt2`), classes de sérialisation et polices présentes après R8 |
+| **Non vérifié** | Aucun téléphone ni émulateur n'était disponible (pas de virtualisation matérielle) : l'APK n'a pas été installé sur un appareil réel. La biométrie et l'export de fichiers (sélecteur système) restent à confirmer sur téléphone. Les tests d'interface tournent sur la version debug ; la version release minifiée n'a été vérifiée que de façon statique. |
 
-**Pourquoi l'APK n'existe pas encore.** L'environnement de compilation utilisé n'autorisait pas l'accès à `dl.google.com`, le serveur de Google qui distribue le SDK Android, le plugin Gradle Android (AGP), AndroidX et Jetpack Compose (`maven.google.com` y redirige). Sans ces composants, aucun APK ne peut être produit. Dès que ce domaine est accessible (ou sur n'importe quel poste avec Android Studio), une seule commande suffit :
+Bugs trouvés et corrigés grâce à ces tests : le compteur d'échecs du PIN était enregistré dans le mauvais type (plantage au premier code erroné) ; après la création du PIN, « Plus tard » sur l'écran de biométrie ne menait pas à l'accueil.
+
+## Compiler
 
 ```bash
 echo "sdk.dir=/chemin/vers/android-sdk" > local.properties   # plateforme 35 + build-tools 35
-./gradlew essabankApk            # → release/ESSABANK-SUPERESSENCE.apk (release, R8, signé)
-./gradlew test                   # tests du moteur + tests Android Robolectric
+./gradlew essabankApk                       # → release/ESSABANK-SUPERESSENCE.apk (release, R8, signé)
+./gradlew test                              # moteur (50) + tests Android Robolectric (35)
 ./gradlew :app:testDebugUnitTest -Pscreenshots=true   # captures PNG des écrans dans app/build/screenshots
+./gradlew -PcoreOnly :core:test             # moteur seul, sans SDK Android
 ```
-
-Le module `core` se compile et se teste sans SDK Android : `./gradlew -PcoreOnly :core:test`.
-
----
 
 ## Fonctionnalités
 
@@ -99,7 +107,7 @@ SQLite locale : une table par entité (`accounts`, `cards`, `transactions`, `ben
 - **Persistance (vraie SQLite)** : aller-retour complet, **données conservées après fermeture et réouverture**, **panne d'écriture au milieu d'un virement : rien n'est enregistré**, 60 virements concurrents, sauvegarde chiffrée (mauvais mot de passe, fichier invalide), effacement.
 - **Crédit, marché, sécurité, analyses, PDF** (structure du fichier, table xref, mentions SIMULATION).
 
-`app` (écrits, à exécuter dès que le SDK est disponible) : persistance sur SQLite Android après fermeture, PIN haché et délai, parcours complet dans l'activité (intro → démonstration → PIN → accueil → virement → recréation de l'activité), rendu des 32 écrans avec captures optionnelles.
+`app` (exécutés, 35/35) : persistance sur SQLite Android après fermeture, PIN haché et délai, parcours complet dans l'activité (intro → démonstration → PIN → accueil → virement → recréation de l'activité), rendu des 32 écrans avec captures optionnelles.
 
 ## Signature
 

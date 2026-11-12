@@ -95,3 +95,6 @@ tasks.register<Copy>("essabankApk") {
     into(rootProject.layout.projectDirectory.dir("release"))
     rename { "ESSABANK-SUPERESSENCE.apk" }
 }
+
+// Les tests d'interface utilisent ui-test-manifest (variante debug uniquement) : on les exécute sur debug.
+tasks.matching { it.name == "testReleaseUnitTest" }.configureEach { enabled = false }

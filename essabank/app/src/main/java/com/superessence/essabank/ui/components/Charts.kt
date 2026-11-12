@@ -186,7 +186,8 @@ fun BarChart(
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
             labels.forEachIndexed { i, l ->
-                Text(l, style = EssaType.small, color = if (highlight == i) c.text else c.textMuted, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
+                Text(l, style = EssaType.small, color = if (highlight == i) c.text else c.textMuted, textAlign = TextAlign.Center, maxLines = 1,
+                    softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Visible, modifier = Modifier.weight(1f))
             }
         }
     }
