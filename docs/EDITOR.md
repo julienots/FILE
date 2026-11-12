@@ -144,3 +144,21 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
   dans l'historique Ctrl+Z de la scène. Les autres fichiers sont copiés dans le
   projet, avec un avertissement qu'aucun importeur n'existe encore pour eux.
 - L'inspecteur modifie l'entité principale ; l'édition simultanée de plusieurs entités passe par le gizmo.
+
+## Mode mobile (Android, ou `--mobile` sur ordinateur)
+
+L'éditeur tourne aussi sur téléphone et tablette Android (`tools/build_android_editor.sh`) :
+
+- disposition pour petit écran : la vue de la scène à gauche, tous les panneaux en onglets à droite ;
+- tailles tactiles : grandes barres de défilement, poignées, espacements, marge de toucher ;
+- gestes : glisser verticalement fait défiler les listes ; appui long = clic droit (menus
+  contextuels) ; dans la vue, deux doigts tournent autour (3D) ou déplacent (2D), pincer zoome,
+  trois doigts déplacent en 3D ; un geste à plusieurs doigts ne sélectionne rien ;
+- économie : la vue est rendue à 70 % de la résolution de l'écran, et l'éditeur passe à
+  15 images / s après 1,5 s sans toucher l'écran (60 dès qu'on le touche ou en mode Jeu) ;
+- non disponible sur Android (grisé, avec une explication) : export, sélecteur de fichiers natif,
+  ouverture dans le gestionnaire de fichiers.
+
+Test automatique : `agr_editor --mobile-test DIR` (disposition, défilement au doigt, appui long,
+pincement). `--screenshot FICHIER.png` capture la fenêtre puis quitte.
+

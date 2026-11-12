@@ -11,6 +11,8 @@
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 
+struct ImGuiWindow;  // imgui_internal.h
+
 namespace agr::editor {
 
 class HierarchyPanel {
@@ -81,6 +83,22 @@ private:
     bool m_openPopup = false;
 };
 
+/// Touch input for the panels: long press = right click, vertical drag = scroll.
+/// Call after ImGui::NewFrame (mobile mode).
+class TouchSupport {
+public:
+    void update();
+    float longPressSeconds = 0.55f;
+    u32 longPresses = 0;  ///< Count (automated tests).
+
+private:
+    bool m_longPressed = false, m_scrolling = false;
+    int m_rightPhase = 0;
+    ::ImGuiWindow* m_scrollWindow = nullptr;
+};
+/// Larger scrollbars, grabs, paddings and touch margins (mobile mode).
+void applyTouchStyle(float uiScale);
+
 class InspectorPanel {
 public:
     void draw(EditorShared& s, const MaterialPreview& preview);
@@ -150,6 +168,10 @@ private:
     bool m_visible = false;
     bool m_gizmoWasUsing = false;
     bool m_flying = false;
+    // Touch gestures (two fingers: orbit / pan, pinch: zoom, three fingers: pan in 3D).
+    bool m_multiTouch = false, m_hadTwo = false;
+    math::Vec2 m_touchCenter{};
+    float m_touchDistance = 0.0f;
     ImVec2 m_pressPos{};
     bool m_pressed = false;
     std::vector<std::pair<ecs::Entity, ImVec2>> m_iconHits;

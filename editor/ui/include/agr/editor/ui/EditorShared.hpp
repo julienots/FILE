@@ -58,6 +58,7 @@ struct EditorShared {
     UIPlugin* ui = nullptr;
     AnimationPlugin* animation = nullptr;
     EditorFonts fonts;
+    bool mobile = false;  ///< Touch interface (EditorOptions::mobile).
     TilemapBrush brush;
     TerrainTool terrainTool;
 

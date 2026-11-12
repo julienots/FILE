@@ -15,7 +15,10 @@ struct EditorOptions {
     std::string projectPath;     ///< Open this project at startup (otherwise: project hub)
     std::string smokeTestDir;    ///< Non-empty: run the scripted end-to-end test in this folder
     std::string galleryDir;      ///< Non-empty: play every game template and capture its game view here, then quit
-    std::string hubScreenshot;   ///< Non-empty: capture the project hub to this PNG and quit
+    std::string hubScreenshot;
+    std::string mobileTestDir;   ///< Non-empty: scripted test of the touch interface (implies mobile)
+    std::string screenshot;      ///< Non-empty: capture the window at frame 40 and quit
+    bool mobile = false;         ///< Touch interface: layout, sizes, gestures, frame-rate saving (Android: always)   ///< Non-empty: capture the project hub to this PNG and quit
 };
 
 /// The AGR editor application: project hub, docked panels, menus, toolbar,
@@ -51,6 +54,8 @@ private:
     void captureNextFrame(std::string path) { m_capturePath = std::move(path); }
     void smokeTest(const FrameTime& time);
     void templateGallery();
+    void mobileTest();
+    void throttleFrameRate();
     void check(bool condition, const char* what);
     void pushMouse(u32 sdlEventType, ImVec2 pos);
     void pushKey(u32 sdlKey, u32 scancode, u16 mod, bool down);
@@ -66,6 +71,8 @@ private:
     ViewportPanel m_viewport;
     MaterialPreview m_materialPreview;
     MaterialPreview m_shaderPreview;  // sphere of the shader editor
+    TouchSupport m_touch;
+    f64 m_lastActivity = 0.0;  // seconds (ImGui time) of the last input: mobile frame-rate saving
     ShaderEditorPanel m_shaderEditor;
     AssetBrowserPanel m_assets;
     ConsolePanel m_console;

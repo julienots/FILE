@@ -200,12 +200,29 @@ int main(int argc, char** argv) {
         else if (a == "--smoke-test" && i + 1 < argc) options.smokeTestDir = argv[++i];
         else if (a == "--hub-screenshot" && i + 1 < argc) options.hubScreenshot = argv[++i];
         else if (a == "--template-gallery" && i + 1 < argc) options.galleryDir = argv[++i];
+        else if (a == "--mobile") options.mobile = true;
+        else if (a == "--mobile-test" && i + 1 < argc) options.mobileTestDir = argv[++i];
+        else if (a == "--screenshot" && i + 1 < argc) options.screenshot = argv[++i];
         else if (!a.empty() && a[0] != '-') options.projectPath = a;
     }
     // User data (settings, scratch) lives in the per-user preference folder.
     if (char* pref = SDL_GetPrefPath("Superessence Studio", "AGR Editor")) {
         config.userDirectory = std::string(pref) + "user";
         SDL_free(pref);
+    }
+#if defined(AGR_PLATFORM_ANDROID)
+    options.mobile = true;
+#endif
+    if (options.mobile || !options.mobileTestDir.empty()) {  // phone-like window on a desktop
+        config.window.width = 1520;
+        config.window.height = 720;
+    }
+    if (!options.mobileTestDir.empty()) {
+        const fs::path previous = fs::path(options.mobileTestDir) / "MobileProject";
+        std::error_code ec;
+        if (fs::exists(previous / "project.agrproject", ec)) fs::remove_all(previous, ec);
+        fs::remove_all(fs::path(options.mobileTestDir) / "settings", ec);
+        config.userDirectory = (fs::path(options.mobileTestDir) / "user").string();
     }
     if (!options.galleryDir.empty()) {
         const fs::path previous = fs::path(options.galleryDir) / "GalleryProject";

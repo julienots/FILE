@@ -119,7 +119,12 @@ Status EditorApp::onStart(Engine& engine) {
     }
     if (!m_options.smokeTestDir.empty()) m_settingsDir = (fs::path(m_options.smokeTestDir) / "settings").string() + "/";
     if (!m_options.galleryDir.empty()) m_settingsDir = (fs::path(m_options.galleryDir) / "settings").string() + "/";
-    m_iniPath = m_settingsDir + "imgui.ini";
+    if (!m_options.mobileTestDir.empty()) {
+        m_options.mobile = true;
+        m_settingsDir = (fs::path(m_options.mobileTestDir) / "settings").string() + "/";
+    }
+    m_shared->mobile = m_options.mobile;
+    m_iniPath = m_settingsDir + (m_options.mobile ? "imgui_mobile.ini" : "imgui.ini");  // each layout kept separately
     loadSettings();
     m_wizard.location = defaultProjectsFolder();
 
@@ -138,6 +143,7 @@ Status EditorApp::onStart(Engine& engine) {
     ImGui::GetStyle().TouchExtraPadding = {4.0f * dpi, 4.0f * dpi};  // easier to hit with a finger
 #endif
     m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi);
+    if (m_options.mobile) applyTouchStyle(dpi);
 
     m_imgui = std::make_unique<ImGuiRenderer>(*render->device());
     if (Status s = m_imgui->initialize(); !s) return s;
@@ -155,6 +161,13 @@ Status EditorApp::onStart(Engine& engine) {
         ProjectSettings settings;
         settings.name = "Smoke Test";
         auto project = Project::create(fs::path(m_options.smokeTestDir) / "SmokeProject", settings, SceneTemplate::Empty3D,
+                                       m_options.resourcesDir + "/templates/assets");
+        if (!project) return project.error();
+        openProject(project.value().root().string());
+    } else if (!m_options.mobileTestDir.empty()) {
+        ProjectSettings settings;
+        settings.name = "Mobile Test";
+        auto project = Project::create(fs::path(m_options.mobileTestDir) / "MobileProject", settings, SceneTemplate::Showcase3D,
                                        m_options.resourcesDir + "/templates/assets");
         if (!project) return project.error();
         openProject(project.value().root().string());
@@ -276,6 +289,10 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
+    if (m_options.mobile) {
+        m_touch.update();
+        throttleFrameRate();
+    }
     {  // native folder dialog results (may arrive from another thread)
         std::lock_guard lock(m_dialogMutex);
         if (!m_dialogFolder.empty()) {
@@ -297,6 +314,9 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     if (m_showDemo) ImGui::ShowDemoWindow(&m_showDemo);
     if (!m_options.smokeTestDir.empty()) smokeTest(time);
     if (!m_options.galleryDir.empty()) templateGallery();
+    if (!m_options.mobileTestDir.empty()) mobileTest();
+    if (!m_options.screenshot.empty() && m_frame == 40) captureNextFrame(m_options.screenshot);
+    if (!m_options.screenshot.empty() && m_frame == 44) m_engine->requestQuit();
     if (!m_options.hubScreenshot.empty() && m_frame == 8) captureNextFrame(m_options.hubScreenshot);
     if (!m_options.hubScreenshot.empty() && m_frame == 10) m_engine->requestQuit();
     ImGui::Render();
@@ -471,7 +491,7 @@ void EditorApp::drawHub() {
     ImGui::Checkbox("Windows / Linux", &w.desktop);
     ImGui::SameLine();
     ImGui::Checkbox("Android", &w.android);
-    if (w.android) ImGui::TextColored(palette::toVec4(palette::kWarning), "Enregistré dans le projet ; l'export APK / AAB arrive en phase 8.");
+    if (w.android) ImGui::TextColored(palette::toVec4(palette::kWarning), "Export APK / AAB : Fichier > Exporter le jeu (éditeur sur ordinateur).");
     ImGui::Spacing();
     if (!w.error.empty()) ImGui::TextColored(palette::toVec4(palette::kError), "%s", w.error.c_str());
     ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kAmber));
@@ -489,6 +509,15 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace, ImGui::GetMainViewport()->WorkSize);
     ImGuiID center = dockspace;
+    if (m_options.mobile) {  // small screens: the scene view, and every panel as a tab on the right
+        const ImGuiID side = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.40f, nullptr, &center);
+        for (const char* w : {"Statistiques", "Console", "Assets", "Animation", "Machine à états", "Mixeur audio", "Hiérarchie", "Inspecteur"})
+            ImGui::DockBuilderDockWindow(w, side);
+        ImGui::DockBuilderDockWindow("Shader", center);
+        ImGui::DockBuilderDockWindow("Scène", center);
+        ImGui::DockBuilderFinish(dockspace);
+        return;
+    }
     const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.18f, nullptr, &center);
     const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.26f, nullptr, &center);
     const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.30f, nullptr, &center);
@@ -881,6 +910,133 @@ void EditorApp::check(bool condition, const char* what) {
 
 /// Scripted end-to-end session driven through the same calls as the UI, with a
 /// screenshot of the real editor window. Used by CI on every graphics backend.
+/// Mobile mode: full frame rate while the user touches the screen or the game plays, 15 FPS
+/// when nothing happens (battery and heat), back to full speed at the next touch.
+void EditorApp::throttleFrameRate() {
+    const ImGuiIO& io = ImGui::GetIO();
+    const f64 now = ImGui::GetTime();
+    const bool input = io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f || ImGui::IsAnyMouseDown() || io.InputQueueCharacters.Size > 0 ||
+                       !m_engine->input().touches().empty() || ImGui::IsAnyItemActive();
+    if (input || m_ctx->playState() == PlayState::Playing) m_lastActivity = now;
+    m_engine->setTargetFps(now - m_lastActivity < 1.5 ? 60u : 15u);
+}
+
+/// --mobile-test: the touch interface, scripted (layout, long press, finger scrolling, pinch).
+namespace {
+/// Largest vertical scroll among a window and its child windows (lists live in child windows).
+float treeScroll(ImGuiWindow* root, float* maxOut = nullptr) {
+    float scroll = 0.0f, maxScroll = 0.0f;
+    for (ImGuiWindow* w : GImGui->Windows)
+        if (w->RootWindow == root) {
+            scroll = std::max(scroll, w->Scroll.y);
+            maxScroll = std::max(maxScroll, w->ScrollMax.y);
+        }
+    if (maxOut) *maxOut = maxScroll;
+    return scroll;
+}
+} // namespace
+
+void EditorApp::mobileTest() {
+    static float distance0 = 0.0f;
+    static f32 scroll0 = 0.0f;
+    static ImVec2 hierarchyPos, hierarchySize, viewPos, viewSize;
+    auto finger = [this](u32 type, u64 id, ImVec2 p) {
+        int w = 0, h = 0;
+        SDL_GetWindowSize(m_platform->window(), &w, &h);
+        SDL_Event e{};
+        e.type = type;
+        e.tfinger.touchID = 1;
+        e.tfinger.fingerID = id;
+        e.tfinger.x = p.x / static_cast<float>(w);
+        e.tfinger.y = p.y / static_cast<float>(h);
+        e.tfinger.pressure = 1.0f;
+        e.tfinger.windowID = SDL_GetWindowID(m_platform->window());
+        SDL_PushEvent(&e);
+    };
+    if (!m_ctx->hasProject()) return;
+    switch (m_frame) {
+        case 20: {
+            ImGuiWindow* insp = ImGui::FindWindowByName("Inspecteur");
+            ImGuiWindow* hier = ImGui::FindWindowByName("Hiérarchie");
+            ImGuiWindow* view = ImGui::FindWindowByName("Scène");
+            check(insp && hier && view && insp->DockNode && insp->DockNode == hier->DockNode, "mobile layout: panels share one tab bar");
+            check(view && insp && view->DockNode != insp->DockNode, "mobile layout: the scene view has its own area");
+            check(ImGui::GetStyle().ScrollbarSize >= 20.0f, "touch-sized scrollbars");
+            if (hier) ImGui::FocusWindow(hier);  // the hierarchy tab in front
+            if (view) viewPos = view->Pos, viewSize = view->Size;
+            break;
+        }
+        case 24: {
+            ImGuiWindow* hier = ImGui::FindWindowByName("Hiérarchie");
+            if (hier) hierarchyPos = hier->Pos, hierarchySize = hier->Size;
+            float maxScroll = 0.0f;
+            scroll0 = hier ? treeScroll(hier, &maxScroll) : 0.0f;
+            check(maxScroll > 0.0f, "the hierarchy of the showcase is long enough to scroll");
+            // Finger drag upwards in the middle of the hierarchy.
+            pushMouse(SDL_EVENT_MOUSE_MOTION, {hierarchyPos.x + hierarchySize.x * 0.5f, hierarchyPos.y + hierarchySize.y * 0.75f});
+            break;
+        }
+        case 25: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, {hierarchyPos.x + hierarchySize.x * 0.5f, hierarchyPos.y + hierarchySize.y * 0.75f}); break;
+        case 26: case 27: case 28: case 29: case 30: case 31:
+            pushMouse(SDL_EVENT_MOUSE_MOTION, {hierarchyPos.x + hierarchySize.x * 0.5f,
+                                               hierarchyPos.y + hierarchySize.y * (0.75f - 0.07f * static_cast<float>(m_frame - 25))});
+            break;
+        case 32: pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, {hierarchyPos.x + hierarchySize.x * 0.5f, hierarchyPos.y + hierarchySize.y * 0.33f}); break;
+        case 34: {
+            ImGuiWindow* hier = ImGui::FindWindowByName("Hiérarchie");
+            check(hier && treeScroll(hier) > scroll0 + 20.0f, "a finger drag scrolls the hierarchy");
+            // Long press on an entity row: its context menu.
+            m_touch.longPressSeconds = 0.0f;  // frames are slow under the software renderer: any hold counts
+            pushMouse(SDL_EVENT_MOUSE_MOTION, {hierarchyPos.x + hierarchySize.x * 0.4f, hierarchyPos.y + hierarchySize.y * 0.5f});
+            break;
+        }
+        case 35: pushMouse(SDL_EVENT_MOUSE_BUTTON_DOWN, {hierarchyPos.x + hierarchySize.x * 0.4f, hierarchyPos.y + hierarchySize.y * 0.5f}); break;
+        case 40: {
+            check(m_touch.longPresses >= 1, "a long press is recognized");
+            check(ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId), "a long press opens the context menu");
+            pushMouse(SDL_EVENT_MOUSE_BUTTON_UP, {hierarchyPos.x + hierarchySize.x * 0.4f, hierarchyPos.y + hierarchySize.y * 0.5f});
+            m_touch.longPressSeconds = 0.55f;
+            break;
+        }
+        case 42: pushKey(SDLK_ESCAPE, SDL_SCANCODE_ESCAPE, SDL_KMOD_NONE, true); break;
+        case 43: pushKey(SDLK_ESCAPE, SDL_SCANCODE_ESCAPE, SDL_KMOD_NONE, false); break;
+        case 45: {
+            // Pinch in the scene view: two fingers moving apart zoom in.
+            distance0 = m_ctx->camera().distance;
+            const ImVec2 c{viewPos.x + viewSize.x * 0.5f, viewPos.y + viewSize.y * 0.55f};
+            finger(SDL_EVENT_FINGER_DOWN, 1, {c.x - 40.0f, c.y});
+            finger(SDL_EVENT_FINGER_DOWN, 2, {c.x + 40.0f, c.y});
+            break;
+        }
+        case 46: case 47: case 48: case 49: case 50: {
+            const ImVec2 c{viewPos.x + viewSize.x * 0.5f, viewPos.y + viewSize.y * 0.55f};
+            const float d = 40.0f + 30.0f * static_cast<float>(m_frame - 45);
+            finger(SDL_EVENT_FINGER_MOTION, 1, {c.x - d, c.y});
+            finger(SDL_EVENT_FINGER_MOTION, 2, {c.x + d, c.y});
+            break;
+        }
+        case 51: {
+            const ImVec2 c{viewPos.x + viewSize.x * 0.5f, viewPos.y + viewSize.y * 0.55f};
+            finger(SDL_EVENT_FINGER_UP, 1, {c.x - 190.0f, c.y});
+            finger(SDL_EVENT_FINGER_UP, 2, {c.x + 190.0f, c.y});
+            break;
+        }
+        case 53: {
+            check(m_ctx->camera().distance < distance0 * 0.8f, "pinching zooms the scene view");
+            check(m_ctx->selection().entities(m_ctx->scene()).size() <= 1, "two fingers do not box-select");
+            break;
+        }
+        case 55: captureNextFrame((fs::path(m_options.mobileTestDir) / "editor_mobile_touch.png").string()); break;
+        case 58: {
+            m_exitCode = m_failures.empty() ? 0 : 1;
+            AGR_LOG_INFO("MobileTest", "{} ({} failure(s))", m_failures.empty() ? "MOBILE TEST PASSED" : "MOBILE TEST FAILED", m_failures.size());
+            m_engine->requestQuit();
+            break;
+        }
+        default: break;
+    }
+}
+
 /// --template-gallery: each game template is opened, played for two seconds and its game view
 /// captured (visual check of the templates), then the editor quits.
 void EditorApp::templateGallery() {

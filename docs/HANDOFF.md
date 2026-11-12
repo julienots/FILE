@@ -65,8 +65,9 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    `<stockage de l'app>/Projects` ; orientation paysage ; échelle d'interface = densité x 0,8 ;
    import par sélecteur natif, « Ouvrir dans l'explorateur », « Parcourir » et l'export sont grisés
    avec une explication (`kDesktopFileAccess`). À faire : **tester sur téléphone / tablette** ;
-   gestes tactiles (défilement au doigt, appui long = clic droit pour les menus contextuels,
-   pincer pour zoomer dans la vue) ; mise en page adaptée aux petits écrans ; import de fichiers
+   mode mobile fait (disposition, gestes, économie : voir EDITOR.md, testé par `--mobile-test`) —
+   reste : glisser-déposer au doigt (aujourd'hui seul un geste d'abord horizontal le permet),
+   clavier virtuel à vérifier sur appareil ; import de fichiers
    (sélecteur Android, URI content://) ; partage / export d'un projet (zip) vers un PC ; lancer le
    jeu en plein écran depuis l'éditeur.
 

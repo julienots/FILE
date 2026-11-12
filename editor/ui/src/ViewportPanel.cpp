@@ -178,6 +178,35 @@ void ViewportPanel::handleCamera(EditorShared& s, const FrameTime& time, bool ho
     if (gameView) return;
     ImGuiIO& io = ImGui::GetIO();
     EditorCamera& cam = s.ctx.camera();
+    // Touch: two fingers orbit (3D) or pan (2D), pinch zooms, three fingers pan (3D).
+    const auto touches = s.engine.input().touches();
+    if (touches.size() >= 2) {
+        math::Vec2 center{0.0f, 0.0f};
+        for (const Touch& t : touches) center = center + t.position;
+        center = center * (1.0f / static_cast<float>(touches.size()));
+        const float distance = math::length(touches[0].position - touches[1].position);
+        const bool inside = center.x >= m_lastOrigin.x && center.y >= m_lastOrigin.y && center.x <= m_lastOrigin.x + m_lastSize.x &&
+                            center.y <= m_lastOrigin.y + m_lastSize.y;
+        if (inside || m_multiTouch) {
+            m_multiTouch = true;
+            m_pressed = false;  // the first finger's press is not a click
+            if (m_hadTwo) {
+                const math::Vec2 d = center - m_touchCenter;
+                const float viewH = m_lastSize.y > 0.0f ? m_lastSize.y : 1.0f;
+                if (cam.mode2D || touches.size() >= 3) cam.pan({d.x, d.y}, viewH);
+                else cam.orbit(-d.x * 0.006f, -d.y * 0.006f);
+                if (m_touchDistance > 1.0f && distance > 1.0f) cam.zoom(std::log(distance / m_touchDistance) / std::log(1.15f));
+            }
+            m_touchCenter = center;
+            m_touchDistance = distance;
+            m_hadTwo = true;
+            return;
+        }
+    } else {
+        m_hadTwo = false;
+        if (touches.empty()) m_multiTouch = false;
+    }
+    if (m_multiTouch) return;  // a finger is still down after a gesture
     const float dt = static_cast<float>(time.unscaledDeltaSeconds);
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) m_flying = true;
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) m_flying = false;
@@ -472,11 +501,11 @@ void ViewportPanel::drawGizmo(EditorShared& s, ImVec2 origin, ImVec2 size) {
 
 void ViewportPanel::handlePicking(EditorShared& s, ImVec2 origin, ImVec2 size) {
     ImGuiIO& io = ImGui::GetIO();
-    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && !ImGuizmo::IsOver()) {
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && !ImGuizmo::IsOver() && !m_multiTouch) {
         m_pressed = true;
         m_pressPos = io.MousePos;
     }
-    if (!m_pressed || !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) return;
+    if (!m_pressed || !ImGui::IsMouseReleased(ImGuiMouseButton_Left) || m_multiTouch) return;
     m_pressed = false;
     const float dx = io.MousePos.x - m_pressPos.x, dy = io.MousePos.y - m_pressPos.y;
     if (dx * dx + dy * dy > 16.0f || ImGuizmo::IsUsing()) return;  // that was a drag
@@ -901,8 +930,11 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
     m_lastOrigin = origin;
     m_lastSize = size;
     const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
-    m_wantWidth = static_cast<u32>(std::max(1.0f, size.x * scale.x));
-    m_wantHeight = static_cast<u32>(std::max(1.0f, size.y * scale.y));
+    // Mobile: the scene view renders at 70 % of the screen resolution (much less GPU work,
+    // the image is scaled up when drawn).
+    const float resolution = s.mobile ? 0.7f : 1.0f;
+    m_wantWidth = static_cast<u32>(std::max(1.0f, size.x * scale.x * resolution));
+    m_wantHeight = static_cast<u32>(std::max(1.0f, size.y * scale.y * resolution));
 
     const rhi::TextureHandle tex = texture(s);
     const bool flip = s.device() && s.device()->info().renderTargetsFlipY;
