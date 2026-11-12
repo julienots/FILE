@@ -688,6 +688,14 @@ void Game::updatePlayer(float dt) {
         a.turnRate = wrapAngle(c.yaw - prev) / std::max(dt, 1e-4f);
     } else a.turnRate = damp(a.turnRate, 0, 8, dt);
     a.speed = hs;
+    // combat readiness (weapon guard vs relaxed carry): threats nearby, lock-on, attacking or blocking
+    {
+        bool threat = lockTarget != NullEntity || bossEnt != NullEntity || input.attackHeld || input.block || c.attackClip != nullptr || comboTimer > 0.05f;
+        if (!threat) reg.each<AIBrain, Character>([&](Entity, AIBrain& ai, Character& o) {
+            if (!o.dead && o.team == Team::Enemy && (ai.state == AIState::Chase || ai.state == AIState::Attack || ai.state == AIState::Strafe) && dist2XZ(o.pos, c.pos) < 16 * 16) threat = true;
+        });
+        a.aux[3] = approach(a.aux[3], threat ? 1.f : 0.f, dt * (threat ? 5.f : 0.7f));
+    }
     a.breath = saturate(1.f - stamina / std::max(1.f, maxStamina)) + (sprinting ? 0.5f : 0.f);
     stamina = std::min(maxStamina, stamina + (staminaRegenDelay > 0 ? 0.f : dt * (c.status.wellFed > 0 ? 34.f : 24.f) * (blocking ? 0.3f : 1.f)));
     if (stamina < 0) stamina = 0;

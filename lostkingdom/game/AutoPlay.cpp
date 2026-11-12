@@ -37,6 +37,20 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name == "gait") {
+        // side-on close-ups of the hero's walk / run cycle (animation quality and skinning checks)
+        s.push_back({2.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});
+        static const char* names[] = {"70_walk_a", "71_walk_b", "72_walk_c", "73_walk_d", "74_run_a", "75_run_b", "76_run_c", "77_run_d"};
+        for (int i = 0; i < 8; i++) {
+            bool run = i >= 4;
+            s.push_back({i == 0 || i == 4 ? 1.5f : 0.13f, none, [run](Game& g, float) {
+                // walk along camera-right so the camera sees the hero from the side, low and close
+                g.input.move = vec2(run ? 1.f : 0.55f, 0); g.input.sprint = run; g.camDist = g.camDistTarget = 5.5f; g.camPitch = 0.25f; }, "move"});
+            s.push_back({0.04f, [i](Game& g) { g.requestScreenshot(std::string("build/shots/") + names[i] + ".png"); }, [run](Game& g, float) { g.input.move = vec2(run ? 1.f : 0.55f, 0); g.input.sprint = run; }, "shot"});
+        }
+        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.66f; }, idle, "reset"});
+        return s;
+    }
     if (name == "hero") {
         // close-up checks of the hero model: idle, walk, run, attack combo, roll, equipment screen
         s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 7.f; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});

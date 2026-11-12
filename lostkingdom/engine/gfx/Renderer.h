@@ -20,6 +20,8 @@ struct GraphicsSettings {
     bool dof = true;           // cinematic depth of field + tilt-shift
     bool terrainNormals = true;
     bool chromatic = false;    // optional chromatic aberration
+    bool ssao = true;          // screen-space ambient occlusion (contact shadows, corners, grass)
+    float ssaoStrength = 0.8f;
     float grassDensity = 1.f;
     float particleScale = 1.f;
     float drawDistance = 110.f;
@@ -132,9 +134,9 @@ private:
     void postProcess();
 
     std::map<int, Shader> litVariants;
-    Shader water, lava, sky, particleAlpha, particleAdd, ribbon, bloomDown, bloomUp, composite, fxaa, blit, ui;
+    Shader water, lava, sky, particleAlpha, particleAdd, ribbon, bloomDown, bloomUp, composite, fxaa, blit, ui, ssao;
     GLuint frameUbo = 0;
-    RenderTarget shadowRT, sceneRT, ldrRT, blurRT;
+    RenderTarget shadowRT, sceneRT, ldrRT, blurRT, aoRT;
     std::vector<RenderTarget> bloomChain;
     GLenum hdrFormat = GL_RGBA16F;
     float hdrScale = 1.f;  // when the HDR target is RGB10A2 we store colour / 4

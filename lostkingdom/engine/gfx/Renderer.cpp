@@ -22,19 +22,19 @@ GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
     switch (p) {
     case QualityProfile::Ultra:
         s.renderScale = 1.0f; s.shadowRes = 2048; s.softShadows = true; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; break;
+        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; break;
     case QualityProfile::High:
         s.renderScale = 0.85f; s.shadowRes = 2048; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; break;
+        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; break;
     case QualityProfile::Medium:
         s.renderScale = 0.75f; s.shadowRes = 1024; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = false;
-        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; break;
+        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; break;
     case QualityProfile::Low:
         s.renderScale = 0.65f; s.shadowRes = 1024; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 80; s.maxLights = 4; s.fpsCap = 30; break;
+        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 80; s.maxLights = 4; s.fpsCap = 30; s.ssao = false; break;
     default:  // battery saver
         s.renderScale = 0.55f; s.shadowRes = 0; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 70; s.maxLights = 3; s.fpsCap = 30; break;
+        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 70; s.maxLights = 3; s.fpsCap = 30; s.ssao = false; break;
     }
     return s;
 }
@@ -107,6 +107,7 @@ bool Renderer::init(const GraphicsSettings& s) {
     ok &= buildFS(bloomDown, "bloomDown", shaders::BLOOM_DOWN_FS);
     ok &= buildFS(bloomUp, "bloomUp", shaders::BLOOM_UP_FS);
     ok &= buildFS(composite, "composite", shaders::COMPOSITE_FS);
+    ok &= buildFS(ssao, "ssao", shaders::SSAO_FS);
     ok &= buildFS(fxaa, "fxaa", shaders::FXAA_FS);
     ok &= buildFS(blit, "blit", shaders::BLIT_FS);
     ok &= ui.build("ui", shaders::UI_VS, shaders::UI_FS, "");
@@ -166,6 +167,7 @@ void Renderer::createTargets() {
     }
     ldrRT.create(w, h, GL_RGBA8, false);
     blurRT.create(std::max(8, w / 4), std::max(8, h / 4), GL_RGBA8, false);
+    if (settings.ssao) aoRT.create(std::max(8, w / 2), std::max(8, h / 2), GL_RGBA8, false);
     if (settings.shadowRes > 0) shadowRT.create(settings.shadowRes, settings.shadowRes, 0, true, true);
     bloomChain.clear();
     int bw = w / 2, bh = h / 2;
@@ -177,7 +179,7 @@ void Renderer::createTargets() {
 }
 
 void Renderer::destroyTargets() {
-    shadowRT.destroy(); sceneRT.destroy(); ldrRT.destroy(); blurRT.destroy();
+    shadowRT.destroy(); sceneRT.destroy(); ldrRT.destroy(); blurRT.destroy(); aoRT.destroy();
     for (auto& b : bloomChain) b.destroy();
     bloomChain.clear();
 }
@@ -192,7 +194,7 @@ void Renderer::shutdown() {
     destroyTargets();
     for (auto& kv : litVariants) kv.second.destroy();
     litVariants.clear();
-    for (Shader* s : {&water, &lava, &sky, &particleAlpha, &particleAdd, &ribbon, &bloomDown, &bloomUp, &composite, &fxaa, &blit, &ui}) s->destroy();
+    for (Shader* s : {&water, &lava, &sky, &particleAlpha, &particleAdd, &ribbon, &bloomDown, &bloomUp, &composite, &fxaa, &blit, &ui, &ssao}) s->destroy();
     noiseTex.destroy(); terrainTex.destroy(); terrainNrm.destroy(); particleTex.destroy();
     quadMesh.destroy(); fsMesh.destroy();
     if (frameUbo) glDeleteBuffers(1, &frameUbo);
@@ -444,6 +446,18 @@ void Renderer::postProcess() {
         bloomDown.set("uHdrScale", 1.f);
         fsMesh.draw();
     }
+    // Screen-space ambient occlusion (half resolution, depth only)
+    bool doAo = settings.ssao && aoRT.fbo;
+    if (doAo) {
+        aoRT.bind();
+        ssao.use();
+        sceneRT.depth.bind(0); ssao.set("uDepth", 0);
+        noiseTex.bind(1); ssao.set("uNoiseTex", 1);
+        float th = std::tan(camera.fovY * 0.5f), aspect = (float)sceneRT.w / std::max(1, sceneRT.h);
+        ssao.set("uProjAo", vec4(camera.zNear, camera.zFar, th * aspect, th));
+        ssao.set("uAoParams", vec4(0.65f, 1.15f, 70.f, 0.f));
+        fsMesh.draw();
+    }
     // Composite into LDR (or directly to the screen when FXAA is off)
     bool doFxaa = settings.fxaa && ldrRT.fbo;
     if (doFxaa) ldrRT.bind();
@@ -454,6 +468,9 @@ void Renderer::postProcess() {
     composite.set("uBloom", 1);
     blurRT.color.bind(2); composite.set("uBlur", 2);
     sceneRT.depth.bind(3); composite.set("uDepth", 3);
+    if (doAo) aoRT.color.bind(4); else { glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, 0); }
+    composite.set("uAO", 4);
+    composite.set("uAoOn", doAo ? vec4(settings.ssaoStrength, 1.f / aoRT.w, 1.f / aoRT.h, 0) : vec4(0, 0, 0, 0));
     composite.set("uPost0", vec4(env.exposure, doBloom ? env.bloomIntensity : 0.f, env.vignette, settings.chromatic ? env.chromatic + 0.25f : env.chromatic));
     composite.set("uPost1", vec4(env.saturation, env.contrast, env.temperature, env.grain));
     composite.set("uLift", vec4(env.lift, doDof ? env.dofAmount : 0.f));

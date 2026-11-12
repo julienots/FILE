@@ -343,6 +343,8 @@ void Game::updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt) {
     if (hs > 0.3f && !c.attackClip && ai.state != AIState::Strafe && ai.state != AIState::Attack) c.yaw = dampAngle(c.yaw, std::atan2(c.vel.x, c.vel.z), 8.f, dt);
     an.speed = hs;
     an.aux[0] = (ai.state == AIState::Strafe || ai.state == AIState::Chase) ? (d.arch == Arch::Humanoid ? 0.5f : 1.f) : 0.2f;
+    { bool fighting = ai.state == AIState::Chase || ai.state == AIState::Attack || ai.state == AIState::Strafe || c.attackClip != nullptr;
+      an.aux[3] = approach(an.aux[3], fighting ? 1.f : 0.f, dt * (fighting ? 5.f : 0.8f)); }   // weapon guard vs relaxed carry
     if (flyer) { c.pos.y = groundAt(c.pos.x, c.pos.z) + 1.4f + std::sin(realTime * 2.f + e) * 0.3f; c.vel.y = 0; c.grounded = true; if (particles.rng.f() < dt * 15) particles.magicTrail(c.pos + vec3(0, 1.2f, 0), elementColor(Element::Arcane) * 0.6f + c.vis.dissolveColor * 0.4f, 0.8f); }
 }
 

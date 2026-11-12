@@ -236,6 +236,15 @@ static void testHeroModel(const std::string& assets) {
     CHECK(m.joints[H_HEAD].y > m.joints[H_CHEST].y && m.joints[H_CHEST].y > m.joints[H_ROOT].y, "spine order");
     CHECK(m.joints[H_HANDL].y < m.joints[H_UARML].y - 0.3f && m.joints[H_HANDR].y < m.joints[H_UARMR].y - 0.3f, "arms lowered into the rest pose");
     CHECK(m.joints[H_HANDL].x > 0 && m.joints[H_HANDR].x < 0, "left on +X");
+    // regression (1.2.0 feedback "things under the models when they walk"): nothing near the feet may be
+    // skinned to the pelvis / torso, otherwise those faces stretch between the hips and the ground
+    int badFeet = 0, cloth = 0;
+    for (auto& v : m.verts) {
+        if (v.py < 0.3f && (v.b0 == H_ROOT || v.b0 == H_SPINE || v.b0 == H_CHEST || v.b0 == H_NECK || v.b0 == H_HEAD) && v.w0 > 128) badFeet++;
+        if (v.ex == 255) cloth++;
+    }
+    CHECK(badFeet == 0, "%d foot-level vertices bound to the torso", badFeet);
+    CHECK(cloth > 500, "cloth flags present (%d)", cloth);
     // corrupted / truncated files are rejected without crashing
     std::vector<uint8_t> cut(mb.begin(), mb.begin() + mb.size() / 2);
     SkinnedModelData bad;

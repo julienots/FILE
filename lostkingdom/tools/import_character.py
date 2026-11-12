@@ -167,9 +167,10 @@ def main():
     legL = ["thighL", "shinL", "footL"]; legR = ["thighR", "shinR", "footR"]
     for n in armL + legL: D[right, B[n]] = big
     for n in armR + legR: D[left, B[n]] = big
-    inArm = np.abs(x) > shoulderX + 0.02 * H
+    armHeight = y > yArm - 0.2 * H                       # T-pose arms are horizontal: only there
+    inArm = (np.abs(x) > shoulderX + 0.02 * H) & armHeight
     for n in ["root", "spine", "neck", "head"] + legL + legR: D[inArm, B[n]] = big
-    notArm = np.abs(x) < shoulderX - 0.03 * H
+    notArm = (np.abs(x) < shoulderX - 0.03 * H) | ~armHeight
     for n in ["larmL", "handL", "larmR", "handR"]: D[notArm, B[n]] = big
     for n in ["uarmL", "uarmR"]: D[np.abs(x) < shoulderX - 0.07 * H, B[n]] = big
     belowHips = y < hipY - 0.04 * H
@@ -179,11 +180,56 @@ def main():
     # cape / long coat behind the body: follows the torso, never the legs
     cape = (z < bodyZ - 0.075 * H) & (y > kneeY - 0.05 * H) & ~inArm
     for n in legL + legR + armL[1:] + armR[1:]: D[cape, B[n]] = big
-    order = np.argsort(D, axis=1)[:, :2]
-    d0 = D[np.arange(len(P)), order[:, 0]]; d1 = D[np.arange(len(P)), order[:, 1]]
-    w0 = 1.0 / np.maximum(d0, 1e-4) ** 4; w1 = np.where(d1 < big / 2, 1.0 / np.maximum(d1, 1e-4) ** 4, 0)
-    W0 = w0 / (w0 + w1)
-    b0, b1 = order[:, 0], np.where(d1 < big / 2, order[:, 1], order[:, 0])
+    # safety net: a vertex excluded from every bone falls back to its nearest bone (no rule)
+    allMasked = (D >= big / 2).all(1)
+    if allMasked.any():
+        print(f"  warning: {int(allMasked.sum())} vertices matched no rule, using nearest bone")
+        for bi in skinBones:
+            end = J[child[bi]] if bi in child else tips[bi]
+            D[allMasked, bi] = seg_dist(P[allMasked], J[bi], end)
+    # ---- geodesic assignment ------------------------------------------------------------------------
+    # Straight-line distance binds capes, skirts and tabards to the legs (they hang next to them), which
+    # stretches those faces into "plates" between and under the feet when walking. Instead, each bone
+    # claims the surface around it (seeds close to the bone) and influence spreads ALONG the mesh surface:
+    # a cape is reached from the shoulders, a tabard from the belt, never from the legs.
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    key = np.round(P / 1e-5).astype(np.int64)                     # weld UV-seam duplicates for connectivity
+    _, weld = np.unique(key, axis=0, return_inverse=True); weld = weld.reshape(-1)
+    nW = weld.max() + 1
+    Pw = np.zeros((nW, 3)); Pw[weld] = P
+    e = np.concatenate([I[:, [0, 1]], I[:, [1, 2]], I[:, [2, 0]]]); e = weld[e]
+    e = e[e[:, 0] != e[:, 1]]
+    lens = np.linalg.norm(Pw[e[:, 0]] - Pw[e[:, 1]], axis=1)
+    graph = coo_matrix((np.concatenate([lens, lens]), (np.concatenate([e[:, 0], e[:, 1]]), np.concatenate([e[:, 1], e[:, 0]]))), shape=(nW, nW)).tocsr()
+    Dw = np.full((nW, 21), big); np.minimum.at(Dw, weld, D)          # region-masked Euclidean distance per welded node
+    nearest = Dw.argmin(1); dnear = Dw.min(1)
+    limb = set(B[n] for n in armL + armR + legL + legR) - {B["shL"], B["shR"]}
+    G = np.full((nW, 21), np.inf)
+    for bi in skinBones:
+        r = 0.045 * H if bi in limb else (0.07 * H if bi in (B["shL"], B["shR"]) else 0.13 * H)
+        seeds = np.where((nearest == bi) & (dnear < r))[0]
+        if len(seeds) == 0:
+            seeds = np.where(nearest == bi)[0][:1]
+        if len(seeds) == 0:
+            continue
+        G[:, bi] = dijkstra(graph, indices=seeds, min_only=True)
+    G[Dw >= big / 2] = np.inf                                       # keep the side / region rules
+    unreached = ~np.isfinite(G).any(1)                              # floating parts with no seed: Euclidean
+    G[unreached] = Dw[unreached]
+    G = G[weld]
+    order = np.argsort(G, axis=1)[:, :2]
+    g0 = G[np.arange(len(P)), order[:, 0]]; g1 = G[np.arange(len(P)), order[:, 1]]
+    blend = 0.05 * H                                                # width of the soft zone around joints
+    w1 = np.where(np.isfinite(g1), 0.5 * np.clip(1 - (g1 - g0) / blend, 0, 1), 0)
+    W0 = 1 - w1
+    b0, b1 = order[:, 0], np.where(np.isfinite(g1), order[:, 1], order[:, 0])
+    print(f"  skinning: {nW} welded nodes, {int(unreached.sum())} without surface path")
+    if os.environ.get("LK_DEBUG_SKIN"):
+        bad = np.where((P[:, 1] < 0.15 * H) & (b0 == B["root"]))[0][:6]
+        for v in bad:
+            print("   dbg v", v, np.round(P[v], 3), "G foot/shin/root:", [round(float(G[v, B[n]]), 3) for n in ("footL", "footR", "shinL", "shinR", "root")],
+                  "D:", [round(float(D[v, B[n]]), 3) for n in ("footL", "footR", "shinL", "shinR", "root")], "unreached", bool(unreached[weld[v]]))
 
     # ---- T-pose -> rest pose (arms down) using the weights -------------------------------------------
     angle = np.pi / 2 - 0.08
@@ -217,13 +263,17 @@ def main():
     path = os.path.join(outDir, a.name + ".lkm")
     nv, ni = len(Pb), I.size
     with open(path, "wb") as f:
-        f.write(b"LKM1"); f.write(struct.pack("<IIIf", nv, ni, 21, H))
+        f.write(b"LKM2"); f.write(struct.pack("<IIIf", nv, ni, 21, H))
         f.write(Jb.astype("<f4").tobytes())
         f.write(Pb.astype("<f4").tobytes())
         f.write(np.clip(np.round(Nb * 127), -127, 127).astype(np.int8).tobytes())
         uv16 = np.clip(np.round(np.stack([UV[:, 0] % 1.0001, UV[:, 1] % 1.0001], 1) * 65535), 0, 65535).astype("<u2")
         f.write(uv16.tobytes())
-        f.write(np.stack([b0, b1, np.round(W0 * 255)], 1).astype(np.uint8).tobytes())
+        # flags byte: 255 = cloth (cape, tabard / skirt) -> never shaded as metal
+        torsoBone = np.isin(b0, [B["root"], B["spine"], B["chest"]])
+        backSide = torsoBone & (z < bodyZ - 0.025 * H) & (y > kneeY - 0.1 * H) & (y < yArm + 0.05 * H)   # cape covers the back
+        cloth = cape | backSide | ((b0 == B["root"]) & (y < rootY - 0.03 * H))
+        f.write(np.stack([b0, b1, np.round(W0 * 255), np.where(cloth, 255, 0)], 1).astype(np.uint8).tobytes())
         f.write(I.astype("<u4").reshape(-1).tobytes())
     print(f"wrote {path}: {nv} vertices, {ni // 3} triangles, {os.path.getsize(path) / 1e6:.2f} MB")
     if tex is not None:

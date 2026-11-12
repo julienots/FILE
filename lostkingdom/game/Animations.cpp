@@ -16,75 +16,131 @@ static Clip& mk(ClipId id, const char* name, float dur, bool loop = false) {
 }
 
 // --------------------------------------------------------------------------------------- humanoid procedural
+// Periodic Catmull-Rom curve through (phase, value) keys; phase in [0,1).
+struct GaitKey { float u, v; };
+static float gaitCurve(const GaitKey* k, int n, float u) {
+    u -= std::floor(u);
+    int i = n - 1;
+    for (int j = 0; j < n; j++) if (k[j].u <= u) i = j;
+    auto key = [&](int j, float& ku, float& kv) {
+        int w = ((j % n) + n) % n;
+        ku = k[w].u + std::floor((float)j / (float)n);   // unwrap keys before/after the cycle
+        kv = k[w].v;
+    };
+    float u0, v0, u1, v1, u2, v2, u3, v3;
+    key(i, u1, v1);
+    key(i + 1, u2, v2); if (u2 <= u1) u2 += 1.f;
+    key(i - 1, u0, v0); if (u0 >= u1) u0 -= 1.f;
+    key(i + 2, u3, v3); while (u3 <= u2) u3 += 1.f;
+    float uu = u < u1 ? u + 1.f : u;
+    float t = (uu - u1) / std::max(1e-4f, u2 - u1);
+    float t2 = t * t, t3 = t2 * t;
+    return 0.5f * ((2 * v1) + (-v0 + v2) * t + (2 * v0 - 5 * v1 + 4 * v2 - v3) * t2 + (-v0 + 3 * v1 - 3 * v2 + v3) * t3);
+}
+
+// Biomechanical gait curves per leg (degrees), phase 0 = this leg's heel / foot strike.
+// Walk: loading-response knee flexion, terminal extension, push-off, swing knee flexion ~60 deg.
+static const GaitKey WALK_HIP[] = {{0.f, 25}, {0.3f, 2}, {0.55f, -12}, {0.65f, -6}, {0.8f, 20}, {0.9f, 27}};
+static const GaitKey WALK_KNEE[] = {{0.f, 4}, {0.15f, 17}, {0.4f, 5}, {0.62f, 38}, {0.73f, 62}, {0.88f, 20}, {0.97f, 3}};
+static const GaitKey WALK_ANKLE[] = {{0.f, -4}, {0.08f, 5}, {0.3f, -6}, {0.5f, -9}, {0.62f, 18}, {0.7f, 10}, {0.85f, -3}};
+// Run: short stance (toe-off ~0.38), flight phase, high swing knee.
+static const GaitKey RUN_HIP[] = {{0.f, 28}, {0.2f, 6}, {0.38f, -16}, {0.5f, -8}, {0.75f, 40}, {0.9f, 36}};
+static const GaitKey RUN_KNEE[] = {{0.f, 22}, {0.12f, 40}, {0.38f, 18}, {0.6f, 105}, {0.72f, 118}, {0.9f, 40}};
+static const GaitKey RUN_ANKLE[] = {{0.f, -6}, {0.12f, -12}, {0.38f, 25}, {0.6f, 10}, {0.85f, -5}};
+#define GK(a) a, (int)(sizeof(a) / sizeof(a[0]))
+
 static void humanLoco(const Animator& a, Pose& p) {
     const float t = a.time, ph = a.phase * TAU, sp = a.speed;
     const GaitParams& g = a.gait;
     float moving = smoothstepf(0.05f, 0.7f, sp);
     float runW = saturate((sp - g.walkSpeed) / (g.runSpeed - g.walkSpeed));
+    runW = runW * runW * (3 - 2 * runW);
     float sprintW = saturate((sp - g.runSpeed) / std::max(0.1f, g.sprintSpeed - g.runSpeed));
-    float thighAmp = lerpf(24, 42, runW) + 10 * sprintW;
-    float kneeAmp = lerpf(38, 88, runW) + 18 * sprintW;
-    float armAmp = lerpf(20, 46, runW) + 8 * sprintW;
-    float elbow = lerpf(14, 78, runW);
-    float lean = lerpf(2, 9, runW) + 10 * sprintW;
-    float bob = lerpf(0.022f, 0.055f, runW);
+    float slow = 0.55f + 0.45f * saturate(sp / std::max(0.1f, g.walkSpeed));   // slow walks: smaller steps
+    float lean = lerpf(3, 10, runW) + 9 * sprintW;
     float crouch = a.blocking ? 0.06f : 0.f;
     float idle = 1.f - moving;
     float aggressive = a.aux[0];  // hunched combat idle for monsters (0..1)
 
-    // pelvis
-    p.rootOffset = vec3(std::sin(t * 0.45f) * 0.012f * idle, -bob * (0.5f + 0.5f * std::cos(2 * ph)) * moving - crouch - 0.03f * runW - aggressive * 0.08f, 0);
-    float roll = clampf(-a.turnRate * sp * 0.9f, -10, 10) + std::cos(ph) * 2.5f * moving;
-    p.rot[H_ROOT] = E(0, std::sin(ph) * 6 * moving, roll);
-    p.rot[H_SPINE] = E(lean * moving * 0.6f + aggressive * 12, -std::sin(ph) * 4 * moving, 0);
+    // ---- legs from the gait curves (left leg phase u, right leg u + 0.5)
+    float hip[2], knee[2], ank[2];
+    for (int s = 0; s < 2; s++) {
+        float u = a.phase + (s ? 0.5f : 0.f);
+        float amp = slow * (1.f + 0.12f * sprintW);
+        hip[s] = lerpf(gaitCurve(GK(WALK_HIP), u), gaitCurve(GK(RUN_HIP), u), runW) * amp;
+        knee[s] = lerpf(gaitCurve(GK(WALK_KNEE), u), gaitCurve(GK(RUN_KNEE), u), runW) * amp;
+        ank[s] = lerpf(gaitCurve(GK(WALK_ANKLE), u), gaitCurve(GK(RUN_ANKLE), u), runW);
+    }
+    float uL = a.phase;
+
+    // ---- pelvis: lowest at double support when walking, at mid-stance when running; sway over the stance leg
+    float bobWalk = -0.028f * (0.5f + 0.5f * std::cos(4 * PI * uL));
+    float bobRun = -0.05f * (0.5f + 0.5f * std::cos(4 * PI * (uL - 0.12f))) - 0.035f;
+    float sway = std::sin(TAU * uL) * lerpf(0.022f, 0.01f, runW);
+    p.rootOffset = vec3((sway * moving) + std::sin(t * 0.45f) * 0.012f * idle,
+                        lerpf(bobWalk, bobRun, runW) * moving - crouch - aggressive * 0.08f + std::sin(t * 1.7f) * 0.004f * idle, 0);
+    float pelvisYaw = (hip[0] - hip[1]) * 0.13f * moving;                 // pelvis turns with the swinging leg
+    float roll = clampf(-a.turnRate * sp * 0.9f, -10, 10) + std::cos(ph) * lerpf(3.f, 1.5f, runW) * moving;
+    p.rot[H_ROOT] = E(lean * 0.25f * moving, pelvisYaw, roll);
+    p.rot[H_SPINE] = E(lean * moving * 0.45f + aggressive * 12, -pelvisYaw * 0.6f, -roll * 0.4f);
     float breath = std::sin(t * (1.6f + a.breath * 1.2f)) * (1.2f + a.breath * 1.5f);
-    p.rot[H_CHEST] = E(lean * moving * 0.4f + breath * idle * 0.6f + aggressive * 10, -std::sin(ph) * 6 * moving, 0);
-    p.rot[H_NECK] = E(-lean * moving * 0.5f - aggressive * 12, 0, 0);
+    p.rot[H_CHEST] = E(lean * moving * 0.3f + breath * idle * 0.6f + aggressive * 10, -pelvisYaw * 0.9f, -roll * 0.3f);   // shoulders counter-rotate
+    p.rot[H_NECK] = E(-lean * moving * 0.45f - aggressive * 12, pelvisYaw * 0.5f, roll * 0.3f);
     float look = std::sin(t * 0.31f) * 14.f * idle * (1 - aggressive);
-    p.rot[H_HEAD] = E(-lean * moving * 0.3f + std::sin(t * 0.23f) * 3 * idle, look, 0);
+    p.rot[H_HEAD] = E(-lean * moving * 0.3f + std::sin(t * 0.23f) * 3 * idle, look + pelvisYaw * 0.5f, roll * 0.2f);   // head stays stable
 
     for (int s = 0; s < 2; s++) {
-        float o = s ? PI : 0.f;
-        float sn = std::sin(ph + o), cs = std::cos(ph + o);
         int th = s ? H_THIGHR : H_THIGHL, sh = s ? H_SHINR : H_SHINL, ft = s ? H_FOOTR : H_FOOTL;
-        float thigh = -sn * thighAmp * moving - crouch * 120 - aggressive * 14;
-        float knee = (std::max(0.f, cs) * kneeAmp + 6 + runW * 12) * moving + crouch * 220 + aggressive * 24 + (1 - moving) * 3;
-        float foot = -(thigh + knee) * 0.55f * moving + (sn < 0 ? -sn * 18 * moving : 0) - crouch * 100 - aggressive * 10;
+        float u = a.phase + (s ? 0.5f : 0.f); u -= std::floor(u);
+        float toeOff = lerpf(0.62f, 0.38f, runW);
+        float stance = 1.f - smoothstepf(toeOff - 0.06f, toeOff + 0.04f, u) + smoothstepf(0.94f, 1.0f, u);
+        float thigh = -hip[s] * moving - crouch * 120 - aggressive * 14;
+        float kn = knee[s] * moving + crouch * 220 + aggressive * 24 + idle * 4;
+        // foot: kept level on the ground during stance (IK refines it), relaxed in swing, + ankle roll
+        float level = -(thigh + kn) * lerpf(0.55f, 1.0f, stance);
+        float foot = level + ank[s] * moving - crouch * 100 - aggressive * 10;
         p.rot[th] = E(thigh, 0, (s ? -1.f : 1.f) * (2.f + idle * 1.5f));
-        p.rot[sh] = E(knee, 0, 0);
+        p.rot[sh] = E(kn, 0, 0);
         p.rot[ft] = E(foot, 0, 0);
-        // arms (counter-swing)
+        // arms: counter-swing driven by the opposite leg, elbows bend more when running
         int sl = s ? H_SHR : H_SHL, ua = s ? H_UARMR : H_UARML, la = s ? H_LARMR : H_LARML, hd = s ? H_HANDR : H_HANDL;
         float side = s ? -1.f : 1.f;
+        float swing = hip[s] * lerpf(0.75f, 1.05f, runW) * moving;           // arm goes back when its leg goes forward
+        float elbow = lerpf(16, 82, runW) + std::max(0.f, -swing) * 0.35f;
         p.rot[sl] = E(0, 0, side * breath * 0.6f * idle);
-        p.rot[ua] = E(sn * armAmp * moving + breath * 0.5f * idle - aggressive * 20, 0, side * (8 + 4 * runW + aggressive * 15));
-        p.rot[la] = E(-(elbow * moving + 10 * idle + std::max(0.f, -sn) * 15 * moving + aggressive * 30), 0, 0);
-        p.rot[hd] = E(0, 0, 0);
+        p.rot[ua] = E(swing + breath * 0.5f * idle - aggressive * 20, side * 4 * runW, side * (7 + 5 * runW + aggressive * 15));
+        p.rot[la] = E(-(elbow * moving + 10 * idle + aggressive * 30), 0, 0);
+        p.rot[hd] = E(0, 0, side * 6 * runW);
     }
+    // relaxed (out of combat) one-handed carry: sword lowered, swinging with the arm
+    float ready = saturate(a.aux[3]);
+    // the wrist counter-rotates the arm swing and elbow bend so the blade keeps a steady angle to the ground
+    float swingR = hip[1] * lerpf(0.75f, 1.05f, runW) * moving;
+    float elbowR = lerpf(14, 70, runW) * moving + 12 * idle;
+    quat relaxedR[3] = {p.rot[H_UARMR], E(-elbowR, 0, 0), E(lerpf(95, 70, runW) - swingR + elbowR * 0.6f, 10, 0)};
     // weapon stance overrides for the arms
     switch (a.stance) {
-    case ST_ONEHAND:
-        p.rot[H_UARMR] = E(-18 - 10 * runW + std::sin(ph + PI) * armAmp * 0.35f * moving, 0, -14);
-        p.rot[H_LARMR] = E(-55 - 15 * runW, 0, 0);
-        p.rot[H_HANDR] = E(20, 0, 0);
+    case ST_ONEHAND: case ST_DAGGER: {
+        bool dg = a.stance == ST_DAGGER;
+        quat guard[3] = {dg ? E(-20, 0, -18) : E(-18 - 10 * runW + hip[1] * 0.3f * moving, 0, -14), dg ? E(-70, 0, 0) : E(-55 - 15 * runW, 0, 0), dg ? E(70, 0, 0) : E(20, 0, 0)};
+        int bones[3] = {H_UARMR, H_LARMR, H_HANDR};
+        for (int i = 0; i < 3; i++) p.rot[bones[i]] = nlerp(relaxedR[i], guard[i], ready);
         break;
+    }
     case ST_TWOHAND:
         p.rot[H_UARMR] = E(-30, 20, -10); p.rot[H_LARMR] = E(-70, 0, 0); p.rot[H_HANDR] = E(35, 0, 30);
         p.rot[H_UARML] = E(-40, -30, 10); p.rot[H_LARML] = E(-75, 0, 0);
         p.rot[H_CHEST] = normalize(p.rot[H_CHEST] * E(0, -12, 0));
-        break;
-    case ST_DAGGER:
-        p.rot[H_UARMR] = E(-20, 0, -18); p.rot[H_LARMR] = E(-70, 0, 0); p.rot[H_HANDR] = E(70, 0, 0);
         break;
     case ST_SPEAR:
         p.rot[H_UARMR] = E(-25, 0, -18); p.rot[H_LARMR] = E(-80, 0, 0); p.rot[H_HANDR] = E(60, 0, 0);
         p.rot[H_UARML] = E(-45, -20, 8); p.rot[H_LARML] = E(-40, 0, 0);
         break;
     case ST_STAFF:
-        p.rot[H_UARMR] = E(-15 + std::sin(ph + PI) * 10 * moving, 0, -12); p.rot[H_LARMR] = E(-80, 0, 0); p.rot[H_HANDR] = E(0, 0, 0);
+        p.rot[H_UARMR] = E(-15 + hip[1] * 0.35f * moving, 0, -12); p.rot[H_LARMR] = E(-80, 0, 0); p.rot[H_HANDR] = E(0, 0, 0);
         break;
     case ST_BOW:
-        p.rot[H_UARML] = E(-10 + std::sin(ph) * 12 * moving, 0, 10); p.rot[H_LARML] = E(-25, 0, 0); p.rot[H_HANDL] = E(0, 90, 0);
+        p.rot[H_UARML] = E(-10 + hip[0] * 0.4f * moving, 0, 10); p.rot[H_LARML] = E(-25, 0, 0); p.rot[H_HANDL] = E(0, 90, 0);
         if (a.aiming) {
             p.rot[H_CHEST] = normalize(p.rot[H_CHEST] * E(0, 60, 0));
             p.rot[H_UARML] = E(-90, -60, 0); p.rot[H_LARML] = E(0, 0, 0); p.rot[H_HANDL] = E(0, 0, -90);
@@ -93,7 +149,7 @@ static void humanLoco(const Animator& a, Pose& p) {
         }
         break;
     case ST_TOOL:
-        p.rot[H_UARMR] = E(-12 + std::sin(ph + PI) * 20 * moving, 0, -12); p.rot[H_LARMR] = E(-35, 0, 0); p.rot[H_HANDR] = E(80, 0, 0);
+        p.rot[H_UARMR] = E(-12 + hip[1] * 0.6f * moving, 0, -12); p.rot[H_LARMR] = E(-35, 0, 0); p.rot[H_HANDR] = E(80, 0, 0);
         break;
     default: break;
     }
@@ -977,7 +1033,7 @@ void setupAnimator(Animator& a, Arch arch) {
         a.dead = humanDead; a.stagger = humanStagger; a.victory = humanVictory; a.sit = humanSit; a.sleep = humanSleep; a.work = humanWork;
         for (int b : {H_SPINE, H_CHEST, H_NECK, H_HEAD, H_SHL, H_UARML, H_LARML, H_HANDL, H_SHR, H_UARMR, H_LARMR, H_HANDR, H_PROPR, H_PROPL}) a.upperMask[b] = 1.f;
         a.upperMask[H_SPINE] = 0.6f;
-        a.gait = GaitParams{1.25f, 2.2f, 1.6f, 4.6f, 7.2f};
+        a.gait = GaitParams{1.4f, 2.5f, 1.6f, 4.6f, 7.2f};   // stride per full cycle: natural cadence (~1.1 Hz walk, ~1.8 Hz run)
         break;
     case Arch::Quadruped:
         a.locomotion = quadLoco; a.dead = quadDead; a.airborne = quadLoco; a.swim = quadLoco;

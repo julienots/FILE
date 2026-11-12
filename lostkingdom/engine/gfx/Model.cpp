@@ -12,10 +12,11 @@ bool SkinnedModelData::loadLKM(const std::vector<uint8_t>& b) {
     auto need = [&](size_t n) { return off + n <= b.size(); };
     auto rd = [&](void* dst, size_t n) { if (!need(n)) return false; memcpy(dst, b.data() + off, n); off += n; return true; };
     char magic[4]; uint32_t nv = 0, ni = 0, nj = 0;
-    if (!rd(magic, 4) || memcmp(magic, "LKM1", 4) != 0) { AGR_WARN("model: bad magic"); return false; }
+    if (!rd(magic, 4) || (memcmp(magic, "LKM1", 4) != 0 && memcmp(magic, "LKM2", 4) != 0)) { AGR_WARN("model: bad magic"); return false; }
+    const size_t skinBytes = magic[3] == '2' ? 4 : 3;   // LKM2 adds a per-vertex flags byte (255 = cloth)
     if (!rd(&nv, 4) || !rd(&ni, 4) || !rd(&nj, 4) || !rd(&height, 4)) return false;
     if (nv == 0 || nv > 200000 || ni == 0 || ni > 1200000 || ni % 3 || nj > 64) { AGR_WARN("model: bad header"); return false; }
-    size_t total = (size_t)nj * 12 + (size_t)nv * (12 + 3 + 4 + 3) + (size_t)ni * 4;
+    size_t total = (size_t)nj * 12 + (size_t)nv * (12 + 3 + 4 + skinBytes) + (size_t)ni * 4;
     if (!need(total)) { AGR_WARN("model: truncated file"); return false; }
     joints.resize(nj);
     for (uint32_t i = 0; i < nj; i++) { float f[3]; rd(f, 12); joints[i] = {f[0], f[1], f[2]}; }
@@ -23,7 +24,7 @@ bool SkinnedModelData::loadLKM(const std::vector<uint8_t>& b) {
     const uint8_t* pos = b.data() + off; off += (size_t)nv * 12;
     const int8_t* nrm = (const int8_t*)(b.data() + off); off += (size_t)nv * 3;
     const uint8_t* uv = b.data() + off; off += (size_t)nv * 4;
-    const uint8_t* sk = b.data() + off; off += (size_t)nv * 3;
+    const uint8_t* sk = b.data() + off; off += (size_t)nv * skinBytes;
     for (uint32_t i = 0; i < nv; i++) {
         Vertex& v = verts[i];
         float p[3]; memcpy(p, pos + i * 12, 12);
@@ -32,7 +33,7 @@ bool SkinnedModelData::loadLKM(const std::vector<uint8_t>& b) {
         v.r = v.g = v.b = v.a = 255;
         // 16-bit UVs packed into the material bytes (read back by the TEXTURED shader variant)
         v.rough = uv[i * 4]; v.metal = uv[i * 4 + 1]; v.emis = uv[i * 4 + 2]; v.wind = uv[i * 4 + 3];
-        v.b0 = sk[i * 3]; v.b1 = sk[i * 3 + 1]; v.w0 = sk[i * 3 + 2]; v.ex = 0;
+        v.b0 = sk[i * skinBytes]; v.b1 = sk[i * skinBytes + 1]; v.w0 = sk[i * skinBytes + 2]; v.ex = skinBytes == 4 ? sk[i * skinBytes + 3] : 0;
         if (v.b0 >= nj || v.b1 >= nj) { AGR_WARN("model: bone index out of range"); return false; }
     }
     idx.resize(ni);

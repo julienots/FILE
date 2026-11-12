@@ -277,7 +277,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.2.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.3.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -860,7 +860,7 @@ void Game::drawMenus(float dt) {
         y += 60;
         const GraphicsSettings& gs = renderer.settings;
         char b[200];
-        snprintf(b, sizeof b, "Résolution %d %% · ombres %s · bloom %s · %d FPS max · herbe %d %% · feuillage %s", (int)(gs.renderScale * 100), gs.shadowRes ? (gs.softShadows ? "douces" : "oui") : "non", gs.bloom ? "oui" : "non", gs.fpsCap, (int)(gs.grassDensity * 100), settings.profile <= QualityProfile::Medium ? "détaillé" : "simple");
+        snprintf(b, sizeof b, "Résolution %d %% · ombres %s · occlusion %s · bloom %s · %d FPS · herbe %d %% · feuillage %s", (int)(gs.renderScale * 100), gs.shadowRes ? (gs.softShadows ? "douces" : "oui") : "non", gs.ssao ? "oui" : "non", gs.bloom ? "oui" : "non", gs.fpsCap, (int)(gs.grassDensity * 100), settings.profile <= QualityProfile::Medium ? "détaillé" : "simple");
         u.text(b, c.x, y, 16, DIM, F_BODY, A_LEFT, colW); y += 44;
         if (toggle(u, {c.x, y, colW, 40}, "Aberration chromatique", settings.chromatic)) applyGraphicsProfile(settings.profile); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Afficher les FPS", settings.showFps); y += 46;

@@ -265,10 +265,19 @@ void main() {
 #ifdef TEXTURED
     // AI-generated textures are bright and contain baked lighting: bring them into the game's albedo
     // range (procedural characters) and restore some saturation lost to the baked highlights.
-    albedo = pow(texture(uAlbedoTex, vUV).rgb, vec3(2.2));
+    vec3 tx = texture(uAlbedoTex, vUV).rgb;
+    albedo = pow(tx, vec3(2.2));
     float alum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
-    albedo = max(mix(vec3(alum), albedo, 1.3), 0.0) * 0.48 * uTint.rgb;
-    rough = 0.78; metal = 0.0; emis = 0.0;
+    // material guess from the painted colour: bright desaturated = steel, bright warm saturated = gold/brass
+    float tmax = max(tx.r, max(tx.g, tx.b)), tmin = min(tx.r, min(tx.g, tx.b));
+    float tsat = (tmax - tmin) / max(tmax, 1e-3);
+    float steel = smoothstep(0.34, 0.58, tmax) * (1.0 - smoothstep(0.1, 0.3, tsat));
+    float gold = smoothstep(0.42, 0.7, tmax) * smoothstep(0.35, 0.6, tsat) * step(tx.b, tx.r * 0.75);
+    metal = max(steel * 0.85, gold * 0.9) * (1.0 - vSkin.w);   // vSkin.w = cloth flag from the importer
+    rough = mix(0.8, 0.3, metal);
+    vec3 dielectric = max(mix(vec3(alum), albedo, 1.3), 0.0) * 0.48;
+    albedo = mix(dielectric, albedo * 0.85, metal) * uTint.rgb;   // metals: albedo is the specular colour
+    emis = 0.0;
     if (!gl_FrontFacing) N = -N;   // double-sided imported meshes (capes)
 #endif
 
@@ -755,6 +764,49 @@ void main() {
 // Final composite: exposure, bloom, depth of field / tilt-shift, ACES tone mapping,
 // colour grading (lift / gamma / gain, saturation, contrast, temperature), vignette,
 // optional chromatic aberration, film grain, screen fades.
+// Screen-space ambient occlusion from depth only (mobile friendly: half resolution, 10 samples).
+// View-space position from linear depth, normal from screen derivatives, golden-angle hemisphere samples
+// rotated per pixel by the noise texture; range check avoids dark halos around silhouettes.
+const char* SSAO_FS = R"(
+in vec2 vUV;
+uniform sampler2D uDepth;
+uniform sampler2D uNoiseTex;
+uniform vec4 uProjAo;    // near, far, tan(fovX/2), tan(fovY/2)
+uniform vec4 uAoParams;  // radius (m), intensity, fade distance (m)
+out vec4 fragColor;
+float linZ(float d) { float n = uProjAo.x, f = uProjAo.y; float z = d * 2.0 - 1.0; return 2.0 * n * f / (f + n - z * (f - n)); }
+void main() {
+    float d = texture(uDepth, vUV).r;
+    if (d >= 0.99999) { fragColor = vec4(1.0); return; }
+    float z = linZ(d);
+    vec3 P = vec3((vUV * 2.0 - 1.0) * uProjAo.zw * z, -z);
+    vec3 N = normalize(cross(dFdx(P), dFdy(P)));
+    if (dot(N, -P) < 0.0) N = -N;
+    vec3 T = normalize(abs(N.y) < 0.9 ? cross(N, vec3(0.0, 1.0, 0.0)) : cross(N, vec3(1.0, 0.0, 0.0)));
+    vec3 Bt = cross(N, T);
+    float ang = texture(uNoiseTex, gl_FragCoord.xy / 64.0).r * 6.2831853;
+    float R = uAoParams.x * (1.0 + z * 0.01);
+    float occ = 0.0;
+    for (int i = 0; i < 10; i++) {
+        float fi = float(i);
+        float a = ang + fi * 2.3999632;
+        float r = sqrt((fi + 0.5) / 10.0);
+        float h = fract(fi * 0.618034 + 0.31) * 0.75 + 0.25;
+        vec3 dir = (T * cos(a) + Bt * sin(a)) * r + N * h;
+        vec3 S = P + dir * R * (0.25 + 0.75 * r);
+        vec2 suv = (S.xy / -S.z) / uProjAo.zw * 0.5 + 0.5;
+        if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) continue;
+        float sz = linZ(texture(uDepth, suv).r);
+        float diff = -S.z - sz;                                  // > 0: something in front of the sample
+        float range = smoothstep(0.0, 1.0, R / max(abs(z - sz), 1e-3));
+        occ += step(0.02 + z * 0.0015, diff) * range;
+    }
+    float ao = clamp(1.0 - occ / 10.0 * uAoParams.y, 0.0, 1.0);
+    ao = mix(ao, 1.0, smoothstep(uAoParams.z * 0.6, uAoParams.z, z));
+    fragColor = vec4(ao, ao, ao, 1.0);
+}
+)";
+
 const char* COMPOSITE_FS = R"(
 in vec2 vUV;
 uniform sampler2D uScene;
@@ -770,6 +822,8 @@ uniform vec4 uFade;   // rgb fade colour, a amount
 uniform vec4 uProj;   // x near, y far, z hdr scale, w damage vignette
 uniform float uTime;
 uniform float uAlphaFromScene;
+uniform sampler2D uAO;
+uniform vec4 uAoOn;   // x strength (0 = off), yz AO texel size
 out vec4 fragColor;
 
 vec3 aces(vec3 x) {
@@ -786,6 +840,13 @@ void main() {
         col = vec3(texture(uScene, uv + dir).r, texture(uScene, uv).g, texture(uScene, uv - dir).b);
     } else col = texture(uScene, uv).rgb;
     col *= uProj.z;
+    if (uAoOn.x > 0.0) {
+        // 4 bilinear taps = soft 4x4 blur of the half-resolution AO
+        vec2 o = uAoOn.yz * 0.75;
+        float ao = 0.25 * (texture(uAO, uv + vec2(-o.x, -o.y)).r + texture(uAO, uv + vec2(o.x, -o.y)).r +
+                           texture(uAO, uv + vec2(-o.x, o.y)).r + texture(uAO, uv + vec2(o.x, o.y)).r);
+        col *= mix(1.0, ao, uAoOn.x);
+    }
     // Depth of field: cinematic focus + tilt-shift (miniature diorama feel of the 2.5D view)
     float dofAmt = uLift.a;
     float tilt = uGain.a * smoothstep(0.18, 0.5, abs(uv.y - 0.47));

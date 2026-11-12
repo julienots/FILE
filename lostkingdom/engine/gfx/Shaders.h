@@ -18,6 +18,7 @@ extern const char* FULLSCREEN_VS;
 extern const char* BLOOM_DOWN_FS;
 extern const char* BLOOM_UP_FS;
 extern const char* COMPOSITE_FS;
+extern const char* SSAO_FS;
 extern const char* FXAA_FS;
 extern const char* BLIT_FS;
 extern const char* UI_VS;
