@@ -260,7 +260,12 @@ void main() {
     float slope = 1.0 - N.y;
     float cliff = smoothstep(0.28, 0.45, slope);
     vec2 uv = vWorld.xz * 0.28;
-    vec4 g = sampleLayer(0, uv), dI = sampleLayer(1, uv * 0.9), sn = sampleLayer(3, uv * 0.7), sa = sampleLayer(4, uv * 0.8);
+    // anti-tiling for the dominant ground layers: a second, rotated & rescaled sample is blended in by
+    // large-scale noise, so the texture never repeats visibly across a meadow
+    float tb = smoothstep(0.3, 0.7, texture(uNoiseTex, vWorld.xz * 0.031).r);
+    vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * uv * 0.53 + vec2(0.37, 0.71);
+    vec4 g = mix(sampleLayer(0, uv), sampleLayer(0, uv2), tb);
+    vec4 dI = mix(sampleLayer(1, uv * 0.9), sampleLayer(1, uv2 * 0.9), tb), sn = sampleLayer(3, uv * 0.7), sa = sampleLayer(4, uv * 0.8);
     // triplanar-ish rock: project on the dominant horizontal axis for steep faces
     vec2 ruv = abs(N.x) > abs(N.z) ? vWorld.zy * 0.22 : vWorld.xy * 0.22;
     vec4 ro = sampleLayer(2, mix(vWorld.xz * 0.22, ruv, cliff));
@@ -374,7 +379,7 @@ void main() {
 #ifdef DISSOLVE
     col += uDissolveColor.rgb * edge * 6.0;
 #endif
-    col = mix(col, vec3(3.0, 2.9, 2.7), uFx.x);
+    col = mix(col, vec3(1.5, 1.42, 1.35), uFx.x);  // hit flash (readable, not blinding)
     // lightning flash
     col += albedo * uMisc.w * 2.0 * max(N.y, 0.2);
     col = applyFog(col, vWorld);
@@ -483,10 +488,10 @@ void main() {
     N = normalize(mix(N, vec3(0.0, 1.0, 0.0), frozen * 0.8));
     float NdV = clamp(dot(N, V), 0.0, 1.0);
     float fres = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
-    fres = fres * 0.85 + 0.04;
+    fres = fres * 0.85 + 0.07;
     vec3 R = reflect(-V, N);
     vec3 refl = envColor(R, 0.05);
-    float absorb = 1.0 - exp(-depth * 0.55);
+    float absorb = 1.0 - exp(-depth * 0.38);
     vec3 body = mix(uWaterShallow.rgb, uWaterDeep.rgb, absorb);
     float sh = shadowPCF(vShadow, 1.0) * cloudShadow(vWorld);
     sh = mix(1.0, sh, uSunColor.w);
@@ -499,6 +504,14 @@ void main() {
     float fn = texture(uNoiseTex, vWorld.xz * 0.22 + flow * t * 0.08 + t * 0.02).r;
     float foam = smoothstep(0.55, 0.0, depth) * smoothstep(0.35, 0.65, fn + 0.25 * sin(t * 2.0 + depth * 10.0));
     foam += smoothstep(0.6, 1.0, length(flow) * fn) * 0.5;  // rapids
+    // current streaks: noise stretched along the flow direction, drifting downstream
+    float fl = length(flow);
+    if (fl > 0.02) {
+        vec2 fd = flow / fl;
+        vec2 suv = vec2(dot(vWorld.xz, fd) * 0.06 - t * fl * 0.12, dot(vWorld.xz, vec2(-fd.y, fd.x)) * 0.5);
+        float streak = smoothstep(0.66, 0.86, texture(uNoiseTex, suv).r);
+        foam += streak * 0.18 * clamp(fl * 3.0, 0.0, 1.0);
+    }
     col = mix(col, vec3(0.95) * (amb + uSunColor.rgb * uSunDir.w * 0.6), clamp(foam, 0.0, 1.0) * (1.0 - frozen));
     // ice
     vec3 ice = vec3(0.75, 0.88, 0.97) * (amb + uSunColor.rgb * uSunDir.w * sh * 0.7) + uSunColor.rgb * spec * 0.4;

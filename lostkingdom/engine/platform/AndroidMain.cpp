@@ -203,6 +203,7 @@ static void handleCmd(android_app* app, int32_t cmd) {
         termSurface(e);
         break;
     case APP_CMD_WINDOW_RESIZED:
+    case APP_CMD_CONTENT_RECT_CHANGED:
     case APP_CMD_CONFIG_CHANGED:
         if (e->surf != EGL_NO_SURFACE) {
             eglQuerySurface(e->dpy, e->surf, EGL_WIDTH, &e->w);
@@ -286,6 +287,21 @@ void android_main(android_app* app) {
             continue;
         }
         e.lastTime = now;
+        // The window can change size without a reliable APP_CMD_WINDOW_RESIZED (immersive mode hiding the
+        // navigation bar after start-up, 180° rotation, split screen). A stale size breaks the UI scale and
+        // makes touches land beside the buttons, so check every frame (cheap).
+        {
+            EGLint w = 0, h = 0;
+            eglQuerySurface(e.dpy, e.surf, EGL_WIDTH, &w);
+            eglQuerySurface(e.dpy, e.surf, EGL_HEIGHT, &h);
+            int ww = app->window ? ANativeWindow_getWidth(app->window) : w, wh = app->window ? ANativeWindow_getHeight(app->window) : h;
+            if (ww > 0 && wh > 0 && (ww != w || wh != h)) { w = ww; h = wh; }
+            if (w > 0 && h > 0 && (w != e.w || h != e.h)) {
+                AGR_LOG("surface resized %dx%d -> %dx%d", e.w, e.h, w, h);
+                e.w = w; e.h = h;
+                e.game->resize(w, h);
+            }
+        }
         e.game->frame(dt);
         if (!eglSwapBuffers(e.dpy, e.surf)) {
             EGLint err = eglGetError();

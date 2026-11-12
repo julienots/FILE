@@ -648,6 +648,7 @@ void Game::saveSettings() {
     o << "volumes " << settings.master << " " << settings.music << " " << settings.sfx << " " << settings.ambience << "\n";
     o << "camera " << settings.camSensitivity << " " << settings.joystickDeadzone << " " << (settings.invertCamera ? 1 : 0) << " " << (settings.cameraShake ? 1 : 0) << "\n";
     o << "flags " << settings.haptics << " " << settings.showFps << " " << settings.autoTarget << " " << settings.chromatic << "\n";
+    o << "layoutver " << LAYOUT_VERSION << "\n";
     o << "layout " << settings.layout.scale << " " << settings.layout.opacity << " " << settings.layout.leftHanded;
     for (int i = 0; i < CTL_COUNT; i++) o << " " << settings.layout.pos[i].x << " " << settings.layout.pos[i].y;
     o << "\n";
@@ -656,8 +657,8 @@ void Game::saveSettings() {
 
 void Game::loadSettings() {
     // default control layout (bottom-right cluster), in UI units relative to the bottom-right corner
-    vec2 def[CTL_COUNT] = {{-130, -130}, {-250, -95}, {-110, -265}, {-270, -215}, {-395, -95}, {-385, -210}, {-305, -320}, {-160, -380}, {-130, -260}, {-60, -380}};
-    for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = def[i];
+    for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = defaultLayoutPos()[i];
+    int layoutVer = 1;
     std::string data;
     if (!platform::readFile(platform::writableDir() + "/settings.cfg", data)) return;
     std::istringstream in(data);
@@ -669,8 +670,17 @@ void Game::loadSettings() {
         else if (k == "volumes") l >> settings.master >> settings.music >> settings.sfx >> settings.ambience;
         else if (k == "camera") { int inv, sh; l >> settings.camSensitivity >> settings.joystickDeadzone >> inv >> sh; settings.invertCamera = inv; settings.cameraShake = sh; }
         else if (k == "flags") l >> settings.haptics >> settings.showFps >> settings.autoTarget >> settings.chromatic;
-        else if (k == "layout") { l >> settings.layout.scale >> settings.layout.opacity >> settings.layout.leftHanded; for (int i = 0; i < CTL_COUNT; i++) l >> settings.layout.pos[i].x >> settings.layout.pos[i].y; }
+        else if (k == "layoutver") l >> layoutVer;
+        else if (k == "layout") {
+            vec2 pos[CTL_COUNT];
+            l >> settings.layout.scale >> settings.layout.opacity >> settings.layout.leftHanded;
+            for (int i = 0; i < CTL_COUNT; i++) l >> pos[i].x >> pos[i].y;
+            if (layoutVer >= LAYOUT_VERSION && l) for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = pos[i];
+        }
     }
+    // layouts saved by older versions (overlapping buttons) are replaced by the new default positions
+    settings.layout.scale = clampf(settings.layout.scale, 0.7f, 1.4f);
+    settings.layout.opacity = clampf(settings.layout.opacity, 0.3f, 1.f);
 }
 
 void Game::applyGraphicsProfile(QualityProfile p) {
@@ -680,6 +690,7 @@ void Game::applyGraphicsProfile(QualityProfile p) {
     renderer.applySettings(gs);
     particles.setBudget(gs.particleScale);
     world.grassDensity = gs.grassDensity;
+    world.detailedFoliage = settings.profile <= QualityProfile::Medium;
     world.unloadAll();   // rebuild chunks with the new grass density
     saveSettings();
 }

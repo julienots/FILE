@@ -8,6 +8,16 @@ namespace lk {
 
 struct Step { float dur; std::function<void(Game&)> start; std::function<void(Game&, float)> tick; const char* name; };
 
+Rect ctlRect(const Game& g, int id);
+
+// Inject a real touch tap (down + up in the SAME frame, like a fast tap at 30 FPS) at a UI position.
+static void tapAt(Game& g, vec2 uiPos, int id, bool release = true) {
+    float k = g.ui.scale;
+    g.touch(TouchEvent{TouchEvent::Down, id, uiPos.x * k, uiPos.y * k});
+    if (release) g.touch(TouchEvent{TouchEvent::Up, id, uiPos.x * k, uiPos.y * k});
+}
+static vec2 ctlCentre(Game& g, int id) { Rect r = ctlRect(g, id); return {r.x + r.w / 2, r.y + r.h / 2}; }
+
 static void teleport(Game& g, float x, float z, float yaw = 0.8f) {
     Character& c = g.pc();
     c.pos = vec3(x, g.world.groundHeight(x, z), z); c.vel = vec3(0); g.camFocus = c.pos; g.camYaw = yaw;
@@ -27,6 +37,48 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name == "look") {
+        // fixed beauty shots for visual work (same places every run)
+        struct V { const char* poi; float dx, dz, yaw, tod, dist; const char* f; };
+        static const V views[] = {{"brindlemere", 10, 26, 0.5f, 10.f, 15.5f, "50_village"}, {"brindlemere", 40, -60, 2.4f, 16.5f, 20.f, "51_meadow"},
+                                  {"brindlemere", -70, 30, -0.8f, 7.5f, 15.5f, "52_forest_morning"}, {"root_glade", 0, 30, 0.f, 13.f, 18.f, "53_elderwood"},
+                                  {"#river", 0, 0, 0.9f, 15.f, 15.5f, "54_river"}, {"brindlemere", -4, 6, 2.6f, 17.5f, 15.5f, "55_village_street"}};
+        for (const V& v : views) {
+            s.push_back({4.f, [v](Game& g) { vec2 at;
+                if (std::string(v.poi) == "#river") { if (g.world.rivers.empty()) return; auto& pts = g.world.rivers[0].pts; vec2 a = pts[pts.size() / 2], b = pts[pts.size() / 2 + 1]; vec2 n = normalize(perp(b - a)); at = a + n * 9.f; }
+                else { const Poi* p = g.world.poiById(v.poi); if (!p) return; at = p->pos + vec2(v.dx, v.dz); }
+                teleport(g, at.x, at.y, v.yaw); g.timeOfDay = v.tod; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = v.dist; g.toastHint.clear(); }, idle, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
+    if (name == "touch") {
+        // Touch-input regression test with injected touch events (no direct input fields).
+        static int res[8];
+        s.push_back({1.5f, [](Game& g) { for (int& r : res) r = 0; const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 30, b->pos.y + 30, 0.4f); g.timeOfDay = 11.f; g.toastHint.clear(); }, idle, "setup"});
+        s.push_back({1.0f, [](Game& g) { tapAt(g, ctlCentre(g, CTL_ATTACK), 101); }, [](Game& g, float) { if (g.pc().attackClip) res[0] = 1; }, "quick tap attack"});
+        s.push_back({1.0f, [](Game& g) { tapAt(g, ctlCentre(g, CTL_DODGE), 102); }, [](Game& g, float) { if (g.dodgeCD > 0) res[1] = 1; }, "quick tap dodge"});
+        s.push_back({1.2f, [](Game& g) { tapAt(g, ctlCentre(g, CTL_JUMP), 103); }, [](Game& g, float) { if (!g.pc().grounded) res[2] = 1; if (g.blockT > 0) res[3] = 1; }, "tap jump (block must stay idle)"});
+        // hold attack 1.2 s -> charged attack on release
+        s.push_back({1.2f, [](Game& g) { tapAt(g, ctlCentre(g, CTL_ATTACK), 104, false); }, [](Game& g, float t) { if (g.btnHold[CTL_ATTACK] > 0.9f && g.attackFinger >= 0) res[4] = 1; }, "hold attack"});
+        s.push_back({1.0f, [](Game& g) { vec2 c = ctlCentre(g, CTL_ATTACK); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 104, c.x * k, c.y * k}); }, [](Game& g, float) { if (g.pc().attackClip) res[5] = 1; }, "release attack"});
+        // two quick taps during one swing: the second must be buffered into a combo
+        s.push_back({1.6f, [](Game& g) { g.comboStep = 0; tapAt(g, ctlCentre(g, CTL_ATTACK), 105); }, [](Game& g, float t) { if ((int)(t * 30) == 4) tapAt(g, ctlCentre(g, CTL_ATTACK), 106); if (g.comboStep >= 2) res[6] = 1; }, "buffered combo"});
+        // a finger that starts on empty space and slides onto a button must not press it
+        s.push_back({0.6f, [](Game& g) { vec2 c = ctlCentre(g, CTL_JUMP); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 107, (c.x - 300) * k, (c.y - 200) * k}); g.touch(TouchEvent{TouchEvent::Move, 107, c.x * k, c.y * k}); g.touch(TouchEvent{TouchEvent::Up, 107, c.x * k, c.y * k}); },
+                     [](Game& g, float) { if (!g.pc().grounded) res[7] = -1; }, "slide onto button"});
+        s.push_back({0.1f, [](Game& g) {
+            AGR_LOG("TOUCH TEST: attack=%d dodge=%d jump=%d blockIdle=%d holdCharge=%d releaseAttack=%d bufferedCombo=%d slideIgnored=%d", res[0], res[1], res[2], !res[3], res[4], res[5], res[6], res[7] == 0);
+            bool ok = res[0] && res[1] && res[2] && !res[3] && res[4] && res[5] && res[6] && res[7] == 0;
+            AGR_LOG("TOUCH TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        // minimap orientation screenshots: camera turned, player facing a known direction
+        s.push_back({1.0f, [](Game& g) { g.camYaw = 0.f; g.pc().yaw = PI; }, idle, "face north"});
+        s.push_back({0.1f, shot("40_minimap_north"), idle, "shot"});
+        s.push_back({1.0f, [](Game& g) { g.camYaw = PI / 2; g.pc().yaw = PI; }, idle, "camera west"});
+        s.push_back({0.1f, shot("41_minimap_cam_rotated"), idle, "shot"});
+        return s;
+    }
     if (name != "tour") {  // "tour": only the region / weather / time-of-day tour (fast visual check)
     s.push_back({4.f, none, [](Game& g, float) { g.input.move = vec2(0, 1); }, "walk north"});
     s.push_back({0.1f, shot("03_start"), idle, "shot"});
@@ -157,7 +209,7 @@ void Game::updateAutoplay(float dt) {
         autoplayStep++;
         stepT = 0;
         if (autoplayStep < (int)steps.size()) { if (steps[autoplayStep].start) steps[autoplayStep].start(*this); }
-        else AGR_LOG("autoplay finished: player hp %.0f/%.0f level %d, %zu entities, %zu chunks", player != NullEntity ? pc().hp : 0.f, player != NullEntity ? pc().maxHp : 0.f, level, reg.count(), world.loadedChunks());
+        else AGR_LOG("autoplay finished: player hp %.0f/%.0f level %d, %zu entities, %zu chunks, last frame %d draw calls %dk triangles", player != NullEntity ? pc().hp : 0.f, player != NullEntity ? pc().maxHp : 0.f, level, reg.count(), world.loadedChunks(), renderer.stats.drawCalls, renderer.stats.triangles / 1000);
     }
 }
 

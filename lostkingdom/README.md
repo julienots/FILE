@@ -6,10 +6,35 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Taille : environ 21 Mo. SHA-256 : `8a21ed959502029507b2947c736d5530c723e5bda1b725ed561215fe1b793a21`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.1.0 (versionCode 2). Taille : environ 21 Mo. SHA-256 : `018b8f0b8fc8884df4be93f3a6944abb53054c4a96beeac3265b2982a92d8c5c`.
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.1.0 (suite aux retours du premier test sur téléphone)
+
+- **Commandes tactiles réparées.**
+  - Les appuis (attaque, esquive, saut, sorts, potion, interaction, monture), la rotation de caméra et le pincement pour zoomer étaient produits *après* la mise à jour du héros, puis effacés en fin d'image : ils étaient perdus. Ils sont maintenant traités avant la simulation.
+  - Un appui très bref sur Attaque, Esquive ou Parade (doigt posé puis levé pendant la même image) est désormais pris en compte.
+  - Un appui pendant une animation est mémorisé environ 0,4 s (attaque, combo) ou 0,3 s (esquive), puis exécuté dès que possible.
+  - Un doigt n'active qu'un seul bouton, le plus proche. La zone tactile est légèrement plus grande que le bouton.
+- **Boutons replacés.**
+  - Nouvelle disposition en arcs autour de l'attaque, sans chevauchement (Saut et Interagir se superposaient) et à l'écart des bords de l'écran.
+  - La disposition est vérifiée par des tests pour 5 formats d'écran, de 4:3 à 21:9.
+  - Les dispositions enregistrées par la version 1.0.0 sont remplacées automatiquement.
+  - Les boutons sans effet (emplacement de sort vide, pas de monture, rien avec quoi interagir) sont masqués au lieu d'être affichés sans réagir.
+- **Taille de l'écran suivie à chaque image.** Avant, si la fenêtre changeait de taille après le démarrage (masquage de la barre de navigation par le mode immersif, rotation), l'interface gardait l'ancienne échelle et les appuis tombaient à côté des boutons.
+- **Flèches de la carte corrigées.**
+  - Sur la minimap, la flèche du joueur pointait à l'envers et les repères tournaient dans le mauvais sens par rapport à l'image.
+  - La flèche de direction de la quête était inversée.
+  - Un repère « N » indique maintenant le nord. Tout cela est vérifié par des tests.
+- **Rendu plus réaliste.**
+  - Arbres : volumes de feuillage doux, couronne de feuilles qui casse la silhouette.
+  - Couleurs : prairies naturelles (vert profond, olive, paille), forêt d'Elderwood moins fluorescente.
+  - Terrain : texture sans répétition visible.
+  - Eau : plus claire, avec des stries de courant dans les rivières.
+  - Caméra : plus basse, champ de vision plus large.
+  - Ajustement de l'étalonnage.
 
 ---
 
@@ -105,14 +130,17 @@ Légende :
    - L'option `--autoplay=full` lance un bot qui joue un scénario de 71 étapes : splash, titre, nouvelle partie, village, dialogue, tous les menus, combat, monture, traversée des six régions, météo, boss, donjon et énigme, test sauvegarde/chargement, éditeur de commandes, générique.
    - Le bot prend des captures d'écran (`build/shots/`) et peut enregistrer le mixage audio (`--wav`).
 2. **AddressSanitizer**. Le même scénario a été exécuté sous ASan. Il a permis de corriger un accès hors limites dans l'IA ennemie et une invalidation de références dans l'ECS.
-3. **Tests unitaires** (`lk_tests`), soit 1 388 vérifications :
+3. **Tests unitaires** (`lk_tests`), soit 1 799 vérifications :
    - l'ECS ;
    - les mathématiques ;
    - l'intégrité des données (chaque référence d'une quête, d'un butin, d'une recette ou d'une boutique pointe vers un objet existant) ;
    - le déterminisme du monde, la présence des 6 régions et l'absence de NaN ;
    - la génération de chunks aux 3 LOD ;
-   - le décodage des fichiers audio.
-4. **APK**. Il est vérifié par `apksigner verify`, `zipalign -c -P 16` et `aapt2 dump badging`. Pour chaque ABI, `readelf` confirme :
+   - le décodage des fichiers audio ;
+   - l'orientation de la minimap, de la flèche du joueur et de la flèche de quête ;
+   - la géométrie de la disposition tactile (aucun chevauchement, marges, minimap dégagée) pour 5 formats d'écran.
+4. **Test tactile automatique** (`--autoplay=touch`). Il injecte de vrais événements tactiles, appuis brefs dans la même image compris, et vérifie l'effet sur le héros : attaque, esquive, saut sans déclencher la parade, attaque chargée, combo mémorisé, doigt glissé depuis l'extérieur ignoré.
+5. **APK**. Il est vérifié par `apksigner verify`, `zipalign -c -P 16` et `aapt2 dump badging`. Pour chaque ABI, `readelf` confirme :
    - que `ANativeActivity_onCreate` est exporté ;
    - que les segments sont alignés sur 16 Ko ;
    - que la bibliothèque ne dépend que de bibliothèques système (libandroid, liblog, libEGL, libGLESv3, libaaudio, libm, libdl, libc) ;

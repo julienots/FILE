@@ -119,7 +119,7 @@ float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 
     if (t->status.shield > 0) { float ab = std::min(t->status.shield, dmg); t->status.shield -= ab; dmg -= ab; if (ab > 0) particles.magicBurst(hitPos, elementColor(Element::Light), 0.5f, 8); }
     dmg = std::max(1.f, dmg);
     t->hp -= dmg;
-    t->vis.flash = 0.45f;
+    t->vis.flash = 0.35f;
     t->lastHitBy = (float)realTime;
     // poise / stagger
     t->poise -= poiseDmg * (crit ? 1.5f : 1.f);

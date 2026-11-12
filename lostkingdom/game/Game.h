@@ -210,6 +210,22 @@ struct DungeonState {
 };
 
 // ------------------------------------------------------------------------------------------ settings
+// HUD orientation helpers (pure functions, unit-tested).
+// Screen rotation of an up-pointing sprite so that it shows world heading `yaw` ((sin yaw, cos yaw) in x/z)
+// on a map whose "up" is the camera forward (-sin camYaw, -cos camYaw). camYaw = 0 gives the world map (north up).
+inline float minimapArrowAngle(float yaw, float camYaw) { return PI - yaw + camYaw; }
+inline vec2 minimapProject(vec2 worldOffset, float camYaw) { return rotate(worldOffset, camYaw); }
+
+// Default touch layout: button centres in UI units relative to the bottom-right corner (mirrored for left-handed).
+// Three arcs around the attack button (radius ~158: dodge/block/jump, ~275: spells, ~390: interact/potion/mount);
+// interact is leftmost so its label has room. No two buttons overlap (checked by unit tests).
+constexpr int LAYOUT_VERSION = 3;
+inline float ctlSize(int id) { return id == 0 ? 136.f : (id >= 4 && id <= 6 ? 96.f : (id == 7 || id == 9 ? 78.f : 100.f)); }  // attack, spells, potion/mount, others
+inline const vec2* defaultLayoutPos() {
+    static const vec2 def[10] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-509, -292}, {-540, -154}, {-430, -411}};
+    return def;
+}
+
 struct ControlLayout { vec2 pos[10]; float scale = 1.f; float opacity = 0.85f; bool leftHanded = false; };
 enum CtlId { CTL_ATTACK = 0, CTL_DODGE, CTL_JUMP, CTL_BLOCK, CTL_SKILL1, CTL_SKILL2, CTL_SKILL3, CTL_POTION, CTL_INTERACT, CTL_MOUNT, CTL_COUNT };
 
@@ -286,6 +302,11 @@ public:
     int activeMount = -1;
     int comboStep = 0;
     float comboTimer = 0, chargeT = 0;
+    // input buffering: a tap during an animation is kept for a short time and executed as soon as possible
+    float attackBuf = 0, dodgeBuf = 0; bool attackBufHeavy = false, attackBufCharged = false;
+    int attackFinger = -1, dodgeFinger = -1, blockFinger = -1;
+    float btnFlash[CTL_COUNT] = {};
+    bool ctlVisible(int id) const;
     bool charging = false;
     float potionCD = 0, dodgeCD = 0, parryT = 0, blockT = 0;
     float staminaRegenDelay = 0;
@@ -345,7 +366,7 @@ public:
 
     // ---- camera ---------------------------------------------------------------------------------
     Camera cam;
-    float camYaw = 0.78f, camPitch = 0.86f, camDist = 15.5f, camDistTarget = 15.5f;
+    float camYaw = 0.78f, camPitch = 0.66f, camDist = 15.5f, camDistTarget = 15.5f;
     vec3 camFocus;
     float shake = 0;
     float cinematicT = -1;

@@ -618,7 +618,7 @@ static float forestDensity(int r, float x, float z) {
 }
 
 void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
-    out.key = k; out.lod = lod;
+    out.key = k; out.lod = lod; out.liteProps = lod > 0 || !detailedFoliage;
     const int step = 1 << lod;           // metres per quad
     const int N = (int)CHUNK / step;     // quads per side
     const float x0 = k.x * CHUNK, z0 = k.z * CHUNK;
@@ -903,8 +903,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float y = hAt(vi, vj);
                 float wl = waterLevel(x, z);
                 if (wl > -1e8f && y < wl + 0.15f) continue;
-                vec3 col = foliageColor(r, g.f());
                 float hn = fbm2(x * 0.08f, z * 0.08f, 2, 123) * 0.5f + 0.5f;
+                // colour follows large patches (lush hollows / dry crests) with per-blade jitter
+                float patch = fbm2(x * 0.021f, z * 0.021f, 3, 321) * 0.5f + 0.5f;
+                vec3 col = foliageColor(r, clampf(patch * 0.75f + g.f() * 0.35f - 0.05f, 0.f, 1.f));
                 InstanceData d;
                 // re-sample exact height across the quad (cheap bilinear)
                 y = height(x, z);

@@ -6,7 +6,7 @@ namespace lk {
 // ------------------------------------------------------------------------------------------ palette
 namespace pal {
 const vec3 bark = hexColor(0x5a4030), barkDark = hexColor(0x3b2b22), birch = hexColor(0xe2ddd0), birchMark = hexColor(0x2f2a26);
-const vec3 leaf1 = hexColor(0x4f7d2c), leaf2 = hexColor(0x6f9a36), leaf3 = hexColor(0x37612a), leafAut = hexColor(0xb8862e);
+const vec3 leaf1 = hexColor(0x46692a), leaf2 = hexColor(0x6a8a36), leaf3 = hexColor(0x30522a), leafAut = hexColor(0xb8862e);
 const vec3 pine = hexColor(0x2c5233), pine2 = hexColor(0x3a6a3d), snow = hexColor(0xeef3f8), ice = hexColor(0xa9d8f0);
 const vec3 elder = hexColor(0x2b6f66), elder2 = hexColor(0x4f8f6a), elderGlow = hexColor(0x8ff0d8);
 const vec3 stone = hexColor(0x8d8880), stoneDark = hexColor(0x5e5a55), stoneLight = hexColor(0xb3ada2), moss = hexColor(0x5d7a35);
@@ -21,36 +21,81 @@ vec3 regionGroundTint(int r) {
     case R_GREENHAVEN: return {1.0f, 1.0f, 0.95f};
     case R_FROSTHEIM: return {0.97f, 1.0f, 1.06f};
     case R_ASHEN: return {0.95f, 0.85f, 0.8f};
-    case R_ELDERWOOD: return {0.72f, 1.02f, 1.0f};
+    case R_ELDERWOOD: return {0.86f, 0.98f, 0.94f};
     case R_SHADOWS: return {0.78f, 0.8f, 0.72f};
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
 
+// Grass/foliage colour for a region; t in [0,1] walks from lush/deep to dry/sunlit (natural meadow range).
+static vec3 ramp3(uint32_t a, uint32_t b, uint32_t c, float t) { t = clampf(t, 0.f, 1.f); return t < 0.5f ? lerp(hexColor(a), hexColor(b), t * 2) : lerp(hexColor(b), hexColor(c), t * 2 - 1); }
 vec3 foliageColor(int r, float t) {
     switch (r) {
-    case R_GREENHAVEN: return lerp(hexColor(0x6a9a32), hexColor(0x9cc24a), t);
-    case R_FROSTHEIM: return lerp(hexColor(0x8a9a78), hexColor(0xb0b89a), t);
-    case R_ASHEN: return lerp(hexColor(0x5a4a3a), hexColor(0x8a6a3a), t);
-    case R_ELDERWOOD: return lerp(hexColor(0x2f8f78), hexColor(0x6fc8a0), t);
-    case R_SHADOWS: return lerp(hexColor(0x4a5a36), hexColor(0x6e7046), t);
-    default: return lerp(hexColor(0x7a8f48), hexColor(0xa0a868), t);
+    case R_GREENHAVEN: return ramp3(0x4a6a2a, 0x6c8a38, 0xa29a58, t);
+    case R_FROSTHEIM: return ramp3(0x6f7a62, 0x8f9480, 0xb2b29a, t);
+    case R_ASHEN: return ramp3(0x4a4034, 0x6a5638, 0x8a7448, t);
+    case R_ELDERWOOD: return ramp3(0x2f5a44, 0x4f7a56, 0x7a9a68, t);
+    case R_SHADOWS: return ramp3(0x3a4632, 0x55603e, 0x76744e, t);
+    default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }
 
 // ------------------------------------------------------------------------------------------ helpers
 static quat rotY(float a) { return quat::axisAngle({0, 1, 0}, a); }
 
-// A canopy clump: faceted ellipsoid with colour jitter and wind weights rising with height.
+// A canopy clump: lumpy ellipsoid with "puffy" normals (pointing out of the clump, like real foliage
+// volumes are lit) plus a shell of small double-sided leaf cards that break the silhouette.
+// Underside darker (self-shadow), wind weight rising with height.
+static bool gLiteBuild = false;   // building the mid-distance (LOD1) templates: no leaf cards, coarser volume
 static void clump(MeshBuilder& m, vec3 c, vec3 r, vec3 col, float wind, uint32_t seed) {
-    bool f = m.flat; m.flat = true;
+    bool f = m.flat; m.flat = false;
+    Rng rng(seed);
     size_t from = m.v.size();
-    m.rock(c, r, Mat(col, 0.75f, 0, 0, wind), seed, 0);
-    m.applyColorJitter(from, 0.12f, seed);
-    // underside darker (self-shadow) and wind weight by height within clump
+    float ph1 = rng.f() * 6.f, ph2 = rng.f() * 6.f;
+    auto lump = [&](vec3 u) { return 1.f + 0.11f * std::sin(u.x * 3.1f + ph1) * std::sin(u.z * 2.7f + ph2) + 0.07f * std::sin(u.y * 4.3f + ph1 * 1.7f); };
+    // core volume (slightly smaller: the leaf shell provides the outer silhouette)
+    const int seg = gLiteBuild ? 7 : 9, rings = gLiteBuild ? 5 : 6;
+    uint32_t base = (uint32_t)m.v.size();
+    for (int j = 0; j <= rings; j++) {
+        float th = PI * j / rings;
+        for (int i = 0; i <= seg; i++) {
+            float phi = TAU * i / seg;
+            vec3 u{std::sin(th) * std::cos(phi), std::cos(th), std::sin(th) * std::sin(phi)};
+            vec3 p = c + u * r * (0.86f * lump(u));
+            vec3 n = normalize(normalize(vec3(u.x / r.x, u.y / r.y, u.z / r.z)) + vec3(0, 0.25f, 0));
+            m.vert(p, n, Mat(col, 0.8f, 0, 0, wind));
+        }
+    }
+    for (int j = 0; j < rings; j++)
+        for (int i = 0; i < seg; i++) {
+            uint32_t a = base + j * (seg + 1) + i, b = a + 1, d = a + seg + 1, e = d + 1;
+            m.tri(a, d, b); m.tri(b, d, e);
+        }
+    // leaf cards on the surface, oriented in the tangent plane, sharing the volume normal
+    int cards = gLiteBuild ? 0 : (int)clampf(6.f + (r.x + r.z) * 5.f, 8.f, 22.f);
+    float avgR = (r.x + r.y + r.z) / 3.f;
+    for (int k = 0; k < cards; k++) {
+        vec3 u = rng.onSphere();
+        if (u.y < -0.55f) u.y = -u.y * 0.5f;                 // few cards underneath
+        u = normalize(u);
+        vec3 p = c + u * r * rng.range(0.92f, 1.08f) * lump(u);
+        vec3 n = normalize(normalize(vec3(u.x / r.x, u.y / r.y, u.z / r.z)) + vec3(0, 0.3f, 0));
+        vec3 t = normalize(cross(n, std::fabs(n.y) > 0.9f ? vec3(1, 0, 0) : vec3(0, 1, 0)));
+        float a = rng.f() * TAU;
+        vec3 tx = t * std::cos(a) + cross(n, t) * std::sin(a), ty = cross(n, tx);
+        float sz = avgR * rng.range(0.4f, 0.62f);
+        vec3 lc = col * rng.range(0.85f, 1.18f);
+        lc = lerp(lc, vec3(lc.x * 1.1f, lc.y * 1.08f, lc.z * 0.8f), rng.f() * 0.4f);  // sun-warmed leaves
+        Mat lm(lc, 0.7f, 0, 0, wind);
+        // irregular diamond (pointed leaf cluster), tilted outwards a bit
+        vec3 q0 = p - tx * sz * 0.5f, q1 = p + ty * sz * 0.38f + n * sz * 0.12f, q2 = p + tx * sz * 0.55f, q3 = p - ty * sz * 0.42f - n * sz * 0.05f;
+        uint32_t i0 = m.vert(q0, n, lm), i1 = m.vert(q1, n, lm), i2 = m.vert(q2, n, lm), i3 = m.vert(q3, n, lm);
+        m.tri(i0, i1, i2); m.tri(i0, i2, i3);   // foliage is drawn two-sided: no back faces needed
+    }
+    m.applyColorJitter(from, 0.1f, seed);
     for (size_t i = from; i < m.v.size(); i++) {
         float k = clampf((m.v[i].py - (c.y - r.y)) / (2 * r.y), 0, 1);
-        m.v[i].a = (uint8_t)(255 * (0.55f + 0.45f * k));
+        m.v[i].a = (uint8_t)(255 * (0.5f + 0.5f * k));
         m.v[i].wind = (uint8_t)clampf(wind * (0.5f + 0.5f * k) * 255, 0, 255);
     }
     m.flat = f;
@@ -101,7 +146,7 @@ static void addCircleCollider(ChunkBuild& out, const Structure& s, float baseY, 
 }
 
 // ------------------------------------------------------------------------------------------ prop templates
-static std::vector<std::vector<PropTemplate>> gTemplates;
+static std::vector<std::vector<PropTemplate>> gTemplates, gTemplatesLite;
 static std::once_flag gOnce;
 
 static void buildProp(PropKind k, int var, PropTemplate& t) {
@@ -401,10 +446,17 @@ void initPropTemplates() {
             gTemplates[k].resize(propVariants((PropKind)k));
             for (int v = 0; v < (int)gTemplates[k].size(); v++) buildProp((PropKind)k, v, gTemplates[k][v]);
         }
+        gLiteBuild = true;
+        gTemplatesLite.resize(P_COUNT);
+        for (int k = 0; k < P_COUNT; k++) {
+            gTemplatesLite[k].resize(propVariants((PropKind)k));
+            for (int v = 0; v < (int)gTemplatesLite[k].size(); v++) buildProp((PropKind)k, v, gTemplatesLite[k][v]);
+        }
+        gLiteBuild = false;
     });
 }
 
-const PropTemplate& propTemplate(PropKind k, int v) { return gTemplates[k][v % gTemplates[k].size()]; }
+const PropTemplate& propTemplate(PropKind k, int v, bool lite) { auto& T = lite ? gTemplatesLite : gTemplates; return T[k][v % T[k].size()]; }
 
 static void appendXf(MeshBuilder& dst, const MeshBuilder& src, const mat4& m, vec3 tint) {
     uint32_t base = (uint32_t)dst.v.size();
@@ -421,7 +473,7 @@ static void appendXf(MeshBuilder& dst, const MeshBuilder& src, const mat4& m, ve
 }
 
 void stampProp(ChunkBuild& out, PropKind k, int var, vec3 pos, float rotY_, float scale, vec3 tint, bool collide) {
-    const PropTemplate& t = propTemplate(k, var);
+    const PropTemplate& t = propTemplate(k, var, out.liteProps);
     mat4 m = mat4::trs(pos, rotY(rotY_), vec3(scale));
     if (!t.solid.v.empty()) appendXf(out.props, t.solid, m, tint);
     if (!t.foliage.v.empty()) appendXf(out.foliage, t.foliage, m, tint);

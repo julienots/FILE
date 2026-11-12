@@ -7,6 +7,7 @@
 #include "../game/Data.h"
 #include "../game/World.h"
 #include "../game/Props.h"
+#include "../game/Game.h"
 #include <cstdio>
 #include <cmath>
 #include <set>
@@ -175,10 +176,56 @@ static void testAudio(const std::string& assets) {
     }
 }
 
+
+static void testMapOrientation() {
+    std::printf("[Map orientation]\n");
+    auto near2 = [](vec2 a, vec2 b) { return length(a - b) < 1e-4f; };
+    for (float c : {0.f, 0.7f, 2.3f, -1.4f, 3.1f}) {
+        vec2 fwd{-std::sin(c), -std::cos(c)}, right{std::cos(c), -std::sin(c)};   // camera basis in world x/z
+        CHECK(near2(minimapProject(fwd, c), vec2(0, -1)), "camera forward must be up on the minimap (camYaw %.2f)", c);
+        CHECK(near2(minimapProject(right, c), vec2(1, 0)), "camera right must be right on the minimap (camYaw %.2f)", c);
+        // map image sampling (UI::imageCircle with angle -camYaw) must agree with the marker projection
+        vec2 d{37.f, -12.f};
+        CHECK(near2(rotate(minimapProject(d, c), -c), d), "map image and markers disagree (camYaw %.2f)", c);
+        for (float y : {0.f, 1.f, -2.5f, 3.f}) {
+            vec2 heading{std::sin(y), std::cos(y)};
+            vec2 arrow = rotate(vec2(0, -1), minimapArrowAngle(y, c));    // the arrow sprite points up
+            CHECK(near2(arrow, minimapProject(heading, c)), "arrow does not match heading (yaw %.2f camYaw %.2f)", y, c);
+        }
+    }
+    // player walking straight "forward" with the camera behind: arrow points up
+    float c = 1.1f; float yaw = std::atan2(-std::sin(c), -std::cos(c));
+    CHECK(near2(rotate(vec2(0, -1), minimapArrowAngle(yaw, c)), vec2(0, -1)), "forward walk arrow not up");
+}
+
+static void testTouchLayout() {
+    std::printf("[Touch layout]\n");
+    const vec2* P = defaultLayoutPos();
+    for (float aspect : {4.f / 3.f, 16.f / 9.f, 2.f, 20.f / 9.f, 21.f / 9.f}) {
+        float H = 720.f, W = H * aspect;
+        auto centre = [&](int i) { return vec2(W + P[i].x, H + P[i].y); };
+        for (int i = 0; i < 10; i++) {
+            vec2 c = centre(i); float r = ctlSize(i) * 0.5f;
+            CHECK(c.x - r > 0 && c.x + r < W - 20 && c.y - r > 0 && c.y + r < H - 20, "button %d leaves the safe area (aspect %.2f)", i, aspect);
+            // minimap {W-196, 80, 176, 176} and top-right shortcut buttons (y < 72) must stay free
+            bool overMini = c.x + r > W - 196 && c.x - r < W - 20 && c.y - r < 80 + 176 && c.y + r > 80;
+            CHECK(!overMini, "button %d overlaps the minimap (aspect %.2f)", i, aspect);
+            CHECK(c.y - r > 72, "button %d overlaps the top bar", i);
+            for (int j = i + 1; j < 10; j++) {
+                float d = length(centre(i) - centre(j));
+                // hit areas are circles of radius size/2 + 10: they must not intersect
+                CHECK(d > ctlSize(i) * 0.5f + ctlSize(j) * 0.5f + 4.f, "buttons %d and %d overlap (distance %.0f)", i, j, d);
+            }
+        }
+    }
+}
+
 int lkRunTests(int argc, char** argv) {
     std::string assets = argc > 1 ? argv[1] : "assets";
     testECS();
     testMath();
+    testMapOrientation();
+    testTouchLayout();
     testData();
     initPropTemplates();
     World w; w.buildPlan();

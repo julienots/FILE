@@ -138,7 +138,7 @@ void Game::playerAttack(bool heavy, bool charged) {
     Character& c = pc();
     if (c.dead || riding || c.swimming || c.hitStun > 0) return;
     Animator& a = c.vis.anim;
-    if (c.attackClip && !(a.actionTime() >= c.attackClip->comboOpen)) { comboTimer = 0.4f; return; }  // buffer
+    if (c.attackClip && !(a.actionTime() >= c.attackClip->comboOpen)) { attackBuf = 0.45f; attackBufHeavy = heavy; return; }  // buffered
     float cost = heavy ? 18.f : 6.f;
     if (stamina < cost * 0.5f) { static float lastTired = -10; if (realTime - lastTired > 1.5f) { floatText(c.pos + vec3(0, 2.2f, 0), "Épuisé", vec3(0.9f, 0.8f, 0.3f), 18); lastTired = realTime; } return; }
     stamina -= cost; staminaRegenDelay = 0.8f;
@@ -636,17 +636,22 @@ void Game::updatePlayer(float dt) {
     a.blocking = blocking;
 
     // ---- attack input: tap = light, hold = charge -> release = charged/heavy
+    if (input.attackRelease) { attackBuf = 0.45f; attackBufHeavy = input.attackHoldT > 0.45f; attackBufCharged = input.attackHoldT > 0.9f; }
+    attackBuf = std::max(0.f, attackBuf - dt);
     if (!busy || (c.attackClip && a.actionTime() >= c.attackClip->comboOpen && c.attackIdx != -2)) {
-        if (input.heavy) playerAttack(true, false);
-        else if (input.attackRelease) {
-            if (input.attackHoldT > 0.45f) playerAttack(true, input.attackHoldT > 0.9f && a.stance == ST_ONEHAND);
-            else playerAttack(false, false);
+        if (input.heavy) { playerAttack(true, false); attackBuf = 0; }
+        else if (attackBuf > 0) {
+            float keep = attackBuf; attackBuf = 0;
+            playerAttack(attackBufHeavy, attackBufCharged && a.stance == ST_ONEHAND);
+            if (attackBuf > 0) attackBuf = std::min(attackBuf, keep);  // re-buffered (clip not open yet)
+            attackBufHeavy = attackBufCharged = false;
         }
-    } else if (input.attackRelease && comboTimer > 0) { /* buffered press handled when the clip opens */ }
-    if (comboTimer > 0.39f && comboTimer < 0.41f && c.attackClip && a.actionTime() >= c.attackClip->comboOpen) playerAttack(false, false);
+    }
     charging = input.attackHeld && input.attackHoldT > 0.45f && !busy;
     if (charging && particles.rng.f() < dt * 20) particles.magicTrail(c.pos + vec3(0, 1.2f, 0) + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 0.5f, input.attackHoldT > 0.9f ? vec3(1, 0.6f, 0.2f) : vec3(1, 0.9f, 0.6f), 0.6f);
-    if (input.dodge) playerDodge();
+    if (input.dodge) dodgeBuf = 0.3f;
+    dodgeBuf = std::max(0.f, dodgeBuf - dt);
+    if (dodgeBuf > 0 && dodgeCD <= 0) { dodgeBuf = 0; playerDodge(); }
     if (input.jump) playerJump();
     if (input.interact && lockTarget == NullEntity) {}
 

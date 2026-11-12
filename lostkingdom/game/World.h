@@ -91,6 +91,7 @@ struct ChunkBuild {
     std::vector<vec4> emitters;    // xyz + kind (chimney smoke, fire, waterfall mist, fireflies)
     int region = 0;
     float snow = 0;
+    bool liteProps = false;        // use mid-distance prop templates
 };
 
 struct Chunk {
@@ -134,6 +135,7 @@ public:
     size_t loadedChunks() const { return chunks.size(); }
     size_t pendingChunks();
     float grassDensity = 1.f;
+    bool detailedFoliage = true;   // leaf cards on near trees (off on low-end profiles)
     void unloadAll();
     void generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const;   // used by tests and workers
 

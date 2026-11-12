@@ -38,7 +38,7 @@ void Game::updateCamera(float dt) {
     float pitch = camPitch - (camDist - 15.5f) * 0.004f;
     vec3 off = vec3(std::sin(camYaw) * std::cos(pitch), std::sin(pitch), std::cos(camYaw) * std::cos(pitch)) * camDist;
     vec3 eye = camFocus + off;
-    vec3 look = camFocus;
+    vec3 look = camFocus + vec3(0, state == GameState::Playing ? 0.9f : 0.f, 0);  // aim at the chest: more landscape in view
     if (cinematicT > 0) {
         float u = 1.f - cinematicT / 4.f;
         eye = lerp(cineFrom, cineTo, easeInOut(saturate(u)));
@@ -55,7 +55,7 @@ void Game::updateCamera(float dt) {
         shake = std::max(0.f, shake - dt * 2.5f);
     }
     cam.pos = eye; cam.target = look;
-    cam.fovY = (dungeon.active ? 38.f : 34.f) * DEG;
+    cam.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
     cam.zNear = 0.8f; cam.zFar = 420.f;
     cam.update((float)W / std::max(1, H));
     dofFocus = length(look - eye);
@@ -93,7 +93,7 @@ void Game::renderWorld(float dt) {
                 if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             }
             if (ch.water.valid()) {
-                vec3 deep = srgb(0x0e3446), shallow = srgb(0x3f8a86);
+                vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);
                 if (ch.region == R_SHADOWS) { deep = srgb(0x14200e); shallow = srgb(0x3a4a26); }
                 else if (ch.region == R_ELDERWOOD) { deep = srgb(0x0c3a3a); shallow = srgb(0x2fa090); }
                 else if (ch.region == R_FROSTHEIM) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }

@@ -28,7 +28,7 @@ enum LightKind { LI_LANTERN = 1, LI_FIRE = 2, LI_LAVA = 3, LI_MAGIC = 4, LI_CRYS
 struct PropTemplate { MeshBuilder solid, foliage; float radius; float height; };
 
 void initPropTemplates();   // build template cache (thread-safe after this call)
-const PropTemplate& propTemplate(PropKind k, int variant);
+const PropTemplate& propTemplate(PropKind k, int variant, bool lite = false);  // lite: mid-distance version (no leaf cards)
 int propVariants(PropKind k);
 
 // Stamp a prop into the batches with transform & tint. Adds collider when solid.

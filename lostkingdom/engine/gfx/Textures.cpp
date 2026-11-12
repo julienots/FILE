@@ -75,12 +75,15 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                 case 0: {  // grass: layered clumps + blade streaks + small flowers of colour
                     float n1 = tileFbm(u * 8, v * 8, 8, 4, 101) * 0.5f + 0.5f;
                     float n2 = tileFbm(u * 32, v * 32, 32, 2, 103) * 0.5f + 0.5f;
-                    float streak = tileNoise(u * 64, v * 12, 64, 105) * 0.5f + 0.5f;
-                    c = lerp(hexColor(0x3f6b25), hexColor(0x79a33a), n1);
-                    c = lerp(c, hexColor(0x5d8a2c), streak * 0.4f);
-                    c = c * (0.85f + n2 * 0.3f);
-                    float dry = smoothstepf(0.62f, 0.8f, tileFbm(u * 4, v * 4, 4, 3, 107) * 0.5f + 0.5f);
-                    c = lerp(c, hexColor(0x9a9a4a), dry * 0.45f);
+                    float streak = tileNoise(u * 48, v * 32, 48, 105) * 0.5f + 0.5f;
+                    // natural meadow: deep green clumps, olive mid-tones, straw where it is dry, dark soil gaps
+                    c = lerp(hexColor(0x34521f), hexColor(0x667f34), n1);
+                    c = lerp(c, hexColor(0x52702a), streak * 0.2f);
+                    c = c * (0.8f + n2 * 0.38f);
+                    float dry = smoothstepf(0.6f, 0.8f, tileFbm(u * 4, v * 4, 4, 3, 107) * 0.5f + 0.5f);
+                    c = lerp(c, hexColor(0x8f8a4f), dry * 0.5f);
+                    float soil = smoothstepf(0.72f, 0.86f, tileNoise(u * 40, v * 40, 40, 109) * 0.5f + 0.5f) * (1.f - n1);
+                    c = lerp(c, hexColor(0x4a3c28), soil * 0.6f);
                     h = 0.35f + n2 * 0.35f + streak * 0.3f;
                     break;
                 }

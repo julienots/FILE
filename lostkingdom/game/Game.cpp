@@ -32,6 +32,7 @@ bool Game::init(int w, int h) {
     initPropTemplates();
     initClips();
     world.grassDensity = gs.grassDensity;
+    world.detailedFoliage = settings.profile <= QualityProfile::Medium;
     if (!gpuReady) {
         world.buildPlan();
         world.startWorkers(std::max(1, std::min(3, platform::cpuCount() - 1)));
@@ -162,6 +163,8 @@ void Game::frame(float dtRaw) {
     fpsAcc += dtRaw; fpsFrames++;
     if (fpsAcc > 0.5f) { fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; }
     ui.begin(W, H, dt);
+    // level-triggered inputs are rebuilt every frame (by touch controls, or by the autoplay bot)
+    input.move = vec2(0, 0); input.attackHeld = false; input.block = false; input.sprint = false;
     if (autoplay) updateAutoplay(dt);
 
     switch (state) {
@@ -187,12 +190,14 @@ void Game::frame(float dtRaw) {
         break;
     }
     case GameState::Loading: case GameState::Playing: {
+        // Touch controls BEFORE the simulation: taps (attack, dodge, jump, spells...) are one-frame edges that
+        // input.clearEdges() erases at the end of the frame, so they must be produced before updatePlaying.
+        updateTouchControls();
         bool paused = menu != Menu::None && menu != Menu::Death;
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
         if (!paused) updatePlaying(sdt);
         renderWorld(sdt);
-        updateTouchControls();
         drawHud(dt);
         if (dialog.open) drawDialog();
         drawMenus(dt);
@@ -216,7 +221,7 @@ void Game::frame(float dtRaw) {
     ui.end(renderer.uiShader());
     ui.endInput();
     input.clearEdges();
-    if (!pendingScreenshot.empty()) { platform::requestScreenshot(pendingScreenshot); pendingScreenshot.clear(); }
+    if (!pendingScreenshot.empty()) { AGR_LOG("render stats: %d draw calls, %dk triangles (%s)", renderer.stats.drawCalls, renderer.stats.triangles / 1000, pendingScreenshot.c_str()); platform::requestScreenshot(pendingScreenshot); pendingScreenshot.clear(); }
 }
 
 void Game::updatePlaying(float dt) {
@@ -263,12 +268,12 @@ static const SkyKey SKY[] = {
 
 struct RegionGrade { vec3 lift, gamma, gain; float sat, contrast, temp, fogMul, fogBase; vec3 fogTint; float exposure; };
 static const RegionGrade GRADE[R_COUNT] = {
-    {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.03f, 1.0f, 0.95f}, 1.12f, 1.06f, 0.15f, 1.0f, 0, {1, 1, 1}, 1.0f},          // Greenhaven
+    {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.03f, 1.0f, 0.95f}, 0.98f, 1.1f, 0.15f, 1.0f, 0, {1, 1, 1}, 1.0f},          // Greenhaven
     {{0.01f, 0.02f, 0.04f}, {1.0f, 1.0f, 1.02f}, {0.95f, 0.99f, 1.06f}, 0.95f, 1.08f, -0.5f, 1.1f, 0, {0.85f, 0.9f, 1.0f}, 0.72f}, // Frostheim
     {{0.02f, 0.0f, 0.0f}, {1.02f, 0.99f, 0.97f}, {1.04f, 0.97f, 0.9f}, 0.92f, 1.1f, 0.3f, 1.2f, 0, {1.05f, 0.88f, 0.78f}, 1.0f},     // Ashen
-    {{0.0f, 0.02f, 0.03f}, {1.0f, 1.02f, 1.02f}, {0.92f, 1.04f, 1.02f}, 1.15f, 1.05f, -0.2f, 1.35f, 0, {0.8f, 1.05f, 1.0f}, 1.0f},  // Elderwood
+    {{0.0f, 0.01f, 0.02f}, {1.0f, 1.01f, 1.01f}, {0.96f, 1.02f, 1.0f}, 0.96f, 1.08f, -0.1f, 1.3f, 0, {0.85f, 1.0f, 0.98f}, 1.0f},  // Elderwood
     {{0.01f, 0.02f, 0.02f}, {0.98f, 1.0f, 0.98f}, {0.92f, 0.98f, 0.9f}, 0.78f, 1.1f, -0.1f, 1.4f, 0, {0.62f, 0.72f, 0.64f}, 0.92f},   // Shadows
-    {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 1.05f, 1.12f, 0.0f, 0.8f, 0, {1, 1, 1.05f}, 1.0f},              // High Crowns
+    {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 0.96f, 1.12f, 0.0f, 0.8f, 0, {1, 1, 1.05f}, 1.0f},              // High Crowns
 };
 
 void Game::updateEnvironment(float dt) {

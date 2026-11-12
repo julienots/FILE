@@ -9,55 +9,84 @@ const char* CTL_ICON[CTL_COUNT] = {"attack", "dodge", "jump", "block", "", "", "
 Rect ctlRect(const Game& g, int id) {
     const ControlLayout& L = g.settings.layout;
     vec2 p = L.pos[id];
-    float s = (id == CTL_ATTACK ? 136.f : (id >= CTL_SKILL1 && id <= CTL_SKILL3 ? 96.f : (id == CTL_POTION || id == CTL_MOUNT ? 78.f : 100.f))) * L.scale;
+    float s = ctlSize(id) * L.scale;
     float x = L.leftHanded ? -p.x : g.ui.W + p.x;
     return {x - s / 2, g.ui.H + p.y - s / 2, s, s};
 }
 
 // ============================================================================================ input
+// Contextual buttons are hidden (and not touchable) when they have nothing to do.
+bool Game::ctlVisible(int id) const {
+    if (id == CTL_INTERACT) return interactTarget != NullEntity || !dungeonPrompt.empty() || fishingT >= 0;
+    if (id >= CTL_SKILL1 && id <= CTL_SKILL3) return equippedSpells[id - CTL_SKILL1] >= 0;
+    if (id == CTL_MOUNT) return !ownedMounts.empty() || riding;
+    return true;
+}
+
 void Game::updateTouchControls() {
     if (state != GameState::Playing || layoutEdit) return;
     bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0;
-    input.move = vec2(0, 0);
-    input.attackHeld = false; input.block = false; input.sprint = false;
     if (modal) { joyFinger = -1; camFinger = -1; return; }
     UI& u = ui;
-    // ---- buttons (consume fingers that start on them)
-    auto pressed = [&](int id) {
+    // ---- buttons
+    // A finger belongs to the button it STARTED on (finger.sx/sy), and to only one button: overlapping or
+    // adjacent buttons can never fire together. Quick taps whose down+up happen within one frame
+    // (common at 30 FPS) are still seen: such a finger has pressed == true and down == false.
+    auto hit = [&](int id, const UI::Finger& f) {
+        if (!ctlVisible(id)) return false;
         Rect r = ctlRect(*this, id);
-        for (auto& f : u.fingers) if (f.down && r.contains(f.sx, f.sy)) return &f;
-        return (UI::Finger*)nullptr;
+        // circular hit area slightly larger than the drawn button (thumbs are imprecise)
+        vec2 c{r.x + r.w / 2, r.y + r.h / 2};
+        return length(vec2(f.sx, f.sy) - c) < r.w * 0.5f + 10.f;
     };
-    auto tapped = [&](int id) {
-        Rect r = ctlRect(*this, id);
-        for (auto& f : u.fingers) if (f.pressed && r.contains(f.x, f.y)) { f.consumed = true; return true; }
-        return false;
-    };
-    // attack: hold for charge / heavy
-    if (UI::Finger* f = pressed(CTL_ATTACK)) {
+    // resolve new fingers: nearest visible button wins
+    for (auto& f : u.fingers) {
+        if (!f.pressed || f.consumed) continue;
+        int best = -1; float bd = 1e9f;
+        for (int id = 0; id < CTL_COUNT; id++) {
+            if (!hit(id, f)) continue;
+            Rect r = ctlRect(*this, id);
+            float d = length(vec2(f.sx, f.sy) - vec2(r.x + r.w / 2, r.y + r.h / 2)) / r.w;
+            if (d < bd) { bd = d; best = id; }
+        }
+        if (best < 0) continue;
+        f.consumed = true;
+        btnFlash[best] = 1.f;
+        haptic(8, 50);
+        switch (best) {
+        case CTL_ATTACK: attackFinger = f.id; break;
+        case CTL_DODGE: dodgeFinger = f.id; input.dodge = true; break;
+        case CTL_BLOCK: blockFinger = f.id; break;
+        case CTL_JUMP: input.jump = true; break;
+        case CTL_SKILL1: case CTL_SKILL2: case CTL_SKILL3: input.skill[best - CTL_SKILL1] = true; break;
+        case CTL_POTION: input.potion = true; break;
+        case CTL_INTERACT: input.interact = true; break;
+        case CTL_MOUNT: input.mount = true; break;
+        }
+    }
+    auto finger = [&](int id) -> UI::Finger* { if (id < 0) return nullptr; for (auto& f : u.fingers) if (f.id == id) return &f; return nullptr; };
+    // attack: tap = light attack, hold = charge, release = heavy / charged
+    if (UI::Finger* f = finger(attackFinger)) {
         f->consumed = true;
-        input.attackHeld = true;
-        input.attackHoldT = f->t;
         btnHold[CTL_ATTACK] = f->t;
-    } else if (btnHold[CTL_ATTACK] > 0) {
-        input.attackRelease = true;
-        input.attackHoldT = btnHold[CTL_ATTACK];
-        btnHold[CTL_ATTACK] = 0;
-    }
-    if (UI::Finger* f = pressed(CTL_DODGE)) {
+        if (f->down) { input.attackHeld = true; input.attackHoldT = f->t; }
+        else { input.attackRelease = true; input.attackHoldT = f->t; attackFinger = -1; btnHold[CTL_ATTACK] = 0; }
+    } else { attackFinger = -1; btnHold[CTL_ATTACK] = 0; }
+    // dodge: tap = roll, hold = sprint
+    if (UI::Finger* f = finger(dodgeFinger)) {
         f->consumed = true;
-        if (f->pressed) input.dodge = true;
-        if (f->t > 0.3f) input.sprint = true;   // hold dodge to sprint
-    }
-    if (tapped(CTL_JUMP)) input.jump = true;
-    if (UI::Finger* f = pressed(CTL_BLOCK)) { f->consumed = true; input.block = true; }
-    for (int i = 0; i < 3; i++) if (tapped(CTL_SKILL1 + i)) input.skill[i] = true;
-    if (tapped(CTL_POTION)) input.potion = true;
-    if ((interactTarget != NullEntity || !dungeonPrompt.empty() || fishingT >= 0) && tapped(CTL_INTERACT)) input.interact = true;
-    if (tapped(CTL_MOUNT)) input.mount = true;
+        if (f->down && f->t > 0.3f) input.sprint = true;
+        if (!f->down) dodgeFinger = -1;
+    } else dodgeFinger = -1;
+    // block: held while the finger stays down (a quick tap still opens the parry window for one frame)
+    if (UI::Finger* f = finger(blockFinger)) {
+        f->consumed = true;
+        input.block = true;
+        if (!f->down) blockFinger = -1;
+    } else blockFinger = -1;
     // top-right shortcuts
     Rect bMenu{u.W - 70, 14, 56, 56}, bMap{u.W - 132, 14, 56, 56}, bBag{u.W - 194, 14, 56, 56};
-    Rect mini{u.W - 210, 82, 196, 196};
+    Rect mini{u.W - 196, 80, 176, 176};
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
         if (f.consumed) continue;
@@ -146,7 +175,9 @@ void Game::drawMinimap(Rect r) {
     }
     u.circle(c, rad + 4, vec4(0.06f, 0.05f, 0.04f, 0.9f), 40);
     const float viewM = 140.f;  // metres shown from centre to edge
-    float ang = camYaw + PI;    // camera forward is "up"
+    // Minimap convention: camera forward (-sin camYaw, -cos camYaw) points up, camera right points right.
+    // World offset d (x, z) -> screen offset rotate(d, camYaw). The map image uses the inverse rotation.
+    float ang = camYaw + PI;
     if (dungeon.active) {
         // dungeon minimap: tiles
         u.circle(c, rad, vec4(0.12f, 0.1f, 0.12f, 0.95f), 40);
@@ -155,8 +186,7 @@ void Game::drawMinimap(Rect r) {
             TileType t = dungeon.tiles[z * dungeon.W + x];
             if (t == TileType::Void) continue;
             vec2 wpos = vec2(dungeon.origin.x + (x + 0.5f) * 4.f, dungeon.origin.z + (z + 0.5f) * 4.f) - p.pos.xz();
-            vec2 sp = rotate(wpos, -ang) * s;
-            sp = vec2(-sp.x, sp.y);
+            vec2 sp = minimapProject(wpos, camYaw) * s;
             if (length(sp) > rad - 4) continue;
             u.rect({c.x + sp.x - 2 * s, c.y + sp.y - 2 * s, 4 * s, 4 * s}, t == TileType::Spikes ? vec4(0.6f, 0.3f, 0.2f, 0.9f) : vec4(0.55f, 0.5f, 0.45f, 0.9f));
         }
@@ -166,8 +196,7 @@ void Game::drawMinimap(Rect r) {
     }
     auto toMini = [&](vec3 wp, bool clampEdge, bool* inside) {
         vec2 d = wp.xz() - p.pos.xz();
-        vec2 sp = rotate(d, -ang + PI) * (rad / viewM);
-        sp = vec2(sp.x, sp.y);
+        vec2 sp = minimapProject(d, camYaw) * (rad / viewM);
         float l = length(sp);
         *inside = l < rad - 8;
         if (clampEdge && l > rad - 10) sp = sp * ((rad - 10) / l);
@@ -198,12 +227,17 @@ void Game::drawMinimap(Rect r) {
         float pulse = 1.f + 0.15f * std::sin(realTime * 5);
         u.sprite("i_quest_marker", {m.x - 12 * pulse, m.y - 16 * pulse, 24 * pulse, 32 * pulse});
     }
-    u.spriteRot("i_player_arrow", c, vec2(22, 22), -(p.yaw - ang) + PI, vec4(1, 1, 1, 1));
+    // arrow sprite points up; heading (sin yaw, cos yaw) -> screen rotate(heading, camYaw)
+    u.spriteRot("i_player_arrow", c, vec2(24, 24), minimapArrowAngle(p.yaw, camYaw), vec4(1, 1, 1, 1));
     u.sprite("minimap_frame", r);
     // north indicator
-    vec2 north = c + rotate(vec2(0, -1), -ang + PI) * (rad + 2);
-    north = c + rotate(vec2(0, -(rad + 2)), PI - ang - PI);
-    (void)north;
+    // north indicator (world -z) on the rim
+    {
+        vec2 n = rotate(vec2(0, -1), camYaw);
+        vec2 np = c + n * (rad - 2);
+        u.circle(np, 11, vec4(0.08f, 0.06f, 0.05f, 0.9f), 16);
+        u.text("N", np.x, np.y - 9, 16, rgba(0xf4d080), F_BOLD, A_CENTER, 0, false);
+    }
     // clock
     char b[32]; snprintf(b, sizeof b, "%02d:%02d", (int)timeOfDay, (int)(std::fmod(timeOfDay, 1.f) * 60));
     u.sprite(env.night > 0.5f ? "i_night" : "i_day", {r.x + 4, r.y + r.h - 34, 28, 28});
@@ -298,7 +332,7 @@ void Game::drawHud(float dt) {
     u.iconButton({W_ - 70, 14, 56, 56}, "menu");
     u.iconButton({W_ - 132, 14, 56, 56}, "map");
     u.iconButton({W_ - 194, 14, 56, 56}, "inventory");
-    drawMinimap({W_ - 210, 82, 196, 196});
+    drawMinimap({W_ - 196, 80, 176, 176});
 
     // ---- quest tracker (top centre)
     std::string obj = questObjectiveText();
@@ -313,8 +347,7 @@ void Game::drawHud(float dt) {
         vec3 m = questMarker(&has);
         if (has && !dungeon.active) {
             float bearing = std::atan2(m.x - p.pos.x, m.z - p.pos.z);
-            float rel = bearing - (camYaw + PI);
-            u.spriteRot("i_player_arrow", {r.x + 26, r.y + 33}, vec2(28, 28), -rel + PI, rgba(0xf8d050));
+            u.spriteRot("i_player_arrow", {r.x + 26, r.y + 33}, vec2(28, 28), minimapArrowAngle(bearing, camYaw), rgba(0xf8d050));
             char db[32]; snprintf(db, sizeof db, "%dm", (int)distXZ(m, p.pos));
             u.text(db, r.x + r.w - 12, r.y + 8, 15, rgba(0xb8ac94), F_BOLD, A_RIGHT, 0, false);
             // on-screen quest beacon
@@ -357,9 +390,10 @@ void Game::drawHud(float dt) {
     vec2 kp = joyFinger >= 0 ? jc + vec2(input.move.x, -input.move.y) * R : jc;
     u.sprite("joy_knob", {kp.x - R * 0.55f, kp.y - R * 0.55f, R * 1.1f, R * 1.1f}, vec4(1, 1, 1, op));
     auto ctl = [&](int id, const std::string& icon, bool enabled, float cd01, const std::string& badge, vec4 tint, const char* base) {
+        if (!ctlVisible(id)) return;
         Rect r = ctlRect(*this, id);
-        bool held = false;
-        for (auto& f : u.fingers) if (f.down && r.contains(f.sx, f.sy)) held = true;
+        bool held = btnFlash[id] > 0 || (id == CTL_ATTACK && attackFinger >= 0) || (id == CTL_DODGE && dodgeFinger >= 0) || (id == CTL_BLOCK && blockFinger >= 0);
+        btnFlash[id] = std::max(0.f, btnFlash[id] - dt * 5.f);
         float s = held ? 0.92f : 1.f;
         Rect rr{r.x + r.w * (1 - s) / 2, r.y + r.h * (1 - s) / 2, r.w * s, r.h * s};
         u.sprite(held ? std::string(base) + "_hi" : base, rr, vec4(1, 1, 1, enabled ? op : op * 0.5f));
@@ -379,7 +413,7 @@ void Game::drawHud(float dt) {
     ctl(CTL_BLOCK, CTL_ICON[CTL_BLOCK], true, 0, "", vec4(1, 1, 1, 1), "round");
     for (int i = 0; i < 3; i++) {
         int si = equippedSpells[i];
-        if (si < 0) { Rect r = ctlRect(*this, CTL_SKILL1 + i); u.sprite("round", r, vec4(1, 1, 1, op * 0.35f)); continue; }
+        if (si < 0) continue;  // empty slot: hidden (assign spells in the Skills menu)
         const SpellDef& s = spells()[si];
         ctl(CTL_SKILL1 + i, s.icon.substr(2), mp >= s.mana, spellCD[si] / s.cooldown, "", vec4(1, 1, 1, 1), "round");
     }

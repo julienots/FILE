@@ -277,7 +277,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.0.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.1.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -691,7 +691,7 @@ void Game::drawMenus(float dt) {
         bool has; vec3 qm = questMarker(&has);
         if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }
         vec2 pm = toMap(pc().pos.xz());
-        u.spriteRot("i_player_arrow", pm, vec2(30, 30), -pc().yaw + PI, vec4(1, 1, 1, 1));
+        u.spriteRot("i_player_arrow", pm, vec2(30, 30), minimapArrowAngle(pc().yaw, 0.f), vec4(1, 1, 1, 1));
         u.popClip();
         // pan with a finger
         static std::map<int, vec2> last;
@@ -860,7 +860,7 @@ void Game::drawMenus(float dt) {
         y += 60;
         const GraphicsSettings& gs = renderer.settings;
         char b[200];
-        snprintf(b, sizeof b, "Résolution %d %% · ombres %s · bloom %s · %d FPS max · herbe %d %%", (int)(gs.renderScale * 100), gs.shadowRes ? (gs.softShadows ? "douces" : "oui") : "non", gs.bloom ? "oui" : "non", gs.fpsCap, (int)(gs.grassDensity * 100));
+        snprintf(b, sizeof b, "Résolution %d %% · ombres %s · bloom %s · %d FPS max · herbe %d %% · feuillage %s", (int)(gs.renderScale * 100), gs.shadowRes ? (gs.softShadows ? "douces" : "oui") : "non", gs.bloom ? "oui" : "non", gs.fpsCap, (int)(gs.grassDensity * 100), settings.profile <= QualityProfile::Medium ? "détaillé" : "simple");
         u.text(b, c.x, y, 16, DIM, F_BODY, A_LEFT, colW); y += 44;
         if (toggle(u, {c.x, y, colW, 40}, "Aberration chromatique", settings.chromatic)) applyGraphicsProfile(settings.profile); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Afficher les FPS", settings.showFps); y += 46;
@@ -933,7 +933,7 @@ void Game::drawLayoutEditor() {
     u.nine("panel_plain", panel, vec4(1, 1, 1, 0.85f), 0.6f);
     slider(u, {panel.x + 30, panel.y + 20, 540, 60}, "Taille des boutons", settings.layout.scale, 0.7f, 1.4f, "x%.2f", 1.f);
     slider(u, {panel.x + 30, panel.y + 84, 540, 60}, "Opacité", settings.layout.opacity, 0.3f, 1.f);
-    if (u.fancyButton({panel.x + 30, panel.y + 166, 250, 54}, "Réinitialiser", true, "button_dark", 20)) { ControlLayout L; settings.layout = L; settings.layout.leftHanded = false; loadSettings(); ControlLayout d; vec2 def[CTL_COUNT] = {{-130, -130}, {-250, -95}, {-110, -265}, {-270, -215}, {-395, -95}, {-385, -210}, {-305, -320}, {-160, -380}, {-130, -260}, {-60, -380}}; for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = def[i]; settings.layout.scale = 1; settings.layout.opacity = 0.85f; }
+    if (u.fancyButton({panel.x + 30, panel.y + 166, 250, 54}, "Réinitialiser", true, "button_dark", 20)) { ControlLayout L; settings.layout = L; settings.layout.leftHanded = false; loadSettings(); for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = defaultLayoutPos()[i]; settings.layout.scale = 1; settings.layout.opacity = 0.85f; }
     if (u.fancyButton({panel.x + 320, panel.y + 166, 250, 54}, "Terminer", true, "button", 20)) { layoutEdit = false; saveSettings(); }
     u.consumeAll();
 }
