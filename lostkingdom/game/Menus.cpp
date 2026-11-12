@@ -107,7 +107,7 @@ void Game::renderPortrait(int npc) {
     c.target = head; c.pos = head + vec3(0.18f, 0.03f, 0.62f); c.fovY = 30 * DEG; c.zNear = 0.05f; c.zFar = 10; c.update(1.f);
     Environment e; e.sunDir = normalize(vec3(0.5f, 0.6f, 0.7f)); e.sunIntensity = 2.6f; e.sunColor = srgb(0xffe8c8);
     e.skyAmbient = srgb(0x8a9ac0); e.groundAmbient = srgb(0x5a4030) * 0.7f; e.fogDensity = 0; e.exposure = 1.05f; e.saturation = 1.05f; e.contrast = 1.05f;
-    DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED; d.bones = v.pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.8f;
+    DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = v.pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.8f;
     renderer.renderToTarget(portraitRT, c, e, {d}, vec4(0.16f, 0.12f, 0.1f, 1));
 }
 
@@ -277,7 +277,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.1.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.2.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -507,7 +507,7 @@ void Game::drawMenus(float dt) {
             for (int b = 0; b < H_COUNT; b++) idle.rot[b] = save.rot[b];
             computeWorld(*v.anim.skeleton, save, pw);
             std::vector<DrawItem> items;
-            DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED; d.bones = pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.7f; d.outline = true; d.outlineWidth = 0.006f;
+            DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.7f; d.outline = true; d.outlineWidth = 0.006f;
             items.push_back(d);
             if (v.weapon) { DrawItem w; w.mesh = v.weapon.get(); w.model = pw.world[v.wt == WeaponType::Bow ? H_PROPL : H_PROPR]; items.push_back(w); }
             if (v.offhand) { DrawItem w; w.mesh = v.offhand.get(); w.model = pw.world[H_PROPL]; items.push_back(w); }
@@ -793,7 +793,7 @@ void Game::drawMenus(float dt) {
             Camera cm; float hgt = e.arch == Arch::Humanoid ? 1.0f : 0.6f;
             cm.target = vec3(0, hgt, 0); cm.pos = vec3(std::sin(realTime * 0.5f) * 3.f, hgt + 0.9f, std::cos(realTime * 0.5f) * 3.f); cm.fovY = 40 * DEG; cm.zNear = 0.1f; cm.zFar = 30; cm.update(1);
             Environment en; en.sunDir = normalize(vec3(0.4f, 0.8f, 0.5f)); en.sunIntensity = 2.8f; en.sunColor = srgb(0xfff0dc); en.skyAmbient = srgb(0x8a9ac0); en.groundAmbient = srgb(0x5a4030); en.fogDensity = 0; en.exposure = 1.05f; en.saturation = 1.05f; en.contrast = 1.05f;
-            DrawItem d; d.mesh = pv.mesh.get(); d.flags = LIT_SKINNED; d.bones = pv.pw.skin[0].m; d.boneCount = pv.anim.skeleton->size(); d.fx.z = 0.6f;
+            DrawItem d; d.mesh = pv.mesh.get(); d.flags = LIT_SKINNED | (pv.albedo ? LIT_TEXTURED : 0); d.albedo = pv.albedo; d.bones = pv.pw.skin[0].m; d.boneCount = pv.anim.skeleton->size(); d.fx.z = 0.6f;
             std::vector<DrawItem> list{d};
             if (pv.weapon) { DrawItem w; w.mesh = pv.weapon.get(); w.model = pv.pw.world[pv.wt == WeaponType::Bow ? H_PROPL : H_PROPR]; list.push_back(w); }
             renderer.renderToTarget(prevRT, cm, en, list, vec4(0, 0, 0, 0));
@@ -868,6 +868,8 @@ void Game::drawMenus(float dt) {
         toggle(u, {c.x, y, colW, 40}, "Inverser la caméra", settings.invertCamera); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Visée automatique", settings.autoTarget); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Vibrations (retour haptique)", settings.haptics); y += 46;
+        if (heroModel.valid() && toggle(u, {c.x, y, colW, 40}, "Héros 3D détaillé (armure fixe)", settings.importedHero)) { rebuildPlayerVisual(); saveSettings(); }
+        if (heroModel.valid()) y += 46;
         float x2 = c.x + colW + 60; y = c.y;
         u.text("Audio", x2, y, 22, GOLDT, F_SERIF); y += 36;
         bool a = false;

@@ -4,6 +4,7 @@
 #include "../engine/core/ECS.h"
 #include "../engine/core/Math.h"
 #include "../engine/audio/Audio.h"
+#include "../engine/gfx/Model.h"
 #include "../game/Data.h"
 #include "../game/World.h"
 #include "../game/Props.h"
@@ -220,6 +221,29 @@ static void testTouchLayout() {
     }
 }
 
+static void testHeroModel(const std::string& assets) {
+    std::printf("[Imported hero model]\n");
+    auto readAll = [](const std::string& p) { std::ifstream f(p, std::ios::binary); return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {}); };
+    std::vector<uint8_t> mb = readAll(assets + "/models/hero.lkm"), tb = readAll(assets + "/models/hero.jpg");
+    SkinnedModelData m;
+    CHECK(!mb.empty() && m.loadLKM(mb), "hero.lkm loads");
+    CHECK(!tb.empty() && m.loadTexture(tb) && m.texW >= 256 && m.texH >= 256, "hero texture decodes");
+    CHECK((int)m.joints.size() == H_COUNT, "joint count %zu", m.joints.size());
+    CHECK(m.height > 1.5f && m.height < 2.2f, "height %.2f", m.height);
+    // rest pose sanity: feet near the ground, head on top, arms down beside the body
+    float minY = 1e9f, maxY = -1e9f; for (auto& v : m.verts) { minY = std::min(minY, v.py); maxY = std::max(maxY, v.py); }
+    CHECK(minY > -0.05f && minY < 0.08f && maxY > 1.5f, "vertical extent %.2f..%.2f", minY, maxY);
+    CHECK(m.joints[H_HEAD].y > m.joints[H_CHEST].y && m.joints[H_CHEST].y > m.joints[H_ROOT].y, "spine order");
+    CHECK(m.joints[H_HANDL].y < m.joints[H_UARML].y - 0.3f && m.joints[H_HANDR].y < m.joints[H_UARMR].y - 0.3f, "arms lowered into the rest pose");
+    CHECK(m.joints[H_HANDL].x > 0 && m.joints[H_HANDR].x < 0, "left on +X");
+    // corrupted / truncated files are rejected without crashing
+    std::vector<uint8_t> cut(mb.begin(), mb.begin() + mb.size() / 2);
+    SkinnedModelData bad;
+    CHECK(!bad.loadLKM(cut), "truncated model rejected");
+    std::vector<uint8_t> junk(64, 0xff); junk[0] = 'L'; junk[1] = 'K'; junk[2] = 'M'; junk[3] = '1';
+    CHECK(!bad.loadLKM(junk), "garbage header rejected");
+}
+
 int lkRunTests(int argc, char** argv) {
     std::string assets = argc > 1 ? argv[1] : "assets";
     testECS();
@@ -231,6 +255,7 @@ int lkRunTests(int argc, char** argv) {
     World w; w.buildPlan();
     testWorld(w);
     testAudio(assets);
+    testHeroModel(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);
     return gFail ? 1 : 0;
 }

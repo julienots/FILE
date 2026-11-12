@@ -62,7 +62,7 @@ struct Environment {
 // Shader variant flags for the lit uber-shader.
 enum LitFlags : int {
     LIT_SKINNED = 1, LIT_INSTANCED = 2, LIT_WIND = 4, LIT_GRASS = 8, LIT_TERRAIN = 16,
-    LIT_DISSOLVE = 32, LIT_OUTLINE = 64, LIT_DEPTH = 128
+    LIT_DISSOLVE = 32, LIT_OUTLINE = 64, LIT_DEPTH = 128, LIT_TEXTURED = 256  // TEXTURED: albedo texture, UVs in the material bytes
 };
 
 struct DrawItem {
@@ -74,6 +74,7 @@ struct DrawItem {
     vec4 tint{1, 1, 1, 0};         // rgb multiply, a snow
     vec4 fx{0, 0, 0, 0};           // flash, dissolve, rim, emissive boost
     vec3 dissolveColor{1.f, 0.5f, 0.1f};
+    GLuint albedo = 0;             // LIT_TEXTURED: base colour texture (sRGB)
     bool castShadow = true;
     bool outline = false;
     vec4 outlineColor{0.05f, 0.03f, 0.02f, 1};

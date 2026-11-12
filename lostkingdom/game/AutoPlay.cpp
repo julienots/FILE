@@ -37,6 +37,23 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name == "hero") {
+        // close-up checks of the hero model: idle, walk, run, attack combo, roll, equipment screen
+        s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 7.f; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});
+        s.push_back({0.1f, shot("60_hero_idle"), idle, "shot"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.input.move = vec2(0.6f, 0.5f); g.camDist = g.camDistTarget = 7.f; }, "walk"});
+        s.push_back({0.1f, shot("61_hero_walk"), [](Game& g, float) { g.input.move = vec2(0.6f, 0.5f); }, "shot"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camDist = g.camDistTarget = 7.f; }, "run"});
+        s.push_back({0.1f, shot("62_hero_run"), [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; }, "shot"});
+        s.push_back({0.25f, [](Game& g) { g.input.attackRelease = true; g.input.attackHoldT = 0.05f; }, idle, "attack"});
+        s.push_back({0.1f, shot("63_hero_attack"), idle, "shot"});
+        s.push_back({0.9f, none, idle, "recover"});
+        s.push_back({0.2f, [](Game& g) { g.input.dodge = true; }, idle, "roll"});
+        s.push_back({0.1f, shot("64_hero_roll"), idle, "shot"});
+        s.push_back({1.0f, [](Game& g) { g.menu = Menu::Equipment; }, idle, "equipment"});
+        s.push_back({0.1f, shot("65_hero_equipment"), idle, "shot"});
+        return s;
+    }
     if (name == "look") {
         // fixed beauty shots for visual work (same places every run)
         struct V { const char* poi; float dx, dz, yaw, tod, dist; const char* f; };

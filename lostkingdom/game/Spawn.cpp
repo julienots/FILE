@@ -6,6 +6,22 @@ namespace lk {
 
 // ============================================================================================ assets
 void Game::loadAssets() {
+    // imported hero model (optional: the procedural hero is used when absent or invalid)
+    {
+        std::vector<uint8_t> mb, tb;
+        if (platform::readAsset("models/hero.lkm", mb) && heroModel.loadLKM(mb) && platform::readAsset("models/hero.jpg", tb) && heroModel.loadTexture(tb)) {
+            const Skeleton& base = skeleton(Arch::Humanoid);
+            if ((int)heroModel.joints.size() == base.size()) {
+                heroSkel = base;
+                for (int i = 0; i < heroSkel.size(); i++) {
+                    Bone& b = heroSkel.bones[i];
+                    b.offset = heroModel.joints[i] - (b.parent >= 0 ? heroModel.joints[b.parent] : vec3(0));
+                }
+                heroSkel.finalize();
+                AGR_LOG("hero model: %zu vertices, %zu triangles, texture %dx%d", heroModel.verts.size(), heroModel.idx.size() / 3, heroModel.texW, heroModel.texH);
+            } else { AGR_WARN("hero model: %zu joints, expected %d", heroModel.joints.size(), base.size()); heroModel = SkinnedModelData(); }
+        } else heroModel = SkinnedModelData();
+    }
     static const char* sounds[] = {"swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water",
                                    "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
                                    "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",

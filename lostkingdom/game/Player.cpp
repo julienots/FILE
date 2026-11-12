@@ -85,6 +85,17 @@ void Game::rebuildPlayerVisual() {
     if (w) c.vis.weapon = weaponMesh(wt, w->tier, elementColor(w->element), &c.vis.tip);
     if (o && ot != WeaponType::None) c.vis.offhand = weaponMesh(ot, o->tier, o->color);
     if (had) { int st = c.vis.anim.stance; c.vis.anim = keep; c.vis.anim.stance = st; }
+    c.vis.albedo = 0;
+    c.vis.anim.skeleton = &skeleton(Arch::Humanoid);
+    if (useHeroModel()) {
+        // imported model: fitted skeleton (same bones, so every animation plays), own cape in the mesh
+        if (!heroMesh || !heroMesh->valid()) { heroMesh = std::make_shared<Mesh>(); heroMesh->upload(heroModel.verts, heroModel.idx); }
+        if (!heroTex.id) heroTex.create2D(heroModel.texW, heroModel.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, heroModel.rgba.data(), true, false);
+        c.vis.mesh = heroMesh;
+        c.vis.albedo = heroTex.id;
+        c.vis.anim.skeleton = &heroSkel;
+        c.vis.cape = false;
+    }
     c.vis.capeColor = L.c1 * 0.8f;
     c.vis.rim = 0.65f;
     c.vis.outlineColor = vec4(0.05f, 0.04f, 0.03f, 1);

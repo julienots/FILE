@@ -65,11 +65,12 @@ void Game::contextLost() {
     ui = UI();
     particles = ParticleSystem();
     meshCache.clear();
+    heroMesh.reset(); heroTex = Texture();
     windmillBlades.reset(); chestMesh.reset(); chestOpenMesh.reset(); pickupMesh.reset(); arrowMesh.reset(); boulderMesh.reset(); orbMesh.reset();
     gateMesh.reset(); brazierMesh.reset(); bladeMesh.reset(); spikeMesh.reset(); leverMesh.reset();
     for (auto& m : nodeMeshes) m.reset();
     world.unloadAll();
-    reg.each<Character>([&](Entity, Character& c) { c.vis.mesh.reset(); c.vis.weapon.reset(); c.vis.offhand.reset(); c.vis.capeMesh.reset(); c.vis.trailMesh.reset(); c.vis.hairMesh.reset(); });
+    reg.each<Character>([&](Entity, Character& c) { c.vis.albedo = 0; c.vis.mesh.reset(); c.vis.weapon.reset(); c.vis.offhand.reset(); c.vis.capeMesh.reset(); c.vis.trailMesh.reset(); c.vis.hairMesh.reset(); });
     reg.each<NodeComp>([&](Entity, NodeComp& n) { n.mesh.reset(); });
     iconsReady = false; mapTex = 0; portraitNpc = -2;
     dungeon.floor = Mesh(); dungeon.walls = Mesh(); dungeon.props = Mesh();

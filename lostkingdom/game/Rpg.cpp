@@ -648,6 +648,7 @@ void Game::saveSettings() {
     o << "volumes " << settings.master << " " << settings.music << " " << settings.sfx << " " << settings.ambience << "\n";
     o << "camera " << settings.camSensitivity << " " << settings.joystickDeadzone << " " << (settings.invertCamera ? 1 : 0) << " " << (settings.cameraShake ? 1 : 0) << "\n";
     o << "flags " << settings.haptics << " " << settings.showFps << " " << settings.autoTarget << " " << settings.chromatic << "\n";
+    o << "hero " << (settings.importedHero ? 1 : 0) << "\n";
     o << "layoutver " << LAYOUT_VERSION << "\n";
     o << "layout " << settings.layout.scale << " " << settings.layout.opacity << " " << settings.layout.leftHanded;
     for (int i = 0; i < CTL_COUNT; i++) o << " " << settings.layout.pos[i].x << " " << settings.layout.pos[i].y;
@@ -671,6 +672,7 @@ void Game::loadSettings() {
         else if (k == "camera") { int inv, sh; l >> settings.camSensitivity >> settings.joystickDeadzone >> inv >> sh; settings.invertCamera = inv; settings.cameraShake = sh; }
         else if (k == "flags") l >> settings.haptics >> settings.showFps >> settings.autoTarget >> settings.chromatic;
         else if (k == "layoutver") l >> layoutVer;
+        else if (k == "hero") { int h = 1; l >> h; settings.importedHero = h != 0; }
         else if (k == "layout") {
             vec2 pos[CTL_COUNT];
             l >> settings.layout.scale >> settings.layout.opacity >> settings.layout.leftHanded;

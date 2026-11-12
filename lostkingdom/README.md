@@ -6,10 +6,23 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.1.0 (versionCode 2). Taille : environ 21 Mo. SHA-256 : `018b8f0b8fc8884df4be93f3a6944abb53054c4a96beeac3265b2982a92d8c5c`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.2.0 (versionCode 3). Taille : environ 22 Mo. SHA-256 : `57934a0b0784925411a80cc0a763656892803bb3d0293cee8421dd4f5192b691`.
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.2.0
+
+- **Nouveau héros 3D.** Le modèle a été généré avec Tripo (texturé, environ 10 000 triangles), puis importé par `tools/import_character.py`. Comme il n'avait pas de squelette, l'outil :
+  - trouve automatiquement les articulations dans le maillage ;
+  - calcule les poids de peau sur le squelette humanoïde du jeu ;
+  - fait passer les bras de la pose en T à la pose de repos.
+
+  Toutes les animations existantes (marche, course, attaques, roulade, monture) s'appliquent donc au modèle. L'arme reste tenue en main.
+- **Limites du modèle importé.**
+  - L'armure ne change plus visuellement avec l'équipement, car elle est peinte dans la texture.
+  - La cape fait partie du maillage et suit le torse, sans physique de tissu.
+  - Le réglage **Réglages → Héros 3D détaillé** permet de revenir au héros procédural, dont l'armure change avec l'équipement.
 
 ### Nouveautés 1.1.0 (suite aux retours du premier test sur téléphone)
 
@@ -130,7 +143,7 @@ Légende :
    - L'option `--autoplay=full` lance un bot qui joue un scénario de 71 étapes : splash, titre, nouvelle partie, village, dialogue, tous les menus, combat, monture, traversée des six régions, météo, boss, donjon et énigme, test sauvegarde/chargement, éditeur de commandes, générique.
    - Le bot prend des captures d'écran (`build/shots/`) et peut enregistrer le mixage audio (`--wav`).
 2. **AddressSanitizer**. Le même scénario a été exécuté sous ASan. Il a permis de corriger un accès hors limites dans l'IA ennemie et une invalidation de références dans l'ECS.
-3. **Tests unitaires** (`lk_tests`), soit 1 799 vérifications :
+3. **Tests unitaires** (`lk_tests`), soit 1 809 vérifications :
    - l'ECS ;
    - les mathématiques ;
    - l'intégrité des données (chaque référence d'une quête, d'un butin, d'une recette ou d'une boutique pointe vers un objet existant) ;
@@ -194,6 +207,7 @@ python3 tools/make_font.py       # atlas SDF (polices OFL : Cinzel, Cinzel Decor
 python3 tools/make_ui.py         # kit d'interface et icônes
 python3 tools/make_audio.py      # musiques, ambiances, effets (numpy, scipy, ffmpeg)
 python3 tools/make_branding.py   # icônes du lanceur, logos, key art
+python3 tools/import_character.py modele.glb hero --preview apercu.png   # importe un personnage GLB (pose en T, sans squelette)
 ```
 
 ---

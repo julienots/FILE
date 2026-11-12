@@ -62,6 +62,7 @@ static std::string litDefines(int f) {
     if (f & LIT_TERRAIN) d += "#define TERRAIN\n";
     if (f & LIT_DISSOLVE) d += "#define DISSOLVE\n";
     if (f & LIT_OUTLINE) d += "#define OUTLINE\n";
+    if (f & LIT_TEXTURED) d += "#define TEXTURED\n";
     return d;
 }
 
@@ -76,7 +77,7 @@ Shader* Renderer::lit(int flags) {
                                          : std::string(shaders::FRAME_UBO) + shaders::LIGHTING + shaders::LIT_FS;
     if (!s.build("lit" + std::to_string(flags), std::string(shaders::FRAME_UBO) + shaders::LIT_VS, fs, defs)) return nullptr;
     s.use();
-    s.set("uShadowMap", 0); s.set("uNoiseTex", 1); s.set("uTerrainTex", 2); s.set("uTerrainNrm", 3);
+    s.set("uShadowMap", 0); s.set("uNoiseTex", 1); s.set("uTerrainTex", 2); s.set("uTerrainNrm", 3); s.set("uAlbedoTex", 5);
     return &s;
 }
 
@@ -243,6 +244,7 @@ void Renderer::drawItem(const DrawItem& d, bool depthPass, bool outlinePass) {
     s->set("uModel", d.model);
     if ((f & LIT_SKINNED) && d.bones) s->setMat4Array("uBones", d.bones, std::min(d.boneCount, 32));
     s->set("uFx", d.fx);
+    if ((f & LIT_TEXTURED) && d.albedo) { glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, d.albedo); }
     if (!depthPass) {
         s->set("uTint", d.tint);
         s->set("uDissolveColor", vec4(d.dissolveColor, 1));
@@ -332,7 +334,7 @@ void Renderer::render(ParticleSystem* particles) {
         return items[a].sortKey < items[b].sortKey;
     });
     for (int i : order) {
-        bool twoSided = (items[i].flags & LIT_WIND) != 0;
+        bool twoSided = (items[i].flags & (LIT_WIND | LIT_TEXTURED)) != 0;  // imported models are often double-sided (capes)
         if (twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         drawItem(items[i], false, false);
     }

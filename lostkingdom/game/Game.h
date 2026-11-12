@@ -5,6 +5,7 @@
 #include "../engine/gfx/Renderer.h"
 #include "../engine/gfx/Particles.h"
 #include "../engine/gfx/UI.h"
+#include "../engine/gfx/Model.h"
 #include "../engine/audio/Audio.h"
 #include "World.h"
 #include "Props.h"
@@ -33,6 +34,7 @@ struct Visual {
     vec3 dissolveColor{1.f, 0.5f, 0.15f};
     bool outline = true;
     vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
+    GLuint albedo = 0;   // imported textured model (LIT_TEXTURED)
     bool cape = false;
     VerletCloth cloth;
     vec3 capeColor{0.5f, 0.1f, 0.1f};
@@ -237,6 +239,7 @@ struct Settings {
     float uiScale = 1.f;
     ControlLayout layout;
     bool chromatic = false;
+    bool importedHero = true;   // imported 3D model for the hero (off = procedural hero whose armour changes with equipment)
 };
 
 // ------------------------------------------------------------------------------------------ game
@@ -391,6 +394,12 @@ public:
 
     // ---- shared meshes ---------------------------------------------------------------------------
     std::map<std::string, std::shared_ptr<Mesh>> meshCache;
+    // Imported hero model (assets/models/hero.lkm + hero.jpg); empty = procedural hero.
+    SkinnedModelData heroModel;
+    std::shared_ptr<Mesh> heroMesh;
+    Texture heroTex;
+    Skeleton heroSkel;
+    bool useHeroModel() const { return heroModel.valid() && settings.importedHero; }
     std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[12];
     std::map<uint32_t, Entity> nodeEntities;   // uid -> entity
     std::set<uint32_t> spawnedChunks;          // chunk hash with spawned creatures

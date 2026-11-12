@@ -53,6 +53,9 @@ out vec4 vColor;
 out vec4 vMat;
 out vec4 vSkin;
 out vec4 vShadow;
+#ifdef TEXTURED
+out vec2 vUV;
+#endif
 
 vec3 windOffset(vec3 wp, float weight) {
     float t = uCamPos.w;
@@ -109,6 +112,10 @@ void main() {
     vColor.rgb *= iTint.rgb * 2.0;
 #endif
     vMat = aMat;
+#ifdef TEXTURED
+    // 16-bit UVs packed little-endian in the four material bytes
+    vUV = vec2(aMat.x * 255.0 + aMat.y * 65280.0, aMat.z * 255.0 + aMat.w * 65280.0) / 65535.0;
+#endif
     vSkin = aSkin / 255.0;
     vShadow = uShadowMat * vec4(wp, 1.0);
     gl_Position = uViewProj * vec4(wp, 1.0);
@@ -223,6 +230,10 @@ in vec4 vShadow;
 uniform vec4 uTint;       // rgb multiply, a = snow on top faces
 uniform vec4 uFx;         // x hit flash, y dissolve, z rim, w emissive boost
 uniform vec4 uDissolveColor;
+#ifdef TEXTURED
+in vec2 vUV;
+uniform sampler2D uAlbedoTex;
+#endif
 #ifdef TERRAIN
 uniform mediump sampler2DArray uTerrainTex;  // albedo.rgb + height.a
 uniform mediump sampler2DArray uTerrainNrm;  // tangent-space normal.rgb
@@ -251,6 +262,15 @@ void main() {
     float rough = vMat.r, metal = vMat.g;
     float emis = vMat.b * 4.0;
     float wet = uGroundColor.w;
+#ifdef TEXTURED
+    // AI-generated textures are bright and contain baked lighting: bring them into the game's albedo
+    // range (procedural characters) and restore some saturation lost to the baked highlights.
+    albedo = pow(texture(uAlbedoTex, vUV).rgb, vec3(2.2));
+    float alum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+    albedo = max(mix(vec3(alum), albedo, 1.3), 0.0) * 0.48 * uTint.rgb;
+    rough = 0.78; metal = 0.0; emis = 0.0;
+    if (!gl_FrontFacing) N = -N;   // double-sided imported meshes (capes)
+#endif
 
 #ifdef TERRAIN
     // Splat weights from vertex: mat.r rock, mat.g dirt, mat.b snow, mat.a sand, skin.x mud, skin.y cobble, skin.z ash

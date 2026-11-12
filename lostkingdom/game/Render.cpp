@@ -272,7 +272,8 @@ void Game::renderCharacter(Entity e, Character& c) {
         }
     }
     DrawItem d;
-    d.mesh = v.mesh.get(); d.model = model; d.flags = LIT_SKINNED | (v.dissolve > 0 ? LIT_DISSOLVE : 0);
+    d.mesh = v.mesh.get(); d.model = model; d.flags = LIT_SKINNED | (v.dissolve > 0 ? LIT_DISSOLVE : 0) | (v.albedo ? LIT_TEXTURED : 0);
+    d.albedo = v.albedo;
     d.bones = v.pw.skin[0].m; d.boneCount = sk.size();
     d.tint = vec4(v.tint, 0); d.fx = vec4(v.flash, v.dissolve, v.rim, v.emissiveBoost); d.dissolveColor = v.dissolveColor;
     d.outline = v.outline && v.dissolve <= 0; d.outlineColor = v.outlineColor; d.outlineWidth = 0.028f;
