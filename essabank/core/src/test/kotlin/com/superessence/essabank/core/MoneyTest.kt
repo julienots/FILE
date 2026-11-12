@@ -51,12 +51,12 @@ class MoneyTest {
     }
 
     @Test fun `formatage francais et anglais`() {
-        assertEquals("4 850,75 UV", MoneyFormat.format(Money.of("4850.75")))
-        assertEquals("4,850.75 UV", MoneyFormat.format(Money.of("4850.75"), language = AppLanguage.EN))
-        assertEquals("−12,50 UV", MoneyFormat.format(Money.of("-12.50")))
-        assertEquals("+12,50 UV", MoneyFormat.format(Money.of("12.50"), signed = true))
+        assertEquals("4 850,75 €", MoneyFormat.format(Money.of("4850.75")))
+        assertEquals("4,850.75 €", MoneyFormat.format(Money.of("4850.75"), language = AppLanguage.EN))
+        assertEquals("−12,50 €", MoneyFormat.format(Money.of("-12.50")))
+        assertEquals("+12,50 €", MoneyFormat.format(Money.of("12.50"), signed = true))
         assertEquals("\$v5,238.81", MoneyFormat.format(Money.of("4850.75"), DisplayCurrency.USD_V, AppLanguage.EN))
-        assertEquals("•••••• UV", MoneyFormat.format(Money.of("4850.75"), masked = true))
+        assertEquals("•••••• €", MoneyFormat.format(Money.of("4850.75"), masked = true))
         assertEquals("4 850" to ",75", MoneyFormat.split(Money.of("4850.75"), DisplayCurrency.UV, AppLanguage.FR))
     }
 }

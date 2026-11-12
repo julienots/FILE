@@ -5,20 +5,22 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * Devise d'affichage. Le moteur compte toujours en unités virtuelles (UV) ;
- * les autres devises sont des conversions d'affichage à taux fictifs fixes.
- * Aucune n'a de valeur réelle.
+ * Devise d'affichage. Le moteur compte en euros VIRTUELS (constante [UV], nom conservé
+ * pour la compatibilité des données enregistrées) ; les autres devises sont des conversions
+ * d'affichage à taux fictifs fixes. Aucune n'a de valeur réelle.
  */
 @Serializable
 enum class DisplayCurrency(
     val code: String,
     val symbol: String,
-    /** Valeur d'une UV dans cette devise d'affichage (taux fictif fixe). */
+    /** Valeur d'un euro virtuel dans cette devise d'affichage (taux fictif fixe). */
     val rate: BigDecimal,
     val symbolBefore: Boolean,
 ) {
-    UV("UV", "UV", BigDecimal.ONE, false),
-    EUR_V("EUR-V", "€v", BigDecimal.ONE, false),
+    /** Euro virtuel : devise de référence de l'application. */
+    UV("EUR", "€", BigDecimal.ONE, false),
+    /** Ancienne option, identique à l'euro virtuel : conservée pour relire les anciennes données, masquée dans les réglages. */
+    EUR_V("EUR", "€", BigDecimal.ONE, false),
     USD_V("USD-V", "\$v", BigDecimal("1.08"), true),
     GBP_V("GBP-V", "£v", BigDecimal("0.86"), true),
     CHF_V("CHF-V", "CHFv", BigDecimal("0.95"), false);
@@ -33,7 +35,7 @@ object MoneyFormat {
     const val MASK = "••••••"
 
     /**
-     * Formate un montant : « 4 850,75 UV » (FR) ou « 4,850.75 UV » (EN).
+     * Formate un montant : « 4 850,75 € » (FR) ou « 4,850.75 € » (EN).
      * @param signed ajoute « + » pour les montants positifs.
      */
     fun format(

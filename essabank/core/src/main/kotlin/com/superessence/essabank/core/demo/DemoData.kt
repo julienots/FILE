@@ -45,7 +45,7 @@ import kotlin.random.Random
  * Profil de démonstration prérempli. Toutes les personnes, enseignes et montants sont
  * inventés ; chaque transaction est marquée [Transaction.isDemo].
  *
- * Soldes finaux garantis : compte courant 4 850,75 UV, épargne 12 400,00 UV, projet 2 150,00 UV.
+ * Soldes finaux garantis : compte courant 4 850,75 €, épargne 12 400,00 €, projet 2 150,00 € (euros virtuels).
  */
 object DemoData {
 

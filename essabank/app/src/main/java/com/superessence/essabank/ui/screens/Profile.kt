@@ -305,8 +305,8 @@ fun PreferencesScreen(vm: AppViewModel, nav: Nav) {
         item { SectionHeader(tr("Devise d'affichage", "Display currency")) }
         item {
             Panel(padding = 8.dp) {
-                DisplayCurrency.entries.forEach { cur ->
-                    ListRow(cur.code + " · " + cur.symbol, if (cur == DisplayCurrency.UV) tr("Unité virtuelle de référence", "Reference virtual unit") else tr("1 UV = ", "1 UV = ") + cur.rate.toPlainString() + " " + cur.symbol + tr(" (taux fictif)", " (fictional rate)"),
+                DisplayCurrency.entries.filter { it != DisplayCurrency.EUR_V }.forEach { cur ->
+                    ListRow(cur.code + " · " + cur.symbol, if (cur == DisplayCurrency.UV) tr("Euro virtuel de référence", "Reference virtual euro") else tr("1 € = ", "1 € = ") + cur.rate.toPlainString() + " " + cur.symbol + tr(" (taux fictif)", " (fictional rate)"),
                         leading = { IconBadge(Icons.Rounded.AttachMoney, if (cur == prefs.currency) c.accent else c.textMuted, 38.dp) },
                         trailing = { if (cur == prefs.currency) Icon(Icons.Rounded.CheckCircle, null, tint = c.accent) },
                         onClick = { update { it.copy(currency = cur) } }, chevron = false)
@@ -565,7 +565,7 @@ fun PlansScreen(vm: AppViewModel, nav: Nav) {
                         Text(L.tierName(tier), style = EssaType.h2, color = if (tier == Tier.BLACK) Brand.Gold else Color.White, modifier = Modifier.weight(1f))
                         if (active) SimulationPill(text = tr("ACTIVE", "ACTIVE"))
                     }
-                    Text(tr("0 UV · gratuit", "0 UV · free"), style = EssaType.bodyStrong, color = Color.White.copy(alpha = 0.75f))
+                    Text(tr("0 € · gratuit", "0 € · free"), style = EssaType.bodyStrong, color = Color.White.copy(alpha = 0.75f))
                     Spacer(Modifier.height(12.dp))
                     features.forEach { f ->
                         Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -668,7 +668,7 @@ fun AboutScreen(nav: Nav) {
                 Spacer(Modifier.height(6.dp))
                 BulletLine(tr("ESSABANK est une banque entièrement fictive, destinée à la simulation et au divertissement.", "ESSABANK is an entirely fictional bank, made for simulation and entertainment."))
                 BulletLine(tr("Elle n'est pas un établissement bancaire, ne détient aucun fonds et n'effectue aucun virement réel.", "It is not a bank, holds no funds and makes no real transfer."))
-                BulletLine(tr("Les unités virtuelles (UV) n'ont aucune valeur monétaire réelle.", "Virtual units (UV) have no real monetary value."))
+                BulletLine(tr("Les euros affichés sont virtuels : ils n'ont aucune valeur monétaire réelle.", "Displayed euros are virtual: they have no real monetary value."))
                 BulletLine(tr("Les cartes, numéros, CVV et références sont inventés et inutilisables sur un réseau de paiement.", "Cards, numbers, CVVs and references are made up and unusable on any payment network."))
                 BulletLine(tr("Le marché, les actifs et les crédits sont simulés localement : ce ne sont ni des conseils ni des offres.", "Market, assets and loans are simulated locally: they are neither advice nor offers."))
                 BulletLine(tr("Aucune connexion Internet n'est utilisée : vos données restent sur votre téléphone.", "No Internet connection is used: your data stays on your phone."))

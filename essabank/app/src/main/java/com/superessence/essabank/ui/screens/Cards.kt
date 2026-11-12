@@ -233,7 +233,7 @@ fun PaymentSimulatorSheet(vm: AppViewModel, card: Card, onDismiss: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(suggestions) { m -> Chip(m, merchant == m) { merchant = m } } }
         Spacer(Modifier.height(10.dp))
-        EssaTextField(amountText, { amountText = it }, tr("Montant (UV)", "Amount (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12,
+        EssaTextField(amountText, { amountText = it }, tr("Montant (€)", "Amount (€)"), keyboard = KeyboardType.Decimal, maxLength = 12,
             isError = amountText.isNotEmpty() && parsed !is ParseResult.Valid,
             supporting = if (amountText.isNotEmpty() && parsed !is ParseResult.Valid) tr("Montant invalide", "Invalid amount") else null)
         Spacer(Modifier.height(10.dp))

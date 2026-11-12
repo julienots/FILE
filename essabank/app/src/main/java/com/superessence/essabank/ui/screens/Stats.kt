@@ -373,7 +373,7 @@ private fun BudgetSheet(title: String, current: Money?, onDismiss: () -> Unit, o
     EssaSheet(onDismiss) {
         Text(title, style = EssaType.h2, color = c.text)
         Spacer(Modifier.height(12.dp))
-        EssaTextField(text, { text = it }, tr("Montant mensuel (UV)", "Monthly amount (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12,
+        EssaTextField(text, { text = it }, tr("Montant mensuel (€)", "Monthly amount (€)"), keyboard = KeyboardType.Decimal, maxLength = 12,
             isError = text.isNotEmpty() && parsed !is ParseResult.Valid)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

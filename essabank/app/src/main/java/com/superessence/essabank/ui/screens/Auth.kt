@@ -188,7 +188,7 @@ fun OnboardingScreen(vm: AppViewModel, onCreated: () -> Unit) {
                         "Accounts, cards, transfers, savings and investing: everything works, but nothing is real."), style = EssaType.body.copy(fontSize = 15.sp, lineHeight = 22.sp), color = Color.White.copy(alpha = 0.72f))
                     Spacer(Modifier.height(22.dp))
                     Promise(Icons.Rounded.Security, t("Banque 100 % fictive", "100% fictional bank"), t("ESSABANK n'est pas un établissement bancaire et ne détient aucun fonds.", "ESSABANK is not a bank and holds no funds."))
-                    Promise(Icons.Rounded.AutoAwesome, t("Monnaie virtuelle", "Virtual currency"), t("Les unités virtuelles (UV) n'ont aucune valeur monétaire.", "Virtual units (UV) have no monetary value."))
+                    Promise(Icons.Rounded.AutoAwesome, t("Monnaie virtuelle", "Virtual currency"), t("Les euros affichés sont virtuels : aucune valeur monétaire réelle.", "Displayed euros are virtual: no real monetary value."))
                     Promise(Icons.Rounded.VerifiedUser, t("Aucune donnée bancaire demandée", "No banking data requested"), t("Tout reste sur votre téléphone, protégé par un code PIN local.", "Everything stays on your phone, protected by a local PIN."))
                     Spacer(Modifier.height(28.dp))
                     PrimaryButton(t("Découvrir avec le profil de démonstration", "Explore with the demo profile"), loading = loading, onClick = {
@@ -282,11 +282,11 @@ private fun CreateProfileForm(language: AppLanguage, onBack: () -> Unit, onCreat
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             capitals.forEachIndexed { i, v ->
-                Chip("%,d UV".format(v).replace(',', if (fr) ' ' else ','), capital == i) { capital = i }
+                Chip("%,d €".format(v).replace(',', if (fr) ' ' else ','), capital == i) { capital = i }
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(t("Unités virtuelles sans valeur réelle, crédités sur votre compte courant fictif.", "Virtual units with no real value, credited to your fictional current account."), style = EssaType.small, color = c.textMuted)
+        Text(t("Euros virtuels sans valeur réelle, crédités sur votre compte courant fictif.", "Virtual euros with no real value, credited to your fictional current account."), style = EssaType.small, color = c.textMuted)
         Spacer(Modifier.height(30.dp))
         PrimaryButton(t("Continuer", "Continue"), enabled = first.isNotBlank(), loading = busy, onClick = {
             busy = true

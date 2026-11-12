@@ -21,7 +21,7 @@ data class Asset(
     val type: AssetType,
     val sectorFr: String,
     val sectorEn: String,
-    /** Prix de départ en unités virtuelles au 1er janvier 2024. */
+    /** Prix de départ en euros virtuels au 1er janvier 2024. */
     val basePrice: Double,
     /** Volatilité annuelle (0,25 = 25 %). */
     val volatility: Double,

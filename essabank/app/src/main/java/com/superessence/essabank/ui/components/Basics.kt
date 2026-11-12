@@ -419,8 +419,8 @@ fun DisclaimerFooter(modifier: Modifier = Modifier) {
         Icon(Icons.Rounded.Info, null, tint = c.textMuted, modifier = Modifier.size(16.dp).padding(top = 1.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            tr("ESSABANK est une application de simulation éditée par Superessence Studio. Ce n'est pas une banque : les montants sont des unités virtuelles sans valeur réelle, aucune opération n'est transmise à un établissement financier.",
-                "ESSABANK is a simulation app published by Superessence Studio. It is not a bank: amounts are virtual units with no real value, and no operation is ever sent to a financial institution."),
+            tr("ESSABANK est une application de simulation éditée par Superessence Studio. Ce n'est pas une banque : les montants sont des euros virtuels sans valeur réelle, aucune opération n'est transmise à un établissement financier.",
+                "ESSABANK is a simulation app published by Superessence Studio. It is not a bank: amounts are virtual euros with no real value, and no operation is ever sent to a financial institution."),
             style = EssaType.small, color = c.textMuted,
         )
     }

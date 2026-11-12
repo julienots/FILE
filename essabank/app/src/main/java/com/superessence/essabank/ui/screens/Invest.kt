@@ -315,7 +315,7 @@ private fun OrderSheet(vm: AppViewModel, s: BankState, asset: Asset, side: Trade
         Text(tr("Prix fictif : ", "Fictional price: ") + fmt(price, hideable = false) + " · " + (if (isBuy) tr("liquidités ", "cash ") + fmt(cash, hideable = false)
             else tr("détenu : ", "held: ") + MarketSimulator.formatQuantity(holding?.quantityMicro ?: 0)), style = EssaType.small, color = c.textMuted)
         Spacer(Modifier.height(12.dp))
-        EssaTextField(text, { text = it; fraction = null }, tr("Montant (UV)", "Amount (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12)
+        EssaTextField(text, { text = it; fraction = null }, tr("Montant (€)", "Amount (€)"), keyboard = KeyboardType.Decimal, maxLength = 12)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (isBuy) listOf(50, 100, 250, 500).forEach { v -> Chip("$v", text == "$v") { text = "$v" } }

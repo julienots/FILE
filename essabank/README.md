@@ -6,7 +6,7 @@
 
 > **ESSABANK est une banque entièrement fictive**, destinée à la simulation et au divertissement.
 > Ce n'est pas un établissement bancaire : elle ne détient aucun fonds, n'effectue aucun virement réel et ne délivre aucune carte de paiement.
-> Toutes les opérations utilisent des **unités virtuelles (UV) sans valeur monétaire**. Les numéros de carte sont inventés et volontairement inutilisables (préfixe « 0 » non attribué, clé de Luhn fausse).
+> Toutes les opérations utilisent des **euros virtuels sans valeur monétaire**. Les numéros de carte sont inventés et volontairement inutilisables (préfixe « 0 » non attribué, clé de Luhn fausse).
 > Aucune connexion Internet : toutes les données restent sur le téléphone.
 
 ---
@@ -59,7 +59,7 @@ echo "sdk.dir=/chemin/vers/android-sdk" > local.properties   # plateforme 35 + b
 | Investissements | Marché de démonstration généré localement (8 actions, 4 cryptos, 4 ETF, symboles `.SIM` inventés), prix « en direct » au pas de 5 min, graphiques 1J/1S/1M/1A, achat et vente virtuels fractionnés, plus/moins-values latentes et réalisées (coût moyen pondéré), historique. Avertissement permanent : prix non réels. |
 | Crédits | Personnel, automobile, immobilier, étudiant (taux fictifs) : capital, durée, taux, assurance, mensualité, coût total, tableau d'amortissement mensuel ou annuel, simulations enregistrées. Aucun crédit accordé. |
 | Notifications | Centre de notifications : paiements, virements reçus/envoyés, objectif atteint, budget dépassé, nouvelle transaction, résumé mensuel, carte créée, échec de virement programmé, investissement, sécurité. Filtres, lu/non lu, suppression, navigation vers l'élément concerné. Réglage par type. |
-| Profil | Nom fictif, photo (stockée localement) ou avatar, informations du compte, langue (FR/EN), devise d'affichage (UV, €v, $v, £v, CHFv à taux fictifs), thème clair/sombre/système/Onyx, couleur d'accent, animations, notifications, sécurité, données. |
+| Profil | Nom fictif, photo (stockée localement) ou avatar, informations du compte, langue (FR/EN), devise d'affichage (€, $v, £v, CHFv à taux fictifs, toutes virtuelles), thème clair/sombre/système/Onyx, couleur d'accent, animations, notifications, sécurité, données. |
 | Données | Sauvegarde **chiffrée AES-256-GCM** protégée par mot de passe (fichier `.essabk`), restauration, suppression des transactions de démonstration (soldes conservés), réinitialisation de la démonstration, effacement complet. |
 | Formules | ESSA STANDARD, ESSA PLUS, ESSA BLACK : **gratuites, aucun paiement demandé**. PLUS : 10 cartes, cartes premium, statistiques avancées, couleurs, objectifs illimités. BLACK : interface Onyx, designs premium, thèmes avancés, **tableau de bord personnalisable** (choix et ordre des blocs). |
 
@@ -67,7 +67,7 @@ Interface entièrement bilingue (français / anglais), aucune émoji, icônes ve
 
 ## Données de démonstration
 
-Profil « Camille Laurent » (fictif) : compte courant **4 850,75 UV**, épargne **12 400,00 UV**, compte projet **2 150,00 UV**, vacances 1 320,00 UV, freelance 6 780,40 UV, investissement 1 250,00 UV + positions ; environ 150 jours d'historique réaliste (salaire, loyer, courses, restaurants, transports, abonnements, loisirs, santé, virements), 3 cartes, 4 bénéficiaires, 2 virements programmés, 3 coffres (dont un atteint), budgets et notifications. Toutes les enseignes et personnes sont inventées. Chaque transaction de démonstration est marquée comme telle.
+Profil « Camille Laurent » (fictif) : compte courant **4 850,75 €**, épargne **12 400,00 €**, compte projet **2 150,00 €**, vacances 1 320,00 €, freelance 6 780,40 €, investissement 1 250,00 € + positions ; environ 150 jours d'historique réaliste (salaire, loyer, courses, restaurants, transports, abonnements, loisirs, santé, virements), 3 cartes, 4 bénéficiaires, 2 virements programmés, 3 coffres (dont un atteint), budgets et notifications. Toutes les enseignes et personnes sont inventées. Chaque transaction de démonstration est marquée comme telle.
 
 ## Architecture
 
@@ -119,6 +119,6 @@ Code : Superessence Studio. Polices Inter et Manrope : SIL Open Font License 1.1
 
 ---
 
-*ESSABANK n'est pas un établissement bancaire. Unités virtuelles sans valeur monétaire réelle.*
+*ESSABANK n'est pas un établissement bancaire. Euros virtuels sans valeur monétaire réelle.*
 
 **A SUPERESSENCE STUDIO PRODUCTION**

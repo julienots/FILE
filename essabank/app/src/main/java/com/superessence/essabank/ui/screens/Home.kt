@@ -161,7 +161,7 @@ private fun BalanceHero(s: BankState, o: com.superessence.essabank.core.engine.O
         Column(Modifier.padding(22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("Solde principal", "Main balance"), style = EssaType.bodyStrong, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
-                SimulationPill(text = tr("UNITÉS VIRTUELLES", "VIRTUAL UNITS"))
+                SimulationPill(text = tr("EUROS VIRTUELS", "VIRTUAL EUROS"))
             }
             Spacer(Modifier.height(6.dp))
             AnimatedBalance(o.primaryBalance, color = Color.White)

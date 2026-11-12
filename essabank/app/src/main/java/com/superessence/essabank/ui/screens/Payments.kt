@@ -144,7 +144,7 @@ fun PaymentsScreen(vm: AppViewModel, nav: Nav) {
         item {
             Column(Modifier.statusBarsPadding().padding(top = 14.dp)) {
                 Text(tr("Paiements", "Payments"), style = EssaType.h1, color = c.text)
-                Text(tr("Virements simulés en unités virtuelles · aucun transfert réel", "Simulated transfers in virtual units · no real transfer"), style = EssaType.small, color = c.textMuted)
+                Text(tr("Virements simulés en euros virtuels · aucun transfert réel", "Simulated transfers in virtual euros · no real transfer"), style = EssaType.small, color = c.textMuted)
             }
         }
         item {
@@ -324,7 +324,7 @@ fun TransferScreen(vm: AppViewModel, nav: Nav, mode: String, initialTo: String?,
                     Spacer(Modifier.weight(0.4f))
                     Text(if (receive) tr("Montant à recevoir", "Amount to receive") else tr("Montant à envoyer", "Amount to send"), style = EssaType.small, color = c.textMuted, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                     Spacer(Modifier.height(4.dp))
-                    Text((amountText.ifEmpty { "0" }) + " UV",
+                    Text((amountText.ifEmpty { "0" }) + " €",
                         style = EssaType.hero.copy(fontSize = 46.sp), color = if (amountError != null) c.negative else c.text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(), maxLines = 1)
                     Text(amountError ?: (fromAcc?.let { (if (receive) tr("Crédité sur ", "Credited to ") else tr("Disponible sur ", "Available on ")) + it.name + " : " + fmt(it.available, hideable = false) } ?: ""),
                         style = EssaType.small, color = if (amountError != null) c.negative else c.textMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -491,7 +491,7 @@ private fun TransferPath(from: String, to: String) {
     }
 }
 
-/** Animation de transfert : une unité virtuelle voyage d'un avatar à l'autre le long d'un arc. */
+/** Animation de transfert : un euro virtuel voyage d'un avatar à l'autre le long d'un arc. */
 @Composable
 private fun ProcessingView(from: String, to: String) {
     val c = Essa.colors

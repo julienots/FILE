@@ -254,7 +254,7 @@ private fun GoalMoveSheet(vm: AppViewModel, s: com.superessence.essabank.core.mo
         Spacer(Modifier.height(4.dp))
         Text(if (deposit) tr("Disponible dans le coffre après dépôt à tout moment.", "Withdraw anytime after depositing.") else tr("Épargne du coffre : ", "Vault balance: ") + fmt(g.saved, hideable = false), style = EssaType.small, color = c.textMuted)
         Spacer(Modifier.height(12.dp))
-        EssaTextField(text, { text = it }, tr("Montant (UV)", "Amount (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12, isError = text.isNotEmpty() && parsed !is ParseResult.Valid)
+        EssaTextField(text, { text = it }, tr("Montant (€)", "Amount (€)"), keyboard = KeyboardType.Decimal, maxLength = 12, isError = text.isNotEmpty() && parsed !is ParseResult.Valid)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val quick = if (deposit) listOf(50, 100, 250, 500) else listOf(50, 100)
@@ -292,7 +292,7 @@ private fun AutoSaveSheet(vm: AppViewModel, s: com.superessence.essabank.core.mo
         Spacer(Modifier.height(4.dp))
         Text(tr("Un versement virtuel est effectué automatiquement, le premier dès aujourd'hui.", "A virtual deposit is made automatically, the first one today."), style = EssaType.small, color = c.textMuted)
         Spacer(Modifier.height(12.dp))
-        EssaTextField(text, { text = it }, tr("Montant par versement (UV)", "Amount per deposit (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12)
+        EssaTextField(text, { text = it }, tr("Montant par versement (€)", "Amount per deposit (€)"), keyboard = KeyboardType.Decimal, maxLength = 12)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(Frequency.WEEKLY, Frequency.MONTHLY).forEach { f -> Chip(L.frequency(f, lang), freq == f) { freq = f } }
@@ -350,7 +350,7 @@ fun GoalEditorScreen(vm: AppViewModel, nav: Nav, id: String?) {
             }
         }
         item { EssaTextField(name, { name = it; edited = true }, tr("Nom de l'objectif", "Goal name"), maxLength = 32) }
-        item { EssaTextField(target, { target = it }, tr("Montant cible (UV)", "Target amount (UV)"), keyboard = KeyboardType.Decimal, maxLength = 12, isError = target.isNotEmpty() && parsed !is ParseResult.Valid) }
+        item { EssaTextField(target, { target = it }, tr("Montant cible (€)", "Target amount (€)"), keyboard = KeyboardType.Decimal, maxLength = 12, isError = target.isNotEmpty() && parsed !is ParseResult.Valid) }
         item { SectionHeader(tr("Date souhaitée", "Target date")) }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

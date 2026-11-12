@@ -5,8 +5,8 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * Montant en unités virtuelles ESSABANK, stocké en centièmes (Long) pour éviter
- * toute erreur d'arrondi binaire. 1 unité virtuelle = 100 centièmes.
+ * Montant en euros virtuels ESSABANK, stocké en centièmes (Long) pour éviter
+ * toute erreur d'arrondi binaire. 1 € virtuel = 100 centimes.
  *
  * Les montants n'ont aucune valeur monétaire réelle.
  */
@@ -36,7 +36,7 @@ value class Money(val cents: Long) : Comparable<Money> {
     companion object {
         val ZERO = Money(0)
 
-        /** Plafond technique d'une opération : 10 millions d'unités virtuelles. */
+        /** Plafond technique d'une opération : 10 millions d'euros virtuels. */
         val MAX_OPERATION = units(10_000_000)
 
         fun units(units: Long): Money = Money(Math.multiplyExact(units, 100L))
