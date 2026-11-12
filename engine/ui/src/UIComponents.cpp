@@ -33,7 +33,8 @@ void registerUIComponents() {
         .field("border", &UIImageComponent::border, {.tooltip = "9-slice borders in texture pixels: left, top, right, bottom", .speed = 1.0f})
         .field("borderScale", &UIImageComponent::borderScale, {.rangeMin = 0.01f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("preserveAspect", &UIImageComponent::preserveAspect)
-        .field("pixelArt", &UIImageComponent::pixelArt, {.tooltip = "Sharp pixels (nearest filtering)"});
+        .field("pixelArt", &UIImageComponent::pixelArt, {.tooltip = "Sharp pixels (nearest filtering)"})
+        .field("blocksPointer", &UIImageComponent::blocksPointer, {.tooltip = "Off: clicks and touches go through the image"});
     reg.add<UITextComponent>("UIText")
         .category("UI")
         .description("Text with a TrueType font, aligned in its rectangle.")

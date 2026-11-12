@@ -59,6 +59,11 @@ function Enemy:hit(n, hero)
     self.life = self.life - n
     self.flash = 0.2
     local x, y = self.entity:position()
+    agr.audio.play("assets://audio/hit.wav", { volume = 0.7 })
+    agr.fx.burst(x, y + 0.3, 0, { count = 14, color = { 0.6, 1, 0.5 }, speed = 4, life = 0.4, size = 0.18 })
+    agr.fx.popup(x, y + 1, 0, "-" .. n, { color = { 1, 0.95, 0.8 }, size = 48 })
+    agr.fx.hitStop(0.05)
+    agr.fx.shake(0.15, 0.15)
     local hx, hy = hero.entity:position()
     local d = math.max(0.01, G.distance(x, y, hx, hy))
     self.entity:setPosition(x + (x - hx) / d * 0.6, y + (y - hy) / d * 0.6)  -- recul

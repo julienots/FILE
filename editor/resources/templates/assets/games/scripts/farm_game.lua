@@ -98,6 +98,9 @@ function Farm:use(p)
     elseif self.tool == "harvest" then
         if p.stage == 3 then
             self.coinsNow = self.coinsNow + self.price
+            local px, py = p.e:position()
+            agr.fx.burst(px, py + 0.3, 0, { count = 16, color = { 1, 0.85, 0.3 }, speed = 3, life = 0.5, spread = "up" })
+            agr.fx.popup(px, py + 0.8, 0, "+" .. self.price, { color = { 1, 0.9, 0.4 }, size = 46 })
             self:setStage(p, nil)
             agr.audio.play("assets://audio/coin.wav")
             if self.coinsNow >= self.goal then

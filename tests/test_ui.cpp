@@ -156,6 +156,18 @@ TEST_CASE("an icon or a label inside a button forwards the click to the button")
     CHECK(f.ui.pointerOverUI());
     f.pointers({{0, {600, 400}, false}});
     CHECK(f.ui.takeEvents().empty());
+    // ... unless it lets the pointer through (overlays): a covered button is clicked.
+    const auto veil = f.element("Veil", f.canvas, {0, 0}, {1, 1}, {0.5f, 0.5f}, {0, 0}, {0, 0});
+    f.scene.registry().emplace<UIImageComponent>(veil).blocksPointer = false;
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {200, 200}, true}});
+    f.pointers({{0, {200, 200}, false}});
+    const auto through = f.ui.takeEvents();
+    REQUIRE(through.size() == 1);
+    CHECK(through[0].entity == card);
+    f.pointers({{0, {700, 50}, true}});
+    CHECK_FALSE(f.ui.pointerOverUI());
+    f.pointers({{0, {700, 50}, false}});
 }
 
 TEST_CASE("buttons: click, cancel, hover, disabled and multi-touch") {

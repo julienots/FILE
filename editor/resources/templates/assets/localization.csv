@@ -174,3 +174,5 @@ ambre.health,Vie : {1} / {2},Health: {1} / {2},Vida: {1} / {2}
 ambre.gems,Gemmes : {1} / 3,Gems: {1} / 3,Gemas: {1} / 3
 ambre.gems.boss,Vainquez le gardien,Defeat the guardian,Derrota al guardián
 ambre.coins,Pièces : {1},Coins: {1},Monedas: {1}
+ambre.dash,Roulade,Dodge,Rodar
+ambre.fury,Furie !,Fury!,¡Furia!

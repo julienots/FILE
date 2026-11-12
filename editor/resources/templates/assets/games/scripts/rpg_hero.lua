@@ -125,7 +125,7 @@ end
 function Hero:attack()
     if self.cooldown > 0 then return end
     self.cooldown = self.attackCooldown
-    agr.audio.play("assets://audio/click.wav", { volume = 0.7, pitch = 0.7 })
+    agr.audio.play("assets://audio/swing.wav", { volume = 0.7, pitch = 0.9 + math.random() * 0.2 })
     local x, y = self.entity:position()
     for _, enemy in ipairs(G.children("Enemies")) do
         if enemy:isActive() then
@@ -140,6 +140,11 @@ function Hero:damage(n)
     self.hp = self.hp - n
     self.invulnerable = 0.8
     agr.device.vibrate(0.1)
+    agr.audio.play("assets://audio/hurt.wav", { volume = 0.6 })
+    agr.fx.shake(0.35, 0.3)
+    agr.fx.flash(1, 0.1, 0.05, 0.35, 0.3)
+    local x, y = self.entity:position()
+    agr.fx.popup(x, y + 1.2, 0, "-" .. n, { color = { 1, 0.35, 0.3 }, size = 52 })
     if self.hp <= 0 then
         self.state = "dead"
         G.text("Message", agr.tr("rpg.dead"))

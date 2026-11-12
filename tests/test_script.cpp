@@ -759,3 +759,140 @@ return C
     CHECK(f.scripts.field(c, "lastScore").value() == "42");
     client.close();
 }
+
+#include "agr/ui/UIComponents.hpp"
+
+TEST_SUITE("script fx") {
+
+TEST_CASE("agr.tween: easing, loops, callbacks, colors, stop; agr.time scale and hit stop") {
+    ScriptFixture f;
+    registerUIComponents();
+    f.write("assets://s/t.lua", R"lua(
+local T = {}
+function T:onStart()
+    self.done = 0
+    agr.tween(agr.find("Mover"), { position = { 10, 0, 0 } }, 1.0, { onDone = function() self.done = self.done + 1 end })
+    agr.tween(agr.find("Pulse"), { scale = 2 }, 0.5, { loop = "yoyo", ease = "inOutSine" })
+    agr.tween(agr.find("Spin"), { rotation = { 0, 90, 0 } }, 0.5, { delay = 0.5 })
+    agr.tween(agr.find("Fade"), { alpha = 0 }, 0.5)
+    self.stopId = agr.tween(agr.find("Stopped"), { position = { 0, 5, 0 } }, 1.0)
+    self.bad = not pcall(agr.tween, agr.find("Mover"), { nothing = 1 }, 1)
+    self.badEase = not pcall(agr.tween, agr.find("Mover"), { scale = 1 }, 1, { ease = "wobbly" })
+end
+function T:stop() agr.stopTween(self.stopId) end
+function T:slow() agr.time.setScale(0.5); self.scale = agr.time.scale() end
+function T:hit() agr.fx.hitStop(0.25) end
+return T
+)lua");
+    const auto mover = f.scene.createEntity("Mover");
+    const auto pulse = f.scene.createEntity("Pulse");
+    const auto spin = f.scene.createEntity("Spin");
+    const auto fade = f.scene.createEntity("Fade");
+    f.scene.registry().emplace<UIImageComponent>(fade).color = {1.0f, 0.5f, 0.25f, 1.0f};
+    const auto stopped = f.scene.createEntity("Stopped");
+    const auto t = f.scripted("Tweens", "assets://s/t.lua");
+    double scale = 1.0;
+    f.scripts.setTimeControl([&](double s) { scale = s; }, [&] { return scale; });
+    f.update();  // onStart (tweens created after the frame's effects step)
+    CHECK(f.scripts.field(t, "bad").value() == "true");
+    CHECK(f.scripts.field(t, "badEase").value() == "true");
+    f.update(5);  // 0.5 s
+    auto pos = [&](ecs::Entity e) { return f.scene.registry().get<TransformComponent>(e).position; };
+    CHECK(pos(mover).x == doctest::Approx(5.0f).epsilon(0.02));  // linear
+    CHECK(f.scene.registry().get<TransformComponent>(pulse).scale.x == doctest::Approx(2.0f).epsilon(0.02));
+    CHECK(f.scene.registry().get<UIImageComponent>(fade).color.w == doctest::Approx(0.0f).epsilon(0.02));
+    CHECK(f.scene.registry().get<UIImageComponent>(fade).color.x == doctest::Approx(1.0f));  // only alpha changes
+    REQUIRE(f.scripts.run("agr.find(\'Tweens\'):script():stop()", &f.scene));
+    f.update(5);  // 1.0 s
+    CHECK(pos(mover).x == doctest::Approx(10.0f));
+    CHECK(f.scripts.field(t, "done").value() == "1");
+    CHECK(f.scene.registry().get<TransformComponent>(pulse).scale.x == doctest::Approx(1.0f).epsilon(0.02));  // yoyo came back
+    CHECK(math::degrees(f.scene.registry().get<TransformComponent>(spin).rotation.toEuler().y) == doctest::Approx(90.0f).epsilon(0.02));
+    CHECK(pos(stopped).y < 3.0f);  // stopped halfway
+    const float stoppedY = pos(stopped).y;
+    f.update(5);
+    CHECK(pos(stopped).y == doctest::Approx(stoppedY));
+    CHECK(f.scripts.field(t, "done").value() == "1");  // onDone once
+    // Time scale and hit stop (real time).
+    REQUIRE(f.scripts.run("agr.find(\'Tweens\'):script():slow()", &f.scene));
+    CHECK(scale == doctest::Approx(0.5));
+    CHECK(f.scripts.field(t, "scale").value() == "0.5");
+    REQUIRE(f.scripts.run("agr.find(\'Tweens\'):script():hit()", &f.scene));
+    CHECK(scale == doctest::Approx(0.05));
+    f.time.unscaledDeltaSeconds = 0.1;
+    f.update(4);
+    CHECK(scale == doctest::Approx(0.5));  // restored to the game's scale
+    f.scripts.reset();                     // the game stops: normal speed again
+    CHECK(scale == doctest::Approx(1.0));
+}
+
+TEST_CASE("agr.fx: bursts clean up, popups float and vanish, flash and fade overlay, camera shake returns") {
+    ScriptFixture f;
+    registerUIComponents();
+    f.write("assets://s/fx.lua", R"lua(
+local F = {}
+function F:burst() self.b = agr.fx.burst(1, 2, 3, { count = 20, color = { 1, 0, 0 }, life = 0.4, spread = "up" }) end
+function F:popup() agr.fx.popup(0, 0, 0, "+10", { color = { 1, 1, 0 }, duration = 0.5 }) end
+function F:flash() agr.fx.flash(1, 0, 0, 0.8, 0.3) end
+function F:fade(a) agr.fx.fade(a, 0.4) end
+function F:shake() agr.fx.shake(0.8, 0.5) end
+return F
+)lua");
+    const auto cam = f.scene.createEntity("Camera");
+    f.scene.registry().emplace<CameraComponent>(cam);
+    f.scene.registry().get<TransformComponent>(cam).position = {0.0f, 2.0f, 10.0f};
+    f.scripted("Fx", "assets://s/fx.lua");
+    f.scripts.setScreenSize({1920.0f, 1080.0f});
+    f.time.unscaledDeltaSeconds = 0.1;
+    f.scene.updateTransforms();
+    f.update();
+    // Burst: a one-shot emitter, destroyed after its particles' life.
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():burst()", &f.scene));
+    const auto burst = f.scene.findByName("__fx burst");
+    REQUIRE_FALSE(burst.isNull());
+    const auto& em = f.scene.registry().get<ParticleEmitter3DComponent>(burst);
+    CHECK_FALSE(em.loop);
+    CHECK(em.burst == 20u);
+    CHECK(em.startColor.x == doctest::Approx(1.0f));
+    CHECK(em.startColor.w == doctest::Approx(1.0f));
+    CHECK(f.scene.registry().get<TransformComponent>(burst).position.z == doctest::Approx(3.0f));
+    f.update(8);
+    CHECK(f.scene.findByName("__fx burst").isNull());
+    // Popup: UI text over the world point, then removed.
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():popup()", &f.scene));
+    f.update();
+    const auto popup = f.scene.findByName("__fx popup");
+    REQUIRE_FALSE(popup.isNull());
+    CHECK(f.scene.registry().get<UITextComponent>(popup).text == "+10");
+    const auto& rect = f.scene.registry().get<UIRectComponent>(popup);
+    CHECK(rect.anchorMin.x == doctest::Approx(0.5f).epsilon(0.01));  // straight ahead of the camera
+    CHECK(rect.anchorMin.y > 0.5f);                                  // below its eye height
+    f.update(6);
+    CHECK(f.scene.findByName("__fx popup").isNull());
+    // Flash then fade on one overlay.
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():flash()", &f.scene));
+    f.update();
+    const auto overlay = f.scene.findByName("__fx overlay");
+    REQUIRE_FALSE(overlay.isNull());
+    CHECK(f.scene.registry().get<UIImageComponent>(overlay).color.w > 0.3f);
+    f.update(4);
+    CHECK(f.scene.registry().get<UIImageComponent>(overlay).color.w == doctest::Approx(0.0f));
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():fade(1.0)", &f.scene));
+    f.update(5);
+    CHECK(f.scene.registry().get<UIImageComponent>(overlay).color.w == doctest::Approx(1.0f));
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():fade(0.0)", &f.scene));
+    f.update(5);
+    CHECK(f.scene.registry().get<UIImageComponent>(overlay).color.w == doctest::Approx(0.0f));
+    // Shake: the camera moves, then settles back exactly.
+    REQUIRE(f.scripts.run("agr.find(\'Fx\'):script():shake()", &f.scene));
+    f.update(2);
+    const math::Vec3 shaken = f.scene.registry().get<TransformComponent>(cam).position;
+    CHECK(math::length(shaken - math::Vec3{0.0f, 2.0f, 10.0f}) > 0.01f);
+    f.update(10);
+    const math::Vec3 rest = f.scene.registry().get<TransformComponent>(cam).position;
+    CHECK(rest.x == doctest::Approx(0.0f));
+    CHECK(rest.y == doctest::Approx(2.0f));
+    CHECK(rest.z == doctest::Approx(10.0f));
+}
+
+}

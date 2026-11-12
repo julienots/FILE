@@ -89,7 +89,7 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
         Element root{e, screen};
         if (auto* r = reg.tryGet<UIRectComponent>(e)) r->screenRect = screen;
         const auto* img = reg.tryGet<UIImageComponent>(e);
-        root.blocks = img && img->color.w > 0.0f;
+        root.blocks = img && img->blocksPointer && img->color.w > 0.0f;
         pass.elements.push_back(root);
         Vec4 content = screen;
         if (c.respectSafeArea) {
@@ -155,7 +155,7 @@ void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s
         const auto* btn = reg.tryGet<UIButtonComponent>(c);
         const auto* sld = reg.tryGet<UISliderComponent>(c);
         el.interactive = btn || sld;
-        el.blocks = el.interactive || (img && img->color.w > 0.0f);
+        el.blocks = el.interactive || (img && img->blocksPointer && img->color.w > 0.0f);
         pass.elements.push_back(el);
         layoutChildren(scene, c, rects[i], s, pass);
     }

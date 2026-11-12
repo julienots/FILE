@@ -45,11 +45,31 @@ ecs::Entity billboard(Builder& b, ecs::Entity parent, const std::string& texture
     return s;
 }
 
+/// Soft round shadow lying on the ground under a character or an item (scripts keep it on the floor).
+ecs::Entity groundShadow(Builder& b, ecs::Entity parent, float size, float alpha = 0.55f) {
+    const auto s = b.entity("Shadow", {0.0f, 0.02f, 0.0f}, parent);
+    b.reg.get<TransformComponent>(s).rotation = math::Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});
+    auto& sr = b.reg.emplace<SpriteRendererComponent>(s);
+    sr.texture = "assets://games/shadow.png";
+    sr.size = {size, size * 0.75f};
+    sr.color = {1.0f, 1.0f, 1.0f, alpha};
+    sr.sortingLayer = 0;
+    return s;
+}
+
 ecs::Entity enemy(Builder& b, const std::string& name, ecs::Entity parent, Vec3 pos, const std::string& kind) {
     const auto e = b.entity(name, pos, parent);
     const bool bat = kind == "bat", boss = kind == "boss";
+    groundShadow(b, e, boss ? 3.6f : bat ? 0.9f : 1.1f, bat ? 0.35f : 0.55f);
     billboard(b, e, bat ? "assets://games/bat.png" : "assets://games/slime.png", boss ? 4.0f : bat ? 1.3f : 1.2f,
               boss ? Vec4{1.0f, 0.45f, 0.35f, 1.0f} : Vec4{1, 1, 1, 1});
+    if (boss) {  // the slam's danger zone, shown before it lands
+        const auto zone = groundShadow(b, e, 6.4f, 0.0f);
+        b.reg.get<NameComponent>(zone).name = "Telegraph";
+        b.reg.get<SpriteRendererComponent>(zone).texture = "assets://games/disc.png";
+        b.reg.get<SpriteRendererComponent>(zone).color = {1.0f, 0.2f, 0.1f, 0.0f};
+        b.reg.get<SpriteRendererComponent>(zone).sortingLayer = 0;
+    }
     if (!bat) {
         auto& agent = b.reg.emplace<NavAgentComponent>(e);
         agent.speed = boss ? 3.2f : 2.4f;
@@ -161,9 +181,11 @@ void buildAdventure25D(Scene& scene) {
         for (int i = 0; i < 6; ++i) {
             const float x = -12.0f + static_cast<float>(i) * 5.0f, z = std::sin(static_cast<float>(i + k) * 1.7f) * 4.0f;
             const auto c = b.entity("Coin " + std::to_string(i + 1), {x, 0.3f, z}, items);
+            b.reg.get<TransformComponent>(groundShadow(b, c, 0.5f, 0.35f)).position.y = -0.28f;
             billboard(b, c, "assets://games/coin.png", 0.6f);
         }
         const auto heart = b.entity("Heart 1", {-2.0f + static_cast<float>(k) * 3.0f, 0.3f, -2.0f}, items);
+        b.reg.get<TransformComponent>(groundShadow(b, heart, 0.6f, 0.35f)).position.y = -0.28f;
         billboard(b, heart, "assets://games/heart.png", 0.7f);
         const auto foes = b.entity("Enemies", {}, area);
         if (k < 3) {
@@ -188,6 +210,7 @@ void buildAdventure25D(Scene& scene) {
         col.offset = {0.0f, 0.7f, 0.0f};
         col.friction = 0.0f;
     }
+    groundShadow(b, hero, 1.2f);
     const auto heroSprite = billboard(b, hero, "", 1.7f);
     {
         auto& sr = reg.get<SpriteRendererComponent>(heroSprite);
@@ -195,6 +218,15 @@ void buildAdventure25D(Scene& scene) {
         sr.sheet = "assets://2d/hero.agrsheet";
         reg.emplace<SpriteAnimatorComponent>(heroSprite).clip = "idle";
         reg.emplace<AnimatorComponent>(heroSprite).controller = "assets://animations/hero.agrctrl";
+    }
+    {  // sword swing: a crescent of light in front of the hero, shown by the script
+        const auto slash = b.entity("Slash", {0.9f, 0.75f, 0.0f}, hero);
+        b.reg.get<TransformComponent>(slash).rotation = math::Quat::fromEuler({math::radians(kLean), 0.0f, math::radians(-90.0f)});
+        auto& sr = b.reg.emplace<SpriteRendererComponent>(slash);
+        sr.texture = "assets://games/slash.png";
+        sr.size = {1.9f, 1.2f};
+        sr.color = {1.0f, 1.0f, 1.0f, 0.0f};
+        sr.sortingLayer = 2;
     }
     b.script(hero, "assets://games/scripts/ambre_hero.lua");
     // Hidden prototype for the minions the boss summons.
@@ -209,14 +241,30 @@ void buildAdventure25D(Scene& scene) {
 
     const auto game = b.entity("Game");
     b.script(game, "assets://games/scripts/ambre_game.lua");
-    templates::audioSource(scene, "Music", "assets://audio/music.wav", AudioBus::Music, 0.35f);
+    templates::audioSource(scene, "Music", "assets://audio/ambre_music.wav", AudioBus::Music, 0.45f);
 
     // ---- interface: HUD, touch controls, menus.
     const auto hud = b.hud();
-    const auto top = b.panel("Top Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {640.0f, 170.0f});
-    b.label("HealthText", top, {0.0f, 0.0f}, {24.0f, 10.0f}, {600.0f, 50.0f}, "", 40.0f, UIHAlign::Left, {1.0f, 0.45f, 0.45f, 1.0f});
-    b.label("GemsText", top, {0.0f, 0.0f}, {24.0f, 62.0f}, {600.0f, 46.0f}, "", 36.0f, UIHAlign::Left, {1.0f, 0.75f, 0.3f, 1.0f});
-    b.label("CoinsText", top, {0.0f, 0.0f}, {24.0f, 110.0f}, {600.0f, 46.0f}, "", 32.0f);
+    const auto top = b.panel("Top Panel", hud, {0.0f, 0.0f}, {30.0f, 30.0f}, {560.0f, 190.0f}, {0.08f, 0.05f, 0.03f, 0.55f});
+    // Hearts (health) and gem slots as icons; the texts stay for screen readers and tests.
+    const auto hearts = templates::uiElement(scene, "Hearts", top, {0.0f, 0.0f}, {20.0f, 12.0f}, {520.0f, 70.0f});
+    for (int i = 0; i < 5; ++i) {
+        const auto h = templates::uiElement(scene, "HeartIcon " + std::to_string(i + 1), hearts, {0.0f, 0.0f}, {static_cast<float>(i) * 76.0f, 0.0f}, {66.0f, 66.0f});
+        auto& img = reg.emplace<UIImageComponent>(h);
+        img.texture = "assets://games/heart.png";
+    }
+    const auto gems = templates::uiElement(scene, "GemSlots", top, {0.0f, 0.0f}, {20.0f, 90.0f}, {300.0f, 56.0f});
+    for (int i = 0; i < 3; ++i) {
+        const auto g = templates::uiElement(scene, "GemIcon " + std::to_string(i + 1), gems, {0.0f, 0.0f}, {static_cast<float>(i) * 64.0f, 0.0f}, {56.0f, 56.0f});
+        auto& img = reg.emplace<UIImageComponent>(g);
+        img.texture = "assets://games/gem.png";
+        img.color = {0.25f, 0.2f, 0.15f, 0.8f};  // empty slot
+    }
+    const auto coinIcon = templates::uiElement(scene, "CoinIcon", top, {0.0f, 0.0f}, {300.0f, 92.0f}, {50.0f, 50.0f});
+    reg.emplace<UIImageComponent>(coinIcon).texture = "assets://games/coin.png";
+    b.label("CoinsText", top, {0.0f, 0.0f}, {360.0f, 90.0f}, {190.0f, 56.0f}, "", 40.0f);
+    b.label("HealthText", top, {0.0f, 0.0f}, {20.0f, 150.0f}, {520.0f, 34.0f}, "", 26.0f, UIHAlign::Left, {1.0f, 0.6f, 0.55f, 0.9f});
+    b.label("GemsText", top, {0.0f, 0.0f}, {270.0f, 150.0f}, {280.0f, 34.0f}, "", 26.0f, UIHAlign::Left, {1.0f, 0.8f, 0.4f, 0.9f});
     b.label("LevelText", hud, {0.5f, 0.0f}, {0.0f, 30.0f}, {1000.0f, 60.0f}, "", 40.0f, UIHAlign::Center);
     b.label("Message", hud, {0.5f, 0.3f}, {0.0f, 0.0f}, {1500.0f, 120.0f}, "", 60.0f, UIHAlign::Center, {1.0f, 0.88f, 0.5f, 1.0f});
     const auto bossBar = b.panel("BossBar", hud, {0.5f, 0.0f}, {0.0f, 100.0f}, {900.0f, 30.0f}, {0.2f, 0.05f, 0.05f, 0.9f});
@@ -228,6 +276,20 @@ void buildAdventure25D(Scene& scene) {
     reg.get<UITextComponent>(scene.children(jump).front()).localizationKey = "hud.jump";
     const auto attack = templates::uiButton(scene, "Attack", hud, {1.0f, 1.0f}, {-290.0f, -40.0f}, {220.0f, 200.0f}, "Épée");
     reg.get<UITextComponent>(scene.children(attack).front()).localizationKey = "rpg.attack";
+    const auto dash = templates::uiButton(scene, "Dash", hud, {1.0f, 1.0f}, {-165.0f, -270.0f}, {200.0f, 150.0f}, "Roulade");
+    reg.get<UITextComponent>(scene.children(dash).front()).localizationKey = "ambre.dash";
+    // Virtual stick (the move_x / move_y touch stick reads the lower-left of the screen): a ring
+    // and a knob that follows the thumb.
+    const auto stick = templates::uiElement(scene, "Stick", hud, {0.0f, 1.0f}, {90.0f, -90.0f}, {260.0f, 260.0f});
+    {
+        auto& img = reg.emplace<UIImageComponent>(stick);
+        img.texture = "assets://games/ring.png";
+        img.color = {1.0f, 0.95f, 0.85f, 0.45f};
+        const auto knob = templates::uiElement(scene, "StickKnob", stick, {0.5f, 0.5f}, {0.0f, 0.0f}, {120.0f, 120.0f});
+        auto& k = reg.emplace<UIImageComponent>(knob);
+        k.texture = "assets://games/disc.png";
+        k.color = {1.0f, 0.85f, 0.55f, 0.7f};
+    }
     // Menus (one panel, buttons shown by the game script as needed).
     const auto menu = b.panel("Menu", hud, {0.5f, 0.5f}, {0.0f, 0.0f}, {900.0f, 720.0f}, {0.08f, 0.06f, 0.05f, 0.92f});
     b.label("MenuTitle", menu, {0.5f, 0.0f}, {0.0f, 40.0f}, {860.0f, 100.0f}, "Les Ruines d'Ambre", 76.0f, UIHAlign::Center, {1.0f, 0.75f, 0.3f, 1.0f});

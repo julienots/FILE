@@ -238,6 +238,9 @@ function Player:damage(n)
     self.health = self.health - n
     self.invulnerable = 0.8
     agr.device.vibrate(0.1)
+    agr.audio.play("assets://audio/hurt.wav", { volume = 0.6 })
+    agr.fx.shake(0.4, 0.3)
+    agr.fx.flash(1, 0.1, 0.05, 0.35, 0.3)
     if self.health <= 0 then self:die() end
 end
 

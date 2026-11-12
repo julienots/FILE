@@ -50,6 +50,12 @@ end
 function Golem:hit(n, hero)
     self.life = self.life - n
     self.flash = 0.15
+    local x, y, z = self.entity:worldPosition()
+    agr.audio.play("assets://audio/hit.wav", { volume = 0.8, pitch = 0.8 })
+    agr.fx.burst(x, y + 1, z, { count = 18, color = { 0.75, 0.7, 0.65 }, speed = 4.5, life = 0.5, size = 0.22, additive = false })
+    agr.fx.popup(x, y + 2.4, z, "-" .. n, { color = { 1, 0.95, 0.8 }, size = 52 })
+    agr.fx.hitStop(0.06)
+    agr.fx.shake(0.2, 0.2)
     self.repath = 0
     if self.life <= 0 then
         self.entity:stopNavigation()

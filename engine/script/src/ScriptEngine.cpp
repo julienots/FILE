@@ -135,6 +135,7 @@ void ScriptEngine::Impl::destroyInstance(Instance& inst, bool callOnDestroy) {
 }
 
 void ScriptEngine::Impl::resetInstances() {
+    fxReset(*this);
     // onDestroy only while the instances' scene is still loaded (not after a reload in place).
     const bool alive = scene && scene->generation() == sceneGeneration;
     std::vector<u64> keys;
@@ -161,6 +162,10 @@ void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setNavigation(NavigationSystem* navigation) { m->navigation = navigation; }
 void ScriptEngine::setNet(net::NetSession* session) { m->net = session; }
 void ScriptEngine::setSceneLoader(std::function<void(std::string)> loader) { m->sceneLoader = std::move(loader); }
+void ScriptEngine::setTimeControl(std::function<void(double)> setScale, std::function<double()> scale) {
+    m->setTimeScale = std::move(setScale);
+    m->timeScale = std::move(scale);
+}
 void ScriptEngine::setAudio(AudioSystem* audio) { m->audio = audio; }
 void ScriptEngine::setUI(UISystem* ui) { m->ui = ui; }
 void ScriptEngine::setAnimation(AnimationSystem* animation) { m->animation = animation; }
@@ -184,7 +189,9 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
             if (inst.ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, inst.ref);
         m->instances.clear();
         m->sceneGeneration = scene.generation();
+        fxReset(*m);
     }
+    fxBeginFrame(*m, scene);
     // 1. Sync instances with the Script components.
     std::vector<u64> seen;
     std::vector<u64> created;
@@ -271,6 +278,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
             return 1;
         });
     }
+    fxEndFrame(*m, scene, time);
     m->stats.updateMs = sw.elapsedMilliseconds();
 }
 

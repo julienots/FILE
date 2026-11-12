@@ -48,6 +48,7 @@ struct UIImageComponent {
     float borderScale = 1.0f;                   ///< Border size on screen = border * borderScale (canvas units).
     bool preserveAspect = false;
     bool pixelArt = false;                      ///< Nearest filtering.
+    bool blocksPointer = true;                  ///< false: clicks and touches go through (overlays, decorations).
 };
 
 enum class UIHAlign : i32 { Left = 0, Center = 1, Right = 2 };

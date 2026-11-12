@@ -85,6 +85,9 @@ function Player:hurt(fell)
     if self.state ~= "playing" or self.invulnerable > 0 then return end
     self.livesLeft = self.livesLeft - 1
     agr.device.vibrate(0.15)
+    agr.fx.shake(0.45, 0.35)
+    agr.fx.flash(1, 0.15, 0.1, 0.4, 0.3)
+    agr.audio.play("assets://audio/hurt.wav", { volume = 0.7 })
     if self.livesLeft <= 0 then
         self.state = "lost"
         G.text("Message", agr.tr("game.over"))
@@ -105,6 +108,11 @@ function Player:onCollision(other, began)
     local _, y = self.entity:position()
     local _, oy = other:position()
     if y > oy + 0.45 then  -- landed on it
+        local ox, oy2 = other:position()
+        agr.fx.burst(ox, oy2 + 0.3, 0, { count = 24, color = { 0.5, 1, 0.45 }, speed = 5, life = 0.5, size = 0.2 })
+        agr.fx.popup(ox, oy2 + 1, 0, "+1", { color = { 1, 0.9, 0.4 }, size = 50 })
+        agr.fx.shake(0.2, 0.2)
+        agr.fx.hitStop(0.05)
         other:setActive(false)
         local vx = self.entity:velocity()
         self.entity:setVelocity(vx, self.jumpSpeed * 0.7)
@@ -124,6 +132,8 @@ function Player:reach(kind, x, y)
         end
     elseif kind == "goal" then
         self.state = "won"
+        agr.fx.burst(x, y + 1, 0, { count = 80, color = { 1, 0.85, 0.3 }, speed = 7, life = 1.2, size = 0.3, spread = "up", texture = "assets://games/sparkle.png" })
+        agr.audio.play("assets://audio/portal.wav", { volume = 0.8 })
         local best = G.record("platformer.bestCoins", self.coins)
         G.text("Message", agr.tr("plat.won", self.coins, self.coinsTotal, best))
         G.show("Restart", true)

@@ -880,6 +880,7 @@ void openAgrLibrary(lua_State* L) {
     openMobileBindings(L);
     openNavigationBindings(L);
     openGameBindings(L);
+    openFxBindings(L);
     openNetBindings(L);
 }
 

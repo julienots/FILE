@@ -796,6 +796,8 @@ TEST_CASE("2.5D adventure: title menu, move and jump, gate opens with 3 gems, en
     CHECK_FALSE(h.active("Menu"));
     CHECK(h.active("Attack"));
     CHECK(h.text("LevelText").find("Hall des Statues") != std::string::npos);
+    // Enemies wait aside while the controls are checked (they chase and knock the hero back).
+    h.lua("for _, e in ipairs(agr.find('Area 1'):find('Enemies'):children()) do e:setActive(false) end");
     h.seconds(1.0);  // the hero settles on the floor
     const math::Vec3 start = h.position("Hero");
     CHECK(std::abs(start.y) < 0.2f);
@@ -830,9 +832,15 @@ TEST_CASE("2.5D adventure: title menu, move and jump, gate opens with 3 gems, en
     CHECK(h.number("Game", "gems") == 2);
     h.lua("assert(agr.find('Area 1'):find('Gate'):isActive())");
     walkOnto("Gem 3");
+    h.lua("assert(agr.find('Area 1'):find('Gate'):isActive())");  // sinking into the floor
+    h.seconds(1.5);
     h.lua("assert(not agr.find('Area 1'):find('Gate'):isActive())");
+    h.lua("local x, y = agr.find('Area 1'):find('Gate'):position(); assert(math.abs(y - 1.25) < 0.01)");  // back home for a replay
     CHECK(h.text("GemsText").find("3 / 3") != std::string::npos);
     // A slime chases the hero along the navigation mesh and hurts him.
+    h.lua("for _, e in ipairs(agr.find('Area 1'):find('Enemies'):children()) do e:setActive(true) end;"
+          " agr.find('Area 1'):find('Enemies'):find('Slime 1'):setPosition(-4, 0, -3)");
+    h.frames(2);
     h.lua("local s = agr.find('Area 1'):find('Enemies'):find('Slime 1'); local x, y, z = s:worldPosition();"
           " agr.find('Hero'):setPosition(x - 5, 0.05, z); agr.find('Hero'):setVelocity(0, 0, 0)");
     const double health = h.number("Hero", "health");
@@ -890,6 +898,7 @@ TEST_CASE("2.5D adventure: title menu, move and jump, gate opens with 3 gems, en
         h.pressKey(Key::J);
         h.seconds(0.4);
     }
+    h.seconds(2.0);  // dying animation
     h.lua("assert(not agr.find('Area 4'):find('Enemies'):find('Boss'):isActive())");
     h.lua("assert(not agr.find('Area 4'):find('Gate'):isActive())");
     h.lua("for _, e in ipairs(agr.find('Area 4'):find('Enemies'):children()) do assert(e:name() ~= 'Minion') end");
@@ -901,12 +910,16 @@ TEST_CASE("2.5D adventure: title menu, move and jump, gate opens with 3 gems, en
     CHECK(h.text("MenuTitle").find("Victoire") != std::string::npos);
     CHECK(h.engine->save().has("ambre.bestTime"));
     // Game over, then "Continue" restarts the level.
+    h.seconds(0.8);  // the menu slides in
     h.clickUI("PlayButton");
     h.frames(2);
     CHECK(h.number("Game", "level") == 1);
     h.lua("local hs = agr.find('Hero'):script(); hs.invulnerable = 0; hs.health = 1; hs:damage(1)");
+    CHECK(h.field("Game", "state") == "dying");  // slow motion first
+    h.seconds(2.0);
     CHECK(h.field("Game", "state") == "gameover");
     CHECK(h.active("ContinueButton"));
+    h.seconds(0.8);
     h.clickUI("ContinueButton");
     h.frames(2);
     CHECK(h.field("Game", "state") == "playing");

@@ -43,6 +43,9 @@ function Creep:hit(damage)
     self.hp = self.hp - damage
     if self.hp <= 0 then
         self.dead = true
+        local x, y, z = self.entity:worldPosition()
+        agr.fx.burst(x, y + 0.3, z, { count = 16, color = { 1, 0.5, 0.3 }, speed = 4, life = 0.45, size = 0.16 })
+        agr.fx.popup(x, y + 0.8, z, "+" .. self.reward, { color = { 1, 0.85, 0.3 }, size = 40, duration = 0.7 })
         self.game:killed(self.entity, self.reward)
         agr.audio.play("assets://audio/coin.wav", { volume = 0.4, pitch = 1.2 })
         self.entity:destroy()

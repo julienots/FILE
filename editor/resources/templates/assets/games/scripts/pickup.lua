@@ -18,7 +18,11 @@ function Pickup:onTrigger(other, began)
     if not began or other:name() ~= self.collector then return end
     local s = other:script()
     if s and s.collect then s:collect(self.kind, self.value, self.entity) end
-    if self.sound ~= "" then agr.audio.play(self.sound, { volume = 0.8 }) end
+    if self.sound ~= "" then agr.audio.play(self.sound, { volume = 0.8, pitch = 0.95 + math.random() * 0.1 }) end
+    -- Retour visuel : étincelles et « +valeur » qui flotte.
+    local x, y, z = self.entity:worldPosition()
+    agr.fx.burst(x, y, z, { count = 14, color = { 1, 0.85, 0.3 }, speed = 3.5, life = 0.45, size = 0.18, spread = "up" })
+    agr.fx.popup(x, y + 0.6, z, "+" .. tostring(self.value), { color = { 1, 0.9, 0.45 }, size = 44, duration = 0.7 })
     self.entity:setActive(false)
 end
 

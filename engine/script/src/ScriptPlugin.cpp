@@ -27,6 +27,7 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_scripts->setPlatform(&engine.platform());
     m_scripts->setSaveStore(&engine.save());
     m_scripts->setSceneLoader([&engine](std::string uri) { engine.requestScene(std::move(uri)); });
+    m_scripts->setTimeControl([&engine](double s) { engine.setTimeScale(s); }, [&engine] { return engine.time().timeScale; });
     engine.registerService<ScriptPlugin>(this);
     m_collisions = engine.events().subscribe<Collision2DEvent>([this](const Collision2DEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);

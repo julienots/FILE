@@ -28,7 +28,9 @@ des modèles et test de bout en bout de l'éditeur.
 | `UISlider` | Curseur horizontal (piste, remplissage, poignée), valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
 | `UILayout` | Range les enfants en **colonne**, **ligne** ou **grille** : espacement, marges, alignement, étirement |
 
-Une image transparente (alpha 0) ne bloque pas le pointeur : utile pour les conteneurs.
+Une image transparente (alpha 0) ne bloque pas le pointeur : utile pour les conteneurs. Une image
+avec `blocksPointer` désactivé laisse aussi passer les clics et les doigts (voiles d'écran, décors
+par-dessus des boutons : c'est le cas du voile de `agr.fx.flash` / `agr.fx.fade`).
 
 ## Pointeurs
 

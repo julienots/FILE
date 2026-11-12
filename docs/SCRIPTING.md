@@ -125,6 +125,37 @@ composant).
 | `agr.camera.worldToScreen(x, y, z)` → x, y, visible ; `agr.camera.ray(x, y)` → origine, direction | sens inverse (barres de vie au-dessus des unités) et rayon de la caméra (avec `agr.physics3d.raycast`) |
 | `agr.loadScene(uri)` | change de scène à la fin de l'image (`"game://scenes/niveau2.agrscene"`) ; dans le player, Retour / Échap ramène à la scène de départ |
 | `agr.net.*` | multijoueur en réseau : héberger, rejoindre, envoyer des tables, événements ; voir [NETWORK.md](NETWORK.md) |
+| `agr.time.setScale(s)`, `agr.time.scale()` | vitesse du jeu (ralenti 0,3, pause 0, accéléré 2) ; revient à 1 quand le jeu s'arrête |
+
+### Animations interpolées et effets (« game feel »)
+
+Comme les *tweens* de Godot ou DOTween dans Unity : une propriété va de sa valeur actuelle à une
+cible en un temps donné, avec une courbe d'accélération.
+
+```lua
+-- Un coffre qui s'ouvre en rebondissant, puis disparaît.
+agr.tween(coffre, { scale = { 1.3, 1.3, 1.3 } }, 0.25, { ease = "outBack", onDone = function()
+    agr.tween(coffre, { alpha = 0 }, 0.4, { onDone = function() coffre:setActive(false) end })
+end })
+agr.tween(gemme, { position = { 0, 0.3, 0 } }, 0.9, { loop = "yoyo", ease = "inOutSine" })  -- flotte
+agr.tween(barre, { uiSize = { 450, 30 } }, 0.25)                                             -- interface
+agr.tween(lampe, { ["PointLight.intensity"] = 0 }, 2)                                        -- tout champ réfléchi
+```
+
+| Fonction | Rôle |
+|---|---|
+| `agr.tween(entité, propriétés, secondes [, options])` → id | propriétés : `position`, `scale`, `rotation` (degrés, plusieurs tours possibles), `color`, `alpha` (sprite, image, texte ou maillage), `uiPosition`, `uiSize`, ou `"Composant.champ"` (nombre ou vecteur). Options : `ease` (`linear`, `inQuad`, `outQuad`, `inOutQuad`, `inCubic`, `outCubic`, `inOutCubic`, `inBack`, `outBack`, `outElastic`, `outBounce`, `inOutSine`), `delay`, `loop` (`"yoyo"` ou `"repeat"`, sans fin sauf `times`), `times`, `from` (valeur de départ), `unscaled` (temps réel, pour les menus en pause), `onDone` (fonction). Un tween démarre à l'image suivante. |
+| `agr.stopTween(id)`, `agr.stopTweens(entité [, finir])`, `agr.isTweening(entité)` | arrêter (ou finir d'un coup) |
+| `agr.fx.burst(x, y, z [, options])` | gerbe de particules unique (impacts, ramassages, explosions), nettoyée seule : `count`, `color`, `endColor`, `speed`, `life`, `size`, `endSize`, `gravity`, `drag`, `spread` (`"sphere"`, `"up"`, `"ring"`), `additive`, `texture` |
+| `agr.fx.shake(force [, secondes])` | tremblement de la caméra principale (force 0..1 cumulable, s'atténue) ; la caméra revient exactement à sa place |
+| `agr.fx.popup(x, y, z, texte [, options])` | texte qui s'élève d'un point du monde et s'efface (dégâts, « +1 ») : `color`, `size`, `duration`, `rise` |
+| `agr.fx.flash(r, g, b [, a, secondes])` | éclair de couleur sur tout l'écran (dégâts, foudre) |
+| `agr.fx.fade(alpha [, secondes, r, g, b])` | fondu de l'écran (transitions de niveaux) ; le voile ne bloque pas les clics |
+| `agr.fx.hitStop(secondes [, échelle])` | arrêt sur image à l'impact (le jeu tourne à 5 % pendant ce temps réel) |
+
+Les textes flottants et le voile sont dans un canevas d'interface `__fx` créé à la demande ; tout
+est remis à zéro quand le jeu s'arrête ou change de scène. Tests : suite `script fx` de
+`tests/test_script.cpp`.
 
 ## Dans l'éditeur
 

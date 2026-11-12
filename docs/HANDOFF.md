@@ -50,7 +50,10 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
      simple) et lier l'aide contextuelle (Aide › …).
 4. **Éditeur de logique visuelle (phase 6)** : graphe de nœuds (événements, conditions, actions,
    variables) compilé en Lua ou interprété ; panneau d'édition, sérialisation, tests.
-5. **Outils avancés encore absents** : éditeur d'animation de particules par courbes, profiler
+5. **Écart restant avec Godot / Unity (honnêtement)** : pas d'éditeur d'animation de tweens
+   visuel, pas d'éditeur de logique visuelle, pas de magasin d'assets, pas d'export iOS / Web /
+   consoles, art des modèles de jeux procédural (simple), aucune validation sur appareils réels.
+   **Outils avancés encore absents** : éditeur d'animation de particules par courbes, profiler
    détaillé par système (le panneau Statistiques existe), gestionnaire de build multi-cibles
    (l'export PC / Android existe), éditeur de shaders par nœuds (les shaders GLSL existent).
 6. **Phase 10 — tests, optimisation, livraison** : format de scène binaire, empaquetage /
@@ -82,7 +85,15 @@ fin de niveau / game over / victoire, ramassage, grille, portail, sauvegarde `am
 le maillage de navigation, chauve-souris volante, boss qui invoque des sbires par `agr.clone`),
 `ambre_camera.lua`. Quatre salles côte à côte dans une seule scène (x = 0, 70, 140, 210). Test :
 « 2.5D adventure » dans `tests/test_game_templates.cpp` ; APK : test opt-in « 2.5D game APK »
-(`AGR_AMBRE_APK`). À faire : équilibrage sur appareil, sons propres au jeu, plus de salles.
+(`AGR_AMBRE_APK`).
+
+Finitions (« game feel ») : ombres au sol, arc d'épée, roulade invulnérable, recul, arrêt sur image
+et tremblement aux impacts, dégâts flottants, gerbes de particules, grille qui s'enfonce, fondus
+entre salles, ralenti à la mort, boss en trois temps (zone rouge annoncée, écrasement esquivable en
+sautant, récupération) qui devient furieux à mi-vie, cœurs et gemmes en icônes, stick tactile
+visible, sons et musique propres (`tools/generate_ambre_assets.py`). Les autres jeux utilisent les
+mêmes effets (`agr.tween`, `agr.fx.*` : voir SCRIPTING.md). À faire : équilibrage sur appareil,
+plus de salles, art des personnages plus détaillé (sprites générés par `tools/`).
 
 Limites connues documentées dans chaque fichier `docs/*.md` (sections « Limites actuelles »).
 Points d'attention : `agr.loadScene` dans l'éditeur en mode Jeu remplace la scène jouée (prévu pour

@@ -69,6 +69,9 @@ function Game:leak(c)
     if self.state ~= "playing" then return end
     self.livesNow = self.livesNow - 1
     agr.device.vibrate(0.1)
+    agr.fx.shake(0.35, 0.3)
+    agr.fx.flash(1, 0.1, 0.05, 0.3, 0.3)
+    agr.audio.play("assets://audio/hurt.wav", { volume = 0.5 })
     if self.livesNow <= 0 then
         self.state = "lost"
         G.text("Message", agr.tr("td.lost", self.wave))

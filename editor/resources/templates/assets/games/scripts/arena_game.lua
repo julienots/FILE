@@ -133,6 +133,8 @@ function Arena:simulate(dt)
         if p.active and G.distance(p.x, p.y, self.coinX, self.coinY) < self.radius + 0.35 then
             p.score = p.score + 1
             agr.audio.play("assets://audio/coin.wav")
+            agr.fx.burst(self.coinX, 0.6, self.coinY, { count = 20, color = { 1, 0.85, 0.3 }, speed = 4, life = 0.5, spread = "up" })
+            agr.fx.popup(self.coinX, 1.2, self.coinY, "+1", { color = { 1, 0.9, 0.4 }, size = 48 })
             self:moveCoin()
             if p.score >= self.target then
                 self.winner = i

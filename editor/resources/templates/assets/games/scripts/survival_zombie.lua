@@ -54,8 +54,13 @@ function Zombie:hit(n, from)
         local d = math.max(0.01, G.distance(x, y, hx, hy))
         self.entity:setPosition(x + (x - hx) / d * 0.5, y + (y - hy) / d * 0.5)
     end
+    local zx, zy = self.entity:position()
+    agr.fx.burst(zx, zy + 0.3, 0, { count = 12, color = { 0.55, 0.8, 0.4 }, speed = 3.5, life = 0.4, size = 0.16, additive = false })
+    agr.audio.play("assets://audio/hit.wav", { volume = 0.5 })
     if self.life <= 0 then
         agr.audio.play("assets://audio/launch.wav", { volume = 0.4, pitch = 0.7 })
+        agr.fx.burst(zx, zy + 0.3, 0, { count = 30, color = { 0.45, 0.7, 0.35 }, speed = 5, life = 0.6, size = 0.2, additive = false })
+        agr.fx.shake(0.15, 0.15)
         self.entity:destroy()
     end
 end

@@ -13,6 +13,10 @@ end
 
 function Cam:goal()
     local tx, ty, tz = self.t:position()
+    local hs = self.t:script()
+    self.look = (self.look or 0) + (((hs and hs.facing) or 1) * 1.5 - (self.look or 0)) * 0.05  -- regarde un peu devant le héros
+    tx = tx + self.look
+    ty = math.min(ty, 2)  -- ne suit pas chaque saut
     local area = math.floor((tx + self.spacing / 2) / self.spacing)
     local cx = area * self.spacing
     tx = math.max(cx - 7, math.min(cx + 12, tx))

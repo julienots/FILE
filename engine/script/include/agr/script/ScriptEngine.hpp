@@ -85,6 +85,8 @@ public:
     void setNet(net::NetSession* session);
     /// agr.loadScene(uri): asks the host to switch scenes at the end of the frame.
     void setSceneLoader(std::function<void(std::string)> loader);
+    /// agr.time.setScale / scale and hit stop (Engine::setTimeScale / timeScale).
+    void setTimeControl(std::function<void(double)> setScale, std::function<double()> scale);
     void setAudio(AudioSystem* audio);
     void setUI(UISystem* ui);
     void setAnimation(AnimationSystem* animation);

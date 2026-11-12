@@ -22,6 +22,50 @@ class NetSession;
 }
 class NavigationSystem;
 
+/// Game-feel effects driven by the script engine (ScriptFx.cpp): tweens, particle bursts,
+/// camera shake, floating texts, screen flash / fade, hit stop.
+struct FxState {
+    struct Tween {
+        u64 id = 0;
+        ecs::Entity entity;
+        std::string component, field;  // reflected field ("Transform"/"position"...); field "rotation" of Transform = Euler degrees
+        bool euler = false;
+        u32 mask = 0xF;                // components written (alpha: 0x8)
+        math::Vec4 from{}, to{};
+        bool hasFrom = false, started = false, fresh = true;  // fresh: created this frame, runs from the next one
+        float duration = 0.3f, delay = 0.0f, t = 0.0f;
+        int ease = 0;
+        int cycles = 1;                // remaining cycles (-1 = forever)
+        bool yoyo = false, backward = false, unscaled = false;
+        int onDone = LUA_NOREF;
+    };
+    struct Temporary {  // destroyed after a delay (particle bursts)
+        ecs::Entity entity;
+        float remaining = 0.0f;
+    };
+    struct Popup {
+        ecs::Entity entity;
+        math::Vec3 world;
+        float age = 0.0f, duration = 0.9f, rise = 1.2f, size = 52.0f;
+        math::Vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
+    };
+    std::vector<Tween> tweens;
+    std::vector<Temporary> temporaries;
+    std::vector<Popup> popups;
+    u64 nextTween = 1;
+    ecs::Entity canvas, overlay;
+    math::Vec4 overlayColor{0.0f, 0.0f, 0.0f, 0.0f};
+    float fadeFrom = 0.0f, fadeTo = 0.0f, fadeTime = 0.0f, fadeDuration = 0.0f;  // persistent fade
+    float flash = 0.0f, flashDuration = 0.0f;                                     // flash on top of the fade
+    math::Vec4 flashColor{1.0f, 1.0f, 1.0f, 1.0f};
+    float trauma = 0.0f, traumaDecay = 1.0f, shakeTime = 0.0f;
+    ecs::Entity shakeCamera;
+    math::Vec3 shakeOffset{0.0f, 0.0f, 0.0f};
+    float hitStop = 0.0f;
+    double resumeScale = 1.0;
+    bool scaleTouched = false;  // the game changed the time scale: back to 1 when it stops
+};
+
 struct ScriptEngine::Impl {
     struct Class {
         int ref = LUA_NOREF;  // the table returned by the script
@@ -50,6 +94,9 @@ struct ScriptEngine::Impl {
     NavigationSystem* navigation = nullptr;
     net::NetSession* net = nullptr;
     std::function<void(std::string)> sceneLoader;
+    std::function<void(double)> setTimeScale;  ///< Engine::setTimeScale (agr.time.setScale, hit stop)
+    std::function<double()> timeScale;
+    FxState fx;
     AudioSystem* audio = nullptr;
     UISystem* ui = nullptr;
     AnimationSystem* animation = nullptr;
@@ -111,6 +158,12 @@ void openMobileBindings(lua_State* L);
 void openNavigationBindings(lua_State* L);
 void openGameBindings(lua_State* L);
 void openNetBindings(lua_State* L);
+void openFxBindings(lua_State* L);
+/// Effects frame hooks (ScriptFx.cpp): before the scripts' onUpdate (removes last frame's camera
+/// shake), after it (tweens, effects, new shake), and when the scene changes.
+void fxBeginFrame(ScriptEngine::Impl& m, Scene& scene);
+void fxEndFrame(ScriptEngine::Impl& m, Scene& scene, const FrameTime& time);
+void fxReset(ScriptEngine::Impl& m);
 /// Lua value <-> JSON (agr.save, agr.net): numbers, strings, booleans, arrays, string-keyed tables.
 nlohmann::json toJson(lua_State* L, int idx, int depth = 0);
 void pushJson(lua_State* L, const nlohmann::json& j);

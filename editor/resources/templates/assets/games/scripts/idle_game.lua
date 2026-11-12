@@ -114,6 +114,11 @@ function Idle:tap()
     end
     self.pulse = 0.15
     agr.audio.play("assets://audio/click.wav", { volume = 0.5, pitch = 1 + math.random() * 0.3 })
+    local c = agr.find("Crystal")
+    if c then
+        local x, y = c:position()
+        agr.fx.popup(x + (math.random() - 0.5) * 1.5, y + 1, 0, "+" .. G.short(self:tapValue()), { color = { 0.8, 0.7, 1 }, size = 46, duration = 0.7 })
+    end
 end
 
 function Idle:onUpdate(dt)

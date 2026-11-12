@@ -10,6 +10,7 @@ agr_add_module(script
         src/ScriptMobile.cpp
         src/ScriptNavigation.cpp
         src/ScriptGame.cpp
+        src/ScriptFx.cpp
         src/ScriptNet.cpp
     PUBLIC_DEPS
         agr::runtime
