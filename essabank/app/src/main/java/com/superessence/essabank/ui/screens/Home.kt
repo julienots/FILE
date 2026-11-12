@@ -24,12 +24,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CallReceived
-import androidx.compose.material.icons.rounded.Calculate
+import androidx.compose.material.icons.automirrored.rounded.CallReceived
+import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Savings
-import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -203,14 +203,14 @@ private fun QuickActions(nav: Nav) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             QuickAction(Icons.Rounded.SwapHoriz, tr("Virer", "Send"), { nav.go(Routes.transfer("beneficiary")) }, Modifier.weight(1f), highlight = true)
-            QuickAction(Icons.Rounded.CallReceived, tr("Recevoir", "Receive"), { nav.go(Routes.transfer("receive")) }, Modifier.weight(1f))
+            QuickAction(Icons.AutoMirrored.Rounded.CallReceived, tr("Recevoir", "Receive"), { nav.go(Routes.transfer("receive")) }, Modifier.weight(1f))
             QuickAction(Icons.Rounded.AccountBalance, tr("Comptes", "Accounts"), { nav.go(Routes.ACCOUNTS) }, Modifier.weight(1f))
             QuickAction(Icons.AutoMirrored.Rounded.ReceiptLong, tr("Historique", "History"), { nav.go(Routes.history()) }, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             QuickAction(Icons.Rounded.Savings, tr("Épargne", "Savings"), { nav.go(Routes.SAVINGS) }, Modifier.weight(1f))
-            QuickAction(Icons.Rounded.ShowChart, tr("Investir", "Invest"), { nav.go(Routes.INVEST) }, Modifier.weight(1f))
-            QuickAction(Icons.Rounded.Calculate, tr("Crédit", "Loans"), { nav.go(Routes.LOANS) }, Modifier.weight(1f))
+            QuickAction(Icons.AutoMirrored.Rounded.ShowChart, tr("Investir", "Invest"), { nav.go(Routes.INVEST) }, Modifier.weight(1f))
+            QuickAction(Icons.Rounded.Assessment, tr("Crédit", "Loans"), { nav.go(Routes.LOANS) }, Modifier.weight(1f))
             QuickAction(Icons.Rounded.CreditCard, tr("Cartes", "Cards"), { nav.tab(Routes.CARDS) }, Modifier.weight(1f))
         }
     }
@@ -239,7 +239,7 @@ private fun InsightBanner(vm: AppViewModel, s: BankState, nav: Nav) {
     Panel(onClick = { nav.go(Routes.BUDGETS) }, padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background((if (warn) c.warning else c.accent).copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                Icon(if (warn) Icons.Rounded.Warning else Icons.Rounded.ShowChart, null, tint = if (warn) c.warning else c.accent, modifier = Modifier.size(21.dp))
+                Icon(if (warn) Icons.Rounded.Warning else Icons.AutoMirrored.Rounded.ShowChart, null, tint = if (warn) c.warning else c.accent, modifier = Modifier.size(21.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

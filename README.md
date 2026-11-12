@@ -1,5 +1,7 @@
 # 🌙 NOCTÉA — by Superessence Studio
 
+> Ce dépôt contient aussi **ESSABANK**, application bancaire de simulation : voir [`essabank/README.md`](essabank/README.md).
+
 **Retrouvez le calme. Retrouvez le sommeil.**
 
 NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) de méditation guidée, de respiration, d'histoires du soir et d'ambiances sonores, éditée par **Superessence Studio**.

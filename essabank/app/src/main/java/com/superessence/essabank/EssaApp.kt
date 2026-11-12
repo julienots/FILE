@@ -11,23 +11,30 @@ import com.superessence.essabank.core.engine.IdGenerator
 import com.superessence.essabank.core.market.MarketSimulator
 import com.superessence.essabank.data.AndroidSqlDriver
 import com.superessence.essabank.data.SecurityStore
+import com.superessence.essabank.data.SecuritySettings
 
 /** Conteneur de dépendances de l'application (une seule instance par processus). */
-class AppContainer(context: Context, clock: BankClock = BankClock.SYSTEM) {
+class AppContainer(
+    val database: BankDatabase,
+    val security: SecuritySettings,
+    clock: BankClock = BankClock.SYSTEM,
+) {
     val market = MarketSimulator(clock.zone)
     val engine = BankEngine(clock, IdGenerator.SECURE, market)
     val analytics = Analytics(clock, market)
-    val database = BankDatabase(AndroidSqlDriver(context))
     val repository = BankRepository(database, engine)
-    val security = SecurityStore(context)
+
+    companion object {
+        fun android(context: Context) = AppContainer(BankDatabase(AndroidSqlDriver(context)), SecurityStore(context))
+    }
 }
 
 class EssaApp : Application() {
     lateinit var container: AppContainer
-        private set
+        internal set
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        container = AppContainer.android(this)
     }
 }

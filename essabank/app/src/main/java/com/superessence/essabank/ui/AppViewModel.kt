@@ -3,6 +3,7 @@ package com.superessence.essabank.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.superessence.essabank.AppContainer
 import com.superessence.essabank.EssaApp
 import com.superessence.essabank.core.demo.DemoData
 import com.superessence.essabank.core.engine.BankEngine
@@ -31,8 +32,8 @@ data class UiMessage(val text: String, val error: Boolean = false, val id: Long 
  * Toutes les opérations passent par [com.superessence.essabank.core.data.BankRepository]
  * (moteur pur + enregistrement SQLite atomique).
  */
-class AppViewModel(app: Application) : AndroidViewModel(app) {
-    val container = (app as EssaApp).container
+class AppViewModel(app: Application, val container: AppContainer) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, (app as EssaApp).container)
     private val repo = container.repository
     val engine: BankEngine get() = container.engine
     val analytics get() = container.analytics

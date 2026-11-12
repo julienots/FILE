@@ -37,10 +37,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -187,7 +187,7 @@ fun OnboardingScreen(vm: AppViewModel, onCreated: () -> Unit) {
                     Text(t("Comptes, cartes, virements, épargne et investissements : tout fonctionne, mais rien n'est réel.",
                         "Accounts, cards, transfers, savings and investing: everything works, but nothing is real."), style = EssaType.body.copy(fontSize = 15.sp, lineHeight = 22.sp), color = Color.White.copy(alpha = 0.72f))
                     Spacer(Modifier.height(22.dp))
-                    Promise(Icons.Rounded.Shield, t("Banque 100 % fictive", "100% fictional bank"), t("ESSABANK n'est pas un établissement bancaire et ne détient aucun fonds.", "ESSABANK is not a bank and holds no funds."))
+                    Promise(Icons.Rounded.Security, t("Banque 100 % fictive", "100% fictional bank"), t("ESSABANK n'est pas un établissement bancaire et ne détient aucun fonds.", "ESSABANK is not a bank and holds no funds."))
                     Promise(Icons.Rounded.AutoAwesome, t("Monnaie virtuelle", "Virtual currency"), t("Les unités virtuelles (UV) n'ont aucune valeur monétaire.", "Virtual units (UV) have no monetary value."))
                     Promise(Icons.Rounded.VerifiedUser, t("Aucune donnée bancaire demandée", "No banking data requested"), t("Tout reste sur votre téléphone, protégé par un code PIN local.", "Everything stays on your phone, protected by a local PIN."))
                     Spacer(Modifier.height(28.dp))
@@ -276,7 +276,7 @@ private fun CreateProfileForm(language: AppLanguage, onBack: () -> Unit, onCreat
         Spacer(Modifier.height(22.dp))
         EssaTextField(first, { first = it }, t("Prénom", "First name"), leading = Icons.Rounded.Person, maxLength = 32)
         Spacer(Modifier.height(10.dp))
-        EssaTextField(last, { last = it }, t("Nom (facultatif)", "Last name (optional)"), leading = Icons.Rounded.Badge, maxLength = 32)
+        EssaTextField(last, { last = it }, t("Nom (facultatif)", "Last name (optional)"), leading = Icons.Rounded.AccountCircle, maxLength = 32)
         Spacer(Modifier.height(22.dp))
         Text(t("Capital virtuel de départ", "Virtual starting capital"), style = EssaType.title, color = Color.White)
         Spacer(Modifier.height(10.dp))
@@ -325,7 +325,7 @@ fun PinSetupScreen(vm: AppViewModel, onDone: () -> Unit) {
 
     if (askBio) {
         Column(Modifier.fillMaxSize().background(c.background).statusBarsPadding().navigationBarsPadding().padding(24.dp), verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Rounded.Shield, null, tint = c.accent, modifier = Modifier.size(56.dp))
+            Icon(Icons.Rounded.Security, null, tint = c.accent, modifier = Modifier.size(56.dp))
             Spacer(Modifier.height(16.dp))
             Text(tr("Déverrouillage biométrique", "Biometric unlock"), style = EssaType.h1, color = c.text)
             Spacer(Modifier.height(8.dp))

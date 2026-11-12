@@ -18,15 +18,15 @@ import androidx.compose.material.icons.rounded.LocalGroceryStore
 import androidx.compose.material.icons.rounded.LocalHospital
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.MonetizationOn
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material.icons.rounded.ShoppingBag
-import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.rounded.LocalMall
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Subscriptions
@@ -34,8 +34,8 @@ import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Train
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Work
-import androidx.compose.material.icons.rounded.CallReceived
-import androidx.compose.material.icons.rounded.CallMade
+import androidx.compose.material.icons.automirrored.rounded.CallReceived
+import androidx.compose.material.icons.automirrored.rounded.CallMade
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Autorenew
@@ -117,7 +117,7 @@ object L {
 
     fun categoryIcon(c: Category): ImageVector = when (c) {
         Category.FOOD -> Icons.Rounded.LocalGroceryStore
-        Category.SHOPPING -> Icons.Rounded.ShoppingBag
+        Category.SHOPPING -> Icons.Rounded.LocalMall
         Category.TRANSPORT -> Icons.Rounded.Train
         Category.LEISURE -> Icons.Rounded.Movie
         Category.HOUSING -> Icons.Rounded.Home
@@ -125,7 +125,7 @@ object L {
         Category.HEALTH -> Icons.Rounded.LocalHospital
         Category.RESTAURANTS -> Icons.Rounded.Restaurant
         Category.TRANSFERS -> Icons.Rounded.SwapHoriz
-        Category.INCOME -> Icons.Rounded.Payments
+        Category.INCOME -> Icons.Rounded.MonetizationOn
         Category.OTHER -> Icons.Rounded.Category
     }
 
@@ -168,7 +168,7 @@ object L {
         "rocket" -> Icons.Rounded.RocketLaunch
         "beach" -> Icons.Rounded.BeachAccess
         "briefcase" -> Icons.Rounded.Work
-        "chart" -> Icons.Rounded.ShowChart
+        "chart" -> Icons.AutoMirrored.Rounded.ShowChart
         "home" -> Icons.Rounded.Home
         "car" -> Icons.Rounded.DirectionsCar
         "heart" -> Icons.Rounded.Favorite
@@ -268,7 +268,7 @@ object L {
     }
 
     fun loanIcon(t: LoanType): ImageVector = when (t) {
-        LoanType.PERSONAL -> Icons.Rounded.Payments
+        LoanType.PERSONAL -> Icons.Rounded.MonetizationOn
         LoanType.AUTO -> Icons.Rounded.DirectionsCar
         LoanType.HOME -> Icons.Rounded.Home
         LoanType.STUDENT -> Icons.Rounded.School
@@ -278,8 +278,8 @@ object L {
 
     fun notificationIcon(t: NotificationType): ImageVector = when (t) {
         NotificationType.PAYMENT -> Icons.Rounded.CreditCard
-        NotificationType.TRANSFER_RECEIVED -> Icons.Rounded.CallReceived
-        NotificationType.TRANSFER_SENT -> Icons.Rounded.CallMade
+        NotificationType.TRANSFER_RECEIVED -> Icons.AutoMirrored.Rounded.CallReceived
+        NotificationType.TRANSFER_SENT -> Icons.AutoMirrored.Rounded.CallMade
         NotificationType.GOAL_REACHED -> Icons.Rounded.EmojiEvents
         NotificationType.BUDGET_EXCEEDED, NotificationType.BUDGET_WARNING -> Icons.Rounded.Warning
         NotificationType.NEW_TRANSACTION -> Icons.AutoMirrored.Rounded.ReceiptLong

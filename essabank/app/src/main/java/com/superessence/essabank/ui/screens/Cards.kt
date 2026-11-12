@@ -36,11 +36,11 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.LocalMall
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material.icons.rounded.WorkspacePremium
+import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -168,7 +168,7 @@ fun CardsScreen(vm: AppViewModel, nav: Nav) {
                 QuickAction(if (card.status == CardStatus.LOCKED) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
                     if (card.status == CardStatus.LOCKED) tr("Déverrouiller", "Unlock") else tr("Verrouiller", "Lock"),
                     { vm.run { setCardStatus(it, card.id, if (card.status == CardStatus.LOCKED) CardStatus.ACTIVE else CardStatus.LOCKED) } }, Modifier.weight(1f))
-                QuickAction(Icons.Rounded.ShoppingBag, tr("Payer", "Pay"), { paySheet = card.id }, Modifier.weight(1f), highlight = true)
+                QuickAction(Icons.Rounded.LocalMall, tr("Payer", "Pay"), { paySheet = card.id }, Modifier.weight(1f), highlight = true)
                 QuickAction(Icons.Rounded.Settings, tr("Gérer", "Manage"), { nav.go(Routes.card(card.id)) }, Modifier.weight(1f))
             }
         }
@@ -284,7 +284,7 @@ fun CardDetailScreen(vm: AppViewModel, nav: Nav, id: String) {
                 QuickAction(if (card.status == CardStatus.LOCKED) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
                     if (card.status == CardStatus.LOCKED) tr("Déverrouiller", "Unlock") else tr("Verrouiller", "Lock"),
                     { vm.run { setCardStatus(it, id, if (card.status == CardStatus.LOCKED) CardStatus.ACTIVE else CardStatus.LOCKED) } }, Modifier.weight(1f))
-                QuickAction(Icons.Rounded.ShoppingBag, tr("Payer", "Pay"), { pay = true }, Modifier.weight(1f), highlight = true)
+                QuickAction(Icons.Rounded.LocalMall, tr("Payer", "Pay"), { pay = true }, Modifier.weight(1f), highlight = true)
             }
         }
         if (reveal) item {
@@ -321,7 +321,7 @@ fun CardDetailScreen(vm: AppViewModel, nav: Nav, id: String) {
                             Modifier.size(78.dp, 50.dp).clip(RoundedCornerShape(10.dp)).background(Brush.linearGradient(CardStyles.colors(d)))
                                 .border(if (card.design == d) 3.dp else 1.dp, if (card.design == d) c.accent else c.border, RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center,
-                        ) { if (locked) Icon(Icons.Rounded.WorkspacePremium, null, tint = Color.White) }
+                        ) { if (locked) Icon(Icons.Rounded.Stars, null, tint = Color.White) }
                         Spacer(Modifier.height(4.dp))
                         Text(L.design(d, lang), style = EssaType.small, color = if (card.design == d) c.text else c.textMuted)
                     }
@@ -394,7 +394,7 @@ fun NewCardScreen(vm: AppViewModel, nav: Nav) {
     val limitReached = s.cards.size >= tier.maxCards
 
     ScreenScaffold(tr("Nouvelle carte fictive", "New fictional card"), nav::back, bottomBar = {
-        if (limitReached) PrimaryButton(tr("Changer de formule (gratuit)", "Change plan (free)"), { nav.go(Routes.PLANS) }, icon = Icons.Rounded.WorkspacePremium)
+        if (limitReached) PrimaryButton(tr("Changer de formule (gratuit)", "Change plan (free)"), { nav.go(Routes.PLANS) }, icon = Icons.Rounded.Stars)
         else PrimaryButton(tr("Créer la carte", "Create card"), loading = busy, enabled = label.isNotBlank(), onClick = {
             busy = true
             vm.run(created, onOk = { v -> (v as? Card)?.let { nav.replace(Routes.card(it.id)) } }) { createCard(it, account, type, label, design, Money.units(limit)) }
@@ -409,7 +409,7 @@ fun NewCardScreen(vm: AppViewModel, nav: Nav) {
         items(CardType.entries.toList()) { t ->
             val locked = t == CardType.PREMIUM && tier == Tier.STANDARD
             Box(Modifier.clip(RoundedCornerShape(16.dp)).background(if (t == type) c.accentSoft else Color.Transparent)) {
-                ListRow(L.cardType(t, lang), L.cardTypeHint(t, lang), leading = { IconBadge(if (locked) Icons.Rounded.WorkspacePremium else Icons.Rounded.CreditCard, if (t == type) c.accent else c.textMuted, 40.dp) },
+                ListRow(L.cardType(t, lang), L.cardTypeHint(t, lang), leading = { IconBadge(if (locked) Icons.Rounded.Stars else Icons.Rounded.CreditCard, if (t == type) c.accent else c.textMuted, 40.dp) },
                     onClick = {
                         if (locked) vm.toast(needPlus, true)
                         else { type = t; if (!labelEdited) label = L.cardType(t, lang); if (t == CardType.PREMIUM) limit = maxOf(limit, 5000) }
@@ -431,7 +431,7 @@ fun NewCardScreen(vm: AppViewModel, nav: Nav) {
                             .border(if (design == d) 3.dp else 1.dp, if (design == d) c.accent else c.border, RoundedCornerShape(10.dp))
                             .pressable { if (!locked) design = d },
                         contentAlignment = Alignment.Center,
-                    ) { if (locked) Icon(Icons.Rounded.WorkspacePremium, null, tint = Color.White.copy(alpha = 0.8f)) }
+                    ) { if (locked) Icon(Icons.Rounded.Stars, null, tint = Color.White.copy(alpha = 0.8f)) }
                 }
             }
         }

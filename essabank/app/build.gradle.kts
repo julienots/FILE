@@ -87,3 +87,11 @@ dependencies {
     testImplementation("androidx.test:core-ktx:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
 }
+
+// ./gradlew essabankApk → compile la version release signée et la copie sous release/ESSABANK-SUPERESSENCE.apk
+tasks.register<Copy>("essabankApk") {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
+    into(rootProject.layout.projectDirectory.dir("release"))
+    rename { "ESSABANK-SUPERESSENCE.apk" }
+}

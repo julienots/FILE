@@ -58,6 +58,7 @@ sealed class EngineResult<out T> {
     val isOk: Boolean get() = this is Ok
 
     fun stateOrNull(): BankState? = (this as? Ok)?.state
+    fun valueOrNull(): T? = when (this) { is Ok -> value; is Err -> null }
     fun errorOrNull(): BankError? = (this as? Err)?.error
 }
 

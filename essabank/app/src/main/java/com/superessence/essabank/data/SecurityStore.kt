@@ -9,65 +9,111 @@ import com.superessence.essabank.core.security.PinLockout
 /**
  * Réglages de sécurité locaux : PIN haché (PBKDF2), compteur d'échecs, biométrie,
  * délai de verrouillage automatique et protection d'écran. Le PIN n'est jamais stocké en clair.
- * Ce fichier est exclu des sauvegardes Android (voir data_extraction_rules.xml).
+ * Implémentation Android : [SecurityStore] (fichier exclu des sauvegardes, voir data_extraction_rules.xml).
  */
-class SecurityStore(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("essabank_security", Context.MODE_PRIVATE)
+interface SecuritySettings {
+    val hasPin: Boolean
+    fun setPin(pin: String)
+    fun check(pin: String, now: Long = System.currentTimeMillis()): PinCheck
+    fun lockRemaining(now: Long = System.currentTimeMillis()): Long
+    var biometricEnabled: Boolean
+    var autoLockSeconds: Int
+    var secureScreen: Boolean
+    var introSeen: Boolean
+    fun clear()
+}
 
-    val hasPin: Boolean get() = prefs.getString(KEY_PIN, null) != null
+/**
+ * Logique commune : PIN haché (PBKDF2), compteur d'échecs et délai croissant.
+ * Le stockage clé-valeur est fourni par la sous-classe.
+ */
+abstract class BaseSecuritySettings : SecuritySettings {
+    protected abstract fun getString(key: String): String?
+    protected abstract fun getInt(key: String, def: Int): Int
+    protected abstract fun getLong(key: String, def: Long): Long
+    protected abstract fun getBoolean(key: String, def: Boolean): Boolean
+    protected abstract fun put(values: Map<String, Any?>)
 
-    fun setPin(pin: String) {
+    override val hasPin: Boolean get() = getString(KEY_PIN) != null
+
+    override fun setPin(pin: String) {
         require(PinHasher.isValidPin(pin))
-        prefs.edit { putString(KEY_PIN, PinHasher.hash(pin)); putInt(KEY_FAILURES, 0); putLong(KEY_LOCK_UNTIL, 0) }
+        put(mapOf(KEY_PIN to PinHasher.hash(pin), KEY_FAILURES to 0, KEY_LOCK_UNTIL to 0L))
     }
 
-    /** Vérifie le PIN. Renvoie [PinCheck.Locked] pendant l'attente imposée après trop d'échecs. */
-    fun check(pin: String, now: Long = System.currentTimeMillis()): PinCheck {
-        val until = prefs.getLong(KEY_LOCK_UNTIL, 0)
+    override fun check(pin: String, now: Long): PinCheck {
+        val until = getLong(KEY_LOCK_UNTIL, 0)
         if (until > now) return PinCheck.Locked(until - now)
-        val stored = prefs.getString(KEY_PIN, null) ?: return PinCheck.Wrong(0, 0)
+        val stored = getString(KEY_PIN) ?: return PinCheck.Wrong(0, 0)
         return if (PinHasher.verify(pin, stored)) {
-            prefs.edit { putInt(KEY_FAILURES, 0); putLong(KEY_LOCK_UNTIL, 0) }
+            put(mapOf(KEY_FAILURES to 0, KEY_LOCK_UNTIL to 0L))
             PinCheck.Ok
         } else {
-            val failures = prefs.getInt(KEY_FAILURES, 0) + 1
+            val failures = getInt(KEY_FAILURES, 0) + 1
             val delay = PinLockout.delayMillis(failures)
-            prefs.edit { putInt(KEY_FAILURES, failures); putLong(KEY_LOCK_UNTIL, if (delay > 0) now + delay else 0) }
+            put(mapOf(KEY_FAILURES to failures, KEY_LOCK_UNTIL to if (delay > 0) now + delay else 0L))
             if (delay > 0) PinCheck.Locked(delay) else PinCheck.Wrong(failures, PinLockout.FREE_ATTEMPTS - failures)
         }
     }
 
-    fun lockRemaining(now: Long = System.currentTimeMillis()): Long = (prefs.getLong(KEY_LOCK_UNTIL, 0) - now).coerceAtLeast(0)
+    override fun lockRemaining(now: Long): Long = (getLong(KEY_LOCK_UNTIL, 0) - now).coerceAtLeast(0)
 
-    var biometricEnabled: Boolean
-        get() = prefs.getBoolean(KEY_BIO, false)
-        set(v) = prefs.edit { putBoolean(KEY_BIO, v) }
+    override var biometricEnabled: Boolean
+        get() = getBoolean(KEY_BIO, false)
+        set(v) = put(mapOf(KEY_BIO to v))
 
-    /** Délai avant verrouillage automatique en arrière-plan, en secondes (0 = immédiat). */
-    var autoLockSeconds: Int
-        get() = prefs.getInt(KEY_AUTOLOCK, 30)
-        set(v) = prefs.edit { putInt(KEY_AUTOLOCK, v) }
+    override var autoLockSeconds: Int
+        get() = getInt(KEY_AUTOLOCK, 30)
+        set(v) = put(mapOf(KEY_AUTOLOCK to v))
 
-    /** Bloque les captures d'écran et masque l'aperçu dans les applications récentes. */
-    var secureScreen: Boolean
-        get() = prefs.getBoolean(KEY_SECURE, true)
-        set(v) = prefs.edit { putBoolean(KEY_SECURE, v) }
+    override var secureScreen: Boolean
+        get() = getBoolean(KEY_SECURE, true)
+        set(v) = put(mapOf(KEY_SECURE to v))
 
-    var introSeen: Boolean
-        get() = prefs.getBoolean(KEY_INTRO, false)
-        set(v) = prefs.edit { putBoolean(KEY_INTRO, v) }
-
-    fun clear() = prefs.edit { clear() }
+    override var introSeen: Boolean
+        get() = getBoolean(KEY_INTRO, false)
+        set(v) = put(mapOf(KEY_INTRO to v))
 
     companion object {
-        private const val KEY_PIN = "pin_hash"
-        private const val KEY_FAILURES = "pin_failures"
-        private const val KEY_LOCK_UNTIL = "pin_lock_until"
-        private const val KEY_BIO = "biometric"
-        private const val KEY_AUTOLOCK = "auto_lock"
-        private const val KEY_SECURE = "secure_screen"
-        private const val KEY_INTRO = "intro_seen"
+        const val KEY_PIN = "pin_hash"
+        const val KEY_FAILURES = "pin_failures"
+        const val KEY_LOCK_UNTIL = "pin_lock_until"
+        const val KEY_BIO = "biometric"
+        const val KEY_AUTOLOCK = "auto_lock"
+        const val KEY_SECURE = "secure_screen"
+        const val KEY_INTRO = "intro_seen"
     }
+}
+
+/** Réglages en mémoire (tests et aperçus). */
+class InMemorySecuritySettings : BaseSecuritySettings() {
+    private val map = HashMap<String, Any?>()
+    override fun getString(key: String) = map[key] as? String
+    override fun getInt(key: String, def: Int) = map[key] as? Int ?: def
+    override fun getLong(key: String, def: Long) = (map[key] as? Number)?.toLong() ?: def
+    override fun getBoolean(key: String, def: Boolean) = map[key] as? Boolean ?: def
+    override fun put(values: Map<String, Any?>) { map.putAll(values) }
+    override fun clear() = map.clear()
+}
+
+/** Réglages persistés dans les SharedPreferences privées de l'application. */
+class SecurityStore(context: Context) : BaseSecuritySettings() {
+    private val prefs: SharedPreferences = context.getSharedPreferences("essabank_security", Context.MODE_PRIVATE)
+
+    override fun getString(key: String): String? = prefs.getString(key, null)
+    override fun getInt(key: String, def: Int): Int = prefs.getInt(key, def)
+    override fun getLong(key: String, def: Long): Long = prefs.getLong(key, def)
+    override fun getBoolean(key: String, def: Boolean): Boolean = prefs.getBoolean(key, def)
+    override fun put(values: Map<String, Any?>) = prefs.edit {
+        for ((k, v) in values) when (v) {
+            null -> remove(k)
+            is String -> putString(k, v)
+            is Int -> putInt(k, v)
+            is Long -> putLong(k, v)
+            is Boolean -> putBoolean(k, v)
+        }
+    }
+    override fun clear() = prefs.edit { clear() }
 }
 
 sealed interface PinCheck {
