@@ -871,6 +871,29 @@ TEST_CASE("demo game APK" * doctest::skip(std::getenv("AGR_DEMO_APK") == nullptr
     CHECK(fs::file_size(std::getenv("AGR_DEMO_APK")) > 1024u * 1024u);
 }
 
+// "Les Ruines d'Ambre", the complete 2.5D game, as a signed release APK at $AGR_AMBRE_APK.
+TEST_CASE("2.5D game APK (Ruines d'Ambre)" * doctest::skip(std::getenv("AGR_AMBRE_APK") == nullptr)) {
+    EditorFixture f(ProjectMode::Mode25D);
+    f.ctx->newScene(SceneTemplate::GameAdventure25D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    Project& project = f.ctx->project();
+    project.settings().name = "Les Ruines d'Ambre";
+    project.settings().exportSettings.packageId = "com.superessence.ruinesdambre";
+    const AndroidToolchain tools = findAndroidToolchain(".");
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE_MESSAGE(problems.empty(), problems.front());
+    REQUIRE(createKeystore(tools, f.root / "keys" / "ambre.p12", "ambre", "agr-ambre-pass", "Superessence Studio"));
+    project.settings().exportSettings.keystorePath = (f.root / "keys" / "ambre.p12").string();
+    project.settings().exportSettings.keyAlias = "ambre";
+    AndroidBuildOptions o;
+    o.kind = AndroidBuildKind::ReleaseApk;
+    o.storePassword = "agr-ambre-pass";
+    auto apk = buildAndroid(project, tools, f.root / "android", o);
+    REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
+    fs::copy_file(apk.value().output, std::getenv("AGR_AMBRE_APK"), fs::copy_options::overwrite_existing);
+    CHECK(fs::file_size(std::getenv("AGR_AMBRE_APK")) > 1024u * 1024u);
+}
+
 // The engine showcase for Android: a menu launching every game template, signed release APK at $AGR_ENGINE_APK.
 TEST_CASE("engine showcase APK (all game templates)" * doctest::skip(std::getenv("AGR_ENGINE_APK") == nullptr)) {
     EditorFixture f(ProjectMode::Mode2D);

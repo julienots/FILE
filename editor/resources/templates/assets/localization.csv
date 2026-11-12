@@ -147,3 +147,30 @@ arena.status.joined,"Connecté : vous êtes le joueur {1}","Connected: you are p
 arena.status.lost,"Connexion perdue : retour au jeu local","Connection lost: back to local play","Conexión perdida: vuelta al juego local"
 arena.status.error,"Réseau : {1}","Network: {1}","Red: {1}"
 arena.won,"Le joueur {1} gagne !","Player {1} wins!","¡Gana el jugador {1}!"
+ambre.new,Nouvelle partie,New game,Nueva partida
+ambre.continue,Continuer,Continue,Continuar
+ambre.resume,Reprendre,Resume,Reanudar
+ambre.menu,Menu principal,Main menu,Menú principal
+ambre.area1,"Niveau 1 — Le Hall des Statues","Level 1 — The Hall of Statues","Nivel 1 — La Sala de las Estatuas"
+ambre.area2,"Niveau 2 — La Crypte Engloutie","Level 2 — The Sunken Crypt","Nivel 2 — La Cripta Sumergida"
+ambre.area3,"Niveau 3 — Les Jardins Suspendus","Level 3 — The Hanging Gardens","Nivel 3 — Los Jardines Colgantes"
+ambre.area4,"Niveau 4 — Le Cœur d'Ambre","Level 4 — The Amber Heart","Nivel 4 — El Corazón de Ámbar"
+ambre.intro,"Explorez les ruines, trouvez les trois gemmes d'ambre de chaque salle et vainquez le gardien.","Explore the ruins, find the three amber gems in each hall and defeat the guardian.","Explora las ruinas, encuentra las tres gemas de ámbar de cada sala y derrota al guardián."
+ambre.best,Meilleur temps : {1},Best time: {1},Mejor tiempo: {1}
+ambre.paused,Pause,Paused,Pausa
+ambre.gameover.title,Vous êtes tombé…,You fell…,Has caído…
+ambre.gameover,"Continuer reprend au début de « {1} ».","Continue restarts “{1}”.","Continuar reinicia «{1}»."
+ambre.victory.title,Victoire !,Victory!,¡Victoria!
+ambre.victory,"Le Cœur d'Ambre est libéré. Temps : {1} — pièces : {2}","The Amber Heart is free. Time: {1} — coins: {2}","El Corazón de Ámbar es libre. Tiempo: {1} — monedas: {2}"
+ambre.record,Nouveau record !,New record!,¡Nuevo récord!
+ambre.goal,Trouvez les 3 gemmes d'ambre,Find the 3 amber gems,Encuentra las 3 gemas de ámbar
+ambre.boss,Le gardien se réveille !,The guardian awakens!,¡El guardián despierta!
+ambre.bossDown,Le gardien est vaincu ! Entrez dans le portail.,The guardian is defeated! Enter the portal.,¡El guardián ha caído! Entra en el portal.
+ambre.gateOpen,La grille s'ouvre : rejoignez le portail !,The gate opens: reach the portal!,La reja se abre: ¡ve al portal!
+ambre.gem,Gemme {1} / 3,Gem {1} / 3,Gema {1} / 3
+ambre.cleared,Salle terminée !,Hall cleared!,¡Sala superada!
+ambre.summon,Le gardien appelle ses sbires !,The guardian summons minions!,¡El guardián invoca esbirros!
+ambre.health,Vie : {1} / {2},Health: {1} / {2},Vida: {1} / {2}
+ambre.gems,Gemmes : {1} / 3,Gems: {1} / 3,Gemas: {1} / 3
+ambre.gems.boss,Vainquez le gardien,Defeat the guardian,Derrota al guardián
+ambre.coins,Pièces : {1},Coins: {1},Monedas: {1}

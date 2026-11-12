@@ -40,6 +40,7 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameStrategy: return "Jeu : Stratégie (temps réel)";
         case SceneTemplate::GameRacing: return "Jeu : Course";
         case SceneTemplate::GameArena: return "Jeu : Multijoueur (arène)";
+        case SceneTemplate::GameAdventure25D: return "Jeu : Aventure 2.5D";
     }
     return "?";
 }
@@ -82,6 +83,8 @@ const char* templateDescription(SceneTemplate t) {
             return "Course arcade en 3D : trois tours d'un circuit contre une voiture pilotée par l'ordinateur, compte à rebours, chronos, classement en direct, meilleur tour sauvegardé, ralentissement hors piste et caméra de poursuite. Flèches / ZQSD, manette ou pédales tactiles.";
         case SceneTemplate::GameArena:
             return "Arène multijoueur : ramassez la pièce, le premier à 10 gagne. À deux sur le même clavier ou avec deux manettes, ou en réseau jusqu'à 4 (Héberger / Rejoindre, module agr.net : l'hôte simule la partie et la diffuse, les clients envoient leurs commandes). Base extensible pour d'autres jeux en ligne.";
+        case SceneTemplate::GameAdventure25D:
+            return "Aventure-action 2.5D complète : ruines en 3D vues de biais, personnages en sprites. Menu, 3 niveaux (3 gemmes ouvrent la sortie), boss, pause, game over, victoire, sauvegarde, commandes tactiles.";
     }
     return "";
 }
@@ -100,6 +103,7 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameAdventure25D: return ProjectMode::Mode25D;
         case SceneTemplate::GameArena: return ProjectMode::Mode2D;
         case SceneTemplate::GameRacing: return ProjectMode::Mode3D;
         case SceneTemplate::GameStrategy: return ProjectMode::Mode3D;
@@ -122,7 +126,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameArena); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameAdventure25D); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -576,6 +580,7 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameAdventure25D: games::buildAdventure25D(scene); break;
         case SceneTemplate::GameArena: games::buildArena(scene); break;
         case SceneTemplate::GameRacing: games::buildRacing(scene); break;
         case SceneTemplate::GameStrategy: games::buildStrategy(scene); break;
@@ -606,10 +611,12 @@ void buildLauncherScene(Scene& scene, const std::string& title, const std::vecto
     b.script(menu, "assets://games/scripts/launcher.lua", std::string(R"({"scenes": ")") + uris + "\"}");
     const auto hud = b.hud();
     b.label("Title", hud, {0.5f, 0.0f}, {0.0f, 250.0f}, {1600.0f, 90.0f}, title, 72.0f, UIHAlign::Center, {1.0f, 0.8f, 0.3f, 1.0f});
-    const int cols = 4;
+    const int cols = entries.size() > 12 ? 5 : 4;  // at most 3 rows under the title
+    const float step = cols == 5 ? 372.0f : 440.0f;
     for (usize i = 0; i < entries.size(); ++i) {
-        const float x = (static_cast<float>(i % cols) - 1.5f) * 440.0f, y = 380.0f + static_cast<float>(i / cols) * 160.0f;
-        b.button("Game " + std::to_string(i + 1), hud, {0.5f, 0.0f}, {x, y}, {420.0f, 140.0f}, entries[i].first, menu, "open");
+        const float x = (static_cast<float>(i % static_cast<usize>(cols)) - static_cast<float>(cols - 1) * 0.5f) * step;
+        const float y = 380.0f + static_cast<float>(i / static_cast<usize>(cols)) * 160.0f;
+        b.button("Game " + std::to_string(i + 1), hud, {0.5f, 0.0f}, {x, y}, {step - 20.0f, 140.0f}, entries[i].first, menu, "open");
     }
     b.label("Hint", hud, {0.5f, 1.0f}, {0.0f, -40.0f}, {1600.0f, 60.0f}, "Retour / Échap : revenir au menu", 32.0f, UIHAlign::Center,
             {0.8f, 0.8f, 0.85f, 1.0f});

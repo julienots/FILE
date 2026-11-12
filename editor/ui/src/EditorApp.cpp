@@ -1065,6 +1065,11 @@ void EditorApp::templateGallery() {
         m_viewport.gameView = true;
     } else if (phase == 3) {
         startPlay();
+    } else if (phase == 20) {
+        // Optional Lua run in the game before the capture (e.g. start from a title menu).
+        if (const char* code = std::getenv("AGR_GALLERY_LUA"); code && *code)
+            if (auto* scripts = m_engine->service<ScriptPlugin>(); scripts && scripts->scripts())
+                if (!scripts->scripts()->run(code, &m_ctx->scene())) AGR_LOG_WARN("Gallery", "AGR_GALLERY_LUA failed");
     } else if (phase == 125) {
         std::string name = templateName(t);
         for (char& c : name)

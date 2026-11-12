@@ -26,10 +26,10 @@ tests automatisés, docs, benchmarks ; ne jamais dire qu'un module est fini s'il
 | 7 Animation, audio, UI | ✅ | ANIMATION.md, AUDIO.md, UI.md |
 | 8 Android (player, export APK / AAB signés, mobile : zones sûres, capteurs, vibreur…) | ✅ | EXPORT.md |
 | 9.1–9.4 Prefabs, entrées / manettes, localisation, navigation (A* 2D, Recast/Detour), terrain, eau, particules 3D, shaders personnalisés + éditeur | ✅ | PREFABS.md, INPUT.md, LOCALIZATION.md, NAVIGATION.md, TERRAIN.md, SHADERS.md |
-| 9.5 Modèles de jeux : plateforme 2D, RPG 2D, RPG 3D, tower defense, cartes, simulation (ferme), stratégie, survie, course, idle, tycoon, multijoueur (arène, réseau UDP `agr.net`) | ✅ jouables et testés | NETWORK.md, ce document |
+| 9.5 Modèles de jeux : plateforme 2D, RPG 2D, RPG 3D, tower defense, cartes, simulation (ferme), stratégie, survie, course, idle, tycoon, multijoueur (arène, réseau UDP `agr.net`), **aventure 2.5D « Les Ruines d'Ambre »** | ✅ jouables et testés | NETWORK.md, ce document |
 
-Livrables : `dist/AGR-ENGINE-Android.apk` (menu + 12 jeux, arm64, signé avec une clé de
-démonstration) et `dist/AGR-Demo-Platformer.apk` (ces fichiers ne sont pas versionnés : `dist/`
+Livrables : `dist/AGR-ENGINE-Android.apk` (menu + 13 jeux, arm64, signé avec une clé de
+démonstration), `dist/Les-Ruines-d-Ambre.apk` (le jeu 2.5D complet seul) et `dist/AGR-Demo-Platformer.apk` (ces fichiers ne sont pas versionnés : `dist/`
 est ignoré ; les recréer avec la section 5). **Les APK n'ont jamais été lancés sur un vrai
 téléphone** (pas d'appareil ici) : à valider en priorité.
 
@@ -37,7 +37,7 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
 
 1. **Validation sur appareil Android** réel (performances des modèles 3D, tactile, audio, réseau
    local de l'arène, retour arrière). Corriger ce qui casse.
-2. **`docs/TEMPLATES.md`** : guide des 12 modèles (règles, scripts dans `assets/games/scripts/`,
+2. **`docs/TEMPLATES.md`** : guide des 13 modèles (règles, scripts dans `assets/games/scripts/`,
    comment les modifier) ; mettre à jour `docs/ROADMAP.md` (lignes « Templates » de la phase 9 encore
    ⬜) et EDITOR.md (option `--template-gallery`).
 3. **Phase 9.6 — gestionnaire de plugins / paquets et documentation intégrée** :
@@ -56,7 +56,7 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
 6. **Phase 10 — tests, optimisation, livraison** : format de scène binaire, empaquetage /
    compression des assets, profilage sur appareils, installeur de l'éditeur (Windows / Linux /
    macOS), CI (GitHub Actions) exécutant les suites, jeu mobile de démonstration finalisé (le menu
-   des 12 modèles en tient lieu pour l'instant).
+   des 13 modèles et « Les Ruines d'Ambre » en tiennent lieu pour l'instant).
 7. **Éditeur sur Android** (demande prioritaire : « le moteur sur mobile ») — **compilé et empaqueté,
    jamais lancé sur un appareil** : `tools/build_android_editor.sh` produit
    `dist/AGR-ENGINE-Editor-Android.apk` (éditeur = `libmain.so`, preset `android-editor-arm64`).
@@ -70,6 +70,19 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    clavier virtuel à vérifier sur appareil ; import de fichiers
    (sélecteur Android, URI content://) ; partage / export d'un projet (zip) vers un PC ; lancer le
    jeu en plein écran depuis l'éditeur.
+
+### Le jeu 2.5D « Les Ruines d'Ambre » (`SceneTemplate::GameAdventure25D`)
+
+Décor en 3D (blocs texturés, piliers, torches à particules, brouillard, lumières ponctuelles) vu par
+une caméra inclinée à environ 40° ; héros, ennemis et objets sont des sprites 2D penchés du même
+angle (rendus en 3D avec test de profondeur, triés d'arrière en avant). Construit par
+`editor/core/src/games/Adventure25D.cpp` ; scripts `ambre_game.lua` (états menu / jeu / pause /
+fin de niveau / game over / victoire, ramassage, grille, portail, sauvegarde `ambre.*`),
+`ambre_hero.lua` (capsule physique Jolt, saut par rayon au sol, épée), `ambre_enemy.lua` (slime sur
+le maillage de navigation, chauve-souris volante, boss qui invoque des sbires par `agr.clone`),
+`ambre_camera.lua`. Quatre salles côte à côte dans une seule scène (x = 0, 70, 140, 210). Test :
+« 2.5D adventure » dans `tests/test_game_templates.cpp` ; APK : test opt-in « 2.5D game APK »
+(`AGR_AMBRE_APK`). À faire : équilibrage sur appareil, sons propres au jeu, plus de salles.
 
 Limites connues documentées dans chaque fichier `docs/*.md` (sections « Limites actuelles »).
 Points d'attention : `agr.loadScene` dans l'éditeur en mode Jeu remplace la scène jouée (prévu pour
@@ -96,7 +109,7 @@ Xvfb :99 -screen 0 1280x800x24 & export DISPLAY=:99
 ./build/debug/bin/agr_tests                                    # unitaires + modèles de jeux
 AGR_TEST_API=gl ./build/debug/bin/agr_gpu_tests                 # gl, gles, vulkan
 ./build/debug/bin/agr_editor --vulkan --smoke-test /tmp/smoke   # test de bout en bout de l'éditeur
-./build/debug/bin/agr_editor --opengl --template-gallery /tmp/g # capture des 12 jeux
+./build/debug/bin/agr_editor --opengl --template-gallery /tmp/g # capture des 13 jeux (AGR_GALLERY_ONLY=n, AGR_GALLERY_LUA=code)
 # Android : NDK + SDK requis
 ANDROID_NDK_HOME=… tools/build_android_templates.sh build/export_templates arm64-v8a
 ANDROID_HOME=… AGR_EXPORT_TEMPLATES=$PWD/build/export_templates AGR_ENGINE_APK=$PWD/dist/AGR-ENGINE-Android.apk \
