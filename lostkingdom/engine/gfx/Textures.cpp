@@ -95,29 +95,31 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                 }
                 case 2: {  // rock: strata + cracks + lichen
                     float n1 = tileFbm(u * 5, v * 5, 5, 6, 301) * 0.5f + 0.5f;
-                    float sd; float w = tileWorley(u * 7, v * 7, 7, 303, &sd);
-                    float crack = smoothstepf(0.06f, 0.0f, sd - w);
+                    float sd; float w = tileWorley(u * 11, v * 11, 11, 303, &sd);
+                    float crack = smoothstepf(0.045f, 0.0f, sd - w) * (0.4f + 0.6f * smoothstepf(0.35f, 0.7f, n1));
                     float strata = std::sin((v * 22 + n1 * 3.f) * TAU) * 0.5f + 0.5f;
                     c = lerp(hexColor(0x5d5b58), hexColor(0x8d8984), n1 * 0.7f + strata * 0.3f);
                     float lichen = smoothstepf(0.6f, 0.75f, tileFbm(u * 9, v * 9, 9, 3, 305) * 0.5f + 0.5f);
                     c = lerp(c, hexColor(0x7d8a4c), lichen * 0.35f);
-                    c = c * (1.f - crack * 0.55f);
-                    h = 0.55f + n1 * 0.35f - crack * 0.5f;
+                    c = c * (1.f - crack * 0.32f);
+                    h = 0.55f + n1 * 0.35f - crack * 0.25f;
                     break;
                 }
                 case 3: {  // snow: soft drifts, cold blue in hollows
                     float n1 = tileFbm(u * 4, v * 4, 4, 5, 401) * 0.5f + 0.5f;
                     float n2 = tileNoise(u * 48, v * 48, 48, 403) * 0.5f + 0.5f;
-                    c = lerp(hexColor(0x8fa0bc), hexColor(0xd6dee8), n1);
-                    c = c * (0.94f + n2 * 0.08f);
+                    c = lerp(hexColor(0x95a2b8), hexColor(0xc2cad8), n1);
+                    c = c * (0.88f + n2 * 0.18f);
                     h = 0.4f + n1 * 0.5f;
                     break;
                 }
                 case 4: {  // sand: wind ripples
                     float n1 = tileFbm(u * 6, v * 6, 6, 4, 501) * 0.5f + 0.5f;
-                    float rip = std::sin((u * 30 + tileNoise(u * 4, v * 4, 4, 503) * 1.5f) * TAU) * 0.5f + 0.5f;
-                    c = lerp(hexColor(0xb59a6a), hexColor(0xd8c393), n1 * 0.6f + rip * 0.4f);
-                    h = 0.4f + rip * 0.35f + n1 * 0.2f;
+                    // soft wind ripples, broken up by noise so they never read as regular stripes
+                    float rip = std::sin((u * 16 + tileNoise(u * 4, v * 4, 4, 503) * 2.5f) * TAU) * 0.5f + 0.5f;
+                    float ripMask = smoothstepf(0.35f, 0.75f, tileFbm(u * 3, v * 3, 3, 3, 507) * 0.5f + 0.5f);
+                    c = lerp(hexColor(0xb59a6a), hexColor(0xd2bd8e), n1 * 0.8f + rip * 0.12f * ripMask);
+                    h = 0.4f + rip * 0.15f * ripMask + n1 * 0.35f;
                     break;
                 }
                 case 5: {  // mud: dark, wet, puddle dimples

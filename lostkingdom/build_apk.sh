@@ -28,7 +28,7 @@ if [[ -z "${LK_KEYSTORE_PASSWORD:-}" ]]; then
 else
   KS_PASS="$LK_KEYSTORE_PASSWORD"
 fi
-EXTRA=""
+EXTRA="-DLK_SMOKE=OFF"  # always explicit: a stale CMake cache must never ship the smoke test
 [[ "${1:-}" == "--smoke" ]] && EXTRA="-DLK_SMOKE=ON"
 
 rm -rf "$OUT" && mkdir -p "$OUT/lib" "$OUT/res"

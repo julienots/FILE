@@ -300,7 +300,7 @@ void Game::updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt) {
             // wind-up: face target, glowing red outline = readable telegraph
             ai.telegraphT -= dt;
             c.yaw = dampAngle(c.yaw, std::atan2(t->pos.x - c.pos.x, t->pos.z - c.pos.z), 10, dt);
-            c.vis.outlineColor = vec4(1.f, 0.2f + 0.2f * std::sin(realTime * 30), 0.1f, 1);
+            c.vis.outlineColor = vec4(1.f, 0.12f + 0.12f * std::sin(realTime * 30), 0.f, 1);
             const AttackDef& a = d.attacks[ai.pendingAttack];
             if ((a.type == AttackType::Area || a.type == AttackType::Leap) && particles.rng.f() < dt * 10) {
                 vec3 center = a.type == AttackType::Leap ? t->pos : (a.radius > 6 ? c.pos : c.pos + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * a.range * 0.5f);

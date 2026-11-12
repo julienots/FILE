@@ -313,7 +313,9 @@ void main() {
   #endif
     // dynamic snow cover from weather
     float snowFx = uFogParams.z * smoothstep(0.55, 0.85, N.y);
-    albedo = mix(albedo, vec3(0.6, 0.66, 0.76), snowFx);
+    // keep drift detail under fresh snow (height map + large-scale noise), cold blue in hollows
+    float sdet = clamp(0.62 + hsum * 0.45 + (texture(uNoiseTex, vWorld.xz * 0.04).r - 0.5) * 0.35, 0.55, 1.1);
+    albedo = mix(albedo, mix(vec3(0.26, 0.32, 0.44), vec3(0.5, 0.55, 0.63), sdet - 0.45) * sdet, snowFx);
     rough = mix(rough, 0.5, snowFx);
     // puddles: wet ground darkens and becomes glossy in low areas (height map valleys)
     float puddle = wet * smoothstep(0.55, 0.2, hsum) * smoothstep(0.8, 0.95, N.y) * (1.0 - snowFx);
@@ -326,7 +328,7 @@ void main() {
     albedo *= 0.9 + nz * 0.2;
     // Snow accumulates on upward faces (Frostheim & snowfall)
     float snow = max(uTint.a, uFogParams.z) * smoothstep(0.45, 0.8, N.y);
-    albedo = mix(albedo, vec3(0.62, 0.68, 0.78), snow);
+    albedo = mix(albedo, vec3(0.5, 0.55, 0.64) * (0.85 + nz * 0.3), snow);
     rough = mix(rough, 0.55, snow);
     albedo *= mix(1.0, 0.7, wet * (1.0 - metal) * (0.4 + 0.6 * N.y));
     rough = mix(rough, rough * 0.4, wet * smoothstep(0.0, 0.6, N.y));
@@ -439,11 +441,11 @@ out vec4 fragColor;
 
 vec3 sampleN(vec2 uv) {
     // derivative of noise as normal (tileable noise texture)
-    float e = 1.0 / 256.0;
-    float h0 = texture(uNoiseTex, uv).g;
-    float hx = texture(uNoiseTex, uv + vec2(e, 0.0)).g;
-    float hy = texture(uNoiseTex, uv + vec2(0.0, e)).g;
-    return vec3(h0 - hx, h0 - hy, 0.0) * 28.0;
+    // central differences over +-2 texels: smooth gradient, no 8-bit contour banding
+    float e = 2.0 / 256.0;
+    float hx = texture(uNoiseTex, uv + vec2(e, 0.0)).g - texture(uNoiseTex, uv - vec2(e, 0.0)).g;
+    float hy = texture(uNoiseTex, uv + vec2(0.0, e)).g - texture(uNoiseTex, uv - vec2(0.0, e)).g;
+    return vec3(-hx, -hy, 0.0) * 7.0;
 }
 
 void main() {
@@ -481,7 +483,7 @@ void main() {
     N = normalize(mix(N, vec3(0.0, 1.0, 0.0), frozen * 0.8));
     float NdV = clamp(dot(N, V), 0.0, 1.0);
     float fres = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
-    fres = mix(fres, 0.6, 0.25);
+    fres = fres * 0.85 + 0.04;
     vec3 R = reflect(-V, N);
     vec3 refl = envColor(R, 0.05);
     float absorb = 1.0 - exp(-depth * 0.55);
@@ -491,7 +493,7 @@ void main() {
     vec3 amb = mix(uGroundColor.rgb, uSkyColor.rgb, 0.8);
     body *= amb + uSunColor.rgb * uSunDir.w * 0.55 * sh;
     vec3 H = normalize(uSunDir.xyz + V);
-    float spec = pow(max(dot(N, H), 0.0), 320.0) * 9.0 * sh * uSunDir.w;
+    float spec = pow(max(dot(N, H), 0.0), 700.0) * 5.0 * sh * uSunDir.w * (1.0 - 0.6 * wet);
     vec3 col = mix(body, refl, fres) + uSunColor.rgb * spec;
     // shoreline foam
     float fn = texture(uNoiseTex, vWorld.xz * 0.22 + flow * t * 0.08 + t * 0.02).r;

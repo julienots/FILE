@@ -11,6 +11,8 @@ struct Step { float dur; std::function<void(Game&)> start; std::function<void(Ga
 static void teleport(Game& g, float x, float z, float yaw = 0.8f) {
     Character& c = g.pc();
     c.pos = vec3(x, g.world.groundHeight(x, z), z); c.vel = vec3(0); g.camFocus = c.pos; g.camYaw = yaw;
+    bool lava = false, frozen = false; float wl = g.world.waterLevel(x, z, &lava, &frozen);
+    AGR_LOG("autoplay teleport (%.0f, %.0f): region %s, ground %.1f, water %.1f%s%s", x, z, regionName(g.world.regionId(x, z)), c.pos.y, wl, frozen ? " (frozen)" : "", lava ? " (lava)" : "");
 }
 
 static std::vector<Step> scenario(const std::string& name) {
@@ -25,6 +27,7 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name != "tour") {  // "tour": only the region / weather / time-of-day tour (fast visual check)
     s.push_back({4.f, none, [](Game& g, float) { g.input.move = vec2(0, 1); }, "walk north"});
     s.push_back({0.1f, shot("03_start"), idle, "shot"});
     s.push_back({3.f, [](Game& g) { const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 2, b->pos.y + 12, 0.4f); g.timeOfDay = 10.f; }, idle, "village"});
@@ -81,15 +84,29 @@ static std::vector<Step> scenario(const std::string& name) {
     s.push_back({3.f, none, [](Game& g, float) { g.input.move = vec2(0.2f, 1); g.input.sprint = true; }, "ride"});
     s.push_back({0.1f, shot("15_riding"), idle, "shot"});
     s.push_back({0.3f, [](Game& g) { if (g.riding) g.toggleMount(); }, idle, "dismount"});
+    }
     // tour of regions with time & weather variety
     struct T { float x, z, yaw, tod; int weather; const char* f; };
     T tour[] = {{850, 600, 2.3f, 11.f, Game::W_SNOW, "16_frostheim"}, {2300, 1700, 0.6f, 17.5f, Game::W_ASHFALL, "17_ashen"}, {600, 1700, 0.5f, 21.5f, Game::W_CLEAR, "18_elderwood_night"},
-                {1160, 2440, 1.f, 9.f, Game::W_FOG, "19_shadows"}, {2350, 860, 1.4f, 13.f, Game::W_CLEAR, "20_highcrowns"}, {1700, 1460, 0.4f, 19.f, Game::W_RAIN, "21_lake_rain_sunset"}, {1240, 1300, 2.0f, 7.f, Game::W_CLEAR, "22_fort_dawn"}};
+                {1160, 2440, 1.f, 9.f, Game::W_FOG, "19_shadows"}, {2350, 860, 1.4f, 13.f, Game::W_CLEAR, "20_highcrowns"}, {-1, 0, 0, 18.6f, Game::W_RAIN, "21_lake_rain_sunset"}, {-2, 0, 0, 7.f, Game::W_CLEAR, "22_fort_dawn"}};
     for (auto& t : tour) {
         T tt = t;
-        s.push_back({5.f, [tt](Game& g) { teleport(g, tt.x, tt.z, tt.yaw); g.timeOfDay = tt.tod; g.weather = g.weatherNext = tt.weather; g.weatherBlend = 1; g.weatherTimer = 999; }, [](Game& g, float t) { g.input.move = vec2(0, t < 2.f ? 0.5f : 0.f); }, "travel"});
+        s.push_back({5.f, [tt](Game& g) {
+            float x = tt.x, z = tt.z, yaw = tt.yaw;
+            // -1: shore of the largest water lake, -2: outside the first castle, camera facing it
+            vec2 target{-1, -1}; float off = 0;
+            if (tt.x == -1) { const Lake* best = nullptr; for (auto& l : g.world.lakes) if (!l.lava && !l.frozen && (!best || l.r > best->r)) best = &l; if (best) { target = best->c; off = best->r * 0.92f; } }
+            if (tt.x == -2) { for (auto& p : g.world.pois) if (p.type == PoiType::Castle) { target = p.pos; off = p.radius * 0.35f; break; } }
+            if (target.x >= 0) {
+                vec2 dir = normalize(vec2(WORLD_SIZE * 0.5f, WORLD_SIZE * 0.5f) - target); if (length(dir) < 0.5f) dir = vec2(1, 0);
+                vec2 p = target + dir * off; x = p.x; z = p.y;
+                vec2 d = target - p; yaw = std::atan2(d.x, d.y);
+            }
+            teleport(g, x, z, yaw);
+            g.camDist = g.camDistTarget = tt.x < 0 ? 26.f : 15.5f; g.timeOfDay = tt.tod; g.weather = g.weatherNext = tt.weather; g.weatherBlend = 1; g.weatherTimer = 999; }, [tt](Game& g, float t) { g.input.move = vec2(0, (t < 2.f && tt.x >= 0) ? 0.5f : 0.f); }, "travel"});
         s.push_back({0.1f, [tt](Game& g) { g.requestScreenshot(std::string("build/shots/") + tt.f + ".png"); }, idle, "shot"});
     }
+    if (name == "tour") return s;
     // boss: the Root Guardian
     s.push_back({0.3f, [](Game& g) { g.weather = g.weatherNext = Game::W_CLEAR; const Poi* p = g.world.poiById("root_glade"); teleport(g, p->pos.x, p->pos.y + 20, 0.f); g.timeOfDay = 14.f; g.level = 12; g.recomputeStats(); g.pc().hp = g.pc().maxHp; }, idle, "boss arena"});
     s.push_back({6.f, none, [](Game& g, float t) { g.input.move = vec2(0, t < 1.2f ? 1.f : 0.f); if ((int)(t * 30) == 70) g.requestScreenshot("build/shots/23_boss_intro.png"); }, "boss intro"});
