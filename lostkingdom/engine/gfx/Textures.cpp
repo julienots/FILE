@@ -108,7 +108,7 @@ void terrainLayers(int S, std::vector<std::vector<uint8_t>>& alb, std::vector<st
                 case 3: {  // snow: soft drifts, cold blue in hollows
                     float n1 = tileFbm(u * 4, v * 4, 4, 5, 401) * 0.5f + 0.5f;
                     float n2 = tileNoise(u * 48, v * 48, 48, 403) * 0.5f + 0.5f;
-                    c = lerp(hexColor(0x9fb0c8), hexColor(0xe6ecf3), n1);
+                    c = lerp(hexColor(0x8fa0bc), hexColor(0xd6dee8), n1);
                     c = c * (0.94f + n2 * 0.08f);
                     h = 0.4f + n1 * 0.5f;
                     break;

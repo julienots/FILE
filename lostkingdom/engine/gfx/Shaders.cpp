@@ -313,7 +313,7 @@ void main() {
   #endif
     // dynamic snow cover from weather
     float snowFx = uFogParams.z * smoothstep(0.55, 0.85, N.y);
-    albedo = mix(albedo, vec3(0.92, 0.95, 1.0), snowFx);
+    albedo = mix(albedo, vec3(0.6, 0.66, 0.76), snowFx);
     rough = mix(rough, 0.5, snowFx);
     // puddles: wet ground darkens and becomes glossy in low areas (height map valleys)
     float puddle = wet * smoothstep(0.55, 0.2, hsum) * smoothstep(0.8, 0.95, N.y) * (1.0 - snowFx);
@@ -326,12 +326,24 @@ void main() {
     albedo *= 0.9 + nz * 0.2;
     // Snow accumulates on upward faces (Frostheim & snowfall)
     float snow = max(uTint.a, uFogParams.z) * smoothstep(0.45, 0.8, N.y);
-    albedo = mix(albedo, vec3(0.93, 0.96, 1.0), snow);
+    albedo = mix(albedo, vec3(0.62, 0.68, 0.78), snow);
     rough = mix(rough, 0.55, snow);
     albedo *= mix(1.0, 0.7, wet * (1.0 - metal) * (0.4 + 0.6 * N.y));
     rough = mix(rough, rough * 0.4, wet * smoothstep(0.0, 0.6, N.y));
 #endif
 
+#if !defined(SKINNED) && !defined(TERRAIN) && !defined(GRASS)
+    // see-through: geometry between the camera and the player is dithered away
+    if (uPlayer.w > 0.0) {
+        vec3 a = uPlayer.xyz + vec3(0.0, 1.0, 0.0), b = uCamPos.xyz;
+        vec3 ab = b - a;
+        float t = clamp(dot(vWorld - a, ab) / dot(ab, ab), 0.0, 1.0);
+        float d = length(vWorld - (a + ab * t));
+        float occ = (1.0 - smoothstep(2.2, 4.2, d)) * step(0.06, t) * step(uPlayer.y + 1.2, vWorld.y);
+        float dither = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + 0.125);
+        if (occ * 0.85 > dither) discard;
+    }
+#endif
 #ifdef DISSOLVE
     float dn = texture(uNoiseTex, vWorld.xz * 0.45 + vec2(vWorld.y * 0.31)).a;
     if (dn < uFx.y) discard;

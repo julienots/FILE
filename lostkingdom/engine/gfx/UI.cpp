@@ -198,6 +198,21 @@ void UI::imageRot(GLuint tex, vec2 c, vec2 s, float ang, vec4 uvr, vec4 col) {
     batches.back().count = (int)idx.size() - batches.back().start;
 }
 
+void UI::imageCircle(GLuint tex, vec2 c, float r, vec2 uc, float ur, float ang, vec4 col, int seg) {
+    ensureBatch(tex);
+    Color8 k = toColor8(col.xyz(), col.w);
+    uint16_t b = (uint16_t)verts.size();
+    verts.push_back({c.x * scale, c.y * scale, k.r, k.g, k.b, k.a, uc.x, uc.y, 4, 0});
+    for (int i = 0; i <= seg; i++) {
+        float a = TAU * i / seg;
+        vec2 d{std::cos(a), std::sin(a)};
+        vec2 uv = uc + rotate(d, ang) * ur;
+        verts.push_back({(c.x + d.x * r) * scale, (c.y + d.y * r) * scale, k.r, k.g, k.b, k.a, uv.x, uv.y, 4, 0});
+    }
+    for (int i = 0; i < seg; i++) { idx.push_back(b); idx.push_back((uint16_t)(b + 1 + i)); idx.push_back((uint16_t)(b + 2 + i)); }
+    batches.back().count = (int)idx.size() - batches.back().start;
+}
+
 float UI::textWidth(const std::string& s, float size, int fi) const {
     const FontFace& f = fonts[fi];
     float k = size / f.size, w = 0, best = 0;
@@ -321,6 +336,8 @@ void UI::popClip() {
 
 void UI::end(Shader& sh) {
     if (idx.empty()) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, pixelW, pixelH);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
@@ -447,6 +464,8 @@ bool UI::fancyButton(Rect r, const std::string& label, bool enabled, const std::
     float press = h ? 2.f : 0.f;
     Rect rr = {r.x, r.y + press, r.w, r.h};
     nine(st, rr, enabled ? vec4(1, 1, 1, 1) : vec4(0.5f, 0.5f, 0.5f, 0.8f), std::min(1.f, r.h / 64.f));
+    float lw = textWidth(label, ts, F_SERIF);
+    if (lw > rr.w - 28) ts *= (rr.w - 28) / lw;
     text(label, rr.x + rr.w / 2, rr.y + rr.h / 2 - ts * 0.62f, ts, enabled ? rgba(0xf6e7c1) : rgba(0x9a8f7a), F_SERIF, A_CENTER, 0, true);
     return enabled && button(r);
 }

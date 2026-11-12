@@ -478,9 +478,10 @@ void Renderer::renderToTarget(RenderTarget& rt, const Camera& cam, const Environ
     Environment saveEnv = env; Camera saveCam = camera;
     env = e; camera = cam;
     std::vector<PointLight> saveLights; saveLights.swap(lights);
+    Environment eNoOcc = e; eNoOcc.grassPushRadius = 0;  // no see-through fading in previews
     RenderTarget hdr;
     if (!hdr.create(rt.w, rt.h, hdrFormat, true, false)) { lights.swap(saveLights); env = saveEnv; camera = saveCam; return; }
-    updateFrameUBO(cam, e, mat4(), false);
+    updateFrameUBO(cam, eNoOcc, mat4(), false);
     hdr.bind();
     glClearColor(clear.x / hdrScale, clear.y / hdrScale, clear.z / hdrScale, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

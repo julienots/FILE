@@ -64,7 +64,13 @@ static void writeWav(const std::string& path, const std::vector<float>& s, int r
     for (float v : s) { int x = (int)(std::max(-1.f, std::min(1.f, v)) * 32767); w16((uint16_t)(int16_t)x); }
 }
 
+#ifdef LK_UNIT_TESTS
+int lkRunTests(int argc, char** argv);
+int main(int argc, char** argv) { return lkRunTests(argc, argv); }
+static int desktopMain(int argc, char** argv) {
+#else
 int main(int argc, char** argv) {
+#endif
     int W = 1280, H = 720, frames = 300;
     float dt = 1.f / 30.f;
     std::string wav;

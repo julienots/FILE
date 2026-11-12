@@ -1,5 +1,6 @@
 // AGR Engine — Entity Component System.
-// Sparse-set storage: each component type lives in a dense, cache-friendly array;
+// Sparse-set storage: each component type lives in a dense, chunked array (std::deque keeps
+// references stable when systems spawn entities while iterating);
 // entities are 32-bit ids with a generation counter so stale handles are detected.
 #pragma once
 #include <cstdint>
@@ -7,6 +8,7 @@
 #include <memory>
 #include <cassert>
 #include <functional>
+#include <deque>
 
 namespace agr {
 
@@ -27,7 +29,7 @@ class Pool final : public IPool {
 public:
     std::vector<uint32_t> sparse;  // entity index -> dense slot + 1 (0 = absent)
     std::vector<Entity> dense;     // dense slot -> entity
-    std::vector<T> data;
+    std::deque<T> data;   // deque: references stay valid when components are added during iteration
 
     T& add(Entity e, T value) {
         uint32_t i = entityIndex(e);

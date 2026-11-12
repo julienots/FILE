@@ -677,7 +677,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 if (ci >= 0)
                     for (int pi : chunkPois[ci]) {
                         const Poi& p = pois[pi];
-                        if (p.type != PoiType::Village && p.type != PoiType::Monastery && p.type != PoiType::Castle && p.type != PoiType::Mill && p.type != PoiType::BossArena) continue;
+                        if (p.type != PoiType::Village && p.type != PoiType::Monastery && p.type != PoiType::Castle && p.type != PoiType::Mill) continue;
                         float d = length(vec2(x, z) - p.pos);
                         float pr = p.type == PoiType::Castle ? p.radius * 0.7f : (p.type == PoiType::BossArena ? p.radius * 0.8f : 13.f);
                         plaza = std::max(plaza, 1.f - smoothstepf(pr - 3.f, pr + 2.f, d + 2.f * fbm2(x * 0.2f, z * 0.2f, 2, 5)));

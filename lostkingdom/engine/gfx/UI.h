@@ -47,6 +47,8 @@ public:
     void nine(const std::string& region, Rect r, vec4 c = vec4(1, 1, 1, 1), float borderScale = 1.f);
     void image(GLuint tex, Rect r, vec4 uv = vec4(0, 0, 1, 1), vec4 c = vec4(1, 1, 1, 1));
     void imageRot(GLuint tex, vec2 center, vec2 size, float angle, vec4 uv, vec4 c);
+    // circular textured disc (minimap): uvCenter/uvRadius in texture space, rotated by angle
+    void imageCircle(GLuint tex, vec2 center, float radius, vec2 uvCenter, float uvRadius, float angle, vec4 c, int seg = 40);
     // text: returns height used. maxW > 0 enables word wrapping.
     float text(const std::string& s, float x, float y, float size, vec4 c, int font = F_BODY, int align = A_LEFT, float maxW = 0, bool outline = false);
     float textWidth(const std::string& s, float size, int font = F_BODY) const;
