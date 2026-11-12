@@ -6,6 +6,7 @@
 #include "../engine/gfx/Particles.h"
 #include "../engine/gfx/UI.h"
 #include "../engine/gfx/Model.h"
+#include <unordered_map>
 #include "../engine/audio/Audio.h"
 #include "World.h"
 #include "Props.h"
@@ -394,12 +395,14 @@ public:
 
     // ---- shared meshes ---------------------------------------------------------------------------
     std::map<std::string, std::shared_ptr<Mesh>> meshCache;
-    // Imported hero model (assets/models/hero.lkm + hero.jpg); empty = procedural hero.
-    SkinnedModelData heroModel;
-    std::shared_ptr<Mesh> heroMesh;
-    Texture heroTex;
-    Skeleton heroSkel;
-    bool useHeroModel() const { return heroModel.valid() && settings.importedHero; }
+    // Imported humanoid models (assets/models/<id>.lkm + <id>.jpg, made by tools/import_character.py).
+    // Looked up lazily by id: "hero", an enemy id ("bandit", "skeleton"...), "npc_<id>", "villager_m/f".
+    // Absent files are cached as null, so the procedural look is used without retrying.
+    struct ImportedModel { SkinnedModelData data; std::shared_ptr<Mesh> mesh; Texture tex; Skeleton skel; };
+    std::unordered_map<std::string, std::unique_ptr<ImportedModel>> importedModels;
+    ImportedModel* importedModel(const std::string& id);
+    bool applyImportedModel(Visual& v, const std::string& id);
+    bool useHeroModel() { return settings.importedHero && importedModel("hero") != nullptr; }
     std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[12];
     std::map<uint32_t, Entity> nodeEntities;   // uid -> entity
     std::set<uint32_t> spawnedChunks;          // chunk hash with spawned creatures
@@ -527,6 +530,10 @@ public:
     bool loadGame(int slot);
     std::string saveSummary(int slot) const;
     void saveSettings();
+    void reportProfile();
+    bool settingsFileFound = false;
+    void updateDynamicResolution(float dtRaw);
+    float drsAcc = 0, drsStable = 0, drsWaitUp = 8; int drsFrames = 0; bool drsJustRaised = false;
     void loadSettings();
     void applyGraphicsProfile(QualityProfile p);
 

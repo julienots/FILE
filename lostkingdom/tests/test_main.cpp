@@ -5,6 +5,7 @@
 #include "../engine/core/Math.h"
 #include "../engine/audio/Audio.h"
 #include "../engine/gfx/Model.h"
+#include "../engine/gfx/Renderer.h"
 #include "../game/Data.h"
 #include "../game/World.h"
 #include "../game/Props.h"
@@ -253,11 +254,29 @@ static void testHeroModel(const std::string& assets) {
     CHECK(!bad.loadLKM(junk), "garbage header rejected");
 }
 
+static void testGpuProfiles() {
+    std::printf("[GPU profile suggestion]\n");
+    struct C { const char* gpu; QualityProfile want; };
+    C cases[] = {{"Adreno (TM) 740", QualityProfile::Ultra}, {"Adreno (TM) 650", QualityProfile::High}, {"Adreno (TM) 619", QualityProfile::Medium},
+                 {"Adreno (TM) 506", QualityProfile::Low}, {"Adreno (TM) 308", QualityProfile::Battery}, {"Mali-G710 MC10", QualityProfile::High},
+                 {"Mali-G610 MC6", QualityProfile::Medium}, {"Mali-G78 MP20", QualityProfile::Medium}, {"Mali-G57 MC2", QualityProfile::Low},
+                 {"Mali-G52", QualityProfile::Low}, {"Mali-G31 MP2", QualityProfile::Battery}, {"Mali-T880", QualityProfile::Battery},
+                 {"PowerVR Rogue GE8320", QualityProfile::Low}, {"Samsung Xclipse 920", QualityProfile::High}, {"Immortalis-G715", QualityProfile::High},
+                 {"Unknown GPU", QualityProfile::Medium}};
+    for (auto& c : cases) CHECK(suggestProfileForGpu(c.gpu) == c.want, "%s -> %d, expected %d", c.gpu, (int)suggestProfileForGpu(c.gpu), (int)c.want);
+    // every profile keeps a sane configuration
+    for (int p = 0; p <= 4; p++) {
+        GraphicsSettings g = GraphicsSettings::forProfile((QualityProfile)p);
+        CHECK(g.renderScale >= 0.5f && g.renderScale <= 1.f && g.fpsCap >= 30 && g.shadowInterval >= 1 && g.bloomStart >= 0, "profile %d settings", p);
+    }
+}
+
 int lkRunTests(int argc, char** argv) {
     std::string assets = argc > 1 ? argv[1] : "assets";
     testECS();
     testMath();
     testMapOrientation();
+    testGpuProfiles();
     testTouchLayout();
     testData();
     initPropTemplates();

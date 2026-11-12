@@ -89,12 +89,7 @@ void Game::rebuildPlayerVisual() {
     c.vis.anim.skeleton = &skeleton(Arch::Humanoid);
     if (useHeroModel()) {
         // imported model: fitted skeleton (same bones, so every animation plays), own cape in the mesh
-        if (!heroMesh || !heroMesh->valid()) { heroMesh = std::make_shared<Mesh>(); heroMesh->upload(heroModel.verts, heroModel.idx); }
-        if (!heroTex.id) heroTex.create2D(heroModel.texW, heroModel.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, heroModel.rgba.data(), true, false);
-        c.vis.mesh = heroMesh;
-        c.vis.albedo = heroTex.id;
-        c.vis.anim.skeleton = &heroSkel;
-        c.vis.cape = false;
+        applyImportedModel(c.vis, "hero");
     }
     c.vis.capeColor = L.c1 * 0.8f;
     c.vis.rim = 0.65f;

@@ -21,6 +21,9 @@ struct GraphicsSettings {
     bool terrainNormals = true;
     bool chromatic = false;    // optional chromatic aberration
     bool ssao = true;          // screen-space ambient occlusion (contact shadows, corners, grass)
+    int shadowInterval = 1;    // redraw the shadow map every N frames (sun moves slowly)
+    int bloomStart = 0;        // 0: bloom chain from half resolution, 1: from quarter resolution
+    bool simpleWater = false;  // one normal octave, no shadow lookup, no point lights on water
     float ssaoStrength = 0.8f;
     float grassDensity = 1.f;
     float particleScale = 1.f;
@@ -29,6 +32,9 @@ struct GraphicsSettings {
     int fpsCap = 60;
     static GraphicsSettings forProfile(QualityProfile p);
 };
+
+// First-launch quality guess from the GL_RENDERER string (Adreno / Mali / PowerVR / Xclipse...).
+QualityProfile suggestProfileForGpu(const std::string& glRenderer);
 
 struct PointLight { vec3 pos; float radius; vec3 color; float flicker; };
 
@@ -103,6 +109,9 @@ public:
     bool init(const GraphicsSettings& s);
     void shutdown();
     void applySettings(const GraphicsSettings& s);
+    // Dynamic resolution: multiplier on settings.renderScale (1 = profile resolution). Rebuilds targets.
+    void setDynamicScale(float k);
+    float dynamicScale = 1.f;
     void resize(int w, int h);
     void begin(const Camera& cam, const Environment& env);
     void submit(const DrawItem& d) { items.push_back(d); }
@@ -120,7 +129,14 @@ public:
     Mesh fsMesh;    // fullscreen triangle pair
     GraphicsSettings settings;
     RenderStats stats;
+    // Per-pass GPU timing (glFinish between passes): debug only, enabled by the LK_GPU_PROFILE env variable.
+    bool gpuProfile = false; int gpuSkipMask = 0; bool gpuSkipProps = false;   // debug: skip item classes to measure them
+    double gpuAcc[12] = {}; int gpuFrames = 0;
+    double gpuT0 = 0;
+    void gpuMark(int pass);
+    std::string gpuReport();
     int width = 1, height = 1;
+    int shadowFrame = 0;
     Camera camera;
     Environment env;
     std::vector<PointLight> lights;

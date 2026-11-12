@@ -188,6 +188,7 @@ vec3 shade(vec3 albedo, vec3 N, vec3 V, vec3 P, float rough, float metal, float 
     vec3 Fa = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - NdV, 5.0);
     col += (albedo * kd * amb + envColor(reflect(-V, N), rough) * Fa * mix(1.0, 0.35, rough)) * ao;
     // Point lights (torches, fires, spells, lava)
+#ifndef DBG_NOLIGHTS
     for (int i = 0; i < 8; i++) {
         if (float(i) >= uMisc.x) break;
         vec3 lv = uLightPos[i].xyz - P;
@@ -202,6 +203,7 @@ vec3 shade(vec3 albedo, vec3 N, vec3 V, vec3 P, float rough, float metal, float 
         float flick = 1.0 + uLightCol[i].w * (sin(uCamPos.w * 13.0 + float(i) * 1.7) * 0.06 + sin(uCamPos.w * 23.0 + float(i)) * 0.04);
         col += uLightCol[i].rgb * att * flick * (albedo * pl * kd + sp * mix(F0, vec3(1.0), 0.3) * 2.0);
     }
+#endif
     // Rim light improves character readability against the ground (2.5D).
     col += rim * pow(1.0 - NdV, 3.0) * (uSkyColor.rgb * 0.6 + uSunColor.rgb * 0.4) * (0.5 + 0.5 * shadow);
     return col;
@@ -245,8 +247,10 @@ out vec4 fragColor;
 
 #ifdef TERRAIN
 // layers: 0 grass, 1 dirt, 2 rock, 3 snow, 4 sand, 5 mud, 6 cobble, 7 ash
-vec4 sampleLayer(int l, vec2 uv) { return texture(uTerrainTex, vec3(uv, float(l))); }
-vec3 sampleNrm(int l, vec2 uv) { return texture(uTerrainNrm, vec3(uv, float(l))).xyz * 2.0 - 1.0; }
+// Explicit-gradient fetches: these are called inside per-pixel branches (only the layers present are
+// read), where implicit derivatives are undefined on mobile GPUs.
+vec4 sampleLayer(int l, vec2 uv, vec2 dx, vec2 dy) { return textureGrad(uTerrainTex, vec3(uv, float(l)), dx, dy); }
+vec3 sampleNrm(int l, vec2 uv, vec2 dx, vec2 dy) { return textureGrad(uTerrainNrm, vec3(uv, float(l)), dx, dy).xyz * 2.0 - 1.0; }
 #endif
 
 void main() {
@@ -291,16 +295,29 @@ void main() {
     vec2 uv = vWorld.xz * 0.28;
     // anti-tiling for the dominant ground layers: a second, rotated & rescaled sample is blended in by
     // large-scale noise, so the texture never repeats visibly across a meadow
-    float tb = smoothstep(0.3, 0.7, texture(uNoiseTex, vWorld.xz * 0.031).r);
-    vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * uv * 0.53 + vec2(0.37, 0.71);
-    vec4 g = mix(sampleLayer(0, uv), sampleLayer(0, uv2), tb);
-    vec4 dI = mix(sampleLayer(1, uv * 0.9), sampleLayer(1, uv2 * 0.9), tb), sn = sampleLayer(3, uv * 0.7), sa = sampleLayer(4, uv * 0.8);
-    // triplanar-ish rock: project on the dominant horizontal axis for steep faces
-    vec2 ruv = abs(N.x) > abs(N.z) ? vWorld.zy * 0.22 : vWorld.xy * 0.22;
-    vec4 ro = sampleLayer(2, mix(vWorld.xz * 0.22, ruv, cliff));
-    vec4 mu = sampleLayer(5, uv), co = sampleLayer(6, uv * 0.6), as = sampleLayer(7, uv * 0.7);
     float ws[8] = float[8](wGrass * (1.0 - cliff), wDirt * (1.0 - cliff), wRock + cliff, wSnow * (1.0 - cliff * 0.7), wSand * (1.0 - cliff), wMud * (1.0 - cliff), wCob, wAsh * (1.0 - cliff));
-    vec4 smp[8] = vec4[8](g, dI, ro, sn, sa, mu, co, as);
+    // Mobile: only fetch the layers present at this pixel (usually 1-3 of 8; regions are coherent so the
+    // branches are uniform over most of the screen).
+    vec4 smp[8];
+    for (int i = 0; i < 8; i++) smp[i] = vec4(0.0);
+#ifdef DBG_ONELAYER
+    for (int i = 1; i < 8; i++) ws[i] = 0.0;
+#endif
+    vec2 ruv = abs(N.x) > abs(N.z) ? vWorld.zy * 0.22 : vWorld.xy * 0.22;   // triplanar-ish rock on steep faces
+    vec2 rockUV = mix(vWorld.xz * 0.22, ruv, cliff);
+    vec2 dX = dFdx(uv), dY = dFdy(uv), rX = dFdx(rockUV), rY = dFdy(rockUV);   // gradients outside branches
+    mat2 rot2 = mat2(0.8, -0.6, 0.6, 0.8);
+    vec2 uv2 = rot2 * uv * 0.53 + vec2(0.37, 0.71);
+    vec2 dX2 = rot2 * dX * 0.53, dY2 = rot2 * dY * 0.53;
+    float tb = smoothstep(0.3, 0.7, texture(uNoiseTex, vWorld.xz * 0.031).r);
+    if (ws[0] > 0.001) smp[0] = mix(sampleLayer(0, uv, dX, dY), sampleLayer(0, uv2, dX2, dY2), tb);
+    if (ws[1] > 0.001) smp[1] = mix(sampleLayer(1, uv * 0.9, dX * 0.9, dY * 0.9), sampleLayer(1, uv2 * 0.9, dX2 * 0.9, dY2 * 0.9), tb);
+    if (ws[2] > 0.001) smp[2] = sampleLayer(2, rockUV, rX, rY);
+    if (ws[3] > 0.001) smp[3] = sampleLayer(3, uv * 0.7, dX * 0.7, dY * 0.7);
+    if (ws[4] > 0.001) smp[4] = sampleLayer(4, uv * 0.8, dX * 0.8, dY * 0.8);
+    if (ws[5] > 0.001) smp[5] = sampleLayer(5, uv, dX, dY);
+    if (ws[6] > 0.001) smp[6] = sampleLayer(6, uv * 0.6, dX * 0.6, dY * 0.6);
+    if (ws[7] > 0.001) smp[7] = sampleLayer(7, uv * 0.7, dX * 0.7, dY * 0.7);
     // height-based blending: the layer whose height sticks out wins the transition
     float best = 0.0;
     for (int i = 0; i < 8; i++) best = max(best, ws[i] + smp[i].a * 0.5);
@@ -323,7 +340,7 @@ void main() {
         rgh += layerRough[i] * w;
         hsum += smp[i].a * w;
   #ifndef TERRAIN_SIMPLE
-        tn += sampleNrm(i, i == 2 ? mix(vWorld.xz * 0.22, ruv, cliff) : uv) * w;
+        tn += (i == 2 ? sampleNrm(i, rockUV, rX, rY) : sampleNrm(i, uv, dX, dY)) * w;
   #endif
     }
     emis = 0.0;
@@ -386,7 +403,11 @@ void main() {
     float edge = 1.0 - smoothstep(uFx.y, uFx.y + 0.09, dn);
 #endif
 
+#ifdef DBG_NOSHADOW
+    float sh = 1.0;
+#else
     float sh = shadowPCF(vShadow, dot(N, uSunDir.xyz)) * cloudShadow(vWorld);
+#endif
     sh = mix(1.0, sh, uSunColor.w);
 #ifdef WIND
     float wrap = 0.5;  // foliage: light passes through leaves (translucency approximation)
@@ -500,7 +521,11 @@ void main() {
     vec2 flow = vFlow;
     vec2 uv1 = vWorld.xz * 0.045 + flow * t * 0.05 + vec2(t * 0.011, t * 0.007);
     vec2 uv2 = vWorld.xz * 0.071 + flow * t * 0.07 - vec2(t * 0.009, -t * 0.013);
+#ifdef WATER_SIMPLE
+    vec3 dn = sampleN(uv1) * 1.4;                      // low profiles: one normal octave
+#else
     vec3 dn = sampleN(uv1) + sampleN(uv2) * 0.7;
+#endif
     // rain ripples: expanding rings in a cell grid
     float wet = uGroundColor.w;
     if (wet > 0.01) {
@@ -522,7 +547,11 @@ void main() {
     vec3 refl = envColor(R, 0.05);
     float absorb = 1.0 - exp(-depth * 0.38);
     vec3 body = mix(uWaterShallow.rgb, uWaterDeep.rgb, absorb);
+#ifdef WATER_SIMPLE
+    float sh = cloudShadow(vWorld);                    // no shadow-map lookup on low profiles
+#else
     float sh = shadowPCF(vShadow, 1.0) * cloudShadow(vWorld);
+#endif
     sh = mix(1.0, sh, uSunColor.w);
     vec3 amb = mix(uGroundColor.rgb, uSkyColor.rgb, 0.8);
     body *= amb + uSunColor.rgb * uSunDir.w * 0.55 * sh;
@@ -548,6 +577,7 @@ void main() {
     ice *= 1.0 - crack * 0.3;
     col = mix(col, ice, frozen);
     // point lights reflect on water
+#ifndef WATER_SIMPLE
     for (int i = 0; i < 8; i++) {
         if (float(i) >= uMisc.x) break;
         vec3 lv = uLightPos[i].xyz - vWorld;
@@ -555,6 +585,7 @@ void main() {
         float att = clamp(1.0 - d / uLightPos[i].w, 0.0, 1.0);
         col += uLightCol[i].rgb * att * att * (0.15 + pow(max(dot(N, normalize(normalize(lv) + V)), 0.0), 60.0) * 2.0);
     }
+#endif
     col += vec3(uMisc.w) * 0.6;
     float alpha = mix(clamp(0.45 + absorb * 0.6 + fres * 0.3 + foam, 0.0, 1.0), 0.97, frozen);
     alpha *= smoothstep(0.0, 0.08, depth);

@@ -5,23 +5,42 @@
 namespace lk {
 
 // ============================================================================================ assets
-void Game::loadAssets() {
-    // imported hero model (optional: the procedural hero is used when absent or invalid)
-    {
-        std::vector<uint8_t> mb, tb;
-        if (platform::readAsset("models/hero.lkm", mb) && heroModel.loadLKM(mb) && platform::readAsset("models/hero.jpg", tb) && heroModel.loadTexture(tb)) {
-            const Skeleton& base = skeleton(Arch::Humanoid);
-            if ((int)heroModel.joints.size() == base.size()) {
-                heroSkel = base;
-                for (int i = 0; i < heroSkel.size(); i++) {
-                    Bone& b = heroSkel.bones[i];
-                    b.offset = heroModel.joints[i] - (b.parent >= 0 ? heroModel.joints[b.parent] : vec3(0));
-                }
-                heroSkel.finalize();
-                AGR_LOG("hero model: %zu vertices, %zu triangles, texture %dx%d", heroModel.verts.size(), heroModel.idx.size() / 3, heroModel.texW, heroModel.texH);
-            } else { AGR_WARN("hero model: %zu joints, expected %d", heroModel.joints.size(), base.size()); heroModel = SkinnedModelData(); }
-        } else heroModel = SkinnedModelData();
+Game::ImportedModel* Game::importedModel(const std::string& id) {
+    auto it = importedModels.find(id);
+    if (it != importedModels.end()) return it->second.get();
+    std::unique_ptr<ImportedModel> m;
+    std::vector<uint8_t> mb, tb;
+    if (platform::readAsset("models/" + id + ".lkm", mb)) {
+        m = std::make_unique<ImportedModel>();
+        const Skeleton& base = skeleton(Arch::Humanoid);
+        if (m->data.loadLKM(mb) && platform::readAsset("models/" + id + ".jpg", tb) && m->data.loadTexture(tb) && (int)m->data.joints.size() == base.size()) {
+            // same bones as the game skeleton, offsets fitted to the model's proportions
+            m->skel = base;
+            for (int i = 0; i < m->skel.size(); i++) {
+                Bone& b = m->skel.bones[i];
+                b.offset = m->data.joints[i] - (b.parent >= 0 ? m->data.joints[b.parent] : vec3(0));
+            }
+            m->skel.finalize();
+            AGR_LOG("model '%s': %zu vertices, %zu triangles, texture %dx%d", id.c_str(), m->data.verts.size(), m->data.idx.size() / 3, m->data.texW, m->data.texH);
+        } else { AGR_WARN("model '%s' is invalid, using the procedural look", id.c_str()); m.reset(); }
     }
+    ImportedModel* r = m.get();
+    importedModels[id] = std::move(m);
+    return r;
+}
+
+bool Game::applyImportedModel(Visual& v, const std::string& id) {
+    ImportedModel* m = importedModel(id);
+    if (!m) return false;
+    if (!m->mesh || !m->mesh->valid()) { m->mesh = std::make_shared<Mesh>(); m->mesh->upload(m->data.verts, m->data.idx); }
+    if (!m->tex.id) m->tex.create2D(m->data.texW, m->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, m->data.rgba.data(), true, false);
+    v.mesh = m->mesh; v.albedo = m->tex.id; v.anim.skeleton = &m->skel;
+    v.cape = false;   // imported models carry their own cloth
+    return true;
+}
+
+void Game::loadAssets() {
+    importedModel("hero");   // preload (logs its size); the procedural hero is used when absent
     static const char* sounds[] = {"swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water",
                                    "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
                                    "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",
@@ -210,6 +229,7 @@ Entity Game::spawnEnemy(int def, vec3 pos, bool elite, uint32_t uid) {
     if (d.arch == Arch::Humanoid) {
         HumanoidLook L = d.hlook;
         setupVisualHumanoid(c.vis, L, d.weapon, d.offhand, sc);
+        applyImportedModel(c.vis, d.id);   // models/<enemy id>.lkm when provided
         c.vis.anim.aux[0] = (d.behavior == Behavior::Tank || L.species == Species::Goblin || L.species == Species::Troll) ? 0.6f : 0.2f;
         c.height = 1.8f * sc;
     } else {
@@ -256,6 +276,7 @@ Entity Game::spawnNpc(int def, vec3 pos, int village) {
     c.team = Team::Neutral; c.name = d.name; c.pos = pos; c.npcDef = def; c.maxHp = c.hp = 200;
     WeaponType wt = d.role == NpcRole::Guard ? WeaponType::Spear : (d.role == NpcRole::Blacksmith ? WeaponType::Hammer : WeaponType::None);
     setupVisualHumanoid(c.vis, d.look, wt, WeaponType::None, d.look.species == Species::Dwarf ? 0.82f : (d.role == NpcRole::Child ? 0.7f : 1.f));
+    if (!applyImportedModel(c.vis, "npc_" + d.id) && d.role != NpcRole::Child) applyImportedModel(c.vis, d.look.female ? "villager_f" : "villager_m");
     c.vis.rim = 0.4f;
     c.vis.anim.gait.walkSpeed = 1.3f;
     c.yaw = particles.rng.range(0, TAU);
@@ -296,6 +317,7 @@ Entity Game::spawnVillager(vec3 pos, int village, uint32_t seed) {
     if (reg_ == R_HIGHCROWNS && r.chance(0.4f)) { L.body = Body::Robe; L.c1 = hexColor(0x8a8aa0); }
     bool child = r.chance(0.15f);
     setupVisualHumanoid(c.vis, L, WeaponType::None, WeaponType::None, child ? 0.68f : (L.species == Species::Dwarf ? 0.82f : r.range(0.95f, 1.05f)));
+    if (!child) applyImportedModel(c.vis, L.female ? "villager_f" : "villager_m");   // generic villager models when provided
     c.vis.anim.gait.walkSpeed = 1.3f;
     reg.add<Character>(e, c);
     NpcBrain nb;

@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "Renderer.h"
 #include "Shaders.h"
 #include "Particles.h"
@@ -17,6 +18,32 @@ const char* profileName(QualityProfile p) {
     }
 }
 
+QualityProfile suggestProfileForGpu(const std::string& r) {
+    auto num = [&](size_t from) { int n = 0; while (from < r.size() && !isdigit((unsigned char)r[from])) from++; while (from < r.size() && isdigit((unsigned char)r[from])) n = n * 10 + (r[from++] - '0'); return n; };
+    size_t p;
+    if ((p = r.find("Adreno")) != std::string::npos) {
+        int n = num(p);                                   // Adreno 6xx/7xx/8xx
+        if (n >= 730) return QualityProfile::Ultra;
+        if (n >= 640) return QualityProfile::High;
+        if (n >= 610) return QualityProfile::Medium;
+        if (n >= 500) return QualityProfile::Low;
+        return QualityProfile::Battery;
+    }
+    if (r.find("Immortalis") != std::string::npos || r.find("Xclipse") != std::string::npos) return QualityProfile::High;
+    if ((p = r.find("Mali-G")) != std::string::npos) {
+        int n = num(p);                                   // G52, G57, G68, G76, G78, G610, G710, G715, G720...
+        if (n >= 700) return QualityProfile::High;       // G710 / G715 / G720
+        if (n >= 600) return QualityProfile::Medium;     // G610 / G615
+        if (n >= 76) return QualityProfile::Medium;      // G76 / G77 / G78
+        if (n >= 51) return QualityProfile::Low;         // G51 / G52 / G57 / G68 / G72
+        return QualityProfile::Battery;                  // G31 and older
+    }
+    if (r.find("Mali-T") != std::string::npos || r.find("Mali-4") != std::string::npos) return QualityProfile::Battery;
+    if (r.find("PowerVR") != std::string::npos) return QualityProfile::Low;
+    if (r.find("llvmpipe") != std::string::npos || r.find("SwiftShader") != std::string::npos) return QualityProfile::Medium;
+    return QualityProfile::Medium;
+}
+
 GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
     GraphicsSettings s; s.profile = p;
     switch (p) {
@@ -28,13 +55,13 @@ GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
         s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; break;
     case QualityProfile::Medium:
         s.renderScale = 0.75f; s.shadowRes = 1024; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = false;
-        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; break;
+        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; s.terrainNormals = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
     case QualityProfile::Low:
         s.renderScale = 0.65f; s.shadowRes = 1024; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 80; s.maxLights = 4; s.fpsCap = 30; s.ssao = false; break;
+        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 80; s.maxLights = 4; s.fpsCap = 30; s.ssao = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
     default:  // battery saver
         s.renderScale = 0.55f; s.shadowRes = 0; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 70; s.maxLights = 3; s.fpsCap = 30; s.ssao = false; break;
+        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 70; s.maxLights = 3; s.fpsCap = 30; s.ssao = false; s.simpleWater = true; break;
     }
     return s;
 }
@@ -72,6 +99,7 @@ Shader* Renderer::lit(int flags) {
     Shader& s = litVariants[flags];
     std::string defs = litDefines(flags);
     if (settings.softShadows) defs += "#define SHADOW_SOFT\n";
+    if (const char* dbg = getenv("LK_DBG_DEFS")) { for (std::string d = dbg; !d.empty();) { size_t c = d.find(';'); defs += "#define " + d.substr(0, c) + "\n"; d = c == std::string::npos ? "" : d.substr(c + 1); } }
     if (!settings.terrainNormals) defs += "#define TERRAIN_SIMPLE\n";
     std::string fs = (flags & LIT_DEPTH) ? std::string(shaders::FRAME_UBO) + shaders::DEPTH_FS
                                          : std::string(shaders::FRAME_UBO) + shaders::LIGHTING + shaders::LIT_FS;
@@ -87,6 +115,9 @@ static bool buildFS(Shader& s, const char* name, const char* fs, const std::stri
 
 bool Renderer::init(const GraphicsSettings& s) {
     settings = s;
+    gpuProfile = getenv("LK_GPU_PROFILE") != nullptr;
+    if (const char* m = getenv("LK_GPU_SKIP")) gpuSkipMask = atoi(m);
+    gpuSkipProps = getenv("LK_GPU_SKIP_PROPS") != nullptr;
     gGpu.detect();
     if (gGpu.halfFloatColorBuffer || gGpu.floatColorBuffer) { hdrFormat = GL_RGBA16F; hdrScale = 1.f; }
     else { hdrFormat = GL_RGB10_A2; hdrScale = 4.f; AGR_WARN("No float render targets: using RGB10_A2 HDR encoding"); }
@@ -98,7 +129,7 @@ bool Renderer::init(const GraphicsSettings& s) {
 
     const std::string U = shaders::FRAME_UBO, L = shaders::LIGHTING;
     bool ok = true;
-    ok &= water.build("water", U + shaders::WATER_VS, U + L + shaders::WATER_FS, "");
+    ok &= water.build("water", U + shaders::WATER_VS, U + L + shaders::WATER_FS, settings.simpleWater ? "#define WATER_SIMPLE\n" : "");
     ok &= lava.build("lava", U + shaders::WATER_VS, U + L + shaders::WATER_FS, "#define LAVA\n");
     ok &= sky.build("sky", U + shaders::SKY_VS, U + shaders::SKY_FS, "");
     ok &= particleAlpha.build("particles", U + shaders::PARTICLE_VS, U + L + shaders::PARTICLE_FS, "");
@@ -148,9 +179,23 @@ bool Renderer::init(const GraphicsSettings& s) {
     return true;
 }
 
+void Renderer::setDynamicScale(float k) {
+    k = clampf(k, 0.5f, 1.f);
+    if (std::fabs(k - dynamicScale) < 0.01f) return;
+    dynamicScale = k;
+    if (frameUbo) createTargets();
+}
+
 void Renderer::applySettings(const GraphicsSettings& s) {
     bool rebuildShaders = s.softShadows != settings.softShadows || s.terrainNormals != settings.terrainNormals;
+    bool rebuildWater = s.simpleWater != settings.simpleWater;
     settings = s;
+    if (rebuildWater && frameUbo) {
+        const std::string U = shaders::FRAME_UBO, L = shaders::LIGHTING;
+        water.destroy();
+        water.build("water", U + shaders::WATER_VS, U + L + shaders::WATER_FS, settings.simpleWater ? "#define WATER_SIMPLE\n" : "");
+        water.use(); water.set("uShadowMap", 0); water.set("uNoiseTex", 1); water.set("uAtlas", 4);
+    }
     if (rebuildShaders) {
         for (auto& kv : litVariants) kv.second.destroy();
         litVariants.clear();
@@ -160,7 +205,9 @@ void Renderer::applySettings(const GraphicsSettings& s) {
 
 void Renderer::createTargets() {
     destroyTargets();
-    int w = std::max(16, (int)(width * settings.renderScale)), h = std::max(16, (int)(height * settings.renderScale));
+    float rs = settings.renderScale * dynamicScale;
+    int w = std::max(16, (int)(width * rs)), h = std::max(16, (int)(height * rs));
+    shadowFrame = 0;
     if (!sceneRT.create(w, h, hdrFormat, true, false)) {
         hdrFormat = GL_RGB10_A2; hdrScale = 4.f;
         sceneRT.create(w, h, hdrFormat, true, false);
@@ -170,7 +217,7 @@ void Renderer::createTargets() {
     if (settings.ssao) aoRT.create(std::max(8, w / 2), std::max(8, h / 2), GL_RGBA8, false);
     if (settings.shadowRes > 0) shadowRT.create(settings.shadowRes, settings.shadowRes, 0, true, true);
     bloomChain.clear();
-    int bw = w / 2, bh = h / 2;
+    int bw = w >> (1 + settings.bloomStart), bh = h >> (1 + settings.bloomStart);
     for (int i = 0; i < 5 && bw >= 8 && bh >= 8; i++) {
         bloomChain.emplace_back();
         bloomChain.back().create(bw, bh, hdrFormat == GL_RGBA16F ? GL_RGBA16F : GL_RGBA8, false);
@@ -259,7 +306,9 @@ void Renderer::drawItem(const DrawItem& d, bool depthPass, bool outlinePass) {
 
 void Renderer::shadowPass() {
     shadowsThisFrame = settings.shadowRes > 0 && shadowRT.fbo && env.sunIntensity > 0.05f && env.shadowStrength > 0.01f;
-    if (!shadowsThisFrame) { shadowMatrix = mat4(); return; }
+    if (!shadowsThisFrame) { shadowMatrix = mat4(); shadowFrame = 0; return; }
+    // low profiles: reuse last frame's shadow map (and its matrix) every other frame
+    if (settings.shadowInterval > 1 && (shadowFrame++ % settings.shadowInterval) != 0) return;
     // Fit an orthographic box around the camera focus; snap to texels to prevent shimmering.
     vec3 sd = normalize(env.sunDir);
     if (sd.y < 0.12f) sd = normalize(vec3(sd.x, 0.12f, sd.z));
@@ -297,10 +346,28 @@ void Renderer::shadowPass() {
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
+static const char* GPU_PASS[12] = {"shadows", "opaque", "outlines", "sky", "water", "particles", "bloom", "dof", "ssao", "composite", "fxaa", "other"};
+void Renderer::gpuMark(int pass) {
+    if (!gpuProfile) return;
+    glFinish();
+    double t = platform::timeSeconds();
+    if (pass >= 0) gpuAcc[pass] += t - gpuT0;
+    gpuT0 = t;
+}
+std::string Renderer::gpuReport() {
+    if (!gpuProfile || gpuFrames == 0) return "";
+    std::string out = "gpu passes (ms/frame):";
+    for (int i = 0; i < 11; i++) { char b[48]; snprintf(b, sizeof b, " %s %.1f", GPU_PASS[i], gpuAcc[i] * 1000.0 / gpuFrames); out += b; gpuAcc[i] = 0; }
+    gpuFrames = 0;
+    return out;
+}
+
 void Renderer::render(ParticleSystem* particles) {
     double t0 = platform::timeSeconds();
     glBindVertexArray(0);
+    if (gpuProfile) { gpuFrames++; gpuMark(-1); }
     shadowPass();
+    gpuMark(0);
     updateFrameUBO(camera, env, shadowMatrix, shadowsThisFrame);
 
     sceneRT.bind();
@@ -338,13 +405,17 @@ void Renderer::render(ParticleSystem* particles) {
     for (int i : order) {
         bool twoSided = (items[i].flags & (LIT_WIND | LIT_TEXTURED)) != 0;  // imported models are often double-sided (capes)
         if (twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+        if (gpuProfile && gpuSkipMask && (items[i].flags & gpuSkipMask) == gpuSkipMask && (gpuSkipMask != 1 || true)) continue;
+        if (gpuProfile && gpuSkipProps && items[i].flags == 0) continue;
         drawItem(items[i], false, false);
     }
+    gpuMark(1);
     // Stylised outlines (inverted hull) for characters and interactables
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
     for (int i : order) if (items[i].outline) drawItem(items[i], false, true);
     glCullFace(GL_BACK);
+    gpuMark(2);
 
     // Sky (only where nothing was drawn)
     {
@@ -358,6 +429,7 @@ void Renderer::render(ParticleSystem* particles) {
         stats.drawCalls++;
     }
 
+    gpuMark(3);
     // Water & lava (alpha blended, depth tested, no depth write)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -376,6 +448,7 @@ void Renderer::render(ParticleSystem* particles) {
         stats.drawCalls++;
     }
     glEnable(GL_BLEND);
+    gpuMark(4);
     // Particles
     if (particles) {
         vec3 fwd = normalize(camera.target - camera.pos);
@@ -396,6 +469,7 @@ void Renderer::render(ParticleSystem* particles) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glEnable(GL_CULL_FACE);
+    gpuMark(5);
 
     postProcess();
     stats.cpuMs = (platform::timeSeconds() - t0) * 1000;
@@ -433,6 +507,7 @@ void Renderer::postProcess() {
         }
         glDisable(GL_BLEND);
     }
+    gpuMark(6);
     // Blurred copy for depth of field (quarter resolution, bilinear)
     bool doDof = settings.dof && (env.dofAmount > 0.01f || env.tiltShift > 0.01f);
     if (doDof) {
@@ -446,6 +521,7 @@ void Renderer::postProcess() {
         bloomDown.set("uHdrScale", 1.f);
         fsMesh.draw();
     }
+    gpuMark(7);
     // Screen-space ambient occlusion (half resolution, depth only)
     bool doAo = settings.ssao && aoRT.fbo;
     if (doAo) {
@@ -458,6 +534,7 @@ void Renderer::postProcess() {
         ssao.set("uAoParams", vec4(0.65f, 1.15f, 70.f, 0.f));
         fsMesh.draw();
     }
+    gpuMark(8);
     // Composite into LDR (or directly to the screen when FXAA is off)
     bool doFxaa = settings.fxaa && ldrRT.fbo;
     if (doFxaa) ldrRT.bind();
@@ -480,6 +557,7 @@ void Renderer::postProcess() {
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
     fsMesh.draw();
+    gpuMark(9);
     if (doFxaa) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
@@ -488,6 +566,7 @@ void Renderer::postProcess() {
         fxaa.set("uTexel", vec2(1.f / ldrRT.w, 1.f / ldrRT.h));
         fsMesh.draw();
     }
+    gpuMark(10);
     stats.drawCalls += 4 + (int)bloomChain.size() * 2;
     glEnable(GL_DEPTH_TEST);
 }

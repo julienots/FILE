@@ -661,7 +661,9 @@ void Game::loadSettings() {
     for (int i = 0; i < CTL_COUNT; i++) settings.layout.pos[i] = defaultLayoutPos()[i];
     int layoutVer = 1;
     std::string data;
+    settingsFileFound = false;
     if (!platform::readFile(platform::writableDir() + "/settings.cfg", data)) return;
+    settingsFileFound = true;
     std::istringstream in(data);
     std::string line;
     while (std::getline(in, line)) {

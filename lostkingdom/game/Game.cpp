@@ -5,6 +5,21 @@
 
 namespace lk {
 
+// Lightweight CPU section profiler (desktop autoplay reports it; negligible cost on device).
+struct SectionProf { const char* name; double acc = 0; };
+static SectionProf gProf[] = {{"player"}, {"characters+AI"}, {"projectiles"}, {"spawning"}, {"dungeon"}, {"environment"}, {"ambientFx"}, {"particles"}, {"audioDir"}, {"renderWorld"}, {"hud+menus"}};
+static int gProfFrames = 0;
+#define PROF(i, stmt) do { double _t = platform::timeSeconds(); stmt; gProf[i].acc += platform::timeSeconds() - _t; } while (0)
+void Game::reportProfile() {
+    if (gProfFrames == 0) return;
+    std::string out = "cpu profile (ms/frame):";
+    for (auto& p : gProf) { char b[64]; snprintf(b, sizeof b, " %s %.2f", p.name, p.acc * 1000.0 / gProfFrames); out += b; p.acc = 0; }
+    AGR_LOG("%s over %d frames", out.c_str(), gProfFrames);
+    std::string g = renderer.gpuReport(); if (!g.empty()) AGR_LOG("%s", g.c_str());
+    gProfFrames = 0;
+}
+
+
 Game* gGame = nullptr;
 
 }  // namespace lk
@@ -21,6 +36,12 @@ bool Game::init(int w, int h) {
     for (auto& a : platform::launchArgs()) {
         if (a.rfind("--autoplay=", 0) == 0) { autoplay = true; autoplayScenario = a.substr(11); }
         if (a.rfind("--profile=", 0) == 0) settings.profile = (QualityProfile)std::atoi(a.c_str() + 10);
+    }
+    if (!settingsFileFound && !autoplay) {
+        // first launch: pick the quality profile from the GPU (the player can change it in Settings)
+        const char* gr = (const char*)glGetString(GL_RENDERER);
+        settings.profile = suggestProfileForGpu(gr ? gr : "");
+        AGR_LOG("first launch: GPU '%s' -> profile %s", gr ? gr : "?", profileName(settings.profile));
     }
     GraphicsSettings gs = GraphicsSettings::forProfile(settings.profile);
     gs.chromatic = settings.chromatic;
@@ -65,7 +86,7 @@ void Game::contextLost() {
     ui = UI();
     particles = ParticleSystem();
     meshCache.clear();
-    heroMesh.reset(); heroTex = Texture();
+    for (auto& kv : importedModels) if (kv.second) { kv.second->mesh.reset(); kv.second->tex = Texture(); }
     windmillBlades.reset(); chestMesh.reset(); chestOpenMesh.reset(); pickupMesh.reset(); arrowMesh.reset(); boulderMesh.reset(); orbMesh.reset();
     gateMesh.reset(); brazierMesh.reset(); bladeMesh.reset(); spikeMesh.reset(); leverMesh.reset();
     for (auto& m : nodeMeshes) m.reset();
@@ -157,11 +178,33 @@ bool Game::collideStatic(vec3& p, float r, float feet, float* step) const {
 }
 
 // ============================================================================================ main loop
+// Dynamic resolution: keep the profile's frame rate by lowering the internal resolution when frames are too
+// slow, and raising it again after a stable period (that period doubles after a failed raise: no oscillation).
+void Game::updateDynamicResolution(float dtRaw) {
+    if (platform::isHeadlessTest() || state != GameState::Playing || menu != Menu::None) { drsAcc = 0; drsFrames = 0; return; }
+    if (dtRaw > 0.25f) return;  // hitches (loading, app switch) are not representative
+    drsAcc += dtRaw; drsFrames++;
+    if (drsAcc < 2.f) return;
+    float avg = drsAcc / drsFrames; drsAcc = 0; drsFrames = 0;
+    float target = 1.f / std::max(20, renderer.settings.fpsCap);
+    float k = renderer.dynamicScale;
+    if (avg > target * 1.18f && k > 0.55f) {
+        if (drsJustRaised) drsWaitUp = std::min(120.f, drsWaitUp * 2.f);
+        renderer.setDynamicScale(k - 0.1f); drsStable = 0; drsJustRaised = false;
+        AGR_LOG("dynamic resolution: %.0f ms/frame -> scale %.2f", avg * 1000, renderer.dynamicScale);
+    } else if (avg < target * 1.06f) {
+        drsStable += 2.f;
+        if (drsStable >= drsWaitUp && k < 0.99f) { renderer.setDynamicScale(k + 0.1f); drsStable = 0; drsJustRaised = true; AGR_LOG("dynamic resolution: raise -> scale %.2f", renderer.dynamicScale); }
+        else if (drsStable > 20.f) drsJustRaised = false;
+    } else drsStable = 0;
+}
+
 void Game::frame(float dtRaw) {
     float dt = std::min(dtRaw, 1.f / 15.f);
     realTime += dt;
     stateT += dt;
     fpsAcc += dtRaw; fpsFrames++;
+    updateDynamicResolution(dtRaw);
     if (fpsAcc > 0.5f) { fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; }
     ui.begin(W, H, dt);
     // level-triggered inputs are rebuilt every frame (by touch controls, or by the autoplay bot)
@@ -198,10 +241,8 @@ void Game::frame(float dtRaw) {
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
         if (!paused) updatePlaying(sdt);
-        renderWorld(sdt);
-        drawHud(dt);
-        if (dialog.open) drawDialog();
-        drawMenus(dt);
+        PROF(9, renderWorld(sdt));
+        PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); });
         break;
     }
     }
@@ -222,6 +263,7 @@ void Game::frame(float dtRaw) {
     ui.end(renderer.uiShader());
     ui.endInput();
     input.clearEdges();
+    if (!pendingScreenshot.empty() && autoplay) reportProfile();
     if (!pendingScreenshot.empty()) { AGR_LOG("render stats: %d draw calls, %dk triangles (%s)", renderer.stats.drawCalls, renderer.stats.triangles / 1000, pendingScreenshot.c_str()); platform::requestScreenshot(pendingScreenshot); pendingScreenshot.clear(); }
 }
 
@@ -231,15 +273,16 @@ void Game::updatePlaying(float dt) {
     // time of day: 1 in-game hour = 60 s
     timeOfDay += dt / 60.f;
     if (timeOfDay >= 24.f) { timeOfDay -= 24.f; day++; }
-    updatePlayer(dt);
-    updateCharacters(dt);
-    updateProjectiles(dt);
-    updateSpawning(dt);
-    updateDungeon(dt);
-    updateEnvironment(dt);
-    updateAmbientFx(dt);
-    particles.update(dt);
-    updateAudioDirector(dt);
+    gProfFrames++;
+    PROF(0, updatePlayer(dt));
+    PROF(1, updateCharacters(dt));
+    PROF(2, updateProjectiles(dt));
+    PROF(3, updateSpawning(dt));
+    PROF(4, updateDungeon(dt));
+    PROF(5, updateEnvironment(dt));
+    PROF(6, updateAmbientFx(dt));
+    PROF(7, particles.update(dt));
+    PROF(8, updateAudioDirector(dt));
     reg.flush();
     // autosave every 3 minutes (outside combat)
     autosaveT += dt;

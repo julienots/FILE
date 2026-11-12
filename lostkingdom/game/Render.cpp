@@ -85,8 +85,9 @@ void Game::renderWorld(float dt) {
             if (d > gs.drawDistance + CHUNK) return;
             DrawItem it; it.tint = vec4(1, 1, 1, 0);
             if (ch.terrain.valid()) { it.mesh = &ch.terrain; it.flags = LIT_TERRAIN; it.castShadow = d < 70.f; renderer.submit(it); }
-            if (ch.props.valid()) { it.mesh = &ch.props; it.flags = 0; it.tint.w = ch.snow * 0.55f; it.castShadow = true; renderer.submit(it); }
-            if (ch.foliage.valid()) { it.mesh = &ch.foliage; it.flags = LIT_WIND; it.tint.w = ch.snow * 0.5f; renderer.submit(it); }
+            // shadow casters limited to what the ~43 m shadow map around the hero can actually show
+            if (ch.props.valid()) { it.mesh = &ch.props; it.flags = 0; it.tint.w = ch.snow * 0.55f; it.castShadow = d < 44.f; renderer.submit(it); }
+            if (ch.foliage.valid()) { it.mesh = &ch.foliage; it.flags = LIT_WIND; it.tint.w = ch.snow * 0.5f; it.castShadow = d < 36.f; renderer.submit(it); }
             if (d < 48.f && gs.grassDensity > 0.01f) {
                 it.castShadow = false; it.tint.w = 0;
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
