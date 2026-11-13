@@ -49,11 +49,20 @@ Lire **uniquement** `Input.move{x,y}`, `Input.look{x,y}`, `Input.buttons`, `Inpu
 | `quality:changed` | A | preset | tous |
 | `ui:toast` | tous | `{text,kind}` | B UI |
 | `game:pause` / `game:resume` | B | — | A (stoppe la sim) |
+| `game:start` | B | — | quitte l'écran titre (A peut lancer une intro) |
+| `progress:xp` | B | `{gained,reason,xp,stage,ratio,need,next}` | UI, audio |
+| `hero:stats` | B | `State.data.hero` | UI (PV/énergie changés) |
+| `world:discovered` | B | `{id}` | UI, carte |
+| `settings:changed` | B | `State.data.settings` | tous (gaucher, volumes…) |
+| `settings:quality` | B | `{level:'auto'|0|1|2}` | A (Quality: forcer/verrouiller ou repasser en auto) |
+| `ui:context` | B | `{label|null}` | UI (libellé du bouton Action) |
+| `quest:tracked` | B | `{title,progress}` | UI (suivi d'objectif) |
+| `ui:click` | B | — | audio |
 
 Ajout d'événement: documente-le ici (une ligne) dans ton commit.
 
 ## Data (B écrit, A lit) — `src/data/`
-- `planets.js`: `{id,name,type,radius,seed,pos[3],system,relief,seaLevel,ring?,palette{deep,shore,low,mid,high,peak},atmosphere{color,intensity},clouds?,biome,`
+- `planets.js`: `SYSTEMS[{id,name,color,center,danger}]` + `PLANETS`: `{id,name,type,system,danger(0-4),hidden?,desc,species,radius,seed,pos[3],relief,seaLevel,ring?,palette{deep,shore,low,mid,high,peak},atmosphere{color,intensity},clouds?,biome,`
   `props:[{kind,density,scale?}]` (kinds: tree,palm,crystal,rock,mushroom,grass,ruin,… A mappe kind→mesh/instancing),
   `npcs:[{id,name,species,lat,lon,model?,dialogue}]`, `pickups:[{id,kind,lat,lon}]`, `enemies:[{type,count,lat,lon,radius}]`, `structures:[{kind,lat,lon}]`, `resources[]`, `secrets[]`, `quests[]`}`
 - `evolutions.js` (stades), `abilities.js`, `creatures.js`, `artifacts.js`, `enemies.js`, `bosses.js`, `quests/*.js`, `dialogues/*.js`, `buildings.js`, `balance.js`.
@@ -61,7 +70,8 @@ Ajout d'événement: documente-le ici (une ligne) dans ton commit.
 - Textes en français via `ui/i18n.js` (B), clés pas chaînes en dur dans les systèmes.
 
 ## State (sauvegarde) — `core/State.js` (B)
-Un seul objet sérialisable, `State.data`, version `v`; toute évolution de schéma = migration. Autosave 5 s. Ne jamais y stocker d'objets THREE.
+Un seul objet sérialisable, `State.data`, version `v` (actuel: 2); toute évolution de schéma = `MIGRATIONS[v]` + `VERSION++` (testé par `npm test`). Autosave 5 s + à la mise en arrière-plan. Ne jamais y stocker d'objets THREE.
+À lire par A: `world.collected` (ids de pickups déjà ramassés → ne pas les instancier), `world.discovered` (planètes `hidden` à n'afficher qu'une fois découvertes), `hero.stage`, `settings`.
 
 ## Modèles 3D (Tripo → GLB)
 - Déposer dans `public/models/<clé>.glb`, déclarer dans `manifest.json` (`file`, `height` en mètres, `disabled:false`).
