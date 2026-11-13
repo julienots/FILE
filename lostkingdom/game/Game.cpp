@@ -443,6 +443,12 @@ void Game::updateEnvironment(float dt) {
     env.chromatic = 0;
     // depth of field: tilt-shift diorama in gameplay, real DoF during dialogues & cinematics
     env.tiltShift = state == GameState::Playing ? 0.35f : 0.55f;
+    if (state == GameState::Playing) {
+        // free camera: zoomed far out = "map" view (fog pushed away, miniature tilt-shift);
+        // close-ups and low "sky" shots keep the hero sharp
+        env.fogDensity *= lerpf(1.f, 0.4f, camRig.mapK);
+        env.tiltShift = lerpf(env.tiltShift, 0.8f, camRig.mapK) * (1.f - 0.7f * camRig.nearK) * (1.f - 0.75f * camRig.lowK);
+    }
     dofAmount = damp(dofAmount, (dialog.open || cinematicT > 0) ? 1.f : 0.f, 4.f, dt);
     env.dofAmount = dofAmount;
     env.dofFocus = dofFocus;

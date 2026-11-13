@@ -262,7 +262,11 @@ Entity Game::spawnBoss(int bi, vec3 pos) {
     bossEnt = e; bossBarName = b.name; bossBarShow = 0;
     // cinematic intro: the camera sweeps around the boss while it roars
     vec3 fwd = normalize(pc().pos - pos);
-    startCinematic(pos + fwd * (8 + c.vis.scale * 3) + vec3(0, 3 + c.vis.scale, 0) + perpVec(fwd) * 6.f, pos + fwd * (5 + c.vis.scale * 2.5f) + vec3(0, 1.5f + c.vis.scale * 0.6f, 0) - perpVec(fwd) * 3.f,
+    // the last frame follows the player's camera pitch (low camera -> low shot, top view -> high shot),
+    // then the camera glides back to the gameplay view (camCineBlend)
+    float endR = 5 + c.vis.scale * 2.5f;
+    float endH = clampf(std::tan(clampf(camPitch, -0.2f, 1.1f)) * endR * 0.55f + c.vis.scale * 0.6f, 0.8f, endR * 1.4f);
+    startCinematic(pos + fwd * (8 + c.vis.scale * 3) + vec3(0, 3 + c.vis.scale, 0) + perpVec(fwd) * 6.f, pos + fwd * endR + vec3(0, endH, 0) - perpVec(fwd) * 3.f,
                    pos + vec3(0, c.height * 0.6f, 0), 4.f, b.intro);
     play("boss_intro", 1.f); play(enemies()[b.enemy].arch == Arch::Dragon ? "dragon_roar" : "roar", 1.f, 0.8f);
     haptic(120, 200);

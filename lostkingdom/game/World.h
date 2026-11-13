@@ -143,6 +143,9 @@ public:
     // Pushes a circle (pos.xz, radius) out of static colliders; returns true if collided.
     bool collide(vec3& pos, float radius, float feetY, float* stepHeight = nullptr) const;
     bool lineBlocked(vec3 a, vec3 b) const;  // line of sight across structures (AI)
+    // Camera collision: is the point inside a building-sized box collider (walls, houses, towers)?
+    // Trees, rocks, fences and low props are ignored (the see-through shader fades those instead).
+    bool cameraBlocked(vec3 p, float margin) const;
 
     // ---- world plan ---------------------------------------------------------------------------
     std::vector<Poi> pois;

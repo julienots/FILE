@@ -125,14 +125,16 @@ void Game::updateTouchControls() {
     } else pinchDist = 0;
     for (auto* f : camFingers) {
         auto it = lastPos.find(f->id);
-        if (it != lastPos.end() && camFingers.size() == 1) input.camDrag.x += -(f->x - it->second.x);
+        if (it != lastPos.end() && camFingers.size() == 1) { input.camDrag.x += -(f->x - it->second.x); input.camDrag.y += f->y - it->second.y; }
         lastPos[f->id] = vec2(f->x, f->y);
     }
     for (auto it = lastPos.begin(); it != lastPos.end();) { bool alive = false; for (auto& f : u.fingers) if (f.id == it->first && f.down) alive = true; if (!alive) it = lastPos.erase(it); else ++it; }
-    // tap on an enemy to lock on / tap empty ground to release
+    // tap on an enemy to lock on / tap empty ground to release; double tap in the camera area: reset the camera
     for (auto& f : u.fingers) {
         if (!f.released || f.consumed || f.t > 0.3f || length(vec2(f.x - f.sx, f.y - f.sy)) > 12) continue;
         if (f.id == joyFinger) continue;
+        if (realTime - lastCamTapT < 0.4f && length(vec2(f.x, f.y) - lastCamTapPos) < 70.f) { input.camReset = true; lastCamTapT = -10.f; }
+        else { lastCamTapT = realTime; lastCamTapPos = vec2(f.x, f.y); }
         Entity best = NullEntity; float bd = 70.f;
         reg.each<Character>([&](Entity e, Character& c) {
             if (c.team != Team::Enemy || c.dead) return;

@@ -1300,6 +1300,22 @@ bool World::lineBlocked(vec3 a, vec3 b) const {
     return false;
 }
 
+bool World::cameraBlocked(vec3 p, float margin) const {
+    ChunkKey k = chunkOf(p.x, p.z);
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            auto it = chunks.find({k.x + dx, k.z + dz});
+            if (it == chunks.end() || !it->second->ready) continue;
+            for (const Collider& c : it->second->colliders) {
+                if (c.hx <= 0 || c.top < 2.5f || std::max(c.hx, c.hz) < 1.2f) continue;
+                if (p.y < c.base - 0.5f || p.y > c.base + c.top + margin) continue;
+                vec2 l = rotate(p.xz() - c.c, -c.rot);
+                if (std::fabs(l.x) < c.hx + margin && std::fabs(l.y) < c.hz + margin) return true;
+            }
+        }
+    return false;
+}
+
 // ---------------------------------------------------------------------------------------- map image
 void World::generateMapImage() {
     int R = mapRes;

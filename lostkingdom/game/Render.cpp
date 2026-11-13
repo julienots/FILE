@@ -7,22 +7,50 @@ namespace lk {
 // ============================================================================================ camera
 void Game::updateCamera(float dt) {
     vec3 target;
-    if (state == GameState::Playing && player != NullEntity) {
+    bool playing = state == GameState::Playing && player != NullEntity;
+    float distMin = CameraRig::DIST_MIN;
+    if (playing) {
         Character& p = pc();
         vec3 lead = vec3(p.vel.x, 0, p.vel.z) * 0.25f;
         target = p.pos + vec3(0, 1.1f, 0) + lead;
-        // lock-on: frame both the player and the target
+        // ---- player input: drag = yaw / pitch, pinch = zoom (multiplicative: same feel near and far)
+        bool touched = input.camDrag.x != 0 || input.camDrag.y != 0 || input.pinch != 0;
+        camIdleT = touched ? 0.f : camIdleT + dt;
+        float sens = settings.camSensitivity;
+        camYaw += input.camDrag.x * 0.006f * sens * (settings.invertCamera ? -1.f : 1.f);
+        camPitch = CameraRig::clampPitch(camPitch + input.camDrag.y * 0.005f * sens * (settings.invertCameraY ? -1.f : 1.f));
+        if (input.pinch != 0) camDistTarget = CameraRig::clampDist(camDistTarget * std::exp(-input.pinch * 0.0035f));
+        if (input.camReset) { camResetT = 0.8f; play("ui_click", 0.3f); }
+        if (touched && !input.camReset) camResetT = 0;
+        if (camResetT > 0) {
+            camResetT -= dt;
+            camPitch = damp(camPitch, CameraRig::PITCH_DEFAULT, 7.f, dt);
+            camDistTarget = damp(camDistTarget, CameraRig::DIST_DEFAULT, 7.f, dt);
+        }
+        float hs = length(vec2(p.vel.x, p.vel.z));
+        bool locked = false;
+        // lock-on: frame both the hero and the target (wider shot, and the camera swings behind the hero)
         if (lockTarget != NullEntity && reg.valid(lockTarget)) {
             Character* t = reg.get<Character>(lockTarget);
-            if (t && !t->dead) target = lerp(target, t->pos + vec3(0, 1.f, 0), 0.3f);
+            if (t && !t->dead) {
+                locked = true;
+                target = lerp(target, t->pos + vec3(0, 1.f, 0), 0.3f);
+                float sep = distXZ(p.pos, t->pos);
+                distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, sep * 0.9f + 7.f + t->height));
+                vec3 d = t->pos - p.pos;
+                if (camIdleT > 1.2f && sep > 1.f) camYaw = dampAngle(camYaw, std::atan2(-d.x, -d.z), 1.4f, dt);
+            }
         }
         if (bossEnt != NullEntity && reg.valid(bossEnt)) {
             Character* b = reg.get<Character>(bossEnt);
-            if (b && !b->dead) { target = lerp(target, b->pos, 0.25f); camDistTarget = std::max(camDistTarget, 24.f + b->vis.scale * 1.5f); }
+            if (b && !b->dead) { target = lerp(target, b->pos, 0.25f); distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, 24.f + b->vis.scale * 1.5f)); }
         }
-        camYaw += input.camDrag.x * 0.006f * settings.camSensitivity * (settings.invertCamera ? -1.f : 1.f);
-        camDistTarget = clampf(camDistTarget - input.pinch * 0.04f, 9.f, 32.f);
-        if (bossEnt == NullEntity && input.pinch == 0) camDistTarget = damp(camDistTarget, dungeon.active ? 14.f : 15.5f, 0.3f, dt);
+        // automatic return: after 4 s without touching the camera while travelling, the pitch eases back
+        if (camIdleT > 4.f && hs > 1.f && !locked && camResetT <= 0) camPitch = damp(camPitch, CameraRig::PITCH_DEFAULT, 0.7f, dt);
+        // look ahead: when running, aim 1.5 m further in the running direction
+        float runK = smoothstepf(2.5f, 5.f, hs) * (p.attackClip ? 0.f : 1.f);
+        vec3 ahead = hs > 0.1f ? vec3(p.vel.x / hs, 0, p.vel.z / hs) * 1.5f * runK : vec3(0);
+        camLookAhead = damp(camLookAhead, ahead, 2.5f, dt);
     } else {
         // title / credits: slow cinematic fly-over above Greenhaven
         titleCamT += dt;
@@ -31,23 +59,41 @@ void Game::updateCamera(float dt) {
         target = vec3(c.x, world.height(c.x, c.y) + 4.f, c.y);
         camYaw = a + 2.2f;
         camDistTarget = 36.f;
+        camPitch = CameraRig::PITCH_DEFAULT;
+        camLookAhead = vec3(0);
     }
     camFocus = damp(camFocus, target, state == GameState::Playing ? 7.f : 1.5f, dt);
     if (length2(camFocus - target) > 60 * 60) camFocus = target;  // teleports
-    camDist = damp(camDist, camDistTarget, 4.f, dt);
-    float pitch = camPitch - (camDist - 15.5f) * 0.004f;
-    vec3 off = vec3(std::sin(camYaw) * std::cos(pitch), std::sin(pitch), std::cos(camYaw) * std::cos(pitch)) * camDist;
-    vec3 eye = camFocus + off;
-    vec3 look = camFocus + vec3(0, state == GameState::Playing ? 0.9f : 0.f, 0);  // aim at the chest: more landscape in view
+    // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
+    // for the overworld)
+    float distCap = dungeon.active ? 16.f : CameraRig::DIST_MAX;
+    camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), 4.f, dt);
+
+    CameraRigIn ri;
+    ri.focus = camFocus; ri.lookAhead = camLookAhead;
+    // dungeons (narrow 4 m corridors): the camera stays above the walls as in 1.5 and the see-through shader
+    // fades them; no low "sky" angle there (walls would fill the view)
+    ri.yaw = camYaw; ri.pitch = dungeon.active ? std::max(camPitch, 0.35f) : camPitch; ri.dist = camDist;
+    ri.playing = state == GameState::Playing;
+    ri.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
+    ri.ground = [this](float x, float z) {
+        if (dungeon.active) { float y; return dungeonFloor(x, z, y) ? y : camFocus.y - 1.1f; }
+        return world.height(x, z);
+    };
+    if (playing && !dungeon.active) ri.blocked = [this](vec3 p) { return cameraBlocked(p); };
+    camRig = CameraRig::compute(ri);
+    vec3 eye = camRig.eye, look = camRig.look;
     if (cinematicT > 0) {
         float u = 1.f - cinematicT / 4.f;
         eye = lerp(cineFrom, cineTo, easeInOut(saturate(u)));
         look = cineLook;
-    }
-    // keep the camera above ground and out of mountains
-    if (!dungeon.active) {
-        float gy = world.height(eye.x, eye.z);
-        if (eye.y < gy + 3.f) eye.y = gy + 3.f;
+        if (!dungeon.active) eye.y = std::max(eye.y, world.height(eye.x, eye.z) + 0.6f);
+        cineLastEye = eye; cineLastLook = look; camCineBlend = 1.f;
+    } else if (camCineBlend > 0) {
+        // glide from the last cinematic shot back to the player's camera (no hard cut)
+        float k = easeInOut(camCineBlend);
+        eye = lerp(eye, cineLastEye, k); look = lerp(look, cineLastLook, k);
+        camCineBlend = std::max(0.f, camCineBlend - dt / 0.7f);
     }
     if (shake > 0) {
         Rng r((uint64_t)(realTime * 977));
@@ -56,9 +102,26 @@ void Game::updateCamera(float dt) {
     }
     cam.pos = eye; cam.target = look;
     cam.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
-    cam.zNear = 0.8f; cam.zFar = 420.f;
+    cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
+    cam.zFar = 420.f + camRig.mapK * 120.f;
     cam.update((float)W / std::max(1, H));
     dofFocus = length(look - eye);
+}
+
+bool Game::cameraBlocked(vec3 p) const {
+    if (dungeon.active && p.x > WORLD_SIZE) {
+        // wall colliders are 8 m tall for gameplay, but the visible walls stop at ~4.6 m above the floor: the
+        // camera may pass over them (top-down dungeon view, as in 1.5)
+        float wallTop = dungeon.origin.y + 4.6f;
+        if (p.y > wallTop) return false;
+        for (const Collider& c : dungeon.colliders) {
+            if (c.hx <= 0) continue;
+            vec2 l = rotate(p.xz() - c.c, -c.rot);
+            if (std::fabs(l.x) < c.hx && std::fabs(l.y) < c.hz) return true;
+        }
+        return false;
+    }
+    return world.cameraBlocked(p, 0.3f);
 }
 
 vec2 Game::worldToScreen(vec3 p, bool* on) const {

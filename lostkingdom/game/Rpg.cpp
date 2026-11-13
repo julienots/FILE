@@ -647,6 +647,7 @@ void Game::saveSettings() {
     o << "profile " << (int)settings.profile << "\n";
     o << "volumes " << settings.master << " " << settings.music << " " << settings.sfx << " " << settings.ambience << "\n";
     o << "camera " << settings.camSensitivity << " " << settings.joystickDeadzone << " " << (settings.invertCamera ? 1 : 0) << " " << (settings.cameraShake ? 1 : 0) << "\n";
+    o << "camera2 " << (settings.invertCameraY ? 1 : 0) << "\n";
     o << "flags " << settings.haptics << " " << settings.showFps << " " << settings.autoTarget << " " << settings.chromatic << "\n";
     o << "hero " << (settings.importedHero ? 1 : 0) << "\n";
     o << "layoutver " << LAYOUT_VERSION << "\n";
@@ -672,6 +673,7 @@ void Game::loadSettings() {
         if (k == "profile") { int p; l >> p; settings.profile = (QualityProfile)clampf((float)p, 0, 4); }
         else if (k == "volumes") l >> settings.master >> settings.music >> settings.sfx >> settings.ambience;
         else if (k == "camera") { int inv, sh; l >> settings.camSensitivity >> settings.joystickDeadzone >> inv >> sh; settings.invertCamera = inv; settings.cameraShake = sh; }
+        else if (k == "camera2") { int iy = 0; l >> iy; settings.invertCameraY = iy != 0; }
         else if (k == "flags") l >> settings.haptics >> settings.showFps >> settings.autoTarget >> settings.chromatic;
         else if (k == "layoutver") l >> layoutVer;
         else if (k == "hero") { int h = 1; l >> h; settings.importedHero = h != 0; }

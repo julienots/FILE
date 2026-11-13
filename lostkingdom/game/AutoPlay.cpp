@@ -83,6 +83,116 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "camera") {
+        // Free camera (1.6.0): pitch x zoom grid with screenshots, then touch-driven checks (vertical drag,
+        // inverted axis, pinch, double-tap reset), automatic return, look-ahead, lock-on framing, collision.
+        static int res[11]; static int gridBad; static float v0;
+        static vec3 wallPt; static bool wallFound;
+        auto check = [](Game& g, const char* what) {
+            vec3 e = g.cam.pos; float gy = g.dungeon.active ? g.groundAt(e.x, e.z) : g.world.height(e.x, e.z);
+            bool above = e.y >= gy + g.camRig.minClear - 0.05f;
+            Character& c = g.pc();
+            bool on1 = false, on2 = false;
+            vec2 f = g.worldToScreen(c.pos + vec3(0, 0.1f, 0), &on1), h = g.worldToScreen(c.pos + vec3(0, 1.7f, 0), &on2);
+            auto in = [&](vec2 q) { return q.x >= 0 && q.x <= g.ui.W && q.y >= 0 && q.y <= g.ui.H; };
+            bool inside = on1 && on2 && in(f) && in(h);
+            AGR_LOG("CAMERA %s: pitch %.2f dist %.1f (effective %.1f) eye %.2f m above ground (min %.2f) hero feet (%.0f,%.0f) head (%.0f,%.0f) in %.0fx%.0f fog %.4f tilt %.2f -> %s",
+                    what, g.camPitch, g.camDistTarget, g.camRig.dist, e.y - gy, g.camRig.minClear, f.x, f.y, h.x, h.y, g.ui.W, g.ui.H, g.env.fogDensity, g.env.tiltShift, above && inside ? "ok" : "BAD");
+            return above && inside;
+        };
+        auto camPt = [](Game& g) { return vec2(g.ui.W * 0.56f, g.ui.H * 0.42f); };
+        auto drag = [](Game& g, int id, vec2 a, vec2 b, float t, float dur) {
+            float k = g.ui.scale; vec2 p = lerp(a, b, saturate(t / dur));
+            g.touch(TouchEvent{TouchEvent::Move, id, p.x * k, p.y * k});
+        };
+        s.push_back({2.5f, [](Game& g) { for (int& r : res) r = 0; gridBad = 0; const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 40, p->pos.y - 60, 2.4f); g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.pc().maxHp = g.pc().hp = 5000; }, idle, "setup"});
+        struct CV { float pitch, dist; const char* f; };
+        static const CV grid[] = {{-0.35f, 4.f, "80_cam_sky_z4"}, {-0.35f, 15.f, "81_cam_sky_z15"}, {-0.35f, 40.f, "82_cam_sky_z40"},
+                                  {0.f, 4.f, "83_cam_low_z4"}, {0.f, 15.f, "84_cam_low_z15"}, {0.f, 40.f, "85_cam_low_z40"},
+                                  {0.66f, 4.f, "86_cam_default_z4"}, {0.66f, 15.f, "87_cam_default_z15"}, {0.66f, 40.f, "88_cam_default_z40"},
+                                  {1.3f, 4.f, "89_cam_top_z4"}, {1.3f, 15.f, "90_cam_top_z15"}, {1.3f, 40.f, "91_cam_map_z40"}};
+        for (const CV& v : grid) {
+            s.push_back({1.4f, [v](Game& g) { g.camPitch = v.pitch; g.camDist = g.camDistTarget = v.dist; g.camResetT = 0; }, [v](Game& g, float) { g.camPitch = v.pitch; g.camIdleT = 0; }, "pose"});
+            s.push_back({0.04f, [v, check](Game& g) { if (!check(g, v.f)) gridBad++; g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        // vertical drag with a real finger: moving up looks up (pitch decreases)
+        s.push_back({0.8f, [camPt](Game& g) { g.camPitch = 0.66f; g.camDist = g.camDistTarget = 15.5f; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 301, p.x * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 301, p, p - vec2(0, 220), t, 0.6f); }, "drag up"});
+        s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) - vec2(0, 220); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 301, p.x * k, p.y * k}); res[0] = g.camPitch < v0 - 0.3f; AGR_LOG("CAMERA drag up: pitch %.2f -> %.2f", v0, g.camPitch); }, idle, "release"});
+        // inverted vertical axis: the same gesture looks down
+        s.push_back({0.8f, [camPt](Game& g) { g.settings.invertCameraY = true; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 302, p.x * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 302, p, p - vec2(0, 220), t, 0.6f); }, "drag up (inverted)"});
+        s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) - vec2(0, 220); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 302, p.x * k, p.y * k}); res[1] = g.camPitch > v0 + 0.3f; g.settings.invertCameraY = false; AGR_LOG("CAMERA drag up (inverted axis): pitch %.2f -> %.2f", v0, g.camPitch); }, idle, "release"});
+        // pinch: fingers apart = zoom in, together = zoom out
+        s.push_back({0.7f, [camPt](Game& g) { g.camPitch = 0.66f; v0 = g.camDistTarget; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 303, (p.x - 40) * k, p.y * k}); g.touch(TouchEvent{TouchEvent::Down, 304, (p.x + 40) * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 303, p - vec2(40, 0), p - vec2(200, 0), t, 0.5f); drag(g, 304, p + vec2(40, 0), p + vec2(200, 0), t, 0.5f); }, "pinch out"});
+        s.push_back({0.1f, [camPt](Game& g) { vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 303, (p.x - 200) * k, p.y * k}); g.touch(TouchEvent{TouchEvent::Up, 304, (p.x + 200) * k, p.y * k}); res[2] = g.camDistTarget < v0 - 4.f; AGR_LOG("CAMERA pinch out: zoom %.1f -> %.1f", v0, g.camDistTarget); }, idle, "release"});
+        // (both fingers start in the camera half of the screen: a finger in the left 45 % is the joystick)
+        s.push_back({0.7f, [camPt](Game& g) { v0 = g.camDistTarget; vec2 p = camPt(g) + vec2(90, 0); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 305, (p.x - 160) * k, p.y * k}); g.touch(TouchEvent{TouchEvent::Down, 306, (p.x + 160) * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g) + vec2(90, 0); drag(g, 305, p - vec2(160, 0), p - vec2(20, 0), t, 0.5f); drag(g, 306, p + vec2(160, 0), p + vec2(20, 0), t, 0.5f); }, "pinch in"});
+        s.push_back({0.1f, [camPt](Game& g) { vec2 p = camPt(g) + vec2(90, 0); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 305, (p.x - 20) * k, p.y * k}); g.touch(TouchEvent{TouchEvent::Up, 306, (p.x + 20) * k, p.y * k}); res[3] = g.camDistTarget > v0 + 4.f; AGR_LOG("CAMERA pinch in: zoom %.1f -> %.1f", v0, g.camDistTarget); }, idle, "release"});
+        // double tap in the camera area: pitch and zoom back to default
+        s.push_back({1.4f, [camPt](Game& g) { g.camPitch = -0.2f; g.camDistTarget = 34.f; tapAt(g, camPt(g), 307); },
+                     [camPt](Game& g, float t) { static bool second; if (t < 0.05f) second = false; if (t > 0.15f && !second) { second = true; tapAt(g, camPt(g) + vec2(8, 5), 308); } }, "double tap"});
+        s.push_back({0.04f, [](Game& g) { res[4] = std::fabs(g.camPitch - 0.66f) < 0.06f && std::fabs(g.camDistTarget - 15.5f) < 0.8f; AGR_LOG("CAMERA double tap reset: pitch %.2f zoom %.1f", g.camPitch, g.camDistTarget); }, idle, "check reset"});
+        // automatic return of the pitch while running (no touch for > 4 s), and the look-ahead
+        s.push_back({7.f, [](Game& g) { g.camPitch = 1.2f; g.camIdleT = 0; }, [](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; if (t > 6.9f && length(g.camLookAhead) > 1.f) res[6] = 1; }, "run (auto return)"});
+        s.push_back({0.04f, [](Game& g) { res[5] = std::fabs(g.camPitch - 0.66f) < 0.12f; AGR_LOG("CAMERA auto return: pitch %.2f, look-ahead %.2f m", g.camPitch, length(g.camLookAhead)); g.requestScreenshot("build/shots/92_cam_run_lookahead.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; }, "check return"});
+        // lock-on: hero and target both framed
+        s.push_back({2.5f, [](Game& g) { Character& c = g.pc(); vec3 p = c.pos + vec3(9, 0, 6); p.y = g.world.groundHeight(p.x, p.z); Entity e = g.spawnEnemy(enemyIndex("wolf"), p); g.lockTarget = e; g.camIdleT = 2.f; g.camYaw += 1.6f; }, idle, "lock-on"});
+        s.push_back({0.04f, [check](Game& g) {
+            bool on = false; Character* t = g.lockTarget != NullEntity ? g.reg.get<Character>(g.lockTarget) : nullptr;
+            vec2 q = t ? g.worldToScreen(t->pos + vec3(0, 0.5f, 0), &on) : vec2(-1, -1);
+            res[7] = t && on && q.x > 0 && q.x < g.ui.W && q.y > 0 && q.y < g.ui.H && check(g, "lock-on");
+            AGR_LOG("CAMERA lock-on: target at (%.0f, %.0f)", q.x, q.y);
+            g.requestScreenshot("build/shots/93_cam_lockon.png");
+        }, idle, "check lock-on"});
+        s.push_back({0.3f, [](Game& g) { if (g.lockTarget != NullEntity) g.reg.destroyLater(g.lockTarget); g.lockTarget = NullEntity; }, idle, "despawn"});
+        // collision: find a house in Brindlemere and put the camera behind its wall
+        s.push_back({2.5f, [](Game& g) { const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x, b->pos.y, 0.4f); }, idle, "village"});
+        s.push_back({1.6f, [](Game& g) {
+            wallFound = false; const Poi* b = g.world.poiById("brindlemere");
+            for (float r = 6; r < 60 && !wallFound; r += 2)
+                for (int a = 0; a < 24 && !wallFound; a++) {
+                    vec2 q = b->pos + vec2(std::cos(a * TAU / 24), std::sin(a * TAU / 24)) * r;
+                    vec3 w{q.x, g.world.height(q.x, q.y) + 2.f, q.y};
+                    if (!g.world.cameraBlocked(w, 0.f)) continue;
+                    for (int d = 0; d < 8 && !wallFound; d++) {
+                        vec2 n{std::cos(d * TAU / 8), std::sin(d * TAU / 8)};
+                        vec2 h = q + n * 6.f;
+                        vec3 hp{h.x, g.world.height(h.x, h.y), h.y}, test = hp;
+                        if (g.world.cameraBlocked(hp + vec3(0, 1.f, 0), 0.6f) || g.world.collide(test, 0.5f, hp.y)) continue;
+                        wallPt = w; wallFound = true;
+                        teleport(g, h.x, h.y, std::atan2(-n.x, -n.y));
+                    }
+                }
+            g.camPitch = 0.3f; g.camDist = g.camDistTarget = 15.5f;
+        }, [](Game& g, float) { g.camIdleT = 0; }, "behind a wall"});
+        s.push_back({0.04f, [check](Game& g) {
+            res[8] = wallFound && g.camRig.collided && !g.cameraBlocked(g.cam.pos) && check(g, "collision");
+            AGR_LOG("CAMERA collision: wall found %d, collided %d, effective distance %.1f", wallFound, g.camRig.collided, g.camRig.dist);
+            g.requestScreenshot("build/shots/94_cam_collision.png");
+        }, [](Game& g, float) { g.camIdleT = 0; }, "check collision"});
+        // dungeon: walls must not trap the camera (regression found while testing 1.6.0)
+        s.push_back({0.3f, [](Game& g) { const Poi* p = g.world.poiById("whisper_cave"); teleport(g, p->pos.x + 3, p->pos.y + 3); g.camPitch = 0.66f; g.camDistTarget = 30.f; }, idle, "cave"});
+        s.push_back({0.6f, [](Game& g) { g.input.interact = true; }, idle, "enter"});
+        s.push_back({3.f, none, [](Game& g, float t) { g.input.move = vec2(0.3f, 0.6f); g.camIdleT = 0; }, "explore"});
+        s.push_back({0.04f, [check](Game& g) {
+            res[10] = g.dungeon.active && !g.cameraBlocked(g.cam.pos) && g.camRig.dist <= 16.5f && check(g, "dungeon");
+            AGR_LOG("CAMERA dungeon: active %d, collided %d, effective distance %.1f", g.dungeon.active, g.camRig.collided, g.camRig.dist);
+            g.requestScreenshot("build/shots/95_cam_dungeon.png");
+        }, idle, "check dungeon"});
+        s.push_back({1.5f, [](Game& g) { if (g.dungeon.active) g.exitDungeon(); }, idle, "exit dungeon"});
+        s.push_back({0.1f, [](Game& g) {
+            res[9] = gridBad == 0;
+            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d",
+                    res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG("CAMERA TEST %s", ok ? "PASSED" : "FAILED");
+            g.camPitch = 0.66f;
+        }, idle, "report"});
+        return s;
+    }
     if (name == "touch") {
         // Touch-input regression test with injected touch events (no direct input fields).
         static int res[8];

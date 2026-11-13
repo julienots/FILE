@@ -277,7 +277,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.5.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.6.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -865,7 +865,8 @@ void Game::drawMenus(float dt) {
         if (toggle(u, {c.x, y, colW, 40}, "Aberration chromatique", settings.chromatic)) applyGraphicsProfile(settings.profile); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Afficher les FPS", settings.showFps); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Tremblements de caméra", settings.cameraShake); y += 46;
-        toggle(u, {c.x, y, colW, 40}, "Inverser la caméra", settings.invertCamera); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Inverser la caméra (horizontal)", settings.invertCamera); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Inverser l'axe vertical", settings.invertCameraY); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Visée automatique", settings.autoTarget); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Vibrations (retour haptique)", settings.haptics); y += 46;
         if (importedModel("hero") && toggle(u, {c.x, y, colW, 40}, "Héros 3D détaillé (armure fixe)", settings.importedHero)) { rebuildPlayerVisual(); saveSettings(); }

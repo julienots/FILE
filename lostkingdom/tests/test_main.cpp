@@ -254,6 +254,102 @@ static void testHeroModel(const std::string& assets) {
     CHECK(!bad.loadLKM(junk), "garbage header rejected");
 }
 
+
+// ---- free camera (CameraRig::compute, pure function) -------------------------------------------------
+// Projects a world point with the camera the game would build from the rig output (same fov, 16:9).
+static vec3 rigProject(const CameraRigOut& o, vec3 p, float fovY = 38.f * DEG) {
+    Camera c; c.pos = o.eye; c.target = o.look; c.fovY = fovY; c.zNear = 0.3f; c.zFar = 540.f; c.update(16.f / 9.f);
+    vec4 h = c.viewProj * vec4(p, 1.f);
+    if (h.w <= 1e-3f) return vec3(9, 9, -1);
+    return vec3(h.x / h.w, h.y / h.w, h.w);
+}
+static bool onScreen(vec3 n, float m = 1.f) { return n.z > 0 && std::fabs(n.x) <= m && std::fabs(n.y) <= m; }
+
+// Checks one rig configuration: eye above the terrain, hero (feet, chest, head) inside the image.
+static void checkRig(const char* what, const CameraRigIn& in, int& bad) {
+    CameraRigOut o = CameraRig::compute(in);
+    bool finite = std::isfinite(o.eye.x) && std::isfinite(o.eye.y) && std::isfinite(o.eye.z) && std::isfinite(o.look.y);
+    float gy = in.ground ? in.ground(o.eye.x, o.eye.z) : -1e9f;
+    vec3 feet = in.focus - vec3(0, in.feetDrop, 0), head = feet + vec3(0, 1.8f, 0), chest = feet + vec3(0, 1.2f, 0);
+    vec3 nf = rigProject(o, feet), nh = rigProject(o, head), nc = rigProject(o, chest);
+    bool ok = finite && o.eye.y >= gy + o.minClear - 1e-3f && length(o.eye - o.look) > 0.5f && onScreen(nf) && onScreen(nh) && onScreen(nc);
+    if (!ok) { bad++; if (bad < 8) std::printf("  rig %s pitch %.2f dist %.1f: eye.y %.2f ground %.2f clear %.2f feet(%.2f,%.2f) head(%.2f,%.2f)\n", what, in.pitch, in.dist, o.eye.y, gy, o.minClear, nf.x, nf.y, nh.x, nh.y); }
+}
+
+static void testCameraRig() {
+    std::printf("[Free camera rig]\n");
+    // factors and clamps
+    CHECK(CameraRig::clampPitch(-2.f) == CameraRig::PITCH_MIN && CameraRig::clampPitch(3.f) == CameraRig::PITCH_MAX, "pitch clamp");
+    CHECK(CameraRig::clampDist(1.f) == 4.f && CameraRig::clampDist(99.f) == 40.f, "zoom range 4..40");
+    CHECK(CameraRig::lowFactor(0.66f) == 0.f && CameraRig::lowFactor(0.25f) == 0.f && CameraRig::lowFactor(-0.35f) == 1.f, "low factor");
+    CHECK(CameraRig::mapFactor(15.5f) == 0.f && CameraRig::mapFactor(40.f) == 1.f, "map factor");
+    CHECK(CameraRig::nearFactor(15.5f) == 0.f && CameraRig::nearFactor(4.f) == 1.f, "near factor");
+    CHECK(CameraRig::minClearance(0.66f, 15.5f) == 3.f && std::fabs(CameraRig::minClearance(-0.35f, 9.f) - 0.6f) < 1e-4f && CameraRig::minClearance(-0.35f, 40.f) == 2.f, "clearance depends on pitch");
+    // default view is unchanged from 1.x (same eye as the old formula on flat ground)
+    CameraRigIn in; in.focus = vec3(100, 1.1f, 100); in.yaw = 0.78f; in.pitch = 0.66f; in.dist = 15.5f;
+    in.ground = [](float, float) { return 0.f; };
+    CameraRigOut o = CameraRig::compute(in);
+    vec3 old = in.focus + vec3(std::sin(0.78f) * std::cos(0.66f), std::sin(0.66f), std::cos(0.78f) * std::cos(0.66f)) * 15.5f;
+    CHECK(length(o.eye - old) < 1e-3f && std::fabs(o.look.y - (1.1f + 0.9f)) < 1e-4f, "default framing identical to 1.5");
+    // out-of-range inputs are clamped
+    in.pitch = -3.f; CameraRigOut lo = CameraRig::compute(in); in.pitch = CameraRig::PITCH_MIN; CameraRigOut lo2 = CameraRig::compute(in);
+    CHECK(length(lo.eye - lo2.eye) < 1e-4f, "pitch below the minimum is clamped");
+    // low camera: closer (x0.6), aim above the head, looking UP, eye 0.6 m above flat ground, hero in the lower half
+    in.pitch = -0.35f; o = CameraRig::compute(in);
+    CHECK(std::fabs(o.dist - 15.5f * 0.6f) < 1e-3f, "low camera pulled in (dist %.2f)", o.dist);
+    CHECK(o.look.y > o.eye.y + 1.f, "low camera looks up at the sky (eye %.2f look %.2f)", o.eye.y, o.look.y);
+    CHECK(std::fabs(o.eye.y - 0.6f) < 1e-3f, "eye kept 0.6 m above the ground (%.2f)", o.eye.y);
+    vec3 nChest = rigProject(o, vec3(100, 1.2f, 100)), nHorizon = rigProject(o, o.eye + normalize(vec3(o.look.x - o.eye.x, 0, o.look.z - o.eye.z)) * 300.f);
+    CHECK(nChest.y < -0.33f && nChest.y > -1.f, "hero framed in the lower third when looking up (chest ndc %.2f)", nChest.y);
+    CHECK(nHorizon.y < -0.2f, "horizon low in the frame: sky fills the image (ndc %.2f)", nHorizon.y);
+    // top view: looking almost straight down
+    in.pitch = 1.3f; in.dist = 40.f; o = CameraRig::compute(in);
+    CHECK(normalize(o.look - o.eye).y < -0.85f, "pitch 1.3 / zoom 40 looks down at the map (%.2f)", normalize(o.look - o.eye).y);
+    CHECK(o.mapK == 1.f, "map view engaged at zoom 40");
+    // zoom is monotonic
+    float prev = 0; bool mono = true;
+    for (float d = 4; d <= 40; d += 2) { in.dist = d; in.pitch = 0.66f; float e = CameraRig::compute(in).dist; if (e < prev) mono = false; prev = e; }
+    CHECK(mono, "zoom distance monotonic");
+    // building behind the hero: the camera is pulled in front of the wall
+    in.pitch = 0.3f; in.dist = 15.5f; in.yaw = 0.f;   // camera on +Z of the hero
+    in.blocked = [](vec3 p) { return p.z > 106.f && p.z < 110.f && p.y < 9.f; };
+    o = CameraRig::compute(in);
+    CHECK(o.collided && o.eye.z < 106.f && o.dist < 7.f, "camera stops in front of the wall (eye z %.2f, dist %.2f)", o.eye.z, o.dist);
+    CHECK(o.nearK > 0.5f && onScreen(rigProject(o, vec3(100, 0.05f, 100)), 0.9f), "hero fully framed after the camera was pulled in");
+    in.pitch = -0.35f; in.dist = 40.f; in.blocked = nullptr; o = CameraRig::compute(in);
+    CHECK(o.dist <= 18.01f, "low sky view stays close enough to see the hero (%.1f m)", o.dist);
+    // terrain: every pitch x zoom on flat ground, a slope rising behind the camera and rough hills
+    std::function<float(float, float)> grounds[3] = {[](float, float) { return 0.f; }, [](float x, float z) { return std::max(0.f, (z - 100.f) * 0.6f) + std::max(0.f, (x - 100.f) * 0.3f); },
+                                                     [](float x, float z) { return 2.5f * std::sin(x * 0.21f) * std::cos(z * 0.17f) + 1.5f * std::sin(x * 0.05f + z * 0.08f); }};
+    const char* gname[3] = {"flat", "slope", "hills"};
+    int bad = 0, n = 0;
+    for (int gi = 0; gi < 3; gi++)
+        for (float pitch : {-0.35f, -0.2f, 0.f, 0.25f, 0.66f, 1.f, 1.3f, 1.35f})
+            for (float dist : {4.f, 9.f, 15.5f, 24.f, 40.f})
+                for (float yaw : {0.f, 1.3f, 2.9f, 4.4f}) {
+                    CameraRigIn r; r.ground = grounds[gi]; r.focus = vec3(100, r.ground(100, 100) + 1.1f, 100);
+                    r.yaw = yaw; r.pitch = pitch; r.dist = dist; checkRig(gname[gi], r, bad); n++;
+                }
+    CHECK(bad == 0, "%d of %d camera configurations put the eye under the ground or lose the hero", bad, n);
+}
+
+// The same checks on the real terrain of the world (mountains, valleys, shores) at many places.
+static void testCameraOnWorld(World& w) {
+    std::printf("[Free camera on the world terrain]\n");
+    int bad = 0, n = 0;
+    Rng rng(4242);
+    for (int i = 0; i < 160; i++) {
+        float x = rng.range(80.f, WORLD_SIZE - 80.f), z = rng.range(80.f, WORLD_SIZE - 80.f);
+        for (float pitch : {-0.35f, 0.f, 0.66f, 1.3f})
+            for (float dist : {4.f, 15.f, 40.f}) {
+                CameraRigIn r; r.ground = [&w](float a, float b) { return w.height(a, b); };
+                r.focus = vec3(x, w.height(x, z) + 1.1f, z); r.yaw = rng.range(0.f, TAU); r.pitch = pitch; r.dist = dist;
+                checkRig("world", r, bad); n++;
+            }
+    }
+    CHECK(bad == 0, "%d of %d world camera placements invalid", bad, n);
+}
+
 static void testGpuProfiles() {
     std::printf("[GPU profile suggestion]\n");
     struct C { const char* gpu; QualityProfile want; };
@@ -278,10 +374,12 @@ int lkRunTests(int argc, char** argv) {
     testMapOrientation();
     testGpuProfiles();
     testTouchLayout();
+    testCameraRig();
     testData();
     initPropTemplates();
     World w; w.buildPlan();
     testWorld(w);
+    testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);

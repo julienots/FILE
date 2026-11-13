@@ -333,7 +333,7 @@ Identifiants proposés ; les quêtes `m1` à `m7` existantes sont **réécrites 
 
 | Étape | Contenu | Version |
 |---|---|---|
-| 1 | Caméra libre complète + scénario `camera` + tests | 1.6.0 |
+| 1 | Caméra libre complète + scénario `camera` + tests | 1.6.0 — **livrée** |
 | 2 | Combat : esquive parfaite, riposte, exécutions, rang, Fureur, télégraphes colorés + scénario `combat` | 1.7.0 |
 | 3 | Systèmes d'histoire (drapeaux, `Goto`, cinématiques à plans, écran Acte, journal) | 1.8.0 |
 | 4 | Histoire actes I à III (quêtes, dialogues, siège, trahison) | 1.9.0 |

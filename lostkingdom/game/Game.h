@@ -12,6 +12,7 @@
 #include "Props.h"
 #include "Characters.h"
 #include "Data.h"
+#include "CameraRig.h"
 #include <memory>
 #include <map>
 #include <set>
@@ -174,9 +175,10 @@ struct Input {
     bool heavy = false;
     bool dodge = false, jump = false, block = false, interact = false, potion = false, mount = false;
     bool skill[3] = {false, false, false};
-    vec2 camDrag;
+    vec2 camDrag;             // camera drag in pixels: x = yaw, y = pitch (finger moving up = look up)
     float pinch = 0;
-    void clearEdges() { attack = attackRelease = heavy = dodge = jump = interact = potion = mount = false; skill[0] = skill[1] = skill[2] = false; camDrag = vec2(0, 0); pinch = 0; }
+    bool camReset = false;    // double tap in the camera area: pitch and zoom back to default
+    void clearEdges() { attack = attackRelease = heavy = dodge = jump = interact = potion = mount = false; skill[0] = skill[1] = skill[2] = false; camDrag = vec2(0, 0); pinch = 0; camReset = false; }
 };
 
 // ------------------------------------------------------------------------------------------ dungeons
@@ -236,7 +238,7 @@ struct Settings {
     QualityProfile profile = QualityProfile::High;
     float master = 0.9f, music = 0.6f, sfx = 0.9f, ambience = 0.7f;
     float camSensitivity = 1.f, joystickDeadzone = 0.12f;
-    bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false;
+    bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false, invertCameraY = false;
     float uiScale = 1.f;
     ControlLayout layout;
     bool chromatic = false;
@@ -370,8 +372,14 @@ public:
 
     // ---- camera ---------------------------------------------------------------------------------
     Camera cam;
-    float camYaw = 0.78f, camPitch = 0.66f, camDist = 15.5f, camDistTarget = 15.5f;
+    float camYaw = 0.78f, camPitch = CameraRig::PITCH_DEFAULT, camDist = 15.5f, camDistTarget = 15.5f;
     vec3 camFocus;
+    vec3 camLookAhead;               // smoothed run-direction offset of the aim point
+    float camIdleT = 0;              // seconds since the last camera drag / pinch
+    float camResetT = 0;             // > 0 while a double-tap reset is easing pitch and zoom back
+    float camCineBlend = 0;          // 1 -> 0: glide from the last cinematic shot back to the gameplay camera
+    vec3 cineLastEye, cineLastLook;
+    CameraRigOut camRig;             // last rig result (environment, tests)
     float shake = 0;
     float cinematicT = -1;
     vec3 cineFrom, cineTo, cineLook;
@@ -423,6 +431,7 @@ public:
     void renderWorld(float dt);
     void renderCharacter(Entity e, Character& c);
     void updateCamera(float dt);
+    bool cameraBlocked(vec3 p) const;   // solid scenery for the camera (buildings, walls)
     void updateEnvironment(float dt);
     void updateAmbientFx(float dt);
     void updateAudioDirector(float dt);
@@ -562,6 +571,7 @@ public:
     vec2 worldToScreen(vec3 p, bool* onScreen = nullptr) const;
     std::vector<int> touchCaptured;   // finger ids owned by controls
     int joyFinger = -1, camFinger = -1;
+    float lastCamTapT = -10.f; vec2 lastCamTapPos;
     vec2 joyOrigin, joyPos;
     float pinchDist = 0;
     std::map<int, float> btnHold;
