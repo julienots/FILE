@@ -22,7 +22,7 @@ export function mountControls(root) {
     b.addEventListener('pointerup', () => set(false)); b.addEventListener('pointercancel', () => set(false));
     return b;
   };
-  mk('action', '⏎', '4vmin', '5vmin'); mk('jump', '⤒', '21vmin', '3vmin'); mk('boost', '≫', '3vmin', '22vmin'); mk('special', '✦', '20vmin', '19vmin');
+  mk('action', '⏎', '4vmin', '5vmin'); mk('jump', '⤒', '21vmin', '3vmin'); mk('boost', '≫', '3vmin', '22vmin'); mk('special', '✦', '20vmin', '19vmin'); mk('attack', '✸', '37vmin', '4vmin');
   let id = null, cx = 0, cy = 0; const R = () => joy.getBoundingClientRect().width / 2;
   const upd = e => { const r = joy.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
     let dx = (e.clientX - cx) / R(), dy = (e.clientY - cy) / R(); const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }

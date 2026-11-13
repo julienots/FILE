@@ -11,6 +11,7 @@ import { createSpeedLines } from '../vfx/SpeedLines.js';
 import { Particles } from '../vfx/Particles.js';
 import { PLANETS } from '../data/planets.js';
 import { Ship } from '../entities/Ship.js';
+import { Serpent } from '../entities/boss/Serpent.js';
 
 const SUN_POS = new THREE.Vector3(600, 400, 300).normalize().multiplyScalar(3600);
 // Exploration spatiale: vol libre, boost warp, astéroïdes, station, soleil, atterrissage cinématique.
@@ -27,6 +28,7 @@ export class SpaceScene {
     this.colliders = [];
     for (const f of [{ center: [150, 30, -1050], radius: 420, count: 200, seed: 3 }, { center: [-500, -120, -2300], radius: 380, count: 160, seed: 9, color: '#9fc4e8' }]) { const a = createAsteroidField(f); this.scene.add(a.mesh); this.colliders.push(...a.colliders); }
     this.station = createStation(); this.station.position.set(190, 50, -230); this.station.rotation.set(.4, .6, 0); this.scene.add(this.station);
+    this.serpent = new Serpent(); this.scene.add(this.serpent.root); this.sighted = false; this.awe = 0;
     this.ship = new Ship(); this.scene.add(this.ship.root);
     this.lines = createSpeedLines(); this.camera.add(this.lines);
     this.trail = new Particles(300); this.scene.add(this.trail.points);
@@ -65,11 +67,16 @@ export class SpaceScene {
     // traînée moteur
     _a.set(0, 0, 2.2).applyQuaternion(this.q).add(sp); _b.copy(_f).multiplyScalar(-12 - boost * 30);
     this.trail.emit(_a, _b, boost > .4 ? '#b48aff' : '#7fe0ff', .9 + boost * 1.2, .35 + boost * .3, 1, 0); this.trail.update(dt, innerHeight);
+    // Serpent céleste: nage, rebond sur son corps, première rencontre cinématique (la caméra se tourne vers lui)
+    const sv = this.serpent; sv.update(dt, t); const hd = sv.headPos.distanceTo(sp);
+    if (!L) for (let i = 0, sg = sv.segments; i < sg.length; i += 2) { const c = sg[i], rr = c.r + 3; if (sp.distanceToSquared(c.pos) < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.6); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length(), boss: 'serpent' }); break; } }
+    if (!this.sighted && hd < 900) { this.sighted = true; this.awe = 4; bus.emit('boss:spawn', { id: 'serpent' }); bus.emit('cinematic:start', { id: 'boss-sighting', boss: 'serpent' }); }
+    if (this.awe > 0) { this.awe -= dt; this.shake = Math.max(this.shake, .5); if (this.awe <= 0) bus.emit('cinematic:end', { id: 'boss-sighting' }); }
     // caméra poursuite + tremblement + FOV
     _a.set(0, 4.5 - boost, 15 + boost * 7).applyQuaternion(this.q).add(sp);
     this.camera.position.lerp(_a, Math.min(1, dt * (5 + boost * 3)));
     if (this.shake > 0) { const k = this.shake * (.12 + boost * .1); this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
-    this.camera.up.set(0, 1, 0).applyQuaternion(this.q); this.camera.lookAt(_a.copy(sp).addScaledVector(_f, 30));
+    this.camera.up.set(0, 1, 0).applyQuaternion(this.q); _a.copy(sp).addScaledVector(_f, 30); if (this.awe > 0) _a.lerp(sv.headPos, Math.min(1, this.awe) * Math.min(1, (4 - this.awe) * 2) * .75); this.camera.lookAt(_a);
     this.camera.fov += ((62 + boost * 22) - this.camera.fov) * Math.min(1, dt * 3);
     this.lines.userData.update(t, Math.max(0, boost - .15));
     // décor

@@ -8,6 +8,8 @@ const p = await b.newPage({ viewport: { width: 1280, height: 600 } }); const err
 p.on('pageerror', e => errs.push(String(e))); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
 await p.goto('http://localhost:4173/'); await p.waitForTimeout(4000);
 await p.screenshot({ path: 'tests/out/space.png' });
+await p.evaluate(() => { const g = window.__game.current, h = g.serpent.headPos; g.ship.root.position.set(h.x + 260, h.y + 120, h.z + 520); g.yaw = .45; g.pitch = -.2; g.camera.position.copy(g.ship.root.position); }); await p.waitForTimeout(2500); await p.screenshot({ path: 'tests/out/serpent.png' });
+await p.evaluate(() => { const g = window.__game.current; g.ship.root.position.set(0, 0, 60); g.yaw = 0; g.pitch = 0; g.vel.set(0, 0, 0); }); await p.waitForTimeout(500);
 await p.keyboard.down('ShiftLeft'); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/boost.png' });
 await p.waitForTimeout(2500); await p.keyboard.up('ShiftLeft'); await p.keyboard.press('KeyE'); await p.waitForTimeout(1900); await p.screenshot({ path: 'tests/out/arrive.png' });
 console.log('scene:', await p.evaluate(() => window.__game.currentName)); await p.waitForTimeout(2500);
@@ -15,6 +17,7 @@ await p.keyboard.press('KeyE'); await p.waitForTimeout(2200); await p.screenshot
 await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(3000);
 await p.screenshot({ path: 'tests/out/planet.png' });
 for (const id of ['ember', 'glacio', 'sylva']) { await p.evaluate((id) => window.__game.goto('planet', { id }), id); await p.waitForTimeout(1500); await p.screenshot({ path: `tests/out/planet-${id}.png` }); }
+await p.evaluate(() => { const g = window.__game.current, e = g.enemies.list[0]; e.dir.copy(g.dir).applyAxisAngle(g.fwd.clone().cross(g.dir).normalize(), -.05); e.home.copy(e.dir); }); await p.keyboard.down('KeyJ'); await p.waitForTimeout(900); await p.screenshot({ path: 'tests/out/combat.png' }); await p.keyboard.up('KeyJ');
 await p.keyboard.press('KeyK'); await p.waitForTimeout(1900); await p.screenshot({ path: 'tests/out/evolve.png' });
 for (let i = 0; i < 3; i++) { await p.waitForTimeout(3600); await p.keyboard.press('KeyK'); } await p.waitForTimeout(3400); await p.screenshot({ path: 'tests/out/evolved4.png' });
 console.log('fps~', await p.evaluate(() => new Promise(r => { let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 > 1500 ? r(Math.round(n / 1.5)) : requestAnimationFrame(f); }; f(); })));

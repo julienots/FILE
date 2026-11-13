@@ -12,6 +12,7 @@ import { EVOLUTIONS } from '../data/evolutions.js';
 import { Hero } from '../entities/Hero.js';
 import { Particles } from '../vfx/Particles.js';
 import { EvolutionFX } from '../vfx/EvolutionFX.js';
+import { Enemies } from '../entities/Enemies.js';
 
 const V = () => new THREE.Vector3();
 const SUN = new THREE.Vector3(200, 300, 150).normalize();
@@ -25,7 +26,8 @@ export class PlanetScene {
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ color: '#0a0620', transparent: true, opacity: .32, depthWrite: false }));
     this.shadow.renderOrder = 3; this.scene.add(this.shadow);
     this.particles = new Particles(700); this.scene.add(this.particles.points);
-    this.evo = new EvolutionFX(this.scene, this.particles);
+    this.evo = new EvolutionFX(this.scene, this.particles); this.enemies = new Enemies(this.scene, this.particles); this.atkCd = 0; this.hurtT = 0;
+    bus.on('enemy:touch', ({ pos }) => { if (!this.active) return; this.hurtT = .4; this.shakeT = .3; this.vh = 7; this.ground = false; this.knock = this.hero.root.position.clone().sub(pos).normalize(); bus.emit('hero:hit', { pos }); });
     this.stars = createStars(3000); this.scene.add(this.stars); this.sky = createSkyDome(); this.scene.add(this.sky); this.sky.material.uniforms.uSun.value.copy(SUN);
     // pickups: orbes de poussière cosmique (instanciés)
     this.orbs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.28, 1), new THREE.MeshBasicMaterial({ color: '#fff3a0' }), 64); this.orbs.frustumCulled = false; this.scene.add(this.orbs);
@@ -40,6 +42,7 @@ export class PlanetScene {
     for (const o of [this.planet, this.props, this.nebula]) if (o) { this.scene.remove(o); disposePlanet(o); }
     const def = this.def = getPlanet(id); this.planet = buildPlanet(def, { surface: true }); this.scene.add(this.planet);
     const water = this.planet.getObjectByName('water'); if (water) water.material.uniforms.uSun.value.copy(SUN);
+    this.enemies.populate(this.planet);
     const sc = scatterProps(this.planet); this.props = sc.group; this.colliders = sc.colliders; this.scene.add(this.props);
     const atmo = def.atmosphere?.color ?? '#8fd0ff';
     this.scene.fog = new THREE.FogExp2(atmo, 0.9 / (def.radius * 6)); this.sky.material.uniforms.uC.value.set(atmo); this.hemi.color.set(atmo).lerp(new THREE.Color('#fff'), .6);
@@ -88,6 +91,14 @@ export class PlanetScene {
     const z = _d.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(), x = _e.crossVectors(up, z).normalize();
     hero.root.quaternion.slerp(this._q.setFromRotationMatrix(this._m.makeBasis(x, up, z)), Math.min(1, dt * 12));
     hero.animate(dt, sp, !this.ground, this.vh);
+    // attaque: projectile stellaire avec visée auto sur l'ennemi le plus proche
+    this.atkCd -= dt;
+    if (!frozen && Input.buttons.attack && this.atkCd <= 0) { this.atkCd = .28; const tgt = this.enemies.nearest(hero.root.position, 28 * Math.sqrt(scale));
+      if (tgt) this.face.copy(tgt.root.position).sub(hero.root.position).addScaledVector(up, -_c.copy(tgt.root.position).sub(hero.root.position).dot(up)).normalize();
+      _c.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(); this.enemies.fire(_e.copy(hero.root.position).addScaledVector(up, .6 * scale).addScaledVector(_c, .6 * scale), _c, scale, EVOLUTIONS[hero.stage].glow);
+      hero._land = .6; bus.emit('hero:ability', { id: 'starbolt', pos: hero.root.position, dir: _c }); }
+    if (this.knock) { up.copy(_c.copy(hero.root.position).addScaledVector(this.knock, 14 * dt)).normalize(); this.hurtT -= dt; if (this.hurtT <= 0) this.knock = null; }
+    this.enemies.update(dt, hero.root.position, scale);
     // ombre blob
     const sh = this.shadow, hAbove = this.alt - gAlt + hero.lift; sh.position.copy(up).multiplyScalar(groundR + .06); sh.quaternion.setFromUnitVectors(this._s.set(0, 0, 1), up);
     sh.scale.setScalar(scale * Math.max(.3, 1 - hAbove * .08 / scale)); sh.material.opacity = wading ? 0 : .32 * Math.max(.2, 1 - hAbove * .1 / scale);
