@@ -73,7 +73,7 @@ static std::vector<Step> scenario(const std::string& name) {
         struct V { const char* poi; float dx, dz, yaw, tod, dist; const char* f; };
         static const V views[] = {{"brindlemere", 10, 26, 0.5f, 10.f, 15.5f, "50_village"}, {"brindlemere", 40, -60, 2.4f, 16.5f, 20.f, "51_meadow"},
                                   {"brindlemere", -70, 30, -0.8f, 7.5f, 15.5f, "52_forest_morning"}, {"root_glade", 0, 30, 0.f, 13.f, 18.f, "53_elderwood"},
-                                  {"#river", 0, 0, 0.9f, 15.f, 15.5f, "54_river"}, {"brindlemere", -4, 6, 2.6f, 17.5f, 15.5f, "55_village_street"}};
+                                  {"#river", 0, 0, 0.9f, 15.f, 15.5f, "54_river"}, {"brindlemere", -4, 6, 2.6f, 17.5f, 15.5f, "55_village_street"}, {"brindlemere", 140, 90, 0.9f, 15.5f, 17.f, "56_countryside"}, {"brindlemere", -150, 60, 3.6f, 9.5f, 17.f, "57_countryside_b"}};
         for (const V& v : views) {
             s.push_back({4.f, [v](Game& g) { vec2 at;
                 if (std::string(v.poi) == "#river") { if (g.world.rivers.empty()) return; auto& pts = g.world.rivers[0].pts; vec2 a = pts[pts.size() / 2], b = pts[pts.size() / 2 + 1]; vec2 n = normalize(perp(b - a)); at = a + n * 9.f; }

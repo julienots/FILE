@@ -564,6 +564,7 @@ void Renderer::postProcess() {
         fxaa.use();
         ldrRT.color.bind(0); fxaa.set("uSrc", 0);
         fxaa.set("uTexel", vec2(1.f / ldrRT.w, 1.f / ldrRT.h));
+        fxaa.set("uSharpen", clampf((1.f - settings.renderScale * dynamicScale) * 2.2f + 0.25f, 0.f, 1.f));
         fsMesh.draw();
     }
     gpuMark(10);

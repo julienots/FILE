@@ -826,6 +826,150 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             stampProp(out, ent->k, rng.irange(0, propVariants(ent->k) - 1), {x, y - 0.05f, z}, rng.range(0, TAU), sc, tint, ent->collide);
             if ((ent->k == P_GIANTSHROOM || ent->k == P_MAGICCRYSTAL) && rng.chance(0.5f)) out.lights.push_back(vec4(x, y + 2.f * sc, z, ent->k == P_GIANTSHROOM ? LI_MAGIC : LI_CRYSTAL));
         }
+    // Small decorations only avoid roads, buildings and the core of settlements (the full POI radius covers
+    // the surrounding fields, which is exactly where flowers and fences belong).
+    auto clutterBlocked = [&](float x, float z, float margin) {
+        if (roadInfluence(x, z) > 0.05f) return true;
+        if (ci >= 0)
+            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < p.radius * 0.55f + margin) return true; }
+        for (auto& c : out.colliders) { float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f; if (length(vec2(x, z) - c.c) < rr + margin) return true; }
+        return false;
+    };
+    // ---- ground clutter (1.5): small non-blocking life between the trees (flowers, tall grass, pebbles...)
+    // Near chunks only (LOD0): invisible further away, and it keeps the triangle budget for mobile.
+    if (lod == 0 && grassDensity > 0.2f) {   // off on the battery-saver profile
+        struct Clutter { PropKind k; float w, smin, smax; };
+        static const std::vector<Clutter> CT[R_COUNT] = {
+            {{P_FLOWERS, 3.f, 0.8f, 1.3f}, {P_TALLGRASS, 2.5f, 0.8f, 1.3f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}, {P_BUSH, 0.6f, 0.5f, 0.8f}, {P_SMALLSHROOMS, 0.3f, 0.8f, 1.2f}},
+            {{P_PEBBLES, 2.f, 0.8f, 1.4f}, {P_TALLGRASS, 1.f, 0.7f, 1.1f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}},
+            {{P_PEBBLES, 2.f, 0.8f, 1.5f}, {P_BRANCHES, 0.8f, 0.8f, 1.2f}, {P_BONES, 0.2f, 0.7f, 1.f}},
+            {{P_FERN, 2.f, 0.6f, 1.f}, {P_SMALLSHROOMS, 2.f, 0.8f, 1.3f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 0.6f, 0.8f, 1.2f}},
+            {{P_TALLGRASS, 2.f, 0.8f, 1.3f}, {P_SMALLSHROOMS, 1.f, 0.8f, 1.3f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}, {P_PEBBLES, 0.6f, 0.8f, 1.2f}},
+            {{P_FLOWERS, 1.5f, 0.7f, 1.1f}, {P_TALLGRASS, 2.f, 0.7f, 1.1f}, {P_PEBBLES, 2.f, 0.8f, 1.5f}},
+        };
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12};
+        Rng cr(hash2i(k.x, k.z, 9191));
+        int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
+        for (int t = 0; t < n; t++) {
+            float x = x0 + cr.f() * CHUNK, z = z0 + cr.f() * CHUNK;
+            int r = regionId(x, z);
+            const auto& tab = CT[r];
+            float tw = 0; for (auto& e : tab) tw += e.w;
+            float pv = cr.f() * tw; const Clutter* e = &tab[0];
+            for (auto& c : tab) { pv -= c.w; if (pv <= 0) { e = &c; break; } }
+            float y = height(x, z);
+            if (normal(x, z).y < 0.85f || waterLevel(x, z) > y - 0.3f || clutterBlocked(x, z, 0.6f)) continue;
+            // flower colour follows large patches (fields of daisies, poppies, lavender)
+            int var = e->k == P_FLOWERS ? (int)clampf((fbm2(x * 0.01f, z * 0.01f, 2, 515) * 0.5f + 0.5f) * 3.f, 0.f, 2.99f)
+                    : (e->k == P_TALLGRASS && r == R_HIGHCROWNS ? 2 : cr.irange(0, propVariants(e->k) - 1));
+            if (e->k == P_FLOWERS || e->k == P_TALLGRASS) {
+                // patches: several clumps grouped over a few metres read as a field from the game camera
+                int clumps = e->k == P_FLOWERS ? cr.irange(5, 10) : cr.irange(3, 6);
+                for (int q = 0; q < clumps; q++) {
+                    vec2 o = cr.inDisk() * (e->k == P_FLOWERS ? 2.6f : 1.8f);
+                    float px = x + o.x, pz = z + o.y, py = height(px, pz);
+                    if (waterLevel(px, pz) > py - 0.3f || clutterBlocked(px, pz, 0.3f)) continue;
+                    stampProp(out, e->k, var, {px, py - 0.03f, pz}, cr.range(0, TAU), cr.range(e->smin, e->smax) * 1.2f, vec3(1.f) * cr.range(0.9f, 1.08f), false);
+                }
+            } else stampProp(out, e->k, var, {x, y - 0.03f, z}, cr.range(0, TAU), cr.range(e->smin, e->smax), vec3(1.f) * cr.range(0.9f, 1.08f), false);
+        }
+    }
+
+    // ---- road furniture (1.5): fences along country roads, lanterns and carts near settlements, signposts
+    auto blockedNoRoad = [&](float x, float z, float margin) {   // POIs and structures only (furniture sits beside roads)
+        if (ci >= 0)
+            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < p.radius * 0.6f + margin) return true; }
+        for (auto& c : out.colliders) { float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f; if (length(vec2(x, z) - c.c) < rr + margin) return true; }
+        return false;
+    };
+    if (ci >= 0 && lod < 2) {
+        Rng rr(hash2i(k.x, k.z, 7373));
+        for (int code : chunkRoads[ci]) {
+            const Road& rd = roads[code >> 16];
+            int sgi = code & 0xffff;
+            vec2 a = rd.pts[sgi], b = rd.pts[sgi + 1];
+            float len = length(b - a);
+            if (len < 1.f) continue;
+            vec2 dir = (b - a) / len, side = vec2(-dir.y, dir.x);
+            float yaw = std::atan2(dir.x, dir.y);
+            for (float s = 4.f; s < len - 2.f; s += 9.f) {
+                vec2 p = a + dir * s;
+                if (p.x < x0 || p.x >= x0 + CHUNK || p.y < z0 || p.y >= z0 + CHUNK) continue;   // each chunk owns its points
+                int r = regionId(p.x, p.y);
+                float nearVillage = 1e9f;
+                for (auto& P : pois) if (P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Farm) nearVillage = std::min(nearVillage, length(P.pos - p) - P.radius);
+                float off = rd.width * 0.5f + 1.3f;
+                for (int sd = -1; sd <= 1; sd += 2) {
+                    vec2 q = p + side * (off * sd);
+                    float y = height(q.x, q.y);
+                    if (waterLevel(q.x, q.y) > y - 0.3f || normal(q.x, q.y).y < 0.88f || roadInfluence(q.x, q.y) > 0.6f || blockedNoRoad(q.x, q.y, 0.8f)) continue;
+                    bool farmland = (r == R_GREENHAVEN || r == R_HIGHCROWNS) && fbm2(q.x * 0.008f, q.y * 0.008f, 2, 4141) > 0.05f;
+                    if (nearVillage < 70.f && nearVillage > 2.f && ((int)(s / 9.f) + (sd > 0)) % 2 == 0 && rr.chance(0.7f)) {
+                        stampProp(out, P_LANTERNPOST, 0, {q.x, y - 0.05f, q.y}, yaw + (sd > 0 ? PI : 0.f), 1.f, vec3(1), true);
+                        vec2 lp = q + side * (sd * -0.5f);
+                        out.lights.push_back(vec4(lp.x, y + 2.15f, lp.y, LI_LANTERN));
+                    } else if (farmland && nearVillage < 220.f && nearVillage > 3.f && rr.chance(0.75f)) {
+                        stampProp(out, P_FENCE, 0, {q.x, y - 0.05f, q.y}, yaw + PI / 2, 1.f, vec3(1) * rr.range(0.9f, 1.05f), false);
+                    } else if (nearVillage < 45.f && nearVillage > 4.f && rr.chance(0.06f)) {
+                        vec2 c = q + side * (sd * 1.8f);
+                        stampProp(out, P_CART, rr.irange(0, 2), {c.x, height(c.x, c.y) - 0.05f, c.y}, yaw + rr.range(-0.4f, 0.4f), 1.f, vec3(1), true);
+                    }
+                }
+                // signposts where roads leave settlements and at long intervals
+                if (rr.chance(nearVillage < 120.f && nearVillage > 20.f ? 0.06f : 0.012f)) {
+                    vec2 q = p + side * (off + 0.6f);
+                    float y = height(q.x, q.y);
+                    if (waterLevel(q.x, q.y) < y - 0.3f && !blockedNoRoad(q.x, q.y, 0.8f) && roadInfluence(q.x, q.y) < 0.6f) stampProp(out, P_SIGNPOST, rr.irange(0, 1), {q.x, y - 0.05f, q.y}, yaw, 1.f, vec3(1), true);
+                }
+            }
+        }
+    }
+
+    // ---- wild landmarks (1.5): small scenes to stumble upon (camps, stone circles, fairy rings, ruins)
+    if (lod < 2) {
+        Rng vr(hash2i(k.x, k.z, 5151));
+        if (vr.chance(0.05f)) {
+            vec2 c{x0 + vr.range(8.f, CHUNK - 8.f), z0 + vr.range(8.f, CHUNK - 8.f)};
+            float cy = height(c.x, c.y);
+            bool ok = normal(c.x, c.y).y > 0.93f && waterLevel(c.x, c.y) < cy - 0.5f && !blocked(c.x, c.y, 6.f) && roadInfluence(c.x, c.y) < 0.01f;
+            for (int t = 0; ok && t < 6; t++) { float a = t * TAU / 6; vec2 q = c + vec2(std::cos(a), std::sin(a)) * 5.f; if (std::fabs(height(q.x, q.y) - cy) > 1.2f || roadInfluence(q.x, q.y) > 0.05f) ok = false; }
+            if (ok) {
+                int r = regionId(c.x, c.y);
+                auto put = [&](PropKind pk, int var, vec2 q, float yaw, float sc, bool col) { float y = height(q.x, q.y); if (waterLevel(q.x, q.y) < y - 0.3f) stampProp(out, pk, var, {q.x, y - 0.05f, q.y}, yaw, sc, vec3(1), col); };
+                int kind = vr.irange(0, 2);
+                if (r == R_ELDERWOOD) {
+                    // fairy ring of glowing mushrooms around a crystal
+                    for (int t = 0; t < 12; t++) { float a = t * TAU / 12 + vr.range(-0.1f, 0.1f); put(P_SMALLSHROOMS, 1, c + vec2(std::cos(a), std::sin(a)) * 3.2f, vr.range(0, TAU), 1.1f, false); }
+                    put(P_MAGICCRYSTAL, vr.irange(0, 2), c, vr.range(0, TAU), 0.8f, true);
+                    out.lights.push_back(vec4(c.x, cy + 1.5f, c.y, LI_MAGIC)); out.emitters.push_back(vec4(c.x, cy + 0.5f, c.y, EM_SPARKLES));
+                } else if (r == R_SHADOWS) {
+                    // forgotten graves around a rune stone
+                    put(P_STANDSTONE, 2, c, vr.range(0, TAU), 1.f, true);
+                    for (int t = 0; t < 6; t++) { vec2 q = c + vr.inDisk() * 6.f; if (length(q - c) > 2.f) put(P_GRAVESTONE, vr.irange(0, 2), q, vr.range(-0.3f, 0.3f), 1.f, true); }
+                    out.lights.push_back(vec4(c.x, cy + 1.6f, c.y, LI_MAGIC));
+                } else if (kind == 0 || r == R_ASHEN) {
+                    // stone circle (ash lands: obsidian)
+                    int nS = vr.irange(6, 8);
+                    for (int t = 0; t < nS; t++) { float a = t * TAU / nS; vec2 q = c + vec2(std::cos(a), std::sin(a)) * 5.5f; if (r == R_ASHEN) put(P_OBSIDIAN, vr.irange(0, 2), q, a, 1.f, true); else put(P_STANDSTONE, vr.irange(0, 2), q, a + PI / 2, vr.range(0.85f, 1.1f), true); }
+                    put(P_STANDSTONE, 2, c, vr.range(0, TAU), 1.25f, true);
+                    out.lights.push_back(vec4(c.x, cy + 2.f, c.y, LI_MAGIC));
+                } else if (kind == 1) {
+                    // abandoned camp: fire, tents, crates, a log to sit on
+                    put(P_CAMPFIRE, 0, c, 0, 1.f, true);
+                    out.lights.push_back(vec4(c.x, cy + 0.8f, c.y, LI_FIRE)); out.emitters.push_back(vec4(c.x, cy + 0.3f, c.y, EM_FIRE));
+                    for (int t = 0; t < 2; t++) { float a = vr.range(0, TAU); vec2 q = c + vec2(std::cos(a), std::sin(a)) * 4.2f; put(P_TENT, r == R_FROSTHEIM ? 2 : vr.irange(0, 2), q, a + PI / 2, 1.f, true); }
+                    put(P_LOG, 0, c + vec2(1.8f, -0.6f), 0.4f, 0.8f, true);
+                    put(P_CRATE, 0, c + vec2(-2.6f, 2.2f), 0.3f, 1.f, true);
+                    put(P_BARREL, 0, c + vec2(-3.2f, 1.4f), 0.f, 1.f, true);
+                } else {
+                    // ruins: broken columns and fallen stones
+                    for (int t = 0; t < 5; t++) { vec2 q = c + vr.inDisk() * 6.f; put(t % 2 ? P_BOULDER : P_RUINCOLUMN, vr.irange(0, 2), q, vr.range(0, TAU), vr.range(0.7f, 1.1f), true); }
+                    put(P_TALLGRASS, 0, c + vec2(1.f, 1.f), 0, 1.2f, false);
+                }
+            }
+        }
+    }
+
     // lily pads on calm water in swamps & Elderwood
     if (crw.dominant == R_SHADOWS || crw.dominant == R_ELDERWOOD)
         for (int n = 0; n < 10; n++) {

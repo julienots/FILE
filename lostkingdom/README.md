@@ -6,10 +6,23 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.4.0 (versionCode 5). Taille : environ 22 Mo. SHA-256 : `e108f3de6955ecc4e219c5bf59ce7e9fb2e8901ec89cee05902c97f5470eaf88`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.5.0 (versionCode 6). Taille : environ 23 Mo. SHA-256 : `9e534edb1d6f1423a913cfa9ae532f2ccfb755b151909c8a0e29bb467015575c`.
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.5.0 (monde plus vivant, nouveaux shaders)
+
+- **11 nouveaux décors procéduraux** : fleurs sauvages (marguerites, lavande, coquelicots), herbes hautes en graines, cailloux, branches mortes et feuilles, clôtures, panneaux indicateurs, charrettes, lanternes sur poteau (allumées la nuit), pierres levées (certaines avec rune), feux de camp, tentes.
+- **Placement automatique dans tout le monde.**
+  - Champs de fleurs en taches de couleur, herbes hautes et petits détails entre les arbres. Seulement près du joueur, et désactivé en Économie d'énergie.
+  - Le long des routes : clôtures autour des champs, lanternes près des villages, charrettes et panneaux.
+  - Petites scènes à découvrir hors des routes : camps abandonnés, cercles de pierres (d'obsidienne dans les Ashen Lands), anneaux de champignons lumineux dans l'Elderwood, tombes oubliées dans le Royaume des Ombres, ruines.
+- **Nouveaux effets.**
+  - Rafales de vent qui traversent les prairies en vagues, avec un reflet doré sur l'herbe.
+  - Netteté adaptative : l'image, calculée sous la résolution native, est rendue plus nette.
+  - Virage de couleurs cinéma : ombres légèrement froides, hautes lumières chaudes.
+- **Coût.** Le coût GPU par profil reste proche de la 1.4.0 (mesuré).
 
 ### Nouveautés 1.4.0 (optimisation mobile)
 

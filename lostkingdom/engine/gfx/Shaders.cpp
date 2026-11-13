@@ -57,11 +57,21 @@ out vec4 vShadow;
 out vec2 vUV;
 #endif
 
+// Gust fronts rolling across the land along the wind direction (0..1): grass bends in waves.
+float windWave(vec3 wp) {
+    vec2 d = normalize(uWind.xy + vec2(1e-4));
+    float along = dot(wp.xz, d) * 0.09 - uCamPos.w * 1.25;
+    float across = dot(wp.xz, vec2(-d.y, d.x)) * 0.035;
+    float w = sin(along + sin(across) * 1.6) * 0.5 + 0.5;
+    return w * w * w * clamp(uWind.z * 1.4, 0.0, 1.0);
+}
+
 vec3 windOffset(vec3 wp, float weight) {
     float t = uCamPos.w;
     float phase = dot(wp.xz, vec2(0.13, 0.17));
     float sway = sin(t * 1.3 + phase) * 0.6 + sin(t * 2.7 + phase * 1.7) * 0.3;
     float gust = 0.55 + 0.45 * sin(t * 0.37 + wp.x * 0.021 + wp.z * 0.013) * uWind.w;
+    gust += windWave(wp) * 0.9;                                   // travelling gust fronts
     vec2 off = uWind.xy * (sway * 0.35 + gust) * uWind.z * weight;
     off += vec2(sin(t * 7.3 + wp.x * 3.1 + wp.z * 1.7), cos(t * 6.1 + wp.z * 2.9)) * 0.04 * weight * uWind.z;
     return vec3(off.x, -dot(off, off) * 0.35, off.y);
@@ -93,6 +103,7 @@ void main() {
   #endif
     wp += windOffset(wp, wweight);
   #ifdef GRASS
+    float sheen = windWave(wp) * aMat.a;
     vec2 d = wp.xz - uPlayer.xz;
     float dist = length(d);
     float push = (1.0 - smoothstep(0.0, uPlayer.w, dist)) * aMat.a * step(abs(wp.y - uPlayer.y), 2.5);
@@ -110,6 +121,9 @@ void main() {
     vColor = aColor;
 #ifdef INSTANCED
     vColor.rgb *= iTint.rgb * 2.0;
+#endif
+#if defined(WIND) && defined(GRASS)
+    vColor.rgb *= 1.0 + sheen * vec3(0.38, 0.34, 0.16);   // silvery-gold sheen as the gust passes
 #endif
     vMat = aMat;
 #ifdef TEXTURED
@@ -899,6 +913,9 @@ void main() {
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(l), col, uPost1.x);
     col = (col - 0.5) * uPost1.y + 0.5;
+    // split toning: cool shadows, warm highlights (cinematic separation, subtle)
+    float lt = dot(clamp(col, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+    col += vec3(-0.02, 0.0, 0.035) * (1.0 - smoothstep(0.0, 0.45, lt)) + vec3(0.03, 0.012, -0.025) * smoothstep(0.55, 1.0, lt);
     // vignette (+ red pulse when badly hurt)
     vec2 vc = uv - 0.5;
     float vig = 1.0 - dot(vc, vc) * uPost0.z * 1.6;
@@ -918,6 +935,7 @@ const char* FXAA_FS = R"(
 in vec2 vUV;
 uniform sampler2D uSrc;
 uniform vec2 uTexel;
+uniform float uSharpen;
 out vec4 fragColor;
 void main() {
     vec3 rgbM = texture(uSrc, vUV).rgb;
@@ -926,7 +944,14 @@ void main() {
     float lSW = texture(uSrc, vUV + vec2(-1, 1) * uTexel).a, lSE = texture(uSrc, vUV + vec2(1, 1) * uTexel).a;
     float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
     float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
-    if (lMax - lMin < max(0.0312, lMax * 0.125)) { fragColor = vec4(rgbM, 1.0); return; }
+    if (lMax - lMin < max(0.0312, lMax * 0.125)) {
+        // flat area: contrast-adaptive sharpening (the scene is rendered below native resolution)
+        vec3 n4 = texture(uSrc, vUV + vec2(0.0, -uTexel.y)).rgb + texture(uSrc, vUV + vec2(0.0, uTexel.y)).rgb
+                + texture(uSrc, vUV + vec2(-uTexel.x, 0.0)).rgb + texture(uSrc, vUV + vec2(uTexel.x, 0.0)).rgb;
+        float amt = uSharpen * (1.0 - smoothstep(0.0, 0.25, lMax - lMin));
+        fragColor = vec4(clamp(rgbM + (rgbM - n4 * 0.25) * amt, 0.0, 1.0), 1.0);
+        return;
+    }
     vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
     float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
     float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + red);

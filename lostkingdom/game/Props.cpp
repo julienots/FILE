@@ -426,6 +426,133 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
         S.lathe({{0.37f, 0.18f}, {0.38f, 0.24f}}, Mat(pal::iron, 0.4f, 0.8f), 12);
         S.lathe({{0.37f, 0.66f}, {0.37f, 0.72f}}, Mat(pal::iron, 0.4f, 0.8f), 12);
         t.radius = 0.4f; t.height = 0.9f; break;
+    // ---------------------------------------------------------------- world dressing
+    case P_FLOWERS: {
+        // a clump of wild flowers seen from above: daisies (0), lavender spikes (1), poppies (2).
+        // Heads are flat discs facing up (2 triangles): readable from the game camera, cheap on mobile.
+        static const uint32_t petals[3][3] = {{0xf6f2e4, 0xffffff, 0xf2e070}, {0x8a6ad8, 0x6a5ac0, 0xa88ae8}, {0xe0302a, 0xf0502a, 0xd02020}};
+        int n = 20 + rng.irange(0, 8);
+        for (int i = 0; i < n; i++) {
+            vec2 o = rng.inDisk() * 0.6f;
+            float h = rng.range(0.25f, 0.5f);
+            vec3 base{o.x, 0, o.y}, top = base + vec3(rng.range(-0.05f, 0.05f), h, rng.range(-0.05f, 0.05f));
+            F.blade(base, top, 0.03f, {1, 0, 0}, Mat(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), Mat(hexColor(0x5a8a34), 0.9f, 0, 0, 0.8f));
+            vec3 pc = hexColor(petals[var % 3][rng.irange(0, 2)]);
+            Mat pm(pc, 0.6f, 0, 0.06f, 1.f);
+            if (var % 3 == 1) F.blade(top - vec3(0, 0.02f, 0), top + vec3(0, 0.16f, 0), 0.06f, {1, 0, 0}, pm, pm);   // lavender spike
+            else F.plane(top, vec2(rng.range(0.07f, 0.1f)), pm, quat::axisAngle({0, 1, 0}, rng.f() * TAU));
+        }
+        t.radius = 0; t.height = 0.5f;
+        break;
+    }
+    case P_PEBBLES: {
+        int n = rng.irange(5, 9);
+        for (int i = 0; i < n; i++) {
+            vec2 o = rng.inDisk() * 0.7f;
+            float r = rng.range(0.05f, 0.16f);
+            S.rock({o.x, r * 0.3f, o.y}, vec3(r * 1.2f, r * 0.7f, r), Mat(lerp(pal::stoneDark, pal::stoneLight, rng.f()), 0.85f), rng.next(), 0);
+        }
+        t.radius = 0; t.height = 0.15f;
+        break;
+    }
+    case P_TALLGRASS: {
+        int n = 16 + rng.irange(0, 8);
+        vec3 c0 = hexColor(0x4a6a2a), c1 = var == 2 ? hexColor(0xc8b46a) : hexColor(0x9aa652);
+        for (int i = 0; i < n; i++) {
+            vec2 o = rng.inDisk() * 0.35f;
+            vec3 base{o.x, 0, o.y};
+            vec3 tip = base + vec3(o.x * 0.8f + rng.range(-0.15f, 0.15f), rng.range(0.6f, 1.05f), o.y * 0.8f + rng.range(-0.15f, 0.15f));
+            F.blade(base, tip, 0.05f, normalize(vec3(-o.y + 0.01f, 0, o.x)), Mat(c0, 0.9f, 0, 0, 0.f), Mat(c1, 0.8f, 0, 0, 1.f));
+            if (var == 2 && i % 3 == 0) F.ellipsoid(tip, vec3(0.02f, 0.07f, 0.02f), Mat(hexColor(0xd8c27a), 0.8f, 0, 0, 1.f), 4, 3);   // seed heads
+        }
+        t.radius = 0; t.height = 1.f;
+        break;
+    }
+    case P_BRANCHES: {
+        for (int i = 0; i < 3; i++) {
+            float a = rng.f() * TAU, l = rng.range(0.6f, 1.2f);
+            vec3 d{std::cos(a), 0, std::sin(a)};
+            vec3 p0 = vec3(rng.range(-0.3f, 0.3f), 0.04f, rng.range(-0.3f, 0.3f));
+            S.tube(p0 - d * l * 0.5f, p0 + d * l * 0.5f + vec3(0, 0.05f, 0), 0.04f, 0.015f, Mat(pal::bark, 0.9f), 5, false);
+        }
+        for (int i = 0; i < 6; i++) { vec2 o = rng.inDisk() * 0.6f; S.ellipsoid({o.x, 0.01f, o.y}, vec3(0.07f, 0.01f, 0.04f), Mat(rng.chance(0.5f) ? pal::leafAut : hexColor(0x8a6a3a), 0.9f), 5, 2); }
+        t.radius = 0; t.height = 0.2f;
+        break;
+    }
+    case P_FENCE: {
+        Mat w(lerp(pal::wood, pal::timber, rng.f() * 0.5f), 0.9f);
+        for (int s2 = -1; s2 <= 1; s2 += 2) S.bevelBox({s2 * 1.2f, 0.5f, 0}, {0.06f, 0.55f, 0.06f}, 0.015f, w);
+        S.box({0, 0.75f, 0}, {1.3f, 0.04f, 0.025f}, w, quat::axisAngle({0, 0, 1}, rng.range(-0.04f, 0.04f)));
+        S.box({0, 0.4f, 0}, {1.3f, 0.04f, 0.025f}, w, quat::axisAngle({0, 0, 1}, rng.range(-0.05f, 0.05f)));
+        t.radius = 0; t.height = 1.1f;
+        break;
+    }
+    case P_SIGNPOST: {
+        Mat w(pal::wood, 0.9f);
+        S.bevelBox({0, 1.1f, 0}, {0.06f, 1.1f, 0.06f}, 0.015f, w);
+        for (int i = 0; i < 2; i++) {
+            float a = (i ? 0.9f : -0.6f) + rng.range(-0.2f, 0.2f);
+            quat q = quat::axisAngle({0, 1, 0}, a);
+            vec3 c = q.rotate(vec3(0.45f, 0, 0)) + vec3(0, 1.75f - i * 0.32f, 0);
+            S.box(c, {0.45f, 0.11f, 0.025f}, Mat(pal::woodLight, 0.85f), q);
+            vec3 tip = q.rotate(vec3(0.95f, 0, 0)) + vec3(0, 1.75f - i * 0.32f, 0);
+            S.triP(tip, q.rotate(vec3(0.88f, 0.11f, 0.03f)) + vec3(0, 1.75f - i * 0.32f, 0), q.rotate(vec3(0.88f, -0.11f, 0.03f)) + vec3(0, 1.75f - i * 0.32f, 0), Mat(pal::woodLight, 0.85f));
+        }
+        t.radius = 0.15f; t.height = 2.2f;
+        break;
+    }
+    case P_CART: {
+        Mat w(pal::wood, 0.85f), dark(pal::timber, 0.9f);
+        S.bevelBox({0, 0.75f, 0}, {0.75f, 0.08f, 1.1f}, 0.02f, w);
+        for (int s2 = -1; s2 <= 1; s2 += 2) {
+            S.box({s2 * 0.72f, 1.0f, 0}, {0.04f, 0.2f, 1.1f}, w);
+            S.lathe({{0.01f, -0.06f}, {0.48f, -0.06f}, {0.48f, 0.06f}, {0.01f, 0.06f}}, dark, 14, {s2 * 0.86f, 0.5f, -0.1f}, quat::axisAngle({0, 0, 1}, PI / 2));
+            S.tube({s2 * 0.35f, 0.72f, 1.05f}, {s2 * 0.3f, 0.45f, 2.3f}, 0.04f, 0.035f, dark, 5, false);
+        }
+        S.box({0, 1.0f, -1.08f}, {0.72f, 0.2f, 0.04f}, w);
+        if (var != 0) for (int i = 0; i < 3; i++) S.lathe({{0.22f, 0}, {0.26f, 0.2f}, {0.22f, 0.45f}, {0.01f, 0.45f}}, Mat(var == 1 ? pal::wood : pal::thatch, 0.85f), 10, {rng.range(-0.4f, 0.4f), 0.83f, rng.range(-0.7f, 0.5f)});
+        t.radius = 1.0f; t.height = 1.4f;
+        break;
+    }
+    case P_LANTERNPOST: {
+        Mat w(pal::timber, 0.9f), iron(pal::iron, 0.5f, 0.8f);
+        S.bevelBox({0, 1.25f, 0}, {0.07f, 1.25f, 0.07f}, 0.015f, w);
+        S.box({0.28f, 2.45f, 0}, {0.3f, 0.04f, 0.04f}, w);
+        S.box({0.52f, 2.15f, 0}, {0.11f, 0.15f, 0.11f}, iron);
+        S.box({0.52f, 2.15f, 0}, {0.085f, 0.12f, 0.12f}, Mat(pal::window, 0.4f).nightGlow(3.f));
+        S.cone({0.52f, 2.3f, 0}, {0.52f, 2.45f, 0}, 0.14f, iron, 6);
+        t.radius = 0.15f; t.height = 2.6f;
+        break;
+    }
+    case P_STANDSTONE: {
+        vec3 col = lerp(pal::stoneDark, pal::stone, rng.f() * 0.6f);
+        S.rock({0, 1.1f, 0}, vec3(rng.range(0.4f, 0.55f), rng.range(1.3f, 1.8f), rng.range(0.28f, 0.4f)), Mat(col, 0.85f), rng.next(), 1);
+        for (auto& v : S.v) if (v.ny > 70 && rng.chance(0.7f)) { Color8 c = toColor8(pal::moss, 1); v.r = c.r; v.g = c.g; v.b = c.b; }
+        if (var == 2) S.box({0, 1.3f, 0.36f}, {0.12f, 0.35f, 0.01f}, Mat(pal::rune, 0.4f, 0, 2.5f));   // faint rune
+        t.radius = 0.55f; t.height = 3.f;
+        break;
+    }
+    case P_CAMPFIRE: {
+        for (int i = 0; i < 9; i++) { float a = i * TAU / 9; S.rock({std::cos(a) * 0.55f, 0.08f, std::sin(a) * 0.55f}, vec3(0.16f, 0.12f, 0.14f), Mat(pal::stoneDark, 0.9f), rng.next(), 0); }
+        for (int i = 0; i < 4; i++) { float a = i * PI / 2 + 0.3f; S.tube({std::cos(a) * 0.4f, 0.05f, std::sin(a) * 0.4f}, {std::cos(a) * 0.05f, 0.35f, std::sin(a) * 0.05f}, 0.06f, 0.04f, Mat(pal::bark, 0.9f), 6, false); }
+        S.ellipsoid({0, 0.04f, 0}, vec3(0.3f, 0.05f, 0.3f), Mat(pal::ember, 0.6f, 0, 2.5f));
+        t.radius = 0.6f; t.height = 0.5f;
+        break;
+    }
+    case P_TENT: {
+        // A-frame canvas tent with poles
+        vec3 cloth = var == 0 ? hexColor(0xc8b88a) : (var == 1 ? hexColor(0x8a3a2a) : hexColor(0x3a5a6a));
+        Mat cm(cloth, 0.95f), pole(pal::timber, 0.9f);
+        float L = 1.3f, W = 1.1f, Ht = 1.5f;
+        vec3 a0{-W, 0, -L}, a1{W, 0, -L}, b0{-W, 0, L}, b1{W, 0, L}, r0{0, Ht, -L}, r1{0, Ht, L};
+        S.quadP(a0, b0, r1, r0, cm); S.quadP(b1, a1, r0, r1, cm);
+        S.quadP(r0, r1, b0, a0, cm); S.quadP(r1, r0, a1, b1, cm);   // inner faces
+        S.triP(a1, a0, r0, cm);                                     // back wall; front stays open
+        S.tube({0, 0, L + 0.05f}, {0, Ht + 0.2f, L + 0.05f}, 0.035f, 0.03f, pole, 5, false);
+        S.tube({0, 0, -L - 0.05f}, {0, Ht + 0.2f, -L - 0.05f}, 0.035f, 0.03f, pole, 5, false);
+        t.radius = 1.2f; t.height = 1.7f;
+        break;
+    }
     default: break;
     }
     S.bakeHeightAO(-0.2f, 1.2f, 0.65f);
@@ -435,6 +562,7 @@ int propVariants(PropKind k) {
     switch (k) {
     case P_OAK: case P_BIRCH: case P_PINE: case P_SNOWPINE: return 4;
     case P_HAYBALE: case P_CRATE: case P_BARREL: return 1;
+    case P_SIGNPOST: case P_LANTERNPOST: case P_CAMPFIRE: return 2;
     default: return 3;
     }
 }
