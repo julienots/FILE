@@ -26,7 +26,10 @@ export class PlanetScene {
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ color: '#0a0620', transparent: true, opacity: .32, depthWrite: false }));
     this.shadow.renderOrder = 3; this.scene.add(this.shadow);
     this.particles = new Particles(700); this.scene.add(this.particles.points);
-    this.evo = new EvolutionFX(this.scene, this.particles); this.enemies = new Enemies(this.scene, this.particles); this.atkCd = 0; this.hurtT = 0;
+    this.evo = new EvolutionFX(this.scene, this.particles); this.enemies = new Enemies(this.scene, this.particles); this.atkCd = 0; this.hurtT = 0; this.waveCd = 0; this.waveT = 0;
+    this.wave = new THREE.Mesh(new THREE.RingGeometry(.78, 1, 56), new THREE.MeshBasicMaterial({ color: '#fff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); this.wave.visible = false; this.scene.add(this.wave);
+    bus.on('hero:died', () => { if (this.active) { this.deadT = .001; this._burst(30, this.hero.baseScale * 2, '#ff5a8a'); } });
+    bus.on('hero:respawn', () => { if (this.active) this.ctx.transition('planet', { id: this.def.id }, { color: '#ffffff' }); });
     bus.on('enemy:touch', ({ pos }) => { if (!this.active) return; this.hurtT = .4; this.shakeT = .3; this.vh = 7; this.ground = false; this.knock = this.hero.root.position.clone().sub(pos).normalize(); bus.emit('hero:hit', { pos }); });
     this.stars = createStars(3000); this.scene.add(this.stars); this.sky = createSkyDome(); this.scene.add(this.sky); this.sky.material.uniforms.uSun.value.copy(SUN);
     // pickups: orbes de poussière cosmique (instanciés)
@@ -57,7 +60,7 @@ export class PlanetScene {
     for (let i = 0; i < 400 && this.orbData.length < 48; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u), d = V().set(r * Math.cos(t), u, r * Math.sin(t));
       if (P.sample(d) - P.sea > .02) this.orbData.push({ id: `${def.id}:dust:${this.orbData.length}`, dir: d, r: P.heightAt(d) + 1.1, ph: rnd() * 6, alive: true }); }
     this.orbs.count = this.orbData.length;
-    this.leaving = 0; this.ground = !arrive;
+    this.leaving = 0; this.ground = !arrive; this.deadT = 0; this.hero.scaleMul = 1; this.knock = null;
     if (arrive) { this.alt = P.heightAt(this.dir) - P.radius + 70; this.vh = -8; this.arriving = true; }   // chute depuis le ciel
     this.camera.position.copy(this.dir).multiplyScalar(P.heightAt(this.dir) + (arrive ? 95 : 30)).addScaledVector(this.fwd, -20);
     bus.emit('scene:entered', { id: 'planet', planet: def }); bus.emit('planet:enter', { id: def.id });
@@ -69,7 +72,7 @@ export class PlanetScene {
     const cine = this.evo.update(dt, up), scale = hero.baseScale;
     // repère tangent caméra
     const camFwd = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize(), right = _b.crossVectors(camFwd, up).normalize();
-    const frozen = cine || this.leaving; const mv = _c.copy(camFwd).multiplyScalar(frozen ? 0 : m.y).addScaledVector(right, frozen ? 0 : m.x); let sp = Math.min(1, mv.length());
+    if (this.deadT) { this.deadT += dt; hero.scaleMul = Math.max(.05, 1 - this.deadT * 1.2); } const frozen = cine || this.leaving || this.deadT; const mv = _c.copy(camFwd).multiplyScalar(frozen ? 0 : m.y).addScaledVector(right, frozen ? 0 : m.x); let sp = Math.min(1, mv.length());
     const groundR0 = Math.max(P.heightAt(up), P.seaRadius - .35 * scale), wading = groundR0 > P.heightAt(up) + .01;
     const speed = 7.5 * Math.sqrt(scale) * (Input.buttons.boost ? 1.6 : 1) * (wading ? .65 : 1);
     if (sp > .05) {
@@ -133,8 +136,14 @@ export class PlanetScene {
     if (this.arriving || this.leaving) for (let k = 0; k < 3; k++) { _e.copy(up).multiplyScalar(this.leaving ? -14 : 10); this.particles.emit(_c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * scale), _e, EVOLUTIONS[hero.stage].glow, .6 * scale, .5, 1, 0); }
     if (this.leaving && (this.leaving += dt) > .35 && !this._left) { this._left = true; this.ctx.transition('space', { from: this.def.id }, { color: this.def.atmosphere?.color ?? '#ffffff', out: .45, in: .8 }); }
     if (!cine && !this.leaving && !this.arriving && Input.pressed.action) { this.leaving = .001; this._left = false; this.ground = false; this.vh = 12 * Math.sqrt(scale); bus.emit('cinematic:start', { id: 'takeoff' }); }
-    // TEMP (jusqu'à B4): ✦ = évolution de test
-    if (!cine && Input.pressed.special) { const s = State.data.hero; s.stage = (s.stage + 1) % EVOLUTIONS.length; bus.emit('hero:evolved', { stage: s.stage }); }
+    // ✦ Onde de choc (grandit avec le stade; "supernova" au stade divin)
+    this.waveCd -= dt;
+    if (!frozen && Input.pressed.special && this.waveCd <= 0) { this.waveCd = 2.5; const rad = (5 + hero.stage * 2.5) * Math.sqrt(scale), col = EVOLUTIONS[hero.stage].glow;
+      this.wave.visible = true; this.waveT = 0; this.waveR = rad; this.wave.material.color.set(col); this.wave.position.copy(hero.root.position).addScaledVector(up, .2 * scale); this.wave.quaternion.setFromUnitVectors(this._s.set(0, 0, 1), up);
+      if (this.ground) { this.vh = 6 * Math.sqrt(scale); this.ground = false; } this.shakeT = .35; this._burst(24, scale * 1.6, col);
+      for (const e of this.enemies.list) if (!e.dead && e.root.position.distanceTo(hero.root.position) < rad + e.T.size) this.enemies.hit(e, 2 + hero.stage * 2, hero.root.position);
+      bus.emit('hero:ability', { id: hero.stage >= 5 ? 'supernova' : 'shockwave', pos: hero.root.position, radius: rad }); }
+    if (this.wave.visible) { this.waveT += dt * 2.2; const k = 1 - Math.pow(1 - Math.min(1, this.waveT), 3); this.wave.scale.setScalar(Math.max(.01, k * this.waveR)); this.wave.material.opacity = (1 - k) * .9; if (this.waveT >= 1) this.wave.visible = false; }
   }
   _burst(n, scale, color) { const p = this._c.copy(this.hero.root.position), e = this._e;
     for (let i = 0; i < n; i++) { const a = i / n * 6.283; e.copy(this._a).multiplyScalar(Math.cos(a)).addScaledVector(this._b, Math.sin(a)).multiplyScalar(4 * scale).addScaledVector(this.dir, 1.5 * scale); this.particles.emit(p, e, color, .35 * scale, .5, 3, 3); } }

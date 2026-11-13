@@ -33,17 +33,23 @@ export class SpaceScene {
     this.lines = createSpeedLines(); this.camera.add(this.lines);
     this.trail = new Particles(300); this.scene.add(this.trail.points);
     this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.yaw = 0; this.pitch = 0; this.roll = 0; this.boost = 0; this.shake = 0;
-    this.near = null; this.landing = null;
+    this.near = null; this.landing = null; this.fireCd = 0;
+    this.fx = new Particles(500); this.scene.add(this.fx.points); this.serpent.particles = this.fx; if (State.data.world.flags.serpentDefeated) { this.serpent.dead = 99; this.serpent.root.visible = false; this.sighted = true; }
+    const lg = new THREE.CapsuleGeometry(.35, 5, 3, 6).rotateX(Math.PI / 2);
+    this.lasers = Array.from({ length: 18 }, () => { const m = new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: '#9fffe0' })); m.visible = false; this.scene.add(m); return { mesh: m, vel: new THREE.Vector3(), life: 0 }; });
+    bus.on('boss:hit-hero', () => { this.shake = 1; });
+    bus.on('boss:defeated', ({ id }) => { if (id === 'serpent') State.data.world.flags.serpentDefeated = true; });
+    bus.on('hero:respawn', () => { if (this.ctx.scenes.space === this && this.isActive) this.ctx.transition('space', {}, { color: '#ffffff' }); });
     this._f = new THREE.Vector3(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._c = new THREE.Vector3();
   }
   enter({ from } = {}) {
     const p = from ? this.planets.find(x => x.userData.def.id === from) : null, s = this.ship.root;
     if (p) { const r = p.userData.radius; s.position.copy(p.position).add(this._a.set(.3, .35, 1).normalize().multiplyScalar(r * 1.35)); this._a.copy(s.position).sub(p.position).normalize(); this.yaw = Math.atan2(-this._a.x, -this._a.z); this.pitch = Math.asin(this._a.y); this.vel.copy(this._a).multiplyScalar(160); this.boost = 1; }
     else { s.position.set(0, 0, 60); this.yaw = 0; this.pitch = 0; this.vel.set(0, 0, 0); }
-    this.landing = null; this.near = null; this.camera.position.copy(s.position).addScaledVector(this.vel, -.08).add(this._b.set(0, 4, 0));
+    this.isActive = true; this.landing = null; this.near = null; this.camera.position.copy(s.position).addScaledVector(this.vel, -.08).add(this._b.set(0, 4, 0));
     bus.emit('scene:entered', { id: 'space' });
   }
-  exit() {}
+  exit() { this.isActive = false; }
   update(dt, t) {
     const s = this.ship, sp = s.root.position, { _f, _a, _b, _c } = this, L = this.landing;
     let wantBoost = Input.buttons.boost ? 1 : 0;
@@ -68,10 +74,20 @@ export class SpaceScene {
     _a.set(0, 0, 2.2).applyQuaternion(this.q).add(sp); _b.copy(_f).multiplyScalar(-12 - boost * 30);
     this.trail.emit(_a, _b, boost > .4 ? '#b48aff' : '#7fe0ff', .9 + boost * 1.2, .35 + boost * .3, 1, 0); this.trail.update(dt, innerHeight);
     // Serpent céleste: nage, rebond sur son corps, première rencontre cinématique (la caméra se tourne vers lui)
-    const sv = this.serpent; sv.update(dt, t); const hd = sv.headPos.distanceTo(sp);
-    if (!L) for (let i = 0, sg = sv.segments; i < sg.length; i += 2) { const c = sg[i], rr = c.r + 3; if (sp.distanceToSquared(c.pos) < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.6); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length(), boss: 'serpent' }); break; } }
+    const sv = this.serpent; sv.update(dt, t, sp); const hd = sv.headPos.distanceTo(sp);
+    if (!L && !sv.dead) for (let i = 0, sg = sv.segments; i < sg.length; i += 2) { const c = sg[i], rr = c.r + 3; if (sp.distanceToSquared(c.pos) < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.6); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length(), boss: 'serpent' }); break; } }
     if (!this.sighted && hd < 900) { this.sighted = true; this.awe = 4; bus.emit('boss:spawn', { id: 'serpent' }); bus.emit('cinematic:start', { id: 'boss-sighting', boss: 'serpent' }); }
     if (this.awe > 0) { this.awe -= dt; this.shake = Math.max(this.shake, .5); if (this.awe <= 0) bus.emit('cinematic:end', { id: 'boss-sighting' }); }
+    // lasers du vaisseau (✸): visée assistée sur le cœur stellaire le plus proche dans l'axe
+    this.fireCd -= dt;
+    if (!L && Input.buttons.attack && this.fireCd <= 0) { this.fireCd = .14; const l = this.lasers.find(x => x.life <= 0);
+      if (l) { _b.copy(_f); let best = .8; if (!sv.dead) for (const c of sv.cores) { if (c.hp <= 0) continue; _c.copy(c.pos).sub(sp); const d = _c.length(); if (d > 1100) continue; const dot = _c.normalize().dot(_f); if (dot > best) { best = dot; _b.copy(_c); } }
+        l.life = 1.8; l.mesh.visible = true; l.mesh.position.copy(sp).addScaledVector(_b, 4); l.vel.copy(_b).multiplyScalar(650); l.mesh.lookAt(_c.copy(l.mesh.position).add(_b)); bus.emit('ship:fire', {}); } }
+    for (const l of this.lasers) { if (l.life <= 0) continue; l.life -= dt; l.mesh.position.addScaledVector(l.vel, dt);
+      if (!sv.dead && sv.damageAt(l.mesh.position, 1)) l.life = 0;
+      else for (let i = 0, cs = this.colliders; i < cs.length; i++) if (cs[i].r > 10 && l.mesh.position.distanceToSquared(cs[i].pos) < cs[i].r * cs[i].r) { l.life = 0; for (let k = 0; k < 5; k++) this.fx.emit(l.mesh.position, _c.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(40), '#9fffe0', 3, .3, 2, 0); break; }
+      if (l.life <= 0) l.mesh.visible = false; }
+    this.fx.update(dt, innerHeight);
     // caméra poursuite + tremblement + FOV
     _a.set(0, 4.5 - boost, 15 + boost * 7).applyQuaternion(this.q).add(sp);
     this.camera.position.lerp(_a, Math.min(1, dt * (5 + boost * 3)));

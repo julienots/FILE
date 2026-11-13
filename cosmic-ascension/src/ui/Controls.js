@@ -37,5 +37,5 @@ export function mountControls(root) {
   cam.addEventListener('pointermove', e => { if (lx != null) { Input.look.x += e.clientX - lx; Input.look.y += e.clientY - ly; lx = e.clientX; ly = e.clientY; } });
   cam.addEventListener('pointerup', () => lx = null);
   bus.on('space:near', ({ planet, canLand }) => { hint.textContent = canLand ? `⏎ Atterrir sur ${planet.name}` : `${planet.name}`; });
-  bus.on('scene:entered', ({ id, planet }) => { if (id === 'planet') hint.textContent = `${planet.name} — ⏎ pour décoller · ✦ évoluer (debug)`; });
+  bus.on('scene:entered', ({ id, planet }) => { if (id === 'planet') hint.textContent = `${planet.name} — ⏎ décoller · ✸ tirer · ✦ onde de choc`; });
 }

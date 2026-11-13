@@ -4,6 +4,7 @@ import { Assets } from './assets/AssetLibrary.js';
 import { SpaceScene } from './scenes/SpaceScene.js';
 import { PlanetScene } from './scenes/PlanetScene.js';
 import { mountControls } from './ui/Controls.js';
+import { initFallback } from './core/Fallback.js';
 
 // Point d'entrée. OPUS: ajouter écran titre, HUD, menus, audio, systèmes (quêtes, dialogues…) via bus d'événements.
 async function boot() {
@@ -12,6 +13,7 @@ async function boot() {
   const game = new Game(document.getElementById('game'));
   game.register('space', SpaceScene); game.register('planet', PlanetScene);
   mountControls(document.getElementById('ui'));
+  initFallback(document.getElementById('ui'));   // systèmes de secours tant que B n'a pas livré (voir core/Fallback.js)
   window.__game = game;               // debug / tests
   game.goto('space', {}); game.start();
 }
