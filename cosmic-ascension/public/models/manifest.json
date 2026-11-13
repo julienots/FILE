@@ -1,0 +1,5 @@
+{
+  "_doc": "Clé → {file, height(m)}. Déposer le GLB dans public/models/ puis ajouter/activer l'entrée. Voir docs/TRIPO_PROMPTS.md pour les prompts.",
+  "hero_stage0": { "file": "hero_stage0.glb", "height": 1.0, "disabled": true },
+  "ship_basic":  { "file": "ship_basic.glb",  "height": 3.0, "disabled": true }
+}
