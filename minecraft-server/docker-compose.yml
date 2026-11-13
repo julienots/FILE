@@ -1,0 +1,24 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"            # acceptation de l'EULA Mojang (https://aka.ms/MinecraftEULA)
+      TYPE: "${TYPE:-PAPER}"  # PAPER (plugins), VANILLA, FABRIC, FORGE...
+      VERSION: "${VERSION:-LATEST}"
+      MEMORY: "${MEMORY:-2G}"
+      MOTD: "${MOTD:-Mon serveur Minecraft}"
+      DIFFICULTY: "${DIFFICULTY:-normal}"
+      MODE: "${MODE:-survival}"
+      MAX_PLAYERS: "${MAX_PLAYERS:-10}"
+      ONLINE_MODE: "${ONLINE_MODE:-TRUE}"   # TRUE = comptes officiels uniquement
+      ENABLE_WHITELIST: "${ENABLE_WHITELIST:-FALSE}"
+      OPS: "${OPS:-}"                       # pseudos admin, séparés par des virgules
+      TZ: "Europe/Paris"
+    volumes:
+      - ./data:/data          # monde, config, plugins
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
