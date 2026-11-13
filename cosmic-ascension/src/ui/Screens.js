@@ -6,10 +6,11 @@ import { PLANETS } from '../data/planets.js';
 import { h, fmtTime } from './dom.js';
 import { t } from './i18n.js';
 import { buzz } from './haptics.js';
+import { journalPanel, inventoryPanel } from './Journal.js';
 // Écrans plein cadre (B): titre, pause, réglages, confirmation. Un seul écran visible à la fois (pile).
 export function mountScreens(root, { onPlay, onQuit } = {}) {
   const layer = h('div.layer.screens'); root.appendChild(layer);
-  const stack = [];
+  const stack = []; let mode = null;
   const push = (el) => { stack.at(-1)?.classList.add('hidden'); stack.push(el); layer.appendChild(el); };
   const pop = () => { stack.pop()?.remove(); stack.at(-1)?.classList.remove('hidden'); };
   const clear = () => { while (stack.length) stack.pop().remove(); };
@@ -19,7 +20,7 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
     push(h('div.screen', {}, h('div.panel.confirm', {}, h('p', { text }), h('div.menu', {}, btn(t('no'), 'ghost', pop), btn(t('yes'), 'danger', () => { pop(); yes(); })))));
   }
   function title() {
-    clear();
+    clear(); mode = 'title';
     const has = State.hasSave && State.data.meta.seenIntro;
     const start = () => { clear(); State.data.meta.seenIntro = true; State.save(); requestFullscreen(); onPlay?.(); };
     push(h('div.screen.title', {},
@@ -31,15 +32,18 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
       h('div.ver', { text: 'v' + Config.version })));
   }
   function pause() {
-    if (stack.length) return; bus.emit('game:pause');
+    if (stack.length) return; mode = 'pause'; bus.emit('game:pause');
     const d = State.data, vis = PLANETS.filter(p => !p.hidden).length;
     const st = (k, v) => h('div', {}, t(k), h('b', { text: v }));
-    const resume = () => { clear(); bus.emit('game:resume'); };
+    const resume = () => { clear(); mode = null; bus.emit('game:resume'); };
     push(h('div.screen', {}, h('div.panel', {}, h('h2', { text: t('pause.title') }),
       h('div.stats', {}, st('stats.stage', EVOLUTIONS[d.hero.stage].name), st('stats.planets', `${d.world.discovered.length}/${vis}`), st('stats.kills', d.stats.kills), st('stats.time', fmtTime(d.stats.playTime))),
-      h('div.menu', {}, btn(t('pause.resume'), '', resume), btn(t('pause.settings'), 'alt', settings),
+      h('div.menu', {}, btn(t('pause.resume'), '', resume),
+        h('div.menu2', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel()))),
+        btn(t('pause.settings'), 'alt', settings),
         btn(`${t('pause.map')} · ${t('soon')}`, 'ghost', () => {}), btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); })))));
   }
+  function sub(title, content) { push(h('div.screen', {}, h('div.panel.wide', {}, h('h2', { text: title }), content, h('div.menu', { style: { marginTop: '3vmin' } }, btn(t('back'), '', pop))))); }
   function settings() {
     const s = State.data.settings, changed = () => { State.save(); bus.emit('settings:changed', s); };
     const seg = (opts, get, set) => { const w = h('div.seg'); const draw = () => { w.innerHTML = ''; for (const [v, l] of opts) w.appendChild(h('button' + (get() === v ? '.sel' : ''), { text: l, onClick: () => { set(v); changed(); draw(); buzz(8); } })); }; draw(); return w; };
@@ -52,7 +56,9 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
       h('div.menu', { style: { marginTop: '3vmin' } }, btn(t('back'), '', pop),
         btn(t('set.reset'), 'danger', () => confirm(t('set.resetConfirm'), () => { State.reset(); clear(); title(); }))))));
   }
-  return { layer, title, pause, settings, get open() { return stack.length > 0; } };
+  // retour (Échap / bouton Android): referme le panneau du dessus; en pause, le dernier panneau reprend la partie
+  function back() { if (!stack.length) return pause(); if (mode === 'title' && stack.length === 1) return; if (stack.length > 1) return pop(); if (mode === 'pause') { clear(); mode = null; bus.emit('game:resume'); } }
+  return { layer, title, pause, settings, back, get open() { return stack.length > 0; } };
 }
 function requestFullscreen() {
   try { const el = document.documentElement; if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); screen.orientation?.lock?.('landscape').catch(() => {}); } catch { /* ignore */ }

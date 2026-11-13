@@ -3,7 +3,7 @@ const FR = {
   'title.play': 'Jouer', 'title.continue': 'Continuer', 'title.new': 'Nouvelle partie', 'title.settings': 'Réglages',
   'title.tagline': 'De grain d’étoile à divinité', 'title.confirmNew': 'Effacer la sauvegarde et recommencer ?',
   'pause.title': 'Pause', 'pause.resume': 'Reprendre', 'pause.settings': 'Réglages', 'pause.map': 'Carte galactique', 'pause.codex': 'Codex',
-  'pause.quit': 'Écran titre', 'soon': 'Bientôt',
+  'pause.quit': 'Écran titre', 'pause.quests': 'Quêtes', 'pause.inventory': 'Inventaire', 'soon': 'Bientôt',
   'set.title': 'Réglages', 'set.quality': 'Qualité graphique', 'set.q.auto': 'Auto', 'set.q.0': 'Bas', 'set.q.1': 'Moyen', 'set.q.2': 'Haut',
   'set.music': 'Musique', 'set.sfx': 'Effets', 'set.lefty': 'Mode gaucher', 'set.haptics': 'Vibrations', 'set.reset': 'Effacer la sauvegarde',
   'set.resetConfirm': 'Vraiment tout effacer ? Ta progression sera perdue.', 'back': 'Retour', 'yes': 'Oui', 'no': 'Non',

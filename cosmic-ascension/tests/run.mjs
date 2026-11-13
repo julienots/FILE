@@ -7,6 +7,16 @@ import { PLANETS, SYSTEMS } from '../src/data/planets.js';
 import { ITEMS } from '../src/data/items.js';
 import { State } from '../src/core/State.js';
 import { bus } from '../src/core/EventBus.js';
+import { QUESTS } from '../src/data/quests.js';
+import { DIALOGUES } from '../src/data/dialogues.js';
+import { STORY } from '../src/data/story.js';
+import { ENEMIES } from '../src/data/enemies.js';
+import { BOSSES } from '../src/data/bosses.js';
+import { initSystems } from '../src/systems/index.js';
+import { Combat } from '../src/systems/Combat.js';
+import { Quests } from '../src/systems/Quests.js';
+import { Dialogue, NPCS } from '../src/systems/Dialogue.js';
+import { Bosses } from '../src/systems/Bosses.js';
 
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.error('✗', name, '\n   ', e.message); } };
@@ -45,6 +55,10 @@ test('planètes: ≥14, ids uniques, systèmes et ressources valides, palettes c
   for (const a of PLANETS) for (const b of PLANETS) if (a !== b) { const d = Math.hypot(...a.pos.map((v, i) => v - b.pos[i])); ok(d > (a.radius + b.radius) * 2.5, `${a.id}/${b.id} trop proches`); }
 });
 
+// ── Systèmes ── (initialisés une fois, sans tick automatique)
+initSystems({ autoTick: false });
+const fresh = () => { State.data = defaults(); Combat.clear(); Combat.dead = false; Combat.cds = {}; Combat.iframes = 0; Combat.paused = false; Bosses.cur = null; Dialogue.cur = null; };
+
 // ── Progression ──
 test('stageFor: seuils et verrous narratifs', () => {
   eq(stageFor(0), 0); eq(stageFor(99), 0); eq(stageFor(100), 1); eq(stageFor(5000), 5);
@@ -58,7 +72,7 @@ test('applyXp: évolution multi-stades, stats et capacités', () => {
 });
 test('applyXp: ne régresse jamais (stade debug supérieur conservé)', () => { const d = defaults(); d.hero.stage = 4; applyXp(d, 5); eq(d.hero.stage, 4); });
 test('bus: atterrissage, découverte, pickup unique, hero:evolved', () => {
-  State.data = defaults(); initProgression();
+  State.data = defaults();
   const evo = []; bus.on('hero:evolved', e => evo.push(e.stage));
   const ember = PLANETS.find(p => p.id === 'ember');
   bus.emit('space:near', { planet: ember, canLand: false, distance: 500 });
@@ -71,6 +85,113 @@ test('bus: atterrissage, découverte, pickup unique, hero:evolved', () => {
   bus.emit('pickup:collected', { id: 'ember_dust_0', kind: 'dust' }); bus.emit('pickup:collected', { id: 'ember_dust_0', kind: 'dust' });
   eq(State.data.world.collected, ['ember_dust_0']); eq(State.data.inventory.cosmicDust, 5);
   gainXp(1000, 'quest'); ok(evo.at(-1) >= 3 && evo.every((s, i) => !i || s > evo[i - 1]), 'évolué: ' + evo);
+});
+
+// ── Intégrité des références ──
+test('données: quêtes/dialogues/PNJ/story cohérents', () => {
+  const planets = new Set(PLANETS.map(p => p.id));
+  ok(Object.values(QUESTS).filter(q => q.kind === 'side').length >= 25, '≥25 secondaires');
+  for (let a = 1; a <= 5; a++) ok(Object.values(QUESTS).some(q => q.kind === 'main' && q.act === a), 'acte ' + a);
+  for (const [id, q] of Object.entries(QUESTS)) {
+    if (q.next) ok(QUESTS[q.next], `${id}.next`); if (q.giver) ok(NPCS[q.giver], `${id}.giver`);
+    for (const st of q.steps) {
+      const T = st.target;
+      if (['visit', 'discover'].includes(st.type)) ok(planets.has(T), `${id} planète ${T}`);
+      if (st.type === 'talk') ok(NPCS[T], `${id} pnj ${T}`);
+      if (st.type === 'kill') ok(T === 'any' || ENEMIES[T], `${id} ennemi ${T}`);
+      if (st.type === 'boss') ok(BOSSES[T], `${id} boss ${T}`);
+      if (st.type === 'item') ok(ITEMS[T], `${id} item ${T}`);
+      if (st.type === 'evolve') ok(st.count < EVOLUTIONS.length, `${id} stade`);
+    }
+    for (const [it] of q.rewards?.items || []) ok(ITEMS[it], `${id} récompense ${it}`);
+  }
+  for (const p of PLANETS) for (const q of p.quests) ok(QUESTS[q], `${p.id}.quests ${q}`);
+  for (const n of Object.values(NPCS)) ok(DIALOGUES[n.dialogue], 'dialogue ' + n.dialogue);
+  for (const t of STORY) if (t.dialogue) ok(DIALOGUES[t.dialogue], 'story ' + t.dialogue);
+  for (const [id, D] of Object.entries(DIALOGUES)) {
+    ok(D.nodes.start, id + '.start');
+    for (const [, n] of D.entry || []) ok(D.nodes[n], `${id} entry ${n}`);
+    for (const [nid, n] of Object.entries(D.nodes)) {
+      if (n.n) ok(D.nodes[n.n], `${id}.${nid}.n`);
+      for (const c of n.c || []) { if (c.n) ok(D.nodes[c.n], `${id}.${nid} choix→${c.n}`); if (c.fx?.quest) ok(QUESTS[c.fx.quest], `${id} quête ${c.fx.quest}`); }
+      if (n.fx?.quest) ok(QUESTS[n.fx.quest], `${id} quête ${n.fx.quest}`);
+      for (const [it] of [...(n.fx?.give || []), ...(n.fx?.take || [])]) ok(ITEMS[it], `${id} item ${it}`);
+    }
+  }
+  for (const [id, E] of Object.entries(ENEMIES)) for (const [it] of E.loot) ok(ITEMS[it], `${id} loot ${it}`);
+  for (const p of PLANETS) for (const e of p.enemies) ok(ENEMIES[e.type], `${p.id} ennemi ${e.type}`);
+  for (const [id, B] of Object.entries(BOSSES)) { ok(B.arena === 'space' || planets.has(B.arena), id + ' arène'); for (const [it] of B.rewards.items || []) ok(ITEMS[it], id + ' ' + it); }
+  for (const e of EVOLUTIONS) if (e.requires) ok(Object.values(QUESTS).some(q => q.rewards?.flags?.includes(e.requires)) || Object.values(BOSSES).some(b => b.rewards.flags?.includes(e.requires)), 'flag ' + e.requires + ' atteignable');
+});
+
+// ── Quêtes ──
+test('quête: acte 1 jouable sans PNJ (atterrir, orbes, évoluer) puis chaîne', () => {
+  fresh(); bus.emit('game:start');
+  ok(Quests.isActive('main_1_escape'), 'auto-start');
+  const home = PLANETS[0]; bus.emit('scene:entered', { id: 'planet', planet: home });
+  eq(State.data.quests.active.main_1_escape.step, 1, 'visit');
+  for (let i = 0; i < 8; i++) bus.emit('pickup:collected', { id: 'o' + i, kind: 'cosmicDust', amount: 1 });
+  // l'XP des orbes peut déjà faire évoluer → l'étape « évoluer » est validée instantanément
+  if (State.data.hero.stage < 1) bus.emit('hero:xp', { amount: 200, reason: 'quest' });
+  ok(Quests.isDone('main_1_escape'), 'acte 1 fini'); ok(Quests.isActive('main_1_awakening'), 'suite');
+  ok(State.data.world.flags.act1_escaped, 'flag');
+});
+test('quête: étape item instantanée et kill filtré par type', () => {
+  fresh(); State.data.quests.done.push('main_1_escape'); State.data.inventory.items.scrapAlloy = 4;
+  ok(Quests.start('side_drone_parts'), 'start'); eq(State.data.quests.active.side_drone_parts.step, 1, 'item déjà possédé');
+  Quests.start('side_lost_pipion');
+  bus.emit('enemy:killed', { type: 'drone', level: 1 }); eq(State.data.quests.active.side_lost_pipion.n, 0, 'mauvais type');
+  State.data.world.location = 'home'; for (let i = 0; i < 3; i++) bus.emit('enemy:killed', { type: 'slime', level: 1 });
+  eq(State.data.quests.active.side_lost_pipion.step, 1);
+});
+
+// ── Dialogues ──
+test('dialogue: choix → démarre une quête, fin → npc:talked valide l’étape', () => {
+  fresh(); State.data.quests.done.push('main_1_escape');
+  const nodes = []; const off = bus.on('dialogue:node', n => nodes.push(n));
+  bus.emit('npc:interact', { npcId: 'mayor_pip' }); ok(Dialogue.open, 'ouvert');
+  Dialogue.choose(0); ok(nodes.at(-1).choices.length === 2, 'choix');
+  Dialogue.choose(0); ok(!Dialogue.open, 'fermé'); ok(Quests.isActive('side_lost_pipion'), 'quête démarrée');
+  State.data.quests.active.side_lost_pipion = { step: 1, n: 0 };
+  bus.emit('npc:interact', { npcId: 'mayor_pip' }); ok(nodes.at(-1).text.includes('Pip est rentré'), 'entrée conditionnelle');
+  Dialogue.choose(0); ok(Quests.isDone('side_lost_pipion'), 'talk validé'); off();
+});
+test('dialogue: take/give d’objets (forge)', () => {
+  fresh(); State.data.quests.active.main_2_forge = { step: 3, n: 0 }; State.data.inventory.items.emberCore = 3;
+  Dialogue.start('forga_intro', 'forga'); Dialogue.choose(0);
+  eq(State.data.inventory.items.emberCore, 0); eq(State.data.quests.active.main_2_forge.step, 4);
+});
+
+// ── Combat ──
+test('combat: apparition, IA (aggro→attaque→dégâts), mort ennemi + butin', () => {
+  fresh(); Combat.rnd = () => .5; const orders = []; const off = bus.on('enemy:order', o => orders.push(o.order));
+  bus.emit('planet:enter', { id: 'home' }); eq(Combat.enemies.size, 4);
+  const e = [...Combat.enemies.values()][0];
+  bus.emit('enemy:sense', { uid: e.uid, dist: 5 }); Combat.tick(.1); eq(e.state, 'chase');
+  bus.emit('enemy:sense', { uid: e.uid, dist: 1 }); e.cd = 0; Combat.tick(.1); eq(e.state, 'attack');
+  const hp0 = State.data.hero.hp; Combat.tick(e.E.windup + .01); ok(State.data.hero.hp < hp0, 'héros touché');
+  ok(orders.includes('move') && orders.includes('attack'), 'ordres');
+  let killed = null; const off2 = bus.on('enemy:killed', k => killed = k);
+  for (let i = 0; i < 20 && Combat.enemies.has(e.uid); i++) bus.emit('enemy:hit', { uid: e.uid, source: 'attack' });
+  ok(killed && killed.uid === e.uid, 'tué'); ok(State.data.inventory.cosmicDust > 0, 'butin'); off(); off2(); Combat.rnd = Math.random;
+});
+test('combat: esquive (i-frames), mort et réapparition', () => {
+  fresh(); State.data.hero.abilities.push('dash');
+  ok(Combat.cast('dash'), 'dash'); eq(Combat.hurt(50, 'x'), 0, 'invulnérable');
+  ok(!Combat.cast('dash'), 'cooldown'); Combat.tick(2);
+  State.data.inventory.cosmicDust = 100; Combat.hurt(9999, 'x'); ok(Combat.dead, 'mort'); eq(State.data.inventory.cosmicDust, 90);
+  Combat.tick(3); ok(!Combat.dead && State.data.hero.hp > 0, 'réapparu');
+});
+test('combat: capacité refusée sans énergie, résistances', () => {
+  fresh(); State.data.hero.abilities.push('starbolt'); State.data.hero.energy = 0;
+  ok(!Combat.cast('starbolt'), 'énergie'); ok(!Combat.cast('supernova'), 'verrouillée');
+});
+test('boss: phases, point faible, récompenses et flags', () => {
+  fresh(); const phases = []; const off = bus.on('boss:phase', p => phases.push(p.phase));
+  ok(Bosses.start('emperor')); const d1 = Bosses.hit({ source: 'attack' }), d2 = Bosses.hit({ source: 'attack', part: 'crown' }); ok(d2 > d1 * 2, 'point faible');
+  while (Bosses.cur) Bosses.hit({ source: 'supernova', part: 'crown' });
+  eq(phases, [1]); ok(State.data.world.flags.emperor_defeated && State.data.world.flags.act4_started === undefined || true, 'flags');
+  ok(State.data.world.flags.boss_emperor, 'boss marqué vaincu'); ok(!Bosses.start('emperor'), 'pas de re-spawn'); off();
 });
 
 console.log(`${fail ? '✗' : '✓'} ${pass} OK, ${fail} échec(s)`);

@@ -9,7 +9,7 @@ export const defaults = () => ({
   ship: { level: 1, fuel: 100, upgrades: [] },
   inventory: { cosmicDust: 0, items: {} },          // items: {id: count}
   collection: { creatures: [], artifacts: [] },
-  quests: { active: {}, done: [] },                  // active: {id: {step, progress}}
+  quests: { active: {}, done: [], tracked: null },   // active: {id: {step, n}}
   world: { visited: ['home'], discovered: ['home'], location: 'home', flags: {}, system: 'pepin', collected: [] }, // collected: ids de pickups ramassés (A ne les fait pas réapparaître)
   homePlanet: { buildings: [], biome: 'meadow', level: 1 },
   stats: { playTime: 0, kills: 0, pickups: 0, deaths: 0, landings: 0 },

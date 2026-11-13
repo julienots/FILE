@@ -59,6 +59,24 @@ Lire **uniquement** `Input.move{x,y}`, `Input.look{x,y}`, `Input.buttons`, `Inpu
 | `ui:context` | B | `{label|null}` | UI (libellé du bouton Action) |
 | `quest:tracked` | B | `{title,progress}` | UI (suivi d'objectif) |
 | `ui:click` | B | — | audio |
+| `enemy:sense` | A | `{uid,dist}` ≤5 Hz, ennemis à < 2× aggro | B IA (aggro/portée/leash) |
+| `enemy:hit` | A | `{uid,source:'attack'|abilityId,part?}` (B calcule les dégâts) | B combat |
+| `enemy:order` | B | `{uid,order:'idle'|'move'|'attack'|'return'|'dead', target?:'hero'|'home', speed?, windup?, kind?, dmg?}` | A anime (attaque = télégraphe `windup` s; B résout le coup) |
+| `enemy:spawn` (détail) | B | `+{hp,maxHp,name,shape,color,size,model,flying,elite,speed}` | A |
+| `enemy:damaged` / `enemy:despawn` | B | `{uid,dmg,hp,maxHp,crit,resist}` / `{uid}` | A (chiffres flottants, flash), audio |
+| `hero:ability` → `ability:cast` / `ability:fail` | A → B | `{id?}` → `{id,dmg,radius?,range?,cd}` / `{id,reason}` | A joue le VFX **seulement sur `ability:cast`** |
+| `hero:respawn` | B | `{planetId}` | A (replace le héros au point d'apparition) |
+| `hero:fell` | A | — (chute/eau mortelle) | B (−20 % PV) |
+| `combat:combo` | B | `{n}` | UI, audio |
+| `boss:spawn` (détail) | B | `{id,name,title,hp,maxHp,scale,arena,attacks,weakPoints,music}` | A crée le boss |
+| `boss:hit` / `boss:attackHit` | A | `{id,source,part?}` / `{id,attack}` | B (PV boss / dégâts héros) |
+| `boss:phase` / `boss:damaged` / `boss:defeated` / `boss:despawn` | B | `{id,phase,attacks}` / `{id,hp,maxHp,weak}` / `{id,name}` | A, UI, quêtes |
+| `npc:near` | A | `{npcId|null}` | B (bouton Action → « Parler ») |
+| `npc:talked` | B | `{npcId}` (fin de dialogue) | quêtes |
+| `dialogue:node` / `dialogue:choose` | B / UI | `{text,speaker,portrait,radio,choices[]}` / `{i}` | UI / moteur |
+| `quest:start` / `quest:track` | tous | `{id}` | B quêtes |
+| `world:flag` | B | `{flag,value}` | quêtes, story, progression |
+| `inventory:changed` | B | `{id,n}` | UI, quêtes |
 
 Ajout d'événement: documente-le ici (une ligne) dans ton commit.
 
