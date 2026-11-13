@@ -7,6 +7,7 @@ import { mountHud } from './Hud.js';
 import { mountScreens } from './Screens.js';
 import { mountDialogueBox } from './DialogueBox.js';
 import { mountCombatFx } from './CombatFx.js';
+import { initNative } from './native.js';
 // Point d'entrée de l'UI (B). main.js appelle mountUI(#ui) une fois.
 export function mountUI(root) {
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + CSS2 }));
@@ -22,7 +23,8 @@ export function mountUI(root) {
   // bouton retour Android / Échap = pause
   const back = () => { if (!hud.layer.classList.contains('hidden') || screens.open) screens.back(); };
   addEventListener('keydown', e => { if (e.code === 'Escape') back(); });
-  globalThis.Capacitor?.Plugins?.App?.addListener?.('backButton', back);
+  initNative({ onBack: back });
+  bus.on('app:background', () => { if (!screens.open && !hud.layer.classList.contains('hidden')) screens.pause(); });
   // mise en arrière-plan = pause automatique
   document.addEventListener('visibilitychange', () => { if (document.hidden && !screens.open && !hud.layer.classList.contains('hidden')) screens.pause(); });
   const api = { hud, controls, screens };

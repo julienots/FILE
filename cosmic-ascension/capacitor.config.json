@@ -1,0 +1,15 @@
+{
+  "appId": "com.cosmicascension.game",
+  "appName": "Cosmic Ascension",
+  "webDir": "dist",
+  "backgroundColor": "#05030f",
+  "android": {
+    "backgroundColor": "#05030f",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "StatusBar": { "overlaysWebView": true, "style": "DARK", "backgroundColor": "#00000000" }
+  }
+}
