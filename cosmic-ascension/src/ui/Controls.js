@@ -32,9 +32,9 @@ export function mountControls(root) {
   const end = e => { if (e.pointerId === id) { id = null; Input.move.x = Input.move.y = 0; knob.style.transform = ''; } };
   joy.addEventListener('pointerup', end); joy.addEventListener('pointercancel', end);
   // glisser dans la moitié droite (hors boutons) = caméra
-  let lx = null; const cam = document.createElement('div'); cam.style.cssText = 'position:absolute;right:0;top:0;width:55%;height:70%'; root.prepend(cam);
-  cam.addEventListener('pointerdown', e => { lx = e.clientX; cam.setPointerCapture(e.pointerId); });
-  cam.addEventListener('pointermove', e => { if (lx != null) { Input.look.x += e.clientX - lx; lx = e.clientX; } });
+  let lx = null, ly = null; const cam = document.createElement('div'); cam.style.cssText = 'position:absolute;right:0;top:0;width:55%;height:70%'; root.prepend(cam);
+  cam.addEventListener('pointerdown', e => { lx = e.clientX; ly = e.clientY; cam.setPointerCapture(e.pointerId); });
+  cam.addEventListener('pointermove', e => { if (lx != null) { Input.look.x += e.clientX - lx; Input.look.y += e.clientY - ly; lx = e.clientX; ly = e.clientY; } });
   cam.addEventListener('pointerup', () => lx = null);
   bus.on('space:near', ({ planet, canLand }) => { hint.textContent = canLand ? `⏎ Atterrir sur ${planet.name}` : `${planet.name}`; });
   bus.on('scene:entered', ({ id, planet }) => { if (id === 'planet') hint.textContent = `${planet.name} — ⏎ pour décoller · ✦ évoluer (debug)`; });

@@ -8,7 +8,7 @@ import { Assets } from '../assets/AssetLibrary.js';
 export class Hero {
   constructor() {
     this.root = new THREE.Group(); this.body = new THREE.Group(); this.root.add(this.body);
-    this.stage = -1; this.t = 0; this.speed = 0; this.parts = {};
+    this.stage = -1; this.t = 0; this.speed = 0; this.parts = {}; this.baseScale = 1; this.scaleMul = 1; this.lift = 0; this.spin = 0; this._sp = 0; this._air = 0;
     this.glow = new THREE.PointLight('#7fd0ff', 1.2, 14); this.root.add(this.glow); this.glow.position.y = .6;
     this.setStage(0);
   }
@@ -19,7 +19,7 @@ export class Hero {
     const model = Assets.get('hero_' + st.id);
     if (model) { this.body.add(model); }
     else this._buildProcedural(st, i);
-    this.root.scale.setScalar(st.scale); this.glow.color.set(st.glow); this.glow.intensity = 1 + i * .5;
+    this.baseScale = st.scale; this.root.scale.setScalar(st.scale); this.glow.color.set(st.glow); this.baseGlow = 1 + i * .5; this.glow.intensity = this.baseGlow; this.glow.distance = 10 + st.scale * 6;
   }
   _buildProcedural(st, i) {
     const mat = toonMaterial({ color: st.color, rim: st.glow, rimStrength: .8 });
@@ -37,18 +37,27 @@ export class Hero {
     if (i >= 4) { const h = new THREE.Mesh(new THREE.TorusGeometry(.45, .04, 8, 32), glowMat); h.position.y = 1.5; h.rotation.x = Math.PI / 2; this.body.add(h); this.parts.halo = h; }
     if (i >= 5) { const core = new THREE.Mesh(new THREE.IcosahedronGeometry(.25, 1), new THREE.MeshBasicMaterial({ color: '#fff' })); core.position.y = .65; core.position.z = .1; this.body.add(core); this.parts.core = core; }
   }
-  // speed01: 0 immobile → 1 course. airborne: bool
-  animate(dt, speed01, airborne) {
-    this.t += dt; const t = this.t, b = this.body;
-    const bob = Math.sin(t * (3 + speed01 * 9)) * (.03 + speed01 * .06);
-    b.position.y = airborne ? .15 : bob; b.scale.set(1 + (airborne ? -.08 : -bob), 1 + (airborne ? .15 : bob * 1.5), 1 + (airborne ? -.08 : -bob));
-    b.rotation.z = Math.sin(t * 9) * .08 * speed01;
+  // speed01: 0 immobile → 1 course. airborne: bool. Squash & stretch, inclinaison, pas, respiration; lift/spin/scaleMul pilotés par les cinématiques.
+  animate(dt, speed01, airborne, vUp = 0) {
+    this.t += dt; const t = this.t, b = this.body, k = Math.min(1, dt * 10);
+    this._sp += (speed01 - this._sp) * k; const sp = this._sp;
+    if (this._air && !airborne) this._land = 1;                       // écrasement à l'atterrissage
+    this._air = airborne ? 1 : 0; this._land = Math.max(0, (this._land || 0) - dt * 5);
+    const stride = t * (4 + sp * 10), bob = Math.abs(Math.sin(stride)) * sp * .12 + Math.sin(t * 2.2) * .02;
+    const stretch = airborne ? THREE.MathUtils.clamp(vUp * .03, -.18, .25) : -this._land * .3 + bob * .5;
+    b.position.y = (airborne ? .1 : bob) + this.lift / this.baseScale;
+    b.scale.set(1 - stretch * .6, 1 + stretch, 1 - stretch * .6);
+    b.rotation.set(sp * .28, this.spin, Math.sin(stride) * .07 * sp);
     for (const s of [-1, 1]) {
-      const f = this.parts['foot' + s]; if (f) f.position.z = .08 + Math.sin(t * 11 + (s > 0 ? Math.PI : 0)) * .15 * speed01;
-      const w = this.parts['wing' + s]; if (w) w.rotation.z = (-1.1 + Math.sin(t * 5) * .25) * s;
+      const ph = stride + (s > 0 ? Math.PI : 0);
+      const f = this.parts['foot' + s]; if (f) { f.position.z = .08 + Math.sin(ph) * .2 * sp; f.position.y = .1 + Math.max(0, Math.cos(ph)) * .14 * sp + (airborne ? -.05 : 0); }
+      const a = this.parts['arm' + s]; if (a) { a.rotation.x = -Math.sin(ph) * .9 * sp; a.rotation.z = (-.6 - (airborne ? .9 : 0)) * s; }
+      const w = this.parts['wing' + s]; if (w) w.rotation.z = (-1.1 + Math.sin(t * (airborne ? 14 : 5)) * .3) * s;
     }
     if (this.parts.halo) this.parts.halo.rotation.z = t * 2;
     if (this.parts.core) this.parts.core.scale.setScalar(1 + Math.sin(t * 6) * .2);
-    if (this.parts.tail) this.parts.tail.scale.y = 1 + Math.sin(t * 12) * .15;
+    if (this.parts.tail) { this.parts.tail.scale.y = 1 + Math.sin(t * 12) * .15 + sp * .6; this.parts.tail.rotation.y = Math.sin(t * 3) * .2; }
+    this.root.scale.setScalar(this.baseScale * this.scaleMul);
+    if (!this.lift) this.glow.intensity += (this.baseGlow - this.glow.intensity) * k;
   }
 }

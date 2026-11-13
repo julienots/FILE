@@ -1,68 +1,125 @@
 import * as THREE from 'three';
 import { Input } from '../core/Input.js';
 import { bus } from '../core/EventBus.js';
+import { State } from '../core/State.js';
 import { createNebula } from '../render/shaders/Nebula.js';
 import { createStars } from '../render/shaders/Stars.js';
-import { buildPlanet } from '../world/PlanetFactory.js';
+import { createSkyDome } from '../render/shaders/SkyDome.js';
+import { buildPlanet, disposePlanet } from '../world/PlanetFactory.js';
+import { scatterProps } from '../world/Props.js';
 import { getPlanet } from '../data/planets.js';
+import { EVOLUTIONS } from '../data/evolutions.js';
 import { Hero } from '../entities/Hero.js';
-import { State } from '../core/State.js';
+import { Particles } from '../vfx/Particles.js';
+import { EvolutionFX } from '../vfx/EvolutionFX.js';
 
-// Exploration à pied sur une petite planète sphérique (style "galaxie"): gravité radiale, caméra alignée sur la normale.
+const V = () => new THREE.Vector3();
+const SUN = new THREE.Vector3(200, 300, 150).normalize();
+// Exploration à pied sur une planète sphérique: gravité radiale, caméra alignée sur la normale, eau, végétation, collectes.
 export class PlanetScene {
   constructor(ctx) {
     this.ctx = ctx; this.scene = new THREE.Scene(); this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
-    this.scene.add(new THREE.HemisphereLight('#bfe3ff', '#5a3d7a', 0.55));
-    const sun = new THREE.DirectionalLight('#fff2d8', 1.3); sun.position.set(200, 300, 150); this.scene.add(sun);
+    this.hemi = new THREE.HemisphereLight('#cfe9ff', '#6a4d8a', 0.75); this.scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight('#fff2d8', 1.3); this.sun.position.copy(SUN).multiplyScalar(500); this.scene.add(this.sun);
     this.hero = new Hero(); this.scene.add(this.hero.root);
-    this.up = new THREE.Vector3(0, 1, 0); this.fwd = new THREE.Vector3(0, 0, -1); this.vh = 0; this.h = 0; this.ground = true;
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ color: '#0a0620', transparent: true, opacity: .32, depthWrite: false }));
+    this.shadow.renderOrder = 3; this.scene.add(this.shadow);
+    this.particles = new Particles(700); this.scene.add(this.particles.points);
+    this.evo = new EvolutionFX(this.scene, this.particles);
+    this.stars = createStars(3000); this.scene.add(this.stars); this.sky = createSkyDome(); this.scene.add(this.sky); this.sky.material.uniforms.uSun.value.copy(SUN);
+    // pickups: orbes de poussière cosmique (instanciés)
+    this.orbs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.28, 1), new THREE.MeshBasicMaterial({ color: '#fff3a0' }), 64); this.orbs.frustumCulled = false; this.scene.add(this.orbs);
+    this.orbData = [];
+    // état
+    this.dir = V().set(0, 1, 0); this.fwd = V().set(0, 0, -1); this.face = V().set(0, 0, -1); this.vh = 0; this.alt = 0; this.ground = true; this.camPitch = .5; this.stepT = 0;
+    this._a = V(); this._b = V(); this._c = V(); this._d = V(); this._e = V(); this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._s = V();
+    bus.on('hero:evolved', ({ stage }) => { if (this.active && stage !== this.hero.stage) this.evo.play(this.hero, stage); });
   }
   enter({ id = 'home' } = {}) {
-    if (this.planet) this.scene.remove(this.planet);
-    for (const o of [this.nebula, this.stars]) o && this.scene.remove(o);
-    this.def = getPlanet(id); this.planet = buildPlanet({ ...this.def, seed: this.def.seed }, 5); this.planet.position.set(0, 0, 0); this.scene.add(this.planet);
-    // vu depuis la surface: pas de coque d'atmosphère/nuages (voile), on utilise un brouillard teinté
-    for (const n of ['atmo', 'clouds']) { const o = this.planet.getObjectByName(n); if (o) o.visible = false; }
-    this.scene.fog = new THREE.FogExp2(this.def.atmosphere?.color ?? "#8fd0ff", 0.0011);
-    this.nebula = createNebula({ seed: this.def.seed }); this.scene.add(this.nebula); this.stars = createStars(3500); this.scene.add(this.stars);
+    this.active = true;
+    for (const o of [this.planet, this.props, this.nebula]) if (o) { this.scene.remove(o); disposePlanet(o); }
+    const def = this.def = getPlanet(id); this.planet = buildPlanet(def, { surface: true }); this.scene.add(this.planet);
+    const water = this.planet.getObjectByName('water'); if (water) water.material.uniforms.uSun.value.copy(SUN);
+    const sc = scatterProps(this.planet); this.props = sc.group; this.colliders = sc.colliders; this.scene.add(this.props);
+    const atmo = def.atmosphere?.color ?? '#8fd0ff';
+    this.scene.fog = new THREE.FogExp2(atmo, 0.9 / (def.radius * 6)); this.sky.material.uniforms.uC.value.set(atmo); this.hemi.color.set(atmo).lerp(new THREE.Color('#fff'), .6);
+    this.nebula = createNebula({ seed: def.seed }); this.scene.add(this.nebula);
     this.hero.setStage(State.data.hero.stage);
-    this.dir = new THREE.Vector3(0, 1, 0.2).normalize(); this.fwd.set(0, 0, -1); this.vh = 0; this.h = 0;
-    bus.emit('scene:entered', { id: 'planet', planet: this.def });
+    // point d'apparition: première terre émergée proche du pôle
+    const P = this.planet.userData; this.dir.set(0.15, 1, 0.25).normalize();
+    for (let i = 0; i < 200 && P.sample(this.dir) - P.sea < .04; i++) this.dir.set(Math.sin(i * 2.4) * i * .02, 1, Math.cos(i * 2.4) * i * .02).normalize();
+    this.fwd.set(0, 0, -1).addScaledVector(this.dir, -this.fwd.dot(this.dir)).normalize(); this.face.copy(this.fwd); this.vh = 0; this.alt = 0;
+    // orbes
+    this.orbData.length = 0; let s = def.seed * 131 + 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 400 && this.orbData.length < 48; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u), d = V().set(r * Math.cos(t), u, r * Math.sin(t));
+      if (P.sample(d) - P.sea > .02) this.orbData.push({ id: `${def.id}:dust:${this.orbData.length}`, dir: d, r: P.heightAt(d) + 1.1, ph: rnd() * 6, alive: true }); }
+    this.orbs.count = this.orbData.length;
+    this.camera.position.copy(this.dir).multiplyScalar(P.heightAt(this.dir) + 30);
+    bus.emit('scene:entered', { id: 'planet', planet: def }); bus.emit('planet:enter', { id: def.id });
   }
-  exit() {}
+  exit() { this.active = false; bus.emit('planet:leave', { id: this.def.id }); }
+
   update(dt, t) {
-    const R = this.planet.userData.radius, hero = this.hero, m = Input.move;
-    this.up.copy(this.dir);
-    // repère caméra: "avant" caméra projeté dans le plan tangent
-    const camFwd = this.fwd.clone().addScaledVector(this.up, -this.fwd.dot(this.up)).normalize();
-    const right = new THREE.Vector3().crossVectors(camFwd, this.up).normalize();
-    const mv = camFwd.clone().multiplyScalar(m.y).addScaledVector(right, m.x), sp = Math.min(1, mv.length());
-    const scale = hero.root.scale.x, speed = 7 * Math.sqrt(scale);
+    const P = this.planet.userData, R = P.radius, hero = this.hero, m = Input.move, up = this.dir, { _a, _b, _c, _d, _e } = this;
+    const cine = this.evo.update(dt, up), scale = hero.baseScale;
+    // repère tangent caméra
+    const camFwd = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize(), right = _b.crossVectors(camFwd, up).normalize();
+    const mv = _c.copy(camFwd).multiplyScalar(cine ? 0 : m.y).addScaledVector(right, cine ? 0 : m.x); let sp = Math.min(1, mv.length());
+    const groundR0 = Math.max(P.heightAt(up), P.seaRadius - .35 * scale), wading = groundR0 > P.heightAt(up) + .01;
+    const speed = 7.5 * Math.sqrt(scale) * (Input.buttons.boost ? 1.6 : 1) * (wading ? .65 : 1);
     if (sp > .05) {
-      mv.normalize(); const ang = (speed * sp * dt) / (R + this.h);
-      const axis = new THREE.Vector3().crossVectors(this.up, mv).normalize();
-      this.dir.applyAxisAngle(axis, ang); this.fwd.applyAxisAngle(axis, ang); this.heroFace = mv.clone();
-    }
+      mv.normalize(); const ang = (speed * sp * dt) / (R + this.alt), axis = _d.crossVectors(up, mv).normalize();
+      up.applyAxisAngle(axis, ang).normalize(); this.fwd.applyAxisAngle(axis, ang); this.face.copy(mv).applyAxisAngle(axis, ang);
+    } else sp = 0;
+    // collisions props (les grandes formes écrasent tout)
+    if (scale < 3) { const hp = _d.copy(up).multiplyScalar(groundR0), hr = .4 * scale;
+      for (let i = 0, cs = this.colliders; i < cs.length; i++) { const c = cs[i], dx = hp.x - c.pos.x, dy = hp.y - c.pos.y, dz = hp.z - c.pos.z, rr = c.r + hr, d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < rr * rr && d2 > 1e-6) { const k = (rr - Math.sqrt(d2)) / Math.sqrt(d2); hp.x += dx * k; hp.y += dy * k; hp.z += dz * k; } }
+      up.copy(hp).normalize(); }
     // saut / gravité radiale
-    if (this.ground && Input.pressed.jump) { this.vh = 9; this.ground = false; }
-    this.vh -= 22 * dt; this.h += this.vh * dt;
-    const gh = this.planet.userData.heightAt(this.dir) - R + 0.0; // hauteur sol relative
-    if (this.h <= gh) { this.h = gh; this.vh = 0; this.ground = true; }
-    // placement + orientation du héros
-    hero.root.position.copy(this.dir).multiplyScalar(R + this.h);
-    const faceDir = (this.heroFace || camFwd).clone().addScaledVector(this.dir, -(this.heroFace || camFwd).dot(this.dir)).normalize();
-    const zAxis = faceDir, yAxis = this.dir, xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();
-    hero.root.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis)), Math.min(1, dt * 12));
-    hero.animate(dt, sp, !this.ground);
-    // caméra: derrière + au-dessus, tourne avec Input.look
-    if (Input.look.x) { this.fwd.applyAxisAngle(this.dir, -Input.look.x * .006); }
-    const dist = 7 * Math.sqrt(scale), want = hero.root.position.clone().addScaledVector(camFwd, -dist).addScaledVector(this.dir, dist * .55);
-    this.camera.position.lerp(want, Math.min(1, dt * 6)); this.camera.up.copy(this.dir).lerp(this.camera.up, .0);
-    this.camera.up.copy(this.dir); this.camera.lookAt(hero.root.position.clone().addScaledVector(this.dir, scale * .8));
-    this.planet.userData.update(dt); this.nebula.position.copy(this.camera.position); this.nebula.userData.update(t);
-    this.stars.position.copy(this.camera.position); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio());
-    if (Input.pressed.action) this.ctx.goto('space', { from: this.def.id });
-    // debug/prototype: évolution rapide
-    if (Input.pressed.special) { const s = State.data.hero; s.stage = (s.stage + 1) % 6; hero.setStage(s.stage); bus.emit('hero:evolved', { stage: s.stage }); }
+    const groundR = Math.max(P.heightAt(up), P.seaRadius - .35 * scale), gAlt = groundR - R;
+    if (!cine && this.ground && Input.pressed.jump) { this.vh = 10 * Math.sqrt(scale); this.ground = false; this._burst(8, scale, '#ffffff'); }
+    this.vh -= 24 * Math.sqrt(scale) * dt; this.alt += this.vh * dt;
+    if (this.alt <= gAlt) { if (!this.ground && this.vh < -4) this._burst(10, scale, wading ? '#bff4ff' : '#ffe9c0'); this.alt = gAlt; this.vh = 0; this.ground = true; } else if (this.alt > gAlt + .05) this.ground = false;
+    // héros: position + orientation
+    hero.root.position.copy(up).multiplyScalar(R + this.alt);
+    const z = _d.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(), x = _e.crossVectors(up, z).normalize();
+    hero.root.quaternion.slerp(this._q.setFromRotationMatrix(this._m.makeBasis(x, up, z)), Math.min(1, dt * 12));
+    hero.animate(dt, sp, !this.ground, this.vh);
+    // ombre blob
+    const sh = this.shadow, hAbove = this.alt - gAlt + hero.lift; sh.position.copy(up).multiplyScalar(groundR + .06); sh.quaternion.setFromUnitVectors(this._s.set(0, 0, 1), up);
+    sh.scale.setScalar(scale * Math.max(.3, 1 - hAbove * .08 / scale)); sh.material.opacity = wading ? 0 : .32 * Math.max(.2, 1 - hAbove * .1 / scale);
+    // particules: pas, éclaboussures, traînée d'énergie
+    this.stepT -= dt * sp;
+    if (this.ground && sp > .4 && this.stepT <= 0) { this.stepT = .09; _e.copy(up).multiplyScalar(1.2 * scale).addScaledVector(z, -1.5 * scale); this.particles.emit(_c.copy(hero.root.position).addScaledVector(up, .1 * scale), _e, wading ? '#bff4ff' : '#bfae9a', (wading ? .5 : .3) * scale, .45, 3, 4); }
+    if (hero.stage >= 2 && Math.random() < .5) { _e.copy(up).multiplyScalar(.6 * scale); this.particles.emit(_c.copy(hero.root.position).addScaledVector(up, (.3 + Math.random() * .6) * scale).addScaledVector(z, -.4 * scale), _e, EVOLUTIONS[hero.stage].glow, .28 * scale, .7, 1, 0); }
+    this.particles.gravityDir.copy(up).negate(); this.particles.update(dt, innerHeight);
+    // orbes: flottement + collecte (aimantation)
+    const hpz = hero.root.position, reach = 1.4 * scale + .6;
+    for (let i = 0; i < this.orbData.length; i++) { const o = this.orbData[i]; if (!o.alive) continue;
+      _c.copy(o.dir).multiplyScalar(o.r + Math.sin(t * 2 + o.ph) * .25); const d = _c.distanceTo(hpz);
+      if (d < reach * 2.5) { o.pull = (o.pull || 0) + dt * 3; _c.lerp(hpz, Math.min(1, o.pull)); }
+      if (d < reach || o.pull > 1) { o.alive = false; this._s.setScalar(0); this._m.compose(_c, this._q.identity(), this._s); this.orbs.setMatrixAt(i, this._m);
+        for (let k = 0; k < 10; k++) this.particles.emit(_c, _e.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(8), '#fff3a0', .35, .5, 3, 0);
+        bus.emit('pickup:collected', { id: o.id, kind: 'cosmicDust', amount: 1 }); continue; }
+      this._m.compose(_c, this._q.identity(), this._s.setScalar(1 + Math.sin(t * 5 + o.ph) * .15)); this.orbs.setMatrixAt(i, this._m); }
+    this.orbs.instanceMatrix.needsUpdate = true;
+    // caméra: orbite tactile, recul selon taille + cinématique
+    if (Input.look.x) this.fwd.applyAxisAngle(up, -Input.look.x * .006);
+    this.camPitch = THREE.MathUtils.clamp(this.camPitch + Input.look.y * .004, .15, 1.3);
+    if (cine) this.fwd.applyAxisAngle(up, dt * .8);
+    const pull = this.evo.camPull, dist = (7.5 + scale * 3.2) * (1 + pull * .5), cf = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize();
+    const want = _c.copy(hero.root.position).addScaledVector(cf, -dist * Math.cos(this.camPitch)).addScaledVector(up, dist * Math.sin(this.camPitch) + scale * .5);
+    const wr = want.length(), minR = Math.max(P.heightAt(_e.copy(want).normalize()), P.seaRadius) + .8; if (wr < minR) want.multiplyScalar(minR / wr);
+    this.camera.position.lerp(want, Math.min(1, dt * 6)); this.camera.up.copy(up); this.camera.lookAt(_e.copy(hero.root.position).addScaledVector(up, scale * (.9 + pull * .6) + hero.lift));
+    // ciel
+    for (const o of [this.nebula, this.stars, this.sky]) o.position.copy(this.camera.position);
+    this.nebula.userData.update(t); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio()); this.sky.material.uniforms.uUp.value.copy(up);
+    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .35 + .45 * day;
+    if (!cine && Input.pressed.action) this.ctx.goto('space', { from: this.def.id });
+    // TEMP (jusqu'à B4): ✦ = évolution de test
+    if (!cine && Input.pressed.special) { const s = State.data.hero; s.stage = (s.stage + 1) % EVOLUTIONS.length; bus.emit('hero:evolved', { stage: s.stage }); }
   }
+  _burst(n, scale, color) { const p = this._c.copy(this.hero.root.position), e = this._e;
+    for (let i = 0; i < n; i++) { const a = i / n * 6.283; e.copy(this._a).multiplyScalar(Math.cos(a)).addScaledVector(this._b, Math.sin(a)).multiplyScalar(4 * scale).addScaledVector(this.dir, 1.5 * scale); this.particles.emit(p, e, color, .35 * scale, .5, 3, 3); } }
 }
