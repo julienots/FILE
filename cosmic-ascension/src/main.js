@@ -1,4 +1,5 @@
 import { Game } from './core/Game.js';
+import { bus } from './core/EventBus.js';
 import { State } from './core/State.js';
 import { Assets } from './assets/AssetLibrary.js';
 import { SpaceScene } from './scenes/SpaceScene.js';
@@ -14,7 +15,7 @@ async function boot() {
   game.register('space', SpaceScene); game.register('planet', PlanetScene);
   mountControls(document.getElementById('ui'));
   initFallback(document.getElementById('ui'));   // systèmes de secours tant que B n'a pas livré (voir core/Fallback.js)
-  window.__game = game;               // debug / tests
+  window.__game = game; window.__bus = bus;               // debug / tests
   game.goto('space', {}); game.start();
 }
 boot();

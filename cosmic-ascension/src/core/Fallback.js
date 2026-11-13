@@ -29,6 +29,11 @@ export function initFallback(root) {
   bus.on('enemy:killed', ({ xp: n = 10 }) => xp(n));
   bus.on('boss:defeated', ({ xp: n = 1500, id }) => { say('BOSS VAINCU !', 4000); xp(n); });
   bus.on('boss:spawn', ({ id }) => say(id === 'devourer' ? '⚠ DÉVOREUR DE PLANÈTES ⚠' : '⚠ SERPENT CÉLESTE ⚠', 3500));
+  const NAMES = { house: 'Maison', greenhouse: 'Serre', lab: 'Laboratoire', forge: 'Forge d’étoiles', hangar: 'Hangar', observatory: 'Observatoire', temple: 'Temple', tower: 'Tour d’énergie' };
+  bus.on('build:request', ({ planetId, slot, buildingId, cost }) => { const inv = State.data.inventory;
+    if (inv.cosmicDust < cost) return say(`Il faut ${cost} ✦ de poussière (tu en as ${inv.cosmicDust})`, 2600);
+    inv.cosmicDust -= cost; State.data.homePlanet.buildings.push({ slot, id: buildingId }); State.data.homePlanet.level = 1 + Math.floor(State.data.homePlanet.buildings.length / 2);
+    bus.emit('build:placed', { planetId, slot, buildingId }); say(`${NAMES[buildingId] ?? buildingId} construit !`); xp(60); State.save(); });
   bus.on('secret:found', ({ xp: n = 100 }) => { say('✧ Secret découvert ✧'); xp(n); });
   bus.on('npc:interact', ({ name, line }) => say(`${name} : « ${line} »`, 4200));
   bus.on('enemy:touch', ({ dmg }) => hurt(dmg, 'enemy'));

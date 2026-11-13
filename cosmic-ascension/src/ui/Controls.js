@@ -38,5 +38,6 @@ export function mountControls(root) {
   cam.addEventListener('pointerup', () => lx = null);
   bus.on('space:near', ({ planet, canLand }) => { hint.textContent = canLand ? `⏎ Atterrir sur ${planet.name}` : `${planet.name}`; });
   bus.on('npc:near', ({ npcId, name }) => { hint.textContent = npcId ? `⏎ Parler à ${name}` : '⏎ décoller · ✸ tirer · ✦ onde de choc'; });
+  bus.on('build:near', ({ slot, cost }) => { hint.textContent = slot != null ? `⏎ Construire ici (${cost} ✦)` : '⏎ décoller · ✸ tirer · ✦ onde de choc'; });
   bus.on('scene:entered', ({ id, planet }) => { if (id === 'planet') hint.textContent = `${planet.name} — ⏎ décoller · ✸ tirer · ✦ onde de choc`; });
 }

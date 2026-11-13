@@ -97,7 +97,7 @@ export class SpaceScene {
     if (this.shake > 0) { const k = this.shake * (.12 + boost * .1); this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
     this.camera.up.set(0, 1, 0).applyQuaternion(this.q); _a.copy(sp).addScaledVector(_f, 30); if (this.awe > 0) _a.lerp(sv.headPos, Math.min(1, this.awe) * Math.min(1, (4 - this.awe) * 2) * .75); this.camera.lookAt(_a);
     this.camera.fov += ((62 + boost * 22) - this.camera.fov) * Math.min(1, dt * 3);
-    this.lines.userData.update(t, Math.max(0, boost - .15));
+    this.lines.userData.update(t, Math.max(0, boost - .15)); this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, boost * 1.2 + this.shake * 2);
     // décor
     const px = this.ctx.renderer.renderer.getPixelRatio();
     for (const o of [this.nebula, this.stars, this.galaxies]) o.position.copy(this.camera.position);

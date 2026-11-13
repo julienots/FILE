@@ -19,7 +19,9 @@ await p.keyboard.down('ShiftLeft'); await p.waitForTimeout(1500); await p.screen
 await p.waitForTimeout(2500); await p.keyboard.up('ShiftLeft'); await p.keyboard.press('KeyE'); await p.waitForTimeout(1900); await p.screenshot({ path: 'tests/out/arrive.png' });
 console.log('scene:', await p.evaluate(() => window.__game.currentName)); await p.waitForTimeout(2500);
 await p.keyboard.press('KeyE'); await p.waitForTimeout(2200); await p.screenshot({ path: 'tests/out/takeoff.png' }); console.log('scene:', await p.evaluate(() => window.__game.currentName));
-await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(3000);
+await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(2000);
+await p.evaluate(async () => { const g = window.__game.current; for (const s of g.base.slots.slice(0, 5)) g.base.slots && window.__bus.emit('build:placed', { planetId: 'home', slot: s.i, buildingId: ['house', 'greenhouse', 'lab', 'forge', 'temple'][g.base.count() % 5] }); g.camPitch = .5; }); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/homebase.png' });
+await p.waitForTimeout(500);
 await p.screenshot({ path: 'tests/out/planet.png' });
 for (const id of ['ember', 'glacio', 'sylva']) { await p.evaluate((id) => window.__game.goto('planet', { id }), id); await p.waitForTimeout(1500); await p.screenshot({ path: `tests/out/planet-${id}.png` }); }
 await p.evaluate(() => { const g = window.__game.current, n = g.structs.npcs[0], t = n.dir.clone().cross({ x: 0, y: 1, z: 0 }).normalize(); g.dir.copy(n.dir).addScaledVector(t, .035).normalize(); g.fwd.copy(t).negate(); g.face.copy(g.fwd); g.camPitch = .28; }); await p.waitForTimeout(1500);
