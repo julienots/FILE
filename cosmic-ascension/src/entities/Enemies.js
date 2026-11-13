@@ -6,17 +6,17 @@ import { bus } from '../core/EventBus.js';
 // Ennemis au sol (poolés) + projectiles du héros. Fournit le rendu, l'animation et une IA de secours (errance/poursuite/contact).
 // B (systems/combat) peut reprendre la main: `enemy:order {uid, order:'die'|'stun'}` et écouter `enemy:hit`, `enemy:touch`, `enemy:killed`.
 const TYPES = {
-  slime: { color: '#b45cff', rim: '#ffb0ff', hp: 3, speed: 3.2, size: 1, sight: 20, model: 'enemy_slime' },
-  scarab: { color: '#2fd6c0', rim: '#b0fff0', hp: 5, speed: 4.5, size: 1.3, sight: 26, model: 'enemy_scarab' },
-  brute: { color: '#8a7a6a', rim: '#ffd0a0', hp: 14, speed: 2.2, size: 3, sight: 30, model: 'enemy_brute' },
+  slime: { color: '#3a1460', rim: '#d070ff', hp: 3, speed: 3.2, size: 1, sight: 20, model: 'enemy_slime' },
+  scarab: { color: '#0e3a44', rim: '#3affe0', hp: 5, speed: 4.5, size: 1.3, sight: 26, model: 'enemy_scarab' },
+  brute: { color: '#2a2228', rim: '#ff7a3a', hp: 14, speed: 2.2, size: 3, sight: 30, model: 'enemy_brute' },
 };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
 function makeBody(type) {
   const T = TYPES[type], g = new THREE.Group(), model = Assets.get(T.model);
   if (model) { model.scale.multiplyScalar(T.size); g.add(model); return g; }
-  const mat = toonMaterial({ color: T.color, rim: T.rim, rimStrength: .8 });
+  const mat = toonMaterial({ color: T.color, rim: T.rim, rimStrength: 1.3 });
   const b = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), mat); b.position.y = .5; b.scale.set(1.1, .85, 1.1); addOutline(b, '#1a0f33', .04); g.add(b);
-  const white = new THREE.MeshBasicMaterial({ color: '#fff' }), red = new THREE.MeshBasicMaterial({ color: '#ff2a4a' });
+  const white = new THREE.MeshBasicMaterial({ color: '#ff2a4a' }), red = new THREE.MeshBasicMaterial({ color: '#ff2a4a' });
   for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.15, 10, 8), white); e.position.set(.24 * s, .62, .46); const p = new THREE.Mesh(new THREE.SphereGeometry(.08, 8, 6), red); p.position.z = .1; e.add(p); g.add(e);
     const brow = new THREE.Mesh(new THREE.BoxGeometry(.3, .07, .08), new THREE.MeshBasicMaterial({ color: '#1a0f33' })); brow.position.set(.24 * s, .8, .52); brow.rotation.z = -.5 * s; g.add(brow);
     if (type !== 'slime') { const h = new THREE.Mesh(new THREE.ConeGeometry(.12, .5, 6), red); h.position.set(.35 * s, 1.1, 0); h.rotation.z = -.5 * s; g.add(h); } }

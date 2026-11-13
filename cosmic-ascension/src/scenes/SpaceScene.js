@@ -20,8 +20,8 @@ const SUN_POS = new THREE.Vector3(600, 400, 300).normalize().multiplyScalar(3600
 export class SpaceScene {
   constructor(ctx) {
     this.ctx = ctx; this.scene = new THREE.Scene(); this.camera = new THREE.PerspectiveCamera(62, 1, 0.5, 14000); this.scene.add(this.camera);
-    this.scene.add(new THREE.AmbientLight('#8a8cff', 0.45));
-    this.sunLight = new THREE.DirectionalLight('#fff3dc', 1.25); this.sunLight.position.copy(SUN_POS); this.scene.add(this.sunLight);
+    this.scene.add(new THREE.AmbientLight('#7a7cff', 0.4));
+    this.sunLight = new THREE.DirectionalLight('#ffe8c8', 1.7); this.sunLight.position.copy(SUN_POS); this.scene.add(this.sunLight);
     this.nebula = createNebula(); this.stars = createStars(Config.qualityPresets[Config.quality.level].stars); this.galaxies = createGalaxies();
     this.scene.add(this.nebula, this.stars, this.galaxies);
     this.sun = createSun(); this.sun.position.copy(SUN_POS); this.scene.add(this.sun);

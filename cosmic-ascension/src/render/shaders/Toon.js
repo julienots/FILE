@@ -6,7 +6,7 @@ export const shaderTime = { value: 0 };
 let ramp;
 function getRamp(steps = 4) {
   if (ramp) return ramp;
-  const d = new Uint8Array(steps); for (let i = 0; i < steps; i++) d[i] = Math.round(255 * (0.3 + 0.7 * i / (steps - 1)));
+  const d = new Uint8Array(steps); for (let i = 0; i < steps; i++) d[i] = [64, 118, 184, 255][i] ?? 255;   // ombres profondes (direction artistique sombre)
   ramp = new THREE.DataTexture(d, steps, 1, THREE.RedFormat); ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.needsUpdate = true;
   return ramp;
 }
@@ -30,12 +30,12 @@ export function toonMaterial({ color = '#ffffff', vertexColors = false, rim = '#
         transformed.x += sin(uTime * 1.7 + swPh) * swW; transformed.z += cos(uTime * 1.3 + swPh * 1.3) * swW;`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uRim; uniform float uRimP,uRimS; varying vec3 vObjP;' + (detail ? NOISE_GLSL : ''))
-      .replace('#include <color_fragment>', '#include <color_fragment>' + (detail ? `
+      .replace('#include <color_fragment>', '#include <color_fragment>\n        diffuseColor.rgb = pow(diffuseColor.rgb, vec3(1.12));' + (detail ? `
         float dn = vnoise(vObjP * .45) * .6 + vnoise(vObjP * 1.6) * .4;   // taches peintes (2 échelles, posterisées)
         diffuseColor.rgb *= .9 + .2 * smoothstep(.42, .46, dn) + .08 * step(.62, vnoise(vObjP * 4.2));` : ''))
       .replace('#include <opaque_fragment>', `
         float rimF = pow(1.0 - saturate(dot(normalize(vViewPosition), normal)), uRimP);
-        outgoingLight += uRim * rimF * uRimS * (0.35 + 0.65 * saturate(dot(normal, directionalLights[0].direction) + .4));
+        outgoingLight += uRim * rimF * uRimS * 1.3 * (0.3 + 0.7 * saturate(dot(normal, directionalLights[0].direction) + .4));
         #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'toon-rim-sway' + (detail ? '-d' : '');

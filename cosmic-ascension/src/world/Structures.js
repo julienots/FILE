@@ -7,16 +7,16 @@ import { Assets } from '../assets/AssetLibrary.js';
 // Sans data → village, ruines et monolithe secret placés de façon déterministe. Renvoie {group, colliders, npcs, secrets, update(dt,t,heroPos)}.
 export const latLonToDir = (lat, lon, out = new THREE.Vector3()) => { const a = THREE.MathUtils.degToRad(lat), o = THREE.MathUtils.degToRad(lon); return out.set(Math.cos(a) * Math.cos(o), Math.sin(a), Math.cos(a) * Math.sin(o)); };
 const BIOME = {
-  meadow: { wall: '#fff1d6', roof: '#ff7a5a', stone: '#b9b4c8', folk: '#ffd76a', glow: '#6ff2ff', lines: ['Bienvenue sur Pépin, petit grain d’étoile !', 'On dit qu’un serpent géant nage entre les mondes…', 'Ramasse la poussière cosmique: elle te fera grandir.'] },
-  volcanic: { wall: '#5a3540', roof: '#ff8a3a', stone: '#3a2630', folk: '#ff6a3a', glow: '#ffb02e', lines: ['La lave ? On s’y baigne le dimanche.', 'Les brutes de roche gardent les cristaux de braise.', 'Tu brilles plus fort qu’hier, étranger.'] },
-  ice: { wall: '#e4f4ff', roof: '#7fb8ff', stone: '#bcd6ea', folk: '#aef4ff', glow: '#ffffff', lines: ['Brrr… même les étoiles gèlent ici.', 'Les anciens ont laissé un monolithe. Touche-le.', 'Ton vaisseau tient le coup dans ce froid ?'] },
-  jungle: { wall: '#f3e6d0', roof: '#c45cff', stone: '#7a6a9a', folk: '#7ee88a', glow: '#ff7ad8', lines: ['Sylva-Mère t’observe par chaque spore.', 'Les champignons chantent quand un dieu naît.', 'Méfie-toi des scarabées, ils adorent ce qui brille.'] },
+  meadow: { wall: '#4a4660', roof: '#1f2a4a', stone: '#6a6680', folk: '#2a2440', glow: '#6ff2ff', lines: ['Bienvenue sur Pépin, petit grain d’étoile !', 'On dit qu’un serpent géant nage entre les mondes…', 'Ramasse la poussière cosmique: elle te fera grandir.'] },
+  volcanic: { wall: '#3a2228', roof: '#1a1014', stone: '#3a2630', folk: '#2a1418', glow: '#ffb02e', lines: ['La lave ? On s’y baigne le dimanche.', 'Les brutes de roche gardent les cristaux de braise.', 'Tu brilles plus fort qu’hier, étranger.'] },
+  ice: { wall: '#6a7a94', roof: '#24385a', stone: '#8a9ab4', folk: '#1c2a40', glow: '#ffffff', lines: ['Brrr… même les étoiles gèlent ici.', 'Les anciens ont laissé un monolithe. Touche-le.', 'Ton vaisseau tient le coup dans ce froid ?'] },
+  jungle: { wall: '#3c3450', roof: '#4a1a6a', stone: '#5a4a7a', folk: '#1e1a34', glow: '#ff7ad8', lines: ['Sylva-Mère t’observe par chaque spore.', 'Les champignons chantent quand un dieu naît.', 'Méfie-toi des scarabées, ils adorent ce qui brille.'] },
 };
 function hut(B) { const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.9, 2.2, 10), toonMaterial({ color: B.wall, rim: B.glow, rimStrength: .3 })); base.position.y = 1.1; g.add(base);
   const roof = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 6, 0, 6.283, 0, Math.PI / 2), toonMaterial({ color: B.roof, rim: '#ffffff', rimStrength: .4 })); roof.position.y = 2.1; roof.scale.y = .85; g.add(roof);
   const door = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.3, .2), toonMaterial({ color: '#5a3a2a' })); door.position.set(0, .65, 1.82); g.add(door);
-  const win = new THREE.Mesh(new THREE.CircleGeometry(.32, 12), new THREE.MeshBasicMaterial({ color: '#ffe9a0' })); win.position.set(.95, 1.4, 1.52); win.rotation.y = .55; g.add(win);
+  const win = new THREE.Mesh(new THREE.CircleGeometry(.32, 12), new THREE.MeshBasicMaterial({ color: B.glow })); win.position.set(.95, 1.4, 1.52); win.rotation.y = .55; g.add(win);
   const chim = new THREE.Mesh(new THREE.CylinderGeometry(.22, .26, 1.2, 6), toonMaterial({ color: B.stone })); chim.position.set(-.9, 3.6, 0); g.add(chim);
   g.userData.r = 2.2; return g; }
 function ruin(B) { const g = new THREE.Group(), st = toonMaterial({ color: B.stone, rim: B.glow, rimStrength: .4, flatShading: true });
@@ -32,10 +32,12 @@ function monolith(B) { const g = new THREE.Group();
   g.userData.r = 2.6; g.userData.crystal = m; return g; }
 function villager(B, i, key) { const g = new THREE.Group(), model = key && Assets.get(key);
   if (model) { g.add(model); } else {
-    const mat = toonMaterial({ color: new THREE.Color(B.folk).offsetHSL(i * .07, 0, 0), rim: B.glow, rimStrength: .7 });
+    const mat = toonMaterial({ color: new THREE.Color(B.folk).offsetHSL(i * .04, 0, 0), rim: B.glow, rimStrength: 1.2 });
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(.62, 1.1, 10), mat); hood.position.set(0, 2.05, -.12); hood.rotation.x = -.25; g.add(hood);
+    const robe = new THREE.Mesh(new THREE.ConeGeometry(.7, 1.5, 10), mat); robe.position.y = .75; g.add(robe);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(.42, .7, 6, 12), mat); body.position.y = .8; addOutline(body, '#1a0f33', .03); g.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(.48, 14, 12), mat); head.position.y = 1.75; addOutline(head, '#1a0f33', .03); g.add(head);
-    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 8), new THREE.MeshBasicMaterial({ color: '#10101a' })); e.position.set(.18 * s, 1.82, .42); g.add(e);
+    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.1, 8, 8), new THREE.MeshBasicMaterial({ color: B.glow })); e.position.set(.17 * s, 1.8, .43); e.scale.set(1.3, .45, .6); e.rotation.z = .3 * s; g.add(e);
       const ear = new THREE.Mesh(new THREE.ConeGeometry(.12, .5, 6), mat); ear.position.set(.34 * s, 2.25, 0); ear.rotation.z = -.4 * s; g.add(ear); }
     const hat = new THREE.Mesh(new THREE.ConeGeometry(.3, .35, 8), new THREE.MeshBasicMaterial({ color: B.glow })); hat.position.y = 2.38; if (i % 2) g.add(hat); }
   const mark = new THREE.Mesh(new THREE.OctahedronGeometry(.18), new THREE.MeshBasicMaterial({ color: '#ffe46a' })); mark.position.y = 3; g.add(mark); g.userData.mark = mark; return g; }
@@ -75,7 +77,7 @@ export function buildStructures(planet) {
 }
 // Nuages bas-poly vus du sol (1 draw call), en orbite lente.
 export function buildSkyClouds(planet, color = '#ffffff') {
-  const P = planet.userData, n = 46, geo = new THREE.IcosahedronGeometry(1, 1), mesh = new THREE.InstancedMesh(geo, new THREE.MeshToonMaterial({ color, emissive: color, emissiveIntensity: .35, transparent: true, opacity: .92 }), n * 3);
+  const P = planet.userData, n = 46, geo = new THREE.IcosahedronGeometry(1, 1), mesh = new THREE.InstancedMesh(geo, new THREE.MeshToonMaterial({ color: new THREE.Color(color).multiplyScalar(.7), emissive: color, emissiveIntensity: .12, transparent: true, opacity: .9 }), n * 3);
   let s = P.def.seed * 71 + 5; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647, m = new THREE.Matrix4(), q = new THREE.Quaternion(), d = new THREE.Vector3(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), t = new THREE.Vector3();
   for (let i = 0; i < n; i++) { const u = rnd() * 2 - 1, a = rnd() * 6.283, r = Math.sqrt(1 - u * u); d.set(r * Math.cos(a), u, r * Math.sin(a)); q.setFromUnitVectors(up, d); const alt = P.radius * (1 + P.relief) + 22 + rnd() * 22, big = 5 + rnd() * 7;
     t.set(1, 0, 0).applyQuaternion(q);

@@ -29,4 +29,5 @@ Biome au choix, bâtiments (≥20: laboratoire, serre, forge d'étoiles, hangar,
 Gauche: joystick. Droite: Action (contextuel), Saut, Boost/Esquive, Capacité (✦), Attaque. Glisser à droite = caméra. Tout gros, gaucher possible.
 
 ## Direction visuelle
+**Mise à jour: ton sombre et stylé** — fonds sombres, ombres profondes, accents néon (cyan, magenta, or), silhouettes à contre-jour, pas de pastel ni de mignon. Le reste de ce paragraphe s'applique dans ce ton.
 Toon 4 tons + rim light, contours épais sur héros/créatures, couleurs saturées, nébuleuses fbm, bloom doux, atmosphères fresnel, cartoon (pas de photoréalisme). Chaque planète lisible en 1 coup d'œil (une teinte dominante + une accent). Effets de capacités: formes simples, grosses, très lumineuses.

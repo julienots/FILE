@@ -11,7 +11,7 @@ export class Ship {
     this.flame.rotation.x = -Math.PI / 2; this.flame.position.z = 2.1; this.root.add(this.flame);
   }
   _procedural() {
-    const hull = toonMaterial({ color: '#f2f5ff', rim: '#7fd0ff' }), accent = toonMaterial({ color: '#ff5a8a', rim: '#ffb0cc' });
+    const hull = toonMaterial({ color: '#2a2c48', rim: '#6ff2ff', rimStrength: 1.3 }), accent = toonMaterial({ color: '#6a1438', rim: '#ff5a9a', rimStrength: 1.2, emissive: '#ff2a6a', emissiveIntensity: .35 });
     const body = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), hull); body.scale.set(.9, .55, 2); addOutline(body, '#1a0f33', .04); this.root.add(body);
     const cock = new THREE.Mesh(new THREE.SphereGeometry(.5, 14, 10), new THREE.MeshToonMaterial({ color: '#59d7ff' })); cock.position.set(0, .4, -.5); this.root.add(cock);
     for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(2, .12, 1.1), accent); w.position.set(1.3 * s, -.05, .6); w.rotation.z = .12 * s; this.root.add(w); }
