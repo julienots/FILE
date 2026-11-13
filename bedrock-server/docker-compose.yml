@@ -1,0 +1,28 @@
+services:
+  bedrock:
+    image: itzg/minecraft-bedrock-server:latest
+    container_name: bedrock
+    ports:
+      - "19132:19132/udp"
+    environment:
+      EULA: "TRUE"                  # accepte l'EULA Minecraft (https://minecraft.net/eula)
+      VERSION: "${VERSION:-LATEST}"
+      SERVER_NAME: "${SERVER_NAME:-Mon serveur Bedrock}"
+      LEVEL_NAME: "${LEVEL_NAME:-Bedrock level}"
+      GAMEMODE: "${GAMEMODE:-survival}"
+      DIFFICULTY: "${DIFFICULTY:-normal}"
+      MAX_PLAYERS: "${MAX_PLAYERS:-3}"
+      ALLOW_CHEATS: "${ALLOW_CHEATS:-false}"
+      ONLINE_MODE: "true"
+      TEXTUREPACK_REQUIRED: "true"  # force les joueurs à charger les packs de ressources
+      VIEW_DISTANCE: "${VIEW_DISTANCE:-10}"
+      TICK_DISTANCE: "${TICK_DISTANCE:-4}"
+      ALLOW_LIST: "${ALLOW_LIST:-false}"
+      ALLOW_LIST_USERS: "${ALLOW_LIST_USERS:-}"   # pseudos Xbox séparés par des virgules
+      OPS: "${OPS:-}"                              # XUID des admins
+      TZ: "Europe/Paris"
+    volumes:
+      - ./data:/data
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
