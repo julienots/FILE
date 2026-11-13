@@ -164,7 +164,7 @@ test('dialogue: take/give d’objets (forge)', () => {
 
 // ── Combat ──
 test('combat: apparition, IA (aggro→attaque→dégâts), mort ennemi + butin', () => {
-  fresh(); Combat.rnd = () => .5; const orders = []; const off = bus.on('enemy:order', o => orders.push(o.order));
+  fresh(); Combat.authoritative = true; Combat.rnd = () => .5; const orders = []; const off = bus.on('enemy:order', o => orders.push(o.order));
   bus.emit('planet:enter', { id: 'home' }); eq(Combat.enemies.size, 4);
   const e = [...Combat.enemies.values()][0];
   bus.emit('enemy:sense', { uid: e.uid, dist: 5 }); Combat.tick(.1); eq(e.state, 'chase');
@@ -173,7 +173,7 @@ test('combat: apparition, IA (aggro→attaque→dégâts), mort ennemi + butin',
   ok(orders.includes('move') && orders.includes('attack'), 'ordres');
   let killed = null; const off2 = bus.on('enemy:killed', k => killed = k);
   for (let i = 0; i < 20 && Combat.enemies.has(e.uid); i++) bus.emit('enemy:hit', { uid: e.uid, source: 'attack' });
-  ok(killed && killed.uid === e.uid, 'tué'); ok(State.data.inventory.cosmicDust > 0, 'butin'); off(); off2(); Combat.rnd = Math.random;
+  ok(killed && killed.uid === e.uid, 'tué'); ok(State.data.inventory.cosmicDust > 0, 'butin'); off(); off2(); Combat.rnd = Math.random; Combat.authoritative = false;
 });
 test('combat: esquive (i-frames), mort et réapparition', () => {
   fresh(); State.data.hero.abilities.push('dash');
@@ -185,6 +185,21 @@ test('combat: esquive (i-frames), mort et réapparition', () => {
 test('combat: capacité refusée sans énergie, résistances', () => {
   fresh(); State.data.hero.abilities.push('starbolt'); State.data.hero.energy = 0;
   ok(!Combat.cast('starbolt'), 'énergie'); ok(!Combat.cast('supernova'), 'verrouillée');
+});
+test('combat compat (A fait autorité): touch → dégâts data, killed → butin + XP selon niveau, starbolt gratuit', () => {
+  fresh(); Combat.rnd = () => 0; bus.emit('planet:enter', { id: 'ember' }); eq(Combat.enemies.size, 0, 'pas d’ennemis fantômes');
+  const hp = State.data.hero.hp; bus.emit('enemy:touch', { uid: 1, type: 'magmaSlime', dmg: 99, pos: {} });
+  eq(hp - State.data.hero.hp, Combat.enemyDmg('magmaSlime'), 'dégâts de la data');
+  const xp = State.data.hero.xp; bus.emit('enemy:killed', { uid: 1, type: 'magmaSlime', pos: {}, xp: 9999 });
+  ok(State.data.inventory.items.emberCore === 1, 'butin'); ok(State.data.hero.xp - xp < 500, 'XP de la data, pas du moteur');
+  const fails = []; const off = bus.on('ability:fail', f => fails.push(f)); const en = State.data.hero.energy;
+  bus.emit('hero:ability', { id: 'starbolt' }); eq(fails.length, 0); eq(State.data.hero.energy, en, 'attaque de base gratuite'); off(); Combat.rnd = Math.random;
+});
+test('boss du moteur: serpent → ouroboros (quête + récompense unique)', () => {
+  fresh(); State.data.quests.active.main_4_titans = { step: 3, n: 0 }; const xp = State.data.hero.xp;
+  bus.emit('boss:defeated', { id: 'serpent', xp: 1500 }); bus.emit('boss:defeated', { id: 'serpent', xp: 1500 });
+  ok(Quests.isDone('main_4_titans'), 'étape boss validée'); ok(State.data.world.flags.serpent_defeated, 'flag');
+  ok(State.data.hero.xp - xp >= 2500 && State.data.hero.xp - xp < 5000, 'récompense une fois');
 });
 test('boss: phases, point faible, récompenses et flags', () => {
   fresh(); const phases = []; const off = bus.on('boss:phase', p => phases.push(p.phase));

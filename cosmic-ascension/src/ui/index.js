@@ -15,9 +15,10 @@ export function mountUI(root) {
   const controls = mountControls(root);
   let screens;
   const hud = mountHud(root, { onPause: () => screens.pause() });
-  const playing = (v) => { hud.show(v); controls.show(v); };
+  let cfx = null;
+  const playing = (v) => { hud.show(v); controls.show(v); cfx?.show(v); };
   screens = mountScreens(root, { onPlay: () => { playing(true); bus.emit('game:start'); }, onQuit: () => playing(false) });
-  mountCombatFx(root, hud);
+  cfx = mountCombatFx(root, hud);
   mountDialogueBox(root, { onOpen: (open) => controls.show(!open) });
   playing(false); screens.title();
   // bouton retour Android / Échap = pause

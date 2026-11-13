@@ -3,6 +3,7 @@ import { State } from '../core/State.js';
 import { QUESTS } from '../data/quests.js';
 import { getPlanet } from '../data/planets.js';
 import { addItem } from './Combat.js';
+import { bossId } from '../data/bosses.js';
 
 // Moteur de quêtes (B3). Étapes pilotées par le bus. Types d'étape:
 // visit{target planet} · discover{target} · talk{target npcId} · collect{kind, count} (pickups) · item{target itemId, count} (inventaire)
@@ -92,7 +93,7 @@ export function initQuests() {
   bus.on('enemy:killed', ({ type }) => Q.progress('kill', st => (st.target === 'any' || st.target === type) && (!st.planet || st.planet === State.data.world.location)));
   bus.on('hero:evolved', ({ stage }) => { for (const id of Object.keys(Q.s.active)) if (Q.step(id)?.type === 'evolve' && stage >= Q.step(id).count) Q.advance(id); Q.autoStart(); });
   bus.on('world:flag', ({ flag }) => { Q.progress('flag', st => st.target === flag); Q.autoStart(); });
-  bus.on('boss:defeated', ({ id }) => Q.progress('boss', st => st.target === id));
+  bus.on('boss:defeated', ({ id }) => Q.progress('boss', st => st.target === bossId(id)));
   bus.on('quest:start', ({ id }) => Q.start(id));
   bus.on('quest:track', ({ id }) => Q.track(id));
   bus.on('state:loaded', () => Q.emitTracked());

@@ -68,6 +68,7 @@ export function initProgression() {
     if (kind === 'cosmicDust' || kind === 'dust') { s.inventory.cosmicDust += BALANCE.dustPerPickup * amount; kind = 'dust'; }
     const base = (BALANCE.xp.pickup[kind] ?? 2) * amount; gainXp(xpFor(base, dangerOf()), 'pickup');
   });
+  // enemy:killed: Combat (enregistré avant) complète `level` en mode compat
   bus.on('enemy:killed', ({ level = 1 }) => { d().stats.kills++; gainXp(xpFor(BALANCE.xp.killBase * level, dangerOf()), 'kill'); });
   bus.on('quest:done', ({ xp }) => gainXp(xp ?? BALANCE.xp.questBase, 'quest'));
   bus.on('world:flag', () => gainXp(0, 'quest')); // un flag peut débloquer un stade verrouillé

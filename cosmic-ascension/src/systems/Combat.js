@@ -12,6 +12,9 @@ import { ITEMS } from '../data/items.js';
 const DMG_TYPE = { starbolt: 'star', shockwave: 'star', supernova: 'star', starforge: 'star', bigBang: 'star', gravity: 'void', blackHole: 'void', nebulaVeil: 'void' };
 
 export const Combat = {
+  // authoritative=false: A simule les ennemis (entities/Enemies.js, PV + IA) → B ne fait que dégâts héros, butin, combos, capacités.
+  // authoritative=true: B possède PV/IA et ordonne via enemy:spawn/order (contrat ARCHITECTURE). Basculé quand A le supporte.
+  authoritative: false,
   enemies: new Map(), cds: {}, t: 0, combo: 0, comboT: 0, iframes: 0, lastHurt: -99, paused: false, dead: false, uid: 1, planet: null,
   rnd: Math.random,
 
@@ -55,8 +58,17 @@ export const Combat = {
     const loot = [];
     for (const [id, ch, a, b] of e.E.loot || []) if (this.rnd() < ch) { const n = a + Math.floor(this.rnd() * (b - a + 1)); loot.push([id, n]); addItem(id, n); }
     bus.emit('enemy:killed', { uid: e.uid, type: e.type, pos: e.pos, level: e.level, elite: !!e.E.elite, loot });
-    if (loot.length) bus.emit('ui:toast', { text: loot.map(([id, n]) => `+${n} ${ITEMS[id]?.icon ?? ''} ${ITEMS[id]?.name ?? id}`).join('  '), kind: 'loot' });
+    lootToast(loot);
   },
+  // ennemi tué par le moteur (mode compat): butin selon data/enemies.js
+  rollLoot(type) {
+    const E = ENEMIES[type], loot = []; if (!E) return loot;
+    for (const [id, ch, a, b] of E.loot || []) if (this.rnd() < ch) { const n = a + Math.floor(this.rnd() * (b - a + 1)); loot.push([id, n]); addItem(id, n); }
+    lootToast(loot); return loot;
+  },
+  levelOf(type) { return (ENEMIES[type]?.level ?? 1) + (this.planet?.danger ?? getPlanet(State.data.world.location)?.danger ?? 0); },
+  enemyDmg(type, fallback) { const E = ENEMIES[type]; return E ? Math.round(E.dmg * (1 + BALANCE.enemyLevel * (this.levelOf(type) - 1))) : fallback; },
+  comboHit() { this.combo = this.comboT > 0 ? this.combo + 1 : 1; this.comboT = BALANCE.comboWindow; if (this.combo > 1) bus.emit('combat:combo', { n: this.combo }); },
 
   // ── capacités ──
   cast(id) {
@@ -134,6 +146,7 @@ export const Combat = {
   },
   cooldown(id) { const A = ABILITIES[id]; return A?.cd ? (this.cds[id] ?? 0) / A.cd : 0; },
 };
+function lootToast(loot) { if (loot.length) bus.emit('ui:toast', { text: loot.map(([id, n]) => `+${n} ${ITEMS[id]?.icon ?? ''} ${ITEMS[id]?.name ?? id}`).join('  '), kind: 'loot' }); }
 function fail(id, reason) { bus.emit('ability:fail', { id, reason }); return false; }
 function clampLat(v) { return Math.max(-85, Math.min(85, v)); }
 function wrapLon(v) { return ((v + 540) % 360) - 180; }
@@ -144,11 +157,19 @@ export function addItem(id, n = 1) {
 }
 
 export function initCombat({ autoTick = true } = {}) {
-  bus.on('planet:enter', ({ id }) => Combat.spawnPlanet(id));
-  bus.on('planet:leave', () => { Combat.clear(); Combat.planet = null; });
-  bus.on('enemy:sense', e => Combat.sense(e));
-  bus.on('enemy:hit', e => Combat.hit(e));
-  bus.on('hero:ability', ({ id } = {}) => Combat.cast(id));
+  const C = Combat;
+  bus.on('planet:enter', ({ id }) => { C.planet = getPlanet(id); if (C.authoritative) C.spawnPlanet(id); });
+  bus.on('planet:leave', () => { C.clear(); C.planet = null; });
+  bus.on('enemy:sense', e => C.authoritative && C.sense(e));
+  bus.on('enemy:hit', e => C.authoritative ? C.hit(e) : C.comboHit());
+  // mode compat: le moteur a tué l'ennemi → butin + niveau (pour l'XP), sans ré-émettre enemy:killed
+  bus.on('enemy:killed', e => { if (!C.authoritative && !e.loot) { e.level ??= C.levelOf(e.type); e.loot = C.rollLoot(e.type); } });
+  bus.on('enemy:touch', ({ type, dmg }) => C.hurt(C.enemyDmg(type, dmg), type));
+  bus.on('boss:hit-hero', ({ id, dmg }) => C.hurt(dmg, id));
+  bus.on('ship:bump', ({ speed = 0 }) => C.hurt(Math.round(2 + speed * .03), 'bump'));
+  // capacités: en compat, A déclenche déjà l'effet (attaque de base = 'starbolt') → B ne fait que consommer l'énergie, sans refus
+  bus.on('hero:ability', ({ id } = {}) => { if (C.authoritative) return C.cast(id); const A = ABILITIES[id], h = State.data.hero;
+    if (A && id !== 'starbolt' && A.cost) { h.energy = Math.max(0, h.energy - A.cost); C.cds[id] = A.cd; bus.emit('hero:stats', h); } });
   bus.on('hero:fell', () => Combat.hurt(State.data.hero.maxHp * .2, 'fall'));
   bus.on('game:pause', () => Combat.paused = true); bus.on('game:resume', () => Combat.paused = false);
   bus.on('dialogue:start', () => Combat.paused = true); bus.on('dialogue:end', () => Combat.paused = false);

@@ -9,6 +9,7 @@ export const CSS = `
 #ui .layer>*{pointer-events:auto}
 #ui .noev,#ui .noev *{pointer-events:none!important}
 .hidden{display:none!important}
+#ui .screens{z-index:20}#ui .cfx{z-index:5}#ui .dlg{z-index:10}
 .txt-out{text-shadow:0 .3vmin 0 var(--ink),0 0 1.4vmin rgba(0,0,0,.5)}
 
 /* ── HUD ── */

@@ -3,7 +3,7 @@ export const BALANCE = {
   xp: {
     discoverPlanet: 25,   // première approche en vaisseau
     firstLanding: 75,     // premier atterrissage sur une planète
-    pickup: { dust: 2, crystal: 8, relic: 30, creature: 40, artifact: 60 },
+    pickup: { dust: 4, crystal: 8, relic: 30, creature: 40, artifact: 60 },
     killBase: 10,         // × niveau ennemi
     questBase: 120,
     dangerMult: [1, 1.3, 1.7, 2.2, 3], // selon planet.danger 0..4

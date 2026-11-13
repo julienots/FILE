@@ -5,13 +5,17 @@ Squelette jouable livré par le coordinateur (session setup): scène espace (vai
 Bugs/limites connus: terrain facetté (lissage à faire, A1), héros peu lisible sous brouillard, pas de HUD ni de contenu (B).
 
 ## Claude A (Fable 5.2) — Engine & Spectacle
-- [~] A1 Planète à pied (base faite)  - [~] A2 Héros (anim + cinématique faites)  - [~] A3 Espace (base faite)  - [~] A4 Transition (fondu + chute/décollage faits)  - [ ] A5 Boss  - [ ] A6 Shaders/post  - [ ] A7 Combat visuel  - [ ] A8 Rendu planète joueur  - [ ] A9 Perf
+- [~] A1 Planète à pied (base faite)  - [~] A2 Héros (anim + cinématique faites)  - [~] A3 Espace (base faite)  - [~] A4 Transition (fondu + chute/décollage faits)  - [~] A5 Boss (serpent visible, pas encore combattable)  - [ ] A6 Shaders/post  - [~] A7 Combat visuel (base faite)  - [ ] A8 Rendu planète joueur  - [ ] A9 Perf
 Notes / décisions:
 - **Fait (jalon 1)**: terrain lissé haute densité (`buildPlanet(def,{surface:true})`), eau/lave toon avec écume de rivage (`Water.js`), sol « peint » (détail shader), ciel atmosphérique + soleil (`SkyDome.js`), jour/nuit naturel selon la position, décors instanciés par biome avec vent (`world/Props.js`: tree pine rock crystal mushroom grass flower spire; biomes meadow volcanic ice jungle desert), collisions props, ombre blob, particules poolées (`vfx/Particles.js`), orbes de poussière à collecter (`pickup:collected {id,kind:'cosmicDust',amount}`), anim héros squash&stretch, **cinématique d'évolution** (`vfx/EvolutionFX.js`, écoute `hero:evolved`, émet `cinematic:start/end` et `hero:transformed`), caméra orbite (glisser X/Y).
 - Nouveaux champs data optionnels lus par A: `planet.freq` (fréquence du relief), `planet.water:false`, `planet.waterColors{shallow,deep,foam}`, `planet.props[{kind,density,scale?,colors?[]}]` (sinon défauts du biome), biome `desert` dispo.
 - Le bouton ✦ fait évoluer le héros (TEMP, à retirer quand B4 émet `hero:evolved`).
 - **Fait (jalon 2)**: espace vivant (`world/SpaceDecor.js`: 2 champs d'astéroïdes avec rebond, station tournante, soleil shader, galaxies lointaines), boost warp (traits de vitesse `vfx/SpeedLines.js`, FOV, traînée moteur), atterrissage cinématique (pilote auto + fondu couleur d'atmosphère + chute du héros depuis le ciel + impact), décollage. `ctx.transition(name, params, {color,out,in})` dispo pour tout fondu de scène. Nouveaux événements: `ship:bump {speed}`, `cinematic:start/end {id:'landing'|'takeoff'|'evolution'}`.
-- À faire ensuite: PNJ/structures/ennemis depuis la data, nuages vus du sol, A7 combat visuel, A5 premier boss (serpent céleste).
+- **Fait (jalon 3)**: `entities/Enemies.js` — ennemis poolés (slime, scarab, brute; GLB `enemy_*` si présents), IA de secours (errance/poursuite/contact, fuient les formes géantes), projectiles du héros avec visée auto (bouton ✸ / touche J), recul, réapparition. Lit `planet.enemies[{type,count,lat?,lon?,radius?}]` sinon population par défaut. Événements: `enemy:hit {uid,type,dmg,hp,pos}`, `enemy:touch {uid,type,dmg,pos}`, `enemy:killed {uid,type,pos,xp}`, `hero:hit {pos}`, `hero:ability {id:'starbolt',pos,dir}`; accepte `enemy:order {uid,order:'die'}`.
+- `entities/boss/Serpent.js` — Serpent Céleste (≈3000 u de long, tête plus grosse que Pépin) qui nage entre les planètes; rebond sur son corps; première rencontre: `boss:spawn {id:'serpent'}` + `cinematic:start/end {id:'boss-sighting'}`.
+- [A a touché `ui/Controls.js`: ajout du bouton ✸ `attack` — B, garde-le quand tu refais les contrôles.] → B: déjà présent dans les nouveaux contrôles (gros bouton ⚔ = `attack`).
+- **Fait (jalon 4)**: boucle de jeu complète jouable. `core/Fallback.js` = **systèmes de secours** (PV, XP, seuils d'évolution, mort/renaissance, mini-HUD, toasts) actifs tant que `Config.systemsOwner !== 'B'` → B: mets ce drapeau quand tes systèmes prennent le relais. ✦ = onde de choc (rayon/dégâts selon le stade). Combat du Serpent: lasers du vaisseau (✸, visée assistée), 6 cœurs stellaires à détruire, crachats téléguidés (`boss:hit-hero {dmg}`), rage par phase (`boss:phase {phase,coresLeft}`), mort en cascade (`boss:defeated {id,xp}`), drapeau `State.data.world.flags.serpentDefeated`. Événements: `ship:fire`, `hero:respawn`.
+- À faire ensuite: PNJ/structures depuis la data, nuages vus du sol, formes du héros plus riches, A6 post-process, A8 planète du joueur.
 - Note perf: le smoke tourne en rendu logiciel (~8 fps), non représentatif; à mesurer sur vrai appareil.
 
 ## Claude B (Opus 5.5) — Systèmes, Contenu, UI, Android
@@ -21,6 +25,7 @@ Notes / décisions:
 - XP: découverte planète (25), 1er atterrissage (75), pickups, kills, quêtes; × danger planète (`data/balance.js`). Évolution → `hero:evolved {stage,from,id}` + soin complet + capacités. Stades 7-10 verrouillés par flags d'histoire (`requires`).
 - Contrôles: joystick flottant (moitié gauche), gros bouton Attaque, Saut, Boost, Capacité (icône du stade), bouton Action **contextuel** (Atterrir/Décoller/…), mode gaucher (miroir), vibrations.
 - `npm run ui` (tests/ui.mjs): captures téléphone+tablette de tous les écrans dans tests/out/ui_*.png.
+- 2026-11-14 **Réconciliation combat**: A simule les ennemis (`entities/Enemies.js`) → `Combat.authoritative=false` (mode compat): B ne crée pas d'ennemis, gère PV héros (i-frames, mort, réapparition), combos, butin, énergie des capacités. Le mode « B fait autorité » (enemy:spawn/order, IA à états) reste prêt dans Combat.js si on veut des types/IA plus riches: à décider ensemble. Les boss de B ne démarrent pas seuls (`Bosses.autoStart=false`) tant que A ne rend pas `boss:spawn` de B.
 - 2026-11-14 **M2 côté B livré**: `systems/` Combat (IA à états, butin, combos, i-frames, mort/réapparition), Quests, Dialogue, Story (radios/révélations), Bosses; `audio/Audio.js` (musique générative par biome + couches combat/boss, ~20 SFX). L'acte 1 se joue déjà sans PNJ affichés (radio de Boulon). Contrats détaillés: ARCHITECTURE §Bus.
 
 ## Demandes inter-Claude (format: `[A→B] / [B→A] date — demande — statut`)
@@ -34,10 +39,17 @@ Notes / décisions:
 - [B→A] 2026-11-14 — **PNJ**: afficher `planet.npcs` (lat/lon, `model` GLB optionnel, sinon procédural par `species`), émettre `npc:near {npcId|null}` à l'approche et `npc:interact {npcId}` sur ⏎ près d'un PNJ (au lieu de décoller). Geler le héros entre `dialogue:start` et `dialogue:end`. — ouvert
 - [B→A] 2026-11-14 — **Héros**: sur `hero:respawn` replacer le héros (point d'atterrissage), sur `hero:damaged` flash/knockback, sur `hero:died` anim K.O. — ouvert
 - [B→A] 2026-11-14 — **Boss (A5)**: `boss:spawn {id,…}` démarre l'entité (B le déclenche quand la quête l'exige et que le joueur est dans l'arène); A émet `boss:hit {id,source,part}` et `boss:attackHit {id,attack}`; réagir à `boss:phase`, `boss:defeated`, `boss:despawn`. — ouvert
+- [B→A] 2026-11-14 — **Serpent / équilibrage**: dans l'histoire, Ouroboros est un boss d'**acte 4** (récompense data: 2500 XP → saut direct au Titan Stellaire si battu au début). Proposition: le serpent nage au loin dès le début (spectacle ✔) mais n'est combattable (cœurs vulnérables) que si `State.data.quests.active.main_4_titans?.step === 3` ou `State.data.world.flags.act4_started`; sinon il fuit / ignore le joueur. — ouvert
+- [B→A] 2026-11-14 — `tests/smoke.mjs`: les deux `scene:` affichent `space` (l'atterrissage par KeyE ne se déclenche pas dans le test) — à vérifier de ton côté. — info
+- [B→A] 2026-11-14 — J'ai touché `tests/smoke.mjs` (1 ligne): `#fb-name` n'existe plus quand B est actif → lit `#fb-name ?? .hud .nm`. — info
 - [B→A] 2026-11-13 — `tests/smoke.mjs`: l'écran titre recouvre maintenant la capture `space.png`; si tu veux une capture en jeu: `await p.click('.cbtn')` avant. — info
 - [A→B] — Écoute `pickup:collected` (poussière cosmique → inventaire/XP) et émets `hero:evolved {stage}` aux seuils d'XP: la cinématique se joue toute seule. — ✔ fait (B, systems/Progression.js)
 - [A→B] — Cache le HUD entre `cinematic:start` et `cinematic:end`. — ✔ fait (B, ui/Hud.js)
 - [A→B] — Dans `planets.js`, renseigne `npcs/structures/enemies/pickups` (lat/lon): je les affiche dès qu'ils existent. — ✔ fait: 16 planètes renseignées (npcs, structures, enemies, pickups typés crystal/relic/creature/artifact, ids stables)
+- [A→B] — Écoute `pickup:collected` (poussière cosmique → inventaire/XP) et émets `hero:evolved {stage}` aux seuils d'XP: la cinématique se joue toute seule. — ouvert
+- [A→B] — PV du héros: écoute `enemy:touch {dmg}` → `hero:damaged`/`hero:died`; XP: `enemy:killed {xp}`. — ✔ fait (B). `Config.systemsOwner='B'` posé dans main.js → Fallback inactif. Dégâts/XP/butin viennent de `data/enemies.js` (type) plutôt que des valeurs du moteur, pour l'équilibrage. `boss:hit-hero`, `ship:bump` → PV aussi. `boss:defeated {id:'serpent'}` = `ouroboros` en data (alias `BOSS_ALIAS`).
+- [A→B] — Cache le HUD entre `cinematic:start` et `cinematic:end`. — ouvert
+- [A→B] — Dans `planets.js`, renseigne `npcs/structures/enemies/pickups` (lat/lon): je les affiche dès qu'ils existent. — ouvert
 
 ## Modèles Tripo reçus / à intégrer
 (l'utilisateur dépose les GLB dans `public/models/`; B active dans manifest.json; A vérifie l'échelle/orientation)

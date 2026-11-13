@@ -14,6 +14,7 @@ for (const vp of [{ name: 'phone', width: 915, height: 412 }, { name: 'tablet', 
   const shot = async n => { const f = `tests/out/ui_${vp.name}_${n}.png`; await p.screenshot({ path: f }); shots.push(f); };
   const emit = (ev, data) => p.evaluate(([e, d]) => window.__bus.emit(e, d), [ev, data]);
   const wait = ms => p.waitForTimeout(ms);
+  const skipDialogues = async () => { for (let i = 0; i < 20 && await p.isVisible('.dlg'); i++) { const c = await p.$('.dl-choice'); if (c && await c.isVisible()) await c.click(); else await p.click('.dl-card'); await wait(200); } };
   await p.goto('http://localhost:4174/'); await p.evaluate(() => localStorage.clear()); await p.reload(); await wait(3000);
   await shot('01_title');
   await p.click('.cbtn'); await wait(3200); await shot('02_dialogue');
@@ -24,6 +25,7 @@ for (const vp of [{ name: 'phone', width: 915, height: 412 }, { name: 'tablet', 
   await emit('combat:combo', { n: 4 }); await emit('hero:damaged', { amount: 30, hp: 20, maxHp: 100 }); await wait(250); await shot('04_planet_combat');
   await emit('boss:spawn', { id: 'lab_warden', name: 'Le Gardien Prime', title: 'Geôlier du Laboratoire', hp: 900, maxHp: 900 });
   await emit('boss:damaged', { hp: 400, maxHp: 900 }); await emit('boss:phase', { phase: 1 }); await wait(400); await shot('05_boss');
+  await wait(5500); await skipDialogues();
   await emit('boss:despawn', {}); await emit('quest:start', { id: 'side_lost_pipion' }); await emit('inventory:changed', {});
   await p.evaluate(() => { const i = JSON.parse(localStorage.getItem('cosmic-ascension-save-v1') || '{}'); });
   await p.keyboard.press('Escape'); await wait(500); await shot('06_pause');

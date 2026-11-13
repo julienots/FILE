@@ -1,6 +1,6 @@
 import { bus } from '../core/EventBus.js';
 import { State } from '../core/State.js';
-import { BOSSES } from '../data/bosses.js';
+import { BOSSES, bossId } from '../data/bosses.js';
 import { QUESTS } from '../data/quests.js';
 import { Combat, addItem } from './Combat.js';
 import { setFlag } from './Quests.js';
@@ -10,6 +10,9 @@ import { setFlag } from './Quests.js';
 // A → B: `boss:hit {id, source, part?}`, `boss:attackHit {id, attack}` (le héros est touché). B → A: `boss:spawn`, `boss:phase`, `boss:damaged`, `boss:defeated`, `boss:despawn`.
 export const Bosses = {
   cur: null,
+  autoStart: false, // true quand A rendra les boss démarrés par B (boss:spawn de B); sinon A lance ses boss lui-même
+  // boss vaincu côté moteur (ex. serpent): récompenses de data/bosses.js, une seule fois
+  external(id) { const k = bossId(id), B = BOSSES[k]; if (!B || this.cur?.id === k || State.data.world.flags['boss_' + k]) return; this.cur = { id: k, B, hp: 0, phase: 0, ext: true }; this.defeat(true); },
   start(id) {
     const B = BOSSES[id]; if (!B || this.cur || State.data.world.flags['boss_' + id]) return false;
     this.cur = { id, B, hp: B.hp, phase: 0 };
@@ -27,11 +30,11 @@ export const Bosses = {
     return dmg;
   },
   attackHit({ attack }) { const c = this.cur; if (c) Combat.hurt(c.B.dmg * (attack === 'devourPlanet' || attack === 'genesisBeam' ? 2 : 1), c.id); },
-  defeat() {
+  defeat(external = false) {
     const c = this.cur; this.cur = null; const r = c.B.rewards || {};
     setFlag('boss_' + c.id);
     for (const [it, n] of r.items || []) addItem(it, n);
-    bus.emit('boss:defeated', { id: c.id, name: c.B.name });
+    if (!external) bus.emit('boss:defeated', { id: c.id, name: c.B.name });
     bus.emit('hero:xp', { amount: r.xp ?? 0, reason: 'kill' });
     for (const f of r.flags || []) setFlag(f);
     State.save();
@@ -46,10 +49,11 @@ export const Bosses = {
 };
 export function initBosses() {
   let timer = null;
-  const tryStart = (arena) => { clearTimeout(timer); const id = Bosses.pending(arena); if (id) timer = setTimeout(() => Bosses.start(id), arena === 'space' ? 6000 : 4000); };
+  const tryStart = (arena) => { clearTimeout(timer); if (!Bosses.autoStart) return; const id = Bosses.pending(arena); if (id) timer = setTimeout(() => Bosses.start(id), arena === 'space' ? 6000 : 4000); };
   bus.on('scene:entered', ({ id, planet }) => { Bosses.abort(); tryStart(id === 'planet' ? planet?.id : 'space'); });
   bus.on('quest:progress', () => { if (!Bosses.cur) tryStart(State.data.world.location); });
   bus.on('boss:hit', e => Bosses.hit(e));
+  bus.on('boss:defeated', ({ id }) => { if (!Bosses.cur || Bosses.cur.id !== bossId(id)) Bosses.external(id); });
   bus.on('boss:attackHit', e => Bosses.attackHit(e));
   bus.on('boss:start', ({ id }) => Bosses.start(id));
   bus.on('hero:died', () => Bosses.cur && setTimeout(() => Bosses.abort(), 2000));

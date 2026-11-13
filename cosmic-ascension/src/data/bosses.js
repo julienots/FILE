@@ -1,6 +1,9 @@
 // Boss cosmiques (B: stats/phases/récompenses; A: entités géantes `entities/boss/` + cinématiques).
 // phases: seuils de PV (fraction restante) où le boss change de pattern. attacks: ids que A télégraphie/anime.
 // weakPoints: ids de points faibles (A les place; `enemy:hit {uid, part}` × mult). arena: planète ou 'space'.
+// ids émis par le moteur (A) → ids de données
+export const BOSS_ALIAS = { serpent: 'ouroboros' };
+export const bossId = (id) => BOSS_ALIAS[id] ?? id;
 export const BOSSES = {
   lab_warden: { name: 'Le Gardien Prime', title: 'Geôlier du Laboratoire', arena: 'lab', scale: 12, hp: 900, dmg: 18, act: 1,
     phases: [{ at: 1, attacks: ['laserSweep', 'droneSwarm'] }, { at: .5, attacks: ['laserSweep', 'overload', 'droneSwarm'] }],
