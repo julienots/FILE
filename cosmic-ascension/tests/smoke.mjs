@@ -21,6 +21,8 @@ await p.keyboard.press('KeyE'); await p.waitForTimeout(2200); await p.screenshot
 await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(3000);
 await p.screenshot({ path: 'tests/out/planet.png' });
 for (const id of ['ember', 'glacio', 'sylva']) { await p.evaluate((id) => window.__game.goto('planet', { id }), id); await p.waitForTimeout(1500); await p.screenshot({ path: `tests/out/planet-${id}.png` }); }
+await p.evaluate(() => { const g = window.__game.current, n = g.structs.npcs[0], t = n.dir.clone().cross({ x: 0, y: 1, z: 0 }).normalize(); g.dir.copy(n.dir).addScaledVector(t, .035).normalize(); g.fwd.copy(t).negate(); g.face.copy(g.fwd); g.camPitch = .28; }); await p.waitForTimeout(1500);
+if (await p.evaluate(() => !!window.__game.current.nearNpc)) await p.keyboard.press('KeyE'); else console.log('WARN: pas de PNJ proche'); await p.waitForTimeout(700); await p.screenshot({ path: 'tests/out/village.png' });
 await p.evaluate(() => { const g = window.__game.current, e = g.enemies.list[0]; e.dir.copy(g.dir).applyAxisAngle(g.fwd.clone().cross(g.dir).normalize(), -.05); e.home.copy(e.dir); }); await p.keyboard.down('KeyJ'); await p.waitForTimeout(900); await p.screenshot({ path: 'tests/out/combat.png' }); await p.keyboard.up('KeyJ');
 await p.keyboard.press('KeyK'); await p.waitForTimeout(500); await p.screenshot({ path: 'tests/out/shockwave.png' }); await p.waitForTimeout(4500); await p.screenshot({ path: 'tests/out/evolved4.png' });
 console.log('fps~', await p.evaluate(() => new Promise(r => { let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 > 1500 ? r(Math.round(n / 1.5)) : requestAnimationFrame(f); }; f(); })));

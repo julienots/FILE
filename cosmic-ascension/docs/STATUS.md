@@ -15,7 +15,8 @@ Notes / décisions:
 - `entities/boss/Serpent.js` — Serpent Céleste (≈3000 u de long, tête plus grosse que Pépin) qui nage entre les planètes; rebond sur son corps; première rencontre: `boss:spawn {id:'serpent'}` + `cinematic:start/end {id:'boss-sighting'}`.
 - [A a touché `ui/Controls.js`: ajout du bouton ✸ `attack` — B, garde-le quand tu refais les contrôles.]
 - **Fait (jalon 4)**: boucle de jeu complète jouable. `core/Fallback.js` = **systèmes de secours** (PV, XP, seuils d'évolution, mort/renaissance, mini-HUD, toasts) actifs tant que `Config.systemsOwner !== 'B'` → B: mets ce drapeau quand tes systèmes prennent le relais. ✦ = onde de choc (rayon/dégâts selon le stade). Combat du Serpent: lasers du vaisseau (✸, visée assistée), 6 cœurs stellaires à détruire, crachats téléguidés (`boss:hit-hero {dmg}`), rage par phase (`boss:phase {phase,coresLeft}`), mort en cascade (`boss:defeated {id,xp}`), drapeau `State.data.world.flags.serpentDefeated`. Événements: `ship:fire`, `hero:respawn`.
-- À faire ensuite: PNJ/structures depuis la data, nuages vus du sol, formes du héros plus riches, A6 post-process, A8 planète du joueur.
+- **Fait (jalon 5)**: `world/Structures.js` — villages (huttes), habitants animés qui se tournent vers le héros (⏎ = parler → `npc:interact {npcId,name,line}`; proximité → `npc:near {npcId|null,name}`), ruines, monolithe secret (`secret:found {id,planet,xp}`), nuages vus du sol, particules d'ambiance par biome, vaisseau garé au point d'arrivée. Lit `planet.structures[{kind:'hut'|'ruin'|'monolith',lat,lon,scale?}]` et `planet.npcs[{id,name,species?,lat,lon,model?,line?}]`; sans data → génération déterministe par défaut. GLB `npc_<species|biome>` utilisés s'ils existent.
+- À faire ensuite: formes du héros plus riches, A6 post-process, A8 planète du joueur, autres boss.
 - Note perf: le smoke tourne en rendu logiciel (~8 fps), non représentatif; à mesurer sur vrai appareil.
 
 ## Claude B (Opus 5.5) — Systèmes, Contenu, UI, Android
