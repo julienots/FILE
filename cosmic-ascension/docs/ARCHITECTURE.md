@@ -41,7 +41,8 @@ Lire **uniquement** `Input.move{x,y}`, `Input.look{x,y}`, `Input.buttons`, `Inpu
 | `npc:interact` | A | `{npcId}` | B dialogues |
 | `dialogue:start/end` | B | `{npcId}` | A (gèle le joueur, caméra) |
 | `quest:started/progress/done` | B | `{id,…}` | UI, A (marqueurs) |
-| `pickup:collected` | A | `{id,kind}` | B inventaire/quêtes |
+| `hero:transformed` | A | `{stage}` (instant du flash) | B audio/UI |
+| `pickup:collected` | A | `{id,kind,amount}` | B inventaire/quêtes |
 | `boss:spawn/phase/defeated` | A/B | `{id,phase?}` | tous |
 | `cinematic:start/end` | A | `{id}` | B (cache HUD) |
 | `build:placed/removed` | B | `{planetId,slot,buildingId}` | A rendu |

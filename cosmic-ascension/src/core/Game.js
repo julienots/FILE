@@ -2,6 +2,7 @@ import { createRenderer } from '../render/createRenderer.js';
 import { Input } from './Input.js';
 import { Quality } from './Quality.js';
 import { bus } from './EventBus.js';
+import { shaderTime } from '../render/shaders/Toon.js';
 // Boucle principale + gestion des scènes. ctx = { renderer, goto(name, params), scenes, quality }
 export class Game {
   constructor(canvas) {
@@ -15,7 +16,7 @@ export class Game {
   }
   start() { this.ctx.renderer.resize(); requestAnimationFrame(this._loop.bind(this)); }
   _loop(now) {
-    const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.t += dt;
+    const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.t += dt; shaderTime.value = this.t;
     const sc = this.current;
     if (sc) {
       const cam = sc.camera; cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();

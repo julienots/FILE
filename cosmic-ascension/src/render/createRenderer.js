@@ -13,7 +13,7 @@ export function createRenderer(canvas) {
     renderer,
     setScene(scene, camera) {
       renderPass = new RenderPass(scene, camera);
-      bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.7, 0.55, 0.82);
+      bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.55, 0.5, 0.9);
       composer = new EffectComposer(renderer); composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
       api.applyQuality();
     },

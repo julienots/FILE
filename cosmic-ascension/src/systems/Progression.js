@@ -61,11 +61,12 @@ export function initProgression() {
       if (!w.visited.includes(planet.id)) { w.visited.push(planet.id); gainXp(xpFor(BALANCE.xp.firstLanding, planet.danger), 'landing'); }
     } else if (id === 'space') w.location = 'space';
   });
-  bus.on('pickup:collected', ({ id, kind }) => {
+  // A émet {id, kind:'cosmicDust', amount} pour les orbes; les autres kinds (crystal, relic, creature, artifact) viennent de planet.pickups.
+  bus.on('pickup:collected', ({ id, kind, amount = 1 }) => {
     const s = d(); if (id && s.world.collected.includes(id)) return;
     if (id) s.world.collected.push(id); s.stats.pickups++;
-    if (kind === 'dust') s.inventory.cosmicDust += BALANCE.dustPerPickup;
-    const base = BALANCE.xp.pickup[kind] ?? 2; gainXp(xpFor(base, dangerOf()), 'pickup');
+    if (kind === 'cosmicDust' || kind === 'dust') { s.inventory.cosmicDust += BALANCE.dustPerPickup * amount; kind = 'dust'; }
+    const base = (BALANCE.xp.pickup[kind] ?? 2) * amount; gainXp(xpFor(base, dangerOf()), 'pickup');
   });
   bus.on('enemy:killed', ({ level = 1 }) => { d().stats.kills++; gainXp(xpFor(BALANCE.xp.killBase * level, dangerOf()), 'kill'); });
   bus.on('quest:done', ({ xp }) => gainXp(xp ?? BALANCE.xp.questBase, 'quest'));

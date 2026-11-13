@@ -18,7 +18,7 @@ export class SpaceScene {
     this.sun = new THREE.DirectionalLight('#fff3dc', 1.25); this.sun.position.set(600, 400, 300); this.scene.add(this.sun);
     this.nebula = createNebula(); this.scene.add(this.nebula);
     this.stars = createStars(Config.qualityPresets[Config.quality.level].stars); this.scene.add(this.stars);
-    this.planets = PLANETS.map(def => { const p = buildPlanet(def); p.position.fromArray(def.pos); this.scene.add(p); return p; });
+    this.planets = PLANETS.map(def => { const p = buildPlanet(def); p.getObjectByName('water')?.material.uniforms.uSun.value.set(600, 400, 300).normalize(); p.position.fromArray(def.pos); this.scene.add(p); return p; });
     this.ship = new Ship(); this.scene.add(this.ship.root);
     this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.yaw = 0; this.pitch = 0; this.roll = 0;
     this.near = null; this._camPos = new THREE.Vector3();
