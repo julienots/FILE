@@ -141,6 +141,7 @@ export function initAudio() {
   bus.on('world:discovered', () => s('discover'));
   bus.on('dialogue:node', () => s('dialogue'));
   bus.on('combat:combo', ({ n }) => s('combo', n));
+  bus.on('ship:bump', () => { s('hit'); s('land'); });
   bus.on('game:pause', () => { A.muted = true; A.volumes(); A.muted = false; if (A.music) A.music.gain.setTargetAtTime(State.data.settings.music * .15, A.ctx.currentTime, .3); });
   bus.on('game:resume', () => A.volumes());
   globalThis.__audio = A;

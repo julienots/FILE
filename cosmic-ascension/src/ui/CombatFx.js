@@ -25,6 +25,7 @@ export function mountCombatFx(root, hud) {
   bus.on('boss:defeated', ({ name }) => hud.toast(`★ ${name} vaincu !`, 'questDone'));
   bus.on('hero:died', ({ lostDust }) => { ko.classList.remove('hidden'); ko.lastChild.textContent = lostDust ? `−${lostDust} ✧` : ''; buzz(120); });
   bus.on('hero:respawn', () => ko.classList.add('hidden'));
+  bus.on('ship:bump', ({ speed = 0 } = {}) => buzz(Math.min(80, 20 + speed * .3)));
   const REASON = { energy: 'Pas assez d’énergie', cooldown: 'Capacité en recharge', locked: 'Capacité verrouillée' };
   let failT = 0;
   bus.on('ability:fail', ({ reason }) => { const n = performance.now(); if (n - failT > 900) { failT = n; hud.toast(REASON[reason] ?? reason, 'warn'); } });
