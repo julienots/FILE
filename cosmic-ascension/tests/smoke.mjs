@@ -26,5 +26,6 @@ if (await p.evaluate(() => !!window.__game.current.nearNpc)) await p.keyboard.pr
 await p.evaluate(() => { const g = window.__game.current, e = g.enemies.list[0]; e.dir.copy(g.dir).applyAxisAngle(g.fwd.clone().cross(g.dir).normalize(), -.05); e.home.copy(e.dir); }); await p.keyboard.down('KeyJ'); await p.waitForTimeout(900); await p.screenshot({ path: 'tests/out/combat.png' }); await p.keyboard.up('KeyJ');
 await p.keyboard.press('KeyK'); await p.waitForTimeout(500); await p.screenshot({ path: 'tests/out/shockwave.png' }); await p.waitForTimeout(4500); await p.screenshot({ path: 'tests/out/evolved4.png' });
 console.log('fps~', await p.evaluate(() => new Promise(r => { let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 > 1500 ? r(Math.round(n / 1.5)) : requestAnimationFrame(f); }; f(); })));
+for (const st of [0, 1, 2, 3, 4, 5]) { await p.evaluate((st) => { const g = window.__game.current; g.hero.setStage(st); g.fwd.copy(g.face).negate(); g.camPitch = .22; }, st); await p.waitForTimeout(900); await p.screenshot({ path: `tests/out/hero${st}.png`, clip: { x: 440, y: 120, width: 400, height: 360 } }); }
 await b.close(); srv.kill();
 if (errs.length) { console.error('ERREURS:', errs); process.exit(1); } console.log('SMOKE OK');
