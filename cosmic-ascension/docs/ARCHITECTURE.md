@@ -46,6 +46,7 @@ Lire **uniquement** `Input.move{x,y}`, `Input.look{x,y}`, `Input.buttons`, `Inpu
 | `boss:spawn/phase/defeated` | A/B | `{id,phase?}` | tous |
 | `cinematic:start/end` | A | `{id}` | B (cache HUD) |
 | `build:placed/removed` | B | `{planetId,slot,buildingId}` | A rendu |
+| `ship:bump` | A | `{speed}` (choc astéroïde) | B (dégâts/son) |
 | `ship:upgraded` | B | `{level,upgrades}` | A visuels |
 | `quality:changed` | A | preset | tous |
 | `ui:toast` | tous | `{text,kind}` | B UI |

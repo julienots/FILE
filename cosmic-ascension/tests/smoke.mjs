@@ -8,6 +8,10 @@ const p = await b.newPage({ viewport: { width: 1280, height: 600 } }); const err
 p.on('pageerror', e => errs.push(String(e))); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
 await p.goto('http://localhost:4173/'); await p.waitForTimeout(4000);
 await p.screenshot({ path: 'tests/out/space.png' });
+await p.keyboard.down('ShiftLeft'); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/boost.png' });
+await p.waitForTimeout(2500); await p.keyboard.up('ShiftLeft'); await p.keyboard.press('KeyE'); await p.waitForTimeout(1900); await p.screenshot({ path: 'tests/out/arrive.png' });
+console.log('scene:', await p.evaluate(() => window.__game.currentName)); await p.waitForTimeout(2500);
+await p.keyboard.press('KeyE'); await p.waitForTimeout(2200); await p.screenshot({ path: 'tests/out/takeoff.png' }); console.log('scene:', await p.evaluate(() => window.__game.currentName));
 await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(3000);
 await p.screenshot({ path: 'tests/out/planet.png' });
 for (const id of ['ember', 'glacio', 'sylva']) { await p.evaluate((id) => window.__game.goto('planet', { id }), id); await p.waitForTimeout(1500); await p.screenshot({ path: `tests/out/planet-${id}.png` }); }
