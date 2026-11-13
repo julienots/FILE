@@ -28,7 +28,7 @@ export function initFallback(root) {
   bus.on('pickup:collected', ({ amount = 1 }) => { State.data.inventory.cosmicDust += amount; xp(6 * amount); });
   bus.on('enemy:killed', ({ xp: n = 10 }) => xp(n));
   bus.on('boss:defeated', ({ xp: n = 1500, id }) => { say('BOSS VAINCU !', 4000); xp(n); });
-  bus.on('boss:spawn', () => say('⚠ SERPENT CÉLESTE ⚠', 3500));
+  bus.on('boss:spawn', ({ id }) => say(id === 'devourer' ? '⚠ DÉVOREUR DE PLANÈTES ⚠' : '⚠ SERPENT CÉLESTE ⚠', 3500));
   bus.on('secret:found', ({ xp: n = 100 }) => { say('✧ Secret découvert ✧'); xp(n); });
   bus.on('npc:interact', ({ name, line }) => say(`${name} : « ${line} »`, 4200));
   bus.on('enemy:touch', ({ dmg }) => hurt(dmg, 'enemy'));
