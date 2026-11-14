@@ -33,7 +33,11 @@ export class SpaceScene {
     this.ship = new Ship(); this.scene.add(this.ship.root);
     this.lines = createSpeedLines(); this.camera.add(this.lines);
     this.trail = new Particles(300); this.scene.add(this.trail.points);
-    this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.yaw = 0; this.pitch = 0; this.roll = 0; this.boost = 0; this.shake = 0;
+    this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.bank = 0; this.boost = 0; this.shake = 0; this.throttle = .3;
+    this._dq = new THREE.Quaternion(); this._m4 = new THREE.Matrix4(); this._X = new THREE.Vector3(1, 0, 0); this._Y = new THREE.Vector3(0, 1, 0); this._Z = new THREE.Vector3(0, 0, 1);
+    // cap absolu (tests, scripts): scene.yaw / scene.pitch réécrivent l'orientation libre
+    let yaw = 0, pitch = 0; const setE = () => this.q.setFromEuler(this.e.set(pitch, yaw, 0));
+    Object.defineProperty(this, 'yaw', { get: () => yaw, set: (v) => { yaw = v; setE(); } }); Object.defineProperty(this, 'pitch', { get: () => pitch, set: (v) => { pitch = v; setE(); } });
     this.near = null; this.landing = null; this.fireCd = 0;
     this.fx = new Particles(500); this.scene.add(this.fx.points); this.serpent.particles = this.fx;
     this.devourer = new Devourer(); this.devourer.particles = this.fx; this.scene.add(this.devourer.root); if (State.data.world.flags.devourerDefeated) { this.devourer.dead = 99; this.devourer.root.visible = false; }
@@ -47,35 +51,40 @@ export class SpaceScene {
   }
   enter({ from } = {}) {
     const p = from ? this.planets.find(x => x.userData.def.id === from) : null, s = this.ship.root;
-    if (p) { const r = p.userData.radius; s.position.copy(p.position).add(this._a.set(.3, .35, 1).normalize().multiplyScalar(r * 1.35)); this._a.copy(s.position).sub(p.position).normalize(); this.yaw = Math.atan2(-this._a.x, -this._a.z); this.pitch = Math.asin(this._a.y); this.vel.copy(this._a).multiplyScalar(160); this.boost = 1; }
-    else { s.position.set(0, 0, 60); this.yaw = 0; this.pitch = 0; this.vel.set(0, 0, 0); }
+    if (p) { const r = p.userData.radius; s.position.copy(p.position).add(this._a.set(.3, .35, 1).normalize().multiplyScalar(r * 1.35)); this._a.copy(s.position).sub(p.position).normalize(); this.q.setFromRotationMatrix(this._m4.lookAt(this._b.set(0, 0, 0), this._a, this._Y)); this.vel.copy(this._a).multiplyScalar(160); this.boost = 1; this.throttle = .45; }
+    else { s.position.set(0, 0, 60); this.q.identity(); this.vel.set(0, 0, 0); this.throttle = .3; }
+    if (!this._hinted) { this._hinted = true; setTimeout(() => bus.emit('ui:toast', { text: 'Vol libre — ≫ accélérer · ⤒ freiner / reculer · glisser à droite: tonneau', kind: 'info' }), 2500); }
     this.isActive = true; this.landing = null; this.near = null; this.camera.position.copy(s.position).addScaledVector(this.vel, -.08).add(this._b.set(0, 4, 0));
     bus.emit('scene:entered', { id: 'space' });
   }
   exit() { this.isActive = false; this.devourer.leave(); if (this.serpentEngaged) { this.serpentEngaged = false; bus.emit('boss:despawn', { id: 'serpent' }); } }
   update(dt, t) {
     const s = this.ship, sp = s.root.position, { _f, _a, _b, _c } = this, L = this.landing;
-    let wantBoost = Input.buttons.boost ? 1 : 0;
+    // VOL LIBRE: orientation en quaternion (aucune limite: loopings, vol sur le dos), manette des gaz persistante, inertie.
     if (L) {                                   // pilote automatique d'atterrissage
-      L.t += dt; _a.copy(L.planet.position).sub(sp).normalize(); const ty = Math.atan2(-_a.x, -_a.z), tp = Math.asin(_a.y), k = Math.min(1, dt * 4);
-      this.yaw += Math.atan2(Math.sin(ty - this.yaw), Math.cos(ty - this.yaw)) * k; this.pitch += (tp - this.pitch) * k; wantBoost = 1; this.shake = Math.min(1, L.t);
+      L.t += dt; this._dq.setFromRotationMatrix(this._m4.lookAt(sp, L.planet.position, _a.set(0, 1, 0).applyQuaternion(this.q))); this.q.slerp(this._dq, Math.min(1, dt * 4)); this.throttle = 1; this.shake = Math.min(1, L.t);
       if (L.t > .9 && !L.done) { L.done = true; this.ctx.transition('planet', { id: L.planet.userData.def.id, arrive: true }, { color: L.planet.userData.def.atmosphere?.color ?? '#ffffff', out: .5, in: .9 }); }
     } else {
-      this.yaw -= Input.move.x * dt * 1.5; this.pitch = THREE.MathUtils.clamp(this.pitch + Input.move.y * dt * 1.1, -1.35, 1.35); this.shake = Math.max(0, this.shake - dt * 2);
+      const mx = Input.move.x, my = Input.move.y;
+      this.q.multiply(this._dq.setFromAxisAngle(this._Y, -mx * dt * 1.7)).multiply(this._dq.setFromAxisAngle(this._X, my * dt * 1.4));
+      if (Input.look.x) this.q.multiply(this._dq.setFromAxisAngle(this._Z, -Input.look.x * .006));        // tonneau: glisser à droite de l'écran
+      this.q.normalize(); this.shake = Math.max(0, this.shake - dt * 2);
+      if (Input.buttons.boost) this.throttle = Math.min(1, this.throttle + dt * .9); else if (Input.buttons.jump) this.throttle = Math.max(-.25, this.throttle - dt * 1.3);
+      else if (this.throttle > .45) this.throttle = Math.max(.45, this.throttle - dt * .35);                 // la postcombustion retombe seule; la croisière reste où on l'a mise
     }
-    this.boost += (wantBoost - this.boost) * Math.min(1, dt * 3); const boost = this.boost;
-    this.roll += (-(L ? 0 : Input.move.x) * 0.8 - this.roll) * Math.min(1, dt * 4);
-    this.q.setFromEuler(this.e.set(this.pitch, this.yaw, this.roll)); s.root.quaternion.copy(this.q);
+    const thr = this.throttle, boost = this.boost += (Math.max(0, (thr - .45) / .55) - this.boost) * Math.min(1, dt * 4);
+    this.bank += (-(L ? 0 : Input.move.x) * .7 - this.bank) * Math.min(1, dt * 4);
+    s.root.quaternion.copy(this.q).multiply(this._dq.setFromAxisAngle(this._Z, this.bank));
     _f.set(0, 0, -1).applyQuaternion(this.q);
-    const cruise = 70 * (State.data.ship.level * .15 + .85), target = cruise * (1 + boost * 3.2);
-    this.vel.lerp(_a.copy(_f).multiplyScalar(target), Math.min(1, dt * 1.8)); sp.addScaledVector(this.vel, dt);
+    const cruise = 70 * (State.data.ship.level * .15 + .85), target = cruise * 4.2 * thr;
+    this.vel.lerp(_a.copy(_f).multiplyScalar(target), Math.min(1, dt * 2.2)); sp.addScaledVector(this.vel, dt);
     // collisions astéroïdes: rebond
     if (!L) for (let i = 0, cs = this.colliders; i < cs.length; i++) { const c = cs[i], rr = c.r + 2; if (Math.abs(sp.x - c.pos.x) > rr || Math.abs(sp.z - c.pos.z) > rr) continue;
       const d2 = sp.distanceToSquared(c.pos); if (d2 < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.5); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length() }); } }
-    const speed01 = this.vel.length() / (cruise * 4.2); s.setThrust(speed01, t);
+    s.setThrust(Math.abs(thr) * .85 + (Input.buttons.boost ? .15 : 0));
     // traînée moteur
-    _a.set(0, 0, 2.2).applyQuaternion(this.q).add(sp); _b.copy(_f).multiplyScalar(-12 - boost * 30);
-    this.trail.emit(_a, _b, boost > .4 ? '#b48aff' : '#7fe0ff', .9 + boost * 1.2, .35 + boost * .3, 1, 0); this.trail.update(dt, innerHeight);
+    _a.set(0, 0, s.engine.position.z + .5).applyQuaternion(this.q).add(sp); _b.copy(_f).multiplyScalar(-12 - boost * 30);
+    if (thr > .12) for (let k = 0; k < 2; k++) { _c.copy(_a).addScaledVector(this.vel, -dt * k * .5); this.trail.emit(_c, _b, boost > .4 ? '#8a6aff' : '#4f9aff', .28 + boost * .5, .22 + thr * .35, 1, 0); } this.trail.update(dt, innerHeight);
     // Serpent céleste: nage, rebond sur son corps, première rencontre cinématique (la caméra se tourne vers lui)
     const fl = State.data.world.flags, sv = this.serpent; sv.hostile = Config.systemsOwner !== 'B' || !!(fl.act4_started || State.data.quests.active?.main_4_titans); sv.update(dt, t, sp); if (!L) this.devourer.update(dt, t, sp, this.vel); const hd = sv.headPos.distanceTo(sp);
     if (!L && !sv.dead) for (let i = 0, sg = sv.segments; i < sg.length; i += 2) { const c = sg[i], rr = c.r + 3; if (sp.distanceToSquared(c.pos) < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.6); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length(), boss: 'serpent' }); break; } }

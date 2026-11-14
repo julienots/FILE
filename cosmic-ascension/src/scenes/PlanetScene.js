@@ -65,7 +65,7 @@ export class PlanetScene {
     { const pad = def.structures?.find(x => x.kind === 'ship_pad') ?? def.npcs?.[0] ?? def.structures?.[0]; if (pad) latLonToDir(pad.lat + 3, pad.lon - 4, this.dir); }
     for (let i = 0; i < 200 && P.sample(this.dir) - P.sea < .04; i++) this.dir.set(Math.sin(i * 2.4) * i * .02, 1, Math.cos(i * 2.4) * i * .02).normalize();
     this.fwd.set(0, 0, -1).addScaledVector(this.dir, -this.fwd.dot(this.dir)).normalize(); this.face.copy(this.fwd); this.vh = 0; this.alt = 0;
-    if (!this.parked) { this.parked = new Ship(); this.parked.flame.visible = false; this.scene.add(this.parked.root); }
+    if (!this.parked) { this.parked = new Ship(); this.parked.setThrust(0); this.scene.add(this.parked.root); }
     { const pd = V().copy(this.dir).multiplyScalar(P.radius).addScaledVector(this.fwd, -7).normalize(), pr = this.parked.root; pr.position.copy(pd).multiplyScalar(P.heightAt(pd) + .9); pr.quaternion.setFromUnitVectors(V().set(0, 1, 0), pd); this.colliders.push({ pos: pr.position.clone(), r: 2.2 }); }
     this.base?.dispose(); if (this.base) { this.scene.remove(this.base.group); disposePlanet(this.base.group); } this.base = null;
     if (def.type === 'home') { this.base = buildHomeBase(this.planet, this.dir, this.particles); this.scene.add(this.base.group); this.colliders.push(...this.base.colliders); }
