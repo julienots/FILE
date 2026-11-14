@@ -112,7 +112,7 @@ export const QUESTS = {
   side_creature_friend: { kind: 'side', auto: true, requires: { stage: 2 }, title: 'Ami des bêtes', desc: 'Des créatures cosmiques se cachent sur chaque planète.',
     steps: [S('collect', 'Trouve des créatures cosmiques', { kind: 'creature', count: 5 })], rewards: { xp: 400, items: [['lumenSap', 2]] } },
   side_elite_hunter: { kind: 'side', auto: true, requires: { stage: 3 }, title: 'Chasseur d’élites', desc: 'Golems, brutes et chevaliers: prouve ta force.',
-    steps: [S('kill', 'Vaincs un golem de glace', { target: 'iceGolem', count: 1 }), S('kill', 'Vaincs une brute de cristal', { target: 'brute', count: 1 })], rewards: { xp: 600, items: [['starIron', 3]] } },
+    steps: [S('kill', 'Vaincs une brute de cristal', { target: 'brute', count: 1 }), S('kill', 'Abats un dragon d’azur', { target: 'dragon', count: 1 })], rewards: { xp: 600, items: [['starIron', 3]] } },
   side_bounty_scarabs: { kind: 'side', planet: 'dune', auto: true, requires: { quests: ['side_caravan_escort'] }, title: 'Prime: scarabées', desc: 'Les nomades paient pour chaque scarabée.',
     steps: [S('kill', 'Chasse des scarabées', { target: 'scarab', count: 12 })], rewards: { xp: 300, dust: 150 } },
   side_relic_scholar: { kind: 'side', auto: true, requires: { flags: ['act2_done'] }, title: 'Archéologue cosmique', desc: 'Les reliques racontent l’histoire des Titans.',

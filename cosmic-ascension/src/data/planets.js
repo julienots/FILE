@@ -54,7 +54,7 @@ export const PLANETS = [
     npcs: [{ id: 'forga', name: 'Forga la Fondeuse', species: 'ember', lat: 18, lon: 20, model: 'npc_ember', dialogue: 'forga_intro' },
            { id: 'tizon', name: 'P’tit Tison', species: 'ember', lat: 22, lon: 24, model: 'npc_ember', dialogue: 'tizon' }],
     pickups: scatter('ember', 23, [['dust', 12], ['crystal', 6], ['creature', 2], ['artifact', 1]]),
-    enemies: [{ type: 'magmaSlime', count: 6, lat: -20, lon: 70, radius: 25 }, { type: 'scarab', count: 3, lat: 45, lon: -120, radius: 20 }],
+    enemies: [{ type: 'magmaSlime', count: 6, lat: -20, lon: 70, radius: 25 }, { type: 'scarab', count: 3, lat: 45, lon: -120, radius: 20 }, { type: 'dragon', count: 1, lat: -55, lon: 150, radius: 5 }],
     structures: [{ kind: 'forge_city', lat: 18, lon: 20 }, { kind: 'ruin', lat: -60, lon: 150 }],
     resources: ['emberCore'], secrets: ['ember_magma_heart'], quests: ['main_2_forge', 'side_tizon_lost', 'side_cool_the_core'] },
 
@@ -97,7 +97,7 @@ export const PLANETS = [
     props: [{ kind: 'crystal', density: .6, colors: ['#c08aff', '#7affd8'] }, { kind: 'spire', density: .3, colors: ['#8ae8ff', '#ffffff'] }, { kind: 'pine', density: .2, colors: ['#5a4a8a', '#5ad8c8', '#ffffff'] }, { kind: 'grass', density: 4, colors: ['#5ad8c8', '#7ab0ff'] }],
     npcs: [{ id: 'prism_oracle', name: 'L’Oracle Prisme', species: 'prism', lat: 70, lon: 0, dialogue: 'oracle' }],
     pickups: scatter('aurora', 43, [['dust', 10], ['crystal', 8], ['creature', 2]]),
-    enemies: [{ type: 'shardBat', count: 6, lat: -20, lon: -100, radius: 30 }],
+    enemies: [{ type: 'shardBat', count: 6, lat: -20, lon: -100, radius: 30 }, { type: 'dragon', count: 1, lat: 40, lon: 120, radius: 5 }],
     structures: [{ kind: 'temple', lat: 70, lon: 0 }],
     resources: ['lumenSap', 'frostCrystal'], secrets: ['aurora_light_bridge'], quests: ['main_3_oracle', 'side_prism_tuning'] },
 
