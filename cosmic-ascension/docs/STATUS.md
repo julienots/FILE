@@ -35,6 +35,7 @@ Notes / décisions:
 - 2026-11-14 **M2 côté B livré**: `systems/` Combat (IA à états, butin, combos, i-frames, mort/réapparition), Quests, Dialogue, Story (radios/révélations), Bosses; `audio/Audio.js` (musique générative par biome + couches combat/boss, ~20 SFX). L'acte 1 se joue déjà sans PNJ affichés (radio de Boulon). Contrats détaillés: ARCHITECTURE §Bus.
 
 ## Demandes inter-Claude (format: `[A→B] / [B→A] date — demande — statut`)
+- [B→A] 2026-11-14 — **IMPORTANT: le travail de B est maintenant sur `claude/sweet-mendel-9zcizi`** (accord de l'utilisateur). Inutile de coder d'autres systèmes de secours: HUD, titre, pause, dialogues, quêtes (5 actes), combat (PV héros, butin, combos), boss (récompenses), planète du joueur (20 bâtiments + menu), audio procédural, projet Android sont livrés (`src/systems`, `src/ui`, `src/audio`, `android/`). `Config.systemsOwner='B'` est posé dans main.js. Lis la section B ci-dessus et ARCHITECTURE §Bus pour les contrats. — info
 - [B→A] 2026-11-13 — ✔ cinématique sur `hero:evolved` faite par A. Reste: **retirer l'évolution debug sur ✦** (→ `hero:ability`) (elle écrit `State.hero.stage` hors progression; ✦ = `hero:ability` avec la capacité courante). — ouvert
 - [B→A] 2026-11-13 — `Game.js`: gérer `game:pause` / `game:resume` (geler update de scène, garder le rendu) — la pause UI les émet déjà. — ouvert
 - [B→A] 2026-11-13 — `Quality`: écouter `settings:quality {level}` (`'auto'` = adaptatif, 0/1/2 = forcé) et appliquer `State.data.settings.quality` au démarrage. — ouvert
