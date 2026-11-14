@@ -19,6 +19,8 @@ import { Dialogue, NPCS } from '../src/systems/Dialogue.js';
 import { Bosses } from '../src/systems/Bosses.js';
 import { Home } from '../src/systems/HomePlanet.js';
 import { BUILDINGS } from '../src/data/buildings.js';
+import { CREATURES, ARTIFACTS, ARTIFACT_SOURCES, ACHIEVEMENTS } from '../src/data/collections.js';
+import { Collections } from '../src/systems/Collections.js';
 
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.error('✗', name, '\n   ', e.message); } };
@@ -224,6 +226,20 @@ test('habitant générique (réplique), secret découvert', () => {
   bus.emit('npc:interact', { npcId: 'home:villager:0', name: 'Milo', line: 'Bonjour !' }); eq(nodes.at(-1).speaker, 'Milo'); Dialogue.choose(0); ok(!Dialogue.open);
   const xp = State.data.hero.xp; bus.emit('secret:found', { id: 'home:monolith:0', planet: 'home' }); bus.emit('secret:found', { id: 'home:monolith:0', planet: 'home' });
   ok(State.data.hero.xp - xp === 100, 'XP secret une fois: ' + (State.data.hero.xp - xp)); off();
+});
+test('collections: 40 créatures liées aux planètes, artefacts → bonus, apprivoisement, bestiaire, succès', async () => {
+  ok(Object.keys(CREATURES).length >= 40, '≥40'); const ids = new Set(PLANETS.map(p => p.id));
+  for (const C of Object.values(CREATURES)) ok(ids.has(C.planet), C.name);
+  for (const v of Object.values(ARTIFACT_SOURCES)) ok(ARTIFACTS[v], 'source ' + v);
+  fresh(); State.data.world.location = 'ember';
+  bus.emit('pickup:collected', { id: 'c1', kind: 'creature' }); eq(State.data.collection.creatures, ['axolave']);
+  bus.emit('pickup:collected', { id: 'a1', kind: 'artifact' }); eq(State.data.collection.artifacts, ['emberHeart']);
+  eq(State.data.hero.maxHp, Math.round(EVOLUTIONS[0].hp * 1.08), 'bonus artefact');
+  Collections.rnd = () => 0; bus.emit('enemy:killed', { uid: 3, type: 'magmaSlime', pos: {} }); Collections.rnd = Math.random;
+  eq(State.data.collection.creatures.length, 2, 'apprivoisée'); eq(State.data.collection.bestiary.magmaSlime, 1);
+  bus.emit('boss:defeated', { id: 'serpent' }); ok(State.data.collection.artifacts.includes('serpentScale'), 'artefact de boss');
+  Collections.check(); ok(State.data.collection.achievements.includes('boss1'), 'succès boss');
+  for (const a of ACHIEVEMENTS) a.test(State.data);
 });
 test('boss: phases, point faible, récompenses et flags', () => {
   fresh(); const phases = []; const off = bus.on('boss:phase', p => phases.push(p.phase));

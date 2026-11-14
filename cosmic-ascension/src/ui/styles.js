@@ -169,6 +169,12 @@ export const CSS2 = `
 .bcard .why{margin-top:.6vmin;font-size:2vmin;font-weight:900;color:#ffb0c0}.bgrid .empty{grid-column:1/-1}
 .bcard.poor{opacity:.75}.bcard.locked{opacity:.45;filter:grayscale(.7)}.bcard.built{border-color:#2ac87a}
 .base .stats{grid-template-columns:repeat(4,1fr)}
+.codex-tabs{justify-content:center;margin-bottom:2vmin;flex-wrap:wrap}.cx-count{text-align:right;font-size:2.4vmin;opacity:.7;margin-bottom:1vmin}
+.cxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(30vmin,1fr));gap:1.6vmin;max-height:50vh;overflow:auto}
+.cx{position:relative;padding:1.4vmin 1.6vmin 1.4vmin 9vmin;min-height:11vmin;background:rgba(255,255,255,.03);border:.2vmin solid rgba(255,255,255,.14);border-radius:1vmin}
+.cx .g{position:absolute;left:1.6vmin;top:1.4vmin;font-size:5.5vmin;color:var(--neo);text-shadow:0 0 1.4vmin var(--neo)}.cx b{display:block;font-size:2.7vmin}.cx small{display:block;font-size:2vmin;opacity:.75}
+.cx.unk{opacity:.4}.cx.unk .g{color:#888;text-shadow:none}.cx.r-rare{border-color:rgba(255,60,200,.6)}.cx.r-rare .g{color:var(--neo2);text-shadow:0 0 1.4vmin var(--neo2)}
+.cx.r-leg{border-color:rgba(255,204,58,.7);box-shadow:0 0 1.4vmin rgba(255,204,58,.25)}.cx.r-leg .g{color:var(--neo3);text-shadow:0 0 1.4vmin var(--neo3)}
 @keyframes hitFlash{0%{box-shadow:inset 0 0 14vmin rgba(255,40,80,.85)}100%{box-shadow:inset 0 0 0 rgba(255,40,80,0)}}
 @keyframes lowPulse{50%{box-shadow:inset 0 0 18vmin rgba(255,40,80,.7)}}
 @keyframes shake{20%{transform:translateX(-52%)}40%{transform:translateX(-48%)}60%{transform:translateX(-51%)}80%{transform:translateX(-49%)}}

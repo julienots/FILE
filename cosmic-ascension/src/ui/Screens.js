@@ -8,6 +8,7 @@ import { t } from './i18n.js';
 import { buzz } from './haptics.js';
 import { journalPanel, inventoryPanel } from './Journal.js';
 import { buildMenu, basePanel } from './Base.js';
+import { codexPanel } from './Codex.js';
 // Écrans plein cadre (B): titre, pause, réglages, confirmation. Un seul écran visible à la fois (pile).
 export function mountScreens(root, { onPlay, onQuit } = {}) {
   const layer = h('div.layer.screens'); root.appendChild(layer);
@@ -43,6 +44,7 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
         h('div.menu2', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel()))),
         btn('🌍 Ma planète', 'alt', () => sub('Ma planète', basePanel())),
         btn(t('pause.settings'), 'alt', settings),
+        btn('◈ ' + t('pause.codex'), 'alt', () => sub(t('pause.codex'), codexPanel())),
         btn(`${t('pause.map')} · ${t('soon')}`, 'ghost', () => {}), btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); })))));
   }
   // menu de construction: met le jeu en pause le temps du choix

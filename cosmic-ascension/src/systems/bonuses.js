@@ -1,9 +1,11 @@
 import { BUILDINGS } from '../data/buildings.js';
 import { EVOLUTIONS } from '../data/evolutions.js';
+import { ARTIFACTS } from '../data/collections.js';
 // Bonus cumulés des bâtiments de la planète du joueur (pur, partagé par Progression et HomePlanet).
 export function bonuses(d) {
   const b = { hp: 0, energy: 0, xp: 0, ship: 0 };
   for (const { id } of d.homePlanet.buildings) { const B = BUILDINGS[id]?.bonus; if (B) for (const k in b) b[k] += B[k] ?? 0; }
+  for (const id of d.collection?.artifacts ?? []) { const B = ARTIFACTS[id]?.bonus; if (B) for (const k in b) b[k] += B[k] ?? 0; }
   return b;
 }
 // recalcule PV/énergie max et niveau du vaisseau (après évolution ou construction)

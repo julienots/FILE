@@ -40,6 +40,8 @@ for (const vp of [{ name: 'phone', width: 915, height: 412 }, { name: 'tablet', 
   for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
   await p.keyboard.press('Escape'); await wait(300); await p.click(V + 'button:has-text("Ma planète")'); await wait(400); await shot('13_base');
   for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
+  await p.keyboard.press('Escape'); await wait(300); await p.click(V + 'button:has-text("Codex")'); await wait(300); await p.click(V + '.codex-tabs button:has-text("Succès")'); await wait(300); await shot('14_codex');
+  for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
   await emit('npc:interact', { npcId: 'forga' }); await wait(1500); await p.click('.dl-card'); await wait(300); await p.click('.dl-card'); await wait(1200); await shot('11_npc_dialogue');
   await p.close();
 }

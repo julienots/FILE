@@ -8,7 +8,7 @@ export const defaults = () => ({
   hero: { stage: 0, xp: 0, energy: 100, maxEnergy: 100, hp: 100, maxHp: 100, abilities: ['hop'] },
   ship: { level: 1, fuel: 100, upgrades: [] },
   inventory: { cosmicDust: 0, items: {} },          // items: {id: count}
-  collection: { creatures: [], artifacts: [] },
+  collection: { creatures: [], artifacts: [], achievements: [], bestiary: {} },   // bestiary: {type: kills}
   quests: { active: {}, done: [], tracked: null },   // active: {id: {step, n}}
   world: { visited: [], discovered: ['home'], location: 'home', flags: {}, system: 'pepin', collected: [] }, // collected: ids de pickups ramassés (A ne les fait pas réapparaître)
   homePlanet: { buildings: [], biome: 'meadow', level: 1, lastCollect: 0, carry: {} },   // buildings: [{slot,id}]
