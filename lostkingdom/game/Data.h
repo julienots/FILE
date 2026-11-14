@@ -165,4 +165,13 @@ const std::vector<DungeonDef>& dungeons();
 struct LoreDef { std::string id, title, text; };
 const std::vector<LoreDef>& lore();
 
+// ---- mods (1.7.0): write access to the content tables, used only by the mod loader at startup
+ItemDef* itemMutable(const std::string& id);
+EnemyDef* enemyMutable(const std::string& id);
+NpcDef* npcMutable(const std::string& id);
+std::vector<LoreDef>& loreMutable();
+// One line of a mod's data.txt ("item.sword_rusty.name = ..."). Returns false and fills err when the line is
+// invalid (unknown id / field, bad number). Blank lines and "#" comments are accepted and ignored.
+bool applyModDataLine(const std::string& line, std::string& err);
+
 }  // namespace lk

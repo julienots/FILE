@@ -247,9 +247,43 @@ struct Settings {
     bool importedHero = true;   // imported 3D model for the hero (off = procedural hero whose armour changes with equipment)
 };
 
+// ------------------------------------------------------------------------------------------ mods
+struct ModInfo {
+    std::string id, name, author, version, desc;
+    bool enabled = true, applied = false;
+    int patches = 0, errors = 0;
+    std::string firstError;
+};
+
+// ------------------------------------------------------------------------------------------ cinematics
+// One shot of a multi-shot cinematic (Cinematics.cpp): the camera glides from `from` to `to` while looking from
+// `lookFrom` to `lookTo`; narration typed at the bottom; optional speaker, title card and per-shot ambience.
+struct CineShot {
+    vec3 from, to, lookFrom, lookTo;
+    float dur = 6.f, fov = 38.f * DEG;
+    std::string text, speaker, title, subtitle;
+    vec3 speakerColor{1, 1, 1};
+    float tod = -1;               // time of day (-1: keep)
+    int weather = -1;             // Game::Weather (-1: keep)
+    std::string music = "-";      // "-": keep, "": silence, else track name
+    std::string sfx;              // played at the start ("thunder" repeats with lightning)
+    vec3 fogTint{0, 0, 0}, magic{0, 0, 0};
+    float fogMul = 0.3f;          // cinematics see far: fog density multiplier
+    float shake = 0;
+    bool heroDown = false, heroRise = false, wristGlow = false;
+};
+struct CinematicState {
+    bool active = false;
+    std::string id;
+    std::vector<CineShot> shots;
+    int index = 0;
+    float t = 0, reveal = 0, fade = 0;
+    float savedTod = 8; int savedWeather = 0; std::string savedMusic;
+};
+
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods };
 
 class Game : public App {
 public:
@@ -334,6 +368,7 @@ public:
     std::set<std::string> defeatedBosses;
     std::map<std::string, int> bestiary;   // enemy id -> kills
     std::set<std::string> loreFound;
+    std::set<std::string> storyFlags;        // 1.7.0: story choices / events (saved as "flag <id>")
     std::set<std::string> relicsFound;
     std::set<std::string> talkedTo;
     std::set<uint32_t> killedUnique;       // elite / unique spawns
@@ -352,7 +387,7 @@ public:
     std::vector<FloatText> floatTexts;
     DialogState dialog;
     int shopNpc = -1;
-    int menuTab = 0, selItem = -1, selSlot = -1, selRecipe = -1, selSkill = -1, selQuest = -1, selEnemy = -1;
+    int menuTab = 0, selItem = -1, selSlot = -1, selRecipe = -1, selSkill = -1, selQuest = -1, selEnemy = -1, selLore = -1;
     int craftStation = ST_ANY;
     float mapZoom = 1.f; vec2 mapPan;
     std::string bossBarName;
@@ -392,6 +427,23 @@ public:
     float cinematicT = -1;
     vec3 cineFrom, cineTo, cineLook;
     std::string cinematicText;
+    CinematicState cine;                       // multi-shot cinematics (prologue, story scenes)
+    bool pendingPrologue = false;
+    void startShots(std::vector<CineShot> shots, const std::string& id);
+    void startPrologue();
+    void beginShot();
+    void updateCinematicShots(float dt);
+    void endCinematicShots(bool skipped);
+    bool cinematicCamera(vec3& eye, vec3& look, float& fov) const;
+    void applyCinematicEnvironment();
+    void drawCinematicShots();
+    void unlockLore(const std::string& id, bool announce = true);
+    // mods (Mods.cpp)
+    std::vector<ModInfo> mods;
+    void scanMods();
+    void saveModList();
+    void applyMods(bool force = false);   // force: tests only (patches are meant to be applied once per launch)
+    void pollModImport();
     float dofFocus = 20, dofAmount = 0;
 
     // ---- environment -----------------------------------------------------------------------------

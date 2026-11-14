@@ -386,6 +386,35 @@ static void testGpuProfiles() {
     }
 }
 
+// ---- mods: data.txt lines (runs last: it patches the content tables)
+static void testModData(const std::string& assets) {
+    std::printf("[Mods: data patches]\n");
+    std::string err;
+    {   // the example mod shipped with the game applies without a single error
+        std::ifstream f(assets + "/../mods/exemple/data.txt");
+        std::string l; int bad = 0, n = 0;
+        while (std::getline(f, l)) { std::string e; if (!applyModDataLine(l, e)) { bad++; std::printf("  example mod: %s -> %s\n", l.c_str(), e.c_str()); } n++; }
+        CHECK(n > 5 && bad == 0, "example mod: %d bad lines of %d", bad, n);
+        CHECK(item("sword_rusty")->name == "Lame du Vagabond", "example mod renamed the starting sword");
+    }
+    CHECK(applyModDataLine("item.sword_rusty.name = Épée du vagabond", err) && item("sword_rusty")->name == "Épée du vagabond", "item name patched (%s)", err.c_str());
+    CHECK(applyModDataLine("item.sword_rusty.atk = 14", err) && item("sword_rusty")->atk == 14.f, "item atk patched");
+    CHECK(applyModDataLine("item.sword_rusty.crit = 7", err) && item("sword_rusty")->crit == 1.f, "values are clamped (crit <= 1)");
+    float hp0 = enemies()[enemyIndex("wolf")].hp;
+    CHECK(applyModDataLine("  enemy.wolf.hp = 80   ", err) && enemies()[enemyIndex("wolf")].hp == 80.f && hp0 != 80.f, "enemy hp patched");
+    size_t g0 = npcs()[0].greetings.size();
+    CHECK(applyModDataLine("npc." + npcs()[0].id + ".greet = Salut, voyageur !", err) && npcs()[0].greetings.size() == g0 + 1, "npc greeting added");
+    size_t n0 = lore().size();
+    CHECK(applyModDataLine("lore.add = mod_test | Une page | Un texte de mod.", err) && lore().size() == n0 + 1 && lore().back().title == "Une page", "lore page added");
+    CHECK(applyModDataLine("lore.add = mod_test | Une page bis | Remplacée.", err) && lore().size() == n0 + 1 && lore().back().title == "Une page bis", "same id replaces the page");
+    CHECK(applyModDataLine("# commentaire", err) && applyModDataLine("   ", err), "comments and blank lines ignored");
+    CHECK(!applyModDataLine("item.nope.name = x", err) && !err.empty(), "unknown item refused");
+    CHECK(!applyModDataLine("item.sword_rusty.colour = red", err), "unknown field refused");
+    CHECK(!applyModDataLine("enemy.wolf.hp = beaucoup", err), "non-numeric value refused");
+    CHECK(!applyModDataLine("code.run = rm -rf", err), "unknown type refused (mods are data only)");
+    CHECK(!applyModDataLine("pas de signe egal", err), "missing = refused");
+}
+
 int lkRunTests(int argc, char** argv) {
     std::string assets = argc > 1 ? argv[1] : "assets";
     testECS();
@@ -401,6 +430,7 @@ int lkRunTests(int argc, char** argv) {
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);
+    testModData(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);
     return gFail ? 1 : 0;
 }

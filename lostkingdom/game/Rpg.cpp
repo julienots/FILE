@@ -525,6 +525,7 @@ bool Game::saveGame(int slot) {
     for (auto& b : defeatedBosses) o << "boss " << b << "\n";
     for (auto& b : bestiary) o << "best " << b.first << " " << b.second << "\n";
     for (auto& l : loreFound) o << "lore " << l << "\n";
+    for (auto& f : storyFlags) o << "flag " << f << "\n";
     for (auto& t : talkedTo) o << "talk " << t << "\n";
     for (auto& d : dungeonsDone) o << "dung " << d << "\n";
     for (auto u : killedUnique) o << "uniq " << u << "\n";
@@ -554,7 +555,7 @@ bool Game::loadGame(int slot) {
     nodeEntities.clear(); spawnedChunks.clear(); chunkSpawns.clear(); villageNpcsSpawned.clear();
     inventory.clear(); for (auto& e : equipment) e = ItemStack();
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear();
-    bestiary.clear(); loreFound.clear(); talkedTo.clear(); dungeonsDone.clear(); killedUnique.clear(); openedChests.clear(); world.harvested.clear(); clearedSpawns.clear();
+    bestiary.clear(); loreFound.clear(); talkedTo.clear(); storyFlags.clear(); dungeonsDone.clear(); killedUnique.clear(); openedChests.clear(); world.harvested.clear(); clearedSpawns.clear();
     fog.assign(128 * 128, 0);
     dye.clear();
     dungeon = DungeonState();
@@ -588,6 +589,7 @@ bool Game::loadGame(int slot) {
         else if (k == "boss") { std::string s; l >> s; defeatedBosses.insert(s); }
         else if (k == "best") { std::string s; int n; l >> s >> n; bestiary[s] = n; }
         else if (k == "lore") { std::string s; l >> s; loreFound.insert(s); }
+        else if (k == "flag") { std::string s; l >> s; if (!s.empty()) storyFlags.insert(s); }
         else if (k == "talk") { std::string s; l >> s; talkedTo.insert(s); }
         else if (k == "dung") { std::string s; l >> s; dungeonsDone.insert(s); }
         else if (k == "uniq") { uint32_t u; l >> u; killedUnique.insert(u); }

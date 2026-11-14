@@ -37,6 +37,78 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name == "mods") {
+        // 1.7.0: install a mod by hand (as the Android importer would), apply it, check data patches and an asset
+        // override (villager_m.lkm replaced), then turn it off from the Mods menu with a real tap
+        static int res[6];
+        s.push_back({0.5f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.ui.recordWidgets = true;
+            std::string root = platform::writableDir() + "/mods/test_mod";
+            platform::makeDirectory(platform::writableDir() + "/mods"); platform::makeDirectory(root);
+            platform::makeDirectory(root + "/assets"); platform::makeDirectory(root + "/assets/models");
+            platform::writeFileAtomic(root + "/mod.txt", "name = Mod de test\nauthor = robot\nversion = 0.1\n");
+            platform::writeFileAtomic(root + "/data.txt", "item.potion_minor.name = Potion du testeur\nenemy.wolf.hp = 77\nlore.add = test_page | Page de test | Texte.\nitem.inconnu.name = erreur volontaire\n");
+            std::vector<uint8_t> b; std::string bs;
+            if (platform::readAsset("models/hero.lkm", b)) platform::writeFileAtomic(root + "/assets/models/villager_m.lkm", std::string(b.begin(), b.end()));
+            if (platform::readAsset("models/hero.jpg", b)) platform::writeFileAtomic(root + "/assets/models/villager_m.jpg", std::string(b.begin(), b.end()));
+            g.applyMods(true);
+            const ModInfo* m = nullptr; for (auto& x : g.mods) if (x.id == "test_mod") m = &x;
+            res[0] = m && m->enabled && m->applied && m->patches == 3 && m->errors == 1;
+            res[1] = item("potion_minor")->name == "Potion du testeur" && enemies()[enemyIndex("wolf")].hp == 77.f && g.loreFound.size() >= 0 && lore().back().id == "test_page";
+            std::vector<uint8_t> v; res[2] = platform::readAsset("models/villager_m.lkm", v) && g.importedModel("villager_m") != nullptr;
+            AGR_LOG("MODS installed: %s, patches %d errors %d (%s)", m ? m->name.c_str() : "?", m ? m->patches : -1, m ? m->errors : -1, m ? m->firstError.c_str() : "");
+        }, idle, "install + apply"});
+        s.push_back({0.6f, [](Game& g) { g.menu = Menu::Mods; g.scanMods(); }, idle, "mods menu"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/E0_mods_menu.png"); res[3] = g.ui.findWidget("Importer un mod (.zip)") != nullptr; }, idle, "shot"});
+        // toggle the mod off with a held tap on its switch (the only switch on this page)
+        s.push_back({0.25f, [](Game& g) {
+            for (auto& w : g.ui.lastWidgets) if (w.second.empty()) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 610, (w.first.x + w.first.w / 2) * k, (w.first.y + w.first.h / 2) * k}); break; }
+        }, idle, "press switch"});
+        s.push_back({0.4f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 610) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 610, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({0.2f, [](Game& g) {
+            g.scanMods();   // re-read from disk: the choice must be saved
+            for (auto& x : g.mods) if (x.id == "test_mod") res[4] = !x.enabled;
+            std::string list; res[5] = platform::readFile(platform::writableDir() + "/mods_enabled.txt", list) && list.find("!test_mod") != std::string::npos;
+            g.menu = Menu::None;
+            AGR_LOG("MODS TEST: applied=%d dataPatched=%d assetOverride=%d menu=%d toggledOff=%d saved=%d", res[0], res[1], res[2], res[3], res[4], res[5]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG("MODS TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        return s;
+    }
+    if (name == "prologue") {
+        // 1.7.0: the animated prologue plays on a new game; one capture per shot, then the end state is checked,
+        // then it is replayed and skipped with a real tap on "Passer"
+        static int lastShot; static int res[6];
+        s.push_back({0.1f, [](Game& g) { lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue"; }, idle, "prologue started"});
+        s.push_back({76.f, none, [](Game& g, float) {
+            if (!g.cine.active) return;
+            if (g.cine.index != lastShot && g.cine.t > 3.2f) {
+                lastShot = g.cine.index;
+                g.requestScreenshot(std::string("build/shots/D") + std::to_string(lastShot) + "_prologue.png");
+                AGR_LOG("PROLOGUE shot %d: \"%s\"", lastShot, g.cine.shots[lastShot].text.c_str());
+            }
+        }, "play prologue"});
+        s.push_back({1.5f, [](Game& g) {
+            res[1] = !g.cine.active && lastShot + 1 == 10;
+            res[2] = g.storyFlags.count("prologue_seen") && g.loreFound.count("l1") && g.loreFound.count("l2") && g.loreFound.count("l3");
+            res[3] = g.pc().vis.anim.state == BodyState::Locomotion;
+        }, idle, "after"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/D9_after_prologue.png"); }, idle, "shot"});
+        // save / load keeps the story flags
+        s.push_back({0.3f, [](Game& g) { g.saveGame(2); g.storyFlags.clear(); g.loadGame(2); g.startPlaying(); res[4] = g.storyFlags.count("prologue_seen") > 0; }, idle, "save/load flags"});
+        s.push_back({1.f, [](Game& g) { g.startPrologue(); }, idle, "replay"});
+        s.push_back({0.6f, [](Game& g) { const Rect* r = g.ui.findWidget("Passer"); if (r) { float k = g.ui.scale; vec2 c{r->x + r->w / 2, r->y + r->h / 2}; g.touch(TouchEvent{TouchEvent::Down, 600, c.x * k, c.y * k}); } }, idle, "press skip"});
+        s.push_back({0.3f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 600) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 600, f.x * k, f.y * k}); } }, idle, "release skip"});
+        s.push_back({0.2f, [](Game& g) {
+            res[5] = !g.cine.active;
+            AGR_LOG("PROLOGUE TEST: started=%d allShots=%d flagsAndLore=%d heroUp=%d saveLoad=%d skipButton=%d", res[0], res[1], res[2], res[3], res[4], res[5]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG("PROLOGUE TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        return s;
+    }
     if (name == "gait") {
         // side-on close-ups of the hero's walk / run cycle (animation quality and skinning checks)
         s.push_back({2.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});

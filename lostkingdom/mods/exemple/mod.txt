@@ -1,0 +1,4 @@
+name = Exemple : Chroniques du Vagabond
+author = SUPERESSENCE STUDIO
+version = 1.0
+description = Mod d'exemple : renomme l'épée de départ, rend les loups plus coriaces, ajoute une chronique et une réplique à Maëlle.

@@ -2,6 +2,8 @@
 #include "Data.h"
 #include <unordered_map>
 #include <mutex>
+#include <cmath>
+#include <cstdlib>
 
 namespace lk {
 
@@ -848,15 +850,119 @@ const std::vector<DungeonDef>& dungeons() {
 }
 
 const std::vector<LoreDef>& lore() {
+    // 1.7.0: the Chronicles. Ids l1..l6 are kept (older saves); new pages are unlocked by the prologue, relics,
+    // discovering regions (r_*) and defeating the Guardians (mem_*: memories of Aldric).
     static std::vector<LoreDef> l = {
-        {"l1", "La Couronne-Mère", "Six joyaux, six royaumes, un seul roi. Aldric fit forger la Couronne-Mère pour que plus jamais les royaumes ne se fassent la guerre."},
-        {"l2", "La Chute", "La nuit de la Chute, la terre s'ouvrit sous Morneval. Ce qui en sortit n'avait pas de nom, seulement une faim."},
-        {"l3", "Le sacrifice", "Aldric brisa la Couronne. Chaque fragment devint un verrou, chaque gardien une clé vivante."},
-        {"l4", "Sire Corwin", "Le champion jura de garder le sceau « jusqu'au retour du roi ». Trois siècles plus tard, il attend encore."},
-        {"l5", "Elsa", "La reine disparut le jour de la Chute. Certains disent qu'elle s'est enfuie par la mer, portant l'héritier."},
-        {"l6", "Les Errants", "Les marins parlent de naufragés marqués d'une couronne, que la mer rend toujours à Greenhaven."},
+        // ---- the legend
+        {"l1", "La Couronne-Mère", "Six joyaux, six royaumes, un seul roi. Aldric fit forger la Couronne-Mère au cœur de Highspire, avec le feu de l'Ashen et la glace de Frostheim, pour que plus jamais les royaumes ne se fassent la guerre. On dit qu'elle chantait la nuit, et que celui qui la portait entendait battre le cœur de chaque sujet."},
+        {"l2", "La Chute", "La nuit de la Chute, la terre s'ouvrit sous Morneval. Le ciel devint violet, les morts se levèrent dans les marais, et pendant sept jours le soleil ne réchauffa plus personne. Ce qui sortit de la faille n'avait pas de nom. Seulement une faim."},
+        {"l3", "Le sacrifice", "Pour refermer la faille, Aldric brisa la Couronne-Mère sur l'enclume de Highspire. Chaque fragment devint un verrou ; chaque Gardien, une clé vivante. Puis le roi entra dans l'Abîme, seul, et lia sa propre âme au sceau. On ne retrouva jamais son corps."},
+        {"l4", "Sire Corwin", "Le champion du roi jura de garder la porte de l'Abîme « jusqu'au retour du roi ». Trois siècles plus tard, il attend encore, dans une armure que la rouille n'ose plus toucher. Ceux qui l'ont croisé disent qu'il ne parle qu'à une seule personne : quelqu'un qui n'est jamais revenu."},
+        {"l5", "La reine Elsa", "La reine disparut le jour de la Chute. Certains disent qu'elle s'est enfuie par la mer, portant l'héritier du trône. Les bardes chantent encore le retour de « l'enfant de la couronne ». Les érudits de Highspire, eux, ne chantent pas : ils cherchent."},
+        {"l6", "Les Errants", "Les marins parlent de naufragés marqués d'une couronne, que la mer rend toujours à Greenhaven. Aucun ne se souvient de son nom. La plupart meurent dans l'année. Un seul, dit-on, a survécu assez longtemps pour poser la question qui fait trembler l'Ordre : « Pourquoi la marque me brûle-t-elle quand je regarde vers Morneval ? »"},
+        {"l7", "Malgrath", "Il était le plus brillant des mages d'Aldric, son élève, presque son frère. Il lisait les étoiles et comptait les années qui lui restaient. Un soir, il compta trop bas. Alors il chercha sous la terre ce que le ciel lui refusait, et trouva une voix qui promettait l'éternité. Il ne demanda pas le prix."},
+        {"l8", "L'Abîme", "Ce n'est pas un lieu, disent les moines : c'est une blessure. Ce qui en monte ressemble à de l'ombre, mais a faim comme une bête. Les créatures d'ombre ne saignent pas ; elles se défont. Et dans leur silence, ceux qui écoutent trop longtemps entendent des promesses."},
+        {"l9", "Les six Gardiens", "L'Esprit des Racines dans l'Elderwood. Le Sénéchal, devenu Roi Squelette, à Gravemoor. Le Colosse sous le Lac de Givre. Le Dragon Cendré au Nid de Cendres. La Reine des Araignées dans son antre. Le Titan de Pierre au Cirque des Titans. Six gardiens, six fragments. Trois siècles de murmures ont suffi à les corrompre tous."},
+        {"l10", "L'Ordre de Highspire", "Les moines de Highspire gardent les archives du royaume et la clé de la forge où fut faite la Couronne-Mère. Ils portent le bleu et l'argent, et ne vieillissent pas plus vite que les autres hommes. Presque tous."},
+        {"l11", "La marque-couronne", "Une couronne à six branches, sous la peau du poignet, qui brûle quand un fragment est proche. Les vieux grimoires l'appellent « le sceau du porteur ». Aucun grimoire n'explique comment un naufragé sans nom peut porter le sceau d'un roi mort."},
+        // ---- the regions (unlocked on discovery)
+        {"r_0", "Greenhaven", "Le cœur doux du royaume : blé, moulins, routes pavées. Brindlemere y garde la tapisserie de la Couronne, que la doyenne Maëlle refuse de montrer aux étrangers. Depuis quelques lunes, les loups sortent des bois la nuit, et ils ont les yeux violets."},
+        {"r_1", "Frostheim", "Les clans du nord n'ont jamais plié le genou que devant Aldric. Ils racontent que le Colosse dort sous le Lac de Givre et que la glace chante quand il rêve. Cet hiver, la glace hurle."},
+        {"r_2", "Ashen Lands", "Une terre de cendre au pied du volcan, où les mineurs de Cinderwatch arrachent le fer à la lave. Le Dragon Cendré y couve un fragment de couronne comme un œuf, et la montagne fume plus fort chaque année."},
+        {"r_3", "Elderwood", "La forêt la plus ancienne du monde. Les druides du Cercle disent qu'Aldric y planta l'arbre-mère avec son champion, le jour de son sacre. Les racines remuent la nuit, et les clairières ne guérissent plus."},
+        {"r_4", "Royaume des Ombres", "Ce fut le plus riche des six royaumes ; c'est aujourd'hui un marais de brume, de tombes et de cloches qui sonnent seules. Le château de Morneval domine la faille. Personne n'y entre. Quelque chose en sort."},
+        {"r_5", "High Crowns", "Les cimes couronnées, où le ciel est si proche qu'on y voit les étoiles en plein jour. Le monastère de Highspire y garde la forge sacrée, et l'astronome de la tour prétend que les étoiles se sont déplacées."},
+        // ---- memories of Aldric (one per defeated Guardian)
+        {"mem_root", "Souvenir : l'arbre-mère", "Tu te souviens de la terre noire sous tes ongles. D'un jeune chevalier qui riait en tenant la pousse : « Elle verra nos petits-enfants, sire. » Corwin. Tu connais ce nom. Tu as planté cet arbre. Tu."},
+        {"mem_king", "Souvenir : le serment du sénéchal", "Un homme agenouillé dans la salle du trône, la main sur l'épée. « Ma vie pour la couronne, ma mort pour le roi. » Le Roi Squelette a gardé son serment trois siècles. Avant de s'effondrer, il t'a appelé « sire »."},
+        {"mem_ice", "Souvenir : l'hiver noir", "La neige rouge, les clans du nord en ligne, et l'armée d'ombre qui avance sans bruit. Tu as levé ton épée et des milliers d'hommes ont crié ton nom. Tu ne te souviens pas de ce nom. Mais tu te souviens du cri."},
+        {"mem_ash", "Souvenir : l'élève", "Un jeune homme penché sur une carte du ciel. « Maître, combien de temps vivent les étoiles ? » Tu lui as répondu, et tu as vu la peur entrer dans ses yeux. C'était Malgrath. C'est toi qui lui as appris à compter les années."},
+        {"mem_spider", "Souvenir : le jeune moine", "La forge de Highspire, la nuit où la Couronne fut brisée. Dans l'ombre, un novice qui tenait les tenailles : cheveux noirs, regard vif, une cicatrice au menton. Tu as déjà vu ce visage. Hier. Il n'a pas pris une ride."},
+        {"mem_titan", "Souvenir : la clé de la forge", "Tu as confié la clé de la forge à l'Ordre en disant : « Que personne ne puisse jamais la reforger. » Le prieur a juré. Derrière lui, le novice à la cicatrice souriait."},
+        {"mem_knight", "Souvenir : le champion", "Corwin, à genoux devant la porte de l'Abîme, et toi qui entres sans te retourner. « Attends-moi. » C'est le dernier mot que tu lui as dit. Il a attendu. Il attend encore. Ou il t'a enfin reconnu."},
+        {"mem_abyss", "Souvenir : la voix", "Au fond de l'Abîme, une voix qui connaît ton vrai nom. « Tu es revenu, Aldric. Mais pas pour sceller. Pour choisir. » Tu sais maintenant qui tu es. Il te reste à décider ce que tu feras de la couronne."},
     };
     return l;
+}
+
+// ---------------------------------------------------------------------------------------- mods (1.7.0)
+// The tables are built once into static non-const storage; mods patch them at startup, before any use.
+ItemDef* itemMutable(const std::string& id) { return const_cast<ItemDef*>(item(id)); }
+EnemyDef* enemyMutable(const std::string& id) { int i = enemyIndex(id); return i < 0 ? nullptr : const_cast<EnemyDef*>(&enemies()[i]); }
+NpcDef* npcMutable(const std::string& id) { for (auto& n : npcs()) if (n.id == id) return const_cast<NpcDef*>(&n); return nullptr; }
+std::vector<LoreDef>& loreMutable() { return const_cast<std::vector<LoreDef>&>(lore()); }
+
+static std::string trimStr(const std::string& s) {
+    size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
+    return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+}
+
+bool applyModDataLine(const std::string& raw, std::string& err) {
+    std::string line = trimStr(raw);
+    if (line.empty() || line[0] == '#') return true;
+    size_t eq = line.find('=');
+    if (eq == std::string::npos) { err = "il manque « = »"; return false; }
+    std::string key = trimStr(line.substr(0, eq)), val = trimStr(line.substr(eq + 1));
+    if (val.size() > 2000) { err = "texte trop long"; return false; }
+    auto num = [&](float& out, float lo, float hi) {
+        char* end = nullptr;
+        float v = std::strtof(val.c_str(), &end);
+        if (end == val.c_str() || !std::isfinite(v)) { err = "nombre attendu : " + val; return false; }
+        out = clampf(v, lo, hi);
+        return true;
+    };
+    if (key == "lore.add") {   // lore.add = id | Titre | Texte
+        size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);
+        if (p2 == std::string::npos) { err = "format : lore.add = id | Titre | Texte"; return false; }
+        LoreDef d{trimStr(val.substr(0, p1)), trimStr(val.substr(p1 + 1, p2 - p1 - 1)), trimStr(val.substr(p2 + 1))};
+        if (d.id.empty() || d.title.empty()) { err = "id ou titre vide"; return false; }
+        auto& L = loreMutable();
+        for (auto& l : L) if (l.id == d.id) { l = d; return true; }
+        L.push_back(d);
+        return true;
+    }
+    size_t d1 = key.find('.'), d2 = d1 == std::string::npos ? d1 : key.find('.', d1 + 1);
+    if (d2 == std::string::npos) { err = "clé attendue : type.id.champ"; return false; }
+    std::string type = key.substr(0, d1), id = key.substr(d1 + 1, d2 - d1 - 1), field = key.substr(d2 + 1);
+    if (type == "item") {
+        ItemDef* it = itemMutable(id);
+        if (!it) { err = "objet inconnu : " + id; return false; }
+        if (field == "name") { it->name = val; return true; }
+        if (field == "desc") { it->desc = val; return true; }
+        if (field == "atk") return num(it->atk, 0, 9999);
+        if (field == "def") return num(it->def, 0, 9999);
+        if (field == "hp") return num(it->hp, 0, 99999);
+        if (field == "mp") return num(it->mp, 0, 99999);
+        if (field == "crit") return num(it->crit, 0, 1);
+        if (field == "speed") return num(it->speed, -0.5f, 1.f);
+        if (field == "value") { float v; if (!num(v, 0, 1e7f)) return false; it->value = (int)v; return true; }
+        err = "champ d'objet inconnu : " + field; return false;
+    }
+    if (type == "enemy") {
+        EnemyDef* e = enemyMutable(id);
+        if (!e) { err = "ennemi inconnu : " + id; return false; }
+        if (field == "name") { e->name = val; return true; }
+        if (field == "desc") { e->desc = val; return true; }
+        if (field == "hp") return num(e->hp, 1, 1e6f);
+        if (field == "atk") return num(e->atk, 0, 9999);
+        if (field == "def") return num(e->def, 0, 9999);
+        if (field == "speed") return num(e->speed, 0.2f, 20.f);
+        if (field == "scale") return num(e->scale, 0.3f, 6.f);
+        if (field == "aggro") return num(e->aggro, 1, 80);
+        err = "champ d'ennemi inconnu : " + field; return false;
+    }
+    if (type == "npc") {
+        NpcDef* n = npcMutable(id);
+        if (!n) { err = "PNJ inconnu : " + id; return false; }
+        if (field == "name") { n->name = val; return true; }
+        if (field == "title") { n->title = val; return true; }
+        if (field == "greet") { n->greetings.push_back(val); return true; }
+        if (field == "greet.replace") { n->greetings = {val}; return true; }
+        if (field == "lore") { n->lore.push_back(val); return true; }
+        err = "champ de PNJ inconnu : " + field; return false;
+    }
+    err = "type inconnu : " + type + " (item, enemy, npc, lore.add)";
+    return false;
 }
 
 }  // namespace lk

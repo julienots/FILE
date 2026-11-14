@@ -6,6 +6,9 @@
 #include <thread>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <algorithm>
+#include <mutex>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -65,5 +68,45 @@ double timeSeconds() {
 
 int cpuCount() { unsigned n = std::thread::hardware_concurrency(); return n ? (int)n : 2; }
 
+}  // namespace platform
+}  // namespace agr
+
+namespace agr {
+namespace platform {
+static std::vector<std::string> gOverrideRoots;
+static std::mutex gOverrideMutex;
+void setAssetOverrideRoots(const std::vector<std::string>& roots) { std::lock_guard<std::mutex> l(gOverrideMutex); gOverrideRoots = roots; }
+bool readAssetOverride(const std::string& path, std::vector<uint8_t>& out) {
+    std::vector<std::string> roots;
+    { std::lock_guard<std::mutex> l(gOverrideMutex); roots = gOverrideRoots; }
+    if (roots.empty() || path.find("..") != std::string::npos) return false;
+    for (const auto& r : roots) {
+        std::string full = r + "/assets/" + path;
+        FILE* f = fopen(full.c_str(), "rb");
+        if (!f) continue;
+        fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+        if (n < 0 || n > 64l * 1024 * 1024) { fclose(f); continue; }
+        out.resize((size_t)n);
+        size_t rd = fread(out.data(), 1, (size_t)n, f);
+        fclose(f);
+        if (rd == (size_t)n) return true;
+    }
+    return false;
+}
+std::vector<std::string> listDirectories(const std::string& dir) {
+    std::vector<std::string> out;
+    DIR* d = opendir(dir.c_str());
+    if (!d) return out;
+    while (dirent* e = readdir(d)) {
+        std::string n = e->d_name;
+        if (n.empty() || n[0] == '.') continue;
+        struct stat st;
+        if (stat((dir + "/" + n).c_str(), &st) == 0 && S_ISDIR(st.st_mode)) out.push_back(n);
+    }
+    closedir(d);
+    std::sort(out.begin(), out.end());
+    return out;
+}
+bool makeDirectory(const std::string& dir) { return mkdir(dir.c_str(), 0755) == 0 || fileExists(dir); }
 }  // namespace platform
 }  // namespace agr

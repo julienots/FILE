@@ -92,7 +92,11 @@ void Game::updateCamera(float dt) {
     ri.smooth = settings.cameraSmooth ? 1.f : 2.5f;   // tight mode: terrain lift / wall back-out settle 2.5x faster
     camRig = CameraRig::compute(ri);
     vec3 eye = camRig.eye, look = camRig.look;
-    if (cinematicT > 0) {
+    float cineFov = 0;
+    if (cine.active) {
+        vec3 ce, cl;
+        if (cinematicCamera(ce, cl, cineFov)) { eye = ce; look = cl; cineLastEye = eye; cineLastLook = look; camCineBlend = 0; }
+    } else if (cinematicT > 0) {
         float u = 1.f - cinematicT / 4.f;
         eye = lerp(cineFrom, cineTo, easeInOut(saturate(u)));
         look = cineLook;
@@ -110,7 +114,7 @@ void Game::updateCamera(float dt) {
         shake = std::max(0.f, shake - dt * 2.5f);
     }
     cam.pos = eye; cam.target = look;
-    cam.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
+    cam.fovY = cineFov > 0 ? cineFov : (dungeon.active ? 40.f : 38.f) * DEG;
     cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
     cam.zFar = dungeon.active ? 420.f : 1500.f;   // the horizon relief reaches the whole island (fog hides the rest)
     cam.update((float)W / std::max(1, H));

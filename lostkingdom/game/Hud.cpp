@@ -25,7 +25,7 @@ bool Game::ctlVisible(int id) const {
 
 void Game::updateTouchControls() {
     if (state != GameState::Playing || layoutEdit) return;
-    bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0;
+    bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0 || cine.active;
     if (modal) { joyFinger = -1; camFinger = -1; return; }
     UI& u = ui;
     // ---- buttons
@@ -261,6 +261,7 @@ void Game::drawMinimap(Rect r) {
 
 void Game::drawHud(float dt) {
     if (player == NullEntity) return;
+    if (cine.active) { drawCinematicShots(); return; }   // no HUD during story cinematics
     UI& u = ui;
     Character& p = pc();
     float W_ = u.W, H_ = u.H;
@@ -478,7 +479,7 @@ void Game::drawHud(float dt) {
 // ============================================================================================ notifications
 void Game::drawNotifications(float dt) {
     UI& u = ui;
-    if (menu != Menu::None || dialog.open) { for (auto& n : notes) n.t = std::min(n.t, 0.5f); return; }
+    if (menu != Menu::None || dialog.open || cine.active) { for (auto& n : notes) n.t = std::min(n.t, 0.5f); return; }   // shown after menus / cinematics
     float y = state == GameState::Playing ? 176 : 20;
     for (auto& n : notes) {
         n.t += dt;

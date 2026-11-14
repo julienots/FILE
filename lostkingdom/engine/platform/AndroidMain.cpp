@@ -25,6 +25,7 @@ static std::atomic<bool> gQuit{false};
 
 namespace platform {
 bool readAsset(const std::string& path, std::vector<uint8_t>& out) {
+    if (readAssetOverride(path, out)) return true;   // enabled mods first
     if (!gApp) return false;
     AAsset* a = AAssetManager_open(gApp->activity->assetManager, path.c_str(), AASSET_MODE_BUFFER);
     if (!a) return false;
@@ -39,6 +40,21 @@ void requestQuit() { gQuit = true; if (gApp) ANativeActivity_finish(gApp->activi
 void requestScreenshot(const std::string&) {}
 const std::vector<std::string>& launchArgs() { return gNoArgs; }
 bool isHeadlessTest() { return false; }
+bool requestModImport() {
+    // GameActivity.pickModZip() posts the system file picker on the UI thread; the Java side unpacks the zip into
+    // <files>/mods/<name>/ and writes <files>/mods/.imported
+    if (!gApp) return false;
+    JNIEnv* env = nullptr;
+    gApp->activity->vm->AttachCurrentThread(&env, nullptr);
+    jobject act = gApp->activity->clazz;
+    jclass cls = env->GetObjectClass(act);
+    jmethodID m = env->GetMethodID(cls, "pickModZip", "()V");
+    bool ok = false;
+    if (m && !env->ExceptionCheck()) { env->CallVoidMethod(act, m); ok = !env->ExceptionCheck(); }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    gApp->activity->vm->DetachCurrentThread();
+    return ok;
+}
 
 void vibrate(int ms, int amplitude) {
     if (!gApp) return;

@@ -36,6 +36,12 @@ int cpuCount();
 void requestScreenshot(const std::string& path);
 const std::vector<std::string>& launchArgs();
 bool isHeadlessTest();
+// ---- mods (1.7.0): folders whose "assets/" subtree overrides the packaged assets (first root wins)
+void setAssetOverrideRoots(const std::vector<std::string>& roots);
+bool readAssetOverride(const std::string& path, std::vector<uint8_t>& out);   // used by readAsset implementations
+std::vector<std::string> listDirectories(const std::string& dir);              // sub-directory names (sorted)
+bool makeDirectory(const std::string& dir);
+bool requestModImport();   // Android: opens the system file picker for a .zip mod (false where unsupported)
 }  // namespace platform
 
 }  // namespace agr

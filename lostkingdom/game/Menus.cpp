@@ -211,6 +211,7 @@ void Game::newGame() {
     inventory.clear(); for (auto& e : equipment) e = ItemStack();
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); activeMount = -1;
     questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
+    storyFlags.clear(); cine = CinematicState(); pendingPrologue = true;
     killedUnique.clear(); openedChests.clear(); clearedSpawns.clear(); dungeonsDone.clear(); world.harvested.clear();
     for (auto& r : reputation) r = 0;
     fog.assign(128 * 128, 0);
@@ -247,6 +248,9 @@ void Game::startPlaying() {
     renderItemIcons();
     toastHint = "Joystick à gauche pour marcher · Bouton épée : attaquer (maintenir pour charger) · Glisser à droite pour tourner la caméra.";
     hintT = 0;
+    // a new game opens with the prologue (the test bot only plays it in its own scenarios)
+    if (pendingPrologue && (!autoplay || autoplayScenario == "prologue")) { toastHint.clear(); startPrologue(); }
+    pendingPrologue = false;
 }
 
 void Game::drawTitle(float dt) {
@@ -308,9 +312,10 @@ void Game::drawCredits(float dt) {
 }
 
 // ============================================================================================ journal tabs
-static const char* TABS[] = {"Inventaire", "Équipement", "Compétences", "Artisanat", "Carte", "Quêtes", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
-static const Menu TAB_MENU[] = {Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Map, Menu::Quests, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
-static const char* TAB_ICON[] = {"i_inventory", "i_character", "i_skills", "i_craft", "i_map", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static const char* TABS[] = {"Inventaire", "Équipement", "Compétences", "Artisanat", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
+static const Menu TAB_MENU[] = {Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
+static const char* TAB_ICON[] = {"i_inventory", "i_character", "i_skills", "i_craft", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static constexpr int TAB_COUNT = 11;
 
 static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
     UI& u = g.ui;
@@ -432,8 +437,8 @@ void Game::drawMenus(float dt) {
     u.consumeAll();
     Rect f = journalFrame(u);
     u.panel(f);
-    float tw = (f.w - 120) / 10.f;
-    for (int i = 0; i < 10; i++) {
+    float tw = (f.w - 120) / (float)TAB_COUNT;
+    for (int i = 0; i < TAB_COUNT; i++) {
         Rect t{f.x + 30 + i * tw, f.y - 36, tw - 6, 58};
         bool active = TAB_MENU[i] == menu;
         u.nine(active ? "button" : "button_dark", t, vec4(1, 1, 1, active ? 1.f : 0.85f), 0.8f);
@@ -816,6 +821,70 @@ void Game::drawMenus(float dt) {
         break;
     }
     // ---------------------------------------------------------------- collection
+    // ---------------------------------------------------------------- mods
+    case Menu::Mods: {
+        u.text("Mods", c.x, c.y, 26, GOLDT, F_SERIF);
+        u.text("Les mods remplacent des modèles, textures, sons et musiques, ou modifient objets, ennemis, dialogues et chroniques. Ils ne contiennent jamais de code. Les changements s'appliquent au prochain lancement du jeu.",
+               c.x, c.y + 38, 17, DIM, F_BODY, A_LEFT, c.w * 0.62f);
+        if (u.fancyButton({c.x + c.w - 300, c.y - 6, 300, 54}, "Importer un mod (.zip)", true, "button", 19)) {
+            if (!platform::requestModImport()) notify("Sur ordinateur : copiez le dossier du mod dans " + platform::writableDir() + "/mods", vec3(1, 0.9f, 0.7f), "i_settings");
+        }
+        Rect list{c.x, c.y + 110, c.w, c.h - 110};
+        if (mods.empty()) {
+            u.text("Aucun mod installé. Touchez « Importer un mod » et choisissez un fichier .zip.", list.x + list.w / 2, list.y + 80, 20, PALE, F_BODY, A_CENTER);
+            break;
+        }
+        u.pushClip(list);
+        float so = u.scrollArea("mods", list, mods.size() * 96.f);
+        float y = list.y - so;
+        bool changed = false;
+        for (auto& m : mods) {
+            Rect row{list.x, y, list.w - 14, 88};
+            u.nine("slot", row, vec4(1, 1, 1, m.enabled ? 1.f : 0.6f), 0.45f);
+            std::string head = m.name + (m.version.empty() ? "" : "  v" + m.version) + (m.author.empty() ? "" : "  · " + m.author);
+            u.text(head, row.x + 16, row.y + 10, 20, m.enabled ? GOLDT : DIM, F_BOLD);
+            std::string info = m.desc;
+            if (m.applied) info = (m.patches ? std::to_string(m.patches) + " modification(s) appliquée(s)" : std::string("ressources seulement")) + (m.errors ? " · " + std::to_string(m.errors) + " erreur(s), " + m.firstError : "") + (m.desc.empty() ? "" : " · " + m.desc);
+            else if (m.enabled) info = "Sera appliqué au prochain lancement" + (m.desc.empty() ? std::string() : " · " + m.desc);
+            u.text(info, row.x + 16, row.y + 44, 16, m.errors ? rgba(0xe0a070) : PALE, F_BODY, A_LEFT, row.w - 140);
+            bool v = m.enabled;
+            if (toggle(u, {row.x + row.w - 110, row.y + 24, 100, 40}, "", v)) { m.enabled = v; changed = true; }
+            y += 96;
+        }
+        u.popClip();
+        if (changed) { saveModList(); notify("Redémarrez le jeu pour appliquer les mods", vec3(1, 0.9f, 0.7f), "i_settings"); }
+        break;
+    }
+    // ---------------------------------------------------------------- chronicles (lore)
+    case Menu::Chronicles: {
+        Rect list{c.x, c.y + 40, c.w * 0.38f, c.h - 40};
+        const auto& L = lore();
+        int found = 0; for (auto& l : L) found += loreFound.count(l.id) ? 1 : 0;
+        u.text("Chroniques · " + std::to_string(found) + "/" + std::to_string(L.size()), c.x, c.y, 22, PALE, F_SERIF);
+        if (u.fancyButton({c.x + c.w * 0.38f - 210, c.y - 8, 210, 42}, "Revoir le prologue", true, "button_dark", 17)) { menu = Menu::None; startPrologue(); }
+        u.pushClip(list);
+        float so = u.scrollArea("lore", list, L.size() * 52.f + 20);
+        std::string cat;
+        float y = list.y - so;
+        for (int i = 0; i < (int)L.size(); i++) {
+            bool f2 = loreFound.count(L[i].id) > 0;
+            Rect row{list.x, y, list.w - 12, 46};
+            u.nine(i == selLore ? "slot_sel" : "slot", row, vec4(1, 1, 1, f2 ? 1.f : 0.5f), 0.4f);
+            u.text(f2 ? L[i].title : "???", row.x + 14, row.y + 12, 18, f2 ? (i == selLore ? GOLDT : PALE) : DIM, f2 ? F_BOLD : F_BODY);
+            if (f2 && u.button(row)) { selLore = i; play("ui_click", 0.4f); }
+            y += 52;
+        }
+        u.popClip();
+        Rect page{c.x + c.w * 0.42f, c.y + 40, c.w * 0.58f, c.h - 40};
+        u.panel(page, "", true);
+        if (selLore >= 0 && selLore < (int)L.size() && loreFound.count(L[selLore].id)) {
+            u.text(L[selLore].title, page.x + 34, page.y + 26, 32, rgba(0x5a2a14), F_TITLE);
+            u.text(L[selLore].text, page.x + 34, page.y + 86, 21, INK, F_BODY, A_LEFT, page.w - 68);
+        } else {
+            u.text("Touchez une chronique pour la lire.", page.x + page.w / 2, page.y + page.h / 2 - 12, 20, rgba(0x7a5a3a), F_BODY, A_CENTER);
+        }
+        break;
+    }
     case Menu::Collection: {
         float y = c.y;
         float colW = c.w / 2 - 20;
@@ -839,13 +908,10 @@ void Game::drawMenus(float dt) {
         u.text("Reliques", x2, y, 22, GOLDT, F_SERIF); y += 36;
         for (auto& d : allItems()) if (d.kind == ItemKind::Relic) { bool f2 = relicsFound.count(d.id) > 0; u.text(std::string(f2 ? "✓ " : "· ") + (f2 ? d.name : "???"), x2 + 10, y, 18, f2 ? PALE : DIM, F_BODY); y += 26; }
         y += 14;
-        u.text("Chroniques", x2, y, 22, GOLDT, F_SERIF); y += 36;
-        for (auto& l : lore()) {
-            bool f2 = loreFound.count(l.id) > 0;
-            if (f2) { u.text(l.title, x2 + 10, y, 18, rgba(0xd8c090), F_BOLD); y += 24; y += u.text(l.text, x2 + 10, y, 16, PALE, F_BODY, A_LEFT, colW - 20) + 8; }
-            else { u.text("· ???", x2 + 10, y, 18, DIM, F_BODY); y += 26; }
+        {
+            int found = 0; for (auto& l : lore()) found += loreFound.count(l.id) ? 1 : 0;
+            u.text("Chroniques : " + std::to_string(found) + "/" + std::to_string(lore().size()) + " (onglet Chroniques)", x2, y, 20, GOLDT, F_SERIF); y += 44;
         }
-        y += 10;
         u.text("Réputation", x2, y, 22, GOLDT, F_SERIF); y += 34;
         for (int fa = 0; fa < FA_COUNT; fa++) { u.text(factionName(fa), x2 + 10, y, 17, PALE, F_BODY); u.bar({x2 + colW - 170, y, 160, 20}, std::min(1.f, reputation[fa] / 150.f), vec4(0.85f, 0.7f, 0.3f, 1)); y += 28; }
         break;
@@ -888,6 +954,11 @@ void Game::drawMenus(float dt) {
         if (u.fancyButton({x2, y, colW, 54}, "Personnaliser les commandes", state == GameState::Playing, "button", 20)) { layoutEdit = true; }
         y += 64;
         if (toggle(u, {x2, y, colW, 40}, "Mode gaucher", settings.layout.leftHanded)) {}
+        y += 50;
+        {
+            int on = 0; for (auto& m : mods) on += m.enabled ? 1 : 0;
+            if (u.fancyButton({x2, y, colW, 54}, "Mods (" + std::to_string(on) + " actif" + (on > 1 ? "s" : "") + ")", true, "button_dark", 20)) { scanMods(); menu = Menu::Mods; }
+        }
         static float lastSave = 0;
         lastSave += dt;
         if (lastSave > 1.f) { saveSettings(); lastSave = 0; }

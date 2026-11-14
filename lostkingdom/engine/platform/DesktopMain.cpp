@@ -23,6 +23,7 @@ static std::vector<std::string> gArgs;
 
 namespace platform {
 bool readAsset(const std::string& path, std::vector<uint8_t>& out) {
+    if (readAssetOverride(path, out)) return true;   // enabled mods first
     std::string full = gAssetDir + "/" + path;
     FILE* f = fopen(full.c_str(), "rb");
     if (!f) return false;
@@ -38,6 +39,7 @@ void requestQuit() {}
 void requestScreenshot(const std::string& path) { gScreenshotQueue.push_back(path); }
 const std::vector<std::string>& launchArgs() { return gArgs; }
 bool isHeadlessTest() { return true; }
+bool requestModImport() { return false; }   // desktop: copy the mod folder into <save dir>/mods by hand
 }  // namespace platform
 }  // namespace agr
 

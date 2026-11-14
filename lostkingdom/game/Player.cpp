@@ -499,9 +499,11 @@ void Game::playerInteract() {
             std::string rid = relics[ns.uid % 3];
             if (pi >= 0 && world.pois[pi].id == "elven_ruins") rid = "relic_elven_harp";
             if (!relicsFound.count(rid)) { relicsFound.insert(rid); addItem(rid, 1); }
-            const auto& L = lore();
-            const LoreDef& ld = L[ns.uid % L.size()];
-            if (!loreFound.count(ld.id)) { loreFound.insert(ld.id); notify("Page de chronique : " + ld.title, vec3(0.9f, 0.8f, 1.f), "i_quest"); }
+            // relics hold the legend pages (l4..l11) not given by the prologue
+            static const char* relicLore[] = {"l4", "l5", "l6", "l7", "l8", "l9", "l10", "l11"};
+            std::string lid = relicLore[ns.uid % 8];
+            for (const char* cand : relicLore) if (!loreFound.count(cand)) { if (ns.uid % 2 == 0 || loreFound.count(lid)) lid = cand; break; }
+            unlockLore(lid);
             world.harvested[ns.uid] = 0;  // permanent
             gainXp(60);
             c.vis.anim.play(&clip(C_INTERACT), 1.f);
@@ -590,6 +592,7 @@ void Game::updatePlayer(float dt) {
         if (r != lastRegion) {
             if (lastRegion >= 0 || true) { regionBanner = regionName(r); regionBannerSub = regionSubtitle(r); regionBannerT = 5.f; }
             lastRegion = r;
+            if (!cine.active) unlockLore("r_" + std::to_string(r));
             if (r == R_FROSTHEIM && c.status.frostRes <= 0 && countItem("elixir_frost") == 0) toastHint = "Le froid de Frostheim est mordant : l'élixir de résistance au froid aide.";
         }
         // cold drains stamina slowly in Frostheim without protection

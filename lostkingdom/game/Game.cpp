@@ -33,6 +33,7 @@ bool Game::init(int w, int h) {
     W = w; H = h;
     double t0 = platform::timeSeconds();
     loadSettings();
+    applyMods();   // content patches + asset overrides of enabled mods, before any asset or data is used
     for (auto& a : platform::launchArgs()) {
         if (a.rfind("--autoplay=", 0) == 0) { autoplay = true; autoplayScenario = a.substr(11); }
         if (a.rfind("--profile=", 0) == 0) settings.profile = (QualityProfile)std::atoi(a.c_str() + 10);
@@ -239,6 +240,8 @@ void Game::frame(float dtRaw) {
         // Touch controls BEFORE the simulation: taps (attack, dodge, jump, spells...) are one-frame edges that
         // input.clearEdges() erases at the end of the frame, so they must be produced before updatePlaying.
         updateTouchControls();
+        if (menu == Menu::Mods || std::fmod(realTime, 2.f) < dt) pollModImport();
+        updateCinematicShots(dt);   // multi-shot cinematics own the taps while they play
         bool paused = menu != Menu::None && menu != Menu::Death;
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
@@ -279,7 +282,7 @@ void Game::updatePlaying(float dt) {
     PROF(0, updatePlayer(dt));
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
-    PROF(3, updateSpawning(dt));
+    if (!cine.active) PROF(3, updateSpawning(dt));
     PROF(4, updateDungeon(dt));
     PROF(5, updateEnvironment(dt));
     PROF(6, updateAmbientFx(dt));
@@ -472,6 +475,7 @@ void Game::updateEnvironment(float dt) {
         env.night = 1.f;  // window/lantern glows on
     }
     audio.setReverb(dungeon.active ? 0.45f : 0.f);
+    applyCinematicEnvironment();
 }
 
 void Game::updateAmbientFx(float dt) {
@@ -587,6 +591,7 @@ void Game::updateAmbientFx(float dt) {
 // ============================================================================================ audio director
 void Game::updateAudioDirector(float dt) {
     if (player == NullEntity) return;
+    if (cine.active) return;   // the cinematic chooses its own music
     Character& p = pc();
     vec3 right = normalize(vec3(std::cos(camYaw), 0, -std::sin(camYaw)));
     audio.setListener(p.pos, right);

@@ -229,6 +229,11 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
         if (c.bossDef >= 0) {
             const BossDef& b = bosses()[c.bossDef];
             defeatedBosses.insert(b.id);
+            {   // each Guardian gives back a memory of Aldric (Chronicles)
+                static const std::pair<const char*, const char*> mem[] = {{"root_guardian", "mem_root"}, {"skeleton_king", "mem_king"}, {"ice_colossus", "mem_ice"}, {"ash_dragon", "mem_ash"},
+                                                                         {"spider_queen", "mem_spider"}, {"stone_titan", "mem_titan"}, {"fallen_knight", "mem_knight"}, {"abyss_lord", "mem_abyss"}};
+                for (auto& m : mem) if (b.id == m.first) unlockLore(m.second);
+            }
             bossEnt = NullEntity;
             advanceQuests(StepKind::KillBoss, b.id, 1);
             for (const auto& r : b.rewards) addItem(r, 1, item(r) ? std::max(item(r)->rarity, Rarity::Epic) : Rarity::Epic);
@@ -508,6 +513,7 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
     if (!c.dead && !(e == player && riding)) {
         BodyState want = c.swimming ? BodyState::Swim : (!c.grounded && c.airTime > 0.12f ? BodyState::Airborne : (c.hitStun > 0.3f && c.vis.arch == Arch::Humanoid && !a.action() ? BodyState::Stagger : BodyState::Locomotion));
         if (a.state == BodyState::Victory && e == player && cinematicT > 0) want = BodyState::Victory;
+        if (e == player && cine.active && cine.index < (int)cine.shots.size() && cine.shots[cine.index].heroDown) want = BodyState::Downed;   // lying on the shore
         if (a.state != want && a.state != BodyState::Sit && a.state != BodyState::Sleep && a.state != BodyState::Work) a.setState(want, want == BodyState::Airborne ? 0.15f : 0.25f);
     }
 }

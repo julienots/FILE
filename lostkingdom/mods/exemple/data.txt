@@ -1,0 +1,17 @@
+# Mod d'exemple de LOST KINGDOM : une modification par ligne, "type.id.champ = valeur".
+# Les lignes qui commencent par # sont des commentaires.
+
+# Objets : name, desc, atk, def, hp, mp, crit (0 à 1), speed, value
+item.sword_rusty.name = Lame du Vagabond
+item.sword_rusty.desc = Rouillée, ébréchée, fidèle. Elle a connu la mer avant toi.
+item.sword_rusty.atk = 9
+
+# Ennemis : name, desc, hp, atk, def, speed, scale, aggro
+enemy.wolf.name = Loup des grèves
+enemy.wolf.hp = 60
+
+# PNJ : name, title, greet (ajoute une salutation), greet.replace, lore (ajoute une confidence)
+npc.maelle.greet = La mer t'a gardé longtemps, cette fois. Plus longtemps que les autres.
+
+# Nouvelle chronique : lore.add = identifiant | Titre | Texte
+lore.add = vagabond | Le Vagabond | Avant toi, il y en eut d'autres. Ils portaient la même marque et la même épée rouillée. La mer les a tous rendus. Aucun n'est resté.
