@@ -22,9 +22,9 @@ def glow(size, xy, rad, color, alpha=200, blur=60):
     return layer.filter(ImageFilter.GaussianBlur(blur))
 
 def background(size):
-    bg = radial(size, (70, 40, 150), (8, 5, 30)).convert('RGBA')
-    bg.alpha_composite(glow(size, (int(size * .3), int(size * .28)), size * .3, (255, 90, 180), 110, size * .12))
-    bg.alpha_composite(glow(size, (int(size * .75), int(size * .7)), size * .32, (60, 140, 255), 120, size * .12))
+    bg = radial(size, (26, 14, 56), (2, 1, 8)).convert('RGBA')
+    bg.alpha_composite(glow(size, (int(size * .3), int(size * .28)), size * .3, (255, 60, 200), 70, size * .12))
+    bg.alpha_composite(glow(size, (int(size * .75), int(size * .7)), size * .32, (40, 120, 255), 80, size * .12))
     rnd = random.Random(7); d = ImageDraw.Draw(bg)
     for _ in range(int(size * .12)):
         x, y, r = rnd.random() * size, rnd.random() * size, rnd.random() * size * .004 + 1
@@ -39,35 +39,36 @@ def star(d, cx, cy, R, r, color, points=5, rot=-math.pi / 2):
     d.polygon(pts, fill=color)
 
 def creature(size, scale=1.0):
-    """Le héros « Grain d'Étoile »: boule lumineuse cyan, grands yeux, antenne étoilée, anneau orbital."""
+    """Le héros (style sombre): orbe d'obsidienne, liseré néon, yeux fendus lumineux, antenne étoilée, anneau orbital. Pas de sourire."""
     im = Image.new('RGBA', (size, size), (0, 0, 0, 0)); c = size / 2; R = size * .26 * scale
-    im.alpha_composite(glow(size, (c, c + R * .05), R * 1.35, (127, 220, 255), 170, size * .05))
+    im.alpha_composite(glow(size, (c, c), R * 1.25, (63, 240, 255), 150, size * .05))
+    ring = lambda front: _ring(size, c, R, front)
+    im.alpha_composite(ring(False))
     d = ImageDraw.Draw(im)
-    ring = Image.new('RGBA', (size, size), (0, 0, 0, 0)); rd = ImageDraw.Draw(ring)   # anneau (arrière)
-    rd.ellipse([c - R * 1.75, c - R * .42 + R * .25, c + R * 1.75, c + R * .42 + R * .25], outline=(255, 215, 106, 255), width=int(R * .11))
-    rd.rectangle([0, 0, size, c + R * .2], fill=(0, 0, 0, 0)); im.alpha_composite(ring.rotate(-14, center=(c, c)))
-    d.ellipse([c - R, c - R * .95, c + R, c + R * 1.05], fill=(26, 15, 51, 255))                       # contour
-    k = R * .93
-    body = radial(int(k * 2), (230, 252, 255), (60, 170, 255), .38, .32, .9).convert('RGBA')
+    d.ellipse([c - R * 1.03, c - R * 1.03, c + R * 1.03, c + R * 1.03], fill=(63, 240, 255, 255))           # liseré néon
+    k = R * .97
+    body = radial(int(k * 2), (40, 34, 80), (5, 4, 14), .35, .3, .85).convert('RGBA')
     mask = Image.new('L', body.size, 0); ImageDraw.Draw(mask).ellipse([0, 0, body.size[0] - 1, body.size[1] - 1], fill=255)
-    im.paste(body, (int(c - k), int(c - k * .95 + R * .05)), mask)
+    im.paste(body, (int(c - k), int(c - k)), mask)
     d = ImageDraw.Draw(im)
-    d.line([(c + R * .1, c - R * .85), (c + R * .35, c - R * 1.45)], fill=(26, 15, 51, 255), width=int(R * .1))   # antenne
-    star(d, c + R * .38, c - R * 1.5, R * .32, R * .14, (26, 15, 51, 255)); star(d, c + R * .38, c - R * 1.5, R * .25, R * .1, (255, 215, 106, 255))
-    for s in (-1, 1):                                                                                   # yeux
-        ex, ey = c + s * R * .36, c + R * .02
-        d.ellipse([ex - R * .27, ey - R * .33, ex + R * .27, ey + R * .33], fill=(26, 15, 51, 255))
-        d.ellipse([ex - R * .21, ey - R * .27, ex + R * .21, ey + R * .27], fill=(255, 255, 255, 255))
-        d.ellipse([ex - R * .13 + s * R * .03, ey - R * .14, ex + R * .13 + s * R * .03, ey + R * .2], fill=(26, 15, 51, 255))
-        d.ellipse([ex - R * .07, ey - R * .12, ex + R * .0, ey - R * .04], fill=(255, 255, 255, 255))
-        d.ellipse([ex + s * R * .3 - R * .1, ey + R * .38, ex + s * R * .3 + R * .1, ey + R * .46], fill=(255, 140, 200, 160))  # joues
-    d.arc([c - R * .14, c + R * .32, c + R * .14, c + R * .52], 20, 160, fill=(26, 15, 51, 255), width=int(R * .06))  # sourire
-    d.ellipse([c - R * .62, c - R * .7, c - R * .3, c - R * .45], fill=(255, 255, 255, 170))                # reflet
-    ring2 = Image.new('RGBA', (size, size), (0, 0, 0, 0)); rd = ImageDraw.Draw(ring2)                   # anneau (avant)
-    rd.ellipse([c - R * 1.75, c - R * .42 + R * .25, c + R * 1.75, c + R * .42 + R * .25], outline=(255, 215, 106, 255), width=int(R * .11))
-    rd.rectangle([0, c + R * .2, size, size], fill=(0, 0, 0, 0)); rd.rectangle([c - R * .9, 0, c + R * .9, size], fill=(0, 0, 0, 0))
-    im.alpha_composite(ring2.rotate(-14, center=(c, c)))
+    d.line([(c + R * .15, c - R * .95), (c + R * .4, c - R * 1.5)], fill=(63, 240, 255, 255), width=int(R * .07))   # antenne
+    star(d, c + R * .42, c - R * 1.55, R * .3, R * .12, (255, 204, 58, 255))
+    eyes = Image.new('RGBA', (size, size), (0, 0, 0, 0)); e = ImageDraw.Draw(eyes)
+    for s in (-1, 1):                                                                                   # yeux fendus
+        ex, ey = c + s * R * .38, c - R * .02
+        e.polygon([(ex + s * R * .27, ey - R * .16), (ex - s * R * .2, ey - R * .01), (ex - s * R * .17, ey + R * .12), (ex + s * R * .24, ey + R * .07)], fill=(120, 250, 255, 255))
+    im.alpha_composite(eyes.filter(ImageFilter.GaussianBlur(size * .012))); im.alpha_composite(eyes)
+    d.arc([c - R * .8, c - R * .8, c + R * .8, c + R * .8], 200, 250, fill=(160, 140, 255, 120), width=int(R * .06))  # reflet
+    im.alpha_composite(ring(True))
     return im
+
+def _ring(size, c, R, front):
+    ring = Image.new('RGBA', (size, size), (0, 0, 0, 0)); rd = ImageDraw.Draw(ring)
+    rd.ellipse([c - R * 1.8, c - R * .4 + R * .2, c + R * 1.8, c + R * .4 + R * .2], outline=(255, 60, 200, 255), width=int(R * .08))
+    if front: rd.rectangle([0, 0, size, c + R * .2], fill=(0, 0, 0, 0)); rd.rectangle([c - R * .95, 0, c + R * .95, size], fill=(0, 0, 0, 0))
+    else: rd.rectangle([0, c + R * .2, size, size], fill=(0, 0, 0, 0))
+    g = ring.filter(ImageFilter.GaussianBlur(size * .01)); g.alpha_composite(ring)
+    return g.rotate(-14, center=(c, c))
 
 def save(im, path, size):
     os.makedirs(os.path.dirname(path), exist_ok=True); im.resize((size, size), Image.LANCZOS).save(path)

@@ -1,7 +1,7 @@
 // Textes d'interface (B). t('clé', {var}) → chaîne. Les noms propres du monde vivent dans src/data/.
 const FR = {
   'title.play': 'Jouer', 'title.continue': 'Continuer', 'title.new': 'Nouvelle partie', 'title.settings': 'Réglages',
-  'title.tagline': 'De grain d’étoile à divinité', 'title.confirmNew': 'Effacer la sauvegarde et recommencer ?',
+  'title.tagline': 'De l’étincelle au néant divin', 'title.confirmNew': 'Effacer la sauvegarde et recommencer ?',
   'pause.title': 'Pause', 'pause.resume': 'Reprendre', 'pause.settings': 'Réglages', 'pause.map': 'Carte galactique', 'pause.codex': 'Codex',
   'pause.quit': 'Écran titre', 'pause.quests': 'Quêtes', 'pause.inventory': 'Inventaire', 'soon': 'Bientôt',
   'set.title': 'Réglages', 'set.quality': 'Qualité graphique', 'set.q.auto': 'Auto', 'set.q.0': 'Bas', 'set.q.1': 'Moyen', 'set.q.2': 'Haut',

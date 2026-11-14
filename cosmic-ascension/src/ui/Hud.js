@@ -9,7 +9,7 @@ import { t } from './i18n.js';
 import { buzz } from './haptics.js';
 // HUD paysage (B): portrait+PV/énergie/XP (haut-gauche), poussière+pause (haut-droite), lieu+indice (haut-centre),
 // suivi d'objectif (droite), toasts, bannière d'évolution. Tout est piloté par le bus + State.
-const STAGE_ICON = ['✧', '🌱', '☄', '✺', '⬢', '☀', '☁', '●', '✸', '✺'];
+const STAGE_ICON = ['✧', '✦', '☄', '✺', '⬢', '☀', '◈', '●', '✸', '✺'];  // glyphes (pas d'emoji: style sombre)
 export function mountHud(root, { onPause } = {}) {
   const layer = h('div.layer.hud'); root.appendChild(layer);
   const portrait = h('div.portrait.noev', {}, h('span'), h('b'));

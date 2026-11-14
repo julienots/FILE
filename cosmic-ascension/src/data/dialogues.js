@@ -35,7 +35,7 @@ export const DIALOGUES = {
     parts: { t: 'Mes articulations grincent. Si tu trouves de l’alliage dans les épaves ou sur les drones, rapporte-m’en, je pourrai même améliorer ta capsule.', c: [
       { l: 'J’en trouverai.', fx: { quest: 'side_drone_parts' }, end: true }, { l: 'Plus tard.', end: true }] },
     repair: { t: 'Oh, de l’alliage ! Tiens bon, je me fais une beauté… Voilà ! Je cours comme un neuf. Enfin, je roule.', fx: { take: [['scrapAlloy', 4]] } } } },
-  mayor_intro: { speaker: 'Maire Pipo', portrait: '🐣', entry: [[{ step: ['side_lost_pipion', 1] }, 'back'], [{ done: 'side_lost_pipion' }, 'after']], nodes: {
+  mayor_intro: { speaker: 'Maire Pipo', portrait: '🕯', entry: [[{ step: ['side_lost_pipion', 1] }, 'back'], [{ done: 'side_lost_pipion' }, 'after']], nodes: {
     start: { t: 'Oh ! Un visiteur ! Bienvenue à Pépin, bienvenue ! Je suis le maire. Le seul. Nous sommes douze.', n: 'b' },
     b: { t: 'Dites… le petit Pip a suivi un slime et n’est pas revenu. Vous pourriez chasser ces bestioles ?', c: [
       { l: 'Je m’en occupe !', fx: { quest: 'side_lost_pipion' }, end: true }, { l: 'Je dois d’abord m’occuper de moi.', end: true }] },

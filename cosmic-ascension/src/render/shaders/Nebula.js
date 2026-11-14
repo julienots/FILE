@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { NOISE_GLSL } from './noise.glsl.js';
 // Skybox nébuleuse stylisée (fbm + palette 3 couleurs + étoiles lointaines). 1 draw call, 0 texture.
-export function createNebula({ a = '#2a0a5e', b = '#ff3c9a', c = '#2fd6ff', seed = 1 } = {}) {
+export function createNebula({ a = '#1c0e52', b = '#a0289a', c = '#24b8d8', seed = 1 } = {}) {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { uA: { value: new THREE.Color(a) }, uB: { value: new THREE.Color(b) }, uC: { value: new THREE.Color(c) },
@@ -12,10 +12,10 @@ export function createNebula({ a = '#2a0a5e', b = '#ff3c9a', c = '#2fd6ff', seed
       void main(){
         vec3 d=normalize(vDir)*2.2+uSeed*7.3;
         float n1=fbm(d+vec3(0.,uTime*.01,0.)), n2=fbm(d*1.9+n1*1.5), n3=fbm(d*.8-n2);
-        float cloud=smoothstep(.35,.85,n2*.9+n1*.3);
-        vec3 col=mix(vec3(.012,.008,.03),uA,smoothstep(.2,.7,n1));
-        col=mix(col,uB,cloud*smoothstep(.3,.9,n3)*.85);
-        col=mix(col,uC,smoothstep(.55,.95,n2*n3*2.)*.7);
+        float cloud=smoothstep(.4,.9,n2*.9+n1*.3);
+        vec3 col=mix(vec3(.008,.005,.02),uA,smoothstep(.22,.72,n1));
+        col=mix(col,uB,cloud*smoothstep(.32,.9,n3)*.75);
+        col=mix(col,uC,smoothstep(.6,.98,n2*n3*2.)*.65);
         // cartoon: posterisation douce
         col=floor(col*9.)/9.*.6+col*.4;
         gl_FragColor=vec4(col,1.);

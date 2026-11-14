@@ -10,22 +10,22 @@ const paint = (g, color) => { g = g.index ? g.toNonIndexed() : g; g.deleteAttrib
 const at = (g, x, y, z, sx = 1, sy = sx, sz = sx) => g.scale(sx, sy, sz).translate(x, y, z);
 const ico = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
 const BUILD = {
-  tree: (c = ['#7a4a2a', '#4fd06a', '#7ee88a']) => mergeGeometries([
+  tree: (c = ['#2a1a2a', '#1f6a5a', '#2f8a7a']) => mergeGeometries([
     paint(at(new THREE.CylinderGeometry(.22, .34, 2.2, 6), 0, 1.1, 0), c[0]),
     paint(at(ico(1.25), 0, 3.0, 0, 1, .9, 1), c[1]), paint(at(ico(.85), .75, 2.5, .2), c[1]), paint(at(ico(.8), -.6, 2.7, -.4), c[2]), paint(at(ico(.7), 0, 3.9, .1), c[2])]),
-  pine: (c = ['#6a4630', '#2f9a6a', '#dff6ff']) => mergeGeometries([
+  pine: (c = ['#2a2030', '#1a4a5a', '#9ad0f0']) => mergeGeometries([
     paint(at(new THREE.CylinderGeometry(.16, .24, 1.2, 6), 0, .6, 0), c[0]),
     paint(at(new THREE.ConeGeometry(1.1, 1.8, 7), 0, 1.9, 0), c[1]), paint(at(new THREE.ConeGeometry(.85, 1.5, 7), 0, 2.9, 0), c[1]), paint(at(new THREE.ConeGeometry(.55, 1.2, 7), 0, 3.8, 0), c[2])]),
-  rock: (c = ['#8d8fa8', '#a9abc4']) => mergeGeometries([paint(at(ico(.8, 0), 0, .35, 0, 1.2, .8, 1), c[0]), paint(at(ico(.45, 0), .7, .2, .3), c[1])]),
+  rock: (c = ['#3a3a54', '#54546e']) => mergeGeometries([paint(at(ico(.8, 0), 0, .35, 0, 1.2, .8, 1), c[0]), paint(at(ico(.45, 0), .7, .2, .3), c[1])]),
   crystal: (c = ['#6ff2ff', '#b48aff']) => mergeGeometries([
     paint(at(new THREE.OctahedronGeometry(.4), 0, 1.0, 0, 1, 2.6, 1), c[0]),
     paint(at(new THREE.OctahedronGeometry(.3), .45, .6, .1, 1, 2.1, 1).rotateZ(-.35), c[1]), paint(at(new THREE.OctahedronGeometry(.26), -.4, .5, -.15, 1, 2, 1).rotateZ(.4), c[0])]),
-  mushroom: (c = ['#f3e6d0', '#c45cff', '#ffd1ff']) => mergeGeometries([
+  mushroom: (c = ['#4a4060', '#5a1a8a', '#ff7ad8']) => mergeGeometries([
     paint(at(new THREE.CylinderGeometry(.3, .42, 2.4, 7), 0, 1.2, 0), c[0]),
     paint(at(new THREE.SphereGeometry(1.5, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0, 2.2, 0, 1, .7, 1), c[1]), paint(at(ico(.28, 0), .7, 2.85, .3), c[2]), paint(at(ico(.22, 0), -.5, 3.0, -.4), c[2])]),
-  grass: (c = ['#58c96a', '#8fe37a']) => mergeGeometries([0, 1, 2, 3, 4].map(i => { const a = i * 1.26;
+  grass: (c = ['#1f6a5a', '#3a9a8a']) => mergeGeometries([0, 1, 2, 3, 4].map(i => { const a = i * 1.26;
     return paint(at(new THREE.ConeGeometry(.07, .5 + (i % 3) * .14, 3), Math.cos(a) * .16, .28, Math.sin(a) * .16).rotateZ(Math.cos(a) * .18), c[i % 2]); })),
-  flower: (c = ['#4fb85a', '#ff7ac0', '#ffe46a']) => mergeGeometries([
+  flower: (c = ['#1f5a4a', '#6ff2ff', '#ffffff']) => mergeGeometries([
     paint(at(new THREE.CylinderGeometry(.03, .04, .7, 4), 0, .35, 0), c[0]), paint(at(ico(.2, 0), 0, .78, 0, 1, .55, 1), c[1]), paint(at(ico(.09, 0), 0, .88, 0), c[2])]),
   spire: (c = ['#bfeaff', '#ffffff']) => mergeGeometries([
     paint(at(new THREE.ConeGeometry(.7, 4.2, 5), 0, 2.1, 0), c[0]), paint(at(new THREE.ConeGeometry(.4, 2.2, 5), .7, 1.1, .2).rotateZ(-.2), c[1])]),
@@ -40,7 +40,7 @@ export const BIOME_PROPS = {
   meadow:   [{ kind: 'tree', density: .55 }, { kind: 'grass', density: 14 }, { kind: 'flower', density: 3 }, { kind: 'rock', density: .35 }, { kind: 'crystal', density: .06 }],
   volcanic: [{ kind: 'rock', density: 1.1, colors: ['#3a2630', '#5a3540'] }, { kind: 'spire', density: .35, colors: ['#4a2a34', '#ff8a3a'] }, { kind: 'crystal', density: .3, colors: ['#ffb02e', '#ff5a2a'] }],
   ice:      [{ kind: 'spire', density: .5 }, { kind: 'pine', density: .45 }, { kind: 'rock', density: .3, colors: ['#bcd6ea', '#e4f4ff'] }, { kind: 'crystal', density: .2, colors: ['#aef4ff', '#ffffff'] }],
-  jungle:   [{ kind: 'mushroom', density: .7 }, { kind: 'tree', density: .7, colors: ['#5a3a6a', '#2fbf8a', '#c47bff'] }, { kind: 'grass', density: 10, colors: ['#2fbf6a', '#b47bff'] }, { kind: 'flower', density: 3, colors: ['#3fa86a', '#6ff2ff', '#ffffff'] }, { kind: 'crystal', density: .15, colors: ['#ff7ad8', '#b48aff'] }],
+  jungle:   [{ kind: 'mushroom', density: .7 }, { kind: 'tree', density: .7, colors: ['#2a1a3a', '#145a5a', '#6a2aaa'] }, { kind: 'grass', density: 10, colors: ['#146a5a', '#7a3ad0'] }, { kind: 'flower', density: 3, colors: ['#145a4a', '#ff7ad8', '#ffffff'] }, { kind: 'crystal', density: .15, colors: ['#ff7ad8', '#b48aff'] }],
   desert:   [{ kind: 'rock', density: .9, colors: ['#c98a5a', '#e0a878'] }, { kind: 'spire', density: .25, colors: ['#d89a6a', '#f0c090'] }, { kind: 'crystal', density: .1, colors: ['#6ff2ff', '#ffe46a'] }],
 };
 const geoCache = new Map();

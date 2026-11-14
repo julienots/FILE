@@ -1,6 +1,6 @@
 import { bus } from '../core/EventBus.js';
 import { State } from '../core/State.js';
-import { CSS, CSS2 } from './styles.js';
+import { CSS, CSS2, CSS_DARK } from './styles.js';
 import { setLang } from './i18n.js';
 import { mountControls } from './Controls.js';
 import { mountHud } from './Hud.js';
@@ -10,7 +10,7 @@ import { mountCombatFx } from './CombatFx.js';
 import { initNative } from './native.js';
 // Point d'entrée de l'UI (B). main.js appelle mountUI(#ui) une fois.
 export function mountUI(root) {
-  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + CSS2 }));
+  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + CSS2 + CSS_DARK }));
   setLang(State.data.settings.lang);
   const controls = mountControls(root);
   let screens;

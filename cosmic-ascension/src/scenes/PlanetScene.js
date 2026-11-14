@@ -23,8 +23,8 @@ const SUN = new THREE.Vector3(200, 300, 150).normalize();
 export class PlanetScene {
   constructor(ctx) {
     this.ctx = ctx; this.scene = new THREE.Scene(); this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
-    this.hemi = new THREE.HemisphereLight('#cfe9ff', '#6a4d8a', 0.75); this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight('#fff2d8', 1.3); this.sun.position.copy(SUN).multiplyScalar(500); this.scene.add(this.sun);
+    this.hemi = new THREE.HemisphereLight('#9fb4ff', '#3a2058', 0.7); this.scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight('#ffe0b8', 1.7); this.sun.position.copy(SUN).multiplyScalar(500); this.scene.add(this.sun);
     this.hero = new Hero(); this.scene.add(this.hero.root);
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ color: '#0a0620', transparent: true, opacity: .32, depthWrite: false }));
     this.shadow.renderOrder = 3; this.scene.add(this.shadow);
@@ -55,7 +55,7 @@ export class PlanetScene {
     this.clouds = def.clouds ? buildSkyClouds(this.planet, def.clouds) : null; if (this.clouds) this.scene.add(this.clouds);
     this.ambient = { meadow: ['#fff3a0', 1, .6], volcanic: ['#ff8a3a', 3, 1.2], ice: ['#ffffff', -2.5, 1.5], jungle: ['#ff7ad8', .8, 1] }[def.biome] ?? ['#ffffff', 1, .5];
     const atmo = def.atmosphere?.color ?? '#8fd0ff';
-    this.scene.fog = new THREE.FogExp2(atmo, 0.9 / (def.radius * 6)); this.sky.material.uniforms.uC.value.set(atmo); this.hemi.color.set(atmo).lerp(new THREE.Color('#fff'), .6);
+    this.scene.fog = new THREE.FogExp2(new THREE.Color(atmo).multiplyScalar(.4), 1.3 / (def.radius * 6)); this.sky.material.uniforms.uC.value.set(atmo); this.hemi.color.set(atmo).lerp(new THREE.Color('#fff'), .25);
     this.nebula = createNebula({ seed: def.seed }); this.scene.add(this.nebula);
     this.hero.setStage(State.data.hero.stage);
     // point d'apparition: première terre émergée proche du pôle
@@ -150,7 +150,7 @@ export class PlanetScene {
     // ciel
     for (const o of [this.nebula, this.stars, this.sky]) o.position.copy(this.camera.position);
     this.nebula.userData.update(t); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio()); this.sky.material.uniforms.uUp.value.copy(up);
-    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .35 + .45 * day;
+    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .34 + .42 * day;
     if (this.shakeT > 0) { this.shakeT -= dt; this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, this.shakeT * 2.5); this.camera.position.addScaledVector(up, (Math.random() - .5) * this.shakeT * 1.2); }
     if (this.arriving || this.leaving) for (let k = 0; k < 3; k++) { _e.copy(up).multiplyScalar(this.leaving ? -14 : 10); this.particles.emit(_c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * scale), _e, EVOLUTIONS[hero.stage].glow, .6 * scale, .5, 1, 0); }
     if (this.leaving && (this.leaving += dt) > .35 && !this._left) { this._left = true; this.ctx.transition('space', { from: this.def.id }, { color: this.def.atmosphere?.color ?? '#ffffff', out: .45, in: .8 }); }
