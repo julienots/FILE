@@ -3,6 +3,7 @@ import { State } from '../core/State.js';
 import { EVOLUTIONS } from '../data/evolutions.js';
 import { BALANCE, xpFor } from '../data/balance.js';
 import { getPlanet } from '../data/planets.js';
+import { bonuses, refreshStats } from './bonuses.js';
 
 // ── Logique pure (testée dans tests/run.mjs) ──────────────────────────────
 // Stade atteignable avec `xp` et les flags de quête (verrous narratifs `requires`).
@@ -19,14 +20,14 @@ export function xpProgress(xp, stage) {
 }
 // Applique un gain d'XP à `d` (State.data). Renvoie {gained, from, to} (to>from ⇒ évolution).
 export function applyXp(d, amount) {
-  const h = d.hero, from = h.stage; h.xp += Math.max(0, Math.round(amount));
+  const h = d.hero, from = h.stage; amount = Math.max(0, Math.round(amount * (1 + bonuses(d).xp))); h.xp += amount;
   const to = Math.max(from, stageFor(h.xp, d.world.flags));
   if (to > from) applyStage(d, to);
   return { gained: amount, from, to };
 }
 export function applyStage(d, to) {
-  const h = d.hero, e = EVOLUTIONS[to]; h.stage = to;
-  h.maxHp = e.hp; h.maxEnergy = e.energy; h.hp = e.hp; h.energy = e.energy; // évoluer soigne complètement
+  const h = d.hero; h.stage = to;
+  refreshStats(d); h.hp = h.maxHp; h.energy = h.maxEnergy; // évoluer soigne complètement (bonus de bâtiments inclus)
   for (let i = 0; i <= to; i++) for (const a of EVOLUTIONS[i].abilities) if (!h.abilities.includes(a)) h.abilities.push(a);
 }
 
@@ -70,6 +71,8 @@ export function initProgression() {
   });
   // enemy:killed: Combat (enregistré avant) complète `level` en mode compat
   bus.on('enemy:killed', ({ level = 1 }) => { d().stats.kills++; gainXp(xpFor(BALANCE.xp.killBase * level, dangerOf()), 'kill'); });
+  bus.on('secret:found', ({ id, planet }) => { const f = d().world.flags, k = 'secret_' + id; if (f[k]) return; f[k] = true; bus.emit('world:flag', { flag: k, value: true });
+    bus.emit('ui:toast', { text: '✧ Secret découvert ✧', kind: 'discover' }); gainXp(xpFor(100, getPlanet(planet)?.danger ?? dangerOf()), 'discover'); });
   bus.on('quest:done', ({ xp }) => gainXp(xp ?? BALANCE.xp.questBase, 'quest'));
   bus.on('world:flag', () => gainXp(0, 'quest')); // un flag peut débloquer un stade verrouillé
   // la régénération PV/énergie est gérée par systems/Combat.js (tick)

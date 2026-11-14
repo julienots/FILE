@@ -160,6 +160,15 @@ export const CSS2 = `
 .inv{display:grid;grid-template-columns:repeat(auto-fill,minmax(18vmin,1fr));gap:2vmin;max-height:56vh;overflow:auto}
 .slot{background:rgba(255,255,255,.08);border:.4vmin solid rgba(255,255,255,.3);border-radius:2.4vmin;padding:1.4vmin;text-align:center;position:relative}
 .slot .ic{display:block;font-size:6vmin}.slot b{position:absolute;top:.8vmin;right:1.2vmin;font-size:2.8vmin;color:var(--gold)}.slot small{display:block;font-size:1.9vmin;font-weight:800;opacity:.85}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(36vmin,1fr));gap:2vmin;max-height:58vh;overflow:auto;padding:.5vmin}
+.bgrid.small{grid-template-columns:repeat(auto-fill,minmax(30vmin,1fr));max-height:34vh}
+.bcard{position:relative;background:rgba(255,255,255,.08);border:.5vmin solid rgba(255,255,255,.35);border-radius:3vmin;padding:1.6vmin 2vmin 1.6vmin 10vmin;min-height:14vmin;transition:transform .12s var(--spring)}
+.bcard:active{transform:scale(.97)}.bcard .bi{position:absolute;left:1.6vmin;top:1.6vmin;font-size:6.5vmin}
+.bcard b{display:block;font-size:3vmin}.bcard small{display:block;font-size:2.1vmin;opacity:.8;margin:.4vmin 0}.bcard .eff{font-size:2.1vmin;color:var(--cy);font-weight:800}
+.bcard .costs{margin-top:.8vmin;display:flex;flex-wrap:wrap;gap:1vmin}.cost{background:rgba(0,0,0,.3);border-radius:2vmin;padding:.2vmin 1.4vmin;font-size:2.3vmin;font-weight:900}
+.bcard .why{margin-top:.6vmin;font-size:2vmin;font-weight:900;color:#ffb0c0}.bgrid .empty{grid-column:1/-1}
+.bcard.poor{opacity:.75}.bcard.locked{opacity:.45;filter:grayscale(.7)}.bcard.built{border-color:#2ac87a}
+.base .stats{grid-template-columns:repeat(4,1fr)}
 @keyframes hitFlash{0%{box-shadow:inset 0 0 14vmin rgba(255,40,80,.85)}100%{box-shadow:inset 0 0 0 rgba(255,40,80,0)}}
 @keyframes lowPulse{50%{box-shadow:inset 0 0 18vmin rgba(255,40,80,.7)}}
 @keyframes shake{20%{transform:translateX(-52%)}40%{transform:translateX(-48%)}60%{transform:translateX(-51%)}80%{transform:translateX(-49%)}}

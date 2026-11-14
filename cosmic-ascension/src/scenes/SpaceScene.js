@@ -12,6 +12,7 @@ import { Particles } from '../vfx/Particles.js';
 import { PLANETS } from '../data/planets.js';
 import { Ship } from '../entities/Ship.js';
 import { Serpent } from '../entities/boss/Serpent.js';
+import { Devourer } from '../entities/boss/Devourer.js';
 
 const SUN_POS = new THREE.Vector3(600, 400, 300).normalize().multiplyScalar(3600);
 // Exploration spatiale: vol libre, boost warp, astéroïdes, station, soleil, atterrissage cinématique.
@@ -34,11 +35,13 @@ export class SpaceScene {
     this.trail = new Particles(300); this.scene.add(this.trail.points);
     this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.yaw = 0; this.pitch = 0; this.roll = 0; this.boost = 0; this.shake = 0;
     this.near = null; this.landing = null; this.fireCd = 0;
-    this.fx = new Particles(500); this.scene.add(this.fx.points); this.serpent.particles = this.fx; if (State.data.world.flags.serpentDefeated) { this.serpent.dead = 99; this.serpent.root.visible = false; this.sighted = true; }
+    this.fx = new Particles(500); this.scene.add(this.fx.points); this.serpent.particles = this.fx;
+    this.devourer = new Devourer(); this.devourer.particles = this.fx; this.scene.add(this.devourer.root); if (State.data.world.flags.devourerDefeated) { this.devourer.dead = 99; this.devourer.root.visible = false; }
+    this.bosses = [this.serpent, this.devourer]; if (State.data.world.flags.serpentDefeated) { this.serpent.dead = 99; this.serpent.root.visible = false; this.sighted = true; }
     const lg = new THREE.CapsuleGeometry(.35, 5, 3, 6).rotateX(Math.PI / 2);
     this.lasers = Array.from({ length: 18 }, () => { const m = new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: '#9fffe0' })); m.visible = false; this.scene.add(m); return { mesh: m, vel: new THREE.Vector3(), life: 0 }; });
     bus.on('boss:hit-hero', () => { this.shake = 1; });
-    bus.on('boss:defeated', ({ id }) => { if (id === 'serpent') State.data.world.flags.serpentDefeated = true; });
+    bus.on('boss:defeated', ({ id }) => { State.data.world.flags[id + 'Defeated'] = true; });
     bus.on('hero:respawn', () => { if (this.ctx.scenes.space === this && this.isActive) this.ctx.transition('space', {}, { color: '#ffffff' }); });
     this._f = new THREE.Vector3(); this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._c = new THREE.Vector3();
   }
@@ -74,17 +77,17 @@ export class SpaceScene {
     _a.set(0, 0, 2.2).applyQuaternion(this.q).add(sp); _b.copy(_f).multiplyScalar(-12 - boost * 30);
     this.trail.emit(_a, _b, boost > .4 ? '#b48aff' : '#7fe0ff', .9 + boost * 1.2, .35 + boost * .3, 1, 0); this.trail.update(dt, innerHeight);
     // Serpent céleste: nage, rebond sur son corps, première rencontre cinématique (la caméra se tourne vers lui)
-    const sv = this.serpent; sv.update(dt, t, sp); const hd = sv.headPos.distanceTo(sp);
+    const sv = this.serpent; sv.update(dt, t, sp); if (!L) this.devourer.update(dt, t, sp, this.vel); const hd = sv.headPos.distanceTo(sp);
     if (!L && !sv.dead) for (let i = 0, sg = sv.segments; i < sg.length; i += 2) { const c = sg[i], rr = c.r + 3; if (sp.distanceToSquared(c.pos) < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.6); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length(), boss: 'serpent' }); break; } }
     if (!this.sighted && hd < 900) { this.sighted = true; this.awe = 4; bus.emit('boss:spawn', { id: 'serpent' }); bus.emit('cinematic:start', { id: 'boss-sighting', boss: 'serpent' }); }
     if (this.awe > 0) { this.awe -= dt; this.shake = Math.max(this.shake, .5); if (this.awe <= 0) bus.emit('cinematic:end', { id: 'boss-sighting' }); }
     // lasers du vaisseau (✸): visée assistée sur le cœur stellaire le plus proche dans l'axe
     this.fireCd -= dt;
     if (!L && Input.buttons.attack && this.fireCd <= 0) { this.fireCd = .14; const l = this.lasers.find(x => x.life <= 0);
-      if (l) { _b.copy(_f); let best = .8; if (!sv.dead) for (const c of sv.cores) { if (c.hp <= 0) continue; _c.copy(c.pos).sub(sp); const d = _c.length(); if (d > 1100) continue; const dot = _c.normalize().dot(_f); if (dot > best) { best = dot; _b.copy(_c); } }
+      if (l) { _b.copy(_f); let best = .8; for (const bo of this.bosses) if (!bo.dead) for (const c of bo.cores) { if (c.hp <= 0) continue; _c.copy(c.pos).sub(sp); const d = _c.length(); if (d > 1100) continue; const dot = _c.normalize().dot(_f); if (dot > best) { best = dot; _b.copy(_c); } }
         l.life = 1.8; l.mesh.visible = true; l.mesh.position.copy(sp).addScaledVector(_b, 4); l.vel.copy(_b).multiplyScalar(650); l.mesh.lookAt(_c.copy(l.mesh.position).add(_b)); bus.emit('ship:fire', {}); } }
     for (const l of this.lasers) { if (l.life <= 0) continue; l.life -= dt; l.mesh.position.addScaledVector(l.vel, dt);
-      if (!sv.dead && sv.damageAt(l.mesh.position, 1)) l.life = 0;
+      if ((!sv.dead && sv.damageAt(l.mesh.position, 1)) || (!this.devourer.dead && this.devourer.damageAt(l.mesh.position, 1))) l.life = 0;
       else for (let i = 0, cs = this.colliders; i < cs.length; i++) if (cs[i].r > 10 && l.mesh.position.distanceToSquared(cs[i].pos) < cs[i].r * cs[i].r) { l.life = 0; for (let k = 0; k < 5; k++) this.fx.emit(l.mesh.position, _c.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(40), '#9fffe0', 3, .3, 2, 0); break; }
       if (l.life <= 0) l.mesh.visible = false; }
     this.fx.update(dt, innerHeight);
@@ -94,7 +97,7 @@ export class SpaceScene {
     if (this.shake > 0) { const k = this.shake * (.12 + boost * .1); this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
     this.camera.up.set(0, 1, 0).applyQuaternion(this.q); _a.copy(sp).addScaledVector(_f, 30); if (this.awe > 0) _a.lerp(sv.headPos, Math.min(1, this.awe) * Math.min(1, (4 - this.awe) * 2) * .75); this.camera.lookAt(_a);
     this.camera.fov += ((62 + boost * 22) - this.camera.fov) * Math.min(1, dt * 3);
-    this.lines.userData.update(t, Math.max(0, boost - .15));
+    this.lines.userData.update(t, Math.max(0, boost - .15)); this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, boost * 1.2 + this.shake * 2);
     // décor
     const px = this.ctx.renderer.renderer.getPixelRatio();
     for (const o of [this.nebula, this.stars, this.galaxies]) o.position.copy(this.camera.position);

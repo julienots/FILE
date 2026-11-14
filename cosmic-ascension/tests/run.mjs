@@ -17,6 +17,8 @@ import { Combat } from '../src/systems/Combat.js';
 import { Quests } from '../src/systems/Quests.js';
 import { Dialogue, NPCS } from '../src/systems/Dialogue.js';
 import { Bosses } from '../src/systems/Bosses.js';
+import { Home } from '../src/systems/HomePlanet.js';
+import { BUILDINGS } from '../src/data/buildings.js';
 
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.error('✗', name, '\n   ', e.message); } };
@@ -200,6 +202,28 @@ test('boss du moteur: serpent → ouroboros (quête + récompense unique)', () =
   bus.emit('boss:defeated', { id: 'serpent', xp: 1500 }); bus.emit('boss:defeated', { id: 'serpent', xp: 1500 });
   ok(Quests.isDone('main_4_titans'), 'étape boss validée'); ok(State.data.world.flags.serpent_defeated, 'flag');
   ok(State.data.hero.xp - xp >= 2500 && State.data.hero.xp - xp < 5000, 'récompense une fois');
+});
+test('planète du joueur: ≥20 bâtiments, menu, coût, niveau, bonus, vaisseau, production hors ligne', () => {
+  ok(Object.keys(BUILDINGS).length >= 20, '≥20');
+  for (const [id, B] of Object.entries(BUILDINGS)) { for (const it of Object.keys(B.cost)) ok(ITEMS[it], id + ' coût ' + it); for (const it of Object.keys(B.prod ?? {})) ok(ITEMS[it], id + ' prod ' + it); }
+  fresh(); const menus = []; const off = bus.on('ui:buildMenu', m => menus.push(m));
+  bus.emit('build:request', { planetId: 'home', slot: 0 }); eq(menus.length, 1, 'menu ouvert');
+  ok(!Home.check('house').ok, 'trop pauvre'); State.data.inventory.cosmicDust = 500; State.data.inventory.items.scrapAlloy = 5;
+  ok(Home.check('hangar').locked, 'hangar verrouillé (niv. 2)');
+  const placed = []; const off2 = bus.on('build:placed', p => placed.push(p));
+  bus.emit('build:choose', { planetId: 'home', slot: 0, id: 'house' }); bus.emit('build:choose', { planetId: 'home', slot: 1, id: 'farm' });
+  eq(placed.map(p => p.buildingId), ['house', 'farm']); eq(State.data.homePlanet.level, 2); eq(State.data.inventory.cosmicDust, 450);
+  eq(State.data.hero.maxHp, Math.round(EVOLUTIONS[0].hp * 1.05), 'bonus PV');
+  ok(Home.build('hangar', 2), 'hangar'); eq(State.data.ship.level, 2, 'vaisseau amélioré');
+  ok(!Home.build('farm', 3), 'pas deux fois'); ok(!Home.build('lab', 2), 'emplacement occupé');
+  const hp = State.data.homePlanet; hp.lastCollect = Date.now() - 30 * 3.6e6; const before = State.data.inventory.cosmicDust;
+  Home.collect(); eq(State.data.inventory.cosmicDust - before, 40 * 12, 'plafond 12 h'); off(); off2();
+});
+test('habitant générique (réplique), secret découvert', () => {
+  fresh(); const nodes = []; const off = bus.on('dialogue:node', n => nodes.push(n));
+  bus.emit('npc:interact', { npcId: 'home:villager:0', name: 'Milo', line: 'Bonjour !' }); eq(nodes.at(-1).speaker, 'Milo'); Dialogue.choose(0); ok(!Dialogue.open);
+  const xp = State.data.hero.xp; bus.emit('secret:found', { id: 'home:monolith:0', planet: 'home' }); bus.emit('secret:found', { id: 'home:monolith:0', planet: 'home' });
+  ok(State.data.hero.xp - xp === 100, 'XP secret une fois: ' + (State.data.hero.xp - xp)); off();
 });
 test('boss: phases, point faible, récompenses et flags', () => {
   fresh(); const phases = []; const off = bus.on('boss:phase', p => phases.push(p.phase));

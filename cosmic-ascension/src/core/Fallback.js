@@ -14,7 +14,7 @@ export function initFallback(root) {
     <div style="height:1.6vmin;border-radius:2vmin;background:#0008;border:1px solid #fff6;overflow:hidden"><div id="fb-xp" style="height:100%;background:linear-gradient(90deg,#6ff2ff,#b48aff);transition:width .3s"></div></div>
     <div id="fb-dust" style="margin-top:.8vmin;font-size:2.6vmin"></div>`;
   root.appendChild(el); const $ = (id) => el.querySelector('#' + id);
-  const toast = document.createElement('div'); toast.style.cssText = 'position:absolute;left:50%;top:22%;transform:translateX(-50%);color:#fff;font:800 6vmin system-ui;text-shadow:0 0 18px #b48aff,0 2px 6px #000;opacity:0;transition:opacity .4s;pointer-events:none;text-align:center;white-space:nowrap'; root.appendChild(toast);
+  const toast = document.createElement('div'); toast.style.cssText = 'position:absolute;left:50%;top:22%;transform:translateX(-50%);color:#fff;font:800 4.2vmin system-ui;max-width:90vw;white-space:normal;text-shadow:0 0 18px #b48aff,0 2px 6px #000;opacity:0;transition:opacity .4s;pointer-events:none;text-align:center'; root.appendChild(toast);
   let toastT; const say = (text, ms = 2600) => { toast.textContent = text; toast.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => toast.style.opacity = 0, ms); };
   const draw = () => { const s = h(), cur = EVOLUTIONS[s.stage], nx = EVOLUTIONS[s.stage + 1];
     $('fb-name').textContent = cur.name; $('fb-hp').style.width = Math.max(0, s.hp / maxHp() * 100) + '%';
@@ -28,7 +28,14 @@ export function initFallback(root) {
   bus.on('pickup:collected', ({ amount = 1 }) => { State.data.inventory.cosmicDust += amount; xp(6 * amount); });
   bus.on('enemy:killed', ({ xp: n = 10 }) => xp(n));
   bus.on('boss:defeated', ({ xp: n = 1500, id }) => { say('BOSS VAINCU !', 4000); xp(n); });
-  bus.on('boss:spawn', () => say('⚠ SERPENT CÉLESTE ⚠', 3500));
+  bus.on('boss:spawn', ({ id }) => say(id === 'devourer' ? '⚠ DÉVOREUR DE PLANÈTES ⚠' : '⚠ SERPENT CÉLESTE ⚠', 3500));
+  const NAMES = { house: 'Maison', greenhouse: 'Serre', lab: 'Laboratoire', forge: 'Forge d’étoiles', hangar: 'Hangar', observatory: 'Observatoire', temple: 'Temple', tower: 'Tour d’énergie' };
+  bus.on('build:request', ({ planetId, slot, buildingId, cost }) => { const inv = State.data.inventory;
+    if (inv.cosmicDust < cost) return say(`Il faut ${cost} ✦ de poussière (tu en as ${inv.cosmicDust})`, 2600);
+    inv.cosmicDust -= cost; State.data.homePlanet.buildings.push({ slot, id: buildingId }); State.data.homePlanet.level = 1 + Math.floor(State.data.homePlanet.buildings.length / 2);
+    bus.emit('build:placed', { planetId, slot, buildingId }); say(`${NAMES[buildingId] ?? buildingId} construit !`); xp(60); State.save(); });
+  bus.on('secret:found', ({ xp: n = 100 }) => { say('✧ Secret découvert ✧'); xp(n); });
+  bus.on('npc:interact', ({ name, line }) => say(`${name} : « ${line} »`, 4200));
   bus.on('enemy:touch', ({ dmg }) => hurt(dmg, 'enemy'));
   bus.on('boss:hit-hero', ({ dmg }) => hurt(dmg, 'boss'));
   bus.on('ship:bump', ({ speed = 0 }) => hurt(Math.round(2 + speed * .03), 'bump'));

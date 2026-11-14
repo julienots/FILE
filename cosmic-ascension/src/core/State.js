@@ -11,7 +11,7 @@ export const defaults = () => ({
   collection: { creatures: [], artifacts: [] },
   quests: { active: {}, done: [], tracked: null },   // active: {id: {step, n}}
   world: { visited: [], discovered: ['home'], location: 'home', flags: {}, system: 'pepin', collected: [] }, // collected: ids de pickups ramassés (A ne les fait pas réapparaître)
-  homePlanet: { buildings: [], biome: 'meadow', level: 1 },
+  homePlanet: { buildings: [], biome: 'meadow', level: 1, lastCollect: 0, carry: {} },   // buildings: [{slot,id}]
   stats: { playTime: 0, kills: 0, pickups: 0, deaths: 0, landings: 0 },
   settings: { music: 0.7, sfx: 0.8, quality: 'auto', lang: 'fr', leftHanded: false, haptics: true },
   meta: { created: 0, saved: 0, seenIntro: false },

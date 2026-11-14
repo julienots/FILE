@@ -31,8 +31,14 @@ for (const vp of [{ name: 'phone', width: 915, height: 412 }, { name: 'tablet', 
   await p.keyboard.press('Escape'); await wait(500); await shot('06_pause');
   await p.click(V + '.menu2 .cbtn:first-child'); await wait(400); await shot('07_quests');
   await p.click(V + '.cbtn'); await p.click(V + '.menu2 .cbtn:last-child'); await wait(400); await shot('08_inventory');
-  await p.click(V + '.cbtn'); await p.click(V + '.menu > .cbtn.alt'); await wait(400); await shot('09_settings');
+  await p.click(V + '.cbtn'); await p.click(V + 'button:has-text("Réglages")'); await wait(400); await shot('09_settings');
   if (vp.name === 'phone') { await p.click(V + '.row:nth-of-type(4) .tog'); await p.click(V + '.cbtn'); await p.click(V + '.cbtn'); await wait(400); await shot('10_lefty'); }
+  for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
+  await p.evaluate(() => { window.__bus.emit('hero:xp', { amount: 0 }); });
+  await emit('inventory:changed', {}); await emit('build:request', { planetId: 'home', slot: 0 }); await wait(500); await shot('12_build_menu');
+  await p.click(V + '.bcard:not(.poor):not(.locked)').catch(() => {}); await wait(800);
+  for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
+  await p.keyboard.press('Escape'); await wait(300); await p.click(V + 'button:has-text("Ma planète")'); await wait(400); await shot('13_base');
   for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
   await emit('npc:interact', { npcId: 'forga' }); await wait(1500); await p.click('.dl-card'); await wait(300); await p.click('.dl-card'); await wait(1200); await shot('11_npc_dialogue');
   await p.close();

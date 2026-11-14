@@ -43,6 +43,8 @@ export const Dialogue = {
     this.cur = { id, npcId, D }; bus.emit('dialogue:start', { id, npcId, radio: !!D.radio });
     this.goto(entry ? entry[1] : 'start'); return true;
   },
+  // réplique isolée (habitant sans dialogue écrit)
+  say(speaker, text, npcId = null) { if (this.cur) return false; DIALOGUES.__say = { speaker, portrait: '🙂', nodes: { start: { t: text } } }; return this.start('__say', npcId); },
   goto(nid) {
     const c = this.cur; if (!c) return;
     const node = nid && c.D.nodes[nid];
@@ -66,7 +68,9 @@ export const Dialogue = {
   },
 };
 export function initDialogue() {
-  bus.on('npc:interact', ({ npcId }) => { const n = NPCS[npcId]; if (n?.dialogue) Dialogue.start(n.dialogue, npcId); });
+  // PNJ de la data → son dialogue; habitant générique du moteur (A) → réplique simple `line`
+  bus.on('npc:interact', ({ npcId, name, line }) => { const n = NPCS[npcId]; if (n?.dialogue) Dialogue.start(n.dialogue, npcId); else if (line) Dialogue.say(name ?? '…', line, npcId); });
+  bus.on('npc:near', ({ npcId } = {}) => bus.emit('ui:context', { label: npcId ? 'Parler' : null, source: 'npc' }));
   bus.on('dialogue:choose', ({ i } = {}) => Dialogue.choose(i ?? 0));
   bus.on('dialogue:request', ({ id, npcId }) => Dialogue.start(id, npcId));
   bus.on('game:pause', () => { Dialogue.paused = true; });

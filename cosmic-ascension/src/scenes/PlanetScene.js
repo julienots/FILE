@@ -7,6 +7,9 @@ import { createStars } from '../render/shaders/Stars.js';
 import { createSkyDome } from '../render/shaders/SkyDome.js';
 import { buildPlanet, disposePlanet } from '../world/PlanetFactory.js';
 import { scatterProps } from '../world/Props.js';
+import { buildStructures, buildSkyClouds } from '../world/Structures.js';
+import { Ship } from '../entities/Ship.js';
+import { buildHomeBase, BUILD_ORDER, buildCost } from '../world/HomeBase.js';
 import { getPlanet } from '../data/planets.js';
 import { EVOLUTIONS } from '../data/evolutions.js';
 import { Hero } from '../entities/Hero.js';
@@ -42,11 +45,15 @@ export class PlanetScene {
   }
   enter({ id = 'home', arrive = false } = {}) {
     this.active = true;
-    for (const o of [this.planet, this.props, this.nebula]) if (o) { this.scene.remove(o); disposePlanet(o); }
+    for (const o of [this.planet, this.props, this.nebula, this.structs?.group, this.clouds]) if (o) { this.scene.remove(o); disposePlanet(o); }
     const def = this.def = getPlanet(id); this.planet = buildPlanet(def, { surface: true }); this.scene.add(this.planet);
     const water = this.planet.getObjectByName('water'); if (water) water.material.uniforms.uSun.value.copy(SUN);
     this.enemies.populate(this.planet);
     const sc = scatterProps(this.planet); this.props = sc.group; this.colliders = sc.colliders; this.scene.add(this.props);
+    this.structs = buildStructures(this.planet); this.scene.add(this.structs.group); this.colliders.push(...this.structs.colliders);
+    // retire les décors qui chevauchent les structures
+    this.clouds = def.clouds ? buildSkyClouds(this.planet, def.clouds) : null; if (this.clouds) this.scene.add(this.clouds);
+    this.ambient = { meadow: ['#fff3a0', 1, .6], volcanic: ['#ff8a3a', 3, 1.2], ice: ['#ffffff', -2.5, 1.5], jungle: ['#ff7ad8', .8, 1] }[def.biome] ?? ['#ffffff', 1, .5];
     const atmo = def.atmosphere?.color ?? '#8fd0ff';
     this.scene.fog = new THREE.FogExp2(atmo, 0.9 / (def.radius * 6)); this.sky.material.uniforms.uC.value.set(atmo); this.hemi.color.set(atmo).lerp(new THREE.Color('#fff'), .6);
     this.nebula = createNebula({ seed: def.seed }); this.scene.add(this.nebula);
@@ -55,6 +62,10 @@ export class PlanetScene {
     const P = this.planet.userData; this.dir.set(0.15, 1, 0.25).normalize();
     for (let i = 0; i < 200 && P.sample(this.dir) - P.sea < .04; i++) this.dir.set(Math.sin(i * 2.4) * i * .02, 1, Math.cos(i * 2.4) * i * .02).normalize();
     this.fwd.set(0, 0, -1).addScaledVector(this.dir, -this.fwd.dot(this.dir)).normalize(); this.face.copy(this.fwd); this.vh = 0; this.alt = 0;
+    if (!this.parked) { this.parked = new Ship(); this.parked.flame.visible = false; this.scene.add(this.parked.root); }
+    { const pd = V().copy(this.dir).multiplyScalar(P.radius).addScaledVector(this.fwd, -7).normalize(), pr = this.parked.root; pr.position.copy(pd).multiplyScalar(P.heightAt(pd) + .9); pr.quaternion.setFromUnitVectors(V().set(0, 1, 0), pd); this.colliders.push({ pos: pr.position.clone(), r: 2.2 }); }
+    this.base?.dispose(); if (this.base) { this.scene.remove(this.base.group); disposePlanet(this.base.group); } this.base = null;
+    if (def.type === 'home') { this.base = buildHomeBase(this.planet, this.dir, this.particles); this.scene.add(this.base.group); this.colliders.push(...this.base.colliders); }
     // orbes
     this.orbData.length = 0; let s = def.seed * 131 + 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
     for (let i = 0; i < 400 && this.orbData.length < 48; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u), d = V().set(r * Math.cos(t), u, r * Math.sin(t));
@@ -102,6 +113,14 @@ export class PlanetScene {
       hero._land = .6; bus.emit('hero:ability', { id: 'starbolt', pos: hero.root.position, dir: _c }); }
     if (this.knock) { up.copy(_c.copy(hero.root.position).addScaledVector(this.knock, 14 * dt)).normalize(); this.hurtT -= dt; if (this.hurtT <= 0) this.knock = null; }
     this.enemies.update(dt, hero.root.position, scale);
+    // habitants, secrets, nuages, particules d'ambiance
+    const npc = this.structs.update(dt, t, hero.root.position);
+    if (npc !== this.nearNpc) { this.nearNpc = npc; bus.emit('npc:near', npc ? { npcId: npc.id, name: npc.name } : { npcId: null }); }
+    for (const sc of this.structs.secrets) if (!sc.found && sc.obj.position.distanceTo(hero.root.position) < 4.5 + scale) { sc.found = true; this._burst(40, 3, '#ffffff'); this.shakeT = .4; bus.emit('secret:found', { id: sc.id, planet: this.def.id, xp: 120 }); }
+    if (this.base) { const sl = this.base.update(dt, t, hero.root.position), n = this.base.count(); if (sl !== this.nearSlot) { this.nearSlot = sl; bus.emit('build:near', sl ? { slot: sl.i, cost: buildCost(n), buildingId: BUILD_ORDER[n % BUILD_ORDER.length] } : { slot: null }); } } else this.nearSlot = null;
+    if (this.clouds) this.clouds.rotation.y += dt * .012;
+    if (Math.random() < this.ambient[2] * .5) { _c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * 40).addScaledVector(z, (Math.random() - .3) * 40).addScaledVector(up, Math.random() * 10 * (this.ambient[1] < 0 ? 2 : 1));
+      this.particles.emit(_c, _e.copy(up).multiplyScalar(this.ambient[1]).addScaledVector(right, Math.random() - .5), this.ambient[0], .22, 3.5, 0, 0); }
     // ombre blob
     const sh = this.shadow, hAbove = this.alt - gAlt + hero.lift; sh.position.copy(up).multiplyScalar(groundR + .06); sh.quaternion.setFromUnitVectors(this._s.set(0, 0, 1), up);
     sh.scale.setScalar(scale * Math.max(.3, 1 - hAbove * .08 / scale)); sh.material.opacity = wading ? 0 : .32 * Math.max(.2, 1 - hAbove * .1 / scale);
@@ -132,10 +151,12 @@ export class PlanetScene {
     for (const o of [this.nebula, this.stars, this.sky]) o.position.copy(this.camera.position);
     this.nebula.userData.update(t); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio()); this.sky.material.uniforms.uUp.value.copy(up);
     const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .35 + .45 * day;
-    if (this.shakeT > 0) { this.shakeT -= dt; this.camera.position.addScaledVector(up, (Math.random() - .5) * this.shakeT * 1.2); }
+    if (this.shakeT > 0) { this.shakeT -= dt; this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, this.shakeT * 2.5); this.camera.position.addScaledVector(up, (Math.random() - .5) * this.shakeT * 1.2); }
     if (this.arriving || this.leaving) for (let k = 0; k < 3; k++) { _e.copy(up).multiplyScalar(this.leaving ? -14 : 10); this.particles.emit(_c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * scale), _e, EVOLUTIONS[hero.stage].glow, .6 * scale, .5, 1, 0); }
     if (this.leaving && (this.leaving += dt) > .35 && !this._left) { this._left = true; this.ctx.transition('space', { from: this.def.id }, { color: this.def.atmosphere?.color ?? '#ffffff', out: .45, in: .8 }); }
-    if (!cine && !this.leaving && !this.arriving && Input.pressed.action) { this.leaving = .001; this._left = false; this.ground = false; this.vh = 12 * Math.sqrt(scale); bus.emit('cinematic:start', { id: 'takeoff' }); }
+    if (!cine && !this.leaving && !this.arriving && Input.pressed.action && this.nearNpc) bus.emit('npc:interact', { npcId: this.nearNpc.id, name: this.nearNpc.name, line: this.nearNpc.line });
+    else if (!cine && !this.leaving && !this.arriving && Input.pressed.action && this.nearSlot) { const n = this.base.count(); bus.emit('build:request', { planetId: this.def.id, slot: this.nearSlot.i, buildingId: BUILD_ORDER[n % BUILD_ORDER.length], cost: buildCost(n) }); if (this.nearSlot.col === null) this.colliders.push(...this.base.colliders.slice(-1)); }
+    else if (!cine && !this.leaving && !this.arriving && Input.pressed.action) { this.leaving = .001; this._left = false; this.ground = false; this.vh = 12 * Math.sqrt(scale); bus.emit('cinematic:start', { id: 'takeoff' }); }
     // ✦ Onde de choc (grandit avec le stade; "supernova" au stade divin)
     this.waveCd -= dt;
     if (!frozen && Input.pressed.special && this.waveCd <= 0) { this.waveCd = 2.5; const rad = (5 + hero.stage * 2.5) * Math.sqrt(scale), col = EVOLUTIONS[hero.stage].glow;

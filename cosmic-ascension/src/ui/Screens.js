@@ -7,6 +7,7 @@ import { h, fmtTime } from './dom.js';
 import { t } from './i18n.js';
 import { buzz } from './haptics.js';
 import { journalPanel, inventoryPanel } from './Journal.js';
+import { buildMenu, basePanel } from './Base.js';
 // Écrans plein cadre (B): titre, pause, réglages, confirmation. Un seul écran visible à la fois (pile).
 export function mountScreens(root, { onPlay, onQuit } = {}) {
   const layer = h('div.layer.screens'); root.appendChild(layer);
@@ -40,9 +41,14 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
       h('div.stats', {}, st('stats.stage', EVOLUTIONS[d.hero.stage].name), st('stats.planets', `${d.world.discovered.length}/${vis}`), st('stats.kills', d.stats.kills), st('stats.time', fmtTime(d.stats.playTime))),
       h('div.menu', {}, btn(t('pause.resume'), '', resume),
         h('div.menu2', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel()))),
+        btn('🌍 Ma planète', 'alt', () => sub('Ma planète', basePanel())),
         btn(t('pause.settings'), 'alt', settings),
         btn(`${t('pause.map')} · ${t('soon')}`, 'ghost', () => {}), btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); })))));
   }
+  // menu de construction: met le jeu en pause le temps du choix
+  function build(req) { if (stack.length) return; mode = 'pause'; bus.emit('game:pause'); const close = () => { clear(); mode = null; bus.emit('game:resume'); };
+    push(h('div.screen', {}, h('div.panel.wide', {}, h('h2', { text: 'Construire' }), buildMenu(req, close), h('div.menu', { style: { marginTop: '3vmin' } }, btn(t('back'), '', close))))); }
+  bus.on('ui:buildMenu', build);
   function sub(title, content) { push(h('div.screen', {}, h('div.panel.wide', {}, h('h2', { text: title }), content, h('div.menu', { style: { marginTop: '3vmin' } }, btn(t('back'), '', pop))))); }
   function settings() {
     const s = State.data.settings, changed = () => { State.save(); bus.emit('settings:changed', s); };

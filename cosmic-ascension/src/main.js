@@ -1,4 +1,5 @@
 import { Game } from './core/Game.js';
+import { bus } from './core/EventBus.js';
 import { State } from './core/State.js';
 import { Config } from './core/Config.js';
 import { Assets } from './assets/AssetLibrary.js';
@@ -7,7 +8,6 @@ import { PlanetScene } from './scenes/PlanetScene.js';
 import { initFallback } from './core/Fallback.js';
 import { initSystems } from './systems/index.js';
 import { mountUI } from './ui/index.js';
-import { bus } from './core/EventBus.js';
 import { initAudio } from './audio/Audio.js';
 
 // Point d'entrée: State → systèmes (B) → assets → Game + scènes (A) → UI (B).

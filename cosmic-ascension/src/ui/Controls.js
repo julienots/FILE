@@ -58,10 +58,13 @@ export function mountControls(root) {
   };
   refreshSpecial(); bus.on('hero:evolved', refreshSpecial); bus.on('state:loaded', refreshSpecial);
   // bouton contextuel (Atterrir / Décoller / Parler…). B5/B3 émettront `ui:context {label|null}` pour PNJ/objets.
-  const setAction = (label) => { action.classList.toggle('off', !label); action.lab.textContent = label || ''; };
-  bus.on('space:near', ({ canLand }) => setAction(canLand ? t('act.land') : null));
-  bus.on('scene:entered', ({ id }) => setAction(id === 'planet' ? t('act.takeoff') : null));
-  bus.on('ui:context', ({ label } = {}) => setAction(label));
+  // plusieurs sources (PNJ > construction > scène); la plus prioritaire non vide s'affiche
+  const ctx = { npc: null, build: null, scene: null };
+  const draw = () => { const label = ctx.npc ?? ctx.build ?? ctx.scene; action.classList.toggle('off', !label); action.lab.textContent = label || ''; };
+  const setCtx = (src, label) => { ctx[src] = label || null; draw(); };
+  bus.on('space:near', ({ canLand }) => setCtx('scene', canLand ? t('act.land') : null));
+  bus.on('scene:entered', ({ id }) => { ctx.npc = ctx.build = null; setCtx('scene', id === 'planet' ? t('act.takeoff') : null); });
+  bus.on('ui:context', ({ label, source = 'npc' } = {}) => setCtx(source, label));
 
   // gaucher
   const applyHand = () => root.classList.toggle('lefty', !!State.data.settings.leftHanded);
