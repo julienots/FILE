@@ -9,6 +9,7 @@ export function createSkyDome(color = '#7fd0ff') {
       void main(){ vec3 d=normalize(vD); float h=dot(d,uUp); float day=smoothstep(-.25,.35,dot(uUp,uSun));
         float a=(1.-smoothstep(-.1,.42,h))*mix(.35,.8,day);
         vec3 col=mix(uC*uC*.9,uC,pow(1.-clamp(h,0.,1.),4.))*mix(.2,.55,day);
+        float sunset=1.-smoothstep(0.,.5,abs(dot(uUp,uSun))); col=mix(col,vec3(1.,.42,.14)*.8,sunset*pow(1.-clamp(h,0.,1.),3.)*(.35+.65*max(dot(d,uSun),0.)));
         float s=dot(d,uSun); float disc=smoothstep(.9965,.9975,s); float halo=pow(max(s,0.),24.)*.5;
         col+=vec3(1.,.85,.55)*(disc*2.5+halo*.8); a=clamp(a+disc+halo*.6,0.,1.);
         gl_FragColor=vec4(col,a);

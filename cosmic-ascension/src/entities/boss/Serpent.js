@@ -45,6 +45,7 @@ export class Serpent {
   get alive() { return this.cores.some(c => c.hp > 0); }
   // Dégâts d'un tir du vaisseau en `pos`. Renvoie true si un cœur est touché.
   damageAt(pos, dmg) {
+    if (this.hostile === false) return false;      // tant que l'histoire ne l'a pas réveillé: invulnérable et pacifique
     for (const c of this.cores) { if (c.hp <= 0 || c.pos.distanceTo(pos) > c.r + 6) continue; c.hp -= dmg; c.flash = .15;
       if (this.particles) for (let k = 0; k < 10; k++) this.particles.emit(pos, this._o.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(120), '#ffe46a', 9, .5, 2, 0);
       if (c.hp <= 0) { c.mesh.visible = false; this.rage++; const left = this.cores.filter(x => x.hp > 0).length;
@@ -68,9 +69,9 @@ export class Serpent {
     }
     this.body.instanceMatrix.needsUpdate = true; this.orbs.instanceMatrix.needsUpdate = true;
     for (const c of this.cores) { if (c.hp <= 0) continue; const sg = this.segments[c.seg]; this._o.copy(sg.pos).sub(this.center).normalize(); c.pos.copy(sg.pos).addScaledVector(this._up, sg.r * .75); c.flash = Math.max(0, (c.flash || 0) - dt);
-      c.mesh.scale.setScalar(c.r * (1 + Math.sin(t * 4 + c.seg) * .12) * (c.flash ? 1.4 : 1)); c.mesh.material.color.set(c.flash ? '#ffffff' : '#ffe46a'); }
+      c.mesh.scale.setScalar(c.r * (1 + Math.sin(t * 4 + c.seg) * .12) * (c.flash ? 1.4 : 1)); c.mesh.material.color.set(c.flash ? '#ffffff' : this.hostile === false ? '#3a4a8a' : '#ffe46a'); }
     // crachats d'énergie vers le vaisseau
-    if (shipPos && !this.dead) {
+    if (shipPos && !this.dead && this.hostile !== false) {
       const d = this.head.position.distanceTo(shipPos); this.spitT -= dt;
       if (d < 950 && this.spitT <= 0) { this.spitT = Math.max(.9, 2.6 - this.rage * .3); const sh = this.shots.find(x => x.life <= 0);
         if (sh) { sh.life = 6; sh.mesh.visible = true; sh.mesh.position.copy(this.head.position); sh.vel.copy(shipPos).sub(this.head.position).normalize().multiplyScalar(210 + this.rage * 25); } }

@@ -11,7 +11,7 @@ export function createRenderer(canvas) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   let composer, renderPass, bloom, w = 1, h = 1;
   // Passe d'étalonnage: vignette + saturation + aberration chromatique pilotable (api.fx.aberration: boost, coups, cinématiques).
-  const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uAb: { value: 0 }, uSat: { value: 1.18 }, uVig: { value: .6 } },
+  const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uAb: { value: 0 }, uSat: { value: 1.02 }, uVig: { value: .6 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
     fragmentShader: `uniform sampler2D tDiffuse; uniform float uAb,uSat,uVig; varying vec2 vUv;
       void main(){ vec2 c=vUv-.5; float r2=dot(c,c); vec2 o=c*r2*uAb*.12; vec3 col=vec3(texture2D(tDiffuse,vUv+o).r,texture2D(tDiffuse,vUv).g,texture2D(tDiffuse,vUv-o).b);
@@ -20,7 +20,7 @@ export function createRenderer(canvas) {
     renderer, fx: { aberration: 0 },
     setScene(scene, camera) {
       renderPass = new RenderPass(scene, camera);
-      bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.55, 0.5, 0.9);
+      bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.38, 0.5, 0.92);
       composer = new EffectComposer(renderer); composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(grade); composer.addPass(new OutputPass());
       api.applyQuality();
     },

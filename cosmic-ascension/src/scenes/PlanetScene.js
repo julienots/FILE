@@ -7,7 +7,7 @@ import { createStars } from '../render/shaders/Stars.js';
 import { createSkyDome } from '../render/shaders/SkyDome.js';
 import { buildPlanet, disposePlanet } from '../world/PlanetFactory.js';
 import { scatterProps } from '../world/Props.js';
-import { buildStructures, buildSkyClouds } from '../world/Structures.js';
+import { buildStructures, buildSkyClouds, latLonToDir } from '../world/Structures.js';
 import { Ship } from '../entities/Ship.js';
 import { buildHomeBase, BUILD_ORDER, buildCost } from '../world/HomeBase.js';
 import { getPlanet } from '../data/planets.js';
@@ -24,19 +24,21 @@ export class PlanetScene {
   constructor(ctx) {
     this.ctx = ctx; this.scene = new THREE.Scene(); this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
     this.hemi = new THREE.HemisphereLight('#9fb4ff', '#3a2058', 0.7); this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight('#ffe0b8', 1.7); this.sun.position.copy(SUN).multiplyScalar(500); this.scene.add(this.sun);
+    this.sun = new THREE.DirectionalLight('#fff0dc', 3.4); this.sun.position.copy(SUN).multiplyScalar(500); this.scene.add(this.sun);
     this.hero = new Hero(); this.scene.add(this.hero.root);
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(.55, 20), new THREE.MeshBasicMaterial({ color: '#0a0620', transparent: true, opacity: .32, depthWrite: false }));
     this.shadow.renderOrder = 3; this.scene.add(this.shadow);
     this.particles = new Particles(700); this.scene.add(this.particles.points);
     this.evo = new EvolutionFX(this.scene, this.particles); this.enemies = new Enemies(this.scene, this.particles); this.atkCd = 0; this.hurtT = 0; this.waveCd = 0; this.waveT = 0;
     this.wave = new THREE.Mesh(new THREE.RingGeometry(.78, 1, 56), new THREE.MeshBasicMaterial({ color: '#fff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); this.wave.visible = false; this.scene.add(this.wave);
+    bus.on('dialogue:start', () => { this.talking = true; }); bus.on('dialogue:end', () => { this.talking = false; });
+    bus.on('hero:damaged', () => { if (this.active) { this.shakeT = Math.max(this.shakeT || 0, .25); } });
     bus.on('hero:died', () => { if (this.active) { this.deadT = .001; this._burst(30, this.hero.baseScale * 2, '#ff5a8a'); } });
     bus.on('hero:respawn', () => { if (this.active) this.ctx.transition('planet', { id: this.def.id }, { color: '#ffffff' }); });
     bus.on('enemy:touch', ({ pos }) => { if (!this.active) return; this.hurtT = .4; this.shakeT = .3; this.vh = 7; this.ground = false; this.knock = this.hero.root.position.clone().sub(pos).normalize(); bus.emit('hero:hit', { pos }); });
     this.stars = createStars(3000); this.scene.add(this.stars); this.sky = createSkyDome(); this.scene.add(this.sky); this.sky.material.uniforms.uSun.value.copy(SUN);
     // pickups: orbes de poussière cosmique (instanciés)
-    this.orbs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.28, 1), new THREE.MeshBasicMaterial({ color: '#fff3a0' }), 64); this.orbs.frustumCulled = false; this.scene.add(this.orbs);
+    this.orbs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.28, 1), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 64); this.orbs.frustumCulled = false; this.scene.add(this.orbs);
     this.orbData = [];
     // état
     this.dir = V().set(0, 1, 0); this.fwd = V().set(0, 0, -1); this.face = V().set(0, 0, -1); this.vh = 0; this.alt = 0; this.ground = true; this.camPitch = .5; this.stepT = 0;
@@ -60,6 +62,7 @@ export class PlanetScene {
     this.hero.setStage(State.data.hero.stage);
     // point d'apparition: première terre émergée proche du pôle
     const P = this.planet.userData; this.dir.set(0.15, 1, 0.25).normalize();
+    { const pad = def.structures?.find(x => x.kind === 'ship_pad') ?? def.npcs?.[0] ?? def.structures?.[0]; if (pad) latLonToDir(pad.lat + 3, pad.lon - 4, this.dir); }
     for (let i = 0; i < 200 && P.sample(this.dir) - P.sea < .04; i++) this.dir.set(Math.sin(i * 2.4) * i * .02, 1, Math.cos(i * 2.4) * i * .02).normalize();
     this.fwd.set(0, 0, -1).addScaledVector(this.dir, -this.fwd.dot(this.dir)).normalize(); this.face.copy(this.fwd); this.vh = 0; this.alt = 0;
     if (!this.parked) { this.parked = new Ship(); this.parked.flame.visible = false; this.scene.add(this.parked.root); }
@@ -67,11 +70,15 @@ export class PlanetScene {
     this.base?.dispose(); if (this.base) { this.scene.remove(this.base.group); disposePlanet(this.base.group); } this.base = null;
     if (def.type === 'home') { this.base = buildHomeBase(this.planet, this.dir, this.particles); this.scene.add(this.base.group); this.colliders.push(...this.base.colliders); }
     // orbes
-    this.orbData.length = 0; let s = def.seed * 131 + 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 400 && this.orbData.length < 48; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u), d = V().set(r * Math.cos(t), u, r * Math.sin(t));
-      if (P.sample(d) - P.sea > .02) this.orbData.push({ id: `${def.id}:dust:${this.orbData.length}`, dir: d, r: P.heightAt(d) + 1.1, ph: rnd() * 6, alive: true }); }
+    this.orbData.length = 0; let s = def.seed * 131 + 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647, got = State.data.world.collected ?? [];
+    const KC = { dust: '#fff3a0', crystal: '#6ff2ff', relic: '#ff9a3a', creature: '#8affb0', artifact: '#ff5ad0' };
+    if (def.pickups?.length) { for (const pk of def.pickups) { if (got.includes(pk.id) || this.orbData.length >= 64) continue; const d = latLonToDir(pk.lat, pk.lon); for (let k = 0; k < 40 && P.sample(d) - P.sea < .015; k++) d.set(d.x + (rnd() - .5) * .2, d.y + (rnd() - .5) * .2, d.z + (rnd() - .5) * .2).normalize();
+        this.orbData.push({ id: pk.id, kind: pk.kind === 'dust' ? 'cosmicDust' : pk.kind, color: KC[pk.kind] ?? '#ffffff', big: pk.kind === 'dust' ? 1 : 1.9, dir: d, r: P.heightAt(d) + 1.1, ph: rnd() * 6, alive: true }); } }
+    else for (let i = 0, n = 0; i < 400 && this.orbData.length < 48; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u), d = V().set(r * Math.cos(t), u, r * Math.sin(t));
+      if (P.sample(d) - P.sea > .02) { const id = `${def.id}:dust:${n++}`; if (!got.includes(id)) this.orbData.push({ id, kind: 'cosmicDust', color: KC.dust, big: 1, dir: d, r: P.heightAt(d) + 1.1, ph: rnd() * 6, alive: true }); } }
+    { const c = new THREE.Color(); this.orbData.forEach((o, i) => this.orbs.setColorAt(i, c.set(o.color))); if (this.orbs.instanceColor) this.orbs.instanceColor.needsUpdate = true; }
     this.orbs.count = this.orbData.length;
-    this.leaving = 0; this.ground = !arrive; this.deadT = 0; this.hero.scaleMul = 1; this.knock = null;
+    this.leaving = 0; this.ground = !arrive; this.deadT = 0; this.talking = false; this.hero.scaleMul = 1; this.knock = null;
     if (arrive) { this.alt = P.heightAt(this.dir) - P.radius + 70; this.vh = -8; this.arriving = true; }   // chute depuis le ciel
     this.camera.position.copy(this.dir).multiplyScalar(P.heightAt(this.dir) + (arrive ? 95 : 30)).addScaledVector(this.fwd, -20);
     bus.emit('scene:entered', { id: 'planet', planet: def }); bus.emit('planet:enter', { id: def.id });
@@ -83,7 +90,7 @@ export class PlanetScene {
     const cine = this.evo.update(dt, up), scale = hero.baseScale;
     // repère tangent caméra
     const camFwd = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize(), right = _b.crossVectors(camFwd, up).normalize();
-    if (this.deadT) { this.deadT += dt; hero.scaleMul = Math.max(.05, 1 - this.deadT * 1.2); } const frozen = cine || this.leaving || this.deadT; const mv = _c.copy(camFwd).multiplyScalar(frozen ? 0 : m.y).addScaledVector(right, frozen ? 0 : m.x); let sp = Math.min(1, mv.length());
+    if (this.deadT) { this.deadT += dt; hero.scaleMul = Math.max(.05, 1 - this.deadT * 1.2); } const frozen = cine || this.leaving || this.deadT || this.talking; const mv = _c.copy(camFwd).multiplyScalar(frozen ? 0 : m.y).addScaledVector(right, frozen ? 0 : m.x); let sp = Math.min(1, mv.length());
     const groundR0 = Math.max(P.heightAt(up), P.seaRadius - .35 * scale), wading = groundR0 > P.heightAt(up) + .01;
     const speed = 7.5 * Math.sqrt(scale) * (Input.buttons.boost ? 1.6 : 1) * (wading ? .65 : 1);
     if (sp > .05) {
@@ -135,9 +142,9 @@ export class PlanetScene {
       _c.copy(o.dir).multiplyScalar(o.r + Math.sin(t * 2 + o.ph) * .25); const d = _c.distanceTo(hpz);
       if (d < reach * 2.5) { o.pull = (o.pull || 0) + dt * 3; _c.lerp(hpz, Math.min(1, o.pull)); }
       if (d < reach || o.pull > 1) { o.alive = false; this._s.setScalar(0); this._m.compose(_c, this._q.identity(), this._s); this.orbs.setMatrixAt(i, this._m);
-        for (let k = 0; k < 10; k++) this.particles.emit(_c, _e.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(8), '#fff3a0', .35, .5, 3, 0);
-        bus.emit('pickup:collected', { id: o.id, kind: 'cosmicDust', amount: 1 }); continue; }
-      this._m.compose(_c, this._q.identity(), this._s.setScalar(1 + Math.sin(t * 5 + o.ph) * .15)); this.orbs.setMatrixAt(i, this._m); }
+        for (let k = 0; k < 10; k++) this.particles.emit(_c, _e.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(8), o.color, .35, .5, 3, 0);
+        bus.emit('pickup:collected', { id: o.id, kind: o.kind, amount: 1 }); continue; }
+      this._m.compose(_c, this._q.identity(), this._s.setScalar((1 + Math.sin(t * 5 + o.ph) * .15) * o.big)); this.orbs.setMatrixAt(i, this._m); }
     this.orbs.instanceMatrix.needsUpdate = true;
     // caméra: orbite tactile, recul selon taille + cinématique
     if (Input.look.x) this.fwd.applyAxisAngle(up, -Input.look.x * .006);
@@ -150,11 +157,12 @@ export class PlanetScene {
     // ciel
     for (const o of [this.nebula, this.stars, this.sky]) o.position.copy(this.camera.position);
     this.nebula.userData.update(t); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio()); this.sky.material.uniforms.uUp.value.copy(up);
-    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .34 + .42 * day;
+    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .14 + .55 * day;
     if (this.shakeT > 0) { this.shakeT -= dt; this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, this.shakeT * 2.5); this.camera.position.addScaledVector(up, (Math.random() - .5) * this.shakeT * 1.2); }
     if (this.arriving || this.leaving) for (let k = 0; k < 3; k++) { _e.copy(up).multiplyScalar(this.leaving ? -14 : 10); this.particles.emit(_c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * scale), _e, EVOLUTIONS[hero.stage].glow, .6 * scale, .5, 1, 0); }
     if (this.leaving && (this.leaving += dt) > .35 && !this._left) { this._left = true; this.ctx.transition('space', { from: this.def.id }, { color: this.def.atmosphere?.color ?? '#ffffff', out: .45, in: .8 }); }
-    if (!cine && !this.leaving && !this.arriving && Input.pressed.action && this.nearNpc) bus.emit('npc:interact', { npcId: this.nearNpc.id, name: this.nearNpc.name, line: this.nearNpc.line });
+    if (this.talking) { /* la boîte de dialogue de B gère ⏎ */ }
+    else if (!cine && !this.leaving && !this.arriving && Input.pressed.action && this.nearNpc) bus.emit('npc:interact', { npcId: this.nearNpc.id, name: this.nearNpc.name, line: this.nearNpc.line });
     else if (!cine && !this.leaving && !this.arriving && Input.pressed.action && this.nearSlot) { const n = this.base.count(); bus.emit('build:request', { planetId: this.def.id, slot: this.nearSlot.i, buildingId: BUILD_ORDER[n % BUILD_ORDER.length], cost: buildCost(n) }); if (this.nearSlot.col === null) this.colliders.push(...this.base.colliders.slice(-1)); }
     else if (!cine && !this.leaving && !this.arriving && Input.pressed.action) { this.leaving = .001; this._left = false; this.ground = false; this.vh = 12 * Math.sqrt(scale); bus.emit('cinematic:start', { id: 'takeoff' }); }
     // ✦ Onde de choc (grandit avec le stade; "supernova" au stade divin)

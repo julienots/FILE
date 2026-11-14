@@ -63,7 +63,7 @@ export class Hero {
     if (this._air && !airborne) this._land = 1;                       // écrasement à l'atterrissage
     this._air = airborne ? 1 : 0; this._land = Math.max(0, (this._land || 0) - dt * 5);
     const stride = t * (4 + sp * 10), bob = Math.abs(Math.sin(stride)) * sp * .12 + Math.sin(t * 2.2) * .02;
-    const stretch = airborne ? THREE.MathUtils.clamp(vUp * .03, -.18, .25) : -this._land * .3 + bob * .5;
+    const stretch = airborne ? THREE.MathUtils.clamp(vUp * .012, -.07, .1) : -this._land * .12 + bob * .2;
     b.position.y = (airborne ? .1 : bob) + this.lift / this.baseScale;
     b.scale.set(1 - stretch * .6, 1 + stretch, 1 - stretch * .6);
     b.rotation.set(sp * .28, this.spin, Math.sin(stride) * .07 * sp);

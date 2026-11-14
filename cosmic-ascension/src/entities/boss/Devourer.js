@@ -38,6 +38,7 @@ export class Devourer {
     this._a = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._e = new THREE.Euler(); this._s = new THREE.Vector3(1, 1, 1); this._p = new THREE.Vector3();
   }
   get headPos() { return this.root.position; }
+  leave() { if (this.sighted && !this.dead) { this.sighted = false; bus.emit('boss:despawn', { id: 'devourer' }); } }
   damageAt(pos, dmg) {
     for (const c of this.cores) { if (c.hp <= 0 || c.pos.distanceTo(pos) > c.r + 8) continue; c.hp -= dmg; c.flash = .15; const P = this.particles;
       if (P) for (let k = 0; k < 10; k++) P.emit(pos, this._a.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(140), '#ffe46a', 10, .5, 2, 0);
@@ -68,5 +69,6 @@ export class Devourer {
       this.biteCd -= dt;
       if (d < R * .75 && this.biteCd <= 0) { this.biteCd = 1.5; bus.emit('boss:hit-hero', { id: 'devourer', dmg: 30 }); shipVel.copy(this._a.set(0, 0, 1).applyQuaternion(root.quaternion)).multiplyScalar(420); } }
     if (!this.sighted && d < 1300) { this.sighted = true; bus.emit('boss:spawn', { id: 'devourer' }); }
+    else if (this.sighted && d > 2000) this.leave();
   }
 }

@@ -6,7 +6,7 @@ await new Promise(r => setTimeout(r, 2500));
 const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 600 } }); const errs = [];
 p.on('pageerror', e => errs.push(String(e))); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
-await p.goto('http://localhost:4173/'); await p.waitForTimeout(4000);
+await p.goto('http://localhost:4173/'); await p.waitForTimeout(3500); await p.click('.cbtn').catch(() => {}); await p.waitForTimeout(1500);
 await p.screenshot({ path: 'tests/out/space.png' });
 await p.evaluate(() => { const g = window.__game.current, h = g.serpent.headPos; g.ship.root.position.set(h.x + 260, h.y + 120, h.z + 520); g.yaw = .45; g.pitch = -.2; g.camera.position.copy(g.ship.root.position); }); await p.waitForTimeout(2500); await p.screenshot({ path: 'tests/out/serpent.png' });
 await p.evaluate(() => { const g = window.__game.current, c = g.serpent.cores[2].pos; g.ship.root.position.set(c.x + 60, c.y + 160, c.z + 200); g.yaw = .29; g.pitch = -.6; g.vel.set(0, 0, 0); g.camera.position.copy(g.ship.root.position); }); await p.keyboard.down('KeyJ'); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/bossfight.png' }); await p.keyboard.up('KeyJ');

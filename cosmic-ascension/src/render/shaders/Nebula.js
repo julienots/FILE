@@ -17,8 +17,8 @@ export function createNebula({ a = '#1c0e52', b = '#a0289a', c = '#24b8d8', seed
         col=mix(col,uB,cloud*smoothstep(.32,.9,n3)*.75);
         col=mix(col,uC,smoothstep(.6,.98,n2*n3*2.)*.65);
         // cartoon: posterisation douce
-        col=floor(col*9.)/9.*.6+col*.4;
-        gl_FragColor=vec4(col,1.);
+        
+        gl_FragColor=vec4(col*.5,1.);
         #include <colorspace_fragment>
       }`,
   });

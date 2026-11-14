@@ -12,7 +12,8 @@ function getRamp(steps = 4) {
 }
 export function toonMaterial({ color = '#ffffff', vertexColors = false, rim = '#9fd8ff', rimPower = 2.5, rimStrength = 0.55,
   emissive = '#000000', emissiveIntensity = 1, flatShading = false, sway = 0, detail = 0, ...rest } = {}) {
-  const m = new THREE.MeshToonMaterial({ color, vertexColors, gradientMap: getRamp(), emissive, emissiveIntensity, flatShading, ...rest });
+  // Direction « SF réaliste »: base PBR (MeshStandardMaterial) au lieu de la rampe toon; le nom `toonMaterial` est gardé pour compatibilité.
+  const m = new THREE.MeshStandardMaterial({ color, vertexColors, emissive, emissiveIntensity, flatShading, roughness: rest.roughness ?? .82, metalness: rest.metalness ?? .04, ...rest });
   const u = { uRim: { value: new THREE.Color(rim) }, uRimP: { value: rimPower }, uRimS: { value: rimStrength }, uSway: { value: sway }, uTime: shaderTime };
   m.userData.uniforms = u;
   m.onBeforeCompile = (s) => {
@@ -30,23 +31,17 @@ export function toonMaterial({ color = '#ffffff', vertexColors = false, rim = '#
         transformed.x += sin(uTime * 1.7 + swPh) * swW; transformed.z += cos(uTime * 1.3 + swPh * 1.3) * swW;`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uRim; uniform float uRimP,uRimS; varying vec3 vObjP;' + (detail ? NOISE_GLSL : ''))
-      .replace('#include <color_fragment>', '#include <color_fragment>\n        diffuseColor.rgb = pow(diffuseColor.rgb, vec3(1.12));' + (detail ? `
-        float dn = vnoise(vObjP * .45) * .6 + vnoise(vObjP * 1.6) * .4;   // taches peintes (2 échelles, posterisées)
-        diffuseColor.rgb *= .9 + .2 * smoothstep(.42, .46, dn) + .08 * step(.62, vnoise(vObjP * 4.2));` : ''))
+      .replace('#include <color_fragment>', '#include <color_fragment>\n        ' + (detail ? `
+        float dn = vnoise(vObjP * .35) * .5 + vnoise(vObjP * 1.3) * .3 + vnoise(vObjP * 5.) * .2;
+        diffuseColor.rgb *= .72 + .56 * dn;` : ''))
       .replace('#include <opaque_fragment>', `
         float rimF = pow(1.0 - saturate(dot(normalize(vViewPosition), normal)), uRimP);
-        outgoingLight += uRim * rimF * uRimS * 1.3 * (0.3 + 0.7 * saturate(dot(normal, directionalLights[0].direction) + .4));
+        outgoingLight += uRim * rimF * uRimS * 0.3 * (0.2 + 0.8 * saturate(dot(normal, directionalLights[0].direction) + .4));
         #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'toon-rim-sway' + (detail ? '-d' : '');
   return m;
 }
 // Contour "inverted hull" — à réserver au héros / créatures importantes.
-export function addOutline(mesh, color = '#120a2a', thickness = 0.04) {
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, uniforms: { uC: { value: new THREE.Color(color) }, uT: { value: thickness } },
-    vertexShader: 'uniform float uT; void main(){ vec3 p=position+normal*uT; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.); }',
-    fragmentShader: 'uniform vec3 uC; void main(){ gl_FragColor=vec4(uC,1.); }',
-  });
-  const o = new THREE.Mesh(mesh.geometry, mat); mesh.add(o); return o;
-}
+// Contours retirés (direction réaliste): fonction conservée pour compatibilité, sans effet.
+export function addOutline() { return null; }

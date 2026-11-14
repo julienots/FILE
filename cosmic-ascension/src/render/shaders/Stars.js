@@ -8,7 +8,7 @@ export function createStars(count = 6000, radius = 4000) {
     pos.set([r * Math.cos(t) * radius, u * radius, r * Math.sin(t) * radius], i * 3);
     c.setHSL(Math.random() < .5 ? .6 : Math.random() < .5 ? .08 : .95, .5, .75 + Math.random() * .25);
     col.set([c.r, c.g, c.b], i * 3);
-    sz[i] = Math.pow(Math.random(), 4) * 5 + 1; ph[i] = Math.random() * 6.28;
+    sz[i] = Math.pow(Math.random(), 5) * 3.2 + .7; ph[i] = Math.random() * 6.28;
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));

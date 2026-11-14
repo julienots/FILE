@@ -14,7 +14,7 @@ export const Assets = {
       try { const gltf = await loader.loadAsync('./models/' + e.file);
         // Harmonise avec le rendu du jeu: matériau toon (texture ou couleurs de sommets conservées), pas de PBR.
         gltf.scene.traverse(o => { if (!o.isMesh) return; const old = o.material, vc = !!o.geometry.attributes.color;
-          o.material = toonMaterial({ color: vc || old.map ? '#ffffff' : old.color, map: old.map ?? null, vertexColors: vc, rim: e.rim ?? '#9fd8ff', rimStrength: e.rimStrength ?? .7 }); old.dispose?.(); });
+          o.material = toonMaterial({ color: vc || old.map ? '#ffffff' : old.color, map: old.map ?? null, normalMap: old.normalMap ?? null, roughness: vc ? .75 : (old.roughness ?? .8), metalness: old.metalnessMap ? .5 : (old.metalness ?? 0), vertexColors: vc, rim: e.rim ?? '#9fd8ff', rimStrength: e.rimStrength ?? .7 }); old.dispose?.(); });
         cache.set(key, { gltf, meta: e }); }
       catch (err) { console.warn('[Assets] modèle introuvable:', key, e.file); }
     }));

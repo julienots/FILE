@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { toonMaterial, addOutline } from '../render/shaders/Toon.js';
 import { Assets } from '../assets/AssetLibrary.js';
 import { bus } from '../core/EventBus.js';
+import { ENEMIES } from '../data/enemies.js';
 
 // Ennemis au sol (poolés) + projectiles du héros. Fournit le rendu, l'animation et une IA de secours (errance/poursuite/contact).
 // B (systems/combat) peut reprendre la main: `enemy:order {uid, order:'die'|'stun'}` et écouter `enemy:hit`, `enemy:touch`, `enemy:killed`.
@@ -11,9 +12,14 @@ const TYPES = {
   dragon: { color: '#1a2a6a', rim: '#6ff2ff', hp: 30, speed: 3.4, size: 2.6, sight: 34, model: 'enemy_dragon' },
   brute: { color: '#2a2228', rim: '#ff7a3a', hp: 14, speed: 2.2, size: 3, sight: 30, model: 'enemy_brute' },
 };
+// Types de la data de B (src/data/enemies.js) → paramètres moteur. Modèle GLB: celui de la data, sinon selon la forme.
+const SHAPE_MODEL = { blob: 'enemy_slime', wraith: 'enemy_slime', drone: 'enemy_drone', bat: 'enemy_drone', beetle: 'enemy_drone', golem: 'enemy_brute', knight: 'enemy_brute', beast: 'enemy_dragon' };
+for (const [id, E] of Object.entries(ENEMIES ?? {})) { if (TYPES[id] && !E) continue; const c = new THREE.Color(E.color ?? '#b45cff');
+  TYPES[id] = { color: '#' + c.clone().multiplyScalar(.35).getHexString(), rim: '#' + c.getHexString(), hp: Math.max(2, Math.round((E.hp ?? 30) / 10)), speed: E.speed ?? 3, size: E.size ?? 1, sight: (E.aggro ?? 12) * 1.6,
+    model: Assets.has?.(E.model) ? E.model : (SHAPE_MODEL[E.shape] ?? 'enemy_slime'), _model: E.model, _shape: E.shape }; }
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
 function makeBody(type) {
-  const T = TYPES[type], g = new THREE.Group(), model = Assets.get(T.model);
+  const T = TYPES[type], g = new THREE.Group(), model = Assets.get(T._model) ?? Assets.get(T.model) ?? Assets.get(SHAPE_MODEL[T._shape]);
   if (model) { g.add(model); g.scale.setScalar(T.size); return g; }
   const mat = toonMaterial({ color: T.color, rim: T.rim, rimStrength: 1.3 });
   const b = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), mat); b.position.y = .5; b.scale.set(1.1, .85, 1.1); addOutline(b, '#1a0f33', .04); g.add(b);
