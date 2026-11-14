@@ -36,7 +36,9 @@ export function mountHud(root, { onPause } = {}) {
     xpl.textContent = nx ? t('hud.xpTo', { need: p.need, name: nx.name }) : t('hud.max');
     dust.textContent = State.data.inventory.cosmicDust;
   }
+  let trackedQ = false; // une quête suivie a priorité sur l'objectif d'exploration
   function objective() {
+    if (trackedQ) return;
     // M1: objectif d'exploration. B3 remplacera par la quête suivie (`quest:tracked`).
     const vis = PLANETS.filter(p => !p.hidden).length, disc = State.data.world.discovered.filter(id => PLANETS.find(p => p.id === id && !p.hidden)).length;
     qTitle.textContent = t('obj.m1'); qProg.textContent = `${t('hud.discovered')}: ${disc}/${vis}`;
@@ -46,7 +48,7 @@ export function mountHud(root, { onPause } = {}) {
   bus.on('state:loaded', refresh); bus.on('hero:stats', stats); bus.on('hero:damaged', stats);
   bus.on('progress:xp', ({ gained, reason }) => { progress(); if (gained > 0) toast(`+${gained} XP · ${t('xp.' + reason)}`, 'xp'); });
   bus.on('world:discovered', objective);
-  bus.on('quest:tracked', ({ title, progress: pg } = {}) => { if (title) { qTitle.textContent = title; qProg.textContent = pg ?? ''; } else objective(); });
+  bus.on('quest:tracked', ({ title, progress: pg } = {}) => { trackedQ = !!title; if (title) { qTitle.textContent = title; qProg.textContent = pg ?? ''; } else objective(); });
   bus.on('ui:toast', ({ text, kind }) => toast(text, kind));
   bus.on('space:near', ({ planet, canLand, distance }) => {
     const sys = getSystem(planet.system);
