@@ -1,6 +1,6 @@
 # COSMIC ASCENSION — lis ceci en premier
 
-Jeu mobile (Android, paysage) 3D cartoon open-world spatial. Moteur: **Three.js + Vite**, emballé en APK via **Capacitor**. Zéro dépendance lourde.
+Jeu mobile (Android, paysage) 3D open-world spatial — direction **SF réaliste et sombre** (voir GAME_DESIGN §Direction visuelle). Moteur: **Three.js + Vite**, emballé en APK via **Capacitor**. Zéro dépendance lourde.
 Ce dossier vit dans le dépôt `julienots/file` (le reste du dépôt = autre projet « NOCTÉA » : **n'y touche pas**).
 
 ## Qui es-tu ? (2 Claude collaborent)

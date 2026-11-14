@@ -3,7 +3,9 @@
 **Comment**: sur Tripo, colle le *Préfixe de style* + le prompt de l'objet (en anglais, Tripo comprend mieux). Génère en **Text-to-3D**, mode *stylized/cartoon* si dispo, **low-poly ≤ 8-10k faces**, avec texture. Exporte en **GLB**. Nomme le fichier comme la clé (`hero_mote.glb`). Pose en **A-pose/T-pose** pour les personnages (rigging possible ensuite via Tripo « Auto-rig » + animations Idle/Run si dispo — optionnel, le jeu anime en procédural sinon). Dépose les GLB dans `cosmic-ascension/public/models/` (ou donne-les moi) puis les Claude activent l'entrée dans `manifest.json`.
 
 **Préfixe de style (à coller avant chaque prompt):**
-> stylized cartoon 3D asset, Pixar / Disney animated-film quality, smooth rounded shapes, bold saturated colors, soft gradients, clean hand-painted texture, glossy toon shading, big expressive design, game-ready low poly, single object, neutral pose, no background, centered
+> **(Nouveau, réaliste — à utiliser désormais)** realistic sci-fi 3D asset, cinematic film quality, PBR materials, physically plausible proportions, detailed but clean surfaces, muted natural colors with subtle emissive accents, weathered and believable, game-ready low poly (≤ 10k faces), single object, neutral pose, no background, centered
+>
+> (ancien préfixe cartoon, abandonné: stylized cartoon 3D asset, Pixar / Disney animated-film quality, …)
 
 **Suffixe pour objets sans personnage:** `, isolated prop, symmetrical, clean silhouette`
 
