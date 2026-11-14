@@ -16,6 +16,7 @@ import { Hero } from '../entities/Hero.js';
 import { Particles } from '../vfx/Particles.js';
 import { EvolutionFX } from '../vfx/EvolutionFX.js';
 import { Enemies } from '../entities/Enemies.js';
+import { GroundBoss, pendingGroundBoss } from '../entities/boss/GroundBoss.js';
 
 const V = () => new THREE.Vector3();
 const SUN = new THREE.Vector3(200, 300, 150).normalize();
@@ -63,12 +64,16 @@ export class PlanetScene {
     // point d'apparition: première terre émergée proche du pôle
     const P = this.planet.userData; this.dir.set(0.15, 1, 0.25).normalize();
     { const pad = def.structures?.find(x => x.kind === 'ship_pad') ?? def.npcs?.[0] ?? def.structures?.[0]; if (pad) latLonToDir(pad.lat + 3, pad.lon - 4, this.dir); }
+    for (let i = 1; i < 80 && P.sample(this.dir) - P.sea < .03; i++) this.dir.set(this.dir.x + Math.sin(i * 2.4) * .03, this.dir.y + Math.cos(i * 1.7) * .03, this.dir.z + Math.cos(i * 2.4) * .03).normalize();   // jamais dans l'eau
     for (let i = 0; i < 200 && P.sample(this.dir) - P.sea < .04; i++) this.dir.set(Math.sin(i * 2.4) * i * .02, 1, Math.cos(i * 2.4) * i * .02).normalize();
     this.fwd.set(0, 0, -1).addScaledVector(this.dir, -this.fwd.dot(this.dir)).normalize(); this.face.copy(this.fwd); this.vh = 0; this.alt = 0;
     if (!this.parked) { this.parked = new Ship(); this.parked.setThrust(0); this.scene.add(this.parked.root); }
     { const pd = V().copy(this.dir).multiplyScalar(P.radius).addScaledVector(this.fwd, -7).normalize(), pr = this.parked.root; pr.position.copy(pd).multiplyScalar(P.heightAt(pd) + .9); pr.quaternion.setFromUnitVectors(V().set(0, 1, 0), pd); this.colliders.push({ pos: pr.position.clone(), r: 2.2 }); }
     this.base?.dispose(); if (this.base) { this.scene.remove(this.base.group); disposePlanet(this.base.group); } this.base = null;
     if (def.type === 'home') { this.base = buildHomeBase(this.planet, this.dir, this.particles); this.scene.add(this.base.group); this.colliders.push(...this.base.colliders); }
+    // boss au sol attendu par la quête en cours: apparaît à ~35 m devant le point d'arrivée
+    this.boss?.dispose(true); this.boss = null; this.bossWait = 0;
+    { const bid = pendingGroundBoss(def.id); if (bid) { this.bossId = bid; this.bossWait = 3.5; } }
     // orbes
     this.orbData.length = 0; let s = def.seed * 131 + 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647, got = State.data.world.collected ?? [];
     const KC = { dust: '#fff3a0', crystal: '#6ff2ff', relic: '#ff9a3a', creature: '#8affb0', artifact: '#ff5ad0' };
@@ -83,7 +88,7 @@ export class PlanetScene {
     this.camera.position.copy(this.dir).multiplyScalar(P.heightAt(this.dir) + (arrive ? 95 : 30)).addScaledVector(this.fwd, -20);
     bus.emit('scene:entered', { id: 'planet', planet: def }); bus.emit('planet:enter', { id: def.id });
   }
-  exit() { this.active = false; bus.emit('planet:leave', { id: this.def.id }); }
+  exit() { this.active = false; this.boss?.dispose(); this.boss = null; bus.emit('planet:leave', { id: this.def.id }); }
 
   update(dt, t) {
     const P = this.planet.userData, R = P.radius, hero = this.hero, m = Input.move, up = this.dir, { _a, _b, _c, _d, _e } = this;
@@ -114,12 +119,16 @@ export class PlanetScene {
     hero.animate(dt, sp, !this.ground, this.vh);
     // attaque: projectile stellaire avec visée auto sur l'ennemi le plus proche
     this.atkCd -= dt;
-    if (!frozen && Input.buttons.attack && this.atkCd <= 0) { this.atkCd = .28; const tgt = this.enemies.nearest(hero.root.position, 28 * Math.sqrt(scale));
+    if (!frozen && Input.buttons.attack && this.atkCd <= 0) { this.atkCd = .28; let tgt = this.enemies.nearest(hero.root.position, 28 * Math.sqrt(scale)); if (this.boss && !this.boss.dead && (!tgt || this.boss.root.position.distanceTo(hero.root.position) < 60)) tgt = this.boss;
       if (tgt) this.face.copy(tgt.root.position).sub(hero.root.position).addScaledVector(up, -_c.copy(tgt.root.position).sub(hero.root.position).dot(up)).normalize();
       _c.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(); this.enemies.fire(_e.copy(hero.root.position).addScaledVector(up, .6 * scale).addScaledVector(_c, .6 * scale), _c, scale, EVOLUTIONS[hero.stage].glow);
       hero._land = .6; bus.emit('hero:ability', { id: 'starbolt', pos: hero.root.position, dir: _c }); }
     if (this.knock) { up.copy(_c.copy(hero.root.position).addScaledVector(this.knock, 14 * dt)).normalize(); this.hurtT -= dt; if (this.hurtT <= 0) this.knock = null; }
     this.enemies.update(dt, hero.root.position, scale);
+    if (this.bossWait > 0 && !this.arriving && (this.bossWait -= dt) <= 0) { _c.copy(up).multiplyScalar(R).addScaledVector(z, 36).normalize(); this.boss = new GroundBoss(this.bossId, this.scene, this.planet, this.particles, _c); this.shakeT = .6; }
+    if (this.boss) { const bo = this.boss;
+      for (const b of this.enemies.bolts) if (b.life > 0 && bo.hits(b.mesh.position, b.size)) { bo.damage(b.dmg, b.mesh.position); b.life = 0; b.mesh.visible = false; }
+      if (!bo.update(dt, hero.root.position, this.alt - gAlt, scale)) { this.boss = null; this.shakeT = .8; } }
     // habitants, secrets, nuages, particules d'ambiance
     const npc = this.structs.update(dt, t, hero.root.position);
     if (npc !== this.nearNpc) { this.nearNpc = npc; bus.emit('npc:near', npc ? { npcId: npc.id, name: npc.name } : { npcId: null }); }
@@ -157,7 +166,7 @@ export class PlanetScene {
     // ciel
     for (const o of [this.nebula, this.stars, this.sky]) o.position.copy(this.camera.position);
     this.nebula.userData.update(t); this.stars.userData.update(t, this.ctx.renderer.renderer.getPixelRatio()); this.sky.material.uniforms.uUp.value.copy(up);
-    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .14 + .55 * day;
+    const day = THREE.MathUtils.smoothstep(up.dot(SUN), -.3, .3); this.hemi.intensity = .34 + .4 * day;
     if (this.shakeT > 0) { this.shakeT -= dt; this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, this.shakeT * 2.5); this.camera.position.addScaledVector(up, (Math.random() - .5) * this.shakeT * 1.2); }
     if (this.arriving || this.leaving) for (let k = 0; k < 3; k++) { _e.copy(up).multiplyScalar(this.leaving ? -14 : 10); this.particles.emit(_c.copy(hero.root.position).addScaledVector(right, (Math.random() - .5) * scale), _e, EVOLUTIONS[hero.stage].glow, .6 * scale, .5, 1, 0); }
     if (this.leaving && (this.leaving += dt) > .35 && !this._left) { this._left = true; this.ctx.transition('space', { from: this.def.id }, { color: this.def.atmosphere?.color ?? '#ffffff', out: .45, in: .8 }); }
@@ -171,6 +180,7 @@ export class PlanetScene {
       this.wave.visible = true; this.waveT = 0; this.waveR = rad; this.wave.material.color.set(col); this.wave.position.copy(hero.root.position).addScaledVector(up, .2 * scale); this.wave.quaternion.setFromUnitVectors(this._s.set(0, 0, 1), up);
       if (this.ground) { this.vh = 6 * Math.sqrt(scale); this.ground = false; } this.shakeT = .35; this._burst(24, scale * 1.6, col);
       for (const e of this.enemies.list) if (!e.dead && e.root.position.distanceTo(hero.root.position) < rad + e.T.size) this.enemies.hit(e, 2 + hero.stage * 2, hero.root.position);
+      if (this.boss && this.boss.root.position.distanceTo(hero.root.position) < rad + this.boss.r) this.boss.damage(4 + hero.stage * 3, hero.root.position);
       bus.emit('hero:ability', { id: hero.stage >= 5 ? 'supernova' : 'shockwave', pos: hero.root.position, radius: rad }); }
     if (this.wave.visible) { this.waveT += dt * 2.2; const k = 1 - Math.pow(1 - Math.min(1, this.waveT), 3); this.wave.scale.setScalar(Math.max(.01, k * this.waveR)); this.wave.material.opacity = (1 - k) * .9; if (this.waveT >= 1) this.wave.visible = false; }
   }

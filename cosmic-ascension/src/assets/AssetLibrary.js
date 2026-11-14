@@ -20,6 +20,7 @@ export const Assets = {
     }));
   },
   has: (key) => cache.has(key),
+  metaHeight: (key) => cache.get(key)?.meta.height ?? 1,
   // Renvoie un clone prêt à l'emploi, normalisé: hauteur = meta.height (m), pieds à y=0, centré en XZ.
   get(key) {
     const e = cache.get(key); if (!e) return null;

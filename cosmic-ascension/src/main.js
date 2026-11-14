@@ -9,6 +9,7 @@ import { initFallback } from './core/Fallback.js';
 import { initSystems } from './systems/index.js';
 import { mountUI } from './ui/index.js';
 import { initAudio } from './audio/Audio.js';
+import { mountEnding } from './ui/Ending.js';
 
 // Point d'entrée: State → systèmes (B) → assets → Game + scènes (A) → UI (B).
 // Les systèmes de B (src/systems + src/ui) remplacent les systèmes de secours de A (core/Fallback.js).
@@ -19,11 +20,11 @@ async function boot() {
   await Assets.init();
   const game = new Game(document.getElementById('game'));
   game.register('space', SpaceScene); game.register('planet', PlanetScene);
-  mountUI(document.getElementById('ui'));
+  mountUI(document.getElementById('ui')); mountEnding(document.body);
   initFallback(document.getElementById('ui'));   // no-op: systemsOwner === 'B'
   // saut warp (carte galactique de B) → transition de la scène espace de A, vaisseau près de la planète choisie
   bus.on('warp:request', ({ planetId }) => game.ctx.transition('space', { from: planetId }, { color: '#3ff0ff', out: .6, in: 1 }));
-  window.__game = game; window.__bus = bus;   // debug / tests
+  window.__game = game; window.__bus = bus; Object.defineProperty(window, '__gameState', { get: () => State.data, configurable: true });   // debug / tests
   game.goto('space', {}); game.start();
 }
 boot();

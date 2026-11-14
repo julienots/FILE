@@ -51,10 +51,12 @@ export function buildStructures(planet) {
     if (obj.userData.r) colliders.push({ pos: obj.position.clone(), r: obj.userData.r * obj.scale.x });
     for (const p of obj.userData.posts ?? []) colliders.push({ pos: obj.localToWorld(new THREE.Vector3(p[0], p[1], 0)).clone(), r: p[2] }); };
   const offset = (base, dx, dz, out) => { t1.set(1, 0, 0).cross(base); if (t1.lengthSq() < .01) t1.set(0, 0, 1).cross(base); t1.normalize(); t2.crossVectors(base, t1); return out.copy(base).multiplyScalar(P.radius).addScaledVector(t1, dx).addScaledVector(t2, dz).normalize(); };
+  // ramène une direction issue de la data (lat/lon) sur la terre ferme la plus proche
+  const toLand = (dir) => { for (let i = 1; i < 60 && P.sample(dir) - P.sea < .02; i++) { const a = i * 2.4, r = i * .012; offset(dir.clone(), Math.cos(a) * r * P.radius, Math.sin(a) * r * P.radius, d); if (P.sample(d) - P.sea >= .02) { dir.copy(d); break; } } return dir; };
   const builders = { hut, ruin, monolith };
   const addNpc = (dir, i, spec = {}) => { const v = villager(B, i, spec.model ?? ('npc_' + (spec.species ?? def.biome))); place(v, dir, 0, 0);
     npcs.push({ id: spec.id ?? `${def.id}:villager:${i}`, name: spec.name ?? ['Milo', 'Zia', 'Orbe', 'Tiko', 'Nuna', 'Fen'][i % 6], line: spec.line ?? B.lines[i % B.lines.length], root: v, dir: dir.clone(), t: rnd() * 6 }); };
-  if (def.structures?.length) for (const st of def.structures) { if (st.kind === 'ship_pad') continue; const o = (builders[st.kind] ?? (/village|city|camp|oasis|dome|refinery|citadel/.test(st.kind) ? hut : /temple|tomb|shrine|beacon|portal|lighthouse|monolith/.test(st.kind) ? monolith : ruin))(B); o.scale.setScalar(st.scale ?? 1); place(o, latLonToDir(st.lat, st.lon, d).clone()); if (o.userData.crystal) secrets.push({ id: `${def.id}:monolith:${secrets.length}`, obj: o, found: false }); }
+  if (def.structures?.length) for (const st of def.structures) { if (st.kind === 'ship_pad') continue; const o = (builders[st.kind] ?? (/village|city|camp|oasis|dome|refinery|citadel/.test(st.kind) ? hut : /temple|tomb|shrine|beacon|portal|lighthouse|monolith/.test(st.kind) ? monolith : ruin))(B); o.scale.setScalar(st.scale ?? 1); place(o, toLand(latLonToDir(st.lat, st.lon, d).clone())); if (o.userData.crystal) secrets.push({ id: `${def.id}:monolith:${secrets.length}`, obj: o, found: false }); }
   else {
     const c = landDir(new THREE.Vector3(), .08).clone();                                   // village
     for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283; offset(c, Math.cos(a) * 9, Math.sin(a) * 9, d); if (P.sample(d) - P.sea > .02) place(hut(B), d.clone(), a + Math.PI / 2); }
@@ -62,7 +64,7 @@ export function buildStructures(planet) {
     for (let i = 0; i < 3; i++) place(ruin(B), landDir(d).clone());
     const m = monolith(B); place(m, landDir(d, .12).clone()); secrets.push({ id: `${def.id}:monolith:0`, obj: m, found: false });
   }
-  if (def.npcs?.length) def.npcs.forEach((n, i) => addNpc(latLonToDir(n.lat, n.lon, d).clone(), i + 10, n));
+  if (def.npcs?.length) def.npcs.forEach((n, i) => addNpc(toLand(latLonToDir(n.lat, n.lon, d).clone()), i + 10, n));
   const m4 = new THREE.Matrix4(), tq = new THREE.Quaternion();
   const update = (dt, t, heroPos) => {
     let nearest = null, nd = 5;

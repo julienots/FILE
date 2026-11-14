@@ -15,7 +15,7 @@ npm test
 npx cap sync android
 cd android
 if [ "$MODE" = release ]; then ./gradlew --no-daemon assembleRelease; OUT=app/build/outputs/apk/release/app-release.apk
-else ./gradlew --no-daemon assembleDebug; OUT=app/build/outputs/apk/debug/app-debug.apk; fi
+else ./gradlew --no-daemon assembleDebug -x extractDebugAnnotations; OUT=app/build/outputs/apk/debug/app-debug.apk; fi
 cd ..
 mkdir -p release
 VER=$(node -p "require('./package.json').version")
