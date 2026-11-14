@@ -324,7 +324,13 @@ Entity Game::spawnVillager(vec3 pos, int village, uint32_t seed) {
     if (reg_ == R_HIGHCROWNS && r.chance(0.4f)) { L.body = Body::Robe; L.c1 = hexColor(0x8a8aa0); }
     bool child = r.chance(0.15f);
     setupVisualHumanoid(c.vis, L, WeaponType::None, WeaponType::None, child ? 0.68f : (L.species == Species::Dwarf ? 0.82f : r.range(0.95f, 1.05f)));
-    if (!child) applyImportedModel(c.vis, L.female ? "villager_f" : "villager_m");   // generic villager models when provided
+    if (!child) {
+        // generic villager models when provided; up to 3 variants per sex (villager_m, villager_m2, villager_m3)
+        // so a village is not a crowd of clones
+        std::string base = L.female ? "villager_f" : "villager_m";
+        int v = (int)(seed % 3);
+        if (v == 0 || !applyImportedModel(c.vis, base + std::to_string(v + 1))) applyImportedModel(c.vis, base);
+    }
     c.vis.anim.gait.walkSpeed = 1.3f;
     reg.add<Character>(e, c);
     NpcBrain nb;

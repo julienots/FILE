@@ -92,6 +92,11 @@ void Game::rebuildPlayerVisual() {
         // imported model: fitted skeleton (same bones, so every animation plays), own cape in the mesh
         applyImportedModel(c.vis, "hero");
     }
+    // 1.6.2 gait matched to the hero's real speeds (walk 2.1, jog 4.9, sprint 7.2 m/s): ~155 steps/min walking,
+    // ~195 running, long bounds when sprinting (it used to scurry at 280-350 steps/min)
+    c.vis.anim.gait.strideWalk = 1.65f; c.vis.anim.gait.strideRun = 3.0f;
+    c.vis.anim.gait.walkSpeed = 2.1f; c.vis.anim.gait.runSpeed = 4.9f; c.vis.anim.gait.sprintSpeed = 7.2f;
+    c.vis.anim.gait.ampWalk = 1.15f; c.vis.anim.gait.ampRun = 1.1f; c.vis.anim.gait.sprintStride = 0.45f;
     c.vis.capeColor = L.c1 * 0.8f;
     c.vis.rim = 0.65f;
     c.vis.outlineColor = vec4(0.05f, 0.04f, 0.03f, 1);

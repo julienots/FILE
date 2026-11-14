@@ -13,6 +13,31 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.6.2 (démarche et combat plus fluides)
+
+- **Démarche refaite.**
+  - **Cause principale** : la longueur de pas n'était pas adaptée aux vitesses du héros. Il faisait environ 280 pas/min en trottinant et 350 en sprintant (un coureur réel : environ 170 à 180), et la posture de course se mélangeait à la marche. D'où l'allure accroupie et « trottinante ».
+  - Pas accordés à ses vitesses : environ 155 pas/min en marchant, environ 195 en courant, longues foulées en sprint.
+  - Course moins accroupie : bassin plus haut, genou plus droit quand le pied est au sol, penchée vers l'avant plus modérée.
+  - Posture plus héroïque : poitrine ouverte, tête droite.
+  - Au repos, le héros se tient sur une jambe puis sur l'autre (déhanché naturel).
+  - Quand un ennemi est proche, il passe en **garde** : pieds écartés, pied gauche devant, buste de profil, main libre levée.
+  - Les autres humanoïdes ont aussi des pas plus longs à la course.
+- **Attaques avec tout le corps** (toutes les armes) :
+  - préparation : poids sur la jambe arrière, torse armé dans le sens opposé au coup ;
+  - frappe : fente sur la jambe avant, bassin qui descend, hanches qui tournent dans le sens de la lame, main libre en contrepoids ;
+  - retour en garde.
+
+  Le sens de rotation est déduit de chaque animation, et l'amplitude du déplacement prévu par le coup.
+- **Banc d'essai d'animation** : nouveau scénario `--autoplay=anim`. Il filme le héros de profil sur un « tapis roulant » (repos, marche, trot, sprint, puis attaque légère et lourde), 8 images par allure.
+- **Modèles importés** :
+  - jusqu'à 3 variantes par sexe pour les villageois (`villager_m`, `villager_m2`, `villager_m3`, et de même pour `villager_f`), tirées au hasard pour chaque villageois ;
+  - guide des prompts Tripo : `docs/TRIPO_PROMPTS.md`.
+- **Limites.**
+  - Les animations restent écrites en code (procédurales), pas en capture de mouvement.
+  - Le jeu ne sait pas encore importer les animations fournies par Tripo.
+  - Tout est vérifié sur ordinateur, **pas sur un téléphone**.
+
 ### Nouveautés 1.6.1 (corrections après le premier essai sur téléphone)
 
 - **Boutons des dialogues et des menus réparés.** Ce défaut existait depuis la 1.0.0 :

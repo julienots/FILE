@@ -85,6 +85,8 @@ struct Clip {
 struct GaitParams {
     float strideWalk = 1.25f, strideRun = 2.1f;   // metres per full cycle
     float walkSpeed = 1.6f, runSpeed = 4.6f, sprintSpeed = 7.2f;
+    float ampWalk = 1.f, ampRun = 1.f;            // leg swing amplitude (longer strides need wider steps)
+    float sprintStride = 0.18f;                   // extra stride length at full sprint (bounds instead of faster steps)
 };
 
 enum class BodyState : uint8_t { Locomotion, Airborne, Swim, Climb, Mounted, Dead, Stagger, Downed, Victory, Sit, Sleep, Work };

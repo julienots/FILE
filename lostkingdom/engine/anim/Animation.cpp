@@ -177,7 +177,7 @@ void Animator::update(float dt) {
     // Phase-synchronised locomotion: stride length interpolates with speed so feet don't slide.
     float stride = speed < gait.walkSpeed ? gait.strideWalk
                  : lerpf(gait.strideWalk, gait.strideRun, saturate((speed - gait.walkSpeed) / (gait.runSpeed - gait.walkSpeed)));
-    if (speed > 1.6f) stride *= 1.f + saturate((speed - gait.runSpeed) / (gait.sprintSpeed - gait.runSpeed)) * 0.18f;
+    if (speed > 1.6f) stride *= 1.f + saturate((speed - gait.runSpeed) / (gait.sprintSpeed - gait.runSpeed)) * gait.sprintStride;
     float prevPhase = phase;
     if (speed > 0.05f) phase += speed / std::max(0.2f, stride) * dt;
     else phase += dt * 0.05f;  // idle drift keeps cycles alive

@@ -83,6 +83,46 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "anim") {
+        // Animation bench: the hero on a "treadmill" (position held, velocity driven), seen from the side on
+        // flat ground. 8 frames per gait (idle, walk, jog, sprint), then attacks. Shots C*.
+        static vec3 spot;
+        auto hold = [](Game& g, vec2 move, bool sprint) {
+            Character& c = g.pc();
+            c.pos.x = spot.x; c.pos.z = spot.z;
+            g.input.move = move; g.input.sprint = sprint;
+            g.camYaw = std::atan2(1.f, 0.f) - 0.0f;   // camera on the hero's side (he moves to screen right)
+            g.camPitch = 0.12f; g.camDist = g.camDistTarget = 4.6f; g.camIdleT = 0; g.camFocus = c.pos + vec3(0, 1.1f, 0);
+            g.stamina = g.maxStamina;
+            c.yaw = PI;            // facing -Z: exact profile for the camera on +X
+            g.interactTarget = NullEntity;
+        };
+        s.push_back({2.5f, [](Game& g) {
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x - 4, b->pos.y + 2, 0.f);
+            spot = g.pc().pos; g.timeOfDay = 12.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.addItem("sword_knight", 1, Rarity::Epic);
+            for (int i = (int)g.inventory.size() - 1; i >= 0; i--) if (g.inventory[i].id == "sword_knight") { g.equip(i); break; }
+        }, [hold](Game& g, float) { hold(g, vec2(0, 0), false); }, "setup"});
+        struct G { const char* name; vec2 move; bool sprint; };
+        static const G gaits[] = {{"C0_idle", {0, 0}, false}, {"C1_walk", {0.5f, 0}, false}, {"C2_jog", {1, 0}, false}, {"C3_sprint", {1, 0}, true}};
+        for (const G& gg : gaits) {
+            s.push_back({1.5f, none, [hold, gg](Game& g, float) { hold(g, gg.move, gg.sprint); }, "settle"});
+            for (int k = 0; k < 8; k++) {
+                char* f = new char[48]; snprintf(f, 48, "build/shots/%s_%d.png", gg.name, k);
+                s.push_back({gg.move.x > 0 ? 0.1f : 0.4f, [f](Game& g) { g.requestScreenshot(f); }, [hold, gg](Game& g, float) { hold(g, gg.move, gg.sprint); }, "shot"});
+            }
+        }
+        // light combo and heavy attack, 6 frames each
+        for (int c = 0; c < 2; c++) {
+            s.push_back({0.8f, none, [hold](Game& g, float) { hold(g, vec2(0, 0), false); }, "rest"});
+            s.push_back({0.01f, [c](Game& g) { g.comboStep = 0; g.input.attackRelease = true; g.input.attackHoldT = c ? 1.2f : 0.05f; }, idle, "attack"});
+            for (int k = 0; k < 6; k++) {
+                char* f = new char[48]; snprintf(f, 48, "build/shots/C%d_attack_%d.png", 4 + c, k);
+                s.push_back({0.1f, [f](Game& g) { g.requestScreenshot(f); }, [hold](Game& g, float) { hold(g, vec2(0, 0), false); }, "shot"});
+            }
+        }
+        return s;
+    }
     if (name == "npcs") {
         // 1.6.1: line-up of villagers and named NPCs facing the camera (procedural character look checks)
         static std::vector<Entity> spawned;

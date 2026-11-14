@@ -3,6 +3,7 @@
 // Z roll swings sideways (+X is the character's left), Y yaw twists. Spine pitch > 0 leans forward.
 #include "Characters.h"
 #include <mutex>
+#include <unordered_map>
 
 namespace lk {
 
@@ -45,9 +46,26 @@ static const GaitKey WALK_KNEE[] = {{0.f, 4}, {0.15f, 17}, {0.4f, 5}, {0.62f, 38
 static const GaitKey WALK_ANKLE[] = {{0.f, -4}, {0.08f, 5}, {0.3f, -6}, {0.5f, -9}, {0.62f, 18}, {0.7f, 10}, {0.85f, -3}};
 // Run: short stance (toe-off ~0.38), flight phase, high swing knee.
 static const GaitKey RUN_HIP[] = {{0.f, 28}, {0.2f, 6}, {0.38f, -16}, {0.5f, -8}, {0.75f, 40}, {0.9f, 36}};
-static const GaitKey RUN_KNEE[] = {{0.f, 22}, {0.12f, 40}, {0.38f, 18}, {0.6f, 105}, {0.72f, 118}, {0.9f, 40}};
+// 1.6.2: stance knee straighter (it read as a crouched "squat run"), swing knee unchanged
+static const GaitKey RUN_KNEE[] = {{0.f, 14}, {0.12f, 30}, {0.38f, 12}, {0.6f, 100}, {0.72f, 112}, {0.9f, 34}};
 static const GaitKey RUN_ANKLE[] = {{0.f, -6}, {0.12f, -12}, {0.38f, 25}, {0.6f, 10}, {0.85f, -5}};
 #define GK(a) a, (int)(sizeof(a) / sizeof(a[0]))
+
+// Swing direction of an attack clip (+1 / -1): sign of the chest's yaw change from the start to the end of
+// the hit window. Drives the hips' coil / uncoil so the body follows the blade. Cached per clip.
+static float clipSwingDir(const Clip* c) {
+    static std::unordered_map<const Clip*, float> cache;
+    auto it = cache.find(c);
+    if (it != cache.end()) return it->second;
+    Pose base, a0, a1;
+    c->sample(0.f, a0, &base, MAX_BONES);
+    c->sample(c->hitEnd, a1, &base, MAX_BONES);
+    auto yaw = [](const quat& q) { vec3 f = q.rotate(vec3(0, 0, 1)); return std::atan2(f.x, f.z); };
+    float d = wrapAngle(yaw(a1.rot[H_CHEST]) + yaw(a1.rot[H_SPINE]) - yaw(a0.rot[H_CHEST]) - yaw(a0.rot[H_SPINE]));
+    float dir = std::fabs(d) < 0.05f ? 1.f : (d > 0 ? 1.f : -1.f);
+    cache[c] = dir;
+    return dir;
+}
 
 static void humanLoco(const Animator& a, Pose& p) {
     const float t = a.time, ph = a.phase * TAU, sp = a.speed;
@@ -57,7 +75,7 @@ static void humanLoco(const Animator& a, Pose& p) {
     runW = runW * runW * (3 - 2 * runW);
     float sprintW = saturate((sp - g.runSpeed) / std::max(0.1f, g.sprintSpeed - g.runSpeed));
     float slow = 0.55f + 0.45f * saturate(sp / std::max(0.1f, g.walkSpeed));   // slow walks: smaller steps
-    float lean = lerpf(3, 10, runW) + 9 * sprintW;
+    float lean = lerpf(2, 7, runW) + 8 * sprintW;
     float crouch = a.blocking ? 0.06f : 0.f;
     float idle = 1.f - moving;
     float aggressive = a.aux[0];  // hunched combat idle for monsters (0..1)
@@ -66,26 +84,55 @@ static void humanLoco(const Animator& a, Pose& p) {
     float hip[2], knee[2], ank[2];
     for (int s = 0; s < 2; s++) {
         float u = a.phase + (s ? 0.5f : 0.f);
-        float amp = slow * (1.f + 0.12f * sprintW);
+        float amp = slow * (1.f + 0.12f * sprintW) * lerpf(g.ampWalk, g.ampRun, runW);
         hip[s] = lerpf(gaitCurve(GK(WALK_HIP), u), gaitCurve(GK(RUN_HIP), u), runW) * amp;
         knee[s] = lerpf(gaitCurve(GK(WALK_KNEE), u), gaitCurve(GK(RUN_KNEE), u), runW) * amp;
         ank[s] = lerpf(gaitCurve(GK(WALK_ANKLE), u), gaitCurve(GK(RUN_ANKLE), u), runW);
     }
     float uL = a.phase;
 
+    // ---- 1.6.2 body language ------------------------------------------------------------------------
+    // Idle: weight on one leg (contrapposto), switching sides every ~7 s. Ready (enemy near): bladed guard,
+    // lead (left) foot forward, knees soft. Attacks: wind-up, lunge on the lead leg, hips into the swing.
+    float ready = saturate(a.aux[3]);
+    float stillW = idle * (1.f - aggressive);
+    float weightSide = std::sin(t * 0.9f) > 0 ? 1.f : -1.f;   // which leg carries the weight (switches smoothly below)
+    float contra = smoothstepf(-0.35f, 0.35f, std::sin(t * 0.45f)) * 2.f - 1.f;   // -1..1, slow
+    (void)weightSide;
+    float guardW = stillW * ready;
+    float relaxW = stillW * (1.f - ready);
+    float atkWind = 0, atkStrike = 0, atkLunge = 0, atkDir = 1.f;
+    if (const Clip* ac = a.action()) {
+        if (ac->hitStart >= 0 && ac->hitEnd > ac->hitStart) {
+            float at = a.actionTime(), h0 = ac->hitStart, h1 = ac->hitEnd;
+            atkWind = smoothstepf(0.f, h0 * 0.85f, at) * (1.f - smoothstepf(h0 * 0.85f, h0 + 0.04f, at));
+            atkStrike = smoothstepf(h0 - 0.1f, (h0 + h1) * 0.5f, at) * (1.f - 0.9f * smoothstepf(h1 + 0.05f, 1.f, at));
+            atkLunge = clampf(ac->motionAt(1.f) / 1.2f, 0.35f, 1.f) * (1.f - runW * 0.7f);
+            atkDir = clipSwingDir(ac);
+        }
+    }
+    float atkW = std::max(atkWind, atkStrike);
+
     // ---- pelvis: lowest at double support when walking, at mid-stance when running; sway over the stance leg
     float bobWalk = -0.028f * (0.5f + 0.5f * std::cos(4 * PI * uL));
-    float bobRun = -0.05f * (0.5f + 0.5f * std::cos(4 * PI * (uL - 0.12f))) - 0.035f;
+    float bobRun = -0.035f * (0.5f + 0.5f * std::cos(4 * PI * (uL - 0.12f))) - 0.008f;   // pelvis kept high
     float sway = std::sin(TAU * uL) * lerpf(0.022f, 0.01f, runW);
-    p.rootOffset = vec3((sway * moving) + std::sin(t * 0.45f) * 0.012f * idle,
-                        lerpf(bobWalk, bobRun, runW) * moving - crouch - aggressive * 0.08f + std::sin(t * 1.7f) * 0.004f * idle, 0);
+    p.rootOffset = vec3((sway * moving) + std::sin(t * 0.45f) * 0.012f * idle + contra * 0.03f * relaxW,
+                        lerpf(bobWalk, bobRun, runW) * moving - crouch - aggressive * 0.08f + std::sin(t * 1.7f) * 0.004f * idle
+                            - 0.012f * relaxW - 0.045f * guardW - (0.03f * atkWind + 0.075f * atkStrike) * atkLunge,
+                        0.05f * atkStrike * atkLunge);
     float pelvisYaw = (hip[0] - hip[1]) * 0.13f * moving;                 // pelvis turns with the swinging leg
     float roll = clampf(-a.turnRate * sp * 0.9f, -10, 10) + std::cos(ph) * lerpf(3.f, 1.5f, runW) * moving;
-    p.rot[H_ROOT] = E(lean * 0.25f * moving, pelvisYaw, roll);
-    p.rot[H_SPINE] = E(lean * moving * 0.45f + aggressive * 12, -pelvisYaw * 0.6f, -roll * 0.4f);
+    // hips: drop on the free leg at rest, bladed (turned) in guard, coil then uncoil through an attack
+    float hipYaw = 22.f * guardW + atkDir * (-14.f * atkWind + 20.f * atkStrike);
+    float hipRoll = -contra * 4.f * relaxW;
+    p.rot[H_ROOT] = E(lean * 0.25f * moving + 6.f * atkStrike * atkLunge, pelvisYaw + hipYaw, roll + hipRoll);
+    // posture: chest open, back straight (heroic), less of it in the aggressive monster crouch
+    float proud = 1.f - aggressive;
+    p.rot[H_SPINE] = E(lean * moving * 0.45f + aggressive * 12 - 2.5f * proud - 4.f * atkWind + 8.f * atkStrike, -pelvisYaw * 0.6f - hipYaw * 0.35f, -roll * 0.4f - hipRoll * 0.6f);
     float breath = std::sin(t * (1.6f + a.breath * 1.2f)) * (1.2f + a.breath * 1.5f);
-    p.rot[H_CHEST] = E(lean * moving * 0.3f + breath * idle * 0.6f + aggressive * 10, -pelvisYaw * 0.9f, -roll * 0.3f);   // shoulders counter-rotate
-    p.rot[H_NECK] = E(-lean * moving * 0.45f - aggressive * 12, pelvisYaw * 0.5f, roll * 0.3f);
+    p.rot[H_CHEST] = E(lean * moving * 0.3f + breath * idle * 0.6f + aggressive * 10 - 3.5f * proud, -pelvisYaw * 0.9f - hipYaw * 0.45f, -roll * 0.3f - hipRoll * 0.4f);   // shoulders counter-rotate
+    p.rot[H_NECK] = E(-lean * moving * 0.45f - aggressive * 12 + 3.f * proud, pelvisYaw * 0.5f, roll * 0.3f);
     float look = std::sin(t * 0.31f) * 14.f * idle * (1 - aggressive);
     p.rot[H_HEAD] = E(-lean * moving * 0.3f + std::sin(t * 0.23f) * 3 * idle, look + pelvisYaw * 0.5f, roll * 0.2f);   // head stays stable
 
@@ -96,10 +143,19 @@ static void humanLoco(const Animator& a, Pose& p) {
         float stance = 1.f - smoothstepf(toeOff - 0.06f, toeOff + 0.04f, u) + smoothstepf(0.94f, 1.0f, u);
         float thigh = -hip[s] * moving - crouch * 120 - aggressive * 14;
         float kn = knee[s] * moving + crouch * 220 + aggressive * 24 + idle * 4;
+        float lead = s ? 0.f : 1.f;   // left leg leads (weapon in the right hand)
+        // rest: the weight leg straight, the free leg's knee relaxed and slightly forward
+        float freeLeg = saturate((s ? -contra : contra) * 1.2f) * relaxW;
+        thigh += -6.f * freeLeg; kn += 10.f * freeLeg - 3.f * relaxW;
+        // guard: feet apart front/back, knees soft
+        thigh += guardW * (lead ? -16.f : 10.f); kn += guardW * (lead ? 20.f : 14.f);
+        // attacks: weight back on the wind-up, then a lunge onto the lead leg, rear leg driving
+        thigh += atkLunge * (atkWind * (lead ? -6.f : 10.f) + atkStrike * (lead ? -34.f : 20.f));
+        kn += atkLunge * (atkWind * (lead ? 8.f : 16.f) + atkStrike * (lead ? 40.f : 8.f));
         // foot: kept level on the ground during stance (IK refines it), relaxed in swing, + ankle roll
         float level = -(thigh + kn) * lerpf(0.55f, 1.0f, stance);
         float foot = level + ank[s] * moving - crouch * 100 - aggressive * 10;
-        p.rot[th] = E(thigh, 0, (s ? -1.f : 1.f) * (2.f + idle * 1.5f));
+        p.rot[th] = E(thigh, -(s ? -1.f : 1.f) * 6.f * guardW, (s ? -1.f : 1.f) * (2.f + idle * 1.5f + 4.f * guardW + freeLeg * 2.f));
         p.rot[sh] = E(kn, 0, 0);
         p.rot[ft] = E(foot, 0, 0);
         // arms: counter-swing driven by the opposite leg, elbows bend more when running
@@ -112,8 +168,14 @@ static void humanLoco(const Animator& a, Pose& p) {
         p.rot[la] = E(-(elbow * moving + 10 * idle + aggressive * 30), 0, 0);
         p.rot[hd] = E(0, 0, side * 6 * runW);
     }
+    // off-hand: reaches forward on the wind-up and pulls back as the blade comes through (counterbalance);
+    // raised a little in guard
+    if (atkW > 0.01f || guardW > 0.01f) {
+        p.rot[H_UARML] = normalize(p.rot[H_UARML] * E(-35.f * atkWind + 25.f * atkStrike - 20.f * guardW, 0, 18.f * atkStrike + 10.f * guardW));
+        p.rot[H_LARML] = normalize(p.rot[H_LARML] * E(-25.f * atkWind - 35.f * atkStrike - 30.f * guardW));
+    }
+    p.rot[H_HEAD] = normalize(p.rot[H_HEAD] * E(0, -hipYaw * 0.6f, 0));   // eyes stay on the target
     // relaxed (out of combat) one-handed carry: sword lowered, swinging with the arm
-    float ready = saturate(a.aux[3]);
     // the wrist counter-rotates the arm swing and elbow bend so the blade keeps a steady angle to the ground
     float swingR = hip[1] * lerpf(0.75f, 1.05f, runW) * moving;
     float elbowR = lerpf(14, 70, runW) * moving + 12 * idle;
@@ -1033,7 +1095,7 @@ void setupAnimator(Animator& a, Arch arch) {
         a.dead = humanDead; a.stagger = humanStagger; a.victory = humanVictory; a.sit = humanSit; a.sleep = humanSleep; a.work = humanWork;
         for (int b : {H_SPINE, H_CHEST, H_NECK, H_HEAD, H_SHL, H_UARML, H_LARML, H_HANDL, H_SHR, H_UARMR, H_LARMR, H_HANDR, H_PROPR, H_PROPL}) a.upperMask[b] = 1.f;
         a.upperMask[H_SPINE] = 0.6f;
-        a.gait = GaitParams{1.4f, 2.5f, 1.6f, 4.6f, 7.2f};   // stride per full cycle: natural cadence (~1.1 Hz walk, ~1.8 Hz run)
+        a.gait = GaitParams{1.4f, 2.9f, 1.6f, 4.6f, 7.2f};   // stride per full cycle: natural cadence (~1.1 Hz walk, ~1.6 Hz run)
         break;
     case Arch::Quadruped:
         a.locomotion = quadLoco; a.dead = quadDead; a.airborne = quadLoco; a.swim = quadLoco;
