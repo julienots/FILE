@@ -20,13 +20,18 @@ export function galaxyPanel(close) {
     const cx = ps.reduce((a, p) => a + sx(p.pos[0]), 0) / ps.length, cy = ps.reduce((a, p) => a + sz(p.pos[2]), 0) / ps.length;
     map.appendChild(svg('circle', { cx, cy, r: 120, fill: s.color, opacity: .07 }));
     const t = svg('text', { x: cx, y: cy - 95, class: 'gsys', fill: s.color }); t.textContent = s.name.toUpperCase(); map.appendChild(t); }
-  const info = h('div.ginfo');
-  for (const p of vis) {
+  const info = h('div.ginfo'), labels = [];
+  for (const p of [...vis].sort((a, b) => disc.has(b.id) - disc.has(a.id))) {
     const known = disc.has(p.id), x = sx(p.pos[0]), y = sz(p.pos[2]), r = Math.max(9, p.radius / 9);
     const g = svg('g', { class: 'gp' + (known ? '' : ' unk') + (p.id === d.world.location ? ' here' : '') + (p.id === target ? ' tgt' : '') });
     if (p.id === target) g.appendChild(svg('circle', { cx: x, cy: y, r: r + 14, class: 'gring' }));
     g.appendChild(svg('circle', { cx: x, cy: y, r, fill: known ? p.palette.peak : '#333', stroke: known ? p.atmosphere.color : '#555' }));
-    const t = svg('text', { x, y: y + r + 22, class: 'gname' }); t.textContent = known ? p.name : '?'; g.appendChild(t);
+    // évite les chevauchements de noms: sous la planète, sinon au-dessus, sinon décalé
+    let ly = y + r + 22; const w = (known ? p.name.length : 1) * 5.5;
+    const hit = (yy) => labels.some(L => Math.abs(L.x - x) < L.w + w && Math.abs(L.y - yy) < 20);
+    if (hit(ly)) ly = y - r - 10; if (hit(ly)) ly = y + r + 44;
+    labels.push({ x, y: ly, w });
+    const t = svg('text', { x, y: ly, class: 'gname' }); t.textContent = known ? p.name : '?'; g.appendChild(t);
     if (known) g.addEventListener('click', () => { buzz(8); select(p); });
     map.appendChild(g);
   }
