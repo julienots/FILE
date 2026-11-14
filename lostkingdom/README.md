@@ -6,8 +6,8 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.1 (versionCode 8). Taille : environ 23 Mo. SHA-256 : `72abc879ab730a13cebfbf543fcadc4f7a5e9e6c50683e7027811986afd94375`.
-  - La 1.6.1 est signée avec la même clé locale que la 1.6.0 : elle s'installe directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.2 (versionCode 9). Taille : environ 23 Mo. SHA-256 : `136858c96cabb2650ee6bdb1a2388f663b39b0f96617b230c58d81deb6a9ec85`.
+  - Les versions 1.6.1 et 1.6.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
@@ -37,6 +37,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - Les animations restent écrites en code (procédurales), pas en capture de mouvement.
   - Le jeu ne sait pas encore importer les animations fournies par Tripo.
   - Tout est vérifié sur ordinateur, **pas sur un téléphone**.
+- **Vérification.** 1 858 tests unitaires réussis ; les scénarios `touch`, `ui`, `grass`, `camera` et `full` passent ; `full` passe aussi sous AddressSanitizer, sans aucune erreur.
 
 ### Nouveautés 1.6.1 (corrections après le premier essai sur téléphone)
 
