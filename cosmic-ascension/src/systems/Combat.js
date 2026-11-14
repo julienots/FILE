@@ -5,6 +5,7 @@ import { ABILITIES } from '../data/abilities.js';
 import { BALANCE } from '../data/balance.js';
 import { getPlanet } from '../data/planets.js';
 import { ITEMS } from '../data/items.js';
+import { refreshStats } from './bonuses.js';
 
 // Combat (B5): stats, dégâts, résistances, IA à états, apparitions, butin, cooldowns, combos, esquive.
 // A affiche (entities/Enemy) et rapporte: `enemy:sense {uid,dist}` (≤5 Hz, ennemis proches), `enemy:hit {uid,source,part?}`.
@@ -87,7 +88,8 @@ export const Combat = {
 
   // ── ennemis → héros ──
   hurt(amount, source) {
-    const h = State.data.hero; if (this.dead || this.iframes > 0 || amount <= 0) return 0;
+    const h = State.data.hero; if (this.paused || this.dead || this.iframes > 0 || amount <= 0) return 0;
+    if (State.data.world.location === 'space') amount *= 1 - .15 * (State.data.ship.parts?.hull ?? 0);
     amount = Math.round(amount); h.hp = Math.max(0, h.hp - amount); this.iframes = BALANCE.hitIFrames; this.lastHurt = this.t; this.combo = 0;
     bus.emit('hero:damaged', { amount, source, hp: h.hp, maxHp: h.maxHp });
     if (h.hp <= 0) this.die(source);
@@ -156,6 +158,15 @@ export function addItem(id, n = 1) {
   bus.emit('inventory:changed', { id, n });
 }
 
+// Atelier: amélioration d'une pièce du vaisseau (vérifie et débite le coût)
+export function upgradeShip(part, SHIP_UPGRADES) {
+  const d = State.data, U = SHIP_UPGRADES[part], n = d.ship.parts[part] ?? 0; if (!U || n >= U.max) return false;
+  const cost = U.cost(n); for (const [it, k] of Object.entries(cost)) if ((it === 'cosmicDust' ? d.inventory.cosmicDust : d.inventory.items[it] ?? 0) < k) return false;
+  for (const [it, k] of Object.entries(cost)) addItem(it, -k);
+  d.ship.parts[part] = n + 1; d.ship.upgrades = Object.entries(d.ship.parts).flatMap(([p, l]) => l ? [`${p}${l}`] : []);
+  refreshStats(d); bus.emit('ship:upgraded', { level: d.ship.level, upgrades: d.ship.upgrades, part, partLevel: n + 1 });
+  bus.emit('ui:toast', { text: `${U.glyph} ${U.name} niv. ${n + 1}`, kind: 'questDone' }); State.save(); return true;
+}
 export function initCombat({ autoTick = true } = {}) {
   const C = Combat;
   bus.on('planet:enter', ({ id }) => { C.planet = getPlanet(id); if (C.authoritative) C.spawnPlanet(id); });

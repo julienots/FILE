@@ -6,7 +6,7 @@ export const VERSION = 2;
 export const defaults = () => ({
   v: VERSION,
   hero: { stage: 0, xp: 0, energy: 100, maxEnergy: 100, hp: 100, maxHp: 100, abilities: ['hop'] },
-  ship: { level: 1, fuel: 100, upgrades: [] },
+  ship: { level: 1, fuel: 100, upgrades: [], parts: { engine: 0, hull: 0, cargo: 0 } },   // level = 1 + parts.engine + bonus bâtiments/artefacts
   inventory: { cosmicDust: 0, items: {} },          // items: {id: count}
   collection: { creatures: [], artifacts: [], achievements: [], bestiary: {} },   // bestiary: {type: kills}
   quests: { active: {}, done: [], tracked: null },   // active: {id: {step, n}}

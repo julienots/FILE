@@ -29,9 +29,9 @@ for (const vp of [{ name: 'phone', width: 915, height: 412 }, { name: 'tablet', 
   await emit('boss:despawn', {}); await emit('quest:start', { id: 'side_lost_pipion' }); await emit('inventory:changed', {});
   await p.evaluate(() => { const i = JSON.parse(localStorage.getItem('cosmic-ascension-save-v1') || '{}'); });
   await p.keyboard.press('Escape'); await wait(500); await shot('06_pause');
-  await p.click(V + '.menu2 .cbtn:first-child'); await wait(400); await shot('07_quests');
-  await p.click(V + '.cbtn'); await p.click(V + '.menu2 .cbtn:last-child'); await wait(400); await shot('08_inventory');
-  await p.click(V + '.cbtn'); await p.click(V + 'button:has-text("Réglages")'); await wait(400); await shot('09_settings');
+  await p.click(V + '.mgrid button:has-text("Quêtes")'); await wait(400); await shot('07_quests');
+  await p.click(V + '.cbtn'); await p.click(V + '.mgrid button:has-text("Inventaire")'); await wait(400); await shot('08_inventory');
+  await p.click(V + '.cbtn'); await p.click(V + '.mgrid button:has-text("Réglages")'); await wait(400); await shot('09_settings');
   if (vp.name === 'phone') { await p.click(V + '.row:nth-of-type(4) .tog'); await p.click(V + '.cbtn'); await p.click(V + '.cbtn'); await wait(400); await shot('10_lefty'); }
   for (let i = 0; i < 4 && await p.isVisible('.screen:not(.hidden)'); i++) { await p.keyboard.press('Escape'); await wait(200); }
   await p.evaluate(() => { window.__bus.emit('hero:xp', { amount: 0 }); });

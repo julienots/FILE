@@ -13,6 +13,6 @@ export function refreshStats(d) {
   const e = EVOLUTIONS[d.hero.stage], b = bonuses(d), h = d.hero;
   const mh = Math.round(e.hp * (1 + b.hp)), me = Math.round(e.energy * (1 + b.energy));
   h.hp = Math.min(mh, h.hp + Math.max(0, mh - h.maxHp)); h.energy = Math.min(me, h.energy + Math.max(0, me - h.maxEnergy));
-  h.maxHp = mh; h.maxEnergy = me; d.ship.level = 1 + b.ship;
+  h.maxHp = mh; h.maxEnergy = me; d.ship.level = 1 + b.ship + (d.ship.parts?.engine ?? 0);
   return b;
 }

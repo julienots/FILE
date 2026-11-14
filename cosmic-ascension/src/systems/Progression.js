@@ -66,7 +66,7 @@ export function initProgression() {
   bus.on('pickup:collected', ({ id, kind, amount = 1 }) => {
     const s = d(); if (id && s.world.collected.includes(id)) return;
     if (id) s.world.collected.push(id); s.stats.pickups++;
-    if (kind === 'cosmicDust' || kind === 'dust') { s.inventory.cosmicDust += BALANCE.dustPerPickup * amount; kind = 'dust'; }
+    if (kind === 'cosmicDust' || kind === 'dust') { s.inventory.cosmicDust += (BALANCE.dustPerPickup + (s.ship.parts?.cargo ?? 0)) * amount; kind = 'dust'; }
     const base = (BALANCE.xp.pickup[kind] ?? 2) * amount; gainXp(xpFor(base, dangerOf()), 'pickup');
   });
   // enemy:killed: Combat (enregistré avant) complète `level` en mode compat

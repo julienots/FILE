@@ -21,6 +21,8 @@ import { Home } from '../src/systems/HomePlanet.js';
 import { BUILDINGS } from '../src/data/buildings.js';
 import { CREATURES, ARTIFACTS, ARTIFACT_SOURCES, ACHIEVEMENTS } from '../src/data/collections.js';
 import { Collections } from '../src/systems/Collections.js';
+import { upgradeShip } from '../src/systems/Combat.js';
+import { SHIP_UPGRADES } from '../src/data/ship.js';
 
 let pass = 0, fail = 0;
 const test = (name, fn) => { try { fn(); pass++; } catch (e) { fail++; console.error('✗', name, '\n   ', e.message); } };
@@ -240,6 +242,14 @@ test('collections: 40 créatures liées aux planètes, artefacts → bonus, appr
   bus.emit('boss:defeated', { id: 'serpent' }); ok(State.data.collection.artifacts.includes('serpentScale'), 'artefact de boss');
   Collections.check(); ok(State.data.collection.achievements.includes('boss1'), 'succès boss');
   for (const a of ACHIEVEMENTS) a.test(State.data);
+});
+test('atelier: moteur → niveau vaisseau, coque → dégâts en vol réduits, soute → poussière, pause = pas de dégâts', () => {
+  fresh(); ok(!upgradeShip('engine', SHIP_UPGRADES), 'trop pauvre'); State.data.inventory.cosmicDust = 1000; Object.assign(State.data.inventory.items, { scrapAlloy: 10, starIron: 10 });
+  const ev = []; const off = bus.on('ship:upgraded', e => ev.push(e));
+  ok(upgradeShip('engine', SHIP_UPGRADES)); eq(State.data.ship.level, 2); eq(ev[0].level, 2);
+  ok(upgradeShip('hull', SHIP_UPGRADES)); State.data.world.location = 'space'; const hp = State.data.hero.hp; Combat.hurt(100, 'bump'); eq(hp - State.data.hero.hp, 85);
+  Combat.tick(2); Combat.paused = true; const hp2 = State.data.hero.hp; Combat.hurt(10, 'x'); eq(State.data.hero.hp, hp2, 'pause'); Combat.paused = false;
+  State.data.ship.parts.cargo = 2; const d0 = State.data.inventory.cosmicDust; bus.emit('pickup:collected', { id: 'zz', kind: 'cosmicDust', amount: 1 }); eq(State.data.inventory.cosmicDust - d0, 7); off();
 });
 test('boss: phases, point faible, récompenses et flags', () => {
   fresh(); const phases = []; const off = bus.on('boss:phase', p => phases.push(p.phase));

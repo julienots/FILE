@@ -7,7 +7,7 @@ import { h, fmtTime } from './dom.js';
 import { t } from './i18n.js';
 import { buzz } from './haptics.js';
 import { journalPanel, inventoryPanel } from './Journal.js';
-import { buildMenu, basePanel } from './Base.js';
+import { buildMenu, basePanel, workshopPanel } from './Base.js';
 import { codexPanel } from './Codex.js';
 import { galaxyPanel } from './GalaxyMap.js';
 // Écrans plein cadre (B): titre, pause, réglages, confirmation. Un seul écran visible à la fois (pile).
@@ -42,11 +42,11 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
     push(h('div.screen', {}, h('div.panel', {}, h('h2', { text: t('pause.title') }),
       h('div.stats', {}, st('stats.stage', EVOLUTIONS[d.hero.stage].name), st('stats.planets', `${d.world.discovered.length}/${vis}`), st('stats.kills', d.stats.kills), st('stats.time', fmtTime(d.stats.playTime))),
       h('div.menu', {}, btn(t('pause.resume'), '', resume),
-        h('div.menu2', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel()))),
-        btn('🌍 Ma planète', 'alt', () => sub('Ma planète', basePanel())),
-        btn(t('pause.settings'), 'alt', settings),
-        btn('◈ ' + t('pause.codex'), 'alt', () => sub(t('pause.codex'), codexPanel())),
-        btn('⌖ ' + t('pause.map'), 'alt', () => sub(t('pause.map'), galaxyPanel(() => { clear(); mode = null; bus.emit('game:resume'); }))), btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); })))));
+        h('div.mgrid', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel())),
+          btn('⌖ ' + t('pause.map'), 'alt', () => sub(t('pause.map'), galaxyPanel(() => { clear(); mode = null; bus.emit('game:resume'); }))), btn('◈ ' + t('pause.codex'), 'alt', () => sub(t('pause.codex'), codexPanel())),
+          btn('🌍 Ma planète', 'alt', () => sub('Ma planète', basePanel())), btn('🛸 Atelier', 'alt', () => sub('Atelier du vaisseau', workshopPanel())),
+          btn(t('pause.settings'), 'ghost', settings),
+          btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); }))))));
   }
   // menu de construction: met le jeu en pause le temps du choix
   function build(req) { if (stack.length) return; mode = 'pause'; bus.emit('game:pause'); const close = () => { clear(); mode = null; bus.emit('game:resume'); };

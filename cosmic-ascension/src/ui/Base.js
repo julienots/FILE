@@ -6,6 +6,8 @@ import { Home } from '../systems/HomePlanet.js';
 import { bonuses } from '../systems/bonuses.js';
 import { h } from './dom.js';
 import { buzz } from './haptics.js';
+import { SHIP_UPGRADES } from '../data/ship.js';
+import { upgradeShip } from '../systems/Combat.js';
 // UI de la planète du joueur (B6): menu de construction (sur `ui:buildMenu`) et panneau « Ma planète » (menu pause).
 const costLine = (cost) => Object.entries(cost).map(([it, n]) => h('span.cost', { text: `${n} ${ITEMS[it]?.icon ?? it}` }));
 function card(id, onPick) {
@@ -29,4 +31,16 @@ export function basePanel() {
   wrap.appendChild(h('div.bgrid.small', {}, hp.buildings.length ? hp.buildings.map(({ id }) => card(id, () => {})) : h('p.empty', { text: 'Pose-toi sur Pépin et approche-toi d’un emplacement ✚ pour construire.' })));
   wrap.appendChild(h('button.cbtn.alt', { text: '🌍 Récolter la production', style: { marginTop: '2vmin', width: '100%' }, onClick: () => { const got = Home.collect(); if (!got.length) bus.emit('ui:toast', { text: 'Rien à récolter pour l’instant', kind: 'warn' }); } }));
   return wrap;
+}
+// Atelier du vaisseau
+export function workshopPanel() {
+  const wrap = h('div.bgrid');
+  const draw = () => { wrap.innerHTML = ''; const d = State.data;
+    wrap.appendChild(h('div.bcard.built', {}, h('div.bi', { text: '🛸' }), h('b', { text: `Vaisseau niveau ${d.ship.level}` }), h('small', { text: 'Moteur, bâtiments (Hangar, Phare, Portail) et artefacts augmentent le niveau.' })));
+    for (const [part, U] of Object.entries(SHIP_UPGRADES)) { const n = d.ship.parts[part] ?? 0, max = n >= U.max, cost = max ? null : U.cost(n);
+      const can = cost && Object.entries(cost).every(([it, k]) => (it === 'cosmicDust' ? d.inventory.cosmicDust : d.inventory.items[it] ?? 0) >= k);
+      wrap.appendChild(h('div.bcard' + (max ? '.built' : can ? '' : '.poor'), { onClick: () => { if (max) return; if (upgradeShip(part, SHIP_UPGRADES)) { buzz(30); draw(); } else { buzz(8); bus.emit('ui:toast', { text: 'Ressources insuffisantes', kind: 'warn' }); } } },
+        h('div.bi', { text: U.glyph }), h('b', { text: `${U.name} · ${n}/${U.max}` }), h('div.eff', { text: U.per }),
+        h('div.costs', {}, max ? h('span.cost', { text: '✔ maximum' }) : costLine(cost)))); } };
+  draw(); return wrap;
 }

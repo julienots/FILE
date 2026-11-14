@@ -181,6 +181,7 @@ export const CSS2 = `
 .gring{fill:none;stroke:#ffcc3a;stroke-width:3;stroke-dasharray:8 6;animation:spin 6s linear infinite;transform-box:fill-box;transform-origin:center}
 .ginfo{width:34vmin;flex:none;display:flex;flex-direction:column;gap:1vmin;font-size:2.4vmin}.ginfo b{font-size:3.6vmin;text-transform:uppercase;letter-spacing:.12em;color:var(--neo)}.ginfo p{margin:0;opacity:.85}.ginfo small{opacity:.7}
 .ginfo .cbtn{margin-top:auto;font-size:2.8vmin;padding:1.4vmin 2vmin}
+#ui .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:1.4vmin}#ui .mgrid .cbtn{font-size:2.7vmin;padding:1.2vmin 1.4vmin;white-space:nowrap}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes hitFlash{0%{box-shadow:inset 0 0 14vmin rgba(255,40,80,.85)}100%{box-shadow:inset 0 0 0 rgba(255,40,80,0)}}
 @keyframes lowPulse{50%{box-shadow:inset 0 0 18vmin rgba(255,40,80,.7)}}
