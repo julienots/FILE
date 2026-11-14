@@ -6,16 +6,14 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.2 (versionCode 9). Taille : environ 23 Mo. SHA-256 : `31adecf9a0d094443f748e4a821d16d90cb34e9d208d2740a61fa43fce1962bd`.
-  - Les versions 1.6.1 et 1.6.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.7.0 (versionCode 10). Taille : environ 23 Mo. SHA-256 : `956e1b2a92711219438254132a5c3aa3138ad7870ea628ad44cf6ef565030ecf`.
+  - Les versions 1.6.1 à 1.7.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
 ### Nouveautés 1.7.0 (histoire : prologue animé, Chroniques, mods)
-
-> **En cours de vérification** : l'APK de `release/` est encore la **1.6.2**. Cette section décrit le code de la branche, pas encore livré.
 
 
 - **Prologue animé et narré.** Une nouvelle partie s'ouvre sur une cinématique d'environ 1 min 15 : dix plans filmés dans le monde du jeu.
@@ -38,7 +36,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - Un mod peut **remplacer** n'importe quel fichier du jeu (modèles 3D, textures, musiques, sons, interface) et **modifier** objets, ennemis, PNJ et chroniques avec de simples lignes `type.id.champ = valeur`.
   - Le menu Mods permet d'activer ou de désactiver chaque mod, et affiche les erreurs avec le numéro de ligne. Les mods s'appliquent au lancement suivant.
   - Guide : `docs/MODDING.md`. Mod d'exemple : `release/mods/exemple-chroniques-du-vagabond.zip`.
-- **Vérification** : nouveaux scénarios `--autoplay=prologue` (les 10 plans, état final, sauvegarde des drapeaux, bouton Passer) et `--autoplay=mods` (installation, modifications, remplacement d'un modèle, menu, désactivation par un vrai appui) ; tests unitaires du format des mods. Le mod d'exemple doit s'appliquer sans aucune erreur.
+- **Vérification (1.7.0)** : 1 873 tests unitaires ; scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue` et `full` réussis ; `full`, `mods` et `prologue` aussi sous AddressSanitizer, sans erreur. Détail des scénarios ajoutés : `--autoplay=prologue` (les 10 plans, état final, sauvegarde des drapeaux, bouton Passer) et `--autoplay=mods` (installation, modifications, remplacement d'un modèle, menu, désactivation par un vrai appui) ; tests unitaires du format des mods. Le mod d'exemple doit s'appliquer sans aucune erreur.
 - **Limites.**
   - **Pas de voix** : la narration est écrite.
   - Le prologue réutilise les décors et personnages du jeu : pas de modèles ni d'effets créés spécialement pour lui.
@@ -263,6 +261,9 @@ Ces images sont prises dans le harnais de bureau : c'est le code réel du jeu, r
 | ![Caméra basse vers le ciel (1.6)](docs/screenshots/30_camera_sky.jpg) | ![Vue carte, zoom 40 m (1.6)](docs/screenshots/31_camera_map.jpg) |
 | ![Caméra devant un mur (1.6)](docs/screenshots/32_camera_collision.jpg) | ![Montagnes à l'horizon (1.6.1)](docs/screenshots/33_horizon_mountains.jpg) |
 | ![Herbe dense, sillage du héros (1.6.1)](docs/screenshots/34_grass_trail.jpg) | ![Villageois (1.6.1)](docs/screenshots/35_villagers.jpg) |
+| ![Prologue : Highspire (1.7)](docs/screenshots/36_prologue_highspire.jpg) | ![Prologue : Morneval (1.7)](docs/screenshots/37_prologue_morneval.jpg) |
+| ![Prologue : « Tu es revenu… » (1.7)](docs/screenshots/38_prologue_voix.jpg) | ![Prologue : titre (1.7)](docs/screenshots/39_prologue_titre.jpg) |
+| ![Menu des mods (1.7)](docs/screenshots/40_mods.jpg) | |
 
 ---
 
@@ -331,7 +332,7 @@ Légende :
    - L'option `--autoplay=full` lance un bot qui joue un scénario de 71 étapes : splash, titre, nouvelle partie, village, dialogue, tous les menus, combat, monture, traversée des six régions, météo, boss, donjon et énigme, test sauvegarde/chargement, éditeur de commandes, générique.
    - Le bot prend des captures d'écran (`build/shots/`) et peut enregistrer le mixage audio (`--wav`).
 2. **AddressSanitizer**. Le même scénario a été exécuté sous ASan. Il a permis de corriger un accès hors limites dans l'IA ennemie et une invalidation de références dans l'ECS.
-3. **Tests unitaires** (`lk_tests`), soit 1 858 vérifications :
+3. **Tests unitaires** (`lk_tests`), soit 1 873 vérifications :
    - l'ECS ;
    - les mathématiques ;
    - l'intégrité des données (chaque référence d'une quête, d'un butin, d'une recette ou d'une boutique pointe vers un objet existant) ;
