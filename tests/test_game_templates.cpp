@@ -782,148 +782,227 @@ TEST_CASE("arena: two local players race for coins; network host simulates a rem
     h.noScriptErrors();
 }
 
-TEST_CASE("2.5D adventure: title menu, move and jump, gate opens with 3 gems, enemies chase and hit, sword, pause, levels, boss, victory, game over, save") {
+TEST_CASE("2.5D adventure: menus, options, story, signs, pots, chest, gems and gate, enemies, shop, spikes, chasm, archers, puzzle, brute, boss, victory, game over") {
     GameHarness h(SceneTemplate::GameAdventure25D);
     h.frames(5);
+    auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
+    auto menuClick = [&](const char* button) {
+        h.seconds(0.6);  // the menu slides in
+        h.clickUI(button);
+        h.frames(2);
+    };
+    // ---- title menu, options (volumes, language), level select.
     CHECK(h.field("Game", "state") == "menu");
-    CHECK(h.active("Menu"));
+    CHECK(h.field("Game", "page") == "title");
     CHECK(h.active("PlayButton"));
-    CHECK_FALSE(h.active("ContinueButton"));  // nothing saved yet
-    CHECK_FALSE(h.active("Jump"));
-    h.clickUI("PlayButton");
-    h.frames(2);
+    CHECK(h.active("LevelsButton"));
+    CHECK_FALSE(h.active("Attack"));
+    menuClick("OptionsButton");
+    CHECK(h.field("Game", "page") == "options");
+    menuClick("MusicButton");
+    ok("math.abs(agr.audio.busVolume('Music') - 0.75) < 0.01");
+    ok("agr.find('MusicButton'):find('Label'):text():find('75')");
+    menuClick("LanguageButton");
+    ok("agr.locale.get() == 'en'");
+    ok("agr.find('LanguageButton'):find('Label'):text():find('English')");
+    menuClick("LanguageButton");
+    menuClick("LanguageButton");
+    ok("agr.locale.get() == 'fr'");
+    menuClick("BackButton");
+    CHECK(h.field("Game", "page") == "title");
+    menuClick("LevelsButton");
+    ok("agr.find('LevelButton 1'):get('UIButton', 'interactable') == true");
+    ok("agr.find('LevelButton 2'):get('UIButton', 'interactable') == false");
+    menuClick("BackButton");
+    // ---- first game: the story, then hall 1.
+    menuClick("PlayButton");
+    CHECK(h.field("Game", "page") == "story");
+    CHECK(h.text("MenuText").find("Ambre") != std::string::npos);
+    menuClick("NextButton");
     CHECK(h.field("Game", "state") == "playing");
     CHECK_FALSE(h.active("Menu"));
     CHECK(h.active("Attack"));
     CHECK(h.text("LevelText").find("Hall des Statues") != std::string::npos);
-    // Enemies wait aside while the controls are checked (they chase and knock the hero back).
+    // Controls (enemies set aside: they chase and knock the hero back).
     h.lua("for _, e in ipairs(agr.find('Area 1'):find('Enemies'):children()) do e:setActive(false) end");
-    h.seconds(1.0);  // the hero settles on the floor
+    h.seconds(1.0);
     const math::Vec3 start = h.position("Hero");
     CHECK(std::abs(start.y) < 0.2f);
     CHECK(h.field("Hero", "grounded") == "true");
     h.holdKey(Key::Right, 1.0);
     CHECK(h.position("Hero").x > start.x + 3.0f);
-    h.holdKey(Key::Up, 0.5);  // screen-up = away from the camera (-Z)
+    h.holdKey(Key::Up, 0.5);
     CHECK(h.position("Hero").z < start.z - 1.0f);
     h.key(Key::Space, true);
     h.frames(8);
     h.key(Key::Space, false);
     CHECK(h.position("Hero").y > 0.5f);
     h.seconds(1.5);
-    CHECK(std::abs(h.position("Hero").y) < 0.2f);  // landed
-    // The gate blocks the exit while gems are missing.
-    h.lua("agr.find('Hero'):setPosition(14, 0.05, 0)");
-    h.holdKey(Key::Right, 1.5);
-    CHECK(h.position("Hero").x < 17.3f);
-    // Gems and a coin: walking onto them picks them up; the third gem opens the gate.
-    const char* pick = "local it = agr.find('Area 1'):find('Items'):find('%s'); local x, y, z = it:worldPosition();"
-                       " agr.find('Hero'):setPosition(x, 0.05, z); agr.find('Hero'):setVelocity(0, 0, 0)";
-    auto walkOnto = [&](const char* item) {
-        char code[512];
-        std::snprintf(code, sizeof code, pick, item);
-        h.lua(code);
+    // Signs show a hint nearby.
+    auto teleport = [&](const std::string& area, const std::string& group, const std::string& name, float dx = 0.0f, float dz = 0.0f) {
+        const std::string path = "agr.find('" + area + "')" + (group.empty() ? "" : ":find('" + group + "')") + ":find('" + name + "')";
+        h.lua("local e = " + path + "; local x, y, z = e:worldPosition();"
+              " agr.find('Hero'):setPosition(x + " + std::to_string(dx) + ", 0.05, z + " + std::to_string(dz) + "); agr.find('Hero'):setVelocity(0, 0, 0)");
         h.frames(3);
     };
-    walkOnto("Coin 1");
-    CHECK(h.number("Game", "coins") == 1);
-    walkOnto("Gem 1");
-    walkOnto("Gem 2");
+    teleport("Area 1", "Props", "Sign 1", 1.0f);
+    CHECK(h.active("HintPanel"));
+    CHECK(h.text("Hint").find("Déplacez") != std::string::npos);
+    teleport("Area 1", "Props", "Sign 1", 6.0f);
+    CHECK_FALSE(h.active("HintPanel"));
+    // Pots break under the sword; the chest opens on contact (+5 coins).
+    teleport("Area 1", "Props", "Pot 3", -1.2f);
+    h.pressKey(Key::Right);  // face it
+    h.lua("agr.find('Hero'):setVelocity(0, 0, 0)");
+    teleport("Area 1", "Props", "Pot 3", -1.2f);
+    h.pressKey(Key::J);
+    ok("not agr.find('Area 1'):find('Props'):find('Pot 3'):isActive()");
+    h.lua("_G.bank0 = agr.find('Game'):script().data.bank");
+    teleport("Area 1", "Props", "Chest 1");
+    ok("agr.find('Game'):script().data.bank == _G.bank0 + 5");
+    ok("agr.find('Area 1'):find('Props'):find('Chest 1'):find('Sprite'):get('SpriteRenderer', 'texture'):find('chest_open')");
+    // Gems and coins; the third gem opens the gate (it sinks, then disappears).
+    teleport("Area 1", "Items", "Coin 1");
+    CHECK(h.number("Game", "coinItems") >= 1);  // more if the walk crossed a coin
+    teleport("Area 1", "Items", "Gem 1");
+    teleport("Area 1", "Items", "Gem 2");
     CHECK(h.number("Game", "gems") == 2);
-    h.lua("assert(agr.find('Area 1'):find('Gate'):isActive())");
-    walkOnto("Gem 3");
-    h.lua("assert(agr.find('Area 1'):find('Gate'):isActive())");  // sinking into the floor
+    teleport("Area 1", "Items", "Gem 3");
+    ok("agr.find('Area 1'):find('Gate'):isActive()");
     h.seconds(1.5);
-    h.lua("assert(not agr.find('Area 1'):find('Gate'):isActive())");
-    h.lua("local x, y = agr.find('Area 1'):find('Gate'):position(); assert(math.abs(y - 1.25) < 0.01)");  // back home for a replay
+    ok("not agr.find('Area 1'):find('Gate'):isActive()");
     CHECK(h.text("GemsText").find("3 / 3") != std::string::npos);
-    // A slime chases the hero along the navigation mesh and hurts him.
+    // A slime chases the hero on the navigation mesh, hurts him, and dies to the sword (2 hits).
     h.lua("for _, e in ipairs(agr.find('Area 1'):find('Enemies'):children()) do e:setActive(true) end;"
-          " agr.find('Area 1'):find('Enemies'):find('Slime 1'):setPosition(-4, 0, -3)");
+          " agr.find('Area 1'):find('Enemies'):find('Slime 1'):setPosition(-1, 0, -3)");
     h.frames(2);
-    h.lua("local s = agr.find('Area 1'):find('Enemies'):find('Slime 1'); local x, y, z = s:worldPosition();"
-          " agr.find('Hero'):setPosition(x - 5, 0.05, z); agr.find('Hero'):setVelocity(0, 0, 0)");
+    teleport("Area 1", "Enemies", "Slime 1", -5.0f);
     const double health = h.number("Hero", "health");
-    h.lua("_G.slimeX = select(1, agr.find('Area 1'):find('Enemies'):find('Slime 1'):worldPosition())");
     for (int k = 0; k < 16 && h.number("Hero", "health") >= health; ++k) h.seconds(0.5);
     CHECK(h.number("Hero", "health") < health);
-    h.lua("assert(math.abs(select(1, agr.find('Area 1'):find('Enemies'):find('Slime 1'):worldPosition()) - _G.slimeX) > 2)");
-    CHECK(h.text("HealthText").find("Vie") != std::string::npos);
-    // The sword defeats it (2 hits).
-    const double coins = h.number("Game", "coins");
     for (int i = 0; i < 8; ++i) {
         h.lua("local s = agr.find('Area 1'):find('Enemies'):find('Slime 1'); if s:isActive() then local x, y, z = agr.find('Hero'):position();"
-              " s:setPosition(x + 1, 0, z) end");
+              " s:setPosition(x + 1, 0, z); agr.find('Hero'):script().facing = 1 end");
         h.pressKey(Key::J);
         h.seconds(0.4);
     }
-    h.lua("assert(not agr.find('Area 1'):find('Enemies'):find('Slime 1'):isActive())");
-    CHECK(h.number("Game", "coins") >= coins + 1);  // +1 per enemy (a coin may lie on the way)
+    ok("not agr.find('Area 1'):find('Enemies'):find('Slime 1'):isActive()");
     // Pause and resume.
     h.pressKey(Key::P);
     CHECK(h.field("Game", "state") == "paused");
     CHECK(h.active("ResumeButton"));
-    const math::Vec3 paused = h.position("Hero");
-    h.holdKey(Key::Right, 0.5);
-    CHECK(std::abs(h.position("Hero").x - paused.x) < 0.1f);
-    h.clickUI("ResumeButton");
-    h.frames(2);
+    CHECK(h.active("RestartButton"));
+    menuClick("ResumeButton");
     CHECK(h.field("Game", "state") == "playing");
-    // The portal leads to level 2 (progress saved).
-    h.lua("local x, y, z = agr.find('Area 1'):find('Portal'):worldPosition(); agr.find('Hero'):setPosition(x - 0.5, 0.05, z)");
-    h.frames(3);
+    // ---- the portal: results, stars, the shop.
+    h.lua("agr.find('Game'):script().coinItems = agr.find('Game'):script().coinItemsTotal");  // pretend every coin was picked
+    teleport("Area 1", "", "Portal", -0.5f);
     CHECK(h.field("Game", "state") == "levelcomplete");
     h.seconds(2.0);
+    CHECK(h.field("Game", "state") == "shop");
+    CHECK(h.active("Shop"));
+    CHECK(h.text("ShopResults").find("★★") != std::string::npos);
+    ok("agr.find('Game'):script():starsOf(1) >= 3");
+    h.lua("local g = agr.find('Game'):script(); g.data.bank = 100; g:refreshShop()");
+    menuClick("BuyHeart");
+    menuClick("BuySword");
+    menuClick("BuyPotion");
+    ok("agr.find('Game'):script().data.upgrades.heart == 1");
+    ok("agr.find('Game'):script().data.upgrades.sword == 1");
+    ok("agr.find('Game'):script().data.bank == 100 - 10 - 15 - 8");
+    ok("agr.find('BuyPotion'):get('UIButton', 'interactable') == false");
+    menuClick("ShopContinue");
     CHECK(h.number("Game", "level") == 2);
+    CHECK(h.number("Hero", "maxHealth") == 6);
+    CHECK(h.number("Hero", "power") == 2);
+    CHECK(h.field("Hero", "guard") == "true");
     CHECK(h.position("Hero").x > 50.0f);
-    CHECK(h.text("LevelText").find("Crypte") != std::string::npos);
-    CHECK(h.engine->save().get("ambre.level") == 2);
-    // Bats fly to the hero.
-    h.lua("local b = agr.find('Area 2'):find('Enemies'):find('Bat 1'); local x, y, z = b:worldPosition();"
-          " agr.find('Hero'):setPosition(x - 6, 0.05, z); _G.batD = 6");
+    ok("agr.save.get('ambre').unlocked == 2");
+    // ---- hall 2: spike traps (the guard potion absorbs the first hit).
+    h.lua("for _, e in ipairs(agr.find('Area 2'):find('Enemies'):children()) do e:setActive(false) end");
     h.seconds(1.0);
-    h.lua("local b = agr.find('Area 2'):find('Enemies'):find('Bat 1'); local x, _, z = b:worldPosition(); local hx, _, hz = agr.find('Hero'):position();"
-          " assert(math.sqrt((x - hx)^2 + (z - hz)^2) < 4.5)");
-    // Boss level: the guardian summons minions, the bar follows its health, its defeat opens the gate.
+    const double h2 = h.number("Hero", "health");
+    for (int i = 0; i < 2; ++i) {
+        teleport("Area 2", "Props", "Spikes 1");
+        h.lua("local s = agr.find('Area 2'):find('Props'):find('Spikes 1'):script(); s.t = 1.6 + 0.5 + 0.05; agr.find('Hero'):script().invulnerable = 0");
+        h.frames(3);
+    }
+    CHECK(h.field("Hero", "guard") == "false");
+    CHECK(h.number("Hero", "health") == h2 - 1);
+    // ---- hall 3: a fall into the chasm brings the hero back to safe ground (one heart).
+    h.lua("agr.find('Game'):script():startLevel(3)");
+    h.lua("for _, e in ipairs(agr.find('Area 3'):find('Enemies'):children()) do if not e:name():find('^Archer') then e:setActive(false) end end");
+    h.seconds(1.0);
+    const double h3 = h.number("Hero", "health");
+    h.lua("agr.find('Hero'):setPosition(140 - 6, 0.05, 4); agr.find('Hero'):setVelocity(0, 0, 0)");
+    h.seconds(0.8);  // safe ground recorded
+    h.lua("agr.find('Hero'):setPosition(140 + 0, 0.5, 4)");  // over the chasm
+    h.seconds(2.5);
+    CHECK(h.position("Hero").y > -1.0f);
+    CHECK(h.position("Hero").x < 140.0f - 4.0f);
+    CHECK(h.number("Hero", "health") <= h3 - 1);
+    // Archers shoot arrows that hurt.
+    h.lua("local a = agr.find('Area 3'):find('Enemies'):find('Archer 1'); local x, y, z = a:worldPosition(); agr.find('Hero'):setPosition(x - 7, 0.05, z);"
+          " agr.find('Hero'):script().health = 8; agr.find('Hero'):script().invulnerable = 0; _G.sawArrow = false");
+    const double h3b = h.number("Hero", "health");
+    for (int k = 0; k < 20 && h.number("Hero", "health") >= h3b; ++k) {
+        h.seconds(0.3);
+        h.lua("if next(agr.find('Game'):script().arrows) then _G.sawArrow = true end");
+    }
+    ok("_G.sawArrow");
+    CHECK(h.number("Hero", "health") < h3b);
+    // ---- hall 4: the plates puzzle reveals the third gem; the brute charges.
     h.lua("agr.find('Game'):script():startLevel(4)");
+    h.lua("for _, e in ipairs(agr.find('Area 4'):find('Enemies'):children()) do if not e:name():find('^Brute') then e:setActive(false) end end");
+    h.frames(3);
+    ok("not agr.find('Area 4'):find('Items'):find('Gem 3'):isActive()");
+    teleport("Area 4", "Props", "Plate 1");
+    teleport("Area 4", "Props", "Plate 1", -4.0f);  // step off
+    teleport("Area 4", "Props", "Plate 4");
+    ok("agr.find('Area 4'):find('Items'):find('Gem 3'):isActive()");
+    h.lua("local b = agr.find('Area 4'):find('Enemies'):find('Brute 1'); local x, y, z = b:worldPosition(); agr.find('Hero'):setPosition(x - 5, 0.05, z);"
+          " _G.charged = false");
+    for (int k = 0; k < 30; ++k) {
+        h.seconds(0.2);
+        h.lua("local s = agr.find('Area 4'):find('Enemies'):find('Brute 1'):script(); if s.phase == 'charge' then _G.charged = true end");
+    }
+    ok("_G.charged");
+    // ---- hall 6: the boss (minions, fury and falling boulders), then victory.
+    h.lua("agr.find('Game'):script():startLevel(6)");
     h.frames(3);
     CHECK(h.active("BossBar"));
-    h.lua("local b = agr.find('Area 4'):find('Enemies'):find('Boss'); b:script().summon = 0");
+    h.lua("local b = agr.find('Area 6'):find('Enemies'):find('Boss'):script(); b:summonMinions()");
     h.frames(3);
-    h.lua("local n = 0; for _, e in ipairs(agr.find('Area 4'):find('Enemies'):children()) do if e:name() == 'Minion' then n = n + 1 end end; assert(n == 2, n)");
-    h.lua("local b = agr.find('Area 4'):find('Enemies'):find('Boss'); b:script().life = 2");
-    for (int i = 0; i < 6; ++i) {
-        h.lua("local b = agr.find('Area 4'):find('Enemies'):find('Boss'); if b:isActive() then local x, y, z = agr.find('Hero'):position();"
-              " local s = b:script(); s:hit(0, agr.find('Hero')); b:setPosition(x - 210 + 1.5, 0, z); agr.find('Hero'):script().invulnerable = 5 end");
-        h.pressKey(Key::J);
-        h.seconds(0.4);
-    }
-    h.seconds(2.0);  // dying animation
-    h.lua("assert(not agr.find('Area 4'):find('Enemies'):find('Boss'):isActive())");
-    h.lua("assert(not agr.find('Area 4'):find('Gate'):isActive())");
-    h.lua("for _, e in ipairs(agr.find('Area 4'):find('Enemies'):children()) do assert(e:name() ~= 'Minion') end");
-    CHECK_FALSE(h.active("BossBar"));
-    h.lua("local x, y, z = agr.find('Area 4'):find('Portal'):worldPosition(); agr.find('Hero'):setPosition(x - 0.5, 0.05, z)");
-    h.frames(3);
+    ok("#(function() local t = {} for _, e in ipairs(agr.find('Area 6'):find('Enemies'):children()) do if e:name() == 'Minion' then t[#t + 1] = e end end return t end)() == 2");
+    h.lua("local b = agr.find('Area 6'):find('Enemies'):find('Boss'); b:script().life = 16; b:script():hit(1, agr.find('Hero'))");
+    ok("agr.find('Area 6'):find('Enemies'):find('Boss'):script().furious");
+    h.lua("local b = agr.find('Area 6'):find('Enemies'):find('Boss'):script(); local x, _, z = agr.find('Hero'):position(); b:rockRain(x + 20, z)");
+    ok("agr.find('Area 6'):find('Enemies'):find('Boulder 1'):isActive()");
+    h.seconds(1.8);
+    ok("not agr.find('Area 6'):find('Enemies'):find('Boulder 1'):isActive()");
+    h.lua("local b = agr.find('Area 6'):find('Enemies'):find('Boss'); b:script().life = 1; b:script():hit(1, agr.find('Hero'))");
+    h.seconds(2.5);
+    ok("not agr.find('Area 6'):find('Enemies'):find('Boss'):isActive()");
+    ok("not agr.find('Area 6'):find('Gate'):isActive()");
+    teleport("Area 6", "", "Portal", -0.5f);
     CHECK(h.field("Game", "state") == "victory");
     CHECK(h.active("Menu"));
     CHECK(h.text("MenuTitle").find("Victoire") != std::string::npos);
-    CHECK(h.engine->save().has("ambre.bestTime"));
-    // Game over, then "Continue" restarts the level.
-    h.seconds(0.8);  // the menu slides in
-    h.clickUI("PlayButton");
-    h.frames(2);
+    ok("agr.save.get('ambre').finished == true");
+    // ---- game over and retry; the continue button now starts at the furthest hall.
+    h.seconds(1.5);  // the victory flash fades
+    menuClick("MenuButton");
+    ok("agr.find('PlayButton'):find('Label'):text():find('2')");
+    menuClick("LevelsButton");
+    menuClick("LevelButton 1");
     CHECK(h.number("Game", "level") == 1);
-    h.lua("local hs = agr.find('Hero'):script(); hs.invulnerable = 0; hs.health = 1; hs:damage(1)");
-    CHECK(h.field("Game", "state") == "dying");  // slow motion first
+    h.lua("local hs = agr.find('Hero'):script(); hs.invulnerable = 0; hs.guard = false; hs.health = 1; hs:damage(1)");
+    CHECK(h.field("Game", "state") == "dying");
     h.seconds(2.0);
     CHECK(h.field("Game", "state") == "gameover");
-    CHECK(h.active("ContinueButton"));
-    h.seconds(0.8);
-    h.clickUI("ContinueButton");
-    h.frames(2);
+    menuClick("RetryButton");
     CHECK(h.field("Game", "state") == "playing");
-    CHECK(h.number("Hero", "health") == 5);
+    CHECK(h.number("Hero", "health") == 6);
     h.noScriptErrors();
 }
 

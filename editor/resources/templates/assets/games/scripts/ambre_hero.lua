@@ -1,4 +1,4 @@
--- Héros des Ruines d'Ambre. Déplacement : flèches / ZQSD / stick (manette ou tactile) ; saut :
+-- Héros des Ruines d'Ambre (améliorations de la boutique : cœurs, force de l'épée, roulade, garde). Déplacement : flèches / ZQSD / stick (manette ou tactile) ; saut :
 -- Espace, bouton A ou « Saut » ; épée : J, K, bouton X ou « Épée » ; roulade (invulnérable) :
 -- Maj, L, bouton B ou « Roulade ». Le sprite (enfant « Sprite ») est animé par sa machine à états
 -- (paramètres speed et grounded) ; ombre au sol, arc d'épée, impacts, recul.
@@ -6,7 +6,7 @@ local G = require("assets://games/scripts/common.lua")
 
 local Hero = {
     properties = { speed = 5.5, jumpSpeed = 7.5, maxHealth = 5, attackRange = 2.0, attackCooldown = 0.28,
-                   dashSpeed = 15, dashTime = 0.18, dashCooldown = 0.7, fallLimit = -8 },
+                   dashSpeed = 15, dashTime = 0.18, dashCooldown = 0.7, fallLimit = -6 },
 }
 
 function Hero:onStart()
@@ -19,6 +19,13 @@ function Hero:onStart()
     self.dashX, self.dashZ = 1, 0
     self.spawnX, self.spawnY, self.spawnZ = self.entity:position()
     self.grounded, self.airSpeed = true, 0
+    self.power, self.guard = 1, false
+    self.safe, self.safeTime = {}, 0
+end
+
+-- Améliorations achetées à la boutique (ambre_game.lua) : cœurs, épée, roulade, garde.
+function Hero:applyUpgrades(maxHealth, power, dashCooldown, guard)
+    self.maxHealth, self.power, self.dashCooldown, self.guard = maxHealth, power, dashCooldown, guard
 end
 
 function Hero:spawn(x, y, z)
@@ -27,6 +34,7 @@ function Hero:spawn(x, y, z)
     self.entity:setVelocity(0, 0, 0)
     self.health = self.maxHealth
     self.invulnerable, self.dash, self.knock = 1, 0, 0
+    self.safe, self.safeTime = { { x, y, z } }, 0
 end
 
 function Hero:button(name)
@@ -109,10 +117,20 @@ function Hero:onUpdate(dt)
         local blink = self.invulnerable > 0 and self.dash <= 0 and math.floor(self.invulnerable * 14) % 2 == 0
         self.sprite:set("SpriteRenderer", "color", blink and { 1, 1, 1, 0.3 } or { 1, 1, 1, 1 })
     end
+    -- Dernières positions sûres (au sol) : une chute dans un gouffre ramène un peu en arrière.
+    self.safeTime = self.safeTime - dt
+    if self.grounded and self.safeTime <= 0 and self.knock <= 0 then
+        self.safeTime = 0.25
+        table.insert(self.safe, { x, y, z })
+        if #self.safe > 5 then table.remove(self.safe, 1) end
+    end
     if y < self.fallLimit then
-        self:damage(1, nil, true)
-        e:setPosition(self.spawnX, self.spawnY + 0.5, self.spawnZ)
+        local p = self.safe[1] or { self.spawnX, self.spawnY, self.spawnZ }
+        e:setPosition(p[1], p[2] + 0.3, p[3])
         e:setVelocity(0, 0, 0)
+        self.safe = { p }
+        agr.fx.fade(0, 0.5, 0, 0, 0)
+        self:damage(1, nil, true)
     end
 end
 
@@ -142,9 +160,22 @@ function Hero:attack()
             local reach = self.attackRange + (s.kind == "boss" and 1.4 or 0)
             local inFront = (fx - x) * self.facing > -0.6 or s.kind == "boss"
             if inFront and G.distance(x, z, fx, fz) < reach then
-                s:hit(1, self.entity)
+                s:hit(self.power, self.entity)
                 hits = hits + 1
             end
+        end
+    end
+    for _, pot in ipairs(self.game:breakables()) do
+        local px, _, pz = pot:worldPosition()
+        if (px - x) * self.facing > -0.6 and G.distance(x, z, px, pz) < self.attackRange then
+            pot:script():hit(self.power, self.entity)
+            hits = hits + 1
+        end
+    end
+    for _, arrow in pairs(self.game.arrows) do
+        if arrow:isValid() then
+            local ax, _, az = arrow:position()
+            if G.distance(x, z, ax, az) < self.attackRange + 0.3 then arrow:script():parry() end
         end
     end
     if hits > 0 then
@@ -157,6 +188,16 @@ end
 -- Dégâts reçus : clignotement, flash rouge, tremblement, recul depuis `from`.
 function Hero:damage(n, from, ignoreInvulnerability)
     if self.game.state ~= "playing" or (self.invulnerable > 0 and not ignoreInvulnerability) then return end
+    if self.guard and not ignoreInvulnerability then  -- potion de garde : un coup absorbé
+        self.guard = false
+        self.invulnerable = 1
+        local x, y, z = self.entity:position()
+        agr.fx.burst(x, y + 1, z, { count = 30, color = { 0.5, 0.8, 1 }, speed = 4, life = 0.6, spread = "ring" })
+        agr.fx.popup(x, y + 1.8, z, agr.tr("ambre.guarded"), { color = { 0.6, 0.85, 1 }, size = 50 })
+        agr.audio.play("assets://audio/hit.wav", { volume = 0.6, pitch = 1.6 })
+        self.game:hud()
+        return
+    end
     self.health = self.health - n
     self.invulnerable = 1.2
     agr.device.vibrate(0.15)

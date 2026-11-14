@@ -147,32 +147,86 @@ arena.status.joined,"Connecté : vous êtes le joueur {1}","Connected: you are p
 arena.status.lost,"Connexion perdue : retour au jeu local","Connection lost: back to local play","Conexión perdida: vuelta al juego local"
 arena.status.error,"Réseau : {1}","Network: {1}","Red: {1}"
 arena.won,"Le joueur {1} gagne !","Player {1} wins!","¡Gana el jugador {1}!"
-ambre.new,Nouvelle partie,New game,Nueva partida
-ambre.continue,Continuer,Continue,Continuar
-ambre.resume,Reprendre,Resume,Reanudar
-ambre.menu,Menu principal,Main menu,Menú principal
-ambre.area1,"Niveau 1 — Le Hall des Statues","Level 1 — The Hall of Statues","Nivel 1 — La Sala de las Estatuas"
-ambre.area2,"Niveau 2 — La Crypte Engloutie","Level 2 — The Sunken Crypt","Nivel 2 — La Cripta Sumergida"
-ambre.area3,"Niveau 3 — Les Jardins Suspendus","Level 3 — The Hanging Gardens","Nivel 3 — Los Jardines Colgantes"
-ambre.area4,"Niveau 4 — Le Cœur d'Ambre","Level 4 — The Amber Heart","Nivel 4 — El Corazón de Ámbar"
-ambre.intro,"Explorez les ruines, trouvez les trois gemmes d'ambre de chaque salle et vainquez le gardien.","Explore the ruins, find the three amber gems in each hall and defeat the guardian.","Explora las ruinas, encuentra las tres gemas de ámbar de cada sala y derrota al guardián."
-ambre.best,Meilleur temps : {1},Best time: {1},Mejor tiempo: {1}
-ambre.paused,Pause,Paused,Pausa
-ambre.gameover.title,Vous êtes tombé…,You fell…,Has caído…
-ambre.gameover,"Continuer reprend au début de « {1} ».","Continue restarts “{1}”.","Continuar reinicia «{1}»."
-ambre.victory.title,Victoire !,Victory!,¡Victoria!
-ambre.victory,"Le Cœur d'Ambre est libéré. Temps : {1} — pièces : {2}","The Amber Heart is free. Time: {1} — coins: {2}","El Corazón de Ámbar es libre. Tiempo: {1} — monedas: {2}"
-ambre.record,Nouveau record !,New record!,¡Nuevo récord!
-ambre.goal,Trouvez les 3 gemmes d'ambre,Find the 3 amber gems,Encuentra las 3 gemas de ámbar
-ambre.boss,Le gardien se réveille !,The guardian awakens!,¡El guardián despierta!
-ambre.bossDown,Le gardien est vaincu ! Entrez dans le portail.,The guardian is defeated! Enter the portal.,¡El guardián ha caído! Entra en el portal.
-ambre.gateOpen,La grille s'ouvre : rejoignez le portail !,The gate opens: reach the portal!,La reja se abre: ¡ve al portal!
-ambre.gem,Gemme {1} / 3,Gem {1} / 3,Gema {1} / 3
-ambre.cleared,Salle terminée !,Hall cleared!,¡Sala superada!
-ambre.summon,Le gardien appelle ses sbires !,The guardian summons minions!,¡El guardián invoca esbirros!
-ambre.health,Vie : {1} / {2},Health: {1} / {2},Vida: {1} / {2}
-ambre.gems,Gemmes : {1} / 3,Gems: {1} / 3,Gemas: {1} / 3
-ambre.gems.boss,Vainquez le gardien,Defeat the guardian,Derrota al guardián
-ambre.coins,Pièces : {1},Coins: {1},Monedas: {1}
-ambre.dash,Roulade,Dodge,Rodar
-ambre.fury,Furie !,Fury!,¡Furia!
+ambre.title,"Les Ruines d'Ambre","The Amber Ruins","Las Ruinas de Ámbar"
+ambre.tagline,"Six salles oubliées, un cœur d'ambre à libérer.","Six forgotten halls, one amber heart to set free.","Seis salas olvidadas, un corazón de ámbar que liberar."
+ambre.progress,"Étoiles : {1} / {2}    Pièces : {3}","Stars: {1} / {2}    Coins: {3}","Estrellas: {1} / {2}    Monedas: {3}"
+ambre.play,"Jouer","Play","Jugar"
+ambre.continueAt,"Continuer (salle {1})","Continue (hall {1})","Continuar (sala {1})"
+ambre.levels,"Salles","Halls","Salas"
+ambre.levels.help,"Rejouez une salle pour gagner ses étoiles.","Replay a hall to earn its stars.","Repite una sala para ganar sus estrellas."
+ambre.locked,"Verrouillée","Locked","Bloqueada"
+ambre.options,"Options","Options","Opciones"
+ambre.music,"Musique : {1} %","Music: {1} %","Música: {1} %"
+ambre.sfx,"Effets : {1} %","Effects: {1} %","Efectos: {1} %"
+ambre.language,"Langue : Français","Language: English","Idioma: Español"
+ambre.back,"Retour","Back","Volver"
+ambre.next,"Continuer","Continue","Continuar"
+ambre.continue,"Salle suivante","Next hall","Siguiente sala"
+ambre.resume,"Reprendre","Resume","Reanudar"
+ambre.restart,"Recommencer la salle","Restart hall","Reiniciar sala"
+ambre.retry,"Réessayer","Try again","Reintentar"
+ambre.menu,"Menu principal","Main menu","Menú principal"
+ambre.paused,"Pause","Paused","Pausa"
+ambre.pauseInfo,"Gemmes : {1} / 3    Temps : {2}","Gems: {1} / 3    Time: {2}","Gemas: {1} / 3    Tiempo: {2}"
+ambre.intro.title,"La légende","The legend","La leyenda"
+ambre.intro,"Sous les sables dort une cité engloutie. En son cœur bat l'Ambre, un joyau qui retient le soleil.
+Un gardien de pierre s'en est emparé et les ruines se sont éteintes.
+Petit robot, réveille les salles une à une : trois gemmes d'ambre ouvrent chaque porte.","Beneath the sands sleeps a sunken city. At its heart beats the Amber, a jewel that holds the sun.
+A stone guardian seized it and the ruins went dark.
+Little robot, wake the halls one by one: three amber gems open each door.","Bajo las arenas duerme una ciudad hundida. En su corazón late el Ámbar, una joya que guarda el sol.
+Un guardián de piedra se apoderó de él y las ruinas se apagaron.
+Pequeño robot, despierta las salas una a una: tres gemas de ámbar abren cada puerta."
+ambre.ending,"Le gardien s'effondre et l'Ambre retrouve sa lumière. Les salles se rallument une à une : la cité se souvient du soleil.","The guardian crumbles and the Amber shines again. The halls light up one by one: the city remembers the sun.","El guardián se derrumba y el Ámbar vuelve a brillar. Las salas se encienden una a una: la ciudad recuerda el sol."
+ambre.area1,"Salle 1 — Le Hall des Statues","Hall 1 — The Hall of Statues","Sala 1 — La Sala de las Estatuas"
+ambre.area2,"Salle 2 — La Crypte Engloutie","Hall 2 — The Sunken Crypt","Sala 2 — La Cripta Sumergida"
+ambre.area3,"Salle 3 — Les Jardins Suspendus","Hall 3 — The Hanging Gardens","Sala 3 — Los Jardines Colgantes"
+ambre.area4,"Salle 4 — La Forge Oubliée","Hall 4 — The Forgotten Forge","Sala 4 — La Forja Olvidada"
+ambre.area5,"Salle 5 — Le Sanctuaire","Hall 5 — The Sanctuary","Sala 5 — El Santuario"
+ambre.area6,"Salle 6 — Le Cœur d'Ambre","Hall 6 — The Amber Heart","Sala 6 — El Corazón de Ámbar"
+ambre.area1.short,"Hall des Statues","Hall of Statues","Sala de las Estatuas"
+ambre.area2.short,"Crypte Engloutie","Sunken Crypt","Cripta Sumergida"
+ambre.area3.short,"Jardins Suspendus","Hanging Gardens","Jardines Colgantes"
+ambre.area4.short,"Forge Oubliée","Forgotten Forge","Forja Olvidada"
+ambre.area5.short,"Sanctuaire","Sanctuary","Santuario"
+ambre.area6.short,"Cœur d'Ambre","Amber Heart","Corazón de Ámbar"
+ambre.goal,"Trouvez les 3 gemmes d'ambre","Find the 3 amber gems","Encuentra las 3 gemas de ámbar"
+ambre.boss,"Le gardien se réveille !","The guardian awakens!","¡El guardián despierta!"
+ambre.bossDown,"Le gardien est vaincu ! Entrez dans le portail.","The guardian is defeated! Enter the portal.","¡El guardián ha caído! Entra en el portal."
+ambre.gateOpen,"La grille s'ouvre : rejoignez le portail !","The gate opens: reach the portal!","La reja se abre: ¡ve al portal!"
+ambre.gem,"Gemme {1} / 3","Gem {1} / 3","Gema {1} / 3"
+ambre.gems,"Gemmes : {1} / 3","Gems: {1} / 3","Gemas: {1} / 3"
+ambre.gems.boss,"Vainquez le gardien","Defeat the guardian","Derrota al guardián"
+ambre.cleared,"Salle terminée !","Hall cleared!","¡Sala superada!"
+ambre.allCoins,"Toutes les pièces !","All the coins!","¡Todas las monedas!"
+ambre.summon,"Le gardien appelle ses sbires !","The guardian summons minions!","¡El guardián invoca esbirros!"
+ambre.rocks,"Attention, des rochers !","Watch out, boulders!","¡Cuidado, rocas!"
+ambre.fury,"Furie !","Fury!","¡Furia!"
+ambre.parry,"Parade !","Parry!","¡Parada!"
+ambre.puzzleDone,"Les dalles s'illuminent : une gemme apparaît !","The plates light up: a gem appears!","Las losas se iluminan: ¡aparece una gema!"
+ambre.health,"Vie : {1} / {2}","Health: {1} / {2}","Vida: {1} / {2}"
+ambre.guard,"garde","guard","guardia"
+ambre.guarded,"Gardé !","Blocked!","¡Bloqueado!"
+ambre.dash,"Roulade","Dodge","Rodar"
+ambre.gameover.title,"Vous êtes tombé…","You fell…","Has caído…"
+ambre.gameover,"« {1} » vous attend. Vos pièces sont gardées.","“{1}” awaits. Your coins are kept.","«{1}» te espera. Conservas tus monedas."
+ambre.victory.title,"Victoire !","Victory!","¡Victoria!"
+ambre.victory,"Temps : {1}    Étoiles : {2} / {3}","Time: {1}    Stars: {2} / {3}","Tiempo: {1}    Estrellas: {2} / {3}"
+ambre.record,"Nouveau record !","New record!","¡Nuevo récord!"
+ambre.best,"Meilleure partie : {1}","Best run: {1}","Mejor partida: {1}"
+ambre.shop.title,"{1} — terminée","{1} — cleared","{1} — superada"
+ambre.results,"Temps : {1}    Pièces au sol : {2} / {3}    {4}","Time: {1}    Floor coins: {2} / {3}    {4}","Tiempo: {1}    Monedas: {2} / {3}    {4}"
+ambre.newStars,"Nouvelles étoiles !","New stars!","¡Nuevas estrellas!"
+ambre.bank,"Le marchand : vous avez {1} pièces","The merchant: you have {1} coins","El mercader: tienes {1} monedas"
+ambre.buy.heart,"Cœurs max : {1} → {2}","Max hearts: {1} → {2}","Corazones máx.: {1} → {2}"
+ambre.buy.sword,"Force de l'épée : {1} → {2}","Sword power: {1} → {2}","Fuerza de la espada: {1} → {2}"
+ambre.buy.dash,"Roulade : recharge {1} s → {2} s","Dodge cooldown: {1} s → {2} s","Rodar: recarga {1} s → {2} s"
+ambre.buy.potion,"Potion de garde (1 coup bloqué)","Guard potion (blocks 1 hit)","Poción de guardia (bloquea 1 golpe)"
+ambre.cost,"{1} pièces","{1} coins","{1} monedas"
+ambre.max,"Maximum","Maxed","Máximo"
+ambre.owned,"Achetée","Bought","Comprada"
+ambre.sign.move,"Déplacez-vous : flèches, ZQSD ou le stick. Saut : Espace ou « Saut ».","Move: arrows, WASD or the stick. Jump: Space or “Jump”.","Muévete: flechas, WASD o el stick. Saltar: Espacio o «Saltar»."
+ambre.sign.attack,"Épée : J ou « Épée ». Roulade (invulnérable) : Maj ou « Roulade ». Brisez les jarres !","Sword: J or “Sword”. Dodge (invulnerable): Shift or “Dodge”. Break the pots!","Espada: J o «Espada». Rodar (invulnerable): Mayús o «Rodar». ¡Rompe las vasijas!"
+ambre.sign.gems,"Trois gemmes d'ambre ouvrent la grille de sortie, à droite.","Three amber gems open the exit gate on the right.","Tres gemas de ámbar abren la reja de salida, a la derecha."
+ambre.sign.spikes,"Les pics tremblent avant de sortir : passez entre deux.","Spikes tremble before they rise: cross between them.","Los pinchos tiemblan antes de salir: cruza entre ellos."
+ambre.sign.jump,"Sautez de pierre en pierre. Une chute coûte un cœur.","Jump from stone to stone. A fall costs a heart.","Salta de piedra en piedra. Una caída cuesta un corazón."
+ambre.sign.plates,"Chaque dalle inverse elle-même et ses voisines. Allumez les quatre !","Each plate flips itself and its neighbours. Light all four!","Cada losa invierte su estado y el de sus vecinas. ¡Enciende las cuatro!"

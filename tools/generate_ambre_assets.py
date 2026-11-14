@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates the original assets of "Les Ruines d'Ambre" (AGR ENGINE 2.5D game template):
-blob shadow, sword slash arc and sparkle sprites (assets/games/) and its sounds and music
-(assets/audio/). Everything is drawn / synthesized here; deterministic (fixed seeds).
+sprites (shadow, slash, sparkle, amber gem, skeleton archer, stone brute, pot, chests, sign,
+spikes, pressure plate, arrow, boulder) in assets/games/, sounds and music in assets/audio/. Everything is drawn / synthesized here; deterministic (fixed seeds).
 Only writes the files listed below (never touches the other template assets).
 
     python3 tools/generate_ambre_assets.py      # requires Pillow
@@ -82,6 +82,174 @@ def sparkle():
             a = min(1.0, star + glow)
             px[x, y] = (255, 255, 255, int(255 * a))
     img.save(os.path.join(GAMES, "sparkle.png"), optimize=True)
+
+
+
+
+# ---- characters and props (drawn at 4x then downsampled, same outline style as the other templates)
+SS = 4
+OUTLINE = (34, 30, 44, 255)
+
+
+def cv(w, h=None):
+    h = h or w
+    img = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    return img, ImageDraw.Draw(img)
+
+
+def put(img, name):
+    w, h = img.size
+    img.resize((w // SS, h // SS), Image.LANCZOS).save(os.path.join(GAMES, name + ".png"), optimize=True)
+
+
+def sh(c, k, a=None):
+    return tuple(max(0, min(255, int(v * k))) for v in c[:3]) + (a if a is not None else (c[3] if len(c) > 3 else 255),)
+
+
+def el(d, cx, cy, rx, ry, fill, outline=None, width=0):
+    d.ellipse([(cx - rx) * SS, (cy - ry) * SS, (cx + rx) * SS, (cy + ry) * SS], fill=fill, outline=outline, width=width * SS)
+
+
+def rc(d, x0, y0, x1, y1, fill, r=0, outline=None, width=0):
+    d.rounded_rectangle([x0 * SS, y0 * SS, x1 * SS, y1 * SS], radius=r * SS, fill=fill, outline=outline, width=width * SS)
+
+
+def pg(d, pts, fill, outline=None, width=0):
+    d.polygon([(x * SS, y * SS) for x, y in pts], fill=fill, outline=outline, width=width * SS)
+
+
+def ln(d, pts, fill, width):
+    d.line([(x * SS, y * SS) for x, y in pts], fill=fill, width=width * SS, joint="curve")
+
+
+def amber():
+    img, d = cv(64)
+    c = (255, 160, 40, 255)
+    pg(d, [(32, 3), (54, 20), (48, 50), (32, 61), (16, 50), (10, 20)], c, OUTLINE, 3)
+    pg(d, [(32, 3), (42, 20), (38, 50), (32, 61), (26, 50), (22, 20)], sh(c, 1.18))
+    pg(d, [(10, 20), (54, 20), (42, 20), (32, 3), (22, 20)], (255, 225, 140, 255))
+    el(d, 24, 14, 4, 3, (255, 250, 220, 230))
+    put(img, "amber")
+
+
+def archer():  # skeleton archer
+    img, d = cv(128)
+    bone = (232, 226, 205, 255)
+    cloth = (120, 60, 70, 255)
+    rc(d, 50, 94, 58, 122, bone, r=3, outline=OUTLINE, width=2)     # legs
+    rc(d, 70, 94, 78, 122, bone, r=3, outline=OUTLINE, width=2)
+    pg(d, [(44, 60), (84, 60), (90, 100), (38, 100)], cloth, OUTLINE, 3)  # tunic
+    for y in (68, 76, 84):
+        ln(d, [(54, y), (74, y)], sh(cloth, 0.7), 2)
+    el(d, 64, 40, 22, 21, bone, OUTLINE, 3)                          # skull
+    rc(d, 52, 52, 76, 64, bone, r=4, outline=OUTLINE, width=2)
+    el(d, 55, 40, 6, 7, (40, 20, 30, 255))
+    el(d, 73, 40, 6, 7, (40, 20, 30, 255))
+    el(d, 55, 40, 2.5, 2.5, (255, 90, 60, 255))
+    el(d, 73, 40, 2.5, 2.5, (255, 90, 60, 255))
+    for x in (58, 64, 70):
+        ln(d, [(x, 56), (x, 63)], OUTLINE, 1)
+    d.arc([86 * SS, 36 * SS, 122 * SS, 112 * SS], 270, 90, fill=(130, 85, 45, 255), width=6 * SS)  # bow
+    ln(d, [(104, 37), (104, 111)], (240, 240, 240, 255), 1)
+    ln(d, [(84, 74), (104, 74)], bone, 5)                            # arm
+    put(img, "archer")
+
+
+def brute():  # stone golem
+    img, d = cv(128)
+    stone = (130, 125, 120, 255)
+    rc(d, 34, 92, 56, 124, sh(stone, 0.85), r=6, outline=OUTLINE, width=3)
+    rc(d, 72, 92, 94, 124, sh(stone, 0.85), r=6, outline=OUTLINE, width=3)
+    rc(d, 26, 40, 102, 100, stone, r=18, outline=OUTLINE, width=4)
+    rc(d, 6, 48, 30, 100, sh(stone, 0.9), r=10, outline=OUTLINE, width=3)
+    rc(d, 98, 48, 122, 100, sh(stone, 0.9), r=10, outline=OUTLINE, width=3)
+    rc(d, 44, 14, 84, 46, sh(stone, 1.08), r=10, outline=OUTLINE, width=3)
+    rc(d, 50, 26, 78, 34, (40, 30, 30, 255), r=3)
+    el(d, 57, 30, 4, 3, (255, 150, 40, 255))
+    el(d, 71, 30, 4, 3, (255, 150, 40, 255))
+    for a, b in (((40, 56), (54, 70)), ((80, 52), (90, 66)), ((60, 78), (72, 90))):
+        ln(d, [a, b], sh(stone, 0.6), 3)
+    pg(d, [(58, 62), (70, 62), (64, 74)], (255, 170, 60, 255))     # amber core
+    put(img, "brute")
+
+
+def pot():
+    img, d = cv(96)
+    clay = (190, 110, 70, 255)
+    el(d, 48, 60, 30, 30, clay, OUTLINE, 3)
+    rc(d, 34, 20, 62, 36, sh(clay, 0.9), r=4, outline=OUTLINE, width=3)
+    el(d, 48, 22, 16, 5, sh(clay, 0.6))
+    ln(d, [(22, 60), (74, 60)], sh(clay, 0.75), 3)
+    ln(d, [(26, 70), (70, 70)], (230, 180, 90, 255), 2)
+    el(d, 38, 48, 6, 9, sh(clay, 1.3, 180))
+    put(img, "pot")
+
+
+def chest(opened):
+    img, d = cv(128)
+    wood = (150, 95, 50, 255)
+    gold = (240, 190, 60, 255)
+    rc(d, 18, 62, 110, 112, wood, r=6, outline=OUTLINE, width=3)
+    for x in (18, 56, 72, 104):
+        rc(d, x, 62, x + 6, 112, gold, r=1)
+    if opened:
+        pg(d, [(18, 62), (110, 62), (100, 28), (28, 28)], sh(wood, 0.6), OUTLINE, 3)
+        el(d, 64, 60, 36, 8, (255, 220, 90, 255))
+        for i in range(7):
+            el(d, 36 + i * 9, 56 - (i % 2) * 4, 5, 4, (255, 230, 120, 255), OUTLINE, 1)
+    else:
+        d.chord([18 * SS, 30 * SS, 110 * SS, 94 * SS], 180, 360, fill=sh(wood, 1.1), outline=OUTLINE, width=3 * SS)
+        rc(d, 56, 54, 72, 74, gold, r=3, outline=OUTLINE, width=2)
+        el(d, 64, 63, 3, 4, OUTLINE)
+    put(img, "chest_open" if opened else "chest")
+
+
+def sign():
+    img, d = cv(96)
+    wood = (170, 120, 70, 255)
+    rc(d, 44, 46, 52, 92, sh(wood, 0.75), r=2, outline=OUTLINE, width=2)
+    rc(d, 12, 12, 84, 54, wood, r=6, outline=OUTLINE, width=3)
+    for y in (24, 33, 42):
+        ln(d, [(22, y), (74 - (y % 3) * 6, y)], sh(wood, 0.55), 3)
+    put(img, "sign")
+
+
+def spikes():
+    img, d = cv(128, 96)
+    steel = (200, 205, 215, 255)
+    for i in range(5):
+        x = 14 + i * 25
+        pg(d, [(x - 11, 88), (x, 10 + (i % 2) * 10), (x + 11, 88)], steel, OUTLINE, 3)
+        pg(d, [(x, 10 + (i % 2) * 10), (x + 11, 88), (x + 3, 88)], sh(steel, 0.75))
+    rc(d, 0, 84, 128, 96, (80, 80, 90, 255), r=2, outline=OUTLINE, width=2)
+    put(img, "spikes")
+
+
+def plate():  # pressure plate seen from above (lit by the game's tint)
+    img, d = cv(128)
+    el(d, 64, 64, 58, 58, (95, 90, 85, 255), OUTLINE, 4)
+    el(d, 64, 64, 46, 46, (150, 145, 135, 255), OUTLINE, 2)
+    for a in range(6):
+        t = a * math.pi / 3
+        ln(d, [(64 + 18 * math.cos(t), 64 + 18 * math.sin(t)), (64 + 36 * math.cos(t), 64 + 36 * math.sin(t))], (255, 255, 255, 255), 4)
+    el(d, 64, 64, 12, 12, (255, 255, 255, 255))
+    put(img, "plate")
+
+
+def arrow():
+    img, d = cv(96, 24)
+    ln(d, [(10, 12), (80, 12)], (150, 100, 55, 255), 4)
+    pg(d, [(76, 4), (94, 12), (76, 20)], (210, 215, 225, 255), OUTLINE, 2)
+    pg(d, [(4, 4), (18, 12), (4, 20), (12, 12)], (230, 80, 70, 255))
+    put(img, "arrow")
+
+
+def rock():
+    img, d = cv(96)
+    c = (140, 110, 90, 255)
+    pg(d, [(20, 70), (14, 44), (34, 18), (64, 14), (84, 38), (80, 70), (52, 84)], c, OUTLINE, 3)
+    pg(d, [(34, 18), (64, 14), (60, 40), (36, 40)], sh(c, 1.25))
+    put(img, "boulder")
 
 
 # ---- audio
@@ -236,6 +404,17 @@ if __name__ == "__main__":
     sparkle()
     disc("disc", False)
     disc("ring", True)
+    amber()
+    archer()
+    brute()
+    pot()
+    chest(False)
+    chest(True)
+    sign()
+    spikes()
+    plate()
+    arrow()
+    rock()
     write("swing.wav", swing())
     write("hit.wav", hit())
     write("hurt.wav", hurt())
