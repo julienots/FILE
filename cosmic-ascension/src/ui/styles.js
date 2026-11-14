@@ -175,6 +175,13 @@ export const CSS2 = `
 .cx .g{position:absolute;left:1.6vmin;top:1.4vmin;font-size:5.5vmin;color:var(--neo);text-shadow:0 0 1.4vmin var(--neo)}.cx b{display:block;font-size:2.7vmin}.cx small{display:block;font-size:2vmin;opacity:.75}
 .cx.unk{opacity:.4}.cx.unk .g{color:#888;text-shadow:none}.cx.r-rare{border-color:rgba(255,60,200,.6)}.cx.r-rare .g{color:var(--neo2);text-shadow:0 0 1.4vmin var(--neo2)}
 .cx.r-leg{border-color:rgba(255,204,58,.7);box-shadow:0 0 1.4vmin rgba(255,204,58,.25)}.cx.r-leg .g{color:var(--neo3);text-shadow:0 0 1.4vmin var(--neo3)}
+.galaxy{display:flex;gap:2vmin;align-items:stretch}.gmap{flex:1;min-width:0;max-height:56vh;background:radial-gradient(ellipse,rgba(40,20,80,.35),rgba(0,0,0,.6));border:.2vmin solid rgba(63,240,255,.25);border-radius:1vmin}
+.gsys{font-size:22px;font-weight:700;letter-spacing:4px;text-anchor:middle;opacity:.8}.gname{font-size:18px;fill:#dfe6ff;text-anchor:middle;font-weight:600}
+.gp{cursor:pointer}.gp circle{stroke-width:3;filter:drop-shadow(0 0 6px rgba(63,240,255,.5))}.gp.unk{opacity:.35;cursor:default}.gp.here circle{stroke:#ffcc3a;stroke-width:5}
+.gring{fill:none;stroke:#ffcc3a;stroke-width:3;stroke-dasharray:8 6;animation:spin 6s linear infinite;transform-box:fill-box;transform-origin:center}
+.ginfo{width:34vmin;flex:none;display:flex;flex-direction:column;gap:1vmin;font-size:2.4vmin}.ginfo b{font-size:3.6vmin;text-transform:uppercase;letter-spacing:.12em;color:var(--neo)}.ginfo p{margin:0;opacity:.85}.ginfo small{opacity:.7}
+.ginfo .cbtn{margin-top:auto;font-size:2.8vmin;padding:1.4vmin 2vmin}
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes hitFlash{0%{box-shadow:inset 0 0 14vmin rgba(255,40,80,.85)}100%{box-shadow:inset 0 0 0 rgba(255,40,80,0)}}
 @keyframes lowPulse{50%{box-shadow:inset 0 0 18vmin rgba(255,40,80,.7)}}
 @keyframes shake{20%{transform:translateX(-52%)}40%{transform:translateX(-48%)}60%{transform:translateX(-51%)}80%{transform:translateX(-49%)}}
