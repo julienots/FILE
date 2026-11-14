@@ -26,6 +26,7 @@ struct CameraRigIn {
     float dt = 0;
     float prevCollisionDist = -1;   // < 0: none yet
     float prevLift = 0;
+    float smooth = 1.f;             // > 1: faster settling (tight camera)
 };
 
 struct CameraRigOut {

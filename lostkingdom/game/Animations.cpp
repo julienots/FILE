@@ -50,6 +50,10 @@ static const GaitKey RUN_HIP[] = {{0.f, 28}, {0.2f, 6}, {0.38f, -16}, {0.5f, -8}
 static const GaitKey RUN_KNEE[] = {{0.f, 14}, {0.12f, 30}, {0.38f, 12}, {0.6f, 100}, {0.72f, 112}, {0.9f, 34}};
 static const GaitKey RUN_ANKLE[] = {{0.f, -6}, {0.12f, -12}, {0.38f, 25}, {0.6f, 10}, {0.85f, -5}};
 #define GK(a) a, (int)(sizeof(a) / sizeof(a[0]))
+#ifndef SWORD_REST_HAND_PITCH
+#define SWORD_REST_HAND_PITCH 15.f
+#define SWORD_REST_HAND_ROLL -22.f
+#endif
 
 // Swing direction of an attack clip (+1 / -1): sign of the chest's yaw change from the start to the end of
 // the hit window. Drives the hips' coil / uncoil so the body follows the blade. Cached per clip.
@@ -112,6 +116,18 @@ static void humanLoco(const Animator& a, Pose& p) {
         }
     }
     float atkW = std::max(atkWind, atkStrike);
+    // Leg spread of the character's own bind pose (imported models are generated with their legs apart): the thigh
+    // roll removes it so the feet land under the hips, and a little closer when walking (1.6.2 "legs apart" fix).
+    float splay[2] = {0, 0};
+    if (a.skeleton && a.skeleton->size() > H_FOOTR) {
+        for (int s = 0; s < 2; s++) {
+            vec3 th = a.skeleton->bones[s ? H_THIGHR : H_THIGHL].bindWorld, ft = a.skeleton->bones[s ? H_FOOTR : H_FOOTL].bindWorld;
+            // feet aim for a natural track: ~10 cm from the midline when walking, ~13 cm standing (imported models
+            // can have their hips 20 cm out with vertical legs, i.e. 45 cm between the feet)
+            float footX = std::fabs(ft.x), target = std::min(std::fabs(th.x), lerpf(0.13f, 0.10f, moving));
+            splay[s] = clampf(std::atan2(footX - target, std::max(0.1f, th.y - ft.y)) / DEG, -6.f, 12.f);
+        }
+    }
 
     // ---- pelvis: lowest at double support when walking, at mid-stance when running; sway over the stance leg
     float bobWalk = -0.028f * (0.5f + 0.5f * std::cos(4 * PI * uL));
@@ -155,9 +171,10 @@ static void humanLoco(const Animator& a, Pose& p) {
         // foot: kept level on the ground during stance (IK refines it), relaxed in swing, + ankle roll
         float level = -(thigh + kn) * lerpf(0.55f, 1.0f, stance);
         float foot = level + ank[s] * moving - crouch * 100 - aggressive * 10;
-        p.rot[th] = E(thigh, -(s ? -1.f : 1.f) * 6.f * guardW, (s ? -1.f : 1.f) * (2.f + idle * 1.5f + 4.f * guardW + freeLeg * 2.f));
+        float legRoll = 2.f + idle * 1.5f + 4.f * guardW + freeLeg * 2.f - splay[s] - 2.5f * moving;
+        p.rot[th] = E(thigh, -(s ? -1.f : 1.f) * 6.f * guardW, (s ? -1.f : 1.f) * legRoll);
         p.rot[sh] = E(kn, 0, 0);
-        p.rot[ft] = E(foot, 0, 0);
+        p.rot[ft] = E(foot, 0, -(s ? -1.f : 1.f) * legRoll * 0.8f);   // sole stays flat
         // arms: counter-swing driven by the opposite leg, elbows bend more when running
         int sl = s ? H_SHR : H_SHL, ua = s ? H_UARMR : H_UARML, la = s ? H_LARMR : H_LARML, hd = s ? H_HANDR : H_HANDL;
         float side = s ? -1.f : 1.f;
@@ -179,14 +196,18 @@ static void humanLoco(const Animator& a, Pose& p) {
     // the wrist counter-rotates the arm swing and elbow bend so the blade keeps a steady angle to the ground
     float swingR = hip[1] * lerpf(0.75f, 1.05f, runW) * moving;
     float elbowR = lerpf(14, 70, runW) * moving + 12 * idle;
-    quat relaxedR[3] = {p.rot[H_UARMR], E(-elbowR, 0, 0), E(lerpf(95, 70, runW) - swingR + elbowR * 0.6f, 10, 0)};
+    quat relaxedR[3] = {p.rot[H_UARMR], E(-elbowR, 0, 0), E(lerpf(74, 70, runW) - swingR + elbowR * 0.6f, 10, 0)};   // blade angled forward-down, clear of the ground
     // weapon stance overrides for the arms
     switch (a.stance) {
     case ST_ONEHAND: case ST_DAGGER: {
         bool dg = a.stance == ST_DAGGER;
         quat guard[3] = {dg ? E(-20, 0, -18) : E(-18 - 10 * runW + hip[1] * 0.3f * moving, 0, -14), dg ? E(-70, 0, 0) : E(-55 - 15 * runW, 0, 0), dg ? E(70, 0, 0) : E(20, 0, 0)};
         int bones[3] = {H_UARMR, H_LARMR, H_HANDR};
-        for (int i = 0; i < 3; i++) p.rot[bones[i]] = nlerp(relaxedR[i], guard[i], ready);
+        // 1.6.2: standing still out of combat, the sword rests on the shoulder (it used to hang with its tip in the
+        // ground); blended out as soon as the hero walks or an enemy comes near
+        float restW = dg ? 0.f : smoothstepf(0.4f, 0.95f, idle) * (1.f - ready);
+        quat shoulder[3] = {E(-28 + breath * 0.4f, 0, -18), E(-122, 0, 0), E(SWORD_REST_HAND_PITCH, 0, SWORD_REST_HAND_ROLL)};
+        for (int i = 0; i < 3; i++) p.rot[bones[i]] = nlerp(nlerp(relaxedR[i], shoulder[i], restW), guard[i], ready);
         break;
     }
     case ST_TWOHAND:

@@ -53,6 +53,17 @@ echo "== 3/5 link manifest + resources + assets"
   --min-sdk-version 26 --target-sdk-version 35 --version-code 9 --version-name 1.6.2 \
   -A assets -0 ogg -0 png -o "$OUT/unaligned.apk" "$OUT/res/compiled.zip"
 
+echo "== 3b/5 Java activity (system bars only) -> classes.dex"
+rm -rf "$OUT/java" && mkdir -p "$OUT/java/classes" "$OUT/java/dex"
+javac -source 11 -target 11 -Xlint:-options -classpath "$PLATFORM" -d "$OUT/java/classes" $(find android/src/main/java -name '*.java')
+"$BT/d8" --release --min-api 26 --lib "$PLATFORM" --output "$OUT/java/dex" $(find "$OUT/java/classes" -name '*.class')
+python3 - "$OUT" <<'PY'
+import sys, zipfile, os
+out = sys.argv[1]
+with zipfile.ZipFile(os.path.join(out, "unaligned.apk"), "a") as z:
+    z.write(os.path.join(out, "java", "dex", "classes.dex"), "classes.dex", compress_type=zipfile.ZIP_DEFLATED)
+PY
+
 echo "== 4/5 add native libraries (stored, 16 KB page aligned)"
 python3 - "$OUT" <<'PY'
 import sys, zipfile, os

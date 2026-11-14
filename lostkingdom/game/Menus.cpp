@@ -869,6 +869,7 @@ void Game::drawMenus(float dt) {
         toggle(u, {c.x, y, colW, 40}, "Tremblements de caméra", settings.cameraShake); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Inverser la caméra (horizontal)", settings.invertCamera); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Inverser l'axe vertical", settings.invertCameraY); y += 46;
+        toggle(u, {c.x, y, colW, 40}, "Caméra souple (suit avec retard)", settings.cameraSmooth); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Visée automatique", settings.autoTarget); y += 46;
         toggle(u, {c.x, y, colW, 40}, "Vibrations (retour haptique)", settings.haptics); y += 46;
         if (importedModel("hero") && toggle(u, {c.x, y, colW, 40}, "Héros 3D détaillé (armure fixe)", settings.importedHero)) { rebuildPlayerVisual(); saveSettings(); }

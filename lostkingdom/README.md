@@ -4,7 +4,7 @@
 
 <p align="center"><img src="branding/key_art.png" width="720" alt="LOST KINGDOM, key art"/></p>
 
-LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
+LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
 - **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.2 (versionCode 9). Taille : environ 23 Mo. SHA-256 : `136858c96cabb2650ee6bdb1a2388f663b39b0f96617b230c58d81deb6a9ec85`.
   - Les versions 1.6.1 et 1.6.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
@@ -33,6 +33,11 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 - **Modèles importés** :
   - jusqu'à 3 variantes par sexe pour les villageois (`villager_m`, `villager_m2`, `villager_m3`, et de même pour `villager_f`), tirées au hasard pour chaque villageois ;
   - guide des prompts Tripo : `docs/TRIPO_PROMPTS.md`.
+- **Corrections après les retours sur téléphone.**
+  - **Barre de navigation Android enfin masquée.** Elle restait affichée depuis la 1.0 : le code natif tentait de la masquer depuis le fil du jeu, alors qu'Android l'exige depuis le fil de l'interface (l'erreur était avalée). Une petite classe Java, `android/src/main/java/.../GameActivity.java`, seul code Java du jeu, masque la barre d'état et la barre de navigation au démarrage et à chaque retour au jeu. Un glissement depuis le bord les fait apparaître un instant. L'APK contient donc maintenant un `classes.dex`, compilé par `build_apk.sh` (toujours sans Gradle).
+  - **L'épée ne se plante plus dans le sol à l'arrêt.** Au repos, hors combat, le héros pose l'épée sur l'épaule. En marchant, la lame est tenue à 45° vers l'avant. Un garde-fou relève le poignet si la pointe d'une arme devait passer sous le terrain (pentes, marches). Le scénario `anim` vérifie que la pointe reste au-dessus du sol par la seule animation, au repos, en marche et au trot.
+  - **Jambes moins écartées vues de dos.** Le modèle importé du héros a ses hanches à ±20 cm, jambes verticales, soit environ 45 cm entre les pieds. Les pieds sont ramenés vers l'axe (environ 10 cm du centre en marchant, 13 cm au repos), semelles à plat.
+  - **Caméra « fixe ».** Par défaut, elle suit maintenant le héros sans retard ni avance : plus d'anticipation dans le sens de la course, et des corrections de zoom et de hauteur plus rapides. L'ancien comportement reste disponible : **Réglages → Caméra souple**. Le scénario `camera` vérifie que, par défaut, la caméra reste à moins de 0,45 m du héros en plein sprint.
 - **Limites.**
   - Les animations restent écrites en code (procédurales), pas en capture de mouvement.
   - Le jeu ne sait pas encore importer les animations fournies par Tripo.
@@ -333,6 +338,7 @@ Légende :
 Prérequis :
 - Android SDK avec build-tools 35, platforms/android-35 et cmake ;
 - NDK r26 ou plus récent ;
+- un JDK (javac, version 11 ou plus) pour la petite classe Java des barres système ;
 - Python 3.
 
 ```bash
@@ -341,7 +347,7 @@ ANDROID_SDK=/chemin/vers/android-sdk ./build_apk.sh
 # -> build/apk/LOST-KINGDOM-SUPERESSENCE.apk
 ```
 
-- Le script n'utilise **pas Gradle**. Il enchaîne : CMake et NDK pour chaque ABI, `aapt2 compile/link`, ajout des bibliothèques stockées, `zipalign -P 16`, puis `apksigner`.
+- Le script n'utilise **pas Gradle**. Il enchaîne : CMake et NDK pour chaque ABI, `aapt2 compile/link`, `javac` et `d8` (une classe Java), ajout des bibliothèques stockées, `zipalign -P 16`, puis `apksigner`.
 - **Signature** : définissez `LK_KEYSTORE`, `LK_KEYSTORE_PASSWORD` et `LK_KEY_ALIAS` pour utiliser votre clé. Sinon, une clé locale est générée dans `keystore/`, qui est ignoré par git. Les clés ne doivent jamais être commitées.
 - **ABIs** : par défaut `ABIS="arm64-v8a armeabi-v7a x86_64"`.
 - **Installation** : `adb install -r build/apk/LOST-KINGDOM-SUPERESSENCE.apk`.
@@ -393,7 +399,7 @@ lostkingdom/
     AutoPlay.cpp     bot de test
   tests/             tests unitaires et prévisualisations
   tools/             génération des polices, de l'UI, de l'audio et de l'identité visuelle
-  android/           manifeste et ressources
+  android/           manifeste, ressources, GameActivity.java (barres système)
   assets/            polices, UI, audio (empaquetés dans l'APK)
   branding/          logos, icônes, key art
 ```

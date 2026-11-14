@@ -48,6 +48,7 @@ struct Visual {
     bool footIK = true;
     float pelvisAdj = 0;
     bool visible = true;
+    float tipClearRaw = 1.f, tipClear = 1.f;   // weapon tip height above the ground before / after the clearance fix (m)
     // weapon trail
     std::deque<std::pair<vec3, vec3>> trail;   // base, tip (world)
     std::shared_ptr<Mesh> trailMesh;
@@ -239,7 +240,7 @@ struct Settings {
     QualityProfile profile = QualityProfile::High;
     float master = 0.9f, music = 0.6f, sfx = 0.9f, ambience = 0.7f;
     float camSensitivity = 1.f, joystickDeadzone = 0.12f;
-    bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false, invertCameraY = false;
+    bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false, invertCameraY = false, cameraSmooth = false;
     float uiScale = 1.f;
     ControlLayout layout;
     bool chromatic = false;

@@ -102,14 +102,44 @@ static std::vector<Step> scenario(const std::string& name) {
             spot = g.pc().pos; g.timeOfDay = 12.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
             g.addItem("sword_knight", 1, Rarity::Epic);
             for (int i = (int)g.inventory.size() - 1; i >= 0; i--) if (g.inventory[i].id == "sword_knight") { g.equip(i); break; }
+            const Skeleton& sk = *g.pc().vis.anim.skeleton;
+            for (int b : {H_ROOT, H_THIGHL, H_SHINL, H_FOOTL, H_THIGHR, H_SHINR, H_FOOTR, H_SHL, H_SHR})
+                AGR_LOG("ANIM bind %d: (%.3f, %.3f, %.3f)", b, sk.bones[b].bindWorld.x, sk.bones[b].bindWorld.y, sk.bones[b].bindWorld.z);
         }, [hold](Game& g, float) { hold(g, vec2(0, 0), false); }, "setup"});
+        static float minRaw[4], minFixed[4];
         struct G { const char* name; vec2 move; bool sprint; };
         static const G gaits[] = {{"C0_idle", {0, 0}, false}, {"C1_walk", {0.5f, 0}, false}, {"C2_jog", {1, 0}, false}, {"C3_sprint", {1, 0}, true}};
-        for (const G& gg : gaits) {
-            s.push_back({1.5f, none, [hold, gg](Game& g, float) { hold(g, gg.move, gg.sprint); }, "settle"});
+        // idle seen from the front (3/4) as well: shoulder rest of the sword
+        s.push_back({1.5f, none, [hold](Game& g, float) { hold(g, vec2(0, 0), false); g.pc().yaw = PI * 0.5f + 0.5f; }, "settle front"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/C9_idle_front.png"); }, [hold](Game& g, float) { hold(g, vec2(0, 0), false); g.pc().yaw = PI * 0.5f + 0.5f; }, "shot"});
+        for (int gi = 0; gi < 4; gi++) {
+            const G gg = gaits[gi];
+            s.push_back({1.5f, [gi](Game&) { minRaw[gi] = minFixed[gi] = 9.f; }, [hold, gg](Game& g, float) { hold(g, gg.move, gg.sprint); }, "settle"});
             for (int k = 0; k < 8; k++) {
                 char* f = new char[48]; snprintf(f, 48, "build/shots/%s_%d.png", gg.name, k);
-                s.push_back({gg.move.x > 0 ? 0.1f : 0.4f, [f](Game& g) { g.requestScreenshot(f); }, [hold, gg](Game& g, float) { hold(g, gg.move, gg.sprint); }, "shot"});
+                s.push_back({gg.move.x > 0 ? 0.1f : 0.4f, [f](Game& g) { g.requestScreenshot(f); }, [hold, gg, gi](Game& g, float) {
+                    hold(g, gg.move, gg.sprint);
+                    minRaw[gi] = std::min(minRaw[gi], g.pc().vis.tipClearRaw); minFixed[gi] = std::min(minFixed[gi], g.pc().vis.tipClear); }, "shot"});
+            }
+        }
+        s.push_back({0.05f, [](Game&) {
+            // the sword must stay clear of the ground by itself at rest, walking and jogging (the clearance fix is a
+            // safety net, not the animation); with the fix, never below the ground in any gait
+            bool ok = true;
+            for (int i = 0; i < 4; i++) {
+                AGR_LOG("ANIM sword tip clearance %s: animation %.2f m, after fix %.2f m", gaits[i].name, minRaw[i], minFixed[i]);
+                if (minFixed[i] < 0.f) ok = false;
+                if (i < 3 && minRaw[i] < 0.02f) ok = false;
+            }
+            AGR_LOG("ANIM TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        // walking and jogging seen from behind (leg spacing)
+        for (int b = 0; b < 2; b++) {
+            float mv = b ? 1.f : 0.5f;
+            s.push_back({1.2f, none, [hold, mv](Game& g, float) { hold(g, vec2(0, 0), false); g.input.move = vec2(0, mv); g.camYaw = 0.f; g.camPitch = 0.25f; }, "settle back"});
+            for (int k = 0; k < 4; k++) {
+                char* f = new char[48]; snprintf(f, 48, "build/shots/C%d_back_%d.png", 6 + b, k);
+                s.push_back({0.12f, [f](Game& g) { g.requestScreenshot(f); }, [hold, mv](Game& g, float) { hold(g, vec2(0, 0), false); g.input.move = vec2(0, mv); g.camYaw = 0.f; g.camPitch = 0.25f; }, "shot"});
             }
         }
         // light combo and heavy attack, 6 frames each
@@ -249,7 +279,7 @@ static std::vector<Step> scenario(const std::string& name) {
     if (name == "camera") {
         // Free camera (1.6.0): pitch x zoom grid with screenshots, then touch-driven checks (vertical drag,
         // inverted axis, pinch, double-tap reset), automatic return, look-ahead, lock-on framing, collision.
-        static int res[12]; static int gridBad; static float v0, yawStart;
+        static int res[13]; static int gridBad; static float v0, yawStart, tightMax;
         static vec3 wallPt; static bool wallFound;
         auto check = [](Game& g, const char* what) {
             vec3 e = g.cam.pos; float gy = g.dungeon.active ? g.groundAt(e.x, e.z) : g.world.height(e.x, e.z);
@@ -303,8 +333,13 @@ static std::vector<Step> scenario(const std::string& name) {
                      [camPt](Game& g, float t) { static bool second; if (t < 0.05f) second = false; if (t > 0.15f && !second) { second = true; tapAt(g, camPt(g) + vec2(8, 5), 308); } }, "double tap"});
         s.push_back({0.04f, [](Game& g) { res[4] = std::fabs(g.camPitch - 0.66f) < 0.06f && std::fabs(g.camDistTarget - 15.5f) < 0.8f; AGR_LOG("CAMERA double tap reset: pitch %.2f zoom %.1f", g.camPitch, g.camDistTarget); }, idle, "check reset"});
         // automatic return of the pitch while running (no touch for > 4 s), and the look-ahead
-        s.push_back({9.f, [](Game& g) { g.camPitch = 1.3f; g.camIdleT = 0; }, [](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; if (t > 4.f && t < 6.f && length(g.camLookAhead) > 1.f) res[6] = 1; }, "run (auto return)"});
+        s.push_back({9.f, [](Game& g) { g.camPitch = 1.3f; g.camIdleT = 0; g.settings.cameraSmooth = true; }, [](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; if (t > 4.f && t < 6.f && length(g.camLookAhead) > 1.f) res[6] = 1; }, "run (auto return)"});
         s.push_back({0.04f, [](Game& g) { res[5] = g.camPitch < 1.1f && g.camPitch > 1.f; AGR_LOG("CAMERA auto return: pitch %.2f, look-ahead %.2f m", g.camPitch, length(g.camLookAhead)); g.requestScreenshot("build/shots/92_cam_run_lookahead.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; }, "check return"});
+        // default (tight) camera: locked on the hero while sprinting, no lag, no lead
+        s.push_back({2.5f, [](Game& g) { g.settings.cameraSmooth = false; g.camPitch = 0.66f; tightMax = 0; }, [](Game& g, float t) {
+            g.input.move = vec2(0, 1); g.input.sprint = true; g.stamina = g.maxStamina;
+            if (t > 1.f) tightMax = std::max(tightMax, distXZ(g.camFocus, g.pc().pos)); }, "sprint (tight camera)"});
+        s.push_back({0.04f, [](Game& g) { res[12] = tightMax < 0.45f; AGR_LOG("CAMERA tight follow: max focus offset while sprinting %.2f m", tightMax); }, idle, "check tight"});
         // lock-on: hero and target both framed
         s.push_back({2.5f, [](Game& g) { Character& c = g.pc(); vec3 p = c.pos + vec3(9, 0, 6); p.y = g.world.groundHeight(p.x, p.z); Entity e = g.spawnEnemy(enemyIndex("wolf"), p); g.lockTarget = e; g.camIdleT = 2.f; g.camYaw += 1.6f; }, idle, "lock-on"});
         s.push_back({0.04f, [check](Game& g) {
@@ -352,8 +387,8 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.5f, [](Game& g) { if (g.dungeon.active) g.exitDungeon(); }, idle, "exit dungeon"});
         s.push_back({0.1f, [](Game& g) {
             res[9] = gridBad == 0;
-            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d axisLock=%d",
-                    res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10], res[11]);
+            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d axisLock=%d tightFollow=%d",
+                    res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10], res[11], res[12]);
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("CAMERA TEST %s", ok ? "PASSED" : "FAILED");
             g.camPitch = 0.66f;

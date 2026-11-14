@@ -12,7 +12,8 @@ void Game::updateCamera(float dt) {
     float distMin = CameraRig::DIST_MIN;
     if (playing) {
         Character& p = pc();
-        vec3 lead = vec3(p.vel.x, 0, p.vel.z) * 0.25f;
+        // "Caméra souple" (option): leads the hero a little in his running direction. Default: locked on the hero.
+        vec3 lead = settings.cameraSmooth ? vec3(p.vel.x, 0, p.vel.z) * 0.25f : vec3(0);
         target = p.pos + vec3(0, 1.1f, 0) + lead;
         // ---- player input: drag = yaw / pitch, pinch = zoom (multiplicative: same feel near and far)
         bool touched = input.camDrag.x != 0 || input.camDrag.y != 0 || input.pinch != 0;
@@ -51,7 +52,7 @@ void Game::updateCamera(float dt) {
         // look ahead: only when sprinting, slowly (zig-zags must not swing the camera)
         float runK = smoothstepf(5.5f, 7.f, hs) * (p.attackClip ? 0.f : 1.f);
         vec3 ahead = hs > 0.1f ? vec3(p.vel.x / hs, 0, p.vel.z / hs) * 1.5f * runK : vec3(0);
-        camLookAhead = damp(camLookAhead, ahead, 1.2f, dt);
+        camLookAhead = damp(camLookAhead, settings.cameraSmooth ? ahead : vec3(0), 1.2f, dt);
     } else {
         // title / credits: slow cinematic fly-over above Greenhaven
         titleCamT += dt;
@@ -63,12 +64,13 @@ void Game::updateCamera(float dt) {
         camPitch = CameraRig::PITCH_DEFAULT;
         camLookAhead = vec3(0);
     }
-    camFocus = damp(camFocus, target, state == GameState::Playing ? 7.f : 1.5f, dt);
+    // 1.6.2: the camera follows the hero tightly by default (players found the floaty follow "bizarre")
+    camFocus = damp(camFocus, target, state == GameState::Playing ? (settings.cameraSmooth ? 7.f : 22.f) : 1.5f, dt);
     if (length2(camFocus - target) > 60 * 60) camFocus = target;  // teleports
     // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
     // for the overworld)
     float distCap = dungeon.active ? 16.f : CameraRig::DIST_MAX;
-    camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), 4.f, dt);
+    camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), settings.cameraSmooth ? 4.f : 10.f, dt);
 
     CameraRigIn ri;
     ri.focus = camFocus; ri.lookAhead = camLookAhead;
@@ -87,6 +89,7 @@ void Game::updateCamera(float dt) {
     camRigFocusPrev = camFocus;
     ri.dt = (playing && !jump) ? dt : 0.f;
     ri.prevCollisionDist = camRig.collisionDist; ri.prevLift = camRig.lift;
+    ri.smooth = settings.cameraSmooth ? 1.f : 2.5f;   // tight mode: terrain lift / wall back-out settle 2.5x faster
     camRig = CameraRig::compute(ri);
     vec3 eye = camRig.eye, look = camRig.look;
     if (cinematicT > 0) {
@@ -357,6 +360,7 @@ void Game::renderCharacter(Entity e, Character& c) {
     // ---- foot IK: plant feet on uneven ground (humanoids walking / idle)
     const Skeleton& sk = *v.anim.skeleton;
     computeWorld(sk, v.anim.pose, v.pw);
+    Pose fpose = v.anim.pose;   // final pose (foot IK, look-at, weapon clearance)
     if (v.arch == Arch::Humanoid && v.footIK && c.grounded && !c.swimming && !c.dead && v.anim.state == BodyState::Locomotion && distXZ(c.pos, camFocus) < 30.f) {
         mat4 inv = model.inverse();
         float offs[2]; vec3 targets[2];
@@ -369,7 +373,7 @@ void Game::renderCharacter(Entity e, Character& c) {
         }
         float pelvis = std::min(0.f, std::min(offs[0], offs[1]));
         v.pelvisAdj = damp(v.pelvisAdj, pelvis, 12.f, 1.f / 60.f);
-        Pose p = v.anim.pose;
+        Pose& p = fpose;
         p.rootOffset.y += v.pelvisAdj / v.scale;
         computeWorld(sk, p, v.pw);
         twoBoneIK(sk, p, v.pw, H_THIGHL, H_SHINL, H_FOOTL, inv.transformPoint(targets[0]), model.inverse().transformDir(vec3(std::sin(c.yaw), 0, std::cos(c.yaw))) + vec3(0, 0, 0.5f), 0.9f);
@@ -382,6 +386,33 @@ void Game::renderCharacter(Entity e, Character& c) {
             vec3 tp = lc ? lc->pos + vec3(0, lc->height * 0.9f, 0) : vec3(0);
             if (!lc) { NodeComp* n = reg.get<NodeComp>(look); if (n) tp = n->node.pos + vec3(0, 0.5f, 0); }
             lookAtIK(sk, p, v.pw, H_HEAD, inv.transformPoint(tp), {0, 0, 1}, 0.9f, 0.8f);
+        }
+    }
+    // ---- weapon clearance (1.6.2): a blade / spear tip never sinks into the ground. If the animated pose puts
+    // the tip below the terrain (idle carry, slopes, steps, guards), the wrist lifts it just enough.
+    if (v.arch == Arch::Humanoid && v.weapon && !c.dead && !c.swimming && v.anim.state != BodyState::Mounted && v.tip > 0.3f) {
+        bool bow = v.wt == WeaponType::Bow || v.wt == WeaponType::Crossbow;
+        int pb = bow ? H_PROPL : H_PROPR, hand = bow ? H_HANDL : H_HANDR;
+        for (int it = 0; it < 4; it++) {
+            vec3 tipM = v.pw.world[pb].transformPoint(vec3(0, 0, v.tip));
+            vec3 tipW = model.transformPoint(tipM);
+            float g = (groundAt(tipW.x, tipW.z) + 0.05f - c.pos.y) / std::max(0.1f, v.scale);   // model space
+            float clear = (tipM.y - g) * v.scale + 0.05f;
+            if (it == 0) v.tipClearRaw = clear;
+            v.tipClear = clear;
+            if (tipM.y >= g || it == 3) break;
+            vec3 handM = v.pw.wpos[hand];
+            vec3 dir = tipM - handM;
+            float L = std::max(0.15f, length(dir));
+            dir = dir / L;
+            vec3 axis = cross(dir, vec3(0, 1, 0));
+            axis = length2(axis) < 1e-4f ? vec3(-1, 0, 0) : normalize(axis);   // straight down: swing the tip forward
+            float need = std::asin(clampf((g - tipM.y) / L, 0.f, 1.f)) + 0.04f;
+            quat q = quat::axisAngle(axis, need);
+            int par = sk.bones[hand].parent;
+            quat parentRot = par >= 0 ? v.pw.wrot[par] : quat();
+            fpose.rot[hand] = normalize(parentRot.conj() * (q * v.pw.wrot[hand]));
+            computeWorld(sk, fpose, v.pw);
         }
     }
     DrawItem d;

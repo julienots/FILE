@@ -46,7 +46,7 @@ CameraRigOut CameraRig::compute(const CameraRigIn& in) {
         }
     }
     if (in.dt > 0 && in.prevCollisionDist > 0 && free > in.prevCollisionDist)
-        free = std::min(free, in.prevCollisionDist + (free - in.prevCollisionDist) * (1.f - std::exp(-2.5f * in.dt)));
+        free = std::min(free, in.prevCollisionDist + (free - in.prevCollisionDist) * (1.f - std::exp(-2.5f * in.smooth * in.dt)));
     o.collisionDist = free;
     d = std::min(d, free);
     o.eye = in.focus + dir * d;
@@ -74,7 +74,7 @@ CameraRigOut CameraRig::compute(const CameraRigIn& in) {
         }
         float lift = want - raw;
         if (in.dt > 0) {
-            float rate = lift > in.prevLift ? 9.f : 2.f;
+            float rate = (lift > in.prevLift ? 9.f : 2.f) * in.smooth;
             lift = in.prevLift + (lift - in.prevLift) * (1.f - std::exp(-rate * in.dt));
             lift = std::max(lift, gy + HARD_CLEARANCE - raw);
             lift = std::max(0.f, lift);
