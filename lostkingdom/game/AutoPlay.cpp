@@ -81,7 +81,7 @@ static std::vector<Step> scenario(const std::string& name) {
         // 1.7.0: the animated prologue plays on a new game; one capture per shot, then the end state is checked,
         // then it is replayed and skipped with a real tap on "Passer"
         static int lastShot; static int res[6];
-        s.push_back({0.1f, [](Game& g) { lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue"; }, idle, "prologue started"});
+        s.push_back({0.1f, [](Game& g) { g.ui.recordWidgets = true; lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue"; }, idle, "prologue started"});
         s.push_back({76.f, none, [](Game& g, float) {
             if (!g.cine.active) return;
             if (g.cine.index != lastShot && g.cine.t > 3.2f) {

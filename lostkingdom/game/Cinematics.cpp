@@ -42,7 +42,8 @@ static std::vector<CineShot> prologueShots(Game& g) {
     CineShot c;
     // 1. the kingdom from the sky at dawn
     c = CineShot(); c.dur = 7.f; c.tod = 6.4f; c.weather = Game::W_CLEAR; c.music = "title";
-    c.from = at(1700, 2150, 170); c.to = at(1620, 1950, 150); c.lookFrom = at(1500, 1500, 0); c.lookTo = at(1480, 1350, 0);
+    c.fogMul = 0.15f;
+    c.from = at(B.x + 300, B.y + 330, 120); c.to = at(B.x + 210, B.y + 240, 100); c.lookFrom = at(B.x, B.y, 0); c.lookTo = at(B.x - 40, B.y - 60, 0);
     c.text = "Avant la Chute, il y eut un roi.";
     s.push_back(c);
     // 2. Highspire, the crown peaks in gold

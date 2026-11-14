@@ -65,8 +65,11 @@ void Game::updateCamera(float dt) {
         camLookAhead = vec3(0);
     }
     // 1.6.2: the camera follows the hero tightly by default (players found the floaty follow "bizarre")
-    camFocus = damp(camFocus, target, state == GameState::Playing ? (settings.cameraSmooth ? 7.f : 22.f) : 1.5f, dt);
-    if (length2(camFocus - target) > 60 * 60) camFocus = target;  // teleports
+    // story cinematics drive camFocus themselves (the world streams around what they film)
+    if (!cine.active) {
+        camFocus = damp(camFocus, target, state == GameState::Playing ? (settings.cameraSmooth ? 7.f : 22.f) : 1.5f, dt);
+        if (length2(camFocus - target) > 60 * 60) camFocus = target;  // teleports
+    }
     // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
     // for the overworld)
     float distCap = dungeon.active ? 16.f : CameraRig::DIST_MAX;

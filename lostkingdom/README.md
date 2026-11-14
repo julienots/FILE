@@ -6,12 +6,45 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.2 (versionCode 9). Taille : environ 23 Mo. SHA-256 : `136858c96cabb2650ee6bdb1a2388f663b39b0f96617b230c58d81deb6a9ec85`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.2 (versionCode 9). Taille : environ 23 Mo. SHA-256 : `31adecf9a0d094443f748e4a821d16d90cb34e9d208d2740a61fa43fce1962bd`.
   - Les versions 1.6.1 et 1.6.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.7.0 (histoire : prologue animé, Chroniques, mods)
+
+> **En cours de vérification** : l'APK de `release/` est encore la **1.6.2**. Cette section décrit le code de la branche, pas encore livré.
+
+
+- **Prologue animé et narré.** Une nouvelle partie s'ouvre sur une cinématique d'environ 1 min 15 : dix plans filmés dans le monde du jeu.
+  - Le royaume vu du ciel à l'aube, Highspire, Brindlemere, Morneval de nuit, l'Abîme sous l'orage, le sacrifice d'Aldric, la mer en tempête.
+  - Puis le héros, étendu au sol à l'aube, et une voix : « Tu es revenu… trop tard. »
+  - Il se relève, la marque-couronne brille à son poignet, et le titre « PROLOGUE — Un réveil sur la grève » apparaît.
+  - Narration en texte (machine à écrire), musique, bandes noires, heure, météo et teinte propres à chaque plan.
+  - Un appui passe la phrase ou le plan ; le bouton « Passer » saute tout.
+  - Le prologue se revoit depuis l'onglet **Chroniques**.
+- **Système de cinématiques à plans** (`game/Cinematics.cpp`), réutilisable pour la suite de l'histoire : trajectoire de caméra, narrateur ou personnage qui parle, carton de titre, coupure propre.
+- **Chroniques** : nouvel onglet du Journal, liste à gauche et page à droite. **26 pages** :
+  - la légende (Couronne-Mère, la Chute, le sacrifice, Malgrath, l'Abîme, les Gardiens, l'Ordre, la marque) ;
+  - une page par région, débloquée à la découverte ;
+  - un **souvenir d'Aldric** par Gardien vaincu, qui révèle peu à peu la vérité : le héros n'est pas un héritier, et l'un de ses guides ne vieillit pas.
+
+  La bible du lore est dans `docs/LORE.md`.
+- **Drapeaux d'histoire** (`storyFlags`) sauvegardés. Les anciennes sauvegardes se chargent sans changement.
+- **Mods**, données et ressources seulement, sans code :
+  - **Journal → Paramètres → Mods → Importer un mod (.zip)** ouvre le sélecteur de fichiers d'Android. Le zip est décompressé dans le stockage privé du jeu ; les chemins qui sortiraient du dossier sont refusés et la taille est limitée.
+  - Un mod peut **remplacer** n'importe quel fichier du jeu (modèles 3D, textures, musiques, sons, interface) et **modifier** objets, ennemis, PNJ et chroniques avec de simples lignes `type.id.champ = valeur`.
+  - Le menu Mods permet d'activer ou de désactiver chaque mod, et affiche les erreurs avec le numéro de ligne. Les mods s'appliquent au lancement suivant.
+  - Guide : `docs/MODDING.md`. Mod d'exemple : `release/mods/exemple-chroniques-du-vagabond.zip`.
+- **Vérification** : nouveaux scénarios `--autoplay=prologue` (les 10 plans, état final, sauvegarde des drapeaux, bouton Passer) et `--autoplay=mods` (installation, modifications, remplacement d'un modèle, menu, désactivation par un vrai appui) ; tests unitaires du format des mods. Le mod d'exemple doit s'appliquer sans aucune erreur.
+- **Limites.**
+  - **Pas de voix** : la narration est écrite.
+  - Le prologue réutilise les décors et personnages du jeu : pas de modèles ni d'effets créés spécialement pour lui.
+  - Seuls le prologue et les Chroniques existent pour l'instant : les actes I à V et les fins du plan 2.0 ne sont pas encore jouables.
+  - Les mods ne peuvent pas encore ajouter de nouveaux objets, ennemis ou quêtes.
+  - L'import de mods n'a pas été testé sur un téléphone : sur ordinateur, le mod est copié à la main.
 
 ### Nouveautés 1.6.2 (démarche et combat plus fluides)
 
@@ -42,7 +75,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - Les animations restent écrites en code (procédurales), pas en capture de mouvement.
   - Le jeu ne sait pas encore importer les animations fournies par Tripo.
   - Tout est vérifié sur ordinateur, **pas sur un téléphone**.
-- **Vérification.** 1 858 tests unitaires réussis ; les scénarios `touch`, `ui`, `grass`, `camera` et `full` passent ; `full` passe aussi sous AddressSanitizer, sans aucune erreur.
+- **Vérification.** 1 858 tests unitaires réussis ; les scénarios `touch`, `ui`, `grass`, `camera`, `anim` et `full` passent ; `full` passe aussi sous AddressSanitizer, sans aucune erreur. L'APK contient `classes.dex` (classe `GameActivity`, déclarée comme activité de lancement).
 
 ### Nouveautés 1.6.1 (corrections après le premier essai sur téléphone)
 

@@ -282,7 +282,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.6.2 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.7.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
