@@ -29,7 +29,7 @@ tests automatisés, docs, benchmarks ; ne jamais dire qu'un module est fini s'il
 | 9.5 Modèles de jeux : plateforme 2D, RPG 2D, RPG 3D, tower defense, cartes, simulation (ferme), stratégie, survie, course, idle, tycoon, multijoueur (arène, réseau UDP `agr.net`), **aventure 2.5D « Les Ruines d'Ambre »** | ✅ jouables et testés | NETWORK.md, ce document |
 
 Livrables : `dist/AGR-ENGINE-Android.apk` (menu + 13 jeux, arm64, signé avec une clé de
-démonstration), `dist/Les-Ruines-d-Ambre.apk` (le jeu 2.5D complet seul) et `dist/AGR-Demo-Platformer.apk` (ces fichiers ne sont pas versionnés : `dist/`
+démonstration), `dist/Les-Ruines-d-Ambre.apk` (le jeu 2.5D complet seul) et `dist/Robo-et-les-Cristaux.apk` (ces fichiers ne sont pas versionnés : `dist/`
 est ignoré ; les recréer avec la section 5). **Les APK n'ont jamais été lancés sur un vrai
 téléphone** (pas d'appareil ici) : à valider en priorité.
 
@@ -74,26 +74,30 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    (sélecteur Android, URI content://) ; partage / export d'un projet (zip) vers un PC ; lancer le
    jeu en plein écran depuis l'éditeur.
 
-### Le jeu 2.5D « Les Ruines d'Ambre » (`SceneTemplate::GameAdventure25D`)
+### Les deux jeux complets
 
-Décor en 3D (blocs texturés, piliers, torches à particules, brouillard, lumières ponctuelles) vu par
-une caméra inclinée à environ 40° ; héros, ennemis et objets sont des sprites 2D penchés du même
-angle (rendus en 3D avec test de profondeur, triés d'arrière en avant). Construit par
-`editor/core/src/games/Adventure25D.cpp` ; scripts `ambre_game.lua` (états menu / jeu / pause /
-fin de niveau / game over / victoire, ramassage, grille, portail, sauvegarde `ambre.*`),
-`ambre_hero.lua` (capsule physique Jolt, saut par rayon au sol, épée), `ambre_enemy.lua` (slime sur
-le maillage de navigation, chauve-souris volante, boss qui invoque des sbires par `agr.clone`),
-`ambre_camera.lua`. Quatre salles côte à côte dans une seule scène (x = 0, 70, 140, 210). Test :
-« 2.5D adventure » dans `tests/test_game_templates.cpp` ; APK : test opt-in « 2.5D game APK »
-(`AGR_AMBRE_APK`).
+**« Les Ruines d'Ambre »** (`SceneTemplate::GameAdventure25D`, `games/Adventure25D.cpp`, scripts
+`ambre_*.lua`) : aventure-action 2.5D (décor 3D, personnages en sprites inclinés). Six salles décrites
+par des données (`levels()`) : tutoriel avec panneaux, pièges à pics, gouffre à pierres de gué,
+énigme des dalles (« lights out » 2 x 2 qui fait apparaître la 3e gemme), épreuve, boss (écrasement
+annoncé, sbires, furie à mi-vie avec pluie de rochers). Ennemis : slimes, chauves-souris, archers
+squelettes (flèches parables), brutes de pierre (charge, étourdies contre les murs). Jarres, coffres,
+pièces, cœurs. Boutique entre les salles (cœurs max, épée, roulade, potion de garde), pièces
+conservées, 3 étoiles par salle (finie, toutes les pièces au sol, temps de référence), choix des
+salles, options (musique, effets, langue fr / en / es), histoire, pause, sauvegarde `ambre`.
+Test : « 2.5D adventure » (partie complète sans écran) ; APK : test opt-in « 2.5D game APK ».
 
-Finitions (« game feel ») : ombres au sol, arc d'épée, roulade invulnérable, recul, arrêt sur image
-et tremblement aux impacts, dégâts flottants, gerbes de particules, grille qui s'enfonce, fondus
-entre salles, ralenti à la mort, boss en trois temps (zone rouge annoncée, écrasement esquivable en
-sautant, récupération) qui devient furieux à mi-vie, cœurs et gemmes en icônes, stick tactile
-visible, sons et musique propres (`tools/generate_ambre_assets.py`). Les autres jeux utilisent les
-mêmes effets (`agr.tween`, `agr.fx.*` : voir SCRIPTING.md). À faire : équilibrage sur appareil,
-plus de salles, art des personnages plus détaillé (sprites générés par `tools/`).
+**« Robo et les Cristaux »** (`SceneTemplate::GamePlatformer`, `games/Platformer.cpp` avec la classe
+`LevelBuilder`, scripts `plat_*.lua` + `platformer_player.lua`) : plateforme 2D, cinq niveaux à
+thèmes empilés dans la scène (prairie, collines, grotte, lac, château), 3 cristaux cachés par niveau,
+ressorts, plateformes mobiles qui portent le héros, blocs friables, slimes, hérissons (on ne saute pas
+dessus), chauves-souris, poissons sauteurs, canons ; saut tolérant (coyote time, tampon) et saut
+variable ; cœurs, point de passage, résultats, choix des niveaux, options, histoire, sauvegarde
+`plat`. Test : « platformer » ; APK : test opt-in « demo game APK ».
+
+Art et sons originaux : `tools/generate_ambre_assets.py`, `tools/generate_platformer_assets.py`.
+À faire : équilibrage sur appareil (difficulté, tactile), plus de niveaux, personnages dessinés à la
+main.
 
 Limites connues documentées dans chaque fichier `docs/*.md` (sections « Limites actuelles »).
 Points d'attention : `agr.loadScene` dans l'éditeur en mode Jeu remplace la scène jouée (prévu pour

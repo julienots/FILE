@@ -855,7 +855,8 @@ TEST_CASE("demo game APK" * doctest::skip(std::getenv("AGR_DEMO_APK") == nullptr
     f.ctx->newScene(SceneTemplate::GamePlatformer);
     REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
     Project& project = f.ctx->project();
-    project.settings().name = "AGR Demo";
+    project.settings().name = "Robo et les Cristaux";
+    project.settings().exportSettings.packageId = "com.superessence.robocristaux";
     const AndroidToolchain tools = findAndroidToolchain(".");
     const auto problems = checkAndroidExport(project, tools);
     REQUIRE_MESSAGE(problems.empty(), problems.front());

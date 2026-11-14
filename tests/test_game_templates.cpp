@@ -177,50 +177,156 @@ TEST_CASE("every game template builds, saves and has a camera, a HUD and scripts
     }
 }
 
-TEST_CASE("platformer: run, collect coins, stomp a slime, get hurt, checkpoint, finish, restart") {
+TEST_CASE("platformer: menus, story, run and variable jump, signs, stomp, spiky, spring, crystals, checkpoint, results, movers, bats, crumbling blocks, fish, cannons, victory, game over") {
     GameHarness h(SceneTemplate::GamePlatformer);
-    h.frames(60);
-    CHECK(h.position("Hero").y == doctest::Approx(-1.0f).epsilon(0.03));
-    CHECK(h.text("CoinsText") == "Pièces : 0 / 12");
-    h.holdKey(Key::Right, 1.0);  // three coins on the path
-    CHECK(h.position("Hero").x > -3.0f);
-    CHECK(h.number("Hero", "coins") >= 2);
-    CHECK_FALSE(h.active("Coin 1"));
-    // Stomp: dropped onto the first slime.
-    h.lua(R"(local s = agr.find("Slime 1"); local x = s:position(); agr.find("Hero"):setPosition(x, 1.5); agr.find("Hero"):setVelocity(0, -2))");
+    h.frames(5);
+    auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
+    auto menuClick = [&](const char* button) {
+        h.seconds(0.6);
+        h.clickUI(button);
+        h.frames(2);
+    };
+    auto put = [&](const std::string& level, const std::string& group, const std::string& name, float dx, float dy) {
+        h.lua("local e = agr.find('" + level + "'):find('" + group + "'):find('" + name + "'); local x, y = e:position();"
+              " agr.find('Hero'):setPosition(x + " + std::to_string(dx) + ", y + " + std::to_string(dy) + "); agr.find('Hero'):setVelocity(0, 0)");
+    };
+    auto number = [&](const std::string& expr) {
+        h.lua("agr.find('Game'):script().probe = " + expr);
+        return h.number("Game", "probe");
+    };
+    CHECK(h.field("Game", "page") == "title");
+    menuClick("LevelsButton");
+    ok("agr.find('LevelButton 2'):get('UIButton', 'interactable') == false");
+    menuClick("BackButton");
+    menuClick("PlayButton");
+    CHECK(h.field("Game", "page") == "story");
+    menuClick("NextButton");
+    CHECK(h.field("Game", "state") == "playing");
+    CHECK(h.text("LevelText") == "La Prairie");
     h.seconds(1.0);
-    CHECK_FALSE(h.active("Slime 1"));
-    CHECK(h.number("Hero", "livesLeft") == 3);
-    // Walking into the second one costs a life.
-    h.lua(R"(local s = agr.find("Slime 2"); local x = s:position(); agr.find("Hero"):setPosition(x - 1.6, -0.9))");
+    const math::Vec3 start = h.position("Hero");
+    CHECK(start.y == doctest::Approx(-1.0f).epsilon(0.05));
+    // Run, collect the first coins; a tap jump is lower than a held jump.
+    h.holdKey(Key::Right, 1.2);
+    CHECK(h.position("Hero").x > start.x + 4.0f);
+    CHECK(h.number("Game", "coins") >= 1);
+    auto peak = [&](int frames) {
+        h.seconds(0.6);
+        const float y0 = h.position("Hero").y;
+        h.key(Key::Space, true);
+        float top = y0;
+        for (int i = 0; i < 50; ++i) {
+            if (i == frames) h.key(Key::Space, false);
+            h.frames(1);
+            top = std::max(top, h.position("Hero").y);
+        }
+        h.key(Key::Space, false);
+        h.seconds(0.8);
+        return top - y0;
+    };
+    const float tap = peak(3), full = peak(50);
+    CHECK(full > 3.5f);
+    CHECK(tap < full - 1.0f);
+    // A sign shows a hint while the hero stands in front of it.
+    put("Level 1", "Props", "Sign 1", 0.0f, 0.1f);
+    h.frames(5);
+    CHECK(h.active("HintPanel"));
+    CHECK(h.text("Hint").find("Saut") != std::string::npos);
+    // Stomp a slime (+1 coin), walk into another (-1 heart).
+    const double bank = number("agr.find('Game'):script().data.bank");
+    put("Level 1", "Enemies", "Slime 1", 0.0f, 2.5f);
+    h.seconds(1.0);
+    ok("not agr.find('Level 1'):find('Enemies'):find('Slime 1'):isActive()");
+    CHECK(number("agr.find('Game'):script().data.bank") >= bank + 1);
+    CHECK(h.number("Game", "hearts") == 3);
+    put("Level 1", "Enemies", "Slime 2", -2.0f, 0.1f);
     h.holdKey(Key::Right, 0.8);
-    CHECK(h.number("Hero", "livesLeft") == 2);
-    CHECK(h.text("LivesText") == "Vies : 2");
-    // Checkpoint, then a fall into the next pit: back at the checkpoint.
-    h.seconds(1.6);  // invulnerability ends
-    h.lua(R"(agr.find("Hero"):setPosition(37.5, -0.9))");
-    h.frames(10);
-    CHECK(h.number("Hero", "spawnX") == doctest::Approx(37.5));
-    h.lua(R"(agr.find("Hero"):setPosition(32.5, -0.9))");  // second pit (tiles 41..44 -> x 31..35)
+    CHECK(h.number("Game", "hearts") == 2);
+    // Landing on the hedgehog hurts too.
+    h.lua("agr.find('Hero'):script().invulnerable = 0");
+    put("Level 1", "Enemies", "Spiky 1", 0.0f, 2.5f);
+    h.seconds(1.0);
+    CHECK(h.number("Game", "hearts") == 1);
+    ok("agr.find('Level 1'):find('Enemies'):find('Spiky 1'):isActive()");
+    h.lua("agr.find('Game'):script().hearts = 3; agr.find('Hero'):script().invulnerable = 0");
+    // The spring launches the hero high; crystals light their slot.
+    put("Level 1", "Props", "Spring 1", 0.0f, 0.6f);
+    float high = -10.0f;
+    for (int i = 0; i < 40; ++i) {
+        h.frames(1);
+        high = std::max(high, h.position("Hero").y);
+    }
+    CHECK(high > start.y + 7.0f);
+    put("Level 1", "Items", "Crystal 2", 0.0f, -0.3f);
+    h.frames(3);
+    CHECK(h.number("Game", "found") == 2);
+    ok("agr.find('CrystalIcon 2'):get('UIImage', 'color').w > 0.9");
+    // Checkpoint, then a fall into the lake: back at the checkpoint with one heart less.
+    put("Level 1", "Props", "Checkpoint", 0.0f, 0.1f);
+    h.frames(5);
+    const double cx = h.number("Game", "spawnX");
+    h.lua("agr.find('Hero'):setPosition(-10 + 53.5, 0)");  // the second lake (tiles 52..55)
+    h.seconds(2.0);
+    CHECK(h.number("Game", "hearts") == 2);
+    CHECK(h.position("Hero").x == doctest::Approx(cx).epsilon(0.05));
+    // The goal flag: results, progress saved, next level.
+    put("Level 1", "Props", "Goal", 0.0f, 0.2f);
+    h.frames(5);
+    CHECK(h.field("Game", "state") == "results");
+    CHECK(h.text("MenuText").find("★") != std::string::npos);
+    ok("agr.save.get('plat').unlocked == 2");
+    ok("agr.save.get('plat').crystals['1'] == 2");
+    menuClick("NextButton");
+    CHECK(h.number("Game", "level") == 2);
+    CHECK(h.position("Hero").y < -40.0f);
+    ok("select(2, agr.find('Main Camera'):position()) < -30");
+    // Level 2: the moving platform and the bat move.
+    h.lua("local m = agr.find('Level 2'):find('Props'):find('Mover 1'); _G.mx = m:position();"
+          " local b = agr.find('Level 2'):find('Enemies'):find('Bat 1'); _G.bx, _G.by = b:position()");
     h.seconds(1.5);
-    CHECK(h.number("Hero", "livesLeft") == 1);
-    CHECK(h.position("Hero").x == doctest::Approx(37.5f).epsilon(0.05));
-    // Finish line.
-    h.lua(R"(agr.find("Hero"):setPosition(76, 4.1))");
-    h.frames(10);
-    CHECK(h.field("Hero", "state") == "won");
-    CHECK(h.active("Restart"));
-    CHECK(h.text("Message").find("Arrivée") != std::string::npos);
-    h.clickUI("Restart");
-    CHECK(h.field("Hero", "state") == "playing");
-    CHECK(h.number("Hero", "coins") == 0);
-    CHECK(h.number("Hero", "livesLeft") == 3);
-    CHECK(h.active("Coin 1"));
-    CHECK(h.active("Slime 1"));
-    CHECK_FALSE(h.active("Restart"));
+    ok("math.abs(agr.find('Level 2'):find('Props'):find('Mover 1'):position() - _G.mx) > 1");
+    ok("math.abs(agr.find('Level 2'):find('Enemies'):find('Bat 1'):position() - _G.bx) > 0.5");
+    // Level 3: a crumbling block falls when stood on, and comes back.
+    h.lua("agr.find('Game'):script():startLevel(3)");
+    h.frames(3);
+    put("Level 3", "Props", "Crumble 1", 0.0f, 0.6f);
+    h.seconds(1.2);
+    ok("not agr.find('Level 3'):find('Props'):find('Crumble 1'):isActive()");
+    h.lua("agr.find('Hero'):setPosition(-10 + 5, -5 - 80 + 4.1)");
+    h.seconds(3.5);
+    ok("agr.find('Level 3'):find('Props'):find('Crumble 1'):isActive()");
+    // Level 4: the fish leaps out of the water.
+    h.lua("agr.find('Game'):script():startLevel(4); _G.leap = false; _G.fy = select(2, agr.find('Level 4'):find('Enemies'):find('Fish 1'):position())");
+    for (int i = 0; i < 25; ++i) {
+        h.seconds(0.2);
+        h.lua("if select(2, agr.find('Level 4'):find('Enemies'):find('Fish 1'):position()) > _G.fy + 3 then _G.leap = true end");
+    }
+    ok("_G.leap");
+    // Level 5: the cannon fires cannonballs that hurt.
+    h.lua("agr.find('Game'):script():startLevel(5)");
+    h.frames(3);
+    put("Level 5", "Enemies", "Cannon 1", -8.0f, 0.1f);
+    const double hearts5 = h.number("Game", "hearts");
+    for (int i = 0; i < 30 && h.number("Game", "hearts") >= hearts5; ++i) h.seconds(0.2);
+    CHECK(h.number("Game", "hearts") < hearts5);
+    put("Level 5", "Props", "Goal", 0.0f, 0.2f);
+    h.frames(5);
+    CHECK(h.field("Game", "state") == "victory");
+    ok("agr.save.get('plat').finished == true");
+    // Game over and retry.
+    h.seconds(1.5);
+    menuClick("LevelsButton");
+    menuClick("LevelButton 1");
+    CHECK(h.number("Game", "level") == 1);
+    h.lua("local g = agr.find('Game'):script(); g.hearts = 1; g:playerHurt(false)");
+    CHECK(h.field("Game", "state") == "dying");
+    h.seconds(1.5);
+    CHECK(h.field("Game", "state") == "gameover");
+    menuClick("RetryButton");
+    CHECK(h.field("Game", "state") == "playing");
+    CHECK(h.number("Game", "hearts") == 3);
     h.noScriptErrors();
 }
-
 
 TEST_CASE("RPG 2D: quest, gems, bats chase along the grid, sword, experience, death and save") {
     GameHarness h(SceneTemplate::GameRpg2D);
