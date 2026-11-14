@@ -329,4 +329,5 @@ input[type=range]::-webkit-slider-thumb{border-radius:0;box-shadow:none;width:3v
 .qcard,.slot,.bcard,.cx{border-radius:0}.cost{border-radius:0;font-family:var(--mono);font-weight:500}
 .cx .g,.cx.r-rare .g,.cx.r-leg .g{text-shadow:none}.bcard.built,.qcard.tracked,.cx.r-leg{box-shadow:none}
 .gmap{border-radius:0}.gp circle{filter:none}
+.bcard .bi,.cx .g{width:6vmin;font-size:4.6vmin;line-height:6vmin;text-align:center;overflow:hidden}.bcard{padding-left:9.5vmin}.cx{padding-left:9vmin}
 `;
