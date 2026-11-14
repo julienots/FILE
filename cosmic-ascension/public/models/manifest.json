@@ -1,30 +1,68 @@
 {
- "_doc": "Clé → {file, height (m, avant échelle du jeu), rotY (radians, pour orienter l'avant vers +Z; vaisseau: nez vers -Z)}. Modèles Tripo allégés avec tools/models (voir docs/TRIPO_PROMPTS.md).",
+ "_doc": "Clé → {file, height (m, avant échelle du jeu), rotY (radians, pour orienter l'avant vers +Z; vaisseau: nez vers -Z)}. Modèles Tripo allégés avec tools/models (voir docs/TRIPO_PROMPTS.md). anim: animation corporelle sans squelette (voir render/shaders/Toon.js animGLSL).",
  "hero_mote": {
   "file": "hero_mote.glb",
-  "height": 1.0
+  "height": 1.0,
+  "anim": {
+   "type": "blob"
+  }
  },
  "hero_sprout": {
   "file": "hero_sprout.glb",
   "height": 1.1,
-  "rotY": -1.5708
+  "rotY": -1.5708,
+  "anim": {
+   "type": "biped",
+   "tpose": 0.75,
+   "armAt": 0.5,
+   "shoulder": 0.5,
+   "hip": 0.3
+  }
  },
  "hero_comet": {
   "file": "hero_comet.glb",
-  "height": 1.2
+  "height": 1.2,
+  "anim": {
+   "type": "biped",
+   "tpose": 1.45,
+   "armAt": 0.24,
+   "shoulder": 0.7,
+   "hip": 0.42
+  }
  },
  "hero_nova": {
   "file": "hero_nova.glb",
   "height": 1.2,
-  "rotY": -1.5708
+  "rotY": -1.5708,
+  "anim": {
+   "type": "biped",
+   "tpose": 1.15,
+   "armAt": 0.3,
+   "shoulder": 0.62,
+   "hip": 0.36
+  }
  },
  "hero_titan": {
   "file": "hero_titan.glb",
-  "height": 1.3
+  "height": 1.3,
+  "anim": {
+   "type": "biped",
+   "tpose": 0,
+   "armAt": 0.5,
+   "shoulder": 0.7,
+   "hip": 0.45
+  }
  },
  "hero_god": {
   "file": "hero_god.glb",
-  "height": 1.4
+  "height": 1.4,
+  "anim": {
+   "type": "biped",
+   "tpose": 1.1,
+   "armAt": 0.26,
+   "shoulder": 0.74,
+   "hip": 0.5
+  }
  },
  "ship_basic": {
   "file": "ship_basic.glb",
@@ -35,19 +73,35 @@
  },
  "enemy_slime": {
   "file": "enemy_slime.glb",
-  "height": 1.1
+  "height": 1.1,
+  "anim": {
+   "type": "blob"
+  }
  },
  "enemy_drone": {
   "file": "enemy_drone.glb",
-  "height": 0.9
+  "height": 0.9,
+  "anim": {
+   "type": "hover"
+  }
  },
  "enemy_brute": {
   "file": "enemy_brute.glb",
-  "height": 1.2
+  "height": 1.2,
+  "anim": {
+   "type": "biped",
+   "tpose": 0,
+   "armAt": 0.5,
+   "shoulder": 0.62,
+   "hip": 0.4
+  }
  },
  "enemy_dragon": {
   "file": "enemy_dragon.glb",
   "height": 1.3,
-  "rotY": 1.5708
+  "rotY": 1.5708,
+  "anim": {
+   "type": "serpent"
+  }
  }
 }

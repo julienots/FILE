@@ -17,6 +17,7 @@ export class Hero {
     while (this.body.children.length) this.body.remove(this.body.children[0]);
     this.parts = {};
     const model = Assets.get('hero_' + st.id);
+    this.animV = model?.userData.anim ?? null;
     if (model) { this.body.add(model); }
     else this._buildProcedural(st, i);
     this.baseScale = st.scale; this.root.scale.setScalar(st.scale); this.glow.color.set(st.glow); this.baseGlow = 1 + i * .5; this.glow.intensity = this.baseGlow; this.glow.distance = 10 + st.scale * 6;
@@ -79,6 +80,7 @@ export class Hero {
     if (this.parts.shards) for (let k = 0; k < this.parts.shards.length; k++) this.parts.shards[k].position.y = .95 + (k % 2) * .2 + Math.sin(t * 2.5 + k) * .06;
     if (this.parts.tailCape) { this.parts.tailCape.rotation.x = .28 + sp * .55 + Math.sin(t * 6) * .05 * (1 + sp * 2); }
     if (this.parts.tail) { this.parts.tail.scale.z = 1 + sp * .7 + Math.sin(t * 12) * .08; this.parts.tail.rotation.y = Math.sin(t * 3) * .25; this.parts.tail.rotation.x = -.25 + Math.sin(t * 2.2) * .12; }
+    this.atk = Math.max(0, (this.atk || 0) - dt * 4); if (this.animV) this.animV.set(sp, stride, this._air ? 1 : 0, this.atk);
     this.root.scale.setScalar(this.baseScale * this.scaleMul);
     if (!this.lift) this.glow.intensity += (this.baseGlow - this.glow.intensity) * k;
   }

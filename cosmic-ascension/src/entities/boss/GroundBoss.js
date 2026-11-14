@@ -25,7 +25,7 @@ export class GroundBoss {
     const B = this.B = BOSSES[id], [model, height, glow] = LOOK[id]; this.id = id; this.scene = scene; this.P = planet.userData; this.particles = particles; this.glow = glow;
     this.h = height; this.r = height * .32; this.maxHp = Math.round(B.hp / 40); this.hp = this.maxHp; this.dir = dir.clone().normalize(); this.face = new THREE.Vector3(1, 0, 0);
     this.root = new THREE.Group(); const m = Assets.get(model);
-    if (m) { m.scale.multiplyScalar(height / (Assets.metaHeight?.(model) ?? 1.2)); this.root.add(m); }
+    if (m) { m.scale.multiplyScalar(height / (Assets.metaHeight?.(model) ?? 1.2)); this.root.add(m); this.animV = m.userData.anim; }
     else { const body = new THREE.Mesh(new THREE.CapsuleGeometry(height * .22, height * .5, 6, 14), toonMaterial({ color: '#16121e', rim: glow, rimStrength: 2 })); body.position.y = height * .5; this.root.add(body);
       for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(height * .04, 8, 8), new THREE.MeshBasicMaterial({ color: glow })); e.position.set(s * height * .09, height * .78, height * .2); this.root.add(e); } }
     this.light = new THREE.PointLight(glow, 40, height * 4); this.light.position.y = height * .6; this.root.add(this.light); scene.add(this.root);
@@ -58,6 +58,7 @@ export class GroundBoss {
     this.root.position.copy(up).multiplyScalar(gr + hop);
     const z = _a.copy(this.face).addScaledVector(up, -this.face.dot(up)); if (z.lengthSq() < 1e-5) z.set(1, 0, 0).addScaledVector(up, -up.x); z.normalize(); const x = _b.crossVectors(up, z).normalize();
     this.root.quaternion.slerp(_q.setFromRotationMatrix(_m.makeBasis(x, up, z)), Math.min(1, dt * 4)); this.light.intensity = this.flash ? 160 : 40 + Math.sin(this.t * 3) * 12;
+    if (this.animV) this.animV.set(this.state === 'walk' ? .8 : 0, this.t * 4, this.state === 'windup' ? 1 : 0, this.state === 'windup' ? Math.min(1, this.st * 2) : 0);
     // frappe au sol: télégraphe → onde de choc qui s'étend; on l'esquive en sautant par-dessus
     this.atk -= dt;
     if (this.state === 'walk' && this.atk <= 0 && dist < 60) { this.state = 'windup'; this.st = 0; }

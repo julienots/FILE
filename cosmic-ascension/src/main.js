@@ -24,7 +24,7 @@ async function boot() {
   initFallback(document.getElementById('ui'));   // no-op: systemsOwner === 'B'
   // saut warp (carte galactique de B) → transition de la scène espace de A, vaisseau près de la planète choisie
   bus.on('warp:request', ({ planetId }) => game.ctx.transition('space', { from: planetId }, { color: '#3ff0ff', out: .6, in: 1 }));
-  window.__game = game; window.__bus = bus; Object.defineProperty(window, '__gameState', { get: () => State.data, configurable: true });   // debug / tests
+  window.__game = game; window.__bus = bus; window.__assets = Assets; Object.defineProperty(window, '__gameState', { get: () => State.data, configurable: true });   // debug / tests
   game.goto('space', {}); game.start();
 }
 boot();

@@ -122,7 +122,7 @@ export class PlanetScene {
     if (!frozen && Input.buttons.attack && this.atkCd <= 0) { this.atkCd = .28; let tgt = this.enemies.nearest(hero.root.position, 28 * Math.sqrt(scale)); if (this.boss && !this.boss.dead && (!tgt || this.boss.root.position.distanceTo(hero.root.position) < 60)) tgt = this.boss;
       if (tgt) this.face.copy(tgt.root.position).sub(hero.root.position).addScaledVector(up, -_c.copy(tgt.root.position).sub(hero.root.position).dot(up)).normalize();
       _c.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(); this.enemies.fire(_e.copy(hero.root.position).addScaledVector(up, .6 * scale).addScaledVector(_c, .6 * scale), _c, scale, EVOLUTIONS[hero.stage].glow);
-      hero._land = .6; bus.emit('hero:ability', { id: 'starbolt', pos: hero.root.position, dir: _c }); }
+      hero.atk = 1; bus.emit('hero:ability', { id: 'starbolt', pos: hero.root.position, dir: _c }); }
     if (this.knock) { up.copy(_c.copy(hero.root.position).addScaledVector(this.knock, 14 * dt)).normalize(); this.hurtT -= dt; if (this.hurtT <= 0) this.knock = null; }
     this.enemies.update(dt, hero.root.position, scale);
     if (this.bossWait > 0 && !this.arriving && (this.bossWait -= dt) <= 0) { _c.copy(up).multiplyScalar(R).addScaledVector(z, 36).normalize(); this.boss = new GroundBoss(this.bossId, this.scene, this.planet, this.particles, _c); this.shakeT = .6; }

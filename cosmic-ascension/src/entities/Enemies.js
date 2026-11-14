@@ -20,7 +20,7 @@ for (const [id, E] of Object.entries(ENEMIES ?? {})) { if (TYPES[id] && !E) cont
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
 function makeBody(type) {
   const T = TYPES[type], g = new THREE.Group(), model = Assets.get(T._model) ?? Assets.get(T.model) ?? Assets.get(SHAPE_MODEL[T._shape]);
-  if (model) { g.add(model); g.scale.setScalar(T.size); return g; }
+  if (model) { g.add(model); g.scale.setScalar(T.size); g.userData.anim = model.userData.anim; return g; }
   const mat = toonMaterial({ color: T.color, rim: T.rim, rimStrength: 1.3 });
   const b = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), mat); b.position.y = .5; b.scale.set(1.1, .85, 1.1); addOutline(b, '#1a0f33', .04); g.add(b);
   const white = new THREE.MeshBasicMaterial({ color: '#ff2a4a' }), red = new THREE.MeshBasicMaterial({ color: '#ff2a4a' });
@@ -91,6 +91,7 @@ export class Enemies {
       e.root.quaternion.slerp(_q.setFromRotationMatrix(_m.makeBasis(x, e.dir, z)), Math.min(1, dt * 8));
       const sq = 1 + (hop - .5) * .25, hs = e.hurt > 0 ? 1.25 : 1; e.root.scale.set(e.T.size * (2 - sq) * hs, e.T.size * sq * hs, e.T.size * (2 - sq) * hs);
       if (e.root.userData.mat) e.root.userData.mat.emissive.setScalar(e.hurt > 0 ? .8 : 0);
+      if (e.root.userData.anim) e.root.userData.anim.set(chase ? 1 : .45, e.t * (chase ? 9 : 5), 0, Math.max(0, e.touchCd));
       if (heroAlive && dist < e.T.size * .7 + heroScale * .6 && e.touchCd <= 0) { e.touchCd = 1; bus.emit('enemy:touch', { uid: e.uid, type: e.type, dmg: Math.round(e.T.hp * 1.5), pos: e.root.position }); }
     }
     for (const b of this.bolts) { if (b.life <= 0) continue; b.life -= dt; const p = b.mesh.position;

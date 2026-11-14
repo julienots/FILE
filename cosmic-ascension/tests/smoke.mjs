@@ -16,9 +16,13 @@ console.log('stage after boss', await p.evaluate(() => JSON.parse(JSON.stringify
 await p.evaluate(() => { const g = window.__game.current, d = g.devourer.root.position; g.ship.root.position.set(d.x - 250, d.y + 150, d.z + 800); g.yaw = -.3; g.pitch = -.18; g.vel.set(0, 0, 0); g.camera.position.copy(g.ship.root.position); }); await p.waitForTimeout(3000); await p.screenshot({ path: 'tests/out/devourer.png' });
 await p.evaluate(() => { const g = window.__game.current; g.ship.root.position.set(0, 0, 60); g.yaw = 0; g.pitch = 0; g.vel.set(0, 0, 0); }); await p.waitForTimeout(500);
 await p.keyboard.down('ShiftLeft'); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/boost.png' });
-await p.waitForTimeout(2500); await p.keyboard.up('ShiftLeft'); await p.keyboard.press('KeyE'); await p.waitForTimeout(1900); await p.screenshot({ path: 'tests/out/arrive.png' });
-console.log('scene:', await p.evaluate(() => window.__game.currentName)); await p.waitForTimeout(2500);
-await p.keyboard.press('KeyE'); await p.waitForTimeout(2200); await p.screenshot({ path: 'tests/out/takeoff.png' }); console.log('scene:', await p.evaluate(() => window.__game.currentName));
+await p.keyboard.up('ShiftLeft');
+// atterrissage: place le vaisseau à portée de Pépin, ⏎, attend la scène planète; puis ⏎ pour redécoller
+const waitScene = (n) => p.waitForFunction((n) => window.__game.currentName === n && !window.__game._fading, n, { timeout: 90000 }).catch(() => {});
+await p.evaluate(() => { const g = window.__game.current, h = g.planets[0]; g.ship.root.position.copy(h.position).add({ x: 0, y: 0, z: h.userData.radius * 1.9 }); g.yaw = 0; g.pitch = 0; g.vel.set(0, 0, 0); }); await p.waitForTimeout(1500);
+await p.keyboard.press('KeyE'); await waitScene('planet'); await p.screenshot({ path: 'tests/out/arrive.png' }); console.log('scene:', await p.evaluate(() => window.__game.currentName));
+await p.waitForFunction(() => !window.__game.current.arriving, null, { timeout: 60000 }).catch(() => {}); await p.waitForTimeout(800);
+await p.keyboard.press('KeyE'); await waitScene('space'); await p.screenshot({ path: 'tests/out/takeoff.png' }); console.log('scene:', await p.evaluate(() => window.__game.currentName));
 await p.evaluate(() => window.__game.goto('planet', { id: 'home' })); await p.waitForTimeout(2000);
 await p.evaluate(async () => { const g = window.__game.current; for (const s of g.base.slots.slice(0, 5)) g.base.slots && window.__bus.emit('build:placed', { planetId: 'home', slot: s.i, buildingId: ['house', 'greenhouse', 'lab', 'forge', 'temple'][g.base.count() % 5] }); g.camPitch = .5; }); await p.waitForTimeout(1500); await p.screenshot({ path: 'tests/out/homebase.png' });
 await p.waitForTimeout(500);
@@ -29,7 +33,7 @@ if (await p.evaluate(() => !!window.__game.current.nearNpc)) await p.keyboard.pr
 await p.evaluate(() => { const g = window.__game.current, e = g.enemies.list[0]; e.dir.copy(g.dir).applyAxisAngle(g.fwd.clone().cross(g.dir).normalize(), -.05); e.home.copy(e.dir); }); await p.keyboard.down('KeyJ'); await p.waitForTimeout(900); await p.screenshot({ path: 'tests/out/combat.png' }); await p.keyboard.up('KeyJ');
 await p.keyboard.press('KeyK'); await p.waitForTimeout(500); await p.screenshot({ path: 'tests/out/shockwave.png' }); await p.waitForTimeout(4500); await p.screenshot({ path: 'tests/out/evolved4.png' });
 console.log('fps~', await p.evaluate(() => new Promise(r => { let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 > 1500 ? r(Math.round(n / 1.5)) : requestAnimationFrame(f); }; f(); })));
-for (const st of [0, 1, 2, 3, 4, 5]) { await p.evaluate((st) => { const g = window.__game.current; g.hero.setStage(st); g.fwd.copy(g.face).negate(); g.camPitch = .22; }, st); await p.waitForTimeout(900); await p.screenshot({ path: `tests/out/hero${st}.png`, clip: { x: 440, y: 120, width: 400, height: 360 } }); }
+for (const st of [0, 1, 2, 3, 4, 5]) { await p.evaluate((st) => { const g = window.__game.current; g.hero.setStage(st); g.fwd.copy(g.face).negate(); g.camPitch = .22; const h = g.hero, an = h.animate.bind(h); h.animate = (dt, sp, air, v) => { an(dt, 1, air, v); if (h.animV) { h.animV.x = 1; h.animV.y = 1.2; } }; }, st); await p.waitForTimeout(900); await p.screenshot({ path: `tests/out/hero${st}.png`, clip: { x: 440, y: 120, width: 400, height: 360 } }); }
 await p.evaluate(() => window.__game.goto('planet', { id: 'ember' })); await p.waitForTimeout(1500);
 await p.evaluate(() => { const g = window.__game.current; g.hero.setStage(3); const pos = g.hero.root.position, up = g.dir, f = g.face, r = f.clone().cross(up).normalize(); ['slime', 'scarab', 'brute', 'dragon'].forEach((t, i) => { const e = g.enemies.list.find(x => x.type === t); if (!e) return; e.dir.copy(pos).addScaledVector(f, 7 + i * 1.5).addScaledVector(r, (i - 1.5) * 4.5).normalize(); e.home.copy(e.dir); e.T = { ...e.T, speed: 0, sight: 0 }; }); g.fwd.copy(f); g.camPitch = .3; }); await p.waitForTimeout(1200); await p.screenshot({ path: 'tests/out/enemies.png' });
 // boss au sol: force l'étape de quête « Vaincs l'Empereur », atterrit sur Bastion, tire, puis l'achève
