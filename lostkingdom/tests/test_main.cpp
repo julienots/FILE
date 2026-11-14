@@ -386,6 +386,20 @@ static void testGpuProfiles() {
     }
 }
 
+// ---- 1.8.0 flight pose: at full speed the body lies along the flight path (head forward, legs back)
+static void testFlightPose() {
+    std::printf("[Flight pose]\n");
+    Animator a; setupAnimator(a, Arch::Humanoid);
+    a.setState(BodyState::Airborne, 0.01f);
+    a.aux[2] = 1.f; a.speed = 11.f; a.grounded = false;
+    for (int i = 0; i < 30; i++) a.update(1.f / 30.f);
+    PoseWorld w; computeWorld(*a.skeleton, a.pose, w);
+    vec3 hip = w.wpos[H_ROOT], head = w.wpos[H_HEAD], foot = (w.wpos[H_FOOTL] + w.wpos[H_FOOTR]) * 0.5f;
+    std::printf("  head-hip (%.2f, %.2f, %.2f)  foot-hip (%.2f, %.2f, %.2f)\n", head.x - hip.x, head.y - hip.y, head.z - hip.z, foot.x - hip.x, foot.y - hip.y, foot.z - hip.z);
+    CHECK(head.z - hip.z > 0.35f && head.y - hip.y < 0.45f, "flying: head forward of the hips and low (%.2f, %.2f)", head.z - hip.z, head.y - hip.y);
+    CHECK(foot.z - hip.z < -0.3f, "flying: feet trail behind (%.2f)", foot.z - hip.z);
+}
+
 // ---- mods: data.txt lines (runs last: it patches the content tables)
 static void testModData(const std::string& assets) {
     std::printf("[Mods: data patches]\n");
@@ -430,6 +444,7 @@ int lkRunTests(int argc, char** argv) {
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);
+    testFlightPose();
     testModData(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);
     return gFail ? 1 : 0;

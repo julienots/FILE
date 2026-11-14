@@ -277,13 +277,13 @@ struct CinematicState {
     std::string id;
     std::vector<CineShot> shots;
     int index = 0;
-    float t = 0, reveal = 0, fade = 0;
+    float t = 0, reveal = 0, fade = 0, waitLoad = 0;
     float savedTod = 8; int savedWeather = 0; std::string savedMusic;
 };
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel };
 
 class Game : public App {
 public:
@@ -438,6 +438,22 @@ public:
     void applyCinematicEnvironment();
     void drawCinematicShots();
     void unlockLore(const std::string& id, bool announce = true);
+    // hero wheel (Heroes.cpp, 1.8.0)
+    std::set<std::string> unlockedHeroes;      // saved as "heroes"
+    int activeHero = 0;                        // index in heroes(), saved as "hero <id>"
+    bool flying = false, usedDoubleJump = false, meteorPending = false;
+    float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
+    float heroCD[3] = {0, 0, 0};
+    const HeroDef& hero() const;
+    bool heroUnlocked(int i) const;
+    void unlockHero(const std::string& id, bool announce = true);
+    bool switchHero(int i);
+    bool heroHasPowers() const;
+    void castHeroPower(int slot);
+    void updateHeroAbilities(float dt);
+    bool heroJump();
+    void heroFlightPhysics(Character& c, float dt);
+    void drawHeroWheel();
     // mods (Mods.cpp)
     std::vector<ModInfo> mods;
     void scanMods();

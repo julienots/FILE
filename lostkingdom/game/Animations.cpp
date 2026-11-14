@@ -255,6 +255,24 @@ static void humanAir(const Animator& a, Pose& p) {
     }
     p.rot[H_SPINE] = E(8 * tuck - 6 * fall, 0, 0);
     p.rootOffset = vec3(0, 0.0f, 0);
+    // 1.8.0 flight (Astra): aux[2] = flight weight. Hovering stands tall with legs loose; at speed the body lies
+    // along the flight path, one fist forward, the other arm along the body, legs stretched back.
+    float fw = saturate(a.aux[2]);
+    if (fw > 0.001f) {
+        float sp = saturate(a.speed / 11.f), t = a.time;
+        float lean = lerpf(12.f, 72.f, sp);
+        float bob = std::sin(t * 2.2f);
+        quat f[H_COUNT];
+        for (int i = 0; i < H_COUNT; i++) f[i] = p.rot[i];
+        f[H_ROOT] = E(lean + bob * 2.f, 0, std::sin(t * 1.3f) * 3.f);
+        f[H_SPINE] = E(-4.f * sp, 0, 0); f[H_CHEST] = E(-6.f * sp, 0, 0);
+        f[H_NECK] = E(-lean * 0.55f, 0, 0); f[H_HEAD] = E(-lean * 0.25f, 0, 0);
+        f[H_THIGHL] = E(-6.f + 4.f * bob * (1 - sp), 0, 3); f[H_SHINL] = E(8.f + 10.f * (1 - sp), 0, 0); f[H_FOOTL] = E(35.f * sp, 0, 0);
+        f[H_THIGHR] = E(2.f - 3.f * bob * (1 - sp), 0, -3); f[H_SHINR] = E(14.f + 12.f * (1 - sp), 0, 0); f[H_FOOTR] = E(35.f * sp, 0, 0);
+        f[H_UARMR] = E(lerpf(-40.f, -170.f, sp), 0, -8); f[H_LARMR] = E(lerpf(-60.f, -5.f, sp), 0, 0); f[H_HANDR] = E(0, 0, 0);
+        f[H_UARML] = E(lerpf(-20.f, 12.f, sp), 0, lerpf(30.f, 10.f, sp)); f[H_LARML] = E(lerpf(-50.f, -10.f, sp), 0, 0);
+        for (int i = 0; i < H_COUNT; i++) p.rot[i] = nlerp(p.rot[i], f[i], fw);
+    }
 }
 
 static void humanSwim(const Animator& a, Pose& p) {

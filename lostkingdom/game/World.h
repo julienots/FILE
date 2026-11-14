@@ -132,6 +132,9 @@ public:
     void update(vec3 focus, float viewRadius, int uploadBudget, double now);  // main thread
     void forEachVisibleChunk(const std::function<void(Chunk&)>& fn);
     Chunk* chunkAt(float x, float z);
+    // fraction (0..1) of the chunks within `radius` of `focus` that are generated and uploaded (cinematics wait
+    // for their scenery before fading in)
+    float areaReady(vec3 focus, float radius) const;
     size_t loadedChunks() const { return chunks.size(); }
     size_t pendingChunks();
     float grassDensity = 1.f;

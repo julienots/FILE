@@ -37,6 +37,89 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, shot("02_title"), idle, "shot"});
     }
     s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); }, idle, "new game"});
+    if (name == "heroes") {
+        // 1.8.0: hero wheel (real tap), Kaede's kit (double jump, shuriken, shadow step, smoke), Astra's kit (flight,
+        // star beam, meteor from the sky without fall damage, solar wave), save / load of the roster
+        static int res[14]; static float peak, base, hp0, wolfHp0; static size_t proj0; static Entity wolf;
+        auto spawnWolf = [](Game& g, float ahead) {
+            Character& c = g.pc(); vec3 f{std::sin(c.yaw), 0, std::cos(c.yaw)};
+            vec3 p = c.pos + f * ahead; p.y = g.world.groundHeight(p.x, p.z);
+            wolf = g.spawnEnemy(enemyIndex("wolf"), p);
+            if (Character* w = g.reg.get<Character>(wolf)) { w->maxHp = w->hp = 5000; wolfHp0 = w->hp; w->yaw = c.yaw; }
+        };
+        auto wolfHp = [](Game& g) { Character* w = g.reg.get<Character>(wolf); return w ? w->hp : -1.f; };
+        s.push_back({2.f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.ui.recordWidgets = true;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 40, b->pos.y - 60, 2.4f);
+            g.timeOfDay = 12.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.level = 12; g.recomputeStats(); g.pc().hp = g.pc().maxHp; g.mp = g.maxMp;
+            g.unlockHero("kaede"); g.unlockHero("astra");
+            res[0] = g.heroUnlocked(heroIndex("kaede")) && g.heroUnlocked(heroIndex("astra")) && g.loreFound.count("hero_kaede") && g.loreFound.count("hero_astra");
+            g.menu = Menu::HeroWheel;
+        }, idle, "unlock + wheel"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/F0_hero_wheel.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { const Rect* r = g.ui.findWidget("hero:kaede"); if (r) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 700, (r->x + r->w / 2) * k, (r->y + r->h / 2) * k}); } }, idle, "press kaede"});
+        s.push_back({0.5f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 700) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 700, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({0.6f, [](Game& g) { res[1] = g.hero().id == "kaede" && g.menu == Menu::None && g.pc().vis.anim.stance == ST_DAGGER; g.stamina = g.maxStamina; }, idle, "kaede active"});
+        // double jump: higher than a single jump
+        s.push_back({1.f, [](Game& g) { base = g.pc().pos.y; peak = base; g.input.jump = true; }, [](Game& g, float t) {
+            peak = std::max(peak, g.pc().pos.y);
+            if (t > 0.22f && t < 0.26f) g.input.jump = true; }, "double jump"});
+        s.push_back({0.5f, [](Game& g) { res[2] = peak - base > 1.5f; AGR_LOG("HEROES double jump height %.2f m", peak - base); g.stamina = g.maxStamina; }, idle, "check"});
+        // shuriken
+        s.push_back({0.8f, [spawnWolf](Game& g) { spawnWolf(g, 9.f); g.lockTarget = wolf; proj0 = 0; g.reg.each<Projectile>([&](Entity, Projectile&) { proj0++; }); g.input.skill[0] = true; }, [](Game& g, float t) { if (t < 0.12f) { size_t n = 0; g.reg.each<Projectile>([&](Entity, Projectile&) { n++; }); if (n >= proj0 + 3) res[3] = 1; } }, "shuriken"});
+        s.push_back({0.4f, [wolfHp](Game& g) { res[4] = wolfHp(g) < wolfHp0; AGR_LOG("HEROES shuriken: wolf %.0f/%.0f", wolfHp(g), wolfHp0); wolfHp0 = wolfHp(g); g.heroCD[1] = 0; g.stamina = g.maxStamina; }, idle, "check"});
+        // shadow step: teleported next to the wolf and hit it
+        s.push_back({0.6f, [](Game& g) { g.input.skill[1] = true; }, idle, "shadow step"});
+        s.push_back({0.1f, [wolfHp](Game& g) { Character* w = g.reg.get<Character>(wolf); res[5] = w && distXZ(w->pos, g.pc().pos) < 3.f && wolfHp(g) < wolfHp0; AGR_LOG("HEROES shadow step: distance %.1f m, wolf %.0f", w ? distXZ(w->pos, g.pc().pos) : -1.f, wolfHp(g)); g.requestScreenshot("build/shots/F1_kaede.png"); g.stamina = g.maxStamina; }, idle, "check"});
+        // smoke bomb: stunned + stealth
+        s.push_back({0.3f, [](Game& g) { g.input.skill[2] = true; }, idle, "smoke"});
+        s.push_back({0.1f, [](Game& g) { Character* w = g.reg.get<Character>(wolf); res[6] = g.stealthT > 0 && w && w->status.stun > 0; g.requestScreenshot("build/shots/F2_smoke.png"); }, idle, "check"});
+        // switch to Astra
+        s.push_back({0.6f, [](Game& g) { if (g.reg.valid(wolf)) g.reg.destroyLater(wolf); g.lockTarget = NullEntity; res[7] = g.switchHero(heroIndex("astra")) && g.pc().vis.anim.stance == ST_UNARMED; g.stamina = g.maxStamina; g.mp = g.maxMp; }, idle, "astra"});
+        // flight: jump, jump again in the air, fly forward
+        s.push_back({3.f, [](Game& g) { g.input.jump = true; hp0 = g.pc().hp; }, [](Game& g, float t) {
+            if (t > 0.25f && t < 0.29f) g.input.jump = true;
+            if (t > 0.6f) { g.input.move = vec2(0, 1); g.camPitch = 0.4f; g.camDist = g.camDistTarget = 9.f; }
+            g.stamina = std::max(g.stamina, 50.f); }, "fly"});
+        s.push_back({0.1f, [](Game& g) {
+            float alt = g.pc().pos.y - g.groundAt(g.pc().pos.x, g.pc().pos.z);
+            res[8] = g.flying && alt > 3.f && alt < 10.f;
+            AGR_LOG("HEROES flight: flying %d, altitude %.1f m, speed %.1f m/s (anim state %d, flight pose %.2f, anim speed %.1f, airTime %.2f)", g.flying, alt, length(vec2(g.pc().vel.x, g.pc().vel.z)),
+                    (int)g.pc().vis.anim.state, g.pc().vis.anim.aux[2], g.pc().vis.anim.speed, g.pc().airTime);
+            g.requestScreenshot("build/shots/F3_astra_flight.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); }, "check"});
+        // side view of the flight pose
+        s.push_back({0.6f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camYaw = g.pc().yaw + PI * 0.5f; g.camPitch = 0.05f; g.camDist = g.camDistTarget = 7.f; g.camIdleT = 0; }, "side view"});
+        s.push_back({0.05f, [](Game& g) {
+            g.requestScreenshot("build/shots/F3b_astra_flight_side.png");
+            const PoseWorld& w = g.pc().vis.pw; vec3 hip = w.wpos[H_ROOT], head = w.wpos[H_HEAD], foot = (w.wpos[H_FOOTL] + w.wpos[H_FOOTR]) * 0.5f;
+            AGR_LOG("HEROES flight pose (model space): head-hip (%.2f, %.2f, %.2f) foot-hip (%.2f, %.2f, %.2f), state %d, aux %.2f, action %s",
+                    head.x - hip.x, head.y - hip.y, head.z - hip.z, foot.x - hip.x, foot.y - hip.y, foot.z - hip.z, (int)g.pc().vis.anim.state, g.pc().vis.anim.aux[2], g.pc().vis.anim.action() ? g.pc().vis.anim.action()->name.c_str() : "none");
+        }, [](Game& g, float) { g.input.move = vec2(0, 1); g.camYaw = g.pc().yaw + PI * 0.5f; }, "shot"});
+        // star beam from the sky
+        s.push_back({0.5f, [spawnWolf](Game& g) { spawnWolf(g, 10.f); g.lockTarget = wolf; g.input.skill[0] = true; }, idle, "beam"});
+        s.push_back({0.1f, [wolfHp](Game& g) { res[9] = wolfHp(g) < wolfHp0; wolfHp0 = wolfHp(g); AGR_LOG("HEROES star beam: wolf %.0f", wolfHp(g)); g.requestScreenshot("build/shots/F4_star_beam.png"); }, idle, "check"});
+        // meteor strike from the sky: lands, hits, no fall damage
+        s.push_back({1.6f, [](Game& g) { g.input.skill[1] = true; hp0 = g.pc().hp; }, idle, "meteor"});
+        s.push_back({0.1f, [wolfHp](Game& g) {
+            res[10] = !g.flying && g.pc().grounded && !g.meteorPending && wolfHp(g) < wolfHp0;
+            res[11] = g.pc().hp >= hp0 - 1.f;
+            AGR_LOG("HEROES meteor: grounded %d, wolf %.0f -> %.0f, hero hp %.0f -> %.0f", g.pc().grounded, wolfHp0, wolfHp(g), hp0, g.pc().hp);
+            wolfHp0 = wolfHp(g); g.heroCD[2] = 0; g.mp = g.maxMp; g.requestScreenshot("build/shots/F5_meteor.png"); }, idle, "check"});
+        s.push_back({0.3f, [](Game& g) { g.input.skill[2] = true; }, idle, "solar wave"});
+        s.push_back({0.1f, [](Game& g) { Character* w = g.reg.get<Character>(wolf); res[12] = w && w->status.stun > 0; }, idle, "check"});
+        // save / load keeps the roster and the active hero
+        s.push_back({0.3f, [](Game& g) {
+            g.saveGame(2); g.unlockedHeroes.clear(); g.activeHero = 0; g.loadGame(2); g.startPlaying();
+            res[13] = g.hero().id == "astra" && g.unlockedHeroes.count("kaede") && g.unlockedHeroes.count("astra");
+            AGR_LOG("HEROES TEST: unlock=%d wheelTap=%d doubleJump=%d shurikenThrown=%d shurikenHit=%d shadowStep=%d smoke=%d switchAstra=%d flight=%d beam=%d meteor=%d noFallDamage=%d solarWave=%d saveLoad=%d",
+                    res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[9], res[10], res[11], res[12], res[13]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG("HEROES TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        return s;
+    }
     if (name == "mods") {
         // 1.7.0: install a mod by hand (as the Android importer would), apply it, check data patches and an asset
         // override (villager_m.lkm replaced), then turn it off from the Mods menu with a real tap
@@ -82,7 +165,7 @@ static std::vector<Step> scenario(const std::string& name) {
         // then it is replayed and skipped with a real tap on "Passer"
         static int lastShot; static int res[6];
         s.push_back({0.1f, [](Game& g) { g.ui.recordWidgets = true; lastShot = -1; for (int& r : res) r = 0; res[0] = g.cine.active && g.cine.id == "prologue"; }, idle, "prologue started"});
-        s.push_back({76.f, none, [](Game& g, float) {
+        s.push_back({110.f, none, [](Game& g, float) {
             if (!g.cine.active) return;
             if (g.cine.index != lastShot && g.cine.t > 3.2f) {
                 lastShot = g.cine.index;

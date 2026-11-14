@@ -132,6 +132,7 @@ void Game::beginShot() {
     if (c.music != "-") audio.playMusic(c.music, 2.f);
     if (!c.sfx.empty()) play(c.sfx, 0.9f);
     camFocus = c.lookFrom;   // the world streams around what the camera looks at
+    cine.waitLoad = 0.0001f; // wait for it before fading in
     if (player != NullEntity) {
         Character& p = pc();
         if (c.heroDown) { p.vis.anim.setState(BodyState::Downed, 0.05f); p.vel = vec3(0); }
@@ -166,6 +167,15 @@ void Game::updateCinematicShots(float dt) {
     if (!cine.active) return;
     if (cine.index >= (int)cine.shots.size()) { endCinematicShots(false); return; }
     const CineShot& c = cine.shots[cine.index];
+    // hold on black until the scenery of the shot is streamed in (max 4 s, so a slow phone never blocks)
+    if (cine.waitLoad > 0) {
+        cine.waitLoad += dt;
+        float ready = world.areaReady(c.lookFrom, 110.f);
+        cine.fade = 1.f;
+        camFocus = c.lookFrom;
+        if (ready < 0.97f && cine.waitLoad < 4.f) return;
+        cine.waitLoad = 0;
+    }
     cine.t += dt;
     if (cine.t > 0.6f) cine.reveal += dt * 38.f;
     // fade: dip to black between shots

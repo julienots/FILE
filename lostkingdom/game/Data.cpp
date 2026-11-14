@@ -748,6 +748,19 @@ const std::vector<QuestDef>& quests() {
         Q("s_bandits", "Farine et fléaux", QuestType::Side, "gareth", "Les Écorcheurs pillent les convois de farine de Millbrook.",
           "Les Écorcheurs volent ma farine ! Leur camp est à l'est. Chasse-les, je t'en prie.", "Ils sont toujours là-bas, à l'est du moulin.", "Le moulin tourne de nouveau sans crainte. Merci !",
           {{"Vaincre des bandits", K::Kill, "bandit", 4, "bandit_camp"}, {"Vaincre des bandits archers", K::Kill, "bandit_archer", 2, "bandit_camp"}}, 260, 90, {"shield_iron", "bread", "bread"}, FA_GREENHAVEN, 15);
+        // ---- hero quests (1.8.0): each one unlocks a hero of the wheel
+        Q("h_kaede", "La lame des brumes", QuestType::Side, "tomas", "Une ombre traque les Écorcheurs. Tomas dit qu'elle ne laisse pas de traces, seulement des bandits endormis.",
+          "Il y a quelqu'un dans les bois, voyageur. Rapide. Silencieux. Elle chasse les Écorcheurs à l'est, seule. Aide-la, ou elle finira comme les autres naufragés.",
+          "Elle t'attend près des Ruines de Vael. Elle n'attend jamais longtemps.",
+          "Elle s'appelle Kaede. Elle dit qu'elle vient d'un archipel que personne ne connaît, et que la mer l'a rejetée comme toi. Elle marchera à tes côtés.",
+          {{"Vaincre des Écorcheurs avec l'ombre", K::Kill, "bandit", 4, "bandit_camp"}, {"Rejoindre l'ombre aux Ruines de Vael", K::Discover, "vael_ruins", 1, "vael_ruins"}, {"Revenir voir Tomas", K::Talk, "tomas", 1, "brindlemere"}},
+          320, 80, {"potion_minor", "potion_minor"}, FA_GREENHAVEN, 10);
+        Q("h_astra", "L'étoile tombée", QuestType::Side, "ilian", "Ilian l'astronome a vu une étoile quitter sa place et tomber sur les Cimes.",
+          "Une étoile est tombée près de la Mine des Cimes. Les étoiles ne tombent pas, voyageur. Elles descendent. Va voir ce qui est descendu.",
+          "Les dragonnets tournent autour du cratère. Quelque chose les attire.",
+          "Elle s'appelle Astra. Elle dit qu'elle gardait le ciel au-dessus de la Couronne, et que le sceau l'a appelée, comme il t'a appelé. Elle vole. Je l'ai vue. Elle vole !",
+          {{"Trouver le lieu de la chute, près de la Mine des Cimes", K::Discover, "crown_mine", 1, "crown_mine"}, {"Chasser les dragonnets du cratère", K::Kill, "drakeling", 3, "crown_mine"}, {"Revenir voir Ilian", K::Talk, "ilian", 1, "astronomer"}},
+          700, 200, {"potion_heal"}, -1, 0);
         Q("s_iron", "Le fer de Hilda", QuestType::Side, "hilda", "Hilda manque de minerai de fer pour sa forge.",
           "Mon stock de fer est vide. Rapporte-moi cinq minerais de fer, et je t'apprendrai à forger.", "Cinq minerais, pas un de moins.", "Parfait ! Voilà de quoi te défendre. La forge t'est ouverte.",
           {{"Rapporter du minerai de fer", K::Deliver, "iron_ore", 5, "brindlemere"}}, 120, 30, {"axe_iron", "iron_bar", "iron_bar"}, FA_GREENHAVEN, 10);
@@ -880,10 +893,55 @@ const std::vector<LoreDef>& lore() {
         {"mem_spider", "Souvenir : le jeune moine", "La forge de Highspire, la nuit où la Couronne fut brisée. Dans l'ombre, un novice qui tenait les tenailles : cheveux noirs, regard vif, une cicatrice au menton. Tu as déjà vu ce visage. Hier. Il n'a pas pris une ride."},
         {"mem_titan", "Souvenir : la clé de la forge", "Tu as confié la clé de la forge à l'Ordre en disant : « Que personne ne puisse jamais la reforger. » Le prieur a juré. Derrière lui, le novice à la cicatrice souriait."},
         {"mem_knight", "Souvenir : le champion", "Corwin, à genoux devant la porte de l'Abîme, et toi qui entres sans te retourner. « Attends-moi. » C'est le dernier mot que tu lui as dit. Il a attendu. Il attend encore. Ou il t'a enfin reconnu."},
+        // ---- heroes of the wheel (1.8.0)
+        {"hero_wanderer", "Le Naufragé", "Le premier Errant à survivre plus d'une lune. Une épée rouillée, une marque au poignet, et cette façon de regarder Morneval comme on regarde une maison qu'on a quittée. Il ne le sait pas encore : il est l'âme d'Aldric."},
+        {"hero_kaede", "Kaede, Lame des Brumes", "Elle vient de l'archipel de Shirokawa, que les cartes du royaume ne connaissent pas. Elle était la dernière gardienne d'un temple qui veillait sur un septième fragment, celui qu'Aldric n'a jamais nommé. La nuit où le sceau a craqué, le temple a brûlé, et la mer l'a portée jusqu'ici. Elle se bat avec deux lames, des étoiles d'acier et la fumée. Elle ne dit jamais ce qu'elle cherche. Elle le cherche quand même."},
+        {"hero_astra", "Astra, l'Étoile tombée", "Les anciens rois savaient qu'une étoile veillait sur la Couronne-Mère. Ils l'appelaient la Sentinelle. Quand le sceau a commencé à mourir, la Sentinelle a quitté le ciel pour le suivre. Ilian l'a vue descendre au-dessus des Cimes. Astra vole, frappe comme une comète et brûle comme une aube. Elle se souvient d'Aldric. Elle ne se souvient pas de lui comme d'un ami."},
         {"mem_abyss", "Souvenir : la voix", "Au fond de l'Abîme, une voix qui connaît ton vrai nom. « Tu es revenu, Aldric. Mais pas pour sceller. Pour choisir. » Tu sais maintenant qui tu es. Il te reste à décider ce que tu feras de la couronne."},
     };
     return l;
 }
+
+// ---------------------------------------------------------------------------------------- heroes (1.8.0)
+const std::vector<HeroDef>& heroes() {
+    static std::vector<HeroDef> h;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        HeroDef w;
+        w.id = "wanderer"; w.name = "Le Naufragé"; w.title = "L'âme d'Aldric"; w.model = "hero";
+        w.look.hair = Hair::Ponytail; w.look.hairCol = hexColor(0x3a2418); w.look.c1 = hexColor(0x5a3a2a); w.look.seed = 7;
+        w.lore = "hero_wanderer"; w.color = hexColor(0xe8c070);
+        h.push_back(w);
+
+        HeroDef k;
+        k.id = "kaede"; k.name = "Kaede"; k.title = "Lame des Brumes"; k.model = "hero_ninja";
+        k.look.female = true; k.look.body = Body::Leather; k.look.helm = Helm::Hood; k.look.hair = Hair::Ponytail; k.look.hairCol = hexColor(0x14121a);
+        k.look.c1 = hexColor(0x1d2236); k.look.c2 = hexColor(0x2a2638); k.look.c3 = hexColor(0x15131c); k.look.trim = hexColor(0xb03040);
+        k.look.skin = hexColor(0xe2b896); k.look.bulk = 0.9f; k.look.gauntlets = true; k.look.seed = 41;
+        k.weapon = WeaponType::Dagger; k.fixedWeapon = true; k.hpMul = 0.85f; k.atkMul = 1.1f; k.speedMul = 1.18f; k.doubleJump = true;
+        k.powers[0] = {HeroPower::Shuriken, "Shuriken", "i_sp_missiles", 2.5f, 10, 0, 0.7f};
+        k.powers[1] = {HeroPower::ShadowStep, "Pas de l'ombre", "i_sp_shadowstep", 6.f, 20, 0, 2.2f};
+        k.powers[2] = {HeroPower::SmokeBomb, "Bombe fumigène", "i_sp_souldrain", 14.f, 25, 0, 0.5f};
+        k.unlockQuest = "h_kaede"; k.unlockHint = "Quête « La lame des brumes » : parlez à Tomas, le chasseur de Brindlemere.";
+        k.lore = "hero_kaede"; k.color = hexColor(0x8a70ff);
+        h.push_back(k);
+
+        HeroDef a;
+        a.id = "astra"; a.name = "Astra"; a.title = "L'Étoile tombée"; a.model = "hero_flyer";
+        a.look.female = true; a.look.body = Body::Plate; a.look.hair = Hair::Long; a.look.hairCol = hexColor(0xf0d890);
+        a.look.c1 = hexColor(0x2a4fd0); a.look.c2 = hexColor(0x1e2f80); a.look.c3 = hexColor(0xd8b040); a.look.metal = hexColor(0x3a62e8); a.look.trim = hexColor(0xf0c850);
+        a.look.cape = true; a.look.gauntlets = true; a.look.greaves = true; a.look.skin = hexColor(0xf0caa8); a.look.eyes = hexColor(0x60c0ff); a.look.seed = 77;
+        a.weapon = WeaponType::None; a.fixedWeapon = true; a.hpMul = 1.1f; a.atkMul = 1.05f; a.canFly = true;
+        a.powers[0] = {HeroPower::StarBeam, "Rayon stellaire", "i_sp_holylight", 4.f, 0, 12, 1.6f};
+        a.powers[1] = {HeroPower::MeteorStrike, "Frappe météore", "i_sp_fireball", 9.f, 0, 20, 2.6f};
+        a.powers[2] = {HeroPower::SolarWave, "Onde solaire", "i_sp_arcanenova", 15.f, 0, 25, 1.2f};
+        a.unlockQuest = "h_astra"; a.unlockHint = "Quête « L'étoile tombée » : parlez à Ilian, l'astronome de la tour.";
+        a.lore = "hero_astra"; a.color = hexColor(0xffd060);
+        h.push_back(a);
+    });
+    return h;
+}
+int heroIndex(const std::string& id) { auto& h = heroes(); for (int i = 0; i < (int)h.size(); i++) if (h[i].id == id) return i; return -1; }
 
 // ---------------------------------------------------------------------------------------- mods (1.7.0)
 // The tables are built once into static non-const storage; mods patch them at startup, before any use.

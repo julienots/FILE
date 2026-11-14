@@ -8,6 +8,7 @@ vec3 rotate3(vec3 v, float a);
 bool Game::canSee(const Character& a, const Character& b, float range, float fov) {
     vec3 d = b.pos - a.pos; d.y = 0;
     float dist = length(d);
+    if (stealthT > 0 && b.team == Team::Player && dist > 2.f) return false;   // Kaede's smoke
     if (dist > range) return false;
     if (dist < 5.f) return true;  // too close to miss
     vec3 fwd{std::sin(a.yaw), 0, std::cos(a.yaw)};

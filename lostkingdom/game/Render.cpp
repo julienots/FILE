@@ -185,7 +185,9 @@ void Game::renderWorld(float dt) {
     vec3 focus = camFocus;
     const GraphicsSettings& gs = renderer.settings;
     // stream the world around the focus point (not while inside a dungeon)
-    if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, gs.drawDistance, state == GameState::Playing ? 3 : 6, realTime);
+    // story cinematics film wide views: larger streaming radius and upload budget while they play
+    float streamR = cine.active ? std::max(gs.drawDistance, 150.f) : gs.drawDistance;
+    if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, streamR, state == GameState::Playing ? (cine.active ? 8 : 3) : 6, realTime);
     // horizon relief: upload once the background build is done (and again after a context loss)
     if (!farTerrainData && farTerrainBuild.valid() && farTerrainBuild.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         farTerrainData = farTerrainBuild.get();
@@ -202,7 +204,7 @@ void Game::renderWorld(float dt) {
         world.forEachVisibleChunk([&](Chunk& ch) {
             if (!cam.frustum.visible(ch.bounds)) return;
             float d = distXZ(ch.bounds.center(), focus);
-            if (d > gs.drawDistance + CHUNK) return;
+            if (d > (cine.active ? std::max(gs.drawDistance, 150.f) : gs.drawDistance) + CHUNK) return;
             DrawItem it; it.tint = vec4(1, 1, 1, 0);
             if (ch.terrain.valid()) { it.mesh = &ch.terrain; it.flags = LIT_TERRAIN; it.castShadow = d < 70.f; renderer.submit(it); }
             // shadow casters limited to what the ~43 m shadow map around the hero can actually show

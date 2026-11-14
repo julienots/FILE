@@ -212,6 +212,7 @@ void Game::newGame() {
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); activeMount = -1;
     questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
     storyFlags.clear(); cine = CinematicState(); pendingPrologue = true;
+    unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; meteorPending = false;
     killedUnique.clear(); openedChests.clear(); clearedSpawns.clear(); dungeonsDone.clear(); world.harvested.clear();
     for (auto& r : reputation) r = 0;
     fog.assign(128 * 128, 0);
@@ -358,6 +359,7 @@ void Game::drawMenus(float dt) {
     float W_ = u.W, H_ = u.H;
     if (menu == Menu::None) return;
     if (layoutEdit) { drawLayoutEditor(); return; }
+    if (menu == Menu::HeroWheel) { drawHeroWheel(); return; }
     if (menu != Menu::Death) u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, 0.55f));
     // ---------------------------------------------------------------- pause & death
     if (menu == Menu::Pause) {

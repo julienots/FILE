@@ -18,7 +18,7 @@ Rect ctlRect(const Game& g, int id) {
 // Contextual buttons are hidden (and not touchable) when they have nothing to do.
 bool Game::ctlVisible(int id) const {
     if (id == CTL_INTERACT) return interactTarget != NullEntity || !dungeonPrompt.empty() || fishingT >= 0;
-    if (id >= CTL_SKILL1 && id <= CTL_SKILL3) return equippedSpells[id - CTL_SKILL1] >= 0;
+    if (id >= CTL_SKILL1 && id <= CTL_SKILL3) return heroHasPowers() || equippedSpells[id - CTL_SKILL1] >= 0;
     if (id == CTL_MOUNT) return !ownedMounts.empty() || riding;
     return true;
 }
@@ -91,6 +91,7 @@ void Game::updateTouchControls() {
     for (auto& f : u.fingers) {
         if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
+        if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
         if (f.pressed && left && joyFinger < 0) { joyFinger = f.id; joyOrigin = vec2(f.x, f.y); }
         else if (f.pressed && !left) {
@@ -161,6 +162,7 @@ void Game::updateTouchControls() {
     }
     if (!camAlive) camFinger = -1;
     if (u.button(bMenu)) { menu = Menu::Pause; play("ui_open", 0.6f); }
+    if (u.button(Rect{14, 14, 108, 108})) { menu = Menu::HeroWheel; play("ui_open", 0.6f); }   // portrait: hero wheel
     if (u.button(bMap) || u.button(mini)) { menu = Menu::Map; play("ui_open", 0.6f); mapPan = vec2(0, 0); }
     if (u.button(bBag)) { menu = Menu::Inventory; play("ui_open", 0.6f); }
 }
@@ -429,6 +431,12 @@ void Game::drawHud(float dt) {
     ctl(CTL_DODGE, CTL_ICON[CTL_DODGE], stamina > 10, 0, "", vec4(1, 1, 1, 1), "round");
     ctl(CTL_JUMP, CTL_ICON[CTL_JUMP], true, 0, "", vec4(1, 1, 1, 1), "round");
     ctl(CTL_BLOCK, CTL_ICON[CTL_BLOCK], true, 0, "", vec4(1, 1, 1, 1), "round");
+    if (heroHasPowers()) {
+        for (int i = 0; i < 3; i++) {
+            const HeroPowerDef& pw = hero().powers[i];
+            ctl(CTL_SKILL1 + i, pw.icon.substr(2), stamina >= pw.stamina && mp >= pw.mana, heroCD[i] / std::max(0.1f, pw.cooldown), "", vec4(hero().color, 1), "round");
+        }
+    } else
     for (int i = 0; i < 3; i++) {
         int si = equippedSpells[i];
         if (si < 0) continue;  // empty slot: hidden (assign spells in the Skills menu)

@@ -46,6 +46,9 @@ void Game::recomputeStats() {
     c.atk = atk * (1 + atkPct); c.def = def; c.element = elem; c.elemDmg = elemDmg;
     maxMp = mpMax; mp = std::min(mp, maxMp); maxStamina = stMax; stamina = std::min(stamina, maxStamina);
     critChance = std::min(0.75f, crit); critDmg = cdmg; moveSpeedMul = 1.f + speed;
+    // hero of the wheel
+    const HeroDef& hd = hero();
+    c.maxHp *= hd.hpMul; c.hp = std::min(c.maxHp, hpRatio * c.maxHp); c.atk *= hd.atkMul; moveSpeedMul *= hd.speedMul;
 }
 
 float skillBonus(const std::set<std::string>& skills, float SkillNode::*field) {
@@ -80,15 +83,28 @@ void Game::rebuildPlayerVisual() {
     const ItemDef* o = item(equipment[SL_OFFHAND].id);
     WeaponType wt = w ? w->weapon : WeaponType::None;
     WeaponType ot = o && wt != WeaponType::Bow && wt != WeaponType::Longsword && wt != WeaponType::Hammer && wt != WeaponType::Spear && wt != WeaponType::Staff ? o->weapon : WeaponType::None;
+    // hero wheel: Kaede / Astra have their own look and fighting style (the gear still gives the stats)
+    const HeroDef& hd = hero();
+    bool altHero = activeHero > 0;
+    if (altHero) { L = hd.look; if (hd.fixedWeapon) { wt = hd.weapon; ot = hd.weapon == WeaponType::Dagger ? WeaponType::Dagger : WeaponType::None; } }
     Animator keep = c.vis.anim;
     bool had = c.vis.mesh != nullptr;
     setupVisualHumanoid(c.vis, L, wt, ot, 1.f);
-    if (w) c.vis.weapon = weaponMesh(wt, w->tier, elementColor(w->element), &c.vis.tip);
+    if (altHero && hd.fixedWeapon) {
+        int tier = w ? w->tier : 1;
+        if (wt != WeaponType::None) c.vis.weapon = weaponMesh(wt, tier, hd.color, &c.vis.tip); else c.vis.weapon.reset();
+        if (ot != WeaponType::None) c.vis.offhand = weaponMesh(ot, tier, hd.color); else c.vis.offhand.reset();
+        w = nullptr; o = nullptr;
+    }
+    else if (w) c.vis.weapon = weaponMesh(wt, w->tier, elementColor(w->element), &c.vis.tip);
     if (o && ot != WeaponType::None) c.vis.offhand = weaponMesh(ot, o->tier, o->color);
     if (had) { int st = c.vis.anim.stance; c.vis.anim = keep; c.vis.anim.stance = st; }
     c.vis.albedo = 0;
     c.vis.anim.skeleton = &skeleton(Arch::Humanoid);
-    if (useHeroModel()) {
+    if (altHero) {
+        // the hero's imported model when provided (assets/models/hero_ninja.lkm, hero_flyer.lkm), else procedural
+        if (!hd.model.empty()) applyImportedModel(c.vis, hd.model);
+    } else if (useHeroModel()) {
         // imported model: fitted skeleton (same bones, so every animation plays), own cape in the mesh
         applyImportedModel(c.vis, "hero");
     }
@@ -149,6 +165,14 @@ static const Clip* heavyClip(int stance) {
 void Game::playerAttack(bool heavy, bool charged) {
     Character& c = pc();
     if (c.dead || riding || c.swimming || c.hitStun > 0) return;
+    if (flying) {   // Astra: attacking from the sky is a dive punch
+        flying = false; meteorPending = true; meteorPower = c.atk * (heavy || charged ? 1.8f : 1.2f);
+        c.vel.y = -26.f; c.invuln = 0.6f;
+        Entity t = lockTarget != NullEntity ? lockTarget : findTarget(c.pos, c.yaw, 18.f, Team::Enemy, -0.2f);
+        if (Character* tc = t != NullEntity ? reg.get<Character>(t) : nullptr) { vec3 d = tc->pos - c.pos; d.y = 0; c.vel.x = d.x * 1.4f; c.vel.z = d.z * 1.4f; }
+        play("swing_heavy", 0.9f, 0.8f);
+        return;
+    }
     Animator& a = c.vis.anim;
     if (c.attackClip && !(a.actionTime() >= c.attackClip->comboOpen)) { attackBuf = 0.45f; attackBufHeavy = heavy; return; }  // buffered
     float cost = heavy ? 18.f : 6.f;
@@ -201,7 +225,9 @@ void Game::playerDodge() {
 
 void Game::playerJump() {
     Character& c = pc();
-    if (c.dead || riding || !c.grounded || c.attackClip) return;
+    if (c.dead || riding) return;
+    if (heroJump()) return;   // double jump, take off / land (hero wheel)
+    if (!c.grounded || c.attackClip) return;
     if (c.swimming) { c.vel.y = 3.f; return; }
     // vault over low climbable obstacles in front
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
@@ -611,7 +637,8 @@ void Game::updatePlayer(float dt) {
     if (input.interact) playerInteract();
     if (input.mount) toggleMount();
     if (input.potion) usePotion();
-    for (int i = 0; i < 3; i++) if (input.skill[i]) castSpell(i);
+    for (int i = 0; i < 3; i++) if (input.skill[i]) { if (heroHasPowers()) castHeroPower(i); else castSpell(i); }
+    updateHeroAbilities(dt);
 
     // ---- mounted
     if (riding && reg.valid(mountEnt)) {
@@ -675,12 +702,13 @@ void Game::updatePlayer(float dt) {
     sprinting = input.sprint && mag > 0.6f && stamina > 3 && !blocking && !c.swimming;
     if (sprinting) { baseSpeed = 7.2f; stamina -= dt * 13.f; staminaRegenDelay = 0.6f; }
     if (blocking) baseSpeed = std::min(baseSpeed, 1.8f);
+    if (flying) { baseSpeed = sprinting ? 17.f : 11.f; sprinting = false; }   // Astra's flight (no sprint stamina cost)
     float speed = baseSpeed * moveSpeedMul * (c.status.slow > 0 ? 0.55f : 1.f) * (c.swimming ? 0.55f : 1.f);
     if (charging) speed *= 0.4f;
     if (fishingT >= 0) speed = 0;
     vec3 dv = (busy || c.status.root > 0 || c.status.freeze > 0) ? vec3(0) : want * speed * (mag < 0.15f ? 0 : 1);
     float rate = length2(dv) > length2(vec3(c.vel.x, 0, c.vel.z)) ? 9.f : 12.f;
-    if (!c.grounded) rate = 2.f;
+    if (!c.grounded) rate = flying ? 4.f : 2.f;
     c.vel.x = damp(c.vel.x, dv.x, rate, dt);
     c.vel.z = damp(c.vel.z, dv.z, rate, dt);
     float hs = length(vec2(c.vel.x, c.vel.z));

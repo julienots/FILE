@@ -1266,6 +1266,22 @@ void World::forEachVisibleChunk(const std::function<void(Chunk&)>& fn) {
     for (auto& kv : chunks) if (kv.second->ready) fn(*kv.second);
 }
 
+float World::areaReady(vec3 focus, float radius) const {
+    ChunkKey fc = chunkOf(focus.x, focus.z);
+    int R = (int)std::ceil(radius / CHUNK), total = 0, ready = 0;
+    for (int dz = -R; dz <= R; dz++)
+        for (int dx = -R; dx <= R; dx++) {
+            ChunkKey k{fc.x + dx, fc.z + dz};
+            if (k.x < 0 || k.z < 0 || k.x >= CHUNKS || k.z >= CHUNKS) continue;
+            vec2 cc{(k.x + 0.5f) * CHUNK, (k.z + 0.5f) * CHUNK};
+            if (length(cc - focus.xz()) > radius) continue;
+            total++;
+            auto it = chunks.find(k);
+            if (it != chunks.end() && it->second->ready) ready++;
+        }
+    return total ? (float)ready / total : 1.f;
+}
+
 Chunk* World::chunkAt(float x, float z) {
     auto it = chunks.find(chunkOf(x, z));
     return it == chunks.end() ? nullptr : it->second.get();

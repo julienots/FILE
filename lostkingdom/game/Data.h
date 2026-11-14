@@ -165,6 +165,25 @@ const std::vector<DungeonDef>& dungeons();
 struct LoreDef { std::string id, title, text; };
 const std::vector<LoreDef>& lore();
 
+// ---- heroes (1.8.0): the hero wheel. Each hero has a look (imported model id + procedural fallback), a fixed
+// weapon style, stat multipliers, movement gifts and three signature powers on the skill buttons.
+enum class HeroPower : uint8_t { None, Shuriken, ShadowStep, SmokeBomb, StarBeam, MeteorStrike, SolarWave };
+struct HeroPowerDef { HeroPower kind = HeroPower::None; std::string name, icon; float cooldown = 5, stamina = 0, mana = 0, power = 1; };
+struct HeroDef {
+    std::string id, name, title, model;      // model: imported model id (assets/models/<model>.lkm), "" = procedural
+    HumanoidLook look;                       // procedural fallback look
+    WeaponType weapon = WeaponType::None;    // None: uses the equipped weapon (the Wanderer)
+    bool fixedWeapon = false;                // true: the hero always fights with `weapon` (Kaede: daggers, Astra: fists)
+    float hpMul = 1, atkMul = 1, speedMul = 1;
+    bool doubleJump = false, canFly = false;
+    HeroPowerDef powers[3];                  // empty: the hero uses the equipped spells
+    std::string unlockQuest;                 // completing this quest unlocks the hero ("" = always available)
+    std::string unlockHint, lore;            // shown on a locked slot / Chronicles page id
+    vec3 color{1, 1, 1};                     // wheel accent
+};
+const std::vector<HeroDef>& heroes();
+int heroIndex(const std::string& id);
+
 // ---- mods (1.7.0): write access to the content tables, used only by the mod loader at startup
 ItemDef* itemMutable(const std::string& id);
 EnemyDef* enemyMutable(const std::string& id);
