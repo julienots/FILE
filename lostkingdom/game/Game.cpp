@@ -56,6 +56,7 @@ bool Game::init(int w, int h) {
     world.detailedFoliage = settings.profile <= QualityProfile::Medium;
     if (!gpuReady) {
         world.buildPlan();
+        farTerrainBuild = std::async(std::launch::async, [this] { auto mb = std::make_shared<MeshBuilder>(); world.buildFarMesh(*mb, 112); return mb; });
         world.startWorkers(std::max(1, std::min(3, platform::cpuCount() - 1)));
         std::thread([this] { world.generateMapImage(); }).detach();
         loadAssets();
@@ -87,6 +88,7 @@ void Game::contextLost() {
     particles = ParticleSystem();
     meshCache.clear();
     for (auto& kv : importedModels) if (kv.second) { kv.second->mesh.reset(); kv.second->tex = Texture(); }
+    farTerrain.reset();
     windmillBlades.reset(); chestMesh.reset(); chestOpenMesh.reset(); pickupMesh.reset(); arrowMesh.reset(); boulderMesh.reset(); orbMesh.reset();
     gateMesh.reset(); brazierMesh.reset(); bladeMesh.reset(); spikeMesh.reset(); leverMesh.reset();
     for (auto& m : nodeMeshes) m.reset();

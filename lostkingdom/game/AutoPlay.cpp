@@ -83,10 +83,133 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "npcs") {
+        // 1.6.1: line-up of villagers and named NPCs facing the camera (procedural character look checks)
+        static std::vector<Entity> spawned;
+        auto lineUp = [](Game& g, float camDist, float pitch) {
+            Character& p = g.pc();
+            vec3 fwd{-std::sin(g.camYaw), 0, -std::cos(g.camYaw)}, right{std::cos(g.camYaw), 0, -std::sin(g.camYaw)};
+            for (size_t i = 0; i < spawned.size(); i++) {
+                Character* c = g.reg.get<Character>(spawned[i]);
+                if (!c) continue;
+                c->pos = p.pos + fwd * 2.6f + right * ((float)i - (spawned.size() - 1) * 0.5f) * 0.95f;
+                c->pos.y = g.world.groundHeight(c->pos.x, c->pos.z); c->vel = vec3(0);
+                c->yaw = std::atan2(-fwd.x, -fwd.z);
+                if (NpcBrain* nb = g.reg.get<NpcBrain>(spawned[i])) { nb->dest = c->pos; nb->home = nb->work = nb->social = nb->bed = c->pos; }
+            }
+            g.camPitch = pitch; g.camDist = g.camDistTarget = camDist; g.camIdleT = 0;
+            p.vis.visible = false;   // the hero would stand in front of the line-up
+        };
+        s.push_back({2.5f, [](Game& g) {
+            spawned.clear();
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 30, b->pos.y + 30, 0.6f);
+            g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            int vil = 0; for (size_t i = 0; i < g.world.pois.size(); i++) if (g.world.pois[i].id == "brindlemere") vil = (int)i;
+            vec3 at = g.pc().pos;
+            for (uint32_t sd : {11u, 23u, 37u, 41u}) spawned.push_back(g.spawnVillager(at, vil, sd));
+            for (const char* id : {"maelle", "hilda"}) for (size_t k = 0; k < npcs().size(); k++) if (npcs()[k].id == id) spawned.push_back(g.spawnNpc((int)k, at, vil));
+        }, [lineUp](Game& g, float) { lineUp(g, 6.5f, 0.12f); }, "spawn"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/B0_npcs_lineup.png"); }, [lineUp](Game& g, float) { lineUp(g, 6.5f, 0.12f); }, "shot"});
+        s.push_back({1.f, none, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "closer"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/B1_npcs_close.png"); }, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
+        return s;
+    }
+    if (name == "vista") {
+        // 1.6.1: low camera views towards the mountains (relief and horizon checks)
+        struct V { float x, z, tx, tz, tod; const char* f; float pitch = 0.08f, dist = 15.f; };
+        static const V views[] = {{1300, 1350, 850, 600, 10.5f, "A0_vista_green_to_frost"}, {900, 800, 600, 350, 11.f, "A1_vista_frostheim"},
+                                  {2150, 1150, 2650, 900, 14.f, "A2_vista_highcrowns"}, {2050, 1500, 2460, 1960, 16.5f, "A3_vista_volcano"},
+                                  {1480, 1700, 1480, 1200, 9.f, "A4_vista_brindlemere"},
+                                  {760, 900, 600, 400, 11.f, "A5_mountains_frostheim", 0.3f, 40.f}, {2300, 1000, 2650, 800, 13.f, "A6_mountains_highcrowns", 0.3f, 40.f},
+                                  {1150, 820, 700, 450, 12.f, "A7_frost_range", 0.12f, 30.f}};
+        for (const V& v : views) {
+            s.push_back({4.f, [v](Game& g) {
+                vec2 d{v.tx - v.x, v.tz - v.z};
+                teleport(g, v.x, v.z, std::atan2(-d.x, -d.y));
+                g.timeOfDay = v.tod; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+                g.camPitch = v.pitch; g.camDist = g.camDistTarget = v.dist; }, [](Game& g, float) { g.camIdleT = 0; }, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
+    if (name == "grass") {
+        // 1.6.1: dense meadow grass bent by the hero and the trail he leaves, which then springs back
+        static int res[3];
+        auto active = [](Game& g) { int n = 0; for (auto& p : g.env.pushers) if (p.w != 0.f) n++; return n; };
+        s.push_back({2.5f, [](Game& g) { for (int& r : res) r = 0; const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 40, p->pos.y - 60, 2.4f); g.timeOfDay = 15.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); }, idle, "meadow"});
+        s.push_back({2.2f, [](Game& g) { g.camPitch = 0.95f; g.camDist = g.camDistTarget = 8.f; }, [](Game& g, float) { g.input.move = vec2(0, 0.55f); g.camIdleT = 0; }, "walk"});
+        s.push_back({0.04f, [active](Game& g) { res[0] = active(g) >= 4; AGR_LOG("GRASS walking: %d active benders (hero + trail + characters)", active(g)); g.requestScreenshot("build/shots/98_grass_trail.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.55f); }, "shot"});
+        s.push_back({3.f, none, idle, "stand"});
+        s.push_back({0.04f, [](Game& g) {
+            // after 3 s still, the trail has sprung back: only the hero (and other characters) remain
+            int trail = 0; for (auto& t : g.grassTrail) if (g.realTime - t.t < 2.5f) trail++;
+            res[1] = trail == 0;
+            float x0 = g.pc().pos.x, z0 = g.pc().pos.z; int blades = 0;
+            g.world.forEachVisibleChunk([&](Chunk& ch) { if (ch.grassNear.valid() && distXZ(ch.bounds.center(), g.pc().pos) < 40) blades++; });
+            res[2] = blades > 0;
+            AGR_LOG("GRASS after standing: fresh trail marks %d, chunks with near grass %d", trail, blades); (void)x0; (void)z0;
+            g.requestScreenshot("build/shots/99_grass_recovered.png");
+        }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
+        return s;
+    }
+    if (name == "ui") {
+        // Menu / dialogue buttons with REAL multi-frame taps (finger down, held 0.2 s, released), the way a phone
+        // delivers them. Regression for 1.6.0 feedback: "buttons in dialogues and menus do nothing".
+        static int res[8]; static float yaw0; static std::string sig;
+        static std::string want;
+        // tap the widget labelled `label` (found in the previous frame's UI), held for `hold` seconds
+        auto tapWidget = [&s, idle](const char* what, std::function<std::string(Game&)> label, float hold, std::function<void(Game&)> check) {
+            static int fid = 500;
+            s.push_back({hold, [label](Game& g) {
+                want = label(g); const Rect* r = g.ui.findWidget(want);
+                if (!r) { AGR_LOG("UI TEST: widget '%s' not found", want.c_str()); return; }
+                fid++; float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, fid, (r->x + r->w * 0.5f) * k, (r->y + r->h * 0.5f) * k});
+            }, idle, what});
+            s.push_back({0.4f, [](Game& g) {
+                for (auto& f : g.ui.fingers) if (f.id == fid && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, fid, f.x * k, f.y * k}); }
+            }, idle, "release"});
+            s.push_back({0.1f, check, idle, "check"});
+        };
+        s.push_back({2.f, [](Game& g) { for (int& r : res) r = 0; g.ui.recordWidgets = true; const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 2, b->pos.y + 12, 0.4f); g.timeOfDay = 10.f; g.toastHint.clear(); }, idle, "setup"});
+        // dialogue: open Maëlle, advance with held taps on the box, then press a choice button
+        s.push_back({1.f, [](Game& g) { g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0 && npcs()[c.npcDef].id == "maelle") { teleport(g, c.pos.x, c.pos.z + 2.5f, 0.2f); g.pc().yaw = PI; g.openDialog(e); } }); yaw0 = g.camYaw; }, idle, "talk"});
+        for (int i = 0; i < 6; i++) {
+            s.push_back({0.2f, [](Game& g) { if (!g.dialog.open || g.dialog.line + 1 >= (int)g.dialog.lines.size()) return; float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 480, g.ui.W * 0.4f * k, (g.ui.H - 150) * k}); }, idle, "hold box"});
+            s.push_back({0.4f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 480 && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 480, f.x * k, f.y * k}); } }, idle, "release box"});
+        }
+        s.push_back({0.1f, [](Game& g) { res[0] = g.dialog.open && g.dialog.line + 1 >= (int)g.dialog.lines.size() && !g.dialog.choices.empty(); sig = g.dialog.choices.empty() ? "" : g.dialog.choices[0].action; g.requestScreenshot("build/shots/96_ui_dialog.png"); AGR_LOG("UI dialogue: last line reached %d, %zu choices, first '%s'", res[0], g.dialog.choices.size(), sig.c_str()); }, idle, "dialog end"});
+        tapWidget("tap choice", [](Game& g) { return g.dialog.choices.empty() ? std::string("?") : g.dialog.choices[0].text; }, 0.2f, [](Game& g) {
+            std::string now = !g.dialog.open ? "closed" : (g.dialog.choices.empty() ? "" : g.dialog.choices[0].action);
+            res[1] = now != sig; AGR_LOG("UI dialogue choice: before '%s' after '%s'", sig.c_str(), now.c_str());
+            res[7] = std::fabs(g.camYaw - yaw0) < 1e-4f;
+            g.dialog.open = false; });
+        // pause menu: "Reprendre"
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::Pause; }, idle, "pause"});
+        tapWidget("tap Reprendre", [](Game&) { return std::string("Reprendre"); }, 0.25f, [](Game& g) { res[2] = g.menu == Menu::None; AGR_LOG("UI pause 'Reprendre': menu %d", (int)g.menu); });
+        // journal: tab then close button
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::Inventory; }, idle, "journal"});
+        tapWidget("tap tab", [](Game&) { return std::string("Quêtes"); }, 0.2f, [](Game& g) { res[3] = g.menu == Menu::Quests; AGR_LOG("UI journal tab: menu %d (quests %d)", (int)g.menu, (int)Menu::Quests); g.requestScreenshot("build/shots/97_ui_quests.png"); });
+        tapWidget("tap close", [](Game&) { return std::string("close"); }, 0.15f, [](Game& g) { res[4] = g.menu == Menu::None; AGR_LOG("UI journal close: menu %d", (int)g.menu); });
+        // settings toggle
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::Settings; yaw0 = g.settings.showFps ? 1.f : 0.f; }, idle, "settings"});
+        tapWidget("tap toggle", [](Game&) { return std::string("Afficher les FPS"); }, 0.3f, [](Game& g) { res[5] = g.settings.showFps != (yaw0 > 0.5f); g.settings.showFps = false; AGR_LOG("UI settings toggle: %d", res[5]); });
+        // the quick same-frame tap must keep working
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::Pause; }, idle, "pause"});
+        s.push_back({0.2f, [](Game& g) { const Rect* r = g.ui.findWidget("Reprendre"); if (r) tapAt(g, vec2(r->x + r->w / 2, r->y + r->h / 2), 520); }, idle, "quick tap"});
+        s.push_back({0.1f, [](Game& g) {
+            res[6] = g.menu == Menu::None;
+            AGR_LOG("UI TEST: dialogueAdvance=%d dialogueChoice=%d pauseResume=%d journalTab=%d journalClose=%d settingsToggle=%d quickTap=%d cameraUntouched=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG("UI TEST %s", ok ? "PASSED" : "FAILED");
+        }, idle, "report"});
+        return s;
+    }
     if (name == "camera") {
         // Free camera (1.6.0): pitch x zoom grid with screenshots, then touch-driven checks (vertical drag,
         // inverted axis, pinch, double-tap reset), automatic return, look-ahead, lock-on framing, collision.
-        static int res[11]; static int gridBad; static float v0;
+        static int res[12]; static int gridBad; static float v0, yawStart;
         static vec3 wallPt; static bool wallFound;
         auto check = [](Game& g, const char* what) {
             vec3 e = g.cam.pos; float gy = g.dungeon.active ? g.groundAt(e.x, e.z) : g.world.height(e.x, e.z);
@@ -119,6 +242,10 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.8f, [camPt](Game& g) { g.camPitch = 0.66f; g.camDist = g.camDistTarget = 15.5f; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 301, p.x * k, p.y * k}); },
                      [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 301, p, p - vec2(0, 220), t, 0.6f); }, "drag up"});
         s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) - vec2(0, 220); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 301, p.x * k, p.y * k}); res[0] = g.camPitch < v0 - 0.3f; AGR_LOG("CAMERA drag up: pitch %.2f -> %.2f", v0, g.camPitch); }, idle, "release"});
+        // axis lock (1.6.1): a horizontal drag with vertical jitter turns the camera without tilting it
+        s.push_back({0.8f, [camPt](Game& g) { v0 = g.camPitch; yawStart = g.camYaw; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 309, p.x * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 309, p, p + vec2(-260, 45 * std::sin(t * 20.f)) + vec2(0, 40), t, 0.6f); }, "drag sideways"});
+        s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) + vec2(-260, 40); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 309, p.x * k, p.y * k}); res[11] = std::fabs(g.camPitch - v0) < 1e-3f && std::fabs(wrapAngle(g.camYaw - yawStart)) > 0.5f; AGR_LOG("CAMERA axis lock: pitch %.3f -> %.3f, yaw turned %.2f", v0, g.camPitch, wrapAngle(g.camYaw - yawStart)); }, idle, "release"});
         // inverted vertical axis: the same gesture looks down
         s.push_back({0.8f, [camPt](Game& g) { g.settings.invertCameraY = true; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 302, p.x * k, p.y * k}); },
                      [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 302, p, p - vec2(0, 220), t, 0.6f); }, "drag up (inverted)"});
@@ -136,8 +263,8 @@ static std::vector<Step> scenario(const std::string& name) {
                      [camPt](Game& g, float t) { static bool second; if (t < 0.05f) second = false; if (t > 0.15f && !second) { second = true; tapAt(g, camPt(g) + vec2(8, 5), 308); } }, "double tap"});
         s.push_back({0.04f, [](Game& g) { res[4] = std::fabs(g.camPitch - 0.66f) < 0.06f && std::fabs(g.camDistTarget - 15.5f) < 0.8f; AGR_LOG("CAMERA double tap reset: pitch %.2f zoom %.1f", g.camPitch, g.camDistTarget); }, idle, "check reset"});
         // automatic return of the pitch while running (no touch for > 4 s), and the look-ahead
-        s.push_back({7.f, [](Game& g) { g.camPitch = 1.2f; g.camIdleT = 0; }, [](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; if (t > 6.9f && length(g.camLookAhead) > 1.f) res[6] = 1; }, "run (auto return)"});
-        s.push_back({0.04f, [](Game& g) { res[5] = std::fabs(g.camPitch - 0.66f) < 0.12f; AGR_LOG("CAMERA auto return: pitch %.2f, look-ahead %.2f m", g.camPitch, length(g.camLookAhead)); g.requestScreenshot("build/shots/92_cam_run_lookahead.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; }, "check return"});
+        s.push_back({9.f, [](Game& g) { g.camPitch = 1.3f; g.camIdleT = 0; }, [](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; if (t > 4.f && t < 6.f && length(g.camLookAhead) > 1.f) res[6] = 1; }, "run (auto return)"});
+        s.push_back({0.04f, [](Game& g) { res[5] = g.camPitch < 1.1f && g.camPitch > 1.f; AGR_LOG("CAMERA auto return: pitch %.2f, look-ahead %.2f m", g.camPitch, length(g.camLookAhead)); g.requestScreenshot("build/shots/92_cam_run_lookahead.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; }, "check return"});
         // lock-on: hero and target both framed
         s.push_back({2.5f, [](Game& g) { Character& c = g.pc(); vec3 p = c.pos + vec3(9, 0, 6); p.y = g.world.groundHeight(p.x, p.z); Entity e = g.spawnEnemy(enemyIndex("wolf"), p); g.lockTarget = e; g.camIdleT = 2.f; g.camYaw += 1.6f; }, idle, "lock-on"});
         s.push_back({0.04f, [check](Game& g) {
@@ -185,8 +312,8 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.5f, [](Game& g) { if (g.dungeon.active) g.exitDungeon(); }, idle, "exit dungeon"});
         s.push_back({0.1f, [](Game& g) {
             res[9] = gridBad == 0;
-            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d",
-                    res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10]);
+            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d axisLock=%d",
+                    res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10], res[11]);
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("CAMERA TEST %s", ok ? "PASSED" : "FAILED");
             g.camPitch = 0.66f;

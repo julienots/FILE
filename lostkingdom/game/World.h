@@ -84,7 +84,7 @@ struct ChunkBuild {
     ChunkKey key;
     int lod = 0;
     MeshBuilder terrain, props, foliage, water, lava;  // foliage = wind-animated batch
-    std::vector<InstanceData> grass, flowers;
+    std::vector<InstanceData> grass, flowers, grassNear;   // grassNear: extra clumps drawn only near the hero
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights;      // xyz + kind (lanterns, braziers, lava glow)
@@ -98,7 +98,7 @@ struct Chunk {
     ChunkKey key;
     int lod = -1;
     bool ready = false;
-    Mesh terrain, props, foliage, water, lava, grass, flowers;
+    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear;
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights, emitters;
@@ -146,6 +146,9 @@ public:
     // Camera collision: is the point inside a building-sized box collider (walls, houses, towers)?
     // Trees, rocks, fences and low props are ignored (the see-through shader fades those instead).
     bool cameraBlocked(vec3 p, float margin) const;
+    // 1.6.1: coarse relief of the whole island (and the sea around it) for the horizon, drawn beyond the
+    // detailed chunks so mountains are seen from afar. Lowered slightly so it never pokes through them.
+    void buildFarMesh(MeshBuilder& out, int res) const;
 
     // ---- world plan ---------------------------------------------------------------------------
     std::vector<Poi> pois;

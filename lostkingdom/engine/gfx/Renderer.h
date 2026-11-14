@@ -64,13 +64,21 @@ struct Environment {
     float damagePulse = 0.f;
     vec3 playerPos;
     float time = 0.f;  // animation time for shaders (s), owned by the game clock
-    float grassPushRadius = 1.3f;
+    float grassPushRadius = 1.3f;   // > 0 also enables the see-through fade around the player
+    // Grass benders (up to 8): xyz position, w = packPusher(strength -1..1, radius 0..4 m); w = 0: unused.
+    vec4 pushers[8];
+    static float packPusher(float strength, float radius) {
+        float st = std::floor(std::min(1.f, std::fabs(strength)) * 64.f);
+        if (st < 1.f) return 0.f;
+        return (strength < 0 ? -1.f : 1.f) * (st + std::min(3.99f, std::max(0.f, radius)) / 4.f);
+    }
 };
 
 // Shader variant flags for the lit uber-shader.
 enum LitFlags : int {
     LIT_SKINNED = 1, LIT_INSTANCED = 2, LIT_WIND = 4, LIT_GRASS = 8, LIT_TERRAIN = 16,
-    LIT_DISSOLVE = 32, LIT_OUTLINE = 64, LIT_DEPTH = 128, LIT_TEXTURED = 256  // TEXTURED: albedo texture, UVs in the material bytes
+    LIT_DISSOLVE = 32, LIT_OUTLINE = 64, LIT_DEPTH = 128, LIT_TEXTURED = 256,  // TEXTURED: albedo texture, UVs in the material bytes
+    LIT_FAR = 512   // distant horizon relief: fragments closer than farClip.z to farClip.xy are discarded
 };
 
 struct DrawItem {
@@ -88,6 +96,7 @@ struct DrawItem {
     vec4 outlineColor{0.05f, 0.03f, 0.02f, 1};
     float outlineWidth = 0.03f;
     float sortKey = 0;
+    vec4 farClip{0, 0, 0, 0};      // LIT_FAR: x, z of the centre, z = radius drawn by the detailed chunks
 };
 
 struct WaterItem { const Mesh* mesh; mat4 model; vec3 deep, shallow; float frozen; bool lava; };

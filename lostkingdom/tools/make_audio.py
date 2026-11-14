@@ -391,6 +391,15 @@ def sfx(name):
         x = bandpass(noise(d), lo, hi) * np.exp(-t * k)
         if name == "step_wood": x += np.sin(2 * np.pi * 140 * t) * np.exp(-t * 30) * 0.5
         return x
+    if name == "grass_rustle":
+        # walking through tall grass: a soft swish made of many tiny leaf brushes
+        d = 0.55; t = t_(d)
+        env = np.sin(np.pi * t / d) ** 1.5
+        x = bandpass(noise(d), 1800, 7500) * env * 0.5
+        for i in range(14):
+            c = int(rng.uniform(0.03, d - 0.05) * SR); n = int(0.012 * SR)
+            x[c:c + n] += bandpass(noise(0.012), 2500, 9000)[:len(x[c:c + n])] * np.exp(-np.arange(len(x[c:c + n])) / SR * 250) * rng.uniform(0.3, 0.8)
+        return x
     if name == "jump": d = 0.25; return sweep_noise(d, 300, 900) * np.exp(-t_(d) * 8) * 0.6
     if name == "land": d = 0.3; t = t_(d); return lowpass(noise(d), 500) * np.exp(-t * 18) + np.sin(2 * np.pi * 70 * t) * np.exp(-t * 15) * 0.6
     if name == "roll": d = 0.45; return bandpass(noise(d), 200, 2500) * np.sin(np.pi * t_(d) / d) * 0.6
@@ -465,7 +474,7 @@ def bubbles(d):
 def magic_like(d):
     return bell(midi(84), d, 1.5) * 0.4 + highpass(noise(d), 6000) * np.exp(-t_(d) * 5) * 0.05
 
-SFX = ["swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water",
+SFX = ["swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water", "grass_rustle",
        "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
        "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",
        "splash", "wolf_howl", "growl", "roar", "dragon_roar", "spider", "skeleton", "goblin", "troll", "golem", "ghost", "death", "player_hurt", "thunder", "birds",
@@ -474,8 +483,12 @@ AMB = ["amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_s
 
 def main():
     only = sys.argv[1:] if len(sys.argv) > 1 else ["sfx", "amb", "music"]
+    # "sfx:name1,name2" regenerates only those effects (the others keep their committed files)
+    pick = [a[4:].split(",") for a in only if a.startswith("sfx:")]
+    if pick:
+        only = only + ["sfx"]
     if "sfx" in only:
-        for s in SFX:
+        for s in (pick[0] if pick else SFX):
             x = sfx(s)
             x = np.concatenate([x, np.zeros(int(0.03 * SR))])
             x = x * np.r_[np.linspace(0, 1, 48), np.ones(len(x) - 96), np.linspace(1, 0, 48)]

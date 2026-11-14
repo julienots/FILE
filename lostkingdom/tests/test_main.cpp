@@ -318,6 +318,25 @@ static void testCameraRig() {
     CHECK(o.nearK > 0.5f && onScreen(rigProject(o, vec3(100, 0.05f, 100)), 0.9f), "hero fully framed after the camera was pulled in");
     in.pitch = -0.35f; in.dist = 40.f; in.blocked = nullptr; o = CameraRig::compute(in);
     CHECK(o.dist <= 18.01f, "low sky view stays close enough to see the hero (%.1f m)", o.dist);
+    // smoothing (1.6.1): a sudden bump under the camera lifts it progressively, never below the hard floor
+    {
+        CameraRigIn r; r.focus = vec3(100, 1.1f, 100); r.yaw = 0.f; r.pitch = 0.2f; r.dist = 15.5f; r.dt = 1.f / 30.f;
+        r.ground = [](float, float z) { return z > 108.f ? 5.f : 0.f; };   // a 5 m step behind the hero
+        CameraRigOut a = CameraRig::compute(r);
+        CameraRigIn r0 = r; r0.dt = 0; CameraRigOut full = CameraRig::compute(r0);
+        float gy = r.ground(a.eye.x, a.eye.z);
+        CHECK(a.eye.y >= gy + CameraRig::HARD_CLEARANCE - 1e-3f, "hard floor kept while smoothing (%.2f over %.2f)", a.eye.y, gy);
+        CHECK(a.lift < full.lift - 0.2f, "terrain lift is smoothed, not instant (%.2f vs %.2f)", a.lift, full.lift);
+        for (int i = 0; i < 90; i++) { r.prevLift = a.lift; r.prevCollisionDist = a.collisionDist; a = CameraRig::compute(r); }
+        CHECK(std::fabs(a.lift - full.lift) < 0.05f, "lift converges (%.2f vs %.2f)", a.lift, full.lift);
+        // collision: snaps in at once, backs out slowly
+        r.ground = [](float, float) { return 0.f; }; r.prevLift = 0; r.prevCollisionDist = 3.f;
+        CameraRigOut b = CameraRig::compute(r);
+        CHECK(b.dist < 4.f && b.dist > 3.f, "camera backs out of a wall slowly (%.2f)", b.dist);
+        r.blocked = [](vec3 q) { return q.z > 103.f; }; r.prevCollisionDist = 15.f;
+        b = CameraRig::compute(r);
+        CHECK(b.dist < 3.f, "camera snaps in front of a wall at once (%.2f)", b.dist);
+    }
     // terrain: every pitch x zoom on flat ground, a slope rising behind the camera and rough hills
     std::function<float(float, float)> grounds[3] = {[](float, float) { return 0.f; }, [](float x, float z) { return std::max(0.f, (z - 100.f) * 0.6f) + std::max(0.f, (x - 100.f) * 0.3f); },
                                                      [](float x, float z) { return 2.5f * std::sin(x * 0.21f) * std::cos(z * 0.17f) + 1.5f * std::sin(x * 0.05f + z * 0.08f); }};

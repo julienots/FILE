@@ -78,6 +78,7 @@ struct FrameUBO {
     float viewProj[16], view[16], shadow[16];
     float camPos[4], sunDir[4], sunColor[4], skyColor[4], groundColor[4], fogColor[4], fogParams[4], wind[4], player[4], misc[4];
     float lightPos[8][4], lightCol[8][4];
+    float pushers[8][4];
 };
 
 static std::string litDefines(int f) {
@@ -90,6 +91,7 @@ static std::string litDefines(int f) {
     if (f & LIT_DISSOLVE) d += "#define DISSOLVE\n";
     if (f & LIT_OUTLINE) d += "#define OUTLINE\n";
     if (f & LIT_TEXTURED) d += "#define TEXTURED\n";
+    if (f & LIT_FAR) d += "#define FAR\n";
     return d;
 }
 
@@ -278,6 +280,7 @@ void Renderer::updateFrameUBO(const Camera& cam, const Environment& e, const mat
         s4(u.lightPos[i], lights[i].pos.x, lights[i].pos.y, lights[i].pos.z, lights[i].radius);
         s4(u.lightCol[i], lights[i].color.x, lights[i].color.y, lights[i].color.z, lights[i].flicker);
     }
+    for (int i = 0; i < 8; i++) s4(u.pushers[i], e.pushers[i].x, e.pushers[i].y, e.pushers[i].z, e.pushers[i].w);
     glBindBuffer(GL_UNIFORM_BUFFER, frameUbo);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(FrameUBO), &u);
 }
@@ -297,6 +300,7 @@ void Renderer::drawItem(const DrawItem& d, bool depthPass, bool outlinePass) {
     if (!depthPass) {
         s->set("uTint", d.tint);
         s->set("uDissolveColor", vec4(d.dissolveColor, 1));
+        if (f & LIT_FAR) s->set("uFar", vec4(d.farClip.x, d.farClip.y, d.farClip.z, 0));
         if (outlinePass) { s->set("uOutline", vec4(d.outlineWidth, 0, 0, 0)); s->set("uOutlineColor", d.outlineColor); }
     }
     d.mesh->draw();

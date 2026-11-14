@@ -33,16 +33,22 @@ CameraRigOut CameraRig::compute(const CameraRigIn& in) {
     vec3 dir{std::sin(in.yaw) * std::cos(ep), std::sin(ep), std::cos(in.yaw) * std::cos(ep)};
 
     // Scenery between the hero and the camera (houses, walls): pull the camera in front of it.
+    // The camera snaps in at once (never inside a wall) but backs out slowly once the wall is passed.
+    float free = d;
     if (in.blocked) {
         const float step = 0.4f, start = 0.8f;
         for (float s = start; s <= d; s += step) {
             if (in.blocked(in.focus + dir * s)) {
-                d = std::max(1.6f, s - 0.5f);
+                free = std::max(1.6f, s - 0.5f);
                 o.collided = true;
                 break;
             }
         }
     }
+    if (in.dt > 0 && in.prevCollisionDist > 0 && free > in.prevCollisionDist)
+        free = std::min(free, in.prevCollisionDist + (free - in.prevCollisionDist) * (1.f - std::exp(-2.5f * in.dt)));
+    o.collisionDist = free;
+    d = std::min(d, free);
     o.eye = in.focus + dir * d;
 
     // Aim point: above the chest (more landscape), lower for close-ups (whole hero in frame, also when a wall
@@ -53,16 +59,28 @@ CameraRigOut CameraRig::compute(const CameraRigIn& in) {
 
     // Terrain: keep the eye above the ground (clearance depends on the pitch), and lift it when a hump of
     // terrain hides the hero.
+    // The lift is smoothed (rises quickly, comes down slowly) so bumps under the camera do not shake it;
+    // a hard floor of HARD_CLEARANCE above the ground is always enforced.
     if (in.ground) {
         o.minClear = minClearance(p, d);
+        float raw = o.eye.y;
         float gy = in.ground(o.eye.x, o.eye.z);
-        if (o.eye.y < gy + o.minClear) o.eye.y = gy + o.minClear;
+        float want = std::max(raw, gy + o.minClear);
         for (int i = 2; i <= 5; i++) {
             float t = i / 6.f;
-            vec3 q = lerp(in.focus, o.eye, t);
+            vec3 q = lerp(in.focus, vec3(o.eye.x, want, o.eye.z), t);
             float g = in.ground(q.x, q.z) + 0.5f;
-            if (q.y < g) o.eye.y = std::max(o.eye.y, in.focus.y + (g - in.focus.y) / t);
+            if (q.y < g) want = std::max(want, in.focus.y + (g - in.focus.y) / t);
         }
+        float lift = want - raw;
+        if (in.dt > 0) {
+            float rate = lift > in.prevLift ? 9.f : 2.f;
+            lift = in.prevLift + (lift - in.prevLift) * (1.f - std::exp(-rate * in.dt));
+            lift = std::max(lift, gy + HARD_CLEARANCE - raw);
+            lift = std::max(0.f, lift);
+        }
+        o.lift = lift;
+        o.eye.y = raw + lift;
     }
     // Looking up: keep the whole hero in frame. The aim point is raised only as long as the feet stay
     // inside 85 % of the lower half of the image (the hero ends up in the lower third, the sky above).

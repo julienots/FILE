@@ -24,6 +24,7 @@ layout(std140) uniform Frame {
     vec4 uMisc;        // x light count, y shadow texel, z cloud shadows, w lightning flash
     vec4 uLightPos[8]; // xyz, w radius
     vec4 uLightCol[8]; // rgb * intensity, w flicker phase
+    vec4 uPushers[8];  // grass benders: xyz position, w = sign(strength) * (floor(|strength| * 64) + radius / 4)
 };
 const float PI = 3.14159265;
 )";
@@ -96,6 +97,7 @@ void main() {
     vec3 wp = (uModel * vec4(p, 1.0)).xyz;
     n = mat3(uModel) * n;
 #endif
+    float grassDown = 0.0;
 #ifdef WIND
     float wweight = aMat.a;
   #ifdef INSTANCED
@@ -104,11 +106,27 @@ void main() {
     wp += windOffset(wp, wweight);
   #ifdef GRASS
     float sheen = windWave(wp) * aMat.a;
-    vec2 d = wp.xz - uPlayer.xz;
-    float dist = length(d);
-    float push = (1.0 - smoothstep(0.0, uPlayer.w, dist)) * aMat.a * step(abs(wp.y - uPlayer.y), 2.5);
-    wp.xz += d / max(dist, 0.001) * push * 0.55;
-    wp.y -= push * 0.25;
+    // grass bent by the hero, his trail (it stays down a moment, then springs back with a little wobble),
+    // and nearby characters / the mount
+    vec2 pushv = vec2(0.0);
+    float down = 0.0;
+    for (int i = 0; i < 8; i++) {
+        vec4 P = uPushers[i];
+        if (P.w == 0.0) continue;
+        float aw = abs(P.w);
+        float st = floor(aw) / 64.0 * sign(P.w);
+        float r = fract(aw) * 4.0;
+        vec2 d = wp.xz - P.xz;
+        float dist = length(d);
+        float k = (1.0 - smoothstep(r * 0.25, r, dist)) * step(abs(wp.y - P.y), 2.5);
+        pushv += d / max(dist, 0.001) * k * st;
+        down += k * max(st, 0.0);
+    }
+    float pl = length(pushv);
+    if (pl > 1.0) pushv /= pl;
+    grassDown = min(down, 1.0);
+    wp.xz += pushv * aMat.a * 0.75;
+    wp.y -= grassDown * aMat.a * 0.45;
   #endif
 #endif
     n = normalize(n);
@@ -124,6 +142,7 @@ void main() {
 #endif
 #if defined(WIND) && defined(GRASS)
     vColor.rgb *= 1.0 + sheen * vec3(0.38, 0.34, 0.16);   // silvery-gold sheen as the gust passes
+    vColor.rgb *= 1.0 - 0.2 * grassDown;                    // trodden grass: a slightly darker path
 #endif
     vMat = aMat;
 #ifdef TEXTURED
@@ -257,6 +276,9 @@ uniform mediump sampler2DArray uTerrainNrm;  // tangent-space normal.rgb
 #ifdef OUTLINE
 uniform vec4 uOutlineColor;
 #endif
+#ifdef FAR
+uniform vec4 uFar;   // xy centre, z radius covered by the detailed chunks
+#endif
 out vec4 fragColor;
 
 #ifdef TERRAIN
@@ -272,6 +294,9 @@ void main() {
     fragColor = vec4(uOutlineColor.rgb * uSkyColor.w, 1.0);
     return;
 #else
+#ifdef FAR
+    if (length(vWorld.xz - uFar.xy) < uFar.z) discard;
+#endif
     vec3 N = normalize(vNormal);
     vec3 V = normalize(uCamPos.xyz - vWorld);
     // vertex colours are authored in sRGB: convert to linear for lighting

@@ -17,6 +17,7 @@
 #include <map>
 #include <set>
 #include <deque>
+#include <future>
 
 namespace lk {
 
@@ -379,7 +380,13 @@ public:
     float camResetT = 0;             // > 0 while a double-tap reset is easing pitch and zoom back
     float camCineBlend = 0;          // 1 -> 0: glide from the last cinematic shot back to the gameplay camera
     vec3 cineLastEye, cineLastLook;
-    CameraRigOut camRig;             // last rig result (environment, tests)
+    CameraRigOut camRig;             // last rig result (environment, tests, smoothing state)
+    vec3 camRigFocusPrev;
+    // horizon relief (1.6.1): built once on a background thread after the world plan, kept on the CPU so it can
+    // be re-uploaded after a GL context loss
+    std::shared_ptr<Mesh> farTerrain;
+    std::shared_ptr<MeshBuilder> farTerrainData;
+    std::future<std::shared_ptr<MeshBuilder>> farTerrainBuild;
     float shake = 0;
     float cinematicT = -1;
     vec3 cineFrom, cineTo, cineLook;
@@ -432,6 +439,10 @@ public:
     void renderCharacter(Entity e, Character& c);
     void updateCamera(float dt);
     bool cameraBlocked(vec3 p) const;   // solid scenery for the camera (buildings, walls)
+    void updateGrassPushers();          // env.pushers: grass bent by the hero, his trail and nearby characters
+    struct GrassMark { vec3 p; float t; };
+    std::deque<GrassMark> grassTrail;
+    vec3 grassTrailLast;
     void updateEnvironment(float dt);
     void updateAmbientFx(float dt);
     void updateAudioDirector(float dt);
@@ -572,6 +583,8 @@ public:
     std::vector<int> touchCaptured;   // finger ids owned by controls
     int joyFinger = -1, camFinger = -1;
     float lastCamTapT = -10.f; vec2 lastCamTapPos;
+    struct CamDragAxis { vec2 acc; int axis = -1; };   // per finger: movement before the lock, locked axis (0 = x, 1 = y)
+    std::map<int, CamDragAxis> camDragAxis;
     vec2 joyOrigin, joyPos;
     float pinchDist = 0;
     std::map<int, float> btnHold;

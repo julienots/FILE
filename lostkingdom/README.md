@@ -6,11 +6,41 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot, ni Java/Kotlin : l'application est une `NativeActivity` pure.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.0 (versionCode 7). Taille : environ 23 Mo. SHA-256 : `6b40398f856a93c9d2d76a6036809d422ab635bf776fd0c949a67b8f1ec04e64`.
-  - **Mise à jour depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.6.1 (versionCode 8). Taille : environ 23 Mo. SHA-256 : `72abc879ab730a13cebfbf543fcadc4f7a5e9e6c50683e7027811986afd94375`.
+  - La 1.6.1 est signée avec la même clé locale que la 1.6.0 : elle s'installe directement par-dessus.
+  - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.6.1 (corrections après le premier essai sur téléphone)
+
+- **Boutons des dialogues et des menus réparés.** Ce défaut existait depuis la 1.0.0 :
+  - les choix de dialogue, la pause, l'écran de mort, la boutique et tout le journal (onglets, croix de fermeture, réglages) ne réagissaient pas sur téléphone ;
+  - **cause 1** : ces écrans « consommaient » tous les doigts *avant* de dessiner leurs boutons. Sur téléphone, un appui dure plusieurs images : le doigt était marqué dès qu'il touchait l'écran et le bouton ne voyait jamais le relâchement. Le robot de test appuyait en une seule image, ce qui masquait le problème ;
+  - **cause 2** : les icônes du coin haut-droit du HUD (menu, carte, sac) captaient aussi les appuis, alors que la croix de fermeture du journal est posée dessus ;
+  - **vérification** : nouveau scénario `--autoplay=ui`, qui appuie sur les boutons comme un vrai doigt (posé, tenu 0,2 s, relevé) et affiche `UI TEST PASSED`. Il couvre le dialogue (avancer, choisir), « Reprendre », un onglet du journal, la croix de fermeture, un interrupteur des Réglages, un appui bref, et vérifie que la caméra ne bouge pas pendant les menus.
+- **Caméra plus stable** (elle « divaguait »).
+  - Un glisser tourne **ou** incline la caméra, selon sa direction de départ : tourner ne fait plus varier l'inclinaison, et inversement. Levez le doigt pour changer d'axe.
+  - La caméra ne tourne plus d'elle-même pendant un verrouillage de cible.
+  - Les corrections de hauteur liées au terrain (bosses, hauteur minimale) et la distance imposée par les murs sont lissées : la caméra monte vite si nécessaire et redescend doucement. Elle ne passe jamais sous le sol.
+  - Le regard vers l'avant ne s'active plus qu'au sprint.
+  - Le retour automatique de l'inclinaison ne s'applique plus qu'aux angles extrêmes (vue du ciel ou de dessus), après 6 s.
+- **Herbe plus dense et animée.**
+  - Couche de base plus dense ; près du héros (< 30 m), une couche de touffes plus hautes s'ajoute en Ultra, Élevé et Moyen.
+  - L'herbe se couche sous le héros et reste couchée derrière lui environ 0,7 s, puis se relève avec un léger rebond. Le chemin foulé est un peu plus sombre.
+  - Les ennemis, les animaux, les villageois et la monture couchent aussi l'herbe.
+  - Bruit de froissement en marchant dans l'herbe, et quelques brins soulevés en courant.
+  - Vérifié par le scénario `--autoplay=grass` (`GRASS TEST PASSED`).
+- **Relief.**
+  - Montagnes de Frostheim et des High Crowns redessinées : crêtes plus vives, vallées plus larges, ravines sur les pentes, formes déformées pour casser l'aspect « bruit régulier ».
+  - Collines plus marquées à Greenhaven et Elderwood.
+  - **Relief d'horizon** : une maille simplifiée de toute l'île (17 689 sommets, une seule passe de rendu) est dessinée au-delà des zones détaillées. Les montagnes se voient maintenant au loin, au lieu d'un horizon vide.
+- **Villageois et PNJ plus soignés** (modèles procéduraux) : yeux plus petits avec iris sombre et paupières, nez et pommettes plus discrets, menton, lèvres, cheveux avec volume (frange, mèches, cheveux longs sur les épaules), col, épaules arrondies, poignets, tuniques plus longues, tablier de travail, et chapeaux (paille, bonnet, foulard).
+- **Limites.**
+  - Tout est vérifié sur ordinateur (rendu logiciel Mesa), **pas sur un téléphone**.
+  - Les villageois restent des modèles construits en code, au style simple : ils n'atteignent pas la qualité du héros importé. Pour de vrais beaux PNJ, il faut des modèles 3D (par exemple générés avec Tripo comme le héros). Le jeu les prend en charge sans code : `villager_m`, `villager_f`, ou `npc_<id>` pour un PNJ nommé (voir `tools/import_character.py`).
+  - **Coût GPU.** Mesuré dans la vue par défaut, sur la même scène que pour la 1.6.0 (`LK_GPU_PROFILE`, ms par image sur le rasteriseur logiciel, en valeurs relatives) : Élevé 151 (152 en 1.6.0), Moyen 100 (98), Faible 53 (59), Économie 33 (34). C'est inchangé aux variations de mesure près. Mais cette scène a peu d'herbe : dans une prairie dense, l'herbe supplémentaire coûte plus. Ce cas n'a pas été mesuré séparément.
 
 ### Nouveautés 1.6.0 (caméra libre)
 
@@ -167,7 +197,8 @@ Ces images sont prises dans le harnais de bureau : c'est le code réel du jeu, r
 | ![Introduction de boss](docs/screenshots/23_boss_intro.jpg) | ![Combat de boss](docs/screenshots/24_boss_fight.jpg) |
 | ![Donjon](docs/screenshots/25_dungeon.jpg) | ![Éditeur de commandes](docs/screenshots/28_layout_editor.jpg) |
 | ![Caméra basse vers le ciel (1.6)](docs/screenshots/30_camera_sky.jpg) | ![Vue carte, zoom 40 m (1.6)](docs/screenshots/31_camera_map.jpg) |
-| ![Caméra devant un mur (1.6)](docs/screenshots/32_camera_collision.jpg) | |
+| ![Caméra devant un mur (1.6)](docs/screenshots/32_camera_collision.jpg) | ![Montagnes à l'horizon (1.6.1)](docs/screenshots/33_horizon_mountains.jpg) |
+| ![Herbe dense, sillage du héros (1.6.1)](docs/screenshots/34_grass_trail.jpg) | ![Villageois (1.6.1)](docs/screenshots/35_villagers.jpg) |
 
 ---
 
@@ -236,7 +267,7 @@ Légende :
    - L'option `--autoplay=full` lance un bot qui joue un scénario de 71 étapes : splash, titre, nouvelle partie, village, dialogue, tous les menus, combat, monture, traversée des six régions, météo, boss, donjon et énigme, test sauvegarde/chargement, éditeur de commandes, générique.
    - Le bot prend des captures d'écran (`build/shots/`) et peut enregistrer le mixage audio (`--wav`).
 2. **AddressSanitizer**. Le même scénario a été exécuté sous ASan. Il a permis de corriger un accès hors limites dans l'IA ennemie et une invalidation de références dans l'ECS.
-3. **Tests unitaires** (`lk_tests`), soit 1 853 vérifications :
+3. **Tests unitaires** (`lk_tests`), soit 1 858 vérifications :
    - l'ECS ;
    - les mathématiques ;
    - l'intégrité des données (chaque référence d'une quête, d'un butin, d'une recette ou d'une boutique pointe vers un objet existant) ;
@@ -247,8 +278,10 @@ Légende :
    - la géométrie de la disposition tactile (aucun chevauchement, marges, minimap dégagée) pour 5 formats d'écran.
    - la caméra libre (`CameraRig::compute`) : 480 configurations synthétiques et 1 920 positions sur le vrai terrain (œil au-dessus du sol, héros entier dans l'image), collision avec un mur, cadrage en vue basse et en vue carte.
 4. **Test tactile automatique** (`--autoplay=touch`). Il injecte de vrais événements tactiles, appuis brefs dans la même image compris, et vérifie l'effet sur le héros : attaque, esquive, saut sans déclencher la parade, attaque chargée, combo mémorisé, doigt glissé depuis l'extérieur ignoré.
-5. **Test de la caméra** (`--autoplay=camera`). 12 captures d'inclinaison et de zoom, avec vérification par le code de la hauteur de l'œil et de la position du héros à l'écran, puis des gestes tactiles injectés et les comportements automatiques. Il affiche `CAMERA TEST PASSED`.
-6. **APK**. Il est vérifié par `apksigner verify`, `zipalign -c -P 16` et `aapt2 dump badging`. Pour chaque ABI, `readelf` confirme :
+5. **Test des boutons** (`--autoplay=ui`, depuis la 1.6.1). Il appuie sur les boutons des dialogues, de la pause, du journal et des réglages avec de vrais appuis tenus sur plusieurs images, et affiche `UI TEST PASSED`.
+6. **Test de l'herbe** (`--autoplay=grass`). Il vérifie que l'herbe est couchée en marchant, que le sillage se relève et que la couche dense proche existe, et affiche `GRASS TEST PASSED`.
+7. **Test de la caméra** (`--autoplay=camera`). 12 captures d'inclinaison et de zoom, avec vérification par le code de la hauteur de l'œil et de la position du héros à l'écran, puis des gestes tactiles injectés et les comportements automatiques. Il affiche `CAMERA TEST PASSED`.
+8. **APK**. Il est vérifié par `apksigner verify`, `zipalign -c -P 16` et `aapt2 dump badging`. Pour chaque ABI, `readelf` confirme :
    - que `ANativeActivity_onCreate` est exporté ;
    - que les segments sont alignés sur 16 Ko ;
    - que la bibliothèque ne dépend que de bibliothèques système (libandroid, liblog, libEGL, libGLESv3, libaaudio, libm, libdl, libc) ;
@@ -293,7 +326,10 @@ ANDROID_SDK=/chemin/vers/android-sdk ./build_apk.sh
 cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk -j
 ./build/desk/lk_tests assets                     # tests unitaires
 ./build/desk/lk_desktop --assets assets --frames 3600 --dt 0.0333 --autoplay=full --wav build/autoplay.wav
-./build/desk/lk_desktop --assets assets --frames 1500 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
+./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
+./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
+./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
+#   autres scénarios visuels : npcs (villageois alignés), vista (montagnes et horizon)
 ```
 
 ### Régénérer les assets
@@ -343,7 +379,7 @@ lostkingdom/
 | Commande | Action |
 |---|---|
 | Joystick gauche | Déplacement (pousser fort pour courir) |
-| Glisser à droite | Horizontal : rotation de la caméra. Vertical : inclinaison (du ciel à la vue de dessus). Pincer : zoom de 4 à 40 m. Double appui : caméra par défaut |
+| Glisser à droite | Horizontal : rotation de la caméra. Vertical : inclinaison (du ciel à la vue de dessus). Un glisser suit un seul axe, choisi par sa direction de départ. Pincer : zoom de 4 à 40 m. Double appui : caméra par défaut |
 | Attaque / Lourde | Combo léger ou attaque chargée |
 | Parade | Bloque ; une parade au bon moment déséquilibre l'ennemi |
 | Esquive | Roulade avec invulnérabilité |

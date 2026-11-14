@@ -35,6 +35,7 @@ static bool toggle(UI& u, Rect r, const std::string& label, bool& v) {
     Rect sw{r.x + r.w - 76, r.y + 4, 66, 32};
     u.nine("bar_frame", sw, vec4(1, 1, 1, 1), 1.f);
     u.circle({v ? sw.x + sw.w - 16 : sw.x + 16, sw.y + 16}, 12, v ? rgba(0x7ac85a) : rgba(0x8a7a6a), 16);
+    u.tag({r.x, r.y, r.w, 40}, label);
     if (u.button({r.x, r.y, r.w, 40})) { v = !v; return true; }
     return false;
 }
@@ -277,7 +278,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v1.6.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v1.6.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -438,6 +439,7 @@ void Game::drawMenus(float dt) {
         u.nine(active ? "button" : "button_dark", t, vec4(1, 1, 1, active ? 1.f : 0.85f), 0.8f);
         u.sprite(TAB_ICON[i], {t.x + 8, t.y + 12, 32, 32}, vec4(1, 1, 1, active ? 1 : 0.7f));
         if (tw > 120) u.text(TABS[i], t.x + 44, t.y + 17, 17, active ? GOLDT : DIM, F_SERIF);
+        u.tag(t, TABS[i]);
         if (u.button(t)) { menu = TAB_MENU[i]; selItem = selSlot = selRecipe = selSkill = selQuest = selEnemy = -1; play("ui_click", 0.5f); }
     }
     if (u.iconButton({f.x + f.w - 56, f.y - 30, 60, 60}, "close")) { menu = state == GameState::Playing ? Menu::None : Menu::None; play("ui_close", 0.5f); return; }

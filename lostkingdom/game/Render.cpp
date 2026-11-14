@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "../engine/core/Platform.h"
 #include <algorithm>
+#include <chrono>
 
 namespace lk {
 
@@ -29,7 +30,7 @@ void Game::updateCamera(float dt) {
         }
         float hs = length(vec2(p.vel.x, p.vel.z));
         bool locked = false;
-        // lock-on: frame both the hero and the target (wider shot, and the camera swings behind the hero)
+        // lock-on: frame both the hero and the target (wider shot). The camera never turns by itself (1.6.1).
         if (lockTarget != NullEntity && reg.valid(lockTarget)) {
             Character* t = reg.get<Character>(lockTarget);
             if (t && !t->dead) {
@@ -37,20 +38,20 @@ void Game::updateCamera(float dt) {
                 target = lerp(target, t->pos + vec3(0, 1.f, 0), 0.3f);
                 float sep = distXZ(p.pos, t->pos);
                 distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, sep * 0.9f + 7.f + t->height));
-                vec3 d = t->pos - p.pos;
-                if (camIdleT > 1.2f && sep > 1.f) camYaw = dampAngle(camYaw, std::atan2(-d.x, -d.z), 1.4f, dt);
             }
         }
         if (bossEnt != NullEntity && reg.valid(bossEnt)) {
             Character* b = reg.get<Character>(bossEnt);
             if (b && !b->dead) { target = lerp(target, b->pos, 0.25f); distMin = std::max(distMin, std::min(CameraRig::DIST_MAX, 24.f + b->vis.scale * 1.5f)); }
         }
-        // automatic return: after 4 s without touching the camera while travelling, the pitch eases back
-        if (camIdleT > 4.f && hs > 1.f && !locked && camResetT <= 0) camPitch = damp(camPitch, CameraRig::PITCH_DEFAULT, 0.7f, dt);
-        // look ahead: when running, aim 1.5 m further in the running direction
-        float runK = smoothstepf(2.5f, 5.f, hs) * (p.attackClip ? 0.f : 1.f);
+        // automatic return: only from extreme angles (sky / top view), after 6 s without touching the camera
+        // while travelling; normal angles chosen by the player are kept
+        if (camIdleT > 6.f && hs > 1.f && !locked && camResetT <= 0 && (camPitch < 0.3f || camPitch > 1.05f))
+            camPitch = damp(camPitch, clampf(camPitch, 0.3f, 1.05f), 0.6f, dt);
+        // look ahead: only when sprinting, slowly (zig-zags must not swing the camera)
+        float runK = smoothstepf(5.5f, 7.f, hs) * (p.attackClip ? 0.f : 1.f);
         vec3 ahead = hs > 0.1f ? vec3(p.vel.x / hs, 0, p.vel.z / hs) * 1.5f * runK : vec3(0);
-        camLookAhead = damp(camLookAhead, ahead, 2.5f, dt);
+        camLookAhead = damp(camLookAhead, ahead, 1.2f, dt);
     } else {
         // title / credits: slow cinematic fly-over above Greenhaven
         titleCamT += dt;
@@ -81,6 +82,11 @@ void Game::updateCamera(float dt) {
         return world.height(x, z);
     };
     if (playing && !dungeon.active) ri.blocked = [this](vec3 p) { return cameraBlocked(p); };
+    // smoothing state (collision distance, terrain lift); reset on teleports and outside gameplay
+    bool jump = length2(camFocus - camRigFocusPrev) > 15.f * 15.f;
+    camRigFocusPrev = camFocus;
+    ri.dt = (playing && !jump) ? dt : 0.f;
+    ri.prevCollisionDist = camRig.collisionDist; ri.prevLift = camRig.lift;
     camRig = CameraRig::compute(ri);
     vec3 eye = camRig.eye, look = camRig.look;
     if (cinematicT > 0) {
@@ -103,9 +109,39 @@ void Game::updateCamera(float dt) {
     cam.pos = eye; cam.target = look;
     cam.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
     cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
-    cam.zFar = 420.f + camRig.mapK * 120.f;
+    cam.zFar = dungeon.active ? 420.f : 1500.f;   // the horizon relief reaches the whole island (fog hides the rest)
     cam.update((float)W / std::max(1, H));
     dofFocus = length(look - eye);
+}
+
+// Grass benders (1.6.1): the hero, the trail he leaves (grass stays down ~0.7 s then springs back with a small
+// wobble), and the nearest characters (enemies, animals, villagers, the mount).
+void Game::updateGrassPushers() {
+    for (auto& pv : env.pushers) pv = vec4(0, 0, 0, 0);
+    if (state != GameState::Playing || player == NullEntity || dungeon.active) return;
+    int n = 0;
+    auto add = [&](vec3 p, float st, float r) { float w = Environment::packPusher(st, r); if (n < 8 && w != 0.f) env.pushers[n++] = vec4(p, w); };
+    Character& c = pc();
+    float r = riding ? 1.7f : 1.05f;
+    add(c.pos, 1.f, r);
+    if (c.grounded && distXZ(c.pos, grassTrailLast) > 0.45f) {
+        grassTrail.push_front({c.pos, realTime});
+        grassTrailLast = c.pos;
+        while (grassTrail.size() > 4) grassTrail.pop_back();
+    }
+    for (auto& t : grassTrail) {
+        float age = realTime - t.t;
+        float st = age < 0.7f ? 1.f : std::exp(-2.4f * (age - 0.7f)) * std::cos(5.f * (age - 0.7f));
+        add(t.p, st * 0.9f, r * 0.9f);
+    }
+    std::vector<std::pair<float, Character*>> near;
+    reg.each<Character>([&](Entity e, Character& o) {
+        if (e == player || o.dead) return;
+        float d2 = dist2XZ(o.pos, c.pos);
+        if (d2 < 25.f * 25.f) near.push_back({d2, &o});
+    });
+    std::sort(near.begin(), near.end(), [](auto& a, auto& b) { return a.first < b.first; });
+    for (auto& o : near) add(o.second->pos, 0.85f, clampf(o.second->radius * 1.7f, 0.6f, 3.f));
 }
 
 bool Game::cameraBlocked(vec3 p) const {
@@ -140,6 +176,17 @@ void Game::renderWorld(float dt) {
     const GraphicsSettings& gs = renderer.settings;
     // stream the world around the focus point (not while inside a dungeon)
     if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, gs.drawDistance, state == GameState::Playing ? 3 : 6, realTime);
+    // horizon relief: upload once the background build is done (and again after a context loss)
+    if (!farTerrainData && farTerrainBuild.valid() && farTerrainBuild.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        farTerrainData = farTerrainBuild.get();
+        AGR_LOG("horizon relief: %zu vertices, %zu triangles", farTerrainData->v.size(), farTerrainData->idx.size() / 3);
+    }
+    if (farTerrainData && !farTerrain) { farTerrain = std::make_shared<Mesh>(); farTerrainData->upload(*farTerrain); }
+    if (farTerrain && !dungeon.active) {
+        DrawItem it; it.mesh = farTerrain.get(); it.flags = LIT_FAR; it.castShadow = false;
+        it.farClip = vec4(focus.x, focus.z, std::max(40.f, gs.drawDistance - 14.f), 0);
+        renderer.submit(it);
+    }
     std::vector<std::pair<float, PointLight>> lights;
     if (!dungeon.active || focus.x < WORLD_SIZE) {
         world.forEachVisibleChunk([&](Chunk& ch) {
@@ -155,6 +202,7 @@ void Game::renderWorld(float dt) {
                 it.castShadow = false; it.tint.w = 0;
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
                 if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+                if (d < 30.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             }
             if (ch.water.valid()) {
                 vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);
@@ -257,6 +305,7 @@ void Game::renderWorld(float dt) {
     std::sort(lights.begin(), lights.end(), [](auto& a, auto& b) { return a.first < b.first; });
     for (size_t i = 0; i < lights.size() && i < 8; i++) renderer.addLight(lights[i].second);
     env.grassPushRadius = 1.3f;
+    updateGrassPushers();
     renderer.env = env;
     renderer.render(&particles);
 }

@@ -41,7 +41,7 @@ void Game::updateTouchControls() {
     };
     // resolve new fingers: nearest visible button wins
     for (auto& f : u.fingers) {
-        if (!f.pressed || f.consumed) continue;
+        if (!f.pressed || f.consumed || f.blocked) continue;
         int best = -1; float bd = 1e9f;
         for (int id = 0; id < CTL_COUNT; id++) {
             if (!hit(id, f)) continue;
@@ -89,7 +89,7 @@ void Game::updateTouchControls() {
     Rect mini{u.W - 196, 80, 176, 176};
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
-        if (f.consumed) continue;
+        if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
         if (f.pressed && left && joyFinger < 0) { joyFinger = f.id; joyOrigin = vec2(f.x, f.y); }
@@ -112,7 +112,7 @@ void Game::updateTouchControls() {
             input.move = vec2(m.x, -m.y);
             if (length(m) > 0.98f && f.t > 1.5f) input.sprint = true;
         }
-        if (!f.consumed && f.id != joyFinger && f.down) camFingers.push_back(&f);
+        if (!f.consumed && !f.blocked && f.id != joyFinger && f.down) camFingers.push_back(&f);
         if (f.id == camFinger) camAlive = f.down || f.released;
     }
     if (!joyAlive) joyFinger = -1;
@@ -125,13 +125,26 @@ void Game::updateTouchControls() {
     } else pinchDist = 0;
     for (auto* f : camFingers) {
         auto it = lastPos.find(f->id);
-        if (it != lastPos.end() && camFingers.size() == 1) { input.camDrag.x += -(f->x - it->second.x); input.camDrag.y += f->y - it->second.y; }
+        if (it != lastPos.end() && camFingers.size() == 1) {
+            // Axis lock (1.6.1): a drag turns OR tilts the camera, decided by its first 14 units of movement;
+            // turning no longer drifts the pitch (and the reverse). Lift the finger to change axis.
+            vec2 d{-(f->x - it->second.x), f->y - it->second.y};
+            CamDragAxis& ax = camDragAxis[f->id];
+            if (ax.axis < 0) {
+                ax.acc += d;
+                if (length(ax.acc) > 14.f) { ax.axis = std::fabs(ax.acc.x) >= std::fabs(ax.acc.y) * 0.8f ? 0 : 1; d = ax.acc; }
+                else d = vec2(0, 0);
+            }
+            if (ax.axis == 0) input.camDrag.x += d.x;
+            if (ax.axis == 1) input.camDrag.y += d.y;
+        }
         lastPos[f->id] = vec2(f->x, f->y);
     }
     for (auto it = lastPos.begin(); it != lastPos.end();) { bool alive = false; for (auto& f : u.fingers) if (f.id == it->first && f.down) alive = true; if (!alive) it = lastPos.erase(it); else ++it; }
+    for (auto it = camDragAxis.begin(); it != camDragAxis.end();) { if (!lastPos.count(it->first)) it = camDragAxis.erase(it); else ++it; }
     // tap on an enemy to lock on / tap empty ground to release; double tap in the camera area: reset the camera
     for (auto& f : u.fingers) {
-        if (!f.released || f.consumed || f.t > 0.3f || length(vec2(f.x - f.sx, f.y - f.sy)) > 12) continue;
+        if (!f.released || f.consumed || f.blocked || f.t > 0.3f || length(vec2(f.x - f.sx, f.y - f.sy)) > 12) continue;
         if (f.id == joyFinger) continue;
         if (realTime - lastCamTapT < 0.4f && length(vec2(f.x, f.y) - lastCamTapPos) < 70.f) { input.camReset = true; lastCamTapT = -10.f; }
         else { lastCamTapT = realTime; lastCamTapPos = vec2(f.x, f.y); }
@@ -331,9 +344,11 @@ void Game::drawHud(float dt) {
     if (skillPoints > 0) { u.sprite("i_skills", {100, 134, 28, 28}, rgba(0xf8d050, 0.7f + 0.3f * std::sin(realTime * 4))); u.text(std::to_string(skillPoints), 132, 136, 20, rgba(0xf8d050), F_BOLD, A_LEFT, 0, true); }
 
     // ---- top-right: shortcuts & minimap
-    u.iconButton({W_ - 70, 14, 56, 56}, "menu");
-    u.iconButton({W_ - 132, 14, 56, 56}, "map");
-    u.iconButton({W_ - 194, 14, 56, 56}, "inventory");
+    // drawn only: their taps are handled in updateTouchControls (before the simulation). Using iconButton here
+    // made the HUD swallow taps meant for the journal's close button, which sits on top of the menu icon.
+    u.iconDraw({W_ - 70, 14, 56, 56}, "menu");
+    u.iconDraw({W_ - 132, 14, 56, 56}, "map");
+    u.iconDraw({W_ - 194, 14, 56, 56}, "inventory");
     drawMinimap({W_ - 196, 80, 176, 176});
 
     // ---- quest tracker (top centre)

@@ -95,7 +95,7 @@ void UI::begin(int sw, int sh, float dt_) {
     pixelW = sw; pixelH = sh;
     H = 720.f; scale = sh / H; W = sw / scale;
     dt = dt_; time += dt_;
-    verts.clear(); idx.clear(); batches.clear(); clipStack.clear();
+    verts.clear(); idx.clear(); batches.clear(); clipStack.clear(); lastWidgets.swap(widgets); widgets.clear();
     curImage = 0;
     batches.push_back({0, 0, 0, {}, false});
     for (auto& kv : flashes) kv.second = std::max(0.f, kv.second - dt * 4.f);
@@ -374,7 +374,7 @@ void UI::onTouch(const TouchEvent& e) {
     auto it = std::find_if(fingers.begin(), fingers.end(), [&](const Finger& f) { return f.id == e.id; });
     if (e.type == TouchEvent::Down) {
         if (it != fingers.end()) fingers.erase(it);
-        fingers.push_back({e.id, x, y, x, y, true, true, false, false, 0});
+        fingers.push_back({e.id, x, y, x, y, true, true, false, false, 0, false});
     } else if (it != fingers.end()) {
         it->x = x; it->y = y;
         if (e.type == TouchEvent::Up || e.type == TouchEvent::Cancel) { it->down = false; it->released = e.type == TouchEvent::Up; }
@@ -421,7 +421,7 @@ bool UI::anyFingerOver(Rect r) const {
     return false;
 }
 
-void UI::consumeAll() { for (auto& f : fingers) f.consumed = true; }
+void UI::consumeAll() { for (auto& f : fingers) f.blocked = true; }
 bool UI::fingerConsumed(int id) const {
     for (auto& f : fingers) if (f.id == id) return f.consumed;
     return false;
@@ -459,6 +459,7 @@ float UI::scrollArea(const std::string& key, Rect r, float contentH) {
 float UI::tapFlash(int key) const { auto it = flashes.find(key); return it == flashes.end() ? 0.f : it->second; }
 
 bool UI::fancyButton(Rect r, const std::string& label, bool enabled, const std::string& style, float ts) {
+    tag(r, label);
     bool h = enabled && held(r);
     std::string st = h ? style + "_hi" : style;
     if (!hasRegion(st)) st = style;
@@ -472,6 +473,12 @@ bool UI::fancyButton(Rect r, const std::string& label, bool enabled, const std::
 }
 
 bool UI::iconButton(Rect r, const std::string& icon, const std::string& base, vec4 tint, bool enabled) {
+    tag(r, icon);
+    iconDraw(r, icon, base, tint, enabled);
+    return enabled && button(r);
+}
+
+void UI::iconDraw(Rect r, const std::string& icon, const std::string& base, vec4 tint, bool enabled) {
     bool h = enabled && held(r);
     std::string b = h && hasRegion(base + "_hi") ? base + "_hi" : base;
     float s = h ? 0.94f : 1.f;
@@ -479,7 +486,6 @@ bool UI::iconButton(Rect r, const std::string& icon, const std::string& base, ve
     sprite(b, rr, enabled ? vec4(1, 1, 1, 0.92f) : vec4(0.6f, 0.6f, 0.6f, 0.6f));
     Rect ir = rr.inset(rr.w * 0.24f);
     sprite("i_" + icon, ir, enabled ? tint : vec4(0.5f, 0.5f, 0.5f, 0.6f));
-    return enabled && button(r);
 }
 
 void UI::panel(Rect r, const std::string& title, bool parchment) {

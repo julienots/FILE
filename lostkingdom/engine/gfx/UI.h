@@ -63,7 +63,10 @@ public:
     void popClip();
 
     // --- input ------------------------------------------------------------------------
-    struct Finger { int id; float x, y, sx, sy; bool down, pressed, released, consumed; float t; };
+    // consumed: owned by a widget (a button fired, a slider is dragged, a HUD control holds it).
+    // blocked: the finger touched a modal UI (dialogue, menu): it must not drive the world (camera, joystick),
+    //          but the menu's own buttons still see it. Both flags last for the finger's whole life.
+    struct Finger { int id; float x, y, sx, sy; bool down, pressed, released, consumed; float t; bool blocked = false; };
     void onTouch(const TouchEvent& e);       // pixels → stored in virtual units
     std::vector<Finger> fingers;
     bool button(Rect r, int id = -1);        // true on release inside (tap)
@@ -72,13 +75,20 @@ public:
     // vertical scroll area: returns scroll offset (persistent per key)
     float scrollArea(const std::string& key, Rect r, float contentH);
     bool anyFingerOver(Rect r) const;
-    void consumeAll();                       // modal UIs: block world input
+    void consumeAll();                       // modal UIs: block world input (sets `blocked`, buttons still work)
+    // Test support: when enabled, every labelled widget drawn this frame is recorded (rect + label).
+    bool recordWidgets = false;
+    std::vector<std::pair<Rect, std::string>> widgets, lastWidgets;   // this frame / previous frame
+    void tag(Rect r, const std::string& label) { if (recordWidgets) widgets.push_back({r, label}); }
+    const Rect* findWidget(const std::string& label) const { for (auto& w : lastWidgets) if (w.second == label) return &w.first; return nullptr; }
     bool fingerConsumed(int id) const;
     void endInput();                          // clears per-frame flags
 
     // Fancy primitive widgets shared by all menus
     bool fancyButton(Rect r, const std::string& label, bool enabled = true, const std::string& style = "button", float textSize = 26);
     bool iconButton(Rect r, const std::string& icon, const std::string& base = "round", vec4 tint = vec4(1, 1, 1, 1), bool enabled = true);
+    // same look, no input (for icons whose taps are handled elsewhere, e.g. the HUD shortcuts)
+    void iconDraw(Rect r, const std::string& icon, const std::string& base = "round", vec4 tint = vec4(1, 1, 1, 1), bool enabled = true);
     void panel(Rect r, const std::string& title = "", bool parchment = false);
     float tapFlash(int key) const;
 

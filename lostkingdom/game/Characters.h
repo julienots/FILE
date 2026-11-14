@@ -36,6 +36,7 @@ struct HumanoidLook {
     vec3 c1 = hexColor(0x3a5a8a), c2 = hexColor(0x6a4a2a), c3 = hexColor(0x3a3028);  // tunic, trousers, boots
     vec3 metal = hexColor(0xa8aab0), trim = hexColor(0xc9a45c);
     bool pauldrons = false, gauntlets = false, greaves = false, belt = true, cape = false, satchel = false;
+    int hat = 0;              // villagers (1.6.1): 0 none, 1 straw hat, 2 cloth cap, 3 headscarf
     float emissiveEyes = 0;   // glowing eyes (undead, specters, corrupted knights)
     vec3 glow = hexColor(0x6ff0ff);
     uint32_t seed = 1;

@@ -21,6 +21,11 @@ struct CameraRigIn {
     std::function<float(float, float)> ground;
     // solid scenery (buildings, walls) at a point; the camera is pulled in front of it (nullptr: none)
     std::function<bool(vec3)> blocked;
+    // Smoothing (1.6.1: "the camera wanders"). dt = 0 disables it (unit tests, first frame). The caller feeds
+    // back the previous frame's collisionDist / lift from CameraRigOut.
+    float dt = 0;
+    float prevCollisionDist = -1;   // < 0: none yet
+    float prevLift = 0;
 };
 
 struct CameraRigOut {
@@ -32,6 +37,8 @@ struct CameraRigOut {
     float nearK = 0;          // 0..1: how much the close-up framing is engaged
     float minClear = 3.f;     // minimum eye height above the terrain that was enforced
     bool collided = false;    // scenery shortened the distance
+    float collisionDist = -1; // smoothed distance allowed by the scenery (feed back as prevCollisionDist)
+    float lift = 0;           // smoothed terrain lift of the eye (feed back as prevLift)
 };
 
 struct CameraRig {
@@ -47,6 +54,7 @@ struct CameraRig {
     static float nearFactor(float dist);
     // minimum height of the eye above the terrain: 3 m at normal pitch, 0.6 m when looking up
     static float minClearance(float pitch, float dist);
+    static constexpr float HARD_CLEARANCE = 0.3f;   // never closer to the ground than this, even while smoothing
     static CameraRigOut compute(const CameraRigIn& in);
 };
 

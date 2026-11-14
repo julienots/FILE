@@ -1,4 +1,5 @@
 #include "Game.h"
+#include <cstring>
 #include "../engine/core/Platform.h"
 #include <algorithm>
 
@@ -708,6 +709,14 @@ void Game::updatePlayer(float dt) {
             else if (r == R_ASHEN || r == R_HIGHCROWNS) step = "step_stone";
         }
         play(step, sprinting ? 0.5f : 0.32f, particles.rng.range(0.9f, 1.1f));
+        // brushing through the grass of the green regions (not on roads, not mounted)
+        if (std::strcmp(step, "step_grass") == 0 && !dungeon.active && !riding) {
+            int r = world.regionId(c.pos.x, c.pos.z);
+            if ((r == R_GREENHAVEN || r == R_ELDERWOOD || r == R_SHADOWS) && particles.rng.chance(a.speed > 3.f ? 0.6f : 0.3f)) {
+                play("grass_rustle", a.speed > 3.f ? 0.32f : 0.2f, particles.rng.range(0.85f, 1.15f));
+                if (a.speed > 3.f && particles.rng.chance(0.5f)) particles.dust(c.pos + vec3(0, 0.25f, 0), 0.35f, vec3(0.42f, 0.55f, 0.25f));
+            }
+        }
         if (sprinting && particles.rng.chance(0.5f)) particles.dust(c.pos, 0.6f);
         if (c.inWater) particles.splash(c.pos, 0.3f);
     }

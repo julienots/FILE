@@ -193,14 +193,35 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
                 mb.lathe({{0.17f * B, 0.06f}, {0.21f * B, -0.3f}, {0.27f * B, -0.7f}, {0.3f * B, -0.92f}, {0.01f, -0.92f}}, cloth1, 14, J(H_ROOT));
                 mb.lathe({{0.29f * B, -0.86f}, {0.305f * B, -0.92f}}, trim, 14, J(H_ROOT));
             } else if (L.body != Body::Plate) {
-                mb.lathe({{0.165f * B, 0.04f}, {0.19f * B, -0.12f}, {0.2f * B, -0.2f}}, torsoM, 12, J(H_ROOT));
+                // tunic hem down to mid-thigh, with a darker border
+                mb.lathe({{0.165f * B, 0.04f}, {0.19f * B, -0.12f}, {0.205f * B, -0.24f}, {0.21f * B, -0.27f}}, torsoM, 14, J(H_ROOT));
+                if (L.body == Body::Tunic || L.body == Body::Apron) mb.lathe({{0.207f * B, -0.25f}, {0.212f * B, -0.275f}}, Mat(torsoM.color * 0.7f, 0.85f), 14, J(H_ROOT));
             } else {
                 // plate faulds
                 for (int i = 0; i < 3; i++) mb.lathe({{(0.165f + i * 0.01f) * B, 0.02f - i * 0.06f}, {(0.18f + i * 0.012f) * B, -0.05f - i * 0.06f}}, metal, 12, J(H_ROOT));
                 mb.ellipsoid(J(H_CHEST) + vec3(0, 0.03f, 0.045f * B), vec3(0.18f * B, 0.15f, 0.1f * B), Mat(L.metal * 1.05f, 0.25f, 1.f), 12, 7);
                 mb.box(J(H_CHEST) + vec3(0, 0.03f, 0.142f * B), {0.012f, 0.1f, 0.008f}, trim);  // ridge
             }
-            if (L.body == Body::Apron) { mb.setBone(H_SPINE); mb.box(J(H_SPINE) + vec3(0, -0.12f, 0.115f * B), {0.13f * B, 0.28f, 0.01f}, Mat(hexColor(0x5a3a22), 0.6f)); }
+            if (L.body == Body::Apron) {
+                // work apron over the tunic, from the waist to the knees (curved to follow the hem)
+                Mat apron(lerp(hexColor(0x8a7458), L.c2, 0.2f), 0.85f);
+                mb.setBone(H_ROOT);
+                for (int k = -2; k <= 2; k++) {
+                    float a = k * 0.28f;
+                    mb.bevelBox(J(H_ROOT) + vec3(std::sin(a) * 0.205f * B, -0.13f, std::cos(a) * 0.205f * B), {0.032f * B, 0.17f, 0.008f}, 0.004f, apron, quat::axisAngle({0, 1, 0}, a));
+                }
+            }
+            if (!plate && L.body != Body::Rags) {
+                // collar at the base of the neck (contrasting colour) and rounded shoulders
+                Mat collar(lerp(L.c2, hexColor(0xe8dcc0), L.body == Body::Fur ? 0.f : 0.35f), 0.8f);
+                mb.setBone(H_CHEST);
+                mb.lathe({{0.07f * B, -0.025f}, {0.085f * B, 0.0f}, {0.075f * B, 0.025f}}, collar, 12, J(H_NECK));
+                for (int sd = 0; sd < 2; sd++) {
+                    int ua = sd ? H_UARMR : H_UARML;
+                    mb.setBone(ua);
+                    mb.ellipsoid(J(ua) + vec3((sd ? -1 : 1) * 0.01f, 0.005f, 0), vec3(0.074f, 0.066f, 0.078f) * B, torsoM, 10, 6);
+                }
+            }
             if (L.body == Body::Fur) { mb.setBone(H_CHEST); mb.flat = true; mb.rock(J(H_CHEST) + vec3(0, 0.17f, 0), vec3(0.24f * B, 0.08f, 0.15f * B), Mat(hexColor(0xa08870), 0.95f), 41, 0); mb.flat = false; }
             if (L.belt) {
                 mb.setBone(H_ROOT);
@@ -242,19 +263,34 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
         mb.ellipsoid(hc, hr, skin, 14, 10);
         // jaw/cheeks
         mb.ellipsoid(hc + vec3(0, -0.05f * hs, 0.025f * hs), vec3(0.085f, 0.07f, 0.09f) * hs, skin, 10, 6);
-        // eyes: white + iris, set into the face
+        // eyes (1.6.1): small almond eyes with a dark iris and an upper lid; large white eyes read as "bug eyes"
+        bool humanish = L.species == Species::Human || L.species == Species::Elf || L.species == Species::Dwarf;
         for (int s = -1; s <= 1; s += 2) {
-            vec3 e = hc + vec3(s * 0.037f * hs, 0.012f * hs, 0.098f * hs);
-            mb.ellipsoid(e, vec3(0.019f, 0.014f, 0.01f) * hs, Mat(hexColor(0xf4efe6), 0.3f), 8, 5);
-            mb.ellipsoid(e + vec3(0, 0, 0.007f * hs), vec3(0.009f, 0.01f, 0.006f) * hs, Mat(L.eyes, 0.2f, 0, L.emissiveEyes * 4.f), 6, 4);
+            vec3 e = hc + vec3(s * 0.036f * hs, 0.012f * hs, 0.097f * hs);
+            if (humanish && L.emissiveEyes <= 0) {
+                mb.ellipsoid(e, vec3(0.016f, 0.0095f, 0.009f) * hs, Mat(hexColor(0xe6ddd0), 0.35f), 8, 5);
+                mb.ellipsoid(e + vec3(0, -0.0005f, 0.0065f * hs), vec3(0.0085f, 0.0088f, 0.005f) * hs, Mat(L.eyes * 0.55f, 0.15f), 6, 4);
+                mb.ellipsoid(e + vec3(0, 0.0075f * hs, 0.003f * hs), vec3(0.018f, 0.0055f, 0.0095f) * hs, Mat(L.skin * 0.82f, 0.6f), 8, 4);  // upper lid
+            } else {
+                mb.ellipsoid(e, vec3(0.019f, 0.014f, 0.01f) * hs, Mat(hexColor(0xf4efe6), 0.3f), 8, 5);
+                mb.ellipsoid(e + vec3(0, 0, 0.007f * hs), vec3(0.009f, 0.01f, 0.006f) * hs, Mat(L.eyes, 0.2f, 0, L.emissiveEyes * 4.f), 6, 4);
+            }
             // brow
-            mb.box(e + vec3(0, 0.024f * hs, 0.002f), vec3(0.022f, 0.006f, 0.008f) * hs, Mat(L.species == Species::Goblin ? L.skin * 0.7f : L.hairCol, 0.8f), quat::axisAngle({0, 0, 1}, s * 0.15f));
+            mb.box(e + vec3(0, 0.024f * hs, 0.002f), vec3(0.022f, 0.0055f, 0.008f) * hs, Mat(L.species == Species::Goblin ? L.skin * 0.7f : L.hairCol * 0.9f, 0.8f), quat::axisAngle({0, 0, 1}, s * 0.15f));
+            // cheeks: a touch of colour
+            if (humanish) mb.ellipsoid(hc + vec3(s * 0.05f * hs, -0.024f * hs, 0.066f * hs), vec3(0.024f, 0.015f, 0.016f) * hs, Mat(lerp(L.skin, hexColor(0xd0786a), 0.18f), 0.6f), 7, 4);
         }
         // nose
         float nose = L.species == Species::Goblin ? 1.9f : (L.species == Species::Troll ? 1.5f : 1.f);
-        mb.ellipsoid(hc + vec3(0, -0.012f * hs, 0.112f * hs), vec3(0.016f, 0.026f, 0.022f) * hs * nose, skin, 7, 5);
+        if (nose > 1.f) mb.ellipsoid(hc + vec3(0, -0.012f * hs, 0.112f * hs), vec3(0.016f, 0.026f, 0.022f) * hs * nose, skin, 7, 5);
+        else {   // human nose: bridge + small tip, close to the face
+            mb.ellipsoid(hc + vec3(0, -0.004f * hs, 0.1f * hs), vec3(0.011f, 0.022f, 0.014f) * hs, skin, 7, 5);
+            mb.ellipsoid(hc + vec3(0, -0.024f * hs, 0.108f * hs), vec3(0.014f, 0.011f, 0.012f) * hs, skin, 7, 4);
+        }
         // mouth
-        mb.box(hc + vec3(0, -0.055f * hs, 0.1f * hs), vec3(0.025f, 0.004f, 0.006f) * hs, Mat(hexColor(0x7a3a3a), 0.6f));
+        mb.ellipsoid(hc + vec3(0, -0.056f * hs, 0.098f * hs), vec3(0.024f, 0.006f, 0.008f) * hs, Mat(lerp(L.skin, hexColor(0x9a4a44), 0.55f), 0.5f), 8, 4);
+        // chin
+        mb.ellipsoid(hc + vec3(0, -0.085f * hs, 0.07f * hs), vec3(0.035f, 0.025f, 0.03f) * hs, skin, 8, 5);
         // ears
         bool pointy = L.species == Species::Elf || L.species == Species::Goblin || L.species == Species::Demon;
         for (int s = -1; s <= 1; s += 2) {
@@ -278,10 +314,21 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
         Mat hairM(L.hairCol, 0.55f);
         if (!treant && L.helm != Helm::Hood && L.helm != Helm::Great && L.helm != Helm::Skull) {
             switch (L.hair) {
-            case Hair::Short: mb.ellipsoid(hc + vec3(0, 0.03f * hs, -0.012f), hr * vec3(1.06f, 0.92f, 1.04f), hairM, 12, 7); break;
+            case Hair::Short:
+                mb.ellipsoid(hc + vec3(0, 0.035f * hs, -0.014f), hr * vec3(1.07f, 0.92f, 1.05f), hairM, 12, 7);
+                // fringe swept to one side, fuller crown, sideburns
+                mb.ellipsoid(hc + vec3((rng.chance(0.5f) ? 1 : -1) * 0.025f * hs, 0.088f * hs, 0.062f * hs), vec3(0.07f, 0.03f, 0.045f) * hs, hairM, 9, 5);
+                mb.ellipsoid(hc + vec3(0, 0.07f * hs, -0.03f * hs), vec3(0.1f, 0.07f, 0.1f) * hs, hairM, 10, 6);
+                for (int sd = -1; sd <= 1; sd += 2) mb.ellipsoid(hc + vec3(sd * 0.095f * hs, -0.01f * hs, 0.03f * hs), vec3(0.012f, 0.03f, 0.018f) * hs, hairM, 5, 4);
+                break;
             case Hair::Long: case Hair::Braids:
-                mb.ellipsoid(hc + vec3(0, 0.03f * hs, -0.012f), hr * vec3(1.08f, 0.94f, 1.06f), hairM, 12, 7);
-                mb.ellipsoid(hc + vec3(0, -0.08f * hs, -0.06f * hs), vec3(0.1f, 0.16f, 0.06f) * hs, hairM, 10, 6);
+                mb.ellipsoid(hc + vec3(0, 0.035f * hs, -0.014f), hr * vec3(1.09f, 0.95f, 1.07f), hairM, 12, 7);
+                mb.ellipsoid(hc + vec3(0, 0.082f * hs, 0.055f * hs), vec3(0.085f, 0.032f, 0.05f) * hs, hairM, 9, 5);  // parted fringe
+                mb.ellipsoid(hc + vec3(0, -0.08f * hs, -0.06f * hs), vec3(0.11f, 0.17f, 0.065f) * hs, hairM, 10, 6);
+                if (L.hair == Hair::Long) {
+                    // hair falling on the shoulders, framing the face
+                    for (int sd = -1; sd <= 1; sd += 2) mb.tube(hc + vec3(sd * 0.095f, 0.02f, 0.0f) * hs, hc + vec3(sd * 0.11f, -0.2f, -0.015f) * hs, 0.035f * hs, 0.025f * hs, hairM, 7, true);
+                }
                 if (L.hair == Hair::Braids) for (int s = -1; s <= 1; s += 2) mb.tube(hc + vec3(s * 0.08f, -0.05f, 0.02f) * hs, hc + vec3(s * 0.09f, -0.26f, 0.05f) * hs, 0.022f * hs, 0.015f * hs, hairM, 6, true);
                 break;
             case Hair::Ponytail: mb.ellipsoid(hc + vec3(0, 0.03f * hs, -0.012f), hr * vec3(1.05f, 0.92f, 1.04f), hairM, 12, 7); break;  // tail is a verlet chain
@@ -293,6 +340,23 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
         if (L.beard) {
             mb.ellipsoid(hc + vec3(0, -0.075f * hs, 0.065f * hs), vec3(0.07f, 0.08f, 0.05f) * hs * (L.species == Species::Dwarf ? 1.5f : 1.f), hairM, 10, 6);
             mb.box(hc + vec3(0, -0.035f * hs, 0.108f * hs), vec3(0.032f, 0.006f, 0.008f) * hs, hairM);  // moustache
+        }
+    }
+    // villager hats (1.6.1)
+    if (!bony && !golem && !specter && L.helm == Helm::None && L.hat > 0) {
+        mb.setBone(H_HEAD);
+        if (L.hat == 1) {   // straw hat: wide brim + low crown, woven band
+            Mat straw(hexColor(0xd8b874), 0.9f);
+            mb.lathe({{0.24f * hs, 0.065f * hs}, {0.2f * hs, 0.075f * hs}, {0.115f * hs, 0.085f * hs}, {0.11f * hs, 0.15f * hs}, {0.07f * hs, 0.175f * hs}, {0.01f, 0.18f * hs}}, straw, 16, hc);
+            mb.lathe({{0.113f * hs, 0.09f * hs}, {0.113f * hs, 0.105f * hs}}, Mat(hexColor(0x7a3a2a), 0.8f), 16, hc);
+        } else if (L.hat == 2) {   // soft cloth cap leaning back
+            Mat cap(lerp(L.c2, hexColor(0x3a3028), 0.4f), 0.9f);
+            mb.ellipsoid(hc + vec3(0, 0.07f * hs, -0.02f * hs), vec3(0.118f, 0.07f, 0.125f) * hs, cap, 12, 6);
+            mb.lathe({{0.112f * hs, 0.045f * hs}, {0.116f * hs, 0.065f * hs}}, cap, 14, hc);
+        } else if (L.hat == 3) {   // headscarf knotted at the back
+            Mat scarf(lerp(L.c1, hexColor(0xe8dcc0), 0.45f), 0.9f);
+            mb.ellipsoid(hc + vec3(0, 0.04f * hs, -0.012f), hr * vec3(1.13f, 0.98f, 1.1f), scarf, 12, 7);
+            mb.cone(hc + vec3(0, -0.03f, -0.11f) * hs, hc + vec3(0, -0.12f, -0.16f) * hs, 0.035f * hs, scarf, 6);
         }
     }
     // helmets
@@ -319,10 +383,15 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
     for (int s = 0; s < 2; s++) {
         int ua = s ? H_UARMR : H_UARML, la = s ? H_LARMR : H_LARML, hd = s ? H_HANDR : H_HANDL;
         float r0 = bony ? 0.022f : 0.058f * B, r1 = bony ? 0.02f : 0.046f * B, r2 = bony ? 0.018f : 0.036f * B;
-        bool sleeves = !bony && (L.body == Body::Tunic || L.body == Body::Robe || L.body == Body::Dress || L.body == Body::Chain || L.body == Body::Fur || specter);
+        bool sleeves = !bony && (L.body == Body::Tunic || L.body == Body::Robe || L.body == Body::Dress || L.body == Body::Chain || L.body == Body::Fur || L.body == Body::Apron || specter);
         Mat sleeve = L.body == Body::Chain ? Mat(hexColor(0x8a8c90), 0.5f, 0.75f) : cloth1;
         limb(ua, la, r0, r1, bony ? bone : (sleeves ? sleeve : (L.body == Body::Plate ? metal : skin)));
-        limb(la, hd, r1, r2, bony ? bone : (L.gauntlets || plate ? metal : (L.body == Body::Leather ? leather : skin)));
+        bool longSleeve = sleeves && L.body != Body::Apron;
+        limb(la, hd, r1, r2, bony ? bone : (L.gauntlets || plate ? metal : (L.body == Body::Leather ? leather : (longSleeve ? sleeve : skin))));
+        if (longSleeve && !specter && !L.gauntlets && !plate) {   // cuff at the wrist
+            mb.setBone(la);
+            mb.tube(lerp(J(la), J(hd), 0.78f), lerp(J(la), J(hd), 0.92f), r2 * 1.32f, r2 * 1.4f, Mat(lerp(sleeve.color, hexColor(0xe8dcc0), 0.3f), 0.85f), 8, true);
+        }
         if (L.gauntlets || plate || L.body == Body::Leather) { mb.setBone(la); mb.tube(lerp(J(la), J(hd), 0.45f), lerp(J(la), J(hd), 0.95f), r1 * 1.18f, r2 * 1.25f, L.body == Body::Leather ? leather : metal, 8, true); }
         mb.setBone(hd);
         vec3 hp = J(hd) + vec3(0, -0.045f, 0.005f);

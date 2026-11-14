@@ -24,7 +24,7 @@ float distToSegment(vec2 p, vec2 a, vec2 b, float* t) {
 }
 
 void Chunk::destroy() {
-    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy();
+    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy();
     ready = false;
 }
 
@@ -67,14 +67,33 @@ static float terrace(float h, float step, float sharp) {
 
 static const vec2 VOLCANO{2640, 2060};
 
+// Domain warp: bends the noise lookups so ridges and hills meander instead of following the noise grid.
+static vec2 warp2(float x, float z, float amp, float f, uint32_t seed) {
+    return {x + amp * fbm2(x * f, z * f, 2, seed), z + amp * fbm2(x * f + 5.2f, z * f + 1.3f, 2, seed + 1)};
+}
+
+// 1.6.1 mountains: warped ridged noise, sharpened crests and wide valleys (pow), and gullies running down the
+// mid slopes (small ridged detail weighted by the height): reads like eroded rock instead of soft blobs.
+static float mountainField(float x, float z, float scale, uint32_t seed) {
+    vec2 w = warp2(x, z, 110.f, 0.0015f, seed + 100);
+    float r = ridged2(w.x * scale, w.y * scale, 5, seed);
+    r = std::pow(saturate(r), 1.45f);
+    float g = ridged2(w.x * scale * 4.3f, w.y * scale * 4.3f, 3, seed + 7);
+    return r + 0.07f * g * smoothstepf(0.12f, 0.55f, r);
+}
+
 static float regionHeight(int r, float x, float z) {
     switch (r) {
-    case R_GREENHAVEN:
-        return 7.f + 11.f * fbm2(x * 0.0035f, z * 0.0035f, 4, 11) + 3.f * fbm2(x * 0.014f, z * 0.014f, 3, 12);
+    case R_GREENHAVEN: {
+        // rolling hills on warped coordinates, plus a few higher knolls; kept gentle (villages, roads, rivers)
+        vec2 w = warp2(x, z, 70.f, 0.002f, 13);
+        float hills = 11.f * fbm2(w.x * 0.0035f, w.y * 0.0035f, 4, 11);
+        float knolls = 9.f * smoothstepf(0.25f, 0.7f, fbm2(w.x * 0.006f, w.y * 0.006f, 3, 14));
+        return 7.f + hills + knolls + 3.f * fbm2(x * 0.014f, z * 0.014f, 3, 12);
+    }
     case R_FROSTHEIM: {
         float mask = smoothstepf(-0.15f, 0.35f, fbm2(x * 0.0016f, z * 0.0016f, 3, 21));
-        float ridge = ridged2(x * 0.0028f, z * 0.0028f, 5, 22);
-        return 10.f + 62.f * ridge * mask + 5.f * fbm2(x * 0.01f, z * 0.01f, 3, 23);
+        return 10.f + 82.f * mountainField(x, z, 0.0028f, 22) * mask + 5.f * fbm2(x * 0.01f, z * 0.01f, 3, 23);
     }
     case R_ASHEN: {
         float h = 9.f + 16.f * ridged2(x * 0.004f, z * 0.004f, 4, 31) * smoothstepf(-0.2f, 0.4f, fbm2(x * 0.002f, z * 0.002f, 2, 32)) + 3.f * fbm2(x * 0.02f, z * 0.02f, 2, 33);
@@ -83,12 +102,14 @@ static float regionHeight(int r, float x, float z) {
         float crater = 32.f * (1.f - smoothstepf(40.f, 75.f, dv));
         return std::max(h, h * 0.4f + cone - crater + 4.f * fbm2(x * 0.03f, z * 0.03f, 2, 34) * saturate(1.f - dv / 300.f));
     }
-    case R_ELDERWOOD:
-        return 9.f + 14.f * fbm2(x * 0.0045f, z * 0.0045f, 4, 41) + 4.f * fbm2(x * 0.02f, z * 0.02f, 2, 42);
+    case R_ELDERWOOD: {
+        vec2 w = warp2(x, z, 60.f, 0.0025f, 43);
+        return 9.f + 14.f * fbm2(w.x * 0.0045f, w.y * 0.0045f, 4, 41) + 4.f * fbm2(x * 0.02f, z * 0.02f, 2, 42);
+    }
     case R_SHADOWS:
         return 1.1f + 4.5f * fbm2(x * 0.006f, z * 0.006f, 4, 51) + 1.f * fbm2(x * 0.03f, z * 0.03f, 2, 52);
     case R_HIGHCROWNS: {
-        float base = 26.f + 88.f * ridged2(x * 0.0024f, z * 0.0024f, 5, 61) * smoothstepf(-0.3f, 0.3f, fbm2(x * 0.0017f, z * 0.0017f, 2, 62));
+        float base = 26.f + 100.f * mountainField(x, z, 0.0024f, 61) * smoothstepf(-0.3f, 0.3f, fbm2(x * 0.0017f, z * 0.0017f, 2, 62));
         return terrace(base, 9.f, 0.12f) + 2.f * fbm2(x * 0.02f, z * 0.02f, 2, 63);
     }
     }
@@ -1029,9 +1050,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     }
 
     // ---- grass & flowers (instanced, near LOD only)
-    if (lod == 0) {
-        Rng g(hash2i(k.x, k.z, 777));
-        float spacing = 0.9f / std::sqrt(std::max(0.05f, grassDensity));
+    // 1.6.1: denser base layer, plus a "near" layer of taller clumps drawn only close to the hero (Render.cpp),
+    // so the meadows look full where the player walks without paying for it in the distance.
+    auto scatter = [&](uint32_t seed, float spacing, std::vector<InstanceData>& dst, std::vector<InstanceData>* flowersOut, float sMin, float sMax) {
+        Rng g(hash2i(k.x, k.z, seed));
         int GN = (int)(CHUNK / spacing);
         for (int j = 0; j < GN; j++)
             for (int i = 0; i < GN; i++) {
@@ -1054,17 +1076,22 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 InstanceData d;
                 // re-sample exact height across the quad (cheap bilinear)
                 y = height(x, z);
-                d.x = x; d.y = y - 0.03f; d.z = z; d.rotY = g.range(0, TAU); d.scale = g.range(0.6f, 1.15f) * (0.7f + hn * 0.6f);
+                d.x = x; d.y = y - 0.03f; d.z = z; d.rotY = g.range(0, TAU); d.scale = g.range(sMin, sMax) * (0.7f + hn * 0.6f);
                 Color8 c = toColor8(col * 0.5f, 1);
                 d.r = c.r; d.g = c.g; d.b = c.b; d.a = 255;
-                bool flower = g.f() < (r == R_GREENHAVEN ? 0.04f : (r == R_ELDERWOOD ? 0.05f : 0.012f)) * (0.5f + hn);
+                bool flower = flowersOut && g.f() < (r == R_GREENHAVEN ? 0.04f : (r == R_ELDERWOOD ? 0.05f : 0.012f)) * (0.5f + hn);
                 if (flower) {
                     static const uint32_t fc[] = {0xe8d24a, 0xd94b5f, 0xf2f0e6, 0x8f6fd8, 0xf28a3a, 0x6fb8f2};
                     Color8 f = toColor8(hexColor(fc[g.irange(0, 5)]) * 0.5f, 1);
                     d.r = f.r; d.g = f.g; d.b = f.b;
-                    out.flowers.push_back(d);
-                } else out.grass.push_back(d);
+                    flowersOut->push_back(d);
+                } else dst.push_back(d);
             }
+    };
+    if (lod == 0) {
+        float spacing = 0.8f / std::sqrt(std::max(0.05f, grassDensity));
+        scatter(777, spacing, out.grass, &out.flowers, 0.6f, 1.15f);
+        if (grassDensity >= 0.5f) scatter(778, spacing * 1.1f, out.grassNear, nullptr, 0.8f, 1.45f);
     }
 }
 
@@ -1122,7 +1149,7 @@ void World::uploadChunk(ChunkBuild& b) {
     if (!b.foliage.v.empty()) b.foliage.upload(c.foliage);
     if (!b.water.v.empty()) b.water.upload(c.water);
     if (!b.lava.v.empty()) b.lava.upload(c.lava);
-    if (!b.grass.empty() || !b.flowers.empty()) {
+    if (!b.grass.empty() || !b.flowers.empty() || !b.grassNear.empty()) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer
         static MeshBuilder blade, flower;
         if (blade.v.empty()) {
@@ -1154,6 +1181,7 @@ void World::uploadChunk(ChunkBuild& b) {
             for (auto& v : flower.v) { if (v.py < 0.4f) { v.r = 70; v.g = 120; v.b = 50; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
         }
         if (!b.grass.empty()) { blade.upload(c.grass); c.grass.setInstances(b.grass); }
+        if (!b.grassNear.empty()) { blade.upload(c.grassNear); c.grassNear.setInstances(b.grassNear); }
         if (!b.flowers.empty()) { flower.upload(c.flowers); c.flowers.setInstances(b.flowers); }
     }
     c.colliders = std::move(b.colliders);
@@ -1314,6 +1342,63 @@ bool World::cameraBlocked(vec3 p, float margin) const {
             }
         }
     return false;
+}
+
+void World::buildFarMesh(MeshBuilder& b, int res) const {
+    const float cell = WORLD_SIZE / res;
+    const int ext = 10;                       // sea skirt beyond the coast
+    const int n = res + 2 * ext + 1;
+    std::vector<float> hs((size_t)n * n);
+    std::vector<vec3> cols((size_t)n * n);
+    auto inside = [](float x, float z) { return x >= 0 && z >= 0 && x <= WORLD_SIZE && z <= WORLD_SIZE; };
+    for (int j = 0; j < n; j++)
+        for (int i = 0; i < n; i++) {
+            float x = (i - ext) * cell, z = (j - ext) * cell;
+            float h = SEA_LEVEL - 14.f;
+            vec3 c = hexColor(0x2e6a80);
+            if (inside(x, z)) {
+                // lowest of the vertex and four half-cell neighbours: the coarse surface stays under the fine one
+                h = height(x, z);
+                float hc = h;
+                for (int k = 0; k < 4; k++) {
+                    float a = k * PI * 0.5f;
+                    float qx = x + std::cos(a) * cell * 0.5f, qz = z + std::sin(a) * cell * 0.5f;
+                    if (inside(qx, qz)) h = std::min(h, height(qx, qz));
+                }
+                float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
+                              std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
+                RegionWeights rw = regionAt(x, z);
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e};
+                c = vec3(0);
+                for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
+                c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
+                float snowLine = 52.f - 22.f * rw.w[R_FROSTHEIM];
+                c = lerp(c, hexColor(0xe6edf2), smoothstepf(snowLine, snowLine + 12.f, hc) * (rw.w[R_FROSTHEIM] + rw.w[R_HIGHCROWNS]));
+                float e = std::min(std::min(x, z), std::min(WORLD_SIZE - x, WORLD_SIZE - z));
+                if (hc < SEA_LEVEL + 2.f && e < 400.f) c = lerp(c, hexColor(0xc8b88a), 0.7f);           // beaches
+                bool lv = false, fr = false;
+                float wl = waterLevel(x, z, &lv, &fr);
+                if (wl > -1e8f && wl > hc - 0.2f) { h = wl - 0.4f; c = lv ? hexColor(0xd0501a) : (fr ? hexColor(0xbfd8e8) : hexColor(0x2e6a80)); }
+                h -= 1.2f;
+            } else {
+                h = SEA_LEVEL - 0.6f;   // open sea surface
+            }
+            hs[(size_t)j * n + i] = h;
+            cols[(size_t)j * n + i] = c;
+        }
+    uint32_t base = (uint32_t)b.v.size();
+    for (int j = 0; j < n; j++)
+        for (int i = 0; i < n; i++) {
+            auto H = [&](int a, int c2) { a = std::max(0, std::min(n - 1, a)); c2 = std::max(0, std::min(n - 1, c2)); return hs[(size_t)c2 * n + a]; };
+            vec3 nr = normalize(vec3(H(i - 1, j) - H(i + 1, j), 2.f * cell, H(i, j - 1) - H(i, j + 1)));
+            Mat m(cols[(size_t)j * n + i], 0.95f);
+            b.vert(vec3((i - ext) * cell, hs[(size_t)j * n + i], (j - ext) * cell), nr, m);
+        }
+    for (int j = 0; j + 1 < n; j++)
+        for (int i = 0; i + 1 < n; i++) {
+            uint32_t a = base + j * n + i;
+            b.quad(a, a + n, a + n + 1, a + 1);
+        }
 }
 
 // ---------------------------------------------------------------------------------------- map image

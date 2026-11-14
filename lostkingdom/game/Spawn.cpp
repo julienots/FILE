@@ -41,7 +41,7 @@ bool Game::applyImportedModel(Visual& v, const std::string& id) {
 
 void Game::loadAssets() {
     importedModel("hero");   // preload (logs its size); the procedural hero is used when absent
-    static const char* sounds[] = {"swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water",
+    static const char* sounds[] = {"swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "parry", "step_grass", "step_stone", "step_snow", "step_wood", "step_water", "grass_rustle",
                                    "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
                                    "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",
                                    "splash", "wolf_howl", "growl", "roar", "dragon_roar", "spider", "skeleton", "goblin", "troll", "golem", "ghost", "death", "player_hurt", "thunder", "birds",
@@ -314,6 +314,9 @@ Entity Game::spawnVillager(vec3 pos, int village, uint32_t seed) {
     L.body = L.female ? (r.chance(0.6f) ? Body::Dress : Body::Tunic) : (r.chance(0.3f) ? Body::Apron : Body::Tunic);
     L.hair = L.female ? (r.chance(0.5f) ? Hair::Long : (r.chance(0.5f) ? Hair::Braids : Hair::Bun)) : (r.chance(0.8f) ? Hair::Short : Hair::None);
     L.beard = !L.female && r.chance(0.4f);
+    L.eyes = hexColor(r.chance(0.5f) ? 0x4a3420 : (r.chance(0.5f) ? 0x3a5a7a : 0x4a6a3a));
+    // hats: straw hats and caps for men, headscarves for women
+    L.hat = L.female ? (r.chance(0.3f) ? 3 : 0) : (r.chance(0.25f) ? 1 : (r.chance(0.2f) ? 2 : 0));
     int reg_ = world.pois[village].region;
     if (reg_ == R_FROSTHEIM) { L.body = Body::Fur; }
     if (reg_ == R_ELDERWOOD) { L.species = Species::Elf; }
