@@ -44,7 +44,7 @@ export function mountScreens(root, { onPlay, onQuit } = {}) {
       h('div.menu', {}, btn(t('pause.resume'), '', resume),
         h('div.mgrid', {}, btn('★ ' + t('pause.quests'), 'alt', () => sub(t('pause.quests'), journalPanel())), btn('✧ ' + t('pause.inventory'), 'alt', () => sub(t('pause.inventory'), inventoryPanel())),
           btn('⌖ ' + t('pause.map'), 'alt', () => sub(t('pause.map'), galaxyPanel(() => { clear(); mode = null; bus.emit('game:resume'); }))), btn('◈ ' + t('pause.codex'), 'alt', () => sub(t('pause.codex'), codexPanel())),
-          btn('🌍 Ma planète', 'alt', () => sub('Ma planète', basePanel())), btn('🛸 Atelier', 'alt', () => sub('Atelier du vaisseau', workshopPanel())),
+          btn('⌂ Ma planète', 'alt', () => sub('Ma planète', basePanel())), btn('⏏ Atelier', 'alt', () => sub('Atelier du vaisseau', workshopPanel())),
           btn(t('pause.settings'), 'ghost', settings),
           btn(t('pause.quit'), 'ghost', () => { State.save(); clear(); bus.emit('game:resume'); onQuit?.(); title(); }))))));
   }

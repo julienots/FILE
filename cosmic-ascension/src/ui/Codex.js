@@ -15,7 +15,7 @@ export function codexPanel() {
     'Bestiaire': () => grid(Object.entries(ENEMIES).map(([id, E]) => { const n = c.bestiary[id] ?? 0;
       return h('div.cx' + (n ? '' : '.unk'), {}, h('span.g', { text: n ? '☠' : '?' }), h('b', { text: n ? E.name : '???' }), h('small', { text: n ? `Vaincus : ${n} · PV ${E.hp} · ${E.behavior}${E.elite ? ' · élite' : ''}` : 'Jamais affronté' })); }), `${Object.keys(c.bestiary).length}/${Object.keys(ENEMIES).length}`),
     'Succès': () => grid(ACHIEVEMENTS.map(a => { const got = c.achievements.includes(a.id);
-      return h('div.cx' + (got ? '.r-rare' : '.unk'), {}, h('span.g', { text: got ? a.glyph : '🔒' }), h('b', { text: a.name }), h('small', { text: a.desc })); }), `${c.achievements.length}/${ACHIEVEMENTS.length}`),
+      return h('div.cx' + (got ? '.r-rare' : '.unk'), {}, h('span.g', { text: got ? a.glyph : '⊘' }), h('b', { text: a.name }), h('small', { text: a.desc })); }), `${c.achievements.length}/${ACHIEVEMENTS.length}`),
   };
   function grid(items, count) { return h('div', {}, h('div.cx-count', { text: count }), h('div.cxgrid', {}, items)); }
   const show = (k) => { tabs.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.textContent === k)); body.innerHTML = ''; body.appendChild(T[k]()); };

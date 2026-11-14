@@ -1,7 +1,7 @@
 // Textes d'interface (B). t('clé', {var}) → chaîne. Les noms propres du monde vivent dans src/data/.
 const FR = {
-  'title.play': 'Jouer', 'title.continue': 'Continuer', 'title.new': 'Nouvelle partie', 'title.settings': 'Réglages',
-  'title.tagline': 'De l’étincelle au néant divin', 'title.confirmNew': 'Effacer la sauvegarde et recommencer ?',
+  'title.play': 'Lancer', 'title.continue': 'Continuer', 'title.new': 'Nouvelle partie', 'title.settings': 'Réglages',
+  'title.tagline': 'Spécimen Zéro — journal de bord', 'title.confirmNew': 'Effacer la sauvegarde et recommencer ?',
   'pause.title': 'Pause', 'pause.resume': 'Reprendre', 'pause.settings': 'Réglages', 'pause.map': 'Carte galactique', 'pause.codex': 'Codex',
   'pause.quit': 'Écran titre', 'pause.quests': 'Quêtes', 'pause.inventory': 'Inventaire', 'soon': 'Bientôt',
   'set.title': 'Réglages', 'set.quality': 'Qualité graphique', 'set.q.auto': 'Auto', 'set.q.0': 'Bas', 'set.q.1': 'Moyen', 'set.q.2': 'Haut',
@@ -10,8 +10,8 @@ const FR = {
   'hud.stage': 'Stade {n}', 'hud.max': 'Forme ultime', 'hud.xpTo': '{need} XP avant {name}',
   'hud.discovered': 'Planètes découvertes', 'hud.objective': 'Objectif',
   'act.land': 'Atterrir', 'act.takeoff': 'Décoller', 'act.talk': 'Parler', 'act.use': 'Utiliser',
-  'near.land': 'Appuie sur ⏎ pour atterrir sur {name}', 'near.far': '{name} · {dist} km',
-  'evo.title': 'ÉVOLUTION !', 'evo.ability': 'Nouvelle capacité : {name}',
+  'near.land': 'Approche de {name} — ⏎ descente atmosphérique', 'near.far': '{name} · distance {dist} km',
+  'evo.title': 'MUTATION', 'evo.ability': 'Nouvelle capacité : {name}',
   'xp.discover': 'Découverte', 'xp.landing': 'Premier pas', 'xp.pickup': 'Collecte', 'xp.kill': 'Victoire', 'xp.quest': 'Quête',
   'obj.m1': 'Explore Pépin, puis décolle et visite d’autres planètes',
   'stats.time': 'Temps de jeu', 'stats.planets': 'Planètes', 'stats.kills': 'Ennemis vaincus', 'stats.stage': 'Forme',

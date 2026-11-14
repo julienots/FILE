@@ -36,7 +36,7 @@ export const Home = {
     if (B.bonus?.reveal) for (const p of PLANETS) if (!p.hidden && p.system === d.world.system && !d.world.discovered.includes(p.id)) { d.world.discovered.push(p.id); bus.emit('world:discovered', { id: p.id }); }
     bus.emit('build:placed', { planetId, slot, buildingId: id });
     bus.emit('ui:toast', { text: `${B.icon} ${B.name} construit !`, kind: 'questDone' });
-    if (up) bus.emit('ui:toast', { text: `🌍 Planète niveau ${lv}`, kind: 'discover' });
+    if (up) bus.emit('ui:toast', { text: `Base : niveau ${lv}`, kind: 'discover' });
     gainXp(40 * (B.tier ?? 1), 'quest'); bus.emit('hero:stats', d.hero); bus.emit('home:changed', this.hp); State.save();
     return true;
   },
@@ -47,7 +47,7 @@ export const Home = {
     const hrs = Math.min(MAX_OFFLINE_H, Math.max(0, (now - hp.lastCollect) / 3.6e6)); hp.lastCollect = now;
     hp.carry ??= {}; const got = [];
     for (const [it, rate] of Object.entries(this.rates())) { const v = rate * hrs + (hp.carry[it] ?? 0), n = Math.floor(v); hp.carry[it] = v - n; if (n > 0) { addItem(it, n); got.push([it, n]); } }
-    if (got.length) bus.emit('ui:toast', { text: '🌍 Récolte : ' + got.map(([it, n]) => `+${n} ${ITEMS[it]?.icon ?? it}`).join('  '), kind: 'loot' });
+    if (got.length) bus.emit('ui:toast', { text: 'Récolte : ' + got.map(([it, n]) => `+${n} ${ITEMS[it]?.icon ?? it}`).join('  '), kind: 'loot' });
     return got;
   },
 };

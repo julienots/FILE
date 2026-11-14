@@ -265,3 +265,68 @@ input[type=range]::-webkit-slider-thumb{background:#05040c;border:.35vmin solid 
 .qs .cur{color:var(--neo3)}.slot b{color:var(--neo3)}.bcard .eff{color:var(--neo)}.bcard.built{border-color:#3aff9a;box-shadow:0 0 1.2vmin rgba(58,255,154,.25)}
 .cost{background:rgba(63,240,255,.07);border:.15vmin solid rgba(63,240,255,.3);border-radius:.6vmin}
 `;
+// ── Thème RÉALISTE (consigne utilisateur: « plus de réalisme »): HUD de combinaison/cockpit sobre. Surcharge CSS_DARK. ──
+export const CSS_REAL = `
+:root{--neo:#9fd4ff;--neo2:#c9a86a;--neo3:#ffb347;--bad:#ff5a4a;--panel:rgba(8,11,16,.62);--panel2:rgba(10,14,20,.82);--edge:rgba(170,210,240,.35);
+ --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;--font:"Inter","Roboto",ui-sans-serif,system-ui,sans-serif;--glowc:none}
+#ui{letter-spacing:.03em}
+.txt-out{text-shadow:0 .1vmin .4vmin rgba(0,0,0,.9)}
+/* HUD: lignes fines, pas de halo, chiffres à chasse fixe */
+.portrait{width:11vmin;height:11vmin;font-size:4.6vmin;background:rgba(8,11,16,.7);border:.2vmin solid var(--edge);box-shadow:none;color:#dfeaf5;text-shadow:none}
+.portrait b{background:rgba(8,11,16,.85);color:var(--neo3);border:.15vmin solid rgba(255,179,71,.6);box-shadow:none;font-family:var(--mono);font-size:1.7vmin;bottom:-1.4vmin}
+.bars{min-width:34vmin;gap:.7vmin}.bars .nm{font-size:2.4vmin;letter-spacing:.22em;font-weight:600;color:#dfeaf5}
+.bar{height:1.2vmin;border:.12vmin solid rgba(170,210,240,.3);border-radius:0;background:rgba(0,0,0,.45);overflow:visible}
+.hud-top .loc{background:linear-gradient(90deg,transparent,rgba(4,6,10,.55) 20%,rgba(4,6,10,.55) 80%,transparent);padding:.6vmin 6vmin}
+.bar i{border-radius:0;box-shadow:none!important}.bar span{font-family:var(--mono);font-size:1.5vmin;right:0;top:-2.1vmin;transform:none;opacity:.85;text-shadow:0 .1vmin .3vmin #000}
+.bar.hp i{background:linear-gradient(90deg,#a8322a,#e2574a)}.bar.en i{background:linear-gradient(90deg,#2f6a96,#8ec8f0)}.bar.xp{height:.8vmin}.bar.xp i{background:#c9a86a}
+.bars .bar{margin-top:1.4vmin}.xpline{font-family:var(--mono);font-size:1.7vmin;opacity:.65;letter-spacing:.02em}
+.chip{font-family:var(--mono);font-size:2.4vmin;font-weight:500;border-radius:0;border-color:var(--edge);background:var(--panel)}
+.ibtn{width:7.5vmin;height:7.5vmin;font-size:2.8vmin;border-radius:0;border:.15vmin solid var(--edge);box-shadow:none;color:#dfeaf5;background:var(--panel)}
+.loc{font-size:2.8vmin;letter-spacing:.35em;font-weight:500}.loc small{font-family:var(--mono);font-size:1.7vmin;letter-spacing:.04em;opacity:.75;margin-top:.4vmin}
+.hint{border-radius:0;font-size:2.2vmin;font-weight:500;border-color:var(--edge)}.hint.go{animation:none;border-color:var(--neo3);color:var(--neo3);box-shadow:none}
+.quest{border-radius:0;border:.12vmin solid var(--edge);border-left:.4vmin solid var(--neo3);font-size:2.1vmin;backdrop-filter:blur(4px)}
+.quest h4{font-family:var(--mono);font-size:1.6vmin;letter-spacing:.3em;color:var(--neo3);font-weight:500}
+.toast{border-radius:0;box-shadow:none!important;font-weight:500;font-size:2.3vmin;border-width:.12vmin;border-left-width:.5vmin;background:var(--panel2)!important;color:#e6eef6!important;animation:toastIn .3s ease-out,toastOut .4s ease-in 2.6s forwards}
+.toast.xp{font-family:var(--mono);font-size:2vmin;border-color:rgba(201,168,106,.6)}.toast.warn{border-color:var(--bad)}.toast.loot{border-color:#7fc8a0}.toast.discover{border-color:var(--neo)}.toast.quest,.toast.questDone{border-color:var(--neo3)}
+.evo{background:radial-gradient(circle,rgba(160,200,240,.08),transparent 60%)}
+.evo h1{font-size:4.5vmin;letter-spacing:.8em;font-weight:500;background:none;color:#dfeaf5;-webkit-text-fill-color:#dfeaf5;filter:none;animation:fadeIn 1s}
+.evo h2{font-size:6vmin;letter-spacing:.25em;font-weight:300}.evo p{font-size:2.4vmin;opacity:.75}.evo .ab{border-radius:0;box-shadow:none;border-width:.15vmin;font-weight:500;font-size:2.3vmin}
+/* contrôles: disques translucides, liserés fins */
+.joy{border:.18vmin solid rgba(170,210,240,.3);background:rgba(8,11,16,.25);box-shadow:none}
+.joy i{width:11vmin;height:11vmin;margin:-5.5vmin;background:rgba(170,210,240,.18);border:.2vmin solid rgba(220,235,250,.7);box-shadow:none}
+.btn{background:rgba(8,11,16,.45)!important;border:.18vmin solid rgba(220,235,250,.45);box-shadow:none;color:#e6eef6;text-shadow:none;font-weight:400}
+.btn.on{background:rgba(160,200,240,.25)!important;box-shadow:none;transform:scale(.94)}
+.b-attack{border-color:rgba(255,120,100,.7)}.b-special{border-color:rgba(255,179,71,.7)}.b-action{font-size:2.3vmin;letter-spacing:.12em;text-transform:uppercase;border-color:rgba(255,179,71,.8);color:#ffd9a8}
+/* écrans et panneaux: angles vifs, filets fins */
+.screen{background:rgba(2,4,8,.78)}
+.panel{border-radius:0;border:.15vmin solid var(--edge);background:rgba(8,11,16,.94);box-shadow:none;position:relative}
+.panel::before,.panel::after{content:"";position:absolute;width:3vmin;height:3vmin;border:.3vmin solid var(--neo3)}
+.panel::before{top:-.3vmin;left:-.3vmin;border-right:0;border-bottom:0}.panel::after{bottom:-.3vmin;right:-.3vmin;border-left:0;border-top:0}
+.panel h2{font-size:3.6vmin;letter-spacing:.45em;font-weight:500;text-shadow:none;color:#dfeaf5}
+.cbtn{border-radius:0;border:.15vmin solid var(--edge);background:rgba(160,200,240,.06);color:#e6eef6;box-shadow:none;font-weight:500;letter-spacing:.2em;font-size:2.8vmin}
+.cbtn:active{background:rgba(160,200,240,.2);box-shadow:none}
+.cbtn.alt{border-color:rgba(170,210,240,.25);background:rgba(255,255,255,.03);color:#cfdbe6;box-shadow:none}
+.cbtn.danger{border-color:var(--bad);background:rgba(255,90,74,.08);color:#ffd2cc;box-shadow:none}
+#ui .menu > .cbtn:first-child{border-color:var(--neo3);color:#ffd9a8;background:rgba(255,179,71,.08)}
+.logo{font-size:9vmin;letter-spacing:.5em;font-weight:300;background:none;color:#eef4fa;-webkit-text-fill-color:#eef4fa;filter:none;animation:none;text-shadow:0 0 4vmin rgba(160,200,240,.25)}
+.logo span{font-size:.36em;letter-spacing:1.4em;font-weight:500;color:var(--neo3);-webkit-text-fill-color:var(--neo3);filter:none;margin-top:2vmin}
+.tag{font-family:var(--mono);letter-spacing:.3em;font-size:1.9vmin;opacity:.6}
+.row{border-bottom-color:rgba(170,210,240,.12);font-weight:500}
+.seg button{border-radius:0}.seg button.sel{box-shadow:none}
+input[type=range]::-webkit-slider-thumb{border-radius:0;box-shadow:none;width:3vmin;height:4vmin;background:#dfeaf5;border:none}
+.tog,.tog::after{border-radius:0}.tog.on{box-shadow:none}
+.stats b{font-family:var(--mono);font-weight:500;text-shadow:none}
+.dl-card,.dlg.radio .dl-card{border-radius:0;box-shadow:none;border:.15vmin solid var(--edge);border-left:.5vmin solid var(--neo3);background:rgba(8,11,16,.92)}
+.dlg.radio .dl-card{border-style:solid;border-left-color:var(--neo)}
+.dl-port,.dlg.radio .dl-port{width:11vmin;height:11vmin;border-radius:0;font-size:4.4vmin;font-family:var(--mono);font-weight:500;background:rgba(160,200,240,.06);border:.15vmin solid var(--edge);box-shadow:none;filter:none;animation:none;color:#dfeaf5}
+.dl-name{font-family:var(--mono);font-size:1.9vmin;letter-spacing:.25em;color:var(--neo3)}.dlg.radio .dl-name{color:var(--neo)}.dlg.radio .dl-name::after{content:" · CANAL RADIO"}
+.dl-text{font-size:3vmin;font-weight:400;line-height:1.45}
+.dl-choice{border-radius:0;box-shadow:none;background:rgba(255,179,71,.06);border:.15vmin solid rgba(255,179,71,.6);color:#ffe2bf;font-weight:500}
+.combo{font-family:var(--mono);font-weight:500;font-size:4vmin;background:none;color:#e6eef6;-webkit-text-fill-color:#e6eef6;filter:none;transform:none;letter-spacing:.2em}
+.bname{letter-spacing:.4em;font-weight:500;text-shadow:none;font-size:3vmin}.bbar{border-radius:0;box-shadow:none;height:1.4vmin}.bbar i{background:#c8463a}
+.ko h1{font-size:6vmin;letter-spacing:.6em;font-weight:400;filter:none;color:#ff8a7a}.ko h1::after{content:"";display:block}
+.vign.low{box-shadow:inset 0 0 14vmin rgba(160,20,10,.45)}
+.qcard,.slot,.bcard,.cx{border-radius:0}.cost{border-radius:0;font-family:var(--mono);font-weight:500}
+.cx .g,.cx.r-rare .g,.cx.r-leg .g{text-shadow:none}.bcard.built,.qcard.tracked,.cx.r-leg{box-shadow:none}
+.gmap{border-radius:0}.gp circle{filter:none}
+`;

@@ -18,7 +18,7 @@ export function mountDialogueBox(root, { onOpen } = {}) {
   bus.on('dialogue:start', ({ radio }) => { box.classList.remove('hidden'); box.classList.toggle('radio', !!radio); onOpen?.(true); });
   bus.on('dialogue:end', () => { box.classList.add('hidden'); clearInterval(timer); onOpen?.(false); });
   bus.on('dialogue:node', n => {
-    port.textContent = n.portrait ?? '💬'; name.textContent = n.speaker ?? ''; full = n.text; shown = 0; text.textContent = '';
+    port.textContent = (n.speaker ?? '?').replace(/^(Le|La|L’|Dr|Chevalier|Capitaine|Aïeule)\s*/i, '').split(/[\s,’-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''); name.textContent = n.speaker ?? ''; full = n.text; shown = 0; text.textContent = '';
     hasChoices = n.choices.length > 0; choices.innerHTML = ''; choices.classList.add('hidden'); more.classList.add('hidden');
     for (const c of n.choices) choices.appendChild(h('button.dl-choice', { text: c.label, onClick: () => { buzz(10); bus.emit('ui:click'); bus.emit('dialogue:choose', { i: c.i }); } }));
     type();

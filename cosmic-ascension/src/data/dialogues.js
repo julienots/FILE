@@ -3,44 +3,44 @@
 export const DIALOGUES = {
   // ───────── Transmissions radio (Boulon) ─────────
   intro: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: '…ccchhh… Tu m’entends, petite étincelle ? Ici Boulon. Vieux robot de maintenance. C’est moi qui ai ouvert ta cuve.', n: 'b' },
-    b: { t: 'Tu viens de t’échapper du Laboratoire Ω dans une capsule volée. Ils vont te chercher. Vite, pose-toi sur Pépin, la petite planète verte devant toi.', n: 'c' },
-    c: { t: 'Tu sais voler ? Joystick pour diriger, ≫ pour accélérer. Quand tu es assez près: ⏎ pour atterrir.', c: [
+    start: { t: '…kzzt… Spécimen Zéro, tu me reçois ? Ici Boulon, unité de maintenance du Laboratoire Ω. C’est moi qui ai déverrouillé ta cuve.', n: 'b' },
+    b: { t: 'Tu as quitté le Laboratoire dans une capsule de secours. Leurs traqueurs sont déjà en route. Pose-toi sur Pépin, la planète devant toi : leurs capteurs y portent mal.', n: 'c' },
+    c: { t: 'Commandes de vol : joystick pour l’assiette, ≫ pour la poussée. À portée d’atmosphère, ⏎ lance la descente.', c: [
       { l: 'Qui suis-je ?', n: 'who' }, { l: 'Compris, j’y vais !', n: 'go' }] },
-    who: { t: 'Bonne question. Dans les fichiers du Labo, tu t’appelles « Spécimen Zéro ». Moi je trouve que tu ressembles à un grain d’étoile.', n: 'go' },
-    go: { t: 'Absorbe la poussière cosmique là-bas, elle te nourrit. Et… tu pourrais grandir. Beaucoup. Boulon, terminé.' } } },
+    who: { t: 'Les archives disent « Spécimen Zéro ». Le reste du dossier est chiffré. Ce que je sais : rien de ce qu’ils ont cultivé n’avait survécu avant toi.', n: 'go' },
+    go: { t: 'Absorbe la poussière stellaire en surface : ton organisme s’en nourrit. Et il va changer. Boulon, terminé.' } } },
   comm_home: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Bienvenue sur Pépin ! Les orbes qui flottent, ce sont des fragments d’étoile. Touche-les pour les absorber.', n: 'b' },
-    b: { t: 'Gare aux slimes violets: ⚔ pour attaquer, ⤒ pour sauter. Et si tu te sens… bizarre, c’est normal. Ton corps veut évoluer.' } } },
+    start: { t: 'Contact au sol confirmé. Les orbes en suspension sont des fragments stellaires : absorbe-les.', n: 'b' },
+    b: { t: 'Formes hostiles détectées à proximité. ⚔ pour frapper, ⤒ pour sauter. Si ton corps réagit étrangement, laisse faire : c’est une mutation.' } } },
   comm_evolved: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Par mes circuits ! Tu as… des bras ! Le Labo n’avait jamais réussi ça. Ils doivent avoir capté le pic d’énergie.', n: 'b' },
-    b: { t: 'Ils vont envoyer des drones. Le meilleur moyen de se défendre, c’est d’attaquer: retourne au Laboratoire Ω, je te guiderai. Il est tout près de Pépin.' } } },
+    start: { t: 'Pic d’énergie enregistré. Ta morphologie a changé, des membres se sont formés. Le Labo n’avait jamais obtenu ça, et ils l’ont forcément détecté.', n: 'b' },
+    b: { t: 'Ils vont envoyer des drones. Mieux vaut frapper la source : le Laboratoire Ω est en orbite proche. Je te guide.' } } },
   comm_lab: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Le Labo. Ça me donne des frissons de rouille. Les drones patrouillent; détruis-en quelques-uns pour ouvrir le chemin vers Quill.' } } },
+    start: { t: 'Le Laboratoire. Les drones patrouillent en boucle ; neutralises-en assez pour ouvrir un accès jusqu’au Dr Quill.' } } },
   comm_act2: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Un catalyseur forgé sur Braise-9… Les Braisiens sont les meilleurs forgerons du secteur. Cap sur la planète de lave, à l’est !' } } },
+    start: { t: 'Un catalyseur forgé sur Braise-9. Les Braisiens sont les seuls à maîtriser ces alliages. Cap à l’est, vers le monde volcanique.' } } },
   comm_stage3: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Ces ailes ! On dirait les vieilles fresques des Titans… Petite étincelle, je crois que tu n’es pas une expérience ratée. Tu es la seule réussie.' } } },
+    start: { t: 'Ces structures dorsales… identiques aux fresques des Titans. Tu n’es pas une expérience ratée, Spécimen. Tu es la seule qui ait abouti.' } } },
   comm_death: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
-    start: { t: 'Hé ! Je t’ai recousu avec du ruban d’étoile. Tu as perdu un peu de poussière. Sois prudent, d’accord ?' } } },
+    start: { t: 'Signes vitaux rétablis. Tu as perdu une partie de ta réserve stellaire. La prochaine fois, je ne garantis rien.' } } },
   comm_empire: { speaker: 'Boulon', portrait: '🤖', radio: true, nodes: {
     start: { t: 'Attention: tu entres dans la Zone Interdite. L’Empire Écarlate tire à vue. Ici, les ennemis sont bien plus coriaces.' } } },
 
   // ───────── Pépin ─────────
   bolt_intro: { speaker: 'Boulon', portrait: '🤖', entry: [[{ step: ['side_drone_parts', 1] }, 'repair'], [{ canStart: 'side_drone_parts', done: 'main_1_awakening' }, 'parts']], nodes: {
-    start: { t: 'Enfin face à face ! Tu es encore plus petit qu’à travers la caméra. Enfin, de moins en moins petit.', c: [
+    start: { t: 'Enfin face à face. Tu as déjà changé depuis la dernière image que j’ai de toi.', c: [
       { l: 'Merci de m’avoir libéré.', n: 'thx' }, { l: 'Pourquoi m’as-tu aidé ?', n: 'why' }] },
-    thx: { t: 'Pas de merci entre fugitifs. Bon, je retourne bidouiller ta capsule.' },
-    why: { t: 'Parce que j’ai nettoyé ta cuve pendant 300 ans. On finit par s’attacher. Et parce que personne ne devrait être enfermé.' },
-    parts: { t: 'Mes articulations grincent. Si tu trouves de l’alliage dans les épaves ou sur les drones, rapporte-m’en, je pourrai même améliorer ta capsule.', c: [
+    thx: { t: 'Entre fugitifs, on ne compte pas. Je retourne sur ta capsule.' },
+    why: { t: 'Trois cents ans à entretenir ta cuve. On finit par se demander qui est vraiment enfermé.' },
+    parts: { t: 'Mes servomoteurs lâchent. Rapporte-moi de l’alliage, prélevé sur les drones ou les épaves, et j’améliorerai aussi ta capsule.', c: [
       { l: 'J’en trouverai.', fx: { quest: 'side_drone_parts' }, end: true }, { l: 'Plus tard.', end: true }] },
-    repair: { t: 'Oh, de l’alliage ! Tiens bon, je me fais une beauté… Voilà ! Je cours comme un neuf. Enfin, je roule.', fx: { take: [['scrapAlloy', 4]] } } } },
-  mayor_intro: { speaker: 'Maire Pipo', portrait: '🕯', entry: [[{ step: ['side_lost_pipion', 1] }, 'back'], [{ done: 'side_lost_pipion' }, 'after']], nodes: {
-    start: { t: 'Oh ! Un visiteur ! Bienvenue à Pépin, bienvenue ! Je suis le maire. Le seul. Nous sommes douze.', n: 'b' },
-    b: { t: 'Dites… le petit Pip a suivi un slime et n’est pas revenu. Vous pourriez chasser ces bestioles ?', c: [
+    repair: { t: 'Alliage reçu. Remplacement des servos… terminé. Opérationnel à 100 %.', fx: { take: [['scrapAlloy', 4]] } } } },
+  mayor_intro: { speaker: 'Pipo, porte-parole', portrait: '🕯', entry: [[{ step: ['side_lost_pipion', 1] }, 'back'], [{ done: 'side_lost_pipion' }, 'after']], nodes: {
+    start: { t: 'Un étranger. Ici, on ne voit plus personne depuis que le Labo a tout verrouillé. Je suis Pipo, je parle au nom de la colonie.', n: 'b' },
+    b: { t: 'Un de nos jeunes, Pip, est parti sur les traces des créatures violettes. Il n’est pas revenu. Vous pourriez dégager la zone ?', c: [
       { l: 'Je m’en occupe !', fx: { quest: 'side_lost_pipion' }, end: true }, { l: 'Je dois d’abord m’occuper de moi.', end: true }] },
-    back: { t: 'Pip est rentré tout seul en criant « une étoile m’a sauvé » ! Tenez, la récompense de la mairie.' },
-    after: { t: 'Les Pipions parlent de vous comme d’un héros. On a même renommé la fontaine. Bon, c’était une flaque.' } } },
+    back: { t: 'Pip est rentré. Il parle d’une lumière qui l’a protégé. Prenez ceci, c’est tout ce que la colonie peut offrir.' },
+    after: { t: 'La colonie parle de vous à voix basse. Certains ont peur, d’autres espèrent.' } } },
 
   // ───────── Laboratoire Ω ─────────
   quill_lab: { speaker: 'Dr Quill', portrait: '🥽', nodes: {
@@ -56,15 +56,15 @@ export const DIALOGUES = {
     start: { t: 'Un petit être qui brille comme une braise neuve. Tu cherches le catalyseur ? Je vois ça dans tes yeux, gamin.', n: 'b' },
     b: { t: 'Je peux le forger. Il me faut trois Cœurs de Braise. On en trouve sur les slimes de magma… s’ils ne te font pas fondre avant.' },
     forge: { t: 'Trois cœurs, parfaits ! Recule… *CLANG* *CLANG* … Voilà. Ce catalyseur va réveiller ce qui dort en toi. Tiens-toi prêt.', fx: { take: [['emberCore', 3]], give: [['cosmicDust', 30]] } },
-    tizon: { t: 'Tu n’as pas vu mon fils ? P’tit Tison est encore parti admirer les coulées. Il va finir en flaque !', c: [
+    tizon: { t: 'Mon fils, Tison, est parti vers les coulées. Avec les slimes de magma dans le secteur, il ne tiendra pas longtemps.', c: [
       { l: 'Je le retrouve.', fx: { quest: 'side_tizon_lost' }, end: true }, { l: 'Pas le temps.', end: true }] },
-    tizonBack: { t: 'Tison ! Petite tête de lave ! … Merci, voyageur. La forge te sera toujours ouverte.' },
+    tizonBack: { t: 'Tison… Merci, voyageur. La forge te sera toujours ouverte.' },
     core: { t: 'La grande forge chauffe trop. Si elle explose, adieu Braise-9. Il me faudrait du givre qui ne fond jamais…', c: [
       { l: 'Je connais un endroit: Glacio.', fx: { quest: 'side_cool_the_core' }, end: true }, { l: 'Bonne chance.', end: true }] },
     cool: { t: 'Du givre éternel ! Ça siffle, ça fume… ça tient ! Prends ce fer stellaire, il vient du cœur de la forge.', fx: { take: [['frostCrystal', 4]] } } } },
-  tizon: { speaker: 'P’tit Tison', portrait: '🕯', nodes: {
-    start: { t: 'Wouah ! T’es une étoile ? Une vraie ? Moi je voulais juste voir la grande coulée et y’a des slimes partout !', n: 'b' },
-    b: { t: 'Tu me protèges ? Après on rentre, promis. Maman va me transformer en tisonnier…' } } },
+  tizon: { speaker: 'Tison', portrait: '🕯', nodes: {
+    start: { t: 'Tu… tu brilles. C’est le Labo qui t’envoie ? Je voulais juste voir la grande coulée, et ils sont arrivés de partout.', n: 'b' },
+    b: { t: 'Couvre-moi jusqu’à la forge. Ma mère doit déjà me chercher.' } } },
 
   // ───────── Cendrelune ─────────
   hermit: { speaker: 'L’Ermite Gris', portrait: '🌫', entry: [[{ step: ['side_hermit_memory', 1] }, 'echo']], nodes: {
@@ -75,7 +75,7 @@ export const DIALOGUES = {
 
   // ───────── Ossable ─────────
   zaya: { speaker: 'Zaya des Caravanes', portrait: '🐪', entry: [[{ step: ['side_caravan_escort', 1] }, 'saved'], [{ step: ['side_titan_bones', 1] }, 'bones'], [{ canStart: 'side_titan_bones' }, 'giant']], nodes: {
-    start: { t: 'Hé, l’étoile ! Mes caravanes volantes sont attaquées par des scarabées. Tu as des muscles de lumière, non ?', c: [
+    start: { t: 'Toi. Mes caravanes sont harcelées par des scarabées depuis trois cycles. Tu as l’air capable de te battre.', c: [
       { l: 'Je repousse les scarabées.', fx: { quest: 'side_caravan_escort' }, end: true }, { l: 'Une autre fois.', end: true }] },
     saved: { t: 'Les scarabées fuient ! Tiens, des perles des dunes. Et si tu repasses, j’ai une histoire de géant à te raconter.' },
     giant: { t: 'Ce squelette, là-bas ? Ce n’est pas un animal. C’est un Titan. Et il n’est pas mort… il dort. Trouve des reliques dans le sable, je saurai les lire.', c: [
@@ -111,14 +111,14 @@ export const DIALOGUES = {
       { l: 'D’accord.', fx: { quest: 'side_lost_saplings' }, end: true }, { l: 'Plus tard.', end: true }] },
     saplings: { t: 'Les voilà ! Elles chantent déjà. La Mère te remercie, et moi aussi.' } } },
   root_elder: { speaker: 'Vieille-Racine', portrait: '🌳', entry: [[{ quest: 'side_seed_of_life' }, 'go']], nodes: {
-    start: { t: 'Hmmmm… petit… être… Tu… as… une… maison… ?', c: [
+    start: { t: '…Jeune pousse d’étoile… As-tu… un monde… à toi… ?', c: [
       { l: 'Pépin, une petite planète verte.', n: 'seed' }, { l: '(Attendre poliment)', n: 'seed' }] },
     seed: { t: 'Prends… cette… graine. Plante-la… chez toi. Elle… grandira… avec toi.', fx: { quest: 'side_seed_of_life' } },
-    go: { t: 'Va… planter… Pas… de… précipitation… Hmmm.' } } },
+    go: { t: 'Va… La graine… attendra… le temps… qu’il faudra.' } } },
 
   // ───────── Mycélia ─────────
   dreamer: { speaker: 'Rêvasse', portrait: '🍄', entry: [[{ step: ['side_dream_walk', 1] }, 'share'], [{ canStart: 'side_spore_cure', done: 'side_dream_walk' }, 'cure']], nodes: {
-    start: { t: 'Chuuut… les étoiles rêvent. Tu veux savoir de quoi ? Rapporte-moi de la mousse onirique et on rêvera ensemble.', c: [
+    start: { t: 'Silence… les étoiles rêvent. Si tu veux voir leurs rêves, rapporte-moi de la mousse onirique.', c: [
       { l: 'Rêvons !', fx: { quest: 'side_dream_walk' }, end: true }, { l: 'Je préfère rester éveillé.', end: true }] },
     share: { t: '…Je vois… un jardin hors des cartes. Des créatures dorées. Une porte qu’on ne trouve qu’en se souvenant… Étrange rêve.', fx: { take: [['dreamMoss', 3]] } },
     cure: { t: 'Les sporelins font des cauchemars. Ils mordent tout. Calme-les, veux-tu ?', c: [
@@ -126,22 +126,22 @@ export const DIALOGUES = {
 
   // ───────── Thalassa ─────────
   houle: { speaker: 'Capitaine Houle', portrait: '⚓', entry: [[{ step: ['side_lighthouse', 1] }, 'lit'], [{ step: ['side_sky_whale', 1] }, 'song'], [{ canStart: 'side_sky_whale' }, 'whale']], nodes: {
-    start: { t: 'Ahoy, moussaillon lumineux ! Mon phare est éteint et les baleines célestes s’échouent. Il me faut du verre de marée.', c: [
+    start: { t: 'Mon phare est mort, et sans lui les baleines célestes s’échouent sur les récifs. Il me faut du verre de marée pour le rallumer.', c: [
       { l: 'Je trouverai ce verre.', fx: { quest: 'side_lighthouse' }, end: true }, { l: 'Je ne suis pas marin.', end: true }] },
-    lit: { t: 'Il brille ! Regarde, au loin… elles reviennent ! Merci, l’étoile.', fx: { take: [['tideGlass', 3]] } },
+    lit: { t: 'Il brûle à nouveau. Regarde au large… elles reviennent. Merci.', fx: { take: [['tideGlass', 3]] } },
     whale: { t: 'Une baleine chante au-dessus du large depuis que le phare brille. Va écouter, et raconte-moi.', c: [
       { l: 'J’y vais.', fx: { quest: 'side_sky_whale' }, end: true }, { l: 'Plus tard.', end: true }] },
     song: { t: 'Elle chantait le nom d’un Titan ? Par les abysses… Les vieux disent que les Titans dorment sous chaque soleil.' } } },
 
   // ───────── Voltaria ─────────
   spark_rebel: { speaker: 'Étincelle', portrait: '⚡', entry: [[{ step: ['side_sabotage', 1] }, 'sab'], [{ done: 'main_3_rebellion', canStart: 'side_sabotage' }, 'askSab']], nodes: {
-    start: { t: 'Toi ! Le « dieu du Labo » ? Ha, je t’imaginais plus grand. L’Empire pompe nos tempêtes pour nourrir une arme capable de te capturer.', c: [
+    start: { t: 'C’est toi, le « dieu du Labo » ? L’Empire siphonne nos tempêtes pour alimenter une arme conçue pour te capturer.', c: [
       { l: 'Je me bats avec vous.', n: 'join' }, { l: 'Quelle arme ?', n: 'weapon' }] },
     weapon: { t: 'Une cage-étoile. L’Empereur Rubis veut t’y mettre et se servir de toi comme d’un réacteur.', n: 'join' },
     join: { t: 'Alors prouve-le: abats leurs drones écarlates. Chaque drone abattu, c’est une tempête rendue à Voltaria.' },
     askSab: { t: 'La raffinerie au sud. Trois chevaliers la gardent. Tu t’en charges, je pose les charges.', c: [
       { l: 'Allons-y.', fx: { quest: 'side_sabotage' }, end: true }, { l: 'Pas maintenant.', end: true }] },
-    sab: { t: 'BOUM ! Tu entends ? C’est le son de la liberté. Prends ces éclats, ils sont à toi.' } } },
+    sab: { t: 'Les charges ont sauté. La raffinerie est hors service. Prends ces éclats, tu les as gagnés.' } } },
 
   // ───────── Bastion ─────────
   garance: { speaker: 'Chevalier Garance', portrait: '🛡', entry: [[{ step: ['side_defector', 1] }, 'free']], nodes: {

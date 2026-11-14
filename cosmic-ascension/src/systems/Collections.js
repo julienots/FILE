@@ -22,7 +22,7 @@ export const Collections = {
   },
   check() {
     const d = State.data, got = this.c.achievements;
-    for (const a of ACHIEVEMENTS) if (!got.includes(a.id) && a.test(d)) { got.push(a.id); bus.emit('achievement', { id: a.id }); bus.emit('ui:toast', { text: `🏆 ${a.name}`, kind: 'questDone' }); }
+    for (const a of ACHIEVEMENTS) if (!got.includes(a.id) && a.test(d)) { got.push(a.id); bus.emit('achievement', { id: a.id }); bus.emit('ui:toast', { text: `Succès — ${a.name}`, kind: 'questDone' }); }
   },
 };
 export function initCollections() {

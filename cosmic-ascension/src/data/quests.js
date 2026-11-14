@@ -64,9 +64,9 @@ export const QUESTS = {
     rewards: { xp: 5000, flags: ['game_complete'] } },
 
   // ═════════ SECONDAIRES ═════════
-  side_lost_pipion: { kind: 'side', planet: 'home', giver: 'mayor_pip', title: 'Le Pipion égaré', desc: 'Le petit Pip s’est perdu en suivant un slime.',
-    steps: [S('kill', 'Chasse les slimes de Pépin', { target: 'slime', count: 3, planet: 'home' }), S('talk', 'Rassure le Maire Pipo', { target: 'mayor_pip' })], rewards: { xp: 60, dust: 30 } },
-  side_slime_cleanup: { kind: 'side', planet: 'home', auto: true, requires: { quests: ['main_1_escape'] }, title: 'Grand ménage', desc: 'Les slimes d’étoile pullulent.',
+  side_lost_pipion: { kind: 'side', planet: 'home', giver: 'mayor_pip', title: 'Disparu dans les hautes herbes', desc: 'Un jeune colon a disparu en suivant des créatures hostiles.',
+    steps: [S('kill', 'Chasse les slimes de Pépin', { target: 'slime', count: 3, planet: 'home' }), S('talk', 'Fais ton rapport à Pipo', { target: 'mayor_pip' })], rewards: { xp: 60, dust: 30 } },
+  side_slime_cleanup: { kind: 'side', planet: 'home', auto: true, requires: { quests: ['main_1_escape'] }, title: 'Nettoyage du périmètre', desc: 'Les formes hostiles prolifèrent autour des colonies.',
     steps: [S('kill', 'Vaincs des ennemis', { target: 'any', count: 10 })], rewards: { xp: 120, dust: 40 } },
   side_star_cartographer: { kind: 'side', auto: true, requires: { stage: 1 }, title: 'Cartographe stellaire', desc: 'Boulon veut une carte complète du secteur.',
     steps: [S('discover', 'Repère Braise-9', { target: 'ember' }), S('discover', 'Repère Glacio', { target: 'glacio' }), S('discover', 'Repère Sylva-Mère', { target: 'sylva' }), S('discover', 'Repère Thalassa', { target: 'thalassa' })],
@@ -75,8 +75,8 @@ export const QUESTS = {
     steps: [S('item', 'Possède 300 poussières cosmiques', { target: 'cosmicDust', count: 300 })], rewards: { xp: 150, items: [['lumenSap', 1]] } },
   side_drone_parts: { kind: 'side', planet: 'lab', giver: 'bolt', title: 'Pièces détachées', desc: 'Boulon a besoin d’alliage pour se réparer.',
     steps: [S('item', 'Récupère de l’alliage de récup', { target: 'scrapAlloy', count: 4 }), S('talk', 'Rapporte-les à Boulon', { target: 'bolt' })], rewards: { xp: 140, flags: ['bolt_upgraded'] } },
-  side_tizon_lost: { kind: 'side', planet: 'ember', giver: 'forga', title: 'Où est P’tit Tison ?', desc: 'Le fils de Forga est parti voir les coulées de lave.',
-    steps: [S('talk', 'Trouve P’tit Tison', { target: 'tizon' }), S('kill', 'Protège-le des slimes de magma', { target: 'magmaSlime', count: 3 }), S('talk', 'Ramène-le à Forga', { target: 'forga' })], rewards: { xp: 180, dust: 60 } },
+  side_tizon_lost: { kind: 'side', planet: 'ember', giver: 'forga', title: 'Le fils de la forge', desc: 'Le fils de Forga s’est aventuré vers les coulées de lave.',
+    steps: [S('talk', 'Retrouve Tison', { target: 'tizon' }), S('kill', 'Protège-le des slimes de magma', { target: 'magmaSlime', count: 3 }), S('talk', 'Ramène-le à Forga', { target: 'forga' })], rewards: { xp: 180, dust: 60 } },
   side_cool_the_core: { kind: 'side', planet: 'ember', giver: 'forga', requires: { quests: ['main_3_glacio'] }, title: 'Cœur en surchauffe', desc: 'La forge de Braise va exploser. Il faut du givre éternel.',
     steps: [S('item', 'Apporte des cristaux de givre', { target: 'frostCrystal', count: 4 }), S('talk', 'Livre-les à Forga', { target: 'forga' })], rewards: { xp: 300, items: [['starIron', 2]] } },
   side_hermit_memory: { kind: 'side', planet: 'cinder', giver: 'ash_hermit', title: 'Les Cendres du souvenir', desc: 'L’Ermite Gris a oublié le nom de son peuple.',

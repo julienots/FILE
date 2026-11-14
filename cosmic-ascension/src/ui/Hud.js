@@ -9,7 +9,7 @@ import { t } from './i18n.js';
 import { buzz } from './haptics.js';
 // HUD paysage (B): portrait+PV/énergie/XP (haut-gauche), poussière+pause (haut-droite), lieu+indice (haut-centre),
 // suivi d'objectif (droite), toasts, bannière d'évolution. Tout est piloté par le bus + State.
-const STAGE_ICON = ['✧', '✦', '☄', '✺', '⬢', '☀', '◈', '●', '✸', '✺'];  // glyphes (pas d'emoji: style sombre)
+const STAGE_ICON = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];  // numéros de forme (HUD sobre)  // glyphes (pas d'emoji: style sombre)
 export function mountHud(root, { onPause } = {}) {
   const layer = h('div.layer.hud'); root.appendChild(layer);
   const portrait = h('div.portrait.noev', {}, h('span'), h('b'));
@@ -56,7 +56,9 @@ export function mountHud(root, { onPause } = {}) {
   });
   bus.on('scene:entered', ({ id, planet }) => {
     if (id !== 'planet' || !planet) return;
-    loc.innerHTML = ''; loc.append(planet.name, h('small', { text: planet.desc ?? '' })); hint.textContent = ''; hint.classList.remove('go');
+    const ph = planet.phys, f = (v, d = 2) => String(v.toFixed(d)).replace('.', ',');
+    const scan = ph ? `GRAV ${f(ph.g)} g · ${ph.temp > 0 ? '+' : ''}${ph.temp} °C · ${ph.atmo}${ph.day ? ` · jour ${ph.day} h` : ''}` : (planet.desc ?? '');
+    loc.innerHTML = ''; loc.append(planet.name.toUpperCase(), h('small', { text: scan })); hint.textContent = ''; hint.classList.remove('go');
   });
   bus.on('hero:evolved', ({ stage }) => { refresh(); banner(stage); buzz(60); });
   bus.on('cinematic:start', () => layer.classList.add('hidden')); bus.on('cinematic:end', () => layer.classList.remove('hidden'));
