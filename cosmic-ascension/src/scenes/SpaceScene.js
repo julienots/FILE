@@ -33,7 +33,7 @@ export class SpaceScene {
     this.ship = new Ship(); this.scene.add(this.ship.root);
     this.lines = createSpeedLines(); this.camera.add(this.lines);
     this.trail = new Particles(300); this.scene.add(this.trail.points);
-    this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.bank = 0; this.boost = 0; this.shake = 0; this.throttle = .3;
+    this.vel = new THREE.Vector3(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(0, 0, 0, 'YXZ'); this.bank = 0; this.boost = 0; this.shake = 0; this.throttle = 0; this.sx = 0; this.sy = 0;
     this._dq = new THREE.Quaternion(); this._m4 = new THREE.Matrix4(); this._X = new THREE.Vector3(1, 0, 0); this._Y = new THREE.Vector3(0, 1, 0); this._Z = new THREE.Vector3(0, 0, 1);
     // cap absolu (tests, scripts): scene.yaw / scene.pitch réécrivent l'orientation libre
     let yaw = 0, pitch = 0; const setE = () => this.q.setFromEuler(this.e.set(pitch, yaw, 0));
@@ -51,10 +51,11 @@ export class SpaceScene {
   }
   enter({ from } = {}) {
     const p = from ? this.planets.find(x => x.userData.def.id === from) : null, s = this.ship.root;
-    if (p) { const r = p.userData.radius; s.position.copy(p.position).add(this._a.set(.3, .35, 1).normalize().multiplyScalar(r * 1.35)); this._a.copy(s.position).sub(p.position).normalize(); this.q.setFromRotationMatrix(this._m4.lookAt(this._b.set(0, 0, 0), this._a, this._Y)); this.vel.copy(this._a).multiplyScalar(160); this.boost = 1; this.throttle = .45; }
-    else { s.position.set(0, 0, 60); this.q.identity(); this.vel.set(0, 0, 0); this.throttle = .3; }
-    if (!this._hinted) { this._hinted = true; setTimeout(() => bus.emit('ui:toast', { text: 'Vol libre — ≫ accélérer · ⤒ freiner / reculer · glisser à droite: tonneau', kind: 'info' }), 2500); }
+    if (p) { const r = p.userData.radius; s.position.copy(p.position).add(this._a.set(.3, .35, 1).normalize().multiplyScalar(r * 1.35)); this._a.copy(s.position).sub(p.position).normalize(); this.q.setFromRotationMatrix(this._m4.lookAt(this._b.set(0, 0, 0), this._a, this._Y)); this.vel.copy(this._a).multiplyScalar(120); this.boost = 0; this.throttle = .5; }
+    else { s.position.set(0, 0, 60); this.q.identity(); this.vel.set(0, 0, 0); this.throttle = 0; }
+    if (!this._hinted) { this._hinted = true; setTimeout(() => bus.emit('ui:toast', { text: 'Maintiens ≫ pour avancer · ⤒ pour reculer · joystick ou glisser l’écran pour tourner', kind: 'info' }), 2500); }
     this.isActive = true; this.landing = null; this.near = null; this.camera.position.copy(s.position).addScaledVector(this.vel, -.08).add(this._b.set(0, 4, 0));
+    this._camSnap = true;
     bus.emit('scene:entered', { id: 'space' });
   }
   exit() { this.isActive = false; this.devourer.leave(); if (this.serpentEngaged) { this.serpentEngaged = false; bus.emit('boss:despawn', { id: 'serpent' }); } }
@@ -65,19 +66,23 @@ export class SpaceScene {
       L.t += dt; this._dq.setFromRotationMatrix(this._m4.lookAt(sp, L.planet.position, _a.set(0, 1, 0).applyQuaternion(this.q))); this.q.slerp(this._dq, Math.min(1, dt * 4)); this.throttle = 1; this.shake = Math.min(1, L.t);
       if (L.t > .9 && !L.done) { L.done = true; this.ctx.transition('planet', { id: L.planet.userData.def.id, arrive: true }, { color: L.planet.userData.def.atmosphere?.color ?? '#ffffff', out: .5, in: .9 }); }
     } else {
-      const mx = Input.move.x, my = Input.move.y;
-      this.q.multiply(this._dq.setFromAxisAngle(this._Y, -mx * dt * 1.7)).multiply(this._dq.setFromAxisAngle(this._X, my * dt * 1.4));
-      if (Input.look.x) this.q.multiply(this._dq.setFromAxisAngle(this._Z, -Input.look.x * .006));        // tonneau: glisser à droite de l'écran
+      // Direction: joystick OU glisser à droite de l'écran (la vue et le vaisseau tournent ensemble). Entrées lissées, réponse progressive.
+      const cv = (v) => Math.sign(v) * Math.pow(Math.abs(v), 1.6), k = Math.min(1, dt * 10);
+      this.sx += (cv(Input.move.x) - this.sx) * k; this.sy += (cv(Input.move.y) - this.sy) * k;
+      const yawIn = -this.sx * dt * 2.1 - Input.look.x * .0045, pitchIn = this.sy * dt * 1.7 - Input.look.y * .0045;
+      this.q.multiply(this._dq.setFromAxisAngle(this._Y, yawIn)).multiply(this._dq.setFromAxisAngle(this._X, pitchIn));
+      // remise à plat automatique du roulis (l'horizon du vaisseau reste stable, sauf en piqué/chandelle)
+      _a.set(1, 0, 0).applyQuaternion(this.q); _b.set(0, 0, -1).applyQuaternion(this.q); if (Math.abs(_b.y) < .92) this.q.multiply(this._dq.setFromAxisAngle(this._Z, -_a.y * Math.min(1, dt * 2.5)));
       this.q.normalize(); this.shake = Math.max(0, this.shake - dt * 2);
-      if (Input.buttons.boost) this.throttle = Math.min(1, this.throttle + dt * .9); else if (Input.buttons.jump) this.throttle = Math.max(-.25, this.throttle - dt * 1.3);
-      else if (this.throttle > .45) this.throttle = Math.max(.45, this.throttle - dt * .35);                 // la postcombustion retombe seule; la croisière reste où on l'a mise
+      // Gaz: le vaisseau n'avance QUE si ≫ est maintenu (⤒ = marche arrière); relâché, il freine jusqu'à l'arrêt.
+      const want = Input.buttons.boost ? 1 : Input.buttons.jump ? -.3 : 0; this.throttle += (want - this.throttle) * Math.min(1, dt * (want ? 1.6 : 2.4)); if (Math.abs(this.throttle) < .004) this.throttle = 0;
     }
     const thr = this.throttle, boost = this.boost += (Math.max(0, (thr - .45) / .55) - this.boost) * Math.min(1, dt * 4);
-    this.bank += (-(L ? 0 : Input.move.x) * .7 - this.bank) * Math.min(1, dt * 4);
+    this.bank += (-(L ? 0 : this.sx) * .55 - this.bank) * Math.min(1, dt * 5);
     s.root.quaternion.copy(this.q).multiply(this._dq.setFromAxisAngle(this._Z, this.bank));
     _f.set(0, 0, -1).applyQuaternion(this.q);
     const cruise = 70 * (State.data.ship.level * .15 + .85), target = cruise * 4.2 * thr;
-    this.vel.lerp(_a.copy(_f).multiplyScalar(target), Math.min(1, dt * 2.2)); sp.addScaledVector(this.vel, dt);
+    this.vel.lerp(_a.copy(_f).multiplyScalar(target), Math.min(1, dt * 3)); sp.addScaledVector(this.vel, dt);
     // collisions astéroïdes: rebond
     if (!L) for (let i = 0, cs = this.colliders; i < cs.length; i++) { const c = cs[i], rr = c.r + 2; if (Math.abs(sp.x - c.pos.x) > rr || Math.abs(sp.z - c.pos.z) > rr) continue;
       const d2 = sp.distanceToSquared(c.pos); if (d2 < rr * rr) { _a.copy(sp).sub(c.pos).normalize(); sp.copy(c.pos).addScaledVector(_a, rr); this.vel.reflect(_a).multiplyScalar(.5); this.shake = 1; bus.emit('ship:bump', { speed: this.vel.length() }); } }
@@ -102,11 +107,12 @@ export class SpaceScene {
       if (l.life <= 0) l.mesh.visible = false; }
     this.fx.update(dt, innerHeight);
     // caméra poursuite + tremblement + FOV
-    _a.set(0, 4.5 - boost, 15 + boost * 7).applyQuaternion(this.q).add(sp);
-    this.camera.position.lerp(_a, Math.min(1, dt * (5 + boost * 3)));
-    if (this.shake > 0) { const k = this.shake * (.12 + boost * .1); this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
-    this.camera.up.set(0, 1, 0).applyQuaternion(this.q); _a.copy(sp).addScaledVector(_f, 30); if (this.awe > 0) _a.lerp(sv.headPos, Math.min(1, this.awe) * Math.min(1, (4 - this.awe) * 2) * .75); this.camera.lookAt(_a);
-    this.camera.fov += ((62 + boost * 22) - this.camera.fov) * Math.min(1, dt * 3);
+    // caméra solidaire du vaisseau: proche, même orientation, le vaisseau garde sa place à l'écran
+    _a.set(0, 2.5, 10 + boost * 2).applyQuaternion(this.q).add(sp);
+    if (this._camSnap) { this.camera.position.copy(_a); this._camSnap = false; } else this.camera.position.lerp(_a, Math.min(1, dt * 14));
+    if (this.shake > 0) { const k = this.shake * (.06 + boost * .05); this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
+    this.camera.up.set(0, 1, 0).applyQuaternion(this.q); _a.copy(sp).addScaledVector(_f, 40).addScaledVector(this.camera.up, 1.2); if (this.awe > 0) _a.lerp(sv.headPos, Math.min(1, this.awe) * Math.min(1, (4 - this.awe) * 2) * .75); this.camera.lookAt(_a);
+    this.camera.fov += ((60 + boost * 16) - this.camera.fov) * Math.min(1, dt * 3);
     this.lines.userData.update(t, Math.max(0, boost - .15)); this.ctx.renderer.fx.aberration = Math.max(this.ctx.renderer.fx.aberration, boost * 1.2 + this.shake * 2);
     // décor
     const px = this.ctx.renderer.renderer.getPixelRatio();
