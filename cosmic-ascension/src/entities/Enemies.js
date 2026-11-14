@@ -7,13 +7,14 @@ import { bus } from '../core/EventBus.js';
 // B (systems/combat) peut reprendre la main: `enemy:order {uid, order:'die'|'stun'}` et écouter `enemy:hit`, `enemy:touch`, `enemy:killed`.
 const TYPES = {
   slime: { color: '#3a1460', rim: '#d070ff', hp: 3, speed: 3.2, size: 1, sight: 20, model: 'enemy_slime' },
-  scarab: { color: '#0e3a44', rim: '#3affe0', hp: 5, speed: 4.5, size: 1.3, sight: 26, model: 'enemy_scarab' },
+  scarab: { color: '#0e3a44', rim: '#3affe0', hp: 5, speed: 4.5, size: 1.3, sight: 26, model: 'enemy_drone' },
+  dragon: { color: '#1a2a6a', rim: '#6ff2ff', hp: 30, speed: 3.4, size: 2.6, sight: 34, model: 'enemy_dragon' },
   brute: { color: '#2a2228', rim: '#ff7a3a', hp: 14, speed: 2.2, size: 3, sight: 30, model: 'enemy_brute' },
 };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
 function makeBody(type) {
   const T = TYPES[type], g = new THREE.Group(), model = Assets.get(T.model);
-  if (model) { model.scale.multiplyScalar(T.size); g.add(model); return g; }
+  if (model) { g.add(model); g.scale.setScalar(T.size); return g; }
   const mat = toonMaterial({ color: T.color, rim: T.rim, rimStrength: 1.3 });
   const b = new THREE.Mesh(new THREE.SphereGeometry(.6, 16, 12), mat); b.position.y = .5; b.scale.set(1.1, .85, 1.1); addOutline(b, '#1a0f33', .04); g.add(b);
   const white = new THREE.MeshBasicMaterial({ color: '#ff2a4a' }), red = new THREE.MeshBasicMaterial({ color: '#ff2a4a' });
@@ -33,7 +34,7 @@ export class Enemies {
   // Peuple la planète: def.enemies [{type,count,lat,lon,radius}] sinon quelques slimes répartis.
   populate(planet) {
     this.clear(); this.P = planet.userData; const def = this.P.def; let s = def.seed * 57 + 3; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    const specs = def.enemies?.length ? def.enemies : [{ type: 'slime', count: 10 }, { type: 'scarab', count: 3 }, { type: 'brute', count: 1 }];
+    const specs = def.enemies?.length ? def.enemies : [{ type: 'slime', count: 10 }, { type: 'scarab', count: 3 }, { type: 'brute', count: 1 }, { type: 'dragon', count: 1 }];
     for (const sp of specs) for (let i = 0, tries = 0; i < (sp.count ?? 1) && tries < 200; tries++) {
       const d = new THREE.Vector3();
       if (sp.lat != null) { const la = THREE.MathUtils.degToRad(sp.lat), lo = THREE.MathUtils.degToRad(sp.lon), r = (sp.radius ?? 10) / this.P.radius; d.set(Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo)).add(_a.set(rnd() - .5, rnd() - .5, rnd() - .5).multiplyScalar(r * 2)).normalize(); }

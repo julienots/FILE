@@ -1,5 +1,53 @@
 {
-  "_doc": "Clé → {file, height(m)}. Déposer le GLB dans public/models/ puis ajouter/activer l'entrée. Voir docs/TRIPO_PROMPTS.md pour les prompts.",
-  "hero_stage0": { "file": "hero_stage0.glb", "height": 1.0, "disabled": true },
-  "ship_basic":  { "file": "ship_basic.glb",  "height": 3.0, "disabled": true }
+ "_doc": "Clé → {file, height (m, avant échelle du jeu), rotY (radians, pour orienter l'avant vers +Z; vaisseau: nez vers -Z)}. Modèles Tripo allégés avec tools/models (voir docs/TRIPO_PROMPTS.md).",
+ "hero_mote": {
+  "file": "hero_mote.glb",
+  "height": 1.0
+ },
+ "hero_sprout": {
+  "file": "hero_sprout.glb",
+  "height": 1.1,
+  "rotY": -1.5708
+ },
+ "hero_comet": {
+  "file": "hero_comet.glb",
+  "height": 1.2
+ },
+ "hero_nova": {
+  "file": "hero_nova.glb",
+  "height": 1.2,
+  "rotY": -1.5708
+ },
+ "hero_titan": {
+  "file": "hero_titan.glb",
+  "height": 1.3
+ },
+ "hero_god": {
+  "file": "hero_god.glb",
+  "height": 1.4
+ },
+ "ship_basic": {
+  "file": "ship_basic.glb",
+  "height": 2.2,
+  "rotY": 1.5708,
+  "rimStrength": 1.5,
+  "rim": "#6ff2ff"
+ },
+ "enemy_slime": {
+  "file": "enemy_slime.glb",
+  "height": 1.1
+ },
+ "enemy_drone": {
+  "file": "enemy_drone.glb",
+  "height": 0.9
+ },
+ "enemy_brute": {
+  "file": "enemy_brute.glb",
+  "height": 1.2
+ },
+ "enemy_dragon": {
+  "file": "enemy_dragon.glb",
+  "height": 1.3,
+  "rotY": 1.5708
+ }
 }

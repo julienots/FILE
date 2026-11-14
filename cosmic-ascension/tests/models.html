@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#0a0818"><canvas id="c"></canvas>
+<script type="module">
+// Planche d'aperçu de modèles GLB: /tests/models.html?dir=_in&files=a.glb,b.glb  (serveur de dev Vite)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+const q = new URLSearchParams(location.search), files = q.get('files').split(','), dir = q.get('dir') ?? '', cols = +(q.get('cols') ?? 4), yaw = +(q.get('yaw') ?? .6);
+const rows = Math.ceil(files.length / cols), W = 1280, H = Math.round(W / cols * rows);
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); r.setScissorTest(true);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder), cw = W / cols, ch = H / rows;
+for (let i = 0; i < files.length; i++) {
+  const g = await loader.loadAsync(`/models/${dir}/${files[i]}`), sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight('#ffffff', '#40305a', 1.6)); const d = new THREE.DirectionalLight('#fff', 2); d.position.set(2, 3, 4); sc.add(d);
+  const box = new THREE.Box3().setFromObject(g.scene), s = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()); g.scene.position.sub(c); const piv = new THREE.Group(); piv.add(g.scene); piv.rotation.y = yaw; sc.add(piv);
+  const cam = new THREE.PerspectiveCamera(35, cw / ch, .01, 1000), m = Math.max(s.x, s.y, s.z); cam.position.set(0, m * .25, m * 2.1); cam.lookAt(0, 0, 0);
+  const x = (i % cols) * cw, y = H - (Math.floor(i / cols) + 1) * ch; r.setViewport(x, y, cw, ch); r.setScissor(x, y, cw, ch); r.render(sc, cam);
+  console.log(files[i], 'size', s.x.toFixed(2), s.y.toFixed(2), s.z.toFixed(2));
+}
+document.title = 'done';
+</script>

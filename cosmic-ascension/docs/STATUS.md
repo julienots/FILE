@@ -58,3 +58,7 @@ Notes / décisions:
 
 ## Modèles Tripo reçus / à intégrer
 (l'utilisateur dépose les GLB dans `public/models/`; B active dans manifest.json; A vérifie l'échelle/orientation)
+- **Reçus (11 GLB bruts de ~60 Mo via Google Drive), allégés par A (620 Mo → 1,8 Mo, procédure: `tools/models/README.md`) et intégrés:**
+  blue jelly → `hero_mote` · green alien → `hero_sprout` · lava creature → `hero_comet` · chibi ninja → `hero_nova` · galaxy titan → `hero_titan` · cosmic deity → `hero_god` · stellar warship → `ship_basic` · slime violet → `enemy_slime` · security drone → `enemy_drone` (type `scarab`) · rock monster → `enemy_brute` · cartoon dragon → `enemy_dragon` (nouveau type d'élite `dragon`).
+- `AssetLibrary` convertit tout GLB en matériau toon (texture ou couleurs de sommets); `manifest.json` accepte `rotY`, `rim`, `rimStrength`.
+- Manquent encore: `boss_serpent` (tête seule de préférence), PNJ `npc_*`, bâtiments `bld_*`, décors.
