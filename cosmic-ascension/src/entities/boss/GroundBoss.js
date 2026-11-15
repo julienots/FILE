@@ -9,7 +9,7 @@ import { QUESTS } from '../../data/quests.js';
 // Boss au sol générique (Empereur, Titan Kaal, Dieu Céleste, Gardien…): marche vers le héros, frappe le sol (onde de choc
 // à esquiver en sautant), contact. PV côté moteur; à la mort: `boss:defeated {id}` → récompenses et quête gérées par systems/Bosses.
 const LOOK = {   // modèle GLB, hauteur (m), couleur d'énergie
-  lab_warden: ['enemy_drone', 6, '#ff3a4a'], emperor: ['enemy_brute', 8, '#ff2a4a'], ancient_titan: ['hero_titan', 17, '#b48aff'],
+  lab_warden: ['enemy_drone', 6, '#ff3a4a'], emperor: ['enemy_mech', 9, '#ff2a4a'], ancient_titan: ['hero_titan', 17, '#b48aff'],
   celestial_god: ['hero_god', 24, '#ffe9a0'], void_whale: ['enemy_dragon', 14, '#6ff2ff'],
 };
 // Boss attendu par une quête active sur cette planète (arène du boss ou planète de la quête), pas encore vaincu.

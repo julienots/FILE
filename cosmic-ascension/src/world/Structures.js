@@ -30,7 +30,7 @@ function monolith(B) { const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, .8, 8), toonMaterial({ color: B.stone, rim: B.glow, flatShading: true })); base.position.y = .3; g.add(base);
   const halo = createAtmosphere(3.2, B.glow, 2.5, .9); halo.position.y = 4.6; g.add(halo);
   g.userData.r = 2.6; g.userData.crystal = m; return g; }
-function villager(B, i, key) { const g = new THREE.Group(), model = key && Assets.get(key);
+function villager(B, i, keys) { const g = new THREE.Group(), model = keys.map(k => k && Assets.get(k)).find(Boolean); g.userData.anim = model?.userData.anim ?? null;
   if (model) { g.add(model); } else {
     const mat = toonMaterial({ color: new THREE.Color(B.folk).offsetHSL(i * .04, 0, 0), rim: B.glow, rimStrength: 1.2 });
     const hood = new THREE.Mesh(new THREE.ConeGeometry(.62, 1.1, 10), mat); hood.position.set(0, 2.05, -.12); hood.rotation.x = -.25; g.add(hood);
@@ -54,7 +54,7 @@ export function buildStructures(planet) {
   // ramène une direction issue de la data (lat/lon) sur la terre ferme la plus proche
   const toLand = (dir) => { for (let i = 1; i < 60 && P.sample(dir) - P.sea < .02; i++) { const a = i * 2.4, r = i * .012; offset(dir.clone(), Math.cos(a) * r * P.radius, Math.sin(a) * r * P.radius, d); if (P.sample(d) - P.sea >= .02) { dir.copy(d); break; } } return dir; };
   const builders = { hut, ruin, monolith };
-  const addNpc = (dir, i, spec = {}) => { const v = villager(B, i, spec.model ?? ('npc_' + (spec.species ?? def.biome))); place(v, dir, 0, 0);
+  const addNpc = (dir, i, spec = {}) => { const v = villager(B, i, [spec.model, spec.species && 'npc_' + spec.species, 'npc_' + def.biome, 'npc_default']); place(v, dir, 0, 0);
     npcs.push({ id: spec.id ?? `${def.id}:villager:${i}`, name: spec.name ?? ['Milo', 'Zia', 'Orbe', 'Tiko', 'Nuna', 'Fen'][i % 6], line: spec.line ?? B.lines[i % B.lines.length], root: v, dir: dir.clone(), t: rnd() * 6 }); };
   if (def.structures?.length) for (const st of def.structures) { if (st.kind === 'ship_pad') continue; const o = (builders[st.kind] ?? (/village|city|camp|oasis|dome|refinery|citadel/.test(st.kind) ? hut : /temple|tomb|shrine|beacon|portal|lighthouse|monolith/.test(st.kind) ? monolith : ruin))(B); o.scale.setScalar(st.scale ?? 1); place(o, toLand(latLonToDir(st.lat, st.lon, d).clone())); if (o.userData.crystal) secrets.push({ id: `${def.id}:monolith:${secrets.length}`, obj: o, found: false }); }
   else {
@@ -69,7 +69,7 @@ export function buildStructures(planet) {
   const update = (dt, t, heroPos) => {
     let nearest = null, nd = 5;
     for (const n of npcs) { n.t += dt; const dist = n.root.position.distanceTo(heroPos); n.root.userData.mark.position.y = 3 + Math.sin(n.t * 3) * .15; n.root.userData.mark.rotation.y = n.t * 2;
-      n.root.scale.y = 1 + Math.sin(n.t * 2.5) * .03;
+      n.root.scale.y = 1 + Math.sin(n.t * 2.5) * .03; if (n.root.userData.anim) n.root.userData.anim.set(0, n.t, 0, dist < 5 ? .25 + Math.sin(n.t * 3) * .2 : 0);
       if (dist < 14) { t1.copy(heroPos).sub(n.root.position); t1.addScaledVector(n.dir, -t1.dot(n.dir)).normalize(); t2.crossVectors(n.dir, t1).normalize(); n.root.quaternion.slerp(tq.setFromRotationMatrix(m4.makeBasis(t2, n.dir, t1)), Math.min(1, dt * 5)); }
       if (dist < nd) { nd = dist; nearest = n; } }
     for (const sc of secrets) { const cr = sc.obj.userData.crystal; if (cr) { cr.rotation.y += dt * (sc.found ? .3 : 1.2); cr.position.y = 4.6 + Math.sin(t * 1.5) * .3; } }
