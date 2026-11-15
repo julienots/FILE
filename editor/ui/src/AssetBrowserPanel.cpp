@@ -179,6 +179,19 @@ void AssetBrowserPanel::draw(EditorShared& s) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         ImGui::SetTooltip("Shader de surface (.agrshader) : code GLSL branché sur le rendu PBR, avec aperçu en direct");
     ImGui::SameLine();
+    if (ImGui::Button("Nouvelle logique")) {
+        const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouvelle_logique", {".agrlogic"});
+        const std::string uri = "assets://" + join(s.assetFolder, stem + ".agrlogic");
+        if (Status st = s.engine.vfs().writeText(uri, LogicPanel::defaultGraph()); st) {
+            s.openLogicRequest = uri;
+            s.notify("Logique visuelle créée : " + uri + " (glisser sur une entité ou « Attacher à la sélection »)");
+        } else {
+            s.notify("Création impossible : " + st.error().message);
+        }
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Graphe de logique visuelle (.agrlogic) : des événements et des actions reliés, sans code");
+    ImGui::SameLine();
     if (ImGui::Button("Nouveau script")) {
         const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouveau_script", {".lua"});
         const std::string uri = "assets://" + join(s.assetFolder, stem + ".lua");
@@ -308,6 +321,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (isMaterial && s.inspectedAsset == uri) dl->AddRect(p, {p.x + tile, p.y + tile}, palette::kSelect, 4.0f, 2.0f);
                 const bool isShader = !folder && fs::path(name).extension() == kShaderExtension;
                 if (isShader && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderRequest = uri;  // shader editor
+                const bool isLogic = !folder && fs::path(name).extension() == ".agrlogic";
+                if (isLogic && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openLogicRequest = uri;  // visual logic editor
                 if (!folder && ImGui::BeginDragDropSource()) {
                     ImGui::SetDragDropPayload(kPayloadAsset, uri.c_str(), uri.size() + 1);
                     ImGui::Text("%s", name.c_str());
@@ -319,6 +334,7 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
                     else if (fs::path(name).extension() == ".lua") ImGui::SetTooltip("%s\nScript : glisser sur une entité de la vue pour l'attacher", uri.c_str());
                     else if (isMaterial) ImGui::SetTooltip("%s\nMatériau : cliquer pour le modifier, glisser sur un MeshRenderer", uri.c_str());
+                    else if (isLogic) ImGui::SetTooltip("%s\nLogique visuelle : cliquer pour l'éditer, glisser sur une entité pour l'attacher", uri.c_str());
                     else if (isShader) ImGui::SetTooltip("%s\nShader : cliquer pour l'éditer, glisser sur le champ Shader d'un matériau", uri.c_str());
                     else ImGui::SetTooltip("%s", uri.c_str());
                 }

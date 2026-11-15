@@ -82,6 +82,7 @@ private:
     LocalizationPanel m_localizationPanel;
     AnimationPanel m_animation;
     StateMachinePanel m_stateMachine;
+    LogicPanel m_logic;
     ExportPanel m_export;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;

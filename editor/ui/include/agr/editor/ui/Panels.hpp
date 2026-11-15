@@ -10,6 +10,7 @@
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
+#include "agr/script/LogicGraph.hpp"
 
 struct ImGuiWindow;  // imgui_internal.h
 
@@ -306,6 +307,65 @@ private:
     int m_dragState = -1;
     ImVec2 m_pan{240.0f, 50.0f};
     std::string m_newName = "controller";
+};
+
+/// Visual logic editor (.agrlogic): node canvas, links, add menu, variables, compile status,
+/// generated Lua, undo / redo, attach to the selected entity.
+class LogicPanel {
+public:
+    void draw(EditorShared& s);
+    void open(EditorShared& s, const std::string& uri);
+    bool save(EditorShared& s);
+    bool undo();
+    bool redo();
+    Status attachToSelection(EditorShared& s);
+    /// Adds a node at a canvas position (connected to a pending dropped link, if any).
+    int addNode(const std::string& type, ImVec2 canvasPos);
+    logic::Graph& graph() { return m_graph; }
+    const logic::CompileResult& result() const { return m_result; }
+    const std::string& uri() const { return m_uri; }
+    bool dirty() const { return m_dirty; }
+    void changed();  ///< After editing graph(): marks dirty and recompiles.
+    void snapshot();  ///< Before editing graph(): undo point.
+    static std::string defaultGraph();
+
+private:
+    struct PinPos {
+        int node;
+        std::string pin;
+        bool output;
+        logic::PinKind kind;
+        ImVec2 pos;
+    };
+    struct Drag {
+        int node = 0;
+        std::string pin;
+        bool output = false;
+        logic::PinKind kind = logic::PinKind::Any;
+        bool active = false;
+    };
+    struct Pending {
+        int node = 0;
+        std::string pin;
+        bool output = false;
+    };
+    void drawSidebar(EditorShared& s);
+    void drawCanvas(EditorShared& s);
+    void recompile();
+
+    std::string m_uri;
+    logic::Graph m_graph;
+    logic::CompileResult m_result;
+    bool m_dirty = false, m_moved = false, m_panned = false;
+    std::vector<std::string> m_undo, m_redo;
+    int m_selected = 0;
+    ImVec2 m_pan{40.0f, 40.0f};
+    float m_zoom = 1.0f;
+    std::vector<PinPos> m_pins;
+    Drag m_drag;
+    Pending m_pendingFrom;
+    ImVec2 m_menuPos{0, 0};
+    std::string m_search;
 };
 
 /// Export window: target (PC folder, Android APK / AAB), game settings (identity, version,

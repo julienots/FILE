@@ -829,7 +829,8 @@ void ViewportPanel::handleDrop(EditorShared& s, ImVec2 origin, ImVec2 size) {
         const float dropAspect = size.x / std::max(size.y, 1.0f);
         const math::Ray dropRay = rayFromScreen(projectionGL(s, dropAspect) * viewMatrix(s),
                                                 {(mouse.x - origin.x) / size.x, (mouse.y - origin.y) / size.y});
-        if (uri.size() > 4 && uri.compare(uri.size() - 4, 4, ".lua") == 0) {  // attach the script to the entity under the cursor
+        const bool logicFile = uri.size() > 9 && uri.compare(uri.size() - 9, 9, ".agrlogic") == 0;
+        if ((uri.size() > 4 && uri.compare(uri.size() - 4, 4, ".lua") == 0) || logicFile) {  // attach the script / graph to the entity under the cursor
             auto hit = pick(s.ctx.scene(), dropRay, s.pickAssets());
             if (hit) {
                 auto& reg = s.ctx.scene().registry();

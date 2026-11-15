@@ -11,6 +11,7 @@ agr_add_module(script
         src/ScriptNavigation.cpp
         src/ScriptGame.cpp
         src/ScriptFx.cpp
+        src/LogicGraph.cpp
         src/ScriptNet.cpp
     PUBLIC_DEPS
         agr::runtime

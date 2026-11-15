@@ -121,7 +121,7 @@ Guide : [3D.md](3D.md).
 | Ombres des lumières locales | ⬜ | à planifier |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
-## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D et Lua terminés ; éditeur de logique visuelle non réalisé)
+## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D, Lua et logique visuelle terminés ; joints et débogueur à venir)
 
 Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 
@@ -134,7 +134,7 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Éditeur : scripts et physique en mode Jeu, inspecteur de script, nouveau script, glisser un script sur un objet, affichage des collisions | ✅ | `editor/ui` |
 | Modèles jouables : Vitrine 2D (plateforme, clavier et tactile), Vitrine 3D (lancer de balles) | ✅ | `SceneTemplates`, `assets/scripts` |
 | Tests : 7 cas 2D, 4 cas 3D, 10 cas scripts, jeu des modèles sans écran, mode Jeu piloté au clavier dans le test de bout en bout | ✅ | `tests/` |
-| **Éditeur de logique visuelle** (événements, conditions, variables, actions, boucles, minuteurs) | ⬜ | **non réalisé** : à reprendre |
+| **Éditeur de logique visuelle** (événements, conditions, variables, actions, boucles, minuteurs) | ✅ | `.agrlogic` compilé en Lua par le moteur, panneau « Logique visuelle » ; [LOGIC.md](LOGIC.md) |
 | Joints, contrôleur de personnage, formes maillage / convexes 3D, couches de collision | ⬜ | à planifier |
 | Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
 
@@ -162,7 +162,7 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Effets audio (réverbération, filtres), Doppler, occlusion | ⬜ | à planifier |
 | UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | ⬜ | zones sûres en phase 8 ; le reste à planifier |
 | Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |
-| **Éditeur de logique visuelle** (reporté de la phase 6) | ⬜ | **non réalisé** |
+| **Éditeur de logique visuelle** (reporté de la phase 6) | ✅ | voir phase 6 |
 
 ## Phase 8 — Android 🟡 (export APK / AAB et fonctions mobiles terminés ; aucun essai sur appareil réel)
 

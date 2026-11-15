@@ -91,6 +91,8 @@ struct EditorShared {
     bool showLocalization = false; ///< Localization table panel.
     bool showAnimation = false;    ///< Animation timeline panel.
     bool showStateMachine = false; ///< State machine graph panel.
+    bool showLogic = false;        ///< Visual logic editor.
+    std::string openLogicRequest;  ///< .agrlogic to open in the visual logic editor.
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).
     std::string previewMaterial;   ///< Material the preview renders this frame (set by the inspector).

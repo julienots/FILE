@@ -48,8 +48,8 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
    - « marketplace » extensible : au minimum un index local / URL configurable, pas de faux service ;
    - documentation intégrée : afficher les fichiers `docs/*.md` dans un panneau (rendu Markdown
      simple) et lier l'aide contextuelle (Aide › …).
-4. **Éditeur de logique visuelle (phase 6)** : graphe de nœuds (événements, conditions, actions,
-   variables) compilé en Lua ou interprété ; panneau d'édition, sérialisation, tests.
+4. ~~Éditeur de logique visuelle~~ : **fait** (docs/LOGIC.md). Reste : sous-graphes, commentaires,
+   débogage pas à pas.
 5. **Écart restant avec Godot / Unity (honnêtement)** : pas d'éditeur d'animation de tweens
    visuel, pas d'éditeur de logique visuelle, pas de magasin d'assets, pas d'export iOS / Web /
    consoles, art des modèles de jeux procédural (simple), aucune validation sur appareils réels.

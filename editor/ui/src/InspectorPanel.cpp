@@ -502,10 +502,12 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
         auto& sc = *static_cast<ScriptComponent*>(comp);
         auto* plugin = s.engine.service<ScriptPlugin>();
         if (sc.script.empty() || !plugin) {
-            ImGui::TextDisabled("Glissez un fichier .lua dans « Script ».");
+            ImGui::TextDisabled("Glissez un fichier .lua ou .agrlogic dans « Script ».");
             return edit;
         }
         ImGui::PushID("scriptTools");
+        if (sc.script.size() > 9 && sc.script.compare(sc.script.size() - 9, 9, ".agrlogic") == 0 && ImGui::SmallButton("Éditer la logique visuelle"))
+            s.openLogicRequest = sc.script;
         const ScriptInfo si = plugin->scripts()->describe(sc.script);
         if (!si.valid) {
             ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));

@@ -23,6 +23,7 @@
 #include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
+#include "agr/script/ScriptComponent.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
@@ -513,6 +514,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
         const ImGuiID side = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.40f, nullptr, &center);
         for (const char* w : {"Statistiques", "Console", "Assets", "Animation", "Machine à états", "Mixeur audio", "Hiérarchie", "Inspecteur"})
             ImGui::DockBuilderDockWindow(w, side);
+        ImGui::DockBuilderDockWindow("Logique visuelle", center);
         ImGui::DockBuilderDockWindow("Shader", center);
         ImGui::DockBuilderDockWindow("Scène", center);
         ImGui::DockBuilderFinish(dockspace);
@@ -530,6 +532,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Machine à états", bottom);
     ImGui::DockBuilderDockWindow("Mixeur audio", bottom);
     ImGui::DockBuilderDockWindow("Shader", center);
+    ImGui::DockBuilderDockWindow("Logique visuelle", center);
     ImGui::DockBuilderDockWindow("Scène", center);
     ImGui::DockBuilderFinish(dockspace);
 }
@@ -570,6 +573,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_localizationPanel.draw(*m_shared);
     m_animation.draw(*m_shared, time);
     m_stateMachine.draw(*m_shared);
+    m_logic.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
     handleShortcuts();
@@ -685,6 +689,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Entrées (actions)", nullptr, &m_shared->showInput);
         ImGui::MenuItem("Localisation (traductions)", nullptr, &m_shared->showLocalization);
         ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
+        ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -1531,9 +1536,48 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 214: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader.png").string()); break;
-        case 216: {
+        case 216: {  // visual logic: a new graph, nodes linked, saved, attached to a cube, run in play mode
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_shader.png"), "shader editor screenshot written");
             check(static_cast<bool>(m_shaderPreview.texture(*m_shared)), "shader preview sphere rendered");
+            const auto cube = ctx.create(CreateKind::Cube);
+            ctx.rename(cube, "Logic Cube");
+            ctx.scene().registry().get<TransformComponent>(cube).position = {0.0f, 3.0f, 0.0f};
+            ctx.selection().set(ctx.scene().uuidOf(cube));
+            ctx.commit("Logic Cube");
+            check(static_cast<bool>(m_engine->vfs().writeText("assets://logic/smoke.agrlogic", LogicPanel::defaultGraph())), "new logic graph written");
+            m_shared->openLogicRequest = "assets://logic/smoke.agrlogic";  // as a click in the asset browser
+            break;
+        }
+        case 218: {
+            check(m_shared->showLogic && m_logic.uri() == "assets://logic/smoke.agrlogic", "the graph opens in the visual logic editor");
+            check(m_logic.result().ok(), "the starter graph compiles");
+            const int update = m_logic.addNode("event.update", {40.0f, 220.0f});
+            const int move = m_logic.addNode("act.move", {320.0f, 220.0f});
+            m_logic.snapshot();
+            m_logic.graph().node(move)->values["x"] = "2";
+            check(static_cast<bool>(m_logic.graph().connect(update, "next", move, "in")), "nodes linked");
+            check(!m_logic.graph().connect(update, "next", move, "x"), "an exec link into a number is refused");
+            m_logic.changed();
+            check(m_logic.result().ok() && m_logic.result().lua.find("translate") != std::string::npos, "the graph compiles to Lua");
+            check(m_logic.undo() && m_logic.graph().linkFrom(update, "next") == nullptr, "undo removes the link");
+            check(m_logic.redo() && m_logic.graph().linkFrom(update, "next") != nullptr, "redo restores it");
+            check(m_logic.save(*m_shared) && !m_logic.dirty(), "graph saved");
+            check(static_cast<bool>(m_logic.attachToSelection(*m_shared)), "graph attached to the selected cube");
+            const auto c = ctx.scene().findByName("Logic Cube");
+            check(!c.isNull() && ctx.scene().registry().get<ScriptComponent>(c).script == "assets://logic/smoke.agrlogic", "Script component points at the graph");
+            break;
+        }
+        case 220: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_logic.png").string()); break;
+        case 222: startPlay(); break;
+        case 228: {
+            const auto c = ctx.scene().findByName("Logic Cube");
+            check(!c.isNull() && ctx.scene().registry().get<TransformComponent>(c).position.x > 0.05f, "the graph moves the cube during play");
+            stopPlay();
+            const auto r = ctx.scene().findByName("Logic Cube");
+            check(!r.isNull() && ctx.scene().registry().get<TransformComponent>(r).position.x == 0.0f, "stop restores the cube");
+            break;
+        }
+        case 230: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ScriptInternal.hpp"
+#include "agr/script/LogicGraph.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/script/ScriptComponent.hpp"
 
@@ -60,6 +61,22 @@ ScriptEngine::Impl::Class* ScriptEngine::Impl::loadClass(const std::string& uri)
     c.modifiedTime = vfs.modifiedTime(uri);
     auto text = vfs.readText(uri);
     std::string error;
+    if (text && uri.size() > 9 && uri.compare(uri.size() - 9, 9, ".agrlogic") == 0) {
+        // Visual logic graph: compiled to Lua here (the editor shows the same errors).
+        auto graph = logic::Graph::fromJson(text.value());
+        if (!graph) {
+            text = Result<std::string>(graph.error());
+        } else {
+            logic::CompileResult compiled = logic::compile(graph.value(), uri);
+            if (!compiled.ok()) {
+                std::string all;
+                for (const std::string& e : compiled.errors) all += (all.empty() ? "" : "; ") + e;
+                text = Result<std::string>(makeError(Error::Code::ParseError, all));
+            } else {
+                text = Result<std::string>(std::move(compiled.lua));
+            }
+        }
+    }
     if (!text) {
         error = text.error().message;
     } else {

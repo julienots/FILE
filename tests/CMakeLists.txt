@@ -21,6 +21,7 @@ add_executable(agr_tests
     test_terrain.cpp
     test_physics2d.cpp
     test_script.cpp
+    test_logic.cpp
     test_physics3d.cpp
     test_audio.cpp
     test_ui.cpp

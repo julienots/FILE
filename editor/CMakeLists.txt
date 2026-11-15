@@ -47,6 +47,7 @@ add_library(agr_editor_ui STATIC
     ui/src/TouchSupport.cpp
     ui/src/AnimationPanel.cpp
     ui/src/StateMachinePanel.cpp
+    ui/src/LogicPanel.cpp
     ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)
 target_include_directories(agr_editor_ui PUBLIC ui/include)
