@@ -52,6 +52,7 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 
 Tout fichier placé sous `assets/` **remplace** le fichier du jeu de même chemin :
 - **modèles 3D** : `models/<id>.lkm` et `<id>.jpg`, produits par `tools/import_character.py` à partir d'un GLB (Tripo, Meshy…). Les identifiants sont `hero`, `villager_m`, `villager_m2`, `villager_m3`, `villager_f`…, `npc_<id>` et `<id d'ennemi>` ;
+- **bâtiments (1.9.0)** : `models/props/<nom>.lkm` et `.jpg`, produits par `tools/import_prop.py`. Les noms sont `house`, `inn`, `stonehouse`, `longhouse`, `forge`, `chapel`, `tower`, `well`, `stall`, `tent`, avec des variantes `_2` et `_3` ;
 - **musiques et sons** : `audio/music/*.ogg`, `audio/sfx/*.ogg`, `audio/amb/*.ogg` (OGG Vorbis) ;
 - **interface et polices** : `ui/…`, `fonts/…`.
 

@@ -699,6 +699,34 @@ static void humanClips() {
          .key(1.0f, {{H_UARML, E(-20, 0, 15)}, {H_LARML, E(-60)}, {H_CHEST, E(0)}});
         c.hit(0.3f, 0.55f).move(0.45f, 0.3f).move(1.f, 0.3f);
     }
+    {   // 1.9.0 combo finisher: drops into the legs, then the whole body drives a rising uppercut
+        C& c = mk(C_FIST_A3, "uppercut", 0.58f);
+        c.key(0.0f, {{H_UARMR, E(-20, 10, -25)}, {H_LARMR, E(-110)}, {H_CHEST, E(10, -10)}, {H_SPINE, E(8, -10)},
+                     {H_THIGHL, E(-25, 0, 4)}, {H_SHINL, E(40)}, {H_THIGHR, E(10, 0, -4)}, {H_SHINR, E(35)}, {H_UARML, E(-50, -10, 25)}, {H_LARML, E(-100)}})
+         .key(0.32f, {{H_UARMR, E(15, 15, -30)}, {H_LARMR, E(-125)}, {H_CHEST, E(18, -28)}, {H_SPINE, E(14, -18)},
+                      {H_THIGHL, E(-40, 0, 6)}, {H_SHINL, E(70)}, {H_THIGHR, E(15, 0, -6)}, {H_SHINR, E(60)}}, Ease::In)
+         .key(0.55f, {{H_UARMR, E(-165, 0, -8)}, {H_LARMR, E(-45)}, {H_CHEST, E(-14, 25)}, {H_SPINE, E(-10, 15)}, {H_HEAD, E(-15)},
+                      {H_THIGHL, E(-10, 0, 3)}, {H_SHINL, E(8)}, {H_THIGHR, E(12, 0, -3)}, {H_SHINR, E(10)}, {H_FOOTR, E(30)}}, Ease::Out)
+         .key(1.0f, {{H_UARMR, E(-30, 0, -15)}, {H_LARMR, E(-70)}, {H_CHEST, E(0)}, {H_SPINE, E(0)}, {H_HEAD, E(0)},
+                     {H_THIGHL, E(-8, 0, 3)}, {H_SHINL, E(15)}, {H_THIGHR, E(5, 0, -3)}, {H_SHINR, E(12)}, {H_FOOTR, E(0)}, {H_UARML, E(-40, 0, 20)}, {H_LARML, E(-90)}});
+        c.root(0.f, {0, -0.1f, 0}).root(0.32f, {0, -0.24f, 0}).root(0.55f, {0, 0.1f, 0}).root(1.f, {0, 0, 0});
+        c.hit(0.42f, 0.62f).event(0.42f, EV_SOUND_WHOOSH).move(0.3f, 0.1f).move(0.55f, 0.8f).move(1.f, 0.9f);
+        c.comboOpen = 0.7f;
+    }
+    {   // 1.9.0 heavy: spinning roundhouse kick, arms flung out for balance, a small hop on the pivot foot
+        C& c = mk(C_FIST_HEAVY, "roundhouse", 0.85f);
+        c.key(0.0f, {{H_ROOT, E(0, 0)}, {H_CHEST, E(0, 0)}, {H_SPINE, E(0, 0, 0)}, {H_THIGHR, E(0, 0, -4)}, {H_SHINR, E(10)}, {H_THIGHL, E(-5, 0, 4)}, {H_SHINL, E(10)},
+                     {H_UARML, E(-40, 0, 30)}, {H_LARML, E(-90)}, {H_UARMR, E(-40, 0, -30)}, {H_LARMR, E(-90)}})
+         .key(0.22f, {{H_ROOT, E(0, -45)}, {H_CHEST, E(5, -20)}, {H_THIGHR, E(15, 0, -4)}, {H_SHINR, E(30)}, {H_THIGHL, E(-15, 0, 4)}, {H_SHINL, E(35)}}, Ease::In)
+         .key(0.5f, {{H_ROOT, E(0, 150, 18)}, {H_CHEST, E(0, 15)}, {H_SPINE, E(0, 0, 22)}, {H_HEAD, E(0, -25, -15)},
+                     {H_THIGHR, E(-80, 0, -55)}, {H_SHINR, E(8)}, {H_FOOTR, E(30)}, {H_THIGHL, E(-4, 0, 6)}, {H_SHINL, E(18)},
+                     {H_UARML, E(-20, 0, 80)}, {H_LARML, E(-20)}, {H_UARMR, E(-10, 0, -70)}, {H_LARMR, E(-30)}}, Ease::Linear)
+         .key(0.72f, {{H_ROOT, E(0, 300, 6)}, {H_SPINE, E(0, 0, 8)}, {H_HEAD, E(0, -10, -5)}, {H_THIGHR, E(-35, 0, -25)}, {H_SHINR, E(55)}, {H_FOOTR, E(10)}}, Ease::Out)
+         .key(1.0f, {{H_ROOT, E(0, 360)}, {H_CHEST, E(0)}, {H_SPINE, E(0)}, {H_HEAD, E(0)}, {H_THIGHR, E(5, 0, -4)}, {H_SHINR, E(12)}, {H_FOOTR, E(0)},
+                     {H_THIGHL, E(-6, 0, 4)}, {H_SHINL, E(14)}, {H_UARML, E(-35, 0, 25)}, {H_LARML, E(-90)}, {H_UARMR, E(-35, 0, -25)}, {H_LARMR, E(-90)}});
+        c.root(0.f, {0, 0, 0}).root(0.22f, {0, -0.12f, 0}).root(0.5f, {0, 0.12f, 0}).root(0.75f, {0, 0.02f, 0}).root(1.f, {0, 0, 0});
+        c.hit(0.38f, 0.66f).event(0.36f, EV_SOUND_WHOOSH).event(0.55f, EV_SOUND_WHOOSH).move(0.5f, 0.9f).move(1.f, 1.2f);
+    }
     // ---------- defense
     {
         C& c = mk(C_PARRY, "parry", 0.35f);

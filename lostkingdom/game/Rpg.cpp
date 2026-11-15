@@ -215,6 +215,9 @@ void Game::startQuest(const std::string& id) {
 
 void Game::completeQuest(QuestState& s) {
     for (const auto& h : heroes()) if (!h.unlockQuest.empty() && h.unlockQuest == quests()[s.idx].id) unlockHero(h.id);
+    // 1.9.0: hero follow-up quests reveal a chronicle page
+    if (quests()[s.idx].id == "h_kaede2") unlockLore("kaede_silence");
+    if (quests()[s.idx].id == "h_astra2") unlockLore("astra_grudge");
     const QuestDef& q = quests()[s.idx];
     s.done = true;
     questsDone.insert(q.id);

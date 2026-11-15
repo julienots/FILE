@@ -761,6 +761,34 @@ const std::vector<QuestDef>& quests() {
           "Elle s'appelle Astra. Elle dit qu'elle gardait le ciel au-dessus de la Couronne, et que le sceau l'a appelée, comme il t'a appelé. Elle vole. Je l'ai vue. Elle vole !",
           {{"Trouver le lieu de la chute, près de la Mine des Cimes", K::Discover, "crown_mine", 1, "crown_mine"}, {"Chasser les dragonnets du cratère", K::Kill, "drakeling", 3, "crown_mine"}, {"Revenir voir Ilian", K::Talk, "ilian", 1, "astronomer"}},
           700, 200, {"potion_heal"}, -1, 0);
+        // ---- 1.9.0: the heroes' stories go on, and life around Brindlemere
+        Q("h_kaede2", "Le septième fragment", QuestType::Side, "tomas", "Kaede a laissé un mot à Tomas : le temple de Shirokawa gardait un fragment qu'aucune chronique ne nomme.",
+          "Ta ninja est passée cette nuit. Elle n'a rien dit, elle a juste laissé ça : « Le septième dort là où les elfes ont prié. » Le Sanctuaire d'Aelindor, à l'ouest. Les araignées y ont fait leur nid.",
+          "Aelith, la druidesse de Sylvarin, connaît les vieilles prières du sanctuaire. Elle saura lire ce que Kaede cherche.",
+          "Un septième fragment… Aelith dit que les elfes l'appelaient le Silence : le seul joyau que la Couronne n'a jamais porté. Kaede ne l'a pas trouvé. Mais maintenant, toi aussi, tu le cherches.",
+          {{"Fouiller le Sanctuaire d'Aelindor", K::Discover, "elven_ruins", 1, "elven_ruins"}, {"Chasser les araignées du sanctuaire", K::Kill, "forest_spider", 4, "elven_ruins"},
+           {"Demander à Aelith ce qu'est le Silence", K::Talk, "aelith", 1, "sylvarin"}},
+          520, 140, {"potion_heal", "potion_heal"}, -1, 0, "h_kaede");
+        Q("h_astra2", "Ce que l'étoile n'a pas pardonné", QuestType::Side, "ilian", "Astra refuse de parler d'Aldric. Ilian pense que les archives de Highspire diront pourquoi.",
+          "Elle regarde Highspire comme on regarde une tombe. Les archives de l'Ordre gardent les nuits de la Chute. Va les lire, et parle à l'archiviste, Frère Alaric. Mais garde l'œil ouvert : les chevaliers corrompus rôdent près des murs.",
+          "Frère Alaric est aux archives. Il sait tout. Il sait peut-être trop.",
+          "Astra avait conseillé au roi de ne pas briser la Couronne. Il l'a brisée quand même, et un novice à la cicatrice tenait les tenailles. Alaric m'a souri en me le racontant. Il n'a pas une ride, voyageur. Pas une seule.",
+          {{"Monter à Highspire", K::Discover, "highspire", 1, "highspire"}, {"Vaincre des chevaliers corrompus", K::Kill, "dark_knight", 2, "highspire"},
+           {"Interroger Frère Alaric", K::Talk, "alaric", 1, "highspire"}, {"Revenir voir Ilian", K::Talk, "ilian", 1, "astronomer"}},
+          900, 240, {"potion_heal"}, -1, 0, "h_astra");
+        Q("s_pip", "La carte au trésor de Pip", QuestType::Side, "pip", "Pip a dessiné une carte au trésor. Elle passe par la Ferme des Aulnes et la Pierre de Brindlemere.",
+          "Regarde ma carte ! Une croix à la ferme des Aulnes, une croix à la grande pierre, et le trésor au bout ! Tu vas le chercher ? Moi j'ai pas le droit de sortir du village.",
+          "La ferme d'abord, puis la pierre ! C'est écrit sur la carte !",
+          "Tu l'as trouvé ? C'était… une pomme de pin ? Bon. C'est un trésor quand même. Tiens, pour la peine, je te donne ma pièce porte-bonheur.",
+          {{"Suivre la carte jusqu'à la Ferme des Aulnes", K::Discover, "farm_west", 1, "farm_west"}, {"Trouver la grande pierre", K::Discover, "ws_green", 1, "ws_green"},
+           {"Rapporter le « trésor » à Pip", K::Talk, "pip", 1, "brindlemere"}},
+          90, 15, {"bread"}, FA_GREENHAVEN, 5);
+        Q("s_night_watch", "Ronde de nuit", QuestType::Side, "aubert", "Des gobelins sortent de la Grotte des Murmures la nuit et rôdent autour des champs.",
+          "Mes gardes ne sont pas assez nombreux pour tenir les champs la nuit. Les gobelins de la Grotte des Murmures volent les poules et mettent le feu aux meules. Fais-leur passer l'envie de revenir.",
+          "Leur chaman les rend hardis. Commence par lui.",
+          "Les meules ne brûleront pas cette nuit. Brindlemere te doit une nuit de sommeil, voyageur.",
+          {{"Vaincre des gobelins pillards", K::Kill, "goblin", 5, "whisper_cave"}, {"Vaincre leur chaman", K::Kill, "goblin_shaman", 1, "whisper_cave"}, {"Faire ton rapport au capitaine Aubert", K::Talk, "aubert", 1, "brindlemere"}},
+          180, 45, {"shield_iron"}, FA_GREENHAVEN, 15);
         Q("s_iron", "Le fer de Hilda", QuestType::Side, "hilda", "Hilda manque de minerai de fer pour sa forge.",
           "Mon stock de fer est vide. Rapporte-moi cinq minerais de fer, et je t'apprendrai à forger.", "Cinq minerais, pas un de moins.", "Parfait ! Voilà de quoi te défendre. La forge t'est ouverte.",
           {{"Rapporter du minerai de fer", K::Deliver, "iron_ore", 5, "brindlemere"}}, 120, 30, {"axe_iron", "iron_bar", "iron_bar"}, FA_GREENHAVEN, 10);
@@ -896,6 +924,8 @@ const std::vector<LoreDef>& lore() {
         // ---- heroes of the wheel (1.8.0)
         {"hero_wanderer", "Le Naufragé", "Le premier Errant à survivre plus d'une lune. Une épée rouillée, une marque au poignet, et cette façon de regarder Morneval comme on regarde une maison qu'on a quittée. Il ne le sait pas encore : il est l'âme d'Aldric."},
         {"hero_kaede", "Kaede, Lame des Brumes", "Elle vient de l'archipel de Shirokawa, que les cartes du royaume ne connaissent pas. Elle était la dernière gardienne d'un temple qui veillait sur un septième fragment, celui qu'Aldric n'a jamais nommé. La nuit où le sceau a craqué, le temple a brûlé, et la mer l'a portée jusqu'ici. Elle se bat avec deux lames, des étoiles d'acier et la fumée. Elle ne dit jamais ce qu'elle cherche. Elle le cherche quand même."},
+        {"kaede_silence", "Le Silence, septième joyau", "Les elfes d'Aelindor priaient un joyau qu'aucun roi n'a porté. Ils l'appelaient le Silence. Il ne donne pas de pouvoir : il en retire. Aldric l'aurait confié à un temple au-delà de la mer, pour le jour où la Couronne devrait être défaite, et non reforgée. Kaede en était la dernière gardienne. Le temple a brûlé. Quelqu'un savait où chercher."},
+        {"astra_grudge", "Ce que l'étoile n'a pas pardonné", "La Sentinelle avait parlé au roi la veille de la Chute : « Ne la brise pas. Ce qui est brisé peut être ramassé. » Aldric l'a brisée quand même, pour sauver son peuple. Un novice tenait les tenailles, une cicatrice au sourcil. Astra ne pardonne pas le geste. Elle se souvient surtout du sourire du novice."},
         {"hero_astra", "Astra, l'Étoile tombée", "Les anciens rois savaient qu'une étoile veillait sur la Couronne-Mère. Ils l'appelaient la Sentinelle. Quand le sceau a commencé à mourir, la Sentinelle a quitté le ciel pour le suivre. Ilian l'a vue descendre au-dessus des Cimes. Astra vole, frappe comme une comète et brûle comme une aube. Elle se souvient d'Aldric. Elle ne se souvient pas de lui comme d'un ami."},
         {"mem_abyss", "Souvenir : la voix", "Au fond de l'Abîme, une voix qui connaît ton vrai nom. « Tu es revenu, Aldric. Mais pas pour sceller. Pour choisir. » Tu sais maintenant qui tu es. Il te reste à décider ce que tu feras de la couronne."},
     };

@@ -34,6 +34,7 @@ struct Visual {
     float scale = 1.f;
     vec3 tint{1, 1, 1};
     float flash = 0, dissolve = 0, rim = 0.5f, emissiveBoost = 0;
+    float breathT = 0, wetT = 0;   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
     vec3 dissolveColor{1.f, 0.5f, 0.15f};
     bool outline = true;
     vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
@@ -444,7 +445,8 @@ public:
     bool flying = false, usedDoubleJump = false, meteorPending = false;
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
     float heroCD[3] = {0, 0, 0};
-    float heroAura = 0;          // Astra: energy aura (0..1): flight + flare when a power fires
+    float heroAura = 0;
+    void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires
     const HeroDef& hero() const;
     bool heroUnlocked(int i) const;
     void unlockHero(const std::string& id, bool announce = true);

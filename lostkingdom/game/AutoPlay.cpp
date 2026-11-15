@@ -124,6 +124,60 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "details") {
+        // 1.9.0 realism: breath vapour in Frostheim, dripping after a swim
+        static int res[2]; static size_t p0;
+        s.push_back({3.f, [](Game& g) {
+            const Poi* p = g.world.poiById("frostvik"); teleport(g, p->pos.x + 20, p->pos.y + 26, 2.4f);
+            g.timeOfDay = 9.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.camDist = g.camDistTarget = 3.2f; g.camPitch = 0.1f; g.camYaw = g.pc().yaw + 0.5f; g.pc().vis.breathT = 0.2f;
+        }, idle, "frostheim"});
+        s.push_back({0.35f, [](Game& g) { p0 = g.particles.count(); }, idle, "before"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.camYaw = g.pc().yaw + 0.5f; }, "breathe"});
+        s.push_back({0.05f, [](Game& g) {
+            size_t before = g.particles.count();
+            g.pc().vis.breathT = 0; g.updateBodyDetails(g.pc(), 0.016f);   // force one breath now
+            size_t puff = g.particles.count() - before;
+            res[0] = puff >= 3 && g.pc().vis.breathT > 0.8f;
+            AGR_LOG("DETAILS breath: %zu vapour particles in one breath, next in %.1f s", puff, g.pc().vis.breathT);
+            g.requestScreenshot("build/shots/I0_breath.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.pc().inWater = true; g.updateBodyDetails(g.pc(), 0.016f); g.pc().inWater = false; }, idle, "swim"});
+        s.push_back({1.f, none, idle, "drip"});
+        s.push_back({0.05f, [](Game& g) {
+            res[1] = g.pc().vis.wetT > 20.f && g.pc().vis.wetT < 25.f;
+            AGR_LOG("DETAILS wet: %.1f s left", g.pc().vis.wetT);
+            g.requestScreenshot("build/shots/I1_wet.png");
+            AGR_LOG(res[0] && res[1] ? "DETAILS TEST PASSED" : "DETAILS TEST FAILED");
+        }, idle, "check"});
+        return s;
+    }
+    if (name == "combo") {
+        // 1.9.0: Astra's unarmed combo (jab, hook, uppercut) and heavy (roundhouse kick), filmed from the side
+        static int res[2]; static const char* seen[4];
+        s.push_back({2.5f, [](Game& g) {
+            const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f);
+            g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.unlockHero("astra"); g.switchHero(heroIndex("astra")); g.notes.clear();
+            g.camYaw = g.pc().yaw + PI * 0.5f; g.camPitch = 0.2f; g.camDist = g.camDistTarget = 5.5f;
+        }, idle, "setup"});
+        static const char* names[] = {"H0_jab", "H1_hook", "H2_uppercut", "H3_roundhouse"};
+        for (int i = 0; i < 4; i++) {
+            s.push_back({0.02f, [i](Game& g) { if (i < 3) { g.input.attackRelease = true; g.input.attackHoldT = 0.05f; } else g.input.heavy = true; }, idle, "attack"});
+            float peak = i == 0 ? 0.13f : i == 1 ? 0.16f : i == 2 ? 0.3f : 0.4f;
+            s.push_back({peak, none, idle, "to the hit"});
+            s.push_back({0.02f, [i](Game& g) {
+                const Clip* a = g.pc().vis.anim.action(); seen[i] = a ? a->name.c_str() : "none";
+                g.requestScreenshot(std::string("build/shots/") + names[i] + ".png"); }, idle, "shot"});
+            s.push_back({i == 3 ? 0.6f : (i == 2 ? 0.25f : 0.12f), none, idle, "recover"});
+        }
+        s.push_back({0.1f, [](Game& g) {
+            res[0] = std::string(seen[0]) == "jab" && std::string(seen[1]) == "hook" && std::string(seen[2]) == "uppercut";
+            res[1] = std::string(seen[3]) == "roundhouse";
+            AGR_LOG("COMBO clips: %s, %s, %s, heavy %s", seen[0], seen[1], seen[2], seen[3]);
+            AGR_LOG(res[0] && res[1] ? "COMBO TEST PASSED" : "COMBO TEST FAILED");
+        }, idle, "check"});
+        return s;
+    }
     if (name == "buildings") {
         // 1.9.0: a building model (tests/data/props/house.lkm, a plain cottage standing in for a Tripo model)
         // installed by a mod replaces the code-built houses: placed on the footprint, drawn, colliders kept

@@ -147,7 +147,7 @@ static const Clip* lightClip(int stance, int step) {
     case ST_BOW: return &clip(C_BOW_SHOT);
     case ST_STAFF: return &clip(C_STAFF_CAST);
     case ST_TOOL: return &clip(C_GATHER_SWING);
-    default: return &clip(step % 2 == 0 ? C_FIST_A1 : C_FIST_A2);
+    default: return &clip(step == 0 ? C_FIST_A1 : step == 1 ? C_FIST_A2 : C_FIST_A3);   // jab, hook, uppercut
     }
 }
 static const Clip* heavyClip(int stance) {
@@ -158,7 +158,7 @@ static const Clip* heavyClip(int stance) {
     case ST_SPEAR: return &clip(C_SP_HEAVY);
     case ST_BOW: return &clip(C_BOW_HEAVY);
     case ST_STAFF: return &clip(C_STAFF_HEAVY);
-    default: return &clip(C_FIST_A2);
+    default: return &clip(C_FIST_HEAVY);   // spinning roundhouse kick
     }
 }
 

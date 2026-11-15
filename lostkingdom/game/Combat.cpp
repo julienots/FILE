@@ -194,6 +194,50 @@ void Game::updateStatus(Entity e, Character& c, float dt) {
     dec(s.burn); dec(s.poison); dec(s.freeze); dec(s.slow); dec(s.root); dec(s.stun); dec(s.regen); dec(s.strength); dec(s.frostRes); dec(s.wellFed);
     c.vis.tint = s.freeze > 0 ? vec3(0.6f, 0.85f, 1.3f) : (s.poison > 0 ? vec3(0.8f, 1.1f, 0.7f) : vec3(1));
     if (c.hp <= 0 && !c.dead) killCharacter(e, c, NullEntity);
+    updateBodyDetails(c, dt);
+}
+
+// 1.9.0 realism: humanoids near the camera breathe out vapour in the cold (faster when out of breath or
+// running) and drip for a while after leaving the water
+void Game::updateBodyDetails(Character& c, float dt) {
+    Visual& v = c.vis;
+    if (c.dead || v.arch != Arch::Humanoid || dungeon.active || distXZ(c.pos, camFocus) > 22.f) return;
+    if (c.swimming || c.inWater) { v.wetT = 25.f; return; }
+    int r = world.regionId(c.pos.x, c.pos.z);
+    float cold = std::max({r == R_FROSTHEIM ? 1.f : 0.f, snowAmt, r == R_HIGHCROWNS ? env.night * 0.8f + 0.2f : 0.f, env.night * 0.25f});
+    mat4 model = mat4::trs(c.pos, quat::axisAngle({0, 1, 0}, c.yaw), vec3(v.scale));
+    if (cold > 0.3f) {
+        float period = lerpf(3.2f, 1.1f, saturate(v.anim.speed / 6.f + v.anim.breath * 0.5f));
+        v.breathT -= dt;
+        if (v.breathT <= 0) {
+            v.breathT = period * particles.rng.range(0.85f, 1.15f);
+            vec3 head = model.transformPoint(v.pw.wpos[H_HEAD]);
+            vec3 fwd(std::sin(c.yaw), 0, std::cos(c.yaw));
+            int n = 3 + (int)(cold * 3);
+            for (int i = 0; i < n; i++) {
+                Particle p;
+                p.pos = head + fwd * 0.16f * v.scale + vec3(0, -0.02f, 0);
+                p.vel = fwd * particles.rng.range(0.35f, 0.7f) + vec3(particles.rng.range(-0.08f, 0.08f), particles.rng.range(0.05f, 0.18f), particles.rng.range(-0.08f, 0.08f)) + c.vel * 0.8f;
+                p.maxLife = particles.rng.range(0.9f, 1.4f); p.size0 = 0.05f; p.size1 = 0.32f;
+                p.c0 = vec4(0.92f, 0.95f, 1.f, 0.38f * cold); p.c1 = vec4(0.92f, 0.95f, 1.f, 0.f);
+                p.drag = 1.6f; p.turbulence = 0.25f; p.frame = PF_SMOKE; p.additive = false; p.rot = particles.rng.range(0, TAU);
+                particles.spawn(p);
+            }
+        }
+    }
+    if (v.wetT > 0) {
+        v.wetT -= dt;
+        float rate = 9.f * saturate(v.wetT / 25.f);
+        for (float k = particles.rng.f(); k < rate * dt; k += 1.f) {
+            int bones[] = {H_HANDL, H_HANDR, H_CHEST, H_HEAD, H_LARML, H_LARMR};
+            vec3 at = model.transformPoint(v.pw.wpos[bones[particles.rng.irange(0, 5)]]) + vec3(particles.rng.range(-0.06f, 0.06f), 0, particles.rng.range(-0.06f, 0.06f));
+            Particle p;
+            p.pos = at; p.vel = vec3(0, -0.4f, 0) + c.vel * 0.5f; p.gravity = 9.81f; p.maxLife = 0.7f;
+            p.size0 = p.size1 = 0.025f; p.c0 = vec4(0.75f, 0.85f, 0.95f, 0.7f); p.c1 = vec4(0.75f, 0.85f, 0.95f, 0.f);
+            p.stretch = 0.03f; p.frame = PF_RAIN; p.additive = false; p.groundKill = groundAt(at.x, at.z);
+            particles.spawn(p);
+        }
+    }
 }
 
 void Game::killCharacter(Entity e, Character& c, Entity killer) {

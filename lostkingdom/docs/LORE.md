@@ -40,7 +40,9 @@ Référence pour écrire l'histoire, les dialogues et les mods. Tout le texte du
 | **Kaede, Lame des Brumes** | dernière gardienne d'un temple de l'archipel de Shirokawa, qui veillait sur un **septième fragment** qu'Aldric n'a jamais nommé. Le temple a brûlé la nuit où le sceau a craqué ; la mer l'a portée jusqu'ici, comme le héros | quête « La lame des brumes » (Tomas, Brindlemere) |
 | **Astra, l'Étoile tombée** | la **Sentinelle**, l'étoile qui veillait sur la Couronne-Mère. Elle a quitté le ciel pour suivre le sceau mourant et s'est posée près de la Mine des Cimes. Elle se souvient d'Aldric, mais pas comme d'un ami | quête « L'étoile tombée » (Ilian, l'astronome) |
 
-Pistes pour la suite : le septième fragment de Kaede, ce qu'Astra reproche à Aldric.
+Depuis la 1.9.0, deux quêtes prolongent leur histoire :
+- **« Le septième fragment »** (Tomas, après la quête de Kaede) : le Sanctuaire d'Aelindor et Aelith révèlent le **Silence**, le joyau qui défait la Couronne au lieu de la reforger. Le temple de Kaede a brûlé parce que quelqu'un savait où chercher.
+- **« Ce que l'étoile n'a pas pardonné »** (Ilian, après la quête d'Astra) : Astra avait conseillé au roi de ne pas briser la Couronne. Le novice qui tenait les tenailles, cicatrice au sourcil, souriait. À Highspire, Frère Alaric n'a « pas une ride ». C'est le premier indice jouable de sa trahison.
 
 ## Chroniques dans le jeu (onglet Chroniques du Journal)
 
@@ -51,6 +53,7 @@ Pistes pour la suite : le septième fragment de Kaede, ce qu'Astra reproche à A
 | Régions | `r_0` à `r_5` | en découvrant chaque région |
 | Souvenirs d'Aldric | `mem_*` | en battant chaque Gardien et boss |
 | Héros | `hero_wanderer`, `hero_kaede`, `hero_astra` | en débloquant chaque héros |
+| Héros (suite) | `kaede_silence`, `astra_grudge` | quêtes « Le septième fragment » et « Ce que l'étoile n'a pas pardonné » |
 
 Les mods peuvent ajouter des pages avec `lore.add` (voir `docs/MODDING.md`).
 

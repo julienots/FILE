@@ -89,6 +89,8 @@ enum ClipId {
     C_D_BITE, C_D_TAIL, C_D_BREATH, C_D_WING, C_D_ROAR, C_D_HIT, C_D_DEATH, C_D_STOMP,
     // big humanoids (troll, golem, treant, bosses)
     C_B_SLAM, C_B_SWIPE, C_B_STOMP, C_B_ROAR, C_B_SPIN, C_B_THROW,
+    // 1.9.0 unarmed combo finisher and heavy (Astra fights with her fists)
+    C_FIST_A3, C_FIST_HEAVY,
     C_COUNT
 };
 // Event ids fired by clips (Animator::firedEvents)
