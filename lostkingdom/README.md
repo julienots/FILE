@@ -6,12 +6,24 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.8.0 (versionCode 11). Taille : environ 24 Mo. SHA-256 : `8d6cdf7c95936a6bd28b2cc9f8681b406f5e2dd2922b74a3efeaaee38c7b0ae1`.
-  - Les versions 1.6.1 à 1.8.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.8.1 (versionCode 12). Taille : environ 25 Mo. SHA-256 : `7dc9561fc256459dcad9fba775130577354c6d0e83be4ee4e3e7645015f057ef`.
+  - Les versions 1.6.1 à 1.8.1 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.8.1 (Astra a son modèle 3D)
+
+- **Astra utilise maintenant un modèle 3D** : la « cosmic deity » blanc et or envoyée sur le Drive, avec sa couronne de rayons et ses épaulières d'or.
+  - Le modèle d'origine (1,8 million de triangles) flottait, un genou relevé, entouré de cinq planètes. Un nouvel outil, `tools/simplify_glb.py`, le prépare pour le jeu :
+    - il retire les planètes (les pièces qui ne touchent pas le corps) ;
+    - il remplace la jambe pliée par le reflet de la jambe droite, sous le genou, pour que la marche fonctionne ;
+    - il réduit le modèle à 20 000 triangles.
+  - Le squelette du jeu est ensuite posé par `tools/import_character.py`, comme pour le héros de départ.
+  - L'aura dorée, la traînée de lumière et toutes les animations (marche, course, attaques, vol) s'appliquent à ce modèle.
+- **Vérification (1.8.1)** : 1 923 tests unitaires, dont le contrôle du modèle d'Astra (os valides, budget, jambes droites). Les scénarios `heroes`, `hero` (avec `LK_HERO=astra`), `ui` et `mods` ont été rejoués et réussis : vol couché, aura, météore. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limite** : le bas de la jambe droite d'Astra est un reflet de la gauche. Si les motifs de la texture ne sont pas symétriques, une légère couture est possible au genou.
 
 ### Nouveautés 1.8.0 (roue des héros : Kaede la ninja et Astra qui vole)
 
@@ -51,7 +63,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - le vol (altitude et pose), le rayon, la météore sans dégâts de chute et l'onde ;
   - la sauvegarde puis le chargement de la roue.
 - **Limites.**
-  - **Astra n'a pas encore de modèle 3D** : elle utilise l'apparence générée par le jeu (armure bleue et or). Un prompt Tripo est prêt dans `docs/TRIPO_PROMPTS.md`.
+  - Dans la 1.8.0, Astra n'avait pas encore de modèle 3D : c'est corrigé en 1.8.1.
   - Les animations du GLB du ninja (coups de pied, boxe, course) **ne sont pas reprises** : le jeu anime le squelette en code, comme pour les autres héros.
   - Le visage du ninja est masqué. Aucun modèle de Goku n'a été importé : c'est un personnage protégé. Astra le remplace par un héros volant original.
   - Le vol et la roue n'ont pas été essayés sur un téléphone.
@@ -400,7 +412,7 @@ Légende :
 ## Limites connues
 
 - **Aucun test sur un appareil réel.** L'APK est construit et vérifié statiquement, mais il n'a jamais été installé sur un téléphone ou un émulateur : l'environnement de construction n'en possède pas. Des problèmes propres aux pilotes GPU mobiles, aux performances ou au tactile sont possibles.
-- **Graphismes surtout procéduraux.** Seuls le héros de départ et Kaede (la ninja) utilisent des modèles 3D générés par IA (Tripo) et importés. Astra, les PNJ, les créatures, les bâtiments et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
+- **Graphismes surtout procéduraux.** Seuls les trois héros (le Naufragé, Kaede et Astra) utilisent des modèles 3D générés par IA (Tripo) et importés. Les PNJ, les créatures, les bâtiments et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
 - **Audio synthétisé.** Musiques, ambiances et effets sont générés par `tools/make_audio.py` (synthèse additive et soustractive, Karplus-Strong, FM, formants, réverbération par convolution). Ce n'est pas un orchestre enregistré.
 - **Performance non mesurée sur mobile.** Le harnais de bureau tourne sur un rasteriseur logiciel, à environ 120 ms par image : ce chiffre ne dit rien d'un GPU mobile. Les profils Faible et Économie d'énergie réduisent la distance de vue, les ombres, l'herbe et le post-traitement.
 - **Signature locale.** L'APK est signé avec une clé locale générée au moment de la construction, qui n'est pas versionnée. Pour une publication sur le Play Store, il faut le re-signer avec votre propre clé (voir ci-dessous) et produire un AAB.

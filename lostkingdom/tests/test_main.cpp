@@ -246,7 +246,7 @@ static void testHeroModel(const std::string& assets, const std::string& id = "he
         if (v.ex == 255) cloth++;
     }
     CHECK(badFeet == 0, "%d foot-level vertices bound to the torso", badFeet);
-    CHECK(cloth > 500, "cloth flags present (%d)", cloth);
+    if (id == "hero") CHECK(cloth > 500, "cloth flags present (%d)", cloth);   // the starting hero wears a tabard and a cape
     // mobile budget, valid bone indices, legs straight under the hips (1.6.2 feedback: "legs apart")
     int badBone = 0; for (auto& v : m.verts) if (v.b0 >= H_COUNT || v.b1 >= H_COUNT) badBone++;
     CHECK(badBone == 0, "%d vertices with an invalid bone", badBone);
@@ -451,6 +451,7 @@ int lkRunTests(int argc, char** argv) {
     testAudio(assets);
     testHeroModel(assets);
     testHeroModel(assets, "hero_ninja");   // 1.8.0: rigged GLB imported by tools/import_rigged.py
+    testHeroModel(assets, "hero_flyer");   // 1.8.1: Astra, static GLB simplified by tools/simplify_glb.py (bent leg mirrored)
     testFlightPose();
     testModData(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);

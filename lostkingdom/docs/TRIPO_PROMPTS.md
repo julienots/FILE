@@ -16,6 +16,8 @@ L'outil d'import pose le squelette du jeu tout seul. Pour cela, il a besoin d'un
 | Textures **PBR** activées ; **10 000 à 20 000 triangles** (25 000 max pour un boss) | Budget mobile (le héros fait environ 10 000 triangles) |
 | Export en **GLB**, **sans squelette** (pas besoin de Rig) | L'outil fait lui-même le squelette |
 
+**Modèles lourds ou « flottants » (1.8.1).** `tools/simplify_glb.py` réduit un GLB statique à environ 20 000 triangles et retire les objets qui flottent autour du personnage (planètes, étincelles). Avec `--mirror-leg L` ou `R`, il remplace une jambe pliée par le reflet de l'autre. Ensuite, `tools/import_character.py` fait le squelette.
+
 **Depuis la 1.8.0, les modèles riggés passent aussi.** Un GLB avec le squelette automatique de Tripo (« Rig », comme le ninja envoyé sur le Drive) est importé par `tools/import_rigged.py`. L'outil reprend les poids de peau du modèle, le remet en pose de repos (bras le long du corps, jambes droites) et le réduit à environ 22 000 triangles. Les animations de Tripo, elles, ne sont pas reprises : le jeu anime le squelette en code. Avec un modèle riggé, la pose de départ (T ou A) n'a pas d'importance.
 
 Si Tripo propose une option de pose (« T-pose »), active-la. Si ta version de Tripo a un champ **négatif**, mets-y le texte « À éviter » ci-dessous. Sinon, les règles sont déjà dans chaque prompt.
@@ -46,7 +48,7 @@ Les prompts sont en anglais : Tripo comprend mieux l'anglais.
 | Fichier | État | Prompt (+ bloc de style) |
 |---|---|---|
 | `hero_ninja.glb` | **importé** (le « ninja warrior » du Drive) | — |
-| `hero_flyer.glb` | à faire : Astra utilise encore l'apparence générée par le jeu | `an original celestial heroine who can fly, athletic build, fitted deep blue bodysuit with gold star-shaped trims, short flowing cape of golden light, gold bracers and greaves, long platinum blonde hair swept back by the wind, glowing pale blue eyes, a small radiant star emblem on the chest, confident heroic face,` |
+| `hero_flyer.glb` | **importé** (la « cosmic deity » du Drive). Le prompt ci-contre sert pour une variante | `an original celestial heroine who can fly, athletic build, fitted deep blue bodysuit with gold star-shaped trims, short flowing cape of golden light, gold bracers and greaves, long platinum blonde hair swept back by the wind, glowing pale blue eyes, a small radiant star emblem on the chest, confident heroic face,` |
 
 Astra est un personnage **original** : pas de costume ni de coiffure copiés d'un héros existant (manga, comics…).
 
