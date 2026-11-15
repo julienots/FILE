@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CAR_LIST } from './carlist.js';
 
@@ -23,7 +24,7 @@ export function physFromStats(s) {
 }
 
 const loader = new GLTFLoader();
-const draco = new DRACOLoader(); draco.setDecoderPath('./draco/'); loader.setDRACOLoader(draco);
+const draco = new DRACOLoader(); draco.setDecoderPath('./draco/'); loader.setDRACOLoader(draco); loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = new Map();
 export function loadModel(url) {
   if (!cache.has(url)) cache.set(url, new Promise((res, rej) => loader.load(url, (g) => res(g.scene), undefined, rej)));
@@ -208,11 +209,25 @@ function rigImported(src, def, paint) {
   if (def.teinte === false) paintMats.length = 0;
   for (const pm of paintMats) { pm.color.set(paint); if ('metalness' in pm) { pm.metalness = Math.max(pm.metalness, 0.6); pm.roughness = Math.min(pm.roughness, 0.35); } }
 
-  // roues : nœuds dont le nom évoque une roue, regroupés par coin de la voiture
+  // roues préparées par tools/prep-model.mjs : nœuds wheel_fl, wheel_fr, wheel_rl, wheel_rr (voiture) ou wheel_f, wheel_r (moto),
+  // dont l'origine est le centre de la roue et dont le rayon est noté dans les « extras » du fichier
   const wheels = [];
+  const named = [];
+  holder.traverse(o => { const mm = /^wheel_([fr])([lr])?$/i.exec(o.name || ''); if (mm) named.push([o, mm[1].toLowerCase() === 'f']); });
+  if (named.length) {
+    root.updateMatrixWorld(true);
+    for (const [o, front] of named) {
+      const steer = new THREE.Group(); o.getWorldPosition(steer.position);
+      const spin = new THREE.Group(); steer.add(spin);
+      (def.moto ? chassis : root).add(steer);           // la roue d'une moto se penche avec elle
+      root.updateMatrixWorld(true); spin.attach(o);
+      const bb2 = new THREE.Box3().setFromObject(o);
+      wheels.push({ steer, spin, front, radius: (o.userData.rayon ? o.userData.rayon * sc : Math.max(0.2, (bb2.max.y - bb2.min.y) / 2)) });
+    }
+  }
   const found = [];
   const walk = (o) => { if (o !== holder && WHEEL_RE.test(o.name || '')) { found.push(o); return; } o.children.forEach(walk); };
-  walk(holder);
+  if (!named.length) walk(holder);
   const quad = new Map();
   for (const o of found) {
     const b = new THREE.Box3().setFromObject(o); if (b.isEmpty()) continue;
@@ -241,7 +256,7 @@ function rigImported(src, def, paint) {
     }
   }
   root.add(blobShadow(half * 2 + 0.9, len * 2 + 1.1));
-  return { root, chassis, wheels, paintMats, tailMats: [], glows, half, len };
+  return { root, chassis, wheels, paintMats, tailMats: [], glows, half, len, moto: !!def.moto };
 }
 
 // ---------- moto avec son pilote ----------
@@ -310,7 +325,7 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
   v.wheelAngle += speed * dt;
   for (const w of v.wheels) {
     w.spin.rotation.x = -v.wheelAngle / w.radius;
-    if (w.front) w.steer.rotation.y = -steer * 0.42;
+    if (w.front) w.steer.rotation.y = -steer * (v.moto ? 0.22 : 0.42);
   }
   const k = 1 - Math.exp(-8 * dt);
   // la moto se couche dans les virages, la voiture prend juste un peu de roulis

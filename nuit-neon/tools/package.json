@@ -1,0 +1,7 @@
+{
+  "name": "nuit-neon-outils",
+  "private": true,
+  "type": "module",
+  "description": "Préparation des modèles 3D (allègement, orientation, découpe des roues)",
+  "dependencies": { "@gltf-transform/core": "^4", "@gltf-transform/extensions": "^4", "@gltf-transform/functions": "^4", "meshoptimizer": "^1.0", "sharp": "^0.34" }
+}

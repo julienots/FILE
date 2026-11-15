@@ -1085,6 +1085,7 @@ window.__nn = {
 (async () => {
   try {
     setupPost();
+    $('loadmsg').textContent = 'Chargement des véhicules…';
     await resolveModels();
     await new Promise(r => setTimeout(r, 30));
     buildOptions(); audio.setSound(opts.son);
