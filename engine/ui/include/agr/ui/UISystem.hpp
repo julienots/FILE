@@ -1,10 +1,13 @@
 #pragma once
+#include <functional>
 #include <memory>
+#include <string_view>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "agr/core/Time.hpp"
 #include "agr/render/Renderer.hpp"
 #include "agr/ui/Font.hpp"
 #include "agr/ui/UIComponents.hpp"
@@ -19,11 +22,12 @@ struct UIPointer {
     bool down = false;  ///< false on the frame a finger lifts (release), and for a hovering mouse.
 };
 
-enum class UIEventType : u8 { Click, ValueChanged };
+enum class UIEventType : u8 { Click, ValueChanged, TextChanged, Submit };
 struct UIEvent {
     UIEventType type = UIEventType::Click;
     ecs::Entity entity;
     float value = 0.0f;
+    std::string text;  ///< TextChanged / Submit
 };
 
 /// Published on the engine event bus by UIPlugin (scripts receive them as callbacks).
@@ -33,6 +37,12 @@ struct UIClickEvent {
 struct UIValueChangedEvent {
     ecs::Entity entity;
     float value = 0.0f;
+};
+/// Text field edited (submitted = Enter).
+struct UITextEvent {
+    ecs::Entity entity;
+    std::string text;
+    bool submitted = false;
 };
 
 struct UIStats {
@@ -83,6 +93,27 @@ public:
     /// Forgets pointer state (game stopped / scene changed).
     void reset();
 
+    // --- scroll views, text fields, keyboard / gamepad navigation
+    /// Mouse wheel at a point (UI pixels): scrolls the topmost scroll view under it.
+    bool scrollAt(Scene& scene, math::Vec2 position, math::Vec2 wheel);
+    /// Typing for the focused text field: UTF-8 text, backspaces, Enter.
+    void processText(Scene& scene, std::string_view typed, u32 backspaces, bool enter);
+    ecs::Entity focusedField() const { return m_focusedField; }
+    bool wantsText() const { return !m_focusedField.isNull(); }
+    void focusField(ecs::Entity field);  ///< null = none (hides the on-screen keyboard)
+    /// Called with true / false when a field gains / loses focus (on-screen keyboard).
+    void setTextInputHandler(std::function<void(bool)> handler) { m_textInputHandler = std::move(handler); }
+    /// Canvases with keyboardNavigation: move the highlight (dx, dy), activate it, adjust a slider.
+    bool navigationEnabled() const;
+    void navigate(Scene& scene, math::Vec2 direction);
+    void navActivate(Scene& scene);
+    void navAdjust(Scene& scene, float steps);
+    ecs::Entity navFocus() const { return m_navVisible ? m_navFocus : ecs::Entity{}; }
+    void setNavFocus(ecs::Entity e) {
+        m_navFocus = e;
+        m_navVisible = !e.isNull();
+    }
+
     void buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList& out) override;
 
     FontLibrary& fonts() { return m_fonts; }
@@ -96,6 +127,17 @@ private:
         math::Vec4 rect;  // pixels
         bool blocks = false;
         bool interactive = false;
+        math::Vec4 clip{-1e9f, -1e9f, 2e9f, 2e9f};  // visible part (scroll views), pixels
+    };
+    struct ScrollInfo {
+        math::Vec4 view;
+        math::Vec2 content;  // pixels
+        float scale = 1.0f;
+    };
+    struct PointerState {
+        math::Vec2 down, last;
+        ecs::Entity scrollView;
+        bool dragging = false;
     };
     struct CanvasPass {
         i32 sortOrder = 0;
@@ -111,12 +153,17 @@ private:
         math::Vec2 origin;
     };
 
-    void layoutChildren(Scene& scene, ecs::Entity parent, math::Vec4 parentRect, float scale, CanvasPass& pass);
+    void layoutChildren(Scene& scene, ecs::Entity parent, math::Vec4 parentRect, float scale, CanvasPass& pass, math::Vec4 clip);
+    void emit(OverlayDrawList& out, math::Vec2 min, math::Vec2 max, math::Vec4 uv, u32 color, rhi::TextureHandle texture) const;
+    void clickToggle(Scene& scene, ecs::Entity e);
+    void activate(Scene& scene, ecs::Entity e);  ///< click / toggle / focus, as a pointer release would
+    ecs::Entity scrollViewOf(Scene& scene, ecs::Entity e) const;
+    void scrollBy(Scene& scene, ecs::Entity view, math::Vec2 pixels);
+    const Element* elementOf(ecs::Entity e) const;
     void drawElement(Scene& scene, const Element& el, float scale, OverlayDrawList& out);
     void drawImage(const UIImageComponent& img, math::Vec4 rect, math::Vec4 tint, float scale, OverlayDrawList& out);
     void setSliderValue(Scene& scene, ecs::Entity e, float x);
 
-    VirtualFileSystem& m_vfs;
     Renderer* m_renderer = nullptr;
     const Localization* m_localization = nullptr;
     FontLibrary m_fonts;
@@ -130,6 +177,13 @@ private:
     std::unordered_set<std::string> m_reportedFonts;
     std::vector<PendingText> m_texts;
     bool m_pointerOverUI = false;
+    std::unordered_map<u64, ScrollInfo> m_scroll;           // packed scroll view -> last layout
+    std::unordered_map<u64, PointerState> m_pointerState;   // pointer id
+    ecs::Entity m_focusedField, m_navFocus;
+    bool m_navVisible = false;
+    std::function<void(bool)> m_textInputHandler;
+    math::Vec4 m_clip{-1e9f, -1e9f, 2e9f, 2e9f};            // while drawing
+    Stopwatch m_caretClock;
     math::Vec4 m_safeArea{0.0f, 0.0f, 0.0f, 0.0f};
     UIStats m_stats;
 };

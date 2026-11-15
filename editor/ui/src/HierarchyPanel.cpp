@@ -71,7 +71,8 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
         ImGui::EndMenu();
     }
     static const Item ui[] = {{"Canvas", CreateKind::UICanvas}, {"Panneau", CreateKind::UIPanel}, {"Texte", CreateKind::UIText},
-                              {"Bouton", CreateKind::UIButton}, {"Curseur", CreateKind::UISlider}, {"Colonne (mise en page)", CreateKind::UIColumn}};
+                              {"Bouton", CreateKind::UIButton}, {"Curseur", CreateKind::UISlider}, {"Colonne (mise en page)", CreateKind::UIColumn},
+                              {"Case à cocher", CreateKind::UIToggle}, {"Champ de saisie", CreateKind::UIInputField}, {"Zone défilante", CreateKind::UIScrollView}};
     if (ImGui::BeginMenu("Interface (UI)")) {
         items(ui, 6);
         ImGui::EndMenu();

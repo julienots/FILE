@@ -351,4 +351,191 @@ TEST_CASE("safe area: canvases keep their children away from notches") {
     checkRect(f.rect(top), {0, 0, 1080, 100});
 }
 
+
+TEST_CASE("toggles: check boxes flip, radio groups keep one on, disabled ones ignore clicks") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    auto toggle = [&](const char* name, math::Vec2 at, const char* group) {
+        const auto e = f.element(name, f.canvas, {0, 0}, {0, 0}, {0.5f, 0.5f}, at, {200, 40});
+        f.scene.registry().emplace<UIToggleComponent>(e).group = group;
+        return e;
+    };
+    const auto music = toggle("Music", {150, 50}, "");
+    const auto easy = toggle("Easy", {150, 150}, "difficulty");
+    const auto hard = toggle("Hard", {150, 250}, "difficulty");
+    f.scene.registry().get<UIToggleComponent>(easy).isOn = true;
+    f.ui.layout(f.scene, 800, 600);
+    auto click = [&](math::Vec2 p) {
+        f.pointers({{0, p, true}});
+        f.pointers({{0, p, false}});
+    };
+    click({150, 50});
+    CHECK(f.scene.registry().get<UIToggleComponent>(music).isOn);
+    auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].type == UIEventType::ValueChanged);
+    CHECK(ev[0].value == 1.0f);
+    click({150, 50});
+    CHECK_FALSE(f.scene.registry().get<UIToggleComponent>(music).isOn);
+    f.ui.takeEvents();
+    click({150, 250});  // radio: hard on, easy off
+    CHECK(f.scene.registry().get<UIToggleComponent>(hard).isOn);
+    CHECK_FALSE(f.scene.registry().get<UIToggleComponent>(easy).isOn);
+    CHECK(f.ui.takeEvents().size() == 2);
+    click({150, 250});  // clicking the chosen radio button keeps it on
+    CHECK(f.scene.registry().get<UIToggleComponent>(hard).isOn);
+    f.scene.registry().get<UIToggleComponent>(music).interactable = false;
+    click({150, 50});
+    CHECK_FALSE(f.scene.registry().get<UIToggleComponent>(music).isOn);
+}
+
+TEST_CASE("text fields: focus, typing, UTF-8 backspace, max length, numeric, password, submit, blur") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto field = f.element("Name", f.canvas, {0, 0}, {0, 0}, {0.5f, 0.5f}, {200, 50}, {300, 50});
+    auto& fc = f.scene.registry().emplace<UIInputFieldComponent>(field);
+    fc.maxLength = 6;
+    fc.placeholder = "Votre nom";
+    f.scene.registry().emplace<UITextComponent>(field);
+    int keyboard = 0;
+    f.ui.setTextInputHandler([&](bool on) { keyboard += on ? 1 : -1; });
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UITextComponent>(field).text == "Votre nom");  // placeholder shown
+    f.ui.processText(f.scene, "ignored", 0, false);  // not focused yet
+    CHECK(f.scene.registry().get<UIInputFieldComponent>(field).text.empty());
+    f.pointers({{0, {200, 50}, true}});
+    f.pointers({{0, {200, 50}, false}});
+    CHECK(f.ui.focusedField() == field);
+    CHECK(keyboard == 1);  // on-screen keyboard requested
+    f.ui.processText(f.scene, "Zoé", 0, false);
+    CHECK(f.scene.registry().get<UIInputFieldComponent>(field).text == "Zoé");
+    f.ui.processText(f.scene, "", 1, false);  // removes the whole "é" (2 bytes)
+    CHECK(f.scene.registry().get<UIInputFieldComponent>(field).text == "Zo");
+    f.ui.processText(f.scene, "abcdefgh\x01", 0, false);  // capped at 6 characters, control char dropped
+    CHECK(f.scene.registry().get<UIInputFieldComponent>(field).text == "Zoabcd");
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UITextComponent>(field).text == "Zoabcd");
+    auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 3);
+    CHECK(ev.back().type == UIEventType::TextChanged);
+    CHECK(ev.back().text == "Zoabcd");
+    f.ui.processText(f.scene, "", 0, true);  // Enter: submit and blur
+    ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].type == UIEventType::Submit);
+    CHECK(ev[0].text == "Zoabcd");
+    CHECK(f.ui.focusedField().isNull());
+    CHECK(keyboard == 0);  // keyboard hidden again
+    // Numeric and password fields.
+    auto& fc2 = f.scene.registry().get<UIInputFieldComponent>(field);
+    fc2.text.clear();
+    fc2.numeric = true;
+    fc2.password = true;
+    f.ui.focusField(field);
+    f.ui.processText(f.scene, "4a2-.x", 0, false);
+    CHECK(fc2.text == "42-.");
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UITextComponent>(field).text == "****");
+    // A press elsewhere removes the focus.
+    f.pointers({{0, {700, 500}, true}});
+    f.pointers({{0, {700, 500}, false}});
+    CHECK(f.ui.focusedField().isNull());
+}
+
+TEST_CASE("scroll views: content is moved and clipped, wheel and drag scroll, a drag cancels the click, limits") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto view = f.element("List", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {300, 200});
+    f.scene.registry().emplace<UIScrollViewComponent>(view).wheelSpeed = 50.0f;
+    auto& lay = f.scene.registry().emplace<UILayoutComponent>(view);
+    lay.spacing = 0.0f;
+    lay.padding = {0, 0, 0, 0};
+    std::vector<ecs::Entity> items;
+    for (int i = 0; i < 10; ++i) {  // 10 x 60 = 600 px of content in 200 px
+        const auto b = f.element(("Item " + std::to_string(i)).c_str(), view, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {300, 60});
+        f.scene.registry().emplace<UIImageComponent>(b);
+        f.scene.registry().emplace<UIButtonComponent>(b);
+        items.push_back(b);
+    }
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.rect(items[3]).y == doctest::Approx(280.0f));
+    // Item 5 (y 400..460) is laid out below the view: clipped, not clickable.
+    CHECK(f.ui.hitTest({250, 430}).isNull());
+    CHECK(f.ui.hitTest({250, 130}) == items[0]);
+    // Wheel down 2 notches: 100 px.
+    CHECK(f.ui.scrollAt(f.scene, {250, 150}, {0, -2}));
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UIScrollViewComponent>(view).scroll.y == doctest::Approx(100.0f));
+    CHECK(f.rect(items[0]).y == doctest::Approx(0.0f));
+    CHECK(f.ui.hitTest({250, 130}) == items[2]);  // items move up by 100 px: item 2 spans 120..180
+    CHECK(f.ui.hitTest({250, 110}) == items[1]);  // item 1 partly visible (100..120)
+    CHECK_FALSE(f.ui.scrollAt(f.scene, {700, 500}, {0, -1}));  // outside: nothing
+    // Drag up by 150 px with a finger that started on a button: scrolls, no click.
+    f.pointers({{7, {250, 250}, true}});
+    f.pointers({{7, {250, 200}, true}});
+    f.pointers({{7, {250, 100}, true}});
+    f.pointers({{7, {250, 100}, false}});
+    CHECK(f.ui.takeEvents().empty());
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UIScrollViewComponent>(view).scroll.y == doctest::Approx(250.0f));
+    // Limits: content 600 - view 200 = 400 at most, 0 at least.
+    f.ui.scrollAt(f.scene, {250, 150}, {0, -100});
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UIScrollViewComponent>(view).scroll.y == doctest::Approx(400.0f));
+    f.ui.scrollAt(f.scene, {250, 150}, {0, 100});
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.scene.registry().get<UIScrollViewComponent>(view).scroll.y == doctest::Approx(0.0f));
+    // A short tap still clicks.
+    f.pointers({{8, {250, 130}, true}});
+    f.pointers({{8, {253, 132}, false}});
+    const auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].entity == items[0]);
+    // Drawing is clipped to the view: no quad outside its rectangle.
+    OverlayDrawList out;
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    REQUIRE(!out.vertices.empty());
+    for (const auto& v : out.vertices) {
+        CHECK(v.position.y >= 100.0f - 0.01f);
+        CHECK(v.position.y <= 300.0f + 0.01f);
+    }
+}
+
+TEST_CASE("keyboard / gamepad navigation: opt-in per canvas, moves by direction, activates, adjusts sliders") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto play = f.button("Play", {400, 100}, {200, 60});
+    const auto options = f.button("Options", {400, 200}, {200, 60});
+    const auto quit = f.button("Quit", {400, 300}, {200, 60});
+    const auto volume = f.element("Volume", f.canvas, {0, 0}, {0, 0}, {0.5f, 0.5f}, {700, 200}, {200, 40});
+    f.scene.registry().emplace<UISliderComponent>(volume).value = 0.5f;
+    f.ui.layout(f.scene, 800, 600);
+    CHECK_FALSE(f.ui.navigationEnabled());
+    f.scene.registry().get<UICanvasComponent>(f.canvas).keyboardNavigation = true;
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.ui.navigationEnabled());
+    f.ui.navigate(f.scene, {0, 1});  // first press: the top-left control
+    CHECK(f.ui.navFocus() == play);
+    f.ui.navigate(f.scene, {0, 1});
+    CHECK(f.ui.navFocus() == options);
+    f.ui.navigate(f.scene, {0, 1});
+    CHECK(f.ui.navFocus() == quit);
+    f.ui.navigate(f.scene, {0, 1});  // nothing below: stays
+    CHECK(f.ui.navFocus() == quit);
+    f.ui.navigate(f.scene, {0, -1});
+    f.ui.navigate(f.scene, {1, 0});  // to the right of Options: the slider
+    CHECK(f.ui.navFocus() == volume);
+    f.ui.navAdjust(f.scene, 1.0f);
+    CHECK(f.scene.registry().get<UISliderComponent>(volume).value == doctest::Approx(0.6f));
+    f.ui.takeEvents();
+    f.ui.navigate(f.scene, {-1, 0});
+    f.ui.navActivate(f.scene);
+    const auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].entity == options);
+    // The highlight is drawn (an extra outline) and a pointer press hides it.
+    f.pointers({{0, {50, 550}, true}});
+    f.pointers({{0, {50, 550}, false}});
+    CHECK(f.ui.navFocus().isNull());
+}
 }  // TEST_SUITE

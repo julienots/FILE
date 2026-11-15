@@ -32,6 +32,8 @@ public:
     /// Device vibration (phones) for `seconds` at `strength` (0..1); no-op without a vibrator.
     virtual void vibrate(float seconds, float strength) { (void)seconds; (void)strength; }
     virtual bool canVibrate() const { return false; }
+    /// Text entry (shows the on-screen keyboard on phones); no-op without a window.
+    virtual void setTextInput(bool enabled) { (void)enabled; }
     /// User's languages, most preferred first ("fr-FR", "en"...); empty if unknown.
     virtual std::vector<std::string> preferredLanguages() const { return {}; }
 

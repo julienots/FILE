@@ -37,6 +37,8 @@ private:
     void bindRenderer(Engine& engine);
 
     std::unique_ptr<UISystem> m_ui;
+
+    int m_stickDir = 0;  // gamepad stick direction last frame (navigation edges)
     Renderer* m_renderer = nullptr;
     std::optional<Viewport> m_viewport;
     std::optional<math::Vec4> m_safeOverride;

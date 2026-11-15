@@ -160,7 +160,7 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Animation squelettique (skinning glTF) | ✅ | voir ANIMATION.md |
 | Arbres de mélange, couches, IK, morph targets | ⬜ | à planifier |
 | Effets audio (réverbération, filtres), Doppler, occlusion | ⬜ | à planifier |
-| UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | ⬜ | zones sûres en phase 8 ; le reste à planifier |
+| UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | 🟡 | fait : zones défilantes découpées, champs de saisie (clavier virtuel), cases / radios, navigation clavier-manette, zones sûres ; reste : texte enrichi |
 | Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |
 | **Éditeur de logique visuelle** (reporté de la phase 6) | ✅ | voir phase 6 |
 

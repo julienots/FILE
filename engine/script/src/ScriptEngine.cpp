@@ -366,6 +366,29 @@ void ScriptEngine::dispatchUI(Scene& scene, const UIValueChangedEvent& e) {
     m->callOn(scene, e.entity, "onValueChanged", {}, true, e.value);
     if (const auto* sl = scene.registry().tryGet<UISliderComponent>(e.entity))
         m->callOn(scene, sl->target, sl->message, e.entity, true, e.value);
+    if (const auto* t = scene.registry().tryGet<UIToggleComponent>(e.entity)) m->callOn(scene, t->target, t->message, e.entity, true, e.value);
+}
+
+void ScriptEngine::dispatchUI(Scene& scene, const UITextEvent& e) {
+    if (!scene.valid(e.entity) || scene.generation() != m->sceneGeneration) return;
+    m->scene = &scene;
+    auto callWithText = [&](ecs::Entity target, const std::string& fn, ecs::Entity sender) {
+        if (fn.empty() || target.isNull() || !scene.valid(target)) return;
+        auto it = m->instances.find(target.packed());
+        if (it == m->instances.end() || !it->second.started) return;
+        m->call(it->second, fn.c_str(), [&] {
+            int n = 0;
+            if (!sender.isNull()) {
+                pushEntity(m->L, sender);
+                ++n;
+            }
+            lua_pushlstring(m->L, e.text.data(), e.text.size());
+            return n + 1;
+        });
+    };
+    callWithText(e.entity, e.submitted ? "onSubmit" : "onTextChanged", {});
+    if (e.submitted)
+        if (const auto* f = scene.registry().tryGet<UIInputFieldComponent>(e.entity)) callWithText(f->target, f->message, e.entity);
 }
 
 void ScriptEngine::dispatchAnimation(Scene& scene, const AnimationEvent& e) {

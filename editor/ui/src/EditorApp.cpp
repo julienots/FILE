@@ -680,6 +680,7 @@ void EditorApp::drawMenuBar() {
             {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
             {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
+            {"UI : Case à cocher", CreateKind::UIToggle}, {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView},
             {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
         for (const auto& [label, kind] : items) {
             if (!label) ImGui::Separator();
@@ -1624,7 +1625,34 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 239: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_profiler.png").string()); break;
-        case 241: {
+        case 240: {  // UI widgets created from the menu: toggle, text field, scroll view with items
+            m_shared->showProfiler = false;
+            m_shared->showLogic = false;
+            ImGui::SetWindowFocus("Scène");
+            m_viewport.gameView = true;  // the game's interface is drawn in the game view
+            const auto toggle = ctx.create(CreateKind::UIToggle);
+            check(!toggle.isNull() && ctx.scene().registry().has<UIToggleComponent>(toggle), "toggle created");
+            ctx.scene().registry().get<UIToggleComponent>(toggle).isOn = true;
+            ctx.scene().registry().get<UIRectComponent>(toggle).position = {-300.0f, -200.0f};
+            const auto field = ctx.create(CreateKind::UIInputField);
+            check(!field.isNull() && ctx.scene().registry().has<UIInputFieldComponent>(field), "text field created");
+            ctx.scene().registry().get<UIInputFieldComponent>(field).text = "Bonjour";
+            ctx.scene().registry().get<UIRectComponent>(field).position = {-300.0f, -100.0f};
+            const auto view = ctx.create(CreateKind::UIScrollView);
+            check(!view.isNull() && ctx.scene().registry().has<UIScrollViewComponent>(view), "scroll view created");
+            ctx.scene().registry().get<UIRectComponent>(view).position = {200.0f, 0.0f};
+            for (int i = 0; i < 8; ++i) {
+                ctx.selection().set(ctx.scene().uuidOf(view));
+                const auto b = ctx.create(CreateKind::UIButton, view);
+                ctx.scene().registry().get<UIRectComponent>(b).size = {300.0f, 80.0f};
+            }
+            ctx.scene().registry().get<UIScrollViewComponent>(view).scroll = {0.0f, 120.0f};
+            ctx.commit("UI widgets");
+            break;
+        }
+        case 242: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_ui_widgets.png").string()); break;
+        case 243: m_viewport.gameView = false; break;
+        case 244: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

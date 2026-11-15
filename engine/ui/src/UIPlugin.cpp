@@ -3,6 +3,8 @@
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 
+#include <cmath>
+
 namespace agr {
 
 PluginInfo UIPlugin::info() const {
@@ -13,6 +15,7 @@ Status UIPlugin::onLoad(Engine& engine) {
     registerUIComponents();
     m_ui = std::make_unique<UISystem>(engine.vfs());
     m_ui->setLocalization(&engine.localization());
+    m_ui->setTextInputHandler([&engine](bool on) { engine.platform().setTextInput(on); });
     engine.registerService<UIPlugin>(this);
     bindRenderer(engine);
     return {};
@@ -83,9 +86,33 @@ void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
         if (inside(p) || down || in.mouseReleased(MouseButton::Left)) pointers.push_back({0, p, down});
     }
     m_ui->processInput(scene, pointers);
+    // Mouse wheel over a scroll view.
+    if (in.wheel().x != 0.0f || in.wheel().y != 0.0f) m_ui->scrollAt(scene, toUI(in.mousePosition()), in.wheel());
+    // Typing into the focused text field.
+    if (m_ui->wantsText())
+        m_ui->processText(scene, in.textInput(), in.keyPressed(Key::Backspace) ? 1u : 0u, in.keyPressed(Key::Return));
+    // Keyboard / gamepad navigation (canvases with keyboardNavigation), not while typing.
+    if (!m_ui->wantsText() && m_ui->navigationEnabled()) {
+        const float sx = in.gamepadCount() > 0 ? in.gamepadAxis(0, GamepadAxis::LeftX) : 0.0f;
+        const float sy = in.gamepadCount() > 0 ? in.gamepadAxis(0, GamepadAxis::LeftY) : 0.0f;
+        const int stickDir = std::abs(sx) > 0.6f || std::abs(sy) > 0.6f ? (std::abs(sx) > std::abs(sy) ? (sx > 0 ? 1 : 3) : (sy > 0 ? 2 : 4)) : 0;
+        const bool stickEdge = stickDir != 0 && stickDir != m_stickDir;
+        m_stickDir = stickDir;
+        const bool up = in.keyPressed(Key::Up) || in.anyGamepadPressed(GamepadButton::DpadUp) || (stickEdge && stickDir == 4);
+        const bool down = in.keyPressed(Key::Down) || in.anyGamepadPressed(GamepadButton::DpadDown) || (stickEdge && stickDir == 2);
+        const bool left = in.keyPressed(Key::Left) || in.anyGamepadPressed(GamepadButton::DpadLeft) || (stickEdge && stickDir == 3);
+        const bool right = in.keyPressed(Key::Right) || in.anyGamepadPressed(GamepadButton::DpadRight) || (stickEdge && stickDir == 1);
+        const bool onSlider = !m_ui->navFocus().isNull() && scene.registry().valid(m_ui->navFocus()) && scene.registry().has<UISliderComponent>(m_ui->navFocus());
+        if (up) m_ui->navigate(scene, {0.0f, -1.0f});
+        if (down) m_ui->navigate(scene, {0.0f, 1.0f});
+        if (left) onSlider ? m_ui->navAdjust(scene, -1.0f) : m_ui->navigate(scene, {-1.0f, 0.0f});
+        if (right) onSlider ? m_ui->navAdjust(scene, 1.0f) : m_ui->navigate(scene, {1.0f, 0.0f});
+        if (in.keyPressed(Key::Return) || in.keyPressed(Key::Space) || in.anyGamepadPressed(GamepadButton::South)) m_ui->navActivate(scene);
+    }
     for (const UIEvent& e : m_ui->takeEvents()) {
         if (e.type == UIEventType::Click) engine.events().publish(UIClickEvent{e.entity});
-        else engine.events().publish(UIValueChangedEvent{e.entity, e.value});
+        else if (e.type == UIEventType::ValueChanged) engine.events().publish(UIValueChangedEvent{e.entity, e.value});
+        else engine.events().publish(UITextEvent{e.entity, e.text, e.type == UIEventType::Submit});
     }
 }
 

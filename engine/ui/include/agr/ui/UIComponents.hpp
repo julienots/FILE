@@ -24,6 +24,9 @@ struct UICanvasComponent {
     i32 sortOrder = 0;
     /// Children are laid out inside the safe area (away from notches and system bars).
     bool respectSafeArea = true;
+    /// Arrow keys / gamepad D-pad move a highlight between its buttons, toggles, sliders and
+    /// fields; Enter / Space / gamepad A activates (menus playable without a pointer).
+    bool keyboardNavigation = false;
 };
 
 /// Rectangle of a UI element relative to its parent (Unity-like RectTransform).
@@ -95,6 +98,48 @@ struct UISliderComponent {
     math::Vec4 handleColor{1.0f, 1.0f, 1.0f, 1.0f};
     ecs::Entity target;
     std::string message;
+};
+
+/// Check box / switch. Clicking flips `isOn` (toggles sharing a non-empty `group` act as radio
+/// buttons: one on at a time). A change calls onValueChanged(1 or 0) on the entity's script and
+/// target:message(toggle, value). Drawn as a box (with a mark when on) at the left of the
+/// element; add a UIText child for its label.
+struct UIToggleComponent {
+    bool isOn = false;
+    bool interactable = true;
+    std::string group;
+    math::Vec4 boxColor{0.16f, 0.18f, 0.22f, 1.0f};
+    math::Vec4 checkColor{0.98f, 0.55f, 0.16f, 1.0f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Text entry field (with a UIText on the same entity showing the text or the placeholder).
+/// Clicking focuses it (on-screen keyboard on phones); typing calls onTextChanged(text), Enter
+/// calls onSubmit(text) and target:message(field, text).
+struct UIInputFieldComponent {
+    std::string text;
+    std::string placeholder = "Saisir...";
+    u32 maxLength = 64;
+    bool numeric = false;   ///< Digits, '-' and '.' only.
+    bool password = false;  ///< Shown as '*'.
+    bool interactable = true;
+    math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
+    math::Vec4 placeholderColor{1.0f, 1.0f, 1.0f, 0.4f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Scrolling area: its children are the content, moved by `scroll` (canvas units) and clipped to
+/// the element. Mouse wheel, or drag with a finger / the mouse (a drag cancels the press of a
+/// button inside). Add a UILayout to stack the content.
+struct UIScrollViewComponent {
+    bool vertical = true;
+    bool horizontal = false;
+    math::Vec2 scroll{0.0f, 0.0f};
+    float wheelSpeed = 60.0f;
+    bool showScrollbar = true;
+    math::Vec4 scrollbarColor{1.0f, 1.0f, 1.0f, 0.35f};
 };
 
 enum class UILayoutType : i32 { Vertical = 0, Horizontal = 1, Grid = 2 };

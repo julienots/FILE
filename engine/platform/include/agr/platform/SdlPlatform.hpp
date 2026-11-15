@@ -49,7 +49,7 @@ public:
     bool isGLES() const { return m_gles; }
     void setTitle(const std::string& title);
     /// Shows the on-screen keyboard on mobile.
-    void setTextInput(bool enabled);
+    void setTextInput(bool enabled) override;
     /// Called with every raw SDL_Event* before the engine translates it (UI toolkits).
     using RawEventHook = std::function<void(const void* sdlEvent)>;
     void setRawEventHook(RawEventHook hook) { m_rawHook = std::move(hook); }

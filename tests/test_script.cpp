@@ -761,6 +761,7 @@ return C
 }
 
 #include "agr/ui/UIComponents.hpp"
+#include "agr/ui/UISystem.hpp"
 #include "agr/core/Profiler.hpp"
 
 TEST_SUITE("script fx") {
@@ -825,6 +826,37 @@ return T
     CHECK(scale == doctest::Approx(0.5));  // restored to the game's scale
     f.scripts.reset();                     // the game stops: normal speed again
     CHECK(scale == doctest::Approx(1.0));
+}
+
+TEST_CASE("UI from scripts: text field events, toggle messages, agr.ui.isTyping / focus") {
+    ScriptFixture f;
+    registerUIComponents();
+    f.write("assets://s/form.lua", R"lua(
+local F = { properties = { typed = "", sent = "", music = -1 } }
+function F:onTextChanged(text) self.typed = text end
+function F:onSubmit(text) self.sent = text end
+function F:musicChanged(toggle, value) self.music = value end
+function F:focusName() agr.ui.focus(agr.find("Name")); self.typing = agr.ui.isTyping() end
+return F
+)lua");
+    const auto field = f.scripted("Name", "assets://s/form.lua");
+    f.scene.registry().emplace<UIInputFieldComponent>(field);
+    const auto toggle = f.scene.createEntity("Music");
+    auto& t = f.scene.registry().emplace<UIToggleComponent>(toggle);
+    t.target = field;
+    t.message = "musicChanged";
+    UISystem ui(f.vfs);
+    f.scripts.setUI(&ui);
+    f.update();
+    f.scripts.dispatchUI(f.scene, UITextEvent{field, "Zoé", false});
+    CHECK(f.scripts.field(field, "typed").value() == "Zoé");
+    f.scripts.dispatchUI(f.scene, UITextEvent{field, "Zoé!", true});
+    CHECK(f.scripts.field(field, "sent").value() == "Zoé!");
+    f.scripts.dispatchUI(f.scene, UIValueChangedEvent{toggle, 1.0f});
+    CHECK(f.scripts.field(field, "music").value() == "1.0");
+    REQUIRE(f.scripts.run("agr.find('Name'):script():focusName()", &f.scene));
+    CHECK(f.scripts.field(field, "typing").value() == "true");
+    CHECK(ui.focusedField() == field);
 }
 
 TEST_CASE("agr.profile: script sections appear in the profiler; unbalanced calls are caught") {

@@ -41,6 +41,9 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_uiValues = engine.events().subscribe<UIValueChangedEvent>([this](const UIValueChangedEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchUI(m_engine->scene(), e);
     });
+    m_uiTexts = engine.events().subscribe<UITextEvent>([this](const UITextEvent& e) {
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchUI(m_engine->scene(), e);
+    });
     m_animEvents = engine.events().subscribe<AnimationEvent>([this](const AnimationEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchAnimation(m_engine->scene(), e);
     });
@@ -52,6 +55,7 @@ void ScriptPlugin::onUnload(Engine& engine) {
     engine.events().unsubscribe(m_collisions3D);
     engine.events().unsubscribe(m_uiClicks);
     engine.events().unsubscribe(m_uiValues);
+    engine.events().unsubscribe(m_uiTexts);
     engine.events().unsubscribe(m_animEvents);
     engine.registerService<ScriptPlugin>(nullptr);
     m_scripts.reset();

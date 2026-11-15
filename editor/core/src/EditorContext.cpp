@@ -52,6 +52,9 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::Terrain: return "Terrain";
         case CreateKind::Water: return "Water";
         case CreateKind::Particles3D: return "Particles 3D";
+        case CreateKind::UIToggle: return "Toggle";
+        case CreateKind::UIInputField: return "Input Field";
+        case CreateKind::UIScrollView: return "Scroll View";
     }
     return "Entity";
 }
@@ -168,7 +171,8 @@ ecs::Entity EditorContext::uiParentFor(ecs::Entity parent) {
 ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
     Scene& s = scene();
     auto& reg = s.registry();
-    const bool ui = kind >= CreateKind::UIPanel && kind <= CreateKind::UIColumn;
+    const bool ui = (kind >= CreateKind::UIPanel && kind <= CreateKind::UIColumn) || kind == CreateKind::UIToggle || kind == CreateKind::UIInputField ||
+                    kind == CreateKind::UIScrollView;
     if (ui) parent = uiParentFor(parent);
     const ecs::Entity e = s.createEntity(createKindName(kind), parent);
     auto uiRect = [&](math::Vec2 size) -> UIRectComponent& {
@@ -270,6 +274,36 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             uiRect({320, 400});
             reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.6f};
             reg.emplace<UILayoutComponent>(e);
+            break;
+        }
+        case CreateKind::UIToggle: {
+            uiRect({320, 50});
+            reg.emplace<UIToggleComponent>(e);
+            const ecs::Entity label = s.createEntity("Label", e);
+            auto& lr = reg.emplace<UIRectComponent>(label);
+            lr.anchorMin = {0, 0};
+            lr.anchorMax = {1, 1};
+            lr.position = {30, 0};
+            lr.size = {-60, 0};
+            auto& lt = reg.emplace<UITextComponent>(label);
+            lt.text = "Option";
+            lt.hAlign = UIHAlign::Left;
+            break;
+        }
+        case CreateKind::UIInputField: {
+            uiRect({400, 60});
+            reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.85f};
+            reg.emplace<UIInputFieldComponent>(e);
+            auto& fieldText = reg.emplace<UITextComponent>(e);
+            fieldText.hAlign = UIHAlign::Left;
+            fieldText.wrap = false;
+            break;
+        }
+        case CreateKind::UIScrollView: {
+            uiRect({360, 420});
+            reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.6f};
+            reg.emplace<UIScrollViewComponent>(e);
+            reg.emplace<UILayoutComponent>(e).expandChildren = true;
             break;
         }
         case CreateKind::AudioSource: reg.emplace<AudioSourceComponent>(e); break;

@@ -27,6 +27,16 @@ des modèles et test de bout en bout de l'éditeur.
 | `UIButton` | Couleurs normal / survol / appui / désactivé (teinte de l'image) ; clic = `onClick()` du script de l'entité et `message(bouton)` du script de `target` |
 | `UISlider` | Curseur horizontal (piste, remplissage, poignée), valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
 | `UILayout` | Range les enfants en **colonne**, **ligne** ou **grille** : espacement, marges, alignement, étirement |
+| `UIToggle` | Case à cocher ; même `group` = boutons radio (un seul coché) ; changement = `onValueChanged(1 ou 0)` et `message(case, valeur)` sur `target` |
+| `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password` ; curseur clignotant |
+| `UIScrollView` | Zone défilante : ses enfants sont le contenu, déplacés par `scroll` et **découpés** au bord ; molette, glisser du doigt ou de la souris (un glisser annule le clic du bouton touché), barre de défilement ; limites calculées d'après le contenu |
+
+**Navigation au clavier / à la manette** : un canevas avec `keyboardNavigation` permet de passer
+d'un contrôle à l'autre avec les flèches, la croix directionnelle ou le stick (le plus proche dans la
+direction), de l'activer avec Entrée, Espace ou A, et de régler un curseur avec gauche / droite ; le
+contrôle choisi est encadré. Un pointeur reprend la main. `agr.ui.focus(entité)` choisit le contrôle
+(ou donne le clavier à un champ), `agr.ui.isTyping()` dit au jeu d'ignorer les touches pendant la
+saisie. Menu Créer › UI : case à cocher, champ de saisie, zone défilante.
 
 Une image transparente (alpha 0) ne bloque pas le pointeur : utile pour les conteneurs. Une image
 avec `blocksPointer` désactivé laisse aussi passer les clics et les doigts (voiles d'écran, décors

@@ -107,6 +107,8 @@ public:
     void dispatchUI(Scene& scene, const UIClickEvent& event);
     /// UI: `onValueChanged(value)` on the slider's script, then `message(slider, value)` on its target's.
     void dispatchUI(Scene& scene, const UIValueChangedEvent& event);
+    /// onTextChanged(text) / onSubmit(text) on the field; on submit, target:message(field, text).
+    void dispatchUI(Scene& scene, const UITextEvent& event);
     /// Animation: onAnimationEvent(name) / onStateEnter(name) on the animated entity's script.
     void dispatchAnimation(Scene& scene, const AnimationEvent& event);
     /// Destroys every instance (onDestroy is called) — scene unloaded.
