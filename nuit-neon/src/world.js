@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const HALF = 8.2;   // demi-largeur de la route (vibreurs inclus)
-export const LIMIT = 7.0;  // décalage latéral maximum du centre d'une voiture
+export const HALF = 11.0;  // demi-largeur de la route (vibreurs inclus) : 4 voies
+export const LIMIT = 9.7;   // décalage latéral maximum du centre d'une voiture
 
 let seed = 1;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -31,7 +31,8 @@ function box(w, h, d, x, y, z, rotY = 0) {
 
 // ---------- échantillonnage du tracé ----------
 export function makeTrack(def) {
-  const curve = new THREE.CatmullRomCurve3(def.pts.map(p => new THREE.Vector3(p[0], 0, p[1])), true, 'centripetal');
+  const sc = def.echelle || 1.6; // les tracés sont dessinés petits puis agrandis
+  const curve = new THREE.CatmullRomCurve3(def.pts.map(p => new THREE.Vector3(p[0] * sc, 0, p[1] * sc)), true, 'centripetal');
   const L = curve.getLength(), N = Math.round(L / 2), ds = L / N;
   const P = curve.getSpacedPoints(N);
   const px = new Float32Array(N), pz = new Float32Array(N), tx = new Float32Array(N), tz = new Float32Array(N), k = new Float32Array(N);
@@ -103,7 +104,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     float pud = smoothstep(0.42, 0.62, fbm(p*0.16 + 7.3));
     float grain = noise(p*38.0);
     float micro = fbm(p*vec2(5.0,2.2));
-    float lane = (1. - smoothstep(0.055, 0.08, abs(ax - 2.55))) * step(0.45, fract(s/9.0));
+    float lane = max(1. - smoothstep(0.055, 0.08, abs(ax - 4.8)), 1. - smoothstep(0.055, 0.08, ax)) * step(0.45, fract(s/9.0));
     float edge = 1. - smoothstep(0.08, 0.11, abs(ax - (half_-0.95)));
     float curb = step(half_-0.6, ax) * step(ax, half_);
     float cs = step(0.5, fract(s/3.2));
@@ -173,11 +174,16 @@ export function buildWorld(def, renderer, q) {
     side: THREE.BackSide, fog: false, depthWrite: false,
     vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
     fragmentShader: `varying vec3 vP;
+      const vec3 HOR = ${v3(th.sky[2])}; const vec3 MID = ${v3(th.sky[1])};
       float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+      float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x), f.y); }
+      float fb(vec2 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*vn(p); p*=2.1; a*=.5; } return s; }
       void main(){ vec3 d = normalize(vP); float h = d.y;
         vec3 c = mix(${v3(th.sky[2])}, ${v3(th.sky[1])}, smoothstep(0.0,0.16,h)); c = mix(c, ${v3(th.sky[0])}, smoothstep(0.1,0.6,h));
         vec2 sp = floor(d.xz/max(0.2,d.y+0.3)*90.); float st = step(0.9965, h21(sp)) * smoothstep(0.25,0.6,h);
-        c += st*vec3(0.9,0.95,1.0)*0.8;
+        float cl = smoothstep(0.42, 0.78, fb(d.xz/(max(d.y,0.0)+0.28)*1.5)) * smoothstep(0.03, 0.3, h);
+        c += st*vec3(0.9,0.95,1.0)*0.8*(1.-cl);
+        c = mix(c, HOR*0.5 + MID*0.35, cl*0.6);
         gl_FragColor = vec4(c,1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -194,7 +200,7 @@ export function buildWorld(def, renderer, q) {
   disposables.push(...winTex);
   const bGeos = [[], [], [], []];
   const placed = [];
-  const adQuads = [];
+  const adQuads = [], shopGeos = [];
   function tower(x, z, w, d, h, ang, mi) {
     const g = new THREE.BoxGeometry(w, h, d);
     const uv = g.attributes.uv;
@@ -222,6 +228,11 @@ export function buildWorld(def, renderer, q) {
       if (rnd() < 0.4) neonGeos[pick(['a', 'b'])].push(box(w + 0.6, 0.6, d + 0.6, x, h * rr(0.3, 0.7), z, ang));
     }
     if (rnd() < 0.35) neonGeos.w.push(box(0.5, rr(8, 22), 0.5, x, top + 6, z));
+    if (faceSide) {
+      const g = new THREE.BoxGeometry(w + 0.5, 5.2, d + 0.5); const suv = g.attributes.uv; const o = Math.floor(rr(0, 4)) / 4;
+      for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const kk = f * 4 + i; if (f === 2 || f === 3) { suv.setXY(kk, 0.002, 0.002); continue; } suv.setX(kk, Math.round(suv.getX(kk) * (f < 2 ? d : w) / 6) / 4 + o); }
+      g.rotateY(ang); g.translate(x, 2.6, z); shopGeos.push(g);
+    }
     // panneau publicitaire sur la façade tournée vers la piste
     if (faceSide && rnd() < 0.5 && w > 16) {
       const pw = Math.min(w - 3, rr(11, 18)), ph = pw * 0.5, y = rr(9, Math.max(10, Math.min(24, h - ph)));
@@ -253,6 +264,24 @@ export function buildWorld(def, renderer, q) {
     placed.push([x, z, r]);
   }
   bGeos.forEach((gs, i) => { if (gs.length) add(mergeGeometries(gs), bMats[i]); });
+  if (shopGeos.length) {
+    // vitrines : 4 boutiques de 6 m par texture
+    const shopTex = canvasTex(1024, 128, (g) => {
+      g.fillStyle = '#07070c'; g.fillRect(0, 0, 1024, 128);
+      const signs = [hex(th.a), hex(th.b), hex(th.c), '#ffffff'];
+      for (let i = 0; i < 4; i++) {
+        const X = i * 256, warm = rnd() < 0.5;
+        const gr = g.createLinearGradient(0, 40, 0, 128); gr.addColorStop(0, warm ? '#ffd9a0' : '#bfe9ff'); gr.addColorStop(1, warm ? '#7a4a20' : '#20506a');
+        g.fillStyle = gr; g.fillRect(X + 14, 42, 228, 80);
+        g.fillStyle = 'rgba(0,0,0,0.55)'; for (let k = 0; k < 6; k++) g.fillRect(X + 24 + k * 37 + rr(-6, 6), 70 + rr(0, 20), rr(10, 22), 60); // silhouettes, rayons
+        g.fillStyle = '#07070c'; g.fillRect(X + 86, 42, 5, 80); g.fillRect(X + 166, 42, 5, 80);
+        g.fillStyle = signs[i]; g.fillRect(X + 22, 10, 212, 22);
+        g.fillStyle = '#07070c'; for (let k = 0; k < 7; k++) g.fillRect(X + 34 + k * 27, 15, rr(10, 20), 12);
+      }
+    });
+    add(mergeGeometries(shopGeos), new THREE.MeshBasicMaterial({ map: shopTex, color: new THREE.Color(1.15, 1.15, 1.15) }));
+    disposables.push(shopTex);
+  }
 
   // --- panneaux publicitaires (atlas 2x2) ---
   {
@@ -302,7 +331,7 @@ export function buildWorld(def, renderer, q) {
   }
 
   // --- lampadaires + flaques de lumière ---
-  const pools = [], poles = [];
+  const pools = [], poles = [], cones = [];
   const palmSpots = [];
   for (let i = 0, n = 0; i < T.N; i += 17, n++) {
     const s = n % 2 ? 1 : -1, ang = Math.atan2(-T.tx[i], -T.tz[i]);
@@ -315,6 +344,7 @@ export function buildWorld(def, renderer, q) {
     neonGeos.w.push(box(1.1, 0.14, 0.5, xl, 9.88, zl, ang));
     const o4 = s * (HALF - 3.2);
     pools.push([T.px[i] - T.tz[i] * o4, T.pz[i] + T.tx[i] * o4]);
+    const cone = new THREE.ConeGeometry(5.2, 9.8, 14, 1, true); cone.translate(xl, 4.9, zl); cones.push(cone);
   }
   add(mergeGeometries(poles.concat(posts)), new THREE.MeshStandardMaterial({ color: 0x1a1b28, metalness: 0.85, roughness: 0.4 }));
   {
@@ -322,6 +352,7 @@ export function buildWorld(def, renderer, q) {
     const geos = pools.map(([x, z]) => { const g = new THREE.PlaneGeometry(15, 15); g.rotateX(-Math.PI / 2); g.translate(x, 0.02, z); return g; });
     add(mergeGeometries(geos), new THREE.MeshBasicMaterial({ map: pt, color: new THREE.Color(th.lamp).multiplyScalar(0.16), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), true);
     disposables.push(pt);
+    add(mergeGeometries(cones), new THREE.MeshBasicMaterial({ color: new THREE.Color(th.lamp).multiplyScalar(0.014), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }), true);
   }
 
   // --- palmiers ---
@@ -363,7 +394,7 @@ export function buildWorld(def, renderer, q) {
     for (let i = 0; i < T.N; i += 4) {
       // prévient un peu avant le virage
       const kk = T.k[(i + 6) % T.N];
-      if (Math.abs(kk) < 1 / 75) continue;
+      if (Math.abs(kk) < 1 / 120) continue;
       const right = kk > 0, s = right ? -1 : 1; // panneau à l'extérieur
       const o = s * (HALF + 0.5), x = T.px[i] - T.tz[i] * o, z = T.pz[i] + T.tx[i] * o;
       const g = new THREE.PlaneGeometry(7.4, 1.8);

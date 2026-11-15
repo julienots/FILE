@@ -42,6 +42,23 @@ function blobShadow(w, l) {
   return m;
 }
 function box(w, h, d, x, y, z) { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; }
+let beamTex = null, mistTex = null;
+// faisceau des phares projeté sur la route + nuage d'eau soulevé derrière la voiture
+function addEffects(v) {
+  if (!beamTex) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d');
+    for (const cx of [44, 84]) { const gr = g.createRadialGradient(cx, 250, 4, cx, 250, 240); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.save(); g.translate(cx, 250); g.scale(0.22, 1); g.translate(-cx, -250); g.fillStyle = gr; g.fillRect(-400, 0, 900, 256); g.restore(); }
+    beamTex = new THREE.CanvasTexture(c); beamTex.colorSpace = THREE.SRGBColorSpace;
+    mistTex = radialTex([[0, 'rgba(255,255,255,0.9)'], [0.5, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
+  }
+  const beam = new THREE.Mesh(new THREE.PlaneGeometry(6, 15), new THREE.MeshBasicMaterial({ map: beamTex, color: new THREE.Color(0.11, 0.115, 0.14), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  beam.rotation.x = -Math.PI / 2; beam.position.set(0, 0.03, -v.len - 7.2); beam.layers.set(1); beam.renderOrder = 2;
+  v.root.add(beam);
+  v.mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTex, color: 0xaab4d0, transparent: true, opacity: 0, depthWrite: false }));
+  v.mist.position.set(0, 0.5, v.len + 1.5); v.mist.layers.set(1);
+  v.root.add(v.mist);
+}
 
 // spline de Catmull-Rom uniforme sur un tableau de nombres
 function cr(arr, t) {
@@ -230,6 +247,7 @@ function rigImported(src, def, paint) {
 export function createCar(def, paint) {
   const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : buildProcedural(def, paint);
   v.def = def; v.wheelAngle = 0; v.roll = 0; v.pitch = 0;
+  addEffects(v);
   return v;
 }
 export async function resolveModels() {
@@ -250,6 +268,7 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
   v.chassis.rotation.z = v.roll;
   v.chassis.rotation.x = v.pitch;
   v.chassis.position.y = Math.sin(time * 31 + v.wheelAngle) * 0.004 * Math.min(1, Math.abs(speed) / 30);
+  if (v.mist) { const a = THREE.MathUtils.clamp((Math.abs(speed) - 10) / 45, 0, 1); v.mist.material.opacity = a * (0.16 + Math.random() * 0.1); const s = 2.6 + a * 2.2 + Math.random() * 0.8; v.mist.scale.set(s, s * 0.42, 1); v.mist.position.z = v.len + 1.2 + a * 1.4; }
   const b = braking ? 2.6 : 1.1;
   for (const m of v.tailMats) m.color.setRGB(b, 0.02 * b, 0.01 * b);
   for (const g of v.glows) { g.material.opacity = braking ? 1 : 0.55; g.scale.set(braking ? 0.5 : 0.36, braking ? 0.28 : 0.2, 1); }

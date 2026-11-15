@@ -26,7 +26,7 @@ const tuning = store.get('tuning', {});
 const opts = Object.assign({ qual: 'auto', autoGas: false, son: true }, store.get('opts', {}));
 if (opts.v !== 2) { opts.autoGas = false; opts.v = 2; }
 const setup = Object.assign({ track: 0, diff: 1, laps: 3 }, store.get('setup', {}));
-const best = store.get('best', {});
+const best = store.get('best2', {}); // records des circuits agrandis
 let selCar = params.get('modele') ? 0 : Math.max(0, CARS.findIndex(c => c.id === store.get('car', CARS[0].id)));
 if (params.get('q')) opts.qual = params.get('q');
 setup.track = clamp(setup.track | 0, 0, TRACKS.length - 1);
@@ -67,13 +67,16 @@ function setupPost() {
   bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0);
   composer.addPass(bloomPass);
   finalPass = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, amt: { value: 0 } },
+    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; varying vec2 vUv;
+      float hsh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
       void main(){ vec2 c = vec2(0.5,0.56); vec2 d = vUv - c; float r = length(d*vec2(1.0,1.25));
         float k = smoothstep(0.28, 0.85, r) * 0.05 * amt;
         vec3 col = vec3(0.); for(int i=0;i<8;i++){ float t = float(i)/7.; col += texture2D(tDiffuse, vUv - d*k*t).rgb; } col /= 8.;
+        col.r = mix(col.r, texture2D(tDiffuse, vUv - d*0.006*r).r, 0.7); col.b = mix(col.b, texture2D(tDiffuse, vUv + d*0.006*r).b, 0.7);
         col *= 1.0 - 0.45*smoothstep(0.4, 1.0, r);
+        col *= 1.0 + (hsh(vUv*731.0 + fract(time)*17.0) - 0.5) * 0.07;
         gl_FragColor = vec4(col,1.); }`,
   });
   composer.addPass(finalPass);
@@ -111,10 +114,10 @@ function spawn(defIdx, slot, isPlayer, paint, name, skill) {
   const def = CARS[defIdx], vis = createCar(def, paint);
   const row = Math.floor(slot / 2), side = slot % 2 ? 1 : -1;
   const idx = T.N - Math.round((8 + row * 9 + (side > 0 ? 3 : 0)) / T.ds);
-  T.point(idx, side * 2.7, tmp);
+  T.point(idx, side * 3.6, tmp);
   const c = { def, vis, phys: physFromStats(carStats(def)), x: tmp.x, z: tmp.z, h: T.heading(idx), v: 0, u: 0, steer: 0, idx: ((idx % T.N) + T.N) % T.N, lap: 0, total: 0,
     lapStart: 0, bestLap: 0, finished: false, finishTime: 0, rank: 0, isPlayer, name, yaw: 0, lon: 0, braking: false, onWall: false,
-    ai: { off: side * 2.7, base: side * 2.7, t: 1 + slot * 0.4, skill } };
+    ai: { off: side * 3.6, base: side * 3.6, t: 1 + slot * 0.4, skill } };
   c.total = c.idx - T.N;
   vis.root.position.set(c.x, 0, c.z); vis.root.rotation.y = c.h;
   scene.add(vis.root); cars.push(c);
@@ -141,9 +144,9 @@ function gridUp(withPlayer) {
 
 function aiInput(c, dt) {
   const P = c.phys, sk = c.ai.skill, N = T.N, ai = c.ai;
-  ai.t -= dt; if (ai.t < 0) { ai.t = 2 + Math.random() * 4; ai.base = (Math.random() * 2 - 1) * 4.4; }
+  ai.t -= dt; if (ai.t < 0) { ai.t = 2 + Math.random() * 4; ai.base = (Math.random() * 2 - 1) * (LIMIT - 2.6); }
   const kA = T.k[(c.idx + Math.round((14 + c.v * 0.5) / T.ds)) % N];
-  let target = clamp(ai.base * 0.6 + clamp(kA * 70, -1, 1) * 3.2, -5.4, 5.4);
+  let target = clamp(ai.base * 0.6 + clamp(kA * 70, -1, 1) * 4.6, -(LIMIT - 1.6), LIMIT - 1.6);
   const myLat = T.lateral(c.x, c.z, c.idx);
   let slow = 0;
   for (const o of cars) {
@@ -152,7 +155,7 @@ function aiInput(c, dt) {
     const dm = d * T.ds;
     if (dm > -1 && dm < 16) {
       const ol = T.lateral(o.x, o.z, o.idx);
-      if (Math.abs(ol - myLat) < 2.6) { target = clamp(ol + (myLat >= ol ? 3.2 : -3.2), -5.6, 5.6); if (Math.abs(target - ol) < 2.4) target = clamp(ol + (ol > 0 ? -3.2 : 3.2), -5.6, 5.6); if (dm < 6.5 && c.v > o.v) slow = 0.5; }
+      if (Math.abs(ol - myLat) < 2.6) { target = clamp(ol + (myLat >= ol ? 3.4 : -3.4), -(LIMIT - 1.4), LIMIT - 1.4); if (Math.abs(target - ol) < 2.4) target = clamp(ol + (ol > 0 ? -3.4 : 3.4), -(LIMIT - 1.4), LIMIT - 1.4); if (dm < 6.5 && c.v > o.v) slow = 0.5; }
     }
   }
   ai.off += clamp(target - ai.off, -2.4 * dt, 2.4 * dt);
@@ -243,7 +246,7 @@ function onLap(c) {
     if (c.isPlayer) {
       const id = TRACKS[setup.track].id;
       const rec = !best[id] || lt < best[id];
-      if (rec) { best[id] = lt; store.set('best', best); }
+      if (rec) { best[id] = lt; store.set('best2', best); }
       flash((rec ? 'Record du circuit ' : 'Tour ') + fmt(lt));
     }
   }
@@ -329,23 +332,25 @@ function pollPad(dt) {
 addEventListener('touchstart', () => { if (pad.used) { pad.used = false; app.classList.remove('pad'); } }, { passive: true });
 
 // ---------- caméra ----------
-let camH = 0, garageAng = 0.6, garageDrag = null, demoAng = 0;
+let camH = 0, camRoll = 0, garageAng = 0.6, garageDrag = null, demoAng = 0;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 function chaseCam(c, dt, snap) {
   const portrait = H > W;
   camH = snap ? c.h : camH + wrap(c.h - camH) * (1 - Math.exp(-5.5 * dt));
   const ratio = clamp(Math.abs(c.v) / 95, 0, 1);
-  const dist = (portrait ? 8.2 : 5.7) + ratio * 1.2, hgt = portrait ? 2.5 : 1.6;
+  // le champ de vision s'élargit avec la vitesse ; la caméra se rapproche d'autant pour que la voiture garde la même taille
+  const fov0 = portrait ? 72 : 54, fov = fov0 + ratio * 12;
+  const dist = (portrait ? 8.2 : 5.6) * Math.tan(fov0 * Math.PI / 360) / Math.tan(camera.fov * Math.PI / 360), hgt = portrait ? 2.5 : 1.6;
   let x = c.x + Math.sin(camH) * dist, z = c.z + Math.cos(camH) * dist;
   // la caméra reste entre les glissières
   const i = T.nearest(x, z, c.idx, 10), d = T.lateral(x, z, i);
-  if (Math.abs(d) > 7.4) { const s = Math.sign(d), p = Math.abs(d) - 7.4; x -= -T.tz[i] * s * p; z -= T.tx[i] * s * p; }
+  if (Math.abs(d) > LIMIT + 0.5) { const s = Math.sign(d), p = Math.abs(d) - LIMIT - 0.5; x -= -T.tz[i] * s * p; z -= T.tx[i] * s * p; }
   const shake = (c.bump || 0) * 0.25 + ratio * ratio * 0.012;
   camPos.set(x + (Math.random() - 0.5) * shake, hgt + (Math.random() - 0.5) * shake, z);
-  if (snap) camera.position.copy(camPos); else camera.position.lerp(camPos, 1 - Math.exp(-14 * dt));
+  camera.position.copy(camPos); // position rigide : pas de retard qui éloignerait la voiture à haute vitesse
   camLook.set(c.x - Math.sin(camH) * 7, 0.85, c.z - Math.cos(camH) * 7);
   camera.lookAt(camLook);
-  const fov = (portrait ? 72 : 54) + ratio * 13;
+  camRoll += (clamp(-c.yaw * 0.07, -0.05, 0.05) - camRoll) * (1 - Math.exp(-5 * dt)); camera.rotateZ(camRoll);
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
   c.bump = (c.bump || 0) * Math.exp(-6 * dt);
 }
@@ -616,7 +621,7 @@ function frame(now) {
     const f = cars[0] && (mode === 'race' || mode === 'count') ? player : cars[0];
     world.updateRain(camera, dt, f ? -Math.sin(f.h) * f.v : 0, f ? -Math.cos(f.h) * f.v : 0);
   }
-  if (composer) { finalPass.uniforms.amt.value = blur; composer.render(dt); } else renderer.render(scene, camera);
+  if (composer) { finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time; composer.render(dt); } else renderer.render(scene, camera);
   // résolution adaptative en mode Auto
   if (opts.qual === 'auto' && mode !== 'pause') {
     fpsAcc += dt; fpsN++;
