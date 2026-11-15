@@ -14,6 +14,7 @@ add_library(agr_editor_core STATIC
     core/src/GameExport.cpp
     core/src/AndroidExport.cpp
     core/src/games/Platformer.cpp
+    core/src/games/ArenaBattle.cpp
     core/src/games/Adventure25D.cpp
     core/src/games/Arena.cpp
     core/src/games/Racing.cpp

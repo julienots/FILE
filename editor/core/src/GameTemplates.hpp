@@ -135,5 +135,6 @@ void buildIdle(Scene& scene);
 void buildTycoon(Scene& scene);
 void buildArena(Scene& scene);
 void buildAdventure25D(Scene& scene);
+void buildArenaBattle(Scene& scene);
 
 } // namespace agr::editor::games

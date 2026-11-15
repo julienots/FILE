@@ -44,6 +44,43 @@ end
 Les actions sont enregistrées dans `assets/input.agrinput` (JSON) et exportées avec le jeu ; elles sont
 évaluées une fois par image par le moteur. Les modèles Platformer 2D et Vitrine 3D les utilisent.
 
+## Gestes tactiles
+
+Le moteur reconnaît les gestes à chaque image (`agr::GestureRecognizer`, mis à jour par `Engine`) à partir
+des doigts ; sur PC, le bouton gauche de la souris agit comme un doigt et la molette comme un pincement,
+donc tout se teste sans téléphone. Coordonnées en pixels de fenêtre, comme `agr.camera.screenToWorld`.
+
+| Geste | Quand |
+|---|---|
+| `tap` | doigt levé en moins de 0,35 s sans avoir bougé de plus de 14 px |
+| `doubleTap` | deuxième toucher à moins de 0,35 s et 40 px du premier |
+| `longPress` | doigt posé 0,5 s sans bouger |
+| `dragBegin`, `drag`, `dragEnd` | un doigt qui glisse (au-delà de 14 px) ; `dragBegin` porte le mouvement depuis l'appui |
+| `swipe` | au lâcher d'un glisser rapide (≥ 900 px/s), avec la vitesse `vx, vy` |
+| `pinch` | deux doigts : `scale` (> 1 = écartés) et `dx, dy` (déplacement du centre) ; molette sur PC |
+
+```lua
+for _, g in ipairs(agr.input.gestures()) do
+    if g.type == "tap" and not agr.ui.pointerOverUI() then
+        local x, y, z = agr.camera.screenToWorld(g.x, g.y)   -- point du sol touché
+        self:select(x, z)
+    elseif g.type == "dragEnd" then
+        self:drop(g.x, g.y)
+    end
+end
+local dx, dy = agr.input.drag()          -- glissé de cette image (0, 0 sinon)
+local zoom, panX, panY = agr.input.pinch()
+```
+
+**Caméra de stratégie prête à l'emploi** : `assets://scripts/strategy_camera.lua` (glisser pour déplacer en
+gardant le sol sous le doigt, pincer ou molette pour zoomer vers les doigts, inertie au lâcher, limites
+`minX..maxX`, `minY..maxY`, zoom `minZoom..maxZoom` ; caméra 3D ou orthographique 2D ; les gestes commencés
+sur l'interface sont ignorés). À poser sur la caméra d'un jeu de village, de carte ou de tactique.
+
+**Glisser une carte sur le terrain** : le modèle *Jeu : Duel des Tours* le montre (`duel_game.lua`) :
+au `dragBegin`, `agr.ui.isPressed(carte)` dit quelle carte est tenue ; pendant `drag`, un repère suit
+`screenToWorld(g.x, g.y)` ; au `dragEnd`, l'unité est posée si l'endroit est permis.
+
 ## Dans l'éditeur
 
 *Affichage › Entrées* : liste des actions, type, zone morte, liaisons. Pour une touche ou un bouton de
@@ -56,3 +93,5 @@ action s'affiche en direct. Chaque modification est enregistrée.
   exposée aux scripts).
 - Pas de vibration des manettes (la vibration du téléphone existe : `agr.device.vibrate`).
 - Les manettes n'ont pas été testées sur Android avec un vrai appareil.
+- Les gestes sont testés avec des touchers simulés et la souris, pas encore sur un vrai téléphone.
+- Pas de rotation à deux doigts.

@@ -103,6 +103,8 @@ composant).
 | `agr.locale.get()`, `agr.locale.set(code)`, `agr.locale.list()` | langue courante, changement (mémorisé dans la sauvegarde locale), langues disponibles |
 | `agr.input.mouseDown(b)`, `mousePressed(b)`, `mousePosition()` | `b` : 0 gauche, 1 milieu, 2 droit ; position en pixels de fenêtre |
 | `agr.input.touchCount()`, `agr.input.touch(i)` → x, y, phase | phase : `"began"`, `"moved"`, `"stationary"`, `"ended"` |
+| `agr.input.gestures()` → `{ {type, x, y, sx, sy, dx, dy, scale, vx, vy}, ... }` | **gestes** de cette image : `"tap"`, `"doubleTap"`, `"longPress"`, `"dragBegin"`, `"drag"`, `"dragEnd"`, `"swipe"`, `"pinch"` ; `x, y` position, `sx, sy` départ, `dx, dy` déplacement de l'image (pour `"dragBegin"` : depuis l'appui, le seuil de 14 px compris), `scale` facteur du pincement, `vx, vy` vitesse (pixels/s). La souris (bouton gauche) agit comme un doigt et la molette comme un pincement : tout se teste sur PC. Voir [INPUT.md](INPUT.md#gestes-tactiles) |
+| `agr.input.drag()` → dx, dy ; `agr.input.pinch()` → facteur, panX, panY ; `agr.input.tapped()` → x, y, nombre | raccourcis : glissé d'un doigt, pincement à deux doigts (zoom et déplacement), toucher bref de cette image (`nil` sinon) — caméras de stratégie, cartes à poser |
 | `agr.screen.size()` → largeur, hauteur | taille de la fenêtre dans les unités du toucher / de la souris |
 | `agr.time.delta()`, `fixedDelta()`, `total()`, `frame()` | temps (secondes) |
 | `agr.time.now()` | heure réelle en secondes depuis 1970 (gains hors ligne, récompenses quotidiennes) |

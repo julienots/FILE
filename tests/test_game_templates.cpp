@@ -1130,4 +1130,253 @@ TEST_CASE("launcher menu: a button opens its game scene (agr.loadScene)") {
     h.noScriptErrors();
 }
 
+TEST_CASE("arena battle: menu, drag and tap to deploy, elixir, hand cycling, units cross the bridges and fight, towers, AI, fireball, crowns, trophies") {
+    GameHarness h(SceneTemplate::GameArenaBattle);
+    h.frames(5);
+    h.noScriptErrors();
+    auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
+    CHECK(h.field("Game", "state") == "menu");
+    CHECK(h.active("Menu"));
+    CHECK_FALSE(h.active("Card Tray"));
+    CHECK(h.text("TrophiesText").find("100") != std::string::npos);
+    h.clickUI("BattleButton");
+    h.frames(2);
+    CHECK(h.field("Game", "state") == "battle");
+    CHECK_FALSE(h.active("Menu"));
+    CHECK(h.active("Card Tray"));
+    CHECK(h.text("TimerText") == "3:00");
+    ok("math.floor(agr.find('Game'):script().elixir.blue) == 5");
+    // Tests drive the opponent themselves.
+    h.lua("local g = agr.find('Game'):script(); g.thinkAI = function() end");
+    // A known hand: knight, archer, giant, goblin; next fireball, then tank.
+    h.lua("local g = agr.find('Game'):script(); g.decks.blue = { hand = { 'knight', 'archer', 'giant', 'goblin' }, queue = { 'fireball', 'tank' } };"
+          " g.elixir.blue = 10; g:refreshCards()");
+    h.frames(2);
+    ok("agr.find('Card 1'):find('Label'):text():find('Chevalier')");
+    ok("agr.find('NextCard'):text():find('Boule de feu')");
+
+    // ---- drag card 1 onto the blue half: a knight appears where the finger is released.
+    const math::Vec4 r = h.scene().registry().get<UIRectComponent>(h.find("Card 1")).screenRect;
+    const math::Vec2 from{r.x + r.z * 0.5f, r.y + r.w * 0.5f};
+    const math::Vec2 to = h.worldToScreen(-6.0f, 0.0f, -3.0f);
+    h.input().setMousePosition(from);
+    h.frames(1);
+    h.input().setMouseButton(MouseButton::Left, true);
+    h.frames(2);
+    for (int i = 1; i <= 12; ++i) {
+        h.input().setMousePosition(from + (to - from) * (static_cast<float>(i) / 12.0f));
+        h.frames(1);
+        if (i == 6) {
+            CHECK(h.active("Drop Marker"));
+            CHECK(h.active("Deploy Zone"));
+        }
+    }
+    h.input().setMouseButton(MouseButton::Left, false);
+    h.frames(3);
+    CHECK_FALSE(h.active("Drop Marker"));
+    ok("#agr.find('Game'):script().units.blue == 1");
+    ok("math.abs(agr.find('Game'):script().elixir.blue - 7) < 0.2");
+    h.lua("local u = agr.find('Game'):script().units.blue[1]; local x, _, z = u:position();"
+          " assert(u:name():find('^Knight blue'), u:name()); assert(math.abs(x + 6) < 0.8 and math.abs(z + 3) < 0.8, x .. ' ' .. z)");
+    // The played card goes to the back of the queue; the next one takes its slot.
+    ok("agr.find('Game'):script().decks.blue.hand[1] == 'fireball'");
+    ok("agr.find('NextCard'):text():find('Mini')");
+
+    // ---- tap a card, then tap the arena: archers (2). The enemy half is refused.
+    h.lua("agr.find('Game'):script().elixir.blue = 10; agr.find('Game'):script():refreshCards()");
+    h.clickUI("Card 2");
+    ok("agr.find('Game'):script().selected == 2");
+    h.clickWorld(5.0f, 0.0f, 0.0f);
+    ok("agr.find('Game'):script().selected == 2");  // refused: still selected
+    ok("#agr.find('Game'):script().units.blue == 1");
+    h.clickWorld(-7.0f, 0.0f, 3.0f);
+    h.frames(2);
+    ok("agr.find('Game'):script().selected == nil");
+    ok("#agr.find('Game'):script().units.blue == 3");
+    // A card costing more than the elixir is disabled.
+    h.lua("local g = agr.find('Game'):script(); g.elixir.blue = 1; g:refreshCards()");
+    ok("agr.find('Card 3'):get('UIButton', 'interactable') == false");
+    // Elixir refills: about 1 every 2.8 s.
+    h.seconds(2.9);
+    ok("agr.find('Game'):script().elixir.blue >= 2");
+
+    // ---- the units walk to the enemy side across a bridge and attack a princess tower (which shoots back).
+    h.lua("FAR = -99");
+    for (int i = 0; i < 40; ++i) {
+        h.seconds(0.5);
+        h.lua("for _, u in ipairs(agr.find('Game'):script().units.blue) do local x = u:position(); FAR = math.max(FAR, x) end");
+    }
+    ok("FAR > 4");
+    ok("agr.find('Red Princess N'):script().life < 1400 or agr.find('Red Princess S'):script().life < 1400");
+
+    // ---- the enemy towers shoot: an AI knight dropped in front of a blue tower dies to it.
+    h.lua("local g = agr.find('Game'):script(); g:clearUnits(); g.elixir.red = 10;"
+          " g.decks.red = { hand = { 'knight', 'goblin', 'giant', 'fireball' }, queue = { 'archer', 'tank' } }; assert(g:play('red', 2, 1.6, -4.5))");
+    h.frames(3);
+    ok("#agr.find('Game'):script().units.red == 3");
+    ok("agr.find('Game'):script():play('red', 1, -3, 0) == false");  // red cannot deploy on the blue side
+    h.seconds(12.0);
+    ok("#agr.find('Game'):script().units.red < 3");
+
+    // ---- the AI plays on its own.
+    h.lua("local g = agr.find('Game'):script(); g:clearUnits(); g.thinkAI = nil; g.elixir.red = 10; g.aiThreshold = 6");
+    h.seconds(1.5);
+    ok("#agr.find('Game'):script().units.red >= 1 or agr.find('Game'):script().elixir.red < 6");
+    h.lua("local g = agr.find('Game'):script(); g.thinkAI = function() end; g:clearUnits()");
+
+    // ---- fireball: area damage on enemy units and towers.
+    h.lua("local g = agr.find('Game'):script(); g.decks.blue.hand[1] = 'fireball'; g.elixir.blue = 10;"
+          " assert(g:play('blue', 1, 9, -4.5))");
+    h.seconds(1.0);
+    ok("agr.find('Red Princess N'):script().life <= 1400 - 130");
+
+    // ---- a princess tower falls: one crown, the king wakes up, the lane opens for deploying.
+    h.lua("agr.find('Red Princess N'):script():damage(5000)");
+    h.frames(3);
+    CHECK_FALSE(h.active("Red Princess N"));
+    ok("agr.find('Game'):script().crowns.blue == 1");
+    ok("agr.find('Red King'):script().awake == true");
+    CHECK(h.text("CrownsText").find("1 - 0") != std::string::npos);
+    ok("agr.find('Game'):script():canDeploy('blue', { cost = 3 }, 4, -4) == true");
+    ok("agr.find('Game'):script():canDeploy('blue', { cost = 3 }, 4, 4) == false");
+    // ---- the king tower falls: three crowns, victory, +30 trophies, saved.
+    h.lua("agr.find('Red King'):script():damage(99999)");
+    h.frames(3);
+    CHECK(h.field("Game", "state") == "over");
+    CHECK(h.active("Menu"));
+    CHECK(h.text("MenuTitle").find("Victoire") != std::string::npos);
+    ok("agr.save.get('duel.trophies') == 130");
+    CHECK(h.text("TrophiesText").find("130") != std::string::npos);
+
+    // ---- a new battle resets the towers; time out with a crown down = defeat (-20).
+    h.clickUI("BattleButton");
+    h.frames(3);
+    CHECK(h.field("Game", "state") == "battle");
+    CHECK(h.active("Red Princess N"));
+    CHECK(h.active("Red King"));
+    ok("agr.find('Red King'):script().awake == false");
+    ok("#agr.find('Units'):children() == 0");
+    h.lua("local g = agr.find('Game'):script(); g.thinkAI = function() end; agr.find('Blue Princess S'):script():damage(99999)");
+    h.frames(2);
+    ok("agr.find('Game'):script().crowns.red == 1");
+    h.lua("agr.find('Game'):script().time = 61");
+    h.seconds(1.5);
+    ok("agr.find('Game'):script().double == true");
+    h.lua("agr.find('Game'):script().time = 0.1");
+    h.frames(10);
+    CHECK(h.field("Game", "state") == "over");
+    CHECK(h.text("MenuTitle").find("Défaite") != std::string::npos);
+    ok("agr.save.get('duel.trophies') == 110");
+    // ---- tie at the end of time: sudden-death overtime, then a draw.
+    h.clickUI("BattleButton");
+    h.frames(3);
+    h.lua("local g = agr.find('Game'):script(); g.thinkAI = function() end; g.time = 0.05");
+    h.frames(5);
+    ok("agr.find('Game'):script().overtime == true");
+    CHECK(h.field("Game", "state") == "battle");
+    h.lua("agr.find('Game'):script().time = 0.05");
+    h.frames(5);
+    CHECK(h.text("MenuTitle").find("galit") != std::string::npos);
+    h.noScriptErrors();
+}
+
+TEST_CASE("strategy camera script: drag keeps the ground under the finger, inertia, pinch zoom, bounds, UI ignored") {
+    GameHarness h(SceneTemplate::GameArenaBattle);
+    h.frames(3);
+    h.lua("agr.find('Menu'):setActive(false); agr.find('Card Tray'):setActive(false)");
+    auto& sc = h.scene().registry().emplace<ScriptComponent>(h.find("Main Camera"));
+    sc.script = "assets://scripts/strategy_camera.lua";
+    sc.properties = R"({"minX": -6, "maxX": 6, "minY": -4, "maxY": 6, "maxZoom": 2})";
+    h.frames(3);
+    auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
+    ok("agr.find('Main Camera'):script() ~= nil");
+    const math::Vec2 size = h.screen();
+    const math::Vec2 c = size * 0.5f, to = c + math::Vec2{-150.0f, 60.0f};
+    const math::Vec3 p0 = h.position("Main Camera");
+    h.lua("W0 = { agr.camera.screenToWorld(" + std::to_string(c.x) + ", " + std::to_string(c.y) + ", 0) }");
+    // ---- slow drag: the ground point under the finger follows it; no drift once held still.
+    h.input().setMousePosition(c);
+    h.frames(1);
+    h.input().setMouseButton(MouseButton::Left, true);
+    h.frames(1);
+    for (int i = 1; i <= 15; ++i) {
+        h.input().setMousePosition(c + (to - c) * (static_cast<float>(i) / 15.0f));
+        h.frames(1);
+    }
+    h.frames(6);
+    h.input().setMouseButton(MouseButton::Left, false);
+    h.frames(2);
+    const math::Vec3 p1 = h.position("Main Camera");
+    CHECK(p1.x > p0.x + 1.0f);  // the finger went left: the view moves right
+    CHECK(p1.y == doctest::Approx(p0.y));
+    h.lua("local x, _, z = agr.camera.screenToWorld(" + std::to_string(to.x) + ", " + std::to_string(to.y) + ", 0);"
+          " assert(math.abs(x - W0[1]) < 0.2 and math.abs(z - W0[3]) < 0.2, string.format('%.2f %.2f vs %.2f %.2f', x, z, W0[1], W0[3]))");
+    h.frames(30);
+    CHECK(h.position("Main Camera").x == doctest::Approx(p1.x).epsilon(0.001));  // held still before release: no momentum
+    // ---- flick: the view keeps going after the release, then stops.
+    h.input().setMousePosition(c);
+    h.frames(1);
+    h.input().setMouseButton(MouseButton::Left, true);
+    h.frames(1);
+    for (int i = 1; i <= 4; ++i) {
+        h.input().setMousePosition(c + math::Vec2{0.0f, 25.0f * static_cast<float>(i)});
+        h.frames(1);
+    }
+    h.input().setMouseButton(MouseButton::Left, false);
+    h.frames(1);
+    const math::Vec3 released = h.position("Main Camera");
+    h.frames(20);
+    const math::Vec3 coasted = h.position("Main Camera");
+    CHECK(coasted.z < released.z - 0.2f);  // finger down = the view goes up the screen (-z)
+    h.frames(120);
+    const math::Vec3 rest = h.position("Main Camera");
+    h.frames(10);
+    CHECK(h.position("Main Camera").z == doctest::Approx(rest.z).epsilon(0.001));
+    // ---- pinch with two fingers: zoom in (closer to the ground), clamped to maxZoom.
+    h.input().touchDown(1, c - math::Vec2{60.0f, 0.0f}, 1.0f);
+    h.input().touchDown(2, c + math::Vec2{60.0f, 0.0f}, 1.0f);
+    h.frames(2);
+    for (int i = 1; i <= 10; ++i) {
+        h.input().touchMove(1, c - math::Vec2{60.0f + 6.0f * static_cast<float>(i), 0.0f}, 1.0f);
+        h.input().touchMove(2, c + math::Vec2{60.0f + 6.0f * static_cast<float>(i), 0.0f}, 1.0f);
+        h.frames(1);
+    }
+    h.input().touchUp(1, c - math::Vec2{120.0f, 0.0f});
+    h.input().touchUp(2, c + math::Vec2{120.0f, 0.0f});
+    h.frames(2);
+    const double zoom = std::stod(h.field("Main Camera", "zoom"));
+    CHECK(zoom == doctest::Approx(2.0).epsilon(0.05));
+    CHECK(h.position("Main Camera").y < p0.y * 0.6f);
+    // ---- bounds: a long drag stops at maxX.
+    h.input().setMousePosition({size.x - 20.0f, c.y});
+    h.frames(1);
+    h.input().setMouseButton(MouseButton::Left, true);
+    h.frames(1);
+    for (int i = 1; i <= 20; ++i) {
+        h.input().setMousePosition({size.x - 20.0f - (size.x - 40.0f) * static_cast<float>(i) / 20.0f, c.y});
+        h.frames(1);
+    }
+    h.frames(3);
+    h.input().setMouseButton(MouseButton::Left, false);
+    h.frames(2);
+    CHECK(std::stod(h.field("Main Camera", "fx")) == doctest::Approx(6.0));
+    // ---- a drag that starts on the interface (a menu) does not move the view.
+    h.lua("agr.find('Menu'):setActive(true)");
+    h.frames(2);
+    const math::Vec3 before = h.position("Main Camera");
+    h.input().setMousePosition(c);
+    h.frames(1);
+    h.input().setMouseButton(MouseButton::Left, true);
+    h.frames(1);
+    for (int i = 1; i <= 8; ++i) {
+        h.input().setMousePosition(c + math::Vec2{20.0f * static_cast<float>(i), 0.0f});
+        h.frames(1);
+    }
+    h.input().setMouseButton(MouseButton::Left, false);
+    h.frames(10);
+    CHECK(h.position("Main Camera").x == doctest::Approx(before.x));
+    CHECK(h.position("Main Camera").z == doctest::Approx(before.z));
+    h.noScriptErrors();
+}
+
 }

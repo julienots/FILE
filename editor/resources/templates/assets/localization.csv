@@ -275,3 +275,33 @@ plat.sign.spring,"Les ressorts propulsent très haut : des cristaux se cachent l
 plat.sign.crumble,"Les blocs fissurés s'effondrent : ne traînez pas dessus !","Cracked blocks crumble: don't linger on them!","Los bloques agrietados se derrumban: ¡no te quedes encima!"
 plat.sign.fish,"Les poissons sautent hors de l'eau : attendez le bon moment.","Fish leap out of the water: wait for the right moment.","Los peces saltan fuera del agua: espera el momento adecuado."
 plat.sign.cannon,"Les canons tirent quand on approche : sautez par-dessus les boulets.","Cannons fire as you approach: jump over the cannonballs.","Los cañones disparan cuando te acercas: salta sobre las balas."
+duel.title,"Duel des Tours","Tower Duel","Duelo de Torres"
+duel.battle,"Combat !","Battle!","¡Combate!"
+duel.intro,"Détruisez les tours adverses avant la fin des 3 minutes.
+Glissez une carte sur votre moitié de l'arène (ou touchez-la puis touchez l'arène). Chaque carte coûte de l'élixir, qui se recharge.
+La tour du roi vaut 3 couronnes.","Destroy the enemy towers before the 3 minutes run out.
+Drag a card onto your half of the arena (or tap it, then tap the arena). Each card costs elixir, which refills.
+The king's tower is worth 3 crowns.","Destruye las torres enemigas antes de que acaben los 3 minutos.
+Arrastra una carta a tu mitad de la arena (o tócala y luego toca la arena). Cada carta cuesta elixir, que se recarga.
+La torre del rey vale 3 coronas."
+duel.trophies,"Trophées : {1}","Trophies: {1}","Trofeos: {1}"
+duel.crowns,"Couronnes  {1} - {2}","Crowns  {1} - {2}","Coronas  {1} - {2}"
+duel.fight,"Combat !","Fight!","¡A luchar!"
+duel.next,"Suivante","Next","Siguiente"
+duel.cannot,"Impossible de poser ici","Can't deploy here","No se puede desplegar aquí"
+duel.double,"Double élixir !","Double elixir!","¡Doble elixir!"
+duel.overtime,"Prolongation : mort subite !","Overtime: sudden death!","Prórroga: ¡muerte súbita!"
+duel.towerDown,"Tour détruite !","Tower destroyed!","¡Torre destruida!"
+duel.towerLost,"Vous avez perdu une tour","You lost a tower","Has perdido una torre"
+duel.win,"Victoire !","Victory!","¡Victoria!"
+duel.lose,"Défaite","Defeat","Derrota"
+duel.draw,"Égalité","Draw","Empate"
+duel.result,"Couronnes : {1} - {2}","Crowns: {1} - {2}","Coronas: {1} - {2}"
+duel.gain,"+{1} trophées","+{1} trophies","+{1} trofeos"
+duel.loss,"-{1} trophées","-{1} trophies","-{1} trofeos"
+duel.card.knight,"Chevalier","Knight","Caballero"
+duel.card.archer,"Archères","Archers","Arqueras"
+duel.card.giant,"Géant","Giant","Gigante"
+duel.card.goblin,"Gobelins","Goblins","Duendes"
+duel.card.fireball,"Boule de feu","Fireball","Bola de fuego"
+duel.card.tank,"Mini-tank","Mini tank","Minitanque"

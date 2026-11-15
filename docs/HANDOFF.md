@@ -26,7 +26,7 @@ tests automatisés, docs, benchmarks ; ne jamais dire qu'un module est fini s'il
 | 7 Animation, audio, UI | ✅ | ANIMATION.md, AUDIO.md, UI.md |
 | 8 Android (player, export APK / AAB signés, mobile : zones sûres, capteurs, vibreur…) | ✅ | EXPORT.md |
 | 9.1–9.4 Prefabs, entrées / manettes, localisation, navigation (A* 2D, Recast/Detour), terrain, eau, particules 3D, shaders personnalisés + éditeur | ✅ | PREFABS.md, INPUT.md, LOCALIZATION.md, NAVIGATION.md, TERRAIN.md, SHADERS.md |
-| 9.5 Modèles de jeux : plateforme 2D, RPG 2D, RPG 3D, tower defense, cartes, simulation (ferme), stratégie, survie, course, idle, tycoon, multijoueur (arène, réseau UDP `agr.net`), **aventure 2.5D « Les Ruines d'Ambre »** | ✅ jouables et testés | NETWORK.md, ce document |
+| 9.5 Modèles de jeux : plateforme 2D, RPG 2D, RPG 3D, tower defense, cartes, simulation (ferme), stratégie, survie, course, idle, tycoon, multijoueur (arène, réseau UDP `agr.net`), **aventure 2.5D « Les Ruines d'Ambre »**, **combat de cartes « Duel des Tours »** | ✅ jouables et testés | NETWORK.md, ce document |
 
 Livrables : `dist/AGR-ENGINE-Android.apk` (menu + 13 jeux, arm64, signé avec une clé de
 démonstration), `dist/Les-Ruines-d-Ambre.apk` (le jeu 2.5D complet seul) et `dist/Robo-et-les-Cristaux.apk` (ces fichiers ne sont pas versionnés : `dist/`
@@ -87,6 +87,19 @@ ressorts, plateformes mobiles qui portent le héros, blocs friables, slimes, hé
 dessus), chauves-souris, poissons sauteurs, canons ; saut tolérant (coyote time, tampon) et saut
 variable ; cœurs, point de passage, résultats, choix des niveaux, options, histoire, sauvegarde
 `plat`. Test : « platformer » ; APK : test opt-in « demo game APK ».
+
+**« Duel des Tours »** (`SceneTemplate::GameArenaBattle`, `games/ArenaBattle.cpp`, scripts
+`duel_game/unit/tower.lua`) : combat de cartes en temps réel façon jeu mobile d'arène. Élixir (+1 toutes
+les 2,8 s, double dans la dernière minute), main de 4 cartes tirées d'un paquet de 6 (chevalier,
+archères, géant, gobelins, boule de feu, mini-tank) glissées sur sa moitié de l'arène ou touchées puis
+posées, unités qui passent par les ponts (maillage de navigation) et visent unités puis tours, tours qui
+tirent, roi qui s'éveille, couloir ouvert quand une tour de princesse tombe, IA adverse, 3 minutes puis
+mort subite, couronnes, trophées sauvegardés (`duel.trophies`). Test : « arena battle ».
+
+Moteur pour ce genre de jeux : gestes tactiles (`agr.input.gestures/drag/pinch/tapped`, INPUT.md) et
+caméra de stratégie `assets://scripts/strategy_camera.lua` (test « strategy camera script »). Ce qui
+manque pour un vrai jeu mobile en ligne : serveurs de jeu et matchmaking (seul `agr.net` en réseau local
+existe), comptes, achats intégrés, notifications, classements en ligne.
 
 Art et sons originaux : `tools/generate_ambre_assets.py`, `tools/generate_platformer_assets.py`.
 À faire : équilibrage sur appareil (difficulté, tactile), plus de niveaux, personnages dessinés à la

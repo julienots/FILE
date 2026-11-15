@@ -41,6 +41,7 @@ const char* templateName(SceneTemplate t) {
         case SceneTemplate::GameRacing: return "Jeu : Course";
         case SceneTemplate::GameArena: return "Jeu : Multijoueur (arène)";
         case SceneTemplate::GameAdventure25D: return "Jeu : Aventure 2.5D";
+        case SceneTemplate::GameArenaBattle: return "Jeu : Duel des Tours";
     }
     return "?";
 }
@@ -85,6 +86,8 @@ const char* templateDescription(SceneTemplate t) {
             return "Arène multijoueur : ramassez la pièce, le premier à 10 gagne. À deux sur le même clavier ou avec deux manettes, ou en réseau jusqu'à 4 (Héberger / Rejoindre, module agr.net : l'hôte simule la partie et la diffuse, les clients envoient leurs commandes). Base extensible pour d'autres jeux en ligne.";
         case SceneTemplate::GameAdventure25D:
             return "Aventure-action 2.5D complète : ruines en 3D vues de biais, personnages en sprites. Menu, 3 niveaux (3 gemmes ouvrent la sortie), boss, pause, game over, victoire, sauvegarde, commandes tactiles.";
+        case SceneTemplate::GameArenaBattle:
+            return "Combat de cartes en temps réel : élixir, main de 4 cartes glissées sur l'arène, unités qui trouvent leur chemin, tours, IA adverse, couronnes et trophées.";
     }
     return "";
 }
@@ -103,6 +106,7 @@ ProjectMode templateMode(SceneTemplate t) {
         case SceneTemplate::Empty2D:
         case SceneTemplate::Showcase2D:
         case SceneTemplate::GamePlatformer: return ProjectMode::Mode2D;
+        case SceneTemplate::GameArenaBattle: return ProjectMode::Mode3D;
         case SceneTemplate::GameAdventure25D: return ProjectMode::Mode25D;
         case SceneTemplate::GameArena: return ProjectMode::Mode2D;
         case SceneTemplate::GameRacing: return ProjectMode::Mode3D;
@@ -126,7 +130,7 @@ bool isGameTemplate(SceneTemplate t) { return static_cast<u8>(t) >= static_cast<
 
 std::vector<SceneTemplate> allTemplates() {
     std::vector<SceneTemplate> out;
-    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameAdventure25D); ++i) out.push_back(static_cast<SceneTemplate>(i));
+    for (u8 i = 0; i <= static_cast<u8>(SceneTemplate::GameArenaBattle); ++i) out.push_back(static_cast<SceneTemplate>(i));
     return out;
 }
 
@@ -580,6 +584,7 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
         case SceneTemplate::Showcase2D: buildShowcase2D(scene); break;
         case SceneTemplate::Showcase3D: buildShowcase3D(scene); break;
         case SceneTemplate::GamePlatformer: games::buildPlatformer(scene); break;
+        case SceneTemplate::GameArenaBattle: games::buildArenaBattle(scene); break;
         case SceneTemplate::GameAdventure25D: games::buildAdventure25D(scene); break;
         case SceneTemplate::GameArena: games::buildArena(scene); break;
         case SceneTemplate::GameRacing: games::buildRacing(scene); break;
