@@ -365,8 +365,89 @@ Physics3DWorld& physics3d(lua_State* L) {
     if (!m.physics3d) luaL_error(L, "3D physics is not enabled (Physics3DPlugin)");
     return *m.physics3d;
 }
-/// Entity methods drive the 3D body when the entity has a RigidBody, else the 2D one.
-bool is3D(lua_State* L, ecs::Entity e) { return sceneOf(L).registry().has<RigidBodyComponent>(e); }
+/// Entity methods drive the 3D body when the entity has a RigidBody or a CharacterController3D, else the 2D one.
+bool is3D(lua_State* L, ecs::Entity e) {
+    const auto& reg = sceneOf(L).registry();
+    return reg.has<RigidBodyComponent>(e) || reg.has<CharacterController3DComponent>(e);
+}
+int e_isGrounded(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    auto& m = implOf(L);
+    lua_pushboolean(L, m.physics3d && m.physics3d->isGrounded(e));
+    return 1;
+}
+int e_groundNormal(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    auto& m = implOf(L);
+    const auto n = m.physics3d ? m.physics3d->groundNormal(e) : std::nullopt;
+    if (!n) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushnumber(L, n->x);
+    lua_pushnumber(L, n->y);
+    lua_pushnumber(L, n->z);
+    return 3;
+}
+/// e:jointValue() -> hinge angle (radians), slider position or rope / spring length (m); nil without a joint.
+int e_jointValue(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    auto& m = implOf(L);
+    std::optional<float> v;
+    if (sceneOf(L).registry().has<Joint3DComponent>(e)) {
+        if (m.physics3d) v = m.physics3d->jointValue(e);
+    } else if (m.physics2d) {
+        v = m.physics2d->jointValue(e);
+    }
+    if (v) lua_pushnumber(L, *v);
+    else lua_pushnil(L);
+    return 1;
+}
+// ---- collision layers (names in assets://physics_layers.json)
+const PhysicsLayers& layersOf(lua_State* L) {
+    auto& m = implOf(L);
+    m.physicsLayers.refresh(m.vfs);
+    return m.physicsLayers;
+}
+u32 layerArg(lua_State* L, int idx) {
+    if (lua_type(L, idx) == LUA_TNUMBER) {
+        const lua_Integer i = luaL_checkinteger(L, idx);
+        if (i < 0 || i >= static_cast<lua_Integer>(PhysicsLayers::kCount)) luaL_error(L, "collision layer %d out of range (0..31)", static_cast<int>(i));
+        return static_cast<u32>(i);
+    }
+    const char* name = luaL_checkstring(L, idx);
+    const auto l = layersOf(L).find(name);
+    if (!l) luaL_error(L, "unknown collision layer '%s' (see assets/physics_layers.json)", name);
+    return *l;
+}
+/// agr.physics*.layer(name) -> index
+int p_layer(lua_State* L) {
+    lua_pushinteger(L, static_cast<lua_Integer>(layerArg(L, 1)));
+    return 1;
+}
+/// agr.physics*.mask(name or index, ...) -> bit mask (no argument: every layer)
+int p_mask(lua_State* L) {
+    const int n = lua_gettop(L);
+    u32 mask = n == 0 ? 0xFFFFFFFFu : 0u;
+    for (int i = 1; i <= n; ++i) mask |= 1u << layerArg(L, i);
+    lua_pushinteger(L, static_cast<lua_Integer>(mask));
+    return 1;
+}
+/// Optional mask argument of raycasts: an integer mask, a layer name or a table of names / indices.
+u32 maskArg(lua_State* L, int idx) {
+    if (lua_isnoneornil(L, idx)) return 0xFFFFFFFFu;
+    if (lua_type(L, idx) == LUA_TNUMBER) return static_cast<u32>(luaL_checkinteger(L, idx) & 0xFFFFFFFF);
+    if (lua_type(L, idx) == LUA_TSTRING) return 1u << layerArg(L, idx);
+    luaL_checktype(L, idx, LUA_TTABLE);
+    u32 mask = 0;
+    const lua_Integer len = static_cast<lua_Integer>(lua_rawlen(L, idx));
+    for (lua_Integer i = 1; i <= len; ++i) {
+        lua_rawgeti(L, idx, i);
+        mask |= 1u << layerArg(L, lua_gettop(L));
+        lua_pop(L, 1);
+    }
+    return mask;
+}
 math::Vec3 vecArgs(lua_State* L, int first, bool three) {
     return {static_cast<float>(luaL_checknumber(L, first)), static_cast<float>(luaL_checknumber(L, first + 1)),
             three ? static_cast<float>(luaL_optnumber(L, first + 2, 0.0)) : 0.0f};
@@ -675,7 +756,7 @@ int t_now(lua_State* L) {
 int p_raycast(lua_State* L) {
     const math::Vec2 o{static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2))};
     const math::Vec2 d{static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4))};
-    const auto hit = physics2d(L).raycast(o, d, static_cast<float>(luaL_optnumber(L, 5, 1000.0)));
+    const auto hit = physics2d(L).raycast(o, d, static_cast<float>(luaL_optnumber(L, 5, 1000.0)), maskArg(L, 6));
     if (!hit) {
         lua_pushnil(L);
         return 1;
@@ -695,7 +776,7 @@ int p_raycast(lua_State* L) {
 int p3_raycast(lua_State* L) {
     const math::Vec3 o{static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)), static_cast<float>(luaL_checknumber(L, 3))};
     const math::Vec3 d{static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)), static_cast<float>(luaL_checknumber(L, 6))};
-    const auto hit = physics3d(L).raycast(o, d, static_cast<float>(luaL_optnumber(L, 7, 1000.0)));
+    const auto hit = physics3d(L).raycast(o, d, static_cast<float>(luaL_optnumber(L, 7, 1000.0)), maskArg(L, 8));
     if (!hit) {
         lua_pushnil(L);
         return 1;
@@ -823,7 +904,8 @@ void openAgrLibrary(lua_State* L) {
         {"add", e_add}, {"remove", e_remove}, {"parent", e_parent}, {"children", e_children}, {"find", e_find},
         {"destroy", e_destroy}, {"script", e_script}, {"velocity", e_velocity}, {"setVelocity", e_setVelocity},
         {"applyForce", e_applyForce}, {"applyImpulse", e_applyImpulse}, {"setAngularVelocity", e_setAngularVelocity},
-        {"setActive", e_setActive}, {"isActive", e_isActive}, {nullptr, nullptr}};
+        {"setActive", e_setActive}, {"isActive", e_isActive}, {"isGrounded", e_isGrounded}, {"groundNormal", e_groundNormal},
+        {"jointValue", e_jointValue}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, methods);
     lua_setfield(L, -2, "__index");
@@ -846,7 +928,8 @@ void openAgrLibrary(lua_State* L) {
                                      {"gamepadPressed", i_gamepadPressed}, {"gamepadAxis", i_gamepadAxis},
                                      {nullptr, nullptr}};
     static const luaL_Reg time[] = {{"delta", t_delta}, {"fixedDelta", t_fixedDelta}, {"total", t_total}, {"frame", t_frame}, {"now", t_now}, {nullptr, nullptr}};
-    static const luaL_Reg physics[] = {{"raycast", p_raycast}, {"setGravity", p_setGravity}, {"gravity", p_gravity}, {nullptr, nullptr}};
+    static const luaL_Reg physics[] = {{"raycast", p_raycast}, {"setGravity", p_setGravity}, {"gravity", p_gravity},
+                                       {"layer", p_layer}, {"mask", p_mask}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, agr);
     lua_newtable(L);
@@ -865,7 +948,7 @@ void openAgrLibrary(lua_State* L) {
     lua_newtable(L);
     setFuncs(L, screen);
     lua_setfield(L, -2, "screen");
-    static const luaL_Reg physics3[] = {{"raycast", p3_raycast}, {"setGravity", p3_setGravity}, {nullptr, nullptr}};
+    static const luaL_Reg physics3[] = {{"raycast", p3_raycast}, {"setGravity", p3_setGravity}, {"layer", p_layer}, {"mask", p_mask}, {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, physics3);
     lua_setfield(L, -2, "physics3d");

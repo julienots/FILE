@@ -13,6 +13,12 @@ struct Collision3DEvent {
     bool trigger = false;
 };
 
+/// A Joint3D pulled harder than its breakForce: the joint was removed and `broken` set.
+struct JointBreak3DEvent {
+    ecs::Entity entity;
+    float force = 0.0f;  ///< N.
+};
+
 struct RaycastHit3D {
     ecs::Entity entity;  ///< Body entity.
     math::Vec3 point;
@@ -46,7 +52,19 @@ public:
     math::Vec3 gravity() const;
 
     const std::vector<Collision3DEvent>& events() const;
-    std::optional<RaycastHit3D> raycast(math::Vec3 origin, math::Vec3 direction, float maxDistance) const;
+    const std::vector<JointBreak3DEvent>& jointBreaks() const;
+    /// Closest hit on a body whose layer is in `layerMask` (all by default).
+    std::optional<RaycastHit3D> raycast(math::Vec3 origin, math::Vec3 direction, float maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
+    /// Hinge angle (radians), slider position or distance between the anchors (m) of the
+    /// Joint3D of an entity; nullopt without a live joint.
+    std::optional<float> jointValue(ecs::Entity e) const;
+    u32 jointCount() const;
+
+    // Character controllers (CharacterController3D): velocity is the desired motion, kept between
+    // steps (gravity is added in the air); grounded = standing on walkable ground.
+    bool hasCharacter(ecs::Entity e) const;
+    bool isGrounded(ecs::Entity e) const;
+    std::optional<math::Vec3> groundNormal(ecs::Entity e) const;
 
     std::optional<math::Vec3> velocity(ecs::Entity e) const;
     bool setVelocity(ecs::Entity e, math::Vec3 velocity);

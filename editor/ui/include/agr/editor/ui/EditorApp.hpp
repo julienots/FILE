@@ -86,6 +86,7 @@ private:
     DocsPanel m_docs;
     PackagesPanel m_packages;
     ProfilerPanel m_profiler;
+    PhysicsLayersPanel m_physicsLayers;
     ExportPanel m_export;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;

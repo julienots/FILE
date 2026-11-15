@@ -30,7 +30,7 @@ public:
 private:
     std::unique_ptr<ScriptEngine> m_scripts;
     void bindPhysics(Engine& engine);
-    SubscriptionId m_collisions, m_collisions3D, m_uiClicks, m_uiValues, m_uiTexts, m_animEvents;
+    SubscriptionId m_collisions, m_collisions3D, m_breaks2D, m_breaks3D, m_uiClicks, m_uiValues, m_uiTexts, m_animEvents;
     Engine* m_engine = nullptr;
     bool m_running = true;
     class NetPlugin* m_net = nullptr;

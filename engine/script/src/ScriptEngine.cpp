@@ -404,6 +404,17 @@ void ScriptEngine::dispatchAnimation(Scene& scene, const AnimationEvent& e) {
     });
 }
 
+void ScriptEngine::dispatchJointBreak(Scene& scene, ecs::Entity entity, float force) {
+    if (scene.generation() != m->sceneGeneration || !scene.valid(entity)) return;
+    m->scene = &scene;
+    auto it = m->instances.find(entity.packed());
+    if (it == m->instances.end() || !it->second.started) return;
+    m->call(it->second, "onJointBreak", [&] {
+        lua_pushnumber(m->L, force);
+        return 1;
+    });
+}
+
 void ScriptEngine::dispatchCollision(Scene& scene, const Collision2DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }
 void ScriptEngine::dispatchCollision(Scene& scene, const Collision3DEvent& event) { m->dispatch(scene, event.a, event.b, event.begin, event.trigger); }
 

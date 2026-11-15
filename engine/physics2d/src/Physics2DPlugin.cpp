@@ -22,6 +22,7 @@ void Physics2DPlugin::onUnload(Engine& engine) {
 void Physics2DPlugin::onFixedUpdate(Engine& engine, const FrameTime& time) {
     m_world.step(engine.scene(), static_cast<float>(time.fixedDeltaSeconds));
     for (const Collision2DEvent& e : m_world.events()) engine.events().publish(e);
+    for (const JointBreak2DEvent& e : m_world.jointBreaks()) engine.events().publish(e);
 }
 
 } // namespace agr

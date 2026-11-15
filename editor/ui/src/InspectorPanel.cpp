@@ -85,10 +85,61 @@ Edit drawField(EditorShared& s, const FieldInfo& f, void* comp, std::unordered_m
             if (ImGui::Checkbox("##v", &f.ref<bool>(comp))) e.changed = e.committed = true;
             break;
         case FieldType::Int32:
+            if (f.flags & FieldFlag_Layer) {
+                // Collision layer chosen by name.
+                i32& layer = f.ref<i32>(comp);
+                const u32 cur = static_cast<u32>(std::clamp(layer, 0, 31));
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##v", (std::to_string(cur) + " · " + s.physicsLayers.displayName(cur)).c_str())) {
+                    for (u32 i = 0; i < PhysicsLayers::kCount; ++i) {
+                        if (i > 7 && s.physicsLayers.names[i].empty() && i != cur) continue;  // unnamed high layers hidden
+                        if (ImGui::Selectable((std::to_string(i) + " · " + s.physicsLayers.displayName(i)).c_str(), i == cur)) {
+                            layer = static_cast<i32>(i);
+                            e.changed = e.committed = true;
+                        }
+                    }
+                    ImGui::Separator();
+                    if (ImGui::Selectable("Nommer les couches...")) s.showPhysicsLayers = true;
+                    ImGui::EndCombo();
+                }
+                break;
+            }
             ImGui::DragInt("##v", &f.ref<i32>(comp), std::max(f.speed, 0.2f), static_cast<int>(mn), static_cast<int>(mx));
             e.track();
             break;
         case FieldType::UInt32: {
+            if (f.flags & FieldFlag_LayerMask) {
+                // Set of collision layers: summary + popup of checkboxes.
+                u32& mask = f.ref<u32>(comp);
+                std::string summary;
+                if (mask == 0xFFFFFFFFu) summary = "Toutes";
+                else if (mask == 0) summary = "Aucune";
+                else {
+                    int n = 0;
+                    for (u32 i = 0; i < PhysicsLayers::kCount; ++i)
+                        if (mask & (1u << i)) {
+                            if (n++ < 3) summary += (summary.empty() ? "" : ", ") + s.physicsLayers.displayName(i);
+                        }
+                    if (n > 3) summary += " (+" + std::to_string(n - 3) + ")";
+                }
+                if (ImGui::Button((summary + "##mask").c_str(), {-FLT_MIN, 0})) ImGui::OpenPopup("##maskPopup");
+                if (ImGui::BeginPopup("##maskPopup")) {
+                    if (ImGui::SmallButton("Toutes")) mask = 0xFFFFFFFFu, e.changed = e.committed = true;
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Aucune")) mask = 0, e.changed = e.committed = true;
+                    ImGui::Separator();
+                    for (u32 i = 0; i < PhysicsLayers::kCount; ++i) {
+                        if (i > 7 && s.physicsLayers.names[i].empty()) continue;
+                        bool on = (mask & (1u << i)) != 0;
+                        if (ImGui::Checkbox((std::to_string(i) + " · " + s.physicsLayers.displayName(i)).c_str(), &on)) {
+                            mask = on ? (mask | (1u << i)) : (mask & ~(1u << i));
+                            e.changed = e.committed = true;
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                break;
+            }
             int v = static_cast<int>(f.ref<u32>(comp));
             if (ImGui::DragInt("##v", &v, std::max(f.speed, 0.2f), static_cast<int>(mn), f.hasRange() ? static_cast<int>(mx) : INT32_MAX))
                 f.ref<u32>(comp) = static_cast<u32>(std::max(0, v));
@@ -1079,6 +1130,7 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
             if (ImGui::SmallButton("...")) ImGui::OpenPopup("##compCtx");
         }
         if (open && !remove && beginPropertyTable("##props")) {
+            s.physicsLayers.refresh(s.ctx.engine().vfs());
             for (const FieldInfo& f : info.fields) total.merge(drawField(s, f, comp, m_eulerCache, id.value() ^ info.id));
             ImGui::EndTable();
         }

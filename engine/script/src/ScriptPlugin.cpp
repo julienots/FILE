@@ -36,6 +36,12 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_collisions3D = engine.events().subscribe<Collision3DEvent>([this](const Collision3DEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchCollision(m_engine->scene(), e);
     });
+    m_breaks2D = engine.events().subscribe<JointBreak2DEvent>([this](const JointBreak2DEvent& e) {
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchJointBreak(m_engine->scene(), e.entity, e.force);
+    });
+    m_breaks3D = engine.events().subscribe<JointBreak3DEvent>([this](const JointBreak3DEvent& e) {
+        if (m_running && !m_paused && m_engine) m_scripts->dispatchJointBreak(m_engine->scene(), e.entity, e.force);
+    });
     m_uiClicks = engine.events().subscribe<UIClickEvent>([this](const UIClickEvent& e) {
         if (m_running && !m_paused && m_engine) m_scripts->dispatchUI(m_engine->scene(), e);
     });
@@ -54,6 +60,8 @@ Status ScriptPlugin::onLoad(Engine& engine) {
 void ScriptPlugin::onUnload(Engine& engine) {
     engine.events().unsubscribe(m_collisions);
     engine.events().unsubscribe(m_collisions3D);
+    engine.events().unsubscribe(m_breaks2D);
+    engine.events().unsubscribe(m_breaks3D);
     engine.events().unsubscribe(m_uiClicks);
     engine.events().unsubscribe(m_uiValues);
     engine.events().unsubscribe(m_uiTexts);

@@ -289,6 +289,76 @@ int main() {
         bench("physics3d: step, 1000 boxes piling up", 1000, 60, [&] { world.step(scene, 1.0f / 60.0f); });
     }
     {
+        // 100 characters walking in circles on a floor with obstacles.
+        Scene scene;
+        const auto ground = scene.createEntity("Ground");
+        scene.registry().get<TransformComponent>(ground).position = {0, -0.5f, 0};
+        scene.registry().emplace<ColliderComponent>(ground).size = {200, 1, 200};
+        for (int i = 0; i < 50; ++i) {
+            const auto e = scene.createEntity("Pillar");
+            scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 10) * 6.0f - 27.0f, 1, static_cast<float>(i / 10) * 6.0f - 12.0f};
+            scene.registry().emplace<ColliderComponent>(e).size = {1, 2, 1};
+        }
+        std::vector<ecs::Entity> heroes;
+        for (int i = 0; i < 100; ++i) {
+            const auto e = scene.createEntity("Hero");
+            scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 10) * 5.0f - 25.0f, 0, static_cast<float>(i / 10) * 3.0f - 15.0f};
+            scene.registry().emplace<CharacterController3DComponent>(e);
+            heroes.push_back(e);
+        }
+        Physics3DWorld world;
+        for (int i = 0; i < 30; ++i) world.step(scene, 1.0f / 60.0f);
+        int frame = 0;
+        bench("physics3d: step, 100 characters walking", 100, 60, [&] {
+            ++frame;
+            for (usize i = 0; i < heroes.size(); ++i) {
+                const float a = static_cast<float>(frame) * 0.02f + static_cast<float>(i);
+                world.setVelocity(heroes[i], {std::cos(a) * 4.0f, 0.0f, std::sin(a) * 4.0f});
+            }
+            world.step(scene, 1.0f / 60.0f);
+        });
+    }
+    {
+        // 20 chains of 25 links on ball joints (500 joints), swinging.
+        Scene scene;
+        for (int c = 0; c < 20; ++c) {
+            ecs::Entity previous;
+            for (int l = 0; l < 25; ++l) {
+                const auto e = scene.createEntity("Link");
+                scene.registry().get<TransformComponent>(e).position = {static_cast<float>(c) * 2.0f + static_cast<float>(l) * 0.5f, 30.0f, 0};
+                scene.registry().emplace<RigidBodyComponent>(e);
+                scene.registry().emplace<ColliderComponent>(e).size = {0.5f, 0.15f, 0.15f};
+                auto& j = scene.registry().emplace<Joint3DComponent>(e);
+                j.type = JointType3D::Ball;
+                j.anchor = {-0.25f, 0, 0};
+                j.connectedBody = previous;
+                previous = e;
+            }
+        }
+        Physics3DWorld world;
+        for (int i = 0; i < 30; ++i) world.step(scene, 1.0f / 60.0f);
+        bench("physics3d: step, 500 ball joints (20 chains)", 500, 60, [&] { world.step(scene, 1.0f / 60.0f); });
+    }
+    {
+        Scene scene;
+        for (int c = 0; c < 20; ++c) {
+            ecs::Entity previous;
+            for (int l = 0; l < 25; ++l) {
+                const auto e = scene.createEntity("Link");
+                scene.registry().get<TransformComponent>(e).position = {static_cast<float>(c) * 15.0f + static_cast<float>(l) * 0.5f, 30.0f, 0};
+                scene.registry().emplace<RigidBody2DComponent>(e);
+                scene.registry().emplace<Collider2DComponent>(e).size = {0.5f, 0.15f};
+                auto& j = scene.registry().emplace<Joint2DComponent>(e);
+                j.anchor = {-0.25f, 0};
+                j.connectedBody = previous;
+                previous = e;
+            }
+        }
+        Physics2DWorld world;
+        for (int i = 0; i < 30; ++i) world.step(scene, 1.0f / 60.0f);
+        bench("physics2d: step, 500 hinge joints (20 chains)", 500, 60, [&] { world.step(scene, 1.0f / 60.0f); });
+    }
+    {
         registerScriptComponent();
         const auto root = std::filesystem::temp_directory_path() / "agr_bench_scripts";
         std::filesystem::create_directories(root);

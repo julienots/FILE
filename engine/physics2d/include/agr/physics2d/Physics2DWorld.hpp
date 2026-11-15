@@ -14,6 +14,12 @@ struct Collision2DEvent {
     bool trigger = false;
 };
 
+/// A Joint2D pulled harder than its breakForce: the joint was removed and `broken` set.
+struct JointBreak2DEvent {
+    ecs::Entity entity;  ///< Entity carrying the Joint2D.
+    float force = 0.0f;  ///< N.
+};
+
 struct RaycastHit2D {
     ecs::Entity entity;   ///< Entity of the collider hit.
     math::Vec2 point;
@@ -54,7 +60,15 @@ public:
 
     /// Contacts and trigger overlaps that began or ended during the last step.
     const std::vector<Collision2DEvent>& events() const;
-    std::optional<RaycastHit2D> raycast(math::Vec2 origin, math::Vec2 direction, float maxDistance) const;
+    /// Joints that broke during the last step.
+    const std::vector<JointBreak2DEvent>& jointBreaks() const;
+    /// Closest hit on a collider whose layer is in `layerMask` (all by default).
+    std::optional<RaycastHit2D> raycast(math::Vec2 origin, math::Vec2 direction, float maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
+    /// Current state of the Joint2D of an entity: hinge angle (radians), slider translation or
+    /// distance length (m); nullopt without a live joint.
+    std::optional<float> jointValue(ecs::Entity e) const;
+    /// Joints currently alive.
+    u32 jointCount() const;
 
     // Body control (the entity must carry a RigidBody2D whose body exists).
     std::optional<math::Vec2> velocity(ecs::Entity e) const;

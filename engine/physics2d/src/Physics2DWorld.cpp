@@ -72,7 +72,23 @@ struct Physics2DWorld::Impl {
         u32 shapes = 0;
     };
 
+    struct Joint {
+        b2JointId id = b2_nullJointId;
+        ecs::Entity entity;
+        JointType2D type = JointType2D::Hinge;
+        u64 hash = 0;       // parameters + bodies: rebuilt when it changes
+        u64 paramHash = 0;  // parameters only: keeps the resolved anchors across body rebuilds
+        bool resolved = false;
+        Vec2 worldB;        // connected anchor (world point) resolved at the first creation
+        float length = 0.0f;
+        float referenceAngle = 0.0f;
+        bool warned = false;
+    };
+
     b2WorldId world = b2_nullWorldId;
+    b2BodyId ground = b2_nullBodyId;  // static body at the origin: joints to "the world"
+    std::unordered_map<u64, Joint> joints;
+    std::vector<JointBreak2DEvent> breaks;
     u64 sceneGeneration = 0;
     std::unordered_map<u64, Body> bodies;  // node based: Body addresses are stable
     std::vector<Collision2DEvent> events;
@@ -87,10 +103,14 @@ struct Physics2DWorld::Impl {
         b2WorldDef def = b2DefaultWorldDef();
         def.gravity = toB2(gravity);
         world = b2CreateWorld(&def);
+        b2BodyDef gd = b2DefaultBodyDef();
+        ground = b2CreateBody(world, &gd);
     }
 
     void reset() {
         bodies.clear();
+        joints.clear();
+        breaks.clear();
         b2DestroyWorld(world);
         createWorld();
         events.clear();
@@ -178,12 +198,14 @@ struct Physics2DWorld::Impl {
                 h = mix(h, c.packed());
                 h = mixf(mixf(mixf(mixf(mixf(h, rel.position.x), rel.position.y), rel.angle), rel.scale.x), rel.scale.y);
                 if (const auto* col = reg.tryGet<Collider2DComponent>(c)) {
-                    h = mix(h, static_cast<u64>(col->shape) | (static_cast<u64>(col->isTrigger) << 8));
+                    h = mix(h, static_cast<u64>(col->shape) | (static_cast<u64>(col->isTrigger) << 8) | (static_cast<u64>(col->layer & 31) << 16));
+                    h = mix(h, col->collidesWith);
                     for (float f : {col->size.x, col->size.y, col->radius, col->offset.x, col->offset.y, col->density, col->friction, col->restitution})
                         h = mixf(h, f);
                 }
                 if (const auto* tc = reg.tryGet<TilemapCollider2DComponent>(c)) {
                     h = mixf(mixf(h, tc->friction), tc->restitution);
+                    h = mix(mix(h, static_cast<u64>(tc->layer & 31)), tc->collidesWith);
                     if (const auto* tm = reg.tryGet<TilemapComponent>(c)) h = mix(h, tilesHash(*tm));
                 }
             }
@@ -226,6 +248,192 @@ struct Physics2DWorld::Impl {
             for (usize i = 0; i < placed.size(); ++i) addShapes(s, body, body.colliders[i], placed[i].rel);
             ++stats.rebuilt;
         }
+        syncJoints(s);
+    }
+
+    static b2Filter filterOf(i32 layer, u32 mask) {
+        b2Filter f = b2DefaultFilter();
+        f.categoryBits = 1ull << static_cast<u32>(std::clamp(layer, 0, 31));
+        f.maskBits = mask;
+        return f;
+    }
+
+    static Vec2 worldPoint2(const Mat4& m, Vec2 local) {
+        const math::Vec4 w = m * math::Vec4{local.x, local.y, 0.0f, 1.0f};
+        return {w.x, w.y};
+    }
+
+    void syncJoints(Scene& s) {
+        auto& reg = s.registry();
+        std::unordered_set<u64> seen;
+        reg.view<Joint2DComponent>().each([&](ecs::Entity e, Joint2DComponent& j) {
+            if (!s.isActiveInHierarchy(e) || j.broken) return;
+            Joint& rec = joints[e.packed()];
+            rec.entity = e;
+            const ecs::Entity ownerA = bodyOwner(s, e);
+            const Body* a = ownerA.isNull() ? nullptr : find(ownerA);
+            const Body* b = nullptr;
+            if (!j.connectedBody.isNull()) {
+                if (!s.valid(j.connectedBody) || !s.isActiveInHierarchy(j.connectedBody)) return;
+                const ecs::Entity ownerB = bodyOwner(s, j.connectedBody);
+                b = ownerB.isNull() ? find(j.connectedBody) : find(ownerB);
+            }
+            if (!a || (!j.connectedBody.isNull() && !b) || (b && b == a)) {
+                if (!rec.warned)
+                    AGR_LOG_WARN("Physics2D", "'{}': Joint2D needs a RigidBody2D on the entity and on its connected body (distinct)", s.nameOf(e));
+                rec.warned = true;
+                return;
+            }
+            seen.insert(e.packed());
+            u64 p = mix(static_cast<u64>(j.type) + 1, j.connectedBody.packed());
+            for (float f : {j.anchor.x, j.anchor.y, j.connectedAnchor.x, j.connectedAnchor.y, j.axis.x, j.axis.y, j.length, j.springFrequency,
+                            j.springDamping, j.lowerAngle, j.upperAngle, j.lowerLimit, j.upperLimit})
+                p = mixf(p, f);
+            p = mix(p, static_cast<u64>(j.autoConnectedAnchor) | (static_cast<u64>(j.enableLimits) << 1) | (static_cast<u64>(j.collideConnected) << 2));
+            const b2BodyId bodyB = a->id;                    // this entity
+            const b2BodyId bodyA = b ? b->id : ground;      // connected body or the world
+            const u64 h = mix(mix(p, b2StoreBodyId(bodyA)), b2StoreBodyId(bodyB));
+            if (rec.hash == h && b2Joint_IsValid(rec.id)) {
+                applyMotor(rec, j);
+                return;
+            }
+            if (b2Joint_IsValid(rec.id)) b2DestroyJoint(rec.id);
+            rec.id = b2_nullJointId;
+            if (rec.paramHash != p) {
+                rec.paramHash = p;
+                rec.resolved = false;
+            }
+            const Vec2 worldA = worldPoint2(s.worldMatrix(e), j.anchor);
+            if (!rec.resolved) {
+                if (j.autoConnectedAnchor) rec.worldB = worldA;
+                else rec.worldB = j.connectedBody.isNull() ? j.connectedAnchor : worldPoint2(s.worldMatrix(j.connectedBody), j.connectedAnchor);
+                rec.length = j.length > 0.0f ? j.length : math::length(rec.worldB - worldA);
+                rec.referenceAngle = b2Rot_GetAngle(b2Body_GetRotation(bodyB)) - b2Rot_GetAngle(b2Body_GetRotation(bodyA));
+                rec.resolved = true;
+            }
+            const b2Vec2 localA = b2Body_GetLocalPoint(bodyA, toB2(rec.worldB));
+            const b2Vec2 localB = b2Body_GetLocalPoint(bodyB, toB2(worldA));
+            rec.type = j.type;
+            switch (j.type) {
+                case JointType2D::Fixed: {
+                    b2WeldJointDef d = b2DefaultWeldJointDef();
+                    d.bodyIdA = bodyA, d.bodyIdB = bodyB, d.localAnchorA = localA, d.localAnchorB = localB;
+                    d.referenceAngle = rec.referenceAngle;
+                    d.linearHertz = d.angularHertz = std::max(j.springFrequency, 0.0f);
+                    d.linearDampingRatio = d.angularDampingRatio = std::max(j.springDamping, 0.0f);
+                    d.collideConnected = j.collideConnected;
+                    rec.id = b2CreateWeldJoint(world, &d);
+                    break;
+                }
+                case JointType2D::Hinge: {
+                    b2RevoluteJointDef d = b2DefaultRevoluteJointDef();
+                    d.bodyIdA = bodyA, d.bodyIdB = bodyB, d.localAnchorA = localA, d.localAnchorB = localB;
+                    d.referenceAngle = rec.referenceAngle;
+                    d.enableSpring = j.springFrequency > 0.0f;
+                    d.hertz = j.springFrequency;
+                    d.dampingRatio = j.springDamping;
+                    d.enableLimit = j.enableLimits;
+                    d.lowerAngle = std::min(j.lowerAngle, j.upperAngle);
+                    d.upperAngle = std::max(j.lowerAngle, j.upperAngle);
+                    d.collideConnected = j.collideConnected;
+                    rec.id = b2CreateRevoluteJoint(world, &d);
+                    break;
+                }
+                case JointType2D::Distance: {
+                    b2DistanceJointDef d = b2DefaultDistanceJointDef();
+                    d.bodyIdA = bodyA, d.bodyIdB = bodyB, d.localAnchorA = localA, d.localAnchorB = localB;
+                    d.length = std::max(rec.length, 0.01f);
+                    // A spring of zero stiffness inside limits is a rope.
+                    d.enableSpring = j.springFrequency > 0.0f || j.enableLimits;
+                    d.hertz = j.springFrequency;
+                    d.dampingRatio = j.springDamping;
+                    d.enableLimit = j.enableLimits;
+                    d.minLength = std::max(0.0f, std::min(j.lowerLimit, j.upperLimit));
+                    d.maxLength = std::max({0.01f, j.lowerLimit, j.upperLimit});
+                    d.collideConnected = j.collideConnected;
+                    rec.id = b2CreateDistanceJoint(world, &d);
+                    break;
+                }
+                case JointType2D::Slider: {
+                    b2PrismaticJointDef d = b2DefaultPrismaticJointDef();
+                    d.bodyIdA = bodyA, d.bodyIdB = bodyB, d.localAnchorA = localA, d.localAnchorB = localB;
+                    const Pose2D pe = poseOf(s.worldMatrix(e));
+                    Vec2 axis = rotate(j.axis, pe.angle);
+                    const float len = math::length(axis);
+                    axis = len > 1e-6f ? axis / len : Vec2{1.0f, 0.0f};
+                    d.localAxisA = b2Body_GetLocalVector(bodyA, toB2(axis));
+                    d.referenceAngle = rec.referenceAngle;
+                    d.enableSpring = j.springFrequency > 0.0f;
+                    d.hertz = j.springFrequency;
+                    d.dampingRatio = j.springDamping;
+                    d.enableLimit = j.enableLimits;
+                    d.lowerTranslation = std::min(j.lowerLimit, j.upperLimit);
+                    d.upperTranslation = std::max(j.lowerLimit, j.upperLimit);
+                    d.collideConnected = j.collideConnected;
+                    rec.id = b2CreatePrismaticJoint(world, &d);
+                    break;
+                }
+            }
+            rec.hash = h;
+            applyMotor(rec, j);
+            b2Joint_WakeBodies(rec.id);
+        });
+        for (auto it = joints.begin(); it != joints.end();) {
+            if (seen.contains(it->first)) {
+                ++it;
+                continue;
+            }
+            if (b2Joint_IsValid(it->second.id)) b2DestroyJoint(it->second.id);
+            // Keep the record of a joint waiting for its bodies (warned once); drop the others.
+            if (s.valid(it->second.entity) && s.registry().has<Joint2DComponent>(it->second.entity) && it->second.warned) {
+                it->second.id = b2_nullJointId;
+                it->second.hash = 0;
+                ++it;
+            } else {
+                it = joints.erase(it);
+            }
+        }
+    }
+
+    /// Motor settings change without rebuilding the joint (scripts drive them every frame).
+    static void applyMotor(const Joint& rec, const Joint2DComponent& j) {
+        if (!b2Joint_IsValid(rec.id)) return;
+        switch (rec.type) {
+            case JointType2D::Hinge:
+                b2RevoluteJoint_EnableMotor(rec.id, j.enableMotor);
+                b2RevoluteJoint_SetMotorSpeed(rec.id, j.motorSpeed);
+                b2RevoluteJoint_SetMaxMotorTorque(rec.id, std::max(j.maxMotorForce, 0.0f));
+                break;
+            case JointType2D::Slider:
+                b2PrismaticJoint_EnableMotor(rec.id, j.enableMotor);
+                b2PrismaticJoint_SetMotorSpeed(rec.id, j.motorSpeed);
+                b2PrismaticJoint_SetMaxMotorForce(rec.id, std::max(j.maxMotorForce, 0.0f));
+                break;
+            case JointType2D::Distance:
+                b2DistanceJoint_EnableMotor(rec.id, j.enableMotor);
+                b2DistanceJoint_SetMotorSpeed(rec.id, j.motorSpeed);
+                b2DistanceJoint_SetMaxMotorForce(rec.id, std::max(j.maxMotorForce, 0.0f));
+                break;
+            case JointType2D::Fixed: break;
+        }
+        if (j.enableMotor) b2Joint_WakeBodies(rec.id);
+    }
+
+    void checkBreaks(Scene& s) {
+        breaks.clear();
+        for (auto& [key, rec] : joints) {
+            if (!b2Joint_IsValid(rec.id) || !s.valid(rec.entity)) continue;
+            auto* j = s.registry().tryGet<Joint2DComponent>(rec.entity);
+            if (!j || j->breakForce <= 0.0f) continue;
+            const float force = math::length(fromB2(b2Joint_GetConstraintForce(rec.id)));
+            if (force <= j->breakForce) continue;
+            b2Joint_WakeBodies(rec.id);
+            b2DestroyJoint(rec.id);
+            rec.id = b2_nullJointId;
+            rec.hash = 0;
+            j->broken = true;
+            breaks.push_back({rec.entity, force});
+        }
     }
 
     void addShapes(Scene& s, Body& body, ecs::Entity& entity, const Pose2D& rel) {
@@ -240,6 +448,7 @@ struct Physics2DWorld::Impl {
             sd.material.friction = std::max(col->friction, 0.0f);
             sd.material.restitution = std::clamp(col->restitution, 0.0f, 1.0f);
             sd.isSensor = col->isTrigger;
+            sd.filter = filterOf(col->layer, col->collidesWith);
             const Vec2 center = rel.position + rotate({col->offset.x * scale.x, col->offset.y * scale.y}, rel.angle);
             switch (col->shape) {
                 case ColliderShape2D::Box: {
@@ -271,6 +480,7 @@ struct Physics2DWorld::Impl {
             sd.material.friction = std::max(tc->friction, 0.0f);
             sd.material.restitution = std::clamp(tc->restitution, 0.0f, 1.0f);
             sd.isSensor = false;
+            sd.filter = filterOf(tc->layer, tc->collidesWith);
             const float cw = tm->cellSize.x * scale.x, ch = tm->cellSize.y * scale.y;
             for (u32 y = 0; y < tm->height; ++y) {
                 u32 x = 0;
@@ -314,6 +524,7 @@ struct Physics2DWorld::Impl {
             }
         }
         if (dt > 0.0f) b2World_Step(world, dt, subSteps);
+        checkBreaks(s);
         // Write back.
         u32 dynamicBodies = 0, shapes = 0;
         for (auto& [key, body] : bodies) {
@@ -366,11 +577,34 @@ void Physics2DWorld::setSubSteps(int n) { m->subSteps = std::clamp(n, 1, 16); }
 const std::vector<Collision2DEvent>& Physics2DWorld::events() const { return m->events; }
 Physics2DStats Physics2DWorld::stats() const { return m->stats; }
 
-std::optional<RaycastHit2D> Physics2DWorld::raycast(Vec2 origin, Vec2 direction, float maxDistance) const {
+const std::vector<JointBreak2DEvent>& Physics2DWorld::jointBreaks() const { return m->breaks; }
+
+u32 Physics2DWorld::jointCount() const {
+    u32 n = 0;
+    for (const auto& [key, j] : m->joints) n += b2Joint_IsValid(j.id) ? 1u : 0u;
+    return n;
+}
+
+std::optional<float> Physics2DWorld::jointValue(ecs::Entity e) const {
+    auto it = m->joints.find(e.packed());
+    if (it == m->joints.end() || !b2Joint_IsValid(it->second.id)) return std::nullopt;
+    switch (it->second.type) {
+        case JointType2D::Hinge: return b2RevoluteJoint_GetAngle(it->second.id);
+        case JointType2D::Slider: return b2PrismaticJoint_GetTranslation(it->second.id);
+        case JointType2D::Distance: return b2DistanceJoint_GetCurrentLength(it->second.id);
+        case JointType2D::Fixed: return 0.0f;
+    }
+    return std::nullopt;
+}
+
+std::optional<RaycastHit2D> Physics2DWorld::raycast(Vec2 origin, Vec2 direction, float maxDistance, u32 layerMask) const {
     const float len = math::length(direction);
     if (len < 1e-8f || maxDistance <= 0.0f) return std::nullopt;
     const Vec2 translation = direction / len * maxDistance;
-    const b2RayResult r = b2World_CastRayClosest(m->world, toB2(origin), toB2(translation), b2DefaultQueryFilter());
+    b2QueryFilter filter = b2DefaultQueryFilter();
+    filter.categoryBits = ~0ull;  // seen by every shape, whatever its own mask
+    filter.maskBits = layerMask;
+    const b2RayResult r = b2World_CastRayClosest(m->world, toB2(origin), toB2(translation), filter);
     if (!r.hit) return std::nullopt;
     RaycastHit2D hit;
     hit.entity = m->entityOf(r.shapeId);

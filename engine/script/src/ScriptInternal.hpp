@@ -3,6 +3,7 @@
 #include "agr/runtime/InputActions.hpp"
 #include "agr/runtime/Gestures.hpp"
 #include "agr/runtime/Localization.hpp"
+#include "agr/scene/PhysicsLayers.hpp"
 // Shared between ScriptEngine.cpp (VM, classes, instances) and ScriptBindings.cpp (API).
 #include <string>
 #include <unordered_map>
@@ -94,6 +95,7 @@ struct ScriptEngine::Impl {
     math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
     Physics3DWorld* physics3d = nullptr;
+    PhysicsLayers physicsLayers;  ///< Names of assets://physics_layers.json (agr.physics*.layer / mask), refreshed on use.
     NavigationSystem* navigation = nullptr;
     net::NetSession* net = nullptr;
     std::function<void(std::string)> sceneLoader;

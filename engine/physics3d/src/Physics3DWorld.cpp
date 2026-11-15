@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 // Jolt must be included first.
 #include <Jolt/Jolt.h>
@@ -17,6 +18,14 @@
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -125,9 +134,47 @@ Pose poseOf(const Mat4& m) {
     return p;
 }
 
+u64 pairKey(u32 a, u32 b) { return (static_cast<u64>(std::min(a, b)) << 32) | std::max(a, b); }
+
+/// Collision layer and mask of each body (by Jolt body index); bodies not listed: layer 0, all.
+struct LayerTable {
+    struct Entry {
+        u32 bit = 1u;
+        u32 mask = 0xFFFFFFFFu;
+    };
+    std::unordered_map<u32, Entry> byIndex;
+    std::unordered_set<u64> ignoredPairs;  // bodies joined without collideConnected
+    Entry of(u32 index) const {
+        auto it = byIndex.find(index);
+        return it == byIndex.end() ? Entry{} : it->second;
+    }
+    bool collide(u32 a, u32 b) const {
+        const Entry ea = of(a), eb = of(b);
+        return (ea.mask & eb.bit) && (eb.mask & ea.bit) && !ignoredPairs.contains(pairKey(a, b));
+    }
+};
+
+/// Body filter of queries and characters: layer mask, optionally one ignored body.
+class MaskBodyFilter final : public JPH::BodyFilter {
+public:
+    MaskBodyFilter(const LayerTable& t, u32 mask, JPH::BodyID ignore = {}) : m_table(t), m_mask(mask), m_ignore(ignore) {}
+    bool ShouldCollide(const JPH::BodyID& id) const override { return id != m_ignore && (m_mask & m_table.of(id.GetIndex()).bit) != 0; }
+    bool ShouldCollideLocked(const JPH::Body& body) const override { return ShouldCollide(body.GetID()); }
+
+private:
+    const LayerTable& m_table;
+    u32 m_mask;
+    JPH::BodyID m_ignore;
+};
+
 /// Records contacts from Jolt's callbacks (collision steps may run on job threads).
 class Listener final : public JPH::ContactListener {
 public:
+    explicit Listener(const LayerTable& t) : table(t) {}
+    JPH::ValidateResult OnContactValidate(const JPH::Body& b1, const JPH::Body& b2, JPH::RVec3Arg, const JPH::CollideShapeResult&) override {
+        return table.collide(b1.GetID().GetIndex(), b2.GetID().GetIndex()) ? JPH::ValidateResult::AcceptAllContactsForThisBodyPair
+                                                                         : JPH::ValidateResult::RejectAllContactsForThisBodyPair;
+    }
     struct Pair {
         JPH::BodyID a, b;
         bool begin;
@@ -143,6 +190,7 @@ public:
     }
     std::mutex mutex;
     std::vector<Pair> pairs;
+    const LayerTable& table;
 };
 
 } // namespace
@@ -163,13 +211,39 @@ struct Physics3DWorld::Impl {
         Quat lastRotation;
     };
 
+    struct Joint {
+        JPH::Ref<JPH::TwoBodyConstraint> c;
+        ecs::Entity entity;
+        JointType3D type = JointType3D::Hinge;
+        u64 hash = 0, paramHash = 0;
+        bool resolved = false, warned = false;
+        Vec3 worldB;
+        float length = 0.0f;
+        JPH::BodyID a, b;  // this body, connected body (invalid = world)
+        Vec3 localA, localB;
+    };
+    struct Character {
+        JPH::Ref<JPH::CharacterVirtual> ch;
+        ecs::Entity entity;
+        u64 hash = 0;
+        Vec3 velocity{0.0f};
+        Vec3 lastPosition;
+        float gravityScale = 1.0f, stepHeight = 0.3f;
+        u32 mask = 0xFFFFFFFFu;
+        std::unordered_set<u32> contacts;
+    };
+
+    LayerTable layers;
     BroadPhaseLayers bpLayers;
     ObjectVsBroadPhase objectVsBp;
     ObjectPairs objectPairs;
+    std::unordered_map<u64, Joint> joints;
+    std::unordered_map<u64, Character> characters;
+    std::vector<JointBreak3DEvent> breaks;
     std::unique_ptr<JPH::TempAllocatorImpl> temp;
     std::unique_ptr<JPH::JobSystemSingleThreaded> jobs;
     std::unique_ptr<JPH::PhysicsSystem> system;
-    Listener listener;
+    Listener listener{layers};
     u64 sceneGeneration = 0;
     std::unordered_map<u64, Body> bodies;           // entity -> body
     std::unordered_map<u32, ecs::Entity> byBodyId;  // Jolt body index -> entity
@@ -200,8 +274,31 @@ struct Physics3DWorld::Impl {
         system->SetContactListener(&listener);
     }
 
+    void removeJoint(Joint& j) {
+        if (j.c) system->RemoveConstraint(j.c);
+        if (j.c) layers.ignoredPairs.erase(pairKey(j.a.GetIndex(), j.b.IsInvalid() ? 0xFFFFFFFFu : j.b.GetIndex()));
+        j.c = nullptr;
+        j.hash = 0;
+    }
+
+    void destroyCharacter(Character& c) {
+        if (!c.ch) return;
+        const JPH::BodyID inner = c.ch->GetInnerBodyID();
+        if (!inner.IsInvalid()) {
+            byBodyId.erase(inner.GetIndex());
+            layers.byIndex.erase(inner.GetIndex());
+        }
+        c.ch = nullptr;  // removes the inner body
+    }
+
     void destroyAll() {
         if (!system) return;
+        for (auto& [key, j] : joints) removeJoint(j);
+        joints.clear();
+        for (auto& [key, c] : characters) destroyCharacter(c);
+        characters.clear();
+        layers.byIndex.clear();
+        layers.ignoredPairs.clear();
         JPH::BodyInterface& bi = system->GetBodyInterface();
         for (auto& [key, body] : bodies) {
             bi.RemoveBody(body.id);
@@ -238,6 +335,10 @@ struct Physics3DWorld::Impl {
 
     void destroyBody(Body& b) {
         JPH::BodyInterface& bi = system->GetBodyInterface();
+        // Constraints must go before their bodies.
+        for (auto& [key, j] : joints)
+            if (j.c && (j.a == b.id || j.b == b.id)) removeJoint(j);
+        layers.byIndex.erase(b.id.GetIndex());
         byBodyId.erase(b.id.GetIndex());
         bi.RemoveBody(b.id);
         bi.DestroyBody(b.id);
@@ -296,7 +397,8 @@ struct Physics3DWorld::Impl {
                 for (float f : {col.size.x, col.size.y, col.size.z, col.radius, col.height, col.offset.x, col.offset.y, col.offset.z, col.density,
                                 col.friction, col.restitution})
                     h = mixf(h, f);
-                h = mix(h, static_cast<u64>(col.shape) | (static_cast<u64>(col.isTrigger) << 8));
+                h = mix(h, static_cast<u64>(col.shape) | (static_cast<u64>(col.isTrigger) << 8) | (static_cast<u64>(col.layer & 31) << 16));
+                h = mix(h, col.collidesWith);
             }
             auto it = bodies.find(key);
             if (it != bodies.end() && it->second.hash == h) continue;
@@ -399,10 +501,319 @@ struct Physics3DWorld::Impl {
             body.lastPosition = op.position;
             body.lastRotation = op.rotation;
             byBodyId[body.id.GetIndex()] = o;
+            if (!placed.empty())
+                layers.byIndex[body.id.GetIndex()] = {1u << static_cast<u32>(std::clamp(placed.front().col->layer, 0, 31)), placed.front().col->collidesWith};
             bodies.emplace(key, body);
             ++stats.rebuilt;
         }
         syncTerrains(s);
+        syncCharacters(s);
+        syncJoints(s);
+    }
+
+    // ------------------------------------------------------------ characters
+    void syncCharacters(Scene& s) {
+        auto& reg = s.registry();
+        std::unordered_set<u64> seen;
+        reg.view<CharacterController3DComponent>().each([&](ecs::Entity e, CharacterController3DComponent& cc) {
+            if (!s.isActiveInHierarchy(e)) return;
+            seen.insert(e.packed());
+            u64 h = mix(static_cast<u64>(cc.layer & 31) + 1, cc.collidesWith);
+            for (float f : {cc.radius, cc.height, cc.maxSlope, cc.stepHeight, cc.mass, cc.pushForce}) h = mixf(h, f);
+            Character& c = characters[e.packed()];
+            c.gravityScale = cc.gravityScale;
+            c.stepHeight = std::max(cc.stepHeight, 0.0f);
+            c.mask = cc.collidesWith;
+            if (c.ch && c.hash == h) return;
+            const Pose p = poseOf(s.worldMatrix(e));
+            destroyCharacter(c);
+            const float r = std::max(cc.radius, 0.02f);
+            const float halfCyl = std::max(cc.height * 0.5f - r, 0.01f);
+            JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3(0.0f, halfCyl + r, 0.0f), JPH::Quat::sIdentity(), new JPH::CapsuleShape(halfCyl, r));
+            JPH::ShapeSettings::ShapeResult shape = shapeSettings.Create();
+            if (shape.HasError()) {
+                AGR_LOG_ERROR("Physics3D", "'{}': invalid character shape: {}", s.nameOf(e), shape.GetError().c_str());
+                return;
+            }
+            JPH::CharacterVirtualSettings cs;
+            cs.mShape = shape.Get();
+            cs.mMaxSlopeAngle = std::clamp(cc.maxSlope, 0.0f, 1.55f);
+            cs.mMass = std::max(cc.mass, 0.1f);
+            cs.mMaxStrength = std::max(cc.pushForce, 0.0f);
+            cs.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -r);  // contacts below the bottom sphere's center support
+            cs.mInnerBodyShape = cs.mShape;
+            cs.mInnerBodyLayer = Layers::kMoving;
+            c.ch = new JPH::CharacterVirtual(&cs, JPH::RVec3(p.position.x, p.position.y, p.position.z), JPH::Quat::sIdentity(), e.packed(), system.get());
+            c.entity = e;
+            c.hash = h;
+            c.lastPosition = p.position;
+            const JPH::BodyID inner = c.ch->GetInnerBodyID();
+            if (!inner.IsInvalid()) {
+                byBodyId[inner.GetIndex()] = e;
+                layers.byIndex[inner.GetIndex()] = {1u << static_cast<u32>(std::clamp(cc.layer, 0, 31)), cc.collidesWith};
+            }
+            ++stats.rebuilt;
+        });
+        for (auto it = characters.begin(); it != characters.end();) {
+            if (seen.contains(it->first) && s.valid(it->second.entity)) {
+                ++it;
+                continue;
+            }
+            destroyCharacter(it->second);
+            it = characters.erase(it);
+        }
+    }
+
+    void stepCharacters(Scene& s, float dt) {
+        if (dt <= 0.0f) return;
+        for (auto& [key, c] : characters) {
+            if (!c.ch || !s.valid(c.entity)) continue;
+            const Pose pose = poseOf(s.worldMatrix(c.entity));
+            const Vec3 moved = pose.position - c.lastPosition;
+            if (math::dot(moved, moved) > 1e-10f) c.ch->SetPosition(JPH::RVec3(pose.position.x, pose.position.y, pose.position.z));  // teleported
+            const Vec3 g = gravity * c.gravityScale;
+            const bool grounded = c.ch->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
+            Vec3 v = c.velocity;
+            if (grounded && v.y <= 0.0f) v.y = 0.0f;
+            else v += g * dt;
+            const Vec3 groundVel = grounded ? fromJ(c.ch->GetGroundVelocity()) : Vec3{0.0f};
+            c.ch->SetLinearVelocity(toJ(v + groundVel));
+            JPH::CharacterVirtual::ExtendedUpdateSettings us;
+            us.mWalkStairsStepUp = JPH::Vec3(0.0f, c.stepHeight, 0.0f);
+            us.mStickToFloorStepDown = JPH::Vec3(0.0f, -std::max(c.stepHeight, 0.1f), 0.0f);
+            const JPH::DefaultBroadPhaseLayerFilter bpFilter = system->GetDefaultBroadPhaseLayerFilter(Layers::kMoving);
+            const JPH::DefaultObjectLayerFilter olFilter = system->GetDefaultLayerFilter(Layers::kMoving);
+            const MaskBodyFilter bodyFilter(layers, c.mask, c.ch->GetInnerBodyID());
+            const JPH::ShapeFilter shapeFilter;
+            c.ch->ExtendedUpdate(dt, toJ(g), us, bpFilter, olFilter, bodyFilter, shapeFilter, *temp);
+            const bool nowGrounded = c.ch->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
+            Vec3 after = fromJ(c.ch->GetLinearVelocity()) - (nowGrounded ? fromJ(c.ch->GetGroundVelocity()) : Vec3{0.0f});
+            if (nowGrounded && after.y < 0.0f) after.y = 0.0f;
+            c.velocity = {c.velocity.x, after.y, c.velocity.z};  // horizontal motion stays what the script asked
+            const JPH::RVec3 jp = c.ch->GetPosition();
+            const Vec3 np{static_cast<float>(jp.GetX()), static_cast<float>(jp.GetY()), static_cast<float>(jp.GetZ())};
+            s.setWorldMatrix(c.entity, Mat4::trs(np, pose.rotation, pose.scale));
+            c.lastPosition = np;
+            // Contacts -> begin / end collision events with the bodies touched.
+            std::unordered_set<u32> now;
+            for (const auto& ct : c.ch->GetActiveContacts())
+                if (ct.mHadCollision && !ct.mIsSensorB && !ct.mBodyB.IsInvalid()) now.insert(ct.mBodyB.GetIndex());
+            for (u32 idx : now)
+                if (!c.contacts.contains(idx))
+                    if (auto it = byBodyId.find(idx); it != byBodyId.end()) events.push_back({c.entity, it->second, true, false});
+            for (u32 idx : c.contacts)
+                if (!now.contains(idx))
+                    if (auto it = byBodyId.find(idx); it != byBodyId.end()) events.push_back({c.entity, it->second, false, false});
+            c.contacts = std::move(now);
+        }
+    }
+
+    const Character* character(ecs::Entity e) const {
+        auto it = characters.find(e.packed());
+        return it == characters.end() || !it->second.ch ? nullptr : &it->second;
+    }
+
+    // ------------------------------------------------------------ joints
+    static Vec3 worldPoint(const Mat4& m, Vec3 local) {
+        const math::Vec4 w = m * math::Vec4{local.x, local.y, local.z, 1.0f};
+        return {w.x, w.y, w.z};
+    }
+
+    static JPH::Vec3 perpendicular(JPH::Vec3 axis) {
+        const JPH::Vec3 other = std::fabs(axis.GetY()) < 0.9f ? JPH::Vec3::sAxisY() : JPH::Vec3::sAxisX();
+        return axis.Cross(other).Normalized();
+    }
+
+    void syncJoints(Scene& s) {
+        auto& reg = s.registry();
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        std::unordered_set<u64> seen;
+        reg.view<Joint3DComponent>().each([&](ecs::Entity e, Joint3DComponent& j) {
+            if (!s.isActiveInHierarchy(e) || j.broken) return;
+            Joint& rec = joints[e.packed()];
+            rec.entity = e;
+            const ecs::Entity ownerA = owner(s, e);
+            const Body* a = ownerA.isNull() ? nullptr : find(ownerA);
+            const Body* b = nullptr;
+            if (!j.connectedBody.isNull()) {
+                if (!s.valid(j.connectedBody) || !s.isActiveInHierarchy(j.connectedBody)) return;
+                const ecs::Entity ownerB = owner(s, j.connectedBody);
+                b = find(ownerB.isNull() ? j.connectedBody : ownerB);
+            }
+            if (!a || a->type == BodyType3D::Static || (!j.connectedBody.isNull() && !b) || (b && b == a)) {
+                if (!rec.warned)
+                    AGR_LOG_WARN("Physics3D", "'{}': Joint3D needs a non-static RigidBody on the entity and a body on its connected entity", s.nameOf(e));
+                rec.warned = true;
+                return;
+            }
+            seen.insert(e.packed());
+            u64 p = mix(static_cast<u64>(j.type) + 1, j.connectedBody.packed());
+            for (float f : {j.anchor.x, j.anchor.y, j.anchor.z, j.connectedAnchor.x, j.connectedAnchor.y, j.connectedAnchor.z, j.axis.x, j.axis.y, j.axis.z,
+                            j.length, j.springFrequency, j.springDamping, j.lowerAngle, j.upperAngle, j.lowerLimit, j.upperLimit})
+                p = mixf(p, f);
+            p = mix(p, static_cast<u64>(j.autoConnectedAnchor) | (static_cast<u64>(j.enableLimits) << 1) | (static_cast<u64>(j.collideConnected) << 2));
+            const JPH::BodyID idA = a->id, idB = b ? b->id : JPH::BodyID();
+            const u64 h = mix(mix(p, idA.GetIndexAndSequenceNumber()), idB.GetIndexAndSequenceNumber());
+            if (rec.c && rec.hash == h) {
+                applyMotor(rec, j);
+                return;
+            }
+            removeJoint(rec);
+            if (rec.paramHash != p) {
+                rec.paramHash = p;
+                rec.resolved = false;
+            }
+            const Mat4 me = s.worldMatrix(e);
+            const Vec3 worldA = worldPoint(me, j.anchor);
+            if (!rec.resolved) {
+                if (j.autoConnectedAnchor) rec.worldB = worldA;
+                else rec.worldB = j.connectedBody.isNull() ? j.connectedAnchor : worldPoint(s.worldMatrix(j.connectedBody), j.connectedAnchor);
+                rec.length = j.length > 0.0f ? j.length : math::length(rec.worldB - worldA);
+                rec.resolved = true;
+            }
+            JPH::Vec3 axis = toJ(poseOf(me).rotation * j.axis);
+            axis = axis.LengthSq() > 1e-10f ? axis.Normalized() : JPH::Vec3::sAxisY();
+            const JPH::RVec3 pA(worldA.x, worldA.y, worldA.z), pB(rec.worldB.x, rec.worldB.y, rec.worldB.z);
+            JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
+            const JPH::SpringSettings spring(JPH::ESpringMode::FrequencyAndDamping, std::max(j.springFrequency, 0.0f), std::max(j.springDamping, 0.0f));
+            switch (j.type) {
+                case JointType3D::Fixed: {
+                    auto* f = new JPH::FixedConstraintSettings();
+                    f->mPoint1 = pB;
+                    f->mPoint2 = pA;
+                    settings = f;
+                    break;
+                }
+                case JointType3D::Hinge: {
+                    auto* hs = new JPH::HingeConstraintSettings();
+                    hs->mPoint1 = pB;
+                    hs->mPoint2 = pA;
+                    hs->mHingeAxis1 = hs->mHingeAxis2 = axis;
+                    hs->mNormalAxis1 = hs->mNormalAxis2 = perpendicular(axis);
+                    if (j.enableLimits) {
+                        hs->mLimitsMin = std::clamp(std::min(j.lowerAngle, j.upperAngle), -JPH::JPH_PI, 0.0f);
+                        hs->mLimitsMax = std::clamp(std::max(j.lowerAngle, j.upperAngle), 0.0f, JPH::JPH_PI);
+                    }
+                    if (j.springFrequency > 0.0f) hs->mLimitsSpringSettings = spring;
+                    hs->mMotorSettings = JPH::MotorSettings(2.0f, 1.0f, 0.0f, std::max(j.maxMotorForce, 0.0f));
+                    settings = hs;
+                    break;
+                }
+                case JointType3D::Distance: {
+                    auto* d = new JPH::DistanceConstraintSettings();
+                    d->mPoint1 = pB;
+                    d->mPoint2 = pA;
+                    if (j.enableLimits) {
+                        d->mMinDistance = std::max(0.0f, std::min(j.lowerLimit, j.upperLimit));
+                        d->mMaxDistance = std::max({0.0f, j.lowerLimit, j.upperLimit});
+                    } else {
+                        d->mMinDistance = d->mMaxDistance = rec.length;
+                    }
+                    if (j.springFrequency > 0.0f) d->mLimitsSpringSettings = spring;
+                    settings = d;
+                    break;
+                }
+                case JointType3D::Slider: {
+                    auto* sl = new JPH::SliderConstraintSettings();
+                    sl->mPoint1 = pB;
+                    sl->mPoint2 = pA;
+                    sl->SetSliderAxis(axis);
+                    if (j.enableLimits) {
+                        sl->mLimitsMin = std::min({j.lowerLimit, j.upperLimit, 0.0f});
+                        sl->mLimitsMax = std::max({j.lowerLimit, j.upperLimit, 0.0f});
+                    }
+                    if (j.springFrequency > 0.0f) sl->mLimitsSpringSettings = spring;
+                    sl->mMotorSettings = JPH::MotorSettings(2.0f, 1.0f, std::max(j.maxMotorForce, 0.0f), 0.0f);
+                    settings = sl;
+                    break;
+                }
+                case JointType3D::Ball: {
+                    auto* pt = new JPH::PointConstraintSettings();
+                    pt->mPoint1 = pB;
+                    pt->mPoint2 = pA;
+                    settings = pt;
+                    break;
+                }
+            }
+            rec.c = bi.CreateConstraint(settings, idB, idA);
+            if (!rec.c) return;
+            system->AddConstraint(rec.c);
+            bi.ActivateConstraint(rec.c);
+            rec.type = j.type;
+            rec.a = idA;
+            rec.b = idB;
+            rec.hash = h;
+            // Anchors in each body's frame (for jointValue of a distance joint).
+            const auto toLocal = [&](JPH::BodyID id, Vec3 w) {
+                if (id.IsInvalid()) return w;
+                const JPH::RMat44 t = bi.GetWorldTransform(id);
+                const JPH::Vec3 l = t.InversedRotationTranslation() * JPH::RVec3(w.x, w.y, w.z);
+                return fromJ(l);
+            };
+            rec.localA = toLocal(idA, worldA);
+            rec.localB = toLocal(idB, rec.worldB);
+            if (!j.collideConnected) layers.ignoredPairs.insert(pairKey(idA.GetIndex(), idB.IsInvalid() ? 0xFFFFFFFFu : idB.GetIndex()));
+            applyMotor(rec, j);
+        });
+        for (auto it = joints.begin(); it != joints.end();) {
+            if (seen.contains(it->first)) {
+                ++it;
+                continue;
+            }
+            removeJoint(it->second);
+            if (s.valid(it->second.entity) && s.registry().has<Joint3DComponent>(it->second.entity) && it->second.warned) ++it;
+            else it = joints.erase(it);
+        }
+    }
+
+    void applyMotor(Joint& rec, const Joint3DComponent& j) {
+        if (!rec.c) return;
+        const JPH::EMotorState state = j.enableMotor ? JPH::EMotorState::Velocity : JPH::EMotorState::Off;
+        if (rec.type == JointType3D::Hinge) {
+            auto* h = static_cast<JPH::HingeConstraint*>(rec.c.GetPtr());
+            h->GetMotorSettings().SetTorqueLimit(std::max(j.maxMotorForce, 0.0f));
+            h->SetMotorState(state);
+            h->SetTargetAngularVelocity(j.motorSpeed);
+        } else if (rec.type == JointType3D::Slider) {
+            auto* sl = static_cast<JPH::SliderConstraint*>(rec.c.GetPtr());
+            sl->GetMotorSettings().SetForceLimit(std::max(j.maxMotorForce, 0.0f));
+            sl->SetMotorState(state);
+            sl->SetTargetVelocity(j.motorSpeed);
+        } else {
+            return;
+        }
+        if (j.enableMotor) system->GetBodyInterface().ActivateConstraint(rec.c);
+    }
+
+    float impulseOf(const Joint& rec) const {
+        switch (rec.type) {
+            case JointType3D::Fixed: return static_cast<JPH::FixedConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition().Length();
+            case JointType3D::Hinge: return static_cast<JPH::HingeConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition().Length();
+            case JointType3D::Distance: return std::fabs(static_cast<JPH::DistanceConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition());
+            case JointType3D::Slider: {
+                const auto* sl = static_cast<JPH::SliderConstraint*>(rec.c.GetPtr());
+                const JPH::Vector<2> l = sl->GetTotalLambdaPosition();
+                return std::sqrt(l[0] * l[0] + l[1] * l[1]) + std::fabs(sl->GetTotalLambdaPositionLimits());
+            }
+            case JointType3D::Ball: return static_cast<JPH::PointConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition().Length();
+        }
+        return 0.0f;
+    }
+
+    void checkBreaks(Scene& s, float dt) {
+        breaks.clear();
+        if (dt <= 0.0f) return;
+        for (auto& [key, rec] : joints) {
+            if (!rec.c || !s.valid(rec.entity)) continue;
+            auto* j = s.registry().tryGet<Joint3DComponent>(rec.entity);
+            if (!j || j->breakForce <= 0.0f) continue;
+            const float force = impulseOf(rec) / dt;
+            if (force <= j->breakForce) continue;
+            system->GetBodyInterface().ActivateConstraint(rec.c);
+            removeJoint(rec);
+            j->broken = true;
+            breaks.push_back({rec.entity, force});
+        }
     }
 
     /// Terrains with collision: static triangle meshes, rebuilt when their shape or place changes.
@@ -490,6 +901,7 @@ struct Physics3DWorld::Impl {
                                           JPH::EActivation::Activate);
             }
         }
+        stepCharacters(s, dt);
         if (dt > 0.0f) {
             const JPH::EPhysicsUpdateError err = system->Update(dt, 1, temp.get(), jobs.get());
             if (err != JPH::EPhysicsUpdateError::None) AGR_LOG_WARN("Physics3D", "simulation limits reached (error {})", static_cast<int>(err));
@@ -523,7 +935,8 @@ struct Physics3DWorld::Impl {
                     pairIsSensor[key] = p.sensor;
                     if (ea != byBodyId.end() && eb != byBodyId.end()) {
                         Collision3DEvent e{ea->second, eb->second, true, p.sensor};
-                        if (p.sensor && !find(e.a)->sensor) std::swap(e.a, e.b);  // a = the sensor
+                        const Body* fa = find(e.a);
+                        if (p.sensor && (!fa || !fa->sensor)) std::swap(e.a, e.b);  // a = the sensor
                         events.push_back(e);
                     }
                 }
@@ -538,6 +951,7 @@ struct Physics3DWorld::Impl {
                 }
             }
         }
+        checkBreaks(s, dt);
         stats.bodies = static_cast<u32>(bodies.size());
         stats.activeBodies = active;
         stats.stepMs = sw.elapsedMilliseconds();
@@ -557,15 +971,57 @@ void Physics3DWorld::setGravity(Vec3 g) {
 Vec3 Physics3DWorld::gravity() const { return m->gravity; }
 const std::vector<Collision3DEvent>& Physics3DWorld::events() const { return m->events; }
 Physics3DStats Physics3DWorld::stats() const { return m->stats; }
-bool Physics3DWorld::hasBody(ecs::Entity e) const { return m->find(e) != nullptr; }
+bool Physics3DWorld::hasBody(ecs::Entity e) const { return m->find(e) != nullptr || m->character(e) != nullptr; }
 
-std::optional<RaycastHit3D> Physics3DWorld::raycast(Vec3 origin, Vec3 direction, float maxDistance) const {
+const std::vector<JointBreak3DEvent>& Physics3DWorld::jointBreaks() const { return m->breaks; }
+
+u32 Physics3DWorld::jointCount() const {
+    u32 n = 0;
+    for (const auto& [key, j] : m->joints) n += j.c ? 1u : 0u;
+    return n;
+}
+
+std::optional<float> Physics3DWorld::jointValue(ecs::Entity e) const {
+    auto it = m->joints.find(e.packed());
+    if (it == m->joints.end() || !it->second.c) return std::nullopt;
+    const auto& rec = it->second;
+    switch (rec.type) {
+        case JointType3D::Hinge: return static_cast<JPH::HingeConstraint*>(rec.c.GetPtr())->GetCurrentAngle();
+        case JointType3D::Slider: return static_cast<JPH::SliderConstraint*>(rec.c.GetPtr())->GetCurrentPosition();
+        case JointType3D::Distance: {
+            const JPH::BodyInterface& bi = m->system->GetBodyInterface();
+            auto world = [&](JPH::BodyID id, Vec3 local) {
+                if (id.IsInvalid()) return local;
+                const JPH::RVec3 w = bi.GetWorldTransform(id) * JPH::RVec3(local.x, local.y, local.z);
+                return Vec3{static_cast<float>(w.GetX()), static_cast<float>(w.GetY()), static_cast<float>(w.GetZ())};
+            };
+            return math::length(world(rec.a, rec.localA) - world(rec.b, rec.localB));
+        }
+        case JointType3D::Fixed:
+        case JointType3D::Ball: return 0.0f;
+    }
+    return std::nullopt;
+}
+
+bool Physics3DWorld::hasCharacter(ecs::Entity e) const { return m->character(e) != nullptr; }
+bool Physics3DWorld::isGrounded(ecs::Entity e) const {
+    const auto* c = m->character(e);
+    return c && c->ch->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
+}
+std::optional<Vec3> Physics3DWorld::groundNormal(ecs::Entity e) const {
+    const auto* c = m->character(e);
+    if (!c || !c->ch->IsSupported()) return std::nullopt;
+    return fromJ(c->ch->GetGroundNormal());
+}
+
+std::optional<RaycastHit3D> Physics3DWorld::raycast(Vec3 origin, Vec3 direction, float maxDistance, u32 layerMask) const {
     const float len = math::length(direction);
     if (len < 1e-8f || maxDistance <= 0.0f) return std::nullopt;
     const Vec3 dir = direction / len * maxDistance;
     JPH::RRayCast ray{JPH::RVec3(origin.x, origin.y, origin.z), toJ(dir)};
     JPH::RayCastResult result;
-    if (!m->system->GetNarrowPhaseQuery().CastRay(ray, result)) return std::nullopt;
+    const MaskBodyFilter filter(m->layers, layerMask);
+    if (!m->system->GetNarrowPhaseQuery().CastRay(ray, result, {}, {}, filter)) return std::nullopt;
     RaycastHit3D hit;
     const JPH::RVec3 point = ray.GetPointOnRay(result.mFraction);
     hit.point = {static_cast<float>(point.GetX()), static_cast<float>(point.GetY()), static_cast<float>(point.GetZ())};
@@ -582,11 +1038,16 @@ std::optional<RaycastHit3D> Physics3DWorld::raycast(Vec3 origin, Vec3 direction,
 }
 
 std::optional<Vec3> Physics3DWorld::velocity(ecs::Entity e) const {
+    if (const auto* c = m->character(e)) return c->velocity;
     const auto* b = m->find(e);
     if (!b) return std::nullopt;
     return fromJ(m->system->GetBodyInterface().GetLinearVelocity(b->id));
 }
 bool Physics3DWorld::setVelocity(ecs::Entity e, Vec3 v) {
+    if (auto it = m->characters.find(e.packed()); it != m->characters.end() && it->second.ch) {
+        it->second.velocity = v;
+        return true;
+    }
     const auto* b = m->find(e);
     if (!b || b->type == BodyType3D::Static) return false;
     m->system->GetBodyInterface().SetLinearVelocity(b->id, toJ(v));

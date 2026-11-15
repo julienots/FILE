@@ -1379,4 +1379,82 @@ TEST_CASE("strategy camera script: drag keeps the ground under the finger, inert
     h.noScriptErrors();
 }
 
+TEST_CASE("scripts drive physics: character controller, layer names, raycast masks, joints and onJointBreak") {
+    GameHarness h(SceneTemplate::Empty3D);
+    const fs::path assets = h.root / "game" / "assets";
+    {
+        std::ofstream(assets / "physics_layers.json") << R"({"layers": ["Default", "Player", "Enemies", "Ghosts"]})";
+        std::ofstream(assets / "hero_test.lua") << R"(
+local Hero = {}
+function Hero:onStart() self.jumps = 0 end
+function Hero:onUpdate(dt)
+    local _, vy, _ = self.entity:velocity()
+    if self.entity:isGrounded() and self.wantJump then
+        vy = 5
+        self.wantJump = false
+        self.jumps = self.jumps + 1
+    end
+    self.entity:setVelocity(2, vy, 0)
+end
+return Hero
+)";
+        std::ofstream(assets / "rope_test.lua") << R"(
+local Rope = {}
+function Rope:onJointBreak(force) self.brokeWith = force end
+return Rope
+)";
+    }
+    Scene& sc = h.scene();
+    auto& reg = sc.registry();
+    const auto ground = sc.createEntity("Ground");
+    reg.get<TransformComponent>(ground).position = {0, -0.5f, 0};
+    reg.emplace<ColliderComponent>(ground).size = {100, 1, 100};
+    const auto hero = sc.createEntity("Hero");
+    reg.get<TransformComponent>(hero).position = {0, 0.5f, 0};
+    reg.emplace<CharacterController3DComponent>(hero).layer = 1;
+    reg.emplace<ScriptComponent>(hero).script = "assets://hero_test.lua";
+    const auto enemy = sc.createEntity("Enemy");
+    reg.get<TransformComponent>(enemy).position = {0, 0.5f, 10};
+    reg.emplace<ColliderComponent>(enemy).layer = 2;
+    const auto weight = sc.createEntity("Weight");
+    reg.get<TransformComponent>(weight).position = {-20, 7, 0};
+    reg.emplace<RigidBodyComponent>(weight).mass = 1.0f;
+    reg.emplace<ColliderComponent>(weight).size = {0.5f, 0.5f, 0.5f};
+    auto& rope = reg.emplace<Joint3DComponent>(weight);
+    rope.type = JointType3D::Distance;
+    rope.autoConnectedAnchor = false;
+    rope.connectedAnchor = {-20, 10, 0};
+    rope.breakForce = 50.0f;
+    reg.emplace<ScriptComponent>(weight).script = "assets://rope_test.lua";
+    h.seconds(1.0);
+    auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
+    // Layer names and masks.
+    ok("agr.physics3d.layer('Enemies') == 2");
+    ok("agr.physics3d.mask('Player', 'Ghosts') == (1 << 1) | (1 << 3)");
+    ok("agr.physics2d.layer('Default') == 0");
+    h.lua("local okCall = pcall(agr.physics3d.layer, 'Nope'); assert(not okCall)");
+    // Raycast masks by name / table / number.
+    ok("agr.physics3d.raycast(0, 0.5, 15, 0, 0, -1, 20, 'Enemies').entity:name() == 'Enemy'");
+    ok("agr.physics3d.raycast(0, 0.5, 15, 0, 0, -1, 20, {'Default'}) == nil");
+    // The character walks (velocity from the script) on the ground and jumps once.
+    ok("agr.find('Hero'):isGrounded()");
+    CHECK(h.position("Hero").x > 1.0f);
+    CHECK(std::abs(h.position("Hero").y) < 0.05f);
+    h.lua("agr.find('Hero'):script().wantJump = true");
+    h.seconds(0.3);
+    CHECK(h.position("Hero").y > 0.5f);
+    h.lua("assert(not agr.find('Hero'):isGrounded())");
+    h.seconds(1.0);
+    ok("agr.find('Hero'):isGrounded() and agr.find('Hero'):script().jumps == 1");
+    ok("select(2, agr.find('Hero'):groundNormal()) > 0.99");
+    // Joints from scripts: value, then breaking calls onJointBreak.
+    ok("math.abs(agr.find('Weight'):jointValue() - 3) < 0.05");
+    h.lua("agr.find('Weight'):set('RigidBody', 'mass', 100)");
+    h.seconds(0.5);
+    ok("agr.find('Weight'):script().brokeWith ~= nil and agr.find('Weight'):script().brokeWith > 50");
+    ok("agr.find('Weight'):get('Joint3D', 'broken') == true");
+    ok("agr.find('Weight'):jointValue() == nil");
+    h.noScriptErrors();
+}
+
 }

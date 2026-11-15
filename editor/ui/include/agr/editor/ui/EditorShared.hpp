@@ -14,6 +14,7 @@
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/twod/TwoDPlugin.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
+#include "agr/scene/PhysicsLayers.hpp"
 #include "agr/scene/Terrain.hpp"
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/ui/UIPlugin.hpp"
@@ -96,6 +97,8 @@ struct EditorShared {
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.
     bool showProfiler = false;     ///< CPU profiler panel.
+    bool showPhysicsLayers = false;  ///< Collision layer names panel.
+    PhysicsLayers physicsLayers;     ///< Names of assets://physics_layers.json, refreshed by the inspector.
     std::string openDocRequest;    ///< Guide to show ("LOGIC.md"): contextual help.
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).

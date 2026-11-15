@@ -582,6 +582,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_docs.draw(*m_shared);
     m_packages.draw(*m_shared);
     m_profiler.draw(*m_shared);
+    m_physicsLayers.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
     handleShortcuts();
@@ -701,6 +702,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
+        ImGui::MenuItem("Couches de collision", nullptr, &m_shared->showPhysicsLayers);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -1652,7 +1654,32 @@ void EditorApp::smokeTest(const FrameTime&) {
         }
         case 242: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_ui_widgets.png").string()); break;
         case 243: m_viewport.gameView = false; break;
-        case 244: {
+        case 244: {  // collision layers named in the panel, chosen in the inspector; joints and characters addable
+            m_shared->physicsLayers.names[1] = "Joueur";
+            m_shared->physicsLayers.names[2] = "Ennemis";
+            check(static_cast<bool>(m_shared->physicsLayers.save(m_engine->vfs())), "physics layers saved");
+            check(m_engine->vfs().exists(PhysicsLayers::kUri), "physics_layers.json written");
+            const auto cube = ctx.create(CreateKind::Cube);
+            if (!ctx.scene().registry().has<ColliderComponent>(cube)) check(ctx.addComponent(cube, "Collider"), "collider added");
+            ctx.scene().registry().get<ColliderComponent>(cube).layer = 2;
+            ctx.scene().registry().get<ColliderComponent>(cube).collidesWith = 0b011u;
+            check(ctx.addComponent(cube, "RigidBody"), "rigid body added");
+            check(ctx.addComponent(cube, "Joint3D"), "Joint3D added from the component list");
+            const auto hero = ctx.create(CreateKind::Empty);
+            check(ctx.addComponent(hero, "CharacterController3D"), "CharacterController3D added");
+            ctx.selection().set(ctx.scene().uuidOf(cube));
+            m_shared->showPhysicsLayers = true;
+            ctx.commit("Physics layers");
+            break;
+        }
+        case 247: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_physics.png").string()); break;
+        case 248: {
+            PhysicsLayers reread;
+            check(static_cast<bool>(reread.load(m_engine->vfs())) && reread.find("Ennemis") == 2u, "layer names read back");
+            m_shared->showPhysicsLayers = false;
+            break;
+        }
+        case 250: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

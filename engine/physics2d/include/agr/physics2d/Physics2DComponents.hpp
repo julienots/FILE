@@ -35,6 +35,8 @@ struct Collider2DComponent {
     float friction = 0.6f;
     float restitution = 0.0f;       ///< Bounciness, 0..1.
     bool isTrigger = false;         ///< Detects overlaps (events) without colliding.
+    i32 layer = 0;                  ///< Collision layer, 0..31 (names in the project settings).
+    u32 collidesWith = 0xFFFFFFFFu; ///< Layers it collides with (bit n = layer n). Two shapes touch when each one's mask has the other's layer.
 };
 
 /// Static collision for every painted cell of the Tilemap on the same entity
@@ -42,6 +44,43 @@ struct Collider2DComponent {
 struct TilemapCollider2DComponent {
     float friction = 0.6f;
     float restitution = 0.0f;
+    i32 layer = 0;
+    u32 collidesWith = 0xFFFFFFFFu;
+};
+
+enum class JointType2D : i32 {
+    Fixed = 0,     ///< Welds the two bodies together (springFrequency > 0: soft weld).
+    Hinge = 1,     ///< Rotation about the anchor (doors, wheels, pendulums); angle limits, motor.
+    Distance = 2,  ///< Keeps the anchors at `length` (rope with limits, spring with springFrequency); motor along the line.
+    Slider = 3,    ///< Translation along `axis` only (elevators, pistons); limits, motor.
+};
+
+/// Joins the body of this entity (it needs a RigidBody2D) to `connectedBody` (another body, or
+/// none = a fixed point of the world). Anchors are in each entity's local space; with
+/// autoConnectedAnchor the connected anchor is the same world point as `anchor` when the joint is
+/// created. A joint pulled harder than breakForce breaks: `broken` becomes true and the script of
+/// the entity receives onJointBreak(force).
+struct Joint2DComponent {
+    JointType2D type = JointType2D::Hinge;
+    ecs::Entity connectedBody;
+    math::Vec2 anchor{0.0f, 0.0f};
+    math::Vec2 connectedAnchor{0.0f, 0.0f};
+    bool autoConnectedAnchor = true;
+    math::Vec2 axis{1.0f, 0.0f};      ///< Slider: direction of travel (local to this entity).
+    float length = 0.0f;              ///< Distance: rest length; 0 = the distance when created.
+    float springFrequency = 0.0f;     ///< Hz; 0 = rigid. Distance: spring; Hinge: spring back to the start angle; Fixed: soft weld.
+    float springDamping = 0.7f;       ///< Damping ratio (1 = critical).
+    bool enableLimits = false;
+    float lowerAngle = -0.7853982f;   ///< Hinge limits (radians).
+    float upperAngle = 0.7853982f;
+    float lowerLimit = -1.0f;         ///< Slider translation / Distance min length (m).
+    float upperLimit = 1.0f;          ///< Slider translation / Distance max length (m).
+    bool enableMotor = false;
+    float motorSpeed = 0.0f;          ///< Hinge rad/s; Slider / Distance m/s.
+    float maxMotorForce = 1000.0f;    ///< N (torque N·m for a hinge).
+    float breakForce = 0.0f;          ///< N; 0 = unbreakable.
+    bool collideConnected = false;
+    bool broken = false;              ///< Set when the joint broke (cleared to rebuild it).
 };
 
 /// Registers the reflection data (idempotent).

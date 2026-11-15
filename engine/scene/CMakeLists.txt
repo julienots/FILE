@@ -6,6 +6,7 @@ agr_add_module(scene
         src/SceneSerializer.cpp
         src/Prefab.cpp
         src/Terrain.cpp
+        src/PhysicsLayers.cpp
     PUBLIC_DEPS
         agr::core
         agr::math

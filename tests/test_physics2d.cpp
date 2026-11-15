@@ -200,4 +200,188 @@ TEST_CASE("destroyed entities and reloaded scenes drop their bodies; results are
     CHECK(simulate() == simulate());
 }
 
+TEST_CASE("collision layers: masks decide who collides; raycasts filter by layer") {
+    World2D w;
+    const auto ground = w.box("Ground", {0, 0}, {20, 1}, BodyType2D::Static, false);
+    auto& gc = w.scene.registry().get<Collider2DComponent>(ground);
+    gc.layer = 2;
+    gc.collidesWith = ~(1u << 1);  // not layer 1 (ghosts)
+    const auto solid = w.box("Solid", {-2, 3}, {1, 1}, BodyType2D::Dynamic);
+    const auto ghost = w.box("Ghost", {2, 3}, {1, 1}, BodyType2D::Dynamic);
+    w.scene.registry().get<Collider2DComponent>(ghost).layer = 1;
+    w.run(2.0f);
+    CHECK(w.position(solid).y == doctest::Approx(1.0f).epsilon(0.05));
+    CHECK(w.position(ghost).y < -5.0f);  // fell through
+    // Both sides must agree: a body whose own mask excludes the ground's layer falls too.
+    const auto picky = w.box("Picky", {0, 3}, {1, 1}, BodyType2D::Dynamic);
+    w.scene.registry().get<Collider2DComponent>(picky).collidesWith = ~(1u << 2);
+    w.run(1.5f);
+    CHECK(w.position(picky).y < -3.0f);
+    // Raycasts.
+    CHECK(w.physics.raycast({6, 5}, {0, -1}, 10.0f).has_value());
+    CHECK(w.physics.raycast({6, 5}, {0, -1}, 10.0f, 1u << 2)->entity == ground);
+    CHECK_FALSE(w.physics.raycast({6, 5}, {0, -1}, 10.0f, ~(1u << 2)).has_value());
+}
+
+TEST_CASE("joints: hinge pendulum and limits, motor, rope, spring, slider, weld between two bodies") {
+    World2D w;
+    // Hinge pendulum: pivot at (0, 5), bob 2 m to the right; it swings down and keeps its radius.
+    const auto bob = w.box("Bob", {2, 5}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    auto& hinge = w.scene.registry().emplace<Joint2DComponent>(bob);
+    hinge.type = JointType2D::Hinge;
+    hinge.anchor = {-2, 0};
+    float lowest = 99.0f;
+    for (int i = 0; i < 90; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        const Vec3 p = w.position(bob);
+        CHECK(std::hypot(p.x, p.y - 5.0f) == doctest::Approx(2.0f).epsilon(0.03));
+        lowest = std::min(lowest, p.y);
+    }
+    CHECK(lowest < 3.3f);
+    CHECK(w.physics.jointCount() == 1);
+    CHECK(w.physics.jointValue(bob).has_value());
+    // Limits: a second pendulum may only swing 0.3 rad.
+    const auto limited = w.box("Limited", {12, 5}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    auto& lim = w.scene.registry().emplace<Joint2DComponent>(limited);
+    lim.anchor = {-2, 0};
+    lim.enableLimits = true;
+    lim.lowerAngle = -0.3f;
+    lim.upperAngle = 0.3f;
+    for (int i = 0; i < 120; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        const float a = w.physics.jointValue(limited).value();
+        CHECK(a > -0.42f);  // Box2D limits are slightly soft on impact
+        CHECK(a < 0.42f);
+    }
+    // Motor: a wheel pinned to the world turns at the motor speed.
+    const auto wheel = w.scene.createEntity("Wheel");
+    w.scene.registry().get<TransformComponent>(wheel).position = {-10, 5, 0};
+    w.scene.registry().emplace<RigidBody2DComponent>(wheel).gravityScale = 0.0f;
+    auto& wc = w.scene.registry().emplace<Collider2DComponent>(wheel);
+    wc.shape = ColliderShape2D::Circle;
+    auto& motor = w.scene.registry().emplace<Joint2DComponent>(wheel);
+    motor.enableMotor = true;
+    motor.motorSpeed = 3.0f;
+    motor.maxMotorForce = 500.0f;
+    // Angle travelled in `seconds` (the joint angle wraps at +-pi).
+    auto turned = [&](float seconds) {
+        float total = 0.0f, last = w.physics.jointValue(wheel).value();
+        for (int i = 0; i < static_cast<int>(seconds * 60.0f); ++i) {
+            w.physics.step(w.scene, 1.0f / 60.0f);
+            const float now = w.physics.jointValue(wheel).value();
+            float d = now - last;
+            if (d > math::kPi) d -= 2.0f * math::kPi;
+            if (d < -math::kPi) d += 2.0f * math::kPi;
+            total += d;
+            last = now;
+        }
+        return total;
+    };
+    w.physics.step(w.scene, 1.0f / 60.0f);  // creates the joint
+    turned(0.5f);
+    CHECK(turned(1.0f) == doctest::Approx(3.0f).epsilon(0.05));
+    // The motor speed changes live (scripts drive it), without rebuilding the joint.
+    motor.motorSpeed = -2.0f;
+    turned(0.5f);
+    CHECK(turned(1.0f) == doctest::Approx(-2.0f).epsilon(0.05));
+
+    // Rope (distance limits 0..3): the ball hangs at most 3 m below the hook.
+    const auto ball = w.box("Ball", {20, 9}, {0.3f, 0.3f}, BodyType2D::Dynamic);
+    auto& rope = w.scene.registry().emplace<Joint2DComponent>(ball);
+    rope.type = JointType2D::Distance;
+    rope.autoConnectedAnchor = false;
+    rope.connectedAnchor = {20, 10};  // world point (no connected body)
+    rope.enableLimits = true;
+    rope.lowerLimit = 0.0f;
+    rope.upperLimit = 3.0f;
+    w.run(2.0f);
+    CHECK(w.position(ball).y == doctest::Approx(7.0f).epsilon(0.02));
+    CHECK(w.physics.jointValue(ball).value() == doctest::Approx(3.0f).epsilon(0.02));
+
+    // Slider on a vertical axis: falls straight down until the lower limit.
+    const auto lift = w.box("Lift", {30, 5}, {1, 0.2f}, BodyType2D::Dynamic);
+    w.scene.registry().get<TransformComponent>(lift).rotation = math::Quat::fromAxisAngle({0, 0, 1}, 0.0f);
+    auto& slider = w.scene.registry().emplace<Joint2DComponent>(lift);
+    slider.type = JointType2D::Slider;
+    slider.axis = {0, 1};
+    slider.enableLimits = true;
+    slider.lowerLimit = -1.5f;
+    slider.upperLimit = 0.0f;
+    w.physics.setVelocity(lift, {5, 0});  // sideways push: the slider forbids it (body exists after a first step)
+    w.run(0.05f);
+    w.physics.setVelocity(lift, {5, 0});
+    w.run(2.0f);
+    CHECK(w.position(lift).x == doctest::Approx(30.0f).epsilon(0.01));
+    CHECK(w.position(lift).y == doctest::Approx(3.5f).epsilon(0.02));
+    // Slider motor lifts it back up at 1 m/s.
+    slider.enableMotor = true;
+    slider.motorSpeed = 1.0f;
+    slider.maxMotorForce = 10000.0f;
+    w.run(1.0f);
+    CHECK(w.position(lift).y == doctest::Approx(4.5f).epsilon(0.03));
+
+    // Weld between two dynamic bodies: they fall together, keeping their offset.
+    const auto a = w.box("A", {40, 5}, {1, 1}, BodyType2D::Dynamic);
+    const auto b = w.box("B", {41.5f, 5}, {1, 1}, BodyType2D::Dynamic);
+    auto& weld = w.scene.registry().emplace<Joint2DComponent>(b);
+    weld.type = JointType2D::Fixed;
+    weld.connectedBody = a;
+    w.run(0.5f);
+    CHECK(w.position(a).y < 4.0f);
+    CHECK(w.position(b).x - w.position(a).x == doctest::Approx(1.5f).epsilon(0.02));
+    CHECK(w.position(b).y == doctest::Approx(w.position(a).y).epsilon(0.02));
+    // Spring: a mass on a 2 Hz spring of rest length 2 oscillates, then settles below the rest point.
+    const auto mass = w.box("Mass", {50, 8}, {0.5f, 0.5f}, BodyType2D::Dynamic);
+    auto& spring = w.scene.registry().emplace<Joint2DComponent>(mass);
+    spring.type = JointType2D::Distance;
+    spring.autoConnectedAnchor = false;
+    spring.connectedAnchor = {50, 10};
+    spring.springFrequency = 2.0f;
+    spring.springDamping = 0.5f;
+    w.run(4.0f);
+    const float len = w.physics.jointValue(mass).value();
+    CHECK(len > 2.0f);   // stretched by gravity
+    CHECK(len < 2.2f);   // 2 Hz: g / (2 pi f)^2 ~ 6 cm
+}
+
+TEST_CASE("a joint pulled harder than breakForce breaks once; clearing `broken` rebuilds it; removing the component frees it") {
+    World2D w;
+    const auto weight = w.box("Weight", {0, 7}, {1, 1}, BodyType2D::Dynamic);  // 1 kg/m^2 x 1 m^2
+    auto& rope = w.scene.registry().emplace<Joint2DComponent>(weight);
+    rope.type = JointType2D::Distance;
+    rope.autoConnectedAnchor = false;
+    rope.connectedAnchor = {0, 10};
+    rope.breakForce = 50.0f;  // holds the weight (~9.8 N)
+    w.run(1.0f);
+    CHECK(w.position(weight).y == doctest::Approx(7.0f).epsilon(0.01));
+    CHECK_FALSE(rope.broken);
+    // Heavier: 100 kg pulls ~980 N -> breaks.
+    w.scene.registry().get<Collider2DComponent>(weight).density = 100.0f;
+    int breaks = 0;
+    for (int i = 0; i < 60; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        for (const auto& e : w.physics.jointBreaks()) {
+            ++breaks;
+            CHECK(e.entity == weight);
+            CHECK(e.force > 50.0f);
+        }
+    }
+    CHECK(breaks == 1);
+    CHECK(rope.broken);
+    CHECK(w.physics.jointCount() == 0);
+    CHECK(w.position(weight).y < 5.0f);  // falling
+    rope.broken = false;
+    rope.breakForce = 0.0f;
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    CHECK(w.physics.jointCount() == 1);
+    w.scene.registry().remove<Joint2DComponent>(weight);
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    CHECK(w.physics.jointCount() == 0);
+    // A joint on an entity without a body is reported, not created.
+    const auto lonely = w.scene.createEntity("Lonely");
+    w.scene.registry().emplace<Joint2DComponent>(lonely);
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    CHECK(w.physics.jointCount() == 0);
+}
+
 }  // TEST_SUITE

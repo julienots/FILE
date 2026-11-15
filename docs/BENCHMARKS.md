@@ -191,6 +191,22 @@ script: onUpdate of 1000 entities (translate)      0.250 ms     250.04 ns/item
 | Jolt, 1 000 boîtes en tas : ~10 ms par pas | Simulation mono-thread : à 60 Hz, ~1 000 corps actifs empilés restent dans le budget d'un cœur de ce Xeon, pas forcément d'un téléphone d'entrée de gamme. Le multi-thread (JobSystem) est la piste d'optimisation. |
 | Lua, `onUpdate` de 1 000 entités : 0,25 à 0,4 ms selon les exécutions | 0,25 à 0,4 µs par appel, accès au Transform compris. |
 
+### Articulations et personnages
+
+`agr_benchmarks` (build optimisé, même machine, un cœur) :
+
+```
+physics3d: step, 100 characters walking           0.226 ms    2264.23 ns/item
+physics3d: step, 500 ball joints (20 chains)      0.990 ms    1980.92 ns/item
+physics2d: step, 500 hinge joints (20 chains)      0.437 ms     874.60 ns/item
+```
+
+| Mesure | Analyse |
+|---|---|
+| 100 personnages (`CharacterController3D`) qui marchent entre 50 piliers : ~0,23 ms par pas | ~2,3 µs par personnage : glissement, marches et collage au sol compris ; une foule de PNJ tient dans le budget. |
+| 500 rotules 3D (20 chaînes de 25 maillons) : ~1 ms par pas | Chaînes en mouvement (tous les corps actifs). |
+| 500 charnières 2D : ~0,44 ms par pas | Box2D, 4 sous-pas. |
+
 ## Audio, interface et animation (phase 7)
 
 `agr_benchmarks` (même machine, un cœur) :

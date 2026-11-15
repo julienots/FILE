@@ -343,6 +343,12 @@ private:
     std::set<std::string> m_selection;
 };
 
+/// Names of the 32 collision layers (assets://physics_layers.json), saved on each change.
+class PhysicsLayersPanel {
+public:
+    void draw(EditorShared& s);
+};
+
 /// CPU profiler: scope tree (phases, plugins, scripts, renderer, agr.profile) and history.
 class ProfilerPanel {
 public:

@@ -24,6 +24,7 @@ end
 
 function Player:onFixedUpdate(dt) end            -- au pas fixe (60 Hz), avant la physique
 function Player:onCollision(other, began) end    -- contact physique commencé / terminé
+function Player:onJointBreak(force) end          -- l'articulation (Joint2D / Joint3D) de cette entité a cassé
 function Player:onTrigger(other, began) end      -- entrée / sortie d'un déclencheur
 function Player:onDestroy() end                  -- composant retiré, entité détruite, arrêt du jeu
 function Player:onClick() end                    -- UIButton de cette entité cliqué
@@ -74,7 +75,9 @@ return Player
 | `parent()`, `children()` → table, `find(nom)` | hiérarchie (`find` cherche parmi les descendants) |
 | `destroy()` | détruit l'entité et ses enfants à la fin de l'image |
 | `script()` | la table `self` du script de cette entité, ou `nil` |
-| `velocity()`, `setVelocity(...)`, `applyForce(...)`, `applyImpulse(...)`, `setAngularVelocity(...)` | corps physique : 2D (`x, y` ; angulaire en rad/s) ou 3D (`x, y, z`) selon que l'entité a un `RigidBody2D` ou un `RigidBody` |
+| `velocity()`, `setVelocity(...)`, `applyForce(...)`, `applyImpulse(...)`, `setAngularVelocity(...)` | corps physique : 2D (`x, y` ; angulaire en rad/s) ou 3D (`x, y, z`) selon que l'entité a un `RigidBody2D` ou un `RigidBody` / `CharacterController3D` (pour un personnage, `setVelocity` est le mouvement voulu) |
+| `isGrounded()`, `groundNormal()` → x, y, z | personnage 3D (`CharacterController3D`) sur un sol praticable |
+| `jointValue()` | articulation de l'entité : angle (rad), position de glissière ou longueur (m) ; `nil` sans articulation ([PHYSICS.md](PHYSICS.md#articulations-joints)) |
 | `setActive(bool)`, `isActive()` | active / désactive l'entité (et ses enfants) : menus, objets cachés. Désactiver une entité détruit l'instance de son script (`onDestroy`) ; la réactiver en crée une nouvelle (`onStart`, propriétés d'origine) |
 | `playSound()`, `stopSound([fondu])`, `isSoundPlaying()` | `AudioSource` de l'entité ([AUDIO.md](AUDIO.md)) |
 | `setText(valeur)`, `text()` | `UIText` de l'entité (les nombres sont convertis) ([UI.md](UI.md)) |
@@ -108,9 +111,10 @@ composant).
 | `agr.screen.size()` → largeur, hauteur | taille de la fenêtre dans les unités du toucher / de la souris |
 | `agr.time.delta()`, `fixedDelta()`, `total()`, `frame()` | temps (secondes) |
 | `agr.time.now()` | heure réelle en secondes depuis 1970 (gains hors ligne, récompenses quotidiennes) |
-| `agr.physics2d.raycast(ox, oy, dx, dy [, distance])` | table `{entity, x, y, nx, ny, distance}` ou `nil` |
+| `agr.physics2d.raycast(ox, oy, dx, dy [, distance [, masque]])` | table `{entity, x, y, nx, ny, distance}` ou `nil` ; `masque` : nom de couche, table de noms ou entier |
 | `agr.physics2d.gravity()`, `setGravity(x, y)` | gravité 2D (−9,81 m/s² par défaut) |
-| `agr.physics3d.raycast(ox, oy, oz, dx, dy, dz [, distance])` | `{entity, x, y, z, nx, ny, nz, distance}` ou `nil` |
+| `agr.physics3d.raycast(ox, oy, oz, dx, dy, dz [, distance [, masque]])` | `{entity, x, y, z, nx, ny, nz, distance}` ou `nil` |
+| `agr.physics2d.layer(nom)` / `agr.physics3d.layer(nom)` → n° ; `.mask(nom ou n°, ...)` → masque | couches de collision nommées dans `assets/physics_layers.json` ([PHYSICS.md](PHYSICS.md#couches-de-collision)) |
 | `agr.physics3d.setGravity(x, y, z)` | gravité 3D |
 | `agr.audio.play(uri [, options])` → voix ou `nil, message` | options : `volume`, `pitch`, `pan`, `loop`, `bus`, `stream`, `fadeIn`, `x`/`y`/`z` (voix spatiale), `minDistance`, `maxDistance` |
 | `agr.audio.stop(voix [, fondu])`, `isPlaying(voix)`, `setVolume(voix, v)`, `setPitch(voix, v)` | contrôle d'une voix |

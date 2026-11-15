@@ -469,7 +469,7 @@ void UISystem::navigate(Scene& scene, Vec2 dir) {
         for (const Cand& c : cands)
             if (c.order == topOrder && (!best || c.center.y < best->center.y - 1.0f || (std::abs(c.center.y - best->center.y) <= 1.0f && c.center.x < best->center.x)))
                 best = &c;
-        m_navFocus = best->e;
+        if (best) m_navFocus = best->e;  // always found: cands is not empty
         m_navVisible = true;
         return;
     }

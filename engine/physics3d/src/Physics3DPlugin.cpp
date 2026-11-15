@@ -23,6 +23,7 @@ void Physics3DPlugin::onUnload(Engine& engine) {
 void Physics3DPlugin::onFixedUpdate(Engine& engine, const FrameTime& time) {
     m_world->step(engine.scene(), static_cast<float>(time.fixedDeltaSeconds));
     for (const Collision3DEvent& e : m_world->events()) engine.events().publish(e);
+    for (const JointBreak3DEvent& e : m_world->jointBreaks()) engine.events().publish(e);
 }
 
 } // namespace agr

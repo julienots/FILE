@@ -199,4 +199,205 @@ TEST_CASE("destroyed entities and reloaded scenes drop their bodies; determinist
     CHECK(simulate() == simulate());
 }
 
+TEST_CASE("collision layers: masks decide who collides; raycasts filter by layer") {
+    World3D w;
+    const auto ground = w.box("Ground", {0, 0, 0}, {30, 1, 30}, BodyType3D::Static, false);
+    auto& gc = w.scene.registry().get<ColliderComponent>(ground);
+    gc.layer = 2;
+    gc.collidesWith = ~(1u << 1);
+    const auto solid = w.box("Solid", {-3, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    const auto ghost = w.box("Ghost", {3, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    w.scene.registry().get<ColliderComponent>(ghost).layer = 1;
+    w.run(2.0f);
+    CHECK(w.position(solid).y == doctest::Approx(1.0f).epsilon(0.03));
+    CHECK(w.position(ghost).y < -5.0f);
+    CHECK(w.physics.raycast({8, 5, 0}, {0, -1, 0}, 10.0f, 1u << 2)->entity == ground);
+    CHECK_FALSE(w.physics.raycast({8, 5, 0}, {0, -1, 0}, 10.0f, ~(1u << 2)).has_value());
+}
+
+TEST_CASE("joints 3D: hinge door with motor and limits, rope, slider, ball chain, fixed, connected bodies don't collide") {
+    World3D w;
+    w.box("Ground", {0, -0.5f, 0}, {80, 1, 80}, BodyType3D::Static, false);
+    // Door: 2 x 2 panel hinged on its left edge about Y, motor 1 rad/s, limited to 90 degrees.
+    const auto door = w.box("Door", {1, 1.2f, 0}, {2, 2, 0.1f}, BodyType3D::Dynamic);
+    auto& h = w.scene.registry().emplace<Joint3DComponent>(door);
+    h.type = JointType3D::Hinge;
+    h.anchor = {-1, 0, 0};
+    h.axis = {0, 1, 0};
+    h.enableMotor = true;
+    h.motorSpeed = 1.0f;
+    h.maxMotorForce = 5000.0f;
+    h.enableLimits = true;
+    h.lowerAngle = -1.5707963f;
+    h.upperAngle = 1.5707963f;
+    w.run(0.5f);
+    const float a0 = w.physics.jointValue(door).value();
+    w.run(0.5f);
+    CHECK(w.physics.jointValue(door).value() - a0 == doctest::Approx(0.5f).epsilon(0.08));
+    w.run(2.0f);
+    CHECK(w.physics.jointValue(door).value() == doctest::Approx(1.5707963f).epsilon(0.05));  // stopped by the limit
+    const Vec3 dp = w.position(door);
+    CHECK(std::hypot(dp.x - 0.0f, dp.z) == doctest::Approx(1.0f).epsilon(0.03));  // still 1 m from the hinge
+    CHECK(dp.y == doctest::Approx(1.2f).epsilon(0.03));                            // held up by the hinge
+    // Rope 3 m below a world hook.
+    const auto ball = w.box("Ball", {10, 9, 0}, {0.3f, 0.3f, 0.3f}, BodyType3D::Dynamic);
+    auto& rope = w.scene.registry().emplace<Joint3DComponent>(ball);
+    rope.type = JointType3D::Distance;
+    rope.autoConnectedAnchor = false;
+    rope.connectedAnchor = {10, 10, 0};
+    rope.enableLimits = true;
+    rope.lowerLimit = 0.0f;
+    rope.upperLimit = 3.0f;
+    w.run(2.0f);
+    CHECK(w.position(ball).y == doctest::Approx(7.0f).epsilon(0.02));
+    CHECK(w.physics.jointValue(ball).value() == doctest::Approx(3.0f).epsilon(0.02));
+    // Slider along Y with limits: drops 1.5 m and stays above x/z.
+    const auto lift = w.box("Lift", {20, 5, 0}, {1, 0.2f, 1}, BodyType3D::Dynamic);
+    auto& sl = w.scene.registry().emplace<Joint3DComponent>(lift);
+    sl.type = JointType3D::Slider;
+    sl.axis = {0, 1, 0};
+    sl.enableLimits = true;
+    sl.lowerLimit = -1.5f;
+    sl.upperLimit = 0.0f;
+    w.run(0.05f);
+    w.physics.setVelocity(lift, {4, 0, 4});
+    w.run(2.0f);
+    CHECK(w.position(lift).x == doctest::Approx(20.0f).epsilon(0.01));
+    CHECK(w.position(lift).z == doctest::Approx(0.0f));
+    CHECK(w.position(lift).y == doctest::Approx(3.5f).epsilon(0.02));
+    sl.enableMotor = true;
+    sl.motorSpeed = 1.0f;
+    sl.maxMotorForce = 100000.0f;
+    w.run(1.0f);
+    CHECK(w.position(lift).y == doctest::Approx(4.5f).epsilon(0.04));
+    // Chain of two links on ball joints, hanging from a world point; overlapping links do not
+    // push each other apart (connected bodies ignore each other).
+    const auto l1 = w.box("Link1", {30, 8, 0}, {0.3f, 1.2f, 0.3f}, BodyType3D::Dynamic);
+    const auto l2 = w.box("Link2", {30, 7, 0}, {0.3f, 1.2f, 0.3f}, BodyType3D::Dynamic);
+    auto& j1 = w.scene.registry().emplace<Joint3DComponent>(l1);
+    j1.type = JointType3D::Ball;
+    j1.anchor = {0, 0.5f, 0};
+    auto& j2 = w.scene.registry().emplace<Joint3DComponent>(l2);
+    j2.type = JointType3D::Ball;
+    j2.anchor = {0, 0.5f, 0};
+    j2.connectedBody = l1;
+    w.run(2.0f);
+    CHECK(w.position(l1).y == doctest::Approx(8.0f).epsilon(0.02));
+    CHECK(w.position(l2).y == doctest::Approx(7.0f).epsilon(0.02));
+    CHECK(w.physics.jointCount() == 5);
+    // Fixed: a crate welded to a falling base keeps its offset.
+    const auto base = w.box("Base", {40, 4, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    const auto top = w.box("Top", {40, 5.5f, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    auto& fx = w.scene.registry().emplace<Joint3DComponent>(top);
+    fx.type = JointType3D::Fixed;
+    fx.connectedBody = base;
+    w.run(0.5f);
+    CHECK(w.position(base).y < 3.5f);
+    CHECK(w.position(top).y - w.position(base).y == doctest::Approx(1.5f).epsilon(0.02));
+}
+
+TEST_CASE("joints 3D break above breakForce and are removed with their bodies") {
+    World3D w;
+    const auto weight = w.box("Weight", {0, 7, 0}, {0.5f, 0.5f, 0.5f}, BodyType3D::Dynamic);
+    w.scene.registry().get<RigidBodyComponent>(weight).mass = 1.0f;
+    auto& rope = w.scene.registry().emplace<Joint3DComponent>(weight);
+    rope.type = JointType3D::Distance;
+    rope.autoConnectedAnchor = false;
+    rope.connectedAnchor = {0, 10, 0};
+    rope.breakForce = 50.0f;
+    w.run(1.0f);
+    CHECK_FALSE(rope.broken);
+    CHECK(w.position(weight).y == doctest::Approx(7.0f).epsilon(0.01));
+    w.scene.registry().get<RigidBodyComponent>(weight).mass = 100.0f;
+    int breaks = 0;
+    for (int i = 0; i < 60; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        breaks += static_cast<int>(w.physics.jointBreaks().size());
+    }
+    CHECK(breaks == 1);
+    CHECK(rope.broken);
+    CHECK(w.physics.jointCount() == 0);
+    CHECK(w.position(weight).y < 5.0f);
+    rope.broken = false;
+    rope.breakForce = 0.0f;
+    w.run(0.1f);
+    CHECK(w.physics.jointCount() == 1);
+    w.scene.destroyEntity(weight);
+    w.run(0.1f);
+    CHECK(w.physics.jointCount() == 0);
+}
+
+TEST_CASE("character controller: walks, is grounded, blocked by walls, climbs steps not ledges, jumps, pushes boxes, seen by triggers and rays") {
+    World3D w;
+    const auto ground = w.box("Ground", {0, -0.5f, 0}, {60, 1, 60}, BodyType3D::Static, false);
+    const auto wall = w.box("Wall", {0, 1, 6}, {10, 2, 0.5f}, BodyType3D::Static, false);
+    w.box("Step", {9, 0.125f, 0}, {8, 0.25f, 4}, BodyType3D::Static, false);   // 25 cm: climbable
+    w.box("Ledge", {-6, 0.4f, 0}, {2, 0.8f, 4}, BodyType3D::Static, false);   // 80 cm: not
+    const auto hero = w.scene.createEntity("Hero");
+    w.scene.registry().get<TransformComponent>(hero).position = {0, 1, 0};
+    w.scene.registry().emplace<CharacterController3DComponent>(hero);
+    w.run(1.0f);
+    CHECK(w.physics.hasCharacter(hero));
+    CHECK(w.physics.isGrounded(hero));
+    CHECK(w.position(hero).y == doctest::Approx(0.0f).epsilon(0.05));
+    CHECK(w.physics.groundNormal(hero)->y == doctest::Approx(1.0f).epsilon(0.01));
+    // Walk toward +z into the wall: stops in front of it, collision event with the wall.
+    REQUIRE(w.physics.setVelocity(hero, {0, 0, 4}));
+    bool hitWall = false;
+    for (const auto& e : w.run(2.0f)) hitWall |= e.begin && e.a == hero && e.b == wall;
+    CHECK(hitWall);
+    CHECK(w.position(hero).z == doctest::Approx(6.0f - 0.25f - 0.35f).epsilon(0.03));
+    CHECK(w.position(hero).y == doctest::Approx(0.0f).epsilon(0.05));
+    // Up the 25 cm step.
+    w.scene.registry().get<TransformComponent>(hero).position = {3, 0, 0};
+    w.physics.setVelocity(hero, {3, 0, 0});
+    w.run(1.5f);
+    CHECK(w.position(hero).x > 6.0f);
+    CHECK(w.position(hero).y == doctest::Approx(0.25f).epsilon(0.05));
+    // Not up the 80 cm ledge.
+    w.scene.registry().get<TransformComponent>(hero).position = {-3, 0, 0};
+    w.physics.setVelocity(hero, {-3, 0, 0});
+    w.run(1.5f);
+    CHECK(w.position(hero).x > -5.0f - 0.36f);
+    CHECK(w.position(hero).y == doctest::Approx(0.0f).epsilon(0.05));
+    // Jump: leaves the ground, comes back down.
+    w.physics.setVelocity(hero, {0, 5, 0});
+    float top = 0.0f;
+    bool airborne = false;
+    for (int i = 0; i < 90; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        top = std::max(top, w.position(hero).y);
+        airborne |= !w.physics.isGrounded(hero);
+    }
+    CHECK(airborne);
+    CHECK(top == doctest::Approx(25.0f / (2.0f * 9.81f)).epsilon(0.1));  // v^2 / 2g
+    CHECK(w.physics.isGrounded(hero));
+    CHECK(w.physics.velocity(hero)->y == doctest::Approx(0.0f));
+    // Pushes a light dynamic box.
+    w.scene.registry().get<TransformComponent>(hero).position = {0, 0, -10};
+    const auto crate = w.box("Crate", {2, 0.5f, -10}, {1, 1, 1}, BodyType3D::Dynamic);
+    w.scene.registry().get<RigidBodyComponent>(crate).mass = 5.0f;
+    w.physics.setVelocity(hero, {2, 0, 0});
+    w.run(2.0f);
+    CHECK(w.position(crate).x > 3.0f);
+    // A trigger sees the character; rays hit it.
+    const auto zone = w.box("Zone", {0, 1, -20}, {2, 2, 2}, BodyType3D::Static, false);
+    w.scene.registry().get<ColliderComponent>(zone).isTrigger = true;
+    w.physics.setVelocity(hero, {0, 0, 0});
+    w.scene.registry().get<TransformComponent>(hero).position = {0, 0, -20};
+    bool entered = false;
+    for (const auto& e : w.run(0.5f)) entered |= e.begin && e.trigger && e.a == zone && e.b == hero;
+    CHECK(entered);
+    const auto hit = w.physics.raycast({-5, 1, -20}, {1, 0, 0}, 20.0f, ~(1u << 0) | 1u);
+    REQUIRE(hit.has_value());
+    CHECK((hit->entity == hero || hit->entity == zone));
+    // Layers: a character whose mask excludes the ground falls through it.
+    auto& cc = w.scene.registry().get<CharacterController3DComponent>(hero);
+    cc.collidesWith = 0;
+    w.scene.registry().get<TransformComponent>(hero).position = {20, 0, 20};
+    w.run(1.0f);
+    CHECK(w.position(hero).y < -1.0f);
+    (void)ground;
+}
+
 }  // TEST_SUITE

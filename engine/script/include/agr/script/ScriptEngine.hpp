@@ -106,6 +106,8 @@ public:
     void fixedUpdate(Scene& scene, const FrameTime& time);
     void dispatchCollision(Scene& scene, const Collision2DEvent& event);
     void dispatchCollision(Scene& scene, const Collision3DEvent& event);
+    /// A joint broke: `onJointBreak(force)` on the script of the joint's entity.
+    void dispatchJointBreak(Scene& scene, ecs::Entity entity, float force);
     /// UI: `onClick()` on the button's script, then `message(button)` on its target's script.
     void dispatchUI(Scene& scene, const UIClickEvent& event);
     /// UI: `onValueChanged(value)` on the slider's script, then `message(slider, value)` on its target's.

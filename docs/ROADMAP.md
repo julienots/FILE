@@ -91,9 +91,10 @@ Guide : [2D.md](2D.md).
 | Menu Créer › 2D (Tilemap, Particules 2D, Lumière 2D, Couche de parallaxe), dépôt de feuilles dans la scène | ✅ | éditeur |
 | Modèle « Vitrine 2D » avec art original reproductible | ✅ | `SceneTemplates`, `tools/generate_template_2d_art.py` |
 | Tests : 9 unitaires 2D + 5 éditeur, 6 GPU au pixel près × 3 API, test de bout en bout (peinture à la souris, animation en jeu) | ✅ | `tests/test_twod.cpp`, `tests/gpu/test_renderer2d.cpp` |
-| Collisions / physique 2D, formes de collision des tilemaps | ⬜ | phase 6 |
-| Animation squelettique 2D, timeline | ⬜ | phase 7 |
-| Canvas UI | ⬜ | phase 7 |
+| Collisions / physique 2D, formes de collision des tilemaps | ✅ | phase 6 (`TilemapCollider2D`) |
+| Timeline d'animation | ✅ | phase 7 |
+| Animation squelettique 2D | ⬜ | à planifier |
+| Canvas UI | ✅ | phase 7 |
 | Ombres 2D, normal maps 2D | ⬜ | non planifié en détail |
 | Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
 
@@ -121,7 +122,7 @@ Guide : [3D.md](3D.md).
 | Ombres des lumières locales | ⬜ | à planifier |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
-## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D, Lua et logique visuelle terminés ; joints et débogueur à venir)
+## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua et logique visuelle terminés ; formes maillage et débogueur à venir)
 
 Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 
@@ -135,7 +136,8 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Modèles jouables : Vitrine 2D (plateforme, clavier et tactile), Vitrine 3D (lancer de balles) | ✅ | `SceneTemplates`, `assets/scripts` |
 | Tests : 7 cas 2D, 4 cas 3D, 10 cas scripts, jeu des modèles sans écran, mode Jeu piloté au clavier dans le test de bout en bout | ✅ | `tests/` |
 | **Éditeur de logique visuelle** (événements, conditions, variables, actions, boucles, minuteurs) | ✅ | `.agrlogic` compilé en Lua par le moteur, panneau « Logique visuelle » ; [LOGIC.md](LOGIC.md) |
-| Joints, contrôleur de personnage, formes maillage / convexes 3D, couches de collision | ⬜ | à planifier |
+| Couches de collision nommées (2D / 3D, rayons filtrés), articulations 2D / 3D (soudure, charnière, corde / ressort, glissière, rotule ; butées, moteurs, rupture), contrôleur de personnage 3D (marches, pentes, poussée) | ✅ | `Joint2D`, `Joint3D`, `CharacterController3D`, `physics_layers.json` ; [PHYSICS.md](PHYSICS.md) |
+| Formes maillage / convexes 3D, requêtes de chevauchement, contrôleur de personnage 2D | ⬜ | à planifier |
 | Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
 
 ## Phase 7 — Animation, audio, UI 🟡 (audio, interface et animation de propriétés terminés ; squelettes, effets audio et widgets avancés à venir)

@@ -29,6 +29,8 @@ enum FieldFlags : u32 {
     FieldFlag_Transient = 1u << 3,    ///< Not serialized.
     FieldFlag_Angle = 1u << 4,        ///< Float stored in radians, shown in degrees.
     FieldFlag_AssetPath = 1u << 5,    ///< String holding an asset URI (drag & drop, preview).
+    FieldFlag_Layer = 1u << 6,        ///< Int32 collision layer 0..31 (chosen by name in the inspector).
+    FieldFlag_LayerMask = 1u << 7,    ///< UInt32 set of collision layers (bit n = layer n).
 };
 
 struct EnumEntry {
