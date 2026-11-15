@@ -6,12 +6,45 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.9.1 (versionCode 14). Taille : environ 25 Mo. SHA-256 : `413fc7f77512cb2e5e96128e5c9c3e6a5c57df4fb301abb0a99a2b5a5317a3b7`.
-  - Les versions 1.6.1 à 1.9.1 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.10.0 (versionCode 15). Taille : environ 25 Mo. SHA-256 : `ebd33112749f58eb2b83d9340d9a887fadd0f35b8efd78cdee5c186de09b2916`.
+  - Les versions 1.6.1 à 1.10.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.10.0 (votre domaine, traqueurs de la nuit, pluie avancée)
+
+- **Votre domaine** (Journal → onglet **Domaine**) :
+  - **Fonder** : plantez votre étendard dans la nature, loin des villages, des routes et de l'eau, pour 10 bois. Le terrain est aplani, le domaine apparaît sur la carte, et vous y réapparaissez après une mort.
+  - **Construire** : 10 bâtiments. Maison, tente et grande maison pour loger ; champ, étal, puits et enclos pour produire ; forge, tour de guet et palissades.
+    - Chacun coûte du bois, de la pierre, du cuir ou des lingots.
+    - Un aperçu du bâtiment (vert si l'emplacement est libre, rouge sinon) se place devant le héros : on marche pour le déplacer, on le tourne, on construit.
+    - Les bâtiments sont de vrais bâtiments du monde (collisions, lumières, fumée) et utiliseront vos modèles 3D quand ils arriveront.
+  - **Habitants** (40 or, il faut de la place dans les maisons) : ils vivent au domaine, cultivent les champs et tiennent les étals.
+  - **Soldats** (120 or, il faut une tour de guet) : armure, épée et bouclier. Ils gardent le domaine et attaquent les ennemis qui s'approchent, ou vous **escortent** partout. Un soldat tombé au combat est perdu.
+  - **Élevage** : cochons (35 or) et chevaux (250 or) dans les enclos. Les cochons donnent de la viande et du cuir ; les chevaux donnent un poulain (votre propre cheval) tous les 3 jours.
+  - **Production chaque matin** : du pain (un champ par habitant), de la viande, du cuir, et de l'or grâce aux étals. Le puits ajoute 25 %. On récolte depuis l'onglet Domaine.
+  - **Sûr la nuit** dès qu'une tour de guet est construite.
+- **Traqueurs de la nuit** : après la tombée de la nuit, hors des lieux sûrs, un hurlement, puis des **Molosses de l'Abîme** et des **Rôdeurs de minuit** sortent de l'ombre derrière vous.
+  - Ils connaissent votre position et vous pistent partout, et ils sont aussi forts que vous.
+  - Ils abandonnent si vous atteignez un village (ou votre domaine avec une tour), et ils se dissolvent à l'aube.
+- **Pluie avancée** :
+  - des **flaques** se forment dans les ornières des chemins, sur les pavés et dans les creux, et s'agrandissent quand la pluie dure ;
+  - elles reflètent le ciel, et les gouttes y font des **ronds** ; un frémissement d'impacts couvre tout sol mouillé ;
+  - des **éclaboussures** apparaissent là où tombent les gouttes, des cercles sur l'eau, et des **rideaux de pluie** au loin ;
+  - les personnages ruissellent.
+- **Vérification (1.10.0)** : 1 978 tests unitaires. Trois nouveaux scénarios sont réussis :
+  - `domain` : fondation et construction par de vrais appuis, 7 bâtiments, recrutement, apparition des habitants, soldats et animaux, soldats qui combattent un loup, production du matin, sauvegarde puis chargement sans doublon ;
+  - `hunters` : vague de nuit qui se rapproche, abandon au village, dissolution à l'aube ;
+  - `rain` : sol mouillé, particules, héros trempé.
+
+  Tous les autres scénarios sont aussi réussis ; `full`, `domain` et `hunters` passent sous AddressSanitizer sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Ce qui n'est pas fait (honnêtement)** :
+  - **Jouer à deux** n'existe pas encore : il faut une couche réseau entre deux téléphones (hôte et invité, synchronisation des héros, des ennemis et des combats). C'est un gros chantier à part, et je ne peux pas le tester ici sans deux appareils.
+  - Le **partage du monde** (envoyer sa sauvegarde à un ami) n'est pas fait non plus.
+  - Les ennemis ne visent pas encore vos soldats (ils visent le héros) ; il n'y a pas d'attaque organisée du domaine.
+  - Une seule base par partie, de 34 m de rayon.
 
 ### Nouveautés 1.9.1 (hautes herbes)
 
@@ -497,7 +530,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, rain, hunters, domain, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
