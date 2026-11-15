@@ -28,6 +28,10 @@ public:
     Status loadAll(Engine& engine);
     /// Calls onUnload in reverse load order and closes libraries.
     void unloadAll(Engine& engine);
+    /// Unloads one dynamic plugin (onUnload), closes its library and forgets it, so that a new
+    /// build of the library can be added again (hot reload in the editor). Refused for static
+    /// plugins and while a loaded plugin depends on it.
+    Status unloadDynamic(Engine& engine, const std::string& name);
 
     void fixedUpdate(Engine& engine, const FrameTime& time);
     void update(Engine& engine, const FrameTime& time);

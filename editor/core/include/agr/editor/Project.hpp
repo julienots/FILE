@@ -51,6 +51,10 @@ struct ProjectSettings {
     std::string graphicsProfile = "auto";
     std::string engineVersion;  ///< Written on save.
     ExportSettings exportSettings;
+    /// Plugin libraries of the project's plugins/ folder loaded when the project opens (file names).
+    std::vector<std::string> plugins;
+    /// Folder of .agrpkg packages (local repository); empty = <project>/packages.
+    std::string packageRepository;
 };
 
 /// A project folder:

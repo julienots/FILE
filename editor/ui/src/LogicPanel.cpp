@@ -260,6 +260,7 @@ void LogicPanel::drawSidebar(EditorShared& s) {
         ImGui::PopFont();
     }
     ImGui::SeparatorText("Aide");
+    if (ImGui::SmallButton("Guide complet de la logique visuelle")) s.openDocRequest = "LOGIC.md";
     ImGui::TextWrapped("Clic droit (ou appui long) sur la toile : ajouter un nœud. Tirez d'une broche à une autre pour les relier ; "
                        "tirez une liaison dans le vide pour créer le nœud suivant. Glisser la toile : déplacer la vue ; molette : zoom. "
                        "Suppr : effacer le nœud choisi ; Ctrl+D : le dupliquer.");

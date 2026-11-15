@@ -144,6 +144,7 @@ Status EditorApp::onStart(Engine& engine) {
     ImGui::GetStyle().TouchExtraPadding = {4.0f * dpi, 4.0f * dpi};  // easier to hit with a finger
 #endif
     m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi);
+    m_docs.setDirectory(m_options.resourcesDir + "/docs");
     if (m_options.mobile) applyTouchStyle(dpi);
 
     m_imgui = std::make_unique<ImGuiRenderer>(*render->device());
@@ -208,6 +209,7 @@ void EditorApp::openProject(const std::string& path) {
     }
     m_recent.touch(fs::absolute(path).string());
     saveSettings();
+    if (kDesktopFileAccess) m_packages.loadProjectPlugins(*m_shared);
     m_shared->notify("Projet ouvert : " + m_ctx->project().settings().name);
 }
 
@@ -515,6 +517,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
         for (const char* w : {"Statistiques", "Console", "Assets", "Animation", "Machine à états", "Mixeur audio", "Hiérarchie", "Inspecteur"})
             ImGui::DockBuilderDockWindow(w, side);
         ImGui::DockBuilderDockWindow("Logique visuelle", center);
+        ImGui::DockBuilderDockWindow("Documentation", center);
         ImGui::DockBuilderDockWindow("Shader", center);
         ImGui::DockBuilderDockWindow("Scène", center);
         ImGui::DockBuilderFinish(dockspace);
@@ -533,6 +536,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Mixeur audio", bottom);
     ImGui::DockBuilderDockWindow("Shader", center);
     ImGui::DockBuilderDockWindow("Logique visuelle", center);
+    ImGui::DockBuilderDockWindow("Documentation", center);
     ImGui::DockBuilderDockWindow("Scène", center);
     ImGui::DockBuilderFinish(dockspace);
 }
@@ -574,6 +578,8 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_animation.draw(*m_shared, time);
     m_stateMachine.draw(*m_shared);
     m_logic.draw(*m_shared);
+    m_docs.draw(*m_shared);
+    m_packages.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
     handleShortcuts();
@@ -690,6 +696,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Localisation (traductions)", nullptr, &m_shared->showLocalization);
         ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
+        ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -715,7 +722,16 @@ void EditorApp::drawMenuBar() {
         ImGui::BulletText("Ctrl+Z / Ctrl+Y : annuler / rétablir   Ctrl+D : dupliquer   Ctrl+G : grouper   Suppr : supprimer");
         ImGui::BulletText("Ctrl+P : jouer / arrêter   Ctrl+S : enregistrer   F12 : capture de l'éditeur");
         ImGui::Separator();
-        ImGui::TextDisabled("Documentation : dossier docs/ du moteur (EDITOR.md, RENDERING.md...)");
+        if (ImGui::MenuItem("Documentation", "F1")) m_shared->showDocs = true;
+        if (ImGui::BeginMenu("Guides")) {
+            const char* guides[][2] = {{"Éditeur", "EDITOR.md"},          {"Scripts Lua", "SCRIPTING.md"}, {"Logique visuelle", "LOGIC.md"},
+                                       {"Rendu 3D", "3D.md"},            {"2D", "2D.md"},                 {"Physique", "PHYSICS.md"},
+                                       {"Animation", "ANIMATION.md"},    {"Interface (UI)", "UI.md"},     {"Audio", "AUDIO.md"},
+                                       {"Export PC / Android", "EXPORT.md"}, {"Plugins", "PLUGINS.md"},  {"Paquets", "PACKAGES.md"}};
+            for (const auto& g : guides)
+                if (ImGui::MenuItem(g[0])) m_shared->openDocRequest = g[1];
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();
@@ -780,6 +796,7 @@ void EditorApp::handleShortcuts() {
     EditorContext& ctx = *m_ctx;
     const ImGuiInputFlags global = ImGuiInputFlags_RouteGlobal;
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, global)) saveOrSaveAs();
+    if (ImGui::Shortcut(ImGuiKey_F1, global)) m_shared->showDocs = !m_shared->showDocs;
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, global)) {
         m_saveAsName = ctx.scene().name();
         m_shared->openSaveAsPopup = true;
@@ -1577,7 +1594,26 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(!r.isNull() && ctx.scene().registry().get<TransformComponent>(r).position.x == 0.0f, "stop restores the cube");
             break;
         }
-        case 230: {
+        case 230: {  // integrated documentation (contextual help from the logic editor)
+            check(m_docs.documentCount() >= 20, "the engine's guides ship with the editor");
+            m_shared->openDocRequest = "LOGIC.md";
+            break;
+        }
+        case 232: {
+            check(m_shared->showDocs && m_docs.currentFile() == "LOGIC.md", "contextual help opens the right guide");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_docs.png").string());
+            break;
+        }
+        case 234: {  // plugins and packages
+            m_shared->showDocs = false;
+            m_shared->showPackages = true;
+            const auto entries = m_engine->plugins().entries();
+            check(std::any_of(entries.begin(), entries.end(), [](const PluginManager::Entry& e) { return e.info.name == "Script" && e.loaded; }),
+                  "plugin list available");
+            break;
+        }
+        case 236: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_packages.png").string()); break;
+        case 238: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

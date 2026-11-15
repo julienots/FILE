@@ -5,6 +5,7 @@
 #   agr_editor      : the application.
 add_library(agr_editor_core STATIC
     core/src/Project.cpp
+    core/src/Package.cpp
     core/src/SceneTemplates.cpp
     core/src/UndoStack.cpp
     core/src/EditorCamera.cpp
@@ -48,6 +49,8 @@ add_library(agr_editor_ui STATIC
     ui/src/AnimationPanel.cpp
     ui/src/StateMachinePanel.cpp
     ui/src/LogicPanel.cpp
+    ui/src/DocsPanel.cpp
+    ui/src/PackagesPanel.cpp
     ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)
 target_include_directories(agr_editor_ui PUBLIC ui/include)
@@ -70,9 +73,13 @@ if(AGR_BUILD_PLUGINS)
     add_dependencies(agr_editor agr_plugin_spin)
 endif()
 # Fonts and template assets are shipped next to the executable.
+file(GLOB AGR_DOC_FILES ${PROJECT_SOURCE_DIR}/docs/*.md)
 if(NOT ANDROID)
 add_custom_command(TARGET agr_editor POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources $<TARGET_FILE_DIR:agr_editor>/editor_resources)
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources $<TARGET_FILE_DIR:agr_editor>/editor_resources
+    # The engine's guides, shown by the integrated documentation panel.
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:agr_editor>/editor_resources/docs
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${AGR_DOC_FILES} $<TARGET_FILE_DIR:agr_editor>/editor_resources/docs)
 endif()
 
 # End-to-end editor tests (need a display; CI runs them under xvfb-run).

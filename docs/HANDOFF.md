@@ -40,14 +40,8 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
 2. **`docs/TEMPLATES.md`** : guide des 13 modèles (règles, scripts dans `assets/games/scripts/`,
    comment les modifier) ; mettre à jour `docs/ROADMAP.md` (lignes « Templates » de la phase 9 encore
    ⬜) et EDITOR.md (option `--template-gallery`).
-3. **Phase 9.6 — gestionnaire de plugins / paquets et documentation intégrée** :
-   - panneau éditeur listant les plugins chargés (`engine.plugins()`), activation par projet,
-     chargement des plugins dynamiques (`AGR_DEFINE_PLUGIN`, voir PLUGINS.md) ;
-   - format de paquet (zip d'assets + manifeste : nom, version, dépendances) importable dans un
-     projet, avec vérification et désinstallation (jamais de suppression sans confirmation) ;
-   - « marketplace » extensible : au minimum un index local / URL configurable, pas de faux service ;
-   - documentation intégrée : afficher les fichiers `docs/*.md` dans un panneau (rendu Markdown
-     simple) et lier l'aide contextuelle (Aide › …).
+3. ~~Phase 9.6 — plugins / paquets / documentation intégrée~~ : **fait** (docs/PACKAGES.md ; panneau
+   Documentation, F1). Reste : dépôt en ligne et signature des paquets, résolution des dépendances.
 4. ~~Éditeur de logique visuelle~~ : **fait** (docs/LOGIC.md). Reste : sous-graphes, commentaires,
    débogage pas à pas.
 5. **Écart restant avec Godot / Unity (honnêtement)** : pas d'éditeur d'animation de tweens

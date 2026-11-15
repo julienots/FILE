@@ -83,6 +83,8 @@ private:
     AnimationPanel m_animation;
     StateMachinePanel m_stateMachine;
     LogicPanel m_logic;
+    DocsPanel m_docs;
+    PackagesPanel m_packages;
     ExportPanel m_export;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;

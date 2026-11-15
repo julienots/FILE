@@ -162,3 +162,11 @@ L'éditeur tourne aussi sur téléphone et tablette Android (`tools/build_androi
 Test automatique : `agr_editor --mobile-test DIR` (disposition, défilement au doigt, appui long,
 pincement). `--screenshot FICHIER.png` capture la fenêtre puis quitte.
 
+
+## Documentation intégrée, plugins et paquets
+
+- **F1** ou **Aide › Documentation** : les guides du moteur (`docs/*.md`, livrés avec l'éditeur, aussi
+  sur Android) avec recherche dans tout le texte et liens entre guides ; **Aide › Guides** ouvre un guide
+  précis, et des boutons d'aide contextuelle (logique visuelle, paquets) mènent au bon guide.
+- **Affichage › Logique visuelle** : programmer sans code ([LOGIC.md](LOGIC.md)).
+- **Affichage › Plugins et paquets** : plugins (rechargement à chaud), paquets d'assets ([PACKAGES.md](PACKAGES.md)).

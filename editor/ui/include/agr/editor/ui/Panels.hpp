@@ -1,5 +1,7 @@
 #pragma once
 #include <atomic>
+#include <filesystem>
+#include <set>
 #include <deque>
 #include <thread>
 #include <mutex>
@@ -11,6 +13,7 @@
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/script/LogicGraph.hpp"
+#include "agr/editor/Package.hpp"
 
 struct ImGuiWindow;  // imgui_internal.h
 
@@ -307,6 +310,69 @@ private:
     int m_dragState = -1;
     ImVec2 m_pan{240.0f, 50.0f};
     std::string m_newName = "controller";
+};
+
+/// Plugins and packages: engine plugins (unload / reload dynamic ones), project plugins,
+/// installed packages, local repository, package creation.
+class PackagesPanel {
+public:
+    void draw(EditorShared& s);
+    /// Loads the project's plugins listed in its settings (called when a project opens).
+    void loadProjectPlugins(EditorShared& s);
+
+private:
+    std::filesystem::path repository(EditorShared& s) const;
+    void drawPlugins(EditorShared& s);
+    void drawInstalled(EditorShared& s);
+    void drawRepository(EditorShared& s);
+    void drawCreate(EditorShared& s);
+
+    std::string m_uninstall;
+    UninstallPlan m_uninstallPlan;
+    bool m_removeModified = false;
+    std::vector<RepositoryEntry> m_repo;
+    bool m_repoScanned = false;
+    std::filesystem::path m_installPath;
+    InstallPlan m_installPlan;
+    std::string m_installError;
+    bool m_replaceChanged = false;
+    PackageManifest m_new{"mon-paquet", "1.0.0", "", "", {}, {}, ""};
+    std::string m_deps;
+    std::set<std::string> m_selection;
+};
+
+/// Integrated documentation: docs/*.md rendered as Markdown, full-text search, links.
+class DocsPanel {
+public:
+    void setDirectory(const std::string& docsDir) {
+        m_dir = docsDir;
+        m_scanned = false;
+    }
+    void draw(EditorShared& s);
+    bool openDoc(const std::string& file);  ///< "LOGIC.md"
+    usize documentCount() {
+        if (!m_scanned) scan(m_dir);
+        return m_docs.size();
+    }
+    const std::string& currentFile() const {
+        static const std::string none;
+        return m_current >= 0 && m_current < static_cast<int>(m_docs.size()) ? m_docs[static_cast<usize>(m_current)].file : none;
+    }
+
+private:
+    struct Doc {
+        std::string file, title, text, lower;
+    };
+    void scan(const std::string& docsDir);
+    void render(EditorShared& s, const std::string& text);
+    void inlineText(EditorShared& s, const std::string& text, float indent);
+    void followLink(EditorShared& s, const std::string& link);
+
+    std::string m_dir;
+    std::vector<Doc> m_docs;
+    bool m_scanned = false, m_scrollTop = false;
+    int m_current = -1;
+    std::string m_search;
 };
 
 /// Visual logic editor (.agrlogic): node canvas, links, add menu, variables, compile status,

@@ -29,7 +29,10 @@ AGR_DEFINE_PLUGIN(MyPlugin)   // uniquement pour un plugin dynamique
 
 Le gestionnaire trie les plugins selon leurs dépendances, refuse les cycles, et continue de charger
 les autres plugins si l'un échoue (dépendance manquante, erreur dans `onLoad`).
-Le déchargement se fait dans l'ordre inverse.
+Le déchargement se fait dans l'ordre inverse. Un plugin dynamique peut être déchargé seul
+(`unloadDynamic`, refusé si un plugin chargé en dépend) puis rechargé depuis une nouvelle compilation :
+l'éditeur le fait depuis **Affichage › Plugins et paquets** (voir [PACKAGES.md](PACKAGES.md)), qui charge
+aussi les plugins du dossier `plugins/` du projet.
 
 ## Règles des plugins dynamiques
 

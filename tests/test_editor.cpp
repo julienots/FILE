@@ -950,6 +950,15 @@ TEST_CASE("Android editor APK" * doctest::skip(std::getenv("AGR_EDITOR_APK") == 
         index += rel + "\n";
         for (char c : rel + std::to_string(entry.file_size())) hash = (hash ^ static_cast<u8>(c)) * 1099511628211ull;
     }
+    // The integrated documentation: the engine's guides (docs/*.md).
+    for (const auto& entry : fs::directory_iterator(resources.parent_path().parent_path() / "docs")) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".md") continue;
+        const std::string rel = "docs/" + entry.path().filename().string();
+        fs::create_directories((packed / rel).parent_path());
+        fs::copy_file(entry.path(), packed / rel);
+        index += rel + "\n";
+        for (char c : rel + std::to_string(entry.file_size())) hash = (hash ^ static_cast<u8>(c)) * 1099511628211ull;
+    }
     writeTextFile(packed / "files.txt", std::to_string(hash) + "\n" + index);
     fs::copy_file(resources / "templates" / "assets" / "textures" / "agr_mark.png", assets / "icon.png");  // launcher icon
     project.settings().name = "AGR ENGINE Editor";
@@ -968,4 +977,107 @@ TEST_CASE("Android editor APK" * doctest::skip(std::getenv("AGR_EDITOR_APK") == 
     auto apk = buildAndroid(project, tools, f.root / "android", o, [](const std::string& line) { std::printf("%s\n", line.c_str()); });
     REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
     fs::copy_file(apk.value().output, std::getenv("AGR_EDITOR_APK"), fs::copy_options::overwrite_existing);
+}
+
+#include "agr/editor/Package.hpp"
+
+TEST_SUITE("packages") {
+
+TEST_CASE("packages: create, preview, install, conflicts, integrity, dependencies, uninstall keeps modified files") {
+    const fs::path root = fs::temp_directory_path() / ("agr_pkg_" + Uuid::generate().toString());
+    const fs::path src = root / "src" / "assets", dst = root / "dst" / "assets", repo = root / "repo";
+    fs::create_directories(src / "trees" / "pine");
+    fs::create_directories(dst);
+    auto write = [](const fs::path& p, const std::string& text) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p, std::ios::binary) << text;
+    };
+    auto read = [](const fs::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    write(src / "trees" / "pine" / "pine.agrmat", "{\"color\": [0, 1, 0, 1]}");
+    write(src / "trees" / "oak.png", std::string("\x89PNG\r\n\x1a\nfake", 12));
+    write(src / "scripts" / "wind.lua", "return {}");
+    // Name and path rules.
+    CHECK_FALSE(validatePackageName("Mon Paquet").ok());
+    CHECK(validatePackageName("forest-pack_2.0").ok());
+    CHECK_FALSE(validatePackagePath("../evil.lua").ok());
+    CHECK_FALSE(validatePackagePath("/etc/passwd").ok());
+    CHECK_FALSE(validatePackagePath("C:/x").ok());
+    // Create from a folder and a file.
+    PackageManifest m;
+    m.name = "forest";
+    m.version = "1.2.0";
+    m.author = "Superessence Studio";
+    m.description = "Arbres";
+    auto written = writePackage(repo / "forest.agrpkg", m, src, {"trees", "scripts/wind.lua"});
+    REQUIRE_MESSAGE(written, (written ? "" : written.error().message));
+    CHECK(written.value().files.size() == 3);
+    CHECK_FALSE(writePackage(repo / "x.agrpkg", m, src, {"nothing/here"}).ok());
+    auto back = readPackageManifest(repo / "forest.agrpkg");
+    REQUIRE(back);
+    CHECK(back.value().name == "forest");
+    CHECK(back.value().version == "1.2.0");
+    CHECK(back.value().files.size() == 3);
+    // A dependent package.
+    PackageManifest d;
+    d.name = "forest-extras";
+    d.dependencies = {"forest"};
+    write(src / "extras" / "leaf.txt", "leaf");
+    REQUIRE(writePackage(repo / "extras.agrpkg", d, src, {"extras"}));
+    auto listing = listRepository(repo);
+    REQUIRE(listing.size() == 2);
+    CHECK(listing[0].manifest.name == "forest");
+    // Missing dependency: refused.
+    auto planD = planInstall(repo / "extras.agrpkg", dst);
+    REQUIRE(planD);
+    CHECK(planD.value().missingDependencies == std::vector<std::string>{"forest"});
+    CHECK_FALSE(installPackage(repo / "extras.agrpkg", dst, false).ok());
+    // Conflict preview: one file already there with other content, one identical.
+    write(dst / "scripts" / "wind.lua", "-- mine");
+    write(dst / "trees" / "oak.png", std::string("\x89PNG\r\n\x1a\nfake", 12));
+    auto plan = planInstall(repo / "forest.agrpkg", dst);
+    REQUIRE(plan);
+    CHECK(plan.value().newFiles == std::vector<std::string>{"trees/pine/pine.agrmat"});
+    CHECK(plan.value().changedFiles == std::vector<std::string>{"scripts/wind.lua"});
+    CHECK(plan.value().identicalFiles == std::vector<std::string>{"trees/oak.png"});
+    CHECK_FALSE(installPackage(repo / "forest.agrpkg", dst, false).ok());  // would overwrite "mine"
+    CHECK(read(dst / "scripts" / "wind.lua") == "-- mine");
+    REQUIRE(installPackage(repo / "forest.agrpkg", dst, true));
+    CHECK(read(dst / "trees" / "pine" / "pine.agrmat") == "{\"color\": [0, 1, 0, 1]}");
+    CHECK(read(dst / "scripts" / "wind.lua") == "return {}");
+    REQUIRE(installedPackages(dst).size() == 1);
+    CHECK(installedPackages(dst)[0].version == "1.2.0");
+    REQUIRE(installPackage(repo / "extras.agrpkg", dst, false));
+    // Uninstall: refused while needed; then modified files are kept.
+    CHECK_FALSE(uninstallPackage("forest", dst, false).ok());
+    REQUIRE(uninstallPackage("forest-extras", dst, false));
+    CHECK_FALSE(fs::exists(dst / "extras"));  // emptied folder removed
+    write(dst / "trees" / "pine" / "pine.agrmat", "{\"color\": [1, 0, 0, 1]}");  // the user edited it
+    auto un = planUninstall("forest", dst);
+    REQUIRE(un);
+    CHECK(un.value().modified == std::vector<std::string>{"trees/pine/pine.agrmat"});
+    CHECK(un.value().remove.size() == 2);
+    REQUIRE(uninstallPackage("forest", dst, false));
+    CHECK(fs::exists(dst / "trees" / "pine" / "pine.agrmat"));
+    CHECK_FALSE(fs::exists(dst / "trees" / "oak.png"));
+    CHECK_FALSE(fs::exists(dst / "scripts" / "wind.lua"));
+    CHECK(installedPackages(dst).empty());
+    // Corruption is detected before anything is written.
+    {
+        std::string bytes = read(repo / "forest.agrpkg");
+        bytes.back() ^= 0x55;
+        std::ofstream(repo / "broken.agrpkg", std::ios::binary) << bytes;
+    }
+    const fs::path clean = root / "clean" / "assets";
+    fs::create_directories(clean);
+    const Status broken = installPackage(repo / "broken.agrpkg", clean, false);
+    CHECK_FALSE(broken.ok());
+    CHECK(fs::is_empty(clean));
+    CHECK_FALSE(readPackageManifest(src / "trees" / "oak.png").ok());  // not a package
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
 }

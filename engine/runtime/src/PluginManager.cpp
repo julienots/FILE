@@ -154,6 +154,25 @@ void PluginManager::unloadAll(Engine& engine) {
     m_records.clear();
 }
 
+Status PluginManager::unloadDynamic(Engine& engine, const std::string& name) {
+    auto it = std::find_if(m_records.begin(), m_records.end(), [&](const auto& r) { return r->info.name == name; });
+    if (it == m_records.end()) return makeError(Error::Code::NotFound, "plugin '" + name + "' is not registered");
+    Record* rec = it->get();
+    if (!rec->dynamic) return makeError(Error::Code::Unsupported, "plugin '" + name + "' is built into the engine");
+    for (const Record* other : m_loadOrder)
+        for (const std::string& dep : other->info.dependencies)
+            if (dep == name) return makeError(Error::Code::InvalidArgument, "plugin '" + other->info.name + "' depends on '" + name + "'");
+    if (rec->loaded) {
+        rec->plugin->onUnload(engine);
+        m_loadOrder.erase(std::remove(m_loadOrder.begin(), m_loadOrder.end(), rec), m_loadOrder.end());
+        AGR_LOG_INFO("Plugins", "unloaded plugin '{}'", name);
+    }
+    rec->plugin.reset();  // the object's code lives in the library: destroyed first
+    rec->library.close();
+    m_records.erase(it);
+    return {};
+}
+
 void PluginManager::fixedUpdate(Engine& engine, const FrameTime& time) {
     for (Record* r : m_loadOrder) r->plugin->onFixedUpdate(engine, time);
 }

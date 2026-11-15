@@ -186,6 +186,22 @@ TEST_CASE("dependency cycles are reported") {
 }
 
 #if defined(AGR_TEST_PLUGIN_PATH)
+TEST_CASE("dynamic plugin: unload and load again (editor hot reload); static plugins stay") {
+    Engine engine(headlessConfig(1));
+    REQUIRE(engine.plugins().addDynamic(AGR_TEST_PLUGIN_PATH));
+    REQUIRE(engine.initialize(nullptr));
+    REQUIRE(engine.plugins().isLoaded("Spin"));
+    REQUIRE(ComponentRegistry::instance().find("Spin"));
+    REQUIRE(engine.plugins().unloadDynamic(engine, "Spin"));
+    CHECK_FALSE(engine.plugins().isLoaded("Spin"));
+    CHECK(ComponentRegistry::instance().find("Spin") == nullptr);  // its onUnload cleaned up
+    CHECK_FALSE(engine.plugins().unloadDynamic(engine, "Spin").ok());  // already gone
+    REQUIRE(engine.plugins().addDynamic(AGR_TEST_PLUGIN_PATH));       // a new build
+    REQUIRE(engine.plugins().loadAll(engine));
+    CHECK(engine.plugins().isLoaded("Spin"));
+    CHECK(ComponentRegistry::instance().find("Spin"));
+}
+
 TEST_CASE("dynamic plugin registers a component and drives the scene") {
     Engine engine(headlessConfig(30));
     REQUIRE(engine.plugins().addDynamic(AGR_TEST_PLUGIN_PATH));

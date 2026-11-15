@@ -201,7 +201,7 @@ plugins / paquets et documentation intégrée.
 | **Particules 3D** : formes d'émission (point, sphère, boîte, cône), gravité, traînée, espace local / monde, 7 préréglages, billboards face caméra (alpha ou additif), aperçu en mode édition | ✅ | `twod/Particles3D`, [3D.md](3D.md) |
 | **Shaders personnalisés** (`.agrshader`) : fonctions `surface` / `vertex` branchées sur le PBR (ombres comprises), paramètres réglables par matériau (valeurs, couleurs, textures), rechargement à chaud, repli sur le shader standard en cas d'erreur ; **éditeur de shaders** avec aperçu en direct et erreurs à la ligne | ✅ | `assets/CustomShader`, `render/ShaderLibrary`, [SHADERS.md](SHADERS.md) |
 | Templates : platformer 2D, RPG 2D/3D, tower defense, cartes, simulation, stratégie, survie, course, idle, tycoon, multijoueur extensible | ⬜ | étape 3 |
-| Gestionnaire de plugins / paquets, documentation intégrée | ⬜ | étape 4 |
+| Gestionnaire de plugins / paquets, documentation intégrée | ✅ | fenêtre « Plugins et paquets » (rechargement à chaud, paquets `.agrpkg`, dépôt local) ; panneau « Documentation » (F1) ; [PACKAGES.md](PACKAGES.md) |
 
 ## Phase 10 — Tests, optimisation, livraison ⬜
 Format de scène binaire, empaquetage des assets, profilage sur appareils, installeur de l'éditeur,
