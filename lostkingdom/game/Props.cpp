@@ -1181,12 +1181,67 @@ int propModelFor(int kind, int variant) {
 PropModel* propModel(int i) { return i >= 0 && i < (int)gPropModels.size() ? gPropModels[i].get() : nullptr; }
 
 // footprint (half extents, metres) the model is fitted into: the code-built structure's collider
-static vec2 structureFootprint(int kind) {
+vec2 structureFootprint(int kind) {
     switch (kind) {
     case S_HOUSE: return {3.4f, 4.2f}; case S_INN: return {4.3f, 5.3f}; case S_STONEHOUSE: return {3.4f, 4.0f}; case S_LONGHOUSE: return {3.3f, 6.8f};
     case S_FORGE: return {2.7f, 2.2f}; case S_CHAPEL: return {3.6f, 6.2f}; case S_TOWER: return {2.9f, 2.9f}; case S_WELL: return {1.2f, 1.2f};
-    case S_STALL: return {1.5f, 0.9f}; case S_TENT: return {2.f, 3.f}; default: return {2.f, 2.f};
+    case S_STALL: return {1.5f, 0.9f}; case S_TENT: return {2.f, 3.f};
+    case S_KEEP: return {9.5f, 7.5f}; case S_MONASTERY: return {10.3f, 7.3f}; case S_CRYPT: return {4.1f, 4.6f}; case S_WINDMILL: return {3.f, 3.f};
+    case S_CASTLE_TOWER: return {3.4f, 3.4f}; case S_STILT_HUT: return {2.4f, 2.4f}; case S_STATUE: return {1.6f, 1.6f}; case S_GATE: return {5.2f, 1.3f};
+    case S_PALISADE: return {1.9f, 0.25f}; case S_FIELD: return {9.f, 7.5f}; case S_PEN: return {5.f, 5.f}; case S_BANNER: return {1.5f, 0.7f};
+    case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
+    default: return {2.f, 2.f};
     }
+}
+
+// 1.10.1 buildings sit on the LOWEST ground under their footprint: on a slope (or at the edge of a levelled
+// village) the uphill side is embedded in the ground instead of the downhill side floating in the air.
+static bool restsOnFootprint(int kind) {
+    switch (kind) {
+    case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_STILT_HUT: case S_TOWER: case S_WINDMILL: case S_WELL: case S_STALL:
+    case S_FIELD: case S_CHAPEL: case S_CRYPT: case S_FORGE: case S_TENT: case S_PEN: case S_BANNER: case S_MONASTERY: case S_STATUE: case S_KEEP:
+    case S_CASTLE_TOWER: case S_OBELISK: case S_ALTAR: case S_LANTERN: case S_PALISADE: case S_GATE: case S_WAYSTONE: case S_CAMPFIRE: return true;
+    default: return false;
+    }
+}
+
+// buildings that get a stone foundation on a slope (instead of being half buried uphill)
+static bool getsPlinth(int kind) {
+    switch (kind) {
+    case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_CHAPEL: case S_FORGE: case S_TOWER: case S_WINDMILL:
+    case S_CRYPT: case S_MONASTERY: case S_KEEP: case S_CASTLE_TOWER: return true;
+    default: return false;
+    }
+}
+
+static void groundUnder(const Structure& s, const World& w, float& lo, float& hi) {
+    vec2 fp = structureFootprint(s.kind) * std::max(0.5f, s.scale);
+    lo = 1e9f; hi = -1e9f;
+    for (int j = -2; j <= 2; j++)
+        for (int i = -2; i <= 2; i++) {
+            vec2 p = rotate(vec2(fp.x * i * 0.5f, fp.y * j * 0.5f), -s.rot) + s.pos;
+            float h = w.height(p.x, p.y);
+            lo = std::min(lo, h); hi = std::max(hi, h);
+        }
+}
+
+float structureGroundY(const Structure& s, const World& w) {
+    float gy = w.height(s.pos.x, s.pos.y);
+    if (s.poi >= 0) gy = w.pois[s.poi].height;
+    if (s.kind == S_BRIDGE) return s.variant / 100.f + 1.2f;
+    if (!restsOnFootprint(s.kind)) return gy;
+    float lo, hi;
+    groundUnder(s, w, lo, hi);
+    float slope = hi - lo;
+    if (getsPlinth(s.kind) && slope > 0.8f) return lo + std::min(slope * 0.5f, 2.2f);   // on its foundation
+    return lo - 0.04f;
+}
+
+float structurePlinth(const Structure& s, const World& w) {
+    if (!restsOnFootprint(s.kind) || !getsPlinth(s.kind)) return 0.f;
+    float lo, hi;
+    groundUnder(s, w, lo, hi);
+    return std::max(0.f, structureGroundY(s, w) - lo);
 }
 
 // 1.9.2 livestock enclosure: 10 x 10 m rail fence with a gate on +Z, a trough and hay
@@ -1225,10 +1280,16 @@ static void bannerPole(MeshBuilder& M, MeshBuilder& Fo) {
 }
 
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
-    float gy = w.height(s.pos.x, s.pos.y);
-    if (s.poi >= 0) gy = w.pois[s.poi].height;
-    if (s.kind == S_BRIDGE) gy = s.variant / 100.f + 1.2f;
+    float gy = structureGroundY(s, w);
     MeshBuilder M, Fo;
+    // 1.10.1 stone foundation under a building raised on a slope (dry stone, slightly wider than the walls)
+    if (float pl = structurePlinth(s, w); pl > 0.05f) {
+        vec2 fp = structureFootprint(s.kind) * 1.04f;
+        float bot = -pl - 0.4f;
+        Mat st(lerp(pal::stoneDark, pal::stone, 0.65f), 0.9f);
+        M.bevelBox({0, (bot + 0.06f) * 0.5f, 0}, {fp.x, (0.06f - bot) * 0.5f, fp.y}, 0.08f, st);
+        M.box({0, 0.04f, 0}, {fp.x + 0.08f, 0.05f, fp.y + 0.08f}, Mat(pal::stone, 0.85f));   // coping course
+    }
     Rng rng(hash2i((int)s.pos.x, (int)s.pos.y, s.kind));
     int reg = s.region;
     vec2 L(0, 0);
@@ -1314,6 +1375,14 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
         out.emitters.push_back(vec4(wc.x, gy + hy * s.scale, wc.y, EM_SMOKE));
     }
     mat4 m = mat4::trs({s.pos.x, gy, s.pos.y}, rotY(s.rot), vec3(s.kind == S_BRIDGE ? 1.f : s.scale));
+    // 1.10.1 fields and livestock pens drape over the terrain (rows and fence posts follow the slope)
+    if (s.kind == S_FIELD || s.kind == S_PEN) {
+        for (MeshBuilder* mb : {&M, &Fo})
+            for (Vertex& v : mb->v) {
+                vec2 wp = rotate(vec2(v.px, v.pz) * s.scale, -s.rot) + s.pos;
+                v.py += (w.height(wp.x, wp.y) - gy) / std::max(0.01f, s.scale);
+            }
+    }
     int pm = propModelFor(s.kind, s.variant);
     if (PropModel* P = propModel(pm)) {
         // fitted inside the footprint, centred, base slightly sunk so it never floats on a slope

@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cmath>
 #include <set>
+#include <map>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -194,6 +195,32 @@ static void testTallGrass(World& w) {
     CHECK(onRoad == 0, "%d tall grass cells on roads", onRoad);
     CHECK(inVillage == 0, "%d villages overgrown", inVillage);
     CHECK(cold == 0, "%d samples in Frostheim / Ashen", cold);
+}
+
+// ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
+static void testBuildingsGrounded(World& w) {
+    std::printf("[Buildings on the ground]\n");
+    int n = 0, floatingOld = 0, floatingNew = 0, deepKind = -1; float worstOld = 0, worstNew = 0, deepest = 0;
+    for (const Structure& s : w.structures) {
+        if (s.kind == S_FIELD || s.kind == S_PEN) continue;   // they follow the terrain vertex by vertex
+        if (s.kind == S_BRIDGE || s.kind == S_DOCK || s.kind == S_CASTLE_WALL || s.kind == S_CAVE || s.kind == S_MINE || s.kind == S_RUIN_WALL || s.kind == S_ELVEN_ARCH || s.kind == S_PORTAL) continue;
+        n++;
+        float oldY = s.poi >= 0 ? w.pois[s.poi].height : w.height(s.pos.x, s.pos.y);
+        float newY = structureGroundY(s, w);
+        // corners of the building's own footprint
+        vec2 fp = structureFootprint(s.kind) * std::max(0.5f, s.scale);
+        float lo = 1e9f, hi = -1e9f;
+        for (int j = -1; j <= 1; j += 2) for (int i = -1; i <= 1; i += 2) {
+            vec2 p = rotate(vec2(fp.x * i, fp.y * j), -s.rot) + s.pos;
+            float h = w.height(p.x, p.y); lo = std::min(lo, h); hi = std::max(hi, h);
+        }
+        float gOld = oldY - lo, gNew = newY - structurePlinth(s, w) - lo;   // a foundation fills the gap under a raised building
+        if (gOld > 0.3f) floatingOld++;
+        if (gNew > 0.05f) floatingNew++;
+        worstOld = std::max(worstOld, gOld); worstNew = std::max(worstNew, gNew); if (hi - newY > deepest) { deepest = hi - newY; deepKind = s.kind; }
+    }
+    std::printf("  %d buildings: floating before %d (worst %.2f m), now %d (worst %.2f m); deepest uphill embedding %.2f m (kind %d)\n", n, floatingOld, worstOld, floatingNew, worstNew, deepest, deepKind);
+    CHECK(floatingNew == 0, "%d buildings float above the ground", floatingNew);
 }
 
 // ---- 1.9.2 domain: building catalogue and night hunters data
@@ -498,6 +525,7 @@ int lkRunTests(int argc, char** argv) {
     testWorld(w);
     testTallGrass(w);
     testDomainData();
+    testBuildingsGrounded(w);
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);

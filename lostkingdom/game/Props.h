@@ -40,6 +40,10 @@ int propVariants(PropKind k);
 
 // Stamp a prop into the batches with transform & tint. Adds collider when solid.
 void stampProp(ChunkBuild& out, PropKind k, int variant, vec3 pos, float rotY, float scale, vec3 tint, bool collide);
+// Height at which a structure stands (lowest ground under its footprint for buildings).
+float structureGroundY(const Structure& s, const World& w);
+vec2 structureFootprint(int kind);   // half extents (m) of a structure's base
+float structurePlinth(const Structure& s, const World& w);   // height of the stone foundation (0: none)
 // Build a structure into the chunk batches.
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w);
 

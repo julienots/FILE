@@ -9,7 +9,7 @@
 
 namespace lk {
 
-static const float BASE_RADIUS = 30.f;     // levelled ground of the domain
+static const float BASE_RADIUS = 44.f;     // levelled ground of the domain (fully flat up to 33 m: every building of the 34 m circle)
 static const float BUILD_RADIUS = 34.f;    // buildings must fit inside this circle
 
 const std::vector<BaseBuildDef>& baseBuildings() {

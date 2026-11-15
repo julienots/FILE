@@ -13,6 +13,18 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.10.1 (bâtiments bien posés au sol)
+
+- **Correction : les bâtiments ne volent plus.**
+  - **Cause** : chaque bâtiment était posé à une seule hauteur (celle du centre du village ou du domaine). Sur une pente ou au bord de la zone aplanie d'un village, un côté flottait au-dessus du sol. Mesuré sur les 339 bâtiments du monde : 71 flottaient, jusqu'à 7,25 m.
+  - **Correction** :
+    - chaque bâtiment repose sur le point le plus bas du sol sous son emprise ;
+    - sur une pente, les maisons, auberges, chapelles, tours, forges et donjons sont surélevés à mi-pente, sur des **fondations en pierre** visibles côté aval, au lieu d'être à moitié enterrés ;
+    - les champs et les enclos épousent le relief ;
+    - le terrain aplani du domaine est élargi pour couvrir toute la zone constructible.
+  - **Vérification** : un nouveau test unitaire mesure l'écart sous chaque bâtiment : 0 bâtiment flottant, écart maximal 0,00 m. Le scénario `grounded` filme les bâtiments qui flottaient le plus.
+- 1 979 tests unitaires et tous les scénarios réussis, `full` aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+
 ### Nouveautés 1.10.0 (votre domaine, traqueurs de la nuit, pluie avancée)
 
 - **Votre domaine** (Journal → onglet **Domaine**) :

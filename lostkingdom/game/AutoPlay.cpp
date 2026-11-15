@@ -124,6 +124,39 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "grounded") {
+        // 1.10.1: the buildings that floated the most before (village edges, slopes) seen from a low camera
+        static std::vector<int> worst;
+        s.push_back({0.1f, [](Game& g) {
+            std::vector<std::pair<float, int>> gaps;
+            for (int i = 0; i < (int)g.world.structures.size(); i++) {
+                const Structure& st = g.world.structures[i];
+                if (st.kind != S_HOUSE && st.kind != S_STONEHOUSE && st.kind != S_INN && st.kind != S_LONGHOUSE && st.kind != S_TOWER && st.kind != S_CHAPEL) continue;
+                float oldY = st.poi >= 0 ? g.world.pois[st.poi].height : g.world.height(st.pos.x, st.pos.y);
+                vec2 fp = structureFootprint(st.kind); float lo = 1e9f;
+                for (int j = -1; j <= 1; j += 2) for (int k = -1; k <= 1; k += 2) { vec2 p = rotate(vec2(fp.x * k, fp.y * j), -st.rot) + st.pos; lo = std::min(lo, g.world.height(p.x, p.y)); }
+                gaps.push_back({oldY - lo, i});
+            }
+            std::sort(gaps.rbegin(), gaps.rend());
+            for (int i = 0; i < 3 && i < (int)gaps.size(); i++) { worst.push_back(gaps[i].second); AGR_LOG("GROUNDED before: structure %d kind %d floated %.2f m, plinth now %.2f m", gaps[i].second, g.world.structures[gaps[i].second].kind, gaps[i].first, structurePlinth(g.world.structures[gaps[i].second], g.world)); }
+            g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+        }, idle, "find"});
+        for (int i = 0; i < 3; i++) {
+            s.push_back({4.f, [i](Game& g) {
+                if (i >= (int)worst.size()) return;
+                const Structure& st = g.world.structures[worst[i]];
+                // stand on the downhill side, 14 m away, looking at the building
+                float best = 1e9f; vec2 at = st.pos;
+                for (int a = 0; a < 12; a++) { vec2 p = st.pos + vec2(std::cos(a * TAU / 12), std::sin(a * TAU / 12)) * 14.f; float h = g.world.height(p.x, p.y); if (h < best) { best = h; at = p; } }
+                teleport(g, at.x, at.y, 0.f);
+                vec2 d = st.pos - at; g.camYaw = std::atan2(-d.x, -d.y); g.pc().yaw = std::atan2(d.x, d.y);
+                g.camDist = g.camDistTarget = 9.f; g.camPitch = 0.12f;
+            }, idle, "go"});
+            s.push_back({0.05f, [i](Game& g) { g.requestScreenshot("build/shots/N" + std::to_string(i) + "_grounded.png"); }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("GROUNDED TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "domain") {
         // 1.9.2 the hero's domain: found it with a real tap, build (real taps on Construire), recruit, livestock,
         // soldiers fighting a wolf, daily production, save / load
