@@ -285,6 +285,7 @@ void Game::updatePlaying(float dt) {
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
+    if (!cine.active) updateNightHunters(dt);
     PROF(4, updateDungeon(dt));
     PROF(5, updateEnvironment(dt));
     PROF(6, updateAmbientFx(dt));
@@ -491,10 +492,46 @@ void Game::updateAmbientFx(float dt) {
         vec2 d = r.inDisk() * 26.f;
         p.pos = c + vec3(d.x, r.range(10.f, 16.f), d.y);
         p.vel = vec3(env.windDir.x * 3.f * env.windStrength, -22.f, env.windDir.y * 3.f * env.windStrength);
-        p.maxLife = 0.8f; p.size0 = p.size1 = 0.05f; p.stretch = 3.5f;
-        p.c0 = vec4(0.75f, 0.82f, 0.95f, 0.45f); p.c1 = p.c0; p.frame = PF_RAIN; p.additive = false;
+        p.maxLife = 0.8f; p.size0 = p.size1 = 0.065f; p.stretch = 3.8f;
+        p.c0 = vec4(0.78f, 0.84f, 0.95f, 0.6f); p.c1 = p.c0; p.frame = PF_RAIN; p.additive = false;
         p.groundKill = groundAt(p.pos.x, p.pos.z);
         particles.spawn(p);
+    }
+    // 1.9.2 rain curtains: long faint streaks further away (the storm visibly sweeps the landscape)
+    int nFar = (int)(rainAmt * rainAmt * 50 * dt * 10 * budget);
+    for (int i = 0; i < nFar; i++) {
+        Particle p;
+        float ang = r.range(0, TAU), dist = r.range(26.f, 60.f);
+        p.pos = c + vec3(std::cos(ang) * dist, r.range(14.f, 26.f), std::sin(ang) * dist);
+        p.vel = vec3(env.windDir.x * 5.f * env.windStrength, -26.f, env.windDir.y * 5.f * env.windStrength);
+        p.maxLife = 1.1f; p.size0 = p.size1 = 0.16f; p.stretch = 5.f;
+        p.c0 = vec4(0.7f, 0.76f, 0.86f, 0.22f); p.c1 = p.c0; p.frame = PF_RAIN; p.additive = false;
+        p.groundKill = groundAt(p.pos.x, p.pos.z);
+        particles.spawn(p);
+    }
+    // splashes where the drops hit: little crowns on the ground, rings on water
+    int nSplash = (int)(rainAmt * 90 * dt * 10 * budget);
+    for (int i = 0; i < nSplash; i++) {
+        vec2 d = r.inDisk() * 14.f;
+        vec3 g{c.x + d.x, 0, c.z + d.y};
+        g.y = groundAt(g.x, g.z);
+        float wl = waterAt(g.x, g.z);
+        bool onWater = wl > -1e8f && wl > g.y;
+        if (onWater) {
+            Particle w; w.pos = vec3(g.x, wl + 0.02f, g.z); w.maxLife = 0.35f; w.size0 = 0.03f; w.size1 = 0.22f;
+            w.c0 = vec4(0.8f, 0.86f, 0.95f, 0.35f); w.c1 = vec4(0.8f, 0.86f, 0.95f, 0.f); w.frame = PF_RING; w.additive = false;
+            particles.spawn(w);
+            continue;
+        }
+        for (int k = 0; k < 3; k++) {
+            Particle s;
+            float a = r.range(0, TAU);
+            s.pos = g + vec3(0, 0.03f, 0);
+            s.vel = vec3(std::cos(a) * r.range(0.4f, 0.9f), r.range(0.9f, 1.6f), std::sin(a) * r.range(0.4f, 0.9f));
+            s.gravity = 9.81f; s.maxLife = 0.22f; s.size0 = s.size1 = 0.018f; s.stretch = 0.015f;
+            s.c0 = vec4(0.85f, 0.9f, 1.f, 0.55f); s.c1 = vec4(0.85f, 0.9f, 1.f, 0.f); s.frame = PF_RAIN; s.additive = false;
+            particles.spawn(s);
+        }
     }
     int nSnow = (int)(snowAmt * 60 * dt * 10 * budget);
     for (int i = 0; i < nSnow; i++) {

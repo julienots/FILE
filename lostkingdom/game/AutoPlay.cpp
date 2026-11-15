@@ -124,6 +124,80 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "hunters") {
+        // 1.9.2 night hunters: a wave finds the hero in the open at night, tracks him, and gives up in a village
+        static int res[4]; static float d0;
+        s.push_back({0.1f, [](Game& g) {
+            for (int& r : res) r = 0;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 150, b->pos.y - 120, 0.f);
+            g.timeOfDay = 23.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.level = 8; g.recomputeStats(); g.pc().hp = g.pc().maxHp; g.hunterT = 2.f;
+            g.camDist = g.camDistTarget = 16.f; g.camPitch = 0.6f;
+        }, idle, "night, in the open"});
+        s.push_back({3.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "night settles"});
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("HUNTERS night %.2f", g.env.night); g.hunterT = 1.f; }, idle, "dusk delay over"});
+        s.push_back({2.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "wait for the howl"});
+        s.push_back({0.05f, [](Game& g) {
+            res[0] = !g.nightHunters.empty() && !g.playerInSafeZone();
+            d0 = 1e9f; for (Entity h : g.nightHunters) if (Character* c = g.reg.get<Character>(h)) d0 = std::min(d0, distXZ(c->pos, g.pc().pos));
+            AGR_LOG("HUNTERS %zu spawned, nearest %.0f m", g.nightHunters.size(), d0);
+        }, idle, "spawned"});
+        s.push_back({4.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "they come"});
+        s.push_back({0.05f, [](Game& g) {
+            float d = 1e9f; for (Entity h : g.nightHunters) if (Character* c = g.reg.get<Character>(h)) d = std::min(d, distXZ(c->pos, g.pc().pos));
+            res[1] = d < d0 - 8.f;
+            AGR_LOG("HUNTERS nearest now %.0f m (was %.0f)", d, d0);
+            g.requestScreenshot("build/shots/L0_hunters.png");
+        }, idle, "closing in"});
+        s.push_back({0.1f, [](Game& g) { const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x, b->pos.y + 6, 0.f); }, idle, "flee to the village"});
+        s.push_back({10.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "safe"});
+        s.push_back({0.05f, [](Game& g) {
+            res[2] = g.playerInSafeZone() && g.nightHunters.empty();
+            AGR_LOG("HUNTERS in the village: %zu left", g.nightHunters.size());
+            // dawn also ends a hunt
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 150, b->pos.y - 120, 0.f);
+            g.hunterT = 0.5f;
+        }, idle, "back out"});
+        s.push_back({2.5f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "second wave"});
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("HUNTERS second wave: %zu", g.nightHunters.size()); g.timeOfDay = 7.5f; }, idle, "dawn"});
+        s.push_back({4.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "sunrise"});
+        s.push_back({0.05f, [](Game& g) {
+            res[3] = g.nightHunters.empty() && g.huntsSurvived >= 1;
+            AGR_LOG("HUNTERS at dawn: %zu left, hunts survived %d", g.nightHunters.size(), g.huntsSurvived);
+            AGR_LOG("HUNTERS TEST: spawn=%d track=%d village=%d dawn=%d", res[0], res[1], res[2], res[3]);
+            AGR_LOG(res[0] && res[1] && res[2] && res[3] ? "HUNTERS TEST PASSED" : "HUNTERS TEST FAILED");
+        }, idle, "check"});
+        return s;
+    }
+    if (name == "rain") {
+        // 1.9.2 rain: wet ground, spreading puddles with ripples and a sky mirror, splashes, far curtains, soaked hero
+        static int res[3];
+        s.push_back({0.1f, [](Game& g) {
+            for (int& r : res) r = 0;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x - 4, b->pos.y + 8, 2.6f);
+            g.timeOfDay = 15.f; g.weather = g.weatherNext = Game::W_STORM; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.rainAmt = 0.f; g.env.wetness = 0.f; g.weather = g.weatherNext = Game::W_CLEAR;
+            g.camDist = g.camDistTarget = 11.f; g.camPitch = 0.38f;
+        }, idle, "dry"});
+        s.push_back({4.f, none, [](Game& g, float) { g.rainAmt = 0.f; g.env.wetness = 0.f; }, "dry settle"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/K9_dry_ref.png"); }, idle, "dry shot"});
+        s.push_back({0.1f, [](Game& g) { g.weather = g.weatherNext = Game::W_STORM; g.weatherBlend = 1; g.rainAmt = 1.f; g.env.wetness = 1.f; }, idle, "storm"});
+        s.push_back({6.f, none, [](Game& g, float) { g.rainAmt = 1.f; }, "rain falls"});
+        s.push_back({0.05f, [](Game& g) {
+            res[0] = g.env.wetness > 0.8f && g.particles.count() > 600;
+            res[1] = g.pc().vis.wetT > 5.f;
+            AGR_LOG("RAIN wetness %.2f, %zu particles, hero wet %.1f s", g.env.wetness, g.particles.count(), g.pc().vis.wetT);
+            g.requestScreenshot("build/shots/K0_rain_village.png");
+        }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.12f; g.camDist = g.camDistTarget = 6.f; }, idle, "low"});
+        s.push_back({1.f, none, [](Game& g, float) { g.rainAmt = 1.f; }, "settle"});
+        s.push_back({0.05f, [](Game& g) {
+            res[2] = 1;
+            g.requestScreenshot("build/shots/K1_rain_low.png");
+            AGR_LOG(res[0] && res[1] ? "RAIN TEST PASSED" : "RAIN TEST FAILED");
+        }, idle, "shot"});
+        return s;
+    }
     if (name == "tallgrass") {
         // 1.9.1: tall grass meadows: placed in patches, drawn, bend around the hero, hide him from enemies
         static int res[4]; static vec2 spot; static Entity wolf;

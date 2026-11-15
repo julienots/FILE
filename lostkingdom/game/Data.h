@@ -96,6 +96,7 @@ struct EnemyDef {
     std::vector<AttackDef> attacks;
     Element weak = Element::Count, resist = Element::Count;
     float aggro = 14, fov = 120, poise = 20;
+    bool hunter = false;   // 1.9.2 night hunters: spawned by the night director only, never by chunks
     int xp = 10, gold = 3, group = 1;
     std::vector<std::pair<std::string, float>> loot;  // item id, chance
     bool night = false;     // spawns mostly at night

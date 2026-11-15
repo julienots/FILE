@@ -456,7 +456,7 @@ void Game::updateSpawning(float dt) {
                 std::vector<int> cands;
                 const auto& E = enemies();
                 for (int i = 0; i < (int)E.size(); i++) {
-                    if (E[i].behavior == Behavior::Boss || E[i].region != region) continue;
+                    if (E[i].behavior == Behavior::Boss || E[i].hunter || E[i].region != region) continue;
                     if (E[i].night && env.night < 0.5f && r.f() < 0.7f) continue;
                     if (camp && E[i].family != "Bandits") continue;
                     cands.push_back(i);
@@ -567,4 +567,87 @@ void Game::despawnFar() {
     reg.each<Pickup>([&](Entity e, Pickup& pk) { if (distXZ(pk.pos, p.pos) > 150.f || pk.t > 600.f) reg.destroyLater(e); });
 }
 
+}  // namespace lk
+
+namespace lk {
+// ============================================================================================ night hunters (1.9.2)
+// After dark, outside settlements, creatures of the Abyss pick up the hero's trail: a howl warns, then one to
+// three hunters arrive from out of sight and track him wherever he goes. Villages are safe; at dawn they dissolve.
+bool Game::playerInSafeZone() {
+    if (player == NullEntity) return true;
+    vec2 p = reg.get<Character>(player)->pos.xz();
+    for (const Poi& P : world.pois) {
+        bool safe = P.type == PoiType::Village || P.type == PoiType::Monastery || P.type == PoiType::Mill || P.type == PoiType::Tower || P.type == PoiType::Farm;
+        if (safe && length(P.pos - p) < P.radius + 8.f) return true;
+    }
+    return false;
+}
+
+void Game::updateNightHunters(float dt) {
+    if (player == NullEntity || dungeon.active || state != GameState::Playing) return;
+    Character& pc_ = pc();
+    // forget the dead / destroyed ones
+    nightHunters.erase(std::remove_if(nightHunters.begin(), nightHunters.end(), [&](Entity h) { Character* c = reg.valid(h) ? reg.get<Character>(h) : nullptr; return !c || c->dead; }), nightHunters.end());
+    bool night = env.night > 0.62f;
+    bool safe = playerInSafeZone();
+    hunterSafeT = safe ? hunterSafeT + dt : 0.f;
+    // dawn, or the hero reached a village: the hunters dissolve into the dark
+    if (!nightHunters.empty() && (env.night < 0.35f || hunterSafeT > 8.f || pc_.dead)) {
+        for (Entity h : nightHunters) {
+            Character* c = reg.get<Character>(h);
+            if (!c) continue;
+            c->dead = true; c->deathT = 1.4f; c->vis.dissolveColor = vec3(0.35f, 0.1f, 0.5f);
+            c->vis.anim.setState(BodyState::Dead, 0.3f);
+        }
+        if (env.night < 0.35f && !pc_.dead && !safe) { huntsSurvived++; notify("L'aube chasse les traqueurs.", vec3(1.f, 0.85f, 0.6f), "i_star"); }
+        nightHunters.clear();
+        return;
+    }
+    // they always know where the hero is (scent), while he is out in the open at night
+    for (Entity h : nightHunters) {
+        AIBrain* ai = reg.get<AIBrain>(h);
+        Character* c = reg.get<Character>(h);
+        if (!ai || !c) continue;
+        ai->lastSeen = pc_.pos; ai->aggro = 6.f; ai->target = player;
+        if (ai->state == AIState::Idle || ai->state == AIState::Patrol || ai->state == AIState::Return || ai->state == AIState::Search) ai->state = AIState::Chase;
+    }
+    if (!night || safe || pc_.dead || riding) { hunterT = std::max(hunterT, 15.f); return; }
+    hunterT -= dt;
+    if (hunterT > 0 || nightHunters.size() >= 4) return;
+    hunterT = particles.rng.range(70.f, 120.f);
+    // a wave: howl first, then the hunters come out of sight, behind the hero
+    int n = 1 + (level >= 6 ? 1 : 0) + (level >= 12 && particles.rng.chance(0.5f) ? 1 : 0);
+    int hound = enemyIndex("abyss_hound"), stalker = enemyIndex("night_stalker");
+    vec3 back = -vec3(std::sin(pc_.yaw), 0, std::cos(pc_.yaw));
+    int spawned = 0;
+    for (int i = 0; i < n * 4 && spawned < n; i++) {
+        float a = std::atan2(back.x, back.z) + particles.rng.range(-1.2f, 1.2f);
+        float d = particles.rng.range(36.f, 46.f);
+        vec3 sp = pc_.pos + vec3(std::sin(a), 0, std::cos(a)) * d;
+        sp.y = groundAt(sp.x, sp.z);
+        float wl = waterAt(sp.x, sp.z);
+        if (wl > -1e8f && sp.y < wl + 0.3f) continue;
+        if (std::fabs(sp.y - pc_.pos.y) > 14.f) continue;
+        int def = (spawned == 0 || particles.rng.chance(0.6f)) ? hound : stalker;
+        Entity e = spawnEnemy(def, sp, false, 0);
+        Character* c = reg.get<Character>(e);
+        if (!c) continue;
+        // they grow with the hero: a level 20 hero meets level 20 hunters
+        const EnemyDef& D = enemies()[def];
+        float lv = (float)std::max(D.level, level);
+        float k = 1.f + 0.11f * (lv - D.level);
+        c->level = (int)lv; c->maxHp = c->hp = D.hp * k; c->atk = D.atk * (1.f + 0.07f * (lv - D.level));
+        c->yaw = std::atan2(pc_.pos.x - sp.x, pc_.pos.z - sp.z);
+        if (AIBrain* ai = reg.get<AIBrain>(e)) { ai->state = AIState::Chase; ai->target = player; ai->lastSeen = pc_.pos; ai->aggro = 6.f; }
+        particles.dissolveBurst(sp, vec3(0.35f, 0.1f, 0.5f), 1.2f);
+        nightHunters.push_back(e);
+        spawned++;
+    }
+    if (spawned) {
+        play("wolf_howl", 0.9f, 0.75f);
+        notify(spawned > 1 ? "Des traqueurs de la nuit ont trouvé votre piste…" : "Un traqueur de la nuit a trouvé votre piste…", vec3(0.75f, 0.45f, 1.f), "i_night");
+        if (!storyFlags.count("hint_hunters")) { storyFlags.insert("hint_hunters"); toastHint = "La nuit, les traqueurs vous pistent partout. Les villages sont sûrs ; à l'aube, ils disparaissent."; }
+        addShake(0.2f);
+    }
+}
 }  // namespace lk

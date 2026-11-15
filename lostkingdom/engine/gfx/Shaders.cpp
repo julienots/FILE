@@ -200,6 +200,24 @@ vec3 envColor(vec3 R, float rough) {
     return env + uSunColor.rgb * sunSpot * uSunDir.w * (1.0 - rough) * 0.7;
 }
 
+// 1.9.2 rain impacts: two layers of expanding rings in jittered cells -> normal offset (xz)
+vec2 rainRipples(vec2 p, float t) {
+    vec2 acc = vec2(0.0);
+    for (int L = 0; L < 2; L++) {
+        float sc = L == 0 ? 2.1 : 3.3;
+        vec2 q = p * sc + float(L) * 17.3;
+        vec2 cell = floor(q), f = fract(q) - 0.5;
+        float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5);
+        float ph = fract(t * (1.1 + 0.5 * h) + h);
+        vec2 c = (vec2(h, fract(h * 7.3)) - 0.5) * 0.5;
+        vec2 d = f - c;
+        float r = length(d);
+        float ring = sin((r - ph * 0.45) * 46.0) * (1.0 - ph) * smoothstep(0.45 * ph + 0.06, 0.45 * ph, r) * smoothstep(0.0, 0.05, r);
+        acc += d / max(r, 1e-3) * ring * (L == 0 ? 1.0 : 0.6);
+    }
+    return acc;
+}
+
 vec3 shade(vec3 albedo, vec3 N, vec3 V, vec3 P, float rough, float metal, float ao, float shadow, float wrap, float rim) {
     vec3 L = uSunDir.xyz;
     float NdL = dot(N, L);
@@ -307,6 +325,7 @@ void main() {
     float rough = vMat.r, metal = vMat.g;
     float emis = vMat.b * 4.0;
     float wet = uGroundColor.w;
+    float puddleK = 0.0;
 #ifdef TEXTURED
     // AI-generated textures are bright and contain baked lighting: bring them into the game's albedo
     // range (procedural characters) and restore some saturation lost to the baked highlights.
@@ -410,10 +429,25 @@ void main() {
     albedo = mix(albedo, mix(vec3(0.26, 0.32, 0.44), vec3(0.5, 0.55, 0.63), sdet - 0.45) * sdet, snowFx);
     rough = mix(rough, 0.5, snowFx);
     // puddles: wet ground darkens and becomes glossy in low areas (height map valleys)
-    float puddle = wet * smoothstep(0.55, 0.2, hsum) * smoothstep(0.8, 0.95, N.y) * (1.0 - snowFx);
+    // 1.9.2: puddles spread as the rain goes on (wetness builds up slowly), with soft noisy edges
+    float pn = texture(uNoiseTex, vWorld.xz * 0.09).g;
+    float puddle = wet * smoothstep(0.42 + 0.22 * wet + (pn - 0.5) * 0.25, 0.12, hsum) * smoothstep(0.8, 0.95, N.y) * (1.0 - snowFx);
+    // ruts and dips of roads, paths and mud hold water first: large flat puddles from low-frequency noise
+    float soft = clamp(wDirt + wCob * 0.8 + wMud * 1.3 + wGrass * 0.25, 0.0, 1.0);
+    float spot = texture(uNoiseTex, vWorld.xz * 0.035).b * 0.65 + texture(uNoiseTex, vWorld.xz * 0.11).g * 0.35;
+    float spots = smoothstep(0.66 - 0.16 * wet * soft, 0.6 - 0.16 * wet * soft, 1.0 - spot) * soft * smoothstep(0.9, 0.97, N.y);
+    puddle = max(puddle, wet * wet * spots * (1.0 - snowFx));
     albedo *= mix(1.0, 0.55, wet * 0.6 + puddle * 0.4);
     rough = mix(rough, 0.08, max(wet * 0.4, puddle));
     if (puddle > 0.3) N = normalize(mix(N, vec3(0.0, 1.0, 0.0), puddle));
+  #ifndef TERRAIN_SIMPLE
+    // raindrops: rings in the puddles, a finer shimmer of impacts on all wet ground
+    if (wet > 0.05) {
+        vec2 rr = rainRipples(vWorld.xz, uCamPos.w);
+        N = normalize(N + vec3(rr.x, 0.0, rr.y) * (puddle * 0.9 + wet * 0.12));
+    }
+  #endif
+    puddleK = puddle;
 #else
     // Hand-painted micro-variation for props & characters
     float nz = texture(uNoiseTex, vWorld.xz * 0.35 + vWorld.y * 0.21).r;
@@ -463,6 +497,12 @@ void main() {
 #endif
 #ifdef TERRAIN
     col += vec3(1.0, 0.28, 0.05) * emis;
+    if (puddleK > 0.01) {
+        // puddles mirror the sky (and the sun glint), stronger at grazing angles
+        float pf = 0.04 + 0.96 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0);
+        vec3 pr = envColor(reflect(-V, N), 0.03) * (0.35 + 0.65 * sh);
+        col = mix(col, pr, clamp(puddleK * (0.25 + pf * 0.75), 0.0, 0.85));
+    }
 #else
     float nightOnly = vSkin.w > 0.5 ? uFogParams.w : 1.0;
     col += albedo * emis * (1.0 + uFx.w) * nightOnly;

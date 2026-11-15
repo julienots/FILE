@@ -446,6 +446,12 @@ public:
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
     float heroCD[3] = {0, 0, 0};
     float heroAura = 0;
+    // 1.9.2 night hunters director
+    std::vector<Entity> nightHunters;
+    float hunterT = 30.f, hunterSafeT = 0;
+    int huntsSurvived = 0;
+    void updateNightHunters(float dt);
+    bool playerInSafeZone();
     float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
     float birdFlushCD = 0;
     void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires

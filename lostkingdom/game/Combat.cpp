@@ -203,6 +203,7 @@ void Game::updateBodyDetails(Character& c, float dt) {
     Visual& v = c.vis;
     if (c.dead || v.arch != Arch::Humanoid || dungeon.active || distXZ(c.pos, camFocus) > 22.f) return;
     if (c.swimming || c.inWater) { v.wetT = 25.f; return; }
+    if (rainAmt > 0.5f) v.wetT = std::max(v.wetT, 6.f + rainAmt * 6.f);   // soaked by the rain (drips while it lasts)
     int r = world.regionId(c.pos.x, c.pos.z);
     float cold = std::max({r == R_FROSTHEIM ? 1.f : 0.f, snowAmt, r == R_HIGHCROWNS ? env.night * 0.8f + 0.2f : 0.f, env.night * 0.25f});
     mat4 model = mat4::trs(c.pos, quat::axisAngle({0, 1, 0}, c.yaw), vec3(v.scale));

@@ -395,6 +395,17 @@ static void buildEnemies() {
       e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0x6a6a70); e.clook.c2 = hexColor(0xb8b4ac); e.clook.mane = true; e.group = 3; e.radius = 0.5f;
       e.attacks = {melee(C_Q_BITE, 1.8f, 1, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 6, 1.4f, 5, 0.45f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
       e.loot = {{"leather", 0.6f}, {"meat", 0.5f}, {"fur", 0.2f}}; e.night = true; }
+    // ---- 1.9.2 night hunters: they come out after dark, pick up the hero's trail and track him across the map
+    { auto& e = E("abyss_hound", "Molosse de l'Abîme", "Traqueurs de la nuit", R_SHADOWS, 8, 150, 16, 4, 7.6f, Behavior::Pack, "Ils sortent des failles quand le soleil se couche. Ils suivent l'odeur des Errants, jamais celle des vivants ordinaires.");
+      e.arch = Arch::Quadruped; e.clook.kind = 6; e.clook.c1 = hexColor(0x141218); e.clook.c2 = hexColor(0x2c1a34); e.clook.c3 = hexColor(0x050406);
+      e.clook.spikes = true; e.clook.mane = true; e.clook.emissiveEyes = 1.f; e.clook.glow = hexColor(0xff3020); e.scale = 1.35f; e.radius = 0.7f; e.group = 1; e.aggro = 60; e.fov = 360;
+      e.attacks = {melee(C_Q_BITE, 2.2f, 1.1f, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 4, 0.4f, Element::Shadow, 1.8f, 0}};
+      e.loot = {{"shadow_essence", 0.35f}, {"fur", 0.5f}, {"bone", 0.4f}}; e.weak = Element::Light; e.night = true; e.hunter = true; }
+    { auto& e = E("night_stalker", "Rôdeur de minuit", "Traqueurs de la nuit", R_SHADOWS, 10, 190, 20, 6, 6.2f, Behavior::Melee, "Trop grand, trop maigre, et il ne fait aucun bruit. On ne le voit que lorsqu'il a déjà vu.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x18161c, 0x0c0b10, Helm::Hood, 97); e.hlook.emissiveEyes = 1.f; e.hlook.eyes = hexColor(0xc8e8ff); e.hlook.bulk = 0.75f;
+      e.scale = 1.32f; e.radius = 0.55f; e.aggro = 60; e.fov = 360; e.poise = 60;
+      e.attacks = {melee(C_FIST_A1, 2.f, 1.f, 0.9f, 0.3f), melee(C_FIST_A2, 2.f, 1.2f, 1.1f, 0.3f), {C_Q_POUNCE, AttackType::Leap, 9, 1.4f, 5, 0.5f, Element::Shadow, 1.6f, 0}};
+      e.loot = {{"shadow_essence", 0.5f}, {"bone", 0.5f}}; e.weak = Element::Light; e.resist = Element::Shadow; e.night = true; e.hunter = true; }
     { auto& e = E("boar", "Sanglier furieux", "Bêtes", R_GREENHAVEN, 2, 70, 9, 3, 6.f, Behavior::Charger, "Il charge tout ce qui bouge. Puis il recommence.");
       e.arch = Arch::Quadruped; e.clook.kind = 1; e.clook.c1 = hexColor(0x5a4030); e.clook.c2 = hexColor(0x7a6050); e.clook.c3 = hexColor(0x2a2018); e.clook.tusks = true; e.clook.girth = 1.25f; e.scale = 1.1f; e.radius = 0.6f;
       e.attacks = {{C_Q_CHARGE, AttackType::Charge, 12, 1.6f, 6, 0.6f, Element::Physical, 1.2f, 0}, melee(C_Q_BITE, 1.8f, 1, 1.6f, 0.3f)};
