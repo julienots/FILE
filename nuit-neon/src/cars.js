@@ -30,7 +30,7 @@ export function loadModel(url) {
   if (!cache.has(url)) cache.set(url, new Promise((res, rej) => loader.load(url, (g) => res(g.scene), undefined, rej)));
   return cache.get(url);
 }
-let glowTex = null, shadowTex = null;
+let glowTex = null, shadowTex = null, headTex = null;
 function radialTex(stops) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   const gr = g.createRadialGradient(64, 64, 4, 64, 64, 64); stops.forEach(([o, col]) => gr.addColorStop(o, col)); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
@@ -180,7 +180,7 @@ function buildProcedural(def, paint) {
 // ---------- modèle importé (GLB) : mise à l'échelle, roues détectées, feux ajoutés ----------
 const WHEEL_RE = /wheel|roue|tyre|tire|rim|jante/i;
 const PAINT_RE = /body|paint|carross|carpaint|coque/i;
-function rigImported(src, def, paint) {
+function rigImported(src, def, paint, loin) {
   const root = new THREE.Group(), chassis = new THREE.Group(); root.add(chassis);
   const m = src.clone(true);
   const holder = new THREE.Group(); holder.add(m); chassis.add(holder);
@@ -201,10 +201,20 @@ function rigImported(src, def, paint) {
 
   // matériaux : copie par voiture, peinture repérée par son nom
   const paintMats = [], seen = new Map();
+  const inWheel = (o) => { for (let p = o; p && p !== holder; p = p.parent) if (/^wheel_/i.test(p.name || '')) return true; return false; };
   holder.traverse(o => {
     if (!o.isMesh) return;
-    const conv = (mat) => { if (!seen.has(mat)) { const cl = mat.clone(); seen.set(mat, cl); if (PAINT_RE.test(mat.name || '') || PAINT_RE.test(o.name || '')) paintMats.push(cl); } return seen.get(mat); };
+    const wh = inWheel(o);
+    const conv = (mat) => { const key = mat.uuid + (wh ? 'w' : ''); if (!seen.has(key)) {
+      let cl = mat.clone();
+      // la carrosserie reçoit un vernis qui reflète le soleil et le ciel ; les roues gardent un aspect mat
+      if (!wh && !loin && def.vernis !== false && cl.isMeshStandardMaterial && !cl.isMeshPhysicalMaterial) {
+        const ph = new THREE.MeshPhysicalMaterial(); THREE.MeshStandardMaterial.prototype.copy.call(ph, cl); ph.defines = { STANDARD: '', PHYSICAL: '' };
+        ph.clearcoat = def.moto ? 0.55 : 0.9; ph.clearcoatRoughness = 0.05; ph.envMapIntensity = 1.3; cl = ph;
+      }
+      seen.set(key, cl); if (PAINT_RE.test(mat.name || '') || PAINT_RE.test(o.name || '')) paintMats.push(cl); } return seen.get(key); };
     o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material);
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m.name === 'interieur') m.side = THREE.DoubleSide;
   });
   if (def.teinte === false) paintMats.length = 0;
   for (const pm of paintMats) { pm.color.set(paint); if ('metalness' in pm) { pm.metalness = Math.max(pm.metalness, 0.6); pm.roughness = Math.min(pm.roughness, 0.35); } }
@@ -246,17 +256,34 @@ function rigImported(src, def, paint) {
   }
 
   // feux arrière lumineux ajoutés (s'intensifient au freinage)
-  const glows = [];
-  if (def.feux !== false) {
+  const glows = [], heads = [];
+  if (def.feux !== false && !loin) {
     glowTex = glowTex || radialTex([[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,60,30,0.8)'], [1, 'rgba(255,0,0,0)']]);
-    for (const s of [-1, 1]) {
+    headTex = headTex || radialTex([[0, 'rgba(255,255,255,1)'], [0.2, 'rgba(230,240,255,0.85)'], [0.5, 'rgba(160,190,255,0.25)'], [1, 'rgba(120,160,255,0)']]);
+    const xs = def.moto ? [0] : [-1, 1];
+    for (const s of xs) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0xff2a10).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      sp.scale.set(0.36, 0.2, 1); sp.position.set(s * half * (def.feuxX ?? 0.62), top * (def.feuxY ?? 0.55), len + 0.03);
-      chassis.add(sp); glows.push(sp);
+      sp.scale.set(0.36, 0.2, 1); sp.position.set(s * half * (def.feuxX ?? 0.62), top * (def.feuxY ?? (def.moto ? 0.6 : 0.55)), len + 0.03);
+      root.add(sp); glows.push(sp);
+      const hd = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: new THREE.Color(0xf0f4ff).multiplyScalar(2.0), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      hd.position.set(s * half * (def.pharesX ?? 0.6), top * (def.pharesY ?? (def.moto ? 0.66 : 0.42)), -len - 0.05);
+      root.add(hd); heads.push(hd);
     }
   }
-  root.add(blobShadow(half * 2 + 0.9, len * 2 + 1.1));
-  return { root, chassis, wheels, paintMats, tailMats: [], glows, half, len, moto: !!def.moto };
+  if (!loin) root.add(blobShadow(half * 2 + 0.9, len * 2 + 1.1));
+  // pilote sur les motos
+  let rider = null;
+  if (def.moto && !loin && def.pilote !== false) { rider = buildRider(top, len * 2, paint); chassis.add(rider); }
+  // vue à la première personne : pour une voiture, au-dessus du capot à la base du pare-brise (hauteur mesurée sur le modèle)
+  let cockpit;
+  if (def.moto) cockpit = new THREE.Vector3(0, top * 1.24, -len * 0.08);
+  else {
+    root.updateMatrixWorld(true);
+    const zc = -len * 0.12, rc = new THREE.Raycaster(new THREE.Vector3(0, top + 2, zc), new THREE.Vector3(0, -1, 0));
+    const hit = rc.intersectObject(holder, true)[0];
+    cockpit = new THREE.Vector3(0, (hit ? hit.point.y : top * 0.8) + 0.42, zc);
+  }
+  return { root, chassis, wheels, paintMats, tailMats: [], glows, heads, half, len, moto: !!def.moto, rider, cockpit };
 }
 
 // ---------- moto avec son pilote ----------
@@ -295,6 +322,34 @@ function buildMoto(def, paint) {
   return { root, chassis, wheels, paintMats: [paintMat], tailMats: [tailMat], glows: [], half: 0.5, len: 0.95, moto: true };
 }
 
+// pilote de moto : combinaison, casque à visière, bras tendus vers le guidon, genoux serrés contre le réservoir.
+// Dimensions calées sur une moto de 2,1 m et 1,2 m de haut, puis mises à l'échelle du modèle.
+function buildRider(top, length, accent) {
+  const g = new THREE.Group(), sy = top / 1.2, sz = length / 2.1;
+  const suit = new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.55, metalness: 0.15, envMapIntensity: 0.8 });
+  const stripe = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.4, metalness: 0.2 });
+  const helm = new THREE.MeshPhysicalMaterial({ color: accent, metalness: 0.3, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.4 });
+  const visor = new THREE.MeshPhysicalMaterial({ color: 0x050608, metalness: 0.9, roughness: 0.03, envMapIntensity: 2.0 });
+  const P = (x, y, z) => new THREE.Vector3(x, y * sy, z * sz);
+  const limb = (a, b, r, mat) => { const d = b.clone().sub(a), l = d.length(); const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.01, l - r), 4, 10), mat);
+    m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); };
+  // torse penché vers l'avant, bassin sur la selle
+  limb(P(0, 0.98, 0.26), P(0, 1.30, -0.12), 0.19, suit);
+  limb(P(0, 1.04, 0.16), P(0, 1.30, -0.10), 0.12, stripe);
+  for (const s of [-1, 1]) {
+    limb(P(s * 0.2, 1.30, -0.10), P(s * 0.26, 1.13, -0.36), 0.075, suit);   // bras
+    limb(P(s * 0.26, 1.13, -0.36), P(s * 0.32, 1.06, -0.56), 0.065, suit);  // avant-bras jusqu'au guidon
+    limb(P(s * 0.14, 0.98, 0.24), P(s * 0.21, 0.88, -0.16), 0.095, suit);   // cuisse
+    limb(P(s * 0.21, 0.88, -0.16), P(s * 0.17, 0.50, 0.18), 0.075, suit);   // tibia jusqu'au repose-pied
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.1, 0.26), suit); boot.position.copy(P(s * 0.17, 0.46, 0.12)); g.add(boot);
+  }
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), helm); head.position.copy(P(0, 1.44, -0.30)); head.scale.set(1, 1, 1.12); g.add(head);
+  const vz = new THREE.Mesh(new THREE.SphereGeometry(0.162, 18, 10, -1.0, 2.0, 1.1, 0.75), visor); vz.position.copy(head.position); vz.scale.copy(head.scale);
+  vz.rotation.y = Math.PI; g.add(vz);
+  g.traverse(o => { if (o.isMesh) o.userData.shared = false; });
+  return g;
+}
+
 // paillettes métalliques sous le vernis : de minuscules facettes qui accrochent la lumière
 function flakes(mat) {
   if (mat.userData.flakes || !mat.isMeshStandardMaterial) return; mat.userData.flakes = true;
@@ -310,13 +365,24 @@ function flakes(mat) {
 export function createCar(def, paint) {
   const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : (def.proc && def.proc.type === 'moto') ? buildMoto(def, paint) : buildProcedural(def, paint);
   v.def = def; v.wheelAngle = 0; v.roll = 0; v.pitch = 0;
+  if (def.modele && def._scene && def._sceneLoin) {
+    const f = rigImported(def._sceneLoin, def, paint, true);
+    f.root.visible = false; v.root.add(f.root);
+    v.far = f; v.isFar = false;
+    v.nearObjs = [v.chassis, ...v.wheels.filter(w => w.steer.parent === v.root).map(w => w.steer)];
+  }
   addEffects(v);
   v.shadow = v.root.children.find(o => o.isMesh && o.renderOrder === 1);
   for (const m of v.paintMats) flakes(m);
   return v;
 }
+// bascule entre le modèle détaillé et sa version allégée (models/nom_loin.glb) selon la distance
+export function setLod(v, far) { if (!v.far || v.isFar === far) return; v.isFar = far; v.far.root.visible = far; for (const o of v.nearObjs) o.visible = !far; }
 export async function resolveModels() {
-  for (const c of CARS) if (c.modele) { try { c._scene = await loadModel(c.modele); } catch (e) { console.warn('Modèle introuvable :', c.modele); c._scene = null; } }
+  await Promise.all(CARS.filter(c => c.modele).map(async (c) => {
+    try { c._scene = await loadModel(c.modele); } catch (e) { console.warn('Modèle introuvable :', c.modele); c._scene = null; return; }
+    if (c.lod !== false) c._sceneLoin = await loadModel(c.modele.replace(/\.glb$/, '_loin.glb')).catch(() => null);
+  }));
 }
 export function setPaint(v, color) { for (const m of v.paintMats) m.color.set(color); }
 
@@ -338,6 +404,7 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
   const b = braking ? 2.6 : 1.1;
   for (const m of v.tailMats) m.color.setRGB(b, 0.02 * b, 0.01 * b);
   for (const g of v.glows) { g.material.opacity = braking ? 1 : 0.55; g.scale.set(braking ? 0.5 : 0.36, braking ? 0.28 : 0.2, 1); }
+  if (v.heads) for (const h of v.heads) { const k = v.lights ? 1 : 0.35; h.material.opacity = k; h.scale.set(0.34 * k + 0.12, 0.2 * k + 0.08, 1); }
 }
 
 export function disposeCar(v) {

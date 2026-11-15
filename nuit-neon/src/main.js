@@ -5,10 +5,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { TRACKS, ROUTE_LIBRE } from './tracks.js';
+import { TRACKS, ROUTE_LIBRE, ROUTE_LIGNE } from './tracks.js';
 import { buildWorld, makeTrack, canvasTex } from './world.js';
 import { buildArena, ARENA, TEAM_COL } from './arena.js';
-import { CARS, STAT_KEYS, PAINTS, physFromStats, createCar, resolveModels, setPaint, animateCar, disposeCar } from './cars.js';
+import { CARS, STAT_KEYS, PAINTS, physFromStats, createCar, resolveModels, setPaint, animateCar, disposeCar, setLod } from './cars.js';
 import { TRAFIC, TRAFIC_PAINTS } from './carlist.js';
 import { FX } from './fx.js';
 import * as audio from './audio.js';
@@ -26,9 +26,9 @@ const params = new URLSearchParams(location.search);
 // essai rapide d'un modèle sans toucher à la liste : ?modele=models/fichier.glb (et &rotY=3.14 si besoin)
 if (params.get('modele')) CARS.unshift({ id: 'essai', nom: 'Essai', modele: params.get('modele'), rotY: params.has('rotY') ? +params.get('rotY') : undefined, couleur: 0xb9bec9, stats: { vmax: 7, accel: 7, mania: 6, adher: 6 } });
 const tuning = store.get('tuning', {});
-const opts = Object.assign({ qual: 'auto', autoGas: false, son: true }, store.get('opts', {}));
+const opts = Object.assign({ qual: 'auto', autoGas: false, son: true, vue: 'ext' }, store.get('opts', {}));
 if (opts.v !== 2) { opts.autoGas = false; opts.v = 2; }
-const setup = Object.assign({ track: 0, diff: 1, laps: 3, bots: 7, team: 2, dur: 180 }, store.get('setup', {}));
+const setup = Object.assign({ track: 0, diff: 1, laps: 3, bots: 7, team: 2, dur: 180, route: 'libre' }, store.get('setup', {}));
 const best = store.get('best3', {}); // records (route élargie)
 let selCar = params.get('modele') ? 0 : Math.max(0, CARS.findIndex(c => c.id === store.get('car', CARS[0].id)));
 if (params.get('q')) opts.qual = params.get('q');
@@ -38,6 +38,7 @@ const carColor = (def) => (tuning[def.id] && tuning[def.id].couleur !== undefine
 const DIFFS = [
   { nom: 'Facile', speed: 0.80, corner: 0.60 }, { nom: 'Normal', speed: 0.88, corner: 0.74 },
   { nom: 'Difficile', speed: 0.95, corner: 0.87 }, { nom: 'Expert', speed: 1.0, corner: 0.97 },
+  { nom: 'Légende', speed: 1.0, corner: 1.03, bonus: 1.07 },   // adversaires un peu plus puissants que leur voiture
 ];
 const BOT_NAMES = ['Kaïto', 'Luna', 'Rex', 'Mila', 'Zéphyr', 'Nova', 'Axel', 'Iris', 'Oslo', 'Vega', 'Niko', 'Jade'];
 const ITEM_NAMES = { turbo: 'Turbo', missile: 'Missile', huile: "Flaque d'huile", bouclier: 'Bouclier' };
@@ -53,9 +54,9 @@ camera.layers.enable(1);
 const fx = new FX(scene);
 
 const QUALITY = {
-  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 4200, terrain: 170 },
-  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, grass: 2600, terrain: 140 },
-  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: false, grass: 800, terrain: 90 },
+  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 6000, terrain: 170 },
+  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, grass: 3800, terrain: 140 },
+  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: false, grass: 1100, terrain: 90 },
 };
 const isTouch = matchMedia('(pointer: coarse)').matches;
 let qName = 'moyenne', Q = QUALITY.moyenne, dyn = 1;
@@ -71,14 +72,26 @@ function setupPost() {
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0));
   finalPass = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 } },
+    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
       float hsh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
       void main(){ vec2 c = vec2(0.5,0.56); vec2 d = vUv - c; float r = length(d*vec2(1.0,1.25));
         float k = smoothstep(0.28, 0.85, r) * 0.05 * amt;
         vec3 col = vec3(0.); for(int i=0;i<8;i++){ float t = float(i)/7.; col += texture2D(tDiffuse, vUv - d*k*t).rgb; } col /= 8.;
         col.r = mix(col.r, texture2D(tDiffuse, vUv - d*0.006*r).r, 0.7); col.b = mix(col.b, texture2D(tDiffuse, vUv + d*0.006*r).b, 0.7);
+        if (sunVis > 0.0) {
+          // le soleil n'éblouit que s'il est visible : on regarde la luminosité de l'image à son emplacement (masqué par un arbre, il disparaît)
+          float occ = 0.0; for (int i = 0; i < 5; i++) { vec2 o = vec2(float(i - 2)*0.006, float(i - 2)*0.004); occ += smoothstep(1.2, 3.5, dot(texture2D(tDiffuse, sunPos + o).rgb, vec3(0.33))); } occ /= 5.0;
+          vec2 sd = (vUv - sunPos) * vec2(aspect, 1.0); float sl = length(sd);
+          vec3 fl = sunCol * (exp(-sl*5.0)*0.45 + exp(-sl*28.0)*0.8);                          // halo
+          fl += sunCol * exp(-abs(sd.y)*90.0) * exp(-abs(sd.x)*2.2) * 0.35;                    // traînée horizontale
+          vec2 axis = vec2(0.5) - sunPos;
+          for (int i = 0; i < 4; i++) { float k = 0.55 + float(i)*0.45; vec2 gp = sunPos + axis * k * 2.0; float gs = 0.025 + 0.03*float(i);
+            float gd = length((vUv - gp) * vec2(aspect, 1.0)); vec3 gc = i == 0 ? vec3(0.9,0.5,0.2) : i == 1 ? vec3(0.3,0.6,0.9) : i == 2 ? vec3(0.6,0.9,0.4) : vec3(0.9,0.3,0.6);
+            fl += gc * sunCol * smoothstep(gs, gs*0.6, gd) * 0.07 + gc * sunCol * smoothstep(gs*0.15, 0.0, abs(gd - gs)) * 0.05; }   // reflets dans les lentilles
+          col += fl * occ * sunVis;
+        }
         col *= 1.0 - 0.45*smoothstep(0.4, 1.0, r);
         col *= 1.0 + (hsh(vUv*731.0 + fract(time)*17.0) - 0.5) * 0.07;
         float lum = dot(col, vec3(0.3,0.59,0.11)); col = mix(vec3(lum), col, 1.14); col *= 0.94 + 0.12*smoothstep(0.0, 1.2, lum);   // étalonnage : un peu plus de couleur et de contraste
@@ -105,7 +118,7 @@ function ensureWorld(key) {
   if (worldKey === key) return;
   if (world) { scene.remove(world.group); world.dispose(); }
   fx.clear();
-  world = key === 'arena' ? buildArena(renderer, Q) : buildWorld(key === 'libre' ? ROUTE_LIBRE : TRACKS[+key], renderer, Q);
+  world = key === 'arena' ? buildArena(renderer, Q) : buildWorld(key === 'libre' ? ROUTE_LIBRE : key === 'ligne' ? ROUTE_LIGNE : TRACKS[+key], renderer, Q);
   T = world.T || null; worldKey = key;
   scene.add(world.group); scene.fog = world.fog;
   scene.environment = null;
@@ -131,7 +144,8 @@ function clearGame() {
 }
 function makeCarEntity(def, paint, isPlayer, name, skill) {
   const vis = createCar(def, paint);
-  if (vis.beam) vis.beam.visible = !world.day;
+  if (vis.beam) vis.beam.visible = !!world.lights;
+  vis.lights = !!world.lights;
   vis.wet = world.arena ? 0 : (world.theme.wet ?? 1);
   vis.root.rotation.order = 'YXZ';
   const c = { def, vis, phys: physFromStats(carStats(def)), x: 0, z: 0, h: 0, y: 0, vy: 0, pitch: 0, v: 0, u: 0, steer: 0, idx: 0, lap: 0, total: 0,
@@ -161,6 +175,7 @@ function gridUp(withPlayer, nBots) {
     used.add(paint);
     const c = makeCarEntity(CARS[di], paint, isP, isP ? 'Toi' : BOT_NAMES[s % BOT_NAMES.length], sk);
     placeOnGrid(c, s);
+    if (!isP && sk.bonus) { c.phys.vmax *= sk.bonus; c.phys.accel *= sk.bonus; c.phys.grip *= sk.bonus; }
     if (isP) player = c;
   }
   raceTime = 0; finishOrder = 0;
@@ -335,18 +350,42 @@ function onLap(c) {
     if (!c.bestLap || lt < c.bestLap) c.bestLap = lt;
     if (c.isPlayer) {
       const id = TRACKS[setup.track].id;
-      const rec = G.type === 'race' && (!best[id] || lt < best[id]);
+      const rec = (G.type === 'race' || G.type === 'chrono') && (!best[id] || lt < best[id]);
       if (rec) { best[id] = lt; store.set('best3', best); }
       flash((rec ? 'Record du circuit ' : 'Tour ') + fmt(lt));
     }
   }
   c.lapStart = raceTime;
-  if (c.lap > setup.laps) {
+  if (c.lap > G.laps) {
     c.finished = true; c.finishTime = raceTime; c.rank = ++finishOrder;
     if (c.isPlayer) finishRace();
-  } else if (c.isPlayer && c.lap === setup.laps && setup.laps > 1) flash('Dernier tour');
+  } else if (c.isPlayer && c.lap === G.laps && G.laps > 1) flash('Dernier tour');
 }
-const standings = () => cars.slice().sort((a, b) => (a.finished && b.finished) ? a.rank - b.rank : a.finished ? -1 : b.finished ? 1 : b.total - a.total);
+const standings = () => cars.slice().sort((a, b) => {
+  if (a.out || b.out) return a.out && b.out ? a.rank - b.rank : a.out ? 1 : -1;      // éliminés en bas du classement
+  return (a.finished && b.finished) ? a.rank - b.rank : a.finished ? -1 : b.finished ? 1 : b.total - a.total; });
+
+// ---------- élimination : toutes les 20 secondes, le dernier est éliminé ----------
+const ELIM_DELAI = 20;
+function stepElim(dt) {
+  G.elimT -= dt;
+  if (player && !player.out && G.elimT < 5.5 && mode === 'race') flash('Élimination dans ' + Math.ceil(G.elimT) + ' s');
+  if (G.elimT > 0) return;
+  G.elimT = ELIM_DELAI;
+  const alive = standings().filter(c => !c.out);
+  const last = alive[alive.length - 1];
+  last.out = true; last.rank = alive.length; last.vis.root.visible = false;
+  fx.burst(last.x, 1, last.z, 3.5, 1.2, 0.3, 80, 18); for (let i = 0; i < 10; i++) fx.smoke(last.x, 1, last.z, 0, 3, 0, 2, 0.4, 1.6);
+  if (last.isPlayer) return finishElim(false);
+  flash(last.name + ' est éliminé');
+  if (alive.length - 1 === 1) { player.rank = 1; finishElim(true); }
+}
+function finishElim(win) {
+  mode = 'finished';
+  $('rtitle').textContent = win ? 'Victoire !' : 'Éliminé';
+  $('rsub').textContent = win ? 'Dernier survivant après ' + fmtShort(raceTime) : 'Tu termines ' + ordinal(player.rank) + ' sur ' + cars.length;
+  fillResults(); show('results'); audio.engine(0, 0, false);
+}
 
 // ---------- course à bonus : caisses, missiles, flaques, boucliers ----------
 let boxGeo = null, boxMat = null, oilGeo = null, oilMat = null, shotGeo = null, shotMat = null, shieldGeo = null, shieldMat = null;
@@ -586,7 +625,7 @@ function syncBall(dt) {
 // ---------- entrées ----------
 const keys = { left: false, right: false, gas: false, brake: false, boost: false, act: false };
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', Space: 'act', ShiftLeft: 'boost', ShiftRight: 'boost', KeyX: 'boost' };
-addEventListener('keydown', (e) => { const k = KEYMAP[e.code]; if (k) { keys[k] = true; if (mode === 'race' || mode === 'count') e.preventDefault(); } if ((e.code === 'Escape' || e.code === 'KeyP') && (mode === 'race' || mode === 'pause')) togglePause(); });
+addEventListener('keydown', (e) => { const k = KEYMAP[e.code]; if (k) { keys[k] = true; if (mode === 'race' || mode === 'count') e.preventDefault(); } if ((e.code === 'Escape' || e.code === 'KeyP') && (mode === 'race' || mode === 'pause')) togglePause(); if (e.code === 'KeyC' && (mode === 'race' || mode === 'count')) toggleView(); });
 addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
 for (const [id, k] of [['k-left', 'left'], ['k-right', 'right'], ['k-gas', 'gas'], ['k-brake', 'brake'], ['k-boost', 'boost'], ['k-act', 'act']]) {
   const el = $(id);
@@ -642,6 +681,7 @@ function pollPad(dt) {
   if (!pad.used && (Math.abs(steer) > 0.3 || g.buttons.some(b => b.pressed))) { pad.used = true; app.classList.add('pad'); audio.initAudio(); }
   if (mode === 'race' || mode === 'count') {
     if (hit(9) && mode === 'race') togglePause();
+    if (hit(3)) toggleView();
   } else {
     pad.steer = pad.gas = pad.brake = 0; pad.boost = pad.act = false;
     if (hit(9) && mode === 'pause') togglePause();
@@ -663,7 +703,22 @@ addEventListener('touchstart', () => { if (pad.used) { pad.used = false; app.cla
 let camH = 0, camRoll = 0, garageAng = 0.6, garageDrag = null, demoAng = 0, chaseSnap = true;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 function setFov(f, dt) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov += (f - camera.fov) * (dt ? 1 - Math.exp(-4 * dt) : 1); camera.updateProjectionMatrix(); } }
+// vue à la première personne : au-dessus du capot (voiture) ou dans le casque du pilote (moto)
+function cockpitCam(c, dt, snap) {
+  if (c.vis.rider) c.vis.rider.visible = false;                       // on est le pilote : on ne voit pas sa propre tête
+  const k = c.vis.cockpit, ch = Math.cos(c.h), sh = Math.sin(c.h);
+  const shake = (c.bump || 0) * 0.08 + clamp(Math.abs(c.v) / 95, 0, 1) * 0.006;
+  camera.position.set(c.x + k.x * ch + k.z * sh + (Math.random() - 0.5) * shake, c.y + k.y + (Math.random() - 0.5) * shake, c.z - k.x * sh + k.z * ch);
+  camLook.set(camera.position.x - sh * 30, camera.position.y - 1.6 + c.vy * 0.05, camera.position.z - ch * 30);
+  camera.lookAt(camLook);
+  camera.rotateZ(c.vis.moto ? c.vis.roll : c.vis.roll * 0.5);
+  camH = c.h;
+  setFov(70 + clamp(Math.abs(c.v) / 95, 0, 1) * 12 + (c.boosting ? 5 : 0), snap ? 0 : dt);
+  c.bump = (c.bump || 0) * Math.exp(-6 * dt);
+}
 function chaseCam(c, dt, snap) {
+  if (opts.vue === 'int' && c.vis.cockpit) return cockpitCam(c, dt, snap);
+  if (c.vis.rider) c.vis.rider.visible = true;
   const portrait = H > W;
   camH = snap ? c.h : camH + wrap(c.h - camH) * (1 - Math.exp(-5.5 * dt));
   const ratio = clamp(Math.abs(c.v) / 95, 0, 1), moto = c.vis.moto;
@@ -741,7 +796,7 @@ function drawPath(g, Tk, w, h, padPx, color, lw) {
 let setupType = 'race';
 function buildSetup(type) {
   setupType = type;
-  $('s-title').textContent = type === 'foot' ? 'Foot Turbo' : type === 'items' ? 'Course à bonus' : 'Choix de la course';
+  $('s-title').textContent = { foot: 'Foot Turbo', items: 'Course à bonus', chrono: 'Contre-la-montre', elim: 'Élimination', free: 'Balade libre' }[type] || 'Choix de la course';
   for (const el of document.querySelectorAll('#setup [data-for]')) el.hidden = !el.dataset.for.split(' ').includes(type);
   const el = $('tracks'); el.textContent = '';
   TRACKS.forEach((t, i) => {
@@ -757,7 +812,8 @@ function buildSetup(type) {
   });
   chips($('diffs'), DIFFS.map((d, i) => [i, d.nom]), () => setup.diff, (v) => { setup.diff = v; });
   chips($('laps'), [[1, '1'], [3, '3'], [5, '5']], () => setup.laps, (v) => { setup.laps = v; });
-  chips($('bots'), [[3, '3'], [5, '5'], [7, '7'], [9, '9'], [11, '11']], () => setup.bots, (v) => { setup.bots = v; });
+  chips($('bots'), [[3, '3'], [5, '5'], [7, '7'], [11, '11'], [15, '15']], () => setup.bots, (v) => { setup.bots = v; });
+  chips($('routes'), [['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
   chips($('teams'), [[1, '1 contre 1'], [2, '2 contre 2'], [3, '3 contre 3']], () => setup.team, (v) => { setup.team = v; });
   chips($('durs'), [[120, '2 min'], [180, '3 min'], [300, '5 min']], () => setup.dur, (v) => { setup.dur = v; });
 }
@@ -765,7 +821,7 @@ function buildOptions() {
   chips($('o-qual'), [['auto', 'Auto'], ['haute', 'Élevés'], ['moyenne', 'Moyens'], ['basse', 'Bas']], () => opts.qual, (v) => { opts.qual = v; store.set('opts', opts); changeQuality(); });
   chips($('o-gas'), [[false, 'Manuel'], [true, 'Automatique']], () => opts.autoGas, (v) => { opts.autoGas = v; store.set('opts', opts); });
   chips($('o-snd'), [[true, 'Activé'], [false, 'Coupé']], () => opts.son, (v) => { opts.son = v; store.set('opts', opts); audio.setSound(v); });
-  $('o-info').textContent = 'Manette : gâchette droite pour accélérer, gâchette gauche pour freiner, B pour le boost, A pour sauter ou lancer un objet, Start pour la pause. Clavier : flèches ou ZQSD, Maj pour le boost, Espace pour sauter ou lancer un objet.';
+  $('o-info').textContent = 'Manette : gâchette droite pour accélérer, gâchette gauche pour freiner, B pour le boost, A pour sauter ou lancer un objet, Y pour changer de vue, Start pour la pause. Clavier : flèches ou ZQSD, Maj pour le boost, Espace pour sauter ou lancer un objet, C pour la vue.';
 }
 function changeQuality() {
   pickQuality(); setupPost();
@@ -773,14 +829,14 @@ function changeQuality() {
   setTimeout(() => { worldKey = ''; startDemo(); show('options'); }, 30);
 }
 function hudFor(type) {
-  const race = type === 'race' || type === 'items';
-  $('h-posbox').hidden = !race; $('h-lapbox').hidden = type === 'foot';
+  const race = type === 'race' || type === 'items' || type === 'elim';
+  $('h-posbox').hidden = !race; $('h-lapbox').hidden = type === 'foot' || type === 'elim';
   $('h-laplabel').textContent = type === 'free' ? 'Distance' : 'Tour'; $('h-lapsfx').hidden = type === 'free';
   $('score').hidden = type !== 'foot'; $('mini').hidden = type === 'foot';
   $('k-act').hidden = !(type === 'foot' || type === 'items'); $('k-actl').textContent = type === 'foot' ? 'SAUT' : 'OBJET';
   $('k-boost').hidden = type === 'items'; $('boostbar').hidden = type === 'items';
   $('k-gas').hidden = opts.autoGas; $('h-item').textContent = ''; $('h-msg').textContent = ''; $('wrong').hidden = true; $('banner').hidden = true;
-  $('h-tot').textContent = cars.length; $('h-laps').textContent = setup.laps; $('h-lap').textContent = type === 'free' ? '0.0' : 1;
+  $('h-tot').textContent = cars.length; $('h-laps').textContent = G.laps; $('h-lap').textContent = type === 'free' ? '0.0' : 1;
   $('sc-b').textContent = 0; $('sc-o').textContent = 0;
 }
 
@@ -838,9 +894,9 @@ function startDemo() {
 function toMenu() { startDemo(); refreshMenu(); show('menu'); audio.engine(0, 0, false); }
 function startGame(type) {
   store.set('setup', setup); store.set('car', CARS[selCar].id);
-  show('loading'); $('loadmsg').textContent = type === 'foot' ? 'Foot Turbo' : type === 'free' ? ROUTE_LIBRE.nom : TRACKS[setup.track].nom;
+  show('loading'); $('loadmsg').textContent = type === 'foot' ? 'Foot Turbo' : type === 'free' ? (setup.route === 'ligne' ? ROUTE_LIGNE : ROUTE_LIBRE).nom : TRACKS[setup.track].nom;
   setTimeout(() => {
-    G.type = type; G.ended = false; G.freeze = 0; G.score = [0, 0]; G.dist = 0;
+    G.type = type; G.ended = false; G.freeze = 0; G.score = [0, 0]; G.dist = 0; G.laps = type === 'elim' ? 999 : setup.laps; G.elimT = ELIM_DELAI;
     if (type === 'foot') {
       ensureWorld('arena'); clearGame();
       G.boost = true; G.drain = 33; G.regen = 0; G.timeLeft = setup.dur;
@@ -855,15 +911,17 @@ function startGame(type) {
       }
       kickoff(); raceTime = 0;
     } else if (type === 'free') {
-      ensureWorld('libre'); clearGame();
+      const route = setup.route === 'ligne' ? 'ligne' : 'libre';
+      ensureWorld(route); clearGame();
       G.boost = true; G.drain = 30; G.regen = 7;
       player = makeCarEntity(CARS[selCar], carColor(CARS[selCar]), true, 'Toi', DIFFS[1]);
       T.point(5, 2.3, tmp); Object.assign(player, { x: tmp.x, z: tmp.z, h: T.heading(5), idx: 5 });
-      spawnTraffic(22); raceTime = 0;
+      if (route === 'libre') spawnTraffic(22);
+      raceTime = 0;
     } else {
       ensureWorld(String(setup.track));
-      G.boost = type === 'race'; G.drain = 30; G.regen = 7;
-      gridUp(true, setup.bots);
+      G.boost = type !== 'items'; G.drain = 30; G.regen = 7;
+      gridUp(true, type === 'chrono' ? 0 : setup.bots);
       if (type === 'items') spawnBoxes();
     }
     hudFor(type); show('hud');
@@ -875,7 +933,8 @@ function finishRace() {
   const r = player.rank;
   $('rtitle').textContent = r === 1 ? 'Victoire !' : ordinal(r) + ' place';
   const id = TRACKS[setup.track].id;
-  $('rsub').textContent = 'Meilleur tour ' + (player.bestLap ? fmt(player.bestLap) : '—') + (G.type === 'race' && best[id] ? ' · record du circuit ' + fmt(best[id]) : '');
+  if (G.type === 'chrono') $('rtitle').textContent = 'Temps : ' + fmt(player.finishTime);
+  $('rsub').textContent = 'Meilleur tour ' + (player.bestLap ? fmt(player.bestLap) : '—') + ((G.type === 'race' || G.type === 'chrono') && best[id] ? ' · record du circuit ' + fmt(best[id]) : '');
   fillResults(); show('results');
 }
 function endFoot() {
@@ -895,7 +954,7 @@ function fillResults() {
   const tb = $('rtable'); tb.textContent = '';
   standings().forEach((c, i) => {
     const tr = document.createElement('tr'); if (c.isPlayer) tr.className = 'me';
-    for (const v of [i + 1, c.name + ' · ' + c.def.nom, c.finished ? fmt(c.finishTime) : 'en course']) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
+    for (const v of [i + 1, c.name + ' · ' + c.def.nom, c.out ? 'éliminé' : c.finished ? fmt(c.finishTime) : G.type === 'elim' && mode === 'finished' && c.rank === 1 ? 'vainqueur' : 'en course']) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
     tb.appendChild(tr);
   });
 }
@@ -908,7 +967,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 $('m-race').onclick = () => { audio.initAudio(); buildSetup('race'); show('setup'); };
 $('m-items').onclick = () => { audio.initAudio(); buildSetup('items'); show('setup'); };
 $('m-foot').onclick = () => { audio.initAudio(); buildSetup('foot'); show('setup'); };
-$('m-free').onclick = () => { audio.initAudio(); startGame('free'); };
+$('m-free').onclick = () => { audio.initAudio(); buildSetup('free'); show('setup'); };
+$('m-chrono').onclick = () => { audio.initAudio(); buildSetup('chrono'); show('setup'); };
+$('m-elim').onclick = () => { audio.initAudio(); buildSetup('elim'); show('setup'); };
 $('m-garage').onclick = () => { audio.initAudio(); mode = 'garage'; G.type = 'demo'; garageShow(selCar); show('garage'); };
 $('m-options').onclick = () => { audio.initAudio(); buildOptions(); show('options'); };
 for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => { store.set('setup', setup); toMenu(); };
@@ -918,6 +979,8 @@ $('g-next').onclick = () => garageShow(selCar + 1);
 $('g-reset').onclick = () => { delete tuning[CARS[selCar].id]; store.set('tuning', tuning); garageShow(selCar); };
 $('g-pick').onclick = () => { store.set('car', CARS[selCar].id); toMenu(); };
 $('bpause').onclick = togglePause;
+function toggleView() { opts.vue = opts.vue === 'int' ? 'ext' : 'int'; store.set('opts', opts); chaseSnap = true; }
+$('bvue').onclick = toggleView;
 $('p-resume').onclick = togglePause;
 $('p-restart').onclick = () => startGame(G.type);
 $('p-quit').onclick = toMenu;
@@ -951,16 +1014,19 @@ function drawMini() {
 
 // ---------- boucle ----------
 let time = 0;
+const sunV = new THREE.Vector3(), sunW = new THREE.Vector3();
 function simulate(dt) {
   raceTime += dt;
   for (const c of cars) {
+    if (c.out) continue;
     const inp = (c.isPlayer && mode === 'race') ? playerInput() : aiInput(c, dt);
     if (G.type === 'items') { if (inp.use && !c.prevUse) useItem(c); c.prevUse = !!inp.use; }
     stepCar(c, inp, dt);
     c.inp = inp;
   }
-  collide(cars);
+  collide(G.type === 'elim' ? cars.filter(c => !c.out) : cars);
   if (G.type === 'items') stepItems(dt);
+  if (G.type === 'elim' && mode === 'race') stepElim(dt);
   if (G.type === 'free') stepTraffic(dt);
 }
 // fumée, flammes et étincelles produites par un véhicule
@@ -983,14 +1049,23 @@ function emit(c, dt) {
     if (c.offroad && sp > 6 && Math.random() < 0.5) fx.smoke(rx, 0.25, rz, vx * 0.3, 1.2, vz * 0.3, 1.3, 0.22, 1.0);
     if (c.inp && c.inp.gas > 0.5 && sp < 14 && Math.random() < 0.12) fx.smoke(rx, 0.45, rz, sh * 2, 0.6, ch * 2, 0.6, 0.14, 0.8);
   }
+  // gerbes d'eau derrière les roues sur route mouillée
+  const wet = c.vis.wet ?? 0;
+  if (wet > 0.3 && y < 0.05 && sp > 12) { const n = sp > 40 ? 2 : 1, amt = Math.min(1.4, sp / 45) * wet;
+    for (let k = 0; k < n; k++) for (const s of (c.vis.moto ? [0] : [-1, 1])) { const [wx, wz] = side(s * hw * 0.85, len * 0.62); fx.splash(wx, 0.15, wz, vx, vz, amt); } }
   if (c.onWall && sp > 9) for (let k = 0; k < 2; k++) { const [wx, wz] = side((Math.random() < 0.5 ? -1 : 1) * hw, (Math.random() - 0.5) * len * 2); fx.spark(wx, 0.5, wz, vx * 0.5, 1, vz * 0.5); }
   void dt;
 }
 function syncVisuals(dt) {
   for (const c of cars) {
+    if (c.out) continue;
     c.vis.root.position.set(c.x, c.y, c.z); c.vis.root.rotation.set(c.pitch, c.h + c.spinA, 0);
+    setLod(c.vis, c !== player && c !== gCar && camera.position.distanceToSquared(c.vis.root.position) > 42 * 42);
     animateCar(c.vis, dt, c.v, c.steer, c.yaw * Math.abs(c.v), c.lon, c.braking, time);
     // de jour, l'ombre s'étire à l'opposé du soleil
+    // phares visibles seulement de face, feux arrière seulement de dos
+    if (c.vis.heads) { const dx = camera.position.x - c.x, dz = camera.position.z - c.z, dl = Math.hypot(dx, dz) || 1, f = (-Math.sin(c.h) * dx - Math.cos(c.h) * dz) / dl;
+      for (const hd of c.vis.heads) hd.material.opacity *= clamp(f * 2 + 0.2, 0, 1); for (const g of c.vis.glows) g.material.opacity *= clamp(-f * 2 + 0.4, 0, 1); }
     if (world.sun && c.vis.shadow) { const sx = -world.sun[0] * 1.1, sz = -world.sun[1] * 1.1, ch = Math.cos(c.h), sh = Math.sin(c.h); c.vis.shadow.position.set(sx * ch - sz * sh, 0.015 - c.y, sx * sh + sz * ch); }
     emit(c, dt);
   }
@@ -1045,7 +1120,7 @@ function frame(now) {
         else if (G.type === 'free') { $('h-time').textContent = fmtShort(raceTime); $('h-lap').textContent = (G.dist / 1000).toFixed(1) + ' km'; drawMini(); }
         else {
           $('h-pos').textContent = standings().indexOf(player) + 1;
-          $('h-lap').textContent = clamp(player.lap, 1, setup.laps);
+          $('h-lap').textContent = clamp(player.lap, 1, G.laps);
           $('h-time').textContent = fmt(raceTime);
           $('wrong').hidden = !(Math.cos(wrap(player.h - T.heading(player.idx))) < -0.3 && Math.abs(player.v) > 3);
           if (G.type === 'items') $('h-item').textContent = player.item ? 'Objet : ' + ITEM_NAMES[player.item] : player.shieldT > 0 ? 'Bouclier actif' : '';
@@ -1058,7 +1133,19 @@ function frame(now) {
   if (mode !== 'pause') fx.update(dt);
   if (focus) world.update(camera, dt, time, focus.idx || 0);
   if (world.rain && world.rain.visible) world.updateRain(camera, dt, focus ? -Math.sin(focus.h) * focus.v : 0, focus ? -Math.cos(focus.h) * focus.v : 0);
-  if (composer) { finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time; composer.render(dt); } else renderer.render(scene, camera);
+  if (composer) {
+    finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time;
+    const fu = finalPass.uniforms; fu.sunVis.value = 0;
+    if (world.sunDir) {
+      sunV.copy(camera.position).addScaledVector(world.sunDir, 1000).project(camera);
+      const facing = camera.getWorldDirection(sunW).dot(world.sunDir);
+      if (facing > 0 && Math.abs(sunV.x) < 1.25 && Math.abs(sunV.y) < 1.25) {
+        fu.sunPos.value.set(sunV.x * 0.5 + 0.5, sunV.y * 0.5 + 0.5); fu.sunCol.value.copy(world.sunCol); fu.aspect.value = W / H;
+        fu.sunVis.value = clamp(1.3 - Math.max(Math.abs(sunV.x), Math.abs(sunV.y)), 0, 1) * (world.theme.flare ?? 1);
+      }
+    }
+    composer.render(dt);
+  } else renderer.render(scene, camera);
   // résolution adaptative en mode Auto
   if (opts.qual === 'auto' && mode !== 'pause') {
     fpsAcc += dt; fpsN++;

@@ -4,11 +4,14 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Modes de jeu
 
-- **Course** : 8 circuits (5 en ville de nuit, 3 en pleine nature de jour), 3 à 11 adversaires, 4 niveaux de difficulté, boost.
+- **Course** : 9 circuits (5 en ville de nuit, 4 en pleine nature de jour, dont une côte au coucher du soleil), 3 à 15 adversaires, 5 niveaux de difficulté jusqu'à Légende.
+- **Contre-la-montre** : seul en piste, contre son record.
+- **Élimination** : toutes les 20 secondes, le dernier est éliminé.
 - **Course à bonus** : des caisses sur la piste donnent un objet (turbo, missile, flaque d'huile, bouclier).
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
-- **Balade libre** : 6 km de route de campagne avec circulation, sans chrono.
-- **Garage** : 4 voitures et une moto, peinture, 4 stats réglables par véhicule.
+- **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
+- **Garage** : 6 voitures et 4 motos, 4 stats réglables par véhicule.
+- **Vue** : bouton VUE (ou touche C, ou Y à la manette) pour passer à la première personne.
 
 ## Lancer le jeu
 
@@ -33,6 +36,20 @@ ANDROID_JAR=/chemin/vers/android.jar ./android/build-apk.sh
 ```
 
 Le script indique en tête les outils nécessaires. La clé de signature `android/keystore/nuit-neon.jks` est une clé de projet : elle permet d'installer les mises à jour par-dessus l'ancienne version. Pour une publication sur le Play Store, il faut créer sa propre clé.
+
+## Préparer un modèle 3D
+
+Les modèles bruts pèsent souvent 25 à 70 Mo, bien trop pour un téléphone. `tools/prep-model.mjs` les allège (environ 30 000 triangles, textures 1024 px), les met à l'échelle, tourne l'avant vers -z et découpe les roues en pièces séparées pour qu'elles tournent :
+
+```bash
+cd tools && npm install
+```
+
+```bash
+node prep-model.mjs entree.glb ../models/nom.glb '{"front":"+x","len":4.4,"type":"car"}'
+```
+
+Pour la version lointaine (utilisée quand le véhicule est loin de la caméra), refaire la même commande avec `"tris":5000` et la sortie `../models/nom_loin.glb`.
 
 ## Ajouter une voiture (modèle 3D)
 

@@ -20,7 +20,7 @@ const doc = await io.read(src); const root = doc.getRoot();
 const count = () => { let t = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) t += p.getIndices().getCount() / 3; return t | 0; };
 await doc.transform(dedup(), flatten(), weld());
 const t0 = count();
-if (t0 > cfg.tris * 1.1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: cfg.tris / t0, error: 0.08, lockBorder: false }));
+if (t0 > cfg.tris * 1.1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: cfg.tris / t0, error: cfg.err ?? 0.03, lockBorder: false }));
 await doc.transform(
   textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [1024, 1024], quality: 80, slots: /baseColor/ }),
   textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [512, 512], quality: 80, slots: /^(?!baseColor)/ }));
@@ -34,9 +34,15 @@ const P = read(prim.getAttribute('POSITION'), 3), Nn = read(prim.getAttribute('N
   if (tt && UV) { const o = tt.getOffset(), sc2 = tt.getScale(), ro = tt.getRotation(), c = Math.cos(ro), sn = Math.sin(ro);
     for (let i = 0; i < nv; i++) { const u = UV[i * 2] * sc2[0], v = UV[i * 2 + 1] * sc2[1]; UV[i * 2] = c * u + sn * v + o[0]; UV[i * 2 + 1] = -sn * u + c * v + o[1]; } } }
 let I = new Uint32Array(prim.getIndices().getArray());
-// maillages très morcelés que la réduction normale n'arrive pas à alléger : on autorise à franchir les coutures de texture
-for (const err of [0.05, 0.15, 0.4]) { if (I.length / 3 <= cfg.tris * 1.25) break;
-  const r = MeshoptSimplifier.simplify(I, P, 3, cfg.tris * 3, err, ['Permissive', 'Prune']); if (r[0].length < I.length) I = r[0]; }
+// Pas de réduction « permissive » : elle soude des morceaux de texture différents et fait des taches.
+// Si le maillage est trop morcelé pour descendre jusqu'à la cible, on garde un peu plus de triangles.
+// Seconde passe pour ces maillages : réduction qui mesure aussi la déformation des coordonnées de texture,
+// pour ne fusionner deux morceaux que là où la texture reste la même.
+if (I.length / 3 > cfg.tris * 1.3 && UV) {
+  const tgt = Math.min(Math.floor(I.length / 3) - 1, Math.max(cfg.tris, cfg.trisMax ?? cfg.tris * 2));
+  const r = MeshoptSimplifier.simplifyWithAttributes(I, P, 3, UV, 2, [cfg.uvw ?? 40, cfg.uvw ?? 40], null, tgt * 3, cfg.err2 ?? 0.06, ['Permissive']);
+  if (r[0].length < I.length) I = r[0];
+}
 const finalTris = I.length / 3;
 // matrice du nœud, puis orientation : l'avant vers -z
 const M = node.getWorldMatrix();

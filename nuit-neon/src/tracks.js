@@ -9,6 +9,12 @@ const NATURE = {
   neige: { env: 'nature', sky: [[0.25,0.32,0.50],[0.60,0.68,0.82],[0.86,0.90,0.96]], fog: 0xc8d4e6, dens: 0.0035, a: 0x19a0ff, b: 0xff2b50, c: 0xffd23f, cloud: 0.8,
     ground: 0xe8eef6, sol: { kind: 2, c: [0xdfe8f2, 0xffffff, 0xeaf2fb, 0xc8d4e2] }, relief: 60, ombre: 0.35, hill: 0xdfe8f4, hillH: 320, rock: 0x8a909a, snowTop: true, sun: { dir: [0.3,0.3,-0.906], col: [0.75,0.8,1.0], road: 1.4 }, sunI: 2.0, ambI: 1.7, wet: 0.85, rain: 'neige',
     flore: [['sapin', 520, 5, 220, 0.8, 1.7], ['rocher', 60, 8, 200, 0.6, 1.6]] },
+  // bord de mer au soleil couchant : la piste longe une plage, la mer reflète le ciel
+  couchant: { env: 'nature', sky: [[0.10,0.12,0.32],[0.80,0.40,0.34],[1.0,0.56,0.24]], fog: 0xe0906a, dens: 0.0017, a: 0xff8a1f, b: 0xffffff, c: 0x19e6ff, cloud: 0.72,
+    ground: 0xd8b888, sol: { kind: 1, c: [0xd9b98a, 0xe8cfa0, 0xcfae7e, 0xb89060] }, relief: 70, hill: 0x6a4a5a, hillH: 150, rock: 0x7a5a50,
+    mer: { niveau: -0.35, profond: 0x04202e }, phares: true,
+    sun: { dir: [-0.15,0.07,-0.986], col: [1.0,0.56,0.28], road: 2.6 }, sunI: 2.6, ambI: 1.25, wet: 0.5, ombre: 0.45,
+    flore: [['palmier', 260, 1.5, 12, 0.9, 1.35], ['rocher', 120, 4, 90, 0.6, 2.2]] },
 };
 
 // Les circuits. Points de contrôle en mètres (x, z), boucle fermée, départ au premier point.
@@ -38,6 +44,9 @@ export const TRACKS = [
     theme: { sky: [[0.05,0.0,0.02],[0.28,0.02,0.06],[0.85,0.14,0.08]], fog: 0x3c0a12, dens: 0.0028,
       a: 0xff2a2a, b: 0xffb020, c: 0xff5a1f, lamp: 0xffe0c0, palms: true, rain: false,
       win: [['#ff6a4a','#ffb090','#ffd8c0'],['#ffc040','#ffe0a0','#fff0d0'],['#ff3a5a','#ff90a0','#ffd0b0'],['#ffe9c0','#ff8040','#ff4040']] } },
+  { id: 'couchant', nom: 'Côte du Couchant', desc: 'Bord de mer au coucher du soleil',
+    pts: [[0,0],[0,-280],[80,-380],[220,-400],[340,-320],[360,-180],[300,-60],[360,60],[300,180],[160,200],[60,140]],
+    theme: NATURE.couchant },
   { id: 'prairie', nom: 'Prairie du Soleil', desc: 'Campagne au soleil',
     pts: [[0,0],[0,-260],[90,-380],[250,-400],[360,-300],[340,-160],[430,-60],[400,90],[270,150],[150,90],[60,130]],
     theme: NATURE.prairie },
@@ -53,3 +62,8 @@ export const TRACKS = [
 export const ROUTE_LIBRE = { id: 'libre', nom: 'Route des Prés', desc: 'Balade libre', echelle: 1, half: 4.6, limit: 12.4, libre: true,
   pts: [[0,0],[0,-600],[200,-1000],[700,-1200],[1200,-1000],[1500,-500],[1300,0],[1500,500],[1100,900],[500,800],[200,400]],
   theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 900, 20, 260, 0.8, 1.9], ['rocher', 80, 18, 200, 0.4, 1.0]] }) };
+
+// Ligne Droite : deux lignes droites de 3 km à travers les champs, pour se balader sans circulation
+export const ROUTE_LIGNE = { id: 'ligne', nom: 'Ligne Droite', desc: 'Balade sans circulation', echelle: 1, half: 5.5, limit: 14, libre: true,
+  pts: [[0,0],[0,-1500],[0,-3000],[120,-3220],[330,-3290],[540,-3220],[660,-3000],[660,-1500],[660,0],[540,220],[330,290],[120,220]],
+  theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 700, 22, 300, 0.8, 2.0], ['rocher', 60, 18, 220, 0.4, 1.0]] }) };

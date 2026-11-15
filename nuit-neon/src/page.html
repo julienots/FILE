@@ -86,7 +86,7 @@ h1, h2 { margin: 0; font-weight: 700; font-style: italic; text-wrap: balance; }
 .tc small { display: block; font-size: 11px; color: var(--warn); min-height: 14px; }
 .tr { top: max(10px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: flex; gap: 8px; align-items: flex-start; }
 #mini { width: 96px; height: 96px; }
-#bpause { pointer-events: auto; width: 40px; height: 40px; border: 1px solid var(--line); background: var(--panel); font-weight: 700; }
+#bpause, #bvue { pointer-events: auto; min-width: 40px; height: 40px; font-size: 11px; letter-spacing: 0.04em; border: 1px solid var(--line); background: var(--panel); font-weight: 700; }
 .speed { bottom: max(12px, env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 10px #000; }
 .speed b { font-size: 44px; font-style: italic; line-height: 0.9; font-variant-numeric: tabular-nums; display: block; }
 .pad { bottom: max(16px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 12px; pointer-events: auto; }
@@ -115,7 +115,8 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 @media (max-height: 420px) { .key { width: 66px; height: 66px; } .sheet { gap: 8px; padding: 10px 14px; } .track canvas { height: 48px; } .btn { padding: 9px 18px; } }
 @media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
 /* modes de jeu */
-#menu .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(430px, 100%); }
+#menu .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(640px, 100%); }
+@media (max-width: 560px) { #menu .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #menu .modes .btn { min-width: 0; text-align: left; padding: 10px 16px; }
 #menu .modes .btn small { display: block; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; text-transform: none; opacity: 0.75; }
 .pad.r { flex-direction: column; align-items: flex-end; gap: 8px; }
@@ -142,10 +143,12 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="col">
       <h1><span>NUIT</span> <b>NÉON</b></h1>
       <div class="modes">
-        <button class="btn primary" id="m-race">Course<small>9 circuits, jusqu'à 11 adversaires</small></button>
+        <button class="btn primary" id="m-race">Course<small>9 circuits, jusqu'à 15 adversaires</small></button>
         <button class="btn" id="m-items">Course à bonus<small>Objets à ramasser sur la piste</small></button>
         <button class="btn" id="m-foot">Foot Turbo<small>Ballon, boost, saut et vol</small></button>
-        <button class="btn" id="m-free">Balade libre<small>Route de campagne et circulation</small></button>
+        <button class="btn" id="m-chrono">Contre-la-montre<small>Seul en piste, contre ton record</small></button>
+        <button class="btn" id="m-elim">Élimination<small>Le dernier sort toutes les 20 s</small></button>
+        <button class="btn" id="m-free">Balade libre<small>Campagne, avec ou sans circulation</small></button>
         <button class="btn" id="m-garage">Garage<small>Voitures, moto, réglages</small></button>
         <button class="btn" id="m-options">Options<small>Graphismes, commandes, son</small></button>
       </div>
@@ -157,10 +160,11 @@ tr.me td { color: var(--cyan); font-weight: 700; }
   <div class="screen" id="setup" hidden>
     <div class="sheet panel">
       <div class="head"><h2 id="s-title">Choix de la course</h2><button class="btn small" data-back>Retour</button></div>
-      <div id="tracks" data-for="race items"></div>
-      <div class="row"><span class="label">Difficulté</span><div class="chips" id="diffs"></div></div>
-      <div class="row" data-for="race items"><span class="label">Tours</span><div class="chips" id="laps"></div></div>
-      <div class="row" data-for="race items"><span class="label">Adversaires</span><div class="chips" id="bots"></div></div>
+      <div id="tracks" data-for="race items chrono elim"></div>
+      <div class="row" data-for="free"><span class="label">Route</span><div class="chips" id="routes"></div></div>
+      <div class="row" data-for="race items elim foot"><span class="label">Difficulté</span><div class="chips" id="diffs"></div></div>
+      <div class="row" data-for="race items chrono"><span class="label">Tours</span><div class="chips" id="laps"></div></div>
+      <div class="row" data-for="race items elim"><span class="label">Adversaires</span><div class="chips" id="bots"></div></div>
       <div class="row" data-for="foot"><span class="label">Équipes</span><div class="chips" id="teams"></div></div>
       <div class="row" data-for="foot"><span class="label">Durée</span><div class="chips" id="durs"></div></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" id="s-go">Démarrer</button></div>
@@ -198,7 +202,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <div id="h-lapbox"><div class="label" id="h-laplabel">Tour</div><div class="big"><span id="h-lap">1</span><small id="h-lapsfx">/<span id="h-laps">3</span></small></div></div>
     </div>
     <div class="tc"><div id="score" hidden><span class="b" id="sc-b">0</span> – <span class="o" id="sc-o">0</span></div><span id="h-time">0:00.0</span><small id="h-msg"></small></div>
-    <div class="tr"><canvas id="mini" width="192" height="192"></canvas><button id="bpause" aria-label="Pause">II</button></div>
+    <div class="tr"><canvas id="mini" width="192" height="192"></canvas><button id="bvue" aria-label="Changer de vue">VUE</button><button id="bpause" aria-label="Pause">II</button></div>
     <div id="wrong" hidden>MAUVAIS SENS</div>
     <div id="banner" hidden></div>
     <div class="speed"><div id="h-item"></div><b id="h-kmh">0</b><span class="label">km/h</span><div id="boostbar"><i id="h-boost"></i></div></div>

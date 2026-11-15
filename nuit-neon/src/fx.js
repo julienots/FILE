@@ -70,6 +70,12 @@ export class FX {
       this.fireP.spawn(x, y, z, Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s, Math.sin(a) * Math.cos(e) * s, 0.5 + Math.random() * 0.7, 1.4, 0.2, r, g, b, 1, 9, 1.2);
     }
   }
+  // gerbe d'eau soulevée par un pneu sur route mouillée
+  splash(x, y, z, vx, vz, amount = 1) {
+    const k = 0.7 + Math.random() * 0.3;
+    this.smokeP.spawn(x, y, z, vx * 0.35 + (Math.random() - 0.5) * 2.5, 1.4 + Math.random() * 2.6 * amount, vz * 0.35 + (Math.random() - 0.5) * 2.5, 0.35 + Math.random() * 0.35,
+      0.25, 1.5 * amount, 0.82 * k, 0.86 * k, 0.94 * k, 0.32 * amount, 7, 2.2);
+  }
   update(dt) { this.smokeP.update(dt); this.fireP.update(dt); }
   clear() { this.smokeP.clear(); this.fireP.clear(); }
 }

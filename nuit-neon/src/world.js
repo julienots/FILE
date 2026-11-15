@@ -78,7 +78,7 @@ export function makeTrack(def) {
     raw[i] = ((tx[b] - tx[a]) * (-tz[i]) + (tz[b] - tz[a]) * tx[i]) / (2 * ds); // > 0 : virage à droite
   }
   for (let i = 0; i < N; i++) { let s = 0; for (let j = -3; j <= 3; j++) s += raw[(i + j + N) % N]; k[i] = s / 7; }
-  const half = def.half || 13.5;           // demi-largeur de la route
+  const half = def.half || 16;           // demi-largeur de la route
   const T = { def, N, L, ds, px, pz, tx, tz, k, half, limit: def.limit || half - 1.3, libre: !!def.libre };
   T.nearest = (x, z, hint, span = 14) => {
     let bestI = hint, bd = 1e18;
@@ -519,17 +519,23 @@ export function buildWorld(def, renderer, q) {
     const distTrack = (x, z) => { let b = 1e18; for (let i = 0; i < T.N; i += 4) { const dx = x - T.px[i], dz = z - T.pz[i], d = dx * dx + dz * dz; if (d < b) b = d; } return Math.sqrt(b); };
     const amp = th.relief ?? 34;
     const hills = (x, z) => Math.sin(x * 0.0061 + 1.3) * Math.cos(z * 0.0053 + 0.4) * 0.5 + Math.sin(x * 0.013 + z * 0.011) * 0.28 + Math.sin(x * 0.031 - z * 0.027 + 2.0) * 0.1 + 0.55;
-    const heightAt = (x, z) => { const t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
+    const mer = th.mer;
+    const heightAt = mer
+      // côte : plage en pente douce jusqu'à la mer, quelques îles et caps au loin
+      ? (x, z) => { const d = distTrack(x, z), t = Math.min(1, Math.max(0, (d - 60) / 300)), s = Math.min(1, Math.max(0, (d - 24) / 56));
+          return (hills(x, z) - 0.72) * amp * t * t * (3 - 2 * t) - 8 * s * s * (3 - 2 * s); }
+      : (x, z) => { const t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
     {
       const size = 2 * (R + 1050), seg = q.terrain;
       const g = new THREE.PlaneGeometry(size, size, seg, seg); const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) p.setZ(i, heightAt(cx + p.getX(i), cz - p.getY(i)));
       g.computeVertexNormals();
       const mat = new THREE.ShaderMaterial({
-        uniforms: Object.assign(gUni(), { kind: { value: sol.kind } }), polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8,
+        uniforms: Object.assign(gUni(), { kind: { value: sol.kind }, eau: { value: th.mer ? th.mer.niveau + 0.12 : -1e4 } }), polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8,
         vertexShader: `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix*viewMatrix*w; }`,
-        fragmentShader: GROUND_GLSL + `uniform float kind; varying vec3 vW; varying vec3 vN;
+        fragmentShader: GROUND_GLSL + `uniform float kind; uniform float eau; varying vec3 vW; varying vec3 vN;
           void main(){
+            if (vW.y < eau) discard;                       // sous la mer : seule l'eau est dessinée (sinon les deux se disputent l'écran au loin)
             vec2 p = vW.xz; vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam/dist;
             float field; vec3 alb = groundBase(p, field);
             float near = exp(-dist/55.0), mid = exp(-dist/260.0);
@@ -555,6 +561,7 @@ export function buildWorld(def, renderer, q) {
               alb = mix(alb, alb*vec3(0.78,0.86,1.0), smoothstep(0.4, 0.7, gf(p*0.09)));
               alb *= 0.95 + 0.10*gn(p*14.0)*near;
             }
+            alb *= mix(0.5, 1.0, smoothstep(-0.6, 0.25, vW.y));                                // sable mouillé au bord de l'eau
             float cs = smoothstep(0.48, 0.72, gf(p*0.0045 + vec2(time*0.012, time*0.007)));   // ombres des nuages
             float diff = max(dot(N, sunDir), 0.0);
             vec3 col = alb * (amb*0.55 + sunCol * diff * 1.3 * (1.0 - 0.45*cs));
@@ -567,6 +574,48 @@ export function buildWorld(def, renderer, q) {
       });
       const ground = add(g, mat); ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.1, cz); ground.renderOrder = -1; ground.frustumCulled = false;
       timed.push(mat);
+    }
+    if (mer) {
+      // eau : houle en plusieurs trains de vagues, reflet du ciel selon l'angle (Fresnel), traînée du soleil et éclats
+      const wm = new THREE.ShaderMaterial({
+        uniforms: Object.assign(gUni(), { hor: { value: new THREE.Color().fromArray(th.sky[2]) }, mid: { value: new THREE.Color().fromArray(th.sky[1]) }, top: { value: new THREE.Color().fromArray(th.sky[0]) },
+          deep: { value: new THREE.Color(mer.profond) }, sunRaw: { value: new THREE.Color().fromArray(th.sun.col) } }),
+        vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+        fragmentShader: GROUND_GLSL + `uniform vec3 hor; uniform vec3 mid; uniform vec3 top; uniform vec3 deep; uniform vec3 sunRaw; varying vec3 vW;
+          vec2 wave(vec2 p, vec2 d, float k, float a, float sp){ float ph = dot(d, p)*k + time*sp; return d * k * a * cos(ph); }
+          void main(){
+            vec2 p = vW.xz; vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam/dist;
+            vec2 g = wave(p, vec2(0.80, 0.60), 0.090, 0.55, 1.10) + wave(p, vec2(-0.45, 0.89), 0.140, 0.32, 1.45)
+                   + wave(p, vec2(0.97, -0.24), 0.310, 0.12, 2.10) + wave(p, vec2(-0.70, -0.71), 0.520, 0.06, 2.90);
+            float e = 0.35; vec2 q = p*0.9 + vec2(time*0.6, time*0.35);                       // clapot fin
+            g += vec2(gn(q + vec2(e,0.)) - gn(q - vec2(e,0.)), gn(q + vec2(0.,e)) - gn(q - vec2(0.,e))) * 0.55;
+            vec2 q2 = p*3.1 - vec2(time*0.9, time*0.4);
+            g += vec2(gn(q2 + vec2(e,0.)) - gn(q2 - vec2(e,0.)), gn(q2 + vec2(0.,e)) - gn(q2 - vec2(0.,e))) * 0.25 * exp(-dist/70.0);
+            g *= (0.12 + 3.0*exp(-dist/140.0)) * mix(0.18, 1.0, smoothstep(0.03, 0.3, V.y));   // eau vue en rasant : vagues adoucies (sinon le reflet clignote)                                                      // pentes réalistes de près, eau plus lisse au loin (évite le scintillement)
+            vec3 N = normalize(vec3(-g.x, 1.0, -g.y));
+            vec3 R = reflect(-V, N); R.y = abs(R.y);
+            vec3 sky = mix(hor, mid, smoothstep(0.0, 0.10, R.y)); sky = mix(sky, top, smoothstep(0.06, 0.4, R.y)) * 0.85;
+            float sd = max(dot(R, sunDir), 0.0);
+            sky += sunRaw * (pow(sd, 7.0)*0.35 + pow(sd, 60.0)*0.8);
+            vec3 Nf = normalize(mix(vec3(0.0,1.0,0.0), N, 0.4));                                 // normale lissée pour le Fresnel
+            float fres = min(0.02 + 0.98*pow(1.0 - max(dot(Nf, V), 0.0), 5.0), 0.62);
+            vec3 body = deep * (0.45 + 0.55*max(dot(N, sunDir), 0.0)) + deep * amb * 0.25;
+            body += vec3(0.05, 0.22, 0.20) * sunRaw * pow(max(dot(-V, sunDir), 0.0), 4.0) * max(g.x + g.y, 0.0) * 0.6;  // lumière à travers la crête des vagues
+            vec3 col = mix(body, sky, fres);
+            float nearW = exp(-dist/220.0);
+            col += sunRaw * (pow(sd, 1100.0) * 40.0 * nearW + pow(sd, 240.0) * 2.5 * (0.3 + 0.7*nearW));   // éclats du soleil, adoucis au loin
+            col += sunRaw * pow(max(dot(reflect(-V, vec3(0.0,1.0,0.0)), sunDir), 0.0), 60.0) * 0.9 * (1.0 - nearW);  // au loin : traînée continue vers le soleil
+            float foam = smoothstep(0.62, 0.9, gn(p*0.6 + time*0.15) * gn(p*1.7 - time*0.2) * 2.2) * exp(-dist/120.0) * 0.25;
+            col = mix(col, vec3(0.9)*(amb*0.5 + sunCol*0.6), foam);
+            col = mix(col, fogColor, 1.0 - exp(-fogDensity*fogDensity*dist*dist));
+            gl_FragColor = vec4(col, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }`,
+      });
+      const wsz = 2 * (R + 3000);
+      const water = add(new THREE.PlaneGeometry(wsz, wsz, 40, 40), wm); water.rotation.x = -Math.PI / 2; water.position.set(cx, mer.niveau, cz); water.frustumCulled = false;
+      timed.push(wm);
     }
     // montagnes à l'horizon
     {
@@ -639,6 +688,10 @@ export function buildWorld(def, renderer, q) {
           for (let i = 0; i < 8; i++) { const a = rr(0, 6.28), e = rr(-0.5, 1.2), rad = br * rr(0.35, 0.8);
             gs.push(card(br * 1.5, br * 1.5, bx + Math.cos(a) * Math.cos(e) * rad, by + Math.sin(e) * rad, bz + Math.sin(a) * Math.cos(e) * rad, rr(-0.9, 0.9), rr(0, 6.28), rr(0, 6.28), [bx * 0.4, 5.2, bz * 0.4], 3.6)); }
         return mergeGeometries(gs); },
+      palmier: () => { const gs = [];
+        for (let i = 0; i < 13; i++) { const a = i / 13 * 6.283 + rr(-0.15, 0.15);
+          gs.push(card(1.25, 4.8, 1.3 + Math.sin(a) * 1.9, 9.6 + rr(-0.3, 0.3), Math.cos(a) * 1.9, -1.1 - rr(0, 0.45), a, 0, [1.3, 10.3, 0], 3.2)); }
+        return mergeGeometries(gs); },
       sapin: () => { const gs = [];
         for (let t = 0; t < 6; t++) { const y = 2.0 + t * 1.3, rad = 2.7 * (1 - t / 6.6);
           for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + t * 0.5; gs.push(card(rad * 1.5, 2.3, Math.sin(a) * rad * 0.45, y, Math.cos(a) * rad * 0.45, -0.95, a, 0, [0, y + 0.8, 0], rad * 1.1)); } }
@@ -651,6 +704,9 @@ export function buildWorld(def, renderer, q) {
     const solid = {
       feuillu: () => mergeGeometries([new THREE.CylinderGeometry(0.22, 0.42, 4.6, 7).translate(0, 2.3, 0), new THREE.CylinderGeometry(0.1, 0.18, 2.2, 5).rotateZ(-0.7).translate(0.8, 4.0, 0.2), new THREE.CylinderGeometry(0.1, 0.17, 2.0, 5).rotateZ(0.75).translate(-0.75, 4.1, -0.2)]),
       sapin: () => new THREE.CylinderGeometry(0.12, 0.34, 9.4, 6).translate(0, 4.7, 0),
+      palmier: () => { const g = new THREE.CylinderGeometry(0.17, 0.3, 10, 8, 10); const p = g.attributes.position;
+        for (let i = 0; i < p.count; i++) { const t = (p.getY(i) + 5) / 10; p.setX(i, p.getX(i) + t * t * 1.3); const r2 = 1 + 0.12 * Math.abs(Math.sin(t * 60)); p.setX(i, p.getX(i) * 1); p.setZ(i, p.getZ(i) * r2); }
+        return g.translate(0, 5, 0); },
       cactus: () => mergeGeometries([colored(new THREE.CylinderGeometry(0.42, 0.48, 5, 10).translate(0, 2.5, 0), 0x3d7a3a), colored(new THREE.SphereGeometry(0.42, 10, 6).translate(0, 5, 0), 0x468a40),
         colored(new THREE.CylinderGeometry(0.28, 0.28, 1.6, 8).rotateZ(Math.PI / 2).translate(0.9, 2.6, 0), 0x3d7a3a), colored(new THREE.CylinderGeometry(0.28, 0.28, 1.8, 8).translate(1.6, 3.4, 0), 0x468a40),
         colored(new THREE.CylinderGeometry(0.26, 0.26, 1.3, 8).rotateZ(Math.PI / 2).translate(-0.8, 1.8, 0), 0x3d7a3a), colored(new THREE.CylinderGeometry(0.26, 0.26, 1.4, 8).translate(-1.4, 2.4, 0), 0x468a40)]),
@@ -665,17 +721,19 @@ export function buildWorld(def, renderer, q) {
       for (let t = 0; t < count * 3 && spots.length < count; t++) {
         const i = Math.floor(rnd() * T.N), side = rnd() < 0.5 ? -1 : 1, off = side * (HALF + near + Math.pow(rnd(), 1.6) * farD);
         const x = T.px[i] - T.tz[i] * off, z = T.pz[i] + T.tx[i] * off;
-        if (farFromTrack(x, z, HALF + near - 1)) spots.push([x, z, heightAt(x, z), rr(s0, s1), rr(0, 6.28)]);
+        if (!farFromTrack(x, z, HALF + near - 1)) continue;
+        const hy = heightAt(x, z); if (mer && hy < (kind === 'rocher' ? -3 : 0.15)) continue;   // pas d'arbre dans l'eau
+        spots.push([x, z, hy, rr(s0, s1), rr(0, 6.28)]);
       }
       const place = (geo, mat) => { geo.computeVertexNormals && !geo.attributes.aAO && geo.computeVertexNormals();
         const im = new THREE.InstancedMesh(geo, mat, spots.length);
         spots.forEach(([x, z, y, s, a], i) => { d.position.set(x, y - 0.15, z); d.rotation.set(0, a, 0); d.scale.set(s, s, s); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
         group.add(im); disposables.push(geo); return im; };
-      place(solid[kind](), kind === 'feuillu' || kind === 'sapin' ? trunkMat : rockMat);
-      if (canopy[kind]) { const tex = leafTex(kind === 'sapin', th.snowTop); disposables.push(tex); place(canopy[kind](), foliageMat(tex, kind === 'sapin' ? (th.snowTop ? 0xdfe6e8 : 0xd0e0c8) : 0xffffff)); }
+      place(solid[kind](), kind === 'feuillu' || kind === 'sapin' || kind === 'palmier' ? trunkMat : rockMat);
+      if (canopy[kind]) { const tex = leafTex(kind !== 'feuillu', kind === 'sapin' && th.snowTop); disposables.push(tex); place(canopy[kind](), foliageMat(tex, kind === 'sapin' ? (th.snowTop ? 0xdfe6e8 : 0xd0e0c8) : kind === 'palmier' ? 0xc8e8a0 : 0xffffff)); }
       // ombres portées au sol, allongées à l'opposé du soleil
       const sh = new THREE.InstancedMesh(shGeo, shMat, spots.length); sh.layers.set(1); sh.renderOrder = 1;
-      const w0 = kind === 'cactus' ? 2.2 : kind === 'rocher' ? 5.5 : 7.5;
+      const w0 = kind === 'cactus' ? 2.2 : kind === 'rocher' ? 5.5 : kind === 'palmier' ? 6 : 7.5;
       spots.forEach(([x, z, y, s], i) => { const L = w0 * s * (1 + sunLen * 0.45), ox = -Math.sin(sunAng) * L * 0.3, oz = -Math.cos(sunAng) * L * 0.3;
         d.position.set(x + ox, heightAt(x + ox, z + oz) + 0.0, z + oz); d.rotation.set(0, sunAng, 0); d.scale.set(w0 * s, 1, L); d.updateMatrix(); sh.setMatrixAt(i, d.matrix); });
       group.add(sh);
@@ -738,11 +796,20 @@ export function buildWorld(def, renderer, q) {
               float nb = 6.0, lean = (gh(vec2(vK*91.0, 3.0)) - 0.5) * 0.6;
               float u = vU.x - lean*vU.y*vU.y; if (u < 0.0 || u > 1.0) discard;
               float i = floor(u*nb), f = fract(u*nb) - 0.5;
-              float hi = 0.45 + 0.55*gh(vec2(i*7.31 + vK*57.0, 1.7));
-              float t = vU.y / hi; if (t > 1.0 || abs(f) > 0.47*(1.0 - pow(t, 1.7))) discard;
-              vec3 tip = mix(vBase*1.55 + vec3(0.04,0.07,0.0), vec3(0.88,0.76,0.38), vField*0.9);
+              float seedB = gh(vec2(i*3.7 + vK*91.0, 5.3));
+              bool ear = vField > 0.5 && seedB < 0.6;                 // épi de blé
+              bool flower = vField < 0.35 && seedB > 0.92;            // fleur des prés
+              float hi = 0.45 + 0.55*gh(vec2(i*7.31 + vK*57.0, 1.7)); if (ear) hi = max(hi, 0.82);
+              float t = vU.y / hi;
+              float wd = 0.47*(1.0 - pow(t, 1.7));
+              if (ear && t > 0.66) wd = 0.34*(0.72 + 0.28*abs(sin(t*48.0)))*(1.0 - smoothstep(0.93, 1.0, t)*0.7);
+              if (flower && t > 0.86) wd = 0.5;
+              if (t > 1.0 || abs(f) > wd) discard;
+              vec3 tip = mix(vBase*1.45 + vec3(0.03,0.06,0.0), vec3(0.62,0.52,0.26), vField*0.9);
               vec3 alb = mix(vBase*0.5, tip, t) * (0.78 + 0.44*gh(vec2(i, vK*13.0)));
               alb *= 1.0 - 0.3*abs(f)*2.0;                                                        // nervure centrale plus claire
+              if (ear && t > 0.66) alb = vec3(0.52, 0.40, 0.17) * (0.75 + 0.35*abs(sin(t*48.0 + f*6.0)));   // grains de l'épi
+              if (flower && t > 0.86) { float fc = gh(vec2(seedB*31.0, i)); alb = fc < 0.4 ? vec3(0.85,0.06,0.04) : fc < 0.65 ? vec3(0.95,0.93,0.86) : fc < 0.85 ? vec3(0.95,0.78,0.12) : vec3(0.55,0.36,0.85); }
               vec3 V = normalize(cameraPosition - vWp);
               float back = pow(max(dot(-V, sunDir), 0.0), 3.0);                                    // contre-jour : la lumière traverse les brins
               float sheen = pow(max(dot(reflect(-sunDir, vec3(0.0,1.0,0.0)), V), 0.0), 9.0);       // reflet du soleil sur les brins
@@ -832,5 +899,6 @@ export function buildWorld(def, renderer, q) {
   };
   const update = (cam, dt, time, hint) => { for (const u of updaters) u(cam, dt, time, hint); };
   const dispose = () => { for (const d of disposables) d.dispose && d.dispose(); road.dispose && road.dispose(); if (env) env.dispose(); };
-  return { T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, day: !city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null };
+  return { T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, day: !city, lights: city || !!th.phares, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
+    sunDir: th.sun ? new THREE.Vector3().fromArray(th.sun.dir).normalize() : null, sunCol: th.sun ? new THREE.Color().fromArray(th.sun.col) : null };
 }
