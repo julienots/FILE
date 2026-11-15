@@ -3,6 +3,9 @@
 // and stamped into per-chunk batches (static batching) with a transform and colour variation.
 #pragma once
 #include "World.h"
+#include "../engine/gfx/Model.h"
+#include <memory>
+#include <string>
 
 namespace lk {
 
@@ -37,6 +40,22 @@ int propVariants(PropKind k);
 void stampProp(ChunkBuild& out, PropKind k, int variant, vec3 pos, float rotY, float scale, vec3 tint, bool collide);
 // Build a structure into the chunk batches.
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w);
+
+// 1.9.0 imported building models: assets/models/props/<name>.lkm + .jpg, variants <name>_2, <name>_3
+// (tools/import_prop.py). When a model exists for a structure kind, the chunk places it on the structure's
+// footprint (uniform scale, door towards +Z like the code-built house) instead of building it in code;
+// colliders, lights and chimney smoke stay the same.
+struct PropModel {
+    std::string id;
+    SkinnedModelData data;     // CPU copy (GPU objects are rebuilt after a context loss)
+    vec3 bmin, bmax;
+    std::shared_ptr<Mesh> mesh;
+    Texture tex;
+};
+int loadPropModels();                        // main thread, before the chunk workers start; returns the count
+int propModelFor(int kind, int variant);     // -1: no model, the structure is built in code
+PropModel* propModel(int i);
+const char* structureModelName(int kind);   // "house", "inn"... (nullptr: kind without model support)
 
 // Windmill blades: separate animated mesh
 void buildWindmillBlades(MeshBuilder& mb);

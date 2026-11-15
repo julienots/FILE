@@ -52,6 +52,7 @@ bool Game::init(int w, int h) {
     particles.init(5000);
     particles.setBudget(gs.particleScale);
     initPropTemplates();
+    if (!gpuReady) loadPropModels();   // imported building models (and mod overrides), before the chunk workers
     initClips();
     world.grassDensity = gs.grassDensity;
     world.detailedFoliage = settings.profile <= QualityProfile::Medium;
@@ -89,6 +90,7 @@ void Game::contextLost() {
     particles = ParticleSystem();
     meshCache.clear();
     for (auto& kv : importedModels) if (kv.second) { kv.second->mesh.reset(); kv.second->tex = Texture(); }
+    for (int i = 0; PropModel* P = propModel(i); i++) { P->mesh.reset(); P->tex = Texture(); }   // building models: rebuilt on the next draw
     farTerrain.reset();
     windmillBlades.reset(); chestMesh.reset(); chestOpenMesh.reset(); pickupMesh.reset(); arrowMesh.reset(); boulderMesh.reset(); orbMesh.reset();
     gateMesh.reset(); brazierMesh.reset(); bladeMesh.reset(); spikeMesh.reset(); leverMesh.reset();

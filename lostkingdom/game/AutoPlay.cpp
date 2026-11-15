@@ -4,6 +4,8 @@
 #include "../engine/core/Platform.h"
 #include <functional>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 
 namespace lk {
 
@@ -120,6 +122,69 @@ static std::vector<Step> scenario(const std::string& name) {
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("HEROES TEST %s", ok ? "PASSED" : "FAILED");
         }, idle, "report"});
+        return s;
+    }
+    if (name == "buildings") {
+        // 1.9.0: a building model (tests/data/props/house.lkm, a plain cottage standing in for a Tripo model)
+        // installed by a mod replaces the code-built houses: placed on the footprint, drawn, colliders kept
+        static int res[4]; static int modelsSeen = 0;
+        s.push_back({0.5f, [](Game& g) {
+            for (int& r : res) r = 0;
+            std::string root = platform::writableDir() + "/mods/test_buildings";
+            for (const char* d : {"/mods", "/mods/test_buildings", "/mods/test_buildings/assets", "/mods/test_buildings/assets/models", "/mods/test_buildings/assets/models/props"})
+                platform::makeDirectory(platform::writableDir() + d);
+            platform::writeFileAtomic(root + "/mod.txt", "name = Maisons de test\nauthor = robot\nversion = 0.1\n");
+            for (const char* f : {"house.lkm", "house.jpg"}) {
+                std::ifstream in(std::string("tests/data/props/") + f, std::ios::binary);
+                std::string b((std::istreambuf_iterator<char>(in)), {});
+                platform::writeFileAtomic(root + "/assets/models/props/" + f, b);
+            }
+            g.applyMods(true);
+            g.world.stopWorkers();
+            int n = loadPropModels();
+            g.world.unloadAll();
+            g.world.startWorkers(2);
+            res[0] = n >= 1 && propModelFor(S_HOUSE, 0) >= 0 && propModelFor(S_STALL, -1) < 0;
+            AGR_LOG("BUILDINGS models loaded: %d (house -> %d)", n, propModelFor(S_HOUSE, 0));
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 6, b->pos.y + 22, 3.4f);
+            g.timeOfDay = 15.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 22.f; g.camPitch = 0.55f; g.toastHint.clear();
+        }, idle, "install + rebuild"});
+        s.push_back({6.f, none, [](Game& g, float) { g.camDist = g.camDistTarget = 22.f; }, "stream"});
+        s.push_back({0.1f, [](Game& g) {
+            modelsSeen = 0; int houses = 0;
+            g.world.forEachVisibleChunk([&](Chunk& c) { modelsSeen += (int)c.models.size(); });
+            for (const Structure& st : g.world.structures) if (st.kind == S_HOUSE && distXZ(vec3(st.pos.x, 0, st.pos.y), g.pc().pos) < 60.f) houses++;
+            PropModel* P = propModel(propModelFor(S_HOUSE, 0));
+            res[1] = modelsSeen >= 1 && houses >= 1;
+            res[2] = P && P->mesh && P->mesh->valid() && P->tex.id != 0;   // uploaded by the renderer = drawn
+            AGR_LOG("BUILDINGS %d model instances in loaded chunks, %d code-built houses nearby in the plan", modelsSeen, houses);
+            g.requestScreenshot("build/shots/G0_buildings.png");
+        }, idle, "check + shot"});
+        // colliders kept: walk towards the nearest house and stop at its wall
+        static vec2 target; static float minD;
+        s.push_back({0.1f, [](Game& g) {
+            const Structure* best = nullptr; float bd = 1e9f;
+            for (const Structure& st : g.world.structures) if (st.kind == S_HOUSE) { float d = distXZ(vec3(st.pos.x, 0, st.pos.y), g.pc().pos); if (d < bd) { bd = d; best = &st; } }
+            if (!best) return;
+            target = best->pos;
+            vec2 dir = normalize(vec2(std::sin(best->rot), std::cos(best->rot)));   // door side (+Z of the house)
+            vec2 start = target + dir * 9.f;
+            teleport(g, start.x, start.y, std::atan2(-dir.x, -dir.y));
+            g.camDist = g.camDistTarget = 9.f; minD = 1e9f;
+        }, idle, "face a house"});
+        s.push_back({5.f, none, [](Game& g, float) {
+            vec2 to = target - vec2(g.pc().pos.x, g.pc().pos.z);
+            g.camYaw = std::atan2(-to.x, -to.y);   // camera forward = (-sin, -cos)
+            g.input.move = vec2(0, 1);
+            minD = std::min(minD, length(to)); }, "walk into it"});
+        s.push_back({0.1f, [](Game& g) {
+            float bd = minD; const Structure* best = &g.world.structures[0];
+            res[3] = best && bd > 2.5f && bd < 6.f;   // reached the house, stopped at its walls (half-depth 4.2 m)
+            AGR_LOG("BUILDINGS walked into a house: closest %.1f m from its centre", bd);
+            g.requestScreenshot("build/shots/G1_building_close.png");
+            AGR_LOG("BUILDINGS TEST: models=%d placed=%d drawn=%d collision=%d", res[0], res[1], res[2], res[3]);
+            AGR_LOG(res[0] && res[1] && res[2] && res[3] ? "BUILDINGS TEST PASSED" : "BUILDINGS TEST FAILED");
+        }, idle, "check"});
         return s;
     }
     if (name == "mods") {

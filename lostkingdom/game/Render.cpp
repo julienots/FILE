@@ -210,6 +210,16 @@ void Game::renderWorld(float dt) {
             // shadow casters limited to what the ~43 m shadow map around the hero can actually show
             if (ch.props.valid()) { it.mesh = &ch.props; it.flags = 0; it.tint.w = ch.snow * 0.55f; it.castShadow = d < 44.f; renderer.submit(it); }
             if (ch.foliage.valid()) { it.mesh = &ch.foliage; it.flags = LIT_WIND; it.tint.w = ch.snow * 0.5f; it.castShadow = d < 36.f; renderer.submit(it); }
+            // imported building models (1.9.0)
+            for (const auto& [mi, xf] : ch.models) {
+                PropModel* P = propModel(mi);
+                if (!P) continue;
+                if (!P->mesh || !P->mesh->valid()) { P->mesh = std::make_shared<Mesh>(); P->mesh->upload(P->data.verts, P->data.idx); }
+                if (!P->tex.id) P->tex.create2D(P->data.texW, P->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, P->data.rgba.data(), true, false);
+                DrawItem bi; bi.mesh = P->mesh.get(); bi.model = xf; bi.flags = LIT_TEXTURED; bi.albedo = P->tex.id;
+                bi.tint = vec4(1, 1, 1, ch.snow * 0.55f); bi.castShadow = d < 44.f;
+                renderer.submit(bi);
+            }
             if (d < 48.f && gs.grassDensity > 0.01f) {
                 it.castShadow = false; it.tint.w = 0;
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }

@@ -92,6 +92,7 @@ struct ChunkBuild {
     int region = 0;
     float snow = 0;
     bool liteProps = false;        // use mid-distance prop templates
+    std::vector<std::pair<int, mat4>> models;   // imported building models (propModel index, transform)
 };
 
 struct Chunk {
@@ -102,6 +103,7 @@ struct Chunk {
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights, emitters;
+    std::vector<std::pair<int, mat4>> models;
     AABB bounds;
     int region = 0;
     float snow = 0;

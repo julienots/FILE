@@ -107,6 +107,51 @@ Le Dragon Cendré (`b_ash_dragon`) et la Reine des Araignées (`b_spider_queen`)
 | `goblin.glb` | Gobelin pillard | `a small mischievous goblin raider, green skin, big pointed ears, crooked teeth, ragged leather scraps, bone necklace,` |
 | `ghoul.glb` | Goule | `a gaunt ghoul, grey rotting skin, long clawed fingers, torn burial rags, hunched but standing in T-pose, glowing yellow eyes,` |
 
+### 3.5 Monstres déjà sur le Drive : à refaire avec « Rig » (priorité 1)
+
+Ces trois modèles du Drive sont beaux et vont dans le jeu, mais ils sont **statiques** et **pas en pose en T** : mon outil poserait mal leur squelette. Passe-les dans Tripo avec l'option **Rig** (squelette automatique, comme le ninja), exporte en GLB et renomme :
+
+| Modèle du Drive | Fichier à m'envoyer | Devient dans le jeu |
+|---|---|---|
+| rock monster | `stone_golem.glb` | Golem de pierre (Hautes-Cimes) |
+| galaxy titan | `b_stone_titan.glb` | Le Titan de Pierre (boss) |
+| lava creature | `ember_elemental.glb` | Élémentaire de braise (Cendres) |
+
+Le dragon serpent du Drive ne colle pas au squelette des dragons du jeu (dragon ailé à quatre pattes) : je ne l'utilise pas.
+
+## 3b. Décors : bâtiments et objets (1.9.0)
+
+Le jeu sait maintenant remplacer ses bâtiments construits en code par des **modèles 3D**. Le modèle est mis automatiquement à la taille de l'emprise du bâtiment, posé sur le sol, avec ses collisions.
+
+**Règles pour les décors**
+- **Un seul bâtiment ou objet**, entier, **porte d'entrée face à la caméra** (vue de face).
+- **Pas de sol, de terrain, de pelouse ni de socle** autour : le bâtiment doit être posé sur sa base. Pas de personnages, ni d'arbres collés au bâtiment.
+- **Pas besoin de Rig** (squelette) : un bâtiment ne bouge pas.
+- Textures PBR ; **5 000 à 15 000 triangles** (je réduis moi-même si c'est plus).
+- Même style que les personnages : finis le prompt par ce bloc :
+
+```
+single building, front view, entrance facing the camera, no ground, no terrain, no base, no people, stylized fantasy RPG, hand-painted PBR textures, rich but harmonious colors, clean readable silhouette, game-ready, 10k polygons
+```
+
+**Les modèles que je veux (par ordre de priorité)**
+
+| Fichier | Où on le voit | Prompt (+ bloc de style) |
+|---|---|---|
+| `house.glb` | partout (maisons des villages) | `a cozy medieval timber-framed cottage, white plaster walls with dark oak beams, steep thatched roof, small wooden door, two shuttered windows with flower boxes, stone chimney,` |
+| `house_2.glb` | variante de maison | `a medieval village house, stone ground floor, timber-framed upper floor, red clay tile roof, wooden balcony, lantern by the door,` |
+| `stonehouse.glb` | Hautes-Cimes, Frostheim | `a sturdy medieval stone house, grey fieldstone walls, slate roof covered with a little snow, heavy wooden door with iron bands, small deep windows,` |
+| `inn.glb` | auberges | `a large two-storey medieval inn, timber frame and plaster, wide wooden door, hanging sign with a painted mug, warm lit windows, two chimneys,` |
+| `longhouse.glb` | villages du nord | `a long nordic wooden longhouse, dark carved timber walls, steep shingled roof with crossed carved gables, round shields on the walls,` |
+| `forge.glb` | forgerons | `an open medieval blacksmith forge, stone furnace with chimney, wooden roof on posts, anvil, tools hanging on the wall, water barrel,` |
+| `chapel.glb` | chapelles | `a small medieval stone chapel, arched wooden door, round rose window, slate roof, little bell tower,` |
+| `tower.glb` | tours de guet | `a round medieval watchtower in stone, wooden crenellated top with a small roof, narrow arrow slits, wooden door at the base,` |
+| `well.glb` | places des villages | `a medieval stone well with a small wooden roof, rope and bucket,` |
+| `stall.glb` | marchés | `a medieval market stall, wooden counter, striped cloth canopy, crates of fruit and vegetables,` |
+| `tent.glb` | camps de bandits | `a medieval canvas camping tent, patched beige fabric, wooden poles, ropes,` |
+
+Les fichiers vont dans le même dossier Drive que d'habitude.
+
 ## 4. Comment m'envoyer les modèles
 
 1. Exporte chaque modèle en **GLB**, renommé avec l'identifiant (par exemple `npc_maelle.glb`).

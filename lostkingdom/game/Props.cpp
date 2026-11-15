@@ -1,5 +1,6 @@
 #include "Props.h"
 #include <mutex>
+#include "../engine/core/Platform.h"
 
 namespace lk {
 
@@ -1135,6 +1136,59 @@ static void altar(MeshBuilder& M) {
     M.ellipsoid({0, 1.4f, 0}, vec3(0.25f), Mat(pal::rune, 0.2f, 0, 3.f), 8, 6);
 }
 
+// ---------------------------------------------------------------------------- imported building models
+static std::vector<std::unique_ptr<PropModel>> gPropModels;
+static std::vector<int> gKindModels[S_COUNT];
+
+const char* structureModelName(int kind) {
+    switch (kind) {
+    case S_HOUSE: return "house"; case S_INN: return "inn"; case S_STONEHOUSE: return "stonehouse"; case S_LONGHOUSE: return "longhouse";
+    case S_FORGE: return "forge"; case S_CHAPEL: return "chapel"; case S_TOWER: return "tower"; case S_WELL: return "well";
+    case S_STALL: return "stall"; case S_TENT: return "tent"; default: return nullptr;
+    }
+}
+
+int loadPropModels() {
+    gPropModels.clear();
+    for (auto& v : gKindModels) v.clear();
+    for (int k = 0; k < S_COUNT; k++) {
+        const char* name = structureModelName(k);
+        if (!name) continue;
+        for (int var = 1; var <= 3; var++) {
+            std::string id = std::string(name) + (var > 1 ? "_" + std::to_string(var) : "");
+            std::vector<uint8_t> mb, tb;
+            if (!platform::readAsset("models/props/" + id + ".lkm", mb)) continue;
+            auto m = std::make_unique<PropModel>();
+            m->id = id;
+            if (!m->data.loadLKM(mb) || !platform::readAsset("models/props/" + id + ".jpg", tb) || !m->data.loadTexture(tb)) { AGR_WARN("building model '%s' is invalid, built in code instead", id.c_str()); continue; }
+            m->bmin = vec3(1e9f); m->bmax = vec3(-1e9f);
+            for (const Vertex& v : m->data.verts) { vec3 p(v.px, v.py, v.pz); m->bmin = vmin(m->bmin, p); m->bmax = vmax(m->bmax, p); }
+            AGR_LOG("building model '%s': %zu triangles, %.1f x %.1f x %.1f m", id.c_str(), m->data.idx.size() / 3, m->bmax.x - m->bmin.x, m->bmax.y - m->bmin.y, m->bmax.z - m->bmin.z);
+            gKindModels[k].push_back((int)gPropModels.size());
+            gPropModels.push_back(std::move(m));
+        }
+    }
+    return (int)gPropModels.size();
+}
+
+int propModelFor(int kind, int variant) {
+    if (kind < 0 || kind >= S_COUNT || gKindModels[kind].empty()) return -1;
+    if (kind == S_STALL && variant < 0) return -1;   // village clutter (crates, barrels), not a stall
+    const auto& v = gKindModels[kind];
+    return v[(size_t)std::abs(variant) % v.size()];
+}
+
+PropModel* propModel(int i) { return i >= 0 && i < (int)gPropModels.size() ? gPropModels[i].get() : nullptr; }
+
+// footprint (half extents, metres) the model is fitted into: the code-built structure's collider
+static vec2 structureFootprint(int kind) {
+    switch (kind) {
+    case S_HOUSE: return {3.4f, 4.2f}; case S_INN: return {4.3f, 5.3f}; case S_STONEHOUSE: return {3.4f, 4.0f}; case S_LONGHOUSE: return {3.3f, 6.8f};
+    case S_FORGE: return {2.7f, 2.2f}; case S_CHAPEL: return {3.6f, 6.2f}; case S_TOWER: return {2.9f, 2.9f}; case S_WELL: return {1.2f, 1.2f};
+    case S_STALL: return {1.5f, 0.9f}; case S_TENT: return {2.f, 3.f}; default: return {2.f, 2.f};
+    }
+}
+
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     float gy = w.height(s.pos.x, s.pos.y);
     if (s.poi >= 0) gy = w.pois[s.poi].height;
@@ -1220,6 +1274,17 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
         out.emitters.push_back(vec4(wc.x, gy + hy * s.scale, wc.y, EM_SMOKE));
     }
     mat4 m = mat4::trs({s.pos.x, gy, s.pos.y}, rotY(s.rot), vec3(s.kind == S_BRIDGE ? 1.f : s.scale));
+    int pm = propModelFor(s.kind, s.variant);
+    if (PropModel* P = propModel(pm)) {
+        // fitted inside the footprint, centred, base slightly sunk so it never floats on a slope
+        vec2 fp = structureFootprint(s.kind);
+        vec3 ext = P->bmax - P->bmin;
+        float k = std::min(2.f * fp.x / std::max(0.01f, ext.x), 2.f * fp.y / std::max(0.01f, ext.z));
+        vec3 c = (P->bmin + P->bmax) * 0.5f;
+        mat4 local = mat4::trs(vec3(-c.x * k, -P->bmin.y * k - 0.12f, -c.z * k), quat(), vec3(k));
+        out.models.push_back({pm, m * local});
+        return;
+    }
     appendXf(out.props, M, m, vec3(1));
     if (!Fo.v.empty()) appendXf(out.foliage, Fo, m, vec3(1));
 }

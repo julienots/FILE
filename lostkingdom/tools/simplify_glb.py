@@ -109,6 +109,29 @@ def drop_floating(P, I):
         I = I[kf]
     return I
 
+def decimate(P, UV, I, tris):
+    """Quadric edge collapse keeping the UV seams; returns render vertices (P, N, UV) and triangles."""
+    import pymeshlab
+    ms = pymeshlab.MeshSet()
+    ms.add_mesh(pymeshlab.Mesh(vertex_matrix=P, face_matrix=I.astype(np.int32), v_tex_coords_matrix=UV))
+    ms.compute_texcoord_transfer_vertex_to_wedge()
+    ms.meshing_merge_close_vertices(threshold=pymeshlab.PercentageValue(0.001))
+    ms.meshing_remove_duplicate_faces(); ms.meshing_remove_null_faces(); ms.meshing_remove_unreferenced_vertices()
+    ms.meshing_decimation_quadric_edge_collapse_with_texture(targetfacenum=tris, qualitythr=0.4, extratcoordw=1.0, preserveboundary=True,
+                                                             boundaryweight=1.0, optimalplacement=True, preservenormal=True, planarquadric=True)
+    m = ms.current_mesh()
+    V = m.vertex_matrix(); F = m.face_matrix().astype(np.int64); W = m.wedge_tex_coord_matrix().reshape(-1, 2)
+    fn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    VN = np.zeros_like(V)
+    for c in range(3): np.add.at(VN, F[:, c], fn)
+    VN /= np.maximum(np.linalg.norm(VN, axis=1, keepdims=True), 1e-12)
+    cv = F.reshape(-1)
+    ck = np.concatenate([cv[:, None].astype(np.float64), np.round(W * 65535)], 1)
+    _, first, inv = np.unique(ck, axis=0, return_index=True, return_inverse=True)
+    vid = cv[first]
+    return V[vid], VN[vid], W[first], inv.reshape(-1).reshape(-1, 3)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("glb"); ap.add_argument("out")
@@ -135,27 +158,10 @@ def main():
         I = np.concatenate([I[~dst], I[src][:, ::-1] + nv])    # mirrored copy, winding flipped
         I = drop_floating(P, I)                                  # leftovers of the bent leg float away now
         print(f"leg: replaced {int(dst.sum())} triangles by {int(src.sum())} mirrored ones (below {a.mirror_below:.2f} of the height)")
-    import pymeshlab
-    ms = pymeshlab.MeshSet()
-    ms.add_mesh(pymeshlab.Mesh(vertex_matrix=P, face_matrix=I.astype(np.int32), v_tex_coords_matrix=UV))
-    ms.compute_texcoord_transfer_vertex_to_wedge()
-    ms.meshing_merge_close_vertices(threshold=pymeshlab.PercentageValue(0.001))
-    ms.meshing_remove_duplicate_faces(); ms.meshing_remove_null_faces(); ms.meshing_remove_unreferenced_vertices()
-    ms.meshing_decimation_quadric_edge_collapse_with_texture(targetfacenum=a.tris, qualitythr=0.4, extratcoordw=1.0, preserveboundary=True,
-                                                             boundaryweight=1.0, optimalplacement=True, preservenormal=True, planarquadric=True)
-    m = ms.current_mesh()
-    V = m.vertex_matrix(); F = m.face_matrix().astype(np.int64); W = m.wedge_tex_coord_matrix().reshape(-1, 2)
-    fn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
-    VN = np.zeros_like(V)
-    for c in range(3): np.add.at(VN, F[:, c], fn)
-    VN /= np.maximum(np.linalg.norm(VN, axis=1, keepdims=True), 1e-12)
-    cv = F.reshape(-1)
-    ck = np.concatenate([cv[:, None].astype(np.float64), np.round(W * 65535)], 1)
-    _, first, inv = np.unique(ck, axis=0, return_index=True, return_inverse=True)
-    vid = cv[first]
+    Pd, Nd, UVd, Id = decimate(P, UV, I, a.tris)
     buf = io.BytesIO(); tex.resize((a.tex, a.tex), Image.LANCZOS).save(buf, "JPEG", quality=90)
-    write_glb(a.out, V[vid], VN[vid], W[first], inv.reshape(-1).reshape(-1, 3), buf.getvalue())
-    print(f"wrote {a.out}: {len(vid)} vertices, {len(F)} triangles")
+    write_glb(a.out, Pd, Nd, UVd, Id, buf.getvalue())
+    print(f"wrote {a.out}: {len(Pd)} vertices, {len(Id)} triangles")
 
 
 if __name__ == "__main__":

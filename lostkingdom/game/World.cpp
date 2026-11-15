@@ -1188,6 +1188,7 @@ void World::uploadChunk(ChunkBuild& b) {
     c.nodes = std::move(b.nodes);
     c.lights = std::move(b.lights);
     c.emitters = std::move(b.emitters);
+    c.models = std::move(b.models);
     c.region = b.region;
     c.snow = b.snow;
     c.bounds = AABB();
