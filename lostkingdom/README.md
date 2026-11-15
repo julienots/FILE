@@ -6,12 +6,38 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.8.1 (versionCode 12). Taille : environ 25 Mo. SHA-256 : `7dc9561fc256459dcad9fba775130577354c6d0e83be4ee4e3e7645015f057ef`.
-  - Les versions 1.6.1 à 1.8.1 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.9.0 (versionCode 13). Taille : environ 25 Mo. SHA-256 : `ee4dec70962f9dda5637a306ed5be0fa314ea3b0a9ded62197be89201fe83c1c`.
+  - Les versions 1.6.1 à 1.9.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.9.0 (bâtiments en 3D, combat d'Astra, quêtes, détails réalistes)
+
+- **Bâtiments en modèles 3D (prêt pour tes modèles).** Le jeu peut maintenant remplacer ses bâtiments construits en code par des modèles 3D :
+  - maisons, auberges, maisons de pierre, longères, forges, chapelles, tours, puits, étals, tentes, avec jusqu'à 3 variantes chacun ;
+  - le modèle est posé sur l'emprise du bâtiment, porte vers la rue, à la bonne taille. Les collisions, les lumières et la fumée des cheminées restent ;
+  - les modèles s'importent avec `tools/import_prop.py`, et un mod peut aussi en ajouter (`models/props/…`) ;
+  - **aucun modèle de bâtiment n'est encore livré** : la liste des modèles à générer avec Tripo, avec leurs prompts, est dans `docs/TRIPO_PROMPTS.md` (section 3b). Le jeu a été vérifié avec une petite maison de test qui n'est pas incluse dans le jeu.
+- **Combat d'Astra plus riche** (et de tout héros à mains nues) : un enchaînement en trois coups (direct, crochet, **uppercut** qui part des jambes) et une attaque lourde, un **coup de pied retourné** avec les bras en balancier et un petit saut.
+- **4 nouvelles quêtes et 2 chroniques :**
+  - « Le septième fragment » (Tomas, après la quête de Kaede) : le Sanctuaire d'Aelindor et le Silence, le joyau qui défait la Couronne ;
+  - « Ce que l'étoile n'a pas pardonné » (Ilian, après la quête d'Astra) : à Highspire, le premier indice jouable sur Frère Alaric ;
+  - « La carte au trésor de Pip » et « Ronde de nuit » (capitaine Aubert), à Brindlemere.
+- **Détails réalistes :**
+  - par temps froid (Frostheim, neige, nuits des Hautes-Cimes), les personnages proches **soufflent de la buée**, plus souvent quand ils courent ou sont essoufflés ;
+  - après une baignade, le héros **dégouline** pendant environ 25 secondes.
+- **Vérification (1.9.0)** : 1 960 tests unitaires. Trois nouveaux scénarios sont réussis :
+  - `buildings` : maison de test installée par un mod, posée, affichée, et le héros s'arrête contre ses murs ;
+  - `combo` : les quatre coups d'Astra s'enchaînent ;
+  - `details` : 6 particules de buée par respiration, ruissellement après la baignade.
+
+  Les scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue`, `heroes` et `full` sont aussi réussis ; `full` et `buildings` passent sous AddressSanitizer sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - La buée est discrète : sur la neige, et derrière le casque du Naufragé, elle se voit peu.
+  - Les monstres du Drive (golem, titan, élémentaire de lave) attendent leur version « Rig » de Tripo pour être importés proprement.
+  - Les mods de bâtiments s'appliquent au lancement du jeu (comme les autres mods).
 
 ### Nouveautés 1.8.1 (Astra a son modèle 3D)
 
@@ -450,7 +476,8 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, prologue, mods, npcs, vista
+# import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
 ```
