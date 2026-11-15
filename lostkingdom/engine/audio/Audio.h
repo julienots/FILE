@@ -45,6 +45,8 @@ public:
     void play3D(SoundId s, vec3 pos, float vol = 1.f, float pitch = 1.f, float range = 30.f);
     void playMusic(const std::string& name, float fade = 3.f);  // "" = silence
     void setAmbience(const std::string& name, float volume);   // target volume, crossfades smoothly
+    // A continuous looping sound whose volume and pitch the game drives every frame (vehicle engines).
+    void setEngine(SoundId s, float volume, float pitch) { std::lock_guard<std::mutex> l(mtx); engineSound = s; engineTarget = volume; enginePitch = pitch; }
     void setVolumes(float master, float music, float sfx, float ambience);
     void setReverb(float wet) { reverbTarget = clampf(wet, 0, 0.7f); }
     void setPaused(bool p) { paused = p; }
@@ -78,6 +80,9 @@ private:
     size_t combPos[4] = {0}, apPos[2] = {0};
     float combFilt[4] = {0};
     float reverb = 0, reverbTarget = 0;
+    SoundId engineSound = -1;
+    float engineTarget = 0, engineVol = 0, enginePitch = 1, enginePitchCur = 1;
+    double enginePos = 0;
     int reverbRate = 0;
     std::vector<float> scratch, sfxBus;
     std::shared_ptr<OggStream> openStream(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& lib, const std::string& name);

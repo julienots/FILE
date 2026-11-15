@@ -426,6 +426,7 @@ void Game::findInteractTarget() {
         if (Character* o = reg.get<Character>(e)) { if (o->dead || e == player) return; p = o->pos; if (e == mountEnt && riding) return; }
         else if (NodeComp* n = reg.get<NodeComp>(e)) { p = n->node.pos; if (n->node.type == NodeType::Chest && openedChests.count(n->node.uid)) return; if (n->node.type != NodeType::Chest && n->node.type != NodeType::FishingSpot && !world.nodeAvailable(n->node.uid, gameTime)) return; }
         else if (Pickup* pk = reg.get<Pickup>(e)) p = pk->pos;
+        else if (VehicleRef* vr = reg.get<VehicleRef>(e)) { if (driving >= 0 || vr->idx >= (int)vehicles.size()) return; p = vehicles[vr->idx].pos; }
         else return;
         float d = distXZ(p, c.pos);
         if (d > it.radius || std::fabs(p.y - c.pos.y) > 3.f) return;
@@ -435,6 +436,11 @@ void Game::findInteractTarget() {
     });
     // dungeon interactables are virtual (handled in Dungeon.cpp) — static stations in villages:
     interactTarget = best;
+    // 1.11.0 at the wheel: the action button gets you out
+    if (driving >= 0 && driving < (int)vehicleEnts.size() && reg.valid(vehicleEnts[driving])) {
+        interactTarget = vehicleEnts[driving];
+        if (Interact* it = reg.get<Interact>(interactTarget)) it->text = vehicleDefs()[vehicles[driving].def].moto ? "Descendre de la moto" : "Sortir de la voiture";
+    }
 }
 
 void Game::playerInteract() {
@@ -565,6 +571,10 @@ void Game::playerInteract() {
         break;
     }
     case InterKind::Mount: toggleMount(); break;
+    case InterKind::Vehicle:
+        if (driving >= 0) exitVehicle();
+        else enterVehicle(it->param);
+        break;
     default: break;
     }
 }
@@ -647,6 +657,9 @@ void Game::updatePlayer(float dt) {
     if (input.potion) usePotion();
     for (int i = 0; i < 3; i++) if (input.skill[i]) { if (heroHasPowers()) castHeroPower(i); else castSpell(i); }
     updateHeroAbilities(dt);
+
+    // ---- 1.11.0 at the wheel of a vehicle
+    if (driving >= 0 && driving < (int)vehicles.size()) { updateDriving(dt, want, mag); return; }
 
     // ---- mounted
     if (riding && reg.valid(mountEnt)) {

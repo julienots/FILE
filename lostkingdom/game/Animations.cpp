@@ -298,6 +298,25 @@ static void humanSwim(const Animator& a, Pose& p) {
 static void humanMounted(const Animator& a, Pose& p) {
     p.reset();
     float t = a.time;
+    if (a.aux[3] > 0.5f) {
+        // 1.11.0 motorbike: crouched over the tank, arms forward on the bars, knees tucked, feet on the pegs
+        float sp = a.aux[1];
+        p.rootOffset = vec3(0, std::sin(t * 9.f) * 0.006f * sp, 0);
+        p.rot[H_SPINE] = E(22 + 12 * sp, 0, 0);
+        p.rot[H_CHEST] = E(8 + 6 * sp, 0, 0);
+        p.rot[H_NECK] = E(-18 - 8 * sp, 0, 0);
+        p.rot[H_HEAD] = E(-10 - 6 * sp, 0, 0);
+        for (int s = 0; s < 2; s++) {
+            float side = s ? -1.f : 1.f;
+            p.rot[s ? H_THIGHR : H_THIGHL] = E(-62, side * 6, side * 14);
+            p.rot[s ? H_SHINR : H_SHINL] = E(108, 0, 0);
+            p.rot[s ? H_FOOTR : H_FOOTL] = E(-20, 0, 0);
+            p.rot[s ? H_UARMR : H_UARML] = E(-58 - 10 * sp, side * 4, side * 14);
+            p.rot[s ? H_LARMR : H_LARML] = E(-24, 0, 0);
+            p.rot[s ? H_HANDR : H_HANDL] = E(10, 0, side * 10);
+        }
+        return;
+    }
     float trot = a.aux[1];  // mount gait intensity
     p.rootOffset = vec3(0, std::sin(a.phase * TAU * 2) * 0.04f * trot, 0);
     p.rot[H_SPINE] = E(6 + 10 * trot, 0, 0);

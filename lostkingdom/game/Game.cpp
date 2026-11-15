@@ -287,6 +287,9 @@ void Game::updatePlaying(float dt) {
     if (!cine.active) PROF(3, updateSpawning(dt));
     if (!cine.active) updateNightHunters(dt);
     updateBase(dt);
+    // 1.11.0 vehicles: parked at Brindlemere on a new world; their interaction entities survive registry resets
+    if (vehicles.empty()) initVehicles();
+    if (vehicleEnts.size() != vehicles.size() || (!vehicleEnts.empty() && !reg.get<VehicleRef>(vehicleEnts[0]))) spawnVehicleEntities();
     PROF(4, updateDungeon(dt));
     PROF(5, updateEnvironment(dt));
     PROF(6, updateAmbientFx(dt));

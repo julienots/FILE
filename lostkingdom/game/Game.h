@@ -35,7 +35,8 @@ struct Visual {
     float scale = 1.f;
     vec3 tint{1, 1, 1};
     float flash = 0, dissolve = 0, rim = 0.5f, emissiveBoost = 0;
-    float breathT = 0, wetT = 0;   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
+    float breathT = 0, wetT = 0;
+    float tiltPitch = 0, tiltRoll = 0;   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
     vec3 dissolveColor{1.f, 0.5f, 0.15f};
     bool outline = true;
     vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
@@ -166,7 +167,17 @@ struct Pickup { std::string item; int count; Rarity rarity; float t = 0; vec3 po
 
 struct NodeComp { NodeSpawn node; std::shared_ptr<Mesh> mesh; float hits = 0; float shake = 0; };
 
-enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar };
+enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle };
+// 1.11.0 vehicles (Vehicles.cpp)
+struct VehicleRef { int idx; };
+struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; };
+const std::vector<VehicleDef>& vehicleDefs();
+struct VehicleState {
+    int def = 0;
+    vec3 pos;
+    float yaw = 0, speed = 0, steer = 0, spin = 0, pitch = 0, roll = 0, yawRate = 0;
+    std::vector<mat4> bones;
+};
 struct Interact { InterKind kind = InterKind::None; int param = 0; std::string text; float radius = 2.f; };
 
 struct ItemStack {
@@ -477,6 +488,20 @@ public:
     int huntsSurvived = 0;
     void updateNightHunters(float dt);
     bool playerInSafeZone();
+    // 1.11.0 vehicles
+    struct VehicleAsset { SkinnedModelData data; std::shared_ptr<Mesh> mesh; Texture tex; bool tried = false, ok = false; };
+    std::map<std::string, VehicleAsset> vehicleAssets;
+    std::vector<VehicleState> vehicles;
+    std::vector<Entity> vehicleEnts;
+    int driving = -1;
+    VehicleAsset* vehicleAsset(const std::string& model);
+    void initVehicles();
+    void spawnVehicleEntities();
+    vec3 vehicleLocal(const VehicleState& v, vec3 p) const;
+    void enterVehicle(int i);
+    void exitVehicle();
+    void updateDriving(float dt, vec3 want, float mag);
+    void renderVehicles();
     // 1.9.2 domain: found it, build, recruit, raise livestock
     PlayerBase base;
     std::vector<Entity> soldierEnts, livestockEnts;

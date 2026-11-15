@@ -45,7 +45,7 @@ void Game::loadAssets() {
                                    "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
                                    "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",
                                    "splash", "wolf_howl", "growl", "roar", "dragon_roar", "spider", "skeleton", "goblin", "troll", "golem", "ghost", "death", "player_hurt", "thunder", "birds",
-                                   "door", "lever", "trap", "fish_bite", "horse", "whistle", "boss_intro", "discover", "fire_loop", "magic_burst"};
+                                   "door", "lever", "trap", "fish_bite", "horse", "whistle", "boss_intro", "discover", "fire_loop", "magic_burst", "engine"};
     int loaded = 0;
     for (const char* s : sounds) {
         std::vector<uint8_t> b;

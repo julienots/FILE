@@ -329,6 +329,7 @@ void Game::renderWorld(float dt) {
         if (n.node.type == NodeType::Chest && !open && particles.rng.f() < dt * 2) particles.magicTrail(n.node.pos + vec3(0, 0.8f, 0), vec3(1, 0.85f, 0.4f), 0.5f);
     });
     renderBuildGhost();   // 1.9.2 domain: preview of the building being placed
+    renderVehicles();     // 1.11.0 car and motorbike
     // Astra's aura lights her surroundings
     if (player != NullEntity && heroAura > 0.05f) {
         PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;
@@ -383,7 +384,9 @@ void Game::renderCharacter(Entity e, Character& c) {
     if (!v.visible || !v.mesh) return;
     if (c.npcDef >= 0) { NpcBrain* nb = reg.get<NpcBrain>(e); if (nb && nb->indoors) return; }
     if (distXZ(c.pos, camFocus) > renderer.settings.drawDistance * 0.75f) return;
-    mat4 model = mat4::trs(c.pos + vec3(0, v.pelvisAdj * 0.f, 0), quat::axisAngle({0, 1, 0}, c.yaw), vec3(v.scale));
+    quat rq = quat::axisAngle({0, 1, 0}, c.yaw);
+    if (v.tiltPitch != 0 || v.tiltRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.tiltPitch) * quat::axisAngle({0, 0, 1}, v.tiltRoll);   // rider on the motorbike
+    mat4 model = mat4::trs(c.pos + vec3(0, v.pelvisAdj * 0.f, 0), rq, vec3(v.scale));
     // frustum test with a generous sphere
     if (!cam.frustum.visibleSphere(c.pos + vec3(0, c.height * 0.5f, 0), c.height * 1.2f + 2.f)) return;
 

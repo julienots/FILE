@@ -158,6 +158,23 @@ void AudioEngine::render(float* out, int frames, int rate) {
     // SFX voices into a bus (for reverb send)
     memset(sfxBus.data(), 0, sizeof(float) * frames * 2);
     int active = 0;
+    // vehicle engine: one looping voice, volume and pitch glide towards the game's targets
+    if (engineSound >= 0 && engineSound < (int)sounds.size() && (engineVol > 0.0005f || engineTarget > 0)) {
+        const SoundBuffer& b = sounds[engineSound];
+        size_t nf = b.frames();
+        if (nf > 2) {
+            for (int i = 0; i < frames; i++) {
+                engineVol += (engineTarget - engineVol) * 0.0008f;
+                enginePitchCur += (enginePitch - enginePitchCur) * 0.0006f;
+                size_t i0 = (size_t)enginePos % (nf - 1);
+                float f = (float)(enginePos - std::floor(enginePos));
+                float s = b.channels == 1 ? (b.data[i0] * (1 - f) + b.data[i0 + 1] * f) / 32768.f : b.data[i0 * 2] / 32768.f;
+                sfxBus[i * 2] += s * engineVol; sfxBus[i * 2 + 1] += s * engineVol;
+                enginePos += enginePitchCur * (double)b.rate / rate;
+                if (enginePos >= nf - 1) enginePos -= (nf - 1);
+            }
+        }
+    }
     for (auto& v : voices) {
         if (!v.active) continue;
         const SoundBuffer& b = *v.buf;

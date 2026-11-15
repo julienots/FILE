@@ -197,6 +197,42 @@ static void testTallGrass(World& w) {
     CHECK(cold == 0, "%d samples in Frostheim / Ashen", cold);
 }
 
+// ---- 1.11.0 imported models: buildings (static), monsters (21-bone skeleton), vehicles (wheel bones)
+static void testImportedAssets(const std::string& assets) {
+    std::printf("[Imported buildings, monsters and vehicles]\n");
+    auto readAll = [](const std::string& p) { std::ifstream f(p, std::ios::binary); return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {}); };
+    int props = 0;
+    for (const char* n : {"house", "house_2", "house_3", "inn", "stonehouse", "longhouse", "forge", "chapel", "tower", "well", "stall", "tent"}) {
+        SkinnedModelData m; std::vector<uint8_t> b = readAll(assets + "/models/props/" + n + ".lkm"), t = readAll(assets + "/models/props/" + n + ".jpg");
+        bool ok = m.loadLKM(b) && m.loadTexture(t) && m.idx.size() / 3 <= 13000;
+        CHECK(ok, "building %s loads (%zu triangles)", n, m.idx.size() / 3);
+        if (ok) props++;
+    }
+    CHECK(props == 12, "%d/12 building models", props);
+    for (const char* n : {"stone_golem", "b_stone_titan", "ember_elemental", "goblin", "bandit", "skeleton"}) {
+        SkinnedModelData m; std::vector<uint8_t> b = readAll(assets + "/models/" + n + ".lkm");
+        bool ok = m.loadLKM(b) && (int)m.joints.size() == H_COUNT && m.idx.size() / 3 <= 17000;
+        CHECK(ok, "monster %s loads with the game skeleton", n);
+        if (ok) CHECK(std::fabs(m.joints[H_FOOTL].x - m.joints[H_THIGHL].x) < 0.12f && m.joints[H_HEAD].y > m.joints[H_ROOT].y, "%s rest pose (legs under the hips, head up)", n);
+        if (ok && std::string(n) != "b_stone_titan") CHECK(m.joints[H_HANDL].x > 0 && m.joints[H_HANDR].x < 0, "%s faces +Z (left hand on +X)", n);
+    }
+    for (const char* n : {"car", "moto"}) {
+        SkinnedModelData m; std::vector<uint8_t> b = readAll(assets + "/models/vehicles/" + std::string(n) + ".lkm");
+        bool ok = m.loadLKM(b);
+        int wheels = ok ? (int)m.joints.size() - 2 : 0;
+        CHECK(ok && wheels == (std::string(n) == "car" ? 4 : 2), "%s: %d wheels", n, wheels);
+        if (!ok) continue;
+        std::vector<int> perBone(m.joints.size(), 0);
+        for (auto& v : m.verts) if (v.b0 < perBone.size()) perBone[v.b0]++;
+        for (int w = 2; w < (int)m.joints.size(); w++) {
+            CHECK(perBone[w] > 150, "%s wheel %d has %d vertices", n, w - 2, perBone[w]);
+            CHECK(m.joints[w].y > 0.2f && m.joints[w].y < 0.6f, "%s wheel %d centre %.2f m high (= radius, tyre on the ground)", n, w - 2, m.joints[w].y);
+        }
+        CHECK(m.joints[2].z > 0 && m.joints.back().z < 0, "%s front wheels at +Z", n);
+        CHECK(m.joints[1].y > 0.3f, "%s has a seat", n);
+    }
+}
+
 // ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
 static void testBuildingsGrounded(World& w) {
     std::printf("[Buildings on the ground]\n");
@@ -524,6 +560,7 @@ int lkRunTests(int argc, char** argv) {
     World w; w.buildPlan();
     testWorld(w);
     testTallGrass(w);
+    testImportedAssets(assets);
     testDomainData();
     testBuildingsGrounded(w);
     testCameraOnWorld(w);

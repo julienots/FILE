@@ -28,8 +28,17 @@ def load(path):
     def acc(i):
         a = j["accessors"][i]; bv = j["bufferViews"][a["bufferView"]]
         n = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[a["type"]]
-        dt = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8}[a["componentType"]]
-        r = np.frombuffer(binc, dt, a["count"] * n, bv.get("byteOffset", 0) + a.get("byteOffset", 0)).reshape(a["count"], n)
+        dt = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8, 5122: np.int16, 5120: np.int8}[a["componentType"]]
+        o = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+        size = n * np.dtype(dt).itemsize; stride = bv.get("byteStride", 0)
+        if stride and stride != size:   # interleaved vertex buffers (gltf-transform, gltfpack...)
+            raw = np.frombuffer(binc, np.uint8, stride * (a["count"] - 1) + size, o)
+            raw = np.lib.stride_tricks.as_strided(raw, shape=(a["count"], size), strides=(stride, 1))
+            r = raw.copy().view(dt).reshape(a["count"], n)
+        else:
+            r = np.frombuffer(binc, dt, a["count"] * n, o).reshape(a["count"], n)
+        if a.get("normalized") and dt != np.float32:
+            r = np.maximum(r.astype(np.float64) / np.iinfo(dt).max, -1.0)
         return r if n > 1 else r[:, 0]
 
     Ps, UVs, Is, base, tex = [], [], [], 0, None

@@ -124,6 +124,96 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "vehicles") {
+        // 1.11.0: car and motorbike - get in with a real tap, drive on the terrain, turn, wheels spinning,
+        // body following the ground, rider on the bike (leaning in turns), get out, save / load
+        static int res[9]; static vec3 p0; static float spin0, yaw0, maxLean, pitchMin, pitchMax, topSpeed;
+        auto tapInteract = [](Game& g) { vec2 c = ctlCentre(g, CTL_INTERACT); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 720, c.x * k, c.y * k}); };
+        auto release = [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 720) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 720, f.x * k, f.y * k}); } };
+        auto goTo = [](Game& g, int i) {
+            VehicleState& v = g.vehicles[i];
+            vec3 side = g.vehicleLocal(v, vec3(-2.6f, 0, 0)) - v.pos;
+            teleport(g, v.pos.x + side.x, v.pos.z + side.z, 0.f);
+            g.pc().yaw = std::atan2(v.pos.x - g.pc().pos.x, v.pos.z - g.pc().pos.z);
+        };
+        s.push_back({2.5f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.timeOfDay = 12.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.vehicles.clear();
+        }, idle, "init"});
+        s.push_back({1.5f, [goTo](Game& g) { goTo(g, 0); }, idle, "walk to the car"});
+        s.push_back({0.25f, tapInteract, idle, "tap: drive"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.1f, [](Game& g) {
+            res[0] = g.driving == 0 && !g.pc().vis.visible;
+            p0 = g.vehicles[0].pos; spin0 = g.vehicles[0].spin; yaw0 = g.vehicles[0].yaw; pitchMin = 1e9f; pitchMax = -1e9f; topSpeed = 0;
+            g.camYaw = g.vehicles[0].yaw + PI;   // camera behind the car
+            AGR_LOG("VEHICLES in the car: driving %d, hero visible %d", g.driving, g.pc().vis.visible);
+        }, idle, "inside"});
+        s.push_back({4.5f, none, [](Game& g, float t) { g.input.move = vec2(0, 1); g.camYaw = g.vehicles[0].yaw + PI;
+            static float lastT = -1; if (std::floor(t * 2) != std::floor(lastT * 2)) AGR_LOG("VEHICLES car t=%.1f speed %.1f", t, g.vehicles[0].speed); lastT = t;
+            pitchMin = std::min(pitchMin, g.vehicles[0].pitch); pitchMax = std::max(pitchMax, g.vehicles[0].pitch); topSpeed = std::max(topSpeed, g.vehicles[0].speed); }, "drive"});
+        s.push_back({0.05f, [](Game& g) {
+            VehicleState& v = g.vehicles[0];
+            float moved = distXZ(v.pos, p0);
+            float gap = v.pos.y - g.groundAt(v.pos.x, v.pos.z);
+            res[1] = moved > 30.f && topSpeed > 20.f && std::fabs(v.spin - spin0) > 20.f;   // it may have hit something since
+            res[2] = std::fabs(gap) < 0.4f;
+            AGR_LOG("VEHICLES car: moved %.0f m, top speed %.1f m/s, now %.1f m/s (%.0f km/h), wheel turns %.0f, pitch %.3f..%.3f, height over ground %.2f m",
+                    moved, topSpeed, v.speed, v.speed * 3.6f, (v.spin - spin0) / TAU, pitchMin, pitchMax, gap);
+            g.requestScreenshot("build/shots/R0_car_drive.png");
+        }, [](Game& g, float) { g.input.move = vec2(0, 1); }, "shot"});
+        s.push_back({2.f, none, [](Game& g, float) { g.input.move = vec2(0.8f, 0.6f); }, "turn"});
+        s.push_back({0.05f, [](Game& g) {
+            res[3] = std::fabs(wrapAngle(g.vehicles[0].yaw - yaw0)) > 0.5f;
+            AGR_LOG("VEHICLES car turned %.2f rad, steer %.2f", wrapAngle(g.vehicles[0].yaw - yaw0), g.vehicles[0].steer);
+            g.camYaw = g.vehicles[0].yaw + PI * 0.5f; g.camPitch = 0.2f; g.camDist = g.camDistTarget = 9.f;
+        }, [](Game& g, float) { g.input.move = vec2(0.8f, 0.6f); }, "check"});
+        s.push_back({0.6f, none, [](Game& g, float) { g.input.move = vec2(0, 0); g.camYaw = g.vehicles[0].yaw + PI * 0.5f; }, "brake"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/R1_car_side.png"); }, idle, "side shot"});
+        s.push_back({1.5f, none, idle, "stop"});
+        s.push_back({0.25f, tapInteract, idle, "tap: get out"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.1f, [](Game& g) { res[4] = g.driving == -1 && g.pc().vis.visible && distXZ(g.pc().pos, g.vehicles[0].pos) < 4.f; AGR_LOG("VEHICLES out of the car: driving %d, %.1f m from it", g.driving, distXZ(g.pc().pos, g.vehicles[0].pos)); }, idle, "out"});
+        // the motorbike
+        s.push_back({1.5f, [goTo](Game& g) { goTo(g, 1); }, idle, "walk to the moto"});
+        s.push_back({0.25f, tapInteract, idle, "tap: ride"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.1f, [](Game& g) {
+            res[5] = g.driving == 1 && g.pc().vis.visible && g.pc().vis.anim.state == BodyState::Mounted;
+            maxLean = 0; g.camYaw = g.vehicles[1].yaw + PI;
+            AGR_LOG("VEHICLES on the moto: driving %d, state %d", g.driving, (int)g.pc().vis.anim.state);
+        }, idle, "on"});
+        s.push_back({3.f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camYaw = g.vehicles[1].yaw + PI; }, "ride"});
+        s.push_back({2.f, none, [](Game& g, float) { g.input.move = vec2(-0.75f, 0.65f); maxLean = std::max(maxLean, std::fabs(g.vehicles[1].roll)); }, "lean"});
+        s.push_back({0.02f, [](Game& g) { g.camYaw = g.vehicles[1].yaw - PI * 0.5f; g.camPitch = 0.15f; g.camDist = g.camDistTarget = 6.f; }, [](Game& g, float) { g.input.move = vec2(-0.75f, 0.65f); }, "side camera"});
+        s.push_back({0.05f, [](Game& g) {
+            VehicleState& v = g.vehicles[1];
+            Character& c = g.pc();
+            vec3 seat = g.vehicleLocal(v, g.vehicleAsset("moto")->data.joints[1]);
+            mat4 model = mat4::trs(c.pos, quat::axisAngle({0, 1, 0}, c.yaw) * quat::axisAngle({1, 0, 0}, -c.vis.tiltPitch) * quat::axisAngle({0, 0, 1}, c.vis.tiltRoll), vec3(c.vis.scale));
+            vec3 pelvis = model.transformPoint(c.vis.pw.wpos[H_ROOT]);
+            res[6] = maxLean > 0.15f;
+            res[7] = length(pelvis - seat) < 0.15f;
+            AGR_LOG("VEHICLES moto: speed %.1f m/s, max lean %.2f rad, pelvis %.2f m from the seat", v.speed, maxLean, length(pelvis - seat));
+            g.requestScreenshot("build/shots/R2_moto_lean.png");
+        }, [](Game& g, float) { g.input.move = vec2(-0.75f, 0.65f); }, "shot"});
+        s.push_back({0.8f, none, [](Game& g, float) { g.input.move = vec2(0, 0); g.camYaw = g.vehicles[1].yaw - PI * 0.5f; }, "slow"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/R3_moto_side.png"); }, idle, "side"});
+        s.push_back({1.5f, none, idle, "stop"});
+        s.push_back({0.25f, tapInteract, idle, "tap: get off"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.3f, [](Game& g) {
+            vec3 car = g.vehicles[0].pos, moto = g.vehicles[1].pos;
+            g.saveGame(3); g.loadGame(3);
+            res[8] = g.driving == -1 && g.vehicles.size() == 2 && distXZ(g.vehicles[0].pos, car) < 0.5f && distXZ(g.vehicles[1].pos, moto) < 0.5f;
+            AGR_LOG("VEHICLES after save/load: car %.1f m, moto %.1f m from where they were left", distXZ(g.vehicles[0].pos, car), distXZ(g.vehicles[1].pos, moto));
+            AGR_LOG("VEHICLES TEST: enterCar=%d drive=%d onGround=%d turn=%d exit=%d moto=%d lean=%d seat=%d saveLoad=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8]);
+            bool all = true; for (int r : res) all = all && r;
+            AGR_LOG(all ? "VEHICLES TEST PASSED" : "VEHICLES TEST FAILED");
+        }, idle, "save/load"});
+        return s;
+    }
     if (name == "enemy") {
         // close-up of an enemy model (LK_ENEMY=<id>, default stone_golem): idle, then fighting the hero
         static Entity foe;

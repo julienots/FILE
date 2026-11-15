@@ -562,7 +562,7 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
     Animator& a = c.vis.anim;
     a.grounded = c.grounded;
     a.verticalVel = c.vel.y;
-    if (!c.dead && !(e == player && riding)) {
+    if (!c.dead && !(e == player && (riding || driving >= 0))) {
         BodyState want = c.swimming ? BodyState::Swim : (!c.grounded && c.airTime > 0.12f ? BodyState::Airborne : (c.hitStun > 0.3f && c.vis.arch == Arch::Humanoid && !a.action() ? BodyState::Stagger : BodyState::Locomotion));
         if (a.state == BodyState::Victory && e == player && cinematicT > 0) want = BodyState::Victory;
         if (e == player && cine.active && cine.index < (int)cine.shots.size() && cine.shots[cine.index].heroDown) want = BodyState::Downed;   // lying on the shore
@@ -615,7 +615,7 @@ void Game::updateCharacters(float dt) {
                 }
             }
             updateAttack(e, c, dt);
-            if (!(e == player && riding)) physicsStep(e, c, dt);
+            if (!(e == player && (riding || driving >= 0))) physicsStep(e, c, dt);
         }
         if (e == mountEnt && riding) { c.pos.y = groundAt(c.pos.x, c.pos.z); vec3 tmp = c.pos; collideStatic(c.pos, c.radius, c.pos.y); c.pos += vec3(c.vel.x, 0, c.vel.z) * dt; (void)tmp;
             if (c.vis.anim.speed > 0.5f && c.vis.anim.footstepEvent) { c.vis.anim.footstepEvent = 0; play3D("horse", c.pos, 0.25f, 1.4f); } }
