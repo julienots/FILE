@@ -6,8 +6,8 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.7.0 (versionCode 10). Taille : environ 23 Mo. SHA-256 : `956e1b2a92711219438254132a5c3aa3138ad7870ea628ad44cf6ef565030ecf`.
-  - Les versions 1.6.1 à 1.7.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.8.0 (versionCode 11). Taille : environ 24 Mo. SHA-256 : `8d6cdf7c95936a6bd28b2cc9f8681b406f5e2dd2922b74a3efeaaee38c7b0ae1`.
+  - Les versions 1.6.1 à 1.8.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
@@ -45,7 +45,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - Débloquée par la quête « L'étoile tombée » (Ilian, l'astronome).
 - **Lore** : une chronique par héros, et deux quêtes qui les relient à l'histoire de la Couronne-Mère (`docs/LORE.md`).
 - **Prologue** : chaque plan attend que le décor soit chargé avant de s'afficher (4 s au plus). Plus de plans sur une carte vide.
-- **Vérification (1.8.0)** : __TESTS__ tests unitaires, dont l'import du ninja (squelette, os valides, budget de triangles, jambes droites) et la pose de vol. Les scénarios __SCEN__ sont réussis. `full`, `heroes` et `prologue` passent aussi sous AddressSanitizer, sans erreur. Le nouveau scénario `--autoplay=heroes` vérifie :
+- **Vérification (1.8.0)** : 1 910 tests unitaires, dont l'import du ninja (squelette, os valides, budget de triangles, jambes droites) et la pose de vol. Les scénarios `touch`, `ui`, `grass`, `camera`, `anim`, `mods`, `prologue`, `heroes` et `full` sont réussis. `full`, `heroes` et `prologue` passent aussi sous AddressSanitizer, sans erreur. Le nouveau scénario `--autoplay=heroes` vérifie :
   - le choix dans la roue par un vrai appui ;
   - le double saut, le shuriken, le pas de l'ombre et la fumée ;
   - le vol (altitude et pose), le rayon, la météore sans dégâts de chute et l'onde ;
@@ -438,7 +438,9 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios visuels : npcs (villageois alignés), vista (montagnes et horizon)
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), prologue, mods, npcs, vista
+#   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
+# import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
 ```
 
 ### Régénérer les assets
