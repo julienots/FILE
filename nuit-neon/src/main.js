@@ -23,7 +23,8 @@ const params = new URLSearchParams(location.search);
 // essai rapide d'un modèle sans toucher à la liste : ?modele=models/fichier.glb (et &rotY=3.14 si besoin)
 if (params.get('modele')) CARS.unshift({ id: 'essai', nom: 'Essai', modele: params.get('modele'), rotY: params.has('rotY') ? +params.get('rotY') : undefined, couleur: 0xb9bec9, stats: { vmax: 7, accel: 7, mania: 6, adher: 6 } });
 const tuning = store.get('tuning', {});
-const opts = Object.assign({ qual: 'auto', autoGas: true, son: true }, store.get('opts', {}));
+const opts = Object.assign({ qual: 'auto', autoGas: false, son: true }, store.get('opts', {}));
+if (opts.v !== 2) { opts.autoGas = false; opts.v = 2; }
 const setup = Object.assign({ track: 0, diff: 1, laps: 3 }, store.get('setup', {}));
 const best = store.get('best', {});
 let selCar = params.get('modele') ? 0 : Math.max(0, CARS.findIndex(c => c.id === store.get('car', CARS[0].id)));
@@ -184,7 +185,7 @@ function stepCar(c, inp, dt) {
   let v = c.v; const v0 = v;
   if (inp.gas > 0 && v > -0.5) v += P.accel * inp.gas * (1 - Math.pow(Math.max(0, v) / P.vmax, 2)) * dt;
   if (inp.brake > 0) { if (v > 0.5) v = Math.max(0, v - P.brake * inp.brake * dt); else v = Math.max(-9, v - 7 * inp.brake * dt); }
-  if (inp.gas <= 0 && inp.brake <= 0) { const d = (1.2 + 0.0025 * v * v) * dt; v = Math.abs(v) < d ? 0 : v - Math.sign(v) * d; }
+  if (inp.gas <= 0 && inp.brake <= 0) { const d = (4.5 + 0.0016 * v * v) * dt; v = Math.abs(v) < d ? 0 : v - Math.sign(v) * d; }
   if (inp.gas > 0 && v < -0.5) v = Math.min(0, v + 14 * dt);
   const sp = Math.abs(v);
   const yawMax = Math.min(P.steer * Math.min(1, sp / 7), P.grip * 1.3 / Math.max(sp, 1));
@@ -267,11 +268,65 @@ for (const [id, k] of [['k-left', 'left'], ['k-right', 'right'], ['k-gas', 'gas'
   el.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 function playerInput() {
-  const steer = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-  const brake = keys.brake ? 1 : 0;
-  const gas = brake ? 0 : (opts.autoGas || keys.gas ? 1 : 0);
+  const steer = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + pad.steer, -1, 1);
+  const brake = Math.max(keys.brake ? 1 : 0, pad.brake);
+  const gas = brake > 0.1 ? 0 : Math.max(opts.autoGas || keys.gas ? 1 : 0, pad.gas);
   return { steer, gas, brake };
 }
+
+// ---------- manette (Xbox ou compatible) ----------
+// En course : gâchette droite ou A = accélérer, gâchette gauche, B ou X = freiner, stick gauche ou croix = tourner, Start = pause.
+// Dans les menus : croix ou stick = se déplacer, A = valider, B = retour.
+const pad = { steer: 0, gas: 0, brake: 0, prev: [], navT: 0, used: false };
+const SCREEN_PRIORITY = ['pause', 'results', 'setup', 'garage', 'options', 'menu'];
+function padNav(dx, dy) {
+  const scr = SCREEN_PRIORITY.map($).find(e => !e.hidden); if (!scr) return;
+  const items = [...scr.querySelectorAll('button, input')].filter(e => e.offsetParent !== null);
+  if (!items.length) return;
+  const cur = document.activeElement;
+  if (!items.includes(cur)) { (scr.querySelector('.btn.primary') || items[0]).focus(); return; }
+  if (cur.tagName === 'INPUT' && dx) { cur.value = clamp(+cur.value + dx, +cur.min, +cur.max); cur.dispatchEvent(new Event('input')); return; }
+  const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let bestEl = null, bestD = 1e9;
+  for (const e of items) {
+    if (e === cur) continue;
+    const q = e.getBoundingClientRect(), ex = q.left + q.width / 2 - cx, ey = q.top + q.height / 2 - cy;
+    const along = ex * dx + ey * dy, across = Math.abs(ex * dy) + Math.abs(ey * dx);
+    if (along < 4) continue;
+    const d = along + across * 2.5;
+    if (d < bestD) { bestD = d; bestEl = e; }
+  }
+  if (bestEl) { bestEl.focus(); bestEl.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+function pollPad(dt) {
+  let g = null;
+  try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (const x of gps) if (x && x.connected && x.buttons.length >= 10) { g = x; break; } } catch (e) { g = null; }
+  if (!g) { pad.steer = pad.gas = pad.brake = 0; return; }
+  const val = (i) => { const b = g.buttons[i]; return b ? Math.max(b.value || 0, b.pressed ? 1 : 0) : 0; };
+  const hit = (i) => val(i) > 0.5 && !pad.prev[i];
+  let sx = g.axes[0] || 0, sy = g.axes[1] || 0;
+  sx = Math.abs(sx) < 0.15 ? 0 : (sx - Math.sign(sx) * 0.15) / 0.85;
+  const steer = val(14) ? -1 : val(15) ? 1 : sx;
+  pad.steer = steer; pad.gas = Math.max(val(7), val(0)); pad.brake = Math.max(val(6), val(1), val(2));
+  if (!pad.used && (Math.abs(steer) > 0.3 || g.buttons.some(b => b.pressed))) { pad.used = true; app.classList.add('pad'); audio.initAudio(); }
+  if (mode === 'race' || mode === 'count') {
+    if (hit(9) && mode === 'race') togglePause();
+  } else {
+    pad.steer = pad.gas = pad.brake = 0;
+    if (hit(9) && mode === 'pause') togglePause();
+    else if (hit(0)) { const el = document.activeElement; if (el && el !== document.body && el.offsetParent !== null) el.click(); else padNav(0, 1); }
+    else if (hit(1)) window.__nnBack();
+    else {
+      const dx = val(14) ? -1 : val(15) ? 1 : Math.abs(sx) > 0.6 ? Math.sign(sx) : 0;
+      const dy = val(12) ? -1 : val(13) ? 1 : Math.abs(sy) > 0.6 ? Math.sign(sy) : 0;
+      pad.navT -= dt;
+      if (!dx && !dy) pad.navT = 0;
+      else if (pad.navT <= 0) { pad.navT = 0.22; Math.abs(dx) >= Math.abs(dy) && dx ? padNav(dx, 0) : padNav(0, dy); }
+    }
+  }
+  for (let i = 0; i < g.buttons.length; i++) pad.prev[i] = val(i) > 0.5;
+}
+addEventListener('touchstart', () => { if (pad.used) { pad.used = false; app.classList.remove('pad'); } }, { passive: true });
 
 // ---------- caméra ----------
 let camH = 0, garageAng = 0.6, garageDrag = null, demoAng = 0;
@@ -351,9 +406,9 @@ function buildSetup() {
 }
 function buildOptions() {
   chips($('o-qual'), [['auto', 'Auto'], ['haute', 'Élevés'], ['moyenne', 'Moyens'], ['basse', 'Bas']], () => opts.qual, (v) => { opts.qual = v; store.set('opts', opts); changeQuality(); });
-  chips($('o-gas'), [[true, 'Automatique'], [false, 'Bouton GAZ']], () => opts.autoGas, (v) => { opts.autoGas = v; store.set('opts', opts); syncPads(); });
+  chips($('o-gas'), [[false, 'Manuel'], [true, 'Automatique']], () => opts.autoGas, (v) => { opts.autoGas = v; store.set('opts', opts); syncPads(); });
   chips($('o-snd'), [[true, 'Activé'], [false, 'Coupé']], () => opts.son, (v) => { opts.son = v; store.set('opts', opts); audio.setSound(v); });
-  $('o-info').textContent = 'En mode Auto, le jeu baisse la résolution tout seul si le téléphone ralentit. Clavier : flèches ou ZQSD, Échap pour la pause.';
+  $('o-info').textContent = 'En mode Auto, le jeu baisse la résolution tout seul si le téléphone ralentit. Manette : gâchette droite pour accélérer, gâchette gauche pour freiner, stick ou croix pour tourner, Start pour la pause. Clavier : flèches ou ZQSD, Échap.';
 }
 function syncPads() { $('k-gas').hidden = opts.autoGas; }
 function changeQuality() {
@@ -466,7 +521,9 @@ $('r-menu').onclick = toMenu;
 $('r-again').onclick = startRace;
 
 // touche Retour et mise en veille (application Android)
+let backAt = 0;
 window.__nnBack = () => {
+  const now = performance.now(); if (now - backAt < 350) return true; backAt = now;
   if (mode === 'race' || mode === 'pause') { togglePause(); return true; }
   if (mode === 'count') return true;
   if (mode === 'finished') { toMenu(); return true; }
@@ -512,6 +569,7 @@ function frame(now) {
   if (dt <= 0) return;
   time += dt;
   if (mode === 'loading' || !world) return;
+  pollPad(dt);
   let blur = 0;
   if (mode === 'menu') {
     simulate(dt); syncVisuals(dt, time);

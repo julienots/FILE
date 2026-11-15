@@ -76,7 +76,10 @@ public class MainActivity extends Activity {
                 return !HOST.equals(req.getUrl().getHost());
             }
         });
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
         setContentView(web);
+        web.requestFocus(); // nécessaire pour recevoir la manette
         immersive();
         web.loadUrl("https://" + HOST + "/index.html");
     }

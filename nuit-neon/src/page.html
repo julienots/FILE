@@ -96,6 +96,9 @@ h1, h2 { margin: 0; font-weight: 700; font-style: italic; text-wrap: balance; }
 .key.on { background: rgba(25,230,255,0.4); border-color: var(--cyan); }
 .key.brake.on { background: rgba(255,60,40,0.45); border-color: #ff5a40; }
 .key small { font-size: 11px; letter-spacing: 0.08em; }
+/* manette branchée : boutons tactiles cachés, élément choisi bien visible */
+#app.pad .pad { display: none; }
+#app.pad :focus { outline: 2px solid var(--cyan); outline-offset: 2px; }
 #count { inset: 0; display: grid; place-items: center; font-size: clamp(80px, 30vh, 200px); font-weight: 700; font-style: italic; color: var(--warn); text-shadow: 0 0 40px rgba(255,210,63,0.6), 0 4px 20px #000; }
 #wrong { top: 26%; left: 50%; transform: translateX(-50%); color: #ff5a40; font-weight: 700; font-size: 20px; text-shadow: 0 2px 8px #000; }
 
