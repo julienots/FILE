@@ -137,7 +137,7 @@ void Game::updateGrassPushers() {
     if (c.grounded && distXZ(c.pos, grassTrailLast) > 0.45f) {
         grassTrail.push_front({c.pos, realTime});
         grassTrailLast = c.pos;
-        while (grassTrail.size() > 4) grassTrail.pop_back();
+        while (grassTrail.size() > (tallGrassHere > 0.3f ? 6u : 4u)) grassTrail.pop_back();
     }
     for (auto& t : grassTrail) {
         float age = realTime - t.t;
@@ -225,6 +225,10 @@ void Game::renderWorld(float dt) {
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
                 if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
                 if (d < 30.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+            }
+            // 1.9.1 tall grass meadows: visible a little further than the short grass (they shape the landscape)
+            if (d < 50.f && ch.tallGrass.valid() && gs.grassDensity > 0.01f) {
+                it.castShadow = false; it.tint.w = 0; it.mesh = &ch.tallGrass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it);
             }
             if (ch.water.valid()) {
                 vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);

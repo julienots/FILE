@@ -85,6 +85,7 @@ struct ChunkBuild {
     int lod = 0;
     MeshBuilder terrain, props, foliage, water, lava;  // foliage = wind-animated batch
     std::vector<InstanceData> grass, flowers, grassNear;   // grassNear: extra clumps drawn only near the hero
+    std::vector<InstanceData> tallGrass;                   // 1.9.1 waist-high meadow patches (bend around characters)
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights;      // xyz + kind (lanterns, braziers, lava glow)
@@ -99,7 +100,7 @@ struct Chunk {
     ChunkKey key;
     int lod = -1;
     bool ready = false;
-    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear;
+    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass;
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights, emitters;
@@ -125,6 +126,8 @@ public:
     vec3 normal(float x, float z) const;
     float waterLevel(float x, float z, bool* lava = nullptr, bool* frozen = nullptr, vec2* flow = nullptr) const;  // -1e9 if none
     float roadInfluence(float x, float z, bool* cobble = nullptr) const;
+    // 1.9.1 tall grass meadows: 0 (none) .. 1 (dense), same answer for the chunk builder and for gameplay
+    float tallGrassAmount(float x, float z) const;
     // Ground height including walkable structures (bridges, docks)
     float groundHeight(float x, float z) const;
 

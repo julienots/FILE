@@ -13,6 +13,26 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.9.1 (hautes herbes)
+
+- **Prairies de hautes herbes** (1 m à 1,35 m) :
+  - elles couvrent environ un quart de Greenhaven, et une partie des Ombres, d'Elderwood et des Hautes-Cimes ;
+  - elles s'arrêtent aux routes, aux villages, aux champs et aux bâtiments ;
+  - chaque touffe compte huit brins fins et des épis, avec des couleurs du vert au blond paille, en grandes taches.
+- **Elles bougent quand on y passe** :
+  - les herbes s'écartent autour du héros, des PNJ, des ennemis et de la monture ;
+  - plus une herbe est haute, plus elle se couche ;
+  - le héros laisse derrière lui un sillage d'herbes couchées, qui se relèvent lentement en oscillant ;
+  - le vent les fait onduler par rafales.
+- **Vie dans les herbes** : un bruissement plus fort à chaque pas, des sauterelles qui bondissent, et parfois un vol d'oiseaux qui s'envole devant le héros quand il court (de jour).
+- **Se cacher** : dans les hautes herbes, les ennemis repèrent le héros d'environ deux fois moins loin, tant qu'il n'attaque pas. Un message l'explique la première fois.
+- **Coût maîtrisé** : environ 60 triangles par touffe, et les touffes ne sont dessinées que jusqu'à 50 m. Leur densité suit le profil « Qualité graphique » des Paramètres : clairsemées en profil bas, absentes dans le profil le plus économe.
+- **Vérification (1.9.1)** :
+  - 1 965 tests unitaires, dont 5 sur les prairies : elles sont reproductibles d'une partie à l'autre, absentes des routes, des villages, de Frostheim et des Cendres, et couvrent 26 % de Greenhaven ;
+  - nouveau scénario `tallgrass`, réussi : prairie trouvée, environ 6 500 touffes chargées, herbes qui s'écartent pendant la marche, et un loup à 13 m qui voit le héros à découvert mais pas dans les herbes ;
+  - vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limite** : les performances sur téléphone ne sont pas mesurées. Si les prairies ralentissent le jeu, choisis un profil graphique plus bas dans les Paramètres.
+
 ### Nouveautés 1.9.0 (bâtiments en 3D, combat d'Astra, quêtes, détails réalistes)
 
 - **Bâtiments en modèles 3D (prêt pour tes modèles).** Le jeu peut maintenant remplacer ses bâtiments construits en code par des modèles 3D :

@@ -164,6 +164,38 @@ static void testWorld(World& w) {
     }
 }
 
+// ---- 1.9.1 tall grass meadows: where they grow (and where they must not)
+static void testTallGrass(World& w) {
+    std::printf("[Tall grass]\n");
+    int cells = 0, grass = 0, inVillage = 0, onRoad = 0, cold = 0, bad = 0;
+    for (int z = 0; z < 160; z++) for (int x = 0; x < 160; x++) {
+        float wx = (x + 0.5f) * WORLD_SIZE / 160.f, wz = (z + 0.5f) * WORLD_SIZE / 160.f;
+        float a = w.tallGrassAmount(wx, wz);
+        if (!(a >= 0.f && a <= 1.f)) bad++;
+        if (a != w.tallGrassAmount(wx, wz)) bad++;   // deterministic
+        int r = w.regionId(wx, wz);
+        if (r != R_GREENHAVEN) continue;
+        cells++;
+        if (a > 0.f) grass++;
+        if (a > 0.f && w.roadInfluence(wx, wz) > 0.02f) onRoad++;
+    }
+    for (const Poi& p : w.pois) {
+        if (p.type == PoiType::Village && w.tallGrassAmount(p.pos.x, p.pos.y) > 0.f) inVillage++;
+    }
+    for (int i = 0; i < 400; i++) {
+        float wx = (i % 20 + 0.5f) * WORLD_SIZE / 20.f, wz = (i / 20 + 0.5f) * WORLD_SIZE / 20.f;
+        int r = w.regionId(wx, wz);
+        if ((r == R_FROSTHEIM || r == R_ASHEN) && w.tallGrassAmount(wx, wz) > 0.f) cold++;
+    }
+    float frac = cells ? (float)grass / cells : 0.f;
+    std::printf("  Greenhaven covered by tall grass: %.0f%%\n", frac * 100);
+    CHECK(bad == 0, "values in [0,1] and deterministic (%d bad)", bad);
+    CHECK(frac > 0.05f && frac < 0.45f, "meadows cover part of Greenhaven, not all of it (%.2f)", frac);
+    CHECK(onRoad == 0, "%d tall grass cells on roads", onRoad);
+    CHECK(inVillage == 0, "%d villages overgrown", inVillage);
+    CHECK(cold == 0, "%d samples in Frostheim / Ashen", cold);
+}
+
 static void testAudio(const std::string& assets) {
     std::printf("[Audio assets]\n");
     static const char* names[] = {"music/title", "music/greenhaven", "music/frostheim", "music/ashen", "music/elderwood", "music/shadows", "music/highcrowns", "music/village",
@@ -447,6 +479,7 @@ int lkRunTests(int argc, char** argv) {
     initPropTemplates();
     World w; w.buildPlan();
     testWorld(w);
+    testTallGrass(w);
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);

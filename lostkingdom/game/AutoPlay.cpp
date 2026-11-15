@@ -124,6 +124,62 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "tallgrass") {
+        // 1.9.1: tall grass meadows: placed in patches, drawn, bend around the hero, hide him from enemies
+        static int res[4]; static vec2 spot; static Entity wolf;
+        s.push_back({0.1f, [](Game& g) {
+            for (int& r : res) r = 0;
+            const Poi* b = g.world.poiById("brindlemere"); spot = b->pos; float best = 0;
+            for (float rr = 90.f; rr < 700.f && best < 0.95f; rr += 12.f)
+                for (float a = 0; a < TAU; a += 0.08f) {
+                    vec2 p = b->pos + vec2(std::cos(a), std::sin(a)) * rr;
+                    float t = g.world.tallGrassAmount(p.x, p.y);
+                    if (t > best) { best = t; spot = p; }
+                }
+            AGR_LOG("TALLGRASS meadow at (%.0f, %.0f), density %.2f", spot.x, spot.y, best);
+            teleport(g, spot.x, spot.y, 0.8f);
+            g.timeOfDay = 17.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.camDist = g.camDistTarget = 7.f; g.camPitch = 0.25f;
+        }, idle, "find a meadow"});
+        s.push_back({5.f, none, idle, "stream"});
+        s.push_back({0.1f, [](Game& g) {
+            size_t inst = 0; g.world.forEachVisibleChunk([&](Chunk& c) { if (c.tallGrass.valid()) inst += c.tallGrass.instanceCount; });
+            res[0] = inst > 500 && g.tallGrassHere > 0.5f;
+            AGR_LOG("TALLGRASS %zu tall clumps in loaded chunks, hero in grass %.2f, hint \"%s\"", inst, g.tallGrassHere, g.toastHint.c_str());
+            g.requestScreenshot("build/shots/J0_tallgrass.png");
+        }, idle, "check"});
+        // walking through: the grass parts (pushers active) and grasshoppers jump
+        s.push_back({2.5f, [](Game& g) { g.camPitch = 0.3f; g.camDist = g.camDistTarget = 6.f; }, [](Game& g, float) { g.input.move = vec2(0.3f, 0.7f); }, "walk"});
+        s.push_back({0.05f, [](Game& g) {
+            int act = 0; for (auto& p : g.env.pushers) if (p.w != 0) act++;
+            res[1] = act >= 3;
+            AGR_LOG("TALLGRASS walking: %d benders active", act);
+            g.requestScreenshot("build/shots/J1_tallgrass_walk.png"); }, [](Game& g, float) { g.input.move = vec2(0.3f, 0.7f); }, "shot"});
+        // cover: a wolf at 13 m sees the hero on open ground, not in the meadow (unless he attacks)
+        s.push_back({0.1f, [](Game& g) {
+            Character& c = g.pc(); vec3 f{std::sin(c.yaw), 0, std::cos(c.yaw)};
+            vec3 p = c.pos + f * 13.f; p.y = g.world.groundHeight(p.x, p.z);
+            wolf = g.spawnEnemy(enemyIndex("wolf"), p);
+            Character* w = g.reg.get<Character>(wolf); if (!w) return;
+            w->yaw = std::atan2(-f.x, -f.z);
+            float keep = g.tallGrassHere;
+            bool inGrass = g.canSee(*w, c, 20.f, 360.f);
+            g.tallGrassHere = 0; bool open = g.canSee(*w, c, 20.f, 360.f); g.tallGrassHere = keep;
+            res[2] = !inGrass && open;
+            AGR_LOG("TALLGRASS wolf at 13 m: sees the hero in the grass %d, on open ground %d", inGrass, open);
+        }, idle, "cover"});
+        s.push_back({0.1f, [](Game& g) {
+            g.camPitch = 0.9f; g.camDist = g.camDistTarget = 24.f;
+            res[3] = 1;
+        }, idle, "overview"});
+        s.push_back({1.2f, none, idle, "settle"});
+        s.push_back({0.05f, [](Game& g) {
+            g.requestScreenshot("build/shots/J2_meadow_view.png");
+            AGR_LOG("TALLGRASS TEST: meadow=%d bend=%d cover=%d", res[0], res[1], res[2]);
+            AGR_LOG(res[0] && res[1] && res[2] ? "TALLGRASS TEST PASSED" : "TALLGRASS TEST FAILED");
+        }, idle, "check"});
+        return s;
+    }
     if (name == "details") {
         // 1.9.0 realism: breath vapour in Frostheim, dripping after a swim
         static int res[2]; static size_t p0;

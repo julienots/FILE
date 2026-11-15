@@ -446,6 +446,8 @@ public:
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
     float heroCD[3] = {0, 0, 0};
     float heroAura = 0;
+    float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
+    float birdFlushCD = 0;
     void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires
     const HeroDef& hero() const;
     bool heroUnlocked(int i) const;

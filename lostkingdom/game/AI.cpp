@@ -9,6 +9,8 @@ bool Game::canSee(const Character& a, const Character& b, float range, float fov
     vec3 d = b.pos - a.pos; d.y = 0;
     float dist = length(d);
     if (stealthT > 0 && b.team == Team::Player && dist > 2.f) return false;   // Kaede's smoke
+    // 1.9.1 tall grass hides the hero (not while fighting): spotted from about half as far
+    if (b.team == Team::Player && tallGrassHere > 0.3f && !b.attackClip && b.hitStun <= 0) range *= 1.f - 0.55f * tallGrassHere;
     if (dist > range) return false;
     if (dist < 5.f) return true;  // too close to miss
     vec3 fwd{std::sin(a.yaw), 0, std::cos(a.yaw)};

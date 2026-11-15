@@ -24,7 +24,7 @@ float distToSegment(vec2 p, vec2 a, vec2 b, float* t) {
 }
 
 void Chunk::destroy() {
-    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy();
+    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy(); tallGrass.destroy();
     ready = false;
 }
 
@@ -1093,6 +1093,59 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         scatter(777, spacing, out.grass, &out.flowers, 0.6f, 1.15f);
         if (grassDensity >= 0.5f) scatter(778, spacing * 1.1f, out.grassNear, nullptr, 0.8f, 1.45f);
     }
+    // ---- 1.9.1 tall grass meadows: waist-high clumps, dense inside the patches, shorter at their edges
+    if (lod == 0 && grassDensity >= 0.3f) {
+        Rng g(hash2i(k.x, k.z, 4243));
+        float sp = 0.62f / std::sqrt(std::min(1.f, grassDensity));
+        int GN = (int)(CHUNK / sp);
+        for (int j = 0; j < GN; j++)
+            for (int i = 0; i < GN; i++) {
+                float x = x0 + (i + g.f()) * sp, z = z0 + (j + g.f()) * sp;
+                float a = tallGrassAmount(x, z);
+                if (a <= 0.f || g.f() > 0.35f + a * 0.65f) continue;
+                int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
+                const Vertex& tv = T.v[vj * (N + 1) + vi];
+                float wg = 1.f - (tv.rough + tv.metal + tv.emis + tv.wind + tv.b0 + tv.b1 + tv.w0) / 255.f;
+                if (tv.ny < 108 || wg < 0.45f) continue;   // not on rock, sand or steep slopes
+                int r = regionId(x, z);
+                float patch = fbm2(x * 0.03f, z * 0.03f, 2, 777) * 0.5f + 0.5f;
+                vec3 col = foliageColor(r, clampf(patch * 0.6f + g.f() * 0.3f, 0.f, 1.f));
+                vec3 straw = r == R_SHADOWS ? hexColor(0x6a6440) : hexColor(0xc8b46a);
+                col = lerp(col, straw, clampf((r == R_HIGHCROWNS ? 0.55f : 0.22f) + (patch - 0.5f) * 0.5f + g.range(-0.08f, 0.12f), 0.f, 0.8f));
+                InstanceData d;
+                d.x = x; d.y = height(x, z) - 0.04f; d.z = z; d.rotY = g.range(0, TAU);
+                d.scale = g.range(0.85f, 1.2f) * (0.55f + 0.45f * a);
+                Color8 c = toColor8(col * 0.5f, 1);
+                d.r = c.r; d.g = c.g; d.b = c.b; d.a = 255;
+                out.tallGrass.push_back(d);
+            }
+    }
+}
+
+float World::tallGrassAmount(float x, float z) const {
+    int r = regionId(x, z);
+    float rw = r == R_GREENHAVEN ? 1.f : r == R_SHADOWS ? 0.75f : r == R_ELDERWOOD ? 0.6f : r == R_HIGHCROWNS ? 0.45f : 0.f;
+    if (rw <= 0.f) return 0.f;
+    float n = fbm2(x * 0.011f, z * 0.011f, 3, 4242) * 0.5f + 0.5f;          // meadows ~60-120 m across
+    float a = smoothstepf(0.55f, 0.64f, n) * rw;
+    if (a < 0.02f) return 0.f;
+    if (roadInfluence(x, z) > 0.02f) return 0.f;
+    for (const Poi& p : pois) if (length(p.pos - vec2(x, z)) < p.radius * 0.9f + 6.f) return 0.f;   // not in villages, camps, ruins
+    // nor in ploughed fields or right against a building / fence
+    int cx = (int)std::floor(x / CHUNK), cz = (int)std::floor(z / CHUNK);
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int cj = chunkIndex(cx + dx, cz + dz);
+            if (cj < 0 || cj >= (int)chunkStructures.size()) continue;
+            for (int si : chunkStructures[cj]) {
+                const Structure& st = structures[si];
+                float rr = (st.kind == S_FIELD ? 16.f : (st.kind == S_FENCE ? 5.f : 9.f)) * std::max(1.f, st.scale);
+                if (length(st.pos - vec2(x, z)) < rr) return 0.f;
+            }
+        }
+    float wl = waterLevel(x, z);
+    if (wl > -1e8f && height(x, z) < wl + 0.3f) return 0.f;
+    return a;
 }
 
 // ---------------------------------------------------------------------------------------- streaming
@@ -1149,6 +1202,34 @@ void World::uploadChunk(ChunkBuild& b) {
     if (!b.foliage.v.empty()) b.foliage.upload(c.foliage);
     if (!b.water.v.empty()) b.water.upload(c.water);
     if (!b.lava.v.empty()) b.lava.upload(c.lava);
+    if (!b.tallGrass.empty()) {
+        // tall clump: 8 thin blades up to 1.35 m, two seed heads, leaning out like a real tussock (~60 triangles)
+        static MeshBuilder tall;
+        if (tall.v.empty()) {
+            Mat root(hexColor(0x3a5a22), 0.9f, 0, 0, 0.f), tip(hexColor(0xb8c470), 0.75f, 0, 0, 1.f), seed(hexColor(0xd8c890), 0.8f, 0, 0, 1.f);
+            Rng br(11);
+            for (int i = 0; i < 8; i++) {
+                float a = i * TAU / 8 + br.range(-0.3f, 0.3f);
+                vec3 side{std::cos(a), 0, std::sin(a)};
+                vec2 off = br.inDisk() * 0.26f;
+                vec3 base{off.x, 0, off.y};
+                float h = br.range(0.8f, 1.35f);
+                vec3 lean = vec3(off.x, 0, off.y) * 0.9f + vec3(-side.z, 0, side.x) * 0.06f + vec3(br.range(-0.12f, 0.12f), 0, br.range(-0.12f, 0.12f));
+                tall.blade(base, base + vec3(0, h, 0) + lean, 0.075f, side, root, tip);
+                if (i % 4 == 0) {   // seed head on a stem
+                    vec3 top = base + vec3(0, h + 0.12f, 0) + lean * 1.1f;
+                    tall.blade(top - vec3(0, 0.2f, 0) - lean * 0.1f, top, 0.05f, side, seed.withWind(0.85f), seed);
+                }
+            }
+            for (auto& v : tall.v) {
+                v.r = v.g = v.b = (uint8_t)clampf(140 + v.py * 90, 0, 255);
+                vec3 n = normalize(unpackNormal(v) * 0.3f + vec3(0, 1, 0));
+                v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
+                v.a = (uint8_t)clampf(120 + v.py * 140, 0, 255);   // darker at the root (ambient occlusion)
+            }
+        }
+        tall.upload(c.tallGrass); c.tallGrass.setInstances(b.tallGrass);
+    }
     if (!b.grass.empty() || !b.flowers.empty() || !b.grassNear.empty()) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer
         static MeshBuilder blade, flower;

@@ -125,8 +125,10 @@ void main() {
     float pl = length(pushv);
     if (pl > 1.0) pushv /= pl;
     grassDown = min(down, 1.0);
-    wp.xz += pushv * aMat.a * 0.75;
-    wp.y -= grassDown * aMat.a * 0.45;
+    // bend grows with the blade's height: tall meadow grass parts around the body, short grass just flattens
+    float bendH = clamp(wweight * max(p.y, 0.75) * 1.15, 0.0, 1.4);
+    wp.xz += pushv * bendH * 0.75;
+    wp.y -= grassDown * bendH * 0.5;
   #endif
 #endif
     n = normalize(n);

@@ -621,6 +621,14 @@ void Game::updatePlayer(float dt) {
             if (!cine.active) unlockLore("r_" + std::to_string(r));
             if (r == R_FROSTHEIM && c.status.frostRes <= 0 && countItem("elixir_frost") == 0) toastHint = "Le froid de Frostheim est mordant : l'élixir de résistance au froid aide.";
         }
+        // 1.9.1 tall grass: cover from enemies, a one-time hint
+        float tg = (riding || c.swimming) ? 0.f : world.tallGrassAmount(c.pos.x, c.pos.z);
+        tallGrassHere = approach(tallGrassHere, tg, dt * 3.f);
+        birdFlushCD = std::max(0.f, birdFlushCD - dt);
+        if (tallGrassHere > 0.5f && !storyFlags.count("hint_tallgrass") && !cine.active) {
+            storyFlags.insert("hint_tallgrass");
+            toastHint = "Hautes herbes : les ennemis vous repèrent de moins loin, tant que vous n'attaquez pas.";
+        }
         // cold drains stamina slowly in Frostheim without protection
         if (r == R_FROSTHEIM && c.status.frostRes <= 0 && resist[(int)Element::Ice] < 0.15f && snowAmt > 0.5f) staminaRegenDelay = std::max(staminaRegenDelay, 0.1f);
     }
@@ -751,6 +759,35 @@ void Game::updatePlayer(float dt) {
             if ((r == R_GREENHAVEN || r == R_ELDERWOOD || r == R_SHADOWS) && particles.rng.chance(a.speed > 3.f ? 0.6f : 0.3f)) {
                 play("grass_rustle", a.speed > 3.f ? 0.32f : 0.2f, particles.rng.range(0.85f, 1.15f));
                 if (a.speed > 3.f && particles.rng.chance(0.5f)) particles.dust(c.pos + vec3(0, 0.25f, 0), 0.35f, vec3(0.42f, 0.55f, 0.25f));
+            }
+        }
+        // 1.9.1 wading through tall grass: louder rustle, grasshoppers leaping away, sometimes birds take off
+        if (tallGrassHere > 0.3f && !riding) {
+            play("grass_rustle", (a.speed > 3.f ? 0.45f : 0.3f) * tallGrassHere, particles.rng.range(0.8f, 1.1f));
+            if (particles.rng.chance(0.35f * tallGrassHere)) {
+                for (int i = 0; i < 2; i++) {
+                    Particle p;
+                    float ang = particles.rng.range(0, TAU);
+                    p.pos = c.pos + vec3(std::cos(ang) * 0.6f, 0.4f, std::sin(ang) * 0.6f);
+                    p.vel = vec3(std::cos(ang) * 1.6f, particles.rng.range(2.2f, 3.2f), std::sin(ang) * 1.6f);
+                    p.gravity = 9.f; p.maxLife = 0.75f; p.size0 = p.size1 = 0.035f; p.stretch = 0.02f;
+                    vec3 gc = particles.rng.chance(0.5f) ? vec3(0.42f, 0.55f, 0.2f) : vec3(0.55f, 0.48f, 0.25f);
+                    p.c0 = vec4(gc, 1.f); p.c1 = vec4(gc, 1.f); p.frame = PF_DOT; p.additive = false;
+                    p.groundKill = groundAt(p.pos.x, p.pos.z); p.bounce = true;
+                    particles.spawn(p);
+                }
+            }
+            if (a.speed > 3.5f && birdFlushCD <= 0 && particles.rng.chance(0.12f) && env.night < 0.5f) {
+                birdFlushCD = 25.f;
+                vec3 fwd(std::sin(c.yaw), 0, std::cos(c.yaw));
+                for (int i = 0; i < 5; i++) {
+                    Particle b;
+                    b.pos = c.pos + fwd * particles.rng.range(3.f, 6.f) + vec3(particles.rng.range(-1.5f, 1.5f), 0.6f, particles.rng.range(-1.5f, 1.5f));
+                    b.vel = fwd * particles.rng.range(3.f, 5.f) + vec3(particles.rng.range(-2.f, 2.f), particles.rng.range(4.f, 6.f), particles.rng.range(-2.f, 2.f));
+                    b.maxLife = 4.f; b.size0 = b.size1 = 0.4f; b.frame = PF_BIRD; b.additive = false; b.c0 = b.c1 = vec4(0.15f, 0.13f, 0.12f, 1.f); b.drag = 0.2f;
+                    particles.spawn(b);
+                }
+                play("birds", 0.5f, particles.rng.range(1.05f, 1.2f));
             }
         }
         if (sprinting && particles.rng.chance(0.5f)) particles.dust(c.pos, 0.6f);
