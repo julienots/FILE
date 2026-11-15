@@ -719,7 +719,7 @@ public:
     std::vector<int> touchCaptured;   // finger ids owned by controls
     int joyFinger = -1, camFinger = -1;
     float lastCamTapT = -10.f; vec2 lastCamTapPos;
-    struct CamDragAxis { vec2 acc; int axis = -1; };   // per finger: movement before the lock, locked axis (0 = x, 1 = y)
+    struct CamDragAxis { vec2 acc; int axis = -1; };   // per finger: movement before the drag starts (axis >= 0: started)
     std::map<int, CamDragAxis> camDragAxis;
     vec2 joyOrigin, joyPos;
     float pinchDist = 0;

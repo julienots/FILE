@@ -19,8 +19,9 @@ void Game::updateCamera(float dt) {
         bool touched = input.camDrag.x != 0 || input.camDrag.y != 0 || input.pinch != 0;
         camIdleT = touched ? 0.f : camIdleT + dt;
         float sens = settings.camSensitivity;
-        camYaw += input.camDrag.x * 0.006f * sens * (settings.invertCamera ? -1.f : 1.f);
-        camPitch = CameraRig::clampPitch(camPitch + input.camDrag.y * 0.005f * sens * (settings.invertCameraY ? -1.f : 1.f));
+        // 1.10.2: slower (x0.6) and the same rate on both axes, so a diagonal drag moves the view diagonally
+        camYaw += input.camDrag.x * 0.0034f * sens * (settings.invertCamera ? -1.f : 1.f);
+        camPitch = CameraRig::clampPitch(camPitch + input.camDrag.y * 0.0034f * sens * (settings.invertCameraY ? -1.f : 1.f));
         if (input.pinch != 0) camDistTarget = CameraRig::clampDist(camDistTarget * std::exp(-input.pinch * 0.0035f));
         if (input.camReset) { camResetT = 0.8f; play("ui_click", 0.3f); }
         if (touched && !input.camReset) camResetT = 0;

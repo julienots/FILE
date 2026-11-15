@@ -128,17 +128,16 @@ void Game::updateTouchControls() {
     for (auto* f : camFingers) {
         auto it = lastPos.find(f->id);
         if (it != lastPos.end() && camFingers.size() == 1) {
-            // Axis lock (1.6.1): a drag turns OR tilts the camera, decided by its first 14 units of movement;
-            // turning no longer drifts the pitch (and the reverse). Lift the finger to change axis.
+            // 1.10.2: free orbit - one drag turns AND tilts the camera together, following the finger in both
+            // directions (the 1.6.1 axis lock is gone). A tiny start threshold keeps taps from nudging it.
             vec2 d{-(f->x - it->second.x), f->y - it->second.y};
             CamDragAxis& ax = camDragAxis[f->id];
             if (ax.axis < 0) {
                 ax.acc += d;
-                if (length(ax.acc) > 14.f) { ax.axis = std::fabs(ax.acc.x) >= std::fabs(ax.acc.y) * 0.8f ? 0 : 1; d = ax.acc; }
+                if (length(ax.acc) > 6.f) { ax.axis = 2; d = ax.acc; }
                 else d = vec2(0, 0);
             }
-            if (ax.axis == 0) input.camDrag.x += d.x;
-            if (ax.axis == 1) input.camDrag.y += d.y;
+            if (ax.axis >= 0) input.camDrag += d;
         }
         lastPos[f->id] = vec2(f->x, f->y);
     }

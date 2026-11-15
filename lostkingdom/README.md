@@ -6,12 +6,20 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.10.1 (versionCode 16). Taille : environ 25 Mo. SHA-256 : `fd61c8db0398f21ae00fe5623e86accbb295d862682b6dd19fc38e2f277daddc`.
-  - Les versions 1.6.1 à 1.10.1 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.10.2 (versionCode 17). Taille : environ 25 Mo. SHA-256 : `92f7c10dc217759a1030fad26fb4a43202ab4e4759c369b663e9260f8b252aef`.
+  - Les versions 1.6.1 à 1.10.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.10.2 (caméra au doigt : libre et plus douce)
+
+- **Un seul geste pour les deux sens.** Avant, un glissement tournait la caméra **ou** l'inclinait (verrou d'axe de la 1.6.1). Maintenant, la caméra suit le doigt dans toutes les directions à la fois : un glissement en diagonale tourne et incline en même temps.
+- **Même vitesse sur les deux axes**, pour qu'une diagonale du doigt donne une diagonale à l'écran.
+- **40 % plus lent** qu'avant. Le réglage « Sensibilité caméra » des Paramètres permet encore d'ajuster.
+- Un mouvement de moins de 6 unités ne fait pas bouger la caméra, pour qu'un simple appui ne la décale pas.
+- **Vérification** : le scénario `camera` fait un vrai glissement en diagonale. Il vérifie que la caméra tourne de 0,75 rad et s'incline de 0,54 rad, au même rythme sur les deux axes, et refait tous les autres gestes (glisser vers le haut, axe inversé, pincement, double appui). `CAMERA TEST PASSED`. Les 1 979 tests unitaires et les scénarios `touch`, `ui` et `full` sont réussis, `full` aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
 
 ### Nouveautés 1.10.1 (bâtiments bien posés au sol)
 

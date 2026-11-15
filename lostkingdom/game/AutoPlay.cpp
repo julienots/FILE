@@ -868,10 +868,12 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.8f, [camPt](Game& g) { g.camPitch = 0.66f; g.camDist = g.camDistTarget = 15.5f; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 301, p.x * k, p.y * k}); },
                      [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 301, p, p - vec2(0, 220), t, 0.6f); }, "drag up"});
         s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) - vec2(0, 220); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 301, p.x * k, p.y * k}); res[0] = g.camPitch < v0 - 0.3f; AGR_LOG("CAMERA drag up: pitch %.2f -> %.2f", v0, g.camPitch); }, idle, "release"});
-        // axis lock (1.6.1): a horizontal drag with vertical jitter turns the camera without tilting it
-        s.push_back({0.8f, [camPt](Game& g) { v0 = g.camPitch; yawStart = g.camYaw; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 309, p.x * k, p.y * k}); },
-                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 309, p, p + vec2(-260, 45 * std::sin(t * 20.f)) + vec2(0, 40), t, 0.6f); }, "drag sideways"});
-        s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) + vec2(-260, 40); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 309, p.x * k, p.y * k}); res[11] = std::fabs(g.camPitch - v0) < 1e-3f && std::fabs(wrapAngle(g.camYaw - yawStart)) > 0.5f; AGR_LOG("CAMERA axis lock: pitch %.3f -> %.3f, yaw turned %.2f", v0, g.camPitch, wrapAngle(g.camYaw - yawStart)); }, idle, "release"});
+        // free orbit (1.10.2): one diagonal drag turns AND tilts the camera
+        s.push_back({0.8f, [camPt](Game& g) { g.camPitch = 0.4f; v0 = g.camPitch; yawStart = g.camYaw; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 309, p.x * k, p.y * k}); },
+                     [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 309, p, p + vec2(-220, 160), t, 0.6f); }, "drag diagonally"});
+        s.push_back({0.3f, [camPt](Game& g) { vec2 p = camPt(g) + vec2(-220, 160); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 309, p.x * k, p.y * k}); float turned = wrapAngle(g.camYaw - yawStart), tilted = g.camPitch - v0;
+            res[11] = std::fabs(turned) > 0.4f && tilted > 0.25f && std::fabs(std::fabs(turned) / 220.f - tilted / 160.f) < 0.0012f;
+            AGR_LOG("CAMERA diagonal drag: yaw turned %.2f, pitch %.2f -> %.2f (same rate on both axes)", turned, v0, g.camPitch); }, idle, "release"});
         // inverted vertical axis: the same gesture looks down
         s.push_back({0.8f, [camPt](Game& g) { g.settings.invertCameraY = true; v0 = g.camPitch; vec2 p = camPt(g); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 302, p.x * k, p.y * k}); },
                      [camPt, drag](Game& g, float t) { vec2 p = camPt(g); drag(g, 302, p, p - vec2(0, 220), t, 0.6f); }, "drag up (inverted)"});
@@ -943,7 +945,7 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.5f, [](Game& g) { if (g.dungeon.active) g.exitDungeon(); }, idle, "exit dungeon"});
         s.push_back({0.1f, [](Game& g) {
             res[9] = gridBad == 0;
-            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d axisLock=%d tightFollow=%d",
+            AGR_LOG("CAMERA TEST: grid=%d dragUp=%d invertedAxis=%d pinchOut=%d pinchIn=%d doubleTapReset=%d autoReturn=%d lookAhead=%d lockOn=%d collision=%d dungeon=%d freeOrbit=%d tightFollow=%d",
                     res[9], res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[10], res[11], res[12]);
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("CAMERA TEST %s", ok ? "PASSED" : "FAILED");
