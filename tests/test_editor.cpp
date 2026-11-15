@@ -895,6 +895,29 @@ TEST_CASE("2.5D game APK (Ruines d'Ambre)" * doctest::skip(std::getenv("AGR_AMBR
     CHECK(fs::file_size(std::getenv("AGR_AMBRE_APK")) > 1024u * 1024u);
 }
 
+// "Duel des Tours", the real-time card battle, as a signed release APK at $AGR_DUEL_APK.
+TEST_CASE("card battle game APK (Duel des Tours)" * doctest::skip(std::getenv("AGR_DUEL_APK") == nullptr)) {
+    EditorFixture f(ProjectMode::Mode3D);
+    f.ctx->newScene(SceneTemplate::GameArenaBattle);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    Project& project = f.ctx->project();
+    project.settings().name = "Duel des Tours";
+    project.settings().exportSettings.packageId = "com.superessence.dueldestours";
+    const AndroidToolchain tools = findAndroidToolchain(".");
+    const auto problems = checkAndroidExport(project, tools);
+    REQUIRE_MESSAGE(problems.empty(), problems.front());
+    REQUIRE(createKeystore(tools, f.root / "keys" / "duel.p12", "duel", "agr-duel-pass", "Superessence Studio"));
+    project.settings().exportSettings.keystorePath = (f.root / "keys" / "duel.p12").string();
+    project.settings().exportSettings.keyAlias = "duel";
+    AndroidBuildOptions o;
+    o.kind = AndroidBuildKind::ReleaseApk;
+    o.storePassword = "agr-duel-pass";
+    auto apk = buildAndroid(project, tools, f.root / "android", o);
+    REQUIRE_MESSAGE(apk, (apk ? "" : apk.error().message));
+    fs::copy_file(apk.value().output, std::getenv("AGR_DUEL_APK"), fs::copy_options::overwrite_existing);
+    CHECK(fs::file_size(std::getenv("AGR_DUEL_APK")) > 1024u * 1024u);
+}
+
 // The engine showcase for Android: a menu launching every game template, signed release APK at $AGR_ENGINE_APK.
 TEST_CASE("engine showcase APK (all game templates)" * doctest::skip(std::getenv("AGR_ENGINE_APK") == nullptr)) {
     EditorFixture f(ProjectMode::Mode2D);
