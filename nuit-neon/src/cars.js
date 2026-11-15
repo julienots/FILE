@@ -54,7 +54,7 @@ function addEffects(v) {
   }
   const beam = new THREE.Mesh(new THREE.PlaneGeometry(6, 15), new THREE.MeshBasicMaterial({ map: beamTex, color: new THREE.Color(0.11, 0.115, 0.14), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   beam.rotation.x = -Math.PI / 2; beam.position.set(0, 0.03, -v.len - 7.2); beam.layers.set(1); beam.renderOrder = 2;
-  v.root.add(beam);
+  v.root.add(beam); v.beam = beam;
   v.mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTex, color: 0xaab4d0, transparent: true, opacity: 0, depthWrite: false }));
   v.mist.position.set(0, 0.5, v.len + 1.5); v.mist.layers.set(1);
   v.root.add(v.mist);
@@ -73,7 +73,7 @@ function profile(pts, n) {
 
 // ---------- voiture procédurale (utilisée tant qu'aucun modèle n'est importé) ----------
 function buildProcedural(def, paint) {
-  const o = Object.assign({ L: 1, W: 1, roof: 1.14, wing: 1, nose: 1 }, def.proc || {});
+  const o = Object.assign({ L: 1, W: 1, roof: 1.14, wing: 1, nose: 1, cab: 1 }, def.proc || {});
   const root = new THREE.Group(), chassis = new THREE.Group(); root.add(chassis);
   const HW = 0.98 * o.W, Lh = 2.25 * o.L;
   const st = {
@@ -116,7 +116,7 @@ function buildProcedural(def, paint) {
     const CM = 20, CR = 8, cp = [], ci = [], rowN = CR * 2 - 1;
     for (let m = 0; m <= CM; m++) {
       const u = m / CM, t = cr(ct, u), z = -Lh + t * 2 * Lh, h0 = at(st.h, t) - 0.03;
-      const top = h0 + (o.roof - 0.76) * Math.max(0, cr(cRoof, u)) + 0.02, wb = cr(cW, u) * HW, wt = wb * 0.66, H = top - h0;
+      const top = h0 + (o.roof - 0.76) * Math.max(0, cr(cRoof, u)) + 0.02, wb = Math.min(0.9, cr(cW, u) * o.cab) * HW, wt = wb * (o.cab > 1 ? 0.8 : 0.66), H = top - h0;
       const pr = profile([[wb, h0], [wb * 0.985, h0 + 0.3 * H], [wt * 1.12, h0 + 0.78 * H], [wt * 0.8, top], [0, top + 0.02]], CR);
       for (let i = 0; i < CR; i++) cp.push(pr[i].x, pr[i].y, z);
       for (let i = CR - 2; i >= 0; i--) cp.push(-pr[i].x, pr[i].y, z);
@@ -244,8 +244,44 @@ function rigImported(src, def, paint) {
   return { root, chassis, wheels, paintMats, tailMats: [], glows, half, len };
 }
 
+// ---------- moto avec son pilote ----------
+function buildMoto(def, paint) {
+  const root = new THREE.Group(), chassis = new THREE.Group(); root.add(chassis);
+  const paintMat = new THREE.MeshPhysicalMaterial({ color: paint, metalness: 0.8, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.5 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0b0b0e, metalness: 0.7, roughness: 0.35, envMapIntensity: 1.2 });
+  const suitMat = new THREE.MeshStandardMaterial({ color: 0x17191f, metalness: 0.1, roughness: 0.75 });
+  const rot = (g, rx, x, y, z) => { g.rotateX(rx); g.translate(x, y, z); return g; };
+  chassis.add(new THREE.Mesh(mergeGeometries([
+    box(0.36, 0.26, 0.62, 0, 0.88, -0.08), rot(new THREE.BoxGeometry(0.42, 0.44, 0.46), 0.35, 0, 0.86, -0.56), rot(new THREE.BoxGeometry(0.28, 0.14, 0.6), 0.22, 0, 0.93, 0.52),
+    box(0.17, 0.05, 0.5, 0, 0.69, -0.78), new THREE.SphereGeometry(0.175, 14, 10).translate(0, 1.62, -0.44),
+  ].map(g => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n; })), paintMat));
+  chassis.add(new THREE.Mesh(mergeGeometries([
+    box(0.3, 0.38, 0.82, 0, 0.5, 0.02), box(0.06, 0.62, 0.06, -0.11, 0.62, -0.72), box(0.06, 0.62, 0.06, 0.11, 0.62, -0.72),
+    box(0.07, 0.08, 0.72, -0.11, 0.36, 0.4), box(0.07, 0.08, 0.72, 0.11, 0.36, 0.4), rot(new THREE.BoxGeometry(0.3, 0.22, 0.03), 0.6, 0, 1.08, -0.72), box(0.62, 0.04, 0.04, 0, 1.04, -0.6),
+  ]), darkMat));
+  chassis.add(new THREE.Mesh(mergeGeometries([
+    box(0.4, 0.22, 0.52, 0, 1.02, 0.12), rot(new THREE.BoxGeometry(0.4, 0.56, 0.3), -0.85, 0, 1.3, -0.14),
+    rot(new THREE.BoxGeometry(0.1, 0.1, 0.46), 0.45, -0.24, 1.22, -0.42), rot(new THREE.BoxGeometry(0.1, 0.1, 0.46), 0.45, 0.24, 1.22, -0.42),
+    box(0.13, 0.4, 0.16, -0.22, 0.78, 0.2), box(0.13, 0.4, 0.16, 0.22, 0.78, 0.2),
+  ]), suitMat));
+  const ex = new THREE.CylinderGeometry(0.06, 0.07, 0.62, 10); ex.rotateX(Math.PI / 2); ex.translate(0.19, 0.5, 0.62);
+  chassis.add(new THREE.Mesh(ex, new THREE.MeshStandardMaterial({ color: 0x9a9aa4, metalness: 1, roughness: 0.25 })));
+  const tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff1408).multiplyScalar(2.2) });
+  chassis.add(new THREE.Mesh(box(0.2, 0.06, 0.03, 0, 0.94, 0.84), tailMat));
+  chassis.add(new THREE.Mesh(box(0.2, 0.1, 0.03, 0, 0.9, -0.81), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xeaf4ff).multiplyScalar(3.5) })));
+  const parts = [];
+  const col = (g, r, gg, b) => { const n0 = g.index ? g.toNonIndexed() : g; const n = n0.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = r; c[i * 3 + 1] = gg; c[i * 3 + 2] = b; } n0.setAttribute('color', new THREE.BufferAttribute(c, 3)); n0.deleteAttribute('uv'); return n0; };
+  parts.push(col(new THREE.CylinderGeometry(0.33, 0.33, 0.17, 22).rotateZ(Math.PI / 2), 0.015, 0.015, 0.018), col(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 16).rotateZ(Math.PI / 2), 0.05, 0.05, 0.06));
+  for (let i = 0; i < 3; i++) parts.push(col(new THREE.BoxGeometry(0.19, 0.42, 0.05).rotateX(i / 3 * Math.PI), 0.62, 0.63, 0.68));
+  const wheelGeo = mergeGeometries(parts), wheelMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.6, roughness: 0.42 });
+  const wheels = [];
+  for (const z of [-0.78, 0.74]) { const steer = new THREE.Group(); steer.position.set(0, 0.33, z); const spin = new THREE.Mesh(wheelGeo, wheelMat); steer.add(spin); chassis.add(steer); wheels.push({ steer, spin, front: z < 0, radius: 0.33 }); }
+  root.add(blobShadow(1.5, 3.0));
+  return { root, chassis, wheels, paintMats: [paintMat], tailMats: [tailMat], glows: [], half: 0.5, len: 0.95, moto: true };
+}
+
 export function createCar(def, paint) {
-  const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : buildProcedural(def, paint);
+  const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : (def.proc && def.proc.type === 'moto') ? buildMoto(def, paint) : buildProcedural(def, paint);
   v.def = def; v.wheelAngle = 0; v.roll = 0; v.pitch = 0;
   addEffects(v);
   return v;
@@ -263,12 +299,13 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
     if (w.front) w.steer.rotation.y = -steer * 0.42;
   }
   const k = 1 - Math.exp(-8 * dt);
-  v.roll += (THREE.MathUtils.clamp(latAcc * 0.0035, -0.07, 0.07) - v.roll) * k;
+  // la moto se couche dans les virages, la voiture prend juste un peu de roulis
+  v.roll += ((v.moto ? THREE.MathUtils.clamp(latAcc * 0.032, -0.8, 0.8) : THREE.MathUtils.clamp(latAcc * 0.0035, -0.07, 0.07)) - v.roll) * k;
   v.pitch += (THREE.MathUtils.clamp(-lonAcc * 0.0022, -0.035, 0.03) - v.pitch) * k;
   v.chassis.rotation.z = v.roll;
   v.chassis.rotation.x = v.pitch;
   v.chassis.position.y = Math.sin(time * 31 + v.wheelAngle) * 0.004 * Math.min(1, Math.abs(speed) / 30);
-  if (v.mist) { const a = THREE.MathUtils.clamp((Math.abs(speed) - 10) / 45, 0, 1); v.mist.material.opacity = a * (0.16 + Math.random() * 0.1); const s = 2.6 + a * 2.2 + Math.random() * 0.8; v.mist.scale.set(s, s * 0.42, 1); v.mist.position.z = v.len + 1.2 + a * 1.4; }
+  if (v.mist) { const a = THREE.MathUtils.clamp((Math.abs(speed) - 10) / 45, 0, 1) * (v.wet ?? 1); v.mist.material.opacity = a * (0.16 + Math.random() * 0.1); const s = 2.6 + a * 2.2 + Math.random() * 0.8; v.mist.scale.set(s, s * 0.42, 1); v.mist.position.z = v.len + 1.2 + a * 1.4; }
   const b = braking ? 2.6 : 1.1;
   for (const m of v.tailMats) m.color.setRGB(b, 0.02 * b, 0.01 * b);
   for (const g of v.glows) { g.material.opacity = braking ? 1 : 0.55; g.scale.set(braking ? 0.5 : 0.36, braking ? 0.28 : 0.2, 1); }

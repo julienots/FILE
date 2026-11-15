@@ -1,4 +1,17 @@
-// Les 5 circuits. Points de contrôle en mètres (x, z), boucle fermée, départ au premier point.
+// Décors de nature (jour). flore : [type, nombre, distance mini au bord, étalement, taille mini, taille maxi]
+const NATURE = {
+  prairie: { env: 'nature', sky: [[0.10,0.28,0.72],[0.36,0.60,0.95],[0.80,0.88,0.96]], fog: 0xbcd4ee, dens: 0.0016, a: 0x19a0ff, b: 0xff5a1f, c: 0xffd23f,
+    ground: 0x4f8a35, hill: 0x3f6f48, hillH: 110, sun: { dir: [0.449,0.419,-0.789], col: [1.0,0.86,0.62], road: 2.2 }, sunI: 2.8, ambI: 1.5, wet: 0.6,
+    flore: [['feuillu', 420, 14, 240, 0.8, 1.8], ['rocher', 40, 10, 200, 0.4, 1.0]], grass: { c0: 0x2d5a1c, c1: 0x7fb83a, c2: 0xd8c060, h: 1.35 } },
+  canyon: { env: 'nature', sky: [[0.16,0.18,0.42],[0.85,0.45,0.30],[1.0,0.62,0.30]], fog: 0xd89060, dens: 0.0016, a: 0xff8a1f, b: 0xffffff, c: 0x19e6ff, cloud: 0.75,
+    ground: 0xb0603a, hill: 0x8a3a22, hillH: 220, rock: 0x9a4a2c, sun: { dir: [-0.6,0.22,-0.77], col: [1.0,0.55,0.25], road: 2.4 }, sunI: 3.0, ambI: 1.3, wet: 0.12,
+    flore: [['rocher', 260, 6, 200, 0.8, 3.2], ['cactus', 180, 5, 160, 0.7, 1.5]], grass: { c0: 0x6a5a2a, c1: 0xc8a850, c2: 0xd8b860, h: 0.7, dens: 0.35 } },
+  neige: { env: 'nature', sky: [[0.25,0.32,0.50],[0.60,0.68,0.82],[0.86,0.90,0.96]], fog: 0xc8d4e6, dens: 0.0035, a: 0x19a0ff, b: 0xff2b50, c: 0xffd23f, cloud: 0.8,
+    ground: 0xe8eef6, hill: 0xdfe8f4, hillH: 320, rock: 0x8a909a, snowTop: true, sun: { dir: [0.3,0.3,-0.906], col: [0.75,0.8,1.0], road: 1.4 }, sunI: 2.0, ambI: 1.7, wet: 0.85, rain: 'neige',
+    flore: [['sapin', 520, 5, 220, 0.8, 1.7], ['rocher', 60, 8, 200, 0.6, 1.6]] },
+};
+
+// Les circuits. Points de contrôle en mètres (x, z), boucle fermée, départ au premier point.
 export const TRACKS = [
   { id: 'baie', nom: 'Baie Néon', desc: 'Rapide et large',
     pts: [[0,0],[0,-220],[60,-330],[200,-360],[300,-290],[320,-150],[250,-40],[300,80],[220,190],[80,170],[20,90]],
@@ -25,4 +38,18 @@ export const TRACKS = [
     theme: { sky: [[0.05,0.0,0.02],[0.28,0.02,0.06],[0.85,0.14,0.08]], fog: 0x3c0a12, dens: 0.0028,
       a: 0xff2a2a, b: 0xffb020, c: 0xff5a1f, lamp: 0xffe0c0, palms: true, rain: false,
       win: [['#ff6a4a','#ffb090','#ffd8c0'],['#ffc040','#ffe0a0','#fff0d0'],['#ff3a5a','#ff90a0','#ffd0b0'],['#ffe9c0','#ff8040','#ff4040']] } },
+  { id: 'prairie', nom: 'Prairie du Soleil', desc: 'Campagne au soleil',
+    pts: [[0,0],[0,-260],[90,-380],[250,-400],[360,-300],[340,-160],[430,-60],[400,90],[270,150],[150,90],[60,130]],
+    theme: NATURE.prairie },
+  { id: 'canyon', nom: 'Canyon Rouge', desc: 'Désert au couchant',
+    pts: [[0,0],[0,-200],[-70,-300],[-190,-330],[-270,-250],[-240,-140],[-320,-50],[-290,70],[-190,130],[-90,120],[-15,70]],
+    theme: NATURE.canyon },
+  { id: 'neige', nom: 'Col Blanc', desc: 'Montagne enneigée',
+    pts: [[0,0],[0,-240],[80,-330],[50,-440],[-60,-470],[-150,-400],[-140,-290],[-220,-200],[-200,-80],[-130,20],[-70,90],[-5,70]],
+    theme: NATURE.neige },
 ];
+
+// Balade libre : une longue route de campagne à deux voies, sans barrières
+export const ROUTE_LIBRE = { id: 'libre', nom: 'Route des Prés', desc: 'Balade libre', echelle: 1, half: 4.6, limit: 12.4, libre: true,
+  pts: [[0,0],[0,-600],[200,-1000],[700,-1200],[1200,-1000],[1500,-500],[1300,0],[1500,500],[1100,900],[500,800],[200,400]],
+  theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 900, 20, 260, 0.8, 1.9], ['rocher', 80, 18, 200, 0.4, 1.0]] }) };

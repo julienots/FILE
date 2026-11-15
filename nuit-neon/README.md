@@ -1,6 +1,14 @@
 # Nuit Néon
 
-Jeu de course 3D de nuit pour mobile (navigateur) : 5 circuits, 5 adversaires avec 4 niveaux de difficulté, garage avec choix de la voiture, peinture et réglage des stats.
+Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
+
+## Modes de jeu
+
+- **Course** : 8 circuits (5 en ville de nuit, 3 en pleine nature de jour), 3 à 11 adversaires, 4 niveaux de difficulté, boost.
+- **Course à bonus** : des caisses sur la piste donnent un objet (turbo, missile, flaque d'huile, bouclier).
+- **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
+- **Balade libre** : 6 km de route de campagne avec circulation, sans chrono.
+- **Garage** : 4 voitures et une moto, peinture, 4 stats réglables par véhicule.
 
 ## Lancer le jeu
 
@@ -44,8 +52,10 @@ Chaque voiture a 4 stats de 1 à 10 (vitesse max, accélération, maniabilité, 
 
 ## Fichiers
 
-- `src/tracks.js` : tracé et ambiance des 5 circuits
-- `src/world.js` : ville, route mouillée réfléchissante, décor
+- `src/tracks.js` : tracé et ambiance des circuits et de la route libre
+- `src/world.js` : décors (ville de nuit, nature de jour), route réfléchissante, herbe
+- `src/arena.js` : arène du Foot Turbo
+- `src/fx.js` : fumée, flammes, étincelles
 - `src/cars.js`, `src/carlist.js` : voitures, import des modèles, animations
-- `src/main.js` : conduite, adversaires, course, menus
+- `src/main.js` : conduite, adversaires, modes de jeu, menus
 - `src/page.html` : interface
