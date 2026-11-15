@@ -124,9 +124,16 @@ def main():
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--arm-out", type=float, default=0.10, help="arm angle from the vertical in the rest pose (rad)")
     ap.add_argument("--preview", default="")
+    ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270], help="turn the model about the vertical axis so it faces +Z (Tripo v3.1 characters face +X: 270)")
     a = ap.parse_args()
 
     P, N, UV, Jt, Wt, I, tex, names, parents, bindW = load(a.glb)
+    if a.rotate:
+        r = np.radians(a.rotate); c, s_ = np.cos(r), np.sin(r)
+        R3 = np.array([[c, 0, s_], [0, 1, 0], [-s_, 0, c]])   # same convention as tools/import_prop.py
+        R4 = np.eye(4); R4[:3, :3] = R3
+        P = P @ R3.T; N = N @ R3.T
+        bindW = np.einsum("ij,njk->nik", R4, bindW)
     nb = len(names)
     print(f"model: {len(P)} vertices, {len(I)} triangles, {nb} bones")
     jp = bindW[:, :3, 3].copy()                      # bind-pose joint positions
