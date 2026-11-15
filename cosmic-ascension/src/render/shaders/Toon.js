@@ -30,8 +30,8 @@ function animGLSL(a) {
           sd = d1.x + sg * ${f(a.armAt, .3)} * halfW; yy = d1.y + pYs;
           float aSw = (sin(ph + (sg > 0. ? 3.1416 : 0.)) * .75 * walk - (sg > 0. ? atk * 1.7 : 0.)) * armW; vec2 d2 = rot2(vec2(fw, yy - pYs), aSw); fw = d2.x; yy = d2.y + pYs;
           // jambes: pas alternes autour des hanches (melange doux a l'entrejambe)
-          float legW = 1. - smoothstep(${f(a.hip, .46)} - .1, ${f(a.hip, .46)} + .04, h), lr = smoothstep(-.1, .1, sN) * 2. - 1.;
-          vec2 d3 = rot2(vec2(fw, yy - pYh), (sin(ph) * .8 * walk + air * .35) * lr * legW); fw = d3.x; yy = d3.y + pYh;
+          float legW = 1. - smoothstep(${f(a.hip, .46)} - .26, ${f(a.hip, .46)} + .02, h), lr = smoothstep(-.07, .07, sN) * 2. - 1.;   // poids progressif sous les hanches: pas de membrane etiree a l'entrejambe
+          vec2 d3 = rot2(vec2(fw, yy - pYh), (sin(ph) * .62 * walk + air * .25) * lr * legW); fw = d3.x; yy = d3.y + pYh;
           // buste: torsion, inclinaison vers l'avant, respiration
           float up = smoothstep(${f(a.hip, .46)}, .95, h); vec2 d4 = rot2(vec2(sd, fw), sin(ph) * .13 * walk * up); sd = d4.x; fw = d4.y;
           fw += (walk * .1 + atk * .08) * bsz.y * up; sd *= 1. + sin(uTime * 2.) * .012 * up;` + tail;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { toonMaterial, addOutline } from '../render/shaders/Toon.js';
+import { toonMaterial, addOutline, shaderTime } from '../render/shaders/Toon.js';
 import { EVOLUTIONS } from '../data/evolutions.js';
 import { Assets } from '../assets/AssetLibrary.js';
 
@@ -16,7 +16,7 @@ export class Hero {
     if (i === this.stage) return; this.stage = i; const st = EVOLUTIONS[i];
     while (this.body.children.length) this.body.remove(this.body.children[0]);
     this.parts = {};
-    const model = Assets.get('hero_' + st.id);
+    const model = Assets.get('hero_main') ?? Assets.get('hero_' + st.id);   // `hero_main`: un seul personnage du début à la fin, qui grandit et gagne en aura
     this.animV = model?.userData.anim ?? null; this.mixer = model?.userData.mixer ?? null; this.act = null;
     if (this.mixer) {      // vraies animations (modèle Tripo avec squelette): marche / course / attaques, fondus selon la vitesse
       const clips = model.userData.animations, find = (...n) => clips.find(c => n.some(x => c.name.toLowerCase().includes(x))), A = (c, once) => { if (!c) return null; const a = this.mixer.clipAction(c); if (once) a.setLoop(THREE.LoopOnce, 1); else a.play(); a.setEffectiveWeight(0); return a; };
@@ -24,6 +24,8 @@ export class Hero {
     }
     if (model) { this.body.add(model); }
     else this._buildProcedural(st, i);
+    if (model) model.traverse(o => { const u = o.material?.userData?.uniforms; if (u?.uRim) { u.uRim.value.set(st.glow); u.uRimS.value = .5 + i * .35; o.material.emissive?.set(st.glow); o.material.emissiveIntensity = i * .035; } });
+    this._aura(st, i, !!model);
     this.baseScale = st.scale; this.root.scale.setScalar(st.scale); this.glow.color.set(st.glow); this.baseGlow = 1 + i * .5; this.glow.intensity = this.baseGlow; this.glow.distance = 10 + st.scale * 6;
   }
   _buildProcedural(st, i) {
@@ -60,6 +62,16 @@ export class Hero {
       for (let k = 0; k < 3; k++) { const a = k * 2.094, pl = add(S(.1 + k * .02, 10, 8), toonMaterial({ color: cols[k], rim: '#ffffff', emissive: cols[k], emissiveIntensity: .4 }), Math.cos(a) * 1.05, Math.sin(k * 1.7) * .25, Math.sin(a) * 1.05, 1, 1, 1, P.orbit); if (k === 1) { const r = add(new THREE.TorusGeometry(.2, .015, 4, 20), soft, 0, 0, 0, 1, 1, 1, pl); r.rotation.x = 1.3; } }
       const r2 = add(new THREE.TorusGeometry(.75, .02, 6, 40), glow, 0, .6, 0); r2.rotation.x = Math.PI / 2 - .5; P.ring2 = r2;
       add(new THREE.IcosahedronGeometry(.12, 1), white, 0, .62, .34); }
+  }
+  // Aura d'énergie (flammes montantes en shader) autour du héros: absente au stade 1, de plus en plus haute et vive ensuite.
+  _aura(st, i, on) {
+    if (!this.aura) { const g = new THREE.CylinderGeometry(.16, .62, 2.1, 20, 8, true); g.translate(0, 1.05, 0);
+      this.aura = new THREE.Mesh(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+        uniforms: { uT: shaderTime, uC: { value: new THREE.Color() }, uK: { value: 0 } },
+        vertexShader: 'uniform float uT,uK; varying float vH; varying vec3 vN; varying vec3 vV; void main(){ vH=position.y/2.1; vec3 p=position; float w=sin(uT*9.+position.y*5.+atan(position.z,position.x)*3.)*.07*(.4+vH); p.xz*=1.+w+uK*.25; p.y*=.75+uK*.45; vec4 mv=modelViewMatrix*vec4(p,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }',
+        fragmentShader: 'uniform vec3 uC; uniform float uT,uK; varying float vH; varying vec3 vN; varying vec3 vV; void main(){ float rim=pow(1.-abs(dot(normalize(vN),vV)),1.4); float fl=.6+.4*sin(vH*18.-uT*12.); float a=rim*fl*pow(1.-vH,1.2)*smoothstep(0.,.18,vH)*(.25+uK*.75); gl_FragColor=vec4(mix(uC,vec3(1.),.35*(1.-vH))*a*1.5,a); }' }));
+      this.aura.renderOrder = 4; this.root.add(this.aura); }
+    this.aura.visible = on && i >= 1; this.aura.material.uniforms.uC.value.set(st.glow); this.aura.material.uniforms.uK.value = Math.min(1, i / 6);
   }
   // speed01: 0 immobile → 1 course. airborne: bool. Squash & stretch, inclinaison, pas, respiration; lift/spin/scaleMul pilotés par les cinématiques.
   animate(dt, speed01, airborne, vUp = 0) {
