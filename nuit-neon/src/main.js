@@ -465,6 +465,16 @@ $('p-quit').onclick = toMenu;
 $('r-menu').onclick = toMenu;
 $('r-again').onclick = startRace;
 
+// touche Retour et mise en veille (application Android)
+window.__nnBack = () => {
+  if (mode === 'race' || mode === 'pause') { togglePause(); return true; }
+  if (mode === 'count') return true;
+  if (mode === 'finished') { toMenu(); return true; }
+  if (!$('menu').hidden) return false; // au menu principal : l'application se ferme
+  store.set('setup', setup); toMenu(); return true;
+};
+window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(0, 0, false); };
+
 // ---------- mini-carte ----------
 let miniPath = null;
 const mini = $('mini'), mg = mini.getContext('2d');

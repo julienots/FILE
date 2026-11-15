@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nuit Néon</string>
+    <color name="ic_bg">#0B0720</color>
+    <color name="window_bg">#05040C</color>
+</resources>

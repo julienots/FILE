@@ -3,7 +3,10 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from 'node:fs';
 mkdirSync('dist/draco', { recursive: true });
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, target: 'es2020', outfile: 'dist/game.js', logLevel: 'warning' });
-const page = readFileSync('src/page.html', 'utf8');
+// version autonome : police embarquée au lieu de Google Fonts (fonctionne hors connexion, dans l'APK)
+const face = (w, st) => `@font-face{font-family:"Chakra Petch";font-weight:${w};font-style:${st};font-display:swap;src:url(fonts/chakra-petch-latin-${w}-${st}.woff2) format("woff2")}`;
+const page = readFileSync('src/page.html', 'utf8').replace(/<link rel="stylesheet" href="https:\/\/fonts[^>]*>/, `<style>${face(500, 'normal')}${face(700, 'normal')}${face(700, 'italic')}</style>`);
+cpSync('fonts', 'dist/fonts', { recursive: true });
 writeFileSync('dist/index.html', `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body{margin:0}[hidden]{display:none!important}</style></head><body>${page}</body></html>`);
 for (const f of ['draco_wasm_wrapper.js', 'draco_decoder.wasm', 'draco_decoder.js']) cpSync(`node_modules/three/examples/jsm/libs/draco/gltf/${f}`, `dist/draco/${f}`);
 if (existsSync('models')) cpSync('models', 'dist/models', { recursive: true });

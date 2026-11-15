@@ -14,6 +14,18 @@ npm run build
 
 Le jeu est assemblé dans `dist/` ; il suffit de servir ce dossier (par exemple `python3 -m http.server` depuis `dist/`).
 
+## Application Android (APK)
+
+L'APK prêt à installer est dans `release/NuitNeon.apk` (Android 8.0 ou plus récent, paysage verrouillé, plein écran, fonctionne hors connexion).
+
+Pour le refabriquer après une modification ou l'ajout d'un modèle :
+
+```bash
+ANDROID_JAR=/chemin/vers/android.jar ./android/build-apk.sh
+```
+
+Le script indique en tête les outils nécessaires. La clé de signature `android/keystore/nuit-neon.jks` est une clé de projet : elle permet d'installer les mises à jour par-dessus l'ancienne version. Pour une publication sur le Play Store, il faut créer sa propre clé.
+
 ## Ajouter une voiture (modèle 3D)
 
 1. Déposer le fichier `.glb` dans `models/`.
