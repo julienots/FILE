@@ -6,8 +6,8 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.9.0 (versionCode 13). Taille : environ 25 Mo. SHA-256 : `ee4dec70962f9dda5637a306ed5be0fa314ea3b0a9ded62197be89201fe83c1c`.
-  - Les versions 1.6.1 à 1.9.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.9.1 (versionCode 14). Taille : environ 25 Mo. SHA-256 : `413fc7f77512cb2e5e96128e5c9c3e6a5c57df4fb301abb0a99a2b5a5317a3b7`.
+  - Les versions 1.6.1 à 1.9.1 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
@@ -29,6 +29,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 - **Coût maîtrisé** : environ 60 triangles par touffe, et les touffes ne sont dessinées que jusqu'à 50 m. Leur densité suit le profil « Qualité graphique » des Paramètres : clairsemées en profil bas, absentes dans le profil le plus économe.
 - **Vérification (1.9.1)** :
   - 1 965 tests unitaires, dont 5 sur les prairies : elles sont reproductibles d'une partie à l'autre, absentes des routes, des villages, de Frostheim et des Cendres, et couvrent 26 % de Greenhaven ;
+  - les 13 autres scénarios réussis, `full` et `tallgrass` aussi sous AddressSanitizer, sans erreur ;
   - nouveau scénario `tallgrass`, réussi : prairie trouvée, environ 6 500 touffes chargées, herbes qui s'écartent pendant la marche, et un loup à 13 m qui voit le héros à découvert mais pas dans les herbes ;
   - vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
 - **Limite** : les performances sur téléphone ne sont pas mesurées. Si les prairies ralentissent le jeu, choisis un profil graphique plus bas dans les Paramètres.
@@ -496,7 +497,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
