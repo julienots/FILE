@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include "agr/runtime/InputActions.hpp"
+#include "agr/runtime/Gestures.hpp"
 #include "agr/runtime/Localization.hpp"
 // Shared between ScriptEngine.cpp (VM, classes, instances) and ScriptBindings.cpp (API).
 #include <string>
@@ -86,6 +87,7 @@ struct ScriptEngine::Impl {
     VirtualFileSystem& vfs;
     lua_State* L = nullptr;
     const Input* input = nullptr;
+    const GestureRecognizer* gestures = nullptr;
     const InputActions* actions = nullptr;
     Localization* localization = nullptr;
     std::function<bool(std::string_view)> setLanguage;  ///< Engine::setLanguage (remembers the choice)

@@ -16,6 +16,7 @@
 #include "agr/scene/Prefab.hpp"
 #include "agr/runtime/EngineConfig.hpp"
 #include "agr/runtime/Input.hpp"
+#include "agr/runtime/Gestures.hpp"
 #include "agr/runtime/PlatformLayer.hpp"
 #include "agr/runtime/PluginManager.hpp"
 #include "agr/scene/Scene.hpp"
@@ -70,6 +71,8 @@ public:
     PrefabLibrary& prefabs() { return *m_prefabs; }
     PluginManager& plugins() { return m_plugins; }
     Input& input() { return m_input; }
+    /// Touch gestures of this frame (tap, drag, pinch...), recognized from input().
+    GestureRecognizer& gestures() { return m_gestures; }
     /// Named actions ("jump", "move_x"), evaluated every frame from assets://input.agrinput.
     InputActions& actions() { return m_actions; }
     /// Translated texts (assets://localization.csv), language chosen at start from the saved
@@ -133,6 +136,7 @@ private:
     std::unique_ptr<Scene> m_scene;
     PluginManager m_plugins;
     FrameTime m_time;
+    GestureRecognizer m_gestures;
     FrameStats m_stats;
     std::unordered_map<u64, void*> m_services;
     std::function<bool()> m_closeHandler;

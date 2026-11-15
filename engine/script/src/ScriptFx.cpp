@@ -490,6 +490,59 @@ int pr_finish(lua_State* L) {
     return 0;
 }
 
+// ---- touch gestures (window pixels, like agr.camera.screenToWorld)
+/// agr.input.gestures() -> { {type = "tap" | "doubleTap" | "longPress" | "dragBegin" | "drag" |
+/// "dragEnd" | "swipe" | "pinch", x, y, sx, sy (start), dx, dy, scale, vx, vy}, ... } of this frame.
+int g_gestures(lua_State* L) {
+    const GestureRecognizer* g = implOf(L).gestures;
+    lua_newtable(L);
+    if (!g) return 1;
+    int i = 0;
+    for (const GestureEvent& e : g->events()) {
+        lua_createtable(L, 0, 10);
+        lua_pushstring(L, enumName(e.type));
+        lua_setfield(L, -2, "type");
+        const std::pair<const char*, float> fields[] = {{"x", e.position.x}, {"y", e.position.y}, {"sx", e.start.x}, {"sy", e.start.y}, {"dx", e.delta.x},
+                                                        {"dy", e.delta.y}, {"scale", e.scale}, {"vx", e.velocity.x}, {"vy", e.velocity.y}};
+        for (const auto& [k, v] : fields) {
+            lua_pushnumber(L, v);
+            lua_setfield(L, -2, k);
+        }
+        lua_rawseti(L, -2, ++i);
+    }
+    return 1;
+}
+/// agr.input.drag() -> dx, dy: one-finger drag movement this frame (0, 0 if none).
+int g_drag(lua_State* L) {
+    const GestureRecognizer* g = implOf(L).gestures;
+    const math::Vec2 d = g ? g->dragDelta() : math::Vec2{0.0f, 0.0f};
+    lua_pushnumber(L, d.x);
+    lua_pushnumber(L, d.y);
+    return 2;
+}
+/// agr.input.pinch() -> scale, panX, panY: two-finger zoom (or mouse wheel) and pan this frame.
+int g_pinch(lua_State* L) {
+    const GestureRecognizer* g = implOf(L).gestures;
+    lua_pushnumber(L, g ? g->pinchScale() : 1.0f);
+    const math::Vec2 p = g ? g->pinchPan() : math::Vec2{0.0f, 0.0f};
+    lua_pushnumber(L, p.x);
+    lua_pushnumber(L, p.y);
+    return 3;
+}
+/// agr.input.tapped() -> x, y, count (1 tap, 2 double tap) or nil.
+int g_tapped(lua_State* L) {
+    if (const GestureRecognizer* g = implOf(L).gestures)
+        for (const GestureEvent& e : g->events())
+            if (e.type == GestureType::Tap || e.type == GestureType::DoubleTap) {
+                lua_pushnumber(L, e.position.x);
+                lua_pushnumber(L, e.position.y);
+                lua_pushinteger(L, e.type == GestureType::DoubleTap ? 2 : 1);
+                return 3;
+            }
+    lua_pushnil(L);
+    return 1;
+}
+
 /// Primary camera entity (the one RenderView::fromPrimaryCamera uses).
 ecs::Entity primaryCamera(Scene& scene) {
     ecs::Entity best;
@@ -659,6 +712,8 @@ void openFxBindings(lua_State* L) {
     static const luaL_Reg fx[] = {{"burst", fx_burst}, {"shake", fx_shake}, {"popup", fx_popup}, {"flash", fx_flash},
                                   {"fade", fx_fade},   {"hitStop", fx_hitStop}, {nullptr, nullptr}};
     addAgrLibrary(L, "fx", fx);
+    static const luaL_Reg gestures[] = {{"gestures", g_gestures}, {"drag", g_drag}, {"pinch", g_pinch}, {"tapped", g_tapped}, {nullptr, nullptr}};
+    extendAgrLibrary(L, "input", gestures);
     static const luaL_Reg profile[] = {{"begin", pr_begin}, {"finish", pr_finish}, {nullptr, nullptr}};
     addAgrLibrary(L, "profile", profile);
     static const luaL_Reg time[] = {{"setScale", t_setScale}, {"scale", t_scale}, {nullptr, nullptr}};

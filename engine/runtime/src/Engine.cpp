@@ -125,6 +125,7 @@ int Engine::run(Application& app) {
         Stopwatch cpu;
         m_input.beginFrame();
         if (!m_platform->pollEvents(m_events, m_input)) m_quitRequested = true;
+        m_gestures.update(m_input, rawDelta);
         m_actions.update(m_input, m_platform->windowSize());
         m_events.dispatchQueued();
         tick(app, rawDelta);
@@ -163,6 +164,7 @@ Status Engine::start(Application& app) {
 
 void Engine::advance(Application& app, f64 delta) {
     Profiler::instance().beginFrame();
+    m_gestures.update(m_input, delta);
     m_actions.update(m_input, m_platform->windowSize());
     m_events.dispatchQueued();
     tick(app, delta);

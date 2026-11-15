@@ -18,6 +18,7 @@
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
+class GestureRecognizer;
 namespace net {
 class NetSession;
 }
@@ -70,6 +71,8 @@ public:
     ScriptEngine& operator=(const ScriptEngine&) = delete;
 
     void setInput(const Input* input);
+    /// Touch gestures for agr.input.gestures / drag / pinch / tapped (null = none).
+    void setGestures(const GestureRecognizer* gestures);
     /// Named actions for agr.input.down / pressed / released / value.
     void setActions(const InputActions* actions);
     /// Texts for agr.tr / agr.locale; `setLanguage` changes and remembers the language

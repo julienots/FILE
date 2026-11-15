@@ -179,6 +179,7 @@ void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setNavigation(NavigationSystem* navigation) { m->navigation = navigation; }
 void ScriptEngine::setNet(net::NetSession* session) { m->net = session; }
+void ScriptEngine::setGestures(const GestureRecognizer* gestures) { m->gestures = gestures; }
 void ScriptEngine::setSceneLoader(std::function<void(std::string)> loader) { m->sceneLoader = std::move(loader); }
 void ScriptEngine::setTimeControl(std::function<void(double)> setScale, std::function<double()> scale) {
     m->setTimeScale = std::move(setScale);

@@ -247,3 +247,94 @@ TEST_CASE("non-plugin libraries are rejected") {
 #endif
 
 }  // TEST_SUITE
+
+#include "agr/runtime/Gestures.hpp"
+
+TEST_CASE("gestures: tap, double tap, long press, drag and swipe, pinch, mouse and wheel") {
+    Input in;
+    GestureRecognizer g;
+    auto frame = [&](f64 dt = 1.0 / 60.0) {
+        g.update(in, dt);
+        std::vector<GestureType> types;
+        for (const auto& e : g.events()) types.push_back(e.type);
+        in.beginFrame();
+        return types;
+    };
+    auto has = [](const std::vector<GestureType>& v, GestureType t) { return std::find(v.begin(), v.end(), t) != v.end(); };
+    // Tap, then a second tap nearby soon after: double tap.
+    in.touchDown(1, {100, 100}, 1.0f);
+    frame();
+    in.touchUp(1, {102, 101});
+    auto t = frame();
+    CHECK(has(t, GestureType::Tap));
+    in.touchDown(2, {104, 103}, 1.0f);
+    frame();
+    in.touchUp(2, {104, 103});
+    CHECK(has(frame(), GestureType::DoubleTap));
+    // Long press: held still, no tap afterwards.
+    in.touchDown(3, {300, 300}, 1.0f);
+    bool longPress = false;
+    for (int i = 0; i < 40; ++i) longPress |= has(frame(), GestureType::LongPress);
+    CHECK(longPress);
+    in.touchUp(3, {300, 300});
+    CHECK_FALSE(has(frame(), GestureType::Tap));
+    // Slow drag: begin, moves, end; no swipe, no tap.
+    in.touchDown(4, {100, 400}, 1.0f);
+    frame();
+    in.touchMove(4, {130, 400}, 1.0f);
+    t = frame();
+    CHECK(has(t, GestureType::DragBegin));
+    CHECK(g.dragDelta().x == doctest::Approx(30.0f));
+    for (int i = 1; i <= 5; ++i) {
+        in.touchMove(4, {130.0f + i * 2.0f, 400}, 1.0f);
+        t = frame();
+        CHECK(has(t, GestureType::Drag));
+    }
+    in.touchUp(4, {140, 400});
+    t = frame();
+    CHECK(has(t, GestureType::DragEnd));
+    CHECK_FALSE(has(t, GestureType::Swipe));
+    CHECK_FALSE(has(t, GestureType::Tap));
+    // Fast flick: swipe.
+    in.touchDown(5, {100, 500}, 1.0f);
+    frame();
+    for (int i = 1; i <= 4; ++i) {
+        in.touchMove(5, {100.0f + i * 40.0f, 500}, 1.0f);
+        frame();
+    }
+    in.touchUp(5, {260, 500});
+    t = frame();
+    CHECK(has(t, GestureType::Swipe));
+    CHECK(g.events().back().velocity.x > 900.0f);
+    // Two fingers apart: pinch > 1; together: < 1; lifting ends it without a tap.
+    in.touchDown(6, {400, 300}, 1.0f);
+    in.touchDown(7, {500, 300}, 1.0f);
+    frame();
+    in.touchMove(6, {350, 300}, 1.0f);
+    in.touchMove(7, {550, 300}, 1.0f);
+    t = frame();
+    CHECK(has(t, GestureType::Pinch));
+    CHECK(g.pinchScale() == doctest::Approx(2.0f));
+    CHECK(g.pinching());
+    in.touchMove(6, {400, 320}, 1.0f);
+    in.touchMove(7, {500, 320}, 1.0f);
+    frame();
+    CHECK(g.pinchScale() == doctest::Approx(0.5f));
+    CHECK(g.pinchPan().y == doctest::Approx(20.0f));
+    in.touchUp(6, {400, 320});
+    in.touchUp(7, {500, 320});
+    t = frame();
+    CHECK_FALSE(has(t, GestureType::Tap));
+    CHECK_FALSE(g.pinching());
+    // Mouse: the left button is a finger; the wheel zooms.
+    in.setMousePosition({50, 50});
+    in.setMouseButton(MouseButton::Left, true);
+    frame();
+    in.setMousePosition({90, 50});
+    CHECK(has(frame(), GestureType::DragBegin));
+    in.setMouseButton(MouseButton::Left, false);
+    CHECK(has(frame(), GestureType::DragEnd));
+    in.addWheel({0, 2});
+    frame();
+    CHECK(g.pinchScale() == doctest::Approx(1.21f));
+}
