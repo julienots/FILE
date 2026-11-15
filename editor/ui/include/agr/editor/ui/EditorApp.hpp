@@ -85,6 +85,7 @@ private:
     LogicPanel m_logic;
     DocsPanel m_docs;
     PackagesPanel m_packages;
+    ProfilerPanel m_profiler;
     ExportPanel m_export;
     RecentProjects m_recent;
     std::string m_settingsDir, m_iniPath;

@@ -13,6 +13,7 @@
 
 #include "ScriptInternal.hpp"
 #include "agr/core/Log.hpp"
+#include "agr/core/Profiler.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
 #include "agr/scene/Reflection.hpp"
@@ -474,6 +475,21 @@ int t_scale(lua_State* L) {
     return 1;
 }
 
+/// agr.profile.begin(name) / agr.profile.finish(): a named section in the profiler (nested).
+int pr_begin(lua_State* L) {
+    auto& m = implOf(L);
+    Profiler::instance().push(luaL_checkstring(L, 1));
+    ++m.fx.profileDepth;
+    return 0;
+}
+int pr_finish(lua_State* L) {
+    auto& m = implOf(L);
+    if (m.fx.profileDepth == 0) return luaL_error(L, "agr.profile.finish() without agr.profile.begin()");
+    --m.fx.profileDepth;
+    Profiler::instance().pop();
+    return 0;
+}
+
 /// Primary camera entity (the one RenderView::fromPrimaryCamera uses).
 ecs::Entity primaryCamera(Scene& scene) {
     ecs::Entity best;
@@ -504,6 +520,7 @@ void fxBeginFrame(ScriptEngine::Impl& m, Scene& scene) {
 
 void fxEndFrame(ScriptEngine::Impl& m, Scene& scene, const FrameTime& time) {
     FxState& fx = m.fx;
+    for (; fx.profileDepth > 0; --fx.profileDepth) Profiler::instance().pop();  // sections a script forgot to finish
     const float dt = static_cast<float>(time.deltaSeconds), real = static_cast<float>(time.unscaledDeltaSeconds);
     lua_State* L = m.L;
     // Hit stop runs on real time.
@@ -642,6 +659,8 @@ void openFxBindings(lua_State* L) {
     static const luaL_Reg fx[] = {{"burst", fx_burst}, {"shake", fx_shake}, {"popup", fx_popup}, {"flash", fx_flash},
                                   {"fade", fx_fade},   {"hitStop", fx_hitStop}, {nullptr, nullptr}};
     addAgrLibrary(L, "fx", fx);
+    static const luaL_Reg profile[] = {{"begin", pr_begin}, {"finish", pr_finish}, {nullptr, nullptr}};
+    addAgrLibrary(L, "profile", profile);
     static const luaL_Reg time[] = {{"setScale", t_setScale}, {"scale", t_scale}, {nullptr, nullptr}};
     extendAgrLibrary(L, "time", time);
 }

@@ -14,6 +14,8 @@
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/script/LogicGraph.hpp"
 #include "agr/editor/Package.hpp"
+#include "agr/core/Profiler.hpp"
+#include <algorithm>
 
 struct ImGuiWindow;  // imgui_internal.h
 
@@ -339,6 +341,23 @@ private:
     PackageManifest m_new{"mon-paquet", "1.0.0", "", "", {}, {}, ""};
     std::string m_deps;
     std::set<std::string> m_selection;
+};
+
+/// CPU profiler: scope tree (phases, plugins, scripts, renderer, agr.profile) and history.
+class ProfilerPanel {
+public:
+    void draw(EditorShared& s);  ///< Samples every frame, draws when visible.
+    usize rowCount() const { return m_rows.size(); }
+    bool hasScope(const std::string& name) const {
+        return std::any_of(m_rows.begin(), m_rows.end(), [&](const auto& r) { return r.name == name; });
+    }
+
+private:
+    std::vector<Profiler::ScopeStats> m_rows;
+    std::vector<float> m_history = std::vector<float>(240, 0.0f);
+    usize m_head = 0;
+    bool m_paused = false;
+    std::string m_filter;
 };
 
 /// Integrated documentation: docs/*.md rendered as Markdown, full-text search, links.

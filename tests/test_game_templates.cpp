@@ -835,7 +835,8 @@ TEST_CASE("arena: two local players race for coins; network host simulates a rem
     CHECK(h.position("Player 1").x > a0.x + 2.0f);
     CHECK(h.position("Player 2").x < b0.x - 2.0f);
     // Coin: put it on player 1.
-    h.lua(R"(local g = agr.find("Game"):script(); local p = g.players[1]; g.coinX, g.coinY = p.x, p.y)");
+    // (the random coin may already have been picked up on the way: start the count from zero)
+    h.lua(R"(local g = agr.find("Game"):script(); for i = 1, 4 do g.players[i].score = 0 end; local p = g.players[1]; g.coinX, g.coinY = p.x, p.y)");
     h.frames(2);
     CHECK(h.text("Score1") == "Joueur 1 : 1");
     h.lua(R"(local g = agr.find("Game"):script(); g.players[2].score = 9; local p = g.players[2]; g.coinX, g.coinY = p.x, p.y)");

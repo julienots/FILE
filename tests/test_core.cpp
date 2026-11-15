@@ -219,3 +219,44 @@ TEST_CASE("RingBufferSink keeps the newest messages in order") {
 }
 
 }  // TEST_SUITE
+
+#include "agr/core/Profiler.hpp"
+
+TEST_CASE("profiler: nested scopes, calls, averages, CSV, scopes left open are closed") {
+    Profiler& p = Profiler::instance();
+    p.reset();
+    for (int frame = 0; frame < 3; ++frame) {
+        p.beginFrame();
+        {
+            AGR_PROFILE_SCOPE("Update");
+            for (int i = 0; i < 2; ++i) {
+                AGR_PROFILE_SCOPE("Script");
+                volatile double x = 0;
+                for (int k = 0; k < 20000; ++k) x = x + k;
+            }
+        }
+        p.push("Forgotten");  // never popped: endFrame closes it
+        p.endFrame();
+    }
+    const auto rows = p.snapshot();
+    REQUIRE(rows.size() == 3);
+    CHECK(rows[0].path == "Update");
+    CHECK(rows[1].path == "Update/Script");
+    CHECK(rows[1].depth == 1);
+    CHECK(rows[1].calls == 2);
+    CHECK(rows[1].lastMs > 0.0);
+    CHECK(rows[0].lastMs >= rows[1].lastMs);
+    CHECK(rows[1].avgMs > 0.0);
+    CHECK(rows[1].maxMs >= rows[1].lastMs);
+    CHECK(rows[2].name == "Forgotten");
+    CHECK(p.depth() == 0);
+    CHECK(p.toCsv().find("Update/Script;") != std::string::npos);
+    p.setEnabled(false);
+    p.beginFrame();
+    p.push("Off");
+    p.pop();
+    p.endFrame();
+    CHECK(p.snapshot().size() == 3);
+    p.setEnabled(true);
+    p.reset();
+}

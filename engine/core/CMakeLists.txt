@@ -8,6 +8,7 @@ agr_add_module(core
         src/FileSystem.cpp
         src/SharedLibrary.cpp
         src/Uuid.cpp
+        src/Profiler.cpp
     PUBLIC_DEPS
         Threads::Threads
         ${CMAKE_DL_LIBS})

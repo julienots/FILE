@@ -1,4 +1,6 @@
 #include "agr/render/Renderer.hpp"
+#include "agr/core/Profiler.hpp"
+#include <optional>
 
 #include <algorithm>
 #include <bit>
@@ -317,6 +319,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     }
     m_lastViewFrame = deviceFrame;
     Stopwatch cpu;
+    AGR_PROFILE_SCOPE("Renderer");
+    std::optional<ProfileScope> preparation(std::in_place, "Préparation (culling, lots, lumières)");  // early returns close it
     ++m_frame;
     m_stats = {};
     if (width == 0 || height == 0) return;
@@ -693,7 +697,12 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     const rhi::FrameStats before = m_device.frameStats();
     uploadUniforms();
     uploadInstances();
-    if (m_uniformCapacity > 0) drawShadowPass();
+    preparation.reset();
+    {
+        AGR_PROFILE_SCOPE("Ombres");
+        if (m_uniformCapacity > 0) drawShadowPass();
+    }
+    AGR_PROFILE_SCOPE("Passes (scène, post-traitement)");
 
     // ------------------------------------------------------------ passes
     const bool postPath = !m_postPasses.empty();

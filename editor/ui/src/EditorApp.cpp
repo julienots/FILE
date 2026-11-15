@@ -514,7 +514,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGuiID center = dockspace;
     if (m_options.mobile) {  // small screens: the scene view, and every panel as a tab on the right
         const ImGuiID side = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.40f, nullptr, &center);
-        for (const char* w : {"Statistiques", "Console", "Assets", "Animation", "Machine à états", "Mixeur audio", "Hiérarchie", "Inspecteur"})
+        for (const char* w : {"Statistiques", "Profileur", "Console", "Assets", "Animation", "Machine à états", "Mixeur audio", "Hiérarchie", "Inspecteur"})
             ImGui::DockBuilderDockWindow(w, side);
         ImGui::DockBuilderDockWindow("Logique visuelle", center);
         ImGui::DockBuilderDockWindow("Documentation", center);
@@ -529,6 +529,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Hiérarchie", left);
     ImGui::DockBuilderDockWindow("Inspecteur", right);
     ImGui::DockBuilderDockWindow("Statistiques", right);
+    ImGui::DockBuilderDockWindow("Profileur", right);
     ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow("Console", bottom);
     ImGui::DockBuilderDockWindow("Animation", bottom);
@@ -580,6 +581,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_logic.draw(*m_shared);
     m_docs.draw(*m_shared);
     m_packages.draw(*m_shared);
+    m_profiler.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
     handleShortcuts();
@@ -697,6 +699,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
+        ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -1613,7 +1616,15 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 236: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_packages.png").string()); break;
-        case 238: {
+        case 237: {  // the profiler sees the frame phases, the plugins and the renderer stages
+            m_shared->showPackages = false;
+            m_shared->showProfiler = true;
+            check(m_profiler.hasScope("Mise à jour") && m_profiler.hasScope("Script") && m_profiler.hasScope("Render"), "profiler: phases and plugins");
+            check(m_profiler.hasScope("Ombres") || m_profiler.hasScope("Renderer"), "profiler: renderer stages");
+            break;
+        }
+        case 239: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_profiler.png").string()); break;
+        case 241: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

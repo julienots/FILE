@@ -761,6 +761,7 @@ return C
 }
 
 #include "agr/ui/UIComponents.hpp"
+#include "agr/core/Profiler.hpp"
 
 TEST_SUITE("script fx") {
 
@@ -824,6 +825,33 @@ return T
     CHECK(scale == doctest::Approx(0.5));  // restored to the game's scale
     f.scripts.reset();                     // the game stops: normal speed again
     CHECK(scale == doctest::Approx(1.0));
+}
+
+TEST_CASE("agr.profile: script sections appear in the profiler; unbalanced calls are caught") {
+    ScriptFixture f;
+    f.write("assets://s/prof.lua", R"lua(
+local P = {}
+function P:onUpdate(dt)
+    agr.profile.begin("pathfinding")
+    local x = 0
+    for i = 1, 1000 do x = x + i end
+    agr.profile.finish()
+    agr.profile.begin("left open")
+end
+return P
+)lua");
+    f.scripted("Prof", "assets://s/prof.lua");
+    Profiler::instance().reset();
+    Profiler::instance().beginFrame();
+    f.update();
+    CHECK(Profiler::instance().depth() == 0);  // the open section was closed at the end of the update
+    Profiler::instance().endFrame();
+    bool found = false;
+    for (const auto& r : Profiler::instance().snapshot())
+        if (r.name == "pathfinding" && r.path.find("assets://s/prof.lua/") == 0) found = r.calls == 1;
+    CHECK(found);
+    CHECK_FALSE(f.scripts.run("agr.profile.finish()", &f.scene));
+    Profiler::instance().reset();
 }
 
 TEST_CASE("agr.fx: bursts clean up, popups float and vanish, flash and fade overlay, camera shake returns") {

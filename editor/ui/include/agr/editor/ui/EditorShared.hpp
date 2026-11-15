@@ -95,6 +95,7 @@ struct EditorShared {
     std::string openLogicRequest;  ///< .agrlogic to open in the visual logic editor.
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.
+    bool showProfiler = false;     ///< CPU profiler panel.
     std::string openDocRequest;    ///< Guide to show ("LOGIC.md"): contextual help.
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).

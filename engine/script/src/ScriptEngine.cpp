@@ -6,6 +6,7 @@
 #include "ScriptInternal.hpp"
 #include "agr/script/LogicGraph.hpp"
 #include "agr/core/Log.hpp"
+#include "agr/core/Profiler.hpp"
 #include "agr/script/ScriptComponent.hpp"
 
 namespace agr {
@@ -290,6 +291,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
     for (u64 key : order) {
         auto it = m->instances.find(key);
         if (it == m->instances.end() || !scene.valid(it->second.entity)) continue;
+        AGR_PROFILE_SCOPE(it->second.uri);  // one line per script class in the profiler
         m->call(it->second, "onUpdate", [&] {
             lua_pushnumber(L, dt);
             return 1;

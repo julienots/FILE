@@ -64,6 +64,7 @@ struct FxState {
     float hitStop = 0.0f;
     double resumeScale = 1.0;
     bool scaleTouched = false;  // the game changed the time scale: back to 1 when it stops
+    u32 profileDepth = 0;       // agr.profile sections opened by scripts this frame
 };
 
 struct ScriptEngine::Impl {

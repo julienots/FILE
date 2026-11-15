@@ -51,6 +51,7 @@ add_library(agr_editor_ui STATIC
     ui/src/LogicPanel.cpp
     ui/src/DocsPanel.cpp
     ui/src/PackagesPanel.cpp
+    ui/src/ProfilerPanel.cpp
     ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)
 target_include_directories(agr_editor_ui PUBLIC ui/include)

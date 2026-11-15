@@ -47,8 +47,7 @@ téléphone** (pas d'appareil ici) : à valider en priorité.
 5. **Écart restant avec Godot / Unity (honnêtement)** : pas d'éditeur d'animation de tweens
    visuel, pas d'éditeur de logique visuelle, pas de magasin d'assets, pas d'export iOS / Web /
    consoles, art des modèles de jeux procédural (simple), aucune validation sur appareils réels.
-   **Outils avancés encore absents** : éditeur d'animation de particules par courbes, profiler
-   détaillé par système (le panneau Statistiques existe), gestionnaire de build multi-cibles
+   **Outils avancés encore absents** : éditeur d'animation de particules par courbes, ~~profiler détaillé par système~~ (fait : panneau Profileur), gestionnaire de build multi-cibles
    (l'export PC / Android existe), éditeur de shaders par nœuds (les shaders GLSL existent).
 6. **Phase 10 — tests, optimisation, livraison** : format de scène binaire, empaquetage /
    compression des assets, profilage sur appareils, installeur de l'éditeur (Windows / Linux /

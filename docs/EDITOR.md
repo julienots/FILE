@@ -170,3 +170,13 @@ pincement). `--screenshot FICHIER.png` capture la fenêtre puis quitte.
   précis, et des boutons d'aide contextuelle (logique visuelle, paquets) mènent au bon guide.
 - **Affichage › Logique visuelle** : programmer sans code ([LOGIC.md](LOGIC.md)).
 - **Affichage › Plugins et paquets** : plugins (rechargement à chaud), paquets d'assets ([PACKAGES.md](PACKAGES.md)).
+
+## Profileur (Affichage › Profileur)
+
+Temps CPU du fil principal, image par image, en arbre : pas fixes (physique), mise à jour (chaque
+plugin, chaque script Lua ou graphe de logique, l'application), transformations, rendu (préparation,
+ombres, passes, présentation). Colonnes : dernière image, moyenne, pic des 2 dernières secondes,
+part de l'image, appels ; historique des temps d'image ; pause, filtre, export CSV
+(`<projet>/profiler.csv`). Les jeux ajoutent leurs sections : `AGR_PROFILE_SCOPE("nom")` en C++,
+`agr.profile.begin("nom") ... agr.profile.finish()` en Lua (une section oubliée est refermée en fin
+d'image). Code : `engine/core/include/agr/core/Profiler.hpp`.

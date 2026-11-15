@@ -1,4 +1,5 @@
 #include "agr/runtime/Engine.hpp"
+#include "agr/core/Profiler.hpp"
 
 #include <utility>
 
@@ -119,6 +120,8 @@ int Engine::run(Application& app) {
         const f64 rawDelta = frameStart - last;
         last = frameStart;
 
+        Profiler::instance().endFrame();  // closes the previous frame (rendering and waits included)
+        Profiler::instance().beginFrame();
         Stopwatch cpu;
         m_input.beginFrame();
         if (!m_platform->pollEvents(m_events, m_input)) m_quitRequested = true;
@@ -128,8 +131,10 @@ int Engine::run(Application& app) {
         m_stats.cpuMs = cpu.elapsedMilliseconds();
 
         if (m_platform->canRender()) {
+            AGR_PROFILE_SCOPE("Rendu");
             m_plugins.render(*this, m_time);
             app.onRender(*this, m_time);
+            AGR_PROFILE_SCOPE("Présentation (attente écran)");
             m_platform->present();
         } else if (!m_config.headless) {
             // Backgrounded on mobile: don't spin the CPU.
@@ -157,14 +162,17 @@ Status Engine::start(Application& app) {
 }
 
 void Engine::advance(Application& app, f64 delta) {
+    Profiler::instance().beginFrame();
     m_actions.update(m_input, m_platform->windowSize());
     m_events.dispatchQueued();
     tick(app, delta);
     if (m_platform->canRender()) {
+        AGR_PROFILE_SCOPE("Rendu");
         m_plugins.render(*this, m_time);
         app.onRender(*this, m_time);
         m_platform->present();
     }
+    Profiler::instance().endFrame();
     m_input.beginFrame();  // this frame's presses become "held" for the next one
 }
 
@@ -177,24 +185,36 @@ void Engine::tick(Application& app, f64 rawDelta) {
     // Fixed timestep with a bounded number of catch-up steps.
     m_accumulator += m_time.deltaSeconds;
     u32 steps = 0;
+    Profiler::instance().push("Pas fixes");
     while (m_accumulator >= m_config.fixedTimestep && steps < m_config.maxFixedStepsPerFrame) {
         m_plugins.fixedUpdate(*this, m_time);
-        app.onFixedUpdate(*this, m_time);
+        {
+            AGR_PROFILE_SCOPE("Application");
+            app.onFixedUpdate(*this, m_time);
+        }
         m_accumulator -= m_config.fixedTimestep;
         ++steps;
     }
+    Profiler::instance().pop();
     if (steps == m_config.maxFixedStepsPerFrame && m_accumulator >= m_config.fixedTimestep)
         m_accumulator = 0.0;  // drop the backlog instead of spiralling
     m_time.alpha = static_cast<f32>(m_accumulator / m_config.fixedTimestep);
 
-    m_plugins.update(*this, m_time);
-    app.onUpdate(*this, m_time);
+    {
+        AGR_PROFILE_SCOPE("Mise à jour");
+        m_plugins.update(*this, m_time);
+        AGR_PROFILE_SCOPE("Application");
+        app.onUpdate(*this, m_time);
+    }
     m_scene->flushDestroyed();
     if (!m_pendingScene.empty()) {
         const std::string uri = std::exchange(m_pendingScene, {});
         if (Status s = loadScene(uri); !s) AGR_LOG_ERROR("Engine", "cannot load scene '{}': {}", uri, s.error().message);
     }
-    m_scene->updateTransforms();
+    {
+        AGR_PROFILE_SCOPE("Transformations");
+        m_scene->updateTransforms();
+    }
 
     ++m_time.frameIndex;
 

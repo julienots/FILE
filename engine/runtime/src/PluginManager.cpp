@@ -1,4 +1,5 @@
 #include "agr/runtime/PluginManager.hpp"
+#include "agr/core/Profiler.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -174,15 +175,24 @@ Status PluginManager::unloadDynamic(Engine& engine, const std::string& name) {
 }
 
 void PluginManager::fixedUpdate(Engine& engine, const FrameTime& time) {
-    for (Record* r : m_loadOrder) r->plugin->onFixedUpdate(engine, time);
+    for (Record* r : m_loadOrder) {
+        AGR_PROFILE_SCOPE(r->info.name);
+        r->plugin->onFixedUpdate(engine, time);
+    }
 }
 
 void PluginManager::update(Engine& engine, const FrameTime& time) {
-    for (Record* r : m_loadOrder) r->plugin->onUpdate(engine, time);
+    for (Record* r : m_loadOrder) {
+        AGR_PROFILE_SCOPE(r->info.name);
+        r->plugin->onUpdate(engine, time);
+    }
 }
 
 void PluginManager::render(Engine& engine, const FrameTime& time) {
-    for (Record* r : m_loadOrder) r->plugin->onRender(engine, time);
+    for (Record* r : m_loadOrder) {
+        AGR_PROFILE_SCOPE(r->info.name);
+        r->plugin->onRender(engine, time);
+    }
 }
 
 std::vector<PluginManager::Entry> PluginManager::entries() const {
