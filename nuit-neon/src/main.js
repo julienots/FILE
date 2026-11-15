@@ -53,9 +53,9 @@ camera.layers.enable(1);
 const fx = new FX(scene);
 
 const QUALITY = {
-  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 5200 },
-  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, grass: 3000 },
-  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: false, grass: 900 },
+  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 4200, terrain: 170 },
+  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, grass: 2600, terrain: 140 },
+  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: false, grass: 800, terrain: 90 },
 };
 const isTouch = matchMedia('(pointer: coarse)').matches;
 let qName = 'moyenne', Q = QUALITY.moyenne, dyn = 1;
@@ -81,6 +81,7 @@ function setupPost() {
         col.r = mix(col.r, texture2D(tDiffuse, vUv - d*0.006*r).r, 0.7); col.b = mix(col.b, texture2D(tDiffuse, vUv + d*0.006*r).b, 0.7);
         col *= 1.0 - 0.45*smoothstep(0.4, 1.0, r);
         col *= 1.0 + (hsh(vUv*731.0 + fract(time)*17.0) - 0.5) * 0.07;
+        float lum = dot(col, vec3(0.3,0.59,0.11)); col = mix(vec3(lum), col, 1.14); col *= 0.94 + 0.12*smoothstep(0.0, 1.2, lum);   // étalonnage : un peu plus de couleur et de contraste
         gl_FragColor = vec4(col,1.); }`,
   });
   composer.addPass(finalPass);
@@ -989,6 +990,8 @@ function syncVisuals(dt) {
   for (const c of cars) {
     c.vis.root.position.set(c.x, c.y, c.z); c.vis.root.rotation.set(c.pitch, c.h + c.spinA, 0);
     animateCar(c.vis, dt, c.v, c.steer, c.yaw * Math.abs(c.v), c.lon, c.braking, time);
+    // de jour, l'ombre s'étire à l'opposé du soleil
+    if (world.sun && c.vis.shadow) { const sx = -world.sun[0] * 1.1, sz = -world.sun[1] * 1.1, ch = Math.cos(c.h), sh = Math.sin(c.h); c.vis.shadow.position.set(sx * ch - sz * sh, 0.015 - c.y, sx * sh + sz * ch); }
     emit(c, dt);
   }
 }

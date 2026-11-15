@@ -280,10 +280,24 @@ function buildMoto(def, paint) {
   return { root, chassis, wheels, paintMats: [paintMat], tailMats: [tailMat], glows: [], half: 0.5, len: 0.95, moto: true };
 }
 
+// paillettes métalliques sous le vernis : de minuscules facettes qui accrochent la lumière
+function flakes(mat) {
+  if (mat.userData.flakes || !mat.isMeshStandardMaterial) return; mat.userData.flakes = true;
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvOP = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP;\nfloat fkh(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { vec3 q = floor(vOP * 380.0); float fade = clamp(1.0 - length(vViewPosition) / 22.0, 0.0, 1.0);
+          normal = normalize(normal + (vec3(fkh(q), fkh(q + 1.7), fkh(q + 3.1)) - 0.5) * 0.16 * fade); }`);
+  };
+}
+
 export function createCar(def, paint) {
   const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : (def.proc && def.proc.type === 'moto') ? buildMoto(def, paint) : buildProcedural(def, paint);
   v.def = def; v.wheelAngle = 0; v.roll = 0; v.pitch = 0;
   addEffects(v);
+  v.shadow = v.root.children.find(o => o.isMesh && o.renderOrder === 1);
+  for (const m of v.paintMats) flakes(m);
   return v;
 }
 export async function resolveModels() {
