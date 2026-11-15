@@ -368,6 +368,12 @@ void Game::updateTrails(Character& c, float dt) {
         mat4 hand = model * v.pw.world[H_PROPR];
         v.trail.push_back({hand.transformPoint({0, 0, v.tip * 0.25f}), hand.transformPoint({0, 0, v.tip})});
         while (v.trail.size() > 12) v.trail.pop_front();
+    } else if (flying && player != NullEntity && reg.get<Character>(player) == &c && v.anim.aux[2] > 0.5f && length(vec2(c.vel.x, c.vel.z)) > 5.f) {
+        // Astra in flight: a comet tail of light streams from the shoulders
+        mat4 model = mat4::trs(c.pos, quat::axisAngle({0, 1, 0}, c.yaw), vec3(v.scale));
+        v.trailColor = vec3(1.f, 0.85f, 0.45f);
+        v.trail.push_back({model.transformPoint(v.pw.wpos[H_UARML]) + vec3(0, 0.22f, 0), model.transformPoint(v.pw.wpos[H_UARMR]) - vec3(0, 0.22f, 0)});   // tilted: visible from any side
+        while (v.trail.size() > 16) v.trail.pop_front();
     } else if (!v.trail.empty()) {
         v.trail.pop_front();
         if (!v.trail.empty()) v.trail.pop_front();

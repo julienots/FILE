@@ -194,6 +194,32 @@ void Game::updateHeroAbilities(float dt) {
         haptic(90, 255);
     }
     c.vis.anim.aux[2] = approach(c.vis.anim.aux[2], flying ? 1.f : 0.f, dt * 4.f);   // flight pose weight
+    // Astra's energy aura: glows in flight, flares for a moment when a power fires
+    const HeroDef& h = hero();
+    float want = 0;
+    if (h.canFly && !c.dead) {
+        want = 0.55f * c.vis.anim.aux[2];
+        for (int i = 0; i < 3; i++) if (h.powers[i].cooldown > 0 && heroCD[i] > h.powers[i].cooldown - 0.7f) want = 1.f;
+        if (meteorPending) want = 1.f;
+    }
+    heroAura = approach(heroAura, want, dt * (want > heroAura ? 6.f : 1.5f));
+    if (heroAura > 0.01f) {
+        mat4 model = mat4::trs(c.pos, quat::axisAngle({0, 1, 0}, c.yaw), vec3(c.vis.scale));
+        vec3 chest = model.transformPoint(c.vis.pw.wpos[H_CHEST]);
+        vec3 gold(1.f, 0.82f, 0.38f), white(1.f, 0.97f, 0.85f);
+        // rising motes around the body, flickering flame tongues at full power
+        float rate = 26.f * heroAura;
+        for (float k = particles.rng.f(); k < rate * dt; k += 1.f) {
+            vec3 o(particles.rng.range(-0.45f, 0.45f), particles.rng.range(-0.8f, 0.6f), particles.rng.range(-0.45f, 0.45f));
+            particles.magicTrail(chest + o, particles.rng.f() < 0.3f ? white : gold, 0.35f + 0.35f * heroAura);
+        }
+        if (heroAura > 0.8f && particles.rng.f() < dt * 6.f) particles.sparks(chest, vec3(0, 1, 0), 3, gold);
+        float pulse = 0.75f + 0.25f * std::sin(realTime * 11.f);
+        c.vis.outlineColor = vec4(lerp(vec3(0.05f, 0.04f, 0.03f), gold * 1.4f, heroAura * pulse), 1);
+        c.vis.rim = 0.65f + 0.8f * heroAura;
+    } else if (h.canFly) {
+        c.vis.outlineColor = vec4(0.05f, 0.04f, 0.03f, 1); c.vis.rim = 0.65f;
+    }
 }
 
 // Jump button: double jump (Kaede), take off / land (Astra). Returns true when the hero handled it.
@@ -238,7 +264,7 @@ void Game::drawHeroWheel() {
     u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.03f, 0.72f));
     vec2 c{W_ / 2, H_ / 2 + 10};
     const auto& Hs = heroes();
-    int slots = std::max(5, (int)Hs.size());   // a few "???" slots announce heroes to come
+    int slots = (int)Hs.size();   // exactly the three heroes of the wheel
     float R = 225.f;
     u.ring(c, R - 4, R + 4, 0, TAU, rgba(0xc9a45c, 0.35f), 64);
     // centre: active hero
@@ -253,10 +279,9 @@ void Game::drawHeroWheel() {
         float a = -PI / 2 + i * TAU / slots;
         vec2 p = c + vec2(std::cos(a), std::sin(a)) * R;
         Rect r{p.x - 72, p.y - 72, 144, 144};
-        bool exists = i < (int)Hs.size();
-        bool open = exists && heroUnlocked(i);
-        vec3 col = exists ? Hs[i].color : vec3(0.4f);
-        bool sel = exists && i == activeHero;
+        bool open = heroUnlocked(i);
+        vec3 col = Hs[i].color;
+        bool sel = i == activeHero;
         u.circle(p, 66, vec4(0.08f, 0.07f, 0.09f, 0.95f), 40);
         u.ring(p, sel ? 60 : 62, 68, 0, TAU, vec4(col, open ? (sel ? 1.f : 0.75f) : 0.3f), 40);
         if (open) {
@@ -264,12 +289,11 @@ void Game::drawHeroWheel() {
             u.text(Hs[i].name, p.x, p.y + 18, 18, rgba(0xf4e7c4), F_BOLD, A_CENTER, 130, true);
         } else {
             u.sprite("i_lock", {p.x - 22, p.y - 40, 44, 44}, vec4(1, 1, 1, 0.6f));
-            u.text(exists ? Hs[i].name : "???", p.x, p.y + 14, 17, rgba(0x8a8070), F_BOLD, A_CENTER, 130, true);
+            u.text(Hs[i].name, p.x, p.y + 14, 17, rgba(0x8a8070), F_BOLD, A_CENTER, 130, true);
         }
-        u.tag(r, exists ? "hero:" + Hs[i].id : "hero:?");
+        u.tag(r, "hero:" + Hs[i].id);
         if (u.button(r)) {
-            if (!exists) notify("D'autres héros rejoindront la roue au fil de l'histoire.", vec3(0.9f, 0.85f, 0.7f), "i_character");
-            else if (!open) notify("Verrouillé — " + Hs[i].unlockHint, vec3(1.f, 0.85f, 0.6f), "i_lock");
+            if (!open) notify("Verrouillé — " + Hs[i].unlockHint, vec3(1.f, 0.85f, 0.6f), "i_lock");
             else { if (switchHero(i)) menu = Menu::None; else if (i == activeHero) menu = Menu::None; }
         }
     }

@@ -16,6 +16,8 @@ L'outil d'import pose le squelette du jeu tout seul. Pour cela, il a besoin d'un
 | Textures **PBR** activées ; **10 000 à 20 000 triangles** (25 000 max pour un boss) | Budget mobile (le héros fait environ 10 000 triangles) |
 | Export en **GLB**, **sans squelette** (pas besoin de Rig) | L'outil fait lui-même le squelette |
 
+**Depuis la 1.8.0, les modèles riggés passent aussi.** Un GLB avec le squelette automatique de Tripo (« Rig », comme le ninja envoyé sur le Drive) est importé par `tools/import_rigged.py`. L'outil reprend les poids de peau du modèle, le remet en pose de repos (bras le long du corps, jambes droites) et le réduit à environ 22 000 triangles. Les animations de Tripo, elles, ne sont pas reprises : le jeu anime le squelette en code. Avec un modèle riggé, la pose de départ (T ou A) n'a pas d'importance.
+
 Si Tripo propose une option de pose (« T-pose »), active-la. Si ta version de Tripo a un champ **négatif**, mets-y le texte « À éviter » ci-dessous. Sinon, les règles sont déjà dans chaque prompt.
 
 **À éviter (prompt négatif)** :
@@ -38,6 +40,15 @@ Les prompts sont en anglais : Tripo comprend mieux l'anglais.
 ## 3. Prompts par personnage
 
 **Nom du fichier = identifiant du jeu.** Renomme chaque GLB exactement comme indiqué (par exemple `villager_f2.glb`), sinon je ne saurai pas où le mettre.
+
+### 3.0 Héros de la roue (1.8.0)
+
+| Fichier | État | Prompt (+ bloc de style) |
+|---|---|---|
+| `hero_ninja.glb` | **importé** (le « ninja warrior » du Drive) | — |
+| `hero_flyer.glb` | à faire : Astra utilise encore l'apparence générée par le jeu | `an original celestial heroine who can fly, athletic build, fitted deep blue bodysuit with gold star-shaped trims, short flowing cape of golden light, gold bracers and greaves, long platinum blonde hair swept back by the wind, glowing pale blue eyes, a small radiant star emblem on the chest, confident heroic face,` |
+
+Astra est un personnage **original** : pas de costume ni de coiffure copiés d'un héros existant (manga, comics…).
 
 ### 3.1 Villageois (priorité 1 : ils sont partout)
 
@@ -105,6 +116,7 @@ Si un modèle ne passe pas (pose pas assez en T, arme dans la main, socle), je t
 ## 5. Animations
 
 - **Ce que le jeu fait aujourd'hui.** Les animations (marche, course, combos, roulade…) sont écrites en code et s'appliquent à tous les modèles importés. La 1.6.2 a refait la démarche et ajouté le corps entier aux attaques (voir le README).
+- **Modèles riggés (1.8.0).** Leur squelette et leurs poids sont repris, pas leurs animations (voir la section 1).
 - **Pour aller plus loin.** Tripo sait aussi poser un squelette sur un modèle et lui appliquer des animations toutes faites. Le jeu **ne sait pas encore importer** ces animations. C'est faisable : il faut un outil qui transfère les mouvements de leur squelette vers celui du jeu (« retargeting »).
 
   Si tu veux qu'on aille dans ce sens, envoie en plus, pour le héros, la version riggée de Tripo avec quelques animations (idle, walk, run, attack, roll) en GLB. Je te dirai d'abord honnêtement si elles sont exploitables.

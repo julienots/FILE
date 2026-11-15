@@ -13,6 +13,49 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.8.0 (roue des héros : Kaede la ninja et Astra qui vole)
+
+- **Roue des héros**, avec **trois héros** exactement. On l'ouvre en touchant le portrait en haut à gauche.
+  - Changer de héros garde le niveau, l'inventaire et les quêtes ; seuls l'apparence, l'arme et les pouvoirs changent.
+  - Un héros verrouillé affiche sa quête de déblocage.
+  - Le héros actif et les héros débloqués sont sauvegardés. Les anciennes sauvegardes se chargent sans changement.
+- **Le Naufragé** : le héros de départ (l'âme d'Aldric), inchangé.
+- **Kaede, Lame des Brumes** : la ninja.
+  - **Modèle 3D** : le « ninja warrior » envoyé sur le Drive.
+    - Il est importé par un nouvel outil, `tools/import_rigged.py`, qui reprend le squelette et les poids de peau du modèle Tripo.
+    - L'outil le remet en pose de repos (bras le long du corps, jambes droites) et le réduit de 1,9 million à 22 000 triangles.
+  - Plus rapide (+18 %), plus fragile (-15 % de PV), dague fixe, **double saut**.
+  - Pouvoirs :
+    - **Shuriken** : 3 étoiles d'acier en éventail ;
+    - **Pas de l'ombre** : téléportation derrière la cible et coup ×2,2 ;
+    - **Bombe fumigène** : étourdit 2 s et rend invisible 3 s (les ennemis la perdent de vue).
+  - Débloquée par la quête « La lame des brumes » (Tomas, à Brindlemere).
+- **Astra, l'Étoile tombée** : l'héroïne qui **vole**. C'est un personnage original.
+  - Le saut dans les airs la fait décoller ; elle tient son altitude, vole à 11 m/s (17 en sprint) et use l'endurance.
+  - Elle vole couchée sur sa trajectoire, un poing en avant, avec une **aura dorée** :
+    - un contour lumineux qui pulse ;
+    - des étincelles ;
+    - une lumière qui éclaire le décor autour d'elle ;
+    - une traînée de lumière derrière ses épaules.
+  - L'aura s'embrase à chaque pouvoir.
+  - Pouvoirs :
+    - **Rayon stellaire** : rayon de 22 m ;
+    - **Frappe météore** : piqué depuis le ciel, explosion à l'impact, sans dégâts de chute ;
+    - **Onde solaire** : onde de choc de 8 m qui étourdit et soigne.
+  - Débloquée par la quête « L'étoile tombée » (Ilian, l'astronome).
+- **Lore** : une chronique par héros, et deux quêtes qui les relient à l'histoire de la Couronne-Mère (`docs/LORE.md`).
+- **Prologue** : chaque plan attend que le décor soit chargé avant de s'afficher (4 s au plus). Plus de plans sur une carte vide.
+- **Vérification (1.8.0)** : __TESTS__ tests unitaires, dont l'import du ninja (squelette, os valides, budget de triangles, jambes droites) et la pose de vol. Les scénarios __SCEN__ sont réussis. `full`, `heroes` et `prologue` passent aussi sous AddressSanitizer, sans erreur. Le nouveau scénario `--autoplay=heroes` vérifie :
+  - le choix dans la roue par un vrai appui ;
+  - le double saut, le shuriken, le pas de l'ombre et la fumée ;
+  - le vol (altitude et pose), le rayon, la météore sans dégâts de chute et l'onde ;
+  - la sauvegarde puis le chargement de la roue.
+- **Limites.**
+  - **Astra n'a pas encore de modèle 3D** : elle utilise l'apparence générée par le jeu (armure bleue et or). Un prompt Tripo est prêt dans `docs/TRIPO_PROMPTS.md`.
+  - Les animations du GLB du ninja (coups de pied, boxe, course) **ne sont pas reprises** : le jeu anime le squelette en code, comme pour les autres héros.
+  - Le visage du ninja est masqué. Aucun modèle de Goku n'a été importé : c'est un personnage protégé. Astra le remplace par un héros volant original.
+  - Le vol et la roue n'ont pas été essayés sur un téléphone.
+
 ### Nouveautés 1.7.0 (histoire : prologue animé, Chroniques, mods)
 
 
@@ -357,7 +400,7 @@ Légende :
 ## Limites connues
 
 - **Aucun test sur un appareil réel.** L'APK est construit et vérifié statiquement, mais il n'a jamais été installé sur un téléphone ou un émulateur : l'environnement de construction n'en possède pas. Des problèmes propres aux pilotes GPU mobiles, aux performances ou au tactile sont possibles.
-- **Graphismes procéduraux.** Aucun modèle 3D d'artiste, aucune texture photographique, aucune motion capture. Personnages, créatures, bâtiments et végétation sont construits en code, et les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
+- **Graphismes surtout procéduraux.** Seuls le héros de départ et Kaede (la ninja) utilisent des modèles 3D générés par IA (Tripo) et importés. Astra, les PNJ, les créatures, les bâtiments et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
 - **Audio synthétisé.** Musiques, ambiances et effets sont générés par `tools/make_audio.py` (synthèse additive et soustractive, Karplus-Strong, FM, formants, réverbération par convolution). Ce n'est pas un orchestre enregistré.
 - **Performance non mesurée sur mobile.** Le harnais de bureau tourne sur un rasteriseur logiciel, à environ 120 ms par image : ce chiffre ne dit rien d'un GPU mobile. Les profils Faible et Économie d'énergie réduisent la distance de vue, les ombres, l'herbe et le post-traitement.
 - **Signature locale.** L'APK est signé avec une clé locale générée au moment de la construction, qui n'est pas versionnée. Pour une publication sur le Play Store, il faut le re-signer avec votre propre clé (voir ci-dessous) et produire un AAB.

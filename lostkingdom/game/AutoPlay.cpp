@@ -3,6 +3,7 @@
 #include "Game.h"
 #include "../engine/core/Platform.h"
 #include <functional>
+#include <cstdlib>
 
 namespace lk {
 
@@ -90,13 +91,14 @@ static std::vector<Step> scenario(const std::string& name) {
                     (int)g.pc().vis.anim.state, g.pc().vis.anim.aux[2], g.pc().vis.anim.speed, g.pc().airTime);
             g.requestScreenshot("build/shots/F3_astra_flight.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); }, "check"});
         // side view of the flight pose
-        s.push_back({0.6f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camYaw = g.pc().yaw + PI * 0.5f; g.camPitch = 0.05f; g.camDist = g.camDistTarget = 7.f; g.camIdleT = 0; }, "side view"});
+        // fly along camera-right: the camera sees the hero from the side (same trick as the gait scenario)
+        s.push_back({1.2f, none, [](Game& g, float) { g.input.move = vec2(1, 0); g.camPitch = 0.05f; g.camDist = g.camDistTarget = 7.f; }, "side view"});
         s.push_back({0.05f, [](Game& g) {
             g.requestScreenshot("build/shots/F3b_astra_flight_side.png");
             const PoseWorld& w = g.pc().vis.pw; vec3 hip = w.wpos[H_ROOT], head = w.wpos[H_HEAD], foot = (w.wpos[H_FOOTL] + w.wpos[H_FOOTR]) * 0.5f;
-            AGR_LOG("HEROES flight pose (model space): head-hip (%.2f, %.2f, %.2f) foot-hip (%.2f, %.2f, %.2f), state %d, aux %.2f, action %s",
-                    head.x - hip.x, head.y - hip.y, head.z - hip.z, foot.x - hip.x, foot.y - hip.y, foot.z - hip.z, (int)g.pc().vis.anim.state, g.pc().vis.anim.aux[2], g.pc().vis.anim.action() ? g.pc().vis.anim.action()->name.c_str() : "none");
-        }, [](Game& g, float) { g.input.move = vec2(0, 1); g.camYaw = g.pc().yaw + PI * 0.5f; }, "shot"});
+            AGR_LOG("HEROES flight pose (model space): head-hip (%.2f, %.2f, %.2f) foot-hip (%.2f, %.2f, %.2f), state %d, aux %.2f, speed %.1f, action %s",
+                    head.x - hip.x, head.y - hip.y, head.z - hip.z, foot.x - hip.x, foot.y - hip.y, foot.z - hip.z, (int)g.pc().vis.anim.state, g.pc().vis.anim.aux[2], g.pc().vis.anim.speed, g.pc().vis.anim.action() ? g.pc().vis.anim.action()->name.c_str() : "none");
+        }, [](Game& g, float) { g.input.move = vec2(1, 0); }, "shot"});
         // star beam from the sky
         s.push_back({0.5f, [spawnWolf](Game& g) { spawnWolf(g, 10.f); g.lockTarget = wolf; g.input.skill[0] = true; }, idle, "beam"});
         s.push_back({0.1f, [wolfHp](Game& g) { res[9] = wolfHp(g) < wolfHp0; wolfHp0 = wolfHp(g); AGR_LOG("HEROES star beam: wolf %.0f", wolfHp(g)); g.requestScreenshot("build/shots/F4_star_beam.png"); }, idle, "check"});
@@ -208,7 +210,8 @@ static std::vector<Step> scenario(const std::string& name) {
     }
     if (name == "hero") {
         // close-up checks of the hero model: idle, walk, run, attack combo, roll, equipment screen
-        s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 7.f; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});
+        s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 7.f; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic);
+            if (const char* h = getenv("LK_HERO")) { g.unlockHero(h); g.switchHero(heroIndex(h)); g.notes.clear(); } }, idle, "setup"});
         s.push_back({0.1f, shot("60_hero_idle"), idle, "shot"});
         s.push_back({1.2f, none, [](Game& g, float) { g.input.move = vec2(0.6f, 0.5f); g.camDist = g.camDistTarget = 7.f; }, "walk"});
         s.push_back({0.1f, shot("61_hero_walk"), [](Game& g, float) { g.input.move = vec2(0.6f, 0.5f); }, "shot"});

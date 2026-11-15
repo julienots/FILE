@@ -444,6 +444,7 @@ public:
     bool flying = false, usedDoubleJump = false, meteorPending = false;
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
     float heroCD[3] = {0, 0, 0};
+    float heroAura = 0;          // Astra: energy aura (0..1): flight + flare when a power fires
     const HeroDef& hero() const;
     bool heroUnlocked(int i) const;
     void unlockHero(const std::string& id, bool announce = true);

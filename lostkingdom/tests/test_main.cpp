@@ -222,12 +222,13 @@ static void testTouchLayout() {
     }
 }
 
-static void testHeroModel(const std::string& assets) {
-    std::printf("[Imported hero model]\n");
+static void testHeroModel(const std::string& assets, const std::string& id = "hero") {
+    std::printf("[Imported hero model: %s]\n", id.c_str());
     auto readAll = [](const std::string& p) { std::ifstream f(p, std::ios::binary); return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {}); };
-    std::vector<uint8_t> mb = readAll(assets + "/models/hero.lkm"), tb = readAll(assets + "/models/hero.jpg");
+    std::vector<uint8_t> mb = readAll(assets + "/models/" + id + ".lkm"), tb = readAll(assets + "/models/" + id + ".jpg");
     SkinnedModelData m;
-    CHECK(!mb.empty() && m.loadLKM(mb), "hero.lkm loads");
+    CHECK(!mb.empty() && m.loadLKM(mb), "%s.lkm loads", id.c_str());
+    if (mb.empty()) return;
     CHECK(!tb.empty() && m.loadTexture(tb) && m.texW >= 256 && m.texH >= 256, "hero texture decodes");
     CHECK((int)m.joints.size() == H_COUNT, "joint count %zu", m.joints.size());
     CHECK(m.height > 1.5f && m.height < 2.2f, "height %.2f", m.height);
@@ -246,6 +247,11 @@ static void testHeroModel(const std::string& assets) {
     }
     CHECK(badFeet == 0, "%d foot-level vertices bound to the torso", badFeet);
     CHECK(cloth > 500, "cloth flags present (%d)", cloth);
+    // mobile budget, valid bone indices, legs straight under the hips (1.6.2 feedback: "legs apart")
+    int badBone = 0; for (auto& v : m.verts) if (v.b0 >= H_COUNT || v.b1 >= H_COUNT) badBone++;
+    CHECK(badBone == 0, "%d vertices with an invalid bone", badBone);
+    CHECK(m.idx.size() / 3 <= 30000, "%zu triangles (budget 30k)", m.idx.size() / 3);
+    CHECK(std::fabs(m.joints[H_FOOTL].x - m.joints[H_THIGHL].x) < 0.06f && std::fabs(m.joints[H_FOOTR].x - m.joints[H_THIGHR].x) < 0.06f, "legs straight in the rest pose");
     // corrupted / truncated files are rejected without crashing
     std::vector<uint8_t> cut(mb.begin(), mb.begin() + mb.size() / 2);
     SkinnedModelData bad;
@@ -444,6 +450,7 @@ int lkRunTests(int argc, char** argv) {
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);
+    testHeroModel(assets, "hero_ninja");   // 1.8.0: rigged GLB imported by tools/import_rigged.py
     testFlightPose();
     testModData(assets);
     std::printf("\n%d passed, %d failed\n", gPass, gFail);

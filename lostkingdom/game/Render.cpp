@@ -313,6 +313,11 @@ void Game::renderWorld(float dt) {
         renderer.submit(d);
         if (n.node.type == NodeType::Chest && !open && particles.rng.f() < dt * 2) particles.magicTrail(n.node.pos + vec3(0, 0.8f, 0), vec3(1, 0.85f, 0.4f), 0.5f);
     });
+    // Astra's aura lights her surroundings
+    if (player != NullEntity && heroAura > 0.05f) {
+        PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;
+        lights.push_back({0.f, pl});
+    }
     // nearest lights win (renderer budget)
     std::sort(lights.begin(), lights.end(), [](auto& a, auto& b) { return a.first < b.first; });
     for (size_t i = 0; i < lights.size() && i < 8; i++) renderer.addLight(lights[i].second);
@@ -432,6 +437,7 @@ void Game::renderCharacter(Entity e, Character& c) {
     d.outline = v.outline && v.dissolve <= 0; d.outlineColor = v.outlineColor; d.outlineWidth = 0.028f;
     if (e == interactTarget && c.npcDef >= 0) { d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.04f; }
     if (e == lockTarget) { d.outlineColor = vec4(0.9f, 0.2f, 0.15f, 1); d.outlineWidth = 0.04f; }
+    if (e == player && heroAura > 0.01f) { d.outline = true; d.outlineWidth = 0.028f + 0.03f * heroAura; }
     renderer.submit(d);
     // weapons
     auto attach = [&](std::shared_ptr<Mesh>& m, int bone, bool shield) {

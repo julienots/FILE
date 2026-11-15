@@ -32,6 +32,16 @@ Référence pour écrire l'histoire, les dialogues et les mods. Tout le texte du
 2. **Frère Alaric**, l'archiviste chaleureux de Highspire qui guide le héros, était déjà là il y a trois cents ans : c'était le novice à la cicatrice qui tenait les tenailles quand la Couronne fut brisée. Il ne vieillit pas. Il veut la Couronne reforgée pour **rouvrir** l'Abîme et devenir le nouveau Malgrath, et il a guidé le héros pour qu'il rassemble les fragments à sa place.
 3. Malgrath n'est pas mort : il est la **voix** au fond de l'Abîme. Il connaît le vrai nom du héros, et il ne veut pas le combattre : il veut qu'il **choisisse**.
 
+## Les héros de la roue (1.8.0)
+
+| Héros | Qui il est | Comment le débloquer |
+|---|---|---|
+| **Le Naufragé** | l'Errant de Greenhaven, l'âme d'Aldric (voir la vérité) | dès le début |
+| **Kaede, Lame des Brumes** | dernière gardienne d'un temple de l'archipel de Shirokawa, qui veillait sur un **septième fragment** qu'Aldric n'a jamais nommé. Le temple a brûlé la nuit où le sceau a craqué ; la mer l'a portée jusqu'ici, comme le héros | quête « La lame des brumes » (Tomas, Brindlemere) |
+| **Astra, l'Étoile tombée** | la **Sentinelle**, l'étoile qui veillait sur la Couronne-Mère. Elle a quitté le ciel pour suivre le sceau mourant et s'est posée près de la Mine des Cimes. Elle se souvient d'Aldric, mais pas comme d'un ami | quête « L'étoile tombée » (Ilian, l'astronome) |
+
+Pistes pour la suite : le septième fragment de Kaede, ce qu'Astra reproche à Aldric.
+
 ## Chroniques dans le jeu (onglet Chroniques du Journal)
 
 | Groupe | Entrées | Comment les obtenir |
@@ -40,6 +50,7 @@ Référence pour écrire l'histoire, les dialogues et les mods. Tout le texte du
 | Légende | `l4` à `l11` | les reliques trouvées dans le monde |
 | Régions | `r_0` à `r_5` | en découvrant chaque région |
 | Souvenirs d'Aldric | `mem_*` | en battant chaque Gardien et boss |
+| Héros | `hero_wanderer`, `hero_kaede`, `hero_astra` | en débloquant chaque héros |
 
 Les mods peuvent ajouter des pages avec `lore.add` (voir `docs/MODDING.md`).
 
