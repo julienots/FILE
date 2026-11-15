@@ -508,6 +508,7 @@ void Game::updateSpawning(float dt) {
                     spawnNpc(n, sp, i);
                 }
             int generic = P.type == PoiType::Tower ? 0 : (P.type == PoiType::Village ? 8 : 5);
+            if (P.id == "player_base") generic = base.residents;   // 1.9.2 the hero's domain: only the recruited inhabitants
             for (int g = 0; g < generic; g++) {
                 uint32_t seed = hash2i(i, g, 555);
                 Rng r(seed);
@@ -578,6 +579,7 @@ bool Game::playerInSafeZone() {
     vec2 p = reg.get<Character>(player)->pos.xz();
     for (const Poi& P : world.pois) {
         bool safe = P.type == PoiType::Village || P.type == PoiType::Monastery || P.type == PoiType::Mill || P.type == PoiType::Tower || P.type == PoiType::Farm;
+        if (P.id == "player_base") safe = baseCount("tower") > 0;   // the domain is safe once a watchtower stands
         if (safe && length(P.pos - p) < P.radius + 8.f) return true;
     }
     return false;

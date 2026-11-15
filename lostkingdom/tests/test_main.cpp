@@ -196,6 +196,23 @@ static void testTallGrass(World& w) {
     CHECK(cold == 0, "%d samples in Frostheim / Ashen", cold);
 }
 
+// ---- 1.9.2 domain: building catalogue and night hunters data
+static void testDomainData() {
+    std::printf("[Domain & night hunters data]\n");
+    std::set<std::string> ids; int bad = 0, housing = 0, guards = 0;
+    for (auto& b : baseBuildings()) {
+        if (!ids.insert(b.id).second) bad++;
+        if (b.kind < 0 || b.kind >= S_COUNT || b.radius <= 0 || b.variants < 1) bad++;
+        for (auto& c : b.cost) if (!item(c.first) || c.second <= 0) bad++;
+        housing += b.housing; guards += b.guards;
+    }
+    CHECK(bad == 0 && ids.size() >= 8, "%zu buildings, %d invalid", ids.size(), bad);
+    CHECK(housing > 0 && guards > 0, "housing and guard buildings exist");
+    CHECK(baseBuildIndex("tower") >= 0 && baseBuildIndex("pen") >= 0 && baseBuildIndex("nope") < 0, "lookup by id");
+    int hunters = 0; for (auto& e : enemies()) if (e.hunter) { hunters++; CHECK(e.night && e.aggro >= 40, "%s hunts at night with a long reach", e.id.c_str()); }
+    CHECK(hunters >= 2, "%d night hunter kinds", hunters);
+}
+
 static void testAudio(const std::string& assets) {
     std::printf("[Audio assets]\n");
     static const char* names[] = {"music/title", "music/greenhaven", "music/frostheim", "music/ashen", "music/elderwood", "music/shadows", "music/highcrowns", "music/village",
@@ -480,6 +497,7 @@ int lkRunTests(int argc, char** argv) {
     World w; w.buildPlan();
     testWorld(w);
     testTallGrass(w);
+    testDomainData();
     testCameraOnWorld(w);
     testAudio(assets);
     testHeroModel(assets);

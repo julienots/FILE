@@ -205,6 +205,7 @@ void Game::drawSplash(float dt) {
 
 void Game::newGame() {
     reg.clear();
+    clearBase(); nightHunters.clear();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
     riding = false;
     level = 1; xp = 0; gold = 60; skillPoints = 1;
@@ -313,10 +314,10 @@ void Game::drawCredits(float dt) {
 }
 
 // ============================================================================================ journal tabs
-static const char* TABS[] = {"Inventaire", "Équipement", "Compétences", "Artisanat", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
-static const Menu TAB_MENU[] = {Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
-static const char* TAB_ICON[] = {"i_inventory", "i_character", "i_skills", "i_craft", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
-static constexpr int TAB_COUNT = 11;
+static const char* TABS[] = {"Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
+static const Menu TAB_MENU[] = {Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
+static const char* TAB_ICON[] = {"i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static constexpr int TAB_COUNT = 12;
 
 static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
     UI& u = g.ui;
@@ -630,6 +631,7 @@ void Game::drawMenus(float dt) {
         if (craftStation == ST_ANY || craftStation == ST_CAMPFIRE) {
             craftStation = ST_ANY;
             world.forEachVisibleChunk([&](Chunk& ch) { for (auto& e : ch.emitters) if ((int)e.w == EM_FIRE && distXZ(vec3(e.x, e.y, e.z), pc().pos) < 6) craftStation = ST_CAMPFIRE; });
+            for (auto& b : base.built) if (baseBuildings()[b.def].id == "forge" && length(b.pos - pc().pos.xz()) < 8.f) craftStation = ST_FORGE;   // the domain's forge
         }
         u.text(std::string("Poste : ") + (craftStation == ST_ANY ? "Sac (recettes simples)" : stationName(craftStation)), c.x, c.y, 22, GOLDT, F_SERIF);
         if (craftStation == ST_ANY) u.text("Parlez à un forgeron, un alchimiste ou un marchand, ou approchez d'un feu de camp, pour plus de recettes.", c.x, c.y + 34, 17, DIM, F_BODY, A_LEFT, c.w * 0.55f);
@@ -858,6 +860,7 @@ void Game::drawMenus(float dt) {
         break;
     }
     // ---------------------------------------------------------------- chronicles (lore)
+    case Menu::Base: drawBaseMenu(c); break;
     case Menu::Chronicles: {
         Rect list{c.x, c.y + 40, c.w * 0.38f, c.h - 40};
         const auto& L = lore();

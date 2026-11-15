@@ -509,6 +509,7 @@ void Game::updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt) {
     Character& p = pc();
     float pd = distXZ(p.pos, c.pos);
     float flee = ab.kind == 5 ? 8.f : 13.f;
+    if (ab.tame) flee = 0;   // 1.9.2 livestock of the domain: calm, they stay in their pen
     if (pd < flee && length(vec2(p.vel.x, p.vel.z)) > 1.f) ab.fleeing = true;
     vec2 mv{0, 0}; float spd = 0;
     if (ab.fleeing) {
@@ -519,7 +520,7 @@ void Game::updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt) {
         if (ab.timer <= 0) {
             Rng r(e * 13 + (uint32_t)(gameTime * 3));
             ab.timer = r.range(3.f, 9.f);
-            vec2 o = r.inDisk() * 12.f;
+            vec2 o = r.inDisk() * (ab.tame ? 3.5f : 12.f);
             ab.dest = r.chance(0.4f) ? c.pos : ab.home + vec3(o.x, 0, o.y);
         }
         if (distXZ(c.pos, ab.dest) > 0.7f) { mv = steer(c, ab.dest, dt); spd = ab.kind == 5 ? 2.5f : 1.2f; }

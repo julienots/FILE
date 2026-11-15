@@ -1189,6 +1189,41 @@ static vec2 structureFootprint(int kind) {
     }
 }
 
+// 1.9.2 livestock enclosure: 10 x 10 m rail fence with a gate on +Z, a trough and hay
+static void pen(MeshBuilder& M, Rng& rng) {
+    Mat w(lerp(pal::wood, pal::timber, 0.3f), 0.9f), hay(hexColor(0xc8a850), 0.95f), water(hexColor(0x3a6a8a), 0.15f);
+    auto rail = [&](vec2 a, vec2 b) {
+        vec2 d = b - a; float L = length(d); vec2 n = d / L;
+        int posts = std::max(1, (int)std::round(L / 2.5f));
+        quat q = quat::axisAngle({0, 1, 0}, std::atan2(n.x, n.y) - PI * 0.5f);
+        for (int i = 0; i <= posts; i++) { vec2 p = a + d * (i / (float)posts); M.bevelBox({p.x, 0.55f, p.y}, {0.08f, 0.6f, 0.08f}, 0.02f, w); }
+        vec2 m = (a + b) * 0.5f;
+        M.box({m.x, 0.85f, m.y}, {L * 0.5f, 0.05f, 0.035f}, w, q);
+        M.box({m.x, 0.45f, m.y}, {L * 0.5f, 0.05f, 0.035f}, w, q);
+    };
+    float h = 5.f;
+    rail({-h, -h}, {h, -h}); rail({h, -h}, {h, h}); rail({-h, h}, {-h, -h});
+    rail({-h, h}, {-1.4f, h}); rail({1.4f, h}, {h, h});   // gate gap
+    M.box({-3.2f, 0.35f, -3.6f}, {1.1f, 0.25f, 0.35f}, w);
+    M.box({-3.2f, 0.56f, -3.6f}, {1.0f, 0.03f, 0.28f}, water);
+    for (int i = 0; i < 3; i++) M.bevelBox({3.f + rng.range(-0.4f, 0.4f), 0.4f, -3.f + i * 1.1f}, {0.55f, 0.4f, 0.45f}, 0.12f, hay);
+}
+
+// 1.9.2 the domain's banner: a tall pole with a cloth banner (wind-animated) and a brazier
+static void bannerPole(MeshBuilder& M, MeshBuilder& Fo) {
+    Mat pole(pal::timber, 0.8f), iron(pal::iron, 0.4f, 0.9f), cloth = Mat(hexColor(0x8a1f1f), 0.9f), gold(hexColor(0xd8b040), 0.4f, 0.8f);
+    M.tube({0, -0.3f, 0}, {0, 6.2f, 0}, 0.12f, 0.09f, pole, 8, true);
+    M.box({0.9f, 6.0f, 0}, {0.95f, 0.05f, 0.05f}, pole);
+    M.ellipsoid({0, 6.3f, 0}, vec3(0.16f), gold, 8, 6);
+    for (int i = 0; i < 6; i++) {   // hanging cloth in strips so the wind can move its lower part
+        float y0 = 6.0f - i * 0.55f, y1 = y0 - 0.55f;
+        Mat c0 = cloth.withWind(i * 0.18f), c1 = cloth.withWind((i + 1) * 0.18f);
+        Fo.blade({0.9f, y0, 0}, {0.9f, y1, 0}, 1.7f, {1, 0, 0}, c0, c1);
+    }
+    M.lathe({{0.45f, 0}, {0.5f, 0.5f}, {0.35f, 0.9f}, {0.01f, 0.9f}}, Mat(pal::stone, 0.8f), 10, {-1.4f, 0, 0.6f});
+    M.lathe({{0.38f, 0.9f}, {0.42f, 1.15f}, {0.01f, 1.15f}}, iron, 10, {-1.4f, 0, 0.6f});
+}
+
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     float gy = w.height(s.pos.x, s.pos.y);
     if (s.poi >= 0) gy = w.pois[s.poi].height;
@@ -1263,6 +1298,11 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_FORGE: forge(M); addBoxCollider(out, s, gy, {-1.3f, -1.2f}, 1.f, 0.8f, 3.f); out.lights.push_back(vec4(s.pos.x, gy + 1.5f, s.pos.y, LI_FIRE)); { vec2 ch = rotate(vec2(-1.3f, -1.4f) * s.scale, -s.rot) + s.pos; out.emitters.push_back(vec4(ch.x, gy + 4.4f, ch.y, EM_SMOKE)); } break;
     case S_LANTERN: lantern(M); addCircleCollider(out, s, gy, L, 0.15f, 2.6f); { vec2 lp = rotate(vec2(0.55f, 0) * s.scale, -s.rot) + s.pos; out.lights.push_back(vec4(lp.x, gy + 2.2f, lp.y, LI_LANTERN)); } break;
     case S_PALISADE: palisade(M); addBoxCollider(out, s, gy, L, 1.9f, 0.25f, 3.f); break;
+    case S_PEN: pen(M, rng);
+        addBoxCollider(out, s, gy, {0, -5.f}, 5.f, 0.12f, 1.2f); addBoxCollider(out, s, gy, {5.f, 0}, 0.12f, 5.f, 1.2f); addBoxCollider(out, s, gy, {-5.f, 0}, 0.12f, 5.f, 1.2f);
+        addBoxCollider(out, s, gy, {-3.2f, 5.f}, 1.8f, 0.12f, 1.2f); addBoxCollider(out, s, gy, {3.2f, 5.f}, 1.8f, 0.12f, 1.2f); break;
+    case S_BANNER: bannerPole(M, Fo); addCircleCollider(out, s, gy, L, 0.25f, 6.f);
+        out.lights.push_back(vec4(s.pos.x, gy + 1.6f, s.pos.y, LI_FIRE)); { vec2 bp = rotate(vec2(-1.4f, 0.6f) * s.scale, -s.rot) + s.pos; out.emitters.push_back(vec4(bp.x, gy + 1.1f, bp.y, EM_FIRE)); } break;
     case S_ALTAR: altar(M); addBoxCollider(out, s, gy, L, 1.6f, 0.9f, 1.2f); out.lights.push_back(vec4(s.pos.x, gy + 1.8f, s.pos.y, LI_MAGIC)); break;
     default: break;
     }

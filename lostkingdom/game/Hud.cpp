@@ -92,6 +92,7 @@ void Game::updateTouchControls() {
         if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
         if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
+        if (buildMode && Rect{ui.W * 0.5f - 330, 84, 660, 128}.contains(f.sx, f.sy)) continue;   // build panel (domain)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
         if (f.pressed && left && joyFinger < 0) { joyFinger = f.id; joyOrigin = vec2(f.x, f.y); }
         else if (f.pressed && !left) {
@@ -264,6 +265,7 @@ void Game::drawMinimap(Rect r) {
 void Game::drawHud(float dt) {
     if (player == NullEntity) return;
     if (cine.active) { drawCinematicShots(); return; }   // no HUD during story cinematics
+    drawBuildHud();
     UI& u = ui;
     Character& p = pc();
     float W_ = u.W, H_ = u.H;

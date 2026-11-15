@@ -124,6 +124,122 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "domain") {
+        // 1.9.2 the hero's domain: found it with a real tap, build (real taps on Construire), recruit, livestock,
+        // soldiers fighting a wolf, daily production, save / load
+        static int res[9]; static float wolfHp0; static Entity wolf; static vec2 spot;
+        auto press = [](const char* tag) { return [tag](Game& g) { const Rect* r = g.ui.findWidget(tag); if (r) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 710, (r->x + r->w / 2) * k, (r->y + r->h / 2) * k}); } else AGR_LOG("DOMAIN no widget '%s'", tag); }; };
+        auto release = [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 710) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 710, f.x * k, f.y * k}); } };
+        // put the hero so that the building lands on `at` (the ghost sits in front of him)
+        auto aim = [](Game& g, int def, vec2 at, float yaw) {
+            float r = baseBuildings()[def].radius + 2.2f;
+            vec2 from = at - vec2(std::sin(yaw), std::cos(yaw)) * r;
+            teleport(g, from.x, from.y, yaw);
+            g.pc().yaw = yaw;   // teleport only turns the camera
+        };
+        s.push_back({0.1f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.ui.recordWidgets = true;
+            // a wild spot where a domain may be founded
+            const Poi* b = g.world.poiById("brindlemere"); bool found = false;
+            for (float rr = 160.f; rr < 900.f && !found; rr += 25.f)
+                for (float a = 0; a < TAU && !found; a += 0.3f) {
+                    vec2 p = b->pos + vec2(std::cos(a), std::sin(a)) * rr;
+                    teleport(g, p.x, p.y, 0.f);
+                    g.addItem("wood", 10, Rarity::Count, false);
+                    std::string why; if (g.canFoundBase(why)) { found = true; spot = p; }
+                }
+            AGR_LOG("DOMAIN site at (%.0f, %.0f) found %d", spot.x, spot.y, found);
+            g.addItem("wood", 300, Rarity::Count, false); g.addItem("stone", 200, Rarity::Count, false); g.addItem("iron_bar", 10, Rarity::Count, false); g.addItem("leather", 10, Rarity::Count, false);
+            g.gold = 2000; g.level = 10; g.recomputeStats(); g.pc().hp = g.pc().maxHp;
+            g.timeOfDay = 10.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.menu = Menu::Base;
+        }, idle, "site + resources"});
+        s.push_back({0.3f, press("Fonder mon domaine ici"), idle, "press found"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({2.f, [](Game& g) {
+            const Poi* p = g.world.poiById("player_base");
+            res[0] = g.base.founded && p && g.menu == Menu::None;
+            AGR_LOG("DOMAIN founded %d, poi %d, wood left %d", g.base.founded, p != nullptr, g.countItem("wood"));
+        }, idle, "founded"});
+        // a house with real taps: Journal > Domaine > Construire, then the build panel's Construire
+        s.push_back({0.3f, [aim](Game& g) { aim(g, baseBuildIndex("house"), g.base.center + vec2(12, 0), PI * 0.5f); g.menu = Menu::Base; }, idle, "to the house spot"});
+        s.push_back({0.3f, press("build:house"), idle, "press build house"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.4f, [](Game& g) { AGR_LOG("DOMAIN build mode %d ok %d (%s)", g.buildMode, g.buildOk, g.buildWhy.c_str()); g.requestScreenshot("build/shots/M0_build_ghost.png"); }, idle, "ghost"});
+        s.push_back({0.3f, press("Construire"), idle, "press construire"});
+        s.push_back({0.3f, release, idle, "release"});
+        s.push_back({0.5f, [](Game& g) { res[1] = g.baseCount("house") == 1 && !g.buildMode; AGR_LOG("DOMAIN houses %d", g.baseCount("house")); }, idle, "house built"});
+        // the rest by code: tower, pen, two fields, forge, palisades
+        s.push_back({0.2f, [aim](Game& g) {
+            struct P { const char* id; vec2 off; float yaw; };
+            P list[] = {{"tower", {-14, 0}, -PI * 0.5f}, {"pen", {0, -18}, PI}, {"field", {-10, 17}, 0.f}, {"field", {11, 17}, 0.f}, {"forge", {-15, -12}, PI}, {"inn", {17, -14}, PI * 0.5f}};
+            int ok = 0;
+            for (auto& q : list) { int d = baseBuildIndex(q.id); aim(g, d, g.base.center + q.off, q.yaw); g.startBuilding(d); g.updateBuildMode(); if (g.placeBuilding()) ok++; else AGR_LOG("DOMAIN %s refused: %s", q.id, g.buildWhy.c_str()); }
+            res[2] = ok == 6;
+            AGR_LOG("DOMAIN built %zu buildings, housing %d, guards %d", g.base.built.size(), g.baseHousing(), g.baseGuardCap());
+        }, idle, "build the rest"});
+        // recruit with real taps
+        s.push_back({0.2f, [](Game& g) { const vec2 c = g.base.center; teleport(g, c.x + 3, c.y + 3, 0.f); g.menu = Menu::Base; }, idle, "menu"});
+        for (int i = 0; i < 3; i++) { s.push_back({0.25f, press("recruit"), idle, "press recruit"}); s.push_back({0.25f, release, idle, "release"}); }
+        for (int i = 0; i < 2; i++) { s.push_back({0.25f, press("soldier"), idle, "press soldier"}); s.push_back({0.25f, release, idle, "release"}); }
+        for (int i = 0; i < 2; i++) { s.push_back({0.25f, press("pig"), idle, "press pig"}); s.push_back({0.25f, release, idle, "release"}); }
+        s.push_back({0.25f, press("horse"), idle, "press horse"}); s.push_back({0.25f, release, idle, "release"});
+        s.push_back({0.1f, [](Game& g) {
+            res[3] = g.base.residents == 3 && g.base.soldiers == 2 && g.base.pigs == 2 && g.base.horses == 1;
+            AGR_LOG("DOMAIN residents %d soldiers %d pigs %d horses %d, gold %d", g.base.residents, g.base.soldiers, g.base.pigs, g.base.horses, g.gold);
+            g.menu = Menu::None;
+        }, idle, "recruited"});
+        s.push_back({4.f, none, idle, "people arrive"});
+        s.push_back({0.1f, [](Game& g) {
+            int npcs = 0; g.reg.each<NpcBrain>([&](Entity, NpcBrain& nb) { if (nb.village == g.base.poi) npcs++; });
+            res[4] = npcs == 3 && g.soldierEnts.size() == 2 && g.livestockEnts.size() == 3;
+            AGR_LOG("DOMAIN in the world: %d inhabitants, %zu soldiers, %zu animals", npcs, g.soldierEnts.size(), g.livestockEnts.size());
+            const vec2 c = g.base.center; teleport(g, c.x, c.y + 6, 0.f);
+            g.camDist = g.camDistTarget = 40.f; g.camPitch = 0.95f;
+        }, idle, "count"});
+        s.push_back({3.f, none, idle, "settle"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/M1_domain.png"); }, idle, "shot"});
+        // a wolf comes close: the soldiers fight it
+        s.push_back({0.1f, [](Game& g) {
+            vec3 p(g.base.center.x + 6, 0, g.base.center.y + 6); p.y = g.groundAt(p.x, p.z);
+            wolf = g.spawnEnemy(enemyIndex("wolf"), p);
+            if (Character* w = g.reg.get<Character>(wolf)) { w->maxHp = w->hp = 400; wolfHp0 = w->hp; }
+            g.camDist = g.camDistTarget = 14.f; g.camPitch = 0.6f;
+        }, idle, "wolf"});
+        s.push_back({5.f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "fight"});
+        s.push_back({0.05f, [](Game& g) {
+            Character* w = g.reg.get<Character>(wolf);
+            float hp = w ? (w->dead ? 0.f : w->hp) : 0.f;
+            res[5] = hp < wolfHp0 - 30.f;
+            AGR_LOG("DOMAIN wolf %.0f -> %.0f", wolfHp0, hp);
+            g.requestScreenshot("build/shots/M2_soldiers.png");
+        }, idle, "soldiers fought"});
+        // a new day: production
+        s.push_back({0.1f, [](Game& g) { g.day++; }, idle, "next day"});
+        s.push_back({0.2f, [](Game& g) {
+            int bread = 0, meat = 0; for (auto& st : g.base.storage) { if (st.first == "bread") bread = st.second; if (st.first == "meat") meat = st.second; }
+            res[6] = bread >= 4 && meat == 2;
+            AGR_LOG("DOMAIN production: %d bread, %d meat", bread, meat);
+        }, idle, "production"});
+        // save and load: the domain comes back
+        s.push_back({0.2f, [](Game& g) { g.saveGame(3); }, idle, "save"});
+        s.push_back({0.5f, [](Game& g) {
+            size_t built = g.base.built.size();
+            bool ok = g.loadGame(3);
+            const Poi* p = g.world.poiById("player_base");
+            res[7] = ok && g.base.founded && g.base.built.size() == built && p && g.base.residents == 3 && g.base.soldiers == 2;
+            int extra = (int)g.world.structures.size() - g.world.plannedStructures;
+            AGR_LOG("DOMAIN after load: founded %d, %zu buildings, %d runtime structures, poi %d", g.base.founded, g.base.built.size(), extra, p != nullptr);
+            res[8] = extra == (int)built + 1;   // buildings + banner, not duplicated
+        }, idle, "load"});
+        s.push_back({0.1f, [](Game& g) {
+            AGR_LOG("DOMAIN TEST: found=%d tapBuild=%d build=%d recruit=%d spawned=%d defend=%d produce=%d saveLoad=%d noDup=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8]);
+            bool all = true; for (int r : res) all = all && r;
+            AGR_LOG(all ? "DOMAIN TEST PASSED" : "DOMAIN TEST FAILED");
+        }, idle, "check"});
+        return s;
+    }
     if (name == "hunters") {
         // 1.9.2 night hunters: a wave finds the hero in the open at night, tracks him, and gives up in a village
         static int res[4]; static float d0;

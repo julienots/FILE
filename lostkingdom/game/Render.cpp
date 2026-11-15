@@ -327,6 +327,7 @@ void Game::renderWorld(float dt) {
         renderer.submit(d);
         if (n.node.type == NodeType::Chest && !open && particles.rng.f() < dt * 2) particles.magicTrail(n.node.pos + vec3(0, 0.8f, 0), vec3(1, 0.85f, 0.4f), 0.5f);
     });
+    renderBuildGhost();   // 1.9.2 domain: preview of the building being placed
     // Astra's aura lights her surroundings
     if (player != NullEntity && heroAura > 0.05f) {
         PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;

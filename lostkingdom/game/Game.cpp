@@ -286,6 +286,7 @@ void Game::updatePlaying(float dt) {
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
     if (!cine.active) updateNightHunters(dt);
+    updateBase(dt);
     PROF(4, updateDungeon(dt));
     PROF(5, updateEnvironment(dt));
     PROF(6, updateAmbientFx(dt));

@@ -383,7 +383,7 @@ void Game::updateAttack(Entity e, Character& c, float dt) {
         std::vector<Entity> victims;
         reg.each<Character>([&](Entity o, Character& oc) {
             if (o == e || oc.dead) return;
-            bool hostile = oc.team == hostileA || (c.team == Team::Player && oc.team == Team::Animal);
+            bool hostile = oc.team == hostileA || (e == player && oc.team == Team::Animal);
             if (!hostile) return;
             if (std::find(c.hitThisSwing.begin(), c.hitThisSwing.end(), o) != c.hitThisSwing.end()) return;
             vec3 d = oc.pos - c.pos; d.y = 0;
@@ -601,6 +601,7 @@ void Game::updateCharacters(float dt) {
                 if (AIBrain* ai = reg.get<AIBrain>(e)) { if (c.bossDef >= 0) updateBossAI(e, c, *ai, dt); else updateEnemyAI(e, c, *ai, dt); }
                 else if (NpcBrain* nb = reg.get<NpcBrain>(e)) updateNpc(e, c, *nb, dt);
                 else if (AnimalBrain* ab = reg.get<AnimalBrain>(e)) updateAnimal(e, c, *ab, dt);
+                else if (SoldierBrain* sb = reg.get<SoldierBrain>(e)) updateSoldier(e, c, *sb, dt);
                 else if (c.team == Team::Mount && !(riding && e == mountEnt)) {
                     Character& pl = pc();
                     float d = distXZ(c.pos, pl.pos);

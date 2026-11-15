@@ -424,6 +424,60 @@ void World::indexPlan() {
     for (int r = 0; r < (int)rivers.size(); r++)
         for (int s = 0; s + 1 < (int)rivers[r].pts.size(); s++) addSeg(chunkRivers, rivers[r].pts[s], rivers[r].pts[s + 1], rivers[r].width + 26, (r << 16) | s);
     for (int i = 0; i < (int)pois.size(); i++) addSeg(chunkPois, pois[i].pos, pois[i].pos, pois[i].radius + 30, i);
+    plannedPois = (int)pois.size(); plannedStructures = (int)structures.size();
+}
+
+int World::addRuntimePoi(const Poi& p0) {
+    int n = workerCount; bool was = running;
+    stopWorkers();
+    Poi p = p0;
+    p.region = regionId(p.pos.x, p.pos.y);
+    if (p.height == 0) p.height = std::max(height(p.pos.x, p.pos.y), 2.f);
+    pois.push_back(p);
+    int i = (int)pois.size() - 1;
+    float m = p.radius + 30;
+    for (int cz = (int)std::floor((p.pos.y - m) / CHUNK); cz <= (int)std::floor((p.pos.y + m) / CHUNK); cz++)
+        for (int cx = (int)std::floor((p.pos.x - m) / CHUNK); cx <= (int)std::floor((p.pos.x + m) / CHUNK); cx++) {
+            int ci = chunkIndex(cx, cz);
+            if (ci >= 0) chunkPois[ci].push_back(i);
+        }
+    refreshArea(p.pos, p.radius + 60);
+    if (was) startWorkers(n);
+    return i;
+}
+
+int World::addRuntimeStructure(const Structure& s) {
+    int n = workerCount; bool was = running;
+    stopWorkers();
+    structures.push_back(s);
+    int i = (int)structures.size() - 1;
+    ChunkKey k = chunkOf(s.pos.x, s.pos.y);
+    int ci = chunkIndex(k.x, k.z);
+    if (ci >= 0) chunkStructures[ci].push_back(i);
+    refreshArea(s.pos, 20.f);
+    if (was) startWorkers(n);
+    return i;
+}
+
+void World::resetRuntime() {
+    if (plannedPois < 0) return;
+    if ((int)pois.size() == plannedPois && (int)structures.size() == plannedStructures) return;
+    int n = workerCount; bool was = running;
+    stopWorkers();
+    for (int i = plannedPois; i < (int)pois.size(); i++) refreshArea(pois[i].pos, pois[i].radius + 60);
+    for (int i = plannedStructures; i < (int)structures.size(); i++) refreshArea(structures[i].pos, 20.f);
+    pois.resize(plannedPois); structures.resize(plannedStructures);
+    for (auto& v : chunkPois) v.erase(std::remove_if(v.begin(), v.end(), [&](int i) { return i >= plannedPois; }), v.end());
+    for (auto& v : chunkStructures) v.erase(std::remove_if(v.begin(), v.end(), [&](int i) { return i >= plannedStructures; }), v.end());
+    if (was) startWorkers(n);
+}
+
+void World::refreshArea(vec2 c, float r) {
+    // mark the loaded chunks stale: they keep drawing their old meshes until the rebuilt ones arrive
+    for (auto& kv : chunks) {
+        vec2 cc{(kv.first.x + 0.5f) * CHUNK, (kv.first.z + 0.5f) * CHUNK};
+        if (length(cc - c) < r + CHUNK * 0.75f) kv.second->lod = -2;
+    }
 }
 
 const Poi* World::poiById(const std::string& id) const {
@@ -1152,6 +1206,7 @@ float World::tallGrassAmount(float x, float z) const {
 void World::startWorkers(int n) {
     if (running) return;
     running = true;
+    workerCount = n;
     for (int i = 0; i < n; i++) workers.emplace_back([this] { workerLoop(); });
 }
 

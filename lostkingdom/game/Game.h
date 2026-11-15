@@ -17,6 +17,7 @@
 #include <map>
 #include <set>
 #include <deque>
+#include <iosfwd>
 #include <future>
 
 namespace lk {
@@ -122,7 +123,31 @@ struct NpcBrain {
     ClipId workClip = C_HAMMER_WORK;
 };
 
-struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; };
+struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; };
+// 1.9.2 the player's domain
+struct SoldierBrain { vec3 post; Entity target = NullEntity; float cd = 0, think = 0; int slot = 0; };
+struct BaseBuildDef {
+    std::string id, name, desc;
+    int kind, variants;
+    std::vector<std::pair<std::string, int>> cost;
+    int housing = 0, guards = 0;
+    float radius = 3.f;
+    bool unique = false;
+};
+const std::vector<BaseBuildDef>& baseBuildings();
+int baseBuildIndex(const std::string& id);
+struct BaseBuilt { int def; vec2 pos; float rot; int variant; };
+struct PlayerBase {
+    bool founded = false;
+    vec2 center{0, 0};
+    int poi = -1;
+    std::string name = "Domaine du Naufragé";
+    std::vector<BaseBuilt> built;
+    int residents = 0, soldiers = 0, pigs = 0, horses = 0;
+    int lastDay = -1, foalDays = 0;
+    bool escort = false;
+    std::vector<std::pair<std::string, int>> storage;   // production waiting at the banner
+};
 
 enum class ProjKind : uint8_t { Arrow, Fireball, IceSpike, Arcane, Shadow, Nature, Boulder, Web, Lightning, Holy };
 struct Projectile {
@@ -284,7 +309,7 @@ struct CinematicState {
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base };
 
 class Game : public App {
 public:
@@ -452,6 +477,37 @@ public:
     int huntsSurvived = 0;
     void updateNightHunters(float dt);
     bool playerInSafeZone();
+    // 1.9.2 domain: found it, build, recruit, raise livestock
+    PlayerBase base;
+    std::vector<Entity> soldierEnts, livestockEnts;
+    bool buildMode = false, buildOk = false;
+    int buildDef = -1, buildVariant = 0;
+    float buildRot = 0;
+    vec2 buildPos{0, 0};
+    std::string buildWhy;
+    std::shared_ptr<Mesh> buildGhost;
+    std::vector<std::pair<int, mat4>> buildGhostModels;
+    vec3 buildGhostKey{-1, -1, -1};
+    bool canFoundBase(std::string& why);
+    void foundBase();
+    void applyBaseToWorld();
+    void clearBase();
+    int baseCount(const std::string& id) const;
+    int baseHousing() const;
+    int baseGuardCap() const;
+    bool baseCanAfford(const BaseBuildDef& d) const;
+    void startBuilding(int def);
+    void updateBuildMode();
+    bool placeBuilding();
+    void updateBase(float dt);
+    void updateSoldier(Entity e, Character& c, SoldierBrain& sb, float dt);
+    void refreshBaseNpcs();
+    void baseNewDay();
+    void drawBaseMenu(Rect c);
+    void drawBuildHud();
+    void renderBuildGhost();
+    void saveBase(std::ostream& o) const;
+    bool loadBaseLine(const std::string& k, std::istream& l);
     float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
     float birdFlushCD = 0;
     void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires

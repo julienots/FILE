@@ -22,7 +22,9 @@ enum StructureKind : uint8_t {
     S_HOUSE, S_STONEHOUSE, S_LONGHOUSE, S_TOWER, S_WINDMILL, S_WELL, S_STALL, S_FENCE, S_FIELD,
     S_CASTLE_WALL, S_CASTLE_TOWER, S_KEEP, S_CHAPEL, S_RUIN_WALL, S_ELVEN_ARCH, S_CRYPT, S_CAVE, S_MINE,
     S_WAYSTONE, S_CAMPFIRE, S_BRIDGE, S_TENT, S_STILT_HUT, S_MONASTERY, S_STATUE, S_FORGE, S_INN, S_LANTERN,
-    S_GATE, S_PALISADE, S_DOCK, S_OBELISK, S_ALTAR, S_PORTAL, S_COUNT
+    S_GATE, S_PALISADE, S_DOCK, S_OBELISK, S_ALTAR, S_PORTAL,
+    S_PEN, S_BANNER,   // 1.9.2 player domain: livestock enclosure, the domain's banner
+    S_COUNT
 };
 
 // Emitter / animated object kinds stored in ChunkBuild::emitters (w component)

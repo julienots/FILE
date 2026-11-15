@@ -531,6 +531,7 @@ bool Game::saveGame(int slot) {
     for (auto& l : loreFound) o << "lore " << l << "\n";
     for (auto& f : storyFlags) o << "flag " << f << "\n";
     for (auto& h : unlockedHeroes) o << "heroes " << h << "\n";
+    saveBase(o);
     o << "hero " << hero().id << "\n";
     for (auto& t : talkedTo) o << "talk " << t << "\n";
     for (auto& d : dungeonsDone) o << "dung " << d << "\n";
@@ -556,6 +557,8 @@ bool Game::loadGame(int slot) {
     if (data.rfind("LOSTKINGDOM_SAVE", 0) != 0 || data.find("\nend\n") == std::string::npos) { AGR_ERR("corrupt save slot %d", slot); return false; }
     // reset world-dependent state
     reg.clear();
+    clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
+    nightHunters.clear();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
     riding = false;
     nodeEntities.clear(); spawnedChunks.clear(); chunkSpawns.clear(); villageNpcsSpawned.clear();
@@ -597,6 +600,7 @@ bool Game::loadGame(int slot) {
         else if (k == "lore") { std::string s; l >> s; loreFound.insert(s); }
         else if (k == "flag") { std::string s; l >> s; if (!s.empty()) storyFlags.insert(s); }
         else if (k == "heroes") { std::string s; l >> s; if (heroIndex(s) >= 0) unlockedHeroes.insert(s); }
+        else if (k.rfind("base_", 0) == 0) loadBaseLine(k, l);
         else if (k == "hero") { std::string s; l >> s; int hi = heroIndex(s); activeHero = hi >= 0 ? hi : 0; }
         else if (k == "talk") { std::string s; l >> s; talkedTo.insert(s); }
         else if (k == "dung") { std::string s; l >> s; dungeonsDone.insert(s); }
@@ -619,6 +623,7 @@ bool Game::loadGame(int slot) {
         else if (k == "weather") l >> weather >> weatherTimer;
     }
     if (trackedQuest >= (int)questLog.size()) trackedQuest = -1;
+    if (base.founded) applyBaseToWorld();
     if (pos.x > WORLD_SIZE) pos = respawnPos;  // saved inside a dungeon: resume at its entrance
     pos.y = world.groundHeight(pos.x, pos.z);
     spawnPlayer(pos);

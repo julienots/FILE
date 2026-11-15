@@ -142,6 +142,14 @@ public:
     float areaReady(vec3 focus, float radius) const;
     size_t loadedChunks() const { return chunks.size(); }
     size_t pendingChunks();
+    // 1.9.2 runtime additions (the player's domain): a POI and structures added after the plan was built.
+    // Workers are paused while the tables change; the chunks around are rebuilt in place (old meshes stay
+    // visible until the new ones are uploaded).
+    int addRuntimePoi(const Poi& p);
+    int addRuntimeStructure(const Structure& s);
+    void resetRuntime();                        // back to the generated plan (new game / load)
+    void refreshArea(vec2 c, float r);
+    int plannedPois = -1, plannedStructures = -1, workerCount = 0;
     float grassDensity = 1.f;
     bool detailedFoliage = true;   // leaf cards on near trees (off on low-end profiles)
     void unloadAll();
