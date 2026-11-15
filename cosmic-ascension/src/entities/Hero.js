@@ -24,7 +24,7 @@ export class Hero {
     }
     if (model) { this.body.add(model); }
     else this._buildProcedural(st, i);
-    if (model) model.traverse(o => { const u = o.material?.userData?.uniforms; if (u?.uRim) { u.uRim.value.set(st.glow); u.uRimS.value = .5 + i * .35; o.material.emissive?.set(st.glow); o.material.emissiveIntensity = i * .035; } });
+    if (model) model.traverse(o => { const u = o.material?.userData?.uniforms; if (u?.uRim) { u.uRim.value.set(st.glow); u.uRimS.value = .5 + i * .2; o.material.emissive?.set(st.glow); o.material.emissiveIntensity = i * .01; } });
     this._aura(st, i, !!model);
     this.baseScale = st.scale; this.root.scale.setScalar(st.scale); this.glow.color.set(st.glow); this.baseGlow = 1 + i * .5; this.glow.intensity = this.baseGlow; this.glow.distance = 10 + st.scale * 6;
   }

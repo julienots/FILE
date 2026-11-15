@@ -135,13 +135,6 @@
  },
  "hero_main": {
   "file": "hero_main.glb",
-  "height": 1.3,
-  "anim": {
-   "type": "biped",
-   "tpose": 0,
-   "armAt": 0.56,
-   "shoulder": 0.78,
-   "hip": 0.5
-  }
+  "height": 1.3
  }
 }
