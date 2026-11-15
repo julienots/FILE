@@ -97,7 +97,7 @@ export class PlanetScene {
     const camFwd = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize(), right = _b.crossVectors(camFwd, up).normalize();
     if (this.deadT) { this.deadT += dt; hero.scaleMul = Math.max(.05, 1 - this.deadT * 1.2); } const frozen = cine || this.leaving || this.deadT || this.talking; const mv = _c.copy(camFwd).multiplyScalar(frozen ? 0 : m.y).addScaledVector(right, frozen ? 0 : m.x); let sp = Math.min(1, mv.length());
     const groundR0 = Math.max(P.heightAt(up), P.seaRadius - .35 * scale), wading = groundR0 > P.heightAt(up) + .01;
-    const speed = 7.5 * Math.sqrt(scale) * (Input.buttons.boost ? 1.6 : 1) * (wading ? .65 : 1);
+    const speed = 3.4 * Math.sqrt(scale) * (Input.buttons.boost ? 1.5 : 1) * (wading ? .65 : 1);   // marche posée; ≫ = course
     if (sp > .05) {
       mv.normalize(); const ang = (speed * sp * dt) / (R + this.alt), axis = _d.crossVectors(up, mv).normalize();
       up.applyAxisAngle(axis, ang).normalize(); this.fwd.applyAxisAngle(axis, ang); this.face.copy(mv).applyAxisAngle(axis, ang);
@@ -116,6 +116,7 @@ export class PlanetScene {
     hero.root.position.copy(up).multiplyScalar(R + this.alt);
     const z = _d.copy(this.face).addScaledVector(up, -this.face.dot(up)).normalize(), x = _e.crossVectors(up, z).normalize();
     hero.root.quaternion.slerp(this._q.setFromRotationMatrix(this._m.makeBasis(x, up, z)), Math.min(1, dt * 12));
+    hero.moveSpeed = sp > .05 ? speed * sp : 0; hero.atk = Math.max(hero.atk || 0, Input.buttons.attack && !frozen ? 1 : 0);
     hero.animate(dt, sp, !this.ground, this.vh);
     // attaque: projectile stellaire avec visée auto sur l'ennemi le plus proche
     this.atkCd -= dt;
@@ -159,7 +160,7 @@ export class PlanetScene {
     if (Input.look.x) this.fwd.applyAxisAngle(up, -Input.look.x * .006);
     this.camPitch = THREE.MathUtils.clamp(this.camPitch + Input.look.y * .004, .15, 1.3);
     if (cine) this.fwd.applyAxisAngle(up, dt * .8);
-    const pull = this.evo.camPull, dist = (7.5 + scale * 3.2) * (1 + pull * .5), cf = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize();
+    const pull = this.evo.camPull, dist = (3.6 + scale * 3.4) * (1 + pull * .6), cf = _a.copy(this.fwd).addScaledVector(up, -this.fwd.dot(up)).normalize();
     const want = _c.copy(hero.root.position).addScaledVector(cf, -dist * Math.cos(this.camPitch)).addScaledVector(up, dist * Math.sin(this.camPitch) + scale * .5);
     const wr = want.length(), minR = Math.max(P.heightAt(_e.copy(want).normalize()), P.seaRadius) + .8; if (wr < minR) want.multiplyScalar(minR / wr);
     this.camera.position.lerp(want, Math.min(1, dt * 6)); this.camera.up.copy(up); this.camera.lookAt(_e.copy(hero.root.position).addScaledVector(up, scale * (.9 + pull * .6) + hero.lift));

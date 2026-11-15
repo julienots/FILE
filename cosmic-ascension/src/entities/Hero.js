@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { toonMaterial, addOutline, shaderTime } from '../render/shaders/Toon.js';
 import { EVOLUTIONS } from '../data/evolutions.js';
 import { Assets } from '../assets/AssetLibrary.js';
+import { Rig } from './Rig.js';
 
 // Héros évolutif. Si un GLB `hero_<stageId>` existe il remplace le corps procédural (même API).
 // FABLE: pousser les formes (ailes, halo, cornes, cape d'énergie, particules) par stade.
@@ -18,10 +19,7 @@ export class Hero {
     this.parts = {};
     const model = Assets.get('hero_main') ?? Assets.get('hero_' + st.id);   // `hero_main`: un seul personnage du début à la fin, qui grandit et gagne en aura
     this.animV = model?.userData.anim ?? null; this.mixer = model?.userData.mixer ?? null; this.act = null;
-    if (this.mixer) {      // vraies animations (modèle Tripo avec squelette): marche / course / attaques, fondus selon la vitesse
-      const clips = model.userData.animations, find = (...n) => clips.find(c => n.some(x => c.name.toLowerCase().includes(x))), A = (c, once) => { if (!c) return null; const a = this.mixer.clipAction(c); if (once) a.setLoop(THREE.LoopOnce, 1); else a.play(); a.setEffectiveWeight(0); return a; };
-      this.act = { walk: A(find('walk')), run: A(find('run') ?? find('walk')), hits: [find('box_01'), find('kick'), find('box_03')].filter(Boolean).map(c => A(c, true)), n: 0, w: 0, r: 0, atkT: 0 };
-    }
+    this.rig = this.mixer ? new Rig(model) : null;   // vraies animations (squelette Tripo): voir entities/Rig.js
     if (model) { this.body.add(model); }
     else this._buildProcedural(st, i);
     if (model) model.traverse(o => { const u = o.material?.userData?.uniforms; if (u?.uRim) { u.uRim.value.set(st.glow); u.uRimS.value = .5 + i * .2; o.material.emissive?.set(st.glow); o.material.emissiveIntensity = i * .01; } });
@@ -81,8 +79,8 @@ export class Hero {
     this._air = airborne ? 1 : 0; this._land = Math.max(0, (this._land || 0) - dt * 5);
     const stride = t * (4 + sp * 10), bob = Math.abs(Math.sin(stride)) * sp * .12 + Math.sin(t * 2.2) * .02;
     const stretch = airborne ? THREE.MathUtils.clamp(vUp * .012, -.07, .1) : -this._land * .12 + bob * .2;
-    b.position.y = (airborne ? .1 : bob) + this.lift / this.baseScale;
-    b.scale.set(1 - stretch * .6, 1 + stretch, 1 - stretch * .6);
+    b.position.y = (this.rig ? 0 : airborne ? .1 : bob) + this.lift / this.baseScale;
+    if (this.rig) b.scale.setScalar(1); else b.scale.set(1 - stretch * .6, 1 + stretch, 1 - stretch * .6);
     b.rotation.set(this.mixer ? 0 : sp * .28, this.spin, this.mixer ? 0 : Math.sin(stride) * .07 * sp);
     for (const s of [-1, 1]) {
       const ph = stride + (s > 0 ? Math.PI : 0);
@@ -96,12 +94,7 @@ export class Hero {
     if (this.parts.shards) for (let k = 0; k < this.parts.shards.length; k++) this.parts.shards[k].position.y = .95 + (k % 2) * .2 + Math.sin(t * 2.5 + k) * .06;
     if (this.parts.tailCape) { this.parts.tailCape.rotation.x = .28 + sp * .55 + Math.sin(t * 6) * .05 * (1 + sp * 2); }
     if (this.parts.tail) { this.parts.tail.scale.z = 1 + sp * .7 + Math.sin(t * 12) * .08; this.parts.tail.rotation.y = Math.sin(t * 3) * .25; this.parts.tail.rotation.x = -.25 + Math.sin(t * 2.2) * .12; }
-    if (this.mixer) { const a = this.act, k2 = Math.min(1, dt * 8), moving = sp > .08, run = THREE.MathUtils.smoothstep(sp, .45, .8);
-      a.w += ((moving ? 1 - run : 1) - a.w) * k2; a.r += ((moving ? run : 0) - a.r) * k2; a.atkT = Math.max(0, a.atkT - dt);
-      const base = a.atkT > 0 ? .15 : 1; a.walk?.setEffectiveWeight(a.w * base); a.run?.setEffectiveWeight(a.r * base);
-      if (a.walk) { a.walk.timeScale = moving ? .8 + sp : 0; if (!moving && a.walk !== a.run) a.walk.time = 0; }       // à l'arrêt: pose de départ de la marche
-      if (this.atk > .95 && a.atkT <= 0 && a.hits.length) { const h = a.hits[a.n++ % a.hits.length]; h.reset().setEffectiveWeight(1).fadeIn(.08).play(); h.timeScale = 2.2; a.atkT = h.getClip().duration / 2.2 * .8; setTimeout(() => h.fadeOut(.15), a.atkT * 1000); }
-      this.mixer.update(dt); }
+    if (this.rig) this.rig.update(dt, (this.moveSpeed ?? sp * 5) / this.baseScale, !!this._air, (this.atk || 0) > .15);
     this.atk = Math.max(0, (this.atk || 0) - dt * 4); if (this.animV) this.animV.set(sp, stride, this._air ? 1 : 0, this.atk);
     this.root.scale.setScalar(this.baseScale * this.scaleMul);
     if (!this.lift) this.glow.intensity += (this.baseGlow - this.glow.intensity) * k;
