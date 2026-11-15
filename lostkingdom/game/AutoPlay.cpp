@@ -124,6 +124,63 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "enemy") {
+        // close-up of an enemy model (LK_ENEMY=<id>, default stone_golem): idle, then fighting the hero
+        static Entity foe;
+        s.push_back({3.f, [](Game& g) {
+            const char* id = getenv("LK_ENEMY"); std::string eid = id ? id : "stone_golem";
+            // open ground (no tall grass: the hero must be visible), outside any village
+            const Poi* b = g.world.poiById("brindlemere"); vec2 at = b->pos + vec2(150, -120);
+            for (float r = 0; r < 300; r += 7) { vec2 p = b->pos + vec2(150 + r, -120); if (g.world.tallGrassAmount(p.x, p.y) == 0 && g.world.tallGrassAmount(p.x, p.y + 7) == 0 && g.world.roadInfluence(p.x, p.y) < 0.1f) { at = p; break; } }
+            teleport(g, at.x, at.y, 0.f);
+            g.pc().yaw = 0; g.camYaw = PI; g.camPitch = 0.22f; g.camDist = g.camDistTarget = 9.f;
+            g.timeOfDay = 13.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.level = 15; g.recomputeStats();
+            vec3 p = g.pc().pos + vec3(0, 0, 7.f); p.y = g.world.groundHeight(p.x, p.z);
+            foe = g.spawnEnemy(enemyIndex(eid), p);
+            if (Character* c = g.reg.get<Character>(foe)) { c->yaw = PI; if (AIBrain* ai = g.reg.get<AIBrain>(foe)) ai->state = AIState::Idle; c->maxHp = c->hp = 99999; }
+        }, [](Game& g, float) { g.pc().hp = g.pc().maxHp; if (AIBrain* ai = g.reg.get<AIBrain>(foe)) ai->state = AIState::Idle; }, "spawn"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/Q0_enemy_idle.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { if (AIBrain* ai = g.reg.get<AIBrain>(foe)) { ai->state = AIState::Chase; ai->target = g.player; ai->aggro = 6; } }, idle, "aggro"});
+        for (int i = 0; i < 4; i++) {
+            s.push_back({1.4f, none, [](Game& g, float) { g.pc().hp = g.pc().maxHp; }, "fight"});
+            s.push_back({0.05f, [i](Game& g) { Character* c = g.reg.get<Character>(foe); const Clip* a = c ? c->vis.anim.action() : nullptr;
+                AGR_LOG("ENEMY frame %d: action %s, speed %.1f", i, a ? a->name.c_str() : "none", c ? c->vis.anim.speed : 0.f);
+                g.requestScreenshot("build/shots/Q" + std::to_string(i + 1) + "_enemy_fight.png"); }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("ENEMY TEST PASSED"); }, idle, "end"});
+        return s;
+    }
+    if (name == "showcase") {
+        // 1.10.3: every building model seen from the front (door side), in the world, at mid-afternoon
+        struct K { int kind, variant; const char* f; };
+        static const K list[] = {{S_HOUSE, 0, "P0_house"}, {S_HOUSE, 1, "P1_house_2"}, {S_HOUSE, 2, "P2_house_3"}, {S_INN, -1, "P3_inn"}, {S_STONEHOUSE, -1, "P4_stonehouse"},
+                                 {S_LONGHOUSE, -1, "P5_longhouse"}, {S_CHAPEL, -1, "P6_chapel"}, {S_FORGE, -1, "P7_forge"}, {S_TOWER, -1, "P8_tower"}, {S_WELL, -1, "P9_well"},
+                                 {S_STALL, -1, "PA_stall"}, {S_TENT, -1, "PB_tent"}};
+        for (const K& k : list) {
+            s.push_back({4.5f, [k](Game& g) {
+                const Structure* best = nullptr;
+                for (const Structure& st : g.world.structures) {
+                    if (st.kind != k.kind) continue;
+                    if (k.variant >= 0 && propModelFor(st.kind, st.variant) != propModelFor(k.kind, k.variant)) continue;
+                    if (st.kind == S_STALL && st.variant < 0) continue;
+                    best = &st; break;
+                }
+                if (!best) { AGR_LOG("SHOWCASE no %s in the world", k.f); return; }
+                vec2 front = rotate(vec2(0, 1), -best->rot);
+                float dist = std::max(structureFootprint(k.kind).x, structureFootprint(k.kind).y) * 2.2f + 6.f;
+                vec2 hero = best->pos + front * (structureFootprint(k.kind).y + 2.5f);
+                teleport(g, hero.x, hero.y, 0.f);
+                g.pc().yaw = std::atan2(-front.x, -front.y);
+                g.camYaw = std::atan2(front.x, front.y);   // camera behind the hero, looking at the building
+                g.camDist = g.camDistTarget = dist; g.camPitch = 0.28f;
+                g.timeOfDay = 15.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            }, idle, "go"});
+            s.push_back({0.05f, [k](Game& g) { g.requestScreenshot(std::string("build/shots/") + k.f + ".png"); }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("SHOWCASE TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "grounded") {
         // 1.10.1: the buildings that floated the most before (village edges, slopes) seen from a low camera
         static std::vector<int> worst;

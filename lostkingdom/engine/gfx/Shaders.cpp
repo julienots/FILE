@@ -339,7 +339,12 @@ void main() {
     float gold = smoothstep(0.42, 0.7, tmax) * smoothstep(0.35, 0.6, tsat) * step(tx.b, tx.r * 0.75);
     metal = max(steel * 0.85, gold * 0.9) * (1.0 - vSkin.w);   // vSkin.w = cloth flag from the importer
     rough = mix(0.8, 0.3, metal);
+  #ifdef SKINNED
     vec3 dielectric = max(mix(vec3(alum), albedo, 1.3), 0.0) * 0.48;
+  #else
+    // 1.10.3 buildings (Tripo): their textures carry less baked light than the characters' - keep them brighter
+    vec3 dielectric = max(mix(vec3(alum), albedo, 1.15), 0.0) * 0.74;
+  #endif
     albedo = mix(dielectric, albedo * 0.85, metal) * uTint.rgb;   // metals: albedo is the specular colour
     emis = 0.0;
     if (!gl_FrontFacing) N = -N;   // double-sided imported meshes (capes)
