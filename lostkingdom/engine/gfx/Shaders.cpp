@@ -368,16 +368,31 @@ void main() {
 #ifdef DBG_ONELAYER
     for (int i = 1; i < 8; i++) ws[i] = 0.0;
 #endif
-    vec2 ruv = abs(N.x) > abs(N.z) ? vWorld.zy * 0.22 : vWorld.xy * 0.22;   // triplanar-ish rock on steep faces
-    vec2 rockUV = mix(vWorld.xz * 0.22, ruv, cliff);
-    vec2 dX = dFdx(uv), dY = dFdy(uv), rX = dFdx(rockUV), rY = dFdy(rockUV);   // gradients outside branches
+    // 1.11.1 rock: true triplanar - the three projections are sampled and their COLOURS blended by the normal
+    // (blending the coordinates, as before, smeared the texture into diagonal streaks on banks and slopes)
+    vec2 uvT = vWorld.xz * 0.22, uvX = vWorld.zy * 0.22, uvZ = vWorld.xy * 0.22;
+    vec2 tX = dFdx(uvT), tY = dFdy(uvT), xX = dFdx(uvX), xY = dFdy(uvX), zX = dFdx(uvZ), zY = dFdy(uvZ);
+    float bxw = abs(N.x), bzw = abs(N.z);
+    float bsum = bxw + bzw + 1e-4; bxw /= bsum; bzw /= bsum;
+    bxw = smoothstep(0.2, 0.8, bxw); bzw = 1.0 - bxw;
+    vec2 rockUV = cliff > 0.5 ? (bxw > 0.5 ? uvX : uvZ) : uvT;      // normal map: dominant projection
+    vec2 rX = cliff > 0.5 ? (bxw > 0.5 ? xX : zX) : tX, rY = cliff > 0.5 ? (bxw > 0.5 ? xY : zY) : tY;
+    vec2 dX = dFdx(uv), dY = dFdy(uv);   // gradients outside branches
     mat2 rot2 = mat2(0.8, -0.6, 0.6, 0.8);
     vec2 uv2 = rot2 * uv * 0.53 + vec2(0.37, 0.71);
     vec2 dX2 = rot2 * dX * 0.53, dY2 = rot2 * dY * 0.53;
     float tb = smoothstep(0.3, 0.7, texture(uNoiseTex, vWorld.xz * 0.031).r);
     if (ws[0] > 0.001) smp[0] = mix(sampleLayer(0, uv, dX, dY), sampleLayer(0, uv2, dX2, dY2), tb);
     if (ws[1] > 0.001) smp[1] = mix(sampleLayer(1, uv * 0.9, dX * 0.9, dY * 0.9), sampleLayer(1, uv2 * 0.9, dX2 * 0.9, dY2 * 0.9), tb);
-    if (ws[2] > 0.001) smp[2] = sampleLayer(2, rockUV, rX, rY);
+    if (ws[2] > 0.001) {
+        vec4 top = cliff < 0.99 ? sampleLayer(2, uvT, tX, tY) : vec4(0.0);
+        vec4 side = vec4(0.0);
+        if (cliff > 0.01) {
+            if (bxw > 0.01) side += sampleLayer(2, uvX, xX, xY) * bxw;
+            if (bzw > 0.01) side += sampleLayer(2, uvZ, zX, zY) * bzw;
+        }
+        smp[2] = mix(top, side, cliff);
+    }
     if (ws[3] > 0.001) smp[3] = sampleLayer(3, uv * 0.7, dX * 0.7, dY * 0.7);
     if (ws[4] > 0.001) smp[4] = sampleLayer(4, uv * 0.8, dX * 0.8, dY * 0.8);
     if (ws[5] > 0.001) smp[5] = sampleLayer(5, uv, dX, dY);

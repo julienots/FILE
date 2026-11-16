@@ -551,8 +551,10 @@ float World::height(float x, float z) const {
             h = std::min(h, l.level - depth);
         } else {
             float t = smoothstepf(shore, shore + 24.f, d);
+            float hb = h;
             h = lerpf(std::max(h, l.level + 0.35f), h, t);
             h = std::max(h, lerpf(l.level + 0.35f, -100.f, t));
+            h = lerpf(h, std::min(h, hb), ri);   // 1.11.1: the shore bank does not dam the river that flows into the lake
         }
     }
     // settlements & landmarks are levelled
@@ -563,6 +565,7 @@ float World::height(float x, float z) const {
             if (p.type == PoiType::Lake) continue;
             float d = length(vec2(x, z) - p.pos);
             float w = 1.f - smoothstepf(p.radius * 0.75f, p.radius + 22.f, d);
+            w *= 1.f - ri;   // 1.11.1: never fill a river channel (a village next to a river left a dry, stepped bed)
             if (w > 0) h = lerpf(h, p.height, w);
         }
         // roads flatten towards their smoothed profile

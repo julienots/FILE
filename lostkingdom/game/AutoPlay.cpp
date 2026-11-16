@@ -124,6 +124,38 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "river") {
+        // 1.11.1 user report: a river near Brindlemere shown as a dry grey stepped bed (no water). Look at the
+        // river points closest to the village, check each loaded chunk on the river has a water mesh.
+        static std::vector<vec2> spots;
+        s.push_back({0.1f, [](Game& g) {
+            spots.clear();
+            const Poi* b = g.world.poiById("brindlemere");
+            std::vector<std::pair<float, vec2>> pts;
+            for (auto& rv : g.world.rivers) for (size_t i = 0; i + 1 < rv.pts.size(); i++) for (float t = 0; t < 1; t += 0.25f) { vec2 p = lerp(rv.pts[i], rv.pts[i + 1], t); pts.push_back({length(p - b->pos), p}); }
+            std::sort(pts.begin(), pts.end(), [](auto& a, auto& c) { return a.first < c.first; });
+            for (auto& p : pts) { bool far = true; for (auto& q : spots) if (length(q - p.second) < 60) far = false; if (far) spots.push_back(p.second); if (spots.size() >= 3) break; }
+            g.timeOfDay = 11.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+        }, idle, "find"});
+        for (int i = 0; i < 3; i++) {
+            s.push_back({5.f, [i](Game& g) {
+                if (i >= (int)spots.size()) return;
+                vec2 p = spots[i] + vec2(14, 10);
+                teleport(g, p.x, p.y, 0.f);
+                vec2 d = spots[i] - p; g.camYaw = std::atan2(-d.x, -d.y); g.camPitch = i == 1 ? 0.15f : 0.6f; g.camDist = g.camDistTarget = i == 1 ? 7.f : 18.f;
+            }, idle, "go"});
+            s.push_back({0.05f, [i](Game& g) {
+                if (i >= (int)spots.size()) return;
+                vec2 p = spots[i];
+                Chunk* ch = g.world.chunkAt(p.x, p.y);
+                float wl = g.world.waterLevel(p.x, p.y), gh = g.world.height(p.x, p.y);
+                AGR_LOG("RIVER spot %d (%.0f, %.0f): water level %.2f, ground %.2f, chunk lod %d ready %d water mesh %d (%d indices)", i, p.x, p.y, wl, gh, ch ? ch->lod : -9, ch ? ch->ready : 0, ch && ch->water.valid(), ch ? ch->water.indexCount : 0);
+                g.requestScreenshot("build/shots/S" + std::to_string(i) + "_river.png");
+            }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("RIVER TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "vehicles") {
         // 1.11.0: car and motorbike - get in with a real tap, drive on the terrain, turn, wheels spinning,
         // body following the ground, rider on the bike (leaning in turns), get out, save / load

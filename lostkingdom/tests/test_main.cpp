@@ -233,6 +233,26 @@ static void testImportedAssets(const std::string& assets) {
     }
 }
 
+// ---- 1.11.1 rivers hold water everywhere (a village's levelling used to fill the channel near Brindlemere)
+static void testRiversHaveWater(World& w) {
+    std::printf("[Rivers hold water]\n");
+    int samples = 0, dry = 0; float worst = -1e9f; vec2 worstAt;
+    for (auto& rv : w.rivers)
+        for (size_t i = 0; i + 1 < rv.pts.size(); i++)
+            for (float t = 0; t < 1.f; t += 0.2f) {
+                vec2 p = lerp(rv.pts[i], rv.pts[i + 1], t);
+                if (p.x < 40 || p.y < 40 || p.x > WORLD_SIZE - 40 || p.y > WORLD_SIZE - 40) continue;
+                float wl = w.waterLevel(p.x, p.y);
+                if (wl < -1e8f) continue;
+                samples++;
+                float above = w.height(p.x, p.y) - wl;
+                if (above > -0.2f) { dry++; std::printf("    dry at (%.0f, %.0f): ground %.2f, water %.2f\n", p.x, p.y, w.height(p.x, p.y), wl); }
+                if (above > worst) { worst = above; worstAt = p; }
+            }
+    std::printf("  %d samples on river centre lines, %d dry (worst: ground %.2f m vs water at %.0f, %.0f)\n", samples, dry, worst, worstAt.x, worstAt.y);
+    CHECK(samples > 100 && dry == 0, "%d of %d river samples have no water above the bed", dry, samples);
+}
+
 // ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
 static void testBuildingsGrounded(World& w) {
     std::printf("[Buildings on the ground]\n");
@@ -560,6 +580,7 @@ int lkRunTests(int argc, char** argv) {
     World w; w.buildPlan();
     testWorld(w);
     testTallGrass(w);
+    testRiversHaveWater(w);
     testImportedAssets(assets);
     testDomainData();
     testBuildingsGrounded(w);
