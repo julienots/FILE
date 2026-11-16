@@ -76,7 +76,14 @@ void Game::updateTouchControls() {
     if (UI::Finger* f = finger(dodgeFinger)) {
         f->consumed = true;
         if (f->down && f->t > 0.3f) input.sprint = true;
-        if (!f->down) dodgeFinger = -1;
+        // 1.11.2 keep sprinting and slide the same thumb onto Saut: it jumps (once per slide), the sprint goes on
+        if (f->down && ctlVisible(CTL_JUMP)) {
+            Rect jr = ctlRect(*this, CTL_JUMP);
+            bool over = length(vec2(f->x, f->y) - vec2(jr.x + jr.w / 2, jr.y + jr.h / 2)) < jr.w * 0.5f + 8.f;
+            if (over && !dodgeSlideJump) { input.jump = true; btnFlash[CTL_JUMP] = 1.f; haptic(8, 50); }
+            dodgeSlideJump = over;
+        }
+        if (!f->down) { dodgeFinger = -1; dodgeSlideJump = false; }
     } else dodgeFinger = -1;
     // block: held while the finger stays down (a quick tap still opens the parry window for one frame)
     if (UI::Finger* f = finger(blockFinger)) {
@@ -112,12 +119,16 @@ void Game::updateTouchControls() {
             if (length(m) > 1) m = normalize(m);
             if (length(m) < settings.joystickDeadzone) m = vec2(0, 0);
             input.move = vec2(m.x, -m.y);
-            if (length(m) > 0.98f && f.t > 1.5f) input.sprint = true;
+            // 1.11.2 joystick pushed to the edge for half a second = sprint (was 1.5 s after the touch began)
+            float tdt = clampf(realTime - lastTouchT, 0.f, 0.1f);
+            joyEdgeT = length(m) > 0.9f ? joyEdgeT + tdt : 0.f;
+            if (joyEdgeT > 0.5f) input.sprint = true;
         }
         if (!f.consumed && !f.blocked && f.id != joyFinger && f.down) camFingers.push_back(&f);
         if (f.id == camFinger) camAlive = f.down || f.released;
     }
-    if (!joyAlive) joyFinger = -1;
+    if (!joyAlive) { joyFinger = -1; joyEdgeT = 0; }
+    lastTouchT = realTime;
     // camera rotation (one finger drag) and pinch zoom (two fingers)
     static std::map<int, vec2> lastPos;
     if (camFingers.size() >= 2) {

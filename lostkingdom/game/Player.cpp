@@ -223,12 +223,14 @@ void Game::playerDodge() {
     particles.dust(c.pos, 1.2f);
 }
 
-void Game::playerJump() {
+bool Game::playerJump(bool buffered) {
     Character& c = pc();
-    if (c.dead || riding) return;
-    if (heroJump()) return;   // double jump, take off / land (hero wheel)
-    if (!c.grounded || c.attackClip) return;
-    if (c.swimming) { c.vel.y = 3.f; return; }
+    if (c.dead || riding) return true;
+    if (!buffered && heroJump()) return true;   // double jump, take off / land (hero wheel)
+    // 1.11.2 "coyote time": a jump pressed just after running off an edge still counts
+    bool coyote = !c.grounded && !c.swimming && c.airTime < 0.13f && c.vel.y <= 0.5f && !flying;
+    if ((!c.grounded && !coyote) || c.attackClip) return false;
+    if (c.swimming) { c.vel.y = 3.f; return true; }
     // vault over low climbable obstacles in front
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
     vec3 probe = c.pos + fwd * 1.0f;
@@ -243,15 +245,20 @@ void Game::playerJump() {
                 c.attackClip = &clip(C_VAULT); c.attackIdx = -2; c.lastMotion = 0;
                 c.vel.y = 5.5f; c.grounded = false; stamina -= 12;
                 play("jump", 0.6f);
-                return;
+                return true;
             }
         }
     }
-    if (stamina < 8) return;
+    if (stamina < 8) return true;
     stamina -= 8; staminaRegenDelay = 0.5f;
-    c.vel.y = 6.4f;
+    // 1.11.2 a running jump goes higher and further, and keeps the sprint speed in the air
+    float hs = length(vec2(c.vel.x, c.vel.z));
+    bool fast = hs > 5.8f;
+    c.vel.y = fast ? 7.1f : 6.4f;
+    if (fast) { c.vel.x *= 1.08f; c.vel.z *= 1.08f; sprintJump = true; particles.dust(c.pos, 0.8f); }
     c.grounded = false;
-    play("jump", 0.6f);
+    play("jump", 0.6f, fast ? 0.92f : 1.f);
+    return true;
 }
 
 void Game::usePotion() {
@@ -715,7 +722,10 @@ void Game::updatePlayer(float dt) {
     if (input.dodge) dodgeBuf = 0.3f;
     dodgeBuf = std::max(0.f, dodgeBuf - dt);
     if (dodgeBuf > 0 && dodgeCD <= 0) { dodgeBuf = 0; playerDodge(); }
-    if (input.jump) playerJump();
+    // 1.11.2 jump buffer: a press up to 0.15 s before landing jumps on touchdown
+    if (input.jump) { if (playerJump()) jumpBuf = 0; else jumpBuf = 0.15f; }
+    else if (jumpBuf > 0) { jumpBuf -= dt; if (c.grounded && playerJump(true)) jumpBuf = 0; }
+    if (c.grounded && c.vel.y <= 0.1f) sprintJump = false;
     if (input.interact && lockTarget == NullEntity) {}
 
     // ---- locomotion
@@ -723,9 +733,18 @@ void Game::updatePlayer(float dt) {
     sprinting = input.sprint && mag > 0.6f && stamina > 3 && !blocking && !c.swimming;
     if (sprinting) { baseSpeed = 7.2f; stamina -= dt * 13.f; staminaRegenDelay = 0.6f; }
     if (blocking) baseSpeed = std::min(baseSpeed, 1.8f);
+    if (sprintJump && !c.grounded && mag > 0.5f) baseSpeed = std::max(baseSpeed, 7.2f);   // momentum of a running jump
     if (flying) { baseSpeed = sprinting ? 17.f : 11.f; sprinting = false; }   // Astra's flight (no sprint stamina cost)
     float speed = baseSpeed * moveSpeedMul * (c.status.slow > 0 ? 0.55f : 1.f) * (c.swimming ? 0.55f : 1.f);
     if (charging) speed *= 0.4f;
+    // 1.11.2 slopes: climbing is slower, running downhill a little faster
+    slopeMul = 1.f;
+    if (c.grounded && !flying && !c.swimming && mag > 0.15f && length2(want) > 1e-4f) {
+        vec3 w = normalize(vec3(want.x, 0, want.z));
+        float sl = (groundAt(c.pos.x + w.x * 0.9f, c.pos.z + w.z * 0.9f) - groundAt(c.pos.x, c.pos.z)) / 0.9f;
+        slopeMul = clampf(1.f - sl * 0.9f, 0.62f, 1.15f);
+        speed *= slopeMul;
+    }
     if (fishingT >= 0) speed = 0;
     vec3 dv = (busy || c.status.root > 0 || c.status.freeze > 0) ? vec3(0) : want * speed * (mag < 0.15f ? 0 : 1);
     float rate = length2(dv) > length2(vec3(c.vel.x, 0, c.vel.z)) ? 9.f : 12.f;

@@ -130,6 +130,10 @@ public:
     float tallGrassAmount(float x, float z) const;
     // Ground height including walkable structures (bridges, docks)
     float groundHeight(float x, float z) const;
+    // 1.11.2 one deck profile for the bridge mesh, the walkable ground and the railings: `along` in metres from
+    // the centre (-halfLen..halfLen), returns the world height of the deck top. It meets the road at both ends.
+    static float bridgeHalfLen(const Structure& s) { return 8.f * s.scale + 4.f; }
+    float bridgeDeck(const Structure& s, float along) const;
 
     // ---- streaming --------------------------------------------------------------------------
     void startWorkers(int n);

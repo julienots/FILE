@@ -183,6 +183,11 @@ struct VehicleState {
     int def = 0;
     vec3 pos;
     float yaw = 0, speed = 0, steer = 0, spin = 0, pitch = 0, roll = 0, yawRate = 0;
+    // 1.11.2 physics: travel direction (slides behind the heading when the tyres lose grip), vertical speed
+    // (hops over crests, falls), body suspension springs (dive, squat, lean, landing compression; car body only)
+    float velYaw = 0, vy = 0, groundPrev = 0, prevSpeed = 0, airT = 0, slip = 0;
+    float suspP = 0, suspPV = 0, suspR = 0, suspRV = 0, heave = 0, heaveV = 0;
+    bool air = false;
     std::vector<mat4> bones;
 };
 struct Interact { InterKind kind = InterKind::None; int param = 0; std::string text; float radius = 2.f; };
@@ -391,6 +396,10 @@ public:
     // input buffering: a tap during an animation is kept for a short time and executed as soon as possible
     float attackBuf = 0, dodgeBuf = 0; bool attackBufHeavy = false, attackBufCharged = false;
     int attackFinger = -1, dodgeFinger = -1, blockFinger = -1;
+    // 1.11.2 jump while sprinting: slide the sprint finger (held on Esquive) onto Saut; joystick sprint after 0.5 s at the edge
+    bool dodgeSlideJump = false; float joyEdgeT = 0, lastTouchT = 0;
+    float jumpBuf = 0; bool sprintJump = false;
+    float slopeMul = 1.f; int landRolls = 0;   // 1.11.2 speed factor on the current slope; landing rolls done (tests)   // jump pressed just before landing; a jump taken at sprint speed keeps it
     float btnFlash[CTL_COUNT] = {};
     bool ctlVisible(int id) const;
     bool charging = false;
@@ -661,7 +670,7 @@ public:
     void updatePlayer(float dt);
     void playerAttack(bool heavy, bool charged);
     void playerDodge();
-    void playerJump();
+    bool playerJump(bool buffered = false);   // false: not possible now (kept in the jump buffer)
     void playerInteract();
     void castSpell(int slot);
     void usePotion();

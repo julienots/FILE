@@ -1029,28 +1029,78 @@ static void campfire(MeshBuilder& M) {
     for (int s = -1; s <= 1; s += 2) M.tube({s * 1.5f, 0.25f, -0.4f}, {s * 1.5f, 0.25f, 0.6f}, 0.2f, 0.2f, Mat(pal::bark), 7, true);  // log benches
 }
 
-static void bridge(MeshBuilder& M, float halfLen) {
-    Mat plank(pal::woodLight, 0.85f), beam(pal::timber, 0.85f), stone(pal::stone, 0.9f);
-    int n = (int)(halfLen * 2 / 0.6f);
+// 1.11.2 timber bridge built on the shared deck profile (World::bridgeDeck): planks, stringers, posts and rails that
+// follow the deck, trestle piers down to the river bed with cross bracing, stone abutments and lanterns at both ends.
+static void bridgeV2(MeshBuilder& M, ChunkBuild& out, const Structure& s, const World& w, float gy) {
+    float L = World::bridgeHalfLen(s);
+    auto deck = [&](float z) { return w.bridgeDeck(s, z) - gy; };
+    auto ground = [&](float x, float z) { vec2 p = rotate(vec2(x, z), -s.rot) + s.pos; return w.height(p.x, p.y) - gy; };
+    Mat beam(pal::timber, 0.85f), dark(pal::timber * 0.7f, 0.9f), stone(pal::stone, 0.9f), iron(pal::iron, 0.4f, 0.9f);
+    Rng rng(hash2i((int)s.pos.x, (int)s.pos.y, 77));
+    // planks (top = deck), slightly uneven in colour, height and angle
+    int n = (int)(L * 2 / 0.55f);
     for (int i = 0; i <= n; i++) {
-        float z = -halfLen + i * 0.6f;
-        float t = z / halfLen;
-        float y = 0.8f * (1 - t * t);
-        M.box({0, y, z}, {2.4f, 0.08f, 0.27f}, Mat(lerp(pal::woodLight, pal::wood, (i % 3) / 3.f), 0.85f));
-        if (i % 4 == 0) for (int s = -1; s <= 1; s += 2) {
-            M.box({s * 2.35f, y + 0.55f, z}, {0.08f, 0.55f, 0.08f}, beam);
+        float z = -L + i * (2 * L / n);
+        float y = deck(z);
+        vec3 c = lerp(pal::woodLight, pal::wood, rng.f() * 0.8f) * (rng.chance(0.08f) ? 0.75f : 1.f);
+        M.box({rng.range(-0.04f, 0.04f), y - 0.05f + rng.range(-0.012f, 0.012f), z}, {2.4f, 0.05f, 0.25f}, Mat(c, 0.85f),
+              quat::axisAngle({0, 1, 0}, rng.range(-0.025f, 0.025f)));
+    }
+    // stringers under the planks and rails, in 1.1 m segments following the profile
+    int segs = (int)(L * 2 / 1.1f);
+    for (int i = 0; i < segs; i++) {
+        float z0 = -L + i * (2 * L / segs), z1 = z0 + 2 * L / segs;
+        float y0 = deck(z0), y1 = deck(z1);
+        for (float x : {-2.05f, -0.7f, 0.7f, 2.05f}) M.tube({x, y0 - 0.2f, z0}, {x, y1 - 0.2f, z1}, 0.13f, 0.13f, dark, 5, false);
+        for (int sd = -1; sd <= 1; sd += 2) {
+            M.tube({sd * 2.3f, y0 + 1.05f, z0}, {sd * 2.3f, y1 + 1.05f, z1}, 0.07f, 0.07f, beam, 5, false);   // hand rail
+            M.tube({sd * 2.3f, y0 + 0.55f, z0}, {sd * 2.3f, y1 + 0.55f, z1}, 0.045f, 0.045f, beam, 5, false); // mid rail
         }
     }
-    for (int s = -1; s <= 1; s += 2) {
-        for (int i = 0; i < n; i += 4) {
-            float z0 = -halfLen + i * 0.6f, z1 = std::min(halfLen, z0 + 2.4f);
-            float t0 = z0 / halfLen, t1 = z1 / halfLen;
-            M.tube({s * 2.35f, 0.8f * (1 - t0 * t0) + 1.05f, z0}, {s * 2.35f, 0.8f * (1 - t1 * t1) + 1.05f, z1}, 0.07f, 0.07f, beam, 5, false);
+    // posts every 2.2 m
+    int np = std::max(2, (int)(L * 2 / 2.2f));
+    for (int i = 0; i <= np; i++) {
+        float z = -L + 0.4f + i * ((2 * L - 0.8f) / np), y = deck(z);
+        for (int sd = -1; sd <= 1; sd += 2) {
+            M.box({sd * 2.3f, y + 0.55f, z}, {0.09f, 0.6f, 0.09f}, beam);
+            M.box({sd * 2.3f, y + 1.18f, z}, {0.11f, 0.04f, 0.11f}, dark);
         }
-        M.tube({s * 2.2f, -3.f, -halfLen * 0.45f}, {s * 2.2f, 0.75f, -halfLen * 0.45f}, 0.2f, 0.18f, beam, 6, false);
-        M.tube({s * 2.2f, -3.f, halfLen * 0.45f}, {s * 2.2f, 0.75f, halfLen * 0.45f}, 0.2f, 0.18f, beam, 6, false);
     }
-    for (int e = -1; e <= 1; e += 2) M.bevelBox({0, -0.6f, e * (halfLen + 0.5f)}, {2.8f, 0.8f, 1.f}, 0.1f, stone);
+    // trestle piers where the deck is clear of the ground
+    for (float z = -L + 3.2f; z <= L - 3.2f; z += 4.4f) {
+        float y = deck(z);
+        float g = std::min(ground(-2.f, z), ground(2.f, z));
+        if (y - g < 1.1f) continue;
+        float bot = g - 1.2f;
+        for (int sd = -1; sd <= 1; sd += 2) M.tube({sd * 2.f, bot, z}, {sd * 1.95f, y - 0.25f, z}, 0.22f, 0.19f, dark, 7, false);
+        M.box({0, y - 0.32f, z}, {2.35f, 0.14f, 0.18f}, beam);   // cap beam
+        if (y - g > 2.2f) {                                        // X bracing
+            float top = y - 0.5f, lo = std::max(g + 0.3f, top - 3.5f);
+            M.tube({-1.95f, lo, z}, {1.95f, top, z}, 0.08f, 0.08f, beam, 5, false);
+            M.tube({1.95f, lo, z}, {-1.95f, top, z}, 0.08f, 0.08f, beam, 5, false);
+        }
+    }
+    // stone abutments (from below the bank up to the deck) and a lantern at each end
+    for (int e = -1; e <= 1; e += 2) {
+        float z = e * (L - 0.6f), y = deck(z);
+        float g = std::min({ground(-2.8f, z), ground(2.8f, z), ground(0, z)}) - 0.8f;
+        float hh = std::max(0.3f, (y - 0.12f - g) * 0.5f);
+        M.bevelBox({0, g + hh, z}, {2.9f, hh, 1.3f}, 0.12f, stone);
+        for (int sd = -1; sd <= 1; sd += 2) M.bevelBox({sd * 2.75f, y + 0.35f, z}, {0.28f, 0.5f, 0.4f}, 0.06f, stone);   // end pillars
+        float lz = z + e * 0.1f, ly = y + 0.85f;
+        M.tube({2.75f, ly, lz}, {2.75f, ly + 1.4f, lz}, 0.05f, 0.045f, iron, 6, false);
+        M.box({2.75f, ly + 1.55f, lz}, {0.12f, 0.16f, 0.12f}, Mat(pal::window * 0.5f, 0.3f).nightGlow(6.f));
+        M.cone({2.75f, ly + 1.71f, lz}, {2.75f, ly + 1.9f, lz}, 0.16f, iron, 4);
+        vec2 lp = rotate(vec2(2.75f, lz), -s.rot) + s.pos;
+        out.lights.push_back(vec4(lp.x, gy + ly + 1.55f, lp.y, LI_LANTERN));
+    }
+    // railings: colliders in 4 m pieces at the deck height
+    Structure u = s; u.scale = 1;
+    int nc = std::max(1, (int)std::ceil(2 * L / 4.f));
+    for (int i = 0; i < nc; i++) {
+        float hz = L / nc, zc = -L + hz * (2 * i + 1);
+        for (int sd = -1; sd <= 1; sd += 2) addBoxCollider(out, u, gy + deck(zc), {sd * 2.6f, zc}, 0.15f, hz, 1.6f);
+    }
 }
 
 static void tent(MeshBuilder& M, int variant) {
@@ -1352,7 +1402,7 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_MINE: mine(M); addBoxCollider(out, s, gy, {0, -2.f}, 4.5f, 2.6f, 6.f); out.lights.push_back(vec4(s.pos.x, gy + 3.f, s.pos.y, LI_LANTERN)); break;
     case S_WAYSTONE: waystone(M); addCircleCollider(out, s, gy, L, 0.7f, 3.f); out.lights.push_back(vec4(s.pos.x, gy + 2.2f, s.pos.y, LI_MAGIC)); out.emitters.push_back(vec4(s.pos.x, gy + 1.f, s.pos.y, EM_SPARKLES)); break;
     case S_CAMPFIRE: campfire(M); out.lights.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y, LI_FIRE)); out.emitters.push_back(vec4(s.pos.x, gy + 0.2f, s.pos.y, EM_FIRE)); break;
-    case S_BRIDGE: bridge(M, 8.f * s.scale + 4.f); { Structure u = s; u.scale = 1; for (int sd = -1; sd <= 1; sd += 2) addBoxCollider(out, u, gy + 0.5f, {sd * 2.6f, 0}, 0.15f, 8.f * s.scale + 3.f, 1.6f); } break;
+    case S_BRIDGE: bridgeV2(M, out, s, w, gy); break;
     case S_TENT: tent(M, s.variant); addBoxCollider(out, s, gy, L, 2.f, 3.f, 2.4f); break;
     case S_MONASTERY: monastery(M); addBoxCollider(out, s, gy, L, 10.3f, 7.3f, 12.f); break;
     case S_STATUE: statue(M); addBoxCollider(out, s, gy, L, 1.6f, 1.6f, 5.f); break;

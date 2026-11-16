@@ -649,18 +649,28 @@ float World::groundHeight(float x, float z) const {
                 const Structure& s = structures[si];
                 if (s.kind != S_BRIDGE) continue;
                 vec2 l = rotate(vec2(x, z) - s.pos, s.rot);  // into bridge space (z along the bridge)
-                float halfLen = 8.f * s.scale + 4.f;
-                if (std::fabs(l.x) < 2.6f && std::fabs(l.y) < halfLen) {
-                    float deck = s.variant / 100.f + 2.0f;
-                    float arch = 0.8f * (1.f - (l.y / halfLen) * (l.y / halfLen));
-                    float endH = height(s.pos.x + std::sin(s.rot) * l.y, s.pos.y + std::cos(s.rot) * l.y);
-                    float d = std::max(endH, deck + arch);
-                    if (std::fabs(l.y) > halfLen - 4.f) d = lerpf(d, endH, (std::fabs(l.y) - (halfLen - 4.f)) / 4.f);
-                    h = std::max(h, d);
-                }
+                // 1.11.2 the walkable deck is exactly the drawn one (it used to float 0.8 m above the planks)
+                if (std::fabs(l.x) < 2.6f && std::fabs(l.y) < bridgeHalfLen(s)) h = std::max(h, bridgeDeck(s, l.y));
             }
         }
     return h;
+}
+
+float World::bridgeDeck(const Structure& s, float along) const {
+    float L = bridgeHalfLen(s);
+    vec2 dir(std::sin(s.rot), std::cos(s.rot));
+    vec2 a = s.pos - dir * L, b = s.pos + dir * L;
+    float ha = height(a.x, a.y), hb = height(b.x, b.y);
+    float t = clampf(along / L, -1.f, 1.f);
+    float road = lerpf(ha, hb, (t + 1.f) * 0.5f);                 // straight line between the two banks
+    float span = s.variant / 100.f + 1.2f + 0.8f * (1.f - t * t);  // clearance over the water, gentle arch
+    // near the ends the arch comes down to meet the road (no step when walking or driving on); the bigger the
+    // drop, the longer the ramp (at most ~1 in 3)
+    float drop = std::max(0.f, s.variant / 100.f + 1.6f - (t < 0 ? ha : hb));
+    float frac = clampf(drop / (0.22f * L), 0.3f, 0.75f);
+    float e = smoothstepf(1.f - frac, 1.f, std::fabs(t));
+    span -= std::max(0.f, span - road) * e;
+    return std::max(road, span);
 }
 
 bool World::nodeAvailable(uint32_t uid, double t) const {

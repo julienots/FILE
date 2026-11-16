@@ -253,6 +253,33 @@ static void testRiversHaveWater(World& w) {
     CHECK(samples > 100 && dry == 0, "%d of %d river samples have no water above the bed", dry, samples);
 }
 
+// ---- 1.11.2 bridges: the walkable deck is the drawn deck, it meets the road at both ends, has no step, and
+// clears the water
+static void testBridges(World& w) {
+    std::printf("[Bridges]\n");
+    int n = 0;
+    for (const Structure& s : w.structures) {
+        if (s.kind != S_BRIDGE) continue;
+        n++;
+        float L = World::bridgeHalfLen(s);
+        vec2 dir(std::sin(s.rot), std::cos(s.rot));
+        float worstStep = 0, minClear = 1e9f;
+        for (float a = -L; a < L - 0.25f; a += 0.25f) worstStep = std::max(worstStep, std::fabs(w.bridgeDeck(s, a + 0.25f) - w.bridgeDeck(s, a)));
+        for (float a = -L * 0.5f; a <= L * 0.5f; a += 1.f) minClear = std::min(minClear, w.bridgeDeck(s, a) - s.variant / 100.f);
+        vec2 ea = s.pos - dir * L, eb = s.pos + dir * L;
+        float endGap = std::max(std::fabs(w.bridgeDeck(s, -L) - w.height(ea.x, ea.y)), std::fabs(w.bridgeDeck(s, L) - w.height(eb.x, eb.y)));
+        // groundHeight on the deck axis = the deck
+        float walkGap = 0;
+        for (float a = -L + 0.5f; a < L - 0.5f; a += 1.f) { vec2 p = s.pos + dir * a; walkGap = std::max(walkGap, std::fabs(w.groundHeight(p.x, p.y) - w.bridgeDeck(s, a))); }
+        std::printf("  bridge at (%.0f, %.0f): %.0f m, steepest 25 cm step %.3f m, ends %.3f m from the road, clearance %.2f m, walk/deck %.3f m\n", s.pos.x, s.pos.y, 2 * L, worstStep, endGap, minClear, walkGap);
+        CHECK(worstStep < 0.12f, "bridge deck has a step of %.2f m", worstStep);
+        CHECK(endGap < 0.05f, "bridge end %.2f m away from the road", endGap);
+        CHECK(minClear > 1.0f, "bridge only %.2f m above the water", minClear);
+        CHECK(walkGap < 0.05f, "walkable height differs from the deck by %.3f m", walkGap);
+    }
+    CHECK(n >= 1, "%d bridges", n);
+}
+
 // ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
 static void testBuildingsGrounded(World& w) {
     std::printf("[Buildings on the ground]\n");
@@ -581,6 +608,7 @@ int lkRunTests(int argc, char** argv) {
     testWorld(w);
     testTallGrass(w);
     testRiversHaveWater(w);
+    testBridges(w);
     testImportedAssets(assets);
     testDomainData();
     testBuildingsGrounded(w);

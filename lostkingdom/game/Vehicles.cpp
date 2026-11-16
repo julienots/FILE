@@ -66,6 +66,7 @@ void Game::enterVehicle(int i) {
     if (riding) toggleMount();
     if (flying || dungeon.active) return;
     driving = i;
+    { VehicleState& v = vehicles[i]; v.vy = 0; v.air = false; v.airT = 0; v.velYaw = v.yaw; v.groundPrev = v.pos.y; v.prevSpeed = v.speed; }
     Character& c = pc();
     const VehicleDef& d = vehicleDefs()[vehicles[i].def];
     c.vel = vec3(0);
@@ -100,6 +101,8 @@ void Game::updateDriving(float dt, vec3 want, float mag) {
     Character& c = pc();
     if (input.mount || input.jump || c.dead) { exitVehicle(); return; }
     vec3 fwd(std::sin(v.yaw), 0, std::cos(v.yaw));
+    if (std::fabs(v.speed) < 0.5f || std::fabs(wrapAngle(v.velYaw - v.yaw)) > 1.2f) v.velYaw = v.yaw;
+    bool airborne = v.air && v.airT > 0.06f;   // tiny bumps keep the grip
     // the stick gives where to go: drive towards it, reverse if it points behind while (nearly) stopped
     float target = 0, yawRate = 0;
     if (mag > 0.1f) {
@@ -110,22 +113,30 @@ void Game::updateDriving(float dt, vec3 want, float mag) {
         if (reverse) { target = -mag * d.maxSpeed * 0.3f; ang = wrapAngle(ang + PI); }
         else if (back) { target = 0; ang = 0; }   // 1.11.1 stick pulled back while moving forward: brake (then reverse)
         else target = mag * d.maxSpeed * (std::fabs(ang) > 1.2f ? 0.45f : 1.f);   // slow down in a hairpin
-        float grip = clampf(std::fabs(v.speed) / 5.f, 0.f, 1.f);
+        float grip = clampf(std::fabs(v.speed) / 5.f, 0.f, 1.f) * (airborne ? 0.15f : 1.f);
         yawRate = clampf(ang * 3.f, -d.turn, d.turn) * grip * (v.speed < 0 ? -1.f : 1.f);
         v.steer = damp(v.steer, clampf(ang, -0.5f, 0.5f) * (v.speed < 0 ? -1.f : 1.f), 8.f, dt);
     } else v.steer = damp(v.steer, 0.f, 6.f, dt);
     float accel = (std::fabs(target) > std::fabs(v.speed) && target * v.speed >= 0) ? d.accel : 9.f;   // engine / brakes
-    v.speed = approach(v.speed, target, accel * dt);
+    if (!airborne) v.speed = approach(v.speed, target, accel * dt);
     // uphill slows, downhill speeds up a little
     float hAhead = groundAt(v.pos.x + fwd.x * 2.f, v.pos.z + fwd.z * 2.f) - groundAt(v.pos.x, v.pos.z);
     v.speed -= clampf(hAhead / 2.f, -0.5f, 0.8f) * 3.f * dt * (v.speed >= 0 ? 1.f : -1.f);
     float prevYaw = v.yaw;
     v.yaw = wrapAngle(v.yaw + yawRate * dt);
     fwd = vec3(std::sin(v.yaw), 0, std::cos(v.yaw));
-    vec3 np = v.pos + fwd * v.speed * dt;
-    // water and cliffs stop the vehicle
+    // 1.11.2 grip: the travel direction follows the heading; in a hard fast turn the car slides (drift), the
+    // moto barely does, nothing steers in the air
+    float latAcc = std::fabs(yawRate * v.speed);
+    float gripRate = airborne ? 0.f : (d.moto ? 14.f : (latAcc > 17.f ? 3.2f : 10.f));
+    v.velYaw = wrapAngle(v.velYaw + wrapAngle(v.yaw - v.velYaw) * std::min(1.f, gripRate * dt));
+    v.slip = std::fabs(wrapAngle(v.velYaw - v.yaw));
+    if (!airborne) v.speed *= 1.f - std::min(0.5f, v.slip) * 0.5f * dt;   // sliding scrubs speed
+    vec3 vdir(std::sin(v.velYaw), 0, std::cos(v.velYaw));
+    vec3 np = v.pos + vdir * v.speed * dt;
+    // water, walls of rock and high drops stop the vehicle (going down a slope or off a crest is fine)
     float wl = waterAt(np.x, np.z), gy = groundAt(np.x, np.z);
-    bool blocked = (wl > -1e8f && gy < wl + 0.25f) || std::fabs(gy - v.pos.y) > 1.2f + std::fabs(v.speed) * dt * 1.5f;
+    bool blocked = (wl > -1e8f && gy < wl + 0.25f) || gy - v.pos.y > 1.2f + std::fabs(v.speed) * dt * 1.5f || (!v.air && v.pos.y - gy > 3.f);
     if (!blocked) {
         vec3 before = np;
         collideStatic(np, d.radius, gy);
@@ -149,8 +160,33 @@ void Game::updateDriving(float dt, vec3 want, float mag) {
             tr = std::atan2(0.5f * (fl + rl) - 0.5f * (fr + rr), tw) - clampf(yawRate * std::fabs(v.speed) * 0.006f, -0.06f, 0.06f);   // body roll
             ty = 0.25f * (fl + fr + rl + rr);
         }
-        v.pitch = damp(v.pitch, tp, 10.f, dt); v.roll = damp(v.roll, tr, 8.f, dt);
-        v.pos.y = damp(v.pos.y, ty, 14.f, dt);
+        // 1.11.2 vertical motion: gravity, the ground pushes up (and launches the vehicle over a crest)
+        float gvy = clampf((ty - v.groundPrev) / std::max(dt, 1e-4f), -30.f, 0.3f * std::fabs(v.speed) + 1.f);
+        if (std::fabs(ty - v.groundPrev) > 2.f) gvy = 0;   // teleport, first frame
+        v.groundPrev = ty;
+        v.vy -= 20.f * dt;
+        float y = v.pos.y + v.vy * dt;
+        if (y <= ty) {
+            float impact = v.vy - gvy;
+            if (v.air && v.airT > 0.12f && impact < -3.5f) {   // landing: the springs compress, dust, a thud
+                v.heaveV += impact * 0.12f; v.suspPV += impact * 0.05f;
+                addShake(clampf(-impact * 0.025f, 0.05f, 0.35f)); haptic(30, (int)clampf(-impact * 25.f, 60.f, 220.f));
+                play("land", 0.5f, 0.6f); particles.dust(v.pos, 1.2f);
+            }
+            y = ty; v.vy = gvy; v.air = false; v.airT = 0;
+        } else if (y > ty + 0.05f) { v.air = true; v.airT += dt; }
+        v.pos.y = y;
+        if (!v.air || v.airT < 0.06f) { v.pitch = damp(v.pitch, tp, 10.f, dt); v.roll = damp(v.roll, tr, 8.f, dt); }
+        else { v.pitch = damp(v.pitch, -0.12f, 1.2f, dt); v.roll = damp(v.roll, 0.f, 2.f, dt); }   // nose drops slowly in the air
+        // body springs (car): squat when accelerating, dive when braking, lean out of the turn
+        if (!d.moto) {
+            float acc = clampf((v.speed - v.prevSpeed) / std::max(dt, 1e-4f), -25.f, 25.f);
+            float lat = clampf(-yawRate * v.speed * 0.004f, -0.07f, 0.07f);
+            v.suspPV += (-70.f * v.suspP - 9.f * v.suspPV + acc * 0.0035f * 70.f) * dt; v.suspP = clampf(v.suspP + v.suspPV * dt, -0.08f, 0.08f);
+            v.suspRV += (-70.f * (v.suspR - lat) - 9.f * v.suspRV) * dt; v.suspR = clampf(v.suspR + v.suspRV * dt, -0.09f, 0.09f);
+            v.heaveV += (-90.f * v.heave - 10.f * v.heaveV) * dt; v.heave = clampf(v.heave + v.heaveV * dt, -0.12f, 0.08f);
+        }
+        v.prevSpeed = v.speed;
         float r = std::max(0.15f, J[2].y);
         v.spin = std::fmod(v.spin + v.speed / r * dt, TAU * 100.f);
     } else v.pos.y = groundAt(v.pos.x, v.pos.z);
@@ -170,6 +206,11 @@ void Game::updateDriving(float dt, vec3 want, float mag) {
     // engine: one looping voice, pitch follows the speed (the moto revs higher)
     float rev = saturate(std::fabs(v.speed) / d.maxSpeed);
     if (sfx.count("engine")) audio.setEngine(sfx["engine"], 0.22f + 0.3f * rev, (d.moto ? 1.25f : 0.9f) * (0.8f + 1.6f * rev));
+    // tyres sliding: smoke-dust from the rear wheels
+    if (A && v.slip > 0.12f && std::fabs(v.speed) > 9.f && !v.air && particles.rng.chance(dt * 30.f)) {
+        const auto& J = A->data.joints;
+        for (size_t j = J.size() - (d.moto ? 1 : 2); j < J.size(); j++) particles.dust(vehicleLocal(v, vec3(J[j].x, 0.1f, J[j].z)), 0.9f);
+    }
     if (std::fabs(v.speed) > 8.f && particles.rng.chance(dt * 12.f)) {
         vec3 back = vehicleLocal(v, A ? vec3(A->data.joints.back().x, 0.1f, A->data.joints.back().z) : vec3(0, 0.1f, -1.5f));
         particles.dust(back, 0.5f + 0.5f * saturate(std::fabs(v.speed) / d.maxSpeed));
@@ -191,6 +232,11 @@ void Game::renderVehicles() {
         int nb = (int)J.size();
         v.bones.resize(nb);
         for (int b = 0; b < nb; b++) {
+            if (b == 0 && !d.moto) {   // 1.11.2 car body on its springs (the wheels stay on the ground)
+                vec3 pv(0, J.size() > 2 ? J[2].y : 0.4f, 0);
+                v.bones[0] = mat4::trs(pv + vec3(0, v.heave, 0), quat::axisAngle({1, 0, 0}, -v.suspP) * quat::axisAngle({0, 0, 1}, v.suspR), vec3(1)) * mat4::trs(-pv, quat(), vec3(1));
+                continue;
+            }
             if (b < 2) { v.bones[b] = mat4(); continue; }
             bool front = (d.moto && b == 2) || (!d.moto && b <= 3);
             float steer = front ? v.steer * (d.moto ? 0.6f : 1.f) : 0.f;

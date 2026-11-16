@@ -672,6 +672,17 @@ void main() {
         foam += streak * 0.18 * clamp(fl * 3.0, 0.0, 1.0);
     }
     col = mix(col, vec3(0.95) * (amb + uSunColor.rgb * uSunDir.w * 0.6), clamp(foam, 0.0, 1.0) * (1.0 - frozen));
+#ifndef WATER_SIMPLE
+    // 1.11.2 caustics: the waves focus sunlight into a moving net of bright lines on the bed of shallow water
+    {
+        vec2 cp = vWorld.xz * 0.32 + N.xz * 0.35 + flow * t * 0.12;
+        float c1 = texture(uNoiseTex, cp + vec2(t * 0.031, t * 0.019)).g;
+        float c2 = texture(uNoiseTex, cp * 1.37 - vec2(t * 0.024, -t * 0.033)).g;
+        float ca = pow(1.0 - abs(c1 - c2), 14.0);
+        float vis = (1.0 - absorb) * smoothstep(0.04, 0.4, depth) * sh * uSunDir.w * (1.0 - frozen) * (1.0 - fres);
+        col += uSunColor.rgb * ca * vis * 0.75;
+    }
+#endif
     // ice
     vec3 ice = vec3(0.75, 0.88, 0.97) * (amb + uSunColor.rgb * uSunDir.w * sh * 0.7) + uSunColor.rgb * spec * 0.4;
     float crack = smoothstep(0.02, 0.0, abs(texture(uNoiseTex, vWorld.xz * 0.05).r - 0.5));

@@ -541,11 +541,23 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
         if (e == player) { stamina -= dt * 2.f; staminaRegenDelay = 0.2f; if (stamina <= 0) { c.hp -= dt * 5.f; if (c.hp <= 0) killCharacter(e, c, NullEntity); } }
     } else if (!(e == player && flying) && (c.pos.y <= gy + 0.02f || (c.grounded && c.pos.y - gy < 0.45f && c.vel.y <= 0.1f))) {
         if (!c.grounded && c.airTime > 0.35f) {
-            if (e == player) { c.vis.anim.play(&clip(C_LAND), 1.f, false, 0.03f); play("land", 0.6f); particles.dust(c.pos, 1.f); haptic(20, 80); if (c.airTime > 1.6f && !dungeon.active && fallSafeT <= 0) { float fd = (c.airTime - 1.6f) * c.maxHp * 0.25f; dealDamage(NullEntity, e, fd, Element::Physical, vec3(0), 0, false); } }
+            if (e == player) {
+                // 1.11.2 a long fall while running ends in a forward roll: momentum kept, half the fall damage
+                float hs = length(vec2(c.vel.x, c.vel.z));
+                bool roll = c.airTime > 0.85f && hs > 3.5f && !c.attackClip && !c.dead;
+                if (roll) {
+                    c.yaw = std::atan2(c.vel.x, c.vel.z);
+                    c.vis.anim.play(&clip(C_ROLL), 1.15f, false, 0.04f);
+                    c.attackClip = &clip(C_ROLL); c.attackIdx = -2; c.lastMotion = 0;
+                    landRolls++;
+                } else c.vis.anim.play(&clip(C_LAND), 1.f, false, 0.03f);
+                play("land", 0.6f); particles.dust(c.pos, roll ? 1.6f : 1.f); haptic(20, 80);
+                if (c.airTime > 1.6f && !dungeon.active && fallSafeT <= 0) { float fd = (c.airTime - 1.6f) * c.maxHp * 0.25f * (roll ? 0.5f : 1.f); dealDamage(NullEntity, e, fd, Element::Physical, vec3(0), 0, false); }
+            }
         }
         c.pos.y = gy; c.vel.y = 0; c.grounded = true; c.airTime = 0;
         // steep slopes push characters down (no climbing cliffs)
-        if (!dungeon.active) {
+        if (!dungeon.active && gy < world.height(c.pos.x, c.pos.z) + 0.05f) {   // 1.11.2 not on bridge decks / steps
             vec3 n = world.normal(c.pos.x, c.pos.z);
             if (n.y < 0.66f) { c.pos.x += n.x * dt * 6.f; c.pos.z += n.z * dt * 6.f; }
         }

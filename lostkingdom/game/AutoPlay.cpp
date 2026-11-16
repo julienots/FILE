@@ -124,6 +124,224 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "physics") {
+        // 1.11.2 physics: running jump vs standing jump, slope speed, landing roll, car slide / hops / springs
+        static vec3 j0; static float jumpDist[2], jumpPeak[2]; static bool inAir; static int phase;
+        static float upMul, downMul; static int rolls0; static float maxSlip, airTotal, suspMin, suspMax; static int landings; static bool wasAir;
+        static int res[5];
+        s.push_back({2.0f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.timeOfDay = 11.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 30, b->pos.y + 30, 0.4f);
+        }, idle, "flat"});
+        for (int k = 0; k < 2; k++) {   // 0: standing jump (walk), 1: running jump (sprint)
+            s.push_back({2.4f, [k](Game& g) { g.pc().vel = vec3(0); phase = 0; inAir = false; jumpDist[k] = jumpPeak[k] = 0; g.camYaw = 0.4f; },
+                [k](Game& g, float t) {
+                    Character& c = g.pc();
+                    g.input.move = vec2(0, k == 0 ? 0.5f : 1.f); g.input.sprint = k == 1;
+                    if (phase == 0 && t > 1.2f) { g.input.jump = true; phase = 1; j0 = c.pos; }
+                    else if (phase == 1) { if (!c.grounded) { inAir = true; jumpPeak[k] = std::max(jumpPeak[k], c.pos.y - j0.y); } else if (inAir) { jumpDist[k] = distXZ(c.pos, j0); phase = 2; } }
+                }, k == 0 ? "standing jump" : "running jump"});
+            s.push_back({0.6f, [k](Game& g) { g.input.move = vec2(0); AGR_LOG("PHYSICS jump %s: %.2f m long, %.2f m high", k ? "running" : "walking", jumpDist[k], jumpPeak[k]); }, idle, "log"});
+        }
+        // slope: find a ~25-35 % slope near Brindlemere, run up then down it
+        static vec2 sp, sdir;
+        s.push_back({2.0f, [](Game& g) {
+            const Poi* b = g.world.poiById("brindlemere"); float best = 0; sp = b->pos; sdir = vec2(1, 0);
+            for (int i = 0; i < 4000; i++) {
+                vec2 p = b->pos + vec2(std::fmod(i * 37.1f, 300.f) - 150.f, std::fmod(i * 91.7f, 300.f) - 150.f);
+                vec3 n = g.world.normal(p.x, p.y);
+                float sl = std::sqrt(std::max(0.f, 1.f - n.y * n.y)) / std::max(0.1f, n.y);
+                if (sl > 0.25f && sl < 0.4f && g.world.waterLevel(p.x, p.y) < -1e8f && sl > best) { best = sl; sp = p; sdir = normalize(vec2(-n.x, -n.z)); }
+            }
+            AGR_LOG("PHYSICS slope %.2f at (%.0f, %.0f)", best, sp.x, sp.y);
+            teleport(g, sp.x, sp.y, 0);
+        }, idle, "slope"});
+        for (int k = 0; k < 2; k++) {
+            s.push_back({1.0f, [k](Game& g) {
+                vec2 d = k == 0 ? sdir : -sdir;
+                teleport(g, sp.x - d.x * 1.5f, sp.y - d.y * 1.5f, std::atan2(-d.x, -d.y));
+            }, [k](Game& g, float t) {
+                g.input.move = vec2(0, 1.f);
+                if (t > 0.7f) { if (k == 0) upMul = g.slopeMul; else downMul = g.slopeMul; }
+            }, k == 0 ? "run uphill" : "run downhill"});
+        }
+        s.push_back({0.1f, [](Game& g) { g.input.move = vec2(0); AGR_LOG("PHYSICS slope speed: uphill x%.2f, downhill x%.2f", upMul, downMul); }, idle, "log"});
+        // landing roll: running off a 9 m drop (dropped from the air with forward speed)
+        s.push_back({2.5f, [](Game& g) {
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 30, b->pos.y + 30, 0.4f);
+            Character& c = g.pc(); rolls0 = g.landRolls; c.pos.y += 9.f; c.grounded = false; c.airTime = 0.2f; c.vel = vec3(-std::sin(0.4f) * 6.f, 0, -std::cos(0.4f) * 6.f); g.sprintJump = true;
+        }, [](Game& g, float) { g.input.move = vec2(0, 1.f); g.input.sprint = true; }, "drop"});
+        s.push_back({0.1f, [](Game& g) { g.input.move = vec2(0); AGR_LOG("PHYSICS landing rolls %d", g.landRolls - rolls0); }, idle, "log"});
+        // car: hard turn at full speed (slide), then the Gravemoor road (hops, springs)
+        s.push_back({2.0f, [](Game& g) {
+            g.races.clear(); g.buildRaces();
+            const RaceTrack& tr = g.races[2];
+            if (g.vehicles.empty()) g.initVehicles();
+            VehicleState& v = g.vehicles[0];
+            v.pos = vec3(tr.start.x, g.groundAt(tr.start.x, tr.start.y), tr.start.y); v.yaw = std::atan2(tr.startDir.x, tr.startDir.y); v.speed = 0;
+            teleport(g, v.pos.x + 3, v.pos.z, 0.f);
+            g.enterVehicle(0);
+            maxSlip = airTotal = 0; suspMin = suspMax = 0; landings = 0; wasAir = false; phase = 0;
+        }, idle, "car"});
+        s.push_back({75.f, none, [](Game& g, float t) {
+            if (g.driving < 0) return;
+            const RaceTrack& tr = g.races[2];
+            VehicleState& v = g.vehicles[g.driving];
+            while (phase < (int)tr.cps.size() && length(tr.cps[phase] - v.pos.xz()) < 12.f) phase++;
+            if (phase >= (int)tr.cps.size()) { g.input.move = vec2(0); return; }
+            g.camYaw = v.yaw + PI;
+            vec2 d = normalize(tr.cps[phase] - v.pos.xz());
+            vec2 fw(std::sin(v.yaw), std::cos(v.yaw)), rt(-std::cos(v.yaw), std::sin(v.yaw));
+            g.input.move = vec2(dot(d, rt), dot(d, fw));
+            if (dot(d, fw) < 0) g.input.move = vec2(dot(d, rt) >= 0 ? 1.f : -1.f, 0.25f);   // target behind: U-turn going forward
+            if (t > 6.f && t < 7.3f) g.input.move = vec2(1.f, 0.15f);   // yank the wheel at full speed
+            if (length(g.input.move) > 0) g.input.move = normalize(g.input.move);
+            maxSlip = std::max(maxSlip, v.slip);
+            if (v.air && v.airT > 0.06f) airTotal += 1.f / 30.f;
+            if (wasAir && !v.air) landings++;
+            wasAir = v.air && v.airT > 0.12f;
+            suspMin = std::min(suspMin, v.suspP); suspMax = std::max(suspMax, v.suspP);
+            static bool sh = false; if (!sh && v.slip > 0.15f) { sh = true; g.requestScreenshot("build/shots/W0_car_slide.png"); }
+            static float lastLog = -1; if (std::floor(t / 2) != std::floor(lastLog / 2)) AGR_LOG("PHYSICS t=%.0f cp %d dist %.1f speed %.1f slip %.2f air %d y %.2f ground %.2f", t, phase, length(tr.cps[phase] - v.pos.xz()), v.speed, v.slip, v.air, v.pos.y, g.groundAt(v.pos.x, v.pos.z)); lastLog = t;
+        }, "drive"});
+        s.back().until = [](Game& g) { return phase >= (int)g.races[2].cps.size(); };
+        // launch (as off a ramp): the car must fly, then land on its springs
+        static float launchAir; static int launchLand; static float heaveMin;
+        s.push_back({2.5f, [](Game& g) { launchAir = 0; launchLand = 0; heaveMin = 0; if (g.driving >= 0) { VehicleState& v = g.vehicles[g.driving]; v.speed = 15.f; v.vy = 6.f; v.pos.y += 0.1f; } },
+            [](Game& g, float) {
+                if (g.driving < 0) return;
+                VehicleState& v = g.vehicles[g.driving];
+                g.input.move = vec2(0, 0.6f);
+                static bool was = false;
+                if (v.air) launchAir += 1.f / 30.f; else if (was) launchLand++;
+                was = v.air; heaveMin = std::min(heaveMin, v.heave);
+            }, "launch"});
+        s.push_back({0.1f, [](Game& g) {
+            g.input.move = vec2(0);
+            AGR_LOG("PHYSICS car launch: airborne %.2f s, landings %d, springs compressed %.3f m", launchAir, launchLand, -heaveMin);
+            AGR_LOG("PHYSICS car: checkpoints %d/%zu, max slip %.2f rad, airborne %.2f s, landings %d, spring pitch %.3f..%.3f", phase, g.races[2].cps.size(), maxSlip, airTotal, landings, suspMin, suspMax);
+            g.exitVehicle();
+            res[0] = jumpDist[1] > jumpDist[0] * 1.4f && jumpPeak[1] > jumpPeak[0];
+            res[1] = upMul < 0.95f && downMul > 1.0f;
+            res[2] = g.landRolls - rolls0 >= 1;
+            res[3] = maxSlip > 0.1f && suspMax - suspMin > 0.01f && launchAir > 0.3f && launchLand >= 1 && heaveMin < -0.01f;
+            res[4] = phase >= (int)g.races[2].cps.size();
+            AGR_LOG("PHYSICS TEST: runningJump=%d slopes=%d landingRoll=%d carSlideSprings=%d carRoad=%d", res[0], res[1], res[2], res[3], res[4]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG(ok ? "PHYSICS TEST PASSED" : "PHYSICS TEST FAILED");
+        }, idle, "report"});
+        return s;
+    }
+    if (name == "bridge") {
+        // 1.11.2: walk across the 4 bridges nearest to Brindlemere along their road, then drive the car over one.
+        // Checks: the hero gets to the far bank, never swims, and his feet stay on the planks (|feet - deck| small).
+        static std::vector<int> br; static int cur; static float maxGap; static bool swam, crossed; static int res[3];
+        static vec3 carStart;
+        s.push_back({2.5f, [](Game& g) {
+            g.timeOfDay = 9.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            br.clear(); res[0] = res[1] = res[2] = 0;
+            vec2 home = g.world.poiById("brindlemere")->pos;
+            for (int i = 0; i < (int)g.world.structures.size(); i++) if (g.world.structures[i].kind == S_BRIDGE) br.push_back(i);
+            std::sort(br.begin(), br.end(), [&](int a, int b) { return length(g.world.structures[a].pos - home) < length(g.world.structures[b].pos - home); });
+            if (br.size() > 4) br.resize(4);
+            AGR_LOG("BRIDGE %zu bridges tested", br.size());
+        }, idle, "find"});
+        for (int k = 0; k < 4; k++) {
+            s.push_back({2.0f, [k](Game& g) {
+                cur = k; maxGap = 0; swam = crossed = false;
+                if (k >= (int)br.size()) return;
+                const Structure& st = g.world.structures[br[k]];
+                float L = World::bridgeHalfLen(st);
+                vec2 dir(std::sin(st.rot), std::cos(st.rot)), p = st.pos - dir * (L + 7.f);
+                teleport(g, p.x, p.y, st.rot + PI);
+                g.pc().yaw = st.rot;
+                AGR_LOG("BRIDGE %d at (%.0f, %.0f): length %.1f m, water %.2f, deck centre %.2f, ends %.2f / %.2f", k, st.pos.x, st.pos.y, 2 * L,
+                        st.variant / 100.f, g.world.bridgeDeck(st, 0), g.world.bridgeDeck(st, -L), g.world.bridgeDeck(st, L));
+            }, idle, "to the bridge"});
+            s.push_back({16.f, none, [k](Game& g, float t) {
+                if (k >= (int)br.size() || crossed) { g.input.move = vec2(0); return; }
+                const Structure& st = g.world.structures[br[k]];
+                float L = World::bridgeHalfLen(st);
+                Character& c = g.pc();
+                vec2 l = rotate(c.pos.xz() - st.pos, st.rot);
+                g.camYaw = st.rot + PI;
+                g.input.move = vec2(clampf(l.x * 0.8f, -0.6f, 0.6f), 1.f);
+                if (std::fabs(l.y) < L - 1.f && std::fabs(l.x) < 2.f && c.grounded) maxGap = std::max(maxGap, std::fabs(c.pos.y - g.world.bridgeDeck(st, l.y)));
+                if (c.swimming) swam = true;
+                if (l.y > L + 3.f) crossed = true;
+                if (k == 0 && std::fabs(l.y) < 1.f) { static bool shot0 = false; if (!shot0) { shot0 = true; g.requestScreenshot("build/shots/V0_bridge_walk.png"); } }
+                (void)t;
+            }, "walk across"});
+            s.back().until = [](Game&) { return crossed; };
+            s.push_back({0.1f, [k](Game& g) {
+                g.input.move = vec2(0);
+                if (k >= (int)br.size()) return;
+                AGR_LOG("BRIDGE %d: crossed %d, swam %d, max gap feet/deck %.3f m", k, crossed, swam, maxGap);
+                if (crossed && !swam && maxGap < 0.12f) res[0]++;
+            }, idle, "result"});
+        }
+        // side view of the first bridge
+        s.push_back({2.5f, [](Game& g) {
+            const Structure& st = g.world.structures[br[0]];
+            float L = World::bridgeHalfLen(st);
+            vec2 dir(std::sin(st.rot), std::cos(st.rot)), side(std::cos(st.rot), -std::sin(st.rot));
+            vec2 p = st.pos - dir * (L + 3.f) + side * 7.f;   // on the bank, beside the abutment
+            teleport(g, p.x, p.y, 0);
+            vec2 to = st.pos - p; g.camYaw = std::atan2(-to.x, -to.y); g.pc().yaw = std::atan2(to.x, to.y);
+            g.camPitch = 0.22f; g.camDist = g.camDistTarget = 20.f;
+        }, idle, "side"});
+        s.push_back({0.05f, shot("V1_bridge_side"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) {
+            g.timeOfDay = 21.5f;
+            const Structure& st = g.world.structures[br[0]];
+            float L = World::bridgeHalfLen(st);
+            vec2 dir(std::sin(st.rot), std::cos(st.rot)), p = st.pos + dir * (L - 6.f);
+            teleport(g, p.x, p.y, st.rot); g.pc().yaw = st.rot + PI;
+            g.camPitch = CameraRig::PITCH_DEFAULT; g.camDist = g.camDistTarget = 15.5f;
+        }, idle, "night"});
+        s.push_back({2.5f, none, idle, "lanterns"});
+        s.push_back({0.05f, shot("V2_bridge_night"), idle, "shot"});
+        // drive over bridge 0
+        s.push_back({2.0f, [](Game& g) {
+            g.timeOfDay = 10.f; crossed = false; maxGap = 0;
+            const Structure& st = g.world.structures[br[0]];
+            float L = World::bridgeHalfLen(st);
+            vec2 dir(std::sin(st.rot), std::cos(st.rot)), p = st.pos - dir * (L + 10.f);
+            if (g.vehicles.empty()) g.initVehicles();
+            VehicleState& v = g.vehicles[0];
+            v.pos = vec3(p.x, g.world.groundHeight(p.x, p.y), p.y); v.yaw = st.rot; v.speed = 0;
+            teleport(g, p.x + 3.f * dir.y, p.y - 3.f * dir.x, st.rot + PI);
+            g.enterVehicle(0);
+            carStart = v.pos;
+        }, idle, "car"});
+        s.push_back({14.f, none, [](Game& g, float) {
+            if (g.driving < 0 || crossed) { g.input.move = vec2(0); return; }
+            const Structure& st = g.world.structures[br[0]];
+            float L = World::bridgeHalfLen(st);
+            VehicleState& v = g.vehicles[g.driving];
+            vec2 l = rotate(v.pos.xz() - st.pos, st.rot);
+            g.camYaw = v.yaw + PI;
+            vec2 target = st.pos + vec2(std::sin(st.rot), std::cos(st.rot)) * (l.y + 8.f);   // a point ahead on the axis
+            vec2 d = normalize(target - v.pos.xz());
+            vec2 fw(std::sin(v.yaw), std::cos(v.yaw)), rt(-std::cos(v.yaw), std::sin(v.yaw));
+            g.input.move = vec2(dot(d, rt), dot(d, fw)) * 0.75f;
+            if (std::fabs(l.y) < L - 2.f) maxGap = std::max(maxGap, std::fabs(v.pos.y - g.world.bridgeDeck(st, l.y)));
+            if (l.y > L + 3.f) crossed = true;
+            static bool sh = false; if (!sh && std::fabs(l.y) < 2.f) { sh = true; g.requestScreenshot("build/shots/V3_bridge_car.png"); }
+        }, "drive across"});
+        s.back().until = [](Game&) { return crossed; };
+        s.push_back({0.1f, [](Game& g) {
+            g.input.move = vec2(0);
+            res[1] = crossed && maxGap < 0.35f;
+            AGR_LOG("BRIDGE car: crossed %d, max gap body/deck %.3f m", crossed, maxGap);
+            res[2] = (int)br.size() >= 1;
+            g.exitVehicle();
+            AGR_LOG("BRIDGE TEST: walked %d/%zu, car %d", res[0], br.size(), res[1]);
+            AGR_LOG(res[0] == (int)br.size() && res[1] && res[2] ? "BRIDGE TEST PASSED" : "BRIDGE TEST FAILED");
+        }, idle, "report"});
+        return s;
+    }
     if (name == "shafts") {
         // 1.11.1: light shafts through the forest by the Millbrook road, morning, noon and evening
         static const float hours[3] = {7.2f, 12.f, 17.6f};
@@ -1227,9 +1445,34 @@ static std::vector<Step> scenario(const std::string& name) {
         // a finger that starts on empty space and slides onto a button must not press it
         s.push_back({0.6f, [](Game& g) { vec2 c = ctlCentre(g, CTL_JUMP); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 107, (c.x - 300) * k, (c.y - 200) * k}); g.touch(TouchEvent{TouchEvent::Move, 107, c.x * k, c.y * k}); g.touch(TouchEvent{TouchEvent::Up, 107, c.x * k, c.y * k}); },
                      [](Game& g, float) { if (!g.pc().grounded) res[7] = -1; }, "slide onto button"});
+        // 1.11.2 jump while sprinting. (a) joystick pushed to the edge -> sprint after 0.5 s, the other thumb taps Saut
+        static float airSpeed[2]; static bool airborne[2];
+        s.push_back({1.6f, [](Game& g) {
+            airSpeed[0] = airSpeed[1] = 0; airborne[0] = airborne[1] = false;
+            float k = g.ui.scale; vec2 o(g.ui.W * 0.15f, g.ui.H * 0.7f);
+            g.touch(TouchEvent{TouchEvent::Down, 110, o.x * k, o.y * k});
+        }, [](Game& g, float t) {
+            if ((int)(t * 30) == 2) { float k = g.ui.scale; vec2 o(g.ui.W * 0.15f, g.ui.H * 0.7f); g.touch(TouchEvent{TouchEvent::Move, 110, o.x * k, (o.y - 95.f * g.settings.layout.scale) * k}); }
+            if ((int)(t * 30) == 30) tapAt(g, ctlCentre(g, CTL_JUMP), 111);
+            Character& c = g.pc();
+            if (t > 1.f && !c.grounded) { airborne[0] = true; airSpeed[0] = std::max(airSpeed[0], length(vec2(c.vel.x, c.vel.z))); }
+        }, "joystick sprint + jump"});
+        // (b) sprint by holding Esquive, then slide the same thumb onto Saut
+        s.push_back({1.6f, [](Game& g) { vec2 c = ctlCentre(g, CTL_DODGE); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 112, c.x * k, c.y * k}); },
+            [](Game& g, float t) {
+                if ((int)(t * 30) == 27) { vec2 c = ctlCentre(g, CTL_JUMP); float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Move, 112, c.x * k, c.y * k}); }
+                Character& c = g.pc();
+                if (t > 0.9f && !c.grounded) { airborne[1] = true; airSpeed[1] = std::max(airSpeed[1], length(vec2(c.vel.x, c.vel.z))); }
+            }, "dodge-hold sprint + slide to jump"});
+        s.push_back({0.5f, [](Game& g) {
+            float k = g.ui.scale; vec2 c = ctlCentre(g, CTL_JUMP);
+            g.touch(TouchEvent{TouchEvent::Up, 112, c.x * k, c.y * k}); g.touch(TouchEvent{TouchEvent::Up, 110, 0, 0});
+            AGR_LOG("TOUCH sprint jump: joystick airborne %d speed %.1f m/s; dodge slide airborne %d speed %.1f m/s", airborne[0], airSpeed[0], airborne[1], airSpeed[1]);
+        }, idle, "release"});
         s.push_back({0.1f, [](Game& g) {
-            AGR_LOG("TOUCH TEST: attack=%d dodge=%d jump=%d blockIdle=%d holdCharge=%d releaseAttack=%d bufferedCombo=%d slideIgnored=%d", res[0], res[1], res[2], !res[3], res[4], res[5], res[6], res[7] == 0);
-            bool ok = res[0] && res[1] && res[2] && !res[3] && res[4] && res[5] && res[6] && res[7] == 0;
+            bool sj = airborne[0] && airSpeed[0] > 6.8f && airborne[1] && airSpeed[1] > 6.8f;
+            AGR_LOG("TOUCH TEST: attack=%d dodge=%d jump=%d blockIdle=%d holdCharge=%d releaseAttack=%d bufferedCombo=%d slideIgnored=%d sprintJump=%d", res[0], res[1], res[2], !res[3], res[4], res[5], res[6], res[7] == 0, sj);
+            bool ok = res[0] && res[1] && res[2] && !res[3] && res[4] && res[5] && res[6] && res[7] == 0 && sj;
             AGR_LOG("TOUCH TEST %s", ok ? "PASSED" : "FAILED");
         }, idle, "report"});
         // minimap orientation screenshots: camera turned, player facing a known direction
