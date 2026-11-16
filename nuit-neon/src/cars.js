@@ -5,6 +5,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CAR_LIST } from './carlist.js';
+import { buildDesign } from './procar.js';
 
 export const CARS = CAR_LIST;
 export const STAT_KEYS = [
@@ -13,14 +14,22 @@ export const STAT_KEYS = [
 export const PAINTS = [0xb9bec9, 0xf2c200, 0xc8102e, 0x14161c, 0x1668ff, 0x19c37d, 0xff6a00, 0x8a2be2, 0xf2f2f2, 0xff3fa4];
 
 // stats 1..10 -> grandeurs physiques
-export function physFromStats(s) {
-  return {
+// tune : réglages extrêmes du garage (vitesse de pointe libre jusqu'à 10 000 km/h, multiplicateur d'accélération)
+export function physFromStats(s, tune) {
+  const p = {
     vmax: (180 + s.vmax * 18) / 3.6,        // m/s
     accel: 5 + s.accel * 1.3,               // m/s²
     steer: 1.15 + s.mania * 0.12,           // rad/s
     grip: 9 + s.adher * 2.0,                // accélération latérale tenable, m/s²
     brake: 16 + s.adher * 1.2,
   };
+  if (tune && tune.vmaxKmh > 0) {
+    const V = Math.min(10000, tune.vmaxKmh) / 3.6, k = V / p.vmax;
+    p.vmax = V;
+    if (k > 1) { p.accel = Math.max(p.accel, V / 7); p.brake = Math.max(p.brake, V / 3.5); p.grip *= k; }   // le moteur, les freins et les pneus suivent
+  }
+  if (tune && tune.accelX > 1) p.accel *= Math.min(50, tune.accelX);
+  return p;
 }
 
 const loader = new GLTFLoader();
@@ -363,7 +372,7 @@ function flakes(mat) {
 }
 
 export function createCar(def, paint) {
-  const v = (def.modele && def._scene) ? rigImported(def._scene, def, paint) : (def.proc && def.proc.type === 'moto') ? buildMoto(def, paint) : buildProcedural(def, paint);
+  const v = def.design ? buildDesign(def, paint) : (def.modele && def._scene) ? rigImported(def._scene, def, paint) : (def.proc && def.proc.type === 'moto') ? buildMoto(def, paint) : buildProcedural(def, paint);
   v.def = def; v.wheelAngle = 0; v.roll = 0; v.pitch = 0;
   if (def.modele && def._scene && def._sceneLoin) {
     const f = rigImported(def._sceneLoin, def, paint, true);
@@ -382,7 +391,55 @@ export async function resolveModels() {
   await Promise.all(CARS.filter(c => c.modele).map(async (c) => {
     try { c._scene = await loadModel(c.modele); } catch (e) { console.warn('Modèle introuvable :', c.modele); c._scene = null; return; }
     if (c.lod !== false) c._sceneLoin = await loadModel(c.modele.replace(/\.glb$/, '_loin.glb')).catch(() => null);
+    for (const sc of [c._scene, c._sceneLoin]) if (sc && !sc.userData.rouesOk) { sc.userData.rouesOk = true; try { fixWheels(sc, !!c.moto); } catch (e) { console.warn('Roues non corrigées :', c.modele, e); } }
   }));
+}
+// Les modèles ont été découpés triangle par triangle : des morceaux de pneu, de jante ou de disque sont restés collés à la carrosserie
+// et ne tournaient pas. On rattache à chaque roue tous les triangles de la carrosserie qui se trouvent dans son cylindre.
+function fixWheels(scene, moto) {
+  scene.updateMatrixWorld(true);
+  const body = scene.getObjectByName('body'); if (!body || !body.isMesh || !body.geometry.index) return;
+  const g = body.geometry, P = g.attributes.position, Nn = g.attributes.normal, UV = g.attributes.uv, I = g.index, e = body.matrixWorld.elements, nv = P.count;
+  const W = new Float32Array(nv * 3);
+  for (let i = 0; i < nv; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); W[i * 3] = e[0] * x + e[4] * y + e[8] * z + e[12]; W[i * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13]; W[i * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14]; }
+  const wheels = [];
+  scene.traverse(o => { if (!/^wheel_[fr][lr]?$/i.test(o.name || '')) return; const bb = new THREE.Box3().setFromObject(o); if (bb.isEmpty()) return;
+    const m = moto ? 0.012 : 0.03; wheels.push({ o, cy: (bb.min.y + bb.max.y) / 2, cz: (bb.min.z + bb.max.z) / 2, r: o.userData.rayon || (bb.max.y - bb.min.y) / 2, x0: bb.min.x - m, x1: bb.max.x + m, tris: [] }); });
+  if (!wheels.length) return;
+  const keep = [];
+  for (let t = 0; t < I.count; t += 3) {
+    const a = I.getX(t), b = I.getX(t + 1), c = I.getX(t + 2); let own = null;
+    for (const w of wheels) {
+      let ok = true, dmax = 0;
+      for (const v of [a, b, c]) { const x = W[v * 3]; if (x < w.x0 || x > w.x1) { ok = false; break; } dmax = Math.max(dmax, Math.hypot(W[v * 3 + 1] - w.cy, W[v * 3 + 2] - w.cz)); }
+      if (!ok) continue;
+      const dc = Math.hypot((W[a * 3 + 1] + W[b * 3 + 1] + W[c * 3 + 1]) / 3 - w.cy, (W[a * 3 + 2] + W[b * 3 + 2] + W[c * 3 + 2]) / 3 - w.cz);
+      if (dmax <= w.r * 1.04 || (dc <= w.r * 0.99 && dmax <= w.r * 1.12)) { own = w; break; }
+    }
+    if (own) own.tris.push(a, b, c); else keep.push(a, b, c);
+  }
+  for (const w of wheels) {
+    if (!w.tris.length) continue;
+    const inv = w.o.matrixWorld.clone().invert().elements, map = new Map(), pos = [], nor = [], uv = [], idx = [];
+    for (const v of w.tris) { let n = map.get(v);
+      if (n === undefined) { n = pos.length / 3; map.set(v, n); const x = W[v * 3], y = W[v * 3 + 1], z = W[v * 3 + 2];
+        pos.push(inv[0] * x + inv[4] * y + inv[8] * z + inv[12], inv[1] * x + inv[5] * y + inv[9] * z + inv[13], inv[2] * x + inv[6] * y + inv[10] * z + inv[14]);
+        if (Nn) nor.push(Nn.getX(v), Nn.getY(v), Nn.getZ(v)); if (UV) uv.push(UV.getX(v), UV.getY(v)); }
+      idx.push(n); }
+    const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    if (Nn) ng.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); if (UV) ng.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    ng.setIndex(idx);
+    const mesh = new THREE.Mesh(ng, body.material); mesh.name = 'wheel_extra'; w.o.add(mesh);
+  }
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(keep), 1));
+  scene.updateMatrixWorld(true);
+}
+// pouvoir Fantôme : le véhicule devient translucide
+export function setGhost(v, on) {
+  if (!!v.ghost === on) return; v.ghost = on;
+  v.root.traverse(o => { if (!o.isMesh || o.layers.mask !== 1) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) { if (m.userData.op0 === undefined) { m.userData.op0 = m.opacity; m.userData.tr0 = m.transparent; }
+      m.transparent = on ? true : m.userData.tr0; m.opacity = on ? m.userData.op0 * 0.32 : m.userData.op0; m.needsUpdate = true; } });
 }
 export function setPaint(v, color) { for (const m of v.paintMats) m.color.set(color); }
 
@@ -394,8 +451,8 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
     if (w.front) w.steer.rotation.y = -steer * (v.moto ? 0.22 : 0.42);
   }
   const k = 1 - Math.exp(-8 * dt);
-  // la moto se couche dans les virages, la voiture prend juste un peu de roulis
-  v.roll += ((v.moto ? THREE.MathUtils.clamp(latAcc * 0.032, -0.8, 0.8) : THREE.MathUtils.clamp(latAcc * 0.0035, -0.07, 0.07)) - v.roll) * k;
+  // la moto se couche vers l'intérieur du virage, la voiture prend un peu de roulis vers l'extérieur
+  v.roll += ((v.moto ? -THREE.MathUtils.clamp(Math.atan(latAcc / 9.81) * 0.6, -0.58, 0.58) : THREE.MathUtils.clamp(latAcc * 0.0035, -0.07, 0.07)) - v.roll) * k;
   v.pitch += (THREE.MathUtils.clamp(-lonAcc * 0.0022, -0.035, 0.03) - v.pitch) * k;
   v.chassis.rotation.z = v.roll;
   v.chassis.rotation.x = v.pitch;
@@ -409,5 +466,5 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
 
 export function disposeCar(v) {
   // les modèles importés partagent leurs géométries entre voitures : on ne libère que le procédural
-  if (!v.def._scene) v.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  if (!v.def._scene) v.root.traverse(o => { if (o.isMesh && !o.geometry.userData.keep) o.geometry.dispose(); });
 }

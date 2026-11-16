@@ -140,6 +140,7 @@ public class MainActivity extends Activity {
         super.onResume();
         web.resumeTimers();
         web.onResume();
+        web.evaluateJavascript("window.__nnResume&&window.__nnResume()", null);
         immersive();
     }
 

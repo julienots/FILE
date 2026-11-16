@@ -4,14 +4,61 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Modes de jeu
 
-- **Course** : 9 circuits (5 en ville de nuit, 4 en pleine nature de jour, dont une côte au coucher du soleil), 3 à 15 adversaires, 5 niveaux de difficulté jusqu'à Légende.
+- **Course** : 9 circuits (5 en ville de nuit, 4 en pleine nature de jour) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
 - **Contre-la-montre** : seul en piste, contre son record.
 - **Élimination** : toutes les 20 secondes, le dernier est éliminé.
-- **Course à bonus** : des caisses sur la piste donnent un objet (turbo, missile, flaque d'huile, bouclier).
+- **Course à bonus** : des caisses sur la piste donnent l'un des 15 pouvoirs (voir plus bas).
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
 - **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
-- **Garage** : 6 voitures et 4 motos, 4 stats réglables par véhicule.
+- **Atelier** : trois circuits à créer soi-même, entièrement réglés par des nombres.
+- **Garage** : 13 voitures et 4 motos à acheter, réglages à améliorer, moteur extrême.
 - **Vue** : bouton VUE (ou touche C, ou Y à la manette) pour passer à la première personne.
+
+## Conduite
+
+- **Dérapage** : bouton DRIFT (Ctrl ou V au clavier, Espace hors Foot et Bonus, X à la manette). L'arrière chasse, la voiture tourne plus serré en perdant un peu de vitesse, les pneus fument et laissent des traces. Chaque glissade rapporte des points, convertis en crédits ; toucher un mur fait perdre la glissade en cours.
+- **Collisions** : les véhicules échangent leur élan selon leur masse (une moto pèse trois fois moins qu'une voiture), rebondissent, frottent et pivotent selon le point d'impact. Contre un mur, la vitesse perpendiculaire est renvoyée amortie.
+- **Obstacles** : réglage Aucun / Parfois / Souvent / Chaos, tirés au hasard à chaque départ. Cônes et barrières s'envolent, les caisses éclatent, les piles de pneus font rebondir, les blocs de béton arrêtent net ; les tremplins font sauter et les zones turbo accélèrent. Les adversaires les évitent.
+- **Motos** : elles se couchent vers l'intérieur du virage et la caméra s'incline avec elles.
+
+## Pouvoirs (Course à bonus)
+
+Turbo, Nitro (turbo long et plus fort), Missile, Triple missile, Flaque d'huile, Mine, Bouclier, Éclair (foudroie ceux qui sont devant), Aimant (tire vers la voiture de devant), Super saut, Onde de choc (repousse les voisins), Fantôme (traverse voitures et obstacles), Géant (écrase ce qu'il touche), Gel (verglas pour les voitures de devant), Téléporteur (75 m plus loin).
+
+## Économie
+
+Chaque partie rapporte des crédits (CR) : classement, difficulté, nombre de tours, buts, distance en balade, dérapages. Ils servent à :
+
+- acheter des véhicules (de 4 000 à 75 000 CR ; l'Azur et l'Onyx sont offerts) ;
+- monter un réglage d'un niveau (300 CR × niveau visé) ;
+- débloquer les paliers du **moteur extrême** : 500, 1 000, 2 500, 5 000 puis 10 000 km/h. Une fois un palier acquis, la vitesse de pointe de chaque véhicule se règle librement dans le garage (au km/h près), avec un multiplicateur d'accélération de 1 à 50. Freins et adhérence suivent, et la simulation est découpée en petits pas pour ne rien traverser.
+
+## Atelier de circuits
+
+Trois emplacements. Le tracé est tiré d'une graine : les mêmes nombres redonnent toujours le même circuit.
+
+| Réglage | Plage |
+| --- | --- |
+| Graine du tracé | 0 à 99 999 |
+| Nombre de virages | 3 à 40 |
+| Taille du circuit | 100 à 2 500 m |
+| Irrégularité | 0 à 100 % |
+| Largeur de la route | 8 à 160 m |
+| Obstacles | 0 à 600 |
+| Tremplins, zones turbo | 0 à 120 chacun |
+| Voitures de circulation | 0 à 80 |
+| Vitesse de tous les véhicules | × 0,2 à × 30 |
+| Adhérence | × 0,1 à × 5 |
+| Gravité | × 0,05 à × 5 |
+| Hauteur des sauts | × 0,2 à × 10 |
+| Puissance du boost | × 0 à × 10 |
+| Brouillard | × 0 à × 6 |
+
+Le décor se choisit parmi les 9 ambiances du jeu. « Tout au hasard » tire tous les nombres d'un coup. Modifier le tracé remet le record du circuit à zéro.
+
+## Musique
+
+Six morceaux électroniques joués en direct par le jeu (aucun fichier audio) : Néon Drive, Minuit Express, Turbo Cœur, Rêve Chromé, Circuit Rouge, Aube. Choix du morceau et du volume dans les options, « Musique suivante » dans le menu pause.
 
 ## Lancer le jeu
 
@@ -35,7 +82,7 @@ Pour le refabriquer après une modification ou l'ajout d'un modèle :
 ANDROID_JAR=/chemin/vers/android.jar ./android/build-apk.sh
 ```
 
-Le script indique en tête les outils nécessaires. La clé de signature `android/keystore/nuit-neon.jks` est une clé de projet : elle permet d'installer les mises à jour par-dessus l'ancienne version. Pour une publication sur le Play Store, il faut créer sa propre clé.
+Le script indique en tête les outils nécessaires. La clé de signature `android/keystore/nuit-neon.jks` n'est pas dans le dépôt : sans elle, le script ne peut pas signer, et un APK signé avec une autre clé ne s'installe pas par-dessus l'ancien (il faut d'abord désinstaller le jeu). Pour une publication sur le Play Store, il faut créer sa propre clé.
 
 ## Préparer un modèle 3D
 
@@ -63,16 +110,23 @@ Si une pièce ou un matériau s'appelle `body`, `paint`, `carrosserie` ou `coque
 
 Pour essayer un modèle sans toucher à la liste : ouvrir le jeu avec `?modele=models/fichier.glb` (ajouter `&rotY=3.14` si la voiture roule à l'envers).
 
+## Voitures dessinées par le jeu
+
+Sept voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes et le néon sous la caisse. Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
+
 ## Stats
 
-Chaque voiture a 4 stats de 1 à 10 (vitesse max, accélération, maniabilité, adhérence). Les valeurs de `src/carlist.js` sont celles de départ ; elles se règlent ensuite dans le garage et sont gardées sur l'appareil. Les adversaires utilisent les mêmes réglages quand ils conduisent la même voiture.
+Chaque voiture a 4 stats de 1 à 10 (vitesse max, accélération, maniabilité, adhérence). Les valeurs de `src/carlist.js` sont celles de départ ; elles se règlent ensuite dans le garage, jusqu'au niveau débloqué, et sont gardées sur l'appareil. Les adversaires utilisent les mêmes réglages quand ils conduisent la même voiture (le moteur extrême, lui, ne profite qu'au joueur).
 
 ## Fichiers
 
 - `src/tracks.js` : tracé et ambiance des circuits et de la route libre
 - `src/world.js` : décors (ville de nuit, nature de jour), route réfléchissante, herbe
 - `src/arena.js` : arène du Foot Turbo
-- `src/fx.js` : fumée, flammes, étincelles
+- `src/fx.js` : fumée, flammes, étincelles, traces de pneus
 - `src/cars.js`, `src/carlist.js` : voitures, import des modèles, animations
-- `src/main.js` : conduite, adversaires, modes de jeu, menus
+- `src/procar.js` : voitures dessinées par le jeu
+- `src/custom.js` : réglages et tracé des circuits de l'atelier
+- `src/music.js`, `src/audio.js` : musique, moteur, chocs, crissements
+- `src/main.js` : conduite, collisions, obstacles, pouvoirs, économie, adversaires, modes de jeu, menus
 - `src/page.html` : interface

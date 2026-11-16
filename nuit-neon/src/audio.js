@@ -32,3 +32,33 @@ export function beep(freq, dur) {
   g.gain.value = 0.06; g.gain.setTargetAtTime(0, ctx.currentTime + dur, 0.03);
   o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + dur + 0.2);
 }
+export const getCtx = () => ctx;
+export const soundOn = () => on;
+let noiseBuf = null;
+export function noise() {
+  if (!ctx) return null;
+  if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  return noiseBuf;
+}
+// choc : bruit sourd dont la force suit la violence de l'impact (0..1)
+export function thud(force) {
+  if (!ctx || !on || force < 0.05) return;
+  const t = ctx.currentTime, f = Math.min(1, force);
+  const s = ctx.createBufferSource(); s.buffer = noise(); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300 + f * 1400;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.1 + f * 0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18 + f * 0.25);
+  s.connect(lp); lp.connect(g); g.connect(ctx.destination); s.start(t, Math.random() * 0.5, 0.5);
+  const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(110 + f * 60, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+  og.gain.setValueAtTime(0.12 + f * 0.25, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.25); o.connect(og); og.connect(ctx.destination); o.start(t); o.stop(t + 0.3);
+}
+// crissement des pneus pendant un dérapage (0 = silence)
+let skidG = null, skidF = null;
+export function skid(amount) {
+  if (!ctx) return;
+  if (!skidG) { const s = ctx.createBufferSource(); s.buffer = noise(); s.loop = true; skidF = ctx.createBiquadFilter(); skidF.type = 'bandpass'; skidF.frequency.value = 1500; skidF.Q.value = 5;
+    skidG = ctx.createGain(); skidG.gain.value = 0; s.connect(skidF); skidF.connect(skidG); skidG.connect(ctx.destination); s.start(); }
+  const a = on ? Math.min(1, Math.max(0, amount)) : 0;
+  skidG.gain.setTargetAtTime(a * 0.09, ctx.currentTime, 0.06); skidF.frequency.setTargetAtTime(1100 + a * 900, ctx.currentTime, 0.1);
+}
+// petit jingle (gain d'argent, achat)
+export function chime(notes = [660, 880, 1320]) { notes.forEach((f, i) => setTimeout(() => beep(f, 0.07), i * 70)); }
+export function suspend(v) { if (!ctx) return; try { v ? ctx.suspend() : ctx.resume(); } catch (e) { /* contexte fermé */ } }

@@ -45,7 +45,7 @@ class Pool {
 
 export class FX {
   constructor(scene) {
-    this.smokeP = new Pool(360, false); this.fireP = new Pool(420, true);
+    this.smokeP = new Pool(720, false); this.fireP = new Pool(420, true);
     scene.add(this.smokeP.points, this.fireP.points);
     this.smokeTint = [0.75, 0.77, 0.82];
   }
@@ -78,4 +78,26 @@ export class FX {
   }
   update(dt) { this.smokeP.update(dt); this.fireP.update(dt); }
   clear() { this.smokeP.clear(); this.fireP.clear(); }
+}
+
+// Traces de pneus laissées au sol pendant les dérapages et les gros freinages (anneau de rectangles réutilisés).
+export class Skids {
+  constructor(scene, n = 900) {
+    this.n = n; this.i = 0; this.p = new Float32Array(n * 12);
+    const idx = new Uint16Array(n * 6); for (let q = 0; q < n; q++) idx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4 + 1, q * 4 + 3, q * 4 + 2], q * 6);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(this.p, 3).setUsage(THREE.DynamicDrawUsage)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+    this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x050506, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+    this.mesh.frustumCulled = false; this.mesh.layers.set(1); this.mesh.renderOrder = 2; scene.add(this.mesh);
+  }
+  // prolonge la trace d'une roue : tr = { x, z } du point précédent (ou null), renvoie le nouveau point
+  mark(tr, x, z, w = 0.24) {
+    if (tr) { const dx = x - tr.x, dz = z - tr.z, l = Math.hypot(dx, dz);
+      if (l > 0.25 && l < 6) { const nx = -dz / l * w / 2, nz = dx / l * w / 2, k = this.i * 12, p = this.p; this.i = (this.i + 1) % this.n;
+        p[k] = tr.x - nx; p[k + 1] = 0.022; p[k + 2] = tr.z - nz; p[k + 3] = tr.x + nx; p[k + 4] = 0.022; p[k + 5] = tr.z + nz;
+        p[k + 6] = x - nx; p[k + 7] = 0.022; p[k + 8] = z - nz; p[k + 9] = x + nx; p[k + 10] = 0.022; p[k + 11] = z + nz;
+        this.mesh.geometry.attributes.position.needsUpdate = true; }
+      else if (l <= 0.25) return tr; }
+    return { x, z };
+  }
+  clear() { this.p.fill(0); this.mesh.geometry.attributes.position.needsUpdate = true; }
 }

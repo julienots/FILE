@@ -131,29 +131,53 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 #score .b { color: #5fd0ff; } #score .o { color: #ff9a5a; }
 #banner { top: 30%; left: 50%; transform: translateX(-50%); font-size: clamp(34px, 12vh, 76px); font-weight: 700; font-style: italic; text-shadow: 0 0 30px rgba(255,255,255,0.5), 0 4px 18px #000; white-space: nowrap; }
 @media (max-height: 420px) { .key.mini { width: 54px; height: 54px; } #menu .modes .btn { padding: 7px 14px; } #menu h1 { font-size: clamp(30px, 9vh, 60px); } }
+/* économie, atelier, dérapage */
+#menu .side b .cash { color: var(--warn); }
+#menu .side b:first-of-type { color: var(--warn); margin-bottom: 6px; }
+#gwallet { padding: 6px 12px; font-size: 13px; } #gwallet b { color: var(--warn); font-variant-numeric: tabular-nums; }
+.chip.up { font-size: 11px; padding: 4px 8px; border-color: var(--warn); color: var(--warn); }
+.stat { grid-template-columns: 1fr auto auto; }
+.stat input:disabled { opacity: 0.35; }
+#gext { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+#gext input[type=number], .field input[type=number] { width: 86px; padding: 5px 6px; background: rgba(255,255,255,0.08); border: 1px solid var(--line); color: var(--fg); font: inherit; font-variant-numeric: tabular-nums; }
+#rgain { font-size: 13px; color: var(--warn); font-weight: 700; }
+#toast { position: absolute; z-index: 5; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--warn); color: var(--warn); padding: 7px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; pointer-events: none; }
+#editor { background: rgba(5,4,12,0.55); }
+#editor .sheet { touch-action: pan-y; }
+.edtop { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+#e-prev { width: 220px; height: 122px; background: rgba(0,0,0,0.35); border: 1px solid var(--line); flex: 0 0 auto; }
+.edside { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; flex: 1 1 220px; } .edside .label { flex: 1 0 100%; }
+#e-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px 18px; }
+#e-fields .sec { grid-column: 1 / -1; margin-top: 4px; color: var(--cyan); }
+.field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; font-size: 13px; }
+.field input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--pink); height: 22px; touch-action: pan-y; }
+.key.drift.on { background: rgba(160,90,255,0.5); border-color: #b47cff; }
+#h-drift { font-size: 15px; font-weight: 700; font-style: italic; color: #d0a8ff; min-height: 19px; text-shadow: 0 2px 8px #000; font-variant-numeric: tabular-nums; }
 </style>
 
 
 <div id="app">
   <canvas class="view" id="view"></canvas>
 
+  <div id="toast" hidden></div>
   <div class="screen" id="loading"><div>CHARGEMENT</div><small id="loadmsg">Construction du décor…</small></div>
 
   <div class="screen" id="menu" hidden>
     <div class="col">
       <h1><span>NUIT</span> <b>NÉON</b></h1>
       <div class="modes">
-        <button class="btn primary" id="m-race">Course<small>9 circuits, jusqu'à 15 adversaires</small></button>
-        <button class="btn" id="m-items">Course à bonus<small>Objets à ramasser sur la piste</small></button>
+        <button class="btn primary" id="m-race">Course<small>12 circuits, jusqu'à 31 adversaires</small></button>
+        <button class="btn" id="m-items">Course à bonus<small>15 pouvoirs à ramasser</small></button>
         <button class="btn" id="m-foot">Foot Turbo<small>Ballon, boost, saut et vol</small></button>
         <button class="btn" id="m-chrono">Contre-la-montre<small>Seul en piste, contre ton record</small></button>
         <button class="btn" id="m-elim">Élimination<small>Le dernier sort toutes les 20 s</small></button>
         <button class="btn" id="m-free">Balade libre<small>Campagne, avec ou sans circulation</small></button>
-        <button class="btn" id="m-garage">Garage<small>Voitures, moto, réglages</small></button>
-        <button class="btn" id="m-options">Options<small>Graphismes, commandes, son</small></button>
+        <button class="btn" id="m-atelier">Atelier<small>Crée tes circuits, règle tout</small></button>
+        <button class="btn" id="m-garage">Garage<small>Acheter, améliorer, moteur extrême</small></button>
+        <button class="btn" id="m-options">Options<small>Graphismes, commandes, son, musique</small></button>
       </div>
     </div>
-    <div class="side">Véhicule choisi<b id="m-car">—</b><span id="m-best"></span></div>
+    <div class="side">Crédits<b><span class="cash">0</span> CR</b>Véhicule choisi<b id="m-car">—</b><span id="m-best"></span></div>
     <div id="turn">Tourne ton téléphone à l'horizontale pour mieux jouer</div>
   </div>
 
@@ -165,6 +189,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <div class="row" data-for="race items elim foot"><span class="label">Difficulté</span><div class="chips" id="diffs"></div></div>
       <div class="row" data-for="race items chrono"><span class="label">Tours</span><div class="chips" id="laps"></div></div>
       <div class="row" data-for="race items elim"><span class="label">Adversaires</span><div class="chips" id="bots"></div></div>
+      <div class="row" data-for="race items chrono elim free"><span class="label">Obstacles</span><div class="chips" id="obst"></div></div>
       <div class="row" data-for="foot"><span class="label">Équipes</span><div class="chips" id="teams"></div></div>
       <div class="row" data-for="foot"><span class="label">Durée</span><div class="chips" id="durs"></div></div>
       <div class="row" style="justify-content:flex-end"><button class="btn primary" id="s-go">Démarrer</button></div>
@@ -175,12 +200,14 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="top">
       <button class="btn small" data-back>Retour</button>
       <div class="pickcar"><button class="arrow" id="g-prev" aria-label="Véhicule précédent">◀</button><h2 id="g-name">—</h2><button class="arrow" id="g-next" aria-label="Véhicule suivant">▶</button></div>
+      <div class="panel" id="gwallet"><span id="g-price">—</span> · <b><span class="cash">0</span> CR</b></div>
     </div>
     <div class="panel" id="gpanel">
       <div id="gpaint"><div class="label" style="margin-bottom:6px">Peinture</div><div id="swatches"></div></div>
       <div class="label">Réglages du véhicule</div>
       <div id="stats"></div>
       <div id="gpower">Vitesse de pointe <b id="g-kmh">0</b> km/h · Puissance <b id="g-pow">0</b></div>
+      <div id="gext"></div>
       <div class="row"><button class="btn small" id="g-reset">Réinitialiser</button><button class="btn small primary" id="g-pick">Choisir</button></div>
       <div id="gnote">Les réglages sont gardés sur cet appareil.</div>
     </div>
@@ -192,7 +219,20 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <div class="row"><span class="label">Graphismes</span><div class="chips" id="o-qual"></div></div>
       <div class="row"><span class="label">Accélérateur</span><div class="chips" id="o-gas"></div></div>
       <div class="row"><span class="label">Son</span><div class="chips" id="o-snd"></div></div>
+      <div class="row"><span class="label">Musique</span><div class="chips" id="o-mus"></div></div>
+      <div class="row"><span class="label">Volume</span><div class="chips" id="o-vol"></div></div>
       <div class="label" id="o-info" style="text-transform:none;letter-spacing:0"></div>
+    </div>
+  </div>
+
+  <div class="screen" id="editor" hidden>
+    <div class="sheet panel">
+      <div class="head"><h2>Atelier de circuits</h2><button class="btn small" data-back>Retour</button></div>
+      <div class="row"><span class="label">Circuit</span><div class="chips" id="e-slots"></div></div>
+      <div class="edtop"><canvas id="e-prev" width="360" height="200"></canvas><div class="edside"><div class="label" id="e-info" style="text-transform:none;letter-spacing:0"></div>
+        <button class="btn small" id="e-seed">Nouveau tracé</button><button class="btn small" id="e-wild">Tout au hasard</button><button class="btn small" id="e-reset">Réinitialiser</button><button class="btn small primary" id="e-try">Essayer</button></div></div>
+      <div class="row"><span class="label">Décor</span><div class="chips" id="e-themes"></div></div>
+      <div id="e-fields"></div>
     </div>
   </div>
 
@@ -205,10 +245,10 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="tr"><canvas id="mini" width="192" height="192"></canvas><button id="bvue" aria-label="Changer de vue">VUE</button><button id="bpause" aria-label="Pause">II</button></div>
     <div id="wrong" hidden>MAUVAIS SENS</div>
     <div id="banner" hidden></div>
-    <div class="speed"><div id="h-item"></div><b id="h-kmh">0</b><span class="label">km/h</span><div id="boostbar"><i id="h-boost"></i></div></div>
+    <div class="speed"><div id="h-drift"></div><div id="h-item"></div><b id="h-kmh">0</b><span class="label">km/h</span><div id="boostbar"><i id="h-boost"></i></div></div>
     <div class="pad l"><button class="key" id="k-left" aria-label="Gauche">◀</button><button class="key" id="k-right" aria-label="Droite">▶</button></div>
     <div class="pad r">
-      <div class="line"><button class="key mini act" id="k-act" aria-label="Action"><small id="k-actl">SAUT</small></button><button class="key mini boost" id="k-boost" aria-label="Boost"><small>BOOST</small></button></div>
+      <div class="line"><button class="key mini drift" id="k-drift" aria-label="Déraper"><small>DRIFT</small></button><button class="key mini act" id="k-act" aria-label="Action"><small id="k-actl">SAUT</small></button><button class="key mini boost" id="k-boost" aria-label="Boost"><small>BOOST</small></button></div>
       <div class="line"><button class="key brake" id="k-brake" aria-label="Frein"><small>FREIN</small></button><button class="key" id="k-gas" aria-label="Accélérer"><small>GAZ</small></button></div>
     </div>
     <div id="count" hidden></div>
@@ -219,6 +259,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <h2>Pause</h2>
       <button class="btn primary" id="p-resume">Reprendre</button>
       <button class="btn" id="p-restart">Recommencer</button>
+      <button class="btn" id="p-music">Musique suivante</button>
       <button class="btn" id="p-quit">Quitter</button>
     </div>
   </div>
@@ -227,6 +268,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="sheet panel" style="width:min(480px,100%)">
       <h2 id="rtitle">Arrivée</h2>
       <div class="label" id="rsub" style="text-transform:none;letter-spacing:0"></div>
+      <div id="rgain"></div>
       <table><tbody id="rtable"></tbody></table>
       <div class="row" style="justify-content:flex-end"><button class="btn small" id="r-menu">Menu</button><button class="btn small primary" id="r-again">Rejouer</button></div>
     </div>
