@@ -101,10 +101,19 @@ class Studio:
         self.tts = ChatterboxMultilingualTTS.from_pretrained(device="cpu")
         self.tts.prepare_conditionals(ref, exaggeration=STYLE["exaggeration"])
         self.sr = self.tts.sr
+        # Plafond de longueur par prise : sans lui, une prise qui déraille génère jusqu'à 40 s de son.
+        self.cap = 1000
+        inner = self.tts.t3.inference
+
+        def capped(*args, **kw):
+            kw["max_new_tokens"] = self.cap
+            return inner(*args, **kw)
+        self.tts.t3.inference = capped
         self.asr = WhisperModel("turbo", device="cpu", compute_type="int8", cpu_threads=threads)
 
     def take(self, text, seed):
         self.torch.manual_seed(seed)
+        self.cap = int(25 * (0.14 * len(text) + 2.5))  # 25 jetons audio par seconde
         w = self.tts.generate(text, language_id="fr", **STYLE)
         return w.squeeze().numpy().astype(np.float32)
 
