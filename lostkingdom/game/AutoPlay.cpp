@@ -148,7 +148,10 @@ static std::vector<Step> scenario(const std::string& name) {
                 g.foundBase();
                 AGR_LOG("COOP host: domain founded %d at (%.0f, %.0f)", g.base.founded, spot.x, spot.y);
                 g.coopHost();
+                g.menu = Menu::Coop;
             }, idle, "host"});
+            s.push_back({0.05f, shot("Z5_coop_menu_host"), idle, "shot"});
+            s.push_back({0.1f, [](Game& g) { g.menu = Menu::None; }, idle, "close"});
             s.push_back({60.f, none, [](Game& g, float) { g.pc().invuln = 1.f; g.timeOfDay = 10.f; }, "wait for the guest"});
             s.back().until = [](Game& g) { return g.coop.connected && g.coop.snapshots > 20 && reg_valid(g, g.coop.partner); };
             s.push_back({0.5f, [](Game& g) {
@@ -192,7 +195,10 @@ static std::vector<Step> scenario(const std::string& name) {
             }, idle, "look for a game"});
             s.push_back({40.f, none, idle, "discovery"});
             s.back().until = [](Game& g) { return !g.coop.found.empty(); };
+            s.push_back({0.6f, [](Game& g) { g.menu = Menu::Coop; }, idle, "menu"});
+            s.push_back({0.05f, shot("Z6_coop_menu_guest"), idle, "shot"});
             s.push_back({0.1f, [](Game& g) {
+                g.menu = Menu::None;
                 res[0] = !g.coop.found.empty();
                 if (res[0]) { AGR_LOG("COOP guest: found '%s' at %s", g.coop.found[0].name.c_str(), g.coop.found[0].addr.str().c_str()); g.coopJoin(g.coop.found[0].addr); }
             }, idle, "join"});

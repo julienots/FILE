@@ -238,6 +238,13 @@ void Game::coopHandle(const uint8_t* d, int n, const NetAddr& from) {
             std::string name = r.str(); int lvl = r.u16(); bool busy = r.u8() != 0;
             if (r.bad || busy) return;
             for (auto& f : coop.found) if (f.addr == from) { f.seen = realTime; f.name = name; f.level = lvl; return; }
+            // the same game answering on two addresses (the network one and 127.0.0.1 on this computer): keep one
+            const uint32_t LOOPBACK = 0x7F000001u;
+            for (auto& f : coop.found)
+                if (f.addr.port == from.port && f.name == name && (f.addr.ip == LOOPBACK || from.ip == LOOPBACK)) {
+                    if (f.addr.ip == LOOPBACK) f.addr = from;   // prefer the network address
+                    f.seen = realTime; return;
+                }
             coop.found.push_back({from, name, lvl, realTime});
             return;
         }
