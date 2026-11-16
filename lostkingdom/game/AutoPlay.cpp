@@ -124,6 +124,43 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "ssr") {
+        // 1.12.0 water reflections: the low bridge by the sea and a lake shore, with and without SSR
+        static vec2 spots[2]; static float yaws[2];
+        s.push_back({2.5f, [](Game& g) {
+            g.timeOfDay = 16.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            const Structure* low = nullptr;
+            for (auto& st : g.world.structures) if (st.kind == S_BRIDGE && (!low || st.variant < low->variant)) low = &st;
+            vec2 side(std::cos(low->rot), -std::sin(low->rot));
+            spots[0] = low->pos + side * 9.f; yaws[0] = std::atan2(side.x, side.y);   // camera behind the hero, looking at the bridge
+            const Poi* lake = nullptr;
+            for (auto& p : g.world.pois) if (p.type == PoiType::Lake) { lake = &p; break; }
+            if (lake) { spots[1] = lake->pos + vec2(lake->radius + 6.f, 0); yaws[1] = PI * 0.5f; } else spots[1] = spots[0], yaws[1] = yaws[0];
+            AGR_LOG("SSR bridge at (%.0f, %.0f), lake %s", low->pos.x, low->pos.y, lake ? lake->name.c_str() : "none");
+        }, idle, "find"});
+        for (int k = 0; k < 2; k++) {
+            s.push_back({3.f, [k](Game& g) {
+                vec2 p = spots[k];
+                for (int i = 0; i < 40 && g.world.waterLevel(p.x, p.y) > -1e8f; i++) p += vec2(std::sin(yaws[k]), std::cos(yaws[k])) * 1.f;   // dry ground
+                teleport(g, p.x, p.y, yaws[k]); g.pc().yaw = yaws[k] + PI;
+                g.camPitch = 0.35f; g.camDist = g.camDistTarget = 17.f;
+                g.renderer.settings.ssr = false;
+            }, idle, "spot"});
+            s.push_back({2.5f, none, idle, "settle (exposure)"});
+            s.push_back({0.05f, [k](Game& g) { g.requestScreenshot(std::string("build/shots/X") + char('1' + 2 * k) + "_ssr_off.png"); }, idle, "shot off"});
+            s.push_back({0.4f, [](Game& g) { g.renderer.settings.ssr = true; }, idle, "on"});
+            s.push_back({0.05f, [k](Game& g) { g.requestScreenshot(std::string("build/shots/X") + char('0' + 2 * k) + "_ssr_on.png"); }, idle, "shot on"});
+            s.push_back({0.3f, none, idle, "wait"});
+        }
+        for (int i = 0; i < 6; i++) {   // alternate off / on at 1 s intervals (brightness drift check)
+            s.push_back({1.f, [i](Game& g) { g.renderer.settings.ssr = (i % 2) == 1; }, idle, "toggle"});
+            s.push_back({0.05f, [i](Game& g) { g.requestScreenshot(std::string("build/shots/XA") + char('0' + i) + ".png"); }, idle, "shot"});
+        }
+        s.push_back({3.5f, [](Game& g) { teleport(g, 850, 600, 2.3f); g.timeOfDay = 15.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.camPitch = 0.45f; g.camDist = g.camDistTarget = 14.f; }, idle, "frostheim sun"});
+        s.push_back({0.05f, shot("X4_snow_glitter"), idle, "shot"});
+        s.push_back({0.2f, [](Game&) { AGR_LOG("SSR TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "physics") {
         // 1.11.2 physics: running jump vs standing jump, slope speed, landing roll, car slide / hops / springs
         static vec3 j0; static float jumpDist[2], jumpPeak[2]; static bool inAir; static int phase;

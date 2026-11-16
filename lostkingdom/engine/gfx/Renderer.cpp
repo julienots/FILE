@@ -49,10 +49,10 @@ GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
     switch (p) {
     case QualityProfile::Ultra:
         s.renderScale = 1.0f; s.shadowRes = 2048; s.softShadows = true; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; s.sunShafts = true; break;
+        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; s.sunShafts = true; s.ssr = true; break;
     case QualityProfile::High:
         s.renderScale = 0.85f; s.shadowRes = 2048; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; s.sunShafts = true; break;
+        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; s.sunShafts = true; s.ssr = true; break;
     case QualityProfile::Medium:
         s.renderScale = 0.75f; s.shadowRes = 1024; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = false;
         s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; s.terrainNormals = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
@@ -210,13 +210,16 @@ void Renderer::createTargets() {
     float rs = settings.renderScale * dynamicScale;
     int w = std::max(16, (int)(width * rs)), h = std::max(16, (int)(height * rs));
     shadowFrame = 0;
-    if (!sceneRT.create(w, h, hdrFormat, true, false)) {
+    if (!sceneRT.create(w, h, hdrFormat, true, false)) {   // (the depth is also blitted to depthCopyRT for water reflections)
         hdrFormat = GL_RGB10_A2; hdrScale = 4.f;
         sceneRT.create(w, h, hdrFormat, true, false);
     }
     ldrRT.create(w, h, GL_RGBA8, false);
     blurRT.create(std::max(8, w / 4), std::max(8, h / 4), GL_RGBA8, false);
     if (settings.ssao) aoRT.create(std::max(8, w / 2), std::max(8, h / 2), GL_RGBA8, false);
+    if (settings.ssr && !settings.simpleWater) {
+        if (!reflRT.create(std::max(8, w / 2), std::max(8, h / 2), hdrFormat, false) || !depthCopyRT.create(w, h, 0, true, false)) { reflRT.destroy(); depthCopyRT.destroy(); }
+    }
     if (settings.shadowRes > 0) shadowRT.create(settings.shadowRes, settings.shadowRes, 0, true, true);
     bloomChain.clear();
     int bw = w >> (1 + settings.bloomStart), bh = h >> (1 + settings.bloomStart);
@@ -228,7 +231,7 @@ void Renderer::createTargets() {
 }
 
 void Renderer::destroyTargets() {
-    shadowRT.destroy(); sceneRT.destroy(); ldrRT.destroy(); blurRT.destroy(); aoRT.destroy();
+    shadowRT.destroy(); sceneRT.destroy(); ldrRT.destroy(); blurRT.destroy(); aoRT.destroy(); reflRT.destroy(); depthCopyRT.destroy();
     for (auto& b : bloomChain) b.destroy();
     bloomChain.clear();
 }
@@ -434,6 +437,21 @@ void Renderer::render(ParticleSystem* particles) {
     }
 
     gpuMark(3);
+    // 1.12.0 copy the opaque scene (colour at half resolution, depth) for the water's screen-space reflections
+    bool doSsr = settings.ssr && reflRT.fbo && depthCopyRT.fbo && !waters.empty();
+    if (doSsr) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneRT.fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reflRT.fbo);
+        glBlitFramebuffer(0, 0, sceneRT.w, sceneRT.h, 0, 0, reflRT.w, reflRT.h, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, depthCopyRT.fbo);
+        glBlitFramebuffer(0, 0, sceneRT.w, sceneRT.h, 0, 0, depthCopyRT.w, depthCopyRT.h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        sceneRT.bind();
+        reflRT.color.bind(6); depthCopyRT.depth.bind(7);
+    }
+    water.use();
+    water.set("uReflTex", 6); water.set("uSceneDepth", 7);
+    static const float ssrDebug = getenv("LK_SSR_DEBUG") ? (float)atoi(getenv("LK_SSR_DEBUG")) : 0.f;
+    water.set("uSsr", vec4(doSsr ? 1.f : 0.f, camera.zNear, camera.zFar, ssrDebug));
     // Water & lava (alpha blended, depth tested, no depth write)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

@@ -24,7 +24,8 @@ struct GraphicsSettings {
     int shadowInterval = 1;    // redraw the shadow map every N frames (sun moves slowly)
     int bloomStart = 0;        // 0: bloom chain from half resolution, 1: from quarter resolution
     bool simpleWater = false;
-    bool sunShafts = false;    // 1.11.1 volumetric sunlight (shadow-map ray march in the composite pass)  // one normal octave, no shadow lookup, no point lights on water
+    bool sunShafts = false;
+    bool ssr = false;          // 1.12.0 screen-space reflections on water (trees, bridges, houses, characters)    // 1.11.1 volumetric sunlight (shadow-map ray march in the composite pass)  // one normal octave, no shadow lookup, no point lights on water
     float ssaoStrength = 0.8f;
     float grassDensity = 1.f;
     float particleScale = 1.f;
@@ -164,6 +165,7 @@ private:
     Shader water, lava, sky, particleAlpha, particleAdd, ribbon, bloomDown, bloomUp, composite, fxaa, blit, ui, ssao;
     GLuint frameUbo = 0;
     RenderTarget shadowRT, sceneRT, ldrRT, blurRT, aoRT;
+    RenderTarget reflRT, depthCopyRT;   // 1.12.0 copies of the opaque scene (colour, half res) and depth for water reflections
     std::vector<RenderTarget> bloomChain;
     GLenum hdrFormat = GL_RGBA16F;
     float hdrScale = 1.f;  // when the HDR target is RGB10A2 we store colour / 4

@@ -517,6 +517,21 @@ void main() {
 #endif
 #ifdef TERRAIN
     col += vec3(1.0, 0.28, 0.05) * emis;
+  #ifndef TERRAIN_SIMPLE
+    // 1.12.0 glitter: tiny facets of snow, frost and wet sand catch the sun (bloom turns them into sparkles)
+    {
+        float gk = max(max(wSnow, snowFx), wSand * (0.35 + 0.65 * wet)) * (1.0 - puddleK);
+        if (gk > 0.05) {
+            vec2 gp = vWorld.xz * 7.0, gc = floor(gp);
+            float rnd = fract(sin(dot(gc, vec2(12.9898, 78.233))) * 43758.5453);
+            vec2 ctr = vec2(fract(rnd * 7.0), fract(rnd * 13.0)) * 0.5 + 0.25;   // a point-like crystal inside the cell
+            float dotk = smoothstep(0.42, 0.1, length(fract(gp) - ctr));
+            vec3 fn = normalize(vec3(rnd - 0.5, 0.7, fract(rnd * 17.0) - 0.5));
+            float facet = pow(max(dot(fn, normalize(uSunDir.xyz + V)), 0.0), 80.0) * step(0.88, fract(rnd * 31.0)) * dotk;
+            col += uSunColor.rgb * facet * gk * sh * uSunDir.w * 10.0;
+        }
+    }
+  #endif
     if (puddleK > 0.01) {
         // puddles mirror the sky (and the sun glint), stronger at grazing angles
         float pf = 0.04 + 0.96 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0);
@@ -593,7 +608,46 @@ in vec2 vFlow;
 in vec4 vShadow;
 uniform vec4 uWaterDeep;    // rgb deep colour
 uniform vec4 uWaterShallow; // rgb shallow colour, a = frozen (ice) amount
+uniform sampler2D uReflTex;     // 1.12.0 opaque scene (half res) for screen-space reflections
+uniform highp sampler2D uSceneDepth;
+uniform vec4 uSsr;              // x on, y near, z far
 out vec4 fragColor;
+
+float ssrLinZ(float z) { float n = uSsr.y, f = uSsr.z; z = z * 2.0 - 1.0; return 2.0 * n * f / (f + n - z * (f - n)); }
+// March the reflected ray in world space, test it against the scene depth; rgb = reflected colour, a = confidence
+vec4 traceSSR(vec3 P, vec3 R) {
+    float stepLen = 0.6;
+    vec3 q = P;
+    for (int i = 0; i < 22; i++) {
+        q += R * stepLen;
+        stepLen *= 1.18;
+        vec4 c = uViewProj * vec4(q, 1.0);
+        if (c.w <= 0.0) break;
+        vec3 ndc = c.xyz / c.w;
+        vec2 uv = ndc.xy * 0.5 + 0.5;
+        if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) break;
+        float sceneZ = ssrLinZ(texture(uSceneDepth, uv).r), rayZ = ssrLinZ(ndc.z * 0.5 + 0.5);
+        if (rayZ > sceneZ + 0.05 && rayZ - sceneZ < max(1.2, stepLen * 2.0)) {
+            // refine between the last two points
+            vec3 a = q - R * stepLen / 1.18, b = q;
+            for (int k = 0; k < 4; k++) {
+                vec3 m = 0.5 * (a + b);
+                vec4 cm = uViewProj * vec4(m, 1.0);
+                vec3 nm = cm.xyz / cm.w;
+                vec2 um = nm.xy * 0.5 + 0.5;
+                if (ssrLinZ(nm.z * 0.5 + 0.5) > ssrLinZ(texture(uSceneDepth, um).r)) b = m; else a = m;
+            }
+            vec4 cb = uViewProj * vec4(b, 1.0);
+            vec2 ub = cb.xy / cb.w * 0.5 + 0.5;
+            vec2 edge = smoothstep(vec2(0.0), vec2(0.08), ub) * smoothstep(vec2(0.0), vec2(0.08), 1.0 - ub);
+            float travelled = length(b - P);
+            float conf = edge.x * edge.y * (1.0 - smoothstep(10.0, 40.0, travelled));   // near objects mirror clearly
+            if (texture(uSceneDepth, ub).r > 0.9999) conf = 0.0;   // the sky is already in the environment colour
+            return vec4(texture(uReflTex, ub).rgb / max(uSkyColor.w, 1e-3), conf);
+        }
+    }
+    return vec4(0.0);
+}
 
 vec3 sampleN(vec2 uv) {
     // derivative of noise as normal (tileable noise texture)
@@ -646,6 +700,16 @@ void main() {
     fres = fres * 0.85 + 0.07;
     vec3 R = reflect(-V, N);
     vec3 refl = envColor(R, 0.05);
+    float ssrHit = 0.0;
+#ifndef WATER_SIMPLE
+    if (uSsr.x > 0.5 && frozen < 0.5 && uSsr.w < 2.5) {
+        // trees, bridges, houses and characters mirrored in the water (rippled by the waves)
+        vec3 Rr = normalize(reflect(-V, normalize(vec3(dn.x * 0.35, 1.0, dn.y * 0.35))));
+        vec4 h = traceSSR(vWorld + vec3(0.0, 0.02, 0.0), Rr);
+        refl = mix(refl, h.rgb, h.a);
+        ssrHit = h.a;
+    }
+#endif
     float absorb = 1.0 - exp(-depth * 0.38);
     vec3 body = mix(uWaterShallow.rgb, uWaterDeep.rgb, absorb);
 #ifdef WATER_SIMPLE
@@ -658,7 +722,8 @@ void main() {
     body *= amb + uSunColor.rgb * uSunDir.w * 0.55 * sh;
     vec3 H = normalize(uSunDir.xyz + V);
     float spec = pow(max(dot(N, H), 0.0), 700.0) * 5.0 * sh * uSunDir.w * (1.0 - 0.6 * wet);
-    vec3 col = mix(body, refl, fres) + uSunColor.rgb * spec;
+    // (stylised: mirrored objects read a bit stronger than physical Fresnel so they show from the high camera)
+    vec3 col = mix(body, refl, clamp(fres + ssrHit * 0.15, 0.0, 1.0)) + uSunColor.rgb * spec;
     // shoreline foam
     float fn = texture(uNoiseTex, vWorld.xz * 0.22 + flow * t * 0.08 + t * 0.02).r;
     float foam = smoothstep(0.55, 0.0, depth) * smoothstep(0.35, 0.65, fn + 0.25 * sin(t * 2.0 + depth * 10.0));
@@ -703,6 +768,7 @@ void main() {
     alpha *= smoothstep(0.0, 0.08, depth);
     col = applyFog(col, vWorld);
     fragColor = vec4(col * uSkyColor.w, alpha);
+    if (uSsr.w > 0.5 && uSsr.w < 2.5) fragColor = uSsr.w > 1.5 ? vec4(refl, 1.0) : vec4(vec3(ssrHit), 1.0);   // LK_SSR_DEBUG=1 confidence, 2 reflection
 #endif
 }
 )";
