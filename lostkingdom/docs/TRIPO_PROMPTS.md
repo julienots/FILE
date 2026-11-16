@@ -119,6 +119,12 @@ Ces trois modèles du Drive sont beaux et vont dans le jeu, mais ils sont **stat
 
 Le dragon serpent du Drive ne colle pas au squelette des dragons du jeu (dragon ailé à quatre pattes) : je ne l'utilise pas.
 
+## 3a. État (1.11.0)
+
+- **Importés** : les 12 bâtiments de la section 3b (générés avec Tripo, modèle v3.1, textures « detailed », environ 50 crédits chacun) ; le golem, le titan et l'élémentaire du Drive (squelette Tripo, 25 crédits chacun) ; un gobelin, un bandit et un squelette (génération + squelette, 75 crédits chacun) ; la voiture et la moto du Drive (`tools/import_vehicle.py`).
+- **Orientation** : les modèles Tripo v3.1 regardent vers +X. Les outils ont une option `--rotate 270` qui les tourne vers +Z (le sens du jeu).
+- **Fichiers compressés** : certains GLB récents utilisent la compression meshopt. Il faut les décoder d'abord avec `node tools/decode_glb.mjs in.glb out.glb` (voir l'en-tête du script pour l'installation).
+
 ## 3b. Décors : bâtiments et objets (1.9.0)
 
 Le jeu sait maintenant remplacer ses bâtiments construits en code par des **modèles 3D**. Le modèle est mis automatiquement à la taille de l'emprise du bâtiment, posé sur le sol, avec ses collisions.

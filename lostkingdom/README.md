@@ -6,12 +6,49 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.10.2 (versionCode 17). Taille : environ 25 Mo. SHA-256 : `92f7c10dc217759a1030fad26fb4a43202ab4e4759c369b663e9260f8b252aef`.
-  - Les versions 1.6.1 à 1.10.2 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.11.0 (versionCode 18). Taille : environ 34 Mo. SHA-256 : `8611e73f64117ba2669a4ce9d157c1f7f9099a2736cfb1f94fb7e884598c822c`.
+  - Les versions 1.6.1 à 1.11.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.11.0 (vrais modèles 3D pour le monde, voiture et moto)
+
+- **12 bâtiments en modèles 3D** générés avec Tripo (compte de l'utilisateur, connecté par le Tripo CLI) :
+  - 3 maisons (colombages et chaume, pierre et tuiles rouges, chaumière moussue), auberge, maison de pierre enneigée, longère nordique, chapelle, forge, tour de guet, puits, étal de marché et tente ;
+  - textures 4K à la génération, ramenées à 1024 px dans le jeu pour la mémoire du téléphone ; de 5 000 à 12 000 triangles chacun ;
+  - ils remplacent les bâtiments construits en code dans tous les villages et dans votre domaine, entrée vers la rue, posés au sol avec leurs collisions ;
+  - les textures des bâtiments sont plus claires (le shader les assombrissait comme celles des personnages).
+- **6 monstres en modèles 3D animés** :
+  - le Golem de pierre, le Titan de Pierre (boss) et l'Élémentaire de braise viennent des modèles du Drive ;
+  - le gobelin, le bandit et le squelette ont été créés avec Tripo ;
+  - tous ont reçu un squelette Tripo (« Rig »), repris par `tools/import_rigged.py`. Ils jouent les animations du jeu (marche, attaques, morts).
+- **Voiture et moto, à conduire** (modèles du Drive : la « realistic supercar » et la « sport bike ») :
+  - elles sont garées sur la route juste à l'est de Brindlemere. Le bouton d'action fait « Conduire la voiture », « Monter sur la moto », puis « Descendre » ;
+  - on conduit au joystick : il indique la direction où aller, et le véhicule accélère et tourne vers elle (marche arrière si on tire vers l'arrière à l'arrêt). Vitesse maximale environ 90 km/h pour la voiture et 97 km/h pour la moto ;
+  - **les roues tournent** avec la vitesse et les roues avant braquent. Un nouvel outil, `tools/import_vehicle.py`, sépare chaque roue du modèle d'un seul bloc (pneu et jante) en gardant la fourche de la moto immobile ;
+  - **la carrosserie suit le terrain** : hauteur, tangage et roulis calculés sous chaque roue. La moto se penche dans les virages ;
+  - **le héros est assis sur la moto**, penché sur le réservoir, mains au guidon, et il penche avec elle. Dans la voiture, il n'est pas montré (il est dedans) ;
+  - un **bruit de moteur** continu monte dans les tours avec la vitesse (nouveau son en boucle dans le moteur audio) ;
+  - choc contre un arbre ou un mur (ralentissement, secousse), arrêt devant l'eau et les falaises. La position des véhicules est sauvegardée.
+- **Crédits Tripo utilisés : 980 sur 1 000** (bâtiments 110 + 10 × 50, retexture 20, squelettes 3 × 25, nouveaux monstres 3 × 75). Il en reste 20.
+- **Vérification (1.11.0)** : 2 027 tests unitaires, dont 48 nouveaux sur les modèles importés :
+  - les 12 bâtiments se chargent ;
+  - les 6 monstres ont le squelette du jeu, les jambes sous les hanches et la face vers l'avant ;
+  - la voiture a 4 roues et la moto 2, chacune avec assez de sommets, un centre à la hauteur du rayon, les roues avant à l'avant et un siège.
+
+  Nouveaux scénarios réussis :
+  - `vehicles` : monter par un vrai appui, rouler 52 m jusqu'à 25 m/s, 23 tours de roue, tangage entre -0,15 et 0,16 rad, carrosserie à 7 cm du sol, virage, descendre, moto avec bassin à 4 cm du siège et inclinaison de 0,57 rad, sauvegarde et chargement ;
+  - `showcase` : les 12 bâtiments vus de face ;
+  - `enemy` : un monstre en combat.
+
+  Les 21 scénarios sont réussis ; `full` et `vehicles` passent aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - La voiture et la moto ne renversent pas les ennemis et ne sont pas des montures de combat.
+  - Sur la moto, les rayons de la jante arrière restent en partie immobiles (seul le pneu et une partie de la jante tournent).
+  - Les modèles 3D augmentent la taille de l'APK d'environ 9 Mo (34 Mo au total), et les villages dessinent plus de triangles : les performances sur téléphone ne sont pas mesurées.
+  - Un seul exemplaire de chaque véhicule, garé à Brindlemere.
 
 ### Nouveautés 1.10.2 (caméra au doigt : libre et plus douce)
 
@@ -550,7 +587,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, rain, hunters, domain, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
