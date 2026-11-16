@@ -31,6 +31,7 @@ if (params.get('modele')) CARS.unshift({ id: 'essai', nom: 'Essai', modele: para
 const tuning = store.get('tuning', {});
 const opts = Object.assign({ qual: 'auto', autoGas: false, son: true, vue: 'ext', musique: 'alea', volMus: 0.5 }, store.get('opts', {}));
 if (opts.v !== 2) { opts.autoGas = false; opts.v = 2; }
+if (!opts.radio) opts.radio = opts.musique === 'off' ? 'off' : 'neon';
 const setup = Object.assign({ track: 0, diff: 1, laps: 3, bots: 7, team: 2, dur: 180, route: 'libre', obst: 1, amb: 'def' }, store.get('setup', {}));
 // économie : crédits gagnés en jouant, véhicules achetés, niveaux de réglage débloqués, paliers du moteur extrême
 const ecoSaved = store.get('eco', null);
@@ -826,7 +827,7 @@ function syncBall(dt) {
 // ---------- entrées ----------
 const keys = { left: false, right: false, gas: false, brake: false, boost: false, act: false, drift: false };
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', Space: 'act', ShiftLeft: 'boost', ShiftRight: 'boost', KeyX: 'boost', ControlLeft: 'drift', ControlRight: 'drift', KeyV: 'drift' };
-addEventListener('keydown', (e) => { const k = KEYMAP[e.code]; if (k) { keys[k] = true; if (mode === 'race' || mode === 'count') e.preventDefault(); } if ((e.code === 'Escape' || e.code === 'KeyP') && (mode === 'race' || mode === 'pause')) togglePause(); if (e.code === 'KeyC' && (mode === 'race' || mode === 'count')) toggleView(); });
+addEventListener('keydown', (e) => { const k = KEYMAP[e.code]; if (k) { keys[k] = true; if (mode === 'race' || mode === 'count') e.preventDefault(); } if ((e.code === 'Escape' || e.code === 'KeyP') && (mode === 'race' || mode === 'pause')) togglePause(); if (e.code === 'KeyC' && (mode === 'race' || mode === 'count')) toggleView(); if (e.code === 'KeyR' && e.target.tagName !== 'INPUT') radioStation(1); if (e.code === 'KeyT' && e.target.tagName !== 'INPUT') radioSkip(); });
 addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
 for (const [id, k] of [['k-left', 'left'], ['k-right', 'right'], ['k-gas', 'gas'], ['k-brake', 'brake'], ['k-boost', 'boost'], ['k-act', 'act'], ['k-drift', 'drift']]) {
   const el = $(id);
@@ -883,6 +884,7 @@ function pollPad(dt) {
   if (mode === 'race' || mode === 'count') {
     if (hit(9) && mode === 'race') togglePause();
     if (hit(3)) toggleView();
+    if (hit(12)) radioStation(1); if (hit(13)) radioSkip();
   } else {
     pad.steer = pad.gas = pad.brake = 0; pad.boost = pad.act = pad.drift = false;
     if (hit(9) && mode === 'pause') togglePause();
@@ -971,7 +973,7 @@ addEventListener('pointerup', () => { garageDrag = null; });
 
 // ---------- interface ----------
 const screens = ['loading', 'menu', 'setup', 'garage', 'options', 'editor', 'hud', 'pause', 'results'];
-function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); }
+function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); $('radio').hidden = !(ids.includes('menu') || ids.includes('hud')); }
 const fmt = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); };
 const fmtShort = (t) => { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 const ordinal = (n) => n === 1 ? '1er' : n + 'e';
@@ -981,7 +983,13 @@ let toastT = 0;
 function toast(msg) { $('toast').textContent = msg; $('toast').hidden = false; toastT = 4; }
 function refreshCash() { for (const el of document.querySelectorAll('.cash')) el.textContent = Math.round(eco.cash).toLocaleString('fr-FR'); }
 // musique : démarre au premier appui (les navigateurs l'exigent)
-const wake = () => { audio.initAudio(); music.setVolume(opts.volMus); if (opts.musique === 'off') music.stop(); else if (!music.current()) music.play(opts.musique); };
+const wake = () => { audio.initAudio(); music.setVolume(opts.volMus); if (opts.radio === 'off') music.stop(); else if (!music.current()) music.play(opts.radio); };
+// radio : stations, morceau suivant, affichage du titre en cours
+function radioText() { const n = music.now(); $('rd-txt').textContent = opts.radio === 'off' ? 'Radio coupée' : n.station.nom + (n.station.freq ? ' ' + n.station.freq : '') + (n.titre ? ' · ' + n.titre : ''); }
+music.listen(radioText);
+function radioStation(dir) { audio.initAudio(); music.setVolume(opts.volMus); const s = opts.radio === 'off' ? (music.play(music.station().id), music.station()) : music.nextStation(dir); opts.radio = s.id; store.set('opts', opts); radioText(); }
+function radioSkip() { audio.initAudio(); music.setVolume(opts.volMus); if (opts.radio === 'off') return radioStation(1); music.nextTrack(1); }
+function persoInfo() { const n = music.persoCount(); $('o-perso').textContent = n ? n + (n > 1 ? ' morceaux' : ' morceau') + ' dans « Ma musique »' : 'Aucun morceau pour l\'instant'; }
 function chips(el, items, get, set) {
   el.textContent = '';
   items.forEach(([val, label]) => {
@@ -1030,9 +1038,10 @@ function buildOptions() {
   chips($('o-qual'), [['auto', 'Auto'], ['haute', 'Élevés'], ['moyenne', 'Moyens'], ['basse', 'Bas']], () => opts.qual, (v) => { opts.qual = v; store.set('opts', opts); changeQuality(); });
   chips($('o-gas'), [[false, 'Manuel'], [true, 'Automatique']], () => opts.autoGas, (v) => { opts.autoGas = v; store.set('opts', opts); });
   chips($('o-snd'), [[true, 'Activé'], [false, 'Coupé']], () => opts.son, (v) => { opts.son = v; store.set('opts', opts); audio.setSound(v); });
-  chips($('o-mus'), [['off', 'Coupée'], ['alea', 'Au hasard'], ...music.MORCEAUX.map(m => [m.id, m.nom])], () => opts.musique, (v) => { opts.musique = v; store.set('opts', opts); audio.initAudio(); music.setVolume(opts.volMus); if (v === 'off') music.stop(); else music.play(v); });
+  chips($('o-mus'), [['off', 'Coupée'], ...music.STATIONS.map(s => [s.id, s.nom + (s.freq ? ' ' + s.freq : '')])], () => opts.radio, (v) => { opts.radio = v; store.set('opts', opts); audio.initAudio(); music.setVolume(opts.volMus); if (v === 'off') music.stop(); else music.play(v); radioText(); });
+  persoInfo();
   chips($('o-vol'), [[0.25, '25 %'], [0.5, '50 %'], [0.75, '75 %'], [1, '100 %']], () => opts.volMus, (v) => { opts.volMus = v; store.set('opts', opts); music.setVolume(v); });
-  $('o-info').textContent = 'Manette : gâchette droite pour accélérer, gâchette gauche pour freiner, X pour déraper, B pour le boost, A pour sauter ou lancer un objet, Y pour changer de vue, Start pour la pause. Clavier : flèches ou ZQSD, Maj pour le boost, Ctrl ou V pour déraper (Espace aussi hors Foot et Bonus), Espace pour sauter ou lancer un objet, C pour la vue.';
+  $('o-info').textContent = 'Manette : gâchette droite pour accélérer, gâchette gauche pour freiner, X pour déraper, B pour le boost, A pour sauter ou lancer un objet, Y pour changer de vue, croix haut pour changer de station, croix bas pour le morceau suivant, Start pour la pause. Clavier : R pour la station, T pour le morceau, flèches ou ZQSD, Maj pour le boost, Ctrl ou V pour déraper (Espace aussi hors Foot et Bonus), Espace pour sauter ou lancer un objet, C pour la vue.';
 }
 function changeQuality() {
   pickQuality(); setupPost();
@@ -1202,7 +1211,7 @@ function startGame(type) {
   show('loading'); $('loadmsg').textContent = type === 'foot' ? 'Foot Turbo' : type === 'free' ? (setup.route === 'ligne' ? ROUTE_LIGNE : ROUTE_LIBRE).nom : TRACKS[setup.track].nom;
   setTimeout(() => {
     RU = (type !== 'foot' && type !== 'free' && TRACKS[setup.track].regles) || REGLES_BASE;
-    G.dr = { cur: 0, total: 0, hold: 0 }; G.paid = false; G.sonic = false; music.setDuck(1); if (opts.musique === 'alea') music.shuffle();
+    G.dr = { cur: 0, total: 0, hold: 0 }; G.paid = false; G.sonic = false; music.setDuck(1);
     G.type = type; G.ended = false; G.freeze = 0; G.score = [0, 0]; G.dist = 0; G.laps = type === 'elim' ? 999 : setup.laps; G.elimT = ELIM_DELAI;
     if (type === 'foot') {
       ensureWorld('arena'); clearGame();
@@ -1271,7 +1280,7 @@ function togglePause() {
   if (mode === 'race') { mode = 'pause'; show('hud', 'pause'); audio.engine(null); audio.skid(0); audio.scrape(0); music.setDuck(0.4); }
   else if (mode === 'pause') { mode = 'race'; show('hud'); music.setDuck(1); }
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'race') togglePause(); audio.suspend(document.hidden); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'race') togglePause(); audio.suspend(document.hidden); music.pauseAll(document.hidden); });
 
 $('m-race').onclick = () => { wake(); buildSetup('race'); show('setup'); };
 $('m-items').onclick = () => { wake(); buildSetup('items'); show('setup'); };
@@ -1286,7 +1295,11 @@ $('e-seed').onclick = () => { customs[edSlot].graine = Math.floor(Math.random() 
 $('e-wild').onclick = () => { const c = customs[edSlot]; for (const f of CHAMPS) if (f.length > 1) { const hi = { taille: 1200, obstacles: 200, trafic: 30, largeur: 90 }[f[0]] ?? f[3]; c[f[0]] = Math.round((f[2] + Math.random() * (hi - f[2])) / f[4]) * f[4]; c[f[0]] = +c[f[0]].toFixed(2); } c.theme = Math.floor(Math.random() * THEMES.length); edSave(); buildEditor(); };
 $('e-reset').onclick = () => { customs[edSlot] = defautCustom(edSlot); edSave(); buildEditor(); };
 $('e-try').onclick = () => { edApply(); setup.track = NB_BASE + edSlot; buildSetup('race'); show('setup'); };
-$('p-music').onclick = () => { if (opts.musique === 'off') { opts.musique = 'alea'; store.set('opts', opts); } audio.initAudio(); music.setVolume(opts.volMus); const m = music.next(); toast('Musique : ' + m.nom); };
+$('p-music').onclick = radioSkip;
+$('rd-prev').onclick = () => radioStation(-1); $('rd-next').onclick = () => radioStation(1); $('rd-skip').onclick = radioSkip;
+$('o-add').onclick = () => $('o-file').click();
+$('o-file').onchange = async (e) => { const n = await music.addFiles(e.target.files); e.target.value = ''; persoInfo(); toast(n ? n + (n > 1 ? ' morceaux ajoutés' : ' morceau ajouté') : 'Aucun fichier audio reconnu'); if (n) { opts.radio = 'perso'; store.set('opts', opts); audio.initAudio(); music.setVolume(opts.volMus); music.stop(); music.play('perso'); buildOptions(); radioText(); } };
+$('o-clear').onclick = async () => { await music.clearPerso(); persoInfo(); radioText(); };
 for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => { store.set('setup', setup); toMenu(); };
 $('s-go').onclick = () => startGame(setupType);
 $('g-prev').onclick = () => garageShow(selCar - 1);
@@ -1317,8 +1330,8 @@ window.__nnBack = () => {
   if (!$('menu').hidden) return false; // au menu principal : l'application se ferme
   store.set('setup', setup); toMenu(); return true;
 };
-window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(null); audio.skid(0); audio.scrape(0); audio.suspend(true); };
-window.__nnResume = () => audio.suspend(false);
+window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(null); audio.skid(0); audio.scrape(0); audio.suspend(true); music.pauseAll(true); };
+window.__nnResume = () => { audio.suspend(false); music.pauseAll(false); };
 
 // ---------- mini-carte ----------
 const mini = $('mini'), mg = mini.getContext('2d');
@@ -1561,7 +1574,7 @@ window.__nn = {
     for (let t = 0; t < seconds; t += step) simSteps(step, G.type === 'foot' ? stepFoot : simulate);
     return cars.map(c => ({ n: c.name, lap: c.lap, idx: c.idx, v: +c.v.toFixed(1), best: c.bestLap }));
   },
-  go(m) { mode = m; }, audio, set garageAng(v) { garageAng = v; garageDrag = { x: 0, a: v }; }, garageShow(i) { garageShow(i); }, eco, customs, applyCustoms() { edDirty = true; edShape.add(0); edApply(); }, get player() { return player; }, get RU() { return RU; }, give(it) { player.item = it; useItem(player); }, start(t) { startGame(t); },
+  go(m) { mode = m; }, audio, music, set garageAng(v) { garageAng = v; garageDrag = { x: 0, a: v }; }, garageShow(i) { garageShow(i); }, eco, customs, applyCustoms() { edDirty = true; edShape.add(0); edApply(); }, get player() { return player; }, get RU() { return RU; }, give(it) { player.item = it; useItem(player); }, start(t) { startGame(t); },
   freeze() { mode = 'count'; countT = 1e9; countN = 99; chaseSnap = true; $('count').hidden = true; },
 };
 (async () => {
@@ -1570,7 +1583,8 @@ window.__nn = {
     $('loadmsg').textContent = 'Chargement des véhicules…';
     await resolveModels();
     await new Promise(r => setTimeout(r, 30));
-    buildOptions(); audio.setSound(opts.son);
+    await music.loadPerso(); music.setVolume(opts.volMus);
+    buildOptions(); audio.setSound(opts.son); radioText();
     toMenu();
     requestAnimationFrame(frame);
     window.__booted = true;

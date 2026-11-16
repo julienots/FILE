@@ -1,6 +1,8 @@
 package com.nuitneon.game;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -10,6 +12,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -24,6 +27,8 @@ import java.util.HashMap;
 public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private WebView web;
+    private static final int PICK_AUDIO = 71;
+    private ValueCallback<Uri[]> picker;   // réponse attendue par la page quand le joueur choisit ses morceaux
 
     @Override
     protected void onCreate(Bundle state) {
@@ -53,7 +58,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
-        s.setAllowContentAccess(false);
+        s.setAllowContentAccess(true); // lecture des fichiers audio choisis par le joueur pour la radio
         s.setSupportZoom(false);
         s.setTextZoom(100);
         web.setWebViewClient(new WebViewClient() {
@@ -74,6 +79,25 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 return !HOST.equals(req.getUrl().getHost());
+            }
+        });
+        // « Ajouter des morceaux » : ouvre le sélecteur de fichiers du téléphone, limité aux fichiers audio
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if (picker != null) picker.onReceiveValue(null);
+                picker = cb;
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("audio/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                try {
+                    startActivityForResult(Intent.createChooser(i, "Choisir des morceaux"), PICK_AUDIO);
+                } catch (Exception e) {
+                    picker = null;
+                    return false;
+                }
+                return true;
             }
         });
         web.setFocusable(true);
@@ -119,6 +143,24 @@ public class MainActivity extends Activity {
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != PICK_AUDIO || picker == null) return;
+        Uri[] uris = null;
+        if (result == RESULT_OK && data != null) {
+            ClipData clip = data.getClipData();
+            if (clip != null) {
+                uris = new Uri[clip.getItemCount()];
+                for (int k = 0; k < uris.length; k++) uris[k] = clip.getItemAt(k).getUri();
+            } else if (data.getData() != null) {
+                uris = new Uri[] { data.getData() };
+            }
+        }
+        picker.onReceiveValue(uris);
+        picker = null;
     }
 
     @Override

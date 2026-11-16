@@ -131,6 +131,10 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 #score .b { color: #5fd0ff; } #score .o { color: #ff9a5a; }
 #banner { top: 30%; left: 50%; transform: translateX(-50%); font-size: clamp(34px, 12vh, 76px); font-weight: 700; font-style: italic; text-shadow: 0 0 30px rgba(255,255,255,0.5), 0 4px 18px #000; white-space: nowrap; }
 @media (max-height: 420px) { .key.mini { width: 54px; height: 54px; } #menu .modes .btn { padding: 7px 14px; } #menu h1 { font-size: clamp(30px, 9vh, 60px); } }
+/* radio */
+#radio { position: absolute; z-index: 4; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 58px); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 2px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; font-weight: 700; max-width: min(46%, 340px); }
+#radio button { width: 30px; height: 30px; font-size: 12px; flex: 0 0 auto; } #radio button:active { background: rgba(255,255,255,0.15); }
+#rd-txt { flex: 1 1 auto; min-width: 0; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cyan); }
 /* économie, atelier, dérapage */
 #menu .side b .cash { color: var(--warn); }
 #menu .side b:first-of-type { color: var(--warn); margin-bottom: 6px; }
@@ -160,6 +164,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
   <canvas class="view" id="view"></canvas>
 
   <div id="toast" hidden></div>
+  <div id="radio" hidden><button id="rd-prev" aria-label="Station précédente">◀</button><span id="rd-txt">Radio</span><button id="rd-next" aria-label="Station suivante">▶</button><button id="rd-skip" aria-label="Morceau suivant">»</button></div>
   <div class="screen" id="loading"><div>CHARGEMENT</div><small id="loadmsg">Construction du décor…</small></div>
 
   <div class="screen" id="menu" hidden>
@@ -174,7 +179,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
         <button class="btn" id="m-free">Balade libre<small>Campagne, avec ou sans circulation</small></button>
         <button class="btn" id="m-atelier">Atelier<small>Crée tes circuits, règle tout</small></button>
         <button class="btn" id="m-garage">Garage<small>Acheter, améliorer, moteur extrême</small></button>
-        <button class="btn" id="m-options">Options<small>Graphismes, commandes, son, musique</small></button>
+        <button class="btn" id="m-options">Options<small>Graphismes, commandes, son, radio</small></button>
       </div>
     </div>
     <div class="side">Crédits<b><span class="cash">0</span> CR</b>Véhicule choisi<b id="m-car">—</b><span id="m-best"></span></div>
@@ -220,7 +225,9 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <div class="row"><span class="label">Graphismes</span><div class="chips" id="o-qual"></div></div>
       <div class="row"><span class="label">Accélérateur</span><div class="chips" id="o-gas"></div></div>
       <div class="row"><span class="label">Son</span><div class="chips" id="o-snd"></div></div>
-      <div class="row"><span class="label">Musique</span><div class="chips" id="o-mus"></div></div>
+      <div class="row"><span class="label">Radio</span><div class="chips" id="o-mus"></div></div>
+      <div class="row"><span class="label">Ma musique</span><button class="btn small" id="o-add">Ajouter des morceaux</button><button class="btn small" id="o-clear">Vider</button><input type="file" id="o-file" accept="audio/*" multiple hidden></div>
+      <div class="label" id="o-perso" style="text-transform:none;letter-spacing:0"></div>
       <div class="row"><span class="label">Volume</span><div class="chips" id="o-vol"></div></div>
       <div class="label" id="o-info" style="text-transform:none;letter-spacing:0"></div>
     </div>
@@ -260,7 +267,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
       <h2>Pause</h2>
       <button class="btn primary" id="p-resume">Reprendre</button>
       <button class="btn" id="p-restart">Recommencer</button>
-      <button class="btn" id="p-music">Musique suivante</button>
+      <button class="btn" id="p-music">Morceau suivant</button>
       <button class="btn" id="p-quit">Quitter</button>
     </div>
   </div>

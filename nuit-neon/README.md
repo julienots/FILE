@@ -71,9 +71,22 @@ Le décor se choisit parmi les 9 ambiances du jeu. « Tout au hasard » tire tou
 
 Tout est synthétisé par le jeu (`src/audio.js`), sans fichier audio. Chaque véhicule a son moteur : V8 au ralenti irrégulier (Rubis, Titan, Nomade), V10 (Azur, Fulgur), V12 (Mirage, Éclipse), biturbo (Cobalt, Spectre, Comète), monoplace, prototype, buggy, quatre-cylindres de moto, bicylindre de roadster. S'y ajoutent une boîte à 7 rapports avec coupure et détonation à chaque passage, le rupteur, la montée libre dans les tours à l'arrêt, le sifflement du turbo et sa soupape de décharge, les pétarades au lever de pied, le vent, le réacteur du boost, le moteur de l'adversaire le plus proche (avec effet Doppler), les explosions et le bang du mur du son. Pour changer le moteur d'un véhicule : champ `son` dans `src/carlist.js`.
 
-## Musique
+## Radio
 
-Six morceaux électroniques joués en direct par le jeu (aucun fichier audio) : Néon Drive, Minuit Express, Turbo Cœur, Rêve Chromé, Circuit Rouge, Aube. Choix du morceau et du volume dans les options, « Musique suivante » dans le menu pause.
+Un bandeau en haut à gauche (menu et course) affiche la station et le morceau ; ◀ ▶ changent de station, » passe au morceau suivant (R et T au clavier, croix haut et bas à la manette). Choix de la station et volume dans les options.
+
+| Station | Style | Morceaux |
+| --- | --- | --- |
+| Néon FM 88.6 | synthwave | Néon Drive, Minuit Express, Rêve Chromé, Horizon Rose |
+| Turbo FM 101.3 | trance | Turbo Cœur, Circuit Rouge, Hyperespace |
+| Soleil FM 94.7 | house | Aube, Plage Dorée, Disco Bitume |
+| Basse FM 107.9 | drum and bass | Adrénaline, Tunnel |
+| Furie FM 98.2 | rock | Asphalte Brûlant, Dernier Tour |
+| Ma musique | tes fichiers | ceux que tu ajoutes |
+
+Les quatorze morceaux des cinq premières stations sont composés et joués en direct par `src/music.js`, sans fichier audio : chacun a sa structure (intro, couplet, refrain, pont, final, environ deux minutes), sa suite d'accords, sa mélodie, sa batterie avec roulements et cymbales, un écho, une réverbération et un effet de pompe sur la grosse caisse. À la fin d'un morceau, la station enchaîne sur le suivant.
+
+**Ma musique** lit de vrais fichiers audio (mp3, m4a, ogg, wav, flac…) : bouton « Ajouter des morceaux » dans les options. Ils sont copiés dans la mémoire du jeu sur l'appareil et restent disponibles aux lancements suivants ; « Vider » les retire. Le jeu n'embarque aucune chanson du commerce.
 
 ## Lancer le jeu
 
@@ -142,6 +155,6 @@ Chaque voiture a 4 stats de 1 à 10 (vitesse max, accélération, maniabilité, 
 - `src/cars.js`, `src/carlist.js` : voitures, import des modèles, animations
 - `src/procar.js` : voitures dessinées par le jeu
 - `src/custom.js` : réglages et tracé des circuits de l'atelier
-- `src/music.js`, `src/audio.js` : musique, moteur, chocs, crissements
+- `src/music.js`, `src/audio.js` : radio et morceaux, moteurs, chocs, crissements, orage
 - `src/main.js` : conduite, collisions, obstacles, pouvoirs, économie, adversaires, modes de jeu, menus
 - `src/page.html` : interface
