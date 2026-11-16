@@ -50,7 +50,7 @@ echo "== 2/5 resources"
 
 echo "== 3/5 link manifest + resources + assets"
 "$BT/aapt2" link -I "$PLATFORM" --manifest android/src/main/AndroidManifest.xml \
-  --min-sdk-version 26 --target-sdk-version 35 --version-code 21 --version-name 1.12.0 \
+  --min-sdk-version 26 --target-sdk-version 35 --version-code 22 --version-name 1.13.0 \
   -A assets -0 ogg -0 png -o "$OUT/unaligned.apk" "$OUT/res/compiled.zip"
 
 echo "== 3b/5 Java activity (system bars only) -> classes.dex"

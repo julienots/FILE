@@ -507,7 +507,7 @@ void Game::updateSpawning(float dt) {
                     sp.y = groundAt(sp.x, sp.z);
                     spawnNpc(n, sp, i);
                 }
-            int generic = P.type == PoiType::Tower ? 0 : (P.type == PoiType::Village ? 8 : 5);
+            int generic = P.type == PoiType::Tower ? 0 : (P.type == PoiType::Village ? 12 : 5);   // 1.13.0 livelier villages (was 8)
             if (P.id == "player_base") generic = base.residents;   // 1.9.2 the hero's domain: only the recruited inhabitants
             for (int g = 0; g < generic; g++) {
                 uint32_t seed = hash2i(i, g, 555);

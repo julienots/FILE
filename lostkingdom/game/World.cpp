@@ -779,6 +779,8 @@ static float forestDensity(int r, float x, float z) {
     }
 }
 
+float World::forestAt(float x, float z) const { return forestDensity(regionId(x, z), x, z); }
+
 void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     out.key = k; out.lod = lod; out.liteProps = lod > 0 || !detailedFoliage;
     const int step = 1 << lod;           // metres per quad

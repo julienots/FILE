@@ -128,6 +128,7 @@ public:
     float roadInfluence(float x, float z, bool* cobble = nullptr) const;
     // 1.9.1 tall grass meadows: 0 (none) .. 1 (dense), same answer for the chunk builder and for gameplay
     float tallGrassAmount(float x, float z) const;
+    float forestAt(float x, float z) const;   // 1.13.0 tree cover 0..1 (the scatter density), for the forest atmosphere
     // Ground height including walkable structures (bridges, docks)
     float groundHeight(float x, float z) const;
     // 1.11.2 one deck profile for the bridge mesh, the walkable ground and the railings: `along` in metres from

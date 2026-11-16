@@ -438,6 +438,16 @@ void Game::updateEnvironment(float dt) {
     if (ashAmt > 0.01f) env.fogColor = lerp(env.fogColor, srgb(0x5a4a44) * (0.3f + 0.7f * (1 - env.night)), ashAmt * 0.4f);
     if (fogAmt > 0.01f) env.fogColor = lerp(env.fogColor, env.fogColor * 0.75f, fogAmt);
     env.fogDensity = (0.0042f + fogAmt * 0.009f + rainAmt * 0.003f + snowAmt * 0.005f + ashAmt * 0.004f) * g.fogMul;
+    // 1.13.0 forest haze and morning mist: denser air under the trees and at dawn (the sun shafts cut through it)
+    if (!dungeon.active) {
+        float fsum = 0;
+        for (int i = 0; i < 5; i++) { vec2 o = i == 0 ? vec2(0) : vec2(std::cos(i * 1.57f), std::sin(i * 1.57f)) * 14.f; fsum += world.forestAt(focus.x + o.x, focus.z + o.y); }
+        forestHaze = damp(forestHaze, saturate((fsum / 5.f - 0.3f) / 0.5f), 0.5f, dt);
+        float dawn = smoothstepf(4.8f, 6.0f, h) * (1.f - smoothstepf(7.6f, 9.6f, h));
+        morningMist = damp(morningMist, dawn * (1.f - rainAmt) * (1.f - ashAmt), 0.5f, dt);
+        env.fogDensity += (forestHaze * 0.0045f + morningMist * 0.006f) * g.fogMul;
+        if (forestHaze > 0.01f) env.fogColor = lerp(env.fogColor, env.fogColor * vec3(0.92f, 1.0f, 0.9f), forestHaze * 0.5f);   // green-tinted under the canopy
+    }
     env.fogFalloff = 0.035f;
     env.fogBase = focus.y - 2.f;
     env.wetness = damp(env.wetness, saturate(rainAmt * 1.2f), 0.15f, dt);
@@ -457,7 +467,7 @@ void Game::updateEnvironment(float dt) {
     // 1.11.1 light shafts: strongest with a low sun (morning, evening) and in mist or after rain, faint at noon
     {
         float low = 1.f - saturate((env.sunDir.y - 0.15f) / 0.6f);
-        env.shafts = (0.3f + 0.55f * low + fogAmt * 0.5f + env.wetness * 0.25f) * (1.f - overcast * 0.6f);
+        env.shafts = (0.3f + 0.55f * low + fogAmt * 0.5f + env.wetness * 0.25f + forestHaze * 0.45f + morningMist * 0.5f) * (1.f - overcast * 0.6f);
     }
     env.vignette = 0.32f;
     env.grain = 0.012f;
@@ -580,6 +590,18 @@ void Game::updateAmbientFx(float dt) {
         vec3 lc = regionW[R_ELDERWOOD] > 0.5f ? srgb(0x5ab89a) : (r.chance(0.5f) ? srgb(0xc8a040) : srgb(0x7a9a3a));
         p.c0 = vec4(lc * 2.f, 1); p.c1 = vec4(lc * 2.f, 0); p.frame = PF_LEAF; p.additive = false;
         p.groundKill = groundAt(p.pos.x, p.pos.z);
+        particles.spawn(p);
+    }
+    // 1.13.0 golden dust and pollen floating in the light under the trees (daytime)
+    if (r.f() < spawnRate * 22.f * forestHaze * (1 - env.night) * (1 - rainAmt)) {
+        Particle p;
+        vec2 d = r.inDisk() * 14.f;
+        float gy = groundAt(c.x + d.x, c.z + d.y);
+        p.pos = vec3(c.x + d.x, gy + r.range(0.6f, 4.5f), c.z + d.y);
+        p.vel = vec3(env.windDir.x * 0.15f, r.range(-0.05f, 0.12f), env.windDir.y * 0.15f); p.turbulence = 0.35f;
+        p.maxLife = r.range(5.f, 9.f); p.size0 = p.size1 = r.range(0.025f, 0.05f);
+        vec3 mc = vec3(1.f, 0.88f, 0.6f) * (0.6f + 0.6f * env.sunIntensity / 3.f);
+        p.c0 = vec4(mc * 2.2f, 0.9f); p.c1 = vec4(mc, 0); p.frame = PF_DOT; p.additive = true;
         particles.spawn(p);
     }
     float fireflies = env.night * (regionW[R_GREENHAVEN] * 0.6f + regionW[R_ELDERWOOD] + regionW[R_SHADOWS] * 0.7f);

@@ -572,6 +572,7 @@ public:
     void drawObjectives(Rect c);
     // 1.13.0 co-op (Coop.cpp)
     CoopState coop;
+    float forestHaze = 0, morningMist = 0;   // 1.13.0 atmosphere (Game.cpp updateEnvironment)
     static constexpr uint16_t COOP_PORT = 47777;
     bool coopHost();
     bool coopJoin(const agr::NetAddr& host);
