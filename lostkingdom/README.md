@@ -6,12 +6,41 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.12.0 (versionCode 21). Taille : environ 35 Mo. SHA-256 : `8fac407ecd2e1b599618b554499c495c55a61f84c053abea881c7fc416dbee19`.
-  - Les versions 1.6.1 à 1.12.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 1.13.0 (versionCode 22). Taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
+  - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 1.13.0 (jouer à deux en Wi-Fi, bande originale orchestrale, forêts brumeuses)
+
+- **Jouer à deux** (Journal → onglet **À deux**), sur le même réseau Wi-Fi :
+  - un joueur choisit **Héberger une partie**, l'autre **Rejoindre une partie** : la partie est trouvée automatiquement sur le Wi-Fi. Si le routeur bloque cette recherche, on peut taper l'adresse de l'hôte, affichée sur son écran ;
+  - l'hôte garde son monde : les créatures, l'heure et la météo. L'invité y entre avec **son propre héros**, sa sauvegarde, son niveau, son équipement et ses quêtes ;
+  - chacun voit le héros de l'autre (nom et barre de vie au-dessus de la tête, contour bleu, point bleu sur la minimap et la carte) et **le domaine de l'autre**, ajouté à la carte pendant la partie ;
+  - **on se bat ensemble** : les créatures de l'hôte traquent le plus proche des deux héros et mordent l'invité ; les coups de l'invité blessent les créatures de l'hôte ; quand une créature meurt, l'invité gagne aussi son expérience, son butin et l'avancée de ses quêtes, Gardiens et fragments de Couronne compris ;
+  - réseau local UDP (port 47777) : 20 envois par seconde, et un canal fiable pour les coups, les dégâts, les morts, les apparences et les domaines (renvoyés jusqu'à l'accusé de réception). Si l'autre disparaît plus de 6 s, la partie se ferme proprement ; l'hôte attend alors un nouveau joueur ;
+  - l'APK demande maintenant la permission réseau d'Android (INTERNET), utilisée uniquement pour le réseau local.
+- **Bande originale orchestrale.** 14 nouveaux morceaux composés pour le jeu (titre, Greenhaven, village, Elderwood, Frostheim, Ashen, Highcrowns, Royaume des Ombres, nuit, donjon, combat, boss, générique, jingle). Ils sont joués par de **vrais instruments échantillonnés** (la banque de sons FluidR3, de Frank Wen, sous licence MIT) : cordes, harpe, flûte, hautbois, cors, trompettes, chœur, timbales, célesta, guitare, flûte à bec, piano.
+  - Le thème principal « Lost Kingdom » revient dans le titre et le générique ; chaque région a sa couleur (valse pastorale à Greenhaven, guitare et flûte à bec au village, célesta et chœur à Elderwood, cors et cloches à Frostheim, taikos à Ashen, fanfare à Highcrowns, violoncelle sombre dans les Ombres, berceuse au piano la nuit).
+  - Tout est écrit note à note dans `tools/compose_music.py` (mélodies, accords, arrangements), puis rendu avec FluidSynth à 48 kHz et normalisé (-16 à -17,6 LUFS, aucun écrêtage). Un contrôle automatique d'harmonie compte les frottements d'un demi-ton entre la mélodie et l'accompagnement ; il en reste de 0 à 6 % des notes longues (des notes de passage), un peu plus dans *Shadows* et le donjon, où c'est voulu.
+  - L'ancienne musique synthétisée n'est plus utilisée (`tools/make_audio.py` ne produit plus que les effets et les ambiances).
+- **Ambiance.**
+  - **Forêts brumeuses** : sous les arbres, l'air se charge d'une brume légère, teintée de vert, que les **rayons du soleil** traversent plus fort ; des **poussières dorées** flottent dans la lumière.
+  - **Brume du matin** entre 5 h et 9 h, partout.
+  - **Villages plus animés** : 12 villageois au lieu de 8.
+- **Vérification (1.13.0)** : 2 055 tests unitaires (+6 sur le réseau : encodage des messages, message tronqué détecté, adresses, aller-retour UDP réel). Nouveau test à deux :
+  - deux instances du jeu tournent en même temps sur l'ordinateur. L'hôte fonde son domaine ; l'invité **trouve la partie tout seul** sur le réseau, la rejoint, prend l'heure de l'hôte (10 h au lieu de 20 h 30) et voit son domaine ;
+  - l'hôte fait apparaître 3 loups près de l'invité ; l'invité les combat avec de vraies commandes d'attaque : 9 coups transmis, 3 morts reçues, l'invité passe au niveau 2, il est mordu 7 fois (`COOP HOST TEST PASSED` et `COOP GUEST TEST PASSED`).
+
+  RESULTATS_1130 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur des téléphones.
+- **Limites (honnêtement).**
+  - **Le jeu à deux n'a jamais été essayé entre deux vrais téléphones** : seulement entre deux instances sur un même ordinateur. Certains routeurs (Wi-Fi d'hôtel, d'école) isolent les appareils : la partie ne peut alors pas se faire, même en tapant l'adresse.
+  - Les créatures vivent autour de l'hôte : si l'invité part trop loin (au-delà d'environ 150 m), il ne croise plus de créatures. Restez proches.
+  - Ne sont pas partagés : les PNJ et les animaux (chacun voit les siens), les donjons (chacun joue le sien), les véhicules (l'autre voit le héros, pas la voiture), les cinématiques, les courses, les traqueurs de la nuit de l'invité (ce sont ceux de l'hôte qui comptent).
+  - Deux joueurs au maximum, sur le même réseau local seulement (pas d'Internet).
+  - « Réalisme des photos » : le jeu reste un moteur maison pour téléphone, avec des décors en partie construits en code. Les brumes, rayons, reflets et la nouvelle musique rapprochent l'ambiance, pas la fidélité d'un jeu PC moderne (Unreal Engine 5).
 
 ### Nouveautés 1.12.0 (l'histoire racontée en chapitres, une fin à choisir, reflets dans l'eau, tout bien placé)
 
@@ -50,8 +79,8 @@ Ce qui ferait le plus progresser le jeu, du plus important au moins important (a
 3. **Des voix.** Un doublage, même partiel (le prologue, les chapitres), changerait beaucoup l'immersion.
 4. **De vrais modèles pour tout le monde.** Les héros, 12 bâtiments, 6 monstres et 2 véhicules sont des modèles 3D ; les villageois, les autres créatures (21 sur 27) et la végétation sont encore construits en code.
 5. **Des animations capturées** (motion capture) pour la marche, les combats et les dialogues, au lieu d'images-clés et de procédural.
-6. **Une musique enregistrée** : les musiques et les sons sont synthétisés par un script.
-7. **Le jeu à deux** : il faut une couche réseau (hôte et invité, synchronisation des héros, des ennemis et des combats), et deux appareils pour la tester.
+6. **Une musique enregistrée** : la bande originale (1.13.0) utilise des instruments échantillonnés ; un vrai orchestre et des musiciens iraient plus loin.
+7. **Le jeu à deux** existe depuis la 1.13.0 en Wi-Fi local ; il reste à l'essayer entre deux vrais téléphones, puis à l'étendre (donjons et véhicules partagés, jeu par Internet).
 8. **Plus de contenu entre les chapitres** : des quêtes secondaires liées à l'histoire (Corwin, l'Ordre, les élèves de Malgrath), des donjons uniques par Gardien, des choix qui changent les villages.
 9. **La publication** : un AAB signé avec votre clé pour le Play Store, une politique de confidentialité, des captures et une fiche boutique.
 10. **D'autres langues** (anglais d'abord) et des options d'accessibilité (taille du texte, daltonisme, sous-titres plus grands).
@@ -653,7 +682,7 @@ Légende :
 
 - **Aucun test sur un appareil réel.** L'APK est construit et vérifié statiquement, mais il n'a jamais été installé sur un téléphone ou un émulateur : l'environnement de construction n'en possède pas. Des problèmes propres aux pilotes GPU mobiles, aux performances ou au tactile sont possibles.
 - **Graphismes en partie procéduraux.** Les trois héros, 12 bâtiments, 6 monstres, la voiture et la moto utilisent des modèles 3D générés par IA (Tripo) et importés. Les PNJ, les autres créatures et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
-- **Audio synthétisé.** Musiques, ambiances et effets sont générés par `tools/make_audio.py` (synthèse additive et soustractive, Karplus-Strong, FM, formants, réverbération par convolution). Ce n'est pas un orchestre enregistré.
+- **Audio.** Depuis la 1.13.0, la musique est jouée par des instruments échantillonnés (FluidR3, licence MIT) à partir de partitions écrites dans `tools/compose_music.py` : ce n'est pas un orchestre enregistré en studio. Les ambiances et les effets sont synthétisés par `tools/make_audio.py`.
 - **Performance non mesurée sur mobile.** Le harnais de bureau tourne sur un rasteriseur logiciel, à environ 120 ms par image : ce chiffre ne dit rien d'un GPU mobile. Les profils Faible et Économie d'énergie réduisent la distance de vue, les ombres, l'herbe et le post-traitement.
 - **Signature locale.** L'APK est signé avec une clé locale générée au moment de la construction, qui n'est pas versionnée. Pour une publication sur le Play Store, il faut le re-signer avec votre propre clé (voir ci-dessous) et produire un AAB.
 - **Langue.** L'interface et les dialogues sont en français uniquement.
@@ -701,7 +730,8 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ```bash
 python3 tools/make_font.py       # atlas SDF (polices OFL : Cinzel, Cinzel Decorative, Alegreya Sans)
 python3 tools/make_ui.py         # kit d'interface et icônes
-python3 tools/make_audio.py      # musiques, ambiances, effets (numpy, scipy, ffmpeg)
+python3 tools/make_audio.py      # ambiances et effets (numpy, scipy, ffmpeg)
+python3 -I tools/compose_music.py   # bande originale (fluidsynth + banque FluidR3_GM.sf2, ffmpeg)
 python3 tools/make_branding.py   # icônes du lanceur, logos, key art
 python3 tools/import_character.py modele.glb hero --preview apercu.png   # importe un personnage GLB (pose en T, sans squelette)
 ```
