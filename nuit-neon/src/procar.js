@@ -42,10 +42,16 @@ function wheelGeos(r, tw, style, side) {
   else if (style === 'etoile') for (let i = 0; i < 5; i++) spoke(i / 5 * Math.PI * 2, 0.085);
   else if (style === 'six') for (let i = 0; i < 6; i++) spoke(i / 6 * Math.PI * 2, 0.07);
   else for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; spoke(a - 0.13, 0.032); spoke(a + 0.13, 0.032); }   // cinq branches doubles
+  for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.3, nut = new THREE.CylinderGeometry(0.011, 0.011, 0.03, 6); nut.rotateZ(Math.PI / 2); nut.translate(face + side * 0.05, Math.cos(a) * 0.052, Math.sin(a) * 0.052); add(nut, 1.3); }   // écrous
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, sl = new THREE.BoxGeometry(0.006, ri * 0.3, 0.012); sl.translate(0, ri * 0.62, 0); sl.rotateX(a + 0.5); sl.translate(o - side * 0.116, 0, 0); add(sl, 0.12); }           // rainures du disque
   const hub = new THREE.CylinderGeometry(0.075, 0.085, 0.07, 14); hub.rotateZ(Math.PI / 2); hub.translate(face + side * 0.01, 0, 0); add(hub, 0.9);
   const cap = new THREE.CylinderGeometry(0.035, 0.035, 0.02, 10); cap.rotateZ(Math.PI / 2); cap.translate(face + side * 0.05, 0, 0); add(cap, 0.12);
   const disc = new THREE.CylinderGeometry(ri * 0.86, ri * 0.86, 0.025, 26); disc.rotateZ(Math.PI / 2); disc.translate(o - side * 0.13, 0, 0); add(disc, 0.42);
-  const res = { tire: flat(tire), metal: mergeGeometries(m), ri }; res.tire.userData.keep = res.metal.userData.keep = true;
+  // flanc du pneu : liseré clair et crampons de la bande de roulement
+  const tp = [tint(flat(tire), 1, 1, 1)];
+  const ring = new THREE.TorusGeometry((r + ri) / 2 + 0.01, 0.004, 4, 40); ring.rotateY(Math.PI / 2); ring.translate(o + side * 0.001, 0, 0); tp.push(tint(flat(ring), 40, 40, 40));
+  for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2, gr = new THREE.BoxGeometry(tw * 0.8, 0.012, 0.014); gr.translate(0, r + 0.001, 0); gr.rotateX(a); tp.push(tint(flat(gr), 0.35, 0.35, 0.35)); }
+  const res = { tire: mergeGeometries(tp), metal: mergeGeometries(m), ri }; res.tire.userData.keep = res.metal.userData.keep = true;
   wheelCache.set(key, res); return res;
 }
 
@@ -155,17 +161,39 @@ export function buildDesign(def, paint) {
     dark.push(skin(hd[0] - 0.008, hd[1] + 0.012, hd[2] - 0.5, hd[3] + 0.5, s, 5, 5, 0.004));
     if (d.feuxFlanc) tailG.push(skin(0.965, 0.998, NB + 7.6, NB + 8.8, s, 4, 3, 0.009));                  // feux qui débordent sur l'aile
   }
+  const amber = [], plate = [];
+  {
+    const t0 = cab.t0, t1 = cab.t1, dA = t0 + (t1 - t0) * 0.12, dB = t0 + (t1 - t0) * (d.porte ?? 0.62);
+    for (const s of [-1, 1]) {
+      for (const tv of [dA, dB]) dark.push(skin(tv, tv + 0.0035, NB + 0.4, NB + 9.2, s, 1, 12, 0.004));                 // joints de porte
+      dark.push(skin(dA, dB, NB + 0.9, NB + 1.0, s, 12, 1, 0.004));                                                    // bas de porte
+      chrome.push(skin(dB - 0.05, dB - 0.018, NB + 6.3, NB + 6.6, s, 2, 1, 0.012));                                      // poignée
+      dark.push(skin(0.03, t0 - 0.01, TOP - 3.25, TOP - 3.15, s, 14, 1, 0.004));                                         // arête de capot
+      amber.push(skin(0.105, 0.125, NB + 4.4, NB + 5.0, s, 1, 1, 0.01));                                                 // répétiteur d'aile
+      dark.push(skin(t1 + 0.03, t1 + 0.055, NB + 7.2, NB + 8.2, s, 2, 2, 0.006));                                        // trappe à essence / aération
+      // essuie-glace posé au pied du pare-brise
+      const wz = -Lh + (t0 + 0.035) * 2 * Lh, wy = Math.min(HC(t0 + 0.035), HS(t0 + 0.035)) + 0.035;
+      dark.push(flat(box(HW * 0.42, 0.012, 0.018, s * HW * 0.2, wy, wz, 0, s * 0.12)));
+    }
+  }
   // face arrière
   const hR = HC(1), bR = Bf(1), wR = Wf(1) * HW, yL = lerp(bR, hR, 0.72);
   if (d.feux === 'ronds') for (const s of [-1, 1]) for (const k of [0.42, 0.72]) { const g = new THREE.CylinderGeometry(0.075, 0.075, 0.03, 16); g.rotateX(Math.PI / 2); g.translate(s * wR * k, yL, Lh + 0.012); tailG.push(flat(g)); }
   else { tailG.push(flat(box(wR * 1.7, 0.035, 0.03, 0, yL, Lh + 0.012))); for (const s of [-1, 1]) tailG.push(flat(box(wR * 0.34, 0.07, 0.03, s * wR * 0.68, yL - 0.02, Lh + 0.014))); }
   dark.push(flat(box(wR * 1.7, (hR - bR) * 0.4, 0.025, 0, lerp(bR, hR, 0.27), Lh + 0.006)));                           // bouclier noir
+  plate.push(flat(box(0.5, 0.11, 0.012, 0, lerp(bR, hR, 0.4), Lh + 0.022)));                                           // plaque arrière
+  tailG.push(flat(box(0.34, 0.016, 0.02, 0, hR + 0.012, Lh - 0.03)));                                                 // troisième feu stop
+  for (const s of [-1, 1]) { amber.push(flat(box(wR * 0.2, 0.03, 0.02, s * wR * 0.78, yL - 0.085, Lh + 0.014))); chrome.push(flat(box(0.05, 0.05, 0.02, s * wR * 0.86, lerp(bR, hR, 0.18), Lh + 0.016))); }   // clignotants, catadioptres
   dark.push(flat(box(wR * 1.5, 0.2, 0.36, 0, bR + 0.03, Lh - 0.16)));                                                // diffuseur
   for (let i = -3; i <= 3; i++) dark.push(flat(box(0.022, 0.15, 0.34, i * wR * 0.2, bR + 0.02, Lh - 0.14)));
   // face avant : calandre, lame
   const hF = HC(0), bF = Bf(0), wF = Wf(0) * HW;
   dark.push(flat(box(wF * 1.6, (hF - bF) * (d.calandre ?? 0.55), 0.03, 0, lerp(bF, hF, 0.42), -Lh - 0.006)));
   dark.push(flat(box(Wf(0.06) * HW * 1.9, 0.028, 0.34, 0, Bf(0.05) - 0.01, -Lh + 0.13)));
+  { const gh = (hF - bF) * (d.calandre ?? 0.55), gy = lerp(bF, hF, 0.42);
+    for (let i = -1; i <= 1; i++) chrome.push(flat(box(wF * 1.5, 0.008, 0.012, 0, gy + i * gh * 0.28, -Lh - 0.024)));  // barrettes de calandre
+    plate.push(flat(box(0.42, 0.1, 0.012, 0, gy - gh * 0.05, -Lh - 0.03)));                                            // plaque avant
+    for (const s of [-1, 1]) { headG.push(flat(box(0.16, 0.025, 0.02, s * Wf(0.03) * HW * 0.78, Bf(0.03) + 0.07, -Lh + 0.035))); dark.push(flat(box(0.03, 0.09, 0.3, s * Wf(0.05) * HW * 1.0, Bf(0.05) + 0.05, -Lh + 0.2, 0, 0, s * 0.5))); } }   // feux de jour, dérives de pare-chocs
   for (const s of [-1, 1]) {
     dark.push(flat(box(0.05, 0.1, d.L * 0.36, s * (HW * 0.99), Bf(0.5) + 0.02, 0)));                                 // bas de caisse
     const mt = d.retro ?? (cab.t0 + 0.07), mh = Math.min(HC(mt), HS(mt));
@@ -185,18 +213,20 @@ export function buildDesign(def, paint) {
   if (d.galerie) for (const s of [-1, 1]) chrome.push(flat(box(0.035, 0.035, d.L * 0.34, s * HW * 0.5, cab.h + 0.055, Lh * 0.18)));
   // échappements
   const exh = d.echap || [-0.2, 0.2];
-  for (const x of exh) { const g = new THREE.CylinderGeometry(0.058, 0.066, 0.14, 14, 1, true); g.rotateX(Math.PI / 2); g.translate(x * wR, bR + (d.echapY ?? 0.2), Lh + 0.035); chrome.push(flat(g)); }
+  for (const x of exh) { const g = new THREE.CylinderGeometry(0.058, 0.066, 0.14, 14, 1, true); g.rotateX(Math.PI / 2); g.translate(x * wR, bR + (d.echapY ?? 0.2), Lh + 0.035); chrome.push(flat(g)); const gi = new THREE.CircleGeometry(0.05, 12); gi.translate(x * wR, bR + (d.echapY ?? 0.2), Lh + 0.02); dark.push(flat(gi)); }
 
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x07080b, metalness: 0.6, roughness: 0.38, envMapIntensity: 1.3, side: THREE.DoubleSide });
   chassis.add(new THREE.Mesh(mergeGeometries(dark), trimMat));
   if (accent.length) chassis.add(new THREE.Mesh(mergeGeometries(accent), new THREE.MeshPhysicalMaterial({ color: accentCol, metalness: 0.5, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide })));
   chassis.add(new THREE.Mesh(mergeGeometries(chrome), new THREE.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 1, roughness: 0.18, side: THREE.DoubleSide })));
+  chassis.add(new THREE.Mesh(mergeGeometries(amber), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8a10).multiplyScalar(2), side: THREE.DoubleSide })));
+  chassis.add(new THREE.Mesh(mergeGeometries(plate), new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.5, emissive: 0x30302c })));
   const tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff1408).multiplyScalar(3), side: THREE.DoubleSide });
   chassis.add(new THREE.Mesh(mergeGeometries(tailG), tailMat));
   chassis.add(new THREE.Mesh(mergeGeometries(headG), new THREE.MeshBasicMaterial({ color: new THREE.Color(d.pharesCol ?? 0xeaf4ff).multiplyScalar(3.4), side: THREE.DoubleSide })));
 
   // ---------- roues ----------
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x0b0b0d, metalness: 0, roughness: 0.92 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x0c0c0e, vertexColors: true, metalness: 0, roughness: 0.92 });
   const rimMat = new THREE.MeshStandardMaterial({ color: d.jante ?? 0xc9ccd6, vertexColors: true, metalness: 0.95, roughness: 0.24, envMapIntensity: 1.5 });
   const calMat = new THREE.MeshStandardMaterial({ color: d.etrier ?? 0xd8121e, metalness: 0.4, roughness: 0.4 });
   const wheels = [];

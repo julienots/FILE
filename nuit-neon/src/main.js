@@ -445,7 +445,7 @@ function stepElim(dt) {
   const alive = standings().filter(c => !c.out);
   const last = alive[alive.length - 1];
   last.out = true; last.rank = alive.length; last.vis.root.visible = false;
-  fx.burst(last.x, 1, last.z, 3.5, 1.2, 0.3, 80, 18); for (let i = 0; i < 10; i++) fx.smoke(last.x, 1, last.z, 0, 3, 0, 2, 0.4, 1.6);
+  audio.boom(0.7); fx.burst(last.x, 1, last.z, 3.5, 1.2, 0.3, 80, 18); for (let i = 0; i < 10; i++) fx.smoke(last.x, 1, last.z, 0, 3, 0, 2, 0.4, 1.6);
   if (last.isPlayer) return finishElim(false);
   flash(last.name + ' est éliminé');
   if (alive.length - 1 === 1) { player.rank = 1; finishElim(true); }
@@ -454,7 +454,7 @@ function finishElim(win) {
   mode = 'finished';
   $('rtitle').textContent = win ? 'Victoire !' : 'Éliminé';
   $('rsub').textContent = win ? 'Dernier survivant après ' + fmtShort(raceTime) : 'Tu termines ' + ordinal(player.rank) + ' sur ' + cars.length;
-  fillResults(); show('results'); showGains(); audio.engine(0, 0, false); audio.skid(0);
+  fillResults(); show('results'); showGains(); audio.engine(null); audio.skid(0);
 }
 
 // ---------- course à bonus : caisses, missiles, flaques, boucliers ----------
@@ -531,7 +531,7 @@ function useItem(c) {
 function strike(c, strong) {
   if (c.shieldT > 0) { c.shieldT = 0; fx.burst(c.x, 1, c.z, 0.4, 1.6, 3, 24, 12); return; }
   c.spinT = strong ? 1.3 : 1.0; c.v *= 0.55; c.turboT = 0;
-  if (strong) { fx.burst(c.x, 0.8, c.z, 3.5, 1.4, 0.3, 46, 16); for (let i = 0; i < 8; i++) fx.smoke(c.x, 0.8, c.z, 0, 3, 0, 1.6, 0.4, 1.4); }
+  if (strong) { if (player && Math.hypot(c.x - player.x, c.z - player.z) < 90) audio.boom(c.isPlayer ? 1 : 0.5); fx.burst(c.x, 0.8, c.z, 3.5, 1.4, 0.3, 46, 16); for (let i = 0; i < 8; i++) fx.smoke(c.x, 0.8, c.z, 0, 3, 0, 1.6, 0.4, 1.4); }
   if (c.isPlayer) { flash(strong ? 'Touché !' : 'Dérapage !'); c.bump = 0.8; }
 }
 function stepItems(dt) {
@@ -1164,7 +1164,7 @@ function startDemo() {
 function toMenu() {
   edApply();
   if (!owned(CARS[selCar])) { selCar = CARS.findIndex(c => c.id === store.get('car', '') && owned(c)); if (selCar < 0) selCar = CARS.findIndex(owned); }
-  startDemo(); refreshMenu(); refreshCash(); show('menu'); audio.engine(0, 0, false); audio.skid(0); music.setDuck(1);
+  startDemo(); refreshMenu(); refreshCash(); show('menu'); audio.engine(null); audio.skid(0); music.setDuck(1);
 }
 // gains de la partie : selon le classement, la difficulté, les buts, la distance et les dérapages
 function payout() {
@@ -1248,7 +1248,7 @@ function endFoot() {
     for (const v of [c.team === 0 ? 'Bleu' : 'Orange', c.name + ' · ' + c.def.nom, c.goals + (c.goals > 1 ? ' buts' : ' but')]) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
     tb.appendChild(tr);
   });
-  show('results'); showGains(); audio.engine(0, 0, false); audio.skid(0);
+  show('results'); showGains(); audio.engine(null); audio.skid(0);
 }
 function fillResults() {
   const tb = $('rtable'); tb.textContent = '';
@@ -1259,7 +1259,7 @@ function fillResults() {
   });
 }
 function togglePause() {
-  if (mode === 'race') { mode = 'pause'; show('hud', 'pause'); audio.engine(0, 0, false); audio.skid(0); music.setDuck(0.4); }
+  if (mode === 'race') { mode = 'pause'; show('hud', 'pause'); audio.engine(null); audio.skid(0); music.setDuck(0.4); }
   else if (mode === 'pause') { mode = 'race'; show('hud'); music.setDuck(1); }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'race') togglePause(); audio.suspend(document.hidden); });
@@ -1308,7 +1308,7 @@ window.__nnBack = () => {
   if (!$('menu').hidden) return false; // au menu principal : l'application se ferme
   store.set('setup', setup); toMenu(); return true;
 };
-window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(0, 0, false); audio.skid(0); audio.suspend(true); };
+window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(null); audio.skid(0); audio.suspend(true); };
 window.__nnResume = () => audio.suspend(false);
 
 // ---------- mini-carte ----------
@@ -1351,7 +1351,16 @@ function driftScore(p, dt) {
   if (p.onWall && D.cur > 0) { if (D.cur >= 50) flash('Dérapage perdu'); D.cur = 0; }
   // mur du son
   const sp = Math.abs(p.v);
-  if (sp > 343 && !G.sonic) { G.sonic = true; flash('Mur du son franchi !'); audio.thud(1); fx.burst(p.x, 1, p.z, 3, 3, 3.4, 90, 40); p.bump = 1; } else if (sp < 300) G.sonic = false;
+  if (sp > 343 && !G.sonic) { G.sonic = true; flash('Mur du son franchi !'); audio.boom(1.2); fx.burst(p.x, 1, p.z, 3, 3, 3.4, 90, 40); p.bump = 1; } else if (sp < 300) G.sonic = false;
+}
+// moteur du joueur et de l'adversaire le plus proche
+const sonDe = (def) => def.son || (def.moto ? 'moto' : 'v12');
+function engineSound(thr) {
+  const p = player; let near = null, bd = 50 * 50;
+  for (const c of cars) { if (c === p || c.out) continue; const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2; if (d < bd) { bd = d; near = c; } }
+  let r = null;
+  if (near) { const d = Math.sqrt(bd) || 1, [avx, avz] = velOf(p), [bvx, bvz] = velOf(near); r = { type: sonDe(near.def), ratio: clamp(Math.abs(near.v) / near.phys.vmax, 0, 1.1), dist: d, rel: -((bvx - avx) * (near.x - p.x) + (bvz - avz) * (near.z - p.z)) / d }; }
+  audio.engine({ v: p.v, vmax: p.phys.vmax, thr, boosting: p.boosting, nitro: p.nitroT > 0, air: p.y > 0.05, type: sonDe(p.def) }, r);
 }
 // à très haute vitesse, la simulation est découpée en petits pas pour ne traverser ni les murs ni les obstacles
 function simSteps(dt, fn) {
@@ -1439,7 +1448,7 @@ function frame(now) {
     if (G.type === 'foot') { syncBall(dt); ballCam(player, dt, chaseSnap); } else chaseCam(player, dt, chaseSnap);
     chaseSnap = false;
     if (countT <= 0) { mode = 'race'; raceTime = 0; setTimeout(() => { $('count').hidden = true; }, 700); }
-    audio.engine(0.02, keys.gas ? 1 : 0.2, true);
+    engineSound(playerInput().gas);
   } else if (mode === 'race' || mode === 'finished') {
     if (G.type === 'foot') { if (mode === 'race') simSteps(dt, stepFoot); } else simSteps(dt, simulate);
     syncVisuals(dt);
@@ -1447,7 +1456,7 @@ function frame(now) {
     else if (G.type === 'foot') { ballCam(player, dt, chaseSnap); chaseSnap = false; }
     else chaseCam(player, dt, false);
     blur = G.type === 'foot' ? clamp(player.v / 120, 0, 0.5) : clamp(player.v / 80, 0, 1) + (player.boosting ? 0.3 : 0);
-    audio.engine(clamp(Math.abs(player.v) / player.phys.vmax, 0, 1), player.inp ? (player.inp.gas || 0) : 0, mode === 'race');
+    if (mode === 'race') engineSound(player.boosting ? 1 : player.inp ? (player.inp.gas || 0) : 0); else audio.engine(null);
     audio.skid(mode === 'race' && player.y < 0.05 && Math.abs(player.v) > 6 ? (player.drifting ? 0.5 + Math.abs(player.driftA) : clamp((player.slip - 1.5) / 8, 0, 0.7)) : 0);
     hudT -= dt;
     $('h-kmh').textContent = Math.round(Math.abs(player.v) * 3.6);
@@ -1507,7 +1516,7 @@ window.__nn = {
     for (let t = 0; t < seconds; t += step) simSteps(step, G.type === 'foot' ? stepFoot : simulate);
     return cars.map(c => ({ n: c.name, lap: c.lap, idx: c.idx, v: +c.v.toFixed(1), best: c.bestLap }));
   },
-  go(m) { mode = m; }, set garageAng(v) { garageAng = v; garageDrag = { x: 0, a: v }; }, garageShow(i) { garageShow(i); }, eco, customs, applyCustoms() { edDirty = true; edShape.add(0); edApply(); }, get player() { return player; }, get RU() { return RU; }, give(it) { player.item = it; useItem(player); }, start(t) { startGame(t); },
+  go(m) { mode = m; }, audio, set garageAng(v) { garageAng = v; garageDrag = { x: 0, a: v }; }, garageShow(i) { garageShow(i); }, eco, customs, applyCustoms() { edDirty = true; edShape.add(0); edApply(); }, get player() { return player; }, get RU() { return RU; }, give(it) { player.item = it; useItem(player); }, start(t) { startGame(t); },
   freeze() { mode = 'count'; countT = 1e9; countN = 99; chaseSnap = true; $('count').hidden = true; },
 };
 (async () => {

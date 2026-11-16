@@ -56,6 +56,10 @@ Trois emplacements. Le tracé est tiré d'une graine : les mêmes nombres redonn
 
 Le décor se choisit parmi les 9 ambiances du jeu. « Tout au hasard » tire tous les nombres d'un coup. Modifier le tracé remet le record du circuit à zéro.
 
+## Sons
+
+Tout est synthétisé par le jeu (`src/audio.js`), sans fichier audio. Chaque véhicule a son moteur : V8 au ralenti irrégulier (Rubis, Titan, Nomade), V10 (Azur, Fulgur), V12 (Mirage, Éclipse), biturbo (Cobalt, Spectre, Comète), monoplace, prototype, buggy, quatre-cylindres de moto, bicylindre de roadster. S'y ajoutent une boîte à 7 rapports avec coupure et détonation à chaque passage, le rupteur, la montée libre dans les tours à l'arrêt, le sifflement du turbo et sa soupape de décharge, les pétarades au lever de pied, le vent, le réacteur du boost, le moteur de l'adversaire le plus proche (avec effet Doppler), les explosions et le bang du mur du son. Pour changer le moteur d'un véhicule : champ `son` dans `src/carlist.js`.
+
 ## Musique
 
 Six morceaux électroniques joués en direct par le jeu (aucun fichier audio) : Néon Drive, Minuit Express, Turbo Cœur, Rêve Chromé, Circuit Rouge, Aube. Choix du morceau et du volume dans les options, « Musique suivante » dans le menu pause.
