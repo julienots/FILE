@@ -1,3 +1,4 @@
+import { Color } from 'three';
 // Décors de nature (jour). flore : [type, nombre, distance mini au bord, étalement, taille mini, taille maxi]
 const NATURE = {
   prairie: { env: 'nature', sky: [[0.10,0.28,0.72],[0.36,0.60,0.95],[0.80,0.88,0.96]], fog: 0xbcd4ee, dens: 0.0016, a: 0x19a0ff, b: 0xff5a1f, c: 0xffd23f,
@@ -67,3 +68,24 @@ export const ROUTE_LIBRE = { id: 'libre', nom: 'Route des Prés', desc: 'Balade 
 export const ROUTE_LIGNE = { id: 'ligne', nom: 'Ligne Droite', desc: 'Balade sans circulation', echelle: 1, half: 5.5, limit: 14, libre: true,
   pts: [[0,0],[0,-1500],[0,-3000],[120,-3220],[330,-3290],[540,-3220],[660,-3000],[660,-1500],[660,0],[540,220],[330,290],[120,220]],
   theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 700, 22, 300, 0.8, 2.0], ['rocher', 60, 18, 220, 0.4, 1.0]] }) };
+
+// Ambiance choisie au départ : chaque circuit peut se courir de jour, de nuit ou sous un orage violent.
+// On part du décor d'origine et on change le ciel, la lumière, le brouillard et la météo.
+export function ambiance(th, mode) {
+  if (!mode || mode === 'def') return th;
+  const city = th.env !== 'nature', o = Object.assign({}, th);
+  if (mode === 'jour') {
+    Object.assign(o, { sky: [[0.10, 0.28, 0.72], [0.36, 0.60, 0.95], [0.80, 0.88, 0.96]], sun: { dir: [0.42, 0.62, -0.66], col: [1.0, 0.93, 0.8], road: 2.0 }, sunI: 2.9, ambI: 1.5, cloud: 0.9, phares: false, flare: 1, ombre: 0.6 });
+    o.fog = city ? 0xb4c6dc : (th.rain === 'neige' ? 0xc8d4e6 : 0xbcd4ee); o.rain = th.rain === 'neige' ? 'neige' : false;
+    if (city) { o.jourVille = true; o.wet = 0.3; o.dens = th.dens * 0.6; }
+  } else if (mode === 'nuit') {
+    if (city) return th;                                   // les circuits de ville sont déjà de nuit
+    Object.assign(o, { sky: [[0.004, 0.008, 0.03], [0.015, 0.03, 0.09], [0.04, 0.07, 0.16]], fog: 0x070b18, dens: th.dens * 1.15, sun: { dir: [0.3, 0.55, -0.78], col: [0.6, 0.7, 1.0], road: 0.9 },
+      sunI: 0.6, ambI: 0.42, cloud: 0.16, phares: true, flare: 0.3, ombre: 0.25, nuit: true });
+  } else if (mode === 'orage') {
+    Object.assign(o, { orage: true, rain: th.rain === 'neige' ? 'neige' : true, wet: 1, phares: true, flare: 0, dens: th.dens * 2.1, ombre: 0.2 });
+    if (city) { o.sky = [[0.0, 0.0, 0.015], [0.03, 0.03, 0.07], [0.09, 0.08, 0.14]]; o.fog = new Color(th.fog).multiplyScalar(0.45).getHex(); }
+    else Object.assign(o, { sky: [[0.03, 0.035, 0.05], [0.09, 0.10, 0.13], [0.17, 0.18, 0.21]], fog: 0x23262e, sun: { dir: [0.2, 0.75, -0.63], col: [0.55, 0.58, 0.68], road: 0.8 }, sunI: 0.85, ambI: 0.75, cloud: 0.28, nuit: true });
+  }
+  return o;
+}

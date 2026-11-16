@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { TRACKS, ROUTE_LIBRE, ROUTE_LIGNE } from './tracks.js';
+import { TRACKS, ROUTE_LIBRE, ROUTE_LIGNE, ambiance } from './tracks.js';
 import { buildWorld, makeTrack, canvasTex } from './world.js';
 import { buildArena, ARENA, TEAM_COL } from './arena.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -31,7 +31,7 @@ if (params.get('modele')) CARS.unshift({ id: 'essai', nom: 'Essai', modele: para
 const tuning = store.get('tuning', {});
 const opts = Object.assign({ qual: 'auto', autoGas: false, son: true, vue: 'ext', musique: 'alea', volMus: 0.5 }, store.get('opts', {}));
 if (opts.v !== 2) { opts.autoGas = false; opts.v = 2; }
-const setup = Object.assign({ track: 0, diff: 1, laps: 3, bots: 7, team: 2, dur: 180, route: 'libre', obst: 1 }, store.get('setup', {}));
+const setup = Object.assign({ track: 0, diff: 1, laps: 3, bots: 7, team: 2, dur: 180, route: 'libre', obst: 1, amb: 'def' }, store.get('setup', {}));
 // économie : crédits gagnés en jouant, véhicules achetés, niveaux de réglage débloqués, paliers du moteur extrême
 const ecoSaved = store.get('eco', null);
 const eco = Object.assign({ cash: 3000, owned: {}, caps: {}, extreme: 0 }, ecoSaved || {});
@@ -71,7 +71,8 @@ renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 2500);
 camera.layers.enable(1);
-const fx = new FX(scene), skids = new Skids(scene);
+const fx = new FX(scene), skids = new Skids(scene), scratches = new Skids(scene, 500);
+scratches.mesh.material.opacity = 0.6; scratches.mesh.material.polygonOffset = true; scratches.mesh.material.polygonOffsetFactor = -2;
 
 const QUALITY = {
   haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 6000, terrain: 170 },
@@ -135,10 +136,12 @@ new ResizeObserver(() => applySize()).observe(app);
 // ---------- monde ----------
 let world = null, T = null, worldKey = '';
 function ensureWorld(key) {
+  const base = key; key = key === 'arena' ? key : key + '|' + setup.amb;
   if (worldKey === key) return;
   if (world) { scene.remove(world.group); world.dispose(); }
   fx.clear();
-  world = key === 'arena' ? buildArena(renderer, Q) : buildWorld(key === 'libre' ? ROUTE_LIBRE : key === 'ligne' ? ROUTE_LIGNE : TRACKS[+key], renderer, Q);
+  const bd = base === 'libre' ? ROUTE_LIBRE : base === 'ligne' ? ROUTE_LIGNE : TRACKS[+base];
+  world = key === 'arena' ? buildArena(renderer, Q) : buildWorld(Object.assign({}, bd, { theme: ambiance(bd.theme, setup.amb) }), renderer, Q);
   T = world.T || null; worldKey = key;
   scene.add(world.group); scene.fog = world.fog;
   scene.environment = null;
@@ -160,7 +163,7 @@ function clearGame() {
   for (const t of G.traffic) { scene.remove(t.vis.root); disposeCar(t.vis); }
   cars = []; player = null; G.traffic = [];
   while (objs.children.length) { const o = objs.children.pop(); if (o.geometry && !o.userData.shared) o.geometry.dispose(); }
-  G.boxes = []; G.shots = []; G.oils = []; G.obst = []; fx.clear(); skids.clear();
+  G.boxes = []; G.shots = []; G.oils = []; G.obst = []; fx.clear(); skids.clear(); scratches.clear();
 }
 function makeCarEntity(def, paint, isPlayer, name, skill) {
   const vis = createCar(def, paint);
@@ -170,8 +173,8 @@ function makeCarEntity(def, paint, isPlayer, name, skill) {
   vis.root.rotation.order = 'YXZ';
   if (vis.neon) vis.neon.visible = !!world.lights;
   const phys = physFromStats(carStats(def), isPlayer ? carTune(def) : null), kv = RU.vitesse;
-  phys.vmax *= kv; phys.accel *= kv; phys.brake *= Math.max(1, kv); phys.grip *= RU.adherence * Math.max(1, kv);
-  const c = { def, vis, phys, yawK: 0, ghostT: 0, giantT: 0, iceT: 0, magnetT: 0, nitroT: 0, scale: 1, driftA: 0, mass: def.moto ? 0.35 : Math.max(0.6, vis.half * vis.len / 2.1), sk: [null, null], drifting: false, x: 0, z: 0, h: 0, y: 0, vy: 0, pitch: 0, v: 0, u: 0, steer: 0, idx: 0, lap: 0, total: 0,
+  phys.vmax *= kv; phys.accel *= kv; phys.brake *= Math.max(1, kv); phys.grip *= RU.adherence * Math.max(1, kv) * (world.theme && world.theme.orage ? 0.82 : 1);   // sous l'orage, la piste détrempée accroche moins
+  const c = { def, vis, phys, yawK: 0, ghostT: 0, giantT: 0, iceT: 0, magnetT: 0, nitroT: 0, scale: 1, driftA: 0, mass: def.moto ? 0.35 : Math.max(0.6, vis.half * vis.len / 2.1), sk: [null, null], scr: null, rubT: 0, drifting: false, x: 0, z: 0, h: 0, y: 0, vy: 0, pitch: 0, v: 0, u: 0, steer: 0, idx: 0, lap: 0, total: 0,
     lapStart: 0, bestLap: 0, finished: false, finishTime: 0, rank: 0, isPlayer, name, yaw: 0, lon: 0, braking: false, onWall: false, slip: 0,
     boost: 100, boosting: false, turboT: 0, spinT: 0, spinA: 0, shieldT: 0, item: null, team: 0, goals: 0, jumps: 0, prevJump: false, prevUse: false, gear: 0,
     ai: { off: 0, base: 0, t: 1, skill, itemT: 0, role: 'att', jumpT: 0 } };
@@ -341,7 +344,7 @@ function hitWall(c, nx, nz, dt, sp) {
     }
     setVel(c, vx, vz);
   }
-  c.v *= Math.exp(-0.6 * dt);
+  c.v *= Math.exp(-(0.45 + 0.9 * Math.max(0, vn) / Math.max(4, Math.abs(c.v))) * dt);   // la tôle frotte : plus on appuie contre le mur, plus on ralentit
   const fx_ = -Math.sin(c.h) * Math.sign(c.v || 1), fz_ = -Math.cos(c.h) * Math.sign(c.v || 1), into = fx_ * nx + fz_ * nz;
   if (into > 0) {
     let tx = fx_ - nx * into, tz = fz_ - nz * into; const tl = Math.hypot(tx, tz);
@@ -354,8 +357,11 @@ function trackConstrain(c, dt) {
   c.idx = T.nearest(c.x, c.z, c.idx);
   const d = T.lateral(c.x, c.z, c.idx), i = c.idx;
   c.offroad = false;
-  if (Math.abs(d) > T.limit) {
-    const s = Math.sign(d), push = Math.abs(d) - T.limit;
+  // le mur s'arrête au ras de la carrosserie : une moto passe plus près qu'une voiture
+  const lim = T.libre ? T.limit : Math.max(1, T.half - 0.06 - c.vis.half * c.scale);
+  if (Math.abs(d) > lim) {
+    const s = Math.sign(d), push = Math.abs(d) - lim;
+    T.point(i, s * (lim + c.vis.half * c.scale + 0.02), tmp); c.wx = tmp.x; c.wz = tmp.z;
     c.x -= -T.tz[i] * s * push; c.z -= T.tx[i] * s * push;
     hitWall(c, -T.tz[i] * s, T.tx[i] * s, dt, sp);
   } else {
@@ -393,6 +399,8 @@ function collidePair(a, b) {
   a.x -= nx * pen / ma / im; a.z -= nz * pen / ma / im;
   if (!b.rail) { b.x += nx * pen / mb / im; b.z += nz * pen / mb / im; }
   const [avx, avz] = velOf(a), [bvx, bvz] = b.rail ? [-sb * b.v, -cb * b.v] : velOf(b);
+  // carrosseries qui se frottent : étincelles au point de contact tant que les deux glissent l'une contre l'autre
+  { const slide = Math.abs((bvx - avx) * -nz + (bvz - avz) * nx); if (slide > 3) { a.rubT = 0.12; if (!b.rail) b.rubT = 0.12; if (Math.random() < 0.6) fx.ember(px, 0.55 + a.y, pz, (avx + bvx) * 0.35, 1, (avz + bvz) * 0.35); } }
   const rel = (bvx - avx) * nx + (bvz - avz) * nz;
   if (rel >= 0) return;
   const j = -1.28 * rel / im, tx = -nz, tz = nx, jt = clamp(-((bvx - avx) * tx + (bvz - avz) * tz) * 0.3 / im, -0.45 * j, 0.45 * j);
@@ -454,7 +462,7 @@ function finishElim(win) {
   mode = 'finished';
   $('rtitle').textContent = win ? 'Victoire !' : 'Éliminé';
   $('rsub').textContent = win ? 'Dernier survivant après ' + fmtShort(raceTime) : 'Tu termines ' + ordinal(player.rank) + ' sur ' + cars.length;
-  fillResults(); show('results'); showGains(); audio.engine(null); audio.skid(0);
+  fillResults(); show('results'); showGains(); audio.engine(null); audio.skid(0); audio.scrape(0);
 }
 
 // ---------- course à bonus : caisses, missiles, flaques, boucliers ----------
@@ -644,7 +652,7 @@ function stepObstacles(dt) {
       const dx = c.x - o.x, dz = c.z - o.z;
       if (o.def.zone) {
         const f = -Math.sin(o.h) * dx - Math.cos(o.h) * dz, l = Math.cos(o.h) * dx - Math.sin(o.h) * dz;   // position dans le repère de la zone
-        if (o.type === 'tremplin') { if (Math.abs(l) < 2.6 + D.r * 0.5 && Math.abs(f) < 3 && c.y < 0.4 && c.vy <= 0 && c.v > 5 && Math.cos(c.h - o.h) > 0.3) { c.vy = clamp(sp * 0.34, 6, 30) * RU.saut; c.y = 0.4; if (c.isPlayer) audio.beep(520, 0.08); } }
+        if (o.type === 'tremplin') { if (Math.abs(l) < 2.6 + D.r * 0.5 && Math.abs(f) < 3 && c.y < 0.4 && c.vy <= 0 && c.v > 5 && Math.cos(c.h - o.h) > 0.3) { c.vy = clamp(sp * 0.13, 4, 8.5) * RU.saut; c.y = 0.4; if (c.isPlayer) audio.beep(520, 0.08); } }
         else if (Math.abs(l) < 2.5 + D.r * 0.5 && Math.abs(f) < 4.5 && c.y < 0.4) { if (c.turboT < 0.5 && c.isPlayer) audio.beep(1040, 0.06); c.turboT = Math.max(c.turboT, 1.6); }
         continue;
       }
@@ -1011,6 +1019,7 @@ function buildSetup(type) {
   });
   chips($('diffs'), DIFFS.map((d, i) => [i, d.nom]), () => setup.diff, (v) => { setup.diff = v; });
   chips($('laps'), [[1, '1'], [3, '3'], [5, '5'], [10, '10'], [25, '25'], [99, '99']], () => setup.laps, (v) => { setup.laps = v; });
+  chips($('ambs'), [['def', "D'origine"], ['jour', 'Jour'], ['nuit', 'Nuit'], ['orage', 'Orage violent']], () => setup.amb, (v) => { setup.amb = v; });
   chips($('obst'), [[0, 'Aucun'], [1, 'Parfois'], [2, 'Souvent'], [3, 'Chaos']], () => setup.obst, (v) => { setup.obst = v; });
   chips($('bots'), [[1, '1'], [3, '3'], [5, '5'], [7, '7'], [11, '11'], [15, '15'], [23, '23'], [31, '31']], () => setup.bots, (v) => { setup.bots = v; });
   chips($('routes'), [['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
@@ -1164,7 +1173,7 @@ function startDemo() {
 function toMenu() {
   edApply();
   if (!owned(CARS[selCar])) { selCar = CARS.findIndex(c => c.id === store.get('car', '') && owned(c)); if (selCar < 0) selCar = CARS.findIndex(owned); }
-  startDemo(); refreshMenu(); refreshCash(); show('menu'); audio.engine(null); audio.skid(0); music.setDuck(1);
+  startDemo(); refreshMenu(); refreshCash(); show('menu'); audio.engine(null); audio.skid(0); audio.scrape(0); music.setDuck(1);
 }
 // gains de la partie : selon le classement, la difficulté, les buts, la distance et les dérapages
 function payout() {
@@ -1235,7 +1244,7 @@ function finishRace() {
   const id = TRACKS[setup.track].id;
   if (G.type === 'chrono') $('rtitle').textContent = 'Temps : ' + fmt(player.finishTime);
   $('rsub').textContent = 'Meilleur tour ' + (player.bestLap ? fmt(player.bestLap) : '—') + ((G.type === 'race' || G.type === 'chrono') && best[id] ? ' · record du circuit ' + fmt(best[id]) : '');
-  fillResults(); show('results'); showGains(); audio.skid(0);
+  fillResults(); show('results'); showGains(); audio.skid(0); audio.scrape(0);
 }
 function endFoot() {
   mode = 'finished';
@@ -1248,7 +1257,7 @@ function endFoot() {
     for (const v of [c.team === 0 ? 'Bleu' : 'Orange', c.name + ' · ' + c.def.nom, c.goals + (c.goals > 1 ? ' buts' : ' but')]) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
     tb.appendChild(tr);
   });
-  show('results'); showGains(); audio.engine(null); audio.skid(0);
+  show('results'); showGains(); audio.engine(null); audio.skid(0); audio.scrape(0);
 }
 function fillResults() {
   const tb = $('rtable'); tb.textContent = '';
@@ -1259,7 +1268,7 @@ function fillResults() {
   });
 }
 function togglePause() {
-  if (mode === 'race') { mode = 'pause'; show('hud', 'pause'); audio.engine(null); audio.skid(0); music.setDuck(0.4); }
+  if (mode === 'race') { mode = 'pause'; show('hud', 'pause'); audio.engine(null); audio.skid(0); audio.scrape(0); music.setDuck(0.4); }
   else if (mode === 'pause') { mode = 'race'; show('hud'); music.setDuck(1); }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'race') togglePause(); audio.suspend(document.hidden); });
@@ -1308,7 +1317,7 @@ window.__nnBack = () => {
   if (!$('menu').hidden) return false; // au menu principal : l'application se ferme
   store.set('setup', setup); toMenu(); return true;
 };
-window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(null); audio.skid(0); audio.suspend(true); };
+window.__nnPause = () => { if (mode === 'race') togglePause(); audio.engine(null); audio.skid(0); audio.scrape(0); audio.suspend(true); };
 window.__nnResume = () => audio.suspend(false);
 
 // ---------- mini-carte ----------
@@ -1322,6 +1331,31 @@ function drawMini() {
   for (const t of G.traffic) dot(t, '#ffd23f', 4);
   for (const c of cars) if (!c.isPlayer) dot(c, '#ff2bd0', 6);
   if (player) dot(player, '#19e6ff', 9);
+}
+
+// ---------- orage : éclairs, foudre, tonnerre, pluie battante ----------
+const storm = { t: 2, flash: 0, bolt: null };
+function strikeBolt() {
+  if (!storm.bolt) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(90 * 6), 3));
+    storm.bolt = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(5, 5.5, 7), fog: false, depthWrite: false })); storm.bolt.frustumCulled = false; storm.bolt.layers.set(1); scene.add(storm.bolt); }
+  // la foudre tombe plutôt devant le joueur, entre 200 m et 1,1 km
+  const fwd = camera.getWorldDirection(sunW), a = Math.atan2(fwd.x, fwd.z) + (Math.random() - 0.5) * 2.2, dist = 200 + Math.random() * 900;
+  const p = storm.bolt.geometry.attributes.position.array; let n = 0, x = camera.position.x + Math.sin(a) * dist, z = camera.position.z + Math.cos(a) * dist, y = 420;
+  const seg = (x0, y0, z0, x1, y1, z1) => { if (n >= 90) return; p.set([x0, y0, z0, x1, y1, z1], n * 6); n++; };
+  while (y > 0 && n < 60) { const nx = x + (Math.random() - 0.5) * 34, nz = z + (Math.random() - 0.5) * 34, ny = y - 12 - Math.random() * 26; seg(x, y, z, nx, Math.max(0, ny), nz);
+    if (Math.random() < 0.22) { let bx = nx, by = ny, bz = nz, dx = (Math.random() - 0.5) * 50; for (let k = 0; k < 4 && by > 20; k++) { const ex = bx + dx + (Math.random() - 0.5) * 20, ey = by - 14 - Math.random() * 18, ez = bz + (Math.random() - 0.5) * 30; seg(bx, by, bz, ex, ey, ez); bx = ex; by = ey; bz = ez; } }
+    x = nx; y = ny; z = nz; }
+  for (let i = n * 6; i < p.length; i++) p[i] = 0;
+  storm.bolt.geometry.attributes.position.needsUpdate = true; storm.flash = 0.4 + Math.random() * 0.35; audio.thunder(dist);
+}
+function stepStorm(dt) {
+  const on = world && world.theme && world.theme.orage && mode !== 'loading';
+  audio.rain(on && mode !== 'pause' ? 1 : 0);
+  if (!on) { if (renderer.toneMappingExposure !== 0.95) renderer.toneMappingExposure = 0.95; if (storm.bolt) storm.bolt.visible = false; storm.flash = 0; return; }
+  if (mode === 'pause') return;
+  storm.t -= dt; if (storm.t <= 0) { storm.t = 2 + Math.random() * 7; strikeBolt(); }
+  if (storm.flash > 0) { storm.flash -= dt; const k = storm.flash > 0 ? (0.45 + 0.55 * Math.abs(Math.sin(storm.flash * 55))) * Math.min(1, storm.flash * 5) : 0;
+    renderer.toneMappingExposure = 0.95 + k * 2.6; storm.bolt.visible = storm.flash > 0.1 && Math.sin(storm.flash * 90) > -0.4; }
 }
 
 // ---------- boucle ----------
@@ -1398,7 +1432,16 @@ function emit(c, dt) {
     for (let k = 0; k < (m ? 1 : 2); k++) { const [wx, wz] = side(m ? 0 : (k ? 1 : -1) * hw * 0.8, len * 0.6); c.sk[k] = skids.mark(c.sk[k], wx, wz, m ? 0.15 : 0.26); } } else c.sk[0] = c.sk[1] = null;
   if (c.landed) { for (let k = 0; k < 8; k++) fx.smoke(c.x + (Math.random() - 0.5) * 2, 0.3, c.z + (Math.random() - 0.5) * 2, vx * 0.2, 1.5, vz * 0.2, 1.6, 0.3, 1.1); for (let k = 0; k < Math.min(12, c.landed); k++) fx.spark(c.x, 0.3, c.z, vx * 0.4, 2, vz * 0.4);
     if (c.isPlayer) { c.bump = Math.max(c.bump || 0, Math.min(1, c.landed / 22)); audio.thud(c.landed / 30); } c.landed = 0; }
-  if (c.onWall && sp > 9) for (let k = 0; k < 2; k++) { const [wx, wz] = side((Math.random() < 0.5 ? -1 : 1) * hw, (Math.random() - 0.5) * len * 2); fx.spark(wx, 0.5, wz, vx * 0.5, 1, vz * 0.5); }
+  if (c.onWall && sp > 4 && c.wx !== undefined) {
+    const k = Math.min(1, sp / 45), n = 1 + Math.floor(k * 5);   // le contact se fait sur toute la longueur du flanc
+    for (let q = 0; q < n; q++) { const f = Math.random() * 2 - 1, px = c.wx + sh * len * f, pz = c.wz + ch * len * f, h = 0.3 + Math.random() * 0.4;
+      if (Math.random() < 0.35) fx.ember(px, h, pz, vx * 0.75, 1.5, vz * 0.75); else fx.spark(px, h, pz, vx * 0.6, 1, vz * 0.6); }
+    if (Math.random() < 0.25 + k * 0.5) fx.dust(c.wx, 0.4, c.wz, vx * 0.3, 0.8, vz * 0.3, 0.8 + k);
+    if (sp > 30 && Math.random() < 0.3) fx.flame(c.wx, 0.45, c.wz, vx * 0.5, 0.5, vz * 0.5, 0.9);
+    c.scr = scratches.markWall(c.scr, c.wx, c.wz);
+    if (c.isPlayer) c.bump = Math.max(c.bump || 0, 0.12 + k * 0.2);
+  } else c.scr = null;
+  if (c.rubT > 0) c.rubT -= dt;
   void dt;
 }
 function syncVisuals(dt) {
@@ -1457,6 +1500,7 @@ function frame(now) {
     else chaseCam(player, dt, false);
     blur = G.type === 'foot' ? clamp(player.v / 120, 0, 0.5) : clamp(player.v / 80, 0, 1) + (player.boosting ? 0.3 : 0);
     if (mode === 'race') engineSound(player.boosting ? 1 : player.inp ? (player.inp.gas || 0) : 0); else audio.engine(null);
+    audio.scrape(mode === 'race' ? Math.max(player.onWall && Math.abs(player.v) > 4 ? 0.25 + Math.abs(player.v) / 60 : 0, player.rubT > 0 ? 0.55 : 0) : 0);
     audio.skid(mode === 'race' && player.y < 0.05 && Math.abs(player.v) > 6 ? (player.drifting ? 0.5 + Math.abs(player.driftA) : clamp((player.slip - 1.5) / 8, 0, 0.7)) : 0);
     hudT -= dt;
     $('h-kmh').textContent = Math.round(Math.abs(player.v) * 3.6);
@@ -1479,10 +1523,11 @@ function frame(now) {
     if (mode === 'race') $('h-drift').textContent = G.dr.cur >= 20 ? 'DÉRAPAGE ' + Math.round(G.dr.cur) : '';
     if (flashT > 0) { flashT -= dt; if (flashT <= 0) $('h-msg').textContent = ''; }
   }
+  stepStorm(dt);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   if (mode !== 'pause') fx.update(dt);
   if (focus) world.update(camera, dt, time, focus.idx || 0);
-  if (world.rain && world.rain.visible) world.updateRain(camera, dt, focus ? -Math.sin(focus.h) * focus.v : 0, focus ? -Math.cos(focus.h) * focus.v : 0);
+  if (world.rain && world.rain.visible) { const wd = world.theme && world.theme.orage ? 16 + Math.sin(time * 0.7) * 8 : 0; world.updateRain(camera, dt, (focus ? -Math.sin(focus.h) * focus.v : 0) + wd, (focus ? -Math.cos(focus.h) * focus.v : 0) + wd * 0.4); }
   if (composer) {
     finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time;
     const fu = finalPass.uniforms; fu.sunVis.value = 0;

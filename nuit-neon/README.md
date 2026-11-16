@@ -17,9 +17,20 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 ## Conduite
 
 - **Dérapage** : bouton DRIFT (Ctrl ou V au clavier, Espace hors Foot et Bonus, X à la manette). L'arrière chasse, la voiture tourne plus serré en perdant un peu de vitesse, les pneus fument et laissent des traces. Chaque glissade rapporte des points, convertis en crédits ; toucher un mur fait perdre la glissade en cours.
-- **Collisions** : les véhicules échangent leur élan selon leur masse (une moto pèse trois fois moins qu'une voiture), rebondissent, frottent et pivotent selon le point d'impact. Contre un mur, la vitesse perpendiculaire est renvoyée amortie.
-- **Obstacles** : réglage Aucun / Parfois / Souvent / Chaos, tirés au hasard à chaque départ. Cônes et barrières s'envolent, les caisses éclatent, les piles de pneus font rebondir, les blocs de béton arrêtent net ; les tremplins font sauter et les zones turbo accélèrent. Les adversaires les évitent.
+- **Collisions** : les véhicules échangent leur élan selon leur masse (une moto pèse trois fois moins qu'une voiture), rebondissent, frottent et pivotent selon le point d'impact. Contre un mur, la vitesse perpendiculaire est renvoyée amortie. Le mur s'arrête au ras de la carrosserie (une moto passe plus près qu'une voiture). Tant que la tôle frotte : gerbe d'étincelles et de braises sur toute la longueur du flanc, poussière, flammèches à haute vitesse, rayures qui restent sur le mur, grincement métallique, caméra qui vibre, et un freinage d'autant plus fort qu'on appuie contre le mur. Deux véhicules qui se frottent font aussi des étincelles.
+- **Obstacles** : réglage Aucun / Parfois / Souvent / Chaos, tirés au hasard à chaque départ. Cônes et barrières s'envolent, les caisses éclatent, les piles de pneus font rebondir, les blocs de béton arrêtent net ; les tremplins font sauter (environ 1,5 m de haut à 200 km/h) et les zones turbo accélèrent. Les adversaires les évitent.
 - **Motos** : elles se couchent vers l'intérieur du virage et la caméra s'incline avec elles.
+
+## Ambiances
+
+Au départ de chaque course ou balade, le réglage **Ambiance** change le ciel, la lumière et la météo de n'importe quel circuit (y compris ceux de l'atelier) :
+
+- **D'origine** : le circuit tel qu'il a été dessiné.
+- **Jour** : grand soleil, y compris sur les circuits de ville.
+- **Nuit** : clair de lune, phares et néons allumés (les circuits de ville sont déjà de nuit).
+- **Orage violent** : ciel noir, pluie battante poussée par le vent, brouillard, éclairs qui illuminent tout le décor, foudre visible au loin, tonnerre qui arrive après l'éclair selon la distance. La piste détrempée accroche 18 % de moins.
+
+Les transformations sont dans `ambiance()` de `src/tracks.js`.
 
 ## Pouvoirs (Course à bonus)
 

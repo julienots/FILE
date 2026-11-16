@@ -142,3 +142,33 @@ export function skid(amount) {
 // petit jingle (gain d'argent, achat)
 export function chime(notes = [660, 880, 1320]) { notes.forEach((f, i) => setTimeout(() => beep(f, 0.07), i * 70)); }
 export function suspend(v) { if (!ctx) return; try { v ? ctx.suspend() : ctx.resume(); } catch (e) { /* contexte fermé */ } }
+
+// frottement de tôle contre un mur ou une autre voiture (0 = silence) : grincement aigu instable + grondement
+let scrG = null, scrF = null, scrG2 = null;
+export function scrape(amount) {
+  if (!ctx) return;
+  if (!scrG) { const s = ctx.createBufferSource(); s.buffer = noise(); s.loop = true; scrF = ctx.createBiquadFilter(); scrF.type = 'bandpass'; scrF.frequency.value = 2800; scrF.Q.value = 6;
+    scrG = ctx.createGain(); scrG.gain.value = 0; const lf = ctx.createBiquadFilter(); lf.type = 'lowpass'; lf.frequency.value = 420; scrG2 = ctx.createGain(); scrG2.gain.value = 0;
+    s.connect(scrF); scrF.connect(scrG); scrG.connect(master); s.connect(lf); lf.connect(scrG2); scrG2.connect(master); s.start(); }
+  const a = Math.min(1, Math.max(0, amount)), t = ctx.currentTime;
+  scrG.gain.setTargetAtTime(a * 0.5, t, 0.03); scrG2.gain.setTargetAtTime(a * 0.6, t, 0.04);
+  if (a > 0) scrF.frequency.setTargetAtTime(1900 + a * 1500 + Math.random() * 1400, t, 0.02);
+}
+// pluie battante et vent de l'orage
+let rainG = null;
+export function rain(levelR) {
+  if (!ctx) return;
+  if (!rainG) { const s = ctx.createBufferSource(); s.buffer = noise(); s.loop = true; const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2200;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; const g2 = ctx.createGain(); g2.gain.value = 1.6;
+    rainG = ctx.createGain(); rainG.gain.value = 0; s.connect(hp); hp.connect(rainG); s.connect(lp); lp.connect(g2); g2.connect(rainG); rainG.connect(master); s.start(); }
+  rainG.gain.setTargetAtTime(levelR * 0.16, ctx.currentTime, 0.3);
+}
+// tonnerre : claquement sec si la foudre est proche, puis long roulement ; il arrive après l'éclair, selon la distance
+export function thunder(dist) {
+  if (!ctx || !on) return;
+  const t = ctx.currentTime + Math.min(3, dist / 343), near = Math.max(0, 1 - dist / 900), vol = 0.35 + near * 0.9;
+  const mk = (type, f0, f1, dur, gain, at) => { const s = ctx.createBufferSource(); s.buffer = noise(); const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, at); f.frequency.exponentialRampToValueAtTime(f1, at + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(gain, at + 0.03); g.gain.exponentialRampToValueAtTime(0.001, at + dur); s.connect(f); f.connect(g); g.connect(master); s.start(at, Math.random() * 0.5, dur + 0.1); };
+  if (near > 0.4) mk('highpass', 1800, 600, 0.25, vol * 0.8, t);
+  mk('lowpass', 900, 70, 1.6 + Math.random(), vol, t + 0.03); mk('lowpass', 260, 50, 3.2 + Math.random() * 1.5, vol * 0.8, t + 0.25 + Math.random() * 0.4);
+}

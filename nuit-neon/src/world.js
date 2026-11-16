@@ -501,8 +501,10 @@ export function buildWorld(def, renderer, q) {
     slabA.repeat.set(750, 750); slabR.repeat.set(750, 750); disposables.push(slabA, slabR);
     const ground = add(new THREE.PlaneGeometry(6000, 6000, 72, 72), new THREE.MeshStandardMaterial({ map: slabA, roughness: 1, roughnessMap: slabR, metalness: 0.0, envMapIntensity: 0.75, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8 }));
     ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.1, cz); ground.renderOrder = -1; // découpé en dalles : un rectangle géant fausse la profondeur et passe devant la route
-    group.add(new THREE.HemisphereLight(new THREE.Color(th.c).lerp(new THREE.Color(0x8080ff), 0.5), 0x140820, 1.1));
-    const key = new THREE.DirectionalLight(0xbfd0ff, 1.2); key.position.set(-6, 14, 8); group.add(key);
+    // ville de jour : la lumière vient du ciel et du soleil au lieu des néons
+    if (th.jourVille) { group.add(new THREE.HemisphereLight(new THREE.Color().fromArray(th.sky[1]), 0x3a3d46, 2.3)); const sl = new THREE.DirectionalLight(new THREE.Color().fromArray(th.sun.col), 3.0); sl.position.fromArray(th.sun.dir).multiplyScalar(100); group.add(sl); }
+    else group.add(new THREE.HemisphereLight(new THREE.Color(th.c).lerp(new THREE.Color(0x8080ff), 0.5), 0x140820, 1.1));
+    const key = new THREE.DirectionalLight(0xbfd0ff, th.jourVille ? 0.3 : 1.2); key.position.set(-6, 14, 8); group.add(key);
     const rim = new THREE.DirectionalLight(th.b, 1.4); rim.position.set(10, 6, -12); group.add(rim);
   } else {
     // ================= NATURE DE JOUR =================
@@ -855,8 +857,8 @@ export function buildWorld(def, renderer, q) {
     textureWidth: 512, textureHeight: 256, clipBias: 0.003, multisample: 0,
     shader: {
       uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, half_: { value: HALF },
-        laneW: { value: T.libre ? 40 : 4.5 }, curbOn: { value: T.libre ? 0 : 1 }, wet: { value: th.wet ?? 1 }, day: { value: city ? 0 : 1 },
-        amb: { value: city ? new THREE.Color(th.c).lerp(new THREE.Color(0.55, 0.5, 0.9), 0.6).multiplyScalar(1.6) : new THREE.Color().fromArray(th.sky[1]).multiplyScalar(0.9) },
+        laneW: { value: T.libre ? 40 : 4.5 }, curbOn: { value: T.libre ? 0 : 1 }, wet: { value: th.wet ?? 1 }, day: { value: city && !th.jourVille ? 0 : 1 },
+        amb: { value: city && !th.jourVille ? new THREE.Color(th.c).lerp(new THREE.Color(0.55, 0.5, 0.9), 0.6).multiplyScalar(1.6) : new THREE.Color().fromArray(th.sky[1]).multiplyScalar(0.9) },
         sunDir: { value: sunDir }, sunCol: { value: th.sun ? new THREE.Color().fromArray(th.sun.col).multiplyScalar(th.sun.road ?? 1) : new THREE.Color(0, 0, 0) },
         offCol: { value: city ? new THREE.Color(0.02, 0.02, 0.03) : new THREE.Color(th.ground).multiplyScalar(0.5) },
         curbCol: { value: curbHex.clone().multiplyScalar(city ? 0.45 : 0.7) } },
@@ -870,11 +872,11 @@ export function buildWorld(def, renderer, q) {
   let rain = null;
   if (th.rain) {
     const snow = th.rain === 'neige';
-    const n = 420, pos = new Float32Array(n * 6), base = new Float32Array(n * 3);
+    const n = th.orage ? 1500 : 420, pos = new Float32Array(n * 6), base = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { base[i * 3] = rr(-22, 22); base[i * 3 + 1] = rr(0, 18); base[i * 3 + 2] = rr(-22, 22); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: snow ? 0xffffff : 0xaac4ff, transparent: true, opacity: snow ? 0.7 : 0.22, depthWrite: false }));
-    rain.frustumCulled = false; rain.layers.set(1); rain.userData = { base, n, fall: snow ? 5 : 26, len: snow ? 0.12 : 0.9 };
+    rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: snow ? 0xffffff : 0xaac4ff, transparent: true, opacity: snow ? 0.7 : th.orage ? 0.42 : 0.22, depthWrite: false }));
+    rain.frustumCulled = false; rain.layers.set(1); rain.userData = { base, n, fall: snow ? (th.orage ? 9 : 5) : th.orage ? 38 : 26, len: snow ? 0.12 : th.orage ? 1.5 : 0.9 };
     group.add(rain); disposables.push(g, rain.material);
   }
   const updateRain = (cam, dt, vx, vz) => {
@@ -899,6 +901,6 @@ export function buildWorld(def, renderer, q) {
   };
   const update = (cam, dt, time, hint) => { for (const u of updaters) u(cam, dt, time, hint); };
   const dispose = () => { for (const d of disposables) d.dispose && d.dispose(); road.dispose && road.dispose(); if (env) env.dispose(); };
-  return { T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, day: !city, lights: city || !!th.phares, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
+  return { T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
     sunDir: th.sun ? new THREE.Vector3().fromArray(th.sun.dir).normalize() : null, sunCol: th.sun ? new THREE.Color().fromArray(th.sun.col) : null };
 }

@@ -64,6 +64,13 @@ export class FX {
   spark(x, y, z, vx, vy, vz) {
     this.fireP.spawn(x, y, z, vx + (Math.random() - 0.5) * 9, vy + Math.random() * 5, vz + (Math.random() - 0.5) * 9, 0.3 + Math.random() * 0.4, 0.22, 0.05, 4.0, 2.4, 0.6, 1, 18, 0.6);
   }
+  ember(x, y, z, vx, vy, vz) {
+    const h = Math.random();
+    this.fireP.spawn(x, y, z, vx + (Math.random() - 0.5) * 5, vy + Math.random() * 3.5, vz + (Math.random() - 0.5) * 5, 0.5 + Math.random() * 0.7, 0.3, 0.04, 4.5, 1.6 + h * 1.6, 0.25 + h * 0.5, 1, 14, 0.5);
+  }
+  dust(x, y, z, vx, vy, vz, size = 1) {
+    this.smokeP.spawn(x, y, z, vx + (Math.random() - 0.5) * 2, vy + Math.random(), vz + (Math.random() - 0.5) * 2, 0.5 + Math.random() * 0.5, 0.3 * size, 1.8 * size, 0.55, 0.52, 0.5, 0.28, -0.3, 2.2);
+  }
   burst(x, y, z, r, g, b, n = 60, speed = 22) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * 6.283, e = Math.random() * 1.5 - 0.3, s = speed * (0.3 + Math.random());
@@ -97,6 +104,15 @@ export class Skids {
         p[k + 6] = x - nx; p[k + 7] = 0.022; p[k + 8] = z - nz; p[k + 9] = x + nx; p[k + 10] = 0.022; p[k + 11] = z + nz;
         this.mesh.geometry.attributes.position.needsUpdate = true; }
       else if (l <= 0.25) return tr; }
+    return { x, z };
+  }
+  // rayure laissée sur un mur : bande verticale entre le point précédent et le point courant
+  markWall(tr, x, z, y0 = 0.28, y1 = 0.62) {
+    if (tr) { const l = Math.hypot(x - tr.x, z - tr.z);
+      if (l > 0.3 && l < 8) { const k = this.i * 12, p = this.p; this.i = (this.i + 1) % this.n;
+        p[k] = tr.x; p[k + 1] = y0; p[k + 2] = tr.z; p[k + 3] = tr.x; p[k + 4] = y1; p[k + 5] = tr.z; p[k + 6] = x; p[k + 7] = y0 + (Math.random() - 0.5) * 0.06; p[k + 8] = z; p[k + 9] = x; p[k + 10] = y1 + (Math.random() - 0.5) * 0.06; p[k + 11] = z;
+        this.mesh.geometry.attributes.position.needsUpdate = true; }
+      else if (l <= 0.3) return tr; }
     return { x, z };
   }
   clear() { this.p.fill(0); this.mesh.geometry.attributes.position.needsUpdate = true; }
