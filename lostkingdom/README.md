@@ -38,7 +38,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - `physics` : saut à l'arrêt et en courant, pentes, roulade de réception, dérapage, parcours complet de la route de Gravemoor (18 points), lancer de la voiture (0,57 s en l'air, réception sur les ressorts) ;
   - `touch` vérifie en plus les deux façons de sauter en sprintant, avec de vrais doigts simulés (7,7 m/s en l'air).
 
-  RESULTATS_1112 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+  Les 24 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `bridge` et `physics` passent aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
 - **Limites.**
   - Sur les routes du jeu, assez douces, la voiture n'a pas décollé pendant les tests : le saut n'a été vérifié qu'avec un lancer simulé.
   - Sous un pont, on ne peut pas marcher dans le lit de la rivière juste sous le tablier : le jeu vous remet sur le pont.
