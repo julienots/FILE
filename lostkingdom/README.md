@@ -34,7 +34,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - `story` : les 4 chapitres se déclenchent à la fin des bonnes quêtes et vont jusqu'au bout ; la quête 4 démarre après le chapitre II ; Alaric disparaît et la quête 6 démarre après le chapitre III ; la quête 7 après Corwin ; l'écran de choix apparaît, un vrai appui sur « Briser la Couronne » lance l'épilogue, puis le générique ;
   - `ssr` : l'eau avec et sans reflets, et la neige au soleil.
 
-  RESULTATS_1120 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+  Les 26 scénarios qui donnent un verdict sont réussis, sans erreur (après la correction de la caméra, `camera`, `story`, `full`, `grounded`, `buildings`, `domain`, `ui`, `touch` et `heroes` ont été relancés et passent). `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `story` passe aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
 - **Limites.**
   - Les cinématiques des chapitres montrent les lieux, pas les personnages : Alaric, Corwin et Malgrath sont « joués » par la voix (texte et nom de celui qui parle), pas par un modèle animé dans le plan.
   - Le test `story` déclenche les fins de quête directement : il ne joue pas toute la quête principale (une dizaine d'heures de jeu).
