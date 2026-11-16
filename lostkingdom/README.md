@@ -13,6 +13,35 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.11.1 (un but au jeu : objectifs, défis et courses ; rivières réparées, herbe plus haute, rayons de soleil)
+
+- **Où sont les véhicules ?** La voiture et la moto sont garées sur la route, juste à l'est de Brindlemere (le village de départ). Elles sont maintenant **marquées sur la minimap** (icône bleue, collée au bord quand elles sont loin) **et sur la carte** (« Voiture », « Moto »).
+- **Nouvel onglet « Objectifs »**, le premier du menu :
+  - **le but** du jeu : retrouver les 6 fragments de la Couronne-Mère, avec le nombre de fragments trouvés et la prochaine étape de la quête principale ;
+  - **« À faire aussi »** : domaine, courses, traqueurs de la nuit, quêtes des villages, contrats de chasse, donjons, Gardiens, héros à débloquer ;
+  - **19 défis** avec barre de progression et récompense en or (de 80 à 500), accordée automatiquement : atteindre le niveau 5 puis 15, découvrir 10 puis 25 lieux, vaincre 50 puis 250 ennemis, un Gardien, réunir 3 fragments, fonder et agrandir son domaine, terminer une course, gagner l'or, débloquer les trois héros, 15 pages de Chroniques, 10 quêtes…
+- **3 courses en voiture ou à moto**, tracées sur les vraies routes depuis Brindlemere :
+  - Sprint de Millbrook (197 m, 5 points de passage), Route du Fort Aldren (263 m, 6 points), La grande route de Gravemoor (759 m, 18 points) ;
+  - on s’arrête un peu plus d’une seconde dans le **cercle vert** du départ (visible en conduisant, et sur la carte), compte à rebours 3-2-1, puis on passe dans chaque point de passage (colonnes d'étincelles lumineuses et flèche sur la minimap) ;
+  - chronomètre à l'écran, **médailles de bronze, d'argent et d'or**, record sauvegardé ; la première fois, chaque médaille rapporte 80, 150 puis 300 or.
+- **Rivières réparées.** Près de Brindlemere, le nivellement du village remplissait le lit de la rivière : on voyait un ravin gris et sec en escaliers au bord de la mer, sans eau (sol à 6,35 m, eau à 2,65 m). C'est probablement ce que montrait votre capture. Le nivellement ne touche plus les lits de rivière, et les embouchures dans les lacs gardent leur eau. Un test vérifie 2 001 points le long des rivières : aucun n'est à sec.
+- **Herbe plus dense et plus haute** : environ 30 % de brins en plus et 30 % plus hauts (jusqu'à 1,85 fois la hauteur de base près du héros). Elle se couche toujours au passage.
+- **Shaders.**
+  - **Rayons de soleil volumétriques** (profils Ultra et Élevé) : la lumière du soleil diffuse dans l'air, et les arbres, les toits et les falaises y découpent des ombres. L'effet est plus fort le matin, le soir, dans la brume et après la pluie, et discret à midi.
+  - **Roche en vraie projection triplanaire** : plus de traînées étirées sur les falaises et les berges.
+- **Conduite** : tirer le joystick vers l'arrière en roulant freine d'abord, puis passe en marche arrière.
+- **Vérification (1.11.1)** : 2 028 tests unitaires (+1 : rivières en eau). Nouveaux scénarios réussis :
+  - `race` : course complète en voiture avec un pilote automatique (départ, compte à rebours, 5 points de passage, arrivée en 10,7 s, médaille d'or, défi « Pilote » accordé, onglet Objectifs) ;
+  - `river` : la rivière de Brindlemere a de l'eau ;
+  - `shafts` : rayons de soleil le matin, à midi et le soir.
+
+  RESULTATS_SCENARIOS Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - **Jouer à deux** n'existe toujours pas (voir la 1.10.0).
+  - Les rayons de soleil coûtent 14 lectures de la carte d'ombres par pixel. Ils sont désactivés en profil Moyen et en dessous ; leur coût sur un vrai GPU de téléphone n'est pas mesuré.
+  - Les courses n'ont pas d'adversaires : on court contre la montre.
+  - Le pilote automatique du test roule mieux qu'un joueur au doigt : les temps des médailles (longueur ÷ 17, 13,5 et 10 m/s) n'ont pas été réglés sur un vrai téléphone.
+
 ### Nouveautés 1.11.0 (vrais modèles 3D pour le monde, voiture et moto)
 
 - **12 bâtiments en modèles 3D** générés avec Tripo (compte de l'utilisateur, connecté par le Tripo CLI) :
@@ -549,7 +578,7 @@ Légende :
 ## Limites connues
 
 - **Aucun test sur un appareil réel.** L'APK est construit et vérifié statiquement, mais il n'a jamais été installé sur un téléphone ou un émulateur : l'environnement de construction n'en possède pas. Des problèmes propres aux pilotes GPU mobiles, aux performances ou au tactile sont possibles.
-- **Graphismes surtout procéduraux.** Seuls les trois héros (le Naufragé, Kaede et Astra) utilisent des modèles 3D générés par IA (Tripo) et importés. Les PNJ, les créatures, les bâtiments et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
+- **Graphismes en partie procéduraux.** Les trois héros, 12 bâtiments, 6 monstres, la voiture et la moto utilisent des modèles 3D générés par IA (Tripo) et importés. Les PNJ, les autres créatures et la végétation sont construits en code. Il n'y a ni texture photographique ni motion capture : les animations sont des images-clés et du procédural. Le style est stylisé ; il n'atteint pas la fidélité d'une production AAA disposant d'une équipe artistique.
 - **Audio synthétisé.** Musiques, ambiances et effets sont générés par `tools/make_audio.py` (synthèse additive et soustractive, Karplus-Strong, FM, formants, réverbération par convolution). Ce n'est pas un orchestre enregistré.
 - **Performance non mesurée sur mobile.** Le harnais de bureau tourne sur un rasteriseur logiciel, à environ 120 ms par image : ce chiffre ne dit rien d'un GPU mobile. Les profils Faible et Économie d'énergie réduisent la distance de vue, les ombres, l'herbe et le post-traitement.
 - **Signature locale.** L'APK est signé avec une clé locale générée au moment de la construction, qui n'est pas versionnée. Pour une publication sur le Play Store, il faut le re-signer avec votre propre clé (voir ci-dessous) et produire un AAB.

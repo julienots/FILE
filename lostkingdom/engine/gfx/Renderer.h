@@ -23,7 +23,8 @@ struct GraphicsSettings {
     bool ssao = true;          // screen-space ambient occlusion (contact shadows, corners, grass)
     int shadowInterval = 1;    // redraw the shadow map every N frames (sun moves slowly)
     int bloomStart = 0;        // 0: bloom chain from half resolution, 1: from quarter resolution
-    bool simpleWater = false;  // one normal octave, no shadow lookup, no point lights on water
+    bool simpleWater = false;
+    bool sunShafts = false;    // 1.11.1 volumetric sunlight (shadow-map ray march in the composite pass)  // one normal octave, no shadow lookup, no point lights on water
     float ssaoStrength = 0.8f;
     float grassDensity = 1.f;
     float particleScale = 1.f;
@@ -62,6 +63,7 @@ struct Environment {
     vec3 fadeColor{0, 0, 0};
     float fade = 0.f;
     float damagePulse = 0.f;
+    float shafts = 0.35f;   // 1.11.1 sunlight scattering in the air (0 = off): light shafts through trees, eaves, smoke
     vec3 playerPos;
     float time = 0.f;  // animation time for shaders (s), owned by the game clock
     float grassPushRadius = 1.3f;   // > 0 also enables the see-through fade around the player

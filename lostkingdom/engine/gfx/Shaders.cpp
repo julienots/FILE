@@ -956,6 +956,10 @@ uniform float uTime;
 uniform float uAlphaFromScene;
 uniform sampler2D uAO;
 uniform vec4 uAoOn;   // x strength (0 = off), yz AO texel size
+uniform mediump sampler2DShadow uShadowMap;   // 1.11.1 light shafts
+uniform mat4 uInvVP, uShadowM;
+uniform vec3 uEye, uSunC;
+uniform vec4 uSunS;   // xyz direction towards the sun, w amount (0 = off)
 out vec4 fragColor;
 
 vec3 aces(vec3 x) {
@@ -988,6 +992,28 @@ void main() {
         coc = max(coc, clamp(abs(d - uGamma.a) / max(uGamma.a, 1.0) * 1.6, 0.0, 1.0) * dofAmt);
     }
     if (coc > 0.01) col = mix(col, texture(uBlur, uv).rgb * uProj.z, clamp(coc, 0.0, 1.0));
+    if (uSunS.w > 0.0) {
+        // Volumetric sunlight: 14 shadow-map taps along the view ray (jittered, max 70 m). Where trees, roofs or
+        // cliffs block the sun the air stays dark, elsewhere it glows: visible shafts in the haze.
+        vec4 wp = uInvVP * vec4(uv * 2.0 - 1.0, texture(uDepth, uv).r * 2.0 - 1.0, 1.0);
+        vec3 P = wp.xyz / wp.w, V = P - uEye;
+        float L = min(length(V), 70.0); vec3 dir = V / max(length(V), 1e-3);
+        float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + uTime * 0.618);
+        float lit = 0.0;
+        for (int i = 0; i < 14; i++) {
+            vec3 q = uEye + dir * (L * (float(i) + jit) / 14.0);
+            vec4 s = uShadowM * vec4(q, 1.0);
+            s.xyz /= s.w;
+            bool inside = all(greaterThan(s.xy, vec2(0.0))) && all(lessThan(s.xy, vec2(1.0))) && s.z < 1.0;
+            lit += inside ? texture(uShadowMap, vec3(s.xy, s.z - 0.002)) : 1.0;
+        }
+        lit /= 14.0;
+        float mu = dot(dir, uSunS.xyz);
+        float g = 0.55;   // Henyey-Greenstein forward scattering + a little isotropic
+        float phase = 0.08 + (1.0 - g * g) / (12.566 * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+        float air = 1.0 - exp(-L * 0.018);
+        col += uSunC * (lit * lit) * phase * air * uSunS.w * 0.55;
+    }
     col += texture(uBloom, uv).rgb * uPost0.y;
     col *= uPost0.x;
     // white balance

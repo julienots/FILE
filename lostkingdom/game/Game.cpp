@@ -452,6 +452,11 @@ void Game::updateEnvironment(float dt) {
     env.temperature = g.temp + (h > 16.5f && h < 19.5f ? 0.4f : 0.f) - env.night * 0.3f;
     env.lift = g.lift; env.gamma = g.gamma; env.gain = g.gain;
     env.bloomIntensity = 0.05f + env.night * 0.04f;
+    // 1.11.1 light shafts: strongest with a low sun (morning, evening) and in mist or after rain, faint at noon
+    {
+        float low = 1.f - saturate((env.sunDir.y - 0.15f) / 0.6f);
+        env.shafts = (0.3f + 0.55f * low + fogAmt * 0.5f + env.wetness * 0.25f) * (1.f - overcast * 0.6f);
+    }
     env.vignette = 0.32f;
     env.grain = 0.012f;
     env.chromatic = 0;

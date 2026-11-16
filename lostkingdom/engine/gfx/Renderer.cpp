@@ -49,10 +49,10 @@ GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
     switch (p) {
     case QualityProfile::Ultra:
         s.renderScale = 1.0f; s.shadowRes = 2048; s.softShadows = true; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; break;
+        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; s.sunShafts = true; break;
     case QualityProfile::High:
         s.renderScale = 0.85f; s.shadowRes = 2048; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; break;
+        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; s.sunShafts = true; break;
     case QualityProfile::Medium:
         s.renderScale = 0.75f; s.shadowRes = 1024; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = false;
         s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; s.terrainNormals = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
@@ -560,6 +560,17 @@ void Renderer::postProcess() {
     composite.set("uFade", vec4(env.fadeColor, env.fade));
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
+    // 1.11.1 light shafts: march the shadow map from the eye to each pixel
+    bool doShafts = settings.sunShafts && shadowsThisFrame && shadowRT.fbo && env.shafts > 0.01f && env.sunIntensity > 0.05f;
+    if (doShafts) {
+        shadowRT.depth.bind(5); composite.set("uShadowMap", 5);
+        composite.set("uInvVP", camera.viewProj.inverse());
+        composite.set("uShadowM", shadowMatrix);
+        composite.set("uEye", camera.pos);
+        float a = env.shafts * std::min(1.f, env.sunIntensity / 3.f) * (1.f - env.night);
+        composite.set("uSunS", vec4(normalize(env.sunDir), a));
+        composite.set("uSunC", env.sunColor * env.sunIntensity);
+    } else composite.set("uSunS", vec4(0, 1, 0, 0));
     fsMesh.draw();
     gpuMark(9);
     if (doFxaa) {

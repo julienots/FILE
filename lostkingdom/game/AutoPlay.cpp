@@ -124,6 +124,25 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "shafts") {
+        // 1.11.1: light shafts through the forest by the Millbrook road, morning, noon and evening
+        static const float hours[3] = {7.2f, 12.f, 17.6f};
+        s.push_back({2.5f, [](Game& g) {
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.races.clear(); g.buildRaces();
+            vec2 p = g.races[0].cps[1];
+            teleport(g, p.x, p.y, 0.f);
+        }, idle, "forest"});
+        for (int i = 0; i < 3; i++) {
+            s.push_back({2.f, [i](Game& g) { g.timeOfDay = hours[i]; }, idle, "hour"});
+            s.push_back({0.05f, [i](Game& g) {
+                AGR_LOG("SHAFTS hour %.1f amount %.2f sun y %.2f", hours[i], g.env.shafts, g.env.sunDir.y);
+                g.requestScreenshot(std::string("build/shots/U") + char('0' + i) + "_shafts.png");
+            }, idle, "shot"});
+        }
+        s.push_back({0.5f, [](Game&) { AGR_LOG("SHAFTS TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "race") {
         // 1.11.1: a full race with the car on the Millbrook road (driven by a simple autopilot towards each
         // checkpoint), plus the challenges panel
