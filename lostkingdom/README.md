@@ -13,6 +13,48 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.12.0 (l'histoire racontée en chapitres, une fin à choisir, reflets dans l'eau, tout bien placé)
+
+- **L'histoire, en chapitres.** La quête principale avait une intrigue écrite dans les Chroniques (les Gardiens appellent le héros « sire », le novice à la cicatrice qui ne vieillit pas) mais jamais racontée. Elle l'est maintenant, en 5 nouvelles cinématiques à plans (23 plans en tout, dans les vrais lieux du monde, avec heure, météo et brume propres à chacun) :
+  - **I · La voix dans la pierre** (après la Pierre d'écho) : Aldric parle. Une âme liée au sceau ne meurt pas ; quand le sceau cède, elle est rejetée, « comme une épave sur la grève » ;
+  - **II · Les six Gardiens** (en arrivant à Highspire) : survol des six repaires, un plan et une phrase par Gardien. Alaric dit « sire », puis se reprend ;
+  - **III · Le novice à la cicatrice** (après la Couronne reforgée) : **la révélation**. Frère Alaric était le novice qui tenait les tenailles la nuit de la Brisure, l'élève de Malgrath ; il disparaît. La quête suivante démarre seule ; si une quête vous demandait encore de lui parler, cette étape est validée (ce dernier point n'est pas couvert par un test) ;
+  - **IV · Le champion qui attendait** (après Corwin) : Sire Corwin reconnaît son roi et le prévient : la Couronne reforgée est une clé pour ouvrir, pas pour fermer ;
+  - **V · Le choix d'Aldric** : après Malgrath, un écran de choix. **Reprendre ta place dans le sceau** (épilogue « Le Roi du sceau ») ou **Briser la Couronne à jamais** (épilogue « Le Roi sans couronne », qui renvoie à votre domaine). Puis le générique ; le monde reste ouvert ensuite.
+  - Les textes des quêtes 5 à 7 suivent la révélation. Le but affiché dans **Objectifs** change avec l'histoire, et une section **L'histoire** résume chaque chapitre vu, avec un bouton **Revoir** (revoir un chapitre ne relance pas ses effets).
+- **Tout bien placé.** Un nouvel audit génère les 1 285 chunks autour des 33 lieux du monde et vérifie 11 529 objets solides et 393 bâtiments. Il a trouvé de vrais défauts, corrigés :
+  - **18 bâtiments sur des routes** (dont des maisons au milieu de la route qui traverse Brindlemere, et des lanternes sur les pavés) et **4 paires d'étals l'un dans l'autre** : une passe de placement écarte chaque bâtiment de la route et de ses voisins (32 déplacés de quelques mètres, 8 petits éléments sans place retirés : lanternes, étals) ;
+  - des arbres pouvaient pousser dans une maison posée à cheval sur deux chunks (chaque chunk ne regardait que ses propres bâtiments) : la végétation évite désormais aussi les bâtiments des chunks voisins ;
+  - résultat : 0 objet dans un bâtiment, sur une route, dans l'eau ou flottant ; 0 bâtiment qui en chevauche un autre ou posé sur une route (les routes qui finissent à la porte d'une tour ou d'une crypte, et les remparts traversés à leur porte, sont normaux).
+- **Shaders.**
+  - **Reflets dans l'eau** (profils Ultra et Élevé) : le héros, les personnages, les roseaux, les ponts et les arbres proches se reflètent dans l'eau, ondulés par les vagues. La scène est copiée avant de dessiner l'eau, puis le shader de l'eau suit le rayon réfléchi dans cette copie (« réflexions en espace écran »). Vu de haut, comme dans le jeu, l'effet reste discret.
+  - **Paillettes** sur la neige, le givre et le sable mouillé : de minuscules cristaux accrochent le soleil et scintillent.
+- **Vérification (1.12.0)** : 2 049 tests unitaires (+8 : audit de placement). Nouveaux scénarios :
+  - `story` : les 4 chapitres se déclenchent à la fin des bonnes quêtes et vont jusqu'au bout ; la quête 4 démarre après le chapitre II ; Alaric disparaît et la quête 6 démarre après le chapitre III ; la quête 7 après Corwin ; l'écran de choix apparaît, un vrai appui sur « Briser la Couronne » lance l'épilogue, puis le générique ;
+  - `ssr` : l'eau avec et sans reflets, et la neige au soleil.
+
+  RESULTATS_1120 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - Les cinématiques des chapitres montrent les lieux, pas les personnages : Alaric, Corwin et Malgrath sont « joués » par la voix (texte et nom de celui qui parle), pas par un modèle animé dans le plan.
+  - Le test `story` déclenche les fins de quête directement : il ne joue pas toute la quête principale (une dizaine d'heures de jeu).
+  - Les reflets coûtent une copie de l'image et 22 pas de rayon par pixel d'eau ; leur coût sur un vrai téléphone n'est pas mesuré.
+  - Jouer à deux n'existe toujours pas.
+
+## Axes d'amélioration
+
+Ce qui ferait le plus progresser le jeu, du plus important au moins important (avis honnête) :
+
+1. **L'essayer sur de vrais téléphones.** Tout est vérifié sur ordinateur. Il faut mesurer les performances (images par seconde, chauffe, batterie), le tactile réel et les pilotes graphiques de plusieurs marques, puis régler les profils. C'est le plus gros risque restant.
+2. **Les personnages dans les cinématiques.** Mettre Alaric, Corwin, Maëlle et Malgrath en scène (modèles 3D animés, gestes, regards) au lieu de plans de décor avec du texte.
+3. **Des voix.** Un doublage, même partiel (le prologue, les chapitres), changerait beaucoup l'immersion.
+4. **De vrais modèles pour tout le monde.** Les héros, 12 bâtiments, 6 monstres et 2 véhicules sont des modèles 3D ; les villageois, les autres créatures (21 sur 27) et la végétation sont encore construits en code.
+5. **Des animations capturées** (motion capture) pour la marche, les combats et les dialogues, au lieu d'images-clés et de procédural.
+6. **Une musique enregistrée** : les musiques et les sons sont synthétisés par un script.
+7. **Le jeu à deux** : il faut une couche réseau (hôte et invité, synchronisation des héros, des ennemis et des combats), et deux appareils pour la tester.
+8. **Plus de contenu entre les chapitres** : des quêtes secondaires liées à l'histoire (Corwin, l'Ordre, les élèves de Malgrath), des donjons uniques par Gardien, des choix qui changent les villages.
+9. **La publication** : un AAB signé avec votre clé pour le Play Store, une politique de confidentialité, des captures et une fiche boutique.
+10. **D'autres langues** (anglais d'abord) et des options d'accessibilité (taille du texte, daltonisme, sous-titres plus grands).
+
 ### Nouveautés 1.11.2 (ponts réparés, sauter en courant, physique et caustiques)
 
 - **Les ponts se traversent.** Il y en a 3 dans le monde (là où une route croise une rivière), et ils sont refaits :
@@ -647,7 +689,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), bridge, physics, race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), story, ssr, bridge, physics, race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
