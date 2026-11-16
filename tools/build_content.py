@@ -3,13 +3,20 @@
 NOCTÉA — pipeline de production vocale (Superessence Studio).
 
 1. Analyse les scripts (tools/content/library.py) et la banque du générateur (bank.py).
-2. Découpe chaque phrase sur les « ... » pour insérer de VRAIS silences.
-3. Synthétise chaque fragment avec la voix féminine française « siwis » (Piper, CC-BY 4.0),
-   débit ralenti, puis traitement studio : égalisation chaude, de-essing, compression douce,
-   légère réverbération de pièce, normalisation.
+2. Moteur « chatterbox » (par défaut) : chaque phrase est dite d'un seul tenant par
+   tools/voice_chatterbox.py (timbre d'une comédienne française, prises vérifiées par Whisper),
+   puis les « ... » sont allongés en VRAIS silences à l'endroit exact où la voix marque la pause.
+   Moteur « piper » (historique, plus rapide, moins naturel) : chaque fragment est synthétisé
+   séparément avec la voix « siwis » de Piper, débit ralenti.
+3. Traitement studio : égalisation chaude, de-essing, compression douce, légère réverbération
+   de pièce, normalisation.
 4. Encode en Opus (Ogg) et écrit assets/voice/*.ogg + assets/content/catalog.json.
 
-Usage : python3 tools/build_content.py [--model /opt/voices/fr_FR-siwis-medium.onnx]
+Usage :
+    python3 tools/build_content.py                       # écrit tools/.cache/jobs.json
+    python3 tools/voice_chatterbox.py                    # enregistre les phrases manquantes (long)
+    python3 tools/build_content.py                       # traitement studio + catalogue
+    python3 tools/build_content.py --engine piper --model fr_FR-siwis-medium.onnx
 """
 import argparse
 import hashlib
@@ -48,6 +55,18 @@ CHAIN_VERSION = "v3"
 ELLIPSIS_PAUSE_MS = 1050
 SR = 22050
 
+# Moteur Chatterbox : la voix est déjà naturelle, le traitement reste léger.
+ENGINE = "chatterbox"
+CB_SR = 24000
+CB_KEY = "cb1"          # change → tout réenregistrer
+CB_CHAIN_VERSION = "s1"  # change → refaire seulement le traitement studio
+CB_TEMPO = 1.0           # < 1 ralentit la voix sans changer sa hauteur (rubberband)
+CB_CHAIN = ("highpass=f=70,equalizer=f=200:t=q:w=1.0:g=1.5,equalizer=f=3200:t=q:w=1.6:g=-1.0,"
+            "highshelf=f=8000:g=-1.5,deesser=i=0.2,"
+            "acompressor=threshold=-22dB:ratio=2:attack=12:release=220:makeup=1.5,"
+            "apad=pad_dur=0.2,aecho=0.9:0.5:23|37:0.07|0.04")
+RAW = os.path.join(HERE, ".cache", "raw")
+
 ELLIPSIS_SPLIT = re.compile(r"(\.\.\.|…)\s+(?=\S)")
 
 
@@ -68,7 +87,8 @@ class Registry:
         self.frags = {}  # key → (text, settings_name)
 
     def key(self, text, settings="voice"):
-        k = hashlib.sha1(f"{CHAIN_VERSION}|{settings}|{text}".encode()).hexdigest()[:16]
+        prefix = CB_KEY if ENGINE == "chatterbox" else CHAIN_VERSION
+        k = hashlib.sha1(f"{prefix}|{settings}|{text}".encode()).hexdigest()[:16]
         self.frags[k] = (text, settings)
         return k
 
@@ -77,6 +97,9 @@ REG = Registry()
 
 
 def phrase_segments(text, settings="voice"):
+    if ENGINE == "chatterbox":
+        # une phrase = un seul clip, silences des « ... » inclus dans l'audio
+        return [("c", REG.key(text, settings))]
     segs = []
     frags = split_fragments(text)
     for i, f in enumerate(frags):
@@ -129,6 +152,74 @@ def _render(job):
     ms = int(round(len(y) / SR * 1000))
     json.dump({"ms": ms, "text": text}, open(out_meta, "w"), ensure_ascii=False)
     return key, ms
+
+
+def _render_cb(job):
+    """Prise brute Chatterbox → pauses allongées → traitement studio → Opus."""
+    key, text, settings = job
+    out_ogg = os.path.join(CACHE, f"{key}.{CB_CHAIN_VERSION}.ogg")
+    out_meta = os.path.join(CACHE, f"{key}.{CB_CHAIN_VERSION}.json")
+    if os.path.exists(out_ogg) and os.path.exists(out_meta):
+        return key, json.load(open(out_meta))["ms"]
+    meta = json.load(open(os.path.join(RAW, key + ".json"), encoding="utf-8"))
+    with wave.open(os.path.join(RAW, key + ".wav"), "rb") as w:
+        assert w.getframerate() == SR and w.getnchannels() == 1
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768.0
+    cuts = [int(p * SR) for p in meta.get("pauses", []) if p is not None]
+    parts, last = [], 0
+    for c in cuts + [len(x)]:
+        part = trim_voice(x[last:c])
+        last = c
+        if len(part) < int(0.05 * SR):
+            continue
+        part = part.copy()
+        fi, fo = int(0.006 * SR), int(0.04 * SR)
+        part[:fi] *= np.linspace(0, 1, fi)
+        part[-fo:] *= np.linspace(1, 0, fo)
+        if parts:
+            parts.append(np.zeros(int((ELLIPSIS_PAUSE_MS - 90) / 1000 * SR), dtype=np.float32))
+        parts.append(part)
+    x = np.concatenate(parts) if parts else np.zeros(SR // 2, dtype=np.float32)
+    chain = CB_CHAIN
+    if settings == "voice" and abs(CB_TEMPO - 1.0) > 1e-3:
+        chain = f"rubberband=tempo={CB_TEMPO}:pitchq=quality:formant=preserved," + chain
+    with tempfile.TemporaryDirectory() as td:
+        raw = os.path.join(td, "raw.wav")
+        proc = os.path.join(td, "proc.wav")
+        write_wav(raw, x)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw, "-af", chain,
+                        "-ar", str(SR), "-c:a", "pcm_f32le", proc], check=True)
+        y = read_wav_f32(proc)
+        y = trim(y, keep_tail_ms=180 if settings == "voice" else 60)
+        y = level(y)
+        n_fade_in = int(0.008 * SR)
+        n_fade_out = min(int(0.09 * SR), len(y) // 3)
+        y[:n_fade_in] *= np.linspace(0, 1, n_fade_in)
+        y[-n_fade_out:] *= np.linspace(1, 0, n_fade_out)
+        final = os.path.join(td, "final.wav")
+        write_wav(final, y)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", final, "-ar", "24000",
+                        "-c:a", "libopus", "-b:a", "32k", "-application", "audio", out_ogg + ".tmp.ogg"], check=True)
+        os.replace(out_ogg + ".tmp.ogg", out_ogg)
+    ms = int(round(len(y) / SR * 1000))
+    json.dump({"ms": ms, "text": text}, open(out_meta, "w"), ensure_ascii=False)
+    return key, ms
+
+
+def trim_voice(x, rel_db=-28, keep_head_ms=30, keep_tail_ms=110):
+    """Garde la parole (seuil relatif au niveau de la voix) : écarte souffles et bruits résiduels du modèle."""
+    win = int(0.02 * SR)
+    n = len(x) // win
+    if n < 3:
+        return x
+    env = np.sqrt(np.mean(x[: n * win].reshape(n, win) ** 2, axis=1) + 1e-12)
+    thr = max(np.percentile(env, 95) * 10 ** (rel_db / 20), 10 ** (-50 / 20))
+    idx = np.where(env > thr)[0]
+    if len(idx) == 0:
+        return x[:0]
+    a = max(0, idx[0] * win - int(keep_head_ms / 1000 * SR))
+    b = min(len(x), (idx[-1] + 1) * win + int(keep_tail_ms / 1000 * SR))
+    return x[a:b]
 
 
 def trim(x, thresh_db=-46, keep_head_ms=30, keep_tail_ms=60):
@@ -378,7 +469,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="/opt/voices/fr_FR-siwis-medium.onnx")
     ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--engine", choices=["chatterbox", "piper"], default="chatterbox")
     args = ap.parse_args()
+    global ENGINE, SR
+    ENGINE = args.engine
+    if ENGINE == "chatterbox":
+        SR = CB_SR
 
     os.makedirs(CACHE, exist_ok=True)
     voice_dir = os.path.join(ASSETS, "voice")
@@ -399,11 +495,35 @@ def main():
     jobs = [(k, t, s) for k, (t, s) in sorted(REG.frags.items())]
     print(f"{len(jobs)} fragments vocaux à produire…", flush=True)
     clip_ms = {}
-    with Pool(args.jobs, initializer=_init_worker, initargs=(args.model,)) as pool:
-        for i, (k, ms) in enumerate(pool.imap_unordered(_render, jobs, chunksize=4)):
-            clip_ms[k] = ms
-            if (i + 1) % 100 == 0:
-                print(f"  {i + 1}/{len(jobs)}", flush=True)
+    if ENGINE == "chatterbox":
+        os.makedirs(RAW, exist_ok=True)
+        with open(os.path.join(HERE, ".cache", "jobs.json"), "w", encoding="utf-8") as f:
+            json.dump([dict(key=k, text=t, settings=s) for k, t, s in jobs], f, ensure_ascii=False, indent=0)
+        missing = [k for k, _, _ in jobs if not os.path.exists(os.path.join(RAW, k + ".json"))]
+        if missing:
+            print(f"{len(missing)} phrases ne sont pas encore enregistrées.\n"
+                  f"Lancez : python3 tools/voice_chatterbox.py   puis relancez ce script.")
+            sys.exit(2)
+        weak = []
+        for k, t, _ in jobs:
+            m = json.load(open(os.path.join(RAW, k + ".json"), encoding="utf-8"))
+            if not m["ok"] or any(p is None for p in m["pauses"]):
+                weak.append((k, m["ratio"], t, m["heard"]))
+        if weak:
+            print(f"{len(weak)} prises à réécouter (voir --redo de voice_chatterbox.py) :")
+            for k, r, t, h in weak:
+                print(f"  {k} r={r} « {t} » → « {h} »")
+        with Pool(args.jobs) as pool:
+            for i, (k, ms) in enumerate(pool.imap_unordered(_render_cb, jobs, chunksize=4)):
+                clip_ms[k] = ms
+                if (i + 1) % 200 == 0:
+                    print(f"  {i + 1}/{len(jobs)}", flush=True)
+    else:
+        with Pool(args.jobs, initializer=_init_worker, initargs=(args.model,)) as pool:
+            for i, (k, ms) in enumerate(pool.imap_unordered(_render, jobs, chunksize=4)):
+                clip_ms[k] = ms
+                if (i + 1) % 100 == 0:
+                    print(f"  {i + 1}/{len(jobs)}", flush=True)
 
     # 2) identifiants courts et copie dans les assets
     for f in os.listdir(voice_dir):
@@ -412,7 +532,8 @@ def main():
     keys = sorted(clip_ms.keys(), key=lambda k: (REG.frags[k][1], REG.frags[k][0]))
     clip_ids = {k: f"v{i:04d}" for i, k in enumerate(keys)}
     for k, cid in clip_ids.items():
-        with open(os.path.join(CACHE, k + ".ogg"), "rb") as src, open(os.path.join(voice_dir, cid + ".ogg"), "wb") as dst:
+        src_name = f"{k}.{CB_CHAIN_VERSION}.ogg" if ENGINE == "chatterbox" else k + ".ogg"
+        with open(os.path.join(CACHE, src_name), "rb") as src, open(os.path.join(voice_dir, cid + ".ogg"), "wb") as dst:
             dst.write(src.read())
     fx_ms = build_fx(voice_dir)
     # 60 s de silence Opus (même format que la voix → enchaînements sans reconfiguration audio)
@@ -447,7 +568,9 @@ def main():
 
     catalog = dict(
         version=1,
-        voice=dict(name="Siwis (Piper, CC-BY 4.0)", engine="piper-vits", language="fr-FR"),
+        voice=(dict(name="NOCTÉA (Chatterbox, timbre SIWIS CC-BY 4.0)", engine="chatterbox-multilingual", language="fr-FR")
+               if ENGINE == "chatterbox" else
+               dict(name="Siwis (Piper, CC-BY 4.0)", engine="piper-vits", language="fr-FR")),
         clips={clip_ids[k]: clip_ms[k] for k in keys},
         fx=fx_ms,
         categories=[dict(id=c[0], title=c[1], subtitle=c[2]) for c in LIB.CATEGORIES],

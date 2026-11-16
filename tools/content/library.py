@@ -971,6 +971,513 @@ Il réveille chaque cellule de ton corps, doucement. |6
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Séances ajoutées en version 1.1 (regroupées ensuite par catégorie).
+TRACKS += [
+    # ================================================================== SOMMEIL
+    dict(
+        id="sleep_again", cat="sommeil", art="moon", title="Se rendormir en pleine nuit",
+        desc="Tu t'es réveillé au milieu de la nuit ? Une séance très douce, sans effort, pour retrouver le sommeil.",
+        amb=[("rain_soft", 0.35), ("brown", 0.12)], pause=6.0, tail=300,
+        script="""
+~3
+Tu t'es réveillé... et ce n'est pas grave.
+Cela arrive à tout le monde... et la nuit est encore longue.
+Tu n'as pas besoin de regarder l'heure... ni de compter les heures qu'il te reste. |7
+Garde les yeux fermés... et laisse ton corps peser dans le lit. |8
+Même éveillé, ton corps se repose... chaque minute de calme lui fait du bien. |8
+Laisse ta respiration faire ce qu'elle veut... sans la guider. |8
+Remarque seulement l'air qui entre... et l'air qui ressort. |9
+Si une pensée arrive, tu peux lui dire doucement : pas maintenant... demain. |9
+Et tu reviens au poids de ton corps... à la chaleur des draps. |9
+Sens tes pieds... lourds et tièdes. |7
+Tes jambes... qui s'abandonnent. |7
+Ton ventre, qui se soulève... et redescend. |8
+Tes épaules, qui s'enfoncent dans le matelas. |8
+Ton visage... lisse, détendu... la mâchoire desserrée. |9
+~12
+Imagine que la nuit est une eau calme et tiède... et que tu flottes dessus, sans rien faire. |10
+Elle te porte... elle t'a toujours porté. |10
+Tu n'as pas à chercher le sommeil... c'est lui qui te cherche. |10
+Il reviendra... comme la marée revient toujours. |12
+~20
+Rien à faire... |12
+Rien à penser... |14
+~30
+Seulement te laisser porter... |15
+~45
+Bonne nuit... |5
+""",
+    ),
+    dict(
+        id="sleep_heavy", cat="sommeil", art="stars", title="Corps lourd, esprit léger",
+        desc="Inspirée du training autogène : la lourdeur puis la chaleur gagnent tout le corps, jusqu'au sommeil.",
+        amb=[("night", 0.3), ("pads", 0.2)], pause=6.0, tail=240,
+        script="""
+@bell
+~4
+Bonsoir...
+Ce soir, nous allons simplement laisser ton corps devenir lourd... puis chaud... et le sommeil fera le reste.
+Allonge-toi sur le dos... les bras le long du corps... et ferme les yeux. |7
+@pool breath 0-3 5
+Porte ton attention sur ton bras droit... |5
+Mon bras droit est lourd... très lourd... |8
+Il pèse sur le matelas... comme s'il était fait de sable tiède. |8
+Mon bras gauche est lourd... très lourd... |8
+Mes deux bras sont lourds... agréablement lourds. |9
+Ma jambe droite est lourde... |8
+Ma jambe gauche est lourde... |8
+Mes bras et mes jambes sont lourds... |9
+Tout mon corps est lourd... et calme. |10
+~8
+Maintenant, une douce chaleur se répand... |6
+Mes mains sont chaudes... comme posées au soleil. |8
+La chaleur remonte dans mes bras... |8
+Mes pieds sont chauds... mes jambes sont chaudes. |9
+Mon ventre est chaud et détendu... |9
+Mon cœur bat calmement... régulièrement. |10
+Ma respiration est tranquille... ça respire en moi. |10
+Mon front est frais... léger... sans aucun pli. |10
+~12
+Tout mon corps est lourd... chaud... et parfaitement calme. |12
+Et mon esprit devient léger... comme une plume qui descend lentement. |12
+~20
+Elle descend... |12
+Encore... |14
+~30
+@pool close.sleep 0-6 9
+""",
+    ),
+
+    # ================================================================== RELAXATION
+    dict(
+        id="relax_muscle", cat="relaxation", art="lotus", title="Relaxation musculaire progressive",
+        desc="La méthode de Jacobson : contracter puis relâcher chaque groupe de muscles pour dissoudre les tensions.",
+        amb=[("stream", 0.25), ("ambient", 0.2)], pause=5.0, tail=40,
+        script="""
+@bell
+~4
+Bienvenue...
+Nous allons contracter, puis relâcher, chaque partie du corps... l'une après l'autre.
+C'est en sentant la différence entre la tension et le relâchement que le corps apprend à se détendre.
+Contracte sans jamais forcer... et si une zone est douloureuse, passe-la simplement.
+Installe-toi confortablement... et ferme les yeux. |6
+@pool breath 0-3 5
+Commence par les mains... serre les poings, fort. |5
+Tiens... encore un peu... |3
+Et relâche, d'un seul coup. |8
+Sens tes doigts s'ouvrir... la chaleur revenir dans tes paumes. |8
+Maintenant les bras... plie les coudes et contracte les biceps. |5
+Tiens... |4
+Et relâche... laisse tes bras retomber, lourds. |9
+Hausse les épaules vers les oreilles... le plus haut possible. |5
+Tiens... |4
+Et relâche... laisse-les descendre, loin des oreilles. |9
+Le visage, à présent... plisse les yeux, fronce le nez, serre les dents. |5
+Tiens... |3
+Et relâche... ton front se lisse, ta mâchoire se desserre. |9
+Inspire profondément et gonfle la poitrine... retiens l'air. |5
+Et relâche en soufflant... longuement. |9
+Rentre le ventre... contracte les abdominaux. |5
+Tiens... |4
+Et relâche... laisse ton ventre redevenir souple. |9
+Serre les fesses et les cuisses... |5
+Tiens... |4
+Et relâche... sens tes jambes peser. |9
+Enfin, ramène les pointes de pieds vers toi... contracte les mollets. |5
+Tiens... |3
+Et relâche... complètement. |10
+~8
+Parcours maintenant ton corps en entier... des pieds jusqu'à la tête. |8
+S'il reste une tension quelque part, envoie-lui ton souffle... et laisse-la fondre. |10
+Savoure cette sensation de corps délié... reposé. |12
+~15
+@pool close.soft 0-6 5
+@bell
+""",
+    ),
+    dict(
+        id="relax_pause", cat="relaxation", art="clouds", title="Pause express",
+        desc="Quatre minutes pour souffler au milieu de la journée, où que tu sois, les yeux ouverts ou fermés.",
+        amb=[("wind_soft", 0.25), ("piano", 0.2)], pause=4.5, tail=15,
+        script="""
+@bell
+~3
+Bienvenue dans cette petite pause.
+Où que tu sois, tu peux t'arrêter un instant... rien d'autre à faire pendant quelques minutes.
+Pose tes deux pieds au sol... et laisse ton dos trouver un appui. |5
+Relâche les épaules... desserre la mâchoire... adoucis ton regard, ou ferme les yeux. |6
+Prends une grande inspiration par le nez... |4
+Et souffle lentement par la bouche... comme à travers une paille. |6
+Encore une fois... inspire... |4
+Et souffle... tout doucement. |6
+Remarque trois choses que tu entends, en ce moment... |10
+Puis les points d'appui de ton corps... tes pieds, tes cuisses, ton dos. |8
+Tu es là... tout simplement. |6
+Ce qui t'attend peut attendre encore une minute. |6
+Demande-toi : de quoi ai-je vraiment besoin, maintenant ? |8
+Laisse venir la réponse... sans la juger. |10
+Prends une dernière respiration ample... |5
+Et reviens à ta journée... un peu plus léger, un peu plus présent. |5
+@bell
+""",
+    ),
+
+    # ================================================================== RESPIRATION
+    dict(
+        id="breath_box", cat="respiration", art="breath", title="Respiration carrée",
+        desc="Quatre temps égaux : inspirer, retenir, expirer, retenir. Pour retrouver calme et concentration.",
+        amb=[("pads", 0.25)], pause=4.0, tail=20,
+        script="""
+@bell
+~3
+Bienvenue... Nous allons pratiquer la respiration carrée.
+Elle a quatre côtés égaux : tu inspires sur quatre temps... tu retiens sur quatre temps... tu expires sur quatre temps... et tu restes poumons vides sur quatre temps.
+C'est une respiration qui stabilise... elle calme le corps tout en gardant l'esprit clair.
+Assieds-toi, le dos droit mais détendu... et relâche les épaules. |5
+Si les pauses te semblent trop longues, raccourcis-les... le confort passe avant tout. |4
+Nous commençons. |3
+@cycles 4 4 4 4 3 count
+Très bien... continue, je te donne seulement les repères. |2
+@cycles 4 4 4 4 6 cue
+Encore quelques cycles, en silence... dessine le carré dans ton esprit. |2
+@cycles 4 4 4 4 4 silent
+@bell
+Laisse maintenant ta respiration reprendre son rythme naturel... |6
+Remarque comme ton esprit est posé... stable. |8
+Tu peux utiliser cette respiration avant un moment important... ou chaque fois que tu en ressens le besoin. |4
+""",
+    ),
+    dict(
+        id="breath_wave", cat="respiration", art="ocean", title="Respiration en vague",
+        desc="Un souffle ample et rond, calqué sur le va-et-vient de la mer, pour apaiser le système nerveux.",
+        amb=[("waves", 0.4), ("pads", 0.12)], pause=4.5, tail=20,
+        script="""
+@bell
+~3
+Bienvenue... Nous allons respirer comme la mer respire.
+L'inspiration est une vague qui monte sur le sable... l'expiration, une vague qui se retire.
+Entre les deux, il y a un tout petit instant suspendu... où rien ne bouge.
+Installe-toi... pose une main sur ton ventre si tu le souhaites... et ferme les yeux. |6
+Écoute les vagues un instant... |8
+Inspire sur quatre temps... garde l'air deux temps... expire sur six temps... et reste vide deux temps. |3
+@cycles 4 2 6 2 2 count
+C'est cela... laisse le souffle devenir rond, sans à-coups. |2
+@cycles 4 2 6 2 7 cue
+Continue seul... porté par le bruit de la mer. |2
+@cycles 4 2 6 2 6 silent
+Relâche maintenant le rythme... et laisse la mer respirer pour toi. |8
+Sens le calme qui s'est installé... large, comme l'horizon. |10
+@bell
+""",
+    ),
+
+    # ================================================================== MÉDITATION
+    dict(
+        id="med_kindness", cat="meditation", art="heart", title="Bienveillance envers soi",
+        desc="Une méditation d'amour bienveillant : s'offrir à soi-même, puis aux autres, des souhaits de paix.",
+        amb=[("ambient", 0.3), ("pads", 0.12)], pause=5.5, tail=30,
+        script="""
+@bell
+~4
+Bienvenue...
+Cette méditation est un moment de douceur... envers toi, d'abord.
+Nous sommes souvent plus durs avec nous-mêmes qu'avec n'importe qui d'autre... ce soir, nous allons faire autrement.
+Installe-toi... et ferme les yeux. |6
+@pool breath 0-4 5
+Pose une main sur ton cœur, si tu veux... et sens sa chaleur. |7
+Imagine que tu te regardes avec les yeux de quelqu'un qui t'aime profondément. |8
+Quelqu'un qui connaît tes efforts... tes fatigues... et qui ne te demande rien. |9
+Répète intérieurement, après moi... |4
+Que je sois en paix. |9
+Que je sois en bonne santé. |9
+Que je me sente en sécurité. |9
+Que je sois doux avec moi-même. |10
+~8
+Pense maintenant à une personne que tu aimes... vois son visage. |7
+Et offre-lui les mêmes souhaits... |4
+Que tu sois en paix. |9
+Que tu sois en bonne santé. |9
+Que tu te sentes en sécurité. |9
+Que ta vie soit douce. |10
+~8
+Élargis encore... à tous ceux qui, ce soir, ont besoin de douceur. |8
+Que chacun trouve le repos... |9
+Que chacun se sente aimé... |10
+Et toi aussi, tu fais partie de ce « chacun ». |10
+~12
+Sens la chaleur sous ta main... elle est à toi, et elle ne s'épuise pas. |10
+@pool close.soft 0-6 5
+@bell
+""",
+    ),
+    dict(
+        id="med_thoughts", cat="meditation", art="clouds", title="Observer ses pensées",
+        desc="Regarder passer les pensées comme des feuilles sur une rivière, sans s'y accrocher.",
+        amb=[("stream", 0.35), ("ambient", 0.15)], pause=5.5, tail=30,
+        script="""
+@bell
+~4
+Bienvenue...
+Nous n'allons pas essayer d'arrêter les pensées... ce serait comme vouloir arrêter une rivière avec les mains.
+Nous allons simplement nous asseoir sur la rive... et les regarder passer.
+Installe-toi... le dos droit, sans raideur... et ferme les yeux. |6
+@pool breath 0-4 5
+Imagine une rivière tranquille, qui coule devant toi... |7
+Sur l'eau, de temps en temps, une feuille passe... portée par le courant. |8
+Chaque fois qu'une pensée apparaît, dépose-la sur une feuille... |8
+Et regarde-la s'éloigner... à son rythme. |10
+Tu n'as pas à la pousser... ni à la retenir. |10
+~12
+Certaines pensées sont lourdes... elles passent lentement. Laisse-les passer lentement. |10
+D'autres reviennent, encore et encore... dépose-les, encore et encore. |10
+~15
+Peut-être que tu t'es laissé emporter par une feuille... c'est normal. |7
+Dès que tu le remarques, tu es déjà revenu sur la rive. |9
+Et ce retour, c'est exactement cela, méditer. |10
+~20
+Remarque l'espace entre deux pensées... même très court. |10
+Dans cet espace, il y a du calme... il a toujours été là. |12
+~20
+Tu n'es pas tes pensées... tu es celui, ou celle, qui les regarde passer. |10
+@pool close.soft 0-6 5
+@bell
+""",
+    ),
+    dict(
+        id="med_mountain", cat="meditation", art="mountain", title="La montagne intérieure",
+        desc="Retrouver stabilité et solidité en s'identifiant à une montagne que rien n'ébranle.",
+        amb=[("wind_trees", 0.3), ("pads", 0.18)], pause=5.5, tail=30,
+        script="""
+@bell
+~4
+Bienvenue...
+Quand tout bouge autour de nous, nous pouvons retrouver en nous quelque chose de stable... comme une montagne.
+Assieds-toi, le dos droit et digne... les mains posées sur les cuisses... et ferme les yeux. |7
+@pool breath 0-4 5
+Fais apparaître dans ton esprit une montagne... la plus belle que tu puisses imaginer. |8
+Sa base est large, profondément ancrée dans la terre... son sommet s'élève dans le ciel. |9
+Regarde-la... immense, immobile, tranquille. |9
+Maintenant, laisse cette montagne entrer en toi... jusqu'à ce que ton corps et elle ne fassent plus qu'un. |9
+Ton bassin et tes jambes sont sa base... solide, enracinée. |8
+Ton dos est son versant... et ta tête, son sommet. |9
+Tu es cette montagne... assise, stable, entière. |10
+~10
+Le jour se lève sur la montagne... puis la nuit tombe. Elle reste là. |9
+Les saisons passent... la neige, les fleurs, la chaleur de l'été, les feuilles d'automne. |9
+Elle ne s'accroche à aucune saison... et n'en repousse aucune. |10
+Parfois, une tempête se lève... le vent hurle, la pluie frappe ses flancs. |8
+La montagne ne prend pas la tempête pour elle... elle la laisse passer. |10
+Et sous les nuages, elle reste exactement la même. |10
+~15
+Tes pensées, tes émotions, les événements de ta vie... sont la météo. |9
+Toi, tu es la montagne. |12
+~20
+Tu peux revenir à cette solidité, chaque fois que tu en as besoin... elle ne te quitte pas. |9
+@pool close.soft 0-6 5
+@bell
+""",
+    ),
+    dict(
+        id="med_ground", cat="meditation", art="forest", title="Apaiser l'anxiété",
+        desc="Un ancrage par les cinq sens pour sortir du tourbillon mental et revenir dans le présent.",
+        amb=[("wind_soft", 0.25), ("ambient", 0.25)], pause=5.0, tail=30,
+        script="""
+@bell
+~4
+Bienvenue...
+@pool intro.anxiety 0-0 5
+L'anxiété nous emmène dans le futur... nos sens, eux, nous ramènent toujours ici.
+Tu peux garder les yeux ouverts pour le début de cette séance. |5
+Sens d'abord tes pieds sur le sol... appuie-les légèrement. |7
+Le sol te porte... il est solide. |7
+Regarde autour de toi... et nomme intérieurement cinq choses que tu vois. |5
+Prends ton temps... une forme, une couleur, une lumière. |14
+Maintenant, quatre choses que tu peux toucher... le tissu de tes vêtements, la surface sous tes mains. |5
+Sens vraiment leur texture... leur température. |14
+Trois sons que tu entends... proches, ou lointains. |14
+Deux odeurs... ou simplement la fraîcheur de l'air dans tes narines. |12
+Et une chose que tu goûtes... ou la simple sensation de ta bouche. |10
+Tu es ici... dans cette pièce, dans ce corps, dans cet instant. |8
+Et dans cet instant précis... tu es en sécurité. |9
+Tu peux maintenant fermer les yeux, si tu le souhaites. |5
+@pool goal.anxiety 0-8 7
+Allonge ton expiration... comme si tu soufflais doucement sur une bougie, sans l'éteindre. |8
+Encore... |8
+Ce que tu ressens est une vague... et toutes les vagues finissent par redescendre. |10
+~12
+Tu as su revenir au calme... et tu sauras le refaire. |8
+@pool close.soft 0-6 5
+@bell
+""",
+    ),
+
+    # ================================================================== HISTOIRES
+    dict(
+        id="story_train", cat="histoires", art="stars", title="Le train de nuit",
+        desc="Bercé par le roulis d'un wagon-lit, tu traverses la campagne endormie jusqu'au bout de la nuit.",
+        amb=[("brown", 0.22), ("night", 0.2), ("pads", 0.12)], pause=6.0, tail=240,
+        script="""
+@bell
+~4
+Bonsoir...
+Ce soir, je t'emmène en voyage... à bord d'un train de nuit.
+Installe-toi confortablement... ferme les yeux... et laisse-toi conduire. |7
+C'est une petite gare de campagne, à la fin d'une soirée d'été. |6
+Le quai est presque vide... l'air sent le foin coupé et la pierre encore tiède. |7
+Au loin, deux lumières approchent... lentement, sans bruit. |7
+Le train s'arrête devant toi dans un long soupir. |7
+Tu montes... et le contrôleur, un vieil homme au sourire tranquille, t'indique ta cabine. |7
+Elle est petite, lambrissée de bois sombre... éclairée par une lampe à l'abat-jour doré. |7
+Le lit est déjà fait... des draps frais, une couverture de laine épaisse, un oreiller profond. |8
+Tu poses ton sac... tu n'as rien d'autre à porter ce soir. |7
+Par la fenêtre, le quai commence à glisser... tout doucement. |8
+Le train a repris sa route... et tu ne l'as presque pas senti partir. |8
+Tu t'allonges... et tu sens, sous toi, le roulis régulier des roues sur les rails. |8
+Un rythme lent... toujours le même... comme un cœur paisible. |9
+Dehors, la campagne défile sous la lune... |8
+Des champs argentés... une rivière qui brille un instant... un bois sombre. |9
+Un village endormi... avec une seule fenêtre encore allumée. |9
+Puis de nouveau les champs... larges et silencieux. |9
+Tu n'as pas à savoir où va le train... quelqu'un veille, à l'avant. |9
+Les rails sont posés... le chemin est tracé... tu n'as qu'à te laisser porter. |10
+Le wagon se balance légèrement... à gauche... à droite... |10
+La lampe diffuse une lumière de miel... puis tu l'éteins. |9
+Maintenant, il n'y a plus que la lune sur le plafond... et le bruit sourd du train. |10
+Chaque tour de roue t'éloigne un peu plus de la journée. |10
+Tes soucis sont restés sur le quai... de plus en plus petits... puis invisibles. |10
+Tes paupières sont lourdes... ton corps suit le balancement. |10
+Quelque part, le train traverse un pont... et le son devient plus creux, plus doux. |10
+Puis un tunnel de forêt... où tout devient sombre et feutré. |12
+~15
+Le train roule... et roulera toute la nuit. |12
+Demain, il arrivera au bord de la mer... mais tu as tout le temps. |12
+~25
+Pour l'instant... tu dors déjà presque. |14
+~35
+Bon voyage... et bonne nuit... |5
+""",
+    ),
+    dict(
+        id="story_lighthouse", cat="histoires", art="ocean", title="Le phare du bout du monde",
+        desc="Une nuit dans la chambre ronde d'un vieux phare, tandis que la mer veille au pied des rochers.",
+        amb=[("waves", 0.4), ("wind_soft", 0.18), ("fire", 0.12)], pause=6.0, tail=240,
+        script="""
+@bell
+~4
+Bonsoir...
+Ce soir, nous allons passer la nuit dans un phare... tout au bout d'une île.
+Allonge-toi... ferme les yeux... et écoute. |7
+Le sentier longe la falaise, dans la lumière bleue du crépuscule. |7
+L'herbe est rase et douce... le vent sent le sel et la bruyère. |7
+Devant toi, le phare se dresse... blanc, solide, posé là depuis plus de cent ans. |8
+Sa porte est lourde... elle s'ouvre sur un escalier de pierre qui tourne. |7
+Tu montes sans te presser... une marche après l'autre. |8
+À chaque palier, une petite fenêtre... et la mer, un peu plus bas. |8
+Tout en haut, juste sous la lanterne, il y a une chambre ronde. |7
+Un poêle y ronronne doucement... une bouilloire attend sur le côté. |8
+Le lit est installé contre le mur courbe... garni d'édredons et de couvertures de marin. |8
+Tu te glisses dessous... et tu sens la chaleur te gagner peu à peu. |8
+Au-dessus de toi, la grande lampe tourne... lentement. |8
+Son faisceau balaie la mer... s'éloigne... puis revient. |9
+Il s'éloigne... puis revient... |10
+Toujours au même rythme... depuis toujours. |10
+En bas, les vagues se brisent sur les rochers... puis se retirent en chuchotant. |10
+Elles ne peuvent pas t'atteindre ici... les murs sont épais comme des bras. |10
+Le phare a traversé toutes les tempêtes... il veille. |9
+Ce soir, tu n'as pas besoin de veiller... il le fait pour toi. |10
+Au large, un bateau voit la lumière... et sait qu'il est sur la bonne route. |10
+Tout est à sa place... la mer, la lampe, la nuit. |10
+Le poêle craque un peu... la chaleur est douce sur ton visage. |10
+Ta respiration s'accorde au passage de la lumière... |10
+Elle passe... et tu inspires... |8
+Elle s'éloigne... et tu expires... |10
+~15
+La lumière tourne... |12
+La mer respire... |14
+~25
+Et toi, tu glisses dans le sommeil... bien à l'abri. |14
+~35
+Bonne nuit... |5
+""",
+    ),
+    dict(
+        id="story_lavender", cat="histoires", art="garden", title="Un soir en Provence",
+        desc="La chaleur retombe sur les champs de lavande. Une vieille maison de pierre t'attend pour la nuit.",
+        amb=[("night", 0.35), ("wind_soft", 0.2), ("piano", 0.1)], pause=6.0, tail=240,
+        script="""
+@bell
+~4
+Bonsoir...
+Ce soir, je t'emmène dans le sud... à l'heure où la chaleur retombe.
+Installe-toi... ferme les yeux... et respire lentement. |7
+Tu marches sur un chemin de terre claire, entre deux champs de lavande. |7
+Le soleil vient de passer derrière la colline... le ciel est rose, puis mauve. |8
+Les rangées de fleurs s'étirent jusqu'à l'horizon... comme de longues vagues violettes. |8
+Leur parfum monte dans l'air tiède... doux, propre, apaisant. |8
+Tu laisses ta main frôler les épis en marchant... |8
+Les dernières abeilles rentrent... et les grillons commencent leur chant. |8
+Au bout du chemin, il y a une vieille maison de pierre, aux volets bleus. |7
+Devant la porte, un grand tilleul... et sous le tilleul, un banc. |8
+Tu t'assieds un moment... la pierre du mur est encore chaude dans ton dos. |8
+Quelque part, une fontaine coule... un filet d'eau, régulier, tranquille. |9
+Le ciel s'assombrit lentement... et la première étoile apparaît. |9
+Puis une autre... et encore une autre. |9
+L'air fraîchit un peu... juste ce qu'il faut. |8
+Tu entres dans la maison... elle sent la cire, le linge propre et la lavande séchée. |8
+L'escalier de bois craque gentiment sous tes pas. |8
+Dans la chambre, la fenêtre est ouverte sur la nuit... un rideau blanc bouge à peine. |9
+Les draps sont en lin... frais, un peu rêches, merveilleusement propres. |9
+Tu t'allonges... et tout ton corps soupire. |10
+Par la fenêtre entre le chant des grillons... et le parfum des champs. |10
+Tu n'as rien à faire demain matin... rien de pressé. |10
+Les collines dorment... les champs dorment... la maison dort. |10
+Le chant des grillons devient lointain... comme une berceuse très ancienne. |12
+~15
+Ta respiration est lente... parfumée... |12
+Tes pensées se dispersent, comme des graines dans le vent du soir... |14
+~25
+Il ne reste que la douceur de la nuit... |14
+~35
+Dors bien... |8
+Bonne nuit... |5
+""",
+    ),
+
+    # ================================================================== RÉVEIL
+    dict(
+        id="wake_energy", cat="reveil", art="sun", title="Élan du matin",
+        desc="Respiration tonique, étirements et intention : cinq minutes pour démarrer la journée avec entrain.",
+        amb=[("stream", 0.25), ("piano", 0.3)], pause=4.0, tail=15,
+        script="""
+@bell
+~4
+Bonjour...
+Une nouvelle journée commence... et elle n'a encore jamais été vécue par personne.
+Assieds-toi au bord du lit, ou tiens-toi debout... les pieds bien à plat. |5
+Étire tes bras vers le plafond... grandis-toi, comme si un fil tirait le sommet de ta tête. |6
+Et relâche... en soufflant. |5
+Fais rouler doucement tes épaules vers l'arrière... |6
+Incline la tête d'un côté... puis de l'autre. |7
+Maintenant, réveillons le souffle... inspire par le nez, largement... |4
+Et expire d'un seul coup, par la bouche. |4
+Encore... inspire, en ouvrant la poitrine... |4
+Et souffle... |4
+Une dernière fois... inspire toute la lumière du matin... |4
+Et laisse partir ce qu'il reste de la nuit. |6
+Sens l'énergie qui circule... dans tes mains, dans tes jambes, derrière tes yeux. |7
+Pense à une chose, même toute petite, qui te fait plaisir aujourd'hui. |8
+Puis choisis un mot pour ta journée... calme, courage, joie, patience... celui qui te vient. |9
+Garde-le avec toi... comme un caillou lisse au fond de ta poche. |6
+@pool close.wake 2-6 4
+Belle journée à toi. |3
+@bell
+""",
+    ),
+]
+_CAT_ORDER = [c[0] for c in CATEGORIES]
+TRACKS.sort(key=lambda t: _CAT_ORDER.index(t["cat"]))
+
 # Citations apaisantes (affichées dans l'application).
 QUOTES = [
     ("La nuit porte conseil.", "Proverbe français"),
