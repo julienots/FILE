@@ -95,7 +95,7 @@ export function buildDesign(def, paint) {
     const cp = [], cc = [], ci = []; let cy = 0;
     for (let i = 0; i < ring; i++) { const k = (m * ring + i) * 3; cp.push(pos[k], pos[k + 1], pos[k + 2]); cc.push(1, 1, 1); cy += pos[k + 1]; }
     cp.push(0, cy / ring, pos[m * ring * 3 + 2]); cc.push(1, 1, 1);
-    for (let i = 0; i < ring; i++) m === 0 ? ci.push(ring, i, (i + 1) % ring) : ci.push(ring, (i + 1) % ring, i);
+    for (let i = 0; i < ring; i++) m === 0 ? ci.push(ring, (i + 1) % ring, i) : ci.push(ring, i, (i + 1) % ring);   // faces tournées vers l'extérieur
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3)); g.setIndex(ci); g.computeVertexNormals(); caps.push(g);
   }
   const paintMat = new THREE.MeshPhysicalMaterial({ color: paint, vertexColors: true, metalness: 0.82, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 1.6 });
