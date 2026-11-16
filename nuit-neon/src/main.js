@@ -192,7 +192,7 @@ function placeOnGrid(c, slot) {
 function gridUp(withPlayer, nBots) {
   clearGame();
   const sk = DIFFS[setup.diff], order = [];
-  for (let i = 0; i < 24; i++) order.push((selCar + 1 + i) % CARS.length);
+  for (let i = 0; i < nBots; i++) order.push((selCar + 1 + i % (CARS.length - 1)) % CARS.length);   // autant d'entrées que d'adversaires, sans jamais reprendre la voiture du joueur
   const used = new Set(withPlayer ? [carColor(CARS[selCar])] : []);
   const n = nBots + (withPlayer ? 1 : 0);
   for (let s = 0; s < n; s++) {
