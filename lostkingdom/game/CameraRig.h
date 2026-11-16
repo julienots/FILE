@@ -37,6 +37,8 @@ struct CameraRigOut {
     float mapK = 0;           // 0..1: how much the zoomed-out "map" view is engaged
     float nearK = 0;          // 0..1: how much the close-up framing is engaged
     float minClear = 3.f;     // minimum eye height above the terrain that was enforced
+    bool liftedOverWall = false;   // 1.12.0 tilted up / swung around a wall the hero stands against
+    float yawFix = 0;              // yaw offset used for that (the game eases its camera yaw towards it)
     bool collided = false;    // scenery shortened the distance
     float collisionDist = -1; // smoothed distance allowed by the scenery (feed back as prevCollisionDist)
     float lift = 0;           // smoothed terrain lift of the eye (feed back as prevLift)

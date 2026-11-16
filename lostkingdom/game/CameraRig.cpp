@@ -45,6 +45,26 @@ CameraRigOut CameraRig::compute(const CameraRigIn& in) {
             }
         }
     }
+    // 1.12.0 back against a wall: even at the closest distance the eye would be inside it. Tilt the camera up
+    // (over the roof) until the eye is clear, and look down at the hero from there.
+    // If tilting is not enough (a tall block of a building), swing around the hero as well: the game then turns
+    // its camera yaw gently towards the free side (yawFix), so the controls follow what is on screen.
+    if (o.collided && in.blocked && in.blocked(in.focus + dir * free)) {
+        const float step = 0.4f, start = 0.8f;
+        static const float yaws[] = {0.f, 0.5f, -0.5f, 1.f, -1.f, 1.6f, -1.6f, 2.2f, -2.2f};
+        bool found = false;
+        for (float yo : yaws) {
+            for (float ep2 = ep + (yo == 0.f ? 0.15f : 0.f); ep2 <= PITCH_MAX + 1e-3f && !found; ep2 += 0.15f) {
+                float y2 = in.yaw + yo;
+                vec3 dir2{std::sin(y2) * std::cos(ep2), std::sin(ep2), std::cos(y2) * std::cos(ep2)};
+                float f2 = d;
+                for (float s = start; s <= d; s += step)
+                    if (in.blocked(in.focus + dir2 * s)) { f2 = std::max(1.6f, s - 0.5f); break; }
+                if (!in.blocked(in.focus + dir2 * f2) && f2 >= std::min(d, 6.f)) { dir = dir2; free = f2; o.liftedOverWall = true; o.yawFix = yo; found = true; }
+            }
+            if (found) break;
+        }
+    }
     if (in.dt > 0 && in.prevCollisionDist > 0 && free > in.prevCollisionDist)
         free = std::min(free, in.prevCollisionDist + (free - in.prevCollisionDist) * (1.f - std::exp(-2.5f * in.smooth * in.dt)));
     o.collisionDist = free;

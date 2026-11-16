@@ -1504,6 +1504,16 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.04f, [check](Game& g) {
             res[8] = wallFound && g.camRig.collided && !g.cameraBlocked(g.cam.pos) && check(g, "collision");
             AGR_LOG("CAMERA collision: wall found %d, collided %d, effective distance %.1f", wallFound, g.camRig.collided, g.camRig.dist);
+            if (g.cameraBlocked(g.cam.pos)) {   // which collider still holds the eye (diagnostics)
+                vec3 e = g.cam.pos;
+                if (Chunk* ch = g.world.chunkAt(e.x, e.z))
+                    for (const Collider& c : ch->colliders) {
+                        if (c.hx <= 0) continue;
+                        vec2 l = rotate(e.xz() - c.c, -c.rot);
+                        if (std::fabs(l.x) < c.hx + 0.3f && std::fabs(l.y) < c.hz + 0.3f) AGR_LOG("CAMERA eye inside box at (%.1f, %.1f) half %.1f x %.1f base %.1f top %.1f; eye (%.1f, %.1f, %.1f) hero (%.1f, %.1f, %.1f)", c.c.x, c.c.y, c.hx, c.hz, c.base, c.top, e.x, e.y, e.z, g.pc().pos.x, g.pc().pos.y, g.pc().pos.z);
+                    }
+                for (const Structure& st : g.world.structures) if (length(st.pos - e.xz()) < 12.f) AGR_LOG("CAMERA   structure kind %d at (%.1f, %.1f) rot %.2f", st.kind, st.pos.x, st.pos.y, st.rot);
+            }
             g.requestScreenshot("build/shots/94_cam_collision.png");
         }, [](Game& g, float) { g.camIdleT = 0; }, "check collision"});
         // dungeon: walls must not trap the camera (regression found while testing 1.6.0)

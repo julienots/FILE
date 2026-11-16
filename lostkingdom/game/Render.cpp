@@ -95,6 +95,7 @@ void Game::updateCamera(float dt) {
     ri.prevCollisionDist = camRig.collisionDist; ri.prevLift = camRig.lift;
     ri.smooth = settings.cameraSmooth ? 1.f : 2.5f;   // tight mode: terrain lift / wall back-out settle 2.5x faster
     camRig = CameraRig::compute(ri);
+    if (camRig.yawFix != 0 && state == GameState::Playing && !cine.active) camYaw = wrapAngle(camYaw + camRig.yawFix * std::min(1.f, dt * 3.f));   // 1.12.0
     vec3 eye = camRig.eye, look = camRig.look;
     float cineFov = 0;
     if (cine.active) {
