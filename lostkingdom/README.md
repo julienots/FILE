@@ -35,7 +35,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - `river` : la rivière de Brindlemere a de l'eau ;
   - `shafts` : rayons de soleil le matin, à midi et le soir.
 
-  RESULTATS_SCENARIOS Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+  Les 22 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; `race` passe aussi sous AddressSanitizer. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
 - **Limites.**
   - **Jouer à deux** n'existe toujours pas (voir la 1.10.0).
   - Les rayons de soleil coûtent 14 lectures de la carte d'ombres par pixel. Ils sont désactivés en profil Moyen et en dessous ; leur coût sur un vrai GPU de téléphone n'est pas mesuré.
@@ -616,7 +616,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
