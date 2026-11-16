@@ -42,7 +42,7 @@ interface VoiceProvider {
 
 object EmbeddedVoice {
     const val NAME = "Voix NOCTÉA (préenregistrée)"
-    const val NOTE = "Voix féminine française douce, produite en studio à partir d'un modèle neuronal libre (Piper « Siwis », CC-BY 4.0). Disponible hors connexion."
+    const val NOTE = "Voix féminine française douce et naturelle, enregistrée en studio virtuel : le timbre d'une comédienne française (corpus SIWIS, CC-BY 4.0) interprété par un modèle neuronal expressif, chaque phrase étant vérifiée. Disponible hors connexion."
 }
 
 class TtsException(message: String) : Exception(message)

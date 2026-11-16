@@ -352,7 +352,7 @@ fun AboutScreen() {
             GlassCard(Modifier.fillMaxWidth()) {
                 Text("Crédits", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Voix : ${app.catalog.voiceName}, modèle neuronal Piper entraîné sur le corpus SIWIS (Université d'Édimbourg), traitement audio Superessence Studio.\n" +
+                    "Voix : ${app.catalog.voiceName}, synthèse neuronale Chatterbox (Resemble AI, licence MIT) d'après le timbre du corpus SIWIS (Idiap / Université d'Édimbourg, CC-BY 4.0), traitement audio Superessence Studio.\n" +
                         "Ambiances et musiques : synthèse procédurale originale Superessence Studio.\n" +
                         "Polices : Cormorant Garamond, Nunito, Fredoka (SIL Open Font License).\n" +
                         "Lecture audio : AndroidX Media3 (Apache 2.0).\n\n" +

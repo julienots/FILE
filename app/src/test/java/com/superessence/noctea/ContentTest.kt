@@ -37,11 +37,13 @@ class ContentTest {
     @Test fun catalogHasEveryRequestedCategoryAndContent() {
         val cats = catalog.categories.map { it.id }
         listOf("sommeil", "relaxation", "respiration", "meditation", "histoires").forEach { assertTrue(it in cats) }
-        assertEquals(6, catalog.inCategory("sommeil").size)
-        assertEquals(5, catalog.inCategory("relaxation").size)
-        assertEquals(5, catalog.inCategory("respiration").size)
-        assertEquals(5, catalog.inCategory("meditation").size)
-        assertEquals(6, catalog.inCategory("histoires").size)
+        assertEquals(8, catalog.inCategory("sommeil").size)
+        assertEquals(7, catalog.inCategory("relaxation").size)
+        assertEquals(7, catalog.inCategory("respiration").size)
+        assertEquals(9, catalog.inCategory("meditation").size)
+        assertEquals(9, catalog.inCategory("histoires").size)
+        assertEquals(3, catalog.inCategory("reveil").size)
+        assertEquals(43, catalog.tracks.size)
     }
 
     @Test fun everyClipFileExistsAndTimelinesAddUp() {
