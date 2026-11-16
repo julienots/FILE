@@ -11,6 +11,14 @@ const GENRES = {
   trance: { kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', ohat: '..x...x...x...x.', bass: '..x...x...x...x.', arp: 1, stab: '', lead: 'sawtooth', pump: 0.75, rev: 0.6, bassCut: 700, super: true },
   house: { kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '..x...x...x...x.', bass: 'x..o..x.x..o.5..', arp: 4, stab: 'x..x..x...x..x..', lead: 'square', pump: 0.6, rev: 0.35, bassCut: 650, clap: true },
   dnb: { kick: 'x.........x.....', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '', bass: 'x.....x..x......', arp: 2, stab: '', lead: 'square', pump: 0.3, rev: 0.4, bassCut: 380, reese: true, ghost: '.......x.x.....x' },
+  // phonk : cloche mélodique, basse 808 saturée, grosse caisse lourde
+  phonk: { kick: 'x..x..x...x..x..', snare: '....x.......x...', hat: 'x.xxx.x.x.xxx.x.', ohat: '......x.......x.', bass: 'x..x..x...x..x..', arp: 0, stab: '', lead: 'square', pump: 0.55, rev: 0.45, bassCut: 320, clap: true, cow: true, b808: true },
+  // hardstyle : grosse caisse saturée, basse à contretemps, mélodie hurlante
+  hard: { kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', ohat: '..x...x...x...x.', bass: '..x.x.x...x.x.x.', arp: 1, stab: '', lead: 'sawtooth', pump: 0.85, rev: 0.55, bassCut: 900, super: true, hardkick: true, clap: true },
+  // métal : double pédale, guitares serrées
+  metal: { kick: 'x.xxx.xxx.xxx.xx', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '', bass: 'xxxxxxxxxxxxxxxx', arp: 0, stab: 'xxx.xxx.xxx.xxxx', lead: 'sawtooth', pump: 0.1, rev: 0.3, bassCut: 560, guitar: true },
+  // épique : tambours, cordes en staccato, cuivres
+  epic: { kick: 'x.....x...x.x...', snare: '....x.......x.x.', hat: '', ohat: '', bass: 'x...x...x...x.x.', arp: 2, stab: 'x.xxx.xxx.xxx.xx', lead: 'sawtooth', pump: 0.2, rev: 0.75, bassCut: 420, strings: true, brass: true, taiko: true },
   rock: { kick: 'x.....x.x.......', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', ohat: '', bass: 'x.x.x.x.x.x.x.x.', arp: 0, stab: 'x.xxx.xxx.xxx.xx', lead: 'sawtooth', pump: 0.15, rev: 0.3, bassCut: 600, guitar: true },
 };
 // Structure d'un morceau : [mesures, instruments, effets]. K caisse, S caisse claire, H charleston, B basse, A arpège, P nappe, L mélodie, C accords plaqués.
@@ -19,20 +27,27 @@ const T = (nom, genre, bpm, root, scale, prog, seed, x = {}) => Object.assign({ 
 export const STATIONS = [
   { id: 'neon', nom: 'Néon FM', freq: '88.6', style: 'synthwave', pistes: [
     T('Néon Drive', 'synth', 108, 45, MIN, [0, 5, 3, 4], 11), T('Minuit Express', 'synth', 124, 43, DOR, [0, 3, 6, 4], 23),
-    T('Rêve Chromé', 'synth', 92, 48, MAJ, [0, 4, 5, 3], 37, { lead: 'triangle' }), T('Horizon Rose', 'synth', 116, 41, MIN, [0, 6, 2, 4], 51)] },
+    T('Rêve Chromé', 'synth', 92, 48, MAJ, [0, 4, 5, 3], 37, { lead: 'triangle' }), T('Horizon Rose', 'synth', 116, 41, MIN, [0, 6, 2, 4], 51), T('Autoroute Fantôme', 'synth', 128, 40, PHR, [0, 1, 5, 6], 109)] },
   { id: 'turbo', nom: 'Turbo FM', freq: '101.3', style: 'trance', pistes: [
-    T('Turbo Cœur', 'trance', 140, 41, MIN, [0, 0, 5, 6], 5), T('Circuit Rouge', 'trance', 136, 40, PHR, [0, 1, 0, 6], 17), T('Hyperespace', 'trance', 144, 45, MIN, [0, 5, 2, 6], 29)] },
+    T('Turbo Cœur', 'trance', 140, 41, MIN, [0, 0, 5, 6], 5), T('Circuit Rouge', 'trance', 136, 40, PHR, [0, 1, 0, 6], 17), T('Hyperespace', 'trance', 144, 45, MIN, [0, 5, 2, 6], 29), T('Supernova', 'trance', 148, 43, MIN, [0, 3, 5, 4], 113)] },
   { id: 'soleil', nom: 'Soleil FM', freq: '94.7', style: 'house', pistes: [
-    T('Aube', 'house', 122, 46, MAJ, [0, 5, 3, 4], 7), T('Plage Dorée', 'house', 118, 48, DOR, [0, 3, 4, 3], 19), T('Disco Bitume', 'house', 126, 45, MIN, [0, 3, 5, 4], 43)] },
+    T('Aube', 'house', 122, 46, MAJ, [0, 5, 3, 4], 7), T('Plage Dorée', 'house', 118, 48, DOR, [0, 3, 4, 3], 19), T('Disco Bitume', 'house', 126, 45, MIN, [0, 3, 5, 4], 43), T('Néon Tropical', 'house', 124, 43, MAJ, [0, 3, 4, 5], 131)] },
   { id: 'basse', nom: 'Basse FM', freq: '107.9', style: 'drum and bass', pistes: [
-    T('Adrénaline', 'dnb', 172, 41, MIN, [0, 0, 5, 3], 13), T('Tunnel', 'dnb', 168, 43, PHR, [0, 1, 5, 6], 31)] },
+    T('Adrénaline', 'dnb', 172, 41, MIN, [0, 0, 5, 3], 13), T('Tunnel', 'dnb', 168, 43, PHR, [0, 1, 5, 6], 31), T('Zone Rouge', 'dnb', 176, 38, MIN, [0, 6, 5, 3], 127)] },
   { id: 'furie', nom: 'Furie FM', freq: '98.2', style: 'rock', pistes: [
-    T('Asphalte Brûlant', 'rock', 150, 40, MIN, [0, 5, 6, 4], 3), T('Dernier Tour', 'rock', 164, 38, MIN, [0, 3, 5, 6], 41)] },
+    T('Asphalte Brûlant', 'rock', 150, 40, MIN, [0, 5, 6, 4], 3), T('Dernier Tour', 'rock', 164, 38, MIN, [0, 3, 5, 6], 41),
+    T('Métal Hurlant', 'metal', 188, 38, PHR, [0, 1, 5, 3], 103), T('Cylindrée', 'metal', 176, 40, MIN, [0, 5, 3, 6], 107)] },
+  { id: 'drift', nom: 'Drift FM', freq: '91.1', style: 'phonk', pistes: [
+    T('Cloche de Minuit', 'phonk', 130, 38, PHR, [0, 0, 1, 0], 61), T('Gomme Brûlée', 'phonk', 140, 36, MIN, [0, 5, 0, 6], 67), T('Dérive à Tokyo', 'phonk', 124, 41, PHR, [0, 1, 3, 1], 71)] },
+  { id: 'hyper', nom: 'Hyper FM', freq: '104.4', style: 'hardstyle', pistes: [
+    T('Zinzin', 'hard', 150, 41, MIN, [0, 5, 3, 6], 73), T('Rupteur', 'hard', 155, 38, PHR, [0, 0, 1, 5], 79), T('10 000 km/h', 'hard', 160, 43, MIN, [0, 3, 5, 6], 83)] },
+  { id: 'podium', nom: 'Podium FM', freq: '96.0', style: 'épique', pistes: [
+    T('Grand Prix', 'epic', 132, 38, MIN, [0, 5, 3, 4], 89), T('Dernier Virage', 'epic', 140, 41, MIN, [0, 3, 6, 4], 97), T('Champions', 'epic', 126, 43, MAJ, [0, 4, 5, 3], 101)] },
   { id: 'perso', nom: 'Ma musique', freq: '', style: 'tes fichiers', pistes: [] },
 ];
 export const MORCEAUX = STATIONS.flatMap(s => s.pistes);
 
-const GAIN = { synth: 3.8, trance: 4.2, house: 2.9, dnb: 1.05, rock: 1.25 };   // niveau de chaque genre, pour que les stations sonnent aussi fort les unes que les autres
+const GAIN = { synth: 3.8, trance: 4.2, house: 2.9, dnb: 1.05, rock: 1.25, phonk: 1.5, hard: 2.5, metal: 1.1, epic: 2.4 };   // niveau de chaque genre, pour que les stations sonnent aussi fort les unes que les autres
 const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 let an = null, master = null, dry = null, pump = null, send = null, dist = null, timer = null, vol = 0.5, duck = 1;
 let st = STATIONS[0], ti = 0, cur = null, step = 0, nextT = 0, seed = 1, melody = [], onChange = null, total = 0;
@@ -66,7 +81,10 @@ function hit(kind, t, v = 1) {
   const c = getCtx();
   if (kind === 'k') { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(165, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.13);
     g.gain.setValueAtTime(1.0 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.26); o.connect(g); g.connect(dry); o.start(t); o.stop(t + 0.3);
-    const m = GENRES[cur.genre].pump; pump.gain.cancelScheduledValues(t); pump.gain.setValueAtTime(1 - m, t); pump.gain.linearRampToValueAtTime(1, t + 0.22); return; }   // la caisse fait « pomper » nappes et basse
+    const G_ = GENRES[cur.genre];
+    if (G_.hardkick) { const o2 = c.createOscillator(), g2 = c.createGain(); o2.frequency.setValueAtTime(210, t); o2.frequency.exponentialRampToValueAtTime(48, t + 0.16); g2.gain.setValueAtTime(0.9 * v, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3); o2.connect(g2); g2.connect(dist); o2.start(t); o2.stop(t + 0.32); }   // queue saturée
+    if (G_.taiko) { const o2 = c.createOscillator(), g2 = c.createGain(); o2.frequency.setValueAtTime(95, t); o2.frequency.exponentialRampToValueAtTime(52, t + 0.3); g2.gain.setValueAtTime(0.8 * v, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.55); o2.connect(g2); g2.connect(dry); const sg = c.createGain(); sg.gain.value = 0.5; g2.connect(sg); sg.connect(send); o2.start(t); o2.stop(t + 0.6); }   // tambour grave et résonnant
+    const m = G_.pump; pump.gain.cancelScheduledValues(t); pump.gain.setValueAtTime(1 - m, t); pump.gain.linearRampToValueAtTime(1, t + 0.22); return; }   // la caisse fait « pomper » nappes et basse
   if (kind === 't') { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(190 * v, t); o.frequency.exponentialRampToValueAtTime(70 * v, t + 0.2); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.24); o.connect(g); g.connect(dry); o.start(t); o.stop(t + 0.27); return; }
   const s = c.createBufferSource(); s.buffer = noise(); const f = c.createBiquadFilter(), g = c.createGain(); let dur = 0.2, fx = 0;
   if (kind === 's') { f.type = 'bandpass'; f.frequency.value = 1900; f.Q.value = 0.7; g.gain.setValueAtTime(0.6 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.19); fx = GENRES[cur.genre].rev;
@@ -102,7 +120,8 @@ function schedule(m, s, t) {
   if (has('H')) { if (g.ohat[i] === 'x') hit('o', t); else if (g.hat[i] === 'x') hit('h', t, i % 4 === 2 ? 1 : 0.6); }
   // basse
   if (has('B') && g.bass[i] !== '.') { const semi = g.bass[i] === 'o' ? 12 : g.bass[i] === '5' ? 7 : 0, f = hz(deg(m, chord) - 12 + semi);
-    if (g.reese) { for (const dt of [-14, 14]) note('sawtooth', f, t, six * 5, 0.26, g.bassCut, { out: pump, det: dt, close: 0.7, hold: 0.8 }); note('sine', f / 2, t, six * 5, 0.4, 300, { out: pump, hold: 0.8 }); }
+    if (g.b808) { const len = six * (g.bass[(i + 1) % 16] === '.' ? 3.2 : 1.6); note('sine', f, t, len, 0.75, 500, { out: dist, hold: 0.85, close: 0.9, att: 0.004 }); note('sine', f / 2, t, len, 0.5, 300, { out: pump, hold: 0.85 }); }
+    else if (g.reese) { for (const dt of [-14, 14]) note('sawtooth', f, t, six * 5, 0.26, g.bassCut, { out: pump, det: dt, close: 0.7, hold: 0.8 }); note('sine', f / 2, t, six * 5, 0.4, 300, { out: pump, hold: 0.8 }); }
     else { note('sawtooth', f, t, six * 1.8, 0.34, g.bassCut + (i % 4 === 0 ? 350 : 0), { out: pump, q: 4 }); note('sine', f, t, six * 1.6, 0.22, 400, { out: pump }); } }
   // nappe : l'accord tenu toute la mesure
   if (has('P') && i === 0) for (const dd of [0, 2, 4, 6]) for (const dt of [-9, 9]) note('sawtooth', hz(deg(m, chord + dd)), t, six * 16, dd === 6 ? 0.012 : 0.024, 1100, { out: pump, det: dt, att: 0.25, hold: 0.9, close: 0.6, fx: 0.4 });
@@ -110,12 +129,15 @@ function schedule(m, s, t) {
   if (has('A') && g.arp && i % g.arp === 0) { const k = (i / g.arp) % 8, tone = [0, 2, 4, 7, 4, 2, 4, 9][k]; note(m.lead || g.lead, hz(deg(m, chord + tone) + 12), t, six * g.arp * 1.4, 0.06, 2400 + (bar % 4) * 300, { fx: 0.5, q: 3 }); }
   // accords plaqués, ou guitare saturée
   if (g.stab && g.stab[i] === 'x' && (has('C') || (g.guitar && has('B')))) {
-    if (g.guitar) { const mute = i % 4 !== 0 && !has('C'); for (const semi of [0, 7, 12]) note('sawtooth', hz(deg(m, chord) + semi), t, six * (mute ? 0.9 : 2.2), 0.5, mute ? 900 : 3000, { out: dist, hold: mute ? 0.4 : 0.8, close: 0.6 }); }
+    if (g.strings) { for (const dd of [0, 2, 4]) for (const dt of [-7, 7]) note('sawtooth', hz(deg(m, chord + dd) + (has('C') ? 12 : 0)), t, six * 0.9, i % 4 === 0 ? 0.05 : 0.032, 3400, { det: dt, fx: 0.45, hold: 0.3, close: 0.5 }); }
+    else if (g.guitar) { const mute = i % 4 !== 0 && !has('C'); for (const semi of [0, 7, 12]) note('sawtooth', hz(deg(m, chord) + semi), t, six * (mute ? 0.9 : 2.2), 0.5, mute ? 900 : 3000, { out: dist, hold: mute ? 0.4 : 0.8, close: 0.6 }); }
     else for (const dd of [0, 2, 4]) note('sawtooth', hz(deg(m, chord + dd) + 12), t, six * 1.6, 0.05, 2600, { out: pump, fx: 0.35, q: 2 }); }
   // mélodie
   const n = melody[(bar % 8) * 16 + i];
   if (has('L') && n) { const dd = i % 8 === 0 ? chord + [0, 2, 4, 7, 9][Math.min(4, Math.round(n.d / 2.5))] : n.d, f = hz(deg(m, dd) + (g.guitar ? 12 : 24)), dur = six * Math.min(8, n.len) * 0.95;
-    if (g.guitar) note('sawtooth', f, t, dur, 0.55, 3200, { out: dist, vib: true, hold: 0.8, close: 0.7 });
+    if (g.cow) { const fc = hz(deg(m, dd) + 24), dc = Math.min(dur, six * 3); note('square', fc, t, dc, 0.075, 5200, { fx: 0.35, hold: 0.12, close: 0.45, q: 5 }); note('square', fc * 1.4983, t, dc, 0.05, 5200, { fx: 0.35, hold: 0.12, close: 0.45, q: 5 }); }   // cloche : deux carrés à la quinte, très brefs
+    else if (g.brass) { for (const dt of [-8, 8]) note('sawtooth', hz(deg(m, dd) + 12), t, dur, 0.075, 1900, { det: dt, att: 0.05, fx: 0.6, hold: 0.8, close: 0.75, q: 2 }); note('sawtooth', hz(deg(m, dd)), t, dur, 0.06, 1300, { att: 0.06, fx: 0.5, hold: 0.8, close: 0.8 }); }
+    else if (g.guitar) note('sawtooth', f, t, dur, 0.55, 3200, { out: dist, vib: true, hold: 0.8, close: 0.7 });
     else if (g.super) for (const dt of [-16, 0, 16]) note('sawtooth', f, t, dur, 0.045, 3600, { det: dt, fx: 0.6, hold: 0.7, close: 0.5 });
     else note(m.lead || g.lead, f, t, dur, 0.085, 3000, { vib: dur > 0.3, fx: 0.55, hold: 0.7, close: 0.5 }); }
   return true;

@@ -15,7 +15,8 @@ export const PAINTS = [0xb9bec9, 0xf2c200, 0xc8102e, 0x14161c, 0x1668ff, 0x19c37
 
 // stats 1..10 -> grandeurs physiques
 // tune : réglages extrêmes du garage (vitesse de pointe libre jusqu'à 10 000 km/h, multiplicateur d'accélération)
-export function physFromStats(s, tune) {
+export const kmhDe = (def, s) => Math.round((180 + s.vmax * 18) * (def.sur ? 1 + (def.sur - 1) * 0.75 : 1));   // vitesse de pointe d'origine, en km/h
+export function physFromStats(s, tune, sur = 1) {
   const p = {
     vmax: (180 + s.vmax * 18) / 3.6,        // m/s
     accel: 5 + s.accel * 1.3,               // m/s²
@@ -23,6 +24,7 @@ export function physFromStats(s, tune) {
     grip: 9 + s.adher * 2.0,                // accélération latérale tenable, m/s²
     brake: 16 + s.adher * 1.2,
   };
+  if (sur > 1) { p.vmax *= 1 + (sur - 1) * 0.75; p.accel *= sur; p.brake *= 1 + (sur - 1) * 0.8; p.grip *= 1 + (sur - 1) * 0.7; }   // moteur suralimenté : freins et appui aérodynamique à la hauteur
   if (tune && tune.vmaxKmh > 0) {
     const V = Math.min(10000, tune.vmaxKmh) / 3.6, k = V / p.vmax;
     p.vmax = V;

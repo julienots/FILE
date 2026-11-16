@@ -172,3 +172,18 @@ export function thunder(dist) {
   if (near > 0.4) mk('highpass', 1800, 600, 0.25, vol * 0.8, t);
   mk('lowpass', 900, 70, 1.6 + Math.random(), vol, t + 0.03); mk('lowpass', 260, 50, 3.2 + Math.random() * 1.5, vol * 0.8, t + 0.25 + Math.random() * 0.4);
 }
+
+// traversée d'une flaque : claque d'eau puis ruissellement
+export function splash(force = 1) {
+  if (!ctx || !on) return;
+  const f = Math.min(1.4, force); burst('bandpass', 2600, 700, 0.35 + f * 0.25, 0.5 * f, 0.8); burst('highpass', 5200, 3000, 0.5 + f * 0.3, 0.22 * f, 0.6); burst('lowpass', 500, 120, 0.22, 0.4 * f, 0.9);
+}
+// roues dans l'herbe, le blé ou le gravier (0 = silence) : frottement sourd et irrégulier
+let offG = null, offF = null;
+export function offroad(amount) {
+  if (!ctx) return;
+  if (!offG) { const s = ctx.createBufferSource(); s.buffer = noise(); s.loop = true; offF = ctx.createBiquadFilter(); offF.type = 'bandpass'; offF.frequency.value = 700; offF.Q.value = 0.8;
+    offG = ctx.createGain(); offG.gain.value = 0; s.connect(offF); offF.connect(offG); offG.connect(master); s.start(); }
+  const a = on ? Math.min(1, Math.max(0, amount)) : 0, t = ctx.currentTime;
+  offG.gain.setTargetAtTime(a * (0.32 + Math.random() * 0.12), t, 0.05); if (a > 0) offF.frequency.setTargetAtTime(500 + a * 900 + Math.random() * 300, t, 0.08);
+}

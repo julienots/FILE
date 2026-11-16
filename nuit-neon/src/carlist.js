@@ -15,6 +15,7 @@
 //
 // Les stats vont de 1 à 10. Ce sont les valeurs de départ : elles se règlent ensuite dans le garage du jeu.
 // Les modèles de models/ sont passés par tools/prep-model.mjs : allégés, à l'échelle, l'avant vers -z, roues découpées.
+// sur : suralimentation (multiplie la vitesse de pointe et l'accélération d'origine) ; flammes : l'échappement crache des flammes à pleine charge.
 // son : caractère du moteur (voir MOTEURS dans src/audio.js : v8, v10, v12, biturbo, f1, proto, buggy, moto, custom).
 // teinte: false garde les couleurs d'origine du modèle ; moto: true fait pencher le véhicule dans les virages.
 const T10 = [0, 0.04, 0.12, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95, 1];
@@ -78,6 +79,27 @@ export const CAR_LIST = [
     design: { L: 4.8, W: 2.1, t: T10, w: [0.36, 0.7, 0.9, 0.98, 1.0, 1.0, 1.0, 0.98, 0.9, 0.76], hc: [0.44, 0.5, 0.56, 0.63, 0.7, 0.76, 0.78, 0.76, 0.72, 0.66], hs: [0.44, 0.5, 0.56, 0.62, 0.66, 0.69, 0.7, 0.7, 0.68, 0.64], b: [0.38, 0.3, 0.26, 0.24, 0.23, 0.23, 0.24, 0.27, 0.33, 0.44],
       roues: [], propulseurs: [[0.16, 0.7, 0.22], [0.5, 0.86, 0.2], [0.84, 0.76, 0.32]], toit: { t0: 0.26, t1: 0.66, h: 1.06, forme: [0, 0.7, 0.98, 1, 0.9, 0.55, 0.05], larg: [0.6, 0.56, 0.44], pince: 0.56 },
       aileron: 'proto', aileronH: 1.1, derive: true, bandes: 'double', accent: 0xff2bd0, neon: 0xff2bd0, sellerie: 0x7a1c5a, pharesCol: 0xffd0f0, phares: [0.04, 0.12, 9.0, 12.4], echap: [-0.5, 0, 0.5], echapY: 0.14, bombe: 0.03 } },
+  // ---------- hypercars : moteurs suralimentés (sur = multiplicateur de puissance), flammes à l'échappement dès qu'on accélère ----------
+  { id: 'furie', son: 'v12', prix: 0, nom: 'Furie GT', sur: 1.18, flammes: true, couleur: 0xd8121e, stats: { vmax: 10, accel: 10, mania: 9, adher: 9 },
+    design: { L: 4.72, W: 2.04, t: T10, w: [0.58, 0.84, 0.95, 0.99, 0.95, 0.93, 0.985, 1.0, 0.98, 0.88], hc: [0.30, 0.38, 0.46, 0.54, 0.62, 0.70, 0.76, 0.79, 0.78, 0.72], hs: [0.30, 0.42, 0.53, 0.62, 0.65, 0.69, 0.79, 0.86, 0.84, 0.75], b: [0.2, 0.115, 0.09, 0.09, 0.09, 0.09, 0.09, 0.1, 0.14, 0.24],
+      roues: [[0.2, 0.345, 0.29], [0.8, 0.375, 0.36]], toit: { t0: 0.27, t1: 0.76, h: 1.08, forme: [0, 0.64, 0.97, 1, 0.88, 0.5, 0.08], larg: [0.78, 0.7, 0.58], pince: 0.62, toitNoir: true },
+      aileron: 'gt', aileronH: 1.22, derive: true, priseFlanc: [0.52, 0.68], ouies: [0.12, 0.2], bandes: 'centre', accent: 0x101014, jantes: 'turbine', jante: 0x15161a, etrier: 0xffd23f, neon: 0xff2a2a, sellerie: 0x7a1c1c, echap: [-0.24, -0.08, 0.08, 0.24], echapY: 0.34 } },
+  { id: 'tonnerre', son: 'v8', prix: 60000, nom: 'Tonnerre', sur: 1.3, flammes: true, couleur: 0x14161c, stats: { vmax: 10, accel: 10, mania: 7, adher: 8 },
+    design: { L: 5.0, W: 2.06, t: T10, w: [0.86, 0.95, 0.985, 1.0, 1.0, 0.99, 1.0, 1.0, 0.985, 0.93], hc: [0.56, 0.68, 0.76, 0.82, 0.86, 0.87, 0.87, 0.89, 0.88, 0.80], hs: [0.56, 0.68, 0.76, 0.81, 0.84, 0.85, 0.87, 0.9, 0.89, 0.81], b: [0.3, 0.2, 0.17, 0.16, 0.16, 0.16, 0.16, 0.17, 0.22, 0.32],
+      roues: [[0.17, 0.36, 0.3], [0.8, 0.41, 0.42]], toit: { t0: 0.4, t1: 0.84, h: 1.3, forme: [0, 0.7, 0.98, 1, 0.96, 0.6, 0], larg: [0.84, 0.8, 0.78], pince: 0.74, peint: [0.3, 0.86] },
+      bandes: 'double', accent: 0xff6a00, aileron: 'gt', aileronH: 1.34, feux: 'ronds', ouies: [0.12, 0.2, 0.28], jantes: 'etoile', jante: 0xd8d8de, etrier: 0xff6a00, neon: 0xff6a00, phares: [0.012, 0.04, 8.4, 11.2], calandre: 0.9, aile: 0.1, echap: [-0.7, -0.56, -0.42, 0.42, 0.56, 0.7], echapY: 0.16, bombe: 0.02 } },
+  { id: 'chimere', son: 'biturbo', prix: 95000, nom: 'Chimère', sur: 1.42, flammes: true, couleur: 0x19e6ff, stats: { vmax: 10, accel: 10, mania: 10, adher: 10 },
+    design: { L: 4.8, W: 2.08, t: T10, w: [0.52, 0.82, 0.94, 0.99, 0.93, 0.9, 0.98, 1.0, 0.98, 0.9], hc: [0.26, 0.33, 0.41, 0.49, 0.58, 0.67, 0.74, 0.77, 0.76, 0.7], hs: [0.27, 0.41, 0.53, 0.6, 0.62, 0.66, 0.78, 0.86, 0.84, 0.74], b: [0.17, 0.095, 0.075, 0.075, 0.075, 0.075, 0.075, 0.085, 0.12, 0.22],
+      roues: [[0.2, 0.35, 0.3], [0.805, 0.385, 0.38]], toit: { t0: 0.28, t1: 0.74, h: 1.04, forme: [0, 0.66, 0.97, 1, 0.88, 0.5, 0.06], larg: [0.7, 0.62, 0.48], pince: 0.56, toitNoir: true },
+      aileron: 'proto', aileronH: 1.14, derive: true, priseFlanc: [0.5, 0.7], ouies: [0.1, 0.17, 0.24], bandes: 'flanc', accent: 0xff2bd0, jantes: 'double', jante: 0x101014, etrier: 0xff2bd0, neon: 0x19e6ff, sellerie: 0x1d3f9a, pharesCol: 0xd0f4ff, aile: 0.1, echap: [-0.3, -0.1, 0.1, 0.3], echapY: 0.36 } },
+  { id: 'apocalypse', son: 'v12', prix: 140000, nom: 'Apocalypse', sur: 1.6, flammes: true, couleur: 0xd9a400, stats: { vmax: 10, accel: 10, mania: 10, adher: 10 },
+    design: { L: 4.95, W: 2.12, t: T10, w: [0.50, 0.8, 0.93, 0.99, 0.92, 0.89, 0.98, 1.0, 0.99, 0.93], hc: [0.24, 0.31, 0.39, 0.47, 0.56, 0.66, 0.73, 0.76, 0.76, 0.72], hs: [0.25, 0.4, 0.52, 0.59, 0.6, 0.64, 0.77, 0.87, 0.86, 0.77], b: [0.16, 0.09, 0.07, 0.07, 0.07, 0.07, 0.07, 0.08, 0.11, 0.2],
+      roues: [[0.2, 0.355, 0.31], [0.81, 0.4, 0.42]], toit: { t0: 0.29, t1: 0.72, h: 1.02, forme: [0, 0.66, 0.97, 1, 0.86, 0.48, 0.05], larg: [0.66, 0.58, 0.44], pince: 0.54, toitNoir: true },
+      aileron: 'proto', aileronH: 1.2, derive: true, priseFlanc: [0.48, 0.7], ouies: [0.1, 0.16, 0.22, 0.28], bandes: 'double', accent: 0x101014, jantes: 'turbine', jante: 0x101014, etrier: 0xd8121e, neon: 0xffb020, sellerie: 0x15161a, pharesCol: 0xfff0c0, aile: 0.12, echap: [-0.36, -0.2, -0.06, 0.06, 0.2, 0.36], echapY: 0.38 } },
+  { id: 'dragster', son: 'v8', prix: 70000, nom: 'Dragster Enragé', sur: 1.5, flammes: true, couleur: 0x8a2be2, stats: { vmax: 10, accel: 10, mania: 5, adher: 7 },
+    design: { L: 5.3, W: 1.98, t: T10, w: [0.42, 0.6, 0.72, 0.8, 0.86, 0.92, 0.98, 1.0, 1.0, 0.96], hc: [0.34, 0.42, 0.5, 0.58, 0.66, 0.76, 0.86, 0.94, 0.96, 0.9], hs: [0.34, 0.42, 0.5, 0.58, 0.66, 0.76, 0.86, 0.94, 0.96, 0.9], b: [0.2, 0.14, 0.12, 0.12, 0.12, 0.13, 0.15, 0.18, 0.24, 0.34],
+      roues: [[0.13, 0.29, 0.2], [0.82, 0.48, 0.5]], toit: { t0: 0.52, t1: 0.86, h: 1.36, forme: [0, 0.7, 0.98, 1, 0.96, 0.6, 0], larg: [0.72, 0.7, 0.68], pince: 0.7, peint: [0.3, 0.86] },
+      bandes: 'flanc', accent: 0xffd23f, aileron: 'gt', aileronH: 1.5, feux: 'ronds', ouies: [0.14, 0.22, 0.3], jantes: 'six', jante: 0xe8e8ee, etrier: 0xffd23f, neon: 0x8a2be2, phares: [0.02, 0.06, 8.4, 11.2], aile: 0.14, echap: [-0.8, -0.66, 0.66, 0.8], echapY: 0.2, bombe: 0.02 } },
 ];
 
 // Voitures de la circulation (mode Balade libre). Elles n'apparaissent pas dans le garage.

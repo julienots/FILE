@@ -4,19 +4,29 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Modes de jeu
 
-- **Course** : 16 circuits (7 en ville, 9 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
+- **Course** : 20 circuits (8 en ville, 12 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
+- **Grand Prix** : 6 coupes de 4 courses (3 tours, 11 adversaires). Chaque course rapporte des points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1) ; le classement final donne un trophée d'or, d'argent ou de bronze, gardé par coupe et par difficulté, et une prime en crédits. La Coupe Tempête se court sous l'orage, la Coupe Vitesse sur quatre circuits inédits (Anneau de Vitesse, Lagune Turquoise, Glacier Bleu, Néon Central). Les coupes sont décrites dans `COUPES` (`src/tracks.js`).
 - **Contre-la-montre** : seul en piste, contre son record.
 - **Élimination** : toutes les 20 secondes, le dernier est éliminé.
 - **Course à bonus** : des caisses sur la piste donnent l'un des 21 pouvoirs (voir plus bas). Le pictogramme de l'objet tenu s'affiche à l'écran et flotte au-dessus de chaque voiture qui en porte un.
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
 - **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
 - **Atelier** : trois circuits à créer soi-même, entièrement réglés par des nombres.
-- **Garage** : 17 voitures (dont 2 volantes) et 4 motos à acheter, réglages à améliorer, moteur extrême.
+- **Garage** : 22 voitures (dont 2 volantes et 5 hypercars suralimentées) et 4 motos à acheter, réglages à améliorer, moteur extrême.
+- **Ligne de trajectoire** : en option (écran de course, Grand Prix, options, bouton LIGNE ou touche L). La meilleure ligne du circuit est dessinée devant la voiture : verte quand on peut accélérer, jaune quand il faut lever le pied, rouge quand il faut freiner. Elle est calculée pour le véhicule choisi (`src/ligne.js`).
 - **Vue** : bouton VUE (ou touche C, ou Y à la manette) pour passer à la première personne.
 
 ## Circuits ajoutés
 
 Autodrome du Lac, Forêt d'Automne (feuillages roux), Dunes d'Or, Volcan Noir (basalte, lave, braises dans l'air), Aurore Boréale (toundra de nuit sous la neige), et deux circuits spéciaux : **Station Orbitale** (gravité lunaire, sauts géants, boost renforcé) et **Mégapole 2099** (tout va 60 % plus vite). Leurs tracés sont tirés d'une graine, comme ceux de l'atelier ; les décors sont dans `src/tracks.js`.
+
+## Réalisme
+
+- **Fumée** : chaque bouffée est un petit nuage au contour irrégulier, éclairé par le haut. Les pneus fument longtemps en dérapage, au blocage des roues et au démarrage pleins gaz (les roues motrices patinent et marquent le sol) ; l'échappement lâche ses gaz au ralenti et à l'accélération, crache des flammes au lever de pied ; après un gros choc, le moteur fume un moment.
+- **Eau** : sous la pluie et l'orage, des flaques se forment sur la piste (ronds de pluie, reflet du ciel). Les traverser projette deux murs d'eau et des gouttes, mouille l'objectif, freine la voiture et, au-delà de 130 km/h environ, fait flotter les pneus (aquaplanage). Sur les circuits de bord de mer, trois gués recouvrent toute la largeur de la piste.
+- **Poussière** : au ras des bords, les roues soulèvent la terre, le sable ou la neige du décor ; sur le sable et la neige, la piste poudroie derrière les voitures. En forêt d'automne, des feuilles tombent.
+- **Blé** : dans les champs (Balade libre), les tiges portent un épi à grains et à barbes, ondulent par rafales, se couchent sous la voiture et restent à plat dans son sillage avant de se relever lentement ; la paille vole, le champ freine davantage que l'herbe et s'entend.
+- **Hypercars** : Furie GT (offerte), Tonnerre, Chimère, Apocalypse et Dragster Enragé ont un moteur suralimenté (champ `sur` dans `src/carlist.js`) : de 409 à 522 km/h d'origine, flammes à l'échappement à pleine charge. Un adversaire n'a jamais un moteur plus suralimenté que celui du joueur.
 
 ## Conduite
 
@@ -88,14 +98,17 @@ Un bandeau en haut à gauche (menu et course) affiche la station et le morceau ;
 
 | Station | Style | Morceaux |
 | --- | --- | --- |
-| Néon FM 88.6 | synthwave | Néon Drive, Minuit Express, Rêve Chromé, Horizon Rose |
-| Turbo FM 101.3 | trance | Turbo Cœur, Circuit Rouge, Hyperespace |
-| Soleil FM 94.7 | house | Aube, Plage Dorée, Disco Bitume |
-| Basse FM 107.9 | drum and bass | Adrénaline, Tunnel |
-| Furie FM 98.2 | rock | Asphalte Brûlant, Dernier Tour |
+| Néon FM 88.6 | synthwave | Néon Drive, Minuit Express, Rêve Chromé, Horizon Rose, Autoroute Fantôme |
+| Turbo FM 101.3 | trance | Turbo Cœur, Circuit Rouge, Hyperespace, Supernova |
+| Soleil FM 94.7 | house | Aube, Plage Dorée, Disco Bitume, Néon Tropical |
+| Basse FM 107.9 | drum and bass | Adrénaline, Tunnel, Zone Rouge |
+| Furie FM 98.2 | rock et métal | Asphalte Brûlant, Dernier Tour, Métal Hurlant, Cylindrée |
+| Drift FM 91.1 | phonk | Cloche de Minuit, Gomme Brûlée, Dérive à Tokyo |
+| Hyper FM 104.4 | hardstyle | Zinzin, Rupteur, 10 000 km/h |
+| Podium FM 96.0 | épique | Grand Prix, Dernier Virage, Champions |
 | Ma musique | tes fichiers | ceux que tu ajoutes |
 
-Les quatorze morceaux des cinq premières stations sont composés et joués en direct par `src/music.js`, sans fichier audio : chacun a sa structure (intro, couplet, refrain, pont, final, environ deux minutes), sa suite d'accords, sa mélodie, sa batterie avec roulements et cymbales, un écho, une réverbération et un effet de pompe sur la grosse caisse. À la fin d'un morceau, la station enchaîne sur le suivant.
+Les vingt-neuf morceaux des huit premières stations sont composés et joués en direct par `src/music.js`, sans fichier audio : chacun a sa structure (intro, couplet, refrain, pont, final, environ deux minutes), sa suite d'accords, sa mélodie, sa batterie avec roulements et cymbales, un écho, une réverbération et un effet de pompe sur la grosse caisse. À la fin d'un morceau, la station enchaîne sur le suivant.
 
 **Ma musique** lit de vrais fichiers audio (mp3, m4a, ogg, wav, flac…) : bouton « Ajouter des morceaux » dans les options. Ils sont copiés dans la mémoire du jeu sur l'appareil et restent disponibles aux lancements suivants ; « Vider » les retire. Le jeu n'embarque aucune chanson du commerce.
 
@@ -151,7 +164,7 @@ Pour essayer un modèle sans toucher à la liste : ouvrir le jeu avec `?modele=m
 
 ## Voitures dessinées par le jeu
 
-Onze voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur, Aiglon, Sirocco et les volantes Nébula et Orion) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes, le néon sous la caisse, et un habitacle visible à travers les vitres (sièges, planche de bord, volant). Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
+Seize voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur, Aiglon, Sirocco, les volantes Nébula et Orion, et les cinq hypercars) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes, le néon sous la caisse, et un habitacle visible à travers les vitres (sièges, planche de bord, volant). Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
 
 ## Stats
 
@@ -162,7 +175,8 @@ Chaque voiture a 4 stats de 1 à 10 (vitesse max, accélération, maniabilité, 
 - `src/tracks.js` : tracé et ambiance des circuits et de la route libre
 - `src/world.js` : décors (ville de nuit, nature de jour), route réfléchissante, herbe
 - `src/arena.js` : arène du Foot Turbo
-- `src/fx.js` : fumée, flammes, étincelles, traces de pneus
+- `src/fx.js` : fumée, flammes, étincelles, gouttes d'eau, poussière, traces de pneus
+- `src/ligne.js` : ligne de trajectoire
 - `src/cars.js`, `src/carlist.js` : voitures, import des modèles, animations
 - `src/procar.js` : voitures dessinées par le jeu
 - `src/custom.js` : réglages et tracé des circuits de l'atelier

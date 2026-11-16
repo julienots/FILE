@@ -34,8 +34,19 @@ const NATURE = {
     ground: 0xcfe0e6, sol: { kind: 2, c: [0xb8ccd6, 0xe6f2f6, 0xd4e6ee, 0x9ab0bc] }, relief: 55, ombre: 0.3, hill: 0xa8c4cc, hillH: 300, rock: 0x6a7480, snowTop: true, sun: { dir: [-0.3, 0.5, -0.81], col: [0.5, 0.95, 0.8], road: 1.2 }, sunI: 0.95, ambI: 0.7, wet: 0.8,
     rain: 'neige', phares: true, nuit: true, flare: 0.3, flore: [['sapin', 560, 5, 220, 0.8, 1.8], ['rocher', 70, 8, 200, 0.6, 1.6]] },
 };
+// lagon en plein jour : sable blanc, eau turquoise, soleil haut
+NATURE.lagune = Object.assign({}, NATURE.couchant, { sky: [[0.05, 0.30, 0.78], [0.30, 0.66, 0.95], [0.78, 0.93, 0.98]], fog: 0xbfe6f2, dens: 0.0014, cloud: 0.95,
+  ground: 0xf0e2bc, sol: { kind: 1, c: [0xeedfb6, 0xf8eccb, 0xe6d3a0, 0xcdb884] }, hill: 0x4f8a55, hillH: 130, rock: 0x8a8478, mer: { niveau: -0.35, profond: 0x0a6c7c }, phares: false,
+  sun: { dir: [0.35, 0.72, -0.6], col: [1.0, 0.96, 0.86], road: 2.1 }, sunI: 3.1, ambI: 1.6, wet: 0.3, ombre: 0.6,
+  flore: [['palmier', 320, 1.5, 14, 0.9, 1.4], ['rocher', 90, 4, 90, 0.5, 1.8]] });
+// glacier : glace bleue, ciel limpide et froid
+NATURE.glacier = Object.assign({}, NATURE.neige, { sky: [[0.06, 0.20, 0.55], [0.34, 0.60, 0.92], [0.80, 0.92, 1.0]], fog: 0xcfe6f8, dens: 0.0022, cloud: 0.95,
+  ground: 0xdcefff, sol: { kind: 2, c: [0xcfe6f8, 0xffffff, 0xbfe0fa, 0xa8cdee] }, hill: 0xcfe4f6, hillH: 380, rock: 0x7f8fa6, sun: { dir: [-0.4, 0.5, -0.77], col: [0.9, 0.95, 1.0], road: 1.8 }, sunI: 2.6, ambI: 1.7, wet: 0.9, rain: false,
+  flore: [['rocher', 220, 6, 220, 0.8, 3.0], ['sapin', 160, 8, 220, 0.8, 1.5]] });
 // ambiances de ville spéciales
 const VILLE = {
+  central: { sky: [[0.02, 0.01, 0.06], [0.16, 0.05, 0.30], [0.95, 0.55, 0.12]], fog: 0x24103a, dens: 0.0024, a: 0xffc23f, b: 0x8a5cff, c: 0xff3f7a, lamp: 0xffe6b8, palms: true, rain: false, wet: 0.7,
+    win: [['#ffd070', '#fff0c8', '#ffb347'], ['#b48cff', '#e0d0ff', '#8a5cff'], ['#ff7aa8', '#ffd0e0', '#ffe9a0'], ['#ffe9a0', '#c8a8ff', '#ff9bb8']] },
   orbitale: { sky: [[0.0, 0.0, 0.0], [0.0, 0.0, 0.02], [0.03, 0.05, 0.14]], fog: 0x02030a, dens: 0.0015, a: 0x7fd8ff, b: 0xffffff, c: 0x8a5cff, lamp: 0xeaf4ff, palms: false, rain: false, wet: 0.9,
     win: [['#bfe4ff', '#ffffff', '#80c0ff'], ['#b48cff', '#e0d0ff', '#ffffff'], ['#50a0ff', '#d0e8ff', '#ffffff'], ['#ffffff', '#9fd0ff', '#c8a8ff']] },
   megapole: { sky: [[0.02, 0.0, 0.05], [0.18, 0.02, 0.30], [0.75, 0.9, 0.1]], fog: 0x1c0a34, dens: 0.0022, a: 0xb6ff2b, b: 0xff2bd0, c: 0x19e6ff, lamp: 0xf0ffd0, palms: false, rain: true,
@@ -91,7 +102,23 @@ export const TRACKS = [
     regles: { vitesse: 1.15, adherence: 1, gravite: 0.3, saut: 2.4, boost: 1.6 }, contenu: { obstacles: 10, tremplins: 14, turbos: 10, trafic: 0 } },
   { id: 'megapole', nom: 'Mégapole 2099', desc: 'Spécial · tout va 60 % plus vite', echelle: 1, half: 20, pts: tracer({ graine: 7777, virages: 8, taille: 520, chaos: 35, largeur: 40 }), theme: VILLE.megapole,
     regles: { vitesse: 1.6, adherence: 1.2, gravite: 1, saut: 1, boost: 1.5 }, contenu: { obstacles: 14, tremplins: 4, turbos: 16, trafic: 0 } },
+  // ---------- circuits de la Coupe Vitesse (Grand Prix) ----------
+  { id: 'anneau', nom: 'Anneau de Vitesse', desc: 'Presque un ovale : à fond', echelle: 1, half: 18, pts: tracer({ graine: 515, virages: 6, taille: 520, chaos: 22, largeur: 36 }), theme: NATURE.prairie },
+  { id: 'lagune', nom: 'Lagune Turquoise', desc: 'Sable blanc et eau claire', echelle: 1, half: 14, pts: tracer({ graine: 8080, virages: 12, taille: 400, chaos: 50, largeur: 28 }), theme: NATURE.lagune },
+  { id: 'glacier', nom: 'Glacier Bleu', desc: 'Technique, sur la glace', echelle: 1, half: 12, pts: tracer({ graine: 4242, virages: 16, taille: 360, chaos: 62, largeur: 24 }), theme: NATURE.glacier },
+  { id: 'central', nom: 'Néon Central', desc: 'Le grand circuit de la ville', echelle: 1, half: 15, pts: tracer({ graine: 1999, virages: 12, taille: 390, chaos: 55, largeur: 30 }), theme: VILLE.central },
 ];
+
+// Grand Prix : chaque coupe enchaîne quatre circuits ; les points de chaque course s'additionnent.
+export const COUPES = [
+  { id: 'neon', nom: 'Coupe Néon', desc: 'Les nuits de la ville', col: '#19e6ff', pistes: ['baie', 'solaire', 'jade', 'port'] },
+  { id: 'nature', nom: 'Coupe Nature', desc: 'Prairie, mer, désert et neige', col: '#7fdc4a', pistes: ['prairie', 'couchant', 'canyon', 'neige'] },
+  { id: 'braise', nom: 'Coupe Braise', desc: 'Du sable au volcan', col: '#ff6a1f', pistes: ['dunes', 'automne', 'ecarlate', 'volcan'] },
+  { id: 'tempete', nom: 'Coupe Tempête', desc: 'Quatre courses sous l\'orage', col: '#8fa8ff', amb: 'orage', pistes: ['port', 'prairie', 'jade', 'autodrome'] },
+  { id: 'vitesse', nom: 'Coupe Vitesse', desc: 'Quatre circuits inédits', col: '#ffd23f', pistes: ['anneau', 'lagune', 'glacier', 'central'] },
+  { id: 'legende', nom: 'Coupe Légende', desc: 'Les plus durs, jusqu\'à Mégapole', col: '#ff2bd0', pistes: ['autodrome', 'aurore', 'orbitale', 'megapole'] },
+];
+export const GP_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0];
 
 // Balade libre : une longue route de campagne à deux voies, sans barrières
 export const ROUTE_LIBRE = { id: 'libre', nom: 'Route des Prés', desc: 'Balade libre', echelle: 1, half: 4.6, limit: 12.4, libre: true,
