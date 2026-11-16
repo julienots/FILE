@@ -13,6 +13,37 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 1.11.2 (ponts réparés, sauter en courant, physique et caustiques)
+
+- **Les ponts se traversent.** Il y en a 3 dans le monde (là où une route croise une rivière), et ils sont refaits :
+  - la hauteur où l'on marchait était 0,8 m au-dessus des planches dessinées (l'arche était comptée deux fois) : on flottait au-dessus du pont ;
+  - le jeu repoussait le héros quand le ravin sous le pont était raide (la « poussée des pentes » regardait le terrain sous le tablier) : c'est ce qui empêchait de traverser ;
+  - désormais **un seul profil de tablier** sert au dessin, au sol où l'on marche et aux garde-corps. Il rejoint la route aux deux bouts sans marche (rampe plus longue quand il faut monter haut) ;
+  - nouveau modèle : planches irrégulières, longerons, poteaux et deux lisses qui suivent le tablier, **piles en bois avec croisillons jusqu'au fond du ravin**, culées en pierre et une lanterne allumée la nuit à chaque bout.
+- **Sauter en courant.**
+  - Joystick poussé au bord pendant 0,5 s : on sprinte (il fallait 1,5 s). L'autre pouce appuie sur Saut.
+  - En sprintant avec Esquive maintenue, **glissez le même pouce sur Saut** : le héros saute et continue de sprinter.
+  - Le saut en courant va plus haut et plus loin (6,0 m de long contre 1,3 m à l'arrêt), et garde sa vitesse en l'air.
+  - Saut « tolérant » : on peut encore sauter 0,13 s après avoir quitté un bord, et un appui jusqu'à 0,15 s avant de toucher le sol est gardé en mémoire.
+- **Physique du héros.**
+  - Les pentes comptent : on monte moins vite (jusqu'à × 0,62) et on descend un peu plus vite (× 1,15).
+  - Une longue chute en courant se termine par une **roulade** qui garde l'élan et divise les dégâts de chute par deux.
+- **Physique de la voiture et de la moto.**
+  - **Adhérence** : dans un virage serré à pleine vitesse, la voiture glisse (jusqu'à 0,41 rad de dérive mesurée), avec poussière sous les roues arrière. La moto ne dérape presque pas.
+  - **Suspension** (voiture) : la carrosserie plonge au freinage, se cabre à l'accélération et penche dans les virages, les roues restant au sol.
+  - **Sauts** : sur une crête, le véhicule décolle, plonge du nez en l'air et se réceptionne en écrasant ses ressorts (secousse, poussière, vibration). On ne peut plus diriger en l'air.
+- **Graphismes : caustiques** dans l'eau peu profonde. Les vagues concentrent le soleil en un réseau de lignes lumineuses qui bougent, avec le courant, sur le fond des rivières et des rivages (profils Ultra et Élevé).
+- **Vérification (1.11.2)** : 2 041 tests unitaires, dont un nouveau sur les ponts (aucune marche de plus de 9 cm tous les 25 cm, les bouts à 0 cm de la route, 1,8 m au moins au-dessus de l'eau, sol de marche = tablier). Nouveaux scénarios :
+  - `bridge` : traverser à pied les 3 ponts sans nager, pieds sur les planches (écart 0,000 m), puis en voiture (écart 0,013 m) ; vues de côté et de nuit ;
+  - `physics` : saut à l'arrêt et en courant, pentes, roulade de réception, dérapage, parcours complet de la route de Gravemoor (18 points), lancer de la voiture (0,57 s en l'air, réception sur les ressorts) ;
+  - `touch` vérifie en plus les deux façons de sauter en sprintant, avec de vrais doigts simulés (7,7 m/s en l'air).
+
+  RESULTATS_1112 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur un téléphone.
+- **Limites.**
+  - Sur les routes du jeu, assez douces, la voiture n'a pas décollé pendant les tests : le saut n'a été vérifié qu'avec un lancer simulé.
+  - Sous un pont, on ne peut pas marcher dans le lit de la rivière juste sous le tablier : le jeu vous remet sur le pont.
+  - Le dérapage et la suspension sont une simulation simple (pas de moteur physique complet) ; ils n'ont pas été réglés au doigt sur un vrai téléphone.
+
 ### Nouveautés 1.11.1 (un but au jeu : objectifs, défis et courses ; rivières réparées, herbe plus haute, rayons de soleil)
 
 - **Où sont les véhicules ?** La voiture et la moto sont garées sur la route, juste à l'est de Brindlemere (le village de départ). Elles sont maintenant **marquées sur la minimap** (icône bleue, collée au bord quand elles sont loin) **et sur la carte** (« Voiture », « Moto »).
@@ -616,7 +647,7 @@ cmake -S . -B build/desk -DCMAKE_BUILD_TYPE=Release && cmake --build build/desk 
 ./build/desk/lk_desktop --assets assets --frames 1900 --dt 0.0333 --autoplay=camera   # caméra libre : doit afficher CAMERA TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 520 --dt 0.0333 --autoplay=ui        # boutons des menus : UI TEST PASSED
 ./build/desk/lk_desktop --assets assets --frames 260 --dt 0.0333 --autoplay=grass     # herbe : GRASS TEST PASSED
-#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
+#   autres scénarios : heroes (roue, Kaede, Astra : HEROES TEST PASSED), bridge, physics, race, river, shafts, buildings, combo, details, tallgrass, rain, hunters, domain, grounded, vehicles, showcase, enemy, prologue, mods, npcs, vista
 # import d'un bâtiment (Tripo, statique) : python3 -I tools/import_prop.py maison.glb house --preview apercu.png
 #   rendu d'un autre héros de près : LK_HERO=kaede ./build/desk/lk_desktop --assets assets --frames 600 --autoplay=hero
 # import d'un GLB riggé (Tripo) : python3 -I tools/import_rigged.py modele.glb hero_ninja --preview apercu.png
