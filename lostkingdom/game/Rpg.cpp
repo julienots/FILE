@@ -559,6 +559,7 @@ bool Game::saveGame(int slot) {
 }
 
 bool Game::loadGame(int slot) {
+    if (coop.mode != CoopState::Off && slot != 99) coopLeave(true);   // 1.13.0 loading another save ends the session
     std::string data;
     if (!platform::readFile(slotPath(slot), data)) return false;
     if (data.rfind("LOSTKINGDOM_SAVE", 0) != 0 || data.find("\nend\n") == std::string::npos) { AGR_ERR("corrupt save slot %d", slot); return false; }

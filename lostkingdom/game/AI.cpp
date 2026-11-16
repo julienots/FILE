@@ -184,7 +184,8 @@ void Game::updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt) {
     ai.timer -= dt;
     ai.think -= dt;
     attackEffects(*this, e, c, ai);
-    Character* p = player != NullEntity ? reg.get<Character>(player) : nullptr;
+    Entity pe = coopNearestPlayer(c.pos);   // 1.13.0 co-op: the nearest of the two heroes
+    Character* p = pe != NullEntity ? reg.get<Character>(pe) : nullptr;
     bool frozen = c.status.freeze > 0 || c.status.stun > 0 || c.hitStun > 0;
     float speed = d.speed * (c.status.slow > 0 ? 0.5f : 1.f) * (c.status.root > 0 ? 0.f : 1.f);
     vec2 moveDir{0, 0};
@@ -202,10 +203,10 @@ void Game::updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt) {
                 ai.lastSeen = p->pos;
                 ai.aggro = 6.f;
                 if (ai.state == AIState::Idle || ai.state == AIState::Patrol || ai.state == AIState::Return || ai.state == AIState::Search) {
-                    ai.state = AIState::Alert; ai.timer = 0.6f; ai.target = player;
+                    ai.state = AIState::Alert; ai.timer = 0.6f; ai.target = pe;
                     // alert the group
                     reg.each<AIBrain, Character>([&](Entity o, AIBrain& oa, Character& oc) {
-                        if (o != e && !oc.dead && oc.bossDef < 0 && distXZ(oc.pos, c.pos) < 16.f && (oa.state == AIState::Idle || oa.state == AIState::Patrol)) { oa.state = AIState::Chase; oa.target = player; oa.lastSeen = p->pos; }
+                        if (o != e && !oc.dead && oc.bossDef < 0 && distXZ(oc.pos, c.pos) < 16.f && (oa.state == AIState::Idle || oa.state == AIState::Patrol)) { oa.state = AIState::Chase; oa.target = pe; oa.lastSeen = p->pos; }
                     });
                     if (d.arch == Arch::Quadruped && particles.rng.chance(0.4f)) { an.play(&clip(C_Q_HOWL), 1.4f, true); play3D("wolf_howl", c.pos, 0.6f); }
                     else if (d.arch == Arch::Humanoid && particles.rng.chance(0.3f)) an.play(&clip(C_TAUNT), 1.3f, true);
@@ -355,7 +356,8 @@ void Game::updateEnemyAI(Entity e, Character& c, AIBrain& ai, float dt) {
 void Game::updateBossAI(Entity e, Character& c, AIBrain& ai, float dt) {
     const BossDef& b = bosses()[c.bossDef];
     const EnemyDef& d = enemies()[b.enemy];
-    Character* p = reg.get<Character>(player);
+    Entity pe = coopNearestPlayer(c.pos);
+    Character* p = reg.get<Character>(pe);
     bossBarShow = std::min(1.f, bossBarShow + dt * 2);
     if (ai.state == AIState::Intro) {
         ai.timer -= dt;
@@ -366,7 +368,7 @@ void Game::updateBossAI(Entity e, Character& c, AIBrain& ai, float dt) {
             c.vis.anim.play(&clip(roar), 0.8f);
             c.invuln = 4.5f;
         }
-        if (ai.timer <= 0) { ai.state = AIState::Chase; ai.target = player; ai.aggro = 99; }
+        if (ai.timer <= 0) { ai.state = AIState::Chase; ai.target = pe; ai.aggro = 99; }
         c.vis.anim.speed = 0;
         return;
     }

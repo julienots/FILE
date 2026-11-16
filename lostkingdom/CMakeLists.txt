@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB ENGINE_SOURCES
-    engine/gfx/*.cpp engine/anim/*.cpp engine/audio/*.cpp
+    engine/gfx/*.cpp engine/anim/*.cpp engine/audio/*.cpp engine/net/*.cpp
     engine/platform/PlatformCommon.cpp)
 file(GLOB GAME_SOURCES game/*.cpp)
 if(NOT GAME_SOURCES OR LK_SMOKE)

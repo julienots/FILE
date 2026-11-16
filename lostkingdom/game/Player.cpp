@@ -63,29 +63,35 @@ float skillBonusPublic(const std::set<std::string>& s, int which) {
 
 void Game::rebuildPlayerVisual() {
     if (player == NullEntity) return;
-    Character& c = pc();
+    std::string eq[SL_COUNT];
+    for (int i = 0; i < SL_COUNT; i++) eq[i] = equipment[i].id;
+    buildHeroLook(pc(), activeHero, eq, dye);
+}
+
+// 1.13.0 the hero's look from a hero index and equipment ids: the player, and the co-op partner's puppet
+void Game::buildHeroLook(Character& c, int heroIdx, const std::string* eq, const std::string& dyeId) {
     HumanoidLook L;
     L.hair = Hair::Ponytail; L.hairCol = hexColor(0x3a2418); L.skin = hexColor(0xd9a98a); L.eyes = hexColor(0x3a6a8a);
     L.c1 = hexColor(0x5a3a2a); L.c2 = hexColor(0x3a3028); L.c3 = hexColor(0x2a2018); L.seed = 7;
     L.body = Body::Tunic; L.belt = true; L.satchel = true;
-    const ItemDef* head = item(equipment[SL_HEAD].id);
-    const ItemDef* chest = item(equipment[SL_CHEST].id);
-    const ItemDef* hands = item(equipment[SL_HANDS].id);
-    const ItemDef* feet = item(equipment[SL_FEET].id);
+    const ItemDef* head = item(eq[SL_HEAD]);
+    const ItemDef* chest = item(eq[SL_CHEST]);
+    const ItemDef* hands = item(eq[SL_HANDS]);
+    const ItemDef* feet = item(eq[SL_FEET]);
     if (head) L.helm = head->helm;
     if (chest) { L.body = chest->body; L.c1 = chest->color; L.pauldrons = chest->pauldrons; L.cape = chest->cape; if (chest->body == Body::Plate) L.metal = lerp(hexColor(0xa8aab0), chest->color, 0.35f); }
     if (hands) L.gauntlets = hands->gauntlets || hands->tier >= 2;
     if (feet) { L.greaves = feet->greaves; L.c3 = lerp(hexColor(0x2a2018), feet->color, 0.4f); }
-    if (!dye.empty()) { const ItemDef* d = item(dye); if (d) { L.c1 = d->color; } }
+    if (!dyeId.empty()) { const ItemDef* d = item(dyeId); if (d) { L.c1 = d->color; } }
     if (chest && chest->set >= 0 && chest->set == 6) L.trim = hexColor(0xf0d080);
     L.cape = L.cape || (chest && chest->tier >= 3);
-    const ItemDef* w = item(equipment[SL_WEAPON].id);
-    const ItemDef* o = item(equipment[SL_OFFHAND].id);
+    const ItemDef* w = item(eq[SL_WEAPON]);
+    const ItemDef* o = item(eq[SL_OFFHAND]);
     WeaponType wt = w ? w->weapon : WeaponType::None;
     WeaponType ot = o && wt != WeaponType::Bow && wt != WeaponType::Longsword && wt != WeaponType::Hammer && wt != WeaponType::Spear && wt != WeaponType::Staff ? o->weapon : WeaponType::None;
     // hero wheel: Kaede / Astra have their own look and fighting style (the gear still gives the stats)
-    const HeroDef& hd = hero();
-    bool altHero = activeHero > 0;
+    const HeroDef& hd = heroes()[std::max(0, std::min((int)heroes().size() - 1, heroIdx))];
+    bool altHero = heroIdx > 0;
     if (altHero) { L = hd.look; if (hd.fixedWeapon) { wt = hd.weapon; ot = hd.weapon == WeaponType::Dagger ? WeaponType::Dagger : WeaponType::None; } }
     Animator keep = c.vis.anim;
     bool had = c.vis.mesh != nullptr;

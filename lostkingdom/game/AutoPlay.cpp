@@ -28,6 +28,8 @@ static void teleport(Game& g, float x, float z, float yaw = 0.8f) {
     AGR_LOG("autoplay teleport (%.0f, %.0f): region %s, ground %.1f, water %.1f%s%s", x, z, regionName(g.world.regionId(x, z)), c.pos.y, wl, frozen ? " (frozen)" : "", lava ? " (lava)" : "");
 }
 
+static bool reg_valid(Game& g, Entity e) { return e != NullEntity && g.reg.valid(e); }
+
 static std::vector<Step> scenario(const std::string& name) {
     std::vector<Step> s;
     auto shot = [](const char* f) { return [f](Game& g) { g.requestScreenshot(std::string("build/shots/") + f + ".png"); }; };
@@ -122,6 +124,118 @@ static std::vector<Step> scenario(const std::string& name) {
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("HEROES TEST %s", ok ? "PASSED" : "FAILED");
         }, idle, "report"});
+        return s;
+    }
+    if (name == "coop_host" || name == "coop_guest") {
+        // 1.13.0 two players: run "coop_host" and "coop_guest" as two processes on this computer (localhost).
+        // The host founds a domain and raises wolves next to the guest; the guest finds the host by discovery,
+        // joins, fights the host's wolves (real attack inputs), takes their bites, gets the kills' experience, sees
+        // the host's time of day and domain.
+        static int res[8]; static float t0, xp0; static int lvl0; static vec2 spot;
+        bool host = name == "coop_host";
+        if (host) {
+            s.push_back({2.5f, [](Game& g) {
+                for (int& r : res) r = 0;
+                g.timeOfDay = 10.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+                const Poi* b = g.world.poiById("brindlemere"); bool found = false;
+                for (float rr = 160.f; rr < 900.f && !found; rr += 25.f)
+                    for (float a = 0; a < TAU && !found; a += 0.3f) {
+                        vec2 p = b->pos + vec2(std::cos(a), std::sin(a)) * rr;
+                        teleport(g, p.x, p.y, 0.f);
+                        g.addItem("wood", 10, Rarity::Count, false);
+                        std::string why; if (g.canFoundBase(why)) { found = true; spot = p; }
+                    }
+                g.foundBase();
+                AGR_LOG("COOP host: domain founded %d at (%.0f, %.0f)", g.base.founded, spot.x, spot.y);
+                g.coopHost();
+            }, idle, "host"});
+            s.push_back({60.f, none, [](Game& g, float) { g.pc().invuln = 1.f; g.timeOfDay = 10.f; }, "wait for the guest"});
+            s.back().until = [](Game& g) { return g.coop.connected && g.coop.snapshots > 20 && reg_valid(g, g.coop.partner); };
+            s.push_back({0.5f, [](Game& g) {
+                res[0] = g.coop.connected;
+                Character& p = *g.reg.get<Character>(g.coop.partner);
+                AGR_LOG("COOP host: %s joined, partner at (%.1f, %.1f), %d snapshots", g.coop.peerName.c_str(), p.pos.x, p.pos.z, g.coop.snapshots);
+            }, idle, "joined"});
+            // wolves next to the guest's hero (it comes to the host first)
+            s.push_back({8.f, none, [](Game& g, float) { g.pc().invuln = 1.f; g.timeOfDay = 10.f; }, "guest walks over"});
+            s.push_back({0.2f, [](Game& g) {
+                Character& p = *g.reg.get<Character>(g.coop.partner);
+                for (int i = 0; i < 3; i++) { vec3 q = p.pos + vec3(5.f + i * 1.5f, 0, -4.f + i * 3.f); q.y = g.world.groundHeight(q.x, q.z); g.spawnEnemy(enemyIndex("wolf"), q); }
+                t0 = g.realTime;
+            }, idle, "wolves"});
+            s.push_back({70.f, none, [](Game& g, float t) {
+                g.pc().invuln = 1.f; g.timeOfDay = 10.f;
+                static bool shot = false; if (!shot && g.coop.recvHits >= 2) { shot = true; g.requestScreenshot("build/shots/Z7_coop_host_view.png"); }
+                static float dbg = -9; if (t - dbg > 3.f || t < dbg) { dbg = t;
+                    g.reg.each<AIBrain, Character>([&](Entity e, AIBrain& ai, Character& c) {
+                        if (c.dead) return;
+                        Character* p = g.reg.get<Character>(g.coop.partner);
+                        AGR_LOG("COOP host dbg: wolf %u state %d target %s dist partner %.1f host %.1f", e, (int)ai.state, ai.target == g.coop.partner ? "partner" : (ai.target == g.player ? "host" : "-"), p ? distXZ(p->pos, c.pos) : -1.f, distXZ(g.pc().pos, c.pos));
+                    }); }
+            }, "fight"});
+            s.back().until = [](Game& g) { return g.coop.sentKills >= 3 && g.coop.sentDamage >= 1; };
+            s.push_back({3.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "let the events arrive"});
+            s.push_back({0.1f, [](Game& g) {
+                res[1] = g.coop.recvHits >= 1; res[2] = g.coop.sentKills >= 3; res[3] = g.coop.sentDamage >= 1; res[4] = g.coop.snapshots > 100;
+                Character& p = *g.reg.get<Character>(g.coop.partner);
+                AGR_LOG("COOP HOST TEST: joined=%d guestHits=%d kills=%d damageToGuest=%d snapshots=%d (partner hp %.0f/%.0f)", res[0], g.coop.recvHits, g.coop.sentKills, g.coop.sentDamage, g.coop.snapshots, p.hp, p.maxHp);
+                AGR_LOG(res[0] && res[1] && res[2] && res[3] && res[4] ? "COOP HOST TEST PASSED" : "COOP HOST TEST FAILED");
+            }, idle, "report"});
+            s.push_back({8.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "until the guest leaves"});
+            s.back().until = [](Game& g) { return !g.coop.connected; };
+        } else {
+            s.push_back({2.5f, [](Game& g) {
+                for (int& r : res) r = 0;
+                g.timeOfDay = 20.5f; g.toastHint.clear();
+                const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 20, b->pos.y + 25, 0.4f);
+                g.coopJoin(agr::NetAddr());
+            }, idle, "look for a game"});
+            s.push_back({40.f, none, idle, "discovery"});
+            s.back().until = [](Game& g) { return !g.coop.found.empty(); };
+            s.push_back({0.1f, [](Game& g) {
+                res[0] = !g.coop.found.empty();
+                if (res[0]) { AGR_LOG("COOP guest: found '%s' at %s", g.coop.found[0].name.c_str(), g.coop.found[0].addr.str().c_str()); g.coopJoin(g.coop.found[0].addr); }
+            }, idle, "join"});
+            s.push_back({20.f, none, idle, "joining"});
+            s.back().until = [](Game& g) { return g.coop.connected && reg_valid(g, g.coop.partner) && g.coop.snapshots > 5; };
+            s.push_back({1.5f, [](Game& g) {
+                res[1] = g.coop.connected;
+                Character& p = *g.reg.get<Character>(g.coop.partner);
+                teleport(g, p.pos.x + 3.f, p.pos.z + 3.f, 0.4f);   // meet the host
+                xp0 = (float)g.xp; lvl0 = g.level;
+                AGR_LOG("COOP guest: in %s's world, host hero at (%.1f, %.1f), time %.2f", g.coop.peerName.c_str(), p.pos.x, p.pos.z, g.timeOfDay);
+                res[2] = std::fabs(g.timeOfDay - 10.f) < 0.5f;   // the host's clock (we started at 20:30)
+            }, idle, "meet"});
+            s.push_back({90.f, none, [](Game& g, float t) {
+                Character& c = g.pc();
+                if (c.hp < c.maxHp * 0.5f) c.hp = c.maxHp;   // (the test is about the network, not about winning)
+                Entity best = NullEntity; float bd = 40.f;
+                g.reg.each<Character>([&](Entity e, Character& o) { if (!o.dead && g.coopIsRemoteEnemy(e)) { float d = distXZ(o.pos, c.pos); if (d < bd) { bd = d; best = e; } } });
+                g.input.move = vec2(0);
+                if (best == NullEntity) return;
+                Character& o = *g.reg.get<Character>(best);
+                vec3 d = o.pos - c.pos; d.y = 0;
+                vec3 fwd{-std::sin(g.camYaw), 0, -std::cos(g.camYaw)}, right{std::cos(g.camYaw), 0, -std::sin(g.camYaw)};
+                vec3 n = normalize(d);
+                if (bd > 2.2f) g.input.move = vec2(dot(n, right), dot(n, fwd));
+                static float dbg = -9; if (t - dbg > 3.f || t < dbg) { dbg = t; AGR_LOG("COOP guest dbg: nearest wolf %.1f m, hp %.0f, attack %d, sent hits %d", bd, c.hp, c.attackClip != nullptr, g.coop.sentHits); }
+                static bool shot = false; if (!shot && g.coop.sentHits >= 2) { shot = true; g.requestScreenshot("build/shots/Z8_coop_guest_fight.png"); }
+                c.yaw = std::atan2(d.x, d.z);
+                if ((int)(t * 30) % 10 == 0) { g.input.attackRelease = true; g.input.attackHoldT = 0.1f; }
+            }, "fight the host's wolves"});
+            s.back().until = [](Game& g) { return g.coop.recvKills >= 3 && g.coop.recvDamage >= 1; };
+            s.push_back({4.f, none, idle, "wait"});
+            s.push_back({0.1f, [](Game& g) {
+                res[3] = g.coop.sentHits >= 1; res[4] = g.coop.recvKills >= 1; res[5] = g.level > lvl0 || g.xp > xp0; res[6] = g.coop.recvDamage >= 1;
+                res[7] = g.world.poiById("coop_base") != nullptr;
+                AGR_LOG("COOP GUEST TEST: found=%d joined=%d hostClock=%d hits=%d kills=%d xp=%d (%d -> %d, level %d -> %d) bitten=%d hostDomain=%d puppetsSeen=%zu",
+                        res[0], res[1], res[2], g.coop.sentHits, g.coop.recvKills, res[5], (int)xp0, g.xp, lvl0, g.level, g.coop.recvDamage, res[7], g.coop.puppets.size());
+                bool ok = true; for (int r : res) ok = ok && r;
+                AGR_LOG(ok ? "COOP GUEST TEST PASSED" : "COOP GUEST TEST FAILED");
+                g.requestScreenshot("build/shots/Z9_coop_guest.png");
+            }, idle, "report"});
+            s.push_back({1.f, [](Game& g) { g.coopLeave(true); }, idle, "leave"});
+        }
         return s;
     }
     if (name == "story") {

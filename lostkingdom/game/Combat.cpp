@@ -58,6 +58,11 @@ float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 
     Character* s = reg.valid(src) ? reg.get<Character>(src) : nullptr;
     if (!t || t->dead || t->invuln > 0) return 0;
     if (t->team == Team::Neutral || t->team == Team::Mount) return 0;
+    // 1.13.0 co-op: on the guest the host's creatures only take our hero's blows (sent to the host); on the host,
+    // blows on the partner's hero go to the guest, who takes them
+    bool remoteEnemy = coopIsRemoteEnemy(dst);
+    if (remoteEnemy && src != player) return 0;
+    bool partnerHit = coop.mode == CoopState::Host && coop.connected && dst == coop.partner;
     vec3 hitPos = t->pos + vec3(0, t->height * 0.55f, 0);
     // ---- block & parry (player)
     if (dst == player && s) {
@@ -118,7 +123,9 @@ float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 
     // shield absorbs first
     if (t->status.shield > 0) { float ab = std::min(t->status.shield, dmg); t->status.shield -= ab; dmg -= ab; if (ab > 0) particles.magicBurst(hitPos, elementColor(Element::Light), 0.5f, 8); }
     dmg = std::max(1.f, dmg);
-    t->hp -= dmg;
+    if (partnerHit) coopOnPartnerDamaged(dmg, elem, dir);                                              // its health comes back in its state
+    else if (remoteEnemy) { coopOnLocalHit(dst, dmg, elem, dir, poiseDmg); t->hp = std::max(1.f, t->hp - dmg); }   // the host decides
+    else t->hp -= dmg;
     t->vis.flash = 0.35f;
     t->lastHitBy = (float)realTime;
     // poise / stagger
@@ -147,7 +154,7 @@ float Game::dealDamage(Entity src, Entity dst, float amount, Element elem, vec3 
     if (!tag.empty() && src == player) floatText(hitPos + vec3(0, 0.9f, 0), tag, elementColor(elem), 18);
     if (src == player) { hitStop = std::max(hitStop, crit ? 0.09f : 0.045f); haptic(crit ? 30 : 15, crit ? 200 : 90); if (crit) addShake(0.25f); }
     if (dst == player) { haptic(45, 200); addShake(0.3f); play("player_hurt", 0.7f); deathT = 0; }
-    if (t->hp <= 0) killCharacter(dst, *t, src);
+    if (t->hp <= 0 && !partnerHit && !remoteEnemy) killCharacter(dst, *t, src);
     // aggro
     if (AIBrain* ai = reg.get<AIBrain>(dst)) { if (ai->state != AIState::Intro) { ai->target = src; if (ai->state == AIState::Idle || ai->state == AIState::Patrol || ai->state == AIState::Return) ai->state = AIState::Chase; } }
     if (AnimalBrain* ab = reg.get<AnimalBrain>(dst)) ab->fleeing = true;
@@ -242,6 +249,7 @@ void Game::updateBodyDetails(Character& c, float dt) {
 }
 
 void Game::killCharacter(Entity e, Character& c, Entity killer) {
+    if (c.team == Team::Enemy && !c.dead) coopOnEnemyKilled(e);   // 1.13.0 the guest sees it die (and gets its share)
     if (c.dead) return;
     c.dead = true; c.hp = 0; c.deathT = 0; c.attackClip = nullptr;
     ClipId dc = c.vis.arch == Arch::Humanoid ? C_DEATH : (c.vis.arch == Arch::Spider ? C_S_DEATH : (c.vis.arch == Arch::Dragon ? C_D_DEATH : C_Q_DEATH));
@@ -599,9 +607,12 @@ void Game::updateCharacters(float dt) {
                 b.pos.x += push.x * wb; b.pos.z += push.y * wb;
             }
         }
+    // 1.13.0 co-op host: the area around the partner's hero is alive too
+    Character* partnerC = coop.mode == CoopState::Host && coop.connected && reg.valid(coop.partner) ? reg.get<Character>(coop.partner) : nullptr;
+    vec3 partnerPos = partnerC ? partnerC->pos : vec3(1e9f);
     reg.each<Character>([&](Entity e, Character& c) {
         float d2 = dist2XZ(c.pos, camFocus);
-        bool near = d2 < 90.f * 90.f || c.bossDef >= 0;
+        bool near = d2 < 90.f * 90.f || c.bossDef >= 0 || dist2XZ(c.pos, partnerPos) < 90.f * 90.f || e == coop.partner || reg.get<NetPuppet>(e);
         if (!near && e != player) return;
         c.invuln = std::max(0.f, c.invuln - dt);
         c.hitStun = std::max(0.f, c.hitStun - dt);
@@ -609,6 +620,8 @@ void Game::updateCharacters(float dt) {
         if (!c.dead && c.poise < c.maxPoise && realTime - c.lastHitBy > 3.f) c.poise = std::min(c.maxPoise, c.poise + dt * c.maxPoise * 0.3f);
         updateStatus(e, c, dt);
         if (e != player || !riding) {
+            if (NetPuppet* np = reg.get<NetPuppet>(e)) { if (!c.dead) updateNetPuppet(e, c, *np, dt); }   // 1.13.0 co-op: driven by the network
+            else {
             if (!c.dead) {
                 if (AIBrain* ai = reg.get<AIBrain>(e)) { if (c.bossDef >= 0) updateBossAI(e, c, *ai, dt); else updateEnemyAI(e, c, *ai, dt); }
                 else if (NpcBrain* nb = reg.get<NpcBrain>(e)) updateNpc(e, c, *nb, dt);
@@ -628,6 +641,7 @@ void Game::updateCharacters(float dt) {
             }
             updateAttack(e, c, dt);
             if (!(e == player && (riding || driving >= 0))) physicsStep(e, c, dt);
+            }
         }
         if (e == mountEnt && riding) { c.pos.y = groundAt(c.pos.x, c.pos.z); vec3 tmp = c.pos; collideStatic(c.pos, c.radius, c.pos.y); c.pos += vec3(c.vel.x, 0, c.vel.z) * dt; (void)tmp;
             if (c.vis.anim.speed > 0.5f && c.vis.anim.footstepEvent) { c.vis.anim.footstepEvent = 0; play3D("horse", c.pos, 0.25f, 1.4f); } }

@@ -204,6 +204,7 @@ void Game::drawSplash(float dt) {
 }
 
 void Game::newGame() {
+    coopLeave(true);   // 1.13.0
     reg.clear();
     clearBase(); nightHunters.clear();
     vehicles.clear(); vehicleEnts.clear(); driving = -1;
@@ -316,10 +317,10 @@ void Game::drawCredits(float dt) {
 }
 
 // ============================================================================================ journal tabs
-static const char* TABS[] = {"Objectifs", "Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
-static const Menu TAB_MENU[] = {Menu::Objectives, Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
-static const char* TAB_ICON[] = {"i_star", "i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
-static constexpr int TAB_COUNT = 13;
+static const char* TABS[] = {"Objectifs", "Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "À deux", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
+static const Menu TAB_MENU[] = {Menu::Objectives, Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Coop, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
+static const char* TAB_ICON[] = {"i_star", "i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_waypoint", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static constexpr int TAB_COUNT = 14;
 
 static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
     UI& u = g.ui;
@@ -375,7 +376,7 @@ void Game::drawMenus(float dt) {
         if (b("Journal")) { menu = Menu::Inventory; }
         if (b("Sauvegarder")) { menu = Menu::Saves; }
         if (b("Paramètres")) { menu = Menu::Settings; }
-        if (b("Menu principal")) { saveGame(99); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
+        if (b("Menu principal")) { coopLeave(true); saveGame(99); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
         return;
     }
     if (menu == Menu::Death) {
@@ -711,6 +712,11 @@ void Game::drawMenus(float dt) {
             u.circle(m, 9.f, vec4(0.35f, 0.85f, 0.45f, 0.95f), 14);
             u.text(raceDefs()[t.def].name, m.x + 12, m.y - 10, 14, rgba(0x1a4020), F_BOLD);
         }
+        if (coop.connected && reg.valid(coop.partner)) {   // 1.13.0 the other player
+            vec2 m = toMap(reg.get<Character>(coop.partner)->pos.xz());
+            u.circle(m, 11.f, vec4(0.05f, 0.1f, 0.2f, 0.9f), 16); u.circle(m, 8.f, vec4(0.35f, 0.75f, 1.f, 1), 16);
+            u.text(coop.peerName, m.x, m.y + 14, 16, rgba(0x14305a), F_BOLD, A_CENTER);
+        }
         for (const VehicleState& v : vehicles) {   // 1.11.1 where the car and the motorbike are parked
             vec2 m = toMap(v.pos.xz());
             u.circle(m, 15.f, vec4(0.05f, 0.08f, 0.15f, 0.85f), 18);
@@ -878,6 +884,7 @@ void Game::drawMenus(float dt) {
     // ---------------------------------------------------------------- chronicles (lore)
     case Menu::Base: drawBaseMenu(c); break;
     case Menu::Objectives: drawObjectives(c); break;
+    case Menu::Coop: drawCoopMenu(c); break;
     case Menu::Chronicles: {
         Rect list{c.x, c.y + 40, c.w * 0.38f, c.h - 40};
         const auto& L = lore();

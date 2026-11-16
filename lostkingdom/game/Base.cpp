@@ -334,7 +334,8 @@ void Game::saveBase(std::ostream& o) const {
     for (auto& s : base.storage) o << "base_store " << s.first << " " << s.second << "\n";
 }
 
-bool Game::loadBaseLine(const std::string& k, std::istream& l) {
+bool Game::loadBaseLine(const std::string& k, std::istream& l, PlayerBase* into) {
+    PlayerBase& base = into ? *into : this->base;   // 1.13.0 also reads the co-op partner's domain
     if (k == "base_found") { base.founded = true; l >> base.center.x >> base.center.y; return true; }
     if (k == "base_name") { std::string s; std::getline(l, s); if (!s.empty() && s[0] == ' ') s.erase(0, 1); if (!s.empty()) base.name = s.substr(0, 40); return true; }
     if (k == "base_n") { int esc = 0; l >> base.residents >> base.soldiers >> base.pigs >> base.horses >> base.lastDay >> base.foalDays >> esc; base.escort = esc != 0; return true; }

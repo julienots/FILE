@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include "../engine/audio/Audio.h"
 #include "World.h"
+#include "../engine/net/Net.h"
+#include <deque>
 #include "Props.h"
 #include "Characters.h"
 #include "Data.h"
@@ -126,6 +128,13 @@ struct NpcBrain {
 
 struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; };
 // 1.9.2 the player's domain
+// 1.13.0 co-op: a character driven by the network (the partner's hero; on the guest, the host's enemies)
+struct NetPuppet {
+    uint32_t netId = 0;
+    bool hero = false;
+    vec3 target; float targetYaw = 0, speed = 0, lastUpdate = 0;
+    int16_t clip = -1; uint8_t clipSeq = 0, body = 0;
+};
 struct SoldierBrain { vec3 post; Entity target = NullEntity; float cd = 0, think = 0; int slot = 0; };
 struct BaseBuildDef {
     std::string id, name, desc;
@@ -321,6 +330,34 @@ struct CineShot {
     float shake = 0;
     bool heroDown = false, heroRise = false, wristGlow = false;
 };
+// 1.13.0 two players on the same Wi-Fi (Coop.cpp)
+struct CoopHeroState {
+    vec3 pos; float yaw = 0, speed = 0, hp = 100, maxHp = 100, def = 3;
+    uint8_t body = 0, hero = 0, flags = 0;   // flags: 1 dead, 2 blocking, 4 airborne
+    int16_t clip = -1, stance = 0; uint8_t clipSeq = 0;
+};
+struct CoopEvent { uint32_t seq = 0; uint8_t type = 0; std::vector<uint8_t> data; };
+struct CoopFound { agr::NetAddr addr; std::string name; int level = 0; float seen = 0; };
+struct CoopState {
+    enum Mode { Off, Host, Guest } mode = Off;
+    agr::UdpSocket sock;
+    agr::NetAddr peer;
+    bool connected = false, joining = false;
+    float lastRecv = 0, sendT = 0, discoverT = 0, joinT = 0;
+    std::string peerName; int peerLevel = 0;
+    Entity partner = NullEntity;              // the other player's hero (puppet)
+    std::unordered_map<uint32_t, Entity> puppets;   // guest: host enemy id -> local puppet
+    uint32_t outSeq = 0, inSeq = 0, ackedByPeer = 0;
+    std::deque<CoopEvent> outbox;
+    std::vector<CoopFound> found;
+    std::string manualIp, status;
+    uint8_t myClipSeq = 0; int16_t myLastClip = -1;
+    int enemyCursor = 0;
+    std::string peerBase; int peerBaseParts = 0, peerBaseGot = 0; std::vector<std::string> peerBaseChunks; bool peerBaseApplied = false;
+    std::string peerLook; bool peerLookDirty = false;
+    int sentHits = 0, recvHits = 0, sentDamage = 0, recvDamage = 0, sentKills = 0, recvKills = 0, snapshots = 0;
+};
+
 struct ChapterDef { std::string id, title, summary; };   // 1.12.0 story chapters (Story.cpp)
 const std::vector<ChapterDef>& chapters();
 struct CinematicState {
@@ -334,7 +371,7 @@ struct CinematicState {
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop };
 
 class Game : public App {
 public:
@@ -533,6 +570,34 @@ public:
     int challengeProgress(const ChallengeDef& c) const;
     void updateChallenges(float dt);
     void drawObjectives(Rect c);
+    // 1.13.0 co-op (Coop.cpp)
+    CoopState coop;
+    static constexpr uint16_t COOP_PORT = 47777;
+    bool coopHost();
+    bool coopJoin(const agr::NetAddr& host);
+    void coopLeave(bool notifyPeer = true);
+    void updateCoop(float dt);
+    void coopSend(float dt);
+    void coopReceive();
+    void coopHandle(const uint8_t* d, int n, const agr::NetAddr& from);
+    void coopEvent(uint8_t type, const agr::ByteWriter& w);
+    void coopHandleEvent(uint8_t type, agr::ByteReader& r);
+    void coopWriteHero(agr::ByteWriter& w);
+    void coopApplyPartner(const CoopHeroState& s);
+    std::string coopLookString() const;
+    void coopBuildPartnerLook(Character& c, const std::string& look);
+    Entity coopEnsurePartner();
+    void updateNetPuppet(Entity e, Character& c, NetPuppet& np, float dt);
+    bool coopIsRemoteEnemy(Entity e) const;   // guest: an enemy simulated by the host
+    void coopOnLocalHit(Entity dst, float dmg, Element elem, vec3 dir, float poise);    // guest -> host
+    void coopOnPartnerDamaged(float dmg, Element elem, vec3 dir);                       // host -> guest
+    void coopOnEnemyKilled(Entity e);                                                   // host -> guest
+    Entity coopNearestPlayer(vec3 p, float* dist = nullptr);                            // host: the hero or the partner
+    void coopSendBase();
+    void coopApplyPeerBase();
+    void drawCoopMenu(Rect c);
+    void drawCoopHud();
+    void buildHeroLook(Character& c, int heroIdx, const std::string* eq, const std::string& dyeId);
     // 1.12.0 story chapters, Alaric's reveal, the ending choice (Story.cpp)
     std::string pendingChapter; float pendingChapterT = 0;
     bool endingChoice = false, replayingChapter = false; float endingChoiceT = 0;
@@ -575,7 +640,7 @@ public:
     void drawBuildHud();
     void renderBuildGhost();
     void saveBase(std::ostream& o) const;
-    bool loadBaseLine(const std::string& k, std::istream& l);
+    bool loadBaseLine(const std::string& k, std::istream& l, PlayerBase* into = nullptr);
     float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
     float birdFlushCD = 0;
     void updateBodyDetails(Character& c, float dt);          // Astra: energy aura (0..1): flight + flare when a power fires

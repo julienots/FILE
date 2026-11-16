@@ -247,6 +247,7 @@ void Game::frame(float dtRaw) {
         bool paused = menu != Menu::None && menu != Menu::Death;
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
+        updateCoop(dt);   // 1.13.0 the network runs even while a menu is open
         if (!paused) updatePlaying(sdt);
         PROF(9, renderWorld(sdt));
         PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); drawEndingChoice(dt); });

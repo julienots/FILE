@@ -451,7 +451,7 @@ void Game::updateSpawning(float dt) {
             bool camp = poi >= 0 && world.pois[poi].type == PoiType::Camp;
             float chance = camp ? 1.f : 0.3f + env.night * 0.15f;
             std::vector<Entity>& list = chunkSpawns[h];
-            if (r.f() < chance) {
+            if (r.f() < chance && coop.mode != CoopState::Guest) {   // 1.13.0 co-op guest: the host's creatures
                 // pick an enemy appropriate for the region (night creatures mostly at night)
                 std::vector<int> cands;
                 const auto& E = enemies();
@@ -525,7 +525,7 @@ void Game::updateSpawning(float dt) {
     // ---- boss arenas in the open world
     for (int b = 0; b < (int)bosses().size(); b++) {
         const BossDef& B = bosses()[b];
-        if (B.dungeon >= 0 || defeatedBosses.count(B.id) || bossEnt != NullEntity) continue;
+        if (B.dungeon >= 0 || defeatedBosses.count(B.id) || bossEnt != NullEntity || coop.mode == CoopState::Guest) continue;
         const Poi* P = world.poiById(B.arenaPoi);
         if (!P) continue;
         if (B.id == "fallen_knight" && !questActive("m6") && !questsDone.count("m6")) continue;  // Corwin waits for the crown bearer
@@ -586,7 +586,7 @@ bool Game::playerInSafeZone() {
 }
 
 void Game::updateNightHunters(float dt) {
-    if (player == NullEntity || dungeon.active || state != GameState::Playing) return;
+    if (player == NullEntity || dungeon.active || state != GameState::Playing || coop.mode == CoopState::Guest) return;
     Character& pc_ = pc();
     // forget the dead / destroyed ones
     nightHunters.erase(std::remove_if(nightHunters.begin(), nightHunters.end(), [&](Entity h) { Character* c = reg.valid(h) ? reg.get<Character>(h) : nullptr; return !c || c->dead; }), nightHunters.end());

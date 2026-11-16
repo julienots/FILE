@@ -244,6 +244,7 @@ void Game::drawMinimap(Rect r) {
         if (o.dead || e == player) return;
         vec2 m = toMini(o.pos, false, &in);
         if (!in) return;
+        if (e == coop.partner) return;
         if (o.team == Team::Enemy) u.circle(m, o.bossDef >= 0 ? 6.f : 3.5f, vec4(0.95f, 0.25f, 0.2f, 1), 10);
         else if (o.npcDef >= 0) u.circle(m, 3.5f, vec4(1.f, 0.85f, 0.4f, 1), 10);
         else if (o.team == Team::Mount) u.sprite("i_mount", {m.x - 9, m.y - 9, 18, 18});
@@ -255,6 +256,13 @@ void Game::drawMinimap(Rect r) {
         u.circle(m, 9.f + 2.f * std::sin(realTime * 8.f), vec4(0.4f, 0.85f, 1.f, 0.95f), 16);
     } else if (!dungeon.active && driving >= 0) {
         for (const RaceTrack& t : races) if (!t.cps.empty()) { vec2 m = toMini(vec3(t.start.x, 0, t.start.y), false, &in); if (in) u.circle(m, 8.f, vec4(0.5f, 1.f, 0.6f, 0.95f), 14); }
+    }
+    // 1.13.0 the other player: a blue arrow, pinned to the edge when far
+    if (coop.connected && reg.valid(coop.partner)) {
+        Character& o = *reg.get<Character>(coop.partner);
+        vec2 m = toMini(o.pos, true, &in);
+        u.circle(m, 8.f, vec4(0.05f, 0.1f, 0.2f, 0.9f), 14);
+        u.circle(m, 6.f, o.dead ? vec4(0.5f, 0.5f, 0.6f, 1) : vec4(0.35f, 0.75f, 1.f, 1), 14);
     }
     // 1.11.1 vehicles: always findable (pinned to the edge of the minimap when far away)
     if (!dungeon.active)
@@ -295,6 +303,7 @@ void Game::drawHud(float dt) {
     if (endingChoice) return;                              // 1.12.0 nor under the ending choice
     drawBuildHud();
     drawRaceHud();
+    drawCoopHud();
     UI& u = ui;
     Character& p = pc();
     float W_ = u.W, H_ = u.H;
