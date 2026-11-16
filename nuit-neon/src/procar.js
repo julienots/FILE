@@ -134,7 +134,22 @@ export function buildDesign(def, paint) {
     }
     for (let m = 0; m < CM; m++) for (let i = 0; i < rowN - 1; i++) { const a = m * rowN + i, b2 = a + 1, c = a + rowN, e = c + 1; ci.push(a, c, b2, b2, c, e); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3)); g.setIndex(ci); g.computeVertexNormals();
-    chassis.add(new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: 0x04060a, metalness: 0.9, roughness: 0.04, envMapIntensity: 2.4, side: THREE.DoubleSide })));
+    // vitres teintées mais transparentes : on voit l'habitacle
+    const glass = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: 0x0a1016, metalness: 0.9, roughness: 0.03, envMapIntensity: 2.6, side: THREE.DoubleSide, transparent: true, opacity: 0.56, depthWrite: false }));
+    glass.renderOrder = 4; chassis.add(glass);
+    {
+      const tm = lerp(cab.t0, cab.t1, 0.47), zs = -Lh + tm * 2 * Lh, fl = Math.min(HC(tm), HS(tm)) - 0.02, hh = Math.max(0.25, cab.h - fl - 0.1), sx = Math.min(0.4, Wf(tm) * HW * 0.36), int = [], cuir = [];
+      for (const s of [-1, 1]) {
+        cuir.push(flat(box(0.4, 0.1, 0.44, s * sx, fl + 0.07, zs)), flat(box(0.4, hh * 0.72, 0.1, s * sx, fl + hh * 0.4, zs + 0.24, -0.22)), flat(box(0.2, 0.14, 0.08, s * sx, fl + hh * 0.84, zs + 0.3, -0.22)));   // assise, dossier, appuie-tête
+      }
+      const zd = -Lh + lerp(cab.t0, cab.t1, 0.22) * 2 * Lh;
+      int.push(flat(box(Wf(tm) * HW * 1.3, 0.14, 0.26, 0, fl + hh * 0.42, zd)));                                                                // planche de bord
+      int.push(flat(box(0.2, 0.2, 0.9, 0, fl + 0.08, zs - 0.1)));                                                                                // console centrale
+      const vol = new THREE.TorusGeometry(0.15, 0.018, 6, 18); vol.rotateX(-0.45); vol.translate(-sx, fl + hh * 0.5, zd + 0.2); int.push(flat(vol));  // volant
+      int.push(flat(box(0.02, 0.2, 0.02, -sx, fl + hh * 0.4, zd + 0.12, -0.45)));
+      chassis.add(new THREE.Mesh(mergeGeometries(int), new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 })));
+      chassis.add(new THREE.Mesh(mergeGeometries(cuir), new THREE.MeshStandardMaterial({ color: d.sellerie ?? 0x2a2c33, roughness: 0.6 })));
+    }
     if (cab.peint) {
       // toit et montants : une peau posée sur le haut de la bulle, entre le pare-brise et la lunette
       const [u0, u1] = cab.peint, m0 = Math.round(u0 * CM), m1 = Math.round(u1 * CM), i0 = CR - 4, i1 = CR + 2, n = i1 - i0 + 1;
@@ -238,6 +253,16 @@ export function buildDesign(def, paint) {
     root.add(steer); wheels.push({ steer, spin, front: wh.t < 0.5, radius: wh.r });
   }
 
+  // ---------- voiture volante : propulseurs lumineux à la place des roues ----------
+  const jets = [];
+  if (d.propulseurs) {
+    const ring = [], glowG = [];
+    for (const [t, k, r] of d.propulseurs) for (const s of [-1, 1]) { const x = s * Wf(t) * HW * k, z = -Lh + t * 2 * Lh, y = Bf(t) - 0.02;
+      const g1 = new THREE.CylinderGeometry(r * 1.25, r * 1.05, 0.12, 20, 1, true); g1.translate(x, y, z); ring.push(flat(g1));
+      const g2 = new THREE.CircleGeometry(r, 20); g2.rotateX(Math.PI / 2); g2.translate(x, y - 0.03, z); glowG.push(flat(g2)); jets.push([x, y, z]); }
+    chassis.add(new THREE.Mesh(mergeGeometries(ring), new THREE.MeshStandardMaterial({ color: 0x30333c, metalness: 1, roughness: 0.3, side: THREE.DoubleSide })));
+    chassis.add(new THREE.Mesh(mergeGeometries(glowG), new THREE.MeshBasicMaterial({ color: new THREE.Color(d.neon ?? 0x19e6ff).multiplyScalar(3.5), side: THREE.DoubleSide })));
+  }
   // ---------- néon sous la caisse, ombre ----------
   shadowTex = shadowTex || radialTex([[0, 'rgba(0,0,0,0.95)'], [0.6, 'rgba(0,0,0,0.7)'], [1, 'rgba(0,0,0,0)']]);
   const sh = new THREE.Mesh(new THREE.PlaneGeometry(d.W + 0.9, d.L + 1.1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, fog: false }));
@@ -250,5 +275,5 @@ export function buildDesign(def, paint) {
   }
   const tc = cab.t0 + (cab.t1 - cab.t0) * 0.12;
   const paintMats = [paintMat]; if (chassis.userData.roofMat) paintMats.push(chassis.userData.roofMat);
-  return { root, chassis, wheels, paintMats, tailMats: [tailMat], glows: [], half: HW, len: Lh, neon, cockpit: new THREE.Vector3(0, HC(tc) + 0.4, -Lh + tc * 2 * Lh) };
+  return { root, chassis, wheels, paintMats, tailMats: [tailMat], glows: [], half: HW, len: Lh, neon, jets, hover: d.propulseurs ? 0.42 : 0, cockpit: new THREE.Vector3(0, HC(tc) + 0.4, -Lh + tc * 2 * Lh) };
 }

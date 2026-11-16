@@ -131,6 +131,10 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 #score .b { color: #5fd0ff; } #score .o { color: #ff9a5a; }
 #banner { top: 30%; left: 50%; transform: translateX(-50%); font-size: clamp(34px, 12vh, 76px); font-weight: 700; font-style: italic; text-shadow: 0 0 30px rgba(255,255,255,0.5), 0 4px 18px #000; white-space: nowrap; }
 @media (max-height: 420px) { .key.mini { width: 54px; height: 54px; } #menu .modes .btn { padding: 7px 14px; } #menu h1 { font-size: clamp(30px, 9vh, 60px); } }
+/* objet tenu, encre */
+#h-icon { width: 52px; height: 52px; display: block; margin: 0 auto 2px; filter: drop-shadow(0 2px 6px #000); }
+#ink { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+#ink i { position: absolute; background: radial-gradient(closest-side, #05030c 55%, rgba(5,3,12,0.9) 70%, rgba(5,3,12,0) 100%); border-radius: 46% 54% 60% 40% / 50% 42% 58% 50%; }
 /* radio */
 #radio { position: absolute; z-index: 4; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 58px); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 2px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; font-weight: 700; max-width: min(46%, 340px); }
 #radio button { width: 30px; height: 30px; font-size: 12px; flex: 0 0 auto; } #radio button:active { background: rgba(255,255,255,0.15); }
@@ -163,6 +167,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 <div id="app">
   <canvas class="view" id="view"></canvas>
 
+  <div id="ink" hidden><i style="left:8%;top:10%;width:38vmin;height:34vmin"></i><i style="left:52%;top:4%;width:44vmin;height:40vmin"></i><i style="left:30%;top:42%;width:50vmin;height:42vmin"></i><i style="left:68%;top:50%;width:34vmin;height:32vmin"></i><i style="left:2%;top:58%;width:30vmin;height:30vmin"></i></div>
   <div id="toast" hidden></div>
   <div id="radio" hidden><button id="rd-prev" aria-label="Station précédente">◀</button><span id="rd-txt">Radio</span><button id="rd-next" aria-label="Station suivante">▶</button><button id="rd-skip" aria-label="Morceau suivant">»</button></div>
   <div class="screen" id="loading"><div>CHARGEMENT</div><small id="loadmsg">Construction du décor…</small></div>
@@ -171,8 +176,8 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="col">
       <h1><span>NUIT</span> <b>NÉON</b></h1>
       <div class="modes">
-        <button class="btn primary" id="m-race">Course<small>12 circuits, jusqu'à 31 adversaires</small></button>
-        <button class="btn" id="m-items">Course à bonus<small>15 pouvoirs à ramasser</small></button>
+        <button class="btn primary" id="m-race">Course<small>19 circuits, jusqu'à 31 adversaires</small></button>
+        <button class="btn" id="m-items">Course à bonus<small>21 pouvoirs à ramasser</small></button>
         <button class="btn" id="m-foot">Foot Turbo<small>Ballon, boost, saut et vol</small></button>
         <button class="btn" id="m-chrono">Contre-la-montre<small>Seul en piste, contre ton record</small></button>
         <button class="btn" id="m-elim">Élimination<small>Le dernier sort toutes les 20 s</small></button>
@@ -253,7 +258,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="tr"><canvas id="mini" width="192" height="192"></canvas><button id="bvue" aria-label="Changer de vue">VUE</button><button id="bpause" aria-label="Pause">II</button></div>
     <div id="wrong" hidden>MAUVAIS SENS</div>
     <div id="banner" hidden></div>
-    <div class="speed"><div id="h-drift"></div><div id="h-item"></div><b id="h-kmh">0</b><span class="label">km/h</span><div id="boostbar"><i id="h-boost"></i></div></div>
+    <div class="speed"><div id="h-drift"></div><canvas id="h-icon" width="96" height="96" hidden></canvas><div id="h-item"></div><b id="h-kmh">0</b><span class="label">km/h</span><div id="boostbar"><i id="h-boost"></i></div></div>
     <div class="pad l"><button class="key" id="k-left" aria-label="Gauche">◀</button><button class="key" id="k-right" aria-label="Droite">▶</button></div>
     <div class="pad r">
       <div class="line"><button class="key mini drift" id="k-drift" aria-label="Déraper"><small>DRIFT</small></button><button class="key mini act" id="k-act" aria-label="Action"><small id="k-actl">SAUT</small></button><button class="key mini boost" id="k-boost" aria-label="Boost"><small>BOOST</small></button></div>

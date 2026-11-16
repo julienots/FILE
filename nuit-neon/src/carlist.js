@@ -61,6 +61,23 @@ export const CAR_LIST = [
     design: { L: 4.6, W: 2.02, t: T10, w: [0.62, 0.86, 0.95, 0.985, 0.94, 0.925, 0.985, 1.0, 0.97, 0.86], hc: [0.32, 0.40, 0.48, 0.56, 0.64, 0.72, 0.78, 0.80, 0.78, 0.72], hs: [0.32, 0.43, 0.54, 0.63, 0.66, 0.70, 0.79, 0.85, 0.83, 0.74], b: [0.21, 0.125, 0.1, 0.1, 0.1, 0.1, 0.1, 0.11, 0.15, 0.25],
       roues: [[0.2, 0.34, 0.28], [0.8, 0.37, 0.35]], toit: { t0: 0.26, t1: 0.77, h: 1.1, forme: [0, 0.64, 0.97, 1, 0.88, 0.5, 0.08], larg: [0.8, 0.72, 0.62], pince: 0.64 },
       aileron: 'gt', aileronH: 1.16, priseFlanc: [0.55, 0.69], ouies: [0.13], bandes: 'double', accent: 0xf2f2f2, jantes: 'double', jante: 0x1a1b20, etrier: 0xffd23f, neon: 0xff2a2a, echap: [-0.16, 0, 0.16], echapY: 0.36 } },
+  { id: 'aiglon', son: 'v10', prix: 20000, nom: 'Aiglon', couleur: 0xf2c200, stats: { vmax: 9, accel: 9, mania: 8, adher: 9 },
+    design: { L: 4.55, W: 1.98, t: T10, w: [0.64, 0.87, 0.96, 0.99, 0.96, 0.95, 0.99, 1.0, 0.97, 0.88], hc: [0.34, 0.42, 0.50, 0.58, 0.66, 0.74, 0.79, 0.80, 0.77, 0.70], hs: [0.34, 0.45, 0.56, 0.65, 0.68, 0.72, 0.80, 0.85, 0.82, 0.72], b: [0.2, 0.12, 0.095, 0.095, 0.095, 0.095, 0.095, 0.105, 0.15, 0.24],
+      roues: [[0.2, 0.345, 0.29], [0.8, 0.365, 0.35]], toit: { t0: 0.27, t1: 0.76, h: 1.12, forme: [0, 0.64, 0.97, 1, 0.9, 0.52, 0.08], larg: [0.8, 0.73, 0.62], pince: 0.66, peint: [0.44, 0.74], toitNoir: true },
+      aileron: 'gt', aileronH: 1.2, priseFlanc: [0.54, 0.68], ouies: [0.12, 0.2], bandes: 'flanc', accent: 0x101014, jantes: 'six', jante: 0x15161a, etrier: 0xd8121e, neon: 0xffd23f, sellerie: 0x7a1c1c, echap: [-0.5, 0.5], echapY: 0.14 } },
+  { id: 'sirocco', son: 'biturbo', prix: 28000, nom: 'Sirocco', couleur: 0x8a2be2, stats: { vmax: 9, accel: 10, mania: 9, adher: 8 },
+    design: { L: 4.4, W: 1.96, t: T10, w: [0.70, 0.9, 0.97, 1.0, 0.97, 0.96, 1.0, 1.0, 0.96, 0.84], hc: [0.38, 0.47, 0.56, 0.64, 0.71, 0.77, 0.81, 0.80, 0.74, 0.62], hs: [0.38, 0.49, 0.60, 0.69, 0.72, 0.76, 0.83, 0.85, 0.78, 0.64], b: [0.22, 0.14, 0.11, 0.11, 0.11, 0.11, 0.11, 0.12, 0.17, 0.26],
+      roues: [[0.19, 0.34, 0.27], [0.81, 0.35, 0.32]], toit: { t0: 0.3, t1: 0.86, h: 1.2, forme: [0, 0.68, 0.98, 1, 0.92, 0.6, 0.15], larg: [0.82, 0.78, 0.68], pince: 0.7, peint: [0.34, 0.64] },
+      aileron: 'canard', priseFlanc: [0.3, 0.37], ouies: [0.15], bandes: 'centre', accent: 0x19e6ff, jantes: 'turbine', jante: 0xe8e8ee, etrier: 0x19e6ff, neon: 0x8a2be2, sellerie: 0x1d3f9a, feux: 'ronds', echap: [-0.3, 0.3] } },
+  // ---------- voitures volantes : pas de roues, des propulseurs ; le bouton VOL (ou Espace) les fait monter ----------
+  { id: 'nebula', son: 'proto', prix: 45000, nom: 'Nébula', vol: true, couleur: 0x19c37d, stats: { vmax: 9, accel: 8, mania: 9, adher: 8 },
+    design: { L: 4.5, W: 2.0, t: T10, w: [0.50, 0.8, 0.93, 0.99, 1.0, 1.0, 0.99, 0.96, 0.88, 0.7], hc: [0.5, 0.58, 0.66, 0.73, 0.79, 0.83, 0.84, 0.82, 0.78, 0.7], hs: [0.5, 0.57, 0.64, 0.7, 0.74, 0.77, 0.78, 0.77, 0.74, 0.68], b: [0.42, 0.34, 0.3, 0.28, 0.27, 0.27, 0.28, 0.3, 0.36, 0.46],
+      roues: [], propulseurs: [[0.2, 0.72, 0.26], [0.8, 0.74, 0.3]], toit: { t0: 0.24, t1: 0.74, h: 1.18, forme: [0, 0.7, 0.98, 1, 0.9, 0.55, 0.05], larg: [0.74, 0.7, 0.56], pince: 0.6 },
+      aileron: 'plat', bandes: 'centre', accent: 0xffffff, neon: 0x19e6ff, sellerie: 0x15161a, phares: [0.03, 0.09, 9.0, 12.4], echap: [-0.3, 0.3], echapY: 0.16, bombe: 0.03 } },
+  { id: 'orion', son: 'f1', prix: 90000, nom: 'Orion', vol: true, couleur: 0x14161c, stats: { vmax: 10, accel: 10, mania: 10, adher: 9 },
+    design: { L: 4.8, W: 2.1, t: T10, w: [0.36, 0.7, 0.9, 0.98, 1.0, 1.0, 1.0, 0.98, 0.9, 0.76], hc: [0.44, 0.5, 0.56, 0.63, 0.7, 0.76, 0.78, 0.76, 0.72, 0.66], hs: [0.44, 0.5, 0.56, 0.62, 0.66, 0.69, 0.7, 0.7, 0.68, 0.64], b: [0.38, 0.3, 0.26, 0.24, 0.23, 0.23, 0.24, 0.27, 0.33, 0.44],
+      roues: [], propulseurs: [[0.16, 0.7, 0.22], [0.5, 0.86, 0.2], [0.84, 0.76, 0.32]], toit: { t0: 0.26, t1: 0.66, h: 1.06, forme: [0, 0.7, 0.98, 1, 0.9, 0.55, 0.05], larg: [0.6, 0.56, 0.44], pince: 0.56 },
+      aileron: 'proto', aileronH: 1.1, derive: true, bandes: 'double', accent: 0xff2bd0, neon: 0xff2bd0, sellerie: 0x7a1c5a, pharesCol: 0xffd0f0, phares: [0.04, 0.12, 9.0, 12.4], echap: [-0.5, 0, 0.5], echapY: 0.14, bombe: 0.03 } },
 ];
 
 // Voitures de la circulation (mode Balade libre). Elles n'apparaissent pas dans le garage.

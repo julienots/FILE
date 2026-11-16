@@ -64,6 +64,10 @@ export class FX {
   spark(x, y, z, vx, vy, vz) {
     this.fireP.spawn(x, y, z, vx + (Math.random() - 0.5) * 9, vy + Math.random() * 5, vz + (Math.random() - 0.5) * 9, 0.3 + Math.random() * 0.4, 0.22, 0.05, 4.0, 2.4, 0.6, 1, 18, 0.6);
   }
+  // étincelle colorée (dérapage : bleu, orange puis violet selon la durée)
+  sparkC(x, y, z, vx, vy, vz, r, g, b) {
+    this.fireP.spawn(x, y, z, vx + (Math.random() - 0.5) * 7, vy + Math.random() * 4.5, vz + (Math.random() - 0.5) * 7, 0.25 + Math.random() * 0.35, 0.26, 0.04, r, g, b, 1, 16, 0.6);
+  }
   ember(x, y, z, vx, vy, vz) {
     const h = Math.random();
     this.fireP.spawn(x, y, z, vx + (Math.random() - 0.5) * 5, vy + Math.random() * 3.5, vz + (Math.random() - 0.5) * 5, 0.5 + Math.random() * 0.7, 0.3, 0.04, 4.5, 1.6 + h * 1.6, 0.25 + h * 0.5, 1, 14, 0.5);
@@ -89,9 +93,9 @@ export class FX {
 
 // Traces de pneus laissées au sol pendant les dérapages et les gros freinages (anneau de rectangles réutilisés).
 export class Skids {
-  constructor(scene, n = 900) {
+  constructor(scene, n = 3200) {
     this.n = n; this.i = 0; this.p = new Float32Array(n * 12);
-    const idx = new Uint16Array(n * 6); for (let q = 0; q < n; q++) idx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4 + 1, q * 4 + 3, q * 4 + 2], q * 6);
+    const idx = new Uint32Array(n * 6); for (let q = 0; q < n; q++) idx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4 + 1, q * 4 + 3, q * 4 + 2], q * 6);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(this.p, 3).setUsage(THREE.DynamicDrawUsage)); g.setIndex(new THREE.BufferAttribute(idx, 1));
     this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x050506, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
     this.mesh.frustumCulled = false; this.mesh.layers.set(1); this.mesh.renderOrder = 2; scene.add(this.mesh);

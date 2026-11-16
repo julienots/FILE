@@ -732,7 +732,7 @@ export function buildWorld(def, renderer, q) {
         spots.forEach(([x, z, y, s, a], i) => { d.position.set(x, y - 0.15, z); d.rotation.set(0, a, 0); d.scale.set(s, s, s); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
         group.add(im); disposables.push(geo); return im; };
       place(solid[kind](), kind === 'feuillu' || kind === 'sapin' || kind === 'palmier' ? trunkMat : rockMat);
-      if (canopy[kind]) { const tex = leafTex(kind !== 'feuillu', kind === 'sapin' && th.snowTop); disposables.push(tex); place(canopy[kind](), foliageMat(tex, kind === 'sapin' ? (th.snowTop ? 0xdfe6e8 : 0xd0e0c8) : kind === 'palmier' ? 0xc8e8a0 : 0xffffff)); }
+      if (canopy[kind]) { const tex = leafTex(kind !== 'feuillu', kind === 'sapin' && th.snowTop); disposables.push(tex); place(canopy[kind](), foliageMat(tex, kind === 'sapin' ? (th.snowTop ? 0xdfe6e8 : 0xd0e0c8) : kind === 'palmier' ? 0xc8e8a0 : th.feuille ? new THREE.Color().fromArray(th.feuille) : 0xffffff)); }
       // ombres portées au sol, allongées à l'opposé du soleil
       const sh = new THREE.InstancedMesh(shGeo, shMat, spots.length); sh.layers.set(1); sh.renderOrder = 1;
       const w0 = kind === 'cactus' ? 2.2 : kind === 'rocher' ? 5.5 : kind === 'palmier' ? 6 : 7.5;

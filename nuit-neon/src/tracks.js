@@ -1,4 +1,5 @@
 import { Color } from 'three';
+import { tracer } from './custom.js';
 // Décors de nature (jour). flore : [type, nombre, distance mini au bord, étalement, taille mini, taille maxi]
 const NATURE = {
   prairie: { env: 'nature', sky: [[0.10,0.28,0.72],[0.36,0.60,0.95],[0.80,0.88,0.96]], fog: 0xbcd4ee, dens: 0.0016, a: 0x19a0ff, b: 0xff5a1f, c: 0xffd23f,
@@ -16,6 +17,29 @@ const NATURE = {
     mer: { niveau: -0.35, profond: 0x04202e }, phares: true,
     sun: { dir: [-0.15,0.07,-0.986], col: [1.0,0.56,0.28], road: 2.6 }, sunI: 2.6, ambI: 1.25, wet: 0.5, ombre: 0.45,
     flore: [['palmier', 260, 1.5, 12, 0.9, 1.35], ['rocher', 120, 4, 90, 0.6, 2.2]] },
+  // forêt en automne : feuillages roux et dorés, lumière basse
+  automne: { env: 'nature', sky: [[0.16, 0.26, 0.52], [0.62, 0.62, 0.72], [0.98, 0.80, 0.56]], fog: 0xdcc0a0, dens: 0.0022, a: 0xff8a1f, b: 0xffffff, c: 0xffd23f, cloud: 0.85,
+    ground: 0x6f6030, sol: { kind: 0, c: [0x4a4020, 0x8a6a2a, 0xc98a3a, 0x5a4530] }, relief: 48, hill: 0x8a5a2a, hillH: 160, feuille: [2.7, 0.95, 0.3], sun: { dir: [-0.5, 0.3, -0.81], col: [1.0, 0.72, 0.42], road: 2.3 }, sunI: 2.6, ambI: 1.35, wet: 0.45,
+    flore: [['feuillu', 640, 8, 220, 0.9, 2.0], ['rocher', 50, 9, 180, 0.4, 1.1]], grass: { c0: 0x5a4a1c, c1: 0xb88a30, c2: 0xe0a040, h: 1.0 } },
+  // dunes : sable à perte de vue, soleil au zénith, palmiers et cactus
+  dunes: { env: 'nature', sky: [[0.08, 0.30, 0.78], [0.45, 0.68, 0.95], [0.98, 0.90, 0.72]], fog: 0xead8b0, dens: 0.0015, a: 0xff8a1f, b: 0xffffff, c: 0x19e6ff, cloud: 0.95,
+    ground: 0xd9b36a, sol: { kind: 1, c: [0xd2a862, 0xe6c482, 0xf0d49a, 0xb88a4a] }, relief: 46, hill: 0xcaa055, hillH: 95, rock: 0xa8804a, sun: { dir: [0.25, 0.85, -0.46], col: [1.0, 0.95, 0.8], road: 2.4 }, sunI: 3.2, ambI: 1.6, wet: 0.05,
+    flore: [['palmier', 150, 4, 60, 0.9, 1.4], ['cactus', 260, 5, 180, 0.7, 1.6], ['rocher', 90, 8, 200, 0.5, 1.8]] },
+  // volcan : basalte noir fendu de lave, ciel de cendre rougeoyant, braises dans l'air
+  volcan: { env: 'nature', sky: [[0.02, 0.01, 0.01], [0.26, 0.06, 0.03], [0.95, 0.32, 0.08]], fog: 0x3a1408, dens: 0.0034, a: 0xff5a10, b: 0xffd23f, c: 0xff2a2a, cloud: 0.2,
+    ground: 0x1a1412, sol: { kind: 1, c: [0x14100e, 0x2a1c16, 0xff5a10, 0x0a0808] }, relief: 95, hill: 0x1c0f0c, hillH: 420, rock: 0x2a2220, sun: { dir: [0.1, 0.18, -0.98], col: [1.0, 0.36, 0.1], road: 2.8 }, sunI: 1.9, ambI: 0.85, wet: 0.12,
+    phares: true, nuit: true, braises: true, ombre: 0.3, flore: [['rocher', 420, 5, 200, 0.7, 3.4]] },
+  // toundra de nuit sous l'aurore boréale
+  aurore: { env: 'nature', sky: [[0.0, 0.02, 0.06], [0.02, 0.22, 0.2], [0.12, 0.55, 0.36]], fog: 0x0a2420, dens: 0.0026, a: 0x20ffa0, b: 0x19d0ff, c: 0xb6ff2b, cloud: 0.22,
+    ground: 0xcfe0e6, sol: { kind: 2, c: [0xb8ccd6, 0xe6f2f6, 0xd4e6ee, 0x9ab0bc] }, relief: 55, ombre: 0.3, hill: 0xa8c4cc, hillH: 300, rock: 0x6a7480, snowTop: true, sun: { dir: [-0.3, 0.5, -0.81], col: [0.5, 0.95, 0.8], road: 1.2 }, sunI: 0.95, ambI: 0.7, wet: 0.8,
+    rain: 'neige', phares: true, nuit: true, flare: 0.3, flore: [['sapin', 560, 5, 220, 0.8, 1.8], ['rocher', 70, 8, 200, 0.6, 1.6]] },
+};
+// ambiances de ville spéciales
+const VILLE = {
+  orbitale: { sky: [[0.0, 0.0, 0.0], [0.0, 0.0, 0.02], [0.03, 0.05, 0.14]], fog: 0x02030a, dens: 0.0015, a: 0x7fd8ff, b: 0xffffff, c: 0x8a5cff, lamp: 0xeaf4ff, palms: false, rain: false, wet: 0.9,
+    win: [['#bfe4ff', '#ffffff', '#80c0ff'], ['#b48cff', '#e0d0ff', '#ffffff'], ['#50a0ff', '#d0e8ff', '#ffffff'], ['#ffffff', '#9fd0ff', '#c8a8ff']] },
+  megapole: { sky: [[0.02, 0.0, 0.05], [0.18, 0.02, 0.30], [0.75, 0.9, 0.1]], fog: 0x1c0a34, dens: 0.0022, a: 0xb6ff2b, b: 0xff2bd0, c: 0x19e6ff, lamp: 0xf0ffd0, palms: false, rain: true,
+    win: [['#c8ff60', '#f0ffc0', '#60ffa0'], ['#ff4fd8', '#ff9be8', '#ffd0f0'], ['#39d7ff', '#bfe9ff', '#ffffff'], ['#ffe9a0', '#c8ff60', '#ff5ad0']] },
 };
 
 // Les circuits. Points de contrôle en mètres (x, z), boucle fermée, départ au premier point.
@@ -57,6 +81,16 @@ export const TRACKS = [
   { id: 'neige', nom: 'Col Blanc', desc: 'Montagne enneigée',
     pts: [[0,0],[0,-240],[80,-330],[50,-440],[-60,-470],[-150,-400],[-140,-290],[-220,-200],[-200,-80],[-130,20],[-70,90],[-5,70]],
     theme: NATURE.neige },
+  // ---------- nouveaux circuits (tracés tirés d'une graine, comme ceux de l'atelier) ----------
+  { id: 'autodrome', nom: 'Autodrome du Lac', desc: 'Grand circuit rapide', echelle: 1, half: 14, pts: tracer({ graine: 4711, virages: 13, taille: 430, chaos: 55, largeur: 28 }), theme: NATURE.prairie },
+  { id: 'automne', nom: "Forêt d'Automne", desc: 'Sous-bois roux et dorés', echelle: 1, half: 12, pts: tracer({ graine: 9031, virages: 15, taille: 340, chaos: 60, largeur: 24 }), theme: NATURE.automne },
+  { id: 'dunes', nom: "Dunes d'Or", desc: 'Désert, grandes courbes', echelle: 1, half: 17, pts: tracer({ graine: 1207, virages: 9, taille: 470, chaos: 40, largeur: 34 }), theme: NATURE.dunes },
+  { id: 'volcan', nom: 'Volcan Noir', desc: 'Lave, cendre et braises', echelle: 1, half: 13, pts: tracer({ graine: 6660, virages: 14, taille: 330, chaos: 70, largeur: 26 }), theme: NATURE.volcan },
+  { id: 'aurore', nom: 'Aurore Boréale', desc: 'Toundra de nuit sous la neige', echelle: 1, half: 14, pts: tracer({ graine: 3158, virages: 11, taille: 380, chaos: 50, largeur: 28 }), theme: NATURE.aurore },
+  { id: 'orbitale', nom: 'Station Orbitale', desc: 'Spécial · gravité lunaire, sauts géants', echelle: 1, half: 18, pts: tracer({ graine: 2099, virages: 10, taille: 360, chaos: 45, largeur: 36 }), theme: VILLE.orbitale,
+    regles: { vitesse: 1.15, adherence: 1, gravite: 0.3, saut: 2.4, boost: 1.6 }, contenu: { obstacles: 10, tremplins: 14, turbos: 10, trafic: 0 } },
+  { id: 'megapole', nom: 'Mégapole 2099', desc: 'Spécial · tout va 60 % plus vite', echelle: 1, half: 20, pts: tracer({ graine: 7777, virages: 8, taille: 520, chaos: 35, largeur: 40 }), theme: VILLE.megapole,
+    regles: { vitesse: 1.6, adherence: 1.2, gravite: 1, saut: 1, boost: 1.5 }, contenu: { obstacles: 14, tremplins: 4, turbos: 16, trafic: 0 } },
 ];
 
 // Balade libre : une longue route de campagne à deux voies, sans barrières

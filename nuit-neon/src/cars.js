@@ -456,7 +456,7 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
   v.pitch += (THREE.MathUtils.clamp(-lonAcc * 0.0022, -0.035, 0.03) - v.pitch) * k;
   v.chassis.rotation.z = v.roll;
   v.chassis.rotation.x = v.pitch;
-  v.chassis.position.y = Math.sin(time * 31 + v.wheelAngle) * 0.004 * Math.min(1, Math.abs(speed) / 30);
+  v.chassis.position.y = v.hover ? v.hover + Math.sin(time * 2.3 + v.len) * 0.05 : Math.sin(time * 31 + v.wheelAngle) * 0.004 * Math.min(1, Math.abs(speed) / 30);   // une voiture volante flotte et ondule
   if (v.mist) { const a = THREE.MathUtils.clamp((Math.abs(speed) - 10) / 45, 0, 1) * (v.wet ?? 1); v.mist.material.opacity = a * (0.16 + Math.random() * 0.1); const s = 2.6 + a * 2.2 + Math.random() * 0.8; v.mist.scale.set(s, s * 0.42, 1); v.mist.position.z = v.len + 1.2 + a * 1.4; }
   const b = braking ? 2.6 : 1.1;
   for (const m of v.tailMats) m.color.setRGB(b, 0.02 * b, 0.01 * b);

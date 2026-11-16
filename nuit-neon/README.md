@@ -4,17 +4,26 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Modes de jeu
 
-- **Course** : 9 circuits (5 en ville de nuit, 4 en pleine nature de jour) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
+- **Course** : 16 circuits (7 en ville, 9 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
 - **Contre-la-montre** : seul en piste, contre son record.
 - **Élimination** : toutes les 20 secondes, le dernier est éliminé.
-- **Course à bonus** : des caisses sur la piste donnent l'un des 15 pouvoirs (voir plus bas).
+- **Course à bonus** : des caisses sur la piste donnent l'un des 21 pouvoirs (voir plus bas). Le pictogramme de l'objet tenu s'affiche à l'écran et flotte au-dessus de chaque voiture qui en porte un.
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
 - **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
 - **Atelier** : trois circuits à créer soi-même, entièrement réglés par des nombres.
-- **Garage** : 13 voitures et 4 motos à acheter, réglages à améliorer, moteur extrême.
+- **Garage** : 17 voitures (dont 2 volantes) et 4 motos à acheter, réglages à améliorer, moteur extrême.
 - **Vue** : bouton VUE (ou touche C, ou Y à la manette) pour passer à la première personne.
 
+## Circuits ajoutés
+
+Autodrome du Lac, Forêt d'Automne (feuillages roux), Dunes d'Or, Volcan Noir (basalte, lave, braises dans l'air), Aurore Boréale (toundra de nuit sous la neige), et deux circuits spéciaux : **Station Orbitale** (gravité lunaire, sauts géants, boost renforcé) et **Mégapole 2099** (tout va 60 % plus vite). Leurs tracés sont tirés d'une graine, comme ceux de l'atelier ; les décors sont dans `src/tracks.js`.
+
 ## Conduite
+
+- **Mini-turbo** : pendant un dérapage, les roues crachent des étincelles bleues (0,5 s), orange (1,2 s) puis violettes (2,2 s) ; en relâchant, on reçoit une poussée d'autant plus longue. Chaque pneu laisse trois griffures parallèles au sol.
+- **Aspiration** : collé derrière une voiture, on est tiré par son sillage.
+- **Voitures volantes** (Nébula, Orion) : elles flottent sur des propulseurs ; le bouton VOL (Espace, LB à la manette) les fait monter jusqu'à une dizaine de mètres, au-dessus des obstacles et des autres voitures, puis elles redescendent en planant. Hors Foot et Course à bonus.
+- **Flammes d'échappement** : au boost, deux jets de gaz (cœur bleu, panache orangé, disques de Mach) s'allongent derrière la voiture.
 
 - **Dérapage** : bouton DRIFT (Ctrl ou V au clavier, Espace hors Foot et Bonus, X à la manette). L'arrière chasse, la voiture tourne plus serré en perdant un peu de vitesse, les pneus fument et laissent des traces. Chaque glissade rapporte des points, convertis en crédits ; toucher un mur fait perdre la glissade en cours.
 - **Collisions** : les véhicules échangent leur élan selon leur masse (une moto pèse trois fois moins qu'une voiture), rebondissent, frottent et pivotent selon le point d'impact. Contre un mur, la vitesse perpendiculaire est renvoyée amortie. Le mur s'arrête au ras de la carrosserie (une moto passe plus près qu'une voiture). Tant que la tôle frotte : gerbe d'étincelles et de braises sur toute la longueur du flanc, poussière, flammèches à haute vitesse, rayures qui restent sur le mur, grincement métallique, caméra qui vibre, et un freinage d'autant plus fort qu'on appuie contre le mur. Deux véhicules qui se frottent font aussi des étincelles.
@@ -32,9 +41,11 @@ Au départ de chaque course ou balade, le réglage **Ambiance** change le ciel, 
 
 Les transformations sont dans `ambiance()` de `src/tracks.js`.
 
+Sous la pluie (graphismes moyens ou élevés), des gouttes glissent sur l'objectif et déforment l'image, la pluie éclabousse le sol ; à haute vitesse apparaissent des traits de vitesse et, au boost, l'image est aspirée vers le centre.
+
 ## Pouvoirs (Course à bonus)
 
-Turbo, Nitro (turbo long et plus fort), Missile, Triple missile, Flaque d'huile, Mine, Bouclier, Éclair (foudroie ceux qui sont devant), Aimant (tire vers la voiture de devant), Super saut, Onde de choc (repousse les voisins), Fantôme (traverse voitures et obstacles), Géant (écrase ce qu'il touche), Gel (verglas pour les voitures de devant), Téléporteur (75 m plus loin).
+Bombe (lancée en cloche, souffle tout dans 9 m), Tornade (remonte la piste et soulève les voitures), Traînée de feu, Drone foudroyant (file vers le premier), Rétrécisseur, Jet d'encre (taches sur l'écran), Turbo, Nitro (turbo long et plus fort), Missile, Triple missile, Flaque d'huile, Mine, Bouclier, Éclair (foudroie ceux qui sont devant), Aimant (tire vers la voiture de devant), Super saut, Onde de choc (repousse les voisins), Fantôme (traverse voitures et obstacles), Géant (écrase ce qu'il touche), Gel (verglas pour les voitures de devant), Téléporteur (75 m plus loin).
 
 ## Économie
 
@@ -140,7 +151,7 @@ Pour essayer un modèle sans toucher à la liste : ouvrir le jeu avec `?modele=m
 
 ## Voitures dessinées par le jeu
 
-Sept voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes et le néon sous la caisse. Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
+Onze voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur, Aiglon, Sirocco et les volantes Nébula et Orion) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes, le néon sous la caisse, et un habitacle visible à travers les vitres (sièges, planche de bord, volant). Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
 
 ## Stats
 
