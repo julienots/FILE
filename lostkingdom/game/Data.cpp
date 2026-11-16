@@ -744,13 +744,13 @@ const std::vector<QuestDef>& quests() {
           {{"Réunir les fragments de Couronne", K::Collect, "crown_shard", 6, ""}}, 2500, 500, {"potion_great", "potion_great"}, FA_HIGHCROWNS, 30, "m3");
         Q("m5", "La Couronne-Mère", QuestType::Main, "alaric", "Frère Alaric peut reforger la Couronne-Mère à la forge de l'Ordre.",
           "Donne-moi les fragments. La forge de l'Ordre attend depuis trois siècles.", "La forge chauffe. Rapporte-moi les fragments.",
-          "Voilà. La Couronne-Mère. Mais le sceau ne peut être refermé qu'à Morneval… où veille Sire Corwin, le Chevalier Déchu.",
+          "Voilà. La Couronne-Mère. Elle est à vous, sire. Elle l'a toujours été. (Il sourit, et une vieille cicatrice blanchit sur son menton.)",
           {{"Remettre les six fragments à Frère Alaric", K::Deliver, "crown_shard", 6, "highspire"}}, 800, 200, {"mother_crown", "amulet_crown"}, FA_HIGHCROWNS, 30, "m4");
-        Q("m6", "Le Chevalier Déchu", QuestType::Main, "alaric", "Sire Corwin garde l'entrée de l'Abîme au Château de Morneval.",
+        Q("m6", "Le Chevalier Déchu", QuestType::Main, "alaric", "Alaric a fui vers Morneval avec son secret. Sire Corwin garde l'entrée de l'Abîme : il ne laissera passer que son roi.",
           "Sire Corwin était le champion d'Aldric. Il garde encore le sceau. Il ne te laissera passer que s'il te reconnaît. Ou s'il tombe.",
           "Morneval est au sud, au-delà de Gravemoor.", "",
           {{"Vaincre le Chevalier Déchu à Morneval", K::KillBoss, "fallen_knight", 1, "morneval"}}, 1500, 300, {}, FA_GRAVEMOOR, 20, "m5");
-        Q("m7", "L'Abîme", QuestType::Main, "", "L'Abîme s'ouvre sous Morneval. Malgrath attend. Scellez-le avec la Couronne-Mère.", "", "", "",
+        Q("m7", "L'Abîme", QuestType::Main, "", "L'Abîme s'ouvre sous Morneval. Malgrath et Alaric attendent. Corwin l'a dit : la Couronne reforgée ouvre plus qu'elle ne ferme. À vous de décider de son sort.", "", "", "",
           {{"Descendre dans l'Abîme et vaincre le Seigneur des Abysses", K::KillBoss, "abyss_lord", 1, "abyss"}}, 6000, 1500, {}, -1, 0, "m6");
         // ---- Side quests
         Q("s_wolves", "Le loup de la lisière", QuestType::Side, "tomas", "Tomas veut éloigner les loups qui rôdent près de Brindlemere.",

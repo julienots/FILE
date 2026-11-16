@@ -161,6 +161,8 @@ void Game::endCinematicShots(bool skipped) {
         hintT = 0;
     }
     AGR_LOG("cinematic '%s' %s", id.c_str(), skipped ? "skipped" : "finished");
+    if (replayingChapter) replayingChapter = false;   // watched again from the Objectives tab: no consequences
+    else if (id != "prologue") onChapterEnd(id);
 }
 
 void Game::updateCinematicShots(float dt) {

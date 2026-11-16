@@ -234,6 +234,8 @@ void Game::drawObjectives(Rect c) {
     u.text("Le but", c.x, c.y - 4, 26, GOLDT, F_TITLE);
     int shards = countItem("crown_shard");
     std::string main = "Retrouvez les six fragments de la Couronne-Mère, gardés par les six Gardiens corrompus, et découvrez qui vous êtes vraiment.";
+    if (questsDone.count("m5")) main = "Vous êtes Aldric. La Couronne-Mère est reforgée, et Alaric vous attend sous Morneval. Descendez dans l'Abîme et décidez du sort de la Couronne.";
+    if (storyFlags.count("ending_seal") || storyFlags.count("ending_break")) main = "L'histoire est terminée. Le monde reste ouvert : domaine, défis, courses, chasses et donjons vous attendent.";
     u.text(main, c.x, c.y + 34, 18, PALE, F_BODY, A_LEFT, c.w * 0.46f);
     char b[200];
     snprintf(b, sizeof b, "Fragments : %d / 6", shards);
@@ -242,7 +244,13 @@ void Game::drawObjectives(Rect c) {
     std::string next = "—";
     for (auto& q : questLog) if (!q.done && quests()[q.idx].type == QuestType::Main) { const QuestDef& d = quests()[q.idx]; next = d.title + " : " + (q.step < (int)d.steps.size() ? d.steps[q.step].desc : ""); break; }
     u.text("Prochaine étape : " + next, c.x, c.y + 140, 17, DIM, F_BODY, A_LEFT, c.w * 0.46f);
-    float y = c.y + 200;
+    // 1.12.0 the rest of the left column scrolls: the story chapters, then the side activities
+    Rect LC{c.x, c.y + 186, c.w * 0.47f, c.h - 186};
+    u.pushClip(LC);
+    static float leftH = 600;
+    float so0 = u.scrollArea("objectives_left", LC, leftH);
+    float y = LC.y - so0;
+    y += drawStoryPanel({c.x, y, c.w * 0.46f, 0}) + 14;
     u.text("À faire aussi", c.x, y, 22, GOLDT, F_SERIF); y += 34;
     static const char* ideas[] = {
         "· Fonder et agrandir votre domaine (onglet Domaine).",
@@ -251,6 +259,8 @@ void Game::drawObjectives(Rect c) {
         "· Quêtes des villages, contrats de chasse, donjons et Gardiens.",
         "· Débloquer Kaede et Astra dans la roue des héros."};
     for (const char* s : ideas) { u.text(s, c.x, y, 16, DIM, F_BODY, A_LEFT, c.w * 0.46f); y += u.textHeight(s, 16, F_BODY, c.w * 0.46f) + 6; }
+    leftH = y + so0 - LC.y + 10;
+    u.popClip();
     // challenges
     Rect R{c.x + c.w * 0.5f, c.y - 4, c.w * 0.5f, c.h + 4};
     int done = 0; for (auto& ch : challenges()) if (storyFlags.count("ch_" + ch.id)) done++;

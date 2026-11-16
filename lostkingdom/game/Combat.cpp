@@ -289,7 +289,7 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
             particles.dissolveBurst(c.pos, c.vis.dissolveColor, c.radius * 2.f);
             play("magic_burst");
             saveGame(99);
-            if (b.id == "abyss_lord") { questsDone.insert("m7"); creditsT = 0; fadeTransition([this] { state = GameState::Credits; stateT = 0; creditsT = 0; }); }
+            if (b.id == "abyss_lord") { questsDone.insert("m7"); queueChapter("ending_choice"); }   // 1.12.0 the player chooses the ending
         }
     } else if (c.team == Team::Animal) {
         addItem("meat", 1); if (c.animal == 4) addItem("leather", 1);

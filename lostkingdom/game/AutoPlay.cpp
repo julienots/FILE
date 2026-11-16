@@ -124,6 +124,65 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "report"});
         return s;
     }
+    if (name == "story") {
+        // 1.12.0 the story chapters: each turning point of the main quest plays its cinematic (shots fast-forwarded,
+        // one picture of the title card), Alaric vanishes after his reveal, the ending choice leads to an epilogue
+        static int res[7]; static int lastIdx; static bool titleShot; static std::string cur;
+        auto complete = [](Game& g, const char* q) { g.startQuest(q); if (QuestState* st = g.questState(q)) if (!st->done) g.completeQuest(*st); };
+        auto chapter = [&](const char* id, std::function<void(Game&)> trigger, const char* pic) {
+            s.push_back({0.2f, [id, trigger](Game& g) { cur = id; lastIdx = -1; titleShot = false; trigger(g); }, idle, "trigger"});
+            s.push_back({15.f, none, idle, "wait start"});
+            s.back().until = [id](Game& g) { return g.cine.active && g.cine.id == id; };
+            s.push_back({240.f, none, [pic](Game& g, float) {
+                if (!g.cine.active) return;
+                if (g.cine.index != lastIdx) { lastIdx = g.cine.index; AGR_LOG("STORY %s shot %d/%zu: %s", cur.c_str(), g.cine.index + 1, g.cine.shots.size(), g.cine.shots[g.cine.index].text.substr(0, 60).c_str()); }
+                bool last = g.cine.index + 1 >= (int)g.cine.shots.size();
+                if (g.cine.waitLoad > 0) return;
+                static int allShot = -1;
+                if (getenv("LK_STORY_ALL") && g.cine.t > 1.3f && allShot != g.cine.index * 100 + (int)cur.size()) {   // every shot (review)
+                    allShot = g.cine.index * 100 + (int)cur.size();
+                    g.requestScreenshot("build/shots/Z_" + cur + "_" + std::to_string(g.cine.index) + ".png");
+                }
+                if (!last && g.cine.t > 1.5f) g.cine.t = g.cine.shots[g.cine.index].dur;     // fast-forward
+                if (last && !titleShot && g.cine.t > 3.2f) { titleShot = true; g.requestScreenshot(std::string("build/shots/") + pic + ".png"); }
+                if (last && titleShot && g.cine.t > 3.5f) g.cine.t = g.cine.shots[g.cine.index].dur;
+            }, "play"});
+            s.back().until = [](Game& g) { return !g.cine.active; };
+        };
+        s.push_back({2.f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.storyFlags.insert("prologue_seen"); g.toastHint.clear(); g.timeOfDay = 10.f;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 6, b->pos.y + 10, 0.4f);
+        }, idle, "setup"});
+        chapter("ch_echo", [complete](Game& g) { complete(g, "m1"); complete(g, "m2"); }, "Y0_ch1_echo");
+        s.push_back({0.1f, [](Game& g) { res[0] = g.storyFlags.count("seen_ch_echo") > 0; }, idle, "check"});
+        chapter("ch_guardians", [complete](Game& g) { complete(g, "m3"); }, "Y1_ch2_guardians");
+        s.push_back({0.1f, [](Game& g) { res[1] = g.storyFlags.count("seen_ch_guardians") > 0 && g.questActive("m4"); }, idle, "check"});
+        chapter("ch_scar", [complete](Game& g) { complete(g, "m4"); complete(g, "m5"); }, "Y2_ch3_scar");
+        s.push_back({0.1f, [](Game& g) { res[2] = g.storyFlags.count("alaric_gone") > 0 && g.questActive("m6"); }, idle, "check"});
+        chapter("ch_corwin", [complete](Game& g) { complete(g, "m6"); }, "Y3_ch4_corwin");
+        s.push_back({0.1f, [](Game& g) { res[3] = g.storyFlags.count("seen_ch_corwin") > 0 && g.questActive("m7"); }, idle, "check"});
+        // the story panel in the Objectives tab
+        s.push_back({1.2f, [](Game& g) { g.menu = Menu::Objectives; }, idle, "objectives"});
+        s.push_back({0.05f, shot("Y4_objectives_story"), idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::None; }, idle, "close"});
+        // the ending: Malgrath falls (as in killCharacter), the choice appears, the player breaks the Crown
+        s.push_back({0.2f, [](Game& g) { g.questsDone.insert("m7"); g.queueChapter("ending_choice"); }, idle, "abyss lord falls"});
+        s.push_back({8.f, none, idle, "wait choice"});
+        s.back().until = [](Game& g) { return g.endingChoice && g.endingChoiceT > 1.8f; };
+        s.push_back({0.05f, [](Game& g) { res[4] = g.endingChoice; g.requestScreenshot("build/shots/Y5_ending_choice.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { Rect r = g.endingChoiceRect(1); tapAt(g, vec2(r.x + r.w / 2, r.y + r.h / 2), 301); }, idle, "tap: break the Crown"});
+        chapter("ending_break", [](Game&) {}, "Y6_epilogue_break");
+        s.push_back({3.f, none, idle, "fade to credits"});
+        s.push_back({0.1f, [](Game& g) {
+            res[5] = g.storyFlags.count("ending_break") > 0;
+            res[6] = g.state == GameState::Credits;
+            AGR_LOG("STORY TEST: echo=%d guardians+m4=%d scar+alaricGone+m6=%d corwin+m7=%d choice=%d endingBreak=%d credits=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
+            bool ok = true; for (int r : res) ok = ok && r;
+            AGR_LOG(ok ? "STORY TEST PASSED" : "STORY TEST FAILED");
+        }, idle, "report"});
+        return s;
+    }
     if (name == "ssr") {
         // 1.12.0 water reflections: the low bridge by the sea and a lake shore, with and without SSR
         static vec2 spots[2]; static float yaws[2];

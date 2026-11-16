@@ -230,6 +230,11 @@ void Game::completeQuest(QuestState& s) {
     play("quest");
     haptic(60, 150);
     if (q.id == "m6") { startQuest("m7"); notify("L'Abîme s'est ouvert au sud de Morneval.", vec3(0.8f, 0.5f, 1.f), "i_waypoint"); }
+    // 1.12.0 story chapters at the turning points of the main quest
+    if (q.id == "m2") queueChapter("ch_echo");
+    if (q.id == "m3") queueChapter("ch_guardians");
+    if (q.id == "m5") queueChapter("ch_scar");
+    if (q.id == "m6") queueChapter("ch_corwin");
     // pick the next active quest to track
     trackedQuest = -1;
     for (int i = (int)questLog.size() - 1; i >= 0; i--) if (!questLog[i].done) { trackedQuest = i; if (quests()[questLog[i].idx].type == QuestType::Main) break; }

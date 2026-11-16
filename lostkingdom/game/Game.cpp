@@ -249,11 +249,11 @@ void Game::frame(float dtRaw) {
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
         if (!paused) updatePlaying(sdt);
         PROF(9, renderWorld(sdt));
-        PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); });
+        PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); drawEndingChoice(dt); });
         break;
     }
     }
-    drawNotifications(dt);
+    if (!endingChoice) drawNotifications(dt);   // 1.12.0 the ending choice stands alone on screen
     // screen transition fade (dungeon entrances)
     if (transitionT >= 0) {
         transitionT += dt;
@@ -289,6 +289,7 @@ void Game::updatePlaying(float dt) {
     updateBase(dt);
     updateRaces(dt);
     updateChallenges(dt);
+    updateStory(dt);
     // 1.11.0 vehicles: parked at Brindlemere on a new world; their interaction entities survive registry resets
     if (vehicles.empty()) initVehicles();
     if (vehicleEnts.size() != vehicles.size() || (!vehicleEnts.empty() && !reg.get<VehicleRef>(vehicleEnts[0]))) spawnVehicleEntities();

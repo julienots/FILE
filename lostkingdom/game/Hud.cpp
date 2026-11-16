@@ -25,7 +25,7 @@ bool Game::ctlVisible(int id) const {
 
 void Game::updateTouchControls() {
     if (state != GameState::Playing || layoutEdit) return;
-    bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0 || cine.active;
+    bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0 || cine.active || endingChoice;
     if (modal) { joyFinger = -1; camFinger = -1; return; }
     UI& u = ui;
     // ---- buttons
@@ -292,6 +292,7 @@ void Game::drawMinimap(Rect r) {
 void Game::drawHud(float dt) {
     if (player == NullEntity) return;
     if (cine.active) { drawCinematicShots(); return; }   // no HUD during story cinematics
+    if (endingChoice) return;                              // 1.12.0 nor under the ending choice
     drawBuildHud();
     drawRaceHud();
     UI& u = ui;

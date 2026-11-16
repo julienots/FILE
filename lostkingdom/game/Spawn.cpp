@@ -502,7 +502,7 @@ void Game::updateSpawning(float dt) {
             villageNpcsSpawned.push_back(i);
             const auto& N = npcs();
             for (int n = 0; n < (int)N.size(); n++)
-                if (N[n].home == P.id) {
+                if (N[n].home == P.id && !(N[n].id == "alaric" && storyFlags.count("alaric_gone"))) {
                     vec3 sp{P.pos.x + N[n].offset.x, 0, P.pos.y + N[n].offset.y};
                     sp.y = groundAt(sp.x, sp.z);
                     spawnNpc(n, sp, i);

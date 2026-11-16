@@ -321,6 +321,8 @@ struct CineShot {
     float shake = 0;
     bool heroDown = false, heroRise = false, wristGlow = false;
 };
+struct ChapterDef { std::string id, title, summary; };   // 1.12.0 story chapters (Story.cpp)
+const std::vector<ChapterDef>& chapters();
 struct CinematicState {
     bool active = false;
     std::string id;
@@ -531,6 +533,18 @@ public:
     int challengeProgress(const ChallengeDef& c) const;
     void updateChallenges(float dt);
     void drawObjectives(Rect c);
+    // 1.12.0 story chapters, Alaric's reveal, the ending choice (Story.cpp)
+    std::string pendingChapter; float pendingChapterT = 0;
+    bool endingChoice = false, replayingChapter = false; float endingChoiceT = 0;
+    std::vector<CineShot> chapterShots(const std::string& id);
+    void queueChapter(const std::string& id);
+    void startChapter(const std::string& id);
+    void onChapterEnd(const std::string& id);
+    void chooseEnding(bool seal);
+    void updateStory(float dt);
+    Rect endingChoiceRect(int i) const;
+    void drawEndingChoice(float dt);
+    float drawStoryPanel(Rect r);
     // 1.9.2 domain: found it, build, recruit, raise livestock
     PlayerBase base;
     std::vector<Entity> soldierEnts, livestockEnts;
