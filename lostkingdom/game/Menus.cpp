@@ -298,7 +298,7 @@ void Game::drawCredits(float dt) {
     static const char* lines[] = {
         "#LOST KINGDOM", "", "A world waiting to be discovered.", "", "", "@Une production", "#SUPERESSENCE STUDIO", "", "",
         "@Direction artistique & monde", "Superessence Studio", "", "@Moteur", "AGR Engine — rendu OpenGL ES 3, animation, audio, ECS", "",
-        "@Programmation", "Systèmes de jeu, IA, combat, quêtes, streaming du monde", "", "@Musique & sons", "Compositions et effets synthétisés pour Lost Kingdom", "",
+        "@Programmation", "Systèmes de jeu, IA, combat, quêtes, streaming du monde", "", "@Musique", "Bande originale composée pour Lost Kingdom", "Instruments : FluidR3 GM SoundFont, Frank Wen — licence MIT", "", "@Sons", "Ambiances et effets synthétisés pour Lost Kingdom", "",
         "@Polices", "Cinzel, Cinzel Decorative, Alegreya Sans — SIL Open Font License", "", "@Bibliothèques", "stb_image, stb_vorbis, stb_image_write — domaine public (Sean Barrett)", "", "",
         "@Merci d'avoir joué", "Le royaume se souviendra de l'Errant.", "", "", "#LOST KINGDOM — A WORLD WITHOUT BOUNDARIES", "", "Created by SUPERESSENCE STUDIO",
     };

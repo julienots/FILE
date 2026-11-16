@@ -482,7 +482,9 @@ SFX = ["swing", "swing_heavy", "hit_flesh", "hit_metal", "hit_wood", "block", "p
 AMB = ["amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_swamp", "amb_cave", "amb_river", "amb_village"]
 
 def main():
-    only = sys.argv[1:] if len(sys.argv) > 1 else ["sfx", "amb", "music"]
+    # 1.13.0: the music is now composed by tools/compose_music.py (sampled orchestra); "music" here is the old
+    # synthesized soundtrack, only written when asked for explicitly
+    only = sys.argv[1:] if len(sys.argv) > 1 else ["sfx", "amb"]
     # "sfx:name1,name2" regenerates only those effects (the others keep their committed files)
     pick = [a[4:].split(",") for a in only if a.startswith("sfx:")]
     if pick:
