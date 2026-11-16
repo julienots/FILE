@@ -105,8 +105,10 @@ void Game::updateDriving(float dt, vec3 want, float mag) {
     if (mag > 0.1f) {
         vec3 w = normalize(vec3(want.x, 0, want.z));
         float ang = wrapAngle(std::atan2(w.x, w.z) - v.yaw);
-        bool reverse = std::fabs(ang) > 2.3f && v.speed < 3.f;
+        bool back = std::fabs(ang) > 2.3f;
+        bool reverse = back && v.speed < 3.f;
         if (reverse) { target = -mag * d.maxSpeed * 0.3f; ang = wrapAngle(ang + PI); }
+        else if (back) { target = 0; ang = 0; }   // 1.11.1 stick pulled back while moving forward: brake (then reverse)
         else target = mag * d.maxSpeed * (std::fabs(ang) > 1.2f ? 0.45f : 1.f);   // slow down in a hairpin
         float grip = clampf(std::fabs(v.speed) / 5.f, 0.f, 1.f);
         yawRate = clampf(ang * 3.f, -d.turn, d.turn) * grip * (v.speed < 0 ? -1.f : 1.f);

@@ -172,6 +172,13 @@ enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, Dungeo
 struct VehicleRef { int idx; };
 struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; };
 const std::vector<VehicleDef>& vehicleDefs();
+// 1.11.1 goals (Goals.cpp): races on the roads, challenges
+struct RaceDef { std::string id, name, from, to; };
+const std::vector<RaceDef>& raceDefs();
+struct RaceTrack { int def = 0; vec2 start{0, 0}, startDir{0, 1}; std::vector<vec2> cps; float length = 0, gold = 0, silver = 0, bronze = 0; };
+struct RaceState { int active = -1, next = 0; float countdown = 0, time = 0, hold = 0; };
+struct ChallengeDef { std::string id, name, desc; int goal, gold; };
+const std::vector<ChallengeDef>& challenges();
 struct VehicleState {
     int def = 0;
     vec3 pos;
@@ -320,7 +327,7 @@ struct CinematicState {
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives };
 
 class Game : public App {
 public:
@@ -502,6 +509,19 @@ public:
     void exitVehicle();
     void updateDriving(float dt, vec3 want, float mag);
     void renderVehicles();
+    // 1.11.1 goals
+    std::vector<RaceTrack> races;
+    RaceState race;
+    std::map<std::string, float> raceBest;
+    std::string raceResult;
+    float raceResultT = 0, challengeT = 0;
+    void buildRaces();
+    void updateRaces(float dt);
+    void raceFx(float dt, std::vector<std::pair<float, PointLight>>& lights);
+    void drawRaceHud();
+    int challengeProgress(const ChallengeDef& c) const;
+    void updateChallenges(float dt);
+    void drawObjectives(Rect c);
     // 1.9.2 domain: found it, build, recruit, raise livestock
     PlayerBase base;
     std::vector<Entity> soldierEnts, livestockEnts;

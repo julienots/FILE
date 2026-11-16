@@ -330,6 +330,7 @@ void Game::renderWorld(float dt) {
     });
     renderBuildGhost();   // 1.9.2 domain: preview of the building being placed
     renderVehicles();     // 1.11.0 car and motorbike
+    if (state == GameState::Playing) raceFx(dt, lights);   // 1.11.1 race start zones and checkpoints
     // Astra's aura lights her surroundings
     if (player != NullEntity && heroAura > 0.05f) {
         PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;

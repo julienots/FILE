@@ -9,7 +9,7 @@
 
 namespace lk {
 
-struct Step { float dur; std::function<void(Game&)> start; std::function<void(Game&, float)> tick; const char* name; };
+struct Step { float dur; std::function<void(Game&)> start; std::function<void(Game&, float)> tick; const char* name; std::function<bool(Game&)> until = nullptr; };   // until: ends the step early
 
 Rect ctlRect(const Game& g, int id);
 
@@ -122,6 +122,67 @@ static std::vector<Step> scenario(const std::string& name) {
             bool ok = true; for (int r : res) ok = ok && r;
             AGR_LOG("HEROES TEST %s", ok ? "PASSED" : "FAILED");
         }, idle, "report"});
+        return s;
+    }
+    if (name == "race") {
+        // 1.11.1: a full race with the car on the Millbrook road (driven by a simple autopilot towards each
+        // checkpoint), plus the challenges panel
+        static int res[5]; static float t0;
+        s.push_back({2.5f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.timeOfDay = 10.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+            g.vehicles.clear(); g.races.clear();
+        }, idle, "init"});
+        s.push_back({0.5f, [](Game& g) {
+            g.buildRaces();
+            for (auto& t : g.races) AGR_LOG("RACE %s: %zu checkpoints, %.0f m, gold %.0f s, silver %.0f s, bronze %.0f s", raceDefs()[t.def].name.c_str(), t.cps.size(), t.length, t.gold, t.silver, t.bronze);
+            res[0] = g.races.size() == 3 && !g.races[0].cps.empty() && !g.races[1].cps.empty() && !g.races[2].cps.empty();
+            // put the car on the start line of the first race and get in
+            VehicleState& v = g.vehicles[0];
+            v.pos = vec3(g.races[0].start.x, g.groundAt(g.races[0].start.x, g.races[0].start.y), g.races[0].start.y);
+            v.yaw = std::atan2(g.races[0].startDir.x, g.races[0].startDir.y);
+            teleport(g, v.pos.x + 3, v.pos.z, 0.f);
+            g.enterVehicle(0);
+        }, idle, "on the line"});
+        s.push_back({2.f, none, idle, "hold still -> countdown"});
+        s.push_back({0.05f, [](Game& g) { res[1] = g.race.active == 0 && g.race.countdown > 0; AGR_LOG("RACE started %d, countdown %.1f", g.race.active, g.race.countdown); g.requestScreenshot("build/shots/T0_race_start.png"); }, idle, "countdown"});
+        s.push_back({3.2f, none, idle, "3, 2, 1"});
+        s.push_back({0.05f, [](Game& g) { t0 = g.race.time; }, idle, "go"});
+        // autopilot: stick towards the next checkpoint (camera behind the car)
+        s.push_back({120.f, none, [](Game& g, float t) {
+            if (g.race.active < 0) return;
+            const RaceTrack& tr = g.races[g.race.active];
+            if (g.race.next >= (int)tr.cps.size()) return;
+            VehicleState& v = g.vehicles[g.driving];
+            vec2 to = tr.cps[g.race.next] - v.pos.xz();
+            g.camYaw = v.yaw + PI;
+            // stick in camera space: forward = (-sin camYaw, -cos camYaw) = car forward; right = (cos, -sin)
+            vec2 fw(std::sin(v.yaw), std::cos(v.yaw)), rt(-std::cos(v.yaw), std::sin(v.yaw));
+            vec2 d = normalize(to);
+            g.input.move = vec2(dot(d, rt), dot(d, fw));
+            if (length(g.input.move) > 0) g.input.move = normalize(g.input.move);
+            static float lastShot = 0; if (t > 6.f && lastShot == 0) { lastShot = t; g.requestScreenshot("build/shots/T1_race_drive.png"); }
+            static float lastLog = -1; if (std::floor(t) != std::floor(lastLog)) AGR_LOG("RACE t=%.0f next %d dist %.1f speed %.1f yaw %.2f stick (%.2f, %.2f)", t, g.race.next, length(to), v.speed, v.yaw, g.input.move.x, g.input.move.y); lastLog = t;
+        }, "drive"});
+        s.back().until = [](Game& g) { return g.race.active < 0; };
+        s.push_back({0.1f, [](Game& g) {
+            res[2] = g.raceBest.count("r_millbrook") > 0;
+            res[3] = g.storyFlags.count("race_r_millbrook_1") > 0;   // at least bronze with the autopilot
+            AGR_LOG("RACE result: %s (best %.1f s)", g.raceResult.c_str(), g.raceBest.count("r_millbrook") ? g.raceBest["r_millbrook"] : -1.f);
+            g.requestScreenshot("build/shots/T2_race_end.png");
+        }, idle, "finish"});
+        s.push_back({1.5f, [](Game& g) { g.exitVehicle(); }, idle, "challenges tick (game running)"});
+        s.push_back({0.5f, [](Game& g) {
+            res[4] = g.storyFlags.count("ch_c_race") > 0;
+            AGR_LOG("RACE challenge 'Pilote' done %d", res[4]);
+            g.menu = Menu::Objectives;
+        }, idle, "objectives"});
+        s.push_back({0.1f, [](Game& g) {
+            g.requestScreenshot("build/shots/T3_objectives.png");
+            AGR_LOG("RACE TEST: tracks=%d start=%d finish=%d medal=%d challenge=%d", res[0], res[1], res[2], res[3], res[4]);
+            bool all = true; for (int r : res) all = all && r;
+            AGR_LOG(all ? "RACE TEST PASSED" : "RACE TEST FAILED");
+        }, idle, "check"});
         return s;
     }
     if (name == "river") {
@@ -1285,7 +1346,7 @@ void Game::updateAutoplay(float dt) {
     stepT += dt;
     Step& s = steps[autoplayStep];
     if (s.tick) s.tick(*this, stepT);
-    if (stepT >= s.dur) {
+    if (stepT >= s.dur || (s.until && s.until(*this))) {
         autoplayStep++;
         stepT = 0;
         if (autoplayStep < (int)steps.size()) { if (steps[autoplayStep].start) steps[autoplayStep].start(*this); }

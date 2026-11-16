@@ -532,6 +532,7 @@ bool Game::saveGame(int slot) {
     for (auto& f : storyFlags) o << "flag " << f << "\n";
     for (auto& h : unlockedHeroes) o << "heroes " << h << "\n";
     saveBase(o);
+    for (auto& r : raceBest) o << "race " << r.first << " " << r.second << "\n";
     for (size_t i = 0; i < vehicles.size(); i++) o << "vehicle " << i << " " << vehicles[i].pos.x << " " << vehicles[i].pos.y << " " << vehicles[i].pos.z << " " << vehicles[i].yaw << "\n";
     o << "hero " << hero().id << "\n";
     for (auto& t : talkedTo) o << "talk " << t << "\n";
@@ -560,6 +561,7 @@ bool Game::loadGame(int slot) {
     reg.clear();
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
     vehicles.clear(); vehicleEnts.clear(); driving = -1;
+    raceBest.clear(); race = RaceState();
     nightHunters.clear();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
     riding = false;
@@ -603,6 +605,7 @@ bool Game::loadGame(int slot) {
         else if (k == "flag") { std::string s; l >> s; if (!s.empty()) storyFlags.insert(s); }
         else if (k == "heroes") { std::string s; l >> s; if (heroIndex(s) >= 0) unlockedHeroes.insert(s); }
         else if (k.rfind("base_", 0) == 0) loadBaseLine(k, l);
+        else if (k == "race") { std::string id; float t = 0; l >> id >> t; if (t > 0) raceBest[id] = t; }
         else if (k == "vehicle") { size_t i; vec3 p; float y; l >> i >> p.x >> p.y >> p.z >> y; if (vehicles.empty()) initVehicles(); if (i < vehicles.size() && p.x > 0 && p.x < WORLD_SIZE) { vehicles[i].pos = p; vehicles[i].yaw = y; } }
         else if (k == "hero") { std::string s; l >> s; int hi = heroIndex(s); activeHero = hi >= 0 ? hi : 0; }
         else if (k == "talk") { std::string s; l >> s; talkedTo.insert(s); }

@@ -237,6 +237,23 @@ void Game::drawMinimap(Rect r) {
         else if (o.npcDef >= 0) u.circle(m, 3.5f, vec4(1.f, 0.85f, 0.4f, 1), 10);
         else if (o.team == Team::Mount) u.sprite("i_mount", {m.x - 9, m.y - 9, 18, 18});
     });
+    // 1.11.1 races: next checkpoint (pinned), start circles while driving
+    if (!dungeon.active && race.active >= 0 && race.next < (int)races[race.active].cps.size()) {
+        vec2 cp = races[race.active].cps[race.next];
+        vec2 m = toMini(vec3(cp.x, 0, cp.y), true, &in);
+        u.circle(m, 9.f + 2.f * std::sin(realTime * 8.f), vec4(0.4f, 0.85f, 1.f, 0.95f), 16);
+    } else if (!dungeon.active && driving >= 0) {
+        for (const RaceTrack& t : races) if (!t.cps.empty()) { vec2 m = toMini(vec3(t.start.x, 0, t.start.y), false, &in); if (in) u.circle(m, 8.f, vec4(0.5f, 1.f, 0.6f, 0.95f), 14); }
+    }
+    // 1.11.1 vehicles: always findable (pinned to the edge of the minimap when far away)
+    if (!dungeon.active)
+        for (int i = 0; i < (int)vehicles.size(); i++) {
+            if (i == driving) continue;
+            vec2 m = toMini(vehicles[i].pos, true, &in);
+            vec4 col = vehicleDefs()[vehicles[i].def].moto ? vec4(0.55f, 0.85f, 1.f, 1) : vec4(0.4f, 0.65f, 1.f, 1);
+            u.circle(m, 11.f, vec4(0.05f, 0.08f, 0.15f, 0.85f), 16);
+            u.sprite("i_mount", {m.x - 9, m.y - 9, 18, 18}, col);
+        }
     bool hasMarker;
     vec3 qm = questMarker(&hasMarker);
     if (hasMarker && !dungeon.active) {
@@ -265,6 +282,7 @@ void Game::drawHud(float dt) {
     if (player == NullEntity) return;
     if (cine.active) { drawCinematicShots(); return; }   // no HUD during story cinematics
     drawBuildHud();
+    drawRaceHud();
     UI& u = ui;
     Character& p = pc();
     float W_ = u.W, H_ = u.H;

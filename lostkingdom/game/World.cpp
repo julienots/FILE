@@ -1146,9 +1146,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             }
     };
     if (lod == 0) {
-        float spacing = 0.8f / std::sqrt(std::max(0.05f, grassDensity));
-        scatter(777, spacing, out.grass, &out.flowers, 0.6f, 1.15f);
-        if (grassDensity >= 0.5f) scatter(778, spacing * 1.1f, out.grassNear, nullptr, 0.8f, 1.45f);
+        // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
+        float spacing = 0.7f / std::sqrt(std::max(0.05f, grassDensity));
+        scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
+        if (grassDensity >= 0.5f) scatter(778, spacing * 1.05f, out.grassNear, nullptr, 1.05f, 1.85f);
     }
     // ---- 1.9.1 tall grass meadows: waist-high clumps, dense inside the patches, shorter at their edges
     if (lod == 0 && grassDensity >= 0.3f) {

@@ -207,6 +207,7 @@ void Game::newGame() {
     reg.clear();
     clearBase(); nightHunters.clear();
     vehicles.clear(); vehicleEnts.clear(); driving = -1;
+    raceBest.clear(); race = RaceState();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
     riding = false;
     level = 1; xp = 0; gold = 60; skillPoints = 1;
@@ -315,10 +316,10 @@ void Game::drawCredits(float dt) {
 }
 
 // ============================================================================================ journal tabs
-static const char* TABS[] = {"Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
-static const Menu TAB_MENU[] = {Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
-static const char* TAB_ICON[] = {"i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
-static constexpr int TAB_COUNT = 12;
+static const char* TABS[] = {"Objectifs", "Inventaire", "Équipement", "Compétences", "Artisanat", "Domaine", "Carte", "Quêtes", "Chroniques", "Bestiaire", "Collection", "Paramètres", "Sauvegardes"};
+static const Menu TAB_MENU[] = {Menu::Objectives, Menu::Inventory, Menu::Equipment, Menu::Skills, Menu::Crafting, Menu::Base, Menu::Map, Menu::Quests, Menu::Chronicles, Menu::Bestiary, Menu::Collection, Menu::Settings, Menu::Saves};
+static const char* TAB_ICON[] = {"i_star", "i_inventory", "i_character", "i_skills", "i_craft", "i_village", "i_map", "i_quest", "i_quest", "i_bestiary", "i_collection", "i_settings", "i_save"};
+static constexpr int TAB_COUNT = 13;
 
 static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
     UI& u = g.ui;
@@ -702,6 +703,20 @@ void Game::drawMenus(float dt) {
         for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
         bool has; vec3 qm = questMarker(&has);
         if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }
+        for (const RaceTrack& t : races) {   // 1.11.1 race starts and routes
+            if (t.cps.empty()) continue;
+            vec2 prev = toMap(t.start);
+            for (vec2 c : t.cps) { vec2 m = toMap(c); u.circle(m, 2.5f, vec4(0.3f, 0.6f, 0.9f, 0.7f), 8); prev = m; }
+            vec2 m = toMap(t.start);
+            u.circle(m, 9.f, vec4(0.35f, 0.85f, 0.45f, 0.95f), 14);
+            u.text(raceDefs()[t.def].name, m.x + 12, m.y - 10, 14, rgba(0x1a4020), F_BOLD);
+        }
+        for (const VehicleState& v : vehicles) {   // 1.11.1 where the car and the motorbike are parked
+            vec2 m = toMap(v.pos.xz());
+            u.circle(m, 15.f, vec4(0.05f, 0.08f, 0.15f, 0.85f), 18);
+            u.sprite("i_mount", {m.x - 12, m.y - 12, 24, 24}, vec4(0.45f, 0.75f, 1.f, 1));
+            u.text(vehicleDefs()[v.def].moto ? "Moto" : "Voiture", m.x, m.y + 16, 16, rgba(0x1a2a50), F_BOLD, A_CENTER);
+        }
         vec2 pm = toMap(pc().pos.xz());
         u.spriteRot("i_player_arrow", pm, vec2(30, 30), minimapArrowAngle(pc().yaw, 0.f), vec4(1, 1, 1, 1));
         u.popClip();
@@ -862,6 +877,7 @@ void Game::drawMenus(float dt) {
     }
     // ---------------------------------------------------------------- chronicles (lore)
     case Menu::Base: drawBaseMenu(c); break;
+    case Menu::Objectives: drawObjectives(c); break;
     case Menu::Chronicles: {
         Rect list{c.x, c.y + 40, c.w * 0.38f, c.h - 40};
         const auto& L = lore();
