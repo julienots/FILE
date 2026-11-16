@@ -210,6 +210,7 @@ private:
     std::vector<std::vector<int>> chunkPois;
     std::vector<std::vector<int>> chunkRivers;
     void indexPlan();
+    void resolvePlacement();   // 1.12.0 buildings off the roads, no two buildings in each other
 };
 
 // World helpers

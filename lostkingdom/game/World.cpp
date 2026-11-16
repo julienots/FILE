@@ -399,6 +399,80 @@ void World::buildPlan() {
                     }
                 }
     indexPlan();
+    resolvePlacement();
+    indexPlan();
+}
+
+// 1.12.0 placement pass: the village layouts are drawn before the roads, so a house could stand in the middle of
+// the road through the village, a lantern on the cobbles, two market stalls in each other. Each building is
+// pushed sideways off the road (down the slope of the road influence) and away from its neighbours; what cannot
+// find room within a few metres is removed (only small furniture: lanterns, stalls, wells, banners).
+void World::resolvePlacement() {
+    auto movable = [](int k) {
+        return k != S_BRIDGE && k != S_FIELD && k != S_PEN && k != S_DOCK && k != S_CASTLE_WALL && k != S_GATE && k != S_PALISADE &&
+               k != S_CAVE && k != S_MINE && k != S_WAYSTONE && k != S_RUIN_WALL && k != S_KEEP && k != S_PORTAL && k != S_FENCE;
+    };
+    auto small = [](int k) { return k == S_LANTERN || k == S_STALL || k == S_WELL || k == S_BANNER || k == S_CAMPFIRE || k == S_STATUE || k == S_OBELISK || k == S_ALTAR; };
+    auto inside = [](const Structure& s, vec2 p, float m) {
+        vec2 fp = structureFootprint(s.kind) * s.scale;
+        vec2 l = rotate(p - s.pos, s.rot);
+        return std::fabs(l.x) < fp.x + m && std::fabs(l.y) < fp.y + m;
+    };
+    auto roadOn = [&](const Structure& s) {   // worst road influence over the footprint
+        vec2 fp = structureFootprint(s.kind) * s.scale;
+        float worst = 0;
+        for (int i = -1; i <= 1; i++)
+            for (int j = -1; j <= 1; j++) worst = std::max(worst, roadInfluence(s.pos.x + rotate(vec2(i * fp.x, j * fp.y) * 0.9f, -s.rot).x, s.pos.y + rotate(vec2(i * fp.x, j * fp.y) * 0.9f, -s.rot).y));
+        return worst;
+    };
+    auto overlapsAny = [&](size_t i) {
+        const Structure& a = structures[i];
+        vec2 fa = structureFootprint(a.kind) * a.scale;
+        for (size_t j = 0; j < structures.size(); j++) {
+            if (j == i) continue;
+            const Structure& b = structures[j];
+            if (!movable(b.kind) && b.kind != S_KEEP) continue;
+            if (b.kind == S_BRIDGE || length(a.pos - b.pos) > 40.f) continue;
+            vec2 fb = structureFootprint(b.kind) * b.scale;
+            if (inside(a, b.pos, 0) || inside(b, a.pos, 0)) return true;
+            for (int cx = -1; cx <= 1; cx += 2)
+                for (int cz = -1; cz <= 1; cz += 2) {
+                    if (inside(a, b.pos + rotate(vec2(cx * fb.x, cz * fb.y) * 0.8f, -b.rot), 0)) return true;
+                    if (inside(b, a.pos + rotate(vec2(cx * fa.x, cz * fa.y) * 0.8f, -a.rot), 0)) return true;
+                }
+        }
+        return false;
+    };
+    std::vector<bool> drop(structures.size(), false);
+    int moved = 0, removed = 0;
+    for (size_t i = 0; i < structures.size(); i++) {
+        Structure& s = structures[i];
+        if (!movable(s.kind) || s.poi < 0) continue;
+        float limit = s.kind == S_LANTERN ? 0.55f : 0.3f;
+        bool onRoad = roadOn(s) > limit, overlap = overlapsAny(i);
+        if (!onRoad && !overlap) continue;
+        vec2 start = s.pos;
+        bool ok = false;
+        // try rings of candidate positions, nearest first
+        for (float r = 1.f; r <= 14.f && !ok; r += 1.f)
+            for (int k = 0; k < 16 && !ok; k++) {
+                float a = k * TAU / 16 + r * 0.37f;
+                s.pos = start + vec2(std::cos(a), std::sin(a)) * r;
+                const Poi& P = pois[s.poi];
+                if (length(s.pos - P.pos) > P.radius * 1.05f + 4.f) continue;   // stay in its village
+                if (waterLevel(s.pos.x, s.pos.y) > -1e8f) continue;
+                ok = roadOn(s) <= limit && !overlapsAny(i);
+            }
+        if (ok) { moved++; continue; }
+        s.pos = start;
+        if (small(s.kind)) { drop[i] = true; removed++; }
+    }
+    if (removed) {
+        std::vector<Structure> keep;
+        for (size_t i = 0; i < structures.size(); i++) if (!drop[i]) keep.push_back(structures[i]);
+        structures.swap(keep);
+    }
+    AGR_LOG("World plan: placement pass moved %d buildings off roads / neighbours, removed %d small ones", moved, removed);
 }
 
 void World::indexPlan() {
@@ -881,6 +955,19 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f;
             if (length(vec2(x, z) - c.c) < rr + margin) return true;
         }
+        // 1.12.0 buildings of the neighbouring chunks too (a house on a chunk border used to get a tree inside)
+        for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int cj = chunkIndex(k.x + dx, k.z + dz);
+                if (cj < 0 || (dx == 0 && dz == 0)) continue;
+                for (int si : chunkStructures[cj]) {
+                    const Structure& s = structures[si];
+                    if (s.kind == S_FIELD || s.kind == S_PEN) continue;
+                    vec2 fp = structureFootprint(s.kind) * s.scale;
+                    vec2 l = rotate(vec2(x, z) - s.pos, s.rot);
+                    if (std::fabs(l.x) < fp.x + margin && std::fabs(l.y) < fp.y + margin) return true;
+                }
+            }
         return false;
     };
     for (int j = 0; j < CN; j++)

@@ -280,6 +280,82 @@ static void testBridges(World& w) {
     CHECK(n >= 1, "%d bridges", n);
 }
 
+// ---- 1.12.0 placement audit: around every place of the map, nothing solid grows inside a building, on a road,
+// in the water, or floats above the ground; buildings do not overlap each other and do not stand on roads
+static bool insideFootprint(const Structure& s, vec2 p, float margin) {
+    vec2 fp = structureFootprint(s.kind) * s.scale;
+    if (fp.x <= 0 || fp.y <= 0) return false;
+    vec2 l = rotate(p - s.pos, s.rot);
+    return std::fabs(l.x) < fp.x + margin && std::fabs(l.y) < fp.y + margin;
+}
+static void testPlacement(World& w, bool verbose) {
+    std::printf("[Placement audit]\n");
+    std::set<std::pair<int, int>> keys;
+    for (const Poi& p : w.pois) {
+        int r = (int)std::ceil((p.radius + 30.f) / CHUNK);
+        ChunkKey c = chunkOf(p.pos.x, p.pos.y);
+        for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) keys.insert({c.x + dx, c.z + dz});
+    }
+    int props = 0, inBuilding = 0, onRoad = 0, inWater = 0, floating = 0;
+    for (auto& kk : keys) {
+        ChunkKey k{kk.first, kk.second};
+        if (k.x < 0 || k.z < 0 || k.x >= CHUNKS || k.z >= CHUNKS) continue;
+        ChunkBuild b; b.key = k;
+        w.generateChunkSync(k, 0, b);
+        for (const Collider& c : b.colliders) {
+            if (c.hx > 0 || c.r <= 0) continue;   // structure boxes
+            float h = w.height(c.c.x, c.c.y);
+            // scattered props and road furniture are stamped 5 cm into the terrain; any other round collider belongs
+            // to a structure (its base is 1 m under the building's own floor)
+            if (std::fabs(c.base - (h - 0.05f)) > 0.02f && std::fabs(c.base - (h - 0.03f)) > 0.02f) continue;
+            props++;
+            bool bad = false;
+            for (const Structure& s : w.structures) {
+                if (s.kind == S_BRIDGE || s.kind == S_FIELD || s.kind == S_PEN) continue;
+                if (length(s.pos - c.c) > 40.f) continue;
+                if (insideFootprint(s, c.c, c.r * 0.5f)) { inBuilding++; bad = true; if (verbose) std::printf("    prop r=%.1f inside a building (kind %d) at (%.1f, %.1f)\n", c.r, s.kind, c.c.x, c.c.y); break; }
+            }
+            if (!bad && w.roadInfluence(c.c.x, c.c.y) > 0.6f) { onRoad++; bad = true; if (verbose) std::printf("    prop r=%.1f on a road at (%.1f, %.1f)\n", c.r, c.c.x, c.c.y); }
+            float wl = w.waterLevel(c.c.x, c.c.y);
+            if (!bad && wl > -1e8f && wl > h + 0.2f) { inWater++; bad = true; if (verbose) std::printf("    prop in water at (%.1f, %.1f)\n", c.c.x, c.c.y); }
+            if (!bad && c.base - h > 0.15f) { floating++; if (verbose) std::printf("    prop floating %.2f m at (%.1f, %.1f)\n", c.base - h, c.c.x, c.c.y); }
+        }
+    }
+    int overlaps = 0, sOnRoad = 0, sInWater = 0;
+    for (size_t i = 0; i < w.structures.size(); i++) {
+        const Structure& a = w.structures[i];
+        if (a.kind == S_BRIDGE || a.kind == S_FIELD || a.kind == S_PEN || a.kind == S_DOCK) continue;
+        vec2 fa = structureFootprint(a.kind) * a.scale;
+        if (fa.x <= 0) continue;
+        for (size_t j = i + 1; j < w.structures.size(); j++) {
+            const Structure& b = w.structures[j];
+            if (b.kind == S_BRIDGE || b.kind == S_FIELD || b.kind == S_PEN || b.kind == S_DOCK || length(a.pos - b.pos) > 40.f) continue;
+            vec2 fb = structureFootprint(b.kind) * b.scale;
+            if (fb.x <= 0) continue;
+            // corners of b inside a (or centres within each other)
+            bool hit = insideFootprint(a, b.pos, 0) || insideFootprint(b, a.pos, 0);
+            for (int cx = -1; cx <= 1 && !hit; cx += 2) for (int cz = -1; cz <= 1 && !hit; cz += 2) hit = insideFootprint(a, b.pos + rotate(vec2(cx * fb.x, cz * fb.y) * 0.8f, -b.rot), 0);
+            if (hit) { overlaps++; if (verbose) std::printf("    structures %d and %d overlap at (%.0f, %.0f)\n", a.kind, b.kind, a.pos.x, a.pos.y); }
+        }
+        // (roads end at the door of a place's main building - a tower, a crypt -, and pass castle walls at their gate)
+        bool atPoiCentre = a.poi >= 0 && length(a.pos - w.pois[a.poi].pos) < 1.f;
+        bool wall = a.kind == S_CASTLE_WALL || a.kind == S_GATE || a.kind == S_PALISADE || a.kind == S_KEEP;
+        if (w.roadInfluence(a.pos.x, a.pos.y) > 0.6f && !atPoiCentre && !wall) { sOnRoad++; if (verbose) std::printf("    structure %d on a road at (%.0f, %.0f)\n", a.kind, a.pos.x, a.pos.y); }
+        float wl = w.waterLevel(a.pos.x, a.pos.y);
+        if (wl > -1e8f && wl > w.height(a.pos.x, a.pos.y) + 0.3f) { sInWater++; if (verbose) std::printf("    structure %d in water at (%.0f, %.0f)\n", a.kind, a.pos.x, a.pos.y); }
+    }
+    std::printf("  %zu chunks around %zu places: %d solid props; inside buildings %d, on roads %d, in water %d, floating %d\n", keys.size(), w.pois.size(), props, inBuilding, onRoad, inWater, floating);
+    std::printf("  %zu structures: overlapping pairs %d, on roads %d, in water %d\n", w.structures.size(), overlaps, sOnRoad, sInWater);
+    CHECK(props > 1000, "%d props audited", props);
+    CHECK(inBuilding == 0, "%d solid props inside buildings", inBuilding);
+    CHECK(onRoad == 0, "%d solid props on roads", onRoad);
+    CHECK(inWater == 0, "%d solid props in water", inWater);
+    CHECK(floating == 0, "%d props floating", floating);
+    CHECK(overlaps == 0, "%d overlapping buildings", overlaps);
+    CHECK(sOnRoad == 0, "%d buildings on roads", sOnRoad);
+    CHECK(sInWater == 0, "%d buildings in water", sInWater);
+}
+
 // ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
 static void testBuildingsGrounded(World& w) {
     std::printf("[Buildings on the ground]\n");
@@ -609,6 +685,7 @@ int lkRunTests(int argc, char** argv) {
     testTallGrass(w);
     testRiversHaveWater(w);
     testBridges(w);
+    testPlacement(w, getenv("LK_VERBOSE") != nullptr);
     testImportedAssets(assets);
     testDomainData();
     testBuildingsGrounded(w);
