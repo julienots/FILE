@@ -13,6 +13,9 @@
 #include <cstdio>
 #include <cmath>
 #include <set>
+#include <unistd.h>
+#include <cstring>
+#include "../engine/net/Net.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -356,6 +359,26 @@ static void testPlacement(World& w, bool verbose) {
     CHECK(sInWater == 0, "%d buildings in water", sInWater);
 }
 
+// ---- 1.13.0 network layer: message encoding and a real UDP round trip on this machine
+static void testNet() {
+    std::printf("[Network (co-op)]\n");
+    agr::ByteWriter w; w.u32(0x4C4B3133); w.u8(5); w.i16(-1234); w.f32(3.25f); w.str("Le Naufragé"); w.u16(65000);
+    agr::ByteReader r(w.b.data(), w.b.size());
+    bool ok = r.u32() == 0x4C4B3133 && r.u8() == 5 && r.i16() == -1234 && r.f32() == 3.25f && r.str() == "Le Naufragé" && r.u16() == 65000 && !r.bad && r.done();
+    CHECK(ok, "byte writer / reader round trip");
+    agr::ByteReader cut(w.b.data(), 6); cut.u32(); cut.u8(); cut.i16();
+    CHECK(cut.bad, "a truncated message is detected");
+    uint32_t ip = 0;
+    CHECK(agr::parseIPv4("192.168.1.42", ip) && ip == 0xC0A8012Au && !agr::parseIPv4("192.168.1", ip) && !agr::parseIPv4("300.1.1.1", ip), "IPv4 parsing");
+    agr::UdpSocket a, b;
+    CHECK(a.open(0) && b.open(0), "two UDP sockets open");
+    agr::NetAddr to = agr::NetAddr::make("127.0.0.1", b.localPort());
+    CHECK(a.send(to, w.b.data(), (int)w.b.size()), "send to 127.0.0.1:%u", b.localPort());
+    uint8_t buf[256]; agr::NetAddr from; int n = -1;
+    for (int i = 0; i < 200 && n < 0; i++) { n = b.recv(buf, sizeof buf, from); if (n < 0) usleep(1000); }
+    CHECK(n == (int)w.b.size() && std::memcmp(buf, w.b.data(), n) == 0 && from.port == a.localPort(), "datagram received intact (%d bytes)", n);
+}
+
 // ---- 1.10.1 buildings rest on the ground: nothing floats above the terrain under its footprint
 static void testBuildingsGrounded(World& w) {
     std::printf("[Buildings on the ground]\n");
@@ -686,6 +709,7 @@ int lkRunTests(int argc, char** argv) {
     testRiversHaveWater(w);
     testBridges(w);
     testPlacement(w, getenv("LK_VERBOSE") != nullptr);
+    testNet();
     testImportedAssets(assets);
     testDomainData();
     testBuildingsGrounded(w);
