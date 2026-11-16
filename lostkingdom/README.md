@@ -34,7 +34,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - deux instances du jeu tournent en même temps sur l'ordinateur. L'hôte fonde son domaine ; l'invité **trouve la partie tout seul** sur le réseau, la rejoint, prend l'heure de l'hôte (10 h au lieu de 20 h 30) et voit son domaine ;
   - l'hôte fait apparaître 3 loups près de l'invité ; l'invité les combat avec de vraies commandes d'attaque : 9 coups transmis, 3 morts reçues, l'invité passe au niveau 2, il est mordu 7 fois (`COOP HOST TEST PASSED` et `COOP GUEST TEST PASSED`).
 
-  RESULTATS_1130 Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur des téléphones.
+  Les 26 scénarios qui donnent un verdict sont réussis, sans erreur. `full` joue ses 71 étapes jusqu'au générique sans erreur, en version normale comme sous AddressSanitizer ; le test à deux (hôte et invité) passe aussi sous AddressSanitizer, sans erreur. Vérifié sur ordinateur seulement (Mesa llvmpipe), pas sur des téléphones.
 - **Limites (honnêtement).**
   - **Le jeu à deux n'a jamais été essayé entre deux vrais téléphones** : seulement entre deux instances sur un même ordinateur. Certains routeurs (Wi-Fi d'hôtel, d'école) isolent les appareils : la partie ne peut alors pas se faire, même en tapant l'adresse.
   - Les créatures vivent autour de l'hôte : si l'invité part trop loin (au-delà d'environ 150 m), il ne croise plus de créatures. Restez proches.
