@@ -116,17 +116,17 @@ function spawnPos(team,out){for(let i=0;i<40;i++){const x=R(-52,52),z=(team==='A
 class Bot{constructor(team,name,wpn){this.team=team;this.name=name;this.wpn=wpn;this.m=makeSoldier(team,wpn);this.pos=new V3();this.dest=new V3();this.last=new V3();this.kills=0;this.deaths=0;this.alive=false;
   this.st={speed:0,ph:Math.random()*6,cr:0,aim:0,pitch:0,dead:0,fall:1,roll:0,j1:.3,j2:1,flinch:0,kick:0};this.m.root.visible=false;ents.push(this);bots.push(this)}
  spawn(){spawnPos(this.team,this.pos);this.hp=100;this.alive=true;this.yaw=this.team==='A'?Math.PI:0;this.target=null;this.crouch=false;this.react=0;this.fireCD=R(.5,1.5);this.burst=0;this.thinkT=Math.random()*.3;this.strafeT=0;this.strafe=0;
-  this.stuckT=0;this.covT=0;this.cov=null;this.grenCD=R(8,22);this.lastFire=-9;this.alertT=-9;this.safe=2;this.speed=0;this.deadT=0;this.st.dead=0;this.st.cr=0;this.st.aim=0;this.last.copy(this.pos);this.newDest();this.m.root.visible=true}
+  this.rng=(this.wpn==='smg'?R(30,40):R(50,65))*[.85,1,1.15][G.diff];this.stuckT=0;this.covT=0;this.cov=null;this.grenCD=R(8,22);this.lastFire=-9;this.alertT=-9;this.safe=2;this.speed=0;this.deadT=0;this.st.dead=0;this.st.cr=0;this.st.aim=0;this.last.copy(this.pos);this.newDest();this.m.root.visible=true}
  newDest(side){const s=this.team==='A'?-1:1,back=Math.random()<.22;this.dest.set(clamp(this.pos.x+(side?R(-25,25):R(-32,32)),-90,90),0,clamp(this.pos.z+(back?-s:s)*R(8,42),-64,64));this.run=Math.random()<.65;this.stuckT=0}
  eyeY(){return this.pos.y+(this.crouch?1.12:1.62)}
  alert(by){this.alertT=G.t;if(by&&!by.isArty&&by.alive&&by.team!==this.team&&(!this.target||Math.random()<.6)){this.target=by;this.react=Math.min(this.react,.25)}}
  think(){let best=null,bd=1e9;const sy=Math.sin(this.yaw),cy=Math.cos(this.yaw),alerted=G.t-this.alertT<3;
-  for(const e of ents){if(e.team===this.team||!e.alive)continue;const dx=e.pos.x-this.pos.x,dz=e.pos.z-this.pos.z,d=Math.hypot(dx,dz);if(d>100)continue;
+  for(const e of ents){if(e.team===this.team||!e.alive)continue;const dx=e.pos.x-this.pos.x,dz=e.pos.z-this.pos.z,d=Math.hypot(dx,dz);if(d>(this.wpn==='smg'?60:85))continue;
    if(e!==this.target&&!alerted&&d>14&&(dx*sy+dz*cy)/d<-.15)continue;const sc=d*(e===this.target?.6:1);if(sc>=bd)continue;
    if(los(this.pos.x,this.eyeY(),this.pos.z,e.pos.x,e.pos.y+(e.crouch?1:1.4),e.pos.z)){bd=sc;best=e}}
   if(best!==this.target){this.target=best;if(best)this.react=R(.4,.85)/DIFFS[G.diff].react}}
  shoot(t,d){const smg=this.wpn==='smg',df=this.team==='B'?DIFFS[G.diff]:DIFFS[1];if(this.burst<=0)this.burst=smg?3+(Math.random()*3|0):1;this.burst--;this.fireCD=this.burst>0?.105:(smg?R(.7,1.5):R(1.1,2));
-  const p=clamp(.52-d*.0044,.06,.5)*df.acc*(t.speed>2?.6:1)*(t.crouch?.7:1)*(this.speed>.5?.55:1)*(smg?.75:1.3)*(t.safe>0?0:1);const hit=Math.random()<p;
+  const p=clamp(.55-d*(smg?.011:.006),.02,.5)*df.acc*(t.speed>2?.6:1)*(t.crouch?.7:1)*(this.speed>.5?.55:1)*(smg?.75:1.3)*(t.safe>0?0:1);const hit=Math.random()<p;
   const mz=this.m.gun.localToWorld(_v.set(0,.02,this.mz)).clone(),ty=t.pos.y+(t.crouch?.75:1.2);_v2.set(t.pos.x,ty,t.pos.z);
   if(!hit){const k=R(.5,1.6)*(1+d*.02);_v2.x+=R(-1,1)*k;_v2.y+=R(-.6,1)*k;_v2.z+=R(-1,1)*k}
   _v3.subVectors(_v2,mz);const L=_v3.length();_v3.divideScalar(L);const w=rayWorld(mz.x,mz.y,mz.z,_v3.x,_v3.y,_v3.z,hit?L-.4:L+60,1);let end;
@@ -143,9 +143,10 @@ class Bot{constructor(team,name,wpn){this.team=team;this.name=name;this.wpn=wpn;
    this.covT-=dt;if(this.covT<=0){this.covT=R(3,6);this.cov=null;if(this.hp<55){let bd=12;for(const c of covers){const cd=Math.hypot(c.x-this.pos.x,c.z-this.pos.z);if(cd<bd&&Math.hypot(c.x-t.pos.x,c.z-t.pos.z)>6){bd=cd;this.cov=c}}}}
    if(this.cov){const c=this.cov,ux=c.x-t.pos.x,uz=c.z-t.pos.z,ul=Math.hypot(ux,uz)||1,gx=c.x+ux/ul*(c.rad+.75),gz=c.z+uz/ul*(c.rad+.75),ex=gx-this.pos.x,ez=gz-this.pos.z,el=Math.hypot(ex,ez);if(el>.9){mx=ex/el;mz=ez/el;sp=4;this.crouch=false}else{this.crouch=this.fireCD>.25;sp=0}}
    else if(this.strafe&&!this.crouch){mx=Math.cos(this.yaw)*this.strafe;mz=-Math.sin(this.yaw)*this.strafe;sp=2.1}
-   else if(d>60&&!this.crouch){mx=dx/d;mz=dz/d;sp=3}
+   else if(d>this.rng*.8&&!this.crouch){mx=dx/d;mz=dz/d;sp=3.4}
    this.react-=dt;this.fireCD-=dt;let dy=wantYaw-this.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));
-   if(this.react<=0&&this.fireCD<=0&&Math.abs(dy)<.25)this.shoot(t,d);
+   if(d>this.rng){this.cov=null;this.crouch=false;mx=dx/d;mz=dz/d;sp=4}
+   if(this.react<=0&&this.fireCD<=0&&Math.abs(dy)<.25&&d<=this.rng)this.shoot(t,d);
    this.grenCD-=dt;if(this.grenCD<=0&&d>12&&d<32&&this.react<=0){this.grenCD=R(16,30);if(Math.random()<.5){const v=Math.sqrt(d*13/Math.sin(1.2));throwGren(_v.set(this.pos.x,this.pos.y+1.5,this.pos.z),_v2.set(dx/d*v*.825,v*.565,dz/d*v*.825),this)}}}
   else{this.target=null;this.crouch=false;const dx=this.dest.x-this.pos.x,dz=this.dest.z-this.pos.z,d=Math.hypot(dx,dz);if(d<2.5)this.newDest();else{mx=dx/d;mz=dz/d;sp=this.run?4.7:3;wantYaw=Math.atan2(dx,dz)}
    this.stuckT+=dt;if(this.stuckT>1.2){if(this.pos.distanceTo(this.last)<.7)this.newDest(true);this.last.copy(this.pos);this.stuckT=0}}
