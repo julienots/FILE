@@ -37,10 +37,10 @@ RAW = os.path.join(CACHE, "raw")
 
 # Réglages d'interprétation : peu d'emphase, débit posé, prosodie stable.
 STYLE = dict(exaggeration=0.3, cfg_weight=0.3, temperature=0.6)
-MAX_TAKES = 4
+MAX_TAKES = 3
 MAX_TAKES_SHORT = 7
-MIN_RATIO = 0.82
-MIN_PAUSE_S = 0.07
+MIN_RATIO = 0.78
+MIN_PAUSE_S = 0.05
 
 ELLIPSIS_SPLIT = re.compile(r"(\.\.\.|…)\s+(?=\S)")
 DIGITS = {"0": "zéro", "1": "un", "2": "deux", "3": "trois", "4": "quatre", "5": "cinq", "6": "six",
@@ -237,7 +237,7 @@ class Studio:
             score = (full, j["ok"], sum(p is not None for p in j["pauses"]), j["ratio"])
             if best is None or score > best[0]:
                 best = (score, wav, j, k)
-            if full:
+            if full or (k >= 1 and best[2]["ok"]):
                 break
         return best
 
@@ -249,7 +249,7 @@ class Studio:
                                           max_speech=0.80 if cue else None)
         mode = "phrase"
         frs = fragments(text)
-        if not score[0] and len(frs) > 1:
+        if not j["ok"] and len(frs) > 1:
             # repli : fragment par fragment (pauses garanties)
             parts, pauses, pos, heard, ok, ratios = [], [], 0, [], True, []
             gap = np.zeros(int(0.2 * self.sr), dtype=np.float32)
@@ -313,7 +313,7 @@ def main():
         json.dump(meta, open(os.path.join(RAW, key + ".json"), "w", encoding="utf-8"), ensure_ascii=False)
         done_s += len(wav) / studio.sr
         el = time.time() - t0
-        flag = "" if meta["ok"] and all(p is not None for p in meta["pauses"]) else "  <-- À VÉRIFIER"
+        flag = "" if meta["ok"] else "  <-- À VÉRIFIER"
         print(f"[{n + 1}/{len(todo)}] {el / 60:5.1f} min, reste ~{el / (n + 1) * (len(todo) - n - 1) / 60:4.0f} min | "
               f"{meta['mode']} prise {meta['take']} r={meta['ratio']} | {job['text'][:60]}{flag}", flush=True)
 

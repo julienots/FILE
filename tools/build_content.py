@@ -507,7 +507,7 @@ def main():
         weak = []
         for k, t, _ in jobs:
             m = json.load(open(os.path.join(RAW, k + ".json"), encoding="utf-8"))
-            if not m["ok"] or any(p is None for p in m["pauses"]):
+            if not m["ok"]:
                 weak.append((k, m["ratio"], t, m["heard"]))
         if weak:
             print(f"{len(weak)} prises à réécouter (voir --redo de voice_chatterbox.py) :")
