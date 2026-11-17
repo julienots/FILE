@@ -10,6 +10,27 @@
   --display: "Chakra Petch", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
+/* ---------- écran d'ouverture SuperEssence : les lettres tombent une à une et rebondissent ---------- */
+@font-face { font-family: "Fredoka SE"; font-weight: 700; font-display: block; src: url(fonts/fredoka-bold.ttf) format("truetype"); }
+#se { position: fixed; inset: 0; z-index: 1000; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3em; overflow: hidden;
+  font-family: "Fredoka SE", "Arial Rounded MT Bold", system-ui, sans-serif; font-weight: 700; font-size: min(10.5vw, 17vh); line-height: 1; transition: opacity 0.45s ease; user-select: none; -webkit-user-select: none; }
+#se.out { opacity: 0; pointer-events: none; }
+#se .mot { display: flex; align-items: flex-end; white-space: nowrap; position: relative; }
+#se .mot.saut { animation: se-saut 0.5s cubic-bezier(.3,1.6,.5,1) both; }
+#se .l { display: inline-block; color: #fff; text-shadow: 0.035em 0.055em 0 #3b3b3b; transform-origin: 50% 100%; opacity: 0; letter-spacing: 0.01em; }
+#se .l.j { color: #ffc727; }
+#se.go .l { animation: se-pop 0.62s cubic-bezier(.2,.9,.3,1) calc(var(--i) * 70ms + 150ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 1550ms) both; }
+#se.go .l.pt { animation: se-point 0.75s calc(var(--i) * 70ms + 330ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 1550ms) both; }
+#se .studio { font-size: 0.24em; letter-spacing: 0.55em; padding-left: 0.55em; color: #fff; opacity: 0; }
+#se.go .studio { animation: se-studio 0.7s ease-out 1.75s both; }
+@keyframes se-pop { 0% { opacity: 0; transform: translateY(-1.1em) scale(0.6, 1.4); } 45% { opacity: 1; transform: translateY(0) scale(1.28, 0.7); }
+  65% { transform: translateY(-0.12em) scale(0.9, 1.12); } 82% { transform: translateY(0) scale(1.05, 0.95); } 100% { opacity: 1; transform: none; } }
+@keyframes se-point { 0% { opacity: 0; transform: scale(0); } 55% { opacity: 1; transform: scale(1.7); } 75% { transform: scale(0.8); } 100% { opacity: 1; transform: none; } }
+@keyframes se-saut { 0% { transform: none; } 40% { transform: translateY(-0.08em) scale(1.06); } 100% { transform: none; } }
+@keyframes se-brille { 0%, 100% { filter: none; } 50% { filter: brightness(1.75) drop-shadow(0 0 0.12em rgba(255,220,120,0.55)); } }   /* éclat qui court sur le nom */
+@keyframes se-studio { 0% { opacity: 0; letter-spacing: 1.2em; } 100% { opacity: 0.85; letter-spacing: 0.55em; } }
+@media (prefers-reduced-motion: reduce) { #se.go .l, #se.go .l.pt, #se.go .studio { animation: none; opacity: 1; } #se.go .studio { opacity: 0.85; } #se .mot.saut { animation: none; } }
+
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font-family: var(--display); font-weight: 500; overflow: hidden; overscroll-behavior: none; }
 #app { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -167,6 +188,33 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 </style>
 
 
+<div id="se" aria-label="SuperEssence Studio" role="img"><div class="mot"></div><div class="studio">STUDIO</div></div>
+<script>
+// Écran d'ouverture : construit et lancé avant le chargement du jeu (game.js est lourd), puis effacé au bout de 3,4 s ; un toucher le passe.
+(function () {
+  var se = document.getElementById('se'), mot = se.querySelector('.mot'), txt = 'SuperEssence.', n = 0, ac = null, fini = false;
+  for (var i = 0; i < txt.length; i++) { var l = document.createElement('span'); l.className = 'l' + (i >= 5 ? ' j' : '') + (txt[i] === '.' ? ' pt' : ''); l.textContent = txt[i]; l.style.setProperty('--i', i); mot.appendChild(l); }
+  // petit « pop » à chaque lettre, accord final (silencieux si l'appareil interdit le son sans toucher)
+  try { var AC = window.AudioContext || window.webkitAudioContext; if (AC) ac = new AC(); } catch (e) { ac = null; }
+  function pop(t, f, v, d) { if (!ac || ac.state !== 'running') return; var o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.45, t + d);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.05); }
+  function sons() { if (!ac || ac.state !== 'running') return; var t0 = ac.currentTime;
+    for (var k = 0; k < txt.length; k++) pop(t0 + 0.15 + k * 0.07 + 0.27, 520 + k * 38, 0.12, 0.12);
+    [784, 988, 1175, 1568].forEach(function (f, j) { pop(t0 + 1.5 + j * 0.06, f, 0.07, 0.6); }); }
+  function finir() { if (fini) return; fini = true; se.classList.add('out'); setTimeout(function () { se.remove(); if (ac && ac.close) ac.close().catch(function () {}); }, 500); }
+  function lancer() {
+    se.classList.add('go'); if (ac && ac.state === 'suspended' && ac.resume) ac.resume().then(sons, function () {}); else sons();
+    setTimeout(function () { mot.classList.add('saut'); }, 1400);
+    setTimeout(finir, 3400);
+  }
+  // on attend la police (au plus 0,6 s) pour que les lettres apparaissent directement dans le bon dessin
+  var parti = false, go = function () { if (!parti) { parti = true; lancer(); } };
+  if (document.fonts && document.fonts.load) document.fonts.load('700 40px "Fredoka SE"').then(go, go);
+  setTimeout(go, 600);
+  se.addEventListener('pointerdown', function () { if (parti) setTimeout(finir, 150); });
+  window.__seFinir = finir;
+})();
+</script>
 <div id="app">
   <canvas class="view" id="view"></canvas>
 

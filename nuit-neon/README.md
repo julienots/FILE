@@ -2,6 +2,10 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Ouverture
+
+Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre tombe, s'écrase et rebondit, le point surgit en dernier, un éclat court sur le nom puis STUDIO s'affiche ; un petit son accompagne chaque lettre quand l'appareil le permet. L'écran disparaît au bout de 3,4 s (un toucher le passe). Il est dans `src/page.html` (police Fredoka, `fonts/fredoka-bold.ttf`).
+
 ## Modes de jeu
 
 - **Course** : 20 circuits (8 en ville, 12 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.

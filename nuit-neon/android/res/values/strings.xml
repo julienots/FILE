@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Nuit Néon</string>
     <color name="ic_bg">#0B0720</color>
-    <color name="window_bg">#05040C</color>
+    <color name="window_bg">#000000</color>
 </resources>
