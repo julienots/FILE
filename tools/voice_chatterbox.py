@@ -161,6 +161,23 @@ class Studio:
                 gap += 1
         return n
 
+    def valleys(self, env, min_s=0.10):
+        """Centres (s) des silences internes d'au moins min_s, dans l'ordre."""
+        thr = max(np.percentile(env, 95) * 0.07, 1e-4)
+        voiced = np.where(env >= thr)[0]
+        if len(voiced) == 0:
+            return []
+        out, start = [], None
+        for i in range(voiced[0], voiced[-1] + 1):
+            if env[i] < thr:
+                if start is None:
+                    start = i
+            elif start is not None:
+                if (i - start) * 0.01 >= min_s:
+                    out.append((start + i) / 2 * 0.01)
+                start = None
+        return out
+
     def find_pause(self, env, t_from, t_to):
         """Plus long creux d'énergie dans la fenêtre [t_from, t_to] (secondes) → centre, ou None."""
         thr = max(np.percentile(env, 95) * 0.07, 1e-4)
@@ -199,7 +216,10 @@ class Studio:
             ok = (ratio >= MIN_RATIO and len(heard) <= len(exp) + 2 and sp <= 0.13 * n_chars + 1.2
                   and isl <= len(re.findall(r"[,.?!:;]", said)) + (0 if len(exp) <= 3 else 1))
         pauses = []
-        if len(exp_frags) > 1:
+        vals = self.valleys(env) if len(exp_frags) > 1 else []
+        if len(exp_frags) > 1 and len(vals) == len(exp_frags) - 1:
+            pauses = vals  # autant de silences que de « ... » : pas besoin de l'alignement
+        elif len(exp_frags) > 1:
             sm = difflib.SequenceMatcher(None, exp, heard, autojunk=False)
             e2h = {}
             for blk in sm.get_matching_blocks():
@@ -237,7 +257,7 @@ class Studio:
             score = (full, j["ok"], sum(p is not None for p in j["pauses"]), j["ratio"])
             if best is None or score > best[0]:
                 best = (score, wav, j, k)
-            if full or (k >= 1 and best[2]["ok"]):
+            if full or best[2]["ok"]:
                 break
         return best
 
