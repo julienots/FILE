@@ -19,7 +19,8 @@ aapt2 link -o "$OUT/base.apk" -I "$ANDROID_JAR" --manifest android/AndroidManife
   --java "$OUT/gen" -A "$OUT/assets" -0 .wasm -0 .woff2 -0 .glb "$OUT/res/res.zip"
 javac -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "${ANDROID_BOOT:-$ANDROID_JAR}" -d "$OUT/classes" \
   $(find android/src "$OUT/gen" -name '*.java')
-dalvik-exchange --dex --min-sdk-version=26 --output="$OUT/dex/classes.dex" "$OUT/classes"
+if command -v dalvik-exchange >/dev/null; then dalvik-exchange --dex --min-sdk-version=26 --output="$OUT/dex/classes.dex" "$OUT/classes"
+else d8 --min-api 26 --lib "$ANDROID_JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class'); fi   # d8 : outil équivalent fourni avec les build-tools du SDK Android
 (cd "$OUT/dex" && zip -q -j ../base.apk classes.dex)
 zipalign -f -p 4 "$OUT/base.apk" "$OUT/aligned.apk"
 mkdir -p release
