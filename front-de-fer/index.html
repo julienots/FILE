@@ -53,6 +53,7 @@ html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;font-family:
 #bHeal svg{stroke:#e33;stroke-width:5}
 #bJump{right:calc(22px + env(safe-area-inset-right,0px));bottom:128px;width:50px;height:50px}#bCrouch{right:calc(22px + env(safe-area-inset-right,0px));bottom:38px;width:54px;height:54px}
 #bReload{right:calc(214px + env(safe-area-inset-right,0px));bottom:34px;width:52px;height:52px}
+#bKnife{right:calc(206px + env(safe-area-inset-right,0px));bottom:108px;width:50px;height:50px}
 #bFireL{left:calc(26px + env(safe-area-inset-left,0px));bottom:186px;width:52px;height:52px}
 #bottom{position:absolute;bottom:8px;left:50%;transform:translateX(-58%);display:flex;gap:4px;align-items:flex-end}
 .slot{height:48px;min-width:56px;background:var(--panel);border:1px solid rgba(255,255,255,.28);display:flex;align-items:flex-end;justify-content:center;position:relative;padding:3px 6px;box-sizing:border-box;font-size:11px}
@@ -82,7 +83,7 @@ button{font-family:var(--display);color:var(--ink);cursor:pointer;touch-action:m
 .roster ul{list-style:none;margin:0;padding:0}.roster li{padding:1.5px 0;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;gap:6px}
 .roster li span{color:var(--dim);font-weight:400}.roster .A b{color:#8ab8ff}.roster .B b{color:#ff8a7c}.roster b{font-family:var(--display);letter-spacing:.1em;font-weight:500}
 .opts{display:flex;gap:6px;flex-wrap:wrap}
-.opt{flex:1 1 0;min-width:86px;background:rgba(255,255,255,.04);border:1px solid var(--rule);padding:6px 8px;text-align:left;font-size:clamp(12px,3vh,15px);letter-spacing:.04em}
+.opt{flex:1 1 0;min-width:96px;background:rgba(255,255,255,.04);border:1px solid var(--rule);padding:6px 8px;text-align:left;font-size:clamp(12px,3vh,15px);letter-spacing:.04em}
 .opt small{display:block;font-family:var(--body);font-size:11px;color:var(--dim);letter-spacing:0}
 .opt.sel{border-color:var(--go);background:rgba(224,160,33,.16)}
 .row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim)}.row input{flex:1;accent-color:var(--go);min-width:0}
@@ -113,6 +114,7 @@ table.sb .A td:first-child{color:#8ab8ff}table.sb .B td:first-child{color:#ff8a7
   <div class="btn touch" id="bJump" data-act="jump"><svg viewBox="0 0 24 24"><path d="M12 20V6M6 11l6-6 6 6"/></svg></div>
   <div class="btn touch" id="bCrouch" data-act="crouch"><svg viewBox="0 0 24 24"><circle cx="13" cy="5" r="2.2"/><path d="M13 8l-4 5 5 3-1 5M9 13l-4 1M14 11l4 1"/></svg></div>
   <div class="btn touch" id="bReload" data-act="reload"><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 0112-5l2 2M19 4v5h-5M19 12a7 7 0 01-12 5l-2-2M5 20v-5h5"/></svg></div>
+  <div class="btn touch" id="bKnife" data-act="knife"><svg viewBox="0 0 24 24"><path d="M5 19L17 5l2 2L8 20zM5 19l-1 2"/></svg></div>
   <div id="bottom">
    <div class="slot"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="5" ry="6"/><rect x="10" y="4" width="4" height="4"/></svg><span id="gN2">3</span></div>
    <div class="slot"><svg viewBox="0 0 24 24"><path d="M5 6h14v13H5zM10.5 9h3v2.5H16v3h-2.5V17h-3v-2.5H8v-3h2.5z" fill-rule="evenodd"/></svg><span id="mN2">2</span></div>
@@ -129,11 +131,14 @@ table.sb .A td:first-child{color:#8ab8ff}table.sb .B td:first-child{color:#ff8a7
   </div>
   <div class="col r">
    <div class="sheet"><h3>Arme principale</h3><div class="opts" id="optW">
-    <button class="opt sel" data-w="smg" id="w_smg">Pistolet-mitrailleur<small>32 coups · rafale · courte portée</small></button>
-    <button class="opt" data-w="rifle" id="w_rifle">Fusil semi-auto<small>8 coups · précis · moyenne portée</small></button>
-    <button class="opt" data-w="sniper" id="w_sniper">Fusil à lunette<small>5 coups · un tir, un mort</small></button></div></div>
+    <button class="opt sel" data-w="thompson" id="w_thompson">Thompson M1A1<small>30 coups · rafale rapide</small></button>
+    <button class="opt" data-w="mp40" id="w_mp40">MP 40<small>32 coups · rafale stable</small></button>
+    <button class="opt" data-w="stg44" id="w_stg44">StG 44<small>30 coups · fusil d’assaut</small></button>
+    <button class="opt" data-w="garand" id="w_garand">M1 Garand<small>8 coups · semi-auto précis</small></button>
+    <button class="opt" data-w="kar98" id="w_kar98">Kar98k à lunette<small>5 coups · un tir, un mort</small></button></div></div>
    <div class="sheet"><h3>Difficulté des adversaires</h3><div class="opts" id="optD">
     <button class="opt" data-d="0" id="d_0">Recrue</button><button class="opt sel" data-d="1" id="d_1">Vétéran</button><button class="opt" data-d="2" id="d_2">Élite</button></div></div>
+   <div class="sheet"><h3>Qualité graphique</h3><div class="opts" id="optQ"><button class="opt" data-q="0" id="q_0">Fluide</button><button class="opt" data-q="1" id="q_1">Équilibrée</button><button class="opt" data-q="2" id="q_2">Maximale</button></div></div>
    <div class="sheet"><label class="row" for="sens">Sensibilité de visée<input type="range" id="sens" min="0.4" max="2.2" step="0.1" value="1"></label></div>
    <span id="load">CHARGEMENT DU TERRAIN…</span>
    <button class="go" id="deploy" hidden>Déployer</button>
