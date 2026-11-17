@@ -29,9 +29,9 @@ class ScreenshotTest(private val name: String, private val route: String, privat
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
         fun shots() = listOf(
-            arrayOf("01_splash_studio_a", "splash", 1600L),
-            arrayOf("02_splash_studio_b", "splash", 4700L),
-            arrayOf("03_splash_noctea", "splash", 9500L),
+            arrayOf("01_splash_studio_a", "splash", 900L),
+            arrayOf("02_splash_studio_b", "splash", 3300L),
+            arrayOf("03_splash_noctea", "splash", 8000L),
             arrayOf("04_home", "home", 1200L),
             arrayOf("05_explore", "explore", 1200L),
             arrayOf("06_create", "create", 1200L),

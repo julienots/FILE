@@ -15,7 +15,7 @@ NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) d
 
 | Domaine | Contenu |
 |---|---|
-| Écran de lancement | Présentation animée lente « SuperEssence. » (lettre par lettre, ombre portée, reflet lumineux, « STUDIO · présente »), puis apparition du logo NOCTÉA. Toucher pour passer. |
+| Écran de lancement | Intro façon studio de jeu : les lettres « SuperEssence. » tombent une à une et rebondissent (écrasement à l'impact), le point final claque avec un flash et une secousse, reflet lumineux, « STUDIO », puis une barre de chargement rayée qui se remplit par à-coups avant l'apparition du logo NOCTÉA. Toucher pour passer. |
 | Bibliothèque | **43 séances guidées**, soit près de 6 heures de contenu : Sommeil (8), Relaxation (7), Respiration (7), Méditation (9), Histoires du soir (9), Réveil doux (3). Nouveautés 1.1 : Se rendormir en pleine nuit, Corps lourd esprit léger, Relaxation musculaire progressive, Pause express, Respiration carrée, Respiration en vague, Bienveillance envers soi, Observer ses pensées, La montagne intérieure, Apaiser l'anxiété, Le train de nuit, Le phare du bout du monde, Un soir en Provence, Élan du matin. Chaque séance a un titre, une description, une durée, une illustration et son texte. |
 | Voix | Voix féminine française douce et naturelle, **préenregistrée** (1 168 phrases, 86 min de parole). Chaque phrase est dite d'un seul tenant, avec une intonation suspendue avant les vrais silences. |
 | Créer ma méditation | Générateur : 10 objectifs × 8 durées (3 à 60 min) × 10 ambiances × 6 styles × 3 intensités musicales. Il produit un script cohérent (intention, installation, respiration, scan corporel, visualisation, cœur de l'objectif, approfondissement, conclusion), affichable, avec la voix NOCTÉA, à la **durée exacte** demandée. Historique des créations, variantes, favoris. |
@@ -81,7 +81,7 @@ Prérequis : JDK 17 ou plus récent, Android SDK (plateforme 35, build-tools 35.
 ```bash
 echo "sdk.dir=/chemin/vers/android-sdk" > local.properties
 ./gradlew assembleRelease          # → app/build/outputs/apk/release/app-release.apk
-./gradlew testDebugUnitTest        # 47 tests (contenu, générateur, moteur audio, 18 écrans, parcours)
+./gradlew testDebugUnitTest        # 48 tests (contenu, générateur, moteur audio, 18 écrans, parcours)
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true   # captures dans app/build/screenshots
 ```
 
@@ -106,7 +106,7 @@ python3 tools/make_icons.py                                      # régénère l
 - **Changer de voix** : remplacez `tools/voice/reference_siwis.wav` par 6 à 10 s d'une voix calme dont vous détenez les droits, puis relancez la production. Un cache évite de réenregistrer les phrases inchangées ; `voice_chatterbox.py --redo <clé>` refait une prise précise.
 
 ## Tests et vérifications effectués
-- 47 tests automatisés, tous verts : intégrité du catalogue (chaque clip existe, chaque timeline totalise sa durée), générateur (600 combinaisons, durée exacte à la milliseconde, cohérence et déterminisme), découpage des pauses, recherche, moteur audio réel sous Robolectric (durée de la timeline concaténée = durée du catalogue, mixeur, file du rituel, minuteur), rendu de 18 écrans sans plantage, parcours « générer puis écouter » et « minuteur », écran de lancement.
+- 48 tests automatisés, tous verts : intégrité du catalogue (chaque clip existe, chaque timeline totalise sa durée), générateur (600 combinaisons, durée exacte à la milliseconde, cohérence et déterminisme), découpage des pauses, recherche, moteur audio réel sous Robolectric (durée de la timeline concaténée = durée du catalogue, mixeur, file du rituel, minuteur), rendu de 18 écrans sans plantage, parcours « générer puis écouter » et « minuteur », écran de lancement.
 - APK release minifié (R8), signé (schéma v2), vérifié avec `apksigner` et `aapt2`.
 - **Non vérifié ici** : aucun émulateur ni téléphone n'était disponible dans l'environnement de compilation (pas de virtualisation matérielle). L'APK n'a donc pas encore été installé sur un appareil réel ; l'écoute réelle (décodage Opus, écran verrouillé, alarmes) reste à confirmer sur téléphone.
 
