@@ -110,6 +110,8 @@ class Studio:
             return inner(*args, **kw)
         self.tts.t3.inference = capped
         self.asr = WhisperModel("turbo", device="cpu", compute_type="int8", cpu_threads=threads)
+        # Première écoute rapide ; le grand modèle ne réécoute que les prises douteuses.
+        self.asr_fast = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=threads)
 
     def take(self, text, seed):
         self.torch.manual_seed(seed)
@@ -117,9 +119,9 @@ class Studio:
         w = self.tts.generate(text, language_id="fr", **STYLE)
         return w.squeeze().numpy().astype(np.float32)
 
-    def listen(self, wav):
+    def listen(self, wav, fast=False):
         y = self.librosa.resample(wav, orig_sr=self.sr, target_sr=16000)
-        segs, _ = self.asr.transcribe(y, language="fr", beam_size=3, word_timestamps=True,
+        segs, _ = (self.asr_fast if fast else self.asr).transcribe(y, language="fr", beam_size=3, word_timestamps=True,
                                       condition_on_previous_text=False)
         toks = []
         for s in segs:
@@ -173,11 +175,11 @@ class Studio:
             return None
         return (best[0] + best[1]) / 2 * 0.01
 
-    def judge(self, text, wav):
+    def judge(self, text, wav, fast=False):
         """Retourne dict(ratio, ok, pauses=[s|None], heard)."""
         exp_frags = [norm_words(spoken(f)) for f in fragments(text)]
         exp = [w for f in exp_frags for w in f]
-        toks = self.listen(wav)
+        toks = self.listen(wav, fast)
         heard = [t[0] for t in toks]
         env, _ = self.envelope(wav)
         sp = self.speech_seconds(env)
@@ -220,8 +222,11 @@ class Studio:
         best = None
         for k in range(max_takes):
             wav = self.take(spoken(text), base_seed + k)
-            j = self.judge(text, wav)
+            j = self.judge(text, wav, fast=True)
             full = j["ok"] and (not need_pauses or all(p is not None for p in j["pauses"]))
+            if not full:
+                j = self.judge(text, wav)
+                full = j["ok"] and (not need_pauses or all(p is not None for p in j["pauses"]))
             if max_speech is not None and j["speech"] > max_speech:
                 full = False
                 j["ok"] = False
