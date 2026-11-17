@@ -66,7 +66,8 @@ html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;font-family:
 .slot{height:48px;min-width:56px;background:var(--panel);border:1px solid rgba(255,255,255,.28);display:flex;align-items:flex-end;justify-content:center;position:relative;padding:3px 6px;box-sizing:border-box;font-size:11px}
 .slot svg{position:absolute;inset:6px 6px 12px;width:calc(100% - 12px);height:calc(100% - 18px);fill:#fff}
 .slot.w{min-width:132px;border-color:#fff;background:rgba(40,42,36,.6)}.slot.w span{position:absolute;left:6px;bottom:2px;font-size:12px}.slot.w em{position:absolute;right:5px;top:1px;font-style:normal;font-size:12px;opacity:.8}
-body.desk .touch{display:none}
+body.desk .touch,body.pad .touch{display:none}
+.padk{display:none;font-family:var(--body);font-size:12px;color:var(--dim);margin-top:8px}body.pad .padk{display:block}
 /* écrans */
 .ov{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,9,7,.55);z-index:5}
 .ov h2{font-family:var(--display);font-size:clamp(26px,6vh,46px);letter-spacing:.08em;margin:0;text-transform:uppercase;text-wrap:balance}
@@ -154,10 +155,10 @@ table.sb .A td:first-child{color:#8ab8ff}table.sb .B td:first-child{color:#ff8a7
    <div class="sheet"><h3>Qualité graphique</h3><div class="opts" id="optQ"><button class="opt" data-q="0" id="q_0">Fluide</button><button class="opt" data-q="1" id="q_1">Équilibrée</button><button class="opt" data-q="2" id="q_2">Maximale</button></div></div>
    <div class="sheet"><label class="row" for="sens">Sensibilité de visée<input type="range" id="sens" min="0.4" max="2.2" step="0.1" value="1"></label></div>
    <span id="load">CHARGEMENT DU TERRAIN…</span>
-   <button class="go" id="deploy" hidden>Déployer</button>
+   <button class="go" id="deploy" hidden>Déployer</button><span class="padk" style="text-align:right">Manette : A pour déployer</span>
   </div>
  </div>
- <div class="ov" id="pauseOv" hidden><div class="center"><h2>Pause</h2><button class="go" id="resume">Reprendre</button><br><button class="ghost" id="quit">Retour au lobby</button></div></div>
+ <div class="ov" id="pauseOv" hidden><div class="center"><h2>Pause</h2><button class="go" id="resume">Reprendre</button><br><button class="ghost" id="quit">Retour au lobby</button><p class="padk">Manette : A ou Menu pour reprendre · Y pour revenir au lobby</p></div></div>
  <div class="ov" id="deathOv" hidden style="background:rgba(60,0,0,.35)"><div class="center"><h2>Tu es tombé</h2><p id="deathBy"></p><p id="deathT"></p></div></div>
  <div class="ov" id="endOv" hidden><div class="center"><h2 id="endT"></h2><p id="endS"></p><div class="cols" id="endB"></div><button class="go" id="again">Retour au lobby</button></div></div>
  <div id="rot">Tourne ton téléphone en paysage pour jouer</div>

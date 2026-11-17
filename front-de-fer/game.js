@@ -1,6 +1,7 @@
 'use strict';
 // ====== Front de Fer — jeu : soldats, IA, armes, effets, sons, commandes, lobby ======
 const G={state:'lobby',time:600,sA:0,sB:0,limit:40,diff:1,primary:'thompson',sens:1,t:0,noise:null,q:coarse?1:2,artT:25,auto:coarse,assist:true,uavT:0};
+const PAD={on:false,prev:[],sprint:false,look:false,gp:null};
 const DIFFS=[{acc:.55,react:.7,dmg:.7},{acc:1,react:1,dmg:1},{acc:1.5,react:1.6,dmg:1.25}];
 const IC={smg:'M4 12h20l3-3h50v-3h4v3h30v4H84v3H58l-3 20h-7l2-20h-9l-5 9h-7l3-9H22l-12 8H4z',rifle:'M2 16l22-4h30l2-3h10l2 3h48v3H70l-2 4H44l-8 3-4 10h-8l3-11-23 3z',
  sniper:'M2 20l22-4h30l2-3h10l2 3h48v3H70l-2 4H44l-8 3-4 10h-8l3-11-23 3zM40 6h34v6H40z',ar:'M2 14l20-3h34v-3h6v3h54v4H78l-2 4H60l8 18h-9l-9-16h-9l-4 12h-8l3-13-28 3z',pistol:'M30 10h56v10H62l-3 5h-9l-6 13H32l5-18h-7z'};
@@ -54,7 +55,7 @@ function impact(x,y,z,mat,dist){const up=mat==='dirt'?1:.3;
  if(dist<25)sImpact(dist)}
 function blood(x,y,z,dx,dz){for(let i=0;i<5;i++)puff(T.puff,x,y,z,dx*R(.5,2.5)+R(-.7,.7),R(-.2,1.4),dz*R(.5,2.5)+R(-.7,.7),R(.25,.5),.08,R(.3,.55),COL.blood,.8,5,false,2)}
 let shake=0;
-function explode(p,owner){const d=cam.position.distanceTo(p);sExpl(d);shake=Math.max(shake,clamp(1.6-d/22,0,1.4));explL.position.copy(p).y+=1;explL.intensity=60;
+function explode(p,owner){const d=cam.position.distanceTo(p);if(d<30)rumble(.45,1-d/30,.8);sExpl(d);shake=Math.max(shake,clamp(1.6-d/22,0,1.4));explL.position.copy(p).y+=1;explL.intensity=60;
  puff(T.glow,p.x,p.y+.6,p.z,0,0,0,.14,3,10,COL.hot,1,0,true);for(let i=0;i<10;i++)puff(T.puff,p.x+R(-.6,.6),p.y+R(.2,1),p.z+R(-.6,.6),R(-3,3),R(1,6),R(-3,3),R(.25,.5),.8,R(2.2,3.6),COL.fire,.95,0,true,3);
  for(let i=0;i<12;i++)puff(T.puff,p.x+R(-1,1),p.y+R(.2,1.2),p.z+R(-1,1),R(-2.2,2.2),R(1.5,5),R(-2.2,2.2),R(1.8,3.6),1,R(4,7),i%3?COL.smoke:COL.dark,.7,-.25,false,1.6);
  for(let i=0;i<18;i++)puff(T.glow,p.x,p.y+.2,p.z,R(-9,9),R(4,14),R(-9,9),R(.8,1.5),R(.07,.16),.05,COL.dark,1,16);
@@ -162,7 +163,7 @@ const show=[['A','smg',-1.3,88.2,2.6,0,0],['A','rifle',.5,87.3,3.3,0,1],['A','sm
  m.st={speed:0,ph:0,cr:a[5],aim:a[6],pitch:0,dead:0,fall:1,roll:0,j1:0,j2:0,flinch:0,kick:0};pose(m,m.st);return m});
 // ---------- dégâts ----------
 function damage(e,amt,by,head,from){if(!e.alive||G.state!=='play'||e.safe>0)return;
- if(e.isPlayer){let a=amt;if(P.armor>0){const ab=Math.min(P.armor,a*.6);P.armor-=ab;a-=ab}P.hp-=a;P.lastHit=G.t;shake=Math.max(shake,.35);hurtFx(from||by.pos);nz(.3,700,.12);if(P.hp<=0)kill(P,by,head,from)}
+ if(e.isPlayer){rumble(.25,.9,.6);let a=amt;if(P.armor>0){const ab=Math.min(P.armor,a*.6);P.armor-=ab;a-=ab}P.hp-=a;P.lastHit=G.t;shake=Math.max(shake,.35);hurtFx(from||by.pos);nz(.3,700,.12);if(P.hp<=0)kill(P,by,head,from)}
  else{e.hp-=amt;e.st.flinch=R(-1,1);e.alert(by);if(e.hp<=0)kill(e,by,head,from)}}
 function kill(v,k,head,from){v.alive=false;v.deaths++;if(k!==v&&!k.isArty){k.kills++;if(k.team==='A')G.sA++;else G.sB++}if(v.isPlayer)P.streak=0;feed(k,v,head);
  if(v.isPlayer){P.hp=0;P.deadT=5;P.killer=k;P.ads=false;$('deathBy').textContent=k===P?'Ta propre grenade.':'Abattu par '+k.name+'.';$('deathOv').hidden=false}else v.die(from||k.pos);
@@ -255,7 +256,7 @@ function fire(){const cw=P.w[P.cur],w=W[cw.id];if(P.reloadT>0||P.swapT>0||P.fire
  const v=vm();_v.copy(_o).addScaledVector(_r,.11).addScaledVector(_u,-.09).addScaledVector(_d,.7);if(best>3)tracer(_v,end);
  if(!(w.scope&&P.adsK>.8)){v.fl.visible=true;v.fl.material.rotation=Math.random()*6.28;v.flT=.045}flashL.position.copy(_v);flashL.intensity=9;
  puff(T.puff,_v.x,_v.y,_v.z,_d.x*2,.5,_d.z*2,.5,.12,.7,COL.steam,.22,0,false,2);
- sGun(0,w.snd);if(w.ping&&cw.ammo===0)tone(.35,2500,2250,.32,.06,'triangle');if(w.bolt)P.boltT=1;P.pitch=Math.min(1.45,P.pitch+w.rec*.45*(P.adsK>.5?.75:1));P.rc+=w.rec*.55;P.yaw+=R(-1,1)*w.rec*.3;P.kick=1;shake=Math.max(shake,w.rec*4);
+ sGun(0,w.snd);rumble(w.snd==='rifle'?.09:.05,w.snd==='rifle'?.5:.25,.45);if(w.ping&&cw.ammo===0)tone(.35,2500,2250,.32,.06,'triangle');if(w.bolt)P.boltT=1;P.pitch=Math.min(1.45,P.pitch+w.rec*.45*(P.adsK>.5?.75:1));P.rc+=w.rec*.55;P.yaw+=R(-1,1)*w.rec*.3;P.kick=1;shake=Math.max(shake,w.rec*4);
  const c=casings[csi=(csi+1)%6];c.m.visible=true;c.m.position.copy(v.g.position).add(v.ej);c.v.set(R(.5,.9),R(.5,1),R(-.1,.25));c.life=.6;
  P.lastFire=G.t;G.noise=G.t;for(const b of bots)if(b.alive&&b.team==='B'&&b.pos.distanceTo(P.pos)<48)b.alertT=G.t;if(cw.ammo<=0&&cw.res>0)setTimeout(reload,250)}
 // ---------- HUD ----------
@@ -286,7 +287,7 @@ function aimAssist(dt){let best=null,ba=.42,bdy=0,bdp=0,bd=0;const cp=cam.positi
   let a=Math.atan2(-dx,-dz)-P.yaw;a=Math.atan2(Math.sin(a),Math.cos(a));const b=Math.atan2(dy,h)-pt,ang=Math.hypot(a*Math.cos(pt),b);if(ang<ba){ba=ang;best=e;bdy=a;bdp=b;bd=h}}
  if(best&&!los(cp.x,cp.y,cp.z,best.pos.x,best.pos.y+(best.crouch?.85:1.25),best.pos.z))best=null;
  AA.e=best;AA.ang=best?ba:9;AA.d=bd;const on=!!best&&ba<Math.atan2(.55,bd)+.02;AA.t=on?AA.t+dt:0;AA.on=on&&AA.t>.04;
- if(best&&G.assist){let k=0;if(P.snapT>0){P.snapT-=dt;k=Math.min(1,dt*22)}else if(ba<.4)k=Math.min(1,dt*(P.adsK>.5?9:6))*Math.min(1,1.25-ba/.4*1.25)*(P.speed>.5||best.speed>.5||I.lookId>=0||I.fire||G.auto?1:.4);
+ if(best&&G.assist){let k=0;if(P.snapT>0){P.snapT-=dt;k=Math.min(1,dt*22)}else if(ba<.4)k=Math.min(1,dt*(P.adsK>.5?9:6))*Math.min(1,1.25-ba/.4*1.25)*(P.speed>.5||best.speed>.5||I.lookId>=0||PAD.look||I.fire||G.auto?1:.4);
   if(k){P.yaw+=bdy*k;P.pitch=clamp(P.pitch+bdp*k*.95,-1.45,1.45)}}else P.snapT=0;
  if(AA.on!==AA.was){AA.was=AA.on;$('cross').classList.toggle('hot',AA.on)}
  if(best&&ba<.08){if(AA.shown!==best){AA.shown=best;$('tgtN').textContent=best.name;$('tgt').hidden=false}$('tgtF').style.transform=`scaleX(${Math.max(0,best.hp/100)})`}else if(AA.shown){AA.shown=null;$('tgt').hidden=true}}
@@ -324,7 +325,7 @@ let stepAcc=0;
 function updPlayer(dt){const w=W[P.w[P.cur].id];
  if(!P.alive){P.deadT-=dt;$('deathT').textContent='Redéploiement dans '+Math.max(1,Math.ceil(P.deadT))+' s';P.camY+=(P.pos.y+.3-P.camY)*Math.min(1,dt*5);cam.position.set(P.pos.x,P.camY,P.pos.z);cam.rotation.set(P.pitch,P.yaw,Math.min(.9,(5-P.deadT)*2));if(P.deadT<=0)respawnPlayer();return}
  P.safe-=dt;let f=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0)-I.jy,s=(K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0)+I.jx;const m=Math.hypot(f,s);if(m>1){f/=m;s/=m}
- const sprint=(K.ShiftLeft||Math.hypot(I.jx,I.jy)>.93)&&f>.6&&!P.crouch&&!P.ads;
+ const sprint=(K.ShiftLeft||PAD.sprint||(!PAD.on&&Math.hypot(I.jx,I.jy)>.93))&&f>.6&&!P.crouch&&!P.ads;if(PAD.sprint&&f<.3)PAD.sprint=false;
  const sp=P.crouch?2.1:P.ads?2.4:sprint?6.3:4.2,sy=Math.sin(P.yaw),cy=Math.cos(P.yaw),tx=(-sy*f+cy*s)*sp,tz=(-cy*f-sy*s)*sp,k=Math.min(1,dt*(P.onGround?11:2.5));
  P.sprinting=sprint;if(P.slideT>0){P.slideT-=dt;const sv=3+8*Math.max(0,P.slideT)/.7;P.vel.x=P.sdx*sv;P.vel.z=P.sdz*sv;if(P.slideT<=0){P.crouch=false;$('bCrouch').classList.remove('on')}}else{P.vel.x+=(tx-P.vel.x)*k;P.vel.z+=(tz-P.vel.z)*k}
  const ox=P.pos.x,oz=P.pos.z,vv=Math.hypot(P.vel.x,P.vel.z);P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;collide(P.pos,.35,P.pos.y);
@@ -388,8 +389,8 @@ addEventListener('resize',resize);resize();
 // lobby
 {const li=(n,s,me)=>{const l=document.createElement('li');l.textContent=n;const sp=document.createElement('span');sp.textContent=s;l.appendChild(sp);if(me)l.style.color='#ffd76a';return l};
  const a=$('rosA'),b=$('rosB');a.innerHTML='<li><b>ALLIÉS</b></li>';b.innerHTML='<li><b>AXE</b></li>';a.appendChild(li('Toi','joueur',true));bots.forEach(o=>(o.team==='A'?a:b).appendChild(li(o.name,o.team==='A'?(o.wpn==='smg'?'Thompson':'M1 Garand'):(o.wpn==='smg'?'MP 40':'Kar98k'))));
- $('help').textContent=coarse?'Joystick à gauche pour avancer (pousse à fond pour courir), glisse à droite pour viser. Boutons : tir, visée, grenade, soin, saut, accroupi, recharge, coup de crosse. Touche l’arme pour passer au Colt. Reviens près de ta base pour te ravitailler.'
-  :'ZQSD ou WASD pour bouger, souris pour viser, clic gauche pour tirer, clic droit pour épauler. Maj : courir · C : accroupi · Espace : saut · R : recharger · G : grenade · H : soin · Q : changer d’arme · V : coup de crosse · Échap : pause. Reviens près de ta base pour te ravitailler.';
+ window.setHelp=()=>{$('help').textContent=PAD.on?'Manette : stick gauche pour bouger (clic pour courir), stick droit pour viser. RT tirer, LT viser, A sauter, B s’accroupir (en courant : glissade), X recharger, Y changer d’arme, RB grenade, LB soin, clic du stick droit coup de crosse, croix haut reconnaissance, croix droite artillerie, Menu pause. Dans le lobby : croix gauche/droite pour l’arme, haut/bas pour la difficulté, A pour déployer.':coarse?'Joystick à gauche pour avancer (pousse à fond pour courir), glisse à droite pour viser. Boutons : tir, visée, grenade, soin, saut, accroupi, recharge, coup de crosse. Touche l’arme pour passer au Colt. Reviens près de ta base pour te ravitailler.'
+  :'ZQSD ou WASD pour bouger, souris pour viser, clic gauche pour tirer, clic droit pour épauler. Maj : courir · C : accroupi · Espace : saut · R : recharger · G : grenade · H : soin · Q : changer d’arme · V : coup de crosse · Échap : pause. Reviens près de ta base pour te ravitailler.'};setHelp();
  try{const s=localStorage.getItem('fdf');if(s){const o=JSON.parse(s);if(W[o.w]&&o.w!=='m1911')G.primary=o.w;if(o.q>=0&&o.q<3)G.q=o.q;if(typeof o.f==='boolean')G.auto=o.f;if(typeof o.a==='boolean')G.assist=o.a;if(o.d>=0&&o.d<3)G.diff=o.d;if(o.s)G.sens=clamp(+o.s,.4,2.2)}}catch(e){}
  const save=()=>{try{localStorage.setItem('fdf',JSON.stringify({w:G.primary,d:G.diff,s:G.sens,q:G.q,f:G.auto,a:G.assist}))}catch(e){}};
  const sync=()=>{document.querySelectorAll('#optW .opt').forEach(o=>o.classList.toggle('sel',o.dataset.w===G.primary));document.querySelectorAll('#optD .opt').forEach(o=>o.classList.toggle('sel',+o.dataset.d===G.diff));document.querySelectorAll('#optQ .opt').forEach(o=>o.classList.toggle('sel',+o.dataset.q===G.q));document.querySelectorAll('#optF .opt').forEach(o=>o.classList.toggle('sel',(o.dataset.f==='1')===G.auto));document.querySelectorAll('#optA .opt').forEach(o=>o.classList.toggle('sel',(o.dataset.a==='1')===G.assist));$('sens').value=G.sens};sync();
@@ -398,7 +399,32 @@ addEventListener('resize',resize);resize();
  $('load').hidden=true;$('deploy').hidden=false;cam.fov=50;cam.updateProjectionMatrix()}
 // ---------- boucle ----------
 let last=performance.now();
-function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;
+// ---------- manette (disposition console par défaut) ----------
+// A saut · B accroupi/glissade · X recharger · Y changer d'arme · LB soin · RB grenade · LT viser · RT tirer
+// stick gauche (clic : courir) · stick droit (clic : coup de crosse) · croix haut : reconnaissance · croix droite : artillerie · Menu : pause
+function rumble(d,s,w){const a=PAD.gp&&PAD.gp.vibrationActuator;if(!a||!a.playEffect)return;try{const r=a.playEffect('dual-rumble',{duration:d*1000,strongMagnitude:clamp(s,0,1),weakMagnitude:clamp(w,0,1)});if(r&&r.catch)r.catch(()=>{})}catch(e){}}
+function stick(x,y){const m=Math.hypot(x,y);if(m<.16)return[0,0];const k=Math.min(1,(m-.16)/.8)/m;return[x*k,y*k]}
+function pollPad(dt){let gp=null;try{const l=navigator.getGamepads?navigator.getGamepads():[];for(const g of l)if(g&&g.connected&&g.buttons.length>=12){gp=g;break}}catch(e){}
+ if(!gp){if(PAD.on){PAD.on=false;PAD.gp=null;document.body.classList.remove('pad');if(I.joyId<0){I.jx=I.jy=0}I.fire=false;PAD.prev=[];setHelp()}return}
+ PAD.gp=gp;if(!PAD.on){PAD.on=true;document.body.classList.add('pad');setHelp();note('Manette connectée','')}
+ const B=gp.buttons,dn=i=>!!B[i]&&(B[i].pressed||B[i].value>.4),pr=i=>dn(i)&&!PAD.prev[i],rl=i=>!dn(i)&&PAD.prev[i];
+ if(G.state==='lobby'){const ids=Object.keys(W).filter(k=>k!=='m1911');let i=ids.indexOf(G.primary);
+  if(pr(15)||pr(14)||pr(5)||pr(4)){i=(i+((pr(15)||pr(5))?1:ids.length-1))%ids.length;const o=document.querySelector('#optW [data-w="'+ids[i]+'"]');if(o)o.click()}
+  if(pr(12)||pr(13)){const o=document.querySelector('#optD [data-d="'+((G.diff+(pr(13)?1:2))%3)+'"]');if(o)o.click()}
+  if(pr(0)||pr(9))startMatch()}
+ else if(G.state==='pause'){if(pr(0)||pr(9)||pr(1))setPause(false);else if(pr(3))toLobby()}
+ else if(G.state==='end'){if(pr(0)||pr(9))toLobby()}
+ else if(G.state==='play'){const[lx,ly]=stick(gp.axes[0]||0,gp.axes[1]||0),[rx,ry]=stick(gp.axes[2]||0,gp.axes[3]||0);
+  if(I.joyId<0){I.jx=lx;I.jy=ly}PAD.look=!!(rx||ry);
+  if(PAD.look){const cx=rx*Math.abs(rx)*.6+rx*.4,cy=ry*Math.abs(ry)*.6+ry*.4;look(cx*3.6*dt,cy*2.6*dt,1)}
+  if(pr(10))PAD.sprint=!PAD.sprint;
+  if(pr(7)){I.fire=true;I.edge=true}else if(rl(7)&&!I.fireIds.size)I.fire=false;
+  if(pr(6)&&P.alive&&P.reloadT<=0){P.ads=true;if(G.assist&&AA.e&&AA.ang<.5)P.snapT=.24;PAD.sprint=false}else if(rl(6))P.ads=false;
+  if(pr(0))act('jump',true);if(pr(1))act('crouch',true);if(pr(2))act('reload',true);if(pr(3))act('swap',true);if(pr(5))act('gren',true);if(pr(4)||pr(13))act('heal',true);
+  if(pr(11))act('knife',true);if(pr(12))act('uav',true);if(pr(15))act('strike',true);if(pr(9)||pr(8))act('pause',true)}
+ PAD.prev=B.map((b,i)=>dn(i))}
+addEventListener('gamepadconnected',()=>pollPad(0));
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;pollPad(dt);
  if(G.state==='play'){G.t+=dt;G.time-=dt;updPlayer(dt);for(const b of bots)b.update(dt);updGren(dt);updWar(dt);updHud(dt);if(G.time<=0)endMatch()}
  else if(G.state==='lobby'){const a=now*.00012+.4;cam.position.set(.4+Math.sin(a)*4.6,H(.4,88)+1.5,88+Math.cos(a)*4.6-1.2);cam.lookAt(.4,H(.4,88)+1.15,88)}
  if(G.state!=='pause'){updFx(dt);updTr(dt);updAmb(dt);shake=Math.max(0,shake-dt*3);flashL.intensity*=Math.max(0,1-dt*30);explL.intensity*=Math.max(0,1-dt*7)}

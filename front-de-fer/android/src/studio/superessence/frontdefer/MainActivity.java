@@ -3,6 +3,9 @@ package studio.superessence.frontdefer;
 import android.app.Activity;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
@@ -28,7 +31,10 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         web.setBackgroundColor(0xff0c0d0b);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
         setContentView(web);
+        web.requestFocus();
         immersive();
         web.loadUrl("file:///android_asset/index.html");
     }
@@ -54,6 +60,21 @@ public class MainActivity extends Activity {
                 new ValueCallback<String>() {
                     @Override public void onReceiveValue(String v) { if (!"1".equals(v)) finish(); }
                 });
+    }
+
+    private static boolean isPad(int src) {
+        return (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+    }
+
+    /** Les boutons de la manette vont au jeu : B ne doit pas devenir « retour » et fermer l'appli. */
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        if (isPad(e.getSource()) && e.getKeyCode() != KeyEvent.KEYCODE_HOME) { web.dispatchKeyEvent(e); return true; }
+        return super.dispatchKeyEvent(e);
+    }
+
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent e) {
+        if (isPad(e.getSource())) { web.dispatchGenericMotionEvent(e); return true; }
+        return super.dispatchGenericMotionEvent(e);
     }
 
     @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }
