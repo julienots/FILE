@@ -109,14 +109,18 @@ class Studio:
             kw["max_new_tokens"] = self.cap
             return inner(*args, **kw)
         self.tts.t3.inference = capped
-        self.asr = WhisperModel("turbo", device="cpu", compute_type="int8", cpu_threads=threads)
-        # Première écoute rapide ; le grand modèle ne réécoute que les prises douteuses.
-        self.asr_fast = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=threads)
+        # Un seul modèle d'écoute, léger : la machine de production a peu de mémoire.
+        self.asr = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=threads)
+        self.asr_fast = self.asr
 
     def take(self, text, seed):
         self.torch.manual_seed(seed)
         self.cap = int(25 * (0.14 * len(text) + 2.5))  # 25 jetons audio par seconde
-        w = self.tts.generate(text, language_id="fr", **STYLE)
+        try:
+            w = self.tts.generate(text, language_id="fr", **STYLE)
+        except (IndexError, RuntimeError) as e:  # textes très courts : bug connu de l'analyseur d'alignement
+            print(f"  prise impossible ({type(e).__name__}) : {text!r}", flush=True)
+            return np.zeros(int(0.3 * self.sr), dtype=np.float32)
         return w.squeeze().numpy().astype(np.float32)
 
     def listen(self, wav, fast=False):
@@ -224,7 +228,7 @@ class Studio:
             wav = self.take(spoken(text), base_seed + k)
             j = self.judge(text, wav, fast=True)
             full = j["ok"] and (not need_pauses or all(p is not None for p in j["pauses"]))
-            if not full:
+            if not full and self.asr is not self.asr_fast:
                 j = self.judge(text, wav)
                 full = j["ok"] and (not need_pauses or all(p is not None for p in j["pauses"]))
             if max_speech is not None and j["speech"] > max_speech:
