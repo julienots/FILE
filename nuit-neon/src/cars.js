@@ -266,19 +266,25 @@ function rigImported(src, def, paint, loin) {
     wheels.push({ steer, spin, front: key[1] === 'F', radius: Math.max(0.2, s.y / 2) });
   }
 
-  // feux arrière lumineux ajoutés (s'intensifient au freinage)
-  const glows = [], heads = [];
+  // feux : posés sur la carrosserie, à l'endroit où le modèle a ses propres optiques (retrouvées dans sa texture), et orientés comme la tôle.
+  // Ils font partie de la voiture : cachés par la caisse quand on la regarde de l'autre côté, ils roulent et tanguent avec elle.
+  const glows = [], heads = []; let lampG = null;
   if (def.feux !== false && !loin) {
     glowTex = glowTex || radialTex([[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,60,30,0.8)'], [1, 'rgba(255,0,0,0)']]);
     headTex = headTex || radialTex([[0, 'rgba(255,255,255,1)'], [0.2, 'rgba(230,240,255,0.85)'], [0.5, 'rgba(160,190,255,0.25)'], [1, 'rgba(120,160,255,0)']]);
-    const xs = def.moto ? [0] : [-1, 1];
-    for (const s of xs) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0xff2a10).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      sp.scale.set(0.36, 0.2, 1); sp.position.set(s * half * (def.feuxX ?? 0.62), top * (def.feuxY ?? (def.moto ? 0.6 : 0.55)), len + 0.03);
-      root.add(sp); glows.push(sp);
-      const hd = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: new THREE.Color(0xf0f4ff).multiplyScalar(2.0), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      hd.position.set(s * half * (def.pharesX ?? 0.6), top * (def.pharesY ?? (def.moto ? 0.66 : 0.42)), -len - 0.05);
-      root.add(hd); heads.push(hd);
+    lampGeo = lampGeo || new THREE.PlaneGeometry(1, 1); lampGeo.userData.keep = true;
+    root.updateMatrixWorld(true);
+    const L = def._lampes = def._lampes || lampSpots(holder, half, len, top, def);
+    lampG = new THREE.Group(); root.add(lampG);
+    const put = (spot, s, tex, col, list) => {
+      const m = new THREE.Mesh(lampGeo, new THREE.MeshBasicMaterial({ map: tex, color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      const n = new THREE.Vector3(spot.nx * s, spot.ny, spot.nz).normalize();
+      m.position.set(spot.x * s, spot.y, spot.z).addScaledVector(n, 0.025); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      m.renderOrder = 4; lampG.add(m); list.push(m);
+    };
+    for (const s of (def.moto ? [1] : [-1, 1])) {
+      put(L.tail, s, glowTex, new THREE.Color(0xff2a10).multiplyScalar(2.2), glows);
+      put(L.head, s, headTex, new THREE.Color(0xf0f4ff).multiplyScalar(2.0), heads);
     }
   }
   if (!loin) root.add(blobShadow(half * 2 + 0.9, len * 2 + 1.1));
@@ -294,7 +300,55 @@ function rigImported(src, def, paint, loin) {
     const hit = rc.intersectObject(holder, true)[0];
     cockpit = new THREE.Vector3(0, (hit ? hit.point.y : top * 0.8) + 0.42, zc);
   }
-  return { root, chassis, wheels, paintMats, tailMats: [], glows, heads, half, len, moto: !!def.moto, rider, cockpit };
+  return { root, chassis, wheels, paintMats, tailMats: [], glows, heads, lampG, half, len, moto: !!def.moto, rider, cockpit };
+}
+
+// Où sont les optiques d'un modèle importé ? On parcourt les triangles de la carrosserie tournés vers l'arrière (ou l'avant) et on lit
+// la couleur de la texture à cet endroit : les feux arrière sont la zone rouge vif, les phares la zone la plus claire.
+// Sans texture lisible, on prend le point de la carrosserie le plus proche de l'emplacement habituel. Le résultat est donné pour le côté droit.
+let lampGeo = null;
+function lampSpots(holder, half, len, top, def) {
+  const moto = !!def.moto, tris = { tail: [], head: [] };
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nn = new THREE.Vector3();
+  holder.traverse(o => {
+    if (!o.isMesh || !o.geometry.attributes.position) return;
+    const g = o.geometry, P = g.attributes.position, U = g.attributes.uv, I = g.index, mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    let px = null, W = 0, H = 0; const map = mat && mat.map;
+    if (map && map.image && U) { try { W = H = 256; const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(map.image, 0, 0, W, H); px = cx.getImageData(0, 0, W, H).data; } catch (e) { px = null; } }
+    const n = I ? I.count : P.count;
+    for (let i = 0; i < n; i += 3) {
+      const i0 = I ? I.getX(i) : i, i1 = I ? I.getX(i + 1) : i + 1, i2 = I ? I.getX(i + 2) : i + 2;
+      a.fromBufferAttribute(P, i0).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(P, i1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(P, i2).applyMatrix4(o.matrixWorld);
+      const cz = (a.z + b.z + c.z) / 3, back = cz > len * 0.62, front = cz < -len * 0.55; if (!back && !front) continue;
+      const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3;
+      if (cy < top * (moto ? 0.4 : 0.26) || cy > top * (moto ? 0.92 : back ? 0.8 : 0.7) || (moto ? Math.abs(cx) > half * 0.5 : Math.abs(cx) < half * 0.18)) continue;
+      nn.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)); const area = nn.length() / 2; if (area < 1e-7) continue; nn.divideScalar(area * 2);
+      if (mat.side === THREE.DoubleSide && nn.z * (back ? 1 : -1) < 0) nn.negate();
+      if (nn.z * (back ? 1 : -1) < (back || moto ? 0.55 : 0.3)) continue;                     // seules les faces bien tournées vers l'arrière (ou l'avant) portent des optiques
+      let red = 0, white = 0;
+      if (px) { let u = (U.getX(i0) + U.getX(i1) + U.getX(i2)) / 3 * map.repeat.x + map.offset.x, v = (U.getY(i0) + U.getY(i1) + U.getY(i2)) / 3 * map.repeat.y + map.offset.y; u -= Math.floor(u); v -= Math.floor(v); if (map.flipY) v = 1 - v;
+        const k = (Math.min(H - 1, Math.floor(v * H)) * W + Math.min(W - 1, Math.floor(u * W))) * 4, r = px[k] / 255, gg = px[k + 1] / 255, bb = px[k + 2] / 255;
+        red = r > 0.45 ? Math.max(0, r - Math.max(gg, bb) * 1.25) : 0; white = Math.max(0, Math.min(r, gg, bb) - 0.55); }
+      tris[back ? 'tail' : 'head'].push({ x: Math.abs(cx), y: cy, z: cz, nx: nn.x * Math.sign(cx || 1), ny: nn.y, nz: nn.z, area, s: back ? red : white });
+    }
+  });
+  const spot = (list, gx, gy, sign, fixed) => {
+    if (!list.length) return { x: gx, y: gy, z: sign * len, nx: 0, ny: 0, nz: sign };
+    let seed = null;
+    const tot = list.reduce((t, q) => t + q.s * q.area, 0), all = list.reduce((t, q) => t + q.area, 0);
+    // la texture ne désigne les optiques que si la zone colorée est petite devant la face (sinon c'est la peinture)
+    if (!fixed && tot > 1e-5) { let bs = 0; for (const q of list) { let sc = 0, ar = 0; for (const r of list) { const d2 = (r.x - q.x) ** 2 + (r.y - q.y) ** 2; if (d2 < 0.012) { sc += r.s * r.area; ar += r.area; } } sc *= Math.exp(-((q.x - gx) ** 2 + (q.y - gy) ** 2) / 0.16); if (ar < all * 0.35 && sc > bs) { bs = sc; seed = q; } } }   // à couleur égale, on préfère l'emplacement habituel
+    if (!seed) { let bd = 1e9; for (const q of list) { const d = (q.x - gx) ** 2 + (q.y - gy) ** 2 - q.z * sign * 0.02; if (d < bd) { bd = d; seed = q; } } }
+    // moyenne des triangles voisins de la même surface : position et orientation de l'optique
+    const o = { x: 0, y: 0, z: 0, nx: 0, ny: 0, nz: 0 }; let w = 0;
+    for (const q of list) { if ((q.x - seed.x) ** 2 + (q.y - seed.y) ** 2 > 0.008 || Math.abs(q.z - seed.z) > 0.12) continue; const k = q.area * (0.2 + q.s); for (const key in o) o[key] += q[key] * k; w += k; }
+    for (const key in o) o[key] /= w;
+    o.nx *= 0.5; o.ny *= 0.3; const nl = Math.hypot(o.nx, o.ny, o.nz) || 1; o.nx /= nl; o.ny /= nl; o.nz /= nl;   // l'optique reste surtout tournée vers l'arrière (ou l'avant)
+    if (moto) { o.x = 0; o.nx = 0; }
+    return o;
+  };
+  return { tail: spot(tris.tail, moto ? 0 : half * (def.feuxX ?? 0.62), top * (def.feuxY ?? (moto ? 0.6 : 0.55)), 1, def.feuxX !== undefined || def.feuxY !== undefined),
+    head: spot(tris.head, moto ? 0 : half * (def.pharesX ?? 0.6), top * (def.pharesY ?? (moto ? 0.66 : 0.42)), -1, def.pharesX !== undefined || def.pharesY !== undefined) };
 }
 
 // ---------- moto avec son pilote ----------
@@ -458,12 +512,13 @@ export function animateCar(v, dt, speed, steer, latAcc, lonAcc, braking, time) {
   v.pitch += (THREE.MathUtils.clamp(-lonAcc * 0.0022, -0.035, 0.03) - v.pitch) * k;
   v.chassis.rotation.z = v.roll;
   v.chassis.rotation.x = v.pitch;
+  if (v.lampG) { v.lampG.rotation.z = v.roll; v.lampG.rotation.x = v.pitch; }   // les feux suivent les mouvements de la caisse
   v.chassis.position.y = v.hover ? v.hover + Math.sin(time * 2.3 + v.len) * 0.05 : Math.sin(time * 31 + v.wheelAngle) * 0.004 * Math.min(1, Math.abs(speed) / 30);   // une voiture volante flotte et ondule
   if (v.mist) { const a = THREE.MathUtils.clamp((Math.abs(speed) - 10) / 45, 0, 1) * (v.wet ?? 1); v.mist.material.opacity = a * (0.16 + Math.random() * 0.1); const s = 2.6 + a * 2.2 + Math.random() * 0.8; v.mist.scale.set(s, s * 0.42, 1); v.mist.position.z = v.len + 1.2 + a * 1.4; }
   const b = braking ? 2.6 : 1.1;
   for (const m of v.tailMats) m.color.setRGB(b, 0.02 * b, 0.01 * b);
-  for (const g of v.glows) { g.material.opacity = braking ? 1 : 0.55; g.scale.set(braking ? 0.5 : 0.36, braking ? 0.28 : 0.2, 1); }
-  if (v.heads) for (const h of v.heads) { const k = v.lights ? 1 : 0.35; h.material.opacity = k; h.scale.set(0.34 * k + 0.12, 0.2 * k + 0.08, 1); }
+  for (const g of v.glows) { g.material.opacity = braking ? 1 : 0.6; g.scale.set(braking ? 0.44 : 0.34, braking ? 0.2 : 0.15, 1); }
+  if (v.heads) for (const h of v.heads) { const k = v.lights ? 1 : 0.35; h.material.opacity = k; h.scale.set(0.26 * k + 0.12, 0.13 * k + 0.07, 1); }
 }
 
 export function disposeCar(v) {
