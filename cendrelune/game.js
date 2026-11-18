@@ -328,8 +328,9 @@ function prepModelMaterials(obj, cast = true) {
 // Place un modèle Tripo ajusté dans une boîte w×h×d (m), posé au sol. Renvoie true si le modèle existe.
 function placeModel(name, x, z, rot, w, h, d, y = 0, parent = world) {
   const g = MODELS[name]; if (!g) return false;
-  const obj = g.scene.clone(true);
+  let obj = g.scene.clone(true);
   prepModelMaterials(obj);
+  if (name === 'pistol' || name === 'letter') { const lay = new THREE.Group(); obj.rotation.x = -Math.PI / 2; lay.add(obj); obj = lay; } // modèles debout → à plat
   const bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3());
   // oriente l'axe long du modèle comme la boîte demandée
   const wrap = new THREE.Group(); wrap.add(obj);
@@ -337,7 +338,8 @@ function placeModel(name, x, z, rot, w, h, d, y = 0, parent = world) {
   if ((w > d) !== (sz.x > sz.z) && Math.abs(w - d) > 0.15 && Math.abs(sz.x - sz.z) > sz.x * 0.15) { obj.rotation.y = Math.PI / 2; turned = true; }
   const ex = turned ? sz.z : sz.x, ez = turned ? sz.x : sz.z;
   const s = Math.min(w / ex, h / sz.y, d / ez);
-  obj.scale.setScalar(s);
+  if (name === 'door') obj.scale.set(w / ex, h / sz.y, d / ez); // battant étiré pour remplir l'encadrement
+  else obj.scale.setScalar(s);
   const bb2 = new THREE.Box3().setFromObject(wrap), c = bb2.getCenter(new THREE.Vector3());
   obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= bb2.min.y;
   wrap.position.set(x, y, z); wrap.rotation.y = rot;
@@ -411,7 +413,7 @@ function buildDoor(d) {
   let usedModel = false;
   if (MODELS.door) {
     const holder = new THREE.Group();
-    const m = placeModel('door', 0, 0, 0, open, 2.0, 0.12, 0, holder);
+    const m = placeModel('door', 0, 0, 0, open, 2.02, 0.1, 0, holder);
     if (m) { usedModel = true; holder.position.set(open / 2, 0, 0); leaf.add(holder); }
   }
   if (!usedModel) {
@@ -564,7 +566,11 @@ function F_cart(x, z, rot = 0) {
 function F_stall(x, z, len, alongZ) {
   const w = alongZ ? 0.14 : len, d = alongZ ? len : 0.14;
   collider(x, z, w, d);
-  if (MODELS.stall && placeModel('stall', x, z, alongZ ? Math.PI / 2 : 0, len, 1.4, 0.2)) return;
+  if (MODELS.stall) { // cloison en segments du modèle Tripo, mis bout à bout
+    const n = Math.max(1, Math.round(len / 1.7)), seg = len / n;
+    for (let i = 0; i < n; i++) { const o = (i + 0.5) * seg - len / 2; placeModel('stall', alongZ ? x : x + o, alongZ ? z + o : z, alongZ ? Math.PI / 2 : 0, seg, 1.4, 0.7); }
+    return;
+  }
   box(M.darkWood, x, 0.65, z, w, 1.3, d);
   box(M.wood, x, 1.33, z, w + 0.04, 0.08, d + 0.04);
 }

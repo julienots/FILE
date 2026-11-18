@@ -7,6 +7,86 @@
   {
    "name": "table",
    "file": "table.glb"
+  },
+  {
+   "name": "bench",
+   "file": "bench.glb"
+  },
+  {
+   "name": "chair",
+   "file": "chair.glb"
+  },
+  {
+   "name": "barrel",
+   "file": "barrel.glb"
+  },
+  {
+   "name": "armoire",
+   "file": "armoire.glb"
+  },
+  {
+   "name": "bed",
+   "file": "bed.glb"
+  },
+  {
+   "name": "fireplace",
+   "file": "fireplace.glb"
+  },
+  {
+   "name": "lantern",
+   "file": "lantern.glb"
+  },
+  {
+   "name": "cart",
+   "file": "cart.glb"
+  },
+  {
+   "name": "haybale",
+   "file": "haybale.glb"
+  },
+  {
+   "name": "crate",
+   "file": "crate.glb"
+  },
+  {
+   "name": "shelf",
+   "file": "shelf.glb"
+  },
+  {
+   "name": "chest",
+   "file": "chest.glb"
+  },
+  {
+   "name": "cauldron",
+   "file": "cauldron.glb"
+  },
+  {
+   "name": "door",
+   "file": "door.glb"
+  },
+  {
+   "name": "oilflask",
+   "file": "oilflask.glb"
+  },
+  {
+   "name": "meat",
+   "file": "meat.glb"
+  },
+  {
+   "name": "key",
+   "file": "key.glb"
+  },
+  {
+   "name": "pistol",
+   "file": "pistol.glb"
+  },
+  {
+   "name": "letter",
+   "file": "letter.glb"
+  },
+  {
+   "name": "stall",
+   "file": "stall.glb"
   }
  ],
  "werewolfClips": {
