@@ -212,7 +212,20 @@ CUTTINX `final` 1080 conviennent. Limite : ~50 publications par 24 h via l'API.
 Le hub doit être joignable en **HTTPS public** (CUTTINX et votre téléphone l'appellent) et garder ses fichiers
 (dossier `/data` persistant). Un seul processus suffit (le worker tourne dans l'application).
 
-### Option A — VPS avec Docker (recommandé)
+### Option 0 — Hugging Face Spaces (gratuit, sans serveur à gérer)
+1. https://huggingface.co/new-space → nom **`hub-video`**, SDK **Docker** (modèle *Blank*), visibilité **Public**
+   (obligatoire : CUTTINX et l'appli doivent joindre l'URL ; le hub reste protégé par son mot de passe).
+2. Dans l'onglet *Files* du Space, remplacez `README.md` et ajoutez `Dockerfile` avec le contenu de
+   [`deploy/huggingface/`](deploy/huggingface/) (le Dockerfile récupère le code depuis GitHub).
+3. *Settings → Variables and secrets* : ajoutez les variables de la section 4 (`PUBLIC_BASE_URL=https://<compte>-hub-video.hf.space`).
+4. L'adresse du hub est `https://<compte>-hub-video.hf.space` (en minuscules).
+
+Notes : le disque d'un Space gratuit est **effacé à chaque redémarrage** (vidéos et historique). Pour le garder, activez
+*Settings → Persistent storage* (payant), monté sur `/data`. Un Space gratuit se met en veille sans visite pendant
+48 h : l'appli Android l'appelle toutes les 15 min pour l'en empêcher. Pour mettre à jour le code : *Settings →
+Factory rebuild*.
+
+### Option A — VPS avec Docker
 ```bash
 git clone <ce dépôt> && cd <dépôt>/video-hub
 cp .env.example .env && nano .env

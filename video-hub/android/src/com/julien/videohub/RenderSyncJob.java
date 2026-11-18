@@ -68,6 +68,7 @@ public class RenderSyncJob extends JobService {
             public void run() {
                 boolean retry = false;
                 try {
+                    if (params.getJobId() == JOB_PERIODIC) keepAwake(RenderSyncJob.this);
                     retry = syncOnce(RenderSyncJob.this);
                 } catch (Exception e) {
                     Log.w(TAG, "synchro KO", e);
@@ -78,6 +79,14 @@ public class RenderSyncJob extends JobService {
             }
         }, "hub-sync").start();
         return true;
+    }
+
+    /** Petit appel toutes les 15 min : empêche un hébergement gratuit (Hugging Face) de mettre le hub en veille. */
+    static void keepAwake(Context c) {
+        try {
+            if (new Prefs(c).configured()) new HubClient(c).get("/healthz");
+        } catch (Exception ignored) {
+        }
     }
 
     @Override

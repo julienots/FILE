@@ -15,17 +15,24 @@ final class Prefs {
     }
 
     String url() {
-        String u = p.getString("url", "").trim();
+        String u = p.getString("url", Defaults.URL).trim();
         while (u.endsWith("/")) u = u.substring(0, u.length() - 1);
         return u;
     }
 
-    String user() { return p.getString("user", "admin"); }
-    String pass() { return p.getString("pass", ""); }
-    String token() { return p.getString("token", ""); }
+    String user() { return p.getString("user", Defaults.USER.isEmpty() ? "admin" : Defaults.USER); }
+    String pass() { return p.getString("pass", Defaults.PASS); }
+    String token() { return p.getString("token", Defaults.TOKEN); }
     boolean syncEnabled() { return p.getBoolean("sync", true); }
     String folder() { return p.getString("folder", "Cuttinx"); }
-    long lastSync() { return p.getLong("last_sync", 0L); }
+    long lastSync() {
+        long v = p.getLong("last_sync", 0L);
+        if (v == 0L) { // première utilisation : on ignore l'historique de la galerie
+            v = System.currentTimeMillis() / 1000L - 3600L;
+            setLastSync(v);
+        }
+        return v;
+    }
     boolean configured() { return url().startsWith("http"); }
 
     void save(String url, String user, String pass, String token, boolean sync, String folder) {

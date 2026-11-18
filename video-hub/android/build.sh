@@ -36,6 +36,20 @@ fi
 PASS="${HUB_KEYSTORE_PASSWORD:-$(cat "$KEYPASS_FILE")}"
 
 rm -rf build && mkdir -p build/gen build/classes
+# Valeurs pré-remplies facultatives (APK personnel) : HUB_DEFAULT_URL, HUB_DEFAULT_USER, HUB_DEFAULT_PASS, HUB_DEFAULT_TOKEN.
+# Un APK personnel contient des secrets : il n'est PAS copié dans release/ (à ne jamais versionner).
+jesc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+mkdir -p build/gen/com/julien/videohub
+cat > build/gen/com/julien/videohub/Defaults.java <<JAVA
+package com.julien.videohub;
+final class Defaults {
+    static final String URL = "$(jesc "${HUB_DEFAULT_URL:-}")";
+    static final String USER = "$(jesc "${HUB_DEFAULT_USER:-}")";
+    static final String PASS = "$(jesc "${HUB_DEFAULT_PASS:-}")";
+    static final String TOKEN = "$(jesc "${HUB_DEFAULT_TOKEN:-}")";
+    private Defaults() {}
+}
+JAVA
 aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -I "$P23" -F build/res.apk
 javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 \
   -bootclasspath "$ALL:$P23" -d build/classes \
@@ -46,5 +60,9 @@ cp build/res.apk build/unsigned.apk
 zipalign -f 4 build/unsigned.apk build/aligned.apk
 apksigner sign --ks "$KEYSTORE" --ks-pass "pass:$PASS" --ks-key-alias hub --out build/HubVideo.apk build/aligned.apk 2> >(grep -v "Picked up" >&2)
 apksigner verify build/HubVideo.apk 2> >(grep -v "Picked up" >&2)
-mkdir -p release && cp build/HubVideo.apk "release/HubVideo-$VERSION.apk"
-echo "OK : build/HubVideo.apk et release/HubVideo-$VERSION.apk ($(du -h build/HubVideo.apk | cut -f1))"
+if [ -n "${HUB_DEFAULT_PASS:-}${HUB_DEFAULT_TOKEN:-}" ]; then
+  echo "OK (APK personnel, non copié dans release/) : build/HubVideo.apk ($(du -h build/HubVideo.apk | cut -f1))"
+else
+  mkdir -p release && cp build/HubVideo.apk "release/HubVideo-$VERSION.apk"
+  echo "OK : build/HubVideo.apk et release/HubVideo-$VERSION.apk ($(du -h build/HubVideo.apk | cut -f1))"
+fi
