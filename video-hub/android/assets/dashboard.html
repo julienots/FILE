@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub vidéo</title>
+<style>
+:root{--bg:#f6f6f4;--card:#fff;--ink:#1b1b1b;--muted:#6b6b6b;--line:#e3e3df;--accent:#ff4d2e;--ok:#1f8a4c;--warn:#b7791f;--err:#c0392b;--info:#2d6cdf;--chip:#efefec}
+@media (prefers-color-scheme:dark){:root{--bg:#121212;--card:#1c1c1c;--ink:#f1f1f1;--muted:#a0a0a0;--line:#2c2c2c;--chip:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,sans-serif}
+main{padding:16px;display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+h2{font-size:16px;margin:0 0 8px}
+button{font:inherit;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:10px 14px}
+.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;width:100%;padding:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row button{flex:1}
+.muted{color:var(--muted);font-size:13px}
+.item{border-top:1px solid var(--line);padding:10px 0;display:grid;gap:4px}.item:first-child{border-top:0}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--chip);white-space:nowrap}
+.queued,.scheduled{color:var(--info)}.editing,.awaiting_render,.rendered{color:var(--warn)}.published{color:var(--ok)}.error{color:var(--err)}
+.err{color:var(--err);font-size:13px}.cap{font-size:13px;white-space:pre-wrap;color:var(--muted)}
+a{color:var(--info)}
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h2>🎬 Déposer des vidéos</h2>
+    <button class="primary" onclick="Hub.pick()">Choisir des vidéos</button>
+    <p class="muted">Ou « Partager → Hub vidéo » depuis la galerie (max 50 Mo), ou partagez-les dans
+      <b>CUTTINX → Claude</b> (sans limite de taille, écrivez « perf » ou « normal » en note si vous voulez).
+      Claude passe toutes les heures : montage CUTTINX, légende, publication sur @julien.blt.bs.</p>
+  </div>
+  <div class="card">
+    <div class="top"><h2>Tableau de bord</h2><span class="muted" id="upd"></span></div>
+    <div id="list"><p class="muted">Chargement…</p></div>
+  </div>
+  <div class="row"><button onclick="Hub.sync();toast('Recherche de rendus…')">Envoyer les rendus</button><button onclick="Hub.settings()">Réglages</button></div>
+  <p class="muted" id="msg"></p>
+</main>
+<script>
+const LABEL={queued:"En attente",editing:"En montage",awaiting_render:"Rendu en attente",rendered:"Rendue",scheduled:"Programmée",published:"Publiée",error:"Erreur"};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const cfg=JSON.parse(Hub.config());
+function toast(t){document.getElementById("msg").textContent=t;setTimeout(()=>document.getElementById("msg").textContent="",3000);}
+function fmt(d){if(!d)return"";const x=new Date(d);return x.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})+" "+x.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
+async function refresh(){
+  if(!cfg.url){document.getElementById("list").innerHTML='<p class="err">Relais non configuré (Réglages).</p>';return;}
+  try{
+    const r=await fetch(cfg.url+"/rest/v1/hub_videos?select=*&order=created_at.desc&limit=50",{headers:{apikey:cfg.key,...(cfg.key.startsWith("eyJ")?{Authorization:"Bearer "+cfg.key}:{})}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    document.getElementById("upd").textContent="mis à jour "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    document.getElementById("list").innerHTML=rows.length?rows.map(v=>{
+      const link=(v.ig_result||"").match(/https?:\/\/\S+/);
+      return `<div class="item"><div class="top"><span class="name">${v.category==="normal"?"🎥":"💪"} ${esc(v.original_name||v.cuttinx_media_id||v.id)}</span><span class="chip ${v.status}">${LABEL[v.status]||esc(v.status)}</span></div>
+      <div class="muted">${fmt(v.created_at)}${v.scheduled_for&&v.status==="scheduled"?" · publication "+fmt(v.scheduled_for):""}${v.published_at?" · publiée "+fmt(v.published_at):""}${link?` · <a href="#" onclick="Hub.open('${esc(link[0])}');return false">voir</a>`:""}</div>
+      ${v.caption?`<div class="cap">${esc(v.caption.split("\n")[0])}</div>`:""}
+      ${v.last_error?`<div class="err">${esc(v.last_error)}</div>`:""}</div>`}).join(""):'<p class="muted">Aucune vidéo pour l\'instant.</p>';
+  }catch(e){document.getElementById("list").innerHTML='<p class="err">Relais injoignable : '+esc(e.message)+'</p>';}
+}
+refresh();setInterval(refresh,20000);
+</script>
+</body>
+</html>

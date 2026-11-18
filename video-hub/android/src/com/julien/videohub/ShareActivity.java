@@ -26,7 +26,7 @@ public class ShareActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (!new Prefs(this).configured()) {
-            Toast.makeText(this, "Configurez d'abord l'adresse du hub.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Configurez d'abord le relais (Réglages).", Toast.LENGTH_LONG).show();
             startActivity(new Intent(this, SettingsActivity.class));
             finish();
             return;

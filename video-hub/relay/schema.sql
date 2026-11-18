@@ -1,0 +1,5 @@
+-- Schéma du relais Supabase du Hub vidéo (appliqué sur le projet « video-studio-relay »).
+-- Tables : hub_videos (file d'attente), hub_renders (MP4 rendus envoyés par l'appli), hub_settings (réglages, styles).
+-- Buckets publics : hub-raw (dépôts depuis l'appli), hub-renders (rendus CUTTINX), 50 Mo max par fichier.
+-- La clé publique (anon) peut seulement : lire, déposer une vidéo, signaler un rendu, envoyer un fichier.
+-- Voir la migration « hub_video_relay » du projet pour le texte exact.

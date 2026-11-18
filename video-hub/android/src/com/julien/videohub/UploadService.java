@@ -9,8 +9,7 @@ import android.net.Uri;
 import android.os.IBinder;
 import android.os.PowerManager;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.json.JSONObject;
 
 /** Service au premier plan : envoie au hub les vidéos partagées depuis la galerie (gros fichiers). */
 public class UploadService extends Service {
@@ -50,40 +49,54 @@ public class UploadService extends Service {
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "videohub:upload");
         wl.acquire(60 * 60 * 1000L);
         final NotificationManager nm = getSystemService(NotificationManager.class);
+        Relay relay = new Relay(this);
+        ClipData clip = intent.getClipData();
+        int ok = 0;
+        StringBuilder problems = new StringBuilder();
         try {
-            ClipData clip = intent.getClipData();
-            List<HubClient.FilePart> files = new ArrayList<HubClient.FilePart>();
             for (int i = 0; i < clip.getItemCount(); i++) {
                 Uri u = clip.getItemAt(i).getUri();
-                if (u != null) files.add(HubClient.describe(this, "files", u));
-            }
-            final String label = files.size() == 1 ? files.get(0).name : files.size() + " vidéos";
-            HubClient.Result r = new HubClient(this).uploadVideos(
-                    files,
-                    intent.getStringExtra(EXTRA_CATEGORY),
-                    intent.getStringExtra(EXTRA_ASPECT),
-                    intent.getStringExtra(EXTRA_MODE),
-                    intent.getStringExtra(EXTRA_NOTES),
-                    new HubClient.Progress() {
+                if (u == null) continue;
+                final Relay.Info info = Relay.describe(this, u);
+                if (info.size > Relay.MAX_BYTES) {
+                    problems.append(info.name).append(" : trop lourde (").append(info.size / 1048576)
+                            .append(" Mo > 50 Mo). Partagez-la dans CUTTINX → Claude, elle sera traitée pareil.\n");
+                    continue;
+                }
+                try {
+                    String object = System.currentTimeMillis() + "_" + Relay.safe(info.name);
+                    String url = relay.upload("hub-raw", object, u, info.size, new Relay.Progress() {
                         @Override
                         public void onProgress(long sent, long total) {
                             Notification.Builder b = Notifs.builder(UploadService.this, Notifs.CH_UPLOAD,
-                                    "Envoi au hub : " + label, (sent / 1048576) + " Mo envoyés").setOngoing(true);
+                                    "Envoi : " + info.name, (sent / 1048576) + " Mo envoyés").setOngoing(true);
                             if (total > 0) b.setProgress(1000, (int) (sent * 1000 / total), false);
                             else b.setProgress(0, 0, true);
                             nm.notify(NOTIF_ID, b.build());
                         }
                     });
-            if (r.ok()) {
-                Notifs.show(this, 42, Notifs.CH_UPLOAD, "✅ Dans la file du hub",
-                        label + " : montage, légende et publication se font automatiquement.");
-            } else {
-                Notifs.show(this, 42, Notifs.CH_UPLOAD, "❌ Envoi refusé (" + r.code + ")", shorten(r.body));
+                    JSONObject row = new JSONObject();
+                    row.put("original_name", info.name);
+                    row.put("category", intent.getStringExtra(EXTRA_CATEGORY));
+                    row.put("target_aspect", intent.getStringExtra(EXTRA_ASPECT));
+                    row.put("publish_mode", intent.getStringExtra(EXTRA_MODE));
+                    row.put("notes", intent.getStringExtra(EXTRA_NOTES));
+                    row.put("raw_url", url);
+                    relay.insert("hub_videos", row);
+                    ok++;
+                } catch (Exception e) {
+                    problems.append(info.name).append(" : ").append(e.getMessage()).append("\n");
+                }
             }
-        } catch (Exception e) {
-            Notifs.show(this, 42, Notifs.CH_UPLOAD, "❌ Envoi impossible", String.valueOf(e.getMessage()));
         } finally {
             if (wl.isHeld()) wl.release();
+        }
+        if (ok > 0) {
+            Notifs.show(this, 42, Notifs.CH_UPLOAD, "✅ " + ok + " vidéo(s) dans la file",
+                    "Claude s'occupe du montage CUTTINX, de la légende et de la publication (passage toutes les heures)."
+                            + (problems.length() > 0 ? "\n" + problems : ""));
+        } else {
+            Notifs.show(this, 42, Notifs.CH_UPLOAD, "❌ Rien n'a été envoyé", problems.toString());
         }
     }
 

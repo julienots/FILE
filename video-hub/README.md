@@ -22,6 +22,10 @@ tout de suite ou à une heure de forte audience.
   (ntfy / Discord / Telegram)         └───────────────────────────────────────┘               └──────────────────────┘
 ```
 
+> **Nouveau : mode relais, rien à héberger.** Claude fait le montage et la publication tout seul toutes les heures,
+> avec les connecteurs CUTTINX, Supabase et Windsor.ai. Voir [`relay/README.md`](relay/README.md). Le serveur décrit
+> ci-dessous reste une alternative autonome (sans Claude dans la boucle).
+
 ## Appli Android
 
 L'APK **Hub vidéo** (`android/release/HubVideo-1.0.0.apk`, Android 8+) regroupe tout côté téléphone :

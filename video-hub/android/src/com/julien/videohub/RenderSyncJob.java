@@ -68,7 +68,6 @@ public class RenderSyncJob extends JobService {
             public void run() {
                 boolean retry = false;
                 try {
-                    if (params.getJobId() == JOB_PERIODIC) keepAwake(RenderSyncJob.this);
                     retry = syncOnce(RenderSyncJob.this);
                 } catch (Exception e) {
                     Log.w(TAG, "synchro KO", e);
@@ -79,14 +78,6 @@ public class RenderSyncJob extends JobService {
             }
         }, "hub-sync").start();
         return true;
-    }
-
-    /** Petit appel toutes les 15 min : empêche un hébergement gratuit (Hugging Face) de mettre le hub en veille. */
-    static void keepAwake(Context c) {
-        try {
-            if (new Prefs(c).configured()) new HubClient(c).get("/healthz");
-        } catch (Exception ignored) {
-        }
     }
 
     @Override
@@ -103,7 +94,7 @@ public class RenderSyncJob extends JobService {
     /** @return true s'il faut réessayer bientôt (fichier en cours d'écriture ou envoi en échec). */
     static boolean syncOnce(Context c) throws Exception {
         Prefs p = new Prefs(c);
-        if (!p.syncEnabled() || !p.configured() || p.token().isEmpty()) return false;
+        if (!p.syncEnabled() || !p.configured()) return false;
         if (!Perms.canReadVideos(c)) return false;
 
         long since = p.lastSync();
@@ -143,7 +134,7 @@ public class RenderSyncJob extends JobService {
             cur.close();
         }
 
-        HubClient client = new HubClient(c);
+        Relay relay = new Relay(c);
         boolean retry = false;
         long newest = since;
         for (Item it : items) {
@@ -155,28 +146,38 @@ public class RenderSyncJob extends JobService {
                 retry = true;
                 break;
             }
+            String name = it.name == null ? "render.mp4" : it.name;
+            boolean draft = (it.shortSide > 0 && it.shortSide < 720) || name.toLowerCase().contains("brouillon");
+            if (draft) { // les brouillons 480p de vérification ne sont pas publiés
+                p.markSent(it.id);
+                newest = Math.max(newest, it.added);
+                continue;
+            }
+            if (it.size > Relay.MAX_BYTES) {
+                Notifs.show(c, 50, Notifs.CH_SYNC, "⚠️ Rendu trop lourd pour l'envoi",
+                        name + " fait " + (it.size / 1048576) + " Mo (max 50 Mo). Demandez un montage plus court.");
+                p.markSent(it.id);
+                newest = Math.max(newest, it.added);
+                continue;
+            }
             Uri uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, it.id);
-            HubClient.FilePart fp = new HubClient.FilePart("file", uri,
-                    it.name == null ? "render.mp4" : it.name, it.size, "video/mp4");
-            HubClient.Result r = client.uploadRender(fp, it.shortSide, null);
-            if (!r.ok()) {
-                Notifs.show(c, 50, Notifs.CH_SYNC, "⚠️ Rendu non envoyé (" + r.code + ")",
-                        it.name + "\n" + UploadService.shorten(r.body));
-                retry = r.code >= 500 || r.code == 0;
+            try {
+                String url = relay.upload("hub-renders", System.currentTimeMillis() + "_" + Relay.safe(name), uri, it.size, null);
+                JSONObject row = new JSONObject();
+                row.put("file_name", name);
+                row.put("public_url", url);
+                row.put("short_side", it.shortSide);
+                row.put("size_bytes", it.size);
+                relay.insert("hub_renders", row);
+            } catch (Exception e) {
+                Notifs.show(c, 50, Notifs.CH_SYNC, "⚠️ Rendu non envoyé", name + "\n" + e.getMessage());
+                retry = true;
                 break;
             }
             p.markSent(it.id);
             newest = Math.max(newest, it.added);
-            String msg;
-            try {
-                JSONObject o = new JSONObject(r.body);
-                if (o.optBoolean("ignored")) msg = it.name + " : brouillon ignoré.";
-                else if (!o.isNull("video_id")) msg = it.name + " rattaché à la vidéo " + o.optString("video_id") + ". Publication en route.";
-                else msg = it.name + " reçu, à rattacher dans le tableau de bord.";
-            } catch (Exception e) {
-                msg = it.name + " envoyé.";
-            }
-            Notifs.show(c, (int) (60 + (it.id % 1000)), Notifs.CH_SYNC, "🎬 Rendu envoyé au hub", msg);
+            Notifs.show(c, (int) (60 + (it.id % 1000)), Notifs.CH_SYNC, "🎬 Rendu envoyé",
+                    name + " : Claude le publiera au prochain passage.");
         }
         if (newest > since) p.setLastSync(newest);
         return retry;

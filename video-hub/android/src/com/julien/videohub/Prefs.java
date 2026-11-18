@@ -20,9 +20,8 @@ final class Prefs {
         return u;
     }
 
-    String user() { return p.getString("user", Defaults.USER.isEmpty() ? "admin" : Defaults.USER); }
-    String pass() { return p.getString("pass", Defaults.PASS); }
-    String token() { return p.getString("token", Defaults.TOKEN); }
+    /** Clé publique Supabase (anon / publishable). */
+    String key() { return p.getString("key", Defaults.KEY); }
     boolean syncEnabled() { return p.getBoolean("sync", true); }
     String folder() { return p.getString("folder", "Cuttinx"); }
     long lastSync() {
@@ -33,14 +32,12 @@ final class Prefs {
         }
         return v;
     }
-    boolean configured() { return url().startsWith("http"); }
+    boolean configured() { return url().startsWith("http") && !key().isEmpty(); }
 
-    void save(String url, String user, String pass, String token, boolean sync, String folder) {
+    void save(String url, String key, boolean sync, String folder) {
         SharedPreferences.Editor e = p.edit()
                 .putString("url", url.trim())
-                .putString("user", user.trim())
-                .putString("pass", pass)
-                .putString("token", token.trim())
+                .putString("key", key.trim())
                 .putBoolean("sync", sync)
                 .putString("folder", folder.trim().isEmpty() ? "Cuttinx" : folder.trim());
         // Première activation : on ne renvoie pas tout l'historique de la galerie, seulement les nouveaux rendus.
