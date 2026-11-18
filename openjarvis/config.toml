@@ -1,0 +1,25 @@
+# Config OpenJarvis (copiée dans ~/.openjarvis/config.toml par install.sh)
+# Base : preset "chat-simple" — 100 % local via Ollama, aucune donnée envoyée au cloud.
+
+[engine]
+default = "ollama"
+# Ollama sur une autre machine du réseau :
+# [engine.ollama]
+# host = "http://192.168.1.50:11434"
+
+[intelligence]
+default_model = "qwen3.5:4b"   # rapide ; "qwen3.5:9b" = meilleure qualité (16 Go RAM conseillés)
+
+[agent]
+default_agent = "simple"       # "orchestrator" pour un agent avec outils
+
+[server]
+host = "127.0.0.1"
+port = 8000
+
+[security]
+profile = "personal"
+
+[analytics]
+enabled = false
+choice_recorded = true
