@@ -1,0 +1,13 @@
+services:
+  hub:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HUB_DATA_DIR: /data
+    volumes:
+      - ./data:/data
+      # Dossier synchronisé avec le téléphone (décommentez et mettez RENDER_INBOX_DIR=/inbox)
+      # - ./inbox:/inbox
+    ports:
+      - "8000:8000"
