@@ -1,1 +1,4 @@
 dist/models/
+cendrelune/android/build/
+cendrelune/Cendrelune.apk
+cendrelune/android/*.keystore
