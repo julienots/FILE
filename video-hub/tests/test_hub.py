@@ -248,6 +248,23 @@ def test_api_upload_and_inbox(settings):
         assert any("plus court" in e["message"] for e in detail["events"])
 
 
+def test_inbox_auto_assign_and_drafts(settings):
+    app = create_app(settings, start_worker=False)
+    db, p = app.state.db, app.state.pipeline
+    v = make_video(settings, db)
+    db.update(v["id"], step="fetch_render", status="awaiting_render")
+    with TestClient(app) as c:
+        h = {"X-Upload-Token": "tok"}
+        r = c.post("/api/renders/inbox", files={"file": ("VID_001.mp4", b"m", "video/mp4")}, data={"short_side": "480"}, headers=h)
+        assert r.json()["ignored"] and not db.get(v["id"])["rendered_path"]
+        r = c.post("/api/renders/inbox", files={"file": ("Projet (brouillon).mp4", b"m", "video/mp4")}, headers=h)
+        assert r.json()["ignored"]
+        r = c.post("/api/renders/inbox", files={"file": ("VID_002.mp4", b"m", "video/mp4")}, data={"short_side": "1080"}, headers=h)
+        assert r.json()["video_id"] == v["id"]
+        assert db.get(v["id"])["rendered_path"]
+        assert p.waiting_for_render() == []
+
+
 def test_auth_required(settings):
     settings.hub_password = "pw"
     app = create_app(settings, start_worker=False)

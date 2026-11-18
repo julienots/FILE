@@ -22,6 +22,27 @@ tout de suite ou à une heure de forte audience.
   (ntfy / Discord / Telegram)         └───────────────────────────────────────┘               └──────────────────────┘
 ```
 
+## Appli Android
+
+L'APK **Hub vidéo** (`android/release/HubVideo-1.0.0.apk`, Android 8+) regroupe tout côté téléphone :
+
+- **Tableau de bord** du hub dans l'appli (dépôt, suivi, retouches, styles), connexion automatique avec vos identifiants ;
+- **Partager → Hub vidéo** depuis la galerie : choix Performance / Normale, format, publication immédiate ou heure
+  d'audience, puis envoi en arrière‑plan avec barre de progression (gros fichiers OK) ;
+- **Envoi automatique des rendus CUTTINX** : dès qu'un MP4 apparaît dans `Movies/Cuttinx`, il est envoyé au hub
+  (déclenché par Android quand la galerie change, plus un passage de secours toutes les 15 min). Menu ⋮ →
+  « Envoyer les rendus maintenant » pour forcer.
+
+**Installation** : copiez l'APK sur le téléphone, ouvrez‑le et autorisez « Installer des applis inconnues » pour votre
+gestionnaire de fichiers. Au premier lancement : adresse du hub (`PUBLIC_BASE_URL`), `HUB_USERNAME`, `HUB_PASSWORD`,
+`RENDER_UPLOAD_TOKEN`, puis **Enregistrer et tester**. Acceptez l'accès aux vidéos (choisissez **Tout autoriser**, pas
+« accès limité ») et les notifications.
+
+**Recompiler** (sans Android Studio) : `cd android && ./build.sh` (outils Ubuntu `aapt`, `dalvik-exchange`, `zipalign`,
+`apksigner`, `android-sdk-platform-23` — voir l'en‑tête du script). La clé de signature est créée dans
+`android/keystore/` au premier build et n'est **pas** versionnée : gardez‑la, sinon une mise à jour imposera de
+désinstaller l'appli.
+
 ## Sommaire
 1. [Architecture](#1-architecture)
 2. [Le point clé : récupérer le MP4 rendu](#2-le-point-clé--récupérer-le-mp4-rendu)
@@ -80,14 +101,17 @@ d'URL de téléchargement : il faut donc que le fichier remonte jusqu'au hub. Le
 | Voie | Mise en place | Automatique ? |
 |---|---|---|
 | **A. URL renvoyée par CUTTINX** | Si une future version de CUTTINX ajoute `download_url` (ou `url`) au résultat de `get_render`, le hub la télécharge tout seul. Rien à configurer. | ✅ |
-| **B. Envoi depuis le téléphone** (recommandé) | Une automatisation Android envoie chaque nouveau fichier de `Movies/Cuttinx` vers `POST {PUBLIC_BASE_URL}/api/renders/inbox` avec l'en‑tête `X-Upload-Token: <RENDER_UPLOAD_TOKEN>` (multipart, champ `file`). Voir ci‑dessous. | ✅ |
+| **B. Appli Android « Hub vidéo »** (recommandé) | Installez l'APK (section [Appli Android](#appli-android)) et cochez « Envoi automatique des rendus CUTTINX » : chaque MP4 exporté dans `Movies/Cuttinx` part tout seul au hub. | ✅ |
+| **B bis. Automatisation maison** | Une automatisation Android envoie chaque nouveau fichier de `Movies/Cuttinx` vers `POST {PUBLIC_BASE_URL}/api/renders/inbox` avec l'en‑tête `X-Upload-Token: <RENDER_UPLOAD_TOKEN>` (multipart, champ `file`). Voir ci‑dessous. | ✅ |
 | **C. Dossier synchronisé** | Syncthing / FolderSync / rclone synchronise `Movies/Cuttinx` vers un dossier du serveur ; mettez son chemin dans `RENDER_INBOX_DIR`. Le hub le surveille. | ✅ |
 
-Le fichier est rattaché à la bonne vidéo grâce à `HUB-<id>` dans son nom. S'il n'y figure pas, il apparaît dans
+Le fichier est rattaché à la bonne vidéo grâce à `HUB-<id>` dans son nom ; à défaut, s'il n'y a qu'**une** vidéo en
+attente de rendu, il lui est attribué automatiquement. Les brouillons (480p, ou « brouillon »/« draft » dans le nom)
+sont ignorés. Sinon il apparaît dans
 **« Rendus non attribués »** du tableau de bord (rattachement en un clic). En dépannage, le bouton
 **« Envoyer le MP4 à la main »** existe aussi dans la fiche de chaque vidéo.
 
-**Exemple voie B avec MacroDroid** (gratuit) :
+**Exemple voie B bis avec MacroDroid** (gratuit) :
 1. Déclencheur : *Fichier modifié* → dossier `Movies/Cuttinx`, *Fichier créé*.
 2. Action : *Requête HTTP* → `POST`, URL `https://<votre-hub>/api/renders/inbox`, en‑tête `X-Upload-Token: <jeton>`,
    corps *Fichier* (multipart, nom de champ `file`) = `{trigger_file}`.

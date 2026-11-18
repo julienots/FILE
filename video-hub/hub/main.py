@@ -232,16 +232,27 @@ def create_app(settings: Settings | None = None, *, start_worker: bool | None = 
         file: UploadFile = File(...),
         video_id: str = Form(""),
         token: str = Form(""),
+        short_side: int = Form(0),
         x_upload_token: str = Header(""),
     ) -> dict:
-        """Point d'entrée pour l'automatisation du téléphone (jeton RENDER_UPLOAD_TOKEN)."""
+        """Point d'entrée pour l'appli Android / l'automatisation du téléphone (jeton RENDER_UPLOAD_TOKEN).
+
+        Rattachement : `video_id` explicite, sinon « HUB-<id> » dans le nom, sinon la seule vidéo qui attend son rendu.
+        Les brouillons (petit côté < 720 px ou « brouillon »/« draft » dans le nom) sont ignorés.
+        """
         given = x_upload_token or token
         if not s.render_upload_token or not secrets.compare_digest(given, s.render_upload_token):
             raise HTTPException(401, "Jeton invalide")
         name = safe_name(file.filename or "render.mp4")
         if Path(name).suffix.lower() not in VIDEO_EXT:
             raise HTTPException(400, "Fichier vidéo attendu")
+        if (0 < short_side < 720) or re.search(r"brouillon|draft", name, re.IGNORECASE):
+            return {"ok": True, "video_id": None, "ignored": True, "note": "Brouillon ignoré."}
         vid = (video_id or match_video_id(name) or "").lower()
+        if not vid:
+            waiting = pipeline.waiting_for_render()
+            if len(waiting) == 1:
+                vid = waiting[0]
         tmp = s.unassigned_dir / name
         await save_upload(file, tmp)
         if vid and pipeline.attach_render(vid, tmp):

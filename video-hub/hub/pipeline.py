@@ -302,6 +302,10 @@ class Pipeline:
             self.db.update(vid, next_attempt_at=time.time())
         return True
 
+    def waiting_for_render(self) -> list[str]:
+        """Vidéos dont le montage est fini et qui attendent encore leur MP4."""
+        return [v["id"] for v in self.db.by_step("fetch_render") if not v.get("rendered_path") and v["status"] != "error"]
+
     def scan_inbox(self) -> None:
         for path, vid in renders.scan_inbox(self.s):
             if vid and self.attach_render(vid, path):

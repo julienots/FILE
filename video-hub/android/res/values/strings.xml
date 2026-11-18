@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hub vidéo</string>
+    <string name="settings">Réglages du hub</string>
+    <string name="share_label">Envoyer au hub</string>
+</resources>
