@@ -525,8 +525,15 @@ async function loadModels(progress) {
   const loader = new THREE.GLTFLoader();
   let done = 0;
   await Promise.all(manifest.models.map((m) => new Promise((res) => {
-    loader.load('models/' + m.file, (gltf) => { MODELS[m.name] = gltf; done++; progress(done / manifest.models.length); res(); },
-      undefined, () => { done++; progress(done / manifest.models.length); res(); });
+    const ok = (gltf) => { MODELS[m.name] = gltf; done++; progress(done / manifest.models.length); res(); };
+    const fail = (e) => { console.warn('modèle', m.name, e); done++; progress(done / manifest.models.length); res(); };
+    if (m.file.endsWith('.txt')) { // GLB encodé en base64 (format servi par l'hébergeur)
+      fetch('models/' + m.file).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }).then((t) => {
+        const bin = atob(t.trim()), u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        loader.parse(u8.buffer, 'models/', ok, fail);
+      }).catch(fail);
+    } else loader.load('models/' + m.file, ok, undefined, fail);
   })));
 }
 function prepModelMaterials(obj, cast = true) {
