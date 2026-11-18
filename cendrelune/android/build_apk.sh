@@ -13,7 +13,7 @@ for f in build/three.min.js examples/js/loaders/GLTFLoader.js examples/js/utils/
 cp "$ROOT/models/"*.glb "$ROOT/models/manifest.json" "$W/models/"
 javac -source 8 -target 8 -nowarn -bootclasspath "$PLATFORM" -d "$OUT/classes" "$HERE/src/fr/cendrelune/MainActivity.java" 2>&1 | grep -v warning || true
 dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/classes"
-aapt package -f -M "$HERE/AndroidManifest.xml" -S "$HERE/res" -A "$OUT/assets" -I "$PLATFORM" -0 glb -F "$OUT/unsigned.apk"
+aapt package -f -M "$HERE/AndroidManifest.xml" -S "$HERE/res" -A "$OUT/assets" -I "$PLATFORM" -0 glb -0 arsc -F "$OUT/unsigned.apk"
 (cd "$OUT" && aapt add unsigned.apk classes.dex >/dev/null)
 zipalign -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 KS=${KEYSTORE:-$HERE/cendrelune.keystore}
