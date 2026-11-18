@@ -3,6 +3,10 @@
   {
    "name": "werewolf",
    "file": "werewolf.glb"
+  },
+  {
+   "name": "table",
+   "file": "table.glb"
   }
  ],
  "werewolfClips": {
