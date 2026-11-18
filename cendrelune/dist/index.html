@@ -1181,7 +1181,7 @@ function buildWolf() {
     prepModelMaterials(obj);
     obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach((m) => { if (m.color) m.color.multiplyScalar(0.85); }); } });
     const bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3());
-    const s = 2.35 / sz.y; obj.scale.setScalar(s);
+    const s = 2.6 / sz.y; obj.scale.setScalar(s);
     const bb2 = new THREE.Box3().setFromObject(obj), c = bb2.getCenter(new THREE.Vector3());
     obj.position.set(-c.x, -bb2.min.y, -c.z);
     // la plupart des modèles Tripo regardent vers +Z
@@ -1197,8 +1197,8 @@ function buildWolf() {
       const extra = MODELS['werewolf_' + k]; if (extra && extra.animations && extra.animations[0] && !wolf.actions[k]) { const a = wolf.mixer.clipAction(extra.animations[0]); a.play(); a.weight = 0; wolf.actions[k] = a; }
     }
     if (wolf.actions.attack) { wolf.actions.attack.setLoop(THREE.LoopOnce); wolf.actions.attack.clampWhenFinished = true; wolf.actions.attack.stop(); }
-    eyes.position.set(0, 2.12, 0.28);
-    wolf.modelHead = eyes;
+    eyes.position.set(0, 2.0, 0.3);
+    obj.traverse((o) => { if (o.isBone && /head$/i.test(o.name) && !wolf.headBone) wolf.headBone = o; });
   } else {
     const { root, parts } = buildWolfProcedural();
     g.add(root); wolf.parts = parts;
@@ -1227,6 +1227,7 @@ function animateWolf(dt, t) {
     if (wolf.actions.walk) wolf.actions.walk.timeScale = clamp(sp / 1.6, 0.6, 1.8);
     if (wolf.actions.run) wolf.actions.run.timeScale = clamp(sp / 4.5, 0.7, 1.4);
     wolf.mixer.update(dt);
+    if (wolf.headBone) { wolf.obj.updateMatrixWorld(true); const hp = wolf.headBone.getWorldPosition(new THREE.Vector3()); wolf.obj.worldToLocal(hp); wolf.eyes.position.set(hp.x, hp.y + 0.02, hp.z + 0.14); }
     // sans clip : balancement
     if (!wolf.actions.walk && sp > 0.2) { wolf.obj.children[0].position.y = Math.abs(Math.sin(wolf.phase)) * 0.06; wolf.obj.children[0].rotation.z = Math.sin(wolf.phase) * 0.05; }
     return;
@@ -2003,7 +2004,7 @@ function toTitle() {
   $('hud').classList.remove('on'); $('touch').classList.remove('on'); $('bPause').hidden = true;
   $('hideOverlay').className = 'fx'; $('redpulse').style.opacity = 0; $('vignette').style.opacity = 0.6;
   player.candleOn = false; player.hidden = null;
-  wolf.x = 4.2; wolf.z = 4.5; wolf.yaw = Math.atan2(17 - 4.2, 15.5 - 4.5) - 0.4; wolf.obj.position.set(wolf.x, 0, wolf.z); wolf.obj.rotation.y = wolf.yaw;
+  wolf.x = 8.6; wolf.z = 8.4; wolf.yaw = Math.atan2(17 - 8.6, 15.5 - 8.4) - 0.25; wolf.obj.position.set(wolf.x, 0, wolf.z); wolf.obj.rotation.y = wolf.yaw;
   doors.forEach((d) => { d.open = d.target = d.def.open ? 1 : 0; });
   updateDoors(0);
   if (A.ambGain) { A.ambGain.gain.value = 0.05; A.windGain.gain.value = 0.04; }

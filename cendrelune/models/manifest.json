@@ -1,1 +1,14 @@
-{"models":[]}
+{
+ "models": [
+  {
+   "name": "werewolf",
+   "file": "werewolf.glb"
+  }
+ ],
+ "werewolfClips": {
+  "idle": "A hunched predatory beast standing idle, breathing heavily, sho",
+  "run": "A hunched beast charging forward at full speed, fast aggressive",
+  "walk": "A hunched predatory beast stalking forward slowly, crouched low",
+  "attack": "A hunched beast lunges forward and slashes violently with both "
+ }
+}
