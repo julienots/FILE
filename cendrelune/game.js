@@ -797,102 +797,220 @@ function sightClear(ax, az, bx, bz) {
 }
 
 /* ---------------- Audio ---------------- */
-const A = { ctx: null };
+// Les sons sont synthétisés UNE fois au lancement (OfflineAudioContext), puis rejoués comme des
+// échantillons. Très peu de nœuds en temps réel : pas de craquements sur mobile.
+const A = { ctx: null, buf: {}, voices: 0, ready: false };
+const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+
+// --- outils de synthèse hors ligne ---
+function mkNoise(c, sec, brown) {
+  const n = Math.max(1, Math.floor(c.sampleRate * sec)), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  let last = 0; for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
+  return b;
+}
+function envG(c, t, a, dur, peak) { const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setTargetAtTime(0, t + a, Math.max(0.004, (dur - a) / 4)); return g; }
+function oNoise(c, dest, { t = 0, dur = 0.2, type = 'bandpass', f = 800, fEnd, q = 1, g = 0.3, a = 0.004, brown = false }) {
+  const s = c.createBufferSource(); s.buffer = brown ? c._brown : c._white;
+  const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f, t); fl.Q.value = q; if (fEnd) fl.frequency.exponentialRampToValueAtTime(fEnd, t + dur);
+  const gn = envG(c, t, a, dur, g); s.connect(fl); fl.connect(gn); gn.connect(dest);
+  s.start(t, Math.random() * 1.5); s.stop(t + dur * 2 + 0.05); return fl;
+}
+function oOsc(c, dest, { t = 0, f = 60, fEnd, dur = 0.3, g = 0.4, type = 'sine', a = 0.004, vib = 0, vibF = 5.5 }) {
+  const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); if (fEnd) o.frequency.exponentialRampToValueAtTime(fEnd, t + dur);
+  if (vib) { const v = c.createOscillator(); v.frequency.value = vibF; const vg = c.createGain(); vg.gain.value = vib; v.connect(vg); vg.connect(o.frequency); v.start(t); v.stop(t + dur * 2 + 0.05); }
+  const gn = envG(c, t, a, dur, g); o.connect(gn); gn.connect(dest); o.start(t); o.stop(t + dur * 2 + 0.05); return o;
+}
+// grincement de bois réaliste : train d'impulsions « colle-glisse » filtré par deux résonances
+function creakSrc(c, dest, { t = 0, dur = 0.8, r0 = 60, r1 = 110, f1 = 700, f2 = 1700, g = 0.6 }) {
+  const sr = c.sampleRate, n = Math.floor(sr * dur), b = c.createBuffer(1, n, sr), d = b.getChannelData(0);
+  let ph = 0; const wob = Math.random() * 6;
+  for (let i = 0; i < n - 1; i++) {
+    const x = i / n, rate = (r0 + (r1 - r0) * x) * (1 + 0.25 * Math.sin(x * 9 + wob) + 0.15 * (Math.random() - 0.5));
+    ph += rate / sr;
+    if (ph >= 1) { ph -= 1; const e = Math.pow(Math.sin(Math.PI * x), 0.6) * (0.55 + 0.45 * Math.sin(x * 23 + wob)); d[i] += e * (0.6 + 0.4 * Math.random()); d[i + 1] -= e * 0.4; }
+  }
+  const s = c.createBufferSource(); s.buffer = b;
+  const b1 = c.createBiquadFilter(); b1.type = 'bandpass'; b1.frequency.value = f1; b1.Q.value = 7;
+  const b2 = c.createBiquadFilter(); b2.type = 'bandpass'; b2.frequency.value = f2; b2.Q.value = 10;
+  const gn = c.createGain(); gn.gain.value = g * 3;
+  s.connect(b1); s.connect(b2); b1.connect(gn); b2.connect(gn); gn.connect(dest); s.start(t);
+}
+function shaper(c, k) { const ws = c.createWaveShaper(), cv = new Float32Array(2048); for (let i = 0; i < 2048; i++) cv[i] = Math.tanh((i / 1024 - 1) * k); ws.curve = cv; return ws; }
+function renderSnd(sec, fn, { ch = 1, loop = 0 } = {}) {
+  const sr = A.ctx.sampleRate, c = new OAC(ch, Math.ceil(sr * (sec + loop)), sr);
+  c._white = mkNoise(c, 3, false); c._brown = mkNoise(c, 4, true);
+  const out = c.createGain(); out.connect(c.destination); fn(c, out, sec + loop);
+  return new Promise((res) => { c.oncomplete = (e) => res(e.renderedBuffer); const p = c.startRendering(); if (p && p.then) p.then(res); })
+    .then((b) => finishBuf(b, loop));
+}
+function finishBuf(b, loop) {
+  const sr = b.sampleRate; let peak = 1e-6;
+  for (let ch = 0; ch < b.numberOfChannels; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i])); }
+  const k = 0.89 / peak;
+  if (loop) { // boucle sans couture : fondu enchaîné fin → début
+    const X = Math.floor(sr * loop), L = b.length - X, nb = A.ctx.createBuffer(b.numberOfChannels, L, sr);
+    for (let ch = 0; ch < b.numberOfChannels; ch++) { const d = b.getChannelData(ch), o = nb.getChannelData(ch);
+      for (let i = 0; i < L; i++) o[i] = d[i] * k;
+      for (let i = 0; i < X; i++) { const w = i / X; o[i] = (d[i] * Math.sqrt(w) + d[L + i] * Math.sqrt(1 - w)) * k; } }
+    return nb;
+  }
+  const fi = 32, fo = Math.min(b.length >> 1, Math.floor(sr * 0.015));
+  for (let ch = 0; ch < b.numberOfChannels; ch++) { const d = b.getChannelData(ch);
+    for (let i = 0; i < d.length; i++) d[i] *= k;
+    for (let i = 0; i < fi; i++) d[i] *= i / fi;
+    for (let i = 0; i < fo; i++) d[d.length - 1 - i] *= i / fo; }
+  return b;
+}
+
+// --- recettes des sons ---
+const RECIPES = {
+  step0: [0.3, (c, o) => { oOsc(c, o, { f: 115, fEnd: 48, dur: 0.1, g: 0.9, a: 0.002 }); oNoise(c, o, { type: 'lowpass', f: 650, fEnd: 200, dur: 0.14, g: 0.9, brown: true, a: 0.002 }); oNoise(c, o, { type: 'bandpass', f: 1900, q: 3, dur: 0.03, g: 0.1 }); }],
+  step1: [0.3, (c, o) => { oOsc(c, o, { f: 100, fEnd: 45, dur: 0.11, g: 0.85, a: 0.003 }); oNoise(c, o, { type: 'lowpass', f: 560, fEnd: 180, dur: 0.15, g: 0.9, brown: true, a: 0.003 }); oNoise(c, o, { type: 'bandpass', f: 2300, q: 4, dur: 0.025, g: 0.08 }); }],
+  step2: [0.3, (c, o) => { oOsc(c, o, { f: 125, fEnd: 52, dur: 0.09, g: 0.9, a: 0.002 }); oNoise(c, o, { type: 'lowpass', f: 720, fEnd: 230, dur: 0.12, g: 0.8, brown: true, a: 0.002 }); oNoise(c, o, { type: 'bandpass', f: 1500, q: 3, dur: 0.035, g: 0.12 }); }],
+  step3: [0.55, (c, o) => { oOsc(c, o, { f: 108, fEnd: 46, dur: 0.1, g: 0.85, a: 0.003 }); oNoise(c, o, { type: 'lowpass', f: 600, fEnd: 200, dur: 0.14, g: 0.85, brown: true, a: 0.003 }); creakSrc(c, o, { t: 0.04, dur: 0.45, r0: 90, r1: 150, f1: 820, f2: 1900, g: 0.25 }); }],
+  creak0: [0.9, (c, o) => creakSrc(c, o, { dur: 0.85, r0: 55, r1: 120, f1: 650, f2: 1600 })],
+  creak1: [1.2, (c, o) => creakSrc(c, o, { dur: 1.1, r0: 150, r1: 70, f1: 900, f2: 2100 })],
+  creak2: [0.7, (c, o) => creakSrc(c, o, { dur: 0.65, r0: 35, r1: 60, f1: 480, f2: 1250 })],
+  doorOpen: [1.5, (c, o) => { oNoise(c, o, { type: 'highpass', f: 3000, dur: 0.02, g: 0.4, a: 0.001 }); oNoise(c, o, { type: 'bandpass', f: 1400, q: 5, dur: 0.04, g: 0.25, a: 0.001 }); creakSrc(c, o, { t: 0.05, dur: 1.15, r0: 45, r1: 170, f1: 620, f2: 1500, g: 0.7 }); oOsc(c, o, { t: 1.2, f: 90, fEnd: 50, dur: 0.12, g: 0.3 }); oNoise(c, o, { t: 1.2, type: 'lowpass', f: 450, dur: 0.15, g: 0.35, brown: true }); }],
+  doorSlam: [1.3, (c, o) => { oOsc(c, o, { f: 85, fEnd: 32, dur: 0.4, g: 1, a: 0.002 }); oNoise(c, o, { type: 'lowpass', f: 1100, fEnd: 200, dur: 0.6, g: 1, brown: true, a: 0.002 }); for (let i = 0; i < 6; i++) oNoise(c, o, { t: 0.04 + i * 0.045, type: 'bandpass', f: 2600 - i * 150, q: 6, dur: 0.04, g: 0.25 / (i + 1) }); }],
+  breathIn: [1.2, (c, o) => { oNoise(c, o, { type: 'bandpass', f: 600, fEnd: 1050, q: 1.6, dur: 1.0, g: 0.55, a: 0.4 }); oNoise(c, o, { type: 'bandpass', f: 1900, q: 3, dur: 0.95, g: 0.18, a: 0.45 }); const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220; lp.connect(o); oOsc(c, lp, { type: 'sawtooth', f: 46, fEnd: 52, dur: 0.95, g: 0.35, a: 0.35 }); }],
+  breathOut: [1.4, (c, o) => { oNoise(c, o, { type: 'bandpass', f: 520, fEnd: 240, q: 1.3, dur: 1.15, g: 0.6, a: 0.07 }); const am = c.createGain(); am.gain.value = 0.5; const m = c.createOscillator(); m.frequency.value = 31; const mg = c.createGain(); mg.gain.value = 0.5; m.connect(mg); mg.connect(am.gain); m.start(0); m.stop(1.4); am.connect(o); oNoise(c, am, { type: 'lowpass', f: 330, dur: 1.0, g: 0.6, brown: true, a: 0.06 }); const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.connect(o); oOsc(c, lp, { type: 'sawtooth', f: 44, fEnd: 38, dur: 1.1, g: 0.35, a: 0.08 }); }],
+  growl0: [2.0, (c, o) => growlRecipe(c, o, 56, 1.8)],
+  growl1: [2.0, (c, o) => growlRecipe(c, o, 68, 1.8)],
+  wstep0: [0.35, (c, o) => { oOsc(c, o, { f: 72, fEnd: 30, dur: 0.17, g: 1, a: 0.003 }); oNoise(c, o, { type: 'lowpass', f: 380, fEnd: 150, dur: 0.2, g: 0.8, brown: true, a: 0.003 }); oNoise(c, o, { t: 0.02, type: 'highpass', f: 3600, dur: 0.015, g: 0.22, a: 0.001 }); oNoise(c, o, { t: 0.055, type: 'highpass', f: 4200, dur: 0.012, g: 0.16, a: 0.001 }); }],
+  wstep1: [0.35, (c, o) => { oOsc(c, o, { f: 64, fEnd: 28, dur: 0.19, g: 1, a: 0.004 }); oNoise(c, o, { type: 'lowpass', f: 330, fEnd: 140, dur: 0.22, g: 0.85, brown: true, a: 0.004 }); oNoise(c, o, { t: 0.03, type: 'highpass', f: 3900, dur: 0.014, g: 0.2, a: 0.001 }); }],
+  sniff: [0.85, (c, o) => { for (let i = 0; i < 4; i++) oNoise(c, o, { t: i * 0.16, type: 'bandpass', f: 1800 + i * 150, fEnd: 2600 + i * 150, q: 2, dur: 0.1, g: 0.5 + i * 0.08, a: 0.03 }); }],
+  chew: [1.0, (c, o) => { for (let i = 0; i < 3; i++) { oNoise(c, o, { t: i * 0.27, type: 'lowpass', f: 800, dur: 0.15, g: 0.7, brown: true }); oNoise(c, o, { t: i * 0.27 + 0.05, type: 'bandpass', f: 1300, q: 5, dur: 0.05, g: 0.3 }); oNoise(c, o, { t: i * 0.27 + 0.09, type: 'highpass', f: 3500, dur: 0.012, g: 0.25, a: 0.001 }); } }],
+  scratch: [0.9, (c, o) => { for (let i = 0; i < 3; i++) oNoise(c, o, { t: i * 0.22, type: 'bandpass', f: 3000, fEnd: 1500, q: 5, dur: 0.18, g: 0.5, a: 0.02 }); creakSrc(c, o, { t: 0.05, dur: 0.7, r0: 250, r1: 320, f1: 1800, f2: 3200, g: 0.12 }); }],
+  howl: [4.7, (c, o) => { const f1 = c.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 760; f1.Q.value = 5; const f2 = c.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1220; f2.Q.value = 7; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; f1.connect(lp); f2.connect(lp); lp.connect(o);
+    for (const [det, gg] of [[1, 1], [1.006, 0.6]]) { const ob = c.createOscillator(); ob.type = 'sawtooth'; const v = c.createOscillator(); v.frequency.value = 5.3; const vg = c.createGain(); vg.gain.value = 8; v.connect(vg); vg.connect(ob.frequency);
+      ob.frequency.setValueAtTime(270 * det, 0); ob.frequency.exponentialRampToValueAtTime(540 * det, 1.1); ob.frequency.setValueAtTime(540 * det, 2.5); ob.frequency.exponentialRampToValueAtTime(320 * det, 4.3);
+      const g = c.createGain(); g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(0.5 * gg, 0.6); g.gain.setValueAtTime(0.5 * gg, 3.3); g.gain.linearRampToValueAtTime(0, 4.5); ob.connect(g); g.connect(f1); g.connect(f2); ob.start(0); ob.stop(4.6); v.start(0); v.stop(4.6); }
+    oNoise(c, o, { type: 'bandpass', f: 1500, q: 1.5, dur: 4.2, g: 0.06, a: 0.6 }); }],
+  roar: [2.1, (c, o) => { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, 0); lp.frequency.exponentialRampToValueAtTime(900, 1.8); const ws = shaper(c, 4); ws.connect(lp); lp.connect(o);
+    for (const f of [70, 74, 105, 142, 212]) { const ob = c.createOscillator(); ob.type = 'sawtooth'; ob.frequency.setValueAtTime(f * 1.45, 0); ob.frequency.exponentialRampToValueAtTime(f, 0.28); ob.frequency.exponentialRampToValueAtTime(f * 0.68, 1.7); const g = envG(c, 0, 0.05, 1.7, 0.2); ob.connect(g); g.connect(ws); ob.start(0); ob.stop(2.0); }
+    oNoise(c, o, { type: 'bandpass', f: 1000, fEnd: 300, q: 1, dur: 1.7, g: 0.7, a: 0.04 }); oOsc(c, o, { f: 50, fEnd: 28, dur: 1.5, g: 0.8, a: 0.02 }); }],
+  heart: [0.55, (c, o) => { oOsc(c, o, { f: 60, fEnd: 40, dur: 0.13, g: 1, a: 0.004 }); oNoise(c, o, { type: 'lowpass', f: 160, dur: 0.11, g: 0.5, brown: true }); oOsc(c, o, { t: 0.21, f: 54, fEnd: 36, dur: 0.15, g: 0.75, a: 0.004 }); }],
+  gasp: [0.8, (c, o) => { oNoise(c, o, { type: 'bandpass', f: 1500, fEnd: 800, q: 1.3, dur: 0.6, g: 0.6, a: 0.04 }); oNoise(c, o, { type: 'bandpass', f: 2700, fEnd: 2000, q: 3, dur: 0.5, g: 0.2, a: 0.05 }); }],
+  blow: [0.45, (c, o) => { oNoise(c, o, { type: 'bandpass', f: 1500, fEnd: 900, q: 0.8, dur: 0.35, g: 0.6, a: 0.05 }); }],
+  light: [0.5, (c, o) => { for (let i = 0; i < 5; i++) oNoise(c, o, { t: i * 0.018 + Math.random() * 0.01, type: 'highpass', f: 3000 + Math.random() * 2000, dur: 0.015, g: 0.3, a: 0.001 }); oNoise(c, o, { t: 0.05, type: 'lowpass', f: 900, dur: 0.35, g: 0.45, a: 0.06 }); }],
+  thud: [0.4, (c, o) => { oOsc(c, o, { f: 90, fEnd: 45, dur: 0.12, g: 0.8 }); oNoise(c, o, { type: 'lowpass', f: 500, dur: 0.2, g: 0.8, brown: true }); oNoise(c, o, { t: 0.01, type: 'bandpass', f: 900, q: 3, dur: 0.08, g: 0.3 }); }],
+  shot: [1.6, (c, o) => { oNoise(c, o, { type: 'lowpass', f: 7000, fEnd: 300, dur: 0.25, g: 1, a: 0.001 }); oOsc(c, o, { f: 110, fEnd: 34, dur: 0.4, g: 0.9, a: 0.001 }); oNoise(c, o, { t: 0.03, type: 'lowpass', f: 420, dur: 1.3, g: 0.45, brown: true, a: 0.02 }); }],
+  yelp: [1.3, (c, o) => { const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 2.5; bp.connect(o); oOsc(c, bp, { type: 'sawtooth', f: 950, fEnd: 420, dur: 0.6, g: 0.7, a: 0.01, vib: 25, vibF: 9 }); oOsc(c, bp, { t: 0.5, type: 'sawtooth', f: 720, fEnd: 300, dur: 0.6, g: 0.5, a: 0.01 }); }],
+  pickup: [1.8, (c, o) => { for (const [f, g, d] of [[880, 0.5, 1.4], [1320, 0.3, 1.1], [2430, 0.12, 0.6], [1760, 0.15, 0.9]]) oOsc(c, o, { f, dur: d, g, type: 'sine', a: 0.004 }); }],
+  stinger: [2.4, (c, o) => { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(700, 0); lp.frequency.exponentialRampToValueAtTime(3500, 0.25); lp.frequency.exponentialRampToValueAtTime(900, 2); lp.connect(o);
+    for (const f of [311, 329.6, 466, 494, 622, 659]) oOsc(c, lp, { type: 'sawtooth', f, dur: 1.9, g: 0.12, a: 0.05, vib: 3, vibF: 6 + Math.random() });
+    oOsc(c, o, { f: 48, fEnd: 27, dur: 1.8, g: 0.9, a: 0.005 }); oNoise(c, o, { type: 'lowpass', f: 2000, fEnd: 200, dur: 1.2, g: 0.35, a: 0.003 }); }],
+};
+function growlRecipe(c, o, f0, dur) {
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; lp.Q.value = 3; lp.connect(o);
+  const ws = shaper(c, 3); ws.connect(lp);
+  const am = c.createGain(); am.gain.value = 0.55; const m = c.createOscillator(); m.frequency.setValueAtTime(24, 0); m.frequency.linearRampToValueAtTime(30, dur); const mg = c.createGain(); mg.gain.value = 0.45; m.connect(mg); mg.connect(am.gain); m.start(0); m.stop(dur + 0.1); am.connect(ws);
+  const env = envG(c, 0, 0.3, dur, 1); env.connect(am);
+  for (const [r, g] of [[1, 0.45], [1.04, 0.3], [1.5, 0.22]]) { const ob = c.createOscillator(); ob.type = 'sawtooth'; ob.frequency.setValueAtTime(f0 * r, 0); ob.frequency.linearRampToValueAtTime(f0 * r * (0.88 + Math.random() * 0.2), dur); const gg = c.createGain(); gg.gain.value = g; ob.connect(gg); gg.connect(env); ob.start(0); ob.stop(dur + 0.1); }
+  const nb = c.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 340; nb.Q.value = 2; nb.connect(am);
+  const ns = c.createBufferSource(); ns.buffer = c._white; const ng = envG(c, 0, 0.3, dur, 0.5); ns.connect(ng); ng.connect(nb); ns.start(0); ns.stop(dur + 0.1);
+}
+// boucles d'ambiance (rendues avec une marge de fondu pour boucler sans clic)
+const LOOPS = {
+  fire: [6, (c, o, T) => { oNoise(c, o, { type: 'lowpass', f: 420, dur: T, g: 0.35, brown: true, a: 0.01 }); oNoise(c, o, { type: 'bandpass', f: 900, q: 0.7, dur: T, g: 0.05, a: 0.01 });
+    for (let i = 0; i < 70; i++) { const t = Math.random() * (T - 0.1); oNoise(c, o, { t, type: 'bandpass', f: 1800 + Math.random() * 3500, q: 1.2, dur: 0.015 + Math.random() * 0.05, g: 0.08 + Math.random() * 0.35, a: 0.0015 }); }
+    for (let i = 0; i < 8; i++) oNoise(c, o, { t: Math.random() * (T - 0.3), type: 'lowpass', f: 300, dur: 0.18, g: 0.4, brown: true, a: 0.01 }); }, 2],
+  drone: [12, (c, o, T) => { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380; lp.connect(o);
+    for (const [f, g, lf] of [[55, 0.5, 0.05], [55.35, 0.4, 0.07], [82.4, 0.25, 0.04], [116.5, 0.16, 0.09], [41.2, 0.4, 0.03]]) { const ob = c.createOscillator(); ob.type = 'triangle'; ob.frequency.value = f; const g1 = c.createGain(); g1.gain.value = g * 0.6; const l = c.createOscillator(); l.frequency.value = lf; const lg = c.createGain(); lg.gain.value = g * 0.4; l.connect(lg); lg.connect(g1.gain); ob.connect(g1); g1.connect(lp); ob.start(0); ob.stop(T); l.start(0); l.stop(T); }
+    oNoise(c, o, { type: 'lowpass', f: 110, dur: T, g: 0.4, brown: true, a: 0.01 }); }, 3],
+  wind: [14, (c, o, T) => { for (const [f0, q, g] of [[380, 2.5, 0.5], [900, 4, 0.25]]) { const s = c.createBufferSource(); s.buffer = c._white; s.loop = true; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+      const n = 24, curve = new Float32Array(n); for (let i = 0; i < n; i++) curve[i] = f0 * (0.6 + Math.random() * 0.9); curve[n - 1] = curve[0]; bp.frequency.setValueCurveAtTime(curve, 0, T);
+      const gn = c.createGain(); const gc = new Float32Array(n); for (let i = 0; i < n; i++) gc[i] = g * (0.3 + Math.random() * 0.7); gc[n - 1] = gc[0]; gn.gain.setValueCurveAtTime(gc, 0, T);
+      s.connect(bp); bp.connect(gn); gn.connect(o); s.start(0); s.stop(T); } }, 3],
+  dread: [8, (c, o, T) => { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700; lp.connect(o);
+    const trem = c.createGain(); trem.gain.value = 0.5; const m = c.createOscillator(); m.frequency.value = 7; const mg = c.createGain(); mg.gain.value = 0.5; m.connect(mg); mg.connect(trem.gain); m.start(0); m.stop(T); trem.connect(lp);
+    for (const f of [233, 246.9, 349.2, 370]) { const ob = c.createOscillator(); ob.type = 'sawtooth'; ob.frequency.value = f; const v = c.createOscillator(); v.frequency.value = 4 + Math.random() * 2; const vg = c.createGain(); vg.gain.value = 2.5; v.connect(vg); vg.connect(ob.frequency); const g = c.createGain(); g.gain.value = 0.12; ob.connect(g); g.connect(trem); ob.start(0); ob.stop(T); v.start(0); v.stop(T); }
+    for (let t = 0; t < T - 0.5; t += 1.6) oOsc(c, o, { t, f: 44, fEnd: 36, dur: 0.5, g: 0.5, a: 0.01 }); }, 2],
+};
+
+// --- graphe temps réel ---
 function audioInit() {
   if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  const ctx = A.ctx = new AC();
-  A.master = ctx.createGain(); A.master.gain.value = save.volume;
-  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
-  A.master.connect(comp); comp.connect(ctx.destination);
-  // réverbération de pierre
+  let ctx; try { ctx = new AC({ latencyHint: 'playback' }); } catch (e) { ctx = new AC(); } // gros tampon : pas de coupures sur Android
+  A.ctx = ctx;
+  A.master = ctx.createGain(); A.master.gain.value = save.volume * 0.9;
+  const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -9; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.22;
+  A.master.connect(lim); lim.connect(ctx.destination);
+  // réverbération de cave en pierre : queue sombre et courte
   A.verb = ctx.createConvolver();
-  const len = ctx.sampleRate * 2.4, ir = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
-  A.verb.buffer = ir; A.wet = ctx.createGain(); A.wet.gain.value = 0.32; A.verb.connect(A.wet); A.wet.connect(A.master);
+  const len = Math.floor(ctx.sampleRate * 1.5), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); let lp = 0;
+    for (let i = 0; i < len; i++) { const x = i / len, a = 0.5 - 0.42 * x; lp += a * ((Math.random() * 2 - 1) - lp); d[i] = lp * Math.pow(1 - x, 2.6); }
+    for (const [ms, g] of [[11, 0.5], [19, 0.35], [29, 0.28], [43, 0.2]]) d[Math.floor(ctx.sampleRate * ms / 1000) + c * 7] += g * (c ? -1 : 1); }
+  A.verb.buffer = ir; A.wet = ctx.createGain(); A.wet.gain.value = 0.22; A.verb.connect(A.wet); A.wet.connect(A.master);
   A.bus = ctx.createGain(); A.bus.connect(A.master); A.bus.connect(A.verb);
-  const nb = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), nd = nb.getChannelData(0);
-  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1; A.noise = nb;
-  const bb = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate), bd = bb.getChannelData(0); let last = 0;
-  for (let i = 0; i < bd.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; bd[i] = last * 3.5; } A.brown = bb;
-  // ambiance : grondement + vent
-  const amb = ctx.createBufferSource(); amb.buffer = A.brown; amb.loop = true;
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260;
-  A.ambGain = ctx.createGain(); A.ambGain.gain.value = 0.0;
-  amb.connect(lp); lp.connect(A.ambGain); A.ambGain.connect(A.bus); amb.start();
-  const wind = ctx.createBufferSource(); wind.buffer = A.noise; wind.loop = true;
-  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 3;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07; const lg = ctx.createGain(); lg.gain.value = 260; lfo.connect(lg); lg.connect(bp.frequency); lfo.start();
-  A.windGain = ctx.createGain(); A.windGain.gain.value = 0.0; wind.connect(bp); bp.connect(A.windGain); A.windGain.connect(A.bus); wind.start();
-  // panoramiques
   A.wolfPan = makePanner(); A.firePan = makePanner(); A.fxPan = makePanner();
-  A.wolfPan.out.connect(A.bus); A.firePan.out.connect(A.bus); A.fxPan.out.connect(A.bus);
-  // cœur
-  A.heart = ctx.createGain(); A.heart.gain.value = 0.0; A.heart.connect(A.master);
+  // ambiance
+  A.ambGain = ctx.createGain(); A.ambGain.gain.value = 0; A.ambGain.connect(A.master);
+  A.windGain = ctx.createGain(); A.windGain.gain.value = 0; A.windGain.connect(A.master); A.windGain.connect(A.verb);
+  A.dreadGain = ctx.createGain(); A.dreadGain.gain.value = 0; A.dreadGain.connect(A.master); A.dreadGain.connect(A.verb);
+  A.droneLP = ctx.createBiquadFilter(); A.droneLP.type = 'lowpass'; A.droneLP.frequency.value = 500; A.droneLP.connect(A.ambGain);
+  A.fireGain = ctx.createGain(); A.fireGain.gain.value = 0.45; A.fireGain.connect(A.firePan.in);
+  // rendu des sons
+  const jobs = [];
+  for (const k in RECIPES) jobs.push(renderSnd(RECIPES[k][0], RECIPES[k][1]).then((b) => (A.buf[k] = b)).catch(() => {}));
+  for (const k in LOOPS) jobs.push(renderSnd(LOOPS[k][0], LOOPS[k][1], { loop: LOOPS[k][2] }).then((b) => (A.buf[k] = b)).catch(() => {}));
+  Promise.all(jobs).then(() => {
+    A.ready = true;
+    const loop = (name, dest, g = 1) => { if (!A.buf[name]) return; const s = ctx.createBufferSource(); s.buffer = A.buf[name]; s.loop = true; const gn = ctx.createGain(); gn.gain.value = g; s.connect(gn); gn.connect(dest); s.start(ctx.currentTime + 0.05, Math.random() * A.buf[name].duration); };
+    loop('drone', A.droneLP, 0.9); loop('wind', A.windGain, 1); loop('dread', A.dreadGain, 1); loop('fire', A.fireGain, 1);
+    if (fireSpot) setPannerPos(A.firePan, fireSpot.pos.x, 0.6, fireSpot.pos.z);
+  });
 }
 function makePanner() {
-  const p = A.ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 1.5; p.maxDistance = 60; p.rolloffFactor = 1.3;
-  const inp = A.ctx.createGain(); inp.connect(p); return { in: inp, p, out: p };
+  const p = A.ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 1.6; p.maxDistance = 50; p.rolloffFactor = 1.25;
+  const inp = A.ctx.createGain(); inp.connect(p); p.connect(A.bus); return { in: inp, p, out: p };
 }
-function setPannerPos(pn, x, y, z) { const p = pn.p; if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; } else p.setPosition(x, y, z); }
+function setAP(param, v, tau = 0.04) { param.setTargetAtTime(v, A.ctx.currentTime, tau); }
+function setPannerPos(pn, x, y, z) { const p = pn.p; if (p.positionX) { setAP(p.positionX, x); setAP(p.positionY, y); setAP(p.positionZ, z); } else p.setPosition(x, y, z); }
 function updateListener() {
   if (!A.ctx) return; const L = A.ctx.listener, p = camera.getWorldPosition(new THREE.Vector3()), f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-  if (L.positionX) { L.positionX.value = p.x; L.positionY.value = p.y; L.positionZ.value = p.z; L.forwardX.value = f.x; L.forwardY.value = f.y; L.forwardZ.value = f.z; L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; }
+  if (L.positionX) { setAP(L.positionX, p.x, 0.03); setAP(L.positionY, p.y, 0.03); setAP(L.positionZ, p.z, 0.03); setAP(L.forwardX, f.x, 0.03); setAP(L.forwardY, f.y, 0.03); setAP(L.forwardZ, f.z, 0.03); L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; }
   else { L.setPosition(p.x, p.y, p.z); L.setOrientation(f.x, f.y, f.z, 0, 1, 0); }
 }
-function noiseBurst(dest, { t = 0, dur = 0.2, type = 'bandpass', f = 800, q = 1, g = 0.3, a = 0.005, buf, rate = 1, fEnd } = {}) {
-  if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime + t;
-  const s = ctx.createBufferSource(); s.buffer = buf || A.noise; s.playbackRate.value = rate;
-  const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f, now); fl.Q.value = q; if (fEnd) fl.frequency.exponentialRampToValueAtTime(fEnd, now + dur);
-  const gn = ctx.createGain(); gn.gain.setValueAtTime(0.0001, now); gn.gain.exponentialRampToValueAtTime(g, now + a); gn.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  s.connect(fl); fl.connect(gn); gn.connect(dest); s.start(now, rand(0, 2)); s.stop(now + dur + 0.05);
+// joue un son pré-rendu ; pan = -1..1 (stéréo) si la destination n'est pas spatialisée
+function play(name, dest, { g = 1, rate = 1, t = 0, pan } = {}) {
+  if (!A.ctx || !A.buf[name] || A.voices > 26) return;
+  const ctx = A.ctx, s = ctx.createBufferSource(); s.buffer = A.buf[name]; s.playbackRate.value = rate;
+  const gn = ctx.createGain(); gn.gain.value = g; s.connect(gn);
+  if (pan !== undefined && ctx.createStereoPanner) { const sp = ctx.createStereoPanner(); sp.pan.value = pan; gn.connect(sp); sp.connect(dest); } else gn.connect(dest);
+  A.voices++; s.onended = () => { A.voices--; }; s.start(ctx.currentTime + t);
 }
-function tone(dest, { t = 0, f = 60, fEnd, dur = 0.3, g = 0.4, type = 'sine', a = 0.005 } = {}) {
-  if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime + t;
-  const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, now); if (fEnd) o.frequency.exponentialRampToValueAtTime(fEnd, now + dur);
-  const gn = ctx.createGain(); gn.gain.setValueAtTime(0.0001, now); gn.gain.exponentialRampToValueAtTime(g, now + a); gn.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  o.connect(gn); gn.connect(dest); o.start(now); o.stop(now + dur + 0.05);
-}
+const sndPick = (base, n) => base + Math.floor(Math.random() * n);
+// compatibilité : anciens appels génériques
+function noiseBurst() {}
+function tone() {}
 const SFX = {
-  step(run) { if (!A.ctx) return; noiseBurst(A.bus, { dur: 0.12, type: 'lowpass', f: run ? 520 : 360, g: run ? 0.22 : 0.12, buf: A.brown }); if (Math.random() < 0.12) SFX.creak(0.05); },
-  creak(g = 0.06) { if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime; const o = ctx.createOscillator(); o.type = 'sawtooth'; const f0 = rand(160, 320); o.frequency.setValueAtTime(f0, now); o.frequency.linearRampToValueAtTime(f0 * rand(0.7, 1.4), now + 0.5);
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = rand(900, 1600); bp.Q.value = 12; const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(g, now + 0.1); gn.gain.linearRampToValueAtTime(0, now + 0.55);
-    const am = ctx.createOscillator(); am.frequency.value = rand(18, 40); const amg = ctx.createGain(); amg.gain.value = g * 0.8; am.connect(amg); amg.connect(gn.gain); am.start(now); am.stop(now + 0.6);
-    o.connect(bp); bp.connect(gn); gn.connect(A.bus); o.start(now); o.stop(now + 0.6); },
-  door(x, z, slam) { if (!A.ctx) return; setPannerPos(A.fxPan, x, 1.2, z); if (slam) { noiseBurst(A.fxPan.in, { dur: 0.5, type: 'lowpass', f: 900, g: 0.9, buf: A.brown }); tone(A.fxPan.in, { f: 70, fEnd: 35, dur: 0.4, g: 0.8 }); } else { const ctx = A.ctx, now = ctx.currentTime; const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(110, now); o.frequency.linearRampToValueAtTime(190, now + 0.7); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 16; const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(0.12, now + 0.1); gn.gain.linearRampToValueAtTime(0, now + 0.8); o.connect(bp); bp.connect(gn); gn.connect(A.fxPan.in); o.start(now); o.stop(now + 0.85); noiseBurst(A.fxPan.in, { t: 0.7, dur: 0.15, type: 'lowpass', f: 400, g: 0.25, buf: A.brown }); } },
-  pickup() { if (!A.ctx) return; tone(A.master, { f: 880, dur: 0.6, g: 0.06, type: 'triangle' }); tone(A.master, { t: 0.08, f: 1320, dur: 0.7, g: 0.04, type: 'triangle' }); },
-  breath(wolf, inhale) { if (!A.ctx) return; noiseBurst(A.wolfPan.in, { dur: inhale ? 0.7 : 0.9, type: 'bandpass', f: inhale ? 700 : 420, fEnd: inhale ? 1100 : 260, q: 2.2, g: 0.32, a: 0.25 }); },
-  growl(g = 0.5, dur = 1.4) { if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime;
-    for (const f of [58, 61.5, 87]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f, now); o.frequency.linearRampToValueAtTime(f * rand(0.85, 1.15), now + dur);
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 5; const trem = ctx.createOscillator(); trem.frequency.value = rand(22, 32); const tg = ctx.createGain(); tg.gain.value = g * 0.25; trem.connect(tg);
-      const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(g * 0.33, now + 0.25); gn.gain.linearRampToValueAtTime(0, now + dur); tg.connect(gn.gain);
-      o.connect(lp); lp.connect(gn); gn.connect(A.wolfPan.in); o.start(now); o.stop(now + dur + 0.1); trem.start(now); trem.stop(now + dur + 0.1); }
-    noiseBurst(A.wolfPan.in, { dur, type: 'bandpass', f: 300, q: 3, g: g * 0.3, a: 0.2 }); },
-  wolfStep(g = 0.5) { if (!A.ctx) return; noiseBurst(A.wolfPan.in, { dur: 0.18, type: 'lowpass', f: 300, g, buf: A.brown }); tone(A.wolfPan.in, { f: 55, fEnd: 30, dur: 0.18, g: g * 0.8 }); if (Math.random() < 0.3) noiseBurst(A.wolfPan.in, { t: 0.03, dur: 0.05, type: 'highpass', f: 3500, g: g * 0.25 }); },
-  sniff() { if (!A.ctx) return; for (let i = 0; i < 4; i++) noiseBurst(A.wolfPan.in, { t: i * 0.16, dur: 0.11, type: 'bandpass', f: 2200, q: 2, g: 0.18, a: 0.03 }); },
-  scratch(x, z) { if (!A.ctx) return; setPannerPos(A.fxPan, x, 1.4, z); for (let i = 0; i < 3; i++) noiseBurst(A.fxPan.in, { t: i * 0.22, dur: 0.2, type: 'bandpass', f: 2600, fEnd: 1400, q: 6, g: 0.3, a: 0.02 }); },
-  howl(dist = true) { if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime, dest = ctx.createGain(); dest.gain.value = dist ? 0.35 : 0.8; dest.connect(A.verb); dest.connect(A.master);
-    const o = ctx.createOscillator(); o.type = 'sawtooth'; const v = ctx.createOscillator(); v.frequency.value = 5.5; const vg = ctx.createGain(); vg.gain.value = 9; v.connect(vg); vg.connect(o.frequency);
-    o.frequency.setValueAtTime(260, now); o.frequency.exponentialRampToValueAtTime(520, now + 1.1); o.frequency.setValueAtTime(520, now + 2.4); o.frequency.exponentialRampToValueAtTime(330, now + 4.2);
-    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 800; f1.Q.value = 5; const f2 = ctx.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = dist ? 1200 : 2400;
-    const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(0.5, now + 0.6); gn.gain.setValueAtTime(0.5, now + 3.2); gn.gain.linearRampToValueAtTime(0, now + 4.4);
-    o.connect(f1); f1.connect(f2); f2.connect(gn); gn.connect(dest); o.start(now); o.stop(now + 4.5); v.start(now); v.stop(now + 4.5); },
-  roar() { if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime, dest = ctx.createGain(); dest.gain.value = 1.0; dest.connect(A.master); dest.connect(A.verb);
-    const ws = ctx.createWaveShaper(); const curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 6); } ws.curve = curve; ws.connect(dest);
-    for (const f of [70, 74, 105, 142, 210]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 1.4, now); o.frequency.exponentialRampToValueAtTime(f, now + 0.3); o.frequency.exponentialRampToValueAtTime(f * 0.7, now + 1.6);
-      const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(0.18, now + 0.06); gn.gain.linearRampToValueAtTime(0, now + 1.7); o.connect(gn); gn.connect(ws); o.start(now); o.stop(now + 1.8); }
-    noiseBurst(dest, { dur: 1.6, type: 'bandpass', f: 900, fEnd: 300, q: 1, g: 0.9, a: 0.04 }); },
-  stinger() { if (!A.ctx) return; const ctx = A.ctx, now = ctx.currentTime;
-    for (const f of [622, 659, 932, 988, 1244]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const gn = ctx.createGain(); gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(0.045, now + 0.08); gn.gain.linearRampToValueAtTime(0, now + 1.6);
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; o.connect(hp); hp.connect(gn); gn.connect(A.master); gn.connect(A.verb); o.start(now); o.stop(now + 1.7); }
-    tone(A.master, { f: 45, fEnd: 30, dur: 1.2, g: 0.7 }); },
-  heartbeat(g) { if (!A.ctx) return; tone(A.master, { f: 52, fEnd: 38, dur: 0.16, g: g }); tone(A.master, { t: 0.2, f: 46, fEnd: 34, dur: 0.18, g: g * 0.7 }); },
-  gasp() { if (!A.ctx) return; noiseBurst(A.master, { dur: 0.6, type: 'bandpass', f: 1400, fEnd: 700, q: 1.5, g: 0.35, a: 0.05 }); },
-  blow() { if (!A.ctx) return; noiseBurst(A.master, { dur: 0.35, type: 'bandpass', f: 1800, q: 0.8, g: 0.14, a: 0.04 }); },
-  shot() { if (!A.ctx) return; noiseBurst(A.master, { dur: 0.7, type: 'lowpass', f: 3000, fEnd: 200, g: 1.0, a: 0.002 }); tone(A.master, { f: 90, fEnd: 30, dur: 0.5, g: 0.9 }); },
-  yelp() { if (!A.ctx) return; tone(A.wolfPan.in, { f: 900, fEnd: 420, dur: 0.7, g: 0.5, type: 'sawtooth' }); tone(A.wolfPan.in, { t: 0.5, f: 700, fEnd: 300, dur: 0.6, g: 0.35, type: 'sawtooth' }); },
-  crackle() { if (!A.ctx || !fireSpot) return; setPannerPos(A.firePan, fireSpot.pos.x, 0.5, fireSpot.pos.z); noiseBurst(A.firePan.in, { dur: rand(0.02, 0.06), type: 'highpass', f: rand(1500, 4000), g: rand(0.1, 0.3), a: 0.001 }); },
-  chew() { if (!A.ctx) return; for (let i = 0; i < 3; i++) noiseBurst(A.wolfPan.in, { t: i * 0.25, dur: 0.15, type: 'lowpass', f: 700, g: 0.35, buf: A.brown }); },
+  step(run) { play(sndPick('step', run ? 3 : 4), A.bus, { g: run ? 0.42 : 0.24, rate: rand(0.9, 1.1) }); },
+  creak(g = 0.06) { play(sndPick('creak', 3), A.bus, { g: clamp(g * 4, 0.1, 0.5), rate: rand(0.85, 1.15), pan: rand(-0.9, 0.9) }); },
+  door(x, z, slam) { if (!A.ctx) return; setPannerPos(A.fxPan, x, 1.2, z); play(slam ? 'doorSlam' : 'doorOpen', A.fxPan.in, { g: slam ? 1 : 0.55, rate: rand(0.92, 1.08) }); },
+  pickup() { play('pickup', A.bus, { g: 0.22 }); },
+  breath(w, inhale) { play(inhale ? 'breathIn' : 'breathOut', A.wolfPan ? A.wolfPan.in : null, { g: 0.6, rate: rand(0.9, 1.05) }); },
+  growl(g = 0.5) { if (!A.ctx) return; play(sndPick('growl', 2), A.wolfPan.in, { g: clamp(g * 1.3, 0.3, 1.1), rate: rand(0.9, 1.08) }); },
+  wolfStep(g = 0.5) { if (!A.ctx) return; play(sndPick('wstep', 2), A.wolfPan.in, { g: clamp(g * 1.3, 0.2, 1), rate: rand(0.9, 1.1) }); },
+  sniff() { if (A.ctx) play('sniff', A.wolfPan.in, { g: 0.55, rate: rand(0.95, 1.1) }); },
+  scratch(x, z) { if (!A.ctx) return; setPannerPos(A.fxPan, x, 1.4, z); play('scratch', A.fxPan.in, { g: 0.6 }); },
+  howl(dist = true) { if (!A.ctx) return; const d = A.ctx.createGain(); d.gain.value = dist ? 0.22 : 0.6; if (dist) { const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1300; d.connect(lp); lp.connect(A.master); } else d.connect(A.master); d.connect(A.verb); play('howl', d, { rate: rand(0.95, 1.04), pan: dist ? rand(-0.7, 0.7) : undefined }); },
+  roar() { if (!A.ctx) return; play('roar', A.master, { g: 0.95 }); play('roar', A.verb, { g: 0.4 }); },
+  stinger() { if (!A.ctx) return; play('stinger', A.master, { g: 0.6 }); play('stinger', A.verb, { g: 0.3 }); },
+  heartbeat(g) { if (A.ctx) play('heart', A.master, { g: clamp(g * 1.2, 0.1, 0.9) }); },
+  gasp() { if (A.ctx) play('gasp', A.master, { g: 0.3, rate: rand(0.95, 1.05) }); },
+  blow() { if (A.ctx) play('blow', A.master, { g: 0.18 }); },
+  light() { if (A.ctx) play('light', A.master, { g: 0.16 }); },
+  thud() { if (A.ctx) play('thud', A.bus, { g: 0.4 }); },
+  shot() { if (!A.ctx) return; play('shot', A.master, { g: 1 }); play('shot', A.verb, { g: 0.6 }); },
+  yelp() { if (A.ctx) play('yelp', A.wolfPan.in, { g: 0.7 }); },
+  crackle() {}, // le feu est une boucle continue spatialisée
+  chew() { if (A.ctx) play('chew', A.wolfPan.in, { g: 0.6, rate: rand(0.9, 1.1) }); },
+  amb(a, w) { if (!A.ctx) return; setAP(A.ambGain.gain, a * 6, 0.6); setAP(A.windGain.gain, w * 4, 0.6); },
+  fear(f) { if (!A.ctx) return; setAP(A.dreadGain.gain, Math.max(0, f - 0.35) * 0.32, 0.5); setAP(A.droneLP.frequency, 380 + f * 900, 0.5); },
 };
 
 /* ---------------- Loup-garou ---------------- */
@@ -1374,7 +1492,7 @@ function throwMeat() {
   let x = player.x, z = player.z;
   for (let d = 0; d < 5; d += 0.2) { const nx = player.x + fwd.x * d, nz = player.z + fwd.z * d; if (collides(nx, nz, 0.15, false, true)) break; x = nx; z = nz; }
   const bait = itemMesh('meat'); bait.position.set(x, 0, z); world.add(bait);
-  noiseBurst(A.bus, { dur: 0.2, type: 'lowpass', f: 500, g: 0.4, buf: A.brown });
+  SFX.thud();
   if (wolf.state !== 'dormant' && wolf.state !== 'flee' && Math.hypot(wolf.x - x, wolf.z - z) < 22 * game.hearing) {
     if (wolf.state !== 'chase' || Math.random() < 0.6) { if (wolf.bait) world.remove(wolf.bait); wolf.bait = bait; setWolfState('distract'); wolf.path = findPath(wolf.x, wolf.z, x, z) || []; wolf.awareness = 0; SFX.growl(0.4, 0.8); showMsg('Il a senti la viande…', 2); return; }
   }
@@ -1404,7 +1522,7 @@ function setupNight(n) {
 }
 function startGame() {
   audioInit();
-  if (A.ambGain) { A.ambGain.gain.value = 0.07; A.windGain.gain.value = 0.05; }
+  SFX.amb(0.07, 0.05);
   setupNight(game.night);
   game.state = 'play';
   showScreen(null);
@@ -1466,7 +1584,7 @@ function toggleCandle(force) {
   const on = force !== undefined ? force : !player.candleOn;
   if (on && player.oil <= 0.01) { showMsg("Plus d'huile. Il faut trouver une fiole.", 2); return; }
   player.candleOn = on;
-  if (!on) SFX.blow(); else noiseBurst(A.bus, { dur: 0.2, type: 'highpass', f: 2500, g: 0.08 });
+  if (!on) SFX.blow(); else SFX.light();
 }
 
 /* ---------------- Boucle ---------------- */
@@ -1567,7 +1685,7 @@ function updateAtmos(dt, t) {
   if (game.heartT <= 0 && game.fear > 0.15) { const bpm = 70 + game.fear * 95; game.heartT = 60 / bpm; SFX.heartbeat(0.15 + game.fear * 0.5); if (game.fear > 0.7) vibrate(25); }
   // grincements, griffures, faux yeux
   game.creakT -= dt; if (game.creakT <= 0) { game.creakT = rand(5, 13); SFX.creak(rand(0.03, 0.08)); }
-  if (Math.random() < dt * 0.6) SFX.crackle();
+  SFX.fear(game.fear);
   game.scareT -= dt;
   if (game.scareT <= 0 && active) {
     game.scareT = rand(35, 70);
@@ -1744,7 +1862,9 @@ btn('bThrow', () => throwMeat());
 btn('bBreath', () => (input.breathBtn = true), () => (input.breathBtn = false));
 $('bPause').addEventListener('click', () => pauseGame(true));
 $('bPause').addEventListener('touchstart', (e) => { e.preventDefault(); pauseGame(true); }, { passive: false });
-document.addEventListener('visibilitychange', () => { if (document.hidden && game.state === 'play') pauseGame(true); });
+// prépare l'audio dès le premier contact (les sons sont rendus pendant l'écran titre)
+for (const ev of ['pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, () => { audioInit(); if (game.state === 'title') SFX.amb(0.05, 0.04); }, { once: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (game.state === 'play') pauseGame(true); if (A.ctx) A.ctx.suspend(); } else if (A.ctx && !game.paused) A.ctx.resume(); });
 
 /* ---------------- Menus ---------------- */
 const SCREENS = ['loading', 'title', 'how', 'settings', 'lettersScr', 'letterView', 'pause', 'end'];
@@ -1791,7 +1911,7 @@ $('bMenu').onclick = () => toTitle();
 $('sSens').value = save.sens; $('sQual').value = save.quality; $('sVol').value = save.volume;
 $('sSens').oninput = (e) => { save.sens = +e.target.value; persist(); };
 $('sQual').onchange = (e) => { save.quality = +e.target.value; persist(); applyQuality(); };
-$('sVol').oninput = (e) => { save.volume = +e.target.value; persist(); if (A.master) A.master.gain.value = save.volume; };
+$('sVol').oninput = (e) => { save.volume = +e.target.value; persist(); if (A.master) setAP(A.master.gain, save.volume * 0.9, 0.05); };
 function toTitle() {
   game.state = 'title'; titleT = 0;
   $('hud').classList.remove('on'); $('touch').classList.remove('on'); $('bPause').hidden = true;
@@ -1800,7 +1920,7 @@ function toTitle() {
   wolf.x = 8.6; wolf.z = 8.4; wolf.yaw = Math.atan2(17 - 8.6, 15.5 - 8.4) - 0.25; wolf.obj.position.set(wolf.x, 0, wolf.z); wolf.obj.rotation.y = wolf.yaw;
   doors.forEach((d) => { d.open = d.target = d.def.open ? 1 : 0; });
   updateDoors(0);
-  if (A.ambGain) { A.ambGain.gain.value = 0.05; A.windGain.gain.value = 0.04; }
+  SFX.amb(0.05, 0.04);
   renderNights();
   showScreen('title');
 }
@@ -1828,6 +1948,6 @@ async function boot() {
 }
 // API de test
 window.__cendrelune = { game, player, wolf, startGame, caught, win, doors, hideSpots, enterHide, exitHide,
-  sim: (sec) => { const dt = 1 / 30; let t = clock.elapsedTime; for (let k = 0; k < sec * 30 && game.state === 'play'; k++) { t += dt; game.clock += dt; updatePlayer(dt); updateWolf(dt, t); animateWolf(dt, t); updateDoors(dt); updateAtmos(dt, t); } for (let k = 0; k < sec * 30 && game.state === 'caught'; k++) { t += dt; updateCaught(dt, t); } return { state: game.state, w: wolf.state, d: Math.hypot(wolf.x - player.x, wolf.z - player.z).toFixed(1), aw: wolf.awareness.toFixed(2), susp: player.suspicion.toFixed(2) }; }, setPos: (x, z, yaw) => { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; } };
+  sim: (sec) => { const dt = 1 / 30; let t = clock.elapsedTime; for (let k = 0; k < sec * 30 && game.state === 'play'; k++) { t += dt; game.clock += dt; updatePlayer(dt); updateWolf(dt, t); animateWolf(dt, t); updateDoors(dt); updateAtmos(dt, t); } for (let k = 0; k < sec * 30 && game.state === 'caught'; k++) { t += dt; updateCaught(dt, t); } return { state: game.state, w: wolf.state, d: Math.hypot(wolf.x - player.x, wolf.z - player.z).toFixed(1), aw: wolf.awareness.toFixed(2), susp: player.suspicion.toFixed(2) }; }, setPos: (x, z, yaw) => { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; }, A, SFX };
 boot().catch((e) => { $('loadTxt').textContent = 'Erreur : ' + e.message; console.error(e); });
 })();
