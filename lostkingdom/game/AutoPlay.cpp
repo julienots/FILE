@@ -1435,6 +1435,21 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
         return s;
     }
+    if (name == "start") {
+        // 2.1.0 the start of a game: loading screen, then the interactive tutorial (look at the pictures)
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.loadGate = true; g.loadGateT = 0; g.loadGateReady = 0; g.timeOfDay = 9.f; g.toastHint.clear(); }, idle, "new game"});
+        s.push_back({0.3f, [](Game& g) { teleport(g, 3850, 2650, 0.4f); g.loadGate = true; g.loadGateT = 0; g.loadGateReady = 0; g.loadGateHold = 2.f; }, idle, "far away: the world must load"});
+        s.push_back({0.2f, none, idle, "loading"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/T0_loading.png"); g.loadGateHold = 0.6f; }, idle, "shot"});
+        s.push_back({30.f, none, [](Game& g, float) { g.camIdleT = 0; }, "wait for the world", [](Game& g) { return !g.loadGate; }});
+        s.push_back({1.f, [](Game& g) { g.toastHint.clear(); g.startTutorial(); }, idle, "tutorial"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/T1_tutorial_move.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { g.tutStep = 2; g.tutT = 0; }, idle, "step run"});
+        s.push_back({0.4f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/T2_tutorial_run.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("START TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "sky") {
         // 2.0.0 the new sky: clouds by day, sunset, the moon and the Milky Way, aurora in the cold north, a rainbow after the rain
         struct V { float x, z, tod; int weather; float yaw, pitch; float wet; const char* f; };

@@ -244,17 +244,28 @@ void Game::frame(float dtRaw) {
         updateTouchControls();
         if (menu == Menu::Mods || std::fmod(realTime, 2.f) < dt) pollModImport();
         updateCinematicShots(dt);   // multi-shot cinematics own the taps while they play
-        bool paused = menu != Menu::None && menu != Menu::Death;
+        bool paused = (menu != Menu::None && menu != Menu::Death) || loadGate;
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
         updateCoop(dt);   // 1.13.0 the network runs even while a menu is open
-        if (!paused) updatePlaying(sdt);
+        if (!paused) { updateTutorial(sdt); updatePlaying(sdt); }
         PROF(9, renderWorld(sdt));
         PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); drawEndingChoice(dt); });
         break;
     }
     }
-    if (!endingChoice) drawNotifications(dt);   // 1.12.0 the ending choice stands alone on screen
+    // 2.1.0 loading gate: after a game starts or loads, hold black until the hero's surroundings are streamed in
+    if (loadGate) {
+        loadGateT += dt;
+        loadGateReady = std::max(loadGateReady, state == GameState::Playing && player != NullEntity ? std::min(world.areaReady(pc().pos, 80.f), world.areaReady(pc().pos, 170.f) * 1.02f) : 0.f);
+        if (!cine.active && ((loadGateReady >= 0.995f && loadGateT >= loadGateHold) || loadGateT > 10.f)) { loadGate = false; loadGateFade = 1.f; }
+        else if (cine.active) loadGate = false;
+        else drawLoadOverlay(ui.W, ui.H, loadGateReady, 1.f, loadGateT);
+    } else if (loadGateFade > 0.f) {
+        loadGateFade = std::max(0.f, loadGateFade - dt * 1.6f);
+        ui.rect({0, 0, ui.W, ui.H}, vec4(0.02f, 0.015f, 0.01f, loadGateFade));
+    }
+    if (!endingChoice && !loadGate) drawNotifications(dt);   // 1.12.0 the ending choice stands alone on screen
     // screen transition fade (dungeon entrances)
     if (transitionT >= 0) {
         transitionT += dt;

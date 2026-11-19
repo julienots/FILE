@@ -180,6 +180,80 @@ void Game::updateTouchControls() {
     if (u.button(bBag)) { menu = Menu::Inventory; play("ui_open", 0.6f); }
 }
 
+
+// ============================================================================================ tutorial (2.1.0)
+struct TutStepDef { const char* title; const char* text; int ctl; };   // ctl: button to highlight (-1 joystick, -2 camera area, -3 none)
+static const TutStepDef TUT[] = {
+    {"Marcher", "Posez le pouce à gauche et glissez : le joystick vous fait avancer.", -1},
+    {"Tourner la caméra", "Glissez un doigt à droite de l'écran pour tourner et incliner la caméra. Pincez pour zoomer.", -2},
+    {"Courir", "Touchez le bouton « Courir » pour verrouiller la course, puis marchez. (Ou poussez le joystick à fond une demi-seconde.)", CTL_SPRINT},
+    {"Sauter", "Touchez le bouton Saut pour franchir un obstacle ou escalader un rebord.", CTL_JUMP},
+    {"Esquiver", "Touchez Esquive pour rouler : vous êtes invulnérable un court instant. Maintenez-le pour sprinter.", CTL_DODGE},
+    {"Attaquer", "Touchez le bouton épée pour frapper. Maintenez-le pour charger une attaque puissante.", CTL_ATTACK},
+    {"Parler", "Allez parler à Maëlle, la doyenne de Brindlemere (suivez la flèche de quête). Touchez-la quand le bouton Interagir apparaît.", -3},
+};
+constexpr int TUT_N = 7;
+
+void Game::startTutorial() {
+    if (storyFlags.count("tutorial_done") || player == NullEntity) return;
+    tutStep = 0; tutT = 0; tutOkT = 0; tutAcc = 0; tutStart = pc().pos;
+}
+
+void Game::updateTutorial(float dt) {
+    if (tutStep < 0 || state != GameState::Playing || cine.active || dialog.open || player == NullEntity) return;
+    tutT += dt;
+    if (tutOkT > 0) {   // step done: show the check for a moment, then the next
+        tutOkT -= dt;
+        if (tutOkT <= 0) { tutStep++; tutT = 0; tutAcc = 0; tutStart = pc().pos; if (tutStep >= TUT_N) { tutStep = -1; storyFlags.insert("tutorial_done"); notify("Tutoriel terminé. Bonne aventure !", vec3(0.7f, 1.f, 0.7f), "i_check"); } }
+        return;
+    }
+    bool done = false;
+    switch (tutStep) {
+    case 0: done = distXZ(pc().pos, tutStart) > 6.f; break;
+    case 1: tutAcc += length(input.camDrag) + std::fabs(input.pinch); done = tutAcc > 260.f; break;
+    case 2: if (input.sprint && length(input.move) > 0.3f) tutAcc += dt; done = tutAcc > 1.2f; break;
+    case 3: done = input.jump; break;
+    case 4: done = input.dodge; break;
+    case 5: done = input.attackRelease || input.attack; break;
+    case 6: done = talkedTo.count("maelle") > 0 || questsDone.count("m1") > 0; break;
+    }
+    if (done) { tutOkT = 0.9f; play("quest", 0.5f, 1.3f); haptic(15, 80); }
+}
+
+void Game::drawTutorial(float dt) {
+    (void)dt;
+    if (tutStep < 0 || tutStep >= TUT_N || state != GameState::Playing || cine.active || dialog.open || menu != Menu::None || loadGate) return;
+    UI& u = ui;
+    const TutStepDef& d = TUT[tutStep];
+    bool ok = tutOkT > 0;
+    float pw = std::min(u.W * 0.56f, 640.f), ph = 118.f;
+    Rect r{u.W / 2 - pw / 2, 84.f, pw, ph};
+    u.nine("panel_plain", r, vec4(1, 1, 1, 0.92f), 0.55f);
+    char head[96]; snprintf(head, sizeof head, "Tutoriel  %d / %d  ·  %s", tutStep + 1, TUT_N, d.title);
+    u.text(head, r.x + 18, r.y + 12, 21, ok ? rgba(0x9ae88a) : rgba(0xf4d58a), F_BOLD);
+    u.text(ok ? "Bien joué !" : d.text, r.x + 18, r.y + 42, 17, rgba(0xf4e7c4), F_BODY, A_LEFT, pw - 150);
+    for (int i = 0; i < TUT_N; i++) u.circle({r.x + 22 + i * 18.f, r.y + ph - 14}, i == tutStep ? 5.f : 3.5f, i < tutStep ? rgba(0x9ae88a) : (i == tutStep ? rgba(0xf4d58a) : rgba(0x8a8070, 0.7f)), 10);
+    Rect skip{r.x + r.w - 128, r.y + r.h - 44, 116, 34};
+    u.nine("button_dark", skip, vec4(1, 1, 1, 0.9f), 0.6f);
+    u.text("Passer", skip.x + skip.w / 2, skip.y + 7, 17, rgba(0xf4e7c4), F_SERIF, A_CENTER);
+    if (u.button(skip)) { tutStep = -1; storyFlags.insert("tutorial_done"); return; }
+    // pulsing ring around what to use
+    float pulse = 0.5f + 0.5f * std::sin(realTime * 5.f);
+    vec4 col = ok ? vec4(0.6f, 1.f, 0.55f, 0.9f) : vec4(1.f, 0.88f, 0.4f, 0.55f + 0.4f * pulse);
+    if (d.ctl >= 0) {
+        Rect b = ctlRect(*this, d.ctl);
+        vec2 c{b.x + b.w / 2, b.y + b.h / 2};
+        u.ring(c, b.w * (0.53f + 0.05f * pulse), b.w * (0.58f + 0.05f * pulse), 0, TAU, col, 40);
+    } else if (d.ctl == -1) {
+        vec2 jc{settings.layout.leftHanded ? u.W - 170 : 170, u.H - 170};
+        float R = 70.f * settings.layout.scale;
+        u.ring(jc, R * (1.5f + 0.06f * pulse), R * (1.58f + 0.06f * pulse), 0, TAU, col, 48);
+    } else if (d.ctl == -2) {
+        vec2 c{u.W * 0.72f, u.H * 0.45f};
+        u.text("‹  glisser  ›", c.x, c.y + 8 * pulse, 30, col, F_BOLD, A_CENTER, 0, true);
+    }
+}
+
 // ============================================================================================ HUD
 static void drawStatusIcons(UI& u, const Character& c, float x, float y) {
     struct S { float v; const char* icon; vec4 col; };
@@ -513,6 +587,7 @@ void Game::drawHud(float dt) {
         u.nine("panel_plain", lr, vec4(1, 1, 1, 0.85f), 0.4f);
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
+    drawTutorial(dt);
     // hints
     if (!toastHint.empty()) {
         hintT = hintT <= 0 ? 7.f : hintT;

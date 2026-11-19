@@ -188,8 +188,9 @@ void Game::renderWorld(float dt) {
     const GraphicsSettings& gs = renderer.settings;
     // stream the world around the focus point (not while inside a dungeon)
     // story cinematics film wide views: larger streaming radius and upload budget while they play
-    float streamR = cine.active ? std::max(gs.drawDistance, 150.f) : gs.drawDistance;
-    if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, streamR, state == GameState::Playing ? (cine.active ? 8 : 3) : 6, realTime);
+    bool waiting = (cine.active && cine.waitLoad > 0) || loadGate;   // 2.1.0 holding on black until the scenery is in: stream wider and upload faster
+    float streamR = cine.active ? std::max(gs.drawDistance, waiting ? 230.f : 150.f) : (loadGate ? std::max(gs.drawDistance, 200.f) : gs.drawDistance);
+    if (!dungeon.active || focus.x < WORLD_SIZE) world.update(focus, streamR, waiting ? 48 : (state == GameState::Playing ? (cine.active ? 8 : 3) : 6), realTime);
     // horizon relief: upload once the background build is done (and again after a context loss)
     if (!farTerrainData && farTerrainBuild.valid() && farTerrainBuild.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         farTerrainData = farTerrainBuild.get();

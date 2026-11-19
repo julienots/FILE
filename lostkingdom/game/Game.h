@@ -365,7 +365,7 @@ struct CinematicState {
     std::string id;
     std::vector<CineShot> shots;
     int index = 0;
-    float t = 0, reveal = 0, fade = 0, waitLoad = 0;
+    float t = 0, reveal = 0, fade = 0, waitLoad = 0, loadReady = 0;   // loadReady: 0..1 progress of the scenery around the shot (2.1.0 loading bar)
     float savedTod = 8; int savedWeather = 0; std::string savedMusic;
 };
 
@@ -524,6 +524,14 @@ public:
     bool pendingPrologue = false;
     void startShots(std::vector<CineShot> shots, const std::string& id);
     void startPrologue();
+    // 2.1.0 interactive tutorial after the prologue: each step is validated by the real action (walk, turn the camera, run, jump, roll, attack, talk)
+    int tutStep = -1; float tutT = 0, tutOkT = 0, tutAcc = 0; vec3 tutStart;
+    void startTutorial();
+    void updateTutorial(float dt);
+    void drawTutorial(float dt);
+    // 2.1.0 loading: the world is held behind a black screen with a progress bar until the scenery around the hero is in
+    bool loadGate = false; float loadGateT = 0, loadGateReady = 0, loadGateFade = 0, loadGateHold = 0.6f; int loadTip = 0;   // loadGateHold: shortest time on screen (no flash)
+    void drawLoadOverlay(float W, float H, float progress, float alpha, float t);
     void beginShot();
     void updateCinematicShots(float dt);
     void endCinematicShots(bool skipped);

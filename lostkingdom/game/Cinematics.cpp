@@ -132,7 +132,7 @@ void Game::beginShot() {
     if (c.music != "-") audio.playMusic(c.music, 2.f);
     if (!c.sfx.empty()) play(c.sfx, 0.9f);
     camFocus = c.lookFrom;   // the world streams around what the camera looks at
-    cine.waitLoad = 0.0001f; // wait for it before fading in
+    cine.waitLoad = 0.0001f; cine.loadReady = 0; // wait for it before fading in
     if (player != NullEntity) {
         Character& p = pc();
         if (c.heroDown) { p.vis.anim.setState(BodyState::Downed, 0.05f); p.vel = vec3(0); }
@@ -157,8 +157,9 @@ void Game::endCinematicShots(bool skipped) {
         storyFlags.insert("prologue_seen");
         for (const char* l : {"l1", "l2", "l3"}) unlockLore(l);
         audio.playMusic("greenhaven", 3.f);
-        toastHint = "Joystick à gauche pour marcher · Bouton épée : attaquer (maintenir pour charger) · Glisser à droite pour tourner la caméra.";
-        hintT = 0;
+        toastHint.clear();
+        if (!autoplay) startTutorial();   // 2.1.0 the tutorial replaces the single line of hints
+        else { toastHint = "Joystick à gauche pour marcher · Bouton épée : attaquer (maintenir pour charger) · Glisser à droite pour tourner la caméra."; hintT = 0; }
     }
     AGR_LOG("cinematic '%s' %s", id.c_str(), skipped ? "skipped" : "finished");
     if (replayingChapter) replayingChapter = false;   // watched again from the Objectives tab: no consequences
@@ -172,11 +173,13 @@ void Game::updateCinematicShots(float dt) {
     // hold on black until the scenery of the shot is streamed in (max 4 s, so a slow phone never blocks)
     if (cine.waitLoad > 0) {
         cine.waitLoad += dt;
-        float ready = world.areaReady(c.lookFrom, 110.f);
+        // 2.1.0: wait for the whole picture (close detail and the mid-distance terrain), up to 10 s, with a progress bar
+        float ready = std::min(world.areaReady(c.lookFrom, 90.f), world.areaReady(c.lookFrom, 200.f) * 1.02f);
+        cine.loadReady = std::max(cine.loadReady, ready);
         cine.fade = 1.f;
         camFocus = c.lookFrom;
-        if (ready < 0.97f && cine.waitLoad < 4.f) return;
-        cine.waitLoad = 0;
+        if (ready < 0.995f && cine.waitLoad < 10.f) return;
+        cine.waitLoad = 0; cine.loadReady = 0;
     }
     cine.t += dt;
     if (cine.t > 0.6f) cine.reveal += dt * 38.f;
@@ -241,6 +244,7 @@ void Game::drawCinematicShots() {
     float W_ = u.W, H_ = u.H;
     // dip to black, letterbox
     if (cine.fade > 0.01f) u.rect({0, 0, W_, H_}, vec4(0, 0, 0, cine.fade));
+    if (cine.waitLoad > 0) { drawLoadOverlay(W_, H_, cine.loadReady, 0.f, cine.waitLoad); return; }
     float bar = 92;
     u.rect({0, 0, W_, bar}, vec4(0, 0, 0, 1));
     u.rect({0, H_ - bar - 40, W_, bar + 40}, vec4(0, 0, 0, 1));
@@ -264,6 +268,32 @@ void Game::drawCinematicShots() {
     u.tag(skipBtn, "Passer");
     for (int i = 0; i < (int)cine.shots.size(); i++)
         u.circle({W_ / 2 + (i - (cine.shots.size() - 1) * 0.5f) * 18.f, bar * 0.5f}, i == cine.index ? 5.f : 3.f, rgba(0xf6dc9a, i <= cine.index ? 0.9f : 0.3f), 10);
+}
+
+// 2.1.0 loading screen: title, a progress bar and a tip. alpha > 0 also dims what is behind (the black is drawn by the caller otherwise)
+void Game::drawLoadOverlay(float W_, float H_, float progress, float alpha, float t) {
+    UI& u = ui;
+    if (alpha > 0.f) u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, alpha));
+    float a = alpha > 0.f ? alpha : 1.f;
+    u.text("LOST KINGDOM", W_ / 2, H_ * 0.33f, 54, rgba(0xf6dc9a, a), F_TITLE, A_CENTER, 0, true);
+    u.sprite("divider", {W_ / 2 - 200, H_ * 0.33f + 70, 400, 22}, vec4(1, 1, 1, a));
+    float bw = std::min(W_ * 0.5f, 480.f), bx = W_ / 2 - bw / 2, by = H_ * 0.33f + 118;
+    u.rect({bx - 3, by - 3, bw + 6, 20}, vec4(0.3f, 0.22f, 0.12f, 0.9f * a));
+    u.rect({bx, by, bw, 14}, vec4(0.08f, 0.06f, 0.04f, 0.95f * a));
+    float p = saturate(std::max(progress, 0.03f + 0.03f * std::sin(t * 4.f)));
+    u.rect({bx, by, bw * p, 14}, vec4(0.96f, 0.78f, 0.35f, a));
+    char b[64]; snprintf(b, sizeof b, "Chargement du monde…  %d %%", (int)(saturate(progress) * 100.f));
+    u.text(b, W_ / 2, by + 28, 20, rgba(0xe8dcc0, a), F_BODY, A_CENTER);
+    static const char* tips[] = {
+        "Astuce : touchez deux fois la zone de caméra pour la recentrer.",
+        "Astuce : le bouton « Courir » verrouille la course ; touchez-le de nouveau pour marcher.",
+        "Astuce : les pierres de passage enregistrent votre point de retour et permettent le voyage rapide.",
+        "Astuce : une esquive lancée juste avant un coup vous rend invulnérable.",
+        "Astuce : à Port-Azur et à Solmar, les marchands vendent de quoi affronter l'Acte II.",
+        "Astuce : touchez un ennemi pour le verrouiller, touchez le sol pour le relâcher.",
+    };
+    int ti = ((int)(t / 4.f) + loadTip) % 6;
+    u.text(tips[ti], W_ / 2, by + 74, 18, rgba(0xb8aa90, a), F_BODY, A_CENTER, std::min(W_ * 0.8f, 700.f));
 }
 
 void Game::unlockLore(const std::string& id, bool announce) {

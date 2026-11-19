@@ -255,6 +255,7 @@ void Game::startPlaying() {
     hintT = 0;
     // a new game opens with the prologue (the test bot only plays it in its own scenarios)
     if (pendingPrologue && (!autoplay || autoplayScenario == "prologue")) { toastHint.clear(); startPrologue(); }
+    if (!autoplay && !cine.active) { loadGate = true; loadGateT = 0; loadGateReady = 0; loadGateFade = 0; loadTip = (int)(realTime * 7.f) % 6; }   // 2.1.0
     pendingPrologue = false;
 }
 
@@ -287,7 +288,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.0.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.1.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -699,6 +700,14 @@ void Game::drawMenus(float dt) {
             u.sprite(ic, {m.x - 15, m.y - 15, 30, 30});
             if (mapZoom > 1.3f || P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Monastery) u.text(P.name, m.x, m.y + 15, 15, rgba(0x2a1a10), F_BOLD, A_CENTER);
         }
+        // 2.1.0 fast travel: touch a discovered waystone on the map, then "Voyage rapide"
+        static std::string wayPick;
+        for (auto& P : world.pois) {
+            if (P.type != PoiType::Waystone || !discovered.count(P.id)) continue;
+            vec2 m = toMap(P.pos);
+            if (P.id == wayPick) u.ring(m, 20, 25, 0, TAU, vec4(1.f, 0.85f, 0.3f, 0.6f + 0.4f * std::sin(realTime * 6.f)), 28);
+            for (auto& fg : u.fingers) if (fg.released && fg.t < 0.35f && length(vec2(fg.x - fg.sx, fg.y - fg.sy)) < 14.f && length(vec2(fg.x, fg.y) - m) < 26.f && c.contains(fg.x, fg.y)) { wayPick = P.id; play("ui_click", 0.5f); }
+        }
         // region names
         static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}};
         for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
@@ -739,11 +748,31 @@ void Game::drawMenus(float dt) {
         if (u.fancyButton({side2.x, side2.y, side2.w, 54}, "Zoom +", mapZoom < 3, "button_dark", 20)) mapZoom = std::min(3.f, mapZoom * 1.4f);
         if (u.fancyButton({side2.x, side2.y + 64, side2.w, 54}, "Zoom −", mapZoom > 1, "button_dark", 20)) { mapZoom = std::max(1.f, mapZoom / 1.4f); if (mapZoom == 1) mapPan = vec2(0, 0); }
         if (u.fancyButton({side2.x, side2.y + 128, side2.w, 54}, "Centrer", true, "button_dark", 20)) mapPan = vec2(0, 0);
+        {
+            const Poi* wp = wayPick.empty() ? nullptr : world.poiById(wayPick);
+            bool can = wp && !dungeon.active && !riding && driving < 0 && bossEnt == NullEntity;
+            std::string lab = wp ? "Voyage rapide : " + wp->name : "Voyage rapide (touchez une pierre)";
+            if (u.fancyButton({side2.x, side2.y + 192, side2.w, 54}, lab, can, "button", 16)) {
+                std::string id = wayPick; wayPick.clear();
+                menu = Menu::None;
+                fadeTransition([this, id] {
+                    const Poi* t = world.poiById(id);
+                    if (!t || player == NullEntity) return;
+                    Character& ch = pc();
+                    ch.pos = vec3(t->pos.x + 3.f, world.groundHeight(t->pos.x + 3.f, t->pos.y + 3.f) + 0.2f, t->pos.y + 3.f); ch.vel = vec3(0);
+                    camFocus = ch.pos; lockTarget = NullEntity;
+                    loadGate = true; loadGateT = 0; loadGateReady = 0; loadGateFade = 0;
+                    respawnPos = ch.pos;
+                    notify("Voyage rapide : " + t->name, vec3(0.7f, 0.9f, 1.f), "i_waypoint");
+                });
+            }
+            if (wp && !can) u.text("Impossible : donjon, combat de boss, monture ou véhicule.", side2.x, side2.y + 250, 14, rgba(0xd0a080), F_BODY, A_LEFT, side2.w);
+        }
         int found = 0; for (int i = 0; i < 128 * 128; i++) if (fog[i]) found++;
         char b[64]; snprintf(b, sizeof b, "Royaume exploré : %.1f %%", found * 100.f / (128 * 128));
-        u.text(b, side2.x, side2.y + 210, 18, PALE, F_BODY, A_LEFT, side2.w);
-        u.text(std::string("Région : ") + regionName(world.regionId(pc().pos.x, pc().pos.z)), side2.x, side2.y + 246, 18, GOLDT, F_BODY, A_LEFT, side2.w);
-        u.text("Lieux découverts : " + std::to_string(discovered.size()) + "/" + std::to_string(world.pois.size()), side2.x, side2.y + 282, 18, PALE, F_BODY, A_LEFT, side2.w);
+        u.text(b, side2.x, side2.y + 276, 18, PALE, F_BODY, A_LEFT, side2.w);
+        u.text(std::string("Région : ") + regionName(world.regionId(pc().pos.x, pc().pos.z)), side2.x, side2.y + 306, 18, GOLDT, F_BODY, A_LEFT, side2.w);
+        u.text("Lieux découverts : " + std::to_string(discovered.size()) + "/" + std::to_string(world.pois.size()), side2.x, side2.y + 336, 18, PALE, F_BODY, A_LEFT, side2.w);
         break;
     }
     // ---------------------------------------------------------------- quests
