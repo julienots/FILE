@@ -5,11 +5,27 @@
 | Moteur | [Box2D](https://github.com/erincatto/box2d) 3.1.1 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) 5.6.0 |
 | Module / plugin | `agr::physics2d`, `Physics2DPlugin` | `agr::physics3d`, `Physics3DPlugin` |
 | Corps | `RigidBody2D` | `RigidBody` |
-| Formes | `Collider2D` (boîte, cercle, capsule) ; `TilemapCollider2D` | `Collider` (boîte, sphère, capsule) |
+| Formes | `Collider2D` (boîte, cercle, capsule) ; `TilemapCollider2D` | `Collider` (boîte, sphère, capsule, **maillage**, **enveloppe convexe**) |
 | Plan / unités | XY, rotation autour de Z ; mètres, kg, secondes | mètres, kg, secondes |
 
 Les deux mondes suivent le même modèle, couvert par des tests automatisés (`tests/test_physics2d.cpp`,
 `tests/test_physics3d.cpp`, test de jeu des modèles, test de bout en bout de l'éditeur).
+
+## Formes maillage et convexes (3D)
+
+`Collider.shape` = **Mesh** : les triangles exacts d'un modèle importé (glTF, OBJ, FBX), pour les
+niveaux, bâtiments et décors statiques ou cinématiques. **Convex** : l'enveloppe convexe de ses
+sommets, pour les objets qui bougent (caisses, rochers qui roulent, véhicules).
+
+- Le modèle est `Collider.model` / `meshIndex` ; vides (-1), ce sont ceux du `MeshRenderer` de la même
+  entité : il suffit d'ajouter un `Collider` en *Mesh* à un objet importé.
+- Un corps **dynamique** ne peut pas utiliser de maillage exact (comme dans Godot et Jolt) : il prend
+  automatiquement l'enveloppe convexe du même maillage. Sa masse vient du volume de l'enveloppe et de
+  `density`.
+- La géométrie est importée une fois par `Physics3DPlugin` (fichier lu par le système de fichiers du
+  moteur, mis en cache) ; hors moteur, `Physics3DWorld::setCollisionMeshSource` fournit les triangles.
+- Échelle de l'entité appliquée aux sommets ; raycasts, déclencheurs, couches et événements comme les
+  autres formes. Un modèle ou un maillage introuvable est ignoré avec un avertissement (une fois).
 
 ## Principe
 
@@ -133,7 +149,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
 
 ## Limites actuelles
 
-- 3D : pas de formes **maillage** ni **enveloppe convexe** (niveaux importés à approximer avec des boîtes),
+- 3D : pas de *heightfield* dédié pour les terrains importés (le `Terrain` du moteur a sa propre collision) ;
+  maillage et enveloppe convexe : voir plus haut ; le maillage n'est pas rechargé si le fichier change en jeu,
   pas de *heightfield* ; frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
   qui a au moins un déclencheur est entièrement un capteur.
 - 2D : pas de polygones quelconques ni de chaînes (contours lisses) ; pas de tuiles en pente ni de tuiles

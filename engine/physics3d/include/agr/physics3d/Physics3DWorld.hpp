@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -40,6 +42,15 @@ struct Physics3DStats {
 /// contact and trigger events, raycasts. The simulation runs on the engine's
 /// JobSystem when one is attached (setJobSystem), single-threaded otherwise;
 /// both are deterministic on a given platform and report events in the same order.
+/// Triangles of a model's mesh for Mesh / Convex colliders (positions in the mesh's space).
+struct CollisionMesh {
+    std::vector<math::Vec3> positions;
+    std::vector<u32> indices;  ///< Triangles.
+};
+/// Loads collision geometry: (model URI, mesh index) -> mesh, or nullptr (missing file or mesh).
+/// Physics3DPlugin installs one that imports models through the engine's file system (cached).
+using CollisionMeshSource = std::function<std::shared_ptr<const CollisionMesh>(const std::string& model, i32 meshIndex)>;
+
 class Physics3DWorld {
 public:
     Physics3DWorld();
@@ -50,6 +61,8 @@ public:
     /// Runs the Jolt simulation on `jobs` (nullptr: single-threaded). The JobSystem
     /// must outlive this world or be detached first.
     void setJobSystem(JobSystem* jobs);
+    /// Geometry of Mesh / Convex colliders (without a source they are skipped with a warning).
+    void setCollisionMeshSource(CollisionMeshSource source);
 
     void step(Scene& scene, float dt);
     void sync(Scene& scene);

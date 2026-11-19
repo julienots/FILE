@@ -138,7 +138,8 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Tests : 7 cas 2D, 4 cas 3D, 10 cas scripts, jeu des modèles sans écran, mode Jeu piloté au clavier dans le test de bout en bout | ✅ | `tests/` |
 | **Éditeur de logique visuelle** (événements, conditions, variables, actions, boucles, minuteurs) | ✅ | `.agrlogic` compilé en Lua par le moteur, panneau « Logique visuelle » ; [LOGIC.md](LOGIC.md) |
 | Couches de collision nommées (2D / 3D, rayons filtrés), articulations 2D / 3D (soudure, charnière, corde / ressort, glissière, rotule ; butées, moteurs, rupture), contrôleur de personnage 3D (marches, pentes, poussée) | ✅ | `Joint2D`, `Joint3D`, `CharacterController3D`, `physics_layers.json` ; [PHYSICS.md](PHYSICS.md) |
-| Formes maillage / convexes 3D, requêtes de chevauchement, contrôleur de personnage 2D | ⬜ | à planifier |
+| Formes maillage / convexes 3D | ✅ | `Collider.shape` Mesh / Convex (modèles glTF, OBJ, FBX ; repli convexe des corps dynamiques) |
+| Requêtes de chevauchement, contrôleur de personnage 2D | ⬜ | à planifier |
 | Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
 
 ## Phase 7 — Animation, audio, UI 🟡 (audio, interface et animation de propriétés terminés ; squelettes, effets audio et widgets avancés à venir)

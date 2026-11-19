@@ -34,6 +34,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
@@ -44,6 +45,7 @@
 #include "agr/core/JobSystem.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/core/Time.hpp"
+#include "agr/scene/Reflection.hpp"
 #include "agr/scene/Terrain.hpp"
 
 namespace agr {
@@ -246,6 +248,31 @@ struct Physics3DWorld::Impl {
         u64 hash = 0;
     };
     std::unordered_map<u64, TerrainBody> terrainBodies;
+    CollisionMeshSource meshSource;
+    std::unordered_set<std::string> meshWarnings;  // reported once per model / mesh
+
+    /// Model and mesh of a Mesh / Convex collider: its own fields, else the MeshRenderer of the
+    /// entity (read through reflection: physics does not depend on the renderer).
+    std::pair<std::string, i32> meshOf(Scene& s, ecs::Entity e, const ColliderComponent& c) {
+        std::string model = c.model;
+        i32 index = c.meshIndex;
+        if (model.empty() || index < 0) {
+            if (const ComponentInfo* info = ComponentRegistry::instance().find("MeshRenderer"))
+                if (ecs::PoolBase* pool = s.registry().findPool(info->id))
+                    if (void* mr = pool->getRaw(e)) {
+                        if (const FieldInfo* f = info->field("model"); f && model.empty()) model = f->ref<std::string>(mr);
+                        if (const FieldInfo* f = info->field("meshIndex"); f && index < 0) index = f->ref<i32>(mr);
+                    }
+        }
+        return {model, std::max(index, 0)};
+    }
+    std::shared_ptr<const CollisionMesh> loadMesh(const std::string& model, i32 index, const std::string& owner) {
+        std::shared_ptr<const CollisionMesh> mesh = meshSource && !model.empty() ? meshSource(model, index) : nullptr;
+        if ((!mesh || mesh->indices.size() < 3) && meshWarnings.insert(model + "#" + std::to_string(index)).second)
+            AGR_LOG_WARN("Physics3D", "'{}': no collision mesh {} #{} ({}): collider skipped", owner, model.empty() ? "(none)" : model, index,
+                         meshSource ? "missing file or mesh" : "no mesh source");
+        return mesh && mesh->indices.size() >= 3 ? mesh : nullptr;
+    }
     struct Body {
         JPH::BodyID id;
         ecs::Entity entity;
@@ -433,13 +460,21 @@ struct Physics3DWorld::Impl {
             struct Placed {
                 const ColliderComponent* col;
                 Pose rel;
+                std::shared_ptr<const CollisionMesh> mesh;  // Mesh / Convex
             };
             std::vector<Placed> placed;
             for (ecs::Entity c : cols) {
                 // The body's own collider sits exactly at its frame (only the world scale applies).
                 const Pose rel = c == o ? Pose{Vec3{0.0f}, Quat::identity(), op.scale} : poseOf(frameInv * s.worldMatrix(c));
                 const ColliderComponent& col = reg.get<ColliderComponent>(c);
-                placed.push_back({&col, rel});
+                std::shared_ptr<const CollisionMesh> mesh;
+                if (col.shape == ColliderShape3D::Mesh || col.shape == ColliderShape3D::Convex) {
+                    const auto [model, index] = meshOf(s, c, col);
+                    mesh = loadMesh(model, index, s.nameOf(c));
+                    h = mix(h, std::hash<std::string>{}(model));
+                    h = mix(h, static_cast<u64>(index) ^ reinterpret_cast<u64>(mesh.get()));
+                }
+                placed.push_back({&col, rel, mesh});
                 h = mix(h, c.packed());
                 for (float f : {rel.position.x, rel.position.y, rel.position.z, rel.rotation.x, rel.rotation.y, rel.rotation.z, rel.rotation.w,
                                 rel.scale.x, rel.scale.y, rel.scale.z})
@@ -465,6 +500,7 @@ struct Physics3DWorld::Impl {
             JPH::Ref<JPH::Shape> shape;
             JPH::StaticCompoundShapeSettings compound;
             bool sensor = false;
+            usize added = 0;
             for (const Placed& p : placed) {
                 const ColliderComponent& c = *p.col;
                 const Vec3 sc{std::fabs(p.rel.scale.x), std::fabs(p.rel.scale.y), std::fabs(p.rel.scale.z)};
@@ -492,12 +528,40 @@ struct Physics3DWorld::Impl {
                         settings = capsule;
                         break;
                     }
+                    case ColliderShape3D::Mesh:
+                    case ColliderShape3D::Convex: {
+                        if (!p.mesh) continue;  // reported by loadMesh
+                        const CollisionMesh& m = *p.mesh;
+                        // Jolt simulates triangle meshes only on static / kinematic bodies: a dynamic
+                        // body uses the convex hull of the same mesh (as Godot does).
+                        const bool dynamic = rb && rb->type == BodyType3D::Dynamic;
+                        if (c.shape == ColliderShape3D::Mesh && !dynamic) {
+                            JPH::TriangleList triangles;
+                            triangles.reserve(m.indices.size() / 3);
+                            auto at = [&](u32 i) {
+                                const Vec3 v = i < m.positions.size() ? m.positions[i] : Vec3{0.0f};
+                                return JPH::Float3(v.x * sc.x, v.y * sc.y, v.z * sc.z);
+                            };
+                            for (usize i = 0; i + 2 < m.indices.size(); i += 3)
+                                triangles.push_back(JPH::Triangle(at(m.indices[i]), at(m.indices[i + 1]), at(m.indices[i + 2])));
+                            settings = new JPH::MeshShapeSettings(triangles);
+                        } else {
+                            JPH::Array<JPH::Vec3> points;
+                            points.reserve(m.positions.size());
+                            for (const Vec3& v : m.positions) points.push_back(JPH::Vec3(v.x * sc.x, v.y * sc.y, v.z * sc.z));
+                            auto* hull = new JPH::ConvexHullShapeSettings(points, 0.02f);
+                            hull->SetDensity(std::max(c.density, 0.001f));
+                            settings = hull;
+                        }
+                        break;
+                    }
                 }
                 sensor |= c.isTrigger;
                 const Vec3 center = p.rel.position + (p.rel.rotation * Vec3{c.offset.x * sc.x, c.offset.y * sc.y, c.offset.z * sc.z});
                 compound.AddShape(toJ(center), toJ(p.rel.rotation), settings);
+                ++added;
             }
-            if (placed.empty()) {  // body without collider: a tiny sphere so it can still move
+            if (added == 0) {  // body without (usable) collider: a tiny sphere so it can still move
                 shape = new JPH::SphereShape(0.05f);
             } else {
                 JPH::ShapeSettings::ShapeResult r = compound.Create();
@@ -1026,6 +1090,10 @@ void Physics3DWorld::step(Scene& scene, float dt) { m->step(scene, dt); }
 void Physics3DWorld::sync(Scene& scene) { m->sync(scene); }
 void Physics3DWorld::reset() { m->reset(); }
 void Physics3DWorld::setJobSystem(JobSystem* jobs) { m->setJobSystem(jobs); }
+void Physics3DWorld::setCollisionMeshSource(CollisionMeshSource source) {
+    m->meshSource = std::move(source);
+    m->meshWarnings.clear();
+}
 void Physics3DWorld::setGravity(Vec3 g) {
     m->gravity = g;
     m->system->SetGravity(toJ(g));

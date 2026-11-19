@@ -20,8 +20,10 @@ void registerPhysics3DComponents() {
         .field("initialVelocity", &RigidBodyComponent::initialVelocity, {.speed = 0.05f});
     reg.add<ColliderComponent>("Collider")
         .category("Physics 3D")
-        .description("3D collision shape (box, sphere, capsule). Static if no RigidBody on the entity or its parents.")
-        .field("shape", &ColliderComponent::shape, {.enumEntries = {{"Box", 0}, {"Sphere", 1}, {"Capsule", 2}}})
+        .description("3D collision shape (box, sphere, capsule, model mesh, convex hull). Static if no RigidBody on the entity or its parents.")
+        .field("shape", &ColliderComponent::shape,
+               {.tooltip = "Mesh: exact triangles of a model (static / kinematic). Convex: hull of the model (any body)",
+                .enumEntries = {{"Box", 0}, {"Sphere", 1}, {"Capsule", 2}, {"Mesh", 3}, {"Convex", 4}}})
         .field("size", &ColliderComponent::size, {.tooltip = "Box size (before scale)", .speed = 0.01f})
         .field("radius", &ColliderComponent::radius, {.rangeMin = 0.001f, .rangeMax = 1000.0f, .speed = 0.01f})
         .field("height", &ColliderComponent::height, {.tooltip = "Capsule total height", .rangeMin = 0.001f, .rangeMax = 1000.0f, .speed = 0.01f})
@@ -31,7 +33,10 @@ void registerPhysics3DComponents() {
         .field("restitution", &ColliderComponent::restitution, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("isTrigger", &ColliderComponent::isTrigger, {.tooltip = "Detects overlaps without colliding"})
         .field("layer", &ColliderComponent::layer, {.tooltip = "Collision layer (0..31)", .flags = FieldFlag_Layer, .rangeMin = 0.0f, .rangeMax = 31.0f})
-        .field("collidesWith", &ColliderComponent::collidesWith, {.tooltip = "Layers this collides with", .flags = FieldFlag_LayerMask});
+        .field("collidesWith", &ColliderComponent::collidesWith, {.tooltip = "Layers this collides with", .flags = FieldFlag_LayerMask})
+        .field("model", &ColliderComponent::model,
+               {.tooltip = "Mesh / Convex: model file; empty = the MeshRenderer's model", .flags = FieldFlag_AssetPath})
+        .field("meshIndex", &ColliderComponent::meshIndex, {.tooltip = "Mesh / Convex: mesh of the model (-1 = the MeshRenderer's)", .rangeMin = -1.0f, .rangeMax = 100000.0f});
     reg.add<Joint3DComponent>("Joint3D")
         .category("Physics 3D")
         .description("Joint between this body and another one (or the world): fixed, hinge, distance / spring, slider, ball.")

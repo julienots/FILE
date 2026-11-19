@@ -82,6 +82,78 @@ TEST_CASE("simulation on the JobSystem matches the single-threaded one exactly (
     multi.physics.step(multi.scene, 1.0f / 60.0f);
 }
 
+TEST_CASE("mesh and convex colliders: exact triangles for levels, hulls for moving bodies, MeshRenderer model by default") {
+    World3D w;
+    // Geometry source: a 20 x 20 ramp rising along +x (y = 0.5 x), and a unit cube's corners.
+    std::vector<std::string> asked;
+    w.physics.setCollisionMeshSource([&](const std::string& model, i32 index) -> std::shared_ptr<const CollisionMesh> {
+        asked.push_back(model + "#" + std::to_string(index));
+        auto m = std::make_shared<CollisionMesh>();
+        if (model == "assets://ramp.glb") {
+            m->positions = {{-10, -5, -10}, {10, 5, -10}, {10, 5, 10}, {-10, -5, 10}};
+            m->indices = {0, 2, 1, 0, 3, 2};
+        } else if (model == "assets://cube.glb") {
+            for (int i = 0; i < 8; ++i) m->positions.push_back({(i & 1) ? 0.5f : -0.5f, (i & 2) ? 0.5f : -0.5f, (i & 4) ? 0.5f : -0.5f});
+            m->indices = {0, 1, 2};  // hulls only need the points
+        } else {
+            return nullptr;
+        }
+        return m;
+    });
+    // Static level: the ramp's exact triangles. A ray finds the slope (y = 0.5 x).
+    const auto ramp = w.scene.createEntity("Ramp");
+    auto& rc = w.scene.registry().emplace<ColliderComponent>(ramp);
+    rc.shape = ColliderShape3D::Mesh;
+    rc.model = "assets://ramp.glb";
+    w.run(1.0f / 60.0f);
+    auto hit = w.physics.raycast({4, 20, 0}, {0, -1, 0}, 50);
+    REQUIRE(hit);
+    CHECK(hit->point.y == doctest::Approx(2.0f).epsilon(0.01));
+    CHECK(hit->entity == ramp);
+    // A ball dropped on the slope rolls downhill (toward -x).
+    const auto ball = w.box("Ball", {2, 6, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    auto& bc = w.scene.registry().get<ColliderComponent>(ball);
+    bc.shape = ColliderShape3D::Sphere;
+    bc.radius = 0.4f;
+    w.run(2.0f);
+    CHECK(w.position(ball).x < 1.0f);
+    CHECK(w.position(ball).y > 0.5f * w.position(ball).x);  // above the slope, not through it
+
+    // Moving body: the convex hull of the cube falls on flat static ground and rests on its face.
+    World3D v;
+    v.physics.setCollisionMeshSource([&](const std::string& model, i32) -> std::shared_ptr<const CollisionMesh> {
+        if (model != "assets://cube.glb") return nullptr;
+        auto m = std::make_shared<CollisionMesh>();
+        for (int i = 0; i < 8; ++i) m->positions.push_back({(i & 1) ? 0.5f : -0.5f, (i & 2) ? 0.5f : -0.5f, (i & 4) ? 0.5f : -0.5f});
+        m->indices = {0, 1, 2};
+        return m;
+    });
+    v.box("Ground", {0, -0.5f, 0}, {20, 1, 20}, BodyType3D::Static, false);
+    const auto crate = v.box("Crate", {0, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    auto& cc = v.scene.registry().get<ColliderComponent>(crate);
+    cc.shape = ColliderShape3D::Convex;
+    cc.model = "assets://cube.glb";
+    // A dynamic body asking for an exact Mesh gets the hull too; its model comes from its MeshRenderer.
+    const auto barrel = v.box("Barrel", {3, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    v.scene.registry().get<ColliderComponent>(barrel).shape = ColliderShape3D::Mesh;
+    auto& mr = v.scene.registry().emplace<MeshRendererComponent>(barrel);
+    mr.model = "assets://cube.glb";
+    mr.meshIndex = 0;
+    v.run(3.0f);
+    CHECK(v.position(crate).y == doctest::Approx(0.5f).epsilon(0.05));
+    CHECK(v.position(barrel).y == doctest::Approx(0.5f).epsilon(0.05));
+    CHECK(v.physics.mass(crate).value() == doctest::Approx(1000.0f).epsilon(0.05));  // 1 m^3 at the default density
+
+    // A missing mesh is skipped (warning), the body still exists and falls.
+    const auto ghost = v.box("Ghost", {-3, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    auto& gc = v.scene.registry().get<ColliderComponent>(ghost);
+    gc.shape = ColliderShape3D::Convex;
+    gc.model = "assets://missing.glb";
+    v.run(0.5f);
+    CHECK(v.physics.hasBody(ghost));
+    CHECK(v.position(ghost).y < 3.0f);
+}
+
 TEST_CASE("a dynamic box falls and rests on static ground; mass from density or override") {
     World3D w;
     const auto ground = w.box("Ground", {0, 0, 0}, {20, 1, 20}, BodyType3D::Static, false);

@@ -6,4 +6,5 @@ agr_add_module(physics3d
     PUBLIC_DEPS
         agr::runtime
     PRIVATE_DEPS
+        agr::assets
         Jolt)

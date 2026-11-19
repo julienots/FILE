@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include "agr/math/Math.hpp"
 #include "agr/scene/Scene.hpp"
 
@@ -19,7 +20,13 @@ struct RigidBodyComponent {
     math::Vec3 initialVelocity{0.0f};
 };
 
-enum class ColliderShape3D : i32 { Box = 0, Sphere = 1, Capsule = 2 };
+enum class ColliderShape3D : i32 {
+    Box = 0,
+    Sphere = 1,
+    Capsule = 2,
+    Mesh = 3,    ///< Exact triangles of a model's mesh: static or kinematic bodies (levels, decor).
+    Convex = 4,  ///< Convex hull of a model's mesh: any body (moving objects). Dynamic Mesh bodies use it too.
+};
 
 /// Collision shape, scaled by the entity's world scale. Without a RigidBody on the
 /// entity or an ancestor, it is a static collider. Friction / restitution apply to
@@ -36,6 +43,8 @@ struct ColliderComponent {
     bool isTrigger = false;
     i32 layer = 0;                  ///< Collision layer, 0..31 (names in the project settings); per body (first collider).
     u32 collidesWith = 0xFFFFFFFFu; ///< Layers it collides with (bit n = layer n). Two bodies touch when each one's mask has the other's layer.
+    std::string model;              ///< Mesh / Convex: model file (.glb, .gltf, .obj, .fbx); empty = the entity's MeshRenderer model.
+    i32 meshIndex = -1;             ///< Mesh / Convex: mesh of the model; -1 = the entity's MeshRenderer mesh (else 0).
 };
 
 enum class JointType3D : i32 {
