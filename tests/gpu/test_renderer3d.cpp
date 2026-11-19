@@ -507,6 +507,48 @@ TEST_CASE("toon shading: hard light steps, tinted shadows, bands, rim light, out
     CHECK(d.validationErrorCount() == 0);
 }
 
+TEST_CASE("blob shadows darken the ground under an entity and fade with height; toon and outline on the mesh renderer") {
+    Render3DFixture f;
+    f.camera({0, 8, 0}, {0, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Plane, {0, 0, 0}, Vec3{20.0f});
+    const auto hero = f.scene.createEntity("Hero");
+    auto& blob = f.scene.registry().emplace<BlobShadowComponent>(hero);
+    blob.radius = 1.0f;
+    blob.opacity = 0.8f;
+    blob.color = {0, 0, 0, 1};
+    f.frame();
+    CHECK(f.renderer.stats().blobShadows == 1);
+    const int under = luminance(f.at({0, 0, 0}));
+    const int beside = luminance(f.at({2.5f, 0, 0}));
+    CHECK_MESSAGE(under < beside / 3, under, " vs ", beside);
+    const int rim = luminance(f.at({0.85f, 0, 0}));
+    CHECK_MESSAGE((rim > under + 20 && rim < beside), rim);  // soft edge
+    // Half-way up: lighter; above fadeHeight: gone.
+    f.scene.registry().get<TransformComponent>(hero).position.y = blob.fadeHeight * 0.5f;
+    f.frame();
+    const int raised = luminance(f.at({0, 0, 0}));
+    CHECK_MESSAGE((raised > under + 20 && raised < beside), raised);
+    f.scene.registry().get<TransformComponent>(hero).position.y = blob.fadeHeight + 1.0f;
+    f.frame();
+    CHECK(f.renderer.stats().blobShadows == 0);
+    CHECK(luminance(f.at({0, 0, 0})) == beside);
+
+    // Toon and outline straight from the mesh renderer (no material file).
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 1, 0}, Vec3{2.0f}, {1, 0.5f, 0.2f, 1});
+    f.sun({-60, 30, 0});
+    f.frame();
+    CHECK(f.renderer.stats().outlineBatches == 0);
+    auto& mr = f.scene.registry().get<MeshRendererComponent>(ball);
+    mr.toon = true;
+    mr.outlineWidth = 2.0f;
+    f.frame();
+    CHECK(f.renderer.stats().outlineBatches == 1);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

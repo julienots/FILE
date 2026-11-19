@@ -74,6 +74,21 @@ ecs::Entity unit(Builder& b, const std::string& name, ecs::Entity parent, const 
     return u;
 }
 
+/// Mobile cartoon look: toon lighting everywhere, outlines on towers and units (their meshes
+/// stop casting map shadows: a soft blob shadow under each unit reads better from above).
+void cartoonStyle(Scene& scene, ecs::Entity e, bool outline, bool blobs) {
+    auto& reg = scene.registry();
+    if (auto* mr = reg.tryGet<MeshRendererComponent>(e)) {
+        const std::string& name = scene.nameOf(e);
+        const bool bar = name == "HpBack" || name == "HpFill";
+        const bool transparent = mr->color.w < 0.99f;
+        if (!transparent) mr->toon = true;
+        if (outline && !bar && !transparent) mr->outlineWidth = 2.0f;
+        if (blobs) mr->castShadows = false;
+    }
+    for (ecs::Entity c : scene.children(e)) cartoonStyle(scene, c, outline, blobs);
+}
+
 } // namespace
 
 void buildArenaBattle(Scene& scene) {
@@ -81,7 +96,10 @@ void buildArenaBattle(Scene& scene) {
     auto& reg = b.reg;
     b.camera3D({0.0f, 21.0f, 14.5f}, {0.0f, 0.0f, 2.3f}, 44.0f);
     const auto sunLight = templates::sun(scene);
-    reg.get<EnvironmentComponent>(sunLight).sky = SkyMode::Gradient;
+    auto& env = reg.get<EnvironmentComponent>(sunLight);
+    env.sky = SkyMode::Gradient;
+    env.ambientIntensity = 0.55f;  // cartoon: shadows stay colorful, never black
+    reg.get<DirectionalLightComponent>(sunLight).intensity = 1.25f;
 
     // Arena: two halves, a river, two bridges (the navigation mesh crosses the river only there).
     const auto arena = b.entity("Arena");
@@ -121,6 +139,19 @@ void buildArenaBattle(Scene& scene) {
     }
     const auto shot = b.mesh("Shot Prototype", PrimitiveMesh::Sphere, {}, Vec3{0.3f}, {1.0f, 0.9f, 0.5f, 1.0f}, prototypes);
     reg.get<MeshRendererComponent>(shot).castShadows = false;
+
+    // Cartoon look (see cartoonStyle): ground and walls toon, towers and units outlined,
+    // units on blob shadows (clones made by the scripts keep all of it).
+    cartoonStyle(scene, arena, false, false);
+    cartoonStyle(scene, towers, true, false);
+    for (ecs::Entity proto : scene.children(prototypes)) {
+        cartoonStyle(scene, proto, true, true);
+        if (reg.has<NavAgentComponent>(proto)) {
+            auto& blob = reg.emplace<BlobShadowComponent>(proto);
+            blob.radius = scene.nameOf(proto) == "Giant Prototype" ? 0.8f : scene.nameOf(proto) == "Goblin Prototype" ? 0.35f : 0.5f;
+        }
+    }
+    reg.get<MeshRendererComponent>(shot).outlineWidth = 0.0f;  // projectiles: small and fast
 
     const auto nav = b.entity("Navigation");
     auto& ns = reg.emplace<NavigationSettingsComponent>(nav);

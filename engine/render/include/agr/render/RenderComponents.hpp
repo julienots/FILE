@@ -134,6 +134,23 @@ struct MeshRendererComponent {
     float metallic = 0.0f;             ///< Built-in material.
     float roughness = 0.5f;            ///< Built-in material.
     bool castShadows = true;
+    /// Cartoon lighting (ShadingModel::Toon) for every material of the mesh, with the toon
+    /// defaults of MaterialData; an .agrmat set to Toon keeps its own toon settings.
+    bool toon = false;
+    float outlineWidth = 0.0f;         ///< Outline in pixels for every material of the mesh (0: the material's).
+    math::Color outlineColor{0.1f, 0.07f, 0.12f, 1.0f};
+};
+
+/// Soft round shadow on the ground under the entity: the cheap "blob" shadow of mobile games,
+/// readable at any distance and independent of the shadow map. Drawn on the horizontal plane
+/// y = groundHeight (world) below the entity's origin; it shrinks and fades as the entity rises.
+struct BlobShadowComponent {
+    float radius = 0.5f;               ///< World units, on the ground.
+    float opacity = 0.45f;
+    float softness = 0.6f;             ///< Fraction of the radius that fades out (0: hard disc).
+    float groundHeight = 0.0f;         ///< World height of the ground the shadow lies on.
+    float fadeHeight = 4.0f;           ///< Height above the ground where the shadow has faded out.
+    math::Color color{0.12f, 0.09f, 0.18f, 1.0f};
 };
 
 /// Textured quad in the entity's XY plane. Sorted by layer, then order, then depth.

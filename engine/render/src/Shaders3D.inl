@@ -14,7 +14,7 @@ layout(std140) uniform MaterialData {
     vec4 u_toon;         // toon: bands, softness, specular size, rim width
     vec4 u_toonShadow;   // toon: shadow tint (linear rgb), rim strength
     vec4 u_rimColor;     // toon: rim color (linear rgb); outline width in pixels
-    vec4 u_outlineColor; // outline color (linear rgb)
+    vec4 u_outlineColor; // outline color (linear rgb), 1: extrude from the object center (built-in meshes)
     vec4 u_custom[8];    // custom shader parameters (.agrshader)
 };
 )";
@@ -483,9 +483,28 @@ void main() {
 }
 )";
 
+/// Blob shadow: radial falloff on the unit plane. u_baseColor = color (linear), opacity;
+/// u_pbr.x = softness (fraction of the radius that fades out).
+inline constexpr const char* kBlobFragment = R"(
+in vec3 v_worldPos;
+in vec3 v_normal;
+in vec4 v_tangent;
+in vec2 v_uv;
+in vec4 v_color;
+layout(location = 0) out vec4 o_color;
+void main() {
+    float r = length(v_uv * 2.0 - 1.0);
+    float soft = clamp(u_pbr.x, 0.001, 1.0);
+    float a = u_baseColor.a * (1.0 - smoothstep(1.0 - soft, 1.0, r));
+    if (a <= 0.003) discard;
+    o_color = vec4(agrUnlit(u_baseColor.rgb), a);
+}
+)";
+
 /// Outline (inverted hull): back faces pushed out along the normal by a constant number
 /// of pixels in clip space, drawn in the outline color; front faces of the object hide
-/// all but the silhouette. Needs smooth normals (hard-edged meshes show gaps at corners).
+/// all but the silhouette. Imported models need smooth normals; built-in meshes are pushed
+/// out from their center instead (closed hull on a cube).
 inline constexpr const char* kOutlineVertex = R"(
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
@@ -508,7 +527,11 @@ void main() {
     vec3 normal = a_normal;
 #endif
     vec4 clip = u_viewProj * (model * vec4(position, 1.0));
-    vec3 n = mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * normal;
+    // Built-in meshes (cube...) have split normals at hard edges: pushing out from the center
+    // keeps the hull closed there. Imported models use their (smooth) normals.
+    vec3 dir3 = u_outlineColor.w > 0.5 && dot(position, position) > 1e-8 ? mat3(model) * position
+                                                                         : mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * normal;
+    vec3 n = dir3;
     vec2 dir = (u_viewProj * vec4(n, 0.0)).xy;
     float len = length(dir);
     if (len > 1e-6) clip.xy += dir / len * u_rimColor.w * 2.0 * u_time.zw * clip.w;

@@ -59,6 +59,7 @@ Renderer::~Renderer() {
         m_device.destroyBuffer(w.indices);
     }
     m_device.destroyPipeline(m_waterPipeline);
+    m_device.destroyPipeline(m_blobPipeline);
     m_device.destroyPipeline(m_terrainPipeline);
     for (auto p : m_pbrPipelines) m_device.destroyPipeline(p);
     for (auto p : m_pbrSkinnedPipelines) m_device.destroyPipeline(p);

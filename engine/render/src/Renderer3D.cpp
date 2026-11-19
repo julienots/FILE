@@ -135,6 +135,21 @@ Status Renderer::create3DPipelines() {
             if (!r) return r.error();
             m_waterPipeline = r.value();
         }
+        if (!skinned) {  // blob shadow: soft dark disc on the ground, alpha blended (not skinned: once)
+            rhi::PipelineDesc p;
+            p.debugName = "agr.blob";
+            p.shader.vertex = common + shaders::kPbrVertex;
+            p.shader.fragment = common + shaders::kToneMapping + shaders::kBlobFragment;
+            p.layout = modelVertexLayout();
+            p.instanceLayout = instanceLayout(true);
+            p.cull = rhi::CullMode::None;
+            p.blend = rhi::BlendMode::Alpha;
+            p.depthWrite = false;
+            p.uniformBlocks = {"FrameData", "MaterialData"};
+            auto r = m_device.createPipeline(p);
+            if (!r) return r.error();
+            m_blobPipeline = r.value();
+        }
         {  // outline: inverted hull, front faces culled, constant width in pixels
             rhi::PipelineDesc p;
             p.debugName = skinned ? "agr.outline.skinned" : "agr.outline";
@@ -219,7 +234,7 @@ rhi::TextureHandle Renderer::shadowMap() const {
     return m_shadowsActive ? m_device.renderTargetDepthTexture(m_shadowTarget) : rhi::TextureHandle{};
 }
 
-u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale) {
+u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale, bool radialOutline) {
     if (auto it = m_materialSlots.find(key); it != m_materialSlots.end()) return it->second;
     MaterialUniforms u;
     u.baseColor = Vec4(detail::srgbToLinear(m.baseColor), m.baseColor.w);
@@ -234,7 +249,7 @@ u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale) {
     u.toonShadow = Vec4(detail::srgbToLinear(m.shadowColor), std::max(0.0f, m.rimStrength));
     const float outline = std::clamp(m.outlineWidth, 0.0f, 32.0f);
     u.rimColor = Vec4(detail::srgbToLinear(m.rimColor), outline);
-    u.outlineColor = Vec4(detail::srgbToLinear(m.outlineColor), 0.0f);
+    u.outlineColor = Vec4(detail::srgbToLinear(m.outlineColor), radialOutline ? 1.0f : 0.0f);
     FrameMaterial fm;
     fm.outline = outline > 0.0f && m.alphaMode != AlphaMode::Blend;
     fm.pipeline = static_cast<u32>(m.alphaMode) * 2 + (m.doubleSided ? 1u : 0u);
@@ -473,7 +488,24 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 mat = &inline_;
                 key = mix64(mix64(std::hash<std::string>{}(mr.texture), mix64(bits(inline_.metallic), bits(inline_.roughness))), uvKey);
             }
-            const u32 slot = materialSlot(key, *mat, mr.uvScale);
+            // Component-level cartoon / outline: applied on top of whichever material was chosen.
+            const bool styleToon = mr.toon && mat->shading != ShadingModel::Toon;
+            const bool styleOutline = mr.outlineWidth > 0.0f;
+            if (styleToon || styleOutline) {
+                static thread_local MaterialData styled;
+                styled = *mat;
+                if (styleToon) styled.shading = ShadingModel::Toon;
+                if (styleOutline) {
+                    styled.outlineWidth = mr.outlineWidth;
+                    styled.outlineColor = mr.outlineColor;
+                }
+                mat = &styled;
+                key = mix64(key, mix64(styleToon ? 1u : 0u, mix64(bits(mr.outlineWidth),
+                                                                   mix64(mix64(bits(mr.outlineColor.x), bits(mr.outlineColor.y)), bits(mr.outlineColor.z)))));
+            }
+            const bool radial = model == nullptr && mat->outlineWidth > 0.0f;  // built-in mesh: closed hull
+            if (radial) key = mix64(key, 0x0D1A1ull);
+            const u32 slot = materialSlot(key, *mat, mr.uvScale, radial);
             MeshItem item;
             item.vertices = vb;
             item.indices = ib;
@@ -587,6 +619,57 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         item.depth = math::dot(bounds.center() - camPos, camForward);
         m_transparentItems.push_back(item);
         ++m_stats.waterSurfaces;
+    });
+    // ------------------------------------------------------------ blob shadows
+    reg.view<BlobShadowComponent, WorldTransformComponent>().each([&](ecs::Entity e, BlobShadowComponent& bs, WorldTransformComponent& w) {
+        if (!w.activeInHierarchy || hidden(e)) return;
+        const Vec3 origin{w.matrix.c[3].x, w.matrix.c[3].y, w.matrix.c[3].z};
+        const float height = std::max(origin.y - bs.groundHeight, 0.0f);
+        const float fade = 1.0f - std::clamp(height / std::max(bs.fadeHeight, 1e-3f), 0.0f, 1.0f);
+        const float opacity = std::clamp(bs.opacity, 0.0f, 1.0f) * fade;
+        const float radius = std::max(bs.radius, 0.0f) * (0.5f + 0.5f * fade);  // smaller as the entity rises
+        if (opacity <= 0.0f || radius <= 0.0f) return;
+        // Just above the ground: no z-fighting, still under anything standing on it.
+        const Mat4 model = Mat4::trs({origin.x, bs.groundHeight + 0.015f, origin.z}, math::Quat::identity(), {radius * 2.0f, 1.0f, radius * 2.0f});
+        const math::Aabb bounds = math::Aabb{{-0.5f, -0.01f, -0.5f}, {0.5f, 0.01f, 0.5f}}.transformed(model);
+        if (!frustum.intersects(bounds)) return;
+        InstanceData inst;
+        inst.model = model;
+        for (int i = 0; i < 3; ++i) inst.normal[i] = Vec4(i == 0 ? 1.0f : 0.0f, i == 1 ? 1.0f : 0.0f, i == 2 ? 1.0f : 0.0f, 0.0f);
+        inst.color = Vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        const u32 instance = static_cast<u32>(m_instances.size());
+        m_instances.push_back(inst);
+        // One material per distinct look (most scenes share one): instanced like meshes.
+        const u64 key = mix64(0xB10Bull, mix64(mix64(bits(opacity), bits(std::clamp(bs.softness, 0.0f, 1.0f))),
+                                                mix64(mix64(bits(bs.color.x), bits(bs.color.y)), bits(bs.color.z))));
+        u32 slot;
+        if (auto it = m_materialSlots.find(key); it != m_materialSlots.end()) {
+            slot = it->second;
+        } else {
+            MaterialUniforms u{};
+            u.baseColor = Vec4(detail::srgbToLinear(bs.color), opacity);
+            u.pbr = Vec4(std::clamp(bs.softness, 0.0f, 1.0f), 0.0f, 0.0f, 0.0f);
+            u.uvTransform = Vec4(1.0f, 1.0f, 0.0f, 0.0f);
+            FrameMaterial fm;
+            fm.uniformOffset = pushUniforms(&u, sizeof u);
+            for (auto& t : fm.textures) t = m_assets.whiteTexture();
+            fm.pipeline = kBlobPipeline;
+            slot = static_cast<u32>(m_frameMaterials.size());
+            m_frameMaterials.push_back(fm);
+            m_materialSlots.emplace(key, slot);
+        }
+        const GpuMesh& plane = m_meshes[static_cast<int>(PrimitiveMesh::Plane)];
+        MeshItem item;
+        item.vertices = plane.vertices;
+        item.indices = plane.indices;
+        item.indexCount = plane.indexCount;
+        item.material = slot;
+        item.pipeline = kBlobPipeline;
+        item.instance = instance;
+        // Drawn first among transparent surfaces: ground shadows lie under everything else.
+        item.depth = 1e30f;
+        m_transparentItems.push_back(item);
+        ++m_stats.blobShadows;
     });
 
     if (m_frame % 300 == 0)  // GPU data of terrains that no longer exist
@@ -877,6 +960,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
                 if (shadow) h = skinned ? m_shadowSkinnedPipelines[masked ? 1 : 0] : (masked ? m_shadowMaskPipeline : m_shadowPipeline);
                 else if (first.pipeline == kTerrainPipeline) h = m_terrainPipeline;
                 else if (first.pipeline == kWaterPipeline) h = m_waterPipeline;
+                else if (first.pipeline == kBlobPipeline) h = m_blobPipeline;
                 else {
                     const u32 v = pipelineVariant(first.pipeline);
                     h = skinned ? m_pbrSkinnedPipelines[v] : m_pbrPipelines[v];

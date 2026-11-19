@@ -171,7 +171,23 @@ void registerRenderComponents() {
         .field("roughness", &MeshRendererComponent::roughness,
                {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("castShadows", &MeshRendererComponent::castShadows)
-        .field("visible", &MeshRendererComponent::visible);
+        .field("visible", &MeshRendererComponent::visible)
+        .field("toon", &MeshRendererComponent::toon,
+               {.tooltip = "Cartoon lighting for every material of the mesh: light bands, tinted shadows, rim light"})
+        .field("outlineWidth", &MeshRendererComponent::outlineWidth,
+               {.tooltip = "Outline in pixels (0: the material's). Best on smooth meshes", .rangeMin = 0.0f, .rangeMax = 16.0f, .speed = 0.05f})
+        .field("outlineColor", &MeshRendererComponent::outlineColor, {.flags = FieldFlag_Color});
+
+    reg.add<BlobShadowComponent>("BlobShadow")
+        .category("Rendering")
+        .description("Soft round shadow on the ground under the entity (cheap, readable, mobile-friendly).")
+        .field("radius", &BlobShadowComponent::radius, {.rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
+        .field("opacity", &BlobShadowComponent::opacity, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("softness", &BlobShadowComponent::softness, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("groundHeight", &BlobShadowComponent::groundHeight, {.tooltip = "World height of the ground", .speed = 0.01f})
+        .field("fadeHeight", &BlobShadowComponent::fadeHeight,
+               {.tooltip = "Height above the ground where the shadow has faded out", .rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("color", &BlobShadowComponent::color, {.flags = FieldFlag_Color});
 
     reg.add<SpriteRendererComponent>("SpriteRenderer")
         .category("Rendering")

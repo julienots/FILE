@@ -30,7 +30,7 @@
 namespace {
 
 /// Command-line tasks without a window (continuous integration, scripts):
-///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d] [--name NAME]
+///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
@@ -61,7 +61,8 @@ namespace {
                                           {"empty25d", SceneTemplate::Empty25D, ProjectMode::Mode25D},
                                           {"empty3d", SceneTemplate::Empty3D, ProjectMode::Mode3D},
                                           {"showcase2d", SceneTemplate::Showcase2D, ProjectMode::Mode2D},
-                                          {"showcase3d", SceneTemplate::Showcase3D, ProjectMode::Mode3D}};
+                                          {"showcase3d", SceneTemplate::Showcase3D, ProjectMode::Mode3D},
+                                          {"duel", SceneTemplate::GameArenaBattle, ProjectMode::Mode3D}};
         const Named* chosen = nullptr;
         for (const Named& t : templates)
             if (tmplName == t.name) chosen = &t;

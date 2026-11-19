@@ -106,6 +106,7 @@ struct RenderStats {
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
+    u32 blobShadows = 0;     ///< Blob shadows drawn this frame.
     u32 waterSurfaces = 0;
     bool postProcessing = false;  ///< PostProcess active this frame.
     bool hdr = false;             ///< The frame was shaded into an HDR (half float) target.
@@ -266,7 +267,8 @@ private:
     /// 3D part of a frame (Renderer3D.cpp).
     void collect3D(Scene& scene, const RenderView& rv, const math::Mat4& view, const math::Mat4& viewProj, const math::Frustum& frustum,
                    float aspect, const std::function<bool(ecs::Entity)>& hidden, detail::FrameUniforms& frame);
-    u32 materialSlot(u64 key, const MaterialData& material, math::Vec2 uvScale);
+    /// `radialOutline`: the outline extrudes from the object center (built-in meshes).
+    u32 materialSlot(u64 key, const MaterialData& material, math::Vec2 uvScale, bool radialOutline = false);
     /// Uploads the joint palette of a skinned mesh entity; returns its uniform offset and
     /// the world bounds covering the deformed mesh.
     u32 skinPalette(Scene& scene, ecs::Entity e, const MeshRendererComponent& mr, const ModelAsset& model, const math::Mat4& world,
@@ -332,6 +334,8 @@ private:
     f64 m_time = 0.0;
     static constexpr u32 kWaterPipeline = 7;
     rhi::PipelineHandle m_waterPipeline;
+    static constexpr u32 kBlobPipeline = 8;
+    rhi::PipelineHandle m_blobPipeline;
     struct WaterGrid {
         rhi::BufferHandle vertices, indices;
         u32 indexCount = 0;
