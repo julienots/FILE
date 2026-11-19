@@ -13,6 +13,23 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.3.4 (épée tenue en courant, sons corrigés et plus réalistes, nouvelles musiques)
+
+- **L'épée ne tombe plus quand on court** : hors combat, elle reste posée sur l'épaule en marchant, en courant et en sprintant (avant, elle descendait et pendait pointe en bas dès que le héros bougeait). Elle rebondit un peu avec la foulée et repasse en garde dès qu'un combat commence.
+- **Bugs de son corrigés (moteur audio)** :
+  - les changements de musique et d'ambiance copiaient le fichier entier (jusqu'à 3,7 Mo) pendant que le mixeur était bloqué → micro-coupures. Les fichiers sont maintenant partagés et ouverts hors du verrou ;
+  - si le téléphone refuse le 48 kHz (par exemple 44,1 kHz), la musique jouait ~9 % trop vite et trop aiguë : elle est maintenant rééchantillonnée ;
+  - plus de clics : chaque son démarre et s'arrête avec un fondu de quelques millisecondes, et une voix « volée » (trop de sons en même temps) s'éteint en fondu au lieu d'être coupée net ;
+  - un même son déclenché plusieurs fois au même instant (plusieurs coups dans une frame) est fusionné : plus de volume doublé ni d'effet « phaser » ;
+  - la musique ne fait plus de va-et-vient : celle du combat tient 6 s après le dernier ennemi, et une nouvelle musique de région, de village ou de nuit doit rester la bonne pendant 3 s avant de démarrer.
+- **Sons plus réalistes** :
+  - chaque son varie légèrement en hauteur et en volume à chaque fois (pas de « copier-coller ») ;
+  - les sons lointains perdent leurs aigus (absorption de l'air) ;
+  - nouveaux bruitages par synthèse physique (`tools/make_sfx_real.py`) : pas en deux temps (talon puis plante du pied) avec une texture propre à chaque sol (feuilles, gravier, neige qui crisse, **sable** (nouveau), bois creux, eau), 3 variantes par sol jamais rejouées deux fois de suite ; épée qui fend l'air, impacts sur la chair, armure qui résonne, blocage au bouclier, parade lame contre lame ; réception avec cliquetis d'armure, roulade ; sabots du cheval avec la résonance creuse du sabot (3 variantes) ; vrai sifflet humain ;
+  - ambiances refaites : chants d'oiseaux de plusieurs espèces placés dans l'espace, grillons et chouette la nuit, vent en rafales, ruisseau qui gargouille, pluie sur les feuilles, et une **nouvelle ambiance de mer** (vagues, ressac, galets) sur la Côte de Corail.
+- **Nouvelles musiques** (orchestre échantillonné FluidR3, composées dans `tools/compose_music.py`) : « Les Sables » (désert, mode oriental, guitare façon oud, percussions), « La Côte » (harpe, flûte, marimba, en 3/4) et « Le Royaume Céleste » (chœurs, célesta, harpe). Ces trois zones réutilisaient auparavant la musique d'une autre région.
+- **Vérification (ordinateur seulement)** : 2 558 tests unitaires réussis, dont de nouveaux tests du mixeur (musique rendue à 44,1 kHz, trois sons identiques fusionnés en une voix, départ sans clic) et le décodage des nouveaux fichiers ; scénario `swordrun` : captures de côté à l'arrêt, en marche, en course et en sprint (épée sur l'épaule) ; spectrogrammes et niveaux des nouveaux sons vérifiés. **Je ne peux pas écouter les sons** : leur réalisme n'a été jugé que sur les spectrogrammes et les niveaux. Rien n'a été testé sur téléphone.
+
 ### Nouveautés 2.3.3 (moins de boutons + nouveau modèle de cheval)
 
 - **Moins de boutons d'action** : à pied, il en reste 6 au lieu de 9 (attaque, esquive, saut, parade, sort(s), potion).
