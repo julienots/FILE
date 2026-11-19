@@ -108,6 +108,8 @@ struct RenderStats {
     u32 spotShadows = 0;     ///< Spot lights with a shadow map this frame (at most 2).
     u32 pointShadows = 0;    ///< Point lights with cube shadows this frame (at most 1).
     u32 lodMeshes = 0;       ///< Meshes drawn with a simplified level of detail.
+    u32 shadowedLights2D = 0;  ///< 2D lights with shadows this frame.
+    u32 occluderEdges2D = 0;   ///< Occluder edges tested by them.
     u32 rangeCulled = 0;     ///< Meshes hidden by their visibility range.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
@@ -198,6 +200,10 @@ public:
     /// Sprite sheets used by sprites (sheet + frame) and tilemaps.
     void setSpriteSheets(SpriteSheetLibrary* sheets) { m_sheets = sheets; }
     static constexpr u32 kMaxLights2D = 16;
+    static constexpr u32 kShadowRows2D = 8, kShadowBins2D = 512;  // polar shadow maps of 2D lights
+    rhi::TextureHandle m_shadow2D;
+    std::vector<u8> m_shadow2DPixels;
+    std::vector<float> m_shadow2DBins;
     /// Number of distinct texture URIs referenced recently by components.
     usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size() + m_dataTextureCache.size(); }
 

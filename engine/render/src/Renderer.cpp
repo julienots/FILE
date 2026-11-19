@@ -31,9 +31,20 @@ constexpr u32 kSlotLights2D = 1;  // sprite pipelines: FrameData, Lights2D
 struct Lights2DUniforms {
     Vec4 posRadius[Renderer::kMaxLights2D];
     Vec4 colorFalloff[Renderer::kMaxLights2D];
+    Vec4 shadow[Renderer::kMaxLights2D];  // row (-1: none), softness, strength
     i32 count[4];
 };
-static_assert(sizeof(Lights2DUniforms) == 528);
+static_assert(sizeof(Lights2DUniforms) == 784);
+
+/// Distance from `o` along unit direction `dir` to segment [a, b], or a negative value.
+float raySegment(Vec2 o, Vec2 dir, Vec2 a, Vec2 b) {
+    const Vec2 e = b - a, w = a - o;
+    const float den = dir.x * e.y - dir.y * e.x;
+    if (std::fabs(den) < 1e-9f) return -1.0f;
+    const float t = (w.x * e.y - w.y * e.x) / den;  // along the ray
+    const float s = (w.x * dir.y - w.y * dir.x) / den;  // along the segment
+    return s >= 0.0f && s <= 1.0f ? t : -1.0f;
+}
 
 using detail::srgbToLinear;
 
@@ -72,6 +83,7 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_skyVertices);
     m_device.destroyBuffer(m_instanceBuffer);
     m_device.destroyTexture(m_flatNormal);
+    m_device.destroyTexture(m_shadow2D);
     m_device.destroyRenderTarget(m_shadowTarget);
     m_device.destroyRenderTarget(m_spotShadowTarget);
     m_device.destroyPipeline(m_spritePipeline);
@@ -131,6 +143,7 @@ Status Renderer::createPipelines() {
     lit.debugName = "agr.sprite.lit";
     lit.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kSpriteLitFragment;
     lit.uniformBlocks = {"FrameData", "Lights2D"};
+    lit.samplers = {"u_texture", "u_shadow2D"};
     auto lp = m_device.createPipeline(lit);
     if (!lp) return lp.error();
     m_spriteLitPipeline = lp.value();
@@ -450,6 +463,47 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     {
         Lights2DUniforms lights{};
         u32 n = 0;
+        // Occluder edges in world XY (boxes; tilemaps: one box per run of filled cells in a row).
+        struct Edge {
+            Vec2 a, b;
+        };
+        std::vector<Edge> edges;
+        bool occludersCollected = false;
+        auto collectOccluders = [&] {
+            occludersCollected = true;
+            auto addBox = [&](const Mat4& m, Vec2 mn, Vec2 mx) {
+                Vec2 c[4];
+                const Vec2 local[4] = {{mn.x, mn.y}, {mx.x, mn.y}, {mx.x, mx.y}, {mn.x, mx.y}};
+                for (int k = 0; k < 4; ++k) {
+                    const Vec3 p = m.transformPoint({local[k].x, local[k].y, 0.0f});
+                    c[k] = {p.x, p.y};
+                }
+                for (int k = 0; k < 4; ++k) edges.push_back({c[k], c[(k + 1) % 4]});
+            };
+            reg.view<LightOccluder2DComponent, WorldTransformComponent>().each(
+                [&](ecs::Entity e, LightOccluder2DComponent& o, WorldTransformComponent& w) {
+                    if (!w.activeInHierarchy) return;
+                    if (const auto* tm = reg.tryGet<TilemapComponent>(e)) {
+                        for (u32 y = 0; y < tm->height; ++y)
+                            for (u32 x = 0; x < tm->width;) {
+                                if (tm->tileAt(x, y) < 0) {
+                                    ++x;
+                                    continue;
+                                }
+                                u32 end = x;
+                                while (end < tm->width && tm->tileAt(end, y) >= 0) ++end;
+                                addBox(w.matrix, {static_cast<float>(x) * tm->cellSize.x, static_cast<float>(y) * tm->cellSize.y},
+                                       {static_cast<float>(end) * tm->cellSize.x, static_cast<float>(y + 1) * tm->cellSize.y});
+                                x = end;
+                            }
+                        return;
+                    }
+                    addBox(w.matrix, o.offset - o.size * 0.5f, o.offset + o.size * 0.5f);
+                });
+        };
+        u32 shadowRows = 0;
+        if (m_shadow2DBins.size() != kShadowBins2D) m_shadow2DBins.resize(kShadowBins2D);
+        if (m_shadow2DPixels.size() != kShadowBins2D * kShadowRows2D * 4) m_shadow2DPixels.assign(kShadowBins2D * kShadowRows2D * 4, 255);
         reg.view<Light2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, Light2DComponent& l, WorldTransformComponent& w) {
             if (n >= kMaxLights2D || !w.activeInHierarchy || hiddenInEditor(e) || l.intensity <= 0.0f) return;
             const Vec3 pos = w.matrix.translation() + parallaxOf(e);
@@ -457,10 +511,70 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             if (!frustum.intersects(math::Aabb::fromCenterExtents(pos, Vec3{radius}))) return;
             lights.posRadius[n] = Vec4(pos, radius);
             lights.colorFalloff[n] = Vec4(srgbToLinear(l.color) * l.intensity, std::max(l.falloff, 0.01f));
+            lights.shadow[n] = Vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+            if (l.castShadows && shadowRows < kShadowRows2D) {
+                if (!occludersCollected) collectOccluders();
+                // Polar shadow map: for each of 512 directions, the nearest occluder distance / radius.
+                const Vec2 o{pos.x, pos.y};
+                std::fill(m_shadow2DBins.begin(), m_shadow2DBins.end(), 1.0f);
+                constexpr float kTwoPi = 6.2831853f;
+                for (const Edge& ed : edges) {
+                    // Skip edges out of reach.
+                    const Vec2 lo{std::min(ed.a.x, ed.b.x), std::min(ed.a.y, ed.b.y)}, hi{std::max(ed.a.x, ed.b.x), std::max(ed.a.y, ed.b.y)};
+                    if (lo.x > o.x + radius || hi.x < o.x - radius || lo.y > o.y + radius || hi.y < o.y - radius) continue;
+                    ++m_stats.occluderEdges2D;
+                    // Directions covered by the edge (shorter arc), then a ray per bin.
+                    float a0 = std::atan2(ed.a.y - o.y, ed.a.x - o.x), a1 = std::atan2(ed.b.y - o.y, ed.b.x - o.x);
+                    float span = a1 - a0;
+                    if (span > 3.14159265f) span -= kTwoPi;
+                    if (span < -3.14159265f) span += kTwoPi;
+                    if (span < 0.0f) {
+                        a0 += span;
+                        span = -span;
+                    }
+                    const float binWidth = kTwoPi / static_cast<float>(kShadowBins2D);
+                    const i32 first = static_cast<i32>(std::floor((a0 + 3.14159265f) / binWidth));
+                    const i32 last = static_cast<i32>(std::ceil((a0 + span + 3.14159265f) / binWidth));
+                    for (i32 b = first; b <= last; ++b) {
+                        const i32 bin = ((b % static_cast<i32>(kShadowBins2D)) + static_cast<i32>(kShadowBins2D)) % static_cast<i32>(kShadowBins2D);
+                        const float ang = (static_cast<float>(bin) + 0.5f) * binWidth - 3.14159265f;
+                        const float t = raySegment(o, {std::cos(ang), std::sin(ang)}, ed.a, ed.b);
+                        if (t >= 0.0f) m_shadow2DBins[static_cast<usize>(bin)] = std::min(m_shadow2DBins[static_cast<usize>(bin)], t / radius);
+                    }
+                }
+                // Row `shadowRows`, top row first: 16-bit distance in R (high) and G (low).
+                u8* row = &m_shadow2DPixels[static_cast<usize>(shadowRows) * kShadowBins2D * 4];
+                for (u32 b = 0; b < kShadowBins2D; ++b) {
+                    const u32 q = static_cast<u32>(std::clamp(m_shadow2DBins[b], 0.0f, 1.0f) * 65535.0f + 0.5f);
+                    row[b * 4 + 0] = static_cast<u8>(q >> 8);
+                    row[b * 4 + 1] = static_cast<u8>(q & 255);
+                    row[b * 4 + 2] = 0;
+                    row[b * 4 + 3] = 255;
+                }
+                lights.shadow[n] = Vec4(static_cast<float>(shadowRows), std::clamp(l.shadowSoftness, 0.0f, 4.0f) * 4.0f,
+                                        std::clamp(l.shadowStrength, 0.0f, 1.0f), std::max(l.shadowPenetration, 0.0f) / radius);
+                ++shadowRows;
+            }
             ++n;
         });
+        if (shadowRows > 0) {
+            if (!m_shadow2D) {
+                rhi::TextureDesc td;
+                td.width = kShadowBins2D;
+                td.height = kShadowRows2D;
+                td.format = rhi::TextureFormat::RGBA8;
+                td.generateMips = false;
+                td.sampler = {rhi::Filter::Nearest, rhi::Filter::Nearest, false, rhi::Wrap::Repeat, rhi::Wrap::Clamp};
+                td.data = m_shadow2DPixels.data();
+                td.debugName = "agr.shadow2d";
+                if (auto t = m_device.createTexture(td)) m_shadow2D = t.value();
+            } else {
+                (void)m_device.updateTexture(m_shadow2D, m_shadow2DPixels.data());
+            }
+        }
         lights.count[0] = static_cast<i32>(n);
         m_stats.lights2D = n;
+        m_stats.shadowedLights2D = shadowRows;
         m_lightsOffset = pushUniforms(&lights, sizeof lights);
     }
 
@@ -827,6 +941,7 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
         if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart)) {
             m_device.bindPipeline(pipelines[std::min(pipelineAt(batchStart), 2u)]);
             m_device.bindTexture(0, textureAt(batchStart));
+            if (pipelineAt(batchStart) == 1) m_device.bindTexture(1, m_shadow2D ? m_shadow2D : m_assets.whiteTexture());
             m_device.drawIndexed((i - batchStart) * 6, batchStart * 6);
             ++m_stats.spriteBatches;
             batchStart = i;

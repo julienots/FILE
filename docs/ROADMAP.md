@@ -95,7 +95,8 @@ Guide : [2D.md](2D.md).
 | Timeline d'animation | ✅ | phase 7 |
 | Animation squelettique 2D | ⬜ | à planifier |
 | Canvas UI | ✅ | phase 7 |
-| Ombres 2D, normal maps 2D | ⬜ | non planifié en détail |
+| Ombres 2D | ✅ | `LightOccluder2D` (boîtes, cases de tilemap), cartes d'ombre polaires, bords doux, pénétration ; test GPU sur les 3 API |
+| Normal maps 2D | ⬜ | à planifier |
 | Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
 
 ## Phase 5 — 3D 🟡 (rendu terminé : PBR, squelettes, ombres en cascades, post-traitement HDR, ciel en image + IBL ; terrain, eau, végétation, LOD et occlusion à venir)

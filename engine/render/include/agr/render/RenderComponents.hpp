@@ -207,12 +207,26 @@ struct TilemapComponent {
     }
 };
 
-/// Point light for lit sprites and tilemaps (2D). Shadows are not implemented yet.
+/// Point light for lit sprites and tilemaps (2D).
 struct Light2DComponent {
     math::Color color{1.0f, 0.85f, 0.6f, 1.0f};
     float intensity = 1.5f;
     float radius = 5.0f;   ///< World units; no light beyond.
     float falloff = 1.5f;  ///< Exponent of (1 - distance / radius).
+    /// Shadows of LightOccluder2D shapes (up to 8 shadowed lights per frame).
+    bool castShadows = false;
+    float shadowSoftness = 0.5f;  ///< Blur of the shadow edges, 0 = hard.
+    float shadowStrength = 1.0f;  ///< 0..1: how dark the shadows are.
+    /// World units the light enters occluders before the shadow starts: the faces of lit walls
+    /// (tiles, crates) stay lit instead of turning black behind their edge.
+    float shadowPenetration = 0.5f;
+};
+
+/// Blocks 2D light (Light2D.castShadows): a box in the entity's XY plane, or, on an entity
+/// with a Tilemap, every non-empty cell.
+struct LightOccluder2DComponent {
+    math::Vec2 size{1.0f, 1.0f};
+    math::Vec2 offset{0.0f, 0.0f};
 };
 
 /// Makes the entity and its children scroll at a different speed than the

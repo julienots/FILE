@@ -49,9 +49,11 @@ inline constexpr const char* kSpriteLitFragment = R"(
 layout(std140) uniform Lights2D {
     vec4 u_lightPosRadius[16];     // xyz position, w radius
     vec4 u_lightColorFalloff[16];  // rgb linear color * intensity, w falloff exponent
+    vec4 u_lightShadow[16];        // shadow row (-1: none), softness (texels), strength, penetration / radius
     ivec4 u_lightCount;
 };
 uniform sampler2D u_texture;
+uniform sampler2D u_shadow2D;  // polar shadow maps: one row per shadowed light, distance / radius in r (high) g (low)
 in vec2 v_uv;
 in vec4 v_color;
 in vec3 v_worldPos;
@@ -62,8 +64,23 @@ void main() {
     for (int i = 0; i < 16; ++i) {
         if (i >= u_lightCount.x) break;
         vec2 d = v_worldPos.xy - u_lightPosRadius[i].xy;
-        float att = clamp(1.0 - length(d) / u_lightPosRadius[i].w, 0.0, 1.0);
-        light += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w);
+        float dist = length(d) / u_lightPosRadius[i].w;
+        float att = clamp(1.0 - dist, 0.0, 1.0);
+        float lit = 1.0;
+        if (u_lightShadow[i].x > -0.5 && att > 0.0) {
+            // Polar shadow map: nearest occluder in this direction; 5 taps across directions soften the edge.
+            float u = atan(d.y, d.x) / 6.2831853 + 0.5;
+            float v = (u_lightShadow[i].x + 0.5) / 8.0;
+            float spread = u_lightShadow[i].y / 512.0;
+            float sum = 0.0;
+            for (int k = -2; k <= 2; ++k) {
+                vec4 t = texture(u_shadow2D, vec2(u + float(k) * spread * 0.5, v));
+                float stored = (t.r * 255.0 * 256.0 + t.g * 255.0) / 65535.0;
+                sum += dist <= stored + 0.002 + u_lightShadow[i].w ? 1.0 : 0.0;
+            }
+            lit = mix(1.0, sum / 5.0, u_lightShadow[i].z);
+        }
+        light += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w) * lit;
     }
     vec3 lit = c.rgb * light;
     o_color = vec4(u_fogParams.w > 0.5 ? lit : pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2)), c.a);

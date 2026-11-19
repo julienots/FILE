@@ -115,6 +115,66 @@ TEST_CASE("lit sprites: ambient only, then a Light2D with distance falloff") {
     CHECK(near(pixel(*gpu().device, 32 + 13, 32), 255, 255, 255));
 }
 
+TEST_CASE("2D light shadows: occluder boxes and tilemaps, soft edges, penetration, off by default") {
+    Render2DFixture f;
+    f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)
+    auto px = [&](float x, float y) { return pixel(*gpu().device, static_cast<u32>(32.0f + x * 6.4f), static_cast<u32>(32.0f - y * 6.4f)); };
+    auto lum = [](Rgba p) { return int(p.r) + int(p.g) + int(p.b); };
+    auto& env = f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env"));
+    env.ambientIntensity = 0.0f;  // only the light
+    const auto ground = f.sprite({0, 0, 0}, 10.0f);
+    f.scene.registry().get<SpriteRendererComponent>(ground).lit = true;
+    const auto light = f.scene.createEntity("Light");
+    f.scene.registry().get<TransformComponent>(light).position = {-2.5f, 0, 0};
+    auto& l = f.scene.registry().emplace<Light2DComponent>(light);
+    l.color = {1, 1, 1, 1};
+    l.intensity = 1.0f;
+    l.radius = 6.0f;
+    l.falloff = 1.0f;
+    const auto wall = f.scene.createEntity("Wall");
+    f.scene.registry().get<TransformComponent>(wall).position = {-1.0f, 0, 0};
+    f.scene.registry().emplace<LightOccluder2DComponent>(wall).size = {0.5f, 1.0f};
+    f.frame();
+    const int behindOff = lum(px(1.0f, 0.0f));
+    CHECK_MESSAGE(behindOff > 150, behindOff);  // castShadows off: no shadow
+    CHECK(f.renderer.stats().shadowedLights2D == 0);
+    l.castShadows = true;
+    l.shadowSoftness = 0.0f;
+    l.shadowPenetration = 0.0f;
+    f.frame();
+    CHECK(f.renderer.stats().shadowedLights2D == 1);
+    CHECK_MESSAGE(lum(px(1.0f, 0.0f)) < 20, lum(px(1.0f, 0.0f)));                // behind the wall
+    CHECK_MESSAGE(lum(px(1.0f, 2.5f)) > 100, lum(px(1.0f, 2.5f)));               // beside the shadow
+    CHECK_MESSAGE(lum(px(-1.15f, 0.0f)) < 20, lum(px(-1.15f, 0.0f)));            // inside the wall, past its lit face
+    l.shadowPenetration = 0.5f;  // the light enters the wall: its face stays lit
+    f.frame();
+    CHECK_MESSAGE(lum(px(-1.15f, 0.0f)) > 150, lum(px(-1.15f, 0.0f)));
+    CHECK(lum(px(1.0f, 0.0f)) < 20);  // still dark further behind
+    l.shadowStrength = 0.5f;  // half-dark shadows
+    f.frame();
+    const int half = lum(px(1.0f, 0.0f));
+    // Half the light (linear) shows at 0.5^(1/2.2) = 73 % of the value after gamma encoding.
+    CHECK_MESSAGE((half > behindOff * 65 / 100 && half < behindOff * 82 / 100), half, " vs ", behindOff);
+    l.shadowStrength = 1.0f;
+
+    // A tilemap occludes with its filled cells: one cell at x in [-0.5, 0.5], on the light's other side.
+    f.scene.destroyEntity(wall);
+    f.scene.registry().get<TransformComponent>(light).position = {-3.0f, 0, 0};
+    const auto map = f.scene.createEntity("Map");
+    f.scene.registry().get<TransformComponent>(map).position = {-1.5f, -0.5f, 0};
+    auto& tm = f.scene.registry().emplace<TilemapComponent>(map);
+    tm.width = 3;
+    tm.height = 1;
+    tm.dataWidth = 3;
+    tm.tiles = {-1, 0, -1};
+    f.scene.registry().emplace<LightOccluder2DComponent>(map);
+    f.frame();
+    CHECK_MESSAGE(lum(px(2.0f, 0.0f)) < 20, lum(px(2.0f, 0.0f)));
+    CHECK_MESSAGE(lum(px(2.0f, 2.2f)) > 60, lum(px(2.0f, 2.2f)));
+    CHECK(f.renderer.stats().occluderEdges2D >= 4);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("sprite sheet frames select UVs and pivots") {
     Render2DFixture f;
     f.camera();

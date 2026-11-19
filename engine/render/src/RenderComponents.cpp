@@ -241,7 +241,19 @@ void registerRenderComponents() {
         .field("color", &Light2DComponent::color, {.flags = FieldFlag_Color})
         .field("intensity", &Light2DComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("radius", &Light2DComponent::radius, {.rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
-        .field("falloff", &Light2DComponent::falloff, {.rangeMin = 0.1f, .rangeMax = 8.0f, .speed = 0.01f});
+        .field("falloff", &Light2DComponent::falloff, {.rangeMin = 0.1f, .rangeMax = 8.0f, .speed = 0.01f})
+        .field("castShadows", &Light2DComponent::castShadows, {.tooltip = "Shadows of LightOccluder2D shapes (8 shadowed lights at most)"})
+        .field("shadowSoftness", &Light2DComponent::shadowSoftness, {.rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f})
+        .field("shadowStrength", &Light2DComponent::shadowStrength, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("shadowPenetration", &Light2DComponent::shadowPenetration,
+               {.tooltip = "How far the light enters occluders before the shadow starts (lit wall faces)", .rangeMin = 0.0f, .rangeMax = 100.0f,
+                .speed = 0.01f});
+
+    reg.add<LightOccluder2DComponent>("LightOccluder2D")
+        .category("2D")
+        .description("Blocks 2D light: a box, or every non-empty cell of the entity's Tilemap.")
+        .field("size", &LightOccluder2DComponent::size, {.speed = 0.01f})
+        .field("offset", &LightOccluder2DComponent::offset, {.speed = 0.01f});
 
     reg.add<ParallaxComponent>("Parallax")
         .category("2D")
