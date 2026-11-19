@@ -226,7 +226,9 @@ void registerRenderComponents() {
         .field("visible", &SpriteRendererComponent::visible)
         .field("sheet", &SpriteRendererComponent::sheet, {.tooltip = "Sprite sheet (.agrsheet): texture and frames", .flags = FieldFlag_AssetPath})
         .field("frame", &SpriteRendererComponent::frame, {.tooltip = "Frame index in the sheet (-1 = none)", .rangeMin = -1, .rangeMax = 100000, .speed = 0.2f})
-        .field("lit", &SpriteRendererComponent::lit, {.tooltip = "Lit by Light2D components"});
+        .field("lit", &SpriteRendererComponent::lit, {.tooltip = "Lit by Light2D components"})
+        .field("normalMap", &SpriteRendererComponent::normalMap,
+               {.tooltip = "Normal map of the texture (lit sprites): the lights shade its relief", .flags = FieldFlag_AssetPath});
 
     reg.add<TilemapComponent>("Tilemap")
         .category("2D")
@@ -239,6 +241,7 @@ void registerRenderComponents() {
         .field("sortingLayer", &TilemapComponent::sortingLayer, {.speed = 1.0f})
         .field("orderInLayer", &TilemapComponent::orderInLayer, {.speed = 1.0f})
         .field("lit", &TilemapComponent::lit)
+        .field("normalMap", &TilemapComponent::normalMap, {.tooltip = "Normal map laid out like the tileset texture (lit tilemaps)", .flags = FieldFlag_AssetPath})
         .field("dataWidth", &TilemapComponent::dataWidth, {.flags = FieldFlag_Hidden})
         .field("tiles", &TilemapComponent::tiles, {.flags = FieldFlag_Hidden});
 
@@ -254,6 +257,9 @@ void registerRenderComponents() {
         .field("shadowStrength", &Light2DComponent::shadowStrength, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("shadowPenetration", &Light2DComponent::shadowPenetration,
                {.tooltip = "How far the light enters occluders before the shadow starts (lit wall faces)", .rangeMin = 0.0f, .rangeMax = 100.0f,
+                .speed = 0.01f})
+        .field("height", &Light2DComponent::height,
+               {.tooltip = "Height above the sprites for normal maps: low = grazing light, strong relief", .rangeMin = 0.0f, .rangeMax = 100.0f,
                 .speed = 0.01f});
 
     reg.add<LightOccluder2DComponent>("LightOccluder2D")

@@ -231,13 +231,15 @@ Status Renderer::create3DPipelines() {
     return {};
 }
 
-rhi::TextureHandle Renderer::resolveDataTexture(std::string_view uri) {
+rhi::TextureHandle Renderer::resolveDataTexture(std::string_view uri, bool pixelArt) {
     if (uri.empty()) return m_assets.whiteTexture();
-    auto it = m_dataTextureCache.find(uri);
-    if (it == m_dataTextureCache.end()) {
+    TextureCache& cache = pixelArt ? m_pixelDataTextureCache : m_dataTextureCache;
+    auto it = cache.find(uri);
+    if (it == cache.end()) {
         TextureLoadOptions o;
         o.srgb = false;
-        it = m_dataTextureCache.emplace(std::string(uri), CachedTexture{m_assets.loadTexture(uri, o), 0}).first;
+        o.pixelArt = pixelArt;
+        it = cache.emplace(std::string(uri), CachedTexture{m_assets.loadTexture(uri, o), 0}).first;
     }
     it->second.lastUsedFrame = m_frame;
     return m_assets.gpuTexture(it->second.asset);

@@ -112,6 +112,7 @@ struct RenderStats {
     u32 shadowedLights2D = 0;  ///< 2D lights with shadows this frame.
     u32 occluderEdges2D = 0;   ///< Occluder edges tested by them.
     u32 rangeCulled = 0;     ///< Meshes hidden by their visibility range.
+    u32 normalMappedSprites = 0;  ///< Lit sprites drawn with a normal map.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
@@ -182,7 +183,7 @@ public:
     /// Same, with the texture's information (size; state Loading / Failed); null info for uri "".
     rhi::TextureHandle resolveTexture(std::string_view uri, bool pixelArt, const TextureInfo*& info);
     /// Linear (non-sRGB) texture: normal, metallic-roughness and occlusion maps.
-    rhi::TextureHandle resolveDataTexture(std::string_view uri);
+    rhi::TextureHandle resolveDataTexture(std::string_view uri, bool pixelArt = false);
     /// Imported models and .agrmat materials used by mesh renderers.
     void setModels(ModelLibrary* models) { m_models = models; }
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
@@ -213,7 +214,7 @@ public:
     std::vector<u8> m_shadow2DPixels;
     std::vector<float> m_shadow2DBins;
     /// Number of distinct texture URIs referenced recently by components.
-    usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size() + m_dataTextureCache.size(); }
+    usize cachedTextureCount() const { return m_textureCache.size() + m_pixelTextureCache.size() + m_dataTextureCache.size() + m_pixelDataTextureCache.size(); }
 
 private:
     struct GpuMesh {
@@ -260,7 +261,8 @@ private:
         math::Vec3 corners[4];  // bl, br, tr, tl
         math::Vec4 uv;          // u0, v0, u1, v1
         u32 color;
-        u32 pipeline = 0;       // 0 = alpha, 1 = lit (2D lights), 2 = additive
+        u32 pipeline = 0;       // 0 = alpha, 1 = lit (2D lights), 2 = additive, 3 = lit with a normal map
+        rhi::TextureHandle normalMap{};
     };
     struct CachedTexture {
         TextureAsset asset;
@@ -326,7 +328,7 @@ private:
     OcclusionBuffer m_occlusion;
     bool m_occlusionCulling = true;
 
-    rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
+    rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
     rhi::PipelineHandle m_postPipelines[7];  // PostPass::Kind
     static constexpr usize kPostUniformBytes = 5 * 16 + 2 * 64;  // PostData block (Shaders.inl)
@@ -461,6 +463,7 @@ private:
     TextureCache m_textureCache;       ///< Linear filtering.
     TextureCache m_pixelTextureCache;  ///< pixelArt = true (nearest filtering).
     TextureCache m_dataTextureCache;   ///< Linear data (normal / metallic-roughness / occlusion maps).
+    TextureCache m_pixelDataTextureCache;  ///< Linear data with nearest filtering (normal maps of pixel art).
     std::vector<SortKey> m_spriteKeys;
     std::vector<SpriteItem> m_spriteItems;
 };

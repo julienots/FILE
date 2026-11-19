@@ -56,6 +56,7 @@ Renderer::~Renderer() {
     for (auto& [uri, cached] : m_textureCache) m_assets.release(cached.asset);
     for (auto& [uri, cached] : m_pixelTextureCache) m_assets.release(cached.asset);
     for (auto& [uri, cached] : m_dataTextureCache) m_assets.release(cached.asset);
+    for (auto& [uri, cached] : m_pixelDataTextureCache) m_assets.release(cached.asset);
     releaseTargets();
     for (auto& m : m_meshes) {
         m_device.destroyBuffer(m.vertices);
@@ -88,6 +89,7 @@ Renderer::~Renderer() {
     m_device.destroyRenderTarget(m_spotShadowTarget);
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
+    m_device.destroyPipeline(m_spriteLitNormalPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);
     m_device.destroyPipeline(m_overlayPipeline);
     for (auto p : m_postPipelines) m_device.destroyPipeline(p);
@@ -143,10 +145,16 @@ Status Renderer::createPipelines() {
     lit.debugName = "agr.sprite.lit";
     lit.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kSpriteLitFragment;
     lit.uniformBlocks = {"FrameData", "Lights2D"};
-    lit.samplers = {"u_texture", "u_shadow2D"};
+    lit.samplers = {"u_texture", "u_shadow2D", "u_normalMap"};
     auto lp = m_device.createPipeline(lit);
     if (!lp) return lp.error();
     m_spriteLitPipeline = lp.value();
+    rhi::PipelineDesc litNormal = lit;
+    litNormal.debugName = "agr.sprite.lit.normal";
+    litNormal.shader.fragment = std::string("#define AGR_NORMAL_MAP 1\n") + shaders::kFrameBlock + shaders::kSpriteLitFragment;
+    auto lnp = m_device.createPipeline(litNormal);
+    if (!lnp) return lnp.error();
+    m_spriteLitNormalPipeline = lnp.value();
 
     // Default particle: soft white disc (procedural, no asset needed).
     constexpr u32 kSize = 64;
@@ -208,7 +216,7 @@ rhi::TextureHandle Renderer::resolveTexture(std::string_view uri, bool pixelArt,
 void Renderer::sweepTextureCache() {
     // Release textures no component referenced for ~10 s at 60 FPS.
     constexpr u64 kUnusedFrames = 600;
-    for (TextureCache* cache : {&m_textureCache, &m_pixelTextureCache, &m_dataTextureCache}) {
+    for (TextureCache* cache : {&m_textureCache, &m_pixelTextureCache, &m_dataTextureCache, &m_pixelDataTextureCache}) {
         for (auto it = cache->begin(); it != cache->end();) {
             if (m_frame - it->second.lastUsedFrame > kUnusedFrames) {
                 m_assets.release(it->second.asset);
@@ -509,7 +517,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             const Vec3 pos = w.matrix.translation() + parallaxOf(e);
             const float radius = std::max(l.radius, 1e-3f);
             if (!frustum.intersects(math::Aabb::fromCenterExtents(pos, Vec3{radius}))) return;
-            lights.posRadius[n] = Vec4(pos, radius);
+            lights.posRadius[n] = Vec4(pos.x, pos.y, std::max(l.height, 0.0f), radius);
             lights.colorFalloff[n] = Vec4(srgbToLinear(l.color) * l.intensity, std::max(l.falloff, 0.01f));
             lights.shadow[n] = Vec4(-1.0f, 0.0f, 0.0f, 0.0f);
             if (l.castShadows && shadowRows < kShadowRows2D) {
@@ -630,6 +638,11 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             item.color = packColor(s.color);
             item.pipeline = s.lit ? 1u : 0u;
             item.texture = textureFor(texture, pixelArt);
+            if (s.lit && !s.normalMap.empty()) {
+                item.normalMap = resolveDataTexture(s.normalMap, pixelArt);
+                item.pipeline = 3;
+                ++m_stats.normalMappedSprites;
+            }
             m_spriteItems.push_back(item);
         });
 
@@ -660,6 +673,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         const Vec3 ax = local.transformVector({tm.cellSize.x, 0, 0}), ay = local.transformVector({0, tm.cellSize.y, 0});
         const float depth = view.transformPoint(o + ax * (static_cast<float>(tm.width) * 0.5f) + ay * (static_cast<float>(tm.height) * 0.5f)).z;
         const rhi::TextureHandle tex = textureFor(sheet->texture, sheet->pixelArt);
+        const rhi::TextureHandle normalMap = tm.lit && !tm.normalMap.empty() ? resolveDataTexture(tm.normalMap, sheet->pixelArt) : rhi::TextureHandle{};
         const u32 color = packColor(tm.color);
         for (i32 y = cy0; y <= cy1; ++y) {
             for (i32 x = cx0; x <= cx1; ++x) {
@@ -676,8 +690,9 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 item.depth = depth;  // one depth for the whole map: tiles batch together
                 item.uv = m_tileUvs[static_cast<usize>(id)];
                 item.color = color;
-                item.pipeline = tm.lit ? 1u : 0u;
+                item.pipeline = normalMap ? 3u : tm.lit ? 1u : 0u;
                 item.texture = tex;
+                item.normalMap = normalMap;
                 m_spriteItems.push_back(item);
                 ++m_stats.tilesVisible;
             }
@@ -929,7 +944,7 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
     }
     (void)m_device.updateBuffer(m_spriteVertices, 0, m_spriteStaging.data(), m_spriteStaging.size() * sizeof(SpriteVertex));
 
-    const rhi::PipelineHandle pipelines[3] = {m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline};
+    const rhi::PipelineHandle pipelines[4] = {m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_spriteLitNormalPipeline};
     m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, 0, sizeof(FrameUniforms));
     m_device.bindUniformBuffer(kSlotLights2D, m_uniformBuffer, m_lightsOffset, sizeof(Lights2DUniforms));
     m_device.bindVertexBuffer(m_spriteVertices);
@@ -937,11 +952,16 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
     u32 batchStart = 0;
     auto textureAt = [&](u32 i) { return items[m_spriteKeys[i].index].texture; };
     auto pipelineAt = [&](u32 i) { return items[m_spriteKeys[i].index].pipeline; };
+    auto normalAt = [&](u32 i) { return items[m_spriteKeys[i].index].normalMap; };
     for (u32 i = 1; i <= count; ++i) {
-        if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart)) {
-            m_device.bindPipeline(pipelines[std::min(pipelineAt(batchStart), 2u)]);
+        if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart) || normalAt(i) != normalAt(batchStart)) {
+            const u32 pipeline = std::min(pipelineAt(batchStart), 3u);
+            m_device.bindPipeline(pipelines[pipeline]);
             m_device.bindTexture(0, textureAt(batchStart));
-            if (pipelineAt(batchStart) == 1) m_device.bindTexture(1, m_shadow2D ? m_shadow2D : m_assets.whiteTexture());
+            if (pipeline == 1 || pipeline == 3) {
+                m_device.bindTexture(1, m_shadow2D ? m_shadow2D : m_assets.whiteTexture());
+                m_device.bindTexture(2, normalAt(batchStart) ? normalAt(batchStart) : m_flatNormal);
+            }
             m_device.drawIndexed((i - batchStart) * 6, batchStart * 6);
             ++m_stats.spriteBatches;
             batchStart = i;

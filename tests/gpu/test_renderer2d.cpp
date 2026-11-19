@@ -175,6 +175,64 @@ TEST_CASE("2D light shadows: occluder boxes and tilemaps, soft edges, penetratio
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("2D normal maps: relief lit from the light's side, follows flips and rotation") {
+    Render2DFixture f;
+    f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)
+    auto lum = [](Rgba p) { return int(p.r) + int(p.g) + int(p.b); };
+    auto center = [&] { return lum(pixel(*gpu().device, 32, 32)); };
+    f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env")).ambientIntensity = 0.0f;
+    // Normal map whose surface faces +x (right), OpenGL convention: (0.8, 0, 0.6).
+    Image nm;
+    nm.width = nm.height = 4;
+    for (int i = 0; i < 16; ++i) nm.pixels.insert(nm.pixels.end(), {230, 128, 204, 255});
+    auto png = encodePng(4, 4, nm.pixels);
+    REQUIRE(png);
+    REQUIRE(f.vfs.writeBytes("assets://bump_n.png", png.value().data(), png.value().size()));
+    const auto sprite = f.sprite({0, 0, 0}, 6.0f);
+    auto& sr = f.scene.registry().get<SpriteRendererComponent>(sprite);
+    sr.lit = true;
+    const auto light = f.scene.createEntity("Light");
+    auto& lt = f.scene.registry().get<TransformComponent>(light);
+    auto& l = f.scene.registry().emplace<Light2DComponent>(light);
+    l.color = {1, 1, 1, 1};
+    l.intensity = 1.0f;
+    l.radius = 8.0f;
+    l.falloff = 1.0f;
+    l.height = 0.5f;
+    lt.position = {2.5f, 0, 0};
+    f.settle();
+    const int plainRight = center();
+    lt.position = {-2.5f, 0, 0};
+    f.frame();
+    const int plainLeft = center();
+    CHECK(std::abs(plainRight - plainLeft) <= 10);  // without a normal map: same from both sides
+    CHECK(f.renderer.stats().normalMappedSprites == 0);
+
+    sr.normalMap = "assets://bump_n.png";
+    lt.position = {2.5f, 0, 0};
+    f.settle();
+    CHECK(f.renderer.stats().normalMappedSprites == 1);
+    const int facing = center();
+    lt.position = {-2.5f, 0, 0};
+    f.frame();
+    const int away = center();
+    CHECK_MESSAGE(facing > 120, facing);
+    CHECK_MESSAGE(away < 15, away);  // the relief faces away from this light
+    sr.flipX = true;  // mirrored: the surface now faces left
+    f.frame();
+    CHECK_MESSAGE(center() > 120, center());
+    sr.flipX = false;
+    f.scene.registry().get<TransformComponent>(sprite).rotation = math::Quat::fromEuler({0, 0, math::radians(180.0f)});
+    f.frame();
+    CHECK_MESSAGE(center() > 120, center());  // turned around: faces left too
+    // A higher light shades the relief less.
+    f.scene.registry().get<TransformComponent>(sprite).rotation = {};
+    l.height = 20.0f;
+    f.frame();
+    CHECK_MESSAGE(center() > away + 40, center());
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("sprite sheet frames select UVs and pivots") {
     Render2DFixture f;
     f.camera();

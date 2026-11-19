@@ -193,6 +193,7 @@ void buildShowcase2D(Scene& scene) {
     {
         auto& tm = reg.emplace<TilemapComponent>(ground);
         tm.tileset = "assets://2d/forest_tiles.agrsheet";
+        tm.normalMap = "assets://2d/forest_tiles_n.png";  // relief under the lamp (tools/generate_normal_map.py)
         tm.width = 40;
         tm.height = 9;
         tm.lit = true;
@@ -213,6 +214,7 @@ void buildShowcase2D(Scene& scene) {
     {
         auto& tm = reg.emplace<TilemapComponent>(decor);
         tm.tileset = "assets://2d/forest_tiles.agrsheet";
+        tm.normalMap = "assets://2d/forest_tiles_n.png";  // relief under the lamp (tools/generate_normal_map.py)
         tm.width = 40;
         tm.height = 9;
         tm.lit = true;
@@ -234,6 +236,7 @@ void buildShowcase2D(Scene& scene) {
         hs.frame = 0;
         hs.size = {1.5f, 1.5f};
         hs.lit = true;
+        hs.normalMap = "assets://2d/hero_n.png";
         hs.sortingLayer = 1;
     }
     reg.emplace<SpriteAnimatorComponent>(hero).clip = "idle";
@@ -261,6 +264,7 @@ void buildShowcase2D(Scene& scene) {
         cs.sheet = "assets://2d/forest_tiles.agrsheet";
         cs.frame = Crate;
         cs.lit = true;
+        cs.normalMap = "assets://2d/forest_tiles_n.png";
         cs.sortingLayer = 1;
     }
     reg.emplace<RigidBody2DComponent>(crate);
@@ -273,6 +277,7 @@ void buildShowcase2D(Scene& scene) {
         ms.sheet = "assets://2d/forest_tiles.agrsheet";
         ms.frame = Mushroom;
         ms.lit = true;
+        ms.normalMap = "assets://2d/forest_tiles_n.png";
         ms.sortingLayer = 1;
         auto& col = reg.emplace<Collider2DComponent>(m);
         col.shape = ColliderShape2D::Circle;
@@ -296,6 +301,7 @@ void buildShowcase2D(Scene& scene) {
     light.color = {1.0f, 0.8f, 0.5f, 1.0f};
     light.intensity = 2.6f;
     light.radius = 7.0f;
+    light.height = 1.2f;  // low enough for the relief of the normal maps to show
     const auto flies = scene.createEntity("Fireflies", lamp);
     reg.get<TransformComponent>(flies).position = {0.0f, 1.4f, 0.0f};
     auto& p = reg.emplace<ParticleEmitter2DComponent>(flies);

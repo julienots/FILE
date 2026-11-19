@@ -44,16 +44,20 @@ void main() {
 }
 )";
 
-/// Sprites lit by up to 16 point lights (Light2D) plus the scene ambient.
+/// Sprites lit by up to 16 point lights (Light2D) plus the scene ambient. Variant
+/// AGR_NORMAL_MAP: per-pixel normals from a normal map (OpenGL convention, green up) in the
+/// sprite's frame, rebuilt from screen derivatives (rotation and flips need no vertex data);
+/// each light shades the relief from its height above the plane (flat areas are unchanged).
 inline constexpr const char* kSpriteLitFragment = R"(
 layout(std140) uniform Lights2D {
-    vec4 u_lightPosRadius[16];     // xyz position, w radius
+    vec4 u_lightPosRadius[16];     // xy position, z height above the sprites (normal maps), w radius
     vec4 u_lightColorFalloff[16];  // rgb linear color * intensity, w falloff exponent
     vec4 u_lightShadow[16];        // shadow row (-1: none), softness (texels), strength, penetration / radius
     ivec4 u_lightCount;
 };
 uniform sampler2D u_texture;
 uniform sampler2D u_shadow2D;  // polar shadow maps: one row per shadowed light, distance / radius in r (high) g (low)
+uniform sampler2D u_normalMap;
 in vec2 v_uv;
 in vec4 v_color;
 in vec3 v_worldPos;
@@ -61,6 +65,21 @@ layout(location = 0) out vec4 o_color;
 void main() {
     vec4 c = texture(u_texture, v_uv) * v_color;
     vec3 light = u_ambient.rgb;
+#ifdef AGR_NORMAL_MAP
+    vec3 tn = texture(u_normalMap, v_uv).xyz * 2.0 - 1.0;
+    // World directions of increasing u and v (dp/du, dp/dv) from screen derivatives: dividing by
+    // the uv Jacobian makes them independent of the screen orientation (Vulkan flips y).
+    vec3 dp1 = dFdx(v_worldPos), dp2 = dFdy(v_worldPos);
+    vec2 du1 = dFdx(v_uv), du2 = dFdy(v_uv);
+    float det = du1.x * du2.y - du1.y * du2.x;
+    det = abs(det) < 1e-12 ? 1e-12 : det;
+    vec3 T = (dp1 * du2.y - dp2 * du1.y) / det;
+    vec3 B = (dp2 * du1.x - dp1 * du2.x) / det;
+    T = dot(T, T) > 0.0 ? normalize(T) : vec3(1.0, 0.0, 0.0);
+    B = dot(B, B) > 0.0 ? normalize(B) : vec3(0.0, -1.0, 0.0);
+    // v grows down the image while the normal map's green points up.
+    vec3 n = normalize(T * tn.x - B * tn.y + vec3(0.0, 0.0, 1.0) * max(tn.z, 0.0));
+#endif
     for (int i = 0; i < 16; ++i) {
         if (i >= u_lightCount.x) break;
         vec2 d = v_worldPos.xy - u_lightPosRadius[i].xy;
@@ -80,6 +99,12 @@ void main() {
             }
             lit = mix(1.0, sum / 5.0, u_lightShadow[i].z);
         }
+#ifdef AGR_NORMAL_MAP
+        // Relative to a flat surface: flat areas light exactly like a sprite without a normal
+        // map, slopes facing the light brighten (up to 2x), slopes facing away darken.
+        vec3 L = normalize(vec3(-d, u_lightPosRadius[i].z));
+        lit *= clamp(dot(n, L) / max(L.z, 0.25), 0.0, 2.0);
+#endif
         light += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w) * lit;
     }
     vec3 lit = c.rgb * light;

@@ -197,6 +197,9 @@ struct SpriteRendererComponent {
                                          ///< valid frame overrides pivot (frames of a clip may differ).
     i32 frame = -1;                      ///< Frame of the sheet (-1 = none).
     bool lit = false;                    ///< Affected by 2D lights (Light2D).
+    /// Normal map of the texture (same layout, OpenGL convention: green up), lit sprites only:
+    /// the lights shade the relief (bricks, folds, scales) from their height (Light2D.height).
+    std::string normalMap;
 };
 
 /// Grid of tiles drawn from a sprite sheet (the tileset). Cell (x, y) covers
@@ -209,6 +212,7 @@ struct TilemapComponent {
     i32 sortingLayer = 0;
     i32 orderInLayer = 0;
     bool lit = false;
+    std::string normalMap;               ///< Normal map laid out like the tileset's texture (lit tilemaps).
     u32 dataWidth = 16;                  ///< Width the tile data is laid out with (resizes are remapped).
     std::vector<i32> tiles;              ///< Frame index per cell (row-major from y = 0), -1 = empty.
 
@@ -231,6 +235,9 @@ struct Light2DComponent {
     /// World units the light enters occluders before the shadow starts: the faces of lit walls
     /// (tiles, crates) stay lit instead of turning black behind their edge.
     float shadowPenetration = 0.5f;
+    /// Height of the light above the sprites, for normal-mapped sprites: low = grazing light
+    /// (strong relief, long falloff), high = light from the front.
+    float height = 1.0f;
 };
 
 /// Blocks 2D light (Light2D.castShadows): a box in the entity's XY plane, or, on an entity
