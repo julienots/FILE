@@ -177,7 +177,7 @@ void Game::updateTouchControls() {
     if (u.button(bMenu)) { menu = Menu::Pause; play("ui_open", 0.6f); }
     if (u.button(Rect{14, 14, 108, 108})) { menu = Menu::HeroWheel; play("ui_open", 0.6f); }   // portrait: hero wheel
     if (u.button(bMap) || u.button(mini)) { menu = Menu::Map; play("ui_open", 0.6f); mapPan = vec2(0, 0); }
-    if (u.button(bBag)) { menu = Menu::Inventory; play("ui_open", 0.6f); }
+    if (u.button(bBag)) { menu = Menu::Bag; selItem = -1; play("ui_open", 0.6f); }   // 2.2.0 the quick bag (the full journal is one tap away)
 }
 
 
@@ -325,6 +325,8 @@ void Game::drawMinimap(Rect r) {
         else if (o.npcDef >= 0) u.circle(m, 3.5f, vec4(1.f, 0.85f, 0.4f, 1), 10);
         else if (o.team == Team::Mount) u.sprite("i_mount", {m.x - 9, m.y - 9, 18, 18});
     });
+    // 2.2.0 personal pins (cyan diamonds, pinned to the rim when far)
+    if (!dungeon.active) for (vec2 pin : mapPins) { vec2 m = toMini(vec3(pin.x, 0, pin.y), true, &in); u.circle(m, 7.f, vec4(0.03f, 0.08f, 0.12f, 0.9f), 4); u.circle(m, 5.f, vec4(0.35f, 0.9f, 1.f, 1.f), 4); }
     // 1.11.1 races: next checkpoint (pinned), start circles while driving
     if (!dungeon.active && race.active >= 0 && race.next < (int)races[race.active].cps.size()) {
         vec2 cp = races[race.active].cps[race.next];
@@ -587,6 +589,7 @@ void Game::drawHud(float dt) {
         u.nine("panel_plain", lr, vec4(1, 1, 1, 0.85f), 0.4f);
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
+    drawPinsHud();
     drawTutorial(dt);
     // hints
     if (!toastHint.empty()) {

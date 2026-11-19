@@ -371,7 +371,7 @@ struct CinematicState {
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop, Bag };
 
 class Game : public App {
 public:
@@ -524,6 +524,13 @@ public:
     bool pendingPrologue = false;
     void startShots(std::vector<CineShot> shots, const std::string& id);
     void startPrologue();
+    // 2.2.0 personal map pins (up to 6), dust teleport (the hero crumbles to golden dust rising to the sky, then re-forms), quick bag
+    std::vector<vec2> mapPins;
+    struct TeleFx { bool active = false; int phase = 0; float t = 0; vec3 dest; std::string msg; } tele;
+    void startDustTeleport(vec3 dest, const std::string& msg);
+    void updateTeleportFx(float dt);
+    void drawPinsHud();
+    int bagCat = 0;
     // 2.1.0 interactive tutorial after the prologue: each step is validated by the real action (walk, turn the camera, run, jump, roll, attack, talk)
     int tutStep = -1; float tutT = 0, tutOkT = 0, tutAcc = 0; vec3 tutStart;
     void startTutorial();

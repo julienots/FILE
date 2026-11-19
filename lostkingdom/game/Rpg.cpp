@@ -529,6 +529,7 @@ bool Game::saveGame(int slot) {
     o << "LOSTKINGDOM_SAVE 1\n";
     o << "player " << c.pos.x << " " << c.pos.y << " " << c.pos.z << " " << c.yaw << " " << c.hp << " " << mp << " " << stamina << "\n";
     o << "respawn " << respawnPos.x << " " << respawnPos.y << " " << respawnPos.z << "\n";
+    o << "pins " << mapPins.size(); for (vec2 pp : mapPins) o << " " << pp.x << " " << pp.y; o << "\n";   // 2.2.0
     o << "prog " << level << " " << xp << " " << gold << " " << skillPoints << " " << gameTime << " " << timeOfDay << " " << day << " " << playSeconds << "\n";
     for (auto& s : inventory) o << "inv " << s.id << " " << s.count << " " << (int)s.rarity << " " << s.level << "\n";
     for (int i = 0; i < SL_COUNT; i++) if (!equipment[i].id.empty()) o << "eq " << i << " " << equipment[i].id << " " << (int)equipment[i].rarity << " " << equipment[i].level << "\n";
@@ -570,6 +571,7 @@ bool Game::saveGame(int slot) {
 }
 
 bool Game::loadGame(int slot) {
+    mapPins.clear(); tele = TeleFx();
     if (coop.mode != CoopState::Off && slot != 99) coopLeave(true);   // 1.13.0 loading another save ends the session
     std::string data;
     if (!platform::readFile(slotPath(slot), data)) return false;
@@ -597,6 +599,7 @@ bool Game::loadGame(int slot) {
         std::string k; l >> k;
         if (k == "player") { l >> pos.x >> pos.y >> pos.z >> yaw >> hp >> mp >> stamina; }
         else if (k == "respawn") l >> respawnPos.x >> respawnPos.y >> respawnPos.z;
+        else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
         else if (k == "inv") { ItemStack s; int r; l >> s.id >> s.count >> r >> s.level; s.rarity = (Rarity)r; s.isNew = false; if (item(s.id)) inventory.push_back(s); }
         else if (k == "eq") { int i, r; ItemStack s; l >> i >> s.id >> r >> s.level; s.rarity = (Rarity)r; if (i >= 0 && i < SL_COUNT && item(s.id)) equipment[i] = s; }

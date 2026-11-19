@@ -1435,6 +1435,26 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
         return s;
     }
+    if (name == "qol") {
+        // 2.2.0 quick bag, map pins and dungeons, pause menu, dust teleport (look at the pictures)
+        auto sh = [](const char* f) { return [f](Game& g) { g.requestScreenshot(std::string("build/shots/") + f + ".png"); }; };
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.f; g.toastHint.clear(); g.addItem("sword_iron", 1); g.addItem("potion_heal", 4); g.addItem("iron_ore", 6); }, idle, "new game"});
+        s.push_back({2.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.4f, [](Game& g) { g.menu = Menu::Bag; g.selItem = 0; }, idle, "bag"});
+        s.push_back({0.1f, sh("Q0_bag"), idle, "shot"});
+        s.push_back({0.4f, [](Game& g) { g.menu = Menu::Map; g.mapPins = {vec2(1700, 1500), vec2(1300, 1900)}; for (auto& p : g.world.pois) if (p.type == PoiType::Waystone || p.type == PoiType::Village) g.discovered.insert(p.id); }, idle, "map"});
+        s.push_back({0.1f, sh("Q1_map"), idle, "shot"});
+        s.push_back({0.4f, [](Game& g) { g.menu = Menu::Pause; }, idle, "pause"});
+        s.push_back({0.1f, sh("Q2_pause"), idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::None; teleport(g, 1600, 1560, 2.4f); g.camPitch = 0.22f; g.camDist = g.camDistTarget = 6.f; const Poi* w = g.world.poiById("ws_green"); g.startDustTeleport(vec3(w->pos.x + 3, 0, w->pos.y + 3), "test"); }, idle, "teleport"});
+        s.push_back({0.85f, none, idle, "crumbling"});
+        s.push_back({0.1f, sh("Q3_dust_out"), idle, "shot"});
+        s.push_back({12.f, none, idle, "arrive", [](Game& g) { return g.tele.phase == 1 && !g.loadGate && g.tele.t > 0.5f; }});
+        s.push_back({0.1f, sh("Q4_dust_in"), idle, "shot"});
+        s.push_back({3.f, none, idle, "end of fx", [](Game& g) { return !g.tele.active; }});
+        s.push_back({0.1f, [](Game& g) { const Poi* w = g.world.poiById("ws_green"); float d = distXZ(g.pc().pos, vec3(w->pos.x, 0, w->pos.y)); AGR_LOG("QOL teleport distance to the stone %.1f m, dissolve %.2f -> %s", d, g.pc().vis.dissolve, d < 8.f && g.pc().vis.dissolve == 0.f ? "QOL TEST PASSED" : "QOL TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "start") {
         // 2.1.0 the start of a game: loading screen, then the interactive tutorial (look at the pictures)
         s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.loadGate = true; g.loadGateT = 0; g.loadGateReady = 0; g.timeOfDay = 9.f; g.toastHint.clear(); }, idle, "new game"});

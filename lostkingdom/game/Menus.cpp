@@ -214,7 +214,7 @@ void Game::newGame() {
     level = 1; xp = 0; gold = 60; skillPoints = 1;
     inventory.clear(); for (auto& e : equipment) e = ItemStack();
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); activeMount = -1;
-    questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
+    mapPins.clear(); tele = TeleFx(); questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
     storyFlags.clear(); cine = CinematicState(); pendingPrologue = true;
     unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; meteorPending = false;
     killedUnique.clear(); openedChests.clear(); clearedSpawns.clear(); dungeonsDone.clear(); world.harvested.clear();
@@ -288,7 +288,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.1.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.2.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -369,11 +369,23 @@ void Game::drawMenus(float dt) {
     // ---------------------------------------------------------------- pause & death
     if (menu == Menu::Pause) {
         u.consumeAll();
-        Rect p{W_ / 2 - 230, H_ / 2 - 250, 460, 500};
+        Rect p{W_ / 2 - 230, std::max(20.f, H_ / 2 - 330), 460, std::min(660.f, H_ - 40)};
         u.panel(p, "Pause");
-        float y = p.y + 70;
-        auto b = [&](const char* l) { bool r = u.fancyButton({p.x + 50, y, p.w - 100, 60}, l, true, "button", 25); y += 72; return r; };
+        float y = p.y + 64;
+        float bh = std::min(60.f, (p.h - 90) / 7.f - 8.f);
+        auto b = [&](const char* l) { bool r = u.fancyButton({p.x + 50, y, p.w - 100, bh}, l, true, "button", 23); y += bh + 8; return r; };
         if (b("Reprendre")) { menu = Menu::None; play("ui_close", 0.5f); }
+        // 2.2.0 respawn point where you stand, and a way out when stuck (back to that point, as dust)
+        if (b("Point de réapparition ici")) {
+            if (dungeon.active || !pc().grounded || pc().swimming || bossEnt != NullEntity) notify("Impossible ici (donjon, en l'air, dans l'eau ou en combat de boss).", vec3(1.f, 0.7f, 0.5f), "i_lock");
+            else { respawnPos = pc().pos; notify("Point de réapparition enregistré.", vec3(0.6f, 0.9f, 1.f), "i_waypoint"); }
+            menu = Menu::None;
+        }
+        if (b("Je suis bloqué")) {
+            menu = Menu::None;
+            if (dungeon.active) { pc().pos = dungeon.entrance; pc().vel = vec3(0); notify("Retour à l'entrée du donjon.", vec3(0.8f, 0.9f, 1.f), "i_waypoint"); }
+            else startDustTeleport(respawnPos, "Retour au point de réapparition.");
+        }
         if (b("Journal")) { menu = Menu::Inventory; }
         if (b("Sauvegarder")) { menu = Menu::Saves; }
         if (b("Paramètres")) { menu = Menu::Settings; }
@@ -398,6 +410,111 @@ void Game::drawMenus(float dt) {
         if (u.fancyButton({p.x + 40, p.y + 76, p.w - 80, 62}, "Charger la dernière sauvegarde", true, "button_dark", 22)) {
             if (loadGame(99) || loadGame(saveSlot)) { menu = Menu::None; startPlaying(); }
         }
+        return;
+    }
+    // ---------------------------------------------------------------- 2.2.0 quick bag: big slots, five filters, one action bar
+    if (menu == Menu::Bag) {
+        u.consumeAll();
+        auto cat = [](ItemKind k) {
+            switch (k) {
+            case ItemKind::Consumable: return 2;
+            case ItemKind::Material: return 3;
+            case ItemKind::Quest: case ItemKind::Relic: return 4;
+            default: return 1;
+            }
+        };
+        float pw = std::min(W_ * 0.62f, 760.f);
+        Rect P{W_ - pw - 16, 16, pw, H_ - 32};
+        u.nine("panel_plain", P, vec4(1, 1, 1, 0.96f), 0.6f);
+        u.text("Sac", P.x + 24, P.y + 16, 30, GOLDT, F_TITLE);
+        u.sprite("i_coin", {P.x + 110, P.y + 20, 28, 28});
+        u.text(std::to_string(gold), P.x + 144, P.y + 22, 22, GOLDT, F_BOLD);
+        if (u.iconButton({P.x + P.w - 66, P.y + 8, 56, 56}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+        // equipped at a glance (touch: open the full equipment page)
+        static const int strip[] = {SL_WEAPON, SL_OFFHAND, SL_HEAD, SL_CHEST, SL_HANDS, SL_FEET, SL_RING, SL_AMULET};
+        float sx = P.x + 230, ss = std::min(46.f, (P.w - 320) / 8.f - 4.f);
+        for (int i = 0; i < 8; i++) {
+            Rect r{sx + i * (ss + 4), P.y + 16, ss, ss};
+            u.nine("slot", r, vec4(1, 1, 1, 0.9f), 0.4f);
+            if (!equipment[strip[i]].id.empty()) itemIcon(equipment[strip[i]].id, r.inset(4));
+            if (u.button(r)) { menu = Menu::Equipment; play("ui_click", 0.4f); return; }
+        }
+        // filters
+        static const char* cats[] = {"Tout", "Équipement", "Soins", "Matériaux", "Quête"};
+        float cw = (P.w - 48) / 5.f;
+        for (int i = 0; i < 5; i++) {
+            Rect r{P.x + 24 + i * cw, P.y + 76, cw - 8, 46};
+            bool on = bagCat == i;
+            u.nine(on ? "button" : "button_dark", r, vec4(1, 1, 1, on ? 1.f : 0.85f), 0.7f);
+            u.text(cats[i], r.x + r.w / 2, r.y + 12, 17, on ? GOLDT : PALE, F_SERIF, A_CENTER);
+            if (u.button(r)) { bagCat = i; selItem = -1; play("ui_click", 0.4f); }
+        }
+        // items of the filter, sorted: category, rarity, name
+        std::vector<int> list;
+        for (int i = 0; i < (int)inventory.size(); i++) { const ItemDef* d = item(inventory[i].id); if (d && (bagCat == 0 || cat(d->kind) == bagCat)) list.push_back(i); }
+        std::stable_sort(list.begin(), list.end(), [&](int a, int b) {
+            const ItemDef *da = item(inventory[a].id), *db = item(inventory[b].id);
+            if (cat(da->kind) != cat(db->kind)) return cat(da->kind) < cat(db->kind);
+            if (inventory[a].rarity != inventory[b].rarity) return (int)inventory[a].rarity > (int)inventory[b].rarity;
+            return da->name < db->name;
+        });
+        float actionH = 150.f;
+        Rect grid{P.x + 24, P.y + 134, P.w - 48, P.h - 134 - actionH - 16};
+        float cell = 100.f;
+        int cols = std::max(3, (int)(grid.w / cell));
+        cell = grid.w / cols;
+        u.pushClip(grid);
+        float so = u.scrollArea("bag", grid, ((list.size() + cols - 1) / cols) * cell + 10);
+        for (int n = 0; n < (int)list.size(); n++) {
+            int i = list[n];
+            Rect r{grid.x + (n % cols) * cell, grid.y + (n / cols) * cell - so, cell - 8, cell - 8};
+            if (r.y > grid.y + grid.h || r.y + r.h < grid.y) continue;
+            u.nine(i == selItem ? "slot_sel" : "slot", r, vec4(1, 1, 1, 1), 0.45f);
+            vec3 rc = rarityColor(inventory[i].rarity);
+            if ((int)inventory[i].rarity >= 2) u.sprite("glow", r.inset(-6), vec4(rc, 0.25f));
+            itemIcon(inventory[i].id, r.inset(10));
+            u.rect({r.x + 8, r.y + r.h - 9, r.w - 16, 3}, vec4(rc, 0.95f));
+            if (inventory[i].count > 1) u.text("x" + std::to_string(inventory[i].count), r.x + r.w - 8, r.y + r.h - 30, 17, PALE, F_BOLD, A_RIGHT, 0, true);
+            if (inventory[i].isNew) u.circle({r.x + 12, r.y + 12}, 5, rgba(0xf8d050), 8);
+            if (u.button(r)) { selItem = i; inventory[i].isNew = false; play("ui_click", 0.4f); }
+        }
+        if (list.empty()) u.text("Rien ici pour l'instant.", grid.x + grid.w / 2, grid.y + 60, 20, DIM, F_BODY, A_CENTER);
+        u.popClip();
+        // action bar: name, what it does, comparison with what you wear, big buttons
+        Rect A{P.x + 24, P.y + P.h - actionH - 8, P.w - 48, actionH};
+        u.nine("slot", A, vec4(1, 1, 1, 0.7f), 0.5f);
+        if (selItem >= 0 && selItem < (int)inventory.size()) {
+            ItemStack st = inventory[selItem];
+            const ItemDef* d = item(st.id);
+            itemIcon(st.id, {A.x + 12, A.y + 12, 64, 64});
+            u.text(d->name, A.x + 88, A.y + 10, 21, vec4(rarityColor(st.rarity), 1), F_BOLD, A_LEFT, A.w - 300);
+            std::string line;
+            int slot = slotForKind(d->kind);
+            if (slot >= 0) {
+                const ItemDef* e = item(equipment[slot].id);
+                char b[160];
+                float da = d->atk - (e ? e->atk : 0), dd = d->def - (e ? e->def : 0), dh = d->hp - (e ? e->hp : 0);
+                snprintf(b, sizeof b, "Par rapport à l'équipé : attaque %+.0f · défense %+.0f · vie %+.0f", da, dd, dh);
+                line = b;
+            } else if (d->kind == ItemKind::Consumable) {
+                char b[120]; snprintf(b, sizeof b, "%s%s", d->heal > 0 ? ("Soigne " + std::to_string((int)d->heal) + " PV. ").c_str() : "", d->mana > 0 ? ("Rend " + std::to_string((int)d->mana) + " mana.").c_str() : "");
+                line = b[0] ? b : d->desc;
+            } else line = d->desc;
+            u.text(line, A.x + 88, A.y + 40, 16, PALE, F_BODY, A_LEFT, A.w - 300);
+            float bw = 130, bx = A.x + A.w - bw * 2 - 22, by = A.y + A.h - 64;
+            bool equipable = slot >= 0 || d->kind == ItemKind::Cosmetic;
+            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 54}, "Utiliser", true, "button", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
+            if (equipable && u.fancyButton({bx, by, bw, 54}, "Équiper", true, "button", 21)) { equip(selItem); selItem = -1; }
+            if (d->kind != ItemKind::Quest && d->kind != ItemKind::Relic && u.fancyButton({bx + bw + 10, by, bw, 54}, "Jeter", true, "button_dark", 21)) {
+                Character& pl = pc();
+                spawnPickup(st.id, 1, st.rarity, pl.pos + vec3(std::sin(pl.yaw), 0, std::cos(pl.yaw)) * 1.5f);
+                if (--inventory[selItem].count <= 0) { inventory.erase(inventory.begin() + selItem); selItem = -1; }
+            }
+        } else u.text("Touchez un objet.", A.x + A.w / 2, A.y + 56, 20, DIM, F_BODY, A_CENTER);
+        // the full journal (skills, crafting, quests, map...) for those who want everything
+        Rect J{P.x + 24, P.y + P.h - actionH - 8 - 0, 0, 0};
+        (void)J;
+        if (u.fancyButton({16, H_ - 72, 220, 56}, "Journal complet", true, "button_dark", 19)) { menu = Menu::Inventory; selItem = -1; play("ui_open", 0.5f); }
         return;
     }
     if (menu == Menu::Shop) {
@@ -700,13 +817,44 @@ void Game::drawMenus(float dt) {
             u.sprite(ic, {m.x - 15, m.y - 15, 30, 30});
             if (mapZoom > 1.3f || P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Monastery) u.text(P.name, m.x, m.y + 15, 15, rgba(0x2a1a10), F_BOLD, A_CENTER);
         }
+        // 2.2.0 every dungeon entrance is on the map: found ones with their name, the others as a "?" to look for
+        for (int di = 0; di < (int)dungeons().size(); di++) {
+            const Poi* P = world.poiById(dungeons()[di].poi);
+            if (!P) continue;
+            vec2 m = toMap(P->pos);
+            bool known = discovered.count(P->id) > 0, cleared = dungeonsDone.count(dungeons()[di].id) > 0;
+            u.circle(m, 17.f, cleared ? vec4(0.15f, 0.35f, 0.15f, 0.85f) : vec4(0.35f, 0.08f, 0.06f, 0.85f), 16);
+            u.sprite("i_cave", {m.x - 13, m.y - 13, 26, 26}, vec4(1, 1, 1, known ? 1.f : 0.45f));
+            if (!known) u.text("?", m.x + 12, m.y - 24, 18, rgba(0xf6dc9a), F_BOLD, A_CENTER, 0, true);
+            else if (mapZoom > 1.3f) u.text(std::string("Donjon : ") + dungeons()[di].name + (cleared ? " (terminé)" : ""), m.x, m.y + 17, 14, rgba(0x5a1410), F_BOLD, A_CENTER);
+        }
         // 2.1.0 fast travel: touch a discovered waystone on the map, then "Voyage rapide"
+        // 2.2.0 touching anywhere else drops a personal pin (touch a pin again to remove it; 6 at most)
         static std::string wayPick;
+        bool tapUsed = false;
         for (auto& P : world.pois) {
             if (P.type != PoiType::Waystone || !discovered.count(P.id)) continue;
             vec2 m = toMap(P.pos);
             if (P.id == wayPick) u.ring(m, 20, 25, 0, TAU, vec4(1.f, 0.85f, 0.3f, 0.6f + 0.4f * std::sin(realTime * 6.f)), 28);
-            for (auto& fg : u.fingers) if (fg.released && fg.t < 0.35f && length(vec2(fg.x - fg.sx, fg.y - fg.sy)) < 14.f && length(vec2(fg.x, fg.y) - m) < 26.f && c.contains(fg.x, fg.y)) { wayPick = P.id; play("ui_click", 0.5f); }
+            for (auto& fg : u.fingers) if (fg.released && fg.t < 0.35f && length(vec2(fg.x - fg.sx, fg.y - fg.sy)) < 14.f && length(vec2(fg.x, fg.y) - m) < 26.f && c.contains(fg.x, fg.y)) { wayPick = P.id; tapUsed = true; play("ui_click", 0.5f); }
+        }
+        for (size_t i = 0; i < mapPins.size(); i++) {
+            vec2 m = toMap(mapPins[i]);
+            u.circle(m, 12.f, vec4(0.03f, 0.08f, 0.12f, 0.9f), 4); u.circle(m, 9.f, vec4(0.35f, 0.9f, 1.f, 1.f), 4);
+            u.text(std::to_string(i + 1), m.x, m.y - 9, 13, rgba(0x06202a), F_BOLD, A_CENTER);
+        }
+        Rect mapArea{c.x, c.y, c.w * 0.72f, c.h};
+        for (auto& fg : u.fingers) {
+            if (tapUsed || !fg.released || fg.t > 0.35f || length(vec2(fg.x - fg.sx, fg.y - fg.sy)) > 14.f || !mapArea.contains(fg.x, fg.y) || !mr.contains(fg.x, fg.y)) continue;
+            int hitPin = -1;
+            for (size_t i = 0; i < mapPins.size(); i++) if (length(toMap(mapPins[i]) - vec2(fg.x, fg.y)) < 20.f) hitPin = (int)i;
+            if (hitPin >= 0) { mapPins.erase(mapPins.begin() + hitPin); play("ui_close", 0.4f); }
+            else {
+                vec2 w{(fg.x - mr.x) / mr.w * WORLD_SIZE, (fg.y - mr.y) / mr.h * WORLD_SIZE};
+                if (mapPins.size() >= 6) mapPins.erase(mapPins.begin());
+                mapPins.push_back(w); play("ui_click", 0.5f);
+            }
+            tapUsed = true;
         }
         // region names
         static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}};
@@ -746,27 +894,24 @@ void Game::drawMenus(float dt) {
         for (auto it = last.begin(); it != last.end();) { bool alive = false; for (auto& fg : u.fingers) if (fg.id == it->first && fg.down) alive = true; if (!alive) it = last.erase(it); else ++it; }
         Rect side2{c.x + c.w * 0.75f, c.y, c.w * 0.25f, c.h};
         if (u.fancyButton({side2.x, side2.y, side2.w, 54}, "Zoom +", mapZoom < 3, "button_dark", 20)) mapZoom = std::min(3.f, mapZoom * 1.4f);
-        if (u.fancyButton({side2.x, side2.y + 64, side2.w, 54}, "Zoom −", mapZoom > 1, "button_dark", 20)) { mapZoom = std::max(1.f, mapZoom / 1.4f); if (mapZoom == 1) mapPan = vec2(0, 0); }
+        if (u.fancyButton({side2.x, side2.y + 64, side2.w, 54}, "Zoom -", mapZoom > 1, "button_dark", 20)) { mapZoom = std::max(1.f, mapZoom / 1.4f); if (mapZoom == 1) mapPan = vec2(0, 0); }
         if (u.fancyButton({side2.x, side2.y + 128, side2.w, 54}, "Centrer", true, "button_dark", 20)) mapPan = vec2(0, 0);
         {
             const Poi* wp = wayPick.empty() ? nullptr : world.poiById(wayPick);
             bool can = wp && !dungeon.active && !riding && driving < 0 && bossEnt == NullEntity;
-            std::string lab = wp ? "Voyage rapide : " + wp->name : "Voyage rapide (touchez une pierre)";
+            std::string lab = wp ? "Aller : " + wp->name : "Voyage rapide";
             if (u.fancyButton({side2.x, side2.y + 192, side2.w, 54}, lab, can, "button", 16)) {
                 std::string id = wayPick; wayPick.clear();
                 menu = Menu::None;
-                fadeTransition([this, id] {
-                    const Poi* t = world.poiById(id);
-                    if (!t || player == NullEntity) return;
-                    Character& ch = pc();
-                    ch.pos = vec3(t->pos.x + 3.f, world.groundHeight(t->pos.x + 3.f, t->pos.y + 3.f) + 0.2f, t->pos.y + 3.f); ch.vel = vec3(0);
-                    camFocus = ch.pos; lockTarget = NullEntity;
-                    loadGate = true; loadGateT = 0; loadGateReady = 0; loadGateFade = 0;
-                    respawnPos = ch.pos;
-                    notify("Voyage rapide : " + t->name, vec3(0.7f, 0.9f, 1.f), "i_waypoint");
-                });
+                if (const Poi* t = world.poiById(id)) {   // 2.2.0 the hero turns to dust and re-forms at the stone
+                    vec3 dst(t->pos.x + 3.f, 0.f, t->pos.y + 3.f);
+                    respawnPos = vec3(dst.x, world.groundHeight(dst.x, dst.z), dst.z);
+                    startDustTeleport(dst, "Voyage rapide : " + t->name);
+                }
             }
             if (wp && !can) u.text("Impossible : donjon, combat de boss, monture ou véhicule.", side2.x, side2.y + 250, 14, rgba(0xd0a080), F_BODY, A_LEFT, side2.w);
+            if (!mapPins.empty() && u.fancyButton({side2.x, side2.y + 372, side2.w, 44}, "Effacer les repères", true, "button_dark", 16)) mapPins.clear();
+            u.text("Touchez une pierre violette pour le voyage rapide, ailleurs pour poser un repère (touchez-le pour l'enlever).", side2.x, side2.y + 424, 14, DIM, F_BODY, A_LEFT, side2.w);
         }
         int found = 0; for (int i = 0; i < 128 * 128; i++) if (fog[i]) found++;
         char b[64]; snprintf(b, sizeof b, "Royaume exploré : %.1f %%", found * 100.f / (128 * 128));

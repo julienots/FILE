@@ -248,7 +248,9 @@ void Game::frame(float dtRaw) {
         float sdt = paused ? 0.f : dt * timeScale;
         if (hitStop > 0) { hitStop -= dt; sdt *= 0.08f; }
         updateCoop(dt);   // 1.13.0 the network runs even while a menu is open
+        if (tele.active) { Input keep = input; input = Input(); input.camDrag = keep.camDrag; input.pinch = keep.pinch; }   // 2.2.0 no control while turning to dust
         if (!paused) { updateTutorial(sdt); updatePlaying(sdt); }
+        if (!paused) updateTeleportFx(sdt);
         PROF(9, renderWorld(sdt));
         PROF(10, { drawHud(dt); if (dialog.open) drawDialog(); drawMenus(dt); drawEndingChoice(dt); });
         break;
