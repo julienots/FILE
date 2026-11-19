@@ -571,6 +571,10 @@ public:
     vec3 vehicleLocal(const VehicleState& v, vec3 p) const;
     void enterVehicle(int i);
     void exitVehicle();
+    // 2.2.1 call a vehicle to your side (garage button under the minimap), speedometer while driving
+    bool garageOpen = false;
+    void summonVehicle(int i);
+    void drawSpeedometer();
     void updateDriving(float dt, vec3 want, float mag);
     void renderVehicles();
     // 1.11.1 goals

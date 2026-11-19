@@ -1435,6 +1435,19 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
         return s;
     }
+    if (name == "garage") {
+        // 2.2.1 call the car to the hero, drive it, speedometer (look at the pictures)
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); if (g.vehicles.empty()) g.initVehicles(); g.spawnVehicleEntities(); teleport(g, 1600, 1560, 0.f); }, idle, "new game"});
+        s.push_back({2.f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.garageOpen = true; }, idle, "open"});
+        s.push_back({0.3f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G0_garage.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto) car = i; g.summonVehicle(car); g.garageOpen = false; }, idle, "summon"});
+        s.push_back({0.1f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto) car = i; float d = distXZ(g.vehicles[car].pos, g.pc().pos); AGR_LOG("GARAGE car at %.1f m from the hero -> %s", d, d < 9.f ? "GARAGE SUMMON OK" : "GARAGE SUMMON FAILED"); g.enterVehicle(car); }, idle, "enter"});
+        s.push_back({3.f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camIdleT = 0; }, "drive"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("GARAGE speed %.1f km/h -> %s", std::fabs(g.vehicles[std::max(0, g.driving)].speed) * 3.6f, g.driving >= 0 ? "GARAGE TEST PASSED" : "GARAGE TEST FAILED"); g.requestScreenshot("build/shots/G1_speedometer.png"); }, idle, "shot"});
+        return s;
+    }
     if (name == "qol") {
         // 2.2.0 quick bag, map pins and dungeons, pause menu, dust teleport (look at the pictures)
         auto sh = [](const char* f) { return [f](Game& g) { g.requestScreenshot(std::string("build/shots/") + f + ".png"); }; };

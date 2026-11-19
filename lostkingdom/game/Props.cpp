@@ -1549,6 +1549,7 @@ float structureGroundY(const Structure& s, const World& w) {
     float gy = w.height(s.pos.x, s.pos.y);
     if (s.poi >= 0) gy = w.pois[s.poi].height;
     if (s.kind == S_BRIDGE) return s.variant / 100.f + 1.2f;
+    if (s.baseY > -1e8f) return s.baseY - 0.04f;   // 2.2.1 levelled pad
     if (!restsOnFootprint(s.kind)) return gy;
     float lo, hi;
     groundUnder(s, w, lo, hi);
@@ -1558,6 +1559,7 @@ float structureGroundY(const Structure& s, const World& w) {
 }
 
 float structurePlinth(const Structure& s, const World& w) {
+    if (s.baseY > -1e8f) return 0.f;   // 2.2.1 the ground is levelled: no foundation needed
     if (!restsOnFootprint(s.kind) || !getsPlinth(s.kind)) return 0.f;
     float lo, hi;
     groundUnder(s, w, lo, hi);

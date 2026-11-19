@@ -95,10 +95,12 @@ void Game::updateTouchControls() {
     // top-right shortcuts
     Rect bMenu{u.W - 70, 14, 56, 56}, bMap{u.W - 132, 14, 56, 56}, bBag{u.W - 194, 14, 56, 56};
     Rect mini{u.W - 196, 80, 176, 176};
+    Rect bGarage{u.W - 70, 262, 56, 56}, garagePanel{u.W - 300, 262, 224, 130};   // 2.2.1 call a vehicle
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
         if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
+        if ((!vehicles.empty() && bGarage.contains(f.sx, f.sy)) || (garageOpen && garagePanel.contains(f.sx, f.sy))) continue;
         if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
         if (buildMode && Rect{ui.W * 0.5f - 330, 84, 660, 128}.contains(f.sx, f.sy)) continue;   // build panel (domain)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
@@ -177,6 +179,20 @@ void Game::updateTouchControls() {
     if (u.button(bMenu)) { menu = Menu::Pause; play("ui_open", 0.6f); }
     if (u.button(Rect{14, 14, 108, 108})) { menu = Menu::HeroWheel; play("ui_open", 0.6f); }   // portrait: hero wheel
     if (u.button(bMap) || u.button(mini)) { menu = Menu::Map; play("ui_open", 0.6f); mapPan = vec2(0, 0); }
+    if (!vehicles.empty() && driving < 0 && !dungeon.active) {
+        u.nine("button_dark", bGarage, vec4(1, 1, 1, garageOpen ? 1.f : 0.85f), 0.6f);
+        u.sprite("i_mount", bGarage.inset(10), vec4(0.55f, 0.85f, 1.f, 1.f));
+        u.tag(bGarage, "Garage");
+        if (u.button(bGarage)) { garageOpen = !garageOpen; play("ui_click", 0.4f); }
+        if (garageOpen) {
+            u.nine("panel_plain", garagePanel, vec4(1, 1, 1, 0.94f), 0.5f);
+            u.text("Appeler un véhicule", garagePanel.x + 12, garagePanel.y + 8, 16, rgba(0xf4d58a), F_BOLD);
+            for (int i = 0; i < (int)vehicles.size() && i < 2; i++) {
+                Rect r{garagePanel.x + 12, garagePanel.y + 36 + i * 46.f, garagePanel.w - 24, 40};
+                if (u.fancyButton(r, vehicleDefs()[vehicles[i].def].moto ? "Moto" : "Voiture", true, "button", 18)) { summonVehicle(i); garageOpen = false; }
+            }
+        }
+    } else garageOpen = false;
     if (u.button(bBag)) { menu = Menu::Bag; selItem = -1; play("ui_open", 0.6f); }   // 2.2.0 the quick bag (the full journal is one tap away)
 }
 
@@ -590,6 +606,7 @@ void Game::drawHud(float dt) {
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
     drawPinsHud();
+    drawSpeedometer();
     drawTutorial(dt);
     // hints
     if (!toastHint.empty()) {

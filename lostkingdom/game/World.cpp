@@ -705,6 +705,7 @@ void World::buildPlan() {
     indexPlan();
     resolvePlacement();
     indexPlan();
+    levelBuildings();
 }
 
 // 1.12.0 placement pass: the village layouts are drawn before the roads, so a house could stand in the middle of
@@ -779,6 +780,47 @@ void World::resolvePlacement() {
         structures.swap(keep);
     }
     AGR_LOG("World plan: placement pass moved %d buildings off roads / neighbours, removed %d small ones", moved, removed);
+}
+
+
+// 2.2.1 every building stands on level ground: its pad (footprint + 0.4 m) is flattened to one height, blending back into
+// the terrain over 4 m. Before, a house on a slope was half buried uphill (up to 7.8 m) or raised on a stone plinth.
+static bool levelsGround(int k) {
+    switch (k) {
+    case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_CHAPEL: case S_FORGE: case S_TOWER: case S_WINDMILL:
+    case S_CRYPT: case S_MONASTERY: case S_KEEP: case S_CASTLE_TOWER: case S_STILT_HUT: case S_TENT: case S_WELL: case S_STALL:
+    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT:
+    case S_STATUE: case S_GATE: case S_ARCHWAY: case S_COLONNADE: case S_ALTAR: case S_WAYSTONE: case S_OBELISK: case S_PORTAL: return true;
+    default: return false;
+    }
+}
+
+void World::levelBuildings() {
+    levelReady = false;
+    chunkLevel.assign(CHUNKS * CHUNKS, {});
+    for (int i = 0; i < (int)structures.size(); i++) {
+        Structure& s = structures[i];
+        s.baseY = -1e9f;
+        if (!levelsGround(s.kind) || (s.kind == S_STALL && s.variant < 0)) continue;
+        vec2 fp = structureFootprint(s.kind) * s.scale;
+        float sum = 0; int n = 0;
+        for (int j = -1; j <= 1; j++) for (int k = -1; k <= 1; k++) {
+            vec2 q = rotate(vec2(fp.x * k, fp.y * j), -s.rot) + s.pos;
+            sum += height(q.x, q.y); n++;
+        }
+        float y = sum / n;
+        bool wet = false;   // by the water (river banks, lake shores): keep the old placement, the channel must not be filled
+        for (int j = -1; j <= 1 && !wet; j++) for (int k = -1; k <= 1 && !wet; k++) { vec2 q = rotate(vec2(fp.x * k, fp.y * j) * 1.4f, -s.rot) + s.pos; if (waterLevel(q.x, q.y) > -1e8f) wet = true; }
+        if (wet) continue;
+        s.baseY = y;
+        float R = length(fp) + 4.5f;
+        for (int cz = (int)std::floor((s.pos.y - R) / CHUNK); cz <= (int)std::floor((s.pos.y + R) / CHUNK); cz++)
+            for (int cx = (int)std::floor((s.pos.x - R) / CHUNK); cx <= (int)std::floor((s.pos.x + R) / CHUNK); cx++) {
+                int ci = chunkIndex(cx, cz);
+                if (ci >= 0) chunkLevel[ci].push_back(i);
+            }
+    }
+    levelReady = true;
 }
 
 void World::indexPlan() {
@@ -967,6 +1009,21 @@ float World::height(float x, float z) const {
         if (bestD < rw2 + 8 && ri < 0.5f && !harbour) {
             float w = (1.f - smoothstepf(rw2 * 0.5f, rw2 * 0.5f + 8.f, bestD)) * (1.f - ri * 2.f);
             h = lerpf(h, std::max(target, h - 1.5f), w * 0.85f);
+        }
+        // 2.2.1 building pads
+        if (levelReady) {   // the nearest pad wins (two neighbouring houses never fight over the same ground)
+            float bw = 0.f, by = 0.f;
+            for (int si : chunkLevel[ci]) {
+                const Structure& st = structures[si];
+                vec2 l = rotate(vec2(x, z) - st.pos, st.rot);
+                vec2 fp = structureFootprint(st.kind) * st.scale + vec2(0.4f);
+                vec2 q{std::max(std::fabs(l.x) - fp.x, 0.f), std::max(std::fabs(l.y) - fp.y, 0.f)};
+                float d = length(q);
+                if (d >= 4.f) continue;
+                float w = 1.f - smoothstepf(0.f, 4.f, d);
+                if (w > bw) { bw = w; by = st.baseY; }
+            }
+            if (bw > 0.f) h = lerpf(h, by, bw * (1.f - ri));
         }
     }
     return h;

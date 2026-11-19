@@ -68,6 +68,7 @@ struct Structure {
     int variant = 0;
     int region;
     int poi = -1;
+    float baseY = -1e9f;   // 2.2.1 levelled ground height under the building (the terrain is flattened to it); -1e9: not levelled
 };
 
 // Harvestable / interactive node spawned with chunks.
@@ -212,6 +213,9 @@ private:
     std::vector<std::vector<int>> chunkPois;
     std::vector<std::vector<int>> chunkRivers;
     void indexPlan();
+    std::vector<std::vector<int>> chunkLevel;   // 2.2.1 per chunk: buildings whose levelled pad reaches it
+    bool levelReady = false;
+    void levelBuildings();
     void resolvePlacement();   // 1.12.0 buildings off the roads, no two buildings in each other
 };
 

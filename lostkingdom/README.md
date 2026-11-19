@@ -6,12 +6,19 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.2.0 (versionCode 25), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 et 2.1.0 : elle s'installe par-dessus). SHA-256 : `f3c0465365f19251d9e8f32334e40d36df2e6bdb19fcb4b58a5317de9185c48f`. Ancienne mention de taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.2.1 (versionCode 26), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.2.0 : elle s'installe par-dessus). SHA-256 : `bf4f14a5c36cc12142c2f20017a9e9c1da97afcd50c7d49a2ce47806018bf99f`. Ancienne mention de taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.2.1 (appeler un véhicule, compteur de vitesse, bâtiments posés à plat)
+
+- **Garage** : un bouton sous la minicarte (icône bleue) ouvre « Appeler un véhicule » → Voiture ou Moto. Le véhicule apparaît à côté du héros (côté droit d'abord, sinon autour), sur un sol sec et plat, sans chevaucher un mur ; si la place manque, un message le dit. Impossible dans un donjon ou en conduisant. Fini les véhicules perdus au bout du monde.
+- **Compteur de vitesse** en conduisant : cadran sous le suivi de quête, aiguille, chiffre en km/h, arc qui passe au rouge au-delà de 80 % de la vitesse maximale, « R » en marche arrière.
+- **Bâtiments posés à plat** : le sol sous chaque bâtiment (maisons, auberges, tours, temples, statues, pierres de passage…) est aplani à une seule hauteur, avec un talus de 4 m autour ; les bâtiments ne sont plus enterrés d'un côté ni posés sur un socle de pierre. Exception : ceux qui touchent une rivière ou un lac gardent l'ancien placement (on ne comble pas le lit) ; le pire enfouissement mesuré (7,8 m, une maison) est l'un de ceux-là.
+- **Vérification (2.2.1, ordinateur seulement)** : 2 532 tests unitaires réussis (aucun bâtiment flottant, 0 sur 1 101) ; scénario `garage` : la voiture appelée arrive à 4,1 m du héros, la conduite atteint 15,5 km/h en 3 s, captures du garage et du compteur regardées. **Non vérifiés** : la moto appelée, la taille des objets par rapport au héros (pas encore traitée), rien sur téléphone.
 
 ### Nouveautés 2.2.0 (sac rapide, repères, réapparition, téléportation en poussière, donjons sur la carte)
 

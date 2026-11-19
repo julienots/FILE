@@ -77,6 +77,64 @@ void Game::enterVehicle(int i) {
     if (!storyFlags.count("hint_vehicle")) { storyFlags.insert("hint_vehicle"); toastHint = "Joystick : la direction où aller. Bouton d'action : descendre."; }
 }
 
+void Game::summonVehicle(int i) {
+    if (i < 0 || i >= (int)vehicles.size() || player == NullEntity) return;
+    if (driving >= 0) { notify("Descendez d'abord du véhicule.", vec3(1.f, 0.7f, 0.5f), "i_lock"); return; }
+    if (dungeon.active) { notify("Pas de véhicule dans un donjon.", vec3(1.f, 0.7f, 0.5f), "i_lock"); return; }
+    Character& c = pc();
+    vec2 fwd{std::sin(c.yaw), std::cos(c.yaw)}, right{fwd.y, -fwd.x};
+    // first free, dry, gentle spot around the hero (right side first, then the other places)
+    static const vec2 tries[] = {{4.f, 1.f}, {-4.f, 1.f}, {0.f, 5.f}, {4.f, -3.f}, {-4.f, -3.f}, {0.f, -5.f}, {7.f, 0.f}, {-7.f, 0.f}};
+    vec2 best = c.pos.xz() + right * 4.f; bool ok = false;
+    for (vec2 t : tries) {
+        vec2 q = c.pos.xz() + right * t.x + fwd * t.y;
+        float gy = world.groundHeight(q.x, q.y), wl = world.waterLevel(q.x, q.y);
+        if (wl > -1e8f && wl > gy - 0.2f) continue;
+        if (world.normal(q.x, q.y).y < 0.85f || std::fabs(gy - c.pos.y) > 3.f) continue;
+        vec3 test(q.x, gy, q.y); vec3 before = test;
+        world.collide(test, 1.6f, gy);
+        if (length(test.xz() - before.xz()) > 0.3f) continue;
+        best = q; ok = true; break;
+    }
+    if (!ok) { notify("Pas assez de place ici pour le véhicule.", vec3(1.f, 0.7f, 0.5f), "i_lock"); return; }
+    VehicleState& v = vehicles[i];
+    v.pos = vec3(best.x, world.groundHeight(best.x, best.y), best.y);
+    v.yaw = c.yaw; v.velYaw = v.yaw; v.speed = 0; v.vy = 0; v.air = false; v.airT = 0; v.pitch = v.roll = 0; v.groundPrev = v.pos.y;
+    for (int k = 0; k < 3; k++) particles.dust(v.pos + vec3(particles.rng.range(-1.5f, 1.5f), 0, particles.rng.range(-1.5f, 1.5f)), 1.f);
+    particles.shockwave(v.pos + vec3(0, 0.1f, 0), vec3(0.9f, 0.85f, 0.7f), 3.f);
+    play("door", 0.7f);
+    notify(std::string(vehicleDefs()[v.def].moto ? "La moto" : "La voiture") + " est là.", vec3(0.7f, 0.9f, 1.f), "i_mount");
+}
+
+// speed in km/h, a needle dial and a bar; red past 80 % of the top speed
+void Game::drawSpeedometer() {
+    if (driving < 0 || driving >= (int)vehicles.size()) return;
+    UI& u = ui;
+    const VehicleState& v = vehicles[driving];
+    const VehicleDef& d = vehicleDefs()[v.def];
+    float kmh = std::fabs(v.speed) * 3.6f, top = d.maxSpeed * 3.6f;
+    float k = saturate(kmh / std::max(1.f, top));
+    vec2 c{u.W * 0.5f, 150.f};   // under the quest tracker: clear of the thumbs and of the interaction label
+    float R = 58.f;
+    u.circle(c, R + 10, vec4(0.03f, 0.025f, 0.02f, 0.78f), 40);
+    const float a0 = PI * 0.75f, a1 = PI * 2.25f;
+    u.ring(c, R - 6, R, a0, a1, vec4(1, 1, 1, 0.18f), 48);
+    u.ring(c, R - 6, R, a0, a0 + (a1 - a0) * k, k > 0.8f ? vec4(1.f, 0.35f, 0.25f, 0.95f) : vec4(0.45f, 0.85f, 1.f, 0.95f), 48);
+    for (int i = 0; i <= 8; i++) {
+        float a = a0 + (a1 - a0) * i / 8.f;
+        vec2 dir{std::cos(a), std::sin(a)};
+        u.circle(c + dir * (R - 14), i % 2 ? 1.5f : 2.5f, vec4(1, 1, 1, 0.7f), 6);
+    }
+    float an = a0 + (a1 - a0) * k;
+    vec2 nd{std::cos(an), std::sin(an)};
+    for (int i = 0; i < 10; i++) u.circle(c + nd * (6.f + i * 5.f), 2.6f - i * 0.15f, vec4(1.f, 0.55f, 0.3f, 1.f), 6);
+    u.circle(c, 6, vec4(0.9f, 0.9f, 0.9f, 1), 10);
+    char b[16]; snprintf(b, sizeof b, "%d", (int)std::round(kmh));
+    u.text(b, c.x, c.y + 14, 34, rgba(0xf4f0e6), F_BOLD, A_CENTER, 0, true);
+    u.text("km/h", c.x, c.y + 50, 14, rgba(0xb8b0a0), F_BODY, A_CENTER);
+    if (v.speed < -0.3f) u.text("R", c.x + R * 0.55f, c.y - 18, 20, rgba(0xffb070), F_BOLD, A_CENTER);
+}
+
 void Game::exitVehicle() {
     if (driving < 0) return;
     VehicleState& v = vehicles[driving];
