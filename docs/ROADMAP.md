@@ -126,7 +126,7 @@ Guide : [3D.md](3D.md).
 | LOD automatique des modèles importés, portée de visibilité | ✅ | regroupement de sommets (3 niveaux), choix par taille à l'écran, `lodBias`, `visibilityRange` |
 | Occlusion culling, fondu entre niveaux de détail | ⬜ | à planifier |
 
-## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua et logique visuelle terminés ; formes maillage et débogueur à venir)
+## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua, logique visuelle, formes maillage et débogueur terminés)
 
 Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 
@@ -143,7 +143,8 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Couches de collision nommées (2D / 3D, rayons filtrés), articulations 2D / 3D (soudure, charnière, corde / ressort, glissière, rotule ; butées, moteurs, rupture), contrôleur de personnage 3D (marches, pentes, poussée) | ✅ | `Joint2D`, `Joint3D`, `CharacterController3D`, `physics_layers.json` ; [PHYSICS.md](PHYSICS.md) |
 | Formes maillage / convexes 3D | ✅ | `Collider.shape` Mesh / Convex (modèles glTF, OBJ, FBX ; repli convexe des corps dynamiques) |
 | Requêtes de chevauchement, contrôleur de personnage 2D | ⬜ | à planifier |
-| Liaisons Luau / typage, débogueur de scripts | ⬜ | à planifier |
+| Débogueur de scripts : points d'arrêt, pause, arrêt sur erreur, pas à pas (principal / détaillé / sortant), pile d'appels, variables, expressions | ✅ | `ScriptEngine::setBreakHandler`, panneau « Débogueur de scripts » ; [SCRIPTING.md](SCRIPTING.md) |
+| Liaisons Luau / typage | ⬜ | à planifier |
 
 ## Phase 7 — Animation, audio, UI 🟡 (audio, interface et animation de propriétés terminés ; squelettes, effets audio et widgets avancés à venir)
 

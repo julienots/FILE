@@ -35,6 +35,8 @@ public:
     int exitCode() const { return m_exitCode; }
 
 private:
+    /// A script stopped in the debugger: runs a small event / UI loop until the user resumes.
+    ScriptDebugAction onScriptBreak(const ScriptBreak& b);
     void drawHub();
     void drawEditor(const FrameTime& time);
     void drawMenuBar();
@@ -86,6 +88,10 @@ private:
     DocsPanel m_docs;
     PackagesPanel m_packages;
     ProfilerPanel m_profiler;
+    ScriptDebuggerPanel m_scriptDebugger;
+    ScriptEngine* m_debuggedScripts = nullptr;  ///< Engine the break handler is installed on.
+    bool m_stopAfterBreak = false;
+    int m_debugBreaks = 0;  ///< Breaks resumed automatically (smoke test).
     PhysicsLayersPanel m_physicsLayers;
     ExportPanel m_export;
     RecentProjects m_recent;

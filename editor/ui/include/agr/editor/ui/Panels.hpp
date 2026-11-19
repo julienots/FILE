@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <optional>
 #include <filesystem>
 #include <set>
 #include <deque>
@@ -13,6 +14,7 @@
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/script/LogicGraph.hpp"
+#include "agr/script/ScriptEngine.hpp"
 #include "agr/editor/Package.hpp"
 #include "agr/core/Profiler.hpp"
 #include <algorithm>
@@ -364,6 +366,40 @@ private:
     usize m_head = 0;
     bool m_paused = false;
     std::string m_filter;
+};
+
+/// Lua script debugger: breakpoints (click the line numbers), pause, and when a script
+/// stops: the code at the current line, the call stack, the variables of each frame,
+/// watch expressions and continue / step over / into / out / stop.
+class ScriptDebuggerPanel {
+public:
+    /// Normal frames (game running or not): keeps the engine's breakpoints in sync.
+    void draw(EditorShared& s);
+    /// A script stopped: draws the break view; returns the action once chosen.
+    std::optional<ScriptDebugAction> drawBreak(EditorShared& s, const ScriptBreak& b);
+    void beginBreak(const ScriptBreak& b);
+    void toggleBreakpoint(const std::string& uri, int line);
+    bool hasBreakpoint(const std::string& uri, int line) const { return m_breakpoints.contains({uri, line}); }
+    usize breakpointCount() const { return m_breakpoints.size(); }
+    bool breakOnError = true;
+
+private:
+    void sync(ScriptEngine* scripts);
+    void openFile(EditorShared& s, const std::string& uri);
+    /// Code view with clickable line numbers; `current` is highlighted and scrolled to.
+    void drawSource(EditorShared& s, int current, float height);
+
+    std::set<std::pair<std::string, int>> m_breakpoints;
+    ScriptEngine* m_synced = nullptr;
+    bool m_dirty = true;
+    std::string m_file;
+    std::vector<std::string> m_lines;
+    i64 m_fileTime = 0;
+    std::string m_openInput;
+    usize m_frame = 0;  ///< Selected stack frame.
+    bool m_scroll = false;
+    std::vector<std::string> m_watches;
+    std::string m_watchInput;
 };
 
 /// Integrated documentation: docs/*.md rendered as Markdown, full-text search, links.

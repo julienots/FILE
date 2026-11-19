@@ -53,6 +53,40 @@ struct ScriptStats {
     usize memoryKb = 0;   ///< Lua heap.
 };
 
+/// A variable seen by the debugger: its value is a short readable text.
+struct ScriptVariable {
+    std::string name;
+    std::string value;
+    bool upvalue = false;  ///< Captured from an enclosing function (else a local).
+};
+
+/// One Lua function on the call stack of a break (innermost first).
+struct ScriptStackFrame {
+    std::string function;  ///< "onUpdate", "?" for anonymous functions, "main chunk".
+    std::string source;    ///< Script uri (assets://scripts/player.lua) or chunk name.
+    int line = 0;
+    std::vector<ScriptVariable> variables;  ///< Locals then upvalues (no temporaries, no _ENV).
+};
+
+/// Why and where a script stopped in the debugger.
+struct ScriptBreak {
+    enum class Reason : u8 { Breakpoint, Step, Pause, Error };
+    Reason reason = Reason::Breakpoint;
+    std::string source;
+    int line = 0;
+    std::string message;  ///< The error message (Reason::Error).
+    std::vector<ScriptStackFrame> stack;
+};
+
+/// What the debugger does when the break handler returns.
+enum class ScriptDebugAction : u8 {
+    Continue,  ///< Run until the next breakpoint.
+    StepOver,  ///< Next line of this function (or of its caller once it returns).
+    StepInto,  ///< Next line run, entering called functions.
+    StepOut,   ///< Next line of the caller.
+    Stop,      ///< Raise an error in the script (the instance stops) — e.g. the editor leaves play mode.
+};
+
 /// Lua 5.4 runtime for gameplay scripts (one VM per engine).
 ///
 /// A script is a .lua asset returning a table: its functions are callbacks
@@ -128,6 +162,27 @@ public:
     Result<std::string> field(ecs::Entity e, const std::string& name);
 
     ScriptStats stats() const;
+
+    // ---- debugger
+    /// Called (blocking, on the thread running the scripts) when a script stops on a
+    /// breakpoint, a step, a pause request or an error; its answer resumes the script.
+    /// Without a handler, breakpoints are ignored and scripts run at full speed.
+    void setBreakHandler(std::function<ScriptDebugAction(const ScriptBreak&)> handler);
+    /// Breakpoint on a line of a script (uri as in the Script component).
+    void setBreakpoint(const std::string& uri, int line, bool enabled = true);
+    bool hasBreakpoint(const std::string& uri, int line) const;
+    void clearBreakpoints();
+    /// All breakpoints, sorted by uri then line.
+    std::vector<std::pair<std::string, int>> breakpoints() const;
+    /// Stop in the handler when a callback raises an error, before it is reported (default on).
+    void setBreakOnError(bool enabled);
+    /// Stops at the next script line that runs.
+    void requestPause();
+    /// True while the break handler runs.
+    bool inBreak() const;
+    /// Evaluates a Lua expression in a frame of the current break (0 = innermost): its
+    /// locals and upvalues are visible, assignments do not change them. Only while inBreak().
+    Result<std::string> evaluate(std::string_view expression, usize frame = 0);
 
     struct Impl;
 

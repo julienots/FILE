@@ -15,18 +15,9 @@ namespace {
 
 int traceback(lua_State* L) {
     const char* msg = lua_tostring(L, 1);
+    debugError(L, msg);  // the debugger sees the error where it happened
     luaL_traceback(L, L, msg ? msg : "(error object is not a string)", 1);
     return 1;
-}
-
-/// Stops callbacks that run longer than the budget (infinite loops would freeze the game / editor).
-void watchdog(lua_State* L, lua_Debug*) {
-    auto& m = implOf(L);
-    if (m.inCall && m.callClock.elapsedSeconds() > m.budgetSeconds) {
-        char msg[128];
-        std::snprintf(msg, sizeof msg, "script stopped: a callback ran for more than %.2f s (infinite loop?)", m.budgetSeconds);
-        luaL_error(L, "%s", msg);
-    }
 }
 
 } // namespace
@@ -43,7 +34,7 @@ ScriptEngine::Impl::Impl(VirtualFileSystem& v) : vfs(v) {
     lua_pushlightuserdata(L, this);
     lua_rawsetp(L, LUA_REGISTRYINDEX, &kImplKey);
     openAgrLibrary(L);
-    lua_sethook(L, watchdog, LUA_MASKCOUNT, 20000);
+    updateHook();
 }
 
 ScriptEngine::Impl::~Impl() {
@@ -88,6 +79,7 @@ ScriptEngine::Impl::Class* ScriptEngine::Impl::loadClass(const std::string& uri)
             error = lua_tostring(L, -1);
             lua_pop(L, 2);
         } else {
+            callbackName = nullptr;
             inCall = true;
             callClock.restart();
             const int r = lua_pcall(L, 0, 1, -2);
@@ -132,6 +124,7 @@ bool ScriptEngine::Impl::call(Instance& inst, const char* name, PushArgs&& pushA
     }
     lua_insert(L, -2);  // function, self
     const int nargs = pushArgs();
+    callbackName = name;
     inCall = true;
     callClock.restart();
     const int r = lua_pcall(L, 1 + nargs, 0, top + 1);
@@ -513,6 +506,7 @@ Status ScriptEngine::run(std::string_view code, Scene* scene) {
         lua_pop(L, 2);
         return makeError(Error::Code::ParseError, err);
     }
+    m->callbackName = nullptr;
     m->inCall = true;
     m->callClock.restart();
     const int r = lua_pcall(L, 0, 0, -2);

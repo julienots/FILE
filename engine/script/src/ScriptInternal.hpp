@@ -1,4 +1,5 @@
 #pragma once
+#include <set>
 #include <functional>
 #include "agr/runtime/InputActions.hpp"
 #include "agr/runtime/Gestures.hpp"
@@ -113,6 +114,17 @@ struct ScriptEngine::Impl {
     f64 budgetSeconds = 2.0;
     Stopwatch callClock;
     bool inCall = false;
+    const char* callbackName = nullptr;  ///< Callback being called (names the outermost frame in the debugger).
+    struct Debugger {
+        std::function<ScriptDebugAction(const ScriptBreak&)> handler;
+        std::unordered_map<std::string, std::set<int>> breakpoints;  // uri -> lines
+        std::unordered_map<int, int> lineCount;  // line -> breakpoints on it (fast reject in the hook)
+        enum class Step : u8 { None, Into, Over, Out, Pause } step = Step::None;
+        int stepDepth = 0;
+        bool breakOnError = true;
+        bool inBreak = false;
+        std::vector<int> frameLevels;  // lua_getstack levels of the frames of the current break
+    } dbg;
     std::unordered_map<std::string, Class> classes;
     std::unordered_map<u64, Instance> instances;
     std::unordered_map<std::string, int> modules;  // require() cache (registry refs)
@@ -128,6 +140,10 @@ struct ScriptEngine::Impl {
     template <typename PushArgs>
     bool call(Instance& inst, const char* name, PushArgs&& pushArgs);
     void reportError(const std::string& where, const char* message);
+    /// Line hook only while the debugger needs it (breakpoints or stepping): the count hook stays on.
+    void updateHook();
+    /// Builds the break description, calls the handler (blocking) and applies its answer.
+    ScriptDebugAction debugBreak(ScriptBreak::Reason reason, const std::string& message);
     void resetInstances();
     void dispatch(Scene& scene, ecs::Entity a, ecs::Entity b, bool begin, bool trigger);
     /// Calls target_script:function([sender], [value]) if the target has a started script defining it.
@@ -137,6 +153,10 @@ struct ScriptEngine::Impl {
 /// Registry key of the Impl pointer (light userdata).
 inline const char kImplKey = 0;
 ScriptEngine::Impl& implOf(lua_State* L);
+/// Count hook (watchdog) + line hook (debugger), ScriptDebugger.cpp.
+void debugHook(lua_State* L, lua_Debug* ar);
+/// A callback raised an error: break in the debugger if it is attached.
+void debugError(lua_State* L, const char* message);
 
 /// Entity userdata: the entity plus the scene generation it belongs to.
 struct LuaEntity {

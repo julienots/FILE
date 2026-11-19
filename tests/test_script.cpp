@@ -147,6 +147,120 @@ TEST_CASE("sandbox: no file, OS, debug or bytecode access; require through the V
     CHECK(missing.error().message.find("none.lua") != std::string::npos);
 }
 
+TEST_CASE("debugger: breakpoints, call stack, variables, evaluation, stepping") {
+    ScriptFixture f;
+    f.write("assets://s/dbg.lua",
+            "local Dbg = { properties = { speed = 3 } }\n"      // 1
+            "local function helper(a)\n"                         // 2
+            "  local b = a * 2\n"                                // 3
+            "  return b\n"                                       // 4
+            "end\n"                                              // 5
+            "function Dbg:onUpdate(dt)\n"                        // 6
+            "  local n = helper(self.speed)\n"                   // 7
+            "  self.total = (self.total or 0) + n\n"             // 8
+            "  self.done = true\n"                               // 9
+            "end\n"                                              // 10
+            "return Dbg\n");
+    const auto e = f.scripted("Dbg", "assets://s/dbg.lua");
+    std::vector<ScriptBreak> breaks;
+    std::vector<std::string> evals;
+    std::vector<ScriptDebugAction> answers;
+    f.scripts.setBreakHandler([&](const ScriptBreak& b) {
+        breaks.push_back(b);
+        CHECK(f.scripts.inBreak());
+        if (breaks.size() == 1) {
+            evals.push_back(f.scripts.evaluate("self.speed * 10").value());
+            evals.push_back(f.scripts.evaluate("math.max(dt, 5)").value());
+            CHECK_FALSE(f.scripts.evaluate("1 +"));
+        }
+        const usize i = breaks.size() - 1;
+        return i < answers.size() ? answers[i] : ScriptDebugAction::Continue;
+    });
+
+    // No breakpoint: runs normally even with a handler.
+    f.update();
+    CHECK(breaks.empty());
+    CHECK(f.scripts.field(e, "total").value() == "6");
+
+    // Breakpoint on line 7: stack, locals and upvalues of onUpdate.
+    f.scripts.setBreakpoint("assets://s/dbg.lua", 7);
+    CHECK(f.scripts.hasBreakpoint("assets://s/dbg.lua", 7));
+    CHECK(f.scripts.breakpoints().size() == 1);
+    answers = {ScriptDebugAction::StepInto, ScriptDebugAction::StepOver, ScriptDebugAction::StepOut, ScriptDebugAction::StepOver};
+    f.update();
+    REQUIRE(breaks.size() == 5);
+    CHECK(breaks[0].reason == ScriptBreak::Reason::Breakpoint);
+    CHECK(breaks[0].source == "assets://s/dbg.lua");
+    CHECK(breaks[0].line == 7);
+    REQUIRE_FALSE(breaks[0].stack.empty());
+    CHECK(breaks[0].stack[0].function == "onUpdate");
+    auto var = [](const ScriptStackFrame& fr, const std::string& name) {
+        for (const auto& v : fr.variables)
+            if (v.name == name) return v.value;
+        return std::string("<missing>");
+    };
+    CHECK(var(breaks[0].stack[0], "dt") == "0.1");
+    CHECK(var(breaks[0].stack[0], "self").find("speed = 3") != std::string::npos);
+    CHECK(var(breaks[0].stack[0], "helper") == "function");  // upvalue
+    CHECK(evals == std::vector<std::string>{"30", "5"});
+    // Step into: first line of helper, called from onUpdate.
+    CHECK(breaks[1].reason == ScriptBreak::Reason::Step);
+    CHECK(breaks[1].line == 3);
+    REQUIRE(breaks[1].stack.size() >= 2);
+    CHECK(breaks[1].stack[0].function == "helper");
+    CHECK(var(breaks[1].stack[0], "a") == "3");
+    CHECK(breaks[1].stack[1].function == "onUpdate");
+    CHECK(breaks[1].stack[1].line == 7);
+    // Step over: next line of helper, b is set.
+    CHECK(breaks[2].line == 4);
+    CHECK(var(breaks[2].stack[0], "b") == "6");
+    // Step out: back in onUpdate (line 7 finishes the assignment, or line 8).
+    CHECK(breaks[3].stack[0].function == "onUpdate");
+    CHECK((breaks[3].line == 7 || breaks[3].line == 8));
+    CHECK(breaks[4].stack[0].function == "onUpdate");
+    CHECK(breaks[4].line > breaks[3].line);
+    CHECK(f.scripts.field(e, "total").value() == "12");  // the script finished normally
+    CHECK_FALSE(f.scripts.inBreak());
+    CHECK_FALSE(f.scripts.evaluate("1"));  // only while stopped
+
+    // Stop: raises an error, the instance is paused.
+    breaks.clear();
+    answers = {ScriptDebugAction::Stop};
+    f.scripts.setBreakOnError(false);
+    f.update();
+    CHECK(breaks.size() == 1);
+    CHECK(f.scripts.stats().faulted == 1);
+
+    // Removing the breakpoint: no more breaks.
+    f.scripts.setBreakpoint("assets://s/dbg.lua", 7, false);
+    CHECK(f.scripts.breakpoints().empty());
+}
+
+TEST_CASE("debugger: pause request and break on error") {
+    ScriptFixture f;
+    f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");
+    f.scripted("Err", "assets://s/err.lua");
+    std::vector<ScriptBreak> breaks;
+    std::string evalAtError;
+    f.scripts.setBreakHandler([&](const ScriptBreak& b) {
+        breaks.push_back(b);
+        if (b.reason == ScriptBreak::Reason::Error) evalAtError = f.scripts.evaluate("v + 1").value();
+        return ScriptDebugAction::Continue;
+    });
+    f.scripts.requestPause();
+    f.update();
+    REQUIRE(breaks.size() == 2);
+    CHECK(breaks[0].reason == ScriptBreak::Reason::Pause);
+    CHECK(breaks[0].line == 1);  // the first line run: the script is loaded
+    CHECK(breaks[0].stack[0].function == "main chunk");
+    CHECK(breaks[1].reason == ScriptBreak::Reason::Error);
+    CHECK(breaks[1].line == 5);
+    CHECK(breaks[1].message.find("err.lua:5") != std::string::npos);
+    CHECK(evalAtError == "43");
+    CHECK(f.scripts.stats().errors == 1);  // still reported
+    CHECK(f.scripts.stats().faulted == 1);
+}
+
 TEST_CASE("the watchdog stops infinite loops") {
     ScriptFixture f;
     f.scripts.setCallbackBudget(0.05);

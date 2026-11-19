@@ -256,6 +256,14 @@ void EditorApp::onShutdown(Engine&) {
 void EditorApp::onUpdate(Engine&, const FrameTime& time) {
     ++m_frame;
     if (auto* scripts = m_engine->service<ScriptPlugin>()) {  // scripts follow the play state
+        if (scripts->scripts() && scripts->scripts() != m_debuggedScripts) {
+            m_debuggedScripts = scripts->scripts();
+            m_debuggedScripts->setBreakHandler([this](const ScriptBreak& b) { return onScriptBreak(b); });
+        }
+        if (m_stopAfterBreak) {
+            m_stopAfterBreak = false;
+            stopPlay();
+        }
         const PlayState ps = m_ctx->playState();
         if (scripts->running() != (ps != PlayState::Edit)) scripts->setRunning(ps != PlayState::Edit);
         scripts->setPaused(ps == PlayState::Paused);
@@ -582,6 +590,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_docs.draw(*m_shared);
     m_packages.draw(*m_shared);
     m_profiler.draw(*m_shared);
+    m_scriptDebugger.draw(*m_shared);
     m_physicsLayers.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
@@ -595,6 +604,54 @@ void EditorApp::startPlay() {
         m_viewport.gameView = true;
     }
     m_ctx->play();
+}
+
+ScriptDebugAction EditorApp::onScriptBreak(const ScriptBreak& b) {
+    // Scripts run in the plugins' update, before the editor's ImGui frame; anything else
+    // (no window, a script run from inside a frame) cannot show the debugger: keep going.
+    rhi::Device* device = m_shared ? m_shared->device() : nullptr;
+    if (!device || !m_imgui || ImGui::GetCurrentContext()->WithinFrameScope || m_ctx->playState() == PlayState::Edit)
+        return ScriptDebugAction::Continue;
+    AGR_LOG_INFO("Debug", "script arrêté ({}) : {}:{}", b.reason == ScriptBreak::Reason::Error ? "erreur" : "débogueur", b.source, b.line);
+    m_shared->showScriptDebugger = true;
+    m_scriptDebugger.beginBreak(b);
+    Engine& engine = *m_engine;
+    int frames = 0;
+    for (;;) {
+        if (!engine.platform().pollEvents(engine.events(), engine.input())) {
+            engine.requestQuit();
+            m_stopAfterBreak = true;
+            return ScriptDebugAction::Stop;
+        }
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+        const std::optional<ScriptDebugAction> action = m_scriptDebugger.drawBreak(*m_shared, b);
+        ImGui::Render();
+        const math::Vec2 fb = engine.platform().framebufferSize();
+        if (fb.x > 0.0f && fb.y > 0.0f) {
+            device->beginFrame(static_cast<u32>(fb.x), static_cast<u32>(fb.y));
+            m_imgui->render(ImGui::GetDrawData(), true);
+            device->endFrame();
+        }
+        if (action) {
+            if (*action == ScriptDebugAction::Stop) m_stopAfterBreak = true;
+            return *action;
+        }
+        // Automated runs never wait for a user: a few frames of the break view, then continue.
+        const bool automated = !m_options.smokeTestDir.empty() || !m_options.galleryDir.empty() || !m_options.mobileTestDir.empty() ||
+                               !m_options.screenshot.empty();
+        if (automated && ++frames >= 3) {
+            ++m_debugBreaks;
+            if (!m_options.smokeTestDir.empty() && m_debugBreaks == 1) {
+                std::vector<u8> pixels;
+                const u32 w = static_cast<u32>(fb.x), h = static_cast<u32>(fb.y);
+                if (device->readBackbuffer(0, 0, w, h, pixels))
+                    if (auto png = encodePng(w, h, pixels))
+                        writeText((fs::path(m_options.smokeTestDir) / "editor_debugger.png").string(), std::string(png.value().begin(), png.value().end()));
+            }
+            return ScriptDebugAction::Continue;
+        }
+    }
 }
 
 void EditorApp::stopPlay() {
@@ -702,6 +759,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
+        ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
         ImGui::MenuItem("Couches de collision", nullptr, &m_shared->showPhysicsLayers);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
@@ -1592,6 +1650,16 @@ void EditorApp::smokeTest(const FrameTime&) {
         }
         case 220: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_logic.png").string()); break;
         case 222: startPlay(); break;
+        case 224: {  // the script debugger stops the running graph, shows its stack, then resumes
+            auto* plugin = m_engine->service<ScriptPlugin>();
+            check(plugin && plugin->scripts(), "scripts available for the debugger");
+            if (plugin && plugin->scripts()) plugin->scripts()->requestPause();
+            break;
+        }
+        case 226:
+            check(m_debugBreaks >= 1, "the debugger paused the running script and resumed it");
+            check(m_ctx->playState() == PlayState::Playing, "the game keeps playing after the debugger");
+            break;
         case 228: {
             const auto c = ctx.scene().findByName("Logic Cube");
             check(!c.isNull() && ctx.scene().registry().get<TransformComponent>(c).position.x > 0.05f, "the graph moves the cube during play");

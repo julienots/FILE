@@ -174,6 +174,30 @@ est remis à zéro quand le jeu s'arrête ou change de scène. Tests : suite `sc
 - Les scripts ne tournent qu'en **mode Jeu** ; *Pause* les suspend ; *Arrêter* appelle `onDestroy` puis
   restaure la scène telle qu'avant le jeu.
 
+## Débogueur
+
+*Fenêtre › Débogueur de scripts* ouvre le débogueur Lua intégré :
+
+- **Points d'arrêt** : cliquez sur un numéro de ligne dans la vue du code (point rouge) ; la liste en bas
+  permet d'y aller ou de les supprimer. Ils fonctionnent aussi dans les graphes de logique visuelle
+  (sur les lignes du Lua généré).
+- **Pause (F6)** pendant le jeu : arrêt sur la prochaine ligne de script exécutée.
+- **Arrêt sur erreur** (activé par défaut) : quand un script lève une erreur, le débogueur s'ouvre à
+  l'endroit exact de l'erreur, avec les variables intactes, avant qu'elle soit signalée.
+
+Quand un script s'arrête, le jeu est figé et la fenêtre *Script arrêté* montre la ligne courante, la
+**pile d'appels** (cliquez un niveau pour voir son code et ses variables), les **variables** locales et
+capturées (`self`, paramètres, tables résumées, entités) et des **expressions** évaluées dans le contexte
+du niveau choisi (`self.health * 2`, `#self.balls`...). Commandes : *Continuer* (F5), *Pas à pas
+principal* (F10), *Pas à pas détaillé* (F11), *Pas à pas sortant* (Maj+F11), *Arrêter le jeu*.
+
+![Débogueur de scripts](images/editor_debugger.png)
+
+Côté moteur, l'API est dans `ScriptEngine` : `setBreakHandler`, `setBreakpoint`, `requestPause`,
+`setBreakOnError`, `evaluate`. Sans point d'arrêt ni pas à pas, seul le crochet du chien de garde reste
+actif : aucun coût pour le jeu. Les expressions ne modifient pas les variables du script. Tests : cas
+`debugger` de `tests/test_script.cpp` et étape du test de bout en bout de l'éditeur.
+
 ## Exemples livrés
 
 Dans les projets créés par l'éditeur (`assets/scripts/`) : `platformer_hero.lua` (déplacement, saut avec
@@ -190,7 +214,7 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 
 - **Éditeur de logique visuelle** (événements, conditions, actions sans code) : **non réalisé** ; il était
   prévu en phase 6 et reste à faire.
-- Pas de débogueur pas à pas ni de points d'arrêt ; pas d'autocomplétion intégrée (éditeur de texte externe).
+- Pas d'autocomplétion intégrée (éditeur de texte externe) ; le débogueur n'édite pas le code.
 - Un script par entité ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Pas encore d'API pour le chargement de scènes ni les préfabriqués ; la création d'entités se fait
   composant par composant.

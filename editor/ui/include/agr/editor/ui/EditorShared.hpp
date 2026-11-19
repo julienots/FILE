@@ -97,6 +97,7 @@ struct EditorShared {
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.
     bool showProfiler = false;     ///< CPU profiler panel.
+    bool showScriptDebugger = false;  ///< Lua debugger panel.
     bool showPhysicsLayers = false;  ///< Collision layer names panel.
     PhysicsLayers physicsLayers;     ///< Names of assets://physics_layers.json, refreshed by the inspector.
     std::string openDocRequest;    ///< Guide to show ("LOGIC.md"): contextual help.

@@ -619,6 +619,7 @@ void fxEndFrame(ScriptEngine::Impl& m, Scene& scene, const FrameTime& time) {
     for (int ref : callbacks) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        m.callbackName = "tween onDone";
         m.inCall = true;
         m.callClock.restart();
         if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
