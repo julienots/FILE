@@ -36,6 +36,17 @@ static std::vector<Step> scenario(const std::string& name) {
     auto shot = [](const char* f) { return [f](Game& g) { g.requestScreenshot(std::string("build/shots/") + f + ".png"); }; };
     auto none = [](Game&) {};
     auto idle = [](Game&, float) {};
+    if (name == "logo") {
+        // 2.2.1 the SuperEssence studio logo animation, frame by frame (look at the pictures)
+        static const float at[] = {0.6f, 1.25f, 1.9f, 2.3f, 2.9f, 3.8f};
+        float prev = 0.f; int i = 0;
+        for (float a : at) {
+            s.push_back({a - prev, none, idle, "wait"});
+            s.push_back({0.0001f, [i](Game& g) { char b[64]; snprintf(b, sizeof b, "build/shots/K%d_logo.png", i); g.requestScreenshot(b); }, idle, "shot"});
+            prev = a; i++;
+        }
+        return s;
+    }
     if (name == "splash" || name == "full") {
         s.push_back({2.5f, none, idle, "splash"});
         s.push_back({0.1f, shot("01_splash"), idle, "shot"});
@@ -1433,6 +1444,18 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.f, none, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "closer"});
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/B1_npcs_close.png"); }, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "shot"});
         s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
+        return s;
+    }
+    if (name == "realm") {
+        // 2.2.1 the celestial portal and the realm behind it (look at the pictures)
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 17.5f; g.toastHint.clear(); const Poi* p = g.world.poiById("portal_ether"); teleport(g, p->pos.x, p->pos.y + 16.f, 0.f); g.camPitch = 0.18f; g.camDist = g.camDistTarget = 12.f; }, idle, "new game"});
+        s.push_back({4.f, none, [](Game& g, float) { g.camIdleT = 0; }, "look"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/R0_portal.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == "ether") di = i; g.enterDungeon(di); }, idle, "enter"});
+        s.push_back({3.f, none, [](Game& g, float) { g.camIdleT = 0; }, "inside"});
+        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.5f; g.camDist = g.camDistTarget = 16.f; }, idle, "cam"});
+        s.push_back({1.f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("REALM inside: %s", g.dungeon.active && g.dungeon.theme == 8 ? "REALM TEST PASSED" : "REALM TEST FAILED"); g.requestScreenshot("build/shots/R1_realm.png"); }, idle, "shot"});
         return s;
     }
     if (name == "garage") {

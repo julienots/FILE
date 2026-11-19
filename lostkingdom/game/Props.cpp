@@ -1506,6 +1506,7 @@ vec2 structureFootprint(int kind) {
     case S_PALISADE: return {1.9f, 0.25f}; case S_FIELD: return {9.f, 7.5f}; case S_PEN: return {5.f, 5.f}; case S_BANNER: return {1.5f, 0.7f};
     case S_DOMEHOUSE: return {3.4f, 3.5f}; case S_BAZAAR: return {3.3f, 2.5f}; case S_MINARET: return {1.8f, 1.8f}; case S_ZIGGURAT: return {11.f, 11.f};
     case S_LIGHTHOUSE: return {3.2f, 3.2f}; case S_PAGODA: return {5.4f, 11.f}; case S_SPHINX: return {3.2f, 7.3f}; case S_PIER: return {1.4f, 7.f};
+    case S_PORTAL: return {6.f, 1.4f};
     case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};
@@ -1519,7 +1520,7 @@ static bool restsOnFootprint(int kind) {
     case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_STILT_HUT: case S_TOWER: case S_WINDMILL: case S_WELL: case S_STALL:
     case S_FIELD: case S_CHAPEL: case S_CRYPT: case S_FORGE: case S_TENT: case S_PEN: case S_BANNER: case S_MONASTERY: case S_STATUE: case S_KEEP:
     case S_CASTLE_TOWER: case S_OBELISK: case S_ALTAR: case S_LANTERN: case S_PALISADE: case S_GATE: case S_WAYSTONE: case S_CAMPFIRE:
-    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT: case S_COLONNADE: case S_ARCHWAY: return true;
+    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT: case S_COLONNADE: case S_ARCHWAY: case S_PORTAL: return true;
     default: return false;
     }
 }
@@ -1928,6 +1929,54 @@ static void archway(MeshBuilder& M, int variant) {
 // 2.0.0 village dressing: every dwelling gets its yard (barrels and crates, hay, jars, nets, boats, palms, carpets...), chosen by
 // region and placed in the building's own frame (door on +Z). Deterministic per structure; skips roads, water, steep ground
 // and other buildings. Props only (no new structures), so the placement audits are unaffected.
+// 2.2.1 the celestial portal: a stone dais, a ring of rune-cut blocks with a burning gold inner rim, a vortex of light
+// (concentric glowing discs and spiral arms), two pylons crowned with floating crystals, rune stones orbiting. The ring
+// is open at its foot so the hero walks straight in. Facing +Z. (The swirling sparks are particles, Game.cpp.)
+static void portalGate(MeshBuilder& M, MeshBuilder& Fo) {
+    Mat stone(hexColor(0x5a5468), 0.8f), stone2(hexColor(0x6e6880), 0.8f), gold(hexColor(0xe8c060), 0.35f, 0.9f, 1.4f);
+    M.lathe({{6.0f, 0}, {6.0f, 0.25f}, {5.4f, 0.3f}, {5.4f, 0.55f}, {4.8f, 0.6f}, {4.8f, 0.85f}, {0.01f, 0.86f}}, stone, 24);
+    for (int i = 0; i < 24; i++) { float a = i * TAU / 24; M.box({std::cos(a) * 4.8f, 0.87f, std::sin(a) * 4.8f}, {0.25f, 0.02f, 0.08f}, Mat(hexColor(0x9af0ff), 0.2f, 0, 2.5f), quat::axisAngle({0, 1, 0}, -a)); }
+    const float R = 4.3f, cy = 0.86f + 4.4f;
+    int n = 26;
+    for (int i = 0; i < n; i++) {
+        float a = (i + 0.5f) * TAU / n;   // angle in the ring plane, 0 = right
+        if (std::sin(a) < -0.86f) continue;   // the foot of the ring stays open
+        vec3 c{std::cos(a) * R, cy + std::sin(a) * R, 0};
+        quat q = quat::axisAngle({0, 0, 1}, a);
+        M.bevelBox(c, {0.62f, 0.5f, 0.55f}, 0.08f, i % 2 ? stone : stone2, q);
+        M.box(c + q.rotate(vec3(0.3f, 0, 0.56f)), {0.12f, 0.22f, 0.01f}, Mat(hexColor(0x9af0ff), 0.2f, 0, 3.f), q);   // rune
+        vec3 ci{std::cos(a) * (R - 0.62f), cy + std::sin(a) * (R - 0.62f), 0};
+        M.box(ci, {0.08f, 0.52f, 0.36f}, gold, q);
+    }
+    // keystone with a crown of crystal
+    M.bevelBox({0, cy + R + 0.6f, 0}, {0.8f, 0.6f, 0.7f}, 0.1f, stone2);
+    M.lathe({{0.01f, 0}, {0.35f, 0.5f}, {0.01f, 1.6f}}, Mat(hexColor(0x9af0ff), 0.15f, 0, 3.f), 6, {0, cy + R + 1.2f, 0});
+    // the vortex: layered discs facing +Z, hottest in the centre, with six spiral arms
+    for (int k = 0; k < 5; k++) {
+        float rr = (R - 0.7f) * (1.f - k * 0.18f);
+        vec3 col = lerp(hexColor(0x3a6aff), hexColor(0xf0d8ff), k / 4.f);
+        M.lathe({{rr, 0}, {0.01f, 0}}, Mat(col * 0.7f, 0.2f, 0, 1.2f + k * 0.7f), 32, {0, cy, -0.06f + k * 0.03f}, quat::axisAngle({1, 0, 0}, PI / 2));
+        M.lathe({{rr, 0}, {0.01f, 0}}, Mat(col * 0.7f, 0.2f, 0, 1.2f + k * 0.7f), 32, {0, cy, 0.06f - k * 0.03f}, quat::axisAngle({1, 0, 0}, -PI / 2));
+    }
+    for (int arm = 0; arm < 6; arm++)
+        for (int j = 0; j < 9; j++) {
+            float u = j / 8.f, a = arm * TAU / 6 + u * 2.6f, rr = (R - 0.9f) * (1.f - u * 0.9f);
+            M.box({std::cos(a) * rr, cy + std::sin(a) * rr, 0.1f}, {0.28f - u * 0.2f, 0.05f, 0.02f}, Mat(hexColor(0xffffff), 0.2f, 0, 3.5f), quat::axisAngle({0, 0, 1}, a + PI / 2));
+        }
+    // pylons with floating crystals
+    for (int sd = -1; sd <= 1; sd += 2) {
+        vec3 b{sd * 6.6f, 0, 0.5f};
+        M.lathe({{0.9f, 0}, {0.75f, 0.4f}, {0.55f, 4.4f}, {0.8f, 4.7f}, {0.8f, 5.0f}, {0.01f, 5.0f}}, stone, 8, b);
+        for (int k = 0; k < 4; k++) M.box(b + vec3(0, 1.2f + k * 0.9f, 0.62f), {0.18f, 0.3f, 0.01f}, Mat(hexColor(0x9af0ff), 0.2f, 0, 2.5f));
+        M.lathe({{0.01f, 0}, {0.5f, 0.7f}, {0.01f, 2.2f}}, Mat(hexColor(0xc8a8ff), 0.15f, 0, 2.8f), 6, b + vec3(0, 5.8f, 0));
+        M.lathe({{0.01f, 0}, {0.22f, 0.3f}, {0.01f, 0.9f}}, Mat(hexColor(0x9af0ff), 0.15f, 0, 3.f), 6, b + vec3(0.9f * sd, 6.4f, 0.4f));
+    }
+    // rune stones orbiting the ring (frozen in mid-air)
+    for (int i = 0; i < 8; i++) { float a = i * TAU / 8 + 0.2f; M.rock({std::cos(a) * (R + 1.8f), cy + std::sin(a) * (R + 1.4f), 0.4f * (i % 2 ? 1 : -1)}, vec3(0.35f, 0.45f, 0.3f), stone2, 700 + i, 0); }
+    M.bakeHeightAO(-0.2f, 2.f, 0.8f);
+    (void)Fo;
+}
+
 void dressStructure(ChunkBuild& out, const Structure& s, const World& w) {
     bool house = s.kind == S_HOUSE || s.kind == S_STONEHOUSE || s.kind == S_LONGHOUSE || s.kind == S_DOMEHOUSE || s.kind == S_BEACHHUT ||
                  s.kind == S_STILT_HUT || s.kind == S_INN || s.kind == S_FORGE || s.kind == S_CHAPEL || s.kind == S_BAZAAR || s.kind == S_TENT;
@@ -2130,6 +2179,11 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_BEACHHUT: beachHut(M, Fo, s.variant); addBoxCollider(out, s, gy, {0, 0.4f}, 2.5f, 2.9f, 3.f); break;
     case S_COLONNADE: colonnade(M, s.variant, rng); for (int i = 0; i < 5; i++) addCircleCollider(out, s, gy, {(i - 2) * 2.5f, 0}, 0.5f, 4.f); break;
     case S_ARCHWAY: archway(M, s.variant); addBoxCollider(out, s, gy, {-3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {0, 0}, 3.0f, 1.0f, 3.f); out.colliders.back().base = gy + 6.f; out.colliders.back().top = 3.f; break;
+    case S_PORTAL: portalGate(M, Fo);
+        addCircleCollider(out, s, gy, {-4.3f, 0}, 0.7f, 9.f); addCircleCollider(out, s, gy, {4.3f, 0}, 0.7f, 9.f);
+        addCircleCollider(out, s, gy, {-6.6f, 0.5f}, 0.9f, 7.f); addCircleCollider(out, s, gy, {6.6f, 0.5f}, 0.9f, 7.f);
+        out.lights.push_back(vec4(s.pos.x, gy + 5.2f, s.pos.y, LI_MAGIC)); out.lights.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y + 2.f, LI_CRYSTAL));
+        out.emitters.push_back(vec4(s.pos.x, gy + 5.2f, s.pos.y, EM_SPARKLES)); break;
     default: break;
     }
     // chimney smoke for houses
@@ -2154,6 +2208,16 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
         vec2 fp = structureFootprint(s.kind);
         vec3 ext = P->bmax - P->bmin;
         float k = std::min(2.f * fp.x / std::max(0.01f, ext.x), 2.f * fp.y / std::max(0.01f, ext.z));
+        // 2.2.1 fitted to the footprint alone, some models came out at doll size next to a 1.8 m hero (a forge below the
+        // hero's shoulder, a knee-high well, a tower of 5 m): each kind has a believable height, the model grows to it
+        // (at most 1.7 x the footprint fit, so neighbours are not swallowed)
+        float wantH = 0.f;
+        switch (s.kind) {
+        case S_HOUSE: wantH = 7.f; break; case S_INN: wantH = 10.f; break; case S_STONEHOUSE: wantH = 6.8f; break; case S_LONGHOUSE: wantH = 6.5f; break;
+        case S_CHAPEL: wantH = 11.f; break; case S_FORGE: wantH = 5.2f; break; case S_TOWER: wantH = 13.f; break; case S_WELL: wantH = 2.8f; break;
+        case S_STALL: wantH = 2.9f; break; case S_TENT: wantH = 2.7f; break; default: break;
+        }
+        if (wantH > 0.f && ext.y > 0.01f) k = clampf(wantH / ext.y, k, k * 1.7f);
         vec3 c = (P->bmin + P->bmax) * 0.5f;
         mat4 local = mat4::trs(vec3(-c.x * k, -P->bmin.y * k - 0.12f, -c.z * k), quat(), vec3(k));
         out.models.push_back({pm, m * local});

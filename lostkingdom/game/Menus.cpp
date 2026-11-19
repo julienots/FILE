@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "../engine/core/Platform.h"
 #include <algorithm>
+#include "../engine/third_party/stb_image.h"
 
 namespace lk {
 
@@ -152,54 +153,106 @@ void Game::drawDialog() {
 }
 
 // ============================================================================================ splash / title / credits
+// 2.2.1 SuperEssence studio logo (the studio's own artwork, assets/branding/logo_*.png): "Super" slides in, "Essence"
+// is revealed letter-wise from left to right, the yellow dot drops and bounces, a gleam sweeps across, "STUDIO".
+static GLuint loadBrandTex(const char* path, vec2* size) {
+    std::vector<uint8_t> bytes;
+    if (!platform::readAsset(path, bytes)) return 0;
+    int w = 0, h = 0, n = 0;
+    unsigned char* px = stbi_load_from_memory(bytes.data(), (int)bytes.size(), &w, &h, &n, 4);
+    if (!px) return 0;
+    GLuint t = 0;
+    glGenTextures(1, &t);
+    glBindTexture(GL_TEXTURE_2D, t);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    stbi_image_free(px);
+    *size = vec2((float)w, (float)h);
+    return t;
+}
+
 void Game::drawSplash(float dt) {
     UI& u = ui;
     float t = stateT, W_ = u.W, H_ = u.H;
     if (t < 0.05f) audio.playMusic("studio", 0.2f);
-    u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.02f, t < 6.2f ? 1.f : saturate(1 - (t - 6.2f) * 1.5f)));
-    vec2 c{W_ / 2, H_ * 0.42f};
-    // emblem: a faceted essence drop inside two rings, drawn with particles of light
-    float a1 = saturate((t - 0.3f) * 1.2f) * saturate((5.8f - t) * 1.5f);
-    float spin = t * 0.6f;
-    u.ring(c, 92, 96, -PI / 2, -PI / 2 + TAU * saturate(t * 0.6f), rgba(0xc9a45c, a1), 64);
-    u.ring(c, 78, 80, PI / 2, PI / 2 + TAU * saturate((t - 0.4f) * 0.6f), rgba(0xf6dc9a, a1 * 0.7f), 64);
-    for (int i = 0; i < 6; i++) {
-        float a = spin + i * TAU / 6;
-        u.circle(c + vec2(std::cos(a), std::sin(a)) * 87.f, 4, rgba(0xf6dc9a, a1), 8);
+    static GLuint texS = 0, texE = 0, texD = 0, shS = 0, shE = 0, shD = 0;
+    static vec2 sS, sE, sD, tmp;
+    static bool tried = false;
+    if (!tried) { tried = true; texS = loadBrandTex("branding/logo_super.png", &sS); texE = loadBrandTex("branding/logo_essence.png", &sE); texD = loadBrandTex("branding/logo_dot.png", &sD);
+                 shS = loadBrandTex("branding/logo_super_shine.png", &tmp); shE = loadBrandTex("branding/logo_essence_shine.png", &tmp); shD = loadBrandTex("branding/logo_dot_shine.png", &tmp); }
+    u.rect({0, 0, W_, H_}, vec4(0, 0, 0, t < 5.6f ? 1.f : saturate(1 - (t - 5.6f) * 1.6f)));
+    float out = saturate((5.6f - t) * 2.2f);   // everything fades together at the end
+    auto ease = [](float x) { x = saturate(x); return 1.f - std::pow(1.f - x, 3.f); };
+    if (texS && texE && texD) {
+        float total = sS.x + sE.x + sD.x;
+        float k = std::min(W_ * 0.8f, 920.f) / total;
+        float h = sS.y * k;
+        float x0 = W_ / 2 - total * k / 2, y0 = H_ * 0.44f - h / 2;
+        // Super: slides in from the left, settles with a little overshoot
+        float ps = ease((t - 0.3f) / 0.75f);
+        float slide = (1.f - ps) * -70.f + std::sin(saturate((t - 0.3f) / 0.75f) * PI) * 6.f;
+        float sc = 1.f + (1.f - ps) * 0.12f;
+        vec2 cs{x0 + sS.x * k / 2 + slide, y0 + h / 2};
+        u.image(texS, {cs.x - sS.x * k * sc / 2, cs.y - h * sc / 2, sS.x * k * sc, h * sc}, vec4(0, 0, 1, 1), vec4(1, 1, 1, ps * out));
+        // Essence: wiped in from left to right (texture coordinates follow the reveal), each column rising a little
+        float pe = ease((t - 0.85f) / 0.8f);
+        if (pe > 0.f) {
+            float ex = x0 + sS.x * k, ew = sE.x * k * pe;
+            float rise = (1.f - ease((t - 0.85f) / 1.1f)) * 10.f;
+            u.image(texE, {ex, y0 + rise, ew, h}, vec4(0, 0, pe, 1), vec4(1, 1, 1, out));
+            // the bright leading edge of the wipe
+            if (pe < 0.999f) u.sprite("glow", {ex + ew - h * 0.4f, y0 - h * 0.1f, h * 0.8f, h * 1.2f}, vec4(1.f, 0.85f, 0.3f, 0.55f * out));
+        }
+        // the dot: drops from above and bounces twice (squash on impact)
+        float td = t - 1.65f;
+        if (td > 0.f) {
+            float yOff = 0.f, sq = 1.f;
+            if (td < 0.35f) { float q = td / 0.35f; yOff = -(1.f - q * q) * h * 1.6f; }
+            else if (td < 0.65f) { float q = (td - 0.35f) / 0.3f; yOff = -std::sin(q * PI) * h * 0.35f; sq = q < 0.15f ? 0.78f : 1.f; }
+            else if (td < 0.85f) { float q = (td - 0.65f) / 0.2f; yOff = -std::sin(q * PI) * h * 0.1f; sq = q < 0.2f ? 0.88f : 1.f; }
+            float dx = x0 + (sS.x + sE.x) * k, dw = sD.x * k;
+            u.image(texD, {dx - dw * (1.f / sq - 1.f) * 0.5f, y0 + yOff + h * (1.f - sq), dw / sq, h * sq}, vec4(0, 0, 1, 1), vec4(1, 1, 1, out));
+            // a puff of golden sparks when it lands
+            if (td > 0.35f && td < 1.4f) {
+                float f = (td - 0.35f) / 1.05f;
+                vec2 base{dx + dw * 0.5f, y0 + h * 0.82f};
+                for (int i = 0; i < 9; i++) {
+                    float ang = -PI * (0.1f + 0.8f * i / 8.f);
+                    vec2 p = base + vec2(std::cos(ang), std::sin(ang)) * (12.f + f * 70.f) * k * 2.f + vec2(0, f * f * 40.f);
+                    u.circle(p, (1.f - f) * 4.f, vec4(1.f, 0.82f, 0.25f, (1.f - f) * out), 8);
+                }
+            }
+        }
+        // a gleam sweeping across the whole word once it is complete
+        float tg = (t - 2.55f) / 0.7f;
+        if (tg > 0.f && tg < 1.f) {
+            // the letters themselves light up inside a narrow moving band (the black around them stays black)
+            float gx = x0 - h * 0.5f + (total * k + h) * tg;
+            u.pushClip({gx - h * 0.22f, y0 - 10, h * 0.44f, h + 20});
+            float sh = 0.8f * out * std::sin(saturate(tg) * PI);
+            if (shS) u.image(shS, {x0, y0, sS.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            if (shE) u.image(shE, {x0 + sS.x * k, y0, sE.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            if (shD) u.image(shD, {x0 + (sS.x + sE.x) * k, y0, sD.x * k, h}, vec4(0, 0, 1, 1), vec4(1, 1, 1, sh));
+            u.popClip();
+        }
+        // STUDIO, letter-spaced, then "présente"
+        float a2 = saturate((t - 2.8f) * 1.6f) * out;
+        u.text("S T U D I O", W_ / 2, y0 + h + 24, 26, rgba(0xf2f0e8, a2), F_BOLD, A_CENTER, 0, true);
+        float a3 = saturate((t - 3.4f) * 1.6f) * out;
+        u.text("présente", W_ / 2, y0 + h + 64, 20, rgba(0xffc73a, a3), F_BODY, A_CENTER);
+    } else {
+        // fallback (asset missing): the name in text
+        float a = saturate((t - 0.3f) * 1.5f) * out;
+        u.text("SuperEssence.", W_ / 2, H_ * 0.42f, 64, rgba(0xffc73a, a), F_TITLE, A_CENTER, 0, true);
     }
-    // the drop
-    float s = 1.f + 0.03f * std::sin(t * 3);
-    std::vector<vec2> drop;
-    for (int i = 0; i < 24; i++) { float a = i * TAU / 24; float rr = 34 + 18 * std::max(0.f, -std::sin(a)) * std::max(0.f, -std::sin(a)); drop.push_back(c + vec2(std::cos(a) * 30, std::sin(a) * rr - 6) * s); }
-    for (int i = 0; i < 24; i++) { vec2 p0 = drop[i]; (void)p0; }
-    u.circle(c + vec2(0, 6), 30 * s, rgba(0x3fe0c8, a1 * 0.9f), 24);
-    u.ring(c + vec2(0, 6), 30 * s, 33 * s, 0, TAU, rgba(0xf6dc9a, a1), 24);
-    u.circle(c + vec2(0, -26), 14 * s, rgba(0x3fe0c8, a1 * 0.9f), 16);
-    u.circle(c + vec2(-9, -2), 7, rgba(0xffffff, a1 * 0.7f), 10);
-    u.sprite("glow", {c.x - 160, c.y - 160, 320, 320}, rgba(0x3fe0c8, a1 * 0.25f));
-    // name, letter by letter, with a gleam sweeping across
-    std::string name = "SUPERESSENCE";
-    float tw = u.textWidth(name, 64, F_SERIF);
-    float x = W_ / 2 - tw / 2;
-    size_t i = 0; int k = 0;
-    while (i < name.size()) {
-        size_t s0 = i; utf8Next(name, i);
-        std::string ch = name.substr(s0, i - s0);
-        float la = saturate((t - 1.0f - k * 0.09f) * 2.5f) * saturate((5.8f - t) * 1.5f);
-        float gleam = std::exp(-std::pow((t - 2.6f) * 6.f - k * 0.5f, 2.f));
-        vec4 col = lerp(rgba(0xc9a45c, la), rgba(0xfff6dc, la), gleam);
-        u.text(ch, x, H_ * 0.62f + (1 - la) * 20, 64, col, F_SERIF, A_LEFT, 0, true);
-        x += u.textWidth(ch, 64, F_SERIF);
-        k++;
-    }
-    float a2 = saturate((t - 2.4f) * 1.5f) * saturate((5.8f - t) * 1.5f);
-    u.text("S T U D I O", W_ / 2, H_ * 0.62f + 80, 24, rgba(0xe8dcc0, a2), F_SERIF, A_CENTER, 0, true);
-    u.text("présente", W_ / 2, H_ * 0.62f + 120, 20, rgba(0xb0a48c, a2), F_BODY, A_CENTER);
-    float a3 = saturate((t - 3.6f) * 2.f) * saturate((5.8f - t) * 1.5f);
-    u.text("Propulsé par AGR ENGINE", W_ / 2, H_ - 50, 16, rgba(0x8a8070, a3), F_BOLD, A_CENTER);
+    float a4 = saturate((t - 3.8f) * 2.f) * out;
+    u.text("Propulsé par AGR ENGINE", W_ / 2, H_ - 50, 16, rgba(0x8a8070, a4), F_BOLD, A_CENTER);
     bool skip = false;
     for (auto& f : u.fingers) if (f.released) skip = true;
-    if (t > 7.f || (skip && t > 0.8f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); }
+    if (t > 6.3f || (skip && t > 0.8f)) { state = GameState::Title; stateT = 0; audio.playMusic("title", 2.f); }
     (void)dt;
 }
 
@@ -288,7 +341,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.2.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.3.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {

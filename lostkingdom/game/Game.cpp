@@ -67,7 +67,7 @@ bool Game::init(int w, int h) {
     gpuReady = true;
     fog.assign(128 * 128, 0);
     state = autoplay ? GameState::Title : GameState::Splash;
-    if (autoplay && (autoplayScenario == "splash" || autoplayScenario == "full")) state = GameState::Splash;
+    if (autoplay && (autoplayScenario == "splash" || autoplayScenario == "full" || autoplayScenario == "logo")) state = GameState::Splash;
     stateT = 0;
     audio.setVolumes(settings.master, settings.music, settings.sfx, settings.ambience);
     AGR_LOG("Lost Kingdom initialised in %.0f ms (%dx%d, profile %s)", (platform::timeSeconds() - t0) * 1000, W, H, profileName(settings.profile));
@@ -525,10 +525,19 @@ void Game::updateEnvironment(float dt) {
         env.sunIntensity = 0.25f; env.shadowStrength = 0.3f; env.sunColor = srgb(0x8a9aff);
         env.skyAmbient = srgb(0x2a2a3a) * 0.9f; env.groundAmbient = srgb(0x2a2018) * 0.7f;
         int th = dungeons()[dungeon.def].theme;
-        env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : (th == 6 ? srgb(0x3a2a14) : (th == 7 ? srgb(0x0e2a34) : srgb(0x141216)))));
+        env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : (th == 6 ? srgb(0x3a2a14) : (th == 7 ? srgb(0x0e2a34) : (th == 8 ? srgb(0xc8a8e8) : srgb(0x141216))))));
         env.fogDensity = 0.025f; env.fogBase = -10.f; env.cloudShadows = 0; env.snowCover = 0; env.wetness = 0.2f;
         env.exposure = 1.25f; env.tiltShift = 0.25f;
         env.night = 1.f;  // window/lantern glows on
+        if (th == 8) {
+            // 2.2.1 the celestial realm is open sky: low golden sun, violet zenith, aurora, light mist far below
+            env.sunDir = normalize(vec3(0.5f, 0.32f, 0.6f)); env.sunColor = srgb(0xffd8a8); env.sunIntensity = 2.4f; env.shadowStrength = 0.8f;
+            env.skyAmbient = srgb(0x7a70b8) * 0.75f; env.groundAmbient = srgb(0x3a2e5a) * 0.7f;
+            env.skyTop = srgb(0x3a2a8a); env.skyHorizon = srgb(0xe8a8c8); env.cloudCover = 0.45f;
+            env.fogColor = srgb(0x8a74b8); env.fogDensity = 0.0022f; env.fogBase = -30.f;
+            env.night = 0.35f; env.exposure = 0.82f; env.aurora = 0.9f; env.saturation = 1.12f; env.contrast = 1.12f; env.dust = 0.f; env.heat = 0.f; env.sandVeil = 0.f;
+            env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.2f; env.wetness = 0.f;
+        }
     }
     audio.setReverb(dungeon.active ? 0.45f : 0.f);
     applyCinematicEnvironment();
@@ -619,6 +628,34 @@ void Game::updateAmbientFx(float dt) {
         p.maxLife = 2.4f; p.size0 = 0.07f; p.size1 = 0.02f; p.stretch = 1.8f;
         p.c0 = vec4(0.92f, 0.74f, 0.46f, 0.4f); p.c1 = vec4(0.92f, 0.74f, 0.46f, 0.f); p.frame = PF_DUST; p.additive = false;
         particles.spawn(p);
+    }
+    // 2.2.1 the celestial portal: sparks spiralling into the vortex, motes rising from the dais
+    if (!dungeon.active && player != NullEntity) {
+        static const Poi* portal = nullptr; static bool looked = false;
+        if (!looked) { looked = true; portal = world.poiById("portal_ether"); }
+        if (portal && distXZ(pc().pos, vec3(portal->pos.x, 0, portal->pos.y)) < 90.f) {
+            float gy = world.height(portal->pos.x, portal->pos.y) + 0.86f + 4.4f;
+            vec3 ctr(portal->pos.x, gy, portal->pos.y);
+            int n = (int)(dt * 140.f * budget);
+            for (int i = 0; i < n; i++) {
+                Particle p;
+                float a = r.range(0, TAU), rr = r.range(2.6f, 3.6f);
+                vec3 off(std::cos(a) * rr, std::sin(a) * rr, r.range(-0.2f, 0.2f));
+                p.pos = ctr + off;
+                vec3 tang(-std::sin(a), std::cos(a), 0);
+                p.vel = tang * r.range(3.f, 5.f) - off * 0.9f;
+                p.drag = 0.4f; p.maxLife = r.range(0.7f, 1.2f); p.size0 = r.range(0.05f, 0.1f); p.size1 = 0.f; p.stretch = 0.5f;
+                vec3 col = r.chance(0.5f) ? vec3(0.55f, 0.9f, 1.f) : vec3(0.85f, 0.65f, 1.f);
+                p.c0 = vec4(col * 3.f, 1); p.c1 = vec4(col, 0); p.frame = PF_DOT; p.additive = true;
+                particles.spawn(p);
+            }
+            if (r.f() < dt * 25.f * budget) {
+                Particle p; p.pos = vec3(portal->pos.x + r.range(-4.5f, 4.5f), gy - 4.3f, portal->pos.y + r.range(-4.5f, 4.5f));
+                p.vel = vec3(0, r.range(0.6f, 1.6f), 0); p.turbulence = 0.6f; p.maxLife = 3.f; p.size0 = 0.06f; p.size1 = 0.f;
+                p.c0 = vec4(1.6f, 1.9f, 3.f, 1); p.c1 = vec4(0.5f, 0.6f, 1.f, 0); p.frame = PF_DOT; p.additive = true;
+                particles.spawn(p);
+            }
+        }
     }
     int nAsh = (int)(ashAmt * 30 * dt * 10 * budget);
     for (int i = 0; i < nAsh; i++) {

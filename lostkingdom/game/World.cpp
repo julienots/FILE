@@ -298,6 +298,8 @@ void World::buildPlan() {
     Pf("rempart_nord", "Rempart-du-Nord", PoiType::Castle, 3650, 980, 66, -1, -1, 260);
     Pf("naine_mine", "Mine des Naines", PoiType::Mine, 3450, 1380, 24, -1, -1, 200);
     Pf("ws_hautgel", "Pierre de Hautgel", PoiType::Waystone, 3140, 700, 10);
+    // 2.2.1 the portal to the celestial realm, on the meadow east of Lac Miroir
+    Pf("portal_ether", "Portail Céleste", PoiType::Temple, 1830, 1470, 26, 9, -1, 140);
     // ---- more villages for the old island
     Pf("chenebrune", "Chênebrune", PoiType::Village, 1960, 1980, 62, -1, -1, 200);
     Pf("saule_rieur", "Saule-Rieur", PoiType::Village, 1130, 1800, 56, -1, -1, 160);
@@ -613,6 +615,7 @@ void World::buildPlan() {
         }
         case PoiType::Temple: {
             if (p.id == "sun_temple_door") break;   // just the entrance trigger, in front of the ziggurat
+            if (p.id == "portal_ether") { S(S_PORTAL, p.pos, 0, pi, 1.f); for (int i = 0; i < 6; i++) { float a = i * TAU / 6 + 0.5f; if (std::sin(a) > 0.4f) continue; S(S_OBELISK, p.pos + vec2(std::cos(a), std::sin(a)) * 15.f, -a, pi, 1.1f, 2); } break; }   // none in front of the gate
             if (p.id == "sphinx") {
                 S(S_SPHINX, p.pos, 0.9f, pi, 1.f);
                 for (int s2 = -1; s2 <= 1; s2 += 2) { vec2 q = p.pos + rotate(vec2(s2 * 14.f, 6.f), -0.9f); S(S_COLONNADE, q, 0.9f + PI * 0.5f, pi, 1.f, s2 + 1); S(S_OBELISK, rotate(vec2(s2 * 9.f, 15.f), -0.9f) + p.pos, 0, pi, 1.3f, 2); }

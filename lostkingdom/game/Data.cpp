@@ -687,6 +687,11 @@ static void buildEnemies() {
       e.weapon = WeaponType::Longsword; e.scale = 2.2f; e.radius = 1.0f; e.poise = 500;
       e.attacks = {melee(C_2H_A1, 3.6f, 1, 2.f, 0.55f), melee(C_2H_A3, 3.6f, 1.5f, 4.5f, 0.75f), melee(C_B_SPIN, 4.f, 1.2f, 8, 0.7f), {C_CAST_FORWARD, AttackType::Projectile, 26, 1.3f, 4, 0.6f, Element::Fire, 2.5f, 0}, {C_CAST_AREA, AttackType::Area, 7.f, 1.5f, 9, 0.8f, Element::Fire, 8.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Fire, 0, 1}};
       e.weak = Element::Ice; e.resist = Element::Fire; e.xp = 3600; e.gold = 1400; }
+    { auto& e = E("b_ether_warden", "Le Gardien de l'Éther", "Boss", R_HIGHCROWNS, 18, 4200, 46, 22, 4.4f, Behavior::Boss, "Il garde les îles du ciel depuis qu'elles se sont détachées du monde. Il ne se souvient plus pourquoi.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x6a5ab8, 0x3a2a6a, Helm::Great, 129); e.hlook.metal = hexColor(0xc8c0ff); e.hlook.emissiveEyes = 3.f; e.hlook.eyes = hexColor(0x9af0ff); e.hlook.glow = hexColor(0x9af0ff); e.hlook.cape = true; e.hlook.pauldrons = true;
+      e.weapon = WeaponType::Spear; e.scale = 2.3f; e.radius = 1.05f; e.poise = 520;
+      e.attacks = {melee(C_SP_A1, 3.6f, 1, 1.8f, 0.5f), melee(C_SP_A2, 3.6f, 1.2f, 3.f, 0.55f), {C_SP_HEAVY, AttackType::Leap, 12, 1.7f, 7, 0.6f, Element::Lightning, 4.f, 0}, {C_CAST_FORWARD, AttackType::Projectile, 24, 1.2f, 4, 0.6f, Element::Arcane, 2.f, 1}, {C_CAST_AREA, AttackType::Area, 7.f, 1.4f, 9, 0.8f, Element::Lightning, 7.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Arcane, 0, 2}};
+      e.weak = Element::Shadow; e.xp = 3200; e.gold = 1200; }
     { auto& e = E("b_silence", "Le Silence", "Boss", R_CORAL, 22, 6200, 54, 26, 4.6f, Behavior::Boss, "Le septième joyau. Il a pris la voix de tous ceux qui l'ont gardé, et n'en a gardé aucune.");
       e.hlook = humanLook(Species::Specter, Body::Robe, 0xe8f0f8, 0xc8d8e8, Helm::None, 128); e.hlook.skin = hexColor(0xe8f4ff); e.hlook.glow = hexColor(0xb8e8ff); e.hlook.emissiveEyes = 3.f; e.hlook.eyes = hexColor(0xffffff); e.hlook.hair = Hair::None; e.hlook.cape = true; e.hlook.bulk = 1.3f;
       e.weapon = WeaponType::Staff; e.scale = 2.7f; e.radius = 1.2f; e.poise = 650;
@@ -731,6 +736,9 @@ const std::vector<BossDef>& bosses() {
           "« Un voyageur, dans ma maison. Tu as chaud ? Tant mieux. Ici, on ne meurt jamais de froid. »", "L'or se craquelle. Le roi sourit, enfin libre, et s'effrite en poussière claire.");
         B("silence", "Le Silence", "Septième joyau", "b_silence", "silence_gate", 8, {0.66f, 0.33f}, {"silence_jewel", "sword_silence", "amulet_silence"}, "",
           "Plus aucun son. Pas même ton propre souffle. Quelque chose te regarde dans le blanc.", "Le monde reprend sa voix : la mer, le vent, ton cœur. Le joyau tombe, tiède.");
+        // ---- 2.2.1 (index 12) the warden of the celestial realm
+        B("ether_warden", "Le Gardien de l'Éther", "Veilleur des îles du ciel", "b_ether_warden", "portal_ether", 9, {0.6f, 0.3f}, {"bow_ancestral", "amulet_star", "potion_great"}, "",
+          "« Tu as franchi le portail. Peu reviennent assez légers pour retraverser. »", "Le gardien se disperse en lumière d'étoile. Les îles, un instant, cessent de dériver.");
     });
     return b;
 }
@@ -1197,6 +1205,8 @@ const std::vector<DungeonDef>& dungeons() {
         {"sun_temple", "Temple du Soleil Mort", "sun_temple_door", R_AMBER, 707, 9, {"mummy", "sand_wraith", "sandstone_golem", "sun_guard"}, 10, 6, ""},
         {"tide_cave", "Grotte des Marées", "tide_cave", R_CORAL, 808, 7, {"drowned", "sea_crab", "reef_serpent"}, -1, 7, "tide_pearl"},
         {"silence", "Sanctuaire du Silence", "silence_gate", R_CORAL, 909, 9, {"drowned", "coral_golem", "siren"}, 11, 7, ""},
+        // 2.2.1 (index 9): beyond the portal of Lac Miroir, an archipelago floating in the sky
+        {"ether", "Le Royaume Céleste", "portal_ether", R_HIGHCROWNS, 1010, 9, {"wisp", "specter", "drakeling"}, 12, 8, "relic_star_glass"},
     };
     return d;
 }

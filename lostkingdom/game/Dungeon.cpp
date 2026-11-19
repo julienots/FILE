@@ -15,6 +15,7 @@ static Theme theme(int t) {
     case 3: return {hexColor(0x3a2a24), hexColor(0x4a342a), hexColor(0x2a1e1a), hexColor(0x5a3a2a), hexColor(0xff7a26), false, false, false, true, false};   // ember mines
     case 4: return {hexColor(0x8aa0b8), hexColor(0x9ab4c8), hexColor(0x6a8aa8), hexColor(0xc0d8e8), hexColor(0x9ae6ff), false, true, true, false, true};    // ice caves
     case 6: return {hexColor(0xb89a64), hexColor(0xc8aa74), hexColor(0x8a6a3c), hexColor(0xe0b848), hexColor(0xffb040), false, false, true, false, false};   // sun temple: sandstone and gold
+    case 8: return {hexColor(0x4f8a46), hexColor(0x5f9c50), hexColor(0x6a5a88), hexColor(0xa898e0), hexColor(0x5ab8e0), false, true, false, false, false};   // celestial realm: grass on floating rock, crystal
     case 7: return {hexColor(0x3a6a78), hexColor(0x4a7a88), hexColor(0x2a4a5a), hexColor(0x7ad0c8), hexColor(0x70ffe0), false, true, false, false, false};   // sea cave / sanctum: drowned stone, glowing coral
     default: return {hexColor(0x241a2a), hexColor(0x2e2236), hexColor(0x1a1220), hexColor(0x3a2a48), hexColor(0xb040ff), false, true, false, false, false}; // abyss
     }
@@ -23,9 +24,10 @@ static Theme theme(int t) {
 bool Game::dungeonFloor(float x, float z, float& y) const {
     if (!dungeon.active || x < WORLD_SIZE) return false;
     int tx = (int)std::floor((x - dungeon.origin.x) / TILE), tz = (int)std::floor((z - dungeon.origin.z) / TILE);
-    if (tx < 0 || tz < 0 || tx >= dungeon.W || tz >= dungeon.H) { y = dungeon.origin.y; return true; }
+    if (tx < 0 || tz < 0 || tx >= dungeon.W || tz >= dungeon.H) { y = dungeon.theme == 8 ? dungeon.origin.y - 30.f : dungeon.origin.y; return true; }
     TileType t = dungeon.tiles[tz * dungeon.W + tx];
-    y = (t == TileType::Pit) ? dungeon.origin.y - 30.f : dungeon.origin.y;
+    bool open = t == TileType::Pit || (dungeon.theme == 8 && t == TileType::Void);   // 2.2.1 the realm: no walls, the edge of an island is a drop into the sky
+    y = open ? dungeon.origin.y - 30.f : dungeon.origin.y;
     return true;
 }
 
@@ -126,6 +128,26 @@ void Game::buildDungeon(int idx) {
         for (int x = 0; x < d.W; x++) {
             TileType t = T(x, z);
             vec3 c = d.origin + vec3((x + 0.5f) * TILE, 0, (z + 0.5f) * TILE);
+            if (D.theme == 8) {
+                // 2.2.1 floating islands: rooms are grassy rock with a hanging root of stone; corridors are bridges of light
+                if (t == TileType::Void || t == TileType::Pit) continue;
+                bool inRoom = false;
+                for (auto& rm : d.rooms) if (x >= rm.x && x < rm.x + rm.w && z >= rm.z && z < rm.z + rm.h) inRoom = true;
+                if (inRoom) {
+                    fl.bevelBox(c + vec3(0, -0.25f, 0), {TILE * 0.5f, 0.25f, TILE * 0.5f}, 0.12f, Mat(lerp(th.floor, th.floor2, r.f()), 0.9f));
+                    wl.rock(c + vec3(r.range(-0.6f, 0.6f), -1.8f, r.range(-0.6f, 0.6f)), vec3(TILE * 0.55f, 1.8f, TILE * 0.55f), Mat(lerp(th.wall, th.wall * 0.8f, r.f()), 0.9f), r.next(), 0);
+                    wl.cone(c + vec3(r.range(-0.8f, 0.8f), -3.2f, r.range(-0.8f, 0.8f)), c + vec3(r.range(-0.4f, 0.4f), -3.2f - r.range(2.5f, 6.f), r.range(-0.4f, 0.4f)), r.range(0.8f, 1.6f), Mat(th.wall * 0.75f, 0.9f), 6);
+                    if (r.chance(0.18f)) { const PropTemplate& tp = propTemplate(P_MAGICCRYSTAL, r.irange(0, 2)); MeshBuilder tmp; tmp.append(tp.solid); vec3 q = c + vec3(r.range(-1.3f, 1.3f), 0, r.range(-1.3f, 1.3f)); for (auto& v : tmp.v) { v.px = v.px * 0.6f + q.x; v.py = v.py * 0.6f + q.y; v.pz = v.pz * 0.6f + q.z; } pp.append(tmp); }
+                    if (r.chance(0.25f)) { const PropTemplate& tp = propTemplate(P_FLOWERS, r.irange(0, 2)); MeshBuilder tmp; tmp.append(tp.foliage); tmp.append(tp.solid); vec3 q = c + vec3(r.range(-1.4f, 1.4f), 0, r.range(-1.4f, 1.4f)); for (auto& v : tmp.v) { v.px += q.x; v.py += q.y; v.pz += q.z; } pp.append(tmp); }
+                } else {
+                    // bridge: translucent-looking glowing planks between two rails of light
+                    for (int k = 0; k < 4; k++) fl.box(c + vec3(0, -0.06f, (k - 1.5f) * TILE * 0.25f), {TILE * 0.32f, 0.05f, TILE * 0.11f}, Mat(hexColor(0x8ae8ff) * 0.6f, 0.2f, 0, 1.2f));
+                    fl.box(c + vec3(TILE * 0.36f, 0.35f, 0), {0.04f, 0.04f, TILE * 0.5f}, Mat(hexColor(0xc8b8ff), 0.2f, 0, 3.f));
+                    fl.box(c + vec3(-TILE * 0.36f, 0.35f, 0), {0.04f, 0.04f, TILE * 0.5f}, Mat(hexColor(0xc8b8ff), 0.2f, 0, 3.f));
+                    if ((x + z) % 3 == 0) d.lights.push_back(vec4(c + vec3(0, 1.f, 0), LI_CRYSTAL));
+                }
+                continue;
+            }
             if (t != TileType::Void && t != TileType::Pit) {
                 // 4 slabs per tile, slightly bevelled for a hand-laid look
                 for (int s = 0; s < 4; s++) {
@@ -167,15 +189,35 @@ void Game::buildDungeon(int idx) {
     // pillars & accent glows in rooms, cobwebs, lava cracks
     for (size_t i = 0; i < d.rooms.size(); i++) {
         auto& rm = d.rooms[i];
-        if (rm.w >= 4 && rm.h >= 4) for (int k = 0; k < 4; k++) {
+        if (D.theme == 8 && rm.w >= 4 && rm.h >= 4) for (int k = 0; k < 4; k++) {
+            vec3 p = d.origin + vec3((rm.x + (k % 2 ? rm.w - 1 : 1)) * TILE, 0, (rm.z + (k / 2 ? rm.h - 1 : 1)) * TILE);
+            wl.lathe({{0.7f, 0}, {0.55f, 0.5f}, {0.01f, 0.6f}}, Mat(th.trim, 0.6f), 8, p);
+            pp.lathe({{0.01f, 1.2f}, {0.45f, 2.2f}, {0.01f, 4.2f}}, Mat(th.accent * 0.8f, 0.15f, 0, 2.5f), 6, p);
+            d.lights.push_back(vec4(p + vec3(0, 2.6f, 0), LI_CRYSTAL));
+            Collider col; col.c = p.xz(); col.r = 0.7f; col.base = -1; col.top = 5; d.colliders.push_back(col);
+        }
+        else if (rm.w >= 4 && rm.h >= 4) for (int k = 0; k < 4; k++) {
             vec3 p = d.origin + vec3((rm.x + (k % 2 ? rm.w - 1 : 1)) * TILE, 0, (rm.z + (k / 2 ? rm.h - 1 : 1)) * TILE);
             wl.lathe({{0.6f, 0}, {0.5f, 0.4f}, {0.45f, 4.f}, {0.6f, 4.3f}, {0.6f, 4.6f}, {0.01f, 4.6f}}, Mat(th.trim, 0.8f), 10, p);
             Collider col; col.c = p.xz(); col.r = 0.6f; col.base = -1; col.top = 8; d.colliders.push_back(col);
         }
         vec3 rc = d.origin + vec3((rm.x + rm.w * 0.5f) * TILE, 0, (rm.z + rm.h * 0.5f) * TILE);
-        if (rm.kind == 2 || i == 0) { pp.lathe({{2.6f, 0.02f}, {0.01f, 0.03f}}, Mat(th.accent, 0.3f, 0, 2.f), 24, rc); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
+        if (rm.kind == 2 || i == 0) { pp.lathe({{2.6f, 0.02f}, {0.01f, 0.03f}}, Mat(th.accent, 0.3f, 0, D.theme == 8 ? 0.6f : 2.f), 24, rc); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
     }
     if (th.lava) for (int i = 0; i < 12; i++) { auto& rm = d.rooms[r.irange(0, (int)d.rooms.size() - 1)]; vec3 p = d.origin + vec3((rm.x + r.f() * rm.w) * TILE, 0.01f, (rm.z + r.f() * rm.h) * TILE); pp.box(p, {r.range(0.8f, 2.f), 0.02f, 0.06f}, Mat(hexColor(0xff6a1a), 0.5f, 0, 5.f), quat::axisAngle({0, 1, 0}, r.range(0, PI))); }
+    if (D.theme == 8) {
+        // far islands drifting in the sky around the archipelago
+        Rng fr(D.seed + 7);
+        vec3 mid = d.origin + vec3(d.W * TILE * 0.5f, 0, d.H * TILE * 0.5f);
+        for (int i = 0; i < 18; i++) {
+            float a = i * TAU / 18 + fr.range(-0.2f, 0.2f), dist = fr.range(70.f, 140.f);
+            vec3 c = mid + vec3(std::cos(a) * dist, fr.range(-25.f, 18.f), std::sin(a) * dist);
+            float sc = fr.range(4.f, 11.f);
+            wl.rock(c, vec3(sc, sc * 0.35f, sc * 0.9f), Mat(th.floor, 0.9f), fr.next(), 1);
+            wl.cone(c - vec3(0, sc * 0.2f, 0), c - vec3(fr.range(-1.f, 1.f), sc * fr.range(1.2f, 2.f), fr.range(-1.f, 1.f)), sc * 0.8f, Mat(th.wall * 0.8f, 0.9f), 7);
+            if (fr.chance(0.5f)) pp.lathe({{0.01f, 0}, {sc * 0.12f, sc * 0.4f}, {0.01f, sc * 0.9f}}, Mat(th.accent, 0.2f, 0, 2.5f), 6, c + vec3(0, sc * 0.3f, 0));
+        }
+    }
     // exit portal (the way back up)
     pp.lathe({{1.2f, 0.02f}, {0.01f, 0.04f}}, Mat(hexColor(0x8ad8ff), 0.2f, 0, 3.f), 20, d.exitPos);
     for (int i = 0; i < 6; i++) { float a = i * TAU / 6; pp.rock(d.exitPos + vec3(std::cos(a) * 1.5f, 0, std::sin(a) * 1.5f), vec3(0.3f, 0.5f, 0.3f), Mat(th.trim), 300 + i, 0); }
