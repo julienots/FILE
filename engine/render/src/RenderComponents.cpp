@@ -180,6 +180,12 @@ void registerRenderComponents() {
                {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("castShadows", &MeshRendererComponent::castShadows)
         .field("visible", &MeshRendererComponent::visible)
+        .field("lodBias", &MeshRendererComponent::lodBias,
+               {.tooltip = "Automatic LOD of imported models: > 1 keeps detail longer, 0 = always full detail", .rangeMin = 0.0f, .rangeMax = 8.0f,
+                .speed = 0.01f})
+        .field("visibilityRange", &MeshRendererComponent::visibilityRange,
+               {.tooltip = "Hidden beyond this distance from the camera, shadows included (0 = always drawn)", .rangeMin = 0.0f,
+                .rangeMax = 100000.0f, .speed = 0.5f})
         .field("toon", &MeshRendererComponent::toon,
                {.tooltip = "Cartoon lighting for every material of the mesh: light bands, tinted shadows, rim light"})
         .field("outlineWidth", &MeshRendererComponent::outlineWidth,

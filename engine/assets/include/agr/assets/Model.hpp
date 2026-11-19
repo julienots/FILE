@@ -44,6 +44,9 @@ struct ModelMesh {
     std::vector<u32> indices;  ///< Triangles, counter-clockwise front faces.
     std::vector<ModelSubmesh> submeshes;
     math::Aabb bounds;
+    /// Automatic levels of detail (generateMeshLods, filled by the renderer's ModelLibrary; their
+    /// index ranges follow the mesh's own triangles in `indices`). Importers leave it empty.
+    std::vector<std::vector<ModelSubmesh>> lods;
 };
 
 /// Node of the model hierarchy (local transform relative to the parent).
@@ -105,6 +108,15 @@ bool isModelFile(std::string_view name);
 
 /// Reads and imports a model through the VFS (dispatch on the extension).
 Result<ModelData> importModel(VirtualFileSystem& vfs, std::string_view uri);
+
+/// Simplified levels of detail of a mesh (automatic LOD), by vertex clustering: vertices are
+/// merged per cell of a grid over the mesh bounds (32, 16, then 8 cells along the longest side),
+/// also split by the main direction of their normal so creases survive; triangles that collapse
+/// are dropped. The kept vertices are original ones (skin weights stay valid). Each level's
+/// indices are appended to `indices`; returns, per level, its submeshes (same materials, ranges
+/// into `indices`). Stops when a level would not remove at least 25 % of the previous triangles;
+/// meshes under 64 triangles get no level.
+std::vector<std::vector<ModelSubmesh>> generateMeshLods(const ModelMesh& mesh, std::vector<u32>& indices);
 /// glTF 2.0 (.gltf with embedded / external buffers, or .glb). `vfs` resolves external files.
 Result<ModelData> importGltf(std::span<const u8> bytes, std::string_view uri, VirtualFileSystem* vfs);
 /// Wavefront OBJ with its MTL library (read through `vfs` when given).

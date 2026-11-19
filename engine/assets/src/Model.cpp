@@ -827,3 +827,59 @@ Result<ByteBuffer> readEmbeddedImage(VirtualFileSystem& vfs, std::string_view ur
 }
 
 } // namespace agr
+
+namespace agr {
+
+std::vector<std::vector<ModelSubmesh>> generateMeshLods(const ModelMesh& mesh, std::vector<u32>& indices) {
+    std::vector<std::vector<ModelSubmesh>> levels;
+    const usize triangles = mesh.indices.size() / 3;
+    if (triangles < 64 || mesh.vertices.empty()) return levels;
+    math::Vec3 lo = mesh.vertices[0].position, hi = lo;
+    for (const ModelVertex& v : mesh.vertices) {
+        lo = {std::min(lo.x, v.position.x), std::min(lo.y, v.position.y), std::min(lo.z, v.position.z)};
+        hi = {std::max(hi.x, v.position.x), std::max(hi.y, v.position.y), std::max(hi.z, v.position.z)};
+    }
+    const math::Vec3 extent = hi - lo;
+    const float longest = std::max({extent.x, extent.y, extent.z, 1e-6f});
+    usize previous = triangles;
+    std::vector<u32> rep(mesh.vertices.size());
+    std::unordered_map<u64, u32> cells;
+    for (const u32 grid : {32u, 16u, 8u}) {
+        const float cell = longest / static_cast<float>(grid);
+        // Cluster key: grid cell + main normal direction (6 classes).
+        cells.clear();
+        for (usize i = 0; i < mesh.vertices.size(); ++i) {
+            const ModelVertex& v = mesh.vertices[i];
+            const u64 cx = static_cast<u64>(std::min<float>((v.position.x - lo.x) / cell, static_cast<float>(grid)));
+            const u64 cy = static_cast<u64>(std::min<float>((v.position.y - lo.y) / cell, static_cast<float>(grid)));
+            const u64 cz = static_cast<u64>(std::min<float>((v.position.z - lo.z) / cell, static_cast<float>(grid)));
+            const math::Vec3 n = v.normal, a{std::fabs(n.x), std::fabs(n.y), std::fabs(n.z)};
+            const u64 axis = a.x >= a.y && a.x >= a.z ? (n.x >= 0 ? 0 : 1) : a.y >= a.z ? (n.y >= 0 ? 2 : 3) : (n.z >= 0 ? 4 : 5);
+            const u64 key = cx | (cy << 10) | (cz << 20) | (axis << 30);
+            rep[i] = cells.try_emplace(key, static_cast<u32>(i)).first->second;  // first vertex of the cell
+        }
+        const usize base = indices.size();
+        std::vector<ModelSubmesh> subs;
+        for (const ModelSubmesh& sm : mesh.submeshes) {
+            ModelSubmesh out{static_cast<u32>(indices.size()), 0, sm.material};
+            for (u32 t = sm.firstIndex; t + 2 < sm.firstIndex + sm.indexCount && t + 2 < mesh.indices.size(); t += 3) {
+                const u32 a = rep[mesh.indices[t]], b = rep[mesh.indices[t + 1]], c = rep[mesh.indices[t + 2]];
+                if (a == b || b == c || a == c) continue;  // collapsed
+                indices.insert(indices.end(), {a, b, c});
+                out.indexCount += 3;
+            }
+            subs.push_back(out);
+        }
+        const usize kept = (indices.size() - base) / 3;
+        if (kept == 0 || kept > previous * 3 / 4) {  // not worth a level (or everything collapsed)
+            indices.resize(base);
+            if (kept == 0) break;
+            continue;
+        }
+        levels.push_back(std::move(subs));
+        previous = kept;
+    }
+    return levels;
+}
+
+} // namespace agr

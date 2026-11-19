@@ -107,6 +107,8 @@ struct RenderStats {
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 spotShadows = 0;     ///< Spot lights with a shadow map this frame (at most 2).
     u32 pointShadows = 0;    ///< Point lights with cube shadows this frame (at most 1).
+    u32 lodMeshes = 0;       ///< Meshes drawn with a simplified level of detail.
+    u32 rangeCulled = 0;     ///< Meshes hidden by their visibility range.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
     u32 blobShadows = 0;     ///< Blob shadows drawn this frame.

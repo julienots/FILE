@@ -197,6 +197,60 @@ TEST_CASE("materials: toon shading and outline fields, written only when used") 
     CHECK_FALSE(parseMaterial(R"({"format":"agr.material","version":1,"shading":"oil"})"));
 }
 
+TEST_CASE("automatic LOD: vertex clustering keeps fewer, valid triangles per level, materials kept") {
+    // A dense sphere (64 x 64 quads), two materials (top and bottom halves).
+    ModelMesh m;
+    const int R = 64;
+    for (int i = 0; i <= R; ++i)
+        for (int j = 0; j <= R; ++j) {
+            const float th = 3.14159265f * static_cast<float>(i) / R, ph = 6.2831853f * static_cast<float>(j) / R;
+            const math::Vec3 n{std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)};
+            m.vertices.push_back({n * 2.0f, n, {1, 0, 0, 1}, {0, 0}});
+        }
+    for (int half = 0; half < 2; ++half) {
+        ModelSubmesh sm{static_cast<u32>(m.indices.size()), 0, half};
+        for (int i = half * R / 2; i < (half + 1) * R / 2; ++i)
+            for (int j = 0; j < R; ++j) {
+                const u32 a = static_cast<u32>(i * (R + 1) + j), b = a + R + 1;
+                for (u32 v : {a, b, a + 1, a + 1, b, b + 1}) m.indices.push_back(v);
+                sm.indexCount += 6;
+            }
+        m.submeshes.push_back(sm);
+    }
+    std::vector<u32> all = m.indices;
+    const auto lods = generateMeshLods(m, all);
+    REQUIRE(lods.size() >= 2);
+    usize previous = m.indices.size();
+    for (const auto& level : lods) {
+        REQUIRE(level.size() == 2);
+        usize count = 0;
+        for (usize k = 0; k < level.size(); ++k) {
+            const ModelSubmesh& sm = level[k];
+            CHECK(sm.material == static_cast<i32>(k));
+            CHECK(sm.firstIndex >= m.indices.size());  // after the full-detail triangles
+            CHECK(sm.firstIndex + sm.indexCount <= all.size());
+            for (u32 t = sm.firstIndex; t < sm.firstIndex + sm.indexCount; t += 3) {
+                const u32 a = all[t], b = all[t + 1], c = all[t + 2];
+                CHECK((a < m.vertices.size() && b < m.vertices.size() && c < m.vertices.size()));
+                CHECK((a != b && b != c && a != c));
+            }
+            count += sm.indexCount;
+        }
+        CHECK(count * 4 <= previous * 3);  // at least 25 % fewer triangles than the previous level
+        CHECK(count > 0);
+        previous = count;
+    }
+    CHECK(std::equal(m.indices.begin(), m.indices.end(), all.begin()));  // full detail unchanged
+    // Tiny meshes get no level.
+    ModelMesh tiny;
+    tiny.vertices = {m.vertices[0], m.vertices[1], m.vertices[2]};
+    tiny.indices = {0, 1, 2};
+    tiny.submeshes = {{0, 3, -1}};
+    std::vector<u32> t = tiny.indices;
+    CHECK(generateMeshLods(tiny, t).empty());
+    CHECK(t.size() == 3);
+}
+
 TEST_CASE("glTF: GLB with embedded image, hierarchy and PBR material") {
     TempAssets t;
     const std::vector<u8> glb = makeGlb();

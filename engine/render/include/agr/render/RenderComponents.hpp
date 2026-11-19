@@ -148,6 +148,11 @@ struct MeshRendererComponent {
     /// Cartoon lighting (ShadingModel::Toon) for every material of the mesh, with the toon
     /// defaults of MaterialData; an .agrmat set to Toon keeps its own toon settings.
     bool toon = false;
+    /// Automatic level of detail of imported models: simplified versions are used when the object
+    /// is small on screen. > 1 keeps the detail longer, < 1 simplifies sooner, 0 = always full detail.
+    float lodBias = 1.0f;
+    /// Hidden beyond this distance from the camera (shadows included); 0 = always drawn.
+    float visibilityRange = 0.0f;
     float outlineWidth = 0.0f;         ///< Outline in pixels for every material of the mesh (0: the material's).
     math::Color outlineColor{0.1f, 0.07f, 0.12f, 1.0f};
 };

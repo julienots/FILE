@@ -59,6 +59,13 @@ void ModelLibrary::start(ModelAsset& asset, bool blocking) {
     auto work = [this, uri, version] {
         Pending p{uri, version, makeError(Error::Code::Unknown, "not loaded"), m_vfs.modifiedTime(uri)};
         p.data = importModel(m_vfs, uri);
+        // Automatic LOD on this worker thread: simplified triangles appended to each index buffer.
+        if (p.data)
+            for (ModelMesh& mesh : p.data.value().meshes) {
+                std::vector<u32> all = mesh.indices;
+                mesh.lods = generateMeshLods(mesh, all);
+                mesh.indices = std::move(all);
+            }
         std::lock_guard lock(m_mutex);
         m_done.push_back(std::move(p));
     };
@@ -86,9 +93,10 @@ void ModelLibrary::finish(Pending& p) {
     for (ModelMesh& src : data.meshes) {
         ModelAsset::Mesh m;
         m.name = src.name;
-        m.indexCount = static_cast<u32>(src.indices.size());
+        m.indexCount = static_cast<u32>(src.indices.size());  // all levels
         m.vertexCount = static_cast<u32>(src.vertices.size());
         m.submeshes = src.submeshes;
+        m.lods = src.lods;
         m.bounds = src.bounds;
         m.skinned = src.skinWeights.size() == src.vertices.size() && !src.vertices.empty();
         if (m_device && !src.vertices.empty()) {

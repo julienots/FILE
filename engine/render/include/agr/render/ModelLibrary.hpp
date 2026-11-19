@@ -30,6 +30,7 @@ struct ModelAsset {
         u32 indexCount = 0;
         u32 vertexCount = 0;
         std::vector<ModelSubmesh> submeshes;
+        std::vector<std::vector<ModelSubmesh>> lods;  ///< Simplified levels (same buffers), coarser and coarser.
         math::Aabb bounds;   ///< Bind pose.
         bool skinned = false;  ///< Vertex buffer of SkinnedModelVertex (deformed by a skin).
     };

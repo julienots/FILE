@@ -680,6 +680,38 @@ TEST_CASE("point light shadows: cube faces below and beside the bulb; one per fr
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("automatic LOD of imported models: simplified far away, full near, bias and visibility range") {
+    Render3DFixture f;
+    std::filesystem::copy_file(std::filesystem::path(AGR_TEST_TEMPLATE_ASSETS) / "games" / "duel" / "tree.glb", f.root / "tree.glb");
+    f.camera({0, 1.5f, 6}, {0, 1.5f, 0});
+    f.darkEnvironment().ambientIntensity = 1.0f;
+    const auto tree = f.scene.createEntity("Tree");
+    auto& mr = f.scene.registry().emplace<MeshRendererComponent>(tree);
+    mr.model = "assets://tree.glb";
+    f.settle();
+    const ModelAsset* asset = f.models.get("assets://tree.glb");
+    REQUIRE(asset);
+    REQUIRE(asset->state == AssetState::Ready);
+    REQUIRE_FALSE(asset->meshes[0].lods.empty());
+    CHECK(f.renderer.stats().lodMeshes == 0);  // close: full detail
+    const u64 nearTriangles = f.renderer.stats().triangles;
+    auto& t = f.scene.registry().get<TransformComponent>(tree);
+    t.position = {0, 0, -120};
+    f.frame();
+    CHECK(f.renderer.stats().lodMeshes == 1);
+    CHECK_MESSAGE(f.renderer.stats().triangles < nearTriangles / 2, f.renderer.stats().triangles, " vs ", nearTriangles);
+    mr.lodBias = 0.0f;  // always full detail
+    f.frame();
+    CHECK(f.renderer.stats().lodMeshes == 0);
+    CHECK(f.renderer.stats().triangles == nearTriangles);
+    mr.lodBias = 1.0f;
+    mr.visibilityRange = 50.0f;  // beyond: hidden
+    f.frame();
+    CHECK(f.renderer.stats().rangeCulled == 1);
+    CHECK(f.renderer.stats().triangles == 0);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

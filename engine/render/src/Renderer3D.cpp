@@ -535,6 +535,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         const std::vector<ModelSubmesh>* submeshes = nullptr;
         static thread_local std::vector<ModelSubmesh> primitiveSubmesh(1);
         const ModelAsset* model = nullptr;
+        const ModelAsset::Mesh* modelMesh = nullptr;
         bool skinnedMesh = false;
         if (!mr.model.empty()) {
             model = m_models ? m_models->get(mr.model) : nullptr;
@@ -543,6 +544,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 return;
             }
             const ModelAsset::Mesh& mesh = model->meshes[static_cast<usize>(mr.meshIndex)];
+            modelMesh = &mesh;
             vb = mesh.vertices;
             ib = mesh.indices;
             bounds = mesh.bounds;
@@ -558,6 +560,23 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         }
         if (!vb || !ib) return;
         math::Aabb worldBounds = bounds.transformed(w.matrix);
+        const float camDistance = math::length(worldBounds.center() - camPos);
+        if (mr.visibilityRange > 0.0f && camDistance > mr.visibilityRange) {  // visibility range (shadows too)
+            ++m_stats.rangeCulled;
+            return;
+        }
+        // Automatic LOD: the level follows the object's size on screen (radius / half the view height).
+        if (modelMesh && !modelMesh->lods.empty() && mr.lodBias > 0.0f) {
+            const float radius = math::length(worldBounds.max - worldBounds.min) * 0.5f;
+            const float halfView = rv.projection == Projection::Perspective ? std::max(camDistance, 1e-3f) * std::tan(rv.fieldOfView * 0.5f)
+                                                                              : std::max(rv.orthographicSize, 1e-3f);
+            const float screen = radius / halfView * mr.lodBias;
+            const usize level = screen > 0.25f ? 0 : screen > 0.12f ? 1 : screen > 0.06f ? 2 : 3;
+            if (level > 0) {
+                submeshes = &modelMesh->lods[std::min(level, modelMesh->lods.size()) - 1];
+                ++m_stats.lodMeshes;
+            }
+        }
         u32 skinOffset = ~0u;
         if (skinnedMesh) skinOffset = skinPalette(scene, e, mr, *model, w.matrix, bounds, worldBounds);
         const bool visible = frustum.intersects(worldBounds);
