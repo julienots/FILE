@@ -17,6 +17,7 @@
 namespace agr {
 
 using math::Mat4;
+using math::Vec2;
 using math::Vec3;
 using math::Vec4;
 using detail::FrameUniforms;
@@ -294,7 +295,7 @@ u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale, b
     return slot;
 }
 
-void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, const Mat4& /*viewProj*/, const math::Frustum& frustum,
+void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, const Mat4& viewProj, const math::Frustum& frustum,
                          float aspect, const std::function<bool(ecs::Entity)>& hidden, detail::FrameUniforms& frame) {
     auto& reg = scene.registry();
     const auto range = m_glClipSpace ? Mat4::DepthRange::NegativeOneToOne : Mat4::DepthRange::ZeroToOne;
@@ -527,6 +528,25 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         }
     const Vec3 camPos = rv.position;
     const Vec3 camForward = -Vec3{view.c[0].z, view.c[1].z, view.c[2].z};  // third row of the view matrix
+    // ------------------------------------------------------------ occlusion buffer
+    // Occluders are rasterized on the CPU into a small depth buffer (~256 pixels wide).
+    bool occlusionActive = false;
+    if (m_occlusionCulling) {
+        reg.view<OccluderComponent, WorldTransformComponent>().each([&](ecs::Entity, OccluderComponent& oc, WorldTransformComponent& w) {
+            if (!oc.enabled || !w.activeInHierarchy) return;
+            if (!occlusionActive) {
+                const u32 width = 256;
+                const u32 height = std::clamp(static_cast<u32>(static_cast<float>(width) / std::max(aspect, 0.1f)), 16u, 512u);
+                m_occlusion.begin(viewProj, width, height, range == Mat4::DepthRange::ZeroToOne);
+                occlusionActive = true;
+            }
+            const Vec3 half = oc.size * 0.5f;
+            if (oc.shape == OccluderComponent::Shape::Quad) m_occlusion.addQuad(w.matrix, Vec2(half.x, half.y));
+            else m_occlusion.addBox(w.matrix, half);
+            ++m_stats.occluders;
+        });
+        occlusionActive = occlusionActive && !m_occlusion.empty();
+    }
     reg.view<MeshRendererComponent, WorldTransformComponent>().each([&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
         if (!mr.visible || !w.activeInHierarchy || hidden(e)) return;
         // Geometry: built-in mesh or a mesh of an imported model.
@@ -579,7 +599,11 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         }
         u32 skinOffset = ~0u;
         if (skinnedMesh) skinOffset = skinPalette(scene, e, mr, *model, w.matrix, bounds, worldBounds);
-        const bool visible = frustum.intersects(worldBounds);
+        bool visible = frustum.intersects(worldBounds);
+        if (visible && occlusionActive && !reg.has<OccluderComponent>(e) && m_occlusion.occluded(worldBounds)) {
+            visible = false;  // behind occluders: still a shadow caster
+            ++m_stats.occlusionCulled;
+        }
         u32 casterMask = 0;  // cascades whose light volume contains the mesh
         if (m_shadowsActive && mr.castShadows)
             for (u32 c = 0; c < m_shadowCascades; ++c)

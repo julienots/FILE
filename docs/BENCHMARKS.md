@@ -207,6 +207,21 @@ requêtes de temps Vulkan ; celle d'OpenGL n'est pas fiable sur ce pilote et n'e
 | Ciel en image : +1 draw (fond), un échantillon de texture et 9 coefficients SH par pixel | ~5 ms de plus ici en logiciel, dont le ciel plein écran. |
 | Préparation d'un ciel 2048 × 1024 : ~134 ms sur un thread de travail | Rééchantillonnage, chaîne de mips floutée, projection SH. Une fois au chargement ; le dégradé s'affiche en attendant. |
 
+### Occlusion culling
+
+Rue de ville vue au niveau du sol : 6 rangées de bâtiments (un `Occluder` chacun), 3 000 objets
+derrière eux et 500 dans la rue. Vulkan sur llvmpipe, 1280 × 720.
+
+```
+3D: town, 3500 props, occlusion off      collect  0.478 ms  submit 130.910 ms  gpu  109.70 ms  draws 2  visible 2812  culled  694
+3D: town, 3500 props, occlusion on       collect  1.009 ms  submit   4.465 ms  gpu    1.41 ms  draws 2  visible  106  culled 3400
+```
+
+| Mesure | Analyse |
+|---|---|
+| ~2 700 objets écartés, image ~29× plus rapide ici | Les objets cachés ne sont plus envoyés : moins de sommets et de fragments. Sur GPU matériel le gain dépend de la charge, mais il est d'autant plus grand que la scène est dense (villes, intérieurs). |
+| +0,5 ms de collecte | Rastérisation des occulteurs (256 × 144) et test du rectangle de chaque objet visible, sur le thread principal. |
+
 ## Physique et scripts (phase 6)
 
 `agr_benchmarks` (même machine, un cœur) :

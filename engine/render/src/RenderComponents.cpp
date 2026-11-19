@@ -203,6 +203,13 @@ void registerRenderComponents() {
                {.tooltip = "Height above the ground where the shadow has faded out", .rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
         .field("color", &BlobShadowComponent::color, {.flags = FieldFlag_Color});
 
+    reg.add<OccluderComponent>("Occluder")
+        .category("Rendering")
+        .description("Hides the objects behind it from the renderer (occlusion culling). Keep it inside the visible geometry.")
+        .field("shape", &OccluderComponent::shape, {.enumEntries = {{"Box", 0}, {"Quad", 1}}})
+        .field("size", &OccluderComponent::size, {.tooltip = "Full size in local units (Quad: x and y)", .rangeMin = 0.0f, .speed = 0.01f})
+        .field("enabled", &OccluderComponent::enabled);
+
     reg.add<SpriteRendererComponent>("SpriteRenderer")
         .category("Rendering")
         .description("Textured quad for 2D games, batched automatically.")

@@ -10,6 +10,7 @@
 #include "agr/assets/AssetManager.hpp"
 #include "agr/math/Geometry.hpp"
 #include "agr/render/EnvironmentLibrary.hpp"
+#include "agr/render/OcclusionBuffer.hpp"
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
@@ -111,6 +112,8 @@ struct RenderStats {
     u32 shadowedLights2D = 0;  ///< 2D lights with shadows this frame.
     u32 occluderEdges2D = 0;   ///< Occluder edges tested by them.
     u32 rangeCulled = 0;     ///< Meshes hidden by their visibility range.
+    u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
+    u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
     u32 blobShadows = 0;     ///< Blob shadows drawn this frame.
@@ -166,6 +169,11 @@ public:
     /// lives in shared dynamic buffers): create another Renderer for extra views.
     void renderView(Scene& scene, const RenderView& view, rhi::RenderTargetHandle target, u32 width, u32 height);
     bool glClipSpace() const { return m_glClipSpace; }
+    /// Occlusion culling with the scene's Occluder components (on by default).
+    void setOcclusionCulling(bool enabled) { m_occlusionCulling = enabled; }
+    bool occlusionCulling() const { return m_occlusionCulling; }
+    /// The occlusion depth buffer of the last frame (debug views, tests).
+    const OcclusionBuffer& occlusionBuffer() const { return m_occlusion; }
     rhi::Device& device() { return m_device; }
     const RenderStats& stats() const { return m_stats; }
 
@@ -315,6 +323,8 @@ private:
     u64 m_lastViewFrame = 0;
     bool m_warnedSecondView = false;
     bool m_glClipSpace = true;
+    OcclusionBuffer m_occlusion;
+    bool m_occlusionCulling = true;
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;

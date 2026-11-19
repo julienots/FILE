@@ -712,6 +712,35 @@ TEST_CASE("automatic LOD of imported models: simplified far away, full near, bia
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("occlusion culling: objects behind an occluder are not drawn, shadows and picture unchanged") {
+    Render3DFixture f;
+    f.camera({0, 1.5f, 8}, {0, 1.5f, 0});
+    f.darkEnvironment().ambientIntensity = 1.0f;
+    const auto wall = f.mesh(PrimitiveMesh::Cube, {0, 1.5f, 0}, {6.0f, 3.0f, 0.4f}, {0.2f, 0.4f, 0.9f, 1});
+    f.scene.registry().emplace<OccluderComponent>(wall);  // unit box scaled with the wall
+    for (int i = 0; i < 5; ++i) f.mesh(PrimitiveMesh::Sphere, {-2.0f + i, 1.5f, -4.0f}, Vec3{0.8f}, {1, 0.2f, 0.1f, 1});
+    const auto beside = f.mesh(PrimitiveMesh::Sphere, {5.5f, 1.5f, -2.0f}, Vec3{0.8f}, {1, 1, 0.1f, 1});
+    f.frame();
+    CHECK(f.renderer.stats().occluders == 1);
+    CHECK(f.renderer.stats().occlusionCulled == 5);
+    const u64 culledTriangles = f.renderer.stats().triangles;
+    const Rgba wallPixel = f.at({0, 1.5f, 0.2f});
+    const Rgba besidePixel = f.at({5.5f, 1.5f, -2.0f});
+    CHECK(wallPixel.b > wallPixel.r);
+    CHECK(besidePixel.g > 100);  // yellow sphere still drawn
+    f.renderer.setOcclusionCulling(false);
+    f.frame();
+    CHECK(f.renderer.stats().occlusionCulled == 0);
+    CHECK(f.renderer.stats().triangles > culledTriangles);
+    const Rgba wallPixel2 = f.at({0, 1.5f, 0.2f});
+    CHECK(std::abs(int(wallPixel.b) - int(wallPixel2.b)) <= 2);  // same picture
+    f.renderer.setOcclusionCulling(true);
+    f.scene.registry().get<TransformComponent>(beside).position = {0, 1.5f, 3.0f};  // in front of the wall
+    f.frame();
+    CHECK(f.renderer.stats().occlusionCulled == 5);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

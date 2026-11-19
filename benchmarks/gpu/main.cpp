@@ -43,9 +43,10 @@ double median(std::vector<double> v) {
 }
 
 void run(Bench& b, const char* name, const std::function<void(Scene&)>& build,
-         const std::function<void(GraphicsProfile&)>& tweak = nullptr) {
+         const std::function<void(GraphicsProfile&)>& tweak = nullptr, bool occlusionCulling = true) {
     Renderer renderer(*b.device, *b.assets);
     if (!renderer.initialize()) return;
+    renderer.setOcclusionCulling(occlusionCulling);
     GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
     p.renderScale = 1.0f;
     p.shadowMapSize = 0;  // 3D cases enable shadows explicitly
@@ -293,6 +294,37 @@ int main(int argc, char** argv) {
                 m.material = uri;
             }
         });
+    }
+    for (bool occlusion : {false, true}) {  // street view: rows of buildings hide what is behind them
+        run(b, occlusion ? "3D: town, 3500 props, occlusion on" : "3D: town, 3500 props, occlusion off", [](Scene& s) {
+            const auto c = s.createEntity("Camera");
+            s.registry().emplace<CameraComponent>(c);
+            s.registry().get<TransformComponent>(c).position = {0, 1.7f, 30};
+            const auto l = s.createEntity("Light");
+            s.registry().emplace<DirectionalLightComponent>(l);
+            s.registry().get<TransformComponent>(l).rotation = math::Quat::fromEuler({math::radians(-50.0f), 0.6f, 0});
+            for (int i = 0; i < 500; ++i) {  // the street in front of the first building: always visible
+                const auto e = s.createEntity("StreetProp");
+                s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 50 - 25) * 1.4f, 0.3f, 23.0f - static_cast<float>(i / 50) * 0.3f};
+                s.registry().get<TransformComponent>(e).scale = math::Vec3{0.5f};
+                s.registry().emplace<MeshRendererComponent>(e).mesh = PrimitiveMesh::Sphere;
+            }
+            for (int row = 0; row < 6; ++row) {
+                const float z = 20.0f - static_cast<float>(row) * 12.0f;
+                const auto wall = s.createEntity("Building");
+                auto& t = s.registry().get<TransformComponent>(wall);
+                t.position = {0, 5, z};
+                t.scale = {120, 10, 2};
+                s.registry().emplace<MeshRendererComponent>(wall).mesh = PrimitiveMesh::Cube;
+                s.registry().emplace<OccluderComponent>(wall);
+                for (int i = 0; i < 500; ++i) {  // props of the block behind the building
+                    const auto e = s.createEntity("Prop");
+                    s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 50 - 25) * 1.4f, 0.5f,
+                                                                        z - 2.5f - static_cast<float>(i / 50) * 0.8f};
+                    s.registry().emplace<MeshRendererComponent>(e).mesh = PrimitiveMesh::Sphere;
+                }
+            }
+        }, nullptr, occlusion);
     }
     run(b, "2D: 10k sprites, 1 texture", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 1u << 30); });
     run(b, "2D: 10k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 64); });

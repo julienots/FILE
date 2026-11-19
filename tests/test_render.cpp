@@ -4,6 +4,7 @@
 
 #include "agr/core/Uuid.hpp"
 #include "agr/render/GraphicsProfile.hpp"
+#include "agr/render/OcclusionBuffer.hpp"
 #include "agr/render/Primitives.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/RenderPlugin.hpp"
@@ -108,6 +109,39 @@ TEST_CASE("RenderPlugin in headless mode provides CPU assets and services") {
     engine.run(app);
     CHECK(engine.service<AssetManager>() == nullptr);  // unregistered on unload
     std::filesystem::remove_all(c.userDirectory);
+}
+
+TEST_CASE("occlusion buffer: hidden behind a wall, visible beside, in front, across the near plane") {
+    using math::Mat4;
+    using math::Vec3;
+    for (bool zeroToOne : {true, false}) {
+        CAPTURE(zeroToOne);
+        const Mat4 proj = Mat4::perspective(math::radians(60.0f), 16.0f / 9.0f, 0.1f, 200.0f,
+                                            zeroToOne ? Mat4::DepthRange::ZeroToOne : Mat4::DepthRange::NegativeOneToOne);
+        const Mat4 view = Mat4::lookAt({0, 1, 10}, {0, 1, 0}, {0, 1, 0});
+        OcclusionBuffer ob;
+        ob.begin(proj * view, 256, 144, zeroToOne);
+        CHECK(ob.empty());
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{0.5f})));  // no occluder
+        ob.addBox(Mat4::translate({0, 1, 0}), {3.0f, 2.0f, 0.2f});  // wall 6 x 4 at z = 0
+        CHECK(ob.triangles() == 12);
+        CHECK(ob.coverage() > 0.05f);
+        CHECK(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{0.5f})));        // behind
+        CHECK(ob.occluded(math::Aabb::fromCenterExtents({1.5f, 0.5f, -2}, Vec3{0.4f})));  // behind, off center
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({8, 1, -5}, Vec3{0.5f})));  // beside
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, 4}, Vec3{0.5f})));   // in front
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 4.5f, -5}, Vec3{1.5f}))); // sticks out above
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, 10}, Vec3{1.0f})));  // around the camera
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{40.0f}))); // bigger than the wall
+        // A quad occludes from both sides.
+        ob.begin(proj * view, 256, 144, zeroToOne);
+        ob.addQuad(Mat4::trs({0, 1, 0}, math::Quat::fromEuler({0, math::radians(180.0f), 0}), Vec3{1.0f}), {3.0f, 2.0f});
+        CHECK(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{0.5f})));
+        // An occluder behind the camera hides nothing.
+        ob.begin(proj * view, 256, 144, zeroToOne);
+        ob.addBox(Mat4::translate({0, 1, 15}), {3.0f, 2.0f, 0.2f});
+        CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{0.5f})));
+    }
 }
 
 }  // TEST_SUITE

@@ -169,6 +169,17 @@ struct BlobShadowComponent {
     math::Color color{0.12f, 0.09f, 0.18f, 1.0f};
 };
 
+/// Hides what is behind it from the renderer (occlusion culling): a simple box or rectangle
+/// placed on walls, buildings, rocks or hills. Objects entirely behind occluders are not drawn
+/// (their shadows still are). The shape should stay inside the visible geometry, or objects
+/// seen around its edges could be hidden. Not drawn itself.
+struct OccluderComponent {
+    enum class Shape : i32 { Box = 0, Quad = 1 };
+    Shape shape = Shape::Box;
+    math::Vec3 size{1.0f, 1.0f, 1.0f};  ///< Full size in local units (Quad: x and y, in the XY plane).
+    bool enabled = true;
+};
+
 /// Textured quad in the entity's XY plane. Sorted by layer, then order, then depth.
 struct SpriteRendererComponent {
     std::string texture;

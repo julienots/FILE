@@ -124,7 +124,8 @@ Guide : [3D.md](3D.md).
 | Ombres des projecteurs (SpotLight) | ✅ | 2 par image, atlas en perspective ; test GPU sur les 3 API |
 | Ombres des lumières ponctuelles | ✅ | 1 par image, 6 faces dans l'atlas des lumières locales ; test GPU sur les 3 API |
 | LOD automatique des modèles importés, portée de visibilité | ✅ | regroupement de sommets (3 niveaux), choix par taille à l'écran, `lodBias`, `visibilityRange` |
-| Occlusion culling, fondu entre niveaux de détail | ⬜ | à planifier |
+| Occlusion culling (composant `Occluder`, tampon de profondeur logiciel) | ✅ | `OcclusionBuffer` ; [3D.md](3D.md) ; test CPU + test GPU sur les 3 API ; rue de ville 131 → 4,5 ms |
+| Fondu entre niveaux de détail, occulteurs générés depuis les maillages | ⬜ | à planifier |
 
 ## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua, logique visuelle, formes maillage et débogueur terminés)
 
