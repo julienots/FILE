@@ -795,8 +795,9 @@ void Game::updatePlayer(float dt) {
             if (world.roadInfluence(c.pos.x, c.pos.z) > 0.4f) step = "step_stone";
             else if (r == R_FROSTHEIM || snowAmt > 0.5f) step = "step_snow";
             else if (r == R_ASHEN || r == R_HIGHCROWNS) step = "step_stone";
+            else if (r == R_AMBER) step = "step_sand";
         }
-        play(step, sprinting ? 0.5f : 0.32f, particles.rng.range(0.9f, 1.1f));
+        play(variant(step), sprinting ? 0.5f : 0.32f, particles.rng.range(0.94f, 1.06f));
         // brushing through the grass of the green regions (not on roads, not mounted)
         if (std::strcmp(step, "step_grass") == 0 && !dungeon.active && !riding) {
             int r = world.regionId(c.pos.x, c.pos.z);

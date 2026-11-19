@@ -438,13 +438,34 @@ static void testAudio(const std::string& assets) {
     std::printf("[Audio assets]\n");
     static const char* names[] = {"music/title", "music/greenhaven", "music/frostheim", "music/ashen", "music/elderwood", "music/shadows", "music/highcrowns", "music/village",
                                   "music/night", "music/combat", "music/boss", "music/dungeon", "music/credits", "music/studio", "sfx/swing", "sfx/hit_flesh", "sfx/parry",
-                                  "sfx/fireball", "sfx/levelup", "amb/amb_forest_day", "amb/amb_wind", "amb/amb_cave"};
+                                  "sfx/fireball", "sfx/levelup", "amb/amb_forest_day", "amb/amb_wind", "amb/amb_cave",
+                                  "music/sands", "music/coast", "music/realm", "amb/amb_sea", "sfx/step_sand", "sfx/step_grass3", "sfx/horse2"};
     for (const char* n : names) {
         std::ifstream f(assets + "/audio/" + n + ".ogg", std::ios::binary);
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), {});
         SoundBuffer sb;
         bool ok = !bytes.empty() && decodeOgg(bytes, sb);
         CHECK(ok && sb.frames() > 1000 && sb.rate == 48000, "decode %s", n);
+    }
+    // 2.3.4 mixer: music streamed at a 44.1 kHz device rate keeps its pitch and length (resampling), no click at
+    // a voice start, duplicate sounds fired together are merged
+    {
+        auto load = [&](const char* n) { std::ifstream f(assets + "/audio/" + n + ".ogg", std::ios::binary); return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {}); };
+        AudioEngine ae;
+        ae.addMusic("t", load("music/studio"));
+        ae.setVolumes(1, 1, 1, 1);
+        ae.playMusic("t", 0.1f);
+        std::vector<float> out(441 * 2);
+        double energy = 0; int blocks = 0;
+        for (int i = 0; i < 300; i++) { ae.render(out.data(), 441, 44100); for (float v : out) energy += v * v; blocks++; }
+        CHECK(energy > 1.0, "music renders at 44.1 kHz (energy %.2f)", energy);
+        std::vector<uint8_t> sw = load("sfx/swing");
+        CHECK(ae.loadSound("swing", sw), "load swing");
+        ae.setMusicDuck(0);
+        ae.play(ae.id("swing"), 1.f); ae.play(ae.id("swing"), 1.f); ae.play(ae.id("swing"), 1.f);
+        ae.render(out.data(), 64, 48000);
+        CHECK(ae.activeVoices() == 1, "three identical sounds at once merge into one voice (%d)", ae.activeVoices());
+        CHECK(std::fabs(out[0]) < 0.02f, "voice starts without a click (%.3f)", out[0]);
     }
 }
 

@@ -720,6 +720,7 @@ public:
     // ---- audio ids --------------------------------------------------------------------------------
     std::map<std::string, SoundId> sfx;
     void play(const std::string& s, float vol = 1, float pitch = 1);
+    std::string variant(const std::string& base);
     void play3D(const std::string& s, vec3 p, float vol = 1, float pitch = 1, float range = 32);
     float footstepT = 0;
 

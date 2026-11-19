@@ -45,7 +45,10 @@ void Game::loadAssets() {
                                    "jump", "land", "roll", "bow", "arrow_hit", "fireball", "explosion", "ice", "lightning", "heal", "shadow", "arcane", "nature", "holy",
                                    "pickup", "coin", "chest", "levelup", "quest", "ui_click", "ui_open", "ui_close", "potion", "craft", "forge", "harvest_wood", "harvest_stone", "harvest_herb",
                                    "splash", "wolf_howl", "growl", "roar", "dragon_roar", "spider", "skeleton", "goblin", "troll", "golem", "ghost", "death", "player_hurt", "thunder", "birds",
-                                   "door", "lever", "trap", "fish_bite", "horse", "whistle", "boss_intro", "discover", "fire_loop", "magic_burst", "engine"};
+                                   "door", "lever", "trap", "fish_bite", "horse", "whistle", "boss_intro", "discover", "fire_loop", "magic_burst", "engine",
+                                   // 2.3.4 variants (a step never sounds twice the same) and the sand
+                                   "step_grass2", "step_grass3", "step_stone2", "step_stone3", "step_snow2", "step_snow3", "step_wood2", "step_wood3",
+                                   "step_water2", "step_water3", "step_sand", "step_sand2", "step_sand3", "horse2", "horse3"};
     int loaded = 0;
     for (const char* s : sounds) {
         std::vector<uint8_t> b;
@@ -56,7 +59,7 @@ void Game::loadAssets() {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/music/") + m + ".ogg", b)) audio.addMusic(m, std::move(b));
     }
-    static const char* amb[] = {"amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_swamp", "amb_cave", "amb_river", "amb_village"};
+    static const char* amb[] = {"amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_swamp", "amb_cave", "amb_river", "amb_village", "amb_sea"};
     for (const char* a : amb) {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/amb/") + a + ".ogg", b)) audio.addAmbience(a, std::move(b));

@@ -141,6 +141,17 @@ void Game::play(const std::string& s, float vol, float pitch) {
     auto it = sfx.find(s);
     if (it != sfx.end()) { float v = vol; float k = sfxVary(s, v); audio.play(it->second, v, pitch * k); }
 }
+// 2.3.4 base, base2, base3...: a random variant, never the same one twice in a row
+std::string Game::variant(const std::string& base) {
+    static std::unordered_map<std::string, int> last;
+    static Rng r(4411);
+    int n = 1; while (sfx.count(base + std::to_string(n + 1))) n++;
+    if (n == 1) return base;
+    int k = r.irange(0, n - 1);
+    if (k == last[base]) k = (k + 1) % n;
+    last[base] = k;
+    return k == 0 ? base : base + std::to_string(k + 1);
+}
 void Game::play3D(const std::string& s, vec3 p, float vol, float pitch, float range) {
     auto it = sfx.find(s);
     if (it != sfx.end()) { float v = vol; float k = sfxVary(s, v); audio.play3D(it->second, p, v, pitch * k, range); }
@@ -812,6 +823,7 @@ void Game::updateAudioDirector(float dt) {
     int vi = world.nearestPoi(p.pos.xz(), 70.f);
     bool villageNear = !under && vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Mill || world.pois[vi].type == PoiType::Monastery);
     audio.setAmbience("amb_village", villageNear ? (1 - env.night) * 0.6f : 0.f);
+    audio.setAmbience("amb_sea", under ? 0.f : regionW[R_CORAL] * 0.75f);   // 2.3.4 the surf of the Coral Coast
 }
 
 }  // namespace lk
