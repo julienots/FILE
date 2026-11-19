@@ -5,14 +5,14 @@
 namespace lk {
 
 // ============================================================================================ assets
-Game::ImportedModel* Game::importedModel(const std::string& id) {
+Game::ImportedModel* Game::importedModel(const std::string& id, Arch arch) {
     auto it = importedModels.find(id);
     if (it != importedModels.end()) return it->second.get();
     std::unique_ptr<ImportedModel> m;
     std::vector<uint8_t> mb, tb;
     if (platform::readAsset("models/" + id + ".lkm", mb)) {
         m = std::make_unique<ImportedModel>();
-        const Skeleton& base = skeleton(Arch::Humanoid);
+        const Skeleton& base = skeleton(arch);   // 2.3.3 also quadrupeds (the imported horse)
         if (m->data.loadLKM(mb) && platform::readAsset("models/" + id + ".jpg", tb) && m->data.loadTexture(tb) && (int)m->data.joints.size() == base.size()) {
             // same bones as the game skeleton, offsets fitted to the model's proportions
             m->skel = base;
@@ -29,8 +29,8 @@ Game::ImportedModel* Game::importedModel(const std::string& id) {
     return r;
 }
 
-bool Game::applyImportedModel(Visual& v, const std::string& id) {
-    ImportedModel* m = importedModel(id);
+bool Game::applyImportedModel(Visual& v, const std::string& id, Arch arch) {
+    ImportedModel* m = importedModel(id, arch);
     if (!m) return false;
     if (!m->mesh || !m->mesh->valid()) { m->mesh = std::make_shared<Mesh>(); m->mesh->upload(m->data.verts, m->data.idx); }
     if (!m->tex.id) m->tex.create2D(m->data.texW, m->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, m->data.rgba.data(), true, false);
@@ -372,6 +372,7 @@ Entity Game::spawnMount(int def, vec3 pos) {
     Character c;
     c.team = Team::Mount; c.pos = pos; c.mountDef = def; c.name = m.name; c.maxHp = c.hp = 300;
     setupVisualCreature(c.vis, Arch::Quadruped, m.look, m.scale);
+    if (m.id == "horse") applyImportedModel(c.vis, "horse_mount", Arch::Quadruped);   // 2.3.3 the detailed horse (falls back to the built one)
     c.vis.anim.gait.walkSpeed = 2.f; c.vis.anim.gait.runSpeed = m.speed; c.vis.anim.gait.sprintSpeed = m.sprint;
     c.radius = 0.6f; c.height = 1.6f;
     reg.add<Character>(e, c);

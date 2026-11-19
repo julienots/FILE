@@ -17,9 +17,14 @@ Rect ctlRect(const Game& g, int id) {
 // ============================================================================================ input
 // Contextual buttons are hidden (and not touchable) when they have nothing to do.
 bool Game::ctlVisible(int id) const {
+    // 2.3.3 fewer buttons: run = joystick pushed to the edge (no button), the mount button only near your horse
+    // (jump gets you off, the garage calls it), no combat buttons in the saddle, no potion button with no potion
+    if (id == CTL_SPRINT) return false;
     if (id == CTL_INTERACT) return interactTarget != NullEntity || !dungeonPrompt.empty() || fishingT >= 0;
+    if (id == CTL_MOUNT) return mountNearby && !riding && driving < 0 && !dungeon.active;
+    if (riding && (id == CTL_ATTACK || id == CTL_BLOCK || (id >= CTL_SKILL1 && id <= CTL_SKILL3))) return false;
     if (id >= CTL_SKILL1 && id <= CTL_SKILL3) return heroHasPowers() || equippedSpells[id - CTL_SKILL1] >= 0;
-    if (id == CTL_MOUNT) return !ownedMounts.empty() || riding;
+    if (id == CTL_POTION) return countItem("potion_minor") + countItem("potion_heal") + countItem("potion_great") > 0;
     return true;
 }
 
@@ -28,6 +33,8 @@ void Game::updateTouchControls() {
     bool modal = menu != Menu::None || dialog.open || cinematicT > 0 || transitionT >= 0 || cine.active || endingChoice;
     if (modal) { joyFinger = -1; camFinger = -1; return; }
     UI& u = ui;
+    mountNearby = false;
+    if (!riding && reg.valid(mountEnt)) if (Character* m = reg.get<Character>(mountEnt)) mountNearby = distXZ(m->pos, pc().pos) < 25.f;
     // ---- buttons
     // A finger belongs to the button it STARTED on (finger.sx/sy), and to only one button: overlapping or
     // adjacent buttons can never fire together. Quick taps whose down+up happen within one frame
@@ -128,9 +135,8 @@ void Game::updateTouchControls() {
             input.move = vec2(m.x, -m.y);
             // 1.11.2 joystick pushed to the edge for half a second = sprint (was 1.5 s after the touch began)
             float tdt = clampf(realTime - lastTouchT, 0.f, 0.1f);
-            joyEdgeT = length(m) > 0.9f ? joyEdgeT + tdt : 0.f;
-            if (joyEdgeT > 0.3f) input.sprint = true;   // 2.0.1: 0.3 s at the edge (was 0.5)
-            if (sprintLock && length(m) > 0.05f) input.sprint = true;
+            joyEdgeT = length(m) > 0.85f ? joyEdgeT + tdt : 0.f;
+            if (joyEdgeT > 0.12f) input.sprint = true;   // 2.3.3: the run button is gone, pushing to the edge runs almost at once
         }
         if (!f.consumed && !f.blocked && f.id != joyFinger && f.down) camFingers.push_back(&f);
         if (f.id == camFinger) camAlive = f.down || f.released;
@@ -209,7 +215,7 @@ struct TutStepDef { const char* title; const char* text; int ctl; };   // ctl: b
 static const TutStepDef TUT[] = {
     {"Marcher", "Posez le pouce à gauche et glissez : le joystick vous fait avancer.", -1},
     {"Tourner la caméra", "Glissez un doigt à droite de l'écran pour tourner et incliner la caméra. Pincez pour zoomer.", -2},
-    {"Courir", "Touchez le bouton « Courir » pour verrouiller la course, puis marchez. (Ou poussez le joystick à fond une demi-seconde.)", CTL_SPRINT},
+    {"Courir", "Poussez le joystick jusqu'au bord : vous courez (un cercle doré l'indique). Relâchez un peu pour marcher.", -1},
     {"Sauter", "Touchez le bouton Saut pour franchir un obstacle ou escalader un rebord.", CTL_JUMP},
     {"Esquiver", "Touchez Esquive pour rouler : vous êtes invulnérable un court instant. Maintenez-le pour sprinter.", CTL_DODGE},
     {"Attaquer", "Touchez le bouton épée pour frapper. Maintenez-le pour charger une attaque puissante.", CTL_ATTACK},
@@ -550,6 +556,10 @@ void Game::drawHud(float dt) {
     u.sprite("joy_base", {jc.x - R * 1.35f, jc.y - R * 1.35f, R * 2.7f, R * 2.7f}, vec4(1, 1, 1, joyFinger >= 0 ? op : op * 0.45f));
     vec2 kp = joyFinger >= 0 ? jc + vec2(input.move.x, -input.move.y) * R : jc;
     u.sprite("joy_knob", {kp.x - R * 0.55f, kp.y - R * 0.55f, R * 1.1f, R * 1.1f}, vec4(1, 1, 1, op));
+    if (joyFinger >= 0 && input.sprint && !riding) {   // 2.3.3 running: a golden rim on the stick (replaces the run button)
+        u.ring(jc, R * 1.3f, R * 1.42f, 0, TAU, vec4(1.f, 0.82f, 0.4f, 0.85f * op), 48);
+        u.text("COURSE", jc.x, jc.y - R * 1.75f, 15, rgba(0xf8e0a0), F_BOLD, A_CENTER, 0, true);
+    } else if (joyFinger < 0 && tutStep == 2) u.text("Poussez au bord pour courir", jc.x, jc.y - R * 1.75f, 15, rgba(0xf8e0a0), F_BOLD, A_CENTER, 0, true);
     auto ctl = [&](int id, const std::string& icon, bool enabled, float cd01, const std::string& badge, vec4 tint, const char* base) {
         if (!ctlVisible(id)) return;
         Rect r = ctlRect(*this, id);
@@ -586,13 +596,7 @@ void Game::drawHud(float dt) {
     }
     int pots = countItem("potion_minor") + countItem("potion_heal") + countItem("potion_great");
     ctl(CTL_POTION, "potion", pots > 0 && potionCD <= 0, potionCD / 1.2f, std::to_string(pots), vec4(1, 1, 1, 1), "round");
-    ctl(CTL_MOUNT, "mount", !ownedMounts.empty(), 0, "", vec4(1, 1, 1, 1), "round");
-    {   // run button: double chevrons, lit while the run is locked on
-        btnFlash[CTL_SPRINT] = std::max(btnFlash[CTL_SPRINT], sprintLock ? 0.02f : 0.f);
-        ctl(CTL_SPRINT, "arrow_right", stamina > 3, 0, "", sprintLock ? vec4(1.f, 0.9f, 0.5f, 1.f) : vec4(1, 1, 1, 1), sprintLock ? "round_hi" : "round");
-        Rect r = ctlRect(*this, CTL_SPRINT);
-        u.text(sprintLock ? "COURSE" : "COURIR", r.x + r.w / 2, r.y + r.h - 16, 13, rgba(0xf4e7c4), F_BOLD, A_CENTER, 0, true);
-    }
+    ctl(CTL_MOUNT, "mount", true, 0, "", vec4(1, 1, 1, 1), "round");
     // contextual interaction button with label
     std::string label;
     if (fishingT >= 0) label = fishBite > 0 ? "Ferrer !" : "Ranger la canne";

@@ -268,7 +268,7 @@ void Game::updateBase(float dt) {
                     ab->tame = true; ab->home = vec3(pc2.x, sp.y, pc2.y); c->team = Team::Neutral;
                     CreatureLook L; L.kind = kind; L.seed = (uint32_t)(k * 17);
                     if (kind == 1) { L.c1 = hexColor(0xd89a8a); L.c2 = hexColor(0xe8b8a8); L.c3 = hexColor(0x8a5a50); L.fur = false; c->name = "Cochon"; setupVisualCreature(c->vis, Arch::Quadruped, L, 0.75f); }
-                    else { L.c1 = hexColor(r.chance(0.5f) ? 0x6a4a30 : 0x3a2a20); L.c2 = hexColor(0x8a6a4a); L.mane = true; c->name = "Cheval"; setupVisualCreature(c->vis, Arch::Quadruped, L, 1.9f); c->height = 1.9f; c->radius = 0.7f; }
+                    else { L.c1 = hexColor(r.chance(0.5f) ? 0x6a4a30 : 0x3a2a20); L.c2 = hexColor(0x8a6a4a); L.mane = true; c->name = "Cheval"; setupVisualCreature(c->vis, Arch::Quadruped, L, 1.9f); applyImportedModel(c->vis, "horse_mount", Arch::Quadruped); c->height = 1.9f; c->radius = 0.7f; }
                     c->vis.outline = false;
                 }
                 livestockEnts.push_back(e);

@@ -1248,13 +1248,14 @@ void Game::drawLayoutEditor() {
     u.text("Faites glisser les boutons · Touchez « Terminer » pour enregistrer", u.W / 2, 90, 22, GOLDT, F_SERIF, A_CENTER, 0, true);
     static const char* names[CTL_COUNT] = {"Attaque", "Esquive", "Saut", "Parade", "Sort 1", "Sort 2", "Sort 3", "Potion", "Interagir", "Monture", "Courir"};
     for (int i = 0; i < CTL_COUNT; i++) {
+        if (i == CTL_SPRINT) continue;   // 2.3.3 no run button any more (joystick to the edge)
         Rect r = ctlRect(*this, i);
         u.sprite(i == layoutDrag ? "round_hi" : "round", r, vec4(1, 1, 1, settings.layout.opacity));
         if (CTL_ICON[i][0]) u.sprite(std::string("i_") + CTL_ICON[i], r.inset(r.w * 0.25f));
         u.text(names[i], r.x + r.w / 2, r.y + r.h + 2, 15, PALE, F_BOLD, A_CENTER, 0, true);
     }
     for (auto& f : u.fingers) {
-        if (f.pressed) for (int i = 0; i < CTL_COUNT; i++) if (ctlRect(*this, i).contains(f.x, f.y)) layoutDrag = i;
+        if (f.pressed) for (int i = 0; i < CTL_COUNT; i++) if (i != CTL_SPRINT && ctlRect(*this, i).contains(f.x, f.y)) layoutDrag = i;
         if (f.down && layoutDrag >= 0) {
             vec2 p{f.x - u.W, f.y - u.H};
             if (settings.layout.leftHanded) p.x = -f.x;

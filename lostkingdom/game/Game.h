@@ -441,6 +441,7 @@ public:
     float jumpBuf = 0; bool sprintJump = false;
     float slopeMul = 1.f; int landRolls = 0;   // 1.11.2 speed factor on the current slope; landing rolls done (tests)   // jump pressed just before landing; a jump taken at sprint speed keeps it
     float btnFlash[CTL_COUNT] = {};
+    bool mountNearby = false;   // 2.3.3 the mount button only shows when your horse is close (call it from the garage)
     bool sprintLock = false;   // 2.0.1 the run button: tap to keep running while the stick is held, tap again to walk
     bool ctlVisible(int id) const;
     bool charging = false;
@@ -707,8 +708,8 @@ public:
     // Absent files are cached as null, so the procedural look is used without retrying.
     struct ImportedModel { SkinnedModelData data; std::shared_ptr<Mesh> mesh; Texture tex; Skeleton skel; };
     std::unordered_map<std::string, std::unique_ptr<ImportedModel>> importedModels;
-    ImportedModel* importedModel(const std::string& id);
-    bool applyImportedModel(Visual& v, const std::string& id);
+    ImportedModel* importedModel(const std::string& id, Arch arch = Arch::Humanoid);
+    bool applyImportedModel(Visual& v, const std::string& id, Arch arch = Arch::Humanoid);
     bool useHeroModel() { return settings.importedHero && importedModel("hero") != nullptr; }
     std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[12];
     std::map<uint32_t, Entity> nodeEntities;   // uid -> entity
