@@ -382,6 +382,42 @@ TEST_CASE("skeletal clips: imported from a glTF model, played and crossfaded by 
         return -1.0f;
     };
     CHECK(rootY == doctest::Approx(danceAt(0.2f) * 0.5f).epsilon(0.02));
+
+    // ---- Blend state (1D blend tree): Idle at 0, Dance at 1, mixed by "energy" with phases in step.
+    AnimatorController blend;
+    blend.parameters = {{"energy", ParameterType::Float, 0.0f}};
+    AnimatorState move{"Move", "", "", 1.0f, {}};
+    move.blendParameter = "energy";
+    move.motions = {{"assets://3d/sprout.glb#Dance", 1.0f}, {"assets://3d/sprout.glb#Idle", 0.0f}};  // sorted on load
+    blend.states = {move};
+    f.save("assets://blend.agrctrl", blend);
+    {
+        auto loaded = AnimatorController::fromJson(blend.toJson());
+        REQUIRE(loaded);
+        REQUIRE(loaded.value().states[0].motions.size() == 2);
+        CHECK(loaded.value().states[0].motions[0].threshold == 0.0f);  // sorted
+        CHECK(loaded.value().states[0].blendParameter == "energy");
+        CHECK(loaded.value().validate().empty());
+        AnimatorController bad = loaded.value();
+        bad.states[0].blendParameter = "nope";
+        CHECK_FALSE(bad.validate().empty());
+    }
+    auto rootYAfter = [&](float energy, float seconds) {
+        f.scene.registry().get<AnimatorComponent>(root) = {"assets://blend.agrctrl", "", 1.0f, true};
+        f.anim.reset();
+        f.step(0.0f);
+        f.anim.setFloat(f.scene, root, "energy", energy);
+        f.step(seconds);
+        return f.scene.registry().get<TransformComponent>(joints[0]).position.y;
+    };
+    // Weight 0: Idle only (no bounce); weight 1: Dance at its own pace.
+    CHECK(rootYAfter(0.0f, 0.2f) == doctest::Approx(0.0f).epsilon(1e-4));
+    CHECK(rootYAfter(1.0f, 0.2f) == doctest::Approx(danceAt(0.2f)).epsilon(0.02));
+    CHECK(rootYAfter(3.0f, 0.2f) == doctest::Approx(danceAt(0.2f)).epsilon(0.02));  // clamped above the last motion
+    // Half way: half the bounce, Dance sampled at the shared phase (cycle length between 3 s and 1.2 s).
+    const float phase = 0.2f / (3.0f + (1.2f - 3.0f) * 0.5f);
+    CHECK(rootYAfter(0.5f, 0.2f) == doctest::Approx(danceAt(phase * 1.2f) * 0.5f).epsilon(0.02));
+    CHECK(f.anim.currentState(root) == "Move");
 }
 #endif
 

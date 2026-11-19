@@ -137,6 +137,62 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
         m_dirty |= ImGui::InputText("Clip de sprite", &st.spriteClip);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Nom d'un clip de la feuille de sprites (SpriteAnimator.clip)");
         m_dirty |= ImGui::DragFloat("Vitesse", &st.speed, 0.01f, 0.0f, 10.0f);
+        // ---- blend state (1D blend tree): motions mixed by a parameter.
+        bool blend = st.isBlend();
+        if (ImGui::Checkbox("Mélange (blend tree 1D)", &blend)) {
+            if (blend) {
+                st.motions = {{st.clip, 0.0f}, {"", 1.0f}};
+                for (const AnimatorParameter& p : m_ctrl.parameters)
+                    if (st.blendParameter.empty() && (p.type == ParameterType::Float || p.type == ParameterType::Int)) st.blendParameter = p.name;
+            } else {
+                st.motions.clear();
+            }
+            m_dirty = true;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Mélange des clips selon un paramètre (ex. Idle 0, Walk 2, Run 5 selon « speed »), pas synchronisés");
+        if (st.isBlend()) {
+            if (ImGui::BeginCombo("Paramètre", st.blendParameter.c_str())) {
+                for (const AnimatorParameter& p : m_ctrl.parameters) {
+                    if (p.type != ParameterType::Float && p.type != ParameterType::Int) continue;
+                    if (ImGui::Selectable(p.name.c_str(), p.name == st.blendParameter)) {
+                        st.blendParameter = p.name;
+                        m_dirty = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            int removeAt = -1;
+            for (usize i = 0; i < st.motions.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                BlendMotion& m = st.motions[i];
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+                m_dirty |= ImGui::InputText("##clip", &m.clip);
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
+                        m.clip = static_cast<const char*>(p->Data);
+                        m_dirty = true;
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
+                if (ImGui::DragFloat("##threshold", &m.threshold, 0.01f)) m_dirty = true;
+                if (ImGui::IsItemDeactivatedAfterEdit())  // keep the motions ordered by threshold
+                    std::stable_sort(st.motions.begin(), st.motions.end(), [](const BlendMotion& a, const BlendMotion& b) { return a.threshold < b.threshold; });
+                ImGui::SameLine();
+                if (ImGui::Button("x")) removeAt = static_cast<int>(i);
+                ImGui::PopID();
+            }
+            if (removeAt >= 0 && st.motions.size() > 1) {
+                st.motions.erase(st.motions.begin() + removeAt);
+                m_dirty = true;
+            }
+            if (ImGui::Button("+ Mouvement")) {
+                st.motions.push_back({"", st.motions.empty() ? 0.0f : st.motions.back().threshold + 1.0f});
+                m_dirty = true;
+            }
+        }
         if (m_ctrl.entry != st.name && ImGui::Button("Définir comme état initial")) {
             m_ctrl.entry = st.name;
             m_dirty = true;

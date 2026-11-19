@@ -26,12 +26,23 @@ struct TransitionCondition {
 };
 
 /// A state plays a property clip (.agranim) and / or a sprite clip (SpriteAnimator.clip).
+/// One motion of a blend state: a clip and the parameter value where it plays alone.
+struct BlendMotion {
+    std::string clip;
+    float threshold = 0.0f;
+};
+
 struct AnimatorState {
     std::string name;
     std::string clip;        ///< .agranim asset, optional.
     std::string spriteClip;  ///< Sprite sheet clip name, optional.
     float speed = 1.0f;
     math::Vec2 editorPosition{0.0f, 0.0f};  ///< Node position in the graph editor.
+    /// Blend state (1D blend tree, e.g. Idle / Walk / Run by "speed"): when `motions` is not
+    /// empty, the two motions around the parameter's value are mixed, their phases kept in step.
+    std::string blendParameter;
+    std::vector<BlendMotion> motions;  ///< Sorted by threshold when loaded.
+    bool isBlend() const { return !motions.empty(); }
 };
 
 /// Goes from `from` ("*" = any state) to `to` when every condition holds and, with

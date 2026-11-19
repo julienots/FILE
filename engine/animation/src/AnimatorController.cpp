@@ -39,6 +39,15 @@ std::vector<std::string> AnimatorController::validate() const {
     for (usize i = 0; i < states.size(); ++i)
         for (usize k = i + 1; k < states.size(); ++k)
             if (states[i].name == states[k].name) problems.push_back("two states are named '" + states[i].name + "'");
+    for (const AnimatorState& s : states) {
+        if (!s.isBlend()) continue;
+        const AnimatorParameter* p = findParameter(s.blendParameter);
+        if (!p) problems.push_back("blend state '" + s.name + "' uses unknown parameter '" + s.blendParameter + "'");
+        else if (p->type == ParameterType::Bool || p->type == ParameterType::Trigger)
+            problems.push_back("blend state '" + s.name + "' needs a float or int parameter, '" + s.blendParameter + "' is not");
+        for (const BlendMotion& m : s.motions)
+            if (m.clip.empty()) problems.push_back("blend state '" + s.name + "' has a motion without clip");
+    }
     for (const AnimatorTransition& t : transitions) {
         if (t.from != "*" && !findState(t.from)) problems.push_back("transition from unknown state '" + t.from + "'");
         if (!findState(t.to)) problems.push_back("transition to unknown state '" + t.to + "'");
@@ -59,9 +68,16 @@ std::string AnimatorController::toJson() const {
         ps.push_back({{"name", p.name}, {"type", kParamTypes[static_cast<usize>(p.type)]}, {"default", p.defaultValue}});
     j["parameters"] = std::move(ps);
     json ss = json::array();
-    for (const AnimatorState& s : states)
-        ss.push_back({{"name", s.name}, {"clip", s.clip}, {"spriteClip", s.spriteClip}, {"speed", s.speed},
-                      {"position", {s.editorPosition.x, s.editorPosition.y}}});
+    for (const AnimatorState& s : states) {
+        json st = {{"name", s.name}, {"clip", s.clip}, {"spriteClip", s.spriteClip}, {"speed", s.speed},
+                   {"position", {s.editorPosition.x, s.editorPosition.y}}};
+        if (s.isBlend()) {
+            json ms = json::array();
+            for (const BlendMotion& m : s.motions) ms.push_back({{"clip", m.clip}, {"threshold", m.threshold}});
+            st["blend"] = {{"parameter", s.blendParameter}, {"motions", std::move(ms)}};
+        }
+        ss.push_back(std::move(st));
+    }
     j["states"] = std::move(ss);
     json ts = json::array();
     for (const AnimatorTransition& t : transitions) {
@@ -90,6 +106,11 @@ Result<AnimatorController> AnimatorController::fromJson(std::string_view text) {
             st.speed = s.value("speed", 1.0f);
             if (s.contains("position") && s["position"].is_array() && s["position"].size() == 2)
                 st.editorPosition = {s["position"][0].get<float>(), s["position"][1].get<float>()};
+            if (const auto b = s.find("blend"); b != s.end() && b->is_object()) {
+                st.blendParameter = b->value("parameter", "");
+                for (const json& m : b->value("motions", json::array())) st.motions.push_back({m.value("clip", ""), m.value("threshold", 0.0f)});
+                std::stable_sort(st.motions.begin(), st.motions.end(), [](const BlendMotion& a, const BlendMotion& b) { return a.threshold < b.threshold; });
+            }
             c.states.push_back(std::move(st));
         }
         for (const json& t : j.value("transitions", json::array())) {

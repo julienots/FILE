@@ -1209,7 +1209,7 @@ TEST_CASE("arena battle: menu, drag and tap to deploy, elixir, hand cycling, uni
     }
     ok("FAR > 4");
     // The cartoon characters (generated .glb with Idle / Walk / Attack) are animated by the game.
-    ok("STATES.Walk == true");
+    ok("STATES.Locomotion == true");  // Idle / Walk blended by speed
     ok("STATES.Attack == true");
     ok("agr.find('Red Princess N'):script().life < 1400 or agr.find('Red Princess S'):script().life < 1400");
 

@@ -45,6 +45,31 @@ end
 function Hero:onAnimationEvent(name) if name == "step" then agr.audio.play("assets://audio/step.wav") end end
 ```
 
+## États de mélange (blend tree 1D)
+
+Un état peut mélanger plusieurs clips selon un paramètre `float` ou `int` (l'équivalent du
+`BlendSpace1D` de Godot) : par exemple *Locomotion* = Idle à 0, Walk à 2, Run à 5 selon `speed`.
+
+```json
+{ "name": "Locomotion", "clip": "", "speed": 1.0,
+  "blend": { "parameter": "speed",
+             "motions": [ { "clip": "assets://hero.glb#Idle", "threshold": 0 },
+                          { "clip": "assets://hero.glb#Walk", "threshold": 2 },
+                          { "clip": "assets://hero.glb#Run",  "threshold": 5 } ] } }
+```
+
+- Les deux mouvements qui encadrent la valeur sont mélangés (poids linéaire entre leurs seuils) ; en
+  dessous du premier seuil ou au-dessus du dernier, un seul joue.
+- **Phases synchronisées** : les deux clips avancent de la même fraction de leur propre durée (la durée
+  du cycle est interpolée), donc les pieds restent en phase même si Walk dure 0,8 s et Run 0,5 s.
+- Fondus, transitions, temps de sortie (`exitTime`, sur la phase) et déclencheurs fonctionnent comme
+  pour les autres états, y compris pour entrer dans un mélange ou en sortir.
+- Le mélange s'applique aux pistes de transformation (squelettes, nœuds importés) ; les pistes de
+  propriétés et les événements viennent du mouvement de seuil inférieur.
+- Éditeur : *Machine à états* ➜ état ➜ *Mélange (blend tree 1D)* : paramètre, mouvements (glisser un
+  clip, seuil, ajouter / retirer).
+- Le *Duel des Tours* l'utilise : `Locomotion` mélange Idle et Walk selon la vitesse réelle de l'unité.
+
 ## Animation squelettique (modèles glTF)
 
 - **Import** : les *skins* glTF (articulations, matrices de liaison inverses, `JOINTS_0` /
@@ -88,8 +113,9 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Pas d'arbres de mélange (*blend trees*), de couches ni de masques d'animation, ni de cinématique
-  inverse ; pas de *morph targets* ; au plus 128 articulations par maillage, 4 influences par sommet.
+- Mélange en une dimension seulement (pas de *blend space* 2D) ; pas de couches ni de masques
+  d'animation, ni de cinématique inverse ; pas de *morph targets* ; au plus 128 articulations par
+  maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.
 - Timeline : pas de sélection de plusieurs clés, de copier-coller ni de poignées de tangentes à

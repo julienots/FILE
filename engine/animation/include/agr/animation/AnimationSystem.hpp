@@ -113,6 +113,7 @@ private:
     struct Runtime;
     Runtime* runtime(Scene& scene, ecs::Entity e);
     void enterState(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorState* state, float fade);
+    void updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step);
     void apply(Scene& scene, ecs::Entity root, Runtime* rt, const AnimationClip* from, float fromTime, const AnimationClip& to, float toTime,
                float weight);
 

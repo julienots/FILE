@@ -436,16 +436,19 @@ def write_character(kind):
         anims.append((name, times, {3 + j: (path, vals) for j, (path, vals) in tracks.items()}))
     write_glb(os.path.join(OUT, kind + ".glb"), [("Skin", skin, True), ("Body", team, True)], materials, nodes,
               skins={"name": "Rig", "joints": [3 + j for j in range(len(JOINTS))], "skeleton": 3}, animations=anims, ibm=ibm)
+    # Locomotion blends Idle and Walk by the unit's real speed (m/s): a slowed unit walks slowly.
+    clip = f"assets://games/duel/{kind}.glb#"
     ctrl = {
-        "version": 1, "entry": "Idle",
-        "parameters": [{"name": "moving", "type": "bool", "default": 0.0}, {"name": "attack", "type": "trigger", "default": 0.0}],
-        "states": [{"name": s, "clip": f"assets://games/duel/{kind}.glb#{s}", "spriteClip": "", "speed": 1.0, "position": [i * 220, 0]}
-                   for i, s in enumerate(["Idle", "Walk", "Attack"])],
+        "version": 1, "entry": "Locomotion",
+        "parameters": [{"name": "speed", "type": "float", "default": 0.0}, {"name": "attack", "type": "trigger", "default": 0.0}],
+        "states": [
+            {"name": "Locomotion", "clip": "", "spriteClip": "", "speed": 1.0, "position": [0, 0],
+             "blend": {"parameter": "speed", "motions": [{"clip": clip + "Idle", "threshold": 0.0}, {"clip": clip + "Walk", "threshold": 2.0}]}},
+            {"name": "Attack", "clip": clip + "Attack", "spriteClip": "", "speed": 1.0, "position": [240, 0]},
+        ],
         "transitions": [
-            {"from": "Idle", "to": "Walk", "conditions": [{"param": "moving", "op": "true", "value": 0.0}], "exitTime": -1.0, "duration": 0.12},
-            {"from": "Walk", "to": "Idle", "conditions": [{"param": "moving", "op": "false", "value": 0.0}], "exitTime": -1.0, "duration": 0.15},
             {"from": "*", "to": "Attack", "conditions": [{"param": "attack", "op": "true", "value": 0.0}], "exitTime": -1.0, "duration": 0.05},
-            {"from": "Attack", "to": "Idle", "conditions": [], "exitTime": 0.95, "duration": 0.15},
+            {"from": "Attack", "to": "Locomotion", "conditions": [], "exitTime": 0.95, "duration": 0.15},
         ],
     }
     with open(os.path.join(OUT, kind + ".agrctrl"), "w") as f:

@@ -33,7 +33,6 @@ function Unit:onStart()
     self.animated = self.entity:has("Animator")
     local x0, _, z0 = self.entity:position()
     self.lastX, self.lastZ = x0, z0
-    self.moving = false
     self.game:register(self.entity)
 end
 
@@ -59,16 +58,14 @@ function Unit:pickTarget()
     return best
 end
 
--- Marche quand l'unité avance réellement (navigation, poussée par les autres...).
+-- Vitesse réelle (lissée) vers l'Animator : l'état Locomotion mélange Idle et Walk selon elle.
 function Unit:animate(dt)
     if not self.animated or dt <= 0 then return end
     local x, _, z = self.entity:position()
-    local moving = G.distance(x, z, self.lastX, self.lastZ) / dt > 0.25
+    local v = G.distance(x, z, self.lastX, self.lastZ) / dt
     self.lastX, self.lastZ = x, z
-    if moving ~= self.moving then
-        self.moving = moving
-        self.entity:setParameter("moving", moving)
-    end
+    self.speed = (self.speed or 0) + (v - (self.speed or 0)) * math.min(1, dt * 10)
+    self.entity:setParameter("speed", self.speed)
 end
 
 function Unit:onUpdate(dt)

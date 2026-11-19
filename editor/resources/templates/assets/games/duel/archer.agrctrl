@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "entry": "Idle",
+  "entry": "Locomotion",
   "parameters": [
     {
-      "name": "moving",
-      "type": "bool",
+      "name": "speed",
+      "type": "float",
       "default": 0.0
     },
     {
@@ -15,24 +15,27 @@
   ],
   "states": [
     {
-      "name": "Idle",
-      "clip": "assets://games/duel/archer.glb#Idle",
+      "name": "Locomotion",
+      "clip": "",
       "spriteClip": "",
       "speed": 1.0,
       "position": [
         0,
         0
-      ]
-    },
-    {
-      "name": "Walk",
-      "clip": "assets://games/duel/archer.glb#Walk",
-      "spriteClip": "",
-      "speed": 1.0,
-      "position": [
-        220,
-        0
-      ]
+      ],
+      "blend": {
+        "parameter": "speed",
+        "motions": [
+          {
+            "clip": "assets://games/duel/archer.glb#Idle",
+            "threshold": 0.0
+          },
+          {
+            "clip": "assets://games/duel/archer.glb#Walk",
+            "threshold": 2.0
+          }
+        ]
+      }
     },
     {
       "name": "Attack",
@@ -40,38 +43,12 @@
       "spriteClip": "",
       "speed": 1.0,
       "position": [
-        440,
+        240,
         0
       ]
     }
   ],
   "transitions": [
-    {
-      "from": "Idle",
-      "to": "Walk",
-      "conditions": [
-        {
-          "param": "moving",
-          "op": "true",
-          "value": 0.0
-        }
-      ],
-      "exitTime": -1.0,
-      "duration": 0.12
-    },
-    {
-      "from": "Walk",
-      "to": "Idle",
-      "conditions": [
-        {
-          "param": "moving",
-          "op": "false",
-          "value": 0.0
-        }
-      ],
-      "exitTime": -1.0,
-      "duration": 0.15
-    },
     {
       "from": "*",
       "to": "Attack",
@@ -87,7 +64,7 @@
     },
     {
       "from": "Attack",
-      "to": "Idle",
+      "to": "Locomotion",
       "conditions": [],
       "exitTime": 0.95,
       "duration": 0.15

@@ -214,6 +214,16 @@ struct AnimationSystem::Runtime {
         float speed = 1.0f;
         std::string state;
         bool fresh = true;  // events at t = 0 fire on the first update
+        // Blend state: `clip` is the lower motion of the pair around the parameter, `second`
+        // the upper one mixed with `secondWeight`; `phase` (cycles) keeps both in step.
+        std::vector<std::shared_ptr<const AnimationClip>> motions;
+        std::vector<float> thresholds;
+        std::string blendParameter;
+        float phase = 0.0f;
+        std::shared_ptr<const AnimationClip> second;
+        float secondTime = 0.0f, secondWeight = 0.0f;
+        std::vector<i32> secondMap;  // clip->transformTracks[i] -> index in second (or -1)
+        const AnimationClip* secondMapFor[2] = {nullptr, nullptr};
     };
     std::string controllerUri, clipUri;
     std::shared_ptr<const AnimatorController> controller;
@@ -318,21 +328,45 @@ void AnimationSystem::apply(Scene& scene, ecs::Entity root, Runtime* rt, const A
         const bool cached = rt && rt->current.clip.get() == &to && rt->current.transformBindings.size() == to.transformTracks.size();
         auto& reg = scene.registry();
         const float fromSample = from ? sampleTime(*from, fromTime) : 0.0f;
+        // Blend states mix in their second motion (same target and path) with its weight.
+        auto blended = [&](Runtime::Playback* pb, const AnimationClip& clip, usize index, math::Vec4 v) {
+            if (!pb || pb->clip.get() != &clip || !pb->second || pb->secondWeight <= 0.0f) return v;
+            const AnimationClip& second = *pb->second;
+            if (pb->secondMapFor[0] != &clip || pb->secondMapFor[1] != &second) {
+                pb->secondMap.assign(clip.transformTracks.size(), -1);
+                for (usize a = 0; a < clip.transformTracks.size(); ++a)
+                    for (usize b = 0; b < second.transformTracks.size(); ++b)
+                        if (second.transformTracks[b].path == clip.transformTracks[a].path && second.transformTracks[b].target == clip.transformTracks[a].target)
+                            pb->secondMap[a] = static_cast<i32>(b);
+                pb->secondMapFor[0] = &clip;
+                pb->secondMapFor[1] = &second;
+            }
+            const i32 k = pb->secondMap[index];
+            if (k < 0) return v;
+            const TransformTrack& t = second.transformTracks[static_cast<usize>(k)];
+            return blendTransform(t.path, v, t.sample(sampleTime(second, pb->secondTime)), pb->secondWeight);
+        };
+        Runtime::Playback* toPlayback = rt ? &rt->current : nullptr;
+        Runtime::Playback* fromPlayback = rt && rt->fading ? &rt->previous : nullptr;
         for (usize i = 0; i < to.transformTracks.size(); ++i) {
             const TransformTrack& track = to.transformTracks[i];
             ecs::Entity target = cached ? rt->current.transformBindings[i] : resolvePath(scene, root, track.target);
             if (target.isNull() || !scene.valid(target)) continue;
             auto* tr = reg.tryGet<TransformComponent>(target);
             if (!tr) continue;
-            math::Vec4 v = track.sample(ts);
+            math::Vec4 v = blended(toPlayback, to, i, track.sample(ts));
             if (weight < 1.0f) {
                 // Crossfade from the previous clip's value for the same target, else from the current pose.
                 math::Vec4 base;
                 const TransformTrack* old = nullptr;
+                usize oldIndex = 0;
                 if (from)
-                    for (const TransformTrack& o : from->transformTracks)
-                        if (o.path == track.path && o.target == track.target) old = &o;
-                if (old) base = old->sample(fromSample);
+                    for (usize o = 0; o < from->transformTracks.size(); ++o)
+                        if (from->transformTracks[o].path == track.path && from->transformTracks[o].target == track.target) {
+                            old = &from->transformTracks[o];
+                            oldIndex = o;
+                        }
+                if (old) base = blended(fromPlayback, *from, oldIndex, old->sample(fromSample));
                 else if (track.path == TransformTrack::Path::Translation) base = math::Vec4(tr->position, 0.0f);
                 else if (track.path == TransformTrack::Path::Scale) base = math::Vec4(tr->scale, 0.0f);
                 else base = {tr->rotation.x, tr->rotation.y, tr->rotation.z, tr->rotation.w};
@@ -410,7 +444,23 @@ void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const
     rt.current.state = state->name;
     rt.current.speed = state->speed;
     rt.stateTime = 0.0f;
-    if (!state->clip.empty()) {
+    if (state->isBlend()) {
+        for (const BlendMotion& m : state->motions) {
+            auto c = m_library.clip(m.clip);
+            if (!c) {
+                AGR_LOG_ERROR("Animation", "blend state '{}': {}", state->name, c.error().message);
+                continue;
+            }
+            rt.current.motions.push_back(c.value());
+            rt.current.thresholds.push_back(m.threshold);
+        }
+        rt.current.blendParameter = state->blendParameter;
+        if (!rt.current.motions.empty()) {
+            rt.current.clip = rt.current.motions.front();
+            rt.current.bindings = bindTracks(scene, e, *rt.current.clip);
+            for (const TransformTrack& t : rt.current.clip->transformTracks) rt.current.transformBindings.push_back(resolvePath(scene, e, t.target));
+        }
+    } else if (!state->clip.empty()) {
         if (auto c = m_library.clip(state->clip)) {
             rt.current.clip = c.value();
             rt.current.bindings = bindTracks(scene, e, *rt.current.clip);
@@ -423,6 +473,32 @@ void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const
         if (auto* sa = scene.registry().tryGet<SpriteAnimatorComponent>(e)) sa->clip = state->spriteClip;
     if (!rt.fading) rt.previous = {};
     m_events.push_back({e, AnimationEvent::Kind::StateEnter, state->name});
+}
+
+void AnimationSystem::updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step) {
+    Runtime::Playback& p = rt.current;
+    const usize n = p.motions.size();
+    auto it = rt.params.find(p.blendParameter);
+    const float x = it == rt.params.end() ? 0.0f : it->second;
+    // Pair of motions around x and the weight of the upper one (clamped at both ends).
+    usize lo = 0;
+    while (lo + 1 < n && x >= p.thresholds[lo + 1]) ++lo;
+    const usize hi = std::min(lo + 1, n - 1);
+    float w = 0.0f;
+    if (hi != lo && x > p.thresholds[lo]) w = std::clamp((x - p.thresholds[lo]) / std::max(p.thresholds[hi] - p.thresholds[lo], 1e-6f), 0.0f, 1.0f);
+    const float durLo = std::max(p.motions[lo]->duration, 1e-4f), durHi = std::max(p.motions[hi]->duration, 1e-4f);
+    // Phase in cycles: both clips advance by the same fraction of their own length (feet in step).
+    p.phase += step * p.speed / (durLo + (durHi - durLo) * w);
+    if (p.clip != p.motions[lo]) {
+        p.clip = p.motions[lo];
+        p.bindings = bindTracks(scene, e, *p.clip);
+        p.transformBindings.clear();
+        for (const TransformTrack& t : p.clip->transformTracks) p.transformBindings.push_back(resolvePath(scene, e, t.target));
+    }
+    p.time = p.phase * durLo;
+    p.second = hi != lo && w > 0.0f ? p.motions[hi] : nullptr;
+    p.secondTime = p.phase * durHi;
+    p.secondWeight = p.second ? w : 0.0f;
 }
 
 void AnimationSystem::update(Scene& scene, float dt) {
@@ -448,7 +524,8 @@ void AnimationSystem::update(Scene& scene, float dt) {
         const float step = dt * anim.speed;
         Runtime::Playback& cur = rt->current;
         const float t0 = cur.time;
-        cur.time += step * cur.speed;
+        if (!cur.motions.empty()) updateBlend(scene, e, *rt, step);
+        else cur.time += step * cur.speed;
         rt->stateTime += step;
         // Clip events crossed this frame (every loop).
         if (cur.clip && !cur.clip->events.empty() && cur.time != t0) {
@@ -466,6 +543,7 @@ void AnimationSystem::update(Scene& scene, float dt) {
         cur.fresh = false;
         if (rt->fading) {
             rt->previous.time += step * rt->previous.speed;
+            rt->previous.secondTime += step * rt->previous.speed;
             rt->fade += step;
             if (rt->fade >= rt->fadeDuration) {
                 rt->fading = false;
