@@ -133,7 +133,7 @@ struct NpcDef {
 const std::vector<NpcDef>& npcs();
 int npcIndex(const std::string& id);
 
-enum Faction { FA_GREENHAVEN = 0, FA_FROSTHEIM, FA_ELDERWOOD, FA_ASHEN, FA_HIGHCROWNS, FA_GRAVEMOOR, FA_COUNT };
+enum Faction { FA_GREENHAVEN = 0, FA_FROSTHEIM, FA_ELDERWOOD, FA_ASHEN, FA_HIGHCROWNS, FA_GRAVEMOOR, FA_SOLMAR, FA_AZUR, FA_COUNT };
 const char* factionName(int f);
 
 enum class QuestType : uint8_t { Main, Side, Hidden, Hunt, Treasure, Faction };

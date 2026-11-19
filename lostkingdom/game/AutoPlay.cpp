@@ -2,6 +2,7 @@
 // validates core systems and captures screenshots. Enabled with --autoplay=<scenario>.
 #include "Game.h"
 #include "../engine/core/Platform.h"
+#include <algorithm>
 #include <functional>
 #include <cstdlib>
 #include <fstream>
@@ -1432,6 +1433,64 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.f, none, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "closer"});
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/B1_npcs_close.png"); }, [lineUp](Game& g, float) { lineUp(g, 4.f, 0.05f); }, "shot"});
         s.push_back({0.1f, [](Game& g) { g.pc().vis.visible = true; }, idle, "show hero"});
+        return s;
+    }
+    if (name == "sky") {
+        // 2.0.0 the new sky: clouds by day, sunset, the moon and the Milky Way, aurora in the cold north, a rainbow after the rain
+        struct V { float x, z, tod; int weather; float yaw, pitch; float wet; const char* f; };
+        static const V views[] = {
+            {3600, 3300, 10.5f, Game::W_CLOUDY, 0.6f, -0.34f, 0.f, "S0_day_clouds"},
+            {1500, 1500, 18.6f, Game::W_CLEAR, 2.4f, -0.12f, 0.f, "S1_sunset"},
+            {3600, 3300, 1.5f, Game::W_CLEAR, 0.9f, -0.34f, 0.f, "S2_night_stars"},
+            {850, 600, 23.f, Game::W_CLEAR, 1.2f, -0.34f, 0.f, "S3_aurora"},
+            {1500, 1500, 16.2f, Game::W_CLEAR, 5.0f, -0.12f, 0.95f, "S4_rainbow"},
+            {3600, 3300, 12.5f, Game::W_CLEAR, 0.4f, -0.1f, 0.f, "S5_desert_noon"},
+        };
+        std::vector<std::string> only;
+        if (const char* e = getenv("LK_SKY")) { std::string t = e; size_t a = 0; while (a <= t.size()) { size_t b = t.find(',', a); if (b == std::string::npos) b = t.size(); only.push_back(t.substr(a, b - a)); a = b + 1; } }
+        for (const V& v : views) {
+            if (!only.empty() && std::find(only.begin(), only.end(), std::string(v.f).substr(3)) == only.end()) continue;
+            s.push_back({3.4f, [v](Game& g) {
+                teleport(g, v.x, v.z, v.yaw);
+                g.timeOfDay = v.tod; g.weather = g.weatherNext = v.weather; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+                g.env.wetness = v.wet; g.camPitch = v.pitch; g.camDist = g.camDistTarget = 5.f; }, [v](Game& g, float) { g.camIdleT = 0; g.env.wetness = std::max(g.env.wetness, v.wet * 0.9f); }, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
+    if (name == "lands") {
+        // 2.0.0 the new lands: settlements and landmarks seen from a pleasant camera (dev aid: look at the pictures)
+        // arg: LK_LANDS="id1,id2,..." picks places; default is a tour of the highlights. Each view: poi, camera distance, pitch,
+        // camera yaw offset, hour, weather, height of the look target.
+        struct V { const char* poi; float dist, pitch, yaw, tod; int weather; float dx, dz; const char* f; };
+        static const V all[] = {
+            {"solmar", 40, 0.36f, 0.4f, 16.5f, Game::W_CLEAR, 4, 4, "L0_solmar"},
+            {"solmar", 30, 0.18f, 2.6f, 19.2f, Game::W_CLEAR, 0, 0, "L1_solmar_dusk"},
+            {"sun_temple", 70, 0.35f, 0.2f, 17.4f, Game::W_CLEAR, 0, 40, "L2_sun_temple"},
+            {"sphinx", 36, 0.22f, 0.9f, 8.2f, Game::W_CLEAR, 0, 14, "L3_sphinx"},
+            {"port_azur", 46, 0.34f, 3.14f, 10.5f, Game::W_CLEAR, 6, 10, "L4_port_azur"},
+            {"pilotis", 40, 0.3f, 0.8f, 12.f, Game::W_CLEAR, 6, 6, "L5_pilotis"},
+            {"shirokawa", 34, 0.26f, 3.1f, 7.f, Game::W_CLEAR, 0, 30, "L6_shirokawa"},
+            {"phare", 40, 0.2f, 2.9f, 20.3f, Game::W_CLEAR, 0, 20, "L7_phare_night"},
+            {"karun_ruins", 40, 0.3f, 1.0f, 15.f, Game::W_CLEAR, 0, 0, "L8_karun"},
+            {"kheft", 44, 0.34f, 1.7f, 11.f, Game::W_CLEAR, 0, 0, "L9_kheft_oasis"},
+            {"solmar", 22, 0.14f, 0.7f, 13.f, Game::W_SANDSTORM, 0, 12, "LA_sandstorm"},
+            {"amber_fort", 60, 0.3f, 0.6f, 9.f, Game::W_CLEAR, 0, 10, "LB_fort"},
+        };
+        std::vector<std::string> only;
+        if (const char* e = getenv("LK_LANDS")) { std::string t = e; size_t a = 0; while (a <= t.size()) { size_t b = t.find(',', a); if (b == std::string::npos) b = t.size(); only.push_back(t.substr(a, b - a)); a = b + 1; } }
+        for (const V& v : all) {
+            if (!only.empty() && std::find(only.begin(), only.end(), std::string(v.f).substr(3)) == only.end() && std::find(only.begin(), only.end(), std::string(v.f)) == only.end()) continue;
+            s.push_back({4.2f, [v](Game& g) {
+                const Poi* p = g.world.poiById(v.poi);
+                if (!p) { AGR_LOG("LANDS no poi %s", v.poi); return; }
+                vec2 hero = p->pos + vec2(v.dx, v.dz);
+                teleport(g, hero.x, hero.y, v.yaw);
+                g.timeOfDay = v.tod; g.weather = g.weatherNext = v.weather; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+                if (v.weather == Game::W_SANDSTORM) { g.sandAmt = 1.f; }
+                g.camPitch = v.pitch; g.camDist = g.camDistTarget = v.dist; }, [](Game& g, float) { g.camIdleT = 0; }, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
         return s;
     }
     if (name == "vista") {

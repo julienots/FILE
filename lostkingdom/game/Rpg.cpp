@@ -235,6 +235,12 @@ void Game::completeQuest(QuestState& s) {
     if (q.id == "m3") queueChapter("ch_guardians");
     if (q.id == "m5") queueChapter("ch_scar");
     if (q.id == "m6") queueChapter("ch_corwin");
+    // 2.0.0 Act II chapters
+    if (q.id == "n1") queueChapter("ch_act2");
+    if (q.id == "n2") queueChapter("ch_mareval");
+    if (q.id == "n6") queueChapter("ch_sun_king");
+    if (q.id == "n7") queueChapter("ch_sanctum");
+    if (q.id == "n9") queueChapter("ch_legacy");
     // pick the next active quest to track
     trackedQuest = -1;
     for (int i = (int)questLog.size() - 1; i >= 0; i--) if (!questLog[i].done) { trackedQuest = i; if (quests()[questLog[i].idx].type == QuestType::Main) break; }
@@ -254,6 +260,9 @@ void Game::advanceQuests(StepKind kind, const std::string& target, int amount) {
             if (st.kind == StepKind::Collect) {
                 int have = countItem(st.target);
                 if (have != s.progress[s.step]) { s.progress[s.step] = std::min(have, st.count); hit = true; }
+            } else if ((st.kind == StepKind::KillBoss && defeatedBosses.count(st.target)) || (st.kind == StepKind::Dungeon && dungeonsDone.count(st.target))) {
+                // 2.0.0 a boss already beaten or a dungeon already cleared before this step came up counts at once
+                s.progress[s.step] = st.count; hit = true;
             } else if (st.kind == kind && st.kind == StepKind::Discover && st.target == "waystones") {
                 int n = 0; for (auto& p : world.pois) if (p.type == PoiType::Waystone && discovered.count(p.id)) n++;
                 s.progress[s.step] = n; hit = true;
@@ -327,6 +336,8 @@ void Game::discover(const std::string& poi) {
     // hidden quests
     if (poi == "elven_ruins") startQuest("x_harp");
     if (poi == "morneval") startQuest("x_ring");
+    if (poi == "sphinx") startQuest("x_sphinx");   // 2.0.0
+    if (poi == "phare") startQuest("x_phare");
     if (p->type == PoiType::Waystone) { if (!questActive("x_stones") && !questsDone.count("x_stones")) { int n = 0; for (auto& q : world.pois) if (q.type == PoiType::Waystone && discovered.count(q.id)) n++; if (n >= 2) startQuest("x_stones"); } }
     advanceQuests(StepKind::Discover, poi);
     advanceQuests(StepKind::Discover, "waystones");

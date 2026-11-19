@@ -146,14 +146,26 @@ static void testWorld(World& w) {
         regions.insert(w.regionId(px, pz));
         float h = w.height(px, pz); if (!std::isfinite(h)) nan++;
     }
-    CHECK(regions.size() == 6, "six regions present (%zu)", regions.size());
+    CHECK(regions.size() == (size_t)R_COUNT, "all %d regions present (%zu)", (int)R_COUNT, regions.size());
     CHECK(nan == 0, "%d non-finite heights", nan);
     // every dungeon / boss arena referenced by data exists as a POI
     for (auto& d : dungeons()) CHECK(w.poiById(d.poi) != nullptr, "dungeon poi %s", d.poi.c_str());
     for (auto& b : bosses()) if (b.dungeon < 0) CHECK(w.poiById(b.arenaPoi) != nullptr, "boss arena %s", b.arenaPoi.c_str());
     for (auto& n : npcs()) CHECK(w.poiById(n.home) != nullptr, "npc %s home %s", n.id.c_str(), n.home.c_str());
+    // 2.0.0 the data refer to each other by index (dungeon, boss): the world plan and the data must agree
+    for (int i = 0; i < (int)dungeons().size(); i++) {
+        const Poi* p = w.poiById(dungeons()[i].poi);
+        CHECK(p && p->dungeon == i, "dungeon %s: its entrance POI must carry index %d (has %d)", dungeons()[i].id.c_str(), i, p ? p->dungeon : -99);
+        if (dungeons()[i].boss >= 0) CHECK(bosses()[dungeons()[i].boss].dungeon == i, "dungeon %s boss %d must be a dungeon boss of index %d", dungeons()[i].id.c_str(), dungeons()[i].boss, i);
+    }
+    for (int bi = 0; bi < (int)bosses().size(); bi++) if (bosses()[bi].dungeon < 0) {
+        const Poi* p = w.poiById(bosses()[bi].arenaPoi);
+        CHECK(p && p->boss == bi, "boss %s: its arena POI must carry boss index %d (has %d)", bosses()[bi].id.c_str(), bi, p ? p->boss : -99);
+    }
+    // the main quest of Act II is a chain n1..n9 that starts after the end of Act I
+    { std::string prev = "m7"; bool chain = true; for (int k = 1; k <= 9; k++) { int qi = questIndex("n" + std::to_string(k)); if (qi < 0 || quests()[qi].requires_ != prev) chain = false; prev = "n" + std::to_string(k); } CHECK(chain, "Act II quest chain n1..n9 is linked"); }
     // POIs flattened: height at centre close to recorded plateau height
-    int off = 0; for (auto& p : w.pois) if (p.type == PoiType::Village && std::fabs(w.height(p.pos.x, p.pos.y) - p.height) > 1.5f) off++;
+    int off = 0; for (auto& p : w.pois) if (p.type == PoiType::Village && std::fabs(w.height(p.pos.x, p.pos.y) - p.height) > 1.5f) { off++; std::printf("  village %s: centre %.2f m vs plateau %.2f m\n", p.id.c_str(), w.height(p.pos.x, p.pos.y), p.height); }
     CHECK(off == 0, "%d villages not flattened", off);
     // chunk generation at all LODs produces geometry and colliders near a village
     const Poi* v = nullptr; for (auto& p : w.pois) if (p.type == PoiType::Village) { v = &p; break; }
@@ -273,7 +285,7 @@ static void testBridges(World& w) {
         float endGap = std::max(std::fabs(w.bridgeDeck(s, -L) - w.height(ea.x, ea.y)), std::fabs(w.bridgeDeck(s, L) - w.height(eb.x, eb.y)));
         // groundHeight on the deck axis = the deck
         float walkGap = 0;
-        for (float a = -L + 0.5f; a < L - 0.5f; a += 1.f) { vec2 p = s.pos + dir * a; walkGap = std::max(walkGap, std::fabs(w.groundHeight(p.x, p.y) - w.bridgeDeck(s, a))); }
+        for (float a = -L + 0.5f; a < L - 0.5f; a += 1.f) { vec2 p = s.pos + dir * a; float g = std::fabs(w.groundHeight(p.x, p.y) - w.bridgeDeck(s, a)); if (g > 0.1f) std::printf("    gap %.2f at along %.1f: ground %.2f deck %.2f terrain %.2f\n", g, a, w.groundHeight(p.x, p.y), w.bridgeDeck(s, a), w.height(p.x, p.y)); walkGap = std::max(walkGap, g); }
         std::printf("  bridge at (%.0f, %.0f): %.0f m, steepest 25 cm step %.3f m, ends %.3f m from the road, clearance %.2f m, walk/deck %.3f m\n", s.pos.x, s.pos.y, 2 * L, worstStep, endGap, minClear, walkGap);
         CHECK(worstStep < 0.12f, "bridge deck has a step of %.2f m", worstStep);
         CHECK(endGap < 0.05f, "bridge end %.2f m away from the road", endGap);
@@ -327,12 +339,12 @@ static void testPlacement(World& w, bool verbose) {
     int overlaps = 0, sOnRoad = 0, sInWater = 0;
     for (size_t i = 0; i < w.structures.size(); i++) {
         const Structure& a = w.structures[i];
-        if (a.kind == S_BRIDGE || a.kind == S_FIELD || a.kind == S_PEN || a.kind == S_DOCK) continue;
+        if (a.kind == S_BRIDGE || a.kind == S_FIELD || a.kind == S_PEN || a.kind == S_DOCK || a.kind == S_PIER) continue;
         vec2 fa = structureFootprint(a.kind) * a.scale;
         if (fa.x <= 0) continue;
         for (size_t j = i + 1; j < w.structures.size(); j++) {
             const Structure& b = w.structures[j];
-            if (b.kind == S_BRIDGE || b.kind == S_FIELD || b.kind == S_PEN || b.kind == S_DOCK || length(a.pos - b.pos) > 40.f) continue;
+            if (b.kind == S_BRIDGE || b.kind == S_FIELD || b.kind == S_PEN || b.kind == S_DOCK || b.kind == S_PIER || length(a.pos - b.pos) > 40.f) continue;
             vec2 fb = structureFootprint(b.kind) * b.scale;
             if (fb.x <= 0) continue;
             // corners of b inside a (or centres within each other)
@@ -385,7 +397,7 @@ static void testBuildingsGrounded(World& w) {
     int n = 0, floatingOld = 0, floatingNew = 0, deepKind = -1; float worstOld = 0, worstNew = 0, deepest = 0;
     for (const Structure& s : w.structures) {
         if (s.kind == S_FIELD || s.kind == S_PEN) continue;   // they follow the terrain vertex by vertex
-        if (s.kind == S_BRIDGE || s.kind == S_DOCK || s.kind == S_CASTLE_WALL || s.kind == S_CAVE || s.kind == S_MINE || s.kind == S_RUIN_WALL || s.kind == S_ELVEN_ARCH || s.kind == S_PORTAL) continue;
+        if (s.kind == S_BRIDGE || s.kind == S_DOCK || s.kind == S_PIER || s.kind == S_CASTLE_WALL || s.kind == S_CAVE || s.kind == S_MINE || s.kind == S_RUIN_WALL || s.kind == S_ELVEN_ARCH || s.kind == S_PORTAL) continue;
         n++;
         float oldY = s.poi >= 0 ? w.pois[s.poi].height : w.height(s.pos.x, s.pos.y);
         float newY = structureGroundY(s, w);
@@ -704,6 +716,18 @@ int lkRunTests(int argc, char** argv) {
     testData();
     initPropTemplates();
     World w; w.buildPlan();
+    if (const char* pr = getenv("LK_PROBE")) {
+        // development aid (2.0.0): ASCII relief and region map of the whole world, to place settlements. LK_PROBE=<cell metres>
+        float cell = (float)atof(pr); if (cell < 16.f) cell = 48.f;
+        int n = (int)(WORLD_SIZE / cell);
+        static const char reg[] = "GFAESHDC";   // Greenhaven Frostheim Ashen Elderwood Shadows High-crowns Dunes(Amber) Coral
+        printf("REGIONS (cell %.0f m, %d x %d)\n", cell, n, n);
+        for (int j = 0; j < n; j++) { std::string line; for (int i = 0; i < n; i++) { float x = (i + .5f) * cell, z = (j + .5f) * cell; float h = w.height(x, z); bool wat = w.waterLevel(x, z) > h; line += wat ? '~' : reg[w.regionId(x, z) % 8]; } printf("%s\n", line.c_str()); }
+        printf("RELIEF (digit = height/10 m, ~ water, ! slope >35%%)\n");
+        for (int j = 0; j < n; j++) { std::string line; for (int i = 0; i < n; i++) { float x = (i + .5f) * cell, z = (j + .5f) * cell; float h = w.height(x, z); bool wat = w.waterLevel(x, z) > h; float sl = std::fabs(w.height(x + cell * .3f, z) - w.height(x - cell * .3f, z)) / (cell * .6f) + std::fabs(w.height(x, z + cell * .3f) - w.height(x, z - cell * .3f)) / (cell * .6f); line += wat ? '~' : (sl > 0.35f ? '!' : (char)('0' + std::min(9, std::max(0, (int)(h / 10.f))))); } printf("%s\n", line.c_str()); }
+        for (auto& p : w.pois) printf("POI %-16s %-22s (%5.0f,%5.0f) r=%.0f h=%.1f %s\n", p.id.c_str(), p.name.c_str(), p.pos.x, p.pos.y, p.radius, p.height, regionName(p.region));
+        return 0;
+    }
     testWorld(w);
     testTallGrass(w);
     testRiversHaveWater(w);

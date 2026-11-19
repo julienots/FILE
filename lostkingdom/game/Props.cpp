@@ -24,6 +24,8 @@ vec3 regionGroundTint(int r) {
     case R_ASHEN: return {0.95f, 0.85f, 0.8f};
     case R_ELDERWOOD: return {0.86f, 0.98f, 0.94f};
     case R_SHADOWS: return {0.78f, 0.8f, 0.72f};
+    case R_AMBER: return {1.1f, 0.94f, 0.72f};
+    case R_CORAL: return {0.98f, 1.04f, 0.9f};
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
@@ -37,6 +39,8 @@ vec3 foliageColor(int r, float t) {
     case R_ASHEN: return ramp3(0x4a4034, 0x6a5638, 0x8a7448, t);
     case R_ELDERWOOD: return ramp3(0x2f5a44, 0x4f7a56, 0x7a9a68, t);
     case R_SHADOWS: return ramp3(0x3a4632, 0x55603e, 0x76744e, t);
+    case R_AMBER: return ramp3(0x6a5a30, 0x8a7a44, 0xb59a58, t);
+    case R_CORAL: return ramp3(0x2f7a3a, 0x4f9a40, 0x9ab84a, t);
     default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }
@@ -554,6 +558,265 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
         t.radius = 1.2f; t.height = 1.7f;
         break;
     }
+    // ---------------------------------------------------------------- 2.0.0 Amber Sands and Coral Coast
+    case P_PALM: case P_DATEPALM: {
+        // curved, ringed trunk; a crown of arched fronds (three-section blades that droop at the tips); fruit
+        bool date = k == P_DATEPALM;
+        float h = date ? rng.range(6.5f, 8.5f) : rng.range(5.5f, 8.f);
+        float lean = rng.range(0.7f, 2.2f) * (rng.chance(0.5f) ? 1.f : -1.f), ang = rng.range(0, TAU);
+        vec3 dir{std::cos(ang), 0, std::sin(ang)};
+        vec3 prev{0, -0.3f, 0};
+        int segs = 7;
+        Mat trunk(date ? hexColor(0x6b5438) : hexColor(0x8a7050), 0.92f);
+        vec3 top = prev;
+        for (int i = 1; i <= segs; i++) {
+            float u = (float)i / segs;
+            vec3 p = dir * (lean * u * u) + vec3(0, -0.3f + h * u, 0);
+            S.tube(prev, p, 0.3f - u * 0.12f, 0.3f - (u + 1.f / segs) * 0.12f, trunk.withColor(trunk.color * (0.9f + 0.1f * (i % 2))), 7, i == segs);
+            prev = p; top = p;
+        }
+        int nf = date ? 12 : rng.irange(9, 12);
+        vec3 gl = date ? hexColor(0x3f7a38) : hexColor(0x2f8a3a), gt = date ? hexColor(0x7ab048) : hexColor(0x7cc24a);
+        for (int i = 0; i < nf; i++) {
+            float a = i * TAU / nf + rng.range(-0.15f, 0.15f);
+            vec3 d{std::cos(a), 0, std::sin(a)};
+            float len = rng.range(2.7f, 3.5f) * (date ? 0.9f : 1.f), up = rng.range(0.35f, 1.15f);
+            vec3 p0 = top, p1 = top + d * (len * 0.38f) + vec3(0, up, 0), p2 = top + d * (len * 0.72f) + vec3(0, up * 0.9f - 0.5f, 0), p3 = top + d * len + vec3(0, up * 0.5f - 1.5f, 0);
+            vec3 sd{-d.z, 0, d.x};
+            Mat m0(lerp(gl, gt, 0.15f), 0.8f, 0, 0, 0.5f), m1(lerp(gl, gt, 0.55f), 0.8f, 0, 0, 0.8f), m2(gt, 0.8f, 0, 0, 1.f);
+            F.blade(p0, p1, 0.55f, sd, m0, m1);
+            F.blade(p1, p2, 0.62f, sd, m1, m1);
+            F.blade(p2, p3, 0.46f, sd, m1, m2);
+        }
+        if (date) for (int i = 0; i < 3; i++) F.ellipsoid(top + vec3(std::cos(i * 2.1f) * 0.3f, -0.45f - i * 0.05f, std::sin(i * 2.1f) * 0.3f), vec3(0.14f, 0.3f, 0.14f), Mat(hexColor(0xc0702a), 0.7f, 0, 0, 0.3f), 6, 4);
+        else for (int i = 0; i < 4; i++) F.ellipsoid(top + vec3(std::cos(i * 1.6f) * 0.28f, -0.3f, std::sin(i * 1.6f) * 0.28f), vec3(0.16f), Mat(hexColor(0x6a4a22), 0.8f, 0, 0, 0.2f), 6, 4);
+        t.radius = 0.4f; t.height = h;
+        break;
+    }
+    case P_BANANA: {
+        for (int s2 = 0; s2 < 3; s2++) {
+            vec3 o{rng.range(-0.5f, 0.5f), 0, rng.range(-0.5f, 0.5f)};
+            float h = rng.range(2.2f, 3.2f);
+            S.tube(o + vec3(0, -0.2f, 0), o + vec3(rng.range(-0.1f, 0.1f), h, rng.range(-0.1f, 0.1f)), 0.2f, 0.12f, Mat(hexColor(0x6a8a3a), 0.85f), 7, false);
+            int nl = 6;
+            for (int i = 0; i < nl; i++) {
+                float a = i * TAU / nl + s2;
+                vec3 d{std::cos(a), 0, std::sin(a)};
+                vec3 r0 = o + vec3(0, h, 0), r1 = r0 + d * 1.1f + vec3(0, 0.5f, 0), r2 = r0 + d * 2.1f + vec3(0, -0.15f, 0);
+                vec3 sd{-d.z, 0, d.x};
+                F.blade(r0, r1, 0.9f, sd, Mat(hexColor(0x3d8a30), 0.8f, 0, 0, 0.5f), Mat(hexColor(0x5aa83a), 0.8f, 0, 0, 0.9f));
+                F.blade(r1, r2, 0.85f, sd, Mat(hexColor(0x5aa83a), 0.8f, 0, 0, 0.9f), Mat(hexColor(0x78c04a), 0.8f, 0, 0, 1.f));
+            }
+            if (s2 == 0) { for (int i = 0; i < 7; i++) S.tube({o.x + 0.2f, h - 0.6f - i * 0.04f, o.z}, {o.x + 0.35f, h - 0.9f - i * 0.04f, o.z + 0.08f * i - 0.3f}, 0.05f, 0.05f, Mat(hexColor(0xe4c33a), 0.6f), 5, true); }
+        }
+        t.radius = 0.55f; t.height = 3.f;
+        break;
+    }
+    case P_TROPBUSH: {
+        vec3 fl = var == 0 ? hexColor(0xe8364a) : (var == 1 ? hexColor(0xf5b23a) : hexColor(0xf070b8));
+        for (int i = 0; i < 4; i++) {
+            vec3 o{rng.range(-0.5f, 0.5f), rng.range(0.35f, 0.6f), rng.range(-0.5f, 0.5f)};
+            clump(F, o, vec3(rng.range(0.55f, 0.8f), rng.range(0.4f, 0.55f), rng.range(0.55f, 0.8f)), lerp(hexColor(0x2f7a38), hexColor(0x4f9a40), rng.f()), 0.35f, rng.next());
+        }
+        for (int i = 0; i < 9; i++) {
+            vec3 p = rng.onSphere() * vec3(0.75f, 0.45f, 0.75f) + vec3(0, 0.6f, 0);
+            F.ellipsoid(p, vec3(0.13f, 0.06f, 0.13f), Mat(fl, 0.5f, 0, 0.25f, 0.3f), 6, 3);
+            F.ellipsoid(p + vec3(0, 0.05f, 0), vec3(0.04f), Mat(hexColor(0xffe070), 0.5f, 0, 0.3f, 0.3f), 4, 3);
+        }
+        t.radius = 0; t.height = 1.1f;
+        break;
+    }
+    case P_ACACIA: {
+        // flat umbrella canopy on a forked trunk
+        float h = rng.range(3.4f, 4.8f);
+        Mat bark(hexColor(0x6a5238), 0.92f);
+        vec3 top{rng.range(-0.5f, 0.5f), h, rng.range(-0.5f, 0.5f)};
+        S.tube({0, -0.3f, 0}, top * 0.5f, 0.3f, 0.22f, bark, 7, false);
+        for (int i = 0; i < 3; i++) {
+            float a = i * TAU / 3 + rng.f();
+            vec3 b = top * 0.5f, e = top + vec3(std::cos(a) * 1.6f, 0.1f * i, std::sin(a) * 1.6f);
+            S.tube(b, e, 0.18f, 0.08f, bark, 6, false);
+            clump(F, e + vec3(0, 0.35f, 0), vec3(2.0f, 0.42f, 2.0f), lerp(hexColor(0x6a8a30), hexColor(0x9aa040), rng.f() * 0.6f), 0.7f, rng.next());
+        }
+        clump(F, top + vec3(0, 0.5f, 0), vec3(2.4f, 0.5f, 2.4f), hexColor(0x7a9a34), 0.7f, rng.next());
+        t.radius = 0.35f; t.height = h + 1.f;
+        break;
+    }
+    case P_CACTUS: {
+        // saguaro with up-turned arms; a pink flower crowns some
+        float h = rng.range(2.6f, 4.2f);
+        Mat c(hexColor(0x4f8a4a), 0.85f), rib(hexColor(0x3a6e3a), 0.85f);
+        S.tube({0, -0.2f, 0}, {0, h, 0}, 0.3f, 0.27f, c, 10, true);
+        S.ellipsoid({0, h, 0}, vec3(0.27f, 0.22f, 0.27f), c, 8, 4);
+        for (int i = 0; i < 10; i++) { float a = i * TAU / 10; S.box({std::cos(a) * 0.29f, h * 0.5f, std::sin(a) * 0.29f}, {0.015f, h * 0.5f - 0.1f, 0.015f}, rib); }
+        int arms = var == 0 ? 0 : (var == 1 ? 1 : 2);
+        for (int i = 0; i < arms; i++) {
+            float a = i * PI + rng.range(0, 1.f), y = h * rng.range(0.4f, 0.6f);
+            vec3 d{std::cos(a), 0, std::sin(a)};
+            vec3 p1 = d * 0.9f + vec3(0, y, 0), p2 = d * 1.05f + vec3(0, y + h * 0.28f, 0);
+            S.tube(vec3(0, y, 0) + d * 0.1f, p1, 0.17f, 0.16f, c, 8, false);
+            S.tube(p1, p2, 0.16f, 0.15f, c, 8, true);
+            S.ellipsoid(p2, vec3(0.15f), c, 7, 4);
+        }
+        for (int i = 0; i < 24; i++) { float a = rng.range(0, TAU), y = rng.range(0.3f, h); S.box({std::cos(a) * 0.31f, y, std::sin(a) * 0.31f}, {0.012f, 0.05f, 0.012f}, Mat(hexColor(0xe8e2c0), 0.8f)); }
+        if (var != 1) S.ellipsoid({0, h + 0.2f, 0}, vec3(0.16f, 0.09f, 0.16f), Mat(hexColor(0xf070a0), 0.5f, 0, 0.3f), 7, 3);
+        t.radius = 0.4f; t.height = h + 0.3f;
+        break;
+    }
+    case P_AGAVE: {
+        int n = 13;
+        for (int i = 0; i < n; i++) {
+            float a = i * TAU / n * 1.62f + rng.range(-0.1f, 0.1f), tilt = 0.3f + 0.8f * (float)(i % 4) / 3.f;
+            vec3 d{std::cos(a), 0, std::sin(a)};
+            vec3 root{0, 0, 0}, tip = d * (0.4f + tilt * 1.0f) + vec3(0, 1.3f - tilt * 0.5f, 0);
+            F.blade(root, tip, 0.26f, {-d.z, 0, d.x}, Mat(hexColor(0x4f7a62), 0.8f, 0, 0, 0.1f), Mat(hexColor(0x8ab8a0), 0.8f, 0, 0, 0.35f));
+        }
+        if (var == 2) { S.tube({0, 0, 0}, {0.05f, 3.2f, 0}, 0.07f, 0.04f, Mat(hexColor(0x8a7a40), 0.9f), 6, false); for (int i = 0; i < 6; i++) S.ellipsoid({0.05f, 2.2f + i * 0.17f, 0}, vec3(0.22f, 0.09f, 0.22f), Mat(hexColor(0xe8c050), 0.6f), 6, 3); }
+        t.radius = 0; t.height = 1.2f;
+        break;
+    }
+    case P_SANDROCK: {
+        // wind-carved sandstone: a layered pillar on a narrow neck (a hoodoo) or a sloping slab
+        vec3 c0 = lerp(hexColor(0xb8743a), hexColor(0xd69a58), rng.f());
+        if (var != 2) {
+            int layers = rng.irange(4, 6);
+            float y = 0;
+            for (int i = 0; i < layers; i++) {
+                float r = 0.5f + 0.55f * std::fabs(std::sin(i * 1.4f + var));
+                float hh = rng.range(0.45f, 0.8f);
+                S.rock({rng.range(-0.08f, 0.08f), y + hh * 0.5f, rng.range(-0.08f, 0.08f)}, vec3(r * 1.1f, hh * 0.65f, r), Mat(lerp(c0, hexColor(0x8a5230), (float)(i % 2) * 0.5f), 0.9f), rng.next(), 1);
+                y += hh * 0.85f;
+            }
+            t.height = y + 0.5f; t.radius = 0.9f;
+        } else {
+            S.rock({0, 0.5f, 0}, vec3(1.7f, 0.9f, 1.2f), Mat(c0, 0.9f), rng.next(), 1);
+            S.rock({1.5f, 0.2f, 0.5f}, vec3(0.7f, 0.45f, 0.6f), Mat(c0 * 0.9f, 0.9f), rng.next(), 0);
+            t.height = 1.6f; t.radius = 1.6f;
+        }
+        break;
+    }
+    case P_TUMBLEWEED: {
+        for (int i = 0; i < 26; i++) {
+            vec3 d = rng.onSphere();
+            F.blade({0, 0.5f, 0}, d * 0.5f + vec3(0, 0.5f, 0), 0.05f, normalize(cross(d, vec3(0, 1, 0.1f))), Mat(hexColor(0x6a5232), 0.9f, 0, 0, 0.6f), Mat(hexColor(0x9a7a4a), 0.9f, 0, 0, 0.9f));
+        }
+        t.radius = 0; t.height = 1.f;
+        break;
+    }
+    case P_DRYBUSH: {
+        for (int i = 0; i < 7; i++) {
+            float a = i * TAU / 7 + rng.range(-0.3f, 0.3f);
+            vec3 tip = vec3(std::cos(a) * rng.range(0.3f, 0.7f), rng.range(0.7f, 1.2f), std::sin(a) * rng.range(0.3f, 0.7f));
+            S.tube({0, 0, 0}, tip, 0.04f, 0.015f, Mat(hexColor(0x7a6040), 0.95f, 0, 0, 0.5f), 4, false);
+            if (rng.chance(0.6f)) S.tube(tip * 0.6f, tip * 0.6f + vec3(rng.range(-0.3f, 0.3f), 0.35f, rng.range(-0.3f, 0.3f)), 0.025f, 0.01f, Mat(hexColor(0x8a6a48), 0.95f, 0, 0, 0.6f), 4, false);
+            if (var == 1 && rng.chance(0.5f)) F.ellipsoid(tip, vec3(0.08f), Mat(hexColor(0xb8a050), 0.9f, 0, 0, 0.6f), 4, 3);
+        }
+        t.radius = 0; t.height = 1.f;
+        break;
+    }
+    case P_SEAROCK: {
+        vec3 col = lerp(hexColor(0x4a4a50), hexColor(0x6a6a70), rng.f());
+        S.rock({0, 0.2f, 0}, vec3(rng.range(0.9f, 1.4f), rng.range(0.6f, 1.0f), rng.range(0.9f, 1.3f)), Mat(col, 0.8f), rng.next(), 1);
+        S.rock({0.9f, 0.05f, 0.5f}, vec3(0.5f, 0.35f, 0.45f), Mat(col * 0.9f, 0.8f), rng.next(), 0);
+        for (auto& v : S.v) if (v.ny < 60 && v.py < 0.3f) { Color8 c = toColor8(hexColor(0x3f7a52), 1); v.r = c.r; v.g = c.g; v.b = c.b; }   // weed at the waterline
+        for (int i = 0; i < 4; i++) S.cone({rng.range(-0.8f, 0.8f), 0.2f, rng.range(-0.6f, 0.6f)}, {rng.range(-0.8f, 0.8f), 0.55f, rng.range(-0.6f, 0.6f)}, 0.1f, Mat(hexColor(0xe8a0a0), 0.8f), 6);
+        t.radius = 1.1f; t.height = 1.3f;
+        break;
+    }
+    case P_DRIFTWOOD: {
+        Mat w(hexColor(0xb8aa94), 0.95f);
+        vec3 a{-1.1f, 0.12f, 0}, b{0.1f, 0.35f, 0.2f}, c{1.2f, 0.18f, -0.1f};
+        S.tube(a, b, 0.14f, 0.1f, w, 6, true); S.tube(b, c, 0.1f, 0.12f, w, 6, true);
+        S.tube(b, b + vec3(-0.2f, 0.5f, 0.3f), 0.05f, 0.02f, w, 5, false);
+        t.radius = 0.9f; t.height = 0.5f;
+        break;
+    }
+    case P_SHELLS: {
+        for (int i = 0; i < 5; i++) {
+            vec3 p{rng.range(-0.6f, 0.6f), 0.03f, rng.range(-0.6f, 0.6f)};
+            vec3 col = i % 3 == 0 ? hexColor(0xf4d8d0) : (i % 3 == 1 ? hexColor(0xf8f0e0) : hexColor(0xe8b8a0));
+            if (i % 2) S.ellipsoid(p, vec3(0.12f, 0.05f, 0.1f), Mat(col, 0.4f), 7, 4);
+            else S.cone(p, p + vec3(0.02f, 0.2f, 0), 0.08f, Mat(col, 0.45f), 7);
+        }
+        t.radius = 0; t.height = 0.2f;
+        break;
+    }
+    case P_HAMMOCK: {
+        Mat w(pal::wood, 0.88f);
+        for (int s2 = -1; s2 <= 1; s2 += 2) S.tube({s2 * 1.5f, -0.2f, 0}, {s2 * 1.45f, 2.2f, 0}, 0.1f, 0.08f, w, 6, true);
+        for (int i = 0; i < 10; i++) {
+            float u = (float)i / 9.f, x = -1.4f + 2.8f * u, y = 1.9f - 0.9f * std::sin(u * PI);
+            S.box({x, y, 0}, {0.16f, 0.025f, 0.34f}, Mat(i % 2 ? hexColor(0xd9d0b8) : hexColor(0xc85a40), 0.9f));
+        }
+        t.radius = 0.2f; t.height = 2.2f;
+        break;
+    }
+    case P_NETRACK: {
+        Mat w(pal::woodLight, 0.88f);
+        for (int s2 = -1; s2 <= 1; s2 += 2) { S.tube({s2 * 1.6f, -0.2f, 0}, {s2 * 1.55f, 2.2f, 0.1f}, 0.07f, 0.06f, w, 6, true); S.tube({s2 * 1.6f, 0.2f, 0}, {s2 * 1.1f, 1.2f, 0.9f}, 0.04f, 0.04f, w, 5, false); }
+        S.tube({-1.6f, 2.15f, 0.05f}, {1.6f, 2.15f, 0.05f}, 0.06f, 0.06f, w, 6, true);
+        for (int i = 0; i < 12; i++) { float x = -1.45f + i * 0.26f; S.tube({x, 2.15f, 0.05f}, {x + 0.03f, 0.9f - 0.2f * std::sin(i * 0.5f), 0.05f}, 0.012f, 0.012f, Mat(hexColor(0xa89870), 0.95f), 4, false); }
+        for (int j = 0; j < 4; j++) S.tube({-1.5f, 1.85f - j * 0.3f, 0.06f}, {1.5f, 1.8f - j * 0.3f, 0.06f}, 0.01f, 0.01f, Mat(hexColor(0xa89870), 0.95f), 4, false);
+        for (int i = 0; i < 3; i++) S.ellipsoid({-0.9f + i * 0.9f, 0.5f, 0.08f}, vec3(0.28f, 0.06f, 0.1f), Mat(hexColor(0xaab4bc), 0.35f, 0.3f), 7, 4);   // fish
+        t.radius = 0.2f; t.height = 2.2f;
+        break;
+    }
+    case P_BOAT: {
+        // a fishing boat: hull of planks, a mast with a furled lateen sail, oars, a net heap
+        Mat hull(hexColor(0x7a5636), 0.88f), plank(hexColor(0x9c7448), 0.88f), paint(var == 1 ? hexColor(0x2a5a8a) : (var == 2 ? hexColor(0xb83a2a) : hexColor(0x2f7a6a)), 0.8f);
+        for (int i = 0; i < 14; i++) {
+            float u = (float)i / 13.f, z = -2.4f + 4.8f * u;
+            float wdt = 0.95f * std::sin(u * PI * 0.92f + 0.12f) + 0.1f;
+            float rise = 0.28f + 0.5f * std::pow(std::fabs(u * 2.f - 1.f), 2.f);
+            S.box({-wdt, 0.45f + rise * 0.5f, z}, {0.05f, 0.3f + rise * 0.3f, 0.2f}, hull);
+            S.box({wdt, 0.45f + rise * 0.5f, z}, {0.05f, 0.3f + rise * 0.3f, 0.2f}, hull);
+            S.box({0, 0.22f, z}, {wdt * 0.85f, 0.05f, 0.2f}, plank);
+        }
+        S.box({-0.9f, 0.9f, 0}, {0.03f, 0.04f, 2.3f}, paint); S.box({0.9f, 0.9f, 0}, {0.03f, 0.04f, 2.3f}, paint);
+        S.box({0, 0.55f, 0.9f}, {0.85f, 0.04f, 0.09f}, plank); S.box({0, 0.55f, -0.9f}, {0.85f, 0.04f, 0.09f}, plank);
+        if (var != 0) {
+            S.tube({0, 0.3f, 0.3f}, {0, 4.2f, 0.3f}, 0.07f, 0.05f, plank, 6, true);
+            S.tube({-1.4f, 3.6f, 0.3f}, {1.6f, 1.6f, 0.3f}, 0.04f, 0.035f, plank, 5, true);
+            S.triP({-1.4f, 3.6f, 0.3f}, {1.6f, 1.6f, 0.3f}, {-0.1f, 1.5f, 0.3f}, Mat(hexColor(0xe8dcc0), 0.95f));
+            S.triP({1.6f, 1.6f, 0.3f}, {-1.4f, 3.6f, 0.3f}, {-0.1f, 1.5f, 0.3f}, Mat(hexColor(0xe8dcc0), 0.95f));
+        } else {
+            S.tube({-0.7f, 0.9f, 0.5f}, {-2.0f, 0.5f, 0.1f}, 0.03f, 0.03f, plank, 4, false);
+            S.tube({0.7f, 0.9f, 0.5f}, {2.0f, 0.5f, 0.1f}, 0.03f, 0.03f, plank, 4, false);
+            S.ellipsoid({0, 0.4f, -1.1f}, vec3(0.5f, 0.18f, 0.4f), Mat(hexColor(0xa89870), 0.95f), 7, 4);
+        }
+        t.radius = 1.4f; t.height = 1.3f;
+        break;
+    }
+    case P_AMPHORA: {
+        Mat tc(var == 1 ? hexColor(0xb86a3a) : hexColor(0xc87a48), 0.8f), tc2(hexColor(0x8a4a2a), 0.8f);
+        auto jar = [&](vec3 o, float s, bool two) {
+            S.lathe({{0.01f, 0}, {0.2f * s, 0.03f * s}, {0.34f * s, 0.3f * s}, {0.3f * s, 0.62f * s}, {0.16f * s, 0.85f * s}, {0.13f * s, 1.0f * s}, {0.19f * s, 1.05f * s}, {0.12f * s, 1.05f * s}}, tc, 10, o);
+            S.lathe({{0.2f * s, 0.55f * s}, {0.31f * s, 0.57f * s}}, tc2, 10, o);
+            if (two) for (int sd = -1; sd <= 1; sd += 2) S.tube(o + vec3(sd * 0.13f * s, 0.95f * s, 0), o + vec3(sd * 0.3f * s, 0.6f * s, 0), 0.025f * s, 0.025f * s, tc2, 4, false);
+        };
+        jar({0, 0, 0}, 1.2f, true); jar({0.55f, 0, 0.2f}, 0.9f, false);
+        if (var != 2) jar({-0.4f, 0, 0.5f}, 0.75f, true);
+        t.radius = 0.8f; t.height = 1.3f;
+        break;
+    }
+    case P_CARPET: {
+        vec3 a = var == 0 ? hexColor(0x9a2a2a) : (var == 1 ? hexColor(0x2a5a8a) : hexColor(0x2f7a5a)), b = hexColor(0xe8c860), c = hexColor(0xe8dcc0);
+        S.box({0, 0.025f, 0}, {1.15f, 0.025f, 1.7f}, Mat(a, 0.95f));
+        S.box({0, 0.052f, 0}, {1.0f, 0.004f, 1.55f}, Mat(b, 0.95f));
+        S.box({0, 0.056f, 0}, {0.88f, 0.004f, 1.43f}, Mat(a * 0.85f, 0.95f));
+        for (int i = 0; i < 3; i++) S.ellipsoid({0, 0.062f, -0.9f + i * 0.9f}, vec3(0.34f, 0.006f, 0.34f), Mat(i % 2 ? c : b, 0.9f), 8, 2);
+        for (int i = 0; i < 8; i++) { float x = -1.0f + i * 0.28f; S.box({x, 0.025f, 1.78f}, {0.03f, 0.015f, 0.1f}, Mat(c, 0.95f)); S.box({x, 0.025f, -1.78f}, {0.03f, 0.015f, 0.1f}, Mat(c, 0.95f)); }
+        t.radius = 0; t.height = 0.1f;
+        break;
+    }
+    case P_BRAZIER: {
+        Mat br(hexColor(0x8a5a30), 0.45f, 0.9f);
+        for (int i = 0; i < 3; i++) { float a = i * TAU / 3; S.tube({std::cos(a) * 0.45f, 0, std::sin(a) * 0.45f}, {std::cos(a) * 0.12f, 0.85f, std::sin(a) * 0.12f}, 0.04f, 0.035f, br, 5, false); }
+        S.lathe({{0.01f, 0.8f}, {0.28f, 0.88f}, {0.46f, 1.15f}, {0.42f, 1.18f}, {0.01f, 0.9f}}, br, 12);
+        S.ellipsoid({0, 1.12f, 0}, vec3(0.34f, 0.09f, 0.34f), Mat(pal::ember, 0.6f, 0, 2.8f), 8, 3);
+        t.radius = 0.5f; t.height = 1.2f;
+        break;
+    }
     default: break;
     }
     S.bakeHeightAO(-0.2f, 1.2f, 0.65f);
@@ -564,6 +827,8 @@ int propVariants(PropKind k) {
     case P_OAK: case P_BIRCH: case P_PINE: case P_SNOWPINE: return 4;
     case P_HAYBALE: case P_CRATE: case P_BARREL: return 1;
     case P_SIGNPOST: case P_LANTERNPOST: case P_CAMPFIRE: return 2;
+    case P_DATEPALM: case P_PALM: return 4;
+    case P_SHELLS: case P_NETRACK: case P_HAMMOCK: case P_BRAZIER: case P_TUMBLEWEED: case P_DRIFTWOOD: return 1;
     default: return 3;
     }
 }
@@ -831,7 +1096,7 @@ static void field(MeshBuilder& M, MeshBuilder& Fo, int variant) {
 }
 
 static vec3 castleStone(int variant) {
-    return variant == 1 ? hexColor(0x4a4650) : (variant == 2 ? hexColor(0xa8b2ba) : hexColor(0x9a948a));
+    return variant == 1 ? hexColor(0x4a4650) : (variant == 2 ? hexColor(0xa8b2ba) : (variant == 3 ? hexColor(0xd2b078) : hexColor(0x9a948a)));
 }
 
 static void crenellations(MeshBuilder& M, float x0, float x1, float y, float z, float depth, const Mat& m) {
@@ -1239,6 +1504,9 @@ vec2 structureFootprint(int kind) {
     case S_KEEP: return {9.5f, 7.5f}; case S_MONASTERY: return {10.3f, 7.3f}; case S_CRYPT: return {4.1f, 4.6f}; case S_WINDMILL: return {3.f, 3.f};
     case S_CASTLE_TOWER: return {3.4f, 3.4f}; case S_STILT_HUT: return {2.4f, 2.4f}; case S_STATUE: return {1.6f, 1.6f}; case S_GATE: return {5.2f, 1.3f};
     case S_PALISADE: return {1.9f, 0.25f}; case S_FIELD: return {9.f, 7.5f}; case S_PEN: return {5.f, 5.f}; case S_BANNER: return {1.5f, 0.7f};
+    case S_DOMEHOUSE: return {3.4f, 3.5f}; case S_BAZAAR: return {3.3f, 2.5f}; case S_MINARET: return {1.8f, 1.8f}; case S_ZIGGURAT: return {11.f, 11.f};
+    case S_LIGHTHOUSE: return {3.2f, 3.2f}; case S_PAGODA: return {5.4f, 11.f}; case S_SPHINX: return {3.2f, 7.3f}; case S_PIER: return {1.4f, 7.f};
+    case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};
     }
@@ -1250,7 +1518,8 @@ static bool restsOnFootprint(int kind) {
     switch (kind) {
     case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_STILT_HUT: case S_TOWER: case S_WINDMILL: case S_WELL: case S_STALL:
     case S_FIELD: case S_CHAPEL: case S_CRYPT: case S_FORGE: case S_TENT: case S_PEN: case S_BANNER: case S_MONASTERY: case S_STATUE: case S_KEEP:
-    case S_CASTLE_TOWER: case S_OBELISK: case S_ALTAR: case S_LANTERN: case S_PALISADE: case S_GATE: case S_WAYSTONE: case S_CAMPFIRE: return true;
+    case S_CASTLE_TOWER: case S_OBELISK: case S_ALTAR: case S_LANTERN: case S_PALISADE: case S_GATE: case S_WAYSTONE: case S_CAMPFIRE:
+    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT: case S_COLONNADE: case S_ARCHWAY: return true;
     default: return false;
     }
 }
@@ -1259,7 +1528,8 @@ static bool restsOnFootprint(int kind) {
 static bool getsPlinth(int kind) {
     switch (kind) {
     case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_CHAPEL: case S_FORGE: case S_TOWER: case S_WINDMILL:
-    case S_CRYPT: case S_MONASTERY: case S_KEEP: case S_CASTLE_TOWER: return true;
+    case S_CRYPT: case S_MONASTERY: case S_KEEP: case S_CASTLE_TOWER:
+    case S_DOMEHOUSE: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_ARCHWAY: return true;
     default: return false;
     }
 }
@@ -1327,6 +1597,431 @@ static void bannerPole(MeshBuilder& M, MeshBuilder& Fo) {
     }
     M.lathe({{0.45f, 0}, {0.5f, 0.5f}, {0.35f, 0.9f}, {0.01f, 0.9f}}, Mat(pal::stone, 0.8f), 10, {-1.4f, 0, 0.6f});
     M.lathe({{0.38f, 0.9f}, {0.42f, 1.15f}, {0.01f, 1.15f}}, iron, 10, {-1.4f, 0, 0.6f});
+}
+
+// ------------------------------------------------------------------------------------------ 2.0.0 new buildings
+// Sandstone of the Amber Sands, lime-washed harbour towns of the Coral Coast, the temple of Shirokawa.
+namespace sand {
+const vec3 wall = hexColor(0xdcbf8a), wallDark = hexColor(0xb98d58), wallLight = hexColor(0xecd6a8), trim = hexColor(0x2fa6a0), trim2 = hexColor(0xc4543a);
+const vec3 gold = hexColor(0xd9a93c), lime = hexColor(0xf2ece0), terracotta = hexColor(0xc0683a), indigo = hexColor(0x2a4a8a);
+}  // namespace sand
+
+static void striped(MeshBuilder& M, vec3 a0, vec3 a1, vec3 b0, vec3 b1, int n, const Mat& m1, const Mat& m2) {
+    // a cloth sloping from edge a (a0..a1) to edge b (b0..b1), cut into n alternating strips
+    for (int i = 0; i < n; i++) {
+        float u0 = (float)i / n, u1 = (float)(i + 1) / n;
+        vec3 p00 = lerp(a0, a1, u0), p01 = lerp(a0, a1, u1), p10 = lerp(b0, b1, u0), p11 = lerp(b0, b1, u1);
+        const Mat& m = i % 2 ? m2 : m1;
+        M.quadP(p00, p10, p11, p01, m); M.quadP(p00, p01, p11, p10, m);
+    }
+}
+
+static void domeHouse(MeshBuilder& M, MeshBuilder& Fo, int variant, int region) {
+    Rng rng(variant * 29 + region);
+    float w = rng.range(5.6f, 6.6f), l = rng.range(5.8f, 6.8f), h = 3.5f + 0.5f * (variant % 2);
+    bool coast = region == R_CORAL;
+    vec3 wc = coast ? sand::lime : lerp(sand::wall, sand::wallLight, rng.f() * 0.6f);
+    Mat wall(wc, 0.92f), dark(sand::wallDark, 0.92f), trim(coast ? sand::indigo : sand::trim, 0.7f), wood(hexColor(0x6a4426), 0.85f);
+    M.jitter = 0.04f; M.jitterSeed = variant + 31;
+    M.bevelBox({0, h / 2 - 0.2f, 0}, {w / 2, h / 2 + 0.4f, l / 2}, 0.16f, wall);
+    M.jitter = 0;
+    // parapet and a coloured band under it
+    M.box({0, h + 0.28f, l / 2 - 0.1f}, {w / 2 + 0.08f, 0.28f, 0.14f}, wall); M.box({0, h + 0.28f, -l / 2 + 0.1f}, {w / 2 + 0.08f, 0.28f, 0.14f}, wall);
+    M.box({w / 2 - 0.1f, h + 0.28f, 0}, {0.14f, 0.28f, l / 2}, wall); M.box({-w / 2 + 0.1f, h + 0.28f, 0}, {0.14f, 0.28f, l / 2}, wall);
+    M.box({0, h - 0.35f, l / 2 + 0.03f}, {w / 2 + 0.02f, 0.12f, 0.03f}, trim); M.box({0, h - 0.35f, -l / 2 - 0.03f}, {w / 2 + 0.02f, 0.12f, 0.03f}, trim);
+    M.box({w / 2 + 0.03f, h - 0.35f, 0}, {0.03f, 0.12f, l / 2}, trim); M.box({-w / 2 - 0.03f, h - 0.35f, 0}, {0.03f, 0.12f, l / 2}, trim);
+    // horizontal mud-brick courses
+    for (int i = 0; i < 3; i++) { float y = 0.8f + i * 0.95f; M.box({0, y, l / 2 + 0.02f}, {w / 2, 0.015f, 0.015f}, dark); M.box({w / 2 + 0.02f, y, 0}, {0.015f, 0.015f, l / 2}, dark); M.box({-w / 2 - 0.02f, y, 0}, {0.015f, 0.015f, l / 2}, dark); }
+    // arched door with a heavy lintel
+    M.box({0, 1.25f, l / 2 + 0.05f}, {0.62f, 1.15f, 0.05f}, wood);
+    M.ellipsoid({0, 2.35f, l / 2 + 0.05f}, vec3(0.62f, 0.4f, 0.05f), wood, 10, 4);
+    M.box({-0.78f, 1.4f, l / 2 + 0.08f}, {0.1f, 1.4f, 0.1f}, dark); M.box({0.78f, 1.4f, l / 2 + 0.08f}, {0.1f, 1.4f, 0.1f}, dark);
+    M.box({0, 2.85f, l / 2 + 0.08f}, {0.9f, 0.1f, 0.1f}, dark);
+    M.box({0.35f, 1.3f, l / 2 + 0.12f}, {0.04f, 0.04f, 0.03f}, Mat(sand::gold, 0.35f, 1.f));
+    // lattice windows (glow at night)
+    Mat win = Mat(hexColor(0xffb860) * 0.5f, 0.3f).nightGlow(3.4f);
+    for (int s = -1; s <= 1; s += 2) {
+        M.box({s * w * 0.32f, 2.3f, l / 2 + 0.04f}, {0.32f, 0.38f, 0.03f}, win);
+        for (int i = -1; i <= 1; i++) { M.box({s * w * 0.32f + i * 0.18f, 2.3f, l / 2 + 0.07f}, {0.015f, 0.4f, 0.02f}, wood); M.box({s * w * 0.32f, 2.3f + i * 0.2f, l / 2 + 0.07f}, {0.34f, 0.015f, 0.02f}, wood); }
+        M.box({s * (w / 2 + 0.04f), 2.2f, 0}, {0.03f, 0.36f, 0.3f}, win);
+    }
+    // striped awning over the door (poles at the front)
+    Mat a1(coast ? hexColor(0x2a7aa0) : sand::trim2, 0.9f), a2(hexColor(0xf0e6d0), 0.9f);
+    striped(M, {-1.5f, 3.0f, l / 2 + 0.1f}, {1.5f, 3.0f, l / 2 + 0.1f}, {-1.5f, 2.4f, l / 2 + 1.7f}, {1.5f, 2.4f, l / 2 + 1.7f}, 6, a1, a2);
+    for (int s = -1; s <= 1; s += 2) M.tube({s * 1.45f, 0, l / 2 + 1.6f}, {s * 1.45f, 2.4f, l / 2 + 1.6f}, 0.06f, 0.05f, wood, 5, false);
+    // roof: a small dome on a drum for variants 1 and 2, a shade pergola for variant 0, a stair up the side
+    if (variant % 3 != 0) {
+        Mat dome(variant % 3 == 1 ? (coast ? hexColor(0xe8e6e0) : sand::terracotta) : sand::indigo, 0.55f, 0.1f);
+        M.lathe({{1.5f, 0}, {1.5f, 0.45f}, {1.45f, 0.5f}, {1.15f, 1.05f}, {0.75f, 1.55f}, {0.3f, 1.9f}, {0.05f, 2.1f}, {0.01f, 2.3f}}, dome, 14, {-w * 0.15f, h + 0.55f, -l * 0.12f});
+        M.tube({-w * 0.15f, h + 2.8f, -l * 0.12f}, {-w * 0.15f, h + 3.35f, -l * 0.12f}, 0.04f, 0.015f, Mat(sand::gold, 0.35f, 1.f), 5, true);
+    } else {
+        for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) M.tube({i * 1.8f, h + 0.5f, j * 1.8f - 0.6f}, {i * 1.8f, h + 2.3f, j * 1.8f - 0.6f}, 0.07f, 0.06f, wood, 5, false);
+        for (int i = 0; i < 6; i++) M.box({0, h + 2.32f, -2.4f + i * 0.5f - 0.6f}, {2.0f, 0.03f, 0.05f}, wood);
+        striped(M, {-2.0f, h + 2.4f, -2.4f}, {-2.0f, h + 2.4f, 1.0f}, {2.0f, h + 2.4f, -2.4f}, {2.0f, h + 2.4f, 1.0f}, 5, a1, a2);
+    }
+    for (int i = 0; i < 6; i++) M.box({w / 2 + 0.55f, 0.3f + i * (h / 6.f), -l * 0.28f + 0.0f - i * 0.0f}, {0.5f, 0.3f + i * (h / 12.f), 0.5f - 0.0f}, dark);   // outside stair, rising towards the back
+    // vigas: roof beams sticking out of the wall, a drying rack, a clay pot
+    for (int i = -2; i <= 2; i++) M.tube({i * 1.0f, h + 0.0f, l / 2 + 0.02f}, {i * 1.0f, h + 0.0f, l / 2 + 0.55f}, 0.07f, 0.07f, wood, 5, true);
+    M.bakeHeightAO(-0.2f, 2.f, 0.7f);
+    Fo.ellipsoid({w * 0.28f, 1.1f, l / 2 + 0.35f}, vec3(0.3f, 0.2f, 0.2f), Mat(hexColor(0x3fa04a), 0.7f, 0, 0, 0.3f), 8, 4);   // potted plant
+}
+
+static void bazaarHall(MeshBuilder& M, MeshBuilder& Fo, int variant, int region) {
+    Rng rng(variant * 41 + region);
+    Mat wood(hexColor(0x6a4426), 0.85f), dark(hexColor(0x3a2616), 0.9f);
+    float W = 6.f, D = 4.3f;
+    for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j += 2) M.tube({i * W * 0.45f, -0.1f, j * D * 0.45f}, {i * W * 0.45f, 3.0f + 0.1f * i * j, j * D * 0.45f}, 0.1f, 0.08f, wood, 6, true);
+    Mat c1(variant % 2 ? hexColor(0x2a7aa0) : sand::trim2, 0.9f), c2(hexColor(0xf0e6d0), 0.9f), c3(sand::gold, 0.9f);
+    striped(M, {-W * 0.55f, 3.25f, -D * 0.5f}, {W * 0.55f, 3.25f, -D * 0.5f}, {-W * 0.55f, 3.9f, 0.f}, {W * 0.55f, 3.9f, 0.f}, 9, c1, c2);
+    striped(M, {-W * 0.55f, 3.9f, 0.f}, {W * 0.55f, 3.9f, 0.f}, {-W * 0.55f, 3.25f, D * 0.5f}, {W * 0.55f, 3.25f, D * 0.5f}, 9, c2, c1);
+    for (int i = 0; i < 10; i++) { float x = -W * 0.55f + (i + 0.5f) * (W * 1.1f / 10); Fo.blade({x, 3.25f, D * 0.5f}, {x, 2.85f, D * 0.5f + 0.05f}, 0.5f, {1, 0, 0}, c3.withWind(0.2f), (i % 2 ? c1 : c2).withWind(0.6f)); }
+    // counters with goods: fruit pyramids, spice cones, jars, folded cloth
+    for (int s = -1; s <= 1; s += 2) {
+        M.bevelBox({s * 1.6f, 0.55f, D * 0.3f}, {1.2f, 0.55f, 0.5f}, 0.05f, wood);
+        M.box({s * 1.6f, 1.12f, D * 0.3f}, {1.3f, 0.04f, 0.6f}, dark);
+    }
+    Mat fr[] = {Mat(hexColor(0xe86a1a), 0.6f), Mat(hexColor(0xd23a2a), 0.6f), Mat(hexColor(0xf0c030), 0.6f), Mat(hexColor(0x5aa030), 0.6f)};
+    for (int i = 0; i < 4; i++) for (int k = 0; k < 6; k++) Fo.ellipsoid({-2.5f + i * 0.5f + rng.range(-0.08f, 0.08f), 1.25f + (k > 3 ? 0.14f : 0.f), D * 0.3f + (k % 3 - 1) * 0.17f}, vec3(0.12f), fr[i], 6, 4);
+    Mat sp[] = {Mat(hexColor(0xd88a1a), 0.9f), Mat(hexColor(0xa02a1a), 0.9f), Mat(hexColor(0xd8c040), 0.9f), Mat(hexColor(0x6a3a1a), 0.9f)};
+    for (int i = 0; i < 4; i++) M.cone({0.4f + i * 0.55f, 1.14f, D * 0.3f}, {0.4f + i * 0.55f, 1.55f, D * 0.3f}, 0.22f, sp[i], 10);
+    M.box({1.6f, 1.4f, -D * 0.3f}, {0.9f, 0.04f, 0.45f}, dark);
+    for (int i = 0; i < 4; i++) M.box({0.9f + i * 0.4f, 1.2f + 0.1f * (i % 2), -D * 0.3f}, {0.18f, 0.1f + 0.05f * (i % 2), 0.28f}, Mat(i % 2 ? sand::indigo : sand::trim2, 0.95f));
+    M.lathe({{0.01f, 0}, {0.3f, 0.05f}, {0.42f, 0.4f}, {0.2f, 0.85f}, {0.2f, 1.0f}}, Mat(sand::terracotta, 0.8f), 10, {-2.4f, 0, -D * 0.35f});
+    M.lathe({{0.01f, 0}, {0.26f, 0.05f}, {0.36f, 0.35f}, {0.18f, 0.75f}, {0.18f, 0.9f}}, Mat(sand::terracotta * 0.85f, 0.8f), 10, {-1.7f, 0, -D * 0.4f});
+    // hanging lanterns
+    for (int i = -1; i <= 1; i += 2) { M.tube({i * 2.0f, 3.2f, 0.2f}, {i * 2.0f, 2.7f, 0.2f}, 0.01f, 0.01f, dark, 3, false); M.ellipsoid({i * 2.0f, 2.55f, 0.2f}, vec3(0.15f, 0.2f, 0.15f), Mat(hexColor(0xffb050) * 0.5f, 0.4f).nightGlow(3.6f), 8, 5); }
+    M.bakeHeightAO(-0.2f, 2.f, 0.72f);
+}
+
+static void minaret(MeshBuilder& M, int variant) {
+    Mat wall(lerp(sand::wallLight, sand::wall, 0.3f), 0.85f), trim(sand::trim, 0.6f), gold(sand::gold, 0.35f, 0.9f);
+    M.bevelBox({0, 0.5f, 0}, {1.8f, 0.7f, 1.8f}, 0.1f, Mat(sand::wallDark, 0.9f));
+    M.tube({0, 1.0f, 0}, {0, 8.5f, 0}, 1.25f, 1.0f, wall, 8, false);
+    M.lathe({{1.35f, 0}, {1.35f, 0.18f}, {1.0f, 0.3f}}, trim, 8, {0, 8.4f, 0});
+    M.tube({0, 8.8f, 0}, {0, 11.8f, 0}, 0.9f, 0.8f, wall, 8, false);
+    M.lathe({{1.6f, 0}, {1.6f, 0.18f}, {1.2f, 0.28f}, {0.9f, 0.28f}}, Mat(sand::wallDark, 0.9f), 8, {0, 11.4f, 0});
+    for (int i = 0; i < 8; i++) { float a = i * TAU / 8; M.box({std::cos(a) * 1.5f, 12.0f, std::sin(a) * 1.5f}, {0.04f, 0.3f, 0.04f}, trim); }   // balcony rail
+    M.tube({0, 11.7f, 0}, {0, 14.2f, 0}, 0.75f, 0.7f, wall, 8, false);
+    Mat win = Mat(hexColor(0xffb860) * 0.5f, 0.3f).nightGlow(3.6f);
+    for (int i = 0; i < 4; i++) { float a = i * PI / 2; M.box({std::cos(a) * 0.74f, 13.0f, std::sin(a) * 0.74f}, {0.06f, 0.45f, 0.06f}, win); }
+    for (int i = 0; i < 4; i++) { float a = i * PI / 2 + PI / 4, y = 3.5f + i * 1.3f; M.box({std::cos(a) * 1.12f, y, std::sin(a) * 1.12f}, {0.05f, 0.35f, 0.05f}, Mat(hexColor(0x201810))); }
+    M.lathe({{0.9f, 0}, {0.85f, 0.4f}, {0.55f, 0.95f}, {0.25f, 1.35f}, {0.01f, 1.55f}}, Mat(variant % 2 ? sand::indigo : sand::terracotta, 0.55f, 0.1f), 12, {0, 14.2f, 0});
+    M.tube({0, 15.6f, 0}, {0, 17.2f, 0}, 0.04f, 0.015f, gold, 5, true);
+    M.ellipsoid({0, 16.1f, 0}, vec3(0.17f), gold, 8, 6);
+    M.bakeHeightAO(-0.2f, 3.f, 0.75f);
+}
+
+static void ziggurat(MeshBuilder& M, MeshBuilder& Fo, int variant) {
+    // five terraces; a wide stair on the +Z face; a shrine with columns and a brazier at the top
+    Mat st(sand::wall, 0.9f), st2(sand::wallDark, 0.9f), gold(sand::gold, 0.35f, 0.9f), glow(hexColor(0xffb050) * 0.6f, 0.4f);
+    float sz = 11.f;
+    float y = 0;
+    for (int i = 0; i < 5; i++) {
+        float hh = 1.55f, r = sz - i * 1.9f;
+        M.jitter = 0.05f; M.jitterSeed = 7 + i;
+        M.bevelBox({0, y + hh / 2 - 0.2f, 0}, {r, hh / 2 + 0.2f, r * 0.94f}, 0.12f, i % 2 ? st : st2);
+        M.jitter = 0;
+        M.box({0, y + hh + 0.02f, r * 0.94f - 0.0f}, {r + 0.04f, 0.06f, 0.06f}, gold);
+        // carved band: dark niches along the face
+        for (int k = -3; k <= 3; k++) { M.box({k * r * 0.26f, y + hh * 0.5f, r * 0.94f + 0.14f}, {0.35f, 0.4f, 0.03f}, Mat(hexColor(0x241810), 0.9f)); }
+        y += hh;
+    }
+    // stair
+    for (int i = 0; i < 14; i++) { float yy = 0.12f + i * (y / 14.f), zz = sz * 0.94f + 0.25f - i * (sz * 0.94f - 2.2f) / 14.f; M.box({0, yy * 0.5f + 0.0f, zz - 0.3f}, {2.1f, yy * 0.5f + 0.05f, 0.5f}, i % 2 ? st : Mat(sand::wallLight, 0.9f)); }
+    for (int s = -1; s <= 1; s += 2) M.bevelBox({s * 2.6f, y * 0.5f, sz * 0.5f}, {0.5f, y * 0.5f + 0.2f, sz * 0.5f - 1.0f}, 0.1f, st2);
+    // shrine
+    float t = 1.7f;
+    M.bevelBox({0, y + 0.15f, 0}, {t * 1.6f, 0.2f, t * 1.5f}, 0.05f, Mat(sand::wallLight, 0.85f));
+    for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) M.lathe({{0.38f, 0}, {0.3f, 0.2f}, {0.26f, 3.0f}, {0.34f, 3.2f}, {0.4f, 3.4f}}, Mat(sand::wallLight, 0.8f), 10, {i * t * 1.3f, y + 0.3f, j * t * 1.2f});
+    M.bevelBox({0, y + 3.95f, 0}, {t * 1.65f, 0.28f, t * 1.55f}, 0.06f, st);
+    M.box({0, y + 4.27f, t * 1.55f}, {t * 1.65f, 0.06f, 0.06f}, gold);
+    M.cone({0, y + 4.2f, 0}, {0, y + 6.2f, 0}, t * 1.2f, st2, 4);
+    M.ellipsoid({0, y + 6.4f, 0}, vec3(0.22f), gold, 8, 6);
+    M.lathe({{0.01f, 0}, {0.55f, 0.3f}, {0.35f, 0.7f}, {0.5f, 1.2f}, {0.01f, 1.2f}}, Mat(sand::gold * 0.8f, 0.45f, 0.8f), 10, {0, y + 0.35f, 0});   // great brazier
+    M.ellipsoid({0, y + 1.65f, 0}, vec3(0.45f, 0.14f, 0.45f), Mat(hexColor(0xff9a30), 0.6f, 0, 3.f), 8, 3);
+    // winged sun disc over the base doorway
+    M.lathe({{0.01f, 0}, {0.8f, 0.05f}, {0.8f, 0.12f}, {0.01f, 0.15f}}, gold, 14, {0, 2.3f, sz * 0.94f + 0.2f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    for (int s = -1; s <= 1; s += 2) for (int i = 0; i < 4; i++) M.box({s * (1.2f + i * 0.28f), 2.3f - i * 0.04f, sz * 0.94f + 0.2f}, {0.14f, 0.05f, 0.03f}, gold);
+    M.bakeHeightAO(-0.2f, 4.f, 0.7f);
+    (void)Fo; (void)variant;
+}
+
+static void lighthouse(MeshBuilder& M, MeshBuilder& Fo) {
+    Mat white(hexColor(0xf4f0e8), 0.85f), red(hexColor(0xb8302a), 0.8f), stone(sand::wallDark * 0.8f, 0.9f), iron(pal::iron, 0.4f, 0.9f);
+    M.bevelBox({0, 0.5f, 0}, {3.2f, 0.8f, 3.2f}, 0.15f, stone);
+    for (int i = 0; i < 6; i++) {
+        float y0 = 1.1f + i * 2.5f, y1 = y0 + 2.5f, r0 = 2.4f - i * 0.16f, r1 = 2.4f - (i + 1) * 0.16f;
+        M.tube({0, y0, 0}, {0, y1, 0}, r0, r1, i % 2 ? red : white, 12, false);
+    }
+    M.lathe({{2.6f, 0}, {2.6f, 0.15f}, {1.5f, 0.3f}}, Mat(sand::wallDark, 0.7f), 12, {0, 16.1f, 0});
+    for (int i = 0; i < 16; i++) { float a = i * TAU / 16; M.tube({std::cos(a) * 2.45f, 16.4f, std::sin(a) * 2.45f}, {std::cos(a) * 2.45f, 17.3f, std::sin(a) * 2.45f}, 0.03f, 0.03f, iron, 4, false); }
+    M.tube({0, 17.3f, 0}, {0, 17.3f, 0.001f}, 0.01f, 0.01f, iron, 3, false);
+    Mat glass = Mat(hexColor(0xfff2c0) * 0.55f, 0.15f).nightGlow(5.f);
+    M.tube({0, 16.4f, 0}, {0, 18.8f, 0}, 1.25f, 1.15f, glass, 10, true);
+    for (int i = 0; i < 8; i++) { float a = i * TAU / 8; M.box({std::cos(a) * 1.22f, 17.6f, std::sin(a) * 1.22f}, {0.05f, 1.25f, 0.05f}, iron); }
+    M.lathe({{1.5f, 0}, {1.4f, 0.2f}, {0.8f, 0.9f}, {0.01f, 1.5f}}, red, 12, {0, 18.8f, 0});
+    M.tube({0, 20.2f, 0}, {0, 21.2f, 0}, 0.04f, 0.02f, iron, 4, true);
+    M.box({0, 1.5f, 2.35f}, {0.55f, 1.0f, 0.06f}, Mat(hexColor(0x3a2616), 0.9f));
+    for (int i = 0; i < 4; i++) { float a = i * 1.7f + 0.6f, y = 4.f + i * 3.3f; M.box({std::cos(a) * (2.2f - y * 0.0f), y, std::sin(a) * (2.2f - y * 0.0f)}, {0.05f, 0.3f, 0.05f}, Mat(hexColor(0x1a1410))); }
+    M.bakeHeightAO(-0.2f, 3.f, 0.78f);
+    (void)Fo;
+}
+
+static void pagoda(MeshBuilder& M, MeshBuilder& Fo, int variant) {
+    // Shirokawa: a three-tier pagoda on a stone platform, lacquered red posts, white plaster, teal tiles with upturned corners
+    Mat stone(pal::stone, 0.9f), red(hexColor(0xa8281e), 0.55f), white(hexColor(0xf0ece0), 0.85f), tile(hexColor(0x2f5a5a), 0.55f, 0.1f), gold(sand::gold, 0.35f, 0.9f), wood(hexColor(0x3a2616), 0.85f);
+    M.bevelBox({0, 0.4f, 0}, {5.4f, 0.55f, 5.4f}, 0.1f, stone);
+    for (int i = 0; i < 4; i++) M.box({0, 0.1f + i * 0.14f, 5.5f + 0.5f - i * 0.18f}, {1.6f, 0.07f, 0.3f}, stone);
+    float y = 0.95f;
+    float half[3] = {3.4f, 2.7f, 2.0f};
+    for (int t = 0; t < 3; t++) {
+        float r = half[t], hh = 2.9f - 0.2f * t;
+        M.box({0, y + hh / 2, 0}, {r - 0.35f, hh / 2, r - 0.35f}, white);
+        for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) M.tube({i * (r - 0.3f), y, j * (r - 0.3f)}, {i * (r - 0.3f), y + hh, j * (r - 0.3f)}, 0.17f, 0.15f, red, 8, true);
+        for (int i = -1; i <= 1; i++) M.tube({i * (r - 0.3f), y + 0.1f, r - 0.3f}, {i * (r - 0.3f), y + hh, r - 0.3f}, 0.1f, 0.09f, red, 6, false);
+        M.box({0, y + hh * 0.5f, r - 0.33f}, {r * 0.28f, hh * 0.38f, 0.04f}, Mat(hexColor(0x201810), 0.9f));   // sliding door
+        Mat win = Mat(hexColor(0xffc070) * 0.5f, 0.3f).nightGlow(3.6f);
+        M.box({r * 0.62f, y + hh * 0.55f, r - 0.33f}, {0.28f, 0.34f, 0.03f}, win); M.box({-r * 0.62f, y + hh * 0.55f, r - 0.33f}, {0.28f, 0.34f, 0.03f}, win);
+        // roof: a low pyramid with upswept corners (eaves overshoot the walls by 1.4 m)
+        float e = r + 1.5f, rh = 1.15f, ry = y + hh;
+        vec3 c0{-e, ry, -e}, c1{e, ry, -e}, c2{e, ry, e}, c3{-e, ry, e}, top{0, ry + rh, 0};
+        vec3 u0 = c0 + vec3(-0.5f, 0.55f, -0.5f), u1 = c1 + vec3(0.5f, 0.55f, -0.5f), u2 = c2 + vec3(0.5f, 0.55f, 0.5f), u3 = c3 + vec3(-0.5f, 0.55f, 0.5f);
+        vec3 m01 = (c0 + c1) * 0.5f - vec3(0, 0.12f, 0), m12 = (c1 + c2) * 0.5f - vec3(0, 0.12f, 0), m23 = (c2 + c3) * 0.5f - vec3(0, 0.12f, 0), m30 = (c3 + c0) * 0.5f - vec3(0, 0.12f, 0);
+        M.triP(u0, m01, top, tile); M.triP(m01, u1, top, tile); M.triP(u1, m12, top, tile); M.triP(m12, u2, top, tile);
+        M.triP(u2, m23, top, tile); M.triP(m23, u3, top, tile); M.triP(u3, m30, top, tile); M.triP(m30, u0, top, tile);
+        M.bevelBox({0, ry - 0.08f, 0}, {e - 0.3f, 0.12f, e - 0.3f}, 0.04f, wood);
+        // hanging bell at each corner
+        for (vec3 u : {u0, u1, u2, u3}) M.cone(u + vec3(0, -0.02f, 0), u + vec3(0, -0.5f, 0), 0.1f, gold, 6);
+        y += hh + 0.55f;
+    }
+    M.tube({0, y - 0.1f, 0}, {0, y + 2.6f, 0}, 0.07f, 0.03f, gold, 6, true);
+    for (int i = 0; i < 6; i++) M.lathe({{0.34f - i * 0.04f, 0}, {0.36f - i * 0.04f, 0.05f}}, gold, 10, {0, y + 0.3f + i * 0.34f, 0});
+    // stone lanterns before the stair and a vermilion gate
+    for (int s = -1; s <= 1; s += 2) {
+        M.bevelBox({s * 2.4f, 0.5f, 7.6f}, {0.28f, 0.5f, 0.28f}, 0.05f, stone); M.bevelBox({s * 2.4f, 1.2f, 7.6f}, {0.38f, 0.24f, 0.38f}, 0.05f, Mat(pal::stoneLight, 0.8f));
+        M.box({s * 2.4f, 1.2f, 7.6f}, {0.2f, 0.16f, 0.2f}, Mat(hexColor(0xffb860) * 0.5f, 0.3f).nightGlow(3.5f)); M.cone({s * 2.4f, 1.44f, 7.6f}, {s * 2.4f, 1.9f, 7.6f}, 0.5f, stone, 4);
+        M.tube({s * 3.0f, 0, 10.2f}, {s * 3.0f, 4.6f, 10.2f}, 0.22f, 0.2f, red, 8, true);
+    }
+    M.box({0, 4.3f, 10.2f}, {3.9f, 0.14f, 0.17f}, red); M.box({0, 3.5f, 10.2f}, {3.2f, 0.1f, 0.12f}, red);
+    for (int i = 0; i < 2; i++) M.quadP({-4.2f, 4.5f + i * 0.0f, 10.0f}, {4.2f, 4.5f, 10.0f}, {4.5f, 4.85f, 10.0f}, {-4.5f, 4.85f, 10.0f}, red);
+    M.bakeHeightAO(-0.2f, 3.f, 0.75f);
+    (void)Fo; (void)variant;
+}
+
+static void sphinx(MeshBuilder& M, int variant) {
+    // a crouching guardian of weathered sandstone, nose long since eroded; facing +Z
+    Mat st(lerp(sand::wall, sand::wallDark, 0.35f), 0.92f), dk(sand::wallDark, 0.92f), gold(sand::gold, 0.4f, 0.8f);
+    M.jitter = 0.06f; M.jitterSeed = 91;
+    M.bevelBox({0, 0.6f, 0}, {3.2f, 0.7f, 6.4f}, 0.25f, dk);                       // plinth
+    M.ellipsoid({0, 2.3f, -1.6f}, vec3(2.0f, 1.7f, 3.8f), st, 12, 8);              // haunch and back
+    M.ellipsoid({0, 2.7f, 1.8f}, vec3(1.45f, 1.6f, 1.7f), st, 12, 8);              // chest
+    for (int s = -1; s <= 1; s += 2) {
+        M.bevelBox({s * 1.15f, 1.55f, 4.4f}, {0.6f, 0.65f, 2.3f}, 0.15f, st);      // forelegs
+        for (int k = 0; k < 3; k++) M.ellipsoid({s * (1.15f + (k - 1) * 0.28f), 1.0f, 6.9f}, vec3(0.2f, 0.18f, 0.32f), dk, 7, 4);
+        M.ellipsoid({s * 1.7f, 1.6f, -4.1f}, vec3(0.9f, 0.9f, 1.4f), st, 9, 6);    // hind paws
+    }
+    M.tube({0, 3.4f, 3.0f}, {0, 5.4f, 3.5f}, 0.95f, 0.85f, st, 10, false);         // neck
+    M.ellipsoid({0, 5.9f, 3.65f}, vec3(0.88f, 1.05f, 0.95f), st, 12, 9);            // head
+    M.ellipsoid({0, 5.5f, 4.45f}, vec3(0.25f, 0.36f, 0.2f), dk, 6, 4);              // eroded nose
+    for (int s = -1; s <= 1; s += 2) {
+        M.ellipsoid({s * 0.38f, 6.05f, 4.45f}, vec3(0.15f, 0.12f, 0.06f), Mat(hexColor(0x241810), 0.9f), 6, 4);
+        M.ellipsoid({s * 1.0f, 5.5f, 3.2f}, vec3(0.45f, 1.35f, 0.7f), Mat(hexColor(0x3a7a8a), 0.7f), 8, 5);   // striped headdress lappets
+        M.box({s * 1.16f, 5.4f, 3.4f}, {0.04f, 1.2f, 0.48f}, gold);
+    }
+    M.box({0, 6.85f, 3.55f}, {0.9f, 0.1f, 0.95f}, gold);                            // diadem band
+    M.ellipsoid({0, 7.0f, 3.7f}, vec3(0.1f, 0.2f, 0.08f), gold, 6, 4);
+    M.jitter = 0;
+    (void)variant;
+    M.bakeHeightAO(-0.2f, 4.f, 0.72f);
+}
+
+static void pier(MeshBuilder& M, MeshBuilder& Fo, float deckY, int variant) {
+    // a boardwalk running along local +Z (14 m), posts down to the seabed, mooring bollards, crates and lamps
+    Mat plank(hexColor(0x8a6a44), 0.9f), plank2(hexColor(0x6e5236), 0.9f), post(hexColor(0x4a3626), 0.92f), rope(hexColor(0xb8a070), 0.95f);
+    float L = 14.f, W = 1.2f;
+    for (int i = 0; i < 28; i++) { float z = -L * 0.5f + 0.25f + i * 0.5f; M.box({0, deckY, z}, {W, 0.06f, 0.235f}, (i + variant) % 3 ? plank : plank2); }
+    for (int s = -1; s <= 1; s += 2) M.box({s * (W - 0.05f), deckY - 0.12f, 0}, {0.07f, 0.1f, L * 0.5f}, post);
+    for (int i = 0; i < 8; i++) {
+        float z = -L * 0.5f + 0.5f + i * 2.f;
+        for (int s = -1; s <= 1; s += 2) {
+            M.tube({s * W, deckY - 3.2f, z}, {s * W, deckY + (i % 2 ? 0.6f : 0.3f), z}, 0.12f, 0.1f, post, 6, true);
+            if (i % 2) M.tube({s * W, deckY + 0.5f, z}, {s * W, deckY + 0.5f, z + 2.f}, 0.03f, 0.03f, rope, 4, false);
+        }
+    }
+    for (int i = 0; i < 3; i++) M.lathe({{0.12f, 0}, {0.1f, 0.3f}, {0.16f, 0.4f}, {0.01f, 0.42f}}, Mat(pal::iron, 0.5f, 0.8f), 7, {W + 0.15f, deckY + 0.06f, -3.f + i * 3.2f});
+    for (int i = 0; i < 2; i++) M.bevelBox({-W + 0.4f, deckY + 0.4f + i * 0.45f * (variant % 2), -4.f + i * 0.0f}, {0.4f, 0.35f, 0.4f}, 0.04f, Mat(pal::woodLight, 0.85f));
+    M.tube({0.0f, deckY, L * 0.5f - 0.6f}, {0.0f, deckY + 3.0f, L * 0.5f - 0.6f}, 0.06f, 0.05f, post, 5, true);
+    M.box({0.35f, deckY + 2.85f, L * 0.5f - 0.6f}, {0.35f, 0.03f, 0.03f}, post);
+    M.box({0.62f, deckY + 2.6f, L * 0.5f - 0.6f}, {0.1f, 0.14f, 0.1f}, Mat(hexColor(0xffc070) * 0.5f, 0.3f).nightGlow(3.6f));
+    (void)Fo;
+}
+
+static void beachHut(MeshBuilder& M, MeshBuilder& Fo, int variant) {
+    // palm-thatched hut on short posts with a veranda, hammock hooks and shell chimes
+    Rng rng(variant * 53 + 5);
+    Mat post(hexColor(0x6a5030), 0.92f), plank(hexColor(0xb09060), 0.9f), wall(hexColor(0xe4d4b0), 0.92f), thatch(hexColor(0xb89a50), 0.97f), thatch2(hexColor(0x9a7e3c), 0.97f);
+    for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) M.tube({i * 2.2f, -0.6f, j * 2.2f}, {i * 2.2f, 1.2f, j * 2.2f}, 0.12f, 0.1f, post, 6, false);
+    M.box({0, 1.2f, 0.4f}, {2.5f, 0.07f, 2.9f}, plank);
+    M.box({0, 2.2f, -0.2f}, {1.9f, 1.0f, 1.9f}, wall);
+    M.box({0, 1.9f, 1.72f}, {0.45f, 0.8f, 0.04f}, Mat(hexColor(0x3a2616), 0.9f));
+    Mat win = Mat(hexColor(0xffc070) * 0.5f, 0.3f).nightGlow(3.4f);
+    M.box({1.4f, 2.4f, 1.72f}, {0.3f, 0.3f, 0.03f}, win); M.box({-1.4f, 2.4f, 1.72f}, {0.3f, 0.3f, 0.03f}, win);
+    // veranda rail and posts
+    for (int i = -2; i <= 2; i++) M.tube({i * 1.1f, 1.2f, 3.1f}, {i * 1.1f, 2.2f, 3.1f}, 0.04f, 0.04f, post, 4, false);
+    M.box({0, 2.2f, 3.1f}, {2.4f, 0.04f, 0.04f}, post);
+    for (int s = -1; s <= 1; s += 2) M.tube({s * 2.3f, 1.2f, 3.2f}, {s * 2.3f, 3.4f, 3.2f}, 0.1f, 0.08f, post, 6, true);
+    // steep thatched roof (layered fringes), ridge pole
+    float ry = 3.1f;
+    vec3 a{-3.2f, ry, -2.4f}, b{3.2f, ry, -2.4f}, c{3.2f, ry, 3.6f}, d{-3.2f, ry, 3.6f}, ra{0, ry + 2.1f, -2.4f}, rb{0, ry + 2.1f, 3.6f};
+    M.quadP(a, d, rb, ra, thatch); M.quadP(c, b, ra, rb, thatch); M.triP(a, ra, b, thatch2); M.triP(c, rb, d, thatch2);
+    for (int i = 0; i < 9; i++) { float z = -2.4f + i * 0.7f; Fo.blade({-3.2f + 0.2f, ry - 0.1f, z}, {-3.5f, ry - 0.55f, z}, 0.7f, {0, 0, 1}, thatch.withWind(0.1f), thatch2.withWind(0.5f)); Fo.blade({3.2f - 0.2f, ry - 0.1f, z}, {3.5f, ry - 0.55f, z}, 0.7f, {0, 0, 1}, thatch.withWind(0.1f), thatch2.withWind(0.5f)); }
+    M.tube({0, ry + 2.15f, -2.5f}, {0, ry + 2.15f, 3.7f}, 0.07f, 0.07f, post, 5, true);
+    // shell chime
+    for (int i = 0; i < 4; i++) { M.tube({-0.6f + i * 0.4f, ry - 0.2f, 3.4f}, {-0.6f + i * 0.4f, ry - 0.9f - 0.1f * (i % 2), 3.4f}, 0.008f, 0.008f, Mat(hexColor(0xe8e0d0), 0.9f), 3, false); M.cone({-0.6f + i * 0.4f, ry - 0.9f - 0.1f * (i % 2), 3.4f}, {-0.6f + i * 0.4f, ry - 1.1f - 0.1f * (i % 2), 3.4f}, 0.06f, Mat(hexColor(0xf4d8d0), 0.5f), 6); }
+    // ladder
+    for (int i = 0; i < 4; i++) M.box({0, -0.4f + i * 0.5f, 3.9f - i * 0.2f}, {0.5f, 0.03f, 0.05f}, post);
+    M.bakeHeightAO(-0.6f, 2.f, 0.7f);
+}
+
+static void colonnade(MeshBuilder& M, int variant, Rng& rng) {
+    // a row of fluted sandstone columns, some broken, a fallen drum, a lintel stretch still standing
+    Mat st(lerp(sand::wallLight, sand::wall, 0.4f), 0.9f), dk(sand::wallDark, 0.92f);
+    int n = 5;
+    for (int i = 0; i < n; i++) {
+        float x = (i - (n - 1) * 0.5f) * 2.5f;
+        float h = (i % 3 == 1) ? rng.range(1.2f, 2.4f) : rng.range(3.6f, 4.4f);
+        M.bevelBox({x, 0.2f, 0}, {0.6f, 0.25f, 0.6f}, 0.04f, dk);
+        M.lathe({{0.5f, 0}, {0.42f, 0.2f}, {0.38f, h}, {0.45f, h + 0.05f}}, st, 10, {x, 0.4f, 0});
+        for (int k = 0; k < 8; k++) { float a = k * TAU / 8; M.box({x + std::cos(a) * 0.4f, 0.4f + h * 0.5f, std::sin(a) * 0.4f}, {0.015f, h * 0.5f, 0.015f}, dk); }
+        if (h > 3.f) M.bevelBox({x, 0.4f + h + 0.2f, 0}, {0.62f, 0.2f, 0.62f}, 0.04f, st);
+    }
+    M.bevelBox({-1.25f, 4.95f, 0}, {3.6f, 0.38f, 0.55f}, 0.06f, st);   // surviving lintel
+    M.box({3.2f, 0.4f, 1.0f}, {0.8f, 0.4f, 0.4f}, st, quat::axisAngle({0, 1, 0}, 0.4f));   // fallen drum
+    M.bakeHeightAO(-0.2f, 3.f, 0.75f);
+    (void)variant;
+}
+
+static void archway(MeshBuilder& M, int variant) {
+    Mat st(lerp(sand::wallLight, sand::wall, 0.5f), 0.9f), dk(sand::wallDark, 0.92f), gold(sand::gold, 0.35f, 0.9f), trim(sand::trim, 0.6f);
+    for (int s = -1; s <= 1; s += 2) {
+        M.bevelBox({s * 3.4f, 3.2f, 0}, {1.0f, 3.4f, 1.1f}, 0.12f, st);
+        M.box({s * 3.4f, 5.4f, 1.15f}, {1.1f, 0.12f, 0.06f}, trim);
+        for (int k = 0; k < 4; k++) M.box({s * 3.4f, 1.1f + k * 1.4f, 1.13f}, {0.7f, 0.025f, 0.02f}, dk);
+    }
+    M.bevelBox({0, 7.0f, 0}, {4.6f, 0.55f, 1.1f}, 0.1f, st);
+    // the opening: a true semicircular arch of wedge-shaped stones (voussoirs) springing from the piers
+    for (int i = 0; i < 9; i++) {
+        float a = (i + 0.5f) * PI / 9.f;
+        vec3 c{std::cos(a) * 2.5f, 4.1f + std::sin(a) * 2.5f, 0};
+        M.bevelBox(c, {0.46f, 0.5f, 1.0f}, 0.06f, i % 2 ? st : Mat(sand::wallLight, 0.9f), quat::axisAngle({0, 0, 1}, a - PI * 0.5f));
+    }
+    M.box({0, 6.3f, 0}, {2.3f, 0.35f, 0.9f}, st);   // spandrel fill above the keystone
+    for (int i = 0; i < 7; i++) M.box({-3.6f + i * 1.2f, 7.85f, 0}, {0.3f, 0.3f, 0.5f}, st);   // merlons
+    M.lathe({{0.01f, 0}, {0.9f, 0.05f}, {0.9f, 0.12f}, {0.01f, 0.16f}}, gold, 14, {0, 6.9f, 1.18f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    M.box({0, 8.3f, 0}, {4.8f, 0.14f, 1.2f}, dk);
+    (void)variant;
+}
+
+
+// 2.0.0 village dressing: every dwelling gets its yard (barrels and crates, hay, jars, nets, boats, palms, carpets...), chosen by
+// region and placed in the building's own frame (door on +Z). Deterministic per structure; skips roads, water, steep ground
+// and other buildings. Props only (no new structures), so the placement audits are unaffected.
+void dressStructure(ChunkBuild& out, const Structure& s, const World& w) {
+    bool house = s.kind == S_HOUSE || s.kind == S_STONEHOUSE || s.kind == S_LONGHOUSE || s.kind == S_DOMEHOUSE || s.kind == S_BEACHHUT ||
+                 s.kind == S_STILT_HUT || s.kind == S_INN || s.kind == S_FORGE || s.kind == S_CHAPEL || s.kind == S_BAZAAR || s.kind == S_TENT;
+    if (!house || s.poi < 0) return;
+    const Poi& P = w.pois[s.poi];
+    if (P.type != PoiType::Village && P.type != PoiType::Monastery && P.type != PoiType::Mill && P.type != PoiType::Farm && P.type != PoiType::Camp && P.type != PoiType::Temple) return;
+    Rng r(hash2i((int)(s.pos.x * 3.f), (int)(s.pos.y * 3.f), 8811 + s.kind));
+    vec2 fp = structureFootprint(s.kind) * s.scale;
+    int reg = s.region;
+    auto okAt = [&](vec2 wp, float margin) {
+        if (w.roadInfluence(wp.x, wp.y) > 0.25f) return false;
+        float y = w.height(wp.x, wp.y);
+        float wl = w.waterLevel(wp.x, wp.y);
+        if (wl > -1e8f && wl > y - 0.25f) return false;
+        if (w.normal(wp.x, wp.y).y < 0.86f) return false;
+        ChunkKey k = chunkOf(wp.x, wp.y);
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            int cj = chunkIndex(k.x + dx, k.z + dz);
+            if (cj < 0) continue;
+            for (int si : w.chunkStructures[cj]) {
+                const Structure& o = w.structures[si];
+                if (o.kind == S_FIELD || o.kind == S_LANTERN || o.kind == S_STALL) { if (o.kind != S_FIELD && length(o.pos - wp) < 1.6f) return false; continue; }
+                if (o.kind == S_PEN) continue;
+                vec2 f2 = structureFootprint(o.kind) * o.scale;
+                vec2 l = rotate(wp - o.pos, o.rot);
+                if (o.kind == S_PIER) { if (std::fabs(l.x) < 2.5f && std::fabs(l.y) < 8.f) return false; continue; }
+                if (std::fabs(l.x) < f2.x + margin && std::fabs(l.y) < f2.y + margin) return false;
+            }
+        }
+        return true;
+    };
+    auto put = [&](PropKind k, int var, vec2 local, float yaw, float sc, bool collide) {
+        vec2 wp = rotate(local, -s.rot) + s.pos;
+        if (!okAt(wp, 0.7f)) return false;
+        float y = w.height(wp.x, wp.y);
+        stampProp(out, k, var, {wp.x, y - 0.04f, wp.y}, s.rot + yaw, sc, vec3(1) * r.range(0.92f, 1.06f), collide);
+        return true;
+    };
+    float fx = fp.x, fz = fp.y;
+    int sd = r.chance(0.5f) ? 1 : -1;
+    if (s.kind == S_BAZAAR || s.kind == S_TENT) {
+        if (reg == R_AMBER) { put(P_CARPET, r.irange(0, 2), {0, fz + 1.8f}, r.range(-0.2f, 0.2f), 1.f, false); put(P_AMPHORA, r.irange(0, 2), {sd * (fx + 1.2f), fz * 0.4f}, r.range(0, TAU), 1.f, true); }
+        else { put(P_BARREL, 0, {sd * (fx + 1.f), fz * 0.5f}, 0, 1.f, true); put(P_CRATE, 0, {-sd * (fx + 1.1f), fz * 0.3f}, r.range(0, TAU), 1.f, true); }
+        return;
+    }
+    switch (reg) {
+    case R_AMBER: {
+        put(P_AMPHORA, r.irange(0, 2), {sd * (fx * 0.6f), fz + 1.1f}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.6f)) put(P_CARPET, r.irange(0, 2), {-sd * 0.3f, fz + 1.6f + (s.kind == S_DOMEHOUSE ? 1.0f : 0.f)}, r.range(-0.15f, 0.15f), 0.9f, false);
+        if (r.chance(0.5f)) put(P_AGAVE, r.irange(0, 2), {-sd * (fx + 1.3f), r.range(-fz, fz)}, r.range(0, TAU), 1.f, false);
+        if (r.chance(0.35f)) put(P_DATEPALM, r.irange(0, 3), {sd * (fx + 2.6f), r.range(-fz, fz * 0.6f)}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.3f)) put(P_BRAZIER, 0, {-sd * (fx * 0.7f), fz + 1.6f}, 0, 1.f, true);
+        if (r.chance(0.35f)) put(P_CRATE, 0, {-sd * (fx * 0.5f), -fz - 1.2f}, r.range(0, TAU), 1.f, true);
+        break;
+    }
+    case R_CORAL: {
+        put(P_BARREL, 0, {sd * (fx * 0.7f), fz + 1.0f}, 0, 1.f, true);
+        if (r.chance(0.5f)) put(P_NETRACK, 0, {-sd * (fx + 2.4f), r.range(-fz * 0.5f, fz * 0.5f)}, PI / 2, 1.f, true);
+        if (r.chance(0.35f)) put(P_BOAT, r.irange(0, 2), {sd * (fx + 3.2f), r.range(-fz, fz * 0.4f)}, PI / 2 + r.range(-0.3f, 0.3f), 1.f, true);
+        if (r.chance(0.5f)) put(P_PALM, r.irange(0, 3), {-sd * (fx + 2.0f), -fz * 0.2f + r.range(-1.f, 1.f)}, r.range(0, TAU), r.range(0.85f, 1.15f), true);
+        if (r.chance(0.5f)) put(P_TROPBUSH, r.irange(0, 2), {sd * (fx * 0.3f), fz + 1.6f}, r.range(0, TAU), 1.f, false);
+        if (r.chance(0.12f)) put(P_HAMMOCK, 0, {-sd * (fx + 3.2f), fz * 0.6f}, PI / 2, 1.f, true);
+        if (r.chance(0.4f)) put(P_SHELLS, 0, {r.range(-fx, fx), fz + 2.2f}, r.range(0, TAU), 1.f, false);
+        break;
+    }
+    case R_FROSTHEIM: {
+        put(P_BARREL, 0, {sd * (fx * 0.7f), fz + 1.0f}, 0, 1.f, true);
+        put(P_CRATE, 0, {-sd * (fx * 0.6f), fz + 1.2f}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.5f)) put(P_SNOWROCK, r.irange(0, 2), {sd * (fx + 1.8f), r.range(-fz, fz)}, r.range(0, TAU), r.range(0.4f, 0.7f), false);
+        if (r.chance(0.4f)) put(P_SNOWPINE, r.irange(0, 3), {-sd * (fx + 3.0f), r.range(-fz, fz)}, r.range(0, TAU), r.range(0.7f, 1.f), true);
+        break;
+    }
+    case R_ELDERWOOD: {
+        put(P_SMALLSHROOMS, r.irange(0, 2), {sd * (fx + 0.8f), fz * 0.2f}, r.range(0, TAU), 1.2f, false);
+        put(P_FERN, r.irange(0, 2), {-sd * (fx + 0.9f), -fz * 0.3f}, r.range(0, TAU), 1.2f, false);
+        if (r.chance(0.5f)) put(P_BARREL, 0, {sd * (fx * 0.6f), fz + 1.0f}, 0, 1.f, true);
+        if (r.chance(0.3f)) put(P_ELDERTREE, r.irange(0, 2), {-sd * (fx + 4.f), r.range(-fz, fz)}, r.range(0, TAU), r.range(0.5f, 0.7f), true);
+        break;
+    }
+    case R_SHADOWS: case R_ASHEN: {
+        put(P_BARREL, 0, {sd * (fx * 0.7f), fz + 1.0f}, 0, 1.f, true);
+        if (r.chance(0.5f)) put(P_CRATE, 0, {-sd * (fx * 0.6f), fz + 1.1f}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.35f)) put(reg == R_SHADOWS ? P_DEADTREE : P_CHARRED, r.irange(0, 2), {-sd * (fx + 3.f), r.range(-fz, fz)}, r.range(0, TAU), r.range(0.6f, 0.9f), true);
+        break;
+    }
+    default: {   // Greenhaven, High Crowns
+        put(P_BARREL, 0, {sd * (fx * 0.7f), fz + 1.0f}, 0, 1.f, true);
+        if (r.chance(0.55f)) put(P_CRATE, 0, {-sd * (fx * 0.55f), fz + 1.2f}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.45f)) put(P_HAYBALE, 0, {sd * (fx + 1.3f), r.range(-fz, fz * 0.5f)}, r.range(0, TAU), 1.f, true);
+        if (r.chance(0.5f)) put(P_FLOWERS, r.irange(0, 2), {-sd * (fx * 0.4f), fz + 1.9f}, r.range(0, TAU), 1.3f, false);
+        if (r.chance(0.3f)) put(P_FENCE, 0, {sd * (fx + 2.2f), 0}, PI / 2, 1.f, false);
+        if (r.chance(0.35f)) put(reg == R_HIGHCROWNS ? P_PINE : P_OAK, r.irange(0, 3), {-sd * (fx + 3.5f), r.range(-fz, fz)}, r.range(0, TAU), r.range(0.65f, 0.95f), true);
+        if (r.chance(0.12f)) put(P_CART, r.irange(0, 2), {sd * (fx + 2.6f), fz * 0.2f}, r.range(0, TAU), 1.f, true);
+        break;
+    }
+    }
 }
 
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
@@ -1415,6 +2110,24 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_BANNER: bannerPole(M, Fo); addCircleCollider(out, s, gy, L, 0.25f, 6.f);
         out.lights.push_back(vec4(s.pos.x, gy + 1.6f, s.pos.y, LI_FIRE)); { vec2 bp = rotate(vec2(-1.4f, 0.6f) * s.scale, -s.rot) + s.pos; out.emitters.push_back(vec4(bp.x, gy + 1.1f, bp.y, EM_FIRE)); } break;
     case S_ALTAR: altar(M); addBoxCollider(out, s, gy, L, 1.6f, 0.9f, 1.2f); out.lights.push_back(vec4(s.pos.x, gy + 1.8f, s.pos.y, LI_MAGIC)); break;
+    // ---- 2.0.0
+    case S_DOMEHOUSE: domeHouse(M, Fo, s.variant, reg); addBoxCollider(out, s, gy, L, 3.4f, 3.5f, 5.f); break;
+    case S_BAZAAR: bazaarHall(M, Fo, s.variant, reg);
+        addBoxCollider(out, s, gy, {-1.6f, 1.3f}, 1.3f, 0.6f, 1.4f); addBoxCollider(out, s, gy, {1.6f, 1.3f}, 1.3f, 0.6f, 1.4f);
+        out.lights.push_back(vec4(s.pos.x, gy + 2.6f, s.pos.y, LI_LANTERN)); break;
+    case S_MINARET: minaret(M, s.variant); addCircleCollider(out, s, gy, L, 1.6f, 17.f); out.lights.push_back(vec4(s.pos.x, gy + 13.2f, s.pos.y, LI_LANTERN)); break;
+    case S_ZIGGURAT: ziggurat(M, Fo, s.variant);
+        addBoxCollider(out, s, gy, {-7.2f, 0}, 3.8f, 10.f, 8.f); addBoxCollider(out, s, gy, {7.2f, 0}, 3.8f, 10.f, 8.f); addBoxCollider(out, s, gy, {0, -7.2f}, 5.f, 3.8f, 8.f); addBoxCollider(out, s, gy, {0, 3.f}, 5.f, 6.5f, 8.f);
+        out.lights.push_back(vec4(s.pos.x, gy + 9.4f * s.scale, s.pos.y, LI_FIRE)); out.emitters.push_back(vec4(s.pos.x, gy + 9.2f * s.scale, s.pos.y, EM_FIRE)); break;
+    case S_LIGHTHOUSE: lighthouse(M, Fo); addCircleCollider(out, s, gy, L, 2.9f, 22.f); out.lights.push_back(vec4(s.pos.x, gy + 18.f * s.scale, s.pos.y, LI_FIRE)); out.emitters.push_back(vec4(s.pos.x, gy + 18.2f * s.scale, s.pos.y, EM_SPARKLES)); break;
+    case S_PAGODA: pagoda(M, Fo, s.variant); addBoxCollider(out, s, gy, L, 5.4f, 5.4f, 14.f); addCircleCollider(out, s, gy, {-3.0f, 10.2f}, 0.3f, 5.f); addCircleCollider(out, s, gy, {3.0f, 10.2f}, 0.3f, 5.f);
+        out.lights.push_back(vec4(s.pos.x, gy + 2.2f, s.pos.y, LI_MAGIC)); out.emitters.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y, EM_SPARKLES)); break;
+    case S_SPHINX: sphinx(M, s.variant); addBoxCollider(out, s, gy, {0, -1.f}, 2.6f, 5.6f, 6.f); addBoxCollider(out, s, gy, {0, 3.6f}, 2.4f, 3.f, 7.f); out.lights.push_back(vec4(s.pos.x, gy + 6.2f, s.pos.y, LI_MAGIC)); break;
+    case S_PIER: { float lv = w.waterLevel(s.pos.x, s.pos.y); float deck = (lv > -1e8f ? lv : gy) + 0.75f; pier(M, Fo, deck - gy, s.variant);
+        out.lights.push_back(vec4(s.pos.x, deck + 2.7f, s.pos.y, LI_LANTERN)); break; }
+    case S_BEACHHUT: beachHut(M, Fo, s.variant); addBoxCollider(out, s, gy, {0, 0.4f}, 2.5f, 2.9f, 3.f); break;
+    case S_COLONNADE: colonnade(M, s.variant, rng); for (int i = 0; i < 5; i++) addCircleCollider(out, s, gy, {(i - 2) * 2.5f, 0}, 0.5f, 4.f); break;
+    case S_ARCHWAY: archway(M, s.variant); addBoxCollider(out, s, gy, {-3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {0, 0}, 3.0f, 1.0f, 3.f); out.colliders.back().base = gy + 6.f; out.colliders.back().top = 3.f; break;
     default: break;
     }
     // chimney smoke for houses

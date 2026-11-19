@@ -665,9 +665,9 @@ public:
 
     // ---- environment -----------------------------------------------------------------------------
     Environment env;
-    enum Weather { W_CLEAR = 0, W_CLOUDY, W_RAIN, W_STORM, W_SNOW, W_FOG, W_ASHFALL, W_COUNT };
+    enum Weather { W_CLEAR = 0, W_CLOUDY, W_RAIN, W_STORM, W_SNOW, W_FOG, W_ASHFALL, W_SANDSTORM, W_COUNT };
     int weather = W_CLEAR, weatherNext = W_CLEAR;
-    float weatherBlend = 1, weatherTimer = 120, rainAmt = 0, snowAmt = 0, fogAmt = 0, stormAmt = 0, ashAmt = 0, lightningT = 0, lightningFlash = 0;
+    float weatherBlend = 1, weatherTimer = 120, rainAmt = 0, snowAmt = 0, fogAmt = 0, stormAmt = 0, ashAmt = 0, sandAmt = 0, lightningT = 0, lightningFlash = 0;
     vec3 regionTint;  // smoothed per-region grading blend
     float regionW[R_COUNT] = {1, 0, 0, 0, 0, 0};
 

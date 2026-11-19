@@ -20,6 +20,17 @@ const std::vector<ChapterDef>& chapters() {
          "Sire Corwin a reconnu son roi au troisième assaut. Avant de tomber en cendre, il a prévenu : une couronne reforgée n'est pas une clé pour fermer, c'est une clé pour ouvrir."},
         {"ending", "V · Le choix d'Aldric",
          "Malgrath est tombé au fond de l'Abîme. Aldric a choisi le sort de la Couronne-Mère."},
+        // ---- 2.0.0 Act II
+        {"ch_act2", "ACTE II · I · Le message de la marée",
+         "Un coquillage est arrivé de la côte sud : la voix de Kaede. Le septième joyau de la Couronne, le Silence, ne dort pas à Aelindor. Il dort de l'autre côté du désert, ou sous la mer."},
+        {"ch_mareval", "ACTE II · II · La dette du capitaine",
+         "Mareval a vendu son équipage à la mer pour une carte. La mer a gardé la dette, et lui avec. La carte désigne un temple à Shirokawa, et un passage sous le sanctuaire."},
+        {"ch_sun_king", "ACTE II · III · Le soleil qui ne se couche pas",
+         "Sekhmar a marchandé avec le soleil pour ne jamais mourir. Son royaume est devenu du sable. Il a rendu le Sceau, et il a enfin dormi."},
+        {"ch_sanctum", "ACTE II · IV · L'eau et le feu",
+         "Trois perles de marée et le Sceau du Soleil : Maître Hanzo ouvre la porte du sanctuaire, sous le temple de Shirokawa. Tout se tait."},
+        {"ch_legacy", "ACTE II · V · L'héritage",
+         "Le Silence est enterré au fond de la mer. Kaede, pour la première fois depuis quinze ans, regarde l'océan en face."},
     };
     return C;
 }
@@ -127,6 +138,60 @@ std::vector<CineShot> Game::chapterShots(const std::string& id) {
         c.text = "Corwin pose son épée à tes pieds, et sa forme se défait en cendre claire. Sous Morneval, l'Abîme respire.";
         c.title = "CHAPITRE IV"; c.subtitle = "Le champion qui attendait";
         s.push_back(c);
+    } else if (id == "ch_act2") {
+        vec2 PA = P("port_azur", {1500, 4300});
+        c = orbit(PA, 2.1f, 2.6f, 130, 80, 55, 36, 8); c.dur = 7.5f; c.tod = 17.9f; c.weather = W_CLEAR; c.music = "greenhaven";
+        c.speaker = "Kaede"; c.speakerColor = vec3(0.6f, 0.85f, 1.f);
+        c.text = "« Le septième ne dort pas à Aelindor. Retrouve-moi à Port-Azur, avant que la marée tourne. »";
+        s.push_back(c);
+        c = orbit(P("phare", {2150, 4420}), 3.6f, 4.0f, 70, 46, 28, 20, 12); c.dur = 7.f; c.tod = 18.8f; c.weather = W_CLEAR;
+        c.text = "Le sud n'a pas de fin : une côte de sable blanc, de lagons turquoise, de palmiers. Et, plus loin, un désert d'ambre qui brûle sous un soleil sans pitié.";
+        s.push_back(c);
+        c = orbit(P("solmar", {3850, 2700}), 1.0f, 1.5f, 150, 100, 60, 40, 8); c.dur = 7.5f; c.tod = 16.5f; c.weather = W_CLEAR; c.music = "ashen";
+        c.text = "Sept joyaux. Six ont forgé une Couronne. Le septième, personne n'a jamais dit où il était. Ce que l'on sait : il a faim de silence.";
+        c.title = "ACTE II"; c.subtitle = "L'héritage du septième";
+        s.push_back(c);
+    } else if (id == "ch_mareval") {
+        vec2 MV = P("storm_deck", {1700, 4290});
+        c = orbit(MV, 0.6f, 1.1f, 60, 38, 24, 14, 4); c.dur = 7.f; c.tod = 19.4f; c.weather = W_STORM; c.fogTint = vec3(0.4f, 0.6f, 0.7f); c.fogMul = 0.4f; c.music = "night"; c.sfx = "thunder";
+        c.speaker = "Le Capitaine Mareval"; c.speakerColor = vec3(0.45f, 0.95f, 0.85f);
+        c.text = "« J'ai vendu trente hommes pour cette carte. La mer en veut trente-et-un. Tu m'as rendu un service. »";
+        s.push_back(c);
+        c = orbit(P("shirokawa", {2500, 3850}), 3.2f, 3.8f, 110, 70, 50, 30, 14); c.dur = 7.5f; c.tod = 6.6f; c.weather = W_CLEAR; c.music = "greenhaven";
+        c.text = "La carte montre un temple sur un lagon, des toits relevés comme des ailes, et, dessous, un passage qui descend plus bas que la mer.";
+        c.title = "ACTE II · II"; c.subtitle = "La dette du capitaine";
+        s.push_back(c);
+    } else if (id == "ch_sun_king") {
+        vec2 ST = P("sun_temple", {4080, 3560});
+        c = orbit(ST, 0.2f, 0.7f, 90, 56, 40, 26, 10); c.dur = 7.5f; c.tod = 13.f; c.weather = W_CLEAR; c.music = "ashen"; c.magic = vec3(1.f, 0.8f, 0.3f);
+        c.speaker = "Sekhmar"; c.speakerColor = vec3(1.f, 0.82f, 0.35f);
+        c.text = "« J'ai demandé au soleil de ne jamais se coucher sur mon royaume. Il a obéi. J'aurais dû préciser : sur mes sujets. »";
+        s.push_back(c);
+        c = orbit(ST, 1.9f, 2.4f, 50, 34, 22, 12, 8); c.dur = 7.f; c.tod = 18.4f; c.weather = W_CLEAR; c.magic = vec3(1.f, 0.7f, 0.2f);
+        c.speaker = "Sekhmar"; c.speakerColor = vec3(1.f, 0.82f, 0.35f);
+        c.text = "« Prends le sceau. Dis à Zahra… dis-lui que le sable a la mémoire longue, mais pas éternelle. Que je suis désolé. »";
+        c.title = "ACTE II · III"; c.subtitle = "Le soleil qui ne se couche pas";
+        s.push_back(c);
+    } else if (id == "ch_sanctum") {
+        vec2 SH = P("shirokawa", {2500, 3850});
+        c = orbit(SH, 4.2f, 4.7f, 50, 32, 28, 16, 8); c.dur = 7.f; c.tod = 21.2f; c.weather = W_CLEAR; c.music = "title"; c.magic = vec3(0.5f, 0.9f, 1.f);
+        c.speaker = "Maître Hanzo"; c.speakerColor = vec3(0.95f, 0.9f, 0.8f);
+        c.text = "« L'eau d'abord. Le feu ensuite. Ce que la mer a pris, le soleil le rend. Écoute. »";
+        s.push_back(c);
+        c = orbit(SH, 4.7f, 5.0f, 24, 14, 10, 5, 2); c.dur = 7.5f; c.tod = 21.4f; c.magic = vec3(0.8f, 1.f, 1.f); c.shake = 0.08f; c.sfx = "thunder";
+        c.text = "La porte s'ouvre sans un bruit. En fait, plus aucun bruit : plus la mer, plus le vent, plus ton souffle. Seulement un escalier qui descend dans le blanc.";
+        c.title = "ACTE II · IV"; c.subtitle = "L'eau et le feu";
+        s.push_back(c);
+    } else if (id == "ch_legacy") {
+        vec2 SH = P("shirokawa", {2500, 3850});
+        c = orbit(SH, 1.0f, 1.5f, 70, 44, 32, 20, 6); c.dur = 7.5f; c.tod = 6.1f; c.weather = W_CLEAR; c.music = "greenhaven";
+        c.speaker = "Kaede"; c.speakerColor = vec3(0.6f, 0.85f, 1.f);
+        c.text = "« On ne détruit pas le silence. On lui donne un endroit où se coucher. La mer est assez grande. »";
+        s.push_back(c);
+        c = orbit(P("port_azur", {1500, 4300}), 2.4f, 2.9f, 90, 60, 40, 26, 6); c.dur = 8.f; c.tod = 17.6f; c.weather = W_CLEAR;
+        c.text = "Les voiles de Port-Azur reprennent la mer. À Solmar, on grave de nouveaux noms sur le mur. Le monde est un peu plus fort, et un peu plus bruyant. C'est bien.";
+        c.title = "ACTE II · FIN"; c.subtitle = "L'héritage";
+        s.push_back(c);
     } else if (id == "ending_seal" || id == "ending_break") {
         bool seal = id == "ending_seal";
         c = orbit(A, 1.0f, 1.5f, 30, 18, 12, 6, 2); c.dur = 8.f; c.tod = 22.f; c.weather = W_STORM; c.fogTint = vec3(0.6f, 0.25f, 0.85f); c.fogMul = 0.4f; c.music = "title";
@@ -188,6 +253,7 @@ void Game::onChapterEnd(const std::string& id) {
         reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef == ai && ai >= 0) { if (interactTarget == e) interactTarget = NullEntity; reg.destroyLater(e); } });
         if (!questActive("m6") && !questsDone.count("m6")) startQuest("m6");
     }
+    if (id == "ch_legacy") { storyFlags.insert("act2_done"); notify("Acte II terminé : l'héritage du septième est entre les vagues.", vec3(0.7f, 0.95f, 1.f), "i_check"); }
     if (id == "ending_seal" || id == "ending_break") {
         storyFlags.insert("seen_ending");
         creditsT = 0;

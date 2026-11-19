@@ -237,6 +237,8 @@ void Game::renderWorld(float dt) {
                 if (ch.region == R_SHADOWS) { deep = srgb(0x14200e); shallow = srgb(0x3a4a26); }
                 else if (ch.region == R_ELDERWOOD) { deep = srgb(0x0c3a3a); shallow = srgb(0x2fa090); }
                 else if (ch.region == R_FROSTHEIM) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }
+                else if (ch.region == R_CORAL) { deep = srgb(0x0a5a82); shallow = srgb(0x35d6c8); }   // 2.0.0 tropical lagoons: azure over white sand
+                else if (ch.region == R_AMBER) { deep = srgb(0x0e5260); shallow = srgb(0x4ac0a0); }   // oases
                 renderer.submitWater({&ch.water, mat4(), deep, shallow, 0.f, false});
             }
             if (ch.lava.valid()) renderer.submitWater({&ch.lava, mat4(), vec3(0), vec3(0), 0.f, true});

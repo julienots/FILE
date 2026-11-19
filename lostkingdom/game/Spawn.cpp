@@ -458,7 +458,7 @@ void Game::updateSpawning(float dt) {
                 for (int i = 0; i < (int)E.size(); i++) {
                     if (E[i].behavior == Behavior::Boss || E[i].hunter || E[i].region != region) continue;
                     if (E[i].night && env.night < 0.5f && r.f() < 0.7f) continue;
-                    if (camp && E[i].family != "Bandits") continue;
+                    if (camp && E[i].family != "Bandits" && E[i].family != "Pilleurs" && E[i].family != "Corsaires") continue;   // 2.0.0: desert raiders and corsairs man their camps too
                     cands.push_back(i);
                 }
                 if (!cands.empty()) {

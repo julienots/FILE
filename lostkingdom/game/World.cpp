@@ -7,11 +7,11 @@
 namespace lk {
 
 const char* regionName(int r) {
-    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns"};
+    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "?";
 }
 const char* regionSubtitle(int r) {
-    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées"};
+    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "";
 }
 
@@ -37,6 +37,14 @@ static const Seed SEEDS[] = {
     {{430, 1450}, R_ELDERWOOD}, {{480, 2000}, R_ELDERWOOD}, {{620, 1050}, R_ELDERWOOD},
     {{1150, 2650}, R_SHADOWS}, {{650, 2650}, R_SHADOWS}, {{1650, 2780}, R_SHADOWS},
     {{2600, 620}, R_HIGHCROWNS}, {{2200, 420}, R_HIGHCROWNS}, {{2780, 1150}, R_HIGHCROWNS},
+    // 2.0.0 the north-east range (the mountains go on east of Highspire)
+    {{3350, 560}, R_HIGHCROWNS}, {{3800, 420}, R_HIGHCROWNS}, {{4150, 900}, R_HIGHCROWNS}, {{3500, 1250}, R_HIGHCROWNS}, {{4350, 1500}, R_HIGHCROWNS},
+    // 2.0.0 the Amber Sands: a desert of dunes, mesas and oases in the south-east
+    {{3450, 2250}, R_AMBER}, {{3950, 2000}, R_AMBER}, {{4300, 2500}, R_AMBER}, {{3800, 2950}, R_AMBER}, {{3350, 3050}, R_AMBER},
+    {{4150, 3500}, R_AMBER}, {{3650, 3750}, R_AMBER}, {{4250, 4150}, R_AMBER}, {{3150, 3650}, R_AMBER},
+    // 2.0.0 the Coral Coast: lagoons, palm groves and harbour towns along the southern sea
+    {{450, 3450}, R_CORAL}, {{1000, 3700}, R_CORAL}, {{1600, 3500}, R_CORAL}, {{2200, 3750}, R_CORAL}, {{2800, 3900}, R_CORAL},
+    {{700, 4150}, R_CORAL}, {{1400, 4200}, R_CORAL}, {{2000, 4250}, R_CORAL}, {{2600, 4250}, R_CORAL},
 };
 
 RegionWeights World::regionAt(float x, float z) const {
@@ -44,14 +52,16 @@ RegionWeights World::regionAt(float x, float z) const {
     // domain warp for organic borders
     float wx = x + 140.f * fbm2(x * 0.0025f, z * 0.0025f, 3, 501);
     float wz = z + 140.f * fbm2(x * 0.0025f + 31.7f, z * 0.0025f - 12.3f, 3, 502);
-    float d[R_COUNT];
-    for (int i = 0; i < R_COUNT; i++) d[i] = 1e9f;
+    float d2[R_COUNT];
+    for (int i = 0; i < R_COUNT; i++) d2[i] = 1e18f;
     for (const Seed& s : SEEDS) {
-        float dd = length(vec2(wx, wz) - s.p);
-        if (dd < d[s.r]) d[s.r] = dd;
+        float dx = wx - s.p.x, dz = wz - s.p.y;
+        float dd = dx * dx + dz * dz;
+        if (dd < d2[s.r]) d2[s.r] = dd;
     }
+    float d[R_COUNT];
     float dmin = 1e9f; int best = 0;
-    for (int i = 0; i < R_COUNT; i++) if (d[i] < dmin) { dmin = d[i]; best = i; }
+    for (int i = 0; i < R_COUNT; i++) { d[i] = std::sqrt(d2[i]); if (d[i] < dmin) { dmin = d[i]; best = i; } }
     float sum = 0;
     for (int i = 0; i < R_COUNT; i++) { rw.w[i] = std::exp(-(d[i] - dmin) / 45.f); sum += rw.w[i]; }
     for (int i = 0; i < R_COUNT; i++) rw.w[i] /= sum;
@@ -112,6 +122,25 @@ static float regionHeight(int r, float x, float z) {
         float base = 26.f + 100.f * mountainField(x, z, 0.0024f, 61) * smoothstepf(-0.3f, 0.3f, fbm2(x * 0.0017f, z * 0.0017f, 2, 62));
         return terrace(base, 9.f, 0.12f) + 2.f * fbm2(x * 0.02f, z * 0.02f, 2, 63);
     }
+    case R_AMBER: {
+        // 2.0.0 the Amber Sands: long crescent dunes with sharp crests (1 - |sin| of a meandering phase), a finer set of
+        // ripples across them, and flat-topped mesas where the canyon mask rises (terraces with steep walls)
+        vec2 w = warp2(x, z, 90.f, 0.0016f, 81);
+        float ph = (w.x * 0.83f + w.y * 0.56f) * 0.021f + 2.6f * fbm2(w.x * 0.003f, w.y * 0.003f, 2, 83);
+        float dune1 = std::pow(1.f - std::fabs(std::sin(ph)), 1.25f);
+        float ph2 = (w.x * 0.5f - w.y * 0.87f) * 0.058f + 3.f * fbm2(w.x * 0.004f, w.y * 0.004f, 2, 84);
+        float dune2 = 1.f - std::fabs(std::sin(ph2));
+        float m = smoothstepf(0.18f, 0.5f, fbm2(x * 0.0011f + 9.f, z * 0.0011f - 4.f, 3, 85));
+        float mesa = terrace(14.f + 40.f * ridged2(w.x * 0.0035f, w.y * 0.0035f, 4, 86), 10.f, 0.05f);
+        return 6.f + (dune1 * 13.f + dune2 * 2.2f) * (1.f - m) + m * mesa + 1.0f * fbm2(x * 0.03f, z * 0.03f, 2, 87);
+    }
+    case R_CORAL: {
+        // 2.0.0 the Coral Coast: soft jungle hills, kept above sea level (the lagoons are carved by lakes)
+        vec2 w = warp2(x, z, 70.f, 0.002f, 91);
+        float h = 6.f + 10.f * fbm2(w.x * 0.0042f, w.y * 0.0042f, 4, 92) + 7.f * smoothstepf(0.25f, 0.7f, fbm2(w.x * 0.008f, w.y * 0.008f, 3, 93)) + 1.5f * fbm2(x * 0.02f, z * 0.02f, 3, 94);
+        if (h < 2.6f) h = 2.6f - (2.6f - h) * 0.12f;
+        return h;
+    }
     }
     return 0;
 }
@@ -124,6 +153,13 @@ float World::baseHeight(float x, float z, const RegionWeights& rw) const {
     e += 40.f * fbm2(x * 0.004f, z * 0.004f, 3, 71);
     float coast = smoothstepf(40.f, 230.f, e);
     h = lerpf(-14.f, h, coast);
+    // 2.0.0 tropical islets off the south and east coasts (reachable by swimming): palms, beaches, a hidden chest
+    if (e < 400.f && (z > 3000.f || x > 3000.f)) {
+        float n = fbm2(x * 0.011f, z * 0.011f, 3, 73) * 0.5f + 0.5f;
+        float mask = smoothstepf(30.f, 90.f, e) * (1.f - smoothstepf(300.f, 390.f, e));
+        float ih = lerpf(-14.f, 13.f, smoothstepf(0.52f, 0.74f, n));
+        h = std::max(h, lerpf(-14.f, ih, mask));
+    }
     return h;
 }
 
@@ -196,6 +232,117 @@ void World::buildPlan() {
     P("ws_crown", "Pierre de Highspire", PoiType::Waystone, 2290, 870, 10);
     P("crown_mine", "Mine des Cimes", PoiType::Mine, 2150, 460, 22);
 
+    // Rivers (from the mountains to the southern sea)
+    River r1; r1.width = 14;
+    r1.pts = {{1080, 690}, {1220, 980}, {1390, 1250}, {1430, 1480}, {1370, 1760}, {1260, 2050}, {1130, 2330}, {990, 2700}, {930, 3060},
+              {910, 3300}, {890, 3650}, {860, 4000}, {840, 4380}};   // 2.0.0: on through the Coral Coast to the southern sea
+    River r2; r2.width = 10;
+    r2.pts = {{2280, 820}, {2120, 1040}, {1930, 1240}, {1760, 1360}};
+    River r3; r3.width = 9;
+    r3.pts = {{380, 1000}, {470, 1250}, {430, 1500}, {400, 1780}};
+    // 2.0.0 the Sekh, a river that runs down from the north-east range through the Amber Sands into the oasis of Kheft
+    River r4; r4.width = 9;
+    r4.pts = {{3330, 1500}, {3300, 1850}, {3390, 2250}, {3470, 2650}, {3510, 2950}, {3548, 3120}};
+    rivers = {r1, r2, r3, r4};
+
+    // =========================================================================================
+    // 2.0.0 -- the world grows: the Amber Sands (south-east), the Coral Coast (south), the north-east range, and a
+    // few more villages on the old island. Positions are nudged to level, dry ground (findFlat) so the plan stays
+    // valid whatever the terrain does, and kept clear of lakes, rivers and one another.
+    // =========================================================================================
+    struct Keep { vec2 c; float r; };
+    std::vector<Keep> keep;
+    for (const Poi& q : pois) keep.push_back({q.pos, q.radius + 20.f});
+    // lakes and rivers of the new lands, declared first so that settlements avoid them (pushed to `lakes` below)
+    static const struct { float x, z, r; } NEWLAKES[] = {
+        {3560, 3190, 75}, {4150, 3050, 45}, {1150, 3850, 130}, {2100, 3950, 110}, {420, 3750, 85}, {3390, 3720, 50}, {3980, 3480, 28}};
+    for (auto& l : NEWLAKES) keep.push_back({{l.x, l.z}, l.r + 38.f});
+    auto nearRiver = [&](vec2 q, float m) {   // the rivers still hold their raw control points here (they are densified below)
+        for (const River& rv : rivers)
+            for (size_t i = 0; i + 1 < rv.pts.size(); i++) if (distToSegment(q, rv.pts[i], rv.pts[i + 1]) < m + rv.width + 45.f) return true;
+        return false;
+    };
+    auto findFlat = [&](vec2 want, float r, float search, bool allowSlope = false) {
+        vec2 best = want; float bestScore = 1e9f;
+        for (float dz = -search; dz <= search + 0.1f; dz += 24.f)
+            for (float dx = -search; dx <= search + 0.1f; dx += 24.f) {
+                vec2 c = want + vec2(dx, dz);
+                if (c.x < 260 || c.y < 260 || c.x > WORLD_SIZE - 260 || c.y > WORLD_SIZE - 260) continue;
+                bool bad = false;
+                for (const Keep& k : keep) if (length(k.c - c) < k.r + r) { bad = true; break; }
+                if (bad || nearRiver(c, r)) continue;
+                float lo = 1e9f, hi = -1e9f;
+                for (int i = 0; i < 13 && !bad; i++) {
+                    vec2 q = c;
+                    if (i > 0) { float a = (i - 1) * TAU / 6.f + (i > 6 ? 0.5f : 0.f); q += vec2(std::cos(a), std::sin(a)) * r * (i > 6 ? 0.85f : 0.45f); }
+                    float h = baseHeight(q.x, q.y, regionAt(q.x, q.y));
+                    if (h < 2.0f) bad = true;
+                    lo = std::min(lo, h); hi = std::max(hi, h);
+                }
+                if (bad) continue;
+                float score = (hi - lo) * (allowSlope ? 0.4f : 1.f) + 0.012f * length(vec2(dx, dz));
+                if (score < bestScore) { bestScore = score; best = c; }
+            }
+        return best;
+    };
+    auto Pf = [&](const char* id, const char* name, PoiType t, float x, float z, float r, int dungeon = -1, int boss = -1, float search = 150.f) {
+        vec2 c = findFlat({x, z}, r, search, t == PoiType::Castle || t == PoiType::BossArena || t == PoiType::Temple);
+        P(id, name, t, c.x, c.y, r, dungeon, boss);
+        keep.push_back({c, r + 22.f});
+    };
+    // the sea shore at a given x (first z, going south, where the natural land drops under the water)
+    auto shoreZ = [&](float x) { for (float z = 3600.f; z < WORLD_SIZE; z += 4.f) if (baseHeight(x, z, regionAt(x, z)) < 0.2f) return z; return WORLD_SIZE - 150.f; };
+
+    // ---- the north-east range: the mountains go on east of Highspire
+    Pf("hautgel", "Hautgel", PoiType::Village, 3080, 640, 58, -1, -1, 220);
+    Pf("rempart_nord", "Rempart-du-Nord", PoiType::Castle, 3650, 980, 66, -1, -1, 260);
+    Pf("naine_mine", "Mine des Naines", PoiType::Mine, 3450, 1380, 24, -1, -1, 200);
+    Pf("ws_hautgel", "Pierre de Hautgel", PoiType::Waystone, 3140, 700, 10);
+    // ---- more villages for the old island
+    Pf("chenebrune", "Chênebrune", PoiType::Village, 1960, 1980, 62, -1, -1, 200);
+    Pf("saule_rieur", "Saule-Rieur", PoiType::Village, 1130, 1800, 56, -1, -1, 160);
+    Pf("givrebourg", "Givrebourg", PoiType::Village, 1420, 650, 60, -1, -1, 160);
+    Pf("auberclat", "Aubéclat", PoiType::Village, 360, 2150, 56, -1, -1, 160);
+    Pf("braise_pic", "Braise-Pic", PoiType::Village, 2800, 2750, 54, -1, -1, 200);
+    Pf("marais_noir", "Marais-Noir", PoiType::Village, 640, 2900, 52, -1, -1, 200);
+    // ---- the Amber Sands
+    Pf("solmar", "Solmar, Cité des Caravanes", PoiType::Village, 3850, 2700, 104, -1, -1, 220);
+    Pf("kheft", "Oasis de Kheft", PoiType::Village, 3470, 3010, 66, -1, -1, 120);
+    Pf("tamrak", "Tamrak", PoiType::Village, 3250, 3540, 62, -1, -1, 160);
+    Pf("zafir", "Caravansérail de Zafir", PoiType::Village, 3760, 3260, 42, -1, -1, 160);
+    Pf("sphinx", "La Gardienne des Sables", PoiType::Temple, 3400, 2330, 46, -1, -1, 200);
+    Pf("sun_temple", "Temple du Soleil Mort", PoiType::Temple, 4080, 3560, 70, -1, -1, 220);
+    { vec2 t = pois.back().pos; P("sun_temple_door", "Portes du Temple", PoiType::Temple, t.x, t.y + 17.f, 8, 6); }   // the dungeon entrance stands before the stair
+    Pf("scorpion_nest", "Le Nid des Scorpions", PoiType::BossArena, 4300, 2950, 58, -1, 8, 220);
+    Pf("amber_fort", "Fort Zénith", PoiType::Castle, 4250, 2300, 72, -1, -1, 220);
+    Pf("amber_mine", "Mines d'Ambre", PoiType::Mine, 4130, 2680, 24, -1, -1, 160);
+    Pf("mesa_tower", "Tour du Veilleur", PoiType::Tower, 3520, 1870, 30, -1, -1, 200);
+    Pf("karun_ruins", "Colonnades de Karun", PoiType::Ruins, 3900, 3080, 46, -1, -1, 160);
+    Pf("dune_raiders", "Camp des Pilleurs de Dunes", PoiType::Camp, 4180, 3900, 30, -1, -1, 220);
+    Pf("ws_solmar", "Pierre de Solmar", PoiType::Waystone, 3935, 2640, 10);
+    Pf("ws_kheft", "Pierre de Kheft", PoiType::Waystone, 3520, 3100, 10);
+    Pf("ws_temple", "Pierre du Soleil Mort", PoiType::Waystone, 4010, 3470, 10);
+    // ---- the Coral Coast
+    {
+        float z = shoreZ(1500.f) - 110.f;
+        Pf("port_azur", "Port-Azur", PoiType::Village, 1500, z, 100, -1, -1, 40);
+        pois.back().coastal = true;
+    }
+    Pf("pilotis", "Corail-sur-Pilotis", PoiType::Village, 560, 3870, 70, -1, -1, 160);
+    Pf("sel_de_mer", "Sel-de-Mer", PoiType::Village, 2850, 3720, 58, -1, -1, 160);
+    Pf("shirokawa", "Temple de Shirokawa", PoiType::Temple, 2500, 3850, 66, -1, -1, 200);
+    Pf("silence_gate", "Sanctuaire du Silence", PoiType::Cave, 2590, 3950, 22, 8, -1, 80);
+    {
+        float z = shoreZ(2150.f) - 40.f;
+        Pf("phare", "Phare des Brumes", PoiType::Tower, 2150, z, 28, -1, -1, 40);
+    }
+    Pf("pirate_cove", "Crique des Corsaires", PoiType::Camp, 1880, 4240, 36, -1, -1, 120);
+    Pf("storm_deck", "Le Pont du Tonnerre", PoiType::BossArena, 1700, 4290, 50, -1, 9, 120);
+    Pf("tide_cave", "Grotte des Marées", PoiType::Cave, 1230, 4260, 22, 7, -1, 120);
+    Pf("wreck", "L'Épave du Léviathan", PoiType::Ruins, 760, 4300, 34, -1, -1, 120);
+    Pf("ws_port", "Pierre de Port-Azur", PoiType::Waystone, 1580, 4150, 10);
+    Pf("ws_shiro", "Pierre de Shirokawa", PoiType::Waystone, 2430, 3790, 10);
+
     // Lakes
     lakes.push_back({{1700, 1390}, 85, 0, false, false});      // Lac Miroir (level computed below)
     lakes.push_back({{1180, 360}, 120, 0, false, true});       // frozen lake (boss arena on ice)
@@ -204,14 +351,7 @@ void World::buildPlan() {
     lakes.push_back({{2820, 1900}, 26, 0, true, false});
     lakes.push_back({{420, 1800}, 38, 0, false, false});       // magic spring
     lakes.push_back({{760, 420}, 40, 0, false, true});
-    // Rivers (from the mountains to the southern sea)
-    River r1; r1.width = 14;
-    r1.pts = {{1080, 690}, {1220, 980}, {1390, 1250}, {1430, 1480}, {1370, 1760}, {1260, 2050}, {1130, 2330}, {990, 2700}, {930, 3060}};
-    River r2; r2.width = 10;
-    r2.pts = {{2280, 820}, {2120, 1040}, {1930, 1240}, {1760, 1360}};
-    River r3; r3.width = 9;
-    r3.pts = {{380, 1000}, {470, 1250}, {430, 1500}, {400, 1780}};
-    rivers = {r1, r2, r3};
+    for (auto& l : NEWLAKES) lakes.push_back({{l.x, l.z}, l.r, 0, false, false});   // 2.0.0 oases and lagoons
 
     // lake levels: slightly below surrounding base terrain
     for (auto& l : lakes) {
@@ -257,6 +397,7 @@ void World::buildPlan() {
     for (auto& p : pois) {
         float h = baseHeight(p.pos.x, p.pos.y, regionAt(p.pos.x, p.pos.y));
         p.height = std::max(h, 2.0f);
+        if (p.coastal) p.height = 3.0f;   // 2.0.0 harbour: a low plain, so the beach and the sea stay where the piers are
         if (p.type == PoiType::BossArena && p.boss == 2) p.height = lakes[1].level + 0.02f;  // on the ice
     }
     // Roads between settlements
@@ -272,6 +413,32 @@ void World::buildPlan() {
     addRoad(*this, {pos("frostvik"), {700, 420}, pos("hrimgard")}, 4, false);
     addRoad(*this, {pos("gravemoor"), {1000, 2520}, pos("graveyard")}, 4, false);
     addRoad(*this, {pos("highspire"), {2550, 650}, pos("astronomer")}, 4, false);
+
+    // 2.0.0 roads: caravan trails to the Amber Sands, the coastal highway, the north-east passes, links to the new villages
+    addRoad(*this, {pos("cinderwatch"), {2700, 1900}, {3150, 2150}, pos("sphinx"), {3650, 2500}, pos("solmar")}, 5, false);
+    addRoad(*this, {pos("solmar"), {3700, 2900}, pos("kheft")}, 5, false);
+    addRoad(*this, {pos("solmar"), pos("zafir"), {3900, 3350}, pos("sun_temple")}, 5, false);
+    addRoad(*this, {pos("kheft"), {3350, 3300}, pos("tamrak")}, 4, false);
+    addRoad(*this, {pos("solmar"), {4000, 2500}, pos("amber_fort")}, 5, false);
+    addRoad(*this, {pos("solmar"), {4000, 2680}, pos("amber_mine")}, 4, false);
+    addRoad(*this, {pos("solmar"), pos("karun_ruins")}, 4, false);
+    addRoad(*this, {pos("sphinx"), {3450, 2100}, pos("mesa_tower")}, 4, false);
+    addRoad(*this, {pos("gravemoor"), {1180, 2900}, {1300, 3400}, pos("port_azur")}, 5, false);
+    addRoad(*this, {pos("port_azur"), {1950, 4100}, pos("shirokawa"), {2850, 3600}, pos("sel_de_mer"), pos("tamrak")}, 5, false);
+    addRoad(*this, {pos("port_azur"), pos("pirate_cove")}, 4, false);
+    addRoad(*this, {pos("port_azur"), {1000, 4130}, {780, 4040}, pos("pilotis")}, 4, false);
+    addRoad(*this, {pos("port_azur"), {1350, 4220}, pos("tide_cave")}, 3, false);
+    addRoad(*this, {pos("shirokawa"), pos("silence_gate")}, 3, false);
+    addRoad(*this, {pos("shirokawa"), {2300, 4200}, pos("phare")}, 3, false);
+    addRoad(*this, {pos("highspire"), {2800, 700}, pos("hautgel"), {3350, 800}, pos("rempart_nord")}, 5, false);
+    addRoad(*this, {pos("rempart_nord"), pos("naine_mine")}, 4, false);
+    addRoad(*this, {pos("brindlemere"), {1700, 1750}, pos("chenebrune")}, 4, false);
+    addRoad(*this, {pos("brindlemere"), {1300, 1700}, pos("saule_rieur")}, 4, false);
+    addRoad(*this, {pos("frostvik"), {1150, 600}, pos("givrebourg")}, 4, false);
+    addRoad(*this, {pos("sylvarin"), {430, 1850}, pos("auberclat")}, 4, false);
+    addRoad(*this, {pos("cinderwatch"), {2550, 2200}, pos("braise_pic")}, 4, false);
+    addRoad(*this, {pos("braise_pic"), {3000, 2800}, {3350, 3000}, pos("kheft")}, 4, false);
+    addRoad(*this, {pos("gravemoor"), {900, 2700}, pos("marais_noir")}, 4, false);
 
     // ---- structures ----------------------------------------------------------------------
     auto S = [&](int kind, vec2 p, float rot, int poi, float scale = 1, int variant = 0) {
@@ -291,8 +458,88 @@ void World::buildPlan() {
                 S(kindFn(i), q, rot, pi, 1.f, rng.irange(0, 3));
             }
         };
+
+        // ---- 2.0.0 settlements of the new lands -------------------------------------------------
+        auto polar = [&](float a, float d) { return p.pos + vec2(std::cos(a), std::sin(a)) * d; };
+        auto faceCentre = [&](vec2 q) { return std::atan2(p.pos.x - q.x, p.pos.y - q.y); };
+        auto faceOut = [&](vec2 q) { return std::atan2(q.x - p.pos.x, q.y - p.pos.y); };
+        // direction (angle) to the nearest open water around a settlement: where the harbour and the piers go
+        auto seaAngle = [&]() {
+            float best = 0.f, bh = 1e9f;
+            for (int k = 0; k < 24; k++) {
+                float a = k * TAU / 24; vec2 q = polar(a, p.radius * 1.5f + 30.f);
+                float h = baseHeight(q.x, q.y, regionAt(q.x, q.y));
+                for (const Lake& l : lakes) if (length(q - l.c) < l.r) h = std::min(h, l.level - 2.f);
+                if (h < bh) { bh = h; best = a; }
+            }
+            return best;
+        };
+        auto desertTown = [&]() {
+            float R = p.radius; bool big = R > 90.f, small = R < 50.f;
+            S(S_WELL, p.pos, 0, pi, 1.2f);
+            for (int i = 0; i < 2; i++) { float a = 0.5f + i * PI; vec2 q = polar(a, R * 0.2f); S(S_BAZAAR, q, faceCentre(q), pi, 1.f, i); }
+            if (!small) for (int i = 0; i < 4; i++) { float a = 1.57f * i + 1.0f; vec2 q = polar(a, R * 0.27f); S(S_STALL, q, faceCentre(q), pi, 1.f, i % 3); }
+            for (int i = 0; i < 6; i++) S(S_LANTERN, polar(i * TAU / 6 + 0.2f, R * 0.33f), 0, pi);
+            int nA = small ? 5 : (big ? 11 : 8), nB = small ? 6 : (big ? 17 : 12);
+            for (int i = 0; i < nA; i++) { vec2 q = polar(i * TAU / nA + rng.range(-0.12f, 0.12f), R * rng.range(0.46f, 0.54f)); S(S_DOMEHOUSE, q, faceCentre(q), pi, rng.range(0.95f, 1.1f), (i + 1) % 3); }
+            for (int i = 0; i < nB; i++) {
+                float a = (i + 0.5f) * TAU / nB + rng.range(-0.1f, 0.1f); vec2 q = polar(a, R * rng.range(0.74f, 0.84f));
+                int kind = i == 2 ? S_FORGE : (i == 5 && !small ? S_BAZAAR : S_DOMEHOUSE);
+                S(kind, q, faceCentre(q), pi, 1.f, i % 3);
+            }
+            int nm = big ? 3 : (small ? 0 : 1);
+            for (int i = 0; i < nm; i++) { vec2 q = polar(2.1f + i * 2.2f, R * 0.64f); S(S_MINARET, q, 0, pi, 1.f, i); }
+            if (big) { vec2 q = polar(-1.1f, R * 0.62f); S(S_STATUE, q, faceCentre(q), pi, 1.5f); }
+            if (!small) for (int i = 0; i < 2; i++) { vec2 q = polar(1.57f + i * PI, R * 0.99f); S(S_ARCHWAY, q, faceOut(q), pi, 1.f, i); }
+            if (!small) for (int i = 0; i < 2; i++) { vec2 q = polar(0.9f + i * 3.4f, R * 0.95f); S(S_PEN, q, rng.range(0, TAU), pi); }
+            for (int i = 0; i < (small ? 4 : 10); i++) { vec2 q = polar(rng.range(0, TAU), rng.range(R * 0.2f, R * 0.7f)); S(i % 3 == 0 ? S_LANTERN : S_STALL, q, rng.range(0, TAU), pi, 1.f, -1 - (i % 3)); }
+        };
+        auto coastTown = [&]() {
+            float R = p.radius; bool lagoon = p.id != "port_azur";
+            float sea = seaAngle();
+            vec2 sd(std::cos(sea), std::sin(sea));
+            S(S_WELL, p.pos - sd * (R * 0.1f), 0, pi, 1.1f);
+            // fish market hall on the quay, an inn facing the water
+            { vec2 q = p.pos + sd * (R * 0.42f); S(S_BAZAAR, q, faceOut(q), pi, 1.f, 1); }
+            { vec2 q = p.pos + sd * (R * 0.2f) + vec2(-sd.y, sd.x) * (R * 0.34f); S(S_INN, q, faceOut(q), pi, 1.f, 1); }
+            // houses in two arcs behind the waterfront (all around but the sea side)
+            int nA = lagoon ? 7 : 10, nB = lagoon ? 10 : 16;
+            for (int i = 0; i < nA + nB; i++) {
+                bool inner = i < nA;
+                int n = inner ? nA : nB;
+                int k = inner ? i : i - nA;
+                float span = inner ? 4.4f : 4.9f;                       // radians covered (the sea side stays open for the quay)
+                float a = sea + PI + (k + 0.5f - n * 0.5f) / n * span + rng.range(-0.05f, 0.05f);
+                vec2 q = polar(a, R * (inner ? 0.5f : 0.8f) * rng.range(0.94f, 1.06f));
+                int kind = (i % 4 == 1) ? S_BEACHHUT : (i % 7 == 3 ? S_HOUSE : S_DOMEHOUSE);
+                if (i == 2) kind = S_FORGE;
+                if (i == 6 && !lagoon) kind = S_CHAPEL;
+                S(kind, q, faceCentre(q), pi, 1.f, (i + 1) % 3);
+            }
+            // waterfront row of boathouses and net racks
+            for (int i = 0; i < 5; i++) { float a = sea + (i - 2) * 0.33f; vec2 q = polar(a, R * 0.72f); S(i % 2 ? S_BEACHHUT : S_STILT_HUT, q, faceOut(q), pi, 1.f, i); }
+            // quay and piers: chains of 14 m piers running out over the water, three rows
+            // distance from the centre to the water's edge along the sea direction (natural terrain / lagoon rim)
+            float shore = R * 0.9f;
+            for (float d = R * 0.5f; d < R * 3.f; d += 3.f) {
+                vec2 q = p.pos + sd * d; bool wet = baseHeight(q.x, q.y, regionAt(q.x, q.y)) < 0.4f;
+                for (const Lake& l : lakes) if (length(q - l.c) < l.r * 0.97f) wet = true;
+                if (wet) { shore = d; break; }
+            }
+            for (int row = -1; row <= 1; row++) {
+                vec2 lat(-sd.y, sd.x);
+                float rot = std::atan2(sd.x, sd.y);
+                int len = (row == 0 && !lagoon) ? 4 : 3;
+                for (int k = 0; k < len; k++) S(S_PIER, p.pos + sd * (shore - 3.f + k * 14.f) + lat * (row * 19.f), rot, pi, 1.f, row + k);
+            }
+            if (!lagoon) { vec2 q = p.pos + sd * (R * 0.6f) + vec2(-sd.y, sd.x) * (-R * 0.5f); S(S_TOWER, q, 0, pi, 1.f, 0); S(S_CHAPEL, polar(sea + PI + 0.3f, R * 0.35f), faceCentre(polar(sea + PI + 0.3f, R * 0.35f)), pi, 1.f, 0); }
+            for (int i = 0; i < 8; i++) S(S_LANTERN, polar(sea + (i - 3.5f) * 0.38f, R * 0.56f), 0, pi);
+            for (int i = 0; i < 10; i++) { vec2 q = polar(rng.range(0, TAU), rng.range(R * 0.2f, R * 0.7f)); S(i % 3 == 0 ? S_LANTERN : S_STALL, q, rng.range(0, TAU), pi, 1.f, -1 - (i % 3)); }
+        };
         switch (p.type) {
         case PoiType::Village: case PoiType::Mill: case PoiType::Monastery: {
+            if (p.type == PoiType::Village && reg == R_AMBER) { desertTown(); break; }
+            if (p.type == PoiType::Village && reg == R_CORAL) { coastTown(); break; }
             S(S_WELL, p.pos, 0, pi);
             int house = reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
             int n = p.type == PoiType::Village ? 9 : 6;
@@ -333,6 +580,19 @@ void World::buildPlan() {
                 float a = i * TAU / 10;
                 S(S_PALISADE, p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.95f, -a, pi);
             }
+            // 2.0.0 livelier villages: a second ring of homes with their yards, a pen or two, and a bakery-sized forge
+            if (p.type == PoiType::Village && p.radius >= 50.f) {
+                int n2 = (int)(p.radius / 6.2f);
+                for (int i = 0; i < n2; i++) {
+                    float a = (i + 0.5f) * TAU / n2 + rng.range(-0.12f, 0.12f);
+                    vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * ((reg == R_SHADOWS || reg == R_ASHEN) ? rng.range(0.7f, 0.78f) : rng.range(0.86f, 0.96f));
+                    int kind = reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_ASHEN || reg == R_HIGHCROWNS ? S_STONEHOUSE : S_HOUSE));
+                    if (i % 5 == 4) kind = S_STONEHOUSE;
+                    if (reg == R_ELDERWOOD) kind = i % 2 ? S_HOUSE : S_TENT;
+                    S(kind, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.f, rng.irange(0, 3));
+                }
+                for (int i = 0; i < 2; i++) { float a = rng.range(0, TAU); S(S_PEN, p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.8f, rng.range(0, TAU), pi); }
+            }
             break;
         }
         case PoiType::Castle: {
@@ -340,18 +600,51 @@ void World::buildPlan() {
             for (int i = 0; i < n; i++) {
                 float a = i * TAU / n;
                 vec2 t = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.8f;
-                S(S_CASTLE_TOWER, t, a, pi, 1.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : 0));
+                S(S_CASTLE_TOWER, t, a, pi, 1.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0)));
                 float a2 = (i + 0.5f) * TAU / n;
                 vec2 m = p.pos + vec2(std::cos(a2), std::sin(a2)) * p.radius * 0.8f * std::cos(PI / n);
                 if (i == 1) S(S_GATE, m, -a2 + PI / 2, pi, 1.f, reg == R_SHADOWS ? 1 : 0);
-                else S(S_CASTLE_WALL, m, -a2 + PI / 2, pi, 2.f * p.radius * 0.8f * std::sin(PI / n) / 10.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : 0));
+                else S(S_CASTLE_WALL, m, -a2 + PI / 2, pi, 2.f * p.radius * 0.8f * std::sin(PI / n) / 10.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0)));
             }
-            if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : 0);
+            if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0));
             else S(S_STATUE, p.pos + vec2(0, -p.radius * 0.45f), 0, pi, 1.6f);
             for (int i = 0; i < 4; i++) S(S_LANTERN, p.pos + vec2(i < 2 ? -12.f : 12.f, i % 2 ? -12.f : 12.f), 0, pi);
             break;
         }
+        case PoiType::Temple: {
+            if (p.id == "sun_temple_door") break;   // just the entrance trigger, in front of the ziggurat
+            if (p.id == "sphinx") {
+                S(S_SPHINX, p.pos, 0.9f, pi, 1.f);
+                for (int s2 = -1; s2 <= 1; s2 += 2) { vec2 q = p.pos + rotate(vec2(s2 * 14.f, 6.f), -0.9f); S(S_COLONNADE, q, 0.9f + PI * 0.5f, pi, 1.f, s2 + 1); S(S_OBELISK, rotate(vec2(s2 * 9.f, 15.f), -0.9f) + p.pos, 0, pi, 1.3f, 2); }
+                S(S_ALTAR, p.pos + rotate(vec2(0, 13.f), -0.9f), 0.9f + PI, pi);
+            } else if (p.id == "sun_temple") {
+                S(S_ZIGGURAT, p.pos, 0, pi, 1.f);
+                for (int i = 0; i < 4; i++) { float a = i * PI / 2 + PI / 4; S(S_OBELISK, p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.88f, 0, pi, 1.4f, i); }
+                for (int i = 0; i < 4; i++) { float a = i * PI / 2 + PI / 4 + 0.6f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.8f; S(S_COLONNADE, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.f, i); }
+                S(S_ARCHWAY, p.pos + vec2(0, 25.f), PI, pi, 1.f, 2);
+                for (int i = 0; i < 6; i++) S(S_LANTERN, p.pos + vec2(i < 3 ? -7.5f : 7.5f, 14.f + (i % 3) * 5.f), 0, pi);
+            } else if (p.id == "shirokawa") {
+                S(S_PAGODA, p.pos, 0, pi, 1.f);
+                for (int i = 0; i < 4; i++) { float a = 0.9f + i * 1.45f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.72f; S(S_HOUSE, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.f, i); }
+                S(S_WELL, p.pos + vec2(14.f, 20.f), 0, pi);
+                for (int i = 0; i < 8; i++) S(S_LANTERN, p.pos + vec2(i < 4 ? -4.f : 4.f, 16.f + (i % 4) * 4.5f), 0, pi);
+                S(S_STATUE, p.pos + vec2(-16.f, 22.f), 0.4f, pi, 0.9f);
+            } else {
+                S(S_ALTAR, p.pos, 0, pi);
+            }
+            break;
+        }
         case PoiType::Ruins: case PoiType::ElvenRuins: {
+            if (p.type == PoiType::Ruins && reg == R_AMBER) {
+                // Karun: a fallen colonnaded court
+                for (int i = 0; i < 3; i++) { float a = i * TAU / 3 + 0.4f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.55f; S(S_COLONNADE, q, a + PI / 2, pi, 1.f, i); }
+                S(S_ARCHWAY, p.pos + vec2(0, -p.radius * 0.72f), 0, pi, 1.f, 1);
+                const Poi* from = poiById("solmar");   // keep the approach road clear of fallen walls
+                float roadA = from ? std::atan2(from->pos.y - p.pos.y, from->pos.x - p.pos.x) : 0.f;
+                for (int i = 0; i < 5; i++) { float a = rng.range(0, TAU), d = rng.range(8, p.radius * 0.85f); if (std::fabs(std::remainder(a - roadA, TAU)) < 0.8f) a += PI; S(i % 2 ? S_RUIN_WALL : S_OBELISK, p.pos + vec2(std::cos(a), std::sin(a)) * d, rng.range(0, TAU), pi, rng.range(0.8f, 1.3f), 0); }
+                S(S_ALTAR, p.pos, 0, pi);
+                break;
+            }
             for (int i = 0; i < 7; i++) {
                 float a = rng.range(0, TAU), d = rng.range(6, p.radius * 0.8f);
                 vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
@@ -363,11 +656,22 @@ void World::buildPlan() {
         }
         case PoiType::Cave: S(S_CAVE, p.pos, rng.range(0, TAU), pi, p.id == std::string("abyss") ? 1.6f : 1.f, p.id == std::string("abyss") ? 1 : 0); break;
         case PoiType::Mine: S(S_MINE, p.pos, rng.range(0, TAU), pi); S(S_CAMPFIRE, p.pos + vec2(8, 6), 0, pi); S(S_TENT, p.pos + vec2(-10, 8), 0.5f, pi); break;
-        case PoiType::Tower: S(S_TOWER, p.pos, 0, pi, 1.6f, 1); S(S_CAMPFIRE, p.pos + vec2(9, 7), 0, pi); break;
+        case PoiType::Tower:
+            if (p.id == "phare") { S(S_LIGHTHOUSE, p.pos, 0, pi, 1.f); S(S_BEACHHUT, p.pos + vec2(10.f, 8.f), 0.5f, pi, 1.f, 1); S(S_CAMPFIRE, p.pos + vec2(-9, 7), 0, pi); }
+            else { S(S_TOWER, p.pos, 0, pi, 1.6f, 1); S(S_CAMPFIRE, p.pos + vec2(9, 7), 0, pi); }
+            break;
         case PoiType::Waystone: S(S_WAYSTONE, p.pos, 0, pi); break;
         case PoiType::Camp: for (int i = 0; i < 4; i++) S(S_TENT, p.pos + vec2(std::cos(i * 1.6f), std::sin(i * 1.6f)) * 12.f, i * 1.6f + PI, pi); S(S_CAMPFIRE, p.pos, 0, pi); for (int i = 0; i < 8; i++) { float a = i * TAU / 8; S(S_PALISADE, p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.95f, -a, pi); } break;
         case PoiType::Graveyard: S(S_CRYPT, p.pos, 0, pi); S(S_CHAPEL, p.pos + vec2(-26, -20), 0.3f, pi, 0.9f, 1); for (int i = 0; i < 4; i++) S(S_LANTERN, p.pos + vec2(i < 2 ? -9.f : 9.f, i % 2 ? 9.f : 4.f), 0, pi); break;
         case PoiType::BossArena: {
+            if (p.id == "storm_deck") {   // a wrecked jetty: two piers running into the sea and a ring of broken masts (obelisks)
+                vec2 q = p.pos; float sea = 1.5707963f;
+                for (int k = 0; k < 3; k++) S(S_PIER, q + vec2(-9.f, 7.f + k * 14.f), 0, pi, 1.f, k);
+                for (int k = 0; k < 3; k++) S(S_PIER, q + vec2(9.f, 7.f + k * 14.f), 0, pi, 1.f, k + 1);
+                for (int i = 0; i < 6; i++) { float a = i * TAU / 6 + 0.3f; if (std::sin(a) > 0.3f) continue; S(S_OBELISK, q + vec2(std::cos(a), std::sin(a)) * p.radius * 0.8f, -a, pi, 0.8f, 0); }
+                S(S_ALTAR, q + vec2(0, -p.radius * 0.5f), 0, pi); (void)sea;
+                break;
+            }
             int n = 10;
             for (int i = 0; i < n; i++) {
                 float a = i * TAU / n;
@@ -410,7 +714,8 @@ void World::buildPlan() {
 void World::resolvePlacement() {
     auto movable = [](int k) {
         return k != S_BRIDGE && k != S_FIELD && k != S_PEN && k != S_DOCK && k != S_CASTLE_WALL && k != S_GATE && k != S_PALISADE &&
-               k != S_CAVE && k != S_MINE && k != S_WAYSTONE && k != S_RUIN_WALL && k != S_KEEP && k != S_PORTAL && k != S_FENCE;
+               k != S_CAVE && k != S_MINE && k != S_WAYSTONE && k != S_RUIN_WALL && k != S_KEEP && k != S_PORTAL && k != S_FENCE &&
+               k != S_PIER && k != S_ZIGGURAT && k != S_SPHINX && k != S_PAGODA && k != S_ARCHWAY && k != S_COLONNADE && k != S_LIGHTHOUSE;
     };
     auto small = [](int k) { return k == S_LANTERN || k == S_STALL || k == S_WELL || k == S_BANNER || k == S_CAMPFIRE || k == S_STATUE || k == S_OBELISK || k == S_ALTAR; };
     auto inside = [](const Structure& s, vec2 p, float m) {
@@ -465,7 +770,8 @@ void World::resolvePlacement() {
             }
         if (ok) { moved++; continue; }
         s.pos = start;
-        if (small(s.kind)) { drop[i] = true; removed++; }
+        bool dwelling = s.kind == S_HOUSE || s.kind == S_STONEHOUSE || s.kind == S_LONGHOUSE || s.kind == S_STILT_HUT || s.kind == S_DOMEHOUSE || s.kind == S_BEACHHUT || s.kind == S_TENT || s.kind == S_BAZAAR;
+        if (small(s.kind) || dwelling) { drop[i] = true; removed++; }
     }
     if (removed) {
         std::vector<Structure> keep;
@@ -656,7 +962,9 @@ float World::height(float x, float z) const {
                 target = baseHeight(q.x, q.y, qw);
             }
         }
-        if (bestD < rw2 + 8 && ri < 0.5f) {
+        bool harbour = false;
+        for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (p.coastal && length(vec2(x, z) - p.pos) < p.radius + 22.f) harbour = true; }
+        if (bestD < rw2 + 8 && ri < 0.5f && !harbour) {
             float w = (1.f - smoothstepf(rw2 * 0.5f, rw2 * 0.5f + 8.f, bestD)) * (1.f - ri * 2.f);
             h = lerpf(h, std::max(target, h - 1.5f), w * 0.85f);
         }
@@ -721,6 +1029,11 @@ float World::groundHeight(float x, float z) const {
             if (cj < 0) continue;
             for (int si : chunkStructures[cj]) {
                 const Structure& s = structures[si];
+                if (s.kind == S_PIER) {   // 2.0.0 boardwalks over the water: a flat deck 0.75 m above the surface
+                    vec2 lp = rotate(vec2(x, z) - s.pos, s.rot);
+                    if (std::fabs(lp.x) < 1.15f && std::fabs(lp.y) < 7.f) { float lv = waterLevel(s.pos.x, s.pos.y); h = std::max(h, (lv > -1e8f ? lv : height(s.pos.x, s.pos.y)) + 0.75f); }
+                    continue;
+                }
                 if (s.kind != S_BRIDGE) continue;
                 vec2 l = rotate(vec2(x, z) - s.pos, s.rot);  // into bridge space (z along the bridge)
                 // 1.11.2 the walkable deck is exactly the drawn one (it used to float 0.8 m above the planks)
@@ -737,6 +1050,17 @@ float World::bridgeDeck(const Structure& s, float along) const {
     float ha = height(a.x, a.y), hb = height(b.x, b.y);
     float t = clampf(along / L, -1.f, 1.f);
     float road = lerpf(ha, hb, (t + 1.f) * 0.5f);                 // straight line between the two banks
+    {   // 2.0.0 a bank that bulges above the line carries the deck over it (no walking inside a levee); the lift is the
+        // envelope of the bulge over +-3 m so the deck stays smooth
+        float lift = 0.f;
+        for (int k = -3; k <= 3; k++) {
+            float a2 = clampf(along + k, -L, L);
+            vec2 q = s.pos + dir * a2;
+            float line2 = lerpf(ha, hb, (clampf(a2 / L, -1.f, 1.f) + 1.f) * 0.5f);
+            lift = std::max(lift, height(q.x, q.y) - line2);
+        }
+        road += std::max(0.f, lift) * (1.f - smoothstepf(0.8f, 1.f, std::fabs(t)));   // no lift at the very ends: they meet the road
+    }
     float span = s.variant / 100.f + 1.2f + 0.8f * (1.f - t * t);  // clearance over the water, gentle arch
     // near the ends the arch comes down to meet the road (no step when walking or driving on); the bigger the
     // drop, the longer the ramp (at most ~1 in 3)
@@ -763,6 +1087,10 @@ static const std::vector<ScatterEntry>& scatterTable(int r) {
         {{P_ELDERTREE, 1.4f, 0.8f, 1.3f, true}, {P_OAK, 1, 0.9f, 1.3f, true}, {P_GIANTSHROOM, 1.0f, 0.7f, 1.4f, true}, {P_FERN, 3, 0.8f, 1.4f, false}, {P_MAGICCRYSTAL, 0.35f, 0.7f, 1.3f, true}, {P_SMALLSHROOMS, 1.2f, 0.8f, 1.3f, false}, {P_BUSH, 1.2f, 0.8f, 1.3f, false}, {P_LOG, 0.3f, 0.9f, 1.2f, true}},
         {{P_TWISTED, 2, 0.8f, 1.3f, true}, {P_WILLOW, 1.5f, 0.8f, 1.3f, true}, {P_DEADTREE, 1, 0.8f, 1.3f, true}, {P_GRAVESTONE, 0.25f, 0.8f, 1.2f, true}, {P_REEDS, 2.5f, 0.8f, 1.3f, false}, {P_BONES, 0.3f, 0.8f, 1.2f, false}, {P_SMALLSHROOMS, 0.6f, 0.8f, 1.3f, false}},
         {{P_PINE, 3, 0.8f, 1.4f, true}, {P_ROCK, 2, 0.8f, 1.8f, true}, {P_BOULDER, 1, 0.8f, 1.4f, true}, {P_BUSH, 1, 0.7f, 1.1f, false}, {P_RUINCOLUMN, 0.1f, 0.8f, 1.2f, true}, {P_SNOWROCK, 0.5f, 0.8f, 1.4f, true}},
+        // Amber Sands: acacias, cacti, agaves, wind-carved rocks, tumbleweed, bleached bones
+        {{P_ACACIA, 1.2f, 0.8f, 1.4f, true}, {P_CACTUS, 1.6f, 0.7f, 1.4f, true}, {P_AGAVE, 1.4f, 0.8f, 1.3f, false}, {P_SANDROCK, 2.f, 0.7f, 1.8f, true}, {P_TUMBLEWEED, 1.f, 0.8f, 1.2f, false}, {P_DRYBUSH, 1.2f, 0.7f, 1.2f, false}, {P_BONES, 0.25f, 0.8f, 1.2f, false}, {P_DATEPALM, 0.1f, 0.9f, 1.2f, true}},
+        // Coral Coast: palms, ferns, flowering bushes, driftwood, shells, sea rocks
+        {{P_PALM, 3.2f, 0.85f, 1.35f, true}, {P_BANANA, 1.2f, 0.8f, 1.2f, true}, {P_FERN, 2.f, 0.8f, 1.4f, false}, {P_TROPBUSH, 2.4f, 0.8f, 1.3f, false}, {P_SEAROCK, 0.7f, 0.7f, 1.5f, true}, {P_DRIFTWOOD, 0.3f, 0.8f, 1.2f, true}, {P_SHELLS, 0.5f, 0.9f, 1.2f, false}, {P_OAK, 0.25f, 0.8f, 1.1f, true}},
     };
     return T[r];
 }
@@ -775,6 +1103,8 @@ static float forestDensity(int r, float x, float z) {
     case R_ASHEN: return 0.18f + n * 0.12f;
     case R_ELDERWOOD: return 0.55f + n * 0.4f;
     case R_SHADOWS: return 0.25f + n * 0.35f;
+    case R_AMBER: return 0.05f + smoothstepf(0.52f, 0.78f, n) * 0.28f;   // sparse: oases and wadis hold the green
+    case R_CORAL: return 0.35f + smoothstepf(0.35f, 0.7f, n) * 0.5f;
     default: return 0.12f + smoothstepf(0.5f, 0.75f, n) * 0.4f;
     }
 }
@@ -820,6 +1150,8 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 case R_ELDERWOOD: wMud += w * smoothstepf(0.55f, 0.75f, n1) * 0.35f; wDirt += w * smoothstepf(0.7f, 0.85f, n2) * 0.3f; break;
                 case R_SHADOWS: wMud += w * (0.35f + 0.4f * n1); wDirt += w * smoothstepf(0.6f, 0.8f, n2) * 0.25f; break;
                 case R_HIGHCROWNS: wRock += w * (0.15f + smoothstepf(0.55f, 0.75f, n1) * 0.4f); wSnow += w * smoothstepf(70.f, 95.f, y + n1 * 12.f); wDirt += w * smoothstepf(0.7f, 0.85f, n2) * 0.2f; break;
+                case R_AMBER: wSand += w * (0.82f + 0.16f * smoothstepf(0.35f, 0.7f, n1)); wRock += w * smoothstepf(0.62f, 0.85f, n2) * 0.45f; wDirt += w * smoothstepf(0.7f, 0.9f, n1) * 0.18f; break;
+                case R_CORAL: wSand += w * (1.f - smoothstepf(0.9f, 3.0f, y)) * 0.92f; wDirt += w * smoothstepf(0.68f, 0.85f, n2) * 0.22f; wMud += w * smoothstepf(0.75f, 0.9f, n1) * 0.12f; break;
                 }
             }
             // slopes become rock, altitude snow anywhere
@@ -940,6 +1272,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // ---- structures
     int ci = chunkIndex(k.x, k.z);
     if (ci >= 0) for (int si : chunkStructures[ci]) buildStructure(out, structures[si], *this);
+    if (ci >= 0 && lod == 0) for (int si : chunkStructures[ci]) dressStructure(out, structures[si], *this);   // 2.0.0 yards, jars, nets, boats, palms
 
     // ---- vegetation & props scatter (deterministic per chunk)
     Rng rng(hash2i(k.x, k.z, 4242));
@@ -950,13 +1283,21 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         if (ci >= 0)
             for (int pi : chunkPois[ci]) {
                 const Poi& p = pois[pi];
-                float rr = p.type == PoiType::Waystone ? 8.f : (p.type == PoiType::Cave || p.type == PoiType::Mine ? p.radius + 4 : p.radius * 0.95f);
+                float rr = p.type == PoiType::Waystone ? 8.f : (p.type == PoiType::Cave || p.type == PoiType::Mine ? p.radius + 4 : (p.type == PoiType::Village || p.type == PoiType::Monastery || p.type == PoiType::Mill ? p.radius * 0.5f : p.radius * 0.95f));   // 2.0.0 villages keep their plaza and houses clear, trees grow in between
                 if (length(vec2(x, z) - p.pos) < rr + margin) return true;
             }
         for (auto& c : out.colliders) {
             float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f;
             if (length(vec2(x, z) - c.c) < rr + margin) return true;
         }
+        if (ci >= 0)   // 2.0.0 the whole footprint of this chunk's own buildings (a forge's collider covers only its hearth), piers included
+            for (int si : chunkStructures[ci]) {
+                const Structure& s = structures[si];
+                if (s.kind == S_FIELD || s.kind == S_PEN) continue;
+                vec2 fp = s.kind == S_PIER ? vec2(1.6f, 7.5f) : structureFootprint(s.kind) * s.scale;
+                vec2 l = rotate(vec2(x, z) - s.pos, s.rot);
+                if (std::fabs(l.x) < fp.x + margin && std::fabs(l.y) < fp.y + margin) return true;
+            }
         // 1.12.0 buildings of the neighbouring chunks too (a house on a chunk border used to get a tree inside)
         for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++) {
@@ -1023,8 +1364,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             {{P_FERN, 2.f, 0.6f, 1.f}, {P_SMALLSHROOMS, 2.f, 0.8f, 1.3f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 0.6f, 0.8f, 1.2f}},
             {{P_TALLGRASS, 2.f, 0.8f, 1.3f}, {P_SMALLSHROOMS, 1.f, 0.8f, 1.3f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}, {P_PEBBLES, 0.6f, 0.8f, 1.2f}},
             {{P_FLOWERS, 1.5f, 0.7f, 1.1f}, {P_TALLGRASS, 2.f, 0.7f, 1.1f}, {P_PEBBLES, 2.f, 0.8f, 1.5f}},
+            {{P_PEBBLES, 2.5f, 0.8f, 1.5f}, {P_DRYBUSH, 1.2f, 0.5f, 0.9f}, {P_BONES, 0.15f, 0.7f, 1.f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}},
+            {{P_SHELLS, 2.f, 0.8f, 1.3f}, {P_FLOWERS, 1.5f, 0.8f, 1.3f}, {P_FERN, 2.f, 0.6f, 1.f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.2f, 0.8f, 1.2f}},
         };
-        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12};
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15};
         Rng cr(hash2i(k.x, k.z, 9191));
         int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
         for (int t = 0; t < n; t++) {
@@ -1181,6 +1524,8 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         case R_ASHEN: t = p < 0.25f ? NodeType::Rock : p < 0.55f ? NodeType::CopperOre : p < 0.8f ? NodeType::RareOre : NodeType::Crystal; tier = 2; break;
         case R_ELDERWOOD: t = p < 0.3f ? NodeType::Herb : p < 0.5f ? NodeType::Mushroom : p < 0.7f ? NodeType::Crystal : p < 0.85f ? NodeType::Tree : NodeType::Berries; tier = 1; break;
         case R_SHADOWS: t = p < 0.35f ? NodeType::Mushroom : p < 0.6f ? NodeType::Herb : p < 0.8f ? NodeType::Tree : NodeType::IronOre; tier = 1; break;
+        case R_AMBER: t = p < 0.28f ? NodeType::Rock : p < 0.5f ? NodeType::CopperOre : p < 0.72f ? NodeType::RareOre : p < 0.88f ? NodeType::Crystal : NodeType::Herb; tier = 3; break;
+        case R_CORAL: t = p < 0.3f ? NodeType::Tree : p < 0.55f ? NodeType::Berries : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
         default: t = p < 0.3f ? NodeType::IronOre : p < 0.5f ? NodeType::RareOre : p < 0.7f ? NodeType::Rock : p < 0.85f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
         }
         addNode(t, x, z, tier);
@@ -1220,7 +1565,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float wg = 1.f - (tv.rough + tv.metal + tv.emis + tv.wind + tv.b0 + tv.b1 + tv.w0) / 255.f;
                 if (tv.ny < 105) continue;
                 int r = regionId(x, z);
-                float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.35f : (r == R_HIGHCROWNS ? 0.6f : 1.f));
+                float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.35f : (r == R_HIGHCROWNS ? 0.6f : (r == R_AMBER ? 0.05f : (r == R_CORAL ? 0.8f : 1.f))));
                 if (g.f() > wg * gd * 1.1f) continue;
                 float y = hAt(vi, vj);
                 float wl = waterLevel(x, z);
@@ -1624,7 +1969,7 @@ void World::buildFarMesh(MeshBuilder& b, int res) const {
                 float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
                               std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
                 RegionWeights rw = regionAt(x, z);
-                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e};
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a};
                 c = vec3(0);
                 for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
                 c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
@@ -1670,7 +2015,7 @@ void World::generateMapImage() {
             float x = (i + 0.5f) * s, z = (j + 0.5f) * s;
             float h = hh[(size_t)j * R + i];
             RegionWeights rw = regionAt(x, z);
-            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384)};
+            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888)};
             vec3 c(0);
             for (int r = 0; r < R_COUNT; r++) c += rc[r] * rw.w[r];
             float hx = hh[(size_t)j * R + std::min(R - 1, i + 1)] - h, hz = hh[(size_t)std::min(R - 1, j + 1) * R + i] - h;

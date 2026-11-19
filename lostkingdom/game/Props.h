@@ -15,6 +15,9 @@ enum PropKind : uint8_t {
     P_REEDS, P_STUMP, P_LOG, P_SMALLSHROOMS, P_CACTUSFERN, P_BONES, P_SNOWROCK, P_LILYPADS, P_HAYBALE, P_CRATE, P_BARREL,
     // world dressing (1.5): ground clutter, road furniture, wild landmarks
     P_FLOWERS, P_PEBBLES, P_TALLGRASS, P_BRANCHES, P_FENCE, P_SIGNPOST, P_CART, P_LANTERNPOST, P_STANDSTONE, P_CAMPFIRE, P_TENT,
+    // 2.0.0 the Amber Sands and the Coral Coast
+    P_ACACIA, P_CACTUS, P_AGAVE, P_SANDROCK, P_TUMBLEWEED, P_DRYBUSH, P_DATEPALM,
+    P_PALM, P_BANANA, P_TROPBUSH, P_SEAROCK, P_DRIFTWOOD, P_SHELLS, P_HAMMOCK, P_NETRACK, P_BOAT, P_AMPHORA, P_CARPET, P_BRAZIER,
     P_COUNT
 };
 
@@ -24,6 +27,8 @@ enum StructureKind : uint8_t {
     S_WAYSTONE, S_CAMPFIRE, S_BRIDGE, S_TENT, S_STILT_HUT, S_MONASTERY, S_STATUE, S_FORGE, S_INN, S_LANTERN,
     S_GATE, S_PALISADE, S_DOCK, S_OBELISK, S_ALTAR, S_PORTAL,
     S_PEN, S_BANNER,   // 1.9.2 player domain: livestock enclosure, the domain's banner
+    // 2.0.0 sandstone towns, harbours, the temple of Shirokawa
+    S_DOMEHOUSE, S_BAZAAR, S_MINARET, S_ZIGGURAT, S_LIGHTHOUSE, S_PAGODA, S_SPHINX, S_PIER, S_BEACHHUT, S_COLONNADE, S_ARCHWAY,
     S_COUNT
 };
 
@@ -46,6 +51,8 @@ vec2 structureFootprint(int kind);   // half extents (m) of a structure's base
 float structurePlinth(const Structure& s, const World& w);   // height of the stone foundation (0: none)
 // Build a structure into the chunk batches.
 void buildStructure(ChunkBuild& out, const Structure& s, const World& w);
+// 2.0.0 the yard around a dwelling (props only; see Props.cpp)
+void dressStructure(ChunkBuild& out, const Structure& s, const World& w);
 
 // 1.9.0 imported building models: assets/models/props/<name>.lkm + .jpg, variants <name>_2, <name>_3
 // (tools/import_prop.py). When a model exists for a structure kind, the chunk places it on the structure's

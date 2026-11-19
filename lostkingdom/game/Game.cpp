@@ -58,7 +58,7 @@ bool Game::init(int w, int h) {
     world.detailedFoliage = settings.profile <= QualityProfile::Medium;
     if (!gpuReady) {
         world.buildPlan();
-        farTerrainBuild = std::async(std::launch::async, [this] { auto mb = std::make_shared<MeshBuilder>(); world.buildFarMesh(*mb, 112); return mb; });
+        farTerrainBuild = std::async(std::launch::async, [this] { auto mb = std::make_shared<MeshBuilder>(); world.buildFarMesh(*mb, 168); return mb; });
         world.startWorkers(std::max(1, std::min(3, platform::cpuCount() - 1)));
         std::thread([this] { world.generateMapImage(); }).detach();
         loadAssets();
@@ -334,6 +334,8 @@ static const RegionGrade GRADE[R_COUNT] = {
     {{0.0f, 0.01f, 0.02f}, {1.0f, 1.01f, 1.01f}, {0.96f, 1.02f, 1.0f}, 0.96f, 1.08f, -0.1f, 1.3f, 0, {0.85f, 1.0f, 0.98f}, 1.0f},  // Elderwood
     {{0.01f, 0.02f, 0.02f}, {0.98f, 1.0f, 0.98f}, {0.92f, 0.98f, 0.9f}, 0.78f, 1.1f, -0.1f, 1.4f, 0, {0.62f, 0.72f, 0.64f}, 0.92f},   // Shadows
     {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 0.96f, 1.12f, 0.0f, 0.8f, 0, {1, 1, 1.05f}, 1.0f},              // High Crowns
+    {{0.02f, 0.005f, 0.0f}, {1.02f, 1.0f, 0.97f}, {1.07f, 0.98f, 0.84f}, 1.06f, 1.14f, 0.55f, 0.65f, 0, {1.05f, 0.92f, 0.78f}, 1.08f},    // Amber Sands: blazing, orange-gold
+    {{0.0f, 0.012f, 0.02f}, {1.0f, 1.0f, 1.0f}, {0.97f, 1.04f, 1.03f}, 1.16f, 1.1f, 0.1f, 0.75f, 0, {0.9f, 1.0f, 1.05f}, 1.04f},          // Coral Coast: saturated, turquoise air
 };
 
 void Game::updateEnvironment(float dt) {
@@ -388,6 +390,8 @@ void Game::updateEnvironment(float dt) {
         case R_ASHEN: next = p < 0.45f ? W_ASHFALL : p < 0.75f ? W_CLEAR : W_STORM; break;
         case R_ELDERWOOD: next = p < 0.45f ? W_CLEAR : p < 0.75f ? W_FOG : W_RAIN; break;
         case R_SHADOWS: next = p < 0.45f ? W_FOG : p < 0.75f ? W_RAIN : W_STORM; break;
+        case R_AMBER: next = p < 0.55f ? W_CLEAR : p < 0.8f ? W_SANDSTORM : p < 0.92f ? W_CLOUDY : W_CLEAR; break;
+        case R_CORAL: next = p < 0.5f ? W_CLEAR : p < 0.68f ? W_CLOUDY : p < 0.9f ? W_RAIN : W_STORM; break;
         default: next = p < 0.55f ? W_CLEAR : p < 0.75f ? W_CLOUDY : W_SNOW; break;
         }
         weatherNext = next;
@@ -405,13 +409,15 @@ void Game::updateEnvironment(float dt) {
     float tFog = target(wcur, W_FOG) * wb + regionW[R_SHADOWS] * 0.35f;
     float tStorm = target(wcur, W_STORM) * wb;
     float tAsh = target(wcur, W_ASHFALL) * wb + regionW[R_ASHEN] * 0.25f;
-    float tCloud = target(wcur, W_CLOUDY) * wb + tRain + tSnow * 0.7f + tStorm;
-    if (dungeon.active) tRain = tSnow = tStorm = tAsh = tCloud = 0;
+    float tSand = target(wcur, W_SANDSTORM) * wb * saturate(regionW[R_AMBER] * 1.6f);   // 2.0.0: the storms stay in the Amber Sands
+    float tCloud = target(wcur, W_CLOUDY) * wb + tRain + tSnow * 0.7f + tStorm + tSand * 0.5f;
+    if (dungeon.active) tRain = tSnow = tStorm = tAsh = tCloud = tSand = 0;
     rainAmt = damp(rainAmt, tRain, 0.5f, dt);
     snowAmt = damp(snowAmt, tSnow, 0.5f, dt);
     fogAmt = damp(fogAmt, saturate(tFog), 0.4f, dt);
     stormAmt = damp(stormAmt, tStorm, 0.5f, dt);
     ashAmt = damp(ashAmt, saturate(tAsh), 0.5f, dt);
+    sandAmt = damp(sandAmt, saturate(tSand), 0.35f, dt);
     float cloud = saturate(tCloud);
 
     // lightning
@@ -428,7 +434,7 @@ void Game::updateEnvironment(float dt) {
     float flash = lightningFlash > 0.5f ? 1.f : (lightningFlash > 0.25f && std::fmod(realTime * 30.f, 2.f) < 1.f ? 0.4f : 0.f);
 
     // --- compose environment
-    float overcast = cloud * 0.55f + fogAmt * 0.25f + ashAmt * 0.3f;
+    float overcast = cloud * 0.55f + fogAmt * 0.25f + ashAmt * 0.3f + sandAmt * 0.4f;
     env.sunIntensity *= (1.f - overcast * 0.75f);
     env.shadowStrength = 1.f - overcast * 0.7f;
     env.skyAmbient = lerp(env.skyAmbient, env.skyAmbient * 0.75f + vec3(0.05f), overcast);
@@ -437,7 +443,8 @@ void Game::updateEnvironment(float dt) {
     env.fogColor = lerp(fogC, fogC * 0.7f + vec3(0.12f), overcast) * g.fogTint;
     if (ashAmt > 0.01f) env.fogColor = lerp(env.fogColor, srgb(0x5a4a44) * (0.3f + 0.7f * (1 - env.night)), ashAmt * 0.4f);
     if (fogAmt > 0.01f) env.fogColor = lerp(env.fogColor, env.fogColor * 0.75f, fogAmt);
-    env.fogDensity = (0.0042f + fogAmt * 0.009f + rainAmt * 0.003f + snowAmt * 0.005f + ashAmt * 0.004f) * g.fogMul;
+    if (sandAmt > 0.01f) env.fogColor = lerp(env.fogColor, srgb(0xc98f4e) * (0.35f + 0.65f * (1 - env.night)), sandAmt * 0.8f);
+    env.fogDensity = (0.0042f + fogAmt * 0.009f + rainAmt * 0.003f + snowAmt * 0.005f + ashAmt * 0.004f + sandAmt * 0.014f) * g.fogMul;
     // 1.13.0 forest haze and morning mist: denser air under the trees and at dawn (the sun shafts cut through it)
     if (!dungeon.active) {
         float fsum = 0;
@@ -452,7 +459,7 @@ void Game::updateEnvironment(float dt) {
     env.fogBase = focus.y - 2.f;
     env.wetness = damp(env.wetness, saturate(rainAmt * 1.2f), 0.15f, dt);
     env.snowCover = saturate(snowAmt * 0.7f + regionW[R_FROSTHEIM] * 0.15f);
-    float wind = 0.35f + rainAmt * 0.3f + stormAmt * 0.6f + snowAmt * 0.3f + regionW[R_HIGHCROWNS] * 0.25f;
+    float wind = 0.35f + rainAmt * 0.3f + stormAmt * 0.6f + snowAmt * 0.3f + regionW[R_HIGHCROWNS] * 0.25f + sandAmt * 0.9f + regionW[R_AMBER] * 0.15f + regionW[R_CORAL] * 0.1f;
     env.windStrength = damp(env.windStrength, wind, 0.5f, dt);
     env.windDir = normalize(vec2(0.8f, 0.35f + std::sin(realTime * 0.02f) * 0.3f));
     env.gust = 0.6f + 0.4f * std::sin(realTime * 0.13f);
@@ -468,6 +475,16 @@ void Game::updateEnvironment(float dt) {
     {
         float low = 1.f - saturate((env.sunDir.y - 0.15f) / 0.6f);
         env.shafts = (0.3f + 0.55f * low + fogAmt * 0.5f + env.wetness * 0.25f + forestHaze * 0.45f + morningMist * 0.5f) * (1.f - overcast * 0.6f);
+    }
+    // 2.0.0 sky and post effects
+    {
+        float clear = (1.f - overcast) * (1.f - rainAmt) * (1.f - fogAmt);
+        env.aurora = dungeon.active ? 0.f : saturate((regionW[R_FROSTHEIM] * 1.0f + regionW[R_HIGHCROWNS] * 0.55f) * clear * 1.4f) * (1.f - morningMist);
+        env.dust = dungeon.active ? 0.f : saturate(regionW[R_AMBER] * 0.55f + sandAmt + ashAmt * 0.5f + regionW[R_ASHEN] * 0.2f);
+        env.rainbow = dungeon.active ? 0.f : saturate((env.wetness - 0.25f) * 2.f) * (1.f - rainAmt) * (1.f - env.night) * (1.f - overcast * 0.6f);
+        env.heat = dungeon.active ? 0.f : saturate(regionW[R_AMBER] * 1.2f + regionW[R_ASHEN] * 0.35f) * (1.f - env.night) * (1.f - sandAmt) * (1.f - rainAmt) * saturate(env.sunIntensity / 2.5f);
+        env.sandVeil = dungeon.active ? 0.f : sandAmt;
+        env.flare = dungeon.active ? 0.f : (1.f - env.night) * saturate(env.sunIntensity / 2.2f) * (1.f - overcast * 0.9f) * (1.f - rainAmt) * (1.f - fogAmt) * 0.75f;
     }
     env.vignette = 0.32f;
     env.grain = 0.012f;
@@ -495,7 +512,7 @@ void Game::updateEnvironment(float dt) {
         env.sunIntensity = 0.25f; env.shadowStrength = 0.3f; env.sunColor = srgb(0x8a9aff);
         env.skyAmbient = srgb(0x2a2a3a) * 0.9f; env.groundAmbient = srgb(0x2a2018) * 0.7f;
         int th = dungeons()[dungeon.def].theme;
-        env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : srgb(0x141216)));
+        env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : (th == 6 ? srgb(0x3a2a14) : (th == 7 ? srgb(0x0e2a34) : srgb(0x141216)))));
         env.fogDensity = 0.025f; env.fogBase = -10.f; env.cloudShadows = 0; env.snowCover = 0; env.wetness = 0.2f;
         env.exposure = 1.25f; env.tiltShift = 0.25f;
         env.night = 1.f;  // window/lantern glows on
@@ -565,6 +582,29 @@ void Game::updateAmbientFx(float dt) {
         p.maxLife = 7.f; p.size0 = p.size1 = r.range(0.07f, 0.14f); p.turbulence = 1.2f;
         p.c0 = vec4(1, 1, 1, 0.9f); p.c1 = vec4(1, 1, 1, 0.6f); p.frame = PF_SNOW; p.additive = false; p.rotVel = r.range(-2.f, 2.f);
         p.groundKill = groundAt(p.pos.x, p.pos.z);
+        particles.spawn(p);
+    }
+    // 2.0.0 sandstorm: grit racing across the ground with the wind, in thick sheets
+    int nSand = (int)(sandAmt * 120 * dt * 10 * budget);
+    for (int i = 0; i < nSand; i++) {
+        Particle p;
+        vec2 d = r.inDisk() * 28.f;
+        p.pos = c + vec3(d.x, r.range(0.3f, 7.f), d.y);
+        vec2 w = env.windDir * (14.f + 8.f * env.windStrength);
+        p.vel = vec3(w.x, r.range(-0.3f, 0.5f), w.y);
+        p.maxLife = 1.6f; p.size0 = r.range(0.05f, 0.12f); p.size1 = 0.f; p.turbulence = 2.2f; p.stretch = 2.6f;
+        p.c0 = vec4(0.85f, 0.62f, 0.34f, 0.55f); p.c1 = vec4(0.85f, 0.62f, 0.34f, 0.f); p.frame = PF_DUST; p.additive = false;
+        particles.spawn(p);
+    }
+    // Amber Sands, calm weather: a faint blown-sand veil off the dune crests, wind-driven
+    if (sandAmt < 0.1f && regionW[R_AMBER] > 0.4f && r.f() < (dt * budget) * 10.f * regionW[R_AMBER] * (1.f - env.night)) {
+        Particle p;
+        vec2 d = r.inDisk() * 22.f;
+        p.pos = vec3(c.x + d.x, groundAt(c.x + d.x, c.z + d.y) + r.range(0.1f, 1.2f), c.z + d.y);
+        vec2 w = env.windDir * (4.f + 5.f * env.windStrength);
+        p.vel = vec3(w.x, r.range(0.1f, 0.6f), w.y); p.turbulence = 0.9f;
+        p.maxLife = 2.4f; p.size0 = 0.07f; p.size1 = 0.02f; p.stretch = 1.8f;
+        p.c0 = vec4(0.92f, 0.74f, 0.46f, 0.4f); p.c1 = vec4(0.92f, 0.74f, 0.46f, 0.f); p.frame = PF_DUST; p.additive = false;
         particles.spawn(p);
     }
     int nAsh = (int)(ashAmt * 30 * dt * 10 * budget);
@@ -679,7 +719,8 @@ void Game::updateAudioDirector(float dt) {
     else if (combat) track = "combat";
     else if (dungeon.active) track = "dungeon";
     else {
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns"};
+        // 2.0.0: the new regions reuse existing scores (no new compositions yet): the Sands play the Ashen theme, the Coast the Greenhaven one
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "ashen", "greenhaven"};
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);
@@ -688,11 +729,11 @@ void Game::updateAudioDirector(float dt) {
     audio.playMusic(track, track == "combat" || track == "boss" ? 1.5f : 4.f);
     audio.setMusicDuck(dialog.open ? 0.55f : 1.f);
     // ambience layers
-    float forest = regionW[R_GREENHAVEN] * 0.7f + regionW[R_ELDERWOOD];
+    float forest = regionW[R_GREENHAVEN] * 0.7f + regionW[R_ELDERWOOD] + regionW[R_CORAL] * 0.8f;
     bool under = dungeon.active;
     audio.setAmbience("amb_forest_day", under ? 0 : forest * (1 - env.night) * (1 - rainAmt) * 0.8f);
     audio.setAmbience("amb_night", under ? 0 : env.night * (1 - rainAmt) * 0.7f);
-    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f, 0, 1) * 0.8f);
+    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + sandAmt * 0.5f, 0, 1) * 0.8f);
     audio.setAmbience("amb_rain", under ? 0 : rainAmt);
     audio.setAmbience("amb_lava", under ? (dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
     audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f);

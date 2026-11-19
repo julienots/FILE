@@ -430,6 +430,7 @@ void Renderer::render(ParticleSystem* particles) {
         sky.set("uInvViewProj", camera.viewProj.inverse());
         sky.set("uSkyTop", vec4(env.skyTop, 1));
         sky.set("uSkyHorizon", vec4(env.skyHorizon, env.cloudCover));
+        sky.set("uSkyFx", vec4(env.aurora, env.dust, env.rainbow, 0.f));
         glDepthMask(GL_FALSE);
         fsMesh.draw();
         glDepthMask(GL_TRUE);
@@ -578,6 +579,12 @@ void Renderer::postProcess() {
     composite.set("uFade", vec4(env.fadeColor, env.fade));
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
+    composite.set("uFx0", vec4(env.heat, env.sandVeil, 0.f, 0.f));
+    {   // 2.0.0 lens flare: where the sun falls on the screen (clip space of a far point along the sun direction)
+        vec4 sc = camera.viewProj * vec4(camera.pos + normalize(env.sunDir) * 2000.f, 1.f);
+        float amt = env.flare * (sc.w > 0.f ? 1.f : 0.f);
+        composite.set("uSunScr", vec4(sc.w > 0.f ? (sc.x / sc.w) * 0.5f + 0.5f : 0.5f, sc.w > 0.f ? (sc.y / sc.w) * 0.5f + 0.5f : 0.5f, (float)width / std::max(1, height), amt));
+    }
     // 1.11.1 light shafts: march the shadow map from the eye to each pixel
     bool doShafts = settings.sunShafts && shadowsThisFrame && shadowRT.fbo && env.shafts > 0.01f && env.sunIntensity > 0.05f;
     if (doShafts) {
@@ -638,6 +645,8 @@ void Renderer::renderToTarget(RenderTarget& rt, const Camera& cam, const Environ
     composite.set("uFade", vec4(0, 0, 0, 0));
     composite.set("uProj", vec4(cam.zNear, cam.zFar, hdrScale, 0));
     composite.set("uTime", 0.f);
+    composite.set("uFx0", vec4(0, 0, 0, 0)); composite.set("uSunScr", vec4(0.5f, 0.5f, 1.f, 0.f));   // no mirage or flare in previews
+    composite.set("uSunS", vec4(0, 1, 0, 0));
     composite.set("uAlphaFromScene", 1.f);
     fsMesh.draw();
     composite.set("uAlphaFromScene", 0.f);

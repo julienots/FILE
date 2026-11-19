@@ -441,6 +441,17 @@ void main() {
     vec3 T = normalize(vec3(1.0, 0.0, 0.0) - N * N.x);
     vec3 B = cross(N, T);
     N = normalize(T * tn.x + B * tn.y + N * max(tn.z, 0.2));
+    // 2.0.0 wind ripples on sand: long crests across the wind, a finer set across them (dunes and beaches)
+    {
+        float sandK = wSand * (1.0 - cliff) * smoothstep(0.7, 0.96, N.y);
+        if (sandK > 0.02) {
+            vec2 wd = normalize(uWind.xy + vec2(1e-3));
+            float ph = dot(vWorld.xz, wd) * 3.1 + texture(uNoiseTex, vWorld.xz * 0.06).g * 7.0;
+            float dr = cos(ph) * (0.6 + 0.4 * sin(ph * 0.5));
+            float ph2 = dot(vWorld.xz, vec2(-wd.y, wd.x)) * 9.5 + texture(uNoiseTex, vWorld.xz * 0.27).r * 9.0;
+            N = normalize(N + (vec3(wd.x, 0.0, wd.y) * dr * 0.11 + vec3(-wd.y, 0.0, wd.x) * cos(ph2) * 0.035) * sandK);
+        }
+    }
   #endif
     // dynamic snow cover from weather
     float snowFx = uFogParams.z * smoothstep(0.55, 0.85, N.y);
@@ -520,7 +531,7 @@ void main() {
   #ifndef TERRAIN_SIMPLE
     // 1.12.0 glitter: tiny facets of snow, frost and wet sand catch the sun (bloom turns them into sparkles)
     {
-        float gk = max(max(wSnow, snowFx), wSand * (0.35 + 0.65 * wet)) * (1.0 - puddleK);
+        float gk = max(max(wSnow, snowFx), wSand * (0.55 + 0.45 * wet)) * (1.0 - puddleK);
         if (gk > 0.05) {
             vec2 gp = vWorld.xz * 7.0, gc = floor(gp);
             float rnd = fract(sin(dot(gc, vec2(12.9898, 78.233))) * 43758.5453);
@@ -736,7 +747,12 @@ void main() {
         float streak = smoothstep(0.66, 0.86, texture(uNoiseTex, suv).r);
         foam += streak * 0.18 * clamp(fl * 3.0, 0.0, 1.0);
     }
+    // 2.0.0 swash: bands of foam running up the beach with the waves (shallow open water only)
+    float swash = smoothstep(0.8, 0.0, depth) * smoothstep(0.82, 0.96, sin(depth * 8.0 - t * 1.1 + fn * 2.0) * 0.5 + 0.5) * 0.45 * (1.0 - clamp(length(flow) * 4.0, 0.0, 1.0));
+    foam += swash;
     col = mix(col, vec3(0.95) * (amb + uSunColor.rgb * uSunDir.w * 0.6), clamp(foam, 0.0, 1.0) * (1.0 - frozen));
+    // 2.0.0 lagoon glow: sunlit shallow water scatters its own colour (turquoise over white sand)
+    col += uWaterShallow.rgb * uSunColor.rgb * uSunDir.w * sh * (1.0 - absorb) * smoothstep(0.0, 0.5, depth) * (0.18 + 0.32 * pow(max(dot(-V, uSunDir.xyz), 0.0), 2.0)) * (1.0 - frozen);
 #ifndef WATER_SIMPLE
     // 1.11.2 caustics: the waves focus sunlight into a moving net of bright lines on the bed of shallow water
     {
@@ -791,29 +807,121 @@ in vec3 vDir;
 uniform sampler2D uNoiseTex;
 uniform vec4 uSkyTop;      // zenith colour
 uniform vec4 uSkyHorizon;  // horizon colour, a = cloud cover
+uniform vec4 uSkyFx;       // 2.0.0 x aurora, y dust haze (desert, ash), z rainbow
 out vec4 fragColor;
+
+float hash13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+
+// layered cloud density: three octaves from the tileable noise texture
+float cloudDens(vec2 p, float cover) {
+    float c = texture(uNoiseTex, p).b * 0.55 + texture(uNoiseTex, p * 2.31 + 0.37).g * 0.30 + texture(uNoiseTex, p * 5.07 + 0.11).r * 0.15;
+    return smoothstep(1.0 - cover, 1.18 - cover * 0.55, c);
+}
+
 void main() {
     vec3 d = normalize(vDir);
     float h = clamp(d.y, -0.2, 1.0);
-    vec3 col = mix(uSkyHorizon.rgb, uSkyTop.rgb, pow(max(h, 0.0), 0.6));
+    float night = uFogParams.w;
+    float sun = uSunDir.w;                         // sunlight intensity (also dims at night)
+    vec3 S = normalize(uSunDir.xyz);
+    float sd = max(dot(d, S), 0.0);
+    float low = 1.0 - smoothstep(0.02, 0.5, S.y);  // 1 at sunrise/sunset
+    // ---- atmosphere: zenith to horizon, warm scattering around a low sun
+    vec3 col = mix(uSkyHorizon.rgb, uSkyTop.rgb, pow(max(h, 0.0), 0.55));
+    col += uSunColor.rgb * pow(sd, 4.0) * 0.16 * (0.3 + low) * (1.0 - night);                       // aureole
+    col += vec3(1.0, 0.42, 0.14) * pow(sd, 2.2) * low * smoothstep(0.55, 0.0, h) * 0.38 * (1.0 - night);   // sunset band hugging the horizon
     col = mix(col, uFogColor.rgb, smoothstep(0.15, -0.1, h));
-    float sd = max(dot(d, uSunDir.xyz), 0.0);
-    col += uSunColor.rgb * (pow(sd, 900.0) * 30.0 + pow(sd, 12.0) * 0.4) * uSunDir.w;
-    // moon on the opposite side at night
-    float md = max(dot(d, -uSunDir.xyz), 0.0);
-    col += vec3(0.8, 0.85, 1.0) * pow(md, 2000.0) * 8.0 * uFogParams.w;
-    // stars
-    vec2 suv = d.xz / (d.y + 0.3) * 40.0;
-    float st = texture(uNoiseTex, suv * 0.05).r;
-    col += vec3(pow(st, 40.0) * 30.0) * uFogParams.w * smoothstep(0.0, 0.3, h);
-    // clouds on a plane
+    // desert / ash dust: a warm brown haze thickening towards the horizon
+    float dust = uSkyFx.y;
+    if (dust > 0.001) col = mix(col, mix(vec3(0.85, 0.58, 0.32), uFogColor.rgb, 0.4) * (0.35 + 0.65 * (1.0 - night)), dust * smoothstep(0.42, -0.05, h) * 0.62 * (1.0 - night * 0.55));
+    // ---- sun disc with limb glow, moon with maria
+    col += uSunColor.rgb * (pow(sd, 1100.0) * 34.0 + pow(sd, 12.0) * 0.35 + pow(sd, 90.0) * 0.5) * sun;
+    vec3 M = -S;
+    float md = dot(d, M);
+    if (night > 0.02 && md > 0.9) {
+        float disc = smoothstep(0.99925, 0.99945, md);
+        vec2 mp = (d.xz - M.xz) * 26.0;
+        float maria = texture(uNoiseTex, mp * 0.5 + 0.3).r;
+        vec3 mooncol = mix(vec3(0.62, 0.66, 0.78), vec3(0.95, 0.96, 1.0), smoothstep(0.35, 0.7, maria));
+        col += mooncol * disc * 5.5 * night;
+        col += vec3(0.55, 0.65, 1.0) * (pow(max(md, 0.0), 80.0) * 0.16 + smoothstep(0.986, 0.9856, md) * smoothstep(0.9847, 0.9856, md) * 0.04) * night;   // halo and a faint 22 degree ring
+    }
+    // ---- stars (hashed cells, twinkling), the Milky Way band with dust lanes, a shooting star now and then
+    if (night > 0.02 && h > -0.02) {
+        float horizonFade = smoothstep(0.0, 0.3, h);
+        vec3 cell = floor(d * 180.0);
+        float hs = hash13(cell);
+        vec3 f = fract(d * 180.0) - 0.5;
+        float star = step(0.9935, hs) * smoothstep(0.42, 0.0, length(f)) * (0.55 + 0.45 * sin(uCamPos.w * (2.0 + hs * 4.0) + hs * 60.0));
+        vec3 sc = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.85, 0.65), fract(hs * 91.7));
+        col += sc * star * 3.2 * night * horizonFade;
+        vec3 gn = normalize(vec3(0.35, 0.78, 0.52));
+        float gb = dot(d, gn);
+        vec2 gp = vec2(atan(d.z, d.x) * 1.3, d.y * 3.0);
+        float lane = smoothstep(0.38, 0.62, texture(uNoiseTex, gp * 0.55 + 0.2).g);
+        float mw = exp(-gb * gb * 14.0) * (0.35 + 0.65 * texture(uNoiseTex, gp * 1.7).r) * (1.0 - 0.55 * lane);
+        col += mix(vec3(0.32, 0.38, 0.7), vec3(0.8, 0.62, 0.55), smoothstep(0.55, 0.9, texture(uNoiseTex, gp * 0.4).b)) * mw * 0.32 * night * horizonFade;
+        float ts = floor(uCamPos.w / 7.0), tf = fract(uCamPos.w / 7.0);
+        if (hash13(vec3(ts, 3.1, 1.7)) > 0.45 && tf < 0.12) {
+            vec3 a0 = normalize(vec3(hash13(vec3(ts, 1.0, 0.0)) - 0.5, 0.45 + 0.35 * hash13(vec3(ts, 2.0, 0.0)), hash13(vec3(ts, 5.0, 0.0)) - 0.5));
+            vec3 dirm = normalize(vec3(hash13(vec3(ts, 7.0, 0.0)) - 0.5, -0.35, hash13(vec3(ts, 8.0, 0.0)) - 0.5));
+            vec3 head = normalize(a0 + dirm * tf * 2.2);
+            vec3 tail = normalize(a0 + dirm * max(tf - 0.05, 0.0) * 2.2);
+            vec3 ax = head - tail; float len = length(ax) + 1e-5;
+            float tt = clamp(dot(d - tail, ax) / (len * len), 0.0, 1.0);
+            float dist = length(d - (tail + ax * tt));
+            col += vec3(1.0, 0.95, 0.85) * smoothstep(0.004, 0.0, dist) * tt * (1.0 - tf / 0.12) * 4.0 * night;
+        }
+    }
+    // ---- aurora: shimmering curtains of green, cyan and violet (cold regions at night)
+    float au = uSkyFx.x;
+    if (au > 0.01 && d.y > 0.04) {
+        vec3 acc = vec3(0.0);
+        for (int i = 0; i < 6; i++) {
+            float fi = float(i);
+            float t = (0.55 + 0.11 * fi) / (d.y + 0.12);
+            vec2 p = d.xz * t * 0.5 + vec2(uCamPos.w * 0.012, fi * 0.13);
+            float n = texture(uNoiseTex, p * 0.31).g + 0.28 * sin(p.x * 6.0 + uCamPos.w * 0.35 + fi);
+            float cur = smoothstep(0.52, 0.74, n) * smoothstep(0.98, 0.7, n + 0.2 * texture(uNoiseTex, p * 1.9).r);
+            vec3 ac = mix(vec3(0.1, 1.0, 0.45), vec3(0.15, 0.75, 1.0), fi / 5.0);
+            ac = mix(ac, vec3(0.75, 0.25, 1.0), smoothstep(0.55, 1.0, fi / 5.0 + 0.25 * sin(uCamPos.w * 0.2 + p.x)));
+            acc += ac * cur * (1.0 - fi * 0.12);
+        }
+        col += acc * 0.34 * au * smoothstep(0.04, 0.4, d.y) * night;
+    }
+    // ---- clouds: a fat cumulus layer lit from the sun's side (self-shadow, silver edges, dark underside) and thin high cirrus
     if (d.y > 0.0) {
-        vec2 cuv = d.xz / (d.y + 0.05) * 0.25 + uWind.xy * uCamPos.w * 0.003;
-        float c = texture(uNoiseTex, cuv).b * 0.65 + texture(uNoiseTex, cuv * 2.7).g * 0.35;
         float cover = uSkyHorizon.a;
-        float cl = smoothstep(1.0 - cover, 1.15 - cover * 0.6, c) * smoothstep(0.0, 0.25, d.y);
-        vec3 cc = mix(uSkyHorizon.rgb * 1.1, uSunColor.rgb * uSunDir.w + uSkyTop.rgb * 0.4, 0.5) ;
-        col = mix(col, cc, cl * 0.9);
+        vec2 wdir = uWind.xy * uCamPos.w * 0.0028;
+        vec2 cuv = d.xz / (d.y + 0.07) * 0.24 + wdir;
+        float dens = cloudDens(cuv, cover);
+        float fade = smoothstep(0.0, 0.22, d.y);
+        if (dens > 0.002) {
+            vec2 sdir = normalize(S.xz + vec2(1e-3)) * 0.03;
+            float toward = cloudDens(cuv + sdir, cover);
+            float thick = clamp((dens - toward) * 2.4 + dens * 0.35, 0.0, 1.0);
+            vec3 litC = uSunColor.rgb * min(sun, 1.5) * 0.85 + uSkyTop.rgb * 0.45;
+            vec3 shdC = uSkyHorizon.rgb * 0.5 + uSkyTop.rgb * 0.18 + vec3(0.02, 0.025, 0.04);
+            vec3 cc = mix(litC, shdC, thick * 0.9);
+            float edge = (1.0 - dens) * smoothstep(0.0, 0.35, dens);
+            cc += uSunColor.rgb * edge * pow(sd, 3.0) * sun * 1.4;                              // silver lining against the sun
+            cc += vec3(1.0, 0.5, 0.22) * low * pow(sd, 2.0) * (1.0 - thick) * 0.55 * (1.0 - night);   // glowing underside at sunset
+            col = mix(col, cc, dens * 0.93 * fade);
+        }
+        vec2 cir = d.xz / (d.y + 0.18) * vec2(0.09, 0.55) + wdir * 0.4 + vec2(0.0, 7.0);
+        float ci = smoothstep(0.55, 0.85, texture(uNoiseTex, cir).r * 0.7 + texture(uNoiseTex, cir * 3.1).g * 0.3);
+        vec3 cic = mix(uSkyHorizon.rgb * 1.15, uSunColor.rgb * min(sun, 1.3), 0.35 + 0.4 * low);
+        col = mix(col, cic, ci * 0.28 * (1.0 - cover * 0.5) * smoothstep(0.05, 0.4, d.y) * (1.0 - night * 0.8));
+    }
+    // ---- rainbow after a shower, opposite the sun
+    float rb = uSkyFx.z;
+    if (rb > 0.01 && S.y > 0.02 && S.y < 0.7 && d.y > -0.02) {
+        float ang = acos(clamp(dot(d, -S), -1.0, 1.0));
+        float hue = (ang - 0.693) / 0.048;
+        if (hue > 0.0 && hue < 1.0) {
+            vec3 sp = clamp(vec3(abs(hue * 6.0 - 3.0) - 1.0, 2.0 - abs(hue * 6.0 - 2.0), 2.0 - abs(hue * 6.0 - 4.0)), 0.0, 1.0);
+            col += sp.zyx * smoothstep(0.0, 0.18, hue) * smoothstep(1.0, 0.82, hue) * rb * 0.34 * smoothstep(-0.02, 0.2, d.y);
+        }
     }
     col += vec3(uMisc.w) * 0.8;
     fragColor = vec4(col * uSkyColor.w, 1.0);
@@ -1037,6 +1145,8 @@ uniform mediump sampler2DShadow uShadowMap;   // 1.11.1 light shafts
 uniform mat4 uInvVP, uShadowM;
 uniform vec3 uEye, uSunC;
 uniform vec4 uSunS;   // xyz direction towards the sun, w amount (0 = off)
+uniform vec4 uFx0;    // 2.0.0 x heat shimmer (mirage), y sand veil (sandstorm)
+uniform vec4 uSunScr; // 2.0.0 lens flare: xy sun position on screen (uv), z aspect, w amount
 out vec4 fragColor;
 
 vec3 aces(vec3 x) {
@@ -1047,7 +1157,17 @@ float linDepth(float z) { float n = uProj.x, f = uProj.y; z = z * 2.0 - 1.0; ret
 
 void main() {
     vec2 uv = vUV;
+    vec2 uv0 = vUV;
     vec3 col;
+    // 2.0.0 heat shimmer: the far ground wobbles (a mirage over the dunes); near things stay still
+    if (uFx0.x > 0.0) {
+        float dh = linDepth(texture(uDepth, uv).r);
+        float m = smoothstep(30.0, 160.0, dh) * uFx0.x;
+        float tt = uTime;
+        float wob = sin(uv.y * 150.0 + tt * 2.3) + 0.6 * sin(uv.y * 330.0 - tt * 3.1 + uv.x * 25.0);
+        uv.x += wob * 0.0016 * m;
+        uv.y += sin(uv.x * 90.0 + tt * 1.7) * 0.0008 * m;
+    }
     if (uPost0.w > 0.0) {
         vec2 dir = (uv - 0.5) * uPost0.w * 0.012;
         col = vec3(texture(uScene, uv + dir).r, texture(uScene, uv).g, texture(uScene, uv - dir).b);
@@ -1112,6 +1232,44 @@ void main() {
     col *= clamp(vig, 0.0, 1.0);
     col = mix(col, vec3(0.55, 0.0, 0.0), uProj.w * smoothstep(0.15, 0.6, length(vc)));
     // grain
+    // 2.0.0 sandstorm: a veil of ochre grit racing across the picture, in long horizontal streaks
+    if (uFx0.y > 0.0) {
+        float s1 = fract(sin(dot(floor(vec2(uv0.x * 5.0 - uTime * 2.4, uv0.y * 90.0)), vec2(12.9898, 78.233))) * 43758.5453);
+        float s2 = fract(sin(dot(floor(vec2(uv0.x * 11.0 - uTime * 4.6, uv0.y * 160.0)), vec2(39.346, 11.135))) * 24634.634);
+        float streak = smoothstep(0.55, 1.0, s1) * 0.55 + smoothstep(0.7, 1.0, s2) * 0.45;
+        vec3 sandc = vec3(0.80, 0.56, 0.32) * (0.55 + 0.45 * smoothstep(0.1, 0.9, dot(col, vec3(0.33))));
+        col = mix(col, sandc, uFx0.y * (0.22 + 0.2 * streak));
+        col += vec3(0.95, 0.7, 0.4) * streak * uFx0.y * 0.07;
+    }
+    // 2.0.0 lens flare: soft halo, ghosts mirrored through the centre, an anamorphic streak (only when the sun is in view and unobstructed)
+    if (uSunScr.w > 0.0) {
+        vec2 sp = uSunScr.xy;
+        float vis = 0.0;
+        for (int i = 0; i < 5; i++) {
+            vec2 o = i == 0 ? vec2(0.0) : vec2(i == 1 ? 0.012 : (i == 2 ? -0.012 : 0.0), i == 3 ? 0.014 : (i == 4 ? -0.014 : 0.0));
+            vec2 q = clamp(sp + o, vec2(0.002), vec2(0.998));
+            vis += step(0.9999, texture(uDepth, q).r);
+        }
+        vis *= 0.2;
+        vis *= smoothstep(-0.25, 0.05, sp.x) * smoothstep(1.25, 0.95, sp.x) * smoothstep(-0.25, 0.05, sp.y) * smoothstep(1.25, 0.95, sp.y);
+        if (vis > 0.001) {
+            vec2 asp = vec2(uSunScr.z, 1.0);
+            vec2 p = (uv0 - 0.5) * asp, sP = (sp - 0.5) * asp;
+            float ds = length(p - sP);
+            vec3 fl = vec3(1.0, 0.82, 0.55) * (0.10 / (1.0 + ds * ds * 60.0));
+            fl += vec3(0.35, 0.6, 1.0) * exp(-abs(p.y - sP.y) * 55.0) * exp(-abs(p.x - sP.x) * 2.2) * 0.10;
+            for (int k = 0; k < 4; k++) {
+                float g = k == 0 ? 0.35 : (k == 1 ? 0.7 : (k == 2 ? 1.25 : 1.9));
+                float r = k == 0 ? 0.035 : (k == 1 ? 0.06 : (k == 2 ? 0.045 : 0.09));
+                vec2 gp = mix(sP, -sP, g);
+                float dg = length(p - gp);
+                float ring = smoothstep(r, r * 0.82, dg) - smoothstep(r * 0.82, r * 0.6, dg) * 0.8;
+                vec3 tint = k == 0 ? vec3(1.0, 0.6, 0.3) : (k == 1 ? vec3(0.4, 0.8, 1.0) : (k == 2 ? vec3(0.6, 1.0, 0.5) : vec3(1.0, 0.45, 0.7)));
+                fl += tint * ring * 0.05;
+            }
+            col += fl * vis * uSunScr.w;
+        }
+    }
     float n = fract(sin(dot(uv * (uTime + 1.37), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
     col += n * uPost1.w;
     col = mix(col, uFade.rgb, uFade.a);

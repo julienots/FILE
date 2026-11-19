@@ -14,6 +14,8 @@ static Theme theme(int t) {
     case 2: return {hexColor(0x2e2a30), hexColor(0x3a3440), hexColor(0x241f28), hexColor(0x3a3040), hexColor(0xd060ff), true, true, true, false, false};     // spider den
     case 3: return {hexColor(0x3a2a24), hexColor(0x4a342a), hexColor(0x2a1e1a), hexColor(0x5a3a2a), hexColor(0xff7a26), false, false, false, true, false};   // ember mines
     case 4: return {hexColor(0x8aa0b8), hexColor(0x9ab4c8), hexColor(0x6a8aa8), hexColor(0xc0d8e8), hexColor(0x9ae6ff), false, true, true, false, true};    // ice caves
+    case 6: return {hexColor(0xb89a64), hexColor(0xc8aa74), hexColor(0x8a6a3c), hexColor(0xe0b848), hexColor(0xffb040), false, false, true, false, false};   // sun temple: sandstone and gold
+    case 7: return {hexColor(0x3a6a78), hexColor(0x4a7a88), hexColor(0x2a4a5a), hexColor(0x7ad0c8), hexColor(0x70ffe0), false, true, false, false, false};   // sea cave / sanctum: drowned stone, glowing coral
     default: return {hexColor(0x241a2a), hexColor(0x2e2236), hexColor(0x1a1220), hexColor(0x3a2a48), hexColor(0xb040ff), false, true, false, false, false}; // abyss
     }
 }
@@ -250,11 +252,15 @@ void Game::updateDungeon(float dt) {
             if (!poi) continue;
             float d = length(poi->pos - p.pos.xz());
             if (d < 9.f) {
-                bool locked = dungeons()[i].id == "abyss" && !questActive("m7") && !questsDone.count("m7");
+                const std::string& did = dungeons()[i].id;
+                auto opened = [&](const char* q) { return questActive(q) || questsDone.count(q) > 0; };
+                bool locked = (did == "abyss" && !opened("m7")) || (did == "sun_temple" && !opened("n6")) || (did == "silence" && !opened("n8"));
+                const char* lockMsg = did == "abyss" ? "Le sceau de Morneval est encore intact. (Quête principale)"
+                                    : (did == "sun_temple" ? "Les portes du temple sont scellées par une clé d'ambre. (Quête principale)" : "Le sanctuaire reste fermé. Maître Hanzo en garde la porte. (Quête principale)");
                 nearDungeon = i;
-                dungeonPrompt = locked ? "Un sceau ancien bloque le passage" : "Entrer : " + dungeons()[i].name;
+                dungeonPrompt = locked ? (did == "abyss" ? "Un sceau ancien bloque le passage" : "Une porte scellée bloque le passage") : "Entrer : " + dungeons()[i].name;
                 if (input.interact && !locked && transitionT < 0) enterDungeon(i);
-                if (input.interact && locked) notify("Le sceau de Morneval est encore intact. (Quête principale)", vec3(0.8f, 0.6f, 1.f), "i_lock");
+                if (input.interact && locked) notify(lockMsg, vec3(0.8f, 0.6f, 1.f), "i_lock");
             }
         }
         return;

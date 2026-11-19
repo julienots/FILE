@@ -20,18 +20,18 @@
 namespace lk {
 using namespace agr;
 
-constexpr float WORLD_SIZE = 3072.f;
+constexpr float WORLD_SIZE = 4608.f;   // 2.0.0: 3072 -> 4608 m (the old island keeps its coordinates; the new lands lie east and south)
 constexpr float CHUNK = 32.f;
 constexpr int CHUNKS = (int)(WORLD_SIZE / CHUNK);
 constexpr float SEA_LEVEL = 0.f;
 
-enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_COUNT };
+enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_COUNT };
 const char* regionName(int r);
 const char* regionSubtitle(int r);
 
 struct RegionWeights { float w[R_COUNT]; int dominant; };
 
-enum class PoiType : uint8_t { Village, Castle, Ruins, Cave, Tower, Shrine, Camp, BossArena, Mine, Monastery, Graveyard, ElvenRuins, Farm, Mill, Lake, Volcano, Bridge, Waystone };
+enum class PoiType : uint8_t { Village, Castle, Ruins, Cave, Tower, Shrine, Camp, BossArena, Mine, Monastery, Graveyard, ElvenRuins, Farm, Mill, Lake, Volcano, Bridge, Waystone, Temple };
 
 struct Poi {
     std::string id, name;
@@ -43,6 +43,7 @@ struct Poi {
     int dungeon = -1;      // entrance to dungeon index
     int boss = -1;         // boss index for arenas
     bool discovered = false;
+    bool coastal = false;  // 2.0.0 harbour: kept low so the sea stays where the piers are
 };
 
 struct Road { std::vector<vec2> pts; float width; bool cobble; };
@@ -183,7 +184,7 @@ public:
     int nearestPoi(vec2 p, float maxDist, PoiType* typeFilter = nullptr) const;
 
     // Minimap / world map colour image (generated in the background).
-    std::vector<uint8_t> mapImage; int mapRes = 512; std::atomic<bool> mapReady{false};
+    std::vector<uint8_t> mapImage; int mapRes = 768; std::atomic<bool> mapReady{false};
     void generateMapImage();
 
     // Modified world state (harvested nodes, opened chests) - owned by save system
