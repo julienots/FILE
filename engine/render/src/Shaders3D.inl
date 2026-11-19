@@ -340,16 +340,19 @@ vec3 agrToonShade(vec3 albedo, vec3 N, vec3 V, float occlusion) {
         if (u_lightColorType[i].w > 0.5) atten *= smoothstep(u_lightSpotDir[i].w, u_lightSpotInner[i].x, dot(-L, u_lightSpotDir[i].xyz));
         if (atten > 0.0) color += albedo * u_lightColorType[i].rgb * atten * agrToonRamp(max(dot(N, L), 0.0));
     }
-    // Flat ambient (hemisphere or image sky irradiance): no reflections, readable colors.
+    // Flat ambient (hemisphere or image sky irradiance): no reflections, readable colors. It
+    // mostly fills the shadow side: on the lit side the sun alone shows the true base color.
     vec3 ambient = u_envParams.x > 0.5 ? agrEnvIrradiance(N) * u_groundColor.w : hemisphere(N);
-    color += albedo * ambient * occlusion;
+    color += albedo * ambient * occlusion * (1.0 - 0.7 * sunLit);
     if (u_toonShadow.w > 0.0) {
         float NoV = clamp(dot(N, V), 0.0, 1.0);
         float w = max(u_toon.w, 0.001);
         float rim = smoothstep(1.0 - w, 1.0 - w + max(u_toon.y, 0.01) + 0.02, 1.0 - NoV);
         color += u_rimColor.rgb * rim * u_toonShadow.w * (0.35 + 0.65 * sunLit);
     }
-    return color;
+    // Sun + ambient can exceed 1: scale the color down as a whole instead of clipping each
+    // channel, so lit surfaces keep their hue and saturation instead of washing out to white.
+    return color / max(1.0, max(color.r, max(color.g, color.b)));
 }
 
 void main() {

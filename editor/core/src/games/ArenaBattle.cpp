@@ -5,6 +5,7 @@
 // AI opponent, a three-minute match with double elixir at the end, crowns, trophies.
 // games/scripts/duel_*.lua run the game.
 #include "../GameTemplates.hpp"
+#include "agr/animation/AnimationSystem.hpp"
 #include "agr/navigation/NavigationComponents.hpp"
 
 namespace agr::editor::games {
@@ -12,6 +13,43 @@ namespace agr::editor::games {
 namespace {
 
 constexpr Vec4 kBlue{0.25f, 0.5f, 1.0f, 1.0f}, kRed{0.95f, 0.3f, 0.25f, 1.0f};
+
+/// Skeleton shared by the characters of tools/generate_duel_art.py (JOINTS there): name,
+/// parent index, translation relative to the parent. The entities below a unit mirror the
+/// model's nodes so the skin and the clips ("Model/Hips/Spine"...) find their joints.
+struct JointDef {
+    const char* name;
+    int parent;
+    Vec3 local;
+};
+constexpr JointDef kJoints[] = {{"Hips", -1, {0.0f, 0.50f, 0.0f}},   {"Spine", 0, {0.0f, 0.22f, 0.0f}}, {"Head", 1, {0.0f, 0.28f, 0.0f}},
+                                {"ArmL", 1, {0.31f, 0.18f, 0.0f}},   {"ArmR", 1, {-0.31f, 0.18f, 0.0f}},
+                                {"LegL", 0, {0.13f, -0.04f, 0.0f}},  {"LegR", 0, {-0.13f, -0.04f, 0.0f}}};
+
+/// The node hierarchy of a duel model under `parent`: "Model" > two meshes (fixed colors, then
+/// team-colored parts tinted by `team`) and, for characters, the joints.
+ecs::Entity modelInstance(Builder& b, ecs::Entity parent, const std::string& file, float scale, Vec4 team, bool character) {
+    Scene& scene = b.scene;
+    const auto model = scene.createEntity("Model", parent);
+    b.reg.get<TransformComponent>(model).scale = Vec3{scale};
+    const char* names[2] = {character ? "Skin" : "Base", character ? "Body" : "Roof"};
+    for (int i = 0; i < 2; ++i) {
+        const auto e = scene.createEntity(names[i], model);
+        auto& mr = b.reg.emplace<MeshRendererComponent>(e);
+        mr.model = "assets://games/duel/" + file + ".glb";
+        mr.meshIndex = i;
+        mr.skin = character ? 0 : -1;
+        if (i == 1) mr.color = team;
+    }
+    if (character) {
+        ecs::Entity joints[std::size(kJoints)];
+        for (usize j = 0; j < std::size(kJoints); ++j) {
+            joints[j] = scene.createEntity(kJoints[j].name, kJoints[j].parent < 0 ? model : joints[kJoints[j].parent]);
+            b.reg.get<TransformComponent>(joints[j]).position = kJoints[j].local;
+        }
+    }
+    return model;
+}
 
 ecs::Entity ground(Builder& b, const std::string& name, Vec3 center, Vec3 size, Vec4 color, const char* texture, ecs::Entity parent) {
     const auto e = b.mesh(name, PrimitiveMesh::Cube, center, size, color, parent);
@@ -35,10 +73,10 @@ void healthBar(Builder& b, ecs::Entity parent, float height, float width, Vec4 c
 ecs::Entity tower(Builder& b, const std::string& name, ecs::Entity parent, Vec3 pos, Vec4 color, bool king, const std::string& team) {
     const auto t = b.entity(name, pos, parent);
     const float s = king ? 1.35f : 1.0f;
-    const auto base = b.mesh("Base", PrimitiveMesh::Cube, {0.0f, 1.0f * s, 0.0f}, Vec3{1.8f, 2.0f, 1.8f} * s, {0.75f, 0.72f, 0.68f, 1.0f}, t);
-    b.reg.get<MeshRendererComponent>(base).texture = "assets://terrain/rock.png";
-    b.mesh("Roof", PrimitiveMesh::Cube, {0.0f, 2.15f * s, 0.0f}, Vec3{2.1f, 0.35f, 2.1f} * s, color, t);
-    b.mesh(king ? "Crown" : "Flag", PrimitiveMesh::Sphere, {0.0f, 2.7f * s, 0.0f}, Vec3{king ? 0.9f : 0.6f}, king ? Vec4{1.0f, 0.82f, 0.25f, 1.0f} : color, t);
+    // Round stone tower, team roof; the king's is larger and crowned (tools/generate_duel_art.py).
+    const auto model = modelInstance(b, t, king ? "king_tower" : "tower", 1.0f, color, false);
+    // Doors toward the river (the model only: the health bar keeps facing the camera).
+    b.reg.get<TransformComponent>(model).rotation = math::Quat::fromAxisAngle({0.0f, 1.0f, 0.0f}, math::radians(pos.x < 0.0f ? 90.0f : -90.0f));
     b.reg.emplace<RigidBodyComponent>(t).type = BodyType3D::Static;
     auto& col = b.reg.emplace<ColliderComponent>(t);
     col.size = Vec3{1.8f, 2.0f, 1.8f} * s;
@@ -52,20 +90,18 @@ ecs::Entity tower(Builder& b, const std::string& name, ecs::Entity parent, Vec3 
 /// Unit prototypes (hidden): blocky soldiers tinted by team when cloned.
 ecs::Entity unit(Builder& b, const std::string& name, ecs::Entity parent, const std::string& kind) {
     const auto u = b.entity(name, {}, parent);
-    const bool giant = kind == "giant", goblin = kind == "goblin", tank = kind == "tank", archer = kind == "archer";
+    const bool giant = kind == "giant", goblin = kind == "goblin", tank = kind == "tank";
     const float s = giant ? 1.6f : goblin ? 0.7f : 1.0f;
     if (tank) {
         b.mesh("Body", PrimitiveMesh::Cube, {0.0f, 0.45f, 0.0f}, {1.3f, 0.6f, 0.9f}, {0.5f, 0.5f, 0.55f, 1.0f}, u);
         b.mesh("Turret", PrimitiveMesh::Cube, {0.0f, 0.9f, 0.0f}, {0.6f, 0.35f, 0.6f}, kBlue, u);
         b.mesh("Gun", PrimitiveMesh::Cube, {0.55f, 0.9f, 0.0f}, {0.8f, 0.12f, 0.12f}, {0.3f, 0.3f, 0.32f, 1.0f}, u);
     } else {
-        const Vec4 skin = goblin ? Vec4{0.45f, 0.8f, 0.35f, 1.0f} : Vec4{0.95f, 0.8f, 0.65f, 1.0f};
-        b.mesh("Body", PrimitiveMesh::Cube, {0.0f, 0.5f * s, 0.0f}, Vec3{0.55f, 0.75f, 0.4f} * s, kBlue, u);
-        b.mesh("Head", PrimitiveMesh::Sphere, {0.0f, 1.08f * s, 0.0f}, Vec3{0.42f} * s, skin, u);
-        if (archer) b.mesh("Bow", PrimitiveMesh::Cube, {0.35f * s, 0.6f * s, 0.0f}, Vec3{0.06f, 0.7f, 0.06f} * s, {0.55f, 0.35f, 0.15f, 1.0f}, u);
-        else b.mesh("Weapon", PrimitiveMesh::Cube, {0.38f * s, 0.65f * s, 0.0f}, Vec3{0.08f, 0.8f, 0.08f} * s, {0.8f, 0.8f, 0.85f, 1.0f}, u);
+        // Animated character: Idle / Walk / Attack driven by duel_unit.lua through the Animator.
+        modelInstance(b, u, kind, s * 1.3f, kBlue, true);  // 1.3: readable from the high camera
+        b.reg.emplace<AnimatorComponent>(u).controller = "assets://games/duel/" + kind + ".agrctrl";
     }
-    healthBar(b, u, (giant ? 2.4f : goblin ? 1.3f : tank ? 1.6f : 1.7f), giant ? 1.4f : 0.9f, kBlue);
+    healthBar(b, u, (giant ? 3.1f : goblin ? 1.6f : tank ? 1.6f : 2.25f), giant ? 1.4f : 0.9f, kBlue);
     auto& agent = b.reg.emplace<NavAgentComponent>(u);
     agent.speed = giant ? 1.3f : goblin ? 3.4f : tank ? 1.6f : 2.2f;
     agent.stoppingDistance = 0.2f;
@@ -98,19 +134,19 @@ void buildArenaBattle(Scene& scene) {
     const auto sunLight = templates::sun(scene);
     auto& env = reg.get<EnvironmentComponent>(sunLight);
     env.sky = SkyMode::Gradient;
-    env.ambientIntensity = 0.55f;  // cartoon: shadows stay colorful, never black
-    reg.get<DirectionalLightComponent>(sunLight).intensity = 1.25f;
+    env.ambientIntensity = 0.6f;  // cartoon: shadows stay colorful, never black
+    reg.get<DirectionalLightComponent>(sunLight).intensity = 1.05f;
 
     // Arena: two halves, a river, two bridges (the navigation mesh crosses the river only there).
     const auto arena = b.entity("Arena");
-    ground(b, "Blue Side", {-8.0f, -0.5f, 0.0f}, {14.0f, 1.0f, 16.0f}, {0.85f, 1.0f, 0.85f, 1.0f}, "assets://terrain/grass.png", arena);
-    ground(b, "Red Side", {8.0f, -0.5f, 0.0f}, {14.0f, 1.0f, 16.0f}, {1.0f, 0.95f, 0.85f, 1.0f}, "assets://terrain/grass.png", arena);
+    ground(b, "Blue Side", {-8.0f, -0.5f, 0.0f}, {14.0f, 1.0f, 16.0f}, {0.85f, 1.0f, 0.85f, 1.0f}, "assets://games/duel/grass.png", arena);
+    ground(b, "Red Side", {8.0f, -0.5f, 0.0f}, {14.0f, 1.0f, 16.0f}, {1.0f, 0.95f, 0.85f, 1.0f}, "assets://games/duel/grass.png", arena);
     const auto river = b.mesh("River", PrimitiveMesh::Plane, {0.0f, -0.35f, 0.0f}, {2.0f, 1.0f, 16.0f}, {0.3f, 0.6f, 0.95f, 1.0f}, arena);
     reg.get<MeshRendererComponent>(river).roughness = 0.1f;
     for (float z : {-4.5f, 4.5f})
-        ground(b, z < 0 ? "Bridge N" : "Bridge S", {0.0f, -0.45f, z}, {2.2f, 0.9f, 2.2f}, {0.65f, 0.45f, 0.3f, 1.0f}, "assets://terrain/dirt.png", arena);
-    for (float x : {-15.5f, 15.5f}) ground(b, x < 0 ? "Wall W" : "Wall E", {x, 0.5f, 0.0f}, {1.0f, 1.0f, 16.0f}, {0.6f, 0.58f, 0.55f, 1.0f}, "assets://terrain/rock.png", arena);
-    for (float z : {-8.5f, 8.5f}) ground(b, z < 0 ? "Wall N" : "Wall S", {0.0f, 0.5f, z}, {32.0f, 1.0f, 1.0f}, {0.6f, 0.58f, 0.55f, 1.0f}, "assets://terrain/rock.png", arena);
+        ground(b, z < 0 ? "Bridge N" : "Bridge S", {0.0f, -0.45f, z}, {2.2f, 0.9f, 2.2f}, {0.65f, 0.45f, 0.3f, 1.0f}, "assets://games/duel/path.png", arena);
+    for (float x : {-15.5f, 15.5f}) ground(b, x < 0 ? "Wall W" : "Wall E", {x, 0.5f, 0.0f}, {1.0f, 1.0f, 16.0f}, {0.6f, 0.58f, 0.55f, 1.0f}, "assets://games/duel/stone.png", arena);
+    for (float z : {-8.5f, 8.5f}) ground(b, z < 0 ? "Wall N" : "Wall S", {0.0f, 0.5f, z}, {32.0f, 1.0f, 1.0f}, {0.6f, 0.58f, 0.55f, 1.0f}, "assets://games/duel/stone.png", arena);
     // Deploy zone highlight (shown while dragging a card).
     const auto zone = b.mesh("Deploy Zone", PrimitiveMesh::Plane, {-8.0f, 0.03f, 0.0f}, {14.0f, 1.0f, 16.0f}, {0.3f, 0.6f, 1.0f, 0.18f}, arena);
     reg.get<MeshRendererComponent>(zone).castShadows = false;
@@ -148,7 +184,7 @@ void buildArenaBattle(Scene& scene) {
         cartoonStyle(scene, proto, true, true);
         if (reg.has<NavAgentComponent>(proto)) {
             auto& blob = reg.emplace<BlobShadowComponent>(proto);
-            blob.radius = scene.nameOf(proto) == "Giant Prototype" ? 0.8f : scene.nameOf(proto) == "Goblin Prototype" ? 0.35f : 0.5f;
+            blob.radius = scene.nameOf(proto) == "Giant Prototype" ? 1.0f : scene.nameOf(proto) == "Goblin Prototype" ? 0.45f : 0.6f;
         }
     }
     reg.get<MeshRendererComponent>(shot).outlineWidth = 0.0f;  // projectiles: small and fast

@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "entry": "Idle",
+  "parameters": [
+    {
+      "name": "moving",
+      "type": "bool",
+      "default": 0.0
+    },
+    {
+      "name": "attack",
+      "type": "trigger",
+      "default": 0.0
+    }
+  ],
+  "states": [
+    {
+      "name": "Idle",
+      "clip": "assets://games/duel/giant.glb#Idle",
+      "spriteClip": "",
+      "speed": 1.0,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Walk",
+      "clip": "assets://games/duel/giant.glb#Walk",
+      "spriteClip": "",
+      "speed": 1.0,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "name": "Attack",
+      "clip": "assets://games/duel/giant.glb#Attack",
+      "spriteClip": "",
+      "speed": 1.0,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "Idle",
+      "to": "Walk",
+      "conditions": [
+        {
+          "param": "moving",
+          "op": "true",
+          "value": 0.0
+        }
+      ],
+      "exitTime": -1.0,
+      "duration": 0.12
+    },
+    {
+      "from": "Walk",
+      "to": "Idle",
+      "conditions": [
+        {
+          "param": "moving",
+          "op": "false",
+          "value": 0.0
+        }
+      ],
+      "exitTime": -1.0,
+      "duration": 0.15
+    },
+    {
+      "from": "*",
+      "to": "Attack",
+      "conditions": [
+        {
+          "param": "attack",
+          "op": "true",
+          "value": 0.0
+        }
+      ],
+      "exitTime": -1.0,
+      "duration": 0.05
+    },
+    {
+      "from": "Attack",
+      "to": "Idle",
+      "conditions": [],
+      "exitTime": 0.95,
+      "duration": 0.15
+    }
+  ]
+}

@@ -1201,12 +1201,16 @@ TEST_CASE("arena battle: menu, drag and tap to deploy, elixir, hand cycling, uni
     ok("agr.find('Game'):script().elixir.blue >= 2");
 
     // ---- the units walk to the enemy side across a bridge and attack a princess tower (which shoots back).
-    h.lua("FAR = -99");
+    h.lua("FAR = -99; STATES = {}");
     for (int i = 0; i < 40; ++i) {
         h.seconds(0.5);
-        h.lua("for _, u in ipairs(agr.find('Game'):script().units.blue) do local x = u:position(); FAR = math.max(FAR, x) end");
+        h.lua("for _, u in ipairs(agr.find('Game'):script().units.blue) do local x = u:position(); FAR = math.max(FAR, x)"
+              " if u:has('Animator') then STATES[u:currentState()] = true end end");
     }
     ok("FAR > 4");
+    // The cartoon characters (generated .glb with Idle / Walk / Attack) are animated by the game.
+    ok("STATES.Walk == true");
+    ok("STATES.Attack == true");
     ok("agr.find('Red Princess N'):script().life < 1400 or agr.find('Red Princess S'):script().life < 1400");
 
     // ---- the enemy towers shoot: an AI knight dropped in front of a blue tower dies to it.

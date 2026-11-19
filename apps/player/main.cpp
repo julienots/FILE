@@ -1,7 +1,7 @@
 // AGR game player: runs an exported game (game.json + assets/ + scenes/).
 //
 // Desktop:  agr_player [--game DIR] [--vulkan|--opengl|--gles] [--validation] [--frames N]
-//                      [--user DIR] [--screenshot user://shot.png] [--autotest]
+//                      [--user DIR] [--screenshot user://shot.png] [--screenshot-frame N] [--autotest]
 //           DIR defaults to the "game" folder next to the executable.
 // Android:  built as libmain.so, started by the activity (SDL); the game data is in the
 //           APK's assets/game folder.
@@ -39,6 +39,7 @@ struct Options {
     std::string gameDir;
     std::string screenshot;
     bool autotest = false;
+    u64 screenshotFrame = 60;  ///< Frame at which --screenshot is taken.
 };
 
 class PlayerApp final : public Application {
@@ -109,7 +110,7 @@ private:
     GameManifest m_manifest;
     Options m_options;
     SubscriptionId m_back{};
-    u64 m_screenshotFrame = 60;
+    u64 m_screenshotFrame = m_options.screenshotFrame;
     bool m_screenshotTaken = false;
     bool m_rendered = false;
     int m_failures = 0;
@@ -145,6 +146,7 @@ int main(int argc, char** argv) {
         else if (a == "--validation") config.window.graphicsValidation = true;
         else if (a == "--frames" && i + 1 < argc) config.maxFrames = std::strtoull(argv[++i], nullptr, 10);
         else if (a == "--screenshot" && i + 1 < argc) options.screenshot = argv[++i];
+        else if (a == "--screenshot-frame" && i + 1 < argc) options.screenshotFrame = std::strtoull(argv[++i], nullptr, 10);
         else if (a == "--autotest") options.autotest = true;
         else if (a == "--user" && i + 1 < argc) {
             config.userDirectory = argv[++i];

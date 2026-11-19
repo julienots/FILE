@@ -29,6 +29,11 @@ function Unit:onStart()
         end
     end
     agr.tween(self.entity, { scale = { 1.3, 1.3, 1.3 } }, 0.3, { from = { 0.2, 0.2, 0.2 }, ease = "outBack" })
+    -- Modèles animés (Idle / Walk / Attack) : le mini-tank n'en a pas.
+    self.animated = self.entity:has("Animator")
+    local x0, _, z0 = self.entity:position()
+    self.lastX, self.lastZ = x0, z0
+    self.moving = false
     self.game:register(self.entity)
 end
 
@@ -54,8 +59,21 @@ function Unit:pickTarget()
     return best
 end
 
+-- Marche quand l'unité avance réellement (navigation, poussée par les autres...).
+function Unit:animate(dt)
+    if not self.animated or dt <= 0 then return end
+    local x, _, z = self.entity:position()
+    local moving = G.distance(x, z, self.lastX, self.lastZ) / dt > 0.25
+    self.lastX, self.lastZ = x, z
+    if moving ~= self.moving then
+        self.moving = moving
+        self.entity:setParameter("moving", moving)
+    end
+end
+
 function Unit:onUpdate(dt)
     if self.dead then return end
+    self:animate(dt)
     if self.game.state ~= "battle" then
         self.entity:stopNavigation()
         return
@@ -81,6 +99,7 @@ function Unit:onUpdate(dt)
         self.entity:setRotation(0, math.deg(math.atan(tx - x, tz - z)), 0)
         if self.cool <= 0 then
             self.cool = self.stats.hit
+            if self.animated then self.entity:setTrigger("attack") end
             self.game:attack(self.entity, t, self.stats.dmg, self.stats.ranged)
         end
     elseif self.repath <= 0 then
