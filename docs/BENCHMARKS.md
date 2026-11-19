@@ -34,9 +34,42 @@ scene: load 100k entities from JSON             805.276 ms    8052.76 ns/item
 | `get<T>` aléatoire : ~30 ns | Dominé par 3 défauts de cache par accès ; les systèmes doivent itérer par vues. |
 | `PoolAllocator` | ~1,7× plus rapide que `malloc`/`free`, sans fragmentation. |
 | `parallelFor` | ~4,6× sur 3 workers + thread principal pour du calcul de matrices. |
-| Jobs soumis un par un : ~3 µs/job | Coût du verrou partagé et des réveils de threads. **Point faible connu** : pour du travail fin, utiliser `submitBatch`/`parallelFor` (~0,1 µs/job). Une file *work-stealing* sans verrou est prévue si le renderer en a besoin. |
+| Jobs soumis un par un | Mesure d'origine : ~3 à 8 µs/job (verrou partagé, réveils). Depuis la file sans verrou : ~0,5 µs/job (voir « Optimisations du cœur »). |
 | `updateTransforms` : ~30 ns/entité | Parcours complet de la hiérarchie à chaque image ; calcule aussi `activeInHierarchy` (utilisé par le renderer à la place d'une remontée des parents). Un marquage « dirty » est prévu pour les scènes majoritairement statiques. |
-| JSON : ~5 µs/entité | Format d'édition, lisible et fusionnable. Les jeux livrés utiliseront un format binaire (phase 10). |
+| JSON : ~5 µs/entité | Format d'édition, lisible et fusionnable. Les jeux exportés utilisent le format binaire (~0,4 µs/entité à l'écriture, ~0,8 µs au chargement). |
+
+## Optimisations du cœur (avant / après)
+
+Les deux versions mesurées l'une après l'autre sur la même machine (preset `release`, meilleur temps).
+
+| Cas | Avant | Après | Gain |
+|---|---:|---:|---:|
+| ecs: view<Position,Velocity> 1M | 3,83 ms | 2,31 ms | ×1,7 |
+| ecs: random get<Velocity> 1M | 35,4 ms | 29,2 ms | ×1,2 |
+| ecs: create 1M entities + 2 components | 53,5 ms | 44,7 ms | ×1,2 |
+| jobs: 10k empty jobs submit+wait | 84,7 ms | 5,6 ms | ×15 |
+| jobs: 10k jobs de ~1 µs, submit+wait | 5,1 ms | 2,3 ms | ×2,2 |
+| jobs: une image de 8 `parallelFor` de 64 lots | 0,40 ms | 0,19 ms | ×2,1 |
+| jobs: 10k empty jobs submitBatch+wait | 0,58 ms | 5,4 ms | ×0,11 (voir ci-dessous) |
+| scene: updateTransforms 100k entities | 2,55 ms | 1,44 ms | ×1,8 |
+| scene: save 100k entities (JSON ➜ binaire) | 492 ms | 35 ms | ×14 |
+| scene: load 100k entities (JSON ➜ binaire) | 696 ms | 76 ms | ×9 |
+| physics3d: 4 000 boîtes qui tombent (1 thread ➜ JobSystem 3 w) | 8,2 ms | 4,6 ms | ×1,8 |
+
+Les lignes « ~1 µs » et « une image » viennent d'un banc séparé qui compile l'ancien et le nouveau
+`JobSystem` côte à côte.
+
+- **JobSystem** : file circulaire sans verrou + attente active courte avant de dormir. Le seul cas plus
+  lent, 10 000 jobs **vides** soumis d'un bloc, ne mesure que la contention : avant, les *workers*
+  dormaient et le thread principal exécutait tout seul ; maintenant les 4 threads se partagent des jobs
+  qui ne font rien. Dès que les jobs travaillent (~1 µs), la nouvelle version est 2 fois plus rapide.
+- **ECS** : table de pools à adressage ouvert (au lieu de `std::unordered_map`), lecture du pool qui mène
+  une vue par son index dense.
+- **Scènes binaires** : `SceneSerializer::toBinary` / `fromBinary`, utilisées par l'annuler / rétablir, le
+  mode Jeu et l'export des jeux. Le JSON reste le format d'édition.
+- **Physique 3D** : Jolt sur les *workers* du moteur, résultats identiques au bit près au mono-thread.
+- A* sur grille : essais (tampons réutilisés, départage des égalités, parcours exact de la ligne de vue)
+  sans gain mesurable sur ce cas ; non retenus.
 
 ## Renderer (phase 2)
 

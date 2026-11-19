@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <functional>
+#include <queue>
 
 namespace agr {
 
@@ -62,39 +62,13 @@ void NavGrid::blockCircle(Vec2 center, float radius, float margin) {
 }
 
 bool NavGrid::lineOfSight(Vec2 a, Vec2 b) const {
-    // Exact grid traversal (Amanatides & Woo) of every cell the segment touches.
-    // When the segment passes exactly through a cell corner, both side cells must
-    // be free too: the same "no corner cutting" rule as the A* search.
-    const float ax = (a.x - m_origin.x) / m_cell, ay = (a.y - m_origin.y) / m_cell;
-    const float bx = (b.x - m_origin.x) / m_cell, by = (b.y - m_origin.y) / m_cell;
-    i32 x = static_cast<i32>(std::floor(ax)), y = static_cast<i32>(std::floor(ay));
-    const i32 ex = static_cast<i32>(std::floor(bx)), ey = static_cast<i32>(std::floor(by));
-    if (blocked(x, y) || blocked(ex, ey)) return false;
-    const float dx = bx - ax, dy = by - ay;
-    const i32 sx = dx > 0.0f ? 1 : (dx < 0.0f ? -1 : 0);
-    const i32 sy = dy > 0.0f ? 1 : (dy < 0.0f ? -1 : 0);
-    constexpr float kInf = 1e30f;
-    const float tdx = sx != 0 ? 1.0f / std::abs(dx) : kInf;
-    const float tdy = sy != 0 ? 1.0f / std::abs(dy) : kInf;
-    float tx = sx > 0 ? (static_cast<float>(x + 1) - ax) * tdx : (sx < 0 ? (ax - static_cast<float>(x)) * tdx : kInf);
-    float ty = sy > 0 ? (static_cast<float>(y + 1) - ay) * tdy : (sy < 0 ? (ay - static_cast<float>(y)) * tdy : kInf);
-    constexpr float kCornerEps = 1e-5f;
-    i32 budget = std::abs(ex - x) + std::abs(ey - y) + 2;  // hard bound against float drift
-    while ((x != ex || y != ey) && budget-- > 0) {
-        if (std::abs(tx - ty) <= kCornerEps) {
-            if (blocked(x + sx, y) || blocked(x, y + sy)) return false;
-            x += sx;
-            y += sy;
-            tx += tdx;
-            ty += tdy;
-        } else if (tx < ty) {
-            x += sx;
-            tx += tdx;
-        } else {
-            y += sy;
-            ty += tdy;
-        }
-        if (blocked(x, y)) return false;
+    // Samples at a quarter of a cell: conservative against corners.
+    const float len = math::length(b - a);
+    const int steps = std::max(1, static_cast<int>(std::ceil(len / (m_cell * 0.25f))));
+    for (int i = 0; i <= steps; ++i) {
+        const Vec2 p = a + (b - a) * (static_cast<float>(i) / static_cast<float>(steps));
+        i32 x, y;
+        if (!cellOf(p, x, y) || blocked(x, y)) return false;
     }
     return true;
 }
@@ -133,99 +107,49 @@ bool NavGrid::findPath(Vec2 from, Vec2 to, std::vector<Vec2>& out, bool smooth, 
     const bool goalSnapped = blocked(gx, gy);
     if (!nearestFree(sx, sy, snapRadius) || !nearestFree(gx, gy, snapRadius)) return false;
 
-    // Per-thread scratch reused between queries: no allocation and no O(cells)
-    // clear per search. A generation stamp marks which entries are current.
-    struct OpenNode {
-        float f, g;
-        i32 cell;
-    };
-    struct Scratch {
-        std::vector<float> g;
-        std::vector<i32> parent;
-        std::vector<u32> seen;    ///< == gen: g / parent valid for this search
-        std::vector<u32> closed;  ///< == gen: expanded in this search
-        std::vector<OpenNode> heap;
-        u32 gen = 0;
-    };
-    thread_local Scratch sc;
     const usize n = static_cast<usize>(m_width) * m_height;
-    if (sc.seen.size() < n) {
-        sc.g.resize(n);
-        sc.parent.resize(n);
-        sc.seen.assign(n, 0);
-        sc.closed.assign(n, 0);
-        sc.gen = 0;
-    }
-    if (++sc.gen == 0) {  // wrapped: reset the stamps once every 4 billion searches
-        std::fill(sc.seen.begin(), sc.seen.end(), 0u);
-        std::fill(sc.closed.begin(), sc.closed.end(), 0u);
-        sc.gen = 1;
-    }
-    const u32 gen = sc.gen;
-    float* g = sc.g.data();
-    i32* parent = sc.parent.data();
-    u32* seen = sc.seen.data();
-    u32* closed = sc.closed.data();
-    const u8* blockedCells = m_blocked.data();
-    const i32 w = static_cast<i32>(m_width), h = static_cast<i32>(m_height);
-
+    std::vector<float> g(n, 1e30f);
+    std::vector<i32> parent(n, -1);
+    std::vector<u8> closed(n, 0);
+    auto index = [&](i32 x, i32 y) { return static_cast<usize>(y) * m_width + static_cast<usize>(x); };
     auto heuristic = [&](i32 x, i32 y) {  // octile distance
         const float dx = static_cast<float>(std::abs(x - gx)), dy = static_cast<float>(std::abs(y - gy));
         return (dx + dy) + (1.41421356f - 2.0f) * std::min(dx, dy);
     };
-    auto& open = sc.heap;
-    open.clear();
-    // Min-heap on f; among equal f, the deepest node (largest g) first. On open
-    // ground this follows one optimal line instead of flooding every tie.
-    const auto cmp = [](const OpenNode& a, const OpenNode& b) { return a.f > b.f || (a.f == b.f && a.g < b.g); };
-    const i32 start = sy * w + sx, goal = gy * w + gx;
+    using Node = std::pair<float, i32>;  // f, cell index
+    std::priority_queue<Node, std::vector<Node>, std::greater<>> open;
+    const usize start = index(sx, sy), goal = index(gx, gy);
     g[start] = 0.0f;
-    parent[start] = -1;
-    seen[start] = gen;
-    open.push_back({heuristic(sx, sy), 0.0f, start});
+    open.push({heuristic(sx, sy), static_cast<i32>(start)});
     bool found = false;
-    // Neighbour order: 4 straight moves first, then the diagonals that need them.
-    static constexpr i32 kDx[8] = {1, -1, 0, 0, 1, 1, -1, -1};
-    static constexpr i32 kDy[8] = {0, 0, 1, -1, 1, -1, 1, -1};
     while (!open.empty()) {
-        std::pop_heap(open.begin(), open.end(), cmp);
-        const i32 cur = open.back().cell;
-        open.pop_back();
-        if (closed[cur] == gen) continue;
-        closed[cur] = gen;
+        const usize cur = static_cast<usize>(open.top().second);
+        open.pop();
+        if (closed[cur]) continue;
+        closed[cur] = 1;
         ++m_lastExpanded;
         if (cur == goal) {
             found = true;
             break;
         }
-        const i32 cx = cur % w, cy = cur / w;
-        const float gc = g[cur];
-        bool freeStraight[4];
-        for (int k = 0; k < 8; ++k) {
-            const i32 nx = cx + kDx[k], ny = cy + kDy[k];
-            bool free = nx >= 0 && ny >= 0 && nx < w && ny < h && blockedCells[ny * w + nx] == 0;
-            if (k < 4) {
-                freeStraight[k] = free;
-            } else {
-                // No corner cutting: both orthogonal neighbours must be free.
-                free = free && freeStraight[kDx[k] > 0 ? 0 : 1] && freeStraight[kDy[k] > 0 ? 2 : 3];
+        const i32 cx = static_cast<i32>(cur % m_width), cy = static_cast<i32>(cur / m_width);
+        for (i32 dy = -1; dy <= 1; ++dy)
+            for (i32 dx = -1; dx <= 1; ++dx) {
+                if ((dx == 0 && dy == 0) || blocked(cx + dx, cy + dy)) continue;
+                if (dx != 0 && dy != 0 && (blocked(cx + dx, cy) || blocked(cx, cy + dy))) continue;  // no corner cutting
+                const usize nb = index(cx + dx, cy + dy);
+                if (closed[nb]) continue;
+                const float cost = g[cur] + ((dx != 0 && dy != 0) ? 1.41421356f : 1.0f);
+                if (cost < g[nb]) {
+                    g[nb] = cost;
+                    parent[nb] = static_cast<i32>(cur);
+                    open.push({cost + heuristic(cx + dx, cy + dy), static_cast<i32>(nb)});
+                }
             }
-            if (!free) continue;
-            const i32 nb = ny * w + nx;
-            if (closed[nb] == gen) continue;
-            const float cost = gc + (k >= 4 ? 1.41421356f : 1.0f);
-            if (seen[nb] != gen || cost < g[nb]) {
-                seen[nb] = gen;
-                g[nb] = cost;
-                parent[nb] = cur;
-                open.push_back({cost + heuristic(nx, ny), cost, nb});
-                std::push_heap(open.begin(), open.end(), cmp);
-            }
-        }
     }
     if (!found) return false;
     std::vector<Vec2> cells;
-    for (i32 c = goal; c >= 0; c = parent[c])
+    for (i32 c = static_cast<i32>(goal); c >= 0; c = parent[static_cast<usize>(c)])
         cells.push_back(cellCenter(static_cast<i32>(static_cast<u32>(c) % m_width), static_cast<i32>(static_cast<u32>(c) / m_width)));
     std::reverse(cells.begin(), cells.end());
     // Exact end points when they are free; cell centers otherwise.
