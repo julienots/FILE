@@ -13,6 +13,17 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.3.3 (moins de boutons + nouveau modèle de cheval)
+
+- **Moins de boutons d'action** : à pied, il en reste 6 au lieu de 9 (attaque, esquive, saut, parade, sort(s), potion).
+  - **Plus de bouton « Courir »** : poussez le joystick jusqu'au bord et vous courez presque tout de suite (0,12 s). Un cercle doré et le mot « COURSE » apparaissent autour du joystick.
+  - **Bouton Monture contextuel** : il n'apparaît que si votre cheval est à moins de 25 m (pour remonter dessus). Le garage appelle le cheval et « Saut » fait descendre.
+  - **À cheval**, les boutons d'attaque, de parade et de sorts disparaissent (on ne peut pas combattre en selle) : il reste saut (descendre), esquive (galop) et potion.
+  - **Potion** : le bouton est caché quand vous n'avez plus de potion.
+  - Le tutoriel « Courir » explique le joystick au bord ; l'éditeur de disposition ne montre plus le bouton Courir.
+- **Nouveau modèle de cheval** (fichier Tripo fourni) : importé avec un nouvel outil, `tools/import_quadruped.py`. Le modèle était statique ; l'outil place les 21 articulations du squelette quadrupède du jeu sur l'anatomie du cheval (pattes, cou, tête, mâchoire, queue) et calcule les poids de peau le long de la surface. Le cheval joue donc les animations existantes (pas, trot, galop, queue, tête). Il remplace le cheval construit en code, pour votre monture comme pour les chevaux du ranch du domaine. Selle réaliste à environ 1,45 m, cavalier recalé sur son dos.
+- **Vérification (ordinateur seulement)** : scénario `garage` : cheval appelé, héros en selle, captures de côté à l'arrêt et au galop regardées (cavalier bien assis, pattes animées). **Non vérifié** : le rendu sur téléphone, l'aspect du cheval de près dans toutes les animations (saut, mort), les chevaux du ranch.
+
 ### Nouveautés 2.3.2 (garage déplacé + appel du cheval)
 
 - **Garage déplacé** : le bouton (icône bleue) est maintenant dans la barre du haut, à gauche du sac ; sa liste s'ouvre sous la barre, à gauche de la minicarte. Il ne touche plus les boutons d'action (attaque, saut, courir, potion…). Il est caché en conduisant et dans un donjon.
