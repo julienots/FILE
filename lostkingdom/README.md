@@ -13,6 +13,11 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.0.1 (bouton Courir)
+
+- **Bouton « Courir »** (flèche, à gauche de Parade) : un appui active la course tant que le joystick est tenu, un second appui revient à la marche ; il s'allume quand la course est verrouillée. Il se déplace dans l'éditeur de disposition (la disposition enregistrée par une ancienne version est remplacée par la nouvelle par défaut). Le joystick poussé à fond fait toujours courir, désormais après 0,3 s au lieu de 0,5 s.
+- Vérifié sur ordinateur : tests unitaires (2 532 réussis, dont le contrôle qu'aucun bouton n'en chevauche un autre) et une capture. Le bouton n'a pas été essayé au doigt, ni sur téléphone ; il n'y a pas de nouveau mouvement (accroupi, glissade) : je n'en ai pas ajouté. APK toujours non reconstruit.
+
 ### Nouveautés 2.0.0 (« L'Héritage du Septième » : un monde de 4 608 m, deux nouvelles régions, un Acte II, un ciel refait)
 
 > **À lire d'abord.** Cette version a été écrite et vérifiée **sur ordinateur seulement** (Mesa llvmpipe, rendu logiciel). **Aucun APK 2.0.0 n'a été construit** : le SDK et le NDK Android n'étaient pas disponibles dans l'environnement qui a produit cette version. L'APK de `release/` reste la 1.13.0. Pour obtenir la 2.0.0 sur téléphone : `./build_apk.sh` (le numéro de version est déjà passé à 2.0.0, versionCode 23). Rien de ce qui suit n'a été essayé sur un vrai téléphone : les performances du nouveau ciel, du nouveau monde et des nouveaux effets ne sont **pas mesurées** sur mobile.

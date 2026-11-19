@@ -4,7 +4,7 @@
 
 namespace lk {
 
-const char* CTL_ICON[CTL_COUNT] = {"attack", "dodge", "jump", "block", "", "", "", "potion", "interact", "mount"};
+const char* CTL_ICON[CTL_COUNT] = {"attack", "dodge", "jump", "block", "", "", "", "potion", "interact", "mount", ""};
 
 Rect ctlRect(const Game& g, int id) {
     const ControlLayout& L = g.settings.layout;
@@ -62,6 +62,7 @@ void Game::updateTouchControls() {
         case CTL_POTION: input.potion = true; break;
         case CTL_INTERACT: input.interact = true; break;
         case CTL_MOUNT: input.mount = true; break;
+        case CTL_SPRINT: sprintLock = !sprintLock; notify(sprintLock ? "Course activée" : "Marche", vec3(0.9f, 0.9f, 0.7f), "i_check"); break;
         }
     }
     auto finger = [&](int id) -> UI::Finger* { if (id < 0) return nullptr; for (auto& f : u.fingers) if (f.id == id) return &f; return nullptr; };
@@ -122,7 +123,8 @@ void Game::updateTouchControls() {
             // 1.11.2 joystick pushed to the edge for half a second = sprint (was 1.5 s after the touch began)
             float tdt = clampf(realTime - lastTouchT, 0.f, 0.1f);
             joyEdgeT = length(m) > 0.9f ? joyEdgeT + tdt : 0.f;
-            if (joyEdgeT > 0.5f) input.sprint = true;
+            if (joyEdgeT > 0.3f) input.sprint = true;   // 2.0.1: 0.3 s at the edge (was 0.5)
+            if (sprintLock && length(m) > 0.05f) input.sprint = true;
         }
         if (!f.consumed && !f.blocked && f.id != joyFinger && f.down) camFingers.push_back(&f);
         if (f.id == camFinger) camAlive = f.down || f.released;
@@ -486,6 +488,12 @@ void Game::drawHud(float dt) {
     int pots = countItem("potion_minor") + countItem("potion_heal") + countItem("potion_great");
     ctl(CTL_POTION, "potion", pots > 0 && potionCD <= 0, potionCD / 1.2f, std::to_string(pots), vec4(1, 1, 1, 1), "round");
     ctl(CTL_MOUNT, "mount", !ownedMounts.empty(), 0, "", vec4(1, 1, 1, 1), "round");
+    {   // run button: double chevrons, lit while the run is locked on
+        btnFlash[CTL_SPRINT] = std::max(btnFlash[CTL_SPRINT], sprintLock ? 0.02f : 0.f);
+        ctl(CTL_SPRINT, "arrow_right", stamina > 3, 0, "", sprintLock ? vec4(1.f, 0.9f, 0.5f, 1.f) : vec4(1, 1, 1, 1), sprintLock ? "round_hi" : "round");
+        Rect r = ctlRect(*this, CTL_SPRINT);
+        u.text(sprintLock ? "COURSE" : "COURIR", r.x + r.w / 2, r.y + r.h - 16, 13, rgba(0xf4e7c4), F_BOLD, A_CENTER, 0, true);
+    }
     // contextual interaction button with label
     std::string label;
     if (fishingT >= 0) label = fishBite > 0 ? "Ferrer !" : "Ranger la canne";

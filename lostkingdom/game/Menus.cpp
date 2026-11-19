@@ -1019,7 +1019,7 @@ void Game::drawLayoutEditor() {
     UI& u = ui;
     u.rect({0, 0, u.W, u.H}, vec4(0, 0, 0, 0.35f));
     u.text("Faites glisser les boutons · Touchez « Terminer » pour enregistrer", u.W / 2, 90, 22, GOLDT, F_SERIF, A_CENTER, 0, true);
-    static const char* names[CTL_COUNT] = {"Attaque", "Esquive", "Saut", "Parade", "Sort 1", "Sort 2", "Sort 3", "Potion", "Interagir", "Monture"};
+    static const char* names[CTL_COUNT] = {"Attaque", "Esquive", "Saut", "Parade", "Sort 1", "Sort 2", "Sort 3", "Potion", "Interagir", "Monture", "Courir"};
     for (int i = 0; i < CTL_COUNT; i++) {
         Rect r = ctlRect(*this, i);
         u.sprite(i == layoutDrag ? "round_hi" : "round", r, vec4(1, 1, 1, settings.layout.opacity));

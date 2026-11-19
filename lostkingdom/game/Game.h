@@ -284,15 +284,15 @@ inline vec2 minimapProject(vec2 worldOffset, float camYaw) { return rotate(world
 // Default touch layout: button centres in UI units relative to the bottom-right corner (mirrored for left-handed).
 // Three arcs around the attack button (radius ~158: dodge/block/jump, ~275: spells, ~390: interact/potion/mount);
 // interact is leftmost so its label has room. No two buttons overlap (checked by unit tests).
-constexpr int LAYOUT_VERSION = 3;
-inline float ctlSize(int id) { return id == 0 ? 136.f : (id >= 4 && id <= 6 ? 96.f : (id == 7 || id == 9 ? 78.f : 100.f)); }  // attack, spells, potion/mount, others
+constexpr int LAYOUT_VERSION = 4;   // 2.0.1: + the run button
+inline float ctlSize(int id) { return id == 0 ? 136.f : (id >= 4 && id <= 6 ? 96.f : (id == 7 || id == 9 ? 78.f : (id == 10 ? 92.f : 100.f))); }  // attack, spells, potion/mount, others
 inline const vec2* defaultLayoutPos() {
-    static const vec2 def[10] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-509, -292}, {-540, -154}, {-430, -411}};
+    static const vec2 def[11] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-509, -292}, {-540, -154}, {-430, -411}, {-345, -205}};
     return def;
 }
 
-struct ControlLayout { vec2 pos[10]; float scale = 1.f; float opacity = 0.85f; bool leftHanded = false; };
-enum CtlId { CTL_ATTACK = 0, CTL_DODGE, CTL_JUMP, CTL_BLOCK, CTL_SKILL1, CTL_SKILL2, CTL_SKILL3, CTL_POTION, CTL_INTERACT, CTL_MOUNT, CTL_COUNT };
+struct ControlLayout { vec2 pos[11]; float scale = 1.f; float opacity = 0.85f; bool leftHanded = false; };
+enum CtlId { CTL_ATTACK = 0, CTL_DODGE, CTL_JUMP, CTL_BLOCK, CTL_SKILL1, CTL_SKILL2, CTL_SKILL3, CTL_POTION, CTL_INTERACT, CTL_MOUNT, CTL_SPRINT, CTL_COUNT };
 
 struct Settings {
     QualityProfile profile = QualityProfile::High;
@@ -440,6 +440,7 @@ public:
     float jumpBuf = 0; bool sprintJump = false;
     float slopeMul = 1.f; int landRolls = 0;   // 1.11.2 speed factor on the current slope; landing rolls done (tests)   // jump pressed just before landing; a jump taken at sprint speed keeps it
     float btnFlash[CTL_COUNT] = {};
+    bool sprintLock = false;   // 2.0.1 the run button: tap to keep running while the stick is held, tap again to walk
     bool ctlVisible(int id) const;
     bool charging = false;
     float potionCD = 0, dodgeCD = 0, parryT = 0, blockT = 0;
