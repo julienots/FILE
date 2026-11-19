@@ -1473,6 +1473,10 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.3f, [](Game& g) { g.summonHorse(); }, idle, "horse"});
         s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "ride"});
         s.push_back({0.1f, [](Game& g) { AGR_LOG("GARAGE horse -> %s", g.riding ? "HORSE SUMMON OK" : "HORSE SUMMON FAILED"); g.requestScreenshot("build/shots/G2_horse.png"); }, idle, "shot"});
+        s.push_back({0.8f, none, [](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 5.5f; g.camIdleT = 0; }, "side"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G3_horse_side.png"); }, [](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; }, "shot"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.dodge = true; g.camYaw = g.pc().yaw + 1.57f; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 6.5f; g.camIdleT = 0; }, "gallop"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G4_horse_gallop.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.dodge = true; g.camYaw = g.pc().yaw + 1.57f; }, "shot"});
         return s;
     }
     if (name == "qol") {
