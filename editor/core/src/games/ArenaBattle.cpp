@@ -27,12 +27,13 @@ constexpr JointDef kJoints[] = {{"Hips", -1, {0.0f, 0.50f, 0.0f}},   {"Spine", 0
                                 {"LegL", 0, {0.13f, -0.04f, 0.0f}},  {"LegR", 0, {-0.13f, -0.04f, 0.0f}}};
 
 /// The node hierarchy of a duel model under `parent`: "Model" > two meshes (fixed colors, then
-/// team-colored parts tinted by `team`) and, for characters, the joints.
+/// team-colored parts tinted by `team`) and, for (skinned) characters, the joints.
 ecs::Entity modelInstance(Builder& b, ecs::Entity parent, const std::string& file, float scale, Vec4 team, bool character) {
     Scene& scene = b.scene;
     const auto model = scene.createEntity("Model", parent);
     b.reg.get<TransformComponent>(model).scale = Vec3{scale};
-    const char* names[2] = {character ? "Skin" : "Base", character ? "Body" : "Roof"};
+    const bool tower = file.find("tower") != std::string::npos;
+    const char* names[2] = {tower ? "Base" : "Skin", tower ? "Roof" : "Body"};  // "Body": tinted by duel_unit.lua
     for (int i = 0; i < 2; ++i) {
         const auto e = scene.createEntity(names[i], model);
         auto& mr = b.reg.emplace<MeshRendererComponent>(e);
@@ -93,9 +94,7 @@ ecs::Entity unit(Builder& b, const std::string& name, ecs::Entity parent, const 
     const bool giant = kind == "giant", goblin = kind == "goblin", tank = kind == "tank";
     const float s = giant ? 1.6f : goblin ? 0.7f : 1.0f;
     if (tank) {
-        b.mesh("Body", PrimitiveMesh::Cube, {0.0f, 0.45f, 0.0f}, {1.3f, 0.6f, 0.9f}, {0.5f, 0.5f, 0.55f, 1.0f}, u);
-        b.mesh("Turret", PrimitiveMesh::Cube, {0.0f, 0.9f, 0.0f}, {0.6f, 0.35f, 0.6f}, kBlue, u);
-        b.mesh("Gun", PrimitiveMesh::Cube, {0.55f, 0.9f, 0.0f}, {0.8f, 0.12f, 0.12f}, {0.3f, 0.3f, 0.32f, 1.0f}, u);
+        modelInstance(b, u, "tank", 1.1f, kBlue, false);  // rigid model: no Animator
     } else {
         // Animated character: Idle / Walk / Attack driven by duel_unit.lua through the Animator.
         modelInstance(b, u, kind, s * 1.3f, kBlue, true);  // 1.3: readable from the high camera
@@ -130,7 +129,7 @@ void cartoonStyle(Scene& scene, ecs::Entity e, bool outline, bool blobs) {
 void buildArenaBattle(Scene& scene) {
     Builder b(scene);
     auto& reg = b.reg;
-    b.camera3D({0.0f, 21.0f, 14.5f}, {0.0f, 0.0f, 2.3f}, 44.0f);
+    b.camera3D({0.0f, 15.5f, 17.5f}, {0.0f, 0.0f, 1.6f}, 46.0f);  // tilted: characters seen from the front
     const auto sunLight = templates::sun(scene);
     auto& env = reg.get<EnvironmentComponent>(sunLight);
     env.sky = SkyMode::Gradient;
@@ -210,7 +209,16 @@ void buildArenaBattle(Scene& scene) {
         const auto card = b.button("Card " + std::to_string(i + 1), tray, {0.0f, 0.0f}, {230.0f + static_cast<float>(i) * 230.0f, 20.0f}, {210.0f, 190.0f}, "", game,
                                    "cardTapped");
         reg.get<UIRectComponent>(card).pivot = {0.5f, 0.0f};
-        b.buttonText(card).fontSize = 30.0f;
+        auto& label = b.buttonText(card);
+        label.fontSize = 28.0f;
+        label.vAlign = UIVAlign::Bottom;
+        // Portrait of the card's unit (duel_game.lua sets the texture: card_<kind>.png).
+        const auto icon = b.panel("Icon", card, {0.5f, 0.0f}, {0.0f, 6.0f}, {112.0f, 112.0f}, {1.0f, 1.0f, 1.0f, 1.0f});
+        reg.get<UIRectComponent>(icon).pivot = {0.5f, 0.0f};
+        auto& img = reg.get<UIImageComponent>(icon);
+        img.texture = "assets://games/duel/card_knight.png";
+        img.preserveAspect = true;
+        img.blocksPointer = false;
     }
     b.label("NextCard", tray, {0.0f, 0.0f}, {20.0f, 40.0f}, {110.0f, 140.0f}, "", 24.0f, UIHAlign::Center, {0.8f, 0.85f, 1.0f, 0.8f});
     // Elixir bar: 10 segments.

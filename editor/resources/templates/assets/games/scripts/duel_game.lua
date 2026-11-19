@@ -130,6 +130,8 @@ function Game:refreshCards()
         local label = b:find("Label")
         if label then label:setText(self:cardName(kind) .. "\n" .. card.cost) end
         b:set("UIImage", "color", card.color)
+        local icon = b:find("Icon")
+        if icon then icon:set("UIImage", "texture", "assets://games/duel/card_" .. kind .. ".png") end
         b:set("UIButton", "interactable", self.elixir.blue >= card.cost)
         local selected = self.selected == i
         b:set("UIButton", "normalColor", selected and { 1, 1, 1, 1 } or { 0.8, 0.8, 0.8, 1 })

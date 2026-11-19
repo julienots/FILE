@@ -1290,7 +1290,7 @@ TEST_CASE("strategy camera script: drag keeps the ground under the finger, inert
     h.lua("agr.find('Menu'):setActive(false); agr.find('Card Tray'):setActive(false)");
     auto& sc = h.scene().registry().emplace<ScriptComponent>(h.find("Main Camera"));
     sc.script = "assets://scripts/strategy_camera.lua";
-    sc.properties = R"({"minX": -6, "maxX": 6, "minY": -4, "maxY": 6, "maxZoom": 2})";
+    sc.properties = R"({"minX": -6, "maxX": 6, "minY": -10, "maxY": 6, "maxZoom": 2})";  // room for the flick below
     h.frames(3);
     auto ok = [&](const std::string& lua) { h.lua("assert(" + lua + ")"); };
     ok("agr.find('Main Camera'):script() ~= nil");

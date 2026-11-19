@@ -554,7 +554,116 @@ def textures():
     print("textures: grass.png, path.png, stone.png")
 
 
+def write_tank():
+    """Mini tank (rigid, faces +Z): tracks with wheels, hull, team turret and plate, long gun."""
+    base, team = Mesh(), Mesh()
+    materials = [("Track", (0.30, 0.28, 0.32), 0.8), ("Wheel", (0.55, 0.55, 0.60), 0.5), ("Hull", (0.52, 0.56, 0.44), 0.6),
+                 ("Steel", STEEL, 0.3), ("Gold", GOLD, 0.35), ("Team", TEAM, 0.6), ("Dark", DARK, 0.5)]
+    for sx in (-1, 1):
+        base.blob((sx * 0.42, 0.20, 0.0), (0.17, 0.19, 0.62), 0, power=0.55)                   # track
+        for k in range(4):                                                                      # wheels
+            base.blob((sx * 0.60, 0.19, -0.42 + k * 0.28), (0.03, 0.12, 0.12), 1, rows=8, cols=12)
+    base.blob((0, 0.42, 0.0), (0.34, 0.17, 0.56), 2, power=0.6)                                 # hull
+    team.blob((0, 0.55, -0.05), (0.30, 0.04, 0.46), 5, power=0.5)                               # plate
+    team.blob((0, 0.72, -0.05), (0.29, 0.17, 0.31), 5, power=0.75)                              # turret
+    base.blob((0.0, 0.90, -0.12), (0.10, 0.04, 0.10), 4, power=0.8)                             # hatch
+    base.tube(lambda t: (0.0, 0.74, 0.18 + 0.78 * t), 0.065, 3)                                 # gun
+    base.blob((0.0, 0.74, 0.97), (0.09, 0.09, 0.06), 6)                                         # muzzle
+    for sx in (-1, 1):                                                                          # headlights
+        base.blob((sx * 0.22, 0.45, 0.55), (0.06, 0.05, 0.03), 4, rows=6, cols=10)
+    nodes = [{"name": "Model", "children": [1, 2]}, {"name": "Skin", "mesh": 0}, {"name": "Body", "mesh": 1}]
+    write_glb(os.path.join(OUT, "tank.glb"), [("Skin", base, False), ("Body", team, False)], materials, nodes)
+
+
+def card_icons():
+    """Card portraits (256 px, transparent): the unit's head in the 3D models' style, dark outline."""
+    from PIL import Image, ImageDraw
+    S, K = 256, 4  # drawn 4x larger, then reduced (smooth edges)
+    INK = (40, 26, 44, 255)  # the player's team is blue: team parts of the portraits are blue
+    W = 9 * K
+
+    def c(rgb): return tuple(int(v * 255) for v in rgb) + (255,)
+
+    def new():
+        img = Image.new("RGBA", (S * K, S * K), (0, 0, 0, 0))
+        return img, ImageDraw.Draw(img)
+
+    def ell(d, cx, cy, rx, ry, fill, w=W):
+        d.ellipse([(cx - rx) * K, (cy - ry) * K, (cx + rx) * K, (cy + ry) * K], fill=fill, outline=INK, width=w)
+
+    def eyes(d, cx, cy, dx=30, size=1.0, brows=False):
+        for sx in (-1, 1):
+            ex = cx + sx * dx
+            ell(d, ex, cy, 11 * size, 16 * size, INK, 1)
+            ell(d, ex + 4 * size, cy - 6 * size, 4.5 * size, 4.5 * size, (255, 255, 255, 255), 1)
+            if brows:
+                d.line([(ex - 16) * K, (cy - 22 - sx * -6) * K, (ex + 16) * K, (cy - 22 + sx * -6) * K], fill=INK, width=8 * K)
+
+    def mouth(d, cx, cy, w=22):
+        d.arc([(cx - w) * K, (cy - 12) * K, (cx + w) * K, (cy + 12) * K], 20, 160, fill=INK, width=6 * K)
+
+    def save(img, name):
+        img.resize((S, S), Image.LANCZOS).save(os.path.join(OUT, "card_" + name + ".png"), optimize=True)
+
+    # Knight: steel helmet with a plume, round face.
+    img, d = new()
+    d.rounded_rectangle([118 * K, 18 * K, 140 * K, 70 * K], radius=10 * K, fill=c((0.30, 0.55, 1.0)), outline=INK, width=W)
+    ell(d, 128, 140, 84, 84, c(SKIN))
+    d.chord([40 * K, 40 * K, 216 * K, 190 * K], 180, 360, fill=c(STEEL), outline=INK, width=W)
+    d.rectangle([40 * K, 110 * K, 216 * K, 124 * K], fill=c(STEEL), outline=INK, width=W)
+    eyes(d, 128, 156)
+    mouth(d, 128, 190)
+    save(img, "knight")
+    # Archer: hood with a pointed tip, bow arc on the side.
+    img, d = new()
+    d.arc([150 * K, 40 * K, 250 * K, 230 * K], 250, 110, fill=c(WOOD)[:3] + (255,), width=12 * K)
+    ell(d, 120, 128, 96, 96, c((0.30, 0.55, 1.0)))
+    d.polygon([(70 * K, 60 * K), (40 * K, 10 * K), (110 * K, 40 * K)], fill=c((0.30, 0.55, 1.0)), outline=INK, width=W)
+    ell(d, 120, 150, 66, 66, c(SKIN))
+    eyes(d, 120, 150, dx=26, size=1.1)
+    mouth(d, 120, 184, 16)
+    save(img, "archer")
+    # Giant: wide bald head, frowning brows, big nose.
+    img, d = new()
+    ell(d, 128, 136, 100, 92, c(SKIN))
+    eyes(d, 128, 130, dx=34, size=0.85, brows=True)
+    ell(d, 128, 160, 22, 18, c((0.95, 0.72, 0.56)))
+    d.line([100 * K, 196 * K, 156 * K, 196 * K], fill=INK, width=7 * K)
+    save(img, "giant")
+    # Goblin: long ears, big eyes, pointy nose.
+    img, d = new()
+    for sx in (-1, 1):
+        d.polygon([((128 + sx * 70) * K, 110 * K), ((128 + sx * 126) * K, 80 * K), ((128 + sx * 70) * K, 160 * K)],
+                  fill=c(GOBLIN), outline=INK, width=W)
+    ell(d, 128, 140, 82, 76, c(GOBLIN))
+    eyes(d, 128, 128, dx=32, size=1.2)
+    d.polygon([(118 * K, 150 * K), (128 * K, 186 * K), (140 * K, 150 * K)], fill=c((0.38, 0.72, 0.28)), outline=INK, width=5 * K)
+    mouth(d, 128, 200, 26)
+    save(img, "goblin")
+    # Mini tank: front view.
+    img, d = new()
+    d.rounded_rectangle([30 * K, 150 * K, 226 * K, 220 * K], radius=26 * K, fill=c((0.30, 0.28, 0.32)), outline=INK, width=W)
+    for k in range(5):
+        ell(d, 52 + k * 38, 186, 13, 13, c((0.55, 0.55, 0.60)), 5 * K)
+    d.rounded_rectangle([50 * K, 112 * K, 206 * K, 162 * K], radius=20 * K, fill=c((0.52, 0.56, 0.44)), outline=INK, width=W)
+    ell(d, 128, 100, 58, 40, c((0.30, 0.55, 1.0)))
+    d.rounded_rectangle([118 * K, 18 * K, 138 * K, 90 * K], radius=8 * K, fill=c(STEEL), outline=INK, width=W)
+    save(img, "tank")
+    # Fireball: flame drop with a bright core.
+    img, d = new()
+    d.polygon([(128 * K, 10 * K), (196 * K, 120 * K), (60 * K, 120 * K)], fill=(255, 120, 40, 255))
+    ell(d, 128, 160, 80, 80, (255, 120, 40, 255))
+    d.line([(128 * K, 10 * K), (196 * K, 120 * K)], fill=INK, width=W)
+    d.line([(128 * K, 10 * K), (60 * K, 120 * K)], fill=INK, width=W)
+    ell(d, 128, 166, 48, 48, (255, 214, 80, 255), 1)
+    ell(d, 128, 176, 24, 24, (255, 250, 210, 255), 1)
+    save(img, "fireball")
+    print("card icons: card_*.png")
+
+
 if __name__ == "__main__":
+    card_icons()
+    write_tank()
     for kind in ("knight", "archer", "giant", "goblin"):
         write_character(kind)
     write_tower("tower", 1.0, False)
