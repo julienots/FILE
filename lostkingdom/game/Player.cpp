@@ -691,7 +691,13 @@ void Game::updatePlayer(float dt) {
             m.vis.anim.turnRate = wrapAngle(m.yaw - prev) / std::max(dt, 1e-4f);
         }
         m.vis.anim.speed = hs;
-        c.pos = m.pos + vec3(0, (md.look.kind == 1 ? 0.95f : 1.25f) * m.vis.scale * 0.62f, 0) + vec3(std::sin(m.yaw), 0, std::cos(m.yaw)) * 0.05f * m.vis.scale;
+        float seat = (md.look.kind == 1 ? 0.95f : 1.25f) * m.vis.scale * 0.62f;
+        if (ImportedModel* im = importedModel("horse_mount", Arch::Quadruped); im && im->mesh && im->mesh == m.vis.mesh) {
+            // 2.3.3 the imported horse: the rider's pelvis sits on its real back (0.72 of the unit skeleton + the saddle)
+            float hip = c.vis.anim.skeleton ? c.vis.anim.skeleton->bones[0].offset.y : 0.98f;
+            seat = (0.72f + 0.05f) * m.vis.scale - hip * 0.92f;
+        }
+        c.pos = m.pos + vec3(0, seat, 0) + vec3(std::sin(m.yaw), 0, std::cos(m.yaw)) * 0.05f * m.vis.scale;
         c.yaw = m.yaw; c.vel = m.vel; c.grounded = true;
         a.aux[1] = saturate(hs / md.speed);
         a.phase = m.vis.anim.phase;
