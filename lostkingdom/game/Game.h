@@ -575,6 +575,7 @@ public:
     // 2.2.1 call a vehicle to your side (garage button under the minimap), speedometer while driving
     bool garageOpen = false;
     void summonVehicle(int i);
+    void summonHorse();
     void drawSpeedometer();
     void updateDriving(float dt, vec3 want, float mag);
     void renderVehicles();

@@ -13,6 +13,12 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.3.2 (garage déplacé + appel du cheval)
+
+- **Garage déplacé** : le bouton (icône bleue) est maintenant dans la barre du haut, à gauche du sac ; sa liste s'ouvre sous la barre, à gauche de la minicarte. Il ne touche plus les boutons d'action (attaque, saut, courir, potion…). Il est caché en conduisant et dans un donjon.
+- **Appeler le cheval** : le garage propose Voiture, Moto et **Cheval**. Le cheval arrive à côté du héros (sol sec, sans mur) et le héros monte directement en selle. Si vous n'avez encore aucune monture, l'écurie royale vous confie un cheval (la monture achetée chez Odo reste prioritaire si vous en avez une). Si votre cheval était resté loin, il est ramené près de vous.
+- **Vérification (ordinateur seulement)** : scénario `garage` : voiture appelée à 4,1 m, conduite à 15,5 km/h, puis cheval appelé et héros en selle (`HORSE SUMMON OK`) ; captures du garage ouvert et du cheval regardées. **Non vérifié** sur téléphone (taille des doigts, position exacte selon l'écran).
+
 ### Nouveautés 2.3.1 (le Royaume Céleste refait à la qualité du monde)
 
 - Les îles n'étaient que des dalles carrées sur fond violet. Elles sont maintenant construites comme le reste du monde : un **sol organique** au contour irrégulier, rendu par le même shader de terrain que le royaume (textures d'herbe, de terre et de roche, normales), des **falaises de roche** qui plongent sous chaque île vers une grande masse de pierre et de longues aiguilles suspendues, de la **vraie herbe** animée par le vent (comme dans les prairies) avec des fleurs pâles, des **arbres** (arbres anciens et champignons géants lumineux, bouleaux, chênes) sur le pourtour des îles, des buissons et des fougères, et de la brume sous les îles.
@@ -29,7 +35,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 ### Nouveautés 2.2.1 (appeler un véhicule, compteur de vitesse, bâtiments posés à plat)
 
-- **Garage** : un bouton sous la minicarte (icône bleue) ouvre « Appeler un véhicule » → Voiture ou Moto. Le véhicule apparaît à côté du héros (côté droit d'abord, sinon autour), sur un sol sec et plat, sans chevaucher un mur ; si la place manque, un message le dit. Impossible dans un donjon ou en conduisant. Fini les véhicules perdus au bout du monde.
+- **Garage** (déplacé dans la barre du haut en 2.3.2) : un bouton (icône bleue) ouvre « Appeler un véhicule » → Voiture ou Moto. Le véhicule apparaît à côté du héros (côté droit d'abord, sinon autour), sur un sol sec et plat, sans chevaucher un mur ; si la place manque, un message le dit. Impossible dans un donjon ou en conduisant. Fini les véhicules perdus au bout du monde.
 - **Compteur de vitesse** en conduisant : cadran sous le suivi de quête, aiguille, chiffre en km/h, arc qui passe au rouge au-delà de 80 % de la vitesse maximale, « R » en marche arrière.
 - **Bâtiments posés à plat** : le sol sous chaque bâtiment (maisons, auberges, tours, temples, statues, pierres de passage…) est aplani à une seule hauteur, avec un talus de 4 m autour ; les bâtiments ne sont plus enterrés d'un côté ni posés sur un socle de pierre. Exception : ceux qui touchent une rivière ou un lac gardent l'ancien placement (on ne comble pas le lit) ; le pire enfouissement mesuré (7,8 m, une maison) est l'un de ceux-là.
 - **Vérification (2.2.1, ordinateur seulement)** : 2 532 tests unitaires réussis (aucun bâtiment flottant, 0 sur 1 101) ; scénario `garage` : la voiture appelée arrive à 4,1 m du héros, la conduite atteint 15,5 km/h en 3 s, captures du garage et du compteur regardées. **Non vérifiés** : la moto appelée, la taille des objets par rapport au héros (pas encore traitée), rien sur téléphone.

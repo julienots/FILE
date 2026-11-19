@@ -106,6 +106,44 @@ void Game::summonVehicle(int i) {
     notify(std::string(vehicleDefs()[v.def].moto ? "La moto" : "La voiture") + " est là.", vec3(0.7f, 0.9f, 1.f), "i_mount");
 }
 
+// 2.3.2 whistle the horse straight to the hero (granted a stable horse if the hero has none), then hop on
+void Game::summonHorse() {
+    if (player == NullEntity) return;
+    if (driving >= 0) { notify("Descendez d'abord du véhicule.", vec3(1.f, 0.7f, 0.5f), "i_lock"); return; }
+    if (dungeon.active) { notify("Pas de cheval dans un donjon.", vec3(1.f, 0.7f, 0.5f), "i_lock"); return; }
+    if (riding) { notify("Vous êtes déjà en selle.", vec3(0.7f, 0.9f, 1.f), "i_mount"); return; }
+    if (ownedMounts.empty()) {
+        ownedMounts.push_back("horse");
+        notify("L'écurie royale vous confie un cheval.", vec3(0.8f, 1.f, 0.7f), "i_mount");
+    }
+    if (activeMount < 0 || activeMount >= (int)mounts().size()) {
+        activeMount = 0;
+        for (int i = 0; i < (int)mounts().size(); i++) if (ownedMounts.back() == mounts()[i].id) activeMount = i;
+    }
+    Character& c = pc();
+    vec2 fwd{std::sin(c.yaw), std::cos(c.yaw)}, right{fwd.y, -fwd.x};
+    static const vec2 tries[] = {{2.2f, 0.f}, {-2.2f, 0.f}, {0.f, 2.5f}, {0.f, -2.5f}, {2.f, 2.f}, {-2.f, 2.f}};
+    vec2 best = c.pos.xz() + right * 2.2f;
+    for (vec2 t : tries) {
+        vec2 q = c.pos.xz() + right * t.x + fwd * t.y;
+        float gy = world.groundHeight(q.x, q.y), wl = world.waterLevel(q.x, q.y);
+        if (wl > -1e8f && wl > gy - 0.2f) continue;
+        if (std::fabs(gy - c.pos.y) > 2.f) continue;
+        vec3 test(q.x, gy, q.y); vec3 before = test;
+        world.collide(test, 0.9f, gy);
+        if (length(test.xz() - before.xz()) > 0.3f) continue;
+        best = q; break;
+    }
+    vec3 sp(best.x, world.groundHeight(best.x, best.y), best.y);
+    Character* m = reg.valid(mountEnt) ? reg.get<Character>(mountEnt) : nullptr;
+    if (m) { m->pos = sp; m->yaw = c.yaw; }
+    else { mountEnt = spawnMount(activeMount, sp); m = reg.get<Character>(mountEnt); if (m) m->yaw = c.yaw; }
+    mountCalled = false;
+    play("whistle", 0.8f); play3D("horse", sp, 0.8f);
+    for (int k = 0; k < 3; k++) particles.dust(sp + vec3(particles.rng.range(-1.f, 1.f), 0, particles.rng.range(-1.f, 1.f)), 1.f);
+    toggleMount();   // close enough: straight into the saddle
+}
+
 // speed in km/h, a needle dial and a bar; red past 80 % of the top speed
 void Game::drawSpeedometer() {
     if (driving < 0 || driving >= (int)vehicles.size()) return;
