@@ -35,7 +35,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - Météo et grading propres à chaque région (désert brûlant et doré, côte saturée et turquoise).
 - **Vérification (2.0.0, ordinateur seulement)** :
   - 2 532 vérifications unitaires réussies, 0 échec (nouveaux contrôles : indices des donjons et des boss, chaîne n1→n9, placement des 38 nouveaux lieux : aucun bâtiment sur une route, dans l'eau ou dans un autre, ponts praticables).
-  - Scénario `full` de l'Acte I : **lancé mais non terminé au moment de ce commit** (le rendu logiciel est très lent) ; son verdict n'est donc pas établi. Il faut le relancer : `./build/desk/lk_desktop --assets assets --frames 3600 --dt 0.0333 --autoplay=full`.
+  - Scénario `full` de l'Acte I : **joué jusqu'à l'écran de générique (29 captures), sans plantage**, à 640x360, avec le nouveau monde et le nouveau ciel. Le journal contient une ligne « save failed (slot 2) » que je n'ai pas expliquée (je n'ai pas vérifié si elle existait avant la 2.0.0). Le scénario n'a pas été relancé sous AddressSanitizer.
   - Les captures du nouveau monde (`lands`) et du ciel (`sky`) ont été regardées ; tout n'a pas été photographié (par exemple l'intérieur des trois nouveaux donjons n'a pas été vu).
 - **Outils pour regarder** : `./build/desk/lk_desktop --assets assets --size 960x540 --frames N --dt 0.0333 --autoplay=lands` (tour des nouveaux lieux ; `LK_LANDS=solmar,port_azur` en choisit), `--autoplay=sky` (ciel : jour, coucher, nuit, aurore, arc-en-ciel ; `LK_SKY=aurora`), et `LK_PROBE=64 ./build/desk/lk_tests assets` (carte ASCII des régions et du relief, liste des lieux).
 - **Limites (honnêtement).**
