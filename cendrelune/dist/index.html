@@ -268,8 +268,232 @@ function resize() {
   camera.aspect = w / h;
   camera.fov = w < h ? 82 : 72;
   camera.updateProjectionMatrix();
+  postSize();
 }
 addEventListener('resize', resize);
+
+/* ---------------- Shaders : brume au sol, flammes, poussière, rayons de lune, post-traitement ---------------- */
+const FXU = { time: { value: 0 } }; // horloge partagée par tous les shaders
+// Brume rampante au ras du sol, injectée dans le brouillard de tous les matériaux de la scène
+THREE.ShaderChunk.fog_pars_vertex += '\n#ifdef USE_MIST\nvarying vec3 vMistWorld;\n#endif\n';
+THREE.ShaderChunk.fog_vertex += '\n#ifdef USE_MIST\nvMistWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif\n';
+THREE.ShaderChunk.fog_pars_fragment += `
+#ifdef USE_MIST
+varying vec3 vMistWorld;
+uniform float uFxTime;
+float mHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float mNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mHash(i), mHash(i + vec2(1.0, 0.0)), f.x), mix(mHash(i + vec2(0.0, 1.0)), mHash(i + vec2(1.0, 1.0)), f.x), f.y); }
+#endif
+`;
+THREE.ShaderChunk.fog_fragment += `
+#if defined(USE_FOG) && defined(USE_MIST)
+{
+  float mh = clamp(1.0 - vMistWorld.y / 0.9, 0.0, 1.0);
+  vec2 mp = vMistWorld.xz * 0.45 + vec2(uFxTime * 0.06, uFxTime * 0.035);
+  float mn = mNoise(mp) * 0.6 + mNoise(mp * 2.7 - vec2(uFxTime * 0.05, 0.0)) * 0.4;
+  float mist = mh * mh * smoothstep(0.25, 0.9, mn) * smoothstep(0.6, 4.0, vFogDepth) * 0.75;
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.028, 0.026, 0.03), mist * 0.7 * (1.0 - fogFactor));
+}
+#endif
+`;
+// active la brume sur un matériau de surface (pas les sprites ni les points)
+function addMist(m) {
+  if (!m || m.userData.mist || m.isSpriteMaterial || m.isPointsMaterial || m.isShaderMaterial) return;
+  m.userData.mist = true; m.defines = Object.assign({}, m.defines, { USE_MIST: '' });
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (s, r) => { s.uniforms.uFxTime = FXU.time; if (prev) prev(s, r); };
+  m.needsUpdate = true;
+}
+// Flamme vivante : la texture ondule et lèche vers le haut
+function flameMaterial(opts) {
+  const m = new THREE.SpriteMaterial(Object.assign({ map: flameTexture() }, opts));
+  const seed = Math.random() * 100;
+  m.onBeforeCompile = (s) => {
+    s.uniforms.uFxTime = FXU.time; s.uniforms.uSeed = { value: seed };
+    s.fragmentShader = 'uniform float uFxTime;\nuniform float uSeed;\n' + s.fragmentShader.replace('#include <map_fragment>', `
+      vec2 fuv = vUv;
+      float tip = smoothstep(0.25, 1.0, fuv.y);
+      fuv.x += (sin(fuv.y * 9.0 + uFxTime * 11.0 + uSeed) * 0.04 + sin(fuv.y * 19.0 - uFxTime * 7.3 + uSeed) * 0.022) * tip;
+      fuv.y -= (sin(uFxTime * 13.0 + uSeed) * 0.5 + 0.5) * 0.035 * tip;
+      fuv.x = 0.5 + (fuv.x - 0.5) * (1.0 + 0.12 * sin(uFxTime * 17.0 + uSeed * 2.0));
+      vec4 sampledDiffuseColor = texture2D(map, fuv);
+      sampledDiffuseColor.rgb *= vec3(1.0, 0.92 + 0.08 * (1.0 - fuv.y), 0.85 + 0.15 * (1.0 - fuv.y));
+      diffuseColor *= sampledDiffuseColor;`);
+  };
+  return m;
+}
+// Poussière en suspension : des grains dorés qui flottent autour du joueur, éclairés par la bougie
+const DUST = { obj: null, u: null };
+function buildDust() {
+  const N = isTouch ? 260 : 420, S = 9, pos = new Float32Array(N * 3), rnd = new Float32Array(N);
+  for (let i = 0; i < N; i++) { pos[i * 3] = Math.random() * S; pos[i * 3 + 1] = Math.random() * 2.8 + 0.1; pos[i * 3 + 2] = Math.random() * S; rnd[i] = Math.random(); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('rnd', new THREE.BufferAttribute(rnd, 1));
+  DUST.u = { uTime: FXU.time, uCam: { value: new THREE.Vector3() }, uLight: { value: 1 }, uSize: { value: 1 }, uBox: { value: S } };
+  const m = new THREE.ShaderMaterial({
+    uniforms: DUST.u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uTime, uSize, uBox; uniform vec3 uCam; attribute float rnd; varying float vA;
+      void main() {
+        vec3 p = position;
+        p.x += sin(uTime * 0.13 + rnd * 40.0) * 0.6 + uTime * 0.05;
+        p.z += cos(uTime * 0.11 + rnd * 33.0) * 0.6;
+        p.y += sin(uTime * 0.2 + rnd * 20.0) * 0.25;
+        p.xz = mod(p.xz - uCam.xz + uBox * 0.5, uBox) - uBox * 0.5 + uCam.xz;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float d = length(p - uCam);
+        vA = smoothstep(4.5, 0.6, d) * smoothstep(0.15, 0.5, d) * (0.45 + 0.55 * sin(uTime * (1.5 + rnd * 2.0) + rnd * 50.0) * 0.5 + 0.5);
+        gl_PointSize = min(uSize * (1.6 + rnd * 2.6) / -mv.z, uSize * 5.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float uLight; varying float vA;
+      void main() { vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); gl_FragColor = vec4(vec3(1.0, 0.75, 0.48) * 0.6, a * vA * uLight); }`,
+  });
+  DUST.obj = new THREE.Points(g, m); DUST.obj.frustumCulled = false; DUST.obj.renderOrder = 5; scene.add(DUST.obj);
+}
+// Rayon de lune volumétrique qui tombe d'une fenêtre
+let moonBeamMat = null;
+function moonBeam() {
+  if (!moonBeamMat) moonBeamMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: FXU.time }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+      void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+      float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      void main() {
+        float edge = pow(abs(dot(normalize(vN), normalize(vV))), 2.0);
+        float along = pow(vUv.y, 1.8) * smoothstep(1.0, 0.95, vUv.y);
+        float dust = 0.55 + 0.45 * n3(vW * 2.2 + vec3(0.0, -uTime * 0.15, uTime * 0.07));
+        float bars = 0.75 + 0.25 * smoothstep(0.2, 0.5, abs(fract(vUv.x * 12.0) - 0.5) * 2.0);
+        gl_FragColor = vec4(vec3(0.42, 0.55, 0.85) * edge * along * dust * bars * 0.38, 1.0);
+      }`,
+  });
+  const geo = new THREE.CylinderGeometry(0.4, 1.0, 3.2, 14, 1, true);
+  geo.scale(1, 1, 0.45); geo.translate(0, -1.6, 0); // le haut du cône à l'origine (la fenêtre)
+  const m = new THREE.Mesh(geo, moonBeamMat); m.rotation.x = -0.95; m.renderOrder = 4; return m;
+}
+
+// --- Post-traitement : HDR, bloom, ACES, étalonnage, aberration, grain, vignette ---
+const POST = { on: true };
+function initPost() {
+  const gl2 = renderer.capabilities.isWebGL2, ext = renderer.extensions;
+  const hdr = gl2 ? ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float') : ext.has('OES_texture_half_float') && ext.has('EXT_color_buffer_half_float');
+  const type = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  const rt = (s = 1) => { const r = new THREE.WebGLRenderTarget(4, 4, { type, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false }); r.texture.generateMipmaps = false; r._s = s; return r; };
+  POST.scene = new THREE.WebGLRenderTarget(4, 4, { type, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
+  if (gl2 && !isTouch) POST.scene.samples = 4;
+  POST.b = [rt(4), rt(4), rt(8), rt(8), rt(16), rt(16)];
+  POST.hdr = hdr;
+  POST.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  POST.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); POST.quad.frustumCulled = false;
+  POST.qs = new THREE.Scene(); POST.qs.add(POST.quad);
+  const vs = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  POST.bright = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, px: { value: new THREE.Vector2() }, thr: { value: 0.55 } }, vertexShader: vs, depthTest: false, depthWrite: false,
+    fragmentShader: `uniform sampler2D t; uniform vec2 px; uniform float thr; varying vec2 vUv;
+      void main() {
+        vec3 c = (texture2D(t, vUv + px * vec2(-1.0, -1.0)).rgb + texture2D(t, vUv + px * vec2(1.0, -1.0)).rgb + texture2D(t, vUv + px * vec2(-1.0, 1.0)).rgb + texture2D(t, vUv + px * vec2(1.0, 1.0)).rgb) * 0.25;
+        float l = max(c.r, max(c.g, c.b)); float k = max(l - thr, 0.0); k = k * k / (k + 0.35);
+        gl_FragColor = vec4(c * k / max(l, 1e-4), 1.0);
+      }` });
+  POST.blur = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, dir: { value: new THREE.Vector2() } }, vertexShader: vs, depthTest: false, depthWrite: false,
+    fragmentShader: `uniform sampler2D t; uniform vec2 dir; varying vec2 vUv;
+      void main() {
+        vec3 c = texture2D(t, vUv).rgb * 0.2270270;
+        c += (texture2D(t, vUv + dir * 1.3846154).rgb + texture2D(t, vUv - dir * 1.3846154).rgb) * 0.3162162;
+        c += (texture2D(t, vUv + dir * 3.2307692).rgb + texture2D(t, vUv - dir * 3.2307692).rgb) * 0.0702703;
+        gl_FragColor = vec4(c, 1.0);
+      }` });
+  POST.copy = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: vs, depthTest: false, depthWrite: false,
+    fragmentShader: 'uniform sampler2D t; varying vec2 vUv; void main() { gl_FragColor = vec4(texture2D(t, vUv).rgb, 1.0); }' });
+  POST.U = { t: { value: null }, b1: { value: null }, b2: { value: null }, b3: { value: null }, time: FXU.time, res: { value: new THREE.Vector2() },
+    exposure: { value: 1.15 }, fear: { value: 0 }, chase: { value: 0 }, pulse: { value: 0 }, caught: { value: 0 }, hidden: { value: 0 }, bloomK: { value: 1 } };
+  POST.final = new THREE.ShaderMaterial({ uniforms: POST.U, vertexShader: vs, depthTest: false, depthWrite: false,
+    fragmentShader: `
+      uniform sampler2D t, b1, b2, b3; uniform float time, exposure, fear, chase, pulse, caught, hidden, bloomK; uniform vec2 res; varying vec2 vUv;
+      vec3 cdlFit(vec3 v) { vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+      vec3 aces(vec3 c) {
+        const mat3 I = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
+        const mat3 O = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
+        return clamp(O * cdlFit(I * (c * exposure / 0.6)), 0.0, 1.0);
+      }
+      vec3 toSRGB(vec3 c) { return mix(pow(c, vec3(0.41666)) * 1.055 - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308)))); }
+      float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+      void main() {
+        vec2 uv = vUv, cc = uv - 0.5;
+        float r2 = dot(cc, cc);
+        // objectif : légère distorsion en barillet, accentuée par la peur, et respiration du cadre au rythme du cœur
+        float k = 0.035 + fear * 0.05 + caught * 0.12;
+        vec2 duv = 0.5 + cc * (1.0 + k * r2) * (1.0 - k * 0.25) * (1.0 - pulse * 0.006);
+        // aberration chromatique radiale
+        float ab = (0.0012 + fear * 0.0045 + chase * 0.003 + caught * 0.012) * (0.3 + r2 * 3.0);
+        vec2 dir = normalize(cc + 1e-5) * ab;
+        vec3 col;
+        col.r = texture2D(t, duv + dir).r;
+        col.g = texture2D(t, duv).g;
+        col.b = texture2D(t, duv - dir).b;
+        // bloom chaud multi-échelle
+        vec3 bl = texture2D(b1, duv).rgb * 0.55 + texture2D(b2, duv).rgb * 0.75 + texture2D(b3, duv).rgb * 1.0;
+        col += bl * vec3(1.05, 0.9, 0.75) * 0.9 * bloomK;
+        col = aces(col);
+        // étalonnage : ombres bleu nuit, hautes lumières ambrées, contraste en S
+        float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col = mix(col, col * vec3(0.78, 0.9, 1.18) + vec3(0.0, 0.004, 0.012), (1.0 - smoothstep(0.0, 0.35, l)) * 0.3);
+        col = mix(col, col * vec3(1.08, 0.98, 0.84), smoothstep(0.35, 0.9, l) * 0.6);
+        col = clamp(col, 0.0, 1.0); col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
+        // la peur draine les couleurs et fait monter le rouge sur les bords
+        float sat = 1.0 - fear * 0.45 - caught * 0.3;
+        col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, sat);
+        float edge = smoothstep(0.08, 0.55, r2 * (1.0 + fear));
+        col = mix(col, col * vec3(1.4, 0.35, 0.3) + vec3(0.09, 0.0, 0.0), edge * (fear * 0.25 + chase * (0.25 + pulse * 0.35) + caught * 0.6));
+        // vignette ovale, plus serrée quand on est caché
+        float vig = smoothstep(0.85, 0.18 - hidden * 0.12, length(cc * vec2(1.0, 1.25)) * (1.0 + fear * 0.25 + hidden * 0.5));
+        col *= mix(0.12, 1.0, vig);
+        // grain de pellicule animé, plus présent dans les ombres
+        float gr = hash(uv * res + fract(time * 61.0) * 917.0) - 0.5;
+        col += gr * (0.01 + 0.018 * (1.0 - l)) * (1.0 + fear * 0.8);
+        // scintillement de projection
+        col *= 0.985 + 0.015 * sin(time * 31.0) * sin(time * 17.3);
+        col = toSRGB(clamp(col, 0.0, 1.0));
+        col += (hash(uv * res * 1.7 + 3.1) - 0.5) / 255.0; // tramage : pas de bandes dans le noir
+        gl_FragColor = vec4(col, 1.0);
+      }` });
+  POST.U.res.value.set(4, 4);
+  // le grain et les voiles CSS sont remplacés par le shader
+  for (const id of ['grain', 'vignette', 'redpulse']) { const e = $(id); if (e) e.style.display = 'none'; }
+}
+function postSize() {
+  if (!POST.scene) return;
+  const v = renderer.getDrawingBufferSize(new THREE.Vector2()), w = Math.max(1, v.x), h = Math.max(1, v.y);
+  POST.scene.setSize(w, h);
+  for (const r of POST.b) r.setSize(Math.max(1, Math.round(w / r._s)), Math.max(1, Math.round(h / r._s)));
+  POST.U.res.value.set(w, h);
+}
+function pass(mat, target) { POST.quad.material = mat; renderer.setRenderTarget(target); renderer.render(POST.qs, POST.cam); }
+function renderFrame(t) {
+  FXU.time.value = t;
+  if (DUST.u) { DUST.u.uCam.value.copy(camera.getWorldPosition(new THREE.Vector3())); DUST.u.uLight.value = player.candleOn ? 1 : 0.25; DUST.u.uSize.value = renderer.getPixelRatio(); }
+  if (!POST.on || !POST.scene) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+  const U = POST.U, f = game.fear || 0;
+  U.fear.value = game.state === 'play' ? f : 0;
+  U.chase.value += ((wolf.state === 'chase' && game.state === 'play' ? 1 : 0) - U.chase.value) * 0.08;
+  U.caught.value += ((game.state === 'caught' ? 1 : 0) - U.caught.value) * 0.1;
+  U.hidden.value += ((player.hidden ? 1 : 0) - U.hidden.value) * 0.1;
+  const bpm = 70 + f * 95; U.pulse.value = Math.pow(Math.max(0, Math.sin(t * Math.PI * bpm / 60)), 12) * f;
+  renderer.setRenderTarget(POST.scene); renderer.render(scene, camera);
+  const [a1, a2, b1, b2, c1, c2] = POST.b;
+  POST.bright.uniforms.t.value = POST.scene.texture; POST.bright.uniforms.px.value.set(1 / POST.scene.width, 1 / POST.scene.height); pass(POST.bright, a1);
+  const blur = (src, tmp) => { const d = POST.blur.uniforms; d.t.value = src.texture; d.dir.value.set(1 / src.width, 0); pass(POST.blur, tmp); d.t.value = tmp.texture; d.dir.value.set(0, 1 / src.height); pass(POST.blur, src); };
+  blur(a1, a2);
+  POST.copy.uniforms.t.value = a1.texture; pass(POST.copy, b1); blur(b1, b2);
+  POST.copy.uniforms.t.value = b1.texture; pass(POST.copy, c1); blur(c1, c2);
+  U.t.value = POST.scene.texture; U.b1.value = a1.texture; U.b2.value = b1.texture; U.b3.value = c1.texture;
+  pass(POST.final, null);
+}
+
 
 /* ---------------- Textures procédurales ---------------- */
 function noise2() { // bruit de valeur simple, répétable
@@ -806,7 +1030,7 @@ function F_fireplace(x, z) { // contre le mur nord
   cyl(M.darkWood, x - 0.15, 0.2, z + 0.35, 0.09, 0.09, 1.0, 8, 0.3, Math.PI / 2);
   cyl(M.darkWood, x + 0.15, 0.25, z + 0.3, 0.08, 0.08, 0.9, 8, -0.4, Math.PI / 2);
   const em = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 6), M.ember); em.scale.set(1.6, 0.35, 0.8); em.position.set(x, 0.15, z + 0.35); world.add(em);
-  const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffb060 }));
+  const fl = new THREE.Sprite(flameMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffb060 }));
   fl.scale.set(1.0, 1.1, 1); fl.position.set(x, 0.65, z + 0.35); world.add(fl);
   fireSpot = { pos: new THREE.Vector3(x, 0.8, z + 0.9), sprite: fl };
 }
@@ -826,7 +1050,7 @@ function F_lantern(x, z, y = 2.2, wall = false) {
 }
 function F_candle(x, y, z) {
   cyl(M.wax, x, y + 0.07, z, 0.025, 0.03, 0.14, 8);
-  const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffc070 }));
+  const fl = new THREE.Sprite(flameMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffc070 }));
   fl.scale.set(0.07, 0.11, 1); fl.position.set(x, y + 0.2, z); world.add(fl);
   tableCandles.push({ s: fl, ph: rand(0, 9), pos: new THREE.Vector3(x, y + 0.2, z) });
 }
@@ -837,6 +1061,7 @@ function F_window(x, z, facing) { // fenêtre à barreaux, clair de lune
   const sill = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.2), M.beam); sill.position.set(0, -0.5, 0.05); g.add(sill);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(150,180,255,1)', 'rgba(60,80,140,0)'), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.35 }));
   glow.scale.set(1.8, 1.8, 1); glow.position.z = 0.1; g.add(glow);
+  const beam = moonBeam(); beam.position.set(0, 0.2, 0.05); g.add(beam);
   world.add(g);
 }
 function addHide(type, x, z, rot, label) {
@@ -918,7 +1143,7 @@ function buildLights() {
   const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.02, 14), M.iron); holder.position.y = -0.06;
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 12), M.iron); handle.position.set(0.07, -0.055, 0); handle.rotation.x = Math.PI / 2;
   const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.12, 10), M.wax);
-  candleFlame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffd090, fog: false }));
+  candleFlame = new THREE.Sprite(flameMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffd090, fog: false }));
   candleFlame.scale.set(0.05, 0.085, 1); candleFlame.position.y = 0.1;
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.25, fog: false }));
   halo.scale.set(0.35, 0.35, 1); halo.position.y = 0.1; candleFlame.userData.halo = halo;
@@ -2007,7 +2232,7 @@ function frame() {
   if (game.shakeAmt > 0) { camera.position.x += (Math.random() - 0.5) * game.shakeAmt * 0.12; camera.position.y += (Math.random() - 0.5) * game.shakeAmt * 0.12; game.shakeAmt = Math.max(0, game.shakeAmt - dt * 1.6); }
   if (game.flashT > 0) { $('flash').style.opacity = game.flashT; game.flashT = Math.max(0, game.flashT - dt * 2.5); }
   updateListener();
-  renderer.render(scene, camera);
+  renderFrame(t);
 }
 // grain animé
 (function grain() {
@@ -2159,6 +2384,9 @@ async function boot() {
   colliders.forEach((c) => { if (!c.door && c.x1 - c.x0 < 2.01 && (c.x1 - c.x0 <= 0.26 || c.z1 - c.z0 <= 0.26)) c.frame = true; });
   buildLights(); buildNav(); buildPatrolPoints(); collectSpawnSurfaces();
   buildWolf();
+  buildDust();
+  scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(addMist); });
+  initPost();
   applyQuality();
   setLoad(1, 'Prêt.');
   // compile les shaders avant le premier rendu
