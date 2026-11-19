@@ -1,6 +1,7 @@
 // 3D part of the renderer: PBR pipelines, mesh collection with automatic
 // instancing, lights, directional shadow map, procedural sky.
 #include <algorithm>
+#include <optional>
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -417,69 +418,106 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     }
     m_stats.shadowCascades = m_shadowCascades;
 
-    // ------------------------------------------------------------ spot light shadows
+    // ------------------------------------------------------------ local light shadows
+    // Spot lights (tiles 0-1) and one point light (6 cube faces, tiles 2-7) share a 4 x 2 atlas.
     // Chosen before the meshes so that casters outside the camera view are kept for them.
     m_spotShadowCount = 0;
+    m_pointShadow = false;
     for (auto& list : m_spotShadowItems) list.clear();
+    for (auto& list : m_pointShadowItems) list.clear();
     std::array<math::Frustum, kSpotShadowSlots> spotFrustum{};
+    std::array<math::Frustum, 6> pointFrustum{};
     if (m_profile.shadowMapSize > 0 && rv.projection == Projection::Perspective) {
-        struct SpotCaster {
+        struct LocalCaster {
             float distance;
             ecs::Entity e;
             Vec3 p, dir;
             float range, outer;
         };
-        std::vector<SpotCaster> casters;
+        std::vector<LocalCaster> spots;
         reg.view<SpotLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, SpotLightComponent& l, WorldTransformComponent& w) {
             if (!l.castShadows || !w.activeInHierarchy || hidden(e) || l.intensity <= 0.0f || l.range <= 0.0f) return;
             const Vec3 p = w.matrix.translation();
             if (!frustum.intersects(math::Aabb::fromCenterExtents(p, Vec3{l.range}))) return;
-            casters.push_back({math::length(p - rv.position), e, p, math::normalize(w.matrix.transformVector({0, 0, -1})), l.range,
-                               std::clamp(l.outerAngle, 0.01f, math::radians(89.0f))});
+            spots.push_back({math::length(p - rv.position), e, p, math::normalize(w.matrix.transformVector({0, 0, -1})), l.range,
+                             std::clamp(l.outerAngle, 0.01f, math::radians(89.0f))});
         });
-        std::sort(casters.begin(), casters.end(), [](const SpotCaster& a, const SpotCaster& b) { return a.distance < b.distance; });
-        const u32 count = std::min<u32>(static_cast<u32>(casters.size()), kSpotShadowSlots);
-        if (count > 0) {
-            const u32 tile = std::clamp<u32>(m_profile.shadowMapSize / 2, 256, std::min<u32>(2048, m_device.info().maxTextureSize / 2));
+        std::sort(spots.begin(), spots.end(), [](const LocalCaster& a, const LocalCaster& b) { return a.distance < b.distance; });
+        std::optional<LocalCaster> point;
+        reg.view<PointLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, PointLightComponent& l, WorldTransformComponent& w) {
+            if (!l.castShadows || !w.activeInHierarchy || hidden(e) || l.intensity <= 0.0f || l.range <= 0.0f) return;
+            const Vec3 p = w.matrix.translation();
+            if (!frustum.intersects(math::Aabb::fromCenterExtents(p, Vec3{l.range}))) return;
+            const float d = math::length(p - rv.position);
+            if (!point || d < point->distance) point = LocalCaster{d, e, p, {}, l.range, 0.0f};
+        });
+        const u32 spotCount = std::min<u32>(static_cast<u32>(spots.size()), kSpotShadowSlots);
+        if (spotCount > 0 || point) {
+            const u32 tile = std::clamp<u32>(m_profile.shadowMapSize / 2, 256, std::min<u32>(2048, m_device.info().maxTextureSize / 4));
             if (!m_spotShadowTarget || m_spotShadowSize != tile) {
                 m_device.destroyRenderTarget(m_spotShadowTarget);
                 m_spotShadowTarget = {};
                 m_spotShadowSize = 0;
-                auto rt = m_device.createRenderTarget({.width = tile * kSpotShadowSlots, .height = tile, .color = false, .depth = true,
-                                                       .sampleableDepth = true, .debugName = "agr.spotshadows"});
+                auto rt = m_device.createRenderTarget({.width = tile * 4, .height = tile * 2, .color = false, .depth = true,
+                                                       .sampleableDepth = true, .debugName = "agr.localshadows"});
                 if (rt) {
                     m_spotShadowTarget = rt.value();
                     m_spotShadowSize = tile;
                 } else {
-                    AGR_LOG_ERROR("Render", "spot shadow atlas creation failed: {}", rt.error().message);
+                    AGR_LOG_ERROR("Render", "local light shadow atlas creation failed: {}", rt.error().message);
                 }
             }
+        }
+        if (m_spotShadowTarget) {
             const bool flipY = m_device.info().renderTargetsFlipY;
-            for (u32 k = 0; m_spotShadowTarget && k < count; ++k) {
-                const SpotCaster& c = casters[k];
-                const Vec3 up = std::fabs(c.dir.y) > 0.99f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
-                const Mat4 lightView = Mat4::lookAt(c.p, c.p + c.dir, up);
-                const Mat4 lightProj = Mat4::perspective(std::min(2.0f * c.outer + 0.05f, math::radians(175.0f)), 1.0f,
-                                                         std::max(0.05f, c.range * 0.005f), c.range, range);
-                const Mat4 viewProj = lightProj * lightView;
-                spotFrustum[k] = math::Frustum::fromMatrix(viewProj, range);
-                // Clip space -> atlas: tile k covers u in [k / 2, (k + 1) / 2], all of v.
-                const float tileUv = 1.0f / static_cast<float>(kSpotShadowSlots);
+            // Tile t of the atlas: clip space -> its uv bounds (GL stores render targets bottom row first).
+            auto place = [&](u32 t, const Mat4& viewProj, Vec4& rect) {
+                const u32 col = t % 4, row = t / 4;
+                const float u0 = static_cast<float>(col) * 0.25f, v0 = flipY ? static_cast<float>(row) * 0.5f : 1.0f - static_cast<float>(row + 1) * 0.5f;
+                rect = Vec4(u0, v0, u0 + 0.25f, v0 + 0.5f);
                 Mat4 bias;
-                bias.c[0] = {0.5f * tileUv, 0, 0, 0};
-                bias.c[1] = {0, flipY ? 0.5f : -0.5f, 0, 0};
+                bias.c[0] = {0.125f, 0, 0, 0};
+                bias.c[1] = {0, flipY ? 0.25f : -0.25f, 0, 0};
                 bias.c[2] = {0, 0, m_glClipSpace ? 0.5f : 1.0f, 0};
-                bias.c[3] = {static_cast<float>(k) * tileUv + 0.5f * tileUv, 0.5f, m_glClipSpace ? 0.5f : 0.0f, 1};
-                m_spotShadowMatrix[k] = bias * viewProj;
+                bias.c[3] = {u0 + 0.125f, v0 + 0.25f, m_glClipSpace ? 0.5f : 0.0f, 1};
+                return bias * viewProj;
+            };
+            auto shadowFrame = [&](const Mat4& viewProj) {
+                FrameUniforms f = frame;
+                f.viewProj = viewProj;
+                return pushUniforms(&f, sizeof f);
+            };
+            for (u32 k = 0; k < spotCount; ++k) {
+                const LocalCaster& c = spots[k];
+                const Vec3 up = std::fabs(c.dir.y) > 0.99f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
+                const Mat4 viewProj = Mat4::perspective(std::min(2.0f * c.outer + 0.05f, math::radians(175.0f)), 1.0f,
+                                                        std::max(0.05f, c.range * 0.005f), c.range, range) *
+                                      Mat4::lookAt(c.p, c.p + c.dir, up);
+                spotFrustum[k] = math::Frustum::fromMatrix(viewProj, range);
+                m_spotShadowMatrix[k] = place(k, viewProj, m_spotShadowRect[k]);
                 m_spotShadowEntities[k] = c.e;
-                FrameUniforms spotFrame = frame;
-                spotFrame.viewProj = viewProj;
-                m_spotFrameOffsets[k] = pushUniforms(&spotFrame, sizeof spotFrame);
+                m_spotFrameOffsets[k] = shadowFrame(viewProj);
                 m_spotShadowCount = k + 1;
+            }
+            if (point) {
+                // Cube faces +x, -x, +y, -y, +z, -z; a slightly wider field than 90 degrees leaves
+                // room for the filter at the face edges.
+                static const Vec3 dirs[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+                static const Vec3 ups[6] = {{0, 1, 0}, {0, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
+                const Mat4 proj = Mat4::perspective(2.0f * std::atan(1.06f), 1.0f, std::max(0.05f, point->range * 0.005f), point->range, range);
+                for (u32 f = 0; f < 6; ++f) {
+                    const Mat4 viewProj = proj * Mat4::lookAt(point->p, point->p + dirs[f], ups[f]);
+                    pointFrustum[f] = math::Frustum::fromMatrix(viewProj, range);
+                    m_pointShadowMatrix[f] = place(2 + f, viewProj, m_pointShadowRect[f]);
+                    m_pointFrameOffsets[f] = shadowFrame(viewProj);
+                }
+                m_pointShadowEntity = point->e;
+                m_pointShadow = true;
             }
         }
     }
     m_stats.spotShadows = m_spotShadowCount;
+    m_stats.pointShadows = m_pointShadow ? 1u : 0u;
 
     // ------------------------------------------------------------ meshes
     if (m_frame % 300 == 0)  // forget the joints of skinned meshes that no longer exist
@@ -527,10 +565,14 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         if (m_shadowsActive && mr.castShadows)
             for (u32 c = 0; c < m_shadowCascades; ++c)
                 if (lightFrustum[c].intersects(worldBounds)) casterMask |= 1u << c;
-        u32 spotMask = 0;  // shadowed spot lights whose cone contains the mesh
-        if (mr.castShadows)
+        u32 spotMask = 0;  // shadowed spot lights whose cone contains the mesh (bits 0-1), cube faces (bits 2-7)
+        if (mr.castShadows) {
             for (u32 k = 0; k < m_spotShadowCount; ++k)
                 if (spotFrustum[k].intersects(worldBounds)) spotMask |= 1u << k;
+            if (m_pointShadow)
+                for (u32 f = 0; f < 6; ++f)
+                    if (pointFrustum[f].intersects(worldBounds)) spotMask |= 1u << (2 + f);
+        }
         if (!visible) ++m_stats.meshesCulled;
         else ++m_stats.meshesVisible;
         if (!visible && !casterMask && !spotMask) return;
@@ -600,9 +642,12 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             if (!blend)
                 for (u32 c = 0; c < m_shadowCascades; ++c)
                     if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
-            if (!blend)
+            if (!blend) {
                 for (u32 k = 0; k < m_spotShadowCount; ++k)
                     if (spotMask & (1u << k)) m_spotShadowItems[k].push_back(item);
+                for (u32 f = 0; f < 6; ++f)
+                    if (spotMask & (1u << (2 + f))) m_pointShadowItems[f].push_back(item);
+            }
         }
     });
     // ------------------------------------------------------------ terrains
@@ -792,6 +837,10 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         std::sort(list.begin(), list.end(), byShadowState);
         m_stats.shadowCasters += static_cast<u32>(list.size());
     }
+    for (auto& list : m_pointShadowItems) {
+        std::sort(list.begin(), list.end(), byShadowState);
+        m_stats.shadowCasters += static_cast<u32>(list.size());
+    }
     // Transparent: back to front.
     std::sort(m_transparentItems.begin(), m_transparentItems.end(), [](const MeshItem& a, const MeshItem& b) {
         if (a.depth != b.depth) return a.depth > b.depth;
@@ -834,11 +883,20 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         lights.spotInner[n] = c.spotInner;
         for (u32 k = 0; k < m_spotShadowCount; ++k)
             if (c.entity == m_spotShadowEntities[k] && c.colorType.w > 0.5f) lights.spotInner[n].y = static_cast<float>(k);
+        if (m_pointShadow && c.entity == m_pointShadowEntity && c.colorType.w < 0.5f) lights.spotInner[n].z = 1.0f;
         ++n;
     }
-    for (u32 k = 0; k < m_spotShadowCount; ++k) lights.spotShadowMatrix[k] = m_spotShadowMatrix[k];
+    for (u32 k = 0; k < m_spotShadowCount; ++k) {
+        lights.spotShadowMatrix[k] = m_spotShadowMatrix[k];
+        lights.spotShadowRect[k] = m_spotShadowRect[k];
+    }
+    if (m_pointShadow)
+        for (u32 f = 0; f < 6; ++f) {
+            lights.pointShadowMatrix[f] = m_pointShadowMatrix[f];
+            lights.pointShadowRect[f] = m_pointShadowRect[f];
+        }
     if (m_spotShadowSize > 0)
-        lights.spotShadowParams = Vec4(1.0f / static_cast<float>(m_spotShadowSize * kSpotShadowSlots), 1.0f / static_cast<float>(m_spotShadowSize),
+        lights.spotShadowParams = Vec4(1.0f / static_cast<float>(m_spotShadowSize * 4), 1.0f / static_cast<float>(m_spotShadowSize * 2),
                                        m_profile.softShadows ? 1.0f : 0.0f, 0.0004f);
     lights.count[0] = static_cast<i32>(n);
     m_stats.lights = n;
@@ -853,6 +911,8 @@ void Renderer::uploadInstances() {
     for (const auto& list : m_shadowItems)
         for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
     for (const auto& list : m_spotShadowItems)
+        for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
+    for (const auto& list : m_pointShadowItems)
         for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
     if (m_instanceStaging.empty()) return;
     const usize bytes = m_instanceStaging.size() * sizeof(InstanceData);
@@ -1026,15 +1086,17 @@ void Renderer::releaseTerrain(TerrainGpu& g) {
 
 void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade) {
     if (items.empty() || !m_instanceBuffer) return;
-    // cascade >= kMaxCascades: tile (cascade - kMaxCascades) of the spot shadow atlas.
-    const u32 shadowFrame = cascade >= kMaxCascades ? m_spotFrameOffsets[cascade - kMaxCascades] : m_shadowFrameOffsets[cascade];
+    // cascade >= kMaxCascades: spot light tiles, then the point light's cube faces.
+    const u32 shadowFrame = cascade >= kMaxCascades + kSpotShadowSlots ? m_pointFrameOffsets[cascade - kMaxCascades - kSpotShadowSlots]
+                            : cascade >= kMaxCascades               ? m_spotFrameOffsets[cascade - kMaxCascades]
+                                                                    : m_shadowFrameOffsets[cascade];
     m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? shadowFrame : m_frameOffset, sizeof(FrameUniforms));
     if (!shadow) {
         m_device.bindUniformBuffer(kSlotLights, m_uniformBuffer, m_lights3DOffset, sizeof(LightUniforms));
         m_device.bindTexture(kShadowUnit, m_shadowsActive ? m_device.renderTargetDepthTexture(m_shadowTarget) : m_assets.whiteTexture());
         m_device.bindTexture(kEnvUnit, m_envTexture ? m_envTexture : m_assets.whiteTexture());
         m_device.bindTexture(kSpotShadowUnit,
-                             m_spotShadowCount > 0 ? m_device.renderTargetDepthTexture(m_spotShadowTarget) : m_assets.whiteTexture());
+                             m_spotShadowCount > 0 || m_pointShadow ? m_device.renderTargetDepthTexture(m_spotShadowTarget) : m_assets.whiteTexture());
         for (u32 t = kSplatUnit; t < kSpotShadowUnit; ++t) m_device.bindTexture(t, m_assets.whiteTexture());  // unused units stay valid
     }
     u32 boundPipeline = ~0u, boundMaterial = ~0u;
@@ -1150,13 +1212,23 @@ void Renderer::drawShadowPass() {
         m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_shadowTarget));
     }
     // Spot light shadows: one tile of the atlas per shadowed spot light (instances follow the cascades').
-    if (m_spotShadowCount > 0 && m_spotShadowTarget) {
+    if ((m_spotShadowCount > 0 || m_pointShadow) && m_spotShadowTarget) {
         m_device.beginPass(m_spotShadowTarget, {false, {}, true, 1.0f});
+        const auto tileViewport = [&](u32 t) {  // bottom-left origin, like the cascades
+            m_device.setViewport(static_cast<i32>((t % 4) * m_spotShadowSize), static_cast<i32>((t / 4) * m_spotShadowSize), m_spotShadowSize,
+                                 m_spotShadowSize);
+        };
         for (u32 k = 0; k < m_spotShadowCount; ++k) {
-            m_device.setViewport(static_cast<i32>(k * m_spotShadowSize), 0, m_spotShadowSize, m_spotShadowSize);
+            tileViewport(k);
             drawMeshItems(m_spotShadowItems[k], first, true, kMaxCascades + k);
             first += static_cast<u32>(m_spotShadowItems[k].size());
         }
+        if (m_pointShadow)
+            for (u32 f = 0; f < 6; ++f) {
+                tileViewport(2 + f);
+                drawMeshItems(m_pointShadowItems[f], first, true, kMaxCascades + kSpotShadowSlots + f);
+                first += static_cast<u32>(m_pointShadowItems[f].size());
+            }
         m_device.endPass();
         m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_spotShadowTarget));
     }

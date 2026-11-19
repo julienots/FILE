@@ -639,6 +639,47 @@ TEST_CASE("spot light shadows: a cube shadows the floor under the cone; off by d
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("point light shadows: cube faces below and beside the bulb; one per frame; spot shadows still work") {
+    Render3DFixture f;
+    f.camera({0, 9, 0.01f}, {0, 0, 0});
+    f.darkEnvironment();
+    f.mesh(PrimitiveMesh::Plane, {0, 0, 0}, Vec3{20.0f});
+    f.mesh(PrimitiveMesh::Cube, {0, 1.5f, 0}, Vec3{1.0f});            // under the bulb: -Y face
+    f.mesh(PrimitiveMesh::Cube, {2.5f, 0.75f, 0}, {0.3f, 1.5f, 3.0f});  // wall beside it: +X face
+    const auto bulb = f.scene.createEntity("Bulb");
+    f.scene.registry().get<TransformComponent>(bulb).position = {0.4f, 3.0f, 0};
+    auto& pl = f.scene.registry().emplace<PointLightComponent>(bulb);
+    pl.color = {1, 1, 1, 1};
+    pl.intensity = 30.0f;
+    pl.range = 12.0f;
+    // Below: the cube's shadow reaches x = -1.4 (the cube hides the floor up to -0.64 from above).
+    // Beside: behind the 1.5 m wall at x = 2.5, the floor from x = 3.6 to ~4.5 is in its shadow.
+    const Vec3 under{-1.0f, 0, 0}, behindWall{3.9f, 0, 0}, open{-0.6f, 0, 2.6f};
+    f.frame();
+    CHECK(f.renderer.stats().pointShadows == 0);
+    const int underOff = luminance(f.at(under)), wallOff = luminance(f.at(behindWall));
+    CHECK_MESSAGE((underOff > 60 && wallOff > 20), underOff, " ", wallOff);
+    pl.castShadows = true;
+    f.frame();
+    CHECK(f.renderer.stats().pointShadows == 1);
+    CHECK_MESSAGE(luminance(f.at(under)) < underOff / 3, luminance(f.at(under)), " vs ", underOff);
+    CHECK_MESSAGE(luminance(f.at(behindWall)) < wallOff / 2, luminance(f.at(behindWall)), " vs ", wallOff);
+    CHECK_MESSAGE(luminance(f.at(open)) > 30, luminance(f.at(open)));  // open floor stays lit
+    // A second shadowed bulb: only the nearest one gets shadows. A shadowed spot still works beside it.
+    const auto far = f.scene.createEntity("Far bulb");
+    f.scene.registry().get<TransformComponent>(far).position = {-6, 3, -6};
+    f.scene.registry().emplace<PointLightComponent>(far).castShadows = true;
+    const auto spot = f.scene.createEntity("Spot");
+    f.scene.registry().get<TransformComponent>(spot).position = {-4, 4, 3};
+    f.scene.registry().get<TransformComponent>(spot).rotation = math::Quat::fromEuler({math::radians(-90.0f), 0, 0});
+    f.scene.registry().emplace<SpotLightComponent>(spot).castShadows = true;
+    f.frame();
+    CHECK(f.renderer.stats().pointShadows == 1);
+    CHECK(f.renderer.stats().spotShadows == 1);
+    CHECK(luminance(f.at(under)) < underOff / 3);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

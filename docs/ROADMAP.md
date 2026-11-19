@@ -121,7 +121,7 @@ Guide : [3D.md](3D.md).
 | Profondeur de champ, TAA, sondes de réflexion locales | ⬜ | à planifier |
 | Ombres en cascades (1 à 4 selon le profil, atlas, fondu entre cascades) | ✅ | `Renderer3D.cpp` |
 | Ombres des projecteurs (SpotLight) | ✅ | 2 par image, atlas en perspective ; test GPU sur les 3 API |
-| Ombres des lumières ponctuelles | ⬜ | à planifier (6 faces par lumière) |
+| Ombres des lumières ponctuelles | ✅ | 1 par image, 6 faces dans l'atlas des lumières locales ; test GPU sur les 3 API |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
 ## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua et logique visuelle terminés ; formes maillage et débogueur à venir)

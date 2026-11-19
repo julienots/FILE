@@ -54,10 +54,14 @@ struct LightUniforms {
     math::Vec4 spotDir[kMaxLights3D];
     math::Vec4 spotInner[kMaxLights3D];  // cos(inner), shadow slot (-1: none), -, -
     i32 count[4];
+    // Local light shadow atlas (4 x 2 tiles): spot lights in tiles 0-1, the point light's cube faces in 2-7.
     math::Mat4 spotShadowMatrix[kMaxSpotShadows];  // world -> atlas uv + depth
     math::Vec4 spotShadowParams;                   // atlas texel size (u, v), PCF on, depth bias
+    math::Vec4 spotShadowRect[kMaxSpotShadows];    // atlas uv bounds of each spot tile
+    math::Mat4 pointShadowMatrix[6];               // one per cube face (+x, -x, +y, -y, +z, -z)
+    math::Vec4 pointShadowRect[6];                 // atlas uv bounds of each face
 };
-static_assert(sizeof(LightUniforms) == 528 + 128 + 16);
+static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96);
 
 inline float srgbToLinear(float c) {
     c = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);

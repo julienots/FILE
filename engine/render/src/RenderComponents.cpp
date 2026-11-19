@@ -58,7 +58,9 @@ void registerRenderComponents() {
         .description("Light radiating in every direction, up to its range (bulbs, torches).")
         .field("color", &PointLightComponent::color, {.flags = FieldFlag_Color})
         .field("intensity", &PointLightComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.05f})
-        .field("range", &PointLightComponent::range, {.rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f});
+        .field("range", &PointLightComponent::range, {.rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("castShadows", &PointLightComponent::castShadows,
+               {.tooltip = "Shadows in every direction (the nearest shadowed point light; 6 shadow views)"});
 
     reg.add<SpotLightComponent>("SpotLight")
         .category("Rendering")

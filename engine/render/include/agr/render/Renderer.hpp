@@ -106,6 +106,7 @@ struct RenderStats {
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map (all cascades).
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 spotShadows = 0;     ///< Spot lights with a shadow map this frame (at most 2).
+    u32 pointShadows = 0;    ///< Point lights with cube shadows this frame (at most 1).
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
     u32 terrains = 0;        ///< Terrains drawn (or casting shadows) this frame.
     u32 blobShadows = 0;     ///< Blob shadows drawn this frame.
@@ -402,11 +403,19 @@ private:
     rhi::BufferHandle m_instanceBuffer;
     usize m_instanceCapacity = 0;
     rhi::RenderTargetHandle m_shadowTarget;
-    // Spot light shadows: an atlas of 2 square tiles side by side, one per shadowed spot light.
+    // Local light shadows: one atlas of 4 x 2 square tiles; tiles 0-1 for the shadowed spot lights,
+    // tiles 2-7 for the 6 cube faces of the shadowed point light.
     static constexpr u32 kSpotShadowSlots = 2;
     rhi::RenderTargetHandle m_spotShadowTarget;
     u32 m_spotShadowSize = 0;  // tile size
     u32 m_spotShadowCount = 0;
+    bool m_pointShadow = false;
+    ecs::Entity m_pointShadowEntity{};
+    std::array<math::Mat4, 6> m_pointShadowMatrix{};
+    std::array<math::Vec4, 6> m_pointShadowRect{};
+    std::array<math::Vec4, kSpotShadowSlots> m_spotShadowRect{};
+    std::array<std::vector<MeshItem>, 6> m_pointShadowItems;
+    std::array<u32, 6> m_pointFrameOffsets{};
     std::array<ecs::Entity, kSpotShadowSlots> m_spotShadowEntities{};
     std::array<math::Mat4, kSpotShadowSlots> m_spotShadowMatrix{};
     std::array<std::vector<MeshItem>, kSpotShadowSlots> m_spotShadowItems;

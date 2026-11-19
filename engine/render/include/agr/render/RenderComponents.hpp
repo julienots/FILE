@@ -49,6 +49,9 @@ struct PointLightComponent {
     math::Color color{1.0f, 0.95f, 0.85f, 1.0f};
     float intensity = 5.0f;
     float range = 10.0f;
+    /// Shadows in every direction (6 shadow views): the nearest shadowed point light gets them;
+    /// profiles without shadows skip them.
+    bool castShadows = false;
 };
 
 /// Cone of light along the entity's forward axis (-Z).
