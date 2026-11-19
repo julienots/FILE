@@ -151,7 +151,7 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
 
 - 3D : pas de *heightfield* dédié pour les terrains importés (le `Terrain` du moteur a sa propre collision) ;
   maillage et enveloppe convexe : voir plus haut ; le maillage n'est pas rechargé si le fichier change en jeu,
-  pas de *heightfield* ; frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
+  frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
   qui a au moins un déclencheur est entièrement un capteur.
 - 2D : pas de polygones quelconques ni de chaînes (contours lisses) ; pas de tuiles en pente ni de tuiles
   traversables par le dessous (*one-way*) ; pas de contrôleur de personnage 2D dédié (un corps dynamique à
