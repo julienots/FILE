@@ -68,7 +68,15 @@ h1, h2 { margin: 0; font-weight: 700; font-style: italic; text-wrap: balance; }
 #cups { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; touch-action: pan-x; }
 .track.cup { flex: 0 0 200px; }
 .track.cup canvas { height: 58px; }
-#tracks { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; touch-action: pan-x; }
+/* liste des circuits : ne se fait jamais écraser par le reste du panneau (flex-shrink: 0), défilement horizontal, filtres par famille */
+#tracks { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; touch-action: pan-x; flex: 0 0 auto; min-height: 128px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--cyan) transparent; }
+#tracks::-webkit-scrollbar { height: 5px; } #tracks::-webkit-scrollbar-thumb { background: var(--cyan); }
+#tracks .track { scroll-snap-align: start; }
+#tcats { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#tcats .chip { padding: 5px 10px; font-size: 12px; }
+#tcats .count { margin-left: auto; font-size: 11px; color: var(--dim); }
+#cups { flex: 0 0 auto; }
+@media (min-height: 620px) { #tracks { display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: 150px; } }
 .track { flex: 0 0 132px; min-width: 0; padding: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); text-align: left; display: flex; flex-direction: column; gap: 4px; }
 .track[aria-pressed="true"] { border-color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan); }
 .track canvas { width: 100%; height: 62px; display: block; }
@@ -136,7 +144,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 #rtitle { font-size: 26px; }
 #turn { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-size: 12px; color: var(--dim); background: var(--panel); padding: 4px 10px; white-space: nowrap; pointer-events: none; }
 @media (orientation: landscape) { #turn { display: none; } }
-@media (max-height: 420px) { .key { width: 66px; height: 66px; } .sheet { gap: 8px; padding: 10px 14px; } .track canvas { height: 48px; } .btn { padding: 9px 18px; } }
+@media (max-height: 420px) { .key { width: 66px; height: 66px; } .sheet { gap: 8px; padding: 10px 14px; } .track canvas { height: 46px; } #tracks { min-height: 118px; } .btn { padding: 9px 18px; } }
 @media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
 /* modes de jeu */
 #menu .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(640px, 100%); }
@@ -162,6 +170,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 /* radio */
 #radio { position: absolute; z-index: 4; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 58px); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 2px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; font-weight: 700; max-width: min(46%, 340px); }
 #radio button { width: 30px; height: 30px; font-size: 12px; flex: 0 0 auto; } #radio button:active { background: rgba(255,255,255,0.15); }
+#radio.menu { left: auto; right: max(16px, env(safe-area-inset-right, 0px)); top: max(10px, env(safe-area-inset-top, 0px)); }
 #rd-txt { flex: 1 1 auto; min-width: 0; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cyan); }
 /* économie, atelier, dérapage */
 #menu .side b .cash { color: var(--warn); }
@@ -227,8 +236,8 @@ tr.me td { color: var(--cyan); font-weight: 700; }
     <div class="col">
       <h1><span>NUIT</span> <b>NÉON</b></h1>
       <div class="modes">
-        <button class="btn primary" id="m-race">Course<small>23 circuits, jusqu'à 31 adversaires</small></button>
-        <button class="btn" id="m-gp">Grand Prix<small>6 coupes de 4 courses, trophées</small></button>
+        <button class="btn primary" id="m-race">Course<small>27 circuits, jusqu'à 31 adversaires</small></button>
+        <button class="btn" id="m-gp">Grand Prix<small>7 coupes de 4 courses, trophées</small></button>
         <button class="btn" id="m-items">Course à bonus<small>21 pouvoirs à ramasser</small></button>
         <button class="btn" id="m-foot">Foot Turbo<small>Ballon, boost, saut et vol</small></button>
         <button class="btn" id="m-chrono">Contre-la-montre<small>Seul en piste, contre ton record</small></button>
@@ -246,6 +255,7 @@ tr.me td { color: var(--cyan); font-weight: 700; }
   <div class="screen" id="setup" hidden>
     <div class="sheet panel">
       <div class="head"><h2 id="s-title">Choix de la course</h2><button class="btn small" data-back>Retour</button></div>
+      <div id="tcats" data-for="race items chrono elim"></div>
       <div id="tracks" data-for="race items chrono elim"></div>
       <div class="row" data-for="free"><span class="label">Route</span><div class="chips" id="routes"></div></div>
       <div class="row" data-for="race items elim foot"><span class="label">Difficulté</span><div class="chips" id="diffs"></div></div>

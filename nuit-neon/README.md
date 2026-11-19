@@ -2,14 +2,24 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.1
+
+- **Menu des circuits corrigé** : les cartes des circuits n'étaient plus visibles (la liste se faisait écraser par le reste du panneau). Elles s'affichent en entier, avec des filtres Tous / Ville / Nature / Spéciaux / Atelier, le nombre de circuits, la longueur et la largeur de chaque piste ; sur grand écran, deux rangées. Dans le menu principal, la radio est passée en haut à droite et ne cache plus le titre.
+- **Pistes plus larges** : 42 m pour les circuits dessinés (32 m avant), de 4 à 10 m de plus pour tous les autres.
+- **Quatre nouveaux circuits** (marqués ★) : Docks sous la Pluie, Jungle Émeraude, Champs de Lavande, Périphérique (54 m de large), réunis dans la nouvelle **Coupe Horizon** du Grand Prix.
+- **Pluie réaliste** : des milliers de gouttes calculées par la carte graphique, étirées selon la vitesse (à l'arrêt elles tombent, lancé elles filent vers la caméra), éclairées par la ville et par les éclairs ; ronds de pluie animés et film d'eau qui coule sur la chaussée, bitume plus sombre et plus brillant, halo des lumières dans l'air humide. La pluie est aussi active en graphismes bas.
+- **Son sans grésillement** : une seule sortie pour la radio et les effets, avec compresseur, limiteur et écrêtage doux (avant, les deux s'additionnaient au-delà du maximum et saturaient) ; contexte audio en mode lecture (tampons plus grands, plus de craquements quand le téléphone est occupé) ; plus aucun saut brusque de volume (passages de rapport, pompe de la grosse caisse, fin des notes, montées) ; au changement de morceau, l'ancien s'éteint en douceur.
+- **Moteurs réalistes** : chaque explosion de chaque cylindre est simulée (voir Sons).
+- **Radio** : trois nouvelles stations (Funk FM, Techno FM, Nuit Calme) et neuf morceaux de plus sur les autres : 50 morceaux en tout.
+
 ## Ouverture
 
 Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre tombe, s'écrase et rebondit, le point surgit en dernier, un éclat court sur le nom puis STUDIO s'affiche ; un petit son accompagne chaque lettre quand l'appareil le permet. L'écran disparaît au bout de 3,4 s (un toucher le passe). Il est dans `src/page.html` (police Fredoka, `fonts/fredoka-bold.ttf`).
 
 ## Modes de jeu
 
-- **Course** : 20 circuits (8 en ville, 12 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
-- **Grand Prix** : 6 coupes de 4 courses (3 tours, 11 adversaires). Chaque course rapporte des points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1) ; le classement final donne un trophée d'or, d'argent ou de bronze, gardé par coupe et par difficulté, et une prime en crédits. La Coupe Tempête se court sous l'orage, la Coupe Vitesse sur quatre circuits inédits (Anneau de Vitesse, Lagune Turquoise, Glacier Bleu, Néon Central). Les coupes sont décrites dans `COUPES` (`src/tracks.js`).
+- **Course** : 24 circuits (10 en ville, 14 en pleine nature, dont 2 circuits spéciaux) et 3 circuits de l'atelier, 1 à 31 adversaires, 1 à 99 tours, 5 niveaux de difficulté jusqu'à Légende.
+- **Grand Prix** : 7 coupes de 4 courses (3 tours, 11 adversaires). Chaque course rapporte des points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1) ; le classement final donne un trophée d'or, d'argent ou de bronze, gardé par coupe et par difficulté, et une prime en crédits. La Coupe Tempête se court sous l'orage, la Coupe Vitesse sur quatre circuits inédits (Anneau de Vitesse, Lagune Turquoise, Glacier Bleu, Néon Central), la Coupe Horizon sur les circuits de la 2.1 (Docks sous la Pluie, Jungle Émeraude, Champs de Lavande, Périphérique). Les coupes sont décrites dans `COUPES` (`src/tracks.js`).
 - **Contre-la-montre** : seul en piste, contre son record.
 - **Élimination** : toutes les 20 secondes, le dernier est éliminé.
 - **Course à bonus** : des caisses sur la piste donnent l'un des 21 pouvoirs (voir plus bas). Le pictogramme de l'objet tenu s'affiche à l'écran et flotte au-dessus de chaque voiture qui en porte un.
@@ -23,6 +33,8 @@ Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre t
 ## Circuits ajoutés
 
 Autodrome du Lac, Forêt d'Automne (feuillages roux), Dunes d'Or, Volcan Noir (basalte, lave, braises dans l'air), Aurore Boréale (toundra de nuit sous la neige), et deux circuits spéciaux : **Station Orbitale** (gravité lunaire, sauts géants, boost renforcé) et **Mégapole 2099** (tout va 60 % plus vite). Leurs tracés sont tirés d'une graine, comme ceux de l'atelier ; les décors sont dans `src/tracks.js`.
+
+En 2.1 : **Docks sous la Pluie** (port industriel, grues, éclairage au sodium et néons turquoise, toujours sous la pluie), **Jungle Émeraude** (forêt tropicale sous une pluie chaude, brume verte), **Champs de Lavande** (Provence au soleil couchant) et **Périphérique** (anneau urbain de six voies, le plus rapide du jeu).
 
 ## Réalisme
 
@@ -94,25 +106,42 @@ Le décor se choisit parmi les 9 ambiances du jeu. « Tout au hasard » tire tou
 
 ## Sons
 
-Tout est synthétisé par le jeu (`src/audio.js`), sans fichier audio. Chaque véhicule a son moteur : V8 au ralenti irrégulier (Rubis, Titan, Nomade), V10 (Azur, Fulgur), V12 (Mirage, Éclipse), biturbo (Cobalt, Spectre, Comète), monoplace, prototype, buggy, quatre-cylindres de moto, bicylindre de roadster. S'y ajoutent une boîte à 7 rapports avec coupure et détonation à chaque passage, le rupteur, la montée libre dans les tours à l'arrêt, le sifflement du turbo et sa soupape de décharge, les pétarades au lever de pied, le vent, le réacteur du boost, le moteur de l'adversaire le plus proche (avec effet Doppler), les explosions et le bang du mur du son. Pour changer le moteur d'un véhicule : champ `son` dans `src/carlist.js`.
+Tout est synthétisé par le jeu (`src/audio.js`), sans fichier audio.
+
+**Sortie** : effets et radio passent par une sortie unique (compresseur doux, limiteur, écrêtage doux suréchantillonné) : rien ne peut saturer. Le contexte audio est ouvert en mode « lecture » pour éviter les craquements, et toutes les attaques et coupures sont adoucies (2 à 5 ms) pour ne jamais claquer.
+
+**Moteurs** : un petit processeur audio (AudioWorklet) simule chaque explosion de chaque cylindre dans le cycle de 720°, selon l'ordre d'allumage réel : V8 à vilebrequin croisé (les deux bancs reçoivent leurs impulsions de façon inégale, d'où le « glouglou » du ralenti), V8 biturbo à vilebrequin plat, V10, V12, V10 de course à 18 000 tr/min, V6 de prototype, flat-4 du buggy, quatre-cylindres de moto, bicylindre en V du roadster (allumages à 315° puis 405°). Chaque impulsion varie un peu en force (plus au ralenti qu'à haut régime), résonne dans deux lignes d'échappement (banc gauche à gauche, banc droit à droite, en stéréo) puis dans un silencieux qui s'ouvre avec la charge ; s'y ajoutent le souffle d'admission et le cliquetis des soupapes. Les réglages sont dans `PHYS` (`src/audio.js`). Si l'appareil ne sait pas faire tourner ce processeur, l'ancien moteur à oscillateurs prend le relais.
+
+**Boîte de vitesses** : 7 rapports automatiques ; à fond, elle monte au rupteur avec une coupure d'injection et une détonation ; à mi-gaz elle passe plus tôt ; en décélérant elle rétrograde avec un coup de gaz. Le rupteur coupe l'injection par à-coups. Au départ, l'embrayage patine.
+
+**Autour du moteur** : sifflement et souffle du turbo, soupape de décharge avec son battement, compresseur mécanique des hypercars, pétarades en grappes au lever de pied, roulement des pneus sur l'asphalte, chuintement de la route mouillée, vent, réacteur du boost, crissements (deux résonances qui tremblent), frottements de tôle, chocs avec tôle froissée, gerbes d'eau. L'adversaire le plus proche a son propre moteur : volume et aigus selon la distance, effet Doppler, placé à gauche ou à droite.
+
+**Pluie** : crépitement de milliers de gouttes (fabriqué une fois au chargement), souffle et grondement ; sur tous les circuits pluvieux, plus fort sous l'orage, avec le tonnerre qui arrive après l'éclair selon la distance.
+
+Pour changer le moteur d'un véhicule : champ `son` dans `src/carlist.js`.
 
 ## Radio
 
-Un bandeau en haut à gauche (menu et course) affiche la station et le morceau ; ◀ ▶ changent de station, » passe au morceau suivant (R et T au clavier, croix haut et bas à la manette). Choix de la station et volume dans les options.
+Un bandeau (en haut à droite dans le menu, en haut à gauche en course) affiche la station et le morceau ; ◀ ▶ changent de station, » passe au morceau suivant (R et T au clavier, croix haut et bas à la manette). Choix de la station et volume dans les options.
 
 | Station | Style | Morceaux |
 | --- | --- | --- |
-| Néon FM 88.6 | synthwave | Néon Drive, Minuit Express, Rêve Chromé, Horizon Rose, Autoroute Fantôme |
-| Turbo FM 101.3 | trance | Turbo Cœur, Circuit Rouge, Hyperespace, Supernova |
-| Soleil FM 94.7 | house | Aube, Plage Dorée, Disco Bitume, Néon Tropical |
-| Basse FM 107.9 | drum and bass | Adrénaline, Tunnel, Zone Rouge |
-| Furie FM 98.2 | rock et métal | Asphalte Brûlant, Dernier Tour, Métal Hurlant, Cylindrée |
-| Drift FM 91.1 | phonk | Cloche de Minuit, Gomme Brûlée, Dérive à Tokyo |
-| Hyper FM 104.4 | hardstyle | Zinzin, Rupteur, 10 000 km/h |
-| Podium FM 96.0 | épique | Grand Prix, Dernier Virage, Champions |
+| Néon FM 88.6 | synthwave | Néon Drive, Minuit Express, Rêve Chromé, Horizon Rose, Autoroute Fantôme, Vitesse Lumière, Lignes Blanches |
+| Turbo FM 101.3 | trance | Turbo Cœur, Circuit Rouge, Hyperespace, Supernova, Aurore Électrique |
+| Soleil FM 94.7 | house | Aube, Plage Dorée, Disco Bitume, Néon Tropical, Club au Couchant |
+| Basse FM 107.9 | drum and bass | Adrénaline, Tunnel, Zone Rouge, Tempête |
+| Furie FM 98.2 | rock et métal | Asphalte Brûlant, Dernier Tour, Métal Hurlant, Cylindrée, Pied au Plancher |
+| Drift FM 91.1 | phonk | Cloche de Minuit, Gomme Brûlée, Dérive à Tokyo, Frein à Main |
+| Hyper FM 104.4 | hardstyle | Zinzin, Rupteur, 10 000 km/h, Surcompresseur |
+| Podium FM 96.0 | épique | Grand Prix, Dernier Virage, Champions, Ligne d'Arrivée |
+| Funk FM 99.9 | funk et disco | Boulevard Disco, Groove de Minuit, Velours Chromé, Talons Aiguilles |
+| Techno FM 102.6 | techno et acid | Acide 303, Entrepôt, Hypnose, Circuit Fermé |
+| Nuit Calme 89.9 | lo-fi | Pluie sur le Pare-brise, Feux Arrière, Station-service 3 h, Retour à l'Aube |
 | Ma musique | tes fichiers | ceux que tu ajoutes |
 
-Les vingt-neuf morceaux des huit premières stations sont composés et joués en direct par `src/music.js`, sans fichier audio : chacun a sa structure (intro, couplet, refrain, pont, final, environ deux minutes), sa suite d'accords, sa mélodie, sa batterie avec roulements et cymbales, un écho, une réverbération et un effet de pompe sur la grosse caisse. À la fin d'un morceau, la station enchaîne sur le suivant.
+Funk FM a une basse slappée, un clavinet, des cuivres et un charleston chaloupé ; Techno FM une basse acide (filtre résonant, accents et glissés) et une grosse caisse qui gronde dans la réverbération ; Nuit Calme une batterie feutrée et chaloupée, un piano électrique et des craquements de vinyle.
+
+Les cinquante morceaux des onze premières stations sont composés et joués en direct par `src/music.js`, sans fichier audio : chacun a sa structure (intro, couplet, refrain, pont, final, environ deux minutes), sa suite d'accords, sa mélodie, sa batterie avec roulements et cymbales, un écho, une réverbération et un effet de pompe sur la grosse caisse. À la fin d'un morceau, la station enchaîne sur le suivant.
 
 **Ma musique** lit de vrais fichiers audio (mp3, m4a, ogg, wav, flac…) : bouton « Ajouter des morceaux » dans les options. Ils sont copiés dans la mémoire du jeu sur l'appareil et restent disponibles aux lancements suivants ; « Vider » les retire. Le jeu n'embarque aucune chanson du commerce.
 

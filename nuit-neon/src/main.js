@@ -77,27 +77,27 @@ const fx = new FX(scene), skids = new Skids(scene), scratches = new Skids(scene,
 scratches.mesh.material.opacity = 0.6; scratches.mesh.material.polygonOffset = true; scratches.mesh.material.polygonOffsetFactor = -2;
 
 const QUALITY = {
-  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, grass: 6000, terrain: 170 },
-  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, grass: 3800, terrain: 140 },
-  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: false, grass: 1100, terrain: 90 },
+  haute: { pr: 2, refl: 0.55, bloom: true, msaa: 4, taps: 9, env: 256, rain: true, rainK: 1, grass: 6000, terrain: 170 },
+  moyenne: { pr: 1.5, refl: 0.45, bloom: true, msaa: 0, taps: 7, env: 128, rain: true, rainK: 0.6, grass: 3800, terrain: 140 },
+  basse: { pr: 1, refl: 0.33, bloom: false, msaa: 0, taps: 5, env: 64, rain: true, rainK: 0.3, grass: 1100, terrain: 90 },
 };
 const isTouch = matchMedia('(pointer: coarse)').matches;
 let qName = 'moyenne', Q = QUALITY.moyenne, dyn = 1;
 function pickQuality() { qName = opts.qual === 'auto' ? (isTouch ? 'moyenne' : 'haute') : (QUALITY[opts.qual] ? opts.qual : 'moyenne'); Q = QUALITY[qName]; dyn = 1; }
 pickQuality();
 
-let composer = null, finalPass = null;
+let composer = null, finalPass = null, bloomPass = null;
 function setupPost() {
   if (composer) { composer.dispose(); composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); composer = null; }
   if (!Q.bloom) return;
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.msaa });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0));
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0); composer.addPass(bloomPass);
   finalPass = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
+    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, brume: { value: 0 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float brume; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
       float hsh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
       // gouttes de pluie sur l'objectif : chaque case de la grille porte une goutte qui glisse et dévie l'image comme une lentille
       vec3 gouttes(vec2 uv, float sc, float sp){ vec2 g = uv*vec2(sc*aspect, sc); float col = floor(g.x); g.y += time*sp*(0.5 + hsh(vec2(col, 3.0))) ; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
@@ -126,6 +126,9 @@ function setupPost() {
             fl += gc * sunCol * smoothstep(gs, gs*0.6, gd) * 0.07 + gc * sunCol * smoothstep(gs*0.15, 0.0, abs(gd - gs)) * 0.05; }   // reflets dans les lentilles
           col += fl * occ * sunVis;
         }
+        // air chargé de pluie : la lumière se diffuse, les noirs se voilent légèrement, les couleurs s'adoucissent
+        if (brume > 0.0) { vec3 halo = (texture2D(tDiffuse, uvp + vec2(0.004, 0.0)).rgb + texture2D(tDiffuse, uvp - vec2(0.004, 0.0)).rgb + texture2D(tDiffuse, uvp + vec2(0.0, 0.007)).rgb + texture2D(tDiffuse, uvp - vec2(0.0, 0.007)).rgb) * 0.25;
+          col = mix(col, halo, 0.2*brume); col += halo * 0.025 * brume; float l2 = dot(col, vec3(0.3,0.59,0.11)); col = mix(col, vec3(l2), 0.08*brume); }
         col *= 1.0 - 0.45*smoothstep(0.4, 1.0, r);
         col *= 1.0 + (hsh(vUv*731.0 + fract(time)*17.0) - 0.5) * 0.07;
         float lum = dot(col, vec3(0.3,0.59,0.11)); col = mix(vec3(lum), col, 1.14); col *= 0.94 + 0.12*smoothstep(0.0, 1.2, lum);   // étalonnage : un peu plus de couleur et de contraste
@@ -1130,7 +1133,7 @@ addEventListener('pointerup', () => { garageDrag = null; });
 
 // ---------- interface ----------
 const screens = ['loading', 'menu', 'setup', 'gp', 'garage', 'options', 'editor', 'hud', 'pause', 'results'];
-function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); $('radio').hidden = !(ids.includes('menu') || ids.includes('hud'));
+function show(...ids) { for (const s of screens) $(s).hidden = !ids.includes(s); $('radio').hidden = !(ids.includes('menu') || ids.includes('hud')); $('radio').classList.toggle('menu', ids.includes('menu'));
   if (ids.includes('results')) { $('r-next').hidden = !(gp.on && !gp.done); $('r-again').hidden = gp.on; $('r-menu').textContent = gp.on && !gp.done ? 'Abandonner' : 'Menu'; } }
 const fmt = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); };
 const fmtShort = (t) => { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
@@ -1172,17 +1175,32 @@ function buildSetup(type) {
   $('s-title').textContent = { foot: 'Foot Turbo', items: 'Course à bonus', chrono: 'Contre-la-montre', elim: 'Élimination', free: 'Balade libre' }[type] || 'Choix de la course';
   for (const el of document.querySelectorAll('#setup [data-for]')) el.hidden = !el.dataset.for.split(' ').includes(type);
   const el = $('tracks'); el.textContent = '';
+  // familles de circuits, pour retrouver vite un circuit parmi tous
+  const fam = (t) => t.perso !== undefined ? 'atelier' : t.regles ? 'special' : t.theme.env === 'nature' ? 'nature' : 'ville';
+  const FAMS = [['tous', 'Tous'], ['ville', 'Ville'], ['nature', 'Nature'], ['special', 'Spéciaux'], ['atelier', 'Atelier']];
+  if (!FAMS.some(f => f[0] === setup.fam)) setup.fam = 'tous';
+  const cards = [];
   TRACKS.forEach((t, i) => {
-    const b = document.createElement('button'); b.className = 'track'; b.type = 'button'; b.setAttribute('aria-pressed', String(setup.track === i));
+    const b = document.createElement('button'); b.className = 'track'; b.type = 'button'; b.setAttribute('aria-pressed', String(setup.track === i)); b.dataset.fam = fam(t);
     const cv = document.createElement('canvas'); cv.width = 232; cv.height = 124; b.appendChild(cv);
     const g = cv.getContext('2d'); const col = '#' + new THREE.Color(t.theme.env === 'nature' ? t.theme.c : t.theme.a).getHexString();
     g.shadowColor = col; g.shadowBlur = 12; drawPath(g, trackCache[i], 232, 124, 14, col, 5);
-    const nm = document.createElement('b'); nm.textContent = t.nom; b.appendChild(nm);
-    const ds = document.createElement('small'); ds.textContent = (t.perso !== undefined ? 'Atelier' : t.desc) + ' · ' + (trackCache[i].L / 1000).toFixed(1) + ' km'; b.appendChild(ds);
+    const nm = document.createElement('b'); nm.textContent = (t.nouveau ? '★ ' : '') + t.nom; b.appendChild(nm);
+    const ds = document.createElement('small'); ds.textContent = (t.perso !== undefined ? 'Atelier' : t.desc) + ' · ' + (trackCache[i].L / 1000).toFixed(1) + ' km · ' + Math.round(trackCache[i].half * 2) + ' m'; b.appendChild(ds);
     const rc = document.createElement('em'); rc.textContent = best[t.id] ? 'Record ' + fmt(best[t.id]) : 'Pas encore de record'; b.appendChild(rc);
     b.addEventListener('click', () => { setup.track = i; for (const o of el.children) o.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-pressed', 'true'); });
-    el.appendChild(b);
+    el.appendChild(b); cards.push(b);
   });
+  const filtre = () => {
+    let n = 0; for (const b of cards) { b.hidden = setup.fam !== 'tous' && b.dataset.fam !== setup.fam; if (!b.hidden) n++; }
+    cnt.textContent = n + ' circuit' + (n > 1 ? 's' : ''); el.scrollLeft = 0;
+    const sel = cards[setup.track]; if (sel && !sel.hidden) requestAnimationFrame(() => { el.scrollLeft = Math.max(0, sel.offsetLeft - el.offsetLeft - 8); });
+  };
+  const cats = $('tcats'); chips(cats, FAMS, () => setup.fam, (v) => { setup.fam = v; filtre(); });
+  const cnt = document.createElement('span'); cnt.className = 'count'; cats.appendChild(cnt);
+  // molette de la souris : défile la liste horizontalement
+  el.onwheel = (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); } };
+  filtre();
   chips($('diffs'), DIFFS.map((d, i) => [i, d.nom]), () => setup.diff, (v) => { setup.diff = v; });
   chips($('laps'), [[1, '1'], [3, '3'], [5, '5'], [10, '10'], [25, '25'], [99, '99']], () => setup.laps, (v) => { setup.laps = v; });
   chips($('ambs'), [['def', "D'origine"], ['jour', 'Jour'], ['nuit', 'Nuit'], ['orage', 'Orage violent']], () => setup.amb, (v) => { setup.amb = v; });
@@ -1694,7 +1712,8 @@ function strikeBolt() {
 }
 function stepStorm(dt) {
   const on = world && world.theme && world.theme.orage && mode !== 'loading';
-  audio.rain(on && mode !== 'pause' ? 1 : 0);
+  const pl = world && world.theme && world.theme.rain === true && (mode === 'race' || mode === 'count') ? (world.theme.orage ? 1 : 0.55) : 0;
+  audio.rain(pl);
   if (!on) { if (renderer.toneMappingExposure !== 0.95) renderer.toneMappingExposure = 0.95; if (storm.bolt) storm.bolt.visible = false; storm.flash = 0; return; }
   if (mode === 'pause') return;
   storm.t -= dt; if (storm.t <= 0) { storm.t = 2 + Math.random() * 7; strikeBolt(); }
@@ -1743,8 +1762,8 @@ function engineSound(thr) {
   const p = player; let near = null, bd = 50 * 50;
   for (const c of cars) { if (c === p || c.out) continue; const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2; if (d < bd) { bd = d; near = c; } }
   let r = null;
-  if (near) { const d = Math.sqrt(bd) || 1, [avx, avz] = velOf(p), [bvx, bvz] = velOf(near); r = { type: sonDe(near.def), ratio: clamp(Math.abs(near.v) / near.phys.vmax, 0, 1.1), dist: d, rel: -((bvx - avx) * (near.x - p.x) + (bvz - avz) * (near.z - p.z)) / d }; }
-  audio.engine({ v: p.v, vmax: p.phys.vmax, thr, boosting: p.boosting, nitro: p.nitroT > 0, air: p.y > 0.05, type: sonDe(p.def) }, r);
+  if (near) { const d = Math.sqrt(bd) || 1, [avx, avz] = velOf(p), [bvx, bvz] = velOf(near); r = { type: sonDe(near.def), ratio: clamp(Math.abs(near.v) / near.phys.vmax, 0, 1.1), dist: d, rel: -((bvx - avx) * (near.x - p.x) + (bvz - avz) * (near.z - p.z)) / d, pan: clamp((Math.cos(p.h) * (near.x - p.x) - Math.sin(p.h) * (near.z - p.z)) / 12, -1, 1) }; }
+  audio.engine({ v: p.v, vmax: p.phys.vmax, thr, boosting: p.boosting, nitro: p.nitroT > 0, air: p.y > 0.05, type: sonDe(p.def), sur: p.def.sur || 0 }, r);
 }
 // à très haute vitesse, la simulation est découpée en petits pas pour ne traverser ni les murs ni les obstacles
 function simSteps(dt, fn) {
@@ -1922,9 +1941,12 @@ function frame(now) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   if (mode !== 'pause') fx.update(dt);
   if (focus) world.update(camera, dt, time, focus.idx || 0);
-  if (world.rain && world.rain.visible) { const wd = world.theme && world.theme.orage ? 16 + Math.sin(time * 0.7) * 8 : 0; world.updateRain(camera, dt, (focus ? -Math.sin(focus.h) * focus.v : 0) + wd, (focus ? -Math.cos(focus.h) * focus.v : 0) + wd * 0.4); }
+  { const wd = world.theme && world.theme.orage ? 16 + Math.sin(time * 0.7) * 8 : world.theme && world.theme.rain === true ? 3 + Math.sin(time * 0.4) * 2 : 0;
+    world.updateRain(camera, mode === 'pause' ? 0 : dt, focus ? -Math.sin(focus.h) * focus.v : 0, focus ? -Math.cos(focus.h) * focus.v : 0, wd, wd * 0.4);
+    if (world.rain) world.rain.material.uniforms.flash.value = Math.max(0, storm.flash); }
   if (composer) {
     finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time;
+    { const th = world.theme || {}, wetAir = th.rain === true ? (th.orage ? 1 : 0.6) : 0; bloomPass.strength += (0.42 + 0.22 * wetAir - bloomPass.strength) * Math.min(1, dt * 2); bloomPass.radius = 0.6 + 0.25 * wetAir; finalPass.uniforms.brume.value = wetAir; }
     { const u = finalPass.uniforms, th = world.theme || {}, race = (mode === 'race' || mode === 'count') && player, kp = 1 - Math.exp(-6 * dt);
       u.pluie.value += (Math.max(world.rain && world.rain.visible && th.rain !== 'neige' ? (th.orage ? 1 : 0.45) : 0, race ? G.lens : 0) - u.pluie.value) * Math.min(1, kp * (G.lens > u.pluie.value ? 4 : 1));   // une flaque traversée mouille l'objectif
       u.vit.value += ((race ? clamp((Math.abs(player.v) - 60) / 70, 0, 1) : 0) - u.vit.value) * kp;

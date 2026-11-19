@@ -84,7 +84,7 @@ export function makeTrack(def) {
     raw[i] = ((tx[b] - tx[a]) * (-tz[i]) + (tz[b] - tz[a]) * tx[i]) / (2 * ds); // > 0 : virage à droite
   }
   for (let i = 0; i < N; i++) { let s = 0; for (let j = -3; j <= 3; j++) s += raw[(i + j + N) % N]; k[i] = s / 7; }
-  const half = def.half || 16;           // demi-largeur de la route
+  const half = def.half || 21;           // demi-largeur de la route (42 m : pistes larges, on peut doubler partout)
   const T = { def, N, L, ds, px, pz, tx, tz, k, half, limit: def.limit || half - 1.3, libre: !!def.libre };
   T.nearest = (x, z, hint, span = 14) => {
     let bestI = hint, bd = 1e18;
@@ -124,12 +124,17 @@ const flat = (T, o0, o1, y, uScale) => strip(T, (j, s) => [
 const ROAD_VERT = `uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW; varying vec2 vT;
   void main(){ vUv = textureMatrix * vec4(position,1.); vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vT = uv; gl_Position = projectionMatrix*viewMatrix*w; }`;
 const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform float fogDensity; uniform float half_; uniform float laneW; uniform float curbOn;
-  uniform vec3 amb; uniform vec3 curbCol; uniform vec3 offCol; uniform vec3 sunDir; uniform vec3 sunCol; uniform float wet; uniform float day;
+  uniform vec3 amb; uniform vec3 curbCol; uniform vec3 offCol; uniform vec3 sunDir; uniform vec3 sunCol; uniform float wet; uniform float day; uniform float time; uniform float rainK;
   varying vec4 vUv; varying vec3 vW; varying vec2 vT;
   float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
   float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
     return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
   float fbm(vec2 p){ float a=.5, s=0.; for(int i=0;i<3;i++){ s+=a*noise(p); p*=2.03; a*=.5; } return s; }
+  // ronds de pluie : chaque case reçoit une goutte à un instant tiré au hasard, l'onde s'élargit puis s'éteint
+  vec2 ripple(vec2 p, float sc, float t){ vec2 q = p*sc; vec2 id = floor(q); vec2 f = fract(q) - 0.5; float h = hash(id);
+    vec2 o = (vec2(hash(id + 2.3), hash(id + 5.1)) - 0.5) * 0.5; float ph = fract(t*(0.8 + h*0.7) + h*7.0); vec2 d = f - o; float r = length(d) + 1e-4;
+    float R = ph*0.48; float w = sin(clamp((r - R)*52.0, -3.1416, 3.1416)) * smoothstep(0.09, 0.0, abs(r - R)) * (1.0 - ph) * (1.0 - ph);
+    return d / r * w; }
   void main(){
     vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam/dist;
     vec2 p = vW.xz; float ax = abs(vT.x); float s = vT.y;
@@ -162,6 +167,15 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     vec2 uv = vUv.xy / vUv.w;
     vec2 nrm = vec2(noise(p*9.0+1.7)-.5, noise(p*9.0+8.1)-.5) + 0.6*vec2(noise(p*31.)-.5, noise(p*31.+4.)-.5);
     float att = 1.0/(1.0+dist*0.035);
+    if (rainK > 0.0) {
+      // sous la pluie : bitume détrempé (plus sombre, plus lisse), film d'eau qui ruisselle, ronds de pluie qui font trembler les reflets
+      float near = smoothstep(70.0, 8.0, dist) * (1.0 - off);
+      vec2 rip = ripple(p, 1.7, time) + 0.7*ripple(p + 13.7, 2.9, time*1.13);
+      nrm += rip * rainK * near * (0.9 + 1.6*pud);
+      nrm += vec2(noise(p*vec2(2.0,0.6) + vec2(0.0, time*1.8)) - 0.5) * 0.25 * rainK;   // film d'eau qui coule
+      albedo *= mix(1.0, 0.55, rainK*(1.0 - off));
+      rough *= mix(1.0, 0.5, rainK);
+    }
     uv += nrm * (0.012 + 0.05*rough) * att;
     float spread = (0.010 + 0.085*rough) * (0.35 + 0.65*att);
     vec3 refl = vec3(0.); float wsum = 0.;
@@ -169,7 +183,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
       refl += texture2D(tDiffuse, uv + vec2(0.35*nrm.x*t*spread, t*spread)).rgb * w; wsum += w; }
     refl /= wsum;
     float fres = 0.05 + 0.95*pow(1.0 - clamp(V.y,0.,1.), 4.0);
-    float strength = mix(0.55, 1.0, pud) * mix(1.0, 0.45, rough) * mix(0.25, 1.0, wet) * (1.0 - off*0.85);
+    float strength = mix(0.55, 1.0, pud) * mix(1.0, 0.45, rough) * mix(0.25, 1.0, wet) * (1.0 - off*0.85) * (1.0 + 0.35*rainK);
     vec3 N = normalize(vec3(nrm.x*0.16, 1.0, nrm.y*0.16));
     vec3 col = albedo * (amb + sunCol * max(dot(N, sunDir), 0.0) * 0.85) + refl * fres * strength;
     // reflet du soleil sur la chaussée : traînée brillante vers le soleil, plus nette dans les flaques
@@ -879,7 +893,8 @@ export function buildWorld(def, renderer, q) {
     textureWidth: 512, textureHeight: 256, clipBias: 0.003, multisample: 0,
     shader: {
       uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, half_: { value: HALF },
-        laneW: { value: T.libre ? 40 : 4.5 }, curbOn: { value: T.libre ? 0 : 1 }, wet: { value: th.wet ?? 1 }, day: { value: city && !th.jourVille ? 0 : 1 },
+        laneW: { value: T.libre ? 40 : 4.5 }, curbOn: { value: T.libre ? 0 : 1 }, wet: { value: th.rain === true ? 1 : th.wet ?? 1 }, day: { value: city && !th.jourVille ? 0 : 1 },
+        time: { value: 0 }, rainK: { value: th.rain === true ? (th.orage ? 1 : 0.65) : 0 },
         amb: { value: city && !th.jourVille ? new THREE.Color(th.c).lerp(new THREE.Color(0.55, 0.5, 0.9), 0.6).multiplyScalar(1.6) : new THREE.Color().fromArray(th.sky[1]).multiplyScalar(0.9) },
         sunDir: { value: sunDir }, sunCol: { value: th.sun ? new THREE.Color().fromArray(th.sun.col).multiplyScalar(th.sun.road ?? 1) : new THREE.Color(0, 0, 0) },
         offCol: { value: city ? new THREE.Color(0.02, 0.02, 0.03) : new THREE.Color(th.ground).multiplyScalar(0.5) },
@@ -890,30 +905,66 @@ export function buildWorld(def, renderer, q) {
   road.rotation.x = -Math.PI / 2; road.frustumCulled = false; road.renderOrder = 5;
   group.add(road); disposables.push(roadGeo, road.material);
 
-  // --- pluie ou neige ---
+  // --- pluie ou neige : gouttes calculées par la carte graphique ---
+  // Chaque goutte est un petit rectangle tourné vers la caméra et étiré selon sa vitesse relative à la voiture
+  // (flou de mouvement) : à l'arrêt elles tombent, à 200 km/h elles filent vers la caméra. Elles vivent dans une boîte
+  // de 64 m autour de la caméra (repliée sur elle-même), s'estompent de près et de loin, et s'illuminent sous les éclairs.
   let rain = null;
   if (th.rain) {
-    const snow = th.rain === 'neige';
-    const n = th.orage ? 1500 : 420, pos = new Float32Array(n * 6), base = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { base[i * 3] = rr(-22, 22); base[i * 3 + 1] = rr(0, 18); base[i * 3 + 2] = rr(-22, 22); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: snow ? 0xffffff : 0xaac4ff, transparent: true, opacity: snow ? 0.7 : th.orage ? 0.42 : 0.22, depthWrite: false }));
-    rain.frustumCulled = false; rain.layers.set(1); rain.userData = { base, n, fall: snow ? (th.orage ? 9 : 5) : th.orage ? 38 : 26, len: snow ? 0.12 : th.orage ? 1.5 : 0.9 };
-    group.add(rain); disposables.push(g, rain.material);
-  }
-  const updateRain = (cam, dt, vx, vz) => {
-    if (!rain || !rain.visible) return;
-    const { base, n, fall, len } = rain.userData, p = rain.geometry.attributes.position.array;
+    const snow = th.rain === 'neige', heavy = !!th.orage, n = Math.round((snow ? (heavy ? 5000 : 2600) : heavy ? 9000 : 4200) * (q.rainK ?? 1));
+    const seed = new Float32Array(n * 4 * 4), corner = new Float32Array(n * 4 * 2), idx = new Uint32Array(n * 6);
     for (let i = 0; i < n; i++) {
-      let y = base[i * 3 + 1] - fall * dt; if (y < 0) y += 18; base[i * 3 + 1] = y;
-      let x = base[i * 3] - vx * dt, z = base[i * 3 + 2] - vz * dt;
-      if (x < -22) x += 44; else if (x > 22) x -= 44; if (z < -22) z += 44; else if (z > 22) z -= 44;
-      base[i * 3] = x; base[i * 3 + 2] = z;
-      const X = cam.position.x + x, Z = cam.position.z + z, k6 = i * 6;
-      p[k6] = X; p[k6 + 1] = y; p[k6 + 2] = Z;
-      p[k6 + 3] = X - vx * 0.03; p[k6 + 4] = y + len; p[k6 + 5] = Z - vz * 0.03;
+      const a = rnd(), b = rnd(), c = rnd(), d = rnd();
+      for (let k = 0; k < 4; k++) { seed.set([a, b, c, d], (i * 4 + k) * 4); corner.set([k & 1 ? 1 : -1, k >> 1], (i * 4 + k) * 2); }
+      idx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 1, i * 4 + 3, i * 4 + 2], i * 6);
     }
-    rain.geometry.attributes.position.needsUpdate = true;
+    const g = new THREE.BufferGeometry(); g.setAttribute('seed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('corner', new THREE.BufferAttribute(corner, 2)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 4 * 3), 3));
+    const tint = city ? new THREE.Color(th.fog).lerp(new THREE.Color(th.lamp || 0xffffff), 0.55).multiplyScalar(1.5) : new THREE.Color().fromArray(th.sky[2]).lerp(new THREE.Color(0xffffff), 0.4);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide,
+      uniforms: { time: { value: 0 }, wind: { value: new THREE.Vector2() }, camVel: { value: new THREE.Vector3() }, fall: { value: snow ? (heavy ? 6 : 3.2) : heavy ? 34 : 26 },
+        box: { value: 64 }, hgt: { value: 26 }, snow: { value: snow ? 1 : 0 }, col: { value: snow ? new THREE.Color(1.1, 1.1, 1.15) : tint }, alpha: { value: snow ? 0.85 : heavy ? 0.5 : 0.36 }, flash: { value: 0 } },
+      vertexShader: `attribute vec4 seed; attribute vec2 corner; uniform float time; uniform vec2 wind; uniform vec3 camVel; uniform float fall; uniform float box; uniform float hgt; uniform float snow; uniform float flash;
+        varying vec2 vC; varying float vA;
+        void main(){
+          float sp = fall * (0.75 + 0.5*seed.w);
+          vec3 v = vec3(wind.x, -sp, wind.y);
+          if (snow > 0.5) { v.x += sin(time*1.3 + seed.w*40.0) * 0.9; v.z += cos(time*1.1 + seed.w*23.0) * 0.9; }
+          vec3 p;
+          p.y = hgt - mod(seed.y*hgt + sp*time, hgt);
+          p.xz = seed.xz*box + v.xz*time;
+          p.xz = cameraPosition.xz + mod(p.xz - cameraPosition.xz + box*0.5, box) - box*0.5;
+          vec3 rel = v - camVel;                                   // vitesse vue depuis la caméra
+          float rl = length(rel) + 1e-3; vec3 dir = rel / rl;
+          float L = snow > 0.5 ? 0.06 : clamp(rl * 0.028, 0.25, 4.5);   // flou de mouvement (exposition ~1/35 s)
+          vec3 toCam = cameraPosition - p; float dist = length(toCam);
+          vec3 side = normalize(cross(dir, toCam / dist));
+          float w = snow > 0.5 ? 0.035 + 0.03*seed.w : max(0.006, dist*0.0016);
+          vec3 wp = p - dir * L * corner.y + side * w * corner.x;
+          if (snow > 0.5) wp = p + (side * corner.x + normalize(cross(side, toCam)) * (corner.y*2.0 - 1.0)) * w;
+          vC = vec2(corner.x, corner.y);
+          vA = smoothstep(0.6, 3.0, dist) * (1.0 - smoothstep(box*0.3, box*0.5, dist)) * (snow > 0.5 ? 1.0 : clamp(0.006 / w * 3.0, 0.25, 1.0)) * (0.6 + 0.4*seed.w) * (1.0 + flash*2.5);
+          gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        }`,
+      fragmentShader: `uniform vec3 col; uniform float alpha; uniform float snow; varying vec2 vC; varying float vA;
+        void main(){
+          float a;
+          if (snow > 0.5) { vec2 q = vec2(vC.x, vC.y*2.0 - 1.0); a = smoothstep(1.0, 0.2, length(q)); }
+          else a = (1.0 - vC.x*vC.x) * mix(1.0, 0.15, vC.y);       // tête de la goutte plus nette, traîne qui s'efface
+          gl_FragColor = vec4(col, a * alpha * vA);
+          #include <colorspace_fragment>
+        }`,
+    });
+    rain = new THREE.Mesh(g, mat);
+    rain.frustumCulled = false; rain.layers.set(1); rain.renderOrder = 20;
+    group.add(rain); disposables.push(g, mat);
+  }
+  // cam : caméra ; vx, vz : vitesse de la voiture suivie ; wx, wz : vent
+  const updateRain = (cam, dt, vx, vz, wx = 0, wz = 0) => {
+    road.material.uniforms.time.value += dt;
+    if (!rain || !rain.visible) return;
+    const u = rain.material.uniforms; u.time.value += dt; u.wind.value.set(wx, wz); u.camVel.value.set(vx, 0, vz);
   };
 
   let env = null;

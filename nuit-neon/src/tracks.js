@@ -43,8 +43,24 @@ NATURE.lagune = Object.assign({}, NATURE.couchant, { sky: [[0.05, 0.30, 0.78], [
 NATURE.glacier = Object.assign({}, NATURE.neige, { sky: [[0.06, 0.20, 0.55], [0.34, 0.60, 0.92], [0.80, 0.92, 1.0]], fog: 0xcfe6f8, dens: 0.0022, cloud: 0.95,
   ground: 0xdcefff, sol: { kind: 2, c: [0xcfe6f8, 0xffffff, 0xbfe0fa, 0xa8cdee] }, hill: 0xcfe4f6, hillH: 380, rock: 0x7f8fa6, sun: { dir: [-0.4, 0.5, -0.77], col: [0.9, 0.95, 1.0], road: 1.8 }, sunI: 2.6, ambI: 1.7, wet: 0.9, rain: false,
   flore: [['rocher', 220, 6, 220, 0.8, 3.0], ['sapin', 160, 8, 220, 0.8, 1.5]] });
+// jungle tropicale sous une pluie chaude : brume verte, feuillages denses, piste détrempée
+NATURE.jungle = { env: 'nature', sky: [[0.10, 0.16, 0.16], [0.30, 0.40, 0.36], [0.62, 0.70, 0.60]], fog: 0x5a7466, dens: 0.0042, a: 0x20ffa0, b: 0xffd23f, c: 0x19e6ff, cloud: 0.45,
+  ground: 0x2f4a22, sol: { kind: 0, c: [0x1f3a14, 0x3f6a22, 0x5a4a2a, 0x3a2a18] }, relief: 52, hill: 0x24402a, hillH: 190, rock: 0x4a5048, feuille: [0.7, 1.15, 0.6],
+  sun: { dir: [0.2, 0.7, -0.68], col: [0.85, 0.95, 0.85], road: 1.2 }, sunI: 1.7, ambI: 1.35, wet: 1, rain: true, ombre: 0.25, flare: 0,
+  flore: [['feuillu', 900, 4, 200, 1.0, 2.3], ['palmier', 420, 2, 60, 1.0, 1.6], ['rocher', 60, 6, 160, 0.6, 2.0]], grass: { c0: 0x1a3a12, c1: 0x4a8a2a, c2: 0x8ac04a, h: 1.6 } };
+// champs de lavande au soleil couchant, cyprès et pierres claires
+NATURE.lavande = { env: 'nature', sky: [[0.14, 0.12, 0.40], [0.78, 0.50, 0.62], [1.0, 0.72, 0.46]], fog: 0xd8a8b8, dens: 0.0018, a: 0xb45cff, b: 0xffffff, c: 0xffb347, cloud: 0.8,
+  ground: 0x6a5a8a, sol: { kind: 0, c: [0x4a3a6a, 0x7a5aa8, 0xa88ad0, 0x6a5a40] }, relief: 40, hill: 0x6a5a7a, hillH: 120, rock: 0xc8b8a0,
+  sun: { dir: [-0.55, 0.16, -0.82], col: [1.0, 0.66, 0.42], road: 2.5 }, sunI: 2.6, ambI: 1.35, wet: 0.35, ombre: 0.45,
+  flore: [['sapin', 260, 6, 200, 0.7, 1.5], ['feuillu', 220, 12, 240, 0.8, 1.7], ['rocher', 70, 8, 200, 0.4, 1.0]], grass: { c0: 0x3a2a5a, c1: 0x7a5ac0, c2: 0xc8a0ff, h: 1.0 } };
 // ambiances de ville spéciales
 const VILLE = {
+  // docks industriels sous la pluie : grues, sodium orangé et néons turquoise, flaques partout
+  docks: { sky: [[0.01, 0.015, 0.03], [0.06, 0.08, 0.12], [0.30, 0.20, 0.12]], fog: 0x1a1c24, dens: 0.0032, a: 0x19e6ff, b: 0xff8a1f, c: 0xffd23f, lamp: 0xffb060, palms: false, rain: true, wet: 1,
+    win: [['#ffb060', '#ffd8a0', '#ff9040'], ['#39d7ff', '#a8eaff', '#ffffff'], ['#ffe0b0', '#ffb060', '#40c8ff'], ['#ff8a40', '#ffd23f', '#a0e8ff']] },
+  // périphérique de nuit : six voies, rose et bleu
+  periph: { sky: [[0.02, 0.0, 0.08], [0.12, 0.03, 0.30], [0.55, 0.12, 0.50]], fog: 0x2a0e48, dens: 0.0022, a: 0xff2bd0, b: 0x2f8aff, c: 0xffffff, lamp: 0xf0e8ff, palms: false, rain: false, wet: 0.85,
+    win: [['#ff4fd8', '#ff9be8', '#ffffff'], ['#2f8aff', '#a8d0ff', '#ffffff'], ['#ffd0f0', '#b45cff', '#40a0ff'], ['#ffffff', '#ff70c0', '#80b0ff']] },
   central: { sky: [[0.02, 0.01, 0.06], [0.16, 0.05, 0.30], [0.95, 0.55, 0.12]], fog: 0x24103a, dens: 0.0024, a: 0xffc23f, b: 0x8a5cff, c: 0xff3f7a, lamp: 0xffe6b8, palms: true, rain: false, wet: 0.7,
     win: [['#ffd070', '#fff0c8', '#ffb347'], ['#b48cff', '#e0d0ff', '#8a5cff'], ['#ff7aa8', '#ffd0e0', '#ffe9a0'], ['#ffe9a0', '#c8a8ff', '#ff9bb8']] },
   orbitale: { sky: [[0.0, 0.0, 0.0], [0.0, 0.0, 0.02], [0.03, 0.05, 0.14]], fog: 0x02030a, dens: 0.0015, a: 0x7fd8ff, b: 0xffffff, c: 0x8a5cff, lamp: 0xeaf4ff, palms: false, rain: false, wet: 0.9,
@@ -93,20 +109,26 @@ export const TRACKS = [
     pts: [[0,0],[0,-240],[80,-330],[50,-440],[-60,-470],[-150,-400],[-140,-290],[-220,-200],[-200,-80],[-130,20],[-70,90],[-5,70]],
     theme: NATURE.neige },
   // ---------- nouveaux circuits (tracés tirés d'une graine, comme ceux de l'atelier) ----------
-  { id: 'autodrome', nom: 'Autodrome du Lac', desc: 'Grand circuit rapide', echelle: 1, half: 14, pts: tracer({ graine: 4711, virages: 13, taille: 430, chaos: 55, largeur: 28 }), theme: NATURE.prairie },
-  { id: 'automne', nom: "Forêt d'Automne", desc: 'Sous-bois roux et dorés', echelle: 1, half: 12, pts: tracer({ graine: 9031, virages: 15, taille: 340, chaos: 60, largeur: 24 }), theme: NATURE.automne },
-  { id: 'dunes', nom: "Dunes d'Or", desc: 'Désert, grandes courbes', echelle: 1, half: 17, pts: tracer({ graine: 1207, virages: 9, taille: 470, chaos: 40, largeur: 34 }), theme: NATURE.dunes },
-  { id: 'volcan', nom: 'Volcan Noir', desc: 'Lave, cendre et braises', echelle: 1, half: 13, pts: tracer({ graine: 6660, virages: 14, taille: 330, chaos: 70, largeur: 26 }), theme: NATURE.volcan },
-  { id: 'aurore', nom: 'Aurore Boréale', desc: 'Toundra de nuit sous la neige', echelle: 1, half: 14, pts: tracer({ graine: 3158, virages: 11, taille: 380, chaos: 50, largeur: 28 }), theme: NATURE.aurore },
-  { id: 'orbitale', nom: 'Station Orbitale', desc: 'Spécial · gravité lunaire, sauts géants', echelle: 1, half: 18, pts: tracer({ graine: 2099, virages: 10, taille: 360, chaos: 45, largeur: 36 }), theme: VILLE.orbitale,
+  { id: 'autodrome', nom: 'Autodrome du Lac', desc: 'Grand circuit rapide', echelle: 1, half: 19, pts: tracer({ graine: 4711, virages: 13, taille: 430, chaos: 55, largeur: 28 }), theme: NATURE.prairie },
+  { id: 'automne', nom: "Forêt d'Automne", desc: 'Sous-bois roux et dorés', echelle: 1, half: 16, pts: tracer({ graine: 9031, virages: 15, taille: 340, chaos: 60, largeur: 24 }), theme: NATURE.automne },
+  { id: 'dunes', nom: "Dunes d'Or", desc: 'Désert, grandes courbes', echelle: 1, half: 22, pts: tracer({ graine: 1207, virages: 9, taille: 470, chaos: 40, largeur: 34 }), theme: NATURE.dunes },
+  { id: 'volcan', nom: 'Volcan Noir', desc: 'Lave, cendre et braises', echelle: 1, half: 16, pts: tracer({ graine: 6660, virages: 14, taille: 330, chaos: 70, largeur: 26 }), theme: NATURE.volcan },
+  { id: 'aurore', nom: 'Aurore Boréale', desc: 'Toundra de nuit sous la neige', echelle: 1, half: 19, pts: tracer({ graine: 3158, virages: 11, taille: 380, chaos: 50, largeur: 28 }), theme: NATURE.aurore },
+  { id: 'orbitale', nom: 'Station Orbitale', desc: 'Spécial · gravité lunaire, sauts géants', echelle: 1, half: 22, pts: tracer({ graine: 2099, virages: 10, taille: 360, chaos: 45, largeur: 36 }), theme: VILLE.orbitale,
     regles: { vitesse: 1.15, adherence: 1, gravite: 0.3, saut: 2.4, boost: 1.6 }, contenu: { obstacles: 10, tremplins: 14, turbos: 10, trafic: 0 } },
-  { id: 'megapole', nom: 'Mégapole 2099', desc: 'Spécial · tout va 60 % plus vite', echelle: 1, half: 20, pts: tracer({ graine: 7777, virages: 8, taille: 520, chaos: 35, largeur: 40 }), theme: VILLE.megapole,
+  { id: 'megapole', nom: 'Mégapole 2099', desc: 'Spécial · tout va 60 % plus vite', echelle: 1, half: 25, pts: tracer({ graine: 7777, virages: 8, taille: 520, chaos: 35, largeur: 40 }), theme: VILLE.megapole,
     regles: { vitesse: 1.6, adherence: 1.2, gravite: 1, saut: 1, boost: 1.5 }, contenu: { obstacles: 14, tremplins: 4, turbos: 16, trafic: 0 } },
   // ---------- circuits de la Coupe Vitesse (Grand Prix) ----------
-  { id: 'anneau', nom: 'Anneau de Vitesse', desc: 'Presque un ovale : à fond', echelle: 1, half: 18, pts: tracer({ graine: 515, virages: 6, taille: 520, chaos: 22, largeur: 36 }), theme: NATURE.prairie },
-  { id: 'lagune', nom: 'Lagune Turquoise', desc: 'Sable blanc et eau claire', echelle: 1, half: 14, pts: tracer({ graine: 8080, virages: 12, taille: 400, chaos: 50, largeur: 28 }), theme: NATURE.lagune },
-  { id: 'glacier', nom: 'Glacier Bleu', desc: 'Technique, sur la glace', echelle: 1, half: 12, pts: tracer({ graine: 4242, virages: 16, taille: 360, chaos: 62, largeur: 24 }), theme: NATURE.glacier },
-  { id: 'central', nom: 'Néon Central', desc: 'Le grand circuit de la ville', echelle: 1, half: 15, pts: tracer({ graine: 1999, virages: 12, taille: 390, chaos: 55, largeur: 30 }), theme: VILLE.central },
+  { id: 'anneau', nom: 'Anneau de Vitesse', desc: 'Presque un ovale : à fond', echelle: 1, half: 23, pts: tracer({ graine: 515, virages: 6, taille: 520, chaos: 22, largeur: 36 }), theme: NATURE.prairie },
+  { id: 'lagune', nom: 'Lagune Turquoise', desc: 'Sable blanc et eau claire', echelle: 1, half: 19, pts: tracer({ graine: 8080, virages: 12, taille: 400, chaos: 50, largeur: 28 }), theme: NATURE.lagune },
+  { id: 'glacier', nom: 'Glacier Bleu', desc: 'Technique, sur la glace', echelle: 1, half: 16, pts: tracer({ graine: 4242, virages: 16, taille: 360, chaos: 62, largeur: 24 }), theme: NATURE.glacier },
+  // ---------- nouveaux circuits (2.1) ----------
+  { id: 'jungle', nom: 'Jungle Émeraude', desc: 'Forêt tropicale sous la pluie', nouveau: true, echelle: 1, half: 20, pts: tracer({ graine: 31337, virages: 14, taille: 420, chaos: 58, largeur: 40 }), theme: NATURE.jungle },
+  { id: 'docks', nom: 'Docks sous la Pluie', desc: 'Port industriel, flaques et sodium', nouveau: true, echelle: 1.7, half: 22,
+    pts: [[0,0],[0,-230],[50,-320],[170,-340],[260,-280],[250,-170],[330,-110],[420,-150],[470,-60],[430,60],[320,110],[220,80],[140,150],[40,140]], theme: VILLE.docks },
+  { id: 'periph', nom: 'Périphérique', desc: 'Six voies, très rapide', nouveau: true, echelle: 1, half: 27, pts: tracer({ graine: 7070, virages: 9, taille: 560, chaos: 30, largeur: 54 }), theme: VILLE.periph },
+  { id: 'lavande', nom: 'Champs de Lavande', desc: 'Provence au soleil couchant', nouveau: true, echelle: 1, half: 21, pts: tracer({ graine: 1313, virages: 12, taille: 450, chaos: 48, largeur: 42 }), theme: NATURE.lavande },
+  { id: 'central', nom: 'Néon Central', desc: 'Le grand circuit de la ville', echelle: 1, half: 20, pts: tracer({ graine: 1999, virages: 12, taille: 390, chaos: 55, largeur: 30 }), theme: VILLE.central },
 ];
 
 // Grand Prix : chaque coupe enchaîne quatre circuits ; les points de chaque course s'additionnent.
@@ -116,6 +138,7 @@ export const COUPES = [
   { id: 'braise', nom: 'Coupe Braise', desc: 'Du sable au volcan', col: '#ff6a1f', pistes: ['dunes', 'automne', 'ecarlate', 'volcan'] },
   { id: 'tempete', nom: 'Coupe Tempête', desc: 'Quatre courses sous l\'orage', col: '#8fa8ff', amb: 'orage', pistes: ['port', 'prairie', 'jade', 'autodrome'] },
   { id: 'vitesse', nom: 'Coupe Vitesse', desc: 'Quatre circuits inédits', col: '#ffd23f', pistes: ['anneau', 'lagune', 'glacier', 'central'] },
+  { id: 'horizon', nom: 'Coupe Horizon', desc: 'Les quatre nouveaux circuits', col: '#20ffa0', pistes: ['docks', 'jungle', 'lavande', 'periph'] },
   { id: 'legende', nom: 'Coupe Légende', desc: 'Les plus durs, jusqu\'à Mégapole', col: '#ff2bd0', pistes: ['autodrome', 'aurore', 'orbitale', 'megapole'] },
 ];
 export const GP_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0];
