@@ -7,6 +7,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/render/Skin2D.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/TilemapEditing.hpp"
@@ -230,6 +231,39 @@ TEST_CASE("2D normal maps: relief lit from the light's side, follows flips and r
     l.height = 20.0f;
     f.frame();
     CHECK_MESSAGE(center() > away + 40, center());
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("2D skins: a picture bent by its bones") {
+    Render2DFixture f;
+    f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)
+    auto lum = [&](float x, float y) {
+        const Rgba p = pixel(*gpu().device, static_cast<u32>(32.0f + x * 6.4f), static_cast<u32>(32.0f - y * 6.4f));
+        return int(p.r) + int(p.g) + int(p.b);
+    };
+    const auto root = f.scene.createEntity("Creature");
+    f.scene.registry().emplace<Skeleton2DComponent>(root);
+    const auto b1 = f.scene.createEntity("Bone1", root);
+    f.scene.registry().emplace<Bone2DComponent>(b1).length = 2.0f;
+    const auto b2 = f.scene.createEntity("Bone2", b1);
+    f.scene.registry().get<TransformComponent>(b2).position = {2, 0, 0};
+    f.scene.registry().emplace<Bone2DComponent>(b2).length = 2.0f;
+    const auto body = f.scene.createEntity("Body", root);
+    auto& sk = f.scene.registry().emplace<Skin2DComponent>(body);
+    sk.size = {4.0f, 0.8f};
+    sk.pivot = {0.0f, 0.5f};
+    sk.columns = 12;
+    sk.rows = 2;
+    captureBone2DRest(f.scene);
+    f.settle();
+    CHECK(f.renderer.stats().skins2D == 1);
+    CHECK(lum(3.5f, 0.0f) > 600);  // straight: the far end is on the right
+    CHECK(lum(2.0f, 1.5f) < 30);
+    f.scene.registry().get<TransformComponent>(b2).rotation = math::Quat::fromAxisAngle({0, 0, 1}, math::radians(90.0f));
+    f.frame();
+    CHECK(lum(3.5f, 0.0f) < 30);   // bent up: the far end left this place...
+    CHECK(lum(2.0f, 1.5f) > 600);  // ...and points up from the joint
+    CHECK(lum(0.5f, 0.0f) > 600);  // the near end did not move
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

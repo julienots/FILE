@@ -1,3 +1,4 @@
+#include "agr/render/Skin2D.hpp"
 #include "agr/editor/EditorContext.hpp"
 #include "agr/scene/Prefab.hpp"
 #include "agr/scene/Terrain.hpp"
@@ -55,6 +56,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIToggle: return "Toggle";
         case CreateKind::UIInputField: return "Input Field";
         case CreateKind::UIScrollView: return "Scroll View";
+        case CreateKind::Skeleton2D: return "Skeleton 2D";
     }
     return "Entity";
 }
@@ -307,6 +309,26 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             break;
         }
         case CreateKind::AudioSource: reg.emplace<AudioSourceComponent>(e); break;
+        case CreateKind::Skeleton2D: {
+            // A chain of 3 bones and a skin over it: pick a texture, pose the bones, animate them.
+            reg.emplace<Skeleton2DComponent>(e);
+            ecs::Entity parentBone = e;
+            for (int i = 0; i < 3; ++i) {
+                const ecs::Entity b = s.createEntity("Bone " + std::to_string(i + 1), parentBone);
+                reg.get<TransformComponent>(b).position = {i == 0 ? -1.5f : 1.0f, 0.0f, 0.0f};
+                reg.emplace<Bone2DComponent>(b).length = 1.0f;
+                parentBone = b;
+            }
+            const ecs::Entity skin = s.createEntity("Skin", e);
+            auto& sk = reg.emplace<Skin2DComponent>(skin);
+            sk.size = {3.0f, 0.8f};
+            sk.columns = 12;
+            sk.rows = 2;
+            sk.color = {0.55f, 0.8f, 0.45f, 1.0f};
+            s.updateTransforms();
+            captureBone2DRest(s, e);
+            break;
+        }
     }
     s.updateTransforms();
     m_selection.set(s.uuidOf(e));

@@ -203,6 +203,37 @@ void registerRenderComponents() {
                {.tooltip = "Height above the ground where the shadow has faded out", .rangeMin = 0.01f, .rangeMax = 1000.0f, .speed = 0.05f})
         .field("color", &BlobShadowComponent::color, {.flags = FieldFlag_Color});
 
+    reg.add<Skeleton2DComponent>("Skeleton2D")
+        .category("2D")
+        .description("Root of a 2D skeleton: its Bone2D children deform the Skin2D parts below it.")
+        .field("showBones", &Skeleton2DComponent::showBones);
+    reg.add<Bone2DComponent>("Bone2D")
+        .category("2D")
+        .description("Bone of a 2D skeleton, pointing along +X. Its pose in edit mode is the rest pose of the skins.")
+        .field("length", &Bone2DComponent::length, {.rangeMin = 0.001f, .rangeMax = 1000.0f, .speed = 0.01f})
+        .field("restSet", &Bone2DComponent::restSet, {.flags = FieldFlag_Hidden})
+        .field("restPosition", &Bone2DComponent::restPosition, {.flags = FieldFlag_Hidden})
+        .field("restRotation", &Bone2DComponent::restRotation, {.flags = FieldFlag_Hidden})
+        .field("restScale", &Bone2DComponent::restScale, {.flags = FieldFlag_Hidden});
+    reg.add<Skin2DComponent>("Skin2D")
+        .category("2D")
+        .description("Picture deformed by the bones of the enclosing Skeleton2D (smooth bending).")
+        .field("texture", &Skin2DComponent::texture, {.flags = FieldFlag_AssetPath})
+        .field("normalMap", &Skin2DComponent::normalMap, {.tooltip = "Normal map (lit skins)", .flags = FieldFlag_AssetPath})
+        .field("color", &Skin2DComponent::color, {.flags = FieldFlag_Color})
+        .field("size", &Skin2DComponent::size, {.rangeMin = 0.0f, .speed = 0.01f})
+        .field("pivot", &Skin2DComponent::pivot, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("uvRect", &Skin2DComponent::uvRect, {.speed = 0.001f})
+        .field("columns", &Skin2DComponent::columns, {.tooltip = "Grid cells across: more = smoother bends", .rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("rows", &Skin2DComponent::rows, {.rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("stiffness", &Skin2DComponent::stiffness,
+               {.tooltip = "Higher = rigid parts and sharper joints, lower = soft bends", .rangeMin = 0.5f, .rangeMax = 16.0f, .speed = 0.05f})
+        .field("sortingLayer", &Skin2DComponent::sortingLayer)
+        .field("orderInLayer", &Skin2DComponent::orderInLayer)
+        .field("pixelArt", &Skin2DComponent::pixelArt)
+        .field("lit", &Skin2DComponent::lit)
+        .field("visible", &Skin2DComponent::visible);
+
     reg.add<OccluderComponent>("Occluder")
         .category("Rendering")
         .description("Hides the objects behind it from the renderer (occlusion culling). Keep it inside the visible geometry.")

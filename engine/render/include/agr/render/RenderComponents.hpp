@@ -202,6 +202,43 @@ struct SpriteRendererComponent {
     std::string normalMap;
 };
 
+/// Root of a 2D skeleton: the Bone2D entities below it deform the Skin2D parts below it.
+struct Skeleton2DComponent {
+    bool showBones = true;  ///< Editor: draws the bones over the scene view.
+};
+
+/// A bone of a 2D skeleton. It points along its local +X axis; its children (other bones,
+/// sprites attached rigidly) follow it. The rest pose is the pose the skins were drawn in:
+/// in the editor (edit mode) it follows the bone; animations and IK move the bone away from it.
+struct Bone2DComponent {
+    float length = 1.0f;                ///< World units along +X (weights, IK, editor drawing).
+    bool restSet = false;               ///< False: the current local transform is the rest pose.
+    math::Vec3 restPosition{0.0f};
+    math::Quat restRotation{};
+    math::Vec3 restScale{1.0f};
+};
+
+/// A textured mesh deformed by the bones of the enclosing Skeleton2D (smooth bending of
+/// bodies, tails, cloth, faces): a grid of columns x rows cells over the picture, whose points
+/// follow the nearby bones (automatic weights from the distance to each bone at rest).
+/// Without a Skeleton2D above it, it is drawn like a sprite.
+struct Skin2DComponent {
+    std::string texture;
+    std::string normalMap;               ///< Lit skins: relief (see SpriteRenderer.normalMap).
+    math::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+    math::Vec2 size{1.0f, 1.0f};         ///< World units, in the entity's XY plane.
+    math::Vec2 pivot{0.5f, 0.5f};
+    math::Vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
+    i32 columns = 8;                     ///< Grid resolution: more cells = smoother bends.
+    i32 rows = 4;
+    float stiffness = 4.0f;              ///< Exponent of the distance weights: higher = rigid parts, sharper joints.
+    i32 sortingLayer = 0;
+    i32 orderInLayer = 0;
+    bool pixelArt = false;
+    bool lit = false;
+    bool visible = true;
+};
+
 /// Grid of tiles drawn from a sprite sheet (the tileset). Cell (x, y) covers
 /// [x, x+1] x [y, y+1] * cellSize in the entity's local XY plane; y grows upward.
 struct TilemapComponent {

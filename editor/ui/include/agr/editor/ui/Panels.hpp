@@ -270,6 +270,8 @@ public:
     void draw(EditorShared& s, const FrameTime& time);
     /// Restores the values changed by the preview (play mode, panel closed, other entity).
     void endPreview(EditorShared& s);
+    /// The timeline is showing animated values in the scene (edit mode).
+    bool previewing() const { return m_previewing; }
 
 private:
     void loadClip(EditorShared& s, const std::string& uri);

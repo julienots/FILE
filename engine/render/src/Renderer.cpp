@@ -1,4 +1,5 @@
 #include "agr/render/Renderer.hpp"
+#include "agr/render/Skin2D.hpp"
 #include "agr/core/Profiler.hpp"
 #include <optional>
 
@@ -645,6 +646,49 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             }
             m_spriteItems.push_back(item);
         });
+
+    // ------------------------------------------------------------ 2D skins
+    // Bone-deformed grids: one quad per cell, batched like sprites (same texture, same depth).
+    reg.view<Skin2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, Skin2DComponent& sk, WorldTransformComponent& w) {
+        if (!sk.visible || !w.activeInHierarchy || hiddenInEditor(e)) return;
+        if (!skin2DPoints(scene, e, m_skinPoints)) return;
+        const Vec3 off = parallaxOf(e);
+        math::Aabb box;
+        for (Vec3& p : m_skinPoints) {
+            p = p + off;
+            box.expand(p);
+        }
+        if (!frustum.intersects(box)) {
+            ++m_stats.spritesCulled;
+            return;
+        }
+        ++m_stats.skins2D;
+        const i32 cols = std::clamp(sk.columns, 1, 64), rows = std::clamp(sk.rows, 1, 64);
+        const rhi::TextureHandle tex = textureFor(sk.texture, sk.pixelArt);
+        const rhi::TextureHandle normalMap = sk.lit && !sk.normalMap.empty() ? resolveDataTexture(sk.normalMap, sk.pixelArt) : rhi::TextureHandle{};
+        const u32 color = packColor(sk.color);
+        const float depth = view.transformPoint(box.center()).z;
+        auto u = [&](i32 i) { return sk.uvRect.x + (sk.uvRect.z - sk.uvRect.x) * static_cast<float>(i) / static_cast<float>(cols); };
+        auto v = [&](i32 j) { return sk.uvRect.w + (sk.uvRect.y - sk.uvRect.w) * static_cast<float>(j) / static_cast<float>(rows); };  // v = 0: top
+        auto at = [&](i32 i, i32 j) { return m_skinPoints[static_cast<usize>(j * (cols + 1) + i)]; };
+        for (i32 j = 0; j < rows; ++j)
+            for (i32 i = 0; i < cols; ++i) {
+                SpriteItem item;
+                item.corners[0] = at(i, j);
+                item.corners[1] = at(i + 1, j);
+                item.corners[2] = at(i + 1, j + 1);
+                item.corners[3] = at(i, j + 1);
+                item.uv = {u(i), v(j + 1), u(i + 1), v(j)};
+                item.layer = sk.sortingLayer;
+                item.order = sk.orderInLayer;
+                item.depth = depth;
+                item.color = color;
+                item.pipeline = normalMap ? 3u : sk.lit ? 1u : 0u;
+                item.texture = tex;
+                item.normalMap = normalMap;
+                m_spriteItems.push_back(item);
+            }
+    });
 
     // ------------------------------------------------------------ tilemaps
     // Only cells inside the view are generated: cost follows the screen, not the map.

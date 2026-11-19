@@ -35,6 +35,7 @@ struct AnimationStats {
     u32 tracksApplied = 0;
     u32 transitions = 0;  ///< Since start.
     u32 clips = 0, controllers = 0;
+    u32 ik2DChains = 0;   ///< TwoBoneIK2D chains solved this frame.
     f64 updateMs = 0.0;
 };
 

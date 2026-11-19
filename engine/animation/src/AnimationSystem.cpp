@@ -1,4 +1,5 @@
 #include "agr/animation/AnimationSystem.hpp"
+#include "agr/animation/IK2D.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -592,6 +593,7 @@ void AnimationSystem::update(Scene& scene, float dt) {
             apply(scene, e, rt, rt->fading ? rt->previous.clip.get() : nullptr, rt->previous.time, *now.clip, now.time, w);
         }
     }
+    m_stats.ik2DChains = solveIK2D(scene);  // after the clips: IK overrides the animated pose
     for (auto it = m_runtimes.begin(); it != m_runtimes.end();) {
         if (!alive.count(it->first)) it = m_runtimes.erase(it);
         else ++it;
@@ -686,6 +688,7 @@ bool AnimationSystem::isTextTrack(const AnimationTrack& track) {
 }
 
 void registerAnimationComponents() {
+    registerIK2DComponents();
     auto& reg = ComponentRegistry::instance();
     if (reg.find<AnimatorComponent>()) return;
     reg.add<AnimatorComponent>("Animator")

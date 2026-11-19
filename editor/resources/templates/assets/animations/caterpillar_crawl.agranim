@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "duration": 1.6,
+  "loop": true,
+  "tracks": [
+    {
+      "target": "Bone 1",
+      "component": "Transform",
+      "field": "rotation",
+      "channel": 2,
+      "keys": [
+        {
+          "t": 0.0,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.2,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.4,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.6,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.8,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.0,
+          "v": -0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.2,
+          "v": -0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.4,
+          "v": -0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.6,
+          "v": -0.0,
+          "interp": "smooth"
+        }
+      ]
+    },
+    {
+      "target": "Bone 1/Bone 2",
+      "component": "Transform",
+      "field": "rotation",
+      "channel": 2,
+      "keys": [
+        {
+          "t": 0.0,
+          "v": -14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.2,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.4,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.6,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.8,
+          "v": 14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.0,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.2,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.4,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.6,
+          "v": -14.0,
+          "interp": "smooth"
+        }
+      ]
+    },
+    {
+      "target": "Bone 1/Bone 2/Bone 3",
+      "component": "Transform",
+      "field": "rotation",
+      "channel": 2,
+      "keys": [
+        {
+          "t": 0.0,
+          "v": -0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.2,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.4,
+          "v": -14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.6,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.8,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.0,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.2,
+          "v": 14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.4,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.6,
+          "v": 0.0,
+          "interp": "smooth"
+        }
+      ]
+    },
+    {
+      "target": "Bone 1/Bone 2/Bone 3/Bone 4",
+      "component": "Transform",
+      "field": "rotation",
+      "channel": 2,
+      "keys": [
+        {
+          "t": 0.0,
+          "v": 14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.2,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.4,
+          "v": -0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.6,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 0.8,
+          "v": -14.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.0,
+          "v": -9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.2,
+          "v": 0.0,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.4,
+          "v": 9.899,
+          "interp": "smooth"
+        },
+        {
+          "t": 1.6,
+          "v": 14.0,
+          "interp": "smooth"
+        }
+      ]
+    }
+  ],
+  "events": []
+}

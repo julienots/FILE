@@ -93,7 +93,7 @@ Guide : [2D.md](2D.md).
 | Tests : 9 unitaires 2D + 5 éditeur, 6 GPU au pixel près × 3 API, test de bout en bout (peinture à la souris, animation en jeu) | ✅ | `tests/test_twod.cpp`, `tests/gpu/test_renderer2d.cpp` |
 | Collisions / physique 2D, formes de collision des tilemaps | ✅ | phase 6 (`TilemapCollider2D`) |
 | Timeline d'animation | ✅ | phase 7 |
-| Animation squelettique 2D | ⬜ | à planifier |
+| Animation squelettique 2D | ✅ | `Skeleton2D`, `Bone2D`, `Skin2D` (déformation par os, poids automatiques), `TwoBoneIK2D` ; *Créer › Squelette 2D* ; chenille de la Vitrine 2D ; [ANIMATION.md](ANIMATION.md) |
 | Canvas UI | ✅ | phase 7 |
 | Ombres 2D | ✅ | `LightOccluder2D` (boîtes, cases de tilemap), cartes d'ombre polaires, bords doux, pénétration ; test GPU sur les 3 API |
 | Normal maps 2D | ✅ | `SpriteRenderer.normalMap`, `Tilemap.normalMap`, `Light2D.height`, `tools/generate_normal_map.py` ; Vitrine 2D ; test GPU sur les 3 API |

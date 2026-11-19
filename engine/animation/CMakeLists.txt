@@ -4,6 +4,7 @@ agr_add_module(animation
         src/AnimatorController.cpp
         src/AnimationSystem.cpp
         src/AnimationPlugin.cpp
+        src/IK2D.cpp
     PUBLIC_DEPS
         agr::runtime
         agr::twod

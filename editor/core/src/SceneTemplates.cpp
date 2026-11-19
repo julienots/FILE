@@ -1,3 +1,4 @@
+#include "agr/render/Skin2D.hpp"
 #include "agr/editor/SceneTemplates.hpp"
 
 #include "GameTemplates.hpp"
@@ -285,6 +286,32 @@ void buildShowcase2D(Scene& scene) {
         col.isTrigger = true;
         reg.emplace<ScriptComponent>(m).script = "assets://scripts/collectible.lua";
         reg.emplace<AnimatorComponent>(m).clip = "assets://animations/mushroom_pulse.agranim";
+    }
+
+    // A caterpillar: one picture (Skin2D) bent by a chain of 4 bones; a clip sends a wave along them.
+    const auto caterpillar = scene.createEntity("Caterpillar");
+    reg.get<TransformComponent>(caterpillar).position = {-0.2f, -0.76f, 0.0f};  // on the grass, under the lamp
+    reg.emplace<Skeleton2DComponent>(caterpillar);
+    {
+        ecs::Entity parentBone = caterpillar;
+        for (int i = 0; i < 4; ++i) {
+            const auto b = scene.createEntity("Bone " + std::to_string(i + 1), parentBone);
+            reg.get<TransformComponent>(b).position = {i == 0 ? -1.2f : 0.6f, 0.0f, 0.0f};
+            reg.emplace<Bone2DComponent>(b).length = 0.6f;
+            parentBone = b;
+        }
+        const auto body = scene.createEntity("Body", caterpillar);
+        auto& sk = reg.emplace<Skin2DComponent>(body);
+        sk.texture = "assets://2d/caterpillar.png";
+        sk.normalMap = "assets://2d/caterpillar_n.png";
+        sk.size = {2.4f, 0.6f};
+        sk.columns = 16;
+        sk.rows = 2;
+        sk.lit = true;
+        sk.sortingLayer = 1;
+        scene.updateTransforms();
+        captureBone2DRest(scene, caterpillar);
+        reg.emplace<AnimatorComponent>(caterpillar).clip = "assets://animations/caterpillar_crawl.agranim";
     }
 
     const auto lamp = scene.createEntity("Lamp");

@@ -6,6 +6,7 @@
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
 
+#include "agr/render/Skin2D.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
 #include "agr/editor/ui/Panels.hpp"
@@ -297,6 +298,29 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
             [&](ecs::Entity e, PointLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light, false); });
         reg.view<SpotLightComponent, WorldTransformComponent>().each(
             [&](ecs::Entity e, SpotLightComponent&, WorldTransformComponent&) { drawIcon(e, icons::Kind::Light, true); });
+    }
+
+    // 2D skeletons: bones as kites from the joint to the tip; a click on a joint selects the bone.
+    if (!gameView) {
+        reg.view<Bone2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, Bone2DComponent& b, WorldTransformComponent& w) {
+            if (!w.activeInHierarchy) return;
+            const ecs::Entity root = skeleton2DOf(scene, e);
+            if (!root.isNull() && !reg.get<Skeleton2DComponent>(root).showBones) return;
+            const float len = std::max(b.length, 0.01f);
+            ImVec2 o, t, a, c;
+            if (!project(vp, w.matrix.transformPoint({0, 0, 0}), origin, size, o) || !project(vp, w.matrix.transformPoint({len, 0, 0}), origin, size, t) ||
+                !project(vp, w.matrix.transformPoint({len * 0.2f, len * 0.12f, 0}), origin, size, a) ||
+                !project(vp, w.matrix.transformPoint({len * 0.2f, -len * 0.12f, 0}), origin, size, c))
+                return;
+            const bool sel = s.ctx.selection().contains(scene.uuidOf(e));
+            const ImU32 fill = sel ? IM_COL32(255, 196, 64, 110) : IM_COL32(120, 200, 255, 70);
+            const ImU32 edge = sel ? palette::kSelect : IM_COL32(170, 225, 255, 220);
+            const ImVec2 kite[4] = {o, a, t, c};
+            dl->AddConvexPolyFilled(kite, 4, fill);
+            for (int k = 0; k < 4; ++k) dl->AddLine(kite[k], kite[(k + 1) % 4], edge, 1.5f);
+            dl->AddCircleFilled(o, 4.0f, edge);
+            if (showIcons) m_iconHits.emplace_back(e, o);
+        });
     }
 
     // Play mode frame and statistics.

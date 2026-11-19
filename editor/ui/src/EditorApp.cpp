@@ -23,6 +23,7 @@
 #include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
+#include "agr/render/Skin2D.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
@@ -276,6 +277,8 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
             a->setPaused(ps == PlayState::Paused);
         }
         if (auto* an = m_engine->service<AnimationPlugin>()) an->setRunning(playing);  // paused: time scale 0 freezes it
+        // 2D skeletons: in edit mode the pose of the bones is the rest pose of their skins.
+        if (!playing && m_ctx->hasProject() && !m_animation.previewing()) captureBone2DRest(m_ctx->scene());
         if (auto* ui = m_engine->service<UIPlugin>()) ui->setRunning(ps == PlayState::Playing && m_viewport.gameView);
     }
     if (m_closeProjectRequested) {
@@ -733,7 +736,7 @@ void EditorApp::drawMenuBar() {
             {"Entité vide", CreateKind::Empty}, {nullptr, {}}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere},
             {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}, {nullptr, {}}, {"Sprite", CreateKind::Sprite},
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
-            {"Couche de parallaxe", CreateKind::ParallaxLayer}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
+            {"Couche de parallaxe", CreateKind::ParallaxLayer}, {"Squelette 2D", CreateKind::Skeleton2D}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
             {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},

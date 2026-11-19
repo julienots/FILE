@@ -112,6 +112,7 @@ struct RenderStats {
     u32 shadowedLights2D = 0;  ///< 2D lights with shadows this frame.
     u32 occluderEdges2D = 0;   ///< Occluder edges tested by them.
     u32 rangeCulled = 0;     ///< Meshes hidden by their visibility range.
+    u32 skins2D = 0;              ///< Bone-deformed 2D skins drawn.
     u32 normalMappedSprites = 0;  ///< Lit sprites drawn with a normal map.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
@@ -326,6 +327,7 @@ private:
     bool m_warnedSecondView = false;
     bool m_glClipSpace = true;
     OcclusionBuffer m_occlusion;
+    std::vector<math::Vec3> m_skinPoints;  ///< Scratch: points of the 2D skin being collected.
     bool m_occlusionCulling = true;
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;

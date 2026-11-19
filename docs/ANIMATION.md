@@ -87,6 +87,37 @@ Un état peut mélanger plusieurs clips selon un paramètre `float` ou `int` (l'
 - **Vitrine 3D** : la plante `sprout.glb` (4 articulations, clips *Idle* et *Dance* générés par
   `tools/generate_template_character.py`) danse quand une balle la touche (script + machine à états).
 
+## Animation squelettique 2D (os, peaux déformées, IK)
+
+![La chenille de la Vitrine 2D : une seule image pliée par 4 os, éclairée par le lampadaire (3 instants)](images/skeleton_2d.png)
+
+Comme les `Skeleton2D` / `Bone2D` / `Polygon2D` de Godot :
+
+| Composant | Rôle |
+|---|---|
+| `Skeleton2D` | racine du squelette (`showBones` : dessin des os dans l'éditeur) |
+| `Bone2D` | un os, orienté selon son axe +X, de longueur `length` ; ses enfants le suivent (os suivants, sprites attachés rigidement : animation « découpée » classique) |
+| `Skin2D` | une image **déformée** par les os du squelette au-dessus d'elle : une grille de `columns` × `rows` cases dont chaque point suit les os proches (poids automatiques : les 4 os les plus proches au repos, inverse de la distance à la puissance `stiffness`). Texture, normal map, couleur, taille, pivot, `uvRect`, tri, éclairage comme un sprite |
+| `TwoBoneIK2D` | sur le premier os d'un bras ou d'une jambe : tourne cet os et son os enfant pour que le bout de l'enfant atteigne l'entité `target` (main, pied posé au sol) ; `flipBend` choisit le sens du coude ou du genou, `weight` mélange avec la pose animée. Résolu après les clips, à chaque image du jeu |
+
+- **Pose de repos** : la pose dans laquelle les peaux sont dessinées. Dans l'éditeur, en mode Édition,
+  la pose des os **est** la pose de repos (on place les os sur l'image) ; en jeu et pendant l'aperçu
+  de la timeline, les animations et l'IK les en écartent. Le code qui construit un squelette appelle
+  `captureBone2DRest(scene, racine)`.
+- **Animer** : un Animator sur la racine, des pistes `Transform.rotation` (canal z) sur les chemins
+  des os (`"Bone 1/Bone 2"`), éditables dans la timeline. Les machines à états et les mélanges
+  fonctionnent comme pour le reste.
+- **Rendu** : la déformation est faite sur le processeur (`skin2DPoints`) et chaque case devient un
+  quadrilatère du lot de sprites : même texture = un seul draw, tri, éclairage, normal maps et
+  parallaxe compris. `RenderStats::skins2D` compte les peaux dessinées.
+- **Éditeur** : *Créer › Squelette 2D* (racine, chaîne de 3 os, une peau) ; les os sont dessinés en
+  losanges sur la vue de scène, un clic sur une articulation sélectionne l'os.
+- **Vitrine 2D** : une chenille (`caterpillar.png`, 4 os, clip `caterpillar_crawl.agranim` : une vague
+  qui court de la queue à la tête), générée par `tools/generate_skeleton_2d_art.py`.
+
+Tests : `2D skeleton` et `2D two-bone IK` (`tests/test_animation.cpp`), `2D skins` (test GPU, GL /
+GLES / Vulkan), création depuis l'éditeur (`tests/test_editor.cpp`).
+
 ## Dans l'éditeur
 
 - **Timeline** (*Affichage › Animation*, ou bouton *Timeline* de l'Animator) : clips de l'Animator
@@ -114,7 +145,7 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 ## Limites actuelles
 
 - Mélange en une dimension seulement (pas de *blend space* 2D) ; pas de couches ni de masques
-  d'animation, ni de cinématique inverse ; pas de *morph targets* ; au plus 128 articulations par
+  d'animation ; IK : deux os en 2D seulement (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
   maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.

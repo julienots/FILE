@@ -238,6 +238,21 @@ TEST_CASE("dropping a sprite sheet creates an animated sprite at native size") {
     const auto& tm = reg.get<TilemapComponent>(tmE);
     CHECK(tm.tiles.size() == static_cast<usize>(tm.width) * tm.height);
     CHECK(reg.get<TransformComponent>(tmE).position.x == std::floor(reg.get<TransformComponent>(tmE).position.x));
+    // 2D skeleton: root, a chain of 3 bones with their rest pose, a skin over them; one undo step.
+    const auto skel = f.ctx->create(CreateKind::Skeleton2D);
+    CHECK(reg.has<Skeleton2DComponent>(skel));
+    usize bones = 0;
+    reg.view<Bone2DComponent>().each([&](ecs::Entity, Bone2DComponent& b) {
+        ++bones;
+        CHECK(b.restSet);
+    });
+    CHECK(bones == 3);
+    const auto skin = f.scene().findByName("Skin");
+    REQUIRE_FALSE(skin.isNull());
+    CHECK(f.scene().parent(skin) == skel);
+    CHECK(reg.has<Skin2DComponent>(skin));
+    f.ctx->undo();
+    CHECK(f.scene().findByName("Bone 1").isNull());
 }
 
 TEST_CASE("the 3D showcase references shipped models and materials; models instantiate as one undo step") {

@@ -3,6 +3,8 @@
 #include <filesystem>
 
 #include "agr/animation/AnimationSystem.hpp"
+#include "agr/animation/IK2D.hpp"
+#include "agr/render/Skin2D.hpp"
 #include "agr/assets/Model.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -420,5 +422,103 @@ TEST_CASE("skeletal clips: imported from a glTF model, played and crossfaded by 
     CHECK(f.anim.currentState(root) == "Move");
 }
 #endif
+
+TEST_CASE("2D skeleton: skins follow their bones with smooth weights, rest pose, no skeleton = flat") {
+    Scene scene;
+    registerRenderComponents();
+    using math::Vec3;
+    const auto root = scene.createEntity("Creature");
+    scene.registry().emplace<Skeleton2DComponent>(root);
+    const auto b1 = scene.createEntity("Bone1", root);
+    scene.registry().emplace<Bone2DComponent>(b1).length = 1.0f;
+    const auto b2 = scene.createEntity("Bone2", b1);
+    scene.registry().get<TransformComponent>(b2).position = {1, 0, 0};
+    scene.registry().emplace<Bone2DComponent>(b2).length = 1.0f;
+    const auto body = scene.createEntity("Body", root);
+    auto& sk = scene.registry().emplace<Skin2DComponent>(body);
+    sk.size = {2.0f, 0.4f};
+    sk.pivot = {0.0f, 0.5f};
+    sk.columns = 8;
+    sk.rows = 2;
+    captureBone2DRest(scene);
+    CHECK(scene.registry().get<Bone2DComponent>(b2).restSet);
+    scene.updateTransforms();
+    std::vector<Vec3> pts;
+    REQUIRE(skin2DPoints(scene, body, pts));
+    REQUIRE(pts.size() == 9 * 3);
+    auto at = [&](int i, int j) { return pts[static_cast<usize>(j * 9 + i)]; };
+    // At rest: the flat grid.
+    CHECK(at(0, 0).x == doctest::Approx(0.0f));
+    CHECK(at(0, 0).y == doctest::Approx(-0.2f));
+    CHECK(at(8, 2).x == doctest::Approx(2.0f).epsilon(0.001));
+    CHECK(at(8, 2).y == doctest::Approx(0.2f).epsilon(0.001));
+    // Bend the second bone up by 90 degrees: the far end follows it, the near end does not move.
+    scene.registry().get<TransformComponent>(b2).rotation = math::Quat::fromAxisAngle({0, 0, 1}, math::radians(90.0f));
+    scene.updateTransforms();
+    REQUIRE(skin2DPoints(scene, body, pts));
+    CHECK(at(8, 1).x == doctest::Approx(1.0f).epsilon(0.02));
+    CHECK(at(8, 1).y == doctest::Approx(1.0f).epsilon(0.02));
+    CHECK(at(0, 1).x == doctest::Approx(0.0f).epsilon(0.001));
+    CHECK(std::abs(at(0, 1).y) < 1e-3f);
+    // Around the joint the points blend between both bones (no tearing): neighbours stay close.
+    for (int i = 0; i < 8; ++i) CHECK(math::length(at(i + 1, 1) - at(i, 1)) < 0.6f);
+    // The rest pose is kept: moving the root moves everything rigidly.
+    scene.registry().get<TransformComponent>(root).position = {5, 0, 0};
+    scene.updateTransforms();
+    REQUIRE(skin2DPoints(scene, body, pts));
+    CHECK(at(0, 1).x == doctest::Approx(5.0f).epsilon(0.001));
+    // Without a skeleton: drawn flat like a sprite.
+    const auto loose = scene.createEntity("Loose");
+    scene.registry().emplace<Skin2DComponent>(loose).size = {1, 1};
+    scene.updateTransforms();
+    REQUIRE(skin2DPoints(scene, loose, pts));
+    CHECK(pts.front().x == doctest::Approx(-0.5f));
+    CHECK_FALSE(skin2DPoints(scene, root, pts));
+}
+
+TEST_CASE("2D two-bone IK reaches the target, bends either way, clamps, blends") {
+    Scene scene;
+    registerRenderComponents();
+    registerAnimationComponents();
+    using math::Vec3;
+    const auto shoulder = scene.createEntity("Shoulder");
+    scene.registry().get<TransformComponent>(shoulder).position = {2, 3, 0};
+    const auto upper = scene.createEntity("Upper", shoulder);
+    scene.registry().emplace<Bone2DComponent>(upper).length = 1.0f;
+    const auto lower = scene.createEntity("Lower", upper);
+    scene.registry().get<TransformComponent>(lower).position = {1, 0, 0};
+    scene.registry().emplace<Bone2DComponent>(lower).length = 1.0f;
+    const auto target = scene.createEntity("Target");
+    scene.registry().get<TransformComponent>(target).position = {3, 4, 0};  // (1, 1) from the shoulder
+    auto& ik = scene.registry().emplace<TwoBoneIK2DComponent>(upper);
+    ik.target = target;
+    auto tip = [&] { return scene.worldMatrix(lower).transformPoint(Vec3(1, 0, 0)); };
+    auto elbow = [&] { return scene.worldMatrix(lower).transformPoint(Vec3(0.0f)); };
+    CHECK(solveIK2D(scene) == 1);
+    CHECK(math::length(tip() - Vec3(3, 4, 0)) < 1e-3f);
+    const Vec3 elbowA = elbow();
+    ik.flipBend = true;
+    solveIK2D(scene);
+    CHECK(math::length(tip() - Vec3(3, 4, 0)) < 1e-3f);
+    CHECK(math::length(elbow() - elbowA) > 0.5f);  // the other elbow position
+    // Out of reach: the arm points straight at the target.
+    scene.registry().get<TransformComponent>(target).position = {12, 3, 0};
+    solveIK2D(scene);
+    CHECK(tip().x == doctest::Approx(4.0f).epsilon(0.001));
+    CHECK(tip().y == doctest::Approx(3.0f).epsilon(0.01));
+    // Weight 0: untouched; disabled: untouched.
+    ik.weight = 0.0f;
+    const auto before = scene.registry().get<TransformComponent>(upper).rotation;
+    scene.registry().get<TransformComponent>(target).position = {2, 5, 0};
+    CHECK(solveIK2D(scene) == 0);
+    CHECK(scene.registry().get<TransformComponent>(upper).rotation.z == doctest::Approx(before.z));
+    // Through the animation system, every frame.
+    ik.weight = 1.0f;
+    VirtualFileSystem vfs;
+    AnimationSystem anim{vfs};
+    anim.update(scene, 0.016f);
+    CHECK(anim.stats().ik2DChains == 1);
+    CHECK(math::length(tip() - Vec3(2, 5, 0)) < 1e-3f);
+}
 
 }  // TEST_SUITE
