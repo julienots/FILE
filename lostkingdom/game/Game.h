@@ -284,10 +284,10 @@ inline vec2 minimapProject(vec2 worldOffset, float camYaw) { return rotate(world
 // Default touch layout: button centres in UI units relative to the bottom-right corner (mirrored for left-handed).
 // Three arcs around the attack button (radius ~158: dodge/block/jump, ~275: spells, ~390: interact/potion/mount);
 // interact is leftmost so its label has room. No two buttons overlap (checked by unit tests).
-constexpr int LAYOUT_VERSION = 4;   // 2.0.1: + the run button
+constexpr int LAYOUT_VERSION = 5;   // 2.0.2: potion moved to the right edge
 inline float ctlSize(int id) { return id == 0 ? 136.f : (id >= 4 && id <= 6 ? 96.f : (id == 7 || id == 9 ? 78.f : (id == 10 ? 92.f : 100.f))); }  // attack, spells, potion/mount, others
 inline const vec2* defaultLayoutPos() {
-    static const vec2 def[11] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-509, -292}, {-540, -154}, {-430, -411}, {-345, -205}};
+    static const vec2 def[11] = {{-150, -140}, {-305, -107}, {-144, -298}, {-247, -264}, {-422, -102}, {-373, -302}, {-271, -387}, {-62, -250}, {-540, -154}, {-430, -411}, {-345, -205}};
     return def;
 }
 

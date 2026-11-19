@@ -13,7 +13,9 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
-### Nouveautés 2.0.1 (bouton Courir)
+### Nouveautés 2.0.1 (bouton Courir ; potion déplacée)
+
+- **Bouton Potion** déplacé du milieu de l'écran au bord droit, au-dessus d'Attaque (la disposition enregistrée est de nouveau remplacée par la nouvelle par défaut). Vérifié par les tests de disposition (aucun chevauchement, tout dans la zone sûre, 5 formats d'écran) ; la position finale n'a pas été photographiée.
 
 - **Bouton « Courir »** (flèche, à gauche de Parade) : un appui active la course tant que le joystick est tenu, un second appui revient à la marche ; il s'allume quand la course est verrouillée. Il se déplace dans l'éditeur de disposition (la disposition enregistrée par une ancienne version est remplacée par la nouvelle par défaut). Le joystick poussé à fond fait toujours courir, désormais après 0,3 s au lieu de 0,5 s.
 - Vérifié sur ordinateur : tests unitaires (2 532 réussis, dont le contrôle qu'aucun bouton n'en chevauche un autre) et une capture. Le bouton n'a pas été essayé au doigt, ni sur téléphone ; il n'y a pas de nouveau mouvement (accroupi, glissade) : je n'en ai pas ajouté. APK toujours non reconstruit.
