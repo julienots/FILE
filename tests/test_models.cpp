@@ -168,6 +168,35 @@ TEST_CASE("materials: .agrmat round trip, defaults and errors") {
     CHECK(linearToSrgbChannel(srgbToLinearChannel(0.3f)) == doctest::Approx(0.3f));
 }
 
+TEST_CASE("materials: toon shading and outline fields, written only when used") {
+    MaterialData plain;
+    const std::string plainText = materialToJson(plain);
+    CHECK(plainText.find("shading") == std::string::npos);  // standard materials keep the old format
+    CHECK(plainText.find("outline") == std::string::npos);
+
+    MaterialData m;
+    m.shading = ShadingModel::Toon;
+    m.toonBands = 3;
+    m.toonSoftness = 0.1f;
+    m.shadowColor = {0.3f, 0.2f, 0.6f, 1.0f};
+    m.specularSize = 0.4f;
+    m.rimStrength = 0.8f;
+    m.rimWidth = 0.25f;
+    m.rimColor = {1.0f, 0.9f, 0.6f, 1.0f};
+    m.outlineWidth = 2.5f;
+    m.outlineColor = {0.05f, 0.02f, 0.1f, 1.0f};
+    auto back = parseMaterial(materialToJson(m));
+    REQUIRE(back);
+    CHECK(back.value() == m);
+
+    // Out-of-range values are clamped; an unknown shading model is an error.
+    auto clamped = parseMaterial(R"({"format":"agr.material","version":1,"shading":"toon","toonBands":40,"outlineWidth":-3})");
+    REQUIRE(clamped);
+    CHECK(clamped.value().toonBands == 8);
+    CHECK(clamped.value().outlineWidth == 0.0f);
+    CHECK_FALSE(parseMaterial(R"({"format":"agr.material","version":1,"shading":"oil"})"));
+}
+
 TEST_CASE("glTF: GLB with embedded image, hierarchy and PBR material") {
     TempAssets t;
     const std::vector<u8> glb = makeGlb();

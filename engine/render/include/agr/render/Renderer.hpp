@@ -101,6 +101,7 @@ struct RenderStats {
     u32 lights2D = 0;
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
+    u32 outlineBatches = 0;  ///< Outline draw calls (instanced batches of outlined materials).
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map (all cascades).
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
@@ -208,6 +209,7 @@ private:
         rhi::TextureHandle splat;        // terrain layer weights
         rhi::TextureHandle custom[kMaxShaderTextures];  // custom shader textures (units 7..)
         u32 customCount = 0;
+        bool outline = false;            // material draws an outline (inverted hull pass)
     };
     /// Per-instance vertex stream of the 3D pipelines (locations 4..11).
     struct InstanceData {
@@ -273,6 +275,7 @@ private:
     void drawShadowPass();
     void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade = 0);
     void drawSky();
+    void drawOutlines(const std::vector<MeshItem>& items, u32 firstInstance);
     void ensureTargets(u32 renderW, u32 renderH, u32 samples, bool needResolve);
     void releaseTargets();
     u32 pushUniforms(const void* data, usize size);
@@ -338,6 +341,7 @@ private:
     TerrainGpu* terrainGpu(ecs::Entity e, TerrainComponent& t);
     void releaseTerrain(TerrainGpu& g);
     rhi::PipelineHandle m_shadowSkinnedPipelines[2];  // [alpha mask]
+    rhi::PipelineHandle m_outlinePipelines[2];        // [skinned]
     /// Joint entities of skinned meshes (resolved by name, revalidated every frame).
     std::unordered_map<u64, std::vector<ecs::Entity>> m_skinJoints;
     std::vector<math::Mat4> m_palette;

@@ -28,7 +28,7 @@ struct FrameUniforms {
     math::Vec4 shadowParams2;     // atlas texel size (uv), PCF radius, -, -
     math::Vec4 envSH[9];          // image sky: irradiance / pi (SH9, rgb)
     math::Vec4 envParams;         // image sky ready, intensity, rotation (radians), last mip level
-    math::Vec4 time;              // seconds (wrapped every hour), -, -, -
+    math::Vec4 time;              // seconds (wrapped every hour), -, 1 / render width, 1 / render height
 };
 static_assert(sizeof(FrameUniforms) == 848);
 
@@ -37,10 +37,14 @@ struct MaterialUniforms {
     math::Vec4 emissive;
     math::Vec4 pbr;
     math::Vec4 uvTransform;
-    math::Vec4 flags;
-    math::Vec4 custom[8];  // custom shader parameters
+    math::Vec4 flags;        // alpha cutoff, unlit, toon, -
+    math::Vec4 toon;         // bands, softness, specular size, rim width
+    math::Vec4 toonShadow;   // shadow tint (linear rgb), rim strength
+    math::Vec4 rimColor;     // linear rgb, outline width (pixels)
+    math::Vec4 outlineColor; // linear rgb, -
+    math::Vec4 custom[8];    // custom shader parameters
 };
-static_assert(sizeof(MaterialUniforms) == 208);
+static_assert(sizeof(MaterialUniforms) == 272);
 
 inline constexpr u32 kMaxLights3D = 8;
 struct LightUniforms {

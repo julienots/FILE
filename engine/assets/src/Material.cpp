@@ -70,6 +70,18 @@ Result<MaterialData> parseMaterial(std::string_view text) {
         m.alphaCutoff = std::clamp(j.value("alphaCutoff", m.alphaCutoff), 0.0f, 1.0f);
         m.doubleSided = j.value("doubleSided", false);
         m.unlit = j.value("unlit", false);
+        const std::string shading = j.value("shading", std::string("standard"));
+        if (shading == "toon") m.shading = ShadingModel::Toon;
+        else if (shading != "standard") return makeError(Error::Code::ParseError, "unknown shading '" + shading + "'");
+        m.toonBands = std::clamp(j.value("toonBands", m.toonBands), 1, 8);
+        m.toonSoftness = std::clamp(j.value("toonSoftness", m.toonSoftness), 0.0f, 0.5f);
+        m.shadowColor = readColor(j.value("shadowColor", json()), m.shadowColor);
+        m.specularSize = std::clamp(j.value("specularSize", m.specularSize), 0.0f, 1.0f);
+        m.rimStrength = std::max(0.0f, j.value("rimStrength", m.rimStrength));
+        m.rimWidth = std::clamp(j.value("rimWidth", m.rimWidth), 0.0f, 1.0f);
+        m.rimColor = readColor(j.value("rimColor", json()), m.rimColor);
+        m.outlineWidth = std::clamp(j.value("outlineWidth", m.outlineWidth), 0.0f, 32.0f);
+        m.outlineColor = readColor(j.value("outlineColor", json()), m.outlineColor);
         m.uvScale = readVec2(j.value("uvScale", json()), m.uvScale);
         m.uvOffset = readVec2(j.value("uvOffset", json()), m.uvOffset);
         m.shader = j.value("shader", std::string());
@@ -110,6 +122,21 @@ std::string materialToJson(const MaterialData& m) {
     j["alphaCutoff"] = m.alphaCutoff;
     j["doubleSided"] = m.doubleSided;
     j["unlit"] = m.unlit;
+    // Stylized keys only when used: standard materials keep the previous format.
+    if (m.shading == ShadingModel::Toon) {
+        j["shading"] = "toon";
+        j["toonBands"] = m.toonBands;
+        j["toonSoftness"] = m.toonSoftness;
+        j["shadowColor"] = color(m.shadowColor);
+        j["specularSize"] = m.specularSize;
+        j["rimStrength"] = m.rimStrength;
+        j["rimWidth"] = m.rimWidth;
+        j["rimColor"] = color(m.rimColor);
+    }
+    if (m.outlineWidth > 0.0f) {
+        j["outlineWidth"] = m.outlineWidth;
+        j["outlineColor"] = color(m.outlineColor);
+    }
     j["uvScale"] = {m.uvScale.x, m.uvScale.y};
     j["uvOffset"] = {m.uvOffset.x, m.uvOffset.y};
     if (!m.shader.empty()) {

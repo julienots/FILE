@@ -1,5 +1,6 @@
 // 3D rendering on every backend: shadows, point / spot lights, automatic
 // instancing, imported models with .agrmat materials, sky, fog, alpha modes.
+#include <array>
 #include <filesystem>
 
 #include "GpuFixture.hpp"
@@ -405,6 +406,105 @@ TEST_CASE("3D particles: camera-facing billboards, additive brighter, hidden beh
     const Rgba hiddenPx = f.at({-2.1f, 0, 0});
     CHECK_MESSAGE(hiddenPx.r < 40, hiddenPx);  // the unlit back of the wall, no particle
     CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("toon shading: hard light steps, tinted shadows, bands, rim light, outlines") {
+    Render3DFixture f;
+    f.camera({0, 0, 0}, {0, 0, -1});
+    f.darkEnvironment();
+    f.sun({0, 90, 0});  // from the side: half of the ball lit, half in shadow
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, -4}, Vec3{2.6f});
+    auto& d = *gpu().device;
+    auto use = [&](const MaterialData& m) {
+        REQUIRE(f.materials.save("assets://look.agrmat", m));
+        f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://look.agrmat";
+        f.frame();
+    };
+    // Histogram of the red channel over the ball (the background is black).
+    auto ballPixels = [&]() {
+        std::vector<u8> px;
+        REQUIRE(d.readBackbuffer(0, 0, kWidth, kHeight, px));
+        std::vector<Rgba> out;
+        for (usize i = 0; i < px.size(); i += 4)
+            if (px[i] + px[i + 1] + px[i + 2] > 12) out.push_back({px[i], px[i + 1], px[i + 2], px[i + 3]});
+        return out;
+    };
+    auto levels = [](const std::vector<Rgba>& pixels, u32 minCount) {
+        std::array<u32, 256> h{};
+        for (const Rgba& p : pixels) ++h[p.b];
+        u32 n = 0;
+        for (u32 c : h) n += c >= minCount ? 1u : 0u;
+        return n;
+    };
+
+    MaterialData standard;
+    standard.roughness = 1.0f;
+    use(standard);
+    const auto smooth = ballPixels();
+    REQUIRE(smooth.size() > 400);
+    CHECK(levels(smooth, 1) > 30);  // PBR: a continuous gradient
+
+    MaterialData toon;
+    toon.shading = ShadingModel::Toon;
+    toon.toonBands = 1;
+    toon.toonSoftness = 0.0f;
+    toon.shadowColor = {0.2f, 0.3f, 1.0f, 1.0f};
+    use(toon);
+    const auto hard = ballPixels();
+    u32 lit = 0, shade = 0, other = 0;
+    for (const Rgba& p : hard) {
+        if (p.r > 245 && p.g > 245 && p.b > 245) ++lit;
+        else if (p.b > 240 && p.r > 40 && p.r < 70 && p.g > 65 && p.g < 95) ++shade;  // the tint (0.2, 0.3, 1) x white albedo
+        else ++other;
+    }
+    CHECK_MESSAGE(lit > hard.size() / 4, lit);
+    CHECK_MESSAGE(shade > hard.size() / 4, shade);
+    CHECK_MESSAGE(other < hard.size() / 10, other);  // only the terminator line in between
+
+    toon.toonBands = 3;
+    toon.toonSoftness = 0.0f;
+    toon.shadowColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    use(toon);
+    const u32 bands = levels(ballPixels(), 12);
+    CHECK_MESSAGE((bands >= 3 && bands <= 5), bands);  // dark side + 3 steps, not a gradient
+
+    // Rim light brightens the silhouette.
+    toon.toonBands = 1;
+    toon.shadowColor = {0.2f, 0.2f, 0.2f, 1.0f};
+    use(toon);
+    // Leftmost ball pixel on the middle row, without outline.
+    std::vector<u8> row;
+    REQUIRE(d.readBackbuffer(0, 0, kWidth, kHeight, row));
+    u32 edge = 0;
+    for (u32 x = 0; x < kWidth / 2; ++x) {
+        const u8* p = &row[(static_cast<usize>(kHeight / 2) * kWidth + x) * 4];
+        if (p[0] + p[1] + p[2] > 12) {
+            edge = x;
+            break;
+        }
+    }
+    REQUIRE(edge > 4);
+    const Rgba noRim = pixel(d, edge + 1, kHeight / 2);
+    toon.rimStrength = 1.0f;
+    toon.rimWidth = 0.4f;
+    toon.rimColor = {0.0f, 1.0f, 0.0f, 1.0f};
+    use(toon);
+    const Rgba withRim = pixel(d, edge + 1, kHeight / 2);
+    CHECK_MESSAGE(int(withRim.g) > int(noRim.g) + 40, withRim);
+    CHECK(f.renderer.stats().outlineBatches == 0);
+
+    // Outline: a red ring of constant pixel width around the silhouette.
+    toon.rimStrength = 0.0f;
+    toon.outlineWidth = 3.0f;
+    toon.outlineColor = {1.0f, 0.0f, 0.0f, 1.0f};
+    use(toon);
+    CHECK(f.renderer.stats().outlineBatches == 1);
+    const Rgba ring = pixel(d, edge - 2, kHeight / 2);
+    CHECK_MESSAGE((ring.r > 200 && ring.g < 30 && ring.b < 30), ring);
+    CHECK_MESSAGE(near(pixel(d, edge - 6, kHeight / 2), 0, 0, 0, 2), pixel(d, edge - 6, kHeight / 2));  // background beyond
+    const Rgba inside = pixel(d, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE((inside.r < 250 || inside.g > 30), inside);  // the ball itself is not covered
+    CHECK(d.validationErrorCount() == 0);
 }
 
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {

@@ -15,6 +15,12 @@ enum class AlphaMode : i32 {
     Blend = 2,  ///< Transparent: sorted back to front, no depth write.
 };
 
+/// Lighting model of a material.
+enum class ShadingModel : i32 {
+    Standard = 0,  ///< Physically based (GGX, metallic-roughness).
+    Toon = 1,      ///< Stylized: banded light, tinted shadows, sharp highlight, rim light.
+};
+
 /// PBR material, metallic-roughness workflow (the glTF 2.0 model).
 /// Stored as `.agrmat` JSON files ("agr.material", version 1); also produced by the
 /// model importers for the materials embedded in glTF / OBJ / FBX files.
@@ -37,6 +43,18 @@ struct MaterialData {
     float alphaCutoff = 0.5f;
     bool doubleSided = false;
     bool unlit = false;                    ///< Shows the base color as is (no lighting).
+    // ---- Stylized shading (shading == Toon), outlines (any shading model)
+    ShadingModel shading = ShadingModel::Standard;
+    i32 toonBands = 1;                          ///< Light steps between shadow and full light (1..8).
+    float toonSoftness = 0.04f;                 ///< Width of the band edges (0 = hard).
+    math::Color shadowColor{0.55f, 0.5f, 0.78f, 1.0f};  ///< Tint of the shadowed side (x base color).
+    float specularSize = 0.0f;                  ///< Sharp highlight size, 0 = none.
+    float rimStrength = 0.0f;                   ///< Rim light on the silhouette, 0 = none.
+    float rimWidth = 0.3f;
+    math::Color rimColor{1.0f, 1.0f, 1.0f, 1.0f};
+    float outlineWidth = 0.0f;                  ///< Outline thickness in pixels, 0 = none.
+    math::Color outlineColor{0.1f, 0.07f, 0.12f, 1.0f};
+
     math::Vec2 uvScale{1.0f, 1.0f};
     math::Vec2 uvOffset{0.0f, 0.0f};
     /// Custom surface shader (`.agrshader`, empty = standard PBR) and the values of its

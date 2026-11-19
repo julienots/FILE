@@ -135,6 +135,20 @@ Status Renderer::create3DPipelines() {
             if (!r) return r.error();
             m_waterPipeline = r.value();
         }
+        {  // outline: inverted hull, front faces culled, constant width in pixels
+            rhi::PipelineDesc p;
+            p.debugName = skinned ? "agr.outline.skinned" : "agr.outline";
+            p.shader.vertex = skinDefine + common + (skinned ? shaders::kSkinBlock : "") + shaders::kOutlineVertex;
+            p.shader.fragment = skinDefine + common + shaders::kToneMapping + shaders::kOutlineFragment;
+            p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
+            p.instanceLayout = instanceLayout(true);
+            p.cull = rhi::CullMode::Front;
+            p.uniformBlocks = {"FrameData", "MaterialData"};
+            if (skinned) p.uniformBlocks.push_back("SkinData");
+            auto r = m_device.createPipeline(p);
+            if (!r) return r.error();
+            m_outlinePipelines[skinned] = r.value();
+        }
         for (u32 mask = 0; mask < 2; ++mask) {
             rhi::PipelineDesc p;
             p.debugName = mask ? "agr.shadow.mask" : "agr.shadow";
@@ -213,8 +227,16 @@ u32 Renderer::materialSlot(u64 key, const MaterialData& m, math::Vec2 uvScale) {
     u.pbr = Vec4(m.metallic, m.roughness, m.normalTexture.empty() ? 0.0f : m.normalScale,
                  m.occlusionTexture.empty() ? 0.0f : m.occlusionStrength);
     u.uvTransform = Vec4(m.uvScale.x * uvScale.x, m.uvScale.y * uvScale.y, m.uvOffset.x, m.uvOffset.y);
-    u.flags = Vec4(m.alphaCutoff, m.unlit ? 1.0f : 0.0f, 0.0f, 0.0f);
+    const bool toon = m.shading == ShadingModel::Toon && !m.unlit;
+    u.flags = Vec4(m.alphaCutoff, m.unlit ? 1.0f : 0.0f, toon ? 1.0f : 0.0f, 0.0f);
+    u.toon = Vec4(static_cast<float>(std::clamp(m.toonBands, 1, 8)), std::clamp(m.toonSoftness, 0.0f, 0.5f),
+                  std::clamp(m.specularSize, 0.0f, 1.0f), std::clamp(m.rimWidth, 0.0f, 1.0f));
+    u.toonShadow = Vec4(detail::srgbToLinear(m.shadowColor), std::max(0.0f, m.rimStrength));
+    const float outline = std::clamp(m.outlineWidth, 0.0f, 32.0f);
+    u.rimColor = Vec4(detail::srgbToLinear(m.rimColor), outline);
+    u.outlineColor = Vec4(detail::srgbToLinear(m.outlineColor), 0.0f);
     FrameMaterial fm;
+    fm.outline = outline > 0.0f && m.alphaMode != AlphaMode::Blend;
     fm.pipeline = static_cast<u32>(m.alphaMode) * 2 + (m.doubleSided ? 1u : 0u);
     if (const u32 set = m.shader.empty() ? ~0u : customShaderSet(m.shader); set != ~0u) {
         const CustomShader& cs = m_shaders->get(m.shader)->parsed;  // usable set: the asset exists
@@ -883,6 +905,48 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
         m_device.bindInstanceBuffer(m_instanceBuffer, static_cast<usize>(firstInstance + i) * sizeof(InstanceData));
         m_device.drawIndexedInstanced(first.indexCount, static_cast<u32>(end - i), first.firstIndex);
         if (!shadow) ++m_stats.meshBatches;
+        i = end;
+    }
+}
+
+void Renderer::drawOutlines(const std::vector<MeshItem>& items, u32 firstInstance) {
+    if (items.empty() || !m_instanceBuffer) return;
+    // Items are sorted by state: runs share geometry, material and instance range, like drawMeshItems.
+    i32 boundSkinned = -1;
+    u32 boundMaterial = ~0u;
+    rhi::BufferHandle boundVb;
+    usize i = 0;
+    while (i < items.size()) {
+        const MeshItem& first = items[i];
+        usize end = i + 1;
+        while (end < items.size() && items[end].vertices == first.vertices && items[end].firstIndex == first.firstIndex &&
+               items[end].indexCount == first.indexCount && items[end].skinOffset == first.skinOffset && first.skinOffset == ~0u &&
+               items[end].material == first.material && items[end].pipeline == first.pipeline)
+            ++end;
+        const FrameMaterial& m = m_frameMaterials[first.material];
+        if (!m.outline || first.pipeline == kTerrainPipeline || first.pipeline == kWaterPipeline) {
+            i = end;
+            continue;
+        }
+        const bool skinned = first.skinOffset != ~0u;
+        if (static_cast<i32>(skinned) != boundSkinned) {
+            m_device.bindPipeline(m_outlinePipelines[skinned ? 1 : 0]);
+            boundSkinned = skinned ? 1 : 0;
+            boundMaterial = ~0u;
+        }
+        if (skinned) m_device.bindUniformBuffer(kSlotSkin, m_uniformBuffer, first.skinOffset, kPaletteBytes);
+        if (first.material != boundMaterial) {
+            m_device.bindUniformBuffer(kSlotMaterial, m_uniformBuffer, m.uniformOffset, sizeof(MaterialUniforms));
+            boundMaterial = first.material;
+        }
+        if (first.vertices != boundVb) {
+            m_device.bindVertexBuffer(first.vertices);
+            m_device.bindIndexBuffer(first.indices, rhi::IndexType::U32);
+            boundVb = first.vertices;
+        }
+        m_device.bindInstanceBuffer(m_instanceBuffer, static_cast<usize>(firstInstance + i) * sizeof(InstanceData));
+        m_device.drawIndexedInstanced(first.indexCount, static_cast<u32>(end - i), first.firstIndex);
+        ++m_stats.outlineBatches;
         i = end;
     }
 }

@@ -912,6 +912,49 @@ void InspectorPanel::drawMaterialAsset(EditorShared& s, const MaterialPreview& p
         commit |= ImGui::Checkbox("##double", &m.doubleSided);
         row("Sans éclairage", "Affiche la couleur telle quelle (interfaces 3D, écrans)");
         commit |= ImGui::Checkbox("##unlit", &m.unlit);
+        // ---- stylized shading (cartoon) and outline
+        row("Éclairage", "Standard : physique (PBR). Cartoon : paliers de lumière, ombres teintées, reflet net, liseré");
+        {
+            static const char* models[] = {"Standard (PBR)", "Cartoon (toon)"};
+            int model = static_cast<int>(m.shading);
+            if (ImGui::Combo("##shading", &model, models, 2)) {
+                m.shading = static_cast<ShadingModel>(model);
+                commit = true;
+            }
+        }
+        if (m.shading == ShadingModel::Toon) {
+            row("Paliers", "Nombre de niveaux de lumière entre l'ombre et la pleine lumière");
+            ImGui::SliderInt("##bands", &m.toonBands, 1, 8);
+            track();
+            row("Douceur des bords");
+            ImGui::SliderFloat("##tsoft", &m.toonSoftness, 0.0f, 0.5f, "%.2f");
+            track();
+            row("Couleur de l'ombre", "Teinte du côté à l'ombre et des ombres portées (multipliée par la couleur de base)");
+            ImGui::ColorEdit3("##shadowc", &m.shadowColor.x);
+            track();
+            row("Reflet", "Taille de la tache de lumière nette (0 : aucune)");
+            ImGui::SliderFloat("##spec", &m.specularSize, 0.0f, 1.0f, "%.2f");
+            track();
+            row("Liseré", "Lumière sur le contour de l'objet (0 : aucun)");
+            ImGui::SliderFloat("##rim", &m.rimStrength, 0.0f, 2.0f, "%.2f");
+            track();
+            if (m.rimStrength > 0.0f) {
+                row("Largeur du liseré");
+                ImGui::SliderFloat("##rimw", &m.rimWidth, 0.0f, 1.0f, "%.2f");
+                track();
+                row("Couleur du liseré");
+                ImGui::ColorEdit3("##rimc", &m.rimColor.x);
+                track();
+            }
+        }
+        row("Contour", "Épaisseur du contour en pixels (0 : aucun). Idéal sur des modèles aux normales lisses");
+        ImGui::SliderFloat("##outline", &m.outlineWidth, 0.0f, 8.0f, "%.1f px");
+        track();
+        if (m.outlineWidth > 0.0f) {
+            row("Couleur du contour");
+            ImGui::ColorEdit3("##outlinec", &m.outlineColor.x);
+            track();
+        }
         row("Répétition UV");
         dragAxes("uvs", &m.uvScale.x, 2, 0.01f, 0.0f, 0.0f, "%.2f");
         track();

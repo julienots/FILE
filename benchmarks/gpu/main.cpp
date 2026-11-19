@@ -13,6 +13,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/render/RenderComponents.hpp"
+#include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Renderer.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
@@ -32,6 +33,7 @@ struct Bench {
     std::unique_ptr<AssetManager> assets;
     std::unique_ptr<SpriteSheetLibrary> sheets;
     std::unique_ptr<EnvironmentLibrary> environments;
+    std::unique_ptr<MaterialLibrary> materials;
     std::filesystem::path root = std::filesystem::temp_directory_path() / ("agr_gpubench_" + Uuid::generate().toString());
 };
 
@@ -51,6 +53,7 @@ void run(Bench& b, const char* name, const std::function<void(Scene&)>& build,
     renderer.setProfile(p);
     renderer.setSpriteSheets(b.sheets.get());
     renderer.setEnvironments(b.environments.get());
+    renderer.setMaterials(b.materials.get());
     Scene scene;
     build(scene);
     scene.updateTransforms();
@@ -159,6 +162,21 @@ int main(int argc, char** argv) {
     b.assets = std::make_unique<AssetManager>(b.vfs, b.jobs, b.device.get());
     b.sheets = std::make_unique<SpriteSheetLibrary>(b.vfs);
     b.environments = std::make_unique<EnvironmentLibrary>(b.vfs, b.jobs, b.device.get());
+    b.materials = std::make_unique<MaterialLibrary>(b.vfs);
+    {
+        MaterialData standard;
+        standard.baseColor = {0.9f, 0.55f, 0.2f, 1.0f};
+        MaterialData toon = standard;
+        toon.shading = ShadingModel::Toon;
+        toon.toonBands = 2;
+        toon.specularSize = 0.3f;
+        toon.rimStrength = 0.6f;
+        MaterialData outlined = toon;
+        outlined.outlineWidth = 2.0f;
+        (void)b.materials->save("assets://standard.agrmat", standard);
+        (void)b.materials->save("assets://toon.agrmat", toon);
+        (void)b.materials->save("assets://outlined.agrmat", outlined);
+    }
     {
         // 2048 x 1024 HDR sky: gradient + bright sun.
         std::vector<float> sky(2048u * 1024u * 3u);
@@ -257,6 +275,25 @@ int main(int argc, char** argv) {
             s.registry().emplace<PointLightComponent>(l).range = 8.0f;
         }
     }, [](GraphicsProfile& p) { p.maxLights = 8; });
+    for (const char* look : {"standard", "toon", "outlined"}) {
+        char label[64];
+        std::snprintf(label, sizeof label, "3D: 2000 spheres + sun, %s", look);
+        const std::string uri = std::string("assets://") + look + ".agrmat";
+        run(b, label, [uri](Scene& s) {
+            perspectiveCamera(s);
+            const auto sun = s.createEntity("Sun");
+            s.registry().emplace<DirectionalLightComponent>(sun);
+            s.registry().get<TransformComponent>(sun).rotation = math::Quat::fromEuler({-0.8f, 0.5f, 0.0f});
+            for (int i = 0; i < 2000; ++i) {
+                const auto e = s.createEntity("S");
+                s.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 50 - 25) * 1.2f, 0,
+                                                                    static_cast<float>(i / 50) * -1.2f + 10.0f};
+                auto& m = s.registry().emplace<MeshRendererComponent>(e);
+                m.mesh = PrimitiveMesh::Sphere;
+                m.material = uri;
+            }
+        });
+    }
     run(b, "2D: 10k sprites, 1 texture", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 1u << 30); });
     run(b, "2D: 10k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 6); spriteGrid(s, 10000, 64); });
     run(b, "2D: 50k sprites, 2 textures interleaved", [](Scene& s) { orthoCamera(s, 12); spriteGrid(s, 50000, 64); });

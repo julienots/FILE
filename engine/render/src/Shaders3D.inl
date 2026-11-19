@@ -10,7 +10,11 @@ layout(std140) uniform MaterialData {
     vec4 u_emissive;     // linear rgb * intensity
     vec4 u_pbr;          // metallic, roughness, normal scale, occlusion strength
     vec4 u_uvTransform;  // scale xy, offset zw
-    vec4 u_flags;        // alpha cutoff, unlit, -, -
+    vec4 u_flags;        // alpha cutoff, unlit, toon, -
+    vec4 u_toon;         // toon: bands, softness, specular size, rim width
+    vec4 u_toonShadow;   // toon: shadow tint (linear rgb), rim strength
+    vec4 u_rimColor;     // toon: rim color (linear rgb); outline width in pixels
+    vec4 u_outlineColor; // outline color (linear rgb)
     vec4 u_custom[8];    // custom shader parameters (.agrshader)
 };
 )";
@@ -295,6 +299,59 @@ float shadowFactor(vec3 N, vec3 L) {
     if (t > 0.0) lit = mix(lit, i + 1 < count ? cascadeLit(i + 1, N, NoL) : 1.0, t);
     return mix(1.0, lit, u_shadowParams.w);
 }
+// ---- Stylized (toon) shading: banded light, tinted shadows, sharp highlight, rim light.
+// Light steps of x in 0..1: `bands` levels, soft edges of width u_toon.y around each step.
+float agrToonRamp(float x) {
+    float bands = max(u_toon.x, 1.0);
+    float w = max(u_toon.y, 0.001);
+    float t = clamp(x, 0.0, 1.0) * bands;
+    float b = min(floor(t), bands - 1.0);
+    return clamp((b + smoothstep(0.5 - w, 0.5 + w, t - b)) / bands, 0.0, 1.0);
+}
+vec3 agrToonShade(vec3 albedo, vec3 N, vec3 V, float occlusion) {
+    vec3 tint = u_toonShadow.rgb;
+    vec3 color = vec3(0.0);
+    float sunLit = 0.0;
+    if (dot(u_lightColor.rgb, u_lightColor.rgb) > 0.0) {
+        vec3 L = -u_lightDir.xyz;
+        float NoL = dot(N, L);
+        // Half Lambert: the terminator sits at NoL = 0. Cast shadows join the shadow band, but
+        // fade out where the light grazes the surface: there the shadow map is unreliable and its
+        // filtered values would cross the hard step as speckles (the ramp alone decides there).
+        float shadow = mix(1.0, smoothstep(0.25, 0.75, shadowFactor(N, L)), smoothstep(0.0, 0.25, NoL));
+        sunLit = agrToonRamp(NoL * 0.5 + 0.5) * shadow;
+        sunLit = min(sunLit, agrToonRamp((NoL * 0.5 + 0.5) * shadow));
+        color += albedo * u_lightColor.rgb * mix(tint, vec3(1.0), sunLit);
+        if (u_toon.z > 0.0) {
+            float NoH = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
+            float edge = 1.0 - u_toon.z * u_toon.z * 0.08;  // size 1: wide highlight, 0.25: a small spot
+            float w = max(u_toon.y, 0.002) * 0.05;
+            color += u_lightColor.rgb * smoothstep(edge - w, edge + w, NoH) * sunLit;
+        }
+    }
+    for (int i = 0; i < 8; ++i) {
+        if (i >= u_lightCount.x) break;
+        vec3 d = u_lightPosRange[i].xyz - v_worldPos;
+        float dist2 = max(dot(d, d), 1e-4);
+        vec3 L = d * inversesqrt(dist2);
+        float r = dist2 / (u_lightPosRange[i].w * u_lightPosRange[i].w);
+        float window = clamp(1.0 - r * r, 0.0, 1.0);
+        float atten = window * window / (dist2 + 1.0);
+        if (u_lightColorType[i].w > 0.5) atten *= smoothstep(u_lightSpotDir[i].w, u_lightSpotInner[i].x, dot(-L, u_lightSpotDir[i].xyz));
+        if (atten > 0.0) color += albedo * u_lightColorType[i].rgb * atten * agrToonRamp(max(dot(N, L), 0.0));
+    }
+    // Flat ambient (hemisphere or image sky irradiance): no reflections, readable colors.
+    vec3 ambient = u_envParams.x > 0.5 ? agrEnvIrradiance(N) * u_groundColor.w : hemisphere(N);
+    color += albedo * ambient * occlusion;
+    if (u_toonShadow.w > 0.0) {
+        float NoV = clamp(dot(N, V), 0.0, 1.0);
+        float w = max(u_toon.w, 0.001);
+        float rim = smoothstep(1.0 - w, 1.0 - w + max(u_toon.y, 0.01) + 0.02, 1.0 - NoV);
+        color += u_rimColor.rgb * rim * u_toonShadow.w * (0.35 + 0.65 * sunLit);
+    }
+    return color;
+}
+
 void main() {
 #ifdef AGR_TERRAIN
     // Terrain: 4 layers (units 0, 1, 3, 4) blended by the splat map; tiling per layer in u_emissive.
@@ -370,6 +427,15 @@ void main() {
         return;
     }
 #endif
+    if (u_flags.z > 0.5) {  // toon: vivid colors, no filmic curve (exposure kept)
+        vec3 toon = agrToonShade(base.rgb, N, V, occlusion) + emissive;
+        if (u_fogColor.w > 0.5) {
+            float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
+            toon = mix(toon, u_fogColor.rgb, f);
+        }
+        o_color = vec4(agrUnlit(toon * u_fogParams.z), base.a);
+        return;
+    }
     float a = roughness * roughness;
     vec3 diffuseColor = base.rgb * (1.0 - metallic);
     vec3 f0 = mix(vec3(0.04), base.rgb, metallic);
@@ -414,6 +480,46 @@ void main() {
         color = mix(color, u_fogColor.rgb, f);
     }
     o_color = vec4(agrToneMap(color), base.a);
+}
+)";
+
+/// Outline (inverted hull): back faces pushed out along the normal by a constant number
+/// of pixels in clip space, drawn in the outline color; front faces of the object hide
+/// all but the silhouette. Needs smooth normals (hard-edged meshes show gaps at corners).
+inline constexpr const char* kOutlineVertex = R"(
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 4) in vec4 i_model0;
+layout(location = 5) in vec4 i_model1;
+layout(location = 6) in vec4 i_model2;
+layout(location = 7) in vec4 i_model3;
+layout(location = 8) in vec4 i_normal0;
+layout(location = 9) in vec4 i_normal1;
+layout(location = 10) in vec4 i_normal2;
+void main() {
+    mat4 model = mat4(i_model0, i_model1, i_model2, i_model3);
+#ifdef AGR_SKINNED
+    mat4 skin = a_weights.x * u_joints[int(a_joints.x)] + a_weights.y * u_joints[int(a_joints.y)] +
+                a_weights.z * u_joints[int(a_joints.z)] + a_weights.w * u_joints[int(a_joints.w)];
+    vec3 position = (skin * vec4(a_position, 1.0)).xyz;
+    vec3 normal = mat3(skin) * a_normal;
+#else
+    vec3 position = a_position;
+    vec3 normal = a_normal;
+#endif
+    vec4 clip = u_viewProj * (model * vec4(position, 1.0));
+    vec3 n = mat3(i_normal0.xyz, i_normal1.xyz, i_normal2.xyz) * normal;
+    vec2 dir = (u_viewProj * vec4(n, 0.0)).xy;
+    float len = length(dir);
+    if (len > 1e-6) clip.xy += dir / len * u_rimColor.w * 2.0 * u_time.zw * clip.w;
+    gl_Position = clip;
+}
+)";
+
+inline constexpr const char* kOutlineFragment = R"(
+layout(location = 0) out vec4 o_color;
+void main() {
+    o_color = vec4(agrUnlit(u_outlineColor.rgb), 1.0);
 }
 )";
 

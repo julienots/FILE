@@ -64,6 +64,7 @@ Renderer::~Renderer() {
     for (auto p : m_pbrSkinnedPipelines) m_device.destroyPipeline(p);
     for (CustomPipelines& set : m_customSets) destroyCustomPipelines(set);
     for (auto p : m_shadowSkinnedPipelines) m_device.destroyPipeline(p);
+    for (auto p : m_outlinePipelines) m_device.destroyPipeline(p);
     m_device.destroyPipeline(m_shadowPipeline);
     m_device.destroyPipeline(m_shadowMaskPipeline);
     m_device.destroyPipeline(m_skyPipeline);
@@ -346,7 +347,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
 
     // ------------------------------------------------------------ frame: light, environment
     FrameUniforms frame{};
-    frame.time = Vec4(static_cast<float>(std::fmod(m_time, 3600.0)), 0.0f, 0.0f, 0.0f);
+    frame.time = Vec4(static_cast<float>(std::fmod(m_time, 3600.0)), 0.0f, 1.0f / static_cast<float>(renderW),
+                      1.0f / static_cast<float>(renderH));
     frame.viewProj = viewProj;
     frame.invViewProj = math::inverse(viewProj);
     frame.cameraPos = Vec4(rv.position, 1.0f);
@@ -712,6 +714,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     m_device.beginPass(target, {true, rv.clearColor, true, 1.0f});
     if (m_uniformCapacity > 0) {
         drawMeshItems(m_opaqueItems, 0, false);
+        drawOutlines(m_opaqueItems, 0);
         drawSky();
         drawMeshItems(m_transparentItems, static_cast<u32>(m_opaqueItems.size()), false);
         drawSprites(m_spriteItems);
