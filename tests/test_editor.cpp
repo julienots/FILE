@@ -694,6 +694,18 @@ TEST_CASE("game export: data package, desktop folder safety, Android Gradle proj
     REQUIRE(manifest);
     CHECK(manifest.value().startupScene == project.settings().startupScene);
     CHECK(fs::exists(out / "game" / manifest.value().startupScene));
+    // Scenes ship in the binary format (verified lossless) and load to the same scene.
+    CHECK(data.value().binaryScenes >= 1);
+    {
+        const std::string exported = readTextFile(out / "game" / manifest.value().startupScene);
+        const std::string original = readTextFile(project.root() / project.settings().startupScene);
+        CHECK(SceneSerializer::isBinary(exported));
+        Scene fromBinary, fromText;
+        REQUIRE(SceneSerializer::fromBytes(fromBinary, exported));
+        REQUIRE(SceneSerializer::fromBytes(fromText, original));
+        CHECK(SceneSerializer::toString(fromBinary) == SceneSerializer::toString(fromText));
+        CHECK(exported.size() < original.size());
+    }
     // A folder that is not an export output is never emptied.
     fs::create_directories(out / "mine");
     writeTextFile(out / "mine" / "notes.txt", "keep me");

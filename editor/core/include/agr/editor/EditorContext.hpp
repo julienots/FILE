@@ -120,7 +120,7 @@ private:
     UndoStack m_undo;
     EditorCamera m_camera;
     PlayState m_playState = PlayState::Edit;
-    std::string m_playSnapshot;
+    std::vector<u8> m_playSnapshot;  ///< Binary scene taken when Play starts.
     std::vector<Uuid> m_playSelection;
 };
 

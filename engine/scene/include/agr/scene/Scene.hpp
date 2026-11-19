@@ -100,7 +100,8 @@ private:
     void link(Entity e, Entity parent, Entity before);
     void destroyRecursive(Entity e);
     Entity duplicateRecursive(Entity src, Entity parent, Entity before);
-    void updateTransformRecursive(Entity e, const math::Mat4& parentWorld, bool parentActive);
+    struct TransformPools;
+    void updateTransformRecursive(const TransformPools& pools, Entity e, const math::Mat4& parentWorld, bool parentActive);
 
     std::string m_name;
     mutable ecs::Registry m_registry;

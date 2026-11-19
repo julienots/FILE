@@ -124,9 +124,12 @@ Les scripts Lua utilisent les mêmes fonctions : [SCRIPTING.md](SCRIPTING.md).
 | 2D : 1 000 boîtes qui s'empilent | ~2,8 ms |
 | 3D : 1 000 boîtes qui s'empilent | ~10 ms |
 
-La simulation 3D est **mono-thread** (déterministe sur une plateforme donnée) ; une version
-multi-thread branchée sur le `JobSystem` du moteur est une optimisation possible. Mesures sur téléphones :
-phase 8.
+La simulation 3D s'exécute sur le **`JobSystem` du moteur** (`Physics3DPlugin` branche le monde sur
+`engine.jobs()` ; `Physics3DWorld::setJobSystem(nullptr)` revient au mono-thread). Jolt reste
+**déterministe** quel que soit le nombre de threads ; seuls ses rappels de contact arrivent dans un ordre
+variable, et le moteur les trie (débuts puis fins, par paire de corps) : positions et événements sont
+identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure : 4 000 boîtes qui tombent,
+~7,1 ms par pas sur un thread, ~3,8 ms sur 3 *workers* + le thread principal. Mesures sur téléphones : phase 8.
 
 ## Limites actuelles
 

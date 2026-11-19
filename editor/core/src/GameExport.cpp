@@ -3,7 +3,13 @@
 #include <algorithm>
 #include <cctype>
 
+#include <cstdio>
+#include <optional>
+
+#include <nlohmann/json.hpp>
+
 #include "agr/core/Log.hpp"
+#include "agr/scene/SceneSerializer.hpp"
 
 namespace agr::editor {
 
@@ -51,6 +57,45 @@ Status copyFile(const fs::path& from, const fs::path& to, ExportReport& report) 
     ++report.files;
     report.bytes += fs::file_size(to, ec);
     return {};
+}
+
+Status writeFile(const fs::path& to, const std::vector<u8>& bytes, ExportReport& report) {
+    std::error_code ec;
+    fs::create_directories(to.parent_path(), ec);
+    FILE* f = std::fopen(to.string().c_str(), "wb");
+    if (!f) return makeError(Error::Code::IOError, "cannot write '" + to.string() + "'");
+    const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
+    std::fclose(f);
+    if (!ok) return makeError(Error::Code::IOError, "cannot write '" + to.string() + "'");
+    ++report.files;
+    report.bytes += bytes.size();
+    return {};
+}
+
+/// The scene in the binary format, or nullopt when the conversion would not be exact
+/// (component unknown to the editor, prefab not found, hand-edited file...): the
+/// binary file, read back, must give the very same document as the JSON on disk.
+std::optional<std::vector<u8>> binaryScene(const fs::path& file) {
+    std::string text;
+    if (FILE* f = std::fopen(file.string().c_str(), "rb")) {
+        char buf[65536];
+        for (usize n; (n = std::fread(buf, 1, sizeof buf, f)) > 0;) text.append(buf, n);
+        std::fclose(f);
+    } else {
+        return std::nullopt;
+    }
+    if (SceneSerializer::isBinary(text)) return std::vector<u8>(text.begin(), text.end());
+    const auto original = nlohmann::ordered_json::parse(text, nullptr, false);
+    if (original.is_discarded()) return std::nullopt;
+    Scene source;
+    if (!SceneSerializer::fromJson(source, original)) return std::nullopt;
+    std::vector<u8> bin = SceneSerializer::toBinary(source);
+    Scene check;
+    if (!SceneSerializer::fromBinary(check, bin) || SceneSerializer::toJson(check) != original) {
+        AGR_LOG_INFO("Export", "{}: kept as text (not converted to binary losslessly)", file.filename().string());
+        return std::nullopt;
+    }
+    return bin;
 }
 
 bool hidden(const fs::path& p) {
@@ -118,6 +163,11 @@ Result<ExportReport> packageGameData(const Project& project, const fs::path& gam
     // Scenes (wherever they are in the project, outside assets/ and hidden folders).
     for (const std::string& scene : project.listScenes()) {
         if (hidden(fs::path(scene))) continue;
+        if (std::optional<std::vector<u8>> bin = binaryScene(project.root() / scene)) {
+            if (Status s = writeFile(gameDir / scene, *bin, report); !s) return s.error();
+            ++report.binaryScenes;
+            continue;
+        }
         if (Status s = copyFile(project.root() / scene, gameDir / scene, report); !s) return s.error();
     }
 
@@ -133,8 +183,8 @@ Result<ExportReport> packageGameData(const Project& project, const fs::path& gam
         ++report.files;
         report.bytes += text.size();
     }
-    AGR_LOG_INFO("Export", "game data: {} files, {:.1f} MB -> {}", report.files, static_cast<double>(report.bytes) / (1024.0 * 1024.0),
-                 gameDir.string());
+    AGR_LOG_INFO("Export", "game data: {} files, {:.1f} MB, {} binary scene(s) -> {}", report.files,
+                 static_cast<double>(report.bytes) / (1024.0 * 1024.0), report.binaryScenes, gameDir.string());
     return report;
 }
 

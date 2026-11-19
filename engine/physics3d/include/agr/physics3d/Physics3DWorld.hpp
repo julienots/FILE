@@ -7,6 +7,8 @@
 
 namespace agr {
 
+class JobSystem;
+
 struct Collision3DEvent {
     ecs::Entity a, b;   ///< Body entities (for triggers: a = the sensor).
     bool begin = true;
@@ -35,14 +37,19 @@ struct Physics3DStats {
 
 /// 3D physics of a Scene (Jolt Physics). Same model as Physics2DWorld: bodies mirror
 /// RigidBody / Collider components, two-way transform sync, rebuild on edits,
-/// contact and trigger events, raycasts. Single-threaded simulation (deterministic
-/// on a given platform).
+/// contact and trigger events, raycasts. The simulation runs on the engine's
+/// JobSystem when one is attached (setJobSystem), single-threaded otherwise;
+/// both are deterministic on a given platform and report events in the same order.
 class Physics3DWorld {
 public:
     Physics3DWorld();
     ~Physics3DWorld();
     Physics3DWorld(const Physics3DWorld&) = delete;
     Physics3DWorld& operator=(const Physics3DWorld&) = delete;
+
+    /// Runs the Jolt simulation on `jobs` (nullptr: single-threaded). The JobSystem
+    /// must outlive this world or be detached first.
+    void setJobSystem(JobSystem* jobs);
 
     void step(Scene& scene, float dt);
     void sync(Scene& scene);

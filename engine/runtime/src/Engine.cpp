@@ -90,7 +90,8 @@ Status Engine::loadScene(std::string_view uri) {
     auto text = m_vfs.readText(uri);
     if (!text) return text.error();
     auto scene = std::make_unique<Scene>();
-    if (Status s = SceneSerializer::fromString(*scene, text.value()); !s) return s;
+    // Text (.agrscene as saved by the editor) or binary (exported games): detected from the content.
+    if (Status s = SceneSerializer::fromBytes(*scene, text.value()); !s) return s;
     AGR_LOG_INFO("Engine", "scene '{}' loaded from {} ({} entities)", scene->name(), uri, scene->entityCount());
     m_scene = std::move(scene);
     m_sceneUri = std::string(uri);

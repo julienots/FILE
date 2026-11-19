@@ -6,11 +6,20 @@ Un jeu exporté = le **lecteur AGR** (`agr_player`, le moteur avec tous ses plug
 ```
 game.json         nom, version, identifiant Android, scène de départ, orientation, cadence...
 assets/...        les assets du projet (assets://)
-scenes/*.agrscene les scènes enregistrées
+scenes/*.agrscene les scènes enregistrées, converties au format binaire
 ```
 
 La scène exportée est celle **enregistrée sur le disque** : enregistrez avant d'exporter (la fenêtre
 d'export le rappelle).
+
+**Scènes binaires.** À l'export, chaque scène est convertie au format binaire de `SceneSerializer`
+(même nom de fichier ; le chargement reconnaît le format à sa signature `AGRSCNB`). Contenu identique au
+JSON (composants et champs par nom, références par UUID, instances de prefabs avec leurs modifications),
+sans arbre JSON intermédiaire : pour 100 000 entités, ~0,1 s de chargement au lieu de ~0,7 s. La
+conversion est **vérifiée** : relue, la scène binaire doit redonner exactement le document JSON du disque ;
+sinon (composant inconnu de l'éditeur, prefab introuvable, fichier modifié à la main) la scène est copiée
+telle quelle. `ExportReport::binaryScenes` compte les scènes converties. L'éditeur utilise le même format
+pour ses instantanés (annuler / rétablir, mode Jeu).
 
 ## Depuis l'éditeur
 

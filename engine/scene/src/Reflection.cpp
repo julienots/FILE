@@ -52,7 +52,7 @@ const ComponentInfo* ComponentRegistry::find(ecs::ComponentTypeId id) const {
 }
 
 const ComponentInfo* ComponentRegistry::find(std::string_view name) const {
-    auto it = m_byName.find(std::string(name));
+    auto it = m_byName.find(name);
     return it == m_byName.end() ? nullptr : find(it->second);
 }
 

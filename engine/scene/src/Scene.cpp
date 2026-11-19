@@ -202,17 +202,27 @@ Entity Scene::duplicateRecursive(Entity src, Entity newParent, Entity before) {
 }
 
 // ---------------------------------------------------------------- transforms
+struct Scene::TransformPools {
+    ecs::Pool<TransformComponent>& local;
+    ecs::Pool<WorldTransformComponent>& world;
+    ecs::Pool<StateComponent>& state;
+    ecs::Pool<HierarchyComponent>& tree;
+};
+
 void Scene::updateTransforms() {
-    for (Entity r = m_firstRoot; !r.isNull(); r = hierarchy(r).nextSibling) updateTransformRecursive(r, math::Mat4::identity(), true);
+    // Pools resolved once per update instead of three type lookups per entity.
+    const TransformPools pools{m_registry.pool<TransformComponent>(), m_registry.pool<WorldTransformComponent>(),
+                               m_registry.pool<StateComponent>(), *m_hierarchy};
+    const math::Mat4 identity = math::Mat4::identity();
+    for (Entity r = m_firstRoot; !r.isNull(); r = pools.tree.get(r).nextSibling) updateTransformRecursive(pools, r, identity, true);
 }
 
-void Scene::updateTransformRecursive(Entity e, const math::Mat4& parentWorld, bool parentActive) {
-    const auto& t = m_registry.get<TransformComponent>(e);
-    auto& w = m_registry.get<WorldTransformComponent>(e);
-    w.matrix = parentWorld * t.localMatrix();
-    w.activeInHierarchy = parentActive && m_registry.get<StateComponent>(e).active;
-    for (Entity c = hierarchy(e).firstChild; !c.isNull(); c = hierarchy(c).nextSibling)
-        updateTransformRecursive(c, w.matrix, w.activeInHierarchy);
+void Scene::updateTransformRecursive(const TransformPools& pools, Entity e, const math::Mat4& parentWorld, bool parentActive) {
+    auto& w = pools.world.get(e);
+    w.matrix = parentWorld * pools.local.get(e).localMatrix();
+    w.activeInHierarchy = parentActive && pools.state.get(e).active;
+    for (Entity c = pools.tree.get(e).firstChild; !c.isNull(); c = pools.tree.get(c).nextSibling)
+        updateTransformRecursive(pools, c, w.matrix, w.activeInHierarchy);
 }
 
 math::Mat4 Scene::worldMatrix(Entity e) const {

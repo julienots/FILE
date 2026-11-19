@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstring>
+
+#include "agr/core/JobSystem.hpp"
 
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -38,6 +41,46 @@ struct World3D {
 }  // namespace
 
 TEST_SUITE("physics3d") {
+
+TEST_CASE("simulation on the JobSystem matches the single-threaded one exactly (positions and events)") {
+    auto build = [](World3D& w) {
+        w.box("Ground", {0, -0.5f, 0}, {40, 1, 40}, BodyType3D::Static, false);
+        // A sensor the pile falls through and 300 boxes tumbling onto each other.
+        auto& trig = w.scene.registry().emplace<ColliderComponent>(w.scene.createEntity("Zone"));
+        trig.size = {6, 1, 6};
+        trig.isTrigger = true;
+        for (int i = 0; i < 300; ++i)
+            w.box("Box", {static_cast<float>(i % 6) * 1.05f - 3.0f + static_cast<float>(i / 36) * 0.13f, 2.0f + static_cast<float>(i / 36) * 1.1f,
+                          static_cast<float>((i / 6) % 6) * 1.05f - 3.0f},
+                  {1, 1, 1}, BodyType3D::Dynamic);
+    };
+    World3D single, multi;
+    JobSystem jobs(3);
+    multi.physics.setJobSystem(&jobs);
+    build(single);
+    build(multi);
+    for (int step = 0; step < 120; ++step) {
+        single.physics.step(single.scene, 1.0f / 60.0f);
+        multi.physics.step(multi.scene, 1.0f / 60.0f);
+        const auto& ea = single.physics.events();
+        const auto& eb = multi.physics.events();
+        REQUIRE(ea.size() == eb.size());
+        for (usize i = 0; i < ea.size(); ++i) {
+            CHECK(ea[i].a == eb[i].a);
+            CHECK(ea[i].b == eb[i].b);
+            CHECK(ea[i].begin == eb[i].begin);
+            CHECK(ea[i].trigger == eb[i].trigger);
+        }
+    }
+    usize differing = 0;
+    single.scene.registry().view<RigidBodyComponent>().each([&](ecs::Entity e, RigidBodyComponent&) {
+        const Vec3 a = single.position(e), b = multi.position(e);
+        if (std::memcmp(&a, &b, sizeof a) != 0) ++differing;
+    });
+    CHECK(differing == 0);
+    multi.physics.setJobSystem(nullptr);  // back to single-threaded before `jobs` goes away
+    multi.physics.step(multi.scene, 1.0f / 60.0f);
+}
 
 TEST_CASE("a dynamic box falls and rests on static ground; mass from density or override") {
     World3D w;

@@ -36,7 +36,7 @@ public:
 private:
     struct State {
         std::string label;
-        std::string scene;
+        std::vector<u8> scene;  ///< Binary snapshot (SceneSerializer::toBinary): fast to take and restore.
         std::vector<Uuid> selection;
     };
     bool restore(Scene& scene, std::vector<Uuid>& selection);

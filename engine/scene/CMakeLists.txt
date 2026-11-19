@@ -4,6 +4,7 @@ agr_add_module(scene
         src/Components.cpp
         src/Scene.cpp
         src/SceneSerializer.cpp
+        src/SceneBinary.cpp
         src/Prefab.cpp
         src/Terrain.cpp
         src/PhysicsLayers.cpp

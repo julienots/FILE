@@ -154,6 +154,12 @@ int main() {
             Scene loaded;
             (void)SceneSerializer::fromString(loaded, text);
         });
+        std::vector<u8> binary;
+        bench("scene: serialize 100k entities to binary", 100000, 3, [&] { binary = SceneSerializer::toBinary(scene); });
+        bench("scene: load 100k entities from binary", 100000, 3, [&] {
+            Scene loaded;
+            (void)SceneSerializer::fromBinary(loaded, binary);
+        });
         std::printf("    (scene JSON size: %.1f MB)\n", static_cast<double>(text.size()) / (1024.0 * 1024.0));
     }
 
@@ -237,6 +243,7 @@ int main() {
         }
         std::vector<math::Vec2> path;
         bench("nav: A* 512x512 grid, corner to corner (+ smoothing)", 1, 5, [&] { g_sink = grid.findPath({1.5f, 1.5f}, {510.5f, 510.5f}, path) ? 1.0f : 0.0f; });
+        bench("nav: A* 512x512 grid, corner to corner (raw cells)", 1, 5, [&] { g_sink = grid.findPath({1.5f, 1.5f}, {510.5f, 510.5f}, path, false) ? 1.0f : 0.0f; });
         std::printf("    (%zu points, %u cells expanded)\n", path.size(), grid.lastExpanded());
         std::vector<math::Vec3> verts{{-50, 0, -50}, {50, 0, -50}, {50, 0, 50}, {-50, 0, 50}};
         std::vector<u32> idx{0, 2, 1, 0, 3, 2};
@@ -287,6 +294,29 @@ int main() {
         Physics3DWorld world;
         for (int i = 0; i < 60; ++i) world.step(scene, 1.0f / 60.0f);
         bench("physics3d: step, 1000 boxes piling up", 1000, 60, [&] { world.step(scene, 1.0f / 60.0f); });
+    }
+    {
+        // A bigger pile, single-threaded then on the JobSystem (Jolt jobs on AGR workers).
+        Scene scene;
+        const auto ground = scene.createEntity("Ground");
+        scene.registry().emplace<ColliderComponent>(ground).size = {400, 1, 400};
+        for (int i = 0; i < 4000; ++i) {
+            const auto e = scene.createEntity("Box");
+            scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 20) * 1.1f - 11.0f, 1.0f + static_cast<float>(i / 400) * 1.1f,
+                                                                    static_cast<float>((i / 20) % 20) * 1.1f - 11.0f};
+            scene.registry().emplace<RigidBodyComponent>(e);
+            scene.registry().emplace<ColliderComponent>(e);
+        }
+        Physics3DWorld single;
+        for (int i = 0; i < 20; ++i) single.step(scene, 1.0f / 60.0f);
+        bench("physics3d: step, 4000 boxes falling, 1 thread", 4000, 20, [&] { single.step(scene, 1.0f / 60.0f); });
+        JobSystem jobs;
+        Physics3DWorld multi;
+        multi.setJobSystem(&jobs);
+        for (int i = 0; i < 20; ++i) multi.step(scene, 1.0f / 60.0f);
+        char label[64];
+        std::snprintf(label, sizeof label, "physics3d: step, 4000 boxes falling, JobSystem (%u w)", jobs.workerCount());
+        bench(label, 4000, 20, [&] { multi.step(scene, 1.0f / 60.0f); });
     }
     {
         // 100 characters walking in circles on a floor with obstacles.

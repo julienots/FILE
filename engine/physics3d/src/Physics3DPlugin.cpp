@@ -11,13 +11,14 @@ PluginInfo Physics3DPlugin::info() const {
 Status Physics3DPlugin::onLoad(Engine& engine) {
     registerPhysics3DComponents();
     m_world = std::make_unique<Physics3DWorld>();
+    m_world->setJobSystem(&engine.jobs());
     engine.registerService<Physics3DPlugin>(this);
     return {};
 }
 
 void Physics3DPlugin::onUnload(Engine& engine) {
     engine.registerService<Physics3DPlugin>(nullptr);
-    m_world.reset();
+    m_world.reset();  // detaches from engine.jobs() before the engine shuts it down
 }
 
 void Physics3DPlugin::onFixedUpdate(Engine& engine, const FrameTime& time) {

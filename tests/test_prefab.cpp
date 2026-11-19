@@ -75,6 +75,7 @@ struct Fixture {
         return {};
     }
     void reload(Scene& s, Scene& out) { REQUIRE(SceneSerializer::fromString(out, SceneSerializer::toString(s))); }
+    void reloadBinary(Scene& s, Scene& out) { REQUIRE(SceneSerializer::fromBinary(out, SceneSerializer::toBinary(s))); }
 };
 
 }  // namespace
@@ -148,6 +149,33 @@ TEST_CASE("per-instance changes survive a reload; other instances are untouched"
     CHECK(lr.tryGet<ArmorComponent>(lb));
     CHECK(prefab::overrideCount(loaded, la) == 6);
     CHECK(prefab::overrideCount(loaded, lb) == 0);
+}
+
+TEST_CASE("binary scenes keep prefab instances as references with their overrides") {
+    Fixture f;
+    f.makePrefab(f.scene, f.enemy(f.scene), "assets://enemy.agrprefab");
+    auto a = prefab::instantiate(f.scene, "assets://enemy.agrprefab");
+    auto b = prefab::instantiate(f.scene, "assets://enemy.agrprefab");
+    REQUIRE(a);
+    REQUIRE(b);
+    auto& reg = f.scene.registry();
+    reg.get<NameComponent>(a.value()).name = "Boss";
+    reg.get<AimComponent>(f.child(f.scene, a.value(), "Gun")).damage = 9.0f;
+    f.scene.createEntity("Shield", a.value());
+    const Entity outside = f.scene.createEntity("Outside");
+    reg.emplace<AimComponent>(outside).target = f.child(f.scene, b.value(), "Gun");  // reference into an instance
+    Scene viaJson, viaBinary;
+    f.reload(f.scene, viaJson);
+    f.reloadBinary(f.scene, viaBinary);
+    CHECK(SceneSerializer::toString(viaBinary) == SceneSerializer::toString(viaJson));
+    const Entity la = viaBinary.findByUuid(f.scene.uuidOf(a.value()));
+    REQUIRE(viaBinary.valid(la));
+    CHECK(viaBinary.nameOf(la) == "Boss");
+    CHECK(prefab::overrideCount(viaBinary, la) == prefab::overrideCount(f.scene, a.value()));
+    CHECK(viaBinary.registry().get<AimComponent>(f.child(viaBinary, la, "Gun")).damage == doctest::Approx(9.0f));
+    const Entity lo = viaBinary.findByUuid(f.scene.uuidOf(outside));
+    const Entity lb = viaBinary.findByUuid(f.scene.uuidOf(b.value()));
+    CHECK(viaBinary.registry().get<AimComponent>(lo).target == f.child(viaBinary, lb, "Gun"));
 }
 
 TEST_CASE("applying an instance updates the prefab and every other instance, keeping their own changes") {

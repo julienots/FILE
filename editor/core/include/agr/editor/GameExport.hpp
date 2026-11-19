@@ -17,6 +17,7 @@ struct ExportReport {
     std::filesystem::path output;   ///< Folder, APK or AAB produced.
     u32 files = 0;                  ///< Game data files.
     u64 bytes = 0;                  ///< Game data size.
+    u32 binaryScenes = 0;           ///< Scenes converted to the binary format (faster loading).
     std::vector<std::string> warnings;
     std::string log;                ///< Output of external tools (Gradle).
 };
@@ -26,8 +27,9 @@ struct ExportReport {
 Status prepareExportFolder(const std::filesystem::path& dir);
 
 /// Writes the game data of a project into `gameDir` (created or emptied first if it holds
-/// a previous export): game.json, assets/, every .agrscene of the project. Scenes are
-/// exported as saved on disk.
+/// a previous export): game.json, assets/, every .agrscene of the project. Each scene is
+/// converted to the binary scene format (same file name, loading detects the format) when
+/// the conversion is verified lossless; otherwise it is copied as saved on disk.
 Result<ExportReport> packageGameData(const Project& project, const std::filesystem::path& gameDir);
 
 /// Desktop build: `outputDir`/<Name>/ with the player executable (renamed after the game)

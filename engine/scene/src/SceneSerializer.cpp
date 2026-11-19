@@ -1,5 +1,7 @@
 #include "agr/scene/SceneSerializer.hpp"
 
+#include <algorithm>
+
 #include <nlohmann/json.hpp>
 
 #include "agr/core/Log.hpp"
@@ -122,12 +124,28 @@ bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs:
 
 json componentsToJson(const Scene& scene, Entity e) {
     auto& registry = const_cast<Scene&>(scene).registry();
+    const ComponentRegistry& components = ComponentRegistry::instance();
+    // Only the entity's own components (a handful), in the registry's stable order
+    // (category, name): no sort of every registered type per entity.
+    struct Present {
+        const ComponentInfo* info;
+        void* data;
+    };
+    std::vector<Present> list;
+    list.reserve(16);
+    registry.eachPool([&](ecs::PoolBase& pool) {
+        void* data = pool.getRaw(e);
+        if (!data) return;
+        const ComponentInfo* info = components.find(pool.typeId());
+        if (info && info->serializable) list.push_back({info, data});
+    });
+    std::sort(list.begin(), list.end(), [](const Present& a, const Present& b) {
+        return a.info->category != b.info->category ? a.info->category < b.info->category : a.info->name < b.info->name;
+    });
     json comps = json::object();
-    for (const ComponentInfo* info : ComponentRegistry::instance().all()) {
-        if (!info->serializable) continue;
-        ecs::PoolBase* pool = registry.findPool(info->id);
-        if (!pool || !pool->contains(e)) continue;
-        void* comp = pool->getRaw(e);
+    for (const Present& p : list) {
+        const ComponentInfo* info = p.info;
+        void* comp = p.data;
         json fields = json::object();
         for (const auto& f : info->fields) {
             if (f.flags & FieldFlag_Transient) continue;
@@ -187,8 +205,10 @@ bool readComponent(LoadContext& ctx, Entity e, const std::string& compName, cons
     }
     if (!fields.is_object()) return true;
     for (const auto& f : info->fields) {
-        if ((f.flags & FieldFlag_Transient) || !fields.contains(f.name)) continue;
-        if (!readField(f, comp, fields[f.name], e, info->id, ctx.refs))
+        if (f.flags & FieldFlag_Transient) continue;
+        const auto it = fields.find(f.name);
+        if (it == fields.end()) continue;
+        if (!readField(f, comp, *it, e, info->id, ctx.refs))
             AGR_LOG_WARN("Serializer", "field '{}.{}' has an invalid value; default kept", compName, f.name);
     }
     return true;
@@ -197,12 +217,13 @@ bool readComponent(LoadContext& ctx, Entity e, const std::string& compName, cons
 Status createEntries(LoadContext& ctx, const json& entities, Entity rootParent, const IdFn& idFor, Entity* firstCreated) {
     if (!entities.is_array()) return makeError(Error::Code::ParseError, "'entities' must be an array");
     for (const json& item : entities) {
-        if (!item.is_object() || !item.contains("id") || !item["id"].is_string())
-            return makeError(Error::Code::ParseError, "entity entry without a valid 'id'");
-        const std::string fileId = item["id"].get<std::string>();
+        if (!item.is_object()) return makeError(Error::Code::ParseError, "entity entry without a valid 'id'");
+        const auto idIt = item.find("id");
+        if (idIt == item.end() || !idIt->is_string()) return makeError(Error::Code::ParseError, "entity entry without a valid 'id'");
+        const std::string& fileId = idIt->get_ref<const std::string&>();
         Entity parent = rootParent;
-        if (item.contains("parent") && item["parent"].is_string()) {
-            parent = ctx.lookup(item["parent"].get<std::string>());
+        if (const auto pIt = item.find("parent"); pIt != item.end() && pIt->is_string()) {
+            parent = ctx.lookup(pIt->get_ref<const std::string&>());
             if (parent.isNull()) {
                 if (ctx.strictParents)
                     return makeError(Error::Code::ParseError, "entity " + fileId + " references a parent defined later or missing");
@@ -211,13 +232,13 @@ Status createEntries(LoadContext& ctx, const json& entities, Entity rootParent, 
         }
         const Uuid id = idFor ? idFor(fileId) : Uuid{};
         Entity e{};
-        if (item.contains("prefab") && item["prefab"].is_string()) {
+        if (const auto prefabIt = item.find("prefab"); prefabIt != item.end() && prefabIt->is_string()) {
             Status s = loadInstanceEntry(ctx, item, parent, id.isNull() ? Uuid::generate() : id, &e);
             if (!s) return s;
         } else {
             e = ctx.scene.createEntity("Entity", parent, id);
-            if (item.contains("components"))
-                for (const auto& [compName, fields] : item["components"].items()) readComponent(ctx, e, compName, fields);
+            if (const auto cIt = item.find("components"); cIt != item.end() && cIt->is_object())
+                for (auto c = cIt->begin(); c != cIt->end(); ++c) readComponent(ctx, e, c.key(), c.value());
         }
         ctx.byFileId[fileId] = e;
         if (firstCreated && firstCreated->isNull()) *firstCreated = e;

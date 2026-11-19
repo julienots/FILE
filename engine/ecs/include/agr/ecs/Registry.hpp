@@ -5,6 +5,10 @@
 //  * add / remove / has are O(1); iteration walks the smallest pool of a view.
 //  * Component type ids are derived from the type *name* hash, so the same
 //    component has the same id in the host executable and in plugin libraries.
+//  * Pools are found through a flat open-addressing table (the type id is
+//    already a hash): one or two cache lines per lookup instead of the node
+//    chasing of std::unordered_map. Pools are kept in creation order, so
+//    every walk over pools (destroy, serialization, editor) is deterministic.
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -15,6 +19,7 @@
 #include <vector>
 
 #include "agr/core/Assert.hpp"
+#include "agr/core/Platform.hpp"
 #include "agr/core/StringId.hpp"
 #include "agr/ecs/Entity.hpp"
 
@@ -82,7 +87,13 @@ public:
         AGR_ASSERT(contains(e), "component missing");
         return m_data[m_sparse[e.index]];
     }
-    T* tryGet(Entity e) { return contains(e) ? &m_data[m_sparse[e.index]] : nullptr; }
+    T* tryGet(Entity e) {
+        if (e.index >= m_sparse.size()) return nullptr;
+        const u32 idx = m_sparse[e.index];
+        return idx != kAbsent && m_dense[idx] == e ? &m_data[idx] : nullptr;
+    }
+    /// Component stored at dense position `i` (the order of entities()).
+    T& at(usize i) { return m_data[i]; }
 
     void remove(Registry& r, Entity e) override {
         if (!contains(e)) return;
@@ -171,7 +182,8 @@ public:
 
     void destroy(Entity e) {
         if (!valid(e)) return;
-        for (auto& [id, pool] : m_pools) pool->remove(*this, e);
+        // Index loop: a destroy hook may create a new pool.
+        for (usize i = 0; i < m_poolList.size(); ++i) m_poolList[i]->remove(*this, e);
         m_alive[e.index] = 0;
         ++m_versions[e.index];
         m_free.push_back(e.index);
@@ -188,7 +200,7 @@ public:
 
     /// Destroys every entity and every component.
     void clear() {
-        for (auto& [id, pool] : m_pools) pool->clear(*this);
+        for (usize i = 0; i < m_poolList.size(); ++i) m_poolList[i]->clear(*this);
         m_versions.clear();
         m_alive.clear();
         m_free.clear();
@@ -238,42 +250,48 @@ public:
     template <typename T>
     Pool<T>& pool() {
         const ComponentTypeId id = componentTypeId<T>();
-        auto it = m_pools.find(id);
-        if (it == m_pools.end()) it = m_pools.emplace(id, std::make_unique<Pool<T>>()).first;
-        return static_cast<Pool<T>&>(*it->second);
+        if (PoolBase* p = findPool(id)) return static_cast<Pool<T>&>(*p);
+        return static_cast<Pool<T>&>(insertPool(id, std::make_unique<Pool<T>>()));
     }
 
     template <typename T>
     Pool<T>* findPool() const {
-        auto it = m_pools.find(componentTypeId<T>());
-        return it == m_pools.end() ? nullptr : static_cast<Pool<T>*>(it->second.get());
+        return static_cast<Pool<T>*>(findPool(componentTypeId<T>()));
     }
 
     PoolBase* findPool(ComponentTypeId id) const {
-        auto it = m_pools.find(id);
-        return it == m_pools.end() ? nullptr : it->second.get();
+        if (m_slots.empty()) return nullptr;
+        const usize mask = m_slots.size() - 1;
+        for (usize i = slotOf(id) & mask;; i = (i + 1) & mask) {
+            const Slot& s = m_slots[i];
+            if (s.pool == nullptr) return nullptr;
+            if (s.id == id) return s.pool;
+        }
     }
 
     /// Registers a pool created elsewhere (reflection registers pools by id).
     PoolBase& ensurePool(ComponentTypeId id, const std::function<std::unique_ptr<PoolBase>()>& factory) {
-        auto it = m_pools.find(id);
-        if (it == m_pools.end()) it = m_pools.emplace(id, factory()).first;
-        return *it->second;
+        if (PoolBase* p = findPool(id)) return *p;
+        return insertPool(id, factory());
     }
 
     /// Clears and deletes a pool. Required before unloading a plugin that
     /// defined the component type (its code lives in the plugin library).
     void erasePool(ComponentTypeId id) {
-        auto it = m_pools.find(id);
-        if (it == m_pools.end()) return;
-        it->second->clear(*this);
-        m_pools.erase(it);
+        PoolBase* p = findPool(id);
+        if (!p) return;
+        p->clear(*this);
+        auto it = std::find_if(m_poolList.begin(), m_poolList.end(), [&](const auto& u) { return u.get() == p; });
+        m_poolList.erase(it);
+        rebuildSlots(m_slots.size());
     }
 
     template <typename Fn>
     void eachPool(Fn&& fn) {
-        for (auto& [id, p] : m_pools) fn(*p);
+        for (usize i = 0; i < m_poolList.size(); ++i) fn(*m_poolList[i]);
     }
+
+    usize poolCount() const { return m_poolList.size(); }
 
 private:
     template <typename T>
@@ -282,11 +300,40 @@ private:
         return p && p->contains(e);
     }
 
+    struct Slot {
+        ComponentTypeId id = 0;
+        PoolBase* pool = nullptr;
+    };
+
+    static usize slotOf(ComponentTypeId id) { return static_cast<usize>(id ^ (id >> 29) ^ (id >> 47)); }
+
+    PoolBase& insertPool(ComponentTypeId id, std::unique_ptr<PoolBase> pool) {
+        PoolBase& ref = *pool;
+        m_poolList.push_back(std::move(pool));
+        // Load factor <= 1/2 keeps probe sequences to one or two slots.
+        if (m_poolList.size() * 2 > m_slots.size()) rebuildSlots(std::max<usize>(16, m_slots.size() * 2));
+        else placeSlot(id, &ref);
+        return ref;
+    }
+
+    void placeSlot(ComponentTypeId id, PoolBase* p) {
+        const usize mask = m_slots.size() - 1;
+        usize i = slotOf(id) & mask;
+        while (m_slots[i].pool != nullptr) i = (i + 1) & mask;
+        m_slots[i] = Slot{id, p};
+    }
+
+    void rebuildSlots(usize capacity) {
+        m_slots.assign(capacity, Slot{});
+        for (auto& p : m_poolList) placeSlot(p->typeId(), p.get());
+    }
+
     std::vector<u32> m_versions;
     std::vector<u8> m_alive;
     std::vector<u32> m_free;
     usize m_aliveCount = 0;
-    std::unordered_map<ComponentTypeId, std::unique_ptr<PoolBase>> m_pools;
+    std::vector<std::unique_ptr<PoolBase>> m_poolList;  ///< Creation order.
+    std::vector<Slot> m_slots;                          ///< Open addressing, power-of-two size.
 };
 
 /// Iterates entities owning every component in Ts. Driven by the smallest pool.
@@ -313,8 +360,12 @@ public:
         // Iterate backwards so that removing the current entity is safe.
         for (usize i = ents.size(); i-- > 0;) {
             const Entity e = ents[i];
-            if (!std::apply([&](auto*... p) { return (p->contains(e) && ...); }, m_pools)) continue;
-            std::apply([&](auto*... p) { fn(e, p->get(e)...); }, m_pools);
+            // The driving pool is read at its dense index (no sparse lookup);
+            // the others resolve and check membership in one step.
+            const auto ptrs = std::apply(
+                [&](auto*... p) { return std::make_tuple(lookup(p, e, i)...); }, m_pools);
+            if (!std::apply([](auto*... c) { return ((c != nullptr) && ...); }, ptrs)) continue;
+            std::apply([&](auto*... c) { fn(e, *c...); }, ptrs);
             if (i > ents.size()) i = ents.size();
         }
     }
@@ -329,6 +380,11 @@ public:
     }
 
 private:
+    template <typename T>
+    AGR_FORCE_INLINE T* lookup(Pool<T>* p, Entity e, usize i) const {
+        return static_cast<PoolBase*>(p) == m_driver ? &p->at(i) : p->tryGet(e);
+    }
+
     std::tuple<Pool<Ts>*...> m_pools;
     PoolBase* m_driver;
 };

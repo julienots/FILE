@@ -178,7 +178,12 @@ public:
 
 private:
     std::unordered_map<ecs::ComponentTypeId, ComponentInfo> m_byId;
-    std::unordered_map<std::string, ecs::ComponentTypeId> m_byName;
+    /// Transparent hash: find(string_view) without building a std::string.
+    struct NameHash {
+        using is_transparent = void;
+        usize operator()(std::string_view s) const noexcept { return std::hash<std::string_view>{}(s); }
+    };
+    std::unordered_map<std::string, ecs::ComponentTypeId, NameHash, std::equal_to<>> m_byName;
 };
 
 } // namespace agr

@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -14,7 +15,9 @@
 #include <Jolt/Jolt.h>
 
 #include <Jolt/Core/Factory.h>
+#include <Jolt/Core/FixedSizeFreeList.h>
 #include <Jolt/Core/JobSystemSingleThreaded.h>
+#include <Jolt/Core/JobSystemWithBarrier.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyLock.h>
@@ -38,6 +41,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include "agr/core/JobSystem.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/core/Time.hpp"
 #include "agr/scene/Terrain.hpp"
@@ -167,6 +171,47 @@ private:
     JPH::BodyID m_ignore;
 };
 
+/// Jolt job system running on AGR's JobSystem: physics jobs share the engine's
+/// worker threads instead of spawning a second pool (no oversubscription, and
+/// the calling thread helps through Jolt's barrier while it waits).
+class AgrJoltJobSystem final : public JPH::JobSystemWithBarrier {
+public:
+    explicit AgrJoltJobSystem(agr::JobSystem& jobs) : JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), m_jobs(jobs) {
+        m_pool.Init(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsJobs);
+    }
+    int GetMaxConcurrency() const override { return static_cast<int>(m_jobs.workerCount()) + 1; }
+    JobHandle CreateJob(const char* name, JPH::ColorArg color, const JobFunction& fn, JPH::uint32 numDependencies) override {
+        JPH::uint32 index;
+        for (;;) {
+            index = m_pool.ConstructObject(name, color, this, fn, numDependencies);
+            if (index != Pool::cInvalidObjectIndex) break;
+            std::this_thread::yield();  // every job slot in flight: let them finish
+        }
+        Job* job = &m_pool.Get(index);
+        JobHandle handle(job);  // keeps the job alive: it may complete right after QueueJob
+        if (numDependencies == 0) QueueJob(job);
+        return handle;
+    }
+
+protected:
+    void QueueJob(Job* job) override {
+        job->AddRef();
+        m_jobs.submit([job] {
+            job->Execute();  // no-op when a barrier wait already ran it
+            job->Release();
+        });
+    }
+    void QueueJobs(Job** jobs, JPH::uint count) override {
+        for (JPH::uint i = 0; i < count; ++i) QueueJob(jobs[i]);
+    }
+    void FreeJob(Job* job) override { m_pool.DestructObject(job); }
+
+private:
+    using Pool = JPH::FixedSizeFreeList<Job>;
+    agr::JobSystem& m_jobs;
+    Pool m_pool;
+};
+
 /// Records contacts from Jolt's callbacks (collision steps may run on job threads).
 class Listener final : public JPH::ContactListener {
 public:
@@ -241,7 +286,7 @@ struct Physics3DWorld::Impl {
     std::unordered_map<u64, Character> characters;
     std::vector<JointBreak3DEvent> breaks;
     std::unique_ptr<JPH::TempAllocatorImpl> temp;
-    std::unique_ptr<JPH::JobSystemSingleThreaded> jobs;
+    std::unique_ptr<JPH::JobSystem> jobs;
     std::unique_ptr<JPH::PhysicsSystem> system;
     Listener listener{layers};
     u64 sceneGeneration = 0;
@@ -252,6 +297,11 @@ struct Physics3DWorld::Impl {
     std::vector<Collision3DEvent> events;
     Vec3 gravity{0.0f, -9.81f, 0.0f};
     Physics3DStats stats;
+
+    void setJobSystem(JobSystem* js) {
+        if (js && js->workerCount() > 0) jobs = std::make_unique<AgrJoltJobSystem>(*js);
+        else jobs = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
+    }
 
     Impl() {
         acquireJolt();
@@ -926,6 +976,17 @@ struct Physics3DWorld::Impl {
             std::lock_guard lock(listener.mutex);
             pairs.swap(listener.pairs);
         }
+        // Callbacks arrive from several job threads in any order: sort them so that
+        // events are identical to a single-threaded step (all begins, then all ends,
+        // each by body pair). Jolt reports a sub-shape pair at most once per step.
+        std::stable_sort(pairs.begin(), pairs.end(), [](const Listener::Pair& x, const Listener::Pair& y) {
+            if (x.begin != y.begin) return x.begin;
+            const u32 xa = std::min(x.a.GetIndex(), x.b.GetIndex()), xb = std::max(x.a.GetIndex(), x.b.GetIndex());
+            const u32 ya = std::min(y.a.GetIndex(), y.b.GetIndex()), yb = std::max(y.a.GetIndex(), y.b.GetIndex());
+            if (xa != ya) return xa < ya;
+            if (xb != yb) return xb < yb;
+            return x.a.GetIndex() < y.a.GetIndex();
+        });
         for (const Listener::Pair& p : pairs) {
             const u32 ia = p.a.GetIndex(), ib = p.b.GetIndex();
             const u64 key = (static_cast<u64>(std::min(ia, ib)) << 32) | std::max(ia, ib);
@@ -964,6 +1025,7 @@ Physics3DWorld::~Physics3DWorld() = default;
 void Physics3DWorld::step(Scene& scene, float dt) { m->step(scene, dt); }
 void Physics3DWorld::sync(Scene& scene) { m->sync(scene); }
 void Physics3DWorld::reset() { m->reset(); }
+void Physics3DWorld::setJobSystem(JobSystem* jobs) { m->setJobSystem(jobs); }
 void Physics3DWorld::setGravity(Vec3 g) {
     m->gravity = g;
     m->system->SetGravity(toJ(g));

@@ -1,5 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cstring>
+
 #include <nlohmann/json.hpp>
 
 #include "agr/scene/Reflection.hpp"
@@ -193,6 +196,79 @@ TEST_CASE("scene serialization round trip") {
     CHECK(SceneSerializer::toString(loaded) == text);
     // Enums are written by name.
     CHECK(text.find("\"Blue\"") != std::string::npos);
+}
+
+TEST_CASE("binary scenes: same content as JSON, both formats detected, unknown data skipped") {
+    registerTestComponents();
+    Scene s("Level 2");
+    const Entity player = s.createEntity("Player");
+    const Entity cam = s.createEntity("Camera", player);
+    s.registry().get<TransformComponent>(cam).position = {0, 2, -5};
+    s.registry().get<TransformComponent>(cam).rotation = math::Quat::fromEuler({0.1f, 0.2f, 0.3f});
+    s.registry().get<StateComponent>(cam).layer = 3;
+    auto& follow = s.registry().emplace<FollowComponent>(cam);
+    follow.target = player;
+    follow.team = Team::Blue;
+    follow.distance = 7.5f;
+    follow.tint = {0.5f, 0.25f, 1.0f, 1.0f};
+    follow.label = "main camera";
+    const Entity back = s.createEntity("Back reference");
+    s.registry().emplace<FollowComponent>(player).target = back;  // reference to an entity written later
+    s.createEntity("Light", back);
+
+    const std::vector<u8> bin = SceneSerializer::toBinary(s);
+    const std::string_view view(reinterpret_cast<const char*>(bin.data()), bin.size());
+    CHECK(SceneSerializer::isBinary(view));
+    CHECK_FALSE(SceneSerializer::isBinary(SceneSerializer::toString(s)));
+    Scene loaded;
+    REQUIRE(SceneSerializer::fromBinary(loaded, bin));
+    // Identical content: the JSON written from either scene is the same document.
+    CHECK(SceneSerializer::toString(loaded) == SceneSerializer::toString(s));
+    CHECK(loaded.name() == "Level 2");
+    const Entity lp = loaded.findByUuid(s.uuidOf(player));
+    const Entity lc = loaded.findByUuid(s.uuidOf(cam));
+    REQUIRE(loaded.valid(lc));
+    CHECK(loaded.registry().get<FollowComponent>(lc).target == lp);
+    CHECK(loaded.registry().get<FollowComponent>(lp).target == loaded.findByUuid(s.uuidOf(back)));
+    const math::Mat4 wl = loaded.worldMatrix(lc), ws = s.worldMatrix(cam);
+    CHECK(std::memcmp(&wl, &ws, sizeof(math::Mat4)) == 0);  // transforms updated after loading
+    // Writing the loaded scene gives the same bytes (stable output).
+    CHECK(SceneSerializer::toBinary(loaded) == bin);
+
+    // fromBytes accepts both formats.
+    Scene a, b;
+    REQUIRE(SceneSerializer::fromBytes(a, view));
+    REQUIRE(SceneSerializer::fromBytes(b, SceneSerializer::toString(s)));
+    CHECK(SceneSerializer::toString(a) == SceneSerializer::toString(b));
+
+    // Unknown component and unknown field (renamed in the string table): skipped, the rest loads.
+    auto patch = [&](std::string from, std::string to) {
+        std::vector<u8> out = bin;
+        const auto it = std::search(out.begin(), out.end(), from.begin(), from.end());
+        REQUIRE(it != out.end());
+        std::copy(to.begin(), to.end(), it);
+        return out;
+    };
+    Scene unknown;
+    REQUIRE(SceneSerializer::fromBinary(unknown, patch("TestFollow", "TestFollox")));
+    CHECK(unknown.entityCount() == 4);
+    CHECK_FALSE(unknown.registry().tryGet<FollowComponent>(unknown.findByUuid(s.uuidOf(cam))));
+    CHECK(unknown.registry().get<TransformComponent>(unknown.findByUuid(s.uuidOf(cam))).position == Vec3{0, 2, -5});
+    Scene renamed;
+    REQUIRE(SceneSerializer::fromBinary(renamed, patch("distance", "distancf")));
+    const auto& rf = renamed.registry().get<FollowComponent>(renamed.findByUuid(s.uuidOf(cam)));
+    CHECK(rf.distance == doctest::Approx(2.0f));  // default kept
+    CHECK(rf.label == "main camera");             // other fields read
+
+    // Corrupt input never crashes: every truncation is rejected or loads a valid prefix.
+    for (usize n = 0; n < bin.size(); ++n) {
+        Scene t;
+        CHECK_FALSE(SceneSerializer::fromBinary(t, std::span(bin.data(), n)));
+    }
+    std::vector<u8> future = bin;
+    future[8] = 99;  // version
+    Scene v;
+    CHECK(SceneSerializer::fromBinary(v, future).error().code == Error::Code::VersionMismatch);
 }
 
 TEST_CASE("serializer rejects bad input and survives unknown components") {

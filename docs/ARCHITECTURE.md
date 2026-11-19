@@ -135,4 +135,14 @@ sauvegarde ne corrompt pas le fichier existant.
 
 `JobSystem` : *workers* = cœurs − 1 sur desktop, plafonné à 4 sur mobile. `wait()` exécute des
 jobs en attendant au lieu de bloquer, donc le parallélisme imbriqué ne provoque pas d'interblocage.
-Pour un travail fin, utilisez `parallelFor` / `submitBatch` (un seul verrou et un seul réveil).
+
+- Les jobs passent par une **file circulaire sans verrou** (MPMC bornée, algorithme de D. Vyukov,
+  16 384 places) : soumettre et prendre un job coûte quelques opérations atomiques. Au-delà, les jobs
+  débordent dans une liste protégée par un mutex.
+- Un *worker* sans travail **tourne brièvement** (instruction `pause` / `yield` du CPU, ~50-150 µs sur
+  desktop, ~10-20 µs sur mobile pour la batterie) avant de s'endormir : les jobs d'une même image sont
+  pris sans réveil du noyau. Le mutex ne sert plus qu'à s'endormir et à réveiller.
+- `parallelFor` garde un lot pour le thread appelant et ne réveille que les *workers* utiles ; un seul
+  lot s'exécute directement, sans file.
+- La physique 3D (Jolt) s'exécute sur ces mêmes *workers* (`Physics3DWorld::setJobSystem`, branché par
+  `Physics3DPlugin`) : pas de second pool de threads.

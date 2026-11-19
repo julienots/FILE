@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <numeric>
 
 #include "agr/core/JobSystem.hpp"
@@ -67,4 +69,41 @@ TEST_CASE("submitBatch runs every job and releases the counter") {
     CHECK(n.load() == 500);
     jobs.submitBatch({}, &c);  // empty batch is a no-op
     CHECK(c.done());
+}
+
+TEST_CASE("more jobs than the lock-free ring holds spill over and all run, from several producers") {
+    JobSystem jobs(3);
+    std::atomic<int> n{0};
+    JobCounter c;
+    // 50k jobs submitted at once (the ring holds 16k) plus jobs that submit jobs.
+    std::vector<JobSystem::Job> batch;
+    for (int i = 0; i < 50000; ++i) batch.emplace_back([&n] { n.fetch_add(1, std::memory_order_relaxed); });
+    jobs.submitBatch(std::move(batch), &c);
+    for (int p = 0; p < 8; ++p)
+        jobs.submit(
+            [&] {
+                for (int k = 0; k < 1000; ++k) jobs.submit([&n] { n.fetch_add(1, std::memory_order_relaxed); }, &c);
+            },
+            &c);
+    jobs.wait(c);
+    CHECK(n.load() == 58000);
+    CHECK(c.done());
+}
+
+TEST_CASE("workers asleep between bursts still wake up for new work") {
+    JobSystem jobs(2);
+    for (int burst = 0; burst < 3; ++burst) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));  // longer than the spin window: workers park
+        std::atomic<int> n{0};
+        JobCounter c;
+        for (int i = 0; i < 100; ++i) jobs.submit([&n] { ++n; }, &c);
+        jobs.wait(c);
+        CHECK(n.load() == 100);
+    }
+    // parallelFor with one batch runs inline; with none, nothing runs.
+    int calls = 0;
+    jobs.parallelFor(10, 64, [&](u32 b, u32 e) { calls += static_cast<int>(e - b); });
+    CHECK(calls == 10);
+    jobs.parallelFor(0, 64, [&](u32, u32) { ++calls; });
+    CHECK(calls == 10);
 }

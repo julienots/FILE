@@ -458,7 +458,7 @@ void EditorContext::play() {
         return;
     }
     if (m_playState != PlayState::Edit) return;
-    m_playSnapshot = SceneSerializer::toString(scene(), -1);
+    m_playSnapshot = SceneSerializer::toBinary(scene());
     m_playSelection = m_selection.ids();
     m_playState = PlayState::Playing;
     m_engine.setTimeScale(1.0);
@@ -477,7 +477,7 @@ void EditorContext::pause() {
 
 void EditorContext::stop() {
     if (m_playState == PlayState::Edit) return;
-    if (Status s = SceneSerializer::fromString(scene(), m_playSnapshot); !s)
+    if (Status s = SceneSerializer::fromBinary(scene(), m_playSnapshot); !s)
         AGR_LOG_ERROR("Editor", "could not restore the edited scene: {}", s.error().message);
     m_selection.assign(m_playSelection);
     m_playState = PlayState::Edit;

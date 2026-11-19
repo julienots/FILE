@@ -7,7 +7,7 @@ namespace agr::editor {
 
 void UndoStack::reset(const Scene& scene, const std::vector<Uuid>& selection) {
     m_states.clear();
-    m_states.push_back({"", SceneSerializer::toString(scene, -1), selection});
+    m_states.push_back({"", SceneSerializer::toBinary(scene), selection});
     m_pos = 0;
     m_savedPos = 0;
 }
@@ -17,7 +17,7 @@ void UndoStack::commit(const std::string& label, const Scene& scene, const std::
         reset(scene, selection);
         return;
     }
-    std::string snapshot = SceneSerializer::toString(scene, -1);
+    std::vector<u8> snapshot = SceneSerializer::toBinary(scene);
     if (snapshot == m_states[m_pos].scene) {  // nothing changed: keep history clean
         m_states[m_pos].selection = selection;
         return;
@@ -34,7 +34,7 @@ void UndoStack::commit(const std::string& label, const Scene& scene, const std::
 
 bool UndoStack::restore(Scene& scene, std::vector<Uuid>& selection) {
     const State& s = m_states[m_pos];
-    if (Status st = SceneSerializer::fromString(scene, s.scene); !st) {
+    if (Status st = SceneSerializer::fromBinary(scene, s.scene); !st) {
         AGR_LOG_ERROR("Editor", "undo / redo failed: {}", st.error().message);
         return false;
     }
