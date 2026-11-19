@@ -160,7 +160,8 @@ public:
     float grassDensity = 1.f;
     bool detailedFoliage = true;   // leaf cards on near trees (off on low-end profiles)
     void unloadAll();
-    void generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const;   // used by tests and workers
+    void generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const;
+    static void uploadBuild(ChunkBuild& b, Chunk& c);   // 2.2.2 meshes of a build into any chunk (realm scenery)   // used by tests and workers
 
     // ---- collision ------------------------------------------------------------------------
     // Pushes a circle (pos.xz, radius) out of static colliders; returns true if collided.

@@ -252,6 +252,7 @@ struct DungeonState {
     std::vector<TileType> tiles;
     std::vector<DungeonRoom> rooms;
     Mesh floor, walls, props;
+    Chunk realm;   // 2.2.2 celestial realm: terrain-shaded islands, trees, grass (built like a world chunk)
     std::vector<Collider> colliders;
     std::vector<vec4> lights;
     std::vector<vec4> emitters;

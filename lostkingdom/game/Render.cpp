@@ -73,14 +73,15 @@ void Game::updateCamera(float dt) {
     }
     // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
     // for the overworld)
-    float distCap = dungeon.active ? 16.f : CameraRig::DIST_MAX;
+    bool openSky = dungeon.active && dungeon.theme == 8;   // 2.2.2 the celestial realm: free camera, the sky and the far islands are the show
+    float distCap = dungeon.active && !openSky ? 16.f : CameraRig::DIST_MAX;
     camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), settings.cameraSmooth ? 4.f : 10.f, dt);
 
     CameraRigIn ri;
     ri.focus = camFocus; ri.lookAhead = camLookAhead;
     // dungeons (narrow 4 m corridors): the camera stays above the walls as in 1.5 and the see-through shader
     // fades them; no low "sky" angle there (walls would fill the view)
-    ri.yaw = camYaw; ri.pitch = dungeon.active ? std::max(camPitch, 0.35f) : camPitch; ri.dist = camDist;
+    ri.yaw = camYaw; ri.pitch = dungeon.active && !openSky ? std::max(camPitch, 0.35f) : camPitch; ri.dist = camDist;
     ri.playing = state == GameState::Playing;
     ri.fovY = (dungeon.active ? 40.f : 38.f) * DEG;
     ri.ground = [this](float x, float z) {

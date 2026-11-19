@@ -134,11 +134,7 @@ void Game::buildDungeon(int idx) {
                 bool inRoom = false;
                 for (auto& rm : d.rooms) if (x >= rm.x && x < rm.x + rm.w && z >= rm.z && z < rm.z + rm.h) inRoom = true;
                 if (inRoom) {
-                    fl.bevelBox(c + vec3(0, -0.25f, 0), {TILE * 0.5f, 0.25f, TILE * 0.5f}, 0.12f, Mat(lerp(th.floor, th.floor2, r.f()), 0.9f));
-                    wl.rock(c + vec3(r.range(-0.6f, 0.6f), -1.8f, r.range(-0.6f, 0.6f)), vec3(TILE * 0.55f, 1.8f, TILE * 0.55f), Mat(lerp(th.wall, th.wall * 0.8f, r.f()), 0.9f), r.next(), 0);
-                    wl.cone(c + vec3(r.range(-0.8f, 0.8f), -3.2f, r.range(-0.8f, 0.8f)), c + vec3(r.range(-0.4f, 0.4f), -3.2f - r.range(2.5f, 6.f), r.range(-0.4f, 0.4f)), r.range(0.8f, 1.6f), Mat(th.wall * 0.75f, 0.9f), 6);
-                    if (r.chance(0.18f)) { const PropTemplate& tp = propTemplate(P_MAGICCRYSTAL, r.irange(0, 2)); MeshBuilder tmp; tmp.append(tp.solid); vec3 q = c + vec3(r.range(-1.3f, 1.3f), 0, r.range(-1.3f, 1.3f)); for (auto& v : tmp.v) { v.px = v.px * 0.6f + q.x; v.py = v.py * 0.6f + q.y; v.pz = v.pz * 0.6f + q.z; } pp.append(tmp); }
-                    if (r.chance(0.25f)) { const PropTemplate& tp = propTemplate(P_FLOWERS, r.irange(0, 2)); MeshBuilder tmp; tmp.append(tp.foliage); tmp.append(tp.solid); vec3 q = c + vec3(r.range(-1.4f, 1.4f), 0, r.range(-1.4f, 1.4f)); for (auto& v : tmp.v) { v.px += q.x; v.py += q.y; v.pz += q.z; } pp.append(tmp); }
+                    // 2.2.2 the island itself is built below as one organic, terrain-shaded mesh (see buildRealm)
                 } else {
                     // bridge: translucent-looking glowing planks between two rails of light
                     for (int k = 0; k < 4; k++) fl.box(c + vec3(0, -0.06f, (k - 1.5f) * TILE * 0.25f), {TILE * 0.32f, 0.05f, TILE * 0.11f}, Mat(hexColor(0x8ae8ff) * 0.6f, 0.2f, 0, 1.2f));
@@ -186,6 +182,108 @@ void Game::buildDungeon(int idx) {
                 }
             }
         }
+    if (D.theme == 8) {
+        // 2.2.2 celestial islands built like a world chunk: an organic island top with the world's grass and rock
+        // textures (terrain shader), cliffs that drop away under a hanging root of stone, real grass, flowers, trees
+        ChunkBuild cb; cb.liteProps = false; cb.region = R_ELDERWOOD;
+        Rng ir(D.seed + 31);
+        MeshBuilder& T = cb.terrain;
+        for (size_t ri = 0; ri < d.rooms.size(); ri++) {
+            const DungeonRoom& rm = d.rooms[ri];
+            vec2 c0{d.origin.x + rm.x * TILE, d.origin.z + rm.z * TILE};
+            vec2 ctr = c0 + vec2(rm.w * TILE * 0.5f, rm.h * TILE * 0.5f);
+            float hx = rm.w * TILE * 0.5f, hz = rm.h * TILE * 0.5f, rr = 1.0f;
+            const float M = 3.f, st = 1.f;
+            int nx = (int)((hx * 2 + 2 * M) / st) + 1, nz = (int)((hz * 2 + 2 * M) / st) + 1;
+            std::vector<float> H((size_t)nx * nz);
+            auto edgeAt = [&](float x, float z) {
+                vec2 q{std::fabs(x - ctr.x) - (hx - rr), std::fabs(z - ctr.y) - (hz - rr)};
+                float sd = length(vec2(std::max(q.x, 0.f), std::max(q.y, 0.f))) + std::min(std::max(q.x, q.y), 0.f) - rr;
+                float n = fbm2(x * 0.25f, z * 0.25f, 2, 4100 + (int)ri);
+                return sd - std::max(n, 0.f) * 0.9f;   // ragged outline, never inside the walkable area
+            };
+            for (int j = 0; j < nz; j++) for (int i = 0; i < nx; i++) {
+                float x = ctr.x - hx - M + i * st, z = ctr.y - hz - M + j * st;
+                float e = edgeAt(x, z);
+                H[(size_t)j * nx + i] = e <= 0.f ? 0.f : -std::min(9.f, e * 3.5f + e * e * 1.5f);
+            }
+            uint32_t base = (uint32_t)T.v.size();
+            for (int j = 0; j < nz; j++) for (int i = 0; i < nx; i++) {
+                float x = ctr.x - hx - M + i * st, z = ctr.y - hz - M + j * st, y = H[(size_t)j * nx + i];
+                auto Hc = [&](int a, int b) { a = std::max(0, std::min(nx - 1, a)); b = std::max(0, std::min(nz - 1, b)); return H[(size_t)b * nx + a]; };
+                vec3 nn = normalize(vec3(Hc(i - 1, j) - Hc(i + 1, j), 2.f * st, Hc(i, j - 1) - Hc(i, j + 1)));
+                float n1 = fbm2(x * 0.09f, z * 0.09f, 2, 51) * 0.5f + 0.5f;
+                Vertex v{};
+                v.px = x; v.py = d.origin.y + y; v.pz = z;
+                v.nx = (int8_t)(nn.x * 127); v.ny = (int8_t)(nn.y * 127); v.nz = (int8_t)(nn.z * 127);
+                vec3 tint = vec3(0.92f, 1.04f, 0.98f) * (0.94f + 0.12f * n1);
+                Color8 cc = toColor8(tint * 0.5f, 1.f);
+                v.r = cc.r; v.g = cc.g; v.b = cc.b; v.a = 255;
+                auto q8 = [](float f) { return (uint8_t)clampf(f * 255.f + 0.5f, 0, 255); };
+                v.rough = q8(y < -0.15f ? 1.f : 0.f);
+                v.metal = q8(y >= -0.15f ? smoothstepf(0.62f, 0.8f, n1) * 0.55f : 0.f);
+                T.v.push_back(v);
+            }
+            for (int j = 0; j + 1 < nz; j++) for (int i = 0; i + 1 < nx; i++) {
+                uint32_t a = base + j * nx + i, b = a + 1, cI = a + nx, dI = cI + 1;
+                T.tri(a, cI, dI); T.tri(a, dI, b);
+            }
+            // the hanging root of the island: a big stone mass and a few long spires below
+            wl.rock(vec3(ctr.x, d.origin.y - 6.f, ctr.y), vec3(hx * 0.95f, 5.f, hz * 0.95f), Mat(th.wall * 0.85f, 0.9f), ir.next(), 1);
+            for (int k = 0; k < 5; k++) {
+                vec3 tp(ctr.x + ir.range(-hx, hx) * 0.6f, d.origin.y - 8.f, ctr.y + ir.range(-hz, hz) * 0.6f);
+                wl.cone(tp, tp - vec3(ir.range(-1.f, 1.f), ir.range(6.f, 14.f), ir.range(-1.f, 1.f)), ir.range(1.5f, 3.f), Mat(th.wall * 0.7f, 0.9f), 7);
+            }
+            d.emitters.push_back(vec4(ctr.x, d.origin.y - 7.f, ctr.y, EM_MIST));
+            // trees and bushes along the island's rim (not where a bridge leaves, not in the boss arena)
+            bool arena = ri + 1 == d.rooms.size();
+            int nTrees = arena ? 0 : ir.irange(2, 4);
+            for (int k = 0; k < nTrees * 3 && nTrees > 0; k++) {
+                float ang = ir.range(0, TAU);
+                vec2 pp2 = ctr + vec2(std::cos(ang) * (hx - 1.3f), std::sin(ang) * (hz - 1.3f));
+                int tx = (int)std::floor((pp2.x - d.origin.x) / TILE), tz = (int)std::floor((pp2.y - d.origin.z) / TILE);
+                bool nearBridge = false;
+                for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+                    int xx = tx + dx, zz = tz + dz;
+                    if (xx < 0 || zz < 0 || xx >= d.W || zz >= d.H) continue;
+                    bool inR = xx >= rm.x && xx < rm.x + rm.w && zz >= rm.z && zz < rm.z + rm.h;
+                    if (!inR && d.tiles[zz * d.W + xx] != TileType::Void && d.tiles[zz * d.W + xx] != TileType::Pit) nearBridge = true;
+                }
+                if (nearBridge) continue;
+                static const PropKind trees[] = {P_ELDERTREE, P_BIRCH, P_OAK, P_GIANTSHROOM};
+                PropKind pk = trees[ir.irange(0, 3)];
+                stampProp(cb, pk, ir.irange(0, propVariants(pk) - 1), {pp2.x, d.origin.y - 0.05f, pp2.y}, ir.range(0, TAU), ir.range(0.75f, 1.05f), vec3(1), true);
+                if (pk == P_GIANTSHROOM || pk == P_ELDERTREE) cb.lights.push_back(vec4(pp2.x, d.origin.y + 2.5f, pp2.y, LI_MAGIC));
+                if (--nTrees <= 0) break;
+            }
+            for (int k = 0; k < 8; k++) {
+                float ang = ir.range(0, TAU), rad = ir.range(0.55f, 0.92f);
+                vec2 q = ctr + vec2(std::cos(ang) * hx * rad, std::sin(ang) * hz * rad);
+                PropKind pk = k % 3 == 0 ? P_BUSH : (k % 3 == 1 ? P_FERN : P_FLOWERS);
+                stampProp(cb, pk, ir.irange(0, 2), {q.x, d.origin.y - 0.03f, q.y}, ir.range(0, TAU), ir.range(0.8f, 1.2f), vec3(1), false);
+            }
+            // grass (and a few flowers) over the island top
+            for (float z = ctr.y - hz + 0.3f; z < ctr.y + hz - 0.2f; z += 0.62f)
+                for (float x = ctr.x - hx + 0.3f; x < ctr.x + hx - 0.2f; x += 0.62f) {
+                    float gx = x + ir.range(-0.25f, 0.25f), gz = z + ir.range(-0.25f, 0.25f);
+                    if (edgeAt(gx, gz) > -0.2f) continue;
+                    float patch = fbm2(gx * 0.05f, gz * 0.05f, 2, 77) * 0.5f + 0.5f;
+                    if (ir.f() > 0.55f + 0.45f * patch) continue;
+                    InstanceData g;
+                    g.x = gx; g.y = d.origin.y - 0.03f; g.z = gz; g.rotY = ir.range(0, TAU); g.scale = ir.range(0.8f, 1.4f);
+                    vec3 col = lerp(foliageColor(R_ELDERWOOD, patch), hexColor(0x6ac8a8), 0.15f);
+                    bool flower = ir.f() < 0.045f;
+                    if (flower) { static const uint32_t fc[] = {0xf0e0ff, 0x9af0ff, 0xf6c0e8, 0xffe08a}; col = hexColor(fc[ir.irange(0, 3)]); }
+                    Color8 c8 = toColor8(col * 0.5f, 1);
+                    g.r = c8.r; g.g = c8.g; g.b = c8.b; g.a = 255;
+                    (flower ? cb.flowers : cb.grass).push_back(g);
+                }
+        }
+        if (d.realm.ready) d.realm.destroy();
+        World::uploadBuild(cb, d.realm);
+        for (const Collider& c : d.realm.colliders) d.colliders.push_back(c);
+        for (const vec4& l : d.realm.lights) d.lights.push_back(l);
+    }
     // pillars & accent glows in rooms, cobwebs, lava cracks
     for (size_t i = 0; i < d.rooms.size(); i++) {
         auto& rm = d.rooms[i];
@@ -276,7 +374,7 @@ void Game::exitDungeon() {
         c.pos = rp; c.pos.y = world.groundHeight(rp.x, rp.z); c.vel = vec3(0);
         camFocus = c.pos;
         dungeon.active = false;
-        dungeon.floor.destroy(); dungeon.walls.destroy(); dungeon.props.destroy();
+        dungeon.floor.destroy(); dungeon.walls.destroy(); dungeon.props.destroy(); dungeon.realm.destroy();
         dungeon.tiles.clear(); dungeon.def = -1;
         play("door");
     });
@@ -399,6 +497,16 @@ void Game::renderDungeon() {
     DrawItem it;
     it.mesh = &d.floor; renderer.submit(it);
     it.mesh = &d.walls; renderer.submit(it);
+    if (d.theme == 8 && d.realm.ready) {   // 2.2.2 the islands, drawn like a world chunk
+        Chunk& ch = d.realm;
+        DrawItem r2; r2.tint = vec4(1, 1, 1, 0);
+        if (ch.terrain.valid()) { r2.mesh = &ch.terrain; r2.flags = LIT_TERRAIN; renderer.submit(r2); }
+        if (ch.props.valid()) { r2.mesh = &ch.props; r2.flags = 0; renderer.submit(r2); }
+        if (ch.foliage.valid()) { r2.mesh = &ch.foliage; r2.flags = LIT_WIND; renderer.submit(r2); }
+        r2.castShadow = false;
+        if (ch.grass.valid()) { r2.mesh = &ch.grass; r2.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(r2); }
+        if (ch.flowers.valid()) { r2.mesh = &ch.flowers; r2.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(r2); }
+    }
     if (d.props.valid()) { it.mesh = &d.props; renderer.submit(it); }
     float t = (float)gameTime;
     for (size_t i = 0; i < d.braziers.size(); i++) {

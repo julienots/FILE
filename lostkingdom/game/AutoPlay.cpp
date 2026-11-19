@@ -1453,7 +1453,7 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/R0_portal.png"); }, idle, "shot"});
         s.push_back({0.2f, [](Game& g) { int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == "ether") di = i; g.enterDungeon(di); }, idle, "enter"});
         s.push_back({3.f, none, [](Game& g, float) { g.camIdleT = 0; }, "inside"});
-        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.5f; g.camDist = g.camDistTarget = 16.f; }, idle, "cam"});
+        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.22f; g.camDist = g.camDistTarget = 20.f; g.camYaw = 2.4f; }, idle, "cam"});
         s.push_back({1.f, none, idle, "settle"});
         s.push_back({0.1f, [](Game& g) { AGR_LOG("REALM inside: %s", g.dungeon.active && g.dungeon.theme == 8 ? "REALM TEST PASSED" : "REALM TEST FAILED"); g.requestScreenshot("build/shots/R1_realm.png"); }, idle, "shot"});
         return s;

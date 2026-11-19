@@ -1757,7 +1757,11 @@ size_t World::pendingChunks() { std::lock_guard<std::mutex> l(qmtx); return jobs
 void World::uploadChunk(ChunkBuild& b) {
     auto& slot = chunks[b.key];
     if (!slot) { slot = std::make_unique<Chunk>(); slot->key = b.key; }
-    Chunk& c = *slot;
+    uploadBuild(b, *slot);
+}
+
+// 2.2.2 also used for scenery built outside the world grid (the celestial realm)
+void World::uploadBuild(ChunkBuild& b, Chunk& c) {
     c.destroy();
     c.lod = b.lod;
     if (!b.terrain.v.empty()) b.terrain.upload(c.terrain);
