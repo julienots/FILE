@@ -57,7 +57,7 @@ function Tower:damage(n)
         local x, _, z = self.entity:position()
         agr.fx.burst(x, 2, z, { count = 80, color = { 0.8, 0.75, 0.7 }, speed = 6, life = 1, size = 0.4, additive = false })
         agr.fx.shake(0.5, 0.5)
-        agr.audio.play("assets://audio/slam.wav", { volume = 0.7 })
+        agr.audio.play("assets://games/duel/collapse.wav", { volume = 0.8 })
         -- Le jeu d'abord : désactiver l'entité détruit l'instance de ce script.
         self.game:towerDestroyed(self.entity, self.team, self.king)
         self.entity:setActive(false)

@@ -2,6 +2,7 @@
 // Procedural scattering of props (trees, rocks, bushes...) for scene templates: deterministic
 // dart throwing with weighted items, minimum spacing, exclusion rectangles and per-prop
 // variations (size, rotation, tint). Same seed, same scene, on every platform.
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,12 +21,14 @@ struct ScatterItem {
     float outlineWidth = 0.0f;  ///< Cartoon outline in pixels (0: none).
     bool castShadows = true;
     float tint = 0.08f;         ///< Random brightness / hue variation of the instance color (0: none).
+    float colliderRadius = 0.0f;  ///< Static capsule (trunk) at scale 1, 2 m high; 0: decoration only.
 };
 
 struct ScatterSettings {
     u32 seed = 1;
     math::Vec2 min{-10.0f, -10.0f}, max{10.0f, 10.0f};  ///< Area on the ground (x, z).
-    float height = 0.0f;                                ///< Ground height (y).
+    float height = 0.0f;                                ///< Ground height (y) when heightAt is empty.
+    std::function<float(float x, float z)> heightAt;    ///< Ground height under a point (terrains).
     std::vector<std::pair<math::Vec2, math::Vec2>> exclude;  ///< Rectangles (min, max) kept free.
     float spacing = 0.3f;    ///< Extra gap between footprints.
     u32 maxCount = 200;

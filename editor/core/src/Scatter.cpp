@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/render/RenderComponents.hpp"
 
 namespace agr::editor::templates {
@@ -60,7 +61,7 @@ std::vector<ecs::Entity> scatter(Scene& scene, ecs::Entity parent, const Scatter
         placed.push_back({p, r});
         const auto root = scene.createEntity(it.name + " " + std::to_string(++counters[k]), parent);
         auto& t = reg.get<TransformComponent>(root);
-        t.position = {p.x, s.height, p.y};
+        t.position = {p.x, s.heightAt ? s.heightAt(p.x, p.y) : s.height, p.y};
         t.rotation = math::Quat::fromAxisAngle({0.0f, 1.0f, 0.0f}, yaw);
         t.scale = math::Vec3{scale};
         const auto model = scene.createEntity("Model", root);
@@ -74,6 +75,14 @@ std::vector<ecs::Entity> scatter(Scene& scene, ecs::Entity parent, const Scatter
         // Brightness and a slight warm / cool shift: per-instance color, still drawn instanced.
         const float v = 1.0f - it.tint * (0.5f + 0.5f * tintA), w = it.tint * 0.5f * tintB;  // color multiplies: darker only
         mr.color = {std::clamp(v + w, 0.0f, 1.0f), std::clamp(v, 0.0f, 1.0f), std::clamp(v - w, 0.0f, 1.0f), 1.0f};
+        if (it.colliderRadius > 0.0f) {  // a trunk the characters bump into (and navigation avoids)
+            reg.emplace<RigidBodyComponent>(root).type = BodyType3D::Static;
+            auto& col = reg.emplace<ColliderComponent>(root);
+            col.shape = ColliderShape3D::Capsule;
+            col.radius = it.colliderRadius;
+            col.height = 2.0f;
+            col.offset = {0.0f, 1.0f, 0.0f};
+        }
         out.push_back(root);
     }
     return out;

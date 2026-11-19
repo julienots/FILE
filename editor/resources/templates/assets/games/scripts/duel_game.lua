@@ -80,6 +80,8 @@ end
 
 function Game:showMenu(title, text)
     G.show("Menu", true)
+    G.show("Showcase", true)
+    self.cheer = 1.0
     G.show("Card Tray", false)
     G.text("MenuTitle", title)
     G.text("MenuText", text)
@@ -112,6 +114,7 @@ function Game:startBattle()
     self.spawned = 0
     self.state = "battle"
     G.show("Menu", false)
+    G.show("Showcase", false)
     G.show("Card Tray", true)
     self:say(agr.tr("duel.fight"), 1.5)
     self:refreshCards()
@@ -233,7 +236,7 @@ function Game:play(team, i, x, z)
         end
         agr.fx.burst(x, 0.3, z, { count = 14, color = TEAM_COLOR[team], speed = 2.5, life = 0.4 })
     end
-    agr.audio.play("assets://audio/click.wav", { volume = 0.5 })
+    self:sfx("deploy", 0.55)
     if team == "blue" then self:refreshCards() end
     return true
 end
@@ -251,7 +254,7 @@ function Game:fireball(team, card, x, z)
         agr.fx.flash(1, 0.6, 0.2, 0.25, 0.15)
         self:scorch(x, z, card.radius)
         agr.fx.shake(0.35, 0.3)
-        agr.audio.play("assets://audio/slam.wav", { volume = 0.6 })
+        self:sfx("explosion", 0.8)
         local enemy = self:enemyOf(team)
         local victims = {}
         for _, u in ipairs(self.units[enemy]) do victims[#victims + 1] = { u, card.damage } end
@@ -275,6 +278,15 @@ function Game:hit(target, dmg)
     if s and s.damage then s:damage(dmg) end
 end
 
+-- Sons du duel (tools/generate_duel_audio.py). Un même son ne repart pas plus d'une fois toutes les
+-- 3 images : une grosse mêlée reste audible sans saturer. Hauteur légèrement variée.
+function Game:sfx(name, volume)
+    self.lastSfx = self.lastSfx or {}
+    if self.lastSfx[name] and self.frame - self.lastSfx[name] < 3 then return end
+    self.lastSfx[name] = self.frame
+    agr.audio.play("assets://games/duel/" .. name .. ".wav", { volume = volume or 0.5, pitch = 0.92 + math.random() * 0.16 })
+end
+
 -- Petite gerbe d'étincelles là où un coup porte.
 function Game:impact(x, y, z, heavy)
     agr.fx.burst(x, y, z, { count = heavy and 16 or 7, color = heavy and { 1, 0.7, 0.3 } or { 1, 1, 0.85 }, speed = heavy and 4 or 2.5,
@@ -296,6 +308,7 @@ function Game:attack(src, target, dmg, ranged)
         agr.tween(src, { scale = { 1.15, 1.15, 1.15 } }, 0.08, { ease = "outQuad", loop = "yoyo", times = 2 })
         local tx, ty, tz = target:worldPosition()
         self:impact(tx, ty + 0.8, tz, false)
+        self:sfx("clash", 0.35)
         return
     end
     local x, y, z = src:worldPosition()
@@ -304,6 +317,7 @@ function Game:attack(src, target, dmg, ranged)
     local heavy = ss and ss.kind == "tank"
     local sy, ey = y + ((ss and ss.isTower) and 3.0 or 1.4), ty + 0.8
     local shot = agr.clone(heavy and self.ballProto or self.arrowProto, false)
+    self:sfx(heavy and "cannon" or "bow", heavy and 0.5 or 0.3)
     shot:setPosition(x, sy, z)
     -- La flèche pointe vers sa cible (tangage puis lacet, en degrés).
     local dx, dy, dz = tx - x, ey - sy, tz - z
@@ -349,6 +363,7 @@ function Game:finish()
     local title, delta
     if b > r then
         title, delta = agr.tr("duel.win"), 30
+        self:sfx("victory", 0.7)
         agr.fx.burst(12.5, 3, 0, { count = 120, color = { 1, 0.85, 0.3 }, speed = 7, life = 1.2 })
     elseif r > b then
         title, delta = agr.tr("duel.lose"), -20
@@ -461,7 +476,19 @@ function Game:onUpdate(dt)
             G.text("Message", "")
         end
     end
-    if self.state ~= "battle" then return end
+    if self.state ~= "battle" then
+        -- Écran d'accueil : les personnages saluent chacun leur tour.
+        self.cheer = (self.cheer or 1) - dt
+        if self.cheer <= 0 then
+            local poses = G.children("Showcase")
+            if #poses > 0 then
+                local p = poses[math.random(#poses)]
+                if p:has("Animator") then p:setTrigger("attack") end
+            end
+            self.cheer = 1.6
+        end
+        return
+    end
     if self.navDirty then
         self.navDirty = false
         agr.nav.rebuild()

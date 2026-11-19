@@ -2,6 +2,7 @@
 // orbs), stone golems chasing on the navigation mesh, sword, experience and levels.
 #include "../GameTemplates.hpp"
 #include "agr/navigation/NavigationComponents.hpp"
+#include "agr/editor/Scatter.hpp"
 #include "agr/scene/Terrain.hpp"
 
 namespace agr::editor::games {
@@ -84,6 +85,25 @@ void buildRpg3D(Scene& scene) {
         auto& col = reg.emplace<ColliderComponent>(e);
         col.size = {0.9f, 0.9f, 0.9f};
         col.offset = {0.0f, 0.45f, 0.0f};
+    }
+    // Woods on the hills around the village (procedural, seeded): trees and rocks block the way,
+    // bushes are decoration. Physically based look, like the rest of this template.
+    {
+        templates::ScatterSettings woods;
+        woods.seed = 77;
+        woods.min = {-33.0f, -33.0f};
+        woods.max = {33.0f, 33.0f};
+        woods.exclude = {{{-17.0f, -17.0f}, {17.0f, 17.0f}}};
+        woods.heightAt = ground;
+        woods.spacing = 0.8f;
+        woods.maxCount = 90;
+        woods.toon = false;
+        const std::string dir = "assets://games/duel/";
+        templates::scatter(scene, b.entity("Woods"), woods,
+                           {{dir + "tree.glb", "Tree", 3.0f, 1.0f, 1.6f, 1.0f, 0.0f, true, 0.1f, 0.25f},
+                            {dir + "pine.glb", "Pine", 3.0f, 1.1f, 1.8f, 0.8f, 0.0f, true, 0.1f, 0.2f},
+                            {dir + "bush.glb", "Bush", 1.5f, 0.8f, 1.2f, 0.8f, 0.0f, false, 0.1f},
+                            {dir + "rock.glb", "Boulder", 1.0f, 0.8f, 1.8f, 0.9f, 0.0f, true, 0.05f, 0.6f}});
     }
     const auto elder = figure(b, "Sage", {-2.0f, ground(-2.0f, 2.0f), 2.0f}, {0.55f, 0.3f, 0.65f, 1.0f}, {0.95f, 0.85f, 0.75f, 1.0f});
     b.script(elder, "assets://games/scripts/rpg_npc.lua", R"({"texts": "rpg3d"})");

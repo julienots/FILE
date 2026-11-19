@@ -262,6 +262,22 @@ void buildArenaBattle(Scene& scene) {
         blob.softness = 0.8f;
     }
 
+    // Home screen: the four characters, big, facing the camera, visible only in the menu
+    // (duel_game.lua shows / hides "Showcase" and makes them cheer in turn).
+    const auto showcase = b.entity("Showcase");
+    const struct { const char* kind; float x; Vec4 team; } poses[] = {
+        {"knight", -4.8f, kBlue}, {"archer", -1.6f, kRed}, {"giant", 1.8f, kBlue}, {"goblin", 5.0f, kRed}};
+    for (const auto& p : poses) {
+        std::string name = p.kind;
+        name[0] = static_cast<char>(name[0] - 'a' + 'A');
+        const auto e = b.entity(name + " Pose", {p.x, 0.0f, -2.0f}, showcase);
+        const float s = std::string(p.kind) == "giant" ? 1.6f : std::string(p.kind) == "goblin" ? 0.75f : 1.0f;
+        modelInstance(b, e, p.kind, s * 1.9f, p.team, true);
+        reg.emplace<AnimatorComponent>(e).controller = "assets://games/duel/" + std::string(p.kind) + ".agrctrl";
+        reg.emplace<BlobShadowComponent>(e).radius = 0.9f * s;
+        cartoonStyle(scene, e, true, true);
+    }
+
     const auto nav = b.entity("Navigation");
     auto& ns = reg.emplace<NavigationSettingsComponent>(nav);
     ns.cellSize = 0.25f;
@@ -301,7 +317,9 @@ void buildArenaBattle(Scene& scene) {
         b.panel("Elixir " + std::to_string(i + 1), bar, {0.0f, 0.0f}, {5.0f + static_cast<float>(i) * 99.0f, 5.0f}, {94.0f, 40.0f}, {0.85f, 0.3f, 0.95f, 1.0f});
     b.label("ElixirText", tray, {0.0f, 0.0f}, {1160.0f, 220.0f}, {120.0f, 60.0f}, "5", 44.0f, UIHAlign::Center, {1.0f, 0.7f, 1.0f, 1.0f});
     // Menu (start / results).
-    const auto menu = b.panel("Menu", hud, {0.5f, 0.5f}, {0.0f, 0.0f}, {900.0f, 640.0f}, {0.05f, 0.07f, 0.12f, 0.95f});
+    // Lower half of the screen: the characters of the showcase pose above it.
+    const auto menu = b.panel("Menu", hud, {0.5f, 1.0f}, {0.0f, -24.0f}, {1100.0f, 560.0f}, {0.05f, 0.07f, 0.12f, 0.9f});
+    reg.get<UIRectComponent>(menu).pivot = {0.5f, 1.0f};
     b.label("MenuTitle", menu, {0.5f, 0.0f}, {0.0f, 40.0f}, {860.0f, 100.0f}, "Duel des Tours", 72.0f, UIHAlign::Center, {1.0f, 0.85f, 0.3f, 1.0f});
     b.label("MenuText", menu, {0.5f, 0.0f}, {0.0f, 160.0f}, {820.0f, 260.0f}, "", 34.0f, UIHAlign::Center);
     const auto battle = b.button("BattleButton", menu, {0.5f, 1.0f}, {0.0f, -50.0f}, {520.0f, 110.0f}, "Combat !", game, "startBattle");
