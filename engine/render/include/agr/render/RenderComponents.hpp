@@ -58,6 +58,9 @@ struct SpotLightComponent {
     float range = 15.0f;
     float innerAngle = math::radians(20.0f);  ///< Half angle of the fully lit cone.
     float outerAngle = math::radians(30.0f);  ///< Half angle where the light reaches zero.
+    /// Shadows of the objects in the cone (the 2 nearest shadowed spot lights get them; half the
+    /// directional shadow map resolution; profiles without shadows skip them).
+    bool castShadows = false;
 };
 
 enum class SkyMode : i32 {

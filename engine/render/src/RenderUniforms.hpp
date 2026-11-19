@@ -47,14 +47,17 @@ struct MaterialUniforms {
 static_assert(sizeof(MaterialUniforms) == 272);
 
 inline constexpr u32 kMaxLights3D = 8;
+inline constexpr u32 kMaxSpotShadows = 2;
 struct LightUniforms {
     math::Vec4 posRange[kMaxLights3D];
     math::Vec4 colorType[kMaxLights3D];
     math::Vec4 spotDir[kMaxLights3D];
-    math::Vec4 spotInner[kMaxLights3D];
+    math::Vec4 spotInner[kMaxLights3D];  // cos(inner), shadow slot (-1: none), -, -
     i32 count[4];
+    math::Mat4 spotShadowMatrix[kMaxSpotShadows];  // world -> atlas uv + depth
+    math::Vec4 spotShadowParams;                   // atlas texel size (u, v), PCF on, depth bias
 };
-static_assert(sizeof(LightUniforms) == 528);
+static_assert(sizeof(LightUniforms) == 528 + 128 + 16);
 
 inline float srgbToLinear(float c) {
     c = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);

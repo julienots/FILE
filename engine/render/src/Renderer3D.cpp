@@ -27,7 +27,18 @@ namespace {
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
 constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
 constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
-constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7;
+constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7, kSpotShadowUnit = 11;
+
+/// Samplers of the lit 3D pipelines: material maps (0..4), shadow map (5), environment (6),
+/// `extra` from unit 7 (terrain splat map, custom shader maps), placeholders up to unit 10,
+/// and the spot shadow atlas at unit 11 (fixed: the shader binds it by position).
+std::vector<std::string> litSamplers(std::vector<std::string> extra = {}) {
+    std::vector<std::string> s = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap"};
+    for (std::string& e : extra) s.push_back(std::move(e));
+    while (s.size() < kSpotShadowUnit) s.push_back("u_unused" + std::to_string(s.size()));
+    s.push_back("u_spotShadowMap");
+    return s;
+}
 
 u64 mix64(u64 h, u64 v) {
     h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -98,7 +109,7 @@ Status Renderer::create3DPipelines() {
                 }
                 p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
                 if (skinned) p.uniformBlocks.push_back("SkinData");
-                p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap"};
+                p.samplers = litSamplers();
                 auto r = m_device.createPipeline(p);
                 if (!r) return r.error();
                 (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines)[alpha * 2 + twoSided] = r.value();
@@ -114,7 +125,7 @@ Status Renderer::create3DPipelines() {
             p.instanceLayout = instanceLayout(true);
             p.cull = rhi::CullMode::Back;
             p.uniformBlocks = {"FrameData", "MaterialData", "LightData"};
-            p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap", "u_splatMap"};
+            p.samplers = litSamplers({"u_splatMap"});
             auto r = m_device.createPipeline(p);
             if (!r) return r.error();
             m_terrainPipeline = r.value();
@@ -406,6 +417,70 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     }
     m_stats.shadowCascades = m_shadowCascades;
 
+    // ------------------------------------------------------------ spot light shadows
+    // Chosen before the meshes so that casters outside the camera view are kept for them.
+    m_spotShadowCount = 0;
+    for (auto& list : m_spotShadowItems) list.clear();
+    std::array<math::Frustum, kSpotShadowSlots> spotFrustum{};
+    if (m_profile.shadowMapSize > 0 && rv.projection == Projection::Perspective) {
+        struct SpotCaster {
+            float distance;
+            ecs::Entity e;
+            Vec3 p, dir;
+            float range, outer;
+        };
+        std::vector<SpotCaster> casters;
+        reg.view<SpotLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, SpotLightComponent& l, WorldTransformComponent& w) {
+            if (!l.castShadows || !w.activeInHierarchy || hidden(e) || l.intensity <= 0.0f || l.range <= 0.0f) return;
+            const Vec3 p = w.matrix.translation();
+            if (!frustum.intersects(math::Aabb::fromCenterExtents(p, Vec3{l.range}))) return;
+            casters.push_back({math::length(p - rv.position), e, p, math::normalize(w.matrix.transformVector({0, 0, -1})), l.range,
+                               std::clamp(l.outerAngle, 0.01f, math::radians(89.0f))});
+        });
+        std::sort(casters.begin(), casters.end(), [](const SpotCaster& a, const SpotCaster& b) { return a.distance < b.distance; });
+        const u32 count = std::min<u32>(static_cast<u32>(casters.size()), kSpotShadowSlots);
+        if (count > 0) {
+            const u32 tile = std::clamp<u32>(m_profile.shadowMapSize / 2, 256, std::min<u32>(2048, m_device.info().maxTextureSize / 2));
+            if (!m_spotShadowTarget || m_spotShadowSize != tile) {
+                m_device.destroyRenderTarget(m_spotShadowTarget);
+                m_spotShadowTarget = {};
+                m_spotShadowSize = 0;
+                auto rt = m_device.createRenderTarget({.width = tile * kSpotShadowSlots, .height = tile, .color = false, .depth = true,
+                                                       .sampleableDepth = true, .debugName = "agr.spotshadows"});
+                if (rt) {
+                    m_spotShadowTarget = rt.value();
+                    m_spotShadowSize = tile;
+                } else {
+                    AGR_LOG_ERROR("Render", "spot shadow atlas creation failed: {}", rt.error().message);
+                }
+            }
+            const bool flipY = m_device.info().renderTargetsFlipY;
+            for (u32 k = 0; m_spotShadowTarget && k < count; ++k) {
+                const SpotCaster& c = casters[k];
+                const Vec3 up = std::fabs(c.dir.y) > 0.99f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
+                const Mat4 lightView = Mat4::lookAt(c.p, c.p + c.dir, up);
+                const Mat4 lightProj = Mat4::perspective(std::min(2.0f * c.outer + 0.05f, math::radians(175.0f)), 1.0f,
+                                                         std::max(0.05f, c.range * 0.005f), c.range, range);
+                const Mat4 viewProj = lightProj * lightView;
+                spotFrustum[k] = math::Frustum::fromMatrix(viewProj, range);
+                // Clip space -> atlas: tile k covers u in [k / 2, (k + 1) / 2], all of v.
+                const float tileUv = 1.0f / static_cast<float>(kSpotShadowSlots);
+                Mat4 bias;
+                bias.c[0] = {0.5f * tileUv, 0, 0, 0};
+                bias.c[1] = {0, flipY ? 0.5f : -0.5f, 0, 0};
+                bias.c[2] = {0, 0, m_glClipSpace ? 0.5f : 1.0f, 0};
+                bias.c[3] = {static_cast<float>(k) * tileUv + 0.5f * tileUv, 0.5f, m_glClipSpace ? 0.5f : 0.0f, 1};
+                m_spotShadowMatrix[k] = bias * viewProj;
+                m_spotShadowEntities[k] = c.e;
+                FrameUniforms spotFrame = frame;
+                spotFrame.viewProj = viewProj;
+                m_spotFrameOffsets[k] = pushUniforms(&spotFrame, sizeof spotFrame);
+                m_spotShadowCount = k + 1;
+            }
+        }
+    }
+    m_stats.spotShadows = m_spotShadowCount;
+
     // ------------------------------------------------------------ meshes
     if (m_frame % 300 == 0)  // forget the joints of skinned meshes that no longer exist
         for (auto it = m_skinJoints.begin(); it != m_skinJoints.end();) {
@@ -452,9 +527,13 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         if (m_shadowsActive && mr.castShadows)
             for (u32 c = 0; c < m_shadowCascades; ++c)
                 if (lightFrustum[c].intersects(worldBounds)) casterMask |= 1u << c;
+        u32 spotMask = 0;  // shadowed spot lights whose cone contains the mesh
+        if (mr.castShadows)
+            for (u32 k = 0; k < m_spotShadowCount; ++k)
+                if (spotFrustum[k].intersects(worldBounds)) spotMask |= 1u << k;
         if (!visible) ++m_stats.meshesCulled;
         else ++m_stats.meshesVisible;
-        if (!visible && !casterMask) return;
+        if (!visible && !casterMask && !spotMask) return;
 
         InstanceData inst;
         inst.model = w.matrix;
@@ -521,6 +600,9 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             if (!blend)
                 for (u32 c = 0; c < m_shadowCascades; ++c)
                     if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
+            if (!blend)
+                for (u32 k = 0; k < m_spotShadowCount; ++k)
+                    if (spotMask & (1u << k)) m_spotShadowItems[k].push_back(item);
         }
     });
     // ------------------------------------------------------------ terrains
@@ -693,16 +775,21 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     };
     std::sort(m_opaqueItems.begin(), m_opaqueItems.end(), byState);
     m_stats.shadowCasters = 0;
+    const auto byShadowState = [this](const MeshItem& a, const MeshItem& b) {
+        const u32 ak = shadowKey(a.pipeline), bk = shadowKey(b.pipeline);  // alpha-tested casters need their material
+        if (ak != bk) return ak < bk;
+        if ((ak & 1u) && a.material != b.material) return a.material < b.material;
+        if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
+        if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
+        if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
+        return a.instance < b.instance;
+    };
     for (auto& list : m_shadowItems) {
-        std::sort(list.begin(), list.end(), [this](const MeshItem& a, const MeshItem& b) {
-            const u32 ak = shadowKey(a.pipeline), bk = shadowKey(b.pipeline);  // alpha-tested casters need their material
-            if (ak != bk) return ak < bk;
-            if ((ak & 1u) && a.material != b.material) return a.material < b.material;
-            if (a.vertices.index != b.vertices.index) return a.vertices.index < b.vertices.index;
-            if (a.firstIndex != b.firstIndex) return a.firstIndex < b.firstIndex;
-            if (a.skinOffset != b.skinOffset) return a.skinOffset < b.skinOffset;
-            return a.instance < b.instance;
-        });
+        std::sort(list.begin(), list.end(), byShadowState);
+        m_stats.shadowCasters += static_cast<u32>(list.size());
+    }
+    for (auto& list : m_spotShadowItems) {
+        std::sort(list.begin(), list.end(), byShadowState);
         m_stats.shadowCasters += static_cast<u32>(list.size());
     }
     // Transparent: back to front.
@@ -715,6 +802,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     struct Candidate {
         float distance;
         Vec4 posRange, colorType, spotDir, spotInner;
+        ecs::Entity entity;
     };
     std::vector<Candidate> candidates;
     reg.view<PointLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, PointLightComponent& l, WorldTransformComponent& w) {
@@ -722,7 +810,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         const Vec3 p = w.matrix.translation();
         if (!frustum.intersects(math::Aabb::fromCenterExtents(p, Vec3{l.range}))) return;
         candidates.push_back({math::length(p - camPos), Vec4(p, l.range), Vec4(detail::srgbToLinear(l.color) * l.intensity, 0.0f), Vec4(0, 0, -1, -1),
-                              Vec4(1, 0, 0, 0)});
+                              Vec4(1, -1, 0, 0), e});
     });
     reg.view<SpotLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, SpotLightComponent& l, WorldTransformComponent& w) {
         if (!w.activeInHierarchy || hidden(e) || l.intensity <= 0.0f || l.range <= 0.0f) return;
@@ -732,7 +820,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         const float inner = std::clamp(l.innerAngle, 0.0f, outer - 0.0005f);
         const Vec3 dir = math::normalize(w.matrix.transformVector({0, 0, -1}));
         candidates.push_back({math::length(p - camPos), Vec4(p, l.range), Vec4(detail::srgbToLinear(l.color) * l.intensity, 1.0f),
-                              Vec4(dir, std::cos(outer)), Vec4(std::cos(inner), 0, 0, 0)});
+                              Vec4(dir, std::cos(outer)), Vec4(std::cos(inner), -1, 0, 0), e});
     });
     std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) { return a.distance < b.distance; });
     LightUniforms lights{};
@@ -744,8 +832,14 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         lights.colorType[n] = c.colorType;
         lights.spotDir[n] = c.spotDir;
         lights.spotInner[n] = c.spotInner;
+        for (u32 k = 0; k < m_spotShadowCount; ++k)
+            if (c.entity == m_spotShadowEntities[k] && c.colorType.w > 0.5f) lights.spotInner[n].y = static_cast<float>(k);
         ++n;
     }
+    for (u32 k = 0; k < m_spotShadowCount; ++k) lights.spotShadowMatrix[k] = m_spotShadowMatrix[k];
+    if (m_spotShadowSize > 0)
+        lights.spotShadowParams = Vec4(1.0f / static_cast<float>(m_spotShadowSize * kSpotShadowSlots), 1.0f / static_cast<float>(m_spotShadowSize),
+                                       m_profile.softShadows ? 1.0f : 0.0f, 0.0004f);
     lights.count[0] = static_cast<i32>(n);
     m_stats.lights = n;
     m_lights3DOffset = pushUniforms(&lights, sizeof lights);
@@ -757,6 +851,8 @@ void Renderer::uploadInstances() {
     for (const auto* list : {&m_opaqueItems, &m_transparentItems})
         for (const MeshItem& it : *list) m_instanceStaging.push_back(m_instances[it.instance]);
     for (const auto& list : m_shadowItems)
+        for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
+    for (const auto& list : m_spotShadowItems)
         for (const MeshItem& it : list) m_instanceStaging.push_back(m_instances[it.instance]);
     if (m_instanceStaging.empty()) return;
     const usize bytes = m_instanceStaging.size() * sizeof(InstanceData);
@@ -930,11 +1026,16 @@ void Renderer::releaseTerrain(TerrainGpu& g) {
 
 void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade) {
     if (items.empty() || !m_instanceBuffer) return;
-    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? m_shadowFrameOffsets[cascade] : m_frameOffset, sizeof(FrameUniforms));
+    // cascade >= kMaxCascades: tile (cascade - kMaxCascades) of the spot shadow atlas.
+    const u32 shadowFrame = cascade >= kMaxCascades ? m_spotFrameOffsets[cascade - kMaxCascades] : m_shadowFrameOffsets[cascade];
+    m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, shadow ? shadowFrame : m_frameOffset, sizeof(FrameUniforms));
     if (!shadow) {
         m_device.bindUniformBuffer(kSlotLights, m_uniformBuffer, m_lights3DOffset, sizeof(LightUniforms));
         m_device.bindTexture(kShadowUnit, m_shadowsActive ? m_device.renderTargetDepthTexture(m_shadowTarget) : m_assets.whiteTexture());
         m_device.bindTexture(kEnvUnit, m_envTexture ? m_envTexture : m_assets.whiteTexture());
+        m_device.bindTexture(kSpotShadowUnit,
+                             m_spotShadowCount > 0 ? m_device.renderTargetDepthTexture(m_spotShadowTarget) : m_assets.whiteTexture());
+        for (u32 t = kSplatUnit; t < kSpotShadowUnit; ++t) m_device.bindTexture(t, m_assets.whiteTexture());  // unused units stay valid
     }
     u32 boundPipeline = ~0u, boundMaterial = ~0u;
     rhi::BufferHandle boundVb;
@@ -1036,17 +1137,29 @@ void Renderer::drawOutlines(const std::vector<MeshItem>& items, u32 firstInstanc
 }
 
 void Renderer::drawShadowPass() {
-    if (!m_shadowsActive) return;
-    m_device.beginPass(m_shadowTarget, {false, {}, true, 1.0f});
     u32 first = static_cast<u32>(m_opaqueItems.size() + m_transparentItems.size());
-    for (u32 c = 0; c < m_shadowCascades; ++c) {
-        const Vec4& vp = m_cascadeViewports[c];
-        m_device.setViewport(static_cast<i32>(vp.x), static_cast<i32>(vp.y), static_cast<u32>(vp.z), static_cast<u32>(vp.w));
-        drawMeshItems(m_shadowItems[c], first, true, c);
-        first += static_cast<u32>(m_shadowItems[c].size());
+    if (m_shadowsActive) {
+        m_device.beginPass(m_shadowTarget, {false, {}, true, 1.0f});
+        for (u32 c = 0; c < m_shadowCascades; ++c) {
+            const Vec4& vp = m_cascadeViewports[c];
+            m_device.setViewport(static_cast<i32>(vp.x), static_cast<i32>(vp.y), static_cast<u32>(vp.z), static_cast<u32>(vp.w));
+            drawMeshItems(m_shadowItems[c], first, true, c);
+            first += static_cast<u32>(m_shadowItems[c].size());
+        }
+        m_device.endPass();
+        m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_shadowTarget));
     }
-    m_device.endPass();
-    m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_shadowTarget));
+    // Spot light shadows: one tile of the atlas per shadowed spot light (instances follow the cascades').
+    if (m_spotShadowCount > 0 && m_spotShadowTarget) {
+        m_device.beginPass(m_spotShadowTarget, {false, {}, true, 1.0f});
+        for (u32 k = 0; k < m_spotShadowCount; ++k) {
+            m_device.setViewport(static_cast<i32>(k * m_spotShadowSize), 0, m_spotShadowSize, m_spotShadowSize);
+            drawMeshItems(m_spotShadowItems[k], first, true, kMaxCascades + k);
+            first += static_cast<u32>(m_spotShadowItems[k].size());
+        }
+        m_device.endPass();
+        m_device.prepareTextureForSampling(m_device.renderTargetDepthTexture(m_spotShadowTarget));
+    }
 }
 
 void Renderer::drawSky() {
@@ -1158,8 +1271,9 @@ rhi::PipelineHandle Renderer::customPipeline(u32 index, u32 variant, bool skinne
         }
         p.uniformBlocks.push_back("LightData");
         if (skinned) p.uniformBlocks.push_back("SkinData");
-        p.samplers = {"u_baseColorMap", "u_metalRoughMap", "u_normalMap", "u_occlusionMap", "u_emissiveMap", "u_shadowMap", "u_envMap"};
-        for (u32 t = 0; t < cs.textureCount; ++t) p.samplers.push_back(std::format("u_customMap{}", t));
+        std::vector<std::string> maps;
+        for (u32 t = 0; t < cs.textureCount; ++t) maps.push_back(std::format("u_customMap{}", t));
+        p.samplers = litSamplers(std::move(maps));
     }
     auto r = m_device.createPipeline(p);
     if (!r) {

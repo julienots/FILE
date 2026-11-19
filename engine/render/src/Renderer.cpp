@@ -73,6 +73,7 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_instanceBuffer);
     m_device.destroyTexture(m_flatNormal);
     m_device.destroyRenderTarget(m_shadowTarget);
+    m_device.destroyRenderTarget(m_spotShadowTarget);
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);

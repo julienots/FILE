@@ -120,7 +120,8 @@ Guide : [3D.md](3D.md).
 | SSAO | ✅ | `PostProcess.ambientOcclusion` (mi-résolution, profils ultra à medium) ; test GPU sur les 3 API |
 | Profondeur de champ, TAA, sondes de réflexion locales | ⬜ | à planifier |
 | Ombres en cascades (1 à 4 selon le profil, atlas, fondu entre cascades) | ✅ | `Renderer3D.cpp` |
-| Ombres des lumières locales | ⬜ | à planifier |
+| Ombres des projecteurs (SpotLight) | ✅ | 2 par image, atlas en perspective ; test GPU sur les 3 API |
+| Ombres des lumières ponctuelles | ⬜ | à planifier (6 faces par lumière) |
 | Terrain, eau, végétation, LOD, occlusion culling | ⬜ | phase 9 (éditeurs) / à planifier |
 
 ## Phase 6 — Physique et scripting 🟡 (physique 2D / 3D avec couches, articulations et personnage, Lua et logique visuelle terminés ; formes maillage et débogueur à venir)

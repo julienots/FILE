@@ -24,8 +24,10 @@ layout(std140) uniform LightData {
     vec4 u_lightPosRange[8];   // world position, range
     vec4 u_lightColorType[8];  // linear rgb * intensity, type (0 point, 1 spot)
     vec4 u_lightSpotDir[8];    // direction the light travels, cos(outer angle)
-    vec4 u_lightSpotInner[8];  // cos(inner angle), -, -, -
+    vec4 u_lightSpotInner[8];  // cos(inner angle), shadow slot (-1: none), -, -
     ivec4 u_lightCount;
+    mat4 u_spotShadowMatrix[2];
+    vec4 u_spotShadowParams;   // atlas texel (u, v), PCF on, depth bias
 };
 )";
 
@@ -218,6 +220,7 @@ uniform sampler2D u_normalMap;
 uniform sampler2D u_occlusionMap;
 uniform sampler2D u_emissiveMap;
 uniform sampler2D u_shadowMap;
+uniform sampler2D u_spotShadowMap;
 in vec3 v_worldPos;
 in vec3 v_normal;
 in vec4 v_tangent;
@@ -226,6 +229,34 @@ in vec4 v_color;
 layout(location = 0) out vec4 o_color;
 
 const float PI = 3.14159265;
+
+// Lit fraction (0..1) of the point for spot light i, from its tile of the spot shadow atlas.
+float spotShadow(int i, vec3 N, vec3 L) {
+    float slot = u_lightSpotInner[i].y;
+    if (slot < -0.5) return 1.0;
+    int k = int(slot + 0.5);
+    // Normal offset grows with the distance to the light (perspective texels get larger).
+    float dist = length(u_lightPosRange[i].xyz - v_worldPos);
+    float NoL = clamp(dot(N, L), 0.0, 1.0);
+    vec3 p = v_worldPos + N * (0.004 + 0.012 * dist) * (1.0 - NoL * 0.5);
+    vec4 s = u_spotShadowMatrix[k] * vec4(p, 1.0);
+    if (s.w <= 0.0) return 1.0;
+    vec3 c = s.xyz / s.w;
+    float u0 = float(k) * 0.5;
+    if (c.x <= u0 || c.x >= u0 + 0.5 || c.y <= 0.0 || c.y >= 1.0 || c.z >= 1.0) return 1.0;
+    float depth = c.z - u_spotShadowParams.w;
+    vec2 lo = vec2(u0, 0.0) + u_spotShadowParams.xy * 0.5;
+    vec2 hi = vec2(u0 + 0.5, 1.0) - u_spotShadowParams.xy * 0.5;
+    int radius = int(u_spotShadowParams.z);
+    float lit = 0.0, taps = 0.0;
+    for (int y = -radius; y <= radius; ++y)
+        for (int x = -radius; x <= radius; ++x) {
+            float stored = texture(u_spotShadowMap, clamp(c.xy + vec2(float(x), float(y)) * u_spotShadowParams.xy, lo, hi)).r;
+            lit += depth <= stored ? 1.0 : 0.0;
+            taps += 1.0;
+        }
+    return lit / taps;
+}
 
 float distributionGGX(float NoH, float a) {
     float a2 = a * a;
@@ -338,7 +369,7 @@ vec3 agrToonShade(vec3 albedo, vec3 N, vec3 V, float occlusion) {
         float window = clamp(1.0 - r * r, 0.0, 1.0);
         float atten = window * window / (dist2 + 1.0);
         if (u_lightColorType[i].w > 0.5) atten *= smoothstep(u_lightSpotDir[i].w, u_lightSpotInner[i].x, dot(-L, u_lightSpotDir[i].xyz));
-        if (atten > 0.0) color += albedo * u_lightColorType[i].rgb * atten * agrToonRamp(max(dot(N, L), 0.0));
+        if (atten > 0.0) color += albedo * u_lightColorType[i].rgb * atten * agrToonRamp(max(dot(N, L), 0.0) * spotShadow(i, N, L));
     }
     // Flat ambient (hemisphere or image sky irradiance): no reflections, readable colors. It
     // mostly fills the shadow side: on the lit side the sun alone shows the true base color.
@@ -461,7 +492,7 @@ void main() {
             float cd = dot(-L, u_lightSpotDir[i].xyz);
             atten *= smoothstep(u_lightSpotDir[i].w, u_lightSpotInner[i].x, cd);
         }
-        if (atten > 0.0) color += shade(N, V, L, diffuseColor, f0, a) * u_lightColorType[i].rgb * atten;
+        if (atten > 0.0) color += shade(N, V, L, diffuseColor, f0, a) * u_lightColorType[i].rgb * atten * spotShadow(i, N, L);
     }
     // Ambient: hemisphere light + split-sum environment BRDF approximation (Karis, mobile).
     float NoV = clamp(dot(N, V), 1e-4, 1.0);

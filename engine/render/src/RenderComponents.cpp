@@ -69,7 +69,9 @@ void registerRenderComponents() {
         .field("innerAngle", &SpotLightComponent::innerAngle,
                {.flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = math::radians(89.0f), .speed = 0.01f})
         .field("outerAngle", &SpotLightComponent::outerAngle,
-               {.flags = FieldFlag_Angle, .rangeMin = math::radians(1.0f), .rangeMax = math::radians(89.0f), .speed = 0.01f});
+               {.flags = FieldFlag_Angle, .rangeMin = math::radians(1.0f), .rangeMax = math::radians(89.0f), .speed = 0.01f})
+        .field("castShadows", &SpotLightComponent::castShadows,
+               {.tooltip = "Shadows in the cone (the 2 nearest shadowed spot lights; needs a profile with shadows)"});
 
     reg.add<EnvironmentComponent>("Environment")
         .category("Rendering")

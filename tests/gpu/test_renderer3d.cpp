@@ -591,6 +591,54 @@ TEST_CASE("ambient occlusion (SSAO): darker where a cube meets the floor, open f
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("spot light shadows: a cube shadows the floor under the cone; off by default; two shadowed spots") {
+    Render3DFixture f;
+    f.camera({0, 9, 0.01f}, {0, 0, 0});
+    f.darkEnvironment();
+    f.mesh(PrimitiveMesh::Plane, {0, 0, 0}, Vec3{20.0f});
+    f.mesh(PrimitiveMesh::Cube, {0, 1.5f, 0}, Vec3{1.0f});  // between the light and the floor
+    const auto spot = f.scene.createEntity("Spot");
+    auto& st = f.scene.registry().get<TransformComponent>(spot);
+    st.position = {0.4f, 5, 0};
+    st.rotation = math::Quat::fromEuler({math::radians(-90.0f), 0, 0});  // points down
+    auto& sp = f.scene.registry().emplace<SpotLightComponent>(spot);
+    sp.color = {1, 1, 1, 1};
+    sp.intensity = 40.0f;
+    sp.range = 12.0f;
+    sp.innerAngle = math::radians(35.0f);
+    sp.outerAngle = math::radians(45.0f);
+    // The cube's shadow on the floor: below it, shifted away from the light (x < 0.4).
+    const Vec3 shadowed{-0.9f, 0, 0}, lit{2.2f, 0, 1.5f};  // shadow reaches x = -1.1; the cube hides the floor up to -0.64
+    f.frame();
+    CHECK(f.renderer.stats().spotShadows == 0);
+    const int before = luminance(f.at(shadowed));
+    CHECK_MESSAGE(before > 100, before);  // no shadow without castShadows
+    sp.castShadows = true;
+    f.frame();
+    CHECK(f.renderer.stats().spotShadows == 1);
+    const int after = luminance(f.at(shadowed));
+    CHECK_MESSAGE(after < before / 3, after, " vs ", before);
+    const int litAfter = luminance(f.at(lit));
+    CHECK_MESSAGE(litAfter > 60, litAfter);  // the rest of the cone stays lit
+    // Two shadowed spots at once; a third one is lit without a shadow map.
+    for (int i = 0; i < 2; ++i) {
+        const auto e = f.scene.createEntity("Extra");
+        f.scene.registry().get<TransformComponent>(e).position = {static_cast<float>(i * 6 - 3), 5, 4};
+        f.scene.registry().get<TransformComponent>(e).rotation = math::Quat::fromEuler({math::radians(-90.0f), 0, 0});
+        auto& x = f.scene.registry().emplace<SpotLightComponent>(e);
+        x.castShadows = true;
+    }
+    f.frame();
+    CHECK(f.renderer.stats().spotShadows == 2);
+    // A profile without shadows has none.
+    GraphicsProfile p = f.renderer.profile();
+    p.shadowMapSize = 0;
+    f.renderer.setProfile(p);
+    f.frame();
+    CHECK(f.renderer.stats().spotShadows == 0);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});
