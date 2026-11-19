@@ -1474,7 +1474,8 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "ride"});
         s.push_back({0.1f, [](Game& g) { AGR_LOG("GARAGE horse -> %s", g.riding ? "HORSE SUMMON OK" : "HORSE SUMMON FAILED"); g.requestScreenshot("build/shots/G2_horse.png"); }, idle, "shot"});
         s.push_back({0.8f, none, [](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; g.camPitch = 0.1f; g.camDist = g.camDistTarget = 10.f; g.camIdleT = 0; }, "side"});
-        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G3_horse_side.png"); }, [](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; }, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G3_horse_side.png");
+            if (Character* m = g.reg.get<Character>(g.mountEnt)) AGR_LOG("HORSEDBG mount %.2f %.2f %.2f yaw %.2f scale %.2f rootw %.2f %.2f %.2f | rider %.2f %.2f %.2f yaw %.2f ground %.2f", m->pos.x, m->pos.y, m->pos.z, m->yaw, m->vis.scale, m->vis.pw.wpos[0].x, m->vis.pw.wpos[0].y, m->vis.pw.wpos[0].z, g.pc().pos.x, g.pc().pos.y, g.pc().pos.z, g.pc().yaw, g.groundAt(m->pos.x, m->pos.z)); }, [](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; }, "shot"});
         s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.dodge = true; g.camYaw = g.pc().yaw + 1.57f; g.camPitch = 0.1f; g.camDist = g.camDistTarget = 11.f; g.camIdleT = 0; }, "gallop"});
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G4_horse_gallop.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.dodge = true; g.camYaw = g.pc().yaw + 1.57f; }, "shot"});
         return s;
