@@ -1311,6 +1311,20 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { g.camPitch = 0.66f; }, idle, "reset"});
         return s;
     }
+    if (name == "swordrun") {
+        // 2.3.4 the sword while running, seen from the side (it used to drop and hang down)
+        s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic); }, idle, "setup"});
+        auto side = [](float d) { return [d](Game& g, float) { g.camYaw = g.pc().yaw + 1.57f; g.camPitch = 0.08f; g.camDist = g.camDistTarget = d; g.camIdleT = 0; }; };
+        s.push_back({0.6f, none, side(4.5f), "cam"});
+        s.push_back({0.1f, shot("S0_idle"), side(4.5f), "shot"});
+        s.push_back({1.2f, none, [side](Game& g, float t) { g.input.move = vec2(0, 0.5f); side(4.5f)(g, t); }, "walk"});
+        s.push_back({0.1f, shot("S1_walk"), [side](Game& g, float t) { g.input.move = vec2(0, 0.5f); side(4.5f)(g, t); }, "shot"});
+        s.push_back({1.2f, none, [side](Game& g, float t) { g.input.move = vec2(0, 1); side(5.f)(g, t); }, "run"});
+        s.push_back({0.1f, shot("S2_run"), [side](Game& g, float t) { g.input.move = vec2(0, 1); side(5.f)(g, t); }, "shot"});
+        s.push_back({1.2f, none, [side](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; side(5.5f)(g, t); }, "sprint"});
+        s.push_back({0.1f, shot("S3_sprint"), [side](Game& g, float t) { g.input.move = vec2(0, 1); g.input.sprint = true; side(5.5f)(g, t); }, "shot"});
+        return s;
+    }
     if (name == "hero") {
         // close-up checks of the hero model: idle, walk, run, attack combo, roll, equipment screen
         s.push_back({3.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 30, p->pos.y + 30, 0.6f); g.timeOfDay = 10.5f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.camDist = g.camDistTarget = 7.f; g.toastHint.clear(); g.addItem("sword_knight", 1, Rarity::Epic);

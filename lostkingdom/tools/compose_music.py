@@ -630,7 +630,99 @@ def song_studio():
     return s
 
 
-MELODIC = {'horn', 'flute', 'violin', 'oboe', 'recorder', 'fiddle', 'clar', 'pan', 'tpt', 'cello', 'piano', 'bsn', 'brass', 'box', 'celesta'}
+# ---- 2.3.4: the regions that borrowed another score get their own ------------------------------------------
+SITAR, SHANAI, KALIMBA, MARIMBA, ACCORDION, PAD_WARM, PAD_HALO, OCARINA = 104, 111, 108, 12, 21, 89, 94, 79
+
+
+def song_sands():
+    """Les Sables d'Ambre: D Phrygian dominant, an oud-like nylon guitar, frame drums, a desert flute."""
+    s = Song('sands', 84, 4, seed=141)
+    s.track('oud', NYLON, 0, 104, 58, 70); s.track('flute', FLUTE, 1, 88, 76, 100); s.track('str', STRINGS, 2, 78, 64, 110)
+    s.track('cello', CELLO, 3, 84, 50, 90); s.track('perc', 48, DRUMS, 96, 64, 60, bank=128); s.track('taiko', TAIKO, 4, 96, 64, 70)
+    s.track('bass', CBASS, 5, 86, 64, 80); s.track('sitar', SITAR, 6, 70, 84, 90)
+    A = ("D5:1 Eb5:.5 F#5:.5 G5:1 A5:1 | Bb5:1.5 A5:.5 G5:1 F#5:1 | G5:.5 F#5:.5 Eb5:1 D5:2 | r:1 A4:1 D5:1 C5:1 |"
+         "D5:1.5 Eb5:.5 F#5:1 A5:1 | G5:1 F#5:.5 G5:.5 A5:2 | Bb5:1 A5:1 G5:.5 F#5:.5 Eb5:1 | D5:4")
+    ACH = "D | Gm | Eb D | D | D | Cm D | Gm Eb | D"
+    B = "A4:2 F#4:1 A4:1 | G4:2 Eb4:1 G4:1 | G4:1 Bb4:1 D5:1 Bb4:1 | A4:4 | D5:2 C5:1 Bb4:1 | A4:1.5 G4:.5 F#4:2 | G4:1 A4:1 Bb4:1 G4:1 | A4:4"
+    BCH = "D | Cm | Gm | D | Gm | D | Cm | D"
+    groove = [(0, 64, 1.0), (1, 63, .5), (1, 54, .35), (1.5, 60, .6), (2, 64, .8), (2.5, 61, .45), (3, 63, .6), (3, 54, .35), (3.5, 60, .5)]
+    def drone(bar, n, v=60):
+        for b in range(bar, bar + n): s.note('cello', b * 4, 4, pitch('D2'), v)
+    def strum(bar, ch, v=58):   # oud: quick repeated strokes on the chord, the Phrygian colour on the off-beats
+        b = bar
+        for barstr in ch.split('|'):
+            cs = barstr.split(); each = 4 / len(cs)
+            for k, c in enumerate(cs):
+                root, iv, bs = chord(c); tones = [pitch('D3') + ((root - 2) % 12) + i for i in iv[:3]]
+                for i, off in enumerate([0, .75, 1.5, 2, 2.75, 3.5]):
+                    if off < each: s.note('oud', b * 4 + k * each + off, .5, tones[i % 3], v - (0 if i == 0 else 10))
+            b += 1
+    drone(0, 4, 54); s.drums('perc', 2, 2, groove, 70); strum(0, "D | D | Eb | D", 52)
+    s.melody('sitar', 2, "r:2 A5:1 Bb5:1 | A5:4", 60)
+    drone(4, 8); s.drums('perc', 4, 8, groove, 84); s.melody('oud', 4, A, 96); s.pads('str', 4, ACH, 50, 50); s.bass('bass', 4, ACH, 70, 2, (('R', 0, 1.5), ('5', 2, 1), ('R', 3, 1)))
+    for b in range(4, 12, 2): s.note('taiko', b * 4, 1, pitch('D2'), 86)
+    drone(12, 8, 56); s.drums('perc', 12, 8, groove, 78); s.melody('flute', 12, B, 90); strum(12, BCH, 56); s.bass('bass', 12, BCH, 70, 2)
+    s.pads('str', 12, BCH, 46, 50)
+    drone(20, 8, 64); s.drums('perc', 20, 8, groove, 96); s.melody('oud', 20, A, 104); s.melody('flute', 20, _tr_line(A, 12), 70)
+    s.pads('str', 20, ACH, 62, 50); s.bass('bass', 20, ACH, 80, 2, (('R', 0, 1.5), ('5', 2, 1), ('R', 3, 1)))
+    for b in range(20, 28): s.note('taiko', b * 4, 1, pitch('D2'), 96)
+    drone(28, 4, 50); s.drums('perc', 28, 3, groove, 66); strum(28, "D | Eb | D | D", 50); s.melody('sitar', 28, "A5:2 Bb5:1 A5:1 | G5:2 F#5:2 | Eb5:2 D5:2 | D5:4", 56)
+    s.swell('str', 28 * 4, 32 * 4, 100, 20); s.pads('str', 28, "D | Eb | D | D", 44, 50)
+    return s
+
+
+def song_coast():
+    """La Côte de Corail: F Lydian in 3/4, harp and marimba over the waves, a flute that floats."""
+    s = Song('coast', 96, 3, seed=151)
+    s.track('harp', HARP, 0, 92, 50, 110); s.track('flute', FLUTE, 1, 92, 76, 110); s.track('str', STRINGS, 2, 80, 64, 115)
+    s.track('marimba', MARIMBA, 3, 74, 84, 90); s.track('bass', PIZZ, 4, 86, 60, 90); s.track('clar', CLARINET, 5, 84, 44, 100)
+    s.track('perc', 48, DRUMS, 70, 64, 70, bank=128)
+    A = "C5:1.5 D5:.5 F5:1 | F5:2 A4:1 | B4:1 D5:1 G5:1 | C5:3 | A5:1.5 G5:.5 F5:1 | E5:2 D5:1 | D5:1 B4:1 G4:1 | A4:3"
+    ACH = "F | Dm | G | C | F | Am | G | F"
+    B = "F5:1 E5:1 D5:1 | E5:2 C5:1 | D5:1 C5:1 A4:1 | B4:3 | C5:1 D5:1 E5:1 | F5:1.5 E5:.5 D5:1 | E5:1 D5:1 B4:1 | C5:3"
+    BCH = "Dm | Am | Dm | G | C | Dm | G | C"
+    waves = [(0, SHAKER, .6), (1, SHAKER, .35), (1.5, SHAKER, .3), (2, SHAKER, .45)]
+    def harp(bar, ch, v=60): s.arp('harp', bar, ch, v, 53, 0.5, (0, 2, 4, 5, 4, 2), 2)
+    def mar(bar, ch, v=54):
+        b = bar
+        for barstr in ch.split('|'):
+            root, iv, bs = chord(barstr.split()[0]); tones = sorted(72 + (root + i) % 12 for i in iv[:3])
+            for i, off in enumerate([0, .5, 1, 1.5, 2, 2.5]): s.note('marimba', b * 3 + off, .4, tones[[0, 2, 1, 2, 0, 1][i]], v - (0 if i == 0 else 8))
+            b += 1
+    harp(0, "F | F | G | F", 54); s.pads('str', 0, "F | F | G | F", 40, 52); s.drums('perc', 2, 2, waves, 50)
+    harp(4, ACH); s.melody('flute', 4, A, 90); s.pads('str', 4, ACH, 46, 52); s.bass('bass', 4, ACH, 70, 2, (('R', 0, 1), ('5', 1, 1), ('8', 2, 1))); s.drums('perc', 4, 8, waves, 60)
+    mar(12, BCH); harp(12, BCH, 54); s.melody('clar', 12, B, 86); s.pads('str', 12, BCH, 48, 52); s.bass('bass', 12, BCH, 72, 2, (('R', 0, 1), ('5', 1, 1), ('8', 2, 1))); s.drums('perc', 12, 8, waves, 64)
+    mar(20, ACH, 58); harp(20, ACH, 64); s.melody('flute', 20, A, 98); s.melody('clar', 20, _tr_line(A, -12), 70); s.pads('str', 20, ACH, 58, 52)
+    s.bass('bass', 20, ACH, 78, 2, (('R', 0, 1), ('5', 1, 1), ('8', 2, 1))); s.drums('perc', 20, 8, waves, 68)
+    harp(28, "F | G | C | F", 52); s.pads('str', 28, "F | G | C | F", 46, 52); s.swell('str', 28 * 3, 32 * 3, 100, 20)
+    s.melody('flute', 28, "A5:3 | B5:3 | G5:3 | F5:3", 70)
+    return s
+
+
+def song_realm():
+    """Le Royaume Céleste: D Lydian, slow; choir, celesta, harp and a halo pad, weightless."""
+    s = Song('realm', 64, 4, seed=161)
+    s.track('choir', CHOIR, 0, 84, 64, 127); s.track('halo', PAD_HALO, 1, 70, 64, 127); s.track('harp', HARP, 2, 88, 44, 120)
+    s.track('celesta', CELESTA, 3, 84, 84, 127); s.track('str', SLOWSTR, 4, 80, 64, 120); s.track('bass', CBASS, 5, 70, 64, 100)
+    s.track('flute', FLUTE, 6, 84, 70, 120); s.track('bells', VIBES, 7, 60, 90, 127)
+    A = "A5:2 F#5:1 G#5:1 | A5:3 E5:1 | F#5:2 D5:1 E5:1 | C#5:4 | D5:2 B4:1 D5:1 | G#5:2 B5:1 G#5:1 | A5:2 E5:1 C#5:1 | D5:4"
+    ACH = "D | A | Bm | F#m | G | E | A | D"
+    B = "B4:2 A4:1 D5:1 | E5:4 | F#5:2 E5:1 D5:1 | C#5:4 | B4:2 D5:1 F#5:1 | E5:2 G#5:2 | A5:3 G#5:1 | A5:4"
+    BCH = "G | A | Bm | F#m | G | E | A | A"
+    def harp(bar, ch, v=56): s.arp('harp', bar, ch, v, 50, 0.5, (0, 1, 2, 3, 4, 5, 4, 3), 3)
+    s.pads('halo', 0, "D | D | G | D", 50, 50); s.pads('choir', 0, "D | D | G | D", 40, 52); harp(0, "D | D | G | D", 50); s.swell('choir', 0, 16, 30, 100)
+    for b in (0, 2): s.note('bells', b * 4, 4, pitch('A5'), 50)
+    harp(4, ACH); s.melody('celesta', 4, A, 84); s.pads('halo', 4, ACH, 52, 50); s.pads('str', 4, ACH, 44, 50); s.bass('bass', 4, ACH, 56, 1, (('R', 0, None),))
+    harp(12, BCH, 52); s.melody('flute', 12, B, 82); s.pads('choir', 12, BCH, 56, 52); s.pads('halo', 12, BCH, 48, 50); s.bass('bass', 12, BCH, 56, 1, (('R', 0, None),))
+    for b in range(12, 20, 2): s.note('bells', b * 4 + 2, 3, pitch('E6'), 40)
+    harp(20, ACH, 62); s.melody('celesta', 20, A, 90); s.melody('flute', 20, _tr_line(A, -12), 66); s.pads('choir', 20, ACH, 62, 52)
+    s.pads('str', 20, ACH, 54, 50); s.pads('halo', 20, ACH, 50, 50); s.bass('bass', 20, ACH, 60, 1, (('R', 0, None),))
+    harp(28, "G | A | D | D", 50); s.pads('choir', 28, "G | A | D | D", 50, 52); s.pads('halo', 28, "G | A | D | D", 46, 50); s.swell('choir', 28 * 4, 32 * 4, 100, 10)
+    s.melody('celesta', 28, "B5:4 | C#6:4 | D6:4 | r:4", 64); s.note('bells', 30 * 4, 6, pitch('D6'), 46)
+    return s
+
+
+MELODIC = {'oud', 'sitar', 'horn', 'flute', 'violin', 'oboe', 'recorder', 'fiddle', 'clar', 'pan', 'tpt', 'cello', 'piano', 'bsn', 'brass', 'box', 'celesta'}
 ACCOMP = {'str', 'choir', 'harp', 'guitar', 'pads', 'trem', 'pizz', 'ost', 'bass', 'tuba', 'trb', 'low'}
 
 
@@ -658,6 +750,7 @@ SONGS = {
     'title': lambda: song_title('title', 72), 'credits': lambda: song_title('credits', 70, credits=True), 'greenhaven': song_greenhaven,
     'village': song_village, 'elderwood': song_elderwood, 'frostheim': song_frostheim, 'ashen': song_ashen, 'highcrowns': song_highcrowns,
     'shadows': song_shadows, 'night': song_night, 'dungeon': song_dungeon, 'combat': song_combat, 'boss': song_boss, 'studio': song_studio,
+    'sands': song_sands, 'coast': song_coast, 'realm': song_realm,
 }
 
 

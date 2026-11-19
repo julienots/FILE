@@ -130,13 +130,20 @@ void Game::touch(const TouchEvent& e) { ui.onTouch(e); }
 
 void Game::haptic(int ms, int amp) { if (settings.haptics) platform::vibrate(ms, amp); }
 
+// 2.3.4 a repeated sound never plays twice identically: a small random pitch / level spread (except UI and jingles)
+static float sfxVary(const std::string& s, float& vol) {
+    static Rng r(9127);
+    if (s.rfind("ui_", 0) == 0 || s == "levelup" || s == "quest" || s == "discover" || s == "boss_intro" || s == "engine") return 1.f;
+    vol *= r.range(0.88f, 1.f);
+    return r.range(0.955f, 1.045f);
+}
 void Game::play(const std::string& s, float vol, float pitch) {
     auto it = sfx.find(s);
-    if (it != sfx.end()) audio.play(it->second, vol, pitch);
+    if (it != sfx.end()) { float v = vol; float k = sfxVary(s, v); audio.play(it->second, v, pitch * k); }
 }
 void Game::play3D(const std::string& s, vec3 p, float vol, float pitch, float range) {
     auto it = sfx.find(s);
-    if (it != sfx.end()) audio.play3D(it->second, p, vol, pitch, range);
+    if (it != sfx.end()) { float v = vol; float k = sfxVary(s, v); audio.play3D(it->second, p, v, pitch * k, range); }
 }
 
 void Game::notify(const std::string& text, vec3 color, const std::string& icon) {
@@ -767,15 +774,26 @@ void Game::updateAudioDirector(float dt) {
     std::string track;
     if (bossEnt != NullEntity) track = "boss";
     else if (combat) track = "combat";
-    else if (dungeon.active) track = "dungeon";
+    else if (dungeon.active) track = dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon";   // 2.3.4 the Celestial Realm
     else {
-        // 2.0.0: the new regions reuse existing scores (no new compositions yet): the Sands play the Ashen theme, the Coast the Greenhaven one
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "ashen", "greenhaven"};
+        // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast"};
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);
         track = env.night > 0.6f ? "night" : (village ? "village" : names[r]);
     }
+    // 2.3.4 no ping-pong between tracks: combat music holds 6 s after the last enemy gives up, and a new
+    // exploration track (region / village / night border) must stay the right one for 3 s before it starts
+    static float combatHold = 0, candT = 0; static std::string cand;
+    if (track == "combat") combatHold = 6.f; else combatHold = std::max(0.f, combatHold - dt);
+    if (track != "boss" && track != "combat" && combatHold > 0 && !dungeon.active) track = "combat";
+    bool urgent = track == "boss" || track == "combat" || audio.currentMusic().empty() || audio.currentMusic() == "title";
+    if (track != audio.currentMusic() && !urgent) {
+        if (track != cand) { cand = track; candT = 0; }
+        candT += dt;
+        if (candT < 3.f) track = audio.currentMusic();
+    } else { cand.clear(); candT = 0; }
     audio.playMusic(track, track == "combat" || track == "boss" ? 1.5f : 4.f);
     audio.setMusicDuck(dialog.open ? 0.55f : 1.f);
     // ambience layers

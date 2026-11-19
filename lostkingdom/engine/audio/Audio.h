@@ -19,13 +19,18 @@ struct SoundBuffer {
 
 // Streaming OGG source (music, long ambiences)
 struct OggStream {
-    std::vector<uint8_t> file;
+    std::shared_ptr<const std::vector<uint8_t>> file;   // shared with the library: opening never copies the file
     stb_vorbis* vb = nullptr;
     int channels = 2, rate = 44100;
-    bool open(std::vector<uint8_t>&& bytes);
+    bool open(std::shared_ptr<const std::vector<uint8_t>> bytes);
     int read(float* out, int frames);  // interleaved stereo float, loops forever
+    // 2.3.4 read at the device rate (linear resampling when the file rate differs: a phone that refuses 48 kHz
+    // used to play every track ~9 % too fast and too high)
+    void readAt(float* out, int frames, int outRate);
     void close();
     ~OggStream() { close(); }
+private:
+    std::vector<float> rbuf; double rpos = 0;
 };
 
 bool decodeOgg(const std::vector<uint8_t>& bytes, SoundBuffer& out);
@@ -59,12 +64,16 @@ public:
     int activeVoices() const { return voiceCount.load(); }
 
 private:
-    struct Voice { const SoundBuffer* buf; double pos; float pitch, volL, volR; bool active; };
+    // 2.3.4 voices: short fade in/out (no clicks), stolen voices fade instead of being cut, optional low-pass for distance
+    struct Voice { const SoundBuffer* buf; double pos; float pitch, volL, volR; bool active; int id = -1; float lp = 1.f, zl = 0, zr = 0; int fadeOut = -1; };
     struct Deck { std::shared_ptr<OggStream> stream; float vol = 0, target = 0, fadeRate = 0.3f; std::string name; };
     struct Amb { std::string name; std::shared_ptr<OggStream> stream; float vol = 0, target = 0; };
     std::vector<std::string> soundNames;
     std::vector<SoundBuffer> sounds;
-    std::vector<std::pair<std::string, std::vector<uint8_t>>> musicData, ambData;
+    using Lib = std::vector<std::pair<std::string, std::shared_ptr<const std::vector<uint8_t>>>>;
+    Lib musicData, ambData;
+    std::vector<double> lastStart;   // per sound: last start time (game thread), merges duplicates fired in the same instant
+    void playVoice(SoundId s, float vol, float pitch, float pan, float lp);
     std::mutex mtx;
     std::vector<Voice> voices;
     Deck decks[2];
@@ -85,7 +94,7 @@ private:
     double enginePos = 0;
     int reverbRate = 0;
     std::vector<float> scratch, sfxBus;
-    std::shared_ptr<OggStream> openStream(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& lib, const std::string& name);
+    std::shared_ptr<OggStream> openStream(const Lib& lib, const std::string& name);
 };
 
 }  // namespace agr

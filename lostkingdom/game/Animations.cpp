@@ -205,8 +205,11 @@ static void humanLoco(const Animator& a, Pose& p) {
         int bones[3] = {H_UARMR, H_LARMR, H_HANDR};
         // 1.6.2: standing still out of combat, the sword rests on the shoulder (it used to hang with its tip in the
         // ground); blended out as soon as the hero walks or an enemy comes near
-        float restW = dg ? 0.f : smoothstepf(0.4f, 0.95f, idle) * (1.f - ready);
-        quat shoulder[3] = {E(-28 + breath * 0.4f, 0, -18), E(-122, 0, 0), E(SWORD_REST_HAND_PITCH, 0, SWORD_REST_HAND_ROLL)};
+        // 2.3.4: the sword stays on the shoulder when walking and running too (it used to drop and hang tip down
+        // as soon as the hero moved); a little bounce with the stride, back to the guard as soon as a fight starts
+        float restW = dg ? 0.f : (1.f - ready);
+        float bounce = std::sin(a.phase * TAU * 2.f) * lerpf(1.5f, 4.f, runW) * moving;
+        quat shoulder[3] = {E(-28 + breath * 0.4f - 6.f * runW * moving + bounce, 0, -18), E(-122 + 4.f * runW * moving, 0, 0), E(SWORD_REST_HAND_PITCH, 0, SWORD_REST_HAND_ROLL)};
         for (int i = 0; i < 3; i++) p.rot[bones[i]] = nlerp(nlerp(relaxedR[i], shoulder[i], restW), guard[i], ready);
         break;
     }
