@@ -539,6 +539,11 @@ TEST_CASE("animation API: parameters, triggers, states and animation events") {
     ctrl.parameters = {{"speed", ParameterType::Float, 0.0f}, {"hit", ParameterType::Trigger, 0.0f}};
     ctrl.states = {{"Idle", "", "", 1.0f, {}}, {"Run", "assets://run.agranim", "", 1.0f, {}}};
     ctrl.transitions = {{"Idle", "Run", {{"speed", ConditionOp::Greater, 0.5f}}, -1.0f, 0.0f}};
+    AnimatorLayer upper;
+    upper.name = "Upper";
+    upper.weight = 0.0f;
+    upper.states = {{"Rest", "", "", 1.0f, {}}, {"Wave", "", "", 1.0f, {}}};
+    ctrl.layers = {upper};
     REQUIRE(f.vfs.writeText("assets://hero.agrctrl", ctrl.toJson()));
     f.write("assets://s/anim.lua", R"lua(
 local A = { }
@@ -548,7 +553,10 @@ function A:onStart()
     self.bad = not pcall(function() self.entity:setParameter("nope", 1) end)
     self.events = ""
 end
-function A:onStateEnter(name) self.events = self.events .. "enter:" .. name .. ";" end
+function A:onStateEnter(name, layer)
+    if layer then self.layerEvents = (self.layerEvents or "") .. layer .. ":" .. name .. ";" return end
+    self.events = self.events .. "enter:" .. name .. ";"
+end
 function A:onAnimationEvent(name) self.events = self.events .. name .. ";"; self.state = self.entity:currentState() end
 return A
 )lua");
@@ -565,10 +573,19 @@ return A
     CHECK(f.scripts.field(e, "bad").value() == "true");
     CHECK(f.scripts.field(e, "events").value() == "enter:Idle;enter:Run;step;");
     CHECK(f.scripts.field(e, "state").value() == "Run");
+    CHECK(f.scripts.field(e, "layerEvents").value() == "Upper:Rest;");
     CHECK(f.scene.registry().get<TransformComponent>(e).position.y == doctest::Approx(3.0f));
     CHECK(f.scripts.run("agr.find('Hero'):playState('Idle')", &f.scene));
     CHECK(anim.currentState(e) == "Idle");
     CHECK_FALSE(f.scripts.run("agr.find('Hero'):playState('Fly')", &f.scene));
+    // Layers: weight and states from scripts.
+    CHECK(f.scripts.run("local h = agr.find('Hero'); h:setLayerWeight('Upper', 0.8); assert(math.abs(h:layerWeight('Upper') - 0.8) < 1e-6)\n"
+                        "h:playState('Wave', 0.2, 'Upper'); assert(h:currentState('Upper') == 'Wave' and h:currentState() == 'Idle')",
+                        &f.scene));
+    CHECK(anim.layerWeight(f.scene, e, "Upper").value() == doctest::Approx(0.8f));
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):setLayerWeight('Nope', 1)", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.find('Hero'):playState('Idle', 0, 'Upper')", &f.scene));
+    CHECK(f.scripts.run("assert(agr.find('Hero'):layerWeight('Nope') == nil)", &f.scene));
 }
 
 TEST_CASE("mobile API: local save, device services, motion sensors") {

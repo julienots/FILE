@@ -225,7 +225,22 @@ struct AnimationSystem::Runtime {
         float secondTime = 0.0f, secondWeight = 0.0f;
         std::vector<i32> secondMap;  // clip->transformTracks[i] -> index in second (or -1)
         const AnimationClip* secondMapFor[2] = {nullptr, nullptr};
+        // Every motion of a blend state with its bindings and this frame's weight (pose path).
+        std::vector<std::vector<Binding>> motionBindings;
+        std::vector<std::vector<ecs::Entity>> motionXforms;
+        std::vector<float> mixWeights;
+        std::vector<math::Vec2> positions;  // 2D blend: motion positions
+        std::string blendParameterY;
     };
+    /// A layer of the state machine: its own states and playback over the base layer.
+    struct Layer {
+        std::unique_ptr<Runtime> rt;
+        const AnimatorLayer* def = nullptr;
+        float weight = 1.0f;
+        std::shared_ptr<AnimatorController> machine;  // the layer's states with the controller's parameters
+    };
+    std::vector<Layer> layers;
+    std::string layerName;  // "" for the base layer
     std::string controllerUri, clipUri;
     std::shared_ptr<const AnimatorController> controller;
     std::unordered_map<std::string, float> params;
@@ -236,7 +251,133 @@ struct AnimationSystem::Runtime {
     bool valid = false;  // false: missing assets (reported once)
 };
 
-AnimationSystem::AnimationSystem(VirtualFileSystem& vfs) : m_vfs(vfs), m_library(vfs) {}
+// ---------------------------------------------------------------- poses
+// Values of several clips mixed with weights (blend states, layers, crossfades) before writing.
+struct AnimationSystem::PoseScratch {
+    struct Prop {
+        void* comp;
+        const FieldInfo* field;
+        i32 channel;
+        float sum, weight;
+        const std::string* text;
+        float textWeight;
+    };
+    struct Xform {
+        TransformComponent* tr;
+        TransformTrack::Path path;
+        math::Vec4 sum;
+        float weight;
+    };
+    struct Pose {
+        std::vector<Prop> props;
+        std::vector<Xform> xforms;
+        std::unordered_map<u64, u32> propIndex, xformIndex;
+        void clear() {
+            props.clear();
+            xforms.clear();
+            propIndex.clear();
+            xformIndex.clear();
+        }
+        static u64 key(const void* a, const void* b, i32 c) {
+            u64 h = reinterpret_cast<uintptr_t>(a) * 0x9E3779B97F4A7C15ull;
+            h ^= reinterpret_cast<uintptr_t>(b) + 0x632BE59BD9B4E019ull + (h << 6) + (h >> 2);
+            return h ^ (static_cast<u64>(static_cast<u32>(c)) * 0xC2B2AE3D27D4EB4Full);
+        }
+        Prop& prop(void* comp, const FieldInfo* field, i32 ch) {
+            auto [it, inserted] = propIndex.try_emplace(key(comp, field, ch), static_cast<u32>(props.size()));
+            if (inserted) props.push_back({comp, field, ch, 0.0f, 0.0f, nullptr, 0.0f});
+            return props[it->second];
+        }
+        Xform& xform(TransformComponent* tr, TransformTrack::Path path, bool* created = nullptr) {
+            auto [it, inserted] = xformIndex.try_emplace(key(tr, nullptr, static_cast<i32>(path)), static_cast<u32>(xforms.size()));
+            if (inserted) xforms.push_back({tr, path, {0, 0, 0, 0}, 0.0f});
+            if (created) *created = inserted;
+            return xforms[it->second];
+        }
+        const Prop* findProp(void* comp, const FieldInfo* field, i32 ch) const {
+            auto it = propIndex.find(key(comp, field, ch));
+            return it == propIndex.end() ? nullptr : &props[it->second];
+        }
+        const Xform* findXform(TransformComponent* tr, TransformTrack::Path path) const {
+            auto it = xformIndex.find(key(tr, nullptr, static_cast<i32>(path)));
+            return it == xformIndex.end() ? nullptr : &xforms[it->second];
+        }
+        /// Weighted sums -> values (rotations renormalized).
+        void finish() {
+            for (Prop& p : props)
+                if (p.weight > 0.0f) p.sum /= p.weight;
+            for (Xform& x : xforms) {
+                if (x.weight <= 0.0f) continue;
+                if (x.path == TransformTrack::Path::Rotation) {
+                    const float len = std::sqrt(x.sum.x * x.sum.x + x.sum.y * x.sum.y + x.sum.z * x.sum.z + x.sum.w * x.sum.w);
+                    x.sum = len > 1e-8f ? x.sum * (1.0f / len) : math::Vec4(0, 0, 0, 1);
+                } else {
+                    x.sum = x.sum * (1.0f / x.weight);
+                }
+            }
+        }
+    };
+    Pose a, b;
+};
+
+namespace {
+
+math::Vec4 currentXform(const TransformComponent& tr, TransformTrack::Path path) {
+    if (path == TransformTrack::Path::Translation) return math::Vec4(tr.position, 0.0f);
+    if (path == TransformTrack::Path::Scale) return math::Vec4(tr.scale, 0.0f);
+    return {tr.rotation.x, tr.rotation.y, tr.rotation.z, tr.rotation.w};
+}
+
+void setXform(TransformComponent& tr, TransformTrack::Path path, math::Vec4 v) {
+    switch (path) {
+        case TransformTrack::Path::Translation: tr.position = {v.x, v.y, v.z}; break;
+        case TransformTrack::Path::Scale: tr.scale = {v.x, v.y, v.z}; break;
+        case TransformTrack::Path::Rotation: tr.rotation = {v.x, v.y, v.z, v.w}; break;
+    }
+}
+
+/// Adds `clip` at `time` with `weight` to the pose (tracks outside the layer's mask skipped).
+void addClipToPose(Scene& scene, ecs::Entity root, const AnimationClip& clip, const std::vector<Binding>& bindings, const std::vector<ecs::Entity>& xforms,
+                   float time, float weight, const AnimatorLayer* layer, AnimationSystem::PoseScratch::Pose& pose) {
+    if (weight <= 0.0f) return;
+    const float ts = sampleTime(clip, time);
+    for (usize i = 0; i < clip.tracks.size() && i < bindings.size(); ++i) {
+        const AnimationTrack& track = clip.tracks[i];
+        if (track.curve.empty() || (layer && !layer->masks(track.target))) continue;
+        void* c = componentPtr(scene, bindings[i]);
+        if (!c) continue;
+        auto& p = pose.prop(c, bindings[i].field, std::clamp(track.channel, 0, 3));
+        if (bindings[i].field->type == FieldType::String) {
+            if (weight > p.textWeight) {
+                p.text = &track.curve.evaluateText(ts);
+                p.textWeight = weight;
+            }
+            continue;
+        }
+        p.sum += track.curve.evaluate(ts) * weight;
+        p.weight += weight;
+    }
+    auto& reg = scene.registry();
+    for (usize i = 0; i < clip.transformTracks.size(); ++i) {
+        const TransformTrack& track = clip.transformTracks[i];
+        if (layer && !layer->masks(track.target)) continue;
+        const ecs::Entity target = i < xforms.size() ? xforms[i] : AnimationSystem::resolvePath(scene, root, track.target);
+        if (target.isNull() || !scene.valid(target)) continue;
+        auto* tr = reg.tryGet<TransformComponent>(target);
+        if (!tr) continue;
+        math::Vec4 v = track.sample(ts);
+        bool created = false;
+        auto& x = pose.xform(tr, track.path, &created);
+        // Quaternions: keep every sample in the hemisphere of the first one before summing.
+        if (track.path == TransformTrack::Path::Rotation && !created && x.sum.x * v.x + x.sum.y * v.y + x.sum.z * v.z + x.sum.w * v.w < 0.0f) v = v * -1.0f;
+        x.sum = x.sum + v * weight;
+        x.weight += weight;
+    }
+}
+
+} // namespace
+
+AnimationSystem::AnimationSystem(VirtualFileSystem& vfs) : m_vfs(vfs), m_library(vfs), m_pose(std::make_unique<PoseScratch>()) {}
 AnimationSystem::~AnimationSystem() = default;
 
 ecs::Entity AnimationSystem::resolvePath(Scene& scene, ecs::Entity root, std::string_view path) {
@@ -417,6 +558,24 @@ AnimationSystem::Runtime* AnimationSystem::runtime(Scene& scene, ecs::Entity e) 
         if (!entry && !rt.controller->states.empty()) entry = &rt.controller->states.front();
         rt.valid = entry != nullptr;
         if (entry) enterState(scene, e, rt, entry, 0.0f);
+        for (const AnimatorLayer& def : rt.controller->layers) {
+            Runtime::Layer layer;
+            layer.def = &def;
+            layer.weight = def.weight;
+            layer.machine = std::make_shared<AnimatorController>();
+            layer.machine->parameters = rt.controller->parameters;
+            layer.machine->states = def.states;
+            layer.machine->transitions = def.transitions;
+            layer.machine->entry = def.entry;
+            layer.rt = std::make_unique<Runtime>();
+            layer.rt->controller = layer.machine;
+            layer.rt->layerName = def.name;
+            const AnimatorState* le = layer.machine->findState(def.entry);
+            if (!le && !layer.machine->states.empty()) le = &layer.machine->states.front();
+            layer.rt->valid = le != nullptr;
+            if (le) enterState(scene, e, *layer.rt, le, 0.0f);
+            rt.layers.push_back(std::move(layer));
+        }
     } else if (!anim->clip.empty()) {
         auto c = m_library.clip(anim->clip);
         if (!c) {
@@ -454,8 +613,16 @@ void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const
             }
             rt.current.motions.push_back(c.value());
             rt.current.thresholds.push_back(m.threshold);
+            rt.current.positions.push_back(m.position);
+            rt.current.motionBindings.push_back(bindTracks(scene, e, *c.value()));
+            std::vector<ecs::Entity> xf;
+            for (const TransformTrack& t : c.value()->transformTracks) xf.push_back(resolvePath(scene, e, t.target));
+            rt.current.motionXforms.push_back(std::move(xf));
         }
         rt.current.blendParameter = state->blendParameter;
+        rt.current.blendParameterY = state->blendParameterY;
+        rt.current.mixWeights.assign(rt.current.motions.size(), 0.0f);
+        if (!rt.current.mixWeights.empty()) rt.current.mixWeights[0] = 1.0f;
         if (!rt.current.motions.empty()) {
             rt.current.clip = rt.current.motions.front();
             rt.current.bindings = bindTracks(scene, e, *rt.current.clip);
@@ -473,14 +640,63 @@ void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const
     if (!state->spriteClip.empty())
         if (auto* sa = scene.registry().tryGet<SpriteAnimatorComponent>(e)) sa->clip = state->spriteClip;
     if (!rt.fading) rt.previous = {};
-    m_events.push_back({e, AnimationEvent::Kind::StateEnter, state->name});
+    m_events.push_back({e, AnimationEvent::Kind::StateEnter, state->name, rt.layerName});
 }
 
-void AnimationSystem::updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step) {
+void AnimationSystem::updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step, const std::unordered_map<std::string, float>& params) {
     Runtime::Playback& p = rt.current;
     const usize n = p.motions.size();
-    auto it = rt.params.find(p.blendParameter);
-    const float x = it == rt.params.end() ? 0.0f : it->second;
+    auto it = params.find(p.blendParameter);
+    const float x = it == params.end() ? 0.0f : it->second;
+    p.mixWeights.assign(n, 0.0f);
+    if (!p.blendParameterY.empty()) {
+        // 2D blend space: gradient band interpolation (each motion's influence fades out toward
+        // every other motion), normalized. Exact on a motion; smooth and local in between.
+        auto iy = params.find(p.blendParameterY);
+        const math::Vec2 q{x, iy == params.end() ? 0.0f : iy->second};
+        float total = 0.0f;
+        for (usize i = 0; i < n; ++i) {
+            float w = 1.0f;
+            for (usize j = 0; j < n && w > 0.0f; ++j) {
+                if (i == j) continue;
+                const math::Vec2 pij = p.positions[j] - p.positions[i];
+                const float len2 = pij.x * pij.x + pij.y * pij.y;
+                if (len2 < 1e-12f) continue;
+                const math::Vec2 piq = q - p.positions[i];
+                w = std::min(w, std::clamp(1.0f - (piq.x * pij.x + piq.y * pij.y) / len2, 0.0f, 1.0f));
+            }
+            p.mixWeights[i] = w;
+            total += w;
+        }
+        if (total <= 1e-6f) {  // outside every band: the nearest motion
+            usize best = 0;
+            float bestD = 1e30f;
+            for (usize i = 0; i < n; ++i) {
+                const math::Vec2 d = q - p.positions[i];
+                if (d.x * d.x + d.y * d.y < bestD) bestD = d.x * d.x + d.y * d.y, best = i;
+            }
+            p.mixWeights.assign(n, 0.0f);
+            p.mixWeights[best] = 1.0f;
+            total = 1.0f;
+        }
+        float dur = 0.0f;
+        usize heaviest = 0;
+        for (usize i = 0; i < n; ++i) {
+            p.mixWeights[i] /= total;
+            dur += p.mixWeights[i] * std::max(p.motions[i]->duration, 1e-4f);
+            if (p.mixWeights[i] > p.mixWeights[heaviest]) heaviest = i;
+        }
+        p.phase += step * p.speed / std::max(dur, 1e-4f);
+        if (p.clip != p.motions[heaviest]) {  // events and exit times follow the heaviest motion
+            p.clip = p.motions[heaviest];
+            p.bindings = p.motionBindings[heaviest];
+            p.transformBindings = p.motionXforms[heaviest];
+        }
+        p.time = p.phase * std::max(p.clip->duration, 1e-4f);
+        p.second = nullptr;
+        p.secondWeight = 0.0f;
+        return;
+    }
     // Pair of motions around x and the weight of the upper one (clamped at both ends).
     usize lo = 0;
     while (lo + 1 < n && x >= p.thresholds[lo + 1]) ++lo;
@@ -497,9 +713,153 @@ void AnimationSystem::updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, floa
         for (const TransformTrack& t : p.clip->transformTracks) p.transformBindings.push_back(resolvePath(scene, e, t.target));
     }
     p.time = p.phase * durLo;
+    p.mixWeights[lo] = 1.0f - w;
+    p.mixWeights[hi] += w;
     p.second = hi != lo && w > 0.0f ? p.motions[hi] : nullptr;
     p.secondTime = p.phase * durHi;
     p.secondWeight = p.second ? w : 0.0f;
+}
+
+void AnimationSystem::stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, float step, std::unordered_map<std::string, float>& params) {
+    Runtime::Playback& cur = rt.current;
+    const float t0 = cur.time;
+    if (!cur.motions.empty()) updateBlend(scene, e, rt, step, params);
+    else cur.time += step * cur.speed;
+    rt.stateTime += step;
+    // Clip events crossed this frame (every loop).
+    if (cur.clip && !cur.clip->events.empty() && cur.time != t0) {
+        const AnimationClip& c = *cur.clip;
+        const float d = std::max(c.duration, 1e-4f);
+        const float lo = std::min(t0, cur.time), hi = std::max(t0, cur.time);
+        const i64 n0 = c.loop ? static_cast<i64>(std::floor(lo / d)) : 0, n1 = c.loop ? static_cast<i64>(std::floor(hi / d)) : 0;
+        for (i64 n = n0; n <= n1; ++n)
+            for (const AnimationEventKey& ev : c.events) {
+                const float at = static_cast<float>(n) * d + ev.time;
+                if (!c.loop && at > c.duration) continue;
+                if ((at > lo || (cur.fresh && at >= lo)) && at <= hi) m_events.push_back({e, AnimationEvent::Kind::ClipEvent, ev.name, rt.layerName});
+            }
+    }
+    cur.fresh = false;
+    if (rt.fading) {
+        rt.previous.time += step * rt.previous.speed;
+        rt.previous.secondTime += step * rt.previous.speed;
+        if (rt.previous.clip) rt.previous.phase += step * rt.previous.speed / std::max(rt.previous.clip->duration, 1e-4f);
+        rt.fade += step;
+        if (rt.fade >= rt.fadeDuration) {
+            rt.fading = false;
+            rt.previous = {};
+        }
+    }
+    // Transitions (one per frame; not while crossfading).
+    if (rt.controller && !rt.fading) {
+        for (const AnimatorTransition& tr : rt.controller->transitions) {
+            if (tr.from != "*" && tr.from != cur.state) continue;
+            if (tr.from == "*" && tr.to == cur.state) continue;
+            if (tr.exitTime >= 0.0f) {
+                const float d = cur.clip ? cur.clip->duration : 0.0f;
+                const float normalized = d > 0.0f ? cur.time / d : 1.0f;
+                if (normalized < tr.exitTime) continue;
+            }
+            bool ok = true;
+            for (const TransitionCondition& c : tr.conditions) {
+                auto p = params.find(c.parameter);
+                const float v = p == params.end() ? 0.0f : p->second;
+                switch (c.op) {
+                    case ConditionOp::Greater: ok = v > c.value; break;
+                    case ConditionOp::Less: ok = v < c.value; break;
+                    case ConditionOp::Equal: ok = std::fabs(v - c.value) < 1e-4f; break;
+                    case ConditionOp::NotEqual: ok = std::fabs(v - c.value) >= 1e-4f; break;
+                    case ConditionOp::IsTrue: ok = v >= 0.5f; break;
+                    case ConditionOp::IsFalse: ok = v < 0.5f; break;
+                }
+                if (!ok) break;
+            }
+            if (!ok) continue;
+            const AnimatorState* target = rt.controller->findState(tr.to);
+            if (!target) continue;
+            for (const TransitionCondition& c : tr.conditions) {
+                const AnimatorParameter* p = rt.controller->findParameter(c.parameter);
+                if (p && p->type == ParameterType::Trigger) params[c.parameter] = 0.0f;  // consumed
+            }
+            enterState(scene, e, rt, target, tr.duration);
+            ++m_stats.transitions;
+            break;
+        }
+    }
+}
+
+void AnimationSystem::applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorLayer* layer, float weight) {
+    using Pose = PoseScratch::Pose;
+    Pose& cur = m_pose->a;
+    Pose& prev = m_pose->b;
+    auto sample = [&](Runtime::Playback& pb, Pose& pose) {
+        pose.clear();
+        if (!pb.motions.empty()) {
+            for (usize i = 0; i < pb.motions.size(); ++i) {
+                const float w = i < pb.mixWeights.size() ? pb.mixWeights[i] : 0.0f;
+                addClipToPose(scene, e, *pb.motions[i], pb.motionBindings[i], pb.motionXforms[i], pb.phase * std::max(pb.motions[i]->duration, 1e-4f),
+                              w, layer, pose);
+            }
+        } else if (pb.clip) {
+            addClipToPose(scene, e, *pb.clip, pb.bindings, pb.transformBindings, pb.time, 1.0f, layer, pose);
+        }
+        pose.finish();
+    };
+    sample(rt.current, cur);
+    const float fade = rt.fading && rt.fadeDuration > 0.0f ? std::clamp(rt.fade / rt.fadeDuration, 0.0f, 1.0f) : 1.0f;
+    if (fade < 1.0f) {
+        // Crossfade: from the previous state's values (or the current value where it had none).
+        sample(rt.previous, prev);
+        for (auto& p : cur.props) {
+            if (!p.weight) continue;
+            const auto* o = prev.findProp(p.comp, p.field, p.channel);
+            const std::optional<float> base = o && o->weight > 0.0f ? std::optional<float>(o->sum) : readChannel(p.comp, *p.field, p.channel);
+            if (base) p.sum = *base + (p.sum - *base) * fade;
+            if (p.text && fade < 0.5f && o && o->text) p.text = o->text;
+        }
+        for (auto& x : cur.xforms) {
+            const auto* o = prev.findXform(x.tr, x.path);
+            x.sum = blendTransform(x.path, o ? o->sum : currentXform(*x.tr, x.path), x.sum, fade);
+        }
+        for (const auto& o : prev.props)  // animated only by the previous state: back to the current value
+            if (o.weight > 0.0f && !cur.findProp(o.comp, o.field, o.channel)) {
+                auto& p = cur.prop(o.comp, o.field, o.channel);
+                const std::optional<float> now = readChannel(o.comp, *o.field, o.channel);
+                p.sum = now ? o.sum + (*now - o.sum) * fade : o.sum;
+                p.weight = 1.0f;
+            }
+        for (const auto& o : prev.xforms)
+            if (!cur.findXform(o.tr, o.path)) {
+                auto& x = cur.xform(o.tr, o.path);
+                x.sum = blendTransform(o.path, o.sum, currentXform(*o.tr, o.path), fade);
+                x.weight = 1.0f;
+            }
+    }
+    // Write over the values below (lower layers) with the layer's weight, one write per field.
+    std::vector<FieldWrite> writes;
+    for (const auto& p : cur.props) {
+        if (p.weight <= 0.0f && !p.text) continue;
+        auto w = std::find_if(writes.begin(), writes.end(), [&](const FieldWrite& fw) { return fw.component == p.comp && fw.field == p.field; });
+        if (w == writes.end()) {
+            writes.push_back({p.comp, p.field, {0, 0, 0, 0}, 0, nullptr});
+            w = writes.end() - 1;
+        }
+        if (p.field->type == FieldType::String) {
+            if (weight >= 0.5f) w->text = p.text;
+            continue;
+        }
+        float v = p.sum;
+        if (weight < 1.0f)
+            if (const auto base = readChannel(p.comp, *p.field, p.channel)) v = *base + (v - *base) * weight;
+        w->v[p.channel] = v;
+        w->mask |= static_cast<u8>(1u << p.channel);
+    }
+    for (FieldWrite& w : writes) writeField(w);
+    for (const auto& x : cur.xforms) {
+        if (x.weight <= 0.0f) continue;
+        setXform(*x.tr, x.path, weight < 1.0f ? blendTransform(x.path, currentXform(*x.tr, x.path), x.sum, weight) : x.sum);
+    }
+    m_stats.tracksApplied += static_cast<u32>(cur.props.size() + cur.xforms.size());
 }
 
 void AnimationSystem::update(Scene& scene, float dt) {
@@ -523,69 +883,16 @@ void AnimationSystem::update(Scene& scene, float dt) {
         ++m_stats.animators;
         if (!anim.playing) continue;
         const float step = dt * anim.speed;
-        Runtime::Playback& cur = rt->current;
-        const float t0 = cur.time;
-        if (!cur.motions.empty()) updateBlend(scene, e, *rt, step);
-        else cur.time += step * cur.speed;
-        rt->stateTime += step;
-        // Clip events crossed this frame (every loop).
-        if (cur.clip && !cur.clip->events.empty() && cur.time != t0) {
-            const AnimationClip& c = *cur.clip;
-            const float d = std::max(c.duration, 1e-4f);
-            const float lo = std::min(t0, cur.time), hi = std::max(t0, cur.time);
-            const i64 n0 = c.loop ? static_cast<i64>(std::floor(lo / d)) : 0, n1 = c.loop ? static_cast<i64>(std::floor(hi / d)) : 0;
-            for (i64 n = n0; n <= n1; ++n)
-                for (const AnimationEventKey& ev : c.events) {
-                    const float at = static_cast<float>(n) * d + ev.time;
-                    if (!c.loop && at > c.duration) continue;
-                    if ((at > lo || (cur.fresh && at >= lo)) && at <= hi) m_events.push_back({e, AnimationEvent::Kind::ClipEvent, ev.name});
-                }
-        }
-        cur.fresh = false;
-        if (rt->fading) {
-            rt->previous.time += step * rt->previous.speed;
-            rt->previous.secondTime += step * rt->previous.speed;
-            rt->fade += step;
-            if (rt->fade >= rt->fadeDuration) {
-                rt->fading = false;
-                rt->previous = {};
-            }
-        }
-        // Transitions (one per frame; not while crossfading).
-        if (rt->controller && !rt->fading) {
-            for (const AnimatorTransition& tr : rt->controller->transitions) {
-                if (tr.from != "*" && tr.from != cur.state) continue;
-                if (tr.from == "*" && tr.to == cur.state) continue;
-                if (tr.exitTime >= 0.0f) {
-                    const float d = cur.clip ? cur.clip->duration : 0.0f;
-                    const float normalized = d > 0.0f ? cur.time / d : 1.0f;
-                    if (normalized < tr.exitTime) continue;
-                }
-                bool ok = true;
-                for (const TransitionCondition& c : tr.conditions) {
-                    auto p = rt->params.find(c.parameter);
-                    const float v = p == rt->params.end() ? 0.0f : p->second;
-                    switch (c.op) {
-                        case ConditionOp::Greater: ok = v > c.value; break;
-                        case ConditionOp::Less: ok = v < c.value; break;
-                        case ConditionOp::Equal: ok = std::fabs(v - c.value) < 1e-4f; break;
-                        case ConditionOp::NotEqual: ok = std::fabs(v - c.value) >= 1e-4f; break;
-                        case ConditionOp::IsTrue: ok = v >= 0.5f; break;
-                        case ConditionOp::IsFalse: ok = v < 0.5f; break;
-                    }
-                    if (!ok) break;
-                }
-                if (!ok) continue;
-                const AnimatorState* target = rt->controller->findState(tr.to);
-                if (!target) continue;
-                for (const TransitionCondition& c : tr.conditions) {
-                    const AnimatorParameter* p = rt->controller->findParameter(c.parameter);
-                    if (p && p->type == ParameterType::Trigger) rt->params[c.parameter] = 0.0f;  // consumed
-                }
-                enterState(scene, e, *rt, target, tr.duration);
-                ++m_stats.transitions;
-                break;
-            }
+        stepMachine(scene, e, *rt, step, rt->params);
+        for (Runtime::Layer& l : rt->layers)
+            if (l.rt && l.rt->valid) stepMachine(scene, e, *l.rt, step, rt->params);
+        auto isMix = [](const Runtime::Playback& pb) { return !pb.motions.empty(); };
+        if (!rt->layers.empty() || isMix(rt->current) || (rt->fading && isMix(rt->previous))) {
+            // Pose path: blend states (every motion, property and transform tracks), layers with masks.
+            applyLayer(scene, e, *rt, nullptr, 1.0f);
+            for (Runtime::Layer& l : rt->layers)
+                if (l.rt && l.rt->valid && l.weight > 0.0f) applyLayer(scene, e, *l.rt, l.def, l.weight);
+            continue;
         }
         Runtime::Playback& now = rt->current;
         if (now.clip) {
@@ -639,19 +946,49 @@ std::optional<float> AnimationSystem::parameter(Scene& scene, ecs::Entity e, std
     return it->second;
 }
 
-bool AnimationSystem::play(Scene& scene, ecs::Entity e, std::string_view state, float fade) {
+bool AnimationSystem::play(Scene& scene, ecs::Entity e, std::string_view state, float fade, std::string_view layer) {
     Runtime* rt = runtime(scene, e);
     if (!rt || !rt->controller) return false;
-    const AnimatorState* s = rt->controller->findState(state);
+    Runtime* target = rt;
+    if (!layer.empty()) {
+        target = nullptr;
+        for (Runtime::Layer& l : rt->layers)
+            if (l.def && l.def->name == layer) target = l.rt.get();
+        if (!target) return false;
+    }
+    const AnimatorState* s = target->controller->findState(state);
     if (!s) return false;
-    enterState(scene, e, *rt, s, fade);
-    rt->valid = true;
+    enterState(scene, e, *target, s, fade);
+    target->valid = true;
     return true;
 }
 
-std::string AnimationSystem::currentState(ecs::Entity e) const {
+std::string AnimationSystem::currentState(ecs::Entity e, std::string_view layer) const {
     auto it = m_runtimes.find(e.packed());
-    return it == m_runtimes.end() ? std::string() : it->second->current.state;
+    if (it == m_runtimes.end()) return {};
+    if (layer.empty()) return it->second->current.state;
+    for (const Runtime::Layer& l : it->second->layers)
+        if (l.def && l.def->name == layer && l.rt) return l.rt->current.state;
+    return {};
+}
+
+bool AnimationSystem::setLayerWeight(Scene& scene, ecs::Entity e, std::string_view layer, float weight) {
+    Runtime* rt = runtime(scene, e);
+    if (!rt) return false;
+    for (Runtime::Layer& l : rt->layers)
+        if (l.def && l.def->name == layer) {
+            l.weight = std::clamp(weight, 0.0f, 1.0f);
+            return true;
+        }
+    return false;
+}
+
+std::optional<float> AnimationSystem::layerWeight(Scene& scene, ecs::Entity e, std::string_view layer) {
+    Runtime* rt = runtime(scene, e);
+    if (!rt) return std::nullopt;
+    for (const Runtime::Layer& l : rt->layers)
+        if (l.def && l.def->name == layer) return l.weight;
+    return std::nullopt;
 }
 
 float AnimationSystem::stateTime(ecs::Entity e) const {

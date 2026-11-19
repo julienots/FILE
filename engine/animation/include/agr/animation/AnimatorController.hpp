@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "agr/core/Result.hpp"
@@ -27,9 +28,11 @@ struct TransitionCondition {
 
 /// A state plays a property clip (.agranim) and / or a sprite clip (SpriteAnimator.clip).
 /// One motion of a blend state: a clip and the parameter value where it plays alone.
+/// In a 2D blend state (blend space), `position` is the point of the two parameters where it plays alone.
 struct BlendMotion {
     std::string clip;
     float threshold = 0.0f;
+    math::Vec2 position{0.0f, 0.0f};
 };
 
 struct AnimatorState {
@@ -41,8 +44,13 @@ struct AnimatorState {
     /// Blend state (1D blend tree, e.g. Idle / Walk / Run by "speed"): when `motions` is not
     /// empty, the two motions around the parameter's value are mixed, their phases kept in step.
     std::string blendParameter;
-    std::vector<BlendMotion> motions;  ///< Sorted by threshold when loaded.
+    /// 2D blend state (blend space, e.g. strafing by "moveX" / "moveY"): motions are placed at
+    /// `position`; the ones around the point of the two parameters are mixed (gradient band
+    /// interpolation), their phases kept in step.
+    std::string blendParameterY;
+    std::vector<BlendMotion> motions;  ///< 1D: sorted by threshold when loaded.
     bool isBlend() const { return !motions.empty(); }
+    bool isBlend2D() const { return isBlend() && !blendParameterY.empty(); }
 };
 
 /// Goes from `from` ("*" = any state) to `to` when every condition holds and, with
@@ -56,12 +64,30 @@ struct AnimatorTransition {
     float duration = 0.1f;
 };
 
+/// An extra state machine played on top of the base one (upper body that shoots while the legs
+/// run, a face, a hit reaction): its values replace the ones below with `weight` (0..1, changed
+/// by scripts at run time), only on the objects of its `mask`.
+struct AnimatorLayer {
+    std::string name;
+    float weight = 1.0f;
+    /// Paths below the animated entity ("Torso", "Hips/Spine") whose subtree the layer animates;
+    /// empty = everything.
+    std::vector<std::string> mask;
+    std::vector<AnimatorState> states;
+    std::vector<AnimatorTransition> transitions;
+    std::string entry;
+
+    /// True when a track targeting `path` is inside the mask.
+    bool masks(std::string_view path) const;
+};
+
 /// State machine asset (.agrctrl).
 struct AnimatorController {
     std::vector<AnimatorParameter> parameters;
     std::vector<AnimatorState> states;
     std::vector<AnimatorTransition> transitions;
     std::string entry;  ///< Initial state (default: the first one).
+    std::vector<AnimatorLayer> layers;  ///< Played over the base layer (the states above), in order.
 
     const AnimatorState* findState(std::string_view name) const;
     const AnimatorParameter* findParameter(std::string_view name) const;

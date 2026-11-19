@@ -496,6 +496,41 @@ int main() {
         AnimationSystem anim(vfs);
         anim.update(scene, 0.016f);
         bench("animation: 1000 animators (500 state machines), 3 curves each", 1000, 100, [&] { anim.update(scene, 0.016f); });
+        // Blend space (5 motions, 3 curves each on 2 children) + an upper-body layer with a mask.
+        for (int m = 0; m < 5; ++m) {
+            AnimationClip c;
+            c.duration = 1.0f + 0.1f * static_cast<float>(m);
+            c.loop = true;
+            for (const char* target : {"Legs", "Arms"})
+                for (int ch = 0; ch < 3; ++ch) c.track(target, "Transform", "position", ch).curve.setKey(0.0f, static_cast<float>(m + ch));
+            (void)vfs.writeText("assets://m" + std::to_string(m) + ".agranim", c.toJson());
+        }
+        AnimatorController layered;
+        layered.parameters = {{"mx", ParameterType::Float, 0.3f}, {"my", ParameterType::Float, 0.4f}};
+        AnimatorState strafe;
+        strafe.name = "Strafe";
+        strafe.blendParameter = "mx";
+        strafe.blendParameterY = "my";
+        const math::Vec2 at[5] = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int m = 0; m < 5; ++m) strafe.motions.push_back({"assets://m" + std::to_string(m) + ".agranim", 0.0f, at[m]});
+        layered.states = {strafe};
+        AnimatorLayer upper;
+        upper.name = "Upper";
+        upper.mask = {"Arms"};
+        upper.weight = 0.7f;
+        upper.states = {{"Aim", "assets://m1.agranim"}};
+        layered.layers = {upper};
+        (void)vfs.writeText("assets://layered.agrctrl", layered.toJson());
+        Scene layeredScene;
+        for (int i = 0; i < 500; ++i) {
+            const auto e = layeredScene.createEntity("Hero");
+            layeredScene.createEntity("Legs", e);
+            layeredScene.createEntity("Arms", e);
+            layeredScene.registry().emplace<AnimatorComponent>(e).controller = "assets://layered.agrctrl";
+        }
+        AnimationSystem anim2(vfs);
+        anim2.update(layeredScene, 0.016f);
+        bench("animation: 500 animators, 2D blend of 5 clips + masked layer (18 curves)", 500, 100, [&] { anim2.update(layeredScene, 0.016f); });
     }
     std::error_code ec;
     std::filesystem::remove_all(root, ec);

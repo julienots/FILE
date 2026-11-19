@@ -393,7 +393,9 @@ void ScriptEngine::dispatchAnimation(Scene& scene, const AnimationEvent& e) {
     const char* fn = e.kind == AnimationEvent::Kind::StateEnter ? "onStateEnter" : "onAnimationEvent";
     m->call(it->second, fn, [&] {
         lua_pushstring(m->L, e.name.c_str());
-        return 1;
+        if (e.layer.empty()) return 1;
+        lua_pushstring(m->L, e.layer.c_str());  // second argument: the layer (nil for the base layer)
+        return 2;
     });
 }
 

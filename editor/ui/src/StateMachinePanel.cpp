@@ -45,6 +45,7 @@ float distanceToSegment(ImVec2 p, ImVec2 a, ImVec2 b) {
 void StateMachinePanel::load(EditorShared& s, const std::string& uri) {
     m_uri = uri;
     m_state = m_transition = m_dragState = -1;
+    m_layer = -1;
     m_dirty = false;
     m_ctrl = {};
     auto text = s.engine.vfs().readText(uri);
@@ -58,6 +59,71 @@ void StateMachinePanel::load(EditorShared& s, const std::string& uri) {
         return;
     }
     m_ctrl = std::move(c.value());
+}
+
+void StateMachinePanel::drawLayerBar(EditorShared& s) {
+    (void)s;
+    if (m_layer >= static_cast<int>(m_ctrl.layers.size())) m_layer = -1;
+    auto layerName = [&](int i) { return i < 0 ? std::string("Base") : m_ctrl.layers[static_cast<usize>(i)].name; };
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::BeginCombo("Couche", layerName(m_layer).c_str())) {
+        for (int i = -1; i < static_cast<int>(m_ctrl.layers.size()); ++i)
+            if (ImGui::Selectable(layerName(i).c_str(), i == m_layer)) {
+                m_layer = i;
+                m_state = m_transition = m_dragState = -1;
+                m_maskText.clear();
+                if (i >= 0)
+                    for (const std::string& m : m_ctrl.layers[static_cast<usize>(i)].mask) m_maskText += (m_maskText.empty() ? "" : ", ") + m;
+            }
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Couches : d'autres machines à états jouées par-dessus la base (haut du corps qui tire pendant que les jambes courent)");
+    ImGui::SameLine();
+    if (ImGui::Button("+ Couche")) {
+        AnimatorLayer l;
+        l.name = "Couche " + std::to_string(m_ctrl.layers.size() + 1);
+        l.states.push_back({"Vide", "", "", 1.0f, {0.0f, 0.0f}});
+        l.entry = "Vide";
+        m_ctrl.layers.push_back(std::move(l));
+        m_layer = static_cast<int>(m_ctrl.layers.size()) - 1;
+        m_state = m_transition = m_dragState = -1;
+        m_maskText.clear();
+        m_dirty = true;
+    }
+    if (m_layer < 0) return;
+    AnimatorLayer& l = m_ctrl.layers[static_cast<usize>(m_layer)];
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120);
+    m_dirty |= ImGui::InputText("Nom##layer", &l.name);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    m_dirty |= ImGui::SliderFloat("Poids", &l.weight, 0.0f, 1.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Part de la couche sur les valeurs du dessous ; les scripts le changent (setLayerWeight)");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::InputTextWithHint("Masque", "Torse, Torse/Bras (vide = tout)", &m_maskText)) {
+        l.mask.clear();
+        std::string cur;
+        for (char c : m_maskText + ",") {
+            if (c == ',') {
+                const auto b = cur.find_first_not_of(' '), e = cur.find_last_not_of(' ');
+                if (b != std::string::npos) l.mask.push_back(cur.substr(b, e - b + 1));
+                cur.clear();
+            } else {
+                cur += c;
+            }
+        }
+        m_dirty = true;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Objets (chemins sous l'Animator, séparés par des virgules) que la couche anime, avec leurs enfants");
+    ImGui::SameLine();
+    if (ImGui::Button("Supprimer la couche")) {
+        m_ctrl.layers.erase(m_ctrl.layers.begin() + m_layer);
+        m_layer = -1;
+        m_state = m_transition = m_dragState = -1;
+        m_dirty = true;
+    }
 }
 
 bool StateMachinePanel::save(EditorShared& s) {
@@ -112,17 +178,17 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
     }
 
     // ------------------------------------------------------------- selection
-    if (m_state >= 0 && m_state < static_cast<int>(m_ctrl.states.size())) {
-        AnimatorState& st = m_ctrl.states[static_cast<usize>(m_state)];
+    if (m_state >= 0 && m_state < static_cast<int>(states().size())) {
+        AnimatorState& st = states()[static_cast<usize>(m_state)];
         ImGui::SeparatorText("État");
         const std::string oldName = st.name;
         if (ImGui::InputText("Nom", &st.name)) {
             // Keep transitions and the entry pointing at the renamed state.
-            for (AnimatorTransition& t : m_ctrl.transitions) {
+            for (AnimatorTransition& t : transitions()) {
                 if (t.from == oldName) t.from = st.name;
                 if (t.to == oldName) t.to = st.name;
             }
-            if (m_ctrl.entry == oldName) m_ctrl.entry = st.name;
+            if (entry() == oldName) entry() = st.name;
             m_dirty = true;
         }
         m_dirty |= ImGui::InputText("Clip", &st.clip);
@@ -139,20 +205,45 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
         m_dirty |= ImGui::DragFloat("Vitesse", &st.speed, 0.01f, 0.0f, 10.0f);
         // ---- blend state (1D blend tree): motions mixed by a parameter.
         bool blend = st.isBlend();
-        if (ImGui::Checkbox("Mélange (blend tree 1D)", &blend)) {
+        if (ImGui::Checkbox("Mélange (blend tree)", &blend)) {
             if (blend) {
                 st.motions = {{st.clip, 0.0f}, {"", 1.0f}};
                 for (const AnimatorParameter& p : m_ctrl.parameters)
                     if (st.blendParameter.empty() && (p.type == ParameterType::Float || p.type == ParameterType::Int)) st.blendParameter = p.name;
             } else {
                 st.motions.clear();
+                st.blendParameterY.clear();
             }
             m_dirty = true;
+        }
+        if (st.isBlend()) {
+            bool twoD = st.isBlend2D();
+            ImGui::SameLine();
+            if (ImGui::Checkbox("2D", &twoD)) {
+                st.blendParameterY.clear();
+                if (twoD)
+                    for (const AnimatorParameter& p : m_ctrl.parameters)
+                        if (st.blendParameterY.empty() && p.name != st.blendParameter && (p.type == ParameterType::Float || p.type == ParameterType::Int))
+                            st.blendParameterY = p.name;
+                if (twoD && st.blendParameterY.empty()) st.blendParameterY = "y";
+                m_dirty = true;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Espace de mélange 2D : chaque clip placé en (x, y) selon deux paramètres (déplacements latéraux, visée)");
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Mélange des clips selon un paramètre (ex. Idle 0, Walk 2, Run 5 selon « speed »), pas synchronisés");
         if (st.isBlend()) {
-            if (ImGui::BeginCombo("Paramètre", st.blendParameter.c_str())) {
+            if (st.isBlend2D() && ImGui::BeginCombo("Paramètre Y", st.blendParameterY.c_str())) {
+                for (const AnimatorParameter& p : m_ctrl.parameters) {
+                    if (p.type != ParameterType::Float && p.type != ParameterType::Int) continue;
+                    if (ImGui::Selectable(p.name.c_str(), p.name == st.blendParameterY)) {
+                        st.blendParameterY = p.name;
+                        m_dirty = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::BeginCombo(st.isBlend2D() ? "Paramètre X" : "Paramètre", st.blendParameter.c_str())) {
                 for (const AnimatorParameter& p : m_ctrl.parameters) {
                     if (p.type != ParameterType::Float && p.type != ParameterType::Int) continue;
                     if (ImGui::Selectable(p.name.c_str(), p.name == st.blendParameter)) {
@@ -177,8 +268,12 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
                 }
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
-                if (ImGui::DragFloat("##threshold", &m.threshold, 0.01f)) m_dirty = true;
-                if (ImGui::IsItemDeactivatedAfterEdit())  // keep the motions ordered by threshold
+                if (st.isBlend2D()) {
+                    m_dirty |= ImGui::DragFloat2("##position", &m.position.x, 0.01f);
+                } else if (ImGui::DragFloat("##threshold", &m.threshold, 0.01f)) {
+                    m_dirty = true;
+                }
+                if (!st.isBlend2D() && ImGui::IsItemDeactivatedAfterEdit())  // keep the motions ordered by threshold
                     std::stable_sort(st.motions.begin(), st.motions.end(), [](const BlendMotion& a, const BlendMotion& b) { return a.threshold < b.threshold; });
                 ImGui::SameLine();
                 if (ImGui::Button("x")) removeAt = static_cast<int>(i);
@@ -193,12 +288,12 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
                 m_dirty = true;
             }
         }
-        if (m_ctrl.entry != st.name && ImGui::Button("Définir comme état initial")) {
-            m_ctrl.entry = st.name;
+        if (entry() != st.name && ImGui::Button("Définir comme état initial")) {
+            entry() = st.name;
             m_dirty = true;
         }
-    } else if (m_transition >= 0 && m_transition < static_cast<int>(m_ctrl.transitions.size())) {
-        AnimatorTransition& t = m_ctrl.transitions[static_cast<usize>(m_transition)];
+    } else if (m_transition >= 0 && m_transition < static_cast<int>(transitions().size())) {
+        AnimatorTransition& t = transitions()[static_cast<usize>(m_transition)];
         ImGui::SeparatorText("Transition");
         ImGui::Text("%s  ->  %s", t.from == "*" ? "Tout état" : t.from.c_str(), t.to.c_str());
         bool exit = t.exitTime >= 0.0f;
@@ -242,7 +337,7 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
             m_dirty = true;
         }
         if (ImGui::Button("Supprimer la transition")) {
-            m_ctrl.transitions.erase(m_ctrl.transitions.begin() + m_transition);
+            transitions().erase(transitions().begin() + m_transition);
             m_transition = -1;
             m_dirty = true;
         }
@@ -306,7 +401,10 @@ void StateMachinePanel::draw(EditorShared& s) {
     if (ImGui::Button(m_dirty ? "Enregistrer*" : "Enregistrer")) save(s);
     ImGui::SameLine();
     ImGui::TextDisabled("%s", m_uri.c_str());
-    const std::string current = s.animation && !editMode ? s.animation->animation().currentState(root) : std::string();
+    drawLayerBar(s);
+    const std::string current = s.animation && !editMode
+                                    ? s.animation->animation().currentState(root, m_layer < 0 ? std::string_view{} : std::string_view(m_ctrl.layers[static_cast<usize>(m_layer)].name))
+                                    : std::string();
 
     const float propsW = 300.0f;
     ImGui::BeginChild("graph", {std::max(100.0f, ImGui::GetContentRegionAvail().x - propsW), 0}, ImGuiChildFlags_Borders,
@@ -329,20 +427,20 @@ void StateMachinePanel::draw(EditorShared& s) {
     }
 
     auto center = [&](int i) {
-        const ImVec2 p = i < 0 ? kAnyPos : ImVec2{m_ctrl.states[static_cast<usize>(i)].editorPosition.x, m_ctrl.states[static_cast<usize>(i)].editorPosition.y};
+        const ImVec2 p = i < 0 ? kAnyPos : ImVec2{states()[static_cast<usize>(i)].editorPosition.x, states()[static_cast<usize>(i)].editorPosition.y};
         return ImVec2{origin.x + p.x + kNodeW * 0.5f, origin.y + p.y + kNodeH * 0.5f};
     };
     auto indexOf = [&](const std::string& name) {
         if (name == "*") return -1;
-        for (int i = 0; i < static_cast<int>(m_ctrl.states.size()); ++i)
-            if (m_ctrl.states[static_cast<usize>(i)].name == name) return i;
+        for (int i = 0; i < static_cast<int>(states().size()); ++i)
+            if (states()[static_cast<usize>(i)].name == name) return i;
         return -2;
     };
 
     // Transitions (arrows); two-way pairs are offset so both stay visible.
     int hoverTransition = -1;
-    for (int i = 0; i < static_cast<int>(m_ctrl.transitions.size()); ++i) {
-        const AnimatorTransition& t = m_ctrl.transitions[static_cast<usize>(i)];
+    for (int i = 0; i < static_cast<int>(transitions().size()); ++i) {
+        const AnimatorTransition& t = transitions()[static_cast<usize>(i)];
         const int a = indexOf(t.from), b = indexOf(t.to);
         if (a == -2 || b < 0) continue;
         ImVec2 ca = center(a), cb = center(b);
@@ -372,10 +470,10 @@ void StateMachinePanel::draw(EditorShared& s) {
         if (hovered && mouse.x >= a.x && mouse.x <= b.x && mouse.y >= a.y && mouse.y <= b.y) hoverState = i;
     };
     node(-1, "Tout état", palette::kGraphite700, palette::kGraphite900);
-    for (int i = 0; i < static_cast<int>(m_ctrl.states.size()); ++i) {
-        const AnimatorState& st = m_ctrl.states[static_cast<usize>(i)];
+    for (int i = 0; i < static_cast<int>(states().size()); ++i) {
+        const AnimatorState& st = states()[static_cast<usize>(i)];
         ImU32 border = palette::kGraphite700;
-        if (st.name == m_ctrl.entry) border = palette::kSuccess;
+        if (st.name == entry()) border = palette::kSuccess;
         if (!current.empty() && st.name == current) border = palette::kError;
         if (i == m_state) border = palette::kAmber;
         node(i, st.name.c_str(), border, palette::kGraphite800);
@@ -390,7 +488,7 @@ void StateMachinePanel::draw(EditorShared& s) {
         m_dragState = hoverState >= 0 ? hoverState : -1;
     }
     if (m_dragState >= 0 && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        math::Vec2& p = m_ctrl.states[static_cast<usize>(m_dragState)].editorPosition;
+        math::Vec2& p = states()[static_cast<usize>(m_dragState)].editorPosition;
         p.x += ImGui::GetIO().MouseDelta.x;
         p.y += ImGui::GetIO().MouseDelta.y;
         m_dirty = true;
@@ -410,20 +508,20 @@ void StateMachinePanel::draw(EditorShared& s) {
             if (ImGui::MenuItem("Ajouter un état")) {
                 std::string name = "State";
                 for (int n = 1; indexOf(name) != -2; ++n) name = "State" + std::to_string(n);
-                m_ctrl.states.push_back({name, "", "", 1.0f, {menuPos.x, menuPos.y}});
-                if (m_ctrl.entry.empty()) m_ctrl.entry = name;
-                m_state = static_cast<int>(m_ctrl.states.size()) - 1;
+                states().push_back({name, "", "", 1.0f, {menuPos.x, menuPos.y}});
+                if (entry().empty()) entry() = name;
+                m_state = static_cast<int>(states().size()) - 1;
                 m_transition = -1;
                 m_dirty = true;
             }
         } else {
-            const std::string from = menuState < 0 ? std::string("*") : m_ctrl.states[static_cast<usize>(menuState)].name;
+            const std::string from = menuState < 0 ? std::string("*") : states()[static_cast<usize>(menuState)].name;
             if (ImGui::BeginMenu("Transition vers")) {
-                for (const AnimatorState& st : m_ctrl.states) {
+                for (const AnimatorState& st : states()) {
                     if (st.name == from) continue;
                     if (ImGui::MenuItem(st.name.c_str())) {
-                        m_ctrl.transitions.push_back({from, st.name, {}, from == "*" ? -1.0f : 1.0f, 0.1f});
-                        m_transition = static_cast<int>(m_ctrl.transitions.size()) - 1;
+                        transitions().push_back({from, st.name, {}, from == "*" ? -1.0f : 1.0f, 0.1f});
+                        m_transition = static_cast<int>(transitions().size()) - 1;
                         m_state = -1;
                         m_dirty = true;
                     }
@@ -432,13 +530,13 @@ void StateMachinePanel::draw(EditorShared& s) {
             }
             if (menuState >= 0) {
                 if (ImGui::MenuItem("Définir comme état initial")) {
-                    m_ctrl.entry = from;
+                    entry() = from;
                     m_dirty = true;
                 }
                 if (ImGui::MenuItem("Supprimer l'état")) {
-                    std::erase_if(m_ctrl.transitions, [&](const AnimatorTransition& t) { return t.from == from || t.to == from; });
-                    m_ctrl.states.erase(m_ctrl.states.begin() + menuState);
-                    if (m_ctrl.entry == from) m_ctrl.entry = m_ctrl.states.empty() ? std::string() : m_ctrl.states.front().name;
+                    std::erase_if(transitions(), [&](const AnimatorTransition& t) { return t.from == from || t.to == from; });
+                    states().erase(states().begin() + menuState);
+                    if (entry() == from) entry() = states().empty() ? std::string() : states().front().name;
                     m_state = m_transition = -1;
                     m_dirty = true;
                 }

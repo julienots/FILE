@@ -308,9 +308,18 @@ private:
     void load(EditorShared& s, const std::string& uri);
     bool save(EditorShared& s);
     void drawProperties(EditorShared& s);
+    void drawLayerBar(EditorShared& s);
+    /// States, transitions and entry of the layer being edited (-1: the base layer).
+    std::vector<AnimatorState>& states() { return m_layer < 0 ? m_ctrl.states : m_ctrl.layers[static_cast<usize>(m_layer)].states; }
+    std::vector<AnimatorTransition>& transitions() {
+        return m_layer < 0 ? m_ctrl.transitions : m_ctrl.layers[static_cast<usize>(m_layer)].transitions;
+    }
+    std::string& entry() { return m_layer < 0 ? m_ctrl.entry : m_ctrl.layers[static_cast<usize>(m_layer)].entry; }
 
     std::string m_uri;
     AnimatorController m_ctrl;
+    int m_layer = -1;
+    std::string m_maskText;
     bool m_dirty = false;
     int m_state = -1, m_transition = -1;
     int m_dragState = -1;

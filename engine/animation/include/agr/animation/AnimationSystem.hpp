@@ -28,6 +28,7 @@ struct AnimationEvent {
     ecs::Entity entity;
     Kind kind = Kind::ClipEvent;
     std::string name;
+    std::string layer;  ///< Layer of the state machine ("" = the base layer).
 };
 
 struct AnimationStats {
@@ -87,9 +88,12 @@ public:
     bool setTrigger(Scene& scene, ecs::Entity e, std::string_view name);
     bool resetTrigger(Scene& scene, ecs::Entity e, std::string_view name);
     std::optional<float> parameter(Scene& scene, ecs::Entity e, std::string_view name);
-    /// Jumps to a state (crossfade of `fade` seconds).
-    bool play(Scene& scene, ecs::Entity e, std::string_view state, float fade = 0.0f);
-    std::string currentState(ecs::Entity e) const;
+    /// Jumps to a state (crossfade of `fade` seconds), on the base layer or the named layer.
+    bool play(Scene& scene, ecs::Entity e, std::string_view state, float fade = 0.0f, std::string_view layer = {});
+    std::string currentState(ecs::Entity e, std::string_view layer = {}) const;
+    /// Weight of a layer of the state machine (0..1: how much it replaces the layers below).
+    bool setLayerWeight(Scene& scene, ecs::Entity e, std::string_view layer, float weight);
+    std::optional<float> layerWeight(Scene& scene, ecs::Entity e, std::string_view layer);
     /// Seconds spent in the current state.
     float stateTime(ecs::Entity e) const;
 
@@ -103,6 +107,7 @@ public:
     static bool isTextTrack(const AnimationTrack& track);
 
     AnimationLibrary& library() { return m_library; }
+    struct PoseScratch;  ///< Implementation detail (blended values before writing).
     const AnimationStats& stats() const { return m_stats; }
 
     /// Entity below `root` designated by a path of names ("" = root, "Arm/Hand").
@@ -113,8 +118,12 @@ public:
 private:
     struct Runtime;
     Runtime* runtime(Scene& scene, ecs::Entity e);
+    /// Time, events, crossfade and transitions of one state machine (base layer or a layer).
+    void stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, float step, std::unordered_map<std::string, float>& params);
+    /// Samples the layer's clips (blends, crossfade, mask) and writes them over the current values with `weight`.
+    void applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorLayer* layer, float weight);
     void enterState(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorState* state, float fade);
-    void updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step);
+    void updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step, const std::unordered_map<std::string, float>& params);
     void apply(Scene& scene, ecs::Entity root, Runtime* rt, const AnimationClip* from, float fromTime, const AnimationClip& to, float toTime,
                float weight);
 
@@ -125,6 +134,7 @@ private:
     u64 m_sceneGeneration = 0;
     Scene* m_scene = nullptr;
     AnimationStats m_stats;
+    std::unique_ptr<PoseScratch> m_pose;
 };
 
 } // namespace agr

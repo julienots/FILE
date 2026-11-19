@@ -64,11 +64,61 @@ Un état peut mélanger plusieurs clips selon un paramètre `float` ou `int` (l'
   du cycle est interpolée), donc les pieds restent en phase même si Walk dure 0,8 s et Run 0,5 s.
 - Fondus, transitions, temps de sortie (`exitTime`, sur la phase) et déclencheurs fonctionnent comme
   pour les autres états, y compris pour entrer dans un mélange ou en sortir.
-- Le mélange s'applique aux pistes de transformation (squelettes, nœuds importés) ; les pistes de
-  propriétés et les événements viennent du mouvement de seuil inférieur.
-- Éditeur : *Machine à états* ➜ état ➜ *Mélange (blend tree 1D)* : paramètre, mouvements (glisser un
+- Le mélange s'applique à **toutes les pistes** : transformations (squelettes, nœuds importés) et
+  propriétés (os 2D, couleurs, tailles...). Les événements et le temps de sortie suivent le mouvement
+  dominant.
+- Éditeur : *Machine à états* ➜ état ➜ *Mélange (blend tree)* : paramètre, mouvements (glisser un
   clip, seuil, ajouter / retirer).
 - Le *Duel des Tours* l'utilise : `Locomotion` mélange Idle et Walk selon la vitesse réelle de l'unité.
+
+## Espaces de mélange 2D (blend space)
+
+Un état de mélange avec un **second paramètre** (`parameterY`) place chaque clip en un point (x, y) :
+l'équivalent du `BlendSpace2D` de Godot. Exemple : se déplacer dans toutes les directions selon
+`moveX` / `moveY`, viser en haut / en bas et à gauche / à droite.
+
+```json
+{ "name": "Strafe",
+  "blend": { "parameter": "moveX", "parameterY": "moveY",
+             "motions": [ { "clip": "assets://idle.agranim",  "position": [0, 0] },
+                          { "clip": "assets://right.agranim", "position": [1, 0] },
+                          { "clip": "assets://left.agranim",  "position": [-1, 0] },
+                          { "clip": "assets://fwd.agranim",   "position": [0, 1] },
+                          { "clip": "assets://back.agranim",  "position": [0, -1] } ] } }
+```
+
+- **Interpolation par bandes de gradient** (*gradient band*, comme les blend spaces « freeform » des
+  autres moteurs) : sur un point, son clip joue seul ; entre plusieurs, les plus proches se partagent
+  le poids, sans triangulation à faire ; hors de la zone couverte, le clip le plus proche.
+- Phases synchronisées (durée du cycle pondérée), fondus et transitions comme en 1D.
+- Éditeur : case *2D* à côté de *Mélange*, paramètres X et Y, position (x, y) de chaque mouvement.
+
+## Couches et masques
+
+Une machine à états peut avoir des **couches** (`layers`) jouées par-dessus la base, chacune avec ses
+propres états et transitions (les paramètres sont communs) :
+
+```json
+"layers": [ { "name": "Upper", "weight": 1.0, "mask": ["Torso"], "entry": "Idle",
+              "states": [ ... ], "transitions": [ ... ] } ]
+```
+
+- **Masque** : chemins sous l'Animator (`"Torso"`, `"Hips/Spine"`) ; la couche n'anime que ces objets
+  et leurs enfants (vide = tout). Exemple classique : les jambes courent (base) pendant que le haut du
+  corps tire (couche `Upper` masquée sur `Torso`).
+- **Poids** (0..1) : la couche remplace les valeurs du dessous dans cette proportion ; les scripts le
+  font varier (`self.entity:setLayerWeight("Upper", 1)` pour viser, 0 pour relâcher) avec
+  `layerWeight(nom)`. Les couches s'appliquent dans l'ordre.
+- `playState(état, fondu, couche)` et `currentState(couche)` agissent sur une couche ;
+  `onStateEnter(nom, couche)` et `onAnimationEvent(nom, couche)` reçoivent le nom de la couche en
+  second argument (`nil` pour la base).
+- Éditeur : *Machine à états* ➜ liste *Couche* (Base ou une couche), *+ Couche*, nom, poids, masque
+  (chemins séparés par des virgules), suppression ; le graphe montre les états de la couche choisie et,
+  en jeu, son état courant.
+
+Coût : 500 personnages avec un espace de mélange de 5 clips et une couche masquée (18 courbes) :
+~0,37 ms par image ; 1 000 Animators simples : ~0,15 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : cas
+`layers` de `tests/test_animation.cpp` et test de script d'animation.
 
 ## Animation squelettique (modèles glTF)
 
@@ -144,8 +194,7 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Mélange en une dimension seulement (pas de *blend space* 2D) ; pas de couches ni de masques
-  d'animation ; IK : deux os en 2D seulement (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
+- Pas de couches additives (les couches remplacent) ni de masques pondérés par os ; IK : deux os en 2D seulement (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
   maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.

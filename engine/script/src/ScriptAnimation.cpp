@@ -1,4 +1,4 @@
-// Entity:setParameter / setTrigger / getParameter / playState / currentState (Animator).
+// Entity:setParameter / setTrigger / getParameter / playState / currentState / setLayerWeight / layerWeight (Animator).
 #include "ScriptInternal.hpp"
 
 namespace agr {
@@ -42,14 +42,31 @@ int e_getParameter(lua_State* L) {
 int e_playState(lua_State* L) {
     const ecs::Entity e = animated(L);
     const char* name = luaL_checkstring(L, 2);
-    if (!animOf(L).play(sceneOf(L), e, name, static_cast<float>(luaL_optnumber(L, 3, 0.0))))
+    const char* layer = luaL_optstring(L, 4, "");
+    if (!animOf(L).play(sceneOf(L), e, name, static_cast<float>(luaL_optnumber(L, 3, 0.0)), layer)) {
+        if (layer[0]) luaL_error(L, "the Animator has no layer '%s' with a state '%s'", layer, name);
         luaL_error(L, "the Animator has no state '%s'", name);
+    }
     return 0;
 }
 int e_currentState(lua_State* L) {
     const ecs::Entity e = animated(L);
-    const std::string s = animOf(L).currentState(e);
+    const std::string s = animOf(L).currentState(e, luaL_optstring(L, 2, ""));
     lua_pushstring(L, s.c_str());
+    return 1;
+}
+int e_setLayerWeight(lua_State* L) {
+    const ecs::Entity e = animated(L);
+    const char* layer = luaL_checkstring(L, 2);
+    if (!animOf(L).setLayerWeight(sceneOf(L), e, layer, static_cast<float>(luaL_checknumber(L, 3))))
+        luaL_error(L, "the Animator has no layer '%s'", layer);
+    return 0;
+}
+int e_layerWeight(lua_State* L) {
+    const ecs::Entity e = animated(L);
+    const auto w = animOf(L).layerWeight(sceneOf(L), e, luaL_checkstring(L, 2));
+    if (w) lua_pushnumber(L, *w);
+    else lua_pushnil(L);
     return 1;
 }
 
@@ -57,7 +74,8 @@ int e_currentState(lua_State* L) {
 
 void openAnimationBindings(lua_State* L) {
     static const luaL_Reg methods[] = {{"setParameter", e_setParameter}, {"setTrigger", e_setTrigger}, {"getParameter", e_getParameter},
-                                       {"playState", e_playState},       {"currentState", e_currentState}, {nullptr, nullptr}};
+                                       {"playState", e_playState},       {"currentState", e_currentState}, {"setLayerWeight", e_setLayerWeight},
+                                       {"layerWeight", e_layerWeight},   {nullptr, nullptr}};
     addEntityMethods(L, methods);
 }
 

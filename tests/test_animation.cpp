@@ -521,4 +521,150 @@ TEST_CASE("2D two-bone IK reaches the target, bends either way, clamps, blends")
     CHECK(math::length(tip() - Vec3(2, 5, 0)) < 1e-3f);
 }
 
+TEST_CASE("layers: masks, weights, their own states; blend states mix property tracks; 2D blend spaces") {
+    AnimFixture f;
+    auto clipXY = [](const char* target, float x, float y) {
+        AnimationClip c;
+        c.duration = 1.0f;
+        c.loop = true;
+        c.track(target, "Transform", "position", 0).curve.setKey(0.0f, x);
+        c.track(target, "Transform", "position", 1).curve.setKey(0.0f, y);
+        return c;
+    };
+    // Base: legs and arms at x = 1. Layer "Upper" (mask: Arms): arms (and legs, masked out) at x = 5.
+    AnimationClip base;
+    base.duration = 1.0f;
+    base.loop = true;
+    base.track("Legs", "Transform", "position", 0).curve.setKey(0.0f, 1.0f);
+    base.track("Arms", "Transform", "position", 0).curve.setKey(0.0f, 1.0f);
+    AnimationClip shoot;
+    shoot.duration = 1.0f;
+    shoot.loop = true;
+    shoot.track("Legs", "Transform", "position", 0).curve.setKey(0.0f, 5.0f);
+    shoot.track("Arms", "Transform", "position", 0).curve.setKey(0.0f, 5.0f);
+    AnimationClip wave = constantX(9.0f);
+    f.save("assets://base.agranim", base);
+    f.save("assets://shoot.agranim", shoot);
+    AnimationClip waveArms;
+    waveArms.duration = 1.0f;
+    waveArms.track("Arms", "Transform", "position", 0).curve.setKey(0.0f, 9.0f);
+    f.save("assets://wave.agranim", waveArms);
+    AnimatorController ctrl;
+    ctrl.parameters = {{"aim", ParameterType::Bool, 0.0f}};
+    ctrl.states = {{"Run", "assets://base.agranim"}};
+    AnimatorLayer upper;
+    upper.name = "Upper";
+    upper.mask = {"Arms"};
+    upper.states = {{"Shoot", "assets://shoot.agranim"}, {"Wave", "assets://wave.agranim"}};
+    upper.transitions = {{"Shoot", "Wave", {{"aim", ConditionOp::IsTrue, 0.0f}}, -1.0f, 0.0f}};
+    ctrl.layers = {upper};
+    CHECK(ctrl.validate().empty());
+    // JSON round trip keeps the layers.
+    auto parsed = AnimatorController::fromJson(ctrl.toJson());
+    REQUIRE(parsed);
+    REQUIRE(parsed.value().layers.size() == 1);
+    CHECK(parsed.value().layers[0].mask == std::vector<std::string>{"Arms"});
+    CHECK(parsed.value().layers[0].states.size() == 2);
+    CHECK(upper.masks("Arms"));
+    CHECK(upper.masks("Arms/Hand"));
+    CHECK_FALSE(upper.masks("Armsy"));
+    CHECK_FALSE(upper.masks("Legs"));
+    AnimatorController bad = ctrl;
+    bad.layers[0].transitions[0].to = "Nope";
+    CHECK_FALSE(bad.validate().empty());
+    f.save("assets://hero.agrctrl", ctrl);
+
+    const auto hero = f.scene.createEntity("Hero");
+    const auto legs = f.scene.createEntity("Legs", hero);
+    const auto arms = f.scene.createEntity("Arms", hero);
+    f.scene.registry().emplace<AnimatorComponent>(hero).controller = "assets://hero.agrctrl";
+    f.step(0.1f);
+    CHECK(f.x(legs) == doctest::Approx(1.0f));  // outside the mask: the base layer
+    CHECK(f.x(arms) == doctest::Approx(5.0f));  // the layer wins inside its mask
+    CHECK(f.anim.currentState(hero, "Upper") == "Shoot");
+    CHECK(f.anim.setLayerWeight(f.scene, hero, "Upper", 0.5f));
+    CHECK(f.anim.layerWeight(f.scene, hero, "Upper").value() == doctest::Approx(0.5f));
+    f.step(0.1f);
+    CHECK(f.x(arms) == doctest::Approx(3.0f));  // half way
+    f.anim.setLayerWeight(f.scene, hero, "Upper", 0.0f);
+    f.step(0.1f);
+    CHECK(f.x(arms) == doctest::Approx(1.0f));
+    f.anim.setLayerWeight(f.scene, hero, "Upper", 1.0f);
+    CHECK(f.anim.setBool(f.scene, hero, "aim", true));  // the layer's transitions read the shared parameters
+    f.step(0.1f);
+    CHECK(f.anim.currentState(hero, "Upper") == "Wave");
+    CHECK(f.x(arms) == doctest::Approx(9.0f));
+    f.anim.setBool(f.scene, hero, "aim", false);
+    CHECK(f.anim.play(f.scene, hero, "Shoot", 0.0f, "Upper"));
+    CHECK_FALSE(f.anim.play(f.scene, hero, "Run", 0.0f, "Upper"));  // not a state of that layer
+    CHECK_FALSE(f.anim.play(f.scene, hero, "Shoot", 0.0f, "Nope"));
+    CHECK_FALSE(f.anim.setLayerWeight(f.scene, hero, "Nope", 1.0f));
+    f.step(0.1f);
+    CHECK(f.x(arms) == doctest::Approx(5.0f));
+    CHECK(f.anim.currentState(hero) == "Run");
+
+    // 1D blend of property tracks (not only imported transform tracks).
+    f.save("assets://left.agranim", clipXY("", -10.0f, 0.0f));
+    f.save("assets://right.agranim", clipXY("", 10.0f, 0.0f));
+    f.save("assets://up.agranim", clipXY("", 0.0f, 10.0f));
+    f.save("assets://down.agranim", clipXY("", 0.0f, -10.0f));
+    f.save("assets://center.agranim", clipXY("", 0.0f, 0.0f));
+    AnimatorController oneD;
+    oneD.parameters = {{"speed", ParameterType::Float, 0.0f}};
+    AnimatorState move;
+    move.name = "Move";
+    move.blendParameter = "speed";
+    move.motions = {{"assets://left.agranim", 0.0f}, {"assets://right.agranim", 1.0f}};
+    oneD.states = {move};
+    f.save("assets://oned.agrctrl", oneD);
+    const auto walker = f.scene.createEntity("Walker");
+    f.scene.registry().emplace<AnimatorComponent>(walker).controller = "assets://oned.agrctrl";
+    f.anim.setFloat(f.scene, walker, "speed", 0.75f);
+    f.step(0.1f);
+    CHECK(f.x(walker) == doctest::Approx(5.0f));
+
+    // 2D blend space: center and four directions.
+    AnimatorController twoD;
+    twoD.parameters = {{"mx", ParameterType::Float, 0.0f}, {"my", ParameterType::Float, 0.0f}};
+    AnimatorState strafe;
+    strafe.name = "Strafe";
+    strafe.blendParameter = "mx";
+    strafe.blendParameterY = "my";
+    strafe.motions = {{"assets://center.agranim", 0.0f, {0, 0}}, {"assets://right.agranim", 0.0f, {1, 0}}, {"assets://left.agranim", 0.0f, {-1, 0}},
+                      {"assets://up.agranim", 0.0f, {0, 1}},     {"assets://down.agranim", 0.0f, {0, -1}}};
+    twoD.states = {strafe};
+    CHECK(twoD.validate().empty());
+    auto p2 = AnimatorController::fromJson(twoD.toJson());
+    REQUIRE(p2);
+    REQUIRE(p2.value().states[0].isBlend2D());
+    CHECK(p2.value().states[0].motions[3].position.y == doctest::Approx(1.0f));
+    CHECK(p2.value().states[0].motions[1].clip == "assets://right.agranim");  // 2D motions keep their order
+    f.save("assets://twod.agrctrl", twoD);
+    const auto strafer = f.scene.createEntity("Strafer");
+    f.scene.registry().emplace<AnimatorComponent>(strafer).controller = "assets://twod.agrctrl";
+    auto pos = [&] { return f.scene.registry().get<TransformComponent>(strafer).position; };
+    f.anim.setFloat(f.scene, strafer, "mx", 1.0f);
+    f.step(0.1f);
+    CHECK(pos().x == doctest::Approx(10.0f));  // exactly on a motion: that motion alone
+    CHECK(pos().y == doctest::Approx(0.0f));
+    f.anim.setFloat(f.scene, strafer, "mx", 0.5f);
+    f.step(0.1f);
+    CHECK(pos().x == doctest::Approx(5.0f));  // half way between the center and "right"
+    f.anim.setFloat(f.scene, strafer, "mx", 0.0f);
+    f.anim.setFloat(f.scene, strafer, "my", -1.0f);
+    f.step(0.1f);
+    CHECK(pos().y == doctest::Approx(-10.0f));
+    f.anim.setFloat(f.scene, strafer, "mx", 0.5f);
+    f.anim.setFloat(f.scene, strafer, "my", 0.5f);
+    f.step(0.1f);
+    CHECK(pos().x > 1.0f);  // diagonal: some of "right" and of "up"
+    CHECK(pos().y > 1.0f);
+    CHECK(pos().x == doctest::Approx(pos().y));
+    f.anim.setFloat(f.scene, strafer, "mx", 3.0f);  // far outside: clamped to the nearest band
+    f.anim.setFloat(f.scene, strafer, "my", 0.0f);
+    f.step(0.1f);
+    CHECK(pos().x == doctest::Approx(10.0f));
+    (void)wave;
+}
+
 }  // TEST_SUITE

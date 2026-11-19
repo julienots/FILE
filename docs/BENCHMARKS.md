@@ -266,6 +266,7 @@ ui: layout + overlay of 501 elements (100 buttons with text)      0.110 ms     2
     (990 quads)
 ui: pointer input (hit test, top element first) over 501 elements      0.000 ms     378.00 ns/item
 animation: 1000 animators (500 state machines), 3 curves each      0.188 ms     188.41 ns/item
+animation: 500 animators, 2D blend of 5 clips + masked layer (18 curves)      0.366 ms     731.53 ns/item
 ```
 
 | Mesure | Analyse |
