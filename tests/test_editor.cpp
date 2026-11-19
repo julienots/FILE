@@ -1116,3 +1116,51 @@ TEST_CASE("packages: create, preview, install, conflicts, integrity, dependencie
 }
 
 }
+
+#include "agr/editor/Scatter.hpp"
+
+TEST_CASE("procedural scatter: deterministic, spacing, exclusion zones, weights, variations") {
+    using namespace agr::editor::templates;
+    registerRenderComponents();
+    auto build = [](Scene& s, u32 seed) {
+        ScatterSettings st;
+        st.seed = seed;
+        st.min = {-20.0f, -20.0f};
+        st.max = {20.0f, 20.0f};
+        st.height = -1.0f;
+        st.exclude = {{{-5.0f, -5.0f}, {5.0f, 5.0f}}};
+        st.spacing = 0.5f;
+        st.maxCount = 80;
+        const std::vector<ScatterItem> items = {{"assets://a.glb", "Tree", 3.0f, 0.8f, 1.2f, 1.0f, 1.5f},
+                                                {"assets://b.glb", "Rock", 1.0f, 0.5f, 1.0f, 0.6f}};
+        return scatter(s, s.createEntity("Land"), st, items);
+    };
+    Scene a, b, c;
+    const auto pa = build(a, 42), pb = build(b, 42), pc = build(c, 43);
+    REQUIRE(pa.size() > 40);
+    REQUIRE(pa.size() == pb.size());
+    int trees = 0, rocks = 0;
+    for (usize i = 0; i < pa.size(); ++i) {
+        const auto& ta = a.registry().get<TransformComponent>(pa[i]);
+        const auto& tb = b.registry().get<TransformComponent>(pb[i]);
+        CHECK(ta.position == tb.position);  // same seed, same layout
+        CHECK(ta.position.y == doctest::Approx(-1.0f));
+        CHECK_FALSE((std::abs(ta.position.x) < 5.0f && std::abs(ta.position.z) < 5.0f));  // exclusion zone
+        (a.nameOf(pa[i]).rfind("Tree", 0) == 0 ? trees : rocks)++;
+        // Model > Skin with the cartoon look and a darker-only tint.
+        const auto skin = a.children(a.children(pa[i])[0])[0];
+        const auto& mr = a.registry().get<MeshRendererComponent>(skin);
+        CHECK(mr.toon);
+        CHECK(mr.color.x <= 1.0f);
+        for (usize j = 0; j < i; ++j) {  // footprints never overlap
+            const auto& tj = a.registry().get<TransformComponent>(pa[j]);
+            const float dx = ta.position.x - tj.position.x, dz = ta.position.z - tj.position.z;
+            CHECK(std::sqrt(dx * dx + dz * dz) > 0.5f * 0.5f);
+        }
+    }
+    CHECK(trees > rocks);  // weights 3 : 1
+    bool different = pc.size() != pa.size();
+    for (usize i = 0; !different && i < pa.size(); ++i)
+        different = !(c.registry().get<TransformComponent>(pc[i]).position == a.registry().get<TransformComponent>(pa[i]).position);
+    CHECK(different);  // another seed, another layout
+}

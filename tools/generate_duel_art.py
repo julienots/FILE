@@ -661,7 +661,93 @@ def card_icons():
     print("card icons: card_*.png")
 
 
+def write_static(name, build):
+    """One rigid model: node "Model" > "Skin" (single mesh). build(mesh) -> materials."""
+    m = Mesh()
+    materials = build(m)
+    nodes = [{"name": "Model", "children": [1]}, {"name": "Skin", "mesh": 0}]
+    write_glb(os.path.join(OUT, name + ".glb"), [("Skin", m, False)], materials, nodes)
+
+
+def lumpy(m, center, radii, material, seed, amount=0.12, rows=10, cols=16, flat_bottom=False):
+    """Ellipsoid with a smooth deterministic bumpy surface (rocks, foliage)."""
+    rnd = random.Random(seed)
+    waves = [(rnd.uniform(1.5, 3.5), rnd.uniform(1.5, 3.5), rnd.uniform(0, 6.28), rnd.uniform(0.4, 1.0)) for _ in range(4)]
+
+    def point(v, u):
+        th, ph = math.pi * v, 2 * math.pi * u
+        d = (math.sin(th) * math.cos(ph), math.cos(th), math.sin(th) * math.sin(ph))
+        k = 1 + amount * sum(w * math.sin(a * th + b * ph + o) for a, b, o, w in waves) / 2.5
+        p = (center[0] + radii[0] * d[0] * k, center[1] + radii[1] * d[1] * k, center[2] + radii[2] * d[2] * k)
+        if flat_bottom:
+            p = (p[0], max(p[1], center[1] - radii[1] * 0.35), p[2])
+        return p
+    m.grid(rows, cols, point, material, 0, center, True)
+
+
+LEAF, LEAF_LIGHT, PINE, BARK, ROCK, ROCK_DARK = (0.36, 0.72, 0.26), (0.52, 0.84, 0.32), (0.20, 0.52, 0.34), (0.52, 0.34, 0.20), (0.66, 0.64, 0.68), (0.50, 0.48, 0.55)
+
+
+def props():
+    def tree(m):
+        m.lathe([(0.16, 0.0), (0.12, 0.5), (0.10, 1.2), (0.0, 1.25)], (0, 0, 0), 0, cols=12)
+        lumpy(m, (0, 1.75, 0), (0.85, 0.7, 0.85), 1, 1, 0.10)
+        lumpy(m, (0.35, 2.25, 0.1), (0.55, 0.5, 0.55), 2, 2, 0.10)
+        lumpy(m, (-0.3, 2.15, -0.2), (0.5, 0.45, 0.5), 1, 3, 0.10)
+        return [("Bark", BARK, 0.8), ("Leaf", LEAF, 0.7), ("LeafLight", LEAF_LIGHT, 0.7)]
+
+    def pine(m):
+        m.lathe([(0.13, 0.0), (0.10, 0.6), (0.0, 0.65)], (0, 0, 0), 0, cols=12)
+        for k, (y, r, h) in enumerate([(0.45, 0.85, 1.0), (1.05, 0.68, 0.9), (1.6, 0.48, 0.8)]):
+            m.lathe([(r * 0.7, 0.0), (r, 0.12), (r * 0.55, h * 0.55), (0.0, h)], (0, y, 0), 1, cols=18)
+        return [("Bark", BARK, 0.8), ("Pine", PINE, 0.7)]
+
+    def rock(m):
+        lumpy(m, (0, 0.30, 0), (0.75, 0.55, 0.6), 0, 11, 0.18, flat_bottom=True)
+        lumpy(m, (0.55, 0.18, 0.35), (0.38, 0.30, 0.34), 1, 12, 0.2, flat_bottom=True)
+        return [("Rock", ROCK, 0.9), ("RockDark", ROCK_DARK, 0.9)]
+
+    def bush(m):
+        for k, (x, z, r) in enumerate([(0, 0, 0.5), (0.45, 0.15, 0.38), (-0.4, 0.1, 0.36), (0.05, -0.38, 0.34)]):
+            lumpy(m, (x, r * 0.8, z), (r, r * 0.85, r), k % 2, 20 + k, 0.1)
+        for k in range(5):  # little flowers on top
+            a = k * 1.3
+            m.blob((math.cos(a) * 0.35, 0.78 + 0.05 * math.sin(a * 3), math.sin(a) * 0.3), (0.06,) * 3, 2, rows=6, cols=8)
+        return [("Leaf", LEAF, 0.7), ("LeafLight", LEAF_LIGHT, 0.7), ("Flower", (1.0, 0.86, 0.35), 0.5)]
+
+    def cloud(m):
+        for k, (x, y, r) in enumerate([(0, 0, 1.0), (1.1, -0.15, 0.75), (-1.0, -0.2, 0.7), (0.4, 0.45, 0.65)]):
+            m.blob((x, y, 0), (r, r * 0.75, r * 0.8), 0)
+        return [("Cloud", (1.0, 1.0, 1.0), 0.9)]
+
+    def arrow(m):  # points along +Z, 0.9 long
+        m.tube(lambda t: (0.0, 0.0, -0.45 + 0.8 * t), 0.022, 0, rows=4, cols=8)
+        m.lathe([(0.06, 0.0), (0.0, 0.16)], (0, 0, 0.35), 1, cols=10, rot=rot_matrix((1, 0, 0), math.pi / 2))  # tip toward +Z
+        for sx in (-1, 1):
+            m.blob((sx * 0.05, 0.0, -0.40), (0.06, 0.012, 0.08), 2, rows=6, cols=8)
+            m.blob((0.0, sx * 0.05, -0.40), (0.012, 0.06, 0.08), 2, rows=6, cols=8)
+        return [("Shaft", WOOD, 0.7), ("Tip", STEEL, 0.3), ("Feather", (1.0, 1.0, 1.0), 0.8)]
+
+    def cannonball(m):
+        m.blob((0, 0, 0), (0.16,) * 3, 0)
+        m.blob((0.05, 0.07, 0.11), (0.04,) * 3, 1, rows=6, cols=8)
+        return [("Iron", (0.22, 0.20, 0.26), 0.4), ("Shine", (0.9, 0.9, 1.0), 0.3)]
+
+    def rubble(m):
+        rnd = random.Random(5)
+        for k in range(9):
+            a, d = rnd.uniform(0, 6.28), rnd.uniform(0.0, 0.9)
+            r = rnd.uniform(0.18, 0.35)
+            lumpy(m, (math.cos(a) * d, r * 0.4, math.sin(a) * d), (r, r * 0.7, r * 0.9), k % 2, 40 + k, 0.2, rows=8, cols=12, flat_bottom=True)
+        return [("Stone", (0.72, 0.68, 0.63), 0.9), ("StoneDark", (0.56, 0.53, 0.58), 0.9)]
+
+    for name, fn in [("tree", tree), ("pine", pine), ("rock", rock), ("bush", bush), ("cloud", cloud), ("arrow", arrow),
+                     ("cannonball", cannonball), ("rubble", rubble)]:
+        write_static(name, fn)
+
+
 if __name__ == "__main__":
+    props()
     card_icons()
     write_tank()
     for kind in ("knight", "archer", "giant", "goblin"):

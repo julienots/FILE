@@ -66,6 +66,11 @@ end
 function Game:onStart()
     self.units = { blue = {}, red = {} }
     self.shotProto = agr.find("Shot Prototype")
+    -- Effets : flèches (archères, tours), boulets (mini-tank), brûlure et gravats (modèles 3D cartoon).
+    self.arrowProto = agr.find("Arrow Prototype") or self.shotProto
+    self.ballProto = agr.find("Cannonball Prototype") or self.shotProto
+    self.scorchProto = agr.find("Scorch Prototype")
+    self.rubbleProto = agr.find("Rubble Prototype")
     self.towerHomes = G.homes("Towers")
     self.trophies = agr.save.get("duel.trophies") or 100
     self.frame = 0
@@ -241,7 +246,10 @@ function Game:fireball(team, card, x, z)
     agr.tween(ball, { position = { x, 0.3, z } }, 0.55, { ease = "inQuad", onDone = function()
         if ball:isValid() then ball:destroy() end
         if self.state ~= "battle" then return end
-        agr.fx.burst(x, 0.5, z, { count = 60, color = { 1, 0.55, 0.2 }, speed = 6, life = 0.6, size = 0.35 })
+        agr.fx.burst(x, 0.5, z, { count = 60, color = { 1, 0.55, 0.2 }, endColor = { 0.4, 0.3, 0.3 }, speed = 6, life = 0.6, size = 0.35 })
+        agr.fx.burst(x, 0.2, z, { count = 40, color = { 1, 0.85, 0.5 }, speed = 9, life = 0.35, size = 0.25, spread = "ring" })  -- onde de choc
+        agr.fx.flash(1, 0.6, 0.2, 0.25, 0.15)
+        self:scorch(x, z, card.radius)
         agr.fx.shake(0.35, 0.3)
         agr.audio.play("assets://audio/slam.wav", { volume = 0.6 })
         local enemy = self:enemyOf(team)
@@ -267,24 +275,56 @@ function Game:hit(target, dmg)
     if s and s.damage then s:damage(dmg) end
 end
 
+-- Petite gerbe d'étincelles là où un coup porte.
+function Game:impact(x, y, z, heavy)
+    agr.fx.burst(x, y, z, { count = heavy and 16 or 7, color = heavy and { 1, 0.7, 0.3 } or { 1, 1, 0.85 }, speed = heavy and 4 or 2.5,
+                            life = 0.25, size = heavy and 0.22 or 0.12 })
+end
+
+-- Trace brûlée au sol (ombre ronde orange sombre) qui s'efface.
+function Game:scorch(x, z, radius)
+    if not self.scorchProto then return end
+    local s = agr.clone(self.scorchProto, agr.find("Units"))
+    s:setPosition(x, 0, z)
+    s:set("BlobShadow", "radius", radius * 0.8)
+    agr.tween(s, { ["BlobShadow.opacity"] = 0 }, 2.5, { from = 0.75, delay = 0.4, onDone = function() if s:isValid() then s:destroy() end end })
+end
+
 function Game:attack(src, target, dmg, ranged)
     if not ranged then
         self:hit(target, dmg)
         agr.tween(src, { scale = { 1.15, 1.15, 1.15 } }, 0.08, { ease = "outQuad", loop = "yoyo", times = 2 })
+        local tx, ty, tz = target:worldPosition()
+        self:impact(tx, ty + 0.8, tz, false)
         return
     end
     local x, y, z = src:worldPosition()
     local tx, ty, tz = target:worldPosition()
-    local shot = agr.clone(self.shotProto, false)
-    shot:setPosition(x, y + 1.4, z)
-    local d = G.distance3(x, y + 1.4, z, tx, ty + 0.8, tz)
-    agr.tween(shot, { position = { tx, ty + 0.8, tz } }, math.max(0.08, d / 16), { ease = "linear", onDone = function()
+    local ss = src:script()
+    local heavy = ss and ss.kind == "tank"
+    local sy, ey = y + ((ss and ss.isTower) and 3.0 or 1.4), ty + 0.8
+    local shot = agr.clone(heavy and self.ballProto or self.arrowProto, false)
+    shot:setPosition(x, sy, z)
+    -- La flèche pointe vers sa cible (tangage puis lacet, en degrés).
+    local dx, dy, dz = tx - x, ey - sy, tz - z
+    shot:setRotation(-math.deg(math.atan(dy, math.max(1e-4, math.sqrt(dx * dx + dz * dz)))), math.deg(math.atan(dx, dz)), 0)
+    local d = G.distance3(x, sy, z, tx, ey, tz)
+    agr.tween(shot, { position = { tx, ey, tz } }, math.max(0.08, d / (heavy and 12 or 18)), { ease = "linear", onDone = function()
         if shot:isValid() then shot:destroy() end
+        if self.state == "battle" and target:isValid() then self:impact(tx, ey, tz, heavy) end
         self:hit(target, dmg)
     end })
 end
 
 function Game:towerDestroyed(tower, team, king)
+    -- Gravats à la place de la tour (nettoyés avec les unités à la partie suivante).
+    if self.rubbleProto then
+        local x, _, z = tower:position()
+        local r = agr.clone(self.rubbleProto, agr.find("Units"))
+        r:setPosition(x, 0, z)
+        local k = king and 1.6 or 1.2
+        agr.tween(r, { scale = { k, k, k } }, 0.35, { from = { 0.2, 0.2, 0.2 }, ease = "outBack" })
+    end
     local winner = self:enemyOf(team)
     self.crowns[winner] = king and 3 or math.min(3, self.crowns[winner] + 1)
     self:say(agr.tr(team == "red" and "duel.towerDown" or "duel.towerLost"), 2)

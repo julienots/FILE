@@ -5,6 +5,7 @@
 // AI opponent, a three-minute match with double elixir at the end, crowns, trophies.
 // games/scripts/duel_*.lua run the game.
 #include "../GameTemplates.hpp"
+#include "agr/editor/Scatter.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/navigation/NavigationComponents.hpp"
 
@@ -124,6 +125,61 @@ void cartoonStyle(Scene& scene, ecs::Entity e, bool outline, bool blobs) {
     for (ecs::Entity c : scene.children(e)) cartoonStyle(scene, c, outline, blobs);
 }
 
+/// The land around the arena (a plateau 1 m above it, the river bed stays visible): a wide
+/// meadow, soft hills, forests, rocks, bushes and clouds,
+/// scattered procedurally (seeded: the same layout every time). Kept out of the arena and of
+/// the strip between the camera and the arena; props are instanced (a few draw calls).
+void environment(Builder& b) {
+    using templates::ScatterItem;
+    using templates::ScatterSettings;
+    Scene& scene = b.scene;
+    const auto land = b.entity("Environment");
+    const auto meadow = b.mesh("Meadow", PrimitiveMesh::Plane, {0.0f, -1.0f, -10.0f}, {150.0f, 1.0f, 110.0f}, {0.66f, 0.8f, 0.6f, 1.0f}, land);
+    auto& mm = b.reg.get<MeshRendererComponent>(meadow);
+    mm.texture = "assets://games/duel/grass.png";
+    mm.uvScale = {75.0f, 55.0f};
+    mm.toon = true;
+    // Rolling hills on the horizon (half-buried flattened spheres).
+    const struct { Vec3 p, s; } hills[] = {{{-34, -3.0f, -38}, {34, 9, 16}}, {{6, -3.5f, -46}, {40, 10, 16}}, {{42, -3.0f, -36}, {30, 8, 16}},
+                                           {{-46, -2.5f, -8}, {16, 6, 30}},  {{48, -2.5f, -6}, {16, 6, 30}}};
+    for (const auto& h : hills) {
+        const auto e = b.mesh("Hill", PrimitiveMesh::Sphere, h.p, h.s, {0.55f, 0.8f, 0.42f, 1.0f}, land);
+        auto& mr = b.reg.get<MeshRendererComponent>(e);
+        mr.toon = true;
+        mr.castShadows = false;
+    }
+    const std::string dir = "assets://games/duel/";
+    ScatterSettings forest;
+    forest.seed = 2024;
+    forest.min = {-50.0f, -40.0f};
+    forest.max = {50.0f, 11.0f};
+    forest.exclude = {{{-17.5f, -10.0f}, {17.5f, 12.0f}}};  // the arena, and in front of it (camera side)
+    forest.spacing = 0.4f;
+    forest.height = -1.0f;
+    forest.maxCount = 170;
+    const std::vector<ScatterItem> props = {
+        {dir + "tree.glb", "Tree", 3.0f, 0.9f, 1.4f, 0.9f, 1.5f},
+        {dir + "pine.glb", "Pine", 3.0f, 1.0f, 1.6f, 0.7f, 1.5f},
+        {dir + "bush.glb", "Bush", 2.0f, 0.8f, 1.2f, 0.8f, 1.5f, false},
+        {dir + "rock.glb", "Rock", 1.2f, 0.6f, 1.5f, 0.8f, 1.5f},
+    };
+    templates::scatter(scene, land, forest, props);
+    // A few clouds drifting high above the hills (no shadows: they would darken the arena).
+    ScatterSettings sky;
+    sky.seed = 7;
+    sky.min = {-45.0f, -46.0f};
+    sky.max = {45.0f, -24.0f};
+    sky.height = 10.0f;
+    sky.spacing = 4.0f;
+    sky.maxCount = 6;
+    const auto clouds = templates::scatter(scene, land, sky, {{dir + "cloud.glb", "Cloud", 1.0f, 2.0f, 3.2f, 2.5f, 0.0f, false, 0.0f}});
+    for (usize i = 0; i < clouds.size(); ++i) {
+        auto& t = b.reg.get<TransformComponent>(clouds[i]);
+        t.rotation = math::Quat::identity();  // seen from the side
+        t.position.y += static_cast<float>(i % 3) * 1.6f;
+    }
+}
+
 } // namespace
 
 void buildArenaBattle(Scene& scene) {
@@ -153,6 +209,8 @@ void buildArenaBattle(Scene& scene) {
     const auto marker = b.mesh("Drop Marker", PrimitiveMesh::Sphere, {0.0f, 0.1f, 0.0f}, {1.2f, 0.1f, 1.2f}, {1.0f, 1.0f, 1.0f, 0.6f}, arena);
     reg.get<MeshRendererComponent>(marker).castShadows = false;
     b.hide(marker);
+
+    environment(b);
 
     // Towers.
     const auto towers = b.entity("Towers");
@@ -186,7 +244,23 @@ void buildArenaBattle(Scene& scene) {
             blob.radius = scene.nameOf(proto) == "Giant Prototype" ? 1.0f : scene.nameOf(proto) == "Goblin Prototype" ? 0.45f : 0.6f;
         }
     }
-    reg.get<MeshRendererComponent>(shot).outlineWidth = 0.0f;  // projectiles: small and fast
+    reg.get<MeshRendererComponent>(shot).outlineWidth = 1.0f;  // the fireball
+    // Effect props (duel_game.lua clones them): arrows, cannonballs, a scorch mark, tower rubble.
+    for (const char* fx : {"Arrow", "Cannonball", "Rubble"}) {
+        const auto e = b.entity(std::string(fx) + " Prototype", {}, prototypes);
+        std::string file = fx;
+        file[0] = static_cast<char>(file[0] - 'A' + 'a');
+        modelInstance(b, e, file, 1.0f, Vec4{1.0f, 1.0f, 1.0f, 1.0f}, false);
+        cartoonStyle(scene, e, std::string(fx) != "Arrow", std::string(fx) != "Rubble");
+        if (std::string(fx) == "Arrow") reg.get<MeshRendererComponent>(scene.children(scene.children(e)[0])[0]).outlineWidth = 1.0f;
+    }
+    {
+        const auto scorch = b.entity("Scorch Prototype", {}, prototypes);
+        auto& blob = reg.emplace<BlobShadowComponent>(scorch);
+        blob.color = {0.25f, 0.12f, 0.05f, 1.0f};
+        blob.opacity = 0.75f;
+        blob.softness = 0.8f;
+    }
 
     const auto nav = b.entity("Navigation");
     auto& ns = reg.emplace<NavigationSettingsComponent>(nav);
