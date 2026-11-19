@@ -95,7 +95,81 @@ layout(std140) uniform PostData {
     vec4 u_bloom;      // threshold, soft knee, intensity, upsample radius
     vec4 u_grade;      // contrast, saturation, vignette, 1 = filmic tone mapping (HDR input)
     vec4 u_filter;     // color filter (rgb), 1 = HDR input
+    vec4 u_ao;         // radius (world), intensity, 1 = ambient occlusion on, 1 = GL depth range (-1..1), 0 = Vulkan (0..1)
+    mat4 u_proj;       // camera projection (SSAO)
+    mat4 u_invProj;
 };
+)";
+
+/// Screen-space ambient occlusion (half resolution) from the scene depth: view-space position
+/// and normal rebuilt from depth, 12 samples in the normal hemisphere turned per pixel, range
+/// check so that far objects do not darken near ones. Output: visibility in r (1 = open).
+inline constexpr const char* kSsao = R"(
+uniform sampler2D u_source;  // scene depth
+layout(location = 0) out vec4 o_color;
+// Target texture coordinates <-> clip space: identical on every backend (the Vulkan RHI flips
+// its viewport to match OpenGL); only the depth range differs.
+vec2 toNdc(vec2 uv) { return uv * 2.0 - 1.0; }
+vec2 toUv(vec2 ndc) { return ndc * 0.5 + 0.5; }
+vec3 viewPos(vec2 uv) {
+    float d = texture(u_source, uv).r;
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec4 p = u_invProj * vec4(toNdc(uv), z, 1.0);
+    return p.xyz / p.w;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    if (texture(u_source, uv).r >= 0.99999) { o_color = vec4(1.0); return; }  // sky
+    vec3 P = viewPos(uv);
+    // Normal from the smaller depth step on each axis (no halo across silhouettes).
+    vec2 px = u_texel.xy;
+    vec3 r = viewPos(uv + vec2(px.x, 0.0)) - P, l = P - viewPos(uv - vec2(px.x, 0.0));
+    vec3 t = viewPos(uv + vec2(0.0, px.y)) - P, b = P - viewPos(uv - vec2(0.0, px.y));
+    vec3 dx = abs(r.z) < abs(l.z) ? r : l;
+    vec3 dy = abs(t.z) < abs(b.z) ? t : b;
+    vec3 N = normalize(cross(dx, dy));
+    if (N.z < 0.0) N = -N;  // toward the camera (view space looks down -z)
+    // Per-pixel rotation of a fixed spiral kernel, from a 4 x 4 pattern (dithered order): the
+    // 4 x 4 blur then averages all 16 rotations exactly and the noise cancels out.
+    vec2 cell = mod(floor(gl_FragCoord.xy), 4.0);
+    float noise = (cell.x + 4.0 * cell.y + 0.5) / 16.0;  // each 4 x 4 window holds the 16 rotations once
+    vec3 rv = vec3(cos(noise * 6.2831853), sin(noise * 6.2831853), 0.0);
+    vec3 T = normalize(rv - N * dot(rv, N));
+    vec3 B = cross(N, T);
+    float radius = u_ao.x;
+    float bias = 0.05 * radius - 0.004 * P.z;  // grows with distance: 16-bit depth steps
+    float occlusion = 0.0;
+    for (int i = 0; i < 12; ++i) {
+        float fi = float(i);
+        float a = fi * 2.3999632;                 // golden angle
+        float h = mix(0.2, 1.0, (fi + 0.5) / 12.0);  // away from the tangent plane (depth precision)
+        float rr = sqrt(1.0 - h * h);
+        vec3 k = vec3(cos(a) * rr, sin(a) * rr, h) * mix(0.15, 1.0, (fi + 1.0) / 12.0);  // denser near the point
+        vec3 S = P + (T * k.x + B * k.y + N * k.z) * radius;
+        vec4 c = u_proj * vec4(S, 1.0);
+        vec2 suv = toUv(c.xy / c.w);
+        if (suv.x < 0.0 || suv.y < 0.0 || suv.x > 1.0 || suv.y > 1.0) continue;
+        float sceneZ = viewPos(suv).z;
+        float range = smoothstep(0.0, 1.0, radius / max(abs(P.z - sceneZ), 1e-4));
+        occlusion += (sceneZ >= S.z + bias ? 1.0 : 0.0) * range;
+    }
+    float ao = clamp(1.0 - occlusion / 12.0 * u_ao.y, 0.0, 1.0);
+    o_color = vec4(ao, ao, ao, 1.0);
+}
+)";
+
+/// 4 x 4 box blur of the occlusion (removes the rotation noise).
+inline constexpr const char* kSsaoBlur = R"(
+uniform sampler2D u_source;
+layout(location = 0) out vec4 o_color;
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    float sum = 0.0;
+    for (int y = -2; y < 2; ++y)
+        for (int x = -2; x < 2; ++x) sum += texture(u_source, uv + (vec2(float(x), float(y)) + 0.5) * u_texel.xy).r;
+    float ao = sum / 16.0;
+    o_color = vec4(ao, ao, ao, 1.0);
+}
 )";
 
 /// Bright pass + first half-resolution downsample (soft threshold, firefly clamp).
@@ -152,10 +226,12 @@ void main() {
 inline constexpr const char* kComposite = R"(
 uniform sampler2D u_scene;
 uniform sampler2D u_bloomTex;
+uniform sampler2D u_aoTex;
 layout(location = 0) out vec4 o_color;
 void main() {
     vec2 uv = gl_FragCoord.xy * u_texel.zw;
     vec3 c = texture(u_scene, uv).rgb;
+    if (u_ao.z > 0.5) c *= texture(u_aoTex, uv).r;  // before tone mapping, like light
     if (u_bloom.z > 0.0) c += texture(u_bloomTex, uv).rgb * u_bloom.z;
     if (u_filter.w > 0.5) {  // HDR input: linear light -> display
         c *= u_filter.rgb;

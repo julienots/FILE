@@ -25,6 +25,7 @@ struct GraphicsProfile {
     bool bloom = true;           ///< PostProcess bloom allowed (glow of bright areas).
     bool fxaa = true;            ///< PostProcess FXAA allowed (anti-aliasing filter).
     u32 shadowCascades = 3;      ///< Directional shadow cascades (1..4).
+    bool ssao = true;            ///< PostProcess ambient occlusion allowed (half resolution).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

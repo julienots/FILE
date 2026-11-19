@@ -667,10 +667,14 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     if (postActive) {
         const bool bloom = post.bloom && m_profile.bloom && post.bloomIntensity > 0.0f;
         const bool fxaa = post.fxaa && m_profile.fxaa;
-        if (ensurePostTargets(renderW, renderH, samples, width, height, postHdr, bloom, fxaa)) {
+        const bool ao = post.ambientOcclusion && m_profile.ssao && post.aoIntensity > 0.0f;
+        if (ensurePostTargets(renderW, renderH, ao ? 1u : samples, width, height, postHdr, bloom, fxaa, ao)) {
             struct PostUniforms {
-                Vec4 texel, bloom, grade, filter;
+                Vec4 texel, bloom, grade, filter, ao;
+                Mat4 proj, invProj;
             };
+            static_assert(sizeof(PostUniforms) == kPostUniformBytes);
+            const Mat4 proj = rv.projectionMatrix(aspect, m_glClipSpace);
             const rhi::RenderTargetHandle sceneColor = m_postResolve ? m_postResolve : m_postScene;
             auto add = [&](PostPass::Kind kind, rhi::RenderTargetHandle src, rhi::RenderTargetHandle dst, Vec2 srcSize, Vec2 dstSize) {
                 PostUniforms u;
@@ -678,6 +682,9 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 u.bloom = Vec4(std::max(0.0f, post.bloomThreshold), 0.5f, bloom ? post.bloomIntensity : 0.0f, std::clamp(post.bloomRadius, 0.25f, 4.0f));
                 u.grade = Vec4(post.contrast, post.saturation, std::clamp(post.vignette, 0.0f, 1.0f), post.filmicToneMapping ? 1.0f : 0.0f);
                 u.filter = Vec4(post.colorFilter.x, post.colorFilter.y, post.colorFilter.z, postHdr ? 1.0f : 0.0f);
+                u.ao = Vec4(std::clamp(post.aoRadius, 0.05f, 5.0f), std::clamp(post.aoIntensity, 0.0f, 2.0f), ao ? 1.0f : 0.0f, m_glClipSpace ? 1.0f : 0.0f);
+                u.proj = proj;
+                u.invProj = math::inverse(proj);
                 m_postPasses.push_back({kind, src, dst, pushUniforms(&u, sizeof u)});
             };
             const Vec2 renderSize{static_cast<float>(renderW), static_cast<float>(renderH)}, outSize{static_cast<float>(width), static_cast<float>(height)};
@@ -686,6 +693,12 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 add(PostPass::Prefilter, sceneColor, m_bloomLevels[0], renderSize, levelSize(0));
                 for (usize i = 1; i < m_bloomLevels.size(); ++i) add(PostPass::Down, m_bloomLevels[i - 1], m_bloomLevels[i], levelSize(i - 1), levelSize(i));
                 for (usize i = m_bloomLevels.size() - 1; i >= 1; --i) add(PostPass::Up, m_bloomLevels[i], m_bloomLevels[i - 1], levelSize(i), levelSize(i - 1));
+            }
+            if (ao) {
+                const Vec2 half{static_cast<float>(std::max(1u, renderW / 2)), static_cast<float>(std::max(1u, renderH / 2))};
+                add(PostPass::Ao, m_postScene, m_aoTarget, renderSize, half);  // source: the scene's depth
+                add(PostPass::AoBlur, m_aoTarget, m_aoBlurTarget, half, half);
+                m_stats.ambientOcclusion = true;
             }
             add(PostPass::Composite, sceneColor, fxaa ? m_postLdr : outputTarget, renderSize, outSize);
             if (fxaa) add(PostPass::Fxaa, m_postLdr, outputTarget, outSize, outSize);
@@ -869,9 +882,10 @@ u32 packColor(math::Vec4 c) {
 }
 
 Status Renderer::createPostPipelines() {
-    const char* fragments[5] = {shaders::kBloomPrefilter, shaders::kBloomDownsample, shaders::kBloomUpsample, shaders::kComposite, shaders::kFxaa};
-    const char* names[5] = {"agr.post.prefilter", "agr.post.down", "agr.post.up", "agr.post.composite", "agr.post.fxaa"};
-    for (int k = 0; k < 5; ++k) {
+    const char* fragments[7] = {shaders::kBloomPrefilter, shaders::kBloomDownsample, shaders::kBloomUpsample, shaders::kComposite, shaders::kFxaa,
+                                shaders::kSsao,           shaders::kSsaoBlur};
+    const char* names[7] = {"agr.post.prefilter", "agr.post.down", "agr.post.up", "agr.post.composite", "agr.post.fxaa", "agr.post.ssao", "agr.post.ssao.blur"};
+    for (int k = 0; k < 7; ++k) {
         rhi::PipelineDesc p;
         p.debugName = names[k];
         p.shader.vertex = shaders::kPostVertex;
@@ -883,7 +897,7 @@ Status Renderer::createPostPipelines() {
         p.depthWrite = false;
         p.blend = k == PostPass::Up ? rhi::BlendMode::Additive : rhi::BlendMode::Opaque;
         p.uniformBlocks = {"PostData"};
-        p.samplers = k == PostPass::Composite ? std::vector<std::string>{"u_scene", "u_bloomTex"} : std::vector<std::string>{"u_source"};
+        p.samplers = k == PostPass::Composite ? std::vector<std::string>{"u_scene", "u_bloomTex", "u_aoTex"} : std::vector<std::string>{"u_source"};
         auto r = m_device.createPipeline(p);
         if (!r) return r.error();
         m_postPipelines[k] = r.value();
@@ -892,7 +906,7 @@ Status Renderer::createPostPipelines() {
 }
 
 void Renderer::releasePostTargets() {
-    for (rhi::RenderTargetHandle t : {m_postScene, m_postResolve, m_postLdr}) m_device.destroyRenderTarget(t);
+    for (rhi::RenderTargetHandle t : {m_postScene, m_postResolve, m_postLdr, m_aoTarget, m_aoBlurTarget}) m_device.destroyRenderTarget(t);
     for (rhi::RenderTargetHandle t : m_bloomLevels) m_device.destroyRenderTarget(t);
     m_postScene = m_postResolve = m_postLdr = {};
     m_bloomLevels.clear();
@@ -900,21 +914,27 @@ void Renderer::releasePostTargets() {
     m_postW = m_postH = m_postSamples = m_postOutW = m_postOutH = 0;
 }
 
-bool Renderer::ensurePostTargets(u32 w, u32 h, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa) {
+bool Renderer::ensurePostTargets(u32 w, u32 h, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa, bool ao) {
     if (m_postScene && w == m_postW && h == m_postH && samples == m_postSamples && outW == m_postOutW && outH == m_postOutH && hdr == m_postHdr &&
-        bloom == m_postBloom && fxaa == m_postFxaa)
+        bloom == m_postBloom && fxaa == m_postFxaa && ao == m_postAo)
         return true;
     releasePostTargets();
     const rhi::TextureFormat color = hdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8;
-    auto make = [&](u32 tw, u32 th, rhi::TextureFormat f, bool depth, u32 s, const char* name) -> rhi::RenderTargetHandle {
-        auto t = m_device.createRenderTarget({.width = std::max(1u, tw), .height = std::max(1u, th), .colorFormat = f, .depth = depth, .samples = s, .debugName = name});
+    auto make = [&](u32 tw, u32 th, rhi::TextureFormat f, bool depth, u32 s, const char* name, bool readDepth = false) -> rhi::RenderTargetHandle {
+        auto t = m_device.createRenderTarget({.width = std::max(1u, tw), .height = std::max(1u, th), .colorFormat = f, .depth = depth,
+                                              .sampleableDepth = readDepth, .samples = s, .debugName = name});
         if (!t) {
             AGR_LOG_ERROR("Render", "post-processing target '{}': {}", name, t.error().message);
             return {};
         }
         return t.value();
     };
-    m_postScene = make(w, h, color, true, samples, "agr.post.scene");
+    // SSAO reads the scene depth: a single-sampled, sampleable depth texture (the caller drops MSAA).
+    m_postScene = make(w, h, color, true, samples, "agr.post.scene", ao && samples == 1);
+    if (ao) {
+        m_aoTarget = make(w / 2, h / 2, rhi::TextureFormat::RGBA8, false, 1, "agr.post.ao");
+        m_aoBlurTarget = make(w / 2, h / 2, rhi::TextureFormat::RGBA8, false, 1, "agr.post.ao.blur");
+    }
     if (samples > 1) m_postResolve = make(w, h, color, false, 1, "agr.post.resolve");
     if (fxaa) m_postLdr = make(outW, outH, rhi::TextureFormat::RGBA8, false, 1, "agr.post.ldr");
     if (bloom) {
@@ -926,30 +946,35 @@ bool Renderer::ensurePostTargets(u32 w, u32 h, u32 samples, u32 outW, u32 outH, 
             bh = std::max(1u, bh / 2);
         }
     }
-    const bool ok = m_postScene && (samples == 1 || m_postResolve) && (!fxaa || m_postLdr) &&
+    const bool ok = m_postScene && (samples == 1 || m_postResolve) && (!fxaa || m_postLdr) && (!ao || (m_aoTarget && m_aoBlurTarget)) &&
                     std::all_of(m_bloomLevels.begin(), m_bloomLevels.end(), [](rhi::RenderTargetHandle t) { return static_cast<bool>(t); });
     if (!ok) {
         releasePostTargets();
         return false;  // the frame is drawn without post-processing
     }
     m_postW = w, m_postH = h, m_postSamples = samples, m_postOutW = outW, m_postOutH = outH;
-    m_postHdr = hdr, m_postBloom = bloom, m_postFxaa = fxaa;
+    m_postHdr = hdr, m_postBloom = bloom, m_postFxaa = fxaa, m_postAo = ao;
     return true;
 }
 
 void Renderer::runPost(rhi::RenderTargetHandle output) {
     rhi::TextureHandle bloom = m_bloomLevels.empty() ? m_assets.whiteTexture() : m_device.renderTargetTexture(m_bloomLevels[0]);
+    const rhi::TextureHandle ao = m_postAo && m_aoBlurTarget ? m_device.renderTargetTexture(m_aoBlurTarget) : m_assets.whiteTexture();
     for (const PostPass& pass : m_postPasses) {
-        const rhi::TextureHandle src = m_device.renderTargetTexture(pass.source);
+        const rhi::TextureHandle src = pass.kind == PostPass::Ao ? m_device.renderTargetDepthTexture(pass.source) : m_device.renderTargetTexture(pass.source);
         m_device.prepareTextureForSampling(src);
         const bool composite = pass.kind == PostPass::Composite;
         if (composite && !m_bloomLevels.empty()) m_device.prepareTextureForSampling(bloom);
+        if (composite && m_postAo) m_device.prepareTextureForSampling(ao);
         // Upsampling adds into the target: keep its content (loaded); other passes overwrite every pixel.
         m_device.beginPass(pass.target ? pass.target : output, {false, {}, false, 1.0f});
         m_device.bindPipeline(m_postPipelines[pass.kind]);
-        m_device.bindUniformBuffer(0, m_uniformBuffer, pass.uniformOffset, sizeof(Vec4) * 4);
+        m_device.bindUniformBuffer(0, m_uniformBuffer, pass.uniformOffset, kPostUniformBytes);
         m_device.bindTexture(0, src);
-        if (composite) m_device.bindTexture(1, bloom);
+        if (composite) {
+            m_device.bindTexture(1, bloom);
+            m_device.bindTexture(2, ao);
+        }
         m_device.bindVertexBuffer(m_skyVertices);
         m_device.draw(3);
         m_device.endPass();

@@ -150,7 +150,11 @@ void registerRenderComponents() {
         .field("contrast", &PostProcessComponent::contrast, {.rangeMin = 0.0f, .rangeMax = 3.0f, .speed = 0.01f})
         .field("saturation", &PostProcessComponent::saturation, {.rangeMin = 0.0f, .rangeMax = 3.0f, .speed = 0.01f})
         .field("colorFilter", &PostProcessComponent::colorFilter, {.flags = FieldFlag_Color})
-        .field("vignette", &PostProcessComponent::vignette, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f});
+        .field("vignette", &PostProcessComponent::vignette, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("ambientOcclusion", &PostProcessComponent::ambientOcclusion,
+               {.tooltip = "Contact shadows in corners and under objects (SSAO, half resolution; MSAA off, FXAA instead)"})
+        .field("aoRadius", &PostProcessComponent::aoRadius, {.rangeMin = 0.05f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("aoIntensity", &PostProcessComponent::aoIntensity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.01f});
     reg.add<MeshRendererComponent>("MeshRenderer")
         .category("Rendering")
         .description("Draws a built-in mesh or a mesh of an imported model (glTF, OBJ, FBX) with PBR materials.")

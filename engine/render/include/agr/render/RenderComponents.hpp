@@ -113,6 +113,11 @@ struct PostProcessComponent {
     float saturation = 1.0f;
     math::Color colorFilter{1.0f, 1.0f, 1.0f, 1.0f};
     float vignette = 0.2f;          ///< Darkened corners, 0..1.
+    /// Screen-space ambient occlusion: contact shadows in corners, creases and under objects
+    /// (half resolution; turns MSAA off for this camera, FXAA smooths the edges instead).
+    bool ambientOcclusion = false;
+    float aoRadius = 0.5f;          ///< World units around each point.
+    float aoIntensity = 1.0f;       ///< 0..2.
 };
 
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };

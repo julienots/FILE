@@ -549,6 +549,48 @@ TEST_CASE("blob shadows darken the ground under an entity and fade with height; 
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("ambient occlusion (SSAO): darker where a cube meets the floor, open floor and sky unchanged") {
+    Render3DFixture f;
+    f.camera({0, 3.5f, 5.0f}, {0, 0.3f, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;  // ambient light only: occlusion is the only shading
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Plane, {0, 0, 0}, Vec3{20.0f}, {0.7f, 0.7f, 0.7f, 1});
+    f.mesh(PrimitiveMesh::Cube, {0, 0.5f, 0}, Vec3{1.0f}, {0.7f, 0.7f, 0.7f, 1});
+    const auto cam = f.scene.findByName("Camera");
+    f.scene.registry().get<CameraComponent>(cam).clearColor = {0.2f, 0.3f, 0.5f, 1.0f};
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(cam);
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.filmicToneMapping = false;
+    const Vec3 corner{0.6f, 0.02f, 0.6f}, open{2.6f, 0.0f, 1.8f};
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().ambientOcclusion);
+    const int cornerOff = luminance(f.at(corner)), openOff = luminance(f.at(open));
+    const Rgba skyOff = pixel(*gpu().device, kWidth / 2, 1);
+    post.ambientOcclusion = true;
+    post.aoRadius = 0.6f;
+    post.aoIntensity = 2.0f;
+    f.frame();
+    CHECK(f.renderer.stats().ambientOcclusion);
+    const int cornerOn = luminance(f.at(corner)), openOn = luminance(f.at(open));
+    CHECK_MESSAGE(cornerOn < cornerOff - 25, cornerOn, " vs ", cornerOff);  // contact shadow
+    CHECK_MESSAGE(std::abs(openOn - openOff) < 25, openOn, " vs ", openOff);  // flat open floor: no occlusion
+    const Rgba skyOn = pixel(*gpu().device, kWidth / 2, 1);
+    CHECK(std::abs(int(skyOn.r) - int(skyOff.r)) <= 2);
+    CHECK(std::abs(int(skyOn.b) - int(skyOff.b)) <= 2);
+    // A profile without SSAO (mobile tiers) skips it.
+    GraphicsProfile p = f.renderer.profile();
+    p.ssao = false;
+    f.renderer.setProfile(p);
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().ambientOcclusion);
+    CHECK_FALSE(graphicsProfile(GraphicsTier::UltraMobile).ssao);
+    CHECK(graphicsProfile(GraphicsTier::High).ssao);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("point and spot lights: range, cone and per-profile limit") {
     Render3DFixture f;
     f.camera({0, 8, 0}, {0, 0, 0});

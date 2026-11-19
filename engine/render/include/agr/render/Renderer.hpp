@@ -102,6 +102,7 @@ struct RenderStats {
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
     u32 outlineBatches = 0;  ///< Outline draw calls (instanced batches of outlined materials).
+    bool ambientOcclusion = false;  ///< SSAO computed this frame.
     u32 shadowCasters = 0;   ///< Mesh parts drawn into the shadow map (all cascades).
     u32 shadowCascades = 0;  ///< Directional shadow cascades rendered this frame.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
@@ -286,12 +287,12 @@ private:
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {
-        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa } kind;
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur } kind;
         rhi::RenderTargetHandle source, target;  // target null = output
         u32 uniformOffset = 0;
     };
     Status createPostPipelines();
-    bool ensurePostTargets(u32 renderW, u32 renderH, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa);
+    bool ensurePostTargets(u32 renderW, u32 renderH, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa, bool ao);
     void releasePostTargets();
     void runPost(rhi::RenderTargetHandle output);
     void sweepTextureCache();
@@ -307,7 +308,10 @@ private:
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
-    rhi::PipelineHandle m_postPipelines[5];  // PostPass::Kind
+    rhi::PipelineHandle m_postPipelines[7];  // PostPass::Kind
+    static constexpr usize kPostUniformBytes = 5 * 16 + 2 * 64;  // PostData block (Shaders.inl)
+    rhi::RenderTargetHandle m_aoTarget, m_aoBlurTarget;  // half resolution
+    bool m_postAo = false;
     rhi::RenderTargetHandle m_postScene, m_postResolve, m_postLdr;
     std::vector<rhi::RenderTargetHandle> m_bloomLevels;
     std::vector<std::pair<u32, u32>> m_bloomSizes;
