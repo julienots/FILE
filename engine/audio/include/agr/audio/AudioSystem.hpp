@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "agr/audio/AudioComponents.hpp"
+#include "agr/audio/AudioEffects.hpp"
 #include "agr/core/FileSystem.hpp"
 #include "agr/core/Result.hpp"
 
@@ -87,6 +88,13 @@ public:
     void setBusMuted(AudioBus bus, bool muted);
     bool busMuted(AudioBus bus) const;
     void setListener(math::Vec3 position, math::Vec3 forward, math::Vec3 up = {0.0f, 1.0f, 0.0f});
+    /// Effects of a bus, applied in order to everything it mixes (reverb on Effects, low-pass
+    /// on Music when paused, compressor on Master...). Safe while sounds play.
+    void setBusEffects(AudioBus bus, std::vector<AudioEffect> effects);
+    const std::vector<AudioEffect>& busEffects(AudioBus bus) const;
+    /// Volumes, mutes and effects of every bus at once (assets://audio_buses.json).
+    void applyLayout(const AudioBusLayout& layout);
+    AudioBusLayout layout() const;
     /// Suspends the output device (application in background) or resumes it.
     void suspend(bool suspended);
 

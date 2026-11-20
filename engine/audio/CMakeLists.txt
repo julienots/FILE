@@ -2,10 +2,12 @@ agr_add_module(audio
     SOURCES
         src/AudioComponents.cpp
         src/AudioSystem.cpp
+        src/AudioEffects.cpp
         src/AudioPlugin.cpp
         src/Wav.cpp
     PUBLIC_DEPS
         agr::render
         agr::runtime
     PRIVATE_DEPS
-        agr::miniaudio)
+        agr::miniaudio
+        nlohmann_json::nlohmann_json)

@@ -30,6 +30,34 @@ des modèles, test de bout en bout de l'éditeur).
   silence au rythme réel (les sons finissent à l'heure). Sur mobile, la sortie est libérée quand
   l'application passe en arrière-plan et reprise au retour.
 
+## Effets des bus
+
+Chaque bus a une **chaîne d'effets**, appliquée dans l'ordre à tout ce qu'il mixe (dans le graphe de
+miniaudio, sur le fil audio : modifier un effet pendant que les sons jouent ne coupe rien) :
+
+| Effet | Réglages | Usages |
+|---|---|---|
+| `LowPass` (passe-bas) | coupure (Hz), résonance | son étouffé sous l'eau / derrière un mur, musique de pause |
+| `HighPass` (passe-haut) | coupure (Hz), résonance | radio, téléphone, enlever les graves |
+| `Echo` | délai (s, jusqu'à 2), réinjection, mélange | canyon, voix magique |
+| `Reverb` (réverbération, type Freeverb, stéréo) | taille de la salle, amortissement, mélange | grotte, cathédrale, salle |
+| `Compressor` | seuil (dB), ratio, attaque / relâchement (ms), gain (dB) | éviter la saturation quand beaucoup de sons jouent, voix régulières |
+| `Distortion` (saturation douce) | attaque du signal, mélange | moteurs, radio grésillante, rage |
+| `Chorus` | vitesse (Hz), profondeur (ms), mélange | voix de robot, ambiance aquatique, élargir un son |
+
+- **Mixeur** (*Affichage › Mixeur audio*) : cliquer le nom d'un bus montre ses effets ; *+ Ajouter un
+  effet*, case pour l'activer, réglages, `^` pour le monter dans l'ordre, `x` pour le retirer — le son
+  change tout de suite. *Enregistrer le mixage* écrit volumes, coupures et effets dans
+  `assets/audio_buses.json`, que le jeu applique au lancement (et relit s'il change pendant qu'il
+  tourne).
+- Les nouveaux projets ont un léger **compresseur sur Master** (seuil -6 dB, 4:1) qui évite la
+  saturation quand beaucoup de sons se superposent.
+- Lua : `agr.audio.addBusEffect("Music", "LowPass", { cutoff = 400 })` (renvoie son numéro),
+  `agr.audio.setBusEffect("Music", 1, "cutoff", 800)` ou `(..., "enabled", false)`,
+  `agr.audio.clearBusEffects(bus)`, `agr.audio.busEffectCount(bus)`.
+- C++ : `AudioSystem::setBusEffects`, `busEffects`, `applyLayout`, `layout` ; `AudioEffectChain`
+  traite aussi du son hors mixeur (rendu hors ligne).
+
 ## Composants
 
 | Composant | Champs |
@@ -65,13 +93,14 @@ n'ont aucun effet.
 
 ## Performances
 
-Mixage de 32 voix (dont 16 spatiales, rééchantillonnées) : ~0,14 ms pour 10,7 ms de son, soit ~1,3 %
-d'un cœur de la machine de test ([BENCHMARKS.md](BENCHMARKS.md)).
+Mixage de 32 voix (dont 16 spatiales, rééchantillonnées) : ~0,12 ms pour 10,7 ms de son, soit ~1,1 %
+d'un cœur de la machine de test ; avec une réverbération et un passe-bas sur `Effects` et un compresseur
+sur `Master` : ~0,17 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : `audio effects` et `bus effects`
+(`tests/test_audio.cpp`), API Lua (`tests/test_script.cpp`).
 
 ## Limites actuelles
 
-- Pas d'effets (réverbération, filtres, compresseur), d'effet Doppler, d'occlusion ni de cônes de
-  directivité.
-- Les volumes du mixeur réglés dans l'éditeur ne sont pas enregistrés dans le projet (un jeu les
-  règle par script).
+- Pas encore de décalage de hauteur (pitch shift), de phaser, d'égaliseur multibande, d'analyseur de
+  spectre ni d'enregistrement ; pas d'effet Doppler, d'occlusion ni de cônes de directivité ; pas de bus
+  créés par l'utilisateur (les six bus sont fixes).
 - Pas encore testé sur un appareil Android (sortie AAudio / OpenSL ES de miniaudio : phase 8).

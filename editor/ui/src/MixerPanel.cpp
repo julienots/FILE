@@ -40,24 +40,123 @@ void MixerPanel::draw(EditorShared& s, const FrameTime& time) {
     }
     ImGui::Separator();
 
-    // One column per bus: volume (vertical), mute.
-    const float h = std::max(80.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 2.5f);
+    // One column per bus: volume (vertical), mute; a click on the name shows its effects.
+    const float h = std::clamp(ImGui::GetContentRegionAvail().y * 0.35f, 80.0f, 220.0f);
     for (i32 i = 0; i < kAudioBusCount; ++i) {
         const auto bus = static_cast<AudioBus>(i);
         if (i) ImGui::SameLine(0, 12);
         ImGui::BeginGroup();
         ImGui::PushID(i);
         float v = audio.busVolume(bus);
-        if (ImGui::VSliderFloat("##v", {44, h}, &v, 0.0f, 1.5f, "%.2f")) audio.setBusVolume(bus, v);
+        if (ImGui::VSliderFloat("##v", {44, h}, &v, 0.0f, 1.5f, "%.2f")) {
+            audio.setBusVolume(bus, v);
+            m_dirty = true;
+        }
         bool muted = audio.busMuted(bus);
-        if (ImGui::Checkbox("##m", &muted)) audio.setBusMuted(bus, muted);
+        if (ImGui::Checkbox("##m", &muted)) {
+            audio.setBusMuted(bus, muted);
+            m_dirty = true;
+        }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Couper");
-        ImGui::TextUnformatted(audioBusName(bus));
+        const usize fxCount = audio.busEffects(bus).size();
+        const std::string name = std::string(audioBusName(bus)) + (fxCount ? " (" + std::to_string(fxCount) + ")" : "");
+        if (ImGui::Selectable(name.c_str(), m_bus == i, 0, {60, 0})) m_bus = i;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Effets de ce bus");
         ImGui::PopID();
         ImGui::EndGroup();
     }
-    ImGui::TextDisabled("Réglages de la session ; un jeu règle ses volumes par script (agr.audio.setBusVolume).");
+    drawEffects(s, audio);
     ImGui::End();
+}
+
+void MixerPanel::drawEffects(EditorShared& s, AudioSystem& audio) {
+    const auto bus = static_cast<AudioBus>(std::clamp(m_bus, 0, kAudioBusCount - 1));
+    ImGui::SeparatorText((std::string("Effets du bus ") + audioBusName(bus)).c_str());
+    std::vector<AudioEffect> list = audio.busEffects(bus);
+    bool changed = false;
+    int remove = -1, up = -1;
+    for (usize i = 0; i < list.size(); ++i) {
+        AudioEffect& e = list[i];
+        ImGui::PushID(static_cast<int>(i));
+        changed |= ImGui::Checkbox("##on", &e.enabled);
+        ImGui::SameLine();
+        const bool open = ImGui::TreeNodeEx(audioEffectName(e.type), ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f);
+        if (i > 0 && ImGui::SmallButton("^")) up = static_cast<int>(i);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x")) remove = static_cast<int>(i);
+        if (open) {
+            switch (e.type) {
+                case AudioEffectType::LowPass:
+                case AudioEffectType::HighPass:
+                    changed |= ImGui::SliderFloat("Coupure (Hz)", &e.cutoff, 20.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderFloat("Résonance", &e.resonance, 0.3f, 8.0f);
+                    break;
+                case AudioEffectType::Echo:
+                    changed |= ImGui::SliderFloat("Délai (s)", &e.delay, 0.01f, 2.0f);
+                    changed |= ImGui::SliderFloat("Réinjection", &e.feedback, 0.0f, 0.95f);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+                case AudioEffectType::Reverb:
+                    changed |= ImGui::SliderFloat("Taille de la salle", &e.roomSize, 0.0f, 1.0f);
+                    changed |= ImGui::SliderFloat("Amortissement", &e.damping, 0.0f, 1.0f);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+                case AudioEffectType::Compressor:
+                    changed |= ImGui::SliderFloat("Seuil (dB)", &e.threshold, -60.0f, 0.0f);
+                    changed |= ImGui::SliderFloat("Ratio", &e.ratio, 1.0f, 30.0f);
+                    changed |= ImGui::SliderFloat("Attaque (ms)", &e.attack, 0.1f, 200.0f);
+                    changed |= ImGui::SliderFloat("Relâchement (ms)", &e.release, 5.0f, 2000.0f);
+                    changed |= ImGui::SliderFloat("Gain (dB)", &e.gain, -12.0f, 24.0f);
+                    break;
+                case AudioEffectType::Distortion:
+                    changed |= ImGui::SliderFloat("Attaque du signal", &e.drive, 1.0f, 50.0f);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+                case AudioEffectType::Chorus:
+                    changed |= ImGui::SliderFloat("Vitesse (Hz)", &e.rate, 0.05f, 10.0f);
+                    changed |= ImGui::SliderFloat("Profondeur (ms)", &e.depth, 0.0f, 20.0f);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    if (remove >= 0) {
+        list.erase(list.begin() + remove);
+        changed = true;
+    }
+    if (up > 0) {
+        std::swap(list[static_cast<usize>(up)], list[static_cast<usize>(up - 1)]);
+        changed = true;
+    }
+    static const char* kLabels[kAudioEffectTypeCount] = {"Passe-bas", "Passe-haut", "Écho", "Réverbération", "Compresseur", "Distorsion", "Chorus"};
+    if (ImGui::BeginCombo("##add", "+ Ajouter un effet")) {
+        for (u32 t = 0; t < kAudioEffectTypeCount; ++t)
+            if (ImGui::Selectable(kLabels[t])) {
+                AudioEffect e;
+                e.type = static_cast<AudioEffectType>(t);
+                if (e.type == AudioEffectType::HighPass) e.cutoff = 200.0f;
+                if (e.type == AudioEffectType::Distortion) e.mix = 0.6f;
+                if (e.type == AudioEffectType::Chorus) e.mix = 0.5f;
+                list.push_back(e);
+                changed = true;
+            }
+        ImGui::EndCombo();
+    }
+    if (changed) {
+        audio.setBusEffects(bus, list);  // heard at once
+        m_dirty = true;
+    }
+    ImGui::BeginDisabled(!s.ctx.hasProject());
+    if (ImGui::Button(m_dirty ? "Enregistrer le mixage*" : "Enregistrer le mixage")) {
+        if (Status st = s.engine.vfs().writeText(AudioBusLayout::kUri, audio.layout().toJson()); !st) s.notify(st.error().message);
+        else m_dirty = false;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Volumes, coupures et effets dans assets/audio_buses.json, chargés au lancement du jeu");
 }
 
 } // namespace agr::editor

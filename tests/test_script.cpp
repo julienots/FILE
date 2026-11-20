@@ -457,6 +457,21 @@ return T
     CHECK(f.scripts.run("agr.audio.stop(1)", &f.scene));
     audio.update(0.0);
     CHECK(audio.stats().voices == 1);
+    // Bus effects: underwater muffle, then off.
+    CHECK(f.scripts.run("local i = agr.audio.addBusEffect('Music', 'LowPass', { cutoff = 400 })\n"
+                        "assert(i == 1 and agr.audio.busEffectCount('Music') == 1)\n"
+                        "agr.audio.addBusEffect('Music', 'Reverb', { roomSize = 0.9, mix = 0.5 })\n"
+                        "agr.audio.setBusEffect('Music', 1, 'cutoff', 800)\n"
+                        "agr.audio.setBusEffect('Music', 2, 'enabled', false)",
+                        &f.scene));
+    REQUIRE(audio.busEffects(AudioBus::Music).size() == 2);
+    CHECK(audio.busEffects(AudioBus::Music)[0].cutoff == doctest::Approx(800.0f));
+    CHECK_FALSE(audio.busEffects(AudioBus::Music)[1].enabled);
+    CHECK_FALSE(f.scripts.run("agr.audio.addBusEffect('Music', 'Wobble')", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.audio.setBusEffect('Music', 3, 'mix', 1)", &f.scene));
+    CHECK_FALSE(f.scripts.run("agr.audio.setBusEffect('Music', 1, 'nope', 1)", &f.scene));
+    CHECK(f.scripts.run("agr.audio.clearBusEffects('Music')", &f.scene));
+    CHECK(audio.busEffects(AudioBus::Music).empty());
 }
 
 TEST_CASE("UI API: clicks, slider changes, target messages, texts and visibility") {

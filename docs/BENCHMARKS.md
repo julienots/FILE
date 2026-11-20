@@ -260,7 +260,8 @@ physics2d: step, 500 hinge joints (20 chains)      0.437 ms     874.60 ns/item
 `agr_benchmarks` (même machine, un cœur) :
 
 ```
-audio: mix 32 voices (16 spatial, resampled), 512 frames      0.147 ms     287.50 ns/item
+audio: mix 32 voices (16 spatial, resampled), 512 frames      0.120 ms     235.22 ns/item
+audio: same + reverb, low-pass and master compressor      0.165 ms     323.03 ns/item
     (512 frames = 10.7 ms of sound at 48 kHz)
 ui: layout + overlay of 501 elements (100 buttons with text)      0.110 ms     218.78 ns/item
     (990 quads)

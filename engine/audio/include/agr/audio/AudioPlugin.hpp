@@ -28,6 +28,8 @@ private:
     SubscriptionId m_lifecycle{};
     bool m_running = true;
     bool m_paused = false;
+    f64 m_layoutTimer = 0.0;
+    i64 m_layoutModified = -1;  ///< assets://audio_buses.json last applied (-1: not checked yet)
 };
 
 } // namespace agr

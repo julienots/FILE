@@ -261,7 +261,10 @@ public:
     void draw(EditorShared& s, const FrameTime& time);
 
 private:
+    void drawEffects(EditorShared& s, AudioSystem& audio);
     float m_level[2] = {0.0f, 0.0f};
+    int m_bus = 2;  ///< Bus whose effects are shown (Effects).
+    bool m_dirty = false;
 };
 
 /// Animation timeline: tracks of a clip (.agranim) of the selected Animator, keys on a

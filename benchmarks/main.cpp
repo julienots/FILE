@@ -431,6 +431,10 @@ int main() {
         }
         std::vector<float> out(512 * 2);
         bench("audio: mix 32 voices (16 spatial, resampled), 512 frames", 512, 400, [&] { audio.mix(out.data(), 512); });
+        audio.setBusEffects(AudioBus::Effects, {AudioEffect{.type = AudioEffectType::Reverb}, AudioEffect{.type = AudioEffectType::LowPass, .cutoff = 3000.0f}});
+        audio.setBusEffects(AudioBus::Master, {AudioEffect{.type = AudioEffectType::Compressor}});
+        audio.mix(out.data(), 512);  // the effects are set up on the next block
+        bench("audio: same + reverb, low-pass and master compressor", 512, 400, [&] { audio.mix(out.data(), 512); });
         std::printf("    (512 frames = 10.7 ms of sound at 48 kHz)\n");
     }
     {

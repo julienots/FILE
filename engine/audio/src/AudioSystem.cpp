@@ -5,12 +5,14 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include <miniaudio.h>
 
+#include "agr/audio/AudioEffects.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Components.hpp"
@@ -65,6 +67,35 @@ void atomicMax(std::atomic<u32>& a, float value) {
 
 const char* resultText(ma_result r) { return ma_result_description(r); }
 
+/// A node of miniaudio's graph running a bus's effect chain (between the bus and its parent).
+struct EffectNode {
+    ma_node_base base;  // first member: miniaudio sees the node through it
+    AudioEffectChain chain;
+    std::mutex mutex;  // guards `pending` (main thread) against the audio thread
+    std::vector<AudioEffect> pending;
+    bool dirty = false, active = false;
+    u32 rate = 48000;
+};
+
+void effectNodeProcess(ma_node* node, const float** in, ma_uint32* inCount, float** out, ma_uint32* outCount) {
+    auto* n = reinterpret_cast<EffectNode*>(node);
+    const ma_uint32 frames = std::min(*inCount, *outCount);
+    std::memcpy(out[0], in[0], static_cast<usize>(frames) * kChannels * sizeof(float));
+    *outCount = frames;
+    if (n->mutex.try_lock()) {  // never wait on the audio thread: a change applies on the next block
+        if (n->dirty) {
+            n->chain.configure(n->pending, n->rate);
+            n->active = false;
+            for (const AudioEffect& e : n->pending) n->active |= e.enabled;
+            n->dirty = false;
+        }
+        n->mutex.unlock();
+    }
+    if (n->active) n->chain.process(out[0], frames);
+}
+
+ma_node_vtable kEffectNodeVtable = {effectNodeProcess, nullptr, 1, 1, 0};
+
 } // namespace
 
 struct AudioSystem::Impl {
@@ -75,6 +106,8 @@ struct AudioSystem::Impl {
     ma_sound_group groups[kAudioBusCount]{};
     bool engineInit = false, deviceInit = false, deviceRunning = false, suspended = false;
     bool groupInit[kAudioBusCount]{};
+    std::unique_ptr<EffectNode> effectNodes[kAudioBusCount];
+    std::vector<AudioEffect> busEffects[kAudioBusCount];
     float busVolumes[kAudioBusCount]{1, 1, 1, 1, 1, 1};
     bool busMutedFlags[kAudioBusCount]{};
     AudioOutput output = AudioOutput::Manual;
@@ -330,6 +363,29 @@ Status AudioSystem::initialize(const AudioConfig& config) {
         m->groupInit[i] = true;
         m->applyBus(i);
     }
+    // Effects: bus group -> effect node -> parent (the Master group, or the output for Master).
+    const ma_uint32 channels[1] = {kChannels};
+    for (i32 i = 0; i < kAudioBusCount; ++i) {
+        auto node = std::make_unique<EffectNode>();
+        node->rate = rate;
+        ma_node_config nc = ma_node_config_init();
+        nc.vtable = &kEffectNodeVtable;
+        nc.inputBusCount = 1;
+        nc.outputBusCount = 1;
+        nc.pInputChannels = channels;
+        nc.pOutputChannels = channels;
+        if (ma_result r = ma_node_init(ma_engine_get_node_graph(&m->engine), &nc, nullptr, &node->base); r != MA_SUCCESS) {
+            shutdown();
+            return makeError(Error::Code::Unknown, std::string("audio effects: ") + resultText(r));
+        }
+        m->effectNodes[i] = std::move(node);
+    }
+    for (i32 i = kAudioBusCount - 1; i >= 0; --i) {
+        ma_node* parent = i == 0 ? ma_engine_get_endpoint(&m->engine) : static_cast<ma_node*>(&m->groups[0]);
+        ma_node_attach_output_bus(&m->groups[i], 0, &m->effectNodes[i]->base, 0);
+        ma_node_attach_output_bus(&m->effectNodes[i]->base, 0, parent, 0);
+        setBusEffects(static_cast<AudioBus>(i), m->busEffects[i]);  // effects set before initialize()
+    }
     m->stats.sampleRate = rate;
 
     m->output = config.output;
@@ -375,11 +431,49 @@ void AudioSystem::shutdown() {
             ma_sound_group_uninit(&m->groups[i]);
             m->groupInit[i] = false;
         }
+    for (auto& node : m->effectNodes)
+        if (node) {
+            ma_node_uninit(&node->base, nullptr);
+            node.reset();
+        }
     if (m->engineInit) {
         ma_engine_uninit(&m->engine);
         m->engineInit = false;
     }
     m->stats = {};
+}
+
+// ------------------------------------------------------------------ effects
+void AudioSystem::setBusEffects(AudioBus bus, std::vector<AudioEffect> effects) {
+    const i32 b = std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1);
+    m->busEffects[b] = std::move(effects);
+    if (EffectNode* n = m->effectNodes[b].get()) {
+        std::lock_guard lock(n->mutex);
+        n->pending = m->busEffects[b];
+        n->dirty = true;
+    }
+}
+
+const std::vector<AudioEffect>& AudioSystem::busEffects(AudioBus bus) const {
+    return m->busEffects[std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1)];
+}
+
+void AudioSystem::applyLayout(const AudioBusLayout& layout) {
+    for (i32 b = 0; b < kAudioBusCount; ++b) {
+        setBusVolume(static_cast<AudioBus>(b), layout.volume[b]);
+        setBusMuted(static_cast<AudioBus>(b), layout.muted[b]);
+        setBusEffects(static_cast<AudioBus>(b), layout.effects[b]);
+    }
+}
+
+AudioBusLayout AudioSystem::layout() const {
+    AudioBusLayout l;
+    for (i32 b = 0; b < kAudioBusCount; ++b) {
+        l.volume[b] = busVolume(static_cast<AudioBus>(b));
+        l.muted[b] = busMuted(static_cast<AudioBus>(b));
+        l.effects[b] = m->busEffects[b];
+    }
+    return l;
 }
 
 // ------------------------------------------------------------------ voices

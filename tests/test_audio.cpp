@@ -325,3 +325,109 @@ TEST_CASE("audio: virtual output advances in real time") {
     std::error_code ec;
     fs::remove_all(root, ec);
 }
+
+namespace {
+
+std::vector<float> stereoSine(float freq, float amplitude, u32 frames, u32 rate) {
+    std::vector<float> s(static_cast<usize>(frames) * 2);
+    for (u32 i = 0; i < frames; ++i) s[i * 2] = s[i * 2 + 1] = amplitude * static_cast<float>(std::sin(2.0 * std::numbers::pi * freq * i / rate));
+    return s;
+}
+float peakFrom(const std::vector<float>& s, usize firstFrame) {
+    float p = 0.0f;
+    for (usize i = firstFrame * 2; i < s.size(); ++i) p = std::max(p, std::fabs(s[i]));
+    return p;
+}
+std::vector<float> runChain(const std::vector<AudioEffect>& fx, std::vector<float> s, u32 rate = 48000) {
+    AudioEffectChain chain;
+    chain.configure(fx, rate);
+    for (usize at = 0; at < s.size() / 2; at += 512) chain.process(s.data() + at * 2, static_cast<u32>(std::min<usize>(512, s.size() / 2 - at)));
+    return s;
+}
+
+} // namespace
+
+TEST_CASE("audio effects: filters, echo, reverb, compressor, distortion, chorus") {
+    const u32 rate = 48000;
+    AudioEffect lp{.type = AudioEffectType::LowPass, .cutoff = 500.0f};
+    CHECK(peakFrom(runChain({lp}, stereoSine(8000, 0.5f, rate / 4, rate)), rate / 8) < 0.05f);   // highs removed
+    CHECK(peakFrom(runChain({lp}, stereoSine(100, 0.5f, rate / 4, rate)), rate / 8) > 0.45f);    // lows kept
+    AudioEffect hp{.type = AudioEffectType::HighPass, .cutoff = 2000.0f};
+    CHECK(peakFrom(runChain({hp}, stereoSine(100, 0.5f, rate / 4, rate)), rate / 8) < 0.05f);
+    CHECK(peakFrom(runChain({hp}, stereoSine(8000, 0.5f, rate / 4, rate)), rate / 8) > 0.45f);
+
+    // Echo: an impulse comes back after `delay` at `mix`, then again at mix x feedback.
+    std::vector<float> impulse(static_cast<usize>(rate) * 2, 0.0f);
+    impulse[0] = impulse[1] = 1.0f;
+    AudioEffect echo{.type = AudioEffectType::Echo, .delay = 0.1f, .feedback = 0.5f, .mix = 0.6f};
+    const auto e = runChain({echo}, impulse);
+    CHECK(e[0] == doctest::Approx(1.0f));
+    CHECK(e[4800 * 2] == doctest::Approx(0.6f));
+    CHECK(e[9600 * 2] == doctest::Approx(0.3f));
+    CHECK(std::fabs(e[2400 * 2]) < 1e-6f);
+
+    // Reverb: a tail after the impulse; mix 0 leaves the sound untouched.
+    AudioEffect rev{.type = AudioEffectType::Reverb, .roomSize = 0.8f, .mix = 0.5f};
+    const auto r = runChain({rev}, impulse);
+    CHECK(peakFrom(r, rate / 5) > 1e-3f);
+    rev.mix = 0.0f;
+    const auto dry = runChain({rev}, impulse);
+    CHECK(dry[0] == doctest::Approx(1.0f));
+    CHECK(peakFrom(dry, 1) < 1e-6f);
+
+    // Compressor: a loud tone (0 dBFS) above -20 dB at 10:1 comes out around -18 dB.
+    AudioEffect comp{.type = AudioEffectType::Compressor, .threshold = -20.0f, .ratio = 10.0f, .attack = 1.0f, .release = 50.0f};
+    const float squashed = peakFrom(runChain({comp}, stereoSine(440, 1.0f, rate / 2, rate)), rate / 4);
+    CHECK(squashed < 0.2f);
+    CHECK(squashed > 0.08f);
+    CHECK(peakFrom(runChain({comp}, stereoSine(440, 0.05f, rate / 2, rate)), rate / 4) == doctest::Approx(0.05f).epsilon(0.05));  // quiet: untouched
+
+    // Distortion: a soft clip that drives a 0.5 tone near full scale; disabled = untouched.
+    AudioEffect dist{.type = AudioEffectType::Distortion, .drive = 10.0f, .mix = 1.0f};
+    CHECK(peakFrom(runChain({dist}, stereoSine(440, 0.5f, rate / 10, rate)), 0) > 0.95f);
+    dist.enabled = false;
+    CHECK(peakFrom(runChain({dist}, stereoSine(440, 0.5f, rate / 10, rate)), 0) == doctest::Approx(0.5f).epsilon(0.01));
+
+    // Chorus: mixes a moving delayed copy (the output differs, stays bounded).
+    AudioEffect ch{.type = AudioEffectType::Chorus, .mix = 0.5f};
+    const auto src = stereoSine(440, 0.5f, rate / 4, rate);
+    const auto c = runChain({ch}, src);
+    float diff = 0.0f;
+    for (usize i = 0; i < c.size(); ++i) diff = std::max(diff, std::fabs(c[i] - src[i]));
+    CHECK(diff > 0.05f);
+    CHECK(peakFrom(c, 0) <= 0.51f);
+    // A chain runs effects in order.
+    CHECK(peakFrom(runChain({lp, dist}, stereoSine(8000, 0.5f, rate / 4, rate)), rate / 8) < 0.1f);
+}
+
+TEST_CASE("audio: bus effects apply to the mix, layouts round-trip") {
+    AudioFixture f;
+    f.sine("assets://tone.wav", 1.0);
+    REQUIRE(f.audio.play("assets://tone.wav", {.bus = AudioBus::Music, .loop = true}));
+    const float full = f.run(0.05).peak();
+    f.audio.setBusEffects(AudioBus::Music, {AudioEffect{.type = AudioEffectType::LowPass, .cutoff = 120.0f}});
+    REQUIRE(f.audio.busEffects(AudioBus::Music).size() == 1);
+    f.run(0.05);
+    CHECK(f.run(0.05).peak() < full * 0.25f);  // a 440 Hz tone through a 120 Hz low-pass
+    f.audio.setBusEffects(AudioBus::Music, {});
+    f.run(0.05);
+    CHECK(f.run(0.05).peak() == doctest::Approx(full).epsilon(0.05));
+    // On Master: every bus goes through it.
+    f.audio.setBusEffects(AudioBus::Master, {AudioEffect{.type = AudioEffectType::Distortion, .drive = 20.0f, .mix = 1.0f}});
+    f.run(0.05);
+    CHECK(f.run(0.05).peak() > 0.9f);
+
+    AudioBusLayout l = f.audio.layout();
+    l.volume[static_cast<int>(AudioBus::Effects)] = 0.4f;
+    l.effects[static_cast<int>(AudioBus::Effects)].push_back(AudioEffect{.type = AudioEffectType::Reverb, .roomSize = 0.9f});
+    auto parsed = AudioBusLayout::fromJson(l.toJson());
+    REQUIRE(parsed);
+    CHECK(parsed.value().volume[static_cast<int>(AudioBus::Effects)] == doctest::Approx(0.4f));
+    REQUIRE(parsed.value().effects[static_cast<int>(AudioBus::Master)].size() == 1);
+    CHECK(parsed.value().effects[static_cast<int>(AudioBus::Master)][0].type == AudioEffectType::Distortion);
+    CHECK(parsed.value().effects[static_cast<int>(AudioBus::Effects)][0].roomSize == doctest::Approx(0.9f));
+    f.audio.applyLayout(parsed.value());
+    CHECK(f.audio.busVolume(AudioBus::Effects) == doctest::Approx(0.4f));
+    CHECK(f.audio.busEffects(AudioBus::Effects).size() == 1);
+    CHECK_FALSE(AudioBusLayout::fromJson("{"));
+}

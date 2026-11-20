@@ -94,6 +94,74 @@ int au_setPitch(lua_State* L) {
     if (AudioSystem* a = audioOf(L)) a->setPitch(v, x);
     return 0;
 }
+/// agr.audio.addBusEffect(bus, type [, params]) -> index (1-based). type: "LowPass", "HighPass",
+/// "Echo", "Reverb", "Compressor", "Distortion", "Chorus"; params: a table of AudioEffect fields.
+float* effectField(AudioEffect& e, std::string_view name) {
+    static const std::pair<const char*, float AudioEffect::*> fields[] = {
+        {"cutoff", &AudioEffect::cutoff},       {"resonance", &AudioEffect::resonance}, {"delay", &AudioEffect::delay},
+        {"feedback", &AudioEffect::feedback},   {"roomSize", &AudioEffect::roomSize},   {"damping", &AudioEffect::damping},
+        {"threshold", &AudioEffect::threshold}, {"ratio", &AudioEffect::ratio},         {"attack", &AudioEffect::attack},
+        {"release", &AudioEffect::release},     {"gain", &AudioEffect::gain},           {"drive", &AudioEffect::drive},
+        {"rate", &AudioEffect::rate},           {"depth", &AudioEffect::depth},         {"mix", &AudioEffect::mix}};
+    for (const auto& [n, member] : fields)
+        if (name == n) return &(e.*member);
+    return nullptr;
+}
+int au_addBusEffect(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    AudioEffect fx;
+    if (!audioEffectFromName(luaL_checkstring(L, 2), fx.type)) return luaL_error(L, "unknown audio effect '%s'", lua_tostring(L, 2));
+    if (lua_istable(L, 3)) {
+        lua_pushnil(L);
+        while (lua_next(L, 3) != 0) {
+            if (lua_type(L, -2) == LUA_TSTRING) {
+                const std::string key = lua_tostring(L, -2);
+                if (key == "enabled") fx.enabled = lua_toboolean(L, -1) != 0;
+                else if (float* f = effectField(fx, key)) *f = static_cast<float>(luaL_checknumber(L, -1));
+                else return luaL_error(L, "unknown effect parameter '%s'", key.c_str());
+            }
+            lua_pop(L, 1);
+        }
+    }
+    AudioSystem* a = audioOf(L);
+    if (!a) return 0;
+    auto list = a->busEffects(bus);
+    list.push_back(fx);
+    a->setBusEffects(bus, list);
+    lua_pushinteger(L, static_cast<lua_Integer>(list.size()));
+    return 1;
+}
+AudioEffect* busEffect(lua_State* L, std::vector<AudioEffect>& list) {
+    const lua_Integer i = luaL_checkinteger(L, 2);
+    if (i < 1 || i > static_cast<lua_Integer>(list.size())) luaL_error(L, "no effect %d on this bus (it has %d)", static_cast<int>(i), static_cast<int>(list.size()));
+    return &list[static_cast<usize>(i - 1)];
+}
+/// agr.audio.setBusEffect(bus, index, param, value) — param: "enabled" or an AudioEffect field.
+int au_setBusEffect(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    AudioSystem* a = audioOf(L);
+    if (!a) return 0;
+    auto list = a->busEffects(bus);
+    AudioEffect* fx = busEffect(L, list);
+    const std::string key = luaL_checkstring(L, 3);
+    if (key == "enabled") fx->enabled = lua_toboolean(L, 4) != 0;
+    else if (float* f = effectField(*fx, key)) *f = static_cast<float>(luaL_checknumber(L, 4));
+    else return luaL_error(L, "unknown effect parameter '%s'", key.c_str());
+    a->setBusEffects(bus, list);
+    return 0;
+}
+int au_clearBusEffects(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    if (AudioSystem* a = audioOf(L)) a->setBusEffects(bus, {});
+    return 0;
+}
+int au_busEffectCount(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    AudioSystem* a = audioOf(L);
+    lua_pushinteger(L, a ? static_cast<lua_Integer>(a->busEffects(bus).size()) : 0);
+    return 1;
+}
+
 int au_setBusVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
     const float x = static_cast<float>(luaL_checknumber(L, 2));
@@ -146,7 +214,9 @@ void openAudioBindings(lua_State* L) {
                                      {"isPlaying", au_isPlaying}, {"setVolume", au_setVolume},
                                      {"setPitch", au_setPitch},   {"setBusVolume", au_setBusVolume},
                                      {"busVolume", au_busVolume}, {"setBusMuted", au_setBusMuted},
-                                     {"busMuted", au_busMuted},   {nullptr, nullptr}};
+                                     {"busMuted", au_busMuted},   {"addBusEffect", au_addBusEffect},
+                                     {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects},
+                                     {"busEffectCount", au_busEffectCount}, {nullptr, nullptr}};
     addAgrLibrary(L, "audio", audio);
     static const luaL_Reg methods[] = {
         {"playSound", e_playSound}, {"stopSound", e_stopSound}, {"isSoundPlaying", e_isSoundPlaying}, {nullptr, nullptr}};

@@ -47,6 +47,21 @@ void AudioPlugin::setPaused(bool paused) {
 
 void AudioPlugin::onUpdate(Engine& engine, const FrameTime& time) {
     if (!m_audio) return;
+    // The project's bus layout (volumes, mutes, effects): applied when the file appears or changes.
+    m_layoutTimer += time.unscaledDeltaSeconds;
+    if (m_layoutTimer >= 0.5 || m_layoutModified < 0) {
+        m_layoutTimer = 0.0;
+        const i64 modified = engine.vfs().exists(AudioBusLayout::kUri) ? engine.vfs().modifiedTime(AudioBusLayout::kUri) : 0;
+        if (modified != m_layoutModified) {
+            m_layoutModified = modified;
+            if (modified != 0) {
+                auto text = engine.vfs().readText(AudioBusLayout::kUri);
+                auto layout = text ? AudioBusLayout::fromJson(text.value()) : Result<AudioBusLayout>(text.error());
+                if (layout) m_audio->applyLayout(layout.value());
+                else AGR_LOG_ERROR("Audio", "{}: {}", AudioBusLayout::kUri, layout.error().message);
+            }
+        }
+    }
     m_audio->updateScene(engine.scene(), m_running);
     m_audio->update(time.unscaledDeltaSeconds);
 }
