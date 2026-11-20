@@ -192,6 +192,9 @@ NpcDef* npcMutable(const std::string& id);
 std::vector<LoreDef>& loreMutable();
 // One line of a mod's data.txt ("item.sword_rusty.name = ..."). Returns false and fills err when the line is
 // invalid (unknown id / field, bad number). Blank lines and "#" comments are accepted and ignored.
+// 2.4.0 digging and bombs, tunable by mods ("dig.radius = 2", "bomb.radius = 6"...)
+struct DigTuning { float digRadius = 1.6f, digDepth = 0.55f, bombRadius = 3.4f, bombDepth = 2.4f, bombDamage = 70.f, bombFuse = 2.2f; };
+DigTuning& digTuning();
 bool applyModDataLine(const std::string& line, std::string& err);
 
 }  // namespace lk

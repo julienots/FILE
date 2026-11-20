@@ -470,6 +470,35 @@ static void testAudio(const std::string& assets) {
 }
 
 
+// 2.4.0 diggable ground: the offset layer, seams between chunks, refusal near buildings, save / load, mod tuning
+static void testDig(World& w) {
+    std::printf("[Dig]\n");
+    w.clearDigs();
+    vec2 c{1600, 1560};
+    float h0 = w.height(c.x, c.y);
+    CHECK(w.dig(c, 2.f, 1.f, false), "dig in the open");
+    CHECK(w.height(c.x, c.y) < h0 - 0.9f, "the ground went down (%.2f -> %.2f)", h0, w.height(c.x, c.y));
+    // a hole across a chunk border has no step: both sides read the same offset on the border
+    vec2 b{1600.f, 1536.f};   // z = 48 * 32: a chunk border
+    w.dig(b, 2.5f, 1.2f, false);
+    float above = w.digOffset(b.x, b.y - 0.001f), below = w.digOffset(b.x, b.y + 0.001f);
+    CHECK(std::fabs(above - below) < 0.02f, "no seam at the chunk border (%.3f vs %.3f)", above, below);
+    const Poi* vil = w.poiById("brindlemere");
+    CHECK(vil && !w.dig(vil->pos, 2.f, 1.f, false), "no digging in a village");
+    std::string saved = w.saveDigs();
+    float hDug = w.height(c.x, c.y);
+    w.clearDigs();
+    CHECK(std::fabs(w.height(c.x, c.y) - h0) < 1e-3f, "cleared");
+    size_t p = 0;
+    while (p < saved.size()) { size_t e = saved.find('\n', p); if (e == std::string::npos) e = saved.size(); w.loadDigs(saved.substr(p, e - p)); p = e + 1; }
+    CHECK(std::fabs(w.height(c.x, c.y) - hDug) < 0.02f, "loaded back (%.2f vs %.2f)", w.height(c.x, c.y), hDug);
+    w.clearDigs();
+    std::string err;
+    CHECK(applyModDataLine("bomb.radius = 8", err) && std::fabs(digTuning().bombRadius - 8.f) < 1e-3f, "mod tunes the bomb radius");
+    CHECK(applyModDataLine("dig.depth = 99", err) && digTuning().digDepth <= 3.f, "mod values are clamped");
+    digTuning() = DigTuning();
+}
+
 static void testMapOrientation() {
     std::printf("[Map orientation]\n");
     auto near2 = [](vec2 a, vec2 b) { return length(a - b) < 1e-4f; };
@@ -754,6 +783,7 @@ int lkRunTests(int argc, char** argv) {
     testRiversHaveWater(w);
     testBridges(w);
     testPlacement(w, getenv("LK_VERBOSE") != nullptr);
+    testDig(w);   // 2.4.0
     testNet();
     testImportedAssets(assets);
     testDomainData();

@@ -1410,6 +1410,8 @@ static std::string trimStr(const std::string& s) {
     return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
 }
 
+DigTuning& digTuning() { static DigTuning t; return t; }
+
 bool applyModDataLine(const std::string& raw, std::string& err) {
     std::string line = trimStr(raw);
     if (line.empty() || line[0] == '#') return true;
@@ -1424,6 +1426,15 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         out = clampf(v, lo, hi);
         return true;
     };
+    {   // 2.4.0 digging / bombs
+        DigTuning& t = digTuning();
+        if (key == "dig.radius") return num(t.digRadius, 0.6f, 4.f);
+        if (key == "dig.depth") return num(t.digDepth, 0.1f, 3.f);
+        if (key == "bomb.radius") return num(t.bombRadius, 1.f, 12.f);
+        if (key == "bomb.depth") return num(t.bombDepth, 0.2f, 10.f);
+        if (key == "bomb.damage") return num(t.bombDamage, 0.f, 2000.f);
+        if (key == "bomb.fuse") return num(t.bombFuse, 0.3f, 10.f);
+    }
     if (key == "lore.add") {   // lore.add = id | Titre | Texte
         size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);
         if (p2 == std::string::npos) { err = "format : lore.add = id | Titre | Texte"; return false; }

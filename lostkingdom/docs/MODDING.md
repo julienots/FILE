@@ -43,6 +43,8 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 | `enemy` (ennemi) | `name`, `desc`, `hp`, `atk`, `def`, `speed`, `scale`, `aggro` | `enemy.wolf.hp = 80` |
 | `npc` (PNJ) | `name`, `title`, `greet` (ajoute une salutation), `greet.replace`, `lore` (ajoute une confidence) | `npc.maelle.greet = Bonjour !` |
 | `lore.add` (chronique) | `identifiant \| Titre \| Texte` | `lore.add = ma_page \| Mon titre \| Mon texte` |
+| `dig` (pelle, 2.4.0) | `dig.radius` (0,6 à 4 m), `dig.depth` (0,1 à 3 m par coup) | `dig.depth = 1.2` |
+| `bomb` (bombes, 2.4.0) | `bomb.radius` (1 à 12 m), `bomb.depth` (0,2 à 10 m), `bomb.damage` (0 à 2000), `bomb.fuse` (0,3 à 10 s) | `bomb.radius = 8` |
 
 - **Valeurs** : les nombres sont limités à des valeurs raisonnables (par exemple `crit` entre 0 et 1, `scale` entre 0,3 et 6).
 - **Erreurs** : une ligne invalide est ignorée et signalée dans le menu Mods. Le reste du mod s'applique quand même.

@@ -11,7 +11,8 @@ void Game::playerDig() {
     if (stamina < 6) { floatText(c.pos + vec3(0, 2.2f, 0), "Épuisé", vec3(0.9f, 0.8f, 0.3f), 18); return; }
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
     vec2 at = (c.pos + fwd * 1.7f).xz();
-    if (!world.dig(at, 1.6f, 0.55f, false)) { notify("Impossible de creuser ici (trop près des bâtiments).", vec3(1.f, 0.75f, 0.5f), "i_lock"); return; }
+    const DigTuning& T = digTuning();
+    if (!world.dig(at, T.digRadius, T.digDepth, false)) { notify("Impossible de creuser ici (trop près des bâtiments).", vec3(1.f, 0.75f, 0.5f), "i_lock"); return; }
     stamina -= 6; staminaRegenDelay = 0.4f;
     c.vis.anim.play(&clip(C_GATHER_SWING), 1.35f);
     c.attackClip = &clip(C_GATHER_SWING); c.attackIdx = -2;
@@ -44,7 +45,7 @@ void Game::throwBomb() {
     if (player == NullEntity) return;
     Character& c = pc();
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
-    Bomb b; b.pos = c.pos + vec3(0, 1.6f, 0) + fwd * 0.6f; b.vel = fwd * 9.5f + vec3(0, 6.f, 0) + vec3(c.vel.x, 0, c.vel.z) * 0.5f;
+    Bomb b; b.fuse = digTuning().bombFuse; b.pos = c.pos + vec3(0, 1.6f, 0) + fwd * 0.6f; b.vel = fwd * 9.5f + vec3(0, 6.f, 0) + vec3(c.vel.x, 0, c.vel.z) * 0.5f;
     bombs.push_back(b);
     c.vis.anim.play(&clip(C_INTERACT), 1.4f);
     play("swing", 0.6f, 0.8f);
@@ -92,7 +93,8 @@ void Game::updateBombs(float dt) {
         if (b.fuse <= 0) {
             vec3 at = b.pos;
             bombs.erase(bombs.begin() + i);
-            explodeAt(at, 3.4f, 2.4f, 70.f + level * 7.f, player);
+            const DigTuning& T = digTuning();
+            explodeAt(at, T.bombRadius, T.bombDepth, T.bombDamage + level * 7.f, player);
             continue;
         }
         i++;
