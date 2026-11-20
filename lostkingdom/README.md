@@ -13,6 +13,22 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.5.0 (entrer dans les bâtiments)
+
+- **On peut entrer dans les bâtiments** : devant la porte d'une maison, d'une maison de pierre, d'une longère, d'une auberge, d'une chapelle, d'une forge, d'une maison de grès du désert ou d'une cabane, le bouton d'action affiche « Entrer : … ». Un fondu, et vous êtes dedans ; la porte au fond de la pièce (« Sortir ») vous ramène dehors, devant le bâtiment.
+- **Des intérieurs meublés**, différents selon le bâtiment :
+  - **maison / longère** : lit, cheminée qui crépite (lumière et feu), table avec tabourets, cruche et bol, étagère de pots, tonneau, tapis, lanterne ;
+  - **auberge** : comptoir, étagère à bouteilles, tonneaux, quatre tables avec leurs tabourets, grande cheminée, lanternes, un lit à louer ;
+  - **chapelle** : bancs en deux rangées, tapis d'allée, autel avec bougies, symbole doré, vitraux colorés ;
+  - **forge** : foyer, enclume, tonneaux de trempe, râtelier, meule ;
+  - murs à colombages (plâtre et poutres) ou en pierre, fenêtres lumineuses, sol en planches ou en dalles ; pas de plafond, pour que la caméra voie la pièce.
+- **Ce qu'on peut y faire** :
+  - **dormir** dans un lit : vie, mana et endurance au maximum, réveil à 7 h, partie sauvegardée ;
+  - **travailler à la forge** : ouvre l'artisanat avec les recettes de forge ;
+  - **un coffre par maison**, à ouvrir une seule fois (enregistré dans la sauvegarde).
+- Ambiance : lumière chaude, son de pièce, musique de village ; le creusement est désactivé à l'intérieur.
+- **Vérification (ordinateur seulement)** : scénario `interior` : la porte d'une maison de Brindlemere est détectée, on entre, on dort (vie au maximum, 7 h), on ressort devant la porte, la forge ouvre l'artisanat, l'auberge a sa salle et son lit (`INTERIOR TEST PASSED`) ; captures regardées. **Limites** : les intérieurs sont des pièces types (pas la forme exacte du modèle extérieur) et ne contiennent pas encore d'habitants ; l'intérieur des maisons reste assez lumineux ; rien n'a été testé sur téléphone.
+
 ### Nouveautés 2.4.0 (sol creusable et bombes, vraie nage, carte agrandie, deux nouvelles régions, bugs corrigés)
 
 - **Creuser le sol** :
