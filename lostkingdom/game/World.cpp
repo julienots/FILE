@@ -1387,6 +1387,15 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             // slopes become rock, altitude snow anywhere
             wRock += smoothstepf(0.22f, 0.4f, slope) * 0.8f;
             wSnow = std::max(wSnow, smoothstepf(85.f, 110.f, y));
+            // 2.4.0 dug ground: bare soil (mud deep down, dirt on the walls and the thrown-up rim), never paving
+            {
+                float dg = digOffset(x, z);
+                if (std::fabs(dg) > 0.12f) {
+                    float k = saturate(std::fabs(dg) * 1.4f);
+                    wRock *= 1.f - 0.85f * k; wSnow *= 1.f - k; wSand *= 1.f - 0.5f * k; wAsh *= 1.f - 0.5f * k;
+                    wDirt += k * 1.2f; wMud += saturate(-dg - 1.2f) * 0.8f;
+                }
+            }
             // shores
             float wl = waterLevel(x, z);
             if (wl > -1e8f && y < wl + 1.6f && y > wl - 3.f) {
