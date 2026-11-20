@@ -14,6 +14,7 @@ void NavGrid::reset(Vec2 origin, float cellSize, u32 width, u32 height) {
     m_width = width;
     m_height = height;
     m_blocked.assign(static_cast<usize>(width) * height, 0);
+    m_links.clear();
 }
 
 void NavGrid::setBlocked(i32 x, i32 y, bool b) {
@@ -93,6 +94,15 @@ bool NavGrid::nearestFree(i32& x, i32& y, i32 radius) const {
     return false;
 }
 
+void NavGrid::addLink(Vec2 a, Vec2 b, bool bidirectional, float cost) {
+    i32 ax, ay, bx, by;
+    if (!cellOf(a, ax, ay) || !cellOf(b, bx, by) || !nearestFree(ax, ay, 3) || !nearestFree(bx, by, 3)) return;
+    const usize ia = static_cast<usize>(ay) * m_width + static_cast<usize>(ax), ib = static_cast<usize>(by) * m_width + static_cast<usize>(bx);
+    const float len = math::length(cellCenter(ax, ay) - cellCenter(bx, by)) / std::max(m_cell, 1e-6f) * std::max(cost, 0.01f);
+    m_links.push_back({ia, ib, len});
+    if (bidirectional) m_links.push_back({ib, ia, len});
+}
+
 bool NavGrid::findPath(Vec2 from, Vec2 to, std::vector<Vec2>& out, bool smooth, i32 snapRadius) const {
     out.clear();
     m_lastExpanded = 0;
@@ -146,6 +156,15 @@ bool NavGrid::findPath(Vec2 from, Vec2 to, std::vector<Vec2>& out, bool smooth, 
                     open.push({cost + heuristic(cx + dx, cy + dy), static_cast<i32>(nb)});
                 }
             }
+        for (const Link& l : m_links) {  // shortcuts leaving this cell
+            if (l.from != cur || closed[l.to]) continue;
+            const float cost = g[cur] + l.cost;
+            if (cost < g[l.to]) {
+                g[l.to] = cost;
+                parent[l.to] = static_cast<i32>(cur);
+                open.push({cost + heuristic(static_cast<i32>(l.to % m_width), static_cast<i32>(l.to / m_width)), static_cast<i32>(l.to)});
+            }
+        }
     }
     if (!found) return false;
     std::vector<Vec2> cells;

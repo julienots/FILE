@@ -1,5 +1,6 @@
 #include "agr/navigation/NavigationPlugin.hpp"
 
+#include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 
 namespace agr {
@@ -21,6 +22,9 @@ void NavigationPlugin::onUnload(Engine& engine) {
 }
 
 void NavigationPlugin::onUpdate(Engine& engine, const FrameTime& time) {
+    if (!m_system->hasMeshSource())  // models' triangles: the same (cached) source as the 3D physics
+        if (auto* physics = engine.service<Physics3DPlugin>())
+            m_system->setMeshSource(physics->world().collisionMeshSource());
     if (time.deltaSeconds <= 0.0) return;  // editing or paused: nothing moves (the editor rebuilds on demand)
     m_system->update(engine.scene(), static_cast<float>(time.deltaSeconds));
 }

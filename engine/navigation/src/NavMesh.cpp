@@ -55,7 +55,7 @@ struct RecastData {
 };
 } // namespace
 
-Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& s) {
+Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& s, const std::vector<NavMeshLink>& links) {
     Stopwatch sw;
     clear();
     if (vertices.empty() || indices.size() < 3) return makeError(Error::Code::InvalidArgument, "no walkable geometry");
@@ -142,6 +142,30 @@ Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>&
     params.cs = cfg.cs;
     params.ch = cfg.ch;
     params.buildBvTree = true;
+    // Off-mesh links: endpoints within the agent radius of the mesh.
+    std::vector<float> linkVerts;
+    std::vector<float> linkRad;
+    std::vector<unsigned short> linkFlags;
+    std::vector<unsigned char> linkAreas, linkDir;
+    std::vector<unsigned int> linkIds;
+    for (usize i = 0; i < links.size(); ++i) {
+        const NavMeshLink& l = links[i];
+        linkVerts.insert(linkVerts.end(), {l.start.x, l.start.y, l.start.z, l.end.x, l.end.y, l.end.z});
+        linkRad.push_back(std::max(s.agentRadius, cfg.cs * 2.0f));
+        linkFlags.push_back(1);
+        linkAreas.push_back(0);
+        linkDir.push_back(l.bidirectional ? DT_OFFMESH_CON_BIDIR : 0);
+        linkIds.push_back(static_cast<unsigned int>(i));
+    }
+    if (!links.empty()) {
+        params.offMeshConVerts = linkVerts.data();
+        params.offMeshConRad = linkRad.data();
+        params.offMeshConFlags = linkFlags.data();
+        params.offMeshConAreas = linkAreas.data();
+        params.offMeshConDir = linkDir.data();
+        params.offMeshConUserID = linkIds.data();
+        params.offMeshConCount = static_cast<int>(links.size());
+    }
     unsigned char* navData = nullptr;
     int navDataSize = 0;
     if (!dtCreateNavMeshData(&params, &navData, &navDataSize)) return makeError(Error::Code::Unknown, "navmesh: Detour data failed");
@@ -161,6 +185,7 @@ Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>&
     m_stats.polygons = static_cast<u32>(r.pmesh->npolys);
     m_stats.vertices = static_cast<u32>(r.pmesh->nverts);
     m_stats.inputTriangles = static_cast<u32>(ntris);
+    m_stats.links = static_cast<u32>(links.size());
     m_stats.buildMs = sw.elapsedMilliseconds();
     return {};
 }

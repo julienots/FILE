@@ -63,6 +63,7 @@ public:
     void setJobSystem(JobSystem* jobs);
     /// Geometry of Mesh / Convex colliders (without a source they are skipped with a warning).
     void setCollisionMeshSource(CollisionMeshSource source);
+    const CollisionMeshSource& collisionMeshSource() const;
 
     void step(Scene& scene, float dt);
     void sync(Scene& scene);

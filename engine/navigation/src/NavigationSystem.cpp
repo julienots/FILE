@@ -110,7 +110,21 @@ void registerNavigationComponents() {
         .field("faceMovement", &NavAgentComponent::faceMovement, {.tooltip = "3D: turns the entity (its +Z axis) toward where it goes"})
         .field("plane", &NavAgentComponent::plane,
                {.tooltip = "Auto: 3D navigation mesh if the scene has one, else the 2D grid",
-                .enumEntries = {{"Auto", 0}, {"Grid2D", 1}, {"Mesh3D", 2}}});
+                .enumEntries = {{"Auto", 0}, {"Grid2D", 1}, {"Mesh3D", 2}}})
+        .field("avoidance", &NavAgentComponent::avoidance, {.tooltip = "Steers around other agents and obstacles (crowds)"})
+        .field("radius", &NavAgentComponent::radius, {.rangeMin = 0.01f, .rangeMax = 20.0f, .speed = 0.01f});
+    reg.add<NavObstacleComponent>("NavObstacle")
+        .category("Navigation")
+        .description("Agents steer around it; with carve, it is also cut out of the navigation (paths go around it).")
+        .field("radius", &NavObstacleComponent::radius, {.rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
+        .field("height", &NavObstacleComponent::height, {.rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
+        .field("carve", &NavObstacleComponent::carve, {.tooltip = "Cut out of the navigation (rebuilt when it moves)"});
+    reg.add<NavLinkComponent>("NavLink")
+        .category("Navigation")
+        .description("Shortcut for paths (jump, ladder, teleporter) from this entity to `end` (relative).")
+        .field("end", &NavLinkComponent::end, {.speed = 0.05f})
+        .field("bidirectional", &NavLinkComponent::bidirectional)
+        .field("cost", &NavLinkComponent::cost, {.tooltip = "Multiplies its length in path costs", .rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.05f});
     reg.add<NavigationSettingsComponent>("NavigationSettings")
         .category("Navigation")
         .description("Build parameters of the 2D grid and the 3D navigation mesh (static colliders and tilemaps).")
@@ -120,7 +134,8 @@ void registerNavigationComponents() {
         .field("agentRadius", &NavigationSettingsComponent::agentRadius, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("agentHeight", &NavigationSettingsComponent::agentHeight, {.rangeMin = 0.1f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("agentMaxClimb", &NavigationSettingsComponent::agentMaxClimb, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
-        .field("agentMaxSlope", &NavigationSettingsComponent::agentMaxSlope, {.rangeMin = 0.0f, .rangeMax = 89.0f, .speed = 0.5f});
+        .field("agentMaxSlope", &NavigationSettingsComponent::agentMaxSlope, {.rangeMin = 0.0f, .rangeMax = 89.0f, .speed = 0.5f})
+        .field("meshRenderersAsSources", &NavigationSettingsComponent::meshRenderersAsSources, {.tooltip = "Static imported models are walkable geometry"});
 }
 
 // ------------------------------------------------------------------ build
@@ -154,8 +169,25 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
         h = mix(h, terrain::heightsHash(t));
         mat(e);
     });
+    reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
+        if (!o.carve || !s.isActiveInHierarchy(e)) return;
+        h = mixf(mixf(h, o.radius), o.height);
+        mat(e);
+    });
+    reg.view<NavLinkComponent>().each([&](ecs::Entity e, NavLinkComponent& l) {
+        if (!s.isActiveInHierarchy(e)) return;
+        h = mix(mixf(mixf(mixf(mixf(h, l.end.x), l.end.y), l.end.z), l.cost), l.bidirectional ? 3 : 5);
+        mat(e);
+    });
     const NavigationSettingsComponent st = settingsOf(s);
+    if (st.meshRenderersAsSources && m_meshSource)
+        reg.view<MeshRendererComponent>().each([&](ecs::Entity e, MeshRendererComponent& mr) {
+            if (mr.model.empty() || !s.isActiveInHierarchy(e) || !staticCollider<RigidBodyComponent>(s, e, BodyType3D::Static)) return;
+            h = mix(h, std::hash<std::string>{}(mr.model) + static_cast<u64>(mr.meshIndex + 2));
+            mat(e);
+        });
     for (float f : {st.gridCellSize, st.agentRadius2D, st.cellSize, st.agentRadius, st.agentHeight, st.agentMaxClimb, st.agentMaxSlope}) h = mixf(h, f);
+    h = mix(h, st.meshRenderersAsSources ? 1 : 2);
     return h;
 }
 
@@ -249,7 +281,22 @@ void NavigationSystem::rebuild(Scene& s) {
         m_grid.reset(lo, cell, w, h);
         for (const Rect2& r : rects) m_grid.blockRect(r.mn, r.mx, st.agentRadius2D);
         for (const Circle2& c : circles) m_grid.blockCircle(c.c, c.r, st.agentRadius2D);
+        reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
+            if (!o.carve || !s.isActiveInHierarchy(e)) return;
+            const Vec3 p = worldPosition(s, e);
+            m_grid.blockCircle({p.x, p.y}, o.radius, st.agentRadius2D);
+        });
     }
+    m_stats.links = 0;
+    std::vector<NavMeshLink> meshLinks;
+    reg.view<NavLinkComponent>().each([&](ecs::Entity e, NavLinkComponent& l) {
+        if (!s.isActiveInHierarchy(e)) return;
+        const Mat4 m = s.worldMatrix(e);
+        const Vec3 a = m.transformPoint({0, 0, 0}), b = m.transformPoint(l.end);
+        if (!m_grid.empty()) m_grid.addLink({a.x, a.y}, {b.x, b.y}, l.bidirectional, l.cost);
+        meshLinks.push_back({a, b, l.bidirectional});
+        ++m_stats.links;
+    });
     m_stats.gridCells = m_grid.width() * m_grid.height();
     m_stats.gridBlocked = m_grid.blockedCount();
 
@@ -270,8 +317,44 @@ void NavigationSystem::rebuild(Scene& s) {
                 addSphere(verts, idx, world * Mat4::trs(c.offset, math::Quat::identity(), Vec3{1.0f}), c.radius,
                           std::max(c.height * 0.5f - c.radius, 0.0f));
                 break;
+            case ColliderShape3D::Mesh:
+            case ColliderShape3D::Convex: {  // the model's triangles (its convex hull walks like its mesh here)
+                std::string model = c.model;
+                i32 index = c.meshIndex;
+                if (const auto* mr = reg.tryGet<MeshRendererComponent>(e)) {
+                    if (model.empty()) model = mr->model;
+                    if (index < 0) index = mr->meshIndex;
+                }
+                if (m_meshSource && !model.empty())
+                    if (auto mesh = m_meshSource(model, std::max(index, 0))) {
+                        const u32 base = static_cast<u32>(verts.size());
+                        for (const Vec3& p : mesh->positions) verts.push_back(world.transformPoint(p));
+                        for (u32 i : mesh->indices) idx.push_back(base + i);
+                    }
+                break;
+            }
         }
         ++m_stats.sourceShapes3D;
+    });
+    if (st.meshRenderersAsSources && m_meshSource)  // static imported models without a collider
+        reg.view<MeshRendererComponent>().each([&](ecs::Entity e, MeshRendererComponent& mr) {
+            if (mr.model.empty() || reg.has<ColliderComponent>(e) || !s.isActiveInHierarchy(e) ||
+                !staticCollider<RigidBodyComponent>(s, e, BodyType3D::Static))
+                return;
+            const Mat4 world = s.worldMatrix(e);
+            for (i32 i = mr.meshIndex >= 0 ? mr.meshIndex : 0; i < (mr.meshIndex >= 0 ? mr.meshIndex + 1 : 64); ++i) {
+                auto mesh = m_meshSource(mr.model, i);
+                if (!mesh) break;
+                const u32 base = static_cast<u32>(verts.size());
+                for (const Vec3& p : mesh->positions) verts.push_back(world.transformPoint(p));
+                for (u32 k : mesh->indices) idx.push_back(base + k);
+            }
+            ++m_stats.sourceShapes3D;
+        });
+    reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
+        if (!o.carve || !s.isActiveInHierarchy(e) || idx.empty()) return;
+        const Vec3 p = worldPosition(s, e);  // a tall box: its top is out of reach, its sides are walls
+        addBox(verts, idx, Mat4::trs(p + Vec3{0, o.height * 0.5f, 0}, math::Quat::identity(), {o.radius * 2.0f, o.height, o.radius * 2.0f}));
     });
     reg.view<TerrainComponent>().each([&](ecs::Entity e, TerrainComponent& t) {
         if (!t.collision || !s.isActiveInHierarchy(e)) return;
@@ -294,7 +377,7 @@ void NavigationSystem::rebuild(Scene& s) {
         bs.agentHeight = st.agentHeight;
         bs.agentMaxClimb = st.agentMaxClimb;
         bs.agentMaxSlope = st.agentMaxSlope;
-        if (Status r = m_mesh.build(verts, idx, bs); !r) {
+        if (Status r = m_mesh.build(verts, idx, bs, meshLinks); !r) {
             m_stats.lastError = r.error().message;
             AGR_LOG_WARN("Navigation", "navigation mesh not built: {}", r.error().message);
         }
@@ -389,41 +472,160 @@ std::vector<Vec3> NavigationSystem::path(ecs::Entity e) const {
 void NavigationSystem::update(Scene& s, float dt) {
     ensureBuilt(s);
     m_stats.agentsMoving = 0;
+    m_stats.avoiding = 0;
+    auto& reg = s.registry();
+    // Every agent and obstacle (moving or not), in the plane of its navigation (XY grid, XZ mesh).
+    struct Body {
+        u64 key;
+        Vec2 p, v;
+        float r;
+        bool use3D, agent, moving;
+    };
+    std::vector<Body> bodies;
+    auto planar = [](Vec3 p, bool use3D) { return use3D ? Vec2{p.x, p.z} : Vec2{p.x, p.y}; };
+    reg.view<NavAgentComponent>().each([&](ecs::Entity e, NavAgentComponent& c) {
+        if (!s.isActiveInHierarchy(e)) return;
+        auto it = m_agents.find(e.packed());
+        const bool use3D = it != m_agents.end() ? it->second.use3D : uses3D(s, e);
+        const bool moving = it != m_agents.end() && it->second.status == NavStatus::Moving;
+        bodies.push_back({e.packed(), planar(worldPosition(s, e), use3D), it != m_agents.end() ? planar(it->second.velocity, use3D) : Vec2{},
+                          std::max(c.radius, 0.01f), use3D, true, moving});
+    });
+    std::unordered_map<u64, Vec3> seenObstacles;
+    reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
+        if (!s.isActiveInHierarchy(e)) return;
+        const Vec3 p = worldPosition(s, e);
+        auto last = m_obstaclePositions.find(e.packed());
+        const Vec3 vel = last != m_obstaclePositions.end() && dt > 0.0f ? (p - last->second) / dt : Vec3{0.0f};
+        seenObstacles[e.packed()] = p;
+        for (bool use3D : {false, true})  // seen by agents of both planes
+            bodies.push_back({e.packed(), planar(p, use3D), planar(vel, use3D), std::max(o.radius, 0.01f), use3D, false, true});
+    });
+    m_obstaclePositions = std::move(seenObstacles);
+
     for (auto it = m_agents.begin(); it != m_agents.end();) {
         const ecs::Entity e{static_cast<u32>(it->first), static_cast<u32>(it->first >> 32)};
-        const auto* comp = s.valid(e) ? s.registry().tryGet<NavAgentComponent>(e) : nullptr;
+        const auto* comp = s.valid(e) ? reg.tryGet<NavAgentComponent>(e) : nullptr;
         if (!comp) {
             it = m_agents.erase(it);
             continue;
         }
         Agent& a = it->second;
         ++it;
-        if (a.status != NavStatus::Moving) continue;
+        if (a.status != NavStatus::Moving) {
+            a.velocity = Vec3{0.0f};
+            continue;
+        }
         ++m_stats.agentsMoving;
-        Vec3 pos = worldPosition(s, e);
-        float step = std::max(comp->speed, 0.0f) * dt;
+        const Vec3 start = worldPosition(s, e);
+        Vec3 pos = start;
+        const float speed = std::max(comp->speed, 0.0f);
+        float step = speed * dt;
         Vec3 heading{0.0f};
-        while (step > 0.0f && a.next < a.corners.size()) {
-            Vec3 target = a.corners[a.next];
-            if (!a.use3D) target.z = pos.z;
-            const Vec3 d = target - pos;
-            const float dist = math::length(d);
-            const bool last = a.next + 1 == a.corners.size();
-            const float travel = dist - (last ? std::max(comp->stoppingDistance, 0.0f) : 0.0f);  // to the corner, or to the stop
-            if (dist > 1e-6f) heading = d / dist;
-            if (travel <= step) {
-                if (travel > 0.0f) pos = pos + heading * travel;
-                step -= std::max(travel, 0.0f);
+        // Neighbors close enough to matter during the next second.
+        const Vec2 me = planar(pos, a.use3D);
+        const float r = std::max(comp->radius, 0.01f);
+        std::vector<const Body*> near;
+        if (comp->avoidance)
+            for (const Body& b : bodies) {
+                if (b.key == e.packed() || b.use3D != a.use3D) continue;
+                if (math::length(b.p - me) < r + b.r + speed * 1.5f + math::length(b.v) * 1.5f) near.push_back(&b);
+            }
+        if (near.empty()) {
+            // Exact path following.
+            while (step > 0.0f && a.next < a.corners.size()) {
+                Vec3 target = a.corners[a.next];
+                if (!a.use3D) target.z = pos.z;
+                const Vec3 d = target - pos;
+                const float dist = math::length(d);
+                const bool last = a.next + 1 == a.corners.size();
+                const float travel = dist - (last ? std::max(comp->stoppingDistance, 0.0f) : 0.0f);  // to the corner, or to the stop
+                if (dist > 1e-6f) heading = d / dist;
+                if (travel <= step) {
+                    if (travel > 0.0f) pos = pos + heading * travel;
+                    step -= std::max(travel, 0.0f);
+                    ++a.next;
+                } else {
+                    pos = pos + heading * step;
+                    step = 0.0f;
+                }
+            }
+        } else {
+            // Avoidance: sampled velocities scored by distance to the preferred one and by the time
+            // to collision with each neighbor (reciprocal: the other agent takes half of the turn).
+            ++m_stats.avoiding;
+            while (a.next < a.corners.size()) {  // corners already reached
+                Vec3 target = a.corners[a.next];
+                if (!a.use3D) target.z = pos.z;
+                const bool last = a.next + 1 == a.corners.size();
+                if (math::length(target - pos) > (last ? std::max(comp->stoppingDistance, 0.01f) : r * 0.6f)) break;
                 ++a.next;
-            } else {
-                pos = pos + heading * step;
-                step = 0.0f;
+            }
+            if (a.next < a.corners.size()) {
+                Vec3 target = a.corners[a.next];
+                if (!a.use3D) target.z = pos.z;
+                const Vec2 toTarget = planar(target, a.use3D) - me;
+                const float dist = math::length(toTarget);
+                const Vec2 pref = dist > 1e-6f ? toTarget / dist * std::min(speed, dist / std::max(dt, 1e-4f)) : Vec2{};
+                const Vec2 current = planar(a.velocity, a.use3D);
+                auto timeToCollision = [&](Vec2 v) {
+                    float best = 1e9f;
+                    for (const Body* b : near) {
+                        const Vec2 rel = b->p - me;
+                        const Vec2 w = b->agent ? v * 2.0f - current - b->v : v - b->v;  // reciprocal for agents
+                        const float R = r + b->r;
+                        const float c = math::dot(rel, rel) - R * R;
+                        if (c < 0.0f) {  // already overlapping: only moving apart is fine
+                            if (math::dot(w, rel) > 0.0f) best = 0.0f;
+                            continue;
+                        }
+                        const float aa = math::dot(w, w), bb = math::dot(w, rel);
+                        const float disc = bb * bb - aa * c;
+                        if (aa < 1e-8f || bb <= 0.0f || disc < 0.0f) continue;
+                        best = std::min(best, (bb - std::sqrt(disc)) / aa);
+                    }
+                    return best;
+                };
+                Vec2 bestV = pref;
+                float bestScore = 1e30f;
+                auto consider = [&](Vec2 v) {
+                    // Stay on walkable ground.
+                    const Vec2 next = me + v * dt;
+                    if (!a.use3D && !m_grid.empty()) {
+                        i32 cx, cy;
+                        if (m_grid.cellOf(next, cx, cy) && m_grid.blocked(cx, cy)) return;
+                    }
+                    const float ttc = timeToCollision(v);
+                    const float score = math::length(v - pref) * 1.0f + math::length(v - current) * 0.25f + (ttc < 3.0f ? 2.0f * speed / std::max(ttc, 0.05f) : 0.0f);
+                    if (score < bestScore) bestScore = score, bestV = v;
+                };
+                consider(pref);
+                consider({0.0f, 0.0f});
+                const float baseAngle = std::atan2(pref.y, pref.x);
+                for (int k = 0; k < 16; ++k) {
+                    const float ang = baseAngle + 6.2831853f * static_cast<float>(k) / 16.0f;
+                    for (float f : {1.0f, 0.5f}) consider(Vec2{std::cos(ang), std::sin(ang)} * speed * f);
+                }
+                const Vec2 moved = me + bestV * dt;
+                if (a.use3D) {
+                    Vec3 p3{moved.x, pos.y, moved.y};
+                    Vec3 onMesh;
+                    if (m_mesh.nearestPoint(p3, onMesh, {r, 2.0f, r})) p3 = onMesh;
+                    pos = p3;
+                } else {
+                    pos = {moved.x, moved.y, pos.z};
+                }
+                if (math::length(bestV) > 1e-4f) heading = a.use3D ? Vec3{bestV.x, 0.0f, bestV.y} / math::length(bestV) : Vec3{bestV.x, bestV.y, 0.0f} / math::length(bestV);
             }
         }
+        a.velocity = dt > 0.0f ? (pos - start) / dt : Vec3{0.0f};
         setWorldPosition(s, e, pos);
         if (comp->faceMovement && a.use3D && (heading.x != 0.0f || heading.z != 0.0f))
-            s.registry().get<TransformComponent>(e).rotation = math::Quat::fromAxisAngle({0, 1, 0}, std::atan2(heading.x, heading.z));
-        if (a.next >= a.corners.size()) a.status = a.complete ? NavStatus::Arrived : NavStatus::Unreachable;
+            reg.get<TransformComponent>(e).rotation = math::Quat::fromAxisAngle({0, 1, 0}, std::atan2(heading.x, heading.z));
+        if (a.next >= a.corners.size()) {
+            a.status = a.complete ? NavStatus::Arrived : NavStatus::Unreachable;
+            a.velocity = Vec3{0.0f};
+        }
     }
 }
 

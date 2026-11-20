@@ -1093,6 +1093,8 @@ void Physics3DWorld::step(Scene& scene, float dt) { m->step(scene, dt); }
 void Physics3DWorld::sync(Scene& scene) { m->sync(scene); }
 void Physics3DWorld::reset() { m->reset(); }
 void Physics3DWorld::setJobSystem(JobSystem* jobs) { m->setJobSystem(jobs); }
+const CollisionMeshSource& Physics3DWorld::collisionMeshSource() const { return m->meshSource; }
+
 void Physics3DWorld::setCollisionMeshSource(CollisionMeshSource source) {
     m->meshSource = std::move(source);
     m->meshWarnings.clear();

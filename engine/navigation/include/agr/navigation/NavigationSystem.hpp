@@ -6,6 +6,7 @@
 #include "agr/navigation/NavGrid.hpp"
 #include "agr/navigation/NavMesh.hpp"
 #include "agr/navigation/NavigationComponents.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
@@ -18,6 +19,8 @@ struct NavigationStats {
     u32 meshPolygons = 0;
     u32 sourceShapes2D = 0, sourceShapes3D = 0;
     u32 agentsMoving = 0;
+    u32 links = 0;        ///< NavLinks in the last build.
+    u32 avoiding = 0;     ///< Agents that steered around a neighbor or obstacle this update.
     u32 builds = 0;
     f64 lastBuildMs = 0.0;
     std::string lastError;  ///< Of the last 3D build (empty when fine or no 3D geometry).
@@ -47,6 +50,9 @@ public:
     const NavGrid& grid() const { return m_grid; }
     const NavMesh& mesh() const { return m_mesh; }
     const NavigationStats& stats() const { return m_stats; }
+    /// Triangles of models (Mesh / Convex colliders, static MeshRenderers): set by the plugin.
+    void setMeshSource(CollisionMeshSource source) { m_meshSource = std::move(source); }
+    bool hasMeshSource() const { return static_cast<bool>(m_meshSource); }
 
 private:
     struct Agent {
@@ -56,6 +62,7 @@ private:
         bool use3D = false;
         bool complete = true;  ///< The path reaches the destination (else: as close as possible).
         math::Vec3 destination{0.0f};
+        math::Vec3 velocity{0.0f};  ///< Last move (avoidance).
     };
     bool uses3D(Scene& scene, ecs::Entity e) const;
     u64 geometryHash(Scene& scene) const;
@@ -68,6 +75,8 @@ private:
     u64 m_sceneGeneration = 0;
     const Scene* m_scene = nullptr;
     u32 m_checkCountdown = 0;
+    CollisionMeshSource m_meshSource;
+    std::unordered_map<u64, math::Vec3> m_obstaclePositions;  ///< Last positions (velocity estimate).
 };
 
 } // namespace agr

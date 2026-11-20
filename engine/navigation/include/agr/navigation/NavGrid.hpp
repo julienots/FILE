@@ -36,6 +36,10 @@ public:
     /// goal. False when no path exists (out is cleared).
     bool findPath(math::Vec2 from, math::Vec2 to, std::vector<math::Vec2>& out, bool smooth = true, i32 snapRadius = 3) const;
     u32 lastExpanded() const { return m_lastExpanded; }
+    /// Shortcut between two cells (jump, door, teleporter): A* may take it at `cost` x its length.
+    void addLink(math::Vec2 a, math::Vec2 b, bool bidirectional, float cost = 1.0f);
+    void clearLinks() { m_links.clear(); }
+    usize linkCount() const { return m_links.size(); }
 
 private:
     bool nearestFree(i32& x, i32& y, i32 radius) const;
@@ -43,6 +47,11 @@ private:
     float m_cell = 1.0f;
     u32 m_width = 0, m_height = 0;
     std::vector<u8> m_blocked;
+    struct Link {
+        usize from, to;
+        float cost;
+    };
+    std::vector<Link> m_links;
     mutable u32 m_lastExpanded = 0;
 };
 

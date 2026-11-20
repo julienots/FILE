@@ -57,12 +57,31 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
 | Construction d'un maillage 100 × 100 m avec 200 obstacles (Recast) | ~51 ms (674 polygones) |
 | Chemin à travers ce maillage (Detour) | ~0,02 ms |
 
+## Foules, obstacles et liens
+
+- **Évitement** (`NavAgent.avoidance`, actif par défaut, `radius`) : chaque agent choisit à chaque
+  image une vitesse parmi 34 essais (la sienne, l'arrêt, 16 directions × 2 vitesses) en pénalisant
+  l'écart avec la vitesse voulue, les changements brusques et le **temps avant collision** avec ses
+  voisins ; entre agents, chacun prend la moitié de l'écart (principe RVO), si bien que deux agents
+  face à face se croisent sans se toucher. Les vitesses qui mènent dans un mur (grille 2D) sont
+  écartées, et en 3D l'agent est ramené sur le maillage. Sans voisin proche, le chemin est suivi
+  exactement. Désactivé, les agents se traversent (`stats().avoiding` compte les agents qui ont dévié).
+- **`NavObstacle`** (`radius`) : un rocher qui roule, une créature sans `NavAgent`, une porte fermée.
+  Les agents le contournent à la volée ; sa vitesse est estimée d'une image à l'autre. Avec
+  `carve`, il est aussi **découpé** de la navigation (le chemin passe autour, comme un collider
+  statique ; reconstruit quand il bouge : pour ce qui bouge rarement).
+- **`NavLink`** : raccourci entre deux points que le sol ne relie pas — un saut au-dessus d'un vide, une
+  échelle, un téléporteur. Il part de l'entité et arrive à `end` (relatif) ; `bidirectional`, `cost`
+  (grille 2D). En 3D ce sont des connexions hors maillage de Detour ; en 2D des arêtes de l'A*. Les
+  agents le traversent en ligne droite.
+- **Modèles importés** : un `MeshRenderer` statique avec un modèle (`NavigationSettings.meshRenderersAsSources`,
+  actif par défaut) et les colliders **Mesh** / **Convex** fournissent leurs vrais triangles (même cache
+  que la physique 3D) : un niveau importé est navigable sans collider ajouté.
+
 ## Limites actuelles
 
-- Les modèles importés (`MeshRenderer` d'un `.glb`) ne sont pas des sources : la navigation suit les
-  **colliders**. Ajouter des colliders statiques (ou un sol) là où l'on veut marcher.
-- Pas d'évitement entre agents (foule) ni d'obstacles dynamiques creusés dans le maillage : les
-  agents se traversent. DetourCrowd est une piste pour plus tard.
+- Évitement local (sans planification de foule globale) : dans un couloir très étroit, deux groupes
+  face à face peuvent ralentir avant de se départager.
 - Un seul maillage 3D (une tuile) : pour de très grands mondes, augmenter `cellSize` ; pas de
   construction par tuiles ni en arrière-plan (la reconstruction bloque l'image le temps du calcul).
 - Une seule taille d'agent par scène (celle des réglages).

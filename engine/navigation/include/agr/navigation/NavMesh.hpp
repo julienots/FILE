@@ -18,10 +18,17 @@ struct NavMeshBuildSettings {
     float agentMaxSlope = 45.0f;  ///< Degrees.
 };
 
+/// Off-mesh connection (jump, ladder, teleporter) between two points near the mesh.
+struct NavMeshLink {
+    math::Vec3 start, end;
+    bool bidirectional = true;
+};
+
 struct NavMeshStats {
     u32 polygons = 0;
     u32 vertices = 0;
     u32 inputTriangles = 0;
+    u32 links = 0;
     f64 buildMs = 0.0;
 };
 
@@ -34,7 +41,8 @@ public:
 
     /// Builds from triangles (indices into `vertices`, counter-clockwise seen from above
     /// for walkable surfaces). Replaces the previous mesh; an error leaves it empty.
-    Status build(const std::vector<math::Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& settings);
+    Status build(const std::vector<math::Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& settings,
+                 const std::vector<NavMeshLink>& links = {});
     void clear();
     bool empty() const;
 

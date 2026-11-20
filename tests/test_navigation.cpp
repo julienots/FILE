@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "agr/navigation/NavigationSystem.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/physics2d/Physics2DComponents.hpp"
 #include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -212,4 +213,155 @@ TEST_CASE("2D agents: grid from tilemaps and static 2D colliders") {
     CHECK((minY < 0.0f || maxY > 8.0f));  // around one end of the column (top-down world: below is open)
 }
 
+
+TEST_CASE("crowds: agents crossing paths avoid each other (2D and 3D); avoidance off goes through") {
+    registerAll();
+    for (bool threeD : {false, true}) {
+        Scene s;
+        if (threeD) box3(s, {0, -0.5f, 0}, {40, 1, 40});
+        else box2(s, {0, 30}, {1, 1});  // far away: gives the 2D grid its area
+        auto spawn = [&](const char* name, Vec3 at) {
+            const auto e = s.createEntity(name);
+            s.registry().get<TransformComponent>(e).position = at;
+            auto& a = s.registry().emplace<NavAgentComponent>(e);
+            a.speed = 3.0f;
+            a.radius = 0.5f;
+            a.plane = threeD ? NavPlane::Mesh3D : NavPlane::Grid2D;
+            return e;
+        };
+        // Head-on: two agents swap places along the same line.
+        const auto a = spawn("A", threeD ? Vec3{-6, 0, 0} : Vec3{-6, 0, 0});
+        const auto b = spawn("B", threeD ? Vec3{6, 0, 0} : Vec3{6, 0, 0});
+        s.updateTransforms();
+        NavigationSystem nav;
+        REQUIRE(nav.navigateTo(s, a, threeD ? Vec3{6, 0, 0} : Vec3{6, 0, 0}));
+        REQUIRE(nav.navigateTo(s, b, threeD ? Vec3{-6, 0, 0} : Vec3{-6, 0, 0}));
+        float closest = 1e9f;
+        bool avoided = false;
+        for (int i = 0; i < 600 && (nav.status(a) == NavStatus::Moving || nav.status(b) == NavStatus::Moving); ++i) {
+            nav.update(s, 1.0f / 60.0f);
+            s.updateTransforms();
+            const Vec3 d = position(s, a) - position(s, b);
+            closest = std::min(closest, threeD ? std::hypot(d.x, d.z) : std::hypot(d.x, d.y));
+            avoided |= nav.stats().avoiding > 0;
+        }
+        CHECK(avoided);
+        CHECK_MESSAGE(closest > 0.85f, closest);  // two radii of 0.5: they barely touch, never cross through
+        CHECK(nav.status(a) == NavStatus::Arrived);
+        CHECK(nav.status(b) == NavStatus::Arrived);
+        CHECK(position(s, a).x == doctest::Approx(6.0f).epsilon(0.05));
+        // Without avoidance: straight through each other.
+        s.registry().get<NavAgentComponent>(a).avoidance = false;
+        s.registry().get<NavAgentComponent>(b).avoidance = false;
+        REQUIRE(nav.navigateTo(s, a, {-6, 0, 0}));
+        REQUIRE(nav.navigateTo(s, b, {6, 0, 0}));
+        closest = 1e9f;
+        for (int i = 0; i < 600 && nav.status(a) == NavStatus::Moving; ++i) {
+            nav.update(s, 1.0f / 60.0f);
+            s.updateTransforms();
+            const Vec3 d = position(s, a) - position(s, b);
+            closest = std::min(closest, threeD ? std::hypot(d.x, d.z) : std::hypot(d.x, d.y));
+        }
+        CHECK(closest < 0.3f);
+    }
+}
+
+TEST_CASE("obstacles: steered around, or carved out of the navigation; links: shortcuts across gaps") {
+    registerAll();
+    Scene s;
+    box3(s, {0, -0.5f, 0}, {40, 1, 40});
+    const auto agent = s.createEntity("Agent");
+    s.registry().get<TransformComponent>(agent).position = {-6, 0, 0};
+    s.registry().emplace<NavAgentComponent>(agent).speed = 3.0f;
+    const auto rock = s.createEntity("Boulder");  // in the way, not carved: avoided on the fly
+    s.registry().get<TransformComponent>(rock).position = {0, 0, 0};
+    s.registry().emplace<NavObstacleComponent>(rock).radius = 1.0f;
+    s.updateTransforms();
+    NavigationSystem nav;
+    REQUIRE(nav.navigateTo(s, agent, {6, 0, 0}));
+    CHECK(nav.path(agent).size() == 1);  // straight path: the obstacle is not in the mesh
+    float closest = 1e9f;
+    for (int i = 0; i < 600 && nav.status(agent) == NavStatus::Moving; ++i) {
+        nav.update(s, 1.0f / 60.0f);
+        s.updateTransforms();
+        const Vec3 p = position(s, agent);
+        closest = std::min(closest, std::hypot(p.x, p.z));
+    }
+    CHECK(nav.status(agent) == NavStatus::Arrived);
+    CHECK_MESSAGE(closest > 1.3f, closest);  // 1.0 + 0.4 radii
+    // Carved: the path itself goes around it.
+    s.registry().get<NavObstacleComponent>(rock).carve = true;
+    nav.rebuild(s);
+    std::vector<Vec3> path;
+    REQUIRE(nav.findPath(s, {-6, 0, 0}, {6, 0, 0}, true, path));
+    CHECK(path.size() > 2);
+
+    // Two floors separated by a gap: unreachable until a link joins them.
+    Scene g;
+    box3(g, {-6, -0.5f, 0}, {8, 1, 8});
+    box3(g, {6, -0.5f, 0}, {8, 1, 8});
+    g.updateTransforms();
+    NavigationSystem nav2;
+    REQUIRE(nav2.findPath(g, {-6, 0, 0}, {6, 0, 0}, true, path));
+    CHECK(math::length(path.back() - Vec3{6, 0, 0}) > 2.0f);  // as close as possible: the edge of the first floor
+    const auto link = g.createEntity("Jump");
+    g.registry().get<TransformComponent>(link).position = {-2.5f, 0, 0};
+    g.registry().emplace<NavLinkComponent>(link).end = {5, 0, 0};  // to x = 2.5
+    g.updateTransforms();
+    nav2.rebuild(g);
+    CHECK(nav2.stats().links == 1);
+    REQUIRE(nav2.findPath(g, {-6, 0, 0}, {6, 0, 0}, true, path));
+    CHECK(math::length(path.back() - Vec3{6, 0, 0}) < 0.3f);
+    bool jumped = false;
+    for (usize i = 0; i + 1 < path.size(); ++i) jumped |= path[i].x < -2.0f && path[i + 1].x > 2.0f;
+    CHECK(jumped);
+
+    // 2D grid link (teleporter) through a closed wall.
+    Scene t;
+    box2(t, {0, 0}, {1, 20});  // a wall from y -10 to 10, cells around it open
+    box2(t, {0, 30}, {1, 1});
+    box2(t, {0, -30}, {1, 1});
+    t.updateTransforms();
+    NavigationSystem nav3;
+    REQUIRE(nav3.findPath(t, {-3, 0, 0}, {3, 0, 0}, false, path));
+    usize detour = path.size();
+    const auto tp = t.createEntity("Portal");
+    t.registry().get<TransformComponent>(tp).position = {-2, 0, 0};
+    t.registry().emplace<NavLinkComponent>(tp).end = {4, 0, 0};
+    t.updateTransforms();
+    nav3.rebuild(t);
+    REQUIRE(nav3.findPath(t, {-3, 0, 0}, {3, 0, 0}, false, path));
+    float longest = 0.0f;
+    for (usize i = 0; i + 1 < path.size(); ++i) longest = std::max(longest, math::length(path[i + 1] - path[i]));
+    CHECK(path.size() <= detour);
+    CHECK(std::abs(path[1].y) < 1.0f);  // straight to the portal, not around the wall
+}
+
+TEST_CASE("static imported models and Mesh colliders are walkable sources") {
+    registerAll();
+    Scene s;
+    const auto floor = s.createEntity("Floor");  // a model with no collider at all
+    auto& mr = s.registry().emplace<MeshRendererComponent>(floor);
+    mr.model = "assets://floor.glb";
+    s.updateTransforms();
+    NavigationSystem nav;
+    nav.ensureBuilt(s);
+    CHECK(nav.mesh().empty());  // no source of triangles yet
+    nav.setMeshSource([](const std::string& model, i32 index) -> std::shared_ptr<const CollisionMesh> {
+        if (model != "assets://floor.glb" || index != 0) return nullptr;
+        auto m = std::make_shared<CollisionMesh>();
+        m->positions = {{-10, 0, -10}, {10, 0, -10}, {10, 0, 10}, {-10, 0, 10}};
+        m->indices = {0, 2, 1, 0, 3, 2};  // counter-clockwise seen from above
+        return m;
+    });
+    nav.rebuild(s);
+    CHECK(nav.stats().meshPolygons > 0);
+    std::vector<Vec3> path;
+    CHECK(nav.findPath(s, {-5, 0, -5}, {5, 0, 5}, true, path));
+    // Turned off in the settings: not a source any more.
+    const auto settings = s.createEntity("Navigation");
+    s.registry().emplace<NavigationSettingsComponent>(settings).meshRenderersAsSources = false;
+    nav.rebuild(s);
+    CHECK(nav.mesh().empty());
+}
 }

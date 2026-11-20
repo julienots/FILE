@@ -17,6 +17,28 @@ struct NavAgentComponent {
     float stoppingDistance = 0.05f; ///< Arrived when this close to the destination.
     bool faceMovement = true;       ///< Turns the entity toward where it goes (yaw in 3D, flipX-free in 2D: rotation only in 3D).
     NavPlane plane = NavPlane::Auto;
+    /// Steers around the other agents and the NavObstacles (crowds): each agent takes half of
+    /// the avoidance, like RVO. Off: walks its path exactly (agents go through each other).
+    bool avoidance = true;
+    float radius = 0.4f;            ///< Size used by the avoidance.
+};
+
+/// Something the agents steer around: a rolling boulder, a creature without NavAgent, a closed
+/// door. With `carve`, it is also cut out of the navigation itself (paths go around it; the
+/// navigation is rebuilt when it moves: for objects that move seldom).
+struct NavObstacleComponent {
+    float radius = 0.5f;
+    float height = 2.0f;            ///< 3D carving: height of the cut cylinder.
+    bool carve = false;
+};
+
+/// Shortcut that paths may take between two places not joined by walkable ground: a jump down, a
+/// ladder, a gap to leap, a teleporter. It starts at the entity and ends at `end` (relative to it).
+/// Agents cross it in a straight line. One way unless `bidirectional`.
+struct NavLinkComponent {
+    math::Vec3 end{2.0f, 0.0f, 0.0f};
+    bool bidirectional = true;
+    float cost = 1.0f;              ///< Multiplies its length in the path cost (2D grid).
 };
 
 /// Scene-wide build parameters (first active one). Without it, defaults are used.
@@ -30,6 +52,9 @@ struct NavigationSettingsComponent {
     float agentHeight = 1.8f;
     float agentMaxClimb = 0.4f;
     float agentMaxSlope = 45.0f;   ///< Degrees.
+    /// Static imported models (MeshRenderer with a model, no moving body) are walkable geometry
+    /// too, like static colliders.
+    bool meshRenderersAsSources = true;
 };
 
 void registerNavigationComponents();
