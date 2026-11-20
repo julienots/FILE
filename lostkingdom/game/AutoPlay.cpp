@@ -1626,6 +1626,21 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "newlands") {
+        // 2.4.0 the Valdor Steppes and the Emerald Jungle (pictures)
+        static const char* places[] = {"valdor", "pierres_levees", "emeraude", "temple_jaguar", "xochi"};
+        static const float offs[][2] = {{40, 30}, {60, -40}, {-30, 50}, {0, 70}, {50, 40}};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
+        for (int i = 0; i < 5; i++) {
+            s.push_back({4.f, [i](Game& g) { const Poi* p = g.world.poiById(places[i]); if (!p) { AGR_LOG("NEWLANDS missing %s", places[i]); return; }
+                teleport(g, p->pos.x + offs[i][0], p->pos.y + offs[i][1], 0.f);
+                vec2 d = p->pos - g.pc().pos.xz(); g.camYaw = std::atan2(-d.x, -d.y); g.camPitch = 0.22f; g.camDist = g.camDistTarget = 12.f;
+                AGR_LOG("NEWLANDS %s region %s", places[i], regionName(g.world.regionId(p->pos.x, p->pos.y))); },
+                [i](Game& g, float) { const Poi* p = g.world.poiById(places[i]); if (p) { vec2 d = p->pos - g.pc().pos.xz(); g.camYaw = std::atan2(-d.x, -d.y); } g.camIdleT = 0; }, "go"});
+            s.push_back({0.1f, [i](Game& g) { g.requestScreenshot(std::string("build/shots/N_") + places[i] + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "dig") {
         // 2.4.0 diggable ground: shovel strikes, a bomb crater, save / load keeps the holes (log + pictures)
         static vec2 spot; static float h0, h1, h2; static int ok[4];
