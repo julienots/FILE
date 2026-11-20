@@ -439,6 +439,9 @@ void ScriptEngine::dispatchUI(Scene& scene, const UIValueChangedEvent& e) {
     if (const auto* t = scene.registry().tryGet<UIToggleComponent>(e.entity)) m->callOn(scene, t->target, t->message, e.entity, true, e.value);
     if (const auto* d = scene.registry().tryGet<UIDropdownComponent>(e.entity)) m->callOn(scene, d->target, d->message, e.entity, true, e.value);
     if (const auto* t = scene.registry().tryGet<UITabsComponent>(e.entity)) m->callOn(scene, t->target, t->message, e.entity, true, e.value);
+    if (const auto* l = scene.registry().tryGet<UIItemListComponent>(e.entity)) m->callOn(scene, l->target, l->message, e.entity, true, e.value);
+    if (const auto* d = scene.registry().tryGet<UIDialogComponent>(e.entity)) m->callOn(scene, d->target, d->message, e.entity, true, e.value);
+    if (const auto* c = scene.registry().tryGet<UIColorPickerComponent>(e.entity)) m->callOn(scene, c->target, c->message, e.entity, true, e.value);
 }
 
 void ScriptEngine::dispatchUI(Scene& scene, const UITextEvent& e) {

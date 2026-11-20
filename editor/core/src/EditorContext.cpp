@@ -62,6 +62,9 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIProgressBar: return "Progress Bar";
         case CreateKind::UIDropdown: return "Dropdown";
         case CreateKind::UITabs: return "Tabs";
+        case CreateKind::UIItemList: return "Item List";
+        case CreateKind::UIDialog: return "Dialog";
+        case CreateKind::UIColorPicker: return "Color Picker";
     }
     return "Entity";
 }
@@ -179,7 +182,8 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
     Scene& s = scene();
     auto& reg = s.registry();
     const bool ui = (kind >= CreateKind::UIPanel && kind <= CreateKind::UIColumn) || kind == CreateKind::UIToggle || kind == CreateKind::UIInputField ||
-                    kind == CreateKind::UIScrollView || kind == CreateKind::UIProgressBar || kind == CreateKind::UIDropdown || kind == CreateKind::UITabs;
+                    kind == CreateKind::UIScrollView || kind == CreateKind::UIProgressBar || kind == CreateKind::UIDropdown || kind == CreateKind::UITabs ||
+                    kind == CreateKind::UIItemList || kind == CreateKind::UIDialog || kind == CreateKind::UIColorPicker;
     if (ui) parent = uiParentFor(parent);
     const ecs::Entity e = s.createEntity(createKindName(kind), parent);
     auto uiRect = [&](math::Vec2 size) -> UIRectComponent& {
@@ -330,6 +334,24 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             uiRect({360, 60});
             reg.emplace<UIDropdownComponent>(e);
             break;
+        case CreateKind::UIItemList: {
+            uiRect({360, 300});
+            reg.emplace<UIItemListComponent>(e);
+            break;
+        }
+        case CreateKind::UIDialog: {
+            uiRect({0, 0});
+            auto& d = reg.emplace<UIDialogComponent>(e);
+            d.title = "Quitter la partie ?";
+            d.text = "La progression non sauvegardée sera perdue.";
+            d.buttons = "Annuler;Quitter";
+            break;
+        }
+        case CreateKind::UIColorPicker: {
+            uiRect({300, 200});
+            reg.emplace<UIColorPickerComponent>(e);
+            break;
+        }
         case CreateKind::UITabs: {
             // Two pages (children) under the tabs, each stretched over the content area.
             uiRect({640, 420});

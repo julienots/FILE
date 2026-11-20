@@ -136,13 +136,43 @@ public:
     float canvasScale(ecs::Entity canvas) const;
 
 private:
+    /// 2D affine transform of the drawing (rotated elements): p' = (a*x + c*y + tx, b*x + d*y + ty).
+    struct Affine {
+        float a = 1, b = 0, c = 0, d = 1, tx = 0, ty = 0;
+        math::Vec2 apply(math::Vec2 p) const { return {a * p.x + c * p.y + tx, b * p.x + d * p.y + ty}; }
+        Affine operator*(const Affine& o) const {
+            return {a * o.a + c * o.b, b * o.a + d * o.b, a * o.c + c * o.d, b * o.c + d * o.d, a * o.tx + c * o.ty + tx, b * o.tx + d * o.ty + ty};
+        }
+        Affine inverse() const {
+            const float det = a * d - b * c;
+            if (std::abs(det) < 1e-12f) return {};
+            const float ia = d / det, ib = -b / det, ic = -c / det, id = a / det;
+            return {ia, ib, ic, id, -(ia * tx + ic * ty), -(ib * tx + id * ty)};
+        }
+        bool identity() const { return a == 1 && b == 0 && c == 0 && d == 1 && tx == 0 && ty == 0; }
+    };
     struct Element {
         ecs::Entity entity;
         math::Vec4 rect;  // pixels
         bool blocks = false;
         bool interactive = false;
         math::Vec4 clip{-1e9f, -1e9f, 2e9f, 2e9f};  // visible part (scroll views), pixels
+        Affine xform;     // rotations of the element and its parents
+        float scale = 1.0f;  // canvas scale times the UIRect scales of the parents
     };
+    struct ListRow {
+        i32 index = 0, depth = 0;
+        std::string label;
+        bool hasChildren = false, folded = false;
+    };
+    static std::vector<ListRow> listRows(const UIItemListComponent& list);
+    math::Vec2 localPoint(const Element& el, math::Vec2 p) const { return el.xform.identity() ? p : el.xform.inverse().apply(p); }
+    void clickList(Scene& scene, ecs::Entity e, math::Vec2 position);
+    void setPickerValue(Scene& scene, ecs::Entity e, math::Vec2 position, i32 zone);
+    i32 pickerZone(const Element& el, math::Vec2 local) const;
+    bool dialogPointer(Scene& scene, const UIPointer& p, bool wasDown);
+    void layoutDialog(Scene& scene, u32 width, u32 height);
+    void emitGradient(OverlayDrawList& out, math::Vec2 mn, math::Vec2 mx, const math::Vec4 colors[4]) const;
     struct ScrollInfo {
         math::Vec4 view;
         math::Vec2 content;  // pixels
@@ -179,7 +209,7 @@ private:
         i64 modified = 0;
     };
 
-    void layoutChildren(Scene& scene, ecs::Entity parent, math::Vec4 parentRect, float scale, CanvasPass& pass, math::Vec4 clip);
+    void layoutChildren(Scene& scene, ecs::Entity parent, math::Vec4 parentRect, float scale, CanvasPass& pass, math::Vec4 clip, const Affine& xform);
     void emit(OverlayDrawList& out, math::Vec2 min, math::Vec2 max, math::Vec4 uv, u32 color, rhi::TextureHandle texture) const;
     void clickToggle(Scene& scene, ecs::Entity e);
     void activate(Scene& scene, ecs::Entity e);  ///< click / toggle / focus, as a pointer release would
@@ -234,6 +264,22 @@ private:
         math::Vec4 color;
     };
     std::vector<OverlayText> m_overlayTexts;  // popup and tooltip texts, drawn last
+    Affine m_xform;  // transform of the element being drawn
+    std::unordered_map<u64, i32> m_pickerZone;  // pointer -> color picker part pressed (0 square, 1 hue, 2 alpha)
+    struct ListClick {
+        ecs::Entity entity;
+        i32 row = -1;
+        f64 time = -10.0;
+    } m_lastListClick;
+    Stopwatch m_uiClock;
+    ecs::Entity m_dialog;  // open modal dialog (topmost)
+    math::Vec4 m_dialogRect{}, m_dialogScreen{};
+    std::vector<math::Vec4> m_dialogButtons;
+    float m_dialogScale = 1.0f;
+    const UITheme* m_dialogTheme = nullptr;
+    std::unordered_map<u64, i32> m_dialogPress;
+    i32 m_dialogHover = -1;
+    std::vector<OverlayText> m_dialogTexts;
     std::unordered_map<std::string, ThemeEntry> m_themes;
     VirtualFileSystem& m_vfs;
     UIStats m_stats;

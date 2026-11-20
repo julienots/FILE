@@ -41,6 +41,10 @@ struct UIRectComponent {
     math::Vec2 pivot{0.5f, 0.5f};  ///< Point of the element placed at the anchor (0..1).
     math::Vec2 position{0.0f, 0.0f};
     math::Vec2 size{200.0f, 60.0f};
+    /// Scale around the pivot (children too: they are laid out in the scaled rectangle) and rotation
+    /// (radians, around the pivot; drawing and pointer hits follow it).
+    math::Vec2 scale{1.0f, 1.0f};
+    float rotation = 0.0f;
     /// Computed each frame: x, y, width, height in screen pixels (not saved).
     math::Vec4 screenRect{0.0f, 0.0f, 0.0f, 0.0f};
 };
@@ -130,6 +134,7 @@ struct UIInputFieldComponent {
     u32 maxLength = 64;
     bool numeric = false;   ///< Digits, '-' and '.' only.
     bool password = false;  ///< Shown as '*'.
+    bool multiline = false; ///< Enter starts a new line (no submit); set the UIText to wrap, top aligned.
     bool interactable = true;
     math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
     math::Vec4 placeholderColor{1.0f, 1.0f, 1.0f, 0.4f};
@@ -213,6 +218,59 @@ struct UITabsComponent {
 struct UITooltipComponent {
     std::string text = "Tooltip";
     float delay = 0.6f;
+};
+
+/// List of items (Godot's ItemList and Tree): one row per item of `items` (';'-separated). With
+/// `tree`, leading '>' give the depth ("Fruits;>Apple;>Pear;Vegetables;>Leek") and a click on a
+/// row's arrow folds / unfolds it. Wheel or drag scrolls it. A click selects a row
+/// (onValueChanged(index), index in `items`); a double click activates it (onSubmit(label)).
+struct UIItemListComponent {
+    std::string items = "Item 1;Item 2;Item 3";
+    i32 selected = -1;
+    bool tree = false;
+    std::string collapsed;           ///< Tree: indices of the folded items, comma-separated.
+    float itemHeight = 48.0f;
+    float scroll = 0.0f;             ///< Canvas units.
+    bool interactable = true;
+    std::string font = "assets://fonts/Inter-Regular.ttf";
+    float fontSize = 26.0f;
+    math::Vec4 backgroundColor{0.11f, 0.12f, 0.15f, 0.95f};
+    math::Vec4 selectedColor{0.98f, 0.55f, 0.16f, 1.0f};
+    math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Modal dialog box: while `open`, a dimmed layer covers the screen and blocks the rest of the
+/// UI, and a centered panel shows `title`, `text` and its `buttons` (';'-separated). A button
+/// closes it (open = false, result = its index): onValueChanged(index), target:message(index).
+struct UIDialogComponent {
+    bool open = false;
+    std::string title = "Titre";
+    std::string text = "Message";
+    std::string buttons = "OK";
+    math::Vec2 size{640.0f, 320.0f};  ///< Canvas units.
+    i32 result = -1;                  ///< Index of the last button pressed.
+    std::string font = "assets://fonts/Inter-Regular.ttf";
+    float fontSize = 28.0f;
+    math::Vec4 panelColor{0.11f, 0.12f, 0.15f, 1.0f};
+    math::Vec4 dimColor{0.0f, 0.0f, 0.0f, 0.55f};
+    math::Vec4 buttonColor{0.98f, 0.55f, 0.16f, 1.0f};
+    math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Color picker: a saturation / brightness square, a hue bar and an alpha bar (with `alpha`).
+/// Pressing or dragging in them changes `color` (onValueChanged with the alpha).
+struct UIColorPickerComponent {
+    math::Vec4 color{1.0f, 0.5f, 0.2f, 1.0f};
+    bool alpha = true;
+    bool interactable = true;
+    ecs::Entity target;
+    std::string message;
+    math::Vec3 hsv{0.0f, 0.0f, 0.0f};    ///< Internal: hue kept when the color is gray.
+    math::Vec4 hsvOf{-1.0f, 0.0f, 0.0f, 0.0f};  ///< Internal: the color `hsv` was computed from.
 };
 
 /// Registers the reflection data (idempotent).

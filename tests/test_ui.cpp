@@ -698,4 +698,153 @@ TEST_CASE("themes recolor the controls of a canvas") {
     CHECK(f.ui.theme("assets://none.agrtheme") == nullptr);
 }
 
+
+TEST_CASE("item lists and trees: rows, selection, double click, folding, scrolling") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto e = f.element("List", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {300, 200});
+    auto& l = f.scene.registry().emplace<UIItemListComponent>(e);
+    l.items = "Fruits;>Apple;>Pear;>>Williams;Vegetables;>Leek;Cereals;Nuts;Rice";
+    l.tree = true;
+    l.itemHeight = 40;
+    f.ui.layout(f.scene, 800, 600);
+    // Click on "Apple" (row 1): selects item 1.
+    f.pointers({{0, {250, 160}, true}});
+    f.pointers({{0, {250, 160}, false}});
+    CHECK(l.selected == 1);
+    auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].type == UIEventType::ValueChanged);
+    CHECK(ev[0].value == doctest::Approx(1.0f));
+    // Double click: activates it.
+    f.pointers({{0, {250, 160}, true}});
+    f.pointers({{0, {250, 160}, false}});
+    ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].type == UIEventType::Submit);
+    CHECK(ev[0].text == "Apple");
+    // The arrow of "Fruits" folds it: Vegetables moves up to row 1.
+    f.pointers({{0, {110, 120}, true}});
+    f.pointers({{0, {110, 120}, false}});
+    CHECK(l.collapsed == "0");
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {250, 160}, true}});
+    f.pointers({{0, {250, 160}, false}});
+    CHECK(l.selected == 4);  // Vegetables
+    // Unfold; 9 rows of 40 in 200 px: the wheel scrolls, clamped at the end.
+    f.pointers({{0, {110, 120}, true}});
+    f.pointers({{0, {110, 120}, false}});
+    CHECK(l.collapsed.empty());
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.ui.scrollAt(f.scene, {250, 200}, {0, -10}));
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(l.scroll == doctest::Approx(9 * 40 - 200));
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(f.ui.stats().texts >= 5);  // the rows in view, clipped
+}
+
+TEST_CASE("modal dialogs block the UI behind and report the button") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto behind = f.button("Behind", {400, 300}, {800, 600});
+    const auto dlg = f.scene.createEntity("Quit?", f.canvas);
+    auto& d = f.scene.registry().emplace<UIDialogComponent>(dlg);
+    d.title = "Quitter ?";
+    d.buttons = "Oui;Non";
+    d.size = {400, 200};
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {400, 300}, true}});
+    f.pointers({{0, {400, 300}, false}});
+    auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].entity == behind);  // closed: the button works
+    d.open = true;
+    f.ui.layout(f.scene, 800, 600);
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    f.pointers({{0, {400, 300}, true}});  // the panel's middle: blocked
+    f.pointers({{0, {400, 300}, false}});
+    CHECK(f.ui.takeEvents().empty());
+    // Buttons at the bottom right of the 400 x 200 panel centered in 800 x 600 (x 200..600, y 200..400).
+    f.pointers({{0, {570, 360}, true}});  // "Non"
+    f.pointers({{0, {570, 360}, false}});
+    ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].entity == dlg);
+    CHECK(ev[0].value == doctest::Approx(1.0f));
+    CHECK_FALSE(d.open);
+    CHECK(d.result == 1);
+}
+
+TEST_CASE("color picker, multiline fields, scaled and rotated elements") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto e = f.element("Picker", f.canvas, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {300, 200});
+    auto& c = f.scene.registry().emplace<UIColorPickerComponent>(e);
+    c.color = {1, 0, 0, 1};
+    f.ui.layout(f.scene, 800, 600);
+    // Square 200 x 200: top-right corner = full saturation and value of the hue (red).
+    f.pointers({{0, {199, 1}, true}});
+    f.pointers({{0, {199, 1}, false}});
+    CHECK(c.color.x == doctest::Approx(1.0f).epsilon(0.02));
+    CHECK(c.color.y < 0.02f);
+    // Bottom-left: black.
+    f.pointers({{0, {1, 199}, true}});
+    CHECK(c.color.x < 0.02f);
+    // Drag to the middle-left: gray of value 0.5.
+    f.pointers({{0, {0, 100}, true}});
+    f.pointers({{0, {0, 100}, false}});
+    CHECK(c.color.x == doctest::Approx(0.5f).epsilon(0.02));
+    CHECK(c.color.y == doctest::Approx(0.5f).epsilon(0.02));
+    // Hue bar (x 212..236): a third of the way down = green; the square keeps saturation / value.
+    f.pointers({{0, {199, 1}, true}});
+    f.pointers({{0, {199, 1}, false}});
+    f.pointers({{0, {220, 200.0f / 3.0f}, true}});
+    f.pointers({{0, {220, 200.0f / 3.0f}, false}});
+    CHECK(c.color.y == doctest::Approx(1.0f).epsilon(0.03));
+    CHECK(c.color.x < 0.05f);
+    // Alpha bar (x 248..272): half way = alpha 0.5.
+    f.pointers({{0, {260, 100}, true}});
+    f.pointers({{0, {260, 100}, false}});
+    CHECK(c.color.w == doctest::Approx(0.5f).epsilon(0.02));
+    CHECK_FALSE(f.ui.takeEvents().empty());
+
+    // Multiline field: Enter adds a line instead of submitting.
+    const auto field = f.element("Notes", f.canvas, {0, 0}, {0, 0}, {0, 0}, {400, 0}, {300, 200});
+    auto& in = f.scene.registry().emplace<UIInputFieldComponent>(field);
+    in.multiline = true;
+    f.scene.registry().emplace<UITextComponent>(field);
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {500, 100}, true}});
+    f.pointers({{0, {500, 100}, false}});
+    f.ui.processText(f.scene, "abc", 0, true);
+    f.ui.processText(f.scene, "de", 0, false);
+    CHECK(in.text == "abc\nde");
+    for (const auto& ev : f.ui.takeEvents()) CHECK(ev.type != UIEventType::Submit);
+
+    // Scale around the pivot (children too) and rotation (hits follow it).
+    const auto box = f.button("Box", {400, 450}, {200, 100});
+    auto& r = f.scene.registry().get<UIRectComponent>(box);
+    r.scale = {0.5f, 0.5f};
+    f.ui.layout(f.scene, 800, 600);
+    checkRect(f.rect(box), {350, 425, 100, 50});
+    f.pointers({{0, {460, 450}, true}});  // outside the scaled box
+    f.pointers({{0, {460, 450}, false}});
+    CHECK(f.ui.takeEvents().empty());
+    r.scale = {1, 1};
+    r.rotation = math::radians(90.0f);  // 200 x 100 turned: now 100 wide, 200 tall
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {400, 530}, true}});  // below the unrotated box, inside the rotated one
+    f.pointers({{0, {400, 530}, false}});
+    auto evs = f.ui.takeEvents();
+    REQUIRE(evs.size() == 1);
+    CHECK(evs[0].entity == box);
+    f.pointers({{0, {490, 450}, true}});  // inside the unrotated box, outside the rotated one
+    f.pointers({{0, {490, 450}, false}});
+    CHECK(f.ui.takeEvents().empty());
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK_FALSE(list.vertices.empty());
+}
 }  // TEST_SUITE

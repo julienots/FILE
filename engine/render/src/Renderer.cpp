@@ -1232,6 +1232,14 @@ void OverlayDrawList::quad(math::Vec2 mn, math::Vec2 mx, math::Vec4 uv, u32 colo
     commands.back().indexCount += 6;
 }
 
+void OverlayDrawList::quad4(const math::Vec2 p[4], const math::Vec2 uv[4], const u32 c[4], rhi::TextureHandle texture) {
+    const u32 base = static_cast<u32>(vertices.size());
+    for (int i = 0; i < 4; ++i) vertices.push_back({{p[i].x, p[i].y, 0.0f}, uv[i], c[i]});
+    if (commands.empty() || commands.back().texture != texture) commands.push_back({texture, static_cast<u32>(indices.size()), 0});
+    for (u32 i : {0u, 1u, 2u, 0u, 2u, 3u}) indices.push_back(base + i);
+    commands.back().indexCount += 6;
+}
+
 u32 packColor(math::Vec4 c) {
     auto b = [](float v) { return static_cast<u32>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
     return b(c.x) | (b(c.y) << 8) | (b(c.z) << 16) | (b(c.w) << 24);

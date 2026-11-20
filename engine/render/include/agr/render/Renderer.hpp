@@ -79,6 +79,8 @@ struct OverlayDrawList {
     bool empty() const { return indices.empty(); }
     /// Axis-aligned quad from `min` to `max` (pixels) with texture coordinates `uv` (u0, v0, u1, v1).
     void quad(math::Vec2 min, math::Vec2 max, math::Vec4 uv, u32 color, rhi::TextureHandle texture);
+    /// Any convex quad (corners in order), one color per corner (gradients, rotated elements).
+    void quad4(const math::Vec2 corners[4], const math::Vec2 uvs[4], const u32 colors[4], rhi::TextureHandle texture);
 };
 /// Produces the overlay of a view (implemented by the UI module).
 class OverlaySource {

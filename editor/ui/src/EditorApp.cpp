@@ -757,7 +757,7 @@ void EditorApp::drawMenuBar() {
             {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {"Décalque", CreateKind::Decal}, {"Sonde de réflexion", CreateKind::ReflectionProbe}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
             {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
-            {"UI : Case à cocher", CreateKind::UIToggle}, {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView}, {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown}, {"UI : Onglets", CreateKind::UITabs},
+            {"UI : Case à cocher", CreateKind::UIToggle}, {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView}, {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown}, {"UI : Onglets", CreateKind::UITabs}, {"UI : Liste / arbre", CreateKind::UIItemList}, {"UI : Boîte de dialogue", CreateKind::UIDialog}, {"UI : Sélecteur de couleur", CreateKind::UIColorPicker},
             {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
         for (const auto& [label, kind] : items) {
             if (!label) ImGui::Separator();

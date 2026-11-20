@@ -28,12 +28,22 @@ des modèles et test de bout en bout de l'éditeur.
 | `UISlider` | Curseur horizontal ou **vertical** (`vertical` : bas = minimum) — piste, remplissage, poignée, valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
 | `UILayout` | Range les enfants en **colonne**, **ligne** ou **grille** : espacement, marges, alignement, étirement |
 | `UIToggle` | Case à cocher ; même `group` = boutons radio (un seul coché) ; changement = `onValueChanged(1 ou 0)` et `message(case, valeur)` sur `target` |
-| `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password` ; curseur clignotant |
+| `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password`, **`multiline`** (Entrée ajoute une ligne au lieu de valider ; mettre le `UIText` en haut avec retour à la ligne) ; curseur clignotant |
 | `UIProgressBar` | Barre de progression, de vie ou de chargement : valeur, min / max, sens de remplissage (gauche → droite, droite → gauche, bas → haut, haut → bas), couleurs, marge intérieure |
 | `UIDropdown` | Liste déroulante : options séparées par `;`, `selected` ; un clic ouvre la liste **par-dessus tout** (au-dessus si la place manque en bas), survol surligné, choix = `onValueChanged(index)` et `message(liste, index)` ; un clic ailleurs la ferme sans rien toucher d'autre ; au clavier / à la manette, Entrée passe à l'option suivante |
 | `UITabs` | Onglets : noms séparés par `;`, `current` ; le *i*-ème enfant est la page du *i*-ème onglet, seule la page courante est affichée sous la barre d'onglets ; clic sur un onglet = `onValueChanged(index)` et `message(onglets, index)` |
 | `UITooltip` | Infobulle : texte affiché dans une boîte près du pointeur après `delay` secondes de survol |
+| `UIItemList` | **Liste ou arbre** : éléments séparés par `;` ; avec `tree`, des `>` en tête donnent la profondeur (`Armes;>Épée;>Arc;>>Arc long`) et un clic sur la flèche replie / déplie (`collapsed` garde les repliés, sauvegardé) ; clic = sélection (`onValueChanged(index)`), **double clic** = `onSubmit(libellé)` ; molette ou glisser pour défiler, lignes découpées au bord |
+| `UIDialog` | **Boîte de dialogue modale** : `open` affiche un voile sur tout l'écran (qui bloque le reste de l'UI) et un panneau centré avec `title`, `text` et des `buttons` (`Annuler;Quitter`) ; le panneau grandit pour contenir le texte ; un bouton la ferme (`open = false`, `result` = son index) et appelle `onValueChanged(index)` / `message(dialogue, index)` |
+| `UIColorPicker` | **Sélecteur de couleur** : carré saturation / luminosité, barre de teinte, barre d'opacité (`alpha`) ; appuyer ou glisser change `color` (`onValueChanged(alpha)`) ; la teinte est gardée sur les gris |
 | `UIScrollView` | Zone défilante : ses enfants sont le contenu, déplacés par `scroll` et **découpés** au bord ; molette, glisser du doigt ou de la souris (un glisser annule le clic du bouton touché), barre de défilement ; limites calculées d'après le contenu |
+
+![Arbre, sélecteur de couleur, bouton tourné, boîte de dialogue](images/ui_widgets.png)
+
+**Échelle et rotation** : `UIRect.scale` agrandit ou réduit l'élément autour de son pivot, enfants
+compris (ils sont placés dans le rectangle mis à l'échelle, leurs tailles multipliées par la moyenne
+des deux axes) ; `UIRect.rotation` le tourne autour du pivot, enfants et textes compris, et les clics
+suivent la rotation. Avec `agr.tween(e, {["UIRect.scale"] = {1.2, 1.2}}, 0.15)`, un bouton « rebondit ».
 
 **Navigation au clavier / à la manette** : un canevas avec `keyboardNavigation` permet de passer
 d'un contrôle à l'autre avec les flèches, la croix directionnelle ou le stick (le plus proche dans la
@@ -116,10 +126,11 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Pas encore d'arbres (`Tree`), de listes d'éléments (`ItemList`), de champs multilignes, de boîtes
-  de dialogue ni de sélecteur de couleur ; texte enrichi sans italique, images ni liens ; coins
-  arrondis uniquement par textures 9-slice.
-- Pas de rotation ni d'échelle des éléments.
+- Texte enrichi sans italique, images ni liens ; coins arrondis uniquement par textures 9-slice.
+- Champ multiligne : le curseur reste en fin de texte (pas de déplacement à la souris ni de
+  sélection) ; arbres sans glisser-déposer des éléments ; listes sans sélection multiple.
+- Rotation : les zones défilantes contenues dans un élément tourné découpent selon le rectangle non
+  tourné.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent
   (il est alors vidé et reconstruit, avec un avertissement si cela ne suffit pas).
 - UI Builder : un élément à la fois (pas de sélection multiple déplacée ensemble), pas de guides

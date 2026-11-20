@@ -24,12 +24,14 @@ Vec4 intersect(Vec4 a, Vec4 b) {
 }
 bool interactiveKind(ecs::Registry& reg, ecs::Entity e) {
     return reg.has<UIButtonComponent>(e) || reg.has<UISliderComponent>(e) || reg.has<UIToggleComponent>(e) || reg.has<UIInputFieldComponent>(e) ||
-           reg.has<UIDropdownComponent>(e) || reg.has<UITabsComponent>(e);
+           reg.has<UIDropdownComponent>(e) || reg.has<UITabsComponent>(e) || reg.has<UIItemListComponent>(e) || reg.has<UIColorPickerComponent>(e);
 }
 bool interactableNow(ecs::Registry& reg, ecs::Entity e) {
     if (const auto* b = reg.tryGet<UIButtonComponent>(e)) return b->interactable;
     if (const auto* d = reg.tryGet<UIDropdownComponent>(e)) return d->interactable;
     if (reg.has<UITabsComponent>(e)) return true;
+    if (const auto* l = reg.tryGet<UIItemListComponent>(e)) return l->interactable;
+    if (const auto* c = reg.tryGet<UIColorPickerComponent>(e)) return c->interactable;
     if (const auto* s = reg.tryGet<UISliderComponent>(e)) return s->interactable;
     if (const auto* t = reg.tryGet<UIToggleComponent>(e)) return t->interactable;
     if (const auto* f = reg.tryGet<UIInputFieldComponent>(e)) return f->interactable;
@@ -66,6 +68,31 @@ std::vector<std::string> splitList(const std::string& s) {
     }
     if (!cur.empty() || !out.empty()) out.push_back(cur);
     return out;
+}
+
+Vec4 hsvToRgb(float h, float s, float v, float a) {
+    h = h - std::floor(h);
+    const float i = std::floor(h * 6.0f), f = h * 6.0f - i;
+    const float p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+    switch (static_cast<int>(i) % 6) {
+        case 0: return {v, t, p, a};
+        case 1: return {q, v, p, a};
+        case 2: return {p, v, t, a};
+        case 3: return {p, q, v, a};
+        case 4: return {t, p, v, a};
+        default: return {v, p, q, a};
+    }
+}
+math::Vec3 rgbToHsv(Vec4 c, float keepHue) {
+    const float mx = std::max({c.x, c.y, c.z}), mn = std::min({c.x, c.y, c.z}), d = mx - mn;
+    float h = keepHue;
+    if (d > 1e-6f) {
+        if (mx == c.x) h = (c.y - c.z) / d / 6.0f;
+        else if (mx == c.y) h = ((c.z - c.x) / d + 2.0f) / 6.0f;
+        else h = ((c.x - c.y) / d + 4.0f) / 6.0f;
+        if (h < 0) h += 1.0f;
+    }
+    return {h, mx > 1e-6f ? d / mx : 0.0f, mx};
 }
 
 bool isWhite(Vec4 c) { return c.x == 1.0f && c.y == 1.0f && c.z == 1.0f; }
@@ -253,20 +280,21 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
             const Vec4 in = m_safeArea;
             content = {in.x, in.y, std::max(0.0f, screen.z - in.x - in.z), std::max(0.0f, screen.w - in.y - in.w)};
         }
-        layoutChildren(scene, e, content, pass.scale, pass, screen);
+        layoutChildren(scene, e, content, pass.scale, pass, screen, Affine{});
         m_passes.push_back(std::move(pass));
     });
     std::stable_sort(m_passes.begin(), m_passes.end(), [](const CanvasPass& a, const CanvasPass& b) {
         return a.sortOrder != b.sortOrder ? a.sortOrder < b.sortOrder : a.hierarchyIndex < b.hierarchyIndex;
     });
     layoutPopup();
+    layoutDialog(scene, width, height);
     m_stats.canvases = static_cast<u32>(m_passes.size());
     m_stats.elements = 0;
     for (const CanvasPass& p : m_passes) m_stats.elements += static_cast<u32>(p.elements.size());
     m_stats.layoutMs = sw.elapsedMilliseconds();
 }
 
-void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s, CanvasPass& pass, Vec4 clip) {
+void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s, CanvasPass& pass, Vec4 clip, const Affine& xform) {
     auto& reg = scene.registry();
     std::vector<ecs::Entity> kids;
     scene.forEachChild(parent, [&](ecs::Entity c) {
@@ -335,13 +363,34 @@ void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s
     }
     for (usize i = 0; i < kids.size(); ++i) {
         const ecs::Entity c = kids[i];
-        reg.get<UIRectComponent>(c).screenRect = rects[i];
-        Element el{c, rects[i], false, false, childClip};
+        const auto& rc = reg.get<UIRectComponent>(c);
+        // Scale around the pivot (children laid out in the scaled rectangle, sizes scaled by the mean).
+        Vec4 rect = rects[i];
+        float childScale = s;
+        if (rc.scale.x != 1.0f || rc.scale.y != 1.0f) {
+            const float sx = std::max(rc.scale.x, 0.0f), sy = std::max(rc.scale.y, 0.0f);
+            const float px = rect.x + rect.z * rc.pivot.x, py = rect.y + rect.w * rc.pivot.y;
+            rect = {px - rect.z * sx * rc.pivot.x, py - rect.w * sy * rc.pivot.y, rect.z * sx, rect.w * sy};
+            childScale = s * (sx + sy) * 0.5f;
+        }
+        Affine xf = xform;
+        if (rc.rotation != 0.0f) {  // rotation around the pivot, after the parents'
+            const float px = rect.x + rect.z * rc.pivot.x, py = rect.y + rect.w * rc.pivot.y;
+            const float cs = std::cos(rc.rotation), sn = std::sin(rc.rotation);
+            const Affine r{cs, sn, -sn, cs, px - cs * px + sn * py, py - sn * px - cs * py};
+            xf = xform * r;
+        }
+        reg.get<UIRectComponent>(c).screenRect = rect;
+        Element el{c, rect, false, false, childClip, xf, childScale};
         const auto* img = reg.tryGet<UIImageComponent>(c);
         el.interactive = interactiveKind(reg, c);
         el.blocks = el.interactive || reg.has<UIScrollViewComponent>(c) || (img && img->blocksPointer && img->color.w > 0.0f);
+        if (auto* list = reg.tryGet<UIItemListComponent>(c)) {  // keep the scroll inside the content
+            const float content = static_cast<float>(listRows(*list).size()) * list->itemHeight * childScale;
+            list->scroll = std::clamp(list->scroll, 0.0f, std::max(0.0f, (content - rect.w) / std::max(childScale, 0.01f)));
+        }
         pass.elements.push_back(el);
-        layoutChildren(scene, c, rects[i], s, pass, childClip);
+        layoutChildren(scene, c, rect, childScale, pass, childClip, xf);
     }
 }
 
@@ -349,14 +398,14 @@ void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s
 ecs::Entity UISystem::hitTest(Vec2 p) const {
     for (auto pass = m_passes.rbegin(); pass != m_passes.rend(); ++pass)
         for (auto el = pass->elements.rbegin(); el != pass->elements.rend(); ++el)
-            if (el->blocks && contains(el->rect, p) && contains(el->clip, p)) return el->entity;
+            if (el->blocks && contains(el->rect, localPoint(*el, p)) && contains(el->clip, localPoint(*el, p))) return el->entity;
     return {};
 }
 
 ecs::Entity UISystem::elementAt(Vec2 p) const {
     for (auto pass = m_passes.rbegin(); pass != m_passes.rend(); ++pass)
         for (auto el = pass->elements.rbegin(); el != pass->elements.rend(); ++el)
-            if (el->entity != pass->canvas && contains(el->rect, p)) return el->entity;
+            if (el->entity != pass->canvas && contains(el->rect, localPoint(*el, p))) return el->entity;
     return {};
 }
 
@@ -408,6 +457,10 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
     for (const UIPointer& p : pointers) {
         seen.insert(p.id);
         const bool wasDown = m_pointerDown[p.id];
+        if (dialogPointer(scene, p, wasDown)) {  // a modal dialog takes every pointer
+            m_pointerDown[p.id] = p.down;
+            continue;
+        }
         if (popupPointer(scene, p, wasDown)) {
             m_pointerDown[p.id] = p.down;
             continue;
@@ -447,9 +500,15 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
             if (topInteractive && interactableNow(reg, top)) {
                 m_pressed[p.id] = top;
                 if (reg.has<UISliderComponent>(top)) setSliderValue(scene, top, p.position);
+                if (reg.has<UIColorPickerComponent>(top))
+                    if (const Element* el = elementOf(top)) {
+                        m_pickerZone[p.id] = pickerZone(*el, localPoint(*el, p.position));
+                        setPickerValue(scene, top, p.position, m_pickerZone[p.id]);
+                    }
             }
         } else if (p.down) {
-            const bool slider = pressedIt != m_pressed.end() && reg.has<UISliderComponent>(pressedIt->second);
+            const bool picker = pressedIt != m_pressed.end() && reg.has<UIColorPickerComponent>(pressedIt->second);
+            const bool slider = pressedIt != m_pressed.end() && (reg.has<UISliderComponent>(pressedIt->second) || picker);
             if (!ps.dragging && !ps.scrollView.isNull() && !slider && math::length(p.position - ps.down) > 12.0f) {
                 ps.dragging = true;  // a drag scrolls the view and cancels the press inside it
                 if (pressedIt != m_pressed.end()) {
@@ -458,6 +517,7 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                 }
             }
             if (ps.dragging && reg.valid(ps.scrollView)) scrollBy(scene, ps.scrollView, ps.last - p.position);
+            else if (picker) setPickerValue(scene, pressedIt->second, p.position, m_pickerZone[p.id]);
             else if (slider) setSliderValue(scene, pressedIt->second, p.position);
             ps.last = p.position;
         } else if (!p.down && wasDown) {
@@ -471,7 +531,9 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                         if (el && n > 0 && p.position.y < el->rect.y + tabs->headerHeight * scale)
                             selectOption(scene, pressed, std::clamp(static_cast<i32>((p.position.x - el->rect.x) / std::max(1.0f, el->rect.z) * static_cast<float>(n)), 0,
                                                                     static_cast<i32>(n) - 1));
-                    } else {
+                    } else if (reg.has<UIItemListComponent>(pressed)) {
+                        clickList(scene, pressed, p.position);
+                    } else if (!reg.has<UIColorPickerComponent>(pressed)) {
                         activate(scene, pressed);
                     }
                 }
@@ -645,6 +707,10 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
         if (f->maxLength > 0 && utf8Length(f->text) >= f->maxLength) break;
         f->text += ch;
     }
+    if (enter && f->multiline && (f->maxLength == 0 || utf8Length(f->text) < f->maxLength)) {  // a new line, no submit
+        f->text += '\n';
+        enter = false;
+    }
     if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
     if (enter) {
         m_events.push_back({UIEventType::Submit, m_focusedField, 0.0f, f->text});
@@ -653,15 +719,199 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
     m_caretClock.restart();
 }
 
+std::vector<UISystem::ListRow> UISystem::listRows(const UIItemListComponent& list) {
+    std::vector<ListRow> all;
+    const auto items = splitList(list.items);
+    std::vector<i32> folded;
+    if (list.tree) {
+        std::string cur;
+        for (char c : list.collapsed + ",") {
+            if (c == ',') {
+                if (!cur.empty()) folded.push_back(std::atoi(cur.c_str()));
+                cur.clear();
+            } else if (c != ' ') {
+                cur += c;
+            }
+        }
+    }
+    for (usize i = 0; i < items.size(); ++i) {
+        ListRow r;
+        r.index = static_cast<i32>(i);
+        usize skip = 0;
+        if (list.tree)
+            while (skip < items[i].size() && items[i][skip] == '>') ++skip;
+        r.depth = static_cast<i32>(skip);
+        r.label = items[i].substr(skip);
+        r.folded = std::find(folded.begin(), folded.end(), r.index) != folded.end();
+        all.push_back(std::move(r));
+    }
+    for (usize i = 0; i + 1 < all.size(); ++i) all[i].hasChildren = all[i + 1].depth > all[i].depth;
+    std::vector<ListRow> shown;
+    i32 hideDeeperThan = 1 << 30;
+    for (ListRow& r : all) {
+        if (r.depth > hideDeeperThan) continue;
+        hideDeeperThan = r.folded && r.hasChildren ? r.depth : 1 << 30;
+        shown.push_back(std::move(r));
+    }
+    return shown;
+}
+
+void UISystem::clickList(Scene& scene, ecs::Entity e, Vec2 position) {
+    auto* list = scene.registry().tryGet<UIItemListComponent>(e);
+    const Element* el = elementOf(e);
+    if (!list || !el || !list->interactable) return;
+    const Vec2 p = localPoint(*el, position);
+    const float s = std::max(el->scale, 0.01f), rowH = list->itemHeight * s;
+    const auto rows = listRows(*list);
+    const i32 row = static_cast<i32>(std::floor((p.y - el->rect.y + list->scroll * s) / std::max(rowH, 1.0f)));
+    if (row < 0 || row >= static_cast<i32>(rows.size())) return;
+    const ListRow& r = rows[static_cast<usize>(row)];
+    const float indent = 28.0f * s;
+    if (list->tree && r.hasChildren && p.x < el->rect.x + indent * static_cast<float>(r.depth + 1)) {  // the arrow: fold / unfold
+        std::string cur, out;
+        bool removed = false;
+        for (char c : list->collapsed + ",") {
+            if (c == ',') {
+                if (!cur.empty()) {
+                    if (std::atoi(cur.c_str()) == r.index) removed = true;
+                    else out += (out.empty() ? "" : ",") + cur;
+                }
+                cur.clear();
+            } else if (c != ' ') {
+                cur += c;
+            }
+        }
+        if (!removed) out += (out.empty() ? "" : ",") + std::to_string(r.index);
+        list->collapsed = out;
+        return;
+    }
+    const f64 now = m_uiClock.elapsedSeconds();
+    if (list->selected != r.index) {
+        list->selected = r.index;
+        m_events.push_back({UIEventType::ValueChanged, e, static_cast<float>(r.index), {}});
+    }
+    if (m_lastListClick.entity == e && m_lastListClick.row == r.index && now - m_lastListClick.time < 0.4) {
+        m_events.push_back({UIEventType::Submit, e, static_cast<float>(r.index), r.label});
+        m_lastListClick = {};
+    } else {
+        m_lastListClick = {e, r.index, now};
+    }
+}
+
+i32 UISystem::pickerZone(const Element& el, Vec2 local) const {
+    const Vec4 r = el.rect;
+    const float sq = std::min(r.w, r.z * 0.72f);
+    if (local.x < r.x + sq) return 0;
+    const float bar = sq * 0.12f, gap = sq * 0.06f;
+    if (local.x < r.x + sq + gap + bar + gap * 0.5f) return 1;
+    return 2;
+}
+
+void UISystem::setPickerValue(Scene& scene, ecs::Entity e, Vec2 position, i32 zone) {
+    auto* c = scene.registry().tryGet<UIColorPickerComponent>(e);
+    const Element* el = elementOf(e);
+    if (!c || !el || !c->interactable) return;
+    const Vec2 p = localPoint(*el, position);
+    const Vec4 r = el->rect;
+    const float sq = std::max(1.0f, std::min(r.w, r.z * 0.72f));
+    if (c->hsvOf.x != c->color.x || c->hsvOf.y != c->color.y || c->hsvOf.z != c->color.z || c->hsvOf.w != c->color.w)
+        c->hsv = rgbToHsv(c->color, c->hsv.x);
+    const float ty = std::clamp((p.y - r.y) / sq, 0.0f, 1.0f);
+    float alpha = c->color.w;
+    if (zone == 0) {
+        c->hsv.y = std::clamp((p.x - r.x) / sq, 0.0f, 1.0f);
+        c->hsv.z = 1.0f - ty;
+    } else if (zone == 1) {
+        c->hsv.x = std::min(ty, 0.9999f);
+    } else if (c->alpha) {
+        alpha = 1.0f - ty;
+    }
+    const Vec4 next = hsvToRgb(c->hsv.x, c->hsv.y, c->hsv.z, alpha);
+    if (next.x != c->color.x || next.y != c->color.y || next.z != c->color.z || next.w != c->color.w) {
+        c->color = next;
+        m_events.push_back({UIEventType::ValueChanged, e, next.w, {}});
+    }
+    c->hsvOf = c->color;
+}
+
+void UISystem::layoutDialog(Scene& scene, u32 width, u32 height) {
+    m_dialog = {};
+    m_dialogButtons.clear();
+    auto& reg = scene.registry();
+    reg.view<UIDialogComponent>().each([&](ecs::Entity e, UIDialogComponent& d) {
+        if (!d.open || !scene.isActiveInHierarchy(e)) return;
+        if (m_dialog.isNull() || e.index > m_dialog.index) m_dialog = e;  // the last created is in front
+    });
+    if (m_dialog.isNull()) return;
+    const auto& d = reg.get<UIDialogComponent>(m_dialog);
+    m_dialogScale = 1.0f;
+    m_dialogTheme = nullptr;
+    m_dialogScreen = {0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)};
+    for (ecs::Entity p = m_dialog; !p.isNull(); p = scene.parent(p))
+        if (reg.has<UICanvasComponent>(p)) {
+            for (const CanvasPass& pass : m_passes)
+                if (pass.canvas == p) m_dialogScale = pass.scale, m_dialogTheme = pass.theme;
+            break;
+        }
+    const float s = m_dialogScale;
+    const float w = std::min(d.size.x * s, m_dialogScreen.z * 0.95f), h = std::min(d.size.y * s, m_dialogScreen.w * 0.95f);
+    m_dialogRect = {(m_dialogScreen.z - w) * 0.5f, (m_dialogScreen.w - h) * 0.5f, w, h};
+    const auto buttons = splitList(d.buttons);
+    const usize n = std::max<usize>(buttons.size(), 1);
+    const float pad = 24.0f * s, bh = std::min(64.0f * s, h * 0.3f);
+    const float bw = std::min(220.0f * s, (w - pad * static_cast<float>(n + 1)) / static_cast<float>(n));
+    float x = m_dialogRect.x + w - pad - bw * static_cast<float>(buttons.size()) - pad * static_cast<float>(buttons.size() - (buttons.empty() ? 0 : 1));
+    for (usize i = 0; i < buttons.size(); ++i) {
+        m_dialogButtons.push_back({x, m_dialogRect.y + h - pad - bh, bw, bh});
+        x += bw + pad;
+    }
+}
+
+bool UISystem::dialogPointer(Scene& scene, const UIPointer& p, bool wasDown) {
+    if (m_dialog.isNull() || !scene.valid(m_dialog)) return false;
+    m_pointerOverUI = true;
+    i32 button = -1;
+    for (usize i = 0; i < m_dialogButtons.size(); ++i)
+        if (contains(m_dialogButtons[i], p.position)) button = static_cast<i32>(i);
+    if (!p.down) m_dialogHover = button;
+    if (p.down && !wasDown) m_dialogPress[p.id] = button;
+    auto it = m_dialogPress.find(p.id);
+    if (!p.down && wasDown && it != m_dialogPress.end()) {
+        const i32 pressed = it->second;
+        m_dialogPress.erase(it);
+        if (pressed >= 0 && pressed == button) {
+            auto* d = scene.registry().tryGet<UIDialogComponent>(m_dialog);
+            if (d) {
+                d->open = false;
+                d->result = pressed;
+                m_events.push_back({UIEventType::ValueChanged, m_dialog, static_cast<float>(pressed), {}});
+            }
+            const ecs::Entity closed = m_dialog;
+            m_dialog = {};
+            layoutDialog(scene, static_cast<u32>(m_dialogScreen.z), static_cast<u32>(m_dialogScreen.w));  // another dialog under it?
+            (void)closed;
+        }
+    }
+    return true;
+}
+
 ecs::Entity UISystem::scrollViewOf(Scene& scene, ecs::Entity e) const {
     for (ecs::Entity p = e; !p.isNull() && scene.valid(p); p = scene.parent(p)) {
-        if (scene.registry().has<UIScrollViewComponent>(p)) return p;
+        if (scene.registry().has<UIScrollViewComponent>(p) || scene.registry().has<UIItemListComponent>(p)) return p;
         if (scene.registry().has<UICanvasComponent>(p)) break;
     }
     return {};
 }
 
 void UISystem::scrollBy(Scene& scene, ecs::Entity view, Vec2 pixels) {
+    if (auto* list = scene.registry().tryGet<UIItemListComponent>(view)) {
+        if (const Element* el = elementOf(view)) {
+            const float s = std::max(el->scale, 0.01f);
+            const float content = static_cast<float>(listRows(*list).size()) * list->itemHeight * s;
+            list->scroll = std::clamp(list->scroll + pixels.y / s, 0.0f, std::max(0.0f, (content - el->rect.w) / s));
+        }
+        return;
+    }
     auto* sv = scene.registry().tryGet<UIScrollViewComponent>(view);
     auto it = m_scroll.find(view.packed());
     if (!sv || it == m_scroll.end()) return;
@@ -676,6 +926,11 @@ bool UISystem::scrollAt(Scene& scene, Vec2 position, Vec2 wheel) {
     const ecs::Entity hit = hitTest(position);
     const ecs::Entity view = hit.isNull() ? ecs::Entity{} : scrollViewOf(scene, hit);
     if (view.isNull()) return false;
+    if (const auto* list = scene.registry().tryGet<UIItemListComponent>(view)) {
+        const Element* el = elementOf(view);
+        scrollBy(scene, view, {0.0f, -wheel.y * list->itemHeight * (el ? el->scale : 1.0f)});
+        return true;
+    }
     const auto& sv = scene.registry().get<UIScrollViewComponent>(view);
     const float s = m_scroll.count(view.packed()) ? m_scroll[view.packed()].scale : 1.0f;
     // Wheel up (positive) shows what is above: the scroll offset decreases.
@@ -784,6 +1039,9 @@ void UISystem::reset() {
     focusField({});
     m_openDropdown = {};
     m_popupPress.clear();
+    m_dialogPress.clear();
+    m_pickerZone.clear();
+    m_lastListClick = {};
     m_tooltipEntity = {};
     m_tooltipVisible = false;
     m_navFocus = {};
@@ -802,14 +1060,25 @@ void UISystem::emit(OverlayDrawList& out, Vec2 mn, Vec2 mx, Vec4 uv, u32 color, 
     const Vec4 c = m_clip;
     const float x0 = std::max(mn.x, c.x), y0 = std::max(mn.y, c.y), x1 = std::min(mx.x, c.x + c.z), y1 = std::min(mx.y, c.y + c.w);
     if (x1 <= x0 || y1 <= y0) return;
-    if (x0 == mn.x && y0 == mn.y && x1 == mx.x && y1 == mx.y) {
-        out.quad(mn, mx, uv, color, texture);
-        return;
-    }
     const float w = std::max(1e-6f, mx.x - mn.x), h = std::max(1e-6f, mx.y - mn.y);
     const float u0 = uv.x + (uv.z - uv.x) * (x0 - mn.x) / w, u1 = uv.x + (uv.z - uv.x) * (x1 - mn.x) / w;
     const float v0 = uv.y + (uv.w - uv.y) * (y0 - mn.y) / h, v1 = uv.y + (uv.w - uv.y) * (y1 - mn.y) / h;
+    if (!m_xform.identity()) {  // rotated element: clipped in its own frame, then turned
+        const Vec2 p[4] = {m_xform.apply({x0, y0}), m_xform.apply({x1, y0}), m_xform.apply({x1, y1}), m_xform.apply({x0, y1})};
+        const Vec2 t[4] = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
+        const u32 cs[4] = {color, color, color, color};
+        out.quad4(p, t, cs, texture);
+        return;
+    }
     out.quad({x0, y0}, {x1, y1}, {u0, v0, u1, v1}, color, texture);
+}
+
+void UISystem::emitGradient(OverlayDrawList& out, Vec2 mn, Vec2 mx, const Vec4 colors[4]) const {
+    // Corners: top-left, top-right, bottom-right, bottom-left (not clipped: small controls).
+    const Vec2 p[4] = {m_xform.apply(mn), m_xform.apply({mx.x, mn.y}), m_xform.apply(mx), m_xform.apply({mn.x, mx.y})};
+    const Vec2 t[4] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+    const u32 cs[4] = {packColor(colors[0]), packColor(colors[1]), packColor(colors[2]), packColor(colors[3])};
+    out.quad4(p, t, cs, {});
 }
 void UISystem::drawImage(const UIImageComponent& img, Vec4 rect, Vec4 tint, float scale, OverlayDrawList& out) {
     const Vec4 color = mul(img.color, tint);
@@ -941,6 +1210,67 @@ void UISystem::drawElement(Scene& scene, const Element& el, float scale, const U
             quad(x, r.y + h - line, x + tw, r.y + h, active);
         }
     }
+    if (const auto* list = reg.tryGet<UIItemListComponent>(el.entity)) {  // background, selection, tree arrows
+        const Vec4 r = el.rect;
+        quad(r.x, r.y, r.x + r.z, r.y + r.w, th ? th->panel : list->backgroundColor);
+        m_clip = intersect(el.clip, r);  // rows and their texts stay inside
+        const float rowH = list->itemHeight * scale, indent = 28.0f * scale;
+        const auto rows = listRows(*list);
+        const Vec4 accent = th ? th->accent : list->selectedColor;
+        const Vec4 arrow = th ? th->text : list->textColor;
+        for (usize i = 0; i < rows.size(); ++i) {
+            const float y = r.y + static_cast<float>(i) * rowH - list->scroll * scale;
+            if (y + rowH < r.y || y > r.y + r.w) continue;
+            if (rows[i].index == list->selected) quad(r.x, y, r.x + r.z, y + rowH, {accent.x, accent.y, accent.z, accent.w * 0.45f});
+            if (list->tree && rows[i].hasChildren) {  // stepped triangle: right when folded, down when open
+                const float a = std::min(rowH * 0.18f, indent * 0.35f), cx = r.x + indent * (static_cast<float>(rows[i].depth) + 0.5f), cy = y + rowH * 0.5f;
+                for (int k = 0; k < 4; ++k) {
+                    const float t = static_cast<float>(k) / 4.0f, w = a * (1.0f - t);
+                    if (rows[i].folded) quad(cx - a * 0.5f + t * a, cy - w, cx - a * 0.5f + (t + 0.25f) * a, cy + w, arrow);
+                    else quad(cx - w, cy - a * 0.5f + t * a, cx + w, cy - a * 0.5f + (t + 0.25f) * a, arrow);
+                }
+            }
+        }
+    }
+    if (auto* cp = reg.tryGet<UIColorPickerComponent>(el.entity)) {  // square, hue bar, alpha bar, markers
+        if (cp->hsvOf.x != cp->color.x || cp->hsvOf.y != cp->color.y || cp->hsvOf.z != cp->color.z || cp->hsvOf.w != cp->color.w) {
+            cp->hsv = rgbToHsv(cp->color, cp->hsv.x);
+            cp->hsvOf = cp->color;
+        }
+        const Vec4 r = el.rect;
+        const float sq = std::min(r.w, r.z * 0.72f), bar = sq * 0.12f, gap = sq * 0.06f;
+        const Vec4 hue = hsvToRgb(cp->hsv.x, 1, 1, 1);
+        const Vec4 sat[4] = {{1, 1, 1, 1}, hue, hue, {1, 1, 1, 1}};
+        emitGradient(out, {r.x, r.y}, {r.x + sq, r.y + sq}, sat);
+        const Vec4 dark[4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 0, 1}};
+        emitGradient(out, {r.x, r.y}, {r.x + sq, r.y + sq}, dark);
+        const float hx = r.x + sq + gap;
+        for (int k = 0; k < 6; ++k) {
+            const float y0 = r.y + sq * static_cast<float>(k) / 6.0f, y1 = r.y + sq * static_cast<float>(k + 1) / 6.0f;
+            const Vec4 a = hsvToRgb(static_cast<float>(k) / 6.0f, 1, 1, 1), b = hsvToRgb(static_cast<float>(k + 1) / 6.0f, 1, 1, 1);
+            const Vec4 g[4] = {a, a, b, b};
+            emitGradient(out, {hx, y0}, {hx + bar, y1}, g);
+        }
+        const float mark = std::max(2.0f, 3.0f * scale);
+        const Vec4 white{1, 1, 1, 1}, black{0, 0, 0, 1};
+        const float hy = r.y + cp->hsv.x * sq;
+        quad(hx - mark, hy - mark * 0.5f, hx + bar + mark, hy + mark * 0.5f, white);
+        if (cp->alpha) {
+            const float ax = hx + bar + gap;
+            quad(ax, r.y, ax + bar, r.y + sq, {0.5f, 0.5f, 0.5f, 1});
+            for (int k = 0; k < 8; ++k)  // checkerboard under the alpha
+                quad(ax + (k % 2) * bar * 0.5f, r.y + sq * static_cast<float>(k) / 8.0f, ax + (k % 2 + 1) * bar * 0.5f, r.y + sq * static_cast<float>(k + 1) / 8.0f,
+                     {0.8f, 0.8f, 0.8f, 1});
+            const Vec4 opaque{cp->color.x, cp->color.y, cp->color.z, 1}, clear{cp->color.x, cp->color.y, cp->color.z, 0};
+            const Vec4 g[4] = {opaque, opaque, clear, clear};
+            emitGradient(out, {ax, r.y}, {ax + bar, r.y + sq}, g);
+            const float ay = r.y + (1.0f - cp->color.w) * sq;
+            quad(ax - mark, ay - mark * 0.5f, ax + bar + mark, ay + mark * 0.5f, white);
+        }
+        const float mx = r.x + cp->hsv.y * sq, my = r.y + (1.0f - cp->hsv.z) * sq, m = std::max(4.0f, 6.0f * scale);
+        quad(mx - m, my - mark * 0.5f, mx + m, my + mark * 0.5f, cp->hsv.z > 0.5f ? black : white);
+        quad(mx - mark * 0.5f, my - m, mx + mark * 0.5f, my + m, cp->hsv.z > 0.5f ? black : white);
+    }
     if (const auto* sv = reg.tryGet<UIScrollViewComponent>(el.entity); sv && sv->showScrollbar) {
         auto it = m_scroll.find(el.entity.packed());
         if (it != m_scroll.end() && sv->vertical && it->second.content.y > el.rect.w + 1.0f) {
@@ -1006,6 +1336,17 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                         }
                     }
                 }
+                if (const auto* list = reg.tryGet<UIItemListComponent>(el.entity)) {  // visible rows
+                    const float rowH = list->itemHeight * el.scale, indent = 28.0f * el.scale, px = list->fontSize * el.scale;
+                    const auto rows = listRows(*list);
+                    for (usize i = 0; i < rows.size(); ++i) {
+                        const float y = el.rect.y + static_cast<float>(i) * rowH - list->scroll * el.scale;
+                        if (y + rowH < el.rect.y || y > el.rect.y + el.rect.w) continue;
+                        const float x = el.rect.x + 12.0f * el.scale + (list->tree ? indent * static_cast<float>(rows[i].depth + 1) : 0.0f);
+                        if (auto lay = textLayout(fontOf(list->font), rows[i].label, px, std::max(1.0f, el.rect.x + el.rect.z - x), false, UIHAlign::Left))
+                            m_texts.push_back({ei, ci, std::move(*lay), {std::round(x), std::round(y + (rowH - lay->size.y) * 0.5f)}, th ? th->text : list->textColor, {}, px});
+                    }
+                }
                 if (const auto* tb = reg.tryGet<UITabsComponent>(el.entity)) {  // tab names, centered in their tab
                     const auto names = splitList(tb->tabs);
                     const float h = std::min(tb->headerHeight * pass.scale, el.rect.w), tw = names.empty() ? 0.0f : el.rect.z / static_cast<float>(names.size());
@@ -1017,6 +1358,39 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                 }
             }
         }
+        m_dialogTexts.clear();
+        if (!m_dialog.isNull() && reg.valid(m_dialog))
+            if (const auto* d = reg.tryGet<UIDialogComponent>(m_dialog)) {
+                const UITheme* th = m_dialogTheme;
+                const float s = m_dialogScale, pad = 24.0f * s;
+                const std::string& font = th && !th->font.empty() ? th->font : d->font;
+                const Vec4 tc = th ? th->text : d->textColor;
+                auto title = textLayout(font, d->title, d->fontSize * 1.3f * s, m_dialogRect.z - pad * 2.0f, true, UIHAlign::Left);
+                auto body = textLayout(font, d->text, d->fontSize * s, m_dialogRect.z - pad * 2.0f, true, UIHAlign::Left);
+                // The panel grows to fit its texts above the buttons (kept centered on the screen).
+                const float bh = m_dialogButtons.empty() ? 0.0f : m_dialogButtons[0].w;
+                const float needed = pad + (title ? title->size.y + pad * 0.6f : 0.0f) + (body ? body->size.y : 0.0f) + pad + bh + pad;
+                if (needed > m_dialogRect.w) {
+                    const float grow = std::min(needed, m_dialogScreen.w * 0.95f) - m_dialogRect.w;
+                    m_dialogRect.y -= grow * 0.5f;
+                    m_dialogRect.w += grow;
+                    for (Vec4& b : m_dialogButtons) b.y += grow * 0.5f;
+                }
+                const Vec4 r = m_dialogRect;
+                float y = r.y + pad;
+                if (title) {
+                    const float h = title->size.y;
+                    m_dialogTexts.push_back({std::move(*title), {std::round(r.x + pad), std::round(y)}, tc});
+                    y += h + pad * 0.6f;
+                }
+                if (body) m_dialogTexts.push_back({std::move(*body), {std::round(r.x + pad), std::round(y)}, {tc.x, tc.y, tc.z, tc.w * 0.85f}});
+                const auto labels = splitList(d->buttons);
+                for (usize i = 0; i < labels.size() && i < m_dialogButtons.size(); ++i) {
+                    const Vec4 b = m_dialogButtons[i];
+                    if (auto lay = textLayout(font, labels[i], d->fontSize * s, b.z, false, UIHAlign::Center))
+                        m_dialogTexts.push_back({std::move(*lay), {std::round(b.x), std::round(b.y + (b.w - lay->size.y) * 0.5f)}, {0.07f, 0.07f, 0.08f, 1.0f}});
+                }
+            }
         if (m_tooltipVisible && reg.valid(m_tooltipEntity)) {
             if (const auto* tip = reg.tryGet<UITooltipComponent>(m_tooltipEntity)) {
                 float scale = 1.0f;
@@ -1060,18 +1434,33 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
         for (usize ei = 0; ei < pass.elements.size(); ++ei) {
             const Element& el = pass.elements[ei];
             m_clip = el.clip;
-            drawElement(scene, el, pass.scale, pass.theme, out);
-            float caretX = el.rect.x + 4.0f * pass.scale;
+            m_xform = el.xform;
+            drawElement(scene, el, el.scale, pass.theme, out);
+            float caretX = el.rect.x + 4.0f * pass.scale, caretY = -1.0f, caretH = 0.0f;
+            const auto* field = reg.tryGet<UIInputFieldComponent>(el.entity);
             for (; ti < m_texts.size() && m_texts[ti].canvas == ci && m_texts[ti].element == ei; ++ti) {
                 const PendingText& pt = m_texts[ti];
                 drawText(pt);
                 for (const TextGlyph& g : pt.layout.glyphs)
                     if (g.max.x > g.min.x) caretX = std::max(caretX, pt.origin.x + g.max.x + 2.0f);
+                if (field && field->multiline && el.entity == m_focusedField) {  // after the last character, on its line
+                    const float lineH = pt.layout.lines ? pt.layout.size.y / static_cast<float>(pt.layout.lines) : pt.pixelSize;
+                    caretH = lineH * 0.85f;
+                    if (!field->text.empty() && field->text.back() == '\n') {
+                        caretX = pt.origin.x;
+                        caretY = pt.origin.y + pt.layout.size.y;
+                    } else if (!pt.layout.glyphs.empty()) {
+                        const TextGlyph& g = pt.layout.glyphs.back();
+                        caretX = pt.origin.x + g.min.x + g.advance + 1.0f;
+                        caretY = pt.origin.y + std::floor(g.baseline / std::max(lineH, 1.0f)) * lineH;
+                    }
+                }
             }
             if (el.entity == m_focusedField && std::fmod(m_caretClock.elapsedSeconds(), 1.0) < 0.55) {  // blinking caret
-                const auto* f = reg.tryGet<UIInputFieldComponent>(el.entity);
+                const auto* f = field;
                 if (f && f->text.empty()) caretX = el.rect.x + 4.0f * pass.scale;
-                const float h = el.rect.w * 0.6f, y = el.rect.y + (el.rect.w - h) * 0.5f;
+                float h = el.rect.w * 0.6f, y = el.rect.y + (el.rect.w - h) * 0.5f;
+                if (caretY >= 0.0f) h = caretH, y = caretY;
                 emit(out, {caretX, y}, {caretX + std::max(2.0f, 2.0f * pass.scale), y + h}, {0, 0, 1, 1}, packColor(f ? f->textColor : Vec4{1, 1, 1, 1}), {});
             }
             if (m_navVisible && el.entity == m_navFocus) {  // keyboard / gamepad highlight
@@ -1085,6 +1474,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             }
         }
         m_clip = {-1e9f, -1e9f, 2e9f, 2e9f};
+        m_xform = {};
     }
     // Over everything: the open drop-down list, then the tooltip.
     usize oi = 0;
@@ -1114,6 +1504,20 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
              packColor(panel), {});
         drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f});
     }
+    if (!m_dialog.isNull() && reg.valid(m_dialog))  // the modal dialog, over everything
+        if (const auto* d = reg.tryGet<UIDialogComponent>(m_dialog)) {
+            const UITheme* th = m_dialogTheme;
+            const Vec4 sc = m_dialogScreen, r = m_dialogRect;
+            emit(out, {sc.x, sc.y}, {sc.x + sc.z, sc.y + sc.w}, {0, 0, 1, 1}, packColor(d->dimColor), {});
+            emit(out, {r.x, r.y}, {r.x + r.z, r.y + r.w}, {0, 0, 1, 1}, packColor(th ? th->panel : d->panelColor), {});
+            const Vec4 bc = th ? th->accent : d->buttonColor;
+            for (usize i = 0; i < m_dialogButtons.size(); ++i) {
+                const Vec4 b = m_dialogButtons[i];
+                const float k = static_cast<i32>(i) == m_dialogHover ? 1.15f : 1.0f;
+                emit(out, {b.x, b.y}, {b.x + b.z, b.y + b.w}, {0, 0, 1, 1}, packColor({bc.x * k, bc.y * k, bc.z * k, bc.w}), {});
+            }
+            for (OverlayText& ot : m_dialogTexts) drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f});
+        }
     m_stats.quads = static_cast<u32>(out.indices.size() / 6);
     m_stats.texts = static_cast<u32>(m_texts.size());
     m_stats.buildMs = sw.elapsedMilliseconds();
