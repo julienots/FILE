@@ -711,7 +711,8 @@ void World::buildPlan() {
                 for (int tries = 0; tries < 14 && !ok; tries++) {
                     float a = rng.range(0, TAU), d = rng.range(6, p.radius * 0.8f);
                     q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
-                    ok = roadInfluence(q.x, q.y) < 0.2f;
+                    ok = true;   // (the road index isn't built yet here: test the road polylines directly)
+                    for (const Road& rd : roads) { for (size_t k = 0; k + 1 < rd.pts.size() && ok; k++) if (distToSegment(q, rd.pts[k], rd.pts[k + 1]) < rd.width * 0.5f + 6.f) ok = false; if (!ok) break; }
                     for (vec2 o : placed) if (length(o - q) < 8.f) ok = false;
                 }
                 if (!ok) continue;
