@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <functional>
 #include <string_view>
 #include <memory>
@@ -162,6 +163,16 @@ public:
 
     /// Compiles a script without running instances (editor inspector, validation).
     ScriptInfo describe(const std::string& uri);
+    /// Code completion from the live API: names in the table at `path` ("" = globals,
+    /// "agr", "agr.physics2d", "string"...) or, for path ":", the entity methods. Sorted.
+    std::vector<std::string> completions(std::string_view path);
+    /// Syntax check of Lua code without running it: nullopt when it compiles, else the line
+    /// (0 if unknown) and the message.
+    struct SyntaxError {
+        int line = 0;
+        std::string message;
+    };
+    std::optional<SyntaxError> checkSyntax(std::string_view code, const std::string& name = "script");
     /// Runs a chunk in the sandbox (tests, console). Returns the error message on failure.
     Status run(std::string_view code, Scene* scene = nullptr);
     /// The `self` table of an entity's script as a debug string of its fields (tests, inspector).

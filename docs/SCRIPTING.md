@@ -217,6 +217,22 @@ est remis à zéro quand le jeu s'arrête ou change de scène. Tests : suite `sc
 - Les scripts ne tournent qu'en **mode Jeu** ; *Pause* les suspend ; *Arrêter* appelle `onDestroy` puis
   restaure la scène telle qu'avant le jeu.
 
+## Éditeur de scripts intégré
+
+Double-cliquer sur un `.lua` dans les assets (ou « Éditer le script » sur le composant Script, ou
+Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
+
+- coloration (mots-clés, chaînes, nombres, commentaires, `agr` / `self`, fonctions) et numéros de
+  ligne ; **vérification de syntaxe en direct** (ligne en rouge et message dans la barre) ;
+- **autocomplétion** tirée de l'API réellement chargée : `agr.` puis `agr.physics2d.`..., les
+  méthodes d'entité après `:` (`self.entity:setPo` → `setPosition`), les champs `self.` du script, les
+  mots-clés, bibliothèques Lua et mots du fichier ; **Tab** complète (sinon insère 4 espaces),
+  Échap ferme la liste ;
+- indentation automatique après `then`, `do`, `else`, `function(...)`, `{` ;
+- colonne **API** : l'arbre de `agr` et des méthodes d'entité, un clic insère le nom ;
+- **Ctrl+S** enregistre : le jeu recharge le script à chaud ; un fichier modifié par un éditeur externe
+  est relu tant qu'il n'y a pas de modification en cours.
+
 ## Débogueur
 
 *Fenêtre › Débogueur de scripts* ouvre le débogueur Lua intégré :
@@ -257,7 +273,8 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 
 - **Éditeur de logique visuelle** (événements, conditions, actions sans code) : **non réalisé** ; il était
   prévu en phase 6 et reste à faire.
-- Pas d'autocomplétion intégrée (éditeur de texte externe) ; le débogueur n'édite pas le code.
+- Éditeur intégré : pas de recherche / remplacement ni de plusieurs fichiers ouverts en onglets ; la
+  complétion ne connaît pas les types (une variable locale n'est pas suivie jusqu'à sa table).
 - Un script par entité ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche
   rien, `emit` rend 0).

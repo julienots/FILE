@@ -623,4 +623,60 @@ ScriptStats ScriptEngine::stats() const {
     return s;
 }
 
+std::vector<std::string> ScriptEngine::completions(std::string_view path) {
+    lua_State* L = m->L;
+    std::vector<std::string> out;
+    const int top = lua_gettop(L);
+    if (path == ":") {
+        luaL_getmetatable(L, "agr.Entity");
+        lua_getfield(L, -1, "__index");
+    } else {
+        lua_pushglobaltable(L);
+        std::string_view rest = path;
+        while (!rest.empty() && lua_istable(L, -1)) {
+            const usize dot = rest.find('.');
+            const std::string key(rest.substr(0, dot));
+            lua_getfield(L, -1, key.c_str());
+            lua_remove(L, -2);
+            rest = dot == std::string_view::npos ? std::string_view{} : rest.substr(dot + 1);
+        }
+    }
+    if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+            if (lua_type(L, -2) == LUA_TSTRING) {
+                std::string name = lua_tostring(L, -2);
+                if (!name.empty() && name[0] != '_') out.push_back(std::move(name));
+            }
+            lua_pop(L, 1);
+        }
+    }
+    lua_settop(L, top);
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+std::optional<ScriptEngine::SyntaxError> ScriptEngine::checkSyntax(std::string_view code, const std::string& name) {
+    lua_State* L = m->L;
+    const std::string chunk = "=" + name;
+    if (luaL_loadbufferx(L, code.data(), code.size(), chunk.c_str(), "t") == LUA_OK) {
+        lua_pop(L, 1);
+        return std::nullopt;
+    }
+    SyntaxError e;
+    e.message = lua_tostring(L, -1) ? lua_tostring(L, -1) : "syntax error";
+    lua_pop(L, 1);
+    // "name:LINE: message"
+    const std::string prefix = name + ":";
+    if (e.message.rfind(prefix, 0) == 0) {
+        const usize colon = e.message.find(':', prefix.size());
+        if (colon != std::string::npos) {
+            e.line = std::atoi(e.message.substr(prefix.size(), colon - prefix.size()).c_str());
+            e.message = e.message.substr(colon + 1);
+            if (!e.message.empty() && e.message[0] == ' ') e.message.erase(0, 1);
+        }
+    }
+    return e;
+}
+
 } // namespace agr

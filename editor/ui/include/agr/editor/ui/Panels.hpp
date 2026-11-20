@@ -92,6 +92,36 @@ private:
     bool m_openPopup = false;
 };
 
+/// Built-in Lua editor (ScriptEditorPanel.cpp): colors, syntax check, completion from the live API.
+class ScriptEditorPanel {
+public:
+    void draw(EditorShared& s);
+    const std::string& uri() const { return m_uri; }
+    const std::optional<ScriptEngine::SyntaxError>& error() const { return m_error; }
+    /// Replaces the code as if typed (automated tests) and checks it at once.
+    void edit(EditorShared& s, std::string text);
+    bool save(EditorShared& s);
+    struct Token {
+        usize begin, end;
+        ImU32 color;
+    };
+    static std::vector<Token> tokenize(const std::string& text);
+    /// Completion candidates at `cursor` (byte offset); wordStart = start of the word replaced.
+    static std::vector<std::string> suggestions(EditorShared& s, const std::string& text, int cursor, int& wordStart);
+
+private:
+    void open(EditorShared& s, const std::string& uri);
+    void check(EditorShared& s);
+    void drawCode(EditorShared& s, float height);
+    std::string m_uri, m_text, m_saved, m_afterUri, m_clickedSuggestion;
+    std::optional<ScriptEngine::SyntaxError> m_error;
+    bool m_pendingCheck = false, m_askSave = false, m_followCursor = false, m_refocus = false;
+    bool m_hideUntilEdit = false, m_suggestionsDirty = false;
+    f64 m_editTime = 0.0;
+    int m_gotoLine = 0, m_cursorLine = 1, m_cursorCol = 0, m_cursorPos = 0, m_wordStart = 0, m_selected = 0, m_lastLength = -1;
+    std::vector<std::string> m_suggestions;
+};
+
 /// Touch input for the panels: long press = right click, vertical drag = scroll.
 /// Call after ImGui::NewFrame (mobile mode).
 class TouchSupport {

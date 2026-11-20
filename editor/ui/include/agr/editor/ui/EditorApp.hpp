@@ -76,6 +76,7 @@ private:
     TouchSupport m_touch;
     f64 m_lastActivity = 0.0;  // seconds (ImGui time) of the last input: mobile frame-rate saving
     ShaderEditorPanel m_shaderEditor;
+    ScriptEditorPanel m_scriptEditor;
     AssetBrowserPanel m_assets;
     ConsolePanel m_console;
     StatsPanel m_stats;

@@ -594,6 +594,8 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
         ImGui::PushID("scriptTools");
         if (sc.script.size() > 9 && sc.script.compare(sc.script.size() - 9, 9, ".agrlogic") == 0 && ImGui::SmallButton("Éditer la logique visuelle"))
             s.openLogicRequest = sc.script;
+        if (sc.script.size() > 4 && sc.script.compare(sc.script.size() - 4, 4, ".lua") == 0 && ImGui::SmallButton("Éditer le script"))
+            s.openScriptRequest = sc.script;
         const ScriptInfo si = plugin->scripts()->describe(sc.script);
         if (!si.valid) {
             ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kError));

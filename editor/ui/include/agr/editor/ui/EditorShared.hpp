@@ -105,6 +105,10 @@ struct EditorShared {
     std::string assetFolder;       ///< Current folder of the asset browser, relative to assets://
     std::string inspectedAsset;    ///< Asset shown by the inspector when no entity is selected (.agrmat).
     std::string previewMaterial;   ///< Material the preview renders this frame (set by the inspector).
+    // --- script editor
+    bool showScriptEditor = false;
+    std::string openScriptRequest;      ///< .lua to open in the script editor (asset browser, inspector).
+    bool scriptDirty = false;
     // --- shader editor
     bool showShaderEditor = false;
     std::string openShaderRequest;      ///< .agrshader to open in the shader editor (asset browser, inspector).

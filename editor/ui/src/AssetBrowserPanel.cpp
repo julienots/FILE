@@ -321,6 +321,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (isMaterial && s.inspectedAsset == uri) dl->AddRect(p, {p.x + tile, p.y + tile}, palette::kSelect, 4.0f, 2.0f);
                 const bool isShader = !folder && fs::path(name).extension() == kShaderExtension;
                 if (isShader && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderRequest = uri;  // shader editor
+                const bool isLua = !folder && fs::path(name).extension() == ".lua";
+                if (isLua && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) s.openScriptRequest = uri;  // script editor
                 const bool isLogic = !folder && fs::path(name).extension() == ".agrlogic";
                 if (isLogic && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openLogicRequest = uri;  // visual logic editor
                 if (!folder && ImGui::BeginDragDropSource()) {

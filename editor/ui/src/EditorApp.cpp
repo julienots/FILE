@@ -34,6 +34,17 @@
 
 namespace agr::editor {
 
+namespace {
+std::string smokeCoinScript() {
+    return "local Coin = { properties = { spin = 90 } }\n"
+           "function Coin:onUpdate(dt)\n"
+           "    self.entity:rotate(0, self.spin * dt, 0)\n"
+           "end\n"
+           "return Coin\n";
+}
+} // namespace
+
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -531,6 +542,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
         ImGui::DockBuilderDockWindow("Logique visuelle", center);
         ImGui::DockBuilderDockWindow("Documentation", center);
         ImGui::DockBuilderDockWindow("Shader", center);
+        ImGui::DockBuilderDockWindow("Script", center);
         ImGui::DockBuilderDockWindow("Scène", center);
         ImGui::DockBuilderFinish(dockspace);
         return;
@@ -548,6 +560,7 @@ void EditorApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow("Machine à états", bottom);
     ImGui::DockBuilderDockWindow("Mixeur audio", bottom);
     ImGui::DockBuilderDockWindow("Shader", center);
+    ImGui::DockBuilderDockWindow("Script", center);
     ImGui::DockBuilderDockWindow("Logique visuelle", center);
     ImGui::DockBuilderDockWindow("Documentation", center);
     ImGui::DockBuilderDockWindow("Scène", center);
@@ -582,6 +595,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_inspector.draw(*m_shared, m_materialPreview);
     m_shared->shaderPreviewMaterial.clear();  // the shader editor sets it again while it is visible
     m_shaderEditor.draw(*m_shared, m_shaderPreview);
+    m_scriptEditor.draw(*m_shared);
     m_assets.draw(*m_shared);
     m_console.draw(*m_shared);
     m_stats.draw(*m_shared, time);
@@ -761,6 +775,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Entrées (actions)", nullptr, &m_shared->showInput);
         ImGui::MenuItem("Localisation (traductions)", nullptr, &m_shared->showLocalization);
         ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
+        ImGui::MenuItem("Éditeur de scripts", nullptr, &m_shared->showScriptEditor);
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
@@ -1407,8 +1422,10 @@ void EditorApp::smokeTest(const FrameTime&) {
             Renderer* renderer = m_shared->renderer();
             check(renderer && renderer->stats().modelsLoading == 0, "glTF models of the showcase loaded");
             check(renderer && renderer->stats().lights >= 2 && renderer->stats().shadowCasters > 10, "point / spot lights and shadow casters");
-            check(renderer && renderer->stats().meshBatches > 0 && renderer->stats().meshBatches < renderer->stats().meshesVisible,
-                  "identical meshes are instanced");
+            // Instancing itself is covered by the GPU tests: the showcase's spheres all have their own
+            // material (roughness / metal ramp), so here batches only must not exceed the meshes drawn.
+            check(renderer && renderer->stats().meshBatches > 0 && renderer->stats().meshBatches <= renderer->stats().meshesVisible,
+                  "meshes are drawn in batches");
             const ModelAsset* rock = m_shared->models() ? m_shared->models()->load("assets://3d/rock.glb") : nullptr;
             check(rock && rock->state == AssetState::Ready, "model loads through the editor (drag and drop path)");
             if (rock && rock->state == AssetState::Ready) {
@@ -1622,7 +1639,44 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(!m_shared->shaderDirty && m_shaderEditor.status().usable, "revert restores the compiling shader");
             break;
         }
-        case 214: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader.png").string()); break;
+        case 212: {  // script editor: opened like a double click in the asset browser
+            check(static_cast<bool>(m_engine->vfs().writeText("assets://scripts/smoke_coin.lua", smokeCoinScript())), "script written");
+            m_shared->openScriptRequest = "assets://scripts/smoke_coin.lua";
+            break;
+        }
+        case 213: {
+            check(m_shared->showScriptEditor && m_scriptEditor.uri() == "assets://scripts/smoke_coin.lua", "the script opens in the script editor");
+            check(!m_scriptEditor.error(), "the script has no syntax error");
+            // Completion from the live API, the entity methods and the file's words.
+            int start = 0;
+            const std::string a = "local p = agr.phy";
+            auto sug = ScriptEditorPanel::suggestions(*m_shared, a, static_cast<int>(a.size()), start);
+            check(std::find(sug.begin(), sug.end(), "physics2d") != sug.end() && start == 14, "agr.phy completes to physics2d");
+            const std::string b = "self.entity:setPo";
+            sug = ScriptEditorPanel::suggestions(*m_shared, b, static_cast<int>(b.size()), start);
+            check(!sug.empty() && sug[0] == "setPosition", "entity methods complete after ':'");
+            const std::string c = "agr.physics2d.ove";
+            sug = ScriptEditorPanel::suggestions(*m_shared, c, static_cast<int>(c.size()), start);
+            check(std::find(sug.begin(), sug.end(), "overlapCircle") != sug.end(), "nested tables complete");
+            const std::string d = "-- agr.phy";
+            check(ScriptEditorPanel::suggestions(*m_shared, d, static_cast<int>(d.size()), start).empty(), "no completion in comments");
+            const auto tokens = ScriptEditorPanel::tokenize("local x = 1 -- c\nprint('s')");
+            check(tokens.size() == 4, "keywords, numbers, comments and strings are colored");
+            // A typo is reported on its line; fixing it clears the error.
+            m_scriptEditor.edit(*m_shared, "local Coin = {}\nfunction Coin:onUpdate(dt)\n    self.x = = 1\nend\nreturn Coin\n");
+            check(m_scriptEditor.error() && m_scriptEditor.error()->line == 3, "syntax error reported on its line");
+            check(m_shared->scriptDirty, "unsaved script changes are tracked");
+            m_scriptEditor.edit(*m_shared, smokeCoinScript() + "-- edited\n");
+            check(!m_scriptEditor.error(), "fixed code checks clean");
+            check(m_scriptEditor.save(*m_shared) && !m_shared->scriptDirty, "script saved");
+            auto saved = m_engine->vfs().readText("assets://scripts/smoke_coin.lua");
+            check(saved && saved.value().find("-- edited") != std::string::npos, "the file has the edit");
+            break;
+        }
+        case 214:
+            ImGui::SetWindowFocus("Shader");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader.png").string());
+            break;
         case 216: {  // visual logic: a new graph, nodes linked, saved, attached to a cube, run in play mode
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_shader.png"), "shader editor screenshot written");
             check(static_cast<bool>(m_shaderPreview.texture(*m_shared)), "shader preview sphere rendered");
