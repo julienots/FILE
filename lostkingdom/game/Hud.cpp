@@ -617,6 +617,7 @@ void Game::drawHud(float dt) {
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
     drawPinsHud();
+    drawWorldEventHud();
     drawSpeedometer();
     drawTutorial(dt);
     // hints

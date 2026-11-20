@@ -1,4 +1,6 @@
 #include "Props.h"
+#include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include "../engine/core/Platform.h"
 
@@ -1463,6 +1465,33 @@ const char* structureModelName(int kind) {
     }
 }
 
+// 2.3.6 vertex-clustering decimation: snap every vertex to a grid cell, keep one representative per cell, drop the
+// triangles that collapse. Cheap, robust, and fine for a building seen from 30 m and more.
+static void clusterDecimate(const std::vector<Vertex>& V, const std::vector<uint32_t>& I, vec3 bmin, vec3 bmax, int cells,
+                            std::vector<Vertex>& outV, std::vector<uint32_t>& outI) {
+    vec3 ext = vmax(bmax - bmin, vec3(1e-3f));
+    float cs = std::max(ext.x, std::max(ext.y, ext.z)) / cells;
+    std::unordered_map<uint64_t, uint32_t> cellOf;
+    std::vector<uint32_t> remap(V.size());
+    outV.clear(); outI.clear();
+    for (size_t i = 0; i < V.size(); i++) {
+        int cx = (int)((V[i].px - bmin.x) / cs), cy = (int)((V[i].py - bmin.y) / cs), cz = (int)((V[i].pz - bmin.z) / cs);
+        uint64_t key = ((uint64_t)(uint32_t)cx << 42) ^ ((uint64_t)(uint32_t)cy << 21) ^ (uint64_t)(uint32_t)cz;
+        auto it = cellOf.find(key);
+        if (it == cellOf.end()) { cellOf[key] = (uint32_t)outV.size(); remap[i] = (uint32_t)outV.size(); outV.push_back(V[i]); }
+        else remap[i] = it->second;
+    }
+    std::unordered_set<uint64_t> seen;
+    for (size_t t = 0; t + 2 < I.size(); t += 3) {
+        uint32_t a = remap[I[t]], b = remap[I[t + 1]], c = remap[I[t + 2]];
+        if (a == b || b == c || a == c) continue;
+        uint32_t lo = std::min(a, std::min(b, c)), hi = std::max(a, std::max(b, c)), mid = a + b + c - lo - hi;
+        uint64_t key = ((uint64_t)lo << 42) ^ ((uint64_t)mid << 21) ^ hi;
+        if (!seen.insert(key).second) continue;
+        outI.push_back(a); outI.push_back(b); outI.push_back(c);
+    }
+}
+
 int loadPropModels() {
     gPropModels.clear();
     for (auto& v : gKindModels) v.clear();
@@ -1478,7 +1507,8 @@ int loadPropModels() {
             if (!m->data.loadLKM(mb) || !platform::readAsset("models/props/" + id + ".jpg", tb) || !m->data.loadTexture(tb)) { AGR_WARN("building model '%s' is invalid, built in code instead", id.c_str()); continue; }
             m->bmin = vec3(1e9f); m->bmax = vec3(-1e9f);
             for (const Vertex& v : m->data.verts) { vec3 p(v.px, v.py, v.pz); m->bmin = vmin(m->bmin, p); m->bmax = vmax(m->bmax, p); }
-            AGR_LOG("building model '%s': %zu triangles, %.1f x %.1f x %.1f m", id.c_str(), m->data.idx.size() / 3, m->bmax.x - m->bmin.x, m->bmax.y - m->bmin.y, m->bmax.z - m->bmin.z);
+            clusterDecimate(m->data.verts, m->data.idx, m->bmin, m->bmax, 28, m->lodVerts, m->lodIdx);
+            AGR_LOG("building model '%s': %zu triangles (far: %zu), %.1f x %.1f x %.1f m", id.c_str(), m->data.idx.size() / 3, m->lodIdx.size() / 3, m->bmax.x - m->bmin.x, m->bmax.y - m->bmin.y, m->bmax.z - m->bmin.z);
             gKindModels[k].push_back((int)gPropModels.size());
             gPropModels.push_back(std::move(m));
         }

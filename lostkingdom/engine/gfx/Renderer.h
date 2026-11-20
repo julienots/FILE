@@ -114,7 +114,7 @@ struct Camera {
     void update(float aspect);
 };
 
-struct RenderStats { int drawCalls = 0, triangles = 0, shadowCasters = 0; double cpuMs = 0; };
+struct RenderStats { int drawCalls = 0, triangles = 0, shadowCasters = 0; double cpuMs = 0; int triKind[8] = {}; };   // triKind: terrain, far, grass, foliage, models, skinned, props, other
 
 class ParticleSystem;
 

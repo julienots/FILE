@@ -64,6 +64,9 @@ struct PropModel {
     vec3 bmin, bmax;
     std::shared_ptr<Mesh> mesh;
     Texture tex;
+    // 2.3.6 far version (vertex clustering, ~20-30 % of the triangles): used beyond ~32 m and for distant shadows
+    std::vector<Vertex> lodVerts; std::vector<uint32_t> lodIdx;
+    std::shared_ptr<Mesh> lodMesh;
 };
 int loadPropModels();                        // main thread, before the chunk workers start; returns the count
 int propModelFor(int kind, int variant);     // -1: no model, the structure is built in code

@@ -308,7 +308,10 @@ void Renderer::drawItem(const DrawItem& d, bool depthPass, bool outlinePass) {
     }
     d.mesh->draw();
     stats.drawCalls++;
-    stats.triangles += d.mesh->indexCount / 3 * std::max(1, d.mesh->instVbo ? d.mesh->instanceCount : 1);
+    int tri = d.mesh->indexCount / 3 * std::max(1, d.mesh->instVbo ? d.mesh->instanceCount : 1);
+    stats.triangles += tri;
+    int k = (f & LIT_TERRAIN) ? 0 : (f & LIT_FAR) ? 1 : (f & LIT_INSTANCED) ? 2 : (f & LIT_WIND) ? 3 : (f & LIT_TEXTURED) && !(f & LIT_SKINNED) ? 4 : (f & LIT_SKINNED) ? 5 : 6;
+    stats.triKind[k] += tri;
 }
 
 void Renderer::shadowPass() {

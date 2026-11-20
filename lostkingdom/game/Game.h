@@ -126,6 +126,8 @@ struct NpcBrain {
     ClipId workClip = C_HAMMER_WORK;
 };
 
+struct WorldEvent { int kind = -1; vec3 pos; float t = 0, fallT = 0; bool active = false; uint32_t chestUid = 0; std::vector<Entity> foes; };   // 2.3.6
+
 struct AnimalBrain { vec3 home; vec3 dest; float timer = 0; bool fleeing = false; int kind = 0; bool tame = false; };
 // 1.9.2 the player's domain
 // 1.13.0 co-op: a character driven by the network (the partner's hero; on the guest, the host's enemies)
@@ -721,6 +723,11 @@ public:
     std::map<std::string, SoundId> sfx;
     void play(const std::string& s, float vol = 1, float pitch = 1);
     std::string variant(const std::string& base);
+    // 2.3.6 random world events (Events.cpp)
+    WorldEvent worldEvent; float eventTimer = 150.f; int eventsDone = 0;
+    bool startWorldEvent(int kind);
+    void updateWorldEvents(float dt);
+    void drawWorldEventHud();
     void play3D(const std::string& s, vec3 p, float vol = 1, float pitch = 1, float range = 32);
     float footstepT = 0;
 

@@ -90,7 +90,7 @@ void Game::contextLost() {
     particles = ParticleSystem();
     meshCache.clear();
     for (auto& kv : importedModels) if (kv.second) { kv.second->mesh.reset(); kv.second->tex = Texture(); }
-    for (int i = 0; PropModel* P = propModel(i); i++) { P->mesh.reset(); P->tex = Texture(); }   // building models: rebuilt on the next draw
+    for (int i = 0; PropModel* P = propModel(i); i++) { P->mesh.reset(); P->lodMesh.reset(); P->tex = Texture(); }   // building models: rebuilt on the next draw
     farTerrain.reset();
     windmillBlades.reset(); chestMesh.reset(); chestOpenMesh.reset(); pickupMesh.reset(); arrowMesh.reset(); boulderMesh.reset(); orbMesh.reset();
     gateMesh.reset(); brazierMesh.reset(); bladeMesh.reset(); spikeMesh.reset(); leverMesh.reset();
@@ -303,7 +303,7 @@ void Game::frame(float dtRaw) {
     ui.endInput();
     input.clearEdges();
     if (!pendingScreenshot.empty() && autoplay) reportProfile();
-    if (!pendingScreenshot.empty()) { AGR_LOG("render stats: %d draw calls, %dk triangles (%s)", renderer.stats.drawCalls, renderer.stats.triangles / 1000, pendingScreenshot.c_str()); platform::requestScreenshot(pendingScreenshot); pendingScreenshot.clear(); }
+    if (!pendingScreenshot.empty()) { { const int* k = renderer.stats.triKind; AGR_LOG("render stats: %d draw calls, %dk triangles (%s) [terrain %dk far %dk grass %dk foliage %dk models %dk skinned %dk props %dk]", renderer.stats.drawCalls, renderer.stats.triangles / 1000, pendingScreenshot.c_str(), k[0] / 1000, k[1] / 1000, k[2] / 1000, k[3] / 1000, k[4] / 1000, k[5] / 1000, k[6] / 1000); } platform::requestScreenshot(pendingScreenshot); pendingScreenshot.clear(); }
 }
 
 void Game::updatePlaying(float dt) {
@@ -317,6 +317,7 @@ void Game::updatePlaying(float dt) {
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
+    updateWorldEvents(dt);   // 2.3.6
     if (!cine.active) updateNightHunters(dt);
     updateBase(dt);
     updateRaces(dt);

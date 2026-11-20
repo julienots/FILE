@@ -218,10 +218,18 @@ void Game::renderWorld(float dt) {
             for (const auto& [mi, xf] : ch.models) {
                 PropModel* P = propModel(mi);
                 if (!P) continue;
+                // 2.3.6 per-building culling (with a margin so shadows from just outside the view still land) and a far LOD
+                vec3 lc = (P->bmin + P->bmax) * 0.5f;
+                vec3 wc = xf.transformPoint(lc);
+                float rad = length(xf.transformPoint(P->bmax) - xf.transformPoint(P->bmin)) * 0.5f;
+                float db = distXZ(wc, focus);
+                if (!cam.frustum.visibleSphere(wc, rad + (db < 40.f ? 10.f : 1.f))) continue;
+                bool far = db > 32.f && !P->lodIdx.empty() && !cine.active;
                 if (!P->mesh || !P->mesh->valid()) { P->mesh = std::make_shared<Mesh>(); P->mesh->upload(P->data.verts, P->data.idx); }
+                if (far && (!P->lodMesh || !P->lodMesh->valid())) { P->lodMesh = std::make_shared<Mesh>(); P->lodMesh->upload(P->lodVerts, P->lodIdx); }
                 if (!P->tex.id) P->tex.create2D(P->data.texW, P->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, P->data.rgba.data(), true, false);
-                DrawItem bi; bi.mesh = P->mesh.get(); bi.model = xf; bi.flags = LIT_TEXTURED; bi.albedo = P->tex.id;
-                bi.tint = vec4(1, 1, 1, ch.snow * 0.55f); bi.castShadow = d < 44.f;
+                DrawItem bi; bi.mesh = far ? P->lodMesh.get() : P->mesh.get(); bi.model = xf; bi.flags = LIT_TEXTURED; bi.albedo = P->tex.id;
+                bi.tint = vec4(1, 1, 1, ch.snow * 0.55f); bi.castShadow = db < 44.f;
                 renderer.submit(bi);
             }
             if (d < 48.f && gs.grassDensity > 0.01f) {
