@@ -330,7 +330,7 @@ void Game::drawTitle(float dt) {
     bool hasSave = platform::fileExists(platform::writableDir() + "/save_99.lks") || platform::fileExists(platform::writableDir() + "/save_0.lks");
     float bw = 360, bh = 62, by = H_ * 0.52f;
     float ba = saturate((t - 0.8f) * 1.5f);
-    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "button", 26) && ba > 0.5f; by += bh + 12; return r; };
+    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f;   // 2.3.5 oak plaques by += bh + 12; return r; };
     if (menu == Menu::Settings || menu == Menu::Saves) { drawMenus(dt); return; }
     if (hasSave && btn("Continuer", true)) {
         int slot = platform::fileExists(platform::writableDir() + "/save_99.lks") ? 99 : 0;
@@ -793,7 +793,7 @@ void Game::drawMenus(float dt) {
             }
         }
         Rect info{c.x + c.w * 0.7f, c.y, c.w * 0.3f, c.h * 0.48f};
-        u.nine("panel_plain", info, vec4(1, 1, 1, 0.95f), 0.6f);
+        u.nine("card", info, vec4(1, 1, 1, 1), 0.9f);
         if (selSkill >= 0) {
             const SkillNode& n = T[selSkill];
             u.text(n.name, info.x + 20, info.y + 18, 24, GOLDT, F_SERIF, A_LEFT, info.w - 40);
@@ -801,12 +801,12 @@ void Game::drawMenus(float dt) {
             u.text(n.desc, info.x + 20, info.y + 86, 19, PALE, F_BODY, A_LEFT, info.w - 40);
             bool have = skills.count(n.id) > 0;
             bool can = !have && skillPoints >= n.cost && (n.requires_.empty() || skills.count(n.requires_));
-            if (!have && u.fancyButton({info.x + 20, info.y + info.h - 70, info.w - 40, 54}, "Apprendre", can, "button", 22)) unlockSkill(selSkill);
+            if (!have && u.fancyButton({info.x + 20, info.y + info.h - 70, info.w - 40, 54}, "Apprendre", can, "plaque", 22)) unlockSkill(selSkill);
             if (have) u.text("Acquise", info.x + info.w / 2, info.y + info.h - 52, 20, rgba(0x9ae08a), F_BOLD, A_CENTER);
         }
         // spell slots
         Rect sp{c.x + c.w * 0.7f, c.y + c.h * 0.5f, c.w * 0.3f, c.h * 0.5f};
-        u.text("Sorts (toucher pour équiper)", sp.x, sp.y, 19, PALE, F_SERIF);
+        u.text("Sorts : touchez pour équiper", sp.x, sp.y, 18, PALE, F_SERIF, A_LEFT, sp.w);
         for (int s = 0; s < 3; s++) {
             Rect r{sp.x + s * 92, sp.y + 34, 84, 84};
             u.nine(s == selSlot - 100 ? "slot_sel" : "slot", r, vec4(1, 1, 1, 1), 0.45f);

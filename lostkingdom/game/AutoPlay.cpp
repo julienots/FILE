@@ -1636,8 +1636,8 @@ static std::vector<Step> scenario(const std::string& name) {
                 float x = c.pos.x - 7.f + i * 2.f, z = c.pos.z + 5.f; n.pos = vec3(x, g.groundAt(x, z), z);
                 g.spawnNode(n);
             }
-            g.camYaw = c.yaw + PI; g.camPitch = 0.25f; g.camDist = g.camDistTarget = 9.f; }, idle, "spawn"});
-        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+            g.camYaw = PI; g.camPitch = 0.42f; g.camDist = g.camDistTarget = 11.f; g.renderer.settings.grassDensity = 0.f; }, idle, "spawn"});
+        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; g.camYaw = PI; }, "settle"});
         s.push_back({0.1f, shot("R0_resources"), idle, "shot"});
         s.push_back({0.2f, [](Game& g) {
             int before = 0; for (auto& st : g.inventory) before += st.count;
