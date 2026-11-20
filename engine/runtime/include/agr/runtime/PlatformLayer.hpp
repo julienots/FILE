@@ -34,6 +34,9 @@ public:
     virtual bool canVibrate() const { return false; }
     /// Text entry (shows the on-screen keyboard on phones); no-op without a window.
     virtual void setTextInput(bool enabled) { (void)enabled; }
+    /// System clipboard (UTF-8); empty / no-op without a window.
+    virtual std::string clipboardText() const { return {}; }
+    virtual void setClipboardText(const std::string& text) { (void)text; }
     /// User's languages, most preferred first ("fr-FR", "en"...); empty if unknown.
     virtual std::vector<std::string> preferredLanguages() const { return {}; }
 

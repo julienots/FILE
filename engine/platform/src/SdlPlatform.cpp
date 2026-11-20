@@ -433,4 +433,16 @@ void SdlPlatform::setTextInput(bool enabled) {
     else SDL_StopTextInput(m_window);
 }
 
+std::string SdlPlatform::clipboardText() const {
+    if (!m_window) return {};
+    char* t = SDL_GetClipboardText();
+    std::string out = t ? t : "";
+    SDL_free(t);
+    return out;
+}
+
+void SdlPlatform::setClipboardText(const std::string& text) {
+    if (m_window) SDL_SetClipboardText(text.c_str());
+}
+
 } // namespace agr

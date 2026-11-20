@@ -59,6 +59,13 @@ struct UIImageComponent {
     bool preserveAspect = false;
     bool pixelArt = false;                      ///< Nearest filtering.
     bool blocksPointer = true;                  ///< false: clicks and touches go through (overlays, decorations).
+    // Flat style box (images without a texture): rounded corners, outline, drop shadow.
+    float cornerRadius = 0.0f;                  ///< Canvas units.
+    float outlineWidth = 0.0f;                  ///< Canvas units, drawn inside the rectangle.
+    math::Vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f};
+    float shadowSize = 0.0f;                    ///< Canvas units of soft shadow around the box, 0 = none.
+    math::Vec4 shadowColor{0.0f, 0.0f, 0.0f, 0.45f};
+    math::Vec2 shadowOffset{0.0f, 4.0f};        ///< Canvas units (+y = down).
 };
 
 enum class UIHAlign : i32 { Left = 0, Center = 1, Right = 2 };

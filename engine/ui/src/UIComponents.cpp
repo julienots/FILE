@@ -38,7 +38,13 @@ void registerUIComponents() {
         .field("borderScale", &UIImageComponent::borderScale, {.rangeMin = 0.01f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("preserveAspect", &UIImageComponent::preserveAspect)
         .field("pixelArt", &UIImageComponent::pixelArt, {.tooltip = "Sharp pixels (nearest filtering)"})
-        .field("blocksPointer", &UIImageComponent::blocksPointer, {.tooltip = "Off: clicks and touches go through the image"});
+        .field("blocksPointer", &UIImageComponent::blocksPointer, {.tooltip = "Off: clicks and touches go through the image"})
+        .field("cornerRadius", &UIImageComponent::cornerRadius, {.tooltip = "Rounded corners (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.25f})
+        .field("outlineWidth", &UIImageComponent::outlineWidth, {.tooltip = "Outline inside the box (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 200.0f, .speed = 0.1f})
+        .field("outlineColor", &UIImageComponent::outlineColor, {.flags = FieldFlag_Color})
+        .field("shadowSize", &UIImageComponent::shadowSize, {.tooltip = "Soft drop shadow around the box (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 200.0f, .speed = 0.1f})
+        .field("shadowColor", &UIImageComponent::shadowColor, {.flags = FieldFlag_Color})
+        .field("shadowOffset", &UIImageComponent::shadowOffset, {.speed = 0.25f});
     reg.add<UITextComponent>("UIText")
         .category("UI")
         .description("Text with a TrueType font, aligned in its rectangle.")

@@ -132,3 +132,36 @@ TEST_CASE("overlay: text from the glyph atlas") {
     CHECK_MESSAGE(f.ui.stats().quads == 3, f.ui.stats().quads);
     CHECK(f.ui.fonts().stats().glyphs >= 4);
 }
+
+TEST_CASE("overlay: style boxes with rounded corners, outline and soft shadow") {
+    OverlayFixture f;
+    const auto b = f.box({4, 4}, {56, 56}, {1, 0, 0, 1});
+    auto& img = f.scene.registry().get<UIImageComponent>(b);
+    img.cornerRadius = 16.0f;
+    img.outlineWidth = 4.0f;
+    img.outlineColor = {0, 1, 0, 1};
+    f.frame();
+    auto& d = *gpu().device;
+    CHECK_MESSAGE(near(pixel(d, 5, 5), 0, 0, 255), pixel(d, 5, 5));      // cut corner: background
+    CHECK_MESSAGE(near(pixel(d, 32, 32), 255, 0, 0), pixel(d, 32, 32));  // fill
+    CHECK_MESSAGE(near(pixel(d, 6, 32), 0, 255, 0), pixel(d, 6, 32));    // outline along the left edge
+    CHECK_MESSAGE(near(pixel(d, 32, 57), 0, 255, 0), pixel(d, 32, 57));  // and the bottom edge
+    CHECK_MESSAGE(near(pixel(d, 10, 10), 0, 255, 0, 40), pixel(d, 10, 10));  // the rounded outline at 45 degrees
+    CHECK_MESSAGE(near(pixel(d, 13, 13), 255, 0, 0, 40), pixel(d, 13, 13));  // fill inside the inner radius
+    // Soft shadow: darkens the background around the box, fading outward.
+    auto& i2 = f.scene.registry().get<UIImageComponent>(b);
+    i2.outlineWidth = 0.0f;
+    i2.cornerRadius = 0.0f;
+    i2.shadowSize = 8.0f;
+    i2.shadowOffset = {0, 0};
+    i2.shadowColor = {0, 0, 0, 1};
+    auto& r = f.scene.registry().get<UIRectComponent>(b);
+    r.position = {16, 16};
+    r.size = {32, 32};
+    f.frame();
+    const Rgba near1 = pixel(d, 14, 32), far1 = pixel(d, 10, 32), out1 = pixel(d, 2, 32);
+    CHECK_MESSAGE(near1.b < far1.b, near1 << " vs " << far1);
+    CHECK_MESSAGE(far1.b < 250, far1);
+    CHECK_MESSAGE(out1.b > 250, out1);  // beyond the shadow
+    CHECK(near(pixel(d, 32, 32), 255, 0, 0));
+}

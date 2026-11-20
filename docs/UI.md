@@ -22,13 +22,13 @@ des modèles et test de bout en bout de l'éditeur.
 
 | Composant | Rôle |
 |---|---|
-| `UIImage` | Rectangle de couleur ou texture ; bordures **9-slice** (coins non déformés), `preserveAspect`, `pixelArt` |
+| `UIImage` | Rectangle de couleur ou texture ; bordures **9-slice** (coins non déformés), `preserveAspect`, `pixelArt` ; sans texture, **boîte stylée** : `cornerRadius` (coins arrondis lissés), `outlineWidth` / `outlineColor` (contour intérieur), `shadowSize` / `shadowColor` / `shadowOffset` (ombre portée douce) |
 | `UIText` | Texte UTF-8 (accents compris), police TrueType, taille, couleur, alignement horizontal / vertical, retour à la ligne, interligne |
 | `UIButton` | Couleurs normal / survol / appui / désactivé (teinte de l'image) ; clic = `onClick()` du script de l'entité et `message(bouton)` du script de `target` |
 | `UISlider` | Curseur horizontal ou **vertical** (`vertical` : bas = minimum) — piste, remplissage, poignée, valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
 | `UILayout` | Range les enfants en **colonne**, **ligne** ou **grille** : espacement, marges, alignement, étirement |
 | `UIToggle` | Case à cocher ; même `group` = boutons radio (un seul coché) ; changement = `onValueChanged(1 ou 0)` et `message(case, valeur)` sur `target` |
-| `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password`, **`multiline`** (Entrée ajoute une ligne au lieu de valider ; mettre le `UIText` en haut avec retour à la ligne) ; curseur clignotant |
+| `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password`, **`multiline`** (Entrée ajoute une ligne au lieu de valider ; mettre le `UIText` en haut avec retour à la ligne) ; curseur clignotant **placé au clic**, sélection à la souris (glisser) ou Maj + flèches, Ctrl + flèches = mot par mot, Origine / Fin (par ligne en multiligne), Haut / Bas, Suppr, Ctrl+A / C / X / V avec le presse-papiers du système ; taper remplace la sélection |
 | `UIProgressBar` | Barre de progression, de vie ou de chargement : valeur, min / max, sens de remplissage (gauche → droite, droite → gauche, bas → haut, haut → bas), couleurs, marge intérieure |
 | `UIDropdown` | Liste déroulante : options séparées par `;`, `selected` ; un clic ouvre la liste **par-dessus tout** (au-dessus si la place manque en bas), survol surligné, choix = `onValueChanged(index)` et `message(liste, index)` ; un clic ailleurs la ferme sans rien toucher d'autre ; au clavier / à la manette, Entrée passe à l'option suivante |
 | `UITabs` | Onglets : noms séparés par `;`, `current` ; le *i*-ème enfant est la page du *i*-ème onglet, seule la page courante est affichée sous la barre d'onglets ; clic sur un onglet = `onValueChanged(index)` et `message(onglets, index)` |
@@ -126,11 +126,14 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Texte enrichi sans italique, images ni liens ; coins arrondis uniquement par textures 9-slice.
-- Champ multiligne : le curseur reste en fin de texte (pas de déplacement à la souris ni de
-  sélection) ; arbres sans glisser-déposer des éléments ; listes sans sélection multiple.
+- Texte enrichi sans italique, images ni liens.
+- Boîtes stylées : le contour est dessiné sous le remplissage (un remplissage transparent laisse voir
+  le contour) ; pas de rayon différent par coin.
+- Champs de texte : pas de répétition automatique des touches maintenues, pas d'annulation (Ctrl+Z),
+  pas de défilement horizontal d'un champ d'une ligne trop long ; arbres sans glisser-déposer des
+  éléments ; listes sans sélection multiple.
 - Rotation : les zones défilantes contenues dans un élément tourné découpent selon le rectangle non
-  tourné.
+  tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent
   (il est alors vidé et reconstruit, avec un avertissement si cela ne suffit pas).
 - UI Builder : un élément à la fois (pas de sélection multiple déplacée ensemble), pas de guides

@@ -16,6 +16,8 @@ Status UIPlugin::onLoad(Engine& engine) {
     m_ui = std::make_unique<UISystem>(engine.vfs());
     m_ui->setLocalization(&engine.localization());
     m_ui->setTextInputHandler([&engine](bool on) { engine.platform().setTextInput(on); });
+    m_ui->setClipboard([&engine] { return engine.platform().clipboardText(); },
+                       [&engine](const std::string& t) { engine.platform().setClipboardText(t); });
     engine.registerService<UIPlugin>(this);
     bindRenderer(engine);
     return {};
@@ -89,8 +91,23 @@ void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
     // Mouse wheel over a scroll view.
     if (in.wheel().x != 0.0f || in.wheel().y != 0.0f) m_ui->scrollAt(scene, toUI(in.mousePosition()), in.wheel());
     // Typing into the focused text field.
-    if (m_ui->wantsText())
-        m_ui->processText(scene, in.textInput(), in.keyPressed(Key::Backspace) ? 1u : 0u, in.keyPressed(Key::Return));
+    if (m_ui->wantsText()) {
+        const bool shift = in.keyDown(Key::LeftShift) || in.keyDown(Key::RightShift);
+        const bool ctrl = in.keyDown(Key::LeftCtrl) || in.keyDown(Key::RightCtrl) || in.keyDown(Key::LeftSuper) || in.keyDown(Key::RightSuper);
+        using TK = UISystem::TextKey;
+        const std::pair<Key, TK> keys[] = {{Key::Left, TK::Left}, {Key::Right, TK::Right}, {Key::Up, TK::Up},   {Key::Down, TK::Down},
+                                           {Key::Home, TK::Home}, {Key::End, TK::End},     {Key::Delete, TK::Delete}};
+        for (const auto& [k, tk] : keys)
+            if (in.keyPressed(k)) m_ui->processTextKey(scene, tk, shift, ctrl);
+        if (ctrl) {
+            if (in.keyPressed(Key::A)) m_ui->processTextKey(scene, TK::SelectAll);
+            if (in.keyPressed(Key::C)) m_ui->processTextKey(scene, TK::Copy);
+            if (in.keyPressed(Key::X)) m_ui->processTextKey(scene, TK::Cut);
+            if (in.keyPressed(Key::V)) m_ui->processTextKey(scene, TK::Paste);
+        }
+        // Shortcut letters typed with Ctrl are not text.
+        m_ui->processText(scene, ctrl ? std::string_view{} : in.textInput(), in.keyPressed(Key::Backspace) ? 1u : 0u, in.keyPressed(Key::Return));
+    }
     // Keyboard / gamepad navigation (canvases with keyboardNavigation), not while typing.
     if (!m_ui->wantsText() && m_ui->navigationEnabled()) {
         const float sx = in.gamepadCount() > 0 ? in.gamepadAxis(0, GamepadAxis::LeftX) : 0.0f;

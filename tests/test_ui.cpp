@@ -847,4 +847,89 @@ TEST_CASE("color picker, multiline fields, scaled and rotated elements") {
     f.ui.buildOverlay(f.scene, 800, 600, list);
     CHECK_FALSE(list.vertices.empty());
 }
+
+TEST_CASE("text editing: caret keys, selection, word jumps, clipboard, click and drag to select") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto field = f.element("Name", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {400, 50});
+    auto& fc = f.scene.registry().emplace<UIInputFieldComponent>(field);
+    fc.maxLength = 0;
+    auto& tc = f.scene.registry().emplace<UITextComponent>(field);
+    tc.hAlign = UIHAlign::Left;
+    tc.wrap = false;
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {300, 125}, true}});
+    f.pointers({{0, {300, 125}, false}});
+    REQUIRE(f.ui.focusedField() == field);
+    using TK = UISystem::TextKey;
+    auto text = [&] { return f.scene.registry().get<UIInputFieldComponent>(field).text; };
+    f.ui.processText(f.scene, "hello world", 0, false);
+    CHECK(f.ui.caret() == 11);
+    f.ui.processTextKey(f.scene, TK::Left, false, true);  // word left: before "world"
+    CHECK(f.ui.caret() == 6);
+    f.ui.processText(f.scene, "big ", 0, false);
+    CHECK(text() == "hello big world");
+    f.ui.processTextKey(f.scene, TK::Home);
+    f.ui.processTextKey(f.scene, TK::Right, true);  // shift: select "he"
+    f.ui.processTextKey(f.scene, TK::Right, true);
+    CHECK(f.ui.selectionAnchor() == 0);
+    CHECK(f.ui.caret() == 2);
+    f.ui.processText(f.scene, "J", 0, false);  // typing replaces the selection
+    CHECK(text() == "Jllo big world");
+    f.ui.processTextKey(f.scene, TK::Delete);
+    CHECK(text() == "Jlo big world");
+    f.ui.processTextKey(f.scene, TK::End);
+    f.ui.processText(f.scene, "", 2, false);  // backspaces at the caret
+    CHECK(text() == "Jlo big wor");
+    // Select all, copy, paste at the end (internal clipboard when there is no system one).
+    f.ui.processTextKey(f.scene, TK::SelectAll);
+    f.ui.processTextKey(f.scene, TK::Copy);
+    f.ui.processTextKey(f.scene, TK::End);
+    f.ui.processText(f.scene, " ", 0, false);
+    f.ui.processTextKey(f.scene, TK::Paste);
+    CHECK(text() == "Jlo big wor Jlo big wor");
+    f.ui.processTextKey(f.scene, TK::SelectAll);
+    f.ui.processTextKey(f.scene, TK::Cut);
+    CHECK(text().empty());
+    std::string sys;
+    f.ui.setClipboard([&] { return std::string("from system"); }, [&](const std::string& s) { sys = s; });
+    f.ui.processTextKey(f.scene, TK::Paste);
+    CHECK(text() == "from system");
+    f.ui.processTextKey(f.scene, TK::Left, true, true);
+    f.ui.processTextKey(f.scene, TK::Copy);
+    CHECK(sys == "system");
+
+    // Clicks place the caret between the characters drawn; a drag selects.
+    f.ui.processTextKey(f.scene, TK::End);
+    f.ui.layout(f.scene, 800, 600);
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    f.pointers({{0, {101, 125}, true}});
+    CHECK(f.ui.caret() == 0);
+    f.pointers({{0, {499, 125}, true}});  // drag to the far right: everything selected
+    f.pointers({{0, {499, 125}, false}});
+    CHECK(f.ui.selectionAnchor() == 0);
+    CHECK(f.ui.caret() == 11);
+    f.ui.buildOverlay(f.scene, 800, 600, list);  // selection drawn under the text
+    f.pointers({{0, {101, 125}, true}});
+    f.pointers({{0, {101, 125}, false}});
+    CHECK(f.ui.caret() == 0);
+    CHECK(f.ui.selectionAnchor() == 0);
+
+    // Multiline: Home / End per line, Up / Down by lines.
+    auto& m = f.scene.registry().get<UIInputFieldComponent>(field);
+    m.multiline = true;
+    m.text.clear();
+    f.ui.processText(f.scene, "abc", 0, true);
+    f.ui.processText(f.scene, "defgh", 0, false);
+    CHECK(text() == "abc\ndefgh");
+    f.ui.processTextKey(f.scene, TK::Home);
+    CHECK(f.ui.caret() == 4);
+    f.ui.processTextKey(f.scene, TK::End);
+    CHECK(f.ui.caret() == 9);
+    f.ui.setCaret(6, 6);
+    f.ui.processTextKey(f.scene, TK::Up);  // stops are from the single-line drawing: by text lines
+    f.ui.processTextKey(f.scene, TK::Down);
+    CHECK(f.ui.caret() >= 4);
+}
 }  // TEST_SUITE

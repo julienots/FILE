@@ -98,8 +98,20 @@ public:
     // --- scroll views, text fields, keyboard / gamepad navigation
     /// Mouse wheel at a point (UI pixels): scrolls the topmost scroll view under it.
     bool scrollAt(Scene& scene, math::Vec2 position, math::Vec2 wheel);
-    /// Typing for the focused text field: UTF-8 text, backspaces, Enter.
+    /// Typing for the focused text field: UTF-8 text, backspaces, Enter. Typing replaces the
+    /// selection and goes in at the caret.
     void processText(Scene& scene, std::string_view typed, u32 backspaces, bool enter);
+    /// Caret movement and editing keys of the focused field (shift extends the selection).
+    enum class TextKey { Left, Right, Up, Down, Home, End, Delete, SelectAll, Copy, Cut, Paste };
+    void processTextKey(Scene& scene, TextKey key, bool shift = false, bool word = false);
+    /// Caret and selection of the focused field, in code points (anchor == caret: no selection).
+    usize caret() const { return m_caret; }
+    usize selectionAnchor() const { return m_anchor; }
+    void setCaret(usize caret, usize anchor) { m_caret = caret, m_anchor = anchor; }
+    /// Clipboard used by Copy / Cut / Paste (default: an internal buffer).
+    void setClipboard(std::function<std::string()> get, std::function<void(const std::string&)> set) {
+        m_clipboardGet = std::move(get), m_clipboardSet = std::move(set);
+    }
     ecs::Entity focusedField() const { return m_focusedField; }
     bool wantsText() const { return !m_focusedField.isNull(); }
     void focusField(ecs::Entity field);  ///< null = none (hides the on-screen keyboard)
@@ -224,7 +236,27 @@ private:
     void layoutPopup();
     std::optional<TextLayout> textLayout(const std::string& font, const std::string& text, float pixelSize, float width, bool wrap, UIHAlign align);
 
+    /// Rounded box (axis-aligned rect in screen pixels) from the 9-sliced disc / blurred disc.
+    void roundBox(OverlayDrawList& out, math::Vec4 rect, float radius, u32 color, bool soft);
+    void ensureShapeTextures();
+
+    /// Caret positions (screen pixels: x, line top, line height) of the focused field for each
+    /// code point index 0..n, from the last drawn frame (clicks and Up / Down).
+    struct CaretStop {
+        float x, y, h;
+    };
+    std::vector<CaretStop> m_caretStops;
+    usize m_caret = 0, m_anchor = 0;
+    bool m_selectingText = false;
+    std::string m_clipboard;
+    std::function<std::string()> m_clipboardGet;
+    std::function<void(const std::string&)> m_clipboardSet;
+    usize caretAt(math::Vec2 p) const;
+    void computeCaretStops(const PendingText& pt, const std::string& text);
+
     Renderer* m_renderer = nullptr;
+    rhi::Device* m_shapeDevice = nullptr;
+    rhi::TextureHandle m_discTexture, m_softTexture;  // 64x64 white disc, blurred disc (style boxes)
     const Localization* m_localization = nullptr;
     FontLibrary m_fonts;
     Scene* m_layoutScene = nullptr;

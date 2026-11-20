@@ -50,6 +50,8 @@ public:
     void setTitle(const std::string& title);
     /// Shows the on-screen keyboard on mobile.
     void setTextInput(bool enabled) override;
+    std::string clipboardText() const override;
+    void setClipboardText(const std::string& text) override;
     /// Called with every raw SDL_Event* before the engine translates it (UI toolkits).
     using RawEventHook = std::function<void(const void* sdlEvent)>;
     void setRawEventHook(RawEventHook hook) { m_rawHook = std::move(hook); }

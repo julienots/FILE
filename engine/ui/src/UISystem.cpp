@@ -44,6 +44,21 @@ usize utf8Length(const std::string& s) {
         if ((c & 0xC0) != 0x80) ++n;
     return n;
 }
+/// Byte offset of code point `index` (the end if past it).
+usize utf8Offset(const std::string& s, usize index) {
+    usize n = 0;
+    for (usize i = 0; i < s.size(); ++i)
+        if ((static_cast<unsigned char>(s[i]) & 0xC0) != 0x80) {
+            if (n == index) return i;
+            ++n;
+        }
+    return s.size();
+}
+/// Code point at `index` as a string ("" past the end).
+std::string utf8At(const std::string& s, usize index) {
+    const usize a = utf8Offset(s, index), b = utf8Offset(s, index + 1);
+    return s.substr(a, b - a);
+}
 void utf8PopBack(std::string& s) {
     while (!s.empty()) {
         const unsigned char c = static_cast<unsigned char>(s.back());
@@ -216,7 +231,61 @@ std::optional<TextLayout> UISystem::textLayout(const std::string& font, const st
     }
     return std::move(lay.value());
 }
-UISystem::~UISystem() = default;
+UISystem::~UISystem() {
+    if (m_shapeDevice) {
+        if (m_discTexture) m_shapeDevice->destroyTexture(m_discTexture);
+        if (m_softTexture) m_shapeDevice->destroyTexture(m_softTexture);
+    }
+}
+
+void UISystem::ensureShapeTextures() {
+    if (m_discTexture || !m_renderer) return;
+    m_shapeDevice = &m_renderer->device();
+    constexpr u32 kSize = 64;
+    std::vector<u8> disc(kSize * kSize * 4, 255), soft(kSize * kSize * 4, 255);
+    for (u32 y = 0; y < kSize; ++y)
+        for (u32 x = 0; x < kSize; ++x) {
+            const float dx = static_cast<float>(x) + 0.5f - 32.0f, dy = static_cast<float>(y) + 0.5f - 32.0f;
+            const float d = std::sqrt(dx * dx + dy * dy);
+            const float a = std::clamp(32.0f - d, 0.0f, 1.0f);  // 1-texel antialiased edge
+            float t = std::clamp(1.0f - d / 32.0f, 0.0f, 1.0f);
+            t = t * t * (3.0f - 2.0f * t);
+            disc[(y * kSize + x) * 4 + 3] = static_cast<u8>(a * 255.0f + 0.5f);
+            soft[(y * kSize + x) * 4 + 3] = static_cast<u8>(t * 255.0f + 0.5f);
+        }
+    auto make = [&](const std::vector<u8>& px, const char* name) {
+        rhi::TextureDesc td;
+        td.width = td.height = kSize;
+        td.format = rhi::TextureFormat::RGBA8;
+        td.generateMips = false;
+        td.sampler = {rhi::Filter::Linear, rhi::Filter::Linear, false, rhi::Wrap::Clamp, rhi::Wrap::Clamp};
+        td.data = px.data();
+        td.debugName = name;
+        auto t = m_shapeDevice->createTexture(td);
+        return t ? t.value() : rhi::TextureHandle{};
+    };
+    m_discTexture = make(disc, "agr.ui.disc");
+    m_softTexture = make(soft, "agr.ui.softdisc");
+}
+
+void UISystem::roundBox(OverlayDrawList& out, Vec4 rect, float radius, u32 color, bool soft) {
+    if (rect.z <= 0.0f || rect.w <= 0.0f) return;
+    const rhi::TextureHandle tex = soft ? m_softTexture : m_discTexture;
+    const float r = std::min({radius, rect.z * 0.5f, rect.w * 0.5f});
+    if (r <= 0.0f || !tex) {
+        emit(out, {rect.x, rect.y}, {rect.x + rect.z, rect.y + rect.w}, {0, 0, 1, 1}, color, {});
+        return;
+    }
+    // 9-slice of the disc: quarter discs in the corners, the middle row / column of texels elsewhere.
+    const float xs[4] = {rect.x, rect.x + r, rect.x + rect.z - r, rect.x + rect.z};
+    const float ys[4] = {rect.y, rect.y + r, rect.y + rect.w - r, rect.y + rect.w};
+    const float us[4] = {0.0f, 0.5f, 0.5f, 1.0f};
+    for (int y = 0; y < 3; ++y)
+        for (int x = 0; x < 3; ++x) {
+            if (xs[x + 1] <= xs[x] || ys[y + 1] <= ys[y]) continue;
+            emit(out, {xs[x], ys[y]}, {xs[x + 1], ys[y + 1]}, {us[x], us[y], us[x + 1], us[y + 1]}, color, tex);
+        }
+}
 
 void UISystem::setRenderer(Renderer* renderer) { m_renderer = renderer; }
 
@@ -497,6 +566,11 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
             m_navVisible = false;  // the pointer takes over from keyboard navigation
             ps = {p.position, p.position, hit.isNull() ? ecs::Entity{} : scrollViewOf(scene, hit), false};
             if (!m_focusedField.isNull() && top != m_focusedField) focusField({});
+            if (!m_focusedField.isNull() && top == m_focusedField && !m_caretStops.empty()) {
+                m_caret = m_anchor = caretAt(p.position);
+                m_selectingText = true;
+                m_caretClock.restart();
+            }
             if (topInteractive && interactableNow(reg, top)) {
                 m_pressed[p.id] = top;
                 if (reg.has<UISliderComponent>(top)) setSliderValue(scene, top, p.position);
@@ -516,11 +590,14 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                     pressedIt = m_pressed.end();
                 }
             }
+            if (m_selectingText && pressedIt != m_pressed.end() && pressedIt->second == m_focusedField && !m_caretStops.empty())
+                m_caret = caretAt(p.position);
             if (ps.dragging && reg.valid(ps.scrollView)) scrollBy(scene, ps.scrollView, ps.last - p.position);
             else if (picker) setPickerValue(scene, pressedIt->second, p.position, m_pickerZone[p.id]);
             else if (slider) setSliderValue(scene, pressedIt->second, p.position);
             ps.last = p.position;
         } else if (!p.down && wasDown) {
+            m_selectingText = false;
             if (pressedIt != m_pressed.end()) {
                 const ecs::Entity pressed = pressedIt->second;
                 if (pressed == top && !ps.dragging && interactableNow(reg, pressed) && !reg.has<UISliderComponent>(pressed)) {
@@ -682,6 +759,9 @@ void UISystem::focusField(ecs::Entity field) {
     if (field == m_focusedField) return;
     const bool had = !m_focusedField.isNull();
     m_focusedField = field;
+    m_caret = m_anchor = static_cast<usize>(-1);  // the end of the text (clamped on use)
+    m_caretStops.clear();
+    m_selectingText = false;
     m_caretClock.restart();
     if (m_textInputHandler && had != !field.isNull()) m_textInputHandler(!field.isNull());
 }
@@ -696,7 +776,26 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
     auto* f = reg.tryGet<UIInputFieldComponent>(m_focusedField);
     if (!f || !f->interactable) return;
     const std::string before = f->text;
-    for (u32 i = 0; i < backspaces; ++i) utf8PopBack(f->text);
+    usize len = utf8Length(f->text);
+    m_caret = std::min(m_caret, len), m_anchor = std::min(m_anchor, len);
+    auto eraseRange = [&](usize from, usize to) {  // code points [from, to)
+        if (to <= from) return;
+        const usize a = utf8Offset(f->text, from), b = utf8Offset(f->text, to);
+        f->text.erase(a, b - a);
+        len -= to - from;
+        m_caret = m_anchor = from;
+    };
+    const bool hadSelection = m_caret != m_anchor;
+    if (hadSelection && (backspaces > 0 || !typed.empty() || (enter && f->multiline))) {
+        eraseRange(std::min(m_caret, m_anchor), std::max(m_caret, m_anchor));
+        if (backspaces > 0) --backspaces;  // the first backspace removes the selection
+    }
+    for (u32 i = 0; i < backspaces && m_caret > 0; ++i) eraseRange(m_caret - 1, m_caret);
+    auto insert = [&](const std::string& ch) {
+        f->text.insert(utf8Offset(f->text, m_caret), ch);
+        ++len;
+        m_anchor = ++m_caret;
+    };
     for (usize i = 0; i < typed.size();) {
         const unsigned char c = static_cast<unsigned char>(typed[i]);
         const usize n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : 4;
@@ -704,11 +803,11 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
         i += n;
         if (c < 0x20 || c == 0x7F) continue;  // control characters
         if (f->numeric && !(n == 1 && (std::isdigit(c) || c == '-' || c == '.'))) continue;
-        if (f->maxLength > 0 && utf8Length(f->text) >= f->maxLength) break;
-        f->text += ch;
+        if (f->maxLength > 0 && len >= f->maxLength) break;
+        insert(ch);
     }
-    if (enter && f->multiline && (f->maxLength == 0 || utf8Length(f->text) < f->maxLength)) {  // a new line, no submit
-        f->text += '\n';
+    if (enter && f->multiline && (f->maxLength == 0 || len < f->maxLength)) {  // a new line, no submit
+        insert("\n");
         enter = false;
     }
     if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
@@ -717,6 +816,182 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
         focusField({});
     }
     m_caretClock.restart();
+}
+
+void UISystem::processTextKey(Scene& scene, TextKey key, bool shift, bool word) {
+    if (m_focusedField.isNull() || !scene.registry().valid(m_focusedField)) return;
+    auto* f = scene.registry().tryGet<UIInputFieldComponent>(m_focusedField);
+    if (!f) return;
+    const usize len = utf8Length(f->text);
+    m_caret = std::min(m_caret, len), m_anchor = std::min(m_anchor, len);
+    const usize selA = std::min(m_caret, m_anchor), selB = std::max(m_caret, m_anchor);
+    auto isSpace = [&](usize i) {
+        const std::string c = utf8At(f->text, i);
+        return c == " " || c == "\n" || c == "\t";
+    };
+    auto move = [&](usize to) {
+        m_caret = std::min(to, len);
+        if (!shift) m_anchor = m_caret;
+    };
+    auto lineStart = [&](usize i) {
+        while (i > 0 && utf8At(f->text, i - 1) != "\n") --i;
+        return i;
+    };
+    auto lineEnd = [&](usize i) {
+        while (i < len && utf8At(f->text, i) != "\n") ++i;
+        return i;
+    };
+    const std::string before = f->text;
+    switch (key) {
+        case TextKey::Left:
+            if (!shift && selA != selB) move(selA);
+            else if (word) {
+                usize i = m_caret;
+                while (i > 0 && isSpace(i - 1)) --i;
+                while (i > 0 && !isSpace(i - 1)) --i;
+                move(i);
+            } else {
+                move(m_caret > 0 ? m_caret - 1 : 0);
+            }
+            break;
+        case TextKey::Right:
+            if (!shift && selA != selB) move(selB);
+            else if (word) {
+                usize i = m_caret;
+                while (i < len && !isSpace(i)) ++i;
+                while (i < len && isSpace(i)) ++i;
+                move(i);
+            } else {
+                move(m_caret + 1);
+            }
+            break;
+        case TextKey::Home: move(f->multiline && !word ? lineStart(m_caret) : 0); break;
+        case TextKey::End: move(f->multiline && !word ? lineEnd(m_caret) : len); break;
+        case TextKey::Up:
+        case TextKey::Down: {
+            if (!f->multiline) {
+                move(key == TextKey::Up ? 0 : len);
+                break;
+            }
+            // Same x on the previous / next drawn line (wrapped lines included).
+            if (m_caretStops.size() == len + 1) {
+                const CaretStop cur = m_caretStops[m_caret];
+                const float targetY = key == TextKey::Up ? cur.y - cur.h * 0.5f : cur.y + cur.h * 1.5f;
+                if (targetY < m_caretStops.front().y) move(0);
+                else if (targetY > m_caretStops.back().y + m_caretStops.back().h) move(len);
+                else move(caretAt({cur.x, targetY}));
+            } else {  // not drawn yet: by text lines
+                const usize start = lineStart(m_caret), col = m_caret - start;
+                if (key == TextKey::Up) {
+                    if (start == 0) move(0);
+                    else {
+                        const usize prev = lineStart(start - 1);
+                        move(std::min(prev + col, start - 1));
+                    }
+                } else {
+                    const usize end = lineEnd(m_caret);
+                    if (end >= len) move(len);
+                    else move(std::min(end + 1 + col, lineEnd(end + 1)));
+                }
+            }
+            break;
+        }
+        case TextKey::Delete:
+            if (selA != selB) {
+                f->text.erase(utf8Offset(f->text, selA), utf8Offset(f->text, selB) - utf8Offset(f->text, selA));
+                m_caret = m_anchor = selA;
+            } else if (m_caret < len) {
+                f->text.erase(utf8Offset(f->text, m_caret), utf8Offset(f->text, m_caret + 1) - utf8Offset(f->text, m_caret));
+                m_anchor = m_caret;
+            }
+            break;
+        case TextKey::SelectAll:
+            m_anchor = 0;
+            m_caret = len;
+            break;
+        case TextKey::Copy:
+        case TextKey::Cut:
+            if (selA != selB && !f->password) {
+                const usize a = utf8Offset(f->text, selA), b = utf8Offset(f->text, selB);
+                const std::string part = f->text.substr(a, b - a);
+                if (m_clipboardSet) m_clipboardSet(part);
+                m_clipboard = part;
+                if (key == TextKey::Cut) {
+                    f->text.erase(a, b - a);
+                    m_caret = m_anchor = selA;
+                }
+            }
+            break;
+        case TextKey::Paste: {
+            std::string clip = m_clipboardGet ? m_clipboardGet() : std::string{};
+            if (clip.empty()) clip = m_clipboard;  // no system clipboard (headless)
+            if (!f->multiline) std::replace(clip.begin(), clip.end(), '\n', ' ');
+            std::string typed;
+            for (char c : clip)  // processText drops control characters: keep new lines for multiline fields
+                if (c != '\r') typed += c;
+            if (f->multiline) {
+                usize start = 0;
+                for (usize i = 0; i <= typed.size(); ++i)
+                    if (i == typed.size() || typed[i] == '\n') {
+                        processText(scene, std::string_view(typed).substr(start, i - start), 0, i < typed.size());
+                        start = i + 1;
+                    }
+            } else {
+                processText(scene, typed, 0, false);
+            }
+            return;  // processText reported the change
+        }
+    }
+    if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+    m_caretClock.restart();
+}
+
+usize UISystem::caretAt(Vec2 p) const {
+    if (m_caretStops.empty()) return static_cast<usize>(-1);
+    // The line under the point (nearest line), then the nearest stop on it.
+    float bestLineDist = 1e30f, lineY = m_caretStops.front().y;
+    for (const CaretStop& s : m_caretStops) {
+        const float d = p.y < s.y ? s.y - p.y : p.y > s.y + s.h ? p.y - s.y - s.h : 0.0f;
+        if (d < bestLineDist - 1e-3f) bestLineDist = d, lineY = s.y;
+    }
+    usize best = 0;
+    float bestDx = 1e30f;
+    for (usize i = 0; i < m_caretStops.size(); ++i) {
+        if (std::fabs(m_caretStops[i].y - lineY) > 0.5f) continue;
+        const float dx = std::fabs(m_caretStops[i].x - p.x);
+        if (dx < bestDx) bestDx = dx, best = i;
+    }
+    return best;
+}
+
+void UISystem::computeCaretStops(const PendingText& pt, const std::string& text) {
+    const usize count = utf8Length(text);
+    std::vector<bool> newline(count, false);
+    for (usize i = 0, cp = 0; i < text.size(); ++i)
+        if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) {
+            newline[cp] = text[i] == '\n';
+            ++cp;
+        }
+    const TextLayout& l = pt.layout;
+    const float lineH = l.lines ? l.size.y / static_cast<float>(l.lines) : pt.pixelSize;
+    std::vector<const TextGlyph*> bySource(count, nullptr);
+    for (const TextGlyph& g : l.glyphs)
+        if (g.source < count && !bySource[g.source]) bySource[g.source] = &g;
+    m_caretStops.assign(count + 1, {pt.origin.x, pt.origin.y, lineH});
+    float penX = 0.0f;
+    i32 penLine = 0;
+    for (usize i = 0; i < count; ++i) {
+        if (const TextGlyph* g = bySource[i]) {
+            const i32 line = static_cast<i32>(std::floor(g->baseline / std::max(lineH, 1.0f)));
+            if (line != penLine) penX = g->min.x, penLine = line;
+            m_caretStops[i] = {pt.origin.x + penX, pt.origin.y + static_cast<float>(penLine) * lineH, lineH};
+            penX += g->advance;
+        } else {
+            m_caretStops[i] = {pt.origin.x + penX, pt.origin.y + static_cast<float>(penLine) * lineH, lineH};
+            if (newline[i]) penX = 0.0f, ++penLine;
+        }
+    }
+    m_caretStops[count] = {pt.origin.x + penX, pt.origin.y + static_cast<float>(penLine) * lineH, lineH};
 }
 
 std::vector<UISystem::ListRow> UISystem::listRows(const UIItemListComponent& list) {
@@ -1095,6 +1370,29 @@ void UISystem::drawImage(const UIImageComponent& img, Vec4 rect, Vec4 tint, floa
         }
     }
     const u32 packed = packColor(color);
+    if (img.texture.empty() && (img.cornerRadius > 0.0f || img.outlineWidth > 0.0f || img.shadowSize > 0.0f)) {
+        // Flat style box: shadow, then outline (the whole box), then the fill inset by the outline.
+        ensureShapeTextures();
+        const float radius = std::max(img.cornerRadius, 0.0f) * scale;
+        if (img.shadowSize > 0.0f) {
+            const Vec4 sc = mul(img.shadowColor, Vec4{1, 1, 1, tint.w});
+            const float s = img.shadowSize * scale;
+            if (sc.w > 0.0f)
+                roundBox(out, {rect.x + img.shadowOffset.x * scale - s, rect.y + img.shadowOffset.y * scale - s, rect.z + 2.0f * s, rect.w + 2.0f * s},
+                         radius + 2.0f * s, packColor(sc), true);
+        }
+        Vec4 inner = rect;
+        float innerRadius = radius;
+        if (img.outlineWidth > 0.0f) {
+            const Vec4 oc = mul(img.outlineColor, Vec4{1, 1, 1, tint.w});
+            if (oc.w > 0.0f) roundBox(out, rect, radius, packColor(oc), false);
+            const float w = std::min(img.outlineWidth * scale, std::min(rect.z, rect.w) * 0.5f);
+            inner = {rect.x + w, rect.y + w, rect.z - 2.0f * w, rect.w - 2.0f * w};
+            innerRadius = std::max(radius - w, 0.0f);
+        }
+        roundBox(out, inner, innerRadius, packed, false);
+        return;
+    }
     const bool sliced = texW > 0.0f && (img.border.x > 0 || img.border.y > 0 || img.border.z > 0 || img.border.w > 0);
     if (!sliced) {
         Vec4 r = rect;
@@ -1436,32 +1734,36 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             m_clip = el.clip;
             m_xform = el.xform;
             drawElement(scene, el, el.scale, pass.theme, out);
-            float caretX = el.rect.x + 4.0f * pass.scale, caretY = -1.0f, caretH = 0.0f;
             const auto* field = reg.tryGet<UIInputFieldComponent>(el.entity);
+            const bool focusedField = field && el.entity == m_focusedField;
+            bool stopsDrawn = false;
             for (; ti < m_texts.size() && m_texts[ti].canvas == ci && m_texts[ti].element == ei; ++ti) {
                 const PendingText& pt = m_texts[ti];
-                drawText(pt);
-                for (const TextGlyph& g : pt.layout.glyphs)
-                    if (g.max.x > g.min.x) caretX = std::max(caretX, pt.origin.x + g.max.x + 2.0f);
-                if (field && field->multiline && el.entity == m_focusedField) {  // after the last character, on its line
-                    const float lineH = pt.layout.lines ? pt.layout.size.y / static_cast<float>(pt.layout.lines) : pt.pixelSize;
-                    caretH = lineH * 0.85f;
-                    if (!field->text.empty() && field->text.back() == '\n') {
-                        caretX = pt.origin.x;
-                        caretY = pt.origin.y + pt.layout.size.y;
-                    } else if (!pt.layout.glyphs.empty()) {
-                        const TextGlyph& g = pt.layout.glyphs.back();
-                        caretX = pt.origin.x + g.min.x + g.advance + 1.0f;
-                        caretY = pt.origin.y + std::floor(g.baseline / std::max(lineH, 1.0f)) * lineH;
+                if (focusedField && !stopsDrawn && !field->text.empty()) {
+                    // Caret stops for clicks and arrows, and the selection under the text.
+                    computeCaretStops(pt, field->text);
+                    stopsDrawn = true;
+                    const usize n = m_caretStops.size() - 1;
+                    const usize a = std::min(std::min(m_caret, m_anchor), n), b = std::min(std::max(m_caret, m_anchor), n);
+                    const u32 sel = packColor({0.25f, 0.5f, 1.0f, 0.45f});
+                    for (usize i = a; i < b; ++i) {
+                        const CaretStop& s0 = m_caretStops[i];
+                        const CaretStop& s1 = m_caretStops[i + 1];
+                        const float x1 = std::fabs(s1.y - s0.y) < 0.5f && s1.x > s0.x ? s1.x : s0.x + std::max(4.0f, pt.pixelSize * 0.3f);
+                        emit(out, {s0.x, s0.y}, {x1, s0.y + s0.h}, {0, 0, 1, 1}, sel, {});
                     }
                 }
+                drawText(pt);
             }
-            if (el.entity == m_focusedField && std::fmod(m_caretClock.elapsedSeconds(), 1.0) < 0.55) {  // blinking caret
-                const auto* f = field;
-                if (f && f->text.empty()) caretX = el.rect.x + 4.0f * pass.scale;
-                float h = el.rect.w * 0.6f, y = el.rect.y + (el.rect.w - h) * 0.5f;
-                if (caretY >= 0.0f) h = caretH, y = caretY;
-                emit(out, {caretX, y}, {caretX + std::max(2.0f, 2.0f * pass.scale), y + h}, {0, 0, 1, 1}, packColor(f ? f->textColor : Vec4{1, 1, 1, 1}), {});
+            if (focusedField && !stopsDrawn) m_caretStops.clear();
+            if (focusedField && std::fmod(m_caretClock.elapsedSeconds(), 1.0) < 0.55) {  // blinking caret
+                float caretX = el.rect.x + 4.0f * pass.scale, h = el.rect.w * 0.6f, y = el.rect.y + (el.rect.w - h) * 0.5f;
+                if (!m_caretStops.empty()) {
+                    const CaretStop& s = m_caretStops[std::min(m_caret, m_caretStops.size() - 1)];
+                    caretX = s.x;
+                    if (field->multiline) h = s.h * 0.85f, y = s.y + s.h * 0.075f;
+                }
+                emit(out, {caretX, y}, {caretX + std::max(2.0f, 2.0f * pass.scale), y + h}, {0, 0, 1, 1}, packColor(field->textColor), {});
             }
             if (m_navVisible && el.entity == m_navFocus) {  // keyboard / gamepad highlight
                 const Vec4 r = el.rect;
