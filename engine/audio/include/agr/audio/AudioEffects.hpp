@@ -9,8 +9,14 @@
 
 namespace agr {
 
-enum class AudioEffectType : u8 { LowPass = 0, HighPass = 1, Echo = 2, Reverb = 3, Compressor = 4, Distortion = 5, Chorus = 6 };
-inline constexpr u32 kAudioEffectTypeCount = 7;
+enum class AudioEffectType : u8 {
+    LowPass = 0, HighPass = 1, Echo = 2, Reverb = 3, Compressor = 4, Distortion = 5, Chorus = 6,
+    Equalizer = 7,   ///< 3 bands: low shelf, middle peak, high shelf (gains in dB).
+    Phaser = 8,      ///< Sweeping notches (4 all-pass stages moved by an LFO).
+    PitchShift = 9,  ///< Changes the pitch without changing the speed (`pitch`: 2 = an octave up).
+    Analyzer = 10,   ///< Leaves the sound unchanged; measures its spectrum (AudioSystem::spectrum).
+};
+inline constexpr u32 kAudioEffectTypeCount = 11;
 const char* audioEffectName(AudioEffectType type);  ///< "LowPass"...
 bool audioEffectFromName(std::string_view name, AudioEffectType& out);
 
@@ -32,6 +38,9 @@ struct AudioEffect {
     float drive = 6.0f;
     float rate = 0.8f, depth = 3.0f;
     float mix = 0.35f;
+    float lowGain = 0.0f, midGain = 0.0f, highGain = 0.0f;  ///< Equalizer, dB.
+    float lowFreq = 200.0f, midFreq = 1000.0f, highFreq = 5000.0f;
+    float pitch = 1.0f;  ///< PitchShift ratio (0.5 .. 2).
 };
 
 /// Stereo effect chain processed in place on interleaved float frames (the audio thread of a
@@ -45,6 +54,9 @@ public:
     void process(float* frames, u32 count);  ///< Stereo, interleaved.
     /// Forgets delays, reverb tails and envelopes.
     void reset();
+    /// Spectrum measured by the chain's first Analyzer: `bands` levels (0..1, log-spaced from
+    /// 40 Hz to 16 kHz). Empty without an Analyzer. Safe from any thread.
+    std::vector<float> spectrum(u32 bands) const;
 
 private:
     struct Impl;

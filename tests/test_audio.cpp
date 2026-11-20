@@ -1,4 +1,7 @@
 #include <doctest/doctest.h>
+#include <algorithm>
+#include <chrono>
+#include <thread>
 
 #include <cmath>
 #include <filesystem>
@@ -430,4 +433,171 @@ TEST_CASE("audio: bus effects apply to the mix, layouts round-trip") {
     CHECK(f.audio.busVolume(AudioBus::Effects) == doctest::Approx(0.4f));
     CHECK(f.audio.busEffects(AudioBus::Effects).size() == 1);
     CHECK_FALSE(AudioBusLayout::fromJson("{"));
+
+}
+namespace {
+/// Frequency of a (stereo, interleaved) signal from its zero crossings (left channel).
+float frequencyOf(const std::vector<float>& f, usize from, u32 rate) {
+    usize crossings = 0;
+    for (usize i = from + 1; i < f.size() / 2; ++i)
+        if ((f[(i - 1) * 2] < 0.0f) != (f[i * 2] < 0.0f)) ++crossings;
+    const usize frames = f.size() / 2 - from;
+    return frames ? static_cast<float>(crossings) * 0.5f * static_cast<float>(rate) / static_cast<float>(frames) : 0.0f;
+}
+std::vector<float> sineStereo(float hz, float amp, u32 frames, u32 rate) {
+    std::vector<float> out(static_cast<usize>(frames) * 2);
+    for (u32 i = 0; i < frames; ++i) out[i * 2] = out[i * 2 + 1] = amp * std::sin(2.0f * 3.14159265f * hz * static_cast<float>(i) / static_cast<float>(rate));
+    return out;
+}
+float peakAfter(const std::vector<float>& f, usize fromFrame) {
+    float p = 0.0f;
+    for (usize i = fromFrame * 2; i < f.size(); ++i) p = std::max(p, std::fabs(f[i]));
+    return p;
+}
+std::vector<float> chain(std::vector<AudioEffect> fx, std::vector<float> in, u32 rate) {
+    AudioEffectChain c;
+    c.configure(fx, rate);
+    for (usize i = 0; i < in.size() / 2; i += 512) c.process(in.data() + i * 2, static_cast<u32>(std::min<usize>(512, in.size() / 2 - i)));
+    return in;
+}
+} // namespace
+
+TEST_CASE("audio effects: equalizer, phaser, pitch shift, spectrum analyzer") {
+    const u32 rate = 48000;
+    AudioEffect eq{.type = AudioEffectType::Equalizer};
+    eq.lowGain = 12.0f;
+    eq.highGain = -24.0f;
+    CHECK(peakAfter(chain({eq}, sineStereo(60, 0.2f, rate / 4, rate), rate), rate / 8) > 0.5f);     // +12 dB ~ x4
+    CHECK(peakAfter(chain({eq}, sineStereo(12000, 0.5f, rate / 4, rate), rate), rate / 8) < 0.06f);  // -24 dB
+    CHECK(peakAfter(chain({eq}, sineStereo(1000, 0.5f, rate / 4, rate), rate), rate / 8) == doctest::Approx(0.5f).epsilon(0.15));  // middle untouched
+    // Phaser: changes the signal without changing its pitch.
+    AudioEffect ph{.type = AudioEffectType::Phaser, .feedback = 0.5f, .rate = 0.5f, .depth = 3.0f, .mix = 0.5f};
+    const auto in = sineStereo(440, 0.5f, rate / 2, rate);
+    const auto phased = chain({ph}, in, rate);
+    float diff = 0.0f;
+    for (usize i = 0; i < in.size(); ++i) diff = std::max(diff, std::fabs(phased[i] - in[i]));
+    CHECK(diff > 0.05f);
+    CHECK(frequencyOf(phased, rate / 4, rate) == doctest::Approx(440.0f).epsilon(0.05));
+    // Pitch shift: an octave up and a fifth down, same duration.
+    AudioEffect ps{.type = AudioEffectType::PitchShift, .mix = 1.0f};
+    ps.pitch = 2.0f;
+    CHECK(frequencyOf(chain({ps}, sineStereo(440, 0.5f, rate, rate), rate), rate / 4, rate) == doctest::Approx(880.0f).epsilon(0.06));
+    ps.pitch = 2.0f / 3.0f;
+    CHECK(frequencyOf(chain({ps}, sineStereo(660, 0.5f, rate, rate), rate), rate / 4, rate) == doctest::Approx(440.0f).epsilon(0.06));
+    // Analyzer: unchanged sound; the band of 1 kHz is the loudest.
+    AudioEffectChain an;
+    an.configure({AudioEffect{.type = AudioEffectType::Analyzer}}, rate);
+    CHECK(an.spectrum(16).size() == 16);
+    auto tone = sineStereo(1000, 0.5f, rate / 2, rate);
+    const auto original = tone;
+    for (usize i = 0; i < tone.size() / 2; i += 512) an.process(tone.data() + i * 2, static_cast<u32>(std::min<usize>(512, tone.size() / 2 - i)));
+    CHECK(tone == original);
+    const auto bands = an.spectrum(16);
+    const usize loudest = static_cast<usize>(std::max_element(bands.begin(), bands.end()) - bands.begin());
+    const float f0 = 40.0f * std::pow(400.0f, static_cast<float>(loudest) / 16.0f), f1 = 40.0f * std::pow(400.0f, static_cast<float>(loudest + 1) / 16.0f);
+    CHECK((f0 <= 1100.0f && f1 >= 900.0f));
+    CHECK(bands[loudest] > 0.3f);
+    CHECK(bands[0] < 0.05f);
+    // JSON keeps the new fields.
+    AudioBusLayout layout;
+    layout.effects[0] = {eq, ps};
+    auto parsed = AudioBusLayout::fromJson(layout.toJson());
+    REQUIRE(parsed);
+    REQUIRE(parsed.value().effects[0].size() == 2);
+    CHECK(parsed.value().effects[0][0].highGain == doctest::Approx(-24.0f));
+    CHECK(parsed.value().effects[0][1].pitch == doctest::Approx(2.0f / 3.0f));
+}
+
+TEST_CASE("audio: attenuation models, directivity cones, Doppler, random variations; bus spectrum") {
+    AudioFixture f;
+    f.sine("assets://tone.wav", 2.0);
+    Scene scene;
+    const auto cam = scene.createEntity("Camera");
+    scene.registry().emplace<CameraComponent>(cam);  // listener at the origin looking -Z
+    const auto spk = scene.createEntity("Speaker");
+    scene.registry().get<TransformComponent>(spk).position = {0, 0, -20};
+    auto& s = scene.registry().emplace<AudioSourceComponent>(spk);
+    s.clip = "assets://tone.wav";
+    s.loop = true;
+    s.spatial = true;
+    s.maxDistance = 1000.0f;
+    scene.updateTransforms();
+    auto level = [&]() {
+        f.audio.updateScene(scene, true);
+        f.run(0.05);
+        return f.run(0.05).peak();
+    };
+    const float inverse = level();
+    scene.registry().get<AudioSourceComponent>(spk).attenuation = AudioAttenuation::None;
+    const float none = level();
+    CHECK(none > inverse * 3.0f);
+    // Cone: the speaker's forward (-Z) points away from the listener: only the outer volume.
+    auto& src = scene.registry().get<AudioSourceComponent>(spk);
+    src.coneInnerAngle = math::radians(60.0f);
+    src.coneOuterAngle = math::radians(90.0f);
+    src.coneOuterVolume = 0.1f;
+    const float away = level();
+    CHECK(away < none * 0.2f);
+    scene.registry().get<TransformComponent>(spk).rotation = math::Quat::fromAxisAngle({0, 1, 0}, 3.14159265f);  // facing the listener
+    scene.updateTransforms();
+    const float facing = level();
+    CHECK(facing > away * 4.0f);
+
+    // Doppler: a source rushing toward the listener sounds higher.
+    f.audio.stopAll();
+    f.audio.resetScene();
+    Scene car;
+    const auto c2 = car.createEntity("Camera");
+    car.registry().emplace<CameraComponent>(c2);
+    const auto horn = car.createEntity("Horn");
+    car.registry().get<TransformComponent>(horn).position = {0, 0, -40};
+    auto& h = car.registry().emplace<AudioSourceComponent>(horn);
+    h.clip = "assets://tone.wav";
+    h.loop = true;
+    h.spatial = true;
+    h.maxDistance = 1000.0f;
+    h.attenuation = AudioAttenuation::None;
+    h.doppler = 1.0f;
+    car.updateTransforms();
+    f.audio.updateScene(car, true);
+    for (int i = 0; i < 3; ++i) {  // moves 2 m toward the listener every ~20 ms: ~100 m/s
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        car.registry().get<TransformComponent>(horn).position.z += 2.0f;
+        car.updateTransforms();
+        f.audio.updateScene(car, true);
+    }
+    f.run(0.05);
+    f.run(0.1);
+    CHECK(frequencyOf(f.buffer, 0, kRate) > 470.0f);  // 440 Hz raised (~1.4x at 100 m/s)
+
+    // Random variations: alternate clips of different loudness are both heard over restarts.
+    f.sine("assets://quiet.wav", 1.0, 0.1f);
+    f.sine("assets://loud.wav", 1.0, 0.8f);
+    Scene steps;
+    const auto foot = steps.createEntity("Foot");
+    auto& fs = steps.registry().emplace<AudioSourceComponent>(foot);
+    fs.clip = "assets://quiet.wav";
+    fs.alternateClips = "assets://loud.wav";
+    fs.playOnStart = false;
+    fs.randomVolume = 0.0f;
+    steps.updateTransforms();
+    f.audio.updateScene(steps, true);
+    bool quiet = false, loud = false;
+    for (int i = 0; i < 24; ++i) {
+        f.audio.playSource(steps, foot);
+        const float p = f.run(0.03).peak();
+        quiet |= p > 0.05f && p < 0.2f;
+        loud |= p > 0.5f;
+    }
+    CHECK(quiet);
+    CHECK(loud);
+    f.audio.stopAll();
+    // Bus spectrum through an Analyzer on Effects.
+    f.audio.setBusEffects(AudioBus::Effects, {AudioEffect{.type = AudioEffectType::Analyzer}});
+    REQUIRE(f.audio.play("assets://tone.wav", {.bus = AudioBus::Effects, .loop = true}));
+    f.run(0.2);
+    const auto bands = f.audio.spectrum(AudioBus::Effects, 8);
+    REQUIRE(bands.size() == 8);
+    CHECK(*std::max_element(bands.begin(), bands.end()) > 0.2f);
+    CHECK(f.audio.spectrum(AudioBus::Music, 8).empty());
 }

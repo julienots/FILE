@@ -118,6 +118,29 @@ void MixerPanel::drawEffects(EditorShared& s, AudioSystem& audio) {
                     changed |= ImGui::SliderFloat("Profondeur (ms)", &e.depth, 0.0f, 20.0f);
                     changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
                     break;
+                case AudioEffectType::Equalizer:
+                    changed |= ImGui::SliderFloat("Graves (dB)", &e.lowGain, -24.0f, 24.0f);
+                    changed |= ImGui::SliderFloat("Médiums (dB)", &e.midGain, -24.0f, 24.0f);
+                    changed |= ImGui::SliderFloat("Aigus (dB)", &e.highGain, -24.0f, 24.0f);
+                    changed |= ImGui::SliderFloat("Fréq. graves", &e.lowFreq, 30.0f, 1000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderFloat("Fréq. médiums", &e.midFreq, 200.0f, 8000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderFloat("Fréq. aigus", &e.highFreq, 1000.0f, 16000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+                    break;
+                case AudioEffectType::Phaser:
+                    changed |= ImGui::SliderFloat("Vitesse (Hz)", &e.rate, 0.05f, 10.0f);
+                    changed |= ImGui::SliderFloat("Étendue (octaves)", &e.depth, 0.1f, 6.0f);
+                    changed |= ImGui::SliderFloat("Réinjection", &e.feedback, 0.0f, 0.9f);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+                case AudioEffectType::PitchShift:
+                    changed |= ImGui::SliderFloat("Hauteur (×)", &e.pitch, 0.25f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderFloat("Mélange", &e.mix, 0.0f, 1.0f);
+                    break;
+                case AudioEffectType::Analyzer: {
+                    const auto bands = audio.spectrum(bus, 32);
+                    if (!bands.empty()) ImGui::PlotHistogram("##spectrum", bands.data(), static_cast<int>(bands.size()), 0, "spectre", 0.0f, 1.0f, {0, 60});
+                    break;
+                }
             }
             ImGui::TreePop();
         }
@@ -131,7 +154,8 @@ void MixerPanel::drawEffects(EditorShared& s, AudioSystem& audio) {
         std::swap(list[static_cast<usize>(up)], list[static_cast<usize>(up - 1)]);
         changed = true;
     }
-    static const char* kLabels[kAudioEffectTypeCount] = {"Passe-bas", "Passe-haut", "Écho", "Réverbération", "Compresseur", "Distorsion", "Chorus"};
+    static const char* kLabels[kAudioEffectTypeCount] = {"Passe-bas", "Passe-haut", "Écho",   "Réverbération",         "Compresseur", "Distorsion",
+                                                         "Chorus",    "Égaliseur",  "Phaser", "Décalage de hauteur", "Analyseur de spectre"};
     if (ImGui::BeginCombo("##add", "+ Ajouter un effet")) {
         for (u32 t = 0; t < kAudioEffectTypeCount; ++t)
             if (ImGui::Selectable(kLabels[t])) {
@@ -140,6 +164,8 @@ void MixerPanel::drawEffects(EditorShared& s, AudioSystem& audio) {
                 if (e.type == AudioEffectType::HighPass) e.cutoff = 200.0f;
                 if (e.type == AudioEffectType::Distortion) e.mix = 0.6f;
                 if (e.type == AudioEffectType::Chorus) e.mix = 0.5f;
+                if (e.type == AudioEffectType::Phaser) e.mix = 0.5f, e.feedback = 0.5f, e.rate = 0.4f, e.depth = 3.0f;
+                if (e.type == AudioEffectType::PitchShift) e.mix = 1.0f, e.pitch = 1.5f;
                 list.push_back(e);
                 changed = true;
             }

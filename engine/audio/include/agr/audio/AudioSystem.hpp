@@ -34,6 +34,11 @@ struct PlayParams {
     float minDistance = 1.0f;
     float maxDistance = 30.0f;
     float fadeInSeconds = 0.0f;
+    AudioAttenuation attenuation = AudioAttenuation::Inverse;
+    float rolloff = 1.0f;
+    float doppler = 0.0f;
+    float coneInner = 6.2832f, coneOuter = 6.2832f, coneOuterVolume = 0.0f;  ///< Radians.
+    math::Vec3 direction{0.0f, 0.0f, -1.0f};  ///< Cone axis (spatial).
 };
 
 /// 0 = no voice.
@@ -92,6 +97,9 @@ public:
     /// on Music when paused, compressor on Master...). Safe while sounds play.
     void setBusEffects(AudioBus bus, std::vector<AudioEffect> effects);
     const std::vector<AudioEffect>& busEffects(AudioBus bus) const;
+    /// Spectrum of what the bus mixes, measured by an Analyzer effect on it (`bands` levels 0..1,
+    /// log-spaced 40 Hz .. 16 kHz); empty without one. For visualizers and rhythm games.
+    std::vector<float> spectrum(AudioBus bus, u32 bands) const;
     /// Volumes, mutes and effects of every bus at once (assets://audio_buses.json).
     void applyLayout(const AudioBusLayout& layout);
     AudioBusLayout layout() const;

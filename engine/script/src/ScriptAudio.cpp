@@ -102,7 +102,10 @@ float* effectField(AudioEffect& e, std::string_view name) {
         {"feedback", &AudioEffect::feedback},   {"roomSize", &AudioEffect::roomSize},   {"damping", &AudioEffect::damping},
         {"threshold", &AudioEffect::threshold}, {"ratio", &AudioEffect::ratio},         {"attack", &AudioEffect::attack},
         {"release", &AudioEffect::release},     {"gain", &AudioEffect::gain},           {"drive", &AudioEffect::drive},
-        {"rate", &AudioEffect::rate},           {"depth", &AudioEffect::depth},         {"mix", &AudioEffect::mix}};
+        {"rate", &AudioEffect::rate},           {"depth", &AudioEffect::depth},         {"mix", &AudioEffect::mix},
+        {"lowGain", &AudioEffect::lowGain},     {"midGain", &AudioEffect::midGain},     {"highGain", &AudioEffect::highGain},
+        {"lowFreq", &AudioEffect::lowFreq},     {"midFreq", &AudioEffect::midFreq},     {"highFreq", &AudioEffect::highFreq},
+        {"pitch", &AudioEffect::pitch}};
     for (const auto& [n, member] : fields)
         if (name == n) return &(e.*member);
     return nullptr;
@@ -162,6 +165,20 @@ int au_busEffectCount(lua_State* L) {
     return 1;
 }
 
+/// agr.audio.spectrum(bus [, bands]) -> { level, ... } (0..1) from an Analyzer effect on the bus.
+int au_spectrum(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    const u32 bands = static_cast<u32>(std::clamp<lua_Integer>(luaL_optinteger(L, 2, 16), 1, 256));
+    AudioSystem* a = audioOf(L);
+    const auto levels = a ? a->spectrum(bus, bands) : std::vector<float>{};
+    lua_createtable(L, static_cast<int>(levels.size()), 0);
+    for (usize i = 0; i < levels.size(); ++i) {
+        lua_pushnumber(L, levels[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    return 1;
+}
+
 int au_setBusVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
     const float x = static_cast<float>(luaL_checknumber(L, 2));
@@ -215,7 +232,7 @@ void openAudioBindings(lua_State* L) {
                                      {"setPitch", au_setPitch},   {"setBusVolume", au_setBusVolume},
                                      {"busVolume", au_busVolume}, {"setBusMuted", au_setBusMuted},
                                      {"busMuted", au_busMuted},   {"addBusEffect", au_addBusEffect},
-                                     {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects},
+                                     {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects}, {"spectrum", au_spectrum},
                                      {"busEffectCount", au_busEffectCount}, {nullptr, nullptr}};
     addAgrLibrary(L, "audio", audio);
     static const luaL_Reg methods[] = {

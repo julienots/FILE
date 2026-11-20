@@ -44,6 +44,10 @@ miniaudio, sur le fil audio : modifier un effet pendant que les sons jouent ne c
 | `Compressor` | seuil (dB), ratio, attaque / relâchement (ms), gain (dB) | éviter la saturation quand beaucoup de sons jouent, voix régulières |
 | `Distortion` (saturation douce) | attaque du signal, mélange | moteurs, radio grésillante, rage |
 | `Chorus` | vitesse (Hz), profondeur (ms), mélange | voix de robot, ambiance aquatique, élargir un son |
+| `Equalizer` (égaliseur 3 bandes) | graves (étagère), médiums (cloche), aigus (étagère) : gain en dB et fréquence | sonorité de la musique, radio, renforcer les basses d'une explosion |
+| `Phaser` | vitesse (Hz), étendue (octaves), réinjection, mélange | science-fiction, guitare, téléportation |
+| `PitchShift` (décalage de hauteur) | `pitch` (2 = une octave plus haut), mélange | voix de monstre / d'écureuil sans changer la vitesse |
+| `Analyzer` (analyseur de spectre) | — (le son n'est pas modifié) | visualiseurs, jeux de rythme : `AudioSystem::spectrum(bus, bandes)`, `agr.audio.spectrum("Music", 16)` (niveaux 0..1, 40 Hz → 16 kHz) ; le mixeur affiche le spectre |
 
 - **Mixeur** (*Affichage › Mixeur audio*) : cliquer le nom d'un bus montre ses effets ; *+ Ajouter un
   effet*, case pour l'activer, réglages, `^` pour le monter dans l'ordre, `x` pour le retirer — le son
@@ -62,7 +66,7 @@ miniaudio, sur le fil audio : modifier un effet pendant que les sons jouent ne c
 
 | Composant | Champs |
 |---|---|
-| `AudioSource` | `clip`, `bus`, `volume`, `pitch` (vitesse), `loop`, `playOnStart`, `spatial`, `minDistance`, `maxDistance`, `stream` |
+| `AudioSource` | `clip`, `bus`, `volume`, `pitch` (vitesse), `loop`, `playOnStart`, `spatial`, `minDistance`, `maxDistance`, `stream` ; spatial : `attenuation` (`None`, `Inverse`, `Linear`, `Exponential`), `rolloff`, `doppler` (0 = sans, 1 = réaliste : un véhicule qui approche sonne plus aigu), cône de directivité (`coneInnerAngle`, `coneOuterAngle`, `coneOuterVolume` ; avant = -Z de l'entité : haut-parleur, voix d'un personnage) ; variations à chaque départ (pas, impacts) : `alternateClips` (autres clips tirés au hasard), `randomPitch`, `randomVolume` |
 | `AudioListener` | `active` : position et orientation d'écoute (par défaut la caméra principale) |
 
 Les sources suivent la scène : démarrage avec le jeu (`playOnStart`), position mise à jour à chaque
@@ -100,7 +104,8 @@ sur `Master` : ~0,17 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : `audio effects
 
 ## Limites actuelles
 
-- Pas encore de décalage de hauteur (pitch shift), de phaser, d'égaliseur multibande, d'analyseur de
-  spectre ni d'enregistrement ; pas d'effet Doppler, d'occlusion ni de cônes de directivité ; pas de bus
-  créés par l'utilisateur (les six bus sont fixes).
+- Pas d'enregistrement (microphone) ni d'occlusion automatique (un script peut baisser le volume ou
+  ajouter un passe-bas selon un rayon) ; pas de bus créés par l'utilisateur (les six bus sont fixes).
+- Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
+  hauteur pendant une image).
 - Pas encore testé sur un appareil Android (sortie AAudio / OpenSL ES de miniaudio : phase 8).

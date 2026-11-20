@@ -1,6 +1,8 @@
 #include "agr/audio/AudioSystem.hpp"
+#include "agr/core/Time.hpp"
 
 #include <algorithm>
+#include <random>
 #include <atomic>
 #include <bit>
 #include <cmath>
@@ -49,6 +51,10 @@ struct Voice {
     bool streamed = false;
     u64 order = 0;
     u64 entity = 0;  ///< Packed entity of a scene source, 0 for other voices.
+    std::string sourceClip;            ///< The source's `clip` when started (an alternate may play).
+    float volumeMul = 1.0f, pitchMul = 1.0f;  ///< Random variation picked at start.
+    math::Vec3 lastPosition{0.0f};
+    bool hasLast = false;
 
     ~Voice() {
         if (soundInit) ma_sound_uninit(&sound);
@@ -100,6 +106,12 @@ ma_node_vtable kEffectNodeVtable = {effectNodeProcess, nullptr, 1, 1, 0};
 
 struct AudioSystem::Impl {
     VirtualFileSystem& vfs;
+    std::mt19937 random{0x5EED};
+    Stopwatch sceneClock;
+    f64 lastSceneTime = -1.0;
+    math::Vec3 listenerLast{0.0f};
+    bool listenerHasLast = false;
+    f64 listenerTime = 0.0;
     AudioConfig config;
     ma_engine engine{};
     ma_device device{};
@@ -278,8 +290,8 @@ struct AudioSystem::Impl {
         ma_sound_set_looping(&v->sound, p.loop ? MA_TRUE : MA_FALSE);
         ma_sound_set_volume(&v->sound, std::max(0.0f, p.volume));
         ma_sound_set_pitch(&v->sound, std::clamp(p.pitch, 0.01f, 16.0f));
-        ma_sound_set_doppler_factor(&v->sound, 0.0f);
         applySpatial(*v, p.spatial, p.position, p.minDistance, p.maxDistance);
+        applySpatialModel(*v, p);
         if (!p.spatial) ma_sound_set_pan(&v->sound, std::clamp(p.pan, -1.0f, 1.0f));
         if (p.fadeInSeconds > 0.0f)
             ma_sound_set_fade_in_milliseconds(&v->sound, 0.0f, 1.0f, static_cast<ma_uint64>(p.fadeInSeconds * 1000.0f));
@@ -287,6 +299,23 @@ struct AudioSystem::Impl {
         const VoiceId id = v->id;
         voices.emplace(id, std::move(v));
         return id;
+    }
+
+    /// Attenuation model, Doppler and directivity cone (miniaudio's spatializer).
+    static void applySpatialModel(Voice& v, const PlayParams& p) {
+        ma_attenuation_model model = ma_attenuation_model_inverse;
+        switch (p.attenuation) {
+            case AudioAttenuation::None: model = ma_attenuation_model_inverse; break;  // rolloff 0 below: miniaudio's "none" disables panning, cones and Doppler
+            case AudioAttenuation::Inverse: model = ma_attenuation_model_inverse; break;
+            case AudioAttenuation::Linear: model = ma_attenuation_model_linear; break;
+            case AudioAttenuation::Exponential: model = ma_attenuation_model_exponential; break;
+        }
+        ma_sound_set_attenuation_model(&v.sound, model);
+        ma_sound_set_rolloff(&v.sound, p.attenuation == AudioAttenuation::None ? 0.0f : std::max(p.rolloff, 0.0f));
+        ma_sound_set_doppler_factor(&v.sound, std::max(p.doppler, 0.0f));
+        const float inner = std::clamp(p.coneInner, 0.0f, 6.2832f), outer = std::clamp(std::max(p.coneOuter, inner), 0.0f, 6.2832f);
+        ma_sound_set_cone(&v.sound, inner, outer, std::clamp(p.coneOuterVolume, 0.0f, 1.0f));
+        ma_sound_set_direction(&v.sound, p.direction.x, p.direction.y, p.direction.z);
     }
 
     static void applySpatial(Voice& v, bool spatial, math::Vec3 position, float minDistance, float maxDistance) {
@@ -454,6 +483,14 @@ void AudioSystem::setBusEffects(AudioBus bus, std::vector<AudioEffect> effects) 
     }
 }
 
+std::vector<float> AudioSystem::spectrum(AudioBus bus, u32 bands) const {
+    const i32 b = std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1);
+    EffectNode* n = m->effectNodes[b].get();
+    if (!n) return {};
+    std::lock_guard lock(n->mutex);  // no reconfiguration meanwhile
+    return n->chain.spectrum(bands);
+}
+
 const std::vector<AudioEffect>& AudioSystem::busEffects(AudioBus bus) const {
     return m->busEffects[std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1)];
 }
@@ -532,6 +569,14 @@ bool AudioSystem::busMuted(AudioBus bus) const {
 
 void AudioSystem::setListener(math::Vec3 p, math::Vec3 forward, math::Vec3 up) {
     if (!m->engineInit) return;
+    const f64 now = m->sceneClock.elapsedSeconds();
+    if (m->listenerHasLast && now - m->listenerTime > 1e-4) {  // Doppler: listener velocity
+        const math::Vec3 v = (p - m->listenerLast) / static_cast<float>(now - m->listenerTime);
+        ma_engine_listener_set_velocity(&m->engine, 0, v.x, v.y, v.z);
+    }
+    m->listenerTime = now;
+    m->listenerLast = p;
+    m->listenerHasLast = true;
     ma_engine_listener_set_position(&m->engine, 0, p.x, p.y, p.z);
     ma_engine_listener_set_direction(&m->engine, 0, forward.x, forward.y, forward.z);
     ma_engine_listener_set_world_up(&m->engine, 0, up.x, up.y, up.z);
@@ -605,6 +650,9 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
         return;
     }
     auto& reg = scene.registry();
+    const f64 now = m->sceneClock.elapsedSeconds();
+    const f64 dt = m->lastSceneTime < 0.0 ? 0.0 : now - m->lastSceneTime;
+    m->lastSceneTime = now;
 
     // Listener: first active AudioListener, else the primary camera.
     bool listenerSet = false;
@@ -638,14 +686,28 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
         }
         Voice* v = m->find(it->second);
         if (!v) return;
-        ma_sound_set_volume(&v->sound, std::max(0.0f, s.volume));
-        ma_sound_set_pitch(&v->sound, std::clamp(s.pitch, 0.01f, 16.0f));
+        ma_sound_set_volume(&v->sound, std::max(0.0f, s.volume * v->volumeMul));
+        ma_sound_set_pitch(&v->sound, std::clamp(s.pitch * v->pitchMul, 0.01f, 16.0f));
+        if (s.spatial) {
+            const math::Vec3 pos = w.matrix.translation();
+            if (v->hasLast && dt > 1e-4) {  // Doppler: velocity from the movement since the last update
+                const math::Vec3 vel = (pos - v->lastPosition) / static_cast<float>(dt);
+                ma_sound_set_velocity(&v->sound, vel.x, vel.y, vel.z);
+            }
+            v->lastPosition = pos;
+            v->hasLast = true;
+            PlayParams sp;
+            sp.attenuation = s.attenuation, sp.rolloff = s.rolloff, sp.doppler = s.doppler;
+            sp.coneInner = s.coneInnerAngle, sp.coneOuter = s.coneOuterAngle, sp.coneOuterVolume = s.coneOuterVolume;
+            sp.direction = math::normalize(w.matrix.transformVector({0, 0, -1}));
+            Impl::applySpatialModel(*v, sp);
+        }
         if (v->loop != s.loop && !v->stopping) {
             v->loop = s.loop;
             ma_sound_set_looping(&v->sound, s.loop ? MA_TRUE : MA_FALSE);
         }
         if (v->spatial != s.spatial || s.spatial) Impl::applySpatial(*v, s.spatial, w.matrix.translation(), s.minDistance, s.maxDistance);
-        if (v->uri != s.clip || v->bus != s.bus || v->streamed != s.stream) {
+        if (v->sourceClip != s.clip || v->bus != s.bus || v->streamed != s.stream) {
             // Clip, bus or streaming changed while playing: restart with the new settings.
             m->forget(it->second);
             playSource(scene, e);
@@ -672,18 +734,48 @@ VoiceId AudioSystem::playSource(Scene& scene, ecs::Entity entity) {
     if (auto it = m->sources.find(entity.packed()); it != m->sources.end()) m->forget(it->second);
     PlayParams p;
     p.bus = s->bus;
-    p.volume = s->volume;
-    p.pitch = s->pitch;
+    // Variations (footsteps, impacts): a random clip among clip + alternates, random pitch / volume.
+    std::string clip = s->clip;
+    if (!s->alternateClips.empty()) {
+        std::vector<std::string> choices{s->clip};
+        std::string cur;
+        for (char c : s->alternateClips + ";") {
+            if (c == ';') {
+                if (!cur.empty()) choices.push_back(cur);
+                cur.clear();
+            } else if (c != ' ') {
+                cur += c;
+            }
+        }
+        clip = choices[std::uniform_int_distribution<usize>(0, choices.size() - 1)(m->random)];
+    }
+    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+    const float pitchMul = s->randomPitch > 0.0f ? 1.0f + (unit(m->random) * 2.0f - 1.0f) * std::min(s->randomPitch, 0.9f) : 1.0f;
+    const float volumeMul = s->randomVolume > 0.0f ? 1.0f - unit(m->random) * std::min(s->randomVolume, 1.0f) : 1.0f;
+    p.volume = s->volume * volumeMul;
+    p.pitch = s->pitch * pitchMul;
+    p.attenuation = s->attenuation;
+    p.rolloff = s->rolloff;
+    p.doppler = s->doppler;
+    p.coneInner = s->coneInnerAngle;
+    p.coneOuter = s->coneOuterAngle;
+    p.coneOuterVolume = s->coneOuterVolume;
+    if (auto* w = reg.tryGet<WorldTransformComponent>(entity)) p.direction = math::normalize(w->matrix.transformVector({0, 0, -1}));
     p.loop = s->loop;
     p.stream = s->stream;
     p.spatial = s->spatial;
     p.minDistance = s->minDistance;
     p.maxDistance = s->maxDistance;
     if (auto* w = reg.tryGet<WorldTransformComponent>(entity)) p.position = w->matrix.translation();
-    auto voice = m->play(s->clip, p, entity.packed());
+    auto voice = m->play(clip, p, entity.packed());
     if (!voice) {
         AGR_LOG_WARN("Audio", "{}", voice.error().message);
         return 0;
+    }
+    if (Voice* v = m->find(voice.value())) {
+        v->sourceClip = s->clip;
+        v->volumeMul = volumeMul;
+        v->pitchMul = pitchMul;
     }
     m->sources[entity.packed()] = voice.value();
     m->started.insert(entity.packed());
