@@ -80,6 +80,18 @@ end
 function Ship:fire(power) agr.fx.burst(...) end    -- partout, l'appelant compris
 ```
 
+- **Visibilité** (`NetSync.visibility`, côté hôte) : `All` (tout le monde), `OwnerOnly` (son seul
+  propriétaire : main d'un joueur, inventaire), `Range` (les joueurs qui possèdent une entité à moins de
+  `visibleRange` : brouillard de guerre, grands mondes). `agr.net.setVisible(entité, joueur, oui/non)`
+  force la visibilité pour un joueur. Une entité qui redevient visible est renvoyée aussitôt.
+- **Seulement les changements** (`NetSync.onlyChanges`, actif par défaut) : un état identique au
+  précédent n'est pas renvoyé (une fois par seconde quand même, contre les pertes) ; une entité immobile
+  ne coûte rien. `ReplicationStats::statesSkipped` / `statesHidden`.
+- **Mot de passe** : `agr.net.setPassword("...")` avant `host` / `join` ; l'hôte refuse un mot de passe
+  différent (`agr.net.joinError()` → `"wrong password"`, ou `"full"`). Vérifié par une empreinte liée à
+  chaque tentative de connexion (le mot de passe ne circule pas en clair) ; ce n'est pas un chiffrement.
+- **Latence et trafic** : `agr.net.ping(joueur)` → aller-retour en millisecondes (lissé),
+  `agr.net.stats()` → octets et paquets envoyés / reçus, renvois.
 - **Gros messages** : les messages fiables sont découpés et recollés automatiquement (jusqu'à
   256 Ko) ; les non fiables restent limités à 1200 octets (un datagramme).
 - **Découverte en réseau local** : l'hôte s'annonce (`agr.net.advertise("Partie de Julien")`) ; un
@@ -99,6 +111,8 @@ client → hôte, disparition partout, propriétés rendues à l'hôte au dépar
 
 - IPv4 uniquement ; pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
   ouvrir son port UDP) ; pas de WebSocket / WebRTC (pas encore d'export Web).
-- Pas de chiffrement ni d'authentification : ne pas transmettre de données sensibles.
+- Pas de chiffrement (le mot de passe n'empêche que de rejoindre) : ne pas transmettre de données
+  sensibles.
 - Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de
-  compensation de latence ; pas de « visibilité » par joueur (tout est envoyé à tous).
+  compensation de latence ; la visibilité filtre les états, pas les apparitions (une entité créée en
+  réseau existe chez tous les joueurs).

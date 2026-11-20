@@ -22,12 +22,22 @@ namespace agr::net {
 
 /// Keeps an entity in step over the network: its Transform (interpolated on the machines that
 /// do not own it) and reflected fields ("Health.value;SpriteRenderer.color").
+enum class NetVisibility : i32 { All = 0, OwnerOnly = 1, Range = 2 };
+
 struct NetSyncComponent {
     i32 owner = 1;              ///< Peer that simulates the entity (1 = host).
     bool syncTransform = true;
     bool interpolate = true;    ///< Smooth between received states (else snap).
     float rate = 20.0f;         ///< States sent per second by the owner.
     std::string fields;         ///< "Component.field" separated by ';' (numbers, booleans, vectors, colors, texts).
+    /// Who receives its state (host side): everyone, only its owner, or the players that own an
+    /// entity within `visibleRange` of it (fog of war, big worlds). Replicator::setVisibleTo
+    /// overrides it per player.
+    NetVisibility visibility = NetVisibility::All;
+    float visibleRange = 50.0f;
+    /// Sends a state only when it changed (plus one per second, against losses): idle entities
+    /// cost nothing.
+    bool onlyChanges = true;
 };
 
 void registerNetComponents();
@@ -38,6 +48,8 @@ struct ReplicationStats {
     u32 statesReceived = 0;  ///< Entity states applied this frame.
     u32 spawned = 0;         ///< Network-spawned entities alive.
     u32 rpcsSent = 0, rpcsReceived = 0;  ///< Since start.
+    u32 statesSkipped = 0;   ///< Unchanged states not sent this frame (onlyChanges).
+    u32 statesHidden = 0;    ///< States not sent to a player that cannot see the entity, this frame.
 };
 
 class Replicator {
@@ -56,6 +68,11 @@ public:
     /// Host: gives an entity to a peer (it then sends its state).
     bool setOwner(Scene& scene, NetSession& session, ecs::Entity e, u32 owner);
     u32 ownerOf(Scene& scene, ecs::Entity e) const;
+    /// Host: shows / hides an entity to one player whatever its NetSync visibility (0 = clear).
+    void setVisibleTo(Scene& scene, ecs::Entity e, u32 peer, bool visible);
+    void clearVisibility(Scene& scene, ecs::Entity e);
+    /// Host: whether `peer` receives the state of `e`.
+    bool visibleTo(Scene& scene, ecs::Entity e, u32 peer) const;
     bool isOwner(Scene& scene, NetSession& session, ecs::Entity e) const;
     /// Calls `function` of the entity's script on `target` (0 = every other machine, 1 = host,
     /// n = that peer), through the host. Reliable and in order.
@@ -85,6 +102,10 @@ private:
     RpcHandler m_rpc;
     std::unordered_map<u64, Remote> m_remote;   // uuid -> interpolation
     std::unordered_map<u64, f64> m_lastSent;    // uuid -> time of its last state
+    std::unordered_map<u64, std::string> m_lastBytes;  // uuid -> last state sent (onlyChanges)
+    std::unordered_map<u64, f64> m_lastFull;    // uuid -> time of its last sent state, changed or not
+    std::unordered_map<u64, std::unordered_map<u32, bool>> m_visibility;  // uuid -> peer -> forced
+    std::unordered_map<u64, std::unordered_map<u32, bool>> m_wasVisible;  // uuid -> peer -> visible last frame
     std::unordered_map<u64, Spawned> m_spawned; // uuid -> prefab (host: for late joiners)
     u32 m_sender = 0;
     u64 m_sceneGeneration = 0;

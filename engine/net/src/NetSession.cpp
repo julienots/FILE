@@ -31,7 +31,17 @@ constexpr usize kHeader = 4 + 1 + 4 + 4 + 4;  // magic, type, sender, seq, token
 constexpr f64 kResendInterval = 0.2, kPingInterval = 0.5, kHelloInterval = 0.25;
 constexpr usize kMaxEarly = 256, kMaxUnacked = 1024;
 
-enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8, Discover = 9, Info = 10 };
+enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8, Discover = 9, Info = 10, Denied = 11, Pong = 12 };
+
+/// Proof of the password bound to the connection's token (FNV-1a 64, two rounds).
+u64 passwordProof(const std::string& password, u32 token) {
+    u64 h = 1469598103934665603ull;
+    for (int round = 0; round < 2; ++round) {
+        for (unsigned char c : password) h = (h ^ c) * 1099511628211ull;
+        for (int i = 0; i < 4; ++i) h = (h ^ ((token >> (8 * i)) & 0xFF)) * 1099511628211ull;
+    }
+    return h;
+}
 // First byte of every reliable payload: a whole message, or a fragment of a large one.
 constexpr char kWhole = 'M', kFragment = 'F', kLastFragment = 'L';
 
@@ -167,8 +177,14 @@ Status NetSession::host(u16 port, u32 maxPeers) {
     return {};
 }
 
+f64 NetSession::rtt(u32 peer) const {
+    auto it = m_peers.find(peer);
+    return it == m_peers.end() ? 0.0 : it->second.rtt;
+}
+
 Status NetSession::join(std::string_view address, u16 port) {
     close();
+    m_joinError.clear();
     stopDiscovery();
     auto addr = Address::resolve(address, port);
     if (!addr) return addr.error();
@@ -189,7 +205,8 @@ Status NetSession::join(std::string_view address, u16 port) {
 
 void NetSession::close() {
     if (m_role != NetRole::None)
-        for (auto& [id, p] : m_peers) sendPacket(p, Bye, 0, {});
+        for (auto& [id, p] : m_peers)
+            for (int copy = 0; copy < 3; ++copy) sendPacket(p, Bye, 0, {});  // unreliable: a few copies (no wait for the timeout)
     m_peers.clear();
     m_role = NetRole::None;
     m_localId = 0;
@@ -335,6 +352,17 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
             sendPacket(tmp, Full, 0, {});
             return;
         }
+        {
+            u64 proof = 0;
+            if (payload.size() >= 8) std::memcpy(&proof, payload.data(), 8);
+            if (proof != passwordProof(m_password, token)) {
+                Peer tmp;
+                tmp.address = from;
+                sendPacket(tmp, Denied, 0, {});
+                AGR_LOG_WARN("Net", "refused {}: wrong password", from.toString());
+                return;
+            }
+        }
         Peer np;
         np.id = m_nextId++;
         np.address = from;
@@ -349,10 +377,11 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
         m_peers[np.id] = std::move(np);
         return;
     }
-    if (m_role == NetRole::Client && (type == Welcome || type == Full)) {
+    if (m_role == NetRole::Client && (type == Welcome || type == Full || type == Denied)) {
         if (!p || p->id != kHostId) return;
-        if (type == Full) {
-            AGR_LOG_WARN("Net", "the host is full");
+        if (type == Full || type == Denied) {
+            m_joinError = type == Full ? "full" : "wrong password";
+            AGR_LOG_WARN("Net", "join refused: {}", m_joinError);
             drop(kHostId, true);
             return;
         }
@@ -392,7 +421,15 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
             q.erase(std::remove_if(q.begin(), q.end(), [&](const Pending& m) { return m.seq == seq; }), q.end());
             break;
         }
-        case Ping: break;
+        case Ping: sendPacket(*p, Pong, 0, payload); break;
+        case Pong:
+            if (payload.size() >= 8) {
+                f64 sent = 0.0;
+                std::memcpy(&sent, payload.data(), 8);
+                const f64 sample = std::max(now - sent, 0.0);
+                p->rtt = p->rtt <= 0.0 ? sample : p->rtt * 0.8 + sample * 0.2;
+            }
+            break;
         case Bye: drop(p->id, true); break;
         default: break;
     }
@@ -429,13 +466,18 @@ void NetSession::update(f64 now) {
         }
         if (m_role == NetRole::Client && !p.welcomed) {  // still joining: say hello again
             if (now - p.lastPing >= kHelloInterval) {
-                sendPacket(p, Hello, 0, {});
+                std::string proof;
+                const u64 h = passwordProof(m_password, m_token);
+                proof.append(reinterpret_cast<const char*>(&h), 8);
+                sendPacket(p, Hello, 0, proof);
                 p.lastPing = now;
             }
             continue;
         }
         if (now - p.lastPing >= kPingInterval) {
-            sendPacket(p, Ping, 0, {});
+            std::string stamp(8, '\0');
+            std::memcpy(stamp.data(), &now, 8);
+            sendPacket(p, Ping, 0, stamp);
             p.lastPing = now;
         }
         for (Pending& m : p.unacked)

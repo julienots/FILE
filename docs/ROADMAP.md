@@ -141,6 +141,7 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 |---|---|---|
 | Physique 2D Box2D v3 : corps statiques / cinématiques / dynamiques, boîtes, cercles, capsules, composés, déclencheurs, tilemaps solides, rayons, forces | ✅ | `agr::physics2d` |
 | Physique 3D Jolt : corps, boîtes, sphères, capsules, composés, déclencheurs, masse imposée, rotation bloquée, rayons, forces | ✅ | `agr::physics3d` |
+| Réseau : visibilité par joueur (propriétaire, portée, forçage), envoi des seuls changements, mot de passe, mesure de l'aller-retour et du trafic | ✅ | `Replication.cpp`, `NetSession.cpp` ; tests unitaires |
 | Audio : égaliseur, phaser, décalage de hauteur, analyseur de spectre ; atténuations, Doppler, cônes de directivité ; clips alternatifs et variations aléatoires | ✅ | `AudioEffects.cpp`, `AudioSystem.cpp` ; tests unitaires |
 | Éditeur : édition de plusieurs entités dans l'inspecteur, panneau Historique, palette de commandes, rechercher / remplacer et recherche dans tous les scripts | ✅ | `InspectorPanel.cpp`, `EditorCommands.cpp`, `ScriptEditorPanel.cpp` ; tests unitaires et de l'éditeur |
 | Animation : IK en chaîne longue FABRIK (2D, 3D, limites, pôle), transitions interruptibles, masques pondérés | ✅ | `Fabrik.hpp`, `AnimationSystem.cpp` ; tests unitaires |

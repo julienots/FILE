@@ -114,12 +114,55 @@ void registerNetComponents() {
         .field("syncTransform", &NetSyncComponent::syncTransform)
         .field("interpolate", &NetSyncComponent::interpolate, {.tooltip = "Smooth between received states"})
         .field("rate", &NetSyncComponent::rate, {.tooltip = "States per second", .rangeMin = 1.0f, .rangeMax = 120.0f, .speed = 0.5f})
-        .field("fields", &NetSyncComponent::fields, {.tooltip = "Component.field separated by ';' (e.g. Health.value;SpriteRenderer.color)"});
+        .field("fields", &NetSyncComponent::fields, {.tooltip = "Component.field separated by ';' (e.g. Health.value;SpriteRenderer.color)"})
+        .field("visibility", &NetSyncComponent::visibility,
+               {.tooltip = "Who receives it: everyone, its owner only, players owning an entity within visibleRange",
+                .enumEntries = {{"All", 0}, {"OwnerOnly", 1}, {"Range", 2}}})
+        .field("visibleRange", &NetSyncComponent::visibleRange, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.5f})
+        .field("onlyChanges", &NetSyncComponent::onlyChanges, {.tooltip = "Send only when the state changed (and once per second)"});
+}
+
+void Replicator::setVisibleTo(Scene& scene, ecs::Entity e, u32 peer, bool visible) {
+    if (scene.valid(e)) m_visibility[scene.uuidOf(e).value()][peer] = visible;
+}
+
+void Replicator::clearVisibility(Scene& scene, ecs::Entity e) {
+    if (scene.valid(e)) m_visibility.erase(scene.uuidOf(e).value());
+}
+
+bool Replicator::visibleTo(Scene& scene, ecs::Entity e, u32 peer) const {
+    if (!scene.valid(e)) return false;
+    const auto* s = scene.registry().tryGet<NetSyncComponent>(e);
+    if (!s) return false;
+    const u32 owner = s->owner > 0 ? static_cast<u32>(s->owner) : NetSession::kHostId;
+    if (owner == peer) return true;
+    if (auto it = m_visibility.find(scene.uuidOf(e).value()); it != m_visibility.end())
+        if (auto f = it->second.find(peer); f != it->second.end()) return f->second;
+    switch (s->visibility) {
+        case NetVisibility::All: return true;
+        case NetVisibility::OwnerOnly: return false;
+        case NetVisibility::Range: {
+            // Near any entity the player owns (no entity: everything is visible).
+            const math::Vec3 p = scene.worldMatrix(e).translation();
+            bool owns = false, near = false;
+            scene.registry().view<NetSyncComponent>().each([&](ecs::Entity o, NetSyncComponent& os) {
+                if (near || os.owner != static_cast<i32>(peer)) return;
+                owns = true;
+                near = math::length(scene.worldMatrix(o).translation() - p) <= s->visibleRange;
+            });
+            return !owns || near;
+        }
+    }
+    return true;
 }
 
 void Replicator::reset() {
     m_remote.clear();
     m_lastSent.clear();
+    m_lastBytes.clear();
+    m_lastFull.clear();
+    m_visibility.clear();
+    m_wasVisible.clear();
     m_spawned.clear();
     m_sender = 0;
 }
@@ -293,7 +336,8 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
             } else {  // from where it is shown now to the new state
                 const auto& t = scene.registry().get<TransformComponent>(e);
                 rm.p0 = t.position, rm.r0 = t.rotation, rm.s0 = t.scale;
-                rm.interval = std::clamp(now - rm.received, 0.01, 0.5);
+                // States only when it moves (onlyChanges): a gap is a rest, not a slow rate.
+                rm.interval = std::clamp(std::min(now - rm.received, 1.5 / std::clamp(static_cast<f64>(sync->rate), 1.0, 120.0)), 0.01, 0.5);
             }
             rm.p1 = p, rm.r1 = q, rm.s1 = s;
             rm.received = now;
@@ -309,7 +353,7 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
 }
 
 void Replicator::update(Scene& scene, NetSession& session, f64 now) {
-    m_stats.synced = m_stats.statesSent = m_stats.statesReceived = 0;
+    m_stats.synced = m_stats.statesSent = m_stats.statesReceived = m_stats.statesSkipped = m_stats.statesHidden = 0;
     if (&scene != m_scene || scene.generation() != m_sceneGeneration) {
         reset();
         m_scene = &scene;
@@ -353,6 +397,7 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
         u64 uuid;
         u32 owner;
         std::string bytes;
+        ecs::Entity entity;
     };
     std::vector<Item> items;
     reg.view<NetSyncComponent, TransformComponent>().each([&](ecs::Entity e, NetSyncComponent& s, TransformComponent& t) {
@@ -382,7 +427,26 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
             putU16(b, static_cast<u16>(text.size()));
             b += text;
         }
-        items.push_back({uuid, owner, std::move(b)});
+        // A player that starts seeing the entity needs its state even if it did not change.
+        bool newlyVisible = false;
+        if (session.role() == NetRole::Host)
+            for (u32 peer : session.peers()) {
+                const bool vis = visibleTo(scene, e, peer);
+                bool& was = m_wasVisible[uuid][peer];
+                newlyVisible |= vis && !was;
+                was = vis;
+            }
+        if (s.onlyChanges) {  // unchanged since the last state: skipped (one per second all the same)
+            std::string& lastBytes = m_lastBytes[uuid];
+            f64& full = m_lastFull[uuid];
+            if (lastBytes == b && now - full < 1.0 && !newlyVisible) {
+                ++m_stats.statesSkipped;
+                return;
+            }
+            lastBytes = b;
+            full = now;
+        }
+        items.push_back({uuid, owner, std::move(b), e});
     });
     auto flush = [&](u32 peer, const std::vector<const Item*>& list) {
         usize i = 0;
@@ -408,8 +472,14 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
         if (session.role() == NetRole::Host) {
             for (u32 peer : session.peers()) {
                 std::vector<const Item*> list;
-                for (const Item& it : items)
-                    if (it.owner != peer) list.push_back(&it);
+                for (const Item& it : items) {
+                    if (it.owner == peer) continue;
+                    if (!visibleTo(scene, it.entity, peer)) {
+                        ++m_stats.statesHidden;
+                        continue;
+                    }
+                    list.push_back(&it);
+                }
                 flush(peer, list);
             }
         } else {

@@ -36,6 +36,34 @@ int n_host(lua_State* L) {
 }
 /// agr.net.join(address, port) -> true or nil, message (then a "connected" event)
 int n_join(lua_State* L) { return pushStatus(L, netOf(L).join(luaL_checkstring(L, 1), checkPort(L, 2))); }
+/// agr.net.setPassword(text): the game password (host: required from players; client: sent).
+int n_setPassword(lua_State* L) {
+    netOf(L).setPassword(luaL_optstring(L, 1, ""));
+    return 0;
+}
+/// agr.net.joinError() -> "full", "wrong password" or nil
+int n_joinError(lua_State* L) {
+    const std::string& e = netOf(L).joinError();
+    if (e.empty()) lua_pushnil(L);
+    else lua_pushstring(L, e.c_str());
+    return 1;
+}
+/// agr.net.ping(peer) -> round trip in milliseconds (0 until measured)
+int n_ping(lua_State* L) {
+    lua_pushnumber(L, netOf(L).rtt(static_cast<u32>(luaL_checkinteger(L, 1))) * 1000.0);
+    return 1;
+}
+/// agr.net.stats() -> { bytesSent, bytesReceived, packetsSent, packetsReceived, resent }
+int n_stats(lua_State* L) {
+    const auto& st = netOf(L).stats();
+    lua_createtable(L, 0, 5);
+    for (auto [k, v] : {std::pair<const char*, u64>{"bytesSent", st.bytesSent}, {"bytesReceived", st.bytesReceived}, {"packetsSent", st.packetsSent},
+                        {"packetsReceived", st.packetsReceived}, {"resent", st.resent}}) {
+        lua_pushinteger(L, static_cast<lua_Integer>(v));
+        lua_setfield(L, -2, k);
+    }
+    return 1;
+}
 int n_leave(lua_State* L) {
     netOf(L).close();
     return 0;
@@ -98,6 +126,13 @@ int n_poll(lua_State* L) {
 }
 
 net::Replicator* replicatorOf(lua_State* L) { return implOf(L).replicator; }
+/// agr.net.setVisible(entity, peer, visible) (host): shows / hides the entity's state to a player.
+int n_setVisible(lua_State* L) {
+    net::Replicator* r = replicatorOf(L);
+    const ecs::Entity e = checkEntity(L, 1);
+    if (r) r->setVisibleTo(sceneOf(L), e, static_cast<u32>(luaL_checkinteger(L, 2)), lua_toboolean(L, 3) != 0);
+    return 0;
+}
 net::Replicator& needReplicator(lua_State* L) {
     net::Replicator* r = replicatorOf(L);
     if (!r) luaL_error(L, "agr.net: networking is not available (NetPlugin not loaded)");
@@ -204,7 +239,9 @@ void openNetBindings(lua_State* L) {
                                      {"port", n_port}, {"peers", n_peers}, {"send", n_send}, {"broadcast", n_broadcast},
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
                                      {"sender", n_sender}, {"advertise", n_advertise}, {"discover", n_discover},
-                                     {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {nullptr, nullptr}};
+                                     {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {"setPassword", n_setPassword},
+                                     {"joinError", n_joinError}, {"ping", n_ping}, {"stats", n_stats}, {"setVisible", n_setVisible},
+                                     {nullptr, nullptr}};
     addAgrLibrary(L, "net", funcs);
     static const luaL_Reg methods[] = {{"rpc", e_rpc}, {"rpcTo", e_rpcTo}, {"owner", e_owner}, {"isOwner", e_isOwner}, {nullptr, nullptr}};
     addEntityMethods(L, methods);

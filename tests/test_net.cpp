@@ -1,6 +1,7 @@
 // Networking: real UDP sessions on the loopback interface, reliable ordered delivery over a
 // lossy, reordering transport, capacity, disconnects and timeouts; agr.net from Lua.
 #include <doctest/doctest.h>
+#include <functional>
 
 #include <algorithm>
 #include <deque>
@@ -387,4 +388,109 @@ TEST_CASE("replication: synced transforms and fields, owners, spawns for late jo
     setPrefabResolver(nullptr);
     std::error_code ec;
     fs::remove_all(root, ec);
+
+}
+TEST_CASE("game password, round-trip time") {
+    LossyNetwork network;
+    network.loss = 0.0f;
+    NetSession host(std::make_unique<LossyTransport>(network)), good(std::make_unique<LossyTransport>(network)),
+        bad(std::make_unique<LossyTransport>(network));
+    host.setPassword("tartiflette");
+    REQUIRE(host.host(9100, 4));
+    bad.setPassword("raclette");
+    REQUIRE(bad.join("127.0.0.1", 9100));
+    f64 now = 0.0;
+    std::vector<NetEvent> badEvents;
+    REQUIRE(pump({&host, &bad}, now, [&] {
+        collect(badEvents, bad);
+        return !badEvents.empty();
+    }));
+    CHECK(badEvents[0].type == NetEvent::Type::Disconnected);
+    CHECK(bad.joinError() == "wrong password");
+    CHECK(host.peers().empty());
+    good.setPassword("tartiflette");
+    REQUIRE(good.join("127.0.0.1", 9100));
+    REQUIRE(pump({&host, &good}, now, [&] { return good.connected(); }));
+    CHECK(good.joinError().empty());
+    // Pings are answered: both sides measure the round trip (one update apart here: 10 ms).
+    REQUIRE(pump({&host, &good}, now, [&] { return good.rtt(NetSession::kHostId) > 0.0 && host.rtt(good.localId()) > 0.0; }, 300));
+    CHECK(good.rtt(NetSession::kHostId) < 0.1);
+}
+
+TEST_CASE("replication: only changes are sent, visibility per player (owner only, range, overrides)") {
+    registerRenderComponents();
+    registerNetComponents();
+    LossyNetwork netw;
+    netw.loss = 0.0f;
+    struct Machine {
+        NetSession session;
+        Scene scene;
+        Replicator rep;
+        explicit Machine(LossyNetwork& n) : session(std::make_unique<LossyTransport>(n)) {}
+    };
+    const Uuid treasureId = Uuid::generate(), secretId = Uuid::generate(), heroId = Uuid::generate();
+    auto build = [&](Machine& m) {
+        m.scene.createEntity("Treasure", {}, treasureId);
+        m.scene.registry().emplace<NetSyncComponent>(m.scene.findByUuid(treasureId)).visibility = NetVisibility::Range;
+        m.scene.registry().get<NetSyncComponent>(m.scene.findByUuid(treasureId)).visibleRange = 10.0f;
+        m.scene.createEntity("Secret", {}, secretId);
+        m.scene.registry().emplace<NetSyncComponent>(m.scene.findByUuid(secretId)).visibility = NetVisibility::OwnerOnly;
+        m.scene.createEntity("Hero", {}, heroId);
+        m.scene.registry().emplace<NetSyncComponent>(m.scene.findByUuid(heroId));
+    };
+    Machine host(netw), a(netw);
+    build(host);
+    build(a);
+    REQUIRE(host.session.host(7200, 4));
+    REQUIRE(a.session.join("127.0.0.1", 7200));
+    f64 now = 0.0;
+    auto step = [&](int frames, const std::function<void()>& each = {}) {
+        for (int i = 0; i < frames; ++i) {
+            now += 1.0 / 60.0;
+            if (each) each();
+            for (Machine* m : {&host, &a}) {
+                m->session.update(now);
+                m->rep.update(m->scene, m->session, now);
+                m->session.takeEvents();
+            }
+        }
+    };
+    step(60);
+    REQUIRE(a.session.connected());
+    auto tr = [](Machine& m, Uuid id) -> TransformComponent& { return m.scene.registry().get<TransformComponent>(m.scene.findByUuid(id)); };
+    // A's hero far from the treasure (A owns it).
+    REQUIRE(host.rep.setOwner(host.scene, host.session, host.scene.findByUuid(heroId), a.session.localId()));
+    tr(a, heroId).position = {100, 0, 0};
+    step(30);
+    // Idle entities: nothing sent but the once-per-second refresh.
+    u32 skipped = 0, sent = 0;
+    step(30, [&] { skipped += host.rep.stats().statesSkipped, sent += host.rep.stats().statesSent; });
+    CHECK(skipped > sent * 3);
+    // Moving the treasure and the secret on the host: A does not see them (out of range / not its own).
+    step(60, [&] {
+        tr(host, treasureId).position.y += 0.1f;
+        tr(host, secretId).position.y += 0.1f;
+    });
+    CHECK(tr(a, treasureId).position.y == doctest::Approx(0.0f));
+    CHECK(tr(a, secretId).position.y == doctest::Approx(0.0f));
+    CHECK_FALSE(host.rep.visibleTo(host.scene, host.scene.findByUuid(treasureId), a.session.localId()));
+    // A's hero comes near the treasure: it shows up.
+    tr(a, heroId).position = {3, 0, 0};
+    step(60);
+    step(30);
+    CHECK(host.rep.visibleTo(host.scene, host.scene.findByUuid(treasureId), a.session.localId()));
+    CHECK(tr(a, treasureId).position.y == doctest::Approx(tr(host, treasureId).position.y).epsilon(0.01));
+    // Override: the secret is shown to A, the treasure hidden again.
+    host.rep.setVisibleTo(host.scene, host.scene.findByUuid(secretId), a.session.localId(), true);
+    host.rep.setVisibleTo(host.scene, host.scene.findByUuid(treasureId), a.session.localId(), false);
+    u32 hidden = 0;
+    step(60, [&] {
+        tr(host, treasureId).position.y += 0.1f;
+        tr(host, secretId).position.y += 0.1f;
+        hidden += host.rep.stats().statesHidden;
+    });
+    step(30);
+    CHECK(tr(a, secretId).position.y == doctest::Approx(tr(host, secretId).position.y).epsilon(0.01));
+    CHECK(tr(a, treasureId).position.y < tr(host, treasureId).position.y - 1.0f);
+    CHECK(hidden > 0);
 }

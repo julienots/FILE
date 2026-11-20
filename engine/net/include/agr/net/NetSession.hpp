@@ -133,6 +133,13 @@ public:
     const NetStats& stats() const { return m_stats; }
     /// Seconds without any packet before a peer is dropped.
     void setTimeout(f64 seconds) { m_timeout = seconds; }
+    /// Game password: the host refuses players whose password differs (set it before host() /
+    /// join()). Checked with a hash bound to each connection attempt; it does not encrypt.
+    void setPassword(std::string password) { m_password = std::move(password); }
+    /// Last reason a join failed ("full", "wrong password"), empty otherwise.
+    const std::string& joinError() const { return m_joinError; }
+    /// Round-trip time to a peer in seconds (smoothed; 0 until measured).
+    f64 rtt(u32 peer) const;
 
 private:
     struct Pending {
@@ -149,6 +156,7 @@ private:
         std::map<u32, std::string> early;  ///< Reliable messages received ahead of order.
         std::string assembly;  ///< Fragments of a large reliable message received so far.
         bool welcomed = false;
+        f64 rtt = 0.0;
     };
     void sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload);
     void handle(const Address& from, const std::vector<u8>& packet, f64 now);
@@ -170,6 +178,7 @@ private:
     NetStats m_stats;
     f64 m_now = 0.0, m_timeout = 5.0, m_joinStarted = 0.0;
     std::vector<u8> m_buffer;
+    std::string m_password, m_joinError;
 };
 
 } // namespace agr::net
