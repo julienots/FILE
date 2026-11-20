@@ -743,6 +743,21 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         }
     });
 
+    // Over-lifetime curves and flipbook frames shared by 2D and 3D particles.
+    auto curvesFor = [&](const std::string& uri) { return m_particleCurves && !uri.empty() ? m_particleCurves->get(uri) : nullptr; };
+    auto particleLook = [&](const ParticleCurvesLut* lut, i32 cols, i32 rows, float cycles, float t, float startSize, float endSize, Vec4 c0, Vec4 c1,
+                            float& size, Vec4& color, Vec4& uv) {
+        size = lut && lut->hasSize ? startSize * lut->sizeAt(t) : math::lerp(startSize, endSize, t);
+        color = lut && lut->hasColor ? Vec4(lut->colorAt(t)) : Vec4{math::lerp(c0.x, c1.x, t), math::lerp(c0.y, c1.y, t), math::lerp(c0.z, c1.z, t), math::lerp(c0.w, c1.w, t)};
+        uv = {0, 0, 1, 1};
+        if (cols > 1 || rows > 1) {
+            const i32 c = std::max(cols, 1), r = std::max(rows, 1), frames = c * r;
+            const i32 frame = std::min(static_cast<i32>(t * std::max(cycles, 0.0f) * static_cast<float>(frames)) % frames, frames - 1);
+            const float fw = 1.0f / static_cast<float>(c), fh = 1.0f / static_cast<float>(r);
+            const float u0 = static_cast<float>(frame % c) * fw, v0 = static_cast<float>(frame / c) * fh;  // row 0 = top of the image
+            uv = {u0, v0, u0 + fw, v0 + fh};
+        }
+    };
     // ------------------------------------------------------------ particles
     reg.view<ParticleEmitter2DComponent, ParticleState2DComponent, WorldTransformComponent>().each(
         [&](ecs::Entity e, ParticleEmitter2DComponent& em, ParticleState2DComponent& st, WorldTransformComponent& w) {
@@ -751,9 +766,14 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
             const float depth = view.transformPoint(w.matrix.translation() + off).z;
             const Vec4 c0 = em.startColor, c1 = em.endColor;
+            const ParticleCurvesLut* lut = curvesFor(em.curves);
             for (const Particle2D& p : st.particles) {
                 const float t = std::clamp(p.age / std::max(p.lifetime, 1e-4f), 0.0f, 1.0f);
-                const float half = math::lerp(em.startSize, em.endSize, t) * 0.5f;
+                float size;
+                Vec4 color, uv;
+                particleLook(lut, em.flipbookColumns, em.flipbookRows, em.flipbookCycles, t, em.startSize, em.endSize, c0, c1, size, color, uv);
+                const float half = size * 0.5f;
+                if (half <= 0.0f) continue;
                 const Vec3 center = (em.worldSpace ? Vec3{p.position.x, p.position.y, p.z} : w.matrix.transformPoint({p.position.x, p.position.y, 0.0f})) + off;
                 const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
                 const Vec3 dx{cs, sn, 0.0f}, dy{-sn, cs, 0.0f};
@@ -765,8 +785,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 item.layer = em.sortingLayer;
                 item.order = em.orderInLayer;
                 item.depth = depth;
-                item.uv = {0, 0, 1, 1};
-                item.color = packColor(Vec4{math::lerp(c0.x, c1.x, t), math::lerp(c0.y, c1.y, t), math::lerp(c0.z, c1.z, t), math::lerp(c0.w, c1.w, t)});
+                item.uv = uv;
+                item.color = packColor(color);
                 item.pipeline = em.additive ? 2u : 0u;
                 item.texture = tex;
                 m_spriteItems.push_back(item);
@@ -781,9 +801,13 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty()) return;
                 const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
                 const Vec4 c0 = em.startColor, c1 = em.endColor;
+                const ParticleCurvesLut* lut = curvesFor(em.curves);
                 for (const Particle3D& p : st.particles) {
                     const float t = std::clamp(p.age / std::max(p.lifetime, 1e-4f), 0.0f, 1.0f);
-                    const float half = math::lerp(em.startSize, em.endSize, t) * 0.5f;
+                    float size;
+                    Vec4 color, uv;
+                    particleLook(lut, em.flipbookColumns, em.flipbookRows, em.flipbookCycles, t, em.startSize, em.endSize, c0, c1, size, color, uv);
+                    const float half = size * 0.5f;
                     if (half <= 0.0f) continue;
                     const Vec3 center = em.worldSpace ? p.position : w.matrix.transformPoint(p.position);
                     const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
@@ -796,8 +820,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                     item.layer = 0;
                     item.order = 0;
                     item.depth = view.transformPoint(center).z;
-                    item.uv = {0, 0, 1, 1};
-                    item.color = packColor(Vec4{math::lerp(c0.x, c1.x, t), math::lerp(c0.y, c1.y, t), math::lerp(c0.z, c1.z, t), math::lerp(c0.w, c1.w, t)});
+                    item.uv = uv;
+                    item.color = packColor(color);
                     item.pipeline = em.additive ? 2u : 0u;
                     item.texture = tex;
                     m_spriteItems.push_back(item);

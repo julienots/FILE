@@ -11,6 +11,7 @@
 #include "agr/math/Geometry.hpp"
 #include "agr/render/EnvironmentLibrary.hpp"
 #include "agr/render/OcclusionBuffer.hpp"
+#include "agr/render/ParticleCurves.hpp"
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/render/Primitives.hpp"
@@ -188,6 +189,7 @@ public:
     /// Imported models and .agrmat materials used by mesh renderers.
     void setModels(ModelLibrary* models) { m_models = models; }
     void setMaterials(MaterialLibrary* materials) { m_materials = materials; }
+    void setParticleCurves(ParticleCurvesLibrary* curves) { m_particleCurves = curves; }
     /// Custom surface shaders (`.agrshader`) referenced by materials.
     void setShaders(ShaderLibrary* shaders) { m_shaders = shaders; }
     struct ShaderStatus {
@@ -382,6 +384,7 @@ private:
     rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map
     ModelLibrary* m_models = nullptr;
     MaterialLibrary* m_materials = nullptr;
+    ParticleCurvesLibrary* m_particleCurves = nullptr;
     ShaderLibrary* m_shaders = nullptr;
     // Custom shaders: pipeline ids kCustomPipelineBase + set * kCustomStride + variant
     // (alphaMode * 2 + doubleSided); compiled on first use, rebuilt when the source changes.

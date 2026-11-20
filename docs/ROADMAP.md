@@ -97,7 +97,8 @@ Guide : [2D.md](2D.md).
 | Canvas UI | ✅ | phase 7 |
 | Ombres 2D | ✅ | `LightOccluder2D` (boîtes, cases de tilemap), cartes d'ombre polaires, bords doux, pénétration ; test GPU sur les 3 API |
 | Normal maps 2D | ✅ | `SpriteRenderer.normalMap`, `Tilemap.normalMap`, `Light2D.height`, `tools/generate_normal_map.py` ; Vitrine 2D ; test GPU sur les 3 API |
-| Tuiles animées, autotiling, éditeur visuel de feuilles et de particules | ⬜ | phase 9 |
+| Éditeur visuel de particules : courbes de taille, dégradés couleur / opacité, flipbook, 7 modèles avec textures originales, aperçu en direct | ✅ | `ParticleCurves` (`.agrparticle`), panneau *Effets de particules* ; [2D.md](2D.md) |
+| Tuiles animées, autotiling, éditeur visuel de feuilles | ⬜ | phase 9 |
 
 ## Phase 5 — 3D 🟡 (rendu terminé : PBR, squelettes, ombres en cascades, post-traitement HDR, ciel en image + IBL ; terrain, eau, végétation, LOD et occlusion à venir)
 

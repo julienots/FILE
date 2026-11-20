@@ -15,6 +15,7 @@
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/script/LogicGraph.hpp"
 #include "agr/script/ScriptEngine.hpp"
+#include "agr/render/ParticleCurves.hpp"
 #include "agr/editor/Package.hpp"
 #include "agr/core/Profiler.hpp"
 #include <algorithm>
@@ -411,6 +412,23 @@ private:
     bool m_scroll = false;
     std::vector<std::string> m_watches;
     std::string m_watchInput;
+};
+
+/// Particle effects: presets (fire, smoke, explosion...), over-lifetime size curve and color /
+/// alpha gradient (.agrparticle, previewed live), flipbook, main emitter settings, restart.
+class ParticlePanel {
+public:
+    void draw(EditorShared& s, const std::string& templateAssetsDir);
+
+private:
+    bool curveEditor(std::vector<ParticleCurves::Key>& keys);
+    bool gradientEditor(std::vector<ParticleCurves::ColorKey>& keys);
+
+    std::string m_uri;             ///< Curves being edited.
+    ParticleCurves m_curves;
+    bool m_dirty = false;
+    int m_dragKey = -1, m_selectedStop = 0, m_dragStop = -1;
+    bool m_pendingCommit = false;
 };
 
 /// Integrated documentation: docs/*.md rendered as Markdown, full-text search, links.

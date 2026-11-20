@@ -8,6 +8,7 @@ agr_add_module(render
         src/Renderer3D.cpp
         src/OcclusionBuffer.cpp
         src/Skin2D.cpp
+        src/ParticleCurves.cpp
         src/EnvironmentLibrary.cpp
         src/ModelLibrary.cpp
         src/ShaderLibrary.cpp

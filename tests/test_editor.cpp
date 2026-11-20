@@ -11,6 +11,7 @@
 #include "agr/assets/Image.hpp"
 #include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/EditorContext.hpp"
+#include "agr/editor/ParticlePresets.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/SceneTemplates.hpp"
 #include "agr/scene/Prefab.hpp"
@@ -1178,4 +1179,31 @@ TEST_CASE("procedural scatter: deterministic, spacing, exclusion zones, weights,
     for (usize i = 0; !different && i < pa.size(); ++i)
         different = !(c.registry().get<TransformComponent>(pc[i]).position == a.registry().get<TransformComponent>(pa[i]).position);
     CHECK(different);  // another seed, another layout
+}
+
+TEST_CASE("particle presets fill 2D and 3D emitters with shipped textures and curves") {
+    namespace fs = std::filesystem;
+    for (ParticlePreset p : kParticlePresets) {
+        CAPTURE(particlePresetName(p));
+        CHECK(std::string(particlePresetName(p)).size() > 0);
+        ParticleEmitter2DComponent e2;
+        ParticleEmitter3DComponent e3;
+        applyParticlePreset(p, e2);
+        applyParticlePreset(p, e3);
+        CHECK(e2.texture == e3.texture);
+        CHECK(e2.curves == e3.curves);
+        CHECK((e2.rate > 0.0f || e2.burst > 0));
+        CHECK(e2.lifetimeMin <= e2.lifetimeMax);
+        for (const std::string& uri : {e2.texture, e2.curves})
+            if (!uri.empty()) CHECK_MESSAGE(fs::exists(fs::path(AGR_TEST_TEMPLATE_ASSETS) / uri.substr(9)), uri);
+        CHECK(e3.gravity.y == doctest::Approx(e2.gravity.y));
+    }
+    ParticleEmitter2DComponent ex;
+    applyParticlePreset(ParticlePreset::Explosion, ex);
+    CHECK(ex.flipbookColumns == 4);
+    CHECK(ex.flipbookRows == 4);
+    ParticleEmitter3DComponent snow;
+    applyParticlePreset(ParticlePreset::Snow, snow);
+    CHECK(snow.shape == EmitterShape3D::Box);
+    CHECK(snow.gravity.y < 0.0f);
 }

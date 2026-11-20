@@ -8,6 +8,7 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
 #include "agr/render/Skin2D.hpp"
+#include "agr/render/ParticleCurves.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/twod/TilemapEditing.hpp"
@@ -341,6 +342,56 @@ TEST_CASE("particles: soft default texture, additive blending") {
     CHECK_MESSAGE(c.r > 200, c);
     CHECK_MESSAGE(c.g < 10, c);
     CHECK(near(pixel(*gpu().device, 4, 4), 0, 0, 0));
+}
+
+TEST_CASE("particles: over-lifetime curves and flipbook frames") {
+    Render2DFixture f;
+    f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)
+    ParticleCurvesLibrary curves(f.vfs);
+    f.renderer.setParticleCurves(&curves);
+    ParticleCurves c;
+    c.size = {{0.0f, 1.0f}, {1.0f, 0.5f}};
+    c.gradient = {{0.0f, {1, 0, 0, 1}}, {1.0f, {0, 0, 1, 1}}};
+    REQUIRE(curves.save("assets://fx.agrparticle", c));
+    const auto e = f.scene.createEntity("Emitter");
+    auto& em = f.scene.registry().emplace<ParticleEmitter2DComponent>(e);
+    em.emitting = false;
+    em.startSize = 2.0f;
+    em.texture = "assets://two.png";  // 2 x 1: yellow | magenta
+    em.curves = "assets://fx.agrparticle";
+    auto& st = f.scene.registry().emplace<ParticleState2DComponent>(e);
+    st.started = true;
+    auto particle = [](float x, float age) {
+        Particle2D p;
+        p.position = {x, 0.0f};
+        p.age = age;
+        p.lifetime = 1.0f;
+        return p;
+    };
+    st.particles = {particle(-3.0f, 0.0f), particle(3.0f, 1.0f)};
+    f.settle();
+    CHECK(f.renderer.stats().particlesVisible == 2);
+    auto at = [&](float x, float y) { return pixel(*gpu().device, static_cast<u32>(32.0f + x * 6.4f), static_cast<u32>(32.0f - y * 6.4f)); };
+    // Birth: red, 2 units wide (texture sampled across both halves: yellow x red = red, magenta x red = red).
+    CHECK(at(-3.0f, 0.0f).r > 150);
+    CHECK(at(-3.0f, 0.0f).b < 40);
+    CHECK(at(-3.7f, 0.0f).r > 150);  // still inside: half size 1.0
+    // Death: blue, half the size (0.5 unit half width): 0.8 units from the center is outside.
+    CHECK(at(3.0f, 0.0f).b > 150);
+    CHECK(at(3.0f, 0.0f).r < 40);
+    CHECK(int(at(3.8f, 0.0f).b) < 30);
+    // Flipbook 2 x 1 over the life: frame 0 (yellow) young, frame 1 (magenta) old; white gradient.
+    c.gradient = {{0.0f, {1, 1, 1, 1}}};
+    c.size = {};
+    curves.preview("assets://fx.agrparticle", c);
+    em.startSize = em.endSize = 2.0f;
+    em.flipbookColumns = 2;
+    st.particles = {particle(-3.0f, 0.25f), particle(3.0f, 0.75f)};
+    f.frame();
+    const Rgba young = at(-3.0f, 0.0f), old = at(3.0f, 0.0f);
+    CHECK_MESSAGE((young.r > 200 && young.g > 200 && young.b < 60), young);  // yellow
+    CHECK_MESSAGE((old.r > 200 && old.g < 60 && old.b > 200), old);          // magenta
+    CHECK(gpu().device->validationErrorCount() == 0);
 }
 
 TEST_CASE("parallax: factor 0 follows the camera, 1 stays in the world") {

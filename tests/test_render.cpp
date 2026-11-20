@@ -5,6 +5,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/render/GraphicsProfile.hpp"
 #include "agr/render/OcclusionBuffer.hpp"
+#include "agr/render/ParticleCurves.hpp"
 #include "agr/render/Primitives.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/RenderPlugin.hpp"
@@ -142,6 +143,54 @@ TEST_CASE("occlusion buffer: hidden behind a wall, visible beside, in front, acr
         ob.addBox(Mat4::translate({0, 1, 15}), {3.0f, 2.0f, 0.2f});
         CHECK_FALSE(ob.occluded(math::Aabb::fromCenterExtents({0, 1, -5}, Vec3{0.5f})));
     }
+}
+
+TEST_CASE("particle curves: sampling, baked table, JSON, library with live preview and reload") {
+    ParticleCurves c;
+    c.size = {{1.0f, 0.0f}, {0.0f, 2.0f}};  // unsorted on purpose
+    c.gradient = {{0.0f, {1, 0, 0, 1}}, {1.0f, {0, 0, 1, 0}}};
+    c.sort();
+    CHECK(c.sizeAt(0.0f) == doctest::Approx(2.0f));
+    CHECK(c.sizeAt(0.5f) == doctest::Approx(1.0f));
+    CHECK(c.sizeAt(2.0f) == doctest::Approx(0.0f));  // held outside
+    CHECK(c.colorAt(0.5f).x == doctest::Approx(0.5f));
+    CHECK(c.colorAt(0.5f).w == doctest::Approx(0.5f));
+    const ParticleCurvesLut lut = bakeParticleCurves(c);
+    CHECK(lut.hasSize);
+    CHECK(lut.hasColor);
+    CHECK(lut.sizeAt(0.25f) == doctest::Approx(1.5f).epsilon(0.01));
+    CHECK(lut.colorAt(0.75f).z == doctest::Approx(0.75f).epsilon(0.01));
+    CHECK_FALSE(bakeParticleCurves(ParticleCurves{}).hasSize);
+    auto parsed = ParticleCurves::fromJson(c.toJson());
+    REQUIRE(parsed);
+    CHECK(parsed.value().size.size() == 2);
+    CHECK(parsed.value().gradient[1].color.z == doctest::Approx(1.0f));
+    CHECK_FALSE(ParticleCurves::fromJson("[1,2"));
+
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / ("agr_curves_" + Uuid::generate().toString());
+    fs::create_directories(root);
+    VirtualFileSystem vfs;
+    vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
+    ParticleCurvesLibrary lib(vfs);
+    CHECK(lib.get("assets://none.agrparticle") == nullptr);
+    REQUIRE(lib.save("assets://fx.agrparticle", c));
+    REQUIRE(lib.get("assets://fx.agrparticle"));
+    CHECK(lib.get("assets://fx.agrparticle")->sizeAt(0.0f) == doctest::Approx(2.0f));
+    ParticleCurves edited = c;
+    edited.size = {{0.0f, 5.0f}};
+    lib.preview("assets://fx.agrparticle", edited);  // editor: seen at once, file unchanged
+    CHECK(lib.get("assets://fx.agrparticle")->sizeAt(0.5f) == doctest::Approx(5.0f));
+    CHECK(lib.reloadChanged() == 0);
+#ifdef AGR_TEST_TEMPLATE_ASSETS  // editor builds: the shipped effect curves load
+    VirtualFileSystem shipped;
+    shipped.mount("assets", std::make_unique<NativeFileProvider>(AGR_TEST_TEMPLATE_ASSETS, true));
+    ParticleCurvesLibrary shippedLib(shipped);
+    for (const char* name : {"fire", "smoke", "explosion", "sparks", "magic", "dust"})
+        CHECK_MESSAGE(shippedLib.get(std::string("assets://particles/") + name + ".agrparticle") != nullptr, name);
+#endif
+    std::error_code ec;
+    fs::remove_all(root, ec);
 }
 
 }  // TEST_SUITE

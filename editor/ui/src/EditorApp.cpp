@@ -24,6 +24,7 @@
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/script/ScriptPlugin.hpp"
 #include "agr/render/Skin2D.hpp"
+#include "agr/editor/ParticlePresets.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
@@ -594,6 +595,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_packages.draw(*m_shared);
     m_profiler.draw(*m_shared);
     m_scriptDebugger.draw(*m_shared);
+    m_particles.draw(*m_shared, m_options.resourcesDir + "/templates/assets");
     m_physicsLayers.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
@@ -763,6 +765,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
         ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
+        ImGui::MenuItem("Effets de particules", nullptr, &m_shared->showParticles);
         ImGui::MenuItem("Couches de collision", nullptr, &m_shared->showPhysicsLayers);
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
@@ -1750,7 +1753,27 @@ void EditorApp::smokeTest(const FrameTime&) {
             m_shared->showPhysicsLayers = false;
             break;
         }
-        case 250: {
+        case 250: {  // particle effects panel: the fire preset on a 3D emitter, curves loaded, previewed
+            const auto fx = ctx.create(CreateKind::Particles3D);
+            auto* em = ctx.scene().registry().tryGet<ParticleEmitter3DComponent>(fx);
+            check(em != nullptr, "3D emitter created");
+            if (em) {
+                applyParticlePreset(ParticlePreset::Fire, *em);
+                ctx.scene().registry().get<TransformComponent>(fx).position = {0.0f, 0.5f, 0.0f};
+            }
+            ctx.selection().set(ctx.scene().uuidOf(fx));
+            ctx.commit("Fire");
+            m_shared->showParticles = true;
+            break;
+        }
+        case 256: {
+            auto* lib = m_engine->service<ParticleCurvesLibrary>();
+            check(lib && lib->get("assets://particles/fire.agrparticle") != nullptr, "the fire preset's curves load");
+            captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_particles.png").string());
+            break;
+        }
+        case 258: m_shared->showParticles = false; break;
+        case 260: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

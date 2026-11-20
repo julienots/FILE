@@ -35,6 +35,7 @@ public:
     SpriteSheetLibrary* spriteSheets() const { return m_sheets.get(); }
     ModelLibrary* models() const { return m_models.get(); }
     MaterialLibrary* materials() const { return m_materials.get(); }
+    ParticleCurvesLibrary* particleCurves() const { return m_particleCurves.get(); }
     ShaderLibrary* shaders() const { return m_shaders.get(); }
     EnvironmentLibrary* environments() const { return m_environments.get(); }
 
@@ -55,6 +56,7 @@ private:
     std::unique_ptr<SpriteSheetLibrary> m_sheets;
     std::unique_ptr<ModelLibrary> m_models;
     std::unique_ptr<MaterialLibrary> m_materials;
+    std::unique_ptr<ParticleCurvesLibrary> m_particleCurves;
     std::unique_ptr<ShaderLibrary> m_shaders;
     std::unique_ptr<EnvironmentLibrary> m_environments;
     std::unique_ptr<Renderer> m_renderer;

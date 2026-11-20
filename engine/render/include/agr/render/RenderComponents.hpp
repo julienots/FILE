@@ -311,6 +311,10 @@ struct ParticleEmitter2DComponent {
     float startSize = 0.25f, endSize = 0.05f;
     float angularVelocity = 0.0f;   ///< Radians per second (random sign).
     std::string texture;            ///< Empty = soft round particle.
+    std::string curves;             ///< Over-lifetime size curve and color gradient (.agrparticle); empty = start / end values.
+    i32 flipbookColumns = 1;        ///< Texture cut in columns x rows frames played over the lifetime (smoke, explosions).
+    i32 flipbookRows = 1;
+    float flipbookCycles = 1.0f;    ///< How many times the frames play during a particle's life.
     bool additive = false;
     bool worldSpace = true;         ///< Particles stay where emitted when the emitter moves.
     i32 sortingLayer = 0;
@@ -357,6 +361,10 @@ struct ParticleEmitter3DComponent {
     float startSize = 0.3f, endSize = 0.1f;
     float angularVelocity = 0.0f;   ///< Radians / s, random sign.
     std::string texture;            ///< Empty = soft round particle.
+    std::string curves;             ///< Over-lifetime size curve and color gradient (.agrparticle); empty = start / end values.
+    i32 flipbookColumns = 1;        ///< Texture cut in columns x rows frames played over the lifetime (smoke, explosions).
+    i32 flipbookRows = 1;
+    float flipbookCycles = 1.0f;    ///< How many times the frames play during a particle's life.
     bool additive = false;
     bool worldSpace = true;
     u32 seed = 0;                   ///< 0 = random.

@@ -8,6 +8,7 @@ add_library(agr_editor_core STATIC
     core/src/Package.cpp
     core/src/SceneTemplates.cpp
     core/src/Scatter.cpp
+    core/src/ParticlePresets.cpp
     core/src/UndoStack.cpp
     core/src/EditorCamera.cpp
     core/src/Picking.cpp
@@ -55,6 +56,7 @@ add_library(agr_editor_ui STATIC
     ui/src/PackagesPanel.cpp
     ui/src/ProfilerPanel.cpp
     ui/src/ScriptDebuggerPanel.cpp
+    ui/src/ParticlePanel.cpp
     ui/src/PhysicsLayersPanel.cpp
     ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)

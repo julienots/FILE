@@ -89,6 +89,7 @@ private:
     PackagesPanel m_packages;
     ProfilerPanel m_profiler;
     ScriptDebuggerPanel m_scriptDebugger;
+    ParticlePanel m_particles;
     ScriptEngine* m_debuggedScripts = nullptr;  ///< Engine the break handler is installed on.
     bool m_stopAfterBreak = false;
     int m_debugBreaks = 0;  ///< Breaks resumed automatically (smoke test).
