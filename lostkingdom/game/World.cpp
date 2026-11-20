@@ -379,7 +379,7 @@ void World::buildPlan() {
     Pf("xochi", "Xochi, la Cité des Cascades", PoiType::Village, 4600, 4900, 72, -1, -1, 220);
     Pf("temple_jaguar", "Temple du Jaguar", PoiType::Temple, 5500, 4600, 66, -1, -1, 220);
     { vec2 t = pois.back().pos; P("jaguar_door", "Portes du Jaguar", PoiType::Temple, t.x, t.y + 17.f, 8, 10); }
-    Pf("tlaloc", "Ruines de Tlaloc", PoiType::Ruins, 4300, 5600, 46, -1, -1, 200);
+    Pf("tlaloc", "Ruines de Tlaloc", PoiType::Ruins, 4340, 5560, 44, -1, -1, 200);
     Pf("grotte_cascade", "Grotte de la Cascade", PoiType::Cave, 5800, 5300, 22, -1, -1, 200);
     Pf("pilleurs_tombes", "Camp des Pilleurs de Tombes", PoiType::Camp, 5000, 4300, 30, -1, -1, 200);
     Pf("ws_emeraude", "Pierre d'Émeraude", PoiType::Waystone, 5390, 3330, 10);
