@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+#include <span>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -23,6 +25,9 @@ struct EditorOptions {
 
 /// The AGR editor application: project hub, docked panels, menus, toolbar,
 /// shortcuts, and the frame structure (scene view render target, then UI).
+/// Items of the Create menu (nullptr label = separator); also offered by the command palette.
+std::span<const std::pair<const char*, CreateKind>> createMenuItems();
+
 class EditorApp final : public Application {
 public:
     EditorApp(SdlPlatform* platform, EditorOptions options);
@@ -43,6 +48,14 @@ private:
     void drawToolbar(float height);
     void drawStatusBar(float height);
     void drawModals();
+    /// History panel (undo states) and command palette (EditorCommands.cpp).
+    void drawHistory();
+    void drawCommandPalette();
+    struct Command {
+        std::string label;
+        std::function<void()> run;
+    };
+    std::vector<Command> buildCommands();
     void handleShortcuts();
     void buildDefaultLayout(unsigned int dockspace);
     void openProject(const std::string& path);
@@ -101,6 +114,11 @@ private:
     bool m_layoutBuilt = false;
     bool m_resetLayout = false;
     bool m_showDemo = false;
+    bool m_showHistory = false;
+    bool m_paletteOpen = false, m_paletteFocus = false;
+    std::string m_paletteQuery;
+    int m_paletteSelected = 0;
+    std::vector<Command> m_paletteCommands;
     bool m_gameViewBeforePlay = false;
     bool m_closeProjectRequested = false;
     std::string m_title;

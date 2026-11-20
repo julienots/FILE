@@ -29,6 +29,12 @@ public:
     const std::string& undoLabel() const;
     const std::string& redoLabel() const;
     usize size() const { return m_states.size(); }
+    /// Index of the current state (0 = the oldest kept).
+    usize position() const { return m_pos; }
+    /// Label of state `i` (the action that produced it; the first is the opening).
+    const std::string& label(usize i) const { return m_states[i].label; }
+    /// Restores state `i` directly (History panel): one step back or many at once.
+    bool jumpTo(usize i, Scene& scene, std::vector<Uuid>& selection);
 
     void markSaved() { m_savedPos = static_cast<i64>(m_pos); }
     bool dirty() const { return m_savedPos != static_cast<i64>(m_pos); }

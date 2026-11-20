@@ -314,6 +314,54 @@ void frameImage(EditorShared& s, const SpriteSheet& sheet, u32 frame, float size
 bool beginPropertyTable(const char* id);
 
 /// Extra tools under the reflected fields of 2D components. Returns the edit made.
+/// Copies one reflected field between two instances of the same component (multi-selection).
+void copyField(const FieldInfo& f, void* src, void* dst) {
+    switch (f.type) {
+        case FieldType::Bool: f.ref<bool>(dst) = f.ref<bool>(src); break;
+        case FieldType::Int32:
+        case FieldType::Enum: f.ref<i32>(dst) = f.ref<i32>(src); break;
+        case FieldType::UInt32: f.ref<u32>(dst) = f.ref<u32>(src); break;
+        case FieldType::Float: f.ref<float>(dst) = f.ref<float>(src); break;
+        case FieldType::Vec2: f.ref<math::Vec2>(dst) = f.ref<math::Vec2>(src); break;
+        case FieldType::Vec3: f.ref<math::Vec3>(dst) = f.ref<math::Vec3>(src); break;
+        case FieldType::Vec4: f.ref<math::Vec4>(dst) = f.ref<math::Vec4>(src); break;
+        case FieldType::Quat: f.ref<math::Quat>(dst) = f.ref<math::Quat>(src); break;
+        case FieldType::String: f.ref<std::string>(dst) = f.ref<std::string>(src); break;
+        case FieldType::Entity: f.ref<ecs::Entity>(dst) = f.ref<ecs::Entity>(src); break;
+        case FieldType::IntArray: f.ref<std::vector<i32>>(dst) = f.ref<std::vector<i32>>(src); break;
+        case FieldType::Vec2Array: f.ref<std::vector<math::Vec2>>(dst) = f.ref<std::vector<math::Vec2>>(src); break;
+    }
+}
+
+/// True when the field has the same value in both instances (shown as "mixed" otherwise).
+bool sameField(const FieldInfo& f, void* a, void* b) {
+    switch (f.type) {
+        case FieldType::Bool: return f.ref<bool>(a) == f.ref<bool>(b);
+        case FieldType::Int32:
+        case FieldType::Enum: return f.ref<i32>(a) == f.ref<i32>(b);
+        case FieldType::UInt32: return f.ref<u32>(a) == f.ref<u32>(b);
+        case FieldType::Float: return f.ref<float>(a) == f.ref<float>(b);
+        case FieldType::Vec2: return f.ref<math::Vec2>(a).x == f.ref<math::Vec2>(b).x && f.ref<math::Vec2>(a).y == f.ref<math::Vec2>(b).y;
+        case FieldType::Vec3: {
+            const auto &x = f.ref<math::Vec3>(a), &y = f.ref<math::Vec3>(b);
+            return x.x == y.x && x.y == y.y && x.z == y.z;
+        }
+        case FieldType::Vec4: {
+            const auto &x = f.ref<math::Vec4>(a), &y = f.ref<math::Vec4>(b);
+            return x.x == y.x && x.y == y.y && x.z == y.z && x.w == y.w;
+        }
+        case FieldType::Quat: {
+            const auto &x = f.ref<math::Quat>(a), &y = f.ref<math::Quat>(b);
+            return x.x == y.x && x.y == y.y && x.z == y.z && x.w == y.w;
+        }
+        case FieldType::String: return f.ref<std::string>(a) == f.ref<std::string>(b);
+        case FieldType::Entity: return f.ref<ecs::Entity>(a) == f.ref<ecs::Entity>(b);
+        case FieldType::IntArray: return f.ref<std::vector<i32>>(a) == f.ref<std::vector<i32>>(b);
+        case FieldType::Vec2Array: return f.ref<std::vector<math::Vec2>>(a).size() == f.ref<std::vector<math::Vec2>>(b).size();
+    }
+    return true;
+}
+
 Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, ecs::Entity e) {
     Edit edit;
     Scene& scene = s.ctx.scene();
@@ -1117,16 +1165,24 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
     const Uuid id = scene.uuidOf(e);
     Edit total;
 
-    if (selected.size() > 1) {
+    // Multi-selection: the components every selected entity has; an edited field is copied to all.
+    std::vector<ecs::Entity> others;
+    for (ecs::Entity o : selected)
+        if (o != e) others.push_back(o);
+    if (!others.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kAmber));
-        ImGui::TextWrapped("%zu entités sélectionnées : l'inspecteur montre la dernière, le gizmo déplace toute la sélection.",
+        ImGui::TextWrapped("%zu entités sélectionnées : les composants communs sont affichés, une valeur modifiée est appliquée à toutes "
+                           "(« ≠ » : valeurs différentes).",
                            selected.size());
         ImGui::PopStyleColor();
     }
 
     // ---- header: active, name, layer, id
     auto& state = reg.get<StateComponent>(e);
-    if (ImGui::Checkbox("##active", &state.active)) total.changed = total.committed = true;
+    if (ImGui::Checkbox("##active", &state.active)) {
+        total.changed = total.committed = true;
+        for (ecs::Entity o : others) reg.get<StateComponent>(o).active = state.active;
+    }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Active (les entités inactives et leurs enfants sont ignorées)");
     ImGui::SameLine();
     ImGui::PushFont(s.fonts.semibold, 0.0f);
@@ -1211,12 +1267,33 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
         }
         if (open && !remove && beginPropertyTable("##props")) {
             s.physicsLayers.refresh(s.ctx.engine().vfs());
-            for (const FieldInfo& f : info.fields) total.merge(drawField(s, f, comp, m_eulerCache, id.value() ^ info.id));
+            ecs::PoolBase* pool = others.empty() ? nullptr : reg.findPool(info.id);
+            for (const FieldInfo& f : info.fields) {
+                bool mixed = false;
+                if (pool)
+                    for (ecs::Entity o : others)
+                        if (pool->contains(o) && !sameField(f, comp, pool->getRaw(o))) mixed = true;
+                if (mixed) ImGui::PushStyleColor(ImGuiCol_Text, palette::toVec4(palette::kAmber));
+                const Edit fe = drawField(s, f, comp, m_eulerCache, id.value() ^ info.id);
+                if (mixed) {
+                    ImGui::PopStyleColor();
+                    if (!(f.flags & FieldFlag_Hidden) && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                        ImGui::SetTooltip("≠ valeurs différentes dans la sélection ; une modification les égalise");
+                }
+                if (fe.changed && pool)
+                    for (ecs::Entity o : others)
+                        if (pool->contains(o)) copyField(f, comp, pool->getRaw(o));
+                total.merge(fe);
+            }
             ImGui::EndTable();
         }
         if (open && !remove) total.merge(drawComponentTools(s, info, comp, e));
         ImGui::PopID();
-        if (remove) s.ctx.removeComponent(e, info.name);
+        if (remove) {
+            std::vector<ecs::Entity> all = others;
+            all.push_back(e);
+            s.ctx.removeComponent(all, info.name);
+        }
         return remove;
     };
 
@@ -1226,6 +1303,7 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
         if (info->name == "Name" || info->name == "State" || info->name == "Transform" || info->name == "PrefabInstance") continue;
         ecs::PoolBase* pool = reg.findPool(info->id);
         if (!pool || !pool->contains(e)) continue;
+        if (std::any_of(others.begin(), others.end(), [&](ecs::Entity o) { return !pool->contains(o); })) continue;  // not shared
         if (drawComponent(*info, pool->getRaw(e), true)) break;  // pools changed: redraw next frame
     }
 
@@ -1256,7 +1334,9 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
             ImGui::SeparatorText(category.c_str());
             for (const ComponentInfo* info : list) {
                 if (ImGui::Selectable(info->name.c_str())) {
-                    s.ctx.addComponent(e, info->name);
+                    std::vector<ecs::Entity> all = others;
+                    all.push_back(e);
+                    s.ctx.addComponent(all, info->name);
                     ImGui::CloseCurrentPopup();
                 }
                 if (!info->description.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
@@ -1267,7 +1347,7 @@ void InspectorPanel::draw(EditorShared& s, const MaterialPreview& preview) {
     }
 
     if (total.changed) scene.updateTransforms();
-    if (total.committed) s.ctx.commit("Edit " + scene.nameOf(e));
+    if (total.committed) s.ctx.commit(others.empty() ? "Edit " + scene.nameOf(e) : "Edit " + std::to_string(others.size() + 1) + " entities");
     ImGui::End();
 }
 

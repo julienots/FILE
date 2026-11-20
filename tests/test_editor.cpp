@@ -1206,4 +1206,31 @@ TEST_CASE("particle presets fill 2D and 3D emitters with shipped textures and cu
     applyParticlePreset(ParticlePreset::Snow, snow);
     CHECK(snow.shape == EmitterShape3D::Box);
     CHECK(snow.gravity.y < 0.0f);
+
+}
+TEST_CASE("multi-selection component edits are one undo step; history jumps back and forth") {
+    EditorFixture f;
+    f.ctx->newScene(SceneTemplate::Empty3D);
+    const auto a = f.ctx->create(CreateKind::Cube);
+    const auto b = f.ctx->create(CreateKind::Sphere);
+    const auto c = f.ctx->create(CreateKind::Empty);
+    auto& reg = f.ctx->scene().registry();
+    const usize before = f.ctx->undoStack().size();
+    CHECK(f.ctx->addComponent(std::vector<ecs::Entity>{a, b, c}, "BlobShadow") == 3);
+    CHECK(f.ctx->undoStack().size() == before + 1);
+    CHECK(f.ctx->undoStack().undoLabel() == "Add BlobShadow (3)");
+    CHECK(f.ctx->addComponent(std::vector<ecs::Entity>{a, b}, "BlobShadow") == 0);  // already there: no entry
+    CHECK(f.ctx->undoStack().size() == before + 1);
+    CHECK(f.ctx->removeComponent(std::vector<ecs::Entity>{a, c}, "BlobShadow") == 2);
+    CHECK_FALSE(reg.has<BlobShadowComponent>(f.ctx->scene().findByName("Cube")));
+    CHECK(reg.has<BlobShadowComponent>(f.ctx->scene().findByName("Sphere")));
+    // History: back two states at once (before both), then forward to the latest.
+    const usize latest = f.ctx->undoStack().position();
+    CHECK(f.ctx->jumpToHistory(latest - 2));
+    CHECK_FALSE(reg.has<BlobShadowComponent>(f.ctx->scene().findByName("Sphere")));
+    CHECK(f.ctx->undoStack().canRedo());
+    CHECK(f.ctx->jumpToHistory(latest));
+    CHECK(f.ctx->scene().registry().has<BlobShadowComponent>(f.ctx->scene().findByName("Sphere")));
+    CHECK_FALSE(f.ctx->jumpToHistory(latest));  // already there
+    CHECK_FALSE(f.ctx->jumpToHistory(9999));
 }

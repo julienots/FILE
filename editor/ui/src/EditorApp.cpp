@@ -35,6 +35,29 @@
 namespace agr::editor {
 
 namespace {
+} // namespace
+
+std::span<const std::pair<const char*, CreateKind>> createMenuItems() {
+    // nullptr label = separator
+    static const std::pair<const char*, CreateKind> items[] = {
+        {"Entité vide", CreateKind::Empty}, {nullptr, {}}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere},
+        {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}, {nullptr, {}}, {"Sprite", CreateKind::Sprite},
+        {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
+        {"Couche de parallaxe", CreateKind::ParallaxLayer}, {"Squelette 2D", CreateKind::Skeleton2D}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
+        {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
+        {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain},
+        {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {"Décalque", CreateKind::Decal},
+        {"Sonde de réflexion", CreateKind::ReflectionProbe}, {nullptr, {}}, {"UI : Canvas", CreateKind::UICanvas},
+        {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText}, {"UI : Bouton", CreateKind::UIButton},
+        {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn}, {"UI : Case à cocher", CreateKind::UIToggle},
+        {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView},
+        {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown},
+        {"UI : Onglets", CreateKind::UITabs}, {"UI : Liste / arbre", CreateKind::UIItemList}, {"UI : Boîte de dialogue", CreateKind::UIDialog},
+        {"UI : Sélecteur de couleur", CreateKind::UIColorPicker}, {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
+    return items;
+}
+
+namespace {
 std::string smokeCoinScript() {
     return "local Coin = { properties = { spin = 90 } }\n"
            "function Coin:onUpdate(dt)\n"
@@ -337,6 +360,8 @@ void EditorApp::onUpdate(Engine&, const FrameTime& time) {
         drawHub();
     }
     drawModals();
+    drawHistory();
+    drawCommandPalette();
     if (m_showDemo) ImGui::ShowDemoWindow(&m_showDemo);
     if (!m_options.smokeTestDir.empty()) smokeTest(time);
     if (!m_options.galleryDir.empty()) templateGallery();
@@ -747,19 +772,7 @@ void EditorApp::drawMenuBar() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Créer")) {
-        // nullptr label = separator
-        static const std::pair<const char*, CreateKind> items[] = {
-            {"Entité vide", CreateKind::Empty}, {nullptr, {}}, {"Cube", CreateKind::Cube}, {"Sphère", CreateKind::Sphere},
-            {"Plan", CreateKind::Plane}, {"Quad", CreateKind::Quad}, {nullptr, {}}, {"Sprite", CreateKind::Sprite},
-            {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
-            {"Couche de parallaxe", CreateKind::ParallaxLayer}, {"Squelette 2D", CreateKind::Skeleton2D}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
-            {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
-            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {"Décalque", CreateKind::Decal}, {"Sonde de réflexion", CreateKind::ReflectionProbe}, {nullptr, {}},
-            {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
-            {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
-            {"UI : Case à cocher", CreateKind::UIToggle}, {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView}, {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown}, {"UI : Onglets", CreateKind::UITabs}, {"UI : Liste / arbre", CreateKind::UIItemList}, {"UI : Boîte de dialogue", CreateKind::UIDialog}, {"UI : Sélecteur de couleur", CreateKind::UIColorPicker},
-            {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
-        for (const auto& [label, kind] : items) {
+        for (const auto& [label, kind] : createMenuItems()) {
             if (!label) ImGui::Separator();
             else if (ImGui::MenuItem(label)) ctx.create(kind);
         }
@@ -782,6 +795,13 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
         ImGui::MenuItem("Effets de particules", nullptr, &m_shared->showParticles);
         ImGui::MenuItem("Couches de collision", nullptr, &m_shared->showPhysicsLayers);
+        ImGui::MenuItem("Historique (annuler)", nullptr, &m_showHistory);
+        if (ImGui::MenuItem("Palette de commandes...", "Ctrl+Maj+P")) {
+            m_paletteOpen = m_paletteFocus = true;
+            m_paletteQuery.clear();
+            m_paletteSelected = 0;
+            m_paletteCommands = buildCommands();
+        }
         ImGui::Separator();
         ImGui::MenuItem("Grille", nullptr, &m_viewport.showGrid);
         ImGui::MenuItem("Démo Dear ImGui (référence des widgets)", nullptr, &m_showDemo);
@@ -891,6 +911,13 @@ void EditorApp::handleShortcuts() {
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, global)) {
         if (ctx.playState() == PlayState::Edit) startPlay();
         else stopPlay();
+    }
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P, global) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_K, global)) {
+        m_paletteOpen = true;
+        m_paletteFocus = true;
+        m_paletteQuery.clear();
+        m_paletteSelected = 0;
+        m_paletteCommands = buildCommands();
     }
     if (ImGui::Shortcut(ImGuiKey_F12, global)) {
         const auto stamp = static_cast<long long>(SDL_GetTicks());
@@ -1671,6 +1698,27 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(m_scriptEditor.save(*m_shared) && !m_shared->scriptDirty, "script saved");
             auto saved = m_engine->vfs().readText("assets://scripts/smoke_coin.lua");
             check(saved && saved.value().find("-- edited") != std::string::npos, "the file has the edit");
+            // Find in every script, replace all in the open one.
+            const auto& hits = m_scriptEditor.searchProject(*m_shared, "self.spin");
+            check(std::any_of(hits.begin(), hits.end(), [](const auto& h) { return h.uri == "assets://scripts/smoke_coin.lua" && h.line == 3; }),
+                  "find in files reports the file and line");
+            check(m_scriptEditor.replaceAll(*m_shared, "spin", "turn") == 2 && m_shared->scriptDirty, "replace all in the script");
+            m_scriptEditor.edit(*m_shared, smokeCoinScript());  // back to the saved text
+            // Command palette: creation and selection commands; the history panel jumps between states.
+            const auto commands = buildCommands();
+            auto find = [&](const std::string& label) {
+                return std::find_if(commands.begin(), commands.end(), [&](const Command& c) { return c.label == label; });
+            };
+            const usize states = ctx.undoStack().size();
+            const auto cube = find("Créer : Cube");
+            check(cube != commands.end(), "the palette offers the Create menu");
+            if (cube != commands.end()) cube->run();
+            check(ctx.undoStack().size() == states + 1, "a palette command runs (one undo entry)");
+            check(find("Ouvrir le script : assets://scripts/smoke_coin.lua") != commands.end(), "the palette opens scripts");
+            check(find("Afficher : Historique (annuler)") != commands.end(), "the palette toggles panels");
+            const usize created = ctx.undoStack().position();
+            check(ctx.jumpToHistory(created - 1) && ctx.undoStack().position() == created - 1, "history jump back");
+            check(ctx.jumpToHistory(created) && ctx.undoStack().position() == created, "history jump forward");
             break;
         }
         case 214:

@@ -49,6 +49,7 @@ add_library(agr_editor_ui STATIC
     ui/src/LocalizationPanel.cpp
     ui/src/ShaderEditorPanel.cpp
     ui/src/ScriptEditorPanel.cpp
+    ui/src/EditorCommands.cpp
     ui/src/TouchSupport.cpp
     ui/src/AnimationPanel.cpp
     ui/src/StateMachinePanel.cpp

@@ -120,6 +120,28 @@ private:
     f64 m_editTime = 0.0;
     int m_gotoLine = 0, m_cursorLine = 1, m_cursorCol = 0, m_cursorPos = 0, m_wordStart = 0, m_selected = 0, m_lastLength = -1;
     std::vector<std::string> m_suggestions;
+    // Find / replace (Ctrl+F) in the file, find in every script of the project (Ctrl+Maj+F).
+    bool m_findOpen = false, m_findFocus = false, m_findInFiles = false;
+    std::string m_find, m_replace;
+    int m_selectStart = -1, m_selectEnd = -1;  // selection to apply in the next callback
+    int m_gotoAfterOpen = 0;                    // line to show once the requested file is open
+    struct FileHit {
+        std::string uri;
+        int line;
+        std::string text;
+    };
+    std::vector<FileHit> m_fileHits;
+    void findNext(EditorShared& s, bool backwards);
+    void searchFiles(EditorShared& s);
+
+public:
+    /// Find / replace helpers (automated tests).
+    int replaceAll(EditorShared& s, const std::string& what, const std::string& with);
+    const std::vector<FileHit>& searchProject(EditorShared& s, const std::string& what) {
+        m_find = what;
+        searchFiles(s);
+        return m_fileHits;
+    }
 };
 
 /// Touch input for the panels: long press = right click, vertical drag = scroll.

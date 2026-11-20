@@ -38,6 +38,8 @@ public:
     Scene& scene() { return m_engine.scene(); }
     Selection& selection() { return m_selection; }
     UndoStack& undoStack() { return m_undo; }
+    /// Goes to state `index` of the undo history (History panel).
+    bool jumpToHistory(usize index);
     EditorCamera& camera() { return m_camera; }
 
     // ------------------------------------------------------------- project
@@ -81,6 +83,9 @@ public:
     /// Adds a reflected component by name (Inspector "Add Component").
     bool addComponent(ecs::Entity e, const std::string& componentName);
     bool removeComponent(ecs::Entity e, const std::string& componentName);
+    /// Several entities at once (multi-selection): one undo entry. Returns how many changed.
+    u32 addComponent(const std::vector<ecs::Entity>& entities, const std::string& componentName);
+    u32 removeComponent(const std::vector<ecs::Entity>& entities, const std::string& componentName);
     void selectAll();
 
     // ----------------------------------------------------------- prefabs

@@ -54,6 +54,9 @@ Les projets récents sont mémorisés dans le dossier de préférences de l'util
 | **Aperçu mobile** | Vue Jeu : formats téléphone (20:9, 16:9) et tablette (4:3) en paysage ou portrait, zones sûres simulées (bandes sombres), bouton *Tactile* (en mode Jeu, la souris agit comme un doigt) |
 | **Scripts et physique** | En mode Jeu seulement : scripts Lua (inspecteur : erreurs, propriétés, fonctions, *Ouvrir le fichier*), corps physiques ; bouton *Collisions* de la vue ; *Nouveau script* et glisser un `.lua` sur un objet ([SCRIPTING.md](SCRIPTING.md), [PHYSICS.md](PHYSICS.md)) |
 | **Shader** | Éditeur de shaders `.agrshader` : numéros de ligne, aperçu en direct dans la scène et sur une sphère, erreurs à la ligne (clic pour y aller), enregistrer / annuler, garde des modifications non enregistrées ; *Nouveau shader* dans les assets ([SHADERS.md](SHADERS.md)) |
+| **Historique** | *Affichage › Historique* : chaque état d'annulation nommé par son action ; un clic y revient d'un coup (en arrière ou en avant), les états suivants restent disponibles |
+| **Palette de commandes** | **Ctrl+Maj+P** ou **Ctrl+K** : recherche approximative dans toutes les actions (enregistrer, jouer, annuler...), l'affichage des panneaux, tout le menu Créer, les scènes, les scripts, shaders et graphes de logique du projet, et les entités de la scène (sélection + cadrage) ; flèches, Entrée, Échap |
+| **Script** | Éditeur Lua intégré ([SCRIPTING.md](SCRIPTING.md)) : coloration, syntaxe vérifiée en direct, autocomplétion de l'API, **Ctrl+F** rechercher / remplacer (F3 / Maj+F3 : suivant / précédent, *Tout remplacer*), **Ctrl+Maj+F** recherche dans tous les scripts du projet (clic : fichier et ligne) |
 | **Console** | Journal du moteur, filtres par niveau avec compteurs, recherche, copie d'une ligne |
 | **Statistiques** | FPS, courbe des temps d'image, backend et GPU, draw calls, triangles, culling, lots de sprites, temps GPU, mémoire GPU et CPU par catégorie |
 
@@ -102,6 +105,7 @@ une limite connue.
 | Ctrl+D / Ctrl+G / Suppr / F2 / Ctrl+A | Dupliquer / grouper / supprimer / renommer / tout sélectionner |
 | Ctrl+S / Ctrl+Maj+S | Enregistrer / enregistrer sous |
 | Ctrl+P | Jouer / arrêter |
+| Ctrl+Maj+P / Ctrl+K | Palette de commandes |
 | F12 | Capture de l'éditeur (dossier `screenshots/` du projet) |
 | B / E / U / G / I, Échap | Peinture de tilemap : pinceau / gomme / rectangle / remplissage / pipette, quitter ([2D.md](2D.md)) |
 
@@ -143,7 +147,10 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
   matériaux, de clips d'animation et de machines à états sont enregistrées dans leur fichier et ne sont pas
   dans l'historique Ctrl+Z de la scène. Les autres fichiers sont copiés dans le
   projet, avec un avertissement qu'aucun importeur n'existe encore pour eux.
-- L'inspecteur modifie l'entité principale ; l'édition simultanée de plusieurs entités passe par le gizmo.
+- **Plusieurs entités sélectionnées** : l'inspecteur montre les composants qu'elles ont toutes ; un champ
+  modifié est appliqué à toutes (les champs aux valeurs différentes sont en ambre, « ≠ ») ; ajouter ou
+  retirer un composant le fait sur toutes, en une seule entrée d'historique. Le nom reste celui de
+  l'entité principale.
 
 ## Mode mobile (Android, ou `--mobile` sur ordinateur)
 

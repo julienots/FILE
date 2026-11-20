@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <filesystem>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -206,6 +207,66 @@ std::vector<std::string> ScriptEditorPanel::suggestions(EditorShared& s, const s
     return out;
 }
 
+void ScriptEditorPanel::findNext(EditorShared&, bool backwards) {
+    if (m_find.empty()) return;
+    usize from = static_cast<usize>(std::max(m_cursorPos, 0));
+    usize at = std::string::npos;
+    if (backwards) {
+        const usize start = from >= m_find.size() + 1 ? from - m_find.size() - 1 : std::string::npos;
+        at = start == std::string::npos ? std::string::npos : m_text.rfind(m_find, start);
+        if (at == std::string::npos) at = m_text.rfind(m_find);  // wrap
+    } else {
+        at = m_text.find(m_find, from);
+        if (at == std::string::npos) at = m_text.find(m_find);  // wrap
+    }
+    if (at == std::string::npos) return;
+    m_selectStart = static_cast<int>(at);
+    m_selectEnd = static_cast<int>(at + m_find.size());
+    m_refocus = true;
+}
+
+int ScriptEditorPanel::replaceAll(EditorShared& s, const std::string& what, const std::string& with) {
+    if (what.empty()) return 0;
+    int n = 0;
+    std::string out;
+    usize i = 0;
+    for (usize at; (at = m_text.find(what, i)) != std::string::npos; i = at + what.size(), ++n) out += m_text.substr(i, at - i) + with;
+    if (n == 0) return 0;
+    out += m_text.substr(i);
+    m_text = out;
+    s.scriptDirty = m_text != m_saved;
+    m_pendingCheck = true;
+    m_editTime = 0.0;
+    return n;
+}
+
+void ScriptEditorPanel::searchFiles(EditorShared& s) {
+    m_fileHits.clear();
+    if (m_find.empty()) return;
+    std::error_code ec;
+    const auto assets = s.ctx.project().assetsDirectory();
+    for (auto it = std::filesystem::recursive_directory_iterator(assets, ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec) || it->path().extension() != ".lua") continue;
+        const std::string uri = "assets://" + std::filesystem::relative(it->path(), assets, ec).generic_string();
+        auto text = s.engine.vfs().readText(uri);
+        if (!text) continue;
+        int line = 1;
+        usize start = 0;
+        const std::string& t = text.value();
+        while (start <= t.size()) {
+            usize end = t.find('\n', start);
+            if (end == std::string::npos) end = t.size();
+            const std::string l = t.substr(start, end - start);
+            if (l.find(m_find) != std::string::npos && m_fileHits.size() < 500) {
+                const usize b = l.find_first_not_of(" \t");
+                m_fileHits.push_back({uri, line, b == std::string::npos ? l : l.substr(b)});
+            }
+            start = end + 1;
+            ++line;
+        }
+    }
+}
+
 void ScriptEditorPanel::open(EditorShared& s, const std::string& uri) {
     auto text = s.engine.vfs().readText(uri);
     if (!text) {
@@ -216,7 +277,9 @@ void ScriptEditorPanel::open(EditorShared& s, const std::string& uri) {
     m_text = expandTabs(text.value());
     m_saved = m_text;
     m_cursorLine = 1;
-    m_gotoLine = 0;
+    m_gotoLine = m_gotoAfterOpen;
+    m_gotoAfterOpen = 0;
+    m_refocus = m_gotoLine > 0;
     m_suggestions.clear();
     s.scriptDirty = false;
     check(s);
@@ -308,6 +371,12 @@ void ScriptEditorPanel::drawCode(EditorShared& s, float height) {
             data->SelectionStart = data->SelectionEnd = data->CursorPos;
             self->m_clickedSuggestion.clear();
             self->m_hideUntilEdit = true;
+        }
+        if (self->m_selectStart >= 0) {  // a find result: select it
+            data->SelectionStart = std::clamp(self->m_selectStart, 0, data->BufTextLen);
+            data->SelectionEnd = data->CursorPos = std::clamp(self->m_selectEnd, 0, data->BufTextLen);
+            self->m_selectStart = self->m_selectEnd = -1;
+            self->m_followCursor = true;
         }
         if (self->m_gotoLine > 0) {
             int line = 1, at = 0;
@@ -501,8 +570,73 @@ void ScriptEditorPanel::draw(EditorShared& s) {
     ImGui::SameLine();
     if (m_error) ImGui::TextColored(palette::toVec4(palette::kError), "Ligne %d : %s", m_error->line, m_error->message.c_str());
     else ImGui::TextColored(palette::toVec4(palette::kSuccess), "Syntaxe correcte");
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false) && s.scriptDirty)
-        save(s);
+    const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    if (focused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false) && s.scriptDirty) save(s);
+    if (focused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+        m_findOpen = m_findFocus = true;
+        m_findInFiles = ImGui::GetIO().KeyShift;
+    }
+    if (focused && ImGui::IsKeyPressed(ImGuiKey_F3, false)) findNext(s, ImGui::GetIO().KeyShift);
+    if (m_findOpen) {
+        ImGui::SetNextItemWidth(200);
+        if (m_findFocus) {
+            ImGui::SetKeyboardFocusHere();
+            m_findFocus = false;
+        }
+        const bool enter = ImGui::InputTextWithHint("##find", "Rechercher", &m_find, ImGuiInputTextFlags_EnterReturnsTrue);
+        if (enter) {
+            if (m_findInFiles) searchFiles(s);
+            else findNext(s, false);
+        }
+        ImGui::SameLine();
+        if (ImGui::Checkbox("Tous les scripts", &m_findInFiles) && m_findInFiles) searchFiles(s);
+        if (!m_findInFiles) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("<")) findNext(s, true);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(">")) findNext(s, false);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(160);
+            ImGui::InputTextWithHint("##replace", "Remplacer par", &m_replace);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Remplacer") && m_selectStart < 0 && !m_find.empty()) {
+                // The current match (at the cursor's selection end) is replaced, then the next one is selected.
+                const usize end = static_cast<usize>(std::max(m_cursorPos, 0));
+                if (end >= m_find.size() && m_text.compare(end - m_find.size(), m_find.size(), m_find) == 0) {
+                    m_text.replace(end - m_find.size(), m_find.size(), m_replace);
+                    m_cursorPos = static_cast<int>(end - m_find.size() + m_replace.size());
+                    s.scriptDirty = m_text != m_saved;
+                    m_pendingCheck = true;
+                }
+                findNext(s, false);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Tout remplacer")) s.notify(std::to_string(replaceAll(s, m_find, m_replace)) + " remplacement(s)");
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x")) m_findOpen = false;
+        if (m_findInFiles) {
+            ImGui::BeginChild("##hits", {0, std::min(160.0f, ImGui::GetTextLineHeightWithSpacing() * static_cast<float>(m_fileHits.size() + 1))},
+                              ImGuiChildFlags_Borders);
+            if (m_fileHits.empty()) ImGui::TextDisabled(m_find.empty() ? "Tapez puis Entrée" : "Aucun résultat");
+            for (usize i = 0; i < m_fileHits.size(); ++i) {
+                const FileHit& h = m_fileHits[i];
+                ImGui::PushID(static_cast<int>(i));
+                const std::string label = h.uri.substr(h.uri.find_last_of('/') + 1) + ":" + std::to_string(h.line) + "  " + h.text;
+                if (ImGui::Selectable(label.c_str())) {
+                    if (h.uri != m_uri) {
+                        s.openScriptRequest = h.uri;
+                        m_gotoAfterOpen = h.line;
+                    } else {
+                        m_gotoLine = h.line;
+                    }
+                    m_refocus = true;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+        }
+    }
     if (ImGui::BeginTable("##scriptLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
         ImGui::TableSetupColumn("code", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("api", ImGuiTableColumnFlags_WidthFixed, 220.0f);

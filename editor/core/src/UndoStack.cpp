@@ -42,6 +42,17 @@ bool UndoStack::restore(Scene& scene, std::vector<Uuid>& selection) {
     return true;
 }
 
+bool UndoStack::jumpTo(usize i, Scene& scene, std::vector<Uuid>& selection) {
+    if (i >= m_states.size() || i == m_pos) return false;
+    const usize before = m_pos;
+    m_pos = i;
+    if (!restore(scene, selection)) {
+        m_pos = before;
+        return false;
+    }
+    return true;
+}
+
 bool UndoStack::undo(Scene& scene, std::vector<Uuid>& selection) {
     if (!canUndo()) return false;
     --m_pos;

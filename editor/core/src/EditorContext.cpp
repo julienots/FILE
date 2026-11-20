@@ -153,6 +153,15 @@ bool EditorContext::undo() {
     return true;
 }
 
+bool EditorContext::jumpToHistory(usize index) {
+    if (m_playState != PlayState::Edit) return false;
+    std::vector<Uuid> sel;
+    if (!m_undo.jumpTo(index, scene(), sel)) return false;
+    m_selection.assign(std::move(sel));
+    scene().updateTransforms();
+    return true;
+}
+
 bool EditorContext::redo() {
     if (m_playState != PlayState::Edit) return false;
     std::vector<Uuid> sel;
@@ -512,6 +521,31 @@ bool EditorContext::removeComponent(ecs::Entity e, const std::string& name) {
     pool->remove(scene().registry(), e);
     commit("Remove " + name);
     return true;
+}
+
+u32 EditorContext::addComponent(const std::vector<ecs::Entity>& entities, const std::string& name) {
+    const ComponentInfo* info = ComponentRegistry::instance().find(name);
+    if (!info) return 0;
+    auto& pool = scene().registry().ensurePool(info->id, info->makePool);
+    u32 n = 0;
+    for (ecs::Entity e : entities)
+        if (scene().valid(e) && !pool.contains(e) && pool.emplaceDefault(scene().registry(), e)) ++n;
+    if (n) commit("Add " + name + (n > 1 ? " (" + std::to_string(n) + ")" : ""));
+    return n;
+}
+
+u32 EditorContext::removeComponent(const std::vector<ecs::Entity>& entities, const std::string& name) {
+    const ComponentInfo* info = ComponentRegistry::instance().find(name);
+    ecs::PoolBase* pool = info ? scene().registry().findPool(info->id) : nullptr;
+    if (!pool) return 0;
+    u32 n = 0;
+    for (ecs::Entity e : entities)
+        if (scene().valid(e) && pool->contains(e)) {
+            pool->remove(scene().registry(), e);
+            ++n;
+        }
+    if (n) commit("Remove " + name + (n > 1 ? " (" + std::to_string(n) + ")" : ""));
+    return n;
 }
 
 void EditorContext::selectAll() {
