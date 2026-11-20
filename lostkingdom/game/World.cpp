@@ -705,9 +705,17 @@ void World::buildPlan() {
                 S(S_ALTAR, p.pos, 0, pi);
                 break;
             }
+            std::vector<vec2> placed;   // 2.4.0 no fallen wall on the approach road, none on top of another
             for (int i = 0; i < 7; i++) {
-                float a = rng.range(0, TAU), d = rng.range(6, p.radius * 0.8f);
-                vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
+                vec2 q; bool ok = false;
+                for (int tries = 0; tries < 14 && !ok; tries++) {
+                    float a = rng.range(0, TAU), d = rng.range(6, p.radius * 0.8f);
+                    q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
+                    ok = roadInfluence(q.x, q.y) < 0.2f;
+                    for (vec2 o : placed) if (length(o - q) < 8.f) ok = false;
+                }
+                if (!ok) continue;
+                placed.push_back(q);
                 if (p.type == PoiType::ElvenRuins) S(i % 3 == 0 ? S_ELVEN_ARCH : (i % 3 == 1 ? S_OBELISK : S_RUIN_WALL), q, rng.range(0, TAU), pi, rng.range(0.8f, 1.2f), 1);
                 else S(i % 2 ? S_RUIN_WALL : S_OBELISK, q, rng.range(0, TAU), pi, rng.range(0.8f, 1.3f), 0);
             }
