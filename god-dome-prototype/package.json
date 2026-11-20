@@ -1,0 +1,9 @@
+{
+  "name": "god-dome",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "GOD DOME — jeu 3D mobile (Three.js)",
+  "scripts": { "start": "python3 -m http.server 8080" },
+  "dependencies": { "three": "0.170.0" }
+}
