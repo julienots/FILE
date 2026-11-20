@@ -775,8 +775,19 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 const float half = size * 0.5f;
                 if (half <= 0.0f) continue;
                 const Vec3 center = (em.worldSpace ? Vec3{p.position.x, p.position.y, p.z} : w.matrix.transformPoint({p.position.x, p.position.y, 0.0f})) + off;
-                const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
-                const Vec3 dx{cs, sn, 0.0f}, dy{-sn, cs, 0.0f};
+                Vec3 dx, dy;
+                Vec3 vel = em.worldSpace ? Vec3{p.velocity.x, p.velocity.y, 0.0f} : w.matrix.transformVector({p.velocity.x, p.velocity.y, 0.0f});
+                vel.z = 0.0f;
+                const float speed = math::length(vel);
+                if (em.velocityStretch > 0.0f && speed > 1e-4f) {  // along the motion (sparks, rain)
+                    const Vec3 dir = vel * (1.0f / speed);
+                    dx = dir * (half + speed * em.velocityStretch * 0.5f);
+                    dy = Vec3{-dir.y, dir.x, 0.0f} * half;
+                } else {
+                    const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
+                    dx = {cs, sn, 0.0f};
+                    dy = {-sn, cs, 0.0f};
+                }
                 SpriteItem item;
                 item.corners[0] = center - dx - dy;
                 item.corners[1] = center + dx - dy;
@@ -810,8 +821,18 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                     const float half = size * 0.5f;
                     if (half <= 0.0f) continue;
                     const Vec3 center = em.worldSpace ? p.position : w.matrix.transformPoint(p.position);
-                    const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
-                    const Vec3 dx = right * cs + up * sn, dy = up * cs - right * sn;
+                    Vec3 dx, dy;
+                    const Vec3 vel = em.worldSpace ? p.velocity : w.matrix.transformVector(p.velocity);
+                    const float sx = math::dot(vel, right), sy = math::dot(vel, up), screenSpeed = std::sqrt(sx * sx + sy * sy);
+                    if (em.velocityStretch > 0.0f && screenSpeed > 1e-4f) {  // stretched along the motion as seen on screen
+                        const float ux = sx / screenSpeed, uy = sy / screenSpeed;
+                        dx = (right * ux + up * uy) * (half + screenSpeed * em.velocityStretch * 0.5f);
+                        dy = (up * ux - right * uy) * half;
+                    } else {
+                        const float cs = std::cos(p.rotation) * half, sn = std::sin(p.rotation) * half;
+                        dx = right * cs + up * sn;
+                        dy = up * cs - right * sn;
+                    }
                     SpriteItem item;
                     item.corners[0] = center - dx - dy;
                     item.corners[1] = center + dx - dy;
@@ -827,6 +848,58 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                     m_spriteItems.push_back(item);
                     ++m_stats.particlesVisible;
                 }
+            });
+    }
+    // Trails: one quad per segment between recorded points, facing the camera (in 2D: the XY plane).
+    {
+        const Vec3 camForward = math::normalize(Vec3{-view.c[0].z, -view.c[1].z, -view.c[2].z});
+        reg.view<TrailComponent, TrailStateComponent, WorldTransformComponent>().each(
+            [&](ecs::Entity e, TrailComponent& t, TrailStateComponent& st, WorldTransformComponent& w) {
+                if (!w.activeInHierarchy || hiddenInEditor(e) || st.points.size() < 2 || t.width <= 0.0f) return;
+                const ParticleCurvesLut* lut = curvesFor(t.curves);
+                const rhi::TextureHandle tex = t.texture.empty() ? m_assets.whiteTexture() : textureFor(t.texture, false);
+                const usize n = st.points.size();
+                const float life = std::max(t.lifetime, 1e-3f);
+                std::vector<Vec3>& side = m_trailScratch;
+                side.assign(n, Vec3{0.0f});
+                for (usize i = 0; i < n; ++i) {  // half width offset at each point, perpendicular to the trail
+                    const Vec3 a = st.points[i > 0 ? i - 1 : 0].position, b = st.points[i + 1 < n ? i + 1 : n - 1].position;
+                    Vec3 s = math::cross(b - a, camForward);
+                    const float len = math::length(s);
+                    if (len < 1e-6f) s = i > 0 ? side[i - 1] : Vec3{0.0f};
+                    else s = s * (1.0f / len);
+                    const float age = std::clamp((st.time - st.points[i].time) / life, 0.0f, 1.0f);
+                    const float width = t.width * (lut && lut->hasSize ? lut->sizeAt(age) : 1.0f - age);
+                    side[i] = len < 1e-6f ? s : s * (width * 0.5f);
+                }
+                math::Aabb box;
+                for (const TrailPoint& p : st.points) box.expand(p.position);
+                box.min = box.min - Vec3{t.width}, box.max = box.max + Vec3{t.width};
+                if (!frustum.intersects(box)) return;
+                const float depth = view.transformPoint(box.center()).z;
+                for (usize i = 0; i + 1 < n; ++i) {
+                    const float ageA = std::clamp((st.time - st.points[i].time) / life, 0.0f, 1.0f),
+                                ageB = std::clamp((st.time - st.points[i + 1].time) / life, 0.0f, 1.0f);
+                    const float mid = (ageA + ageB) * 0.5f;
+                    Vec4 color = lut && lut->hasColor ? Vec4(lut->colorAt(mid)) : Vec4{1, 1, 1, 1.0f - mid};
+                    color = {color.x * t.color.x, color.y * t.color.y, color.z * t.color.z, color.w * t.color.w};
+                    const Vec3 a = st.points[i].position, b = st.points[i + 1].position;
+                    SpriteItem item;
+                    item.corners[0] = a - side[i];
+                    item.corners[1] = b - side[i + 1];
+                    item.corners[2] = b + side[i + 1];
+                    item.corners[3] = a + side[i];
+                    // u runs from the tail (0) to the head (1).
+                    item.uv = {static_cast<float>(i) / static_cast<float>(n - 1), 0.0f, static_cast<float>(i + 1) / static_cast<float>(n - 1), 1.0f};
+                    item.layer = t.sortingLayer;
+                    item.order = t.orderInLayer;
+                    item.depth = depth;
+                    item.color = packColor(color);
+                    item.pipeline = t.additive ? 2u : 0u;
+                    item.texture = tex;
+                    m_spriteItems.push_back(item);
+                }
+                ++m_stats.trails;
             });
     }
     m_stats.spritesVisible = static_cast<u32>(m_spriteItems.size());

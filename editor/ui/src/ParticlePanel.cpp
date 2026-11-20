@@ -53,6 +53,29 @@ bool emitterSettings(E& em) {
         changed = true;
     }
     if (em.flipbookColumns * em.flipbookRows > 1) changed |= ImGui::DragFloat("Cycles du flipbook", &em.flipbookCycles, 0.05f, 0.0f, 32.0f);
+    ImGui::SeparatorText("Comportement");
+    changed |= ImGui::DragFloat("Étirement (vitesse)", &em.velocityStretch, 0.002f, 0.0f, 2.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Étire les particules dans le sens du mouvement : étincelles, pluie, traits de vitesse");
+    changed |= ImGui::Checkbox("Collisions", &em.collisions);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rebond sur le sol (y = hauteur) et sur les ParticleCollider (émetteurs en espace monde)");
+    if (em.collisions) {
+        changed |= ImGui::Checkbox("Sol", &em.groundPlane);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100.0f);
+        changed |= ImGui::DragFloat("Hauteur du sol", &em.groundHeight, 0.01f);
+        changed |= ImGui::SliderFloat("Rebond", &em.bounce, 0.0f, 1.0f);
+        changed |= ImGui::SliderFloat("Frottement", &em.collisionFriction, 0.0f, 1.0f);
+        changed |= ImGui::Checkbox("Disparaît au contact", &em.dieOnCollision);
+    }
+    changed |= ImGui::Checkbox("Sensible aux attracteurs", &em.affectedByAttractors);
+    int when = static_cast<int>(em.subEmitOn);
+    ImGui::SetNextItemWidth(160.0f);
+    if (ImGui::Combo("Sous-émetteur à", &when, "la mort\0la collision\0")) {
+        em.subEmitOn = static_cast<SubEmitTrigger>(when);
+        changed = true;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("L'émetteur choisi dans l'inspecteur (subEmitter) lance des particules à cet endroit");
+    changed |= ImGui::DragInt("Particules du sous-émetteur", &em.subEmitCount, 0.2f, 0, 1000);
     return changed;
 }
 

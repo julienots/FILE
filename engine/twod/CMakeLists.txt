@@ -3,6 +3,7 @@ agr_add_module(twod
         src/SpriteAnimator.cpp
         src/Particles2D.cpp
         src/Particles3D.cpp
+        src/Trails.cpp
         src/TilemapEditing.cpp
         src/Atlas.cpp
         src/TwoDPlugin.cpp

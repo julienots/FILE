@@ -238,6 +238,148 @@ TEST_CASE("orthographic scale modes adapt to screen shapes") {
     CHECK(crop.y <= 5.0f + 1e-3f);        // fills the screen, cuts the sides
 }
 
+
+TEST_CASE("particles: ground and collider bounces, attractors, sub-emitters, bursts") {
+    registerRenderComponents();
+    using math::Vec3;
+    Scene scene;
+    auto settle = [&](float seconds, float step = 1.0f / 60.0f) {
+        for (float t = 0.0f; t < seconds; t += step) {
+            scene.updateTransforms();
+            simulateParticles2D(scene, step);
+            simulateParticles3D(scene, step);
+        }
+    };
+    // 2D: falling particles bounce on the ground plane and never go through it.
+    const auto rain = scene.createEntity("Rain");
+    scene.registry().get<TransformComponent>(rain).position = {0, 2, 0};
+    auto& em = scene.registry().emplace<ParticleEmitter2DComponent>(rain);
+    em.rate = 0.0f;
+    em.burst = 20;
+    em.loop = false;
+    em.speedMin = em.speedMax = 0.0f;
+    em.lifetimeMin = em.lifetimeMax = 3.0f;
+    em.gravity = {0.0f, -10.0f};
+    em.collisions = true;
+    em.bounce = 0.5f;
+    em.seed = 3;
+    u32 hits = 0;
+    for (int i = 0; i < 90; ++i) {
+        scene.updateTransforms();
+        hits += simulateParticles2D(scene, 1.0f / 60.0f).collisions;
+        for (const Particle2D& p : scene.registry().get<ParticleState2DComponent>(rain).particles) CHECK(p.position.y >= -1e-4f);
+    }
+    CHECK(hits > 0);
+    // dieOnCollision: they disappear on impact.
+    restartParticles2D(scene, rain);
+    em.dieOnCollision = true;
+    settle(1.5f);
+    CHECK(scene.registry().get<ParticleState2DComponent>(rain).particles.empty());
+
+    // 3D: a particle shot at a sphere collider is pushed out and comes back.
+    const auto gun = scene.createEntity("Gun");
+    auto& e3 = scene.registry().emplace<ParticleEmitter3DComponent>(gun);
+    e3.shape = EmitterShape3D::Point;
+    e3.coneAngle = 0.0f;
+    e3.shape = EmitterShape3D::Cone;
+    e3.shapeRadius = 0.0f;
+    e3.rate = 0.0f;
+    e3.burst = 1;
+    e3.loop = false;
+    e3.speedMin = e3.speedMax = 4.0f;  // straight up (+Y)
+    e3.lifetimeMin = e3.lifetimeMax = 5.0f;
+    e3.collisions = true;
+    e3.groundPlane = false;
+    e3.bounce = 1.0f;
+    e3.collisionFriction = 0.0f;
+    const auto ball = scene.createEntity("Ball");
+    scene.registry().get<TransformComponent>(ball).position = {0, 3, 0};
+    scene.registry().emplace<ParticleColliderComponent>(ball).size = {2, 2, 2};  // radius 1: surface at y = 2
+    settle(1.0f);
+    auto& p3 = scene.registry().get<ParticleState3DComponent>(gun).particles;
+    REQUIRE(p3.size() == 1);
+    CHECK(p3[0].velocity.y < -3.5f);  // bounced back down
+    CHECK(p3[0].position.y < 2.0f);
+    // A box collider stops 2D particles too (its XY section).
+    const auto wall = scene.createEntity("Wall");
+    scene.registry().get<TransformComponent>(wall).position = {3, 0, 0};
+    auto& box = scene.registry().emplace<ParticleColliderComponent>(wall);
+    box.shape = ParticleColliderComponent::Shape::Box;
+    box.size = {1, 10, 1};
+    const auto jet = scene.createEntity("Jet");
+    auto& ej = scene.registry().emplace<ParticleEmitter2DComponent>(jet);
+    ej.rate = 0.0f, ej.burst = 5, ej.loop = false, ej.direction = 0.0f, ej.spread = 0.0f, ej.speedMin = ej.speedMax = 6.0f;
+    ej.gravity = {0, 0}, ej.lifetimeMin = ej.lifetimeMax = 4.0f, ej.collisions = true, ej.groundPlane = false, ej.seed = 9;
+    settle(1.0f);
+    for (const Particle2D& p : scene.registry().get<ParticleState2DComponent>(jet).particles) CHECK(p.position.x <= 2.5f + 1e-3f);
+
+    // Attractor: pulls a resting particle toward its center.
+    const auto hole = scene.createEntity("Hole");
+    scene.registry().get<TransformComponent>(hole).position = {-10, 0, 0};
+    scene.registry().emplace<ParticleAttractorComponent>(hole).radius = 5.0f;
+    const auto dust = scene.createEntity("Dust");
+    scene.registry().get<TransformComponent>(dust).position = {-8, 0, 0};
+    auto& ed = scene.registry().emplace<ParticleEmitter2DComponent>(dust);
+    ed.rate = 0.0f, ed.burst = 1, ed.loop = false, ed.speedMin = ed.speedMax = 0.0f, ed.gravity = {0, 0}, ed.lifetimeMin = ed.lifetimeMax = 5.0f;
+    settle(0.5f);
+    CHECK(scene.registry().get<ParticleState2DComponent>(dust).particles[0].position.x < -8.2f);
+
+    // Sub-emitter: each dying particle bursts 4 sparks where it was.
+    const auto sparks = scene.createEntity("Sparks");
+    auto& es = scene.registry().emplace<ParticleEmitter2DComponent>(sparks);
+    es.emitting = false;
+    es.lifetimeMin = es.lifetimeMax = 5.0f;
+    es.speedMin = es.speedMax = 0.0f;
+    es.gravity = {0, 0};
+    const auto rocket = scene.createEntity("Rocket");
+    scene.registry().get<TransformComponent>(rocket).position = {20, 0, 0};
+    auto& er = scene.registry().emplace<ParticleEmitter2DComponent>(rocket);
+    er.rate = 0.0f, er.burst = 3, er.loop = false, er.lifetimeMin = er.lifetimeMax = 0.1f, er.speedMin = er.speedMax = 0.0f, er.gravity = {0, 0};
+    er.subEmitter = sparks;
+    er.subEmitCount = 4;
+    settle(0.3f);
+    const auto& sp = scene.registry().get<ParticleState2DComponent>(sparks).particles;
+    REQUIRE(sp.size() == 12);
+    CHECK(sp[0].position.x == doctest::Approx(20.0f));
+    // Bursts on demand (impacts, scripts).
+    CHECK(burstParticles2D(scene, sparks, {1, 2, 0}, 5) == 5);
+    CHECK(burstParticles3D(scene, gun, {0, 0, 0}, 2) == 2);
+    CHECK(burstParticles2D(scene, hole, {0, 0, 0}, 2) == 0);  // not an emitter
+}
+
+TEST_CASE("trails record points as the entity moves, then fade") {
+    registerRenderComponents();
+    Scene scene;
+    const auto e = scene.createEntity("Comet");
+    auto& t = scene.registry().emplace<TrailComponent>(e);
+    t.lifetime = 0.5f;
+    t.minDistance = 0.25f;
+    t.maxPoints = 6;
+    auto& tr = scene.registry().get<TransformComponent>(e);
+    for (int i = 0; i <= 10; ++i) {  // 1 unit in 10 steps of 0.1 s
+        tr.position = {0.1f * static_cast<float>(i), 0, 0};
+        scene.updateTransforms();
+        updateTrails(scene, 0.01f);
+    }
+    auto& st = scene.registry().get<TrailStateComponent>(e);
+    REQUIRE(st.points.size() >= 4);
+    CHECK(st.points.back().position.x == doctest::Approx(1.0f));  // the head follows the entity
+    for (usize i = 1; i + 1 < st.points.size(); ++i)
+        CHECK(st.points[i].position.x - st.points[i - 1].position.x >= 0.25f - 1e-4f);
+    // Capped.
+    for (int i = 11; i <= 40; ++i) {
+        tr.position = {0.1f * static_cast<float>(i), 0, 0};
+        scene.updateTransforms();
+        updateTrails(scene, 0.01f);
+    }
+    CHECK(st.points.size() <= 6);
+    // Not emitting: the points expire after the lifetime.
+    t.emitting = false;
+    updateTrails(scene, 0.3f);
+    CHECK_FALSE(st.points.empty());
+    updateTrails(scene, 0.3f);
+    CHECK(st.points.empty());
+}
 }  // TEST_SUITE
 
 TEST_CASE("3D particles: shapes, gravity, lifetime, local / world space, seed, presets") {

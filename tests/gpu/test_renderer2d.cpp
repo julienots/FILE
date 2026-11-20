@@ -9,8 +9,8 @@
 #include "agr/render/Renderer.hpp"
 #include "agr/render/Skin2D.hpp"
 #include "agr/render/ParticleCurves.hpp"
-#include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Particles2D.hpp"
+#include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/TilemapEditing.hpp"
 
 using namespace agr;
@@ -391,6 +391,54 @@ TEST_CASE("particles: over-lifetime curves and flipbook frames") {
     const Rgba young = at(-3.0f, 0.0f), old = at(3.0f, 0.0f);
     CHECK_MESSAGE((young.r > 200 && young.g > 200 && young.b < 60), young);  // yellow
     CHECK_MESSAGE((old.r > 200 && old.g < 60 && old.b > 200), old);          // magenta
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("trails and velocity-stretched particles") {
+    Render2DFixture f;
+    f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)
+    auto lum = [&](float x, float y) {
+        const Rgba p = pixel(*gpu().device, static_cast<u32>(32.0f + x * 6.4f), static_cast<u32>(32.0f - y * 6.4f));
+        return int(p.r) + int(p.g) + int(p.b);
+    };
+    // A trail recorded along x from -4 to 4 (fresh points: full width).
+    const auto comet = f.scene.createEntity("Comet");
+    auto& t = f.scene.registry().emplace<TrailComponent>(comet);
+    t.width = 1.0f;
+    t.lifetime = 100.0f;
+    t.color = {1, 0.2f, 0.1f, 1};
+    t.minDistance = 0.5f;
+    auto& tr = f.scene.registry().get<TransformComponent>(comet);
+    for (int i = 0; i <= 16; ++i) {
+        tr.position = {-4.0f + 0.5f * static_cast<float>(i), 3.0f, 0};
+        f.scene.updateTransforms();
+        updateTrails(f.scene, 0.001f);
+    }
+    f.settle();
+    CHECK(f.renderer.stats().trails == 1);
+    CHECK(lum(0.0f, 3.0f) > 150);  // on the ribbon
+    CHECK(lum(0.0f, 4.2f) < 20);   // above it: half width 0.5
+    // A particle moving at 10 units/s with a 0.2 s stretch: 0.5 wide, 0.5 + 2 long.
+    const auto e = f.scene.createEntity("Spark");
+    auto& em = f.scene.registry().emplace<ParticleEmitter2DComponent>(e);
+    em.emitting = false;
+    em.startSize = em.endSize = 0.5f;
+    em.startColor = em.endColor = {1, 1, 1, 1};
+    em.texture = "assets://two.png";
+    em.velocityStretch = 0.2f;
+    auto& st = f.scene.registry().emplace<ParticleState2DComponent>(e);
+    st.started = true;
+    Particle2D p;
+    p.position = {0.0f, -2.0f};
+    p.velocity = {10.0f, 0.0f};
+    p.lifetime = 100.0f;
+    st.particles = {p};
+    f.frame();
+    CHECK(lum(1.0f, -2.0f) > 150);  // stretched along x
+    CHECK(lum(0.0f, -2.6f) < 20);   // still thin across
+    em.velocityStretch = 0.0f;
+    f.frame();
+    CHECK(lum(1.0f, -2.0f) < 20);
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

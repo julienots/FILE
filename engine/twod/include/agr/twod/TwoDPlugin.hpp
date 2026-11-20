@@ -17,10 +17,12 @@ public:
     /// time is stopped. Animations are not previewed: they write serialized frames.
     void setPreviewWhilePaused(bool enabled) { m_preview = enabled; }
     const ParticleStats2D& particleStats() const { return m_stats; }
+    u32 trailPoints() const { return m_trailPoints; }
 
 private:
     bool m_preview = false;
     ParticleStats2D m_stats;
+    u32 m_trailPoints = 0;
 };
 
 } // namespace agr

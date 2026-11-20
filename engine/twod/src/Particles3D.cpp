@@ -4,6 +4,8 @@
 
 #include "agr/twod/Particles2D.hpp"
 
+#include "ParticleWorld.hpp"
+
 namespace agr {
 
 using math::Vec3;
@@ -69,6 +71,8 @@ void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, c
 ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
     ParticleStats2D stats;
     auto& reg = scene.registry();
+    const particles::World world = particles::gather(scene);
+    std::vector<particles::SubBurst> bursts;
     std::vector<ecs::Entity> missing;
     reg.view<ParticleEmitter3DComponent>().each([&](ecs::Entity e, ParticleEmitter3DComponent&) {
         if (!reg.has<ParticleState3DComponent>(e)) missing.push_back(e);
@@ -78,6 +82,12 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
         [&](ecs::Entity, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
             ++stats.emitters;
             if (!w.activeInHierarchy) return;
+            const bool attract = em.worldSpace && em.affectedByAttractors && !world.attractors.empty();
+            const bool collide = em.worldSpace && em.collisions;
+            auto subBurst = [&](SubEmitTrigger when, const Particle3D& p) {
+                if (em.subEmitOn == when && !em.subEmitter.isNull() && em.subEmitCount > 0)
+                    bursts.push_back({em.subEmitter, em.worldSpace ? p.position : w.matrix.transformPoint(p.position), static_cast<u32>(em.subEmitCount)});
+            };
             if (!st.started) {
                 st.started = true;
                 st.time = 0.0f;
@@ -92,14 +102,24 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
                 for (usize i = 0; i < st.particles.size();) {
                     Particle3D& p = st.particles[i];
                     p.age += dt;
-                    if (p.age >= p.lifetime) {
+                    bool dead = p.age >= p.lifetime;
+                    if (!dead) {
+                        const Vec3 accel = attract ? g + particles::attraction(world, p.position, false) : g;
+                        p.velocity = (p.velocity + accel * dt) * damping;
+                        p.position = p.position + p.velocity * dt;
+                        p.rotation += p.angularVelocity * dt;
+                        if (collide && particles::collide(world, em, p.position, p.velocity, false)) {
+                            ++stats.collisions;
+                            subBurst(SubEmitTrigger::Collision, p);
+                            dead = em.dieOnCollision;
+                        }
+                    }
+                    if (dead) {
+                        subBurst(SubEmitTrigger::Death, p);
                         p = st.particles.back();
                         st.particles.pop_back();
                         continue;
                     }
-                    p.velocity = (p.velocity + g * dt) * damping;
-                    p.position = p.position + p.velocity * dt;
-                    p.rotation += p.angularVelocity * dt;
                     ++i;
                 }
                 if (em.emitting) {
@@ -120,7 +140,33 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
             }
             stats.particles += static_cast<u32>(st.particles.size());
         });
+    for (const particles::SubBurst& b : bursts) stats.spawned += burstParticles3D(scene, b.emitter, b.position, b.count);
     return stats;
+}
+
+u32 burstParticles3D(Scene& scene, ecs::Entity e, Vec3 position, u32 count) {
+    auto& reg = scene.registry();
+    auto* em = reg.tryGet<ParticleEmitter3DComponent>(e);
+    auto* w = reg.tryGet<WorldTransformComponent>(e);
+    if (!em || !w) return 0;
+    auto* st = reg.tryGet<ParticleState3DComponent>(e);
+    if (!st) st = &reg.emplace<ParticleState3DComponent>(e);
+    if (!st->started) {
+        st->started = true;
+        st->rng = em->seed ? em->seed : static_cast<u32>(std::random_device{}()) | 1u;
+    }
+    u32 spawned = 0;
+    if (!em->worldSpace) {
+        const Vec3 local = math::inverse(w->matrix).transformPoint(position);
+        const usize first = st->particles.size();
+        spawn(*em, *st, w->matrix, count, spawned);
+        for (usize i = first; i < st->particles.size(); ++i) st->particles[i].position = st->particles[i].position + local;
+        return spawned;
+    }
+    math::Mat4 m = w->matrix;
+    m.c[3] = {position.x, position.y, position.z, 1.0f};
+    spawn(*em, *st, m, count, spawned);
+    return spawned;
 }
 
 void restartParticles3D(Scene& scene, ecs::Entity e) {

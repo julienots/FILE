@@ -1,5 +1,7 @@
 #include "agr/twod/Particles2D.hpp"
 
+#include "ParticleWorld.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -51,6 +53,8 @@ void spawn(const ParticleEmitter2DComponent& em, ParticleState2DComponent& st, c
 ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
     ParticleStats2D stats;
     auto& reg = scene.registry();
+    const particles::World world = particles::gather(scene);
+    std::vector<particles::SubBurst> bursts;
     std::vector<ecs::Entity> missing;
     reg.view<ParticleEmitter2DComponent>().each([&](ecs::Entity e, ParticleEmitter2DComponent&) {
         if (!reg.has<ParticleState2DComponent>(e)) missing.push_back(e);
@@ -61,6 +65,14 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
         [&](ecs::Entity, ParticleEmitter2DComponent& em, ParticleState2DComponent& st, WorldTransformComponent& w) {
             ++stats.emitters;
             if (!w.activeInHierarchy) return;  // inactive emitters are paused
+            const bool attract = em.worldSpace && em.affectedByAttractors && !world.attractors.empty();
+            const bool collide = em.worldSpace && em.collisions;
+            auto subBurst = [&](SubEmitTrigger when, const Particle2D& p) {
+                if (em.subEmitOn == when && !em.subEmitter.isNull() && em.subEmitCount > 0) {
+                    const math::Vec3 at = em.worldSpace ? math::Vec3{p.position.x, p.position.y, p.z} : w.matrix.transformPoint({p.position.x, p.position.y, 0.0f});
+                    bursts.push_back({em.subEmitter, at, static_cast<u32>(em.subEmitCount)});
+                }
+            };
             if (!st.started) {
                 st.started = true;
                 st.time = 0.0f;
@@ -74,14 +86,33 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
                 for (usize i = 0; i < st.particles.size();) {
                     Particle2D& p = st.particles[i];
                     p.age += dt;
-                    if (p.age >= p.lifetime) {
+                    bool dead = p.age >= p.lifetime;
+                    if (!dead) {
+                        math::Vec2 accel = em.gravity;
+                        if (attract) {
+                            const math::Vec3 a = particles::attraction(world, {p.position.x, p.position.y, p.z}, true);
+                            accel += math::Vec2{a.x, a.y};
+                        }
+                        p.velocity = (p.velocity + accel * dt) * damping;
+                        p.position += p.velocity * dt;
+                        p.rotation += p.angularVelocity * dt;
+                        if (collide) {
+                            math::Vec3 pos{p.position.x, p.position.y, p.z}, vel{p.velocity.x, p.velocity.y, 0.0f};
+                            if (particles::collide(world, em, pos, vel, true)) {
+                                p.position = {pos.x, pos.y};
+                                p.velocity = {vel.x, vel.y};
+                                ++stats.collisions;
+                                subBurst(SubEmitTrigger::Collision, p);
+                                dead = em.dieOnCollision;
+                            }
+                        }
+                    }
+                    if (dead) {
+                        subBurst(SubEmitTrigger::Death, p);
                         p = st.particles.back();
                         st.particles.pop_back();
                         continue;
                     }
-                    p.velocity = (p.velocity + em.gravity * dt) * damping;
-                    p.position += p.velocity * dt;
-                    p.rotation += p.angularVelocity * dt;
                     ++i;
                 }
                 // Emission over the cycle.
@@ -103,7 +134,33 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
             }
             stats.particles += static_cast<u32>(st.particles.size());
         });
+    for (const particles::SubBurst& b : bursts) stats.spawned += burstParticles2D(scene, b.emitter, b.position, b.count);
     return stats;
+}
+
+u32 burstParticles2D(Scene& scene, ecs::Entity e, math::Vec3 position, u32 count) {
+    auto& reg = scene.registry();
+    auto* em = reg.tryGet<ParticleEmitter2DComponent>(e);
+    auto* w = reg.tryGet<WorldTransformComponent>(e);
+    if (!em || !w) return 0;
+    auto* st = reg.tryGet<ParticleState2DComponent>(e);
+    if (!st) st = &reg.emplace<ParticleState2DComponent>(e);
+    if (!st->started) {  // a sub-emitter that never emitted: start its random sequence, no burst of its own
+        st->started = true;
+        st->rng = em->seed ? em->seed : static_cast<u32>(std::random_device{}()) | 1u;
+    }
+    math::Mat4 m = w->matrix;  // the emitter's orientation, at the burst position
+    m.c[3] = {position.x, position.y, position.z, 1.0f};
+    u32 spawned = 0;
+    if (!em->worldSpace) {  // local emitters: the burst point in the emitter's frame
+        const math::Vec3 local = math::inverse(w->matrix).transformPoint(position);
+        const usize first = st->particles.size();
+        spawn(*em, *st, w->matrix, count, spawned);
+        for (usize i = first; i < st->particles.size(); ++i) st->particles[i].position += math::Vec2{local.x, local.y};
+        return spawned;
+    }
+    spawn(*em, *st, m, count, spawned);
+    return spawned;
 }
 
 void restartParticles2D(Scene& scene, ecs::Entity e) {

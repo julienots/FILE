@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "agr/core/Types.hpp"
+#include "agr/ecs/Entity.hpp"
 #include "agr/math/Math.hpp"
 
 namespace agr {
@@ -292,6 +293,9 @@ struct ParallaxComponent {
 };
 
 /// 2D particle emitter, simulated by the 2D module (simulateParticles2D, TwoDPlugin).
+/// When a sub-emitter bursts: where a particle dies, or where it hits a collider / the ground.
+enum class SubEmitTrigger : i32 { Death = 0, Collision = 1 };
+
 struct ParticleEmitter2DComponent {
     bool emitting = true;
     bool loop = true;
@@ -315,6 +319,20 @@ struct ParticleEmitter2DComponent {
     i32 flipbookColumns = 1;        ///< Texture cut in columns x rows frames played over the lifetime (smoke, explosions).
     i32 flipbookRows = 1;
     float flipbookCycles = 1.0f;    ///< How many times the frames play during a particle's life.
+    float velocityStretch = 0.0f;   ///< Stretches particles along their motion: + speed x this (seconds) in length (sparks, rain).
+    // Collisions (world-space emitters): the ground plane and the ParticleCollider shapes.
+    bool collisions = false;
+    bool groundPlane = true;        ///< Collide with the horizontal plane y = groundHeight (world).
+    float groundHeight = 0.0f;
+    float bounce = 0.4f;            ///< Speed kept along the normal after a hit (0 = stops, 1 = elastic).
+    float collisionFriction = 0.2f; ///< Speed lost along the surface at each hit.
+    bool dieOnCollision = false;
+    bool affectedByAttractors = true;  ///< ParticleAttractor pull / push (world-space emitters).
+    /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
+    /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
+    ecs::Entity subEmitter{};
+    SubEmitTrigger subEmitOn = SubEmitTrigger::Death;
+    i32 subEmitCount = 8;
     bool additive = false;
     bool worldSpace = true;         ///< Particles stay where emitted when the emitter moves.
     i32 sortingLayer = 0;
@@ -365,6 +383,20 @@ struct ParticleEmitter3DComponent {
     i32 flipbookColumns = 1;        ///< Texture cut in columns x rows frames played over the lifetime (smoke, explosions).
     i32 flipbookRows = 1;
     float flipbookCycles = 1.0f;    ///< How many times the frames play during a particle's life.
+    float velocityStretch = 0.0f;   ///< Stretches particles along their motion: + speed x this (seconds) in length (sparks, rain).
+    // Collisions (world-space emitters): the ground plane and the ParticleCollider shapes.
+    bool collisions = false;
+    bool groundPlane = true;        ///< Collide with the horizontal plane y = groundHeight (world).
+    float groundHeight = 0.0f;
+    float bounce = 0.4f;            ///< Speed kept along the normal after a hit (0 = stops, 1 = elastic).
+    float collisionFriction = 0.2f; ///< Speed lost along the surface at each hit.
+    bool dieOnCollision = false;
+    bool affectedByAttractors = true;  ///< ParticleAttractor pull / push (world-space emitters).
+    /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
+    /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
+    ecs::Entity subEmitter{};
+    SubEmitTrigger subEmitOn = SubEmitTrigger::Death;
+    i32 subEmitCount = 8;
     bool additive = false;
     bool worldSpace = true;
     u32 seed = 0;                   ///< 0 = random.
@@ -380,6 +412,49 @@ struct ParticleState3DComponent {
     float emitAccumulator = 0.0f;
     u32 rng = 0;
     bool started = false;
+};
+
+/// Obstacle for particles of emitters with `collisions` (world space): a sphere (diameter
+/// size.x) or a box (size), turned and scaled with the entity. 2D particles use its XY section.
+struct ParticleColliderComponent {
+    enum class Shape : i32 { Sphere = 0, Box = 1 };
+    Shape shape = Shape::Sphere;
+    math::Vec3 size{1.0f, 1.0f, 1.0f};
+};
+
+/// Pulls (strength > 0) or pushes (< 0) the particles within `radius` of the entity (world-space
+/// emitters with affectedByAttractors): vortexes, magnets, black holes, wind gusts.
+struct ParticleAttractorComponent {
+    float strength = 6.0f;  ///< World units / s^2 at the center, fading to 0 at the radius.
+    float radius = 3.0f;
+    bool enabled = true;
+};
+
+/// Ribbon left behind the entity as it moves (projectiles, swords, comets, dashes): points are
+/// recorded every `minDistance` and fade over `lifetime`; width and color follow `curves`
+/// (.agrparticle: size = width multiplier, gradient over the age of the point), or `color`.
+/// Faces the camera (in 2D: lies in the XY plane).
+struct TrailComponent {
+    bool emitting = true;
+    float lifetime = 0.4f;          ///< Seconds a point stays.
+    float minDistance = 0.08f;      ///< World units between recorded points.
+    float width = 0.3f;
+    math::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+    std::string curves;             ///< Optional .agrparticle (width curve, color gradient over the age).
+    std::string texture;            ///< Empty = plain; u runs along the trail, v across.
+    bool additive = false;
+    i32 sortingLayer = 0;
+    i32 orderInLayer = 0;
+    u32 maxPoints = 128;
+};
+struct TrailPoint {
+    math::Vec3 position;
+    float time = 0.0f;
+};
+/// Runtime points of a trail (not serialized).
+struct TrailStateComponent {
+    std::vector<TrailPoint> points;  ///< Oldest first; the last one follows the entity.
+    float time = 0.0f;
 };
 
 /// Registers reflection data for the render components (idempotent).

@@ -27,6 +27,8 @@ void TwoDPlugin::onUpdate(Engine& engine, const FrameTime& time) {
     m_stats.emitters += s3.emitters;
     m_stats.particles += s3.particles;
     m_stats.spawned += s3.spawned;
+    m_stats.collisions += s3.collisions;
+    m_trailPoints = updateTrails(engine.scene(), particleDt);
 }
 
 } // namespace agr
