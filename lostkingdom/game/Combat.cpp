@@ -545,10 +545,11 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
         if (c.invuln <= 0) { c.hp -= c.maxHp * 0.15f; c.status.burn = 3; c.invuln = 0.6f; c.vel.y = 7.f; c.knock = -normalize(vec3(c.vel.x, 0, c.vel.z) + vec3(0.01f, 0, 0)) * 6.f; particles.explosion(c.pos, 0.4f); if (e == player) { play("player_hurt"); haptic(80, 255); } if (c.hp <= 0) killCharacter(e, c, NullEntity); }
     }
     if (c.swimming) {
-        float surf = wl - (c.team == Team::Player ? 1.25f : c.height * 0.6f);
+        // 2.4.0 the head stays above the water when treading, the back breaks the surface in the crawl
+        float surf = wl - (c.team == Team::Player ? lerpf(0.6f, 0.3f, c.vis.anim.swimCrawl) : c.height * 0.6f);
         // 2.4.0 diving: down to 0.7 m above the bottom (at most 7 m under the surface), slower to change depth
         bool dive = e == player && diving;
-        if (dive) surf = std::max(gy + 0.7f, std::min(surf, wl - 1.25f - 7.f));
+        if (dive) surf = std::max(gy + 0.7f, std::min(surf, wl - 0.6f - 7.f));
         c.pos.y = damp(c.pos.y, surf, dive ? 1.8f : 6.f, dt);
         c.vel.y = 0; c.grounded = true;
         if (!wasSwim) { particles.splash(c.pos + vec3(0, 1.2f, 0), 1.f); play3D("splash", c.pos, 0.8f); }
