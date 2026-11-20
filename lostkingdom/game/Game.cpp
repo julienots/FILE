@@ -555,9 +555,9 @@ void Game::updateEnvironment(float dt) {
         env.exposure = 1.25f; env.tiltShift = 0.25f;
         env.night = 1.f;  // window/lantern glows on
         if (dungeon.interior) {   // 2.4.1 indoors: warm lamplight, a little daylight through the windows, no fog
-            env.sunIntensity = 0.35f; env.sunColor = srgb(0xffe0b0); env.shadowStrength = 0.35f;
-            env.skyAmbient = srgb(0x6a5a48) * 0.85f; env.groundAmbient = srgb(0x4a3828) * 0.8f;
-            env.fogColor = srgb(0x3a2e24); env.fogDensity = 0.004f; env.exposure = 1.2f; env.tiltShift = 0.1f;
+            env.sunIntensity = 0.22f; env.sunColor = srgb(0xffe8c8); env.shadowStrength = 0.35f;
+            env.skyAmbient = srgb(0x5a5248) * 0.6f; env.groundAmbient = srgb(0x3a3028) * 0.55f;
+            env.fogColor = srgb(0x2a241e); env.fogDensity = 0.004f; env.exposure = 0.92f; env.tiltShift = 0.1f;
         }
         if (th == 8) {
             // 2.2.1 the celestial realm is open sky: low golden sun, violet zenith, aurora, light mist far below
