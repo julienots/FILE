@@ -1662,7 +1662,9 @@ static std::vector<Step> scenario(const std::string& name) {
             teleport(g, lake.x, lake.z, 0.f); g.pc().pos = vec3(lake.x, lake.y - 1.2f, lake.z); g.camFocus = g.pc().pos; g.camDist = g.camDistTarget = 7.f; g.camPitch = 0.25f; }, idle, "lake"});
         s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.6f); g.camIdleT = 0; }, "swim"});
         s.push_back({0.1f, [](Game& g) { ok[0] = g.pc().swimming; Character& c = g.pc();
-            AGR_LOG("SWIM dbg pos %.1f %.1f %.1f ground %.1f water %.1f cine %d gate %d prologue %d", c.pos.x, c.pos.y, c.pos.z, g.groundAt(c.pos.x, c.pos.z), g.waterAt(c.pos.x, c.pos.z), g.cine.active, (int)g.loadGate, (int)g.pendingPrologue);
+            { bool lvx = false, frx = false; g.waterAt(c.pos.x, c.pos.z, &lvx, &frx); AGR_LOG("SWIM dbg lava %d frozen %d swimming %d", lvx, frx, c.swimming);
+              vec3 t = c.pos; float st = -1e9f; bool col = g.collideStatic(t, c.radius, c.pos.y, &st);
+              AGR_LOG("SWIM dbg pos %.1f %.1f %.1f ground %.1f water %.1f cine %d gate %d step %.2f col %d inWater %d grounded %d state %d menu %d", c.pos.x, c.pos.y, c.pos.z, g.groundAt(c.pos.x, c.pos.z), g.waterAt(c.pos.x, c.pos.z), g.cine.active, (int)g.loadGate, st, col, c.inWater, c.grounded, (int)g.state, (int)g.menu); }
             AGR_LOG("SWIM surface swimming %d stamina %.0f", ok[0], g.stamina); g.requestScreenshot("build/shots/W0_swim.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.6f); }, "shot"});
         s.push_back({1.5f, [](Game& g) { g.stamina = g.maxStamina; }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camIdleT = 0; g.camYaw = g.pc().yaw + 1.4f; }, "crawl"});
         s.push_back({0.1f, [](Game& g) { ok[1] = g.pc().vis.anim.swimCrawl > 0.8f && g.stamina < g.maxStamina; AGR_LOG("SWIM crawl %.2f stamina %.0f -> %d", g.pc().vis.anim.swimCrawl, g.stamina, ok[1]); g.requestScreenshot("build/shots/W1_crawl.png"); },

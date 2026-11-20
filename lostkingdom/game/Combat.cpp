@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "Game.h"
 #include "../engine/core/Platform.h"
 #include <algorithm>
@@ -523,8 +524,9 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
     vec3 move = vec3(c.vel.x, 0, c.vel.z) * (frozen ? 0.f : 1.f) + c.knock;
     c.pos += move * dt + vec3(0, c.vel.y * dt, 0);
     c.knock = c.knock * std::exp(-8.f * dt);
-    // static collision
-    float step = 0;
+    // static collision (2.4.0 fix: step starts "none", not 0 m: the sea floor lies below 0 and the hero used to
+    // walk on the sea surface instead of swimming there)
+    float step = -1e9f;
     collideStatic(c.pos, c.radius, c.pos.y, &step);
     // ground, water, slopes
     float gy = groundAt(c.pos.x, c.pos.z);
