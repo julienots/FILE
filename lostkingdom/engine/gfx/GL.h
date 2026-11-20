@@ -61,6 +61,7 @@ public:
     void updateVertices(const std::vector<Vertex>& v);  // for dynamic meshes (cape, trails)
     void setInstances(const std::vector<InstanceData>& inst);
     void draw() const;
+    void draw(int instances) const;   // 2.3.6 instanced meshes: draw only the first N instances (distance thinning)
     void destroy();
     bool valid() const { return vao != 0 && indexCount > 0; }
     size_t gpuBytes() const { return (size_t)vertexCount * sizeof(Vertex) + (size_t)indexCount * (index32 ? 4 : 2) + (size_t)instanceCapacity * sizeof(InstanceData); }

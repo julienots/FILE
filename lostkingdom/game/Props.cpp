@@ -1467,7 +1467,7 @@ const char* structureModelName(int kind) {
 
 // 2.3.6 vertex-clustering decimation: snap every vertex to a grid cell, keep one representative per cell, drop the
 // triangles that collapse. Cheap, robust, and fine for a building seen from 30 m and more.
-static void clusterDecimate(const std::vector<Vertex>& V, const std::vector<uint32_t>& I, vec3 bmin, vec3 bmax, int cells,
+void clusterDecimate(const std::vector<Vertex>& V, const std::vector<uint32_t>& I, vec3 bmin, vec3 bmax, int cells,
                             std::vector<Vertex>& outV, std::vector<uint32_t>& outI) {
     vec3 ext = vmax(bmax - bmin, vec3(1e-3f));
     float cs = std::max(ext.x, std::max(ext.y, ext.z)) / cells;

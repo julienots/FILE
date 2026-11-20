@@ -30,6 +30,7 @@ inline vec3 perpVec(vec3 f) { return normalize(vec3(-f.z, 0, f.x)); }
 struct Visual {
     Arch arch = Arch::Humanoid;
     std::shared_ptr<Mesh> mesh, weapon, offhand, capeMesh;
+    std::shared_ptr<Mesh> lodMesh;   // 2.3.6 imported models: far version
     Animator anim;
     PoseWorld pw;
     WeaponType wt = WeaponType::None, ot = WeaponType::None;
@@ -708,7 +709,7 @@ public:
     // Imported humanoid models (assets/models/<id>.lkm + <id>.jpg, made by tools/import_character.py).
     // Looked up lazily by id: "hero", an enemy id ("bandit", "skeleton"...), "npc_<id>", "villager_m/f".
     // Absent files are cached as null, so the procedural look is used without retrying.
-    struct ImportedModel { SkinnedModelData data; std::shared_ptr<Mesh> mesh; Texture tex; Skeleton skel; };
+    struct ImportedModel { SkinnedModelData data; std::shared_ptr<Mesh> mesh, lodMesh; Texture tex; Skeleton skel; };
     std::unordered_map<std::string, std::unique_ptr<ImportedModel>> importedModels;
     ImportedModel* importedModel(const std::string& id, Arch arch = Arch::Humanoid);
     bool applyImportedModel(Visual& v, const std::string& id, Arch arch = Arch::Humanoid);

@@ -1655,6 +1655,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         float spacing = 0.7f / std::sqrt(std::max(0.05f, grassDensity));
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
         if (grassDensity >= 0.5f) scatter(778, spacing * 1.05f, out.grassNear, nullptr, 1.05f, 1.85f);
+        // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
+        Rng sh(hash2i(k.x, k.z, 9001));
+        for (auto* v : {&out.grass, &out.flowers})
+            for (int i = (int)v->size() - 1; i > 0; i--) std::swap((*v)[i], (*v)[sh.irange(0, i)]);
     }
     // ---- 1.9.1 tall grass meadows: waist-high clumps, dense inside the patches, shorter at their edges
     if (lod == 0 && grassDensity >= 0.3f) {

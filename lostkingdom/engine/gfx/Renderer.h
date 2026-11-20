@@ -97,6 +97,7 @@ struct DrawItem {
     vec3 dissolveColor{1.f, 0.5f, 0.1f};
     GLuint albedo = 0;             // LIT_TEXTURED: base colour texture (sRGB)
     bool castShadow = true;
+    int instances = -1;            // 2.3.6 instanced: how many to draw (-1 = all)
     bool outline = false;
     vec4 outlineColor{0.05f, 0.03f, 0.02f, 1};
     float outlineWidth = 0.03f;

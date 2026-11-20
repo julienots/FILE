@@ -149,6 +149,13 @@ void Mesh::draw() const {
     else glDrawElements(GL_TRIANGLES, indexCount, it, nullptr);
 }
 
+void Mesh::draw(int instances) const {
+    if (!instVbo || instances < 0) { draw(); return; }
+    if (!vao || !indexCount || instances <= 0) return;
+    glBindVertexArray(vao);
+    glDrawElementsInstanced(GL_TRIANGLES, indexCount, index32 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, nullptr, std::min(instances, instanceCount));
+}
+
 void Mesh::destroy() {
     if (vao) glDeleteVertexArrays(1, &vao);
     if (vbo) glDeleteBuffers(1, &vbo);

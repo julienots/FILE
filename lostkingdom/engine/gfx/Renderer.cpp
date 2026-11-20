@@ -306,9 +306,9 @@ void Renderer::drawItem(const DrawItem& d, bool depthPass, bool outlinePass) {
         if (f & LIT_FAR) s->set("uFar", vec4(d.farClip.x, d.farClip.y, d.farClip.z, 0));
         if (outlinePass) { s->set("uOutline", vec4(d.outlineWidth, 0, 0, 0)); s->set("uOutlineColor", d.outlineColor); }
     }
-    d.mesh->draw();
+    d.mesh->draw(d.instances);
     stats.drawCalls++;
-    int tri = d.mesh->indexCount / 3 * std::max(1, d.mesh->instVbo ? d.mesh->instanceCount : 1);
+    int tri = d.mesh->indexCount / 3 * std::max(1, d.mesh->instVbo ? (d.instances >= 0 ? std::min(d.instances, d.mesh->instanceCount) : d.mesh->instanceCount) : 1);
     stats.triangles += tri;
     int k = (f & LIT_TERRAIN) ? 0 : (f & LIT_FAR) ? 1 : (f & LIT_INSTANCED) ? 2 : (f & LIT_WIND) ? 3 : (f & LIT_TEXTURED) && !(f & LIT_SKINNED) ? 4 : (f & LIT_SKINNED) ? 5 : 6;
     stats.triKind[k] += tri;

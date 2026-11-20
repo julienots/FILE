@@ -234,8 +234,11 @@ void Game::renderWorld(float dt) {
             }
             if (d < 48.f && gs.grassDensity > 0.01f) {
                 it.castShadow = false; it.tint.w = 0;
-                if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
-                if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+                // 2.3.6 distance thinning: all of it up close, down to 35 % at the edge (the clumps are tiny there)
+                float keep = clampf(1.f - (d - 20.f) / 40.f, 0.35f, 1.f);
+                if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.grass.instanceCount * keep); renderer.submit(it); }
+                if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.flowers.instanceCount * keep); renderer.submit(it); }
+                it.instances = -1;
                 if (d < 30.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             }
             // 1.9.1 tall grass meadows: visible a little further than the short grass (they shape the landscape)
@@ -471,6 +474,12 @@ void Game::renderCharacter(Entity e, Character& c) {
     if (e == interactTarget && c.npcDef >= 0) { d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.04f; }
     if (e == lockTarget) { d.outlineColor = vec4(0.9f, 0.2f, 0.15f, 1); d.outlineWidth = 0.04f; }
     if (e == player && heroAura > 0.01f) { d.outline = true; d.outlineWidth = 0.028f + 0.03f * heroAura; }
+    {   // 2.3.6 crowds: far version beyond 18 m, no shadow beyond 25 m, no outline beyond 22 m (unless targeted)
+        float dc = distXZ(c.pos, camFocus);
+        bool key = e == player || e == lockTarget || e == interactTarget || e == bossEnt || e == mountEnt;
+        if (!key && dc > 18.f && v.lodMesh && v.lodMesh->valid() && !cine.active) d.mesh = v.lodMesh.get();
+        if (!key) { d.castShadow = dc < 25.f; if (dc > 22.f) d.outline = false; }
+    }
     renderer.submit(d);
     // weapons
     auto attach = [&](std::shared_ptr<Mesh>& m, int bone, bool shield) {

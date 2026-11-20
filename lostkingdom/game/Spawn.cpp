@@ -33,8 +33,15 @@ bool Game::applyImportedModel(Visual& v, const std::string& id, Arch arch) {
     ImportedModel* m = importedModel(id, arch);
     if (!m) return false;
     if (!m->mesh || !m->mesh->valid()) { m->mesh = std::make_shared<Mesh>(); m->mesh->upload(m->data.verts, m->data.idx); }
+    if (!m->lodMesh || !m->lodMesh->valid()) {   // 2.3.6 far version for crowds (villagers, enemies seen from afar)
+        vec3 lo(1e9f), hi(-1e9f);
+        for (const Vertex& vv : m->data.verts) { lo = vmin(lo, vec3(vv.px, vv.py, vv.pz)); hi = vmax(hi, vec3(vv.px, vv.py, vv.pz)); }
+        std::vector<Vertex> lv; std::vector<uint32_t> li;
+        clusterDecimate(m->data.verts, m->data.idx, lo, hi, 22, lv, li);
+        m->lodMesh = std::make_shared<Mesh>(); m->lodMesh->upload(lv, li);
+    }
     if (!m->tex.id) m->tex.create2D(m->data.texW, m->data.texH, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, m->data.rgba.data(), true, false);
-    v.mesh = m->mesh; v.albedo = m->tex.id; v.anim.skeleton = &m->skel;
+    v.mesh = m->mesh; v.lodMesh = m->lodMesh; v.albedo = m->tex.id; v.anim.skeleton = &m->skel;
     v.cape = false;   // imported models carry their own cloth
     return true;
 }

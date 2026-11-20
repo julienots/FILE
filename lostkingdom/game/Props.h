@@ -68,6 +68,8 @@ struct PropModel {
     std::vector<Vertex> lodVerts; std::vector<uint32_t> lodIdx;
     std::shared_ptr<Mesh> lodMesh;
 };
+void clusterDecimate(const std::vector<Vertex>& V, const std::vector<uint32_t>& I, vec3 bmin, vec3 bmax, int cells,
+                     std::vector<Vertex>& outV, std::vector<uint32_t>& outI);   // 2.3.6 far LOD by vertex clustering
 int loadPropModels();                        // main thread, before the chunk workers start; returns the count
 int propModelFor(int kind, int variant);     // -1: no model, the structure is built in code
 PropModel* propModel(int i);
