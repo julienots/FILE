@@ -1430,7 +1430,8 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             v.r = c.r; v.g = c.g; v.b = c.b; v.a = 255;
             auto q = [](float f) { return (uint8_t)clampf(f * 255.f + 0.5f, 0, 255); };
             v.rough = q(wRock); v.metal = q(wDirt); v.emis = q(wSnow); v.wind = q(wSand);
-            v.b0 = q(wMud); v.b1 = q(wCob); v.w0 = q(wAsh); v.ex = 0;
+            v.b0 = q(wMud); v.b1 = q(wCob); v.w0 = q(wAsh);
+            v.ex = (uint8_t)(saturate(std::fabs(digOffset(x, z)) * 1.4f) * 255.f);   // 2.4.0 dug: the shader shows soil on the walls, not rock
             T.v.push_back(v);
         }
     for (int j = 0; j < N; j++)

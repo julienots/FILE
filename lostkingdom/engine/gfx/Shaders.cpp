@@ -357,6 +357,9 @@ void main() {
     // Slope-driven rock override computed per pixel for crisp cliff edges.
     float slope = 1.0 - N.y;
     float cliff = smoothstep(0.28, 0.45, slope);
+    // 2.4.0 freshly dug ground (vSkin.w): the steep walls of holes and craters are soil, not rock
+    float dugK = vSkin.w;
+    wDirt += cliff * dugK; cliff *= 1.0 - dugK;
     vec2 uv = vWorld.xz * 0.28;
     // anti-tiling for the dominant ground layers: a second, rotated & rescaled sample is blended in by
     // large-scale noise, so the texture never repeats visibly across a meadow
