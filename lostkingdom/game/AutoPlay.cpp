@@ -1626,6 +1626,21 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "menus") {
+        // 2.3.5 every menu on a phone-sized screen (look at the pictures)
+        s.push_back({2.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.f; g.toastHint.clear(); g.tutStep = -1;
+            g.addItem("sword_iron", 1); g.addItem("potion_heal", 4); g.addItem("iron_ore", 6); g.addItem("wood", 12); g.addItem("herb", 5); g.gold = 340; }, idle, "setup"});
+        static const std::pair<Menu, const char*> ms[] = {{Menu::Pause, "M0_pause"}, {Menu::Bag, "M1_bag"}, {Menu::Inventory, "M2_inventory"}, {Menu::Equipment, "M3_equipment"},
+            {Menu::Crafting, "M4_crafting"}, {Menu::Skills, "M5_skills"}, {Menu::Quests, "M6_quests"}, {Menu::Settings, "M7_settings"}, {Menu::Map, "M8_map"}};
+        for (auto& m : ms) {
+            Menu mm = m.first; const char* f = m.second;
+            s.push_back({0.5f, [mm](Game& g) { g.menu = mm; g.selItem = 0; }, idle, "open"});
+            s.push_back({0.1f, shot(f), idle, "shot"});
+        }
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::None; g.state = GameState::Title; g.stateT = 3.f; }, idle, "title"});
+        s.push_back({0.1f, shot("M9_title"), idle, "shot"});
+        return s;
+    }
     if (name == "ui") {
         // Menu / dialogue buttons with REAL multi-frame taps (finger down, held 0.2 s, released), the way a phone
         // delivers them. Regression for 1.6.0 feedback: "buttons in dialogues and menus do nothing".
