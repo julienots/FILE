@@ -1,6 +1,9 @@
 #include "agr/render/RenderComponents.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <string_view>
 
 #include "agr/scene/Reflection.hpp"
 
@@ -18,6 +21,84 @@ math::Vec2 orthographicHalfExtents(ScaleMode mode, float size, float refAspect, 
         case ScaleMode::Crop: halfH = std::min(size, size * refAspect / aspect); break;
     }
     return {halfH * aspect, halfH};
+}
+
+TileRules TileRules::parse(const TilemapComponent& tm, usize frameCount) {
+    TileRules r;
+    auto toInt = [](std::string_view s, i32& out) {
+        while (!s.empty() && s.front() == ' ') s.remove_prefix(1);
+        if (s.empty()) return false;
+        char* end = nullptr;
+        const std::string tmp(s);
+        const long v = std::strtol(tmp.c_str(), &end, 10);
+        if (end == tmp.c_str()) return false;
+        out = static_cast<i32>(v);
+        return true;
+    };
+    auto split = [](std::string_view s, char sep, auto&& fn) {
+        while (!s.empty()) {
+            const usize p = s.find(sep);
+            fn(s.substr(0, p));
+            if (p == std::string_view::npos) break;
+            s.remove_prefix(p + 1);
+        }
+    };
+    if (!tm.autotile.empty()) {
+        r.group.assign(frameCount, -1);
+        split(tm.autotile, ';', [&](std::string_view e) {
+            i32 base = 0;
+            if (!toInt(e, base) || base < 0) return;
+            for (i32 k = 0; k < 16; ++k)
+                if (static_cast<usize>(base + k) < frameCount) r.group[static_cast<usize>(base + k)] = base;
+        });
+        if (std::all_of(r.group.begin(), r.group.end(), [](i32 g) { return g < 0; })) r.group.clear();
+    }
+    if (!tm.animatedTiles.empty()) {
+        r.anim.assign(frameCount, -1);
+        split(tm.animatedTiles, ';', [&](std::string_view e) {
+            const usize at = e.find('@');
+            float fps = 8.0f;
+            if (at != std::string_view::npos) {
+                const std::string f(e.substr(at + 1));
+                fps = std::strtof(f.c_str(), nullptr);
+                e = e.substr(0, at);
+            }
+            std::vector<i32> seq;
+            split(e, ',', [&](std::string_view f) {
+                i32 v = 0;
+                if (toInt(f, v) && v >= 0 && static_cast<usize>(v) < frameCount) seq.push_back(v);
+            });
+            if (seq.size() < 2 || fps <= 0.0f || r.anim[static_cast<usize>(seq[0])] >= 0) return;
+            r.anim[static_cast<usize>(seq[0])] = static_cast<i32>(r.sequences.size());
+            r.sequences.push_back(std::move(seq));
+            r.fps.push_back(fps);
+        });
+        if (r.sequences.empty()) r.anim.clear();
+    }
+    return r;
+}
+
+i32 TileRules::resolve(const TilemapComponent& tm, u32 x, u32 y, double time) const {
+    i32 id = tm.tileAt(x, y);
+    if (id < 0) return id;
+    if (!group.empty() && static_cast<usize>(id) < group.size() && group[static_cast<usize>(id)] >= 0) {
+        const i32 g = group[static_cast<usize>(id)];
+        auto same = [&](i64 nx, i64 ny) {
+            if (nx < 0 || ny < 0) return false;
+            const i32 n = tm.tileAt(static_cast<u32>(nx), static_cast<u32>(ny));
+            return n >= 0 && static_cast<usize>(n) < group.size() && group[static_cast<usize>(n)] == g;
+        };
+        const i64 ix = x, iy = y;
+        const i32 mask = (same(ix, iy + 1) ? 1 : 0) | (same(ix + 1, iy) ? 2 : 0) | (same(ix, iy - 1) ? 4 : 0) | (same(ix - 1, iy) ? 8 : 0);
+        id = g + mask;
+    }
+    if (!anim.empty() && static_cast<usize>(id) < anim.size() && anim[static_cast<usize>(id)] >= 0) {
+        const usize a = static_cast<usize>(anim[static_cast<usize>(id)]);
+        const auto& seq = sequences[a];
+        const i64 step = static_cast<i64>(std::floor(std::max(time, 0.0) * static_cast<double>(fps[a])));
+        id = seq[static_cast<usize>(step % static_cast<i64>(seq.size()))];
+    }
+    return id;
 }
 
 void registerRenderComponents() {
@@ -359,6 +440,9 @@ void registerRenderComponents() {
         .field("orderInLayer", &TilemapComponent::orderInLayer, {.speed = 1.0f})
         .field("lit", &TilemapComponent::lit)
         .field("normalMap", &TilemapComponent::normalMap, {.tooltip = "Normal map laid out like the tileset texture (lit tilemaps)", .flags = FieldFlag_AssetPath})
+        .field("animatedTiles", &TilemapComponent::animatedTiles, {.tooltip = "Animated tiles: \"f0,f1,f2@fps;...\" (cells holding f0 cycle)"})
+        .field("autotile", &TilemapComponent::autotile,
+               {.tooltip = "Autotile groups: \"F;G\" — 16 frames from F chosen by the neighbours (+y=1, +x=2, -y=4, -x=8)"})
         .field("dataWidth", &TilemapComponent::dataWidth, {.flags = FieldFlag_Hidden})
         .field("tiles", &TilemapComponent::tiles, {.flags = FieldFlag_Hidden});
 
@@ -377,7 +461,8 @@ void registerRenderComponents() {
                 .speed = 0.01f})
         .field("height", &Light2DComponent::height,
                {.tooltip = "Height above the sprites for normal maps: low = grazing light, strong relief", .rangeMin = 0.0f, .rangeMax = 100.0f,
-                .speed = 0.01f});
+                .speed = 0.01f})
+        .field("directional", &Light2DComponent::directional, {.tooltip = "Sun-like light along the entity's +X axis: no radius, no falloff"});
 
     reg.add<LightOccluder2DComponent>("LightOccluder2D")
         .category("2D")

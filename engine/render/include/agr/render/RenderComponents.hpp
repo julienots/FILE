@@ -311,11 +311,32 @@ struct TilemapComponent {
     std::string normalMap;               ///< Normal map laid out like the tileset's texture (lit tilemaps).
     u32 dataWidth = 16;                  ///< Width the tile data is laid out with (resizes are remapped).
     std::vector<i32> tiles;              ///< Frame index per cell (row-major from y = 0), -1 = empty.
+    /// Animated tiles: "f0,f1,f2@fps;..." — every cell holding frame f0 cycles through the
+    /// list at fps frames per second (all cells in step).
+    std::string animatedTiles;
+    /// Autotiling: "F;G;..." — each base frame starts a group of 16 frames laid out by a
+    /// 4-neighbour bitmask (+y = 1, +x = 2, -y = 4, -x = 8). A cell holding any frame of a group
+    /// is drawn with F + the mask of its neighbours of the same group: paint with F, the
+    /// borders and corners follow.
+    std::string autotile;
 
     i32 tileAt(u32 x, u32 y) const {
         const usize i = static_cast<usize>(y) * dataWidth + x;
         return x < width && y < height && x < dataWidth && i < tiles.size() ? tiles[i] : -1;
     }
+};
+
+/// Parsed Tilemap.animatedTiles / autotile for a tileset of `frameCount` frames.
+struct TileRules {
+    std::vector<i32> group;                   ///< Frame -> base frame of its autotile group, -1 = none.
+    std::vector<i32> anim;                    ///< Frame -> index in `sequences`, -1 = static.
+    std::vector<std::vector<i32>> sequences;  ///< Frames of each animation.
+    std::vector<float> fps;
+    bool empty() const { return sequences.empty() && group.empty(); }
+
+    static TileRules parse(const TilemapComponent& tm, usize frameCount);
+    /// Frame drawn for cell (x, y) at `time` seconds (-1 = empty).
+    i32 resolve(const TilemapComponent& tm, u32 x, u32 y, double time) const;
 };
 
 /// Point light for lit sprites and tilemaps (2D).
@@ -334,6 +355,9 @@ struct Light2DComponent {
     /// Height of the light above the sprites, for normal-mapped sprites: low = grazing light
     /// (strong relief, long falloff), high = light from the front.
     float height = 1.0f;
+    /// Directional (sun/moon): lights everything in the direction of the entity's local +X axis,
+    /// with no radius and no falloff (radius, falloff and shadows are ignored).
+    bool directional = false;
 };
 
 /// Blocks 2D light (Light2D.castShadows): a box in the entity's XY plane, or, on an entity

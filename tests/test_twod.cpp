@@ -451,3 +451,35 @@ TEST_CASE("3D particles: shapes, gravity, lifetime, local / world space, seed, p
         CHECK(std::string(particlePresetName(preset)).size() > 2);
     }
 }
+
+TEST_CASE("tile rules: autotile bitmask from same-group neighbours, animated tiles") {
+    TilemapComponent tm;
+    tm.width = 4;
+    tm.height = 3;
+    tilemapFillRect(tm, 0, 0, 3, 2, -1);
+    // Group at 16 (frames 16..31); an L of three cells: (1,1) (2,1) (1,2). Cell (2,2) is another frame.
+    tilemapSet(tm, 1, 1, 16);
+    tilemapSet(tm, 2, 1, 16);
+    tilemapSet(tm, 1, 2, 20);  // any frame of the group joins it
+    tilemapSet(tm, 2, 2, 3);
+    tm.autotile = "16";
+    TileRules r = TileRules::parse(tm, 64);
+    CHECK(r.resolve(tm, 1, 1, 0.0) == 16 + 1 + 2);  // +y and +x neighbours
+    CHECK(r.resolve(tm, 2, 1, 0.0) == 16 + 8);      // -x only ((2,2) is not in the group)
+    CHECK(r.resolve(tm, 1, 2, 0.0) == 16 + 4);      // -y only
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 3);
+    CHECK(r.resolve(tm, 0, 0, 0.0) == -1);
+    // Animation: frame 3 cycles 3, 4, 5 at 2 fps; resolved autotile frames can animate too.
+    tm.animatedTiles = "3,4,5@2; 24,40@1";
+    r = TileRules::parse(tm, 64);
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 3);
+    CHECK(r.resolve(tm, 2, 2, 0.6) == 4);
+    CHECK(r.resolve(tm, 2, 2, 1.1) == 5);
+    CHECK(r.resolve(tm, 2, 2, 1.6) == 3);
+    CHECK(r.resolve(tm, 2, 1, 1.5) == 40);  // 16 + 8 = 24 -> second frame
+    // Junk is ignored.
+    tm.animatedTiles = "x;7@;99,1@5";
+    tm.autotile = "abc;-4";
+    r = TileRules::parse(tm, 64);
+    CHECK(r.empty());
+}

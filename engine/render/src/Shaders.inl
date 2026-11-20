@@ -44,7 +44,7 @@ void main() {
 }
 )";
 
-/// Sprites lit by up to 16 point lights (Light2D) plus the scene ambient. Variant
+/// Sprites lit by up to 16 point or directional lights (Light2D) plus the scene ambient. Variant
 /// AGR_NORMAL_MAP: per-pixel normals from a normal map (OpenGL convention, green up) in the
 /// sprite's frame, rebuilt from screen derivatives (rotation and flips need no vertex data);
 /// each light shades the relief from its height above the plane (flat areas are unchanged).
@@ -82,8 +82,10 @@ void main() {
 #endif
     for (int i = 0; i < 16; ++i) {
         if (i >= u_lightCount.x) break;
-        vec2 d = v_worldPos.xy - u_lightPosRadius[i].xy;
-        float dist = length(d) / u_lightPosRadius[i].w;
+        // w < 0: directional light, xy = direction it travels (no radius, no falloff).
+        bool directional = u_lightPosRadius[i].w < 0.0;
+        vec2 d = directional ? u_lightPosRadius[i].xy : v_worldPos.xy - u_lightPosRadius[i].xy;
+        float dist = directional ? 0.0 : length(d) / u_lightPosRadius[i].w;
         float att = clamp(1.0 - dist, 0.0, 1.0);
         float lit = 1.0;
         if (u_lightShadow[i].x > -0.5 && att > 0.0) {

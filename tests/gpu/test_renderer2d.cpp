@@ -318,6 +318,59 @@ TEST_CASE("tilemaps draw only visible cells from the tileset") {
     CHECK(f.renderer.stats().tilesVisible >= 7u * 7u);
 }
 
+TEST_CASE("tilemaps: animated tiles follow the renderer time, autotiles pick frames from neighbours") {
+    Render2DFixture f;
+    f.camera();
+    const auto map = f.scene.createEntity("Map");
+    f.scene.registry().get<TransformComponent>(map).position = {-2, -2, 0};
+    auto& tm = f.scene.registry().emplace<TilemapComponent>(map);
+    tm.tileset = "assets://two.agrsheet";
+    tm.width = 4;
+    tm.height = 4;
+    tilemapFillRect(tm, 0, 0, 3, 3, 0);
+    tm.animatedTiles = "0,1@1";
+    f.renderer.setTime(0.2);
+    f.settle();
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32, 32), 255, 255, 0), pixel(*gpu().device, 32, 32));
+    f.renderer.setTime(1.2);
+    f.frame();
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32, 32), 255, 0, 255), pixel(*gpu().device, 32, 32));
+    // Autotile group at 0 on a 2-frame sheet: a lone cell (mask 0) is frame 0, one with a +y
+    // neighbour is frame 1 (yellow vs magenta).
+    auto& t2 = f.scene.registry().get<TilemapComponent>(map);
+    t2.animatedTiles.clear();
+    t2.autotile = "0";
+    tilemapFillRect(t2, 0, 0, 3, 3, -1);
+    tilemapSet(t2, 0, 0, 0);  // alone
+    tilemapSet(t2, 3, 2, 0);  // has (3,3) above
+    tilemapSet(t2, 3, 3, 0);  // mask 4 -> frame 4: out of the sheet, not drawn
+    f.frame();
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32 - 9, 32 + 9), 255, 255, 0), pixel(*gpu().device, 23, 41));
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32 + 9, 32 - 3), 255, 0, 255), pixel(*gpu().device, 41, 29));
+    CHECK(near(pixel(*gpu().device, 32 + 9, 32 - 9), 0, 0, 0));
+}
+
+TEST_CASE("directional Light2D: uniform light, no radius, shades normal maps from its direction") {
+    Render2DFixture f;
+    f.camera();
+    f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env")).ambientIntensity = 0.0f;
+    const auto s = f.sprite({0, 0, 0}, 10.0f);
+    f.scene.registry().get<SpriteRendererComponent>(s).lit = true;
+    const auto light = f.scene.createEntity("Sun");
+    f.scene.registry().get<TransformComponent>(light).position = {100, 100, 0};  // position is ignored
+    auto& l = f.scene.registry().emplace<Light2DComponent>(light);
+    l.color = {1, 1, 1, 1};
+    l.intensity = 0.5f;
+    l.radius = 0.1f;
+    l.directional = true;
+    f.frame();
+    CHECK(f.renderer.stats().lights2D == 1);
+    // 0.5 linear everywhere -> 186.
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32, 32), 186, 186, 186, 5), pixel(*gpu().device, 32, 32));
+    CHECK_MESSAGE(near(pixel(*gpu().device, 5, 5), 186, 186, 186, 5), pixel(*gpu().device, 5, 5));
+    CHECK_MESSAGE(near(pixel(*gpu().device, 58, 58), 186, 186, 186, 5), pixel(*gpu().device, 58, 58));
+}
+
 TEST_CASE("particles: soft default texture, additive blending") {
     Render2DFixture f;
     f.camera();

@@ -524,6 +524,17 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         if (m_shadow2DPixels.size() != kShadowBins2D * kShadowRows2D * 4) m_shadow2DPixels.assign(kShadowBins2D * kShadowRows2D * 4, 255);
         reg.view<Light2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, Light2DComponent& l, WorldTransformComponent& w) {
             if (n >= kMaxLights2D || !w.activeInHierarchy || hiddenInEditor(e) || l.intensity <= 0.0f) return;
+            if (l.directional) {
+                // Direction in xy (w < 0 flags it for the shader); no radius, falloff or shadows.
+                Vec3 d = w.matrix.transformVector({1.0f, 0.0f, 0.0f});
+                const float len = std::sqrt(d.x * d.x + d.y * d.y);
+                d = len > 1e-6f ? Vec3{d.x / len, d.y / len, 0.0f} : Vec3{1.0f, 0.0f, 0.0f};
+                lights.posRadius[n] = Vec4(d.x, d.y, std::max(l.height, 0.0f), -1.0f);
+                lights.colorFalloff[n] = Vec4(srgbToLinear(l.color) * l.intensity, 1.0f);
+                lights.shadow[n] = Vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+                ++n;
+                return;
+            }
             const Vec3 pos = w.matrix.translation() + parallaxOf(e);
             const float radius = std::max(l.radius, 1e-3f);
             if (!frustum.intersects(math::Aabb::fromCenterExtents(pos, Vec3{radius}))) return;
@@ -728,9 +739,11 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         const rhi::TextureHandle tex = textureFor(sheet->texture, sheet->pixelArt);
         const rhi::TextureHandle normalMap = tm.lit && !tm.normalMap.empty() ? resolveDataTexture(tm.normalMap, sheet->pixelArt) : rhi::TextureHandle{};
         const u32 color = packColor(tm.color);
+        const TileRules rules = TileRules::parse(tm, sheet->frames.size());
         for (i32 y = cy0; y <= cy1; ++y) {
             for (i32 x = cx0; x <= cx1; ++x) {
-                const i32 id = tm.tileAt(static_cast<u32>(x), static_cast<u32>(y));
+                const i32 id = rules.empty() ? tm.tileAt(static_cast<u32>(x), static_cast<u32>(y))
+                                             : rules.resolve(tm, static_cast<u32>(x), static_cast<u32>(y), m_time);
                 if (id < 0 || static_cast<usize>(id) >= m_tileUvs.size()) continue;
                 SpriteItem item;
                 const Vec3 c = o + ax * static_cast<float>(x) + ay * static_cast<float>(y);
