@@ -57,6 +57,9 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIInputField: return "Input Field";
         case CreateKind::UIScrollView: return "Scroll View";
         case CreateKind::Skeleton2D: return "Skeleton 2D";
+        case CreateKind::UIProgressBar: return "Progress Bar";
+        case CreateKind::UIDropdown: return "Dropdown";
+        case CreateKind::UITabs: return "Tabs";
     }
     return "Entity";
 }
@@ -174,7 +177,7 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
     Scene& s = scene();
     auto& reg = s.registry();
     const bool ui = (kind >= CreateKind::UIPanel && kind <= CreateKind::UIColumn) || kind == CreateKind::UIToggle || kind == CreateKind::UIInputField ||
-                    kind == CreateKind::UIScrollView;
+                    kind == CreateKind::UIScrollView || kind == CreateKind::UIProgressBar || kind == CreateKind::UIDropdown || kind == CreateKind::UITabs;
     if (ui) parent = uiParentFor(parent);
     const ecs::Entity e = s.createEntity(createKindName(kind), parent);
     auto uiRect = [&](math::Vec2 size) -> UIRectComponent& {
@@ -309,6 +312,30 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             break;
         }
         case CreateKind::AudioSource: reg.emplace<AudioSourceComponent>(e); break;
+        case CreateKind::UIProgressBar:
+            uiRect({400, 36});
+            reg.emplace<UIProgressBarComponent>(e).value = 0.65f;
+            break;
+        case CreateKind::UIDropdown:
+            uiRect({360, 60});
+            reg.emplace<UIDropdownComponent>(e);
+            break;
+        case CreateKind::UITabs: {
+            // Two pages (children) under the tabs, each stretched over the content area.
+            uiRect({640, 420});
+            reg.emplace<UIImageComponent>(e).color = {0.08f, 0.09f, 0.11f, 0.85f};
+            reg.emplace<UITabsComponent>(e);
+            for (int i = 0; i < 2; ++i) {
+                const ecs::Entity page = s.createEntity("Page " + std::to_string(i + 1), e);
+                auto& r = reg.emplace<UIRectComponent>(page);
+                r.anchorMin = {0.0f, 0.0f};
+                r.anchorMax = {1.0f, 1.0f};
+                r.size = {0.0f, 0.0f};
+                auto& label = reg.emplace<UITextComponent>(page);
+                label.text = "Contenu de l'onglet " + std::to_string(i + 1);
+            }
+            break;
+        }
         case CreateKind::Skeleton2D: {
             // A chain of 3 bones and a skin over it: pick a texture, pose the bones, animate them.
             reg.emplace<Skeleton2DComponent>(e);

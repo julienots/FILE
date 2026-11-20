@@ -1,6 +1,7 @@
 agr_add_module(ui
     SOURCES
         src/UIComponents.cpp
+        src/UITheme.cpp
         src/Font.cpp
         src/UISystem.cpp
         src/UIPlugin.cpp
@@ -8,4 +9,5 @@ agr_add_module(ui
         agr::render
         agr::runtime
     PRIVATE_DEPS
-        agr::stb)
+        agr::stb
+        nlohmann_json::nlohmann_json)

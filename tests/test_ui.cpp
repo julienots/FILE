@@ -284,7 +284,11 @@ TEST_CASE("text layout: lines, wrapping, alignment, UTF-8 and overlay geometry")
     CHECK(shift == doctest::Approx((400 - left.value().size.x) / 2).epsilon(0.02));
 
     auto accents = fonts.layout("assets://fonts/Inter-Regular.ttf", "été à Noël", 32, 0, false, 1.0f, UIHAlign::Left);
-    CHECK(accents.value().glyphs.size() == 8);  // spaces have no bitmap
+    REQUIRE(accents.value().glyphs.size() == 10);  // spaces are kept, with no size (underlines span them)
+    usize empty = 0;
+    for (const TextGlyph& g : accents.value().glyphs) empty += g.max.x == g.min.x ? 1 : 0;
+    CHECK(empty == 2);
+    CHECK(accents.value().glyphs[3].source == 3);
     CHECK(fonts.stats().glyphs > 10);
 
     auto missing = fonts.layout("assets://fonts/none.ttf", "x", 32, 0, false, 1.0f, UIHAlign::Left);
@@ -538,4 +542,160 @@ TEST_CASE("keyboard / gamepad navigation: opt-in per canvas, moves by direction,
     f.pointers({{0, {50, 550}, false}});
     CHECK(f.ui.navFocus().isNull());
 }
+TEST_CASE("progress bars, vertical sliders, rich text") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto bar = f.element("Bar", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {200, 20});
+    auto& pb = f.scene.registry().emplace<UIProgressBarComponent>(bar);
+    pb.value = 0.25f;
+    pb.inset = 0.0f;
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    REQUIRE(f.ui.stats().quads == 2);  // background + fill
+    CHECK(list.vertices[4].position.x == doctest::Approx(100.0f));
+    CHECK(list.vertices[6].position.x == doctest::Approx(150.0f));  // a quarter of 200
+    pb.direction = UIFillDirection::BottomToTop;
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(list.vertices[4].position.y == doctest::Approx(115.0f));  // the bottom quarter of 100..120
+    pb.value = 0.0f;
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(f.ui.stats().quads == 1);
+
+    // Vertical slider: bottom = min, top = max (half a handle at each end: usable 110..290 for 100..300).
+    const auto vs = f.element("V", f.canvas, {0, 0}, {0, 0}, {0, 0}, {400, 100}, {20, 200});
+    auto& slider = f.scene.registry().emplace<UISliderComponent>(vs);
+    slider.vertical = true;
+    slider.minValue = 0;
+    slider.maxValue = 10;
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {410, 290}, true}});
+    CHECK(slider.value == doctest::Approx(0.0f));
+    f.pointers({{0, {410, 200}, true}});
+    CHECK(slider.value == doctest::Approx(5.0f));
+    f.pointers({{0, {410, 0}, true}});
+    CHECK(slider.value == doctest::Approx(10.0f));
+    f.pointers({{0, {410, 0}, false}});
+
+    // Rich text: tags removed, colored, bold doubles the glyph, underline adds a bar.
+    f.scene.destroyEntity(bar);
+    f.scene.destroyEntity(vs);
+    f.scene.flushDestroyed();
+    const auto label = f.element("Label", f.canvas, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {600, 60});
+    auto& t = f.scene.registry().emplace<UITextComponent>(label);
+    t.text = "ab[color=#ff0000]cd[/color]";
+    t.richText = true;
+    t.hAlign = UIHAlign::Left;
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    REQUIRE(f.ui.stats().quads == 4);
+    CHECK(list.vertices[0].color == list.vertices[4].color);  // a, b: the text color
+    CHECK(list.vertices[8].color == packColor({1, 0, 0, 1}));  // c, d: red
+    CHECK(list.vertices[12].color == packColor({1, 0, 0, 1}));
+    t.text = "[b]ab[/b] [u]c[/u] [[x] [nope]";
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    // a, b twice (bold); c + its underline; "[x]" and "[nope]" stay as text (unknown tag / escaped bracket).
+    CHECK(f.ui.stats().quads == 4 + 2 + 3 + 6);
+}
+
+TEST_CASE("drop-down lists, tabs and tooltips") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto dd = f.element("Quality", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {200, 40});
+    auto& d = f.scene.registry().emplace<UIDropdownComponent>(dd);
+    d.options = "Low;Medium;High";
+    d.selected = 1;
+    const auto behind = f.button("Behind", {200, 170}, {200, 40});  // under the list
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {150, 120}, true}});
+    f.pointers({{0, {150, 120}, false}});
+    CHECK(f.ui.openDropdown() == dd);
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    // The list (3 x 40 under the box) is drawn last, on top of the button behind it.
+    CHECK(list.vertices[list.vertices.size() - 4].position.y >= 140.0f);
+    f.pointers({{0, {150, 230}, false}});  // hover "High"
+    f.pointers({{0, {150, 230}, true}});
+    f.pointers({{0, {150, 230}, false}});
+    CHECK(d.selected == 2);
+    CHECK(f.ui.openDropdown().isNull());
+    auto events = f.ui.takeEvents();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].type == UIEventType::ValueChanged);
+    CHECK(events[0].value == doctest::Approx(2.0f));
+    // Open, then click elsewhere: closes without clicking the button behind.
+    f.pointers({{0, {150, 120}, true}});
+    f.pointers({{0, {150, 120}, false}});
+    REQUIRE(f.ui.openDropdown() == dd);
+    f.pointers({{0, {600, 500}, true}});
+    f.pointers({{0, {600, 500}, false}});
+    CHECK(f.ui.openDropdown().isNull());
+    CHECK(f.ui.takeEvents().empty());
+    (void)behind;
+
+    // Tabs: only the current page is laid out, under the header; a click on a tab switches.
+    const auto tabs = f.element("Tabs", f.canvas, {0, 0}, {0, 0}, {0, 0}, {400, 0}, {300, 300});
+    auto& tb = f.scene.registry().emplace<UITabsComponent>(tabs);
+    tb.tabs = "A;B;C";
+    tb.headerHeight = 50.0f;
+    std::vector<ecs::Entity> pages;
+    for (int i = 0; i < 3; ++i) pages.push_back(f.element("Page", tabs, {0, 0}, {1, 1}, {0.5f, 0.5f}, {0, 0}, {0, 0}));
+    f.ui.layout(f.scene, 800, 600);
+    checkRect(f.rect(pages[0]), {400, 50, 300, 250});
+    CHECK(f.ui.elementAt({550, 200}) == pages[0]);
+    f.pointers({{0, {650, 20}, true}});  // third tab
+    f.pointers({{0, {650, 20}, false}});
+    CHECK(tb.current == 2);
+    f.ui.layout(f.scene, 800, 600);
+    CHECK(f.ui.elementAt({550, 200}) == pages[2]);
+    events = f.ui.takeEvents();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].value == doctest::Approx(2.0f));
+    f.pointers({{0, {650, 200}, true}});  // a click in the page does not switch tabs
+    f.pointers({{0, {650, 200}, false}});
+    CHECK(tb.current == 2);
+
+    // Tooltip: shown after the delay while the pointer rests on the element.
+    const auto help = f.button("Help", {100, 400}, {80, 40});
+    auto& tip = f.scene.registry().emplace<UITooltipComponent>(help);
+    tip.delay = 0.0f;
+    tip.text = "Aide";
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {100, 400}, false}});
+    f.pointers({{0, {100, 400}, false}});
+    CHECK(f.ui.tooltipShown() == help);
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(f.ui.stats().quads > 0);
+    f.pointers({{0, {700, 550}, false}});
+    CHECK(f.ui.tooltipShown().isNull());
+}
+
+TEST_CASE("themes recolor the controls of a canvas") {
+    UIFixture f;
+    UITheme theme;
+    theme.accent = {0, 1, 0, 1};
+    theme.track = {0, 0, 1, 1};
+    auto parsed = UITheme::fromJson(theme.toJson());
+    REQUIRE(parsed);
+    CHECK(parsed.value().accent.y == doctest::Approx(1.0f));
+    CHECK_FALSE(UITheme::fromJson("{\"accent\": [1]}"));
+    REQUIRE(f.vfs.writeText("assets://t.agrtheme", theme.toJson()));
+    auto& c = f.scene.registry().get<UICanvasComponent>(f.canvas);
+    c.scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto bar = f.element("Bar", f.canvas, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {100, 20});
+    f.scene.registry().emplace<UIProgressBarComponent>(bar).value = 1.0f;
+    OverlayDrawList list;
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(list.vertices[4].color == packColor(UIProgressBarComponent{}.fillColor));
+    c.theme = "assets://t.agrtheme";
+    list.clear();
+    f.ui.buildOverlay(f.scene, 800, 600, list);
+    CHECK(list.vertices[0].color == packColor({0, 0, 1, 1}));  // track
+    CHECK(list.vertices[4].color == packColor({0, 1, 0, 1}));  // accent
+    CHECK(f.ui.theme("assets://none.agrtheme") == nullptr);
+}
+
 }  // TEST_SUITE

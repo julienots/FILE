@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <span>
 #include <unordered_map>
@@ -11,6 +12,7 @@
 #include "agr/render/Renderer.hpp"
 #include "agr/ui/Font.hpp"
 #include "agr/ui/UIComponents.hpp"
+#include "agr/ui/UITheme.hpp"
 
 namespace agr {
 class Localization;
@@ -109,6 +111,18 @@ public:
     void navActivate(Scene& scene);
     void navAdjust(Scene& scene, float steps);
     ecs::Entity navFocus() const { return m_navVisible ? m_navFocus : ecs::Entity{}; }
+    /// Drop-down whose list is open (null = none); opening one closes the other.
+    ecs::Entity openDropdown() const { return m_openDropdown; }
+    void openDropdown(ecs::Entity dropdown) {
+        m_openDropdown = dropdown;
+        m_popupHover = -1;
+    }
+    /// Selects an option of a drop-down / a tab of a tab container (events like a click).
+    void selectOption(Scene& scene, ecs::Entity e, i32 index);
+    /// Element whose tooltip is shown (null = none).
+    ecs::Entity tooltipShown() const { return m_tooltipVisible ? m_tooltipEntity : ecs::Entity{}; }
+    /// The theme of a canvas (.agrtheme), loaded through the VFS; null if none or invalid.
+    const UITheme* theme(const std::string& uri);
     void setNavFocus(ecs::Entity e) {
         m_navFocus = e;
         m_navVisible = !e.isNull();
@@ -144,13 +158,25 @@ private:
         u32 hierarchyIndex = 0;
         ecs::Entity canvas;
         float scale = 1.0f;
+        const UITheme* theme = nullptr;
         std::vector<Element> elements;  // painter's order
+    };
+    struct RichStyle {
+        math::Vec4 color{1, 1, 1, 1};
+        bool hasColor = false, bold = false, underline = false;
     };
     struct PendingText {
         usize element;
         usize canvas;
         TextLayout layout;
         math::Vec2 origin;
+        math::Vec4 color{1, 1, 1, 1};
+        std::vector<RichStyle> styles;  // rich text: per code point
+        float pixelSize = 0.0f;
+    };
+    struct ThemeEntry {
+        std::unique_ptr<UITheme> theme;
+        i64 modified = 0;
     };
 
     void layoutChildren(Scene& scene, ecs::Entity parent, math::Vec4 parentRect, float scale, CanvasPass& pass, math::Vec4 clip);
@@ -160,9 +186,13 @@ private:
     ecs::Entity scrollViewOf(Scene& scene, ecs::Entity e) const;
     void scrollBy(Scene& scene, ecs::Entity view, math::Vec2 pixels);
     const Element* elementOf(ecs::Entity e) const;
-    void drawElement(Scene& scene, const Element& el, float scale, OverlayDrawList& out);
+    void drawElement(Scene& scene, const Element& el, float scale, const UITheme* theme, OverlayDrawList& out);
     void drawImage(const UIImageComponent& img, math::Vec4 rect, math::Vec4 tint, float scale, OverlayDrawList& out);
-    void setSliderValue(Scene& scene, ecs::Entity e, float x);
+    void setSliderValue(Scene& scene, ecs::Entity e, math::Vec2 position);
+    /// Pointer input while a drop-down list is open; true when the list took the pointer.
+    bool popupPointer(Scene& scene, const UIPointer& p, bool wasDown);
+    void layoutPopup();
+    std::optional<TextLayout> textLayout(const std::string& font, const std::string& text, float pixelSize, float width, bool wrap, UIHAlign align);
 
     Renderer* m_renderer = nullptr;
     const Localization* m_localization = nullptr;
@@ -185,6 +215,27 @@ private:
     math::Vec4 m_clip{-1e9f, -1e9f, 2e9f, 2e9f};            // while drawing
     Stopwatch m_caretClock;
     math::Vec4 m_safeArea{0.0f, 0.0f, 0.0f, 0.0f};
+    // Drop-down list drawn over everything.
+    ecs::Entity m_openDropdown;
+    math::Vec4 m_popupRect{0, 0, 0, 0};
+    float m_popupItemHeight = 0.0f;
+    i32 m_popupCount = 0, m_popupHover = -1;
+    std::unordered_map<u64, i32> m_popupPress;  // pointer id -> pressed item (-1: press swallowed)
+    const UITheme* m_popupTheme = nullptr;
+    float m_popupScale = 1.0f;
+    // Tooltip.
+    ecs::Entity m_tooltipEntity;
+    math::Vec2 m_tooltipPos{0.0f, 0.0f};
+    Stopwatch m_tooltipClock;
+    bool m_tooltipVisible = false;
+    struct OverlayText {
+        TextLayout layout;
+        math::Vec2 origin;
+        math::Vec4 color;
+    };
+    std::vector<OverlayText> m_overlayTexts;  // popup and tooltip texts, drawn last
+    std::unordered_map<std::string, ThemeEntry> m_themes;
+    VirtualFileSystem& m_vfs;
     UIStats m_stats;
 };
 

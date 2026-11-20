@@ -23,10 +23,13 @@ Vec4 intersect(Vec4 a, Vec4 b) {
     return {x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0)};
 }
 bool interactiveKind(ecs::Registry& reg, ecs::Entity e) {
-    return reg.has<UIButtonComponent>(e) || reg.has<UISliderComponent>(e) || reg.has<UIToggleComponent>(e) || reg.has<UIInputFieldComponent>(e);
+    return reg.has<UIButtonComponent>(e) || reg.has<UISliderComponent>(e) || reg.has<UIToggleComponent>(e) || reg.has<UIInputFieldComponent>(e) ||
+           reg.has<UIDropdownComponent>(e) || reg.has<UITabsComponent>(e);
 }
 bool interactableNow(ecs::Registry& reg, ecs::Entity e) {
     if (const auto* b = reg.tryGet<UIButtonComponent>(e)) return b->interactable;
+    if (const auto* d = reg.tryGet<UIDropdownComponent>(e)) return d->interactable;
+    if (reg.has<UITabsComponent>(e)) return true;
     if (const auto* s = reg.tryGet<UISliderComponent>(e)) return s->interactable;
     if (const auto* t = reg.tryGet<UIToggleComponent>(e)) return t->interactable;
     if (const auto* f = reg.tryGet<UIInputFieldComponent>(e)) return f->interactable;
@@ -48,6 +51,89 @@ void utf8PopBack(std::string& s) {
 }
 
 Vec4 mul(Vec4 a, Vec4 b) { return {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
+
+/// "A;B;C" -> {"A", "B", "C"} (empty items kept: their place counts).
+std::vector<std::string> splitList(const std::string& s) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+        if (c == ';') {
+            out.push_back(cur);
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    if (!cur.empty() || !out.empty()) out.push_back(cur);
+    return out;
+}
+
+bool isWhite(Vec4 c) { return c.x == 1.0f && c.y == 1.0f && c.z == 1.0f; }
+
+std::optional<Vec4> parseColor(const std::string& v) {
+    static const std::pair<const char*, Vec4> named[] = {
+        {"white", {1, 1, 1, 1}},          {"black", {0, 0, 0, 1}},       {"red", {0.95f, 0.25f, 0.2f, 1}},   {"green", {0.3f, 0.85f, 0.35f, 1}},
+        {"blue", {0.3f, 0.55f, 1.0f, 1}}, {"yellow", {1, 0.86f, 0.2f, 1}}, {"orange", {1, 0.58f, 0.15f, 1}}, {"purple", {0.7f, 0.4f, 1.0f, 1}},
+        {"gray", {0.6f, 0.6f, 0.6f, 1}},  {"cyan", {0.3f, 0.9f, 0.95f, 1}}};
+    for (const auto& [n, c] : named)
+        if (v == n) return c;
+    if (v.size() != 7 && v.size() != 9) return std::nullopt;
+    if (v[0] != '#') return std::nullopt;
+    auto hex = [&](usize i) -> int {
+        auto d = [](char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; };
+        const int a = d(v[i]), b = d(v[i + 1]);
+        return a < 0 || b < 0 ? -1 : a * 16 + b;
+    };
+    const int r = hex(1), g = hex(3), b = hex(5), a = v.size() == 9 ? hex(7) : 255;
+    if (r < 0 || g < 0 || b < 0 || a < 0) return std::nullopt;
+    return Vec4{r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f};
+}
+
+/// Rich text: removes the tags and returns the style of every remaining code point.
+template <typename Style>
+std::string parseRichText(const std::string& in, std::vector<Style>& styles) {
+    std::string out;
+    std::vector<Vec4> colors;
+    int bold = 0, underline = 0;
+    for (usize i = 0; i < in.size();) {
+        if (in[i] == '[') {
+            if (i + 1 < in.size() && in[i + 1] == '[') {  // "[[" = a literal "["
+                out += '[';
+                styles.push_back({colors.empty() ? Vec4{1, 1, 1, 1} : colors.back(), !colors.empty(), bold > 0, underline > 0});
+                i += 2;
+                continue;
+            }
+            const usize close = in.find(']', i);
+            if (close != std::string::npos) {
+                const std::string tag = in.substr(i + 1, close - i - 1);
+                bool known = true;
+                if (tag == "b") ++bold;
+                else if (tag == "/b") bold = std::max(0, bold - 1);
+                else if (tag == "u") ++underline;
+                else if (tag == "/u") underline = std::max(0, underline - 1);
+                else if (tag == "/color") {
+                    if (!colors.empty()) colors.pop_back();
+                } else if (tag.rfind("color=", 0) == 0) {
+                    if (auto c = parseColor(tag.substr(6))) colors.push_back(*c);
+                    else known = false;
+                } else {
+                    known = false;
+                }
+                if (known) {
+                    i = close + 1;
+                    continue;
+                }
+            }
+        }
+        // One code point (UTF-8) with the current style.
+        const unsigned char c = static_cast<unsigned char>(in[i]);
+        const usize n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : 4;
+        out.append(in, i, n);
+        styles.push_back({colors.empty() ? Vec4{1, 1, 1, 1} : colors.back(), !colors.empty(), bold > 0, underline > 0});
+        i += n;
+    }
+    return out;
+}
 
 Vec4 anchoredRect(const UIRectComponent& r, Vec4 p, float s) {
     const float ax0 = p.x + p.z * r.anchorMin.x, ax1 = p.x + p.z * r.anchorMax.x;
@@ -71,7 +157,38 @@ bool isActive(Scene& scene, ecs::Entity e) {
 
 } // namespace
 
-UISystem::UISystem(VirtualFileSystem& vfs) : m_fonts(vfs) {}
+UISystem::UISystem(VirtualFileSystem& vfs) : m_fonts(vfs), m_vfs(vfs) {}
+
+const UITheme* UISystem::theme(const std::string& uri) {
+    if (uri.empty()) return nullptr;
+    const i64 modified = m_vfs.modifiedTime(uri);
+    auto it = m_themes.find(uri);
+    if (it != m_themes.end() && it->second.modified == modified) return it->second.theme.get();
+    ThemeEntry& e = m_themes[uri];
+    e.modified = modified;
+    e.theme.reset();
+    auto text = m_vfs.readText(uri);
+    if (!text) {
+        AGR_LOG_ERROR("UI", "theme '{}': {}", uri, text.error().message);
+        return nullptr;
+    }
+    auto parsed = UITheme::fromJson(text.value());
+    if (!parsed) {
+        AGR_LOG_ERROR("UI", "theme '{}': {}", uri, parsed.error().message);
+        return nullptr;
+    }
+    e.theme = std::make_unique<UITheme>(std::move(parsed.value()));
+    return e.theme.get();
+}
+
+std::optional<TextLayout> UISystem::textLayout(const std::string& font, const std::string& text, float pixelSize, float width, bool wrap, UIHAlign align) {
+    auto lay = m_fonts.layout(font, text, pixelSize, width, wrap, 1.0f, align);
+    if (!lay) {
+        if (m_reportedFonts.insert(font).second) AGR_LOG_ERROR("UI", "font '{}': {}", font, lay.error().message);
+        return std::nullopt;
+    }
+    return std::move(lay.value());
+}
 UISystem::~UISystem() = default;
 
 void UISystem::setRenderer(Renderer* renderer) { m_renderer = renderer; }
@@ -118,6 +235,7 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
         pass.canvas = e;
         pass.sortOrder = c.sortOrder;
         pass.hierarchyIndex = e.index;
+        pass.theme = theme(c.theme);
         if (c.scaleMode == UIScaleMode::ConstantPixelSize) {
             pass.scale = std::max(0.01f, c.pixelScale);
         } else {
@@ -141,6 +259,7 @@ void UISystem::layout(Scene& scene, u32 width, u32 height) {
     std::stable_sort(m_passes.begin(), m_passes.end(), [](const CanvasPass& a, const CanvasPass& b) {
         return a.sortOrder != b.sortOrder ? a.sortOrder < b.sortOrder : a.hierarchyIndex < b.hierarchyIndex;
     });
+    layoutPopup();
     m_stats.canvases = static_cast<u32>(m_passes.size());
     m_stats.elements = 0;
     for (const CanvasPass& p : m_passes) m_stats.elements += static_cast<u32>(p.elements.size());
@@ -154,6 +273,13 @@ void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s
         if (reg.has<UIRectComponent>(c) && isActive(scene, c)) kids.push_back(c);
     });
     if (kids.empty()) return;
+    if (auto* tabs = reg.tryGet<UITabsComponent>(parent)) {
+        // Only the current page is shown, in the area under the tabs.
+        tabs->current = std::clamp(tabs->current, 0, static_cast<i32>(kids.size()) - 1);
+        kids = {kids[static_cast<usize>(tabs->current)]};
+        const float header = std::min(tabs->headerHeight * s, pr.w);
+        pr = {pr.x, pr.y + header, pr.z, pr.w - header};
+    }
     std::vector<Vec4> rects(kids.size());
     if (const auto* lay = reg.tryGet<UILayoutComponent>(parent)) {
         const Vec4 content{pr.x + lay->padding.x * s, pr.y + lay->padding.y * s, std::max(0.0f, pr.z - (lay->padding.x + lay->padding.z) * s),
@@ -249,13 +375,19 @@ bool UISystem::isPressed(ecs::Entity e) const {
     return false;
 }
 
-void UISystem::setSliderValue(Scene& scene, ecs::Entity e, float x) {
+void UISystem::setSliderValue(Scene& scene, ecs::Entity e, Vec2 position) {
     auto* s = scene.registry().tryGet<UISliderComponent>(e);
     auto* r = scene.registry().tryGet<UIRectComponent>(e);
     if (!s || !r || !s->interactable) return;
     const Vec4 rect = r->screenRect;
-    const float handle = rect.w * 0.5f;
-    const float t = std::clamp((x - rect.x - handle) / std::max(1.0f, rect.z - 2.0f * handle), 0.0f, 1.0f);
+    float t;
+    if (s->vertical) {  // bottom = min
+        const float handle = rect.z * 0.5f;
+        t = std::clamp((rect.y + rect.w - handle - position.y) / std::max(1.0f, rect.w - 2.0f * handle), 0.0f, 1.0f);
+    } else {
+        const float handle = rect.w * 0.5f;
+        t = std::clamp((position.x - rect.x - handle) / std::max(1.0f, rect.z - 2.0f * handle), 0.0f, 1.0f);
+    }
     float v = s->minValue + t * (s->maxValue - s->minValue);
     if (s->wholeNumbers) v = std::round(v);
     if (v != s->value) {
@@ -270,10 +402,27 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
     m_pointerOverUI = false;
     std::unordered_set<u64> seen;
     if (!m_focusedField.isNull() && (!reg.valid(m_focusedField) || !reg.has<UIInputFieldComponent>(m_focusedField))) focusField({});
+    if (!m_openDropdown.isNull() && (!reg.valid(m_openDropdown) || !reg.has<UIDropdownComponent>(m_openDropdown) || !elementOf(m_openDropdown)))
+        m_openDropdown = {};
+    ecs::Entity tooltipHit;
     for (const UIPointer& p : pointers) {
         seen.insert(p.id);
         const bool wasDown = m_pointerDown[p.id];
+        if (popupPointer(scene, p, wasDown)) {
+            m_pointerDown[p.id] = p.down;
+            continue;
+        }
         const ecs::Entity hit = hitTest(p.position);
+        if (!p.down && !hit.isNull()) {  // tooltip: the element (or a parent) with one under a resting pointer
+            for (ecs::Entity e = hit; !e.isNull() && reg.valid(e); e = scene.parent(e)) {
+                if (reg.has<UITooltipComponent>(e)) {
+                    tooltipHit = e;
+                    m_tooltipPos = p.position;
+                    break;
+                }
+                if (reg.has<UICanvasComponent>(e)) break;
+            }
+        }
         ecs::Entity top = hit;
         if (!top.isNull()) m_pointerOverUI = true;
         // Images and texts inside a control (icons, labels) forward the press to it.
@@ -297,7 +446,7 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
             if (!m_focusedField.isNull() && top != m_focusedField) focusField({});
             if (topInteractive && interactableNow(reg, top)) {
                 m_pressed[p.id] = top;
-                if (reg.has<UISliderComponent>(top)) setSliderValue(scene, top, p.position.x);
+                if (reg.has<UISliderComponent>(top)) setSliderValue(scene, top, p.position);
             }
         } else if (p.down) {
             const bool slider = pressedIt != m_pressed.end() && reg.has<UISliderComponent>(pressedIt->second);
@@ -309,12 +458,23 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                 }
             }
             if (ps.dragging && reg.valid(ps.scrollView)) scrollBy(scene, ps.scrollView, ps.last - p.position);
-            else if (slider) setSliderValue(scene, pressedIt->second, p.position.x);
+            else if (slider) setSliderValue(scene, pressedIt->second, p.position);
             ps.last = p.position;
         } else if (!p.down && wasDown) {
             if (pressedIt != m_pressed.end()) {
                 const ecs::Entity pressed = pressedIt->second;
-                if (pressed == top && !ps.dragging && interactableNow(reg, pressed) && !reg.has<UISliderComponent>(pressed)) activate(scene, pressed);
+                if (pressed == top && !ps.dragging && interactableNow(reg, pressed) && !reg.has<UISliderComponent>(pressed)) {
+                    if (const auto* tabs = reg.tryGet<UITabsComponent>(pressed)) {  // the tab under the pointer
+                        const Element* el = elementOf(pressed);
+                        const usize n = splitList(tabs->tabs).size();
+                        const float scale = el ? canvasScale(canvasOf(pressed)) : 1.0f;
+                        if (el && n > 0 && p.position.y < el->rect.y + tabs->headerHeight * scale)
+                            selectOption(scene, pressed, std::clamp(static_cast<i32>((p.position.x - el->rect.x) / std::max(1.0f, el->rect.z) * static_cast<float>(n)), 0,
+                                                                    static_cast<i32>(n) - 1));
+                    } else {
+                        activate(scene, pressed);
+                    }
+                }
                 m_pressed.erase(pressedIt);
             }
             ps.dragging = false;
@@ -323,6 +483,14 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
         if (!p.down && topInteractive) m_hovered.insert(top.packed());
         m_pointerDown[p.id] = p.down;
     }
+    if (tooltipHit != m_tooltipEntity) {
+        m_tooltipEntity = tooltipHit;
+        m_tooltipClock.restart();
+    }
+    if (const auto* tip = tooltipHit.isNull() ? nullptr : reg.tryGet<UITooltipComponent>(tooltipHit))
+        m_tooltipVisible = m_tooltipClock.elapsedSeconds() >= tip->delay && !tip->text.empty();
+    else
+        m_tooltipVisible = false;
     // Pointers that disappeared (finger lost, window left): released without a click.
     for (auto it = m_pointerDown.begin(); it != m_pointerDown.end();) {
         if (!seen.count(it->first)) {
@@ -340,6 +508,95 @@ void UISystem::activate(Scene& scene, ecs::Entity e) {
     if (reg.has<UIButtonComponent>(e)) m_events.push_back({UIEventType::Click, e, 0.0f, {}});
     else if (reg.has<UIToggleComponent>(e)) clickToggle(scene, e);
     else if (reg.has<UIInputFieldComponent>(e)) focusField(e);
+    else if (const auto* d = reg.tryGet<UIDropdownComponent>(e)) {
+        if (m_navVisible) {  // keyboard / gamepad: the next option
+            const i32 n = static_cast<i32>(splitList(d->options).size());
+            if (n > 0) selectOption(scene, e, (d->selected + 1) % n);
+        } else {
+            openDropdown(m_openDropdown == e ? ecs::Entity{} : e);
+            layoutPopup();
+        }
+    } else if (const auto* t = reg.tryGet<UITabsComponent>(e)) {  // keyboard / gamepad: the next tab
+        const i32 n = static_cast<i32>(splitList(t->tabs).size());
+        if (n > 0) selectOption(scene, e, (t->current + 1) % n);
+    }
+}
+
+void UISystem::selectOption(Scene& scene, ecs::Entity e, i32 index) {
+    auto& reg = scene.registry();
+    if (auto* d = reg.tryGet<UIDropdownComponent>(e)) {
+        const i32 n = static_cast<i32>(splitList(d->options).size());
+        if (n == 0) return;
+        index = std::clamp(index, 0, n - 1);
+        if (d->selected != index) {
+            d->selected = index;
+            m_events.push_back({UIEventType::ValueChanged, e, static_cast<float>(index), {}});
+        }
+    } else if (auto* t = reg.tryGet<UITabsComponent>(e)) {
+        const i32 n = static_cast<i32>(splitList(t->tabs).size());
+        if (n == 0) return;
+        index = std::clamp(index, 0, n - 1);
+        if (t->current != index) {
+            t->current = index;
+            m_events.push_back({UIEventType::ValueChanged, e, static_cast<float>(index), {}});
+        }
+    }
+}
+
+void UISystem::layoutPopup() {
+    m_popupCount = 0;
+    if (m_openDropdown.isNull() || !m_layoutScene || !m_layoutScene->valid(m_openDropdown)) return;
+    const auto* d = m_layoutScene->registry().tryGet<UIDropdownComponent>(m_openDropdown);
+    const Element* el = elementOf(m_openDropdown);
+    if (!d || !el) {
+        m_openDropdown = {};
+        return;
+    }
+    m_popupCount = static_cast<i32>(splitList(d->options).size());
+    m_popupItemHeight = std::max(8.0f, el->rect.w);
+    m_popupScale = 1.0f;
+    m_popupTheme = nullptr;
+    for (const CanvasPass& pass : m_passes)
+        for (const Element& e : pass.elements)
+            if (e.entity == m_openDropdown) {
+                m_popupScale = pass.scale;
+                m_popupTheme = pass.theme;
+            }
+    const float h = m_popupItemHeight * static_cast<float>(m_popupCount);
+    float y = el->rect.y + el->rect.w;
+    float screenH = 0.0f;
+    for (const CanvasPass& pass : m_passes)
+        if (!pass.elements.empty()) screenH = std::max(screenH, pass.elements.front().rect.y + pass.elements.front().rect.w);
+    if (y + h > screenH && el->rect.y - h >= 0.0f) y = el->rect.y - h;  // no room below: above
+    m_popupRect = {el->rect.x, y, el->rect.z, h};
+}
+
+bool UISystem::popupPointer(Scene& scene, const UIPointer& p, bool wasDown) {
+    if (m_openDropdown.isNull() || m_popupCount <= 0) return false;
+    const bool inside = contains(m_popupRect, p.position);
+    const i32 item = inside ? std::clamp(static_cast<i32>((p.position.y - m_popupRect.y) / m_popupItemHeight), 0, m_popupCount - 1) : -1;
+    if (inside) m_pointerOverUI = true;
+    if (p.down && !wasDown) {
+        m_popupPress[p.id] = item;  // outside: the press closes the list and goes nowhere else
+        if (!inside) {
+            m_openDropdown = {};
+            m_pointerOverUI = true;
+        }
+        return true;
+    }
+    auto it = m_popupPress.find(p.id);
+    if (!p.down && wasDown && it != m_popupPress.end()) {
+        const i32 pressed = it->second;
+        m_popupPress.erase(it);
+        if (pressed >= 0 && pressed == item) {
+            const ecs::Entity dropdown = m_openDropdown;
+            m_openDropdown = {};
+            selectOption(scene, dropdown, item);
+        }
+        return true;
+    }
+    if (!p.down) m_popupHover = item;
+    return inside || it != m_popupPress.end();
 }
 
 void UISystem::clickToggle(Scene& scene, ecs::Entity e) {
@@ -525,6 +782,10 @@ std::vector<UIEvent> UISystem::takeEvents() {
 
 void UISystem::reset() {
     focusField({});
+    m_openDropdown = {};
+    m_popupPress.clear();
+    m_tooltipEntity = {};
+    m_tooltipVisible = false;
     m_navFocus = {};
     m_navVisible = false;
     m_pointerState.clear();
@@ -592,37 +853,92 @@ void UISystem::drawImage(const UIImageComponent& img, Vec4 rect, Vec4 tint, floa
         }
 }
 
-void UISystem::drawElement(Scene& scene, const Element& el, float scale, OverlayDrawList& out) {
+void UISystem::drawElement(Scene& scene, const Element& el, float scale, const UITheme* theme, OverlayDrawList& out) {
     auto& reg = scene.registry();
+    const UITheme* th = theme;
+    auto quad = [&](float x0, float y0, float x1, float y1, Vec4 c) { emit(out, {x0, y0}, {x1, y1}, {0, 0, 1, 1}, packColor(c), {}); };
     Vec4 tint{1, 1, 1, 1};
     if (const auto* b = reg.tryGet<UIButtonComponent>(el.entity)) {
-        if (!b->interactable) tint = b->disabledColor;
-        else if (isPressed(el.entity)) tint = b->pressedColor;
-        else if (isHovered(el.entity)) tint = b->hoverColor;
-        else tint = b->normalColor;
+        if (!b->interactable) tint = th ? th->buttonDisabled : b->disabledColor;
+        else if (isPressed(el.entity)) tint = th ? th->buttonPressed : b->pressedColor;
+        else if (isHovered(el.entity)) tint = th ? th->buttonHover : b->hoverColor;
+        else tint = th ? th->button : b->normalColor;
     }
     if (const auto* img = reg.tryGet<UIImageComponent>(el.entity)) drawImage(*img, el.rect, tint, scale, out);
     if (const auto* s = reg.tryGet<UISliderComponent>(el.entity)) {
         const Vec4 r = el.rect;
-        const float handle = r.w * 0.5f;
         const float range = s->maxValue - s->minValue;
         const float t = range != 0.0f ? std::clamp((s->value - s->minValue) / range, 0.0f, 1.0f) : 0.0f;
-        const float hx = r.x + handle + t * std::max(0.0f, r.z - 2.0f * handle);
-        const float trackH = std::max(2.0f, r.w * 0.3f), ty = r.y + (r.w - trackH) * 0.5f;
         const Vec4 dim = s->interactable ? Vec4{1, 1, 1, 1} : Vec4{1, 1, 1, 0.5f};
-        emit(out, {r.x, ty}, {r.x + r.z, ty + trackH}, {0, 0, 1, 1}, packColor(mul(s->trackColor, dim)), {});
-        emit(out, {r.x, ty}, {hx, ty + trackH}, {0, 0, 1, 1}, packColor(mul(s->fillColor, dim)), {});
-        const float hs = r.w * 0.5f;
-        emit(out, {hx - hs, r.y}, {hx + hs, r.y + r.w}, {0, 0, 1, 1}, packColor(mul(s->handleColor, dim)), {});
+        const Vec4 track = mul(th ? th->track : s->trackColor, dim), fill = mul(th ? th->accent : s->fillColor, dim),
+                   knob = mul(th ? th->handle : s->handleColor, dim);
+        if (s->vertical) {  // bottom = min
+            const float handle = r.z * 0.5f;
+            const float hy = r.y + r.w - handle - t * std::max(0.0f, r.w - 2.0f * handle);
+            const float trackW = std::max(2.0f, r.z * 0.3f), tx = r.x + (r.z - trackW) * 0.5f;
+            quad(tx, r.y, tx + trackW, r.y + r.w, track);
+            quad(tx, hy, tx + trackW, r.y + r.w, fill);
+            quad(r.x, hy - handle, r.x + r.z, hy + handle, knob);
+        } else {
+            const float handle = r.w * 0.5f;
+            const float hx = r.x + handle + t * std::max(0.0f, r.z - 2.0f * handle);
+            const float trackH = std::max(2.0f, r.w * 0.3f), ty = r.y + (r.w - trackH) * 0.5f;
+            quad(r.x, ty, r.x + r.z, ty + trackH, track);
+            quad(r.x, ty, hx, ty + trackH, fill);
+            quad(hx - handle, r.y, hx + handle, r.y + r.w, knob);
+        }
     }
     if (const auto* t = reg.tryGet<UIToggleComponent>(el.entity)) {  // box at the left, mark when on
         const Vec4 r = el.rect;
         const float box = std::min(r.w, r.z) * 0.8f, bx = r.x + (r.w - box) * 0.5f, by = r.y + (r.w - box) * 0.5f;
         const Vec4 dim = t->interactable ? (isHovered(el.entity) ? Vec4{1.2f, 1.2f, 1.2f, 1} : Vec4{1, 1, 1, 1}) : Vec4{1, 1, 1, 0.5f};
-        emit(out, {bx, by}, {bx + box, by + box}, {0, 0, 1, 1}, packColor(mul(t->boxColor, dim)), {});
+        quad(bx, by, bx + box, by + box, mul(th ? th->track : t->boxColor, dim));
         if (t->isOn) {
             const float in = box * 0.22f;
-            emit(out, {bx + in, by + in}, {bx + box - in, by + box - in}, {0, 0, 1, 1}, packColor(mul(t->checkColor, dim)), {});
+            quad(bx + in, by + in, bx + box - in, by + box - in, mul(th ? th->accent : t->checkColor, dim));
+        }
+    }
+    if (const auto* p = reg.tryGet<UIProgressBarComponent>(el.entity)) {
+        const Vec4 r = el.rect;
+        quad(r.x, r.y, r.x + r.z, r.y + r.w, th ? th->track : p->backgroundColor);
+        const float range = p->maxValue - p->minValue;
+        const float t = range != 0.0f ? std::clamp((p->value - p->minValue) / range, 0.0f, 1.0f) : 0.0f;
+        const float in = std::min(p->inset * scale, std::min(r.z, r.w) * 0.5f);
+        const float x0 = r.x + in, y0 = r.y + in, x1 = r.x + r.z - in, y1 = r.y + r.w - in;
+        const Vec4 fill = th ? th->accent : p->fillColor;
+        if (t > 0.0f) switch (p->direction) {
+            case UIFillDirection::LeftToRight: quad(x0, y0, x0 + (x1 - x0) * t, y1, fill); break;
+            case UIFillDirection::RightToLeft: quad(x1 - (x1 - x0) * t, y0, x1, y1, fill); break;
+            case UIFillDirection::BottomToTop: quad(x0, y1 - (y1 - y0) * t, x1, y1, fill); break;
+            case UIFillDirection::TopToBottom: quad(x0, y0, x1, y0 + (y1 - y0) * t, fill); break;
+        }
+    }
+    if (const auto* d = reg.tryGet<UIDropdownComponent>(el.entity)) {  // box and a small arrow at the right
+        const Vec4 r = el.rect;
+        const Vec4 dim = d->interactable ? (isHovered(el.entity) || m_openDropdown == el.entity ? Vec4{1.15f, 1.15f, 1.15f, 1} : Vec4{1, 1, 1, 1})
+                                         : Vec4{1, 1, 1, 0.5f};
+        quad(r.x, r.y, r.x + r.z, r.y + r.w, mul(th ? th->field : d->boxColor, dim));
+        const float a = r.w * 0.16f, cx = r.x + r.z - r.w * 0.5f, cy = r.y + r.w * 0.5f;
+        const Vec4 arrow = th ? th->text : d->textColor;
+        for (int i = 0; i < 4; ++i) {  // a stepped triangle pointing down
+            const float w = a * (1.0f - static_cast<float>(i) / 4.0f), y = cy - a * 0.5f + static_cast<float>(i) * a / 4.0f;
+            quad(cx - w, y, cx + w, y + a / 4.0f, arrow);
+        }
+    }
+    if (const auto* tb = reg.tryGet<UITabsComponent>(el.entity)) {  // header: background, the current tab, a line under it
+        const Vec4 r = el.rect;
+        const float h = std::min(tb->headerHeight * scale, r.w);
+        quad(r.x, r.y, r.x + r.z, r.y + h, th ? th->panel : tb->headerColor);
+        const usize n = splitList(tb->tabs).size();
+        if (n > 0) {
+            const float tw = r.z / static_cast<float>(n);
+            const float x = r.x + tw * static_cast<float>(std::clamp(tb->current, 0, static_cast<i32>(n) - 1));
+            Vec4 active = th ? th->accent : tb->activeColor;
+            Vec4 soft = active;
+            soft.w *= 0.25f;
+            quad(x, r.y, x + tw, r.y + h, soft);
+            const float line = std::max(2.0f, 4.0f * scale);
+            quad(x, r.y + h - line, x + tw, r.y + h, active);
         }
     }
     if (const auto* sv = reg.tryGet<UIScrollViewComponent>(el.entity); sv && sv->showScrollbar) {
@@ -647,22 +963,70 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
     // Pass 1: lay out the texts (rasterizes new glyphs); retried once with an empty atlas if it filled up.
     for (int attempt = 0; attempt < 2; ++attempt) {
         m_texts.clear();
+        m_overlayTexts.clear();
         for (usize ci = 0; ci < m_passes.size(); ++ci) {
             const CanvasPass& pass = m_passes[ci];
+            const UITheme* th = pass.theme;
+            auto fontOf = [&](const std::string& f) -> const std::string& { return th && !th->font.empty() ? th->font : f; };
             for (usize ei = 0; ei < pass.elements.size(); ++ei) {
                 const Element& el = pass.elements[ei];
-                const auto* t = reg.tryGet<UITextComponent>(el.entity);
-                if (!t || t->text.empty() || t->color.w <= 0.0f) continue;
-                auto lay = m_fonts.layout(t->font, t->text, t->fontSize * pass.scale, el.rect.z, t->wrap, t->lineSpacing, t->hAlign);
-                if (!lay) {
-                    if (m_reportedFonts.insert(t->font).second) AGR_LOG_ERROR("UI", "font '{}': {}", t->font, lay.error().message);
-                    continue;
+                if (const auto* t = reg.tryGet<UITextComponent>(el.entity); t && !t->text.empty() && t->color.w > 0.0f) {
+                    PendingText pt{ei, ci, {}, {}, t->color, {}, t->fontSize * pass.scale};
+                    if (th && isWhite(t->color)) pt.color = Vec4{th->text.x, th->text.y, th->text.z, th->text.w * t->color.w};
+                    const std::string shown = t->richText ? parseRichText(t->text, pt.styles) : std::string();
+                    auto lay = m_fonts.layout(fontOf(t->font), t->richText ? shown : t->text, pt.pixelSize, el.rect.z, t->wrap, t->lineSpacing, t->hAlign);
+                    if (!lay) {
+                        if (m_reportedFonts.insert(t->font).second) AGR_LOG_ERROR("UI", "font '{}': {}", t->font, lay.error().message);
+                    } else {
+                        Vec2 origin{el.rect.x, el.rect.y};
+                        if (t->vAlign == UIVAlign::Middle) origin.y += (el.rect.w - lay.value().size.y) * 0.5f;
+                        else if (t->vAlign == UIVAlign::Bottom) origin.y += el.rect.w - lay.value().size.y;
+                        pt.origin = {std::round(origin.x), std::round(origin.y)};
+                        pt.layout = std::move(lay.value());
+                        m_texts.push_back(std::move(pt));
+                    }
                 }
-                Vec2 origin{el.rect.x, el.rect.y};
-                if (t->vAlign == UIVAlign::Middle) origin.y += (el.rect.w - lay.value().size.y) * 0.5f;
-                else if (t->vAlign == UIVAlign::Bottom) origin.y += el.rect.w - lay.value().size.y;
-                origin = {std::round(origin.x), std::round(origin.y)};
-                m_texts.push_back({ei, ci, std::move(lay.value()), origin});
+                if (const auto* d = reg.tryGet<UIDropdownComponent>(el.entity)) {  // the selected option
+                    const auto options = splitList(d->options);
+                    if (!options.empty()) {
+                        const float pad = 12.0f * pass.scale, px = d->fontSize * pass.scale;
+                        const std::string& label = options[static_cast<usize>(std::clamp(d->selected, 0, static_cast<i32>(options.size()) - 1))];
+                        if (auto lay = textLayout(fontOf(d->font), label, px, std::max(1.0f, el.rect.z - pad - el.rect.w), false, UIHAlign::Left)) {
+                            const Vec2 o{std::round(el.rect.x + pad), std::round(el.rect.y + (el.rect.w - lay->size.y) * 0.5f)};
+                            const Vec4 c = th ? th->text : d->textColor;
+                            m_texts.push_back({ei, ci, std::move(*lay), o, d->interactable ? c : mul(c, {1, 1, 1, 0.5f}), {}, px});
+                        }
+                    }
+                    if (el.entity == m_openDropdown && m_popupCount > 0) {  // the list, drawn over everything
+                        for (usize i = 0; i < options.size(); ++i) {
+                            const float y = m_popupRect.y + m_popupItemHeight * static_cast<float>(i);
+                            if (auto lay = textLayout(fontOf(d->font), options[i], d->fontSize * pass.scale, m_popupRect.z, false, UIHAlign::Left))
+                                m_overlayTexts.push_back({std::move(*lay), {std::round(m_popupRect.x + 12.0f * pass.scale), std::round(y + (m_popupItemHeight - lay->size.y) * 0.5f)},
+                                                          th ? th->text : d->textColor});
+                        }
+                    }
+                }
+                if (const auto* tb = reg.tryGet<UITabsComponent>(el.entity)) {  // tab names, centered in their tab
+                    const auto names = splitList(tb->tabs);
+                    const float h = std::min(tb->headerHeight * pass.scale, el.rect.w), tw = names.empty() ? 0.0f : el.rect.z / static_cast<float>(names.size());
+                    for (usize i = 0; i < names.size(); ++i)
+                        if (auto lay = textLayout(fontOf(tb->font), names[i], tb->fontSize * pass.scale, tw, false, UIHAlign::Center)) {
+                            const Vec2 o{std::round(el.rect.x + tw * static_cast<float>(i)), std::round(el.rect.y + (h - lay->size.y) * 0.5f)};
+                            m_texts.push_back({ei, ci, std::move(*lay), o, th ? th->text : tb->textColor, {}, tb->fontSize * pass.scale});
+                        }
+                }
+            }
+        }
+        if (m_tooltipVisible && reg.valid(m_tooltipEntity)) {
+            if (const auto* tip = reg.tryGet<UITooltipComponent>(m_tooltipEntity)) {
+                float scale = 1.0f;
+                const UITheme* th = nullptr;
+                for (const CanvasPass& pass : m_passes)
+                    if (pass.canvas == canvasOf(m_tooltipEntity)) scale = pass.scale, th = pass.theme;
+                const std::string& font = th && !th->font.empty() ? th->font : std::string("assets://fonts/Inter-Regular.ttf");
+                if (auto lay = textLayout(font, tip->text, 24.0f * scale, 420.0f * scale, true, UIHAlign::Left))
+                    m_overlayTexts.push_back({std::move(*lay), {std::round(m_tooltipPos.x + 18.0f * scale), std::round(m_tooltipPos.y + 26.0f * scale)},
+                                              th ? th->text : Vec4{1, 1, 1, 1}});
             }
         }
         if (!m_fonts.overflowed()) break;
@@ -675,22 +1039,34 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
     }
     m_fonts.flush();
 
-    // Pass 2: geometry in painter's order (element, then its text, then its children).
+    // Pass 2: geometry in painter's order (element, then its texts, then its children).
+    auto drawText = [&](const PendingText& pt) {
+        const u32 base = packColor(pt.color);
+        const float boldOffset = std::max(1.0f, std::round(pt.pixelSize * 0.045f));
+        for (const TextGlyph& g : pt.layout.glyphs) {
+            const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
+            const u32 color = st && st->hasColor ? packColor({st->color.x, st->color.y, st->color.z, st->color.w * pt.color.w}) : base;
+            emit(out, pt.origin + g.min, pt.origin + g.max, g.uv, color, m_fonts.texture());
+            if (st && st->bold) emit(out, pt.origin + g.min + Vec2{boldOffset, 0.0f}, pt.origin + g.max + Vec2{boldOffset, 0.0f}, g.uv, color, m_fonts.texture());
+            if (st && st->underline) {
+                const float y = pt.origin.y + g.baseline + std::max(1.0f, pt.pixelSize * 0.08f), t = std::max(1.0f, pt.pixelSize * 0.06f);
+                emit(out, {pt.origin.x + g.min.x, y}, {pt.origin.x + g.min.x + g.advance, y + t}, {0, 0, 1, 1}, color, {});
+            }
+        }
+    };
     usize ti = 0;
     for (usize ci = 0; ci < m_passes.size(); ++ci) {
         const CanvasPass& pass = m_passes[ci];
         for (usize ei = 0; ei < pass.elements.size(); ++ei) {
             const Element& el = pass.elements[ei];
             m_clip = el.clip;
-            drawElement(scene, el, pass.scale, out);
+            drawElement(scene, el, pass.scale, pass.theme, out);
             float caretX = el.rect.x + 4.0f * pass.scale;
             for (; ti < m_texts.size() && m_texts[ti].canvas == ci && m_texts[ti].element == ei; ++ti) {
                 const PendingText& pt = m_texts[ti];
-                const u32 color = packColor(reg.get<UITextComponent>(el.entity).color);
-                for (const TextGlyph& g : pt.layout.glyphs) {
-                    emit(out, pt.origin + g.min, pt.origin + g.max, g.uv, color, m_fonts.texture());
-                    caretX = std::max(caretX, pt.origin.x + g.max.x + 2.0f);
-                }
+                drawText(pt);
+                for (const TextGlyph& g : pt.layout.glyphs)
+                    if (g.max.x > g.min.x) caretX = std::max(caretX, pt.origin.x + g.max.x + 2.0f);
             }
             if (el.entity == m_focusedField && std::fmod(m_caretClock.elapsedSeconds(), 1.0) < 0.55) {  // blinking caret
                 const auto* f = reg.tryGet<UIInputFieldComponent>(el.entity);
@@ -709,6 +1085,34 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             }
         }
         m_clip = {-1e9f, -1e9f, 2e9f, 2e9f};
+    }
+    // Over everything: the open drop-down list, then the tooltip.
+    usize oi = 0;
+    if (!m_openDropdown.isNull() && m_popupCount > 0 && reg.valid(m_openDropdown)) {
+        if (const auto* d = reg.tryGet<UIDropdownComponent>(m_openDropdown)) {
+            const UITheme* th = m_popupTheme;
+            const Vec4 r = m_popupRect;
+            emit(out, {r.x, r.y}, {r.x + r.z, r.y + r.w}, {0, 0, 1, 1}, packColor(th ? th->panel : d->listColor), {});
+            const Vec4 hi = th ? th->accent : d->highlightColor;
+            auto band = [&](i32 i, Vec4 c) {
+                const float y = r.y + m_popupItemHeight * static_cast<float>(i);
+                emit(out, {r.x, y}, {r.x + r.z, y + m_popupItemHeight}, {0, 0, 1, 1}, packColor(c), {});
+            };
+            if (d->selected >= 0 && d->selected < m_popupCount) band(d->selected, {hi.x, hi.y, hi.z, hi.w * 0.3f});
+            if (m_popupHover >= 0 && m_popupHover < m_popupCount) band(m_popupHover, {hi.x, hi.y, hi.z, hi.w * 0.6f});
+            for (; oi < m_overlayTexts.size() && oi < static_cast<usize>(m_popupCount); ++oi)
+                drawText({0, 0, std::move(m_overlayTexts[oi].layout), m_overlayTexts[oi].origin, m_overlayTexts[oi].color, {}, 0.0f});
+        }
+    }
+    for (; oi < m_overlayTexts.size(); ++oi) {  // tooltip: a box around its text
+        OverlayText& ot = m_overlayTexts[oi];
+        const float pad = 8.0f;
+        Vec4 panel{0.08f, 0.09f, 0.11f, 0.95f};
+        for (const CanvasPass& pass : m_passes)
+            if (pass.canvas == canvasOf(m_tooltipEntity) && pass.theme) panel = pass.theme->panel;
+        emit(out, {ot.origin.x - pad, ot.origin.y - pad}, {ot.origin.x + ot.layout.size.x + pad, ot.origin.y + ot.layout.size.y + pad}, {0, 0, 1, 1},
+             packColor(panel), {});
+        drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f});
     }
     m_stats.quads = static_cast<u32>(out.indices.size() / 6);
     m_stats.texts = static_cast<u32>(m_texts.size());

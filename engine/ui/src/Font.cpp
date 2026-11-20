@@ -161,6 +161,7 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
         u32 cp;
         const Glyph* g;
         float x;  // pen position within the line, before alignment
+        u32 source;
     };
     TextLayout out;
     std::vector<Item> line;
@@ -173,9 +174,11 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
         const float baseline = y + ascent;
         for (usize i = 0; i < count; ++i) {
             const Item& it = line[i];
-            if (!it.g->valid || it.g->w <= 0.0f) continue;
+            if (!it.g->valid) continue;
             const float gx = std::round(offset + it.x + it.g->x0), gy = baseline + it.g->y0;
-            out.glyphs.push_back({{gx, gy}, {gx + it.g->w, gy + it.g->h}, it.g->uv});
+            // Empty glyphs (spaces) are kept with a zero size: underlines need their advance.
+            const float w = it.g->w > 0.0f ? it.g->w : 0.0f, h = it.g->w > 0.0f ? it.g->h : 0.0f;
+            out.glyphs.push_back({{gx, gy}, {gx + w, gy + h}, it.g->uv, it.source, baseline, it.g->advance});
         }
         out.size.x = std::max(out.size.x, width);
         y += lineHeight;
@@ -183,6 +186,7 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
     };
 
     usize i = 0;
+    u32 source = 0;
     float pen = 0.0f;
     int prevGlyph = -1;
     usize lastSpace = SIZE_MAX;  // index in `line` of the last space (break opportunity)
@@ -208,6 +212,7 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
     };
     while (i < text.size()) {
         const u32 cp = nextCodepoint(text, i);
+        const u32 index = source++;
         if (cp == '\r') continue;
         if (cp == '\n') {
             emitLine(line.size(), lineWidth(line.size()));
@@ -224,7 +229,7 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
             else breakLine(line.size(), line.size());                        // word longer than the box
             if (prevGlyph >= 0) pen += static_cast<float>(stbtt_GetGlyphKernAdvance(&f.info, prevGlyph, g.index)) * scale;
         }
-        line.push_back({cp, &g, pen});
+        line.push_back({cp, &g, pen, index});
         if (cp == ' ') lastSpace = line.size() - 1;
         pen += g.advance;
         prevGlyph = g.index;

@@ -27,6 +27,9 @@ struct UICanvasComponent {
     /// Arrow keys / gamepad D-pad move a highlight between its buttons, toggles, sliders and
     /// fields; Enter / Space / gamepad A activates (menus playable without a pointer).
     bool keyboardNavigation = false;
+    /// Look of every control inside (.agrtheme): colors of buttons, sliders, toggles, bars,
+    /// lists, tabs and tooltips, the font of the texts and the color of the white ones.
+    std::string theme;
 };
 
 /// Rectangle of a UI element relative to its parent (Unity-like RectTransform).
@@ -70,6 +73,9 @@ struct UITextComponent {
     UIVAlign vAlign = UIVAlign::Middle;
     bool wrap = true;          ///< Breaks lines at the rectangle's width.
     float lineSpacing = 1.0f;
+    /// Inline tags: [color=#ff8800] or [color=red]...[/color], [b]...[/b] (bold), [u]...[/u]
+    /// (underline); write [[ for a literal [.
+    bool richText = false;
 };
 
 /// Clickable element. Tints the UIImage of the entity by state. A click calls
@@ -93,6 +99,7 @@ struct UISliderComponent {
     float maxValue = 1.0f;
     bool wholeNumbers = false;
     bool interactable = true;
+    bool vertical = false;  ///< Bottom = minValue, top = maxValue.
     math::Vec4 trackColor{0.16f, 0.18f, 0.22f, 1.0f};
     math::Vec4 fillColor{0.98f, 0.55f, 0.16f, 1.0f};
     math::Vec4 handleColor{1.0f, 1.0f, 1.0f, 1.0f};
@@ -154,6 +161,58 @@ struct UILayoutComponent {
     UIAlign childAlignment = UIAlign::Start;          ///< Across the main axis (and along it for Grid rows).
     bool expandChildren = false;                      ///< Children fill the cross axis.
     math::Vec2 cellSize{100.0f, 100.0f};              ///< Grid.
+};
+
+enum class UIFillDirection : i32 { LeftToRight = 0, RightToLeft = 1, BottomToTop = 2, TopToBottom = 3 };
+
+/// Progress / health / loading bar: the fill covers (value - min) / (max - min) of the element.
+struct UIProgressBarComponent {
+    float value = 0.5f;
+    float minValue = 0.0f;
+    float maxValue = 1.0f;
+    UIFillDirection direction = UIFillDirection::LeftToRight;
+    math::Vec4 backgroundColor{0.16f, 0.18f, 0.22f, 1.0f};
+    math::Vec4 fillColor{0.35f, 0.85f, 0.35f, 1.0f};
+    float inset = 3.0f;  ///< Canvas units between the frame and the fill.
+};
+
+/// Drop-down list (option button): shows the selected option; a click opens the list of
+/// `options` (separated by ';') over everything; choosing one calls onValueChanged(index) on
+/// the entity's script and target:message(dropdown, index).
+struct UIDropdownComponent {
+    std::string options = "Option 1;Option 2;Option 3";
+    i32 selected = 0;
+    bool interactable = true;
+    std::string font = "assets://fonts/Inter-Regular.ttf";
+    float fontSize = 28.0f;
+    math::Vec4 boxColor{0.16f, 0.18f, 0.22f, 1.0f};
+    math::Vec4 listColor{0.11f, 0.12f, 0.15f, 0.98f};
+    math::Vec4 highlightColor{0.98f, 0.55f, 0.16f, 1.0f};
+    math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Tab container: a row of tabs (`tabs` separated by ';') over pages; page i is the i-th child
+/// with a UIRect, laid out in the area under the tabs; only the current one is shown. A click on
+/// a tab calls onValueChanged(index) and target:message(tabs, index).
+struct UITabsComponent {
+    std::string tabs = "Tab 1;Tab 2";
+    i32 current = 0;
+    float headerHeight = 56.0f;
+    std::string font = "assets://fonts/Inter-Regular.ttf";
+    float fontSize = 26.0f;
+    math::Vec4 headerColor{0.11f, 0.12f, 0.15f, 1.0f};
+    math::Vec4 activeColor{0.98f, 0.55f, 0.16f, 1.0f};
+    math::Vec4 textColor{1.0f, 1.0f, 1.0f, 1.0f};
+    ecs::Entity target;
+    std::string message;
+};
+
+/// Text shown in a small box near the pointer after it rests `delay` seconds on the element.
+struct UITooltipComponent {
+    std::string text = "Tooltip";
+    float delay = 0.6f;
 };
 
 /// Registers the reflection data (idempotent).

@@ -13,6 +13,9 @@ namespace agr {
 struct TextGlyph {
     math::Vec2 min, max;  ///< Pixels, relative to the top-left corner of the text block.
     math::Vec4 uv;        ///< u0, v0, u1, v1 in the glyph atlas.
+    u32 source = 0;       ///< Index of its code point in the text (rich text styles).
+    float baseline = 0.0f;  ///< Baseline of its line (underlines).
+    float advance = 0.0f;   ///< Pen advance (underlines span the spaces too).
 };
 
 struct TextLayout {

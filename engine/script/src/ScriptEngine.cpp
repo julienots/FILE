@@ -361,6 +361,8 @@ void ScriptEngine::dispatchUI(Scene& scene, const UIValueChangedEvent& e) {
     if (const auto* sl = scene.registry().tryGet<UISliderComponent>(e.entity))
         m->callOn(scene, sl->target, sl->message, e.entity, true, e.value);
     if (const auto* t = scene.registry().tryGet<UIToggleComponent>(e.entity)) m->callOn(scene, t->target, t->message, e.entity, true, e.value);
+    if (const auto* d = scene.registry().tryGet<UIDropdownComponent>(e.entity)) m->callOn(scene, d->target, d->message, e.entity, true, e.value);
+    if (const auto* t = scene.registry().tryGet<UITabsComponent>(e.entity)) m->callOn(scene, t->target, t->message, e.entity, true, e.value);
 }
 
 void ScriptEngine::dispatchUI(Scene& scene, const UITextEvent& e) {

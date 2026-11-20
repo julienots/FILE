@@ -160,6 +160,7 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Sortie absente (serveur, CI) : mixage silencieux en temps réel ; arrière-plan mobile : sortie suspendue | ✅ | testé sous Linux ; Android en phase 8 |
 | Interface : canvas adaptatif (résolution de référence, largeur / hauteur), ancres, pivot, images 9-slice, textes TrueType UTF-8, boutons, curseurs, colonnes / lignes / grilles | ✅ | `agr::ui` |
 | Pointeurs souris et multi-touch (plusieurs boutons maintenus), événements vers les scripts, `pointerOverUI` | ✅ | `UISystem`, `UIPlugin` |
+| Widgets avancés : barres de progression, curseurs verticaux, listes déroulantes, onglets, infobulles, texte enrichi (couleurs, gras, souligné), thèmes `.agrtheme` | ✅ | [UI.md](UI.md) ; tests `tests/test_ui.cpp` |
 | Rendu de l'interface en surimpression (pleine résolution, même avec échelle de rendu / MSAA) sur Vulkan, OpenGL, OpenGL ES | ✅ | `Renderer` (overlay) |
 | Clips de propriétés : courbes (constante, linéaire, lissée, tangentes), tout champ réfléchi, enfants, événements | ✅ | `agr::animation` |
 | Machines à états : paramètres, déclencheurs, conditions, tout état, instant de sortie, fondus, clips de sprite | ✅ | `AnimationSystem` |
