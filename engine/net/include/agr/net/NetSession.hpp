@@ -70,6 +70,14 @@ struct NetEvent {
     std::string data;    ///< Message payload.
 };
 
+/// A game found on the local network by NetSession::discover().
+struct LanGame {
+    Address address;
+    std::string name;
+    u32 players = 0, maxPlayers = 0;
+    f64 lastSeen = 0.0;
+};
+
 struct NetStats {
     u64 packetsSent = 0, packetsReceived = 0, bytesSent = 0, bytesReceived = 0, resent = 0;
 };
@@ -78,7 +86,11 @@ class NetSession {
 public:
     static constexpr u32 kHostId = 1;
     static constexpr u32 kBroadcast = 0;
-    static constexpr usize kMaxPayload = 1200;  ///< Below common MTUs (no fragmentation).
+    static constexpr usize kMaxPayload = 1200;  ///< Unreliable messages: below common MTUs (no fragmentation).
+    /// Reliable messages: split into fragments of kMaxPayload and put back together in order.
+    static constexpr usize kMaxReliable = 256 * 1024;
+    /// Messages starting with this byte go to the system channel (replication, RPC): takeSystemEvents().
+    static constexpr char kSystemTag = '\x01';
 
     NetSession();
     explicit NetSession(std::unique_ptr<NetTransport> transport);
@@ -95,9 +107,22 @@ public:
     /// `now` in seconds (any monotonic clock).
     void update(f64 now);
     /// To one peer, or kBroadcast (host: every client; client: the host). False if too large
-    /// or not connected.
+    /// (unreliable: kMaxPayload, reliable: kMaxReliable) or not connected.
     bool send(u32 peer, std::string_view data, bool reliable);
     std::vector<NetEvent> takeEvents();
+    /// Messages of the system channel (first byte kSystemTag) and the connection events.
+    std::vector<NetEvent> takeSystemEvents();
+
+    // ---- LAN discovery
+    /// Host: answers the discovery requests of the local network with this name.
+    void advertise(std::string name) { m_advertisement = std::move(name); }
+    /// Looks for games hosted on `port` on the local network (broadcast); see lanGames(). Works
+    /// while not hosting or joined (join() and host() stop it).
+    Status discover(u16 port);
+    void stopDiscovery();
+    bool discovering() const { return m_discoverPort != 0; }
+    /// Games that answered (dropped after 5 s without an answer).
+    std::vector<LanGame> lanGames() const;
 
     NetRole role() const { return m_role; }
     /// 1 for the host, the assigned id for a connected client, 0 otherwise.
@@ -122,19 +147,26 @@ private:
         u32 nextSendSeq = 1, nextRecvSeq = 1;
         std::deque<Pending> unacked;
         std::map<u32, std::string> early;  ///< Reliable messages received ahead of order.
+        std::string assembly;  ///< Fragments of a large reliable message received so far.
         bool welcomed = false;
     };
     void sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload);
     void handle(const Address& from, const std::vector<u8>& packet, f64 now);
     Peer* findPeer(const Address& a);
     void drop(u32 id, bool notify);
+    void deliver(Peer& p, std::string_view payload);  ///< Reliable payload in order (fragment header).
+    void push(NetEvent e);                             ///< To the user or the system queue.
 
     std::unique_ptr<NetTransport> m_transport;
     NetRole m_role = NetRole::None;
     u32 m_localId = 0, m_nextId = 2, m_maxPeers = 8;
     u32 m_token = 0;  ///< Random per join: tells a new connection from a stale one.
     std::unordered_map<u32, Peer> m_peers;
-    std::vector<NetEvent> m_events;
+    std::vector<NetEvent> m_events, m_systemEvents;
+    std::string m_advertisement = "AGR game";
+    u16 m_discoverPort = 0;
+    f64 m_lastDiscover = -1.0;
+    std::vector<LanGame> m_lanGames;
     NetStats m_stats;
     f64 m_now = 0.0, m_timeout = 5.0, m_joinStarted = 0.0;
     std::vector<u8> m_buffer;

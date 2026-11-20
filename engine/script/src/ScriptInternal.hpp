@@ -22,6 +22,7 @@
 namespace agr {
 namespace net {
 class NetSession;
+class Replicator;
 }
 class NavigationSystem;
 
@@ -99,6 +100,12 @@ struct ScriptEngine::Impl {
     PhysicsLayers physicsLayers;  ///< Names of assets://physics_layers.json (agr.physics*.layer / mask), refreshed on use.
     NavigationSystem* navigation = nullptr;
     net::NetSession* net = nullptr;
+    net::Replicator* replicator = nullptr;
+    /// Runs `fn` of the entity's script for an RPC. `remote`: checks the script's rpc table
+    /// ("any" / "authority"); returns false when refused or missing.
+    bool invokeRpc(Scene& scene, ecs::Entity e, const std::string& fn, const nlohmann::json& args, u32 sender, bool remote);
+    /// The rpc declaration of a function of the entity's script ("" when none).
+    std::string rpcMode(ecs::Entity e, const std::string& fn);
     std::function<void(std::string)> sceneLoader;
     std::function<void(double)> setTimeScale;  ///< Engine::setTimeScale (agr.time.setScale, hit stop)
     std::function<double()> timeScale;

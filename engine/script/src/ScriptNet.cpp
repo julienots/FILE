@@ -1,6 +1,7 @@
 // agr.net: multiplayer sessions (NetPlugin). Messages are Lua tables sent as JSON.
 #include "ScriptInternal.hpp"
 #include "agr/net/NetSession.hpp"
+#include "agr/net/Replication.hpp"
 
 namespace agr {
 
@@ -96,13 +97,117 @@ int n_poll(lua_State* L) {
     return 1;
 }
 
+net::Replicator* replicatorOf(lua_State* L) { return implOf(L).replicator; }
+net::Replicator& needReplicator(lua_State* L) {
+    net::Replicator* r = replicatorOf(L);
+    if (!r) luaL_error(L, "agr.net: networking is not available (NetPlugin not loaded)");
+    return *r;
+}
+nlohmann::json argsFrom(lua_State* L, int first) {
+    nlohmann::json a = nlohmann::json::array();
+    for (int i = first; i <= lua_gettop(L); ++i) a.push_back(toJson(L, i));
+    return a;
+}
+/// Shared by entity:rpc / rpcTo: sends, and runs here too when the declaration ends with ",local".
+int doRpc(lua_State* L, ecs::Entity e, u32 target, const std::string& fn, int firstArg) {
+    auto& m = implOf(L);
+    const nlohmann::json args = argsFrom(L, firstArg);
+    if (args.dump().size() > 60000) return luaL_error(L, "agr.net: RPC arguments too large");
+    const std::string mode = m.rpcMode(e, fn);
+    if (mode.empty()) return luaL_error(L, "rpc '%s': declare it in the script's rpc table (rpc = { %s = \"any\" })", fn.c_str(), fn.c_str());
+    bool sent = false;
+    if (m.net && m.replicator && m.net->connected()) sent = m.replicator->rpc(sceneOf(L), *m.net, e, fn, args, target);
+    const bool local = mode.find("local") != std::string::npos;
+    if (local && (target == 0 || (m.net && target == m.net->localId()))) {
+        const u32 self = m.net && m.net->connected() ? m.net->localId() : net::NetSession::kHostId;
+        m.invokeRpc(sceneOf(L), e, fn, args, self, false);
+    }
+    lua_pushboolean(L, sent);
+    return 1;
+}
+/// entity:rpc(fn, ...) -> sent: calls fn(...) of this entity's script on every other machine.
+int e_rpc(lua_State* L) { return doRpc(L, checkEntity(L, 1), 0, luaL_checkstring(L, 2), 3); }
+/// entity:rpcTo(peer, fn, ...): on one machine (1 = host).
+int e_rpcTo(lua_State* L) { return doRpc(L, checkEntity(L, 1), static_cast<u32>(luaL_checkinteger(L, 2)), luaL_checkstring(L, 3), 4); }
+int e_owner(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    net::Replicator* r = replicatorOf(L);
+    lua_pushinteger(L, r ? r->ownerOf(sceneOf(L), e) : net::NetSession::kHostId);
+    return 1;
+}
+int e_isOwner(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    auto& m = implOf(L);
+    lua_pushboolean(L, !m.replicator || !m.net || m.replicator->isOwner(sceneOf(L), *m.net, e));
+    return 1;
+}
+/// agr.net.spawn(prefab, x, y, z [, owner]) -> entity (host; offline: a plain instance)
+int n_spawn(lua_State* L) {
+    const std::string prefab = luaL_checkstring(L, 1);
+    const math::Vec3 p{static_cast<float>(luaL_optnumber(L, 2, 0)), static_cast<float>(luaL_optnumber(L, 3, 0)), static_cast<float>(luaL_optnumber(L, 4, 0))};
+    const u32 owner = static_cast<u32>(luaL_optinteger(L, 5, net::NetSession::kHostId));
+    auto e = needReplicator(L).spawn(sceneOf(L), netOf(L), prefab, p, owner);
+    if (!e) return luaL_error(L, "agr.net.spawn: %s", e.error().message.c_str());
+    pushEntity(L, e.value());
+    return 1;
+}
+int n_despawn(lua_State* L) {
+    lua_pushboolean(L, needReplicator(L).despawn(sceneOf(L), netOf(L), checkEntity(L, 1)));
+    return 1;
+}
+int n_setOwner(lua_State* L) {
+    lua_pushboolean(L, needReplicator(L).setOwner(sceneOf(L), netOf(L), checkEntity(L, 1), static_cast<u32>(luaL_checkinteger(L, 2))));
+    return 1;
+}
+/// agr.net.sender(): the player whose RPC is running (0 outside an RPC).
+int n_sender(lua_State* L) {
+    net::Replicator* r = replicatorOf(L);
+    lua_pushinteger(L, r ? r->rpcSender() : 0);
+    return 1;
+}
+int n_advertise(lua_State* L) {
+    netOf(L).advertise(luaL_checkstring(L, 1));
+    return 0;
+}
+int n_discover(lua_State* L) { return pushStatus(L, netOf(L).discover(checkPort(L, 1))); }
+int n_stopDiscovery(lua_State* L) {
+    netOf(L).stopDiscovery();
+    return 0;
+}
+/// agr.net.games() -> { {address = "192.168.1.20", port = 7777, name = "...", players = 2, max = 4}, ... }
+int n_games(lua_State* L) {
+    const auto games = netOf(L).lanGames();
+    lua_createtable(L, static_cast<int>(games.size()), 0);
+    for (usize i = 0; i < games.size(); ++i) {
+        const auto& g = games[i];
+        lua_createtable(L, 0, 5);
+        const std::string addr = g.address.toString();
+        lua_pushstring(L, addr.substr(0, addr.rfind(':')).c_str());
+        lua_setfield(L, -2, "address");
+        lua_pushinteger(L, g.address.port);
+        lua_setfield(L, -2, "port");
+        lua_pushstring(L, g.name.c_str());
+        lua_setfield(L, -2, "name");
+        lua_pushinteger(L, g.players);
+        lua_setfield(L, -2, "players");
+        lua_pushinteger(L, g.maxPlayers);
+        lua_setfield(L, -2, "max");
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    return 1;
+}
+
 } // namespace
 
 void openNetBindings(lua_State* L) {
     static const luaL_Reg funcs[] = {{"host", n_host}, {"join", n_join}, {"leave", n_leave}, {"role", n_role}, {"id", n_id},
                                      {"port", n_port}, {"peers", n_peers}, {"send", n_send}, {"broadcast", n_broadcast},
-                                     {"poll", n_poll}, {nullptr, nullptr}};
+                                     {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
+                                     {"sender", n_sender}, {"advertise", n_advertise}, {"discover", n_discover},
+                                     {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {nullptr, nullptr}};
     addAgrLibrary(L, "net", funcs);
+    static const luaL_Reg methods[] = {{"rpc", e_rpc}, {"rpcTo", e_rpcTo}, {"owner", e_owner}, {"isOwner", e_isOwner}, {nullptr, nullptr}};
+    addEntityMethods(L, methods);
 }
 
 } // namespace agr

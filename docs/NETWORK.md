@@ -44,11 +44,61 @@ dans l'export (permission `INTERNET`).
 Le modèle de jeu **Multijoueur (arène)** montre une partie locale à 2 joueurs sur un clavier, ainsi
 que l'hébergement ou la connexion en réseau avec synchronisation par l'hôte.
 
+## Multijoueur de haut niveau : synchronisation, apparitions, propriétaires, RPC
+
+Par-dessus les messages, `net::Replicator` (dans `NetPlugin`) fait le travail des
+`MultiplayerSynchronizer` / `MultiplayerSpawner` / RPC de Godot :
+
+- **`NetSync`** (composant) : l'entité est tenue à jour sur toutes les machines — son `Transform`
+  (envoyé `rate` fois par seconde, **interpolé** entre les deux derniers états sur les autres
+  machines) et des champs listés dans `fields` (`"Health.value;SpriteRenderer.color"` : nombres,
+  booléens, vecteurs, couleurs, textes). Une entité est la même partout grâce à son identifiant de
+  scène : les scènes se chargent à l'identique, les entités créées en réseau reçoivent le même
+  identifiant sur chaque machine.
+- **Propriétaire** (`owner`, 1 = l'hôte) : seule la machine propriétaire simule l'entité et envoie son
+  état ; l'hôte relaie aux autres clients ce que les clients envoient, et n'accepte l'état d'une entité
+  que de son propriétaire. `agr.net.setOwner(entité, joueur)` (hôte) donne par exemple son vaisseau à
+  chaque joueur ; `entity:owner()`, `entity:isOwner()`. Quand un joueur part, ses entités reviennent
+  à l'hôte.
+- **Apparitions** : `agr.net.spawn("assets://prefabs/rocket.agrprefab", x, y, z [, propriétaire])`
+  (hôte) crée le préfabriqué sur toutes les machines ; `agr.net.despawn(entité)` le détruit partout.
+  Un joueur qui **arrive en cours de partie** reçoit les entités déjà créées et les propriétaires.
+- **RPC** : `self.entity:rpc("fire", x, y)` appelle `fire(x, y)` du script de cette entité sur toutes
+  les autres machines (par l'hôte), `entity:rpcTo(joueur, "fn", ...)` sur une seule (1 = l'hôte) ;
+  fiables et dans l'ordre. **Sécurité** : seules les fonctions déclarées dans la table `rpc` du script
+  peuvent être appelées à distance — `"any"` (n'importe quel joueur) ou `"authority"` (le propriétaire
+  de l'entité ou l'hôte) ; `",local"` en plus les exécute aussi sur la machine qui appelle (et hors
+  ligne). `agr.net.sender()` donne le joueur à l'origine de l'appel en cours.
+
+```lua
+local Ship = { rpc = { fire = "authority,local", chat = "any" } }
+function Ship:onUpdate(dt)
+    if not self.entity:isOwner() then return end   -- les autres machines voient la position synchronisée
+    self.entity:translate(agr.input.value("move_x") * 5 * dt, 0, 0)
+    if agr.input.pressed("fire") then self.entity:rpc("fire", 1) end
+end
+function Ship:fire(power) agr.fx.burst(...) end    -- partout, l'appelant compris
+```
+
+- **Gros messages** : les messages fiables sont découpés et recollés automatiquement (jusqu'à
+  256 Ko) ; les non fiables restent limités à 1200 octets (un datagramme).
+- **Découverte en réseau local** : l'hôte s'annonce (`agr.net.advertise("Partie de Julien")`) ; un
+  joueur cherche avec `agr.net.discover(7777)` puis lit `agr.net.games()` →
+  `{ {address, port, name, players, max}, ... }` (diffusion UDP ; une partie qui ne répond plus
+  depuis 5 s disparaît de la liste), `agr.net.stopDiscovery()`.
+- Le modèle **Multijoueur (arène)** utilise un RPC : les effets d'une pièce ramassée (son, particules,
+  « +1 ») sont joués sur toutes les machines.
+
+Tests (`tests/test_net.cpp`, `tests/test_script.cpp`) : 3 machines en mémoire avec 10 % de pertes —
+position et champs synchronisés, entité donnée à un client puis relayée à l'autre, apparition reçue
+par un joueur arrivé après, RPC client → tous (relayé avec le vrai expéditeur), hôte → un joueur,
+client → hôte, disparition partout, propriétés rendues à l'hôte au départ d'un joueur ; message de
+10 Ko fragmenté avec 30 % de pertes ; découverte ; permissions des RPC.
+
 ## Limites actuelles
 
 - IPv4 uniquement ; pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
-  ouvrir son port UDP) ; pas de découverte automatique des parties du réseau local.
+  ouvrir son port UDP) ; pas de WebSocket / WebRTC (pas encore d'export Web).
 - Pas de chiffrement ni d'authentification : ne pas transmettre de données sensibles.
-- Pas de prédiction / réconciliation côté client ni d'interpolation intégrées : le jeu les écrit en
-  Lua s'il en a besoin (le modèle Multijoueur lisse les positions reçues).
-- Messages de 1200 octets au plus (pas de fragmentation).
+- Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de
+  compensation de latence ; pas de « visibilité » par joueur (tout est envoyé à tous).

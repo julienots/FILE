@@ -31,7 +31,9 @@ constexpr usize kHeader = 4 + 1 + 4 + 4 + 4;  // magic, type, sender, seq, token
 constexpr f64 kResendInterval = 0.2, kPingInterval = 0.5, kHelloInterval = 0.25;
 constexpr usize kMaxEarly = 256, kMaxUnacked = 1024;
 
-enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8 };
+enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8, Discover = 9, Info = 10 };
+// First byte of every reliable payload: a whole message, or a fragment of a large one.
+constexpr char kWhole = 'M', kFragment = 'F', kLastFragment = 'L';
 
 void putU32(std::string& out, u32 v) {
     for (int i = 0; i < 4; ++i) out.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
@@ -98,6 +100,8 @@ Status UdpTransport::open(u16 port) {
         closeSocket(s);
         return makeError(Error::Code::IOError, std::format("cannot use UDP port {}: {}", port, err));
     }
+    int yes = 1;  // LAN discovery sends to the broadcast address
+    setsockopt(static_cast<decltype(::socket(0, 0, 0))>(s), SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&yes), sizeof yes);
 #if defined(_WIN32)
     u_long nonBlocking = 1;
     ioctlsocket(static_cast<SOCKET>(s), FIONBIO, &nonBlocking);
@@ -153,6 +157,7 @@ NetSession::~NetSession() { close(); }
 
 Status NetSession::host(u16 port, u32 maxPeers) {
     close();
+    stopDiscovery();
     if (Status s = m_transport->open(port); !s) return s;
     m_role = NetRole::Host;
     m_localId = kHostId;
@@ -164,6 +169,7 @@ Status NetSession::host(u16 port, u32 maxPeers) {
 
 Status NetSession::join(std::string_view address, u16 port) {
     close();
+    stopDiscovery();
     auto addr = Address::resolve(address, port);
     if (!addr) return addr.error();
     if (Status s = m_transport->open(0); !s) return s;
@@ -173,7 +179,7 @@ Status NetSession::join(std::string_view address, u16 port) {
     Peer host;
     host.id = kHostId;
     host.address = addr.value();
-    host.lastHeard = m_now;
+    host.lastHeard = -1.0;  // set by the next update: the session's clock may be stale until then
     host.lastPing = -1.0;
     m_peers[kHostId] = std::move(host);
     m_joinStarted = m_now;
@@ -211,9 +217,36 @@ NetSession::Peer* NetSession::findPeer(const Address& a) {
     return nullptr;
 }
 
+void NetSession::push(NetEvent e) {
+    if (e.type != NetEvent::Type::Message) {  // both sides need to know who is there
+        m_systemEvents.push_back(e);
+        m_events.push_back(std::move(e));
+    } else if (!e.data.empty() && e.data[0] == kSystemTag) {
+        m_systemEvents.push_back(std::move(e));
+    } else {
+        m_events.push_back(std::move(e));
+    }
+}
+
+void NetSession::deliver(Peer& p, std::string_view payload) {
+    if (payload.empty()) return;
+    const char kind = payload[0];
+    payload.remove_prefix(1);
+    if (kind == kWhole) {
+        push({NetEvent::Type::Message, p.id, std::string(payload)});
+    } else if (kind == kFragment || kind == kLastFragment) {
+        if (p.assembly.size() + payload.size() > kMaxReliable) {  // corrupt or hostile: forget it
+            p.assembly.clear();
+            return;
+        }
+        p.assembly.append(payload);
+        if (kind == kLastFragment) push({NetEvent::Type::Message, p.id, std::exchange(p.assembly, {})});
+    }
+}
+
 void NetSession::drop(u32 id, bool notify) {
     if (m_peers.erase(id) == 0) return;
-    if (notify) m_events.push_back({NetEvent::Type::Disconnected, id, {}});
+    if (notify) push({NetEvent::Type::Disconnected, id, {}});
     if (m_role == NetRole::Client && id == kHostId) {  // lost the host: the session is over
         m_localId = 0;
         m_role = NetRole::None;
@@ -222,7 +255,7 @@ void NetSession::drop(u32 id, bool notify) {
 }
 
 bool NetSession::send(u32 peer, std::string_view data, bool reliable) {
-    if (data.size() > kMaxPayload || !connected()) return false;
+    if (data.size() > (reliable ? kMaxReliable : kMaxPayload) || !connected()) return false;
     std::vector<u32> targets;
     if (peer == kBroadcast) {
         for (const auto& [id, p] : m_peers)
@@ -241,9 +274,19 @@ bool NetSession::send(u32 peer, std::string_view data, bool reliable) {
             drop(id, true);
             continue;
         }
-        Pending m{p.nextSendSeq++, std::string(data), m_now};
-        sendPacket(p, Reliable, m.seq, m.data);
-        p.unacked.push_back(std::move(m));
+        // Fragments of kMaxPayload - 1 bytes (one byte of header each), sent in order.
+        constexpr usize kChunk = kMaxPayload - 1;
+        usize at = 0;
+        do {
+            const usize n = std::min(kChunk, data.size() - at);
+            const bool last = at + n >= data.size();
+            std::string chunk(1, data.size() <= kChunk ? kWhole : last ? kLastFragment : kFragment);
+            chunk.append(data.substr(at, n));
+            Pending m{p.nextSendSeq++, std::move(chunk), m_now};
+            sendPacket(p, Reliable, m.seq, m.data);
+            p.unacked.push_back(std::move(m));
+            at += n;
+        } while (at < data.size());
     }
     return !targets.empty();
 }
@@ -254,6 +297,29 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
     const u32 sender = getU32(packet.data() + 5), seq = getU32(packet.data() + 9), token = getU32(packet.data() + 13);
     const std::string_view payload(reinterpret_cast<const char*>(packet.data() + kHeader), packet.size() - kHeader);
     Peer* p = findPeer(from);
+
+    // LAN discovery: anyone may ask a host; answers are recorded while discovering.
+    if (type == Discover) {
+        if (m_role == NetRole::Host) {
+            Peer tmp;
+            tmp.address = from;
+            std::string body;
+            putU32(body, static_cast<u32>(m_peers.size() + 1));
+            putU32(body, m_maxPeers + 1);
+            body += m_advertisement.substr(0, 200);
+            sendPacket(tmp, Info, 0, body);
+        }
+        return;
+    }
+    if (type == Info) {
+        if (m_discoverPort == 0 || payload.size() < 8) return;
+        const auto* b = reinterpret_cast<const u8*>(payload.data());
+        LanGame g{from, std::string(payload.substr(8)), getU32(b), getU32(b + 4), now};
+        auto it = std::find_if(m_lanGames.begin(), m_lanGames.end(), [&](const LanGame& x) { return x.address == from; });
+        if (it == m_lanGames.end()) m_lanGames.push_back(std::move(g));
+        else *it = std::move(g);
+        return;
+    }
 
     if (m_role == NetRole::Host && type == Hello) {
         if (p) {  // same address: an answer to a repeated hello (our welcome was lost)
@@ -279,7 +345,7 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
         putU32(body, token);
         sendPacket(np, Welcome, np.id, body);
         AGR_LOG_INFO("Net", "player {} joined from {}", np.id, from.toString());
-        m_events.push_back({NetEvent::Type::Connected, np.id, {}});
+        push({NetEvent::Type::Connected, np.id, {}});
         m_peers[np.id] = std::move(np);
         return;
     }
@@ -296,7 +362,7 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
             m_localId = seq;
             p->welcomed = true;
             AGR_LOG_INFO("Net", "joined as player {}", m_localId);
-            m_events.push_back({NetEvent::Type::Connected, kHostId, {}});
+            push({NetEvent::Type::Connected, kHostId, {}});
         }
         return;
     }
@@ -304,7 +370,7 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
     if (m_role == NetRole::Host && sender != p->id) return;
     p->lastHeard = now;
     switch (type) {
-        case Data: m_events.push_back({NetEvent::Type::Message, p->id, std::string(payload)}); break;
+        case Data: push({NetEvent::Type::Message, p->id, std::string(payload)}); break;
         case Reliable: {
             sendPacket(*p, Ack, seq, {});
             if (seq < p->nextRecvSeq) break;  // duplicate (our ack was lost)
@@ -312,10 +378,10 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
                 if (p->early.size() < kMaxEarly) p->early.emplace(seq, std::string(payload));
                 break;
             }
-            m_events.push_back({NetEvent::Type::Message, p->id, std::string(payload)});
+            deliver(*p, payload);
             ++p->nextRecvSeq;
             for (auto it = p->early.find(p->nextRecvSeq); it != p->early.end(); it = p->early.find(p->nextRecvSeq)) {
-                m_events.push_back({NetEvent::Type::Message, p->id, std::move(it->second)});
+                deliver(*p, it->second);
                 p->early.erase(it);
                 ++p->nextRecvSeq;
             }
@@ -334,6 +400,18 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
 
 void NetSession::update(f64 now) {
     m_now = now;
+    if (m_discoverPort != 0 && m_role == NetRole::None) {
+        if (m_lastDiscover < 0.0 || now - m_lastDiscover >= 1.0) {  // ask again every second
+            Peer everyone;
+            everyone.address = {0xFFFFFFFFu, m_discoverPort};
+            sendPacket(everyone, Discover, 0, {});
+            m_lastDiscover = now;
+        }
+        Address from;
+        while (m_transport && m_transport->receive(from, m_buffer)) handle(from, m_buffer, now);
+        std::erase_if(m_lanGames, [&](const LanGame& g) { return now - g.lastSeen > 5.0; });
+        return;
+    }
     if (m_role == NetRole::None) return;
     Address from;
     while (m_transport && m_transport->receive(from, m_buffer)) {
@@ -344,6 +422,7 @@ void NetSession::update(f64 now) {
     }
     std::vector<u32> silent;
     for (auto& [id, p] : m_peers) {
+        if (p.lastHeard < 0.0) p.lastHeard = now;
         if (now - p.lastHeard > m_timeout) {
             silent.push_back(id);
             continue;
@@ -373,6 +452,26 @@ void NetSession::update(f64 now) {
 }
 
 std::vector<NetEvent> NetSession::takeEvents() { return std::exchange(m_events, {}); }
+std::vector<NetEvent> NetSession::takeSystemEvents() { return std::exchange(m_systemEvents, {}); }
+
+Status NetSession::discover(u16 port) {
+    if (m_role != NetRole::None) return makeError(Error::Code::InvalidArgument, "discovery needs a session that is not hosting or joined");
+    if (m_discoverPort == 0)
+        if (Status s = m_transport->open(0); !s) return s;
+    m_discoverPort = port;
+    m_lastDiscover = -1.0;
+    m_lanGames.clear();
+    return {};
+}
+
+void NetSession::stopDiscovery() {
+    if (m_discoverPort == 0) return;
+    m_discoverPort = 0;
+    m_lanGames.clear();
+    if (m_role == NetRole::None && m_transport) m_transport->close();
+}
+
+std::vector<LanGame> NetSession::lanGames() const { return m_lanGames; }
 
 std::vector<u32> NetSession::peers() const {
     std::vector<u32> out;

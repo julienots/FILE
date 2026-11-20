@@ -3,10 +3,20 @@
 --  * « Héberger » : cette machine est l'hôte (port 7777) ; elle simule la partie et l'envoie
 --    aux autres 20 fois par seconde. « Rejoindre » : se connecte à l'adresse enregistrée dans la
 --    sauvegarde (clé « arena.address », 127.0.0.1 par défaut) ; envoie seulement ses commandes.
--- Jusqu'à 4 joueurs en réseau. Voir docs/NETWORK.md.
+-- Jusqu'à 4 joueurs en réseau. Les effets d'une pièce ramassée passent par un RPC (coinFx).
+-- Voir docs/NETWORK.md.
 local G = require("assets://games/scripts/common.lua")
 
-local Arena = { properties = { speed = 6, port = 7777, target = 10, halfW = 9.6, halfH = 4.6, radius = 0.55, sendRate = 20 } }
+local Arena = { properties = { speed = 6, port = 7777, target = 10, halfW = 9.6, halfH = 4.6, radius = 0.55, sendRate = 20 },
+                -- Functions other machines may call (entity:rpc): the host's coin effects, also run here.
+                rpc = { coinFx = "authority,local" } }
+
+-- Sound and effects of a picked-up coin, on every machine (an RPC from the host).
+function Arena:coinFx(x, y)
+    agr.audio.play("assets://audio/coin.wav")
+    agr.fx.burst(x, 0.6, y, { count = 20, color = { 1, 0.85, 0.3 }, speed = 4, life = 0.5, spread = "up" })
+    agr.fx.popup(x, 1.2, y, "+1", { color = { 1, 0.9, 0.4 }, size = 48 })
+end
 
 function Arena:onStart()
     self.mode = "local"
@@ -132,9 +142,7 @@ function Arena:simulate(dt)
     for i, p in ipairs(self.players) do
         if p.active and G.distance(p.x, p.y, self.coinX, self.coinY) < self.radius + 0.35 then
             p.score = p.score + 1
-            agr.audio.play("assets://audio/coin.wav")
-            agr.fx.burst(self.coinX, 0.6, self.coinY, { count = 20, color = { 1, 0.85, 0.3 }, speed = 4, life = 0.5, spread = "up" })
-            agr.fx.popup(self.coinX, 1.2, self.coinY, "+1", { color = { 1, 0.9, 0.4 }, size = 48 })
+            self.entity:rpc("coinFx", self.coinX, self.coinY)  -- here and on the clients
             self:moveCoin()
             if p.score >= self.target then
                 self.winner = i

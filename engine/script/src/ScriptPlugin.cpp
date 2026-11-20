@@ -67,6 +67,7 @@ void ScriptPlugin::onUnload(Engine& engine) {
     engine.events().unsubscribe(m_uiTexts);
     engine.events().unsubscribe(m_animEvents);
     engine.registerService<ScriptPlugin>(nullptr);
+    if (auto* net = engine.service<NetPlugin>()) net->replicator().setRpcHandler(nullptr);
     m_scripts.reset();
     m_engine = nullptr;
 }
@@ -87,6 +88,11 @@ void ScriptPlugin::bindPhysics(Engine& engine) {
     m_scripts->setAnimation(anim ? &anim->animation() : nullptr);
     m_net = engine.service<NetPlugin>();
     m_scripts->setNet(m_net ? &m_net->session() : nullptr);
+    m_scripts->setReplicator(m_net ? &m_net->replicator() : nullptr);
+    if (m_net)
+        m_net->replicator().setRpcHandler([this](Scene& scene, ecs::Entity e, const std::string& fn, const nlohmann::json& args, u32 sender) {
+            if (m_scripts) m_scripts->callRpc(scene, e, fn, args.dump(), sender);
+        });
 }
 
 void ScriptPlugin::setRunning(bool running) {

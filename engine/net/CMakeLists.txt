@@ -2,6 +2,7 @@ agr_add_module(net
     SOURCES
         src/NetSession.cpp
         src/NetPlugin.cpp
+        src/Replication.cpp
     PUBLIC_DEPS
         agr::runtime)
 if(WIN32)

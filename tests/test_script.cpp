@@ -17,6 +17,7 @@
 #include "agr/scene/Prefab.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/net/NetSession.hpp"
+#include "agr/net/Replication.hpp"
 #include <nlohmann/json.hpp>
 
 using namespace agr;
@@ -660,6 +661,38 @@ TEST_CASE("mobile API: local save, device services, motion sensors") {
     CHECK(f.scripts.run("local x, y, z = agr.input.accelerometer(); assert(math.abs(y + 9.81) < 1e-4 and z == 0.5)"));
 }
 
+
+TEST_CASE("RPCs from scripts: declared functions only, authority, local calls, sender") {
+    ScriptFixture f;
+    net::registerNetComponents();
+    net::Replicator rep;
+    f.scripts.setReplicator(&rep);
+    f.write("assets://s/ship.lua", R"lua(
+local S = { rpc = { fire = "any,local", hit = "authority", secret = false } }
+function S:onStart() self.log = "" end
+function S:fire(n) self.log = self.log .. "fire" .. n .. "/" .. agr.net.sender() .. ";" end
+function S:hit(d) self.log = self.log .. "hit" .. d .. ";" end
+function S:secret() self.log = self.log .. "secret;" end
+function S:shoot() self.sent = self.entity:rpc("fire", 3) end
+return S
+)lua");
+    const auto e = f.scripted("Ship", "assets://s/ship.lua");
+    f.scene.registry().emplace<net::NetSyncComponent>(e).owner = 3;
+    f.update();
+    // Offline: a ",local" RPC runs here at once.
+    CHECK(f.scripts.run("agr.find('Ship'):rpc('fire', 7)", &f.scene));
+    CHECK(f.scripts.field(e, "log").value() == "fire7/0;");
+    CHECK_FALSE(f.scripts.run("agr.find('Ship'):rpc('nope')", &f.scene));  // not declared
+    CHECK(f.scripts.run("assert(agr.find('Ship'):owner() == 3)", &f.scene));
+    // Received from the network: declared only, "authority" from the owner or the host.
+    CHECK(f.scripts.callRpc(f.scene, e, "fire", "[1]", 2));
+    CHECK_FALSE(f.scripts.callRpc(f.scene, e, "secret", "[]", 1));
+    CHECK_FALSE(f.scripts.callRpc(f.scene, e, "onStart", "[]", 1));
+    CHECK_FALSE(f.scripts.callRpc(f.scene, e, "hit", "[5]", 2));  // player 2 does not own it
+    CHECK(f.scripts.callRpc(f.scene, e, "hit", "[5]", 3));        // its owner
+    CHECK(f.scripts.callRpc(f.scene, e, "hit", "[6]", 1));        // the host
+    CHECK(f.scripts.field(e, "log").value() == "fire7/0;fire1/0;hit5;hit6;");
+}
 }  // TEST_SUITE
 
 TEST_CASE("agr.instantiate spawns prefab instances whose scripts run") {

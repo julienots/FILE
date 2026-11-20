@@ -8,6 +8,8 @@
 #include "agr/core/Log.hpp"
 #include "agr/core/Profiler.hpp"
 #include "agr/script/ScriptComponent.hpp"
+#include "agr/net/Replication.hpp"
+#include "agr/net/NetSession.hpp"
 
 namespace agr {
 
@@ -172,6 +174,58 @@ void ScriptEngine::setPhysics2D(Physics2DWorld* world) { m->physics2d = world; }
 void ScriptEngine::setPhysics3D(Physics3DWorld* world) { m->physics3d = world; }
 void ScriptEngine::setNavigation(NavigationSystem* navigation) { m->navigation = navigation; }
 void ScriptEngine::setNet(net::NetSession* session) { m->net = session; }
+void ScriptEngine::setReplicator(net::Replicator* replicator) { m->replicator = replicator; }
+
+std::string ScriptEngine::Impl::rpcMode(ecs::Entity e, const std::string& fn) {
+    auto it = instances.find(e.packed());
+    if (it == instances.end() || it->second.ref == LUA_NOREF) return {};
+    const int top = lua_gettop(L);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, it->second.ref);
+    lua_getfield(L, -1, "rpc");  // the script's declarations (through the class)
+    std::string mode;
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, fn.c_str());
+        if (lua_isstring(L, -1)) mode = lua_tostring(L, -1);
+        else if (lua_toboolean(L, -1)) mode = "any";
+    }
+    lua_settop(L, top);
+    return mode;
+}
+
+bool ScriptEngine::Impl::invokeRpc(Scene& sc, ecs::Entity e, const std::string& fn, const nlohmann::json& args, u32 sender, bool remote) {
+    auto it = instances.find(e.packed());
+    if (it == instances.end() || !it->second.started) return false;
+    if (remote) {
+        const std::string mode = rpcMode(e, fn);
+        if (mode.empty()) {
+            AGR_LOG_WARN("Script", "RPC '{}' refused: not declared in the rpc table of {}", fn, it->second.uri);
+            return false;
+        }
+        if (mode.rfind("authority", 0) == 0 && replicator) {
+            const u32 owner = replicator->ownerOf(sc, e);
+            if (sender != owner && sender != net::NetSession::kHostId) {
+                AGR_LOG_WARN("Script", "RPC '{}' refused: player {} is not the owner ({})", fn, sender, owner);
+                return false;
+            }
+        }
+    }
+    scene = &sc;
+    call(it->second, fn.c_str(), [&] {
+        int n = 0;
+        if (args.is_array())
+            for (const auto& a : args) {
+                pushJson(L, a);
+                ++n;
+            }
+        return n;
+    });
+    return true;
+}
+
+bool ScriptEngine::callRpc(Scene& scene, ecs::Entity e, const std::string& function, const std::string& argsJson, u32 sender) {
+    const nlohmann::json args = nlohmann::json::parse(argsJson, nullptr, false);
+    return m->invokeRpc(scene, e, function, args.is_discarded() ? nlohmann::json::array() : args, sender, true);
+}
 void ScriptEngine::setGestures(const GestureRecognizer* gestures) { m->gestures = gestures; }
 void ScriptEngine::setSceneLoader(std::function<void(std::string)> loader) { m->sceneLoader = std::move(loader); }
 void ScriptEngine::setTimeControl(std::function<void(double)> setScale, std::function<double()> scale) {

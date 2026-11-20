@@ -21,6 +21,7 @@ namespace agr {
 class GestureRecognizer;
 namespace net {
 class NetSession;
+class Replicator;
 }
 class InputActions;
 class NavigationSystem;
@@ -120,6 +121,11 @@ public:
     void setNavigation(NavigationSystem* navigation);
     /// Multiplayer session for agr.net (null: agr.net raises an error).
     void setNet(net::NetSession* session);
+    /// Entity sync, network spawns and RPCs (entity:rpc, agr.net.spawn...); null = offline.
+    void setReplicator(net::Replicator* replicator);
+    /// Runs an RPC received from `sender` (called by the Replicator): the function must be
+    /// declared in the script's `rpc` table ("any", or "authority": from the owner or the host).
+    bool callRpc(Scene& scene, ecs::Entity e, const std::string& function, const std::string& argsJson, u32 sender);
     /// agr.loadScene(uri): asks the host to switch scenes at the end of the frame.
     void setSceneLoader(std::function<void(std::string)> loader);
     /// agr.time.setScale / scale and hit stop (Engine::setTimeScale / timeScale).

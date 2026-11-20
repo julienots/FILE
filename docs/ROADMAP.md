@@ -147,6 +147,7 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 | Formes maillage / convexes 3D | ✅ | `Collider.shape` Mesh / Convex (modèles glTF, OBJ, FBX ; repli convexe des corps dynamiques) |
 | Requêtes de chevauchement, contrôleur de personnage 2D | ⬜ | à planifier |
 | Débogueur de scripts : points d'arrêt, pause, arrêt sur erreur, pas à pas (principal / détaillé / sortant), pile d'appels, variables, expressions | ✅ | `ScriptEngine::setBreakHandler`, panneau « Débogueur de scripts » ; [SCRIPTING.md](SCRIPTING.md) |
+| Multijoueur de haut niveau : `NetSync` (transform interpolé, champs), propriétaires, apparitions réseau (joueurs arrivés en cours), RPC avec permissions, gros messages fragmentés, découverte en réseau local | ✅ | `net::Replicator`, [NETWORK.md](NETWORK.md) |
 | Liaisons Luau / typage | ⬜ | à planifier |
 
 ## Phase 7 — Animation, audio, UI 🟡 (audio, interface et animation de propriétés terminés ; squelettes, effets audio et widgets avancés à venir)
