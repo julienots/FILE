@@ -2,6 +2,14 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.3
+
+- **Arbres** : feuillage fait de milliers de petites feuilles en bouquets de teintes différentes (jeunes pousses claires, feuilles d'ombre sombres), couronne en sept masses au lieu de quatre, intérieur de la couronne dans l'ombre, translucidité à contre-jour ; troncs évasés au pied avec six branches. En graphismes élevés, 60 % d'arbres en plus (20 % en moyens).
+- **Montagnes** : trois chaînes de vrai relief (crêtes, ravines, pics) éclairées par le soleil, forêts sur les pentes basses, roche plus haut, neige sur les sommets des pays froids, et perspective aérienne (plus loin = plus clair et bleuté).
+- **Bas-côtés** : bande de gravier et de terre tassée derrière la glissière, qui se fond dans l'herbe.
+- **Ciel** : l'horizon s'embrase du côté du soleil, voile clair juste au-dessus de l'horizon.
+- **Bitume sec** : le reflet du soleil sur la chaussée sèche n'éblouit plus.
+
 ## Nouveautés de la 2.2
 
 - **Absinthe** : nouvelle hypercar offerte, vert clair nacré, la voiture la plus détaillée du jeu : carrosserie deux fois plus fine, carbone tissé (sergé 2×2), calandre, ouïes, écope de toit et grille arrière en nid d'abeille, trois projecteurs par phare et signature lumineuse en « L », barre de feux arrière à lamelles, aileron actif col-de-cygne avec volet et jonc de Gurney, lame avant et canards en carbone, diffuseur à grandes dérives, quatre sorties d'échappement en titane bleui, jantes forgées à dix branches et écrou central, disques carbone-céramique percés, gros étriers jaunes, écrans dans l'habitacle, rétroviseurs profilés. Son propre V12 atmosphérique de 9 200 tr/min avec retours de flamme.

@@ -191,7 +191,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     vec3 col = albedo * (amb + sunCol * max(dot(N, sunDir), 0.0) * 0.85) + refl * fres * strength;
     // reflet du soleil sur la chaussée : traînée brillante vers le soleil, plus nette dans les flaques
     float sp = pow(max(dot(N, normalize(V + sunDir)), 0.0), mix(45.0, 900.0, 1.0 - rough));
-    col += sunCol * sp * (0.25 + 4.0*(1.0 - rough)) * (1.0 - off);
+    col += sunCol * sp * (0.25 + 4.0*(1.0 - rough)) * (1.0 - off) * mix(1.0, 0.18, dry);
     float f = 1.0 - exp(-fogDensity*fogDensity*dist*dist);
     col = mix(col, fogColor, f);
     gl_FragColor = vec4(col, 1.);
@@ -267,6 +267,8 @@ export function skyDome(th) {
         float cl = smoothstep(0.42, 0.78, fb(d.xz/(max(d.y,0.0)+0.28)*1.5)) * smoothstep(0.03, 0.3, h);
         ${th.sun ? `float sdc = max(dot(d, ${v3(th.sun.dir)}), 0.0);
         c += ${v3(th.sun.col)} * pow(sdc, 3.0) * 0.10;                                           // halo diffus autour du soleil
+        c += ${v3(th.sun.col)} * pow(sdc, 10.0) * 0.28 * exp(-max(h, 0.0)*5.0);                      // diffusion de Mie : l'horizon s'embrase du côté du soleil
+        c = mix(c, HOR*1.08 + vec3(0.03), exp(-max(h, 0.0)*22.0) * 0.45);                           // voile clair juste au-dessus de l'horizon
         float thick = fb((d.xz + ${v3(th.sun.dir)}.xz*0.10)/(max(d.y,0.0)+0.28)*1.5);            // épaisseur du nuage vers le soleil
         vec3 cc = mix(vec3(1.0)*${(th.cloud ?? 0.9).toFixed(2)} + HOR*0.2, HOR*0.45 + MID*0.25, smoothstep(0.35, 0.85, thick)*0.75);
         cc += ${v3(th.sun.col)} * pow(sdc, 6.0) * 0.55 * (1.0 - smoothstep(0.5, 0.9, cl));         // liseré lumineux côté soleil
@@ -643,27 +645,56 @@ export function buildWorld(def, renderer, q) {
       const water = add(new THREE.PlaneGeometry(wsz, wsz, 40, 40), wm); water.rotation.x = -Math.PI / 2; water.position.set(cx, mer.niveau, cz); water.frustumCulled = false;
       timed.push(wm);
     }
-    // montagnes à l'horizon
+    // montagnes à l'horizon : trois chaînes de relief (bruit fractal), éclairées par le soleil, bleuies et voilées par la distance,
+    // forêts sur les pentes basses, roche plus haut, neige sur les sommets des pays froids
     {
-      const pos = [], idx = [], col = [], seg = 120;
-      const far = new THREE.Color(th.hill).lerp(FOG, 0.45), base = new THREE.Color(th.ground).lerp(FOG, 0.55);
-      for (let ring = 0; ring < 2; ring++) {
-        const rad = R + 900 + ring * 500, o = pos.length / 3;
-        for (let i = 0; i <= seg; i++) {
-          const a = i / seg * Math.PI * 2, x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad;
-          const h = (th.hillH || 120) * (0.35 + 0.65 * Math.abs(Math.sin(a * 3.1 + ring * 2) * Math.sin(a * 7.3 + 1.3 + ring) + 0.35 * Math.sin(a * 17.0))) * (1 + ring * 0.9);
-          pos.push(x, -2, z, x, h + amp, z);
-          const c1 = ring ? far.clone().lerp(FOG, 0.35) : far; col.push(base.r, base.g, base.b, c1.r, c1.g, c1.b);
-          if (i < seg) { const k2 = o + i * 2; idx.push(k2, k2 + 1, k2 + 2, k2 + 1, k2 + 3, k2 + 2); }
+      const pos = [], idx = [], seg = 420, rows = 7;
+      const nz = (x) => { let a = 0, f = 1, w = 1; for (let k = 0; k < 6; k++) { a += w * (Math.sin(x * f * 2.3 + k * 1.7) * 0.5 + Math.sin(x * f * 3.7 + k * 4.1) * 0.5); f *= 2.03; w *= 0.5; } return a; };
+      for (let ring = 0; ring < 3; ring++) {
+        const rad = R + 820 + ring * 520, H = (th.hillH || 120) * (0.8 + ring * 0.75), o = pos.length / 3;
+        for (let i2 = 0; i2 <= seg; i2++) {
+          const a = i2 / seg * Math.PI * 2;
+          // crête : bruit fractal, avec des pics plus marqués (valeur absolue = arêtes)
+          const ridge = Math.max(0.05, 0.42 + 0.35 * nz(a * 2 + ring * 5.3) + 0.25 * (1 - Math.abs(nz(a * 5 + ring * 2.1)))) * H;
+          for (let r2 = 0; r2 <= rows; r2++) {
+            const v = r2 / rows, h = ridge * Math.pow(v, 0.85) - 2 + amp * 0.5 * (1 - v), back = (1 - v) * 160;    // la pente descend vers la caméra
+            const rr2 = rad - back + Math.sin(a * 13 + r2) * 12 * (1 - v);
+            pos.push(cx + Math.cos(a) * rr2, h, cz + Math.sin(a) * rr2);
+          }
+          if (i2 < seg) for (let r2 = 0; r2 < rows; r2++) { const k2 = o + i2 * (rows + 1) + r2, n2 = k2 + rows + 1; idx.push(k2, n2, k2 + 1, k2 + 1, n2, n2 + 1); }
         }
       }
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
-      const m = add(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false })); m.frustumCulled = false;
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+      const cold = th.snowTop || (th.sol && th.sol.kind === 2), dry = th.sol && th.sol.kind === 1;
+      const mm = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false,
+        uniforms: Object.assign(gUni(), { rock: { value: new THREE.Color(th.hill) }, forest: { value: new THREE.Color(dry ? th.hill : th.ground).multiplyScalar(dry ? 0.9 : 0.55) }, top: { value: (th.hillH || 120) * 1.4 },
+          snow: { value: cold ? 0.5 : (th.hillH || 0) > 250 ? 0.8 : 2.0 }, ctr: { value: new THREE.Vector2(cx, cz) } }),
+        vertexShader: `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vN = normalize(normal); gl_Position = projectionMatrix*viewMatrix*w; }`,
+        fragmentShader: GROUND_GLSL + `uniform vec3 rock; uniform vec3 forest; uniform float top; uniform float snow; uniform vec2 ctr; varying vec3 vW; varying vec3 vN;
+          void main(){
+            vec3 N = normalize(vN); vec2 p = vW.xz; float hN = vW.y / top;
+            vec3 toCam = cameraPosition - vW; float dist = length(toCam);
+            N = normalize(N + vec3(gn(p*0.02)-0.5, 0.0, gn(p*0.02+7.)-0.5)*0.9 + vec3(gn(p*0.09)-0.5, 0.0, gn(p*0.09+3.)-0.5)*0.4);   // ravines et arêtes
+            float slope = 1.0 - abs(N.y);
+            vec3 alb = mix(forest, rock, smoothstep(0.18, 0.55, hN + slope*0.4 + (gn(p*0.01)-0.5)*0.3));
+            alb *= 0.8 + 0.4*gf(p*0.03);
+            float sn = smoothstep(snow, snow + 0.12, hN + (gn(p*0.03)-0.5)*0.25 - slope*0.35);
+            alb = mix(alb, vec3(0.92, 0.95, 1.0), sn);
+            float diff = max(dot(N, sunDir), 0.0);
+            vec3 col = alb * (amb*0.6 + sunCol * diff * 1.4);
+            // perspective aérienne : plus c'est loin, plus c'est clair et bleuté (la couleur du brouillard)
+            float air = 1.0 - exp(-dist / 1500.0);
+            col = mix(col, fogColor, clamp(air * 0.85, 0.0, 0.92));
+            gl_FragColor = vec4(col, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }` });
+      const m = add(g, mm); m.frustumCulled = false; m.renderOrder = -2;
     }
 
     // --- végétation ---
     // feuillage : des cartes couvertes de feuilles, éclairées comme une boule (normales sphériques), qui bougent au vent
-    const leafTex = (pine, snow) => canvasTex(256, 256, (g) => {
+    const leafTex = (pine, snow) => canvasTex(pine ? 256 : 512, pine ? 256 : 512, (g) => {
       g.clearRect(0, 0, 256, 256);
       if (pine) {
         for (let b = 0; b < 9; b++) { const x0 = rr(30, 226), y0 = rr(10, 60), len = rr(120, 190), ang = rr(-0.5, 0.5);
@@ -671,10 +702,19 @@ export function buildWorld(def, renderer, q) {
             g.strokeStyle = snow && rnd() < 0.3 ? '#eef4fa' : `rgb(${20 + rnd() * 25 | 0},${60 + rnd() * 50 | 0},${35 + rnd() * 25 | 0})`; g.lineWidth = 2.2;
             g.beginPath(); g.moveTo(x, y); g.lineTo(x - w, y + w * 0.7); g.moveTo(x, y); g.lineTo(x + w, y + w * 0.7); g.stroke(); } }
       } else {
-        for (let i = 0; i < 150; i++) { const x = 128 + (rnd() - 0.5) * 215 * Math.sqrt(rnd()) * 1.1, y = 128 + (rnd() - 0.5) * 215 * Math.sqrt(rnd()) * 1.1, s = rr(9, 19);
-          g.save(); g.translate(x, y); g.rotate(rr(0, 6.28));
-          g.fillStyle = `rgb(${40 + rnd() * 55 | 0},${95 + rnd() * 80 | 0},${25 + rnd() * 35 | 0})`; g.beginPath(); g.ellipse(0, 0, s, s * 0.5, 0, 0, 7); g.fill();
-          g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.stroke(); g.restore(); }
+        // bouquets de feuilles : chacun a sa teinte (jeunes pousses claires, feuilles d'ombre sombres), feuilles petites et nombreuses,
+        // plus denses au centre, quelques brindilles, bord déchiqueté (le ciel passe entre les feuilles)
+        const W = g.canvas.width, k = W / 256;
+        for (let c = 0; c < 26; c++) {
+          const cxp = W / 2 + (rnd() - 0.5) * W * 0.62 * Math.sqrt(rnd()) * 1.2, cyp = W / 2 + (rnd() - 0.5) * W * 0.62 * Math.sqrt(rnd()) * 1.2, cr = rr(28, 52) * k, hue = rnd();
+          g.strokeStyle = 'rgba(60,45,30,0.8)'; g.lineWidth = 1.2 * k; g.beginPath(); g.moveTo(cxp, cyp + cr * 0.6); g.lineTo(cxp + rr(-8, 8) * k, cyp - cr * 0.3); g.stroke();
+          for (let i = 0; i < 70; i++) { const ang = rnd() * 6.283, rad = cr * Math.pow(rnd(), 0.65), x = cxp + Math.cos(ang) * rad, y = cyp + Math.sin(ang) * rad * 0.85, s = rr(4, 8.5) * k;
+            const sh = 1 - 0.5 * (y - cyp + cr) / (2 * cr);            // le haut du bouquet plus clair (lumière du ciel)
+            const r = (50 + hue * 50) * sh + rnd() * 22, gg = (82 + hue * 66) * sh + rnd() * 30, b = (20 + hue * 18) * sh + rnd() * 12;
+            g.save(); g.translate(x, y); g.rotate(rr(0, 6.28)); g.fillStyle = `rgb(${r | 0},${gg | 0},${b | 0})`;
+            g.beginPath(); g.moveTo(-s, 0); g.quadraticCurveTo(0, -s * 0.55, s, 0); g.quadraticCurveTo(0, s * 0.55, -s, 0); g.fill();
+            g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 0.6 * k; g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.stroke(); g.restore(); }
+        }
       }
     }, { wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping });
     const foliageMat = (tex, tint) => {
@@ -693,7 +733,9 @@ export function buildWorld(def, renderer, q) {
             vec3 alb = t.rgb * tint * (0.8 + 0.45*vK);
             float l = dot(normalize(vN), sunDir)*0.5 + 0.5; l *= l;
             float back = pow(max(dot(-V, sunDir), 0.0), 3.0) * (1.0 - l);          // lumière qui traverse les feuilles à contre-jour
-            vec3 col = alb * (amb*0.5 + sunCol*l*1.5) * mix(0.35, 1.0, vAO) + alb * vec3(1.3,1.5,0.6) * sunCol * back * 0.5;
+            float ao = mix(0.22, 1.0, smoothstep(0.15, 1.0, vAO));                    // l'intérieur de la couronne reste dans l'ombre
+            vec3 col = alb * (amb*0.45 + sunCol*l*1.6) * ao + alb * vec3(1.3,1.5,0.6) * sunCol * back * 0.6 * ao;
+            col *= 0.92 + 0.16*fract(sin(dot(floor(vWp.xz*0.7 + vWp.y), vec2(12.9898, 78.233))) * 43758.5453);   // petites variations de teinte
             col = mix(col, fogColor, 1.0 - exp(-fogDensity*fogDensity*dist*dist));
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
@@ -710,9 +752,9 @@ export function buildWorld(def, renderer, q) {
     };
     const canopy = {
       feuillu: () => { const gs = [];
-        for (const [bx, by, bz, br] of [[0, 5.8, 0, 2.7], [1.5, 4.7, 0.7, 2.0], [-1.3, 5.0, -0.7, 1.9], [0.2, 4.4, -1.4, 1.7]])
-          for (let i = 0; i < 8; i++) { const a = rr(0, 6.28), e = rr(-0.5, 1.2), rad = br * rr(0.35, 0.8);
-            gs.push(card(br * 1.5, br * 1.5, bx + Math.cos(a) * Math.cos(e) * rad, by + Math.sin(e) * rad, bz + Math.sin(a) * Math.cos(e) * rad, rr(-0.9, 0.9), rr(0, 6.28), rr(0, 6.28), [bx * 0.4, 5.2, bz * 0.4], 3.6)); }
+        for (const [bx, by, bz, br] of [[0, 6.4, 0, 2.6], [1.6, 5.2, 0.8, 2.0], [-1.5, 5.4, -0.7, 2.0], [0.3, 4.6, -1.6, 1.8], [-0.6, 4.4, 1.5, 1.7], [1.1, 7.2, -0.5, 1.6], [-1.0, 7.0, 0.6, 1.5]])
+          for (let i = 0; i < 11; i++) { const a = rr(0, 6.28), e = rr(-0.5, 1.2), rad = br * rr(0.3, 0.85);
+            gs.push(card(br * 1.25, br * 1.25, bx + Math.cos(a) * Math.cos(e) * rad, by + Math.sin(e) * rad, bz + Math.sin(a) * Math.cos(e) * rad, rr(-0.9, 0.9), rr(0, 6.28), rr(0, 6.28), [bx * 0.4, 5.6, bz * 0.4], 3.9)); }
         return mergeGeometries(gs); },
       palmier: () => { const gs = [];
         for (let i = 0; i < 13; i++) { const a = i / 13 * 6.283 + rr(-0.15, 0.15);
@@ -728,7 +770,10 @@ export function buildWorld(def, renderer, q) {
     const rockMat = noisy(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0, envMapIntensity: 0.25 }), 1.7, 0.45);
     disposables.push(barkTex, trunkMat, rockMat);
     const solid = {
-      feuillu: () => mergeGeometries([new THREE.CylinderGeometry(0.22, 0.42, 4.6, 7).translate(0, 2.3, 0), new THREE.CylinderGeometry(0.1, 0.18, 2.2, 5).rotateZ(-0.7).translate(0.8, 4.0, 0.2), new THREE.CylinderGeometry(0.1, 0.17, 2.0, 5).rotateZ(0.75).translate(-0.75, 4.1, -0.2)]),
+      feuillu: () => { const parts = [new THREE.CylinderGeometry(0.2, 0.46, 5.2, 9).translate(0, 2.6, 0), new THREE.CylinderGeometry(0.34, 0.6, 0.6, 9).translate(0, 0.25, 0)];   // tronc évasé au pied
+        for (const [rz, ry, len, y] of [[-0.7, 0.3, 2.4, 4.0], [0.75, 3.4, 2.2, 4.1], [-0.55, 1.9, 2.0, 4.8], [0.6, 5.0, 2.0, 4.9], [-0.35, 4.2, 1.8, 5.6], [0.4, 0.9, 1.7, 5.7]]) {
+          const b = new THREE.CylinderGeometry(0.06, 0.15, len, 6); b.translate(0, len / 2, 0); b.rotateZ(rz); b.rotateY(ry); b.translate(0, y - 0.6, 0); parts.push(b); }
+        return mergeGeometries(parts); },
       sapin: () => new THREE.CylinderGeometry(0.12, 0.34, 9.4, 6).translate(0, 4.7, 0),
       palmier: () => { const g = new THREE.CylinderGeometry(0.17, 0.3, 10, 8, 10); const p = g.attributes.position;
         for (let i = 0; i < p.count; i++) { const t = (p.getY(i) + 5) / 10; p.setX(i, p.getX(i) + t * t * 1.3); const r2 = 1 + 0.12 * Math.abs(Math.sin(t * 60)); p.setX(i, p.getX(i) * 1); p.setZ(i, p.getZ(i) * r2); }
@@ -742,7 +787,9 @@ export function buildWorld(def, renderer, q) {
     const shGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), shMat = new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false, opacity: th.ombre ?? 0.6 });
     disposables.push(shTex, shGeo, shMat);
     const d = new THREE.Object3D(), sunAng = Math.atan2(sunV.x, sunV.z), sunLen = Math.min(3.2, 1 / Math.max(0.2, sunV.y / Math.hypot(sunV.x, sunV.z)));
-    for (const [kind, count, near, farD, s0, s1] of th.flore) {
+    const floreK = q.terrain >= 170 ? 1.6 : q.terrain >= 140 ? 1.2 : 0.7;     // plus d'arbres quand l'appareil le permet
+    for (const [kind, count0, near, farD, s0, s1] of th.flore) {
+      const count = Math.round(count0 * floreK);
       const spots = [];
       for (let t = 0; t < count * 3 && spots.length < count; t++) {
         const i = Math.floor(rnd() * T.N), side = rnd() < 0.5 ? -1 : 1, off = side * (HALF + near + Math.pow(rnd(), 1.6) * farD);
@@ -781,6 +828,23 @@ export function buildWorld(def, renderer, q) {
         for (let i = 0; i < T.N; i += 2) { const o = s * (HALF + 0.22); posts.push(box(0.14, 0.86, 0.14, T.px[i] - T.tz[i] * o, 0.43, T.pz[i] + T.tx[i] * o)); }
       }
       add(mergeGeometries(posts), new THREE.MeshStandardMaterial({ color: 0x70747c, metalness: 0.8, roughness: 0.5 }));
+      // accotement : gravier et terre tassée sur 3 m derrière la glissière, qui se fond dans l'herbe
+      { const gm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
+          uniforms: Object.assign(gUni(), { tone: { value: new THREE.Color(th.sol ? th.sol.c[3] : 0x6a5a48).lerp(new THREE.Color(0x8a8478), 0.5) } }),
+          vertexShader: 'varying vec3 vW; varying vec2 vT; void main(){ vT = uv; vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
+          fragmentShader: GROUND_GLSL + `uniform vec3 tone; varying vec3 vW; varying vec2 vT;
+            void main(){ vec2 p = vW.xz; float g1 = gn(p*9.0), g2 = gh(floor(p*22.0)); vec3 alb = tone * (0.7 + 0.5*g1) * (0.85 + 0.3*step(0.7, g2));
+              float dist = length(cameraPosition - vW); vec3 col = alb * (amb*0.55 + sunCol*max(sunDir.y, 0.0)*1.3);
+              col = mix(col, fogColor, 1.0 - exp(-fogDensity*fogDensity*dist*dist));
+              float a = (1.0 - smoothstep(0.55, 1.0, vT.y + (gn(p*1.3)-0.5)*0.5)) * 0.95;
+              gl_FragColor = vec4(col, a);
+              #include <tonemapping_fragment>
+              #include <colorspace_fragment>
+            }` });
+        for (const sd of [-1, 1]) { const st = strip(T, (j, s2) => { const o0 = sd * (HALF + 0.25), o1 = sd * (HALF + 3.6);
+            return [T.px[j] - T.tz[j] * o0, 0.04, T.pz[j] + T.tx[j] * o0, T.px[j] - T.tz[j] * o1, 0.06, T.pz[j] + T.tx[j] * o1, s2, 0, s2, 1]; });
+          const mk = add(st, gm); mk.renderOrder = 0; }
+        disposables.push(gm); timed.push(gm); }
       for (let i = 30; i < T.N; i += 46) { const s = rnd() < 0.5 ? -1 : 1, o = s * (HALF + 2.2); adQuads.push({ cx: T.px[i] - T.tz[i] * o, cz: T.pz[i] + T.tx[i] * o, y: 0.5, pw: 9, ph: 2.2, ang: Math.atan2(-T.tx[i], -T.tz[i]) + (s > 0 ? -Math.PI / 2 : Math.PI / 2), cell: 1 + Math.floor(rnd() * 3) }); }
     }
     flushAds(0.9);
