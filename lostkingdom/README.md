@@ -6,7 +6,7 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.5.0 (versionCode 35), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.4.0 : elle s'installe par-dessus). SHA-256 : `9745cd9001ca19f6c0b49d3fd0a1e2fabe9fb28809ba8762683f52e0626c927b`. Ancienne mention de taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.5.1 (versionCode 36), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.5.0 : elle s'installe par-dessus). SHA-256 : `95a82950bd16fb43cfd268d74693a4df56b0256689dff660daee013548e6f839`. Ancienne mention de taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
@@ -20,7 +20,7 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 - **La pioche permet aussi de creuser** (plus seulement la pelle).
 - **On peut creuser dans les villages**, entre les maisons (avant : interdit dans toute l'enceinte, y compris à Brindlemere où l'on commence) ; restent interdits : sous et contre les bâtiments, la place centrale, les châteaux, temples, monastères, tours, ponts et pierres de passage.
 - **Outils de départ** : nouvelle partie avec pioche, hachette, **pelle** et **2 bombes** ; les anciennes sauvegardes reçoivent une fois les outils qui leur manquent.
-- **Vérification (ordinateur seulement)** : scénario `mine` : nouvelle partie, filon le plus proche, bouton d'action touché au doigt : 3 minerais obtenus ; puis creuser à Brindlemere entre les maisons : accepté (`MINE TEST PASSED`, `MINE TOWN TEST PASSED`).
+- **Vérification (ordinateur seulement)** : scénario `mine` : nouvelle partie, filon le plus proche, bouton d'action touché au doigt : 3 minerais obtenus ; puis creuser à Brindlemere entre les maisons : accepté (`MINE TEST PASSED`, `MINE TOWN TEST PASSED`) ; 2 715 tests unitaires réussis.
 
 ### Nouveautés 2.5.0 (entrer dans les bâtiments)
 
