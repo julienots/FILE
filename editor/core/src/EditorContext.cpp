@@ -44,6 +44,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::PointLight: return "Point Light";
         case CreateKind::SpotLight: return "Spot Light";
         case CreateKind::Decal: return "Decal";
+        case CreateKind::ReflectionProbe: return "Reflection Probe";
         case CreateKind::UICanvas: return "Canvas";
         case CreateKind::UIPanel: return "Panel";
         case CreateKind::UIText: return "Text";
@@ -249,6 +250,10 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
         case CreateKind::Decal:
             reg.emplace<DecalComponent>(e).color = {0.85f, 0.2f, 0.15f, 1.0f};  // visible at once; the image is chosen in the inspector
             if (parent.isNull()) t.position.y += 0.5f;
+            break;
+        case CreateKind::ReflectionProbe:
+            reg.emplace<ReflectionProbeComponent>(e);
+            if (parent.isNull()) t.position.y += 2.0f;
             break;
         case CreateKind::UICanvas: reg.emplace<UICanvasComponent>(e); break;
         case CreateKind::UIPanel: {

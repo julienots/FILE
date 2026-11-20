@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <memory>
 #include <functional>
 #include <optional>
 #include <string>
@@ -104,6 +105,8 @@ struct RenderStats {
     u32 lights2D = 0;
     u32 lights = 0;          ///< Point / spot lights shading this frame.
     u32 decals = 0;          ///< Decals projected this frame (<= 16).
+    u32 reflectionProbes = 0;  ///< Probes with a finished capture, used by this frame's shading.
+    bool probeCapture = false; ///< A probe face was captured this frame.
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
     u32 outlineBatches = 0;  ///< Outline draw calls (instanced batches of outlined materials).
     bool ambientOcclusion = false;  ///< SSAO computed this frame.
@@ -205,6 +208,11 @@ public:
     ShaderStatus shaderStatus(const std::string& uri);
     /// Sky images (Environment sky = Image). Without it, image skies fall back to the gradient.
     void setEnvironments(EnvironmentLibrary* environments) { m_environments = environments; }
+    /// Re-captures every reflection probe (after static geometry changed; moved probes and
+    /// probes in Always mode are re-captured on their own).
+    void invalidateReflectionProbes() { ++m_probeEpoch; }
+    /// Atlas of the probe captures (debug views): rows = probes, columns = roughness levels.
+    rhi::RenderTargetHandle reflectionProbeAtlas() const { return m_probeAtlas; }
     /// Depth texture of the last shadow pass (null when shadows are off): an atlas of the
     /// cascades, 2 x 2 tiles when there is more than one. Debug views.
     rhi::TextureHandle shadowMap() const;
@@ -459,7 +467,32 @@ private:
     bool m_shadowsActive = false;
     bool m_drawSky = false;
     u32 m_frameOffset = 0, m_lights3DOffset = 0;
-    std::array<rhi::TextureHandle, 4> m_decalTextures{};  ///< Decal images of this frame (units 12..15).
+    std::array<rhi::TextureHandle, 3> m_decalTextures{};  ///< Decal images of this frame (units 12..14).
+    // Reflection probes (ReflectionProbes.cpp): a second renderer captures one face per frame
+    // into m_probeFaces; when 6 are done, a GPU pass prefilters them into the probe's atlas row.
+    struct ProbeSlot {
+        ecs::Entity entity;
+        u64 hash = 0;
+        u32 facesDone = 6;  ///< 0..5: capture in progress; 6: idle.
+        bool ready = false;
+        u64 seenFrame = 0;
+    };
+    std::unique_ptr<Renderer> m_probeRenderer;
+    bool m_probeCaptureMode = false;  ///< This renderer captures probe faces (linear output, no probes).
+    bool m_probeLinear = false;       ///< Faces and atlas in RGBA16F (else display-encoded RGBA8).
+    std::array<rhi::RenderTargetHandle, 6> m_probeFaces{};
+    rhi::RenderTargetHandle m_probeAtlas;
+    rhi::PipelineHandle m_probeConvertPipeline;
+    std::vector<ProbeSlot> m_probeSlots;
+    std::vector<u32> m_probeConvertOffsets;  ///< Uniforms of this frame's conversion passes (one per level).
+    i32 m_probeConvertSlot = -1;
+    u64 m_probeEpoch = 0;
+    float m_probeExposure = 1.0f;
+    void updateReflectionProbes(Scene& scene);
+    void pushProbeConversion();
+    void runProbeConversion();
+    void gatherProbes(ecs::Registry& reg, detail::LightUniforms& lights);
+    void releaseProbes();
     std::array<u32, kMaxCascades> m_shadowFrameOffsets{};
 
     rhi::BufferHandle m_uniformBuffer;

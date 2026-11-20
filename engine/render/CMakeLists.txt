@@ -7,6 +7,7 @@ agr_add_module(render
         src/Renderer.cpp
         src/Renderer3D.cpp
         src/OcclusionBuffer.cpp
+        src/ReflectionProbes.cpp
         src/Skin2D.cpp
         src/ParticleCurves.cpp
         src/EnvironmentLibrary.cpp

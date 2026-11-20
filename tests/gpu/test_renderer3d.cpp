@@ -38,7 +38,7 @@ struct Render3DFixture {
         std::filesystem::create_directories(root);
         vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
         registerRenderComponents();
-        REQUIRE(renderer.initialize());
+        { auto st = renderer.initialize(); if (!st) FAIL_CHECK(st.error().message); REQUIRE(st); }
         GraphicsProfile p = graphicsProfile(GraphicsTier::High);
         p.renderScale = 1.0f;
         p.msaaSamples = 1;  // pixel-exact checks
@@ -1212,5 +1212,46 @@ TEST_CASE("decals: projected onto the floor, lit, image alpha, normal fade, limi
     f.scene.registry().get<DecalComponent>(red).enabled = false;
     f.frame();
     CHECK(f.renderer.stats().decals == 1);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("reflection probes: a mirror sphere reflects the room captured by the probe") {
+    Render3DFixture f;
+    f.camera({0, 0, 2.5f}, {0, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, 0}, Vec3{1.0f}, {1, 1, 1, 1});
+    f.scene.registry().get<MeshRendererComponent>(ball).metallic = 1.0f;
+    f.scene.registry().get<MeshRendererComponent>(ball).roughness = 0.05f;
+    // A red wall behind the camera: only a capture of the room can show it on the ball.
+    f.mesh(PrimitiveMesh::Cube, {0, 0, 6.0f}, {12, 12, 0.5f}, {1, 0, 0, 1});
+    f.settle();
+    f.frame();
+    CHECK(f.renderer.stats().reflectionProbes == 0);
+    const Rgba before = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE(std::abs(int(before.r) - int(before.g)) < 20, int(before.r), " ", int(before.g));  // the white ambient
+
+    const auto probe = f.scene.createEntity("Probe");
+    auto& p = f.scene.registry().emplace<ReflectionProbeComponent>(probe);
+    p.size = {14, 14, 14};
+    p.boxProjection = false;
+    for (int i = 0; i < 6; ++i) {  // one cube face per frame
+        f.frame();
+        CHECK(f.renderer.stats().probeCapture);
+    }
+    f.frame();  // the conversion ran at the end of the 6th frame: used from now on
+    CHECK_FALSE(f.renderer.stats().probeCapture);  // Once: no more captures
+    CHECK(f.renderer.stats().reflectionProbes == 1);
+    const Rgba after = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE((after.r > 120 && after.r > after.g + 60), int(after.r), " ", int(after.g), " ", int(after.b));
+
+    // Moving the probe re-captures it; outside its box the sky is reflected again.
+    f.scene.registry().get<TransformComponent>(probe).position = {40, 0, 0};
+    f.frame();
+    CHECK(f.renderer.stats().probeCapture);
+    for (int i = 0; i < 7; ++i) f.frame();
+    const Rgba outside = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK(std::abs(int(outside.r) - int(before.r)) < 12);
     CHECK(gpu().device->validationErrorCount() == 0);
 }

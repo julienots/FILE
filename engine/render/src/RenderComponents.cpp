@@ -284,6 +284,18 @@ void registerRenderComponents() {
         .field("orderInLayer", &TrailComponent::orderInLayer)
         .field("maxPoints", &TrailComponent::maxPoints, {.rangeMin = 2.0f, .rangeMax = 4096.0f});
 
+    reg.add<ReflectionProbeComponent>("ReflectionProbe")
+        .category("Rendering")
+        .description("Captures the scene around it: shiny surfaces inside its box reflect the surroundings (rooms, metal, water).")
+        .field("size", &ReflectionProbeComponent::size, {.tooltip = "Box of influence (full size)", .speed = 0.05f})
+        .field("intensity", &ReflectionProbeComponent::intensity, {.rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f})
+        .field("blendDistance", &ReflectionProbeComponent::blendDistance,
+               {.tooltip = "Fade-in distance from the box faces", .rangeMin = 0.0f, .rangeMax = 50.0f, .speed = 0.05f})
+        .field("boxProjection", &ReflectionProbeComponent::boxProjection, {.tooltip = "Line reflections up with the walls of a room the size of the box"})
+        .field("update", &ReflectionProbeComponent::update, {.tooltip = "Once: when added or moved. Always: refreshed continuously (6 frames each)"})
+        .field("maxDistance", &ReflectionProbeComponent::maxDistance, {.rangeMin = 1.0f, .rangeMax = 5000.0f, .speed = 1.0f})
+        .field("enabled", &ReflectionProbeComponent::enabled);
+
     reg.add<DecalComponent>("Decal")
         .category("Rendering")
         .description("Projects an image onto the surfaces inside its box (impacts, stains, road marks). Projects along local -Y.")

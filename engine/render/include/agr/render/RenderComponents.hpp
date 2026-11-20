@@ -198,6 +198,21 @@ struct DecalComponent {
     bool enabled = true;
 };
 
+/// Local reflections: the probe captures the scene around it (6 views, once or continuously)
+/// and the shiny surfaces inside its box reflect that capture instead of the sky alone (a
+/// metal ball reflects the room it is in, a wet floor the walls). Box projection makes the
+/// reflections line up with the walls of a room the size of the box. Up to 8 probes.
+struct ReflectionProbeComponent {
+    enum class Update : i32 { Once = 0, Always = 1 };
+    math::Vec3 size{10.0f, 6.0f, 10.0f};  ///< Box of influence (full size, local units, centered).
+    float intensity = 1.0f;
+    float blendDistance = 1.0f;          ///< Fades in from the box faces over this distance.
+    bool boxProjection = true;           ///< Parallax correction (rooms, corridors); off for open areas.
+    Update update = Update::Once;        ///< Once: when added or moved; Always: 6 frames per refresh.
+    float maxDistance = 200.0f;          ///< Far plane of the capture.
+    bool enabled = true;
+};
+
 /// Hides what is behind it from the renderer (occlusion culling): a simple box or rectangle
 /// placed on walls, buildings, rocks or hills. Objects entirely behind occluders are not drawn
 /// (their shadows still are). The shape should stay inside the visible geometry, or objects

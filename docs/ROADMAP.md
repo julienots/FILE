@@ -123,7 +123,8 @@ Guide : [3D.md](3D.md).
 | SSAO | ✅ | `PostProcess.ambientOcclusion` (mi-résolution, profils ultra à medium) ; test GPU sur les 3 API |
 | Brouillard en hauteur (intégrale analytique, diffusion du soleil) et rayons de soleil | ✅ | `PostProcess.heightFog` / `lightShafts`, passe `Atmosphere` ; test GPU sur les 3 API |
 | Décalques (16 par image, 4 images, fondu selon la pente et la hauteur, émission) | ✅ | composant `Decal`, appliqué dans le shader PBR ; test GPU sur les 3 API |
-| Profondeur de champ, TAA, sondes de réflexion locales | ⬜ | à planifier |
+| Sondes de réflexion (capture étalée sur 6 images, préfiltrage GGX sur GPU, projection sur la boîte, 8 par scène) | ✅ | composant `ReflectionProbe`, `ReflectionProbes.cpp` ; test GPU sur les 3 API |
+| Profondeur de champ, TAA, réflexions en espace écran | ⬜ | à planifier |
 | Ombres en cascades (1 à 4 selon le profil, atlas, fondu entre cascades) | ✅ | `Renderer3D.cpp` |
 | Ombres des projecteurs (SpotLight) | ✅ | 2 par image, atlas en perspective ; test GPU sur les 3 API |
 | Ombres des lumières ponctuelles | ✅ | 1 par image, 6 faces dans l'atlas des lumières locales ; test GPU sur les 3 API |

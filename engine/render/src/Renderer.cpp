@@ -58,6 +58,7 @@ Renderer::~Renderer() {
     for (auto& [uri, cached] : m_pixelTextureCache) m_assets.release(cached.asset);
     for (auto& [uri, cached] : m_dataTextureCache) m_assets.release(cached.asset);
     for (auto& [uri, cached] : m_pixelDataTextureCache) m_assets.release(cached.asset);
+    releaseProbes();
     releaseTargets();
     for (auto& m : m_meshes) {
         m_device.destroyBuffer(m.vertices);
@@ -343,11 +344,16 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         return;
     }
     m_lastViewFrame = deviceFrame;
+    if (!m_probeCaptureMode && !rv.direct) updateReflectionProbes(scene);  // before this view's uniforms (own renderer)
     Stopwatch cpu;
     AGR_PROFILE_SCOPE("Renderer");
     std::optional<ProfileScope> preparation(std::in_place, "Préparation (culling, lots, lumières)");  // early returns close it
     ++m_frame;
-    m_stats = {};
+    {
+        const bool captured = m_stats.probeCapture;  // set by updateReflectionProbes above
+        m_stats = {};
+        m_stats.probeCapture = captured;
+    }
     if (width == 0 || height == 0) return;
     auto& reg = scene.registry();
     m_stats.hasCamera = true;
@@ -434,7 +440,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             }
         });
     const bool postHdr = postActive && m_device.info().halfFloatRenderTargets;
-    frame.fogParams.w = postHdr ? 1.0f : 0.0f;  // shaders output linear light; the composite pass tone maps
+    frame.fogParams.w = postHdr || (m_probeCaptureMode && m_probeLinear) ? 1.0f : 0.0f;  // shaders output linear light; the composite pass tone maps
+    if (!m_probeCaptureMode) m_probeExposure = frame.fogParams.z;
     m_uniformStaging.clear();
     collect3D(scene, rv, view, viewProj, frustum, aspect, hiddenInEditor, frame);  // pushes the frame uniforms first
 
@@ -1004,6 +1011,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     }
 
     m_stats.collectMs = cpu.elapsedMilliseconds();
+    pushProbeConversion();
     Stopwatch submit;
     const rhi::FrameStats before = m_device.frameStats();
     uploadUniforms();
@@ -1013,6 +1021,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         AGR_PROFILE_SCOPE("Ombres");
         if (m_uniformCapacity > 0) drawShadowPass();
     }
+    if (m_uniformCapacity > 0) runProbeConversion();
     AGR_PROFILE_SCOPE("Passes (scène, post-traitement)");
 
     // ------------------------------------------------------------ passes

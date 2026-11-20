@@ -36,6 +36,11 @@ layout(std140) uniform LightData {
     vec4 u_decalColor[16];   // linear rgb, opacity
     vec4 u_decalAxis[16];    // projection direction (world), texture slot
     vec4 u_decalFade[16];    // normal fade, upper fade, lower fade, emission
+    vec4 u_probeMin[8];      // reflection probes (count: u_lightCount.z): box min, blend distance
+    vec4 u_probeMax[8];      // box max, intensity
+    vec4 u_probePos[8];      // capture point, 1 = box projection
+    vec4 u_probeRow[8];      // atlas row
+    vec4 u_probeAtlasInfo;   // tile width (uv), tile height (uv), levels
 };
 )";
 
@@ -232,7 +237,7 @@ uniform sampler2D u_spotShadowMap;  // local light shadow atlas
 uniform sampler2D u_decalMap0;
 uniform sampler2D u_decalMap1;
 uniform sampler2D u_decalMap2;
-uniform sampler2D u_decalMap3;
+uniform sampler2D u_probeAtlas;  // reflection probes: rows = probes, columns = roughness levels
 in vec3 v_worldPos;
 in vec3 v_normal;
 in vec4 v_tangent;
@@ -304,10 +309,9 @@ void agrApplyDecals(inout vec3 albedo, inout vec3 emissive, vec3 geomN) {
         vec3 a = abs(local);
         if (a.x > 0.5 || a.y > 0.5 || a.z > 0.5) continue;
         int slot = int(u_decalAxis[i].w + 0.5);
-        vec4 t = slot >= 4 ? vec4(1.0) : slot == 0 ? textureGrad(u_decalMap0, uv, dx, dy)
+        vec4 t = slot >= 3 ? vec4(1.0) : slot == 0 ? textureGrad(u_decalMap0, uv, dx, dy)
                : slot == 1 ? textureGrad(u_decalMap1, uv, dx, dy)
-               : slot == 2 ? textureGrad(u_decalMap2, uv, dx, dy)
-                           : textureGrad(u_decalMap3, uv, dx, dy);
+                           : textureGrad(u_decalMap2, uv, dx, dy);
         vec4 fade = u_decalFade[i];
         float facing = dot(geomN, -u_decalAxis[i].xyz);
         float limit = fade.x * 0.95;  // cos of the steepest slope kept
@@ -320,6 +324,46 @@ void agrApplyDecals(inout vec3 albedo, inout vec3 emissive, vec3 geomN) {
         albedo = mix(albedo, c, k);
         emissive += c * k * fade.w;
     }
+}
+
+// Reflection probes: radiance seen along R from the probe whose box holds the point (the most
+// inside one), blended with `fallback` (the sky) near its faces. Box projection: the ray is
+// traced to the box walls, the capture is read in the direction capture point -> hit point.
+vec3 agrProbeRadiance(vec3 R, float roughness, vec3 fallback) {
+    int best = -1;
+    float bestW = -1.0;
+    for (int i = 0; i < 8; ++i) {
+        if (i >= u_lightCount.z) break;
+        vec3 inside = min(v_worldPos - u_probeMin[i].xyz, u_probeMax[i].xyz - v_worldPos);
+        float d = min(inside.x, min(inside.y, inside.z));
+        if (d < 0.0) continue;
+        float w = u_probeMin[i].w > 0.0 ? clamp(d / u_probeMin[i].w, 0.0, 1.0) : 1.0;
+        if (w > bestW) {
+            bestW = w;
+            best = i;
+        }
+    }
+    if (best < 0 || bestW <= 0.0) return fallback;
+    vec3 dir = R;
+    if (u_probePos[best].w > 0.5) {
+        vec3 r = vec3(abs(R.x) < 1e-5 ? 1e-5 : R.x, abs(R.y) < 1e-5 ? 1e-5 : R.y, abs(R.z) < 1e-5 ? 1e-5 : R.z);
+        vec3 t1 = (u_probeMax[best].xyz - v_worldPos) / r;
+        vec3 t2 = (u_probeMin[best].xyz - v_worldPos) / r;
+        vec3 tf = max(t1, t2);
+        float t = min(tf.x, min(tf.y, tf.z));
+        dir = v_worldPos + R * t - u_probePos[best].xyz;
+    }
+    dir = normalize(dir);
+    vec2 e = vec2(0.5 + atan(dir.x, -dir.z) * 0.15915494, acos(clamp(dir.y, -1.0, 1.0)) * 0.31830989);
+    e = clamp(e, vec2(0.004, 0.008), vec2(0.996, 0.992));  // half a texel inside the tile
+    float levels = u_probeAtlasInfo.z;
+    float lv = clamp(roughness, 0.0, 1.0) * (levels - 1.0);
+    float l0 = floor(lv);
+    float l1 = min(l0 + 1.0, levels - 1.0);
+    float row = u_probeRow[best].x;
+    vec3 c0 = textureLod(u_probeAtlas, vec2((l0 + e.x) * u_probeAtlasInfo.x, (row + e.y) * u_probeAtlasInfo.y), 0.0).rgb;
+    vec3 c1 = textureLod(u_probeAtlas, vec2((l1 + e.x) * u_probeAtlasInfo.x, (row + e.y) * u_probeAtlasInfo.y), 0.0).rgb;
+    return mix(fallback, mix(c0, c1, lv - l0) * u_probeMax[best].w, bestW);
 }
 
 float distributionGGX(float NoH, float a) {
@@ -571,11 +615,12 @@ void main() {
     float a004 = min(rr.x * rr.x, exp2(-9.28 * NoV)) * rr.x + rr.y;
     vec2 ab = vec2(-1.04, 1.04) * a004 + rr.zw;
     vec3 envSpecular = f0 * ab.x + ab.y;
+    vec3 R = reflect(-V, N);
     if (u_envParams.x > 0.5) {  // image sky: SH irradiance + prefiltered reflections
-        vec3 R = reflect(-V, N);
-        color += (diffuseColor * agrEnvIrradiance(N) + envSpecular * agrEnvRadiance(R, roughness)) * occlusion * u_groundColor.w;
+        vec3 reflected = agrProbeRadiance(R, roughness, agrEnvRadiance(R, roughness) * u_groundColor.w);
+        color += (diffuseColor * agrEnvIrradiance(N) * u_groundColor.w + envSpecular * reflected) * occlusion;
     } else {
-        color += (diffuseColor * hemisphere(N) + envSpecular * hemisphere(reflect(-V, N))) * occlusion;
+        color += (diffuseColor * hemisphere(N) + envSpecular * agrProbeRadiance(R, roughness, hemisphere(R))) * occlusion;
     }
     color += emissive;
     if (u_fogColor.w > 0.5) {
@@ -757,6 +802,98 @@ void vertex(inout Vertex v);
 /// translator reads declarations without preprocessing).
 inline constexpr const char* kShadowNormalBlock = R"(
 layout(location = 1) in vec3 a_normal;
+)";
+
+/// Reflection probe: 6 captured faces -> one equirectangular tile of the probe atlas, GGX
+/// prefiltered for the tile's roughness. Full-screen pass on the atlas; other tiles discarded.
+inline constexpr const char* kProbeConvert = R"(
+layout(std140) uniform ProbeData {
+    vec4 u_tile;      // atlas uv rect: x0, y0, x1, y1
+    vec4 u_params;    // roughness, 1 = linear faces (else tone mapped sRGB), 1 = face rows top-down (Vulkan), exposure
+    vec4 u_atlas;     // 1 / atlas width, 1 / atlas height
+    vec4 u_faceF[6];  // forward of each face
+    vec4 u_faceU[6];  // up of each face
+};
+uniform sampler2D u_face0;
+uniform sampler2D u_face1;
+uniform sampler2D u_face2;
+uniform sampler2D u_face3;
+uniform sampler2D u_face4;
+uniform sampler2D u_face5;
+layout(location = 0) out vec4 o_color;
+vec3 decode(vec3 c) {
+    if (u_params.y > 0.5) return c;
+    // Inverse of the display encoding: sRGB gamma, then the ACES fit (Narkowicz), then exposure.
+    c = min(pow(clamp(c, 0.0, 1.0), vec3(2.2)), vec3(0.98));
+    vec3 a = 2.43 * c - 2.51;
+    vec3 b = 0.59 * c - 0.03;
+    vec3 k = 0.14 * c;
+    vec3 x = (-b - sqrt(max(b * b - 4.0 * a * k, vec3(0.0)))) / (2.0 * a);
+    return max(x, vec3(0.0)) / max(u_params.w, 1e-3);
+}
+vec3 sampleCube(vec3 d) {
+    int best = 0;
+    float m = -2.0;
+    for (int i = 0; i < 6; ++i) {
+        float k = dot(d, u_faceF[i].xyz);
+        if (k > m) {
+            m = k;
+            best = i;
+        }
+    }
+    vec3 F = u_faceF[best].xyz;
+    vec3 U = u_faceU[best].xyz;
+    vec3 Rt = normalize(cross(F, U));
+    vec2 uv = vec2(dot(d, Rt), dot(d, U)) / max(m, 1e-4) * 0.5 + 0.5;
+    if (u_params.z > 0.5) uv.y = 1.0 - uv.y;
+    uv = clamp(uv, vec2(0.002), vec2(0.998));
+    vec3 c = best == 0 ? textureLod(u_face0, uv, 0.0).rgb
+           : best == 1 ? textureLod(u_face1, uv, 0.0).rgb
+           : best == 2 ? textureLod(u_face2, uv, 0.0).rgb
+           : best == 3 ? textureLod(u_face3, uv, 0.0).rgb
+           : best == 4 ? textureLod(u_face4, uv, 0.0).rgb
+                       : textureLod(u_face5, uv, 0.0).rgb;
+    return decode(c);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_atlas.xy;
+    if (uv.x < u_tile.x || uv.y < u_tile.y || uv.x > u_tile.z || uv.y > u_tile.w) discard;
+    vec2 e = (uv - u_tile.xy) / (u_tile.zw - u_tile.xy);
+    float phi = (e.x - 0.5) * 6.2831853;
+    float theta = e.y * 3.14159265;
+    vec3 N = vec3(sin(theta) * sin(phi), cos(theta), -sin(theta) * cos(phi));
+    float r = u_params.x;
+    if (r <= 0.0) {
+        o_color = vec4(sampleCube(N), 1.0);
+        return;
+    }
+    // GGX prefiltering (split sum, N = V = R), golden-ratio sequence.
+    float a = r * r;
+    vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 T = normalize(cross(up, N));
+    vec3 B = cross(N, T);
+    vec3 sum = vec3(0.0);
+    float total = 0.0;
+    const int kSamples = 256;
+    for (int i = 0; i < kSamples; ++i) {
+        vec2 xi = vec2((float(i) + 0.5) / float(kSamples), fract(float(i) * 0.6180340));
+        float ph = 6.2831853 * xi.y;
+        float cosT = sqrt((1.0 - xi.x) / (1.0 + (a * a - 1.0) * xi.x));
+        float sinT = sqrt(max(1.0 - cosT * cosT, 0.0));
+        vec3 H = T * (sinT * cos(ph)) + B * (sinT * sin(ph)) + N * cosT;
+        vec3 L = 2.0 * dot(N, H) * H - N;
+        float NoL = dot(N, L);
+        if (NoL > 0.0) {
+            // Karis weighting: a tiny very bright spot (a lamp) caught by few samples would
+            // leave sparkles; dividing by (1 + luma) evens the samples out.
+            vec3 c = sampleCube(L);
+            float w = NoL / (1.0 + dot(c, vec3(0.2126, 0.7152, 0.0722)));
+            sum += c * w;
+            total += w;
+        }
+    }
+    o_color = vec4(sum / max(total, 1e-6), 1.0);
+}
 )";
 
 } // namespace agr::shaders

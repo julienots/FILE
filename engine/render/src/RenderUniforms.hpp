@@ -48,7 +48,11 @@ static_assert(sizeof(MaterialUniforms) == 272);
 
 inline constexpr u32 kMaxLights3D = 8;
 inline constexpr u32 kMaxDecals = 16;
-inline constexpr u32 kMaxDecalTextures = 4;
+inline constexpr u32 kMaxDecalTextures = 3;
+inline constexpr u32 kMaxProbes = 8;
+inline constexpr u32 kProbeLevels = 5;    // roughness 0, .25, .5, .75, 1
+inline constexpr u32 kProbeFaceSize = 128;
+inline constexpr u32 kProbeTileW = 128, kProbeTileH = 64;  // equirect tile per level
 inline constexpr u32 kMaxSpotShadows = 2;
 struct LightUniforms {
     math::Vec4 posRange[kMaxLights3D];
@@ -67,8 +71,14 @@ struct LightUniforms {
     math::Vec4 decalColor[kMaxDecals];   // linear rgb, opacity
     math::Vec4 decalAxis[kMaxDecals];    // world direction the decal projects along, texture slot (0..3)
     math::Vec4 decalFade[kMaxDecals];    // normal fade, upper fade, lower fade, emission
+    // Reflection probes (count[2]): box, capture point, atlas row.
+    math::Vec4 probeMin[kMaxProbes];     // box min (world), blend distance
+    math::Vec4 probeMax[kMaxProbes];     // box max (world), intensity
+    math::Vec4 probePos[kMaxProbes];     // capture point (world), 1 = box projection
+    math::Vec4 probeRow[kMaxProbes];     // atlas row, -, -, -
+    math::Vec4 probeAtlas;               // tile width (uv), tile height (uv), levels, -
 };
-static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96 + kMaxDecals * (64 + 48));
+static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96 + kMaxDecals * (64 + 48) + kMaxProbes * 64 + 16);
 
 inline float srgbToLinear(float c) {
     c = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);

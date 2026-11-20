@@ -29,7 +29,7 @@ namespace {
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
 constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
 constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
-constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7, kSpotShadowUnit = 11, kDecalUnit = 12;
+constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7, kSpotShadowUnit = 11, kDecalUnit = 12, kProbeUnit = 15;
 
 /// Samplers of the lit 3D pipelines: material maps (0..4), shadow map (5), environment (6),
 /// `extra` from unit 7 (terrain splat map, custom shader maps), placeholders up to unit 10,
@@ -39,7 +39,8 @@ std::vector<std::string> litSamplers(std::vector<std::string> extra = {}) {
     for (std::string& e : extra) s.push_back(std::move(e));
     while (s.size() < kSpotShadowUnit) s.push_back("u_unused" + std::to_string(s.size()));
     s.push_back("u_spotShadowMap");
-    for (u32 i = 0; i < detail::kMaxDecalTextures; ++i) s.push_back("u_decalMap" + std::to_string(i));  // units 12..15
+    for (u32 i = 0; i < detail::kMaxDecalTextures; ++i) s.push_back("u_decalMap" + std::to_string(i));  // units 12..14
+    s.push_back("u_probeAtlas");                                                                         // unit 15
     return s;
 }
 
@@ -947,6 +948,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     lights.count[0] = static_cast<i32>(n);
     m_stats.lights = n;
     gatherDecals(reg, frustum, camPos, lights);
+    gatherProbes(reg, lights);
     m_lights3DOffset = pushUniforms(&lights, sizeof lights);
 }
 
@@ -976,7 +978,7 @@ void Renderer::gatherDecals(ecs::Registry& reg, const math::Frustum& frustum, Ve
             slot = 0;
             while (slot < textures && uris[slot] != d.texture) ++slot;
             if (slot == textures) {
-                if (textures >= detail::kMaxDecalTextures) continue;  // a 5th image: skipped this frame
+                if (textures >= detail::kMaxDecalTextures) continue;  // a 4th image: skipped this frame
                 uris[slot] = d.texture;
                 m_decalTextures[slot] = resolveTexture(d.texture, false);
                 ++textures;
@@ -1192,6 +1194,7 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
         for (u32 t = kSplatUnit; t < kSpotShadowUnit; ++t) m_device.bindTexture(t, m_assets.whiteTexture());  // unused units stay valid
         for (u32 t = 0; t < detail::kMaxDecalTextures; ++t)
             m_device.bindTexture(kDecalUnit + t, m_decalTextures[t] ? m_decalTextures[t] : m_assets.whiteTexture());
+        m_device.bindTexture(kProbeUnit, m_probeAtlas ? m_device.renderTargetTexture(m_probeAtlas) : m_assets.whiteTexture());
     }
     u32 boundPipeline = ~0u, boundMaterial = ~0u;
     rhi::BufferHandle boundVb;
