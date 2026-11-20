@@ -125,8 +125,10 @@ TEST_CASE("overlay: text from the glyph atlas") {
     CHECK_MESSAGE(near(pixel(d, 1, 1), 0, 0, 255), pixel(d, 1, 1));
     CHECK_MESSAGE(near(pixel(d, 62, 62), 0, 0, 255), pixel(d, 62, 62));
     // Changing the text rasterizes new glyphs (atlas upload while rendering).
+    // One line (wrapping would put each letter of this 64 px box on its own line, below the box).
     t.text = "AGR";
+    t.wrap = false;
     f.frame();
-    CHECK(f.ui.stats().quads == 3);
+    CHECK_MESSAGE(f.ui.stats().quads == 3, f.ui.stats().quads);
     CHECK(f.ui.fonts().stats().glyphs >= 4);
 }
