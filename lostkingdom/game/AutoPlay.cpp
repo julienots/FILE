@@ -1626,6 +1626,35 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "events") {
+        // 2.3.6 random world events: start each kind, finish it, check the reward (log + pictures)
+        static int ok[3]; static int gold0;
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; teleport(g, 1600, 1560, 0.f); for (int& o : ok) o = 0; g.eventTimer = 1e9f; }, idle, "setup"});
+        // ambush
+        s.push_back({0.5f, [](Game& g) { bool st = g.startWorldEvent(0); AGR_LOG("EVENT ambush started %d, %zu foes", st, g.worldEvent.foes.size()); gold0 = g.gold;
+            g.camYaw = g.pc().yaw + PI; g.camDist = g.camDistTarget = 14.f; }, idle, "ambush"});
+        s.push_back({2.f, none, [](Game& g, float) { g.camIdleT = 0; Character& p = g.pc(); vec3 d = g.worldEvent.pos - p.pos; p.yaw = std::atan2(d.x, d.z); }, "look"});
+        s.push_back({0.1f, shot("E0_ambush"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { for (Entity e : g.worldEvent.foes) if (Character* c = g.reg.get<Character>(e)) { c->hp = 0; c->dead = true; } }, idle, "win"});
+        s.push_back({1.f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { ok[0] = !g.worldEvent.active && g.gold > gold0 && g.eventsDone == 1; AGR_LOG("EVENT ambush done %d (gold +%d)", ok[0], g.gold - gold0); }, idle, "check"});
+        // falling star
+        s.push_back({0.2f, [](Game& g) { bool st = g.startWorldEvent(1); AGR_LOG("EVENT star started %d", st); Character& p = g.pc(); vec3 d = g.worldEvent.pos - p.pos; p.yaw = std::atan2(d.x, d.z); g.camYaw = p.yaw + PI; }, idle, "star"});
+        s.push_back({1.6f, none, [](Game& g, float) { g.camIdleT = 0; }, "falling"});
+        s.push_back({0.1f, shot("E1_star_fall"), idle, "shot"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "impact"});
+        s.push_back({0.3f, [](Game& g) { teleport(g, g.worldEvent.pos.x + 3.f, g.worldEvent.pos.z + 3.f, 0.f); }, idle, "go"});
+        s.push_back({1.f, none, idle, "arrive"});
+        s.push_back({0.1f, [](Game& g) { int nodes = 0; g.reg.each<NodeComp>([&](Entity, NodeComp& n) { if (distXZ(n.node.pos, g.pc().pos) < 8.f && (n.node.type == NodeType::RareOre || n.node.type == NodeType::Crystal)) nodes++; });
+            ok[1] = !g.worldEvent.active && nodes >= 3; AGR_LOG("EVENT star done %d (%d crater nodes)", ok[1], nodes); g.requestScreenshot("build/shots/E2_crater.png"); }, idle, "check"});
+        // stash
+        s.push_back({0.2f, [](Game& g) { bool st = g.startWorldEvent(2); AGR_LOG("EVENT stash started %d", st); }, idle, "stash"});
+        s.push_back({0.3f, [](Game& g) { teleport(g, g.worldEvent.pos.x + 2.f, g.worldEvent.pos.z + 2.f, 0.f); }, idle, "go"});
+        s.push_back({1.f, none, idle, "arrive"});
+        s.push_back({0.1f, [](Game& g) { ok[2] = !g.worldEvent.active && g.eventsDone == 3; AGR_LOG("EVENT stash done %d", ok[2]);
+            AGR_LOG("EVENTS TEST %s", ok[0] && ok[1] && ok[2] ? "PASSED" : "FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "perf") {
         // 2.3.6 render cost in typical places (logs draw calls / triangles at each picture)
         static const char* places[] = {"brindlemere", "solmar", "port_azur", "shirokawa", "givrebourg", "chenebrune"};
