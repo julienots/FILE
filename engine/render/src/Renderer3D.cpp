@@ -29,7 +29,7 @@ namespace {
 constexpr u32 kSlotFrame = 0, kSlotMaterial = 1, kSlotLights = 2;
 constexpr u32 kSlotSkin = 3, kSlotShadowSkin = 2;  // SkinData: after the other blocks of each pipeline
 constexpr usize kPaletteBytes = kMaxSkinJoints * sizeof(math::Mat4);
-constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7, kSpotShadowUnit = 11;
+constexpr u32 kShadowUnit = 5, kEnvUnit = 6, kSplatUnit = 7, kSpotShadowUnit = 11, kDecalUnit = 12;
 
 /// Samplers of the lit 3D pipelines: material maps (0..4), shadow map (5), environment (6),
 /// `extra` from unit 7 (terrain splat map, custom shader maps), placeholders up to unit 10,
@@ -39,6 +39,7 @@ std::vector<std::string> litSamplers(std::vector<std::string> extra = {}) {
     for (std::string& e : extra) s.push_back(std::move(e));
     while (s.size() < kSpotShadowUnit) s.push_back("u_unused" + std::to_string(s.size()));
     s.push_back("u_spotShadowMap");
+    for (u32 i = 0; i < detail::kMaxDecalTextures; ++i) s.push_back("u_decalMap" + std::to_string(i));  // units 12..15
     return s;
 }
 
@@ -945,7 +946,53 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                                        m_profile.softShadows ? 1.0f : 0.0f, 0.0004f);
     lights.count[0] = static_cast<i32>(n);
     m_stats.lights = n;
+    gatherDecals(reg, frustum, camPos, lights);
     m_lights3DOffset = pushUniforms(&lights, sizeof lights);
+}
+
+void Renderer::gatherDecals(ecs::Registry& reg, const math::Frustum& frustum, Vec3 camPos, detail::LightUniforms& lights) {
+    struct DecalCandidate {
+        float distance;
+        ecs::Entity entity;
+    };
+    std::vector<DecalCandidate> found;
+    reg.view<DecalComponent, WorldTransformComponent>().each([&](ecs::Entity e, DecalComponent& d, WorldTransformComponent& w) {
+        if (!d.enabled || !w.activeInHierarchy || d.color.w <= 0.0f) return;
+        const Vec3 half = d.size * 0.5f;
+        const math::Aabb box = math::Aabb::fromCenterExtents(Vec3{0.0f}, half).transformed(w.matrix);
+        if (!frustum.intersects(box)) return;
+        found.push_back({math::length(w.matrix.translation() - camPos), e});
+    });
+    std::sort(found.begin(), found.end(), [](const DecalCandidate& a, const DecalCandidate& b) { return a.distance < b.distance; });
+    std::array<std::string, detail::kMaxDecalTextures> uris{};
+    u32 textures = 0, n = 0;
+    m_decalTextures = {};
+    for (const DecalCandidate& c : found) {
+        if (n >= detail::kMaxDecals) break;
+        const DecalComponent& d = reg.get<DecalComponent>(c.entity);
+        // Texture slot: shared by decals with the same image; kMaxDecalTextures = no image (white).
+        u32 slot = detail::kMaxDecalTextures;
+        if (!d.texture.empty()) {
+            slot = 0;
+            while (slot < textures && uris[slot] != d.texture) ++slot;
+            if (slot == textures) {
+                if (textures >= detail::kMaxDecalTextures) continue;  // a 5th image: skipped this frame
+                uris[slot] = d.texture;
+                m_decalTextures[slot] = resolveTexture(d.texture, false);
+                ++textures;
+            }
+        }
+        const math::Mat4& world = reg.get<WorldTransformComponent>(c.entity).matrix;
+        const Vec3 size{std::max(d.size.x, 1e-4f), std::max(d.size.y, 1e-4f), std::max(d.size.z, 1e-4f)};
+        lights.decalMatrix[n] = math::Mat4::scale(Vec3{1.0f / size.x, 1.0f / size.y, 1.0f / size.z}) * math::inverse(world);
+        lights.decalColor[n] = Vec4(detail::srgbToLinear(d.color), std::clamp(d.color.w, 0.0f, 1.0f));
+        lights.decalAxis[n] = Vec4(math::normalize(world.transformVector({0, -1, 0})), static_cast<float>(slot));
+        lights.decalFade[n] = Vec4(std::clamp(d.normalFade, 0.0f, 1.0f), std::clamp(d.upperFade, 0.0f, 1.0f), std::clamp(d.lowerFade, 0.0f, 1.0f),
+                                   std::max(d.emission, 0.0f));
+        ++n;
+    }
+    lights.count[1] = static_cast<i32>(n);
+    m_stats.decals = n;
 }
 
 void Renderer::uploadInstances() {
@@ -1143,6 +1190,8 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
         m_device.bindTexture(kSpotShadowUnit,
                              m_spotShadowCount > 0 || m_pointShadow ? m_device.renderTargetDepthTexture(m_spotShadowTarget) : m_assets.whiteTexture());
         for (u32 t = kSplatUnit; t < kSpotShadowUnit; ++t) m_device.bindTexture(t, m_assets.whiteTexture());  // unused units stay valid
+        for (u32 t = 0; t < detail::kMaxDecalTextures; ++t)
+            m_device.bindTexture(kDecalUnit + t, m_decalTextures[t] ? m_decalTextures[t] : m_assets.whiteTexture());
     }
     u32 boundPipeline = ~0u, boundMaterial = ~0u;
     rhi::BufferHandle boundVb;

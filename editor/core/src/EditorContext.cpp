@@ -43,6 +43,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::ParallaxLayer: return "Parallax Layer";
         case CreateKind::PointLight: return "Point Light";
         case CreateKind::SpotLight: return "Spot Light";
+        case CreateKind::Decal: return "Decal";
         case CreateKind::UICanvas: return "Canvas";
         case CreateKind::UIPanel: return "Panel";
         case CreateKind::UIText: return "Text";
@@ -244,6 +245,10 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             reg.emplace<SpotLightComponent>(e);
             if (parent.isNull()) t.position.y += 3.0f;
             t.rotation = math::Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});  // pointing down
+            break;
+        case CreateKind::Decal:
+            reg.emplace<DecalComponent>(e).color = {0.85f, 0.2f, 0.15f, 1.0f};  // visible at once; the image is chosen in the inspector
+            if (parent.isNull()) t.position.y += 0.5f;
             break;
         case CreateKind::UICanvas: reg.emplace<UICanvasComponent>(e); break;
         case CreateKind::UIPanel: {

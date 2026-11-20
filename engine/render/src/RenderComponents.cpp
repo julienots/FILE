@@ -284,6 +284,19 @@ void registerRenderComponents() {
         .field("orderInLayer", &TrailComponent::orderInLayer)
         .field("maxPoints", &TrailComponent::maxPoints, {.rangeMin = 2.0f, .rangeMax = 4096.0f});
 
+    reg.add<DecalComponent>("Decal")
+        .category("Rendering")
+        .description("Projects an image onto the surfaces inside its box (impacts, stains, road marks). Projects along local -Y.")
+        .field("texture", &DecalComponent::texture, {.tooltip = "Color + alpha image (empty: a plain square)", .flags = FieldFlag_AssetPath})
+        .field("color", &DecalComponent::color, {.tooltip = "Tint; alpha = opacity", .flags = FieldFlag_Color})
+        .field("size", &DecalComponent::size, {.tooltip = "Box size: x, z = image, y = projection depth", .speed = 0.01f})
+        .field("normalFade", &DecalComponent::normalFade,
+               {.tooltip = "0: every slope; 1: only surfaces facing the decal", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("upperFade", &DecalComponent::upperFade, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("lowerFade", &DecalComponent::lowerFade, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("emission", &DecalComponent::emission, {.tooltip = "Glow strength (adds light)", .rangeMin = 0.0f, .rangeMax = 16.0f, .speed = 0.01f})
+        .field("enabled", &DecalComponent::enabled);
+
     reg.add<OccluderComponent>("Occluder")
         .category("Rendering")
         .description("Hides the objects behind it from the renderer (occlusion culling). Keep it inside the visible geometry.")

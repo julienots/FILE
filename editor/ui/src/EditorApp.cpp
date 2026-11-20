@@ -740,7 +740,7 @@ void EditorApp::drawMenuBar() {
             {"Tilemap", CreateKind::Tilemap}, {"Particules 2D", CreateKind::Particles2D}, {"Lumière 2D", CreateKind::Light2D},
             {"Couche de parallaxe", CreateKind::ParallaxLayer}, {"Squelette 2D", CreateKind::Skeleton2D}, {nullptr, {}}, {"Caméra", CreateKind::Camera},
             {"Lumière directionnelle", CreateKind::DirectionalLight}, {"Lumière ponctuelle", CreateKind::PointLight},
-            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {nullptr, {}},
+            {"Projecteur (spot)", CreateKind::SpotLight}, {"Environnement", CreateKind::Environment}, {"Terrain", CreateKind::Terrain}, {"Eau", CreateKind::Water}, {"Particules 3D", CreateKind::Particles3D}, {"Décalque", CreateKind::Decal}, {nullptr, {}},
             {"UI : Canvas", CreateKind::UICanvas}, {"UI : Panneau", CreateKind::UIPanel}, {"UI : Texte", CreateKind::UIText},
             {"UI : Bouton", CreateKind::UIButton}, {"UI : Curseur", CreateKind::UISlider}, {"UI : Colonne", CreateKind::UIColumn},
             {"UI : Case à cocher", CreateKind::UIToggle}, {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView}, {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown}, {"UI : Onglets", CreateKind::UITabs},

@@ -32,6 +32,10 @@ layout(std140) uniform LightData {
     vec4 u_spotShadowRect[2];
     mat4 u_pointShadowMatrix[6];  // cube faces +x, -x, +y, -y, +z, -z
     vec4 u_pointShadowRect[6];
+    mat4 u_decalMatrix[16];  // world -> unit box (count: u_lightCount.y)
+    vec4 u_decalColor[16];   // linear rgb, opacity
+    vec4 u_decalAxis[16];    // projection direction (world), texture slot
+    vec4 u_decalFade[16];    // normal fade, upper fade, lower fade, emission
 };
 )";
 
@@ -225,6 +229,10 @@ uniform sampler2D u_occlusionMap;
 uniform sampler2D u_emissiveMap;
 uniform sampler2D u_shadowMap;
 uniform sampler2D u_spotShadowMap;  // local light shadow atlas
+uniform sampler2D u_decalMap0;
+uniform sampler2D u_decalMap1;
+uniform sampler2D u_decalMap2;
+uniform sampler2D u_decalMap3;
 in vec3 v_worldPos;
 in vec3 v_normal;
 in vec4 v_tangent;
@@ -283,6 +291,35 @@ float spotShadow(int i, vec3 N, vec3 L) {
     vec4 rect = u_spotShadowRect[k];
     if (c.x <= rect.x || c.x >= rect.z || c.y <= rect.y || c.y >= rect.w) return 1.0;  // outside the cone
     return atlasShadow(c, rect);
+}
+
+// Decals: each one projects its image along its axis onto the point if it lies in its box.
+// Texture derivatives are taken before any branch (uniform control flow), then textureGrad.
+void agrApplyDecals(inout vec3 albedo, inout vec3 emissive, vec3 geomN) {
+    for (int i = 0; i < 16; ++i) {
+        if (i >= u_lightCount.y) break;
+        vec3 local = (u_decalMatrix[i] * vec4(v_worldPos, 1.0)).xyz;
+        vec2 uv = vec2(local.x + 0.5, local.z + 0.5);
+        vec2 dx = dFdx(uv), dy = dFdy(uv);
+        vec3 a = abs(local);
+        if (a.x > 0.5 || a.y > 0.5 || a.z > 0.5) continue;
+        int slot = int(u_decalAxis[i].w + 0.5);
+        vec4 t = slot >= 4 ? vec4(1.0) : slot == 0 ? textureGrad(u_decalMap0, uv, dx, dy)
+               : slot == 1 ? textureGrad(u_decalMap1, uv, dx, dy)
+               : slot == 2 ? textureGrad(u_decalMap2, uv, dx, dy)
+                           : textureGrad(u_decalMap3, uv, dx, dy);
+        vec4 fade = u_decalFade[i];
+        float facing = dot(geomN, -u_decalAxis[i].xyz);
+        float limit = fade.x * 0.95;  // cos of the steepest slope kept
+        float nf = fade.x > 0.0 ? smoothstep(limit - 0.05, limit + 0.05, facing) : 1.0;
+        float h = local.y * 2.0;  // -1 (bottom) .. 1 (top of the box)
+        float ff = h > 0.0 ? (fade.y > 0.0 ? clamp((1.0 - h) / fade.y, 0.0, 1.0) : 1.0)
+                           : (fade.z > 0.0 ? clamp((1.0 + h) / fade.z, 0.0, 1.0) : 1.0);
+        float k = t.a * u_decalColor[i].a * nf * ff;
+        vec3 c = t.rgb * u_decalColor[i].rgb;
+        albedo = mix(albedo, c, k);
+        emissive += c * k * fade.w;
+    }
 }
 
 float distributionGGX(float NoH, float a) {
@@ -488,6 +525,11 @@ void main() {
         return;
     }
 #endif
+    if (u_lightCount.y > 0) {
+        vec3 albedo = base.rgb;
+        agrApplyDecals(albedo, emissive, normalize(gl_FrontFacing ? v_normal : -v_normal));
+        base.rgb = albedo;
+    }
     if (u_flags.z > 0.5) {  // toon: vivid colors, no filmic curve (exposure kept)
         vec3 toon = agrToonShade(base.rgb, N, V, occlusion) + emissive;
         if (u_fogColor.w > 0.5) {

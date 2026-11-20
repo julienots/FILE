@@ -47,6 +47,8 @@ struct MaterialUniforms {
 static_assert(sizeof(MaterialUniforms) == 272);
 
 inline constexpr u32 kMaxLights3D = 8;
+inline constexpr u32 kMaxDecals = 16;
+inline constexpr u32 kMaxDecalTextures = 4;
 inline constexpr u32 kMaxSpotShadows = 2;
 struct LightUniforms {
     math::Vec4 posRange[kMaxLights3D];
@@ -60,8 +62,13 @@ struct LightUniforms {
     math::Vec4 spotShadowRect[kMaxSpotShadows];    // atlas uv bounds of each spot tile
     math::Mat4 pointShadowMatrix[6];               // one per cube face (+x, -x, +y, -y, +z, -z)
     math::Vec4 pointShadowRect[6];                 // atlas uv bounds of each face
+    // Decals (count[1]): world -> unit box [-0.5, 0.5]^3, tint + opacity, projection direction.
+    math::Mat4 decalMatrix[kMaxDecals];
+    math::Vec4 decalColor[kMaxDecals];   // linear rgb, opacity
+    math::Vec4 decalAxis[kMaxDecals];    // world direction the decal projects along, texture slot (0..3)
+    math::Vec4 decalFade[kMaxDecals];    // normal fade, upper fade, lower fade, emission
 };
-static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96);
+static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96 + kMaxDecals * (64 + 48));
 
 inline float srgbToLinear(float c) {
     c = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);

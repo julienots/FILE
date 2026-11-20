@@ -182,6 +182,22 @@ struct BlobShadowComponent {
     math::Color color{0.12f, 0.09f, 0.18f, 1.0f};
 };
 
+/// Projects a texture onto the surfaces inside its box (bullet holes, stains, road marks,
+/// footprints...): local -Y is the projection direction (the box hangs below the entity like a
+/// light, `size` is its full size in local units, scaled by the transform). The texture replaces
+/// the base color of the lit surfaces it covers before lighting, so it is lit and shadowed like
+/// them. Up to 16 decals near the camera and 4 different textures per frame.
+struct DecalComponent {
+    std::string texture;                ///< Color + alpha image (empty: a plain colored square).
+    math::Color color{1.0f, 1.0f, 1.0f, 1.0f};  ///< Tint; alpha = opacity.
+    math::Vec3 size{2.0f, 2.0f, 2.0f};  ///< Box size (x, z: the image; y: projection depth).
+    float normalFade = 0.3f;            ///< 0: projects on every slope; 1: only on surfaces facing the decal.
+    float upperFade = 0.3f;             ///< Fraction of the box's upper half where the decal fades out.
+    float lowerFade = 0.3f;             ///< Same for the lower half.
+    float emission = 0.0f;              ///< Glow: the decal also adds its color as light (neon signs, lava).
+    bool enabled = true;
+};
+
 /// Hides what is behind it from the renderer (occlusion culling): a simple box or rectangle
 /// placed on walls, buildings, rocks or hills. Objects entirely behind occluders are not drawn
 /// (their shadows still are). The shape should stay inside the visible geometry, or objects

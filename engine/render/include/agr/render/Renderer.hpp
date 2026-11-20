@@ -25,6 +25,7 @@ namespace agr {
 
 namespace detail {
 struct FrameUniforms;
+struct LightUniforms;
 }
 
 /// A camera independent of the scene (editor viewports, previews, split screen).
@@ -102,6 +103,7 @@ struct RenderStats {
     u32 overlayQuads = 0;    ///< Game UI quads (overlay).
     u32 lights2D = 0;
     u32 lights = 0;          ///< Point / spot lights shading this frame.
+    u32 decals = 0;          ///< Decals projected this frame (<= 16).
     u32 meshBatches = 0;     ///< 3D draw calls (instanced batches) in the main pass.
     u32 outlineBatches = 0;  ///< Outline draw calls (instanced batches of outlined materials).
     bool ambientOcclusion = false;  ///< SSAO computed this frame.
@@ -300,6 +302,7 @@ private:
     u32 skinPalette(Scene& scene, ecs::Entity e, const MeshRendererComponent& mr, const ModelAsset& model, const math::Mat4& world,
                     math::Aabb bindBounds, math::Aabb& worldBounds);
     void uploadInstances();
+    void gatherDecals(ecs::Registry& reg, const math::Frustum& frustum, math::Vec3 camPos, detail::LightUniforms& lights);
     void drawShadowPass();
     void drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstance, bool shadow, u32 cascade = 0);
     void drawSky();
@@ -456,6 +459,7 @@ private:
     bool m_shadowsActive = false;
     bool m_drawSky = false;
     u32 m_frameOffset = 0, m_lights3DOffset = 0;
+    std::array<rhi::TextureHandle, 4> m_decalTextures{};  ///< Decal images of this frame (units 12..15).
     std::array<u32, kMaxCascades> m_shadowFrameOffsets{};
 
     rhi::BufferHandle m_uniformBuffer;

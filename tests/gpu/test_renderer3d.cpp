@@ -2,6 +2,7 @@
 // instancing, imported models with .agrmat materials, sky, fog, alpha modes.
 #include <array>
 #include <filesystem>
+#include <fstream>
 
 #include "GpuFixture.hpp"
 #include "agr/assets/AssetManager.hpp"
@@ -1145,4 +1146,71 @@ TEST_CASE("post-processing: HDR bloom, color grading, vignette, FXAA, UI untouch
     const int smooth = countMid();
     CHECK_MESSAGE(smooth > hard + 10, "edge pixels without FXAA: " << hard << ", with: " << smooth);
     CHECK(d.validationErrorCount() == 0);
+}
+
+TEST_CASE("decals: projected onto the floor, lit, image alpha, normal fade, limits") {
+    Render3DFixture f;
+    f.camera({0, 6.0f, 0.01f}, {0, 0, 0});  // looking down at the floor
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Plane, {0, 0, 0}, {20, 1, 20}, {0.8f, 0.8f, 0.8f, 1});
+    f.frame();
+    CHECK(f.renderer.stats().decals == 0);
+    const Rgba floor = f.at({-1.0f, 0.0f, 0.0f});
+
+    // A plain red decal (no image) over x in [-2, 0]; an image decal over x in [0.5, 2.5]:
+    // left half blue and opaque, right half transparent.
+    Image img;
+    img.width = 4;
+    img.height = 4;
+    img.pixels.assign(4 * 4 * 4, 0);
+    for (u32 y = 0; y < 4; ++y)
+        for (u32 x = 0; x < 2; ++x) {
+            u8* p = &img.pixels[(y * 4 + x) * 4];
+            p[0] = 0, p[1] = 0, p[2] = 255, p[3] = 255;
+        }
+    auto png = encodePng(img.width, img.height, img.pixels);
+    REQUIRE(png);
+    {
+        std::ofstream out(f.root / "mark.png", std::ios::binary);
+        out.write(reinterpret_cast<const char*>(png.value().data()), static_cast<std::streamsize>(png.value().size()));
+    }
+    const auto red = f.scene.createEntity("RedDecal");
+    f.scene.registry().get<TransformComponent>(red).position = {-1.0f, 0.5f, 0.0f};
+    auto& rd = f.scene.registry().emplace<DecalComponent>(red);
+    rd.color = {1.0f, 0.0f, 0.0f, 1.0f};
+    rd.size = {2.0f, 2.0f, 2.0f};
+    rd.upperFade = 0.0f;
+    rd.lowerFade = 0.0f;
+    const auto mark = f.scene.createEntity("ImageDecal");
+    f.scene.registry().get<TransformComponent>(mark).position = {1.5f, 0.5f, 0.0f};
+    auto& md = f.scene.registry().emplace<DecalComponent>(mark);
+    md.texture = "assets://mark.png";
+    md.size = {2.0f, 2.0f, 2.0f};
+    md.upperFade = 0.0f;
+    md.lowerFade = 0.0f;
+    f.settle();
+    f.frame();
+    CHECK(f.renderer.stats().decals == 2);
+    const Rgba onRed = f.at({-1.0f, 0.0f, 0.0f});
+    CHECK_MESSAGE((onRed.r > 150 && onRed.g < 80 && onRed.b < 80), onRed);  // red, lit like the floor
+    CHECK(std::abs(int(onRed.r) - int(floor.r)) < 40);
+    const Rgba onBlue = f.at({1.0f, 0.0f, 0.0f});  // image u < 0.5: opaque blue
+    CHECK_MESSAGE((onBlue.b > 150 && onBlue.r < 80), onBlue);
+    const Rgba clear = f.at({2.2f, 0.0f, 0.0f});  // image u > 0.5: transparent -> the floor
+    CHECK_MESSAGE(near(clear, floor.r, floor.g, floor.b, 6), clear, " vs ", floor);
+    const Rgba outside = f.at({-2.6f, 0.0f, 0.0f});
+    CHECK(near(outside, floor.r, floor.g, floor.b, 3));
+
+    // Normal fade: a decal projecting sideways (axis along x) onto the floor does not paint it.
+    f.scene.registry().get<TransformComponent>(red).rotation = math::Quat::fromEuler({0.0f, 0.0f, math::radians(90.0f)});
+    f.scene.registry().get<DecalComponent>(red).normalFade = 0.8f;
+    f.frame();
+    CHECK(near(f.at({-1.0f, 0.0f, 0.0f}), floor.r, floor.g, floor.b, 6));
+    // Off and disabled decals are not counted.
+    f.scene.registry().get<DecalComponent>(red).enabled = false;
+    f.frame();
+    CHECK(f.renderer.stats().decals == 1);
+    CHECK(gpu().device->validationErrorCount() == 0);
 }
