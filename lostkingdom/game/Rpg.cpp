@@ -62,7 +62,7 @@ void Game::equip(int i) {
     if (i < 0 || i >= (int)inventory.size()) return;
     const ItemDef* d = item(inventory[i].id);
     if (!d) return;
-    if (d->id == "tool_shovel") {   // 2.4.0 the shovel toggles the dig mode
+    if (d->id == "tool_shovel" || d->id == "tool_pickaxe") {   // 2.4.0 the shovel toggles the dig mode (2.5.1: the pickaxe too)
         digMode = !digMode; menu = Menu::None;
         notify(digMode ? "Mode creusage : touchez l'épée pour creuser (maintenez pour lancer une bombe). Utilisez la pelle à nouveau pour arrêter."
                        : "Mode creusage terminé.", vec3(0.85f, 0.75f, 0.5f), "i_pickaxe");
@@ -666,6 +666,10 @@ bool Game::loadGame(int slot) {
     if (base.founded) applyBaseToWorld();
     if (pos.x > WORLD_SIZE) pos = respawnPos;  // saved inside a dungeon: resume at its entrance
     if (hadDigs || world.dugChunks() > 0) world.unloadAll();   // 2.4.0 rebuilt with this save's holes and craters
+    if (!storyFlags.count("tools_251")) {   // 2.5.1 older saves: the gathering tools and the shovel, once
+        for (const char* t : {"tool_pickaxe", "tool_woodaxe", "tool_shovel"}) if (!countItem(t)) addItem(t, 1, Rarity::Count, false);
+        storyFlags.insert("tools_251");
+    }
     pos.y = world.groundHeight(pos.x, pos.z);
     spawnPlayer(pos);
     Character& c = pc();

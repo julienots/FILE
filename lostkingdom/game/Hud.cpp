@@ -107,11 +107,15 @@ void Game::updateTouchControls() {
     int garageRows = std::min((int)vehicles.size(), 2) + 1;   // + the horse
     Rect garagePanel{u.W - 436, 76, 224, 44.f + garageRows * 46.f};
     bool garageShown = driving < 0 && !dungeon.active;
+    // 2.5.1 dig mode one tap away (top bar, left of the garage) when you carry a pickaxe or a shovel
+    Rect bDig{u.W - 318, 14, 56, 56};
+    bool digShown = !dungeon.active && driving < 0 && !riding && (countItem("tool_pickaxe") > 0 || countItem("tool_shovel") > 0);
     // ---- joystick (left 45%) and camera (right side)
     for (auto& f : u.fingers) {
         if (f.consumed || f.blocked) continue;
         if (bMenu.contains(f.sx, f.sy) || bMap.contains(f.sx, f.sy) || bBag.contains(f.sx, f.sy) || mini.contains(f.sx, f.sy)) continue;
         if ((garageShown && bGarage.contains(f.sx, f.sy)) || (garageOpen && garagePanel.contains(f.sx, f.sy))) continue;
+        if (digShown && bDig.contains(f.sx, f.sy)) continue;
         if (Rect{14, 14, 108, 108}.contains(f.sx, f.sy)) continue;   // portrait (hero wheel)
         if (buildMode && Rect{ui.W * 0.5f - 330, 84, 660, 128}.contains(f.sx, f.sy)) continue;   // build panel (domain)
         bool left = settings.layout.leftHanded ? f.sx > u.W * 0.55f : f.sx < u.W * 0.45f;
@@ -206,6 +210,15 @@ void Game::updateTouchControls() {
             if (u.fancyButton(r, riding ? "Cheval (en selle)" : "Cheval", !riding, "button", 18)) { summonHorse(); garageOpen = false; }
         }
     } else garageOpen = false;
+    if (digShown) {
+        u.nine(digMode ? "button" : "button_dark", bDig, vec4(1, 1, 1, digMode ? 1.f : 0.85f), 0.6f);
+        u.sprite("i_pickaxe", bDig.inset(10), digMode ? vec4(1.f, 0.9f, 0.6f, 1.f) : vec4(1, 1, 1, 0.95f));
+        u.tag(bDig, "Creuser");
+        if (u.button(bDig)) {
+            digMode = !digMode; play("ui_click", 0.4f);
+            notify(digMode ? "Mode creusage : touchez la pioche (bouton épée) pour creuser ou miner devant vous. Maintenez pour lancer une bombe." : "Mode creusage terminé.", vec3(0.85f, 0.75f, 0.5f), "i_pickaxe");
+        }
+    } else if (dungeon.active || riding || driving >= 0) digMode = false;
     if (u.button(bBag)) { menu = Menu::Bag; selItem = -1; play("ui_open", 0.6f); }   // 2.2.0 the quick bag (the full journal is one tap away)
 }
 

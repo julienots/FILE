@@ -983,13 +983,23 @@ float World::digOffset(float x, float z) const {
 bool World::canDig(vec2 c, float radius) const {
     if (c.x < 80 || c.y < 80 || c.x > WORLD_SIZE - 80 || c.y > WORLD_SIZE - 80) return false;
     for (const Poi& p : pois) {   // not under houses, walls, temples, waystones
-        bool built = p.type == PoiType::Village || p.type == PoiType::Castle || p.type == PoiType::Monastery || p.type == PoiType::Temple ||
-                     p.type == PoiType::Waystone || p.type == PoiType::Mill || p.type == PoiType::Farm || p.type == PoiType::Tower || p.type == PoiType::Bridge;
-        if (built && length(p.pos - c) < p.radius + radius + 4.f) return false;
+        // 2.5.1: villages and farms can be dug between the houses (the buildings themselves are checked below);
+        // castles, temples, monasteries, waystones, towers and bridges stay untouchable
+        bool built = p.type == PoiType::Castle || p.type == PoiType::Monastery || p.type == PoiType::Temple ||
+                     p.type == PoiType::Waystone || p.type == PoiType::Tower || p.type == PoiType::Bridge;
+        if (built && length(p.pos - c) < p.radius + radius + 2.f) return false;
+        if ((p.type == PoiType::Village || p.type == PoiType::Farm || p.type == PoiType::Mill) && length(p.pos - c) < radius + 6.f) return false;   // not the village square
     }
-    int ci = chunkIndex((int)std::floor(c.x / CHUNK), (int)std::floor(c.y / CHUNK));
+    int ccx = (int)std::floor(c.x / CHUNK), ccz = (int)std::floor(c.y / CHUNK);
+    for (int oz = -1; oz <= 1; oz++) for (int ox = -1; ox <= 1; ox++) {
+    int ci = chunkIndex(ccx + ox, ccz + oz);
     if (ci >= 0 && ci < (int)chunkStructures.size())
-        for (int si : chunkStructures[ci]) if (length(structures[si].pos - c) < radius + 6.f) return false;
+        for (int si : chunkStructures[ci]) {   // not under a building: its footprint plus a margin
+            const Structure& st = structures[si];
+            vec2 fp = structureFootprint(st.kind) * st.scale;
+            if (length(st.pos - c) < std::max(fp.x, fp.y) + radius + 1.5f) return false;
+        }
+    }
     return true;
 }
 

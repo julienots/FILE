@@ -10,6 +10,12 @@ void Game::playerDig() {
     if (c.dead || riding || c.swimming || driving >= 0 || dungeon.active || c.attackClip) return;
     if (stamina < 6) { floatText(c.pos + vec3(0, 2.2f, 0), "Épuisé", vec3(0.9f, 0.8f, 0.3f), 18); return; }
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
+    // 2.5.1 a rock, an ore vein, a tree right in front: the strike mines / chops it instead of digging the ground
+    if (interactTarget != NullEntity && reg.valid(interactTarget)) {
+        Interact* it = reg.get<Interact>(interactTarget);
+        NodeComp* n = reg.get<NodeComp>(interactTarget);
+        if (it && n && it->kind == InterKind::Node && distXZ(n->node.pos, c.pos) < 3.f) { playerInteract(); return; }
+    }
     vec2 at = (c.pos + fwd * 1.7f).xz();
     const DigTuning& T = digTuning();
     if (!world.dig(at, T.digRadius, T.digDepth, false)) { notify("Impossible de creuser ici (trop près des bâtiments).", vec3(1.f, 0.75f, 0.5f), "i_lock"); return; }

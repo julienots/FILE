@@ -13,6 +13,15 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.5.1 (creuser et miner plus facilement)
+
+- **Bouton « Creuser » dans la barre du haut** (pioche, à gauche du garage), visible dès que vous avez une pioche ou une pelle : un toucher active ou arrête le mode creusage (avant : caché dans le sac, et seulement avec la pelle).
+- **En mode creusage, le bouton pioche mine aussi** : devant un rocher, un filon ou un arbre, le coup le récolte ; ailleurs, il creuse le sol. Maintenir lance une bombe.
+- **La pioche permet aussi de creuser** (plus seulement la pelle).
+- **On peut creuser dans les villages**, entre les maisons (avant : interdit dans toute l'enceinte, y compris à Brindlemere où l'on commence) ; restent interdits : sous et contre les bâtiments, la place centrale, les châteaux, temples, monastères, tours, ponts et pierres de passage.
+- **Outils de départ** : nouvelle partie avec pioche, hachette, **pelle** et **2 bombes** ; les anciennes sauvegardes reçoivent une fois les outils qui leur manquent.
+- **Vérification (ordinateur seulement)** : scénario `mine` : nouvelle partie, filon le plus proche, bouton d'action touché au doigt : 3 minerais obtenus ; puis creuser à Brindlemere entre les maisons : accepté (`MINE TEST PASSED`, `MINE TOWN TEST PASSED`).
+
 ### Nouveautés 2.5.0 (entrer dans les bâtiments)
 
 - **On peut entrer dans les bâtiments** : devant la porte d'une maison, d'une maison de pierre, d'une longère, d'une auberge, d'une chapelle, d'une forge, d'une maison de grès du désert ou d'une cabane, le bouton d'action affiche « Entrer : … ». Un fondu, et vous êtes dedans ; la porte au fond de la pièce (« Sortir ») vous ramène dehors, devant le bâtiment.

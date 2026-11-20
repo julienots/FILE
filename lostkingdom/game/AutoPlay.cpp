@@ -22,6 +22,7 @@ static void tapAt(Game& g, vec2 uiPos, int id, bool release = true) {
 }
 static vec2 ctlCentre(Game& g, int id) { Rect r = ctlRect(g, id); return {r.x + r.w / 2, r.y + r.h / 2}; }
 
+Rect ctlRect(const Game& g, int id);
 static void teleport(Game& g, float x, float z, float yaw = 0.8f) {
     Character& c = g.pc();
     c.pos = vec3(x, g.world.groundHeight(x, z), z); c.vel = vec3(0); g.camFocus = c.pos; g.camYaw = yaw;
@@ -1624,6 +1625,33 @@ static std::vector<Step> scenario(const std::string& name) {
             g.requestScreenshot("build/shots/99_grass_recovered.png");
         }, idle, "shot"});
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
+        return s;
+    }
+    if (name == "mine") {
+        // 2.5.1 regression "je peux pas miner": a fresh game, walk up to a real ore / rock node and press the action button
+        static Entity node = NullEntity; static int before = 0; static int kind = -1;
+        s.push_back({4.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; teleport(g, 1600, 1560, 0.f); }, [](Game& g, float) { g.camIdleT = 0; }, "setup"});
+        s.push_back({0.5f, [](Game& g) {
+            float bd = 1e9f; node = NullEntity;
+            g.reg.each<NodeComp>([&](Entity e, NodeComp& n) { NodeType t = n.node.type; if (t != NodeType::Rock && t != NodeType::IronOre && t != NodeType::CopperOre) return; float d = distXZ(n.node.pos, g.pc().pos); if (d < bd) { bd = d; node = e; kind = (int)t; } });
+            int nodes = 0; g.reg.each<NodeComp>([&](Entity, NodeComp&) { nodes++; });
+            AGR_LOG("MINE %d nodes around, nearest rock/ore %.0f m (type %d), pickaxe %d", nodes, bd, kind, g.countItem("tool_pickaxe"));
+            if (node != NullEntity) { NodeComp* n = g.reg.get<NodeComp>(node); vec3 p = n->node.pos; teleport(g, p.x + 1.3f, p.z, 0.f); g.pc().yaw = std::atan2(-1.3f, 0.f); }
+            before = 0; for (auto& st : g.inventory) before += st.count; }, idle, "go"});
+        s.push_back({0.6f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("MINE interact target %s, prompt '%s', dungeonPrompt '%s'", g.interactTarget == node ? "the node" : (g.interactTarget == NullEntity ? "none" : "other"), g.interactTarget != NullEntity && g.reg.get<Interact>(g.interactTarget) ? g.reg.get<Interact>(g.interactTarget)->text.c_str() : "", g.dungeonPrompt.c_str());
+            float k = g.ui.scale; Rect r = ctlRect(g, CTL_INTERACT); g.touch(TouchEvent{TouchEvent::Down, 901, (r.x + r.w / 2) * k, (r.y + r.h / 2) * k}); }, idle, "press"});
+        s.push_back({0.25f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 901 && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 901, f.x * k, f.y * k}); } }, idle, "release"});
+        s.push_back({1.f, none, idle, "swing"});
+        s.push_back({0.1f, [](Game& g) { int after = 0; for (auto& st : g.inventory) after += st.count;
+            AGR_LOG("MINE items %d -> %d, stone %d iron %d copper %d -> %s", before, after, g.countItem("stone"), g.countItem("iron_ore"), g.countItem("copper_ore"), after > before ? "MINE TEST PASSED" : "MINE TEST FAILED"); g.requestScreenshot("build/shots/MI_mine.png"); }, idle, "check"});
+        // 2.5.1 dig mode from the top bar in a fresh game, in Brindlemere between the houses, and mining a rock in dig mode
+        s.push_back({0.3f, [](Game& g) { g.menu = Menu::None; const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 20, b->pos.y + 22, 0.f);
+            const Rect* r = nullptr; (void)r; g.digMode = true; before = (int)(g.world.height(g.pc().pos.x + std::sin(g.pc().yaw) * 1.7f, g.pc().pos.z + std::cos(g.pc().yaw) * 1.7f) * 100);
+            AGR_LOG("MINE starter shovel %d, bombs %d", g.countItem("tool_shovel"), g.countItem("bomb")); }, idle, "town"});
+        s.push_back({0.5f, none, idle, "settle"});
+        s.push_back({0.8f, [](Game& g) { g.interactTarget = NullEntity; g.stamina = g.maxStamina; g.pc().attackClip = nullptr; int d0 = g.digsDone; g.playerAttack(false, false); AGR_LOG("MINE dig in Brindlemere: %s", g.digsDone > d0 ? "dug" : "refused"); }, idle, "dig"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("MINE TOWN TEST %s", g.digsDone > 0 ? "PASSED" : "FAILED"); }, idle, "check"});
         return s;
     }
     if (name == "interior") {

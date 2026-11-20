@@ -291,6 +291,8 @@ void Game::newGame() {
     addItem("bread", 2, Rarity::Count, false);
     addItem("tool_pickaxe", 1, Rarity::Count, false);
     addItem("tool_woodaxe", 1, Rarity::Count, false);
+    addItem("tool_shovel", 1, Rarity::Count, false);   // 2.5.1
+    addItem("bomb", 2, Rarity::Count, false);
     addItem("shield_wood", 1, Rarity::Count, false);
     learnSpell("fireball");
     recomputeStats();
@@ -343,7 +345,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.5.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.5.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {
@@ -576,7 +578,7 @@ void Game::drawMenus(float dt) {
             bool equipable = slot >= 0 || d->kind == ItemKind::Cosmetic;
             if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, st.id == "bomb" ? "Lancer" : "Utiliser", true, "plaque", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
             if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "plaque", 21)) { equip(selItem); selItem = -1; }
-            if (st.id == "tool_shovel" && u.fancyButton({bx, by, bw, 56}, digMode ? "Arrêter" : "Creuser", true, "plaque", 21)) { equip(selItem); selItem = -1; }   // 2.4.0
+            if ((st.id == "tool_shovel" || st.id == "tool_pickaxe") && u.fancyButton({bx, by, bw, 56}, digMode ? "Arrêter" : "Creuser", true, "plaque", 21)) { equip(selItem); selItem = -1; }   // 2.4.0
             if (d->kind != ItemKind::Quest && d->kind != ItemKind::Relic && u.fancyButton({bx + bw + 10, by, bw, 54}, "Jeter", true, "button_dark", 21)) {
                 Character& pl = pc();
                 spawnPickup(st.id, 1, st.rarity, pl.pos + vec3(std::sin(pl.yaw), 0, std::cos(pl.yaw)) * 1.5f);
