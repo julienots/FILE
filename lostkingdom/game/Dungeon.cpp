@@ -376,6 +376,7 @@ void Game::exitDungeon() {
         dungeon.active = false;
         dungeon.floor.destroy(); dungeon.walls.destroy(); dungeon.props.destroy(); dungeon.realm.destroy();
         dungeon.tiles.clear(); dungeon.def = -1;
+        dungeon.interior = false; dungeon.hasBed = dungeon.hasForge = false;   // 2.4.1
         play("door");
     });
 }
@@ -385,8 +386,17 @@ void Game::updateDungeon(float dt) {
     nearDungeon = -1;
     if (player == NullEntity) return;
     Character& p = pc();
+    if (updateInterior(dt)) return;   // 2.4.1 inside a building
     // ---- overworld: entrances
     if (!dungeon.active) {
+        findDoor();   // 2.4.1 building doors
+        if (nearDoor >= 0) {
+            const Structure& s = world.structures[nearDoor];
+            static const char* nm[] = {"la maison"};
+            (void)nm;
+            dungeonPrompt = std::string("Entrer : ") + (s.kind == S_INN ? "l'auberge" : s.kind == S_CHAPEL ? "la chapelle" : s.kind == S_FORGE ? "la forge" : s.kind == S_STILT_HUT || s.kind == S_BEACHHUT ? "la cabane" : "la maison");
+            if (input.interact && transitionT < 0) { enterInterior(nearDoor); return; }
+        }
         for (int i = 0; i < (int)dungeons().size(); i++) {
             const Poi* poi = world.poiById(dungeons()[i].poi);
             if (!poi) continue;

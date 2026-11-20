@@ -401,7 +401,7 @@ void Game::updateEnvironment(float dt) {
     // --- region blending (smoothed weights at the focus point)
     vec3 focus = (state == GameState::Playing && player != NullEntity) ? reg.get<Character>(player)->pos : camFocus;
     RegionWeights rw = world.regionAt(focus.x, focus.z);
-    if (dungeon.active && focus.x > WORLD_SIZE) { for (int i = 0; i < R_COUNT; i++) rw.w[i] = i == dungeons()[dungeon.def].region ? 1.f : 0.f; }
+    if (dungeon.active && focus.x > WORLD_SIZE) { int dr = dungeon.interior ? dungeon.interiorRegion : dungeons()[dungeon.def].region; for (int i = 0; i < R_COUNT; i++) rw.w[i] = i == dr ? 1.f : 0.f; }
     for (int i = 0; i < R_COUNT; i++) regionW[i] = damp(regionW[i], rw.w[i], 0.8f, dt);
     RegionGrade g{};
     float sum = 0;
@@ -549,11 +549,16 @@ void Game::updateEnvironment(float dt) {
         // underground: no sun, warm torch light, darker fog
         env.sunIntensity = 0.25f; env.shadowStrength = 0.3f; env.sunColor = srgb(0x8a9aff);
         env.skyAmbient = srgb(0x2a2a3a) * 0.9f; env.groundAmbient = srgb(0x2a2018) * 0.7f;
-        int th = dungeons()[dungeon.def].theme;
+        int th = dungeon.interior ? 9 : dungeons()[dungeon.def].theme;
         env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : (th == 6 ? srgb(0x3a2a14) : (th == 7 ? srgb(0x0e2a34) : (th == 8 ? srgb(0xc8a8e8) : srgb(0x141216))))));
         env.fogDensity = 0.025f; env.fogBase = -10.f; env.cloudShadows = 0; env.snowCover = 0; env.wetness = 0.2f;
         env.exposure = 1.25f; env.tiltShift = 0.25f;
         env.night = 1.f;  // window/lantern glows on
+        if (dungeon.interior) {   // 2.4.1 indoors: warm lamplight, a little daylight through the windows, no fog
+            env.sunIntensity = 0.35f; env.sunColor = srgb(0xffe0b0); env.shadowStrength = 0.35f;
+            env.skyAmbient = srgb(0x6a5a48) * 0.85f; env.groundAmbient = srgb(0x4a3828) * 0.8f;
+            env.fogColor = srgb(0x3a2e24); env.fogDensity = 0.004f; env.exposure = 1.2f; env.tiltShift = 0.1f;
+        }
         if (th == 8) {
             // 2.2.1 the celestial realm is open sky: low golden sun, violet zenith, aurora, light mist far below
             env.sunDir = normalize(vec3(0.5f, 0.32f, 0.6f)); env.sunColor = srgb(0xffd8a8); env.sunIntensity = 2.4f; env.shadowStrength = 0.8f;
@@ -564,7 +569,7 @@ void Game::updateEnvironment(float dt) {
             env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.2f; env.wetness = 0.f;
         }
     }
-    audio.setReverb(dungeon.active ? 0.45f : (underwaterView ? 0.6f : 0.f));
+    audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));
     applyCinematicEnvironment();
 }
 
@@ -792,7 +797,7 @@ void Game::updateAudioDirector(float dt) {
     std::string track;
     if (bossEnt != NullEntity) track = "boss";
     else if (combat) track = "combat";
-    else if (dungeon.active) track = dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon";   // 2.3.4 the Celestial Realm
+    else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
         static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle"};
@@ -821,9 +826,9 @@ void Game::updateAudioDirector(float dt) {
     audio.setAmbience("amb_night", under ? 0 : env.night * (1 - rainAmt) * 0.7f);
     audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + regionW[R_STEPPE] * 0.5f + sandAmt * 0.5f, 0, 1) * 0.8f);
     audio.setAmbience("amb_rain", under ? 0 : rainAmt);
-    audio.setAmbience("amb_lava", under ? (dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
+    audio.setAmbience("amb_lava", under ? (!dungeon.interior && dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
     audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f + regionW[R_JUNGLE] * 0.35f);   // 2.4.0 the jungle croaks too
-    audio.setAmbience("amb_cave", under ? 0.8f : 0.f);
+    audio.setAmbience("amb_cave", under && !dungeon.interior ? 0.8f : 0.f);
     float river = 0;
     if (!under) { vec2 fl; bool lv, fr; float wl = world.waterLevel(p.pos.x, p.pos.z, &lv, &fr, &fl); river = (wl > -1e8f && length(fl) > 0.01f) ? 0.8f : 0.f; }
     audio.setAmbience("amb_river", river);

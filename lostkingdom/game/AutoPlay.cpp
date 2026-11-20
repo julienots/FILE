@@ -1626,6 +1626,37 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "interior") {
+        // 2.4.1 walk into buildings: door prompt, the room, sleep in the bed, the forge, walk out (log + pictures)
+        static int house = -1, forge = -1, inn = -1; static int ok[6]; static vec3 door;
+        auto findKind = [](Game& g, int kind, vec2 near) { int best = -1; float bd = 1e9f; for (int i = 0; i < (int)g.world.structures.size(); i++) { const Structure& st = g.world.structures[i]; if (st.kind != kind) continue; float d = length(st.pos - near); if (d < bd) { bd = d; best = i; } } return best; };
+        s.push_back({1.5f, [findKind](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 15.f; g.toastHint.clear(); g.tutStep = -1; for (int& o : ok) o = 0;
+            const Poi* b = g.world.poiById("brindlemere"); vec2 c = b->pos;
+            house = findKind(g, S_HOUSE, c); forge = findKind(g, S_FORGE, c); inn = findKind(g, S_INN, c);
+            AGR_LOG("INTERIOR house %d forge %d inn %d", house, forge, inn);
+            door = g.doorOf(g.world.structures[house]); teleport(g, door.x, door.z, 0.f); }, idle, "go"});
+        s.push_back({1.f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.interactTarget = NullEntity; g.findDoor(); ok[0] = g.nearDoor == house; AGR_LOG("INTERIOR door prompt %d (near %d)", ok[0], g.nearDoor); g.requestScreenshot("build/shots/I0_door.png"); }, idle, "door"});
+        s.push_back({1.5f, [](Game& g) { g.enterInterior(house); }, idle, "enter"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "inside"});
+        s.push_back({0.1f, [](Game& g) { ok[1] = g.dungeon.active && g.dungeon.interior && g.pc().pos.x > WORLD_SIZE; AGR_LOG("INTERIOR inside %d (%s)", ok[1], g.dungeon.interiorName.c_str()); g.requestScreenshot("build/shots/I1_house.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { Character& c = g.pc(); c.pos = g.dungeon.bedPos + vec3(0.9f, 0, 0); c.hp = c.maxHp * 0.3f; g.input.interact = true; g.updateDungeon(0.016f); }, idle, "bed"});
+        s.push_back({2.f, none, idle, "sleep"});
+        s.push_back({0.1f, [](Game& g) { ok[2] = std::fabs(g.timeOfDay - 7.f) < 0.5f && g.pc().hp >= g.pc().maxHp - 1; AGR_LOG("INTERIOR slept %d (time %.1f, hp %.0f/%.0f)", ok[2], g.timeOfDay, g.pc().hp, g.pc().maxHp); }, idle, "check"});
+        s.push_back({0.3f, [](Game& g) { Character& c = g.pc(); c.pos = g.dungeon.exitPos; g.input.interact = true; g.updateDungeon(0.016f); }, idle, "exit"});
+        s.push_back({2.f, none, idle, "out"});
+        s.push_back({0.1f, [](Game& g) { ok[3] = !g.dungeon.active && distXZ(g.pc().pos, door) < 1.5f; AGR_LOG("INTERIOR back outside %d", ok[3]); }, idle, "check"});
+        s.push_back({1.5f, [](Game& g) { g.enterInterior(forge); }, idle, "forge"});
+        s.push_back({1.5f, none, idle, "inside"});
+        s.push_back({0.3f, [](Game& g) { Character& c = g.pc(); c.pos = g.dungeon.forgePos + vec3(0, 0, 1.2f); g.input.interact = true; g.updateDungeon(0.016f);
+            ok[4] = g.menu == Menu::Crafting && g.craftStation == ST_FORGE; AGR_LOG("INTERIOR forge crafting %d", ok[4]); g.requestScreenshot("build/shots/I2_forge.png"); }, idle, "anvil"});
+        s.push_back({0.5f, [](Game& g) { g.menu = Menu::None; g.exitDungeon(); }, idle, "leave"});
+        s.push_back({1.5f, [](Game& g) { g.enterInterior(inn); }, idle, "inn"});
+        s.push_back({1.8f, none, [](Game& g, float) { g.camIdleT = 0; }, "inside"});
+        s.push_back({0.1f, [](Game& g) { ok[5] = g.dungeon.interior && g.dungeon.hasBed; AGR_LOG("INTERIOR inn %d", ok[5]); g.requestScreenshot("build/shots/I3_inn.png");
+            bool all = true; for (int o : ok) all = all && o; AGR_LOG("INTERIOR TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
+        return s;
+    }
     if (name == "newlands") {
         // 2.4.0 the Valdor Steppes and the Emerald Jungle (pictures)
         static const char* places[] = {"valdor", "pierres_levees", "emeraude", "temple_jaguar", "xochi"};

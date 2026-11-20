@@ -276,6 +276,9 @@ struct DungeonState {
     bool bossDefeated = false;
     vec3 returnPos;                               // overworld position to return to
     int theme = 0;
+    // 2.4.1 building interiors use the same machinery (an off-map room, theme 9, no definition)
+    bool interior = false; int interiorKind = -1, interiorRegion = 0, interiorStruct = -1; std::string interiorName;
+    vec3 bedPos, forgePos; bool hasBed = false, hasForge = false;
 };
 
 // ------------------------------------------------------------------------------------------ settings
@@ -734,6 +737,14 @@ public:
     struct Bomb { vec3 pos, vel; float fuse = 2.2f; int bounces = 0; };
     std::vector<Bomb> bombs;
     void playerDig();
+    // 2.4.1 building interiors (Interiors.cpp)
+    int nearDoor = -1;
+    bool enterableKind(int kind) const;
+    vec3 doorOf(const Structure& s) const;
+    void buildInterior(int structIdx);
+    void enterInterior(int structIdx);
+    bool updateInterior(float dt);   // true when it handled the frame (inside a building)
+    void findDoor();
     void throwBomb();
     void updateBombs(float dt);
     void explodeAt(vec3 p, float radius, float depth, float dmg, Entity src);
