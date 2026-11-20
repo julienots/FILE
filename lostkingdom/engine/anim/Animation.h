@@ -107,6 +107,7 @@ public:
     bool blocking = false;
     bool aiming = false;
     float breath = 1.f;       // breathing intensity (exertion)
+    float swimCrawl = 0.f, swimDive = 0.f;   // 2.4.0 swim styles: front crawl (fast), underwater
     int stance = 0;           // archetype-specific (weapon stance for humanoids)
     float aux[4] = {0, 0, 0, 0};  // archetype-specific parameters (e.g. fly height, aggression)
     BodyState state = BodyState::Locomotion;

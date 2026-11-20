@@ -20,12 +20,19 @@
 namespace lk {
 using namespace agr;
 
-constexpr float WORLD_SIZE = 4608.f;   // 2.0.0: 3072 -> 4608 m (the old island keeps its coordinates; the new lands lie east and south)
+constexpr float WORLD_SIZE = 6144.f;   // 2.4.0: 4608 -> 6144 m (2.0.0: 3072 -> 4608); old coordinates kept, the new lands lie east and south-east
+// 2.4.0 the land is no longer the whole square: the old kingdom plus an eastern strip, and a south-eastern block;
+// the south-west stays open sea (the Coral Coast keeps its shore). Distance (m) from (x, z) into the sea border.
+inline float landEdgeDistance(float x, float z) {
+    float a = std::min(std::min(x, z), std::min(WORLD_SIZE - x, 4608.f - z));              // north: whole width, down to the old south shore
+    float b = std::min(std::min(x - 3500.f, z - 2600.f), std::min(WORLD_SIZE - x, WORLD_SIZE - z));   // south-east block
+    return std::max(a, b);
+}
 constexpr float CHUNK = 32.f;
 constexpr int CHUNKS = (int)(WORLD_SIZE / CHUNK);
 constexpr float SEA_LEVEL = 0.f;
 
-enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_COUNT };
+enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_COUNT };   // 2.4.0 + Steppes, Jungle
 const char* regionName(int r);
 const char* regionSubtitle(int r);
 

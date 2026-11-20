@@ -537,16 +537,20 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
     c.inWater = depth > 0.15f && c.pos.y < wl + 0.1f;
     bool wasSwim = c.swimming;
     c.swimming = depth > 1.3f && !lava && c.team != Team::Mount;
+    if (e == player && diving && depth > 1.0f && !lava) c.swimming = true;   // stay in the water while diving over a slope
     if (lava && depth > 0.1f && c.pos.y < wl + 0.2f) {
         // lava: burns and throws you back to solid ground
         if (c.invuln <= 0) { c.hp -= c.maxHp * 0.15f; c.status.burn = 3; c.invuln = 0.6f; c.vel.y = 7.f; c.knock = -normalize(vec3(c.vel.x, 0, c.vel.z) + vec3(0.01f, 0, 0)) * 6.f; particles.explosion(c.pos, 0.4f); if (e == player) { play("player_hurt"); haptic(80, 255); } if (c.hp <= 0) killCharacter(e, c, NullEntity); }
     }
     if (c.swimming) {
         float surf = wl - (c.team == Team::Player ? 1.25f : c.height * 0.6f);
-        c.pos.y = damp(c.pos.y, surf, 6.f, dt);
+        // 2.4.0 diving: down to 0.7 m above the bottom (at most 7 m under the surface), slower to change depth
+        bool dive = e == player && diving;
+        if (dive) surf = std::max(gy + 0.7f, std::min(surf, wl - 1.25f - 7.f));
+        c.pos.y = damp(c.pos.y, surf, dive ? 1.8f : 6.f, dt);
         c.vel.y = 0; c.grounded = true;
         if (!wasSwim) { particles.splash(c.pos + vec3(0, 1.2f, 0), 1.f); play3D("splash", c.pos, 0.8f); }
-        if (e == player) { stamina -= dt * 2.f; staminaRegenDelay = 0.2f; if (stamina <= 0) { c.hp -= dt * 5.f; if (c.hp <= 0) killCharacter(e, c, NullEntity); } }
+        // (2.4.0: slow swimming no longer drains stamina and hurts; the crawl costs stamina, under water you need air)
     } else if (!(e == player && flying) && (c.pos.y <= gy + 0.02f || (c.grounded && c.pos.y - gy < 0.45f && c.vel.y <= 0.1f))) {
         if (!c.grounded && c.airTime > 0.35f) {
             if (e == player) {

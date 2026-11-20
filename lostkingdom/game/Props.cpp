@@ -28,6 +28,8 @@ vec3 regionGroundTint(int r) {
     case R_SHADOWS: return {0.78f, 0.8f, 0.72f};
     case R_AMBER: return {1.1f, 0.94f, 0.72f};
     case R_CORAL: return {0.98f, 1.04f, 0.9f};
+    case R_STEPPE: return {1.08f, 1.0f, 0.78f};    // 2.4.0 golden grassland
+    case R_JUNGLE: return {0.82f, 1.02f, 0.84f};   // deep, wet green
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
@@ -43,6 +45,8 @@ vec3 foliageColor(int r, float t) {
     case R_SHADOWS: return ramp3(0x3a4632, 0x55603e, 0x76744e, t);
     case R_AMBER: return ramp3(0x6a5a30, 0x8a7a44, 0xb59a58, t);
     case R_CORAL: return ramp3(0x2f7a3a, 0x4f9a40, 0x9ab84a, t);
+    case R_STEPPE: return ramp3(0x8a8a40, 0xb8a452, 0xd8c070, t);   // 2.4.0 straw and gold
+    case R_JUNGLE: return ramp3(0x1f5a2a, 0x2f7a32, 0x5a9a3a, t);   // 2.4.0 emerald
     default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }

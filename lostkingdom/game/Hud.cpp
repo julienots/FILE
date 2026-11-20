@@ -579,7 +579,10 @@ void Game::drawHud(float dt) {
         float f = saturate((input.attackHoldT - 0.25f) / 0.65f);
         u.ring({r.x + r.w / 2, r.y + r.h / 2}, r.w * 0.5f, r.w * 0.56f, -PI / 2, -PI / 2 + TAU * f, f >= 1 ? rgba(0xf8a030) : rgba(0xf6dc9a), 32);
     }
-    ctl(CTL_DODGE, CTL_ICON[CTL_DODGE], stamina > 10, 0, "", vec4(1, 1, 1, 1), "round");
+    {   // 2.4.0 in the water the dodge button dives / surfaces
+        bool sw = player != NullEntity && pc().swimming;
+        ctl(CTL_DODGE, sw ? (diving ? "jump" : "chevron_down") : CTL_ICON[CTL_DODGE], sw || stamina > 10, 0, "", sw ? vec4(0.6f, 0.9f, 1.f, 1.f) : vec4(1, 1, 1, 1), "round");
+    }
     ctl(CTL_JUMP, CTL_ICON[CTL_JUMP], true, 0, "", vec4(1, 1, 1, 1), "round");
     ctl(CTL_BLOCK, CTL_ICON[CTL_BLOCK], true, 0, "", vec4(1, 1, 1, 1), "round");
     if (heroHasPowers()) {
@@ -615,6 +618,23 @@ void Game::drawHud(float dt) {
         Rect lr{r.x + r.w / 2 - tw - r.w * 0.45f, r.y + r.h / 2 - 18, tw, 36};
         u.nine("panel_plain", lr, vec4(1, 1, 1, 0.85f), 0.4f);
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
+    }
+    // 2.4.0 under water: a blue-green veil with darker edges, and the air gauge (bubbles) while diving
+    if (underwaterView && player != NullEntity) {
+        u.rect({0, 0, u.W, u.H}, vec4(0.05f, 0.28f, 0.34f, 0.38f));
+        u.sprite("glow", {-u.W * 0.25f, -u.H * 0.25f, u.W * 1.5f, u.H * 1.5f}, vec4(0.f, 0.05f, 0.08f, 0.0f));
+        for (int i = 0; i < 4; i++) u.rect({0, u.H - (i + 1) * 40.f, u.W, 40.f}, vec4(0.01f, 0.06f, 0.09f, 0.08f));
+    }
+    if (player != NullEntity && (diving || breath < 0.999f)) {
+        Rect br{u.W * 0.5f - 120, u.H - 150, 240, 26};
+        int n = 10, full = (int)std::ceil(breath * n - 0.01f);
+        for (int i = 0; i < n; i++) {
+            vec2 cpos{br.x + 12 + i * 24.f, br.y + 13};
+            bool on = i < full;
+            u.circle(cpos, 9.f, vec4(0.02f, 0.08f, 0.12f, 0.6f), 12);
+            if (on) { u.circle(cpos, 7.f, vec4(0.65f, 0.9f, 1.f, breath < 0.25f ? 0.6f + 0.4f * std::sin(realTime * 10.f) : 0.95f), 12); u.circle(cpos + vec2(-2, -2), 2.f, vec4(1, 1, 1, 0.9f), 6); }
+        }
+        u.text(diving ? "Air  ·  Saut ou Esquive pour remonter" : "Air", br.x + br.w / 2, br.y - 22, 15, rgba(0xcfefff), F_BOLD, A_CENTER, 0, true);
     }
     drawPinsHud();
     drawWorldEventHud();

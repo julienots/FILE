@@ -61,7 +61,7 @@ void Game::loadAssets() {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/sfx/") + s + ".ogg", b) && audio.loadSound(s, b)) { sfx[s] = audio.id(s); loaded++; }
     }
-    static const char* music[] = {"title", "greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "village", "night", "combat", "boss", "dungeon", "credits", "studio", "sands", "coast", "realm"};
+    static const char* music[] = {"title", "greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "village", "night", "combat", "boss", "dungeon", "credits", "studio", "sands", "coast", "realm", "steppe", "jungle"};
     for (const char* m : music) {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/music/") + m + ".ogg", b)) audio.addMusic(m, std::move(b));

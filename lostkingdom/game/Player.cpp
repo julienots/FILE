@@ -208,6 +208,17 @@ void Game::playerAttack(bool heavy, bool charged) {
 
 void Game::playerDodge() {
     Character& c = pc();
+    // 2.4.0 in the water the dodge button dives (and surfaces again)
+    if (c.swimming && !c.dead) {
+        if (dodgeCD > 0) return;
+        dodgeCD = 0.5f;
+        float wl = waterAt(c.pos.x, c.pos.z), gy = groundAt(c.pos.x, c.pos.z);
+        if (!diving) {
+            if (wl - gy < 2.4f) { floatText(c.pos + vec3(0, 2.f, 0), "Trop peu profond", vec3(0.7f, 0.85f, 1.f), 18); return; }
+            diving = true; particles.splash(c.pos + vec3(0, 1.2f, 0), 0.8f); play3D("splash", c.pos, 0.7f, 0.85f);
+        } else { diving = false; play3D(variant("step_water"), c.pos, 0.5f); }
+        return;
+    }
     if (c.dead || riding || c.swimming || dodgeCD > 0 || !c.grounded) return;
     float cost = 22.f * (1.f - skillBonus(skills, &SkillNode::staminaCost));
     if (stamina < cost) { floatText(c.pos + vec3(0, 2.2f, 0), "Épuisé", vec3(0.9f, 0.8f, 0.3f), 18); return; }
@@ -236,7 +247,24 @@ bool Game::playerJump(bool buffered) {
     // 1.11.2 "coyote time": a jump pressed just after running off an edge still counts
     bool coyote = !c.grounded && !c.swimming && c.airTime < 0.13f && c.vel.y <= 0.5f && !flying;
     if ((!c.grounded && !coyote) || c.attackClip) return false;
-    if (c.swimming) { c.vel.y = 3.f; return true; }
+    if (c.swimming) {
+        // 2.4.0 jump: back to the surface when diving; at the surface, near the shore, climb out onto the bank
+        if (diving) { diving = false; return true; }
+        vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
+        float wl = waterAt(c.pos.x, c.pos.z);
+        for (float dd : {1.f, 1.6f, 2.2f}) {
+            vec3 q = c.pos + fwd * dd;
+            float g = groundAt(q.x, q.z);
+            if (g > wl - 0.6f && g < wl + 1.6f) {   // a bank within reach: hop onto it
+                c.pos = vec3(q.x, g + 0.05f, q.z); c.vel = fwd * 2.5f; c.vel.y = 0; c.swimming = false; c.grounded = true;
+                c.vis.anim.play(&clip(C_LAND), 1.1f, false, 0.05f);
+                particles.splash(c.pos, 0.7f); play3D("splash", c.pos, 0.5f, 1.2f);
+                return true;
+            }
+        }
+        particles.splash(c.pos + vec3(0, 1.2f, 0), 0.5f);
+        return true;
+    }
     // vault over low climbable obstacles in front
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
     vec3 probe = c.pos + fwd * 1.0f;
@@ -753,12 +781,12 @@ void Game::updatePlayer(float dt) {
 
     // ---- locomotion
     float baseSpeed = mag < 0.55f ? 2.1f : 4.9f;
-    sprinting = input.sprint && mag > 0.6f && stamina > 3 && !blocking && !c.swimming;
-    if (sprinting) { baseSpeed = 7.2f; stamina -= dt * 13.f; staminaRegenDelay = 0.6f; }
+    sprinting = input.sprint && mag > 0.6f && stamina > 3 && !blocking;
+    if (sprinting) { baseSpeed = 7.2f; stamina -= dt * (c.swimming ? 9.f : 13.f); staminaRegenDelay = 0.6f; }   // in the water: the front crawl
     if (blocking) baseSpeed = std::min(baseSpeed, 1.8f);
     if (sprintJump && !c.grounded && mag > 0.5f) baseSpeed = std::max(baseSpeed, 7.2f);   // momentum of a running jump
     if (flying) { baseSpeed = sprinting ? 17.f : 11.f; sprinting = false; }   // Astra's flight (no sprint stamina cost)
-    float speed = baseSpeed * moveSpeedMul * (c.status.slow > 0 ? 0.55f : 1.f) * (c.swimming ? 0.55f : 1.f);
+    float speed = baseSpeed * moveSpeedMul * (c.status.slow > 0 ? 0.55f : 1.f) * (c.swimming ? (diving ? 0.62f : (sprinting ? 0.72f : 0.6f)) : 1.f);
     if (charging) speed *= 0.4f;
     // 1.11.2 slopes: climbing is slower, running downhill a little faster
     slopeMul = 1.f;
@@ -792,6 +820,26 @@ void Game::updatePlayer(float dt) {
         a.aux[3] = approach(a.aux[3], threat ? 1.f : 0.f, dt * (threat ? 5.f : 0.7f));
     }
     a.breath = saturate(1.f - stamina / std::max(1.f, maxStamina)) + (sprinting ? 0.5f : 0.f);
+    // 2.4.0 swimming: styles for the animation, air, wake, bubbles, stroke sounds
+    if (!c.swimming) diving = false;
+    a.swimCrawl = approach(a.swimCrawl, c.swimming && sprinting && !diving ? 1.f : 0.f, dt * 3.f);
+    a.swimDive = approach(a.swimDive, diving ? 1.f : 0.f, dt * 2.f);
+    if (diving) {
+        breath -= dt / BREATH_SECONDS;
+        if (particles.rng.f() < dt * 4.f) particles.magicTrail(c.pos + vec3(particles.rng.range(-0.2f, 0.2f), 1.5f, particles.rng.range(-0.2f, 0.2f)), vec3(0.75f, 0.9f, 1.f), 0.25f);
+        if (breath <= 0.25f && breath + dt / BREATH_SECONDS > 0.25f) notify("Vous manquez d'air : remontez (Saut ou Esquive) !", vec3(0.6f, 0.85f, 1.f), "i_info");
+        if (breath <= 0) {
+            breath = 0;
+            c.hp -= c.maxHp * 0.08f * dt;
+            if (c.hp <= 0) killCharacter(player, c, NullEntity);
+        }
+    } else breath = std::min(1.f, breath + dt / 3.f);
+    if (c.swimming && !diving && hs > 1.f) {   // wake at the surface, a stroke sound now and then
+        swimFxT -= dt;
+        if (swimFxT <= 0) { swimFxT = sprinting ? 0.18f : 0.32f; particles.splash(c.pos + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 0.6f + vec3(0, 1.2f, 0), sprinting ? 0.35f : 0.22f); }
+        swimStrokeT -= dt;
+        if (swimStrokeT <= 0) { swimStrokeT = sprinting ? 0.55f : 0.95f; play3D(variant("step_water"), c.pos, sprinting ? 0.3f : 0.2f, particles.rng.range(0.85f, 1.f)); }
+    }
     stamina = std::min(maxStamina, stamina + (staminaRegenDelay > 0 ? 0.f : dt * (c.status.wellFed > 0 ? 34.f : 24.f) * (blocking ? 0.3f : 1.f)));
     if (stamina < 0) stamina = 0;
 

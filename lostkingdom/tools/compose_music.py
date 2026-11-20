@@ -722,7 +722,59 @@ def song_realm():
     return s
 
 
-MELODIC = {'oud', 'sitar', 'horn', 'flute', 'violin', 'oboe', 'recorder', 'fiddle', 'clar', 'pan', 'tpt', 'cello', 'piano', 'bsn', 'brass', 'box', 'celesta'}
+def song_steppe():
+    """Les Steppes de Valdor: A Dorian, a fiddle over open fifths, a galloping rhythm, wide horns."""
+    s = Song('steppe', 108, 4, seed=171)
+    s.track('fiddle', FIDDLE, 0, 96, 70, 80); s.track('horn', HORN, 1, 92, 50, 100); s.track('str', STRINGS, 2, 80, 64, 110)
+    s.track('cello', CELLO, 3, 90, 52, 80); s.track('perc', 48, DRUMS, 92, 64, 60, bank=128); s.track('timp', TIMP, 4, 90, 60, 80)
+    s.track('flute', FLUTE, 5, 84, 84, 100); s.track('bass', CBASS, 6, 86, 64, 80)
+    A = "A4:1 B4:.5 C5:.5 D5:1 E5:1 | F#5:1.5 E5:.5 D5:1 B4:1 | C5:1 D5:1 E5:1 A4:1 | B4:4 | A4:1 B4:.5 C5:.5 D5:1 E5:1 | G5:1.5 F#5:.5 E5:1 D5:1 | E5:1 C5:1 B4:1 G4:1 | A4:4"
+    ACH = "Am | D | Am | Em | Am | G D | C Em | Am"
+    B = "E5:2 D5:1 E5:1 | G5:2 F#5:1 E5:1 | D5:1 E5:1 F#5:1 A5:1 | E5:4 | C5:2 D5:1 E5:1 | D5:2 B4:1 A4:1 | A4:1 B4:1 C5:1 D5:1 | E5:4"
+    BCH = "C | G | D | Am | F | G | Am | Em"
+    gallop = [(0, 64, 1.0), (0.75, 63, .5), (1, 64, .7), (2, 64, .9), (2.75, 63, .5), (3, 64, .7), (1, HAT, .3), (3, HAT, .3)]
+    def drone(bar, n, v=58):
+        for b in range(bar, bar + n): s.note('cello', b * 4, 4, pitch('A2'), v); s.note('cello', b * 4, 4, pitch('E3'), v - 8)
+    drone(0, 4, 50); s.pads('str', 0, "Am | Am | D | Am", 42, 50); s.melody('flute', 2, "r:2 E5:1 D5:1 | A4:4", 64)
+    drone(4, 8); s.drums('perc', 4, 8, gallop, 76); s.melody('fiddle', 4, A, 96); s.pads('str', 4, ACH, 50, 50); s.bass('bass', 4, ACH, 70, 2, (('R', 0, 1), ('5', 2, 1)))
+    s.drums('perc', 12, 8, gallop, 84); s.melody('horn', 12, B, 92); s.melody('flute', 12, _tr_line(B, 12), 60); s.pads('str', 12, BCH, 54, 50); s.bass('bass', 12, BCH, 74, 2, (('R', 0, 1), ('5', 2, 1)))
+    for b in (15, 19): s.roll('timp', b, 4, pitch('E2'), 30, 90)
+    drone(20, 8, 64); s.drums('perc', 20, 8, gallop, 94); s.melody('fiddle', 20, A, 104); s.melody('horn', 20, _tr_line(A, -12), 82); s.pads('str', 20, ACH, 60, 50)
+    s.bass('bass', 20, ACH, 82, 2, (('R', 0, 1), ('5', 2, 1)))
+    drone(28, 4, 50); s.pads('str', 28, "Am | G | Em | Am", 46, 50); s.swell('str', 28 * 4, 32 * 4, 100, 20); s.melody('fiddle', 28, "E5:2 D5:2 | B4:2 G4:2 | B4:2 A4:1 B4:1 | A4:4", 72)
+    return s
+
+
+def song_jungle():
+    """La Jungle d'Émeraude: E minor pentatonic, kalimba and marimba ostinati, pan flute, congas and shakers."""
+    s = Song('jungle', 96, 4, seed=181)
+    s.track('kalimba', KALIMBA, 0, 84, 40, 90); s.track('marimba', MARIMBA, 1, 80, 88, 90); s.track('pan', PANFLUTE, 2, 92, 64, 110)
+    s.track('str', SLOWSTR, 3, 70, 64, 120); s.track('perc', 48, DRUMS, 90, 64, 60, bank=128); s.track('bass', CBASS, 4, 84, 64, 80)
+    s.track('choir', VOICE_OOH, 5, 70, 64, 120)
+    A = "E5:1 G5:1 A5:1.5 G5:.5 | B5:2 A5:1 G5:1 | E5:1 D5:1 E5:1 G5:1 | A5:4 | B5:1 D6:1 B5:1.5 A5:.5 | G5:2 E5:1 D5:1 | E5:1 G5:1 D5:1 B4:1 | E5:4"
+    ACH = "Em | Em | C | Am | G | C | Am D | Em"
+    B = "G5:2 A5:1 B5:1 | D6:2 B5:2 | A5:1 G5:1 E5:1 G5:1 | A5:4 | B5:2 A5:1 G5:1 | E5:2 D5:2 | E5:1 G5:1 A5:1 B5:1 | E5:4"
+    BCH = "C | G | Am | D | C | G | Am | Em"
+    groove = [(0, 64, 1.0), (0.5, 63, .45), (1, 62, .6), (1.5, 63, .5), (2, 64, .9), (2.75, 62, .5), (3, 63, .6), (3.5, 62, .45), (0, SHAKER, .4), (1, SHAKER, .3), (2, SHAKER, .4), (3, SHAKER, .3)]
+    def ost(tr, bar, ch, v, oc, pat):
+        b = bar
+        for barstr in ch.split('|'):
+            cs = barstr.split(); each = 4 / len(cs)
+            for k, c in enumerate(cs):
+                root, iv, bs = chord(c); tones = sorted(oc + (root + i) % 12 for i in iv[:3])
+                for i in range(int(each * 2)): s.note(tr, b * 4 + k * each + i * .5, .45, tones[pat[i % len(pat)]], v - (0 if i % 4 == 0 else 8))
+            b += 1
+    ost('kalimba', 0, "Em | Em | C | Em", 58, 64, (0, 2, 1, 2)); s.pads('str', 0, "Em | Em | C | Em", 40, 52); s.drums('perc', 2, 2, groove, 60)
+    ost('kalimba', 4, ACH, 62, 64, (0, 2, 1, 2)); s.melody('pan', 4, A, 92); s.pads('str', 4, ACH, 44, 52); s.bass('bass', 4, ACH, 70, 2, (('R', 0, 1.5), ('5', 2, 1), ('R', 3, 1))); s.drums('perc', 4, 8, groove, 76)
+    ost('marimba', 12, BCH, 60, 72, (0, 1, 2, 1)); ost('kalimba', 12, BCH, 54, 64, (2, 0, 1, 0)); s.pads('choir', 12, BCH, 52, 55, 3); s.bass('bass', 12, BCH, 72, 2, (('R', 0, 1.5), ('5', 2, 1), ('R', 3, 1))); s.drums('perc', 12, 8, groove, 82)
+    s.melody('pan', 12, B, 86)
+    ost('kalimba', 20, ACH, 66, 64, (0, 2, 1, 2)); ost('marimba', 20, ACH, 58, 72, (0, 1, 2, 1)); s.melody('pan', 20, A, 100); s.pads('str', 20, ACH, 54, 52); s.pads('choir', 20, ACH, 50, 55, 3)
+    s.bass('bass', 20, ACH, 78, 2, (('R', 0, 1.5), ('5', 2, 1), ('R', 3, 1))); s.drums('perc', 20, 8, groove, 90)
+    ost('kalimba', 28, "C | Am | D | Em", 56, 64, (0, 2, 1, 2)); s.pads('str', 28, "C | Am | D | Em", 46, 52); s.swell('str', 28 * 4, 32 * 4, 100, 20); s.melody('pan', 28, "G5:4 | E5:4 | F#5:4 | E5:4", 70)
+    return s
+
+
+MELODIC = {'oud', 'sitar', 'kalimba', 'marimba', 'pan', 'fiddle', 'horn', 'flute', 'violin', 'oboe', 'recorder', 'fiddle', 'clar', 'pan', 'tpt', 'cello', 'piano', 'bsn', 'brass', 'box', 'celesta'}
 ACCOMP = {'str', 'choir', 'harp', 'guitar', 'pads', 'trem', 'pizz', 'ost', 'bass', 'tuba', 'trb', 'low'}
 
 
@@ -750,7 +802,7 @@ SONGS = {
     'title': lambda: song_title('title', 72), 'credits': lambda: song_title('credits', 70, credits=True), 'greenhaven': song_greenhaven,
     'village': song_village, 'elderwood': song_elderwood, 'frostheim': song_frostheim, 'ashen': song_ashen, 'highcrowns': song_highcrowns,
     'shadows': song_shadows, 'night': song_night, 'dungeon': song_dungeon, 'combat': song_combat, 'boss': song_boss, 'studio': song_studio,
-    'sands': song_sands, 'coast': song_coast, 'realm': song_realm,
+    'sands': song_sands, 'coast': song_coast, 'realm': song_realm, 'steppe': song_steppe, 'jungle': song_jungle,
 }
 
 

@@ -296,6 +296,54 @@ static void humanSwim(const Animator& a, Pose& p) {
         p.rot[th] = E(-10 + std::sin(t * 4.f + s * PI) * 20 * moving - (1 - moving) * 15, 0, side * (8 + stroke * 8));
         p.rot[sh] = E(30 + std::max(0.f, std::sin(t * 4.f + s * PI)) * 40, 0, 0);
     }
+    // 2.4.0 front crawl (sprint in the water): body flat, arms windmill one after the other, flutter kick,
+    // body roll and the head turning to breathe every third stroke
+    if (a.swimCrawl > 0.01f) {
+        Pose c; c.reset();
+        float cr = t * 6.2f;                 // stroke cycle
+        float roll = std::sin(cr) * 22.f;
+        c.rootOffset = vec3(0, -0.95f + std::sin(cr * 2.f) * 0.02f, 0);
+        c.rot[H_ROOT] = E(84, roll * 0.3f, roll);
+        c.rot[H_SPINE] = E(-4, 0, -roll * 0.3f);
+        bool breathe = std::fmod(cr / TAU, 3.f) < 0.5f;
+        c.rot[H_NECK] = E(-38, breathe ? 55.f * std::sin(std::fmod(cr, TAU) * 0.5f) : 0.f, 0);
+        c.rot[H_HEAD] = E(-12, 0, 0);
+        for (int s = 0; s < 2; s++) {
+            float side = s ? -1.f : 1.f;
+            int ua = s ? H_UARMR : H_UARML, la = s ? H_LARMR : H_LARML, th = s ? H_THIGHR : H_THIGHL, sh = s ? H_SHINR : H_SHINL;
+            float ang = cr + s * PI;                      // continuous rotation around the shoulder
+            float deg = -std::fmod(ang, TAU) / DEG;       // 0 .. -360: reach, pull, push, recover over the water
+            bool recover = std::fmod(ang, TAU) > PI;
+            c.rot[ua] = E(deg, 0, side * (recover ? 28.f : 8.f));
+            c.rot[la] = E(recover ? -70.f : -15.f, 0, 0);
+            float kick = std::sin(t * 13.f + s * PI);
+            c.rot[th] = E(kick * 16.f, 0, side * 5.f);
+            c.rot[sh] = E(12 + std::max(0.f, -kick) * 22.f, 0, 0);
+            c.rot[s ? H_FOOTR : H_FOOTL] = E(55, 0, 0);   // pointed toes
+        }
+        blendPose(p, p, c, a.swimCrawl, H_COUNT);
+    }
+    // 2.4.0 under water: streamlined glide, wide breaststroke pull, dolphin kick
+    if (a.swimDive > 0.01f) {
+        Pose d; d.reset();
+        float cyc = t * (2.6f + 1.4f * moving);
+        float pull = std::sin(cyc);
+        d.rootOffset = vec3(0, -0.9f, 0);
+        d.rot[H_ROOT] = E(lerpf(55, 88, moving), 0, 0);
+        d.rot[H_SPINE] = E(std::sin(cyc + 1.2f) * 8.f, 0, 0);
+        d.rot[H_NECK] = E(-25, 0, 0);
+        for (int s = 0; s < 2; s++) {
+            float side = s ? -1.f : 1.f;
+            int ua = s ? H_UARMR : H_UARML, la = s ? H_LARMR : H_LARML, th = s ? H_THIGHR : H_THIGHL, sh = s ? H_SHINR : H_SHINL;
+            d.rot[ua] = E(-150 + pull * 55, 0, side * (25 + std::max(0.f, pull) * 50));
+            d.rot[la] = E(-20 - std::max(0.f, -pull) * 70, 0, 0);
+            float kick = std::sin(cyc * 2.f);
+            d.rot[th] = E(kick * 14.f, 0, side * 3.f);   // both legs together (dolphin kick)
+            d.rot[sh] = E(18 + std::max(0.f, kick) * 28.f, 0, 0);
+            d.rot[s ? H_FOOTR : H_FOOTL] = E(50, 0, 0);
+        }
+        blendPose(p, p, d, a.swimDive, H_COUNT);
+    }
 }
 
 static void humanMounted(const Animator& a, Pose& p) {

@@ -1626,6 +1626,33 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "swim") {
+        // 2.4.0 swimming: surface, front crawl, dive, air, underwater view, bank climb (log + pictures)
+        static vec3 lake; static int ok[5];
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; for (int& o : ok) o = 0;
+            float best = 0;
+            for (float z = 4250; z < 4560 && best < 6.f; z += 4) for (float x = 1500; x < 1700; x += 8) {   // off the Coral Coast
+                bool lv = false, fr = false; float wl = g.world.waterLevel(x, z, &lv, &fr); if (wl < -1e8f || lv || fr) continue;
+                float dep = wl - g.world.height(x, z);
+                if (dep > 5.f && dep < 9.f && dep > best) { best = dep; lake = vec3(x, wl, z); }
+            }
+            AGR_LOG("SWIM lake at %.0f %.0f depth %.1f", lake.x, lake.z, best);
+            teleport(g, lake.x, lake.z, 0.f); g.pc().pos.y = lake.y - 1.2f; g.camDist = g.camDistTarget = 7.f; g.camPitch = 0.25f; }, idle, "lake"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.6f); g.camIdleT = 0; }, "swim"});
+        s.push_back({0.1f, [](Game& g) { ok[0] = g.pc().swimming; AGR_LOG("SWIM surface swimming %d stamina %.0f", ok[0], g.stamina); g.requestScreenshot("build/shots/W0_swim.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.6f); }, "shot"});
+        s.push_back({1.5f, [](Game& g) { g.stamina = g.maxStamina; }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camIdleT = 0; g.camYaw = g.pc().yaw + 1.4f; }, "crawl"});
+        s.push_back({0.1f, [](Game& g) { ok[1] = g.pc().vis.anim.swimCrawl > 0.8f && g.stamina < g.maxStamina; AGR_LOG("SWIM crawl %.2f stamina %.0f -> %d", g.pc().vis.anim.swimCrawl, g.stamina, ok[1]); g.requestScreenshot("build/shots/W1_crawl.png"); },
+            [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camYaw = g.pc().yaw + 1.4f; }, "shot"});
+        s.push_back({0.2f, [](Game& g) { teleport(g, lake.x, lake.z, 0.f); g.pc().pos.y = lake.y - 1.2f; g.pc().swimming = true; g.playerDodge(); AGR_LOG("SWIM dive %d", g.diving); }, idle, "dive"});
+        s.push_back({3.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.4f); g.camIdleT = 0; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 6.f; }, "under"});
+        s.push_back({0.1f, [](Game& g) { float y0 = g.pc().pos.y; ok[2] = g.diving && y0 < lake.y - 2.5f && g.breath < 1.f; ok[3] = g.underwaterView;
+            AGR_LOG("SWIM underwater: depth %.1f m, air %.2f, view %d -> %d", lake.y - y0, g.breath, g.underwaterView, ok[2]); g.requestScreenshot("build/shots/W2_underwater.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.4f); }, "shot"});
+        s.push_back({0.2f, [](Game& g) { g.playerJump(false); }, idle, "surface"});
+        s.push_back({2.5f, none, idle, "rise"});
+        s.push_back({0.1f, [](Game& g) { ok[4] = !g.diving && g.pc().pos.y > lake.y - 1.6f; AGR_LOG("SWIM surfaced %d (y %.1f)", ok[4], lake.y - g.pc().pos.y);
+            bool all = true; for (int o : ok) all = all && o; AGR_LOG("SWIM TEST %s", all ? "PASSED" : "FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "events") {
         // 2.3.6 random world events: start each kind, finish it, check the reward (log + pictures)
         static int ok[3]; static int gold0;

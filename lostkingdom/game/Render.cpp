@@ -98,6 +98,7 @@ void Game::updateCamera(float dt) {
     camRig = CameraRig::compute(ri);
     if (camRig.yawFix != 0 && state == GameState::Playing && !cine.active) camYaw = wrapAngle(camYaw + camRig.yawFix * std::min(1.f, dt * 3.f));   // 1.12.0
     vec3 eye = camRig.eye, look = camRig.look;
+    { float wle = dungeon.active ? -1e9f : waterAt(eye.x, eye.z); underwaterView = wle > -1e8f && eye.y < wle - 0.05f; }   // 2.4.0
     float cineFov = 0;
     if (cine.active) {
         vec3 ce, cl;

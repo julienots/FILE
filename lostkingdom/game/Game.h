@@ -450,6 +450,9 @@ public:
     bool charging = false;
     float potionCD = 0, dodgeCD = 0, parryT = 0, blockT = 0;
     float staminaRegenDelay = 0;
+    // 2.4.0 swimming: dive (dodge button), air under water, fast crawl (sprint), wake and bubbles
+    bool diving = false, underwaterView = false; float breath = 1.f, swimFxT = 0, swimStrokeT = 0;
+    static constexpr float BREATH_SECONDS = 22.f;
     vec3 respawnPos;
     Entity lockTarget = NullEntity;
     Entity interactTarget = NullEntity;

@@ -680,6 +680,43 @@ static void buildEnemies() {
       e.arch = Arch::Dragon; e.clook.c1 = hexColor(0xc0904a); e.clook.c2 = hexColor(0xf0d8a0); e.clook.c3 = hexColor(0x8a4a1a); e.clook.glow = hexColor(0xffa040); e.scale = 1.7f; e.radius = 0.85f;
       e.attacks = {melee(C_D_BITE, 2.6f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 8, 0.35f, 7, 0.7f, Element::Fire, 2.f, 0}, melee(C_D_TAIL, 3.f, 1.2f, 5, 0.5f)};
       e.loot = {{"dragon_scale", 0.12f}, {"amber", 0.3f}}; e.weak = Element::Ice; e.resist = Element::Fire; }
+    // ============================================================ 2.4.0 Valdor Steppes
+    { auto& e = E("steppe_rider", "Cavalier noir", "Cavaliers Noirs", R_STEPPE, 18, 300, 34, 14, 5.0f, Behavior::Melee, "Les Cavaliers Noirs rançonnent les caravanes de chevaux entre Valdor et les cols.");
+      e.hlook = humanLook(Species::Human, Body::Chain, 0x2a2a30, 0x5a4a3a, Helm::Iron, 141); e.hlook.cape = true; e.hlook.c1 = hexColor(0x1a1a20); e.hlook.beard = true;
+      e.weapon = WeaponType::Spear; e.group = 3; e.poise = 60;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 7, 0.5f, Element::Physical, 2.f, 0}};
+      e.loot = {{"leather", 0.5f}, {"silver_ore", 0.2f}, {"potion_heal", 0.2f}}; e.gold = 48; }
+    { auto& e = E("steppe_archer", "Archer de la steppe", "Cavaliers Noirs", R_STEPPE, 18, 220, 30, 9, 4.9f, Behavior::Ranged, "Il tire en courant, et ne manque jamais deux fois.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x5a4a30, 0x3a2a20, Helm::Hood, 142); e.hlook.c1 = hexColor(0x6a5a30);
+      e.weapon = WeaponType::Bow; e.group = 2;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 26, 1, 2.0f, 0.5f, Element::Physical, 0, 0}};
+      e.loot = {{"wood", 0.3f}, {"flax", 0.3f}}; e.gold = 40; }
+    { auto& e = E("steppe_wolf", "Loup des steppes", "Loups", R_STEPPE, 17, 210, 30, 8, 7.2f, Behavior::Pack, "Pelage couleur de paille : on ne les voit qu'au dernier moment.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xa8904a); e.clook.c2 = hexColor(0xe0d0a0); e.clook.mane = true; e.group = 4; e.radius = 0.55f; e.scale = 1.15f;
+      e.attacks = {melee(C_Q_BITE, 1.9f, 1, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 7, 1.4f, 5, 0.45f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.5f}, {"meat", 0.5f}, {"leather", 0.4f}}; }
+    { auto& e = E("aurochs", "Aurochs", "Bêtes", R_STEPPE, 19, 520, 38, 22, 6.2f, Behavior::Charger, "Le grand bœuf sauvage des steppes. Un troupeau qui charge fait trembler la plaine.");
+      e.arch = Arch::Quadruped; e.clook.kind = 1; e.clook.c1 = hexColor(0x3a2a20); e.clook.c2 = hexColor(0x6a5040); e.clook.c3 = hexColor(0x1a1210); e.clook.horns = true; e.clook.girth = 1.5f; e.scale = 1.9f; e.radius = 0.9f; e.poise = 140;
+      e.attacks = {melee(C_Q_BITE, 2.4f, 1.2f, 3.f, 0.4f), {C_Q_POUNCE, AttackType::Leap, 9, 1.8f, 7, 0.6f, Element::Physical, 2.5f, 0}};
+      e.loot = {{"leather", 0.8f}, {"meat", 0.9f}, {"fur", 0.4f}}; }
+    // ============================================================ 2.4.0 Emerald Jungle
+    { auto& e = E("jaguar", "Jaguar d'émeraude", "Fauves", R_JUNGLE, 20, 280, 40, 10, 7.6f, Behavior::Melee, "Il dort dans les branches, au-dessus des sentiers. Il ne dort jamais vraiment.");
+      e.arch = Arch::Quadruped; e.clook.kind = 6; e.clook.c1 = hexColor(0xc89a3a); e.clook.c2 = hexColor(0xf0d8a0); e.clook.c3 = hexColor(0x1a1410); e.clook.glow = hexColor(0x60ff90); e.scale = 1.35f; e.radius = 0.6f;
+      e.attacks = {melee(C_Q_BITE, 2.0f, 1.1f, 1.6f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 9, 1.6f, 6, 0.4f, Element::Physical, 2.f, 0}};
+      e.loot = {{"fur", 0.6f}, {"leather", 0.5f}, {"crystal", 0.08f}}; }
+    { auto& e = E("jungle_spider", "Mygale de jade", "Araignées", R_JUNGLE, 20, 240, 36, 10, 5.6f, Behavior::Ranged, "Grosse comme un tonneau, verte comme une feuille, et son venin brûle.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x2a6a2a); e.clook.c2 = hexColor(0x9ad85a); e.clook.c3 = hexColor(0x0a2a0a); e.clook.glow = hexColor(0x80ff60); e.scale = 1.5f; e.radius = 0.85f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 14, 0.8f, 4, 0.5f, Element::Nature, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"spider_silk", 0.6f}, {"fire_root", 0.1f}}; e.weak = Element::Fire; }
+    { auto& e = E("tlaloc_warrior", "Guerrier de Tlaloc", "Peuple oublié", R_JUNGLE, 21, 340, 40, 16, 4.8f, Behavior::Melee, "Le peuple de Tlaloc a disparu il y a mille ans. Ses guerriers, eux, montent encore la garde.");
+      e.hlook = humanLook(Species::Undead, Body::Rags, 0x2a8a5a, 0xc8a040, Helm::Circlet, 151); e.hlook.glow = hexColor(0x60ffb0); e.hlook.emissiveEyes = 1.4f; e.hlook.eyes = hexColor(0x60ffb0); e.hlook.c1 = hexColor(0x2a8a5a);
+      e.weapon = WeaponType::Spear; e.offhand = WeaponType::Shield; e.group = 3; e.poise = 80;
+      e.attacks = {melee(C_SP_A1, 2.8f, 1, 1.5f, 0.4f), melee(C_SP_A2, 2.8f, 1.2f, 3, 0.45f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"gold_ore", 0.3f}, {"crystal", 0.15f}, {"potion_great", 0.08f}}; e.gold = 60; e.weak = Element::Light; }
+    { auto& e = E("jade_golem", "Gardien de jade", "Golems", R_JUNGLE, 22, 600, 44, 28, 3.3f, Behavior::Tank, "Sculpté dans un seul bloc de jade, il garde le Temple du Jaguar.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x2a9a6a, 0x2a9a6a, Helm::None, 152); e.hlook.glow = hexColor(0x60ffb0); e.hlook.bulk = 1.6f; e.scale = 1.8f; e.radius = 0.9f; e.poise = 160;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.6f, 1.6f, 6, 0.9f, Element::Nature, 4.f, 0}};
+      e.loot = {{"crystal", 0.5f}, {"gold_ore", 0.4f}, {"rare_ore", 0.3f}}; e.weak = Element::Lightning; }
     // ============================================================ 2.0.0 Coral Coast
     { auto& e = E("sea_crab", "Crabe géant", "Crustacés", R_CORAL, 11, 150, 20, 14, 4.4f, Behavior::Melee, "Il mord le filet, puis le pêcheur, puis le bateau.");
       e.arch = Arch::Spider; e.clook.c1 = hexColor(0xc4482a); e.clook.c2 = hexColor(0xf0d8c0); e.clook.c3 = hexColor(0x6a2210); e.clook.glow = hexColor(0xffd0a0); e.scale = 1.3f; e.radius = 0.8f;
@@ -931,6 +968,13 @@ const std::vector<NpcDef>& npcs() {
         { HumanoidLook l = villagerLook(false, 0x6a4a2a, 0x2a1a10, Hair::Short, Body::Tunic, 51, true); l.hat = 3;
           N("samir", "Samir", "Maître des montures", NpcRole::Stablemaster, "solmar", l, {-4, -12}, {"Un destrier d'ambre ne s'enfonce jamais dans le sable. Les chevaux de la plaine, si.", "Le désert se traverse à cheval, ou à genoux."},
             {"Mes bêtes boivent une fois par jour et ne se plaignent jamais. Vous devriez les imiter."}, {}, FA_SOLMAR); }
+        // 2.4.0 Valdor (the Steppes) and Émeraude-sur-Lianes (the Jungle)
+        { HumanoidLook l = villagerLook(false, 0x5a3a20, 0x2a1a10, Hair::Long, Body::Leather, 141, true); l.beard = true; l.cape = true; l.c1 = hexColor(0x6a2a1a);
+          N("borya", "Borya", "Maître des hordes de Valdor", NpcRole::Elder, "valdor", l, {6, 8}, {"Ici, on mesure un homme à son cheval, et un cheval au vent.", "La steppe n'a pas de murs. Elle n'a que l'horizon, et les Cavaliers Noirs."},
+            {"Les Cavaliers Noirs ont pris les pâturages du sud. Ils volent nos poulains et brûlent les tentes.", "Le Tertre du Roi Cavalier : on dit que le premier khan y dort, avec son épée et son cheval de pierre."}, {}, -1); }
+        { HumanoidLook l = villagerLook(true, 0x2a7a4a, 0x1a1008, Hair::Braids, Body::Leather, 151); l.c1 = hexColor(0x2a7a4a); l.glow = hexColor(0x60ffb0); l.satchel = true;
+          N("itzel", "Itzel", "Gardienne des lianes", NpcRole::Alchemist, "emeraude", l, {-7, 7}, {"Chut… Écoute. La jungle te parle, si tu sais te taire.", "Les racines de braise soignent, si on les cueille au bon moment."},
+            {"Le Temple du Jaguar s'est réveillé. Ses gardiens de jade marchent la nuit.", "Les pilleurs de tombes creusent sous Tlaloc. Ils ne savent pas ce qu'ils réveillent."}, {"potion_heal", "potion_great", "potion_mana", "ember_tonic", "bandage", "potion_stamina"}, -1); }
         // Oasis de Kheft, Tamrak, Zafir
         { HumanoidLook l = villagerLook(true, 0x3a7a5a, 0xe0e0d0, Hair::Bun, Body::Robe, 52); l.hat = 0;
           N("nadira", "Nadira", "Guérisseuse de l'oasis", NpcRole::Alchemist, "kheft", l, {6, 7}, {"L'eau est un remède avant d'être un luxe.", "Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers."},
@@ -1166,6 +1210,19 @@ const std::vector<QuestDef>& quests() {
         Q("s_bell", "La cloche de l'épave", QuestType::Side, "lotte", "Lotte a entendu une cloche sonner toute seule sur l'épave du Léviathan.",
           "Y a une cloche à l'épave ! Elle sonne quand la marée monte ! Tu peux aller voir ? Moi j'ai pas le droit… enfin, j'ai le droit mais Maman dit non.", "L'épave est à l'ouest de Port-Azur, sur la plage.", "Tu l'as trouvée ! Elle sonne beaucoup trop fort. J'adore.",
           {{"Explorer l'épave du Léviathan", K::Discover, "wreck", 1, "wreck"}, {"Retourner voir Lotte", K::Talk, "lotte", 1, "pilotis"}}, 600, 80, {"relic_sea_bell"}, FA_AZUR, 10);
+        // 2.4.0 the new lands
+        Q("s_riders", "Contrat : les Cavaliers Noirs", QuestType::Hunt, "borya", "Les Cavaliers Noirs rançonnent les pâturages de Valdor.",
+          "Cinq Cavaliers Noirs, et les pâturages respireront. Ils campent au sud, près des collines de pierre. Méfie-toi de leurs lances.", "Leur camp est au sud de Valdor.", "Les poulains galopent de nouveau. Valdor ne l'oubliera pas.",
+          {{"Vaincre des Cavaliers Noirs", K::Kill, "steppe_rider", 5, ""}}, 2200, 420, {"sword_steel", "potion_great"}, -1, 0);
+        Q("s_kurgan", "Le Roi Cavalier", QuestType::Side, "borya", "Le tertre du premier khan a été ouvert.",
+          "Quelqu'un a ouvert le Tertre du Roi Cavalier. Va voir ce qu'il en reste, et reviens me le dire. Les morts de la steppe n'aiment pas qu'on les dérange.", "Le tertre est à l'est, sur la plus haute colline.", "Alors le roi dort encore. Bien. Prends ceci, il l'aurait voulu.",
+          {{"Explorer le Tertre du Roi Cavalier", K::Discover, "kurgan", 1, "kurgan"}, {"Retourner voir Borya", K::Talk, "borya", 1, "valdor"}}, 1800, 300, {"ring_silver"}, -1, 0);
+        Q("s_jaguar", "Le réveil du Jaguar", QuestType::Side, "itzel", "Le Temple du Jaguar s'est réveillé.",
+          "Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.", "Le temple est au sud-est d'Émeraude, sous les grands arbres.", "Le temple dort de nouveau. Merci, voyageur.",
+          {{"Explorer le Temple du Jaguar", K::Dungeon, "jaguar", 1, "temple_jaguar"}, {"Retourner voir Itzel", K::Talk, "itzel", 1, "emeraude"}}, 3000, 500, {"amulet_pearl", "ember_tonic"}, -1, 0);
+        Q("s_spiders", "Contrat : mygales de jade", QuestType::Hunt, "itzel", "Les mygales de jade envahissent les sentiers.",
+          "Quatre mygales, pas plus, pas moins : la jungle a besoin d'elles, mais pas si près du village.", "Elles tissent entre les arbres, autour d'Émeraude.", "Les sentiers sont libres. La soie servira aux enfants.",
+          {{"Chasser des mygales de jade", K::Kill, "jungle_spider", 4, ""}}, 2000, 380, {"bandage", "bandage", "potion_great"}, -1, 0);
         Q("s_venom", "Venin d'oasis", QuestType::Side, "nadira", "Nadira prépare un antidote avec du venin de scorpion.",
           "Un venin bien dosé soigne ce qu'il aurait tué. Rapporte-m'en trois fioles : les scorpions des dunes en ont plein, et ils n'aiment pas qu'on leur en prenne.", "Les scorpions couvrent les crêtes à l'est de Kheft.", "Merci. Ce soir, trois caravaniers seront en vie, grâce à toi.",
           {{"Rapporter du venin de scorpion", K::Deliver, "scorpion_venom", 3, "kheft"}}, 1200, 240, {"potion_great", "potion_great", "elixir_sun"}, FA_SOLMAR, 20);
@@ -1246,6 +1303,8 @@ const std::vector<DungeonDef>& dungeons() {
         {"silence", "Sanctuaire du Silence", "silence_gate", R_CORAL, 909, 9, {"drowned", "coral_golem", "siren"}, 11, 7, ""},
         // 2.2.1 (index 9): beyond the portal of Lac Miroir, an archipelago floating in the sky
         {"ether", "Le Royaume Céleste", "portal_ether", R_HIGHCROWNS, 1010, 9, {"wisp", "specter", "drakeling"}, 12, 8, "relic_star_glass"},
+        // 2.4.0 (index 10): under the Jaguar Temple of the Emerald Jungle
+        {"jaguar", "Temple du Jaguar", "jaguar_door", R_JUNGLE, 1111, 9, {"tlaloc_warrior", "jade_golem", "jungle_spider", "jaguar"}, -1, 6, "amulet_pearl"},
     };
     return d;
 }

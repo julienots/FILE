@@ -424,6 +424,8 @@ void Game::updateEnvironment(float dt) {
         case R_SHADOWS: next = p < 0.45f ? W_FOG : p < 0.75f ? W_RAIN : W_STORM; break;
         case R_AMBER: next = p < 0.55f ? W_CLEAR : p < 0.8f ? W_SANDSTORM : p < 0.92f ? W_CLOUDY : W_CLEAR; break;
         case R_CORAL: next = p < 0.5f ? W_CLEAR : p < 0.68f ? W_CLOUDY : p < 0.9f ? W_RAIN : W_STORM; break;
+        case R_STEPPE: next = p < 0.6f ? W_CLEAR : p < 0.85f ? W_CLOUDY : p < 0.95f ? W_STORM : W_RAIN; break;   // 2.4.0 big skies, summer storms
+        case R_JUNGLE: next = p < 0.35f ? W_CLEAR : p < 0.55f ? W_FOG : p < 0.85f ? W_RAIN : W_STORM; break;     // 2.4.0 hot rain and morning mist
         default: next = p < 0.55f ? W_CLEAR : p < 0.75f ? W_CLOUDY : W_SNOW; break;
         }
         weatherNext = next;
@@ -491,7 +493,7 @@ void Game::updateEnvironment(float dt) {
     env.fogBase = focus.y - 2.f;
     env.wetness = damp(env.wetness, saturate(rainAmt * 1.2f), 0.15f, dt);
     env.snowCover = saturate(snowAmt * 0.7f + regionW[R_FROSTHEIM] * 0.15f);
-    float wind = 0.35f + rainAmt * 0.3f + stormAmt * 0.6f + snowAmt * 0.3f + regionW[R_HIGHCROWNS] * 0.25f + sandAmt * 0.9f + regionW[R_AMBER] * 0.15f + regionW[R_CORAL] * 0.1f;
+    float wind = 0.35f + rainAmt * 0.3f + stormAmt * 0.6f + snowAmt * 0.3f + regionW[R_HIGHCROWNS] * 0.25f + sandAmt * 0.9f + regionW[R_AMBER] * 0.15f + regionW[R_CORAL] * 0.1f + regionW[R_STEPPE] * 0.35f;
     env.windStrength = damp(env.windStrength, wind, 0.5f, dt);
     env.windDir = normalize(vec2(0.8f, 0.35f + std::sin(realTime * 0.02f) * 0.3f));
     env.gust = 0.6f + 0.4f * std::sin(realTime * 0.13f);
@@ -558,7 +560,7 @@ void Game::updateEnvironment(float dt) {
             env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.2f; env.wetness = 0.f;
         }
     }
-    audio.setReverb(dungeon.active ? 0.45f : 0.f);
+    audio.setReverb(dungeon.active ? 0.45f : (underwaterView ? 0.6f : 0.f));
     applyCinematicEnvironment();
 }
 
@@ -789,7 +791,7 @@ void Game::updateAudioDirector(float dt) {
     else if (dungeon.active) track = dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon";   // 2.3.4 the Celestial Realm
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast"};
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle"};
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);
@@ -807,16 +809,16 @@ void Game::updateAudioDirector(float dt) {
         if (candT < 3.f) track = audio.currentMusic();
     } else { cand.clear(); candT = 0; }
     audio.playMusic(track, track == "combat" || track == "boss" ? 1.5f : 4.f);
-    audio.setMusicDuck(dialog.open ? 0.55f : 1.f);
+    audio.setMusicDuck(dialog.open ? 0.55f : (underwaterView ? 0.4f : 1.f));   // 2.4.0 muffled under water
     // ambience layers
-    float forest = regionW[R_GREENHAVEN] * 0.7f + regionW[R_ELDERWOOD] + regionW[R_CORAL] * 0.8f;
+    float forest = regionW[R_GREENHAVEN] * 0.7f + regionW[R_ELDERWOOD] + regionW[R_CORAL] * 0.8f + regionW[R_JUNGLE] * 1.f + regionW[R_STEPPE] * 0.35f;
     bool under = dungeon.active;
     audio.setAmbience("amb_forest_day", under ? 0 : forest * (1 - env.night) * (1 - rainAmt) * 0.8f);
     audio.setAmbience("amb_night", under ? 0 : env.night * (1 - rainAmt) * 0.7f);
-    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + sandAmt * 0.5f, 0, 1) * 0.8f);
+    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + regionW[R_STEPPE] * 0.5f + sandAmt * 0.5f, 0, 1) * 0.8f);
     audio.setAmbience("amb_rain", under ? 0 : rainAmt);
     audio.setAmbience("amb_lava", under ? (dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
-    audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f);
+    audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f + regionW[R_JUNGLE] * 0.35f);   // 2.4.0 the jungle croaks too
     audio.setAmbience("amb_cave", under ? 0.8f : 0.f);
     float river = 0;
     if (!under) { vec2 fl; bool lv, fr; float wl = world.waterLevel(p.pos.x, p.pos.z, &lv, &fr, &fl); river = (wl > -1e8f && length(fl) > 0.01f) ? 0.8f : 0.f; }
