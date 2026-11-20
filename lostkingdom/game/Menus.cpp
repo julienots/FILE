@@ -328,9 +328,9 @@ void Game::drawTitle(float dt) {
     u.text("A world waiting to be discovered.", W_ / 2, ly + 160, 26, rgba(0xe8dcc0, a), F_SERIF, A_CENTER, 0, true);
     // menu
     bool hasSave = platform::fileExists(platform::writableDir() + "/save_99.lks") || platform::fileExists(platform::writableDir() + "/save_0.lks");
-    float bw = 360, bh = 62, by = H_ * 0.52f;
+    float bw = 380, bh = 58, by = H_ * 0.465f;   // 2.3.5: five plaques fit above the studio line
     float ba = saturate((t - 0.8f) * 1.5f);
-    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f; by += bh + 12; return r; };
+    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f; by += bh + 10; return r; };
     if (menu == Menu::Settings || menu == Menu::Saves) { drawMenus(dt); return; }
     if (hasSave && btn("Continuer", true)) {
         int slot = platform::fileExists(platform::writableDir() + "/save_99.lks") ? 99 : 0;
@@ -340,8 +340,8 @@ void Game::drawTitle(float dt) {
     if (btn("Charger", hasSave)) { menu = Menu::Saves; play("ui_open"); }
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
-    u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 44, 18, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.3.4 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
+    u.text("v2.3.5 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 void Game::drawCredits(float dt) {

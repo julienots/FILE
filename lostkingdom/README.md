@@ -13,6 +13,22 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.3.5 (menus réalistes optimisés mobile + nouvelles ressources)
+
+- **Menus refaits, plus réalistes** : nouveau kit graphique généré par `tools/make_ui.py` : couverture de cuir travaillé avec grain, pores et plis éclairés en relief, piqûre sellier, filets dorés et coins en laiton rivetés ; onglets en ruban de cuir (rouge sang quand actif) ; boutons en planches de chêne huilé avec embouts de laiton ; cartes de cuir pour les objets et les recettes.
+- **Optimisés pour téléphone** :
+  - le journal occupe tout l'écran, les 14 onglets sont sur le côté gauche, en grands rubans de 64 px avec icône et nom (avant : une rangée de 15 petites icônes en haut), et ils défilent au pouce ;
+  - tous les textes des pages du journal sont 12 % plus grands ; le bouton de fermeture est agrandi (74 px) ;
+  - **Pause** : une carte de cuir avec 7 grandes planches (icône + texte) ;
+  - **Sac** : couverture de cuir, cases en cuir, boutons en planches ; **écran titre** : boutons en planches, la mention du studio ne chevauche plus « Crédits » ;
+  - **Artisanat** : la page n'est plus vide loin d'un atelier : toutes les recettes sont listées, celles de l'atelier où vous êtes en premier, les autres grisées avec l'atelier nécessaire (« Il faut : Forge »).
+- **Plus de ressources** :
+  - 8 nouveaux types de gisements, chacun avec son modèle : **filon d'or** (Sables, High Crowns), **filon d'argent** (Frostheim, High Crowns), **charbon** (Cendres, Ombres), **cactus à figues** (Sables), **coquillages** avec perles (Côte de Corail), **lin** (Greenhaven, Elderwood), **roche d'ambre** (Sables), **racine de braise** (Cendres, Ombres). Les filons demandent la pioche ;
+  - **2 à 4 gisements par parcelle** au lieu de 1 à 3, repousse en **5 minutes** au lieu de 7 ;
+  - 12 nouveaux matériaux (minerais et lingots d'or, d'argent et d'acier, charbon, figue de barbarie, coquillage, perle, lin, toile de lin, racine de braise) ;
+  - 14 nouvelles recettes : lingots d'or, d'argent et d'acier, toile de lin, **épée d'acier**, **hache d'acier**, **dague d'argent**, **anneau d'argent**, **anneau d'or**, **collier de perle**, **bandage de lin**, **jus de figue**, **tonique de braise**, **poisson salé**.
+- **Vérification (ordinateur seulement)** : scénario `res` : les 8 nouveaux gisements posés devant le héros (capture regardée) puis récoltés, 18 objets obtenus, `RES TEST PASSED` ; scénario `menus` : capture de chaque menu (pause, sac, journal et ses pages, paramètres, carte, titre) regardée ; tests unitaires (voir plus bas). **Non vérifié** : la taille réelle sous le doigt sur un téléphone, l'équilibrage des nouvelles armes et recettes.
+
 ### Nouveautés 2.3.4 (épée tenue en courant, sons corrigés et plus réalistes, nouvelles musiques)
 
 - **L'épée ne tombe plus quand on court** : hors combat, elle reste posée sur l'épaule en marchant, en courant et en sprintant (avant, elle descendait et pendait pointe en bas dès que le héros bougeait). Elle rebondit un peu avec la foulée et repasse en garde dès qu'un combat commence.
