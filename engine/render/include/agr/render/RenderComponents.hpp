@@ -125,6 +125,18 @@ struct PostProcessComponent {
     bool ambientOcclusion = false;
     float aoRadius = 0.5f;          ///< World units around each point.
     float aoIntensity = 1.0f;       ///< 0..2.
+    /// Height fog: denser near `fogHeight`, thinning upward (valleys, mornings, swamps), lit by
+    /// the sun when looking toward it. Uses the scene depth (MSAA off, like ambientOcclusion).
+    bool heightFog = false;
+    float fogDensity = 0.05f;
+    float fogHeight = 0.0f;         ///< World height where the fog has `fogDensity`.
+    float fogFalloff = 0.3f;        ///< How fast it thins with height (per world unit).
+    math::Color fogColor{0.68f, 0.74f, 0.84f, 1.0f};
+    float fogSunScatter = 0.8f;     ///< Glow of the fog around the sun.
+    /// Light shafts (god rays) from the sun through openings: trees, windows, clouds of objects.
+    bool lightShafts = false;
+    float shaftIntensity = 0.6f;
+    float shaftDecay = 0.96f;       ///< 0.9 = short rays, 0.99 = long rays.
 };
 
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };

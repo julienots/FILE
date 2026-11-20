@@ -173,7 +173,16 @@ void registerRenderComponents() {
         .field("ambientOcclusion", &PostProcessComponent::ambientOcclusion,
                {.tooltip = "Contact shadows in corners and under objects (SSAO, half resolution; MSAA off, FXAA instead)"})
         .field("aoRadius", &PostProcessComponent::aoRadius, {.rangeMin = 0.05f, .rangeMax = 5.0f, .speed = 0.01f})
-        .field("aoIntensity", &PostProcessComponent::aoIntensity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.01f});
+        .field("aoIntensity", &PostProcessComponent::aoIntensity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.01f})
+        .field("heightFog", &PostProcessComponent::heightFog, {.tooltip = "Fog denser low down, thinning with height, lit around the sun"})
+        .field("fogDensity", &PostProcessComponent::fogDensity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.002f})
+        .field("fogHeight", &PostProcessComponent::fogHeight, {.tooltip = "World height of the given density", .speed = 0.05f})
+        .field("fogFalloff", &PostProcessComponent::fogFalloff, {.tooltip = "Thinning per world unit of height", .rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.005f})
+        .field("fogColor", &PostProcessComponent::fogColor, {.flags = FieldFlag_Color})
+        .field("fogSunScatter", &PostProcessComponent::fogSunScatter, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("lightShafts", &PostProcessComponent::lightShafts, {.tooltip = "Rays of sunlight through gaps (god rays)"})
+        .field("shaftIntensity", &PostProcessComponent::shaftIntensity, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("shaftDecay", &PostProcessComponent::shaftDecay, {.tooltip = "0.9 = short rays, 0.99 = long rays", .rangeMin = 0.5f, .rangeMax = 0.999f, .speed = 0.001f});
     reg.add<MeshRendererComponent>("MeshRenderer")
         .category("Rendering")
         .description("Draws a built-in mesh or a mesh of an imported model (glTF, OBJ, FBX) with PBR materials.")

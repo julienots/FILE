@@ -549,6 +549,55 @@ TEST_CASE("blob shadows darken the ground under an entity and fade with height; 
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("atmosphere: height fog thickens with distance and low down; light shafts toward the sun") {
+    Render3DFixture f;
+    f.camera({0, 1.0f, 6.0f}, {0, 1.0f, -10.0f});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    // Two walls: a near one and a far one (same color), both low and high parts visible.
+    f.mesh(PrimitiveMesh::Cube, {-2.0f, 1.0f, 2.0f}, {1.5f, 4.0f, 0.2f}, {0.2f, 0.2f, 0.2f, 1});
+    f.mesh(PrimitiveMesh::Cube, {2.5f, 1.0f, -30.0f}, {6.0f, 12.0f, 0.2f}, {0.2f, 0.2f, 0.2f, 1});
+    const auto cam = f.scene.findByName("Camera");
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(cam);
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.filmicToneMapping = false;
+    const Vec3 nearPt{-2.0f, 0.5f, 2.11f}, farLow{2.5f, 0.0f, -29.89f}, farHigh{2.5f, 5.5f, -29.89f};
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().atmosphere);
+    const Rgba nearOff = f.at(nearPt), farOff = f.at(farLow);
+    CHECK(std::abs(int(nearOff.r) - int(farOff.r)) < 10);  // same wall color without fog
+    post.heightFog = true;
+    post.fogColor = {1.0f, 0.1f, 0.1f, 1.0f};
+    post.fogDensity = 0.15f;
+    post.fogHeight = 0.0f;
+    post.fogFalloff = 0.35f;
+    post.fogSunScatter = 0.0f;
+    f.frame();
+    CHECK(f.renderer.stats().atmosphere);
+    const Rgba nearFog = f.at(nearPt), farFog = f.at(farLow), farUp = f.at(farHigh);
+    CHECK_MESSAGE(farFog.r > farOff.r + 60, farFog.r);       // far away: deep in the red fog
+    CHECK_MESSAGE(farFog.r > nearFog.r + 30, nearFog.r);     // more than the near wall
+    CHECK_MESSAGE(farFog.r > farUp.r + 10, farUp.r);         // thinner higher up
+    // Light shafts: looking toward a low sun past a wall, the open sky beside it glows.
+    post.heightFog = false;
+    post.lightShafts = true;
+    post.shaftIntensity = 1.5f;
+    const auto sun = f.scene.createEntity("Sun");
+    f.scene.registry().emplace<DirectionalLightComponent>(sun).intensity = 2.0f;
+    // The light travels toward +z (from the far side of the scene into the camera).
+    f.scene.registry().get<TransformComponent>(sun).rotation = math::Quat::fromEuler({math::radians(-10.0f), math::radians(180.0f), 0.0f});
+    f.frame();
+    const Rgba skyShafts = pixel(*gpu().device, kWidth / 2, kHeight / 3);
+    post.lightShafts = false;
+    f.frame();
+    const Rgba skyPlain = pixel(*gpu().device, kWidth / 2, kHeight / 3);
+    CHECK_MESSAGE(luminance(skyShafts) > luminance(skyPlain) + 20, luminance(skyShafts), " vs ", luminance(skyPlain));
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("ambient occlusion (SSAO): darker where a cube meets the floor, open floor and sky unchanged") {
     Render3DFixture f;
     f.camera({0, 3.5f, 5.0f}, {0, 0.3f, 0});

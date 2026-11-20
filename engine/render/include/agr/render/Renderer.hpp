@@ -116,6 +116,7 @@ struct RenderStats {
     u32 skins2D = 0;              ///< Bone-deformed 2D skins drawn.
     u32 trails = 0;               ///< Trail ribbons drawn.
     u32 normalMappedSprites = 0;  ///< Lit sprites drawn with a normal map.
+    bool atmosphere = false;      ///< Height fog / light shafts pass this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
@@ -311,12 +312,12 @@ private:
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {
-        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur } kind;
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere } kind;
         rhi::RenderTargetHandle source, target;  // target null = output
         u32 uniformOffset = 0;
     };
     Status createPostPipelines();
-    bool ensurePostTargets(u32 renderW, u32 renderH, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa, bool ao);
+    bool ensurePostTargets(u32 renderW, u32 renderH, u32 samples, u32 outW, u32 outH, bool hdr, bool bloom, bool fxaa, bool ao, bool atmos);
     void releasePostTargets();
     void runPost(rhi::RenderTargetHandle output);
     void sweepTextureCache();
@@ -336,10 +337,12 @@ private:
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
-    rhi::PipelineHandle m_postPipelines[7];  // PostPass::Kind
-    static constexpr usize kPostUniformBytes = 5 * 16 + 2 * 64;  // PostData block (Shaders.inl)
+    rhi::PipelineHandle m_postPipelines[8];  // PostPass::Kind
+    static constexpr usize kPostUniformBytes = 11 * 16 + 3 * 64;  // PostData block (Shaders.inl)
     rhi::RenderTargetHandle m_aoTarget, m_aoBlurTarget;  // half resolution
     bool m_postAo = false;
+    rhi::RenderTargetHandle m_atmosTarget;  // scene color with fog and light shafts
+    bool m_postAtmos = false;
     rhi::RenderTargetHandle m_postScene, m_postResolve, m_postLdr;
     std::vector<rhi::RenderTargetHandle> m_bloomLevels;
     std::vector<std::pair<u32, u32>> m_bloomSizes;

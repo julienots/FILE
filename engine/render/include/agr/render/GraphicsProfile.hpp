@@ -26,6 +26,7 @@ struct GraphicsProfile {
     bool fxaa = true;            ///< PostProcess FXAA allowed (anti-aliasing filter).
     u32 shadowCascades = 3;      ///< Directional shadow cascades (1..4).
     bool ssao = true;            ///< PostProcess ambient occlusion allowed (half resolution).
+    bool atmosphere = true;      ///< PostProcess height fog and light shafts allowed (full-screen pass).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

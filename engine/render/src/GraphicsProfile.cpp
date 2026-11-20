@@ -21,7 +21,7 @@ GraphicsProfile graphicsProfile(GraphicsTier tier) {
             p = {tier, "low", 0.75f, 1, 1024, 60, 8ull << 20, 1024, false, 4, false, true, 1, false};
             break;
         case GraphicsTier::UltraMobile:
-            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2, false, false, 1, false};
+            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2, false, false, 1, false, false};
             break;
     }
     return p;

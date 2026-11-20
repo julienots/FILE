@@ -140,6 +140,13 @@ layout(std140) uniform PostData {
     vec4 u_ao;         // radius (world), intensity, 1 = ambient occlusion on, 1 = GL depth range (-1..1), 0 = Vulkan (0..1)
     mat4 u_proj;       // camera projection (SSAO)
     mat4 u_invProj;
+    vec4 u_fog;        // height fog: density, base height, falloff, sun scattering
+    vec4 u_fogColor;   // rgb (linear when HDR), 1 = height fog on
+    vec4 u_shafts;     // sun on screen (uv), intensity, decay per sample
+    vec4 u_sun;        // sun color (linear) * intensity, 1 = sun in front of the camera
+    vec4 u_camera;     // camera position, distance given to the sky
+    vec4 u_sunDir;     // direction toward the sun, 1 = light shafts on
+    mat4 u_invViewProj;
 };
 )";
 
@@ -289,6 +296,66 @@ void main() {
     c *= 1.0 - u_grade.z * smoothstep(0.35, 0.95, length(v) * 1.414);
     c = clamp(c, 0.0, 1.0);
     o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+}
+)";
+
+/// Atmosphere (before bloom and tone mapping): height fog integrated along each view ray (denser
+/// low down, thinning with height), light scattered around the sun, and light shafts: from each
+/// pixel toward the sun on screen, the share of open sky (depth = far) seen through the scene.
+inline constexpr const char* kAtmosphere = R"(
+uniform sampler2D u_source;  // scene color
+uniform sampler2D u_depth;   // scene depth
+layout(location = 0) out vec4 o_color;
+bool isSky(float d) { return d >= 0.99999; }
+vec3 worldAt(vec2 uv, float d) {
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec2 ndc = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) ndc.y = -ndc.y;  // Vulkan: framebuffer row 0 is the top (clip y = +1)
+    vec4 p = u_invViewProj * vec4(ndc, z, 1.0);
+    return p.xyz / p.w;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec3 col = texture(u_source, uv).rgb;
+    float d = texture(u_depth, uv).r;
+    bool sky = isSky(d);
+    vec3 cam = u_camera.xyz;
+    vec3 far = worldAt(uv, sky ? 0.5 : d);  // the sky: any point along the ray gives its direction
+    vec3 dir = normalize(far - cam);
+    float dist = sky ? u_camera.w : length(far - cam);
+    float toSun = max(dot(dir, u_sunDir.xyz), 0.0);
+    if (u_fogColor.w > 0.5) {
+        float b = max(u_fog.z, 1e-4);
+        float y0 = cam.y - u_fog.y;
+        float dy = dir.y;
+        // Integral of density * exp(-b * height) along the ray.
+        float amount = abs(dy * dist) < 1e-3 ? exp(-b * y0) * dist : exp(-b * y0) * (1.0 - exp(-b * dy * dist)) / (b * dy);
+        float f = clamp(1.0 - exp(-u_fog.x * max(amount, 0.0)), 0.0, 1.0);
+        vec3 fogCol = u_fogColor.rgb + u_sun.rgb * pow(toSun, 8.0) * u_fog.w;
+        col = mix(col, fogCol, f);
+    }
+    if (u_sunDir.w > 0.5 && u_sun.w > 0.5) {
+        const int kSteps = 40;
+        vec2 delta = (u_shafts.xy - uv) / float(kSteps);
+        vec2 p = uv;
+        float weight = 1.0, sum = 0.0, total = 0.0;
+        for (int i = 0; i < kSteps; ++i) {
+            p += delta;
+            float open = (p.x < 0.0 || p.y < 0.0 || p.x > 1.0 || p.y > 1.0) ? 0.0 : (isSky(texture(u_depth, p).r) ? 1.0 : 0.0);
+            sum += open * weight;
+            total += weight;
+            weight *= u_shafts.w;
+        }
+        float shafts = sum / max(total, 1e-4);
+        // Radial falloff around the sun on screen (aspect-corrected), and only when the camera
+        // looks roughly toward it; occluders leave dark streaks in the open sky light.
+        vec2 rel = (u_shafts.xy - uv) * vec2(u_texel.w / u_texel.z, 1.0);
+        float radial = exp(-length(rel) * 2.2);
+        vec3 forward = normalize(worldAt(vec2(0.5), 0.5) - cam);
+        float facing = clamp(dot(forward, u_sunDir.xyz) * 1.4, 0.0, 1.0);
+        col += u_sun.rgb * shafts * u_shafts.z * radial * facing * 0.6;
+    }
+    o_color = vec4(col, 1.0);
 }
 )";
 

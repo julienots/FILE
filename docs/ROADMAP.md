@@ -121,6 +121,7 @@ Guide : [3D.md](3D.md).
 | Post-traitement HDR : bloom, FXAA, étalonnage, vignettage (selon le profil) | ✅ | `Renderer.cpp`, composant `PostProcess` |
 | Ciel en image (.hdr / .png équirectangulaire) et IBL (harmoniques sphériques + mips préfiltrés) | ✅ | `assets/Environment`, `render/EnvironmentLibrary` |
 | SSAO | ✅ | `PostProcess.ambientOcclusion` (mi-résolution, profils ultra à medium) ; test GPU sur les 3 API |
+| Brouillard en hauteur (intégrale analytique, diffusion du soleil) et rayons de soleil | ✅ | `PostProcess.heightFog` / `lightShafts`, passe `Atmosphere` ; test GPU sur les 3 API |
 | Profondeur de champ, TAA, sondes de réflexion locales | ⬜ | à planifier |
 | Ombres en cascades (1 à 4 selon le profil, atlas, fondu entre cascades) | ✅ | `Renderer3D.cpp` |
 | Ombres des projecteurs (SpotLight) | ✅ | 2 par image, atlas en perspective ; test GPU sur les 3 API |
