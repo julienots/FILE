@@ -137,6 +137,21 @@ struct PostProcessComponent {
     bool lightShafts = false;
     float shaftIntensity = 0.6f;
     float shaftDecay = 0.96f;       ///< 0.9 = short rays, 0.99 = long rays.
+    /// Depth of field: sharp around `focusDistance` (from the camera), blurred in front of and
+    /// behind the focus zone like a camera lens (bokeh). Uses the scene depth (MSAA off).
+    bool depthOfField = false;
+    float focusDistance = 10.0f;    ///< World units from the camera.
+    float focusRange = 4.0f;        ///< Depth of the sharp zone; the blur grows over the same distance beyond it.
+    float dofBlur = 0.012f;         ///< Largest blur radius, as a fraction of the image height.
+    bool dofNear = true;            ///< Blur what is in front of the focus zone.
+    bool dofFar = true;             ///< Blur what is behind it.
+    /// Auto exposure (HDR): brightness adapts to the average light seen, like an eye coming out
+    /// of a cave. Multiplies the Environment exposure.
+    bool autoExposure = false;
+    float exposureTarget = 0.4f;    ///< Average brightness aimed at (0.4 = neutral).
+    float exposureMin = 0.3f;       ///< Exposure limits (darkest scene: at most exposureMax).
+    float exposureMax = 4.0f;
+    float exposureSpeed = 2.0f;     ///< Adaptation speed (per second).
 };
 
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };

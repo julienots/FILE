@@ -147,6 +147,10 @@ layout(std140) uniform PostData {
     vec4 u_camera;     // camera position, distance given to the sky
     vec4 u_sunDir;     // direction toward the sun, 1 = light shafts on
     mat4 u_invViewProj;
+    vec4 u_dof;        // focus distance, focus range, largest blur radius (pixels), 1 = near blur
+    vec4 u_dof2;       // 1 = far blur, -, -, -
+    vec4 u_exposure;   // 1 = auto exposure, target, min, max
+    vec4 u_adapt;      // blend toward the measure this frame (0..1), 1 = history valid, -, -
 };
 )";
 
@@ -276,12 +280,17 @@ inline constexpr const char* kComposite = R"(
 uniform sampler2D u_scene;
 uniform sampler2D u_bloomTex;
 uniform sampler2D u_aoTex;
+uniform sampler2D u_exposureTex;  // 1 x 1: adapted average log luminance (auto exposure)
 layout(location = 0) out vec4 o_color;
 void main() {
     vec2 uv = gl_FragCoord.xy * u_texel.zw;
     vec3 c = texture(u_scene, uv).rgb;
     if (u_ao.z > 0.5) c *= texture(u_aoTex, uv).r;  // before tone mapping, like light
     if (u_bloom.z > 0.0) c += texture(u_bloomTex, uv).rgb * u_bloom.z;
+    if (u_exposure.x > 0.5) {
+        float average = exp(texture(u_exposureTex, vec2(0.5)).r);
+        c *= clamp(u_exposure.y / max(average, 1e-4), u_exposure.z, u_exposure.w);
+    }
     if (u_filter.w > 0.5) {  // HDR input: linear light -> display
         c *= u_filter.rgb;
         if (u_grade.w > 0.5) c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
@@ -296,6 +305,72 @@ void main() {
     c *= 1.0 - u_grade.z * smoothstep(0.35, 0.95, length(v) * 1.414);
     c = clamp(c, 0.0, 1.0);
     o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+}
+)";
+
+/// Depth of field (gather): each pixel averages 32 taps on a golden-angle disc of the largest
+/// blur radius; a tap counts when its own circle of confusion reaches this pixel, and a tap
+/// behind the pixel cannot blur more than the pixel itself (no background halo over a sharp
+/// foreground). Circle of confusion: 0 inside the focus zone, growing over `range` beyond it.
+inline constexpr const char* kDof = R"(
+uniform sampler2D u_source;  // scene color
+uniform sampler2D u_depth;   // scene depth
+layout(location = 0) out vec4 o_color;
+float distanceAt(vec2 uv) {
+    float d = texture(u_depth, uv).r;
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec2 ndc = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) ndc.y = -ndc.y;
+    vec4 p = u_invViewProj * vec4(ndc, z, 1.0);
+    return d >= 0.99999 ? 1e6 : length(p.xyz / p.w - u_camera.xyz);
+}
+float coc(float dist) {
+    float halfRange = u_dof.y * 0.5;
+    float far = u_dof2.x > 0.5 ? clamp((dist - (u_dof.x + halfRange)) / max(u_dof.y, 1e-3), 0.0, 1.0) : 0.0;
+    float near = u_dof.w > 0.5 ? clamp(((u_dof.x - halfRange) - dist) / max(u_dof.y, 1e-3), 0.0, 1.0) : 0.0;
+    return max(far, near) * u_dof.z;  // pixels
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec3 center = texture(u_source, uv).rgb;
+    float centerDist = distanceAt(uv);
+    float centerCoc = coc(centerDist);
+    vec3 sum = center;
+    float total = 1.0;
+    const int kTaps = 32;
+    for (int i = 1; i < kTaps; ++i) {
+        float r = sqrt(float(i) / float(kTaps - 1)) * u_dof.z;  // uniform over the disc
+        float a = float(i) * 2.39996323;                          // golden angle
+        vec2 o = vec2(cos(a), sin(a)) * r;
+        vec2 suv = (floor(gl_FragCoord.xy + o) + 0.5) * u_texel.xy;  // texel centers: color and depth of the same texel
+        float sd = distanceAt(suv);
+        float sc = coc(sd);
+        if (sd > centerDist) sc = min(sc, centerCoc);  // behind: no halo over a sharp foreground
+        float w = clamp(sc - r + 0.5, 0.0, 1.0);
+        sum += texture(u_source, suv).rgb * w;
+        total += w;
+    }
+    o_color = vec4(sum / total, 1.0);
+}
+)";
+
+/// Auto exposure: average log luminance of a 16 x 16 grid of the scene, blended toward the
+/// previous frame's value (u_history) by u_adapt.x. Output in r of a 1 x 1 target.
+inline constexpr const char* kLuminance = R"(
+uniform sampler2D u_source;   // scene color (linear)
+uniform sampler2D u_history;  // previous adapted value
+layout(location = 0) out vec4 o_color;
+void main() {
+    float sum = 0.0;
+    for (int y = 0; y < 16; ++y)
+        for (int x = 0; x < 16; ++x) {
+            vec3 c = textureLod(u_source, (vec2(float(x), float(y)) + 0.5) / 16.0, 0.0).rgb;
+            sum += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
+        }
+    float measured = sum / 256.0;
+    float previous = texture(u_history, vec2(0.5)).r;
+    float v = u_adapt.y > 0.5 ? mix(previous, measured, u_adapt.x) : measured;
+    o_color = vec4(v, 0.0, 0.0, 1.0);
 }
 )";
 

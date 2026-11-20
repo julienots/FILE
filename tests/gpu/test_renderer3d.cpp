@@ -1255,3 +1255,86 @@ TEST_CASE("reflection probes: a mirror sphere reflects the room captured by the 
     CHECK(std::abs(int(outside.r) - int(before.r)) < 12);
     CHECK(gpu().device->validationErrorCount() == 0);
 }
+
+namespace {
+/// Pixels of a row neither black nor fully lit (blurred edges) in [x0, x1).
+int partialPixels(u32 y, u32 x0, u32 x1) {
+    int n = 0;
+    for (u32 x = x0; x < x1; ++x) {
+        const Rgba p = pixel(*gpu().device, x, y);
+        if (p.r > 25 && p.r < 200) ++n;
+    }
+    return n;
+}
+} // namespace
+
+TEST_CASE("depth of field: blurs outside the focus zone, keeps it sharp") {
+    Render3DFixture f;
+    f.camera({0, 0, 0}, {0, 0, -10});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Cube, {-1.2f, 0, -3.0f}, Vec3{1.0f}, {1, 1, 1, 1});          // near, left
+    f.mesh(PrimitiveMesh::Cube, {6.0f, 0, -20.0f}, {6.0f, 6.0f, 1.0f}, {1, 1, 1, 1});  // far, right
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.filmicToneMapping = false;
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().depthOfField);
+    const u32 row = kHeight / 2;
+    const int nearSharp = partialPixels(row, 0, kWidth / 2), farSharp = partialPixels(row, kWidth / 2, kWidth);
+    post.depthOfField = true;
+    post.focusDistance = 3.0f;
+    post.focusRange = 2.0f;
+    post.dofBlur = 0.05f;
+    f.frame();
+    CHECK(f.renderer.stats().depthOfField);
+    CHECK(partialPixels(row, 0, kWidth / 2) <= nearSharp + 1);           // in focus: still sharp
+    CHECK_MESSAGE(partialPixels(row, kWidth / 2, kWidth) >= farSharp + 3, farSharp);  // far: blurred edge
+    post.focusDistance = 20.0f;
+    post.focusRange = 4.0f;
+    f.frame();
+    CHECK_MESSAGE(partialPixels(row, 0, kWidth / 2) >= nearSharp + 3, nearSharp);  // near blur
+    post.dofNear = false;
+    f.frame();
+    CHECK(partialPixels(row, 0, kWidth / 2) <= nearSharp + 1);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("auto exposure: dark scenes are brightened, bright ones darkened (HDR)") {
+    Render3DFixture f;
+    f.camera({0, 0, 3}, {0, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 0.08f;
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Cube, {0, 0, 0}, {6, 6, 1}, {0.8f, 0.8f, 0.8f, 1});
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    f.frame();
+    if (!f.renderer.stats().hdr) {
+        MESSAGE("no HDR targets on this device: auto exposure is off");
+        return;
+    }
+    const int dark = pixel(*gpu().device, kWidth / 2, kHeight / 2).r;
+    post.autoExposure = true;
+    post.exposureSpeed = 100.0f;
+    f.frame();
+    CHECK(f.renderer.stats().autoExposure);
+    for (int i = 0; i < 3; ++i) f.frame();
+    const int adapted = pixel(*gpu().device, kWidth / 2, kHeight / 2).r;
+    CHECK_MESSAGE(adapted > dark + 40, dark, " -> ", adapted);
+    // Very bright: darkened instead (bounded by exposureMin).
+    env.ambientIntensity = 8.0f;
+    post.autoExposure = false;
+    f.frame();
+    const int bright = pixel(*gpu().device, kWidth / 2, kHeight / 2).r;
+    post.autoExposure = true;
+    post.exposureMin = 0.05f;
+    for (int i = 0; i < 4; ++i) f.frame();
+    CHECK_MESSAGE(pixel(*gpu().device, kWidth / 2, kHeight / 2).r < bright - 20, bright);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}

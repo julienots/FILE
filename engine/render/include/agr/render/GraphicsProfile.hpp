@@ -27,6 +27,7 @@ struct GraphicsProfile {
     u32 shadowCascades = 3;      ///< Directional shadow cascades (1..4).
     bool ssao = true;            ///< PostProcess ambient occlusion allowed (half resolution).
     bool atmosphere = true;      ///< PostProcess height fog and light shafts allowed (full-screen pass).
+    bool depthOfField = true;    ///< PostProcess depth of field allowed (32 taps per pixel).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

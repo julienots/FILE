@@ -122,6 +122,8 @@ struct RenderStats {
     u32 trails = 0;               ///< Trail ribbons drawn.
     u32 normalMappedSprites = 0;  ///< Lit sprites drawn with a normal map.
     bool atmosphere = false;      ///< Height fog / light shafts pass this frame.
+    bool depthOfField = false;    ///< Depth of field pass this frame.
+    bool autoExposure = false;    ///< Auto exposure measured this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
     u32 skinnedMeshes = 0;   ///< Meshes deformed by a skeleton this frame.
@@ -323,7 +325,7 @@ private:
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {
-        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere } kind;
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere, Dof, Luminance } kind;
         rhi::RenderTargetHandle source, target;  // target null = output
         u32 uniformOffset = 0;
     };
@@ -348,8 +350,15 @@ private:
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
-    rhi::PipelineHandle m_postPipelines[8];  // PostPass::Kind
-    static constexpr usize kPostUniformBytes = 11 * 16 + 3 * 64;  // PostData block (Shaders.inl)
+    rhi::PipelineHandle m_postPipelines[10];  // PostPass::Kind
+    static constexpr usize kPostUniformBytes = 15 * 16 + 3 * 64;  // PostData block (Shaders.inl)
+    rhi::RenderTargetHandle m_dofTarget;                 // scene color with depth of field
+    rhi::RenderTargetHandle m_lumTargets[2];             // 1 x 1 adapted log luminance (ping-pong)
+    u32 m_lumIndex = 0;                                  // target written this frame
+    bool m_lumValid = false;                             // the other target holds last frame's value
+    f64 m_lastPostClock = -1.0;
+    bool m_postReadDepth = false;                        // this frame needs a sampleable post scene depth
+    bool m_postSceneReadable = false;                    // the post scene target has one
     rhi::RenderTargetHandle m_aoTarget, m_aoBlurTarget;  // half resolution
     bool m_postAo = false;
     rhi::RenderTargetHandle m_atmosTarget;  // scene color with fog and light shafts
