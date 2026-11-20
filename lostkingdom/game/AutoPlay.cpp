@@ -1626,6 +1626,17 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "perf") {
+        // 2.3.6 render cost in typical places (logs draw calls / triangles at each picture)
+        static const char* places[] = {"brindlemere", "solmar", "port_azur", "shirokawa", "givrebourg", "chenebrune"};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        for (int i = 0; i < 6; i++) {
+            const char* pl = places[i];
+            s.push_back({3.f, [pl](Game& g) { const Poi* p = g.world.poiById(pl); if (p) teleport(g, p->pos.x + 6, p->pos.y + 6, 0.8f); g.camPitch = 0.3f; g.camDist = g.camDistTarget = 9.f; }, [](Game& g, float) { g.camIdleT = 0; }, "go"});
+            s.push_back({0.1f, [pl](Game& g) { AGR_LOG("PERF %s", pl); g.requestScreenshot(std::string("build/shots/P_") + pl + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "res") {
         // 2.3.5 the new resource nodes side by side, then harvest each one (look at the picture + log)
         static int got = 0;
