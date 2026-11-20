@@ -13,6 +13,33 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.4.0 (sol creusable et bombes, vraie nage, carte agrandie, deux nouvelles régions, bugs corrigés)
+
+- **Creuser le sol** :
+  - **Pelle** (forgeron de Brindlemere et de Solmar, ou forge : 2 lingots de fer + 2 bois). Dans le sac, « Creuser » active le **mode creusage** : le bouton épée devient une pioche et creuse le sol devant vous à chaque coup (on peut descendre jusqu'à 14 m). La terre rend parfois une pierre, un minerai de la région, et rarement un **trésor enfoui** (or et gemme). « Arrêter » quitte le mode.
+  - **Bombes** (forge : 2 charbons + 1 racine de braise, ou 3 charbons + 1 sel de mer ; aussi en boutique). « Lancer » depuis le sac, ou **maintenir l'épée** en mode creusage : la bombe vole, rebondit, sa mèche crépite, puis elle **explose** : cratère avec un rebord de terre projetée, dégâts de feu aux créatures autour (et à vous si vous êtes trop près), onde de choc, tremblement.
+  - Les **étoiles filantes** des événements creusent maintenant un vrai cratère.
+  - Le terrain creusé garde sa texture de **terre** (pas de roche ni de pavés), les arbres et l'herbe suivent le nouveau sol, la parcelle est reconstruite en arrière-plan.
+  - On ne peut pas creuser dans les villages, châteaux, temples, ni contre les bâtiments.
+  - Les trous et cratères sont **enregistrés dans la sauvegarde** ; une nouvelle partie repart d'un sol intact.
+  - **Mods** : `dig.radius`, `dig.depth`, `bomb.radius`, `bomb.depth`, `bomb.damage`, `bomb.fuse` (voir `docs/MODDING.md`) ; mod d'exemple `release/mods/mega-bombes.zip` (cratères de 8 m).
+- **Vraie nage** :
+  - **bug corrigé** : en mer (fond sous le niveau 0), le héros **marchait sur l'eau** au lieu de nager (la marche sur les obstacles partait de 0 m) ;
+  - nager lentement ne fatigue plus et ne fait plus perdre de vie ; le **crawl** (pousser le joystick au bord) est plus rapide et coûte de l'endurance ;
+  - **plonger** : le bouton Esquive (flèche vers le bas dans l'eau) plonge jusqu'à 7 m ; Saut ou Esquive remonte ; **jauge d'air** (bulles, 22 s), puis la vie baisse ;
+  - **sortir de l'eau** : Saut près d'une berge hisse le héros dessus ;
+  - trois animations (brasse, crawl avec roulis et respiration sur le côté, nage sous-marine avec battement de dauphin), sillage et bruits de brasse, bulles sous l'eau, vue teintée et son étouffé sous la surface ;
+  - des **bancs de coquillages** (perles) au fond des lacs et des criques, à aller chercher en plongée.
+- **Carte agrandie : 6 144 m de côté** (4 608 avant) : une bande de terres à l'est et un grand bloc au sud-est ; la Côte de Corail garde sa mer au sud.
+- **Deux nouvelles régions** :
+  - **Steppes de Valdor** : prairie dorée à perte de vue, herbes hautes, collines rocheuses, pierres levées, grand ciel ; villes **Valdor, Cité des Chevaux** et **Campement du Khan**, **Cercle des Pierres Levées**, **Tertre du Roi Cavalier**, **Camp des Cavaliers Noirs**, **Tour des Vents**, un lac ; ennemis : Cavalier noir, Archer de la steppe, Loup des steppes, Aurochs ;
+  - **Jungle d'Émeraude** : collines boisées, tours de calcaire, arbres géants, fougères, lagons, brume humide ; villes **Émeraude-sur-Lianes** et **Xochi, la Cité des Cascades**, **Temple du Jaguar** (nouveau donjon), **Ruines de Tlaloc**, **Grotte de la Cascade**, **Camp des Pilleurs de Tombes** ; ennemis : Jaguar d'émeraude, Mygale de jade, Guerrier de Tlaloc, Gardien de jade ;
+  - routes depuis Rempart-du-Nord, Fort Zénith et le Temple du Soleil Mort, 5 pierres de passage, météo et étalonnage propres, ressources propres ;
+  - 2 personnages (Borya à Valdor, Itzel à Émeraude) et **4 quêtes** (Cavaliers Noirs, le Roi Cavalier, le réveil du Jaguar, les mygales) ;
+  - 2 nouvelles musiques : « La Steppe » (violon, quintes, galop) et « La Jungle » (kalimba, marimba, flûte de pan, congas).
+- **Autres bugs corrigés** : plantage des tests (tableaux par région trop courts pour les nouvelles régions), bâtiments qui se chevauchaient aux ruines de Tlaloc.
+- **Vérification (ordinateur seulement)** : scénarios `dig` (6 coups de pelle : −2,8 m ; bombe : cratère ; sauvegarde puis rechargement : le trou est conservé ; nouvelle partie : sol intact), `swim` (nage, crawl, plongée à 4,9 m, air, remontée), `newlands` (captures des deux régions) ; tests unitaires (voir ci-dessous) ; balayage des scénarios existants (voir ci-dessous). **Non vérifié** : tout sur téléphone, l'équilibrage des nouvelles régions et des bombes.
+
 ### Nouveautés 2.3.6 (performances mobiles + événements dans le monde)
 
 - **Performances** (mesurées par le nouveau scénario `perf`, qui compte les triangles par catégorie dans six villes) :
