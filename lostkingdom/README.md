@@ -13,6 +13,19 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 2.3.6 (performances mobiles + événements dans le monde)
+
+- **Performances** (mesurées par le nouveau scénario `perf`, qui compte les triangles par catégorie dans six villes) :
+  - herbe : les touffes sont mélangées une fois à la construction de la parcelle, puis on en dessine de moins en moins avec la distance (toutes jusqu'à 20 m, 35 % au bord) ;
+  - personnages : version simplifiée des modèles importés au-delà de 18 m (regroupement de sommets), plus d'ombre au-delà de 25 m ni de contour au-delà de 22 m (sauf le héros, la cible, le boss et la monture) ;
+  - bâtiments importés : version simplifiée au-delà de 32 m, et ceux hors du champ de la caméra ne sont plus envoyés à la carte graphique ;
+  - résultat sur ordinateur : Brindlemere passe de 703 k à 552 k triangles par image (−21 %), Port-Azur de 554 k à 475 k, Solmar de 275 k à 244 k. **L'effet réel en images par seconde sur téléphone n'est pas mesuré.**
+- **Événements aléatoires dans le monde** (toutes les 4 à 7 minutes, hors donjon, village, boss et conduite ; un marqueur avec la distance s'affiche à l'écran) :
+  - **Embuscade** : une bande de créatures de la région attaque des voyageurs ; battez-les toutes pour recevoir leur coffre, de l'or et de l'expérience ;
+  - **Chute d'étoile** : une étoile filante traverse le ciel et s'écrase (onde de choc, poussière, explosion) ; le cratère contient du minerai d'étoile et des cristaux ;
+  - **Cache oubliée** : un coffre abandonné repéré à l'écart du chemin.
+- **Vérification (ordinateur seulement)** : scénario `events` : les trois événements démarrent et se terminent (`EVENTS TEST PASSED`, +52 or pour l'embuscade, 3 gisements dans le cratère) ; captures regardées ; scénario `perf` ; tests unitaires (voir ci-dessous).
+
 ### Nouveautés 2.3.5 (menus réalistes optimisés mobile + nouvelles ressources)
 
 - **Menus refaits, plus réalistes** : nouveau kit graphique généré par `tools/make_ui.py` : couverture de cuir travaillé avec grain, pores et plis éclairés en relief, piqûre sellier, filets dorés et coins en laiton rivetés ; onglets en ruban de cuir (rouge sang quand actif) ; boutons en planches de chêne huilé avec embouts de laiton ; cartes de cuir pour les objets et les recettes.
