@@ -41,7 +41,7 @@ static bool toggle(UI& u, Rect r, const std::string& label, bool& v) {
     return false;
 }
 
-static Rect journalFrame(UI& u) { return {44, 56, u.W - 88, u.H - 84}; }
+static Rect journalFrame(UI& u) { return {10, 10, u.W - 20, u.H - 20}; }   // 2.3.5 the whole phone screen
 
 bool Game::itemIcon(const std::string& id, Rect r, float a) {
     const ItemDef* d = item(id);
@@ -421,28 +421,43 @@ void Game::drawMenus(float dt) {
     if (menu != Menu::Death) u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, 0.55f));
     // ---------------------------------------------------------------- pause & death
     if (menu == Menu::Pause) {
+        // 2.3.5 a leather card with big oak plaques (icon + label), sized for thumbs
         u.consumeAll();
-        Rect p{W_ / 2 - 230, std::max(20.f, H_ / 2 - 330), 460, std::min(660.f, H_ - 40)};
-        u.panel(p, "Pause");
-        float y = p.y + 64;
-        float bh = std::min(60.f, (p.h - 90) / 7.f - 8.f);
-        auto b = [&](const char* l) { bool r = u.fancyButton({p.x + 50, y, p.w - 100, bh}, l, true, "button", 23); y += bh + 8; return r; };
-        if (b("Reprendre")) { menu = Menu::None; play("ui_close", 0.5f); }
+        float pw = std::min(600.f, W_ - 40), ph = std::min(H_ - 24, 690.f);
+        Rect p{W_ / 2 - pw / 2, H_ / 2 - ph / 2, pw, ph};
+        u.rect({p.x + 8, p.y + 10, p.w, p.h}, vec4(0, 0, 0, 0.5f));
+        u.nine("book", p, vec4(1, 1, 1, 1), 0.55f);
+        u.text("Pause", p.x + p.w / 2, p.y + 40, 40, GOLDT, F_TITLE, A_CENTER, 0, true);
+        u.sprite("divider", {p.x + p.w / 2 - 170, p.y + 92, 340, 16}, vec4(1, 1, 1, 0.85f));
+        float y = p.y + 122;
+        float bh = std::min(64.f, (p.y + p.h - 52 - y) / 7.f - 8.f);
+        auto b = [&](const char* l, const char* icon) {
+            Rect r{p.x + 62, y, p.w - 124, bh};
+            u.tag(r, l);
+            bool h = u.held(r);
+            Rect rr{r.x, r.y + (h ? 2.f : 0.f), r.w, r.h};
+            u.nine(h ? "plaque_hi" : "plaque", rr, vec4(1, 1, 1, 1), std::min(1.f, bh / 84.f));
+            u.sprite(icon, {rr.x + 38, rr.y + rr.h / 2 - 20, 40, 40});
+            u.text(l, rr.x + 92, rr.y + rr.h / 2 - 15, 25, rgba(0xfff1d0), F_SERIF, A_LEFT, 0, true);
+            y += bh + 8;
+            return u.button(r);
+        };
+        if (b("Reprendre", "i_check")) { menu = Menu::None; play("ui_close", 0.5f); }
         // 2.2.0 respawn point where you stand, and a way out when stuck (back to that point, as dust)
-        if (b("Point de réapparition ici")) {
+        if (b("Point de réapparition ici", "i_waypoint")) {
             if (dungeon.active || !pc().grounded || pc().swimming || bossEnt != NullEntity) notify("Impossible ici (donjon, en l'air, dans l'eau ou en combat de boss).", vec3(1.f, 0.7f, 0.5f), "i_lock");
             else { respawnPos = pc().pos; notify("Point de réapparition enregistré.", vec3(0.6f, 0.9f, 1.f), "i_waypoint"); }
             menu = Menu::None;
         }
-        if (b("Je suis bloqué")) {
+        if (b("Je suis bloqué", "i_lock")) {
             menu = Menu::None;
             if (dungeon.active) { pc().pos = dungeon.entrance; pc().vel = vec3(0); notify("Retour à l'entrée du donjon.", vec3(0.8f, 0.9f, 1.f), "i_waypoint"); }
             else startDustTeleport(respawnPos, "Retour au point de réapparition.");
         }
-        if (b("Journal")) { menu = Menu::Inventory; }
-        if (b("Sauvegarder")) { menu = Menu::Saves; }
-        if (b("Paramètres")) { menu = Menu::Settings; }
-        if (b("Menu principal")) { coopLeave(true); saveGame(99); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
+        if (b("Journal", "i_quest")) { menu = Menu::Inventory; }
+        if (b("Sauvegarder", "i_save")) { menu = Menu::Saves; }
+        if (b("Paramètres", "i_settings")) { menu = Menu::Settings; }
+        if (b("Menu principal", "i_village")) { coopLeave(true); saveGame(99); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
         return;
     }
     if (menu == Menu::Death) {
@@ -477,8 +492,9 @@ void Game::drawMenus(float dt) {
             }
         };
         float pw = std::min(W_ * 0.62f, 760.f);
-        Rect P{W_ - pw - 16, 16, pw, H_ - 32};
-        u.nine("panel_plain", P, vec4(1, 1, 1, 0.96f), 0.6f);
+        Rect P{W_ - pw - 24, 24, pw, H_ - 48};
+        u.rect({P.x - 14 + 6, P.y - 14 + 8, P.w + 28, P.h + 28}, vec4(0, 0, 0, 0.45f));
+        u.nine("book", P.inset(-18), vec4(1, 1, 1, 1), 0.42f);   // 2.3.5 leather-bound
         u.text("Sac", P.x + 24, P.y + 16, 30, GOLDT, F_TITLE);
         u.sprite("i_coin", {P.x + 110, P.y + 20, 28, 28});
         u.text(std::to_string(gold), P.x + 144, P.y + 22, 22, GOLDT, F_BOLD);
@@ -522,7 +538,7 @@ void Game::drawMenus(float dt) {
             int i = list[n];
             Rect r{grid.x + (n % cols) * cell, grid.y + (n / cols) * cell - so, cell - 8, cell - 8};
             if (r.y > grid.y + grid.h || r.y + r.h < grid.y) continue;
-            u.nine(i == selItem ? "slot_sel" : "slot", r, vec4(1, 1, 1, 1), 0.45f);
+            u.nine(i == selItem ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.7f);
             vec3 rc = rarityColor(inventory[i].rarity);
             if ((int)inventory[i].rarity >= 2) u.sprite("glow", r.inset(-6), vec4(rc, 0.25f));
             itemIcon(inventory[i].id, r.inset(10));
@@ -556,8 +572,8 @@ void Game::drawMenus(float dt) {
             u.text(line, A.x + 88, A.y + 40, 16, PALE, F_BODY, A_LEFT, A.w - 300);
             float bw = 130, bx = A.x + A.w - bw * 2 - 22, by = A.y + A.h - 64;
             bool equipable = slot >= 0 || d->kind == ItemKind::Cosmetic;
-            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 54}, "Utiliser", true, "button", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
-            if (equipable && u.fancyButton({bx, by, bw, 54}, "Équiper", true, "button", 21)) { equip(selItem); selItem = -1; }
+            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, "Utiliser", true, "plaque", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
+            if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "plaque", 21)) { equip(selItem); selItem = -1; }
             if (d->kind != ItemKind::Quest && d->kind != ItemKind::Relic && u.fancyButton({bx + bw + 10, by, bw, 54}, "Jeter", true, "button_dark", 21)) {
                 Character& pl = pc();
                 spawnPickup(st.id, 1, st.rarity, pl.pos + vec3(std::sin(pl.yaw), 0, std::cos(pl.yaw)) * 1.5f);
@@ -610,22 +626,35 @@ void Game::drawMenus(float dt) {
         u.popClip();
         return;
     }
-    // ---------------------------------------------------------------- journal frame with tabs
+    // ---------------------------------------------------------------- journal: a leather-bound book, bookmark tabs on the left
+    // 2.3.5 phone layout: the whole screen, big labelled tabs that scroll with the thumb, a large close button,
+    // and every text of the pages 12 % larger
     u.consumeAll();
     Rect f = journalFrame(u);
-    u.panel(f);
-    float tw = (f.w - 120) / (float)TAB_COUNT;
+    u.rect({f.x + 6, f.y + 8, f.w, f.h}, vec4(0, 0, 0, 0.45f));
+    u.nine("book", f, vec4(1, 1, 1, 1), 0.62f);
+    const float railW = 232.f;
+    Rect rail{f.x + 40, f.y + 92, railW, f.h - 132};
+    u.text("Journal", f.x + 40 + railW / 2, f.y + 40, 34, GOLDT, F_TITLE, A_CENTER, 0, true);
+    u.pushClip(rail);
+    const float tabH = 64.f, tabGap = 6.f;
+    float so = u.scrollArea("journal_tabs", rail, TAB_COUNT * (tabH + tabGap));
     for (int i = 0; i < TAB_COUNT; i++) {
-        Rect t{f.x + 30 + i * tw, f.y - 36, tw - 6, 58};
         bool active = TAB_MENU[i] == menu;
-        u.nine(active ? "button" : "button_dark", t, vec4(1, 1, 1, active ? 1.f : 0.85f), 0.8f);
-        u.sprite(TAB_ICON[i], {t.x + 8, t.y + 12, 32, 32}, vec4(1, 1, 1, active ? 1 : 0.7f));
-        if (tw > 120) u.text(TABS[i], t.x + 44, t.y + 17, 17, active ? GOLDT : DIM, F_SERIF);
+        Rect t{rail.x - (active ? 0.f : 10.f), rail.y + i * (tabH + tabGap) - so, rail.w + (active ? 14.f : 0.f), tabH};
+        if (t.y + t.h < rail.y || t.y > rail.y + rail.h) continue;
+        u.nine(active ? "tab_hi" : "tab", t, vec4(1, 1, 1, active ? 1.f : 0.92f), 0.9f);
+        u.sprite(TAB_ICON[i], {t.x + 16, t.y + 12, 40, 40}, vec4(1, 1, 1, active ? 1.f : 0.8f));
+        u.text(TABS[i], t.x + 66, t.y + 19, 22, active ? rgba(0xfff0c8) : PALE, F_SERIF, A_LEFT, 0, active);
         u.tag(t, TABS[i]);
         if (u.button(t)) { menu = TAB_MENU[i]; selItem = selSlot = selRecipe = selSkill = selQuest = selEnemy = -1; play("ui_click", 0.5f); }
     }
-    if (u.iconButton({f.x + f.w - 56, f.y - 30, 60, 60}, "close")) { menu = state == GameState::Playing ? Menu::None : Menu::None; play("ui_close", 0.5f); return; }
-    Rect c{f.x + 36, f.y + 40, f.w - 72, f.h - 64};
+    u.popClip();
+    if (TAB_COUNT * (tabH + tabGap) > rail.h) u.text(so < 4 ? "Glissez pour plus d'onglets" : "", rail.x + rail.w / 2, rail.y + rail.h + 6, 15, DIM, F_BODY, A_CENTER);
+    if (u.iconButton({f.x + f.w - 96, f.y + 22, 74, 74}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+    Rect c{rail.x + rail.w + 34, f.y + 66, f.x + f.w - 56 - (rail.x + rail.w + 34), f.h - 108};
+    u.textScale = 1.12f;
+    struct TextScaleReset { UI& u; ~TextScaleReset() { u.textScale = 1.f; } } tsr{u};
     switch (menu) {
     // ---------------------------------------------------------------- inventory
     case Menu::Inventory: {
@@ -810,23 +839,32 @@ void Game::drawMenus(float dt) {
         u.text(std::string("Poste : ") + (craftStation == ST_ANY ? "Sac (recettes simples)" : stationName(craftStation)), c.x, c.y, 22, GOLDT, F_SERIF);
         if (craftStation == ST_ANY) u.text("Parlez à un forgeron, un alchimiste ou un marchand, ou approchez d'un feu de camp, pour plus de recettes.", c.x, c.y + 34, 17, DIM, F_BODY, A_LEFT, c.w * 0.55f);
         const auto& R = recipes();
+        // 2.3.5: every recipe is listed (the page used to be empty away from a workshop), those of the current station
+        // first, the others greyed with the workshop they need
         std::vector<int> list;
         for (int i = 0; i < (int)R.size(); i++) if (R[i].station == ST_ANY || R[i].station == craftStation) list.push_back(i);
+        int here = (int)list.size();
+        for (int st : {ST_FORGE, ST_WORKBENCH, ST_ALCHEMY, ST_CAMPFIRE})
+            for (int i = 0; i < (int)R.size(); i++) if (R[i].station == st && st != craftStation) list.push_back(i);
         Rect lr{c.x, c.y + 80, c.w * 0.55f, c.h - 80};
         u.pushClip(lr);
-        float so = u.scrollArea("craft", lr, list.size() * 80.f);
+        const float rowH = 84.f;
+        float so = u.scrollArea("craft", lr, list.size() * rowH);
         for (int k = 0; k < (int)list.size(); k++) {
             const Recipe& r = R[list[k]];
             const ItemDef* d = item(r.result);
-            Rect row{lr.x, lr.y + k * 80 - so, lr.w - 12, 74};
-            bool can = canCraft(r);
-            u.nine(list[k] == selRecipe ? "slot_sel" : "slot", row, vec4(1, 1, 1, can ? 1.f : 0.7f), 0.45f);
-            itemIcon(r.result, {row.x + 6, row.y + 6, 62, 62}, can ? 1.f : 0.5f);
-            u.text(d ? d->name : r.result, row.x + 80, row.y + 10, 20, can ? vec4(rarityColor(d ? d->rarity : Rarity::Common), 1) : DIM, F_BODY);
+            Rect row{lr.x, lr.y + k * rowH - so, lr.w - 12, rowH - 6};
+            if (row.y + row.h < lr.y || row.y > lr.y + lr.h) continue;
+            bool atStation = k < here;
+            bool can = atStation && canCraft(r);
+            u.nine(list[k] == selRecipe ? "card_sel" : "card", row, vec4(1, 1, 1, atStation ? 1.f : 0.75f), 0.8f);
+            itemIcon(r.result, {row.x + 8, row.y + 8, 62, 62}, can ? 1.f : 0.55f);
+            u.text(d ? d->name : r.result, row.x + 82, row.y + 8, 20, can ? vec4(rarityColor(d ? d->rarity : Rarity::Common), 1) : DIM, F_BODY, A_LEFT, row.w - 92);
             std::string req;
             for (auto& in : r.inputs) req += std::to_string(countItem(in.first)) + "/" + std::to_string(in.second) + " " + item(in.first)->name + "  ";
-            if (level < r.minLevel) req = "Niveau " + std::to_string(r.minLevel) + " requis";
-            u.text(req, row.x + 80, row.y + 40, 15, can ? PALE : rgba(0xc07060), F_BODY, A_LEFT, row.w - 90);
+            if (!atStation) req = std::string("À fabriquer : ") + stationName(r.station) + "  ·  " + req;
+            else if (level < r.minLevel) req = "Niveau " + std::to_string(r.minLevel) + " requis";
+            u.text(req, row.x + 82, row.y + 40, 15, can ? PALE : (atStation ? rgba(0xc07060) : DIM), F_BODY, A_LEFT, row.w - 92);
             if (u.button(row)) selRecipe = list[k];
         }
         u.popClip();
@@ -834,7 +872,8 @@ void Game::drawMenus(float dt) {
             Rect info{c.x + c.w * 0.58f, c.y + 80, c.w * 0.42f, c.h - 170};
             ItemStack s; s.id = R[selRecipe].result; s.rarity = item(s.id) ? item(s.id)->rarity : Rarity::Common;
             itemTooltip(*this, info, s, false);
-            if (u.fancyButton({info.x, info.y + info.h + 14, info.w, 60}, "Fabriquer", canCraft(R[selRecipe]), "button", 24)) craft(selRecipe);
+            bool ok = (R[selRecipe].station == ST_ANY || R[selRecipe].station == craftStation) && canCraft(R[selRecipe]);
+            if (u.fancyButton({info.x, info.y + info.h + 14, info.w, 64}, ok || R[selRecipe].station == ST_ANY || R[selRecipe].station == craftStation ? "Fabriquer" : (std::string("Il faut : ") + stationName(R[selRecipe].station)), ok, "plaque", 24)) craft(selRecipe);
         }
         break;
     }

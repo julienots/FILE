@@ -711,7 +711,7 @@ public:
     ImportedModel* importedModel(const std::string& id, Arch arch = Arch::Humanoid);
     bool applyImportedModel(Visual& v, const std::string& id, Arch arch = Arch::Humanoid);
     bool useHeroModel() { return settings.importedHero && importedModel("hero") != nullptr; }
-    std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[12];
+    std::shared_ptr<Mesh> windmillBlades, chestMesh, chestOpenMesh, pickupMesh, arrowMesh, boulderMesh, orbMesh, gateMesh, brazierMesh, bladeMesh, spikeMesh, leverMesh, nodeMeshes[(int)NodeType::NodeTypeCount];
     std::map<uint32_t, Entity> nodeEntities;   // uid -> entity
     std::set<uint32_t> spawnedChunks;          // chunk hash with spawned creatures
     std::map<uint32_t, std::vector<Entity>> chunkSpawns;

@@ -547,6 +547,188 @@ def icon_set():
     return {k: v.done(shadow=not k.startswith(("sp_", "cl_"))) for k, v in I.items()}
 
 
+# ================================================================================ 2.3.5 realistic kit
+def _height_shade(h, strength=2.2):
+    """Lambert shading of a height field lit from the top-left (gives grain and stitches real relief)."""
+    gy, gx = np.gradient(h)
+    nx, ny, nz = -gx * strength, -gy * strength, np.ones_like(h)
+    l = np.array([-0.5, -0.6, 0.62]); l /= np.linalg.norm(l)
+    n = np.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+    return np.clip((nx * l[0] + ny * l[1] + nz * l[2]) / n, 0, 1)
+
+
+def _leather(W, H, base, seed, pores=True, creases=0.6):
+    r = np.random.RandomState(seed)
+    fine = noise(W, H, 3 * SS, seed, 2)
+    mid = noise(W, H, 22 * SS, seed + 1, 3)
+    big = noise(W, H, 90 * SS, seed + 2, 3)
+    cr = 1 - np.abs(noise(W, H, 40 * SS, seed + 3, 3) * 2 - 1)          # ridged noise = creases
+    h = fine * 0.35 + mid * 0.4 + cr ** 6 * creases
+    if pores:
+        pm = (r.rand(H, W) > 0.9965).astype(np.float32)
+        pm = np.array(Image.fromarray((pm * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(SS * 0.6)), np.float32) / 255
+        h -= pm * 1.5
+    shade = _height_shade(h * 6.0)
+    tone = 0.72 + 0.38 * big + 0.12 * (mid - 0.5)
+    arr = np.zeros((H, W, 4), np.float32)
+    for i in range(3): arr[..., i] = base[i] * tone * (0.55 + 0.75 * shade)
+    arr[..., 3] = 255
+    return arr
+
+
+def _stitch(d, box, col_hi, col_lo, dash=7, gap=5, width=2.2):
+    x0, y0, x1, y1 = box
+    L = 2 * (x1 - x0 + y1 - y0)
+    step = (dash + gap) * SS
+    def at(u):
+        u %= L
+        if u < x1 - x0: return (x0 + u, y0)
+        u -= x1 - x0
+        if u < y1 - y0: return (x1, y0 + u)
+        u -= y1 - y0
+        if u < x1 - x0: return (x1 - u, y1)
+        u -= x1 - x0
+        return (x0, y1 - u)
+    t = 0.0
+    while t < L:
+        a, b = at(t), at(t + dash * SS)
+        if abs(a[0] - b[0]) < dash * SS * 1.5 and abs(a[1] - b[1]) < dash * SS * 1.5:
+            d.line([(a[0] + SS, a[1] + SS), (b[0] + SS, b[1] + SS)], fill=(0, 0, 0, 120), width=int(width * SS))   # hole shadow
+            d.line([a, b], fill=col_lo, width=int(width * SS))
+            d.line([a, b], fill=col_hi, width=max(1, int(width * SS * 0.45)))
+        t += step
+
+
+def _rivet(d, cx, cy, r, base=(176, 136, 70)):
+    for i in range(6):
+        k = 1 - i / 6
+        c = tuple(int(min(255, v * (0.55 + 0.7 * (1 - k)))) for v in base) + (255,)
+        rr = r * k; o = i * 0.15 * r
+        d.ellipse([cx - rr - o, cy - rr - o, cx + rr - o, cy + rr - o], fill=c)
+    d.ellipse([cx - r * 0.55, cy - r * 0.7, cx - r * 0.1, cy - r * 0.25], fill=(255, 240, 200, 200))
+
+
+def _metal_from_mask(img, m, col, relief=30, blur=3):
+    W, H = img.size
+    hgt = np.array(m.filter(ImageFilter.GaussianBlur(blur * SS)), np.float32) / 255
+    sh = _height_shade(hgt * relief)
+    n = noise(W, H, 6 * SS, 77, 2)
+    out = np.zeros((H, W, 4), np.float32)
+    for i, v in enumerate(col): out[..., i] = v * (0.45 + 0.9 * sh) * (0.9 + 0.2 * n)
+    out[..., 3] = np.array(m, np.float32)
+    img.alpha_composite(Image.fromarray(out.clip(0, 255).astype(np.uint8), "RGBA"))
+
+
+def _brass_corner(img, cx, cy, sx, sy, s):
+    """L-shaped brass corner protector with bevel and rivets."""
+    W, H = img.size
+    m = Image.new("L", (W, H), 0)
+    L, T = 52 * s, 16 * s
+    poly = [(cx, cy), (cx + sx * L, cy), (cx + sx * L, cy + sy * T * 0.55), (cx + sx * T, cy + sy * T), (cx + sx * T * 0.55, cy + sy * L), (cx, cy + sy * L)]
+    ImageDraw.Draw(m).polygon(poly, fill=255)
+    _metal_from_mask(img, m, (196, 150, 72), 40, 3 * s / SS)
+    d = ImageDraw.Draw(img)
+    for (px, py) in ((cx + sx * T * 0.6, cy + sy * T * 0.6), (cx + sx * L * 0.72, cy + sy * T * 0.32), (cx + sx * T * 0.32, cy + sy * L * 0.72)):
+        _rivet(d, px, py, 3.2 * s)
+
+
+def book(w=256, h=256, border=76):
+    """Journal frame: tooled dark leather border, saddle stitching, brass corners, recessed darker page."""
+    W, H = w * SS, h * SS
+    arr = _leather(W, H, (92, 60, 38), 41)
+    B = border * SS
+    yy, xx = np.mgrid[0:H, 0:W]
+    inner = (xx > B) & (xx < W - B) & (yy > B) & (yy < H - B)
+    page = _leather(W, H, (44, 33, 25), 43, pores=False, creases=0.25)
+    arr[inner] = page[inner]
+    dx = np.minimum(xx - B, W - B - xx).clip(0); dy = np.minimum(yy - B, H - B - yy).clip(0)
+    edge = np.exp(-np.minimum(dx, dy) / (10 * SS))
+    arr[..., :3] *= (1 - 0.55 * (edge * inner)[..., None])
+    od = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy))
+    arr[..., :3] *= (0.6 + 0.4 * np.clip(od / (6 * SS), 0, 1))[..., None]
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    img.paste(Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA"), (0, 0), rounded_mask(W, H, int(14 * SS)))
+    d = ImageDraw.Draw(img)
+    o = int(B * 0.28)
+    d.rounded_rectangle([o, o, W - 1 - o, H - 1 - o], int(10 * SS), outline=(40, 26, 16, 200), width=int(2 * SS))
+    d.rounded_rectangle([o + SS, o + SS, W - 1 - o + SS, H - 1 - o + SS], int(10 * SS), outline=(150, 112, 74, 90), width=SS)
+    si = int(B * 0.58)
+    _stitch(d, (si, si, W - 1 - si, H - 1 - si), (226, 200, 150, 255), (150, 120, 80, 255))
+    pi = B - int(4 * SS)
+    d.rectangle([pi, pi, W - 1 - pi, H - 1 - pi], outline=GOLD_D + (230,), width=int(1.6 * SS))
+    s = SS * 0.95
+    for (cx, cy, sx, sy) in [(int(5 * SS), int(5 * SS), 1, 1), (W - 1 - int(5 * SS), int(5 * SS), -1, 1), (int(5 * SS), H - 1 - int(5 * SS), 1, -1), (W - 1 - int(5 * SS), H - 1 - int(5 * SS), -1, -1)]:
+        _brass_corner(img, cx, cy, sx, sy, s)
+    return down(img)
+
+
+def tab(w=232, h=68, hi=False):
+    """Side bookmark tab: stitched leather strip (inactive) or oxblood ribbon with gold stitching (active)."""
+    W, H = w * SS, h * SS
+    base = (128, 38, 30) if hi else (70, 52, 38)
+    arr = _leather(W, H, base, 51 + hi, pores=not hi, creases=0.3)
+    arr[..., :3] *= np.linspace(1.15, 0.8, H)[:, None, None]
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    m = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(m).polygon([(0, 0), (W - 14 * SS, 0), (W - 1, H // 2), (W - 14 * SS, H - 1), (0, H - 1)], fill=255)   # notched ribbon end
+    img.paste(Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA"), (0, 0), m)
+    d = ImageDraw.Draw(img)
+    hi_c, lo_c = ((246, 216, 140, 255), (170, 128, 60, 255)) if hi else ((196, 170, 128, 230), (120, 96, 64, 230))
+    for yl in (7 * SS, H - 8 * SS):
+        d.line([(6 * SS, yl), (W - 22 * SS, yl)], fill=lo_c, width=int(1.6 * SS))
+        for x in range(int(8 * SS), int(W - 24 * SS), int(12 * SS)):
+            d.line([(x, yl), (x + 6 * SS, yl)], fill=hi_c, width=int(1.2 * SS))
+    return down(img)
+
+
+def plaque(w=320, h=84, hi=False):
+    """Big button: an oiled oak plank with brass end caps and rivets."""
+    W, H = w * SS, h * SS
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    warp = noise(W, H, 140 * SS, 62, 2) * 9 * SS + xx * 0.015
+    grain = 0.5 + 0.5 * np.sin((yy + warp) / (1.7 * SS) + noise(W, H, 30 * SS, 63, 2) * 1.2)
+    grain = grain ** 1.6
+    fine = noise(W, H, 2 * SS, 64, 1)
+    sh = _height_shade((grain * 0.6 + fine * 0.3) * 4)
+    base = np.array((150, 98, 56) if hi else (108, 70, 42), np.float32)
+    tone = 0.75 + 0.35 * grain + 0.1 * noise(W, H, 120 * SS, 65, 2)
+    arr = np.zeros((H, W, 4), np.float32)
+    for i in range(3): arr[..., i] = base[i] * tone * (0.6 + 0.6 * sh)
+    arr[..., 3] = 255
+    arr[..., :3] *= np.linspace(1.18, 0.78, H)[:, None, None]
+    od = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy))
+    arr[..., :3] *= (0.55 + 0.45 * np.clip(od / (5 * SS), 0, 1))[..., None]
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    img.paste(Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA"), (0, 0), rounded_mask(W, H, int(8 * SS)))
+    cap = int(26 * SS)
+    for x0 in (0, W - cap):
+        m = Image.new("L", (W, H), 0); ImageDraw.Draw(m).rounded_rectangle([x0, 0, x0 + cap - 1, H - 1], int(8 * SS), fill=255)
+        _metal_from_mask(img, m, (200, 156, 78) if hi else (176, 136, 70), 30, 3)
+        d = ImageDraw.Draw(img)
+        for yy_ in (H * 0.3, H * 0.7): _rivet(d, x0 + cap / 2, yy_, 3.4 * SS)
+    d = ImageDraw.Draw(img)
+    if hi: d.rounded_rectangle([SS, SS, W - 1 - SS, H - 1 - SS], int(8 * SS), outline=GOLD_L + (200,), width=int(2 * SS))
+    return down(img)
+
+
+def card(w=128, h=96, sel=False):
+    """Row / card background inside the journal: a slightly raised piece of leather with a thin tooled edge."""
+    W, H = w * SS, h * SS
+    arr = _leather(W, H, (86, 60, 40) if sel else (62, 46, 34), 71, pores=False, creases=0.2)
+    yy, xx = np.mgrid[0:H, 0:W]
+    od = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy))
+    arr[..., :3] *= (0.7 + 0.3 * np.clip(od / (5 * SS), 0, 1))[..., None]
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    img.paste(Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA"), (0, 0), rounded_mask(W, H, int(7 * SS)))
+    d = ImageDraw.Draw(img)
+    if sel:
+        def shp(dd, c, wd): dd.rounded_rectangle([SS, SS, W - 1 - SS, H - 1 - SS], int(7 * SS), outline=c, width=wd)
+        gold_stroke(d, shp, int(3 * SS))
+    else:
+        d.rounded_rectangle([3 * SS, 3 * SS, W - 1 - 3 * SS, H - 1 - 3 * SS], int(5 * SS), outline=(150, 118, 70, 150), width=SS)
+    return down(img)
+
+
 # ---------------------------------------------------------------------------------------- packing
 def main():
     items = []  # (name, image, border)
@@ -570,6 +752,14 @@ def main():
     items.append(("minimap_frame", minimap_frame(256), 0))
     items.append(("ribbon", ribbon(512, 96), 0))
     items.append(("divider", divider(512, 24), 0))
+    # 2.3.5 realistic, phone-sized kit (journal cover, bookmark tabs, oak plaques, leather cards)
+    items.append(("book", book(256, 256, 76), 76))
+    items.append(("tab", tab(232, 68), 30))
+    items.append(("tab_hi", tab(232, 68, hi=True), 30))
+    items.append(("plaque", plaque(320, 84), 34))
+    items.append(("plaque_hi", plaque(320, 84, hi=True), 34))
+    items.append(("card", card(128, 96), 22))
+    items.append(("card_sel", card(128, 96, sel=True), 22))
     for name, img in icon_set().items():
         items.append(("i_" + name, img, 0))
 

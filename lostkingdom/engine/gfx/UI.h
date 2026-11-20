@@ -51,7 +51,9 @@ public:
     void imageCircle(GLuint tex, vec2 center, float radius, vec2 uvCenter, float uvRadius, float angle, vec4 c, int seg = 40);
     // text: returns height used. maxW > 0 enables word wrapping.
     float text(const std::string& s, float x, float y, float size, vec4 c, int font = F_BODY, int align = A_LEFT, float maxW = 0, bool outline = false);
-    float textWidth(const std::string& s, float size, int font = F_BODY) const;
+    float textWidth(const std::string& s, float size, int font = F_BODY) const { return textWidthRaw(s, size * textScale, font); }
+    float textWidthRaw(const std::string& s, float size, int font = F_BODY) const;
+    float textScale = 1.f;       // 2.3.5 every text size is multiplied by this (larger, phone-readable journal pages)
     float textHeight(const std::string& s, float size, int font, float maxW) const;
     void bar(Rect r, float frac, vec4 col, float ghost = -1, vec4 ghostCol = vec4(1, 1, 1, 0.5f));
     void circle(vec2 c, float r, vec4 col, int seg = 24);

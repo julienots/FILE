@@ -1626,6 +1626,29 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "res") {
+        // 2.3.5 the new resource nodes side by side, then harvest each one (look at the picture + log)
+        static int got = 0;
+        s.push_back({2.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; g.addItem("tool_pickaxe", 1); teleport(g, 1600, 1560, 0.f);
+            Character& c = g.pc();
+            for (int i = 0; i < 8; i++) {
+                NodeSpawn n; n.type = (NodeType)((int)NodeType::GoldOre + i); n.uid = 900000 + i; n.tier = 1; n.rot = 0.4f * i;
+                float x = c.pos.x - 7.f + i * 2.f, z = c.pos.z + 5.f; n.pos = vec3(x, g.groundAt(x, z), z);
+                g.spawnNode(n);
+            }
+            g.camYaw = c.yaw + PI; g.camPitch = 0.25f; g.camDist = g.camDistTarget = 9.f; }, idle, "spawn"});
+        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.1f, shot("R0_resources"), idle, "shot"});
+        s.push_back({0.2f, [](Game& g) {
+            int before = 0; for (auto& st : g.inventory) before += st.count;
+            g.reg.each<NodeComp>([&](Entity e, NodeComp& n) { if (n.node.uid >= 900000 && n.node.uid < 900008) { teleport(g, n.node.pos.x, n.node.pos.z - 1.2f, 0.f); g.interactTarget = e; g.playerInteract(); } });
+            int after = 0; for (auto& st : g.inventory) after += st.count;
+            got = after - before;
+            AGR_LOG("RES harvested %d items: gold %d silver %d coal %d cactus %d shells %d flax %d amber %d fireroot %d -> %s", got, g.countItem("gold_ore"), g.countItem("silver_ore"), g.countItem("coal"), g.countItem("cactus_fruit"),
+                    g.countItem("seashell"), g.countItem("flax"), g.countItem("amber"), g.countItem("fire_root"),
+                    g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
+        return s;
+    }
     if (name == "menus") {
         // 2.3.5 every menu on a phone-sized screen (look at the pictures)
         s.push_back({2.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.f; g.toastHint.clear(); g.tutStep = -1;

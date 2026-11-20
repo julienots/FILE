@@ -1566,7 +1566,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         uint32_t uid = hash3i(k.x, k.z, (int)out.nodes.size() * 31 + (int)t, 999);
         out.nodes.push_back({t, {x, y, z}, rng.range(0, TAU), uid, tier});
     };
-    int nNodes = rng.irange(1, 3);
+    int nNodes = rng.irange(2, 4);   // 2.3.5 more resources (was 1-3)
     for (int n = 0; n < nNodes; n++) {
         float x = x0 + rng.range(2, CHUNK - 2), z = z0 + rng.range(2, CHUNK - 2);
         if (blocked(x, z, 1.5f)) continue;
@@ -1579,14 +1579,15 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         NodeType t = NodeType::Rock;
         int tier = 0;
         switch (r) {
-        case R_GREENHAVEN: t = p < 0.3f ? NodeType::Tree : p < 0.5f ? NodeType::Herb : p < 0.62f ? NodeType::Berries : p < 0.75f ? NodeType::Rock : p < 0.88f ? NodeType::CopperOre : NodeType::IronOre; break;
-        case R_FROSTHEIM: t = p < 0.25f ? NodeType::Tree : p < 0.45f ? NodeType::Rock : p < 0.7f ? NodeType::IronOre : p < 0.85f ? NodeType::Crystal : NodeType::Herb; tier = 1; break;
-        case R_ASHEN: t = p < 0.25f ? NodeType::Rock : p < 0.55f ? NodeType::CopperOre : p < 0.8f ? NodeType::RareOre : NodeType::Crystal; tier = 2; break;
-        case R_ELDERWOOD: t = p < 0.3f ? NodeType::Herb : p < 0.5f ? NodeType::Mushroom : p < 0.7f ? NodeType::Crystal : p < 0.85f ? NodeType::Tree : NodeType::Berries; tier = 1; break;
-        case R_SHADOWS: t = p < 0.35f ? NodeType::Mushroom : p < 0.6f ? NodeType::Herb : p < 0.8f ? NodeType::Tree : NodeType::IronOre; tier = 1; break;
-        case R_AMBER: t = p < 0.28f ? NodeType::Rock : p < 0.5f ? NodeType::CopperOre : p < 0.72f ? NodeType::RareOre : p < 0.88f ? NodeType::Crystal : NodeType::Herb; tier = 3; break;
-        case R_CORAL: t = p < 0.3f ? NodeType::Tree : p < 0.55f ? NodeType::Berries : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
-        default: t = p < 0.3f ? NodeType::IronOre : p < 0.5f ? NodeType::RareOre : p < 0.7f ? NodeType::Rock : p < 0.85f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
+        // 2.3.5: each region also has its own new resources (flax, silver, coal, fire root, gold, cactus, amber, shells)
+        case R_GREENHAVEN: t = p < 0.26f ? NodeType::Tree : p < 0.42f ? NodeType::Herb : p < 0.52f ? NodeType::Berries : p < 0.64f ? NodeType::Flax : p < 0.75f ? NodeType::Rock : p < 0.88f ? NodeType::CopperOre : NodeType::IronOre; break;
+        case R_FROSTHEIM: t = p < 0.22f ? NodeType::Tree : p < 0.38f ? NodeType::Rock : p < 0.58f ? NodeType::IronOre : p < 0.74f ? NodeType::SilverOre : p < 0.87f ? NodeType::Crystal : NodeType::Herb; tier = 1; break;
+        case R_ASHEN: t = p < 0.2f ? NodeType::Rock : p < 0.4f ? NodeType::CopperOre : p < 0.58f ? NodeType::Coal : p < 0.76f ? NodeType::RareOre : p < 0.88f ? NodeType::FireRoot : NodeType::Crystal; tier = 2; break;
+        case R_ELDERWOOD: t = p < 0.28f ? NodeType::Herb : p < 0.46f ? NodeType::Mushroom : p < 0.62f ? NodeType::Crystal : p < 0.8f ? NodeType::Tree : p < 0.9f ? NodeType::Flax : NodeType::Berries; tier = 1; break;
+        case R_SHADOWS: t = p < 0.3f ? NodeType::Mushroom : p < 0.52f ? NodeType::Herb : p < 0.7f ? NodeType::Tree : p < 0.82f ? NodeType::Coal : p < 0.92f ? NodeType::FireRoot : NodeType::IronOre; tier = 1; break;
+        case R_AMBER: t = p < 0.18f ? NodeType::Rock : p < 0.34f ? NodeType::CopperOre : p < 0.48f ? NodeType::GoldOre : p < 0.62f ? NodeType::Cactus : p < 0.74f ? NodeType::AmberRock : p < 0.86f ? NodeType::RareOre : p < 0.94f ? NodeType::Crystal : NodeType::Herb; tier = 3; break;
+        case R_CORAL: t = p < 0.24f ? NodeType::Tree : p < 0.42f ? NodeType::Berries : p < 0.58f ? NodeType::Shells : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
+        default: t = p < 0.24f ? NodeType::IronOre : p < 0.38f ? NodeType::SilverOre : p < 0.5f ? NodeType::GoldOre : p < 0.62f ? NodeType::RareOre : p < 0.76f ? NodeType::Rock : p < 0.88f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
         }
         addNode(t, x, z, tier);
     }

@@ -214,7 +214,7 @@ void UI::imageCircle(GLuint tex, vec2 c, float r, vec2 uc, float ur, float ang, 
     batches.back().count = (int)idx.size() - batches.back().start;
 }
 
-float UI::textWidth(const std::string& s, float size, int fi) const {
+float UI::textWidthRaw(const std::string& s, float size, int fi) const {
     const FontFace& f = fonts[fi];
     float k = size / f.size, w = 0, best = 0;
     uint32_t prev = 0;
@@ -239,7 +239,7 @@ static std::vector<std::string> wrapLines(const UI& ui, const std::string& s, fl
     auto flushWord = [&]() {
         if (word.empty()) return;
         std::string cand = line.empty() ? word : line + " " + word;
-        if (maxW > 0 && !line.empty() && ui.textWidth(cand, size, font) > maxW) { out.push_back(line); line = word; }
+        if (maxW > 0 && !line.empty() && ui.textWidthRaw(cand, size, font) > maxW) { out.push_back(line); line = word; }
         else line = cand;
         word.clear();
     };
@@ -255,12 +255,14 @@ static std::vector<std::string> wrapLines(const UI& ui, const std::string& s, fl
 }
 
 float UI::textHeight(const std::string& s, float size, int fi, float maxW) const {
+    size *= textScale;
     auto lines = wrapLines(*this, s, size, fi, maxW);
     return lines.size() * fonts[fi].lineH * size / fonts[fi].size * 0.92f;
 }
 
 float UI::text(const std::string& s, float x, float y, float size, vec4 c, int fi, int align, float maxW, bool outline) {
     if (fi < 0 || fi >= (int)fonts.size()) return 0;
+    size *= textScale;
     const FontFace& f = fonts[fi];
     float k = size / f.size;
     float lh = f.lineH * k * 0.92f;
@@ -271,7 +273,7 @@ float UI::text(const std::string& s, float x, float y, float size, vec4 c, int f
     float soft = clampf(0.12f / (size * scale / 28.f), 0.03f, 0.25f);
     float yy = y;
     for (auto& ln : lines) {
-        float lw = textWidth(ln, size, fi);
+        float lw = textWidthRaw(ln, size, fi);
         float xx = x - (align == A_CENTER ? lw * 0.5f : (align == A_RIGHT ? lw : 0));
         uint32_t prev = 0;
         for (size_t i = 0; i < ln.size();) {

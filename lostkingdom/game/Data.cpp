@@ -110,6 +110,10 @@ static void buildItems() {
         {"bow_coral", "Arc de corail", WeaponType::Bow, 3, Rarity::Epic, 25, 0.15f, 0.05f, Element::Nature, 7, "Du bois flotté de l'archipel, tendu d'une corde de soie marine."},
         {"dagger_tide", "Lame de marée", WeaponType::Dagger, 4, Rarity::Legendary, 25, 0.24f, 0.26f, Element::Ice, 9, "Kaede la tenait de son maître, qui la tenait de la mer."},
         {"staff_sun", "Bâton d'ambre", WeaponType::Staff, 4, Rarity::Legendary, 18, 0.1f, 0, Element::Fire, 24, "Une larme d'ambre où dort un éclat de soleil."},
+        // 2.3.5 forged from the new resources
+        {"sword_steel", "Épée d'acier", WeaponType::Sword, 3, Rarity::Rare, 25, 0.08f, 0.04f, Element::Physical, 0, "Une lame d'acier trempé, droite et fiable."},
+        {"axe_steel", "Hache d'acier", WeaponType::Axe, 3, Rarity::Rare, 29, 0.06f, -0.02f, Element::Physical, 0, "Elle fend les boucliers comme les bûches."},
+        {"dagger_silver", "Dague d'argent", WeaponType::Dagger, 3, Rarity::Rare, 17, 0.2f, 0.18f, Element::Light, 8, "Les morts sans repos la craignent."},
     };
     for (auto& w : ws) {
         ItemDef& d = addItem(w.id, w.name, ItemKind::Weapon, w.r, 20 + w.tier * w.tier * 60 + (int)w.r * 80, w.desc);
@@ -168,6 +172,9 @@ static void buildItems() {
         {"ring_scarab", "Scarabée d'or", ItemKind::Ring, Rarity::Rare, 15, 0, 0.05f, 2, 1, 0.02f, "Les caravaniers disent qu'il retrouve toujours l'ombre."},
         {"ring_tide", "Anneau de marée", ItemKind::Ring, Rarity::Epic, 20, 30, 0.04f, 3, 0, 0.03f, "Il murmure comme un coquillage."},
         {"amulet_sun", "Disque solaire", ItemKind::Amulet, Rarity::Legendary, 40, 20, 0.06f, 8, 4, 0.03f, "L'emblème du Roi-Soleil. Il réchauffe, même la nuit."},
+        {"ring_silver", "Anneau d'argent", ItemKind::Ring, Rarity::Rare, 10, 15, 0.03f, 0, 2, 0, "Froid comme la neige de Frostheim."},
+        {"ring_gold", "Anneau d'or", ItemKind::Ring, Rarity::Epic, 25, 10, 0.05f, 3, 2, 0.02f, "L'or des Sables, poli au sable."},
+        {"amulet_pearl", "Collier de perle", ItemKind::Amulet, Rarity::Epic, 30, 40, 0.03f, 0, 3, 0.03f, "Une perle de la Côte, sertie d'argent."},
         {"amulet_silence", "Joyau du Silence", ItemKind::Amulet, Rarity::Ancestral, 70, 70, 0.1f, 12, 8, 0.06f, "Le septième joyau de la Couronne. Il fait taire le monde, pour mieux l'entendre."},
     };
     for (auto& t : ts) {
@@ -194,6 +201,10 @@ static void buildItems() {
     cons("coco", "Noix de coco fraîche", Rarity::Common, 5, 22, 15, 0, 0, 0, "i_heart", "Le lait est frais, même sous le soleil.");
     cons("tea_mint", "Thé à la menthe de Solmar", Rarity::Rare, 22, 0, 70, 40, 1, 90, "i_potion_mana", "Mana et endurance, servi bien sucré.");
     cons("fish_stew", "Bouillabaisse de Port-Azur", Rarity::Rare, 24, 90, 0, 40, 4, 180, "i_heart", "Rend 90 PV et accélère la régénération.");
+    cons("bandage", "Bandage de lin", Rarity::Common, 8, 35, 0, 0, 0, 0, "i_heart", "Rend 35 PV. Simple et efficace.");
+    cons("cactus_juice", "Jus de figue de barbarie", Rarity::Common, 10, 15, 0, 60, 0, 0, "i_potion_mana", "Rend de l'endurance, et un peu de vie.");
+    cons("ember_tonic", "Tonique de braise", Rarity::Rare, 28, 60, 20, 40, 0, 0, "i_potion", "Réchauffe jusqu'aux os : vie, mana et endurance.");
+    cons("salted_fish", "Poisson salé", Rarity::Common, 9, 40, 0, 20, 0, 0, "i_heart", "Se garde des semaines en voyage.");
     cons("elixir_sun", "Élixir solaire", Rarity::Epic, 90, 0, 0, 0, 2, 180, "i_potion", "+20 % de dégâts pendant 3 minutes.");
     // ---- materials -----------------------------------------------------------------------------
     auto mat = [&](const char* id, const char* nm, Rarity r, int v, const char* icon, const char* desc) {
@@ -228,6 +239,19 @@ static void buildItems() {
     mat("sand_glass", "Verre du désert", Rarity::Rare, 26, "i_crystal", "Le sable a fondu sous la foudre, et s'est souvenu.");
     mat("pirate_coin", "Doublon corsaire", Rarity::Common, 12, "i_coin", "Frappé d'un crâne et de deux os.");
     mat("sea_salt", "Sel de mer", Rarity::Common, 4, "i_hunt", "Gris, humide et précieux.");
+    // 2.3.5 more resources
+    mat("gold_ore", "Minerai d'or", Rarity::Rare, 18, "i_pickaxe", "Des paillettes jaunes dans la roche des Sables et des High Crowns.");
+    mat("gold_bar", "Lingot d'or", Rarity::Rare, 45, "i_anvil", "Trop mou pour une lame, parfait pour un anneau.");
+    mat("silver_ore", "Minerai d'argent", Rarity::Common, 9, "i_pickaxe", "Brillant sous le givre de Frostheim.");
+    mat("silver_bar", "Lingot d'argent", Rarity::Rare, 24, "i_anvil", "Les morts sans repos le craignent.");
+    mat("coal", "Charbon", Rarity::Common, 3, "i_pickaxe", "Noir, friable, il brûle longtemps. Indispensable pour l'acier.");
+    mat("steel_bar", "Lingot d'acier", Rarity::Rare, 32, "i_anvil", "Du fer et du charbon, beaucoup de feu et de patience.");
+    mat("cactus_fruit", "Figue de barbarie", Rarity::Common, 4, "i_heart", "Sucrée, juteuse, et pleine d'épines si l'on se presse.");
+    mat("seashell", "Coquillage", Rarity::Common, 3, "i_crystal", "On y entend la mer, dit-on.");
+    mat("pearl", "Perle", Rarity::Epic, 60, "i_crystal", "Une perle nacrée de la Côte de Corail.");
+    mat("flax", "Lin", Rarity::Common, 3, "i_sickle", "Tiges souples aux fleurs bleues.");
+    mat("linen", "Toile de lin", Rarity::Common, 9, "i_hunt", "Tissée serrée, pour les bandages et les vêtements.");
+    mat("fire_root", "Racine de braise", Rarity::Rare, 14, "i_sickle", "Chaude au toucher, elle pousse dans les cendres.");
     // ---- quest items & relics -------------------------------------------------------------------
     auto quest = [&](const char* id, const char* nm, Rarity r, const char* desc, const char* icon = "i_relic") {
         ItemDef& d = addItem(id, nm, ItemKind::Quest, r, 0, desc); d.icon = icon;
@@ -330,6 +354,21 @@ const std::vector<Recipe>& recipes() {
         {"sylvan_head", 1, {{"leather", 2}, {"glowcap", 3}, {"crystal", 1}}, ST_WORKBENCH, 10}, {"sylvan_chest", 1, {{"leather", 5}, {"glowcap", 4}, {"spider_silk", 2}}, ST_WORKBENCH, 10},
         {"sylvan_hands", 1, {{"leather", 2}, {"glowcap", 2}}, ST_WORKBENCH, 10}, {"sylvan_feet", 1, {{"leather", 3}, {"glowcap", 2}}, ST_WORKBENCH, 10},
         {"ring_copper", 1, {{"copper_bar", 2}}, ST_FORGE, 2},
+        // 2.3.5 the new resources
+        {"gold_bar", 1, {{"gold_ore", 2}}, ST_FORGE, 3},
+        {"silver_bar", 1, {{"silver_ore", 2}}, ST_FORGE, 2},
+        {"steel_bar", 1, {{"iron_bar", 1}, {"coal", 2}}, ST_FORGE, 4},
+        {"linen", 1, {{"flax", 3}}, ST_WORKBENCH, 1},
+        {"sword_steel", 1, {{"steel_bar", 3}, {"leather", 1}}, ST_FORGE, 5},
+        {"axe_steel", 1, {{"steel_bar", 3}, {"wood", 2}}, ST_FORGE, 5},
+        {"dagger_silver", 1, {{"silver_bar", 2}, {"leather", 1}}, ST_FORGE, 4},
+        {"ring_silver", 1, {{"silver_bar", 2}}, ST_FORGE, 3},
+        {"ring_gold", 1, {{"gold_bar", 2}, {"amber", 1}}, ST_FORGE, 6},
+        {"amulet_pearl", 1, {{"pearl", 1}, {"silver_bar", 1}, {"linen", 1}}, ST_FORGE, 6},
+        {"bandage", 2, {{"linen", 1}, {"herb", 1}}, ST_ALCHEMY, 1},
+        {"cactus_juice", 1, {{"cactus_fruit", 3}}, ST_CAMPFIRE, 1},
+        {"ember_tonic", 1, {{"fire_root", 2}, {"herb", 1}}, ST_ALCHEMY, 5},
+        {"salted_fish", 1, {{"fish", 1}, {"sea_salt", 1}}, ST_CAMPFIRE, 1},
         {"potion_minor", 1, {{"herb", 2}}, ST_ALCHEMY, 1},
         {"potion_heal", 1, {{"herb", 3}, {"glowcap", 1}}, ST_ALCHEMY, 4},
         {"potion_great", 1, {{"herb", 4}, {"frost_lily", 1}, {"crystal", 1}}, ST_ALCHEMY, 10},

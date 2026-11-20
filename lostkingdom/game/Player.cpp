@@ -538,6 +538,15 @@ void Game::playerInteract() {
         case NodeType::Mushroom: give = "glowcap"; count = r.irange(1, 3); break;
         case NodeType::Berries: give = "berries"; count = r.irange(2, 5); break;
         case NodeType::Crystal: give = world.regionId(ns.pos.x, ns.pos.z) == R_FROSTHEIM ? "frost_crystal" : "crystal"; count = 1; snd = "harvest_stone"; cl = C_GATHER_SWING; break;
+        // 2.3.5 more resources
+        case NodeType::GoldOre: give = "gold_ore"; count = r.irange(1, 2); snd = "harvest_stone"; cl = C_GATHER_SWING; break;
+        case NodeType::SilverOre: give = "silver_ore"; count = r.irange(1, 3); snd = "harvest_stone"; cl = C_GATHER_SWING; break;
+        case NodeType::Coal: give = "coal"; count = r.irange(2, 4); snd = "harvest_stone"; cl = C_GATHER_SWING; break;
+        case NodeType::AmberRock: give = "amber"; count = 1; if (r.chance(0.5f)) addItem("stone", 1); snd = "harvest_stone"; cl = C_GATHER_SWING; break;
+        case NodeType::Cactus: give = "cactus_fruit"; count = r.irange(2, 4); break;
+        case NodeType::Shells: give = "seashell"; count = r.irange(2, 4); if (r.chance(0.25f)) { addItem("pearl", 1); notify("Une perle !", vec3(0.95f, 0.95f, 1.f), "i_crystal"); } if (r.chance(0.5f)) addItem("sea_salt", 1); break;
+        case NodeType::Flax: give = "flax"; count = r.irange(2, 4); break;
+        case NodeType::FireRoot: give = "fire_root"; count = r.irange(1, 2); break;
         case NodeType::Relic: {
             static const char* relics[] = {"relic_elven_harp", "relic_star_glass", "relic_kings_seal"};
             int pi = world.nearestPoi(ns.pos.xz(), 80.f);
@@ -556,7 +565,8 @@ void Game::playerInteract() {
         }
         default: break;
         }
-        bool needTool = ns.type == NodeType::Tree || ns.type == NodeType::Rock || ns.type == NodeType::IronOre || ns.type == NodeType::CopperOre || ns.type == NodeType::RareOre;
+        bool needTool = ns.type == NodeType::Tree || ns.type == NodeType::Rock || ns.type == NodeType::IronOre || ns.type == NodeType::CopperOre || ns.type == NodeType::RareOre
+                     || ns.type == NodeType::GoldOre || ns.type == NodeType::SilverOre || ns.type == NodeType::Coal || ns.type == NodeType::AmberRock;
         if (needTool && !countItem(ns.type == NodeType::Tree ? "tool_woodaxe" : "tool_pickaxe")) {
             notify(ns.type == NodeType::Tree ? "Il vous faut une hachette (forgeronne de Brindlemere)." : "Il vous faut une pioche (forgeronne de Brindlemere).", vec3(1, 0.75f, 0.5f), ns.type == NodeType::Tree ? "i_woodaxe" : "i_pickaxe");
             return;
@@ -568,10 +578,11 @@ void Game::playerInteract() {
         else if (needTool) particles.sparks(ns.pos + vec3(0, 0.6f, 0), {0, 1, 0}, 8, vec3(1, 0.85f, 0.6f));
         else particles.dust(ns.pos + vec3(0, 0.3f, 0), 0.6f, vec3(0.5f, 0.7f, 0.3f));
         addItem(give, count);
-        static const char* htype[] = {"wood", "stone", "ore", "ore", "ore", "herb", "crystal", "", "", "", "herb", "herb"};
+        static const char* htype[] = {"wood", "stone", "ore", "ore", "ore", "herb", "crystal", "", "", "", "herb", "herb",
+                                      "ore", "ore", "ore", "herb", "", "herb", "crystal", "herb"};
         advanceQuests(StepKind::Harvest, htype[(int)ns.type], count);
         gainXp(4);
-        world.harvested[ns.uid] = gameTime + 420.0;  // respawns after 7 minutes
+        world.harvested[ns.uid] = gameTime + 300.0;  // respawns after 5 minutes (2.3.5, was 7)
         break;
     }
     case InterKind::Fishing: {

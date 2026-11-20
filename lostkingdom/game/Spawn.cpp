@@ -149,10 +149,53 @@ void Game::buildSharedMeshes() {
             case NodeType::Tree: for (int i = 0; i < 3; i++) b.tube({-0.8f, 0.22f + i * 0.38f * (i < 2 ? 1.f : 0.5f), (i == 2 ? 0.f : (i ? 0.22f : -0.22f))}, {0.8f, 0.22f + i * 0.38f * (i < 2 ? 1.f : 0.5f), (i == 2 ? 0.05f : (i ? 0.2f : -0.2f))}, 0.2f, 0.19f, Mat(hexColor(0x6a4a30), 0.9f), 8, true);
                 for (auto& v : b.v) if (std::fabs(v.nx) > 100) { v.r = 200; v.g = 170; v.b = 120; } break;
             case NodeType::Rock: b.rock({0, 0.3f, 0}, vec3(0.7f, 0.5f, 0.6f), Mat(hexColor(0x8a8680)), 5, 1); break;
-            case NodeType::IronOre: case NodeType::CopperOre: case NodeType::RareOre: {
-                b.rock({0, 0.35f, 0}, vec3(0.75f, 0.55f, 0.7f), Mat(hexColor(0x6a6660)), 7, 1);
-                vec3 oc = t == NodeType::IronOre ? hexColor(0xb8a08a) : (t == NodeType::CopperOre ? hexColor(0xd07a3a) : hexColor(0x8ad0ff));
-                for (int i = 0; i < 6; i++) { vec3 d = r.onSphere(); d.y = std::fabs(d.y); b.rock(vec3(d.x * 0.6f, 0.3f + d.y * 0.4f, d.z * 0.55f), vec3(0.14f), Mat(oc, 0.3f, t == NodeType::RareOre ? 0.f : 0.8f, t == NodeType::RareOre ? 2.f : 0.f), r.next(), 0); }
+            case NodeType::IronOre: case NodeType::CopperOre: case NodeType::RareOre: case NodeType::GoldOre: case NodeType::SilverOre: case NodeType::Coal: {
+                b.rock({0, 0.35f, 0}, vec3(0.75f, 0.55f, 0.7f), Mat(t == NodeType::Coal ? hexColor(0x4a4642) : hexColor(0x6a6660)), 7, 1);
+                vec3 oc = t == NodeType::IronOre ? hexColor(0xb8a08a) : t == NodeType::CopperOre ? hexColor(0xd07a3a) : t == NodeType::GoldOre ? hexColor(0xf0c040)
+                        : t == NodeType::SilverOre ? hexColor(0xdfe4ea) : t == NodeType::Coal ? hexColor(0x141312) : hexColor(0x8ad0ff);
+                float metal = (t == NodeType::RareOre || t == NodeType::Coal) ? 0.f : 0.85f, rough = t == NodeType::Coal ? 0.9f : (t == NodeType::GoldOre || t == NodeType::SilverOre ? 0.18f : 0.3f);
+                int veins = t == NodeType::Coal ? 9 : 6;
+                for (int i = 0; i < veins; i++) { vec3 d = r.onSphere(); d.y = std::fabs(d.y); b.rock(vec3(d.x * 0.6f, 0.3f + d.y * 0.4f, d.z * 0.55f), vec3(t == NodeType::Coal ? 0.18f : 0.14f), Mat(oc, rough, metal, t == NodeType::RareOre ? 2.f : 0.f), r.next(), 0); }
+                break;
+            }
+            case NodeType::Cactus: {   // saguaro: ribbed trunk, two arms, pink fruits on top
+                Mat green(hexColor(0x4f7a3a), 0.7f), fruit(hexColor(0xd8508a), 0.5f);
+                b.tube({0, 0, 0}, {0, 1.9f, 0}, 0.2f, 0.17f, green, 10, true);
+                for (int s = -1; s <= 1; s += 2) {
+                    float h = s < 0 ? 0.7f : 1.0f;
+                    b.tube({s * 0.15f, h, 0}, {s * 0.45f, h + 0.08f, 0}, 0.11f, 0.11f, green, 8, false);
+                    b.tube({s * 0.45f, h + 0.05f, 0}, {s * 0.47f, h + 0.65f, 0}, 0.11f, 0.09f, green, 8, true);
+                }
+                for (int i = 0; i < 4; i++) { float a = i * TAU / 4 + 0.4f; b.ellipsoid({std::cos(a) * 0.12f, 1.95f, std::sin(a) * 0.12f}, vec3(0.06f, 0.08f, 0.06f), fruit, 6, 4); }
+                break;
+            }
+            case NodeType::Shells: {   // a few shells and a pearl oyster in the sand
+                for (int i = 0; i < 6; i++) {
+                    vec3 p{r.range(-0.45f, 0.45f), 0, r.range(-0.45f, 0.45f)}; float s = r.range(0.06f, 0.12f);
+                    vec3 col = i % 3 == 0 ? hexColor(0xf0d8c8) : (i % 3 == 1 ? hexColor(0xe8a890) : hexColor(0xd8c0a0));
+                    b.lathe({{0.0f, 0.0f}, {s, 0.01f}, {s * 0.8f, s * 0.5f}, {0.0f, s * 0.6f}}, Mat(col, 0.35f), 7, p);
+                }
+                b.lathe({{0.0f, 0.0f}, {0.2f, 0.02f}, {0.18f, 0.08f}, {0.0f, 0.1f}}, Mat(hexColor(0x8a8278), 0.6f), 9, {0.1f, 0, -0.05f});
+                b.ellipsoid({0.1f, 0.11f, -0.05f}, vec3(0.045f), Mat(hexColor(0xf6f0ff), 0.08f, 0.2f, 0.4f), 8, 6);   // the pearl
+                break;
+            }
+            case NodeType::Flax: {     // tall thin stems with small blue flowers
+                for (int i = 0; i < 18; i++) {
+                    vec3 p{r.range(-0.4f, 0.4f), 0, r.range(-0.4f, 0.4f)}; float h = r.range(0.7f, 1.0f);
+                    vec3 top = p + vec3(r.range(-0.08f, 0.08f), h, r.range(-0.08f, 0.08f));
+                    b.tube(p, top, 0.012f, 0.008f, Mat(hexColor(0x7a9a4a), 0.8f), 4, false);
+                    b.ellipsoid(top, vec3(0.04f, 0.02f, 0.04f), Mat(hexColor(0x6a8ae0), 0.6f, 0, 0.3f), 6, 3);
+                }
+                break;
+            }
+            case NodeType::AmberRock: {   // sandstone with glowing amber lumps
+                b.rock({0, 0.35f, 0}, vec3(0.8f, 0.5f, 0.7f), Mat(hexColor(0xc89a60), 0.9f), 9, 1);
+                for (int i = 0; i < 6; i++) { vec3 d = r.onSphere(); d.y = std::fabs(d.y); b.ellipsoid(vec3(d.x * 0.62f, 0.3f + d.y * 0.38f, d.z * 0.55f), vec3(0.1f, 0.08f, 0.1f), Mat(hexColor(0xf09a20), 0.1f, 0, 1.4f), 7, 5); }
+                break;
+            }
+            case NodeType::FireRoot: {    // red leaves, glowing ember bulbs
+                for (int i = 0; i < 7; i++) { float a = i * TAU / 7; vec3 d{std::cos(a), 0, std::sin(a)}; b.blade({0, 0, 0}, d * 0.3f + vec3(0, 0.45f, 0), 0.12f, {-d.z, 0, d.x}, Mat(hexColor(0x6a1a14)), Mat(hexColor(0xc8402a), 0.6f)); }
+                for (int i = 0; i < 3; i++) b.ellipsoid({r.range(-0.12f, 0.12f), 0.12f, r.range(-0.12f, 0.12f)}, vec3(0.07f), Mat(hexColor(0xff7a20), 0.3f, 0, 2.2f), 7, 5);
                 break;
             }
             case NodeType::Herb: for (int i = 0; i < 8; i++) { float a = i * TAU / 8; vec3 d{std::cos(a), 0, std::sin(a)}; b.blade({0, 0, 0}, d * 0.35f + vec3(0, 0.5f, 0), 0.14f, {-d.z, 0, d.x}, Mat(hexColor(0x4a8a3a)), Mat(hexColor(0x8ac85a), 0.7f)); }
@@ -168,7 +211,7 @@ void Game::buildSharedMeshes() {
             b.bakeHeightAO(0, 0.6f, 0.7f);
         });
     };
-    for (int i = 0; i < 12; i++) nodeMeshes[i] = nodeMesh((NodeType)i);
+    for (int i = 0; i < (int)NodeType::NodeTypeCount; i++) nodeMeshes[i] = nodeMesh((NodeType)i);
 }
 
 // ============================================================================================ visuals
@@ -401,13 +444,16 @@ void Game::spawnNode(const NodeSpawn& n) {
     if (n.type != NodeType::Chest && n.type != NodeType::FishingSpot && !world.nodeAvailable(n.uid, gameTime)) return;
     Entity e = reg.create();
     NodeComp nc; nc.node = n;
-    if ((int)n.type < 12 && n.type != NodeType::FishingSpot) nc.mesh = nodeMeshes[(int)n.type];
+    if ((int)n.type < (int)NodeType::NodeTypeCount && n.type != NodeType::FishingSpot) nc.mesh = nodeMeshes[(int)n.type];
     reg.add<NodeComp>(e, nc);
     Interact it;
     switch (n.type) {
     case NodeType::Tree: it.kind = InterKind::Node; it.text = "Couper du bois"; break;
-    case NodeType::Rock: case NodeType::IronOre: case NodeType::CopperOre: case NodeType::RareOre: it.kind = InterKind::Node; it.text = "Miner"; break;
-    case NodeType::Herb: case NodeType::Mushroom: case NodeType::Berries: case NodeType::Crystal: it.kind = InterKind::Node; it.text = "Récolter"; break;
+    case NodeType::Rock: case NodeType::IronOre: case NodeType::CopperOre: case NodeType::RareOre: case NodeType::GoldOre: case NodeType::SilverOre: case NodeType::Coal: case NodeType::AmberRock:
+        it.kind = InterKind::Node; it.text = "Miner"; break;
+    case NodeType::Herb: case NodeType::Mushroom: case NodeType::Berries: case NodeType::Crystal: case NodeType::Flax: case NodeType::FireRoot: it.kind = InterKind::Node; it.text = "Récolter"; break;
+    case NodeType::Cactus: it.kind = InterKind::Node; it.text = "Cueillir les fruits"; break;
+    case NodeType::Shells: it.kind = InterKind::Node; it.text = "Ramasser les coquillages"; break;
     case NodeType::Chest: it.kind = InterKind::Chest; it.text = "Ouvrir le coffre"; break;
     case NodeType::Relic: it.kind = InterKind::Node; it.text = "Examiner la relique"; break;
     case NodeType::FishingSpot: it.kind = InterKind::Fishing; it.text = "Pêcher"; it.radius = 4.5f; break;

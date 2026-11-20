@@ -72,7 +72,9 @@ struct Structure {
 };
 
 // Harvestable / interactive node spawned with chunks.
-enum class NodeType : uint8_t { Tree, Rock, IronOre, CopperOre, RareOre, Herb, Crystal, Chest, FishingSpot, Relic, Mushroom, Berries };
+enum class NodeType : uint8_t { Tree, Rock, IronOre, CopperOre, RareOre, Herb, Crystal, Chest, FishingSpot, Relic, Mushroom, Berries,
+    // 2.3.5 more resources
+    GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, NodeTypeCount };
 struct NodeSpawn { NodeType type; vec3 pos; float rot; uint32_t uid; int tier; };
 
 struct ChunkKey {
