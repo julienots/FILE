@@ -1,6 +1,7 @@
 #include "agr/animation/AnimatorController.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 
 #include <nlohmann/json.hpp>
 
@@ -98,6 +99,7 @@ json transitionsToJson(const std::vector<AnimatorTransition>& transitions) {
         json cs = json::array();
         for (const TransitionCondition& c : t.conditions) cs.push_back({{"param", c.parameter}, {"op", conditionOpName(c.op)}, {"value", c.value}});
         ts.push_back({{"from", t.from}, {"to", t.to}, {"conditions", std::move(cs)}, {"exitTime", t.exitTime}, {"duration", t.duration}});
+        if (t.interruptible) ts.back()["interruptible"] = true;
     }
     return ts;
 }
@@ -137,6 +139,7 @@ std::vector<AnimatorTransition> transitionsFromJson(const json& arr) {
         tr.to = t.value("to", "");
         tr.exitTime = t.value("exitTime", -1.0f);
         tr.duration = std::max(0.0f, t.value("duration", 0.1f));
+        tr.interruptible = t.value("interruptible", false);
         for (const json& cj : t.value("conditions", json::array()))
             tr.conditions.push_back({cj.value("param", ""), fromName(cj.value("op", "true"), kOps, ConditionOp::IsTrue), cj.value("value", 0.0f)});
         out.push_back(std::move(tr));
@@ -146,11 +149,28 @@ std::vector<AnimatorTransition> transitionsFromJson(const json& arr) {
 
 } // namespace
 
-bool AnimatorLayer::masks(std::string_view path) const {
-    if (mask.empty()) return true;
-    for (const std::string& m : mask)
-        if (m.empty() || path == m || (path.size() > m.size() && path.substr(0, m.size()) == m && path[m.size()] == '/')) return true;
-    return false;
+bool AnimatorLayer::masks(std::string_view path) const { return maskWeight(path) > 0.0f; }
+
+float AnimatorLayer::maskWeight(std::string_view path) const {
+    if (mask.empty()) return 1.0f;
+    float weight = 0.0f;
+    usize bestLength = 0;
+    bool found = false;
+    for (const std::string& entry : mask) {
+        std::string_view m = entry;
+        float w = 1.0f;
+        if (const usize colon = m.rfind(':'); colon != std::string_view::npos) {
+            w = std::clamp(std::strtof(std::string(m.substr(colon + 1)).c_str(), nullptr), 0.0f, 1.0f);
+            m = m.substr(0, colon);
+        }
+        const bool inside = m.empty() || path == m || (path.size() > m.size() && path.substr(0, m.size()) == m && path[m.size()] == '/');
+        if (inside && (!found || m.size() >= bestLength)) {  // the most specific entry wins
+            weight = w;
+            bestLength = m.size();
+            found = true;
+        }
+    }
+    return weight;
 }
 
 std::vector<std::string> AnimatorController::validate() const {

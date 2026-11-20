@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
+#include "Fabrik.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/scene/Components.hpp"
 #include "agr/scene/Reflection.hpp"
@@ -34,11 +36,52 @@ void registerIK2DComponents() {
         .field("flipBend", &TwoBoneIK2DComponent::flipBend, {.tooltip = "Bend the other way (elbow / knee)"})
         .field("weight", &TwoBoneIK2DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("enabled", &TwoBoneIK2DComponent::enabled);
+    reg.add<ChainIK2DComponent>("ChainIK2D")
+        .category("2D")
+        .description("On the root Bone2D of a chain (tail, rope, tentacle): FABRIK, the last bone's tip reaches the target.")
+        .field("target", &ChainIK2DComponent::target)
+        .field("boneCount", &ChainIK2DComponent::boneCount, {.rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("iterations", &ChainIK2DComponent::iterations, {.rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("maxAngle", &ChainIK2DComponent::maxAngle, {.tooltip = "Bend limit at each joint", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f})
+        .field("weight", &ChainIK2DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("enabled", &ChainIK2DComponent::enabled);
 }
 
 u32 solveIK2D(Scene& scene) {
     auto& reg = scene.registry();
     u32 solved = 0;
+    reg.view<ChainIK2DComponent, Bone2DComponent>().each([&](ecs::Entity root, ChainIK2DComponent& ik, Bone2DComponent&) {
+        if (!ik.enabled || ik.weight <= 0.0f || !scene.valid(ik.target) || ik.boneCount < 1) return;
+        std::vector<ecs::Entity> bones{root};
+        while (static_cast<i32>(bones.size()) < ik.boneCount) {
+            ecs::Entity next{};
+            scene.forEachChild(bones.back(), [&](ecs::Entity c) {
+                if (next.isNull() && reg.has<Bone2DComponent>(c)) next = c;
+            });
+            if (next.isNull()) break;
+            bones.push_back(next);
+        }
+        // Joints: each bone's origin, then the tip of the last bone.
+        std::vector<Vec3> p;
+        for (ecs::Entity b : bones) p.push_back(scene.worldMatrix(b).transformPoint(Vec3(0.0f)));
+        p.push_back(scene.worldMatrix(bones.back()).transformPoint(Vec3(reg.get<Bone2DComponent>(bones.back()).length, 0.0f, 0.0f)));
+        const float z = p[0].z;
+        for (Vec3& q : p) q.z = z;
+        Vec3 t = scene.worldMatrix(ik.target).transformPoint(Vec3(0.0f));
+        t.z = z;
+        fabrik::solve(p, t, std::clamp(ik.iterations, 1, 64), std::clamp(ik.maxAngle, 0.0f, 3.1416f), nullptr);
+        const float w = std::clamp(ik.weight, 0.0f, 1.0f);
+        for (usize i = 0; i < bones.size(); ++i) {  // each bone turns about Z toward its solved next joint
+            const Mat4 world = scene.worldMatrix(bones[i]);
+            const Vec3 o = world.transformPoint(Vec3(0.0f));
+            const Vec3 nextNow = i + 1 < bones.size() ? scene.worldMatrix(bones[i + 1]).transformPoint(Vec3(0.0f))
+                                                      : world.transformPoint(Vec3(reg.get<Bone2DComponent>(bones[i]).length, 0.0f, 0.0f));
+            const float now = std::atan2(nextNow.y - o.y, nextNow.x - o.x), want = std::atan2(p[i + 1].y - o.y, p[i + 1].x - o.x);
+            auto& tr = reg.get<TransformComponent>(bones[i]);
+            tr.rotation = math::Quat::fromAxisAngle({0, 0, 1}, zAngle(tr.rotation) + wrap(want - now) * w);
+        }
+        ++solved;
+    });
     reg.view<TwoBoneIK2DComponent, Bone2DComponent>().each([&](ecs::Entity upper, TwoBoneIK2DComponent& ik, Bone2DComponent&) {
         if (!ik.enabled || ik.weight <= 0.0f || !scene.valid(ik.target)) return;
         ecs::Entity lower{};

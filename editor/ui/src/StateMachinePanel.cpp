@@ -306,6 +306,7 @@ void StateMachinePanel::drawProperties(EditorShared& s) {
         }
         if (exit) m_dirty |= ImGui::DragFloat("Instant de sortie", &t.exitTime, 0.01f, 0.0f, 10.0f, "%.2f (fraction du clip)");
         m_dirty |= ImGui::DragFloat("Fondu", &t.duration, 0.01f, 0.0f, 5.0f, "%.2f s");
+        m_dirty |= ImGui::Checkbox("Interruptible pendant le fondu", &t.interruptible);
         ImGui::TextUnformatted("Conditions (toutes requises)");
         static const char* ops[] = {">", "<", "==", "!=", "vrai", "faux"};
         for (usize i = 0; i < t.conditions.size(); ++i) {

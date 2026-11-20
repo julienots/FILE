@@ -62,6 +62,9 @@ struct AnimatorTransition {
     std::vector<TransitionCondition> conditions;
     float exitTime = -1.0f;
     float duration = 0.1f;
+    /// While its crossfade runs, the transitions leaving its target state may already fire (a
+    /// hit while turning, a jump while starting to run): the new fade starts from that state.
+    bool interruptible = false;
 };
 
 /// An extra state machine played on top of the base one (upper body that shoots while the legs
@@ -74,7 +77,7 @@ struct AnimatorLayer {
     /// lean, a hit flinch) on top of the layers below instead of replacing them.
     bool additive = false;
     /// Paths below the animated entity ("Torso", "Hips/Spine") whose subtree the layer animates;
-    /// empty = everything.
+    /// empty = everything. "Path:0.5" animates that subtree at half the layer's weight.
     std::vector<std::string> mask;
     std::vector<AnimatorState> states;
     std::vector<AnimatorTransition> transitions;
@@ -82,6 +85,9 @@ struct AnimatorLayer {
 
     /// True when a track targeting `path` is inside the mask.
     bool masks(std::string_view path) const;
+    /// Influence of the layer on `path` (0..1): a mask entry may end with ":weight"
+    /// ("Hips/Spine:0.3"); the most specific entry containing the path wins.
+    float maskWeight(std::string_view path) const;
 };
 
 /// State machine asset (.agrctrl).

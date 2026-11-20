@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Fabrik.hpp"
 #include "agr/scene/Components.hpp"
 #include "agr/scene/Reflection.hpp"
 
@@ -66,6 +67,47 @@ void registerIK3DComponents() {
         .field("maxAngle", &LookAtIK3DComponent::maxAngle, {.flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f, .speed = 0.01f})
         .field("weight", &LookAtIK3DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("enabled", &LookAtIK3DComponent::enabled);
+    reg.add<ChainIK3DComponent>("ChainIK3D")
+        .category("Animation")
+        .description("On the root bone of a chain (spine, tail, tentacle, crane): FABRIK, the chain's end reaches the target.")
+        .field("target", &ChainIK3DComponent::target)
+        .field("pole", &ChainIK3DComponent::pole, {.tooltip = "Optional: the joints bend toward it"})
+        .field("boneCount", &ChainIK3DComponent::boneCount, {.tooltip = "Bones in the chain (following the first child)", .rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("iterations", &ChainIK3DComponent::iterations, {.rangeMin = 1.0f, .rangeMax = 64.0f})
+        .field("maxAngle", &ChainIK3DComponent::maxAngle, {.tooltip = "Bend limit at each joint", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f})
+        .field("weight", &ChainIK3DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("enabled", &ChainIK3DComponent::enabled);
+}
+
+bool solveChainIK3D(Scene& scene, ecs::Entity root, const ChainIK3DComponent& ik) {
+    if (!ik.enabled || ik.weight <= 0.0f || !scene.valid(ik.target) || ik.boneCount < 1) return false;
+    std::vector<ecs::Entity> joints{root};
+    for (i32 i = 0; i < ik.boneCount; ++i) {
+        const ecs::Entity next = firstChild(scene, joints.back());
+        if (next.isNull()) break;
+        joints.push_back(next);
+    }
+    if (joints.size() < 2) return false;
+    std::vector<Vec3> p;
+    for (ecs::Entity j : joints) p.push_back(worldPose(scene, j).position);
+    const Vec3 target = worldPose(scene, ik.target).position;
+    Vec3 pole;
+    if (scene.valid(ik.pole)) pole = worldPose(scene, ik.pole).position;
+    fabrik::solve(p, target, std::clamp(ik.iterations, 1, 64), std::clamp(ik.maxAngle, 0.0f, 3.1416f), scene.valid(ik.pole) ? &pole : nullptr);
+    // Turn each bone (root first) so that its child lands on the solved position.
+    auto& reg = scene.registry();
+    const float w = std::clamp(ik.weight, 0.0f, 1.0f);
+    for (usize i = 0; i + 1 < joints.size(); ++i) {
+        const WorldPose B = worldPose(scene, joints[i]);
+        const Vec3 now = safeNormalize(worldPose(scene, joints[i + 1]).position - B.position, {0, 1, 0});
+        const Vec3 want = safeNormalize(p[i + 1] - B.position, now);
+        Vec3 axis = math::cross(now, want);
+        if (math::length(axis) < 1e-7f) continue;
+        const Quat R = Quat::fromAxisAngle(math::normalize(axis), angleBetween(now, want) * w);
+        auto& t = reg.get<TransformComponent>(joints[i]);
+        t.rotation = rotateInWorld(t.rotation, B.rotation, R);
+    }
+    return true;
 }
 
 bool solveTwoBoneIK3D(Scene& scene, ecs::Entity upper, const TwoBoneIK3DComponent& ik) {
@@ -125,6 +167,9 @@ u32 solveIK3D(Scene& scene) {
     u32 solved = 0;
     reg.view<TwoBoneIK3DComponent>().each([&](ecs::Entity e, TwoBoneIK3DComponent& ik) {
         if (solveTwoBoneIK3D(scene, e, ik)) ++solved;
+    });
+    reg.view<ChainIK3DComponent>().each([&](ecs::Entity e, ChainIK3DComponent& ik) {
+        if (solveChainIK3D(scene, e, ik)) ++solved;
     });
     reg.view<LookAtIK3DComponent>().each([&](ecs::Entity e, LookAtIK3DComponent& la) {
         if (!la.enabled || la.weight <= 0.0f || !scene.valid(la.target)) return;

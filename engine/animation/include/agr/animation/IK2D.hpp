@@ -14,6 +14,17 @@ struct TwoBoneIK2DComponent {
     bool enabled = true;
 };
 
+/// Long 2D chain IK (FABRIK) on the root Bone2D of `boneCount` bones (tail, rope, tentacle): the
+/// tip of the last bone reaches `target`; `maxAngle` limits each joint's bend.
+struct ChainIK2DComponent {
+    ecs::Entity target{};
+    i32 boneCount = 3;
+    i32 iterations = 12;
+    float maxAngle = 3.1416f;
+    float weight = 1.0f;
+    bool enabled = true;
+};
+
 void registerIK2DComponents();
 
 /// Solves every enabled TwoBoneIK2D of the scene (local rotations of the two bones).

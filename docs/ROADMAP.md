@@ -141,6 +141,7 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 |---|---|---|
 | Physique 2D Box2D v3 : corps statiques / cinématiques / dynamiques, boîtes, cercles, capsules, composés, déclencheurs, tilemaps solides, rayons, forces | ✅ | `agr::physics2d` |
 | Physique 3D Jolt : corps, boîtes, sphères, capsules, composés, déclencheurs, masse imposée, rotation bloquée, rayons, forces | ✅ | `agr::physics3d` |
+| Animation : IK en chaîne longue FABRIK (2D, 3D, limites, pôle), transitions interruptibles, masques pondérés | ✅ | `Fabrik.hpp`, `AnimationSystem.cpp` ; tests unitaires |
 | Navigation : évitement entre agents (RVO), obstacles évités ou découpés, liens hors maillage (sauts, téléporteurs), modèles importés et colliders Mesh comme sources | ✅ | `NavigationSystem.cpp` ; tests unitaires |
 | UI : listes et arbres repliables, boîtes de dialogue modales, sélecteur de couleur, champs multilignes, échelle et rotation des éléments | ✅ | `UISystem.cpp` ; tests unitaires, capture GPU |
 | Éditeur de scripts intégré : coloration, vérification de syntaxe en direct, autocomplétion depuis l'API chargée, indentation, arbre de l'API | ✅ | `ScriptEditorPanel.cpp` ; test de l'éditeur |

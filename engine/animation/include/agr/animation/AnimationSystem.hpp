@@ -35,6 +35,7 @@ struct AnimationStats {
     u32 animators = 0;
     u32 tracksApplied = 0;
     u32 transitions = 0;  ///< Since start.
+    u32 interruptions = 0;  ///< Transitions that interrupted a crossfade, since start.
     u32 clips = 0, controllers = 0;
     u32 ik2DChains = 0;
     u32 ik3DChains = 0;   ///< TwoBoneIK3D / LookAtIK3D solved this frame.   ///< TwoBoneIK2D chains solved this frame.

@@ -780,4 +780,133 @@ TEST_CASE("3D IK: two bones reach the target and bend toward the pole; look-at w
     CHECK(anim.stats().ik3DChains == 2);
 }
 
+
+TEST_CASE("chain IK (FABRIK): long 3D chains reach, keep their lengths, bend limits, poles; 2D chains") {
+    Scene scene;
+    registerAnimationComponents();
+    registerRenderComponents();
+    using math::Vec3;
+    // A 5-bone tentacle going up from the origin, bones of 1.
+    std::vector<ecs::Entity> bones{scene.createEntity("B0")};
+    for (int i = 1; i <= 5; ++i) {
+        bones.push_back(scene.createEntity(("B" + std::to_string(i)).c_str(), bones.back()));
+        scene.registry().get<TransformComponent>(bones.back()).position = {0, 1, 0};
+    }
+    const auto target = scene.createEntity("Target");
+    scene.registry().get<TransformComponent>(target).position = {2.5f, 2.0f, 1.0f};
+    auto& ik = scene.registry().emplace<ChainIK3DComponent>(bones[0]);
+    ik.target = target;
+    ik.boneCount = 5;
+    auto wpos = [&](ecs::Entity e) { return scene.worldMatrix(e).transformPoint(Vec3(0.0f)); };
+    CHECK(solveChainIK3D(scene, bones[0], ik));
+    CHECK(math::length(wpos(bones[5]) - wpos(target)) < 0.01f);
+    for (int i = 0; i < 5; ++i) CHECK(math::length(wpos(bones[i + 1]) - wpos(bones[i])) == doctest::Approx(1.0f).epsilon(0.001));
+    CHECK(math::length(wpos(bones[0])) < 1e-5f);  // the root stays
+    // Out of reach: stretched toward the target.
+    scene.registry().get<TransformComponent>(target).position = {20, 0, 0};
+    solveChainIK3D(scene, bones[0], ik);
+    CHECK(wpos(bones[5]).x == doctest::Approx(5.0f).epsilon(0.01));
+    // Bend limit: a target folded back below the root cannot be reached with joints of 20 degrees.
+    scene.registry().get<TransformComponent>(target).position = {0.5f, -1.0f, 0};
+    ik.maxAngle = math::radians(20.0f);
+    solveChainIK3D(scene, bones[0], ik);
+    for (int i = 1; i < 5; ++i) {
+        const Vec3 a = math::normalize(wpos(bones[i]) - wpos(bones[i - 1])), b = math::normalize(wpos(bones[i + 1]) - wpos(bones[i]));
+        CHECK(std::acos(std::clamp(math::dot(a, b), -1.0f, 1.0f)) <= math::radians(20.0f) + 0.02f);
+    }
+    // Pole: the middle joints bend toward it.
+    ik.maxAngle = 3.1416f;
+    scene.registry().get<TransformComponent>(target).position = {0, 3, 0};
+    const auto pole = scene.createEntity("Pole");
+    scene.registry().get<TransformComponent>(pole).position = {0, 1.5f, 5};
+    ik.pole = pole;
+    solveChainIK3D(scene, bones[0], ik);
+    CHECK(wpos(bones[2]).z > 0.3f);
+    CHECK(math::length(wpos(bones[5]) - wpos(target)) < 0.05f);
+
+    // 2D chain of 4 bones of length 1 along +X.
+    std::vector<ecs::Entity> b2{scene.createEntity("T0")};
+    scene.registry().emplace<Bone2DComponent>(b2[0]).length = 1.0f;
+    for (int i = 1; i < 4; ++i) {
+        b2.push_back(scene.createEntity("T", b2.back()));
+        scene.registry().get<TransformComponent>(b2.back()).position = {1, 0, 0};
+        scene.registry().emplace<Bone2DComponent>(b2.back()).length = 1.0f;
+    }
+    const auto t2 = scene.createEntity("T2");
+    scene.registry().get<TransformComponent>(t2).position = {1.5f, 2.0f, 0};
+    auto& c2 = scene.registry().emplace<ChainIK2DComponent>(b2[0]);
+    c2.target = t2;
+    c2.boneCount = 4;
+    CHECK(solveIK2D(scene) == 1);
+    const Vec3 tip = scene.worldMatrix(b2[3]).transformPoint(Vec3(1.0f, 0.0f, 0.0f));
+    CHECK(math::length(tip - Vec3{1.5f, 2.0f, 0}) < 0.02f);
+    CHECK(tip.z == doctest::Approx(0.0f));
+}
+
+TEST_CASE("interruptible transitions and weighted masks") {
+    AnimFixture f;
+    f.save("assets://a.agranim", constantX(0.0f));
+    f.save("assets://b.agranim", constantX(10.0f));
+    f.save("assets://c.agranim", constantX(-10.0f));
+    AnimatorController ctrl;
+    ctrl.parameters = {{"go", ParameterType::Trigger, 0.0f}, {"hit", ParameterType::Trigger, 0.0f}};
+    ctrl.states = {{"A", "assets://a.agranim"}, {"B", "assets://b.agranim"}, {"C", "assets://c.agranim"}};
+    AnimatorTransition ab{"A", "B", {{"go", ConditionOp::IsTrue, 0.0f}}, -1.0f, 1.0f};
+    ab.interruptible = true;
+    ctrl.transitions = {ab, {"B", "C", {{"hit", ConditionOp::IsTrue, 0.0f}}, -1.0f, 0.5f}};
+    auto parsed = AnimatorController::fromJson(ctrl.toJson());
+    REQUIRE(parsed);
+    CHECK(parsed.value().transitions[0].interruptible);
+    CHECK_FALSE(parsed.value().transitions[1].interruptible);
+    f.save("assets://ctrl.agrctrl", ctrl);
+    const auto e = f.scene.createEntity("E");
+    f.scene.registry().emplace<AnimatorComponent>(e).controller = "assets://ctrl.agrctrl";
+    f.step(0.1f);
+    f.anim.setTrigger(f.scene, e, "go");
+    f.step(0.1f);
+    CHECK(f.anim.currentState(e) == "B");
+    f.step(0.2f);  // mid-fade toward B (1 s)
+    f.anim.setTrigger(f.scene, e, "hit");
+    f.step(0.05f);
+    CHECK(f.anim.currentState(e) == "C");  // interrupted the A -> B fade
+    CHECK(f.anim.stats().interruptions == 1);
+    for (int i = 0; i < 20; ++i) f.step(0.05f);
+    CHECK(f.x(e) == doctest::Approx(-10.0f).epsilon(0.01));
+
+    // Weighted mask entries: the most specific one wins.
+    AnimatorLayer l;
+    l.mask = {"Body:0.5", "Body/Arm", "Tail:0"};
+    CHECK(l.maskWeight("Body") == doctest::Approx(0.5f));
+    CHECK(l.maskWeight("Body/Leg") == doctest::Approx(0.5f));
+    CHECK(l.maskWeight("Body/Arm/Hand") == doctest::Approx(1.0f));
+    CHECK(l.maskWeight("Tail") == doctest::Approx(0.0f));
+    CHECK(l.maskWeight("Head") == doctest::Approx(0.0f));
+    // In a layer: a child at half weight lands half way between the base and the layer.
+    AnimationClip baseClip;
+    baseClip.duration = 1.0f;
+    baseClip.loop = true;
+    baseClip.track("Arm", "Transform", "position", 0).curve.setKey(0.0f, 0.0f);
+    baseClip.track("Leg", "Transform", "position", 0).curve.setKey(0.0f, 0.0f);
+    AnimationClip layerClip = baseClip;
+    layerClip.tracks[0].curve.setKey(0.0f, 8.0f);
+    layerClip.tracks[1].curve.setKey(0.0f, 8.0f);
+    f.save("assets://base2.agranim", baseClip);
+    f.save("assets://layer2.agranim", layerClip);
+    AnimatorController c2;
+    c2.states = {{"Base", "assets://base2.agranim"}};
+    AnimatorLayer up;
+    up.name = "Up";
+    up.mask = {"Arm", "Leg:0.25"};
+    up.states = {{"L", "assets://layer2.agranim"}};
+    c2.layers = {up};
+    f.save("assets://c2.agrctrl", c2);
+    const auto h = f.scene.createEntity("H");
+    const auto arm = f.scene.createEntity("Arm", h);
+    const auto leg = f.scene.createEntity("Leg", h);
+    f.scene.registry().emplace<AnimatorComponent>(h).controller = "assets://c2.agrctrl";
+    f.step(0.1f);
+    f.step(0.1f);
+    CHECK(f.x(arm) == doctest::Approx(8.0f));
+    CHECK(f.x(leg) == doctest::Approx(2.0f));
+}
 }  // TEST_SUITE

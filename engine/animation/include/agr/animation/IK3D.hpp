@@ -27,6 +27,20 @@ struct LookAtIK3DComponent {
     bool enabled = true;
 };
 
+/// Long chain IK (FABRIK) on the root bone of a chain of `boneCount` bones (spine, tail,
+/// tentacle, crane arm, a leg of more than two bones): the end of the chain (the origin of the
+/// bone after the last one) reaches `target`. Bones follow the first child. `maxAngle` limits
+/// the bend at each joint; `pole` (optional) is where the joints bend toward.
+struct ChainIK3DComponent {
+    ecs::Entity target{};
+    ecs::Entity pole{};
+    i32 boneCount = 3;
+    i32 iterations = 12;
+    float maxAngle = 3.1416f;  ///< Radians, between a bone and its parent bone.
+    float weight = 1.0f;
+    bool enabled = true;
+};
+
 void registerIK3DComponents();
 
 /// Solves every enabled TwoBoneIK3D then LookAtIK3D of the scene; returns how many were solved.
@@ -34,5 +48,7 @@ u32 solveIK3D(Scene& scene);
 
 /// One two-bone solve (exposed for tests and tools): returns false when the chain is invalid.
 bool solveTwoBoneIK3D(Scene& scene, ecs::Entity upper, const TwoBoneIK3DComponent& ik);
+/// One FABRIK chain solve (tests and tools).
+bool solveChainIK3D(Scene& scene, ecs::Entity root, const ChainIK3DComponent& ik);
 
 } // namespace agr

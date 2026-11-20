@@ -248,6 +248,7 @@ struct AnimationSystem::Runtime {
     Playback current, previous;
     bool fading = false;
     float fade = 0.0f, fadeDuration = 0.0f;
+    bool fadeInterruptible = false;  // the running crossfade comes from an interruptible transition
     float stateTime = 0.0f;
     bool valid = false;  // false: missing assets (reported once)
 };
@@ -262,12 +263,14 @@ struct AnimationSystem::PoseScratch {
         float sum, weight;
         const std::string* text;
         float textWeight;
+        float mask = 1.0f;  // layer mask weight of its target
     };
     struct Xform {
         TransformComponent* tr;
         TransformTrack::Path path;
         math::Vec4 sum;
         float weight;
+        float mask = 1.0f;
     };
     struct Pose {
         std::vector<Prop> props;
@@ -286,12 +289,12 @@ struct AnimationSystem::PoseScratch {
         }
         Prop& prop(void* comp, const FieldInfo* field, i32 ch) {
             auto [it, inserted] = propIndex.try_emplace(key(comp, field, ch), static_cast<u32>(props.size()));
-            if (inserted) props.push_back({comp, field, ch, 0.0f, 0.0f, nullptr, 0.0f});
+            if (inserted) props.push_back({comp, field, ch, 0.0f, 0.0f, nullptr, 0.0f, 1.0f});
             return props[it->second];
         }
         Xform& xform(TransformComponent* tr, TransformTrack::Path path, bool* created = nullptr) {
             auto [it, inserted] = xformIndex.try_emplace(key(tr, nullptr, static_cast<i32>(path)), static_cast<u32>(xforms.size()));
-            if (inserted) xforms.push_back({tr, path, {0, 0, 0, 0}, 0.0f});
+            if (inserted) xforms.push_back({tr, path, {0, 0, 0, 0}, 0.0f, 1.0f});
             if (created) *created = inserted;
             return xforms[it->second];
         }
@@ -344,10 +347,12 @@ void addClipToPose(Scene& scene, ecs::Entity root, const AnimationClip& clip, co
     const float ts = sampleTime(clip, time);
     for (usize i = 0; i < clip.tracks.size() && i < bindings.size(); ++i) {
         const AnimationTrack& track = clip.tracks[i];
-        if (track.curve.empty() || (layer && !layer->masks(track.target))) continue;
+        const float mw = layer ? layer->maskWeight(track.target) : 1.0f;
+        if (track.curve.empty() || mw <= 0.0f) continue;
         void* c = componentPtr(scene, bindings[i]);
         if (!c) continue;
         auto& p = pose.prop(c, bindings[i].field, std::clamp(track.channel, 0, 3));
+        p.mask = mw;
         if (bindings[i].field->type == FieldType::String) {
             if (weight > p.textWeight) {
                 p.text = &track.curve.evaluateText(ts);
@@ -361,7 +366,8 @@ void addClipToPose(Scene& scene, ecs::Entity root, const AnimationClip& clip, co
     auto& reg = scene.registry();
     for (usize i = 0; i < clip.transformTracks.size(); ++i) {
         const TransformTrack& track = clip.transformTracks[i];
-        if (layer && !layer->masks(track.target)) continue;
+        const float mw = layer ? layer->maskWeight(track.target) : 1.0f;
+        if (mw <= 0.0f) continue;
         const ecs::Entity target = i < xforms.size() ? xforms[i] : AnimationSystem::resolvePath(scene, root, track.target);
         if (target.isNull() || !scene.valid(target)) continue;
         auto* tr = reg.tryGet<TransformComponent>(target);
@@ -369,6 +375,7 @@ void addClipToPose(Scene& scene, ecs::Entity root, const AnimationClip& clip, co
         math::Vec4 v = track.sample(ts);
         bool created = false;
         auto& x = pose.xform(tr, track.path, &created);
+        x.mask = mw;
         // Quaternions: keep every sample in the hemisphere of the first one before summing.
         if (track.path == TransformTrack::Path::Rotation && !created && x.sum.x * v.x + x.sum.y * v.y + x.sum.z * v.z + x.sum.w * v.w < 0.0f) v = v * -1.0f;
         x.sum = x.sum + v * weight;
@@ -592,6 +599,7 @@ AnimationSystem::Runtime* AnimationSystem::runtime(Scene& scene, ecs::Entity e) 
 }
 
 void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorState* state, float fade) {
+    rt.fadeInterruptible = false;
     if (fade > 0.0f && rt.current.clip) {
         rt.previous = std::move(rt.current);
         rt.fading = true;
@@ -751,8 +759,8 @@ void AnimationSystem::stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, floa
             rt.previous = {};
         }
     }
-    // Transitions (one per frame; not while crossfading).
-    if (rt.controller && !rt.fading) {
+    // Transitions (one per frame; while crossfading only when the running one is interruptible).
+    if (rt.controller && (!rt.fading || rt.fadeInterruptible)) {
         for (const AnimatorTransition& tr : rt.controller->transitions) {
             if (tr.from != "*" && tr.from != cur.state) continue;
             if (tr.from == "*" && tr.to == cur.state) continue;
@@ -782,7 +790,9 @@ void AnimationSystem::stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, floa
                 const AnimatorParameter* p = rt.controller->findParameter(c.parameter);
                 if (p && p->type == ParameterType::Trigger) params[c.parameter] = 0.0f;  // consumed
             }
+            if (rt.fading) ++m_stats.interruptions;
             enterState(scene, e, rt, target, tr.duration);
+            rt.fadeInterruptible = tr.interruptible;
             ++m_stats.transitions;
             break;
         }
@@ -852,17 +862,17 @@ void AnimationSystem::applyAdditive(Scene&, ecs::Entity, Runtime& rt, const Anim
             writes.push_back({p.comp, p.field, {0, 0, 0, 0}, 0, nullptr});
             w = writes.end() - 1;
         }
-        w->v[p.channel] = *base + p.sum * weight;
+        w->v[p.channel] = *base + p.sum * weight * p.mask;
         w->mask |= static_cast<u8>(1u << p.channel);
     }
     for (FieldWrite& w : writes) writeField(w);
     for (const auto& x : cur.xforms) {
         TransformComponent& tr = *x.tr;
         switch (x.path) {
-            case TransformTrack::Path::Translation: tr.position = tr.position + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight; break;
-            case TransformTrack::Path::Scale: tr.scale = tr.scale + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight; break;
+            case TransformTrack::Path::Translation: tr.position = tr.position + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight * x.mask; break;
+            case TransformTrack::Path::Scale: tr.scale = tr.scale + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight * x.mask; break;
             case TransformTrack::Path::Rotation:
-                tr.rotation = math::normalize(tr.rotation * math::slerp(math::Quat::identity(), math::Quat{x.sum.x, x.sum.y, x.sum.z, x.sum.w}, weight));
+                tr.rotation = math::normalize(tr.rotation * math::slerp(math::Quat::identity(), math::Quat{x.sum.x, x.sum.y, x.sum.z, x.sum.w}, weight * x.mask));
                 break;
         }
     }
@@ -935,15 +945,17 @@ void AnimationSystem::applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const
             continue;
         }
         float v = p.sum;
-        if (weight < 1.0f)
-            if (const auto base = readChannel(p.comp, *p.field, p.channel)) v = *base + (v - *base) * weight;
+        const float pw = weight * p.mask;
+        if (pw < 1.0f)
+            if (const auto base = readChannel(p.comp, *p.field, p.channel)) v = *base + (v - *base) * pw;
         w->v[p.channel] = v;
         w->mask |= static_cast<u8>(1u << p.channel);
     }
     for (FieldWrite& w : writes) writeField(w);
     for (const auto& x : cur.xforms) {
         if (x.weight <= 0.0f) continue;
-        setXform(*x.tr, x.path, weight < 1.0f ? blendTransform(x.path, currentXform(*x.tr, x.path), x.sum, weight) : x.sum);
+        const float xw = weight * x.mask;
+        setXform(*x.tr, x.path, xw < 1.0f ? blendTransform(x.path, currentXform(*x.tr, x.path), x.sum, xw) : x.sum);
     }
     m_stats.tracksApplied += static_cast<u32>(cur.props.size() + cur.xforms.size());
 }

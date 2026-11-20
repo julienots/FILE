@@ -104,7 +104,9 @@ propres états et transitions (les paramètres sont communs) :
 ```
 
 - **Masque** : chemins sous l'Animator (`"Torso"`, `"Hips/Spine"`) ; la couche n'anime que ces objets
-  et leurs enfants (vide = tout). Exemple classique : les jambes courent (base) pendant que le haut du
+  et leurs enfants (vide = tout). **Pondéré** : `"Hips/Spine:0.3"` n'y applique que 30 % de la couche
+  (`"Torso:0.5", "Torso/Arm"` : le bras à 100 %, le reste du torse à 50 % ; l'entrée la plus précise
+  l'emporte, `":0"` exclut une branche). Exemple classique : les jambes courent (base) pendant que le haut du
   corps tire (couche `Upper` masquée sur `Torso`).
 - **Poids** (0..1) : la couche remplace les valeurs du dessous dans cette proportion ; les scripts le
   font varier (`self.entity:setLayerWeight("Upper", 1)` pour viser, 0 pour relâcher) avec
@@ -131,6 +133,7 @@ Résolue après les clips (et les couches), à chaque image du jeu ; `AnimationS
 | Composant | Rôle |
 |---|---|
 | `TwoBoneIK3D` | sur l'os supérieur d'un bras ou d'une jambe (squelettes importés) : tourne cet os et l'os du milieu pour que le bout (`tip` : main, pied) atteigne `target`. `pole` (optionnel) : le coude ou le genou se tourne vers lui. `mid` / `tip` valent par défaut le premier enfant et le premier petit-enfant. Longueurs des os conservées ; cible hors de portée : bras tendu vers elle ; `weight` mélange avec la pose animée |
+| `ChainIK3D` | **chaîne longue (FABRIK)** sur l'os racine de `boneCount` os (colonne, queue, tentacule, bras de grue, patte à trois segments) : le bout de la chaîne (l'origine de l'os qui suit le dernier) atteint `target` ; longueurs conservées, `maxAngle` limite la flexion à chaque articulation, `pole` (optionnel) fait plier les articulations de son côté, `iterations`, `weight` |
 | `LookAtIK3D` | tourne l'os (tête, yeux, tourelle) pour que son axe `forwardAxis` vise `target`, au plus de `maxAngle` par rapport à sa direction animée, avec `weight` |
 
 Usages typiques : pieds posés sur un sol inégal (une cible par pied placée par un script avec un rayon
@@ -138,6 +141,13 @@ Usages typiques : pieds posés sur un sol inégal (une cible par pied placée pa
 L'algorithme à deux os est analytique (loi des cosinus, puis rotation de toute la chaîne vers la
 cible et torsion vers le pôle) : stable d'une image à l'autre et sans itérations. Tests : `3D IK`
 (`tests/test_animation.cpp`).
+
+`ChainIK2D` fait de même pour une chaîne d'os 2D (`Bone2D`) : le bout du dernier os atteint la cible,
+avec la même limite d'angle (queues, cordes, tentacules en 2D).
+
+**Transitions interruptibles** (case *Interruptible pendant le fondu*, `"interruptible": true`) :
+pendant leur fondu, les transitions qui partent de l'état d'arrivée peuvent déjà se déclencher (un coup
+reçu pendant qu'on se retourne) ; le nouveau fondu part de cet état. `AnimationStats::interruptions`.
 
 ## Animation squelettique (modèles glTF)
 
@@ -213,10 +223,12 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Pas de masques pondérés par os ; IK : chaînes de deux os (2D et 3D) et visée, pas de chaînes longues (FABRIK) ni de contraintes d'angle (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
-  maillage, 4 influences par sommet.
+- IK : contraintes d'angle identiques pour toutes les articulations d'une chaîne (pas de limites
+  par axe) ; pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128
+  articulations par maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
-- Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.
+- Une transition interrompue repart de son état d'arrivée (la part de l'état de départ encore visible
+  disparaît) ; une seule transition par image.
 - Timeline : pas de sélection de plusieurs clés, de copier-coller ni de poignées de tangentes à
   glisser (valeurs numériques) ; les modifications d'un clip ou d'une machine à états ne passent pas
   par *Annuler* (elles sont enregistrées dans leur fichier avec *Enregistrer*).
