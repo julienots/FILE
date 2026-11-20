@@ -12,6 +12,12 @@ struct ScriptComponent {
     bool enabled = true;
 };
 
+/// Groups of the entity (comma-separated names, e.g. "enemies,flying"): agr.group("enemies")
+/// lists the members; entity:addToGroup / removeFromGroup / inGroup from scripts.
+struct GroupsComponent {
+    std::string groups;
+};
+
 void registerScriptComponent();
 
 } // namespace agr

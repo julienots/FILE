@@ -126,6 +126,10 @@ void debugHook(lua_State* L, lua_Debug* ar) {
     case Step::Out: stop = stackDepth(L) < m.dbg.stepDepth; reason = ScriptBreak::Reason::Step; break;
     case Step::None: break;
     }
+    if (stop) {  // stepping / pausing: never inside the engine's own Lua runtime (agr.after, agr.start...)
+        lua_getinfo(L, "S", ar);
+        if (ar->source && std::string_view(ar->source) == "=agr.runtime") return;
+    }
     if (!stop) {
         if (!m.dbg.lineCount.contains(ar->currentline)) return;  // most lines: one hash lookup
         lua_getinfo(L, "S", ar);

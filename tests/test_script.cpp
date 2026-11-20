@@ -415,6 +415,91 @@ agr.find("Hero"):set("CharacterController2D", "velocity", {2, 0})
     }
 }
 
+TEST_CASE("runtime: signals, events, timers, coroutines, groups and globals") {
+    ScriptFixture f;  // 0.1 s per frame
+    f.write("assets://s/door.lua", R"lua(
+local D = {}
+function D:onStart()
+  self.opened = 0
+  -- a signal of another entity, connected with this one as owner
+  agr.find("Lever"):connect("pulled", function(force) self.opened = self.opened + force end, self.entity)
+  agr.events.on("score", function(points) agr.globals.score = (agr.globals.score or 0) + points end)
+  self.ticks = 0
+  self.timer = agr.every(0.3, function() self.ticks = self.ticks + 1 end, self.entity)
+  agr.after(0.45, function() self.late = true end, self.entity)
+  self.cancelled = agr.after(0.2, function() self.shouldNot = true end)
+  self.cancelled:cancel()
+  self.steps = {}
+  self.task = agr.start(function()
+    table.insert(self.steps, "a")
+    agr.wait(0.25)
+    table.insert(self.steps, "b")
+    agr.waitFrames(2)
+    table.insert(self.steps, "c")
+    agr.waitUntil(function() return self.opened >= 5 end)
+    table.insert(self.steps, "d")
+    local who, n = agr.waitSignal(agr.find("Lever"), "done")
+    table.insert(self.steps, who .. n)
+  end, self.entity)
+  self.task:onDone(function() self.taskDone = true end)
+  local ok, err = pcall(agr.wait, 1)
+  self.waitOutside = (not ok) and err:find("agr.start") ~= nil
+end
+return D
+)lua");
+    f.scene.createEntity("Lever");
+    const auto door = f.scripted("Door", "assets://s/door.lua");
+    auto field = [&](const char* name) { return f.scripts.field(door, name).valueOr("nil"); };
+    f.update();  // t = 0.1 (timers start with this first tick)
+    CHECK(field("waitOutside") == "true");
+    CHECK(f.scripts.run("assert(#agr.find('Door'):script().steps == 1)", &f.scene));
+    f.update(3);  // t = 0.4
+    CHECK(field("ticks") == "1");
+    CHECK(f.scripts.run("assert(agr.find('Door'):script().steps[2] == 'b')", &f.scene));
+    f.update(1);  // 0.5
+    CHECK(field("late") == "true");
+    f.update(2);
+    CHECK(f.scripts.run("assert(agr.find('Door'):script().steps[3] == 'c')", &f.scene));
+    CHECK(f.scripts.run("assert(agr.find('Lever'):emit('pulled', 2) == 1)", &f.scene));
+    CHECK(f.scripts.run("agr.find('Lever'):emit('pulled', 3)", &f.scene));
+    f.update();
+    CHECK(field("opened") == "5");
+    CHECK(f.scripts.run("assert(agr.find('Door'):script().steps[4] == 'd')", &f.scene));
+    CHECK(f.scripts.run("agr.find('Lever'):emit('done', 'lever', 7)", &f.scene));
+    f.update();
+    CHECK(f.scripts.run("assert(agr.find('Door'):script().steps[5] == 'lever7')", &f.scene));
+    CHECK(field("taskDone") == "true");
+    CHECK(field("shouldNot") == "nil");
+    // Global events; agr.globals.
+    CHECK(f.scripts.run("assert(agr.events.emit('score', 10) == 1); agr.events.emit('score', 5)", &f.scene));
+    CHECK(f.scripts.run("assert(agr.globals.score == 15)", &f.scene));
+    // Stopping a periodic timer from its callback (return false) and with cancel().
+    CHECK(f.scripts.run("local n = 0; agr.every(0.1, function() n = n + 1; _G.everyN = n; if n == 2 then return false end end)", &f.scene));
+    f.update(5);
+    CHECK(f.scripts.run("assert(_G.everyN == 2)", &f.scene));
+    // Groups: added from scripts and in the inspector (component), listed in creation order, saved.
+    const auto a = f.scene.createEntity("A");
+    f.scene.registry().emplace<GroupsComponent>(a).groups = "enemies, flying";
+    CHECK(f.scripts.run(R"lua(
+local door = agr.find("Door")
+door:addToGroup("enemies"); door:addToGroup("enemies")
+local list = agr.group("enemies")
+assert(#list == 2 and list[1]:name() == "Door" and list[2]:name() == "A")
+assert(agr.find("A"):inGroup("flying") and not door:inGroup("flying"))
+assert(#door:groups() == 1)
+agr.find("A"):removeFromGroup("enemies")
+assert(#agr.group("enemies") == 1)
+)lua", &f.scene));
+    CHECK(f.scene.registry().get<GroupsComponent>(door).groups == "enemies");
+    // Destroying the owner stops its timers and handlers; a new scene keeps globals and unowned events.
+    f.scene.destroyEntity(door);
+    f.update(5);
+    CHECK(f.scripts.run("local t, c, s = agr._runtimeStats(); assert(t == 0 and c == 0)", &f.scene));
+    Scene next;
+    f.scripts.update(next, f.time);
+    CHECK(f.scripts.run("assert(agr.globals.score == 15 and agr.events.emit('score', 1) == 1)", &next));
+}
+
 TEST_CASE("scripts drive 3D bodies through the same entity methods") {
     ScriptFixture f;
     registerPhysics3DComponents();

@@ -13,6 +13,10 @@ void registerScriptComponent() {
         .field("script", &ScriptComponent::script, {.tooltip = "Lua file, e.g. assets://scripts/player.lua", .flags = FieldFlag_AssetPath})
         .field("properties", &ScriptComponent::properties, {.tooltip = "Values of the script's properties (JSON)", .flags = FieldFlag_Hidden})
         .field("enabled", &ScriptComponent::enabled);
+    reg.add<GroupsComponent>("Groups")
+        .category("Scripting")
+        .description("Groups of the entity (comma-separated): agr.group(\"enemies\") lists their members.")
+        .field("groups", &GroupsComponent::groups, {.tooltip = "Comma-separated names, e.g. enemies,flying"});
 }
 
 } // namespace agr

@@ -45,6 +45,26 @@ ScriptEngine::Impl::~Impl() {
     lua_close(L);
 }
 
+void ScriptEngine::Impl::callRuntime(const char* function, double arg) {
+    lua_pushcfunction(L, traceback);
+    lua_getglobal(L, "agr");
+    if (lua_getfield(L, -1, function) != LUA_TFUNCTION) {
+        lua_pop(L, 3);
+        return;
+    }
+    lua_remove(L, -2);  // agr
+    int nargs = 0;
+    if (arg >= 0.0) {
+        lua_pushnumber(L, arg);
+        nargs = 1;
+    }
+    if (lua_pcall(L, nargs, 0, -2 - nargs) != LUA_OK) {
+        reportError(std::string("agr.") + function, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);  // traceback
+}
+
 void ScriptEngine::Impl::reportError(const std::string& where, const char* message) {
     ++stats.errors;
     AGR_LOG_ERROR("Script", "{}: {}", where, message ? message : "unknown error");
@@ -256,6 +276,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
         m->instances.clear();
         m->sceneGeneration = scene.generation();
         fxReset(*m);
+        m->callRuntime("_sceneChanged", -1.0);
     }
     fxBeginFrame(*m, scene);
     // 1. Sync instances with the Script components.
@@ -345,6 +366,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
             return 1;
         });
     }
+    m->callRuntime("_tick", dt);  // timers, coroutines, tweens
     fxEndFrame(*m, scene, time);
     m->stats.updateMs = sw.elapsedMilliseconds();
 }

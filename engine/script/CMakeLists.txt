@@ -14,6 +14,7 @@ agr_add_module(script
         src/ScriptFx.cpp
         src/LogicGraph.cpp
         src/ScriptNet.cpp
+        src/ScriptRuntime.cpp
     PUBLIC_DEPS
         agr::runtime
         agr::audio

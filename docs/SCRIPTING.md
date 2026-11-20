@@ -134,6 +134,49 @@ composant).
 | `agr.profile.begin(nom)`, `agr.profile.finish()` | section mesurée dans le profileur de l'éditeur (imbriquable) |
 | `agr.time.setScale(s)`, `agr.time.scale()` | vitesse du jeu (ralenti 0,3, pause 0, accéléré 2) ; revient à 1 quand le jeu s'arrête |
 
+### Signaux, minuteurs, coroutines, groupes et données globales
+
+Les équivalents des signaux, `await`, `Timer`, groupes et *autoloads* de Godot :
+
+```lua
+-- Signaux d'entité : n'importe quel nom, n'importe quels arguments.
+coffre:connect("ouvert", function(qui, or_) score = score + or_ end, self.entity)  -- propriétaire facultatif
+coffre:emit("ouvert", joueur, 50)        -- rend le nombre de fonctions appelées
+
+-- Bus d'événements global (UI, succès, son...).
+agr.events.on("partieFinie", function(gagnant) ... end)
+agr.events.emit("partieFinie", "rouge")
+
+-- Minuteurs (secondes) : la fonction rend false pour arrêter un minuteur répété.
+agr.after(2, function() porte:destroy() end, self.entity)
+local battement = agr.every(0.5, function() clignoter() end, self.entity)
+battement:cancel()
+
+-- Coroutines : une suite d'actions qui attend, sans machine à états.
+agr.start(function()
+  ennemi:set("SpriteRenderer", "color", {1, 0, 0, 1})
+  agr.wait(0.2)                                 -- secondes
+  agr.waitFrames(1)
+  agr.waitUntil(function() return joueur:isValid() == false end)
+  local qui = agr.waitSignal(levier, "tire")    -- rend les arguments du signal
+end, self.entity):onDone(function() print("fini") end)
+
+-- Groupes (sauvegardés avec la scène, composant Groups aussi éditable dans l'inspecteur).
+self.entity:addToGroup("ennemis")
+for _, e in ipairs(agr.group("ennemis")) do e:destroy() end
+
+-- Données qui survivent à agr.loadScene (score, inventaire, options) : un « autoload ».
+agr.globals.score = (agr.globals.score or 0) + 10
+```
+
+- Un **propriétaire** (dernier argument, une entité) arrête le minuteur, la coroutine ou le
+  branchement quand il est détruit. À un changement de scène, tout ce qui appartient à ses entités
+  s'arrête ; les minuteurs, coroutines et événements sans propriétaire et `agr.globals` restent.
+- `agr.wait` et ses variantes ne marchent que dans `agr.start(...)` (message clair sinon). Une erreur
+  dans une coroutine ou un minuteur est signalée dans la console et n'arrête que lui.
+- Les poignées rendues ont `:cancel()`, `:isDone()` et `:onDone(fonction)`. Ordre : chaque image,
+  après tous les `onUpdate` ; ce qui est créé pendant ce passage démarre à l'image suivante.
+
 ### Animations interpolées et effets (« game feel »)
 
 Comme les *tweens* de Godot ou DOTween dans Unity : une propriété va de sa valeur actuelle à une
@@ -216,5 +259,5 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
   prévu en phase 6 et reste à faire.
 - Pas d'autocomplétion intégrée (éditeur de texte externe) ; le débogueur n'édite pas le code.
 - Un script par entité ; pas de types statiques (Lua 5.4 standard, pas Luau).
-- Pas encore d'API pour le chargement de scènes ni les préfabriqués ; la création d'entités se fait
-  composant par composant.
+- Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche
+  rien, `emit` rend 0).

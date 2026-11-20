@@ -147,6 +147,8 @@ struct ScriptEngine::Impl {
     template <typename PushArgs>
     bool call(Instance& inst, const char* name, PushArgs&& pushArgs);
     void reportError(const std::string& where, const char* message);
+    /// Calls agr.<function>(arg) of the Lua runtime (arg < 0: no argument).
+    void callRuntime(const char* function, double arg);
     /// Line hook only while the debugger needs it (breakpoints or stepping): the count hook stays on.
     void updateHook();
     /// Builds the break description, calls the handler (blocking) and applies its answer.
@@ -191,6 +193,7 @@ void openNavigationBindings(lua_State* L);
 void openGameBindings(lua_State* L);
 void openNetBindings(lua_State* L);
 void openFxBindings(lua_State* L);
+void openRuntimeBindings(lua_State* L);
 /// Effects frame hooks (ScriptFx.cpp): before the scripts' onUpdate (removes last frame's camera
 /// shake), after it (tweens, effects, new shake), and when the scene changes.
 void fxBeginFrame(ScriptEngine::Impl& m, Scene& scene);
