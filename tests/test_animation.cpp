@@ -4,6 +4,7 @@
 
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/animation/IK2D.hpp"
+#include "agr/animation/IK3D.hpp"
 #include "agr/render/Skin2D.hpp"
 #include "agr/assets/Model.hpp"
 #include "agr/core/Uuid.hpp"
@@ -665,6 +666,118 @@ TEST_CASE("layers: masks, weights, their own states; blend states mix property t
     f.step(0.1f);
     CHECK(pos().x == doctest::Approx(10.0f));
     (void)wave;
+}
+
+TEST_CASE("additive layers add their change from the first frame, scaled by the weight") {
+    AnimFixture f;
+    AnimationClip base;
+    base.duration = 1.0f;
+    base.track("Arms", "Transform", "position", 0).curve.setKey(0.0f, 1.0f);
+    base.track("Arms", "Transform", "rotation", 2).curve.setKey(0.0f, 30.0f);
+    f.save("assets://base.agranim", base);
+    AnimationClip breath;  // +2 on x and +20 degrees over one second, from its own first frame
+    breath.duration = 1.0f;
+    breath.loop = false;
+    auto& bx = breath.track("Arms", "Transform", "position", 0).curve;
+    bx.setKey(0.0f, 10.0f, Interpolation::Linear);
+    bx.setKey(1.0f, 12.0f, Interpolation::Linear);
+    auto& bz = breath.track("Arms", "Transform", "rotation", 2).curve;
+    bz.setKey(0.0f, 0.0f, Interpolation::Linear);
+    bz.setKey(1.0f, 20.0f, Interpolation::Linear);
+    f.save("assets://breath.agranim", breath);
+    AnimatorController ctrl;
+    ctrl.states = {{"Idle", "assets://base.agranim"}};
+    AnimatorLayer add;
+    add.name = "Breath";
+    add.additive = true;
+    add.states = {{"Breathe", "assets://breath.agranim"}};
+    ctrl.layers = {add};
+    auto parsed = AnimatorController::fromJson(ctrl.toJson());
+    REQUIRE(parsed);
+    CHECK(parsed.value().layers[0].additive);
+    f.save("assets://c.agrctrl", ctrl);
+    const auto hero = f.scene.createEntity("Hero");
+    const auto arms = f.scene.createEntity("Arms", hero);
+    f.scene.registry().emplace<AnimatorComponent>(hero).controller = "assets://c.agrctrl";
+    f.step(0.5f);
+    CHECK(f.x(arms) == doctest::Approx(2.0f));  // 1 + (11 - 10)
+    auto zDeg = [&] { return math::degrees(f.scene.registry().get<TransformComponent>(arms).rotation.toEuler().z); };
+    CHECK(zDeg() == doctest::Approx(40.0f).epsilon(0.01));  // 30 + 10
+    f.anim.setLayerWeight(f.scene, hero, "Breath", 0.5f);
+    f.step(0.0f);
+    CHECK(f.x(arms) == doctest::Approx(1.5f));
+    CHECK(zDeg() == doctest::Approx(35.0f).epsilon(0.01));
+    f.anim.setLayerWeight(f.scene, hero, "Breath", 0.0f);
+    f.step(0.0f);
+    CHECK(f.x(arms) == doctest::Approx(1.0f));
+}
+
+TEST_CASE("3D IK: two bones reach the target and bend toward the pole; look-at within a limit") {
+    Scene scene;
+    registerAnimationComponents();
+    using math::Vec3;
+    const auto body = scene.createEntity("Body");
+    scene.registry().get<TransformComponent>(body).position = {3, 1, -2};
+    scene.registry().get<TransformComponent>(body).rotation = math::Quat::fromAxisAngle({0, 1, 0}, 0.7f);  // any orientation
+    const auto upper = scene.createEntity("Upper", body);
+    const auto mid = scene.createEntity("Mid", upper);
+    scene.registry().get<TransformComponent>(mid).position = {0, -1, 0};
+    const auto tip = scene.createEntity("Tip", mid);
+    scene.registry().get<TransformComponent>(tip).position = {0, -1, 0};
+    const auto target = scene.createEntity("Target");
+    scene.registry().get<TransformComponent>(target).position = {3.8f, 0.2f, -1.5f};
+    const auto pole = scene.createEntity("Pole");
+    scene.registry().get<TransformComponent>(pole).position = {3, 1, 5};
+    auto& ik = scene.registry().emplace<TwoBoneIK3DComponent>(upper);
+    ik.target = target;
+    ik.pole = pole;
+    auto wpos = [&](ecs::Entity e) { return scene.worldMatrix(e).transformPoint(Vec3(0.0f)); };
+    for (int i = 0; i < 2; ++i) solveIK3D(scene);  // stable: a second solve changes nothing
+    CHECK(math::length(wpos(tip) - wpos(target)) < 1e-3f);
+    CHECK(math::length(wpos(mid) - wpos(upper)) == doctest::Approx(1.0f).epsilon(0.001));  // bone lengths kept
+    CHECK(math::length(wpos(tip) - wpos(mid)) == doctest::Approx(1.0f).epsilon(0.001));
+    // The elbow is on the pole's side of the line shoulder -> target.
+    const Vec3 a = wpos(upper), t = wpos(target), dir = math::normalize(t - a);
+    auto side = [&](Vec3 p) { const Vec3 v = p - a; return v - dir * math::dot(v, dir); };
+    CHECK(math::dot(side(wpos(mid)), side(wpos(pole))) > 0.0f);
+    // Move the pole to the other side: the elbow follows.
+    scene.registry().get<TransformComponent>(pole).position = {3, 1, -9};
+    solveIK3D(scene);
+    CHECK(math::length(wpos(tip) - wpos(target)) < 1e-3f);
+    CHECK(math::dot(side(wpos(mid)), side(wpos(pole))) > 0.0f);
+    // Out of reach: the arm points straight at it.
+    scene.registry().get<TransformComponent>(target).position = {3, 1, 10};
+    solveIK3D(scene);
+    CHECK(wpos(tip).z == doctest::Approx(0.0f).epsilon(0.01));
+    CHECK(math::length(wpos(tip) - wpos(upper)) == doctest::Approx(2.0f).epsilon(0.001));
+    // Weight 0: nothing; invalid chain: not solved.
+    ik.weight = 0.0f;
+    CHECK_FALSE(solveTwoBoneIK3D(scene, upper, ik));
+    TwoBoneIK3DComponent lonely;
+    lonely.target = target;
+    CHECK_FALSE(solveTwoBoneIK3D(scene, tip, lonely));
+
+    // Look-at, limited to 45 degrees.
+    const auto head = scene.createEntity("Head");
+    const auto seen = scene.createEntity("Seen");
+    scene.registry().get<TransformComponent>(seen).position = {5, 0, 0};
+    auto& la = scene.registry().emplace<LookAtIK3DComponent>(head);
+    la.target = seen;
+    la.maxAngle = 3.1f;  // the default limit (80 degrees) is below the 90 degrees needed here
+    solveIK3D(scene);
+    const Vec3 fwd = scene.worldMatrix(head).transformVector({0, 0, 1});
+    CHECK(fwd.x == doctest::Approx(1.0f).epsilon(0.001));
+    scene.registry().get<TransformComponent>(head).rotation = {};
+    la.maxAngle = math::radians(45.0f);
+    solveIK3D(scene);
+    const Vec3 fwd2 = scene.worldMatrix(head).transformVector({0, 0, 1});
+    CHECK(std::acos(std::clamp(fwd2.z, -1.0f, 1.0f)) == doctest::Approx(math::radians(45.0f)).epsilon(0.001));
+    // Run by the animation system after the clips.
+    VirtualFileSystem vfs;
+    AnimationSystem anim{vfs};
+    ik.weight = 1.0f;
+    anim.update(scene, 0.016f);
+    CHECK(anim.stats().ik3DChains == 2);
 }
 
 }  // TEST_SUITE

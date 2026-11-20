@@ -36,7 +36,8 @@ struct AnimationStats {
     u32 tracksApplied = 0;
     u32 transitions = 0;  ///< Since start.
     u32 clips = 0, controllers = 0;
-    u32 ik2DChains = 0;   ///< TwoBoneIK2D chains solved this frame.
+    u32 ik2DChains = 0;
+    u32 ik3DChains = 0;   ///< TwoBoneIK3D / LookAtIK3D solved this frame.   ///< TwoBoneIK2D chains solved this frame.
     f64 updateMs = 0.0;
 };
 
@@ -122,6 +123,9 @@ private:
     void stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, float step, std::unordered_map<std::string, float>& params);
     /// Samples the layer's clips (blends, crossfade, mask) and writes them over the current values with `weight`.
     void applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorLayer* layer, float weight);
+    /// Additive layer: adds the change of its clips from their first frame, scaled by `weight`.
+    template <typename Sample>
+    void applyAdditive(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorLayer* layer, float weight, float fade, Sample&& sample);
     void enterState(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorState* state, float fade);
     void updateBlend(Scene& scene, ecs::Entity e, Runtime& rt, float step, const std::unordered_map<std::string, float>& params);
     void apply(Scene& scene, ecs::Entity root, Runtime* rt, const AnimationClip* from, float fromTime, const AnimationClip& to, float toTime,

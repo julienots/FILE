@@ -1,5 +1,6 @@
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/animation/IK2D.hpp"
+#include "agr/animation/IK3D.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -317,7 +318,7 @@ struct AnimationSystem::PoseScratch {
             }
         }
     };
-    Pose a, b;
+    Pose a, b, c, d;
 };
 
 namespace {
@@ -788,28 +789,113 @@ void AnimationSystem::stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, floa
     }
 }
 
+template <typename Sample>
+void AnimationSystem::applyAdditive(Scene&, ecs::Entity, Runtime& rt, const AnimatorLayer*, float weight, float fade, Sample&& sample) {
+    using Pose = PoseScratch::Pose;
+    Pose &cur = m_pose->a, &curRef = m_pose->b, &prev = m_pose->c, &prevRef = m_pose->d;
+    // Deltas from the first frame: values for properties and positions, rotations as ref^-1 * q.
+    auto toDelta = [](Pose& pose, const Pose& ref) {
+        for (auto& p : pose.props) {
+            const auto* r = ref.findProp(p.comp, p.field, p.channel);
+            p.sum = p.weight > 0.0f && r && r->weight > 0.0f ? p.sum - r->sum : 0.0f;
+        }
+        for (auto& x : pose.xforms) {
+            const auto* r = ref.findXform(x.tr, x.path);
+            if (x.path == TransformTrack::Path::Rotation) {
+                const math::Quat q{x.sum.x, x.sum.y, x.sum.z, x.sum.w};
+                const math::Quat rq = r ? math::Quat{r->sum.x, r->sum.y, r->sum.z, r->sum.w} : q;
+                const math::Quat d = math::normalize(rq.conjugate() * q);
+                x.sum = {d.x, d.y, d.z, d.w};
+            } else {
+                x.sum = r ? x.sum - r->sum : math::Vec4(0, 0, 0, 0);
+            }
+        }
+    };
+    sample(rt.current, cur, false);
+    sample(rt.current, curRef, true);
+    toDelta(cur, curRef);
+    auto identityDelta = [](TransformTrack::Path path) { return path == TransformTrack::Path::Rotation ? math::Vec4(0, 0, 0, 1) : math::Vec4(0, 0, 0, 0); };
+    if (fade < 1.0f) {
+        sample(rt.previous, prev, false);
+        sample(rt.previous, prevRef, true);
+        toDelta(prev, prevRef);
+        for (auto& p : cur.props) {
+            const auto* o = prev.findProp(p.comp, p.field, p.channel);
+            const float from = o ? o->sum : 0.0f;
+            p.sum = from + (p.sum - from) * fade;
+        }
+        for (auto& x : cur.xforms) {
+            const auto* o = prev.findXform(x.tr, x.path);
+            x.sum = blendTransform(x.path, o ? o->sum : identityDelta(x.path), x.sum, fade);
+        }
+        for (const auto& o : prev.props)
+            if (!cur.findProp(o.comp, o.field, o.channel)) {
+                auto& p = cur.prop(o.comp, o.field, o.channel);
+                p.sum = o.sum * (1.0f - fade);
+                p.weight = 1.0f;
+            }
+        for (const auto& o : prev.xforms)
+            if (!cur.findXform(o.tr, o.path)) {
+                auto& x = cur.xform(o.tr, o.path);
+                x.sum = blendTransform(o.path, o.sum, identityDelta(o.path), fade);
+                x.weight = 1.0f;
+            }
+    }
+    // Added on top of the current values, scaled by the layer weight.
+    std::vector<FieldWrite> writes;
+    for (const auto& p : cur.props) {
+        if (p.field->type == FieldType::String || p.sum == 0.0f) continue;
+        const auto base = readChannel(p.comp, *p.field, p.channel);
+        if (!base) continue;
+        auto w = std::find_if(writes.begin(), writes.end(), [&](const FieldWrite& fw) { return fw.component == p.comp && fw.field == p.field; });
+        if (w == writes.end()) {
+            writes.push_back({p.comp, p.field, {0, 0, 0, 0}, 0, nullptr});
+            w = writes.end() - 1;
+        }
+        w->v[p.channel] = *base + p.sum * weight;
+        w->mask |= static_cast<u8>(1u << p.channel);
+    }
+    for (FieldWrite& w : writes) writeField(w);
+    for (const auto& x : cur.xforms) {
+        TransformComponent& tr = *x.tr;
+        switch (x.path) {
+            case TransformTrack::Path::Translation: tr.position = tr.position + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight; break;
+            case TransformTrack::Path::Scale: tr.scale = tr.scale + math::Vec3(x.sum.x, x.sum.y, x.sum.z) * weight; break;
+            case TransformTrack::Path::Rotation:
+                tr.rotation = math::normalize(tr.rotation * math::slerp(math::Quat::identity(), math::Quat{x.sum.x, x.sum.y, x.sum.z, x.sum.w}, weight));
+                break;
+        }
+    }
+    m_stats.tracksApplied += static_cast<u32>(cur.props.size() + cur.xforms.size());
+}
+
 void AnimationSystem::applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorLayer* layer, float weight) {
     using Pose = PoseScratch::Pose;
     Pose& cur = m_pose->a;
     Pose& prev = m_pose->b;
-    auto sample = [&](Runtime::Playback& pb, Pose& pose) {
+    // `reference`: the first frame of every clip (additive layers add the change from it).
+    auto sample = [&](Runtime::Playback& pb, Pose& pose, bool reference) {
         pose.clear();
         if (!pb.motions.empty()) {
             for (usize i = 0; i < pb.motions.size(); ++i) {
                 const float w = i < pb.mixWeights.size() ? pb.mixWeights[i] : 0.0f;
-                addClipToPose(scene, e, *pb.motions[i], pb.motionBindings[i], pb.motionXforms[i], pb.phase * std::max(pb.motions[i]->duration, 1e-4f),
-                              w, layer, pose);
+                addClipToPose(scene, e, *pb.motions[i], pb.motionBindings[i], pb.motionXforms[i],
+                              reference ? 0.0f : pb.phase * std::max(pb.motions[i]->duration, 1e-4f), w, layer, pose);
             }
         } else if (pb.clip) {
-            addClipToPose(scene, e, *pb.clip, pb.bindings, pb.transformBindings, pb.time, 1.0f, layer, pose);
+            addClipToPose(scene, e, *pb.clip, pb.bindings, pb.transformBindings, reference ? 0.0f : pb.time, 1.0f, layer, pose);
         }
         pose.finish();
     };
-    sample(rt.current, cur);
     const float fade = rt.fading && rt.fadeDuration > 0.0f ? std::clamp(rt.fade / rt.fadeDuration, 0.0f, 1.0f) : 1.0f;
+    if (layer && layer->additive) {
+        applyAdditive(scene, e, rt, layer, weight, fade, sample);
+        return;
+    }
+    sample(rt.current, cur, false);
     if (fade < 1.0f) {
         // Crossfade: from the previous state's values (or the current value where it had none).
-        sample(rt.previous, prev);
+        sample(rt.previous, prev, false);
         for (auto& p : cur.props) {
             if (!p.weight) continue;
             const auto* o = prev.findProp(p.comp, p.field, p.channel);
@@ -901,6 +987,7 @@ void AnimationSystem::update(Scene& scene, float dt) {
         }
     }
     m_stats.ik2DChains = solveIK2D(scene);  // after the clips: IK overrides the animated pose
+    m_stats.ik3DChains = solveIK3D(scene);
     for (auto it = m_runtimes.begin(); it != m_runtimes.end();) {
         if (!alive.count(it->first)) it = m_runtimes.erase(it);
         else ++it;
@@ -1026,6 +1113,7 @@ bool AnimationSystem::isTextTrack(const AnimationTrack& track) {
 
 void registerAnimationComponents() {
     registerIK2DComponents();
+    registerIK3DComponents();
     auto& reg = ComponentRegistry::instance();
     if (reg.find<AnimatorComponent>()) return;
     reg.add<AnimatorComponent>("Animator")

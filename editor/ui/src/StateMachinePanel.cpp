@@ -101,6 +101,9 @@ void StateMachinePanel::drawLayerBar(EditorShared& s) {
     m_dirty |= ImGui::SliderFloat("Poids", &l.weight, 0.0f, 1.0f);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Part de la couche sur les valeurs du dessous ; les scripts le changent (setLayerWeight)");
     ImGui::SameLine();
+    m_dirty |= ImGui::Checkbox("Additive", &l.additive);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Ajoute le mouvement de ses clips (depuis leur première image) au lieu de remplacer : respiration, recul, sursaut");
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(220);
     if (ImGui::InputTextWithHint("Masque", "Torse, Torse/Bras (vide = tout)", &m_maskText)) {
         l.mask.clear();

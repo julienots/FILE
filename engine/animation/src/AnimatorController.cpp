@@ -177,8 +177,8 @@ std::string AnimatorController::toJson() const {
     if (!layers.empty()) {
         json ls = json::array();
         for (const AnimatorLayer& l : layers)
-            ls.push_back({{"name", l.name}, {"weight", l.weight}, {"mask", l.mask}, {"entry", l.entry}, {"states", statesToJson(l.states)},
-                          {"transitions", transitionsToJson(l.transitions)}});
+            ls.push_back({{"name", l.name}, {"weight", l.weight}, {"blending", l.additive ? "additive" : "override"}, {"mask", l.mask}, {"entry", l.entry},
+                          {"states", statesToJson(l.states)}, {"transitions", transitionsToJson(l.transitions)}});
         j["layers"] = std::move(ls);
     }
     return j.dump(2);
@@ -199,6 +199,7 @@ Result<AnimatorController> AnimatorController::fromJson(std::string_view text) {
             AnimatorLayer l;
             l.name = lj.value("name", "");
             l.weight = std::clamp(lj.value("weight", 1.0f), 0.0f, 1.0f);
+            l.additive = lj.value("blending", "override") == "additive";
             for (const json& m : lj.value("mask", json::array()))
                 if (m.is_string()) l.mask.push_back(m.get<std::string>());
             l.entry = lj.value("entry", "");

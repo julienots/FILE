@@ -112,13 +112,32 @@ propres états et transitions (les paramètres sont communs) :
 - `playState(état, fondu, couche)` et `currentState(couche)` agissent sur une couche ;
   `onStateEnter(nom, couche)` et `onAnimationEvent(nom, couche)` reçoivent le nom de la couche en
   second argument (`nil` pour la base).
-- Éditeur : *Machine à états* ➜ liste *Couche* (Base ou une couche), *+ Couche*, nom, poids, masque
+- **Couches additives** (`"blending": "additive"`, case *Additive*) : au lieu de remplacer, la couche
+  **ajoute** le changement de ses clips depuis leur première image (respiration, recul d'une arme,
+  penché, sursaut à l'impact) par-dessus les couches du dessous, multiplié par le poids : positions,
+  échelles et propriétés s'additionnent, les rotations se composent.
+- Éditeur : *Machine à états* ➜ liste *Couche* (Base ou une couche), *+ Couche*, nom, poids, *Additive*, masque
   (chemins séparés par des virgules), suppression ; le graphe montre les états de la couche choisie et,
   en jeu, son état courant.
 
 Coût : 500 personnages avec un espace de mélange de 5 clips et une couche masquée (18 courbes) :
 ~0,37 ms par image ; 1 000 Animators simples : ~0,15 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : cas
 `layers` de `tests/test_animation.cpp` et test de script d'animation.
+
+## Cinématique inverse 3D (IK)
+
+Résolue après les clips (et les couches), à chaque image du jeu ; `AnimationStats::ik3DChains`.
+
+| Composant | Rôle |
+|---|---|
+| `TwoBoneIK3D` | sur l'os supérieur d'un bras ou d'une jambe (squelettes importés) : tourne cet os et l'os du milieu pour que le bout (`tip` : main, pied) atteigne `target`. `pole` (optionnel) : le coude ou le genou se tourne vers lui. `mid` / `tip` valent par défaut le premier enfant et le premier petit-enfant. Longueurs des os conservées ; cible hors de portée : bras tendu vers elle ; `weight` mélange avec la pose animée |
+| `LookAtIK3D` | tourne l'os (tête, yeux, tourelle) pour que son axe `forwardAxis` vise `target`, au plus de `maxAngle` par rapport à sa direction animée, avec `weight` |
+
+Usages typiques : pieds posés sur un sol inégal (une cible par pied placée par un script avec un rayon
+`agr.physics3d.raycast` vers le bas), mains sur une arme ou une rambarde, tête qui suit le joueur.
+L'algorithme à deux os est analytique (loi des cosinus, puis rotation de toute la chaîne vers la
+cible et torsion vers le pôle) : stable d'une image à l'autre et sans itérations. Tests : `3D IK`
+(`tests/test_animation.cpp`).
 
 ## Animation squelettique (modèles glTF)
 
@@ -194,7 +213,7 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Pas de couches additives (les couches remplacent) ni de masques pondérés par os ; IK : deux os en 2D seulement (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
+- Pas de masques pondérés par os ; IK : chaînes de deux os (2D et 3D) et visée, pas de chaînes longues (FABRIK) ni de contraintes d'angle (pas de chaînes plus longues ni d'IK 3D), pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128 articulations par
   maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition ne peut pas être interrompue pendant son fondu ; une seule transition par image.

@@ -70,6 +70,9 @@ struct AnimatorTransition {
 struct AnimatorLayer {
     std::string name;
     float weight = 1.0f;
+    /// Additive: the layer adds its clips' change from their first frame (breathing, recoil, a
+    /// lean, a hit flinch) on top of the layers below instead of replacing them.
+    bool additive = false;
     /// Paths below the animated entity ("Torso", "Hips/Spine") whose subtree the layer animates;
     /// empty = everything.
     std::vector<std::string> mask;

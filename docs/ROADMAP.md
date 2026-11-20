@@ -169,7 +169,8 @@ Guides : [AUDIO.md](AUDIO.md), [UI.md](UI.md), [ANIMATION.md](ANIMATION.md).
 | Animation squelettique (skinning glTF) | ✅ | voir ANIMATION.md |
 | Mélange 1D (blend tree : Idle / Walk / Run par un paramètre, phases synchronisées) | ✅ | `AnimatorState.motions` ; éditeur de machine à états ; utilisé par le Duel des Tours |
 | Espaces de mélange 2D (gradient band), couches avec masques et poids (scripts), IK 2D à deux os | ✅ | [ANIMATION.md](ANIMATION.md) |
-| Couches additives, IK 3D, morph targets | ⬜ | à planifier |
+| Couches additives, IK 3D (deux os avec pôle, visée) | ✅ | [ANIMATION.md](ANIMATION.md) |
+| Morph targets, IK à chaînes longues | ⬜ | à planifier |
 | Effets audio (réverbération, filtres), Doppler, occlusion | ⬜ | à planifier |
 | UI : masques et défilement, champs de saisie, cases à cocher, listes, texte enrichi, zones sûres (encoches), navigation manette | 🟡 | fait : zones défilantes découpées, champs de saisie (clavier virtuel), cases / radios, navigation clavier-manette, zones sûres ; reste : texte enrichi |
 | Annuler / rétablir dans la timeline et la machine à états, sélection multiple de clés | ⬜ | à planifier |
