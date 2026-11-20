@@ -50,11 +50,35 @@ void Game::saveModList() {
     platform::writeFileAtomic(platform::writableDir() + "/mods_enabled.txt", out);
 }
 
+// 2.6.0 the mods that ship with the game (assets/mods/<id>/) are copied into the mods folder the first time,
+// switched off: the player turns them on in the Mods menu (title screen or settings)
+static void installBundledMods() {
+    std::vector<uint8_t> idx;
+    if (!platform::readAsset("mods/index.txt", idx)) return;
+    std::string list(idx.begin(), idx.end()), en;
+    platform::readFile(platform::writableDir() + "/mods_enabled.txt", en);
+    std::istringstream in(list); std::string id; bool changed = false;
+    while (std::getline(in, id)) {
+        id = trimS(id);
+        if (id.empty()) continue;
+        std::string dir = modsDir() + "/" + id;
+        if (platform::fileExists(dir + "/mod.txt")) continue;
+        platform::makeDirectory(dir);
+        for (const char* f : {"mod.txt", "data.txt"}) {
+            std::vector<uint8_t> b;
+            if (platform::readAsset(std::string("mods/") + id + "/" + f, b)) platform::writeFileAtomic(dir + "/" + f, std::string(b.begin(), b.end()));
+        }
+        if (en.find("!" + id) == std::string::npos && en.find(id + "\n") == std::string::npos) { en += "!" + id + "\n"; changed = true; }
+    }
+    if (changed) platform::writeFileAtomic(platform::writableDir() + "/mods_enabled.txt", en);
+}
+
 void Game::applyMods(bool force) {
     static bool done = false;   // content patches are applied once per launch (before anything uses the data)
     if (done && !force) return;
     done = true;
     platform::makeDirectory(modsDir());
+    installBundledMods();
     scanMods();
     std::vector<std::string> roots;
     for (auto& m : mods) {

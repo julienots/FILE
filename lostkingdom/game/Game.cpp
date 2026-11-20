@@ -78,7 +78,7 @@ void Game::resize(int w, int h) { W = w; H = h; renderer.resize(w, h); }
 
 void Game::pause() {
     audio.setPaused(true);
-    if (state == GameState::Playing && player != NullEntity) { saveGame(99); saveSettings(); }  // autosave slot on focus loss
+    if (state == GameState::Playing && player != NullEntity) { saveGame(saveSlot); saveSettings(); }  // autosave slot on focus loss
 }
 
 void Game::resume() { audio.setPaused(false); }
@@ -110,7 +110,7 @@ void Game::lowMemory() {
 }
 
 void Game::shutdown() {
-    if (state == GameState::Playing) saveGame(99);
+    if (state == GameState::Playing) saveGame(saveSlot);
     saveSettings();
     world.stopWorkers();
     particles.shutdown();
@@ -336,7 +336,7 @@ void Game::updatePlaying(float dt) {
     reg.flush();
     // autosave every 3 minutes (outside combat)
     autosaveT += dt;
-    if (autosaveT > 180.f && bossEnt == NullEntity) { autosaveT = 0; saveGame(99); notify("Sauvegarde automatique", vec3(0.7f, 0.85f, 1.f), "i_save"); }
+    if (autosaveT > 180.f && bossEnt == NullEntity) { autosaveT = 0; saveGame(saveSlot); notify("Sauvegarde automatique", vec3(0.7f, 0.85f, 1.f), "i_save"); }
     // notifications & floating texts
     for (auto& f : floatTexts) { f.t += dt; f.pos.y += dt * 1.2f; }
     floatTexts.erase(std::remove_if(floatTexts.begin(), floatTexts.end(), [](const FloatText& f) { return f.t > 1.2f; }), floatTexts.end());

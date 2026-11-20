@@ -1,0 +1,9 @@
+# Armurerie légendaire (mod livré avec LOST KINGDOM 2.6.0)
+item.sword_rusty.atk = 14
+item.sword_iron.atk = 24
+item.axe_iron.atk = 26
+item.bow_hunter.atk = 22
+item.dagger_iron.atk = 18
+item.spear_iron.atk = 24
+item.shield_wood.def = 12
+item.sword_iron.name = Épée de fer trempé

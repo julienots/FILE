@@ -27,6 +27,7 @@ std::string writableDir();           // persistent per-app directory (saves, set
 bool writeFileAtomic(const std::string& path, const std::string& data);
 bool readFile(const std::string& path, std::string& out);
 bool fileExists(const std::string& path);
+long long fileMTime(const std::string& path);   // seconds since the epoch, -1 if missing
 void removeFile(const std::string& path);
 double timeSeconds();
 void vibrate(int milliseconds, int amplitude /*1..255*/);

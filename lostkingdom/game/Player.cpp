@@ -45,7 +45,7 @@ void Game::recomputeStats() {
     c.maxHp = maxHp; c.hp = std::min(maxHp, hpRatio * maxHp);
     c.atk = atk * (1 + atkPct); c.def = def; c.element = elem; c.elemDmg = elemDmg;
     maxMp = mpMax; mp = std::min(mp, maxMp); maxStamina = stMax; stamina = std::min(stamina, maxStamina);
-    critChance = std::min(0.75f, crit); critDmg = cdmg; moveSpeedMul = 1.f + speed;
+    critChance = std::min(0.75f, crit); critDmg = cdmg; moveSpeedMul = (1.f + speed) * gameTuning().playerSpeed;
     // hero of the wheel
     const HeroDef& hd = hero();
     c.maxHp *= hd.hpMul; c.hp = std::min(c.maxHp, hpRatio * c.maxHp); c.atk *= hd.atkMul; moveSpeedMul *= hd.speedMul;
@@ -126,6 +126,7 @@ void Game::buildHeroLook(Character& c, int heroIdx, const std::string* eq, const
 }
 
 void Game::gainXp(int amount) {
+    amount = std::max(1, (int)std::round(amount * gameTuning().xp));   // 2.6.0 mods
     xp += amount;
     while (xp >= xpForLevel(level)) {
         xp -= xpForLevel(level);
@@ -846,7 +847,7 @@ void Game::updatePlayer(float dt) {
         swimStrokeT -= dt;
         if (swimStrokeT <= 0) { swimStrokeT = sprinting ? 0.55f : 0.95f; play3D(variant("step_water"), c.pos, sprinting ? 0.3f : 0.2f, particles.rng.range(0.85f, 1.f)); }
     }
-    stamina = std::min(maxStamina, stamina + (staminaRegenDelay > 0 ? 0.f : dt * (c.status.wellFed > 0 ? 34.f : 24.f) * (blocking ? 0.3f : 1.f)));
+    stamina = std::min(maxStamina, stamina + (staminaRegenDelay > 0 ? 0.f : dt * (c.status.wellFed > 0 ? 34.f : 24.f) * (blocking ? 0.3f : 1.f) * gameTuning().staminaRegen));
     if (stamina < 0) stamina = 0;
 
     // ---- footsteps by surface

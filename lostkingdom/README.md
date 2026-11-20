@@ -6,12 +6,39 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.5.1 (versionCode 36), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.5.0 : elle s'installe par-dessus). SHA-256 : `95a82950bd16fb43cfd268d74693a4df56b0256689dff660daee013548e6f839`. Ancienne mention de taille : environ 47 Mo (la bande originale orchestrale en fait 22). SHA-256 : `050342d148003c575e1dd8b9c6c7eac81c14b8b20b5716463af836522836bbec`.
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.6.0 (versionCode 37), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.5.1 : elle s'installe par-dessus). SHA-256 : `21c28749e2a40bc8f836221d6251326e51c1de3d7109929f42e27a0f7371586f`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.6.0 (plusieurs parties, écran Nouvelle partie, mods intégrés, habitants dans les maisons)
+
+- **Six parties séparées.** L'écran titre propose maintenant *Continuer* (la dernière partie jouée), *Nouvelle partie*, *Parties*, *Mods*, *Paramètres* et *Crédits*. Chaque partie a sa propre sauvegarde : la sauvegarde automatique, le lit, l'auberge et la réapparition après la mort écrivent toutes dans la partie en cours. Le menu *Parties* charge, sauvegarde ou supprime une partie (la suppression demande une confirmation). L'ancienne sauvegarde automatique des versions précédentes reste chargeable.
+- **Écran Nouvelle partie.** On choisit l'emplacement (1 à 6), la difficulté (*Facile*, *Normal*, *Difficile*, *Héroïque* : vie des ennemis ×0,7 / ×1 / ×1,3 / ×1,65, attaque ×0,6 / ×1 / ×1,35 / ×1,75), les événements aléatoires (embuscades, étoiles filantes, caches) et le prologue. Le menu affiche aussi les mods actifs, avec un bouton *Gérer les mods*. Les réglages sont enregistrés dans la sauvegarde de la partie.
+- **Six mods livrés avec le jeu.** Ils sont désactivés par défaut et s'activent dans le menu *Mods* (écran titre ou paramètres) :
+  - *Chroniques du Vagabond*, le mod d'exemple ;
+  - *Méga-bombes*, des cratères énormes ;
+  - *Ennemis coriaces*, des ennemis plus durs mais plus d'expérience ;
+  - *Fortune des rois*, trois fois plus d'or ;
+  - *Héros véloce*, plus de vitesse et d'endurance ;
+  - *Armurerie légendaire*, des armes de départ plus fortes.
+  Comme avant, les changements de mods s'appliquent **au prochain lancement du jeu**.
+- **Nouvelles clés de mod `game.*`** (voir `docs/MODDING.md`) : vie et attaque des ennemis, expérience, or, vitesse du héros, récupération d'endurance.
+- **Des habitants dans les bâtiments.** On y trouve :
+  - à l'auberge, un aubergiste derrière le comptoir : chambre à 20 or avec sauvegarde, repas chaud à 8 or, partie de dés à 10 or (on gagne 20 or si on fait mieux que lui) ;
+  - à la chapelle, un prêtre : soins gratuits, ou bénédiction à 15 or qui soigne aussi les états ;
+  - à la forge, un forgeron qui tape sur l'enclume : forge et amélioration d'arme ;
+  - dans les maisons, de jour, un habitant qui partage un repas une fois par jour.
+  Ils se tournent vers le héros quand il approche.
+- **Voix des personnages : non ajoutées.** Je n'ai aucun moyen, dans cet environnement hors ligne, de produire des voix vraiment réalistes en français. Les seules synthèses disponibles sonnent robotiques. Comme demandé (*« si pas réaliste n'en mets pas »*), il n'y a donc pas de voix. Les dialogues restent écrits.
+- **Vérifié sur ordinateur** :
+  - scénario `newgame` : clic sur *Nouvelle partie*, partie 3 en *Héroïque*, la partie démarre dans l'emplacement 3, vie des ennemis ×1,65, *Continuer* pointe sur la partie 3, la difficulté est relue depuis la sauvegarde, les 6 mods sont installés ;
+  - scénario `interior` : l'aubergiste existe, le dialogue s'ouvre, une partie de dés débite ou crédite l'or correctement ;
+  - tests unitaires : 2723 réussis, dont l'application sans erreur des 6 mods livrés ;
+  - scénarios `dig` et `mine` : toujours réussis.
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone. Le menu *Mods* ouvert depuis l'écran titre garde le rail d'onglets du journal ; les autres onglets n'ont pas de sens avant d'avoir lancé une partie. Les habitants des maisons n'apparaissent pas la nuit.
 
 ### Nouveautés 2.5.1 (creuser et miner plus facilement)
 

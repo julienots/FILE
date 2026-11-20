@@ -1411,6 +1411,7 @@ static std::string trimStr(const std::string& s) {
 }
 
 DigTuning& digTuning() { static DigTuning t; return t; }
+GameTuning& gameTuning() { static GameTuning t; return t; }
 
 bool applyModDataLine(const std::string& raw, std::string& err) {
     std::string line = trimStr(raw);
@@ -1434,6 +1435,13 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         if (key == "bomb.depth") return num(t.bombDepth, 0.2f, 10.f);
         if (key == "bomb.damage") return num(t.bombDamage, 0.f, 2000.f);
         if (key == "bomb.fuse") return num(t.bombFuse, 0.3f, 10.f);
+        GameTuning& g = gameTuning();   // 2.6.0
+        if (key == "game.enemy_hp") return num(g.enemyHp, 0.2f, 10.f);
+        if (key == "game.enemy_atk") return num(g.enemyAtk, 0.2f, 10.f);
+        if (key == "game.xp") return num(g.xp, 0.1f, 10.f);
+        if (key == "game.gold") return num(g.gold, 0.1f, 10.f);
+        if (key == "game.player_speed") return num(g.playerSpeed, 0.5f, 2.5f);
+        if (key == "game.stamina_regen") return num(g.staminaRegen, 0.2f, 5.f);
     }
     if (key == "lore.add") {   // lore.add = id | Titre | Texte
         size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);

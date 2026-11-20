@@ -195,6 +195,9 @@ std::vector<LoreDef>& loreMutable();
 // 2.4.0 digging and bombs, tunable by mods ("dig.radius = 2", "bomb.radius = 6"...)
 struct DigTuning { float digRadius = 1.6f, digDepth = 0.55f, bombRadius = 3.4f, bombDepth = 2.4f, bombDamage = 70.f, bombFuse = 2.2f; };
 DigTuning& digTuning();
+// 2.6.0 whole-game multipliers a mod can set ("game.enemy_hp = 1.5", "game.gold = 2"...)
+struct GameTuning { float enemyHp = 1, enemyAtk = 1, xp = 1, gold = 1, playerSpeed = 1, staminaRegen = 1; };
+GameTuning& gameTuning();
 bool applyModDataLine(const std::string& line, std::string& err);
 
 }  // namespace lk

@@ -1656,7 +1656,7 @@ static std::vector<Step> scenario(const std::string& name) {
     }
     if (name == "interior") {
         // 2.4.1 walk into buildings: door prompt, the room, sleep in the bed, the forge, walk out (log + pictures)
-        static int house = -1, forge = -1, inn = -1; static int ok[6]; static vec3 door;
+        static int house = -1, forge = -1, inn = -1; static int ok[8]; static vec3 door;
         auto findKind = [](Game& g, int kind, vec2 near) { int best = -1; float bd = 1e9f; for (int i = 0; i < (int)g.world.structures.size(); i++) { const Structure& st = g.world.structures[i]; if (st.kind != kind) continue; float d = length(st.pos - near); if (d < bd) { bd = d; best = i; } } return best; };
         s.push_back({1.5f, [findKind](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 15.f; g.toastHint.clear(); g.tutStep = -1; for (int& o : ok) o = 0;
             const Poi* b = g.world.poiById("brindlemere"); vec2 c = b->pos;
@@ -1681,7 +1681,17 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.5f, [](Game& g) { g.menu = Menu::None; g.exitDungeon(); }, idle, "leave"});
         s.push_back({1.5f, [](Game& g) { g.enterInterior(inn); }, idle, "inn"});
         s.push_back({1.8f, none, [](Game& g, float) { g.camIdleT = 0; }, "inside"});
-        s.push_back({0.1f, [](Game& g) { ok[5] = g.dungeon.interior && g.dungeon.hasBed; AGR_LOG("INTERIOR inn %d", ok[5]); g.requestScreenshot("build/shots/I3_inn.png");
+        s.push_back({0.1f, [](Game& g) { ok[5] = g.dungeon.interior && g.dungeon.hasBed; AGR_LOG("INTERIOR inn %d", ok[5]); g.requestScreenshot("build/shots/I3_inn.png"); }, idle, "shot"});
+        // 2.6.0 the inn keeper: talk, play dice, buy a meal
+        s.push_back({0.5f, [](Game& g) { Entity keeper = NullEntity;
+            g.reg.each<NpcBrain>([&](Entity e, NpcBrain& nb) { if (nb.resident) keeper = e; });
+            ok[6] = keeper != NullEntity;
+            if (keeper) { Character* k = g.reg.get<Character>(keeper); Character& c = g.pc(); c.pos = k->pos + vec3(0, 0, 1.6f); c.yaw = PI; g.camYaw = 0.f; g.camDist = g.camDistTarget = 4.5f; g.camPitch = 0.3f;
+                g.openDialog(keeper); AGR_LOG("INTERIOR resident '%s' (%s) %d", k->name.c_str(), g.dialog.title.c_str(), ok[6]); } }, [](Game& g, float) { g.camIdleT = 0; }, "talk"});
+        s.push_back({2.f, [](Game& g) { g.gold = 100; g.dialogAction("dice"); }, [](Game& g, float) { g.camIdleT = 0; }, "dice"});
+        s.push_back({0.1f, [](Game& g) { int gd = g.gold; ok[7] = g.dialog.title == "Aubergiste" && (gd == 90 || gd == 100 || gd == 110); AGR_LOG("INTERIOR dice: gold %d -> %d (%s)", 100, gd, g.dialog.lines.empty() ? "" : g.dialog.lines[0].c_str());
+            g.requestScreenshot("build/shots/I4_innkeeper.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { g.dialog.open = false;
             bool all = true; for (int o : ok) all = all && o; AGR_LOG("INTERIOR TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
         return s;
     }
@@ -1814,6 +1824,35 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("RES harvested %d items: gold %d silver %d coal %d cactus %d shells %d flax %d amber %d fireroot %d -> %s", got, g.countItem("gold_ore"), g.countItem("silver_ore"), g.countItem("coal"), g.countItem("cactus_fruit"),
                     g.countItem("seashell"), g.countItem("flax"), g.countItem("amber"), g.countItem("fire_root"),
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
+        return s;
+    }
+    if (name == "newgame") {
+        // 2.6.0 title screen -> "Nouvelle partie": slot, difficulty, options; the game starts in that slot; Parties and Mods menus
+        static int ok[5]; static float hp0 = 0;
+        static int fid = 900;
+        auto tap = [&s, idle](const char* what, std::function<std::string(Game&)> label) {
+            s.push_back({0.2f, [label](Game& g) { std::string w = label(g); const Rect* r = g.ui.findWidget(w);
+                if (!r) { AGR_LOG("NEWGAME widget '%s' not found", w.c_str()); return; }
+                fid++; float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, fid, (r->x + r->w * 0.5f) * k, (r->y + r->h * 0.5f) * k}); }, idle, what});
+            s.push_back({0.4f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == fid && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, fid, f.x * k, f.y * k}); } }, idle, "release"});
+        };
+        s.push_back({1.f, [](Game& g) { for (int& o : ok) o = 0; g.ui.recordWidgets = true; hp0 = g.difficultyEnemyHp();
+            platform::removeFile(platform::writableDir() + "/save_2.lks"); g.menu = Menu::None; g.state = GameState::Title; g.stateT = 3.f; }, idle, "title"});
+        s.push_back({0.1f, shot("G0_title"), idle, "shot"});
+        tap("tap Nouvelle partie", [](Game&) { return std::string("Nouvelle partie"); });
+        s.push_back({0.5f, [](Game& g) { ok[0] = g.menu == Menu::NewGame; g.newSlot = 2; g.newOpts.difficulty = 3; g.newOpts.prologue = false; AGR_LOG("NEWGAME screen open %d", ok[0]); }, idle, "set"});
+        s.push_back({0.1f, shot("G1_newgame"), idle, "shot"});
+        tap("tap start", [](Game&) { return std::string("Commencer la partie 3"); });
+        s.push_back({2.f, none, idle, "play"});
+        s.push_back({0.1f, [](Game& g) { ok[1] = g.state == GameState::Playing && g.saveSlot == 2 && g.gameOpts.difficulty == 3;
+            ok[2] = g.difficultyEnemyHp() > hp0 * 1.5f && g.latestSlot() == 2;
+            AGR_LOG("NEWGAME playing %d slot %d difficulty %d | enemy hp x%.2f (was x%.2f), latest slot %d -> %d", ok[1], g.saveSlot, g.gameOpts.difficulty, g.difficultyEnemyHp(), hp0, g.latestSlot(), ok[2]);
+            g.gameOpts.difficulty = 0; g.loadGame(2); ok[3] = g.gameOpts.difficulty == 3; AGR_LOG("NEWGAME difficulty kept in the save %d", ok[3]); }, idle, "check"});
+        s.push_back({0.5f, [](Game& g) { g.menu = Menu::Saves; }, idle, "saves"});
+        s.push_back({0.1f, shot("G2_saves"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { g.scanMods(); g.menu = Menu::Mods; int n = 0; for (auto& m : g.mods) if (m.id == "mega-bombes" || m.id == "heros-veloce") n++; ok[4] = n == 2;
+            AGR_LOG("NEWGAME bundled mods installed %d (%zu mods)", ok[4], g.mods.size()); }, idle, "mods"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G3_mods.png"); bool all = true; for (int o : ok) all = all && o; AGR_LOG("NEWGAME TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
         return s;
     }
     if (name == "menus") {

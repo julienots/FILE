@@ -58,6 +58,7 @@ bool readFile(const std::string& path, std::string& out) {
 }
 
 bool fileExists(const std::string& path) { struct stat st; return stat(path.c_str(), &st) == 0; }
+long long fileMTime(const std::string& path) { struct stat st; return stat(path.c_str(), &st) == 0 ? (long long)st.st_mtime : -1; }
 void removeFile(const std::string& path) { remove(path.c_str()); }
 
 double timeSeconds() {

@@ -297,7 +297,7 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
             pc().vis.anim.setState(BodyState::Victory, 0.4f);
             particles.dissolveBurst(c.pos, c.vis.dissolveColor, c.radius * 2.f);
             play("magic_burst");
-            saveGame(99);
+            saveGame(saveSlot);
             if (b.id == "abyss_lord") { questsDone.insert("m7"); queueChapter("ending_choice"); }   // 1.12.0 the player chooses the ending
         }
     } else if (c.team == Team::Animal) {
@@ -313,6 +313,7 @@ void Game::dropLoot(Character& c, vec3 pos) {
     Rng r((uint64_t)(realTime * 1000) + c.uid);
     int g = d.gold + r.irange(0, d.gold);
     if (c.elite) g *= 3;
+    g = (int)std::round(g * gameTuning().gold);   // 2.6.0 mods
     gold += g;
     if (g > 0) play("coin", 0.4f, 1.1f);
     for (auto& l : d.loot) {

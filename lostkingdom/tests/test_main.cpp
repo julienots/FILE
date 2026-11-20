@@ -753,6 +753,20 @@ static void testModData(const std::string& assets) {
     CHECK(!applyModDataLine("enemy.wolf.hp = beaucoup", err), "non-numeric value refused");
     CHECK(!applyModDataLine("code.run = rm -rf", err), "unknown type refused (mods are data only)");
     CHECK(!applyModDataLine("pas de signe egal", err), "missing = refused");
+    {   // 2.6.0 the mods bundled with the game (assets/mods/<id>/) all apply without an error
+        std::ifstream idx(assets + "/mods/index.txt");
+        std::string id; int mods = 0;
+        while (std::getline(idx, id)) {
+            if (id.empty()) continue;
+            std::ifstream mt(assets + "/mods/" + id + "/mod.txt"), f(assets + "/mods/" + id + "/data.txt");
+            std::string l; int bad = 0, n = 0;
+            while (std::getline(f, l)) { std::string e; if (!applyModDataLine(l, e)) { bad++; std::printf("  %s: %s -> %s\n", id.c_str(), l.c_str(), e.c_str()); } n++; }
+            CHECK(mt.good() && n > 0 && bad == 0, "bundled mod %s: mod.txt %d, %d bad lines of %d", id.c_str(), (int)mt.good(), bad, n);
+            mods++;
+        }
+        CHECK(mods == 6, "6 bundled mods listed (%d)", mods);
+        CHECK(gameTuning().playerSpeed > 1.2f && digTuning().bombRadius >= 8.f, "bundled mods change the game tuning");
+    }
 }
 
 int lkRunTests(int argc, char** argv) {

@@ -1,0 +1,4 @@
+name = Héros véloce
+author = Superessence Studio
+version = 1.0
+description = Le héros court 30 % plus vite et reprend son souffle presque deux fois plus vite.

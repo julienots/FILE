@@ -44,6 +44,7 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 | `npc` (PNJ) | `name`, `title`, `greet` (ajoute une salutation), `greet.replace`, `lore` (ajoute une confidence) | `npc.maelle.greet = Bonjour !` |
 | `lore.add` (chronique) | `identifiant \| Titre \| Texte` | `lore.add = ma_page \| Mon titre \| Mon texte` |
 | `dig` (pelle, 2.4.0) | `dig.radius` (0,6 à 4 m), `dig.depth` (0,1 à 3 m par coup) | `dig.depth = 1.2` |
+| `game` (toute la partie, 2.6.0) | `game.enemy_hp` et `game.enemy_atk` (0,2 à 10), `game.xp` et `game.gold` (0,1 à 10), `game.player_speed` (0,5 à 2,5), `game.stamina_regen` (0,2 à 5) — des multiplicateurs | `game.gold = 3` |
 | `bomb` (bombes, 2.4.0) | `bomb.radius` (1 à 12 m), `bomb.depth` (0,2 à 10 m), `bomb.damage` (0 à 2000), `bomb.fuse` (0,3 à 10 s) | `bomb.radius = 8` |
 
 - **Valeurs** : les nombres sont limités à des valeurs raisonnables (par exemple `crit` entre 0 et 1, `scale` entre 0,3 et 6).
@@ -59,6 +60,10 @@ Tout fichier placé sous `assets/` **remplace** le fichier du jeu de même chemi
 - **interface et polices** : `ui/…`, `fonts/…`.
 
 Si plusieurs mods remplacent le même fichier, c'est le premier mod actif (par ordre alphabétique de dossier) qui gagne.
+
+### Mods livrés avec le jeu (2.6.0)
+
+Six mods sont inclus dans l'APK, dans `assets/mods/<id>/` (avec la liste `assets/mods/index.txt`). Au premier lancement, ils sont copiés dans le dossier des mods, **désactivés**, puis s'activent dans le menu Mods. Ce sont de bons exemples à copier pour écrire les vôtres.
 
 ## 3. Ce que les mods ne font pas (encore)
 

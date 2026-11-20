@@ -331,21 +331,93 @@ void Game::drawTitle(float dt) {
     u.sprite("divider", {W_ / 2 - 260, ly + 128, 520, 26}, vec4(1, 1, 1, a));
     u.text("A world waiting to be discovered.", W_ / 2, ly + 160, 26, rgba(0xe8dcc0, a), F_SERIF, A_CENTER, 0, true);
     // menu
-    bool hasSave = platform::fileExists(platform::writableDir() + "/save_99.lks") || platform::fileExists(platform::writableDir() + "/save_0.lks");
-    float bw = 380, bh = 58, by = H_ * 0.465f;   // 2.3.5: five plaques fit above the studio line
+    int last = latestSlot();
+    bool hasSave = last >= 0;
+    float bw = 380, bh = 52, by = H_ * 0.44f;   // 2.6.0: six plaques (Mods added) above the studio line
     float ba = saturate((t - 0.8f) * 1.5f);
-    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f; by += bh + 10; return r; };
-    if (menu == Menu::Settings || menu == Menu::Saves) { drawMenus(dt); return; }
-    if (hasSave && btn("Continuer", true)) {
-        int slot = platform::fileExists(platform::writableDir() + "/save_99.lks") ? 99 : 0;
-        if (loadGame(slot)) { play("ui_open"); startPlaying(); }
+    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 25) && ba > 0.5f; by += bh + 8; return r; };
+    if (menu == Menu::Settings || menu == Menu::Saves || menu == Menu::Mods) { drawMenus(dt); return; }
+    if (menu == Menu::NewGame) { drawNewGameMenu(); return; }
+    if (hasSave && btn("Continuer", true)) { if (loadGame(last)) { play("ui_open"); startPlaying(); } }   // the game played last
+    if (btn("Nouvelle partie", true)) {   // 2.6.0 the new-game screen: slot, difficulty, options
+        newOpts = GameOpts(); newSlot = 0;
+        for (int s = 0; s < GAME_SLOTS; s++) if (saveSummary(s).empty()) { newSlot = s; break; }
+        menu = Menu::NewGame; play("ui_open");
     }
-    if (btn("Nouvelle partie", true)) { play("ui_open"); newGame(); startPlaying(); regionBanner = "Greenhaven"; regionBannerSub = "Les plaines verdoyantes"; regionBannerT = 5; }
-    if (btn("Charger", hasSave)) { menu = Menu::Saves; play("ui_open"); }
+    if (btn("Parties", hasSave)) { menu = Menu::Saves; play("ui_open"); }
+    if (btn("Mods", true)) { scanMods(); menu = Menu::Mods; play("ui_open"); }
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.5.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.6.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+}
+
+// 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
+void Game::drawNewGameMenu() {
+    UI& u = ui;
+    float W_ = u.W, H_ = u.H;
+    u.consumeAll();
+    u.rect({0, 0, W_, H_}, vec4(0.02f, 0.015f, 0.01f, 0.6f));
+    Rect f{14, 14, W_ - 28, H_ - 28};
+    u.nine("book", f, vec4(1, 1, 1, 1), 0.6f);
+    u.text("Nouvelle partie", f.x + f.w / 2, f.y + 34, 40, GOLDT, F_TITLE, A_CENTER, 0, true);
+    if (u.iconButton({f.x + f.w - 96, f.y + 22, 74, 74}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
+    // ---- slots (left): 2 columns x 3
+    Rect L{f.x + 64, f.y + 110, f.w * 0.5f - 90, f.h - 200};
+    u.text("Emplacement", L.x, L.y - 34, 24, PALE, F_SERIF);
+    float cw = (L.w - 14) / 2, ch = std::min(130.f, (L.h - 28) / 3);
+    for (int s = 0; s < GAME_SLOTS; s++) {
+        Rect r{L.x + (s % 2) * (cw + 14), L.y + (s / 2) * (ch + 14), cw, ch};
+        bool sel = s == newSlot;
+        u.nine(sel ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.9f);
+        std::string sum = saveSummary(s);
+        u.text("Partie " + std::to_string(s + 1), r.x + 18, r.y + 14, 24, sel ? GOLDT : PALE, F_SERIF);
+        u.text(sum.empty() ? "Vide" : sum, r.x + 18, r.y + 52, 16, sum.empty() ? DIM : rgba(0xe0b090), F_BODY, A_LEFT, r.w - 30);
+        if (!sum.empty()) u.text("(sera remplacée)", r.x + 18, r.y + r.h - 30, 14, DIM, F_BODY);
+        u.tag(r, "Partie " + std::to_string(s + 1));
+        if (u.button(r)) { newSlot = s; play("ui_click", 0.4f); }
+    }
+    // ---- options (right)
+    Rect R{f.x + f.w * 0.5f + 10, f.y + 110, f.w * 0.5f - 80, f.h - 200};
+    u.text("Difficulté", R.x, R.y - 34, 24, PALE, F_SERIF);
+    static const char* dn[] = {"Facile", "Normal", "Difficile", "Héroïque"};
+    static const char* dd[] = {"Ennemis plus faibles, pour découvrir l'histoire.", "L'aventure telle qu'elle a été pensée.", "Ennemis plus robustes et plus forts.", "Chaque combat compte. Bonne chance."};
+    float dw = (R.w - 30) / 4;
+    for (int i = 0; i < 4; i++) {
+        Rect r{R.x + i * (dw + 10), R.y, dw, 58};
+        bool on = newOpts.difficulty == i;
+        u.nine(on ? "plaque_hi" : "plaque", r, vec4(1, 1, 1, on ? 1.f : 0.85f), 0.69f);
+        u.text(dn[i], r.x + r.w / 2, r.y + 17, 19, on ? rgba(0xfff1d0) : PALE, F_SERIF, A_CENTER, 0, true);
+        u.tag(r, dn[i]);
+        if (u.button(r)) { newOpts.difficulty = i; play("ui_click", 0.4f); }
+    }
+    u.text(dd[newOpts.difficulty], R.x, R.y + 70, 17, DIM, F_BODY, A_LEFT, R.w);
+    float y = R.y + 120;
+    toggle(u, {R.x, y, R.w, 40}, "Événements aléatoires (embuscades, étoiles filantes, caches)", newOpts.events); y += 54;
+    toggle(u, {R.x, y, R.w, 40}, "Prologue (la cinématique d'ouverture)", newOpts.prologue); y += 70;
+    int active = 0; for (auto& m : mods) if (m.enabled) active++;
+    u.text("Mods actifs : " + std::to_string(active) + " / " + std::to_string((int)mods.size()), R.x, y, 20, PALE, F_SERIF);
+    if (u.fancyButton({R.x + R.w - 200, y - 10, 200, 50}, "Gérer les mods", true, "plaque", 19)) { scanMods(); menu = Menu::Mods; play("ui_open"); return; }
+    y += 44;
+    if (!mods.empty()) {
+        std::string names;
+        for (auto& m : mods) if (m.enabled) names += (names.empty() ? "" : ", ") + m.name;
+        u.text(names.empty() ? "Aucun mod actif." : names, R.x, y, 15, DIM, F_BODY, A_LEFT, R.w);
+    }
+    // ---- start
+    bool overwrite = !saveSummary(newSlot).empty();
+    Rect go{f.x + f.w / 2 - 230, f.y + f.h - 84, 460, 62};
+    if (u.fancyButton(go, overwrite ? "Remplacer la partie " + std::to_string(newSlot + 1) + " et commencer" : "Commencer la partie " + std::to_string(newSlot + 1), true, "plaque", 24)) {
+        play("ui_open");
+        menu = Menu::None;
+        newGame();
+        gameOpts = newOpts;
+        saveSlot = newSlot;
+        pendingPrologue = gameOpts.prologue;
+        startPlaying();
+        regionBanner = "Greenhaven"; regionBannerSub = "Les plaines verdoyantes"; regionBannerT = 5;
+        saveGame(saveSlot);
+    }
 }
 
 void Game::drawCredits(float dt) {
@@ -461,7 +533,7 @@ void Game::drawMenus(float dt) {
         if (b("Journal", "i_quest")) { menu = Menu::Inventory; }
         if (b("Sauvegarder", "i_save")) { menu = Menu::Saves; }
         if (b("Paramètres", "i_settings")) { menu = Menu::Settings; }
-        if (b("Menu principal", "i_village")) { coopLeave(true); saveGame(99); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
+        if (b("Menu principal", "i_village")) { coopLeave(true); saveGame(saveSlot); state = GameState::Title; stateT = 0; menu = Menu::None; audio.playMusic("title", 2.f); dungeon.active = false; }
         return;
     }
     if (menu == Menu::Death) {
@@ -480,7 +552,7 @@ void Game::drawMenus(float dt) {
             play("heal");
         }
         if (u.fancyButton({p.x + 40, p.y + 76, p.w - 80, 62}, "Charger la dernière sauvegarde", true, "button_dark", 22)) {
-            if (loadGame(99) || loadGame(saveSlot)) { menu = Menu::None; startPlaying(); }
+            if (loadGame(saveSlot) || loadGame(99)) { menu = Menu::None; startPlaying(); }
         }
         return;
     }
@@ -1137,7 +1209,7 @@ void Game::drawMenus(float dt) {
         bool changed = false;
         for (auto& m : mods) {
             Rect row{list.x, y, list.w - 14, 88};
-            u.nine("slot", row, vec4(1, 1, 1, m.enabled ? 1.f : 0.6f), 0.45f);
+            u.nine(m.enabled ? "card_sel" : "card", row, vec4(1, 1, 1, m.enabled ? 1.f : 0.75f), 0.8f);
             std::string head = m.name + (m.version.empty() ? "" : "  v" + m.version) + (m.author.empty() ? "" : "  · " + m.author);
             u.text(head, row.x + 16, row.y + 10, 20, m.enabled ? GOLDT : DIM, F_BOLD);
             std::string info = m.desc;
@@ -1266,19 +1338,38 @@ void Game::drawMenus(float dt) {
     }
     // ---------------------------------------------------------------- saves
     case Menu::Saves: {
-        float y = c.y;
-        int slots[4] = {99, 0, 1, 2};
-        for (int k = 0; k < 4; k++) {
+        // 2.6.0 six games side by side (each with its own autosave); the old shared autosave is listed if present
+        static int confirmDel = -1; static float confirmT = 0;
+        confirmT = std::max(0.f, confirmT - dt); if (confirmT <= 0) confirmDel = -1;
+        std::vector<int> slots; for (int s = 0; s < GAME_SLOTS; s++) slots.push_back(s);
+        if (!saveSummary(99).empty()) slots.push_back(99);
+        u.text(state == GameState::Playing ? "Partie en cours : " + std::to_string(saveSlot + 1) : "Choisissez une partie", c.x, c.y - 4, 22, GOLDT, F_SERIF);
+        Rect lr{c.x, c.y + 36, c.w, c.h - 36};
+        u.pushClip(lr);
+        const float rowH = 104;
+        float so = u.scrollArea("saves", lr, slots.size() * rowH);
+        for (size_t k = 0; k < slots.size(); k++) {
             int s = slots[k];
-            Rect r{c.x, y, c.w, 110};
-            u.nine("slot", r, vec4(1, 1, 1, 1), 0.5f);
+            Rect r{lr.x, lr.y + k * rowH - so, lr.w - 14, rowH - 10};
+            if (r.y + r.h < lr.y || r.y > lr.y + lr.h) continue;
+            bool cur = state == GameState::Playing && s == saveSlot;
+            u.nine(cur ? "card_sel" : "card", r, vec4(1, 1, 1, 1), 0.9f);
             std::string sum = saveSummary(s);
-            u.text(s == 99 ? "Sauvegarde automatique" : "Emplacement " + std::to_string(s + 1), r.x + 24, r.y + 16, 24, GOLDT, F_SERIF);
-            u.text(sum.empty() ? "Vide" : sum, r.x + 24, r.y + 56, 19, sum.empty() ? DIM : PALE, F_BODY);
-            if (state == GameState::Playing && s != 99 && u.fancyButton({r.x + r.w - 380, r.y + 26, 170, 56}, "Sauvegarder", true, "button", 21)) { if (saveGame(s)) { saveSlot = s; notify("Partie sauvegardée (emplacement " + std::to_string(s + 1) + ")", vec3(0.7f, 0.9f, 1.f), "i_save"); } }
-            if (u.fancyButton({r.x + r.w - 196, r.y + 26, 170, 56}, "Charger", !sum.empty(), "button_dark", 21)) { if (loadGame(s)) { menu = Menu::None; startPlaying(); notify("Partie chargée", vec3(0.7f, 0.9f, 1.f), "i_save"); return; } }
-            y += 124;
+            u.text(s == 99 ? "Ancienne sauvegarde automatique" : "Partie " + std::to_string(s + 1) + (cur ? " (en cours)" : ""), r.x + 20, r.y + 12, 23, GOLDT, F_SERIF);
+            u.text(sum.empty() ? "Vide" : sum, r.x + 20, r.y + 50, 17, sum.empty() ? DIM : PALE, F_BODY, A_LEFT, r.w - 520);
+            float bx = r.x + r.w - 168;
+            if (u.fancyButton({bx, r.y + 18, 150, 54}, "Charger", !sum.empty(), "plaque", 20)) { if (loadGame(s)) { menu = Menu::None; startPlaying(); notify("Partie chargée", vec3(0.7f, 0.9f, 1.f), "i_save"); u.popClip(); return; } }
+            bx -= 160;
+            if (state == GameState::Playing && s != 99 && u.fancyButton({bx, r.y + 18, 150, 54}, "Sauvegarder", true, "plaque", 19)) {
+                if (saveGame(s)) { saveSlot = s; notify("Partie sauvegardée (partie " + std::to_string(s + 1) + ")", vec3(0.7f, 0.9f, 1.f), "i_save"); }
+            }
+            bx -= 160;
+            if (!sum.empty() && !cur && u.fancyButton({bx, r.y + 18, 150, 54}, confirmDel == s ? "Confirmer ?" : "Supprimer", true, "button_dark", 19)) {
+                if (confirmDel == s) { platform::removeFile(platform::writableDir() + "/save_" + std::to_string(s) + ".lks"); confirmDel = -1; notify("Partie supprimée", vec3(1.f, 0.7f, 0.5f), "i_trash"); }
+                else { confirmDel = s; confirmT = 3.f; }
+            }
         }
+        u.popClip();
         break;
     }
     default: break;

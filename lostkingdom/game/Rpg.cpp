@@ -367,6 +367,30 @@ void Game::openDialog(Entity ent) {
     dialog = DialogState();
     dialog.open = true; dialog.ent = ent; dialog.npc = it->param; dialog.line = 0; dialog.reveal = 0;
     play("ui_open", 0.5f);
+    if (it->param <= -100) {
+        // 2.6.0 the inhabitant of a building (inn keeper, priest, smith, a family at home)
+        int role = -100 - it->param;
+        dialog.speaker = c->name;
+        if (role == 1) {
+            static const char* L[] = {"Entre, entre ! Il fait meilleur près du feu.", "Une chambre, une chope, ou une partie de dés ?", "Les voyageurs racontent des choses étranges sur les routes du nord…"};
+            dialog.title = "Aubergiste"; dialog.lines = {L[(int)(gameTime / 25) % 3]};
+            dialog.choices = {{"Prendre une chambre (20 or) — sauvegarde", "rest"}, {"Jouer aux dés (10 or)", "dice"}, {"Un repas chaud (8 or)", "meal_buy"}, {"Au revoir", "close"}};
+        } else if (role == 2) {
+            static const char* L[] = {"Que la Lumière éclaire ta route, Errant.", "Le silence de ce lieu apaise les blessures.", "Assieds-toi un moment. Les morts ne peuvent pas entrer ici."};
+            dialog.title = "Prêtre"; dialog.lines = {L[(int)(gameTime / 25) % 3]};
+            dialog.choices = {{"Demander des soins", "heal"}, {"Recevoir une bénédiction (15 or)", "bless"}, {"Au revoir", "close"}};
+        } else if (role == 3) {
+            static const char* L[] = {"Attention aux étincelles !", "Un bon acier, ça se mérite. Tu as du minerai ?", "Pose ton arme là, je vais voir ce qu'on peut en tirer."};
+            dialog.title = "Forgeron"; dialog.lines = {L[(int)(gameTime / 25) % 3]};
+            dialog.choices = {{"Utiliser la forge", "craft:1"}, {"Améliorer mon arme", "upgrade"}, {"Au revoir", "close"}};
+        } else {
+            static const char* L[] = {"Oh ! Un visiteur… Entre, ne reste pas sur le seuil.", "Fais comme chez toi, mais essuie tes bottes.", "Il reste de la soupe, si tu as faim.", "On n'a pas grand-chose, mais c'est chaud et c'est sec."};
+            dialog.title = "Habitant"; dialog.lines = {L[(int)(gameTime / 25) % 4]};
+            dialog.choices = {{"Partager un repas", "meal_home"}, {"Au revoir", "close"}};
+        }
+        if (env.night > 0.7f && role == 0) dialog.lines = {"À cette heure-ci ? Bon… entre vite, il fait froid."};
+        return;
+    }
     if (it->param < 0) {
         // generic villager
         static const char* lines[] = {"Belle journée, n'est-ce pas ?", "Les routes ne sont plus sûres…", "On raconte que tu as vaincu des monstres !", "Le marché ouvre à l'aube.",
@@ -465,6 +489,47 @@ void Game::dialogAction(const std::string& a) {
     if (a == "upgrade") { craftStation = ST_FORGE; dialog.open = false; menu = Menu::Equipment; return; }
     if (a == "rest") { if (gold >= 20) { gold -= 20; dialog.open = false; restAtInn(); } else { dialog.lines = {"Vingt pièces, pas une de moins."}; dialog.line = 0; dialog.reveal = 0; } return; }
     if (a == "heal") { Character& c = pc(); c.hp = c.maxHp; mp = maxMp; particles.heal(c.pos); play("heal"); dialog.lines = {"Voilà. Que la Lumière te garde."}; dialog.line = 0; dialog.reveal = 0; setChoices({{"Merci", "close"}}); return; }
+    // 2.6.0 services of the inhabitants
+    auto say = [&](const std::string& l) { dialog.lines = {l}; dialog.line = 0; dialog.reveal = 0; };
+    if (a == "dice") {
+        if (gold < 10) { say("Pas d'or, pas de dés, l'ami."); return; }
+        gold -= 10;
+        Rng r((uint32_t)(realTime * 1000.f) ^ 0x9e3779b9u);
+        int me = r.irange(1, 6) + r.irange(1, 6), him = r.irange(1, 6) + r.irange(1, 6);
+        play("pickup", 0.6f);
+        if (me > him) { gold += 20; say("Tu fais " + std::to_string(me) + ", moi " + std::to_string(him) + "… Bah ! Tu gagnes 20 or."); }
+        else if (me == him) { gold += 10; say("Égalité, " + std::to_string(me) + " partout. Je te rends ta mise."); }
+        else say("Tu fais " + std::to_string(me) + ", moi " + std::to_string(him) + ". La maison gagne !");
+        setChoices({{"Rejouer (10 or)", "dice"}, {"Assez joué", "close"}});
+        return;
+    }
+    if (a == "meal_buy" || a == "meal_home") {
+        Character& c = pc();
+        uint32_t key = dungeon.interior ? (uint32_t)dungeon.interiorStruct : 0xffffffffu;
+        if (a == "meal_home") {
+            auto f = mealDay.find(key);
+            if (f != mealDay.end() && f->second == day) { say("On a déjà partagé la soupe aujourd'hui. Reviens demain !"); setChoices({{"Merci quand même", "close"}}); return; }
+            mealDay[key] = day;
+        } else {
+            if (gold < 8) { say("Huit pièces le bol, c'est le prix."); return; }
+            gold -= 8;
+        }
+        c.hp = std::min(c.maxHp, c.hp + c.maxHp * 0.5f); stamina = maxStamina; c.status.wellFed = std::max(c.status.wellFed, 240.f);
+        particles.heal(c.pos); play("heal", 0.6f);
+        say(a == "meal_home" ? "Tiens, une bonne soupe aux légumes. Ça te remettra d'aplomb." : "Ragoût du jour, pain frais. Bon appétit !");
+        notify("Repas chaud : vie +50 %, rassasié (régénération)", vec3(1.f, 0.85f, 0.6f), "i_heart");
+        setChoices({{"Merci", "close"}});
+        return;
+    }
+    if (a == "bless") {
+        if (gold < 15) { say("Une offrande de quinze pièces pour l'entretien du temple, Errant."); return; }
+        gold -= 15;
+        Character& c = pc(); c.hp = c.maxHp; mp = maxMp; c.status = Status(); c.status.wellFed = std::max(c.status.wellFed, 300.f);
+        particles.heal(c.pos); play("heal");
+        say("Te voilà béni. Tes blessures et tes maux s'effacent.");
+        setChoices({{"Merci", "close"}});
+        return;
+    }
     if (a == "lore") {
         const NpcDef& n = npcs()[dialog.npc];
         dialog.lines = n.lore; dialog.line = 0; dialog.reveal = 0;
@@ -500,7 +565,7 @@ void Game::restAtInn() {
         Character& c = pc();
         c.hp = c.maxHp; mp = maxMp; stamina = maxStamina;
         c.status.wellFed = 300;
-        respawnPos = c.pos;
+        respawnPos = (dungeon.active && dungeon.interior) ? dungeon.returnPos : c.pos;
         saveGame(saveSlot);
         notify("Vous avez dormi jusqu'au matin. Partie sauvegardée.", vec3(0.8f, 0.9f, 1.f), "i_save");
     });
@@ -541,6 +606,7 @@ bool Game::saveGame(int slot) {
     o << "respawn " << respawnPos.x << " " << respawnPos.y << " " << respawnPos.z << "\n";
     o << "pins " << mapPins.size(); for (vec2 pp : mapPins) o << " " << pp.x << " " << pp.y; o << "\n";   // 2.2.0
     o << world.saveDigs();   // 2.4.0 the holes and craters you made
+    o << "gameopts " << gameOpts.difficulty << " " << (int)gameOpts.events << " " << (int)gameOpts.prologue << "\n";   // 2.6.0
     o << "prog " << level << " " << xp << " " << gold << " " << skillPoints << " " << gameTime << " " << timeOfDay << " " << day << " " << playSeconds << "\n";
     for (auto& s : inventory) o << "inv " << s.id << " " << s.count << " " << (int)s.rarity << " " << s.level << "\n";
     for (int i = 0; i < SL_COUNT; i++) if (!equipment[i].id.empty()) o << "eq " << i << " " << equipment[i].id << " " << (int)equipment[i].rarity << " " << equipment[i].level << "\n";
@@ -581,6 +647,14 @@ bool Game::saveGame(int slot) {
     return ok;
 }
 
+int Game::latestSlot() const {
+    int best = -1; long long bt = -1;
+    for (int s = 0; s < GAME_SLOTS; s++) { long long t = platform::fileMTime(slotPath(s)); if (t > bt) { bt = t; best = s; } }
+    long long t99 = platform::fileMTime(slotPath(99));
+    if (t99 > bt) best = 99;
+    return best;
+}
+
 bool Game::loadGame(int slot) {
     mapPins.clear(); tele = TeleFx();
     bool hadDigs = world.dugChunks() > 0;
@@ -591,6 +665,7 @@ bool Game::loadGame(int slot) {
     // reset world-dependent state
     reg.clear();
     world.clearDigs(); bombs.clear(); digMode = false;   // 2.4.0
+    gameOpts = GameOpts();   // 2.6.0 (older saves: normal difficulty)
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
     vehicles.clear(); vehicleEnts.clear(); driving = -1;
     raceBest.clear(); race = RaceState();
@@ -613,6 +688,7 @@ bool Game::loadGame(int slot) {
         if (k == "player") { l >> pos.x >> pos.y >> pos.z >> yaw >> hp >> mp >> stamina; }
         else if (k == "respawn") l >> respawnPos.x >> respawnPos.y >> respawnPos.z;
         else if (k == "digs") { world.loadDigs(line); hadDigs = true; }
+        else if (k == "gameopts") { int dd = 1, ee = 1, pp = 1; l >> dd >> ee >> pp; gameOpts.difficulty = std::clamp(dd, 0, 3); gameOpts.events = ee != 0; gameOpts.prologue = pp != 0; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
         else if (k == "inv") { ItemStack s; int r; l >> s.id >> s.count >> r >> s.level; s.rarity = (Rarity)r; s.isNew = false; if (item(s.id)) inventory.push_back(s); }
@@ -677,7 +753,7 @@ bool Game::loadGame(int slot) {
     recomputeStats();
     rebuildPlayerVisual();
     if (hp > 0) c.hp = std::min(hp, c.maxHp);
-    saveSlot = slot == 99 ? saveSlot : slot;
+    saveSlot = slot == 99 ? 0 : slot;   // 2.6.0 the legacy shared autosave continues as game 1
     camFocus = pos;
     weatherNext = weather;
     return true;

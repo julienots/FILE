@@ -441,6 +441,19 @@ void Game::updateNpc(Entity e, Character& c, NpcBrain& nb, float dt) {
     Animator& an = c.vis.anim;
     nb.timer -= dt;
     nb.waveCD -= dt;
+    if (nb.resident) {   // 2.6.0 indoors: stands at its post, works, looks at the player when close
+        c.vel = vec3(0);
+        if (player != NullEntity) {
+            Character& p = pc();
+            if (distXZ(p.pos, c.pos) < 4.5f) {
+                float want = std::atan2(p.pos.x - c.pos.x, p.pos.z - c.pos.z), dy = want - c.yaw;
+                while (dy > PI) dy -= TAU; while (dy < -PI) dy += TAU;
+                c.yaw += dy * std::min(1.f, dt * 4.f);
+                if (an.action() && nb.workClip == C_HAMMER_WORK) an.stopAction();
+            } else if (nb.workClip == C_HAMMER_WORK && (!an.action() || an.actionDone())) an.play(&clip(C_HAMMER_WORK), 1.f, true);
+        }
+        return;
+    }
     float h = timeOfDay;
     // threat: monsters close by → run home
     bool threat = false;

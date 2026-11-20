@@ -122,6 +122,7 @@ struct NpcBrain {
     float timer = 0;
     bool indoors = false;
     bool generic = true;
+    bool resident = false;   // 2.6.0 lives inside a building: stays at its post (home), turns to the player
     int village = -1;
     float waveCD = 0;
     ClipId workClip = C_HAMMER_WORK;
@@ -251,6 +252,7 @@ struct DungeonState {
     int def = -1;
     bool active = false;
     vec3 origin;                    // world position of tile (0,0)
+    float roomW = 0, roomD = 0;     // 2.6.0 interior room size (metres)
     int W = 0, H = 0;
     std::vector<TileType> tiles;
     std::vector<DungeonRoom> rooms;
@@ -378,7 +380,7 @@ struct CinematicState {
 
 // ------------------------------------------------------------------------------------------ game
 enum class GameState : uint8_t { Splash, Title, Playing, Credits, Loading };
-enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop, Bag };
+enum class Menu : uint8_t { None, Inventory, Equipment, Skills, Crafting, Map, Quests, Bestiary, Collection, Settings, Saves, Shop, Pause, Death, LayoutEdit, Chronicles, Mods, HeroWheel, Base, Objectives, Coop, Bag, NewGame };
 
 class Game : public App {
 public:
@@ -734,6 +736,15 @@ public:
     WorldEvent worldEvent; float eventTimer = 150.f; int eventsDone = 0;
     // 2.4.0 digging and bombs (Dig.cpp)
     bool digMode = false; int digsDone = 0;
+    // 2.6.0 per-game options (chosen on the new-game screen, saved with the game) and several games side by side
+    struct GameOpts { int difficulty = 1; bool events = true; bool prologue = true; };
+    GameOpts gameOpts, newOpts;
+    int newSlot = 0;
+    static constexpr int GAME_SLOTS = 6;
+    int latestSlot() const;                       // the most recently saved game (-1 none)
+    float difficultyEnemyHp() const { static const float k[4] = {0.7f, 1.f, 1.3f, 1.65f}; return k[std::clamp(gameOpts.difficulty, 0, 3)] * gameTuning().enemyHp; }
+    float difficultyEnemyAtk() const { static const float k[4] = {0.6f, 1.f, 1.35f, 1.75f}; return k[std::clamp(gameOpts.difficulty, 0, 3)] * gameTuning().enemyAtk; }
+    void drawNewGameMenu();
     struct Bomb { vec3 pos, vel; float fuse = 2.2f; int bounces = 0; };
     std::vector<Bomb> bombs;
     void playerDig();
@@ -861,6 +872,8 @@ public:
     QuestState* questState(const std::string& id);
     void checkQuestGivers();
     void openDialog(Entity npcEnt);
+    void spawnResident();            // 2.6.0 the inhabitant of the building the player entered
+    std::map<uint32_t, int> mealDay; // 2.6.0 house -> day of the last shared meal
     void dialogAction(const std::string& action);
     void discover(const std::string& poi);
     bool unlockSkill(int idx);

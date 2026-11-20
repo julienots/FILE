@@ -1,0 +1,4 @@
+name = Ennemis coriaces
+author = Superessence Studio
+version = 1.0
+description = Des ennemis 80 % plus résistants et 50 % plus forts, mais 50 % d'expérience en plus.

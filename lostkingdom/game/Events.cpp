@@ -64,7 +64,7 @@ void Game::updateWorldEvents(float dt) {
     if (player == NullEntity || cine.active) return;
     WorldEvent& ev = worldEvent;
     if (!ev.active) {
-        if (dungeon.active || bossEnt != NullEntity || driving >= 0) return;
+        if (dungeon.active || bossEnt != NullEntity || driving >= 0 || !gameOpts.events) return;
         eventTimer -= dt;
         if (eventTimer > 0) return;
         eventTimer = 240.f + (float)((uint32_t)(gameTime * 31.0) % 180u);   // 4 to 7 minutes

@@ -67,6 +67,7 @@ void Game::buildInterior(int si) {
     case S_STILT_HUT: case S_BEACHHUT: rw = 6.f; rd = 6.f; wallH = 3.f; break;
     default: break;
     }
+    d.roomW = rw; d.roomD = rd;
     d.W = (int)std::ceil(rw / ITILE) + 2; d.H = (int)std::ceil(rd / ITILE) + 2;
     d.origin = vec3(WORLD_SIZE + 4200.f, 0.f, 600.f);
     d.tiles.assign(d.W * d.H, TileType::Floor);
@@ -246,6 +247,55 @@ void Game::buildInterior(int si) {
     d.rooms.push_back(DungeonRoom{1, 1, d.W - 2, d.H - 2, 0});
 }
 
+// 2.6.0 someone lives here: the inn keeper behind the bar, the priest by the altar, the smith at the anvil,
+// a member of the family at home (by day; at night they sleep, the house is quiet)
+void Game::spawnResident() {
+    DungeonState& d = dungeon;
+    if (d.interiorStruct < 0 || d.interiorStruct >= (int)world.structures.size()) return;
+    const Structure& S = world.structures[d.interiorStruct];
+    // the nearest settlement gives the look (elves in Elderwood, furs in Frostheim...)
+    int village = -1; float best = 1e9f;
+    for (int i = 0; i < (int)world.pois.size(); i++) {
+        if (world.pois[i].type != PoiType::Village) continue;
+        float dd = length(world.pois[i].pos - S.pos);
+        if (dd < best) { best = dd; village = i; }
+    }
+    if (village < 0) return;
+    int role = 0;
+    vec3 c0 = d.origin + vec3(ITILE, 0, ITILE);
+    float rw = d.roomW, rd = d.roomD;
+    vec3 pos;
+    switch (S.kind) {
+    case S_INN: role = 1; pos = c0 + vec3(rw * 0.5f, 0, 1.25f); break;              // behind the bar
+    case S_CHAPEL: role = 2; pos = c0 + vec3(rw * 0.5f + 0.6f, 0, 2.6f); break;      // in front of the altar
+    case S_FORGE: role = 3; pos = d.forgePos + vec3(0, 0, -0.9f); break;           // at the anvil
+    default: {
+        bool night = timeOfDay < 6.f || timeOfDay > 21.5f;
+        if (night) return;
+        role = 0; pos = c0 + vec3(rw * 0.45f - 0.95f, 0, rd * 0.62f - 0.9f);       // by the table
+        break;
+    }
+    }
+    pos.y = d.origin.y;
+    uint32_t seed = hash32(0x5E51D000u + (uint32_t)d.interiorStruct);
+    Entity e = spawnVillager(pos, village, seed);
+    Character* c = reg.get<Character>(e);
+    NpcBrain* nb = reg.get<NpcBrain>(e);
+    Interact* it = reg.get<Interact>(e);
+    if (!c || !nb || !it) return;
+    c->pos = pos; c->yaw = 0.f;   // facing the door (+Z)
+    nb->resident = true; nb->generic = false; nb->village = -1;
+    nb->home = nb->work = nb->social = nb->bed = nb->dest = pos;
+    nb->workClip = role == 3 ? C_HAMMER_WORK : C_SWEEP_WORK;
+    it->param = -100 - role; it->radius = role == 1 ? 3.0f : 2.4f;
+    static const char* inn[] = {"Maître Aldric", "Dame Gerta", "Bram le Ventru", "Mère Odile"};
+    static const char* pri[] = {"Frère Anselme", "Sœur Maelis", "Père Thibault"};
+    static const char* smi[] = {"Gunnar l'Enclume", "Hilda Main-de-Fer", "Roderic"};
+    if (role == 1) c->name = inn[seed % 4];
+    else if (role == 2) c->name = pri[seed % 3];
+    else if (role == 3) c->name = smi[seed % 3];
+}
+
 void Game::enterInterior(int si) {
     if (si < 0 || si >= (int)world.structures.size()) return;
     const Structure s = world.structures[si];
@@ -260,6 +310,7 @@ void Game::enterInterior(int si) {
         c.pos = dungeon.entrance; c.vel = vec3(0); c.yaw = PI;   // facing into the room
         camFocus = c.pos; camYaw = 0.f; camPitch = std::max(camPitch, 0.75f); camDist = camDistTarget = 7.f;
         regionBanner = dungeon.interiorName; regionBannerSub = ""; regionBannerT = 2.5f;
+        spawnResident();
         play("door");
     });
 }
@@ -282,7 +333,7 @@ bool Game::updateInterior(float dt) {
                 c.hp = c.maxHp; mp = maxMp; stamina = maxStamina; c.status = Status();
                 if (timeOfDay > 7.f) day++;
                 timeOfDay = 7.f;
-                saveGame(99);
+                saveGame(saveSlot);
                 notify("Vous avez bien dormi. Vie, mana et endurance restaurées. (Partie sauvegardée)", vec3(0.7f, 0.9f, 1.f), "i_night");
             });
         }
