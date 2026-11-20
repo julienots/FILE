@@ -410,6 +410,14 @@ struct ParticleEmitter2DComponent {
     float collisionFriction = 0.2f; ///< Speed lost along the surface at each hit.
     bool dieOnCollision = false;
     bool affectedByAttractors = true;  ///< ParticleAttractor pull / push (world-space emitters).
+    /// Turbulence: a swirling, divergence-free noise field (world units / s^2) that wanders over
+    /// time — smoke curls, magic swirls, leaves. 0 = off.
+    float turbulence = 0.0f;
+    float turbulenceScale = 1.0f;   ///< Size of the swirls (world units).
+    float turbulenceSpeed = 0.5f;   ///< How fast the field changes.
+    /// Fraction of the emitter's own velocity given to new particles (world space): a moving
+    /// torch or rocket leaves a trail that keeps going.
+    float inheritVelocity = 0.0f;
     /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
     /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
     ecs::Entity subEmitter{};
@@ -435,9 +443,11 @@ struct ParticleState2DComponent {
     float emitAccumulator = 0.0f;
     u32 rng = 0;
     bool started = false;
+    math::Vec3 lastEmitterPos{0.0f};  ///< For inheritVelocity.
+    float clock = 0.0f;               ///< Seconds since start (turbulence field time).
 };
 
-enum class EmitterShape3D : i32 { Point = 0, Sphere = 1, Box = 2, Cone = 3 };
+enum class EmitterShape3D : i32 { Point = 0, Sphere = 1, Box = 2, Cone = 3, Ring = 4 };
 
 /// 3D particle emitter (camera-facing billboards), simulated by the 2D / effects module
 /// (simulateParticles3D). Emits along its local +Y axis.
@@ -451,7 +461,7 @@ struct ParticleEmitter3DComponent {
     float lifetimeMin = 0.8f, lifetimeMax = 1.6f;
     float speedMin = 1.0f, speedMax = 3.0f;
     EmitterShape3D shape = EmitterShape3D::Cone;
-    float shapeRadius = 0.3f;       ///< Sphere, cone base.
+    float shapeRadius = 0.3f;       ///< Sphere, cone base, ring (circle in the local XZ plane, emits within coneAngle of +Y).
     math::Vec3 boxSize{1.0f, 0.1f, 1.0f};
     float coneAngle = math::radians(25.0f);  ///< Half angle around +Y (cone); sphere / box emit outward / up.
     math::Vec3 gravity{0.0f, 0.0f, 0.0f};    ///< World units / s^2.
@@ -474,6 +484,17 @@ struct ParticleEmitter3DComponent {
     float collisionFriction = 0.2f; ///< Speed lost along the surface at each hit.
     bool dieOnCollision = false;
     bool affectedByAttractors = true;  ///< ParticleAttractor pull / push (world-space emitters).
+    /// Turbulence: a swirling, divergence-free noise field (world units / s^2) that wanders over
+    /// time — smoke curls, magic swirls, leaves. 0 = off.
+    float turbulence = 0.0f;
+    float turbulenceScale = 1.0f;   ///< Size of the swirls (world units).
+    float turbulenceSpeed = 0.5f;   ///< How fast the field changes.
+    /// Fraction of the emitter's own velocity given to new particles (world space): a moving
+    /// torch or rocket leaves a trail that keeps going.
+    float inheritVelocity = 0.0f;
+    /// Lit by the scene: ambient, the directional light (half-Lambert facing the camera) and
+    /// point / spot lights in range, evaluated per particle (smoke and dust in a dark cave).
+    bool lit = false;
     /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
     /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
     ecs::Entity subEmitter{};
@@ -494,6 +515,8 @@ struct ParticleState3DComponent {
     float emitAccumulator = 0.0f;
     u32 rng = 0;
     bool started = false;
+    math::Vec3 lastEmitterPos{0.0f};  ///< For inheritVelocity.
+    float clock = 0.0f;               ///< Seconds since start (turbulence field time).
 };
 
 /// Obstacle for particles of emitters with `collisions` (world space): a sphere (diameter

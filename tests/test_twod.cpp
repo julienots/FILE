@@ -483,3 +483,85 @@ TEST_CASE("tile rules: autotile bitmask from same-group neighbours, animated til
     r = TileRules::parse(tm, 64);
     CHECK(r.empty());
 }
+
+TEST_CASE("particles: ring shape, turbulence, inherited emitter velocity (2D and 3D)") {
+    registerRenderComponents();
+    Scene s;
+    const auto e = s.createEntity("Fx");
+    auto& em = s.registry().emplace<ParticleEmitter3DComponent>(e);
+    em.rate = 0.0f;
+    em.burst = 100;
+    em.shape = EmitterShape3D::Ring;
+    em.shapeRadius = 2.0f;
+    em.coneAngle = 0.0f;
+    em.speedMin = em.speedMax = 1.0f;
+    em.lifetimeMin = em.lifetimeMax = 10.0f;
+    em.seed = 3;
+    s.updateTransforms();
+    simulateParticles3D(s, 0.0f);
+    {
+        auto& st = s.registry().get<ParticleState3DComponent>(e);
+        REQUIRE(st.particles.size() == 100);
+        for (const Particle3D& p : st.particles) {
+            CHECK(std::sqrt(p.position.x * p.position.x + p.position.z * p.position.z) == doctest::Approx(2.0f).epsilon(1e-3));
+            CHECK(p.position.y == doctest::Approx(0.0f));
+            CHECK(p.velocity.y == doctest::Approx(1.0f));
+        }
+    }
+    // Turbulence bends straight paths; without it they stay straight.
+    em.turbulence = 20.0f;
+    for (int i = 0; i < 10; ++i) simulateParticles3D(s, 0.05f);
+    {
+        auto& st = s.registry().get<ParticleState3DComponent>(e);
+        float sideways = 0.0f;
+        for (const Particle3D& p : st.particles) sideways += std::fabs(p.velocity.x) + std::fabs(p.velocity.z);
+        CHECK(sideways / 100.0f > 0.5f);
+    }
+    // Inherited velocity: an emitter moving at +5 x / s gives 0.5 of it to its new particles.
+    auto& em2 = s.registry().get<ParticleEmitter3DComponent>(e);
+    em2.turbulence = 0.0f;
+    em2.shape = EmitterShape3D::Point;
+    em2.rate = 100.0f;
+    em2.burst = 0;
+    em2.inheritVelocity = 0.5f;
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    s.registry().get<TransformComponent>(e).position = {0.5f, 0, 0};
+    s.updateTransforms();
+    simulateParticles3D(s, 0.1f);
+    {
+        auto& st = s.registry().get<ParticleState3DComponent>(e);
+        REQUIRE(!st.particles.empty());
+        CHECK(st.particles.back().velocity.x == doctest::Approx(2.5f).epsilon(1e-3));
+    }
+
+    // 2D: the same inheritance and turbulence.
+    const auto f = s.createEntity("Fx2");
+    auto& e2 = s.registry().emplace<ParticleEmitter2DComponent>(f);
+    e2.rate = 100.0f;
+    e2.speedMin = e2.speedMax = 0.0f;
+    e2.gravity = {0, 0};
+    e2.lifetimeMin = e2.lifetimeMax = 10.0f;
+    e2.inheritVelocity = 1.0f;
+    e2.seed = 5;
+    s.updateTransforms();
+    simulateParticles2D(s, 0.0f);
+    s.registry().get<TransformComponent>(f).position = {0, 1, 0};
+    s.updateTransforms();
+    simulateParticles2D(s, 0.1f);
+    {
+        auto& st = s.registry().get<ParticleState2DComponent>(f);
+        REQUIRE(!st.particles.empty());
+        CHECK(st.particles.back().velocity.y == doctest::Approx(10.0f).epsilon(1e-3));
+    }
+    s.registry().get<ParticleEmitter2DComponent>(f).turbulence = 10.0f;
+    s.registry().get<ParticleEmitter2DComponent>(f).inheritVelocity = 0.0f;
+    restartParticles2D(s, f);
+    simulateParticles2D(s, 0.0f);
+    for (int i = 0; i < 10; ++i) simulateParticles2D(s, 0.05f);
+    {
+        auto& st = s.registry().get<ParticleState2DComponent>(f);
+        REQUIRE(!st.particles.empty());
+        CHECK(math::length(st.particles.front().velocity) > 0.5f);
+    }
+}

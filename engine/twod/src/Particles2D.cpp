@@ -19,7 +19,8 @@ u32 nextRandom(u32& state) {  // xorshift32: fast, deterministic per emitter
 float uniform(u32& state) { return static_cast<float>(nextRandom(state) >> 8) * (1.0f / 16777216.0f); }
 float range(u32& state, float a, float b) { return a + (b - a) * uniform(state); }
 
-void spawn(const ParticleEmitter2DComponent& em, ParticleState2DComponent& st, const math::Mat4& world, u32 count, u32& spawned) {
+void spawn(const ParticleEmitter2DComponent& em, ParticleState2DComponent& st, const math::Mat4& world, u32 count, u32& spawned,
+           math::Vec2 inherited = {}) {
     const float baseAngle = std::atan2(world.c[0].y, world.c[0].x);  // emitter rotation around Z
     const math::Vec3 origin = world.translation();
     for (u32 i = 0; i < count && st.particles.size() < em.maxParticles; ++i) {
@@ -35,6 +36,7 @@ void spawn(const ParticleEmitter2DComponent& em, ParticleState2DComponent& st, c
             offset = {std::cos(a) * r, std::sin(a) * r};
         }
         if (em.worldSpace) {
+            p.velocity += inherited;
             p.position = math::Vec2{origin.x, origin.y} + offset;
             p.z = origin.z;
         } else {
@@ -78,8 +80,20 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
                 st.time = 0.0f;
                 st.emitAccumulator = 0.0f;
                 st.rng = em.seed ? em.seed : static_cast<u32>(std::random_device{}()) | 1u;
+                st.lastEmitterPos = w.matrix.translation();
                 if (em.emitting) spawn(em, st, w.matrix, em.burst, stats.spawned);
             }
+            math::Vec2 inherited{};
+            if (dt > 0.0f) {
+                const math::Vec3 now = w.matrix.translation();
+                if (em.inheritVelocity != 0.0f && em.worldSpace) {
+                    const math::Vec3 v = (now - st.lastEmitterPos) * (em.inheritVelocity / dt);
+                    inherited = {v.x, v.y};
+                }
+                st.lastEmitterPos = now;
+                st.clock = std::fmod(st.clock + dt, 3600.0f);
+            }
+            const bool swirl = em.turbulence != 0.0f;
             if (dt > 0.0f) {
                 // Integrate and remove dead particles (swap-and-pop).
                 const float damping = std::max(0.0f, 1.0f - em.drag * dt);
@@ -92,6 +106,10 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
                         if (attract) {
                             const math::Vec3 a = particles::attraction(world, {p.position.x, p.position.y, p.z}, true);
                             accel += math::Vec2{a.x, a.y};
+                        }
+                        if (swirl) {
+                            const math::Vec3 t = particles::turbulence({p.position.x, p.position.y, 0.0f}, st.clock * em.turbulenceSpeed, em.turbulenceScale);
+                            accel += math::Vec2{t.x, t.y} * em.turbulence;
                         }
                         p.velocity = (p.velocity + accel * dt) * damping;
                         p.position += p.velocity * dt;
@@ -124,11 +142,11 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
                         st.emitAccumulator += em.rate * dt;
                         const u32 n = static_cast<u32>(st.emitAccumulator);
                         st.emitAccumulator -= static_cast<float>(n);
-                        spawn(em, st, w.matrix, n, stats.spawned);
+                        spawn(em, st, w.matrix, n, stats.spawned, inherited);
                     }
                     if (em.loop && st.time >= duration) {
                         st.time = std::fmod(st.time, duration);
-                        spawn(em, st, w.matrix, em.burst, stats.spawned);
+                        spawn(em, st, w.matrix, em.burst, stats.spawned, inherited);
                     }
                 }
             }

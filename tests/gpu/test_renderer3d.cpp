@@ -409,6 +409,44 @@ TEST_CASE("3D particles: camera-facing billboards, additive brighter, hidden beh
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("3D particles: lit by ambient, the sun and point lights in range") {
+    Render3DFixture f;
+    f.camera({0, 0, 6}, {0, 0, 0});
+    f.darkEnvironment();
+    const auto fx = f.scene.createEntity("Fx");
+    auto& em = f.scene.registry().emplace<ParticleEmitter3DComponent>(fx);
+    em.rate = 0.0f;
+    em.burst = 1;
+    em.shape = EmitterShape3D::Point;
+    em.speedMin = em.speedMax = 0.0f;
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.startSize = em.endSize = 2.0f;
+    em.startColor = em.endColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    em.lit = true;
+    f.scene.updateTransforms();
+    simulateParticles3D(f.scene, 0.0f);
+    f.settle();
+    const Rgba dark = f.at({0, 0, 0});
+    CHECK_MESSAGE(dark.r < 20, dark);  // no light at all
+    const auto bulb = f.scene.createEntity("Bulb");
+    f.scene.registry().get<TransformComponent>(bulb).position = {0, 0, 1};
+    auto& pl = f.scene.registry().emplace<PointLightComponent>(bulb);
+    pl.color = {1, 0.2f, 0.2f, 1};
+    pl.intensity = 3.0f;
+    pl.range = 5.0f;
+    f.frame();
+    const Rgba red = f.at({0, 0, 0});
+    CHECK_MESSAGE(red.r > dark.r + 60, red);
+    CHECK_MESSAGE(red.r > red.g + 30, red);  // tinted by the light
+    // Out of range: dark again. Unlit particles ignore lights.
+    f.scene.registry().get<TransformComponent>(bulb).position = {0, 0, -20};
+    f.frame();
+    CHECK(f.at({0, 0, 0}).r < 20);
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).lit = false;
+    f.frame();
+    CHECK(f.at({0, 0, 0}).r > 150);
+}
+
 TEST_CASE("toon shading: hard light steps, tinted shadows, bands, rim light, outlines") {
     Render3DFixture f;
     f.camera({0, 0, 0}, {0, 0, -1});

@@ -1,5 +1,7 @@
 #pragma once
 // Forces and obstacles shared by the 2D and 3D particle simulations.
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "agr/render/RenderComponents.hpp"
@@ -36,6 +38,15 @@ inline World gather(Scene& scene) {
         w.colliders.push_back({t.matrix, math::inverse(t.matrix), c.shape, c.size, c.size.x * 0.5f * scale});
     });
     return w;
+}
+
+/// Divergence-free swirling field in [-2, 2]^3 (each component ignores its own axis), drifting
+/// with time `t`; `scale` = size of the swirls.
+inline math::Vec3 turbulence(math::Vec3 p, float t, float scale) {
+    const float f = 1.0f / std::max(scale, 1e-3f);
+    const float x = p.x * f, y = p.y * f, z = p.z * f;
+    return {std::sin(y * 1.31f + t) + std::cos(z * 1.73f - t * 0.83f), std::sin(z * 1.19f + t * 0.91f) + std::cos(x * 1.57f + t * 1.07f),
+            std::sin(x * 1.43f - t * 1.13f) + std::cos(y * 1.61f + t * 0.77f)};
 }
 
 /// Acceleration from the attractors at `p` (flat2D: in the XY plane only).

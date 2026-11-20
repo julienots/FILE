@@ -829,9 +829,49 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     // 3D particles: billboards facing the camera, sorted per particle with the sprites.
     {
         const Vec3 right{view.c[0].x, view.c[1].x, view.c[2].x}, up{view.c[0].y, view.c[1].y, view.c[2].y};
+        // Lit particles: ambient + half-Lambert sun (normal toward the camera) + point / spot lights
+        // in range, evaluated per particle on the CPU (gathered once, only when needed).
+        struct ParticleLight {
+            Vec3 pos, color, dir;
+            float range, cosOuter, cosInner;  // cosOuter < -1.5: point light
+        };
+        std::vector<ParticleLight> plights;
+        bool plightsGathered = false;
+        const Vec3 toCamera = math::normalize(Vec3{view.c[0].z, view.c[1].z, view.c[2].z});
+        auto lightAt = [&](Vec3 p) {
+            Vec3 l{frame.ambient.x, frame.ambient.y, frame.ambient.z};
+            const float sunWrap = 0.5f + 0.5f * math::dot(toCamera, Vec3{-frame.lightDir.x, -frame.lightDir.y, -frame.lightDir.z});
+            l = l + Vec3{frame.lightColor.x, frame.lightColor.y, frame.lightColor.z} * sunWrap;
+            for (const ParticleLight& pl : plights) {
+                const Vec3 d = p - pl.pos;
+                const float dist = math::length(d);
+                if (dist >= pl.range) continue;
+                float att = 1.0f - dist / pl.range;
+                att *= att;
+                if (pl.cosOuter > -1.5f) {
+                    const float c = dist > 1e-5f ? math::dot(d * (1.0f / dist), pl.dir) : 1.0f;
+                    att *= std::clamp((c - pl.cosOuter) / std::max(pl.cosInner - pl.cosOuter, 1e-4f), 0.0f, 1.0f);
+                }
+                l = l + pl.color * att;
+            }
+            return l;
+        };
         reg.view<ParticleEmitter3DComponent, ParticleState3DComponent, WorldTransformComponent>().each(
             [&](ecs::Entity e, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
                 if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty()) return;
+                if (em.lit && !plightsGathered) {
+                    plightsGathered = true;
+                    reg.view<PointLightComponent, WorldTransformComponent>().each([&](ecs::Entity le, PointLightComponent& l, WorldTransformComponent& lw) {
+                        if (lw.activeInHierarchy && l.intensity > 0.0f && l.range > 0.0f && !hiddenInEditor(le))
+                            plights.push_back({lw.matrix.translation(), srgbToLinear(l.color) * l.intensity, Vec3{0.0f}, l.range, -2.0f, 1.0f});
+                    });
+                    reg.view<SpotLightComponent, WorldTransformComponent>().each([&](ecs::Entity le, SpotLightComponent& l, WorldTransformComponent& lw) {
+                        if (lw.activeInHierarchy && l.intensity > 0.0f && l.range > 0.0f && !hiddenInEditor(le))
+                            plights.push_back({lw.matrix.translation(), srgbToLinear(l.color) * l.intensity,
+                                               math::normalize(lw.matrix.transformVector({0, 0, -1})), l.range, std::cos(l.outerAngle),
+                                               std::cos(std::min(l.innerAngle, l.outerAngle))});
+                    });
+                }
                 const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
                 const Vec4 c0 = em.startColor, c1 = em.endColor;
                 const ParticleCurvesLut* lut = curvesFor(em.curves);
@@ -864,6 +904,10 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                     item.order = 0;
                     item.depth = view.transformPoint(center).z;
                     item.uv = uv;
+                    if (em.lit) {
+                        const Vec3 l = lightAt(center);
+                        color = Vec4{color.x * l.x, color.y * l.y, color.z * l.z, color.w};
+                    }
                     item.color = packColor(color);
                     item.pipeline = em.additive ? 2u : 0u;
                     item.texture = tex;

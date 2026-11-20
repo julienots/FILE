@@ -26,7 +26,8 @@ Vec3 randomUnit(u32& s) {
     return {r * std::cos(a), z, r * std::sin(a)};
 }
 
-void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, const math::Mat4& world, u32 count, u32& spawned) {
+void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, const math::Mat4& world, u32 count, u32& spawned,
+           Vec3 inherited = Vec3{0.0f}) {
     for (u32 i = 0; i < count && st.particles.size() < em.maxParticles; ++i) {
         Vec3 pos{0.0f}, dir{0.0f, 1.0f, 0.0f};
         switch (em.shape) {
@@ -39,12 +40,14 @@ void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, c
             case EmitterShape3D::Box:
                 pos = {range(st.rng, -0.5f, 0.5f) * em.boxSize.x, range(st.rng, -0.5f, 0.5f) * em.boxSize.y, range(st.rng, -0.5f, 0.5f) * em.boxSize.z};
                 break;
-            case EmitterShape3D::Cone: {
-                // Direction within the cone around +Y, start on the base disc.
+            case EmitterShape3D::Cone:
+            case EmitterShape3D::Ring: {
+                // Direction within the cone around +Y; start on the base disc (cone) or its rim (ring).
                 const float cosMax = std::cos(std::clamp(em.coneAngle, 0.0f, math::kPi));
                 const float c = range(st.rng, cosMax, 1.0f), sn = std::sqrt(std::max(0.0f, 1.0f - c * c)), a = range(st.rng, 0.0f, 2.0f * math::kPi);
                 dir = {sn * std::cos(a), c, sn * std::sin(a)};
-                const float r = em.shapeRadius * std::sqrt(uniform(st.rng)), b = range(st.rng, 0.0f, 2.0f * math::kPi);
+                const float r = em.shape == EmitterShape3D::Ring ? em.shapeRadius : em.shapeRadius * std::sqrt(uniform(st.rng));
+                const float b = range(st.rng, 0.0f, 2.0f * math::kPi);
                 pos = {r * std::cos(b), 0.0f, r * std::sin(b)};
                 break;
             }
@@ -53,7 +56,7 @@ void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, c
         const Vec3 velocity = dir * range(st.rng, em.speedMin, std::max(em.speedMin, em.speedMax));
         if (em.worldSpace) {
             p.position = world.transformPoint(pos);
-            p.velocity = world.transformVector(velocity);
+            p.velocity = world.transformVector(velocity) + inherited;
         } else {
             p.position = pos;
             p.velocity = velocity;
@@ -93,8 +96,17 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
                 st.time = 0.0f;
                 st.emitAccumulator = 0.0f;
                 st.rng = em.seed ? em.seed : static_cast<u32>(std::random_device{}()) | 1u;
+                st.lastEmitterPos = w.matrix.translation();
                 if (em.emitting) spawn(em, st, w.matrix, em.burst, stats.spawned);
             }
+            Vec3 inherited{0.0f};
+            if (dt > 0.0f) {
+                const Vec3 now = w.matrix.translation();
+                if (em.inheritVelocity != 0.0f && em.worldSpace) inherited = (now - st.lastEmitterPos) * (em.inheritVelocity / dt);
+                st.lastEmitterPos = now;
+                st.clock = std::fmod(st.clock + dt, 3600.0f);
+            }
+            const bool swirl = em.turbulence != 0.0f;
             if (dt > 0.0f) {
                 const float damping = std::max(0.0f, 1.0f - em.drag * dt);
                 // Gravity is in world units: in local space, bring it into the emitter's frame.
@@ -104,7 +116,8 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
                     p.age += dt;
                     bool dead = p.age >= p.lifetime;
                     if (!dead) {
-                        const Vec3 accel = attract ? g + particles::attraction(world, p.position, false) : g;
+                        Vec3 accel = attract ? g + particles::attraction(world, p.position, false) : g;
+                        if (swirl) accel = accel + particles::turbulence(p.position, st.clock * em.turbulenceSpeed, em.turbulenceScale) * em.turbulence;
                         p.velocity = (p.velocity + accel * dt) * damping;
                         p.position = p.position + p.velocity * dt;
                         p.rotation += p.angularVelocity * dt;
@@ -130,11 +143,11 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
                         st.emitAccumulator += em.rate * dt;
                         const u32 n = static_cast<u32>(st.emitAccumulator);
                         st.emitAccumulator -= static_cast<float>(n);
-                        spawn(em, st, w.matrix, n, stats.spawned);
+                        spawn(em, st, w.matrix, n, stats.spawned, inherited);
                     }
                     if (em.loop && st.time >= duration) {
                         st.time = std::fmod(st.time, duration);
-                        spawn(em, st, w.matrix, em.burst, stats.spawned);
+                        spawn(em, st, w.matrix, em.burst, stats.spawned, inherited);
                     }
                 }
             }
