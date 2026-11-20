@@ -232,6 +232,41 @@ Edit drawField(EditorShared& s, const FieldInfo& f, void* comp, std::unordered_m
         case FieldType::IntArray:
             ImGui::TextDisabled("%zu valeurs", f.ref<std::vector<i32>>(comp).size());
             break;
+        case FieldType::Vec2Array: {
+            // Points edited one by one: drag, insert after (+), remove (x); "+" at the end adds one.
+            auto& pts = f.ref<std::vector<math::Vec2>>(comp);
+            ImGui::TextDisabled("%zu points", pts.size());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("+##add")) {
+                const math::Vec2 last = pts.empty() ? math::Vec2{0.0f, 0.0f} : pts.back();
+                const math::Vec2 prev = pts.size() > 1 ? pts[pts.size() - 2] : last - math::Vec2{1.0f, 0.0f};
+                pts.push_back(last + (last - prev));  // continues the outline
+                e.changed = e.committed = true;
+            }
+            for (usize i = 0; i < pts.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() * 2.0f - 8.0f);
+                if (ImGui::DragFloat2("##p", &pts[i].x, f.speed, 0.0f, 0.0f, "%.2f")) e.changed = true;
+                if (ImGui::IsItemDeactivatedAfterEdit()) e.committed = true;
+                ImGui::SameLine(0, 2.0f);
+                if (ImGui::SmallButton("+")) {
+                    const math::Vec2 next = i + 1 < pts.size() ? pts[i + 1] : pts[i] + math::Vec2{1.0f, 0.0f};
+                    pts.insert(pts.begin() + static_cast<std::ptrdiff_t>(i) + 1, (pts[i] + next) * 0.5f);
+                    e.changed = e.committed = true;
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::SameLine(0, 2.0f);
+                if (ImGui::SmallButton("x")) {
+                    pts.erase(pts.begin() + static_cast<std::ptrdiff_t>(i));
+                    e.changed = e.committed = true;
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::PopID();
+            }
+            break;
+        }
         case FieldType::Enum: {
             i32& v = f.ref<i32>(comp);
             const char* current = "?";

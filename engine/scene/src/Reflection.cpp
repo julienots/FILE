@@ -18,6 +18,7 @@ const char* enumName(FieldType type) {
         case FieldType::Entity: return "entity";
         case FieldType::Enum: return "enum";
         case FieldType::IntArray: return "int[]";
+        case FieldType::Vec2Array: return "vec2[]";
     }
     return "?";
 }

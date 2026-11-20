@@ -141,6 +141,7 @@ Guides : [PHYSICS.md](PHYSICS.md), [SCRIPTING.md](SCRIPTING.md).
 |---|---|---|
 | Physique 2D Box2D v3 : corps statiques / cinématiques / dynamiques, boîtes, cercles, capsules, composés, déclencheurs, tilemaps solides, rayons, forces | ✅ | `agr::physics2d` |
 | Physique 3D Jolt : corps, boîtes, sphères, capsules, composés, déclencheurs, masse imposée, rotation bloquée, rayons, forces | ✅ | `agr::physics3d` |
+| 2D : polygones (concaves découpés), chaînes lisses, plateformes traversables (one-way), `CharacterController2D` (move and slide, pentes, plateformes mobiles) ; requêtes de chevauchement et de lancer de formes 2D et 3D (C++ et Lua) | ✅ | `Physics2DWorld`, `Physics3DWorld` ; tests unitaires et Lua |
 | Synchronisation scène ↔ physique (téléportations, plateformes cinématiques, reconstruction à l'édition), événements de contact | ✅ | |
 | Scripts Lua 5.4 : cycle de vie, propriétés dans l'inspecteur, API entité / composants (réflexion) / entrées / temps / physique, bac à sable, chien de garde, erreurs localisées, rechargement à chaud | ✅ | `agr::script` |
 | Éditeur : scripts et physique en mode Jeu, inspecteur de script, nouveau script, glisser un script sur un objet, affichage des collisions | ✅ | `editor/ui` |

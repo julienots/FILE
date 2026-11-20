@@ -5,7 +5,8 @@
 | Moteur | [Box2D](https://github.com/erincatto/box2d) 3.1.1 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) 5.6.0 |
 | Module / plugin | `agr::physics2d`, `Physics2DPlugin` | `agr::physics3d`, `Physics3DPlugin` |
 | Corps | `RigidBody2D` | `RigidBody` |
-| Formes | `Collider2D` (boîte, cercle, capsule) ; `TilemapCollider2D` | `Collider` (boîte, sphère, capsule, **maillage**, **enveloppe convexe**) |
+| Formes | `Collider2D` (boîte, cercle, capsule, **polygone**, **chaîne**) ; `TilemapCollider2D` | `Collider` (boîte, sphère, capsule, **maillage**, **enveloppe convexe**) |
+| Personnage | `CharacterController2D` (glisser sur les murs et les pentes) | `CharacterController3D` |
 | Plan / unités | XY, rotation autour de Z ; mètres, kg, secondes | mètres, kg, secondes |
 
 Les deux mondes suivent le même modèle, couvert par des tests automatisés (`tests/test_physics2d.cpp`,
@@ -26,6 +27,59 @@ sommets, pour les objets qui bougent (caisses, rochers qui roulent, véhicules).
   moteur, mis en cache) ; hors moteur, `Physics3DWorld::setCollisionMeshSource` fournit les triangles.
 - Échelle de l'entité appliquée aux sommets ; raycasts, déclencheurs, couches et événements comme les
   autres formes. Un modèle ou un maillage introuvable est ignoré avec un avertissement (une fois).
+
+## Polygones, chaînes et plateformes traversables (2D)
+
+- `Collider2D.shape` = **Polygon** : `points` (unités locales), n'importe quel polygone simple. Convexe
+  et jusqu'à 8 points : une seule forme ; concave (un L, un escalier, un rocher découpé) : découpé
+  automatiquement en triangles (*ear clipping*). Le sens des points est corrigé s'il est horaire.
+- **Chain** : un contour lisse (sol vallonné, parois de grotte) ; un objet qui roule ou glisse ne
+  « accroche » pas aux jonctions entre segments (sommets fantômes de Box2D). Solide des deux côtés quel
+  que soit l'ordre des points ; `loop` ferme le contour. Pour les décors statiques.
+- `oneWay` : **plateforme traversable par le dessous** (solide seulement depuis son +Y local) : on saute
+  à travers depuis le dessous ou les côtés, on retombe dessus. Pour les corps dynamiques et les
+  personnages.
+- Les points s'éditent dans l'inspecteur (déplacer, insérer après un point, supprimer, ajouter à la
+  fin) et depuis Lua : `e:set("Collider2D", "points", { {0, 0}, {2, 0}, {x = 1, y = 1} })`. Ils sont
+  sauvegardés dans les deux formats de scène.
+
+## Contrôleur de personnage 2D
+
+`CharacterController2D` est l'équivalent du `CharacterBody2D` + `move_and_slide` de Godot : une
+capsule verticale déplacée par sa `velocity`, sans corps dynamique à régler.
+
+```lua
+function Hero:onFixedUpdate(dt)
+  local c = self.entity
+  local v = c:get("CharacterController2D", "velocity")  -- {x =, y =}
+  v.x = agr.input.axis("horizontal") * 6
+  if c:get("CharacterController2D", "onFloor") and agr.input.pressed("jump") then v.y = 9 end
+  c:set("CharacterController2D", "velocity", v)
+end
+```
+
+- À chaque pas : gravité (`gravityScale`), plans de contact autour de la capsule, résolution
+  (`b2SolvePlanes`), balayage sans traverser, 5 itérations ; la vitesse perd ce qui entre dans les murs
+  et les sols. Sur un sol (pente ≤ `maxSlope`), le personnage ne glisse pas à l'arrêt et
+  `snapDistance` le garde collé en descendant une pente ou une marche.
+- État après le pas : `onFloor`, `onWall`, `onCeiling`, `floorNormal`.
+- **Plateformes mobiles** : debout sur un corps cinématique ou dynamique, il suit son mouvement.
+  **Traversables** (`oneWay`) : il passe au travers en montant et se pose dessus en retombant.
+- **Caisses** : `pushForce` > 0, il les pousse (son corps cinématique les écarte) ; 0, elles bloquent
+  comme des murs. Les déclencheurs (pièces, zones), les rayons et les requêtes le voient ; deux
+  personnages se traversent.
+
+## Requêtes de formes
+
+| | 2D (`Physics2DWorld`) | 3D (`Physics3DWorld`) | Lua |
+|---|---|---|---|
+| Chevauchement | `overlap(QueryShape2D, position, angle, masque, déclencheurs)` | `overlap(QueryShape3D, position, rotation, masque, déclencheurs)` | `agr.physics2d.overlapCircle / overlapBox`, `agr.physics3d.overlapSphere / overlapBox` |
+| Lancer de forme | `castShape(forme, position, angle, direction, distance, masque)` | `castShape(...)` | `agr.physics2d.castCircle / castBox`, `agr.physics3d.castSphere` |
+
+Le chevauchement rend chaque entité touchée une fois (zones d'explosion, attaques au corps à corps,
+« y a-t-il de la place ici ? ») ; les déclencheurs n'y sont qu'à la demande. Le lancer rend le premier
+obstacle (entité, point, normale, distance parcourue) d'une forme qui se déplace : projectiles épais,
+anticipation d'un saut ; une forme qui chevauche déjà un collider au départ l'ignore.
 
 ## Principe
 
@@ -153,10 +207,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
   maillage et enveloppe convexe : voir plus haut ; le maillage n'est pas rechargé si le fichier change en jeu,
   frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
   qui a au moins un déclencheur est entièrement un capteur.
-- 2D : pas de polygones quelconques ni de chaînes (contours lisses) ; pas de tuiles en pente ni de tuiles
-  traversables par le dessous (*one-way*) ; pas de contrôleur de personnage 2D dédié (un corps dynamique à
-  rotation bloquée piloté par script, comme dans les modèles).
-- Pas de requêtes de chevauchement de formes (seulement les rayons).
+- 2D : pas de tuiles en pente ni de tuiles traversables dans `TilemapCollider2D` (utiliser des
+  `Collider2D` polygones ou `oneWay` posés sur la tilemap) ; deux `CharacterController2D` se traversent.
 - Articulations : pas de roue (*wheel*), de poulie ni d'engrenage ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
 - Personnage 3D : capsule verticale uniquement ; entre deux personnages, simple collision des capsules.

@@ -45,6 +45,11 @@ json writeField(const Scene& scene, const FieldInfo& f, void* comp) {
             out["rle"] = std::move(rle);
             return out;
         }
+        case FieldType::Vec2Array: {
+            json out = json::array();
+            for (const math::Vec2& v : f.ref<std::vector<math::Vec2>>(comp)) out.push_back(json::array({v.x, v.y}));
+            return out;
+        }
         case FieldType::Enum: {
             const i32 value = f.ref<i32>(comp);
             for (const auto& e : f.enumEntries)
@@ -109,6 +114,18 @@ bool readField(const FieldInfo& f, void* comp, const json& j, Entity owner, ecs:
                 return false;
             }
             f.ref<std::vector<i32>>(comp) = std::move(out);
+            return true;
+        }
+        case FieldType::Vec2Array: {
+            if (!j.is_array() || j.size() > (1u << 20)) return false;
+            std::vector<math::Vec2> out;
+            out.reserve(j.size());
+            for (const auto& p : j) {
+                math::Vec2 v;
+                if (!readFloats<math::Vec2, 2>(p, v)) return false;
+                out.push_back(v);
+            }
+            f.ref<std::vector<math::Vec2>>(comp) = std::move(out);
             return true;
         }
         case FieldType::Enum:

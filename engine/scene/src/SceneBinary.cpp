@@ -123,6 +123,12 @@ struct SceneWriter {
                 body.patchU32(countAt, runs);
                 break;
             }
+            case FieldType::Vec2Array: {
+                const auto& v = f.ref<std::vector<math::Vec2>>(comp);
+                body.pod(static_cast<u32>(v.size()));
+                for (const math::Vec2& p : v) body.pod(p);
+                break;
+            }
         }
     }
 
@@ -267,6 +273,14 @@ bool readBinaryField(Reader& r, FieldType type, const FieldInfo* f, void* comp, 
                 out.insert(out.end(), count, value);
             }
             if (use && r.ok()) f->ref<std::vector<i32>>(comp) = std::move(out);
+            break;
+        }
+        case FieldType::Vec2Array: {
+            const u32 count = r.pod<u32>();
+            if (!r.ok() || static_cast<usize>(count) * sizeof(math::Vec2) > r.remaining()) return false;
+            std::vector<math::Vec2> out(count);
+            for (u32 i = 0; i < count; ++i) out[i] = r.pod<math::Vec2>();
+            if (use && r.ok()) f->ref<std::vector<math::Vec2>>(comp) = std::move(out);
             break;
         }
         default:

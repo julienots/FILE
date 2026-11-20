@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+
 #include "agr/math/Math.hpp"
 #include "agr/scene/Scene.hpp"
 
@@ -22,7 +24,13 @@ struct RigidBody2DComponent {
     math::Vec2 initialVelocity{0.0f, 0.0f};
 };
 
-enum class ColliderShape2D : i32 { Box = 0, Circle = 1, Capsule = 2 };
+enum class ColliderShape2D : i32 {
+    Box = 0,
+    Circle = 1,
+    Capsule = 2,
+    Polygon = 3,  ///< `points` (local), any simple polygon, convex or not (split into convex pieces).
+    Chain = 4,    ///< `points` as a smooth outline (ground, hills, cave walls): no bumps between segments. Static bodies.
+};
 
 /// Collision shape in the entity's XY plane, scaled by the entity's world scale.
 /// Without a RigidBody2D on the entity or an ancestor, it is a static collider.
@@ -37,6 +45,34 @@ struct Collider2DComponent {
     bool isTrigger = false;         ///< Detects overlaps (events) without colliding.
     i32 layer = 0;                  ///< Collision layer, 0..31 (names in the project settings).
     u32 collidesWith = 0xFFFFFFFFu; ///< Layers it collides with (bit n = layer n). Two shapes touch when each one's mask has the other's layer.
+    std::vector<math::Vec2> points; ///< Polygon / Chain vertices in local units (counter-clockwise for polygons).
+    bool loop = false;              ///< Chain: closes the outline (last point back to the first).
+    /// One-way platform: solid only from above (its local +Y side); bodies and characters jump
+    /// through it from below and from the sides.
+    bool oneWay = false;
+};
+
+/// Platformer / top-down character moved by its `velocity` (the 2D counterpart of Godot's
+/// CharacterBody2D + move_and_slide): a vertical capsule that slides along walls and slopes,
+/// stands on floors up to `maxSlope`, follows moving platforms, goes through one-way platforms
+/// from below and pushes dynamic bodies. Scripts set `velocity` (e.g. in onFixedUpdate) and read
+/// `onFloor` / `onWall` / `onCeiling` after the physics step; gravity is applied unless
+/// `gravityScale` is 0.
+struct CharacterController2DComponent {
+    math::Vec2 size{0.8f, 1.6f};    ///< Capsule width x height (world units, scaled by the entity).
+    math::Vec2 offset{0.0f, 0.0f};
+    math::Vec2 velocity{0.0f, 0.0f};///< m/s; walls and floors remove the part going into them.
+    float gravityScale = 1.0f;
+    float maxSlope = 0.785398f;     ///< Steepest floor (radians); steeper slopes are walls.
+    float snapDistance = 0.1f;      ///< Stays glued to the floor going down slopes and steps (0: off).
+    float pushForce = 1.0f;         ///< > 0: walks into dynamic bodies and pushes them; 0: they block like walls.
+    i32 layer = 0;
+    u32 collidesWith = 0xFFFFFFFFu;
+    // State after the last physics step (read-only).
+    bool onFloor = false;
+    bool onWall = false;
+    bool onCeiling = false;
+    math::Vec2 floorNormal{0.0f, 1.0f};
 };
 
 /// Static collision for every painted cell of the Tilemap on the same entity

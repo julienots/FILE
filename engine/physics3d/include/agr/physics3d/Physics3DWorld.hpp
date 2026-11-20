@@ -75,6 +75,19 @@ public:
     const std::vector<JointBreak3DEvent>& jointBreaks() const;
     /// Closest hit on a body whose layer is in `layerMask` (all by default).
     std::optional<RaycastHit3D> raycast(math::Vec3 origin, math::Vec3 direction, float maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
+    /// Query shape: a sphere (halfExtents.x = radius when `box` is false) or a box.
+    struct QueryShape3D {
+        bool box = false;
+        math::Vec3 halfExtents{0.5f, 0.5f, 0.5f};
+        static QueryShape3D sphere(float r) { return {false, {r, r, r}}; }
+        static QueryShape3D cube(math::Vec3 half) { return {true, half}; }
+    };
+    /// Entities whose colliders overlap the shape at `position` (rotated), each once, sorted.
+    std::vector<ecs::Entity> overlap(const QueryShape3D& shape, math::Vec3 position, math::Quat rotation = {}, u32 layerMask = 0xFFFFFFFFu,
+                                     bool includeTriggers = false) const;
+    /// First collider hit sweeping the shape from `position` along `direction` (maxDistance).
+    std::optional<RaycastHit3D> castShape(const QueryShape3D& shape, math::Vec3 position, math::Quat rotation, math::Vec3 direction,
+                                          float maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
     /// Hinge angle (radians), slider position or distance between the anchors (m) of the
     /// Joint3D of an entity; nullopt without a live joint.
     std::optional<float> jointValue(ecs::Entity e) const;

@@ -515,4 +515,25 @@ TEST_CASE("character controller: walks, is grounded, blocked by walls, climbs st
     (void)ground;
 }
 
+
+TEST_CASE("overlap and shape cast queries 3D") {
+    World3D w;
+    const auto a = w.box("A", {0, 0, 0}, {1, 1, 1}, BodyType3D::Static, false);
+    const auto b = w.box("B", {4, 0, 0}, {1, 1, 1}, BodyType3D::Static, false);
+    const auto t = w.box("T", {-4, 0, 0}, {1, 1, 1}, BodyType3D::Static, false);
+    w.scene.registry().get<ColliderComponent>(t).isTrigger = true;
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    auto ov = w.physics.overlap(Physics3DWorld::QueryShape3D::sphere(0.6f), {0.9f, 0, 0});
+    REQUIRE(ov.size() == 1);
+    CHECK(ov[0] == a);
+    CHECK(w.physics.overlap(Physics3DWorld::QueryShape3D::sphere(0.3f), {2.0f, 0, 0}).empty());
+    CHECK(w.physics.overlap(Physics3DWorld::QueryShape3D::cube({5, 1, 1}), {0, 0, 0}).size() == 2);
+    CHECK(w.physics.overlap(Physics3DWorld::QueryShape3D::cube({5, 1, 1}), {0, 0, 0}, {}, ~0u, true).size() == 3);
+    const auto hit = w.physics.castShape(Physics3DWorld::QueryShape3D::sphere(0.5f), {4, 5, 0}, {}, {0, -1, 0}, 20.0f);
+    REQUIRE(hit);
+    CHECK(hit->entity == b);
+    CHECK(hit->distance == doctest::Approx(4.0f).epsilon(0.02));
+    CHECK(hit->normal.y == doctest::Approx(1.0f).epsilon(0.02));
+    CHECK_FALSE(w.physics.castShape(Physics3DWorld::QueryShape3D::sphere(0.5f), {4, 5, 0}, {}, {0, 1, 0}, 20.0f));
+}
 }  // TEST_SUITE

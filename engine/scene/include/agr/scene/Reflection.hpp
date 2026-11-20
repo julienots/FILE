@@ -18,7 +18,7 @@
 
 namespace agr {
 
-enum class FieldType : u8 { Bool, Int32, UInt32, Float, Vec2, Vec3, Vec4, Quat, String, Entity, Enum, IntArray };
+enum class FieldType : u8 { Bool, Int32, UInt32, Float, Vec2, Vec3, Vec4, Quat, String, Entity, Enum, IntArray, Vec2Array };
 const char* enumName(FieldType type);
 
 enum FieldFlags : u32 {
@@ -84,6 +84,7 @@ constexpr FieldType deduceFieldType() {
     else if constexpr (std::is_same_v<T, std::string>) return FieldType::String;
     else if constexpr (std::is_same_v<T, ecs::Entity>) return FieldType::Entity;
     else if constexpr (std::is_same_v<T, std::vector<i32>>) return FieldType::IntArray;
+    else if constexpr (std::is_same_v<T, std::vector<math::Vec2>>) return FieldType::Vec2Array;
     else if constexpr (std::is_enum_v<T>) {
         static_assert(sizeof(T) == sizeof(i32), "reflected enums must have a 32-bit underlying type");
         return FieldType::Enum;

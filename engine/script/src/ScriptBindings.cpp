@@ -123,6 +123,19 @@ void pushField(lua_State* L, const FieldInfo& f, void* comp) {
             }
             break;
         }
+        case FieldType::Vec2Array: {  // { {x, y}, ... }
+            const auto& arr = f.ref<std::vector<math::Vec2>>(comp);
+            lua_createtable(L, static_cast<int>(arr.size()), 0);
+            for (usize i = 0; i < arr.size(); ++i) {
+                lua_createtable(L, 0, 2);
+                lua_pushnumber(L, arr[i].x);
+                lua_setfield(L, -2, "x");
+                lua_pushnumber(L, arr[i].y);
+                lua_setfield(L, -2, "y");
+                lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+            }
+            break;
+        }
     }
 }
 
@@ -167,6 +180,33 @@ void readField(lua_State* L, int idx, const FieldInfo& f, void* comp) {
                 arr.push_back(static_cast<i32>(lua_tointeger(L, -1)));
                 lua_pop(L, 1);
             }
+            break;
+        }
+        case FieldType::Vec2Array: {  // { {x, y} or {x = , y = }, ... }
+            luaL_checktype(L, idx, LUA_TTABLE);
+            const int t = lua_absindex(L, idx);
+            std::vector<math::Vec2> out;
+            const lua_Integer n = luaL_len(L, t);
+            for (lua_Integer i = 1; i <= n; ++i) {
+                lua_rawgeti(L, t, i);
+                if (lua_istable(L, -1)) {
+                    math::Vec2 v;
+                    lua_getfield(L, -1, "x");
+                    if (lua_isnil(L, -1)) {
+                        lua_pop(L, 1);
+                        lua_rawgeti(L, -1, 1);
+                        lua_rawgeti(L, -2, 2);
+                    } else {
+                        lua_getfield(L, -2, "y");
+                    }
+                    v.x = static_cast<float>(lua_tonumber(L, -2));
+                    v.y = static_cast<float>(lua_tonumber(L, -1));
+                    lua_pop(L, 2);
+                    out.push_back(v);
+                }
+                lua_pop(L, 1);
+            }
+            f.ref<std::vector<math::Vec2>>(comp) = std::move(out);
             break;
         }
     }
@@ -793,6 +833,87 @@ int p3_raycast(lua_State* L) {
     }
     return 1;
 }
+float numArg(lua_State* L, int i) { return static_cast<float>(luaL_checknumber(L, i)); }
+int pushEntityList(lua_State* L, const std::vector<ecs::Entity>& list) {
+    lua_createtable(L, static_cast<int>(list.size()), 0);
+    int n = 0;
+    for (ecs::Entity e : list) {
+        if (!sceneOf(L).valid(e)) continue;
+        pushEntity(L, e);
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+int pushHit2D(lua_State* L, const std::optional<RaycastHit2D>& hit) {
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 6);
+    if (sceneOf(L).valid(hit->entity)) {
+        pushEntity(L, hit->entity);
+        lua_setfield(L, -2, "entity");
+    }
+    for (auto [name, value] : {std::pair{"x", hit->point.x}, {"y", hit->point.y}, {"nx", hit->normal.x}, {"ny", hit->normal.y},
+                               {"distance", hit->distance}}) {
+        lua_pushnumber(L, value);
+        lua_setfield(L, -2, name);
+    }
+    return 1;
+}
+int pushHit3D(lua_State* L, const std::optional<RaycastHit3D>& hit) {
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 8);
+    if (sceneOf(L).valid(hit->entity)) {
+        pushEntity(L, hit->entity);
+        lua_setfield(L, -2, "entity");
+    }
+    for (auto [name, value] : {std::pair{"x", hit->point.x}, {"y", hit->point.y}, {"z", hit->point.z}, {"nx", hit->normal.x},
+                               {"ny", hit->normal.y}, {"nz", hit->normal.z}, {"distance", hit->distance}}) {
+        lua_pushnumber(L, value);
+        lua_setfield(L, -2, name);
+    }
+    return 1;
+}
+// agr.physics2d.overlapCircle(x, y, r [, mask [, triggers]]) -> { entities }
+int p_overlapCircle(lua_State* L) {
+    return pushEntityList(L, physics2d(L).overlap(QueryShape2D::circle(numArg(L, 3)), {numArg(L, 1), numArg(L, 2)}, 0.0f, maskArg(L, 4),
+                                                  lua_toboolean(L, 5) != 0));
+}
+// agr.physics2d.overlapBox(x, y, w, h [, angle [, mask [, triggers]]])
+int p_overlapBox(lua_State* L) {
+    return pushEntityList(L, physics2d(L).overlap(QueryShape2D::box({numArg(L, 3), numArg(L, 4)}), {numArg(L, 1), numArg(L, 2)},
+                                                  static_cast<float>(luaL_optnumber(L, 5, 0.0)), maskArg(L, 6), lua_toboolean(L, 7) != 0));
+}
+// agr.physics2d.castCircle(x, y, r, dx, dy [, maxDistance [, mask]]) -> hit or nil
+int p_castCircle(lua_State* L) {
+    return pushHit2D(L, physics2d(L).castShape(QueryShape2D::circle(numArg(L, 3)), {numArg(L, 1), numArg(L, 2)}, 0.0f, {numArg(L, 4), numArg(L, 5)},
+                                               static_cast<float>(luaL_optnumber(L, 6, 1000.0)), maskArg(L, 7)));
+}
+// agr.physics2d.castBox(x, y, w, h, angle, dx, dy [, maxDistance [, mask]])
+int p_castBox(lua_State* L) {
+    return pushHit2D(L, physics2d(L).castShape(QueryShape2D::box({numArg(L, 3), numArg(L, 4)}), {numArg(L, 1), numArg(L, 2)}, numArg(L, 5),
+                                               {numArg(L, 6), numArg(L, 7)}, static_cast<float>(luaL_optnumber(L, 8, 1000.0)), maskArg(L, 9)));
+}
+// agr.physics3d.overlapSphere(x, y, z, r [, mask [, triggers]])
+int p3_overlapSphere(lua_State* L) {
+    return pushEntityList(L, physics3d(L).overlap(Physics3DWorld::QueryShape3D::sphere(numArg(L, 4)), {numArg(L, 1), numArg(L, 2), numArg(L, 3)}, {},
+                                                  maskArg(L, 5), lua_toboolean(L, 6) != 0));
+}
+// agr.physics3d.overlapBox(x, y, z, hx, hy, hz [, mask [, triggers]])
+int p3_overlapBox(lua_State* L) {
+    return pushEntityList(L, physics3d(L).overlap(Physics3DWorld::QueryShape3D::cube({numArg(L, 4), numArg(L, 5), numArg(L, 6)}),
+                                                  {numArg(L, 1), numArg(L, 2), numArg(L, 3)}, {}, maskArg(L, 7), lua_toboolean(L, 8) != 0));
+}
+// agr.physics3d.castSphere(x, y, z, r, dx, dy, dz [, maxDistance [, mask]])
+int p3_castSphere(lua_State* L) {
+    return pushHit3D(L, physics3d(L).castShape(Physics3DWorld::QueryShape3D::sphere(numArg(L, 4)), {numArg(L, 1), numArg(L, 2), numArg(L, 3)}, {},
+                                               {numArg(L, 5), numArg(L, 6), numArg(L, 7)}, static_cast<float>(luaL_optnumber(L, 8, 1000.0)),
+                                               maskArg(L, 9)));
+}
 int p3_setGravity(lua_State* L) {
     physics3d(L).setGravity({static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)),
                              static_cast<float>(luaL_checknumber(L, 3))});
@@ -928,8 +1049,10 @@ void openAgrLibrary(lua_State* L) {
                                      {"gamepadPressed", i_gamepadPressed}, {"gamepadAxis", i_gamepadAxis},
                                      {nullptr, nullptr}};
     static const luaL_Reg time[] = {{"delta", t_delta}, {"fixedDelta", t_fixedDelta}, {"total", t_total}, {"frame", t_frame}, {"now", t_now}, {nullptr, nullptr}};
-    static const luaL_Reg physics[] = {{"raycast", p_raycast}, {"setGravity", p_setGravity}, {"gravity", p_gravity},
-                                       {"layer", p_layer}, {"mask", p_mask}, {nullptr, nullptr}};
+    static const luaL_Reg physics[] = {{"raycast", p_raycast},       {"setGravity", p_setGravity}, {"gravity", p_gravity},
+                                       {"layer", p_layer},           {"mask", p_mask},             {"overlapCircle", p_overlapCircle},
+                                       {"overlapBox", p_overlapBox}, {"castCircle", p_castCircle}, {"castBox", p_castBox},
+                                       {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, agr);
     lua_newtable(L);
@@ -948,7 +1071,9 @@ void openAgrLibrary(lua_State* L) {
     lua_newtable(L);
     setFuncs(L, screen);
     lua_setfield(L, -2, "screen");
-    static const luaL_Reg physics3[] = {{"raycast", p3_raycast}, {"setGravity", p3_setGravity}, {"layer", p_layer}, {"mask", p_mask}, {nullptr, nullptr}};
+    static const luaL_Reg physics3[] = {{"raycast", p3_raycast},         {"setGravity", p3_setGravity},   {"layer", p_layer},
+                                        {"mask", p_mask},                {"overlapSphere", p3_overlapSphere}, {"overlapBox", p3_overlapBox},
+                                        {"castSphere", p3_castSphere},   {nullptr, nullptr}};
     lua_newtable(L);
     setFuncs(L, physics3);
     lua_setfield(L, -2, "physics3d");

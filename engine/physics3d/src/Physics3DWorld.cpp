@@ -30,6 +30,9 @@
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -1165,6 +1168,67 @@ std::optional<RaycastHit3D> Physics3DWorld::raycast(Vec3 origin, Vec3 direction,
         }
     }
     return hit;
+}
+
+namespace {
+JPH::RefConst<JPH::Shape> queryShape(const Physics3DWorld::QueryShape3D& q) {
+    if (q.box) return new JPH::BoxShape(JPH::Vec3(std::max(q.halfExtents.x, 0.01f), std::max(q.halfExtents.y, 0.01f), std::max(q.halfExtents.z, 0.01f)), 0.0f);
+    return new JPH::SphereShape(std::max(q.halfExtents.x, 0.001f));
+}
+JPH::RMat44 queryTransform(Vec3 p, math::Quat r) {
+    return JPH::RMat44::sRotationTranslation(JPH::Quat(r.x, r.y, r.z, r.w), JPH::RVec3(p.x, p.y, p.z));
+}
+} // namespace
+
+std::vector<ecs::Entity> Physics3DWorld::overlap(const QueryShape3D& q, Vec3 position, math::Quat rotation, u32 layerMask, bool includeTriggers) const {
+    const JPH::RefConst<JPH::Shape> shape = queryShape(q);
+    JPH::CollideShapeSettings settings;
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    const MaskBodyFilter filter(m->layers, layerMask);
+    m->system->GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), queryTransform(position, rotation), settings, JPH::RVec3::sZero(),
+                                                  collector, {}, {}, filter);
+    std::vector<ecs::Entity> out;
+    for (const JPH::CollideShapeResult& hit : collector.mHits) {
+        JPH::BodyLockRead lock(m->system->GetBodyLockInterface(), hit.mBodyID2);
+        if (!lock.Succeeded() || (!includeTriggers && lock.GetBody().IsSensor())) continue;
+        const u64 packed = lock.GetBody().GetUserData();
+        out.push_back(ecs::Entity{static_cast<u32>(packed), static_cast<u32>(packed >> 32)});
+    }
+    std::sort(out.begin(), out.end(), [](ecs::Entity a, ecs::Entity b) { return a.packed() < b.packed(); });
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+std::optional<RaycastHit3D> Physics3DWorld::castShape(const QueryShape3D& q, Vec3 position, math::Quat rotation, Vec3 direction, float maxDistance,
+                                                      u32 layerMask) const {
+    const float len = math::length(direction);
+    if (len < 1e-8f || maxDistance <= 0.0f) return std::nullopt;
+    const JPH::RefConst<JPH::Shape> shape = queryShape(q);
+    const Vec3 travel = direction / len * maxDistance;
+    const JPH::RShapeCast cast(shape, JPH::Vec3::sReplicate(1.0f), queryTransform(position, rotation), toJ(travel));
+    JPH::ShapeCastSettings settings;
+    settings.mReturnDeepestPoint = false;
+    JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
+    const MaskBodyFilter filter(m->layers, layerMask);
+    m->system->GetNarrowPhaseQuery().CastShape(cast, settings, JPH::RVec3::sZero(), collector, {}, {}, filter);
+    const JPH::ShapeCastResult* best = nullptr;
+    for (const JPH::ShapeCastResult& hit : collector.mHits) {
+        if (hit.mFraction <= 0.0f) continue;  // overlapping at the start
+        JPH::BodyLockRead lock(m->system->GetBodyLockInterface(), hit.mBodyID2);
+        if (!lock.Succeeded() || lock.GetBody().IsSensor()) continue;
+        if (!best || hit.mFraction < best->mFraction) best = &hit;
+    }
+    if (!best) return std::nullopt;
+    RaycastHit3D out;
+    out.point = fromJ(best->mContactPointOn2);
+    out.normal = math::normalize(fromJ(-best->mPenetrationAxis));
+    out.distance = best->mFraction * maxDistance;
+    JPH::BodyLockRead lock(m->system->GetBodyLockInterface(), best->mBodyID2);
+    if (lock.Succeeded()) {
+        const u64 packed = lock.GetBody().GetUserData();
+        out.entity = ecs::Entity{static_cast<u32>(packed), static_cast<u32>(packed >> 32)};
+    }
+    return out;
 }
 
 std::optional<Vec3> Physics3DWorld::velocity(ecs::Entity e) const {

@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include "agr/physics2d/Physics2DWorld.hpp"
@@ -384,4 +385,225 @@ TEST_CASE("a joint pulled harder than breakForce breaks once; clearing `broken` 
     CHECK(w.physics.jointCount() == 0);
 }
 
+
+TEST_CASE("polygon colliders (convex and concave) and smooth chains") {
+    World2D w;
+    // An L-shaped (concave) static floor: a box falling into the inner corner rests on the low step.
+    const auto floor = w.scene.createEntity("Floor");
+    auto& fc = w.scene.registry().emplace<Collider2DComponent>(floor);
+    fc.shape = ColliderShape2D::Polygon;
+    fc.points = {{-4, -1}, {4, -1}, {4, 2}, {1, 2}, {1, 0}, {-4, 0}};  // high block on the right
+    const auto crateL = w.box("Left", {-2, 4}, {1, 1}, BodyType2D::Dynamic);
+    const auto crateR = w.box("Right", {2.5f, 5}, {1, 1}, BodyType2D::Dynamic);
+    // A dynamic triangle (convex polygon) has the area of a triangle.
+    const auto tri = w.scene.createEntity("Tri");
+    w.scene.registry().get<TransformComponent>(tri).position = {-3.0f, 6.0f, 0.0f};
+    w.scene.registry().emplace<RigidBody2DComponent>(tri);
+    auto& tc = w.scene.registry().emplace<Collider2DComponent>(tri);
+    tc.shape = ColliderShape2D::Polygon;
+    tc.points = {{0, 0}, {2, 0}, {0, 1}};
+    w.run(3.0f);
+    CHECK(w.position(crateL).y == doctest::Approx(0.5f).epsilon(0.03));
+    CHECK(w.position(crateR).y == doctest::Approx(2.5f).epsilon(0.03));
+    CHECK(w.physics.mass(tri).value() == doctest::Approx(1.0f).epsilon(0.01));
+    // A chain (hilly ground): a ball rolls down into the valley and stays above the outline.
+    World2D c;
+    const auto ground = c.scene.createEntity("Ground");
+    auto& gc = c.scene.registry().emplace<Collider2DComponent>(ground);
+    gc.shape = ColliderShape2D::Chain;
+    gc.points = {{-10, 4}, {-5, 1}, {-2, 0}, {0, -0.2f}, {2, 0}, {5, 1}, {10, 4}};
+    const auto ball = c.scene.createEntity("Ball");
+    c.scene.registry().get<TransformComponent>(ball).position = {-7.0f, 5.0f, 0.0f};
+    c.scene.registry().emplace<RigidBody2DComponent>(ball).angularDamping = 1.0f;
+    auto& bc = c.scene.registry().emplace<Collider2DComponent>(ball);
+    bc.shape = ColliderShape2D::Circle;
+    bc.radius = 0.4f;
+    for (int i = 0; i < 20 * 60; ++i) {
+        c.physics.step(c.scene, 1.0f / 60.0f);
+        CHECK(c.position(ball).y > -0.25f);  // never falls through
+    }
+    CHECK(std::fabs(c.position(ball).x) < 4.0f);  // ended in the valley
+    // Edited points rebuild the body; the chain also works with only 3 points (segments).
+    c.scene.registry().get<Collider2DComponent>(ground).points = {{-10, 0}, {0, 0}, {10, 0}};
+    const auto rebuilt = c.physics.stats().rebuilt;
+    c.physics.step(c.scene, 1.0f / 60.0f);
+    CHECK(c.physics.stats().rebuilt > 0);
+    (void)rebuilt;
+    c.run(2.0f);
+    CHECK(c.position(ball).y == doctest::Approx(0.4f).epsilon(0.05));
+}
+
+TEST_CASE("one-way platforms: bodies jump through from below and land on top") {
+    World2D w;
+    const auto plat = w.box("Platform", {0, 2}, {4, 0.3f}, BodyType2D::Static, false);
+    w.scene.registry().get<Collider2DComponent>(plat).oneWay = true;
+    w.box("Ground", {0, -0.5f}, {20, 1}, BodyType2D::Static, false);
+    const auto ball = w.box("Ball", {0, 0.5f}, {0.5f, 0.5f}, BodyType2D::Dynamic);
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    w.physics.setVelocity(ball, {0.0f, 10.0f});  // jumps from below through the platform
+    float highest = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        highest = std::max(highest, w.position(ball).y);
+    }
+    CHECK(highest > 3.0f);                                                    // went through
+    CHECK(w.position(ball).y == doctest::Approx(2.15f + 0.25f).epsilon(0.03));  // landed on top
+    // A plain platform blocks from below.
+    World2D b;
+    b.box("Platform", {0, 2}, {4, 0.3f}, BodyType2D::Static, false);
+    b.box("Ground", {0, -0.5f}, {20, 1}, BodyType2D::Static, false);
+    const auto ball2 = b.box("Ball", {0, 0.5f}, {0.5f, 0.5f}, BodyType2D::Dynamic);
+    b.physics.step(b.scene, 1.0f / 60.0f);
+    b.physics.setVelocity(ball2, {0.0f, 10.0f});
+    float top = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        b.physics.step(b.scene, 1.0f / 60.0f);
+        top = std::max(top, b.position(ball2).y);
+    }
+    CHECK(top < 1.9f);
+}
+
+TEST_CASE("character controller 2D: floors, walls, slopes, ceilings, moving and one-way platforms") {
+    World2D w;
+    w.box("Ground", {0, -0.5f}, {40, 1}, BodyType2D::Static, false);
+    w.box("Wall", {6, 2}, {1, 6}, BodyType2D::Static, false);
+    const auto hero = w.scene.createEntity("Hero");
+    w.scene.registry().get<TransformComponent>(hero).position = {0, 3, 0};
+    w.scene.registry().emplace<CharacterController2DComponent>(hero);
+    auto ctrl = [&]() -> CharacterController2DComponent& { return w.scene.registry().get<CharacterController2DComponent>(hero); };
+    w.run(1.5f);
+    CHECK(ctrl().onFloor);
+    CHECK(w.position(hero).y == doctest::Approx(0.8f).epsilon(0.03));  // capsule height 1.6 on the ground
+    CHECK(std::fabs(ctrl().velocity.y) < 0.01f);                         // the floor removes the fall
+    // Walk right into the wall: stops against it, onWall, keeps standing.
+    for (int i = 0; i < 120; ++i) {
+        ctrl().velocity.x = 5.0f;
+        w.physics.step(w.scene, 1.0f / 60.0f);
+    }
+    CHECK(w.position(hero).x == doctest::Approx(5.5f - 0.4f).epsilon(0.02));
+    CHECK(ctrl().onWall);
+    CHECK(ctrl().onFloor);
+    CHECK(ctrl().velocity.x == doctest::Approx(0.0f).epsilon(0.01));
+    // Jump: leaves the floor, comes back.
+    ctrl().velocity = {-2.0f, 6.0f};
+    w.physics.step(w.scene, 1.0f / 60.0f);
+    CHECK_FALSE(ctrl().onFloor);
+    w.run(2.0f);
+    CHECK(ctrl().onFloor);
+    // Triggers see the character (pick-ups).
+    const auto coin = w.box("Coin", {w.position(hero).x, 0.8f}, {0.5f, 0.5f}, BodyType2D::Static, false);
+    w.scene.registry().get<Collider2DComponent>(coin).isTrigger = true;
+    bool picked = false;
+    for (const auto& e : w.run(0.2f)) picked |= e.trigger && e.begin && e.a == coin && e.b == hero;
+    CHECK(picked);
+    // Queries see it too.
+    const auto found = w.physics.overlap(QueryShape2D::circle(0.3f), {w.position(hero).x, w.position(hero).y});
+    CHECK(std::find(found.begin(), found.end(), hero) != found.end());
+}
+
+TEST_CASE("character controller 2D: slopes, ceilings, moving platform, one-way platform, pushing crates") {
+    // Slope of 30 degrees: walks up it; on 60 degrees: a wall.
+    World2D w;
+    const auto ramp = w.scene.createEntity("Ramp");
+    auto& rc = w.scene.registry().emplace<Collider2DComponent>(ramp);
+    rc.shape = ColliderShape2D::Polygon;
+    rc.points = {{0, 0}, {10, 0}, {10, 10 * std::tan(math::radians(30.0f))}};
+    w.box("Ground", {0, -0.5f}, {60, 1}, BodyType2D::Static, false);
+    const auto hero = w.scene.createEntity("Hero");
+    w.scene.registry().get<TransformComponent>(hero).position = {-2, 1, 0};
+    w.scene.registry().emplace<CharacterController2DComponent>(hero);
+    auto ctrl = [&]() -> CharacterController2DComponent& { return w.scene.registry().get<CharacterController2DComponent>(hero); };
+    for (int i = 0; i < 180; ++i) {
+        ctrl().velocity.x = 3.0f;
+        w.physics.step(w.scene, 1.0f / 60.0f);
+    }
+    CHECK(w.position(hero).x > 4.0f);
+    CHECK(w.position(hero).y > 2.0f);  // climbed
+    CHECK(ctrl().onFloor);
+    CHECK(ctrl().floorNormal.y == doctest::Approx(std::cos(math::radians(30.0f))).epsilon(0.05));
+    // Standing still on the slope: does not slide down.
+    const float x0 = w.position(hero).x;
+    ctrl().velocity = {0, 0};
+    w.run(1.0f);
+    CHECK(w.position(hero).x == doctest::Approx(x0).epsilon(0.02));
+    // Steep slope (maxSlope 20 degrees): the 30 degree ramp is a wall now.
+    ctrl().maxSlope = math::radians(20.0f);
+    w.run(1.0f);
+    CHECK_FALSE(ctrl().onFloor);
+
+    // Ceiling, moving platform, one-way platform.
+    World2D p;
+    p.box("Ground", {0, -0.5f}, {60, 1}, BodyType2D::Static, false);
+    p.box("Ceiling", {-6, 3}, {4, 0.5f}, BodyType2D::Static, false);
+    const auto lift = p.box("Lift", {6, 1}, {3, 0.4f}, BodyType2D::Kinematic);
+    const auto oneWay = p.box("OneWay", {0, 2.5f}, {3, 0.3f}, BodyType2D::Static, false);
+    p.scene.registry().get<Collider2DComponent>(oneWay).oneWay = true;
+    auto spawn = [&](Vec2 at) {
+        const auto e = p.scene.createEntity("C");
+        p.scene.registry().get<TransformComponent>(e).position = {at.x, at.y, 0};
+        p.scene.registry().emplace<CharacterController2DComponent>(e);
+        return e;
+    };
+    const auto under = spawn({-6, 1});
+    const auto rider = spawn({6, 3});
+    const auto jumper = spawn({0, 1});
+    p.run(1.0f);
+    auto cc = [&](ecs::Entity e) -> CharacterController2DComponent& { return p.scene.registry().get<CharacterController2DComponent>(e); };
+    CHECK(cc(rider).onFloor);
+    const float riderY = p.position(rider).y;
+    cc(under).velocity.y = 8.0f;   // bumps the ceiling
+    cc(jumper).velocity.y = 9.0f;  // jumps through the one-way platform
+    bool hitCeiling = false;
+    float jumperTop = 0.0f;
+    for (int i = 0; i < 150; ++i) {
+        p.physics.step(p.scene, 1.0f / 60.0f);
+        hitCeiling |= cc(under).onCeiling;
+        jumperTop = std::max(jumperTop, p.position(jumper).y);
+        // The lift goes up 1 m/s.
+        auto& t = p.scene.registry().get<TransformComponent>(lift);
+        t.position.y += 1.0f / 60.0f;
+    }
+    CHECK(hitCeiling);
+    CHECK(p.position(under).y < 3.0f);
+    CHECK(jumperTop > 3.0f);
+    CHECK(p.position(jumper).y == doctest::Approx(2.65f + 0.8f).epsilon(0.03));  // standing on it
+    CHECK(cc(jumper).onFloor);
+    CHECK(p.position(rider).y == doctest::Approx(riderY + 2.5f).epsilon(0.05));  // carried up
+    // Pushing a crate (pushForce > 0) vs blocked by it (pushForce = 0).
+    World2D k;
+    k.box("Ground", {0, -0.5f}, {60, 1}, BodyType2D::Static, false);
+    const auto crate = k.box("Crate", {2, 0.5f}, {1, 1}, BodyType2D::Dynamic);
+    const auto pusher = k.scene.createEntity("P");
+    k.scene.registry().get<TransformComponent>(pusher).position = {0, 0.8f, 0};
+    k.scene.registry().emplace<CharacterController2DComponent>(pusher);
+    for (int i = 0; i < 120; ++i) {
+        k.scene.registry().get<CharacterController2DComponent>(pusher).velocity.x = 2.0f;
+        k.physics.step(k.scene, 1.0f / 60.0f);
+    }
+    CHECK(k.position(crate).x > 3.0f);
+}
+
+TEST_CASE("overlap and shape cast queries 2D") {
+    World2D w;
+    const auto a = w.box("A", {0, 0}, {1, 1}, BodyType2D::Static, false);
+    const auto b = w.box("B", {3, 0}, {1, 1}, BodyType2D::Static, false);
+    const auto t = w.box("T", {-3, 0}, {1, 1}, BodyType2D::Static, false);
+    w.scene.registry().get<Collider2DComponent>(t).isTrigger = true;
+    w.scene.registry().get<Collider2DComponent>(b).layer = 2;
+    w.physics.sync(w.scene);
+    auto ov = w.physics.overlap(QueryShape2D::circle(0.6f), {0.9f, 0});
+    REQUIRE(ov.size() == 1);
+    CHECK(ov[0] == a);
+    CHECK(w.physics.overlap(QueryShape2D::circle(0.3f), {1.5f, 0}).empty());
+    CHECK(w.physics.overlap(QueryShape2D::box({8, 1}), {0, 0}).size() == 2);  // the trigger is left out
+    CHECK(w.physics.overlap(QueryShape2D::box({8, 1}), {0, 0}, 0.0f, ~0u, true).size() == 3);
+    CHECK(w.physics.overlap(QueryShape2D::box({8, 1}), {0, 0}, 0.0f, 1u << 2).size() == 1);  // layer filter
+    // Cast a circle of radius 0.5 from x = -1.5 rightward... starts inside the trigger: ignored; hits A.
+    const auto hit = w.physics.castShape(QueryShape2D::circle(0.5f), {0, 3}, 0.0f, {0, -1}, 10.0f);
+    REQUIRE(hit);
+    CHECK(hit->entity == a);
+    CHECK(hit->distance == doctest::Approx(2.0f).epsilon(0.01));  // top of A at 0.5, circle bottom at 2.5
+    CHECK(hit->normal.y == doctest::Approx(1.0f).epsilon(0.01));
+    CHECK_FALSE(w.physics.castShape(QueryShape2D::circle(0.5f), {0, 3}, 0.0f, {0, 1}, 10.0f));
+}
 }  // TEST_SUITE

@@ -15,6 +15,7 @@
 #include "agr/runtime/InputActions.hpp"
 #include "agr/runtime/Localization.hpp"
 #include "agr/scene/Prefab.hpp"
+#include "agr/scene/SceneSerializer.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/net/NetSession.hpp"
 #include "agr/net/Replication.hpp"
@@ -363,6 +364,55 @@ return P
     CHECK(f.scripts.field(player, "touched").value() == "Ground");
     CHECK(f.scene.registry().get<TransformComponent>(player).position.x > 2.0f);  // moved right at 3 m/s
     CHECK(f.scripts.run("assert(agr.time.delta() > 0.09)", &f.scene));
+}
+
+TEST_CASE("physics queries, polygon points and the 2D character from Lua; points saved in JSON and binary") {
+    ScriptFixture f;
+    Physics2DWorld physics;
+    f.scripts.setPhysics2D(&physics);
+    const auto ground = f.scene.createEntity("Ground");
+    f.scene.registry().emplace<Collider2DComponent>(ground).size = {20, 1};
+    const auto rock = f.scene.createEntity("Rock");
+    f.scene.registry().get<TransformComponent>(rock).position = {3, 1, 0};
+    f.scene.registry().emplace<Collider2DComponent>(rock);
+    const auto hero = f.scene.createEntity("Hero");
+    f.scene.registry().get<TransformComponent>(hero).position = {0, 1.5f, 0};
+    f.scene.registry().emplace<CharacterController2DComponent>(hero);
+    physics.sync(f.scene);
+    const auto st = f.scripts.run(R"lua(
+local near = agr.physics2d.overlapCircle(3, 1.3, 0.6)
+assert(#near == 1 and near[1]:name() == "Rock")
+assert(#agr.physics2d.overlapBox(0, 0, 40, 0.8) == 1)
+local hit = agr.physics2d.castCircle(-5, 5, 0.5, 0, -1, 20)
+assert(hit and hit.entity:name() == "Ground" and math.abs(hit.distance - 4) < 0.05)
+assert(agr.physics2d.castBox(10, 5, 1, 1, 0, 0, 1, 20) == nil)
+-- Polygon points from Lua: {x, y} pairs or {x = , y = } tables.
+local rockE = agr.find("Rock")
+rockE:set("Collider2D", "shape", "Polygon")
+rockE:set("Collider2D", "points", { {0, 0}, {1, 0}, {x = 0.5, y = 1} })
+local pts = rockE:get("Collider2D", "points")
+assert(#pts == 3 and pts[3].x == 0.5 and pts[3].y == 1)
+agr.find("Hero"):set("CharacterController2D", "velocity", {2, 0})
+)lua", &f.scene);
+    CHECK_MESSAGE(st, (st ? std::string() : st.error().message));
+    for (int i = 0; i < 60; ++i) physics.step(f.scene, 1.0f / 60.0f);
+    CHECK(f.scene.registry().get<CharacterController2DComponent>(hero).onFloor);
+    CHECK(f.scripts.run("assert(agr.find('Hero'):get('CharacterController2D', 'onFloor') == true)", &f.scene));
+    CHECK(f.scene.registry().get<TransformComponent>(hero).position.x > 1.0f);
+    // Points survive both scene formats.
+    for (int format = 0; format < 2; ++format) {
+        Scene copy;
+        if (format == 0) {
+            REQUIRE(SceneSerializer::fromJson(copy, SceneSerializer::toJson(f.scene)));
+        } else {
+            const auto bytes = SceneSerializer::toBinary(f.scene);
+            REQUIRE(SceneSerializer::fromBinary(copy, bytes));
+        }
+        const auto& pts = copy.registry().get<Collider2DComponent>(copy.findByName("Rock")).points;
+        REQUIRE(pts.size() == 3);
+        CHECK(pts[2].x == doctest::Approx(0.5f));
+        CHECK(pts[2].y == doctest::Approx(1.0f));
+    }
 }
 
 TEST_CASE("scripts drive 3D bodies through the same entity methods") {

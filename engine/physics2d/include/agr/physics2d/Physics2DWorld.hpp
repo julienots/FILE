@@ -27,6 +27,16 @@ struct RaycastHit2D {
     float distance = 0.0f;
 };
 
+/// Shape of an overlap or cast query (world units, centered on the query position).
+struct QueryShape2D {
+    ColliderShape2D shape = ColliderShape2D::Circle;  ///< Box, Circle, Capsule or Polygon (convex, up to 8 points).
+    math::Vec2 size{1.0f, 1.0f};                      ///< Box size; Capsule width x height.
+    float radius = 0.5f;                              ///< Circle.
+    std::vector<math::Vec2> points;                   ///< Polygon.
+    static QueryShape2D circle(float r) { QueryShape2D q; q.shape = ColliderShape2D::Circle; q.radius = r; return q; }
+    static QueryShape2D box(math::Vec2 size) { QueryShape2D q; q.shape = ColliderShape2D::Box; q.size = size; return q; }
+};
+
 struct Physics2DStats {
     u32 bodies = 0;
     u32 shapes = 0;
@@ -64,6 +74,14 @@ public:
     const std::vector<JointBreak2DEvent>& jointBreaks() const;
     /// Closest hit on a collider whose layer is in `layerMask` (all by default).
     std::optional<RaycastHit2D> raycast(math::Vec2 origin, math::Vec2 direction, float maxDistance, u32 layerMask = 0xFFFFFFFFu) const;
+    /// Entities whose colliders overlap `shape` placed at `position` (rotated by `angle`), each
+    /// once, sorted. Triggers only with includeTriggers. Characters are included.
+    std::vector<ecs::Entity> overlap(const QueryShape2D& shape, math::Vec2 position, float angle = 0.0f, u32 layerMask = 0xFFFFFFFFu,
+                                     bool includeTriggers = false) const;
+    /// First collider hit when sweeping `shape` from `position` along `direction` up to
+    /// maxDistance (shapes already overlapping at the start are skipped). distance = travel.
+    std::optional<RaycastHit2D> castShape(const QueryShape2D& shape, math::Vec2 position, float angle, math::Vec2 direction, float maxDistance,
+                                          u32 layerMask = 0xFFFFFFFFu) const;
     /// Current state of the Joint2D of an entity: hinge angle (radians), slider translation or
     /// distance length (m); nullopt without a live joint.
     std::optional<float> jointValue(ecs::Entity e) const;
