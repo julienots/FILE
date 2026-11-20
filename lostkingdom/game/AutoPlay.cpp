@@ -1659,13 +1659,13 @@ static std::vector<Step> scenario(const std::string& name) {
                 if (dep > 5.f && dep < 9.f && dep > best) { best = dep; lake = vec3(x, wl, z); }
             }
             AGR_LOG("SWIM lake at %.0f %.0f depth %.1f", lake.x, lake.z, best);
-            teleport(g, lake.x, lake.z, 0.f); g.pc().pos.y = lake.y - 1.2f; g.camDist = g.camDistTarget = 7.f; g.camPitch = 0.25f; }, idle, "lake"});
+            teleport(g, lake.x, lake.z, 0.f); g.pc().pos = vec3(lake.x, lake.y - 1.2f, lake.z); g.camFocus = g.pc().pos; g.camDist = g.camDistTarget = 7.f; g.camPitch = 0.25f; }, idle, "lake"});
         s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.6f); g.camIdleT = 0; }, "swim"});
         s.push_back({0.1f, [](Game& g) { ok[0] = g.pc().swimming; AGR_LOG("SWIM surface swimming %d stamina %.0f", ok[0], g.stamina); g.requestScreenshot("build/shots/W0_swim.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.6f); }, "shot"});
         s.push_back({1.5f, [](Game& g) { g.stamina = g.maxStamina; }, [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camIdleT = 0; g.camYaw = g.pc().yaw + 1.4f; }, "crawl"});
         s.push_back({0.1f, [](Game& g) { ok[1] = g.pc().vis.anim.swimCrawl > 0.8f && g.stamina < g.maxStamina; AGR_LOG("SWIM crawl %.2f stamina %.0f -> %d", g.pc().vis.anim.swimCrawl, g.stamina, ok[1]); g.requestScreenshot("build/shots/W1_crawl.png"); },
             [](Game& g, float) { g.input.move = vec2(0, 1); g.input.sprint = true; g.camYaw = g.pc().yaw + 1.4f; }, "shot"});
-        s.push_back({0.2f, [](Game& g) { teleport(g, lake.x, lake.z, 0.f); g.pc().pos.y = lake.y - 1.2f; g.pc().swimming = true; g.playerDodge(); AGR_LOG("SWIM dive %d", g.diving); }, idle, "dive"});
+        s.push_back({0.2f, [](Game& g) { teleport(g, lake.x, lake.z, 0.f); g.pc().pos = vec3(lake.x, lake.y - 1.2f, lake.z); g.camFocus = g.pc().pos; g.pc().swimming = true; g.playerDodge(); AGR_LOG("SWIM dive %d", g.diving); }, idle, "dive"});
         s.push_back({3.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.4f); g.camIdleT = 0; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 6.f; }, "under"});
         s.push_back({0.1f, [](Game& g) { float y0 = g.pc().pos.y; ok[2] = g.diving && y0 < lake.y - 2.5f && g.breath < 1.f; ok[3] = g.underwaterView;
             AGR_LOG("SWIM underwater: depth %.1f m, air %.2f, view %d -> %d", lake.y - y0, g.breath, g.underwaterView, ok[2]); g.requestScreenshot("build/shots/W2_underwater.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.4f); }, "shot"});
