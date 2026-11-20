@@ -330,7 +330,7 @@ void Game::drawTitle(float dt) {
     bool hasSave = platform::fileExists(platform::writableDir() + "/save_99.lks") || platform::fileExists(platform::writableDir() + "/save_0.lks");
     float bw = 360, bh = 62, by = H_ * 0.52f;
     float ba = saturate((t - 0.8f) * 1.5f);
-    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f;   // 2.3.5 oak plaques by += bh + 12; return r; };
+    auto btn = [&](const std::string& label, bool en) { bool r = u.fancyButton({W_ / 2 - bw / 2, by, bw, bh}, label, en, "plaque", 26) && ba > 0.5f; by += bh + 12; return r; };
     if (menu == Menu::Settings || menu == Menu::Saves) { drawMenus(dt); return; }
     if (hasSave && btn("Continuer", true)) {
         int slot = platform::fileExists(platform::writableDir() + "/save_99.lks") ? 99 : 0;
