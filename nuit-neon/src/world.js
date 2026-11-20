@@ -124,7 +124,7 @@ const flat = (T, o0, o1, y, uScale) => strip(T, (j, s) => [
 const ROAD_VERT = `uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW; varying vec2 vT;
   void main(){ vUv = textureMatrix * vec4(position,1.); vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vT = uv; gl_Position = projectionMatrix*viewMatrix*w; }`;
 const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform float fogDensity; uniform float half_; uniform float laneW; uniform float curbOn;
-  uniform vec3 amb; uniform vec3 curbCol; uniform vec3 offCol; uniform vec3 sunDir; uniform vec3 sunCol; uniform float wet; uniform float day; uniform float time; uniform float rainK;
+  uniform vec3 amb; uniform vec3 curbCol; uniform vec3 offCol; uniform vec3 sunDir; uniform vec3 sunCol; uniform float wet; uniform float day; uniform float time; uniform float rainK; uniform float dry;
   varying vec4 vUv; varying vec3 vW; varying vec2 vT;
   float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
   float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
@@ -138,7 +138,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
   void main(){
     vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam/dist;
     vec2 p = vW.xz; float ax = abs(vT.x); float s = vT.y;
-    float pud = smoothstep(0.42, 0.62, fbm(p*0.16 + 7.3) + (wet - 1.0)*0.35);
+    float pud = smoothstep(0.42, 0.62, fbm(p*0.16 + 7.3) + (wet - 1.0)*0.35) * (1.0 - 0.9*dry);
     float grain = noise(p*38.0);
     float micro = fbm(p*vec2(5.0,2.2));
     float lx = abs(mod(ax + laneW*0.5, laneW) - laneW*0.5);
@@ -151,6 +151,9 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     float paint = max(lane, edge) * (0.75 + 0.25*grain);
     vec3 albedo = mix(vec3(0.030,0.032,0.042), vec3(0.014,0.015,0.02), micro) + 0.012*grain;
     albedo *= mix(1.0, 2.6, day);
+    // bitume sec de jour : gris clair légèrement chaud, granulats qui scintillent, zones polies par les pneus plus sombres
+    float agg = noise(p*70.0), agg2 = noise(p*160.0 + 3.0);
+    albedo = mix(albedo, albedo*vec3(1.35,1.3,1.22)*(0.82 + 0.36*agg) + vec3(0.02)*step(0.82, agg2), dry);
     albedo = mix(albedo, vec3(0.42,0.42,0.46), paint*0.9);
     albedo = mix(albedo, mix(vec3(0.02), vec3(0.5), chk), startBand);
     albedo = mix(albedo, mix(curbCol, vec3(0.45), cs), curb);
@@ -163,7 +166,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     float bare = (1.0 - paint) * (1.0 - curb) * (1.0 - startBand);
     albedo *= 1.0 - bare * (0.55*crack + 0.30*patchK + 0.32*rubber);
     albedo = mix(albedo, offCol*(0.8+0.4*grain), off);
-    float rough = mix(0.55, 0.06, pud); rough = mix(rough, rough*0.55, patchK*bare); rough = mix(rough, 0.7, crack*bare*0.6); rough = mix(rough, 0.5, max(max(paint, startBand)*0.6, curb*0.7)); rough = mix(rough, 0.9, off);
+    float rough = mix(0.55, 0.06, pud); rough = mix(rough, rough*0.55, patchK*bare); rough = mix(rough, 0.7, crack*bare*0.6); rough = mix(rough, 0.5, max(max(paint, startBand)*0.6, curb*0.7)); rough = mix(rough, 0.9, off); rough = mix(rough, max(rough, 0.78 - 0.25*rubber), dry*(1.0 - paint));
     vec2 uv = vUv.xy / vUv.w;
     vec2 nrm = vec2(noise(p*9.0+1.7)-.5, noise(p*9.0+8.1)-.5) + 0.6*vec2(noise(p*31.)-.5, noise(p*31.+4.)-.5);
     float att = 1.0/(1.0+dist*0.035);
@@ -183,7 +186,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
       refl += texture2D(tDiffuse, uv + vec2(0.35*nrm.x*t*spread, t*spread)).rgb * w; wsum += w; }
     refl /= wsum;
     float fres = 0.05 + 0.95*pow(1.0 - clamp(V.y,0.,1.), 4.0);
-    float strength = mix(0.55, 1.0, pud) * mix(1.0, 0.45, rough) * mix(0.25, 1.0, wet) * (1.0 - off*0.85) * (1.0 + 0.35*rainK);
+    float strength = mix(0.55, 1.0, pud) * mix(1.0, 0.45, rough) * mix(0.25, 1.0, wet) * (1.0 - off*0.85) * (1.0 + 0.35*rainK) * mix(1.0, 0.4, dry);
     vec3 N = normalize(vec3(nrm.x*0.16, 1.0, nrm.y*0.16));
     vec3 col = albedo * (amb + sunCol * max(dot(N, sunDir), 0.0) * 0.85) + refl * fres * strength;
     // reflet du soleil sur la chaussée : traînée brillante vers le soleil, plus nette dans les flaques
@@ -530,8 +533,8 @@ export function buildWorld(def, renderer, q) {
   } else {
     // ================= NATURE DE JOUR =================
     const gcol = new THREE.Color(th.ground);
-    const sunV = new THREE.Vector3().fromArray(th.sun.dir).normalize(), sunC = new THREE.Color().fromArray(th.sun.col).multiplyScalar((th.sunI ?? 2.6) * 0.5);
-    const ambC = new THREE.Color().fromArray(th.sky[1]).multiplyScalar(th.ambI ?? 1.5);
+    const sombre = th.nuit || th.rain ? 1 : 0, sunV = new THREE.Vector3().fromArray(th.sun.dir).normalize(), sunC = new THREE.Color().fromArray(th.sun.col).multiplyScalar((th.sunI ?? 2.6) * 0.5 * (sombre ? 1 : 1.18));
+    const ambC = new THREE.Color().fromArray(th.sky[1]).lerp(new THREE.Color(0.75, 0.78, 0.8), sombre ? 0 : 0.35).multiplyScalar((th.ambI ?? 1.5) * (sombre ? 1 : 0.78));
     const sol = th.sol;
     const gUni = () => ({ gc0: { value: new THREE.Color(sol.c[0]) }, gc1: { value: new THREE.Color(sol.c[1]) }, gc2: { value: new THREE.Color(sol.c[2]) }, gc3: { value: new THREE.Color(sol.c[3]) },
       sunDir: { value: sunV }, sunCol: { value: sunC }, amb: { value: ambC }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, time: { value: 0 } });
@@ -878,8 +881,8 @@ export function buildWorld(def, renderer, q) {
       layer(Math.floor(q.grass * 2 * dens), 46, (th.grass.h || 1.3) * 0.34, 1.5, 0);   // tapis ras et dense
       layer(Math.floor(q.grass * dens), 72, th.grass.h || 1.3, 1.9, 1);                 // herbes hautes
     }
-    group.add(new THREE.HemisphereLight(new THREE.Color().fromArray(th.sky[1]), gcol, th.ambI ?? 1.5));
-    const sunL = new THREE.DirectionalLight(new THREE.Color().fromArray(th.sun.col), th.sunI ?? 2.6); sunL.position.copy(sunV).multiplyScalar(100); group.add(sunL);
+    group.add(new THREE.HemisphereLight(new THREE.Color().fromArray(th.sky[1]), gcol, (th.ambI ?? 1.5) * (sombre ? 1 : 0.8)));
+    const sunL = new THREE.DirectionalLight(new THREE.Color().fromArray(th.sun.col), (th.sunI ?? 2.6) * (sombre ? 1 : 1.2)); sunL.position.copy(sunV).multiplyScalar(100); group.add(sunL);
   }
 
   // --- route réfléchissante ---
@@ -894,7 +897,7 @@ export function buildWorld(def, renderer, q) {
     shader: {
       uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, half_: { value: HALF },
         laneW: { value: T.libre ? 40 : 4.5 }, curbOn: { value: T.libre ? 0 : 1 }, wet: { value: th.rain === true ? 1 : th.wet ?? 1 }, day: { value: city && !th.jourVille ? 0 : 1 },
-        time: { value: 0 }, rainK: { value: th.rain === true ? (th.orage ? 1 : 0.65) : 0 },
+        time: { value: 0 }, rainK: { value: th.rain === true ? (th.orage ? 1 : 0.65) : 0 }, dry: { value: !th.rain && !th.nuit && (!city || th.jourVille) ? 1 : 0 },
         amb: { value: city && !th.jourVille ? new THREE.Color(th.c).lerp(new THREE.Color(0.55, 0.5, 0.9), 0.6).multiplyScalar(1.6) : new THREE.Color().fromArray(th.sky[1]).multiplyScalar(0.9) },
         sunDir: { value: sunDir }, sunCol: { value: th.sun ? new THREE.Color().fromArray(th.sun.col).multiplyScalar(th.sun.road ?? 1) : new THREE.Color(0, 0, 0) },
         offCol: { value: city ? new THREE.Color(0.02, 0.02, 0.03) : new THREE.Color(th.ground).multiplyScalar(0.5) },

@@ -16,7 +16,7 @@
 // Les stats vont de 1 à 10. Ce sont les valeurs de départ : elles se règlent ensuite dans le garage du jeu.
 // Les modèles de models/ sont passés par tools/prep-model.mjs : allégés, à l'échelle, l'avant vers -z, roues découpées.
 // sur : suralimentation (multiplie la vitesse de pointe et l'accélération d'origine) ; flammes : l'échappement crache des flammes à pleine charge.
-// son : caractère du moteur (voir MOTEURS dans src/audio.js : v8, v10, v12, biturbo, f1, proto, buggy, moto, custom).
+// son : caractère du moteur (voir PHYS dans src/audio.js : v8, v10, v12, biturbo, f1, proto, buggy, moto, custom, absinthe).
 // teinte: false garde les couleurs d'origine du modèle ; moto: true fait pencher le véhicule dans les virages.
 const T10 = [0, 0.04, 0.12, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95, 1];
 export const CAR_LIST = [
@@ -96,6 +96,12 @@ export const CAR_LIST = [
     design: { L: 4.95, W: 2.12, t: T10, w: [0.50, 0.8, 0.93, 0.99, 0.92, 0.89, 0.98, 1.0, 0.99, 0.93], hc: [0.24, 0.31, 0.39, 0.47, 0.56, 0.66, 0.73, 0.76, 0.76, 0.72], hs: [0.25, 0.4, 0.52, 0.59, 0.6, 0.64, 0.77, 0.87, 0.86, 0.77], b: [0.16, 0.09, 0.07, 0.07, 0.07, 0.07, 0.07, 0.08, 0.11, 0.2],
       roues: [[0.2, 0.355, 0.31], [0.81, 0.4, 0.42]], toit: { t0: 0.29, t1: 0.72, h: 1.02, forme: [0, 0.66, 0.97, 1, 0.86, 0.48, 0.05], larg: [0.66, 0.58, 0.44], pince: 0.54, toitNoir: true },
       aileron: 'proto', aileronH: 1.2, derive: true, priseFlanc: [0.48, 0.7], ouies: [0.1, 0.16, 0.22, 0.28], bandes: 'double', accent: 0x101014, jantes: 'turbine', jante: 0x101014, etrier: 0xd8121e, neon: 0xffb020, sellerie: 0x15161a, pharesCol: 0xfff0c0, aile: 0.12, echap: [-0.36, -0.2, -0.06, 0.06, 0.2, 0.36], echapY: 0.38 } },
+  // ---------- Absinthe : la voiture la plus détaillée du jeu (carrosserie fine, carbone tissé, nid d'abeille, projecteurs, aileron col-de-cygne, jantes forgées) ----------
+  { id: 'absinthe', son: 'absinthe', prix: 0, nom: 'Absinthe', sur: 1.4, flammes: true, couleur: 0x86e86a, stats: { vmax: 10, accel: 10, mania: 10, adher: 10 },
+    design: { ultra: true, L: 4.86, W: 2.08, t: T10, w: [0.5, 0.8, 0.93, 0.985, 0.92, 0.88, 0.975, 1.0, 0.99, 0.92], hc: [0.22, 0.29, 0.37, 0.45, 0.55, 0.65, 0.72, 0.75, 0.75, 0.7], hs: [0.24, 0.39, 0.52, 0.58, 0.59, 0.63, 0.76, 0.86, 0.85, 0.76], b: [0.15, 0.085, 0.065, 0.065, 0.065, 0.065, 0.065, 0.075, 0.105, 0.19],
+      roues: [[0.2, 0.355, 0.31], [0.81, 0.4, 0.42]], toit: { t0: 0.29, t1: 0.71, h: 1.03, forme: [0, 0.64, 0.97, 1, 0.86, 0.48, 0.05], larg: [0.66, 0.58, 0.44], pince: 0.54, toitNoir: true, peint: [0.22, 0.86] },
+      aileron: 'proto', aileronH: 1.17, priseFlanc: [0.47, 0.69], ouies: [0.1, 0.16, 0.22], jantes: 'forge', jante: 0x2a2d33, etrier: 0xe8ff3a, neon: 0x8aff6a, sellerie: 0x203a1c, pharesCol: 0xeafff0, ecran: 0x6affb0,
+      phares: [0.035, 0.1, 9.2, 12.4], aile: 0.11, echap: [-0.13, -0.045, 0.045, 0.13], echapY: 0.42, bombe: 0.025 } },
   { id: 'dragster', son: 'v8', prix: 70000, nom: 'Dragster Enragé', sur: 1.5, flammes: true, couleur: 0x8a2be2, stats: { vmax: 10, accel: 10, mania: 5, adher: 7 },
     design: { L: 5.3, W: 1.98, t: T10, w: [0.42, 0.6, 0.72, 0.8, 0.86, 0.92, 0.98, 1.0, 1.0, 0.96], hc: [0.34, 0.42, 0.5, 0.58, 0.66, 0.76, 0.86, 0.94, 0.96, 0.9], hs: [0.34, 0.42, 0.5, 0.58, 0.66, 0.76, 0.86, 0.94, 0.96, 0.9], b: [0.2, 0.14, 0.12, 0.12, 0.12, 0.13, 0.15, 0.18, 0.24, 0.34],
       roues: [[0.13, 0.29, 0.2], [0.82, 0.48, 0.5]], toit: { t0: 0.52, t1: 0.86, h: 1.36, forme: [0, 0.7, 0.98, 1, 0.96, 0.6, 0], larg: [0.72, 0.7, 0.68], pince: 0.7, peint: [0.3, 0.86] },

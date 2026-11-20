@@ -95,9 +95,9 @@ function setupPost() {
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0); composer.addPass(bloomPass);
   finalPass = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, brume: { value: 0 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
+    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, brume: { value: 0 }, jour: { value: 0 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float brume; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float brume; uniform float jour; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
       float hsh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
       // gouttes de pluie sur l'objectif : chaque case de la grille porte une goutte qui glisse et dévie l'image comme une lentille
       vec3 gouttes(vec2 uv, float sc, float sp){ vec2 g = uv*vec2(sc*aspect, sc); float col = floor(g.x); g.y += time*sp*(0.5 + hsh(vec2(col, 3.0))) ; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
@@ -116,7 +116,7 @@ function setupPost() {
         if (vit > 0.0) { float a = atan(d.y, d.x); float ln = hsh(vec2(floor(a*46.0), floor(time*24.0))); col += vec3(0.9, 0.95, 1.0) * step(0.94, ln) * smoothstep(0.3, 0.75, r) * vit * 0.16; }   // traits de vitesse
         if (sunVis > 0.0) {
           // le soleil n'éblouit que s'il est visible : on regarde la luminosité de l'image à son emplacement (masqué par un arbre, il disparaît)
-          float occ = 0.0; for (int i = 0; i < 5; i++) { vec2 o = vec2(float(i - 2)*0.006, float(i - 2)*0.004); occ += smoothstep(1.2, 3.5, dot(texture2D(tDiffuse, sunPos + o).rgb, vec3(0.33))); } occ /= 5.0;
+          float occ = 0.0; for (int i = 0; i < 5; i++) { vec2 o = vec2(float(i - 2)*0.006, float(i - 2)*0.004); occ += smoothstep(2.8, 5.5, dot(texture2D(tDiffuse, sunPos + o).rgb, vec3(0.33))); } occ /= 5.0;
           vec2 sd = (vUv - sunPos) * vec2(aspect, 1.0); float sl = length(sd);
           vec3 fl = sunCol * (exp(-sl*5.0)*0.45 + exp(-sl*28.0)*0.8);                          // halo
           fl += sunCol * exp(-abs(sd.y)*90.0) * exp(-abs(sd.x)*2.2) * 0.35;                    // traînée horizontale
@@ -131,7 +131,7 @@ function setupPost() {
           col = mix(col, halo, 0.2*brume); col += halo * 0.025 * brume; float l2 = dot(col, vec3(0.3,0.59,0.11)); col = mix(col, vec3(l2), 0.08*brume); }
         col *= 1.0 - 0.45*smoothstep(0.4, 1.0, r);
         col *= 1.0 + (hsh(vUv*731.0 + fract(time)*17.0) - 0.5) * 0.07;
-        float lum = dot(col, vec3(0.3,0.59,0.11)); col = mix(vec3(lum), col, 1.14); col *= 0.94 + 0.12*smoothstep(0.0, 1.2, lum);   // étalonnage : un peu plus de couleur et de contraste
+        float lum = dot(col, vec3(0.3,0.59,0.11)); col = mix(vec3(lum), col, mix(1.14, 1.03, jour)); col *= 0.94 + 0.12*smoothstep(0.0, 1.2, lum);   // étalonnage : un peu plus de couleur et de contraste
         gl_FragColor = vec4(col,1.); }`,
   });
   composer.addPass(finalPass);
@@ -1946,7 +1946,7 @@ function frame(now) {
     if (world.rain) world.rain.material.uniforms.flash.value = Math.max(0, storm.flash); }
   if (composer) {
     finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time;
-    { const th = world.theme || {}, wetAir = th.rain === true ? (th.orage ? 1 : 0.6) : 0; bloomPass.strength += (0.42 + 0.22 * wetAir - bloomPass.strength) * Math.min(1, dt * 2); bloomPass.radius = 0.6 + 0.25 * wetAir; finalPass.uniforms.brume.value = wetAir; }
+    { const th = world.theme || {}, wetAir = th.rain === true ? (th.orage ? 1 : 0.6) : 0; bloomPass.strength += ((world.day && !th.rain ? 0.28 : 0.42) + 0.22 * wetAir - bloomPass.strength) * Math.min(1, dt * 2); bloomPass.radius = 0.6 + 0.25 * wetAir; bloomPass.threshold = world.day && !th.rain ? 1.7 : 1.0; finalPass.uniforms.brume.value = wetAir; finalPass.uniforms.jour.value = world.day && !th.rain ? 1 : 0; }
     { const u = finalPass.uniforms, th = world.theme || {}, race = (mode === 'race' || mode === 'count') && player, kp = 1 - Math.exp(-6 * dt);
       u.pluie.value += (Math.max(world.rain && world.rain.visible && th.rain !== 'neige' ? (th.orage ? 1 : 0.45) : 0, race ? G.lens : 0) - u.pluie.value) * Math.min(1, kp * (G.lens > u.pluie.value ? 4 : 1));   // une flaque traversée mouille l'objectif
       u.vit.value += ((race ? clamp((Math.abs(player.v) - 60) / 70, 0, 1) : 0) - u.vit.value) * kp;

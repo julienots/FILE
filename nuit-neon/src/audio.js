@@ -23,6 +23,7 @@ export const MOTEURS = {
   buggy: { idle: 40, red: 230, mix: [1, 0.8, 0.5], h: 1.5, lump: 0.6, drive: 5, cut: [320, 3000], roar: 0.6, turbo: 0, crackle: 1, vol: 1 },
   moto: { idle: 72, red: 470, mix: [1, 0.2, 0.85], h: 2, lump: 0.1, drive: 3.4, cut: [600, 5600], roar: 0.3, turbo: 0, crackle: 0.6, vol: 0.9 },
   custom: { idle: 42, red: 250, mix: [1, 0.9, 0.5], h: 1.5, lump: 0.7, drive: 4.2, cut: [330, 3200], roar: 0.5, turbo: 0, crackle: 1, vol: 1 },   // bicylindre de roadster
+  absinthe: { idle: 50, red: 330, mix: [1, 0.45, 0.7], h: 3, lump: 0.1, drive: 2.6, cut: [500, 4800], roar: 0.4, turbo: 0, crackle: 1, vol: 1 },
 };
 
 // Moteurs « physiques » : nombre de cylindres, ordre d'allumage (phase dans le cycle de 720°, banc 0 = gauche, 1 = droite),
@@ -31,21 +32,23 @@ export const MOTEURS = {
 const even = (n, banks) => Array.from({ length: n }, (_, k) => [k / n, banks[k % banks.length]]);
 const PHYS = {
   // V8 à vilebrequin croisé : ordre 1-8-4-3-6-5-7-2, les bancs reçoivent leurs impulsions de façon inégale -> le « glouglou » du V8
-  v8: { fire: [0, 1, 1, 0, 1, 0, 0, 1].map((b, k) => [k / 8, b]), idle: 760, red: 7000, rough: 0.34, tau: 0.34, res: [[92, 1.5, 1], [410, 2.4, 0.5], [1250, 3, 0.16]], comb: [74, 0.46], muf: [650, 5200], intake: 0.32, mech: 0.25, drive: 2.3, vol: 1.05 },
-  v10: { fire: even(10, [0, 1]), idle: 1000, red: 8800, rough: 0.12, tau: 0.26, res: [[128, 1.7, 1], [620, 2.6, 0.6], [1900, 3, 0.3]], comb: [108, 0.36], muf: [1100, 9000], intake: 0.42, mech: 0.3, drive: 2.6, vol: 1 },
-  v12: { fire: even(12, [0, 1]), idle: 900, red: 9000, rough: 0.06, tau: 0.22, res: [[150, 1.5, 0.9], [780, 2.2, 0.6], [2400, 2.5, 0.35]], comb: [124, 0.3], muf: [1300, 10000], intake: 0.5, mech: 0.3, drive: 2.0, vol: 1 },
+  v8: { fire: [0, 1, 1, 0, 1, 0, 0, 1].map((b, k) => [k / 8, b]), idle: 720, red: 6800, rough: 0.36, tau: 0.44, res: [[84, 1.4, 1], [330, 2.2, 0.45], [900, 3, 0.12]], comb: [68, 0.5], muf: [420, 3000], intake: 0.18, mech: 0.08, drive: 2.6, vol: 1.1 },
+  v10: { fire: even(10, [0, 1]), idle: 950, red: 8200, rough: 0.14, tau: 0.34, res: [[112, 1.6, 1], [470, 2.4, 0.5], [1350, 3, 0.18]], comb: [96, 0.42], muf: [650, 5000], intake: 0.28, mech: 0.1, drive: 2.4, vol: 1 },
+  v12: { fire: even(12, [0, 1]), idle: 880, red: 8400, rough: 0.08, tau: 0.32, res: [[128, 1.5, 0.95], [540, 2.2, 0.5], [1650, 2.6, 0.2]], comb: [110, 0.38], muf: [750, 5600], intake: 0.32, mech: 0.1, drive: 2.1, vol: 1 },
   // V8 à vilebrequin plat, deux turbos qui étouffent l'échappement
-  biturbo: { fire: even(8, [0, 1]), idle: 850, red: 7600, rough: 0.16, tau: 0.3, res: [[108, 1.5, 1], [500, 2, 0.42], [1500, 2.5, 0.14]], comb: [88, 0.4], muf: [560, 3800], intake: 0.6, mech: 0.25, drive: 2.4, vol: 1.05 },
-  // V10 atmosphérique de course : 18 000 tr/min
-  f1: { fire: even(10, [0, 1]), idle: 4200, red: 18000, rough: 0.03, tau: 0.2, res: [[300, 1.4, 0.8], [1300, 2, 0.7], [3600, 2.4, 0.4]], comb: [220, 0.3], muf: [2400, 14000], intake: 0.6, mech: 0.35, drive: 2.8, vol: 0.85 },
+  biturbo: { fire: even(8, [0, 1]), idle: 820, red: 7200, rough: 0.18, tau: 0.4, res: [[94, 1.5, 1], [390, 2, 0.4], [1050, 2.5, 0.12]], comb: [80, 0.46], muf: [400, 2700], intake: 0.4, mech: 0.08, drive: 2.4, vol: 1.08 },
+  // V10 atmosphérique de course
+  f1: { fire: even(10, [0, 1]), idle: 3800, red: 15000, rough: 0.04, tau: 0.27, res: [[230, 1.4, 0.9], [900, 2, 0.6], [2400, 2.4, 0.28]], comb: [175, 0.34], muf: [1400, 8000], intake: 0.42, mech: 0.12, drive: 2.6, vol: 0.85 },
   // V6 biturbo de prototype
-  proto: { fire: even(6, [0, 1]), idle: 1500, red: 10500, rough: 0.08, tau: 0.24, res: [[180, 1.6, 0.9], [900, 2.2, 0.55], [2600, 2.6, 0.3]], comb: [150, 0.35], muf: [1400, 9000], intake: 0.55, mech: 0.3, drive: 2.5, vol: 1 },
+  proto: { fire: even(6, [0, 1]), idle: 1300, red: 9000, rough: 0.1, tau: 0.32, res: [[148, 1.6, 0.95], [620, 2.2, 0.5], [1800, 2.6, 0.2]], comb: [128, 0.4], muf: [850, 5600], intake: 0.38, mech: 0.1, drive: 2.5, vol: 1 },
   // quatre-cylindres à plat refroidi par air
-  buggy: { fire: [[0, 0], [0.25, 1], [0.5, 0], [0.75, 1]], idle: 900, red: 6200, rough: 0.42, tau: 0.36, res: [[84, 1.4, 1], [350, 2.2, 0.6], [1100, 3, 0.25]], comb: [60, 0.5], muf: [760, 4500], intake: 0.3, mech: 0.55, drive: 3.0, vol: 1 },
+  buggy: { fire: [[0, 0], [0.25, 1], [0.5, 0], [0.75, 1]], idle: 880, red: 6000, rough: 0.44, tau: 0.44, res: [[80, 1.4, 1], [320, 2.2, 0.55], [950, 3, 0.2]], comb: [58, 0.5], muf: [560, 3400], intake: 0.25, mech: 0.3, drive: 3.0, vol: 1 },
   // quatre-cylindres en ligne de moto sportive : boîte à air qui hurle
-  moto: { fire: [[0, 0], [0.25, 1], [0.5, 1], [0.75, 0]], idle: 1300, red: 14000, rough: 0.1, tau: 0.28, res: [[160, 1.6, 0.9], [700, 2.4, 0.6], [2300, 3, 0.35]], comb: [130, 0.35], muf: [1200, 9000], intake: 0.75, mech: 0.35, drive: 2.6, vol: 0.92 },
+  moto: { fire: [[0, 0], [0.25, 1], [0.5, 1], [0.75, 0]], idle: 1250, red: 12500, rough: 0.12, tau: 0.34, res: [[138, 1.6, 0.95], [540, 2.4, 0.55], [1700, 3, 0.24]], comb: [118, 0.38], muf: [850, 6200], intake: 0.5, mech: 0.12, drive: 2.6, vol: 0.92 },
   // bicylindre en V à 45° : allumages à 315° puis 405° -> « patate »
-  custom: { fire: [[0, 0], [315 / 720, 1]], idle: 850, red: 6800, rough: 0.5, tau: 0.38, res: [[74, 1.4, 1], [300, 2, 0.5], [1000, 3, 0.2]], comb: [55, 0.5], muf: [600, 4000], intake: 0.3, mech: 0.4, drive: 3.2, vol: 1.05 },
+  custom: { fire: [[0, 0], [315 / 720, 1]], idle: 820, red: 6600, rough: 0.52, tau: 0.46, res: [[70, 1.4, 1], [280, 2, 0.5], [900, 3, 0.18]], comb: [52, 0.52], muf: [450, 2900], intake: 0.22, mech: 0.2, drive: 3.2, vol: 1.08 },
+  // V12 atmosphérique de l'Absinthe : grave à bas régime, hurlement plein en haut, retours de flamme
+  absinthe: { fire: even(12, [0, 1]), idle: 900, red: 9200, rough: 0.1, tau: 0.33, res: [[118, 1.5, 1], [500, 2.2, 0.55], [1500, 2.6, 0.22]], comb: [104, 0.42], muf: [700, 6000], intake: 0.36, mech: 0.08, drive: 2.3, vol: 1.08 },
 };
 
 // processeur audio du moteur (tourne dans le fil audio, échantillon par échantillon)
@@ -69,7 +72,7 @@ class Moteur extends AudioWorkletProcessor {
     const n = P.fire.length, banks = [0, 1].map(b => ({ res: P.res.map(r => Object.assign(this.svf(r[0] * (b ? 1.06 : 1), r[1]), { amp: r[2] })),
       len: Math.max(8, Math.round(sampleRate / (P.comb[0] * (b ? 0.94 : 1)))), buf: null, w: 0, fb: P.comb[1], dl: 0 }));
     for (const b of banks) b.buf = new Float32Array(b.len + 2);
-    this.c = { n, ph: P.fire.map(f => f[0]), bank: P.fire.map(f => f[1]), amp: P.fire.map(() => 1 + (this.rnd() - 0.5) * 0.18), jit: new Float32Array(n), last: new Float32Array(n).fill(1),
+    this.c = { n, ph: P.fire.map(f => f[0]), bank: P.fire.map(f => f[1]), amp: P.fire.map(() => 1 + (this.rnd() - 0.5) * 0.34), jit: new Float32Array(n), bang: new Float32Array(n), last: new Float32Array(n).fill(1),
       rough: P.rough, tau: P.tau, banks, muf: P.muf, intake: P.intake, mech: P.mech, drive: P.drive, norm: 1 / Math.sqrt(Math.max(1, n / 4)), ib: this.svf(1800, 1.2), mb: this.svf(5200, 2) };
   }
   process(inp, out, prm) {
@@ -87,10 +90,11 @@ class Moteur extends AudioWorkletProcessor {
       let b0 = 0, b1 = 0, env = 0;
       for (let k = 0; k < C.n; k++) {
         let d = this.ph - C.ph[k]; if (d < 0) d += 1;
-        if (d < C.last[k]) C.jit[k] = (this.rnd() - 0.5) * 2 * rough;      // nouvelle explosion de ce cylindre : force un peu différente à chaque fois
+        if (d < C.last[k]) { C.jit[k] = (this.rnd() - 0.5) * 2 * rough;      // nouvelle explosion de ce cylindre : force un peu différente à chaque fois
+          C.bang[k] = this.load < 0.1 && this.rpm > 2400 && this.rnd() < 0.045 ? 2 + this.rnd() * 3 : 0; }   // retour de flamme dans l'échappement au lever de pied
         C.last[k] = d;
         const x = d / cyc / tau; if (x > 9) continue;
-        const p = x * Math.exp(1 - x) * (1 - 0.38 * x) * C.amp[k] * (1 + C.jit[k]) * ld;
+        const p = x * Math.exp(1 - x) * (1 - 0.38 * x) * C.amp[k] * (1 + C.jit[k]) * (ld + C.bang[k] * 0.3);
         if (C.bank[k]) b1 += p; else b0 += p; env += Math.abs(p);
       }
       // admission : souffle modulé par les impulsions, plus fort à pleine charge et haut régime
@@ -156,9 +160,13 @@ function makeEngine() {
   const n = new AudioWorkletNode(ctx, 'moteur', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
   const e = { node: n, rpm: n.parameters.get('rpm'), load: n.parameters.get('load'), gain: n.parameters.get('gain'), type: null };
   e.lp = ctx.createBiquadFilter(); e.lp.type = 'lowpass'; e.lp.frequency.value = 18000; e.lp.Q.value = 0.5;
+  // égalisation : corps dans le grave, aigus adoucis (le son passe par la carrosserie et l'air avant d'arriver à la caméra)
+  e.lo = ctx.createBiquadFilter(); e.lo.type = 'lowshelf'; e.lo.frequency.value = 170; e.lo.gain.value = 6;
+  e.hi = ctx.createBiquadFilter(); e.hi.type = 'highshelf'; e.hi.frequency.value = 2600; e.hi.gain.value = -8;
+  e.pk = ctx.createBiquadFilter(); e.pk.type = 'peaking'; e.pk.frequency.value = 3800; e.pk.Q.value = 1.2; e.pk.gain.value = -5;
   e.pan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
   e.out = ctx.createGain(); e.out.gain.value = 1;
-  n.connect(e.lp); e.lp.connect(e.pan); e.pan.connect(e.out);
+  n.connect(e.lo); e.lo.connect(e.hi); e.hi.connect(e.pk); e.pk.connect(e.lp); e.lp.connect(e.pan); e.pan.connect(e.out);
   return e;
 }
 function engType(e, type) { if (e.type === type) return; e.type = type; e.node.port.postMessage(PHYS[type] || PHYS.v12); }
@@ -256,7 +264,7 @@ export function engine(s, r) {
   const P = MOTEURS[s.type] || MOTEURS.v12, ratio = Math.min(1.12, Math.abs(s.v) / s.vmax), thr = s.thr, sp = Math.abs(s.v);
   // boîte automatique : monte au rupteur à fond, plus tôt à mi-gaz ; rétrograde en décélérant (avec un coup de gaz)
   let g = st.gear;
-  const upAt = thr > 0.6 ? 0.97 : 0.5 + 0.45 * thr, downAt = thr > 0.6 ? 0.62 : 0.34;
+  const upAt = thr > 0.6 ? 0.93 : 0.45 + 0.45 * thr, downAt = thr > 0.6 ? 0.62 : 0.34;
   if (g < 6 && inGear(ratio, g) > upAt && sp > 3) {
     g++;
     if (thr > 0.4) { st.cut = 0.09; pop(0.35 + P.crackle * 0.35); }

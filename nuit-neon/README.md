@@ -2,6 +2,13 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.2
+
+- **Absinthe** : nouvelle hypercar offerte, vert clair nacré, la voiture la plus détaillée du jeu : carrosserie deux fois plus fine, carbone tissé (sergé 2×2), calandre, ouïes, écope de toit et grille arrière en nid d'abeille, trois projecteurs par phare et signature lumineuse en « L », barre de feux arrière à lamelles, aileron actif col-de-cygne avec volet et jonc de Gurney, lame avant et canards en carbone, diffuseur à grandes dérives, quatre sorties d'échappement en titane bleui, jantes forgées à dix branches et écrou central, disques carbone-céramique percés, gros étriers jaunes, écrans dans l'habitacle, rétroviseurs profilés. Son propre V12 atmosphérique de 9 200 tr/min avec retours de flamme.
+- **Moteurs plus graves et plus réalistes** : régimes redescendus, impulsions d'échappement plus larges, silencieux plus fermés, égalisation (grave renforcé, aigus adoucis) : la fréquence moyenne du son baisse d'un quart environ. Les cylindres sont plus inégaux (grondement), la boîte passe les rapports un peu plus tôt, et l'échappement claque au lever de pied.
+- **Circuits de jour plus réalistes** : bitume sec et granuleux au soleil (avant, la route brillait comme un miroir mouillé), soleil plus franc et lumière du ciel moins écrasante (volumes plus lisibles), herbe et sol de prairie plus naturels, couleurs moins saturées, halo lumineux plus discret.
+- **Voitures** : paillettes métalliques fines sous un vernis épais sur toutes les peintures ; les modèles importés ne ressemblent plus à du chrome (base moins métallique, vrai vernis).
+
 ## Nouveautés de la 2.1
 
 - **Menu des circuits corrigé** : les cartes des circuits n'étaient plus visibles (la liste se faisait écraser par le reste du panneau). Elles s'affichent en entier, avec des filtres Tous / Ville / Nature / Spéciaux / Atelier, le nombre de circuits, la longueur et la largeur de chaque piste ; sur grand écran, deux rangées. Dans le menu principal, la radio est passée en haut à droite et ne cache plus le titre.
@@ -26,7 +33,7 @@ Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre t
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
 - **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
 - **Atelier** : trois circuits à créer soi-même, entièrement réglés par des nombres.
-- **Garage** : 22 voitures (dont 2 volantes et 5 hypercars suralimentées) et 4 motos à acheter, réglages à améliorer, moteur extrême.
+- **Garage** : 23 voitures (dont 2 volantes et 6 hypercars suralimentées) et 4 motos à acheter, réglages à améliorer, moteur extrême.
 - **Ligne de trajectoire** : en option (écran de course, Grand Prix, options, bouton LIGNE ou touche L). La meilleure ligne du circuit est dessinée devant la voiture : verte quand on peut accélérer, jaune quand il faut lever le pied, rouge quand il faut freiner. Elle est calculée pour le véhicule choisi (`src/ligne.js`).
 - **Vue** : bouton VUE (ou touche C, ou Y à la manette) pour passer à la première personne.
 
@@ -42,7 +49,7 @@ En 2.1 : **Docks sous la Pluie** (port industriel, grues, éclairage au sodium e
 - **Eau** : sous la pluie et l'orage, des flaques se forment sur la piste (ronds de pluie, reflet du ciel). Les traverser projette deux murs d'eau et des gouttes, mouille l'objectif, freine la voiture et, au-delà de 130 km/h environ, fait flotter les pneus (aquaplanage). Sur les circuits de bord de mer, trois gués recouvrent toute la largeur de la piste.
 - **Poussière** : au ras des bords, les roues soulèvent la terre, le sable ou la neige du décor ; sur le sable et la neige, la piste poudroie derrière les voitures. En forêt d'automne, des feuilles tombent.
 - **Blé** : dans les champs (Balade libre), les tiges portent un épi à grains et à barbes, ondulent par rafales, se couchent sous la voiture et restent à plat dans son sillage avant de se relever lentement ; la paille vole, le champ freine davantage que l'herbe et s'entend.
-- **Hypercars** : Furie GT (offerte), Tonnerre, Chimère, Apocalypse et Dragster Enragé ont un moteur suralimenté (champ `sur` dans `src/carlist.js`) : de 409 à 522 km/h d'origine, flammes à l'échappement à pleine charge. Un adversaire n'a jamais un moteur plus suralimenté que celui du joueur.
+- **Hypercars** : Furie GT et Absinthe (offertes), Tonnerre, Chimère, Apocalypse et Dragster Enragé ont un moteur suralimenté (champ `sur` dans `src/carlist.js`) : de 409 à 522 km/h d'origine, flammes à l'échappement à pleine charge. Un adversaire n'a jamais un moteur plus suralimenté que celui du joueur.
 
 ## Conduite
 
@@ -197,7 +204,7 @@ Pour essayer un modèle sans toucher à la liste : ouvrir le jeu avec `?modele=m
 
 ## Voitures dessinées par le jeu
 
-Seize voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur, Aiglon, Sirocco, les volantes Nébula et Orion, et les cinq hypercars) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes, le néon sous la caisse, et un habitacle visible à travers les vitres (sièges, planche de bord, volant). Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
+Dix-sept voitures (Comète, Nomade, Titan, Mirage, Éclipse, Vortex, Fulgur, Aiglon, Sirocco, les volantes Nébula et Orion, et les six hypercars) ne viennent pas d'un fichier 3D : elles sont construites par `src/procar.js` à partir de quelques tables de nombres dans `src/carlist.js` (longueur, largeur, ligne de capot, ligne d'épaule, garde au sol, position et taille des roues, forme du toit). Le jeu en tire la carrosserie avec ses passages de roues et ses ailes bombées, les jantes, les étriers, les feux, les bandes, le néon sous la caisse, et un habitacle visible à travers les vitres (sièges, planche de bord, volant). Pour en créer une nouvelle, copier une ligne `design` et changer les nombres.
 
 ## Stats
 

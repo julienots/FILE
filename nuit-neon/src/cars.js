@@ -228,7 +228,9 @@ function rigImported(src, def, paint, loin) {
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) if (m.name === 'interieur') m.side = THREE.DoubleSide;
   });
   if (def.teinte === false) paintMats.length = 0;
-  for (const pm of paintMats) { pm.color.set(paint); if ('metalness' in pm) { pm.metalness = Math.max(pm.metalness, 0.6); pm.roughness = Math.min(pm.roughness, 0.35); } }
+  // peinture réaliste : base peu métallique sous un vernis épais (avant : presque du chrome), paillettes fines
+  for (const pm of paintMats) { pm.color.set(paint); if ('metalness' in pm) { pm.metalness = Math.min(Math.max(pm.metalness, 0.35), 0.55); pm.roughness = Math.min(Math.max(pm.roughness, 0.22), 0.35); }
+    if (pm.isMeshPhysicalMaterial) { pm.clearcoat = 1; pm.clearcoatRoughness = 0.03; } }
 
   // roues préparées par tools/prep-model.mjs : nœuds wheel_fl, wheel_fr, wheel_rl, wheel_rr (voiture) ou wheel_f, wheel_r (moto),
   // dont l'origine est le centre de la roue et dont le rayon est noté dans les « extras » du fichier
@@ -423,7 +425,7 @@ function flakes(mat) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP;\nfloat fkh(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { vec3 q = floor(vOP * 380.0); float fade = clamp(1.0 - length(vViewPosition) / 22.0, 0.0, 1.0);
-          normal = normalize(normal + (vec3(fkh(q), fkh(q + 1.7), fkh(q + 3.1)) - 0.5) * 0.16 * fade); }`);
+          normal = normalize(normal + (vec3(fkh(q), fkh(q + 1.7), fkh(q + 3.1)) - 0.5) * 0.06 * fade); }`);
   };
 }
 

@@ -3,8 +3,8 @@ import { tracer } from './custom.js';
 // Décors de nature (jour). flore : [type, nombre, distance mini au bord, étalement, taille mini, taille maxi]
 const NATURE = {
   prairie: { env: 'nature', sky: [[0.10,0.28,0.72],[0.36,0.60,0.95],[0.80,0.88,0.96]], fog: 0xbcd4ee, dens: 0.0016, a: 0x19a0ff, b: 0xff5a1f, c: 0xffd23f,
-    ground: 0x4f8a35, sol: { kind: 0, c: [0x2f5a1e, 0x5f9a35, 0xc9b25a, 0x6a5136] }, hill: 0x3f6f48, hillH: 110, sun: { dir: [0.449,0.419,-0.789], col: [1.0,0.86,0.62], road: 2.2 }, sunI: 2.8, ambI: 1.5, wet: 0.6,
-    flore: [['feuillu', 420, 14, 240, 0.8, 1.8], ['rocher', 40, 10, 200, 0.4, 1.0]], grass: { c0: 0x2d5a1c, c1: 0x7fb83a, c2: 0xd8c060, h: 1.35 } },
+    ground: 0x46703a, sol: { kind: 0, c: [0x2c4a1e, 0x4f7a32, 0x9a9258, 0x5a4a36] }, hill: 0x3f6a4a, hillH: 110, sun: { dir: [0.449,0.419,-0.789], col: [1.0,0.86,0.62], road: 2.2 }, sunI: 2.8, ambI: 1.5, wet: 0.6,
+    flore: [['feuillu', 420, 14, 240, 0.8, 1.8], ['rocher', 40, 10, 200, 0.4, 1.0]], grass: { c0: 0x24421a, c1: 0x5a8a34, c2: 0xa8a862, h: 1.35 } },
   canyon: { env: 'nature', sky: [[0.16,0.18,0.42],[0.85,0.45,0.30],[1.0,0.62,0.30]], fog: 0xd89060, dens: 0.0016, a: 0xff8a1f, b: 0xffffff, c: 0x19e6ff, cloud: 0.75,
     ground: 0xb0603a, sol: { kind: 1, c: [0x9a5230, 0xc77a48, 0xd69a62, 0x7a3f26] }, relief: 55, hill: 0x8a3a22, hillH: 220, rock: 0x9a4a2c, sun: { dir: [-0.6,0.22,-0.77], col: [1.0,0.55,0.25], road: 2.4 }, sunI: 3.0, ambI: 1.3, wet: 0.12,
     flore: [['rocher', 260, 6, 200, 0.8, 3.2], ['cactus', 180, 5, 160, 0.7, 1.5]], grass: { c0: 0x6a5a2a, c1: 0xc8a850, c2: 0xd8b860, h: 0.7, dens: 0.35 } },
