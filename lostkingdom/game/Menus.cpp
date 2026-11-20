@@ -271,6 +271,8 @@ void Game::newGame() {
     storyFlags.clear(); cine = CinematicState(); pendingPrologue = true;
     unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; meteorPending = false;
     killedUnique.clear(); openedChests.clear(); clearedSpawns.clear(); dungeonsDone.clear(); world.harvested.clear();
+    if (world.dugChunks() > 0) { world.clearDigs(); world.unloadAll(); }   // 2.4.0 a new game starts on untouched ground
+    bombs.clear(); digMode = false; digsDone = 0;
     for (auto& r : reputation) r = 0;
     fog.assign(128 * 128, 0);
     nodeEntities.clear(); spawnedChunks.clear(); chunkSpawns.clear(); villageNpcsSpawned.clear();
@@ -572,8 +574,9 @@ void Game::drawMenus(float dt) {
             u.text(line, A.x + 88, A.y + 40, 16, PALE, F_BODY, A_LEFT, A.w - 300);
             float bw = 130, bx = A.x + A.w - bw * 2 - 22, by = A.y + A.h - 64;
             bool equipable = slot >= 0 || d->kind == ItemKind::Cosmetic;
-            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, "Utiliser", true, "plaque", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
+            if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, st.id == "bomb" ? "Lancer" : "Utiliser", true, "plaque", 21)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
             if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "plaque", 21)) { equip(selItem); selItem = -1; }
+            if (st.id == "tool_shovel" && u.fancyButton({bx, by, bw, 56}, digMode ? "Arrêter" : "Creuser", true, "plaque", 21)) { equip(selItem); selItem = -1; }   // 2.4.0
             if (d->kind != ItemKind::Quest && d->kind != ItemKind::Relic && u.fancyButton({bx + bw + 10, by, bw, 54}, "Jeter", true, "button_dark", 21)) {
                 Character& pl = pc();
                 spawnPickup(st.id, 1, st.rarity, pl.pos + vec3(std::sin(pl.yaw), 0, std::cos(pl.yaw)) * 1.5f);
@@ -949,7 +952,7 @@ void Game::drawMenus(float dt) {
             tapUsed = true;
         }
         // region names
-        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}};
+        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}};
         for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
         bool has; vec3 qm = questMarker(&has);
         if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }

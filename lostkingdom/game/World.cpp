@@ -1,4 +1,5 @@
 #include "World.h"
+#include <sstream>
 #include "Props.h"
 #include "../engine/core/Platform.h"
 #include <algorithm>
@@ -953,6 +954,106 @@ void World::resetRuntime() {
     if (was) startWorkers(n);
 }
 
+// ---------------------------------------------------------------------------------------- 2.4.0 diggable ground
+float World::digOffset(float x, float z) const {
+    int cx = (int)std::floor(x / CHUNK), cz = (int)std::floor(z / CHUNK);
+    if (cx < 0 || cz < 0 || cx >= CHUNKS || cz >= CHUNKS) return 0.f;
+    int ci = cz * CHUNKS + cx;
+    if (!digFlag[ci].load(std::memory_order_relaxed)) return 0.f;
+    std::shared_lock<std::shared_mutex> l(digMtx);
+    auto it = digs.find(ci);
+    if (it == digs.end()) return 0.f;
+    float lx = x - cx * CHUNK, lz = z - cz * CHUNK;          // 0..32, 1 m cells
+    int i = std::min(31, std::max(0, (int)lx)), j = std::min(31, std::max(0, (int)lz));
+    float fx = clampf(lx - i, 0.f, 1.f), fz = clampf(lz - j, 0.f, 1.f);
+    const float* h = it->second->h;
+    float a = h[j * 33 + i], b = h[j * 33 + i + 1], c = h[(j + 1) * 33 + i], d = h[(j + 1) * 33 + i + 1];
+    return lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fz);
+}
+
+bool World::canDig(vec2 c, float radius) const {
+    if (c.x < 80 || c.y < 80 || c.x > WORLD_SIZE - 80 || c.y > WORLD_SIZE - 80) return false;
+    for (const Poi& p : pois) {   // not under houses, walls, temples, waystones
+        bool built = p.type == PoiType::Village || p.type == PoiType::Castle || p.type == PoiType::Monastery || p.type == PoiType::Temple ||
+                     p.type == PoiType::Waystone || p.type == PoiType::Mill || p.type == PoiType::Farm || p.type == PoiType::Tower || p.type == PoiType::Bridge;
+        if (built && length(p.pos - c) < p.radius + radius + 4.f) return false;
+    }
+    int ci = chunkIndex((int)std::floor(c.x / CHUNK), (int)std::floor(c.y / CHUNK));
+    if (ci >= 0 && ci < (int)chunkStructures.size())
+        for (int si : chunkStructures[ci]) if (length(structures[si].pos - c) < radius + 6.f) return false;
+    return true;
+}
+
+bool World::dig(vec2 c, float radius, float depth, bool explosion) {
+    if (!canDig(c, radius)) return false;
+    std::unique_lock<std::shared_mutex> l(digMtx);
+    int x0 = (int)std::floor(c.x - radius - 1.5f), x1 = (int)std::ceil(c.x + radius + 1.5f);
+    int z0 = (int)std::floor(c.y - radius - 1.5f), z1 = (int)std::ceil(c.y + radius + 1.5f);
+    auto grid = [&](int cx, int cz) -> float* {
+        if (cx < 0 || cz < 0 || cx >= CHUNKS || cz >= CHUNKS) return nullptr;
+        int ci = cz * CHUNKS + cx;
+        auto& g = digs[ci];
+        if (!g) g = std::make_unique<DigGrid>();
+        digFlag[ci].store(1);
+        return g->h;
+    };
+    for (int z = z0; z <= z1; z++)
+        for (int x = x0; x <= x1; x++) {
+            float d = length(vec2((float)x, (float)z) - c) / radius;
+            float delta = 0;
+            if (d < 1.f) { float k = 1.f - d * d; delta = -depth * k * k; }                         // the bowl
+            else if (explosion && d < 1.45f) delta = depth * 0.16f * std::sin((d - 1.f) / 0.45f * PI);   // thrown-up rim
+            if (delta == 0) continue;
+            int cx = (int)std::floor(x / CHUNK), cz = (int)std::floor(z / CHUNK);
+            int lx = x - cx * (int)CHUNK, lz = z - cz * (int)CHUNK;
+            // the vertex belongs to its chunk and, on a border, to the neighbours' grids too (seamless)
+            for (int ox = 0; ox <= (lx == 0 ? 1 : 0); ox++)
+                for (int oz = 0; oz <= (lz == 0 ? 1 : 0); oz++) {
+                    float* g = grid(cx - ox, cz - oz);
+                    if (!g) continue;
+                    int gi = ox ? 32 : lx, gj = oz ? 32 : lz;
+                    float& v = g[gj * 33 + gi];
+                    v = std::max(-14.f, std::min(4.f, v + delta));                                  // no bottomless pits
+                }
+        }
+    l.unlock();
+    refreshArea(c, radius + 3.f);
+    return true;
+}
+
+std::string World::saveDigs() const {
+    std::shared_lock<std::shared_mutex> l(digMtx);
+    std::string out;
+    char b[48];
+    for (auto& kv : digs) {
+        out += "digs " + std::to_string(kv.first);
+        for (int i = 0; i < 33 * 33; i++) if (std::fabs(kv.second->h[i]) > 0.005f) { snprintf(b, sizeof b, " %d:%.2f", i, kv.second->h[i]); out += b; }
+        out += "\n";
+    }
+    return out;
+}
+
+void World::loadDigs(const std::string& line) {
+    std::istringstream in(line);
+    std::string tag; int ci = -1;
+    in >> tag >> ci;
+    if (tag != "digs" || ci < 0 || ci >= CHUNKS * CHUNKS) return;
+    std::unique_lock<std::shared_mutex> l(digMtx);
+    auto& g = digs[ci];
+    if (!g) g = std::make_unique<DigGrid>();
+    std::string tok;
+    while (in >> tok) { size_t p = tok.find(':'); if (p == std::string::npos) continue; int i = std::atoi(tok.c_str()); if (i >= 0 && i < 33 * 33) g->h[i] = (float)std::atof(tok.c_str() + p + 1); }
+    digFlag[ci].store(1);
+}
+
+void World::clearDigs() {
+    std::unique_lock<std::shared_mutex> l(digMtx);
+    digs.clear();
+    for (auto& f : digFlag) f.store(0);
+}
+
+int World::dugChunks() const { std::shared_lock<std::shared_mutex> l(digMtx); return (int)digs.size(); }
+
 void World::refreshArea(vec2 c, float r) {
     // mark the loaded chunks stale: they keep drawing their old meshes until the rebuilt ones arrive
     for (auto& kv : chunks) {
@@ -999,6 +1100,11 @@ float World::riverInfluence(float x, float z, float& surf, vec2& flow) const {
 }
 
 float World::height(float x, float z) const {
+    float dug = digOffset(x, z);   // 2.4.0 holes, trenches and craters
+    return heightNoDig(x, z) + dug;
+}
+
+float World::heightNoDig(float x, float z) const {
     RegionWeights rw = regionAt(x, z);
     float h = baseHeight(x, z, rw);
     // rivers: carve channel, raise levees so water never spills outside the mesh
@@ -1490,8 +1596,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             {{P_FLOWERS, 1.5f, 0.7f, 1.1f}, {P_TALLGRASS, 2.f, 0.7f, 1.1f}, {P_PEBBLES, 2.f, 0.8f, 1.5f}},
             {{P_PEBBLES, 2.5f, 0.8f, 1.5f}, {P_DRYBUSH, 1.2f, 0.5f, 0.9f}, {P_BONES, 0.15f, 0.7f, 1.f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}},
             {{P_SHELLS, 2.f, 0.8f, 1.3f}, {P_FLOWERS, 1.5f, 0.8f, 1.3f}, {P_FERN, 2.f, 0.6f, 1.f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.2f, 0.8f, 1.2f}},
+            {{P_FLOWERS, 2.f, 0.7f, 1.2f}, {P_TALLGRASS, 3.f, 0.8f, 1.3f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_BONES, 0.1f, 0.7f, 1.f}},           // 2.4.0 steppe
+            {{P_FERN, 3.f, 0.7f, 1.2f}, {P_SMALLSHROOMS, 1.2f, 0.8f, 1.2f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}},    // 2.4.0 jungle
         };
-        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15};
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16};
         Rng cr(hash2i(k.x, k.z, 9191));
         int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
         for (int t = 0; t < n; t++) {

@@ -573,7 +573,8 @@ void Game::drawHud(float dt) {
         if (cd01 > 0) u.ring({rr.x + rr.w / 2, rr.y + rr.h / 2}, 0, rr.w * 0.42f, -PI / 2, -PI / 2 + TAU * cd01, vec4(0, 0, 0, 0.6f), 28);
         if (!badge.empty()) { u.circle({rr.x + rr.w * 0.82f, rr.y + rr.h * 0.18f}, 13, rgba(0x2a1e16), 14); u.text(badge, rr.x + rr.w * 0.82f, rr.y + rr.h * 0.18f - 11, 16, rgba(0xf6dc9a), F_BOLD, A_CENTER); }
     };
-    ctl(CTL_ATTACK, CTL_ICON[CTL_ATTACK], !riding, 0, "", vec4(1, 1, 1, 1), "round_red");
+    ctl(CTL_ATTACK, digMode ? "pickaxe" : CTL_ICON[CTL_ATTACK], !riding, 0, countItem("bomb") > 0 && digMode ? std::to_string(countItem("bomb")) : "", vec4(1, 1, 1, 1), digMode ? "round" : "round_red");
+    if (digMode) { Rect r = ctlRect(*this, CTL_ATTACK); u.text("CREUSER", r.x + r.w / 2, r.y + r.h - 4, 15, rgba(0xf4e0b0), F_BOLD, A_CENTER, 0, true); }   // 2.4.0
     if (input.attackHeld && input.attackHoldT > 0.25f) {
         Rect r = ctlRect(*this, CTL_ATTACK);
         float f = saturate((input.attackHoldT - 0.25f) / 0.65f);

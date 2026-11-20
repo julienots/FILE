@@ -11,6 +11,8 @@
 #include <unordered_set>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
+#include <atomic>
 #include <thread>
 #include <condition_variable>
 #include <deque>
@@ -165,6 +167,17 @@ public:
     int addRuntimeStructure(const Structure& s);
     void resetRuntime();                        // back to the generated plan (new game / load)
     void refreshArea(vec2 c, float r);
+    // 2.4.0 diggable ground: a sparse offset layer over the procedural terrain (1 m grid, one 33x33 grid per
+    // chunk that has been dug). Shovel strikes and explosions carve it; height() reads it; saved with the game.
+    struct DigGrid { float h[33 * 33] = {}; };
+    float digOffset(float x, float z) const;
+    float heightNoDig(float x, float z) const;
+    bool dig(vec2 c, float radius, float depth, bool explosion);   // false if the ground can't be dug there
+    bool canDig(vec2 c, float radius) const;
+    std::string saveDigs() const;
+    void loadDigs(const std::string& line);   // one "digs" save line
+    void clearDigs();
+    int dugChunks() const;
     int plannedPois = -1, plannedStructures = -1, workerCount = 0;
     float grassDensity = 1.f;
     bool detailedFoliage = true;   // leaf cards on near trees (off on low-end profiles)
@@ -208,6 +221,9 @@ public:
 
 private:
     std::unordered_map<ChunkKey, std::unique_ptr<Chunk>, ChunkKeyHash> chunks;
+    mutable std::shared_mutex digMtx;
+    std::unordered_map<int, std::unique_ptr<DigGrid>> digs;      // chunk index -> grid
+    std::vector<std::atomic<uint8_t>> digFlag = std::vector<std::atomic<uint8_t>>(CHUNKS * CHUNKS);   // fast path: 0 = never dug
     // job queue
     std::vector<std::thread> workers;
     std::mutex qmtx;

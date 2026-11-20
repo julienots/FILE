@@ -62,6 +62,12 @@ void Game::equip(int i) {
     if (i < 0 || i >= (int)inventory.size()) return;
     const ItemDef* d = item(inventory[i].id);
     if (!d) return;
+    if (d->id == "tool_shovel") {   // 2.4.0 the shovel toggles the dig mode
+        digMode = !digMode; menu = Menu::None;
+        notify(digMode ? "Mode creusage : touchez l'épée pour creuser (maintenez pour lancer une bombe). Utilisez la pelle à nouveau pour arrêter."
+                       : "Mode creusage terminé.", vec3(0.85f, 0.75f, 0.5f), "i_pickaxe");
+        return;
+    }
     if (d->kind == ItemKind::Tool) {
         // tools are swapped into the weapon slot only while gathering; equipping keeps them handy
         notify("Les outils s'utilisent automatiquement lors de la récolte.", vec3(0.9f, 0.9f, 0.8f), d->icon);
@@ -94,6 +100,10 @@ void Game::useItem(int i) {
     const ItemDef* d = item(inventory[i].id);
     if (!d) return;
     if (d->kind != ItemKind::Consumable) { equip(i); return; }
+    if (d->id == "bomb") {   // 2.4.0 thrown, not drunk
+        if (--inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
+        menu = Menu::None; throwBomb(); return;
+    }
     Character& c = pc();
     float healMul = 1.f + skillBonus(skills, &SkillNode::heal);
     if (d->heal > 0) { c.hp = std::min(c.maxHp, c.hp + d->heal * healMul); floatText(c.pos + vec3(0, 2.3f, 0), "+" + std::to_string((int)(d->heal * healMul)), vec3(0.4f, 1, 0.5f)); }
@@ -530,6 +540,7 @@ bool Game::saveGame(int slot) {
     o << "player " << c.pos.x << " " << c.pos.y << " " << c.pos.z << " " << c.yaw << " " << c.hp << " " << mp << " " << stamina << "\n";
     o << "respawn " << respawnPos.x << " " << respawnPos.y << " " << respawnPos.z << "\n";
     o << "pins " << mapPins.size(); for (vec2 pp : mapPins) o << " " << pp.x << " " << pp.y; o << "\n";   // 2.2.0
+    o << world.saveDigs();   // 2.4.0 the holes and craters you made
     o << "prog " << level << " " << xp << " " << gold << " " << skillPoints << " " << gameTime << " " << timeOfDay << " " << day << " " << playSeconds << "\n";
     for (auto& s : inventory) o << "inv " << s.id << " " << s.count << " " << (int)s.rarity << " " << s.level << "\n";
     for (int i = 0; i < SL_COUNT; i++) if (!equipment[i].id.empty()) o << "eq " << i << " " << equipment[i].id << " " << (int)equipment[i].rarity << " " << equipment[i].level << "\n";
@@ -572,12 +583,14 @@ bool Game::saveGame(int slot) {
 
 bool Game::loadGame(int slot) {
     mapPins.clear(); tele = TeleFx();
+    bool hadDigs = world.dugChunks() > 0;
     if (coop.mode != CoopState::Off && slot != 99) coopLeave(true);   // 1.13.0 loading another save ends the session
     std::string data;
     if (!platform::readFile(slotPath(slot), data)) return false;
     if (data.rfind("LOSTKINGDOM_SAVE", 0) != 0 || data.find("\nend\n") == std::string::npos) { AGR_ERR("corrupt save slot %d", slot); return false; }
     // reset world-dependent state
     reg.clear();
+    world.clearDigs(); bombs.clear(); digMode = false;   // 2.4.0
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
     vehicles.clear(); vehicleEnts.clear(); driving = -1;
     raceBest.clear(); race = RaceState();
@@ -599,6 +612,7 @@ bool Game::loadGame(int slot) {
         std::string k; l >> k;
         if (k == "player") { l >> pos.x >> pos.y >> pos.z >> yaw >> hp >> mp >> stamina; }
         else if (k == "respawn") l >> respawnPos.x >> respawnPos.y >> respawnPos.z;
+        else if (k == "digs") { world.loadDigs(line); hadDigs = true; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
         else if (k == "inv") { ItemStack s; int r; l >> s.id >> s.count >> r >> s.level; s.rarity = (Rarity)r; s.isNew = false; if (item(s.id)) inventory.push_back(s); }
@@ -651,6 +665,7 @@ bool Game::loadGame(int slot) {
     if (trackedQuest >= (int)questLog.size()) trackedQuest = -1;
     if (base.founded) applyBaseToWorld();
     if (pos.x > WORLD_SIZE) pos = respawnPos;  // saved inside a dungeon: resume at its entrance
+    if (hadDigs || world.dugChunks() > 0) world.unloadAll();   // 2.4.0 rebuilt with this save's holes and craters
     pos.y = world.groundHeight(pos.x, pos.z);
     spawnPlayer(pos);
     Character& c = pc();

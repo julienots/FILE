@@ -201,6 +201,7 @@ static void buildItems() {
     cons("coco", "Noix de coco fraîche", Rarity::Common, 5, 22, 15, 0, 0, 0, "i_heart", "Le lait est frais, même sous le soleil.");
     cons("tea_mint", "Thé à la menthe de Solmar", Rarity::Rare, 22, 0, 70, 40, 1, 90, "i_potion_mana", "Mana et endurance, servi bien sucré.");
     cons("fish_stew", "Bouillabaisse de Port-Azur", Rarity::Rare, 24, 90, 0, 40, 4, 180, "i_heart", "Rend 90 PV et accélère la régénération.");
+    cons("bomb", "Bombe", Rarity::Rare, 30, 0, 0, 0, 0, 0, "i_crystal", "Lancez-la : elle rebondit, siffle, puis explose. Elle creuse un cratère et blesse tout ce qui est autour.");   // 2.4.0
     cons("bandage", "Bandage de lin", Rarity::Common, 8, 35, 0, 0, 0, 0, "i_heart", "Rend 35 PV. Simple et efficace.");
     cons("cactus_juice", "Jus de figue de barbarie", Rarity::Common, 10, 15, 0, 60, 0, 0, "i_potion_mana", "Rend de l'endurance, et un peu de vie.");
     cons("ember_tonic", "Tonique de braise", Rarity::Rare, 28, 60, 20, 40, 0, 0, "i_potion", "Réchauffe jusqu'aux os : vie, mana et endurance.");
@@ -286,6 +287,7 @@ static void buildItems() {
     tool("tool_pickaxe", "Pioche", WeaponType::Pickaxe, "i_pickaxe", "Pour miner pierre et minerais.");
     tool("tool_woodaxe", "Hachette", WeaponType::WoodAxe, "i_woodaxe", "Pour couper du bois.");
     tool("tool_rod", "Canne à pêche", WeaponType::FishingRod, "i_fishing", "Patience et poignet souple.");
+    tool("tool_shovel", "Pelle", WeaponType::Pickaxe, "i_pickaxe", "Touchez « Creuser » dans le sac : l'épée creuse alors le sol devant vous. Pierres, minerais, et parfois un trésor enfoui.");   // 2.4.0
     auto mtok = [&](const char* id, const char* nm, int m, Rarity r, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::MountToken, r, 0, desc); d.mount = m; d.icon = "i_mount"; };
     mtok("mount_horse", "Sifflet : Cheval de Brindlemere", 0, Rarity::Rare, "Appelle votre cheval.");
     mtok("mount_wolf", "Sifflet : Loup géant", 1, Rarity::Epic, "Appelle Fenra, le loup géant d'Eira.");
@@ -366,6 +368,9 @@ const std::vector<Recipe>& recipes() {
         {"ring_gold", 1, {{"gold_bar", 2}, {"amber", 1}}, ST_FORGE, 6},
         {"amulet_pearl", 1, {{"pearl", 1}, {"silver_bar", 1}, {"linen", 1}}, ST_FORGE, 6},
         {"bandage", 2, {{"linen", 1}, {"herb", 1}}, ST_ALCHEMY, 1},
+        {"tool_shovel", 1, {{"iron_bar", 2}, {"wood", 2}}, ST_FORGE, 1},   // 2.4.0
+        {"bomb", 2, {{"coal", 2}, {"fire_root", 1}}, ST_FORGE, 4},
+        {"bomb", 1, {{"coal", 3}, {"sea_salt", 1}}, ST_FORGE, 4},
         {"cactus_juice", 1, {{"cactus_fruit", 3}}, ST_CAMPFIRE, 1},
         {"ember_tonic", 1, {{"fire_root", 2}, {"herb", 1}}, ST_ALCHEMY, 5},
         {"salted_fish", 1, {{"fish", 1}, {"sea_salt", 1}}, ST_CAMPFIRE, 1},
@@ -841,7 +846,7 @@ const std::vector<NpcDef>& npcs() {
             {"Il y a trois siècles, le Haut-Roi Aldric unifia six royaumes sous la Couronne-Mère.", "Quand l'Abîme s'ouvrit sous Morneval, Aldric brisa sa couronne pour sceller la faille. Six fragments, six gardiens.", "Les gardiens ont gardé les fragments… mais les fragments les ont changés."}, {}, FA_GREENHAVEN); }
         { HumanoidLook l = villagerLook(true, 0x6a4a3a, 0xa04a2a, Hair::Braids, Body::Apron, 4); l.bulk = 1.15f;
           N("hilda", "Hilda", "Forgeronne", NpcRole::Blacksmith, "brindlemere", l, {-10, 14}, {"L'acier ne ment jamais. Les hommes, si.", "Besoin d'une lame ? D'une réparation ?"},
-            {"Ma grand-mère disait que les épées d'Aldric chantaient au combat.", "Le meilleur fer vient de la Mine des Cimes. Le plus pur, de Cinderwatch."}, {"sword_iron", "axe_iron", "spear_iron", "shield_wood", "dagger_iron", "tool_pickaxe", "tool_woodaxe", "chain_head"}, FA_GREENHAVEN); }
+            {"Ma grand-mère disait que les épées d'Aldric chantaient au combat.", "Le meilleur fer vient de la Mine des Cimes. Le plus pur, de Cinderwatch."}, {"sword_iron", "axe_iron", "spear_iron", "shield_wood", "dagger_iron", "tool_pickaxe", "tool_woodaxe", "tool_shovel", "bomb", "chain_head"}, FA_GREENHAVEN); }
         { HumanoidLook l = villagerLook(true, 0x5a3a6a, 0x2a2a2a, Hair::Long, Body::Dress, 5);
           N("ysolde", "Mère Ysolde", "Alchimiste", NpcRole::Alchemist, "brindlemere", l, {14, -8}, {"Les plantes savent soigner. Il suffit de les écouter.", "Une potion ? J'en ai toujours une qui mijote."},
             {"Les champignons lumineux d'Elderwood décuplent la puissance des élixirs.", "Le lys de givre ne pousse que sous la neige de Frostheim."}, {"potion_minor", "potion_heal", "potion_mana", "potion_stamina", "herb"}, FA_GREENHAVEN); }
@@ -964,7 +969,7 @@ const std::vector<NpcDef>& npcs() {
             {"Cette lame courbe ? Les caravaniers la baptisent « Soupir », parce qu'on n'a jamais le temps d'en dire plus."}, {"tea_mint", "dates", "potion_heal", "potion_mana", "scimitar_dune", "ring_scarab", "elixir_strength", "dye_gold"}, FA_SOLMAR); }
         { HumanoidLook l = villagerLook(false, 0x4a3a2a, 0x2a1a10, Hair::Short, Body::Apron, 50, true); l.bulk = 1.2f;
           N("hakim", "Hakim le Forgeron", "Maître d'ambre", NpcRole::Blacksmith, "solmar", l, {12, 12}, {"L'ambre et le fer, c'est comme le thé et le sucre.", "Trouve-moi de l'ambre pur, je te forge quelque chose de chaud."},
-            {"Le verre du désert est du sable foudroyé. Il garde la mémoire du feu."}, {"scimitar_dune", "sword_iron", "axe_iron", "chain_chest", "chain_head", "tool_pickaxe"}, FA_SOLMAR); }
+            {"Le verre du désert est du sable foudroyé. Il garde la mémoire du feu."}, {"scimitar_dune", "sword_iron", "axe_iron", "chain_chest", "chain_head", "tool_pickaxe", "tool_shovel", "bomb"}, FA_SOLMAR); }
         { HumanoidLook l = villagerLook(false, 0x6a4a2a, 0x2a1a10, Hair::Short, Body::Tunic, 51, true); l.hat = 3;
           N("samir", "Samir", "Maître des montures", NpcRole::Stablemaster, "solmar", l, {-4, -12}, {"Un destrier d'ambre ne s'enfonce jamais dans le sable. Les chevaux de la plaine, si.", "Le désert se traverse à cheval, ou à genoux."},
             {"Mes bêtes boivent une fois par jour et ne se plaignent jamais. Vous devriez les imiter."}, {}, FA_SOLMAR); }

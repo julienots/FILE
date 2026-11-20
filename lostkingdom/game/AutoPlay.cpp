@@ -1626,6 +1626,28 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.1f, [](Game& g) { bool ok = res[0] && res[1] && res[2]; AGR_LOG("GRASS TEST: bentWhileWalking=%d trailRecovers=%d nearLayer=%d", res[0], res[1], res[2]); AGR_LOG("GRASS TEST %s", ok ? "PASSED" : "FAILED"); }, idle, "report"});
         return s;
     }
+    if (name == "dig") {
+        // 2.4.0 diggable ground: shovel strikes, a bomb crater, save / load keeps the holes (log + pictures)
+        static vec2 spot; static float h0, h1, h2; static int ok[4];
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; for (int& o : ok) o = 0;
+            teleport(g, 1600, 1560, 0.f); g.addItem("tool_shovel", 1); g.addItem("bomb", 3); g.renderer.settings.grassDensity = 0.3f;
+            for (auto& st : g.inventory) if (st.id == "tool_shovel") { int i = (int)(&st - &g.inventory[0]); g.equip(i); break; }
+            Character& c = g.pc(); spot = (c.pos + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 1.7f).xz(); h0 = g.world.height(spot.x, spot.y);
+            g.camYaw = c.yaw + 2.4f; g.camPitch = 0.45f; g.camDist = g.camDistTarget = 8.f; }, idle, "setup"});
+        for (int i = 0; i < 6; i++) {
+            s.push_back({0.7f, [](Game& g) { g.stamina = g.maxStamina; g.pc().attackClip = nullptr; g.playerAttack(false, false); }, [](Game& g, float) { g.camIdleT = 0; }, "dig"});
+        }
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "rebuild"});
+        s.push_back({0.1f, [](Game& g) { h1 = g.world.height(spot.x, spot.y); ok[0] = g.digMode && h1 < h0 - 1.5f && g.digsDone == 6;
+            AGR_LOG("DIG shovel: ground %.2f -> %.2f after %d strikes -> %d", h0, h1, g.digsDone, ok[0]); g.requestScreenshot("build/shots/D0_hole.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { Character& c = g.pc(); c.yaw += PI * 0.5f; g.pc().attackClip = nullptr; g.playerAttack(false, true); AGR_LOG("DIG bomb thrown, %zu in flight, %d left", g.bombs.size(), g.countItem("bomb")); }, idle, "bomb"});
+        s.push_back({3.5f, none, [](Game& g, float) { g.camIdleT = 0; }, "boom"});
+        s.push_back({0.1f, [](Game& g) { ok[1] = g.bombs.empty() && g.world.dugChunks() > 0; AGR_LOG("DIG bomb exploded %d, dug chunks %d", ok[1], g.world.dugChunks()); g.requestScreenshot("build/shots/D1_crater.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { h2 = g.world.height(spot.x, spot.y); g.saveGame(7); g.newGame(); ok[2] = g.world.dugChunks() == 0 && std::fabs(g.world.height(spot.x, spot.y) - h0) < 0.01f; AGR_LOG("DIG new game resets the ground %d", ok[2]); }, idle, "save"});
+        s.push_back({0.5f, [](Game& g) { g.loadGame(7); float h = g.world.height(spot.x, spot.y); ok[3] = std::fabs(h - h2) < 0.05f; AGR_LOG("DIG reload keeps the hole: %.2f vs %.2f -> %d", h, h2, ok[3]);
+            bool all = true; for (int o : ok) all = all && o; AGR_LOG("DIG TEST %s", all ? "PASSED" : "FAILED"); }, idle, "load"});
+        return s;
+    }
     if (name == "swim") {
         // 2.4.0 swimming: surface, front crawl, dive, air, underwater view, bank climb (log + pictures)
         static vec3 lake; static int ok[5];

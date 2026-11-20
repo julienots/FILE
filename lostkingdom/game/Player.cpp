@@ -171,6 +171,12 @@ static const Clip* heavyClip(int stance) {
 void Game::playerAttack(bool heavy, bool charged) {
     Character& c = pc();
     if (c.dead || riding || c.swimming || c.hitStun > 0) return;
+    // 2.4.0 dig mode: the sword button digs; a charged press throws a bomb (if you carry one)
+    if (digMode && !flying) {
+        if (charged && countItem("bomb") > 0) { removeItem("bomb", 1); throwBomb(); }
+        else playerDig();
+        return;
+    }
     if (flying) {   // Astra: attacking from the sky is a dive punch
         flying = false; meteorPending = true; meteorPower = c.atk * (heavy || charged ? 1.8f : 1.2f);
         c.vel.y = -26.f; c.invuln = 0.6f;

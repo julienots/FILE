@@ -84,6 +84,8 @@ void Game::updateWorldEvents(float dt) {
         particles.magicTrail(sky, vec3(0.7f, 0.85f, 1.f), 1.2f);
         if (ev.fallT <= 0) {
             particles.shockwave(ev.pos + vec3(0, 0.2f, 0), vec3(0.6f, 0.8f, 1.f), 7.f);
+            world.dig(ev.pos.xz(), 5.f, 2.8f, true);   // 2.4.0 a real crater
+            ev.pos.y = groundAt(ev.pos.x, ev.pos.z);
             for (int k = 0; k < 6; k++) particles.dust(ev.pos + vec3(particles.rng.range(-2.f, 2.f), 0, particles.rng.range(-2.f, 2.f)), 2.f, vec3(0.5f, 0.45f, 0.4f));
             play3D("explosion", ev.pos, 1.f, 0.8f, 120.f);
             addShake(d < 60.f ? 0.4f : 0.15f);

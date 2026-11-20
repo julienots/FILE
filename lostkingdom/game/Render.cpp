@@ -297,6 +297,19 @@ void Game::renderWorld(float dt) {
     }
     // characters
     reg.each<Character>([&](Entity e, Character& c) { renderCharacter(e, c); });
+    if (!bombs.empty()) {   // 2.4.0 bombs: an iron ball with a fuse, spinning in flight
+        static std::shared_ptr<Mesh> bombMesh;
+        if (!bombMesh || !bombMesh->valid()) bombMesh = cachedMesh("bomb_24", [](MeshBuilder& b) {
+            b.ellipsoid({0, 0, 0}, vec3(0.22f), Mat(hexColor(0x1c1c20), 0.35f, 0.6f), 12, 8);
+            b.tube({0, 0.2f, 0}, {0.05f, 0.34f, 0.02f}, 0.03f, 0.025f, Mat(hexColor(0x8a6a3a), 0.9f), 6, true);
+        });
+        for (const Bomb& bb : bombs) {
+            DrawItem d; d.mesh = bombMesh.get(); d.castShadow = true;
+            d.model = mat4::trs(bb.pos, quat::axisAngle({1, 0, 0}, realTime * 8.f * (bb.bounces < 2 ? 1.f : 0.f)), vec3(1));
+            d.fx = vec4(bb.fuse < 0.6f ? 0.5f + 0.5f * std::sin(realTime * 40.f) : 0.f, 0, 0, 0);
+            renderer.submit(d);
+        }
+    }
     // spell / weapon lights from projectiles
     reg.each<Projectile>([&](Entity, Projectile& p) {
         if (p.kind == ProjKind::Arrow || p.kind == ProjKind::Boulder) return;

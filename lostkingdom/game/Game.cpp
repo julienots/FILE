@@ -318,6 +318,8 @@ void Game::updatePlaying(float dt) {
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
     updateWorldEvents(dt);   // 2.3.6
+    updateBombs(dt);         // 2.4.0
+    if (dungeon.active) digMode = false;
     if (!cine.active) updateNightHunters(dt);
     updateBase(dt);
     updateRaces(dt);
@@ -368,6 +370,8 @@ static const RegionGrade GRADE[R_COUNT] = {
     {{0.0f, 0.0f, 0.01f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 0.96f, 1.12f, 0.0f, 0.8f, 0, {1, 1, 1.05f}, 1.0f},              // High Crowns
     {{0.02f, 0.005f, 0.0f}, {1.02f, 1.0f, 0.97f}, {1.07f, 0.98f, 0.84f}, 1.06f, 1.14f, 0.55f, 0.65f, 0, {1.05f, 0.92f, 0.78f}, 1.08f},    // Amber Sands: blazing, orange-gold
     {{0.0f, 0.012f, 0.02f}, {1.0f, 1.0f, 1.0f}, {0.97f, 1.04f, 1.03f}, 1.16f, 1.1f, 0.1f, 0.75f, 0, {0.9f, 1.0f, 1.05f}, 1.04f},          // Coral Coast: saturated, turquoise air
+    {{0.015f, 0.01f, 0.0f}, {1.01f, 1.0f, 0.98f}, {1.06f, 1.0f, 0.86f}, 1.04f, 1.08f, 0.35f, 0.6f, 0, {1.02f, 0.97f, 0.86f}, 1.06f},     // 2.4.0 Valdor Steppes: golden light, clear far horizon
+    {{0.0f, 0.015f, 0.01f}, {1.0f, 1.0f, 1.0f}, {0.94f, 1.04f, 0.94f}, 1.12f, 1.1f, -0.05f, 1.45f, 0, {0.78f, 0.95f, 0.82f}, 0.96f},     // 2.4.0 Emerald Jungle: humid green haze
 };
 
 void Game::updateEnvironment(float dt) {

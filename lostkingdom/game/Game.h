@@ -729,6 +729,14 @@ public:
     std::string variant(const std::string& base);
     // 2.3.6 random world events (Events.cpp)
     WorldEvent worldEvent; float eventTimer = 150.f; int eventsDone = 0;
+    // 2.4.0 digging and bombs (Dig.cpp)
+    bool digMode = false; int digsDone = 0;
+    struct Bomb { vec3 pos, vel; float fuse = 2.2f; int bounces = 0; };
+    std::vector<Bomb> bombs;
+    void playerDig();
+    void throwBomb();
+    void updateBombs(float dt);
+    void explodeAt(vec3 p, float radius, float depth, float dmg, Entity src);
     bool startWorldEvent(int kind);
     void updateWorldEvents(float dt);
     void drawWorldEventHud();
