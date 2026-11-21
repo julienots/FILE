@@ -99,6 +99,8 @@ struct EditorShared {
     bool showProfiler = false;     ///< CPU profiler panel.
     bool showScriptDebugger = false;  ///< Lua debugger panel.
     bool showParticles = false;   ///< Particle effects panel.
+    bool showSheetEditor = false;  ///< Sprite sheet editor.
+    std::string openSheetRequest;  ///< .agrsheet to open in the sprite sheet editor.
     bool showPhysicsLayers = false;  ///< Collision layer names panel.
     PhysicsLayers physicsLayers;     ///< Names of assets://physics_layers.json, refreshed by the inspector.
     std::string openDocRequest;    ///< Guide to show ("LOGIC.md"): contextual help.

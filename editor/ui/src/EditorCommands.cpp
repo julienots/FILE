@@ -59,7 +59,7 @@ std::vector<EditorApp::Command> EditorApp::buildCommands() {
              {"Animation (timeline)", &s.showAnimation}, {"Machine à états", &s.showStateMachine}, {"Mixeur audio", &s.showMixer},
              {"Entrées (actions)", &s.showInput},         {"Localisation", &s.showLocalization},      {"Éditeur de shaders", &s.showShaderEditor},
              {"Éditeur de scripts", &s.showScriptEditor}, {"Logique visuelle", &s.showLogic},          {"Plugins et paquets", &s.showPackages},
-             {"Profileur", &s.showProfiler},              {"Débogueur de scripts", &s.showScriptDebugger}, {"Effets de particules", &s.showParticles},
+             {"Profileur", &s.showProfiler},              {"Débogueur de scripts", &s.showScriptDebugger}, {"Effets de particules", &s.showParticles}, {"Feuilles de sprites", &s.showSheetEditor},
              {"Couches de collision", &s.showPhysicsLayers}, {"Historique (annuler)", &m_showHistory}, {"Vue jeu", &m_viewport.gameView},
              {"Grille", &m_viewport.showGrid}})
         add(std::string(*flag ? "Masquer : " : "Afficher : ") + label, [flag] { *flag = !*flag; });
@@ -78,6 +78,7 @@ std::vector<EditorApp::Command> EditorApp::buildCommands() {
         if (ext == ".lua") add("Ouvrir le script : " + uri, [&s, uri] { s.openScriptRequest = uri; });
         else if (ext == ".agrshader") add("Ouvrir le shader : " + uri, [&s, uri] { s.openShaderRequest = uri; });
         else if (ext == ".agrlogic") add("Ouvrir la logique : " + uri, [&s, uri] { s.openLogicRequest = uri; });
+        else if (ext == ".agrsheet") add("Éditer la feuille : " + uri, [&s, uri] { s.openSheetRequest = uri; });
     }
     Scene& scene = ctx.scene();
     usize entities = 0;

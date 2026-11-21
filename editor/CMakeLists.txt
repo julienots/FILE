@@ -59,6 +59,7 @@ add_library(agr_editor_ui STATIC
     ui/src/ProfilerPanel.cpp
     ui/src/ScriptDebuggerPanel.cpp
     ui/src/ParticlePanel.cpp
+    ui/src/SpriteSheetPanel.cpp
     ui/src/PhysicsLayersPanel.cpp
     ui/src/ExportPanel.cpp
     ui/src/EditorApp.cpp)

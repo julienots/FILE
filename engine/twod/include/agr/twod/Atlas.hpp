@@ -32,4 +32,14 @@ Result<SpriteSheet> buildAtlasFiles(VirtualFileSystem& vfs, const std::vector<st
 Result<SpriteSheet> buildGridSheetFile(VirtualFileSystem& vfs, const std::string& imageUri, u32 cellWidth, u32 cellHeight,
                                        const std::string& outSheetUri, u32 margin = 0, u32 spacing = 0, bool pixelArt = false);
 
+/// Automatic slicing: one frame per island of opaque pixels (alpha > alphaThreshold, 8-connected),
+/// islands closer than `mergeDistance` pixels joined into one frame, islands smaller than
+/// minSize on both sides dropped. Frames are ordered in rows (top to bottom, then left to right).
+std::vector<SpriteFrame> autoSliceFrames(const Image& image, u8 alphaThreshold = 8, u32 minSize = 2, u32 mergeDistance = 0,
+                                         const std::string& namePrefix = "frame");
+
+/// Writes a sheet cut by autoSliceFrames.
+Result<SpriteSheet> buildAutoSliceSheetFile(VirtualFileSystem& vfs, const std::string& imageUri, const std::string& outSheetUri,
+                                            u8 alphaThreshold = 8, u32 minSize = 2, u32 mergeDistance = 0, bool pixelArt = false);
+
 } // namespace agr

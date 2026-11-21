@@ -128,4 +128,99 @@ Result<SpriteSheet> buildGridSheetFile(VirtualFileSystem& vfs, const std::string
     return sheet;
 }
 
+std::vector<SpriteFrame> autoSliceFrames(const Image& img, u8 alphaThreshold, u32 minSize, u32 mergeDistance, const std::string& namePrefix) {
+    struct Box {
+        u32 x0, y0, x1, y1;  // inclusive
+    };
+    std::vector<Box> boxes;
+    const u32 w = img.width, h = img.height;
+    if (w == 0 || h == 0 || img.pixels.size() < static_cast<usize>(w) * h * 4) return {};
+    std::vector<u8> seen(static_cast<usize>(w) * h, 0);
+    auto opaque = [&](u32 x, u32 y) { return img.pixels[(static_cast<usize>(y) * w + x) * 4 + 3] > alphaThreshold; };
+    std::vector<std::pair<u32, u32>> stack;
+    for (u32 y = 0; y < h; ++y)
+        for (u32 x = 0; x < w; ++x) {
+            const usize i = static_cast<usize>(y) * w + x;
+            if (seen[i] || !opaque(x, y)) continue;
+            Box b{x, y, x, y};
+            seen[i] = 1;
+            stack.push_back({x, y});
+            while (!stack.empty()) {  // flood fill (8 neighbours)
+                const auto [cx, cy] = stack.back();
+                stack.pop_back();
+                b.x0 = std::min(b.x0, cx), b.y0 = std::min(b.y0, cy), b.x1 = std::max(b.x1, cx), b.y1 = std::max(b.y1, cy);
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const i64 nx = static_cast<i64>(cx) + dx, ny = static_cast<i64>(cy) + dy;
+                        if (nx < 0 || ny < 0 || nx >= static_cast<i64>(w) || ny >= static_cast<i64>(h)) continue;
+                        const usize ni = static_cast<usize>(ny) * w + static_cast<usize>(nx);
+                        if (seen[ni] || !opaque(static_cast<u32>(nx), static_cast<u32>(ny))) continue;
+                        seen[ni] = 1;
+                        stack.push_back({static_cast<u32>(nx), static_cast<u32>(ny)});
+                    }
+            }
+            boxes.push_back(b);
+        }
+    // Merge boxes closer than mergeDistance (a sword next to its hero, the dot of an "i").
+    const i64 md = mergeDistance;
+    for (bool merged = true; merged;) {
+        merged = false;
+        for (usize a = 0; a < boxes.size() && !merged; ++a)
+            for (usize c = a + 1; c < boxes.size(); ++c) {
+                const Box& p = boxes[a];
+                const Box& q = boxes[c];
+                const i64 gapX = std::max<i64>({0, static_cast<i64>(q.x0) - static_cast<i64>(p.x1) - 1, static_cast<i64>(p.x0) - static_cast<i64>(q.x1) - 1});
+                const i64 gapY = std::max<i64>({0, static_cast<i64>(q.y0) - static_cast<i64>(p.y1) - 1, static_cast<i64>(p.y0) - static_cast<i64>(q.y1) - 1});
+                if (gapX <= md && gapY <= md && (md > 0 || (gapX == 0 && gapY == 0))) {
+                    boxes[a] = {std::min(p.x0, q.x0), std::min(p.y0, q.y0), std::max(p.x1, q.x1), std::max(p.y1, q.y1)};
+                    boxes.erase(boxes.begin() + static_cast<std::ptrdiff_t>(c));
+                    merged = true;
+                    break;
+                }
+            }
+    }
+    std::erase_if(boxes, [&](const Box& b) { return b.x1 - b.x0 + 1 < minSize && b.y1 - b.y0 + 1 < minSize; });
+    // Rows: a box starts a new row when it lies below the previous row's band.
+    std::sort(boxes.begin(), boxes.end(), [](const Box& a, const Box& b) { return a.y0 < b.y0 || (a.y0 == b.y0 && a.x0 < b.x0); });
+    std::vector<std::vector<Box>> rows;
+    u32 rowBottom = 0;
+    for (const Box& b : boxes) {
+        if (rows.empty() || b.y0 > rowBottom) {
+            rows.push_back({});
+            rowBottom = b.y1;
+        }
+        rows.back().push_back(b);
+        rowBottom = std::max(rowBottom, b.y1);
+    }
+    std::vector<SpriteFrame> frames;
+    for (auto& row : rows) {
+        std::sort(row.begin(), row.end(), [](const Box& a, const Box& b) { return a.x0 < b.x0; });
+        for (const Box& b : row) {
+            SpriteFrame f;
+            f.name = namePrefix + "_" + std::to_string(frames.size());
+            f.x = b.x0, f.y = b.y0, f.w = b.x1 - b.x0 + 1, f.h = b.y1 - b.y0 + 1;
+            frames.push_back(std::move(f));
+        }
+    }
+    return frames;
+}
+
+Result<SpriteSheet> buildAutoSliceSheetFile(VirtualFileSystem& vfs, const std::string& imageUri, const std::string& outSheetUri, u8 alphaThreshold,
+                                            u32 minSize, u32 mergeDistance, bool pixelArt) {
+    auto bytes = vfs.readBytes(imageUri);
+    if (!bytes) return bytes.error();
+    auto img = decodeImage(bytes.value(), imageUri);
+    if (!img) return img.error();
+    const std::string stem = std::filesystem::path(imageUri.substr(imageUri.find_last_of('/') + 1)).stem().string();
+    SpriteSheet sheet;
+    sheet.texture = imageUri;
+    sheet.textureWidth = img.value().width;
+    sheet.textureHeight = img.value().height;
+    sheet.pixelArt = pixelArt;
+    sheet.frames = autoSliceFrames(img.value(), alphaThreshold, minSize, mergeDistance, stem);
+    if (sheet.frames.empty()) return makeError(Error::Code::InvalidArgument, "no opaque pixels to slice");
+    if (Status s = vfs.writeText(outSheetUri, sheet.toJson()); !s) return s.error();
+    return sheet;
+}
+
 } // namespace agr

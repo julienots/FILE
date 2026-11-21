@@ -24,6 +24,29 @@ math::Vec2 SpriteSheet::frameWorldSize(u32 frame) const {
     return {static_cast<float>(frames[frame].w) / ppu, static_cast<float>(frames[frame].h) / ppu};
 }
 
+void SpriteSheet::removeFrame(u32 frame) {
+    if (frame >= frames.size()) return;
+    frames.erase(frames.begin() + frame);
+    for (SpriteClip& c : clips) {
+        std::erase(c.frames, frame);
+        for (u32& f : c.frames)
+            if (f > frame) --f;
+    }
+}
+
+void SpriteSheet::moveFrame(u32 from, u32 to) {
+    if (from >= frames.size() || to >= frames.size() || from == to) return;
+    SpriteFrame f = std::move(frames[from]);
+    frames.erase(frames.begin() + from);
+    frames.insert(frames.begin() + to, std::move(f));
+    for (SpriteClip& c : clips)
+        for (u32& i : c.frames) {
+            if (i == from) i = to;
+            else if (from < to && i > from && i <= to) --i;
+            else if (from > to && i >= to && i < from) ++i;
+        }
+}
+
 i32 SpriteSheet::findFrame(std::string_view name) const {
     for (usize i = 0; i < frames.size(); ++i)
         if (frames[i].name == name) return static_cast<i32>(i);

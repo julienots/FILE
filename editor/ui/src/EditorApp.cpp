@@ -25,6 +25,8 @@
 #include "agr/script/ScriptPlugin.hpp"
 #include "agr/render/Skin2D.hpp"
 #include "agr/editor/ParticlePresets.hpp"
+#include "agr/assets/Image.hpp"
+#include "agr/render/SpriteSheet.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
@@ -635,6 +637,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_profiler.draw(*m_shared);
     m_scriptDebugger.draw(*m_shared);
     m_particles.draw(*m_shared, m_options.resourcesDir + "/templates/assets");
+    m_sheetEditor.draw(*m_shared);
     m_physicsLayers.draw(*m_shared);
     m_export.draw(*m_shared, std::filesystem::path(m_options.resourcesDir).parent_path().string());
     drawStatusBar(statusH);
@@ -794,6 +797,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
         ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
         ImGui::MenuItem("Effets de particules", nullptr, &m_shared->showParticles);
+        ImGui::MenuItem("Feuilles de sprites", nullptr, &m_shared->showSheetEditor);
         ImGui::MenuItem("Couches de collision", nullptr, &m_shared->showPhysicsLayers);
         ImGui::MenuItem("Historique (annuler)", nullptr, &m_showHistory);
         if (ImGui::MenuItem("Palette de commandes...", "Ctrl+Maj+P")) {
@@ -1875,7 +1879,39 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 258: m_shared->showParticles = false; break;
-        case 260: {
+        case 259: {  // sprite sheet editor: a picture of 3 sprites, sliced automatically, a clip, saved
+            Image img;
+            img.width = 48;
+            img.height = 16;
+            img.pixels.assign(static_cast<usize>(img.width) * img.height * 4, 0);
+            for (u32 k = 0; k < 3; ++k)
+                for (u32 y = 2; y < 14; ++y)
+                    for (u32 x = k * 16 + 2; x < k * 16 + 14; ++x) {
+                        u8* p = &img.pixels[(static_cast<usize>(y) * img.width + x) * 4];
+                        p[0] = static_cast<u8>(80 * k + 60), p[1] = 200, p[2] = 120, p[3] = 255;
+                    }
+            auto png = encodePng(img.width, img.height, img.pixels);
+            check(png && m_engine->vfs().writeBytes("assets://smoke_strip.png", png.value().data(), png.value().size()), "strip image written");
+            SpriteSheet sheet;
+            sheet.texture = "assets://smoke_strip.png";
+            sheet.textureWidth = 48;
+            sheet.textureHeight = 16;
+            check(static_cast<bool>(m_engine->vfs().writeText("assets://smoke_strip.agrsheet", sheet.toJson())), "empty sheet written");
+            m_shared->openSheetRequest = "assets://smoke_strip.agrsheet";
+            break;
+        }
+        case 261: {
+            check(m_sheetEditor.uri() == "assets://smoke_strip.agrsheet" && m_shared->showSheetEditor, "sheet editor opened");
+            check(m_sheetEditor.autoSlice(*m_shared, 8, 2, 0) && m_sheetEditor.sheet().frames.size() == 3, "3 sprites found by automatic slicing");
+            check(m_sheetEditor.save(*m_shared), "sheet saved");
+            auto* lib = m_shared->sheets();
+            const SpriteSheet* reread = lib ? lib->get("assets://smoke_strip.agrsheet") : nullptr;
+            check(reread && reread->frames.size() == 3 && reread->frames[1].x == 18, "saved frames read back");
+            break;
+        }
+        case 262: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_sheet.png").string()); break;
+        case 263: m_shared->showSheetEditor = false; break;
+        case 266: {
             const rhi::Device* device = m_shared->device();
             check(device && device->validationErrorCount() == 0, "no graphics API validation error");
             m_exitCode = m_failures.empty() ? 0 : 1;

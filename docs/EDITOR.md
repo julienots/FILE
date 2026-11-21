@@ -57,6 +57,7 @@ Les projets récents sont mémorisés dans le dossier de préférences de l'util
 | **Historique** | *Affichage › Historique* : chaque état d'annulation nommé par son action ; un clic y revient d'un coup (en arrière ou en avant), les états suivants restent disponibles |
 | **Palette de commandes** | **Ctrl+Maj+P** ou **Ctrl+K** : recherche approximative dans toutes les actions (enregistrer, jouer, annuler...), l'affichage des panneaux, tout le menu Créer, les scènes, les scripts, shaders et graphes de logique du projet, et les entités de la scène (sélection + cadrage) ; flèches, Entrée, Échap |
 | **Script** | Éditeur Lua intégré ([SCRIPTING.md](SCRIPTING.md)) : coloration, syntaxe vérifiée en direct, autocomplétion de l'API, **Ctrl+F** rechercher / remplacer (F3 / Maj+F3 : suivant / précédent, *Tout remplacer*), **Ctrl+Maj+F** recherche dans tous les scripts du projet (clic : fichier et ligne) |
+| **Feuilles de sprites** | *Affichage › Feuilles de sprites* ou double-clic sur un `.agrsheet` : frames dessinées, déplacées et redimensionnées à la souris, découpage en grille ou automatique (transparence), pivots, rognage, clips avec aperçu animé ([2D.md](2D.md#éditeur-de-feuilles-de-sprites)) |
 | **Console** | Journal du moteur, filtres par niveau avec compteurs, recherche, copie d'une ligne |
 | **Statistiques** | FPS, courbe des temps d'image, backend et GPU, draw calls, triangles, culling, lots de sprites, temps GPU, mémoire GPU et CPU par catégorie |
 
@@ -139,8 +140,8 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
 
 - Une seule fenêtre : les panneaux ne se détachent pas en fenêtres système (*multi-viewports* d'ImGui
   non activés, car ils nécessitent un rendu multi-fenêtres dans la RHI).
-- Pas d'éditeur de logique visuelle ni de shaders par nœuds (les shaders s'écrivent en GLSL, [SHADERS.md](SHADERS.md)) ; les particules (2D et 3D,
-  avec préréglages) et les feuilles de sprites se règlent dans l'inspecteur et l'explorateur d'assets.
+- Pas de shaders par nœuds (les shaders s'écrivent en GLSL, [SHADERS.md](SHADERS.md)) ; la logique
+  visuelle, les effets de particules et les feuilles de sprites ont leurs éditeurs dédiés.
 - Pas de mode « 2.5D » dédié dans la vue : un projet 2.5D utilise la vue 3D.
 - Importeurs : images (PNG, JPEG, TGA, BMP, PSD, GIF, HDR) et modèles (glTF / GLB, OBJ, FBX) ; les
   feuilles de sprites et les matériaux sont créés dans l'éditeur ou écrits à la main. Les modifications de

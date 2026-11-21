@@ -39,6 +39,10 @@ struct SpriteSheet {
     math::Vec4 uv(u32 frame) const;
     math::Vec2 frameWorldSize(u32 frame) const;
     i32 findFrame(std::string_view name) const;
+    /// Removes a frame; clips lose it and their later indices shift down.
+    void removeFrame(u32 frame);
+    /// Moves a frame to another index (clips follow).
+    void moveFrame(u32 from, u32 to);
     const SpriteClip* findClip(std::string_view name) const;
 
     static Result<SpriteSheet> parse(std::string_view json);

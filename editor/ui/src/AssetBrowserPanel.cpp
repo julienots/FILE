@@ -323,6 +323,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (isShader && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderRequest = uri;  // shader editor
                 const bool isLua = !folder && fs::path(name).extension() == ".lua";
                 if (isLua && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) s.openScriptRequest = uri;  // script editor
+                if (!folder && isSheetFile(name) && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    s.openSheetRequest = uri;  // sprite sheet editor
                 const bool isLogic = !folder && fs::path(name).extension() == ".agrlogic";
                 if (isLogic && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openLogicRequest = uri;  // visual logic editor
                 if (!folder && ImGui::BeginDragDropSource()) {
@@ -331,7 +333,7 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     ImGui::EndDragDropSource();
                 }
                 if (hovered) {
-                    if (sheet) ImGui::SetTooltip("%s\nFeuille de sprites : %zu frames, %zu clips\nGlisser dans la scène pour créer un sprite", uri.c_str(),
+                    if (sheet) ImGui::SetTooltip("%s\nFeuille de sprites : %zu frames, %zu clips\nGlisser dans la scène pour créer un sprite, double-cliquer pour l'éditer", uri.c_str(),
                                                  sheet->frames.size(), sheet->clips.size());
                     else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
                     else if (fs::path(name).extension() == ".lua") ImGui::SetTooltip("%s\nScript : glisser sur une entité de la vue pour l'attacher", uri.c_str());
@@ -343,6 +345,12 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (ImGui::BeginPopupContextItem("##ctx")) {
                     if (ImGui::MenuItem("Copier le chemin")) ImGui::SetClipboardText(uri.c_str());
                     if (!folder && isImageFile(name) && ImGui::MenuItem("Découper en grille (feuille de sprites)...")) m_sliceTarget = rel;
+                    if (!folder && isImageFile(name) && ImGui::MenuItem("Éditer comme feuille de sprites (découpage automatique)")) {
+                        const std::string sheetUri = "assets://" + fs::path(rel).replace_extension(".agrsheet").generic_string();
+                        if (!s.engine.vfs().exists(sheetUri)) (void)buildAutoSliceSheetFile(s.engine.vfs(), uri, sheetUri);
+                        if (s.engine.vfs().exists(sheetUri)) s.openSheetRequest = sheetUri;
+                    }
+                    if (!folder && isSheetFile(name) && ImGui::MenuItem("Éditer la feuille de sprites")) s.openSheetRequest = uri;
                     if (ImGui::MenuItem("Renommer...")) {
                         m_renameTarget = rel;
                         m_renameBuffer = name;

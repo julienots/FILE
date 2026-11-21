@@ -104,6 +104,7 @@ private:
     ProfilerPanel m_profiler;
     ScriptDebuggerPanel m_scriptDebugger;
     ParticlePanel m_particles;
+    SpriteSheetPanel m_sheetEditor;
     ScriptEngine* m_debuggedScripts = nullptr;  ///< Engine the break handler is installed on.
     bool m_stopAfterBreak = false;
     int m_debugBreaks = 0;  ///< Breaks resumed automatically (smoke test).

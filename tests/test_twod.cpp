@@ -565,3 +565,44 @@ TEST_CASE("particles: ring shape, turbulence, inherited emitter velocity (2D and
         CHECK(math::length(st.particles.front().velocity) > 0.5f);
     }
 }
+
+TEST_CASE("sprite sheets: automatic slicing by transparency, merge distance, frame removal and moves") {
+    Image img;
+    img.width = 40;
+    img.height = 30;
+    img.pixels.assign(static_cast<usize>(img.width) * img.height * 4, 0);
+    auto fill = [&](u32 x0, u32 y0, u32 x1, u32 y1) {
+        for (u32 y = y0; y <= y1; ++y)
+            for (u32 x = x0; x <= x1; ++x) img.pixels[(static_cast<usize>(y) * img.width + x) * 4 + 3] = 255;
+    };
+    fill(20, 2, 27, 9);    // row 1, right
+    fill(2, 3, 9, 10);     // row 1, left (starts lower, same row)
+    fill(11, 4, 11, 4);    // 1-pixel speck 1 px right of the left box: dropped (minSize), merged when mergeDistance >= 1
+    fill(5, 18, 14, 25);   // row 2
+    fill(15, 26, 16, 27);  // touches row 2 diagonally: same island
+    auto frames = autoSliceFrames(img, 8, 2, 0, "hero");
+    REQUIRE(frames.size() == 3);
+    CHECK(frames[0].x == 2);
+    CHECK(frames[0].w == 8);
+    CHECK(frames[1].x == 20);
+    CHECK(frames[2].x == 5);
+    CHECK(frames[2].w == 12);  // diagonal neighbour joined (8-connected)
+    CHECK(frames[2].h == 10);
+    CHECK(frames[0].name == "hero_0");
+    frames = autoSliceFrames(img, 8, 2, 1);
+    REQUIRE(frames.size() == 3);
+    CHECK(frames[0].w == 10);  // the speck merged in
+    frames = autoSliceFrames(img, 8, 1, 0);
+    CHECK(frames.size() == 4);  // speck kept as its own frame
+
+    SpriteSheet sheet;
+    for (int i = 0; i < 4; ++i) sheet.frames.push_back({"f" + std::to_string(i), 0, 0, 1, 1, {0.5f, 0.5f}});
+    sheet.clips.push_back({"run", {0, 1, 2, 3}, 10.0f, true});
+    sheet.removeFrame(1);
+    CHECK(sheet.frames.size() == 3);
+    CHECK(sheet.clips[0].frames == std::vector<u32>{0, 1, 2});
+    CHECK(sheet.frames[1].name == "f2");
+    sheet.moveFrame(0, 2);  // f0 to the end: f2, f3, f0
+    CHECK(sheet.frames[2].name == "f0");
+    CHECK(sheet.clips[0].frames == std::vector<u32>{2, 0, 1});  // still f0, f2, f3
+}

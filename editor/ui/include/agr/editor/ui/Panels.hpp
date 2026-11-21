@@ -16,6 +16,8 @@
 #include "agr/script/LogicGraph.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/render/ParticleCurves.hpp"
+#include "agr/render/SpriteSheet.hpp"
+#include "agr/assets/Image.hpp"
 #include "agr/editor/Package.hpp"
 #include "agr/core/Profiler.hpp"
 #include <algorithm>
@@ -484,6 +486,44 @@ private:
     bool m_dirty = false;
     int m_dragKey = -1, m_selectedStop = 0, m_dragStop = -1;
     bool m_pendingCommit = false;
+};
+
+/// Sprite sheet editor (.agrsheet): the texture with its frames (zoom, pan), frames drawn,
+/// moved and resized with the mouse, grid and automatic (transparency) slicing, trimming,
+/// pivots, clips with a live preview.
+class SpriteSheetPanel {
+public:
+    void draw(EditorShared& s);
+    bool open(EditorShared& s, const std::string& uri);
+    bool save(EditorShared& s);
+    /// Replaces the frames by the islands of opaque pixels; false when the image cannot be read.
+    bool autoSlice(EditorShared& s, int alphaThreshold, int minSize, int mergeDistance);
+    const SpriteSheet& sheet() const { return m_sheet; }
+    const std::string& uri() const { return m_uri; }
+    bool dirty() const { return m_dirty; }
+
+private:
+    bool loadPixels(EditorShared& s);
+    void drawCanvas(EditorShared& s);
+    void drawProperties(EditorShared& s);
+    void trimFrame(SpriteFrame& f) const;
+
+    std::string m_uri;
+    SpriteSheet m_sheet;
+    bool m_dirty = false;
+    int m_selected = -1;
+    float m_zoom = 0.0f;  ///< 0: fit on the next draw.
+    float m_panX = 0.0f, m_panY = 0.0f;
+    enum class Drag { None, Create, Move, Resize, Pan } m_drag = Drag::None;
+    float m_dragX = 0.0f, m_dragY = 0.0f;  ///< Texel where the drag started.
+    SpriteFrame m_dragOrigin;
+    Image m_pixels;  ///< Decoded texture (slicing, trimming), loaded on demand.
+    std::string m_pixelsUri;
+    int m_gridW = 32, m_gridH = 32, m_margin = 0, m_spacing = 0;
+    int m_alpha = 8, m_minSize = 2, m_merge = 0;
+    int m_clip = -1;
+    std::string m_clipFrames;  ///< Text of the selected clip's frames.
+    std::string m_status;
 };
 
 /// Integrated documentation: docs/*.md rendered as Markdown, full-text search, links.
