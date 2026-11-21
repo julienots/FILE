@@ -123,6 +123,9 @@ composant).
 | `agr.ui.isPressed(entité)` | bouton maintenu (commandes tactiles) |
 | `agr.input.accelerometer()` → x, y, z ou `nil` ; `agr.input.gyroscope()` | capteurs de mouvement (m/s², rad/s), `nil` sans capteur |
 | `agr.save.set(clé, valeur)`, `get(clé [, défaut])`, `has`, `remove`, `clear`, `flush()` | sauvegarde locale : nombres, textes, booléens, tableaux et tables imbriquées ; écrite automatiquement quand l'application passe en arrière-plan ou se ferme |
+| `agr.json.encode(valeur [, joli])`, `agr.json.decode(texte)` | JSON ↔ tables Lua (`nil, erreur` si invalide) |
+| `agr.file.read(uri)`, `write(uri, texte)`, `exists(uri)` | fichiers texte : lecture `user://` et `assets://`, écriture dans `user://` seulement |
+| `agr.base64.encode(texte)`, `decode(texte)`, `agr.sha256(texte)` | encodage base64, empreinte SHA-256 en hexadécimal (vérifier un fichier, une sauvegarde) |
 | `agr.device.platform()`, `isMobile()` | `"Android"`, `"Linux"`, `"Windows"`... |
 | `agr.device.vibrate(secondes [, force])`, `canVibrate()` | vibreur du téléphone (sans effet ailleurs) |
 | `agr.device.safeArea()` → gauche, haut, droite, bas | marges de l'encoche et des barres système |

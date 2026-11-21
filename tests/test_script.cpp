@@ -1299,3 +1299,28 @@ TEST_CASE("lint: unknown globals and missing agr paths, with their lines; clean 
     CHECK(w[2].message.find("undefinedThing") != std::string::npos);
     CHECK(f.scripts.lint("local x = = 1").empty());  // syntax errors are checkSyntax's job
 }
+
+TEST_CASE("data helpers: agr.json, agr.file (user://), agr.base64, agr.sha256") {
+    ScriptFixture f;
+    const fs::path user = f.root / "user";
+    fs::create_directories(user);
+    f.vfs.mount("user", std::make_unique<NativeFileProvider>(user.string(), false));
+    const Status st = f.scripts.run(R"(
+        local t = agr.json.decode('{"name":"Zoé","items":[1,2,3],"ok":true}')
+        assert(t.name == "Zoé" and #t.items == 3 and t.ok == true)
+        local back = agr.json.decode(agr.json.encode({score = 12, tags = {"a", "b"}}))
+        assert(back.score == 12 and back.tags[2] == "b")
+        local bad, err = agr.json.decode("{oops")
+        assert(bad == nil and err)
+        assert(agr.file.write("user://notes.txt", "bonjour"))
+        assert(agr.file.exists("user://notes.txt"))
+        assert(agr.file.read("user://notes.txt") == "bonjour")
+        assert(not pcall(agr.file.write, "assets://x.txt", "no"))   -- game data is read-only
+        assert(agr.base64.encode("Hello") == "SGVsbG8=")
+        assert(agr.base64.decode("SGVsbG8=") == "Hello")
+        assert(agr.sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        assert(agr.sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    )");
+    CHECK_MESSAGE(st.ok(), (st ? "" : st.error().message));
+    CHECK(fs::exists(user / "notes.txt"));
+}
