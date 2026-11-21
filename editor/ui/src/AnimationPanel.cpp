@@ -426,7 +426,9 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
             const auto& keys = m_clip.tracks[static_cast<usize>(i)].curve.keys;
             for (int k = 0; k < static_cast<int>(keys.size()); ++k) {
                 const float x = xAt(keys[static_cast<usize>(k)].time);
-                const bool sel = i == m_track && k == m_key;
+                const float kt = keys[static_cast<usize>(k)].time;
+                const bool sel = (i == m_track && k == m_key) ||
+                                 std::any_of(m_keySel.begin(), m_keySel.end(), [&](const KeyRef& r) { return r.track == i && std::fabs(r.time - kt) < 1e-4f; });
                 const float r = 5.0f;
                 dl->AddQuadFilled({x, cy - r}, {x + r, cy}, {x, cy + r}, {x - r, cy}, sel ? palette::kAmber : palette::kText);
                 if (std::fabs(mouse.x - x) <= r + 1 && std::fabs(mouse.y - cy) <= r + 1) hover = {i, k, -1};
@@ -452,12 +454,24 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
         m_draggingKey = m_scrubbing = false;
         if (hover.key >= 0) {
             m_track = hover.track, m_key = hover.key, m_event = -1;
+            const KeyRef ref{hover.track, m_clip.tracks[static_cast<usize>(hover.track)].curve.keys[static_cast<usize>(hover.key)].time};
+            auto same = [&](const KeyRef& r) { return r.track == ref.track && std::fabs(r.time - ref.time) < 1e-4f; };
+            const bool inSel = std::any_of(m_keySel.begin(), m_keySel.end(), same);
+            if (ImGui::GetIO().KeyCtrl) {
+                if (inSel) std::erase_if(m_keySel, same);
+                else m_keySel.push_back(ref);
+            } else if (!inSel) {
+                m_keySel = {ref};
+            }
             m_draggingKey = true;
+            m_dragStartTime = timeAt(mouse.x);
+            m_dragApplied = 0.0f;
         } else if (hover.event >= 0) {
             m_event = hover.event, m_key = -1;
             m_draggingKey = true;
         } else {
             m_scrubbing = true;
+            if (!ImGui::GetIO().KeyCtrl) m_keySel.clear();
         }
     }
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hover.key < 0) {
@@ -483,6 +497,14 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
         if (m_event >= 0 && m_event < static_cast<int>(m_clip.events.size())) {
             m_clip.events[static_cast<usize>(m_event)].time = t;
             m_dirty = true;
+        } else if (m_keySel.size() > 1) {  // the whole selection, by the same amount
+            const float total = std::round((timeAt(mouse.x) - m_dragStartTime) * 100.0f) / 100.0f;
+            if (std::fabs(total - m_dragApplied) > 1e-4f) {
+                m_keySel = m_clip.moveKeys(m_keySel, total - m_dragApplied);
+                m_dragApplied = total;
+                m_key = -1;
+                m_dirty = true;
+            }
         } else if (m_track >= 0 && m_key >= 0) {
             Curve& c = m_clip.tracks[static_cast<usize>(m_track)].curve;
             if (m_key < static_cast<int>(c.keys.size())) {
@@ -493,12 +515,36 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
                 placed = moved;
                 for (int k = 0; k < static_cast<int>(c.keys.size()); ++k)
                     if (std::fabs(c.keys[static_cast<usize>(k)].time - t) < 1e-4f) m_key = k;
+                m_keySel = {{m_track, t}};
                 m_dirty = true;
             }
         }
     }
     if (!active) m_draggingKey = m_scrubbing = false;
-    if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+    const bool timelineFocus = ImGui::IsWindowFocused();
+    const bool ctrl = ImGui::GetIO().KeyCtrl;
+    if (timelineFocus && ctrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {  // every key
+        m_keySel.clear();
+        for (int t = 0; t < static_cast<int>(m_clip.tracks.size()); ++t)
+            for (const Keyframe& k : m_clip.tracks[static_cast<usize>(t)].curve.keys) m_keySel.push_back({t, k.time});
+    }
+    if (timelineFocus && ctrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+        std::vector<KeyRef> refs = m_keySel;
+        if (refs.empty() && m_track >= 0 && m_key >= 0) refs.push_back({m_track, m_clip.tracks[static_cast<usize>(m_track)].curve.keys[static_cast<usize>(m_key)].time});
+        m_keyClipboard = m_clip.copyKeys(refs);
+    }
+    if (timelineFocus && ctrl && ImGui::IsKeyPressed(ImGuiKey_V, false) && !m_keyClipboard.empty()) {  // at the playhead
+        m_keySel = m_clip.pasteKeys(m_keyClipboard, m_time);
+        m_key = -1;
+        m_dirty = true;
+    }
+    if (timelineFocus && ImGui::IsKeyPressed(ImGuiKey_Delete, false) && m_keySel.size() > 1) {
+        m_clip.removeKeys(m_keySel);
+        m_keySel.clear();
+        m_key = -1;
+        m_dirty = true;
+    } else if (timelineFocus && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+        m_keySel.clear();
         if (m_event >= 0 && m_event < static_cast<int>(m_clip.events.size())) {
             m_clip.events.erase(m_clip.events.begin() + m_event);
             m_event = -1;
@@ -510,7 +556,7 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
         }
     }
     ImGui::SetCursorScreenPos({o.x, o.y + totalH + 4});
-    ImGui::TextDisabled("Double-clic : clé   Glisser : déplacer   Suppr : supprimer   Ctrl + molette : zoom");
+    ImGui::TextDisabled("Double-clic : clé   Glisser : déplacer   Ctrl+clic / Ctrl+A : sélection   Ctrl+C / Ctrl+V : copier / coller à la tête   Suppr   Ctrl + molette : zoom");
     ImGui::EndChild();
 
     // ------------------------------------------------- key / event + curve

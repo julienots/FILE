@@ -157,6 +157,75 @@ AnimationTrack& AnimationClip::track(std::string_view target, std::string_view c
     return tracks.back();
 }
 
+namespace {
+i32 findKey(const Curve& c, float time) {
+    for (usize i = 0; i < c.keys.size(); ++i)
+        if (std::fabs(c.keys[i].time - time) < 1e-4f) return static_cast<i32>(i);
+    return -1;
+}
+}  // namespace
+
+std::vector<CopiedKey> AnimationClip::copyKeys(const std::vector<KeyRef>& refs) const {
+    std::vector<CopiedKey> out;
+    float earliest = 1e30f;
+    for (const KeyRef& r : refs) {
+        if (r.track < 0 || static_cast<usize>(r.track) >= tracks.size()) continue;
+        const AnimationTrack& t = tracks[static_cast<usize>(r.track)];
+        const i32 k = findKey(t.curve, r.time);
+        if (k < 0) continue;
+        out.push_back({t.target, t.component, t.field, t.channel, r.time, t.curve.keys[static_cast<usize>(k)]});
+        earliest = std::min(earliest, r.time);
+    }
+    for (CopiedKey& c : out) c.offset -= earliest;
+    return out;
+}
+
+std::vector<KeyRef> AnimationClip::pasteKeys(const std::vector<CopiedKey>& keys, float time) {
+    std::vector<KeyRef> out;
+    for (const CopiedKey& c : keys) {
+        AnimationTrack& t = track(c.target, c.component, c.field, c.channel);
+        const float at = std::round(std::max(0.0f, time + c.offset) * 100.0f) / 100.0f;
+        Keyframe& k = t.curve.setKey(at, c.key.value, c.key.interpolation);
+        const float placed = k.time;
+        k = c.key;
+        k.time = placed;
+        out.push_back({static_cast<i32>(&t - tracks.data()), placed});
+    }
+    return out;
+}
+
+void AnimationClip::removeKeys(const std::vector<KeyRef>& refs) {
+    for (const KeyRef& r : refs) {
+        if (r.track < 0 || static_cast<usize>(r.track) >= tracks.size()) continue;
+        Curve& c = tracks[static_cast<usize>(r.track)].curve;
+        if (const i32 k = findKey(c, r.time); k >= 0) c.removeKey(static_cast<usize>(k));
+    }
+}
+
+std::vector<KeyRef> AnimationClip::moveKeys(const std::vector<KeyRef>& refs, float delta) {
+    // Taken out first, put back at their new times (a moved key may pass over another selected one).
+    std::vector<std::pair<KeyRef, Keyframe>> taken;
+    for (const KeyRef& r : refs) {
+        if (r.track < 0 || static_cast<usize>(r.track) >= tracks.size()) continue;
+        Curve& c = tracks[static_cast<usize>(r.track)].curve;
+        if (const i32 k = findKey(c, r.time); k >= 0) {
+            taken.push_back({r, c.keys[static_cast<usize>(k)]});
+            c.removeKey(static_cast<usize>(k));
+        }
+    }
+    std::vector<KeyRef> out;
+    for (auto& [r, key] : taken) {
+        Curve& c = tracks[static_cast<usize>(r.track)].curve;
+        const float t = std::round(std::max(0.0f, r.time + delta) * 100.0f) / 100.0f;
+        Keyframe& k = c.setKey(t, key.value, key.interpolation);
+        const float placed = k.time;
+        k = key;
+        k.time = placed;
+        out.push_back({r.track, placed});
+    }
+    return out;
+}
+
 void AnimationClip::fitDuration() {
     float end = 0.01f;
     for (const AnimationTrack& t : tracks) end = std::max(end, t.curve.duration());

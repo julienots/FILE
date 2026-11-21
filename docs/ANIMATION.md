@@ -229,6 +229,11 @@ GLES / Vulkan), création depuis l'éditeur (`tests/test_editor.cpp`).
 - Les modèles de projet contiennent `hero.agrctrl` (Idle / Run / Air), des clips de pulsation, de
   rotation et de lumière vacillante.
 
+
+Timeline : **Ctrl+clic** ajoute / retire une clé de la sélection, **Ctrl+A** sélectionne toutes les clés ;
+glisser l'une d'elles déplace toute la sélection (pas de 10 ms) ; **Ctrl+C / Ctrl+V** copie les clés
+et les colle à la tête de lecture (mêmes pistes, mêmes écarts ; un autre clip reçoit les pistes
+manquantes) ; Suppr supprime la sélection.
 ## Performances
 
 1 000 Animators (dont 500 machines à états), 3 courbes chacun : ~0,18 ms par image sur la machine de
@@ -243,7 +248,7 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition interrompue repart de son état d'arrivée (la part de l'état de départ encore visible
   disparaît) ; une seule transition par image.
-- Timeline : pas de sélection de plusieurs clés, de copier-coller ni de poignées de tangentes à
-  glisser (valeurs numériques) ; les modifications d'un clip ou d'une machine à états ne passent pas
+- Timeline : pas de poignées de tangentes à glisser (valeurs numériques) ; le copier-coller de clés
+  reste dans l'éditeur (pas de presse-papiers du système) ; les modifications d'un clip ou d'une machine à états ne passent pas
   par *Annuler* (elles sont enregistrées dans leur fichier avec *Enregistrer*).
 - L'aperçu de la timeline ne fonctionne qu'en mode Édition.

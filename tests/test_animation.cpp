@@ -909,4 +909,38 @@ TEST_CASE("interruptible transitions and weighted masks") {
     CHECK(f.x(arm) == doctest::Approx(8.0f));
     CHECK(f.x(leg) == doctest::Approx(2.0f));
 }
+
+TEST_CASE("clip key operations: copy / paste at a time, move several keys, remove") {
+    AnimationClip c;
+    AnimationTrack& x = c.track("", "Transform", "position", 0);
+    x.curve.setKey(0.0f, 0.0f);
+    x.curve.setKey(0.5f, 1.0f, Interpolation::Linear);
+    x.curve.setKey(1.0f, 2.0f);
+    c.track("Arm", "Transform", "position", 1).curve.setKey(0.5f, 5.0f);
+    const std::vector<KeyRef> sel = {{0, 0.5f}, {0, 1.0f}, {1, 0.5f}};
+    const auto copied = c.copyKeys(sel);
+    REQUIRE(copied.size() == 3);
+    CHECK(copied[0].offset == doctest::Approx(0.0f));
+    CHECK(copied[1].offset == doctest::Approx(0.5f));
+    // Pasted at 2 s: same tracks, same spacing, interpolation kept.
+    const auto pasted = c.pasteKeys(copied, 2.0f);
+    REQUIRE(pasted.size() == 3);
+    CHECK(c.tracks[0].curve.keys.size() == 5);
+    CHECK(c.tracks[0].curve.evaluate(2.5f) == doctest::Approx(2.0f));
+    CHECK(c.tracks[0].curve.keys[3].interpolation == Interpolation::Linear);
+    CHECK(c.tracks[1].curve.evaluate(2.0f) == doctest::Approx(5.0f));
+    // Into a clip without the track: created.
+    AnimationClip other;
+    other.pasteKeys(copied, 0.0f);
+    CHECK(other.tracks.size() == 2);
+    // Moving the pasted keys back by 0.25 s.
+    const auto moved = c.moveKeys(pasted, -0.25f);
+    REQUIRE(moved.size() == 3);
+    CHECK(moved[0].time == doctest::Approx(1.75f));
+    CHECK(c.tracks[0].curve.keys[3].time == doctest::Approx(1.75f));
+    CHECK(c.moveKeys({{0, 0.0f}}, -1.0f)[0].time == doctest::Approx(0.0f));  // clamped at 0
+    c.removeKeys(moved);
+    CHECK(c.tracks[0].curve.keys.size() == 3);
+    CHECK(c.tracks[1].curve.keys.size() == 1);
+}
 }  // TEST_SUITE

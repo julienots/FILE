@@ -378,6 +378,9 @@ private:
     int m_event = -1;           // selected event
     bool m_draggingKey = false, m_scrubbing = false;
     float m_zoom = 200.0f;      // pixels per second
+    std::vector<KeyRef> m_keySel;         // selected keys (Ctrl+click, Ctrl+A)
+    std::vector<CopiedKey> m_keyClipboard;
+    float m_dragStartTime = 0.0f, m_dragApplied = 0.0f;
     std::string m_newClipName = "clip";
     // add-track popup
     int m_addTarget = 0, m_addComponent = 0, m_addField = 0;

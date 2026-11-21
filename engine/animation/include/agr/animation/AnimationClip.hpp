@@ -78,6 +78,19 @@ struct AnimationEventKey {
     std::string name;
 };
 
+/// A key of a clip, by track index and time (indices move when keys are re-sorted).
+struct KeyRef {
+    i32 track = -1;
+    float time = 0.0f;
+};
+/// A copied key: its track identity, its time relative to the earliest copied key, the key.
+struct CopiedKey {
+    std::string target, component, field;
+    i32 channel = -1;
+    float offset = 0.0f;
+    Keyframe key;
+};
+
 /// A property animation (.agranim): curves on component fields plus events.
 struct AnimationClip {
     float duration = 1.0f;  ///< Seconds; keys past the end are ignored when looping.
@@ -91,6 +104,14 @@ struct AnimationClip {
     AnimationTrack& track(std::string_view target, std::string_view component, std::string_view field, i32 channel);
     /// Sets duration to the last key or event (at least 0.01 s).
     void fitDuration();
+    // Several keys at once (timeline selection).
+    std::vector<CopiedKey> copyKeys(const std::vector<KeyRef>& keys) const;
+    /// Pastes at `time` (the earliest copied key lands there), into the same tracks (created if
+    /// missing); returns the pasted keys.
+    std::vector<KeyRef> pasteKeys(const std::vector<CopiedKey>& keys, float time);
+    void removeKeys(const std::vector<KeyRef>& keys);
+    /// Shifts keys in time (clamped at 0, 10 ms steps); returns where they are now.
+    std::vector<KeyRef> moveKeys(const std::vector<KeyRef>& keys, float delta);
 
     std::string toJson() const;
     static Result<AnimationClip> fromJson(std::string_view json);
