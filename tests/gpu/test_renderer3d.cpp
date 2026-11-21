@@ -1341,6 +1341,48 @@ TEST_CASE("depth of field: blurs outside the focus zone, keeps it sharp") {
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("screen-space reflections: a mirror floor reflects what is on screen, rough floors do not") {
+    Render3DFixture f;
+    f.camera({0, 1.5f, 4}, {0, 0.3f, -2});
+    f.darkEnvironment();
+    f.sun({-45, 0, 0});  // down and toward -Z: lights the box face seen by the camera
+    f.mesh(PrimitiveMesh::Cube, {0, 1.0f, -2}, Vec3{1.6f}, {1, 0.1f, 0.1f, 1});
+    const auto floor = f.mesh(PrimitiveMesh::Cube, {0, -0.05f, 0}, {30, 0.1f, 30}, {1, 1, 1, 1});
+    {
+        auto& m = f.scene.registry().get<MeshRendererComponent>(floor);
+        m.metallic = 1.0f;
+        m.roughness = 0.05f;
+        m.castShadows = false;
+    }
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().screenSpaceReflections);
+    const Vec3 mirror{0, 0, 0.4f};  // where the floor shows the box's mirror image (0, -1, -2)
+    const Rgba before = f.at(mirror);
+    post.screenSpaceReflections = true;
+    f.frame();
+    CHECK(f.renderer.stats().screenSpaceReflections);
+    const Rgba after = f.at(mirror);
+    CHECK_MESSAGE(after.r > before.r + 40, before << " -> " << after);
+    CHECK_MESSAGE(after.r > after.g + 30, after);  // the red box, not a gray smear
+    // The box itself is unchanged; a rough floor does not mirror.
+    CHECK_MESSAGE(f.at({0, 1.0f, -1.2f}).r > 100, f.at({0, 1.0f, -1.2f}));
+    f.scene.registry().get<MeshRendererComponent>(floor).roughness = 1.0f;
+    f.frame();
+    const Rgba rough = f.at(mirror);
+    CHECK_MESSAGE(rough.r < rough.g + 25, rough);  // lit by the sun, but no red mirror image
+    // Low profiles skip the pass.
+    GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
+    p.renderScale = 1.0f;
+    f.renderer.setProfile(p);
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().screenSpaceReflections);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("auto exposure: dark scenes are brightened, bright ones darkened (HDR)") {
     Render3DFixture f;
     f.camera({0, 0, 3}, {0, 0, 0});

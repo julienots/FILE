@@ -356,6 +356,102 @@ void main() {
 }
 )";
 
+/// Screen-space reflections: the reflected view ray marched in view space through the scene
+/// depth (32 steps, dithered start, 5 refinement steps), added where the opaque pass wrote a
+/// reflectivity in the scene alpha. Fades at the screen edges, with distance and for rays
+/// toward the camera. u_dof2: -, intensity, max distance, thickness.
+inline constexpr const char* kSsr = R"(
+uniform sampler2D u_source;  // scene color, reflectivity in alpha
+uniform sampler2D u_depth;   // scene depth
+layout(location = 0) out vec4 o_color;
+vec2 uvToNdc(vec2 uv) {
+    vec2 n = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n;
+}
+vec2 ndcToUv(vec2 n) {
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n * 0.5 + 0.5;
+}
+float rawDepth(vec2 uv) { return texture(u_depth, uv).r; }
+vec3 viewPos(vec2 uv) {
+    float d = rawDepth(uv);
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec4 p = u_invProj * vec4(uvToNdc(uv), z, 1.0);
+    return p.xyz / p.w;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec4 scene = texture(u_source, uv);
+    float reflectivity = scene.a * u_dof2.y;
+    if (reflectivity < 0.004 || rawDepth(uv) >= 0.99999) {
+        o_color = vec4(scene.rgb, 1.0);
+        return;
+    }
+    vec3 P = viewPos(uv);
+    vec2 px = u_texel.xy;
+    vec3 r = viewPos(uv + vec2(px.x, 0.0)) - P, l = P - viewPos(uv - vec2(px.x, 0.0));
+    vec3 t = viewPos(uv + vec2(0.0, px.y)) - P, b = P - viewPos(uv - vec2(0.0, px.y));
+    vec3 N = normalize(cross(abs(r.z) < abs(l.z) ? r : l, abs(t.z) < abs(b.z) ? t : b));
+    if (dot(N, P) > 0.0) N = -N;  // toward the camera
+    vec3 V = normalize(P);
+    vec3 R = reflect(V, N);
+    float towardCamera = clamp(R.z * 2.0, 0.0, 1.0);  // rays coming back rarely find their target
+    if (towardCamera >= 1.0) {
+        o_color = vec4(scene.rgb, 1.0);
+        return;
+    }
+    const int kSteps = 32;
+    float maxDist = u_dof2.z, thickness = u_dof2.w;
+    float stepLen = maxDist / float(kSteps);
+    vec2 cell = mod(floor(gl_FragCoord.xy), 4.0);
+    float dither = (cell.x + 4.0 * cell.y + 0.5) / 16.0;
+    float tPrev = 0.0, tHit = -1.0;
+    vec3 start = P + N * (0.01 - 0.002 * P.z);  // off the surface (depth precision)
+    for (int i = 1; i <= kSteps; ++i) {
+        float tt = (float(i) - 0.5 + dither * 0.5) * stepLen;
+        vec3 S = start + R * tt;
+        if (S.z > -0.01) break;  // behind the camera
+        vec4 c = u_proj * vec4(S, 1.0);
+        vec2 suv = ndcToUv(c.xy / c.w);
+        if (suv.x < 0.0 || suv.y < 0.0 || suv.x > 1.0 || suv.y > 1.0) break;
+        if (rawDepth(suv) >= 0.99999) {  // the sky: nothing to hit here
+            tPrev = tt;
+            continue;
+        }
+        float sceneZ = viewPos(suv).z;
+        float behind = sceneZ - S.z;  // > 0: the ray point is behind the visible surface
+        float bias = 0.01 - 0.003 * S.z;  // depth precision (16-bit depth far away)
+        if (behind > bias && behind < thickness + stepLen * abs(R.z)) {
+            tHit = tt;
+            break;
+        }
+        tPrev = tt;
+    }
+    if (tHit < 0.0) {
+        o_color = vec4(scene.rgb, 1.0);
+        return;
+    }
+    // Refine between the last miss and the hit.
+    float lo = tPrev, hi = tHit;
+    for (int k = 0; k < 5; ++k) {
+        float mid = (lo + hi) * 0.5;
+        vec3 S = start + R * mid;
+        vec4 c = u_proj * vec4(S, 1.0);
+        vec2 suv = ndcToUv(c.xy / c.w);
+        if (viewPos(suv).z - S.z > 0.0) hi = mid;
+        else lo = mid;
+    }
+    vec3 H = start + R * hi;
+    vec4 hc = u_proj * vec4(H, 1.0);
+    vec2 huv = ndcToUv(hc.xy / hc.w);
+    vec2 edge = smoothstep(vec2(0.0), vec2(0.08), huv) * smoothstep(vec2(0.0), vec2(0.08), 1.0 - huv);
+    float fade = edge.x * edge.y * (1.0 - smoothstep(0.6, 1.0, hi / maxDist)) * (1.0 - towardCamera);
+    vec3 reflected = texture(u_source, huv).rgb;
+    o_color = vec4(scene.rgb + reflected * clamp(reflectivity, 0.0, 1.0) * fade, 1.0);
+}
+)";
+
 /// Auto exposure: average log luminance of a 16 x 16 grid of the scene, blended toward the
 /// previous frame's value (u_history) by u_adapt.x. Output in r of a 1 x 1 target.
 inline constexpr const char* kLuminance = R"(

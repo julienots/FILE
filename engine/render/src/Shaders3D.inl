@@ -627,7 +627,14 @@ void main() {
         float f = clamp((length(u_cameraPos.xyz - v_worldPos) - u_fogParams.x) / max(u_fogParams.y - u_fogParams.x, 1e-3), 0.0, 1.0);
         color = mix(color, u_fogColor.rgb, f);
     }
+#ifdef AGR_OPAQUE
+    // Opaque surfaces: alpha = how much they mirror the screen (screen-space reflections):
+    // specular reflectance x smoothness^2, dimmed by occlusion. Nothing else reads it.
+    float smoothness = 1.0 - roughness;
+    o_color = vec4(agrToneMap(color), clamp(dot(envSpecular, vec3(0.3333)) * smoothness * smoothness * occlusion, 0.0, 1.0));
+#else
     o_color = vec4(agrToneMap(color), base.a);
+#endif
 }
 )";
 

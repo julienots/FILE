@@ -275,6 +275,11 @@ void registerRenderComponents() {
         .field("dofBlur", &PostProcessComponent::dofBlur, {.tooltip = "Largest blur radius (fraction of the image height)", .rangeMin = 0.0f, .rangeMax = 0.05f, .speed = 0.0005f})
         .field("dofNear", &PostProcessComponent::dofNear)
         .field("dofFar", &PostProcessComponent::dofFar)
+        .field("screenSpaceReflections", &PostProcessComponent::screenSpaceReflections,
+               {.tooltip = "Smooth / metallic surfaces reflect what is on screen (wet floors, metal)"})
+        .field("ssrIntensity", &PostProcessComponent::ssrIntensity, {.rangeMin = 0.0f, .rangeMax = 2.0f, .speed = 0.01f})
+        .field("ssrMaxDistance", &PostProcessComponent::ssrMaxDistance, {.tooltip = "World units a reflected ray travels at most", .rangeMin = 0.1f, .rangeMax = 1000.0f, .speed = 0.05f})
+        .field("ssrThickness", &PostProcessComponent::ssrThickness, {.tooltip = "Depth of the surfaces a ray can hit", .rangeMin = 0.01f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("autoExposure", &PostProcessComponent::autoExposure, {.tooltip = "Brightness adapts to the light seen (HDR)"})
         .field("exposureTarget", &PostProcessComponent::exposureTarget, {.rangeMin = 0.01f, .rangeMax = 4.0f, .speed = 0.01f})
         .field("exposureMin", &PostProcessComponent::exposureMin, {.rangeMin = 0.01f, .rangeMax = 64.0f, .speed = 0.01f})

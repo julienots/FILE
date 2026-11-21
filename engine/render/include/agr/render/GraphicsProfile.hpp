@@ -28,6 +28,7 @@ struct GraphicsProfile {
     bool ssao = true;            ///< PostProcess ambient occlusion allowed (half resolution).
     bool atmosphere = true;      ///< PostProcess height fog and light shafts allowed (full-screen pass).
     bool depthOfField = true;    ///< PostProcess depth of field allowed (32 taps per pixel).
+    bool ssr = true;             ///< PostProcess screen-space reflections allowed (ray march per pixel).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

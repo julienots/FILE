@@ -101,7 +101,7 @@ Status Renderer::create3DPipelines() {
             for (u32 twoSided = 0; twoSided < 2; ++twoSided) {
                 rhi::PipelineDesc p;
                 p.debugName = skinned ? "agr.pbr.skinned" : "agr.pbr";
-                const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "");
+                const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") + (alpha != 2 ? "#define AGR_OPAQUE 1\n" : "");
                 p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kPbrVertex;
                 p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kEnvBlock + shaders::kPbrFragment;
                 p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
@@ -123,7 +123,7 @@ Status Renderer::create3DPipelines() {
             rhi::PipelineDesc p;
             p.debugName = "agr.terrain";
             p.shader.vertex = common + shaders::kPbrVertex;
-            p.shader.fragment = std::string("#define AGR_TERRAIN 1\n") + common + shaders::kLightBlock + shaders::kToneMapping +
+            p.shader.fragment = std::string("#define AGR_TERRAIN 1\n#define AGR_OPAQUE 1\n") + common + shaders::kLightBlock + shaders::kToneMapping +
                                 shaders::kEnvBlock + shaders::kTerrainBlock + shaders::kPbrFragment;
             p.layout = modelVertexLayout();
             p.instanceLayout = instanceLayout(true);
@@ -1423,7 +1423,7 @@ rhi::PipelineHandle Renderer::customPipeline(u32 index, u32 variant, bool skinne
     } else {
         const u32 alpha = variant / 2, twoSided = variant & 1u;
         p.debugName = "agr.custom";
-        const std::string defines = skinDefine + vertexDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") +
+        const std::string defines = skinDefine + vertexDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") + (alpha != 2 ? "#define AGR_OPAQUE 1\n" : "") +
                                     (cs.hasSurface ? "#define AGR_CUSTOM_SURFACE 1\n" : "");
         std::string samplers;
         for (u32 t = 0; t < cs.textureCount; ++t) samplers += std::format("uniform sampler2D u_customMap{};\n", t);

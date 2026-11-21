@@ -145,6 +145,13 @@ struct PostProcessComponent {
     float dofBlur = 0.012f;         ///< Largest blur radius, as a fraction of the image height.
     bool dofNear = true;            ///< Blur what is in front of the focus zone.
     bool dofFar = true;             ///< Blur what is behind it.
+    /// Screen-space reflections: smooth and metallic opaque surfaces reflect what is on screen
+    /// (wet floors, polished metal, calm water), traced in the scene depth (MSAA off). Where
+    /// the ray leaves the screen, the sky / reflection probes stay.
+    bool screenSpaceReflections = false;
+    float ssrIntensity = 1.0f;      ///< 0..2.
+    float ssrMaxDistance = 12.0f;   ///< World units a reflected ray travels at most.
+    float ssrThickness = 0.4f;      ///< World depth of the surfaces a ray can hit (behind them: no hit).
     /// Auto exposure (HDR): brightness adapts to the average light seen, like an eye coming out
     /// of a cave. Multiplies the Environment exposure.
     bool autoExposure = false;
