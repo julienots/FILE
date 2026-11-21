@@ -45,6 +45,11 @@ public:
                  const std::vector<NavMeshLink>& links = {});
     void clear();
     bool empty() const;
+    /// Exchanges two meshes (a mesh built in the background replaces the live one at once).
+    void swap(NavMesh& other) noexcept {
+        std::swap(m, other.m);
+        std::swap(m_stats, other.m_stats);
+    }
 
     /// Straight path (corners) from `from` to `to`, both moved onto the mesh (within the
     /// search extents). When the goal is not reachable, the path ends at the closest

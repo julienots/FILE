@@ -94,6 +94,7 @@ rayon 0,3, contournée par un agent de rayon 0,9.
 - Évitement local (sans planification de foule globale) : dans un couloir très étroit, deux groupes
   face à face peuvent ralentir avant de se départager.
 - Un seul maillage 3D (une tuile) : pour de très grands mondes, augmenter `cellSize` ; pas de
-  construction par tuiles ni en arrière-plan (la reconstruction bloque l'image le temps du calcul).
+  construction par tuiles. `backgroundBuild` reconstruit sur un autre fil (l'ancien maillage sert
+  entre-temps) ; la grille 2D et les tailles d'agents supplémentaires restent reconstruites tout de suite.
 - Tailles d'agents : une grille et un maillage par taille listée dans `agentSizes` (mémoire et temps de
   construction multipliés d'autant).

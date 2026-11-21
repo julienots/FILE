@@ -132,6 +132,7 @@ void registerNavigationComponents() {
         .field("agentRadius2D", &NavigationSettingsComponent::agentRadius2D, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("cellSize", &NavigationSettingsComponent::cellSize, {.rangeMin = 0.02f, .rangeMax = 5.0f, .speed = 0.01f})
         .field("agentRadius", &NavigationSettingsComponent::agentRadius, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("backgroundBuild", &NavigationSettingsComponent::backgroundBuild, {.tooltip = "Rebuild the 3D mesh on a worker thread (the old one serves meanwhile)"})
         .field("agentSizes", &NavigationSettingsComponent::agentSizes, {.tooltip = "Extra agent radii, ';'-separated (\"0.8;1.5\"): a grid and a mesh per size"})
         .field("agentHeight", &NavigationSettingsComponent::agentHeight, {.rangeMin = 0.1f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("agentMaxClimb", &NavigationSettingsComponent::agentMaxClimb, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
@@ -193,7 +194,21 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
     return h;
 }
 
+void NavigationSystem::finishBackgroundBuild(Scene& s) {
+    if (!m_pendingMesh.valid() || m_pendingMesh.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    std::unique_ptr<NavMesh> built = m_pendingMesh.get();
+    if (!built) return;
+    m_mesh.swap(*built);
+    m_stats.meshPolygons = m_mesh.stats().polygons;
+    for (auto& [key, a] : m_agents) {  // moving agents follow the new mesh
+        if (a.status != NavStatus::Moving || a.corners.empty() || !a.use3D) continue;
+        const ecs::Entity e{static_cast<u32>(key), static_cast<u32>(key >> 32)};
+        if (s.valid(e)) navigateTo(s, e, a.destination);
+    }
+}
+
 void NavigationSystem::ensureBuilt(Scene& s) {
+    finishBackgroundBuild(s);
     if (&s != m_scene || s.generation() != m_sceneGeneration) {
         reset();
         m_scene = &s;
@@ -395,7 +410,6 @@ void NavigationSystem::rebuild(Scene& s) {
         for (u32 i : indices) idx.push_back(base + i);
         ++m_stats.sourceShapes3D;
     });
-    m_mesh.clear();
     m_stats.lastError.clear();
     auto buildMesh = [&](NavMesh& mesh, float radius) {
         mesh.clear();
@@ -412,7 +426,24 @@ void NavigationSystem::rebuild(Scene& s) {
             AGR_LOG_WARN("Navigation", "navigation mesh (agent radius {}) not built: {}", radius, r.error().message);
         }
     };
-    buildMesh(m_mesh, st.agentRadius);
+    if (st.backgroundBuild && !m_mesh.empty() && !idx.empty()) {
+        // The live mesh keeps serving; the new one replaces it when ready (ensureBuilt).
+        if (m_pendingMesh.valid()) m_pendingMesh.wait();  // one rebuild at a time
+        NavMeshBuildSettings bs;
+        bs.cellSize = st.cellSize;
+        bs.cellHeight = std::max(st.cellSize * 0.5f, 0.02f);
+        bs.agentRadius = st.agentRadius;
+        bs.agentHeight = st.agentHeight;
+        bs.agentMaxClimb = st.agentMaxClimb;
+        bs.agentMaxSlope = st.agentMaxSlope;
+        m_pendingMesh = std::async(std::launch::async, [verts, idx, bs, meshLinks]() -> std::unique_ptr<NavMesh> {
+            auto mesh = std::make_unique<NavMesh>();
+            if (!mesh->build(verts, idx, bs, meshLinks)) return nullptr;
+            return mesh;
+        });
+    } else {
+        buildMesh(m_mesh, st.agentRadius);
+    }
     for (auto& l : m_layers) buildMesh(l->mesh, l->radius);
     m_stats.meshPolygons = m_mesh.stats().polygons;
     ++m_stats.builds;
@@ -435,6 +466,7 @@ i32 NavigationSystem::layerFor(float radius) const {
 }
 
 void NavigationSystem::reset() {
+    if (m_pendingMesh.valid()) m_pendingMesh.get();  // a background build of the old scene: dropped
     m_layers.clear();
     m_agents.clear();
     m_grid.reset({0, 0}, 1.0f, 0, 0);

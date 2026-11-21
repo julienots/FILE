@@ -1,3 +1,5 @@
+#include <thread>
+#include <chrono>
 #include <doctest/doctest.h>
 
 #include <cmath>
@@ -431,5 +433,33 @@ TEST_CASE("agent sizes: a narrow gap lets small agents through, large ones go ar
     };
     CHECK_MESSAGE(length(small) < 12.0f, length(small));  // straight through the gap
     CHECK_MESSAGE(length(big) > 35.0f, length(big));      // around the wall
+}
+
+TEST_CASE("background navigation mesh rebuilds: the old mesh serves until the new one is ready") {
+    registerAll();
+    Scene s;
+    box3(s, {0, -0.5f, 0}, {30, 1, 30});
+    const auto wall = box3(s, {0, 1, -2}, {1, 2, 16});
+    s.registry().emplace<NavigationSettingsComponent>(s.createEntity("Nav")).backgroundBuild = true;
+    s.updateTransforms();
+    NavigationSystem nav;
+    nav.ensureBuilt(s);  // the first build is immediate
+    CHECK_FALSE(nav.building());
+    std::vector<Vec3> path;
+    REQUIRE(nav.findPath(s, {5, 0, -5}, {-5, 0, -5}, true, path));
+    CHECK(path.size() > 2);  // around the wall
+    s.registry().get<TransformComponent>(wall).position = {0, 1, 100};
+    s.updateTransforms();
+    nav.rebuild(s);
+    CHECK(nav.building());
+    // Paths keep working meanwhile (the old mesh), then the new mesh takes over.
+    REQUIRE(nav.findPath(s, {5, 0, -5}, {-5, 0, -5}, true, path));
+    for (int i = 0; i < 400 && nav.building(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        nav.ensureBuilt(s);
+    }
+    CHECK_FALSE(nav.building());
+    REQUIRE(nav.findPath(s, {5, 0, -5}, {-5, 0, -5}, true, path));
+    CHECK(path.size() == 2);  // straight now
 }
 }

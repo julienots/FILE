@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <future>
 #include <memory>
 #include <vector>
 
@@ -51,6 +52,8 @@ public:
     const NavGrid& grid() const { return m_grid; }
     const NavMesh& mesh() const { return m_mesh; }
     const NavigationStats& stats() const { return m_stats; }
+    /// A background rebuild is running (NavigationSettings.backgroundBuild).
+    bool building() const { return m_pendingMesh.valid(); }
     /// Radii of the extra agent sizes built, and the layer an agent of `radius` uses (-1 = default).
     usize sizeLayerCount() const { return m_layers.size(); }
     i32 sizeLayerFor(float radius) const { return layerFor(radius); }
@@ -78,6 +81,8 @@ private:
         NavMesh mesh;
     };
     std::vector<std::unique_ptr<SizeLayer>> m_layers;
+    std::future<std::unique_ptr<NavMesh>> m_pendingMesh;  ///< Background rebuild of m_mesh.
+    void finishBackgroundBuild(Scene& s);
     i32 layerFor(float radius) const;
     const NavGrid& gridOf(i32 layer) const { return layer >= 0 ? m_layers[static_cast<usize>(layer)]->grid : m_grid; }
     const NavMesh& meshOf(i32 layer) const { return layer >= 0 ? m_layers[static_cast<usize>(layer)]->mesh : m_mesh; }

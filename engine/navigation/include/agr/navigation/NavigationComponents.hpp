@@ -56,6 +56,10 @@ struct NavigationSettingsComponent {
     /// a mesh are built for each, with obstacles grown by that radius; every NavAgent uses the
     /// smallest one that fits its `radius` (the default sizes above if they do).
     std::string agentSizes;
+    /// Rebuilds of the 3D mesh (geometry changed during the game) run on a worker thread: the
+    /// old mesh keeps serving paths until the new one is ready (no frame hitch on big levels).
+    /// The first build is always immediate.
+    bool backgroundBuild = false;
     /// Static imported models (MeshRenderer with a model, no moving body) are walkable geometry
     /// too, like static colliders.
     bool meshRenderersAsSources = true;
