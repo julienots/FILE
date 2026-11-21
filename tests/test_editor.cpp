@@ -1272,6 +1272,14 @@ TEST_CASE("Windows export: the cross-compiled player is found in the export temp
     REQUIRE_MESSAGE(report, (report ? "" : report.error().message));
     const bool exe = fs::exists(report.value().output / (report.value().output.filename().string() + ".exe"));
     CHECK(exe);  // <Name>/<Name>.exe
+    CHECK(fs::exists(report.value().output / "icon.png"));
+    CHECK_FALSE(fs::exists(report.value().output / (report.value().output.filename().string() + ".desktop")));  // Windows: no desktop entry
+    { std::ofstream(templates / "agr_player") << "ELF fake player"; }
+    auto linux = exportDesktop(f.ctx->project(), f.root / "out_linux", templates / "agr_player");
+    REQUIRE(linux);
+    const fs::path desktop = linux.value().output / (linux.value().output.filename().string() + ".desktop");
+    REQUIRE(fs::exists(desktop));
+    CHECK(readTextFile(desktop).find("Categories=Game;") != std::string::npos);
     CHECK(fs::exists(report.value().output / "game" / "game.json"));
     // Next to the editor (export_templates/) also works.
     fs::create_directories(editorDir / "export_templates" / "windows-x64");

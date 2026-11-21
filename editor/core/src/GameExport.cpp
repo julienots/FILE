@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <fstream>
 
 #include <cstdio>
 #include <optional>
@@ -205,6 +207,19 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
     fs::copy_file(playerExecutable, exe, fs::copy_options::overwrite_existing, ec);
     if (ec) return makeError(Error::Code::IOError, "cannot copy the player: " + ec.message());
     fs::permissions(exe, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::add, ec);
+    // Icon next to the executable (assets/icon.png, else the AGR mark), and on Linux a desktop entry.
+    fs::path icon = project.assetsDirectory() / "icon.png";
+    if (!fs::is_regular_file(icon, ec)) icon = project.assetsDirectory() / "textures" / "agr_mark.png";
+    if (fs::is_regular_file(icon, ec)) fs::copy_file(icon, dir / "icon.png", fs::copy_options::overwrite_existing, ec);
+    if (playerExecutable.extension() != ".exe") {
+        const std::string name = project.settings().name;
+        std::string entry = "[Desktop Entry]\nType=Application\nName=" + name + "\nExec=sh -c 'cd \"$(dirname \"%k\")\" && ./" + exe.filename().string() +
+                            "'\nIcon=icon\nCategories=Game;\nTerminal=false\n";
+        if (fs::exists(dir / "icon.png", ec)) entry += "# Icon: icon.png next to this file (copy it to ~/.local/share/icons to show it in menus)\n";
+        if (std::ofstream out(dir / (exe.stem().string() + ".desktop")); out) out << entry;
+        fs::permissions(dir / (exe.stem().string() + ".desktop"), fs::perms::owner_exec, fs::perm_options::add, ec);
+        report.files += 1;
+    }
     AGR_LOG_INFO("Export", "desktop build: {}", exe.string());
     return report;
 }

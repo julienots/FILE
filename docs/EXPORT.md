@@ -59,7 +59,8 @@ AGR_STORE_PASSWORD=... agr_editor --project MonJeu --export android-aab --output
 
 ## PC
 
-Le dossier `<Nom>/` contient l'exécutable (renommé d'après le jeu) et `game/`. Options utiles du
+Le dossier `<Nom>/` contient l'exécutable (renommé d'après le jeu), `game/`, `icon.png` (l'icône du
+projet) et, sous Linux, un lanceur `<Nom>.desktop` (catégorie Jeu) qui démarre le jeu depuis son dossier. Options utiles du
 lecteur : `--opengl`, `--gles`, `--vulkan`, `--frames N`, `--autotest` (vérifie que la scène, les
 scripts, le rendu, l'interface et l'audio fonctionnent).
 
