@@ -129,6 +129,7 @@ void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
     for (const UIEvent& e : m_ui->takeEvents()) {
         if (e.type == UIEventType::Click) engine.events().publish(UIClickEvent{e.entity});
         else if (e.type == UIEventType::ValueChanged) engine.events().publish(UIValueChangedEvent{e.entity, e.value});
+        else if (e.type == UIEventType::Link) engine.events().publish(UITextEvent{e.entity, e.text, false, true});
         else engine.events().publish(UITextEvent{e.entity, e.text, e.type == UIEventType::Submit});
     }
 }

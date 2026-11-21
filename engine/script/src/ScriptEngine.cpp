@@ -461,6 +461,14 @@ void ScriptEngine::dispatchUI(Scene& scene, const UITextEvent& e) {
             return n + 1;
         });
     };
+    if (e.link) {  // a [url=id] of a rich text: the text's script, then its parents' (a panel handling its links)
+        for (ecs::Entity t = e.entity; !t.isNull() && scene.valid(t); t = scene.parent(t))
+            if (m->instances.count(t.packed())) {
+                callWithText(t, "onLinkClicked", {});
+                break;
+            }
+        return;
+    }
     callWithText(e.entity, e.submitted ? "onSubmit" : "onTextChanged", {});
     if (e.submitted)
         if (const auto* f = scene.registry().tryGet<UIInputFieldComponent>(e.entity)) callWithText(f->target, f->message, e.entity);

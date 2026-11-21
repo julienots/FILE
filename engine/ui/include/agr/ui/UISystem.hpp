@@ -24,12 +24,12 @@ struct UIPointer {
     bool down = false;  ///< false on the frame a finger lifts (release), and for a hovering mouse.
 };
 
-enum class UIEventType : u8 { Click, ValueChanged, TextChanged, Submit };
+enum class UIEventType : u8 { Click, ValueChanged, TextChanged, Submit, Link };
 struct UIEvent {
     UIEventType type = UIEventType::Click;
     ecs::Entity entity;
     float value = 0.0f;
-    std::string text;  ///< TextChanged / Submit
+    std::string text;  ///< TextChanged / Submit; Link: the link id ([url=id])
 };
 
 /// Published on the engine event bus by UIPlugin (scripts receive them as callbacks).
@@ -45,6 +45,7 @@ struct UITextEvent {
     ecs::Entity entity;
     std::string text;
     bool submitted = false;
+    bool link = false;  ///< A [url=id] of a rich text was clicked; text = id (scripts: onLinkClicked(id)).
 };
 
 struct UIStats {
@@ -205,8 +206,20 @@ private:
     };
     struct RichStyle {
         math::Vec4 color{1, 1, 1, 1};
-        bool hasColor = false, bold = false, underline = false;
+        bool hasColor = false, bold = false, underline = false, italic = false, strike = false;
+        i32 link = -1;  ///< Index into PendingText::links.
     };
+    struct LinkBox {
+        ecs::Entity entity;
+        math::Vec4 rect;  ///< x, y, w, h (UI pixels)
+        std::string id;
+    };
+    std::vector<LinkBox> m_linkBoxes;  ///< Links drawn last frame (clicks).
+
+public:
+    const std::vector<LinkBox>& linkBoxes() const { return m_linkBoxes; }
+
+private:
     struct PendingText {
         usize element;
         usize canvas;
@@ -215,6 +228,7 @@ private:
         math::Vec4 color{1, 1, 1, 1};
         std::vector<RichStyle> styles;  // rich text: per code point
         float pixelSize = 0.0f;
+        std::vector<std::string> links;  // rich text: ids of [url=...]
     };
     struct ThemeEntry {
         std::unique_ptr<UITheme> theme;

@@ -132,16 +132,26 @@ std::optional<Vec4> parseColor(const std::string& v) {
 }
 
 /// Rich text: removes the tags and returns the style of every remaining code point.
+/// Tags: [b] [i] [u] [s] [color=red|#rrggbb] [url=id] and their closing [/...]; "[[" = "[".
 template <typename Style>
-std::string parseRichText(const std::string& in, std::vector<Style>& styles) {
+std::string parseRichText(const std::string& in, std::vector<Style>& styles, std::vector<std::string>& links) {
     std::string out;
     std::vector<Vec4> colors;
-    int bold = 0, underline = 0;
+    int bold = 0, underline = 0, italic = 0, strike = 0;
+    i32 link = -1;
+    auto current = [&] {
+        Style st;
+        st.color = colors.empty() ? Vec4{1, 1, 1, 1} : colors.back();
+        st.hasColor = !colors.empty();
+        st.bold = bold > 0, st.underline = underline > 0, st.italic = italic > 0, st.strike = strike > 0;
+        st.link = link;
+        return st;
+    };
     for (usize i = 0; i < in.size();) {
         if (in[i] == '[') {
             if (i + 1 < in.size() && in[i + 1] == '[') {  // "[[" = a literal "["
                 out += '[';
-                styles.push_back({colors.empty() ? Vec4{1, 1, 1, 1} : colors.back(), !colors.empty(), bold > 0, underline > 0});
+                styles.push_back(current());
                 i += 2;
                 continue;
             }
@@ -153,7 +163,16 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles) {
                 else if (tag == "/b") bold = std::max(0, bold - 1);
                 else if (tag == "u") ++underline;
                 else if (tag == "/u") underline = std::max(0, underline - 1);
-                else if (tag == "/color") {
+                else if (tag == "i") ++italic;
+                else if (tag == "/i") italic = std::max(0, italic - 1);
+                else if (tag == "s") ++strike;
+                else if (tag == "/s") strike = std::max(0, strike - 1);
+                else if (tag.rfind("url=", 0) == 0) {
+                    links.push_back(tag.substr(4));
+                    link = static_cast<i32>(links.size()) - 1;
+                } else if (tag == "/url") {
+                    link = -1;
+                } else if (tag == "/color") {
                     if (!colors.empty()) colors.pop_back();
                 } else if (tag.rfind("color=", 0) == 0) {
                     if (auto c = parseColor(tag.substr(6))) colors.push_back(*c);
@@ -171,7 +190,7 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles) {
         const unsigned char c = static_cast<unsigned char>(in[i]);
         const usize n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : 4;
         out.append(in, i, n);
-        styles.push_back({colors.empty() ? Vec4{1, 1, 1, 1} : colors.back(), !colors.empty(), bold > 0, underline > 0});
+        styles.push_back(current());
         i += n;
     }
     return out;
@@ -598,6 +617,13 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
             ps.last = p.position;
         } else if (!p.down && wasDown) {
             m_selectingText = false;
+            // A rich text link released where it was pressed.
+            auto inBox = [](const Vec4& r, Vec2 q) { return q.x >= r.x && q.y >= r.y && q.x <= r.x + r.z && q.y <= r.y + r.w; };
+            for (const LinkBox& lb : m_linkBoxes)
+                if (inBox(lb.rect, p.position) && inBox(lb.rect, ps.down) && reg.valid(lb.entity)) {
+                    m_events.push_back({UIEventType::Link, lb.entity, 0.0f, lb.id});
+                    break;
+                }
             if (pressedIt != m_pressed.end()) {
                 const ecs::Entity pressed = pressedIt->second;
                 if (pressed == top && !ps.dragging && interactableNow(reg, pressed) && !reg.has<UISliderComponent>(pressed)) {
@@ -1601,7 +1627,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                 if (const auto* t = reg.tryGet<UITextComponent>(el.entity); t && !t->text.empty() && t->color.w > 0.0f) {
                     PendingText pt{ei, ci, {}, {}, t->color, {}, t->fontSize * pass.scale};
                     if (th && isWhite(t->color)) pt.color = Vec4{th->text.x, th->text.y, th->text.z, th->text.w * t->color.w};
-                    const std::string shown = t->richText ? parseRichText(t->text, pt.styles) : std::string();
+                    const std::string shown = t->richText ? parseRichText(t->text, pt.styles, pt.links) : std::string();
                     auto lay = m_fonts.layout(fontOf(t->font), t->richText ? shown : t->text, pt.pixelSize, el.rect.z, t->wrap, t->lineSpacing, t->hAlign);
                     if (!lay) {
                         if (m_reportedFonts.insert(t->font).second) AGR_LOG_ERROR("UI", "font '{}': {}", t->font, lay.error().message);
@@ -1712,17 +1738,55 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
     m_fonts.flush();
 
     // Pass 2: geometry in painter's order (element, then its texts, then its children).
-    auto drawText = [&](const PendingText& pt) {
+    m_linkBoxes.clear();
+    auto drawText = [&](const PendingText& pt, ecs::Entity owner) {
         const u32 base = packColor(pt.color);
         const float boldOffset = std::max(1.0f, std::round(pt.pixelSize * 0.045f));
+        const Vec4 linkColor{0.4f, 0.7f, 1.0f, 1.0f};
         for (const TextGlyph& g : pt.layout.glyphs) {
             const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
-            const u32 color = st && st->hasColor ? packColor({st->color.x, st->color.y, st->color.z, st->color.w * pt.color.w}) : base;
-            emit(out, pt.origin + g.min, pt.origin + g.max, g.uv, color, m_fonts.texture());
-            if (st && st->bold) emit(out, pt.origin + g.min + Vec2{boldOffset, 0.0f}, pt.origin + g.max + Vec2{boldOffset, 0.0f}, g.uv, color, m_fonts.texture());
-            if (st && st->underline) {
-                const float y = pt.origin.y + g.baseline + std::max(1.0f, pt.pixelSize * 0.08f), t = std::max(1.0f, pt.pixelSize * 0.06f);
+            const bool link = st && st->link >= 0 && static_cast<usize>(st->link) < pt.links.size();
+            const Vec4 c = st && st->hasColor ? st->color : link ? linkColor : Vec4{1, 1, 1, 1};
+            const u32 color = st && (st->hasColor || link) ? packColor({c.x, c.y, c.z, c.w * pt.color.w}) : base;
+            const Vec2 mn = pt.origin + g.min, mx = pt.origin + g.max;
+            auto glyph = [&](Vec2 off) {
+                const Vec4 clip = m_clip;
+                const bool inside = mn.x + off.x >= clip.x && mx.x + off.x + (mx.y - mn.y) * 0.25f <= clip.x + clip.z && mn.y >= clip.y && mx.y <= clip.y + clip.w;
+                if (st && st->italic && inside) {  // sheared quad: the top leans right
+                    const float k = 0.2f;
+                    const float baseY = pt.origin.y + g.baseline;
+                    const Vec2 p[4] = {m_xform.apply({mn.x + off.x + (baseY - mn.y) * k, mn.y}), m_xform.apply({mx.x + off.x + (baseY - mn.y) * k, mn.y}),
+                                       m_xform.apply({mx.x + off.x + (baseY - mx.y) * k, mx.y}), m_xform.apply({mn.x + off.x + (baseY - mx.y) * k, mx.y})};
+                    const Vec2 t[4] = {{g.uv.x, g.uv.y}, {g.uv.z, g.uv.y}, {g.uv.z, g.uv.w}, {g.uv.x, g.uv.w}};
+                    const u32 cs[4] = {color, color, color, color};
+                    out.quad4(p, t, cs, m_fonts.texture());
+                } else {
+                    emit(out, mn + off, mx + off, g.uv, color, m_fonts.texture());
+                }
+            };
+            glyph({0.0f, 0.0f});
+            if (st && st->bold) glyph({boldOffset, 0.0f});
+            const float t = std::max(1.0f, pt.pixelSize * 0.06f);
+            if (st && (st->underline || link)) {
+                const float y = pt.origin.y + g.baseline + std::max(1.0f, pt.pixelSize * 0.08f);
                 emit(out, {pt.origin.x + g.min.x, y}, {pt.origin.x + g.min.x + g.advance, y + t}, {0, 0, 1, 1}, color, {});
+            }
+            if (st && st->strike) {
+                const float y = pt.origin.y + g.baseline - pt.pixelSize * 0.28f;
+                emit(out, {pt.origin.x + g.min.x, y}, {pt.origin.x + g.min.x + g.advance, y + t}, {0, 0, 1, 1}, color, {});
+            }
+            if (link) {  // clickable area: the glyph's cell on its line
+                const Vec4 r{pt.origin.x + g.min.x, pt.origin.y + g.baseline - pt.pixelSize * 0.8f, std::max(g.advance, g.max.x - g.min.x), pt.pixelSize};
+                const std::string& id = pt.links[static_cast<usize>(st->link)];
+                if (!m_linkBoxes.empty() && m_linkBoxes.back().entity == owner && m_linkBoxes.back().id == id &&
+                    std::fabs(m_linkBoxes.back().rect.y - r.y) < 0.5f) {
+                    LinkBox& lb = m_linkBoxes.back();  // extend the box along the line
+                    const float x1 = std::max(lb.rect.x + lb.rect.z, r.x + r.z);
+                    lb.rect.x = std::min(lb.rect.x, r.x);
+                    lb.rect.z = x1 - lb.rect.x;
+                } else {
+                    m_linkBoxes.push_back({owner, r, id});
+                }
             }
         }
     };
@@ -1753,7 +1817,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                         emit(out, {s0.x, s0.y}, {x1, s0.y + s0.h}, {0, 0, 1, 1}, sel, {});
                     }
                 }
-                drawText(pt);
+                drawText(pt, el.entity);
             }
             if (focusedField && !stopsDrawn) m_caretStops.clear();
             if (focusedField && std::fmod(m_caretClock.elapsedSeconds(), 1.0) < 0.55) {  // blinking caret
@@ -1793,7 +1857,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             if (d->selected >= 0 && d->selected < m_popupCount) band(d->selected, {hi.x, hi.y, hi.z, hi.w * 0.3f});
             if (m_popupHover >= 0 && m_popupHover < m_popupCount) band(m_popupHover, {hi.x, hi.y, hi.z, hi.w * 0.6f});
             for (; oi < m_overlayTexts.size() && oi < static_cast<usize>(m_popupCount); ++oi)
-                drawText({0, 0, std::move(m_overlayTexts[oi].layout), m_overlayTexts[oi].origin, m_overlayTexts[oi].color, {}, 0.0f});
+                drawText({0, 0, std::move(m_overlayTexts[oi].layout), m_overlayTexts[oi].origin, m_overlayTexts[oi].color, {}, 0.0f}, ecs::Entity{});
         }
     }
     for (; oi < m_overlayTexts.size(); ++oi) {  // tooltip: a box around its text
@@ -1804,7 +1868,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             if (pass.canvas == canvasOf(m_tooltipEntity) && pass.theme) panel = pass.theme->panel;
         emit(out, {ot.origin.x - pad, ot.origin.y - pad}, {ot.origin.x + ot.layout.size.x + pad, ot.origin.y + ot.layout.size.y + pad}, {0, 0, 1, 1},
              packColor(panel), {});
-        drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f});
+        drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f}, ecs::Entity{});
     }
     if (!m_dialog.isNull() && reg.valid(m_dialog))  // the modal dialog, over everything
         if (const auto* d = reg.tryGet<UIDialogComponent>(m_dialog)) {
@@ -1818,7 +1882,7 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                 const float k = static_cast<i32>(i) == m_dialogHover ? 1.15f : 1.0f;
                 emit(out, {b.x, b.y}, {b.x + b.z, b.y + b.w}, {0, 0, 1, 1}, packColor({bc.x * k, bc.y * k, bc.z * k, bc.w}), {});
             }
-            for (OverlayText& ot : m_dialogTexts) drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f});
+            for (OverlayText& ot : m_dialogTexts) drawText({0, 0, std::move(ot.layout), ot.origin, ot.color, {}, 0.0f}, ecs::Entity{});
         }
     m_stats.quads = static_cast<u32>(out.indices.size() / 6);
     m_stats.texts = static_cast<u32>(m_texts.size());

@@ -932,4 +932,51 @@ TEST_CASE("text editing: caret keys, selection, word jumps, clipboard, click and
     f.ui.processTextKey(f.scene, TK::Down);
     CHECK(f.ui.caret() >= 4);
 }
+
+TEST_CASE("rich text: italic, strike-through and clickable links") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto label = f.element("Label", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {600, 60});
+    auto& t = f.scene.registry().emplace<UITextComponent>(label);
+    t.richText = true;
+    t.hAlign = UIHAlign::Left;
+    t.wrap = false;
+    t.text = "Plain";
+    OverlayDrawList plain;
+    f.ui.buildOverlay(f.scene, 800, 600, plain);
+    const usize plainQuads = plain.indices.size() / 6;
+    f.scene.registry().get<UITextComponent>(label).text = "[i]Plain[/i]";
+    OverlayDrawList italic;
+    f.ui.buildOverlay(f.scene, 800, 600, italic);
+    CHECK(italic.indices.size() / 6 == plainQuads);  // same glyphs, sheared
+    bool sheared = false;
+    for (usize q = 0; q + 3 < italic.vertices.size(); q += 4)
+        sheared |= std::fabs(italic.vertices[q].position.x - italic.vertices[q + 3].position.x) > 0.5f;  // top-left vs bottom-left
+    CHECK(sheared);
+    f.scene.registry().get<UITextComponent>(label).text = "[s]Plain[/s]";
+    OverlayDrawList strike;
+    f.ui.buildOverlay(f.scene, 800, 600, strike);
+    CHECK(strike.indices.size() / 6 == plainQuads * 2);  // a line per glyph
+    CHECK(f.ui.linkBoxes().empty());
+
+    f.scene.registry().get<UITextComponent>(label).text = "Go to the [url=shop]shop[/url] or [url=map]map[/url]";
+    OverlayDrawList links;
+    f.ui.buildOverlay(f.scene, 800, 600, links);
+    REQUIRE(f.ui.linkBoxes().size() == 2);
+    CHECK(f.ui.linkBoxes()[0].id == "shop");
+    const math::Vec4 r = f.ui.linkBoxes()[1].rect;
+    CHECK(r.x > f.ui.linkBoxes()[0].rect.x);
+    const math::Vec2 c{r.x + r.z * 0.5f, r.y + r.w * 0.5f};
+    f.ui.takeEvents();
+    f.pointers({{0, c, true}});
+    f.pointers({{0, c, false}});
+    const auto ev = f.ui.takeEvents();
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0].type == UIEventType::Link);
+    CHECK(ev[0].text == "map");
+    CHECK(ev[0].entity == label);
+    f.pointers({{0, {110, 50}, true}});  // outside any link
+    f.pointers({{0, {110, 50}, false}});
+    CHECK(f.ui.takeEvents().empty());
+}
 }  // TEST_SUITE
