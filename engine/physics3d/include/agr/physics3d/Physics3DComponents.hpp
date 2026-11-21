@@ -98,6 +98,42 @@ struct CharacterController3DComponent {
     u32 collidesWith = 0xFFFFFFFFu;
 };
 
+/// Wheeled vehicle (car, truck, kart) on the entity's dynamic RigidBody: 4 ray-cast wheels with
+/// suspension, an engine with automatic gears, steering on the front wheels, brakes and a hand
+/// brake on the rear ones. The vehicle drives toward its local -Z (forward), +Y up. Children named
+/// WheelFL, WheelFR, WheelRL, WheelRR (front / rear, left / right) follow their wheel (spin,
+/// steering, suspension). Scripts drive it with throttle / steering / brake / handBrake.
+struct Vehicle3DComponent {
+    // Driver input (scripts, every frame).
+    float throttle = 0.0f;   ///< -1 (reverse) .. 1 (full gas).
+    float steering = 0.0f;   ///< -1 (left) .. 1 (right).
+    float brake = 0.0f;      ///< 0 .. 1.
+    bool handBrake = false;
+    // Wheels (local space of the body).
+    float wheelBase = 2.6f;      ///< Distance between front and rear axles.
+    float trackWidth = 1.6f;     ///< Distance between left and right wheels.
+    float wheelHeight = 0.0f;    ///< Height of the suspension attachment (local y).
+    float wheelRadius = 0.35f;
+    float wheelWidth = 0.25f;
+    float suspensionMin = 0.05f; ///< Suspension length fully compressed (m).
+    float suspensionMax = 0.4f;  ///< Suspension length fully extended (m).
+    float suspensionFrequency = 1.5f;  ///< Spring stiffness (Hz).
+    float suspensionDamping = 0.5f;
+    float maxSteerAngle = 0.5235988f;  ///< Radians (30°).
+    // Drive.
+    float engineTorque = 500.0f;  ///< N·m.
+    float maxRpm = 6000.0f;
+    float brakeTorque = 1500.0f;      ///< N·m per wheel.
+    float handBrakeTorque = 4000.0f;  ///< N·m per rear wheel.
+    bool frontDrive = false;
+    bool rearDrive = true;
+    float tireFriction = 1.0f;  ///< Grip multiplier.
+    // State (written by the simulation).
+    float speed = 0.0f;  ///< m/s along the forward axis (negative = reversing).
+    float rpm = 0.0f;
+    i32 gear = 0;
+};
+
 void registerPhysics3DComponents();
 
 } // namespace agr

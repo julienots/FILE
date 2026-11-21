@@ -146,6 +146,23 @@ sans corps connecté, à un point fixe du monde.
   `onJointBreak(force)`. Décocher `broken` la reconstruit.
 - `e:jointValue()` : angle de la charnière (radians), position de la glissière ou longueur de la corde.
 
+## Véhicules (`Vehicle3D`)
+
+Sur une entité avec un `RigidBody` dynamique et un `Collider` (la carrosserie) : 4 roues lancées en
+rayons vers le sol avec **suspensions** (`suspensionMin` / `suspensionMax`, `suspensionFrequency`,
+`suspensionDamping`), un **moteur** à boîte automatique (`engineTorque`, `maxRpm`), la **direction** sur
+les roues avant (`maxSteerAngle`), des **freins** (`brakeTorque`) et un **frein à main** sur les roues
+arrière (`handBrakeTorque`) ; traction avant, arrière ou intégrale (`frontDrive`, `rearDrive`) ;
+`tireFriction` règle l'adhérence. Disposition : `wheelBase` (entre essieux), `trackWidth` (entre roues
+gauche et droite), `wheelHeight` (hauteur des fixations), `wheelRadius`, `wheelWidth`. Le véhicule
+avance vers son −Z local.
+
+Les scripts le conduisent en écrivant `throttle` (−1 marche arrière … 1), `steering` (−1 gauche … 1),
+`brake` (0 … 1) et `handBrake` ; la simulation écrit `speed` (m/s, négatif en marche arrière), `rpm` et
+`gear`. Des enfants nommés **WheelFL, WheelFR, WheelRL, WheelRR** (avant / arrière, gauche / droite)
+suivent leur roue : rotation, braquage, débattement. Basé sur le contrôleur de véhicule à roues de Jolt.
+Test : la voiture se pose sur ses suspensions, avance, tourne et s'arrête au freinage.
+
 ## Contrôleur de personnage 3D
 
 `CharacterController3D` (Jolt *CharacterVirtual*) remplace un `RigidBody` pour un héros ou un PNJ : une
@@ -209,7 +226,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
   qui a au moins un déclencheur est entièrement un capteur.
 - 2D : pas de tuiles en pente ni de tuiles traversables dans `TilemapCollider2D` (utiliser des
   `Collider2D` polygones ou `oneWay` posés sur la tilemap) ; deux `CharacterController2D` se traversent.
-- Articulations : pas de roue (*wheel*), de poulie ni d'engrenage ; les butées 2D sont légèrement souples
+- Articulations : pas de poulie ni d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
+  seulement (pas de moto ni de chenilles) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
 - Personnage 3D : capsule verticale uniquement ; entre deux personnages, simple collision des capsules.
 - Pas de *debug draw* des contacts ; pas de physique en mode édition (aperçu).

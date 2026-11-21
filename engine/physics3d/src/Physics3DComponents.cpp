@@ -72,6 +72,34 @@ void registerPhysics3DComponents() {
         .field("pushForce", &CharacterController3DComponent::pushForce, {.tooltip = "Strongest push on dynamic bodies (N)", .rangeMin = 0.0f, .rangeMax = 1e7f, .speed = 1.0f})
         .field("layer", &CharacterController3DComponent::layer, {.tooltip = "Collision layer (0..31)", .flags = FieldFlag_Layer, .rangeMin = 0.0f, .rangeMax = 31.0f})
         .field("collidesWith", &CharacterController3DComponent::collidesWith, {.tooltip = "Layers this collides with", .flags = FieldFlag_LayerMask});
+
+    reg.add<Vehicle3DComponent>("Vehicle3D")
+        .category("Physics 3D")
+        .description("Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR follow the wheels.")
+        .field("throttle", &Vehicle3DComponent::throttle, {.tooltip = "-1 reverse .. 1 full gas (scripts)", .flags = FieldFlag_Transient, .rangeMin = -1.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("steering", &Vehicle3DComponent::steering, {.tooltip = "-1 left .. 1 right (scripts)", .flags = FieldFlag_Transient, .rangeMin = -1.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("brake", &Vehicle3DComponent::brake, {.flags = FieldFlag_Transient, .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("handBrake", &Vehicle3DComponent::handBrake, {.flags = FieldFlag_Transient})
+        .field("wheelBase", &Vehicle3DComponent::wheelBase, {.tooltip = "Distance between the axles", .rangeMin = 0.2f, .rangeMax = 50.0f, .speed = 0.01f})
+        .field("trackWidth", &Vehicle3DComponent::trackWidth, {.tooltip = "Distance between left and right wheels", .rangeMin = 0.2f, .rangeMax = 50.0f, .speed = 0.01f})
+        .field("wheelHeight", &Vehicle3DComponent::wheelHeight, {.tooltip = "Local height of the suspension attachment", .rangeMin = -10.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("wheelRadius", &Vehicle3DComponent::wheelRadius, {.rangeMin = 0.05f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("wheelWidth", &Vehicle3DComponent::wheelWidth, {.rangeMin = 0.02f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("suspensionMin", &Vehicle3DComponent::suspensionMin, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("suspensionMax", &Vehicle3DComponent::suspensionMax, {.rangeMin = 0.01f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("suspensionFrequency", &Vehicle3DComponent::suspensionFrequency, {.tooltip = "Spring stiffness (Hz)", .rangeMin = 0.1f, .rangeMax = 20.0f, .speed = 0.01f})
+        .field("suspensionDamping", &Vehicle3DComponent::suspensionDamping, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("maxSteerAngle", &Vehicle3DComponent::maxSteerAngle, {.flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 1.4f, .speed = 0.01f})
+        .field("engineTorque", &Vehicle3DComponent::engineTorque, {.tooltip = "N·m", .rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 1.0f})
+        .field("maxRpm", &Vehicle3DComponent::maxRpm, {.rangeMin = 500.0f, .rangeMax = 30000.0f, .speed = 10.0f})
+        .field("brakeTorque", &Vehicle3DComponent::brakeTorque, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 1.0f})
+        .field("handBrakeTorque", &Vehicle3DComponent::handBrakeTorque, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 1.0f})
+        .field("frontDrive", &Vehicle3DComponent::frontDrive)
+        .field("rearDrive", &Vehicle3DComponent::rearDrive)
+        .field("tireFriction", &Vehicle3DComponent::tireFriction, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("speed", &Vehicle3DComponent::speed, {.tooltip = "m/s forward (simulation)", .flags = FieldFlag_ReadOnly | FieldFlag_Transient})
+        .field("rpm", &Vehicle3DComponent::rpm, {.flags = FieldFlag_ReadOnly | FieldFlag_Transient})
+        .field("gear", &Vehicle3DComponent::gear, {.flags = FieldFlag_ReadOnly | FieldFlag_Transient});
 }
 
 } // namespace agr

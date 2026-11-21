@@ -43,6 +43,9 @@
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 #include <Jolt/RegisterTypes.h>
 
 #include "agr/core/JobSystem.hpp"
@@ -297,6 +300,15 @@ struct Physics3DWorld::Impl {
         JPH::BodyID a, b;  // this body, connected body (invalid = world)
         Vec3 localA, localB;
     };
+    struct Vehicle {
+        JPH::Ref<JPH::VehicleConstraint> c;
+        JPH::Ref<JPH::VehicleCollisionTester> tester;
+        ecs::Entity entity;
+        JPH::BodyID body;
+        u64 hash = 0;
+        bool warned = false;
+    };
+    std::unordered_map<u64, Vehicle> vehicles;
     struct Character {
         JPH::Ref<JPH::CharacterVirtual> ch;
         ecs::Entity entity;
@@ -371,8 +383,150 @@ struct Physics3DWorld::Impl {
         c.ch = nullptr;  // removes the inner body
     }
 
+    void removeVehicle(Vehicle& v) {
+        if (v.c) {
+            system->RemoveStepListener(v.c);
+            system->RemoveConstraint(v.c);
+        }
+        v.c = nullptr;
+        v.tester = nullptr;
+        v.hash = 0;
+    }
+
+    /// Vehicle constraints for Vehicle3D components (rebuilt when their settings or body change).
+    void syncVehicles(Scene& s) {
+        auto& reg = s.registry();
+        std::unordered_set<u64> seen;
+        reg.view<Vehicle3DComponent>().each([&](ecs::Entity e, Vehicle3DComponent& v) {
+            if (!s.isActiveInHierarchy(e)) return;
+            Vehicle& rec = vehicles[e.packed()];
+            rec.entity = e;
+            const Body* body = find(e);
+            if (!body || body->type != BodyType3D::Dynamic) {
+                if (!rec.warned) AGR_LOG_WARN("Physics3D", "'{}': Vehicle3D needs a dynamic RigidBody and a Collider on the same entity", s.nameOf(e));
+                rec.warned = true;
+                removeVehicle(rec);
+                return;
+            }
+            seen.insert(e.packed());
+            u64 h = mix(body->id.GetIndexAndSequenceNumber(), static_cast<u64>(v.frontDrive) | (static_cast<u64>(v.rearDrive) << 1));
+            for (float f : {v.wheelBase, v.trackWidth, v.wheelHeight, v.wheelRadius, v.wheelWidth, v.suspensionMin, v.suspensionMax, v.suspensionFrequency,
+                            v.suspensionDamping, v.maxSteerAngle, v.engineTorque, v.maxRpm, v.brakeTorque, v.handBrakeTorque, v.tireFriction})
+                h = mixf(h, f);
+            if (rec.c && rec.hash == h) return;
+            removeVehicle(rec);
+            JPH::VehicleConstraintSettings vs;
+            vs.mUp = JPH::Vec3::sAxisY();
+            vs.mForward = -JPH::Vec3::sAxisZ();
+            vs.mMaxPitchRollAngle = JPH::DegreesToRadians(60.0f);
+            const float hx = v.trackWidth * 0.5f, hz = v.wheelBase * 0.5f;
+            const JPH::Vec3 positions[4] = {{-hx, v.wheelHeight, -hz}, {hx, v.wheelHeight, -hz}, {-hx, v.wheelHeight, hz}, {hx, v.wheelHeight, hz}};
+            for (int w = 0; w < 4; ++w) {
+                auto* ws = new JPH::WheelSettingsWV();
+                ws->mPosition = positions[w];
+                ws->mSuspensionDirection = -JPH::Vec3::sAxisY();
+                ws->mSteeringAxis = JPH::Vec3::sAxisY();
+                ws->mWheelUp = JPH::Vec3::sAxisY();
+                ws->mWheelForward = -JPH::Vec3::sAxisZ();
+                ws->mSuspensionMinLength = std::max(v.suspensionMin, 0.0f);
+                ws->mSuspensionMaxLength = std::max(v.suspensionMax, ws->mSuspensionMinLength + 0.01f);
+                ws->mSuspensionSpring = JPH::SpringSettings(JPH::ESpringMode::FrequencyAndDamping, std::max(v.suspensionFrequency, 0.1f), std::max(v.suspensionDamping, 0.0f));
+                ws->mRadius = std::max(v.wheelRadius, 0.05f);
+                ws->mWidth = std::max(v.wheelWidth, 0.02f);
+                const bool front = w < 2;
+                ws->mMaxSteerAngle = front ? std::clamp(v.maxSteerAngle, 0.0f, 1.4f) : 0.0f;
+                ws->mMaxBrakeTorque = std::max(v.brakeTorque, 0.0f);
+                ws->mMaxHandBrakeTorque = front ? 0.0f : std::max(v.handBrakeTorque, 0.0f);
+                const float k = std::max(v.tireFriction, 0.0f);
+                for (JPH::LinearCurve* curve : {&ws->mLongitudinalFriction, &ws->mLateralFriction})
+                    for (auto& point : curve->mPoints) point.mY *= k;
+                vs.mWheels.push_back(ws);
+            }
+            auto* controller = new JPH::WheeledVehicleControllerSettings();
+            controller->mEngine.mMaxTorque = std::max(v.engineTorque, 0.0f);
+            controller->mEngine.mMaxRPM = std::max(v.maxRpm, 500.0f);
+            controller->mEngine.mMinRPM = std::min(1000.0f, controller->mEngine.mMaxRPM * 0.5f);
+            const bool front = v.frontDrive || !v.rearDrive, rear = v.rearDrive;
+            const float ratio = front && rear ? 0.5f : 1.0f;
+            if (front) {
+                JPH::VehicleDifferentialSettings d;
+                d.mLeftWheel = 0, d.mRightWheel = 1, d.mEngineTorqueRatio = ratio;
+                controller->mDifferentials.push_back(d);
+            }
+            if (rear) {
+                JPH::VehicleDifferentialSettings d;
+                d.mLeftWheel = 2, d.mRightWheel = 3, d.mEngineTorqueRatio = ratio;
+                controller->mDifferentials.push_back(d);
+            }
+            vs.mController = controller;
+            JPH::BodyLockWrite lock(system->GetBodyLockInterface(), body->id);
+            if (!lock.Succeeded()) return;
+            rec.c = new JPH::VehicleConstraint(lock.GetBody(), vs);
+            rec.tester = new JPH::VehicleCollisionTesterRay(lock.GetBody().GetObjectLayer());
+            rec.c->SetVehicleCollisionTester(rec.tester);
+            rec.body = body->id;
+            rec.hash = h;
+            rec.warned = false;
+            system->AddConstraint(rec.c);
+            system->AddStepListener(rec.c);
+        });
+        for (auto it = vehicles.begin(); it != vehicles.end();) {
+            if (!seen.count(it->first)) {
+                removeVehicle(it->second);
+                it = vehicles.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    /// Driver input before the step.
+    void driveVehicles(Scene& s) {
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        for (auto& [key, v] : vehicles) {
+            if (!v.c || !s.valid(v.entity)) continue;
+            const auto* comp = s.registry().tryGet<Vehicle3DComponent>(v.entity);
+            if (!comp) continue;
+            auto* controller = static_cast<JPH::WheeledVehicleController*>(v.c->GetController());
+            const float forward = std::clamp(comp->throttle, -1.0f, 1.0f), right = std::clamp(comp->steering, -1.0f, 1.0f);
+            controller->SetDriverInput(forward, right, std::clamp(comp->brake, 0.0f, 1.0f), comp->handBrake ? 1.0f : 0.0f);
+            if (forward != 0.0f || right != 0.0f || comp->brake > 0.0f || comp->handBrake) bi.ActivateBody(v.body);
+        }
+    }
+
+    /// Speed, engine state and the wheel children after the step.
+    void readVehicles(Scene& s) {
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        static const char* kWheelNames[4] = {"WheelFL", "WheelFR", "WheelRL", "WheelRR"};
+        for (auto& [key, v] : vehicles) {
+            if (!v.c || !s.valid(v.entity)) continue;
+            auto* comp = s.registry().tryGet<Vehicle3DComponent>(v.entity);
+            if (!comp) continue;
+            const JPH::Vec3 vel = bi.GetLinearVelocity(v.body);
+            const JPH::Quat rot = bi.GetRotation(v.body);
+            comp->speed = vel.Dot(rot * -JPH::Vec3::sAxisZ());
+            const auto* controller = static_cast<const JPH::WheeledVehicleController*>(v.c->GetController());
+            comp->rpm = controller->GetEngine().GetCurrentRPM();
+            comp->gear = controller->GetTransmission().GetCurrentGear();
+            for (ecs::Entity child : s.children(v.entity)) {
+                const std::string& name = s.nameOf(child);
+                for (u32 w = 0; w < 4; ++w)
+                    if (name == kWheelNames[w]) {
+                        const JPH::RMat44 m = v.c->GetWheelWorldTransform(w, JPH::Vec3::sAxisX(), JPH::Vec3::sAxisY());
+                        const JPH::RVec3 p = m.GetTranslation();
+                        const Quat q = fromJ(m.GetQuaternion());
+                        const Pose current = poseOf(s.worldMatrix(child));
+                        s.setWorldMatrix(child, Mat4::trs(Vec3{static_cast<float>(p.GetX()), static_cast<float>(p.GetY()), static_cast<float>(p.GetZ())}, q,
+                                                          current.scale));
+                    }
+            }
+        }
+    }
+
     void destroyAll() {
         if (!system) return;
+        for (auto& [key, v] : vehicles) removeVehicle(v);
+        vehicles.clear();
         for (auto& [key, j] : joints) removeJoint(j);
         joints.clear();
         for (auto& [key, c] : characters) destroyCharacter(c);
@@ -1019,6 +1173,8 @@ struct Physics3DWorld::Impl {
             }
         }
         stepCharacters(s, dt);
+        syncVehicles(s);
+        driveVehicles(s);
         if (dt > 0.0f) {
             const JPH::EPhysicsUpdateError err = system->Update(dt, 1, temp.get(), jobs.get());
             if (err != JPH::EPhysicsUpdateError::None) AGR_LOG_WARN("Physics3D", "simulation limits reached (error {})", static_cast<int>(err));
@@ -1079,6 +1235,7 @@ struct Physics3DWorld::Impl {
                 }
             }
         }
+        readVehicles(s);
         checkBreaks(s, dt);
         stats.bodies = static_cast<u32>(bodies.size());
         stats.activeBodies = active;

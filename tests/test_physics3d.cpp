@@ -536,4 +536,46 @@ TEST_CASE("overlap and shape cast queries 3D") {
     CHECK(hit->normal.y == doctest::Approx(1.0f).epsilon(0.02));
     CHECK_FALSE(w.physics.castShape(Physics3DWorld::QueryShape3D::sphere(0.5f), {4, 5, 0}, {}, {0, 1, 0}, 20.0f));
 }
+
+TEST_CASE("Vehicle3D: rests on its suspension, drives forward, steers, brakes; wheel children follow") {
+    World3D w;
+    w.box("Ground", {0, -0.5f, 0}, {400, 1, 400}, BodyType3D::Static, false);
+    const auto car = w.box("Car", {0, 1.0f, 0}, {1.8f, 0.6f, 4.0f}, BodyType3D::Dynamic);
+    w.scene.registry().get<RigidBodyComponent>(car).mass = 1200.0f;
+    auto& v = w.scene.registry().emplace<Vehicle3DComponent>(car);
+    v.wheelHeight = -0.1f;
+    const auto wheel = w.scene.createEntity("WheelFL", car);
+    w.scene.updateTransforms();
+    w.run(2.0f);
+    REQUIRE(w.physics.hasBody(car));
+    auto vehicle = [&]() -> Vehicle3DComponent& { return w.scene.registry().get<Vehicle3DComponent>(car); };
+    const Vec3 rest = w.position(car);
+    CHECK(rest.y > 0.4f);  // held up by the wheels (the body alone would lie at 0.3)
+    CHECK(std::fabs(vehicle().speed) < 0.2f);
+    const Vec3 wp = w.scene.worldMatrix(wheel).translation();
+    CHECK(wp.y == doctest::Approx(0.35f).epsilon(0.15));  // wheel center one radius above the ground
+    CHECK(wp.x < rest.x);   // front left
+    CHECK(wp.z < rest.z);   // front = -Z
+    // Gas: forward is -Z.
+    vehicle().throttle = 1.0f;
+    w.run(3.0f);
+    const Vec3 moved = w.position(car);
+    CHECK_MESSAGE(moved.z < rest.z - 3.0f, moved.z);
+    CHECK(vehicle().speed > 2.0f);
+    CHECK(vehicle().rpm > 0.0f);
+    // Steering right turns toward +X.
+    vehicle().steering = 1.0f;
+    w.run(2.0f);
+    CHECK_MESSAGE(w.position(car).x > moved.x + 1.0f, w.position(car).x);
+    // Brakes stop it.
+    vehicle().throttle = 0.0f;
+    vehicle().steering = 0.0f;
+    vehicle().brake = 1.0f;
+    w.run(4.0f);
+    CHECK_MESSAGE(std::fabs(vehicle().speed) < 0.5f, vehicle().speed);
+    // Removing the component removes the constraint (no crash, body stays).
+    w.scene.registry().remove<Vehicle3DComponent>(car);
+    w.run(0.5f);
+    CHECK(w.physics.hasBody(car));
+}
 }  // TEST_SUITE
