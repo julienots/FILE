@@ -53,6 +53,12 @@ int n_ping(lua_State* L) {
     lua_pushnumber(L, netOf(L).rtt(static_cast<u32>(luaL_checkinteger(L, 1))) * 1000.0);
     return 1;
 }
+/// agr.net.time() -> the host's clock in seconds (shared by every player), synced
+int n_time(lua_State* L) {
+    lua_pushnumber(L, netOf(L).networkTime());
+    lua_pushboolean(L, netOf(L).clockSynced());
+    return 2;
+}
 /// agr.net.stats() -> { bytesSent, bytesReceived, packetsSent, packetsReceived, resent }
 int n_stats(lua_State* L) {
     const auto& st = netOf(L).stats();
@@ -240,7 +246,7 @@ void openNetBindings(lua_State* L) {
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
                                      {"sender", n_sender}, {"advertise", n_advertise}, {"discover", n_discover},
                                      {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {"setPassword", n_setPassword},
-                                     {"joinError", n_joinError}, {"ping", n_ping}, {"stats", n_stats}, {"setVisible", n_setVisible},
+                                     {"joinError", n_joinError}, {"ping", n_ping}, {"time", n_time}, {"stats", n_stats}, {"setVisible", n_setVisible},
                                      {nullptr, nullptr}};
     addAgrLibrary(L, "net", funcs);
     static const luaL_Reg methods[] = {{"rpc", e_rpc}, {"rpcTo", e_rpcTo}, {"owner", e_owner}, {"isOwner", e_isOwner}, {nullptr, nullptr}};

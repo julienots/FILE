@@ -107,6 +107,14 @@ par un joueur arrivé après, RPC client → tous (relayé avec le vrai expédit
 client → hôte, disparition partout, propriétés rendues à l'hôte au départ d'un joueur ; message de
 10 Ko fragmenté avec 30 % de pertes ; découverte ; permissions des RPC.
 
+## Horloge partagée
+
+`agr.net.time()` rend l'horloge de l'**hôte** (secondes) sur toutes les machines, et `true` quand elle
+est synchronisée : chaque ping de l'hôte transporte son heure, le client corrige de la moitié de l'aller-
+retour et lisse l'écart (à quelques millisecondes près). Pour qu'un compte à rebours, une apparition
+ou un rythme tombent au même instant chez tous : l'hôte envoie « à `agr.net.time()` + 3 s », chacun
+attend ce moment. C++ : `NetSession::networkTime()`, `clockSynced()`.
+
 ## Apparitions selon la visibilité
 
 `NetSync.spawnWhenVisible` (entités créées en réseau, `agr.net.spawn`) : l'entité n'existe que sur les

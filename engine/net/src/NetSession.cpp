@@ -210,6 +210,8 @@ void NetSession::close() {
     m_peers.clear();
     m_role = NetRole::None;
     m_localId = 0;
+    m_clockOffset = 0.0;
+    m_clockSamples = 0;
     if (m_transport) m_transport->close();
 }
 
@@ -421,13 +423,27 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
             q.erase(std::remove_if(q.begin(), q.end(), [&](const Pending& m) { return m.seq == seq; }), q.end());
             break;
         }
-        case Ping: sendPacket(*p, Pong, 0, payload); break;
+        case Ping: {  // the stamp back, plus our own clock (shared network time)
+            std::string reply(payload.begin(), payload.end());
+            reply.resize(8, '\0');
+            reply.append(8, '\0');
+            std::memcpy(reply.data() + 8, &now, 8);
+            sendPacket(*p, Pong, 0, reply);
+            break;
+        }
         case Pong:
             if (payload.size() >= 8) {
                 f64 sent = 0.0;
                 std::memcpy(&sent, payload.data(), 8);
                 const f64 sample = std::max(now - sent, 0.0);
                 p->rtt = p->rtt <= 0.0 ? sample : p->rtt * 0.8 + sample * 0.2;
+                if (payload.size() >= 16 && m_role == NetRole::Client && p->id == kHostId) {
+                    f64 hostTime = 0.0;
+                    std::memcpy(&hostTime, payload.data() + 8, 8);
+                    const f64 offset = hostTime + sample * 0.5 - now;  // the host's clock when the pong arrives
+                    m_clockOffset = m_clockSamples == 0 ? offset : m_clockOffset * 0.9 + offset * 0.1;
+                    ++m_clockSamples;
+                }
             }
             break;
         case Bye: drop(p->id, true); break;

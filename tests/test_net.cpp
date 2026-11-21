@@ -565,3 +565,24 @@ TEST_CASE("replication: spawnWhenVisible entities exist only for the players tha
     std::error_code ec;
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("network clock: clients read the host's time through the pings") {
+    LossyNetwork netw;
+    netw.loss = 0.0f;
+    NetSession host(std::make_unique<LossyTransport>(netw)), client(std::make_unique<LossyTransport>(netw));
+    REQUIRE(host.host(7400, 4));
+    REQUIRE(client.join("127.0.0.1", 7400));
+    // The client's clock starts 1000 s apart from the host's.
+    f64 t = 0.0;
+    for (int i = 0; i < 180; ++i) {
+        t += 1.0 / 60.0;
+        host.update(t);
+        client.update(t + 1000.0);
+        host.takeEvents();
+        client.takeEvents();
+    }
+    REQUIRE(client.connected());
+    CHECK(client.clockSynced());
+    CHECK(std::fabs(client.networkTime() - host.networkTime()) < 0.05);
+    CHECK(host.networkTime() == doctest::Approx(t));
+}

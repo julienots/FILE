@@ -140,6 +140,10 @@ public:
     const std::string& joinError() const { return m_joinError; }
     /// Round-trip time to a peer in seconds (smoothed; 0 until measured).
     f64 rtt(u32 peer) const;
+    /// Shared clock: the host's time (seconds, the `now` its update() receives), estimated on
+    /// clients from the pings (half the round trip); the local time when not in a session.
+    f64 networkTime() const { return m_now + (m_role == NetRole::Client ? m_clockOffset : 0.0); }
+    bool clockSynced() const { return m_role != NetRole::Client || m_clockSamples > 0; }
 
 private:
     struct Pending {
@@ -177,6 +181,8 @@ private:
     std::vector<LanGame> m_lanGames;
     NetStats m_stats;
     f64 m_now = 0.0, m_timeout = 5.0, m_joinStarted = 0.0;
+    f64 m_clockOffset = 0.0;  ///< Client: host time - local time.
+    u32 m_clockSamples = 0;
     std::vector<u8> m_buffer;
     std::string m_password, m_joinError;
 };
