@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <string>
 #include <vector>
 
@@ -337,7 +338,8 @@ struct TilemapComponent {
     /// Autotiling: "F;G;..." — each base frame starts a group of 16 frames laid out by a
     /// 4-neighbour bitmask (+y = 1, +x = 2, -y = 4, -x = 8). A cell holding any frame of a group
     /// is drawn with F + the mask of its neighbours of the same group: paint with F, the
-    /// borders and corners follow.
+    /// borders and corners follow. "F:47" = a 47-frame "blob" set using the 8 neighbours
+    /// (inner corners too): frame F + index of the mask in blobTileMasks().
     std::string autotile;
 
     i32 tileAt(u32 x, u32 y) const {
@@ -346,9 +348,15 @@ struct TilemapComponent {
     }
 };
 
+/// The 47 distinct 8-neighbour masks of a blob tile set, increasing (bits: +y = 1, +x+y = 2,
+/// +x = 4, +x-y = 8, -y = 16, -x-y = 32, -x = 64, -x+y = 128; a corner counts only with both of
+/// its sides). Frame F + i of a "F:47" group is drawn for mask blobTileMasks()[i].
+const std::array<u8, 47>& blobTileMasks();
+
 /// Parsed Tilemap.animatedTiles / autotile for a tileset of `frameCount` frames.
 struct TileRules {
     std::vector<i32> group;                   ///< Frame -> base frame of its autotile group, -1 = none.
+    std::vector<u8> blob;                     ///< Frame -> 1 when its group is a 47-tile (8 neighbours) set.
     std::vector<i32> anim;                    ///< Frame -> index in `sequences`, -1 = static.
     std::vector<std::vector<i32>> sequences;  ///< Frames of each animation.
     std::vector<float> fps;

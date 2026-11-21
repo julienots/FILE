@@ -606,3 +606,30 @@ TEST_CASE("sprite sheets: automatic slicing by transparency, merge distance, fra
     CHECK(sheet.frames[2].name == "f0");
     CHECK(sheet.clips[0].frames == std::vector<u32>{2, 0, 1});  // still f0, f2, f3
 }
+
+TEST_CASE("tile rules: 47-tile blob autotiling with the 8 neighbours (inner corners)") {
+    const auto& masks = blobTileMasks();
+    CHECK(masks.size() == 47);
+    CHECK(masks.front() == 0);
+    CHECK(masks.back() == 255);
+    for (usize i = 1; i < masks.size(); ++i) CHECK(masks[i - 1] < masks[i]);
+    auto index = [&](u8 m) { return static_cast<i32>(std::find(masks.begin(), masks.end(), m) - masks.begin()); };
+    TilemapComponent tm;
+    tm.width = 5;
+    tm.height = 5;
+    tilemapFillRect(tm, 0, 0, 4, 4, -1);
+    tilemapFillRect(tm, 1, 1, 3, 3, 100);
+    tm.autotile = "100:47";
+    TileRules r = TileRules::parse(tm, 200);
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 100 + 46);                // surrounded
+    CHECK(r.resolve(tm, 1, 1, 0.0) == 100 + index(1 | 2 | 4));  // bottom-left corner: N, NE, E
+    CHECK(r.resolve(tm, 2, 1, 0.0) == 100 + index(1 | 2 | 4 | 64 | 128));
+    tilemapSet(tm, 3, 3, -1);  // top-right gone: the center gets an inner corner
+    r = TileRules::parse(tm, 200);
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 100 + index(255 - 2));
+    CHECK(r.resolve(tm, 3, 2, 0.0) == 100 + index(16 | 32 | 64));  // S, SW, W (N is empty now)
+    // 16-frame groups still work alongside.
+    tm.autotile = "0;100:47";
+    r = TileRules::parse(tm, 200);
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 100 + index(255 - 2));
+}

@@ -23,6 +23,23 @@ math::Vec2 orthographicHalfExtents(ScaleMode mode, float size, float refAspect, 
     return {halfH * aspect, halfH};
 }
 
+const std::array<u8, 47>& blobTileMasks() {
+    static const std::array<u8, 47> masks = [] {
+        std::array<u8, 47> out{};
+        usize n = 0;
+        for (u32 m = 0; m < 256; ++m) {
+            const bool N = m & 1, E = m & 4, S = m & 16, W = m & 64;
+            if ((m & 2) && !(N && E)) continue;  // a corner without both of its sides is not a distinct tile
+            if ((m & 8) && !(S && E)) continue;
+            if ((m & 32) && !(S && W)) continue;
+            if ((m & 128) && !(N && W)) continue;
+            out[n++] = static_cast<u8>(m);
+        }
+        return out;
+    }();
+    return masks;
+}
+
 TileRules TileRules::parse(const TilemapComponent& tm, usize frameCount) {
     TileRules r;
     auto toInt = [](std::string_view s, i32& out) {
@@ -45,11 +62,18 @@ TileRules TileRules::parse(const TilemapComponent& tm, usize frameCount) {
     };
     if (!tm.autotile.empty()) {
         r.group.assign(frameCount, -1);
+        r.blob.assign(frameCount, 0);
         split(tm.autotile, ';', [&](std::string_view e) {
             i32 base = 0;
-            if (!toInt(e, base) || base < 0) return;
-            for (i32 k = 0; k < 16; ++k)
-                if (static_cast<usize>(base + k) < frameCount) r.group[static_cast<usize>(base + k)] = base;
+            const usize colon = e.find(':');
+            const bool blob = colon != std::string_view::npos && e.substr(colon + 1).find("47") != std::string_view::npos;
+            if (!toInt(colon == std::string_view::npos ? e : e.substr(0, colon), base) || base < 0) return;
+            const i32 count = blob ? 47 : 16;
+            for (i32 k = 0; k < count; ++k)
+                if (static_cast<usize>(base + k) < frameCount) {
+                    r.group[static_cast<usize>(base + k)] = base;
+                    r.blob[static_cast<usize>(base + k)] = blob ? 1 : 0;
+                }
         });
         if (std::all_of(r.group.begin(), r.group.end(), [](i32 g) { return g < 0; })) r.group.clear();
     }
@@ -89,8 +113,20 @@ i32 TileRules::resolve(const TilemapComponent& tm, u32 x, u32 y, double time) co
             return n >= 0 && static_cast<usize>(n) < group.size() && group[static_cast<usize>(n)] == g;
         };
         const i64 ix = x, iy = y;
-        const i32 mask = (same(ix, iy + 1) ? 1 : 0) | (same(ix + 1, iy) ? 2 : 0) | (same(ix, iy - 1) ? 4 : 0) | (same(ix - 1, iy) ? 8 : 0);
-        id = g + mask;
+        if (blob[static_cast<usize>(id)]) {
+            const bool n = same(ix, iy + 1), e = same(ix + 1, iy), so = same(ix, iy - 1), w = same(ix - 1, iy);
+            u8 m = static_cast<u8>((n ? 1 : 0) | (e ? 4 : 0) | (so ? 16 : 0) | (w ? 64 : 0));
+            if (n && e && same(ix + 1, iy + 1)) m |= 2;
+            if (so && e && same(ix + 1, iy - 1)) m |= 8;
+            if (so && w && same(ix - 1, iy - 1)) m |= 32;
+            if (n && w && same(ix - 1, iy + 1)) m |= 128;
+            const auto& masks = blobTileMasks();
+            const auto it = std::lower_bound(masks.begin(), masks.end(), m);
+            id = g + static_cast<i32>(it - masks.begin());
+        } else {
+            const i32 mask = (same(ix, iy + 1) ? 1 : 0) | (same(ix + 1, iy) ? 2 : 0) | (same(ix, iy - 1) ? 4 : 0) | (same(ix - 1, iy) ? 8 : 0);
+            id = g + mask;
+        }
     }
     if (!anim.empty() && static_cast<usize>(id) < anim.size() && anim[static_cast<usize>(id)] >= 0) {
         const usize a = static_cast<usize>(anim[static_cast<usize>(id)]);
