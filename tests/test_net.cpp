@@ -586,3 +586,32 @@ TEST_CASE("network clock: clients read the host's time through the pings") {
     CHECK(std::fabs(client.networkTime() - host.networkTime()) < 0.05);
     CHECK(host.networkTime() == doctest::Approx(t));
 }
+
+TEST_CASE("IPv6: address parsing and a session over ::1") {
+    auto a = Address::resolve("::1", 5000);
+    REQUIRE(a);
+    CHECK(a.value().v6);
+    CHECK(a.value().toString() == "[::1]:5000");
+    auto b = Address::resolve("[2001:db8::7]", 80);
+    REQUIRE(b);
+    CHECK(b.value().toString() == "[2001:db8::7]:80");
+    CHECK(Address::resolve("127.0.0.1", 1).value().toString() == "127.0.0.1:1");
+    CHECK_FALSE(a.value() == Address::resolve("127.0.0.1", 5000).value());
+
+    NetSession host, client;
+    REQUIRE(host.host(0, 2));
+    REQUIRE(client.join("::1", host.port()));
+    f64 now = 0.0;
+    if (!pump({&host, &client}, now, [&] { return client.connected(); })) {
+        WARN_MESSAGE(false, "no IPv6 loopback on this machine");  // IPv4-only sandbox
+        return;
+    }
+    CHECK(host.peers().size() == 1);
+    CHECK(client.send(NetSession::kHostId, "hello v6", true));
+    std::vector<NetEvent> got;
+    pump({&host, &client}, now, [&] {
+        collect(got, host);
+        return std::any_of(got.begin(), got.end(), [](const NetEvent& e) { return e.data == "hello v6"; });
+    });
+    CHECK(std::any_of(got.begin(), got.end(), [](const NetEvent& e) { return e.data == "hello v6"; }));
+}

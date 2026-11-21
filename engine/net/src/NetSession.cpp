@@ -75,21 +75,39 @@ std::string lastSocketError() { return std::strerror(errno); }
 
 // ------------------------------------------------------------------ Address
 std::string Address::toString() const {
+    if (v6) {
+        char buf[INET6_ADDRSTRLEN]{};
+        inet_ntop(AF_INET6, ip6.data(), buf, sizeof buf);
+        return std::format("[{}]:{}", buf, port);
+    }
     return std::format("{}.{}.{}.{}:{}", (ip >> 24) & 0xFF, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF, port);
 }
 
 Result<Address> Address::resolve(std::string_view host, u16 port) {
     ensureSockets();
     addrinfo hints{};
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     addrinfo* res = nullptr;
-    const std::string name(host.empty() ? "127.0.0.1" : host);
+    std::string name(host.empty() ? "127.0.0.1" : host);
+    if (name.size() > 2 && name.front() == '[' && name.back() == ']') name = name.substr(1, name.size() - 2);  // [::1]
     if (getaddrinfo(name.c_str(), nullptr, &hints, &res) != 0 || !res)
         return makeError(Error::Code::NotFound, "unknown host '" + name + "'");
-    const auto* in = reinterpret_cast<const sockaddr_in*>(res->ai_addr);
-    Address a{ntohl(in->sin_addr.s_addr), port};
+    const addrinfo* pick = nullptr;
+    for (const addrinfo* r = res; r; r = r->ai_next)  // IPv4 first, then IPv6
+        if (r->ai_family == AF_INET && !pick) pick = r;
+    for (const addrinfo* r = res; r && !pick; r = r->ai_next)
+        if (r->ai_family == AF_INET6) pick = r;
+    Address a;
+    a.port = port;
+    if (pick && pick->ai_family == AF_INET) {
+        a.ip = ntohl(reinterpret_cast<const sockaddr_in*>(pick->ai_addr)->sin_addr.s_addr);
+    } else if (pick) {
+        a.v6 = true;
+        std::memcpy(a.ip6.data(), &reinterpret_cast<const sockaddr_in6*>(pick->ai_addr)->sin6_addr, 16);
+    }
     freeaddrinfo(res);
+    if (!pick) return makeError(Error::Code::NotFound, "no usable address for '" + name + "'");
     return a;
 }
 
@@ -123,17 +141,50 @@ Status UdpTransport::open(u16 port) {
     getsockname(static_cast<decltype(::socket(0, 0, 0))>(s), reinterpret_cast<sockaddr*>(&bound), &len);
     m_socket = s;
     m_port = ntohs(bound.sin_port);
+    // IPv6 beside it, on the same port number (optional: missing on IPv4-only systems).
+    const auto s6 = static_cast<std::intptr_t>(::socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP));
+    if (s6 >= 0) {
+        int only = 1;  // the IPv4 socket handles IPv4
+        setsockopt(static_cast<decltype(::socket(0, 0, 0))>(s6), IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&only), sizeof only);
+        sockaddr_in6 a6{};
+        a6.sin6_family = AF_INET6;
+        a6.sin6_addr = in6addr_any;
+        a6.sin6_port = htons(m_port);
+        if (::bind(static_cast<decltype(::socket(0, 0, 0))>(s6), reinterpret_cast<sockaddr*>(&a6), sizeof a6) == 0) {
+#if defined(_WIN32)
+            ioctlsocket(static_cast<SOCKET>(s6), FIONBIO, &nonBlocking);
+#else
+            fcntl(static_cast<int>(s6), F_SETFL, fcntl(static_cast<int>(s6), F_GETFL, 0) | O_NONBLOCK);
+#endif
+            m_socket6 = s6;
+        } else {
+            AGR_LOG_DEBUG("Net", "no IPv6 on port {}: {}", m_port, lastSocketError());
+            closeSocket(s6);
+        }
+    }
     return {};
 }
 
 void UdpTransport::close() {
     if (m_socket >= 0) closeSocket(m_socket);
-    m_socket = -1;
+    if (m_socket6 >= 0) closeSocket(m_socket6);
+    m_socket = m_socket6 = -1;
     m_port = 0;
 }
 
 Status UdpTransport::send(const Address& to, const void* data, usize size) {
     if (m_socket < 0) return makeError(Error::Code::InvalidArgument, "socket not open");
+    if (to.v6) {
+        if (m_socket6 < 0) return makeError(Error::Code::IOError, "IPv6 is not available on this system");
+        sockaddr_in6 a6{};
+        a6.sin6_family = AF_INET6;
+        std::memcpy(&a6.sin6_addr, to.ip6.data(), 16);
+        a6.sin6_port = htons(to.port);
+        const auto sent6 = ::sendto(static_cast<decltype(::socket(0, 0, 0))>(m_socket6), static_cast<const char*>(data), static_cast<int>(size), 0,
+                                    reinterpret_cast<sockaddr*>(&a6), sizeof a6);
+        if (sent6 < 0) return makeError(Error::Code::IOError, "send failed: " + lastSocketError());
+        return {};
+    }
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(to.ip);
@@ -146,6 +197,20 @@ Status UdpTransport::send(const Address& to, const void* data, usize size) {
 
 bool UdpTransport::receive(Address& from, std::vector<u8>& data) {
     if (m_socket < 0) return false;
+    if (m_socket6 >= 0) {  // IPv6 datagrams first, then IPv4
+        data.resize(2048);
+        sockaddr_in6 a6{};
+        SocketLen len6 = sizeof a6;
+        const auto n6 = ::recvfrom(static_cast<decltype(::socket(0, 0, 0))>(m_socket6), reinterpret_cast<char*>(data.data()),
+                                   static_cast<int>(data.size()), 0, reinterpret_cast<sockaddr*>(&a6), &len6);
+        if (n6 >= 0) {
+            data.resize(static_cast<usize>(n6));
+            std::array<u8, 16> bytes{};
+            std::memcpy(bytes.data(), &a6.sin6_addr, 16);
+            from = Address::ipv6(bytes, ntohs(a6.sin6_port));
+            return true;
+        }
+    }
     data.resize(2048);
     sockaddr_in addr{};
     SocketLen len = sizeof addr;

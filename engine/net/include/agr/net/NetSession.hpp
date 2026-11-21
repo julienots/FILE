@@ -18,19 +18,26 @@
 #include <unordered_map>
 #include <vector>
 
+#include <array>
+
 #include "agr/core/Result.hpp"
 #include "agr/core/Types.hpp"
 
 namespace agr::net {
 
-/// IPv4 address and port.
+/// IPv4 or IPv6 address and port.
 struct Address {
-    u32 ip = 0;  ///< Host byte order (127.0.0.1 = 0x7F000001).
+    u32 ip = 0;  ///< IPv4, host byte order (127.0.0.1 = 0x7F000001).
     u16 port = 0;
+    std::array<u8, 16> ip6{};  ///< IPv6 bytes (network order) when v6.
+    bool v6 = false;
     bool operator==(const Address&) const = default;
+    /// "1.2.3.4:5000" or "[2001:db8::1]:5000".
     std::string toString() const;
-    /// "192.168.1.20", "localhost" or a host name (resolved through the system).
+    /// "192.168.1.20", "::1", "[2001:db8::1]", "localhost" or a host name (resolved through the
+    /// system; IPv4 is preferred when a name has both).
     static Result<Address> resolve(std::string_view host, u16 port);
+    static Address ipv6(const std::array<u8, 16>& bytes, u16 port) { return {0, port, bytes, true}; }
 };
 
 /// Datagram transport. UdpTransport is the default; tests and relays may provide others.
@@ -58,6 +65,7 @@ public:
 
 private:
     std::intptr_t m_socket = -1;
+    std::intptr_t m_socket6 = -1;  // IPv6 on the same port (absent if the system has no IPv6)
     u16 m_port = 0;
 };
 

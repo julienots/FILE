@@ -126,7 +126,11 @@ client modifié ne peut pas révéler ce qu'il ne reçoit pas. `stats().spawnsHi
 
 ## Limites actuelles
 
-- IPv4 uniquement ; pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
+- **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système
+  l'a) ; `join("::1", port)`, `join("[2001:db8::7]", port)` ou un nom (IPv4 préféré quand il a les deux).
+  La découverte LAN reste en IPv4 (diffusion). Le chemin IPv6 réel n'a pas pu être testé dans la VM
+  de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
+- Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
   ouvrir son port UDP) ; pas de WebSocket / WebRTC (pas encore d'export Web).
 - Pas de chiffrement (le mot de passe n'empêche que de rejoindre) : ne pas transmettre de données
   sensibles.
