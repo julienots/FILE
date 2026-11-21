@@ -10,8 +10,11 @@ import { buildTerrain, DOME_R, WORLD_R, VILLAGE } from './terrain.js';
 import { buildWater } from './water.js';
 import { buildGrass, buildFlowers, buildTrees, buildRocks, buildBushes } from './vegetation.js';
 import { makeDetailTexture, applyGroundShader } from './ground.js';
-import { buildGrassField } from './grassfield.js';
+import { buildGrassField, createPushers } from './grassfield.js';
+const pushers = createPushers();
 import { createGame, ITEMS } from './game.js';
+import { AtmospherePass } from './atmosphere.js';
+import { loadExternalModels } from './models.js';
 import { makeVillageMaterials, buildVillage, buildHouse } from './village.js';
 import { buildHumanoid, buildVillagers, buildSheep, buildBirds } from './characters.js';
 import { buildDome, buildCosmos, buildPedestal, buildCreator, buildSunMoon, buildClouds } from './dome.js';
@@ -22,9 +25,9 @@ const params = new URLSearchParams(location.search);
 const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
 const QUALITY = params.get('q') || (isMobile ? 'medium' : 'high');
 const Q = {
-  high: { pr: Math.min(devicePixelRatio, 2), shadow: 4096, grass: 26000, flowers: 6000, msaa: 4, bloom: true, cell: 0.11, gr: 24 },
-  medium: { pr: Math.min(devicePixelRatio, 1.5), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, cell: 0.2, gr: 18 },
-  low: { pr: 1, shadow: 1024, grass: 7000, flowers: 1500, msaa: 0, bloom: false, cell: 0.24, gr: 14 },
+  high: { pr: Math.min(devicePixelRatio, 2), shadow: 4096, grass: 26000, flowers: 6000, msaa: 4, bloom: true, atmo: { aoSamples: 10, raySamples: 32 }, grassLayers: [{ cell: 0.05, r: 9, seg: 5 }, { cell: 0.12, rIn: 8.3, r: 30, seg: 3 }] },
+  medium: { pr: Math.min(devicePixelRatio, 1.5), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, atmo: { aoSamples: 6, raySamples: 18 }, grassLayers: [{ cell: 0.07, r: 8, seg: 4 }, { cell: 0.17, rIn: 7.3, r: 22, seg: 3 }] },
+  low: { pr: 1, shadow: 1024, grass: 7000, flowers: 1500, msaa: 0, bloom: false, atmo: null, grassLayers: [{ cell: 0.1, r: 7, seg: 3 }, { cell: 0.24, rIn: 6.3, r: 15, seg: 2 }] },
 }[QUALITY] || {};
 const setMsg = m => { const e = document.getElementById('loadMsg'); if (e) e.textContent = m; };
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -56,10 +59,13 @@ const interior = new THREE.PointLight(0xffb873, 0, 9, 1.6); scene.add(interior);
 
 // post-production : bloom HDR + étalonnage (vignette, saturation, teinte chaude) + tone mapping ACES
 const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Q.msaa });
+rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType;
 const composer = new EffectComposer(renderer, rt);
 composer.setPixelRatio(Q.pr);
 composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
+const atmo = Q.atmo ? new AtmospherePass(camera, Q.atmo) : null;
+if (atmo) composer.addPass(atmo);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.55, 0.92);
 if (Q.bloom) composer.addPass(bloom);
 const grade = new ShaderPass({
@@ -69,6 +75,8 @@ const grade = new ShaderPass({
     void main(){ vec4 c = texture2D(tDiffuse, vUv);
       float l = dot(c.rgb, vec3(0.2126,0.7152,0.0722));
       c.rgb = mix(vec3(l), c.rgb, uSat);
+      // virage partiel : ombres légèrement bleutées, hautes lumières chaudes
+      c.rgb += mix(vec3(-0.004, 0.0, 0.012), vec3(0.012, 0.004, -0.01), smoothstep(0.05, 0.8, l)) * 1.5;
       c.rgb *= vec3(1.0 + uWarm, 1.0, 1.0 - uWarm);
       vec2 d = vUv - 0.5; c.rgb *= 1.0 - uVig * smoothstep(0.25, 0.85, dot(d,d)*2.2);
       c.rgb += vec3(0.6,0.9,1.0) * uFlash;
@@ -96,7 +104,7 @@ async function buildWorld() {
   scene.add(buildFlowers(terrain, Q.flowers));
   trees = buildTrees(terrain, T, { detail: detailTex }); scene.add(trees);
   rocks = buildRocks(terrain, 160, detailTex); scene.add(rocks);
-  grassField = buildGrassField(terrain, { cell: Q.cell, radius: Q.gr }); scene.add(grassField);
+  grassField = buildGrassField(terrain, { layers: Q.grassLayers }); scene.add(grassField);
   bushes = buildBushes(terrain, 300, T); scene.add(bushes);
   setMsg('Construction du village…'); await nextFrame();
   M = makeVillageMaterials(T);
@@ -389,6 +397,8 @@ function update(dt) {
       if (c.root.userData.cast !== cast) { c.root.userData.cast = cast; c.root.traverse(o => { if (o.isMesh) o.castShadow = cast && !o.userData.tiny; }); }
     }
   }
+  for (const v of villagers.list) v.root.userData.extAnimate?.(v.state.speed, time);
+  player.root.userData.extAnimate?.(pl.speed, time);
   if (mode === 'god') updateGodCamera(dt);
   else if (mode === 'play') updatePlayer(dt);
   else { updateTransition(dt); if (mode === 'toPlay' || mode === 'toGod') player.animate(dt, 0); }
@@ -402,7 +412,8 @@ function update(dt) {
   dome.uniforms.uReveal.value += (reveal - dome.uniforms.uReveal.value) * Math.min(1, dt * 3);
   scene.fog.color.copy(U.uSkyHorizon.value);
   U.uFogColor.value.copy(U.uSkyHorizon.value);
-  scene.fog.density = lerp(0.0006, 0.0058, inside);
+  scene.fog.density = lerp(0.0006, atmo ? 0.0026 : 0.0058, inside);
+  if (atmo) atmo.update(sunMoon.sun.position, inside * (sunMoon.sun.visible ? 1 : 0.0) + (sunMoon.sun.visible ? 0 : inside));
   U.uFogDensity.value = scene.fog.density;
   camera.near = lerp(2.0, 0.12, smoothstep(DOME_R + 40, DOME_R - 40, camR));
   camera.far = 9000; camera.updateProjectionMatrix();
@@ -433,7 +444,10 @@ function update(dt) {
   motes.mat.uniforms.uCenter.value.copy(player.root.position);
   // l'herbe haute définition suit le regard (devant la caméra) en mode habitant
   { const gc = grassField.userData.uniforms; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; if (fwd.lengthSq() > 0) fwd.normalize();
-    gc.uCenter.value.copy(mode === 'god' ? player.root.position : camera.position).addScaledVector(fwd, mode === 'god' ? 0 : Q.gr * 0.45); gc.uFade.value = smoothstep(0.3, 0.9, inside); grassField.visible = inside > 0.3; }
+    gc.uCenter.value.copy(player.root.position).addScaledVector(fwd, mode === 'god' ? 0 : 4); gc.uFade.value = smoothstep(0.3, 0.9, inside); grassField.visible = inside > 0.3;
+    const farR = Q.grassLayers[1].r + 2;
+    U.uGrassCut.value = inside > 0.5 ? farR : 0; U.uGrassCutCenter.value.copy(gc.uCenter.value);
+    pushers(dt, player, [...villagers.list, ...sheep.list.map(s => ({ root: s.root, pushR: 0.8 })), ...game._enemies.filter(e => !e.dead).map(e => ({ root: e.g, pushR: 0.95 }))], gc); }
   motes.mat.uniforms.uFade.value = inside;
   // balise
   beacon.visible = mode === 'god' || (mode === 'toPlay' && inside < 0.6);
@@ -721,6 +735,8 @@ window.GD = {
 (async () => {
   await buildWorld();
   game = createGame({ scene, terrain, world, player, villagers, T, solve, ui, camera, respawn: () => placePlayer(VILLAGE.x + 3, VILLAGE.y + 4) });
+  const ext = await loadExternalModels({ scene, terrain, world, player, villagers: villagers, onProgress: setMsg });
+  if (ext.length) console.info('Modèles 3D chargés :', ext.join(', '));
   for (const b of game.state.builds) { if (b.type === 'house') addHouseAt(b.x, b.z, false); if (b.type === 'tree') plantTree(b.kind, b.x, b.z, b.s, false); }
   bindUI();
   placePlayer(entry.x, entry.z);

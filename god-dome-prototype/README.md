@@ -44,7 +44,10 @@ Qualité forcée : `?q=high`, `?q=medium` (par défaut sur téléphone), `?q=low
 
 Tout est procédural : aucune texture ni aucun modèle externe.
 
-- **Herbe GPU** : jusqu'à 134 000 brins individuels générés dans le vertex shader autour du joueur, avec hauteur et masque lus dans des textures, rafales de vent, translucidité à contre-jour, couleur variable par brin et ombres reçues.
+- **Herbe GPU (v2)** : deux couches de densité générées dans le vertex shader (en qualité haute, jusqu'à ~130 000 brins serrés à moins de 9 m, puis une couche dense jusqu'à 30 m). Les brins se regroupent en touffes ouvertes en éventail. Rafales de vent, normales arrondies, translucidité à contre-jour, reflet spéculaire, occlusion à la racine, ombres reçues.
+- **Interaction avec l'herbe** : 16 « pousseurs » (habitant, villageois, moutons, Ombrelins, traînée du joueur). L'herbe s'écarte et se couche, frémit au passage puis se relève en ~3 s, ce qui laisse un sillon visible derrière soi.
+- **Passe atmosphère** (post-traitement depuis la profondeur) : occlusion ambiante en espace écran, brouillard de hauteur éclairé vers le soleil, rayons crépusculaires à travers le feuillage.
+- **Feuillage proche de la caméra** : il se dissout en trame au lieu de boucher la vue.
 - **Sol** : texture de détail générée (sol herbeux, terre et gravier, roche stratifiée), mélange par sommet, roche en projection triplanaire, relief par différences finies.
 - **Arbres** : feuillus en grappes de cartes de feuilles dessinées, sapins en verticilles de branches à aiguilles, ombres découpées à l'alpha, translucidité, vent.
 - **Eau** : normales animées dans le sens du courant, Fresnel, reflet solaire, écume des berges et cascades, brume.
@@ -54,15 +57,15 @@ Tout est procédural : aucune texture ni aucun modèle externe.
 
 | Qualité | Appels de dessin (Créateur / Habitant) | Triangles (Habitant) |
 |---|---|---|
-| haute | 388 / 308 | 4,2 M |
-| moyenne | 388 / 308 | 2,0 M |
-| basse | 375 / 295 | 1,6 M |
+| haute | 389 / 310 | 4,5 M |
+| moyenne | 389 / 310 | 2,3 M |
+| basse | 375 / 296 | 1,6 M |
 
 Ces chiffres incluent toutes les passes (ombres, scène, bloom). Ils sont mesurés dans un navigateur sans GPU : les images par seconde réelles doivent être relevées sur l'appareil (compteur en haut à droite).
 
 ## Code
 
-`src/main.js` (rendu, caméras, modes, UI) · `terrain.js` · `ground.js` · `grassfield.js` · `vegetation.js` · `water.js` · `village.js` · `characters.js` · `dome.js` · `game.js` (quêtes, combat, objets, météo, sauvegarde) · `shared.js` · `textures.js` · `noise.js`.
+`src/main.js` (rendu, caméras, modes, UI) · `terrain.js` · `ground.js` · `grassfield.js` · `atmosphere.js` · `models.js` (modèles .glb externes, voir `models/README.md`) · `vegetation.js` · `water.js` · `village.js` · `characters.js` · `dome.js` · `game.js` (quêtes, combat, objets, météo, sauvegarde) · `shared.js` · `textures.js` · `noise.js`.
 Moteur : Three.js r170 (copie locale dans `lib/`).
 
 Les captures de `screenshots/` proviennent du jeu réellement exécuté (Chromium headless, rendu logiciel).

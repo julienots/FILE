@@ -43,7 +43,7 @@ function grassClumpGeometry(blades = 6) {
 
 export function buildGrass(terrain, count) {
   const geo = grassClumpGeometry(6);
-  const mat = addWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { strength: 0.3, heightRef: 0.7, sheen: 0.35 });
+  const mat = addWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { strength: 0.3, heightRef: 0.7, sheen: 0.35, nearCut: true });
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   const cA = C('#4f8f26'), cB = C('#a6c94a'), cDry = C('#c6c060'), cForest = C('#3d7a26'), tmp = new THREE.Color();
   let n = 0, tries = 0;

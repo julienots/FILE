@@ -12,6 +12,8 @@ export const U = {
   uFogDensity: { value: 0.004 },
   uInside: { value: 1 },
   uNight: { value: 0 },
+  uGrassCut: { value: 0 },
+  uGrassCutCenter: { value: new THREE.Vector3() },
 };
 
 // GLSL commun : bruit de valeur 2D
@@ -27,13 +29,13 @@ float gd_fbm(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*gd_vn(p); p=p
  * La flexion est proportionnelle à la hauteur locale du sommet, calculée en espace monde
  * puis ramenée en espace local de l'instance pour que toutes les herbes plient dans le même sens.
  */
-export function addWind(material, { strength = 0.25, heightRef = 1, gust = true, sheen = 0, flutter = 0, translucent = 0 } = {}) {
+export function addWind(material, { strength = 0.25, heightRef = 1, gust = true, sheen = 0, flutter = 0, translucent = 0, nearCut = false } = {}) {
   material.onBeforeCompile = (s) => {
     s.uniforms.uTime = U.uTime;
-    s.uniforms.uWind = U.uWind; s.uniforms.uSunDir = U.uSunDir; s.uniforms.uSunColor = U.uSunColor;
+    s.uniforms.uWind = U.uWind; s.uniforms.uGrassCut = U.uGrassCut; s.uniforms.uGrassCutCenter = U.uGrassCutCenter; s.uniforms.uSunDir = U.uSunDir; s.uniforms.uSunColor = U.uSunColor;
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>
-uniform float uTime; uniform float uWind;
+uniform float uTime; uniform float uWind; uniform float uGrassCut; uniform vec3 uGrassCutCenter;
 varying float vGust; varying float vTip; varying vec3 vWindW;
 ${GLSL_NOISE}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -56,16 +58,18 @@ ${GLSL_NOISE}`)
   vec3 wl = transpose(r) * wWorld / max(dot(r[0], r[0]), 1e-4);
   transformed += wl;
   transformed.y -= length(wl.xz) * 0.25 * hN;
+  ${nearCut ? 'if (length(ip.xz - uGrassCutCenter.xz) < uGrassCut) transformed *= 0.0;' : ''}
   vWindW = (modelMatrix * im * vec4(transformed, 1.0)).xyz;
 }`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 varying float vGust; varying float vTip; varying vec3 vWindW; uniform vec3 uSunDir; uniform vec3 uSunColor;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-diffuseColor.rgb *= 1.0 + vGust * ${sheen.toFixed(3)} * vTip;`)
+diffuseColor.rgb *= 1.0 + vGust * ${sheen.toFixed(3)} * vTip;
+{ float cd = length(vWindW - cameraPosition); if (cd < 2.4 && fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) > (cd - 0.6) / 1.8) discard; }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       totalEmissiveRadiance += diffuseColor.rgb * uSunColor * pow(max(dot(normalize(vWindW - cameraPosition), uSunDir), 0.0), 4.0) * ${translucent.toFixed(3)};`);
   };
-  material.customProgramCacheKey = () => `wind-${strength}-${heightRef}-${gust}-${sheen}-${flutter}-${translucent}`;
+  material.customProgramCacheKey = () => `wind-${strength}-${heightRef}-${gust}-${sheen}-${flutter}-${translucent}-${nearCut}`;
   return material;
 }
