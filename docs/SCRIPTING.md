@@ -229,7 +229,9 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
   ligne ; **vérification de syntaxe en direct** (ligne en rouge et message dans la barre) ;
 - **autocomplétion** tirée de l'API réellement chargée : `agr.` puis `agr.physics2d.`..., les
   méthodes d'entité après `:` (`self.entity:setPo` → `setPosition`), les champs `self.` du script, les
-  mots-clés, bibliothèques Lua et mots du fichier ; **Tab** complète (sinon insère 4 espaces),
+  mots-clés, bibliothèques Lua et mots du fichier ; les **variables locales** sont suivies :
+  `local phys = agr.physics2d` puis `phys.` complète comme `agr.physics2d.`, et
+  `local e = agr.find(...)` (ou `self.entity`, `:find`, `:parent`...) propose les méthodes d'entité ; **Tab** complète (sinon insère 4 espaces),
   Échap ferme la liste ;
 - indentation automatique après `then`, `do`, `else`, `function(...)`, `{` ;
 - colonne **API** : l'arbre de `agr` et des méthodes d'entité, un clic insère le nom ;
@@ -285,8 +287,8 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 ## Limites actuelles
 
 - Analyse statique : noms globaux et chemins `agr.` seulement (pas les champs de `self`, ni les
-  méthodes d'entité, ni les types) ; éditeur intégré : la complétion ne connaît pas les types (une variable locale n'est pas suivie
-  jusqu'à sa table) ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
+  méthodes d'entité, ni les types) ; la complétion suit les variables locales affectées directement
+  (`local x = agr...`), pas les valeurs de retour en général ni les tables construites ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
 - Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche
   rien, `emit` rend 0).

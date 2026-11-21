@@ -144,6 +144,30 @@ std::vector<std::string> ScriptEditorPanel::suggestions(EditorShared& s, const s
             while (p > 0 && (isWord(text[static_cast<usize>(p - 1)]) || text[static_cast<usize>(p - 1)] == '.')) --p;
             path = text.substr(static_cast<usize>(p), static_cast<usize>(b - 1 - p));
             if (path == "self.entity" || path == "self") path = path == "self" ? "" : ":";
+            // Local aliases: "local phys = agr.physics2d" makes "phys." complete like "agr.physics2d.";
+            // "local e = agr.find(...)" (or self.entity, :find, :parent...) makes "e." an entity.
+            if (!path.empty() && path != ":") {
+                const usize dot = path.find('.');
+                const std::string head = path.substr(0, dot), rest = dot == std::string::npos ? "" : path.substr(dot);
+                const std::string decl = "local " + head + " =";
+                const std::string before = text.substr(0, static_cast<usize>(b));
+                usize at = std::string::npos;
+                for (usize q = before.find(decl); q != std::string::npos; q = before.find(decl, q + 1))
+                    if (q == 0 || !isWord(before[q - 1])) at = q;  // the last declaration before the cursor
+                if (at != std::string::npos) {
+                    usize v = at + decl.size();
+                    while (v < before.size() && before[v] == ' ') ++v;
+                    usize e = v;
+                    while (e < before.size() && (isWord(before[e]) || before[e] == '.' || before[e] == ':')) ++e;
+                    const std::string value = before.substr(v, e - v);
+                    const bool call = e < before.size() && before[e] == '(';
+                    const bool entity = value == "self.entity" || (call && (value == "agr.find" || value == "agr.instantiate" ||
+                                                                             value.find(":find") != std::string::npos || value.find(":parent") != std::string::npos ||
+                                                                             value.find(":child") != std::string::npos));
+                    if (entity) path = ":";
+                    else if (!call && value.rfind("agr", 0) == 0) path = value + rest;
+                }
+            }
         }
     }
     if (!member && prefix.empty()) return out;

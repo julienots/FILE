@@ -1689,6 +1689,12 @@ void EditorApp::smokeTest(const FrameTime&) {
             const std::string c = "agr.physics2d.ove";
             sug = ScriptEditorPanel::suggestions(*m_shared, c, static_cast<int>(c.size()), start);
             check(std::find(sug.begin(), sug.end(), "overlapCircle") != sug.end(), "nested tables complete");
+            const std::string al = "local phys = agr.physics2d\nphys.ove";
+            sug = ScriptEditorPanel::suggestions(*m_shared, al, static_cast<int>(al.size()), start);
+            check(std::find(sug.begin(), sug.end(), "overlapCircle") != sug.end(), "local aliases of agr tables complete");
+            const std::string ent = "local hero = agr.find('Hero')\nhero.setPo";
+            sug = ScriptEditorPanel::suggestions(*m_shared, ent, static_cast<int>(ent.size()), start);
+            check(!sug.empty() && sug[0] == "setPosition", "locals holding an entity complete its methods");
             const std::string d = "-- agr.phy";
             check(ScriptEditorPanel::suggestions(*m_shared, d, static_cast<int>(d.size()), start).empty(), "no completion in comments");
             const auto tokens = ScriptEditorPanel::tokenize("local x = 1 -- c\nprint('s')");
