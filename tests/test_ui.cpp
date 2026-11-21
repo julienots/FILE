@@ -1013,4 +1013,31 @@ TEST_CASE("item lists: multi-selection with Ctrl (toggle) and Shift (range)") {
     for (const auto& ev : f.ui.takeEvents()) changed |= ev.type == UIEventType::ValueChanged;
     CHECK(changed);
 }
+
+TEST_CASE("item lists: reorderable rows move by drag and drop") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto e = f.element("List", f.canvas, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {300, 240});
+    auto& list = f.scene.registry().emplace<UIItemListComponent>(e);
+    list.items = "A;B;C;D";
+    list.reorderable = true;
+    f.ui.layout(f.scene, 800, 600);
+    f.ui.takeEvents();
+    f.pointers({{0, {100, 24}, true}});   // A
+    f.pointers({{0, {100, 80}, true}});
+    f.pointers({{0, {100, 130}, true}});
+    f.pointers({{0, {100, 130}, false}});  // dropped on C
+    auto& l = f.scene.registry().get<UIItemListComponent>(e);
+    CHECK(l.items == "B;C;A;D");
+    CHECK(l.selected == 2);
+    bool changed = false;
+    for (const auto& ev : f.ui.takeEvents()) changed |= ev.type == UIEventType::ValueChanged && ev.value == 2.0f;
+    CHECK(changed);
+    l.reorderable = false;  // off: a drag does not move anything
+    f.ui.layout(f.scene, 800, 600);
+    f.pointers({{0, {100, 24}, true}});
+    f.pointers({{0, {100, 130}, true}});
+    f.pointers({{0, {100, 130}, false}});
+    CHECK(f.scene.registry().get<UIItemListComponent>(e).items == "B;C;A;D");
+}
 }  // TEST_SUITE

@@ -610,7 +610,9 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
         } else if (p.down) {
             const bool picker = pressedIt != m_pressed.end() && reg.has<UIColorPickerComponent>(pressedIt->second);
             const bool slider = pressedIt != m_pressed.end() && (reg.has<UISliderComponent>(pressedIt->second) || picker);
-            if (!ps.dragging && !ps.scrollView.isNull() && !slider && math::length(p.position - ps.down) > 12.0f) {
+            const auto* reorderList = pressedIt != m_pressed.end() ? reg.tryGet<UIItemListComponent>(pressedIt->second) : nullptr;
+            const bool reordering = reorderList && reorderList->reorderable && !reorderList->tree;  // drags move items (wheel scrolls)
+            if (!ps.dragging && !ps.scrollView.isNull() && !slider && !reordering && math::length(p.position - ps.down) > 12.0f) {
                 ps.dragging = true;  // a drag scrolls the view and cancels the press inside it
                 if (pressedIt != m_pressed.end()) {
                     m_pressed.erase(pressedIt);
@@ -642,6 +644,22 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                         if (el && n > 0 && p.position.y < el->rect.y + tabs->headerHeight * scale)
                             selectOption(scene, pressed, std::clamp(static_cast<i32>((p.position.x - el->rect.x) / std::max(1.0f, el->rect.z) * static_cast<float>(n)), 0,
                                                                     static_cast<i32>(n) - 1));
+                    } else if (auto* list = reg.tryGet<UIItemListComponent>(pressed); list && list->reorderable && !list->tree &&
+                                                                                 listRowAt(pressed, ps.down) >= 0 && listRowAt(pressed, p.position) >= 0 &&
+                                                                                 listRowAt(pressed, ps.down) != listRowAt(pressed, p.position)) {
+                        // Dropped on another row: the item moves there.
+                        const i32 from = listRowAt(pressed, ps.down), to = listRowAt(pressed, p.position);
+                        std::vector<std::string> items = splitList(list->items);
+                        if (from < static_cast<i32>(items.size()) && to < static_cast<i32>(items.size())) {
+                            std::string moved = items[static_cast<usize>(from)];
+                            items.erase(items.begin() + from);
+                            items.insert(items.begin() + to, std::move(moved));
+                            std::string joined;
+                            for (usize k = 0; k < items.size(); ++k) joined += (k ? ";" : "") + items[k];
+                            list->items = joined;
+                            list->selected = to;
+                            m_events.push_back({UIEventType::ValueChanged, pressed, static_cast<float>(to), {}});
+                        }
                     } else if (reg.has<UIItemListComponent>(pressed)) {
                         clickList(scene, pressed, p.position);
                     } else if (!reg.has<UIColorPickerComponent>(pressed)) {
@@ -1063,6 +1081,18 @@ std::vector<UISystem::ListRow> UISystem::listRows(const UIItemListComponent& lis
         shown.push_back(std::move(r));
     }
     return shown;
+}
+
+i32 UISystem::listRowAt(ecs::Entity e, Vec2 position) const {
+    const Element* el = elementOf(e);
+    if (!el || !m_layoutScene) return -1;
+    const auto* list = m_layoutScene->registry().tryGet<UIItemListComponent>(e);
+    if (!list) return -1;
+    const Vec2 p = localPoint(*el, position);
+    const float s = std::max(el->scale, 0.01f), rowH = list->itemHeight * s;
+    const i32 row = static_cast<i32>(std::floor((p.y - el->rect.y + list->scroll * s) / std::max(rowH, 1.0f)));
+    const auto rows = listRows(*list);
+    return row >= 0 && row < static_cast<i32>(rows.size()) ? rows[static_cast<usize>(row)].index : -1;
 }
 
 std::vector<i32> UISystem::listSelection(const UIItemListComponent& list) {

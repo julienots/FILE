@@ -106,6 +106,8 @@ public:
     void setModifiers(bool ctrl, bool shift) { m_ctrl = ctrl, m_shift = shift; }
     /// Indices of a list's selection ("1,4,5" -> {1, 4, 5}; single selection: {selected}).
     static std::vector<i32> listSelection(const UIItemListComponent& list);
+    /// Item index of a list under a point (UI pixels), -1 outside its rows.
+    i32 listRowAt(ecs::Entity list, math::Vec2 position) const;
     /// Caret movement and editing keys of the focused field (shift extends the selection).
     enum class TextKey { Left, Right, Up, Down, Home, End, Delete, SelectAll, Copy, Cut, Paste };
     void processTextKey(Scene& scene, TextKey key, bool shift = false, bool word = false);

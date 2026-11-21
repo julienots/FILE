@@ -236,6 +236,9 @@ struct UIItemListComponent {
     i32 selected = -1;
     /// Several items at once: Ctrl+click adds / removes one, Shift+click a range from `selected`.
     bool multiSelect = false;
+    /// Drag an item onto another row to move it there (lists, not trees): inventories, playlists,
+    /// priority orders. onValueChanged(new index) after the move.
+    bool reorderable = false;
     std::string selection;           ///< multiSelect: selected indices, comma-separated ("1,4,5").
     bool tree = false;
     std::string collapsed;           ///< Tree: indices of the folded items, comma-separated.

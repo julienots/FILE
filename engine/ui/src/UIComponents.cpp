@@ -173,6 +173,7 @@ void registerUIComponents() {
         .description("List or tree of items: click selects (onValueChanged), double click activates (onSubmit), wheel / drag scrolls.")
         .field("items", &UIItemListComponent::items, {.tooltip = "Items separated by ';' (tree: leading '>' per level)"})
         .field("selected", &UIItemListComponent::selected)
+        .field("reorderable", &UIItemListComponent::reorderable, {.tooltip = "Drag an item onto another row to move it"})
         .field("multiSelect", &UIItemListComponent::multiSelect, {.tooltip = "Ctrl+click: add / remove an item, Shift+click: a range"})
         .field("selection", &UIItemListComponent::selection, {.tooltip = "Selected indices (multiSelect), comma-separated"})
         .field("tree", &UIItemListComponent::tree, {.tooltip = "Folding rows: '>' at the start of an item = one level deeper"})
