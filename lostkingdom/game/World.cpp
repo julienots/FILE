@@ -25,7 +25,7 @@ float distToSegment(vec2 p, vec2 a, vec2 b, float* t) {
 }
 
 void Chunk::destroy() {
-    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy(); tallGrass.destroy();
+    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy(); tallGrass.destroy(); wheat.destroy();
     ready = false;
 }
 
@@ -1456,6 +1456,11 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     const float x0 = k.x * CHUNK, z0 = k.z * CHUNK;
     RegionWeights crw = regionAt(x0 + CHUNK / 2, z0 + CHUNK / 2);
     out.region = crw.dominant;
+    // 2.9.1 does this chunk touch a wheat field? (cheap test before the per-point one)
+    bool wheatChunk = false;
+    if (crw.w[R_GREENHAVEN] + crw.w[R_STEPPE] > 0.05f)
+        for (const Poi& p : pois)
+            if ((p.type == PoiType::Village || p.type == PoiType::Farm || p.type == PoiType::Mill) && length(p.pos - vec2(x0 + CHUNK / 2, z0 + CHUNK / 2)) < p.radius + 260.f) { wheatChunk = true; break; }
     out.snow = crw.w[R_FROSTHEIM];
     // ---- heights with a 1-vertex border for normals
     int G = N + 3;
@@ -1532,6 +1537,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                     }
             }
             wCob = std::max(wCob, plaza);
+            if (wheatChunk) {   // 2.9.1 golden stubble and soil under the wheat: the fields read from far away
+                float wa = wheatAmount(x, z);
+                if (wa > 0.f) { tint = lerp(tint, vec3(1.32f, 1.05f, 0.55f), wa * 0.85f); wDirt += wa * 0.18f; wRock *= 1.f - wa; }
+            }
             float total = wRock + wDirt + wSnow + wSand + wMud + wCob + wAsh;
             if (total > 1.f) { wRock /= total; wDirt /= total; wSnow /= total; wSand /= total; wMud /= total; wCob /= total; wAsh /= total; }
             Vertex v{};
@@ -1674,6 +1683,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             for (int rr = 0; rr < R_COUNT; rr++) { acc += rw.w[rr]; if (pick <= acc) { r = rr; break; } }
             float dens = forestDensity(r, x, z);
             if (rng.f() > dens) continue;
+            if (wheatChunk && wheatAmount(x, z) > 0.1f) continue;   // 2.9.1 no trees or rocks in the fields
             float y = height(x, z);
             vec3 n = normal(x, z);
             if (n.y < 0.8f) continue;
@@ -1733,6 +1743,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             for (auto& c : tab) { pv -= c.w; if (pv <= 0) { e = &c; break; } }
             float y = height(x, z);
             if (normal(x, z).y < 0.85f || waterLevel(x, z) > y - 0.3f || clutterBlocked(x, z, 0.6f)) continue;
+            if (wheatChunk && wheatAmount(x, z) > 0.1f) continue;
             // flower colour follows large patches (fields of daisies, poppies, lavender)
             int var = e->k == P_FLOWERS ? (int)clampf((fbm2(x * 0.01f, z * 0.01f, 2, 515) * 0.5f + 0.5f) * 3.f, 0.f, 2.99f)
                     : (e->k == P_TALLGRASS && r == R_HIGHCROWNS ? 2 : cr.irange(0, propVariants(e->k) - 1));
@@ -1922,6 +1933,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         for (int j = 0; j < GN; j++)
             for (int i = 0; i < GN; i++) {
                 float x = x0 + (i + g.f()) * spacing, z = z0 + (j + g.f()) * spacing;
+                if (wheatChunk && wheatAmount(x, z) > 0.6f) continue;   // 2.9.1 the wheat replaces the grass
                 // grass weight from terrain splats (bilinear lookup in our vertex grid)
                 int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
                 const Vertex& tv = T.v[vj * (N + 1) + vi];
@@ -1973,6 +1985,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float x = x0 + (i + g.f()) * sp, z = z0 + (j + g.f()) * sp;
                 float a = tallGrassAmount(x, z);
                 if (a <= 0.f || g.f() > 0.35f + a * 0.65f) continue;
+                if (wheatChunk && wheatAmount(x, z) > 0.2f) continue;
                 int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
                 const Vertex& tv = T.v[vj * (N + 1) + vi];
                 float wg = 1.f - (tv.rough + tv.metal + tv.emis + tv.wind + tv.b0 + tv.b1 + tv.w0) / 255.f;
@@ -1988,6 +2001,30 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 Color8 c = toColor8(col * 0.5f, 1);
                 d.r = c.r; d.g = c.g; d.b = c.b; d.a = 255;
                 out.tallGrass.push_back(d);
+            }
+    }
+    // ---- 2.9.1 wheat: dense tufts of ripe stalks over the parcels, shorter at the field edge, a few poppies
+    if (lod == 0 && wheatChunk && grassDensity >= 0.15f) {
+        Rng g(hash2i(k.x, k.z, 7171));
+        float sp = 0.5f / std::sqrt(std::min(1.f, std::max(0.3f, grassDensity)));
+        int GN = (int)(CHUNK / sp);
+        for (int j = 0; j < GN; j++)
+            for (int i = 0; i < GN; i++) {
+                float x = x0 + (i + g.f() * 0.8f) * sp, z = z0 + (j + g.f() * 0.8f) * sp;
+                float a = wheatAmount(x, z);
+                if (a <= 0.f || g.f() > a * 1.15f) continue;
+                float ripe = fbm2(x * 0.02f, z * 0.02f, 2, 7272) * 0.5f + 0.5f;
+                vec3 col = lerp(hexColor(0xb89a3e), hexColor(0xd8bc68), smoothstepf(0.3f, 0.8f, ripe));
+                col = lerp(col, hexColor(0x9a9a48), smoothstepf(0.72f, 0.95f, fbm2(x * 0.05f, z * 0.05f, 2, 7373) * 0.5f + 0.5f) * 0.6f);   // greener patches
+                col *= g.range(0.9f, 1.08f);
+                InstanceData d;
+                d.x = x; d.y = height(x, z) - 0.05f; d.z = z; d.rotY = g.range(0, TAU);
+                d.scale = g.range(0.88f, 1.12f) * (0.55f + 0.45f * a);
+                bool poppy = g.f() < 0.012f;
+                Color8 c = toColor8((poppy ? hexColor(0xd82a1e) : col) * 0.5f, 1);
+                d.r = c.r; d.g = c.g; d.b = c.b; d.a = 255;
+                if (poppy) { d.scale *= 1.9f; out.flowers.push_back(d); }
+                else out.wheat.push_back(d);
             }
     }
 }
@@ -2015,6 +2052,48 @@ float World::tallGrassAmount(float x, float z) const {
         }
     float wl = waterLevel(x, z);
     if (wl > -1e8f && height(x, z) < wl + 0.3f) return 0.f;
+    return a;
+}
+
+// 2.9.1 wheat fields: a patchwork of parcels (about 46 x 32 m, turned with each village) in a ring around the villages
+// of Greenhaven and the Steppes; grassy paths between parcels, nothing on roads, water or next to buildings
+float World::wheatAmount(float x, float z) const {
+    int r = regionId(x, z);
+    if (r != R_GREENHAVEN && r != R_STEPPE) return 0.f;
+    int best = -1; float bd = 1e9f;
+    for (int i = 0; i < (int)pois.size(); i++) {
+        const Poi& p = pois[i];
+        if (p.type != PoiType::Village && p.type != PoiType::Farm && p.type != PoiType::Mill) continue;
+        float d = length(p.pos - vec2(x, z)) - p.radius;
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0 || bd < 14.f || bd > 230.f) return 0.f;
+    const Poi& p = pois[best];
+    float ang = (hash32((uint32_t)best * 977u + 5u) % 628) * 0.01f;
+    vec2 l = rotate(vec2(x, z) - p.pos, ang);
+    float cw = 46.f, chh = 32.f;
+    int ci = (int)std::floor(l.x / cw), cj = (int)std::floor(l.y / chh);
+    uint32_t h = hash32((uint32_t)(ci * 73856093) ^ (uint32_t)(cj * 19349663) ^ (uint32_t)best * 83492791u);
+    if (h % 100 >= 58) return 0.f;   // meadow, pasture or fallow parcel
+    float ex = std::min(l.x - ci * cw, (ci + 1) * cw - l.x), ez = std::min(l.y - cj * chh, (cj + 1) * chh - l.y);
+    float a = smoothstepf(1.2f, 3.2f, std::min(ex, ez)) * (1.f - smoothstepf(190.f, 230.f, bd));
+    if (a < 0.02f) return 0.f;
+    if (roadInfluence(x, z) > 0.02f) return 0.f;
+    int cx = (int)std::floor(x / CHUNK), cz = (int)std::floor(z / CHUNK);
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int cj2 = chunkIndex(cx + dx, cz + dz);
+            if (cj2 < 0 || cj2 >= (int)chunkStructures.size()) continue;
+            for (int si : chunkStructures[cj2]) {
+                const Structure& st = structures[si];
+                if (st.kind == S_BRIDGE) continue;
+                float rr = (st.kind == S_FIELD ? 12.f : (st.kind == S_FENCE ? 3.f : 8.f)) * std::max(1.f, st.scale);
+                if (length(st.pos - vec2(x, z)) < rr) return 0.f;
+            }
+        }
+    float wl = waterLevel(x, z);
+    if (wl > -1e8f && height(x, z) < wl + 0.5f) return 0.f;
+    if (normal(x, z).y < 0.9f) return 0.f;   // not on steep slopes
     return a;
 }
 
@@ -2104,6 +2183,49 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
             }
         }
         tall.upload(c.tallGrass); c.tallGrass.setInstances(b.tallGrass);
+    }
+    if (!b.wheat.empty()) {
+        // 2.9.1 a wheat tuft: 8 thin stalks from one root, each with a bearded ear (two crossed cards) that nods
+        // a little, and two low leaves. One-sided cards: wind-animated meshes are drawn without back-face culling.
+        static MeshBuilder wt;
+        if (wt.v.empty()) {
+            Rng br(91);
+            auto quad = [&](vec3 a, vec3 b, vec3 c, vec3 d, vec3 n, float wa, float wb, uint8_t la, uint8_t lb) {
+                Mat ma(vec3(1), 0.8f, 0, 0, wa), mb(vec3(1), 0.8f, 0, 0, wb);
+                uint32_t i0 = wt.vert(a, n, ma), i1 = wt.vert(b, n, ma), i2 = wt.vert(c, n, mb), i3 = wt.vert(d, n, mb);
+                wt.v[i0].r = wt.v[i0].g = wt.v[i0].b = la; wt.v[i1].r = wt.v[i1].g = wt.v[i1].b = la;
+                wt.v[i2].r = wt.v[i2].g = wt.v[i2].b = lb; wt.v[i3].r = wt.v[i3].g = wt.v[i3].b = lb;
+                wt.tri(i0, i1, i2); wt.tri(i0, i2, i3);
+            };
+            for (int s = 0; s < 8; s++) {
+                vec2 o = br.inDisk() * 0.17f;
+                vec3 base{o.x, -0.03f, o.y};
+                float h = br.range(0.85f, 1.12f);
+                vec3 lean{o.x * 0.5f + br.range(-0.06f, 0.06f), 0, o.y * 0.5f + br.range(-0.06f, 0.06f)};
+                vec3 top = base + vec3(0, h, 0) + lean;
+                float a = br.range(0, TAU);
+                vec3 sd{std::cos(a), 0, std::sin(a)};
+                vec3 n = normalize(vec3(-sd.z, 0.9f, sd.x));
+                // stalk (two segments: stiff at the root, the wind takes the top)
+                vec3 mid = lerp(base, top, 0.55f);
+                quad(base - sd * 0.011f, base + sd * 0.011f, mid + sd * 0.009f, mid - sd * 0.009f, n, 0.f, 0.45f, 120, 200);
+                quad(mid - sd * 0.009f, mid + sd * 0.009f, top + sd * 0.007f, top - sd * 0.007f, n, 0.45f, 0.9f, 200, 235);
+                // the ear: two crossed cards, nodding forward
+                vec3 nod = normalize(top - mid) * 0.17f + lean * 0.4f + vec3(0, 0, 0);
+                vec3 e0 = top - normalize(top - mid) * 0.02f, e1 = top + nod;
+                for (int c = 0; c < 2; c++) {
+                    vec3 w = c == 0 ? sd : vec3(-sd.z, 0, sd.x);
+                    quad(e0 - w * 0.022f, e0 + w * 0.022f, e1 + w * 0.012f, e1 - w * 0.012f, normalize(vec3(-w.z, 0.8f, w.x)), 0.95f, 1.f, 245, 255);
+                }
+            }
+            for (int l = 0; l < 2; l++) {   // two low leaves
+                float a = br.range(0, TAU); vec3 d{std::cos(a), 0, std::sin(a)}, sd{-d.z, 0, d.x};
+                vec3 b0{0, 0.05f, 0}, t0 = b0 + d * 0.32f + vec3(0, 0.28f, 0);
+                quad(b0 - sd * 0.02f, b0 + sd * 0.02f, t0 + sd * 0.004f, t0 - sd * 0.004f, vec3(0, 1, 0), 0.f, 0.5f, 105, 165);
+            }
+            for (auto& v : wt.v) { vec3 n = normalize(unpackNormal(v) * 0.35f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); v.a = (uint8_t)clampf(90 + v.py * 165, 0, 255); }
+        }
+        wt.upload(c.wheat); c.wheat.setInstances(b.wheat);
     }
     if (!b.grass.empty() || !b.flowers.empty() || !b.grassNear.empty()) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer

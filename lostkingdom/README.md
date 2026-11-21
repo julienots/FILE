@@ -6,12 +6,22 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.9.0 (versionCode 43), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.8.1 : elle s'installe par-dessus). SHA-256 : `9eee98f80cbeb68d0591ca893a68f444d54e8b4e063a4d037ea2c1d3d430cc39`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.9.1 (versionCode 44), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.9.0 : elle s'installe par-dessus). SHA-256 : `a5684a44d2d155cceba04e88753607ad8415c537338d3c9b551cc2db1ac26a40`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.9.1 (champs de blé doré qu'on traverse)
+
+- **Champs de blé autour des villages, fermes et moulins** de Greenhaven et de la Steppe : des parcelles d'environ 46 × 32 m, orientées selon le village, séparées par des chemins de terre, avec un sol doré sous les épis. Environ 58 % des parcelles sont semées ; les autres restent en prairie.
+- **Le blé se couche sous le corps** : chaque touffe compte 8 tiges avec épis, et elles plient autour du héros, de sa trace et des personnages proches (même système que l'herbe haute). Elles ondulent aussi avec le vent.
+- **Coquelicots rouges** semés dans les champs (environ 1,2 % des touffes) et quelques taches de blé encore vert, comme sur la photo de référence.
+- **Se cacher** : dans le blé, le héros compte comme dans les hautes herbes (les ennemis le repèrent de moins loin).
+- Pas d'arbres, de rochers ni d'herbe dans les champs. Le blé s'arrête aux routes, aux bâtiments, à l'eau et aux pentes raides.
+- **Vérifié sur ordinateur seulement** : scénario automatique `wheat` (un champ trouvé près de Brindlemere, 6776 touffes chargées autour, héros caché à 0,60), 2794 tests passés, scénarios de non-régression rejoués. **Pas testé sur téléphone.**
+- **Coût** : le blé n'est dessiné qu'à moins de 62 m, et de moins en moins dense au-delà de 24 m. Scénario `perf` : Brindlemere passe de 573k à 582k triangles (les autres villes ne changent pas). Au milieu d'un champ, le coût est plus élevé que dans une ville : il n'a pas été mesuré sur téléphone. Si ça rame, baisser la qualité de l'herbe dans les Paramètres.
 
 ### Nouveautés 2.9.0 (vrais modèles 3D réalistes de la galerie Tripo : villageois, loup, sanglier, cerf)
 

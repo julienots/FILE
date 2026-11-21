@@ -696,7 +696,7 @@ void Game::updatePlayer(float dt) {
             if (r == R_FROSTHEIM && c.status.frostRes <= 0 && countItem("elixir_frost") == 0) toastHint = "Le froid de Frostheim est mordant : l'élixir de résistance au froid aide.";
         }
         // 1.9.1 tall grass: cover from enemies, a one-time hint
-        float tg = (riding || c.swimming) ? 0.f : world.tallGrassAmount(c.pos.x, c.pos.z);
+        float tg = (riding || c.swimming) ? 0.f : std::max(world.tallGrassAmount(c.pos.x, c.pos.z), world.wheatAmount(c.pos.x, c.pos.z) * 0.9f);   // 2.9.1 the wheat hides you too
         tallGrassHere = approach(tallGrassHere, tg, dt * 3.f);
         birdFlushCD = std::max(0.f, birdFlushCD - dt);
         if (tallGrassHere > 0.5f && !storyFlags.count("hint_tallgrass") && !cine.active) {

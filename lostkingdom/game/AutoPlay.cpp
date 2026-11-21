@@ -1826,6 +1826,31 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "wheat") {
+        // 2.9.1 wheat fields: find one near Brindlemere, overview, walk through it (the stalks part), log counts
+        static vec2 spot; static int ok[2];
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 16.5f; g.toastHint.clear(); g.tutStep = -1; ok[0] = ok[1] = 0;
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            const Poi* b = g.world.poiById("brindlemere"); float best = 0; spot = b->pos;
+            for (float r = 80; r < 260 && best < 0.99f; r += 6) for (float a = 0; a < TAU; a += 0.15f) {
+                vec2 q = b->pos + vec2(std::cos(a), std::sin(a)) * r;
+                float w = g.world.wheatAmount(q.x, q.y);
+                if (w > best && g.world.wheatAmount(q.x + 6, q.y) > 0.9f && g.world.wheatAmount(q.x, q.y + 6) > 0.9f) { best = w; spot = q; }
+            }
+            AGR_LOG("WHEAT field at (%.0f, %.0f) amount %.2f", spot.x, spot.y, best);
+            teleport(g, spot.x - 14, spot.y - 14, 0.78f); g.camPitch = 0.28f; g.camDist = g.camDistTarget = 16.f; g.camYaw = 0.78f + PI; }, [](Game& g, float) { g.camIdleT = 0; }, "field"});
+        s.push_back({0.05f, [](Game& g) { size_t inst = 0; g.world.forEachVisibleChunk([&](Chunk& c) { if (c.wheat.valid()) inst += c.wheat.instanceCount; });
+            ok[0] = inst > 3000; AGR_LOG("WHEAT %zu wheat tufts in loaded chunks -> %d", inst, ok[0]); g.requestScreenshot("build/shots/WH0_overview.png"); }, idle, "shot"});
+        s.push_back({2.5f, [](Game& g) { teleport(g, spot.x - 4, spot.y - 4, 0.78f); g.camPitch = 0.1f; g.camDist = g.camDistTarget = 4.5f; g.camYaw = 0.78f + PI + 0.6f; },
+            [](Game& g, float) { g.input.move = vec2(0, 0.55f); g.camIdleT = 0; }, "walk in"});
+        s.push_back({0.05f, [](Game& g) { ok[1] = g.tallGrassHere > 0.5f; AGR_LOG("WHEAT hero hidden in the wheat %.2f -> %d", g.tallGrassHere, ok[1]); g.requestScreenshot("build/shots/WH1_walk.png"); }, idle, "shot"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.input.move = vec2(0, 0.55f); g.camIdleT = 0; g.camPitch = 0.45f; g.camDist = g.camDistTarget = 5.f; }, "walk on"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/WH2_part.png"); }, idle, "shot"});
+        s.push_back({3.f, [](Game& g) { g.input.move = vec2(0, 0); const Poi* b = g.world.poiById("brindlemere"); vec2 d = normalize(b->pos - spot); vec2 p = spot - d * 30.f;
+            teleport(g, p.x, p.y, std::atan2(d.x, d.y)); g.camPitch = 0.04f; g.camDist = g.camDistTarget = 3.5f; g.camYaw = std::atan2(d.x, d.y) + PI; }, [](Game& g, float) { g.camIdleT = 0; }, "low view"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/WH3_low.png"); bool all = ok[0] && ok[1]; AGR_LOG("WHEAT TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

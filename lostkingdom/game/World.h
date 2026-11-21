@@ -104,6 +104,7 @@ struct ChunkBuild {
     MeshBuilder terrain, props, foliage, water, lava;  // foliage = wind-animated batch
     std::vector<InstanceData> grass, flowers, grassNear;   // grassNear: extra clumps drawn only near the hero
     std::vector<InstanceData> tallGrass;                   // 1.9.1 waist-high meadow patches (bend around characters)
+    std::vector<InstanceData> wheat;                       // 2.9.1 wheat fields around villages (part around the body)
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights;      // xyz + kind (lanterns, braziers, lava glow)
@@ -118,7 +119,7 @@ struct Chunk {
     ChunkKey key;
     int lod = -1;
     bool ready = false;
-    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass;
+    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass, wheat;
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights, emitters;
@@ -146,6 +147,7 @@ public:
     float roadInfluence(float x, float z, bool* cobble = nullptr) const;
     // 1.9.1 tall grass meadows: 0 (none) .. 1 (dense), same answer for the chunk builder and for gameplay
     float tallGrassAmount(float x, float z) const;
+    float wheatAmount(float x, float z) const;   // 2.9.1 0..1: inside a wheat field (parcels around the villages of the plains)
     float forestAt(float x, float z) const;   // 1.13.0 tree cover 0..1 (the scatter density), for the forest atmosphere
     // Ground height including walkable structures (bridges, docks)
     float groundHeight(float x, float z) const;

@@ -242,6 +242,11 @@ void Game::renderWorld(float dt) {
                 it.instances = -1;
                 if (d < 30.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             }
+            // 2.9.1 wheat fields: thinned with distance (the golden ground carries the field further away)
+            if (d < 62.f && ch.wheat.valid() && gs.grassDensity > 0.01f) {
+                float keep = clampf(1.f - (d - 24.f) / 45.f, 0.3f, 1.f);
+                it.castShadow = false; it.tint.w = 0; it.mesh = &ch.wheat; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.wheat.instanceCount * keep); renderer.submit(it); it.instances = -1;
+            }
             // 1.9.1 tall grass meadows: visible a little further than the short grass (they shape the landscape)
             if (d < 50.f && ch.tallGrass.valid() && gs.grassDensity > 0.01f) {
                 it.castShadow = false; it.tint.w = 0; it.mesh = &ch.tallGrass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it);
