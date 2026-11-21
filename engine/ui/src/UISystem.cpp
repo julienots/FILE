@@ -167,7 +167,15 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles, std
                 else if (tag == "/i") italic = std::max(0, italic - 1);
                 else if (tag == "s") ++strike;
                 else if (tag == "/s") strike = std::max(0, strike - 1);
-                else if (tag.rfind("url=", 0) == 0) {
+                else if (tag.rfind("img=", 0) == 0) {  // an em space the image is drawn on
+                    links.push_back(tag.substr(4));
+                    out += "\xE2\x80\x83";
+                    Style st = current();
+                    st.image = static_cast<i32>(links.size()) - 1;
+                    styles.push_back(st);
+                    i = close + 1;
+                    continue;
+                } else if (tag.rfind("url=", 0) == 0) {
                     links.push_back(tag.substr(4));
                     link = static_cast<i32>(links.size()) - 1;
                 } else if (tag == "/url") {
@@ -1794,6 +1802,14 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
         const Vec4 linkColor{0.4f, 0.7f, 1.0f, 1.0f};
         for (const TextGlyph& g : pt.layout.glyphs) {
             const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
+            if (st && st->image >= 0 && static_cast<usize>(st->image) < pt.links.size()) {  // inline image, one em, on the baseline
+                if (m_renderer) {
+                    const rhi::TextureHandle tex = m_renderer->resolveTexture(pt.links[static_cast<usize>(st->image)], false);
+                    const float sz = pt.pixelSize * 0.9f, x = pt.origin.x + g.min.x + (g.advance - sz) * 0.5f, y = pt.origin.y + g.baseline - sz * 0.85f;
+                    emit(out, {x, y}, {x + sz, y + sz}, {0, 0, 1, 1}, packColor({1, 1, 1, pt.color.w}), tex);
+                }
+                continue;
+            }
             const bool link = st && st->link >= 0 && static_cast<usize>(st->link) < pt.links.size();
             const Vec4 c = st && st->hasColor ? st->color : link ? linkColor : Vec4{1, 1, 1, 1};
             const u32 color = st && (st->hasColor || link) ? packColor({c.x, c.y, c.z, c.w * pt.color.w}) : base;

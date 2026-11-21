@@ -7,6 +7,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/assets/Image.hpp"
 #include "agr/ui/UISystem.hpp"
 
 using namespace agr;
@@ -164,4 +165,32 @@ TEST_CASE("overlay: style boxes with rounded corners, outline and soft shadow") 
     CHECK_MESSAGE(far1.b < 250, far1);
     CHECK_MESSAGE(out1.b > 250, out1);  // beyond the shadow
     CHECK(near(pixel(d, 32, 32), 255, 0, 0));
+}
+
+TEST_CASE("overlay: inline images in rich text") {
+    OverlayFixture f;
+    std::vector<u8> red(4 * 4 * 4);
+    for (usize i = 0; i < red.size(); i += 4) red[i] = 255, red[i + 1] = 0, red[i + 2] = 0, red[i + 3] = 255;
+    auto png = encodePng(4, 4, red);
+    REQUIRE(png);
+    REQUIRE(f.vfs.writeBytes("assets://red.png", png.value().data(), png.value().size()));
+    const auto e = f.box({2, 2}, {60, 30}, {0, 0, 0, 0});
+    auto& t = f.scene.registry().emplace<UITextComponent>(e);
+    t.text = "[img=assets://red.png]";
+    t.richText = true;
+    t.fontSize = 24.0f;
+    t.hAlign = UIHAlign::Left;
+    t.wrap = false;
+    f.frame();
+    f.assets.waitAll();
+    f.frame();
+    f.frame();
+    auto& d = *gpu().device;
+    int reds = 0;
+    for (u32 y = 2; y < 32; ++y)
+        for (u32 x = 2; x < 30; ++x) {
+            const Rgba p = pixel(d, x, y);
+            reds += p.r > 200 && p.g < 60 && p.b < 60;
+        }
+    CHECK_MESSAGE(reds > 150, reds);  // ~21 x 21 pixels of image
 }

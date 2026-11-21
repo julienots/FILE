@@ -95,7 +95,9 @@ espaces (et dans les mots trop longs). Les modèles de projet fournissent Inter
 `blue`, `yellow`, `orange`, `purple`, `cyan`, `gray`, `white`, `black`, couleurs imbriquables),
 `[b]...[/b]` (gras), `[i]...[/i]` (italique, glyphes inclinés), `[u]...[/u]` (souligné, espaces
 compris), `[s]...[/s]` (barré), `[url=id]...[/url]` (**lien** : bleu souligné ; un clic appelle
-`onLinkClicked(id)` du script du texte ou de son parent le plus proche qui a un script) ; `[[` pour
+`onLinkClicked(id)` du script du texte ou de son parent le plus proche qui a un script),
+`[img=assets://piece.png]` (**image en ligne** de la taille d'un caractère, posée sur la ligne de base :
+icônes de monnaie, de touches) ; `[[` pour
 écrire un crochet ; une balise inconnue reste affichée telle quelle.
 
 ## Depuis Lua
@@ -133,7 +135,7 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Texte enrichi sans images intégrées ; l'italique est une inclinaison des glyphes (pas de police italique).
+- Texte enrichi : images carrées d'un caractère (pas de taille réglable) ; l'italique est une inclinaison des glyphes (pas de police italique).
 - Boîtes stylées : le contour est dessiné sous le remplissage (un remplissage transparent laisse voir
   le contour) ; pas de rayon différent par coin.
 - Champs de texte : pas de répétition automatique des touches maintenues, pas d'annulation (Ctrl+Z),
