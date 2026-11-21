@@ -217,13 +217,13 @@ std::vector<std::string> checkAndroidExport(const Project& project, const Androi
     return problems;
 }
 
-Result<ByteBuffer> makeLauncherIcon(std::span<const u8> sourceImage, u32 size) {
+Result<ByteBuffer> makeLauncherIcon(std::span<const u8> sourceImage, u32 size, float fill) {
     auto img = decodeImage(sourceImage, "icon");
     if (!img) return img.error();
     const Image& src = img.value();
     std::vector<u8> out(static_cast<usize>(size) * size * 4, 0);
     // Fit inside 84 % of the square (launcher masks), centered, bilinear sampling.
-    const float box = static_cast<float>(size) * 0.84f;
+    const float box = static_cast<float>(size) * std::clamp(fill, 0.1f, 1.0f);
     const float k = std::min(box / static_cast<float>(src.width), box / static_cast<float>(src.height));
     const float w = static_cast<float>(src.width) * k, h = static_cast<float>(src.height) * k;
     const float x0 = (static_cast<float>(size) - w) * 0.5f, y0 = (static_cast<float>(size) - h) * 0.5f;
@@ -305,6 +305,7 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
         "    <uses-feature android:name=\"android.hardware.type.pc\" android:required=\"false\" />\n";
     if (x.vibration) manifest += "    <uses-permission android:name=\"android.permission.VIBRATE\" />\n";
     if (x.network) manifest += "    <uses-permission android:name=\"android.permission.INTERNET\" />\n";
+    if (x.microphone) manifest += "    <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n";
     manifest +=
         "    <application android:label=\"@string/app_name\" android:icon=\"@mipmap/ic_launcher\" android:allowBackup=\"true\"\n"
         "        android:isGame=\"true\" android:appCategory=\"game\" android:hardwareAccelerated=\"true\"\n"
@@ -353,7 +354,26 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
                 break;
             }
             if (Status s = writeBytes(main / "res" / (std::string("mipmap-") + density) / "ic_launcher.png", png.value()); !s) return s.error();
+            // Adaptive icon (Android 8+): the image in the 108 dp foreground's safe zone, on the background color.
+            if (auto fg = makeLauncherIcon(bytes, size * 108 / 48, 0.6f))
+                if (Status s = writeBytes(main / "res" / (std::string("mipmap-") + density) / "ic_launcher_foreground.png", fg.value()); !s) return s.error();
         }
+        if (Status s = writeText(main / "res" / "mipmap-anydpi-v26" / "ic_launcher.xml",
+                                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                                 "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
+                                 "    <background android:drawable=\"@color/ic_launcher_background\" />\n"
+                                 "    <foreground android:drawable=\"@mipmap/ic_launcher_foreground\" />\n"
+                                 "</adaptive-icon>\n");
+            !s)
+            return s.error();
+        char color[16];
+        auto c8 = [](float v) { return static_cast<int>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+        std::snprintf(color, sizeof color, "#%02X%02X%02X", c8(x.iconBackground.x), c8(x.iconBackground.y), c8(x.iconBackground.z));
+        if (Status s = writeText(main / "res" / "values" / "colors.xml",
+                                 std::string("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <color name=\"ic_launcher_background\">") +
+                                     color + "</color>\n</resources>\n");
+            !s)
+            return s.error();
     }
 
     // Gradle files.

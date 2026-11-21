@@ -754,6 +754,15 @@ TEST_CASE("game export: data package, desktop folder safety, Android Gradle proj
     project.settings().exportSettings.network = true;
     REQUIRE(generateAndroidProject(project, tools, out / "android_net"));
     CHECK(readTextFile(out / "android_net" / "app" / "src" / "main" / "AndroidManifest.xml").find("android.permission.INTERNET") != std::string::npos);
+    CHECK(manifestXml.find("RECORD_AUDIO") == std::string::npos);
+    project.settings().exportSettings.microphone = true;
+    project.settings().exportSettings.iconBackground = {1.0f, 0.5f, 0.0f, 1.0f};
+    REQUIRE(generateAndroidProject(project, tools, out / "android_mic"));
+    const fs::path micMain = out / "android_mic" / "app" / "src" / "main";
+    CHECK(readTextFile(micMain / "AndroidManifest.xml").find("android.permission.RECORD_AUDIO") != std::string::npos);
+    CHECK(readTextFile(micMain / "res" / "mipmap-anydpi-v26" / "ic_launcher.xml").find("ic_launcher_foreground") != std::string::npos);
+    CHECK(readTextFile(micMain / "res" / "values" / "colors.xml").find("#FF8000") != std::string::npos);
+    CHECK(fs::exists(micMain / "res" / "mipmap-xxxhdpi" / "ic_launcher_foreground.png"));
     const std::string appGradle = readTextFile(out / "android" / "app" / "build.gradle");
     CHECK(appGradle.find("applicationId 'com.studioncode.testgame'") != std::string::npos);
     CHECK(appGradle.find("versionCode 7") != std::string::npos);

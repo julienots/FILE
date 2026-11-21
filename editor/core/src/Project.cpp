@@ -128,6 +128,10 @@ Result<Project> Project::open(const fs::path& folder) {
         x.targetFps = e.value("targetFps", x.targetFps);
         x.vibration = e.value("vibration", x.vibration);
         x.network = e.value("network", x.network);
+        x.microphone = e.value("microphone", x.microphone);
+        if (e.contains("iconBackground") && e["iconBackground"].is_array() && e["iconBackground"].size() == 4)
+            x.iconBackground = {e["iconBackground"][0].get<float>(), e["iconBackground"][1].get<float>(), e["iconBackground"][2].get<float>(),
+                                e["iconBackground"][3].get<float>()};
         x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
         x.splashImage = e.value("splashImage", x.splashImage);
         if (e.contains("splashColor") && e["splashColor"].is_array() && e["splashColor"].size() == 4)
@@ -177,7 +181,9 @@ Status Project::save() const {
                    {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
                    {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias},
                    {"splashImage", x.splashImage},   {"splashColor", {x.splashColor.x, x.splashColor.y, x.splashColor.z, x.splashColor.w}},
-                   {"splashSeconds", x.splashSeconds}};
+                   {"splashSeconds", x.splashSeconds},
+                   {"microphone", x.microphone},
+                   {"iconBackground", {x.iconBackground.x, x.iconBackground.y, x.iconBackground.z, x.iconBackground.w}}};
     return writeFile(m_root / kFileName, j.dump(2));
 }
 

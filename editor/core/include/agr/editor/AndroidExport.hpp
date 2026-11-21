@@ -51,6 +51,7 @@ Status createKeystore(const AndroidToolchain& tools, const std::filesystem::path
                       const std::string& password, const std::string& owner);
 
 /// Launcher icon of the given size from an image (centered, scaled to fit, transparent margins).
-Result<ByteBuffer> makeLauncherIcon(std::span<const u8> sourceImage, u32 size);
+/// `fill`: fraction of the square the image fits in (0.84 legacy icons, ~0.6 adaptive foregrounds).
+Result<ByteBuffer> makeLauncherIcon(std::span<const u8> sourceImage, u32 size, float fill = 0.84f);
 
 } // namespace agr::editor

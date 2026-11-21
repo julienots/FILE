@@ -109,7 +109,7 @@ sur `Master` : ~0,17 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : `audio effects
 vumètre, « souffler pour jouer »), `agr.audio.stopRecording("user://voix.wav")` arrête et écrit un WAV
 16 bits jouable aussitôt (`agr.audio.play`), et rend son chemin et sa durée. Sans micro (ou en sortie
 virtuelle), l'enregistrement reçoit les échantillons passés à `AudioSystem::feedRecording` (tests,
-sources personnalisées). Sur Android, la permission `RECORD_AUDIO` n'est pas encore ajoutée par l'export.
+sources personnalisées). Sur Android, cocher *Microphone* dans l'export ajoute la permission `RECORD_AUDIO`.
 
 ## Limites actuelles
 

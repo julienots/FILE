@@ -135,6 +135,8 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Identifiant unique de l'application (com.studio.jeu) ; vide = généré");
         changed |= ImGui::Checkbox("Vibration (permission VIBRATE)", &x.vibration);
         changed |= ImGui::Checkbox("Réseau / multijoueur (permission INTERNET)", &x.network);
+        changed |= ImGui::Checkbox("Microphone (permission RECORD_AUDIO)", &x.microphone);
+        changed |= ImGui::ColorEdit3("Fond de l'icône adaptative", &x.iconBackground.x, ImGuiColorEditFlags_NoInputs);
         int minSdk = static_cast<int>(x.minSdk), targetSdk = static_cast<int>(x.targetSdk);
         ImGui::SetNextItemWidth(120);
         if (ImGui::InputInt("API minimale", &minSdk)) x.minSdk = static_cast<u32>(std::clamp(minSdk, 26, 40)), changed = true;

@@ -33,6 +33,7 @@ pour ses instantanés (annuler / rétablir, mode Jeu).
 | Cadence | Celle de l'écran, ou 30 / 60 images/s (30 économise la batterie) |
 | Écran allumé, bouton Retour | Garder l'écran allumé pendant le jeu ; le bouton Retour d'Android quitte le jeu |
 | Écran de démarrage | Image (`assets://...`), couleur de fond et durée minimale : affichée par le lecteur (toutes plateformes) avant la scène de départ, centrée, proportions gardées |
+| Microphone | Permission `RECORD_AUDIO` (jeux qui enregistrent : `agr.audio.startRecording`) |
 | Identifiant Android | `com.studio.jeu` (par défaut : organisation + nom) |
 | API minimale / cible, processeurs | Android 8.0 (API 26) minimum ; `arm64-v8a` (téléphones), `x86_64` (émulateurs, Chromebooks) |
 | Signature | Keystore (fichier), alias, mots de passe ; *Créer un keystore* (`keys/release.p12`) |
@@ -85,7 +86,8 @@ Prérequis sur la machine qui exporte :
 L'export génère un **projet Gradle complet** (`build/android/gradle/`, ouvrable dans Android Studio) :
 manifeste (orientation, permission `VIBRATE`, catégorie jeu), activité `AgrActivity` (SDL), bibliothèques
 natives, données du jeu dans les assets de l'APK, icônes (`assets/icon.png` du projet, sinon le logo
-AGR), puis lance Gradle et copie `Nom-version[-debug].apk` ou `.aab` dans le dossier de sortie.
+AGR) classiques et **adaptatives** (Android 8+ : l'image dans la zone sûre d'un premier plan de 108 dp,
+sur la couleur de fond choisie dans l'export), puis lance Gradle et copie `Nom-version[-debug].apk` ou `.aab` dans le dossier de sortie.
 Installer un APK de test : `adb install -r build/android/Nom-1.0.0-debug.apk`.
 
 Vérifié dans la chaîne de tests : un APK de test de la Vitrine 2D (13 Mo pour arm64-v8a), un AAB et un
@@ -110,7 +112,7 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
 - Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
   contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas d'icône intégrée au
   `.exe` ni d'installateur.
-- Pas d'icône adaptative Android (icône simple), de compression de
+- Pas de compression de
   textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
 - Pas de publication automatique sur Google Play ni d'ouverture directe sur un appareil connecté.
