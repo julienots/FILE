@@ -70,6 +70,7 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_spriteVertices);
     m_device.destroyBuffer(m_spriteIndices);
     for (auto& [key, g] : m_terrains) releaseTerrain(g);
+    for (auto& [key, g] : m_morphs) m_device.destroyBuffer(g.buffer);
     for (auto& [n, w] : m_waterGrids) {
         m_device.destroyBuffer(w.vertices);
         m_device.destroyBuffer(w.indices);

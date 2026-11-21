@@ -33,6 +33,12 @@ struct ModelAsset {
         std::vector<std::vector<ModelSubmesh>> lods;  ///< Simplified levels (same buffers), coarser and coarser.
         math::Aabb bounds;   ///< Bind pose.
         bool skinned = false;  ///< Vertex buffer of SkinnedModelVertex (deformed by a skin).
+        // Morph targets (kept on the CPU: the renderer blends them into a per-entity buffer).
+        std::vector<ModelMorphTarget> morphTargets;
+        std::vector<float> morphDefaults;
+        std::vector<ModelVertex> baseVertices;           ///< Only with morph targets.
+        std::vector<ModelSkinWeights> baseSkinWeights;   ///< Only with morph targets and a skin.
+        float morphReach = 0.0f;  ///< Largest offset of any target (bounds grow by it).
     };
     std::string uri;
     AssetState state = AssetState::Loading;

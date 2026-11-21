@@ -135,6 +135,21 @@ Result<std::shared_ptr<const AnimationClip>> AnimationLibrary::modelClip(const s
         c->loop = true;
         for (const ModelAnimationChannel& ch : an.channels) {
             if (ch.node < 0 || static_cast<usize>(ch.node) >= data.nodes.size()) continue;
+            if (ch.path == ModelAnimationChannel::Path::Weights) {
+                // Morph weights: one curve per target on MeshRenderer.morph (0..3) / morph2 (4..7).
+                const std::string target = modelNodePath(data.nodes, meshNames, static_cast<usize>(ch.node));
+                for (u32 w = 0; w < ch.weightCount; ++w) {
+                    AnimationTrack& tr = c->track(target, "MeshRenderer", w < 4 ? "morph" : "morph2", static_cast<i32>(w % 4));
+                    for (usize k = 0; k < ch.times.size(); ++k) {
+                        Keyframe key;
+                        key.time = ch.times[k];
+                        key.value = ch.weights[k * ch.weightCount + w];
+                        key.interpolation = ch.step ? Interpolation::Constant : Interpolation::Linear;
+                        tr.curve.keys.push_back(key);
+                    }
+                }
+                continue;
+            }
             TransformTrack t;
             t.target = modelNodePath(data.nodes, meshNames, static_cast<usize>(ch.node));
             t.path = static_cast<TransformTrack::Path>(static_cast<u8>(ch.path));

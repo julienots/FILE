@@ -574,6 +574,19 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             bounds = mesh.bounds;
             submeshes = &mesh.submeshes;
             skinnedMesh = mesh.skinned;
+            if (!mesh.morphTargets.empty()) {  // blend shapes: a per-entity buffer with the targets blended in
+                const float weights[8] = {mr.morph.x, mr.morph.y, mr.morph.z, mr.morph.w, mr.morph2.x, mr.morph2.y, mr.morph2.z, mr.morph2.w};
+                bool any = false;
+                for (usize k = 0; k < mesh.morphTargets.size() && k < 8; ++k) any |= weights[k] != 0.0f;
+                if (any) {
+                    if (const rhi::BufferHandle morphed = morphedVertices(e, mesh, weights)) {
+                        vb = morphed;
+                        bounds.min = bounds.min - Vec3{mesh.morphReach * 2.0f};
+                        bounds.max = bounds.max + Vec3{mesh.morphReach * 2.0f};
+                        ++m_stats.morphedMeshes;
+                    }
+                }
+            }
         } else {
             const GpuMesh& mesh = m_meshes[std::clamp(static_cast<int>(mr.mesh), 0, 3)];
             vb = mesh.vertices;
@@ -923,6 +936,15 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
         ++m_stats.blobShadows;
     });
 
+    if (m_frame % 120 == 0)  // morph buffers of entities no longer drawn with weights
+        for (auto it = m_morphs.begin(); it != m_morphs.end();) {
+            if (m_frame > it->second.lastFrame + 120) {
+                m_device.destroyBuffer(it->second.buffer);
+                it = m_morphs.erase(it);
+            } else {
+                ++it;
+            }
+        }
     if (m_frame % 300 == 0)  // GPU data of terrains that no longer exist
         for (auto it = m_terrains.begin(); it != m_terrains.end();) {
             if (m_frame > it->second.lastFrame + 300) {
@@ -1545,6 +1567,51 @@ Renderer::ShaderStatus Renderer::shaderStatus(const std::string& uri) {
     if (it == m_customIndex.end()) return {false, {{0, "no shader library"}}};
     const CustomPipelines& set = m_customSets[it->second];
     return {set.usable, set.diagnostics};
+}
+
+rhi::BufferHandle Renderer::morphedVertices(ecs::Entity e, const ModelAsset::Mesh& mesh, const float weights[8]) {
+    const usize n = mesh.baseVertices.size();
+    if (n == 0) return {};
+    const bool skinned = mesh.skinned && mesh.baseSkinWeights.size() == n;
+    const usize stride = skinned ? sizeof(SkinnedModelVertex) : sizeof(ModelVertex);
+    m_morphScratch.resize(n * stride);
+    for (usize i = 0; i < n; ++i) {
+        ModelVertex v = mesh.baseVertices[i];
+        Vec3 dn{0.0f};
+        for (usize k = 0; k < mesh.morphTargets.size() && k < 8; ++k) {
+            const float w = weights[k];
+            if (w == 0.0f) continue;
+            const ModelMorphTarget& t = mesh.morphTargets[k];
+            if (i < t.positions.size()) v.position = v.position + t.positions[i] * w;
+            if (i < t.normals.size()) dn = dn + t.normals[i] * w;
+        }
+        if (dn.x != 0.0f || dn.y != 0.0f || dn.z != 0.0f) {
+            const Vec3 nn = v.normal + dn;
+            const float len = math::length(nn);
+            if (len > 1e-6f) v.normal = nn * (1.0f / len);
+        }
+        if (skinned) {
+            const SkinnedModelVertex sv{v, mesh.baseSkinWeights[i]};
+            std::memcpy(&m_morphScratch[i * stride], &sv, stride);
+        } else {
+            std::memcpy(&m_morphScratch[i * stride], &v, stride);
+        }
+    }
+    MorphGpu& g = m_morphs[e.packed()];
+    if (g.buffer && g.bytes != m_morphScratch.size()) {
+        m_device.destroyBuffer(g.buffer);
+        g.buffer = {};
+    }
+    if (!g.buffer) {
+        auto b = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Dynamic, m_morphScratch.size(), m_morphScratch.data(), "agr.morph.vb"});
+        if (!b) return {};
+        g.buffer = b.value();
+        g.bytes = m_morphScratch.size();
+    } else if (!m_device.updateBuffer(g.buffer, 0, m_morphScratch.data(), m_morphScratch.size())) {
+        return {};
+    }
+    g.lastFrame = m_frame;
+    return g.buffer;
 }
 
 } // namespace agr

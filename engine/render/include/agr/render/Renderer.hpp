@@ -126,6 +126,7 @@ struct RenderStats {
     bool atmosphere = false;      ///< Height fog / light shafts pass this frame.
     bool depthOfField = false;    ///< Depth of field pass this frame.
     bool screenSpaceReflections = false;  ///< SSR pass this frame.
+    u32 morphedMeshes = 0;        ///< Meshes drawn with blended morph targets.
     bool autoExposure = false;    ///< Auto exposure measured this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
@@ -390,6 +391,15 @@ private:
         u64 lastFrame = 0;
     };
     std::unordered_map<u64, TerrainGpu> m_terrains;  // by entity
+    /// Vertex buffer with an entity's morph targets blended in (rewritten each frame it is drawn).
+    struct MorphGpu {
+        rhi::BufferHandle buffer;
+        usize bytes = 0;
+        u64 lastFrame = 0;
+    };
+    std::unordered_map<u64, MorphGpu> m_morphs;  // by entity
+    std::vector<u8> m_morphScratch;
+    rhi::BufferHandle morphedVertices(ecs::Entity e, const ModelAsset::Mesh& mesh, const float weights[8]);
     f64 m_time = 0.0;
     static constexpr u32 kWaterPipeline = 7;
     rhi::PipelineHandle m_waterPipeline;

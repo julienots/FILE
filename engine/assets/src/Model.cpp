@@ -203,7 +203,6 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
             else if (at.type == cgltf_attribute_type_weights && at.index == 0) weights = at.data;
         }
         if (!pos) return makeError(Error::Code::ParseError, "mesh '" + mesh.name + "' has a primitive without positions");
-        if (prim.targets_count) out.warnings.push_back("mesh '" + mesh.name + "': morph targets are not imported");
         allNormals &= nrm != nullptr;
         allTangents &= tan != nullptr;
         const u32 base = static_cast<u32>(mesh.vertices.size());
@@ -216,6 +215,29 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
             if (tan) cgltf_accessor_read_float(tan, i, &v.tangent.x, 4);
             else v.tangent = {1, 0, 0, 1};
             if (uv) cgltf_accessor_read_float(uv, i, &v.uv.x, 2);
+        }
+        // Morph targets: offsets of this primitive's vertices (primitives without them get zeros).
+        if (prim.targets_count > 0 || !mesh.morphTargets.empty()) {
+            const usize n = std::min<usize>(std::max<usize>(prim.targets_count, mesh.morphTargets.size()), kMaxMorphTargets);
+            if (prim.targets_count > kMaxMorphTargets)
+                out.warnings.push_back("mesh '" + mesh.name + "': only the first " + std::to_string(kMaxMorphTargets) + " morph targets are imported");
+            if (mesh.morphTargets.size() < n) mesh.morphTargets.resize(n);
+            for (usize t = 0; t < mesh.morphTargets.size(); ++t) {
+                ModelMorphTarget& mt = mesh.morphTargets[t];
+                mt.positions.resize(base + count, math::Vec3{0.0f});
+                if (!mt.normals.empty()) mt.normals.resize(base + count, math::Vec3{0.0f});
+                if (t >= prim.targets_count) continue;
+                const cgltf_morph_target& tg = prim.targets[t];
+                for (cgltf_size a = 0; a < tg.attributes_count; ++a) {
+                    const cgltf_attribute& at = tg.attributes[a];
+                    if (at.type == cgltf_attribute_type_position) {
+                        for (usize i = 0; i < count && i < at.data->count; ++i) cgltf_accessor_read_float(at.data, i, &mt.positions[base + i].x, 3);
+                    } else if (at.type == cgltf_attribute_type_normal) {
+                        mt.normals.resize(base + count, math::Vec3{0.0f});
+                        for (usize i = 0; i < count && i < at.data->count; ++i) cgltf_accessor_read_float(at.data, i, &mt.normals[base + i].x, 3);
+                    }
+                }
+            }
         }
         if (joints && weights) {
             // Skinned primitive: earlier primitives without skinning get a neutral entry.
@@ -251,6 +273,13 @@ Result<ModelMesh> gltfMesh(const cgltf_data* data, const cgltf_mesh& m, ModelDat
         if (sub.indexCount) mesh.submeshes.push_back(sub);
     }
     if (!allNormals) out.warnings.push_back("mesh '" + mesh.name + "': normals generated");
+    for (usize t = 0; t < mesh.morphTargets.size(); ++t) {
+        ModelMorphTarget& mt = mesh.morphTargets[t];
+        mt.positions.resize(mesh.vertices.size(), math::Vec3{0.0f});
+        if (!mt.normals.empty()) mt.normals.resize(mesh.vertices.size(), math::Vec3{0.0f});
+        mt.name = t < m.target_names_count && m.target_names[t] ? m.target_names[t] : "Morph " + std::to_string(t);
+    }
+    for (usize t = 0; t < mesh.morphTargets.size(); ++t) mesh.morphDefaults.push_back(t < m.weights_count ? m.weights[t] : 0.0f);
     finishMesh(mesh, allNormals, allTangents);
     return mesh;
 }
@@ -531,7 +560,7 @@ Result<ModelData> importGltf(std::span<const u8> bytes, std::string_view uri, Vi
                                    std::to_string(kMaxSkinJoints) + " are animated");
         out.skins.push_back(std::move(skin));
     }
-    // Animations of node transforms (morph-target weights are not supported).
+    // Animations of node transforms and morph weights.
     bool cubic = false, morph = false;
     for (cgltf_size ai = 0; ai < data->animations_count; ++ai) {
         const cgltf_animation& an = data->animations[ai];
@@ -548,7 +577,33 @@ Result<ModelData> importGltf(std::span<const u8> bytes, std::string_view uri, Vi
                 case cgltf_animation_path_type_translation: c.path = ModelAnimationChannel::Path::Translation; break;
                 case cgltf_animation_path_type_rotation: c.path = ModelAnimationChannel::Path::Rotation; break;
                 case cgltf_animation_path_type_scale: c.path = ModelAnimationChannel::Path::Scale; break;
+                case cgltf_animation_path_type_weights: c.path = ModelAnimationChannel::Path::Weights; break;
                 default: morph = true; continue;
+            }
+            if (c.path == ModelAnimationChannel::Path::Weights) {  // morph weights: N floats per key
+                const cgltf_animation_sampler& sm = *ch.sampler;
+                const cgltf_mesh* mesh = ch.target_node->mesh;
+                const usize n = mesh ? std::max<usize>(mesh->weights_count, mesh->primitives_count ? mesh->primitives[0].targets_count : 0) : 0;
+                if (n == 0) continue;
+                const bool spline = sm.interpolation == cgltf_interpolation_type_cubic_spline;
+                cubic |= spline;
+                c.step = sm.interpolation == cgltf_interpolation_type_step;
+                c.weightCount = static_cast<u32>(std::min(n, kMaxMorphTargets));
+                std::vector<float> all(n);
+                for (cgltf_size k = 0; k < sm.input->count; ++k) {
+                    float t = 0.0f;
+                    cgltf_accessor_read_float(sm.input, k, &t, 1);
+                    for (usize w = 0; w < n; ++w) {
+                        const cgltf_size idx = (spline ? k * 3 + 1 : k) * n + w;
+                        all[w] = 0.0f;
+                        cgltf_accessor_read_float(sm.output, idx, &all[w], 1);
+                    }
+                    c.times.push_back(t);
+                    c.weights.insert(c.weights.end(), all.begin(), all.begin() + c.weightCount);
+                    anim.duration = std::max(anim.duration, t);
+                }
+                if (!c.times.empty()) anim.channels.push_back(std::move(c));
+                continue;
             }
             const cgltf_animation_sampler& sm = *ch.sampler;
             c.step = sm.interpolation == cgltf_interpolation_type_step;

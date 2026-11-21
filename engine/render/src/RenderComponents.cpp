@@ -310,6 +310,9 @@ void registerRenderComponents() {
                {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("roughness", &MeshRendererComponent::roughness,
                {.tooltip = "Built-in material", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("morph", &MeshRendererComponent::morph,
+               {.tooltip = "Morph target (blend shape) weights 0..3 of an imported mesh", .rangeMin = -1.0f, .rangeMax = 2.0f, .speed = 0.01f})
+        .field("morph2", &MeshRendererComponent::morph2, {.tooltip = "Morph target weights 4..7", .rangeMin = -1.0f, .rangeMax = 2.0f, .speed = 0.01f})
         .field("castShadows", &MeshRendererComponent::castShadows)
         .field("visible", &MeshRendererComponent::visible)
         .field("lodBias", &MeshRendererComponent::lodBias,

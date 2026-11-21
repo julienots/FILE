@@ -1,3 +1,4 @@
+#include <cstring>
 // 3D rendering on every backend: shadows, point / spot lights, automatic
 // instancing, imported models with .agrmat materials, sky, fog, alpha modes.
 #include <array>
@@ -802,6 +803,58 @@ TEST_CASE("point light shadows: cube faces below and beside the bulb; one per fr
     CHECK(f.renderer.stats().pointShadows == 1);
     CHECK(f.renderer.stats().spotShadows == 1);
     CHECK(luminance(f.at(under)) < underOff / 3);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("morph targets: imported blend shapes deform the mesh by MeshRenderer weights") {
+    Render3DFixture f;
+    std::vector<float> fl = {-0.5f, -0.5f, 0, 0.5f, -0.5f, 0, 0.5f, 0.5f, 0, -0.5f, 0.5f, 0,  // square facing +Z
+                             2, 0, 0, 2, 0, 0, 2, 0, 0, 2, 0, 0};                             // target: 2 to the right
+    std::vector<u8> bin(fl.size() * 4 + 12);
+    std::memcpy(bin.data(), fl.data(), fl.size() * 4);
+    const u16 idx[6] = {0, 1, 2, 0, 2, 3};
+    std::memcpy(bin.data() + fl.size() * 4, idx, 12);
+    static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string enc;
+    for (usize i = 0; i < bin.size(); i += 3) {
+        const u32 n = (u32(bin[i]) << 16) | (i + 1 < bin.size() ? u32(bin[i + 1]) << 8 : 0) | (i + 2 < bin.size() ? bin[i + 2] : 0);
+        enc += b64[(n >> 18) & 63];
+        enc += b64[(n >> 12) & 63];
+        enc += i + 1 < bin.size() ? b64[(n >> 6) & 63] : '=';
+        enc += i + 2 < bin.size() ? b64[n & 63] : '=';
+    }
+    const std::string json = R"({"asset":{"version":"2.0"},"buffers":[{"byteLength":108,"uri":"data:application/octet-stream;base64,)" + enc + R"("}],
+      "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":96},{"buffer":0,"byteOffset":96,"byteLength":12}],
+      "accessors":[{"bufferView":0,"byteOffset":0,"componentType":5126,"count":4,"type":"VEC3","min":[-0.5,-0.5,0],"max":[0.5,0.5,0]},
+        {"bufferView":0,"byteOffset":48,"componentType":5126,"count":4,"type":"VEC3","min":[2,0,0],"max":[2,0,0]},
+        {"bufferView":1,"byteOffset":0,"componentType":5123,"count":6,"type":"SCALAR"}],
+      "meshes":[{"name":"Card","primitives":[{"attributes":{"POSITION":0},"indices":2,"targets":[{"POSITION":1}]}]}],
+      "nodes":[{"name":"Card","mesh":0}],"scenes":[{"nodes":[0]}],"scene":0})";
+    std::ofstream(f.root / "card.gltf") << json;
+    f.camera({1, 0, 5}, {1, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    const auto e = f.scene.createEntity("Card");
+    auto& mr = f.scene.registry().emplace<MeshRendererComponent>(e);
+    mr.model = "assets://card.gltf";
+    f.settle();
+    const ModelAsset* asset = f.models.get("assets://card.gltf");
+    REQUIRE(asset);
+    REQUIRE(asset->state == AssetState::Ready);
+    REQUIRE(asset->meshes[0].morphTargets.size() == 1);
+    CHECK(f.at({0, 0, 0}).r > 100);  // rest shape at the origin
+    CHECK(f.at({2, 0, 0}).r < 20);
+    CHECK(f.renderer.stats().morphedMeshes == 0);
+    f.scene.registry().get<MeshRendererComponent>(e).morph.x = 1.0f;
+    f.frame();
+    CHECK(f.renderer.stats().morphedMeshes == 1);
+    CHECK(f.at({0, 0, 0}).r < 20);   // moved away...
+    CHECK(f.at({2, 0, 0}).r > 100);  // ...2 units to the right
+    f.scene.registry().get<MeshRendererComponent>(e).morph.x = 0.5f;
+    f.frame();
+    CHECK(f.at({1, 0, 0}).r > 100);  // half way
+    CHECK(f.at({2.4f, 0, 0}).r < 20);
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

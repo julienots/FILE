@@ -166,6 +166,19 @@ reçu pendant qu'on se retourne) ; le nouveau fondu part de cet état. `Animatio
 - **Vitrine 3D** : la plante `sprout.glb` (4 articulations, clips *Idle* et *Dance* générés par
   `tools/generate_template_character.py`) danse quand une balle la touche (script + machine à états).
 
+## Morph targets (blend shapes)
+
+Les *morph targets* d'un glTF (visages, muscles, plis) sont importés : jusqu'à 8 cibles par maillage
+(positions et normales), avec leurs noms (`extras.targetNames`) et leurs poids par défaut, appliqués
+à l'instanciation du modèle. Les poids sont des champs du `MeshRenderer` : `morph` (cibles 0 à 3) et
+`morph2` (4 à 7), de 0 (forme de repos) à 1 (cible complète) ; on les règle dans l'inspecteur, on les
+anime dans la timeline ou depuis Lua comme n'importe quel champ.
+
+Les animations de poids du fichier (`weights`) deviennent des courbes `MeshRenderer.morph.x`... dans
+le clip importé (`modele.glb#Sourire`), mélangeables avec les autres clips par l'Animator. Le rendu
+mélange les cibles sur le CPU dans un tampon de sommets propre à l'entité (seulement quand un poids
+est non nul), compatible avec le skinning, les ombres et les niveaux de détail.
+
 ## Animation squelettique 2D (os, peaux déformées, IK)
 
 ![La chenille de la Vitrine 2D : une seule image pliée par 4 os, éclairée par le lampadaire (3 instants)](images/skeleton_2d.png)
@@ -224,7 +237,8 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 ## Limites actuelles
 
 - IK : contraintes d'angle identiques pour toutes les articulations d'une chaîne (pas de limites
-  par axe) ; pas de poids peints à la main pour les peaux 2D ; pas de *morph targets* ; au plus 128
+  par axe) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
+  (un gros maillage très déformé coûte), pas d'import FBX ; au plus 128
   articulations par maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
 - Une transition interrompue repart de son état d'arrivée (la part de l'état de départ encore visible

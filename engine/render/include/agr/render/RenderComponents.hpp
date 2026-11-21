@@ -179,6 +179,10 @@ struct MeshRendererComponent {
     std::string material;              ///< Optional .agrmat replacing every material of the mesh.
     float metallic = 0.0f;             ///< Built-in material.
     float roughness = 0.5f;            ///< Built-in material.
+    /// Morph target (blend shape) weights of an imported mesh: targets 0..3 in `morph`, 4..7 in
+    /// `morph2` (0 = rest shape, 1 = full target). Animated by imported clips and the timeline.
+    math::Vec4 morph{0.0f, 0.0f, 0.0f, 0.0f};
+    math::Vec4 morph2{0.0f, 0.0f, 0.0f, 0.0f};
     bool castShadows = true;
     /// Cartoon lighting (ShadingModel::Toon) for every material of the mesh, with the toon
     /// defaults of MaterialData; an .agrmat set to Toon keeps its own toon settings.

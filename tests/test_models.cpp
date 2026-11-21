@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 
+#include "agr/animation/AnimationSystem.hpp"
 #include "agr/assets/AssetManager.hpp"
 #include "agr/assets/Image.hpp"
 #include "agr/assets/Material.hpp"
@@ -421,4 +422,56 @@ Connections:  {
     CHECK_FALSE(importFbx(std::span<const u8>(), "assets://x.fbx"));
 }
 
+
+TEST_CASE("glTF morph targets: offsets, names, default weights and weight animations as MeshRenderer curves") {
+    std::vector<float> f = {0, 0, 0, 1, 0, 0, 0, 1, 0,   // base triangle
+                            0, 1, 0, 0, 0, 0, 0, 0, 0,   // target "Up": vertex 0 up
+                            0, 0, 0, 1, 0, 0, 0, 0, 0,   // target "Right": vertex 1 right
+                            0, 1,                        // times
+                            0, 0, 1, 0.5f};              // weights at t=0 (0, 0), t=1 (1, 0.5)
+    std::vector<u8> bin(f.size() * 4);
+    std::memcpy(bin.data(), f.data(), bin.size());
+    const std::string json = R"({"asset":{"version":"2.0"},
+      "buffers":[{"byteLength":132,"uri":"data:application/octet-stream;base64,)" + base64(bin) + R"("}],
+      "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":108},{"buffer":0,"byteOffset":108,"byteLength":24}],
+      "accessors":[
+        {"bufferView":0,"byteOffset":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]},
+        {"bufferView":0,"byteOffset":36,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[0,1,0]},
+        {"bufferView":0,"byteOffset":72,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,0,0]},
+        {"bufferView":1,"byteOffset":0,"componentType":5126,"count":2,"type":"SCALAR","min":[0],"max":[1]},
+        {"bufferView":1,"byteOffset":8,"componentType":5126,"count":4,"type":"SCALAR"}],
+      "meshes":[{"name":"Face","weights":[0.25,0],"extras":{"targetNames":["Up","Right"]},
+        "primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":1},{"POSITION":2}]}]}],
+      "nodes":[{"name":"Head","mesh":0}],"scenes":[{"nodes":[0]}],"scene":0,
+      "animations":[{"name":"Smile","channels":[{"sampler":0,"target":{"node":0,"path":"weights"}}],
+        "samplers":[{"input":3,"output":4,"interpolation":"LINEAR"}]}]})";
+    TempAssets t;
+    REQUIRE(t.vfs.writeText("assets://face.gltf", json));
+    auto m = importModel(t.vfs, "assets://face.gltf");
+    REQUIRE_MESSAGE(m, (m ? "" : m.error().message));
+    const ModelMesh& mesh = m.value().meshes[0];
+    REQUIRE(mesh.morphTargets.size() == 2);
+    CHECK(mesh.morphTargets[0].name == "Up");
+    CHECK(mesh.morphTargets[1].name == "Right");
+    CHECK(mesh.morphTargets[0].positions[0].y == doctest::Approx(1.0f));
+    CHECK(mesh.morphTargets[1].positions[1].x == doctest::Approx(1.0f));
+    REQUIRE(mesh.morphDefaults.size() == 2);
+    CHECK(mesh.morphDefaults[0] == doctest::Approx(0.25f));
+    REQUIRE(m.value().animations.size() == 1);
+    const ModelAnimationChannel& ch = m.value().animations[0].channels[0];
+    CHECK(ch.path == ModelAnimationChannel::Path::Weights);
+    CHECK(ch.weightCount == 2);
+    CHECK(ch.weights == std::vector<float>{0, 0, 1, 0.5f});
+    for (const std::string& w : m.value().warnings) CHECK_MESSAGE(w.find("morph") == std::string::npos, w);
+
+    AnimationLibrary lib(t.vfs);
+    auto clip = lib.clip("assets://face.gltf#Smile");
+    REQUIRE_MESSAGE(clip, (clip ? "" : clip.error().message));
+    const AnimationTrack* up = clip.value()->findTrack("Head", "MeshRenderer", "morph", 0);
+    const AnimationTrack* right = clip.value()->findTrack("Head", "MeshRenderer", "morph", 1);
+    REQUIRE(up);
+    REQUIRE(right);
+    CHECK(up->curve.evaluate(0.5f) == doctest::Approx(0.5f));
+    CHECK(right->curve.evaluate(1.0f) == doctest::Approx(0.5f));
+}
 }  // TEST_SUITE

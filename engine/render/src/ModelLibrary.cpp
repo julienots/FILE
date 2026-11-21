@@ -99,6 +99,14 @@ void ModelLibrary::finish(Pending& p) {
         m.lods = src.lods;
         m.bounds = src.bounds;
         m.skinned = src.skinWeights.size() == src.vertices.size() && !src.vertices.empty();
+        if (!src.morphTargets.empty()) {
+            m.morphTargets = src.morphTargets;
+            m.morphDefaults = src.morphDefaults;
+            m.baseVertices = src.vertices;
+            if (m.skinned) m.baseSkinWeights = src.skinWeights;
+            for (const ModelMorphTarget& t : src.morphTargets)
+                for (const math::Vec3& d : t.positions) m.morphReach = std::max(m.morphReach, math::length(d));
+        }
         if (m_device && !src.vertices.empty()) {
             // Skinned meshes: interleaved vertex + joints / weights (80 bytes).
             std::vector<SkinnedModelVertex> skinned;
@@ -264,6 +272,11 @@ ecs::Entity instantiateModel(Scene& scene, const ModelAsset& model, ecs::Entity 
             mr.model = model.uri;
             mr.meshIndex = n.mesh;
             mr.skin = n.skin;
+            if (static_cast<usize>(n.mesh) < model.meshes.size()) {  // the file's default blend shape weights
+                const std::vector<float>& d = model.meshes[static_cast<usize>(n.mesh)].morphDefaults;
+                float* w[8] = {&mr.morph.x, &mr.morph.y, &mr.morph.z, &mr.morph.w, &mr.morph2.x, &mr.morph2.y, &mr.morph2.z, &mr.morph2.w};
+                for (usize k = 0; k < d.size() && k < 8; ++k) *w[k] = d[k];
+            }
         }
         created[i] = e;
     }

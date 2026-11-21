@@ -37,8 +37,20 @@ struct ModelSkinWeights {
 };
 static_assert(sizeof(ModelSkinWeights) == 32);
 
+/// Blend shape: per-vertex offsets added with a weight (faces, muscles, cloth folds).
+struct ModelMorphTarget {
+    std::string name;
+    std::vector<math::Vec3> positions;  ///< One offset per vertex of the mesh.
+    std::vector<math::Vec3> normals;    ///< Empty or one per vertex.
+};
+
+/// Morph targets a mesh can blend at once (MeshRenderer.morph / morph2 hold the weights).
+inline constexpr usize kMaxMorphTargets = 8;
+
 struct ModelMesh {
     std::string name;
+    std::vector<ModelMorphTarget> morphTargets;  ///< At most kMaxMorphTargets.
+    std::vector<float> morphDefaults;            ///< Default weights (glTF mesh.weights).
     std::vector<ModelVertex> vertices;
     std::vector<ModelSkinWeights> skinWeights;  ///< Empty, or one per vertex (skinned mesh).
     std::vector<u32> indices;  ///< Triangles, counter-clockwise front faces.
@@ -69,8 +81,10 @@ struct ModelSkin {
 
 /// Animation of node transforms (imported clip).
 struct ModelAnimationChannel {
-    enum class Path : u8 { Translation, Rotation, Scale };
+    enum class Path : u8 { Translation, Rotation, Scale, Weights };
     i32 node = -1;
+    u32 weightCount = 0;  ///< Weights path: morph weights per key, in `weights` (keys x count).
+    std::vector<float> weights;
     Path path = Path::Translation;
     bool step = false;            ///< Constant between keys (else linear / spherical).
     std::vector<float> times;     ///< Seconds, increasing.
