@@ -1708,6 +1708,26 @@ void EditorApp::smokeTest(const FrameTime&) {
                   "find in files reports the file and line");
             check(m_scriptEditor.replaceAll(*m_shared, "spin", "turn") == 2 && m_shared->scriptDirty, "replace all in the script");
             m_scriptEditor.edit(*m_shared, smokeCoinScript());  // back to the saved text
+            // Static checks: a typo is flagged; every script of the game templates is clean.
+            m_scriptEditor.edit(*m_shared, "local M = {}\nfunction M:onUpdate(dt)\n    agr.lgo(slef)\nend\nreturn M\n");
+            check(m_scriptEditor.warnings().size() == 2 && m_scriptEditor.warnings()[0].line == 3, "unknown names are flagged on their line");
+            m_scriptEditor.edit(*m_shared, smokeCoinScript());
+            if (auto* sp = m_engine->service<ScriptPlugin>()) {
+                usize scripts = 0, warnings = 0;
+                std::error_code lintEc;
+                const fs::path templates = fs::path(m_options.resourcesDir) / "templates" / "assets";
+                for (auto it = fs::recursive_directory_iterator(templates, lintEc); !lintEc && it != fs::recursive_directory_iterator(); it.increment(lintEc)) {
+                    if (it->path().extension() != ".lua") continue;
+                    std::ifstream in(it->path());
+                    const std::string code((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                    ++scripts;
+                    for (const auto& w : sp->scripts()->lint(code, it->path().filename().string())) {
+                        ++warnings;
+                        AGR_LOG_WARN("SmokeTest", "{}:{}: {}", it->path().filename().string(), w.line, w.message);
+                    }
+                }
+                check(scripts > 10 && warnings == 0, "the game templates' scripts have no lint warning");
+            }
             // Outline and go to definition (in another script: it opens in a second tab).
             const auto defs = ScriptEditorPanel::definitions(smokeCoinScript());
             check(defs.size() == 1 && defs[0].name == "Coin:onUpdate" && defs[0].line == 2, "the outline lists the functions");

@@ -288,10 +288,13 @@ void ScriptEditorPanel::open(EditorShared& s, const std::string& uri) {
 void ScriptEditorPanel::check(EditorShared& s) {
     m_pendingCheck = false;
     m_error.reset();
+    m_warnings.clear();
     auto* plugin = s.engine.service<ScriptPlugin>();
     if (!plugin || !plugin->scripts() || m_uri.empty()) return;
     const std::string name = m_uri.substr(m_uri.find_last_of('/') + 1);
     m_error = plugin->scripts()->checkSyntax(m_text, name);
+    m_warnings.clear();
+    if (!m_error) m_warnings = plugin->scripts()->lint(m_text, name);
 }
 
 void ScriptEditorPanel::edit(EditorShared& s, std::string text) {
@@ -330,11 +333,13 @@ void ScriptEditorPanel::drawCode(EditorShared& s, float height) {
     const int last = std::min(lines, first + static_cast<int>(ImGui::GetWindowHeight() / lineH) + 3);
     for (int i = first; i < last; ++i) {
         const bool error = m_error && m_error->line == i + 1;
+        const bool warning = !error && std::any_of(m_warnings.begin(), m_warnings.end(), [&](const auto& w) { return w.line == i + 1; });
         std::snprintf(buf, sizeof buf, "%d", i + 1);
         const float y = origin.y + style.FramePadding.y + static_cast<float>(i) * lineH;
         if (error) dl->AddRectFilled({origin.x, y}, {origin.x + gutter - style.ItemSpacing.x * 0.5f, y + lineH}, IM_COL32(200, 60, 60, 90));
+        if (warning) dl->AddRectFilled({origin.x, y}, {origin.x + gutter - style.ItemSpacing.x * 0.5f, y + lineH}, IM_COL32(210, 153, 34, 80));
         dl->AddText({origin.x + gutter - style.ItemSpacing.x - ImGui::CalcTextSize(buf).x, y},
-                    error ? palette::kError : (i + 1 == m_cursorLine ? palette::kText : palette::kTextMuted), buf);
+                    error ? palette::kError : warning ? palette::kWarning : (i + 1 == m_cursorLine ? palette::kText : palette::kTextMuted), buf);
     }
     ImGui::SetCursorScreenPos({origin.x + gutter, origin.y});
     float width = ImGui::GetContentRegionAvail().x;
@@ -729,7 +734,20 @@ void ScriptEditorPanel::draw(EditorShared& s) {
     ImGui::EndDisabled();
     ImGui::SameLine();
     if (m_error) ImGui::TextColored(palette::toVec4(palette::kError), "Ligne %d : %s", m_error->line, m_error->message.c_str());
-    else ImGui::TextColored(palette::toVec4(palette::kSuccess), "Syntaxe correcte");
+    else if (!m_warnings.empty()) {
+        ImGui::TextColored(palette::toVec4(palette::kWarning), "Ligne %d : %s%s", m_warnings[0].line, m_warnings[0].message.c_str(),
+                           m_warnings.size() > 1 ? (" (+" + std::to_string(m_warnings.size() - 1) + ")").c_str() : "");
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            for (const auto& w : m_warnings) ImGui::Text("Ligne %d : %s", w.line, w.message.c_str());
+            ImGui::EndTooltip();
+        }
+        if (ImGui::IsItemClicked()) {
+            m_gotoLine = m_warnings[0].line;
+            m_refocus = true;
+        }
+    } else
+        ImGui::TextColored(palette::toVec4(palette::kSuccess), "Syntaxe correcte");
     {  // outline: the functions of the file
         const std::vector<Definition> defs = definitions(m_text);
         ImGui::SameLine();

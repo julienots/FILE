@@ -173,6 +173,10 @@ public:
         std::string message;
     };
     std::optional<SyntaxError> checkSyntax(std::string_view code, const std::string& name = "script");
+    /// Static checks of a script that compiles (empty if it does not): reads of global names that
+    /// neither Lua, the engine (agr...) nor the script itself define (typos such as `slef`), and
+    /// `agr.x.y` paths missing from the live API. Found in the compiled bytecode (exact lines).
+    std::vector<SyntaxError> lint(std::string_view code, const std::string& name = "script");
     /// Runs a chunk in the sandbox (tests, console). Returns the error message on failure.
     Status run(std::string_view code, Scene* scene = nullptr);
     /// The `self` table of an entity's script as a debug string of its fields (tests, inspector).

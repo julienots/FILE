@@ -100,6 +100,7 @@ public:
     void draw(EditorShared& s);
     const std::string& uri() const { return m_uri; }
     const std::optional<ScriptEngine::SyntaxError>& error() const { return m_error; }
+    const std::vector<ScriptEngine::SyntaxError>& warnings() const { return m_warnings; }
     /// Replaces the code as if typed (automated tests) and checks it at once.
     void edit(EditorShared& s, std::string text);
     bool save(EditorShared& s);
@@ -117,6 +118,7 @@ private:
     void drawCode(EditorShared& s, float height);
     std::string m_uri, m_text, m_saved, m_afterUri, m_clickedSuggestion;
     std::optional<ScriptEngine::SyntaxError> m_error;
+    std::vector<ScriptEngine::SyntaxError> m_warnings;  ///< Static checks (unknown names), when it compiles.
     bool m_pendingCheck = false, m_askSave = false, m_followCursor = false, m_refocus = false;
     bool m_hideUntilEdit = false, m_suggestionsDirty = false;
     f64 m_editTime = 0.0;

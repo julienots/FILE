@@ -1270,3 +1270,32 @@ return F
 }
 
 }
+
+TEST_CASE("lint: unknown globals and missing agr paths, with their lines; clean scripts pass") {
+    ScriptFixture f;
+    const std::string good = "local M = { properties = { speed = 2 } }\n"
+                             "function M:onUpdate(dt)\n"
+                             "    local p = self.entity\n"
+                             "    agr.log(math.floor(self.speed * dt), tostring(p))\n"
+                             "    helper()\n"
+                             "end\n"
+                             "function helper() end\n"
+                             "return M\n";
+    CHECK(f.scripts.lint(good).empty());
+    const std::string bad = "local M = {}\n"
+                            "function M:onUpdate(dt)\n"
+                            "    slef.x = 1\n"
+                            "    agr.lgo('typo')\n"
+                            "    agr.log(undefinedThing)\n"
+                            "end\n"
+                            "return M\n";
+    const auto w = f.scripts.lint(bad, "bad.lua");
+    REQUIRE(w.size() == 3);
+    CHECK(w[0].line == 3);
+    CHECK(w[0].message.find("slef") != std::string::npos);
+    CHECK(w[1].line == 4);
+    CHECK(w[1].message.find("agr.lgo") != std::string::npos);
+    CHECK(w[2].line == 5);
+    CHECK(w[2].message.find("undefinedThing") != std::string::npos);
+    CHECK(f.scripts.lint("local x = = 1").empty());  // syntax errors are checkSyntax's job
+}

@@ -230,6 +230,11 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
   Échap ferme la liste ;
 - indentation automatique après `then`, `do`, `else`, `function(...)`, `{` ;
 - colonne **API** : l'arbre de `agr` et des méthodes d'entité, un clic insère le nom ;
+- **analyse statique** (après la syntaxe) : les noms globaux lus mais définis nulle part (`slef`, une
+  variable locale oubliée) et les chemins `agr.x.y` absents de l'API réellement chargée (`agr.lgo`)
+  sont signalés en ambre, à leur ligne (gouttière, barre d'état, liste au survol, clic = aller à la
+  ligne). L'analyse lit le bytecode compilé de Lua (lignes exactes) ; les scripts des modèles de jeu
+  n'en déclenchent aucune (vérifié par le test de bout en bout) ;
 - **onglets** : chaque script ouvert a son onglet (astérisque si modifié, texte gardé en mémoire en
   passant d'un onglet à l'autre ; fermer un onglet modifié demande d'enregistrer) ;
 - liste **Fonctions...** du fichier (`function a:b(`, `nom = function(`) pour y sauter ; **F12** sur
@@ -276,7 +281,8 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 
 ## Limites actuelles
 
-- Éditeur intégré : la complétion ne connaît pas les types (une variable locale n'est pas suivie
+- Analyse statique : noms globaux et chemins `agr.` seulement (pas les champs de `self`, ni les
+  méthodes d'entité, ni les types) ; éditeur intégré : la complétion ne connaît pas les types (une variable locale n'est pas suivie
   jusqu'à sa table) ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
 - Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche

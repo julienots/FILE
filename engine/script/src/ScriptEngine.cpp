@@ -1,9 +1,18 @@
 #include <algorithm>
+#include <cstring>
+#include <unordered_set>
 #include <cstdio>
 
 #include <nlohmann/json.hpp>
 
 #include "ScriptInternal.hpp"
+
+#include "lstate.h"
+#include "lobject.h"
+#include "lopcodes.h"
+#include "lfunc.h"
+#include "ldebug.h"
+#include "lstring.h"
 #include "agr/script/LogicGraph.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/core/Profiler.hpp"
@@ -688,6 +697,88 @@ std::optional<ScriptEngine::SyntaxError> ScriptEngine::checkSyntax(std::string_v
         }
     }
     return e;
+}
+
+namespace {
+/// Instructions of a function and its nested functions.
+template <typename Fn>
+void forEachProto(const Proto* p, Fn&& fn) {
+    fn(p);
+    for (int i = 0; i < p->sizep; ++i) forEachProto(p->p[i], fn);
+}
+std::string kString(const Proto* p, int k) {
+    if (k < 0 || k >= p->sizek || !ttisstring(&p->k[k])) return {};
+    return getstr(tsvalue(&p->k[k]));
+}
+bool isEnv(const Proto* p, int upvalue) {
+    return upvalue >= 0 && upvalue < p->sizeupvalues && p->upvalues[upvalue].name && std::strcmp(getstr(p->upvalues[upvalue].name), "_ENV") == 0;
+}
+} // namespace
+
+std::vector<ScriptEngine::SyntaxError> ScriptEngine::lint(std::string_view code, const std::string& name) {
+    std::vector<SyntaxError> out;
+    lua_State* L = m->L;
+    const std::string chunk = "=" + name;
+    if (luaL_loadbufferx(L, code.data(), code.size(), chunk.c_str(), "t") != LUA_OK) {
+        lua_pop(L, 1);
+        return out;
+    }
+    const LClosure* cl = clLvalue(s2v(L->top.p - 1));
+    // Globals the script assigns somewhere count as defined.
+    std::unordered_set<std::string> written;
+    forEachProto(cl->p, [&](const Proto* p) {
+        for (int pc = 0; pc < p->sizecode; ++pc) {
+            const Instruction i = p->code[pc];
+            if (GET_OPCODE(i) == OP_SETTABUP && isEnv(p, GETARG_A(i))) written.insert(kString(p, GETARG_B(i)));
+        }
+    });
+    auto defined = [&](const std::string& global) {
+        if (written.count(global)) return true;
+        lua_getglobal(L, global.c_str());
+        const bool ok = !lua_isnil(L, -1);
+        lua_pop(L, 1);
+        return ok;
+    };
+    std::unordered_set<std::string> reported;
+    forEachProto(cl->p, [&](const Proto* p) {
+        for (int pc = 0; pc < p->sizecode; ++pc) {
+            const Instruction i = p->code[pc];
+            if (GET_OPCODE(i) != OP_GETTABUP || !isEnv(p, GETARG_B(i))) continue;
+            const std::string global = kString(p, GETARG_C(i));
+            if (global.empty()) continue;
+            const int line = luaG_getfuncline(p, pc);
+            if (!defined(global)) {
+                if (reported.insert(global + "@" + std::to_string(line)).second)
+                    out.push_back({line, "'" + global + "' n'est défini nulle part (faute de frappe ? variable locale oubliée ?)"});
+                continue;
+            }
+            if (global != "agr") continue;
+            // agr.a.b...: the GETFIELD chain right after, checked against the live tables.
+            std::string path = "agr";
+            lua_getglobal(L, "agr");
+            int reg = GETARG_A(i);
+            for (int q = pc + 1; q < p->sizecode; ++q) {
+                const Instruction n = p->code[q];
+                if ((GET_OPCODE(n) != OP_GETFIELD && GET_OPCODE(n) != OP_SELF) || GETARG_B(n) != reg) break;
+                const std::string key = GET_OPCODE(n) == OP_SELF ? (TESTARG_k(n) ? kString(p, GETARG_C(n)) : std::string()) : kString(p, GETARG_C(n));
+                if (key.empty() || !lua_istable(L, -1)) break;
+                lua_getfield(L, -1, key.c_str());
+                lua_remove(L, -2);
+                path += "." + key;
+                if (lua_isnil(L, -1)) {
+                    const int l = luaG_getfuncline(p, q);
+                    if (reported.insert(path + "@" + std::to_string(l)).second) out.push_back({l, "'" + path + "' n'existe pas dans l'API"});
+                    break;
+                }
+                reg = GETARG_A(n);
+                if (GET_OPCODE(n) == OP_SELF) break;
+            }
+            lua_pop(L, 1);
+        }
+    });
+    lua_pop(L, 1);  // the chunk
+    std::sort(out.begin(), out.end(), [](const SyntaxError& a, const SyntaxError& b) { return a.line < b.line; });
+    return out;
 }
 
 } // namespace agr
