@@ -6,12 +6,36 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.8.0 (versionCode 41), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.7.0 : elle s'installe par-dessus). SHA-256 : `db5184ad0016a076740f2c38b9947976173f08009ed81d9a7e3fbbafe3f3638e`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.8.1 (versionCode 42), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.8.0 : elle s'installe par-dessus). SHA-256 : `9f73bc984e7996f6987acaf6b4fcfd1c036b1a02eef6c2de8133dc779a9671a3`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Correctifs 2.8.1 (Terres d'Aurore refaites en réaliste)
+
+Retour reçu sur la 2.8.0 : « l'île n'est pas réaliste, trop bleue, mal faite ». En effet, tout y était cyan : l'herbe, les arbres, les champignons, les cristaux, et même le dessus des îles flottantes.
+
+- **La région devient une île nordique volcanique**, dans l'esprit de l'Islande :
+  - mousse vert sombre et herbe sèche dorée ;
+  - roche de lave nue par endroits ;
+  - bouleaux argentés, quelques pins dans les creux, rochers moussus, fougères et buissons ;
+  - de rares affleurements de quartz blanc ou fumé, à peine lumineux.
+  Les champignons géants et les cristaux violets et cyan ont été retirés. La lumière est froide et propre, sans dominante violette, et la météo est celle d'une île du nord (ciel clair, brume de mer, averses). Les aurores restent la nuit.
+- **Arbre de la région** : c'est maintenant un bouleau d'aurore, avec un tronc blanc argenté marqué de lenticelles sombres, des branches fines et un feuillage vert ou doré naturel. Il remplace l'arbre cyan à fruits lumineux.
+- **Îles flottantes refaites**, comme des blocs arrachés au sol :
+  - un contour irrégulier ;
+  - un dessus bosselé de mousse et d'herbe sèche avec des plaques de terre nue ;
+  - une couche de terre brune, puis de la roche en strates qui s'affine jusqu'à un éperon ;
+  - 16 racines qui pendent du bord ;
+  - quelques quartz dans la roche ;
+  - sur le dessus, un bouleau, des rochers et des buissons, en plus du coffre et de la veine de cristal d'aurore.
+- **Geysers refaits en vraies sources chaudes** : des terrasses de dépôts minéraux crème et ocre, un bassin bleu-vert clair, des pierres mouillées et deux panaches de vapeur. L'ancien bassin turquoise lumineux a disparu.
+- **Cristal d'aurore** : les teintes sont plus douces (aqua pâle à lilas) et la lueur moins forte, sur une roche sombre.
+- **Village** : les maisons de Lumenhaven sont des maisons longues nordiques (avant : maisons à dôme du désert).
+- **Vérifié sur ordinateur** : le scénario `aurora` réussit toujours (éjection par le geyser à 16,7 m, atterrissage sur l'île, coffre, chute, source libre, Aïla). Les tests unitaires et le scénario `newgame` réussissent aussi. Lumenhaven passe de 778 k à 747 k triangles.
+- **Non vérifié** : rien n'a été essayé sur un téléphone. Le dessous des îles reste sombre vu d'en bas : il est à l'ombre.
 
 ### Nouveautés 2.8.0 (nouvelle région : les Terres d'Aurore ; palmiers refaits)
 

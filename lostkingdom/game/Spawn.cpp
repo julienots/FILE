@@ -210,14 +210,14 @@ void Game::buildSharedMeshes() {
             case NodeType::Crystal: b.flat = true; for (int i = 0; i < 5; i++) { vec3 d = normalize(vec3(r.range(-0.5f, 0.5f), 1, r.range(-0.5f, 0.5f))); b.cone({r.range(-0.2f, 0.2f), 0, r.range(-0.2f, 0.2f)}, d * r.range(0.6f, 1.1f), 0.14f, Mat(hexColor(0x9ad8ff), 0.1f, 0, 2.5f), 5); } break;
             case NodeType::AuroraCrystal: {   // 2.8.0 a cluster of glowing hexagonal crystals, turquoise to violet, on a pale rock
                 b.flat = true;
-                b.rock({0, 0.1f, 0}, vec3(0.55f, 0.28f, 0.5f), Mat(hexColor(0xb8c8d0), 0.6f), r.next(), 0);
+                b.rock({0, 0.1f, 0}, vec3(0.55f, 0.28f, 0.5f), Mat(hexColor(0x6a6660), 0.85f), r.next(), 0);
                 for (int i = 0; i < 7; i++) {
                     vec3 d = normalize(vec3(r.range(-0.6f, 0.6f), 1, r.range(-0.6f, 0.6f)));
                     float l = r.range(0.6f, 1.5f) * (i == 0 ? 1.4f : 1.f);
-                    vec3 col = lerp(hexColor(0x40f0d8), hexColor(0xb070ff), r.f());
+                    vec3 col = lerp(hexColor(0x9ae8dc), hexColor(0xc4a8f0), r.f());   // pale aqua to lilac, a soft inner light
                     vec3 base{r.range(-0.3f, 0.3f), 0.05f, r.range(-0.3f, 0.3f)};
-                    b.tube(base, base + d * l * 0.8f, 0.13f, 0.11f, Mat(col, 0.08f, 0, 2.6f), 6, false);
-                    b.cone(base + d * l * 0.8f, base + d * l, 0.12f, Mat(col * 1.2f, 0.06f, 0, 3.2f), 6);
+                    b.tube(base, base + d * l * 0.8f, 0.13f, 0.11f, Mat(col, 0.1f, 0, 1.1f), 6, false);
+                    b.cone(base + d * l * 0.8f, base + d * l, 0.12f, Mat(col * 1.1f, 0.08f, 0, 1.5f), 6);
                 }
                 b.flat = false;
                 break;

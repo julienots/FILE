@@ -613,7 +613,7 @@ void World::buildPlan() {
             if (p.type == PoiType::Village && reg == R_AMBER) { desertTown(); break; }
             if (p.type == PoiType::Village && reg == R_CORAL) { coastTown(); break; }
             S(S_WELL, p.pos, 0, pi);
-            int house = reg == R_AURORA ? S_DOMEHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
+            int house = reg == R_AURORA ? S_LONGHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
             int n = p.type == PoiType::Village ? 9 : 6;
             ring(n, p.radius * 0.62f, [&](int i) {
                 if (i == 0) return (int)S_INN;
@@ -1354,7 +1354,7 @@ bool World::skyDeck(vec3 p, float& deckY) const {
                 if (s.kind != S_SKYISLAND) continue;
                 float deck = s.variant / 100.f;
                 float d = length(vec2(p.x, p.z) - s.pos);
-                if (d < SKY_ISLAND_R * 0.93f && p.y >= deck - 0.7f) { float y = deck + 0.3f * (1.f - d / SKY_ISLAND_R); if (!found || y > deckY) deckY = y; found = true; }
+                if (d < SKY_ISLAND_R * 0.93f && p.y >= deck - 0.7f) { float q = d / SKY_ISLAND_R; float y = deck + 0.4f * (1.f - q * q); if (!found || y > deckY) deckY = y; found = true; }
             }
         }
     return found;
@@ -1423,8 +1423,9 @@ static const std::vector<ScatterEntry>& scatterTable(int r) {
         {{P_ACACIA, 0.7f, 0.9f, 1.5f, true}, {P_BIRCH, 0.4f, 0.8f, 1.2f, true}, {P_BOULDER, 0.9f, 0.7f, 1.6f, true}, {P_ROCK, 1.2f, 0.6f, 1.5f, true}, {P_DRYBUSH, 1.6f, 0.7f, 1.3f, false}, {P_STANDSTONE, 0.12f, 0.9f, 1.3f, true}, {P_HAYBALE, 0.1f, 1, 1, true}, {P_FLOWERS, 1.4f, 0.8f, 1.3f, false}, {P_BONES, 0.1f, 0.8f, 1.1f, false}},
         // 2.4.0 Emerald Jungle: giant canopy trees, banana plants, ferns everywhere, willows by the water, mossy ruins
         {{P_ELDERTREE, 2.4f, 1.0f, 1.6f, true}, {P_BANANA, 2.2f, 0.9f, 1.4f, true}, {P_PALM, 0.8f, 0.9f, 1.4f, true}, {P_FERN, 5.f, 0.9f, 1.6f, false}, {P_TROPBUSH, 3.f, 0.9f, 1.5f, false}, {P_WILLOW, 0.6f, 0.9f, 1.3f, true}, {P_GIANTSHROOM, 0.3f, 0.7f, 1.2f, true}, {P_RUINCOLUMN, 0.12f, 0.8f, 1.2f, true}, {P_LOG, 0.5f, 0.9f, 1.3f, true}, {P_SMALLSHROOMS, 0.8f, 0.8f, 1.3f, false}},
-        // 2.8.0 Lands of Aurora: crystal-leaf trees, aurora spires, glowing giant mushrooms, crystal shards, ferns
-        {{P_CRYSTALTREE, 2.6f, 0.8f, 1.4f, true}, {P_AURORASPIRE, 0.7f, 0.7f, 1.5f, true}, {P_GIANTSHROOM, 1.0f, 0.8f, 1.6f, true}, {P_MAGICCRYSTAL, 1.2f, 0.6f, 1.3f, true}, {P_FERN, 2.f, 0.8f, 1.3f, false}, {P_BIRCH, 0.4f, 0.8f, 1.2f, true}, {P_ROCK, 0.8f, 0.6f, 1.4f, true}, {P_SMALLSHROOMS, 1.f, 0.8f, 1.3f, false}},
+        // 2.8.0 (reworked) Lands of Aurora, a northern volcanic island: silver aurora birches, mossy boulders, pines
+        // in the hollows, ferns and heather, and here and there an outcrop of pale quartz
+        {{P_CRYSTALTREE, 2.4f, 0.8f, 1.3f, true}, {P_BIRCH, 1.2f, 0.8f, 1.2f, true}, {P_PINE, 0.6f, 0.7f, 1.1f, true}, {P_BOULDER, 0.9f, 0.6f, 1.4f, true}, {P_ROCK, 1.4f, 0.6f, 1.5f, true}, {P_AURORASPIRE, 0.22f, 0.6f, 1.2f, true}, {P_FERN, 2.2f, 0.8f, 1.3f, false}, {P_BUSH, 1.2f, 0.7f, 1.2f, false}, {P_SMALLSHROOMS, 0.4f, 0.8f, 1.2f, false}},
     };
     return T[r];
 }
@@ -1490,7 +1491,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 case R_AMBER: wSand += w * (0.82f + 0.16f * smoothstepf(0.35f, 0.7f, n1)); wRock += w * smoothstepf(0.62f, 0.85f, n2) * 0.45f; wDirt += w * smoothstepf(0.7f, 0.9f, n1) * 0.18f; break;
                 case R_STEPPE: wDirt += w * smoothstepf(0.66f, 0.86f, n1) * 0.35f; wRock += w * smoothstepf(0.7f, 0.9f, n2) * 0.25f; break;
                 case R_JUNGLE: wMud += w * smoothstepf(0.5f, 0.75f, n1) * 0.4f; wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;
-                case R_AURORA: wRock += w * smoothstepf(0.68f, 0.86f, n1) * 0.3f; wSnow += w * smoothstepf(0.8f, 0.92f, n2) * 0.25f; break;   // 2.8.0 pale crystal dust
+                case R_AURORA: wRock += w * smoothstepf(0.62f, 0.84f, n1) * 0.35f; wDirt += w * smoothstepf(0.7f, 0.88f, n2) * 0.25f; break;   // 2.8.0 moss over lava rock, bare patches
                 case R_CORAL: wSand += w * (1.f - smoothstepf(0.9f, 3.0f, y)) * 0.92f; wDirt += w * smoothstepf(0.68f, 0.85f, n2) * 0.22f; wMud += w * smoothstepf(0.75f, 0.9f, n1) * 0.12f; break;
                 }
             }
@@ -2369,7 +2370,7 @@ void World::buildFarMesh(MeshBuilder& b, int res) const {
                 float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
                               std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
                 RegionWeights rw = regionAt(x, z);
-                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x4a9a9a};
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x5e7a48};
                 c = vec3(0);
                 for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
                 c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
@@ -2415,7 +2416,7 @@ void World::generateMapImage() {
             float x = (i + 0.5f) * s, z = (j + 0.5f) * s;
             float h = hh[(size_t)j * R + i];
             RegionWeights rw = regionAt(x, z);
-            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x5ac0b8)};
+            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x7a9a62)};
             vec3 c(0);
             for (int r = 0; r < R_COUNT; r++) c += rc[r] * rw.w[r];
             float hx = hh[(size_t)j * R + std::min(R - 1, i + 1)] - h, hz = hh[(size_t)std::min(R - 1, j + 1) * R + i] - h;
