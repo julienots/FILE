@@ -63,6 +63,8 @@ private:
         bool complete = true;  ///< The path reaches the destination (else: as close as possible).
         math::Vec3 destination{0.0f};
         math::Vec3 velocity{0.0f};  ///< Last move (avoidance).
+        float stuckTime = 0.0f;     ///< Seconds the avoidance made no progress toward the next corner.
+        float ghostTime = 0.0f;     ///< > 0: follows its path through the other agents (unjams crowds).
     };
     bool uses3D(Scene& scene, ecs::Entity e) const;
     u64 geometryHash(Scene& scene) const;

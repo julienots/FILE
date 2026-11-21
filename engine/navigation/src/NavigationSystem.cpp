@@ -526,7 +526,8 @@ void NavigationSystem::update(Scene& s, float dt) {
         const Vec2 me = planar(pos, a.use3D);
         const float r = std::max(comp->radius, 0.01f);
         std::vector<const Body*> near;
-        if (comp->avoidance)
+        a.ghostTime = std::max(0.0f, a.ghostTime - dt);
+        if (comp->avoidance && a.ghostTime <= 0.0f)
             for (const Body& b : bodies) {
                 if (b.key == e.packed() || b.use3D != a.use3D) continue;
                 if (math::length(b.p - me) < r + b.r + speed * 1.5f + math::length(b.v) * 1.5f) near.push_back(&b);
@@ -572,7 +573,8 @@ void NavigationSystem::update(Scene& s, float dt) {
                     float best = 1e9f;
                     for (const Body* b : near) {
                         const Vec2 rel = b->p - me;
-                        const Vec2 w = b->agent ? v * 2.0f - current - b->v : v - b->v;  // reciprocal for agents
+                        // Reciprocal for moving agents (they take half of the turn); standing ones are obstacles.
+                        const Vec2 w = b->agent && b->moving ? v * 2.0f - current - b->v : v - b->v;
                         const float R = r + b->r;
                         const float c = math::dot(rel, rel) - R * R;
                         if (c < 0.0f) {  // already overlapping: only moving apart is fine
@@ -607,6 +609,14 @@ void NavigationSystem::update(Scene& s, float dt) {
                     for (float f : {1.0f, 0.5f}) consider(Vec2{std::cos(ang), std::sin(ang)} * speed * f);
                 }
                 const Vec2 moved = me + bestV * dt;
+                // Jammed (blocked by agents that are blocked too): after 1 s without progress
+                // toward the corner, walk the path through them for 0.75 s.
+                const float progress = dist > 1e-6f ? math::dot(moved - me, toTarget / dist) : 0.0f;
+                a.stuckTime = progress < speed * dt * 0.1f ? a.stuckTime + dt : 0.0f;
+                if (a.stuckTime > 1.0f) {
+                    a.stuckTime = 0.0f;
+                    a.ghostTime = 0.75f;
+                }
                 if (a.use3D) {
                     Vec3 p3{moved.x, pos.y, moved.y};
                     Vec3 onMesh;

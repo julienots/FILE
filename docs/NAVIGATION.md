@@ -62,8 +62,10 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
 - **Évitement** (`NavAgent.avoidance`, actif par défaut, `radius`) : chaque agent choisit à chaque
   image une vitesse parmi 34 essais (la sienne, l'arrêt, 16 directions × 2 vitesses) en pénalisant
   l'écart avec la vitesse voulue, les changements brusques et le **temps avant collision** avec ses
-  voisins ; entre agents, chacun prend la moitié de l'écart (principe RVO), si bien que deux agents
-  face à face se croisent sans se toucher. Les vitesses qui mènent dans un mur (grille 2D) sont
+  voisins ; entre agents en mouvement, chacun prend la moitié de l'écart (principe RVO), si bien que
+  deux agents face à face se croisent sans se toucher ; un agent à l'arrêt est un obstacle fixe. Un
+  agent qui ne progresse plus pendant 1 s (foule bloquée, cercle d'agents immobiles) suit son chemin
+  en traversant les autres pendant 0,75 s, puis reprend l'évitement. Les vitesses qui mènent dans un mur (grille 2D) sont
   écartées, et en 3D l'agent est ramené sur le maillage. Sans voisin proche, le chemin est suivi
   exactement. Désactivé, les agents se traversent (`stats().avoiding` compte les agents qui ont dévié).
 - **`NavObstacle`** (`radius`) : un rocher qui roule, une créature sans `NavAgent`, une porte fermée.

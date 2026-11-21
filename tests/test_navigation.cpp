@@ -364,4 +364,33 @@ TEST_CASE("static imported models and Mesh colliders are walkable sources") {
     nav.rebuild(s);
     CHECK(nav.mesh().empty());
 }
+
+TEST_CASE("crowds: an agent blocked by a closed ring of standing agents gets through instead of jamming") {
+    registerAll();
+    Scene s;
+    box2(s, {0, 30}, {1, 1});
+    auto spawn = [&](const char* name, Vec3 at) {
+        const auto e = s.createEntity(name);
+        s.registry().get<TransformComponent>(e).position = at;
+        auto& a = s.registry().emplace<NavAgentComponent>(e);
+        a.speed = 3.0f;
+        a.radius = 0.5f;
+        a.plane = NavPlane::Grid2D;
+        return e;
+    };
+    for (int k = 0; k < 8; ++k) {  // standing agents, shoulder to shoulder around the goal
+        const float ang = 6.2831853f * static_cast<float>(k) / 8.0f;
+        spawn("Guard", {std::cos(ang) * 1.1f, std::sin(ang) * 1.1f, 0});
+    }
+    const auto walker = spawn("Walker", {-6, 0, 0});
+    s.updateTransforms();
+    NavigationSystem nav;
+    REQUIRE(nav.navigateTo(s, walker, {0, 0, 0}));
+    for (int i = 0; i < 600 && nav.status(walker) == NavStatus::Moving; ++i) {
+        nav.update(s, 1.0f / 60.0f);
+        s.updateTransforms();
+    }
+    CHECK(nav.status(walker) == NavStatus::Arrived);
+    CHECK(std::hypot(position(s, walker).x, position(s, walker).y) < 0.5f);
+}
 }
