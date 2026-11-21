@@ -52,6 +52,8 @@ void registerPhysics2DComponents() {
     reg.add<TilemapCollider2DComponent>("TilemapCollider2D")
         .category("Physics 2D")
         .description("Static collision for the painted cells of the Tilemap.")
+        .field("oneWayTiles", &TilemapCollider2DComponent::oneWayTiles, {.tooltip = "Tiles that are one-way platforms (frame indices: \"12,13\")"})
+        .field("slopeTiles", &TilemapCollider2DComponent::slopeTiles, {.tooltip = "Slope tiles: \"20:/,21:\\\" (/ rises to the right)"})
         .field("friction", &TilemapCollider2DComponent::friction, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("restitution", &TilemapCollider2DComponent::restitution, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("layer", &TilemapCollider2DComponent::layer, {.tooltip = "Collision layer (0..31)", .flags = FieldFlag_Layer, .rangeMin = 0.0f, .rangeMax = 31.0f})

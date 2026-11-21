@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <vector>
 
 #include "agr/math/Math.hpp"
@@ -78,6 +79,12 @@ struct CharacterController2DComponent {
 /// Static collision for every painted cell of the Tilemap on the same entity
 /// (cells merged into horizontal runs).
 struct TilemapCollider2DComponent {
+    /// Frames (tile indices, comma-separated) that are one-way platforms: jumped through from
+    /// below, stood on from above ("12,13").
+    std::string oneWayTiles;
+    /// Slope tiles: "frame:/" rises to the right (+x), "frame:\" rises to the left; ',' between
+    /// entries ("20:/,21:\"). The triangle fills the cell under the diagonal.
+    std::string slopeTiles;
     float friction = 0.6f;
     float restitution = 0.0f;
     i32 layer = 0;

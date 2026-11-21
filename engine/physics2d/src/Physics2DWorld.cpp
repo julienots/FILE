@@ -287,6 +287,7 @@ struct Physics2DWorld::Impl {
                 }
                 if (const auto* tc = reg.tryGet<TilemapCollider2DComponent>(c)) {
                     h = mixf(mixf(h, tc->friction), tc->restitution);
+                    h = mix(mix(h, std::hash<std::string>{}(tc->oneWayTiles)), std::hash<std::string>{}(tc->slopeTiles));
                     h = mix(mix(h, static_cast<u64>(tc->layer & 31)), tc->collidesWith);
                     if (const auto* tm = reg.tryGet<TilemapComponent>(c)) h = mix(h, tilesHash(*tm));
                 }
@@ -649,19 +650,65 @@ struct Physics2DWorld::Impl {
             sd.isSensor = false;
             sd.filter = filterOf(tc->layer, tc->collidesWith);
             const float cw = tm->cellSize.x * scale.x, ch = tm->cellSize.y * scale.y;
+            // Tile kinds: 0 solid, 1 one-way, 2 slope rising right, 3 slope rising left.
+            std::unordered_map<i32, int> kinds;
+            {
+                std::string cur;
+                for (char c : tc->oneWayTiles + ",") {
+                    if (c == ',' || c == ';') {
+                        if (!cur.empty()) kinds[std::atoi(cur.c_str())] = 1;
+                        cur.clear();
+                    } else if (c != ' ') {
+                        cur += c;
+                    }
+                }
+                for (char c : tc->slopeTiles + ",") {
+                    if (c == ',' || c == ';') {
+                        const usize colon = cur.find(':');
+                        if (colon != std::string::npos && colon + 1 < cur.size())
+                            kinds[std::atoi(cur.substr(0, colon).c_str())] = cur[colon + 1] == '/' ? 2 : 3;
+                        cur.clear();
+                    } else if (c != ' ') {
+                        cur += c;
+                    }
+                }
+            }
+            auto kindAt = [&](u32 x, u32 y) {
+                const i32 id = tm->tileAt(x, y);
+                if (id < 0) return -1;
+                auto it = kinds.find(id);
+                return it == kinds.end() ? 0 : it->second;
+            };
+            const Vec2 up = rotate({0.0f, 1.0f}, rel.angle);
             for (u32 y = 0; y < tm->height; ++y) {
                 u32 x = 0;
                 while (x < tm->width) {
-                    if (tm->tileAt(x, y) < 0) {
+                    const int kind = kindAt(x, y);
+                    if (kind < 0) {
+                        ++x;
+                        continue;
+                    }
+                    if (kind >= 2) {  // slope: one triangle per cell
+                        const float x0 = static_cast<float>(x) * cw, x1 = x0 + cw, y0 = static_cast<float>(y) * ch, y1 = y0 + ch;
+                        const Vec2 tri[3] = {{x0, y0}, {x1, y0}, kind == 2 ? Vec2{x1, y1} : Vec2{x0, y1}};
+                        b2Vec2 pts[3];
+                        for (int k = 0; k < 3; ++k) pts[k] = toB2(rel.position + rotate(tri[k], rel.angle));
+                        const b2Hull hull = b2ComputeHull(pts, 3);
+                        if (hull.count == 3) {
+                            const b2Polygon poly = b2MakePolygon(&hull, 0.0f);
+                            b2CreatePolygonShape(body.id, &sd, &poly);
+                            ++body.shapes;
+                        }
                         ++x;
                         continue;
                     }
                     const u32 start = x;
-                    while (x < tm->width && tm->tileAt(x, y) >= 0) ++x;  // merge the run
+                    while (x < tm->width && kindAt(x, y) == kind) ++x;  // merge the run of the same kind
                     const Vec2 local{(static_cast<float>(start + x) * 0.5f) * cw, (static_cast<float>(y) + 0.5f) * ch};
                     const Vec2 center = rel.position + rotate(local, rel.angle);
                     const b2Polygon box = b2MakeOffsetBox(static_cast<float>(x - start) * cw * 0.5f, ch * 0.5f, toB2(center), b2MakeRot(rel.angle));
-                    b2CreatePolygonShape(body.id, &sd, &box);
+                    const b2ShapeId shape = b2CreatePolygonShape(body.id, &sd, &box);
+                    if (kind == 1) oneWayShapes[shapeKey(shape)] = up;
                     ++body.shapes;
                 }
             }

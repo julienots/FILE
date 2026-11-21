@@ -606,4 +606,37 @@ TEST_CASE("overlap and shape cast queries 2D") {
     CHECK(hit->normal.y == doctest::Approx(1.0f).epsilon(0.01));
     CHECK_FALSE(w.physics.castShape(QueryShape2D::circle(0.5f), {0, 3}, 0.0f, {0, 1}, 10.0f));
 }
+
+TEST_CASE("tilemap colliders: one-way tiles let bodies jump through, slope tiles are ramps") {
+    World2D w;
+    const auto map = w.scene.createEntity("Map");
+    auto& tm = w.scene.registry().emplace<TilemapComponent>(map);
+    tm.width = 10;
+    tm.height = 6;
+    tilemapEnsureLayout(tm);
+    tilemapFillRect(tm, 0, 0, 9, 0, 1);  // solid floor (y 0..1)
+    tilemapFillRect(tm, 0, 3, 3, 3, 5);  // one-way platform (y 3..4), x 0..4
+    tilemapSet(tm, 7, 1, 6);             // a ramp rising to the right at x 7..8, y 1..2
+    auto& tc = w.scene.registry().emplace<TilemapCollider2DComponent>(map);
+    tc.oneWayTiles = "5";
+    tc.slopeTiles = "6:/";
+    // A crate launched upward under the platform goes through it, then lands on top.
+    const auto crate = w.box("Crate", {2.0f, 1.3f}, {0.5f, 0.5f}, BodyType2D::Dynamic);
+    w.scene.registry().get<RigidBody2DComponent>(crate).initialVelocity = {0.0f, 10.0f};
+    w.run(3.0f);
+    CHECK_MESSAGE(w.position(crate).y == doctest::Approx(4.25f).epsilon(0.03), w.position(crate).y);
+    // A ball dropped on the ramp rolls down to the left.
+    const auto ball = w.scene.createEntity("Ball");
+    w.scene.registry().get<TransformComponent>(ball).position = {7.6f, 3.0f, 0.0f};
+    w.scene.registry().emplace<RigidBody2DComponent>(ball);
+    auto& c = w.scene.registry().emplace<Collider2DComponent>(ball);
+    c.shape = ColliderShape2D::Circle;
+    c.radius = 0.2f;
+    w.run(1.5f);
+    CHECK_MESSAGE(w.position(ball).x < 7.0f, w.position(ball).x);
+    CHECK(w.position(ball).y < 1.5f);  // down on the floor
+    auto hit = w.physics.raycast({7.75f, 5}, {0, -1}, 20.0f);  // 3/4 of the cell: slope top at y = 1.75
+    REQUIRE(hit);
+    CHECK(hit->point.y == doctest::Approx(1.75f).epsilon(0.02));
+}
 }  // TEST_SUITE

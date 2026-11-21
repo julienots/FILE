@@ -109,6 +109,12 @@ anticipation d'un saut ; une forme qui chevauche déjà un collider au départ l
 bandes horizontales (une forme par bande) ; la collision est reconstruite quand les tuiles changent. Pour
 un décor traversable, utiliser une seconde tilemap sans collider (comme « Decor » dans la Vitrine 2D).
 
+
+`TilemapCollider2D.oneWayTiles` (`"12,13"`) : ces tuiles sont des **plateformes traversables** (on saute
+au travers par dessous, on se pose dessus) ; `slopeTiles` (`"20:/,21:\"`) : **pentes** à 45°, `/`
+montant vers la droite, `\` vers la gauche (un triangle par cellule). Les tuiles pleines voisines sont
+toujours fusionnées en rangées, chaque sorte à part.
+
 ## Couches de collision
 
 Chaque `Collider`, `Collider2D`, `TilemapCollider2D` et `CharacterController3D` a une **couche** (`layer`,
@@ -224,8 +230,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
   maillage et enveloppe convexe : voir plus haut ; le maillage n'est pas rechargé si le fichier change en jeu,
   frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
   qui a au moins un déclencheur est entièrement un capteur.
-- 2D : pas de tuiles en pente ni de tuiles traversables dans `TilemapCollider2D` (utiliser des
-  `Collider2D` polygones ou `oneWay` posés sur la tilemap) ; deux `CharacterController2D` se traversent.
+- 2D : pentes de tilemap à 45° par cellule seulement (pas de demi-pentes) ; deux
+  `CharacterController2D` se traversent.
 - Articulations : pas de poulie ni d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
   seulement (pas de moto ni de chenilles) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
