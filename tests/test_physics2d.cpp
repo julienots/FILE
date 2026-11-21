@@ -639,4 +639,27 @@ TEST_CASE("tilemap colliders: one-way tiles let bodies jump through, slope tiles
     REQUIRE(hit);
     CHECK(hit->point.y == doctest::Approx(1.75f).epsilon(0.02));
 }
+
+TEST_CASE("tilemap colliders: gentle half slopes over two cells") {
+    World2D w;
+    const auto map = w.scene.createEntity("Map");
+    auto& tm = w.scene.registry().emplace<TilemapComponent>(map);
+    tm.width = 6;
+    tm.height = 2;
+    tilemapEnsureLayout(tm);
+    tilemapSet(tm, 1, 0, 7);  // lower half, rising right
+    tilemapSet(tm, 2, 0, 8);  // upper half
+    tilemapSet(tm, 4, 0, 9);  // falling (rising left), lower half
+    auto& tc = w.scene.registry().emplace<TilemapCollider2DComponent>(map);
+    tc.slopeTiles = "7:/1, 8:/2, 9:\\1";
+    w.run(0.02f);
+    auto top = [&](float x) {
+        auto hit = w.physics.raycast({x, 5}, {0, -1}, 20.0f);
+        return hit ? hit->point.y : -1.0f;
+    };
+    CHECK(top(1.5f) == doctest::Approx(0.25f).epsilon(0.02));   // middle of the lower half: 1/4
+    CHECK(top(2.5f) == doctest::Approx(0.75f).epsilon(0.02));   // middle of the upper half: 3/4
+    CHECK(top(2.99f) == doctest::Approx(1.0f).epsilon(0.03));
+    CHECK(top(4.25f) == doctest::Approx(0.375f).epsilon(0.03)); // falling: 0.5 at its left edge
+}
 }  // TEST_SUITE

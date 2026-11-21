@@ -665,8 +665,12 @@ struct Physics2DWorld::Impl {
                 for (char c : tc->slopeTiles + ",") {
                     if (c == ',' || c == ';') {
                         const usize colon = cur.find(':');
-                        if (colon != std::string::npos && colon + 1 < cur.size())
-                            kinds[std::atoi(cur.substr(0, colon).c_str())] = cur[colon + 1] == '/' ? 2 : 3;
+                        if (colon != std::string::npos && colon + 1 < cur.size()) {
+                            // "/" "\" full slopes; "/1" "/2" ("\1" "\2"): lower / upper half of a gentle slope over two cells.
+                            const bool right = cur[colon + 1] == '/';
+                            const char half = colon + 2 < cur.size() ? cur[colon + 2] : '0';
+                            kinds[std::atoi(cur.substr(0, colon).c_str())] = (right ? 2 : 3) + (half == '1' ? 2 : half == '2' ? 4 : 0);
+                        }
                         cur.clear();
                     } else if (c != ' ') {
                         cur += c;
@@ -688,13 +692,20 @@ struct Physics2DWorld::Impl {
                         ++x;
                         continue;
                     }
-                    if (kind >= 2) {  // slope: one triangle per cell
-                        const float x0 = static_cast<float>(x) * cw, x1 = x0 + cw, y0 = static_cast<float>(y) * ch, y1 = y0 + ch;
-                        const Vec2 tri[3] = {{x0, y0}, {x1, y0}, kind == 2 ? Vec2{x1, y1} : Vec2{x0, y1}};
-                        b2Vec2 pts[3];
-                        for (int k = 0; k < 3; ++k) pts[k] = toB2(rel.position + rotate(tri[k], rel.angle));
-                        const b2Hull hull = b2ComputeHull(pts, 3);
-                        if (hull.count == 3) {
+                    if (kind >= 2) {  // slope: under the line from (x0, hLeft) to (x1, hRight) in the cell
+                        const float x0 = static_cast<float>(x) * cw, x1 = x0 + cw, y0 = static_cast<float>(y) * ch;
+                        const bool right = kind % 2 == 0;  // 2, 4, 6 rise to the right
+                        float lo = 0.0f, hi = 1.0f;          // heights (fraction of the cell) at the low / high ends
+                        if (kind >= 6) lo = 0.5f, hi = 1.0f; // upper half of a gentle slope
+                        else if (kind >= 4) lo = 0.0f, hi = 0.5f;
+                        const float hl = (right ? lo : hi) * ch, hr = (right ? hi : lo) * ch;
+                        std::vector<Vec2> poly = {{x0, y0}, {x1, y0}};
+                        if (hr > 1e-6f) poly.push_back({x1, y0 + hr});
+                        if (hl > 1e-6f) poly.push_back({x0, y0 + hl});
+                        b2Vec2 pts[4];
+                        for (usize k = 0; k < poly.size(); ++k) pts[k] = toB2(rel.position + rotate(poly[k], rel.angle));
+                        const b2Hull hull = b2ComputeHull(pts, static_cast<int>(poly.size()));
+                        if (hull.count >= 3) {
                             const b2Polygon poly = b2MakePolygon(&hull, 0.0f);
                             b2CreatePolygonShape(body.id, &sd, &poly);
                             ++body.shapes;
