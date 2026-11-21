@@ -6,12 +6,51 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.7.0 (versionCode 40), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.6.2 : elle s'installe par-dessus). SHA-256 : `5d04b26931b98e9637a3b19a427159dcffd249845a430bc21e5db49100e15f12`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.8.0 (versionCode 41), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.7.0 : elle s'installe par-dessus). SHA-256 : `db5184ad0016a076740f2c38b9947976173f08009ed81d9a7e3fbbafe3f3638e`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.8.0 (nouvelle région : les Terres d'Aurore ; palmiers refaits)
+
+- **Une nouvelle région, les Terres d'Aurore.** C'est une grande île d'environ 3,2 km × 1 km dans la mer du sud-ouest, jusque-là vide. Un isthme d'environ 380 m de large la relie à la Côte de Corail, à l'ouest de Port-Azur ; une route part de la Pierre de Port-Azur et va jusqu'à Lumenhaven.
+  - **Paysage** : des prairies turquoise dans de larges cuvettes, des crêtes de cristal à flancs en gradins et quelques aiguilles rocheuses.
+  - **Végétation** : deux nouvelles essences, l'*arbre de cristal* (tronc nacré, feuillage turquoise, fruits de cristal lumineux) et la *flèche d'aurore* (colonnes de cristal hexagonales). On y trouve aussi des champignons géants, des éclats de cristal et des fougères.
+  - **Ambiance** : la lumière est froide et violette, les nuits claires sont presque toujours traversées d'aurores, la brume y est lumineuse. La musique est celle, éthérée, du Royaume Céleste.
+- **Geysers propulseurs** (nouveauté de jeu). Il suffit de marcher dans une source lumineuse pour être projeté dans les airs.
+  - Les sources *libres* lancent à environ 7 m, avec une petite poussée vers l'avant.
+  - Celles qui sont au pied d'une île flottante visent l'île : le héros monte d'environ 16 m et atterrit sur le pont.
+  - Aucun dégât de chute après une éjection. Une source ne relance pas tant qu'on n'en est pas sorti.
+- **Îles flottantes** (nouveauté). Neuf îles flottent entre 14 et 17 m au-dessus des prairies.
+  - Chacune a un dessus de prairie, un dessous en éperon de roche, des cristaux qui pendent et brillent, et un arbre de cristal.
+  - On y trouve un coffre avec un *éclat du ciel* et une veine de cristal d'aurore.
+  - On peut marcher dessus et sauter dans le vide. Passer dessous ne fait pas monter dessus.
+- **Nouvelle ressource : le cristal d'aurore.** On le récolte dans la région, sur les îles, en creusant ou sur certains ennemis. Il sert à fabriquer :
+  - la *Lame d'aurore* (épée légendaire, arcane) ;
+  - le *Sceptre boréal* (bâton, glace) ;
+  - l'*Arc de lumière* ;
+  - le *Cœur d'aurore* (amulette).
+- **Quatre nouveaux ennemis** : le *Loup boréal* (meute), le *Golem de cristal* (tank, sensible au feu), le *Spectre d'aurore* (lanceur de sorts, la nuit) et l'*Araignée de quartz*.
+- **Village de Lumenhaven**, avec des maisons à dôme, une pierre de passage pour le voyage rapide et le *Cratère Cristallin* au sud-est.
+- **Aïla, la cristallière**, vend des potions et des bombes, et donne trois quêtes :
+  - *Lumière captive* : 6 cristaux d'aurore à rapporter ;
+  - *Contrat : golems de cristal* : 3 golems à vaincre ;
+  - *Les îles du ciel* : 3 éclats du ciel à trouver, récompensés par la Lame d'aurore.
+- **Palmiers refaits.** Chaque palme a maintenant une nervure centrale arquée et huit paires de folioles qui retombent, au lieu de trois grandes lames plates. Au loin, l'ancienne version légère est conservée.
+- **Bug trouvé et corrigé pendant les tests** : sur une source libre, le héros retombait dans la même source et repartait sans fin.
+- **Vérifié sur ordinateur** :
+  - scénario `aurora` : paysages de jour et de nuit, 9 îles et 23 sources générées, et le parcours complet de la nouveauté :
+    - la source monte à 16,6 m, le héros atterrit sur le pont à 3,7 m du centre sans perdre de vie ;
+    - le coffre donne l'éclat du ciel ;
+    - le héros saute de l'île (chute de 28 m) ;
+    - une source libre monte à 6,7 m puis on retombe à côté ;
+    - Lumenhaven, Aïla et ses 3 quêtes, un golem de cristal ;
+  - tests unitaires : 2794 réussis (placement des bâtiments, routes, eau ; les îles et les sources sont exclues du test « bâtiment qui flotte ») ;
+  - scénarios `newgame`, `titlemenus`, `interior`, `modfun`, `dig`, `mine` et `swim` réussis.
+- **Coût en triangles** : Lumenhaven 778 k (Chênebrune, la ville la plus boisée, reste à 947 k) ; les autres villes ne changent pas. **Les performances sur téléphone ne sont pas mesurées.**
+- **Limites** : rien n'a été essayé sur un vrai téléphone. Le golem de cristal paraît plus gris que turquoise en plein jour. On traverse visuellement la roche d'une île si on la longe par en dessous (elle n'a pas de collision latérale). Les crêtes de cristal utilisent la texture de falaise habituelle.
 
 ### Nouveautés 2.7.0 (arbres et herbe plus réalistes, 8 mods spéciaux)
 

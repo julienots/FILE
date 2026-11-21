@@ -1794,9 +1794,9 @@ static std::vector<Step> scenario(const std::string& name) {
     }
     if (name == "perf") {
         // 2.3.6 render cost in typical places (logs draw calls / triangles at each picture)
-        static const char* places[] = {"brindlemere", "solmar", "port_azur", "shirokawa", "givrebourg", "chenebrune"};
+        static const char* places[] = {"brindlemere", "solmar", "port_azur", "shirokawa", "givrebourg", "chenebrune", "lumenhaven"};
         s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 7; i++) {
             const char* pl = places[i];
             s.push_back({3.f, [pl](Game& g) { const Poi* p = g.world.poiById(pl); if (p) teleport(g, p->pos.x + 6, p->pos.y + 6, 0.8f); g.camPitch = 0.3f; g.camDist = g.camDistTarget = 9.f; }, [](Game& g, float) { g.camIdleT = 0; }, "go"});
             s.push_back({0.1f, [pl](Game& g) { AGR_LOG("PERF %s", pl); g.requestScreenshot(std::string("build/shots/P_") + pl + ".png"); }, idle, "shot"});
@@ -1826,6 +1826,71 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "aurora") {
+        // 2.8.0 the Lands of Aurora: landscapes by day and by night (pictures)
+        static const float spots[][3] = {{1080, 4700, 3.1f}, {1500, 5350, 0.6f}, {2300, 5450, 2.2f}, {800, 5600, 4.0f}};
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.f; g.toastHint.clear(); g.tutStep = -1;
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
+        for (int i = 0; i < 4; i++) {
+            s.push_back({3.5f, [i](Game& g) { teleport(g, spots[i][0], spots[i][1], spots[i][2]); g.camPitch = 0.12f; g.camDist = g.camDistTarget = 10.f; g.camYaw = spots[i][2] + PI;
+                AGR_LOG("AURORA spot %d region %s ground %.1f", i, regionName(g.world.regionId(spots[i][0], spots[i][1])), g.pc().pos.y); }, [](Game& g, float) { g.camIdleT = 0; }, "go"});
+            s.push_back({0.05f, [i](Game& g) { g.requestScreenshot("build/shots/AU_day" + std::to_string(i) + ".png"); }, idle, "shot"});
+        }
+        s.push_back({3.f, [](Game& g) { g.timeOfDay = 23.f; teleport(g, spots[1][0], spots[1][1], spots[1][2]); g.camPitch = 0.2f; g.camDist = g.camDistTarget = 10.f; }, [](Game& g, float) { g.camIdleT = 0; g.timeOfDay = 23.f; }, "night"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_night.png"); }, idle, "shot"});
+        // ---- the novelties: geyser -> floating island -> chest, a free geyser, Lumenhaven and Aïla, a crystal golem
+        static int isl = -1, gey = -1, ok[6]; static float apex, y0;
+        s.push_back({3.f, [](Game& g) { g.timeOfDay = 11.f; for (int& o : ok) o = 0; isl = gey = -1;
+            for (int i = 0; i < (int)g.world.structures.size(); i++) if (g.world.structures[i].kind == S_SKYISLAND) { isl = i; break; }
+            const Structure& I = g.world.structures[isl];
+            for (int i = 0; i < (int)g.world.structures.size(); i++) { const Structure& s = g.world.structures[i]; if (s.kind == S_GEYSER && s.variant > 0 && length(s.pos - I.pos) < SKY_ISLAND_R + 5.f) gey = i; }
+            int n = 0, ng = 0; for (auto& s : g.world.structures) { n += s.kind == S_SKYISLAND; ng += s.kind == S_GEYSER; }
+            AGR_LOG("AURORA %d floating islands, %d geysers; island %d deck %.1f m, its geyser %d", n, ng, isl, I.variant / 100.f, gey);
+            const Structure& G = g.world.structures[gey];
+            teleport(g, G.pos.x - std::sin(G.rot) * 3.f, G.pos.y - std::cos(G.rot) * 3.f, G.rot); g.camYaw = G.rot + PI; g.camPitch = 0.25f; g.camDist = g.camDistTarget = 11.f; },
+            [](Game& g, float) { g.camIdleT = 0; }, "to the geyser"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_island_below.png"); }, idle, "shot"});
+        s.push_back({2.5f, [](Game& g) { const Structure& I = g.world.structures[isl]; vec2 d{0.6f, 0.8f}; vec2 p = I.pos + d * 30.f; teleport(g, p.x, p.y, 0.f); g.pc().pos.y += 0.f;
+            g.camYaw = std::atan2(d.x, d.y); g.camPitch = -0.05f; g.camDist = g.camDistTarget = 6.f; }, [](Game& g, float) { const Structure& I = g.world.structures[isl]; vec2 d = I.pos - g.pc().pos.xz(); g.camYaw = std::atan2(-d.x, -d.y); g.camPitch = -0.1f; g.camIdleT = 0; }, "island from afar"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_island_far.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { const Structure& G = g.world.structures[gey]; Character& c = g.pc(); c.pos = vec3(G.pos.x, g.groundAt(G.pos.x, G.pos.y), G.pos.y); c.grounded = true; c.vel = vec3(0); g.geyserCD = 0; apex = c.pos.y; y0 = c.pos.y; }, idle, "step in"});
+        s.push_back({0.75f, none, [](Game& g, float) { apex = std::max(apex, g.pc().pos.y); g.camIdleT = 0; g.camPitch = 0.05f; g.camDist = g.camDistTarget = 16.f; }, "fly"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_launch.png"); }, idle, "shot"});
+        s.push_back({3.2f, none, [](Game& g, float) { apex = std::max(apex, g.pc().pos.y); g.camIdleT = 0; }, "fly"});
+        s.push_back({0.1f, [](Game& g) { const Structure& I = g.world.structures[isl]; Character& c = g.pc(); float deck = I.variant / 100.f;
+            ok[0] = g.geyserLaunches >= 1 && c.grounded && std::fabs(c.pos.y - deck) < 0.7f && length(c.pos.xz() - I.pos) < SKY_ISLAND_R && c.hp >= c.maxHp - 1;
+            AGR_LOG("AURORA geyser launch: apex %.1f m above the pool, now at y %.1f (deck %.1f), %.1f m from the island centre, grounded %d, hp %.0f/%.0f -> %d",
+                apex - y0, c.pos.y, deck, length(c.pos.xz() - I.pos), c.grounded, c.hp, c.maxHp, ok[0]);
+            g.camPitch = 0.35f; g.camDist = g.camDistTarget = 12.f; }, [](Game& g, float) { g.camIdleT = 0; }, "landed"});
+        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "look"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_island_top.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { Entity chest = NullEntity; float bd = 1e9f; Character& c = g.pc();
+            g.reg.each<NodeComp>([&](Entity e, NodeComp& n) { if (n.node.type == NodeType::Chest) { float d = length(n.node.pos - c.pos); if (d < bd) { bd = d; chest = e; } } });
+            int before = g.countItem("sky_shard");
+            if (chest != NullEntity && bd < 15.f) { c.pos = g.reg.get<NodeComp>(chest)->node.pos + vec3(0, 0, 1.2f); g.interactTarget = chest; g.playerInteract(); }
+            ok[1] = g.countItem("sky_shard") == before + 1; AGR_LOG("AURORA island chest at %.1f m: sky shards %d -> %d -> %d", bd, before, g.countItem("sky_shard"), ok[1]); }, idle, "chest"});
+        s.push_back({3.f, [](Game& g) { Character& c = g.pc(); const Structure& I = g.world.structures[isl]; c.pos = vec3(I.pos.x + SKY_ISLAND_R + 2.f, c.pos.y, I.pos.y); c.grounded = false; y0 = c.pos.y; }, [](Game& g, float) { g.camIdleT = 0; }, "jump off"});
+        s.push_back({0.1f, [](Game& g) { Character& c = g.pc(); ok[2] = c.pos.y - c.groundY < 0.6f && c.pos.y < y0 - 8.f && c.hp > 0; AGR_LOG("AURORA stepped off the island: fell %.1f m, hp %.0f -> %d (grounded %d swim %d above ground %.2f vel.y %.2f)", y0 - c.pos.y, c.hp, ok[2], c.grounded, c.swimming, c.pos.y - c.groundY, c.vel.y); }, idle, "fell"});
+        s.push_back({0.1f, [](Game& g) { int fg = -1; for (int i = 0; i < (int)g.world.structures.size(); i++) if (g.world.structures[i].kind == S_GEYSER && g.world.structures[i].variant == 0) { fg = i; break; }
+            const Structure& G = g.world.structures[fg]; teleport(g, G.pos.x, G.pos.y, 0.f); Character& c = g.pc(); c.grounded = true; c.vel = vec3(0); g.geyserCD = 0; y0 = apex = c.pos.y; }, idle, "free geyser"});
+        s.push_back({2.5f, none, [](Game& g, float) { apex = std::max(apex, g.pc().pos.y); g.camIdleT = 0; }, "fly"});
+        s.push_back({0.1f, [](Game& g) { ok[3] = apex - y0 > 5.f && g.pc().pos.y - g.pc().groundY < 0.6f && g.pc().hp > 0; AGR_LOG("AURORA free geyser apex %.1f m -> %d (above ground %.2f, hp %.0f, launches %d)", apex - y0, ok[3], g.pc().pos.y - g.pc().groundY, g.pc().hp, g.geyserLaunches); }, idle, "check"});
+        s.push_back({4.f, [](Game& g) { const Poi* p = g.world.poiById("lumenhaven"); teleport(g, p->pos.x + 14, p->pos.y + 20, 0.6f); g.camPitch = 0.2f; g.camDist = g.camDistTarget = 14.f;
+            AGR_LOG("AURORA Lumenhaven at (%.0f, %.0f)", p->pos.x, p->pos.y); }, [](Game& g, float) { g.camIdleT = 0; }, "village"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_lumenhaven.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { Entity aila = NullEntity; g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0 && npcs()[c.npcDef].id == "aila") aila = e; });
+            ok[4] = aila != NullEntity; if (aila) { Character* a = g.reg.get<Character>(aila); teleport(g, a->pos.x, a->pos.z + 2.5f, PI); g.openDialog(aila); }
+            int offers = 0; for (auto& ch : g.dialog.choices) if (ch.action.rfind("offer:", 0) == 0) offers++;
+            ok[4] = ok[4] && offers >= 2; AGR_LOG("AURORA Aïla found %d, %d quests offered (hero above ground %.2f grounded %d)", aila != NullEntity, offers, g.pc().pos.y - g.pc().groundY, g.pc().grounded); }, idle, "aila"});
+        s.push_back({1.f, none, idle, "talk"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_aila.png"); g.dialog.open = false; }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { Character& c = g.pc(); Entity e = g.spawnEnemy(enemyIndex("crystal_golem"), c.pos + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 7.f);
+            if (AIBrain* ai = g.reg.get<AIBrain>(e)) ai->state = AIState::Idle; ok[5] = g.reg.valid(e);
+            g.camYaw = c.yaw + PI; g.camPitch = 0.15f; g.camDist = g.camDistTarget = 10.f; }, idle, "golem"});
+        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; }, "look"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/AU_golem.png"); bool all = true; for (int o : ok) all = all && o; AGR_LOG("AURORA TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
+        return s;
+    }
     if (name == "modfun") {
         // 2.7.0 the special mods in play: moon jump, giant enemies, eternal night under the snow (log + pictures)
         static float y0, apex; static int ok[3];
@@ -1852,10 +1917,10 @@ static std::vector<Step> scenario(const std::string& name) {
     if (name == "trees") {
         // 2.7.0 trees and grass close up in several regions (pictures; LK_SHOT_TAG names the set: before / after)
         static std::string tag; tag = getenv("LK_SHOT_TAG") ? getenv("LK_SHOT_TAG") : "x";
-        static const float spots[][3] = {{1300, 1850, 0.4f}, {2600, 620, 2.2f}, {430, 1450, 1.f}, {1500, 1500, 3.4f}};
+        static const float spots[][3] = {{1300, 1850, 0.4f}, {2600, 620, 2.2f}, {430, 1450, 1.f}, {1500, 1500, 3.4f}, {1000, 3700, 0.8f}, {5100, 3000, 2.f}};
         s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1;
             g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 6; i++) {
             s.push_back({3.5f, [i](Game& g) { teleport(g, spots[i][0], spots[i][1], spots[i][2]); g.camPitch = 0.12f; g.camDist = g.camDistTarget = 8.f; g.camYaw = spots[i][2] + PI; },
                 [](Game& g, float) { g.camIdleT = 0; }, "go"});
             s.push_back({0.05f, [i](Game& g) { g.requestScreenshot("build/shots/TR_" + tag + std::to_string(i) + ".png"); }, idle, "shot"});

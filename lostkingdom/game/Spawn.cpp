@@ -208,6 +208,20 @@ void Game::buildSharedMeshes() {
             case NodeType::Herb: for (int i = 0; i < 8; i++) { float a = i * TAU / 8; vec3 d{std::cos(a), 0, std::sin(a)}; b.blade({0, 0, 0}, d * 0.35f + vec3(0, 0.5f, 0), 0.14f, {-d.z, 0, d.x}, Mat(hexColor(0x4a8a3a)), Mat(hexColor(0x8ac85a), 0.7f)); }
                 for (int i = 0; i < 4; i++) b.ellipsoid({r.range(-0.2f, 0.2f), 0.55f, r.range(-0.2f, 0.2f)}, vec3(0.05f), Mat(hexColor(0xe8e0ff), 0.5f, 0, 0.6f), 6, 4); break;
             case NodeType::Crystal: b.flat = true; for (int i = 0; i < 5; i++) { vec3 d = normalize(vec3(r.range(-0.5f, 0.5f), 1, r.range(-0.5f, 0.5f))); b.cone({r.range(-0.2f, 0.2f), 0, r.range(-0.2f, 0.2f)}, d * r.range(0.6f, 1.1f), 0.14f, Mat(hexColor(0x9ad8ff), 0.1f, 0, 2.5f), 5); } break;
+            case NodeType::AuroraCrystal: {   // 2.8.0 a cluster of glowing hexagonal crystals, turquoise to violet, on a pale rock
+                b.flat = true;
+                b.rock({0, 0.1f, 0}, vec3(0.55f, 0.28f, 0.5f), Mat(hexColor(0xb8c8d0), 0.6f), r.next(), 0);
+                for (int i = 0; i < 7; i++) {
+                    vec3 d = normalize(vec3(r.range(-0.6f, 0.6f), 1, r.range(-0.6f, 0.6f)));
+                    float l = r.range(0.6f, 1.5f) * (i == 0 ? 1.4f : 1.f);
+                    vec3 col = lerp(hexColor(0x40f0d8), hexColor(0xb070ff), r.f());
+                    vec3 base{r.range(-0.3f, 0.3f), 0.05f, r.range(-0.3f, 0.3f)};
+                    b.tube(base, base + d * l * 0.8f, 0.13f, 0.11f, Mat(col, 0.08f, 0, 2.6f), 6, false);
+                    b.cone(base + d * l * 0.8f, base + d * l, 0.12f, Mat(col * 1.2f, 0.06f, 0, 3.2f), 6);
+                }
+                b.flat = false;
+                break;
+            }
             case NodeType::Chest: chest(b, false); break;
             case NodeType::Relic: b.bevelBox({0, 0.4f, 0}, {0.35f, 0.4f, 0.35f}, 0.05f, Mat(hexColor(0xd8d0c0), 0.6f)); b.ellipsoid({0, 1.05f, 0}, vec3(0.16f, 0.22f, 0.16f), Mat(hexColor(0xffd060), 0.2f, 1.f, 2.5f), 10, 6); break;
             case NodeType::Mushroom: for (int i = 0; i < 5; i++) { vec3 p{r.range(-0.35f, 0.35f), 0, r.range(-0.35f, 0.35f)}; float h = r.range(0.2f, 0.4f); b.tube(p, p + vec3(0, h, 0), 0.04f, 0.035f, Mat(hexColor(0xe8e0cc)), 5, false); b.lathe({{0.02f, h}, {0.14f, h - 0.02f}, {0.1f, h + 0.07f}, {0.01f, h + 0.09f}}, Mat(hexColor(0x6ad0ff), 0.4f, 0, 2.f), 8, p); } break;
@@ -459,6 +473,7 @@ void Game::spawnNode(const NodeSpawn& n) {
     case NodeType::Rock: case NodeType::IronOre: case NodeType::CopperOre: case NodeType::RareOre: case NodeType::GoldOre: case NodeType::SilverOre: case NodeType::Coal: case NodeType::AmberRock:
         it.kind = InterKind::Node; it.text = "Miner"; break;
     case NodeType::Herb: case NodeType::Mushroom: case NodeType::Berries: case NodeType::Crystal: case NodeType::Flax: case NodeType::FireRoot: it.kind = InterKind::Node; it.text = "Récolter"; break;
+    case NodeType::AuroraCrystal: it.kind = InterKind::Node; it.text = "Détacher le cristal d'aurore"; break;   // 2.8.0
     case NodeType::Cactus: it.kind = InterKind::Node; it.text = "Cueillir les fruits"; break;
     case NodeType::Shells: it.kind = InterKind::Node; it.text = "Ramasser les coquillages"; break;
     case NodeType::Chest: it.kind = InterKind::Chest; it.text = "Ouvrir le coffre"; break;

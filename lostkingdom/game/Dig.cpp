@@ -40,7 +40,7 @@ void Game::playerDig() {
         notify("Un trésor enfoui ! (+" + std::to_string(gg) + " or)", vec3(1.f, 0.85f, 0.4f), "i_chest");
         play("coin", 0.8f); particles.magicTrail(p + vec3(0, 0.5f, 0), vec3(1.f, 0.85f, 0.4f), 1.f);
     } else if (roll < 0.06f) {
-        const char* ore = r == R_FROSTHEIM ? "silver_ore" : r == R_AMBER || r == R_JUNGLE ? "gold_ore" : r == R_ASHEN || r == R_SHADOWS ? "coal" : "copper_ore";
+        const char* ore = r == R_FROSTHEIM ? "silver_ore" : r == R_AURORA ? "aurora_crystal" : r == R_AMBER || r == R_JUNGLE ? "gold_ore" : r == R_ASHEN || r == R_SHADOWS ? "coal" : "copper_ore";
         addItem(ore, 1);
     } else if (roll < 0.26f) {
         addItem(r == R_AMBER && g.chance(0.3f) ? "sand_glass" : (r == R_CORAL && g.chance(0.5f) ? "seashell" : "stone"), 1);

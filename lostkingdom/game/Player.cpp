@@ -549,6 +549,10 @@ void Game::playerInteract() {
             addItem(d.id, 1, rr);
         }
         addItem(r.chance(0.5f) ? "potion_heal" : "potion_mana", r.irange(1, 2));
+        if (n->node.pos.y > world.height(n->node.pos.x, n->node.pos.z) + 8.f) {   // 2.8.0 a chest on a floating island
+            addItem("sky_shard", 1); addItem("aurora_crystal", 2);
+            notify("Un éclat du ciel !", vec3(0.6f, 1.f, 0.95f), "i_crystal");
+        }
         particles.magicBurst(n->node.pos + vec3(0, 0.8f, 0), vec3(1, 0.85f, 0.4f), 1.2f, 30);
         gainXp(25 + tier * 15);
         // treasure quests resolve at their POI
@@ -582,6 +586,7 @@ void Game::playerInteract() {
         case NodeType::Shells: give = "seashell"; count = r.irange(2, 4); if (r.chance(0.25f)) { addItem("pearl", 1); notify("Une perle !", vec3(0.95f, 0.95f, 1.f), "i_crystal"); } if (r.chance(0.5f)) addItem("sea_salt", 1); break;
         case NodeType::Flax: give = "flax"; count = r.irange(2, 4); break;
         case NodeType::FireRoot: give = "fire_root"; count = r.irange(1, 2); break;
+        case NodeType::AuroraCrystal: give = "aurora_crystal"; count = r.irange(1, 2); snd = "harvest_stone"; cl = C_GATHER_SWING; if (r.chance(0.3f)) addItem("crystal", 1); break;   // 2.8.0
         case NodeType::Relic: {
             static const char* relics[] = {"relic_elven_harp", "relic_star_glass", "relic_kings_seal"};
             int pi = world.nearestPoi(ns.pos.xz(), 80.f);
@@ -807,6 +812,7 @@ void Game::updatePlayer(float dt) {
     vec3 dv = (busy || c.status.root > 0 || c.status.freeze > 0) ? vec3(0) : want * speed * (mag < 0.15f ? 0 : 1);
     float rate = length2(dv) > length2(vec3(c.vel.x, 0, c.vel.z)) ? 9.f : 12.f;
     if (!c.grounded) rate = flying ? 4.f : 2.f;
+    if (geyserT > 0.f && !c.grounded) rate = mag > 0.15f ? 0.7f : 0.f;   // 2.8.0 the geyser's push carries you (a little steering)
     c.vel.x = damp(c.vel.x, dv.x, rate, dt);
     c.vel.z = damp(c.vel.z, dv.z, rate, dt);
     float hs = length(vec2(c.vel.x, c.vel.z));

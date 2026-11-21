@@ -18,6 +18,7 @@ enum PropKind : uint8_t {
     // 2.0.0 the Amber Sands and the Coral Coast
     P_ACACIA, P_CACTUS, P_AGAVE, P_SANDROCK, P_TUMBLEWEED, P_DRYBUSH, P_DATEPALM,
     P_PALM, P_BANANA, P_TROPBUSH, P_SEAROCK, P_DRIFTWOOD, P_SHELLS, P_HAMMOCK, P_NETRACK, P_BOAT, P_AMPHORA, P_CARPET, P_BRAZIER,
+    P_CRYSTALTREE, P_AURORASPIRE,   // 2.8.0 the Lands of Aurora
     P_COUNT
 };
 
@@ -29,6 +30,7 @@ enum StructureKind : uint8_t {
     S_PEN, S_BANNER,   // 1.9.2 player domain: livestock enclosure, the domain's banner
     // 2.0.0 sandstone towns, harbours, the temple of Shirokawa
     S_DOMEHOUSE, S_BAZAAR, S_MINARET, S_ZIGGURAT, S_LIGHTHOUSE, S_PAGODA, S_SPHINX, S_PIER, S_BEACHHUT, S_COLONNADE, S_ARCHWAY,
+    S_GEYSER, S_SKYISLAND,   // 2.8.0 the Lands of Aurora: launch geysers, floating islands
     S_COUNT
 };
 

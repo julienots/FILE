@@ -315,6 +315,7 @@ void Game::updatePlaying(float dt) {
     if (timeOfDay >= 24.f) { timeOfDay -= 24.f; day++; }
     gProfFrames++;
     PROF(0, updatePlayer(dt));
+    updateGeysers(dt);   // 2.8.0
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
     if (!cine.active) PROF(3, updateSpawning(dt));
@@ -373,6 +374,7 @@ static const RegionGrade GRADE[R_COUNT] = {
     {{0.0f, 0.012f, 0.02f}, {1.0f, 1.0f, 1.0f}, {0.97f, 1.04f, 1.03f}, 1.16f, 1.1f, 0.1f, 0.75f, 0, {0.9f, 1.0f, 1.05f}, 1.04f},          // Coral Coast: saturated, turquoise air
     {{0.015f, 0.01f, 0.0f}, {1.01f, 1.0f, 0.98f}, {1.06f, 1.0f, 0.86f}, 1.04f, 1.08f, 0.35f, 0.6f, 0, {1.02f, 0.97f, 0.86f}, 1.06f},     // 2.4.0 Valdor Steppes: golden light, clear far horizon
     {{0.0f, 0.015f, 0.01f}, {1.0f, 1.0f, 1.0f}, {0.94f, 1.04f, 0.94f}, 1.12f, 1.1f, -0.05f, 1.45f, 0, {0.78f, 0.95f, 0.82f}, 0.96f},     // 2.4.0 Emerald Jungle: humid green haze
+    {{0.01f, 0.01f, 0.03f}, {1.0f, 1.0f, 1.0f}, {0.97f, 1.0f, 1.06f}, 1.14f, 1.1f, -0.25f, 0.9f, 0, {0.82f, 0.9f, 1.08f}, 1.02f},     // 2.8.0 Lands of Aurora: cool, violet-blue air
 };
 
 void Game::updateEnvironment(float dt) {
@@ -431,6 +433,7 @@ void Game::updateEnvironment(float dt) {
         case R_AMBER: next = p < 0.55f ? W_CLEAR : p < 0.8f ? W_SANDSTORM : p < 0.92f ? W_CLOUDY : W_CLEAR; break;
         case R_CORAL: next = p < 0.5f ? W_CLEAR : p < 0.68f ? W_CLOUDY : p < 0.9f ? W_RAIN : W_STORM; break;
         case R_STEPPE: next = p < 0.6f ? W_CLEAR : p < 0.85f ? W_CLOUDY : p < 0.95f ? W_STORM : W_RAIN; break;   // 2.4.0 big skies, summer storms
+        case R_AURORA: next = p < 0.6f ? W_CLEAR : p < 0.8f ? W_FOG : p < 0.92f ? W_SNOW : W_CLOUDY; break;   // 2.8.0 crystal-clear nights, glowing mist
         case R_JUNGLE: next = p < 0.35f ? W_CLEAR : p < 0.55f ? W_FOG : p < 0.85f ? W_RAIN : W_STORM; break;     // 2.4.0 hot rain and morning mist
         default: next = p < 0.55f ? W_CLEAR : p < 0.75f ? W_CLOUDY : W_SNOW; break;
         }
@@ -520,7 +523,7 @@ void Game::updateEnvironment(float dt) {
     // 2.0.0 sky and post effects
     {
         float clear = (1.f - overcast) * (1.f - rainAmt) * (1.f - fogAmt);
-        env.aurora = dungeon.active ? 0.f : saturate((regionW[R_FROSTHEIM] * 1.0f + regionW[R_HIGHCROWNS] * 0.55f) * clear * 1.4f) * (1.f - morningMist);
+        env.aurora = dungeon.active ? 0.f : saturate((regionW[R_FROSTHEIM] * 1.0f + regionW[R_HIGHCROWNS] * 0.55f + regionW[R_AURORA] * 1.6f) * clear * 1.4f) * (1.f - morningMist);
         env.dust = dungeon.active ? 0.f : saturate(regionW[R_AMBER] * 0.55f + sandAmt + ashAmt * 0.5f + regionW[R_ASHEN] * 0.2f);
         env.rainbow = dungeon.active ? 0.f : saturate((env.wetness - 0.25f) * 2.f) * (1.f - rainAmt) * (1.f - env.night) * (1.f - overcast * 0.6f);
         env.heat = dungeon.active ? 0.f : saturate(regionW[R_AMBER] * 1.2f + regionW[R_ASHEN] * 0.35f) * (1.f - env.night) * (1.f - sandAmt) * (1.f - rainAmt) * saturate(env.sunIntensity / 2.5f);
@@ -803,7 +806,7 @@ void Game::updateAudioDirector(float dt) {
     else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle"};
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm"};   // 2.8.0 Aurora: the ethereal score
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);

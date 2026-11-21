@@ -564,6 +564,8 @@ public:
     int activeHero = 0;                        // index in heroes(), saved as "hero <id>"
     bool flying = false, usedDoubleJump = false, meteorPending = false;
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
+    float geyserT = 0, geyserCD = 0; int geyserLaunches = 0, geyserLast = -1;   // 2.8.0 launch geysers (no air braking while launched)
+    void updateGeysers(float dt);
     float heroCD[3] = {0, 0, 0};
     float heroAura = 0;
     // 1.9.2 night hunters director

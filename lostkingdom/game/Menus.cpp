@@ -349,7 +349,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.7.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.8.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
@@ -1037,7 +1037,7 @@ void Game::drawMenus(float dt) {
             tapUsed = true;
         }
         // region names
-        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}};
+        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}, {1800, 5450}};
         for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
         bool has; vec3 qm = questMarker(&has);
         if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }

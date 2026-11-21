@@ -28,13 +28,18 @@ constexpr float WORLD_SIZE = 6144.f;   // 2.4.0: 4608 -> 6144 m (2.0.0: 3072 -> 
 inline float landEdgeDistance(float x, float z) {
     float a = std::min(std::min(x, z), std::min(WORLD_SIZE - x, 4608.f - z));              // north: whole width, down to the old south shore
     float b = std::min(std::min(x - 3500.f, z - 2600.f), std::min(WORLD_SIZE - x, WORLD_SIZE - z));   // south-east block
-    return std::max(a, b);
+    // 2.8.0 the Lands of Aurora: a big island in the south-west sea, joined to the Coral Coast by a wide isthmus
+    // (west of Port-Azur, so the harbour and the lighthouse keep their shore)
+    float c = std::min(std::min(x - 200.f, z - 4840.f), std::min(3450.f - x, WORLD_SIZE - 110.f - z));
+    float d = std::min(std::min(x - 740.f, z - 4300.f), std::min(1420.f - x, 5400.f - z));
+    return std::max(std::max(a, b), std::max(c, d));
 }
 constexpr float CHUNK = 32.f;
 constexpr int CHUNKS = (int)(WORLD_SIZE / CHUNK);
 constexpr float SEA_LEVEL = 0.f;
+constexpr float SKY_ISLAND_R = 9.f;   // 2.8.0 radius of a floating island's deck
 
-enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_COUNT };   // 2.4.0 + Steppes, Jungle
+enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_AURORA, R_COUNT };   // 2.8.0 + Terres d'Aurore   // 2.4.0 + Steppes, Jungle
 const char* regionName(int r);
 const char* regionSubtitle(int r);
 
@@ -83,7 +88,7 @@ struct Structure {
 // Harvestable / interactive node spawned with chunks.
 enum class NodeType : uint8_t { Tree, Rock, IronOre, CopperOre, RareOre, Herb, Crystal, Chest, FishingSpot, Relic, Mushroom, Berries,
     // 2.3.5 more resources
-    GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, NodeTypeCount };
+    GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, AuroraCrystal /* 2.8.0 */, NodeTypeCount };
 struct NodeSpawn { NodeType type; vec3 pos; float rot; uint32_t uid; int tier; };
 
 struct ChunkKey {
@@ -144,6 +149,10 @@ public:
     float forestAt(float x, float z) const;   // 1.13.0 tree cover 0..1 (the scatter density), for the forest atmosphere
     // Ground height including walkable structures (bridges, docks)
     float groundHeight(float x, float z) const;
+    // 2.8.0 floating islands: the deck under a character at p (only from above: walking under an island does not
+    // put you on it). Returns false when p is not over an island deck.
+    bool skyDeck(vec3 p, float& deckY) const;
+    int geyserNear(vec2 p, float r) const;   // index of a launch geyser within r metres, -1 if none
     // 1.11.2 one deck profile for the bridge mesh, the walkable ground and the railings: `along` in metres from
     // the centre (-halfLen..halfLen), returns the world height of the deck top. It meets the road at both ends.
     static float bridgeHalfLen(const Structure& s) { return 8.f * s.scale + 4.f; }

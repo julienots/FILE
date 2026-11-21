@@ -532,6 +532,7 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
     // ground, water, slopes
     float gy = groundAt(c.pos.x, c.pos.z);
     if (step > gy) gy = step;
+    if (!dungeon.active) { float dk; if (world.skyDeck(c.pos, dk) && dk > gy) gy = dk; }   // 2.8.0 floating islands
     bool lava = false, frozenW = false;
     float wl = waterAt(c.pos.x, c.pos.z, &lava, &frozenW);
     if (frozenW && wl > gy) gy = wl;  // walk on ice

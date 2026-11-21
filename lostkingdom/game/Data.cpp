@@ -114,6 +114,10 @@ static void buildItems() {
         {"sword_steel", "Épée d'acier", WeaponType::Sword, 3, Rarity::Rare, 25, 0.08f, 0.04f, Element::Physical, 0, "Une lame d'acier trempé, droite et fiable."},
         {"axe_steel", "Hache d'acier", WeaponType::Axe, 3, Rarity::Rare, 29, 0.06f, -0.02f, Element::Physical, 0, "Elle fend les boucliers comme les bûches."},
         {"dagger_silver", "Dague d'argent", WeaponType::Dagger, 3, Rarity::Rare, 17, 0.2f, 0.18f, Element::Light, 8, "Les morts sans repos la craignent."},
+        // 2.8.0 the Lands of Aurora
+        {"sword_aurora", "Lame d'aurore", WeaponType::Sword, 4, Rarity::Legendary, 42, 0.12f, 0.06f, Element::Arcane, 14, "Taillée dans un seul cristal. La nuit, elle éclaire le chemin."},
+        {"staff_aurora", "Sceptre boréal", WeaponType::Staff, 4, Rarity::Legendary, 19, 0.1f, 0, Element::Ice, 26, "Les voiles du ciel dansent dans son cristal."},
+        {"bow_aurora", "Arc de lumière", WeaponType::Bow, 4, Rarity::Legendary, 30, 0.16f, 0.06f, Element::Light, 10, "Sa corde est un fil d'aurore tressé."},
     };
     for (auto& w : ws) {
         ItemDef& d = addItem(w.id, w.name, ItemKind::Weapon, w.r, 20 + w.tier * w.tier * 60 + (int)w.r * 80, w.desc);
@@ -175,6 +179,7 @@ static void buildItems() {
         {"ring_silver", "Anneau d'argent", ItemKind::Ring, Rarity::Rare, 10, 15, 0.03f, 0, 2, 0, "Froid comme la neige de Frostheim."},
         {"ring_gold", "Anneau d'or", ItemKind::Ring, Rarity::Epic, 25, 10, 0.05f, 3, 2, 0.02f, "L'or des Sables, poli au sable."},
         {"amulet_pearl", "Collier de perle", ItemKind::Amulet, Rarity::Epic, 30, 40, 0.03f, 0, 3, 0.03f, "Une perle de la Côte, sertie d'argent."},
+        {"amulet_aurora", "Cœur d'aurore", ItemKind::Amulet, Rarity::Legendary, 45, 45, 0.06f, 6, 4, 0.04f, "Un cristal vivant qui bat doucement contre la poitrine."},   // 2.8.0
         {"amulet_silence", "Joyau du Silence", ItemKind::Amulet, Rarity::Ancestral, 70, 70, 0.1f, 12, 8, 0.06f, "Le septième joyau de la Couronne. Il fait taire le monde, pour mieux l'entendre."},
     };
     for (auto& t : ts) {
@@ -253,6 +258,7 @@ static void buildItems() {
     mat("flax", "Lin", Rarity::Common, 3, "i_sickle", "Tiges souples aux fleurs bleues.");
     mat("linen", "Toile de lin", Rarity::Common, 9, "i_hunt", "Tissée serrée, pour les bandages et les vêtements.");
     mat("fire_root", "Racine de braise", Rarity::Rare, 14, "i_sickle", "Chaude au toucher, elle pousse dans les cendres.");
+    mat("aurora_crystal", "Cristal d'aurore", Rarity::Epic, 45, "i_crystal", "Il garde la lumière des aurores et la rend la nuit. Il ne pousse qu'aux Terres d'Aurore.");   // 2.8.0
     // ---- quest items & relics -------------------------------------------------------------------
     auto quest = [&](const char* id, const char* nm, Rarity r, const char* desc, const char* icon = "i_relic") {
         ItemDef& d = addItem(id, nm, ItemKind::Quest, r, 0, desc); d.icon = icon;
@@ -271,6 +277,7 @@ static void buildItems() {
     quest("amber_key", "Clé d'ambre", Rarity::Epic, "Une clé de résine où dort un scarabée.");
     quest("sun_sigil", "Sceau du Soleil", Rarity::Legendary, "Le sceau de Sekhmar. Il est chaud, comme un cœur.");
     quest("silence_jewel", "Le Silence", Rarity::Ancestral, "Le septième joyau. Il n'a jamais orné aucune Couronne.");
+    quest("sky_shard", "Éclat du ciel", Rarity::Epic, "Un fragment de cristal pur, trouvé dans un coffre des îles flottantes. Il est plus léger que l'air.", "i_crystal");   // 2.8.0
     quest("caravan_ledger", "Registre de caravane", Rarity::Common, "Des chiffres, des noms, et une dernière ligne raturée.", "i_quest");
     auto relic = [&](const char* id, const char* nm, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::Relic, Rarity::Legendary, 150, desc); d.icon = "i_relic"; };
     relic("relic_elven_harp", "Harpe elfique", "Ses cordes vibrent seules quand le vent souffle d'Elderwood.");
@@ -369,6 +376,10 @@ const std::vector<Recipe>& recipes() {
         {"amulet_pearl", 1, {{"pearl", 1}, {"silver_bar", 1}, {"linen", 1}}, ST_FORGE, 6},
         {"bandage", 2, {{"linen", 1}, {"herb", 1}}, ST_ALCHEMY, 1},
         {"tool_shovel", 1, {{"iron_bar", 2}, {"wood", 2}}, ST_FORGE, 1},   // 2.4.0
+        {"sword_aurora", 1, {{"aurora_crystal", 5}, {"steel_bar", 2}}, ST_FORGE, 14},   // 2.8.0
+        {"staff_aurora", 1, {{"aurora_crystal", 4}, {"wood", 2}, {"crystal", 2}}, ST_FORGE, 14},
+        {"bow_aurora", 1, {{"aurora_crystal", 4}, {"wood", 3}, {"spider_silk", 1}}, ST_WORKBENCH, 14},
+        {"amulet_aurora", 1, {{"aurora_crystal", 3}, {"silver_bar", 1}}, ST_FORGE, 12},
         {"bomb", 2, {{"coal", 2}, {"fire_root", 1}}, ST_FORGE, 4},
         {"bomb", 1, {{"coal", 3}, {"sea_salt", 1}}, ST_FORGE, 4},
         {"cactus_juice", 1, {{"cactus_fruit", 3}}, ST_CAMPFIRE, 1},
@@ -722,6 +733,23 @@ static void buildEnemies() {
       e.hlook = humanLook(Species::Golem, Body::Plate, 0x2a9a6a, 0x2a9a6a, Helm::None, 152); e.hlook.glow = hexColor(0x60ffb0); e.hlook.bulk = 1.6f; e.scale = 1.8f; e.radius = 0.9f; e.poise = 160;
       e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.6f, 1.6f, 6, 0.9f, Element::Nature, 4.f, 0}};
       e.loot = {{"crystal", 0.5f}, {"gold_ore", 0.4f}, {"rare_ore", 0.3f}}; e.weak = Element::Lightning; }
+    // ============================================================ 2.8.0 Lands of Aurora
+    { auto& e = E("aurora_wolf", "Loup boréal", "Loups", R_AURORA, 21, 260, 38, 12, 7.f, Behavior::Pack, "Son pelage boit la lumière des aurores et la rend la nuit. Une meute qui court ressemble à une vague de lumière.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xc8d8e8); e.clook.c2 = hexColor(0xf0f8ff); e.clook.mane = true; e.clook.glow = hexColor(0x60f0e0); e.group = 3; e.radius = 0.55f; e.scale = 1.25f;
+      e.attacks = {melee(C_Q_BITE, 2.f, 1.1f, 1.5f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 6, 0.45f, Element::Ice, 1.8f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.6f}, {"leather", 0.4f}, {"aurora_crystal", 0.12f}}; e.weak = Element::Fire; }
+    { auto& e = E("crystal_golem", "Golem de cristal", "Golems", R_AURORA, 23, 640, 46, 30, 3.2f, Behavior::Tank, "Un amas de cristaux que l'aurore a mis debout. Il ne se bat que pour protéger ses prairies.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x60d8d0, 0x9a80e0, Helm::None, 171); e.hlook.glow = hexColor(0x80fff0); e.hlook.bulk = 1.7f; e.hlook.emissiveEyes = 2.f; e.scale = 1.9f; e.radius = 0.95f; e.poise = 170;
+      e.attacks = {melee(C_B_SWIPE, 3.f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.8f, 1.6f, 6, 0.9f, Element::Ice, 4.f, 0}};
+      e.loot = {{"aurora_crystal", 0.6f}, {"crystal", 0.6f}, {"rare_ore", 0.25f}}; e.weak = Element::Fire; e.resist = Element::Ice; e.gold = 70; }
+    { auto& e = E("aurora_wraith", "Spectre d'aurore", "Esprits", R_AURORA, 22, 220, 44, 8, 4.2f, Behavior::Caster, "Une silhouette de voiles lumineux qui flotte au-dessus des prairies. Ses éclats de givre traversent les boucliers.");
+      e.hlook = humanLook(Species::Undead, Body::Robe, 0x80d8f0, 0xb090ff, Helm::Hood, 172); e.hlook.glow = hexColor(0x90f0ff); e.hlook.emissiveEyes = 2.2f; e.hlook.eyes = hexColor(0xc0ffff); e.weapon = WeaponType::Staff; e.radius = 0.45f;
+      e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 16, 1.2f, 2.6f, 0.6f, Element::Ice, 1.6f, 0}, {C_CAST_AREA, AttackType::Area, 5, 1.5f, 8, 0.9f, Element::Arcane, 4.5f, 0}};
+      e.loot = {{"aurora_crystal", 0.25f}, {"potion_mana", 0.2f}}; e.weak = Element::Light; e.night = true; }
+    { auto& e = E("crystal_spider", "Araignée de quartz", "Araignées", R_AURORA, 21, 230, 36, 14, 5.4f, Behavior::Ranged, "Son corps est une géode. Elle crache des éclats de quartz aussi tranchants que du verre.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0x8ab8d0); e.clook.c2 = hexColor(0xd8f0ff); e.clook.c3 = hexColor(0x3a4a6a); e.clook.glow = hexColor(0x80f0ff); e.scale = 1.4f; e.radius = 0.8f;
+      e.attacks = {melee(C_S_BITE, 2.4f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 14, 0.8f, 4, 0.5f, Element::Arcane, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"spider_silk", 0.5f}, {"crystal", 0.35f}, {"aurora_crystal", 0.08f}}; e.weak = Element::Lightning; }
     // ============================================================ 2.0.0 Coral Coast
     { auto& e = E("sea_crab", "Crabe géant", "Crustacés", R_CORAL, 11, 150, 20, 14, 4.4f, Behavior::Melee, "Il mord le filet, puis le pêcheur, puis le bateau.");
       e.arch = Arch::Spider; e.clook.c1 = hexColor(0xc4482a); e.clook.c2 = hexColor(0xf0d8c0); e.clook.c3 = hexColor(0x6a2210); e.clook.glow = hexColor(0xffd0a0); e.scale = 1.3f; e.radius = 0.8f;
@@ -980,6 +1008,11 @@ const std::vector<NpcDef>& npcs() {
         { HumanoidLook l = villagerLook(true, 0x2a7a4a, 0x1a1008, Hair::Braids, Body::Leather, 151); l.c1 = hexColor(0x2a7a4a); l.glow = hexColor(0x60ffb0); l.satchel = true;
           N("itzel", "Itzel", "Gardienne des lianes", NpcRole::Alchemist, "emeraude", l, {-7, 7}, {"Chut… Écoute. La jungle te parle, si tu sais te taire.", "Les racines de braise soignent, si on les cueille au bon moment."},
             {"Le Temple du Jaguar s'est réveillé. Ses gardiens de jade marchent la nuit.", "Les pilleurs de tombes creusent sous Tlaloc. Ils ne savent pas ce qu'ils réveillent."}, {"potion_heal", "potion_great", "potion_mana", "ember_tonic", "bandage", "potion_stamina"}, -1); }
+        // 2.8.0 Lumenhaven (the Lands of Aurora)
+        { HumanoidLook l = villagerLook(true, 0x60c8d0, 0xf0f0ff, Hair::Long, Body::Robe, 171); l.c1 = hexColor(0x3a8ab0); l.glow = hexColor(0x80fff0); l.satchel = true;
+          N("aila", "Aïla", "Cristallière de Lumenhaven", NpcRole::Merchant, "lumenhaven", l, {7, -6}, {"Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.", "Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter."},
+            {"Les cristaux d'aurore gardent la lumière du ciel. Taillés, ils font des armes qui éclairent la nuit.", "Les golems de cristal se réveillent quand on arrache trop de cristaux à la fois. Prudence.", "Sur chaque île du ciel, quelqu'un a laissé un coffre. On ne sait pas qui. On ne sait pas comment."},
+            {"potion_great", "potion_mana", "bandage", "crystal", "bomb", "potion_stamina"}, -1); }
         // Oasis de Kheft, Tamrak, Zafir
         { HumanoidLook l = villagerLook(true, 0x3a7a5a, 0xe0e0d0, Hair::Bun, Body::Robe, 52); l.hat = 0;
           N("nadira", "Nadira", "Guérisseuse de l'oasis", NpcRole::Alchemist, "kheft", l, {6, 7}, {"L'eau est un remède avant d'être un luxe.", "Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers."},
@@ -1222,6 +1255,16 @@ const std::vector<QuestDef>& quests() {
         Q("s_kurgan", "Le Roi Cavalier", QuestType::Side, "borya", "Le tertre du premier khan a été ouvert.",
           "Quelqu'un a ouvert le Tertre du Roi Cavalier. Va voir ce qu'il en reste, et reviens me le dire. Les morts de la steppe n'aiment pas qu'on les dérange.", "Le tertre est à l'est, sur la plus haute colline.", "Alors le roi dort encore. Bien. Prends ceci, il l'aurait voulu.",
           {{"Explorer le Tertre du Roi Cavalier", K::Discover, "kurgan", 1, "kurgan"}, {"Retourner voir Borya", K::Talk, "borya", 1, "valdor"}}, 1800, 300, {"ring_silver"}, -1, 0);
+        // 2.8.0 the Lands of Aurora
+        Q("s_crystals", "Lumière captive", QuestType::Side, "aila", "Aïla a besoin de cristaux d'aurore.",
+          "Six cristaux d'aurore, et je pourrai rallumer la grande lanterne de Lumenhaven. Ils poussent dans les prairies, et parfois sur les îles du ciel. Un coup de pioche, et ils se détachent.", "Les cristaux d'aurore brillent dans les prairies autour de Lumenhaven.", "Regarde : la lanterne se rallume. Garde ce cœur de cristal, il bat pour toi maintenant.",
+          {{"Rapporter des cristaux d'aurore à Aïla", K::Deliver, "aurora_crystal", 6, "lumenhaven"}}, 2600, 450, {"amulet_aurora"}, -1, 0);
+        Q("s_golems", "Contrat : golems de cristal", QuestType::Hunt, "aila", "Des golems de cristal menacent les cueilleurs.",
+          "Trois golems de cristal se sont levés près du Cratère Cristallin. Ils écrasent tout ce qui bouge. Le feu les fait craquer.", "Au sud-est de Lumenhaven, vers le Cratère Cristallin.", "Les cueilleurs peuvent retourner aux prairies. Merci.",
+          {{"Vaincre des golems de cristal", K::Kill, "crystal_golem", 3, ""}}, 3000, 520, {"potion_great", "potion_great"}, -1, 0);
+        Q("s_skyisles", "Les îles du ciel", QuestType::Side, "aila", "Des coffres attendent sur les îles qui flottent.",
+          "Sur chaque île du ciel, il y a un coffre et, dedans, un éclat du ciel. Rapporte-m'en trois. Pour monter, marche dans la source jaillissante au pied de l'île : elle te lancera là-haut.", "Les îles flottent au-dessus des prairies. Cherche la source lumineuse à leur pied.", "Trois éclats du ciel… Avec eux, je peux tailler une lame comme on n'en a pas vu depuis mille ans. Elle est à toi.",
+          {{"Trouver des éclats du ciel", K::Collect, "sky_shard", 3, ""}}, 3400, 600, {"sword_aurora"}, -1, 0);
         Q("s_jaguar", "Le réveil du Jaguar", QuestType::Side, "itzel", "Le Temple du Jaguar s'est réveillé.",
           "Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.", "Le temple est au sud-est d'Émeraude, sous les grands arbres.", "Le temple dort de nouveau. Merci, voyageur.",
           {{"Explorer le Temple du Jaguar", K::Dungeon, "jaguar", 1, "temple_jaguar"}, {"Retourner voir Itzel", K::Talk, "itzel", 1, "emeraude"}}, 3000, 500, {"amulet_pearl", "ember_tonic"}, -1, 0);
@@ -1337,6 +1380,7 @@ const std::vector<LoreDef>& lore() {
         {"r_3", "Elderwood", "La forêt la plus ancienne du monde. Les druides du Cercle disent qu'Aldric y planta l'arbre-mère avec son champion, le jour de son sacre. Les racines remuent la nuit, et les clairières ne guérissent plus."},
         {"r_4", "Royaume des Ombres", "Ce fut le plus riche des six royaumes ; c'est aujourd'hui un marais de brume, de tombes et de cloches qui sonnent seules. Le château de Morneval domine la faille. Personne n'y entre. Quelque chose en sort."},
         {"r_5", "High Crowns", "Les cimes couronnées, où le ciel est si proche qu'on y voit les étoiles en plein jour. Le monastère de Highspire y garde la forge sacrée, et l'astronome de la tour prétend que les étoiles se sont déplacées."},
+        {"r_10", "Terres d'Aurore", "Une île au sud de la Côte de Corail, que les marins croyaient maudite à cause des lumières qui y dansent la nuit. Les cristaux y poussent comme des arbres, et des sources jaillissent assez fort pour lancer un homme jusqu'aux îles qui flottent dans le ciel. Les Lumins y vivent depuis toujours et disent que l'aurore est un être vivant."},   // 2.8.0
         // ---- memories of Aldric (one per defeated Guardian)
         {"mem_root", "Souvenir : l'arbre-mère", "Tu te souviens de la terre noire sous tes ongles. D'un jeune chevalier qui riait en tenant la pousse : « Elle verra nos petits-enfants, sire. » Corwin. Tu connais ce nom. Tu as planté cet arbre. Tu."},
         {"mem_king", "Souvenir : le serment du sénéchal", "Un homme agenouillé dans la salle du trône, la main sur l'épée. « Ma vie pour la couronne, ma mort pour le roi. » Le Roi Squelette a gardé son serment trois siècles. Avant de s'effondrer, il t'a appelé « sire »."},

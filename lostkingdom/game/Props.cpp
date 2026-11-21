@@ -30,6 +30,7 @@ vec3 regionGroundTint(int r) {
     case R_CORAL: return {0.98f, 1.04f, 0.9f};
     case R_STEPPE: return {1.08f, 1.0f, 0.78f};    // 2.4.0 golden grassland
     case R_JUNGLE: return {0.82f, 1.02f, 0.84f};   // deep, wet green
+    case R_AURORA: return {0.78f, 1.02f, 1.06f};   // 2.8.0 turquoise
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
@@ -47,6 +48,7 @@ vec3 foliageColor(int r, float t) {
     case R_CORAL: return ramp3(0x2f7a3a, 0x4f9a40, 0x9ab84a, t);
     case R_STEPPE: return ramp3(0x8a8a40, 0xb8a452, 0xd8c070, t);   // 2.4.0 straw and gold
     case R_JUNGLE: return ramp3(0x1f5a2a, 0x2f7a32, 0x5a9a3a, t);   // 2.4.0 emerald
+    case R_AURORA: return ramp3(0x2a7a7a, 0x3aa89a, 0x9ad8c8, t);   // 2.8.0 turquoise meadows with pale tips
     default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }
@@ -669,9 +671,28 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
             vec3 p0 = top, p1 = top + d * (len * 0.38f) + vec3(0, up, 0), p2 = top + d * (len * 0.72f) + vec3(0, up * 0.9f - 0.5f, 0), p3 = top + d * len + vec3(0, up * 0.5f - 1.5f, 0);
             vec3 sd{-d.z, 0, d.x};
             Mat m0(lerp(gl, gt, 0.15f), 0.8f, 0, 0, 0.5f), m1(lerp(gl, gt, 0.55f), 0.8f, 0, 0, 0.8f), m2(gt, 0.8f, 0, 0, 1.f);
-            F.blade(p0, p1, 0.55f, sd, m0, m1);
-            F.blade(p1, p2, 0.62f, sd, m1, m1);
-            F.blade(p2, p3, 0.46f, sd, m1, m2);
+            if (gLiteBuild) {   // mid distance: three wide blades
+                F.blade(p0, p1, 0.55f, sd, m0, m1);
+                F.blade(p1, p2, 0.62f, sd, m1, m1);
+                F.blade(p2, p3, 0.46f, sd, m1, m2);
+                continue;
+            }
+            // 2.8.0 a real frond: a thin midrib along the arched curve, and pairs of narrow leaflets that hang from it
+            auto curve = [&](float t) { float u = 1.f - t; return p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t); };
+            F.blade(p0, curve(0.5f), 0.07f, sd, m0, m1);
+            F.blade(curve(0.5f), p3, 0.05f, sd, m1, m2);
+            const int nl = 8;
+            for (int q = 1; q <= nl; q++) {
+                float t = 0.12f + 0.86f * q / nl;
+                vec3 P = curve(t), T = normalize(curve(std::min(1.f, t + 0.05f)) - curve(std::max(0.f, t - 0.05f)));
+                vec3 side = normalize(cross(T, vec3(0, 1, 0)));
+                float ll = len * (0.26f - 0.13f * t) * rng.range(0.85f, 1.1f);
+                Mat ml(lerp(gl, gt, t * 0.8f + rng.f() * 0.15f), 0.8f, 0, 0, 0.6f + 0.4f * t);
+                for (int sgn = -1; sgn <= 1; sgn += 2) {
+                    vec3 tip = P + side * (ll * sgn) + vec3(0, -ll * 0.55f, 0) + T * (ll * 0.35f);
+                    F.blade(P, tip, 0.16f * (1.f - 0.4f * t), T, ml, ml.withWind(ml.wind + 0.15f));
+                }
+            }
         }
         if (date) for (int i = 0; i < 3; i++) F.ellipsoid(top + vec3(std::cos(i * 2.1f) * 0.3f, -0.45f - i * 0.05f, std::sin(i * 2.1f) * 0.3f), vec3(0.14f, 0.3f, 0.14f), Mat(hexColor(0xc0702a), 0.7f, 0, 0, 0.3f), 6, 4);
         else for (int i = 0; i < 4; i++) F.ellipsoid(top + vec3(std::cos(i * 1.6f) * 0.28f, -0.3f, std::sin(i * 1.6f) * 0.28f), vec3(0.16f), Mat(hexColor(0x6a4a22), 0.8f, 0, 0, 0.2f), 6, 4);
@@ -900,6 +921,53 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
         S.lathe({{0.01f, 0.8f}, {0.28f, 0.88f}, {0.46f, 1.15f}, {0.42f, 1.18f}, {0.01f, 0.9f}}, br, 12);
         S.ellipsoid({0, 1.12f, 0}, vec3(0.34f, 0.09f, 0.34f), Mat(pal::ember, 0.6f, 0, 2.8f), 8, 3);
         t.radius = 0.5f; t.height = 1.2f;
+        break;
+    }
+    case P_CRYSTALTREE: {
+        // 2.8.0 the tree of the Lands of Aurora: a pale, silky trunk that twists as it rises, limbs carrying soft
+        // turquoise foliage, and clusters of luminous crystal "fruit" hanging under the crown
+        float h = rng.range(4.5f, 6.5f);
+        Mat bark(hexColor(0xd8dce0), 0.6f), barkB(hexColor(0xa8b4c0), 0.6f);
+        vec3 bend{rng.range(-0.5f, 0.5f), 0, rng.range(-0.5f, 0.5f)};
+        vec3 p0{0, -0.3f, 0}, p1 = vec3(0, h * 0.45f, 0) + bend * 0.6f, p2 = vec3(0, h, 0) - bend * 0.3f;
+        S.tube(p0, p1, 0.26f, 0.18f, bark, 8, false);
+        S.tube(p1, p2, 0.18f, 0.08f, barkB, 7, false);
+        vec3 leaf = lerp(hexColor(0x3ab8a8), hexColor(0x6ad0e0), rng.f());
+        int nb = 4; float a0 = rng.f() * TAU;
+        for (int i = 0; i < nb; i++) {
+            float a = a0 + i * TAU / nb + rng.range(-0.3f, 0.3f);
+            vec3 out{std::cos(a), 0, std::sin(a)};
+            vec3 bs = lerp(p1, p2, rng.range(0.2f, 0.7f));
+            vec3 be = bs + out * rng.range(1.2f, 1.8f) + vec3(0, rng.range(0.6f, 1.2f), 0);
+            S.tube(bs, be, 0.09f, 0.04f, bark, 5, false);
+            float s = rng.range(0.9f, 1.3f);
+            clump(F, be + vec3(0, s * 0.2f, 0), vec3(s, s * 0.6f, s), leaf * rng.range(0.9f, 1.1f), 0.8f, rng.next());
+            if (!gLiteBuild) for (int q = 0; q < 3; q++) {   // hanging crystal fruit, they glow (stronger at night)
+                vec3 hp = be + vec3(rng.range(-0.6f, 0.6f), -s * 0.45f, rng.range(-0.6f, 0.6f));
+                vec3 cc = lerp(hexColor(0x60fff0), hexColor(0xc080ff), rng.f());
+                S.flat = true; S.cone(hp + vec3(0, 0.12f, 0), hp - vec3(0, 0.32f, 0), 0.08f, Mat(cc, 0.05f, 0, 2.8f), 5); S.flat = false;
+            }
+        }
+        clump(F, p2 + vec3(0, 0.6f, 0), vec3(1.3f, 0.8f, 1.3f), leaf, 1.f, rng.next());
+        t.radius = 0.3f; t.height = h + 1.5f;
+        break;
+    }
+    case P_AURORASPIRE: {
+        // 2.8.0 a spire of living crystal: hexagonal columns grown from a pale bed of rock, glowing from within
+        S.flat = true;
+        S.rock({0, 0.15f, 0}, vec3(1.3f, 0.5f, 1.2f), Mat(hexColor(0xb0bcc8), 0.7f), rng.next(), 1);
+        int n = gLiteBuild ? 4 : 7;
+        for (int i = 0; i < n; i++) {
+            vec3 d = i == 0 ? vec3(0, 1, 0) : normalize(vec3(rng.range(-0.55f, 0.55f), 1, rng.range(-0.55f, 0.55f)));
+            float l = i == 0 ? rng.range(4.f, 6.5f) : rng.range(1.4f, 3.2f);
+            float r = i == 0 ? 0.55f : rng.range(0.22f, 0.4f);
+            vec3 base = i == 0 ? vec3(0) : vec3(rng.range(-0.8f, 0.8f), 0.1f, rng.range(-0.8f, 0.8f));
+            vec3 col = lerp(hexColor(0x40e8d8), hexColor(0xa070ff), clampf(rng.f() * 0.7f + (i == 0 ? 0.3f : 0.f), 0.f, 1.f));
+            S.tube(base, base + d * l * 0.82f, r, r * 0.9f, Mat(col * 0.85f, 0.06f, 0.f, 1.4f), 6, false);
+            S.cone(base + d * l * 0.82f, base + d * l, r * 0.9f, Mat(col * 1.15f, 0.05f, 0.f, 2.4f), 6);
+        }
+        S.flat = false;
+        t.radius = 0.9f; t.height = 6.f;
         break;
     }
     default: break;
@@ -1621,6 +1689,7 @@ vec2 structureFootprint(int kind) {
     case S_LIGHTHOUSE: return {3.2f, 3.2f}; case S_PAGODA: return {5.4f, 11.f}; case S_SPHINX: return {3.2f, 7.3f}; case S_PIER: return {1.4f, 7.f};
     case S_PORTAL: return {6.f, 1.4f};
     case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
+    case S_GEYSER: return {1.6f, 1.6f}; case S_SKYISLAND: return {0.5f, 0.5f};   // 2.8.0 (the island floats: the ground under it stays free)
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};
     }
@@ -2292,6 +2361,74 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_BEACHHUT: beachHut(M, Fo, s.variant); addBoxCollider(out, s, gy, {0, 0.4f}, 2.5f, 2.9f, 3.f); break;
     case S_COLONNADE: colonnade(M, s.variant, rng); for (int i = 0; i < 5; i++) addCircleCollider(out, s, gy, {(i - 2) * 2.5f, 0}, 0.5f, 4.f); break;
     case S_ARCHWAY: archway(M, s.variant); addBoxCollider(out, s, gy, {-3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {0, 0}, 3.0f, 1.0f, 3.f); out.colliders.back().base = gy + 6.f; out.colliders.back().top = 3.f; break;
+    case S_GEYSER: {
+        // 2.8.0 a launch geyser: a ring of pale stones round a glowing turquoise pool, crystal shards, a mist jet
+        M.flat = true;
+        for (int i = 0; i < 10; i++) {
+            float a = i * TAU / 10 + rng.range(-0.15f, 0.15f);
+            M.rock({std::cos(a) * 1.45f, 0.1f, std::sin(a) * 1.45f}, vec3(rng.range(0.35f, 0.55f), rng.range(0.25f, 0.45f), rng.range(0.35f, 0.5f)), Mat(hexColor(0xc8d0d8), 0.65f), rng.next(), 0);
+        }
+        for (int i = 0; i < 4; i++) {
+            float a = rng.range(0, TAU); vec3 b{std::cos(a) * 1.9f, 0, std::sin(a) * 1.9f};
+            vec3 col = lerp(hexColor(0x40f0d8), hexColor(0xa070ff), rng.f());
+            M.cone(b, b + normalize(vec3(rng.range(-0.3f, 0.3f), 1, rng.range(-0.3f, 0.3f))) * rng.range(0.6f, 1.3f), 0.16f, Mat(col, 0.06f, 0, 2.6f), 6);
+        }
+        M.flat = false;
+        M.ellipsoid({0, 0.02f, 0}, vec3(1.15f, 0.08f, 1.15f), Mat(hexColor(0x5af0e0), 0.05f, 0, 2.6f), 14, 3);
+        M.ellipsoid({0, 0.06f, 0}, vec3(0.45f, 0.06f, 0.45f), Mat(hexColor(0xe8fffc), 0.05f, 0, 3.4f), 10, 3);
+        out.emitters.push_back(vec4(s.pos.x, gy + 0.6f, s.pos.y, EM_MIST));
+        out.emitters.push_back(vec4(s.pos.x, gy + 1.6f, s.pos.y, EM_SPARKLES));
+        out.lights.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y, LI_CRYSTAL));
+        break;
+    }
+    case S_SKYISLAND: {
+        // 2.8.0 a floating island: a domed meadow on top, an inverted crag of layered rock below, glowing crystals
+        // hanging under it, a crystal tree, a chest and a vein of aurora crystal on the deck
+        float off = s.variant / 100.f - gy;
+        const float R = SKY_ISLAND_R;
+        size_t a0 = M.v.size();
+        // (profiles listed so the lathe's faces and normals point outwards: rim -> centre on top, tip -> rim below)
+        M.lathe({{R * 1.02f, off - 0.15f}, {R * 0.9f, off + 0.1f}, {R * 0.55f, off + 0.28f}, {0.f, off + 0.32f}}, Mat(hexColor(0x34907f), 0.92f), 18);
+        size_t a1 = M.v.size();
+        M.lathe({{0.05f, off - 12.5f}, {R * 0.18f, off - 10.5f}, {R * 0.4f, off - 8.f}, {R * 0.62f, off - 5.5f}, {R * 0.82f, off - 3.f}, {R * 0.98f, off - 1.2f}, {R * 1.02f, off - 0.15f}}, Mat(hexColor(0x8a8e98), 0.9f), 18);
+        size_t a2 = M.v.size();
+        for (size_t i = a0; i < a2; i++) {   // craggy: every vertex pushed in or out by its own noise (the top only a little)
+            Vertex& v = M.v[i];
+            float k = i < a1 ? 0.06f : 0.22f;
+            float n = fbm2(v.px * 0.4f + s.pos.x, v.pz * 0.4f + s.pos.y, 2, 991) * k + (i < a1 ? 0.f : 0.08f * std::sin(v.py * 2.3f));
+            v.px *= 1.f + n; v.pz *= 1.f + n;
+            if (i >= a1) { float sh = 0.78f + 0.25f * hashf((uint32_t)(v.py * 7.f) * 31u + 7u); v.r = (uint8_t)clampf(v.r * sh, 0, 255); v.g = (uint8_t)clampf(v.g * sh, 0, 255); v.b = (uint8_t)clampf(v.b * sh * 1.05f, 0, 255); }
+        }
+        M.flat = true;
+        for (int i = 0; i < 9; i++) {   // hanging crystals
+            float a = rng.range(0, TAU), rr = rng.range(1.f, R * 0.7f);
+            float y = off - 1.f - (R - rr) * 0.9f * rng.range(0.6f, 1.f);
+            vec3 b{std::cos(a) * rr, y, std::sin(a) * rr};
+            vec3 col = lerp(hexColor(0x40f0d8), hexColor(0xb070ff), rng.f());
+            M.cone(b, b - vec3(rng.range(-0.3f, 0.3f), rng.range(1.2f, 2.6f), rng.range(-0.3f, 0.3f)), rng.range(0.2f, 0.4f), Mat(col, 0.05f, 0, 2.6f), 6);
+        }
+        for (int i = 0; i < 3; i++) {   // standing crystals on the deck
+            float a = rng.range(0, TAU), rr = rng.range(R * 0.5f, R * 0.85f);
+            vec3 b{std::cos(a) * rr, off + 0.1f, std::sin(a) * rr};
+            vec3 col = lerp(hexColor(0x40f0d8), hexColor(0xb070ff), rng.f());
+            M.cone(b, b + normalize(vec3(rng.range(-0.3f, 0.3f), 1, rng.range(-0.3f, 0.3f))) * rng.range(1.f, 2.2f), 0.3f, Mat(col, 0.05f, 0, 2.2f), 6);
+        }
+        M.flat = false;
+        {   // the crystal tree, off-centre
+            const PropTemplate& t = propTemplate(P_CRYSTALTREE, rng.irange(0, 2));
+            mat4 pm = mat4::trs({-2.5f, off + 0.2f, 1.5f}, rotY(rng.range(0, TAU)), vec3(1.1f));
+            appendXf(M, t.solid, pm, vec3(1)); appendXf(Fo, t.foliage, pm, vec3(1));
+            addCircleCollider(out, s, gy, {-2.5f, 1.5f}, 0.3f, off + 5.f); out.colliders.back().base = s.variant / 100.f - 0.2f; out.colliders.back().top = 5.f;
+        }
+        auto wpos = [&](vec2 l, float y) { vec2 q = rotate(l, -s.rot) + s.pos; return vec3(q.x, y, q.y); };
+        NodeSpawn ch; ch.type = NodeType::Chest; ch.pos = wpos({2.4f, -1.2f}, s.variant / 100.f + 0.25f); ch.rot = s.rot + 0.6f; ch.tier = 3;
+        ch.uid = hash32(0x5C1E0000u + (uint32_t)((int)s.pos.x * 7919 + (int)s.pos.y)); out.nodes.push_back(ch);
+        NodeSpawn cr; cr.type = NodeType::AuroraCrystal; cr.pos = wpos({0.5f, 3.2f}, s.variant / 100.f + 0.2f); cr.rot = s.rot; cr.tier = 3;
+        cr.uid = hash32(0x5C1F0000u + (uint32_t)((int)s.pos.x * 7919 + (int)s.pos.y)); out.nodes.push_back(cr);
+        out.lights.push_back(vec4(s.pos.x, gy + off - 4.f, s.pos.y, LI_CRYSTAL));
+        out.emitters.push_back(vec4(s.pos.x, gy + off - 6.f, s.pos.y, EM_SPARKLES));
+        break;
+    }
     case S_PORTAL: portalGate(M, Fo);
         addCircleCollider(out, s, gy, {-4.3f, 0}, 0.7f, 9.f); addCircleCollider(out, s, gy, {4.3f, 0}, 0.7f, 9.f);
         addCircleCollider(out, s, gy, {-6.6f, 0.5f}, 0.9f, 7.f); addCircleCollider(out, s, gy, {6.6f, 0.5f}, 0.9f, 7.f);

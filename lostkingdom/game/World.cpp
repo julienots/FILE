@@ -8,11 +8,11 @@
 namespace lk {
 
 const char* regionName(int r) {
-    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude"};
+    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude", "Terres d'Aurore"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "?";
 }
 const char* regionSubtitle(int r) {
-    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde"};
+    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde", "Le pays des cristaux vivants"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "";
 }
 
@@ -51,6 +51,9 @@ static const Seed SEEDS[] = {
     // 2.4.0 the Emerald Jungle: the south-east, hot and wet, rivers, ruins of a forgotten people
     {{5100, 3000}, R_JUNGLE}, {{5750, 3300}, R_JUNGLE}, {{4950, 3800}, R_JUNGLE}, {{5600, 4100}, R_JUNGLE}, {{4300, 4900}, R_JUNGLE},
     {{5000, 4800}, R_JUNGLE}, {{5700, 5000}, R_JUNGLE}, {{4100, 5600}, R_JUNGLE}, {{4900, 5650}, R_JUNGLE}, {{5650, 5700}, R_JUNGLE},
+    // 2.8.0 the Lands of Aurora: the island of living crystals in the south-west sea
+    {{1100, 5000}, R_AURORA}, {{600, 5350}, R_AURORA}, {{1300, 5450}, R_AURORA}, {{2000, 5250}, R_AURORA}, {{2700, 5300}, R_AURORA},
+    {{3150, 5600}, R_AURORA}, {{900, 5800}, R_AURORA}, {{1700, 5800}, R_AURORA}, {{2450, 5800}, R_AURORA},
 };
 
 RegionWeights World::regionAt(float x, float z) const {
@@ -153,6 +156,15 @@ static float regionHeight(int r, float x, float z) {
         float hills = 14.f * fbm2(w.x * 0.004f, w.y * 0.004f, 4, 152);
         float karst = 46.f * std::pow(saturate(fbm2(w.x * 0.0065f, w.y * 0.0065f, 3, 153) - 0.18f) * 1.9f, 3.f);
         return 8.f + hills + terrace(karst, 7.f, 0.08f) + 2.f * fbm2(x * 0.02f, z * 0.02f, 3, 154);
+    }
+    case R_AURORA: {
+        // 2.8.0 the Lands of Aurora: soft turquoise meadows in wide basins, broken by sharp crystal ridges with
+        // stepped flanks, and a few lone pinnacles
+        vec2 w = warp2(x, z, 90.f, 0.0018f, 171);
+        float basins = 10.f * fbm2(w.x * 0.003f, w.y * 0.003f, 4, 172);
+        float ridge = std::pow(saturate(ridged2(w.x * 0.0042f, w.y * 0.0042f, 4, 173) - 0.42f) * 1.75f, 2.2f) * 38.f;
+        float pin = 26.f * std::pow(saturate(fbm2(x * 0.011f, z * 0.011f, 2, 174) - 0.34f) * 2.6f, 4.f);
+        return 7.f + basins + terrace(ridge, 6.f, 0.1f) + pin + 1.5f * fbm2(x * 0.025f, z * 0.025f, 2, 175);
     }
     case R_CORAL: {
         // 2.0.0 the Coral Coast: soft jungle hills, kept above sea level (the lagoons are carved by lakes)
@@ -364,6 +376,10 @@ void World::buildPlan() {
     Pf("tide_cave", "Grotte des Marées", PoiType::Cave, 1230, 4260, 22, 7, -1, 120);
     Pf("wreck", "L'Épave du Léviathan", PoiType::Ruins, 760, 4300, 34, -1, -1, 120);
     Pf("ws_port", "Pierre de Port-Azur", PoiType::Waystone, 1580, 4150, 10);
+    // ---- 2.8.0 the Lands of Aurora
+    Pf("lumenhaven", "Lumenhaven", PoiType::Village, 1300, 5330, 62, -1, -1, 240);
+    Pf("ws_lumen", "Pierre de Lumenhaven", PoiType::Waystone, 1390, 5250, 10, -1, -1, 120);
+    Pf("crystal_crater", "Cratère Cristallin", PoiType::Ruins, 2450, 5600, 40, -1, -1, 240);
     Pf("ws_shiro", "Pierre de Shirokawa", PoiType::Waystone, 2430, 3790, 10);
     // ---- 2.4.0 the Valdor Steppes
     Pf("valdor", "Valdor, Cité des Chevaux", PoiType::Village, 5300, 1200, 92, -1, -1, 220);
@@ -493,6 +509,8 @@ void World::buildPlan() {
     addRoad(*this, {pos("emeraude"), {5000, 3900}, pos("pilleurs_tombes"), {4750, 4500}, pos("xochi")}, 4, false);
     addRoad(*this, {pos("sun_temple"), {4250, 4100}, {4450, 4600}, pos("xochi")}, 4, false);
     addRoad(*this, {pos("xochi"), {4400, 5250}, pos("tlaloc")}, 3, false);
+    addRoad(*this, {pos("ws_port"), {1380, 4230}, {1180, 4520}, {1080, 4800}, {1150, 5100}, pos("lumenhaven")}, 4, false);   // 2.8.0 across the isthmus (from the waystone, round the harbour)
+    addRoad(*this, {pos("lumenhaven"), {1900, 5450}, pos("crystal_crater")}, 3, false);
 
     // ---- structures ----------------------------------------------------------------------
     auto S = [&](int kind, vec2 p, float rot, int poi, float scale = 1, int variant = 0) {
@@ -595,7 +613,7 @@ void World::buildPlan() {
             if (p.type == PoiType::Village && reg == R_AMBER) { desertTown(); break; }
             if (p.type == PoiType::Village && reg == R_CORAL) { coastTown(); break; }
             S(S_WELL, p.pos, 0, pi);
-            int house = reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
+            int house = reg == R_AURORA ? S_DOMEHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
             int n = p.type == PoiType::Village ? 9 : 6;
             ring(n, p.radius * 0.62f, [&](int i) {
                 if (i == 0) return (int)S_INN;
@@ -771,6 +789,46 @@ void World::buildPlan() {
                         structures.push_back(st);
                     }
                 }
+    // 2.8.0 the Lands of Aurora: floating islands, each with a launch geyser at its foot, and free geysers to play with.
+    // Placed on dry land away from settlements and lakes (baseHeight only: the road index is not built yet).
+    {
+        Rng gr(0xA0A0A0u);
+        auto dry = [&](vec2 p, float m) {
+            if (regionId(p.x, p.y) != R_AURORA || baseHeight(p.x, p.y, regionAt(p.x, p.y)) < 4.f) return false;
+            for (const Poi& q : pois) if (length(q.pos - p) < q.radius + m) return false;
+            for (const Lake& l : lakes) if (length(l.c - p) < l.r + m) return false;
+            for (const Road& rd : roads) for (size_t i = 0; i + 1 < rd.pts.size(); i++) if (distToSegment(p, rd.pts[i], rd.pts[i + 1]) < rd.width + std::min(m, 10.f)) return false;
+            for (const Structure& s : structures) if ((s.kind == S_SKYISLAND || s.kind == S_GEYSER) && length(s.pos - p) < (s.kind == S_SKYISLAND ? 60.f : 25.f)) return false;
+            return true;
+        };
+        int islands = 0;
+        for (int tries = 0; tries < 400 && islands < 9; tries++) {
+            vec2 p{gr.range(450.f, 3200.f), gr.range(5050.f, 5900.f)};
+            if (!dry(p, 30.f)) continue;
+            float a = gr.range(0, TAU);
+            vec2 dir{std::sin(a), std::cos(a)};
+            vec2 gp = p + dir * (SKY_ISLAND_R + 3.5f);
+            if (!dry(gp, 12.f) && regionId(gp.x, gp.y) != R_AURORA) continue;
+            float top = 0;
+            for (int k = 0; k < 9; k++) { vec2 q = p + vec2(std::cos(k * 0.7f), std::sin(k * 0.7f)) * (k ? SKY_ISLAND_R : 0.f); top = std::max(top, baseHeight(q.x, q.y, regionAt(q.x, q.y))); }
+            float gh = baseHeight(gp.x, gp.y, regionAt(gp.x, gp.y));
+            float deck = std::max(top + 9.f, gh + gr.range(14.f, 17.f));
+            if (deck - gh > 18.f) continue;   // the geyser must reach it
+            Structure si; si.kind = S_SKYISLAND; si.pos = p; si.rot = gr.range(0, TAU); si.region = R_AURORA; si.variant = (int)(deck * 100.f);
+            structures.push_back(si);
+            Structure ge; ge.kind = S_GEYSER; ge.pos = gp; ge.rot = std::atan2(-dir.x, -dir.y); ge.region = R_AURORA; ge.variant = (int)((deck - gh) * 100.f);   // aims at the island
+            structures.push_back(ge);
+            islands++;
+        }
+        int free_ = 0;
+        for (int tries = 0; tries < 300 && free_ < 14; tries++) {
+            vec2 p{gr.range(400.f, 3300.f), gr.range(4950.f, 5950.f)};
+            if (!dry(p, 15.f)) continue;
+            Structure ge; ge.kind = S_GEYSER; ge.pos = p; ge.rot = 0; ge.region = R_AURORA; ge.variant = 0;   // straight up
+            structures.push_back(ge);
+            free_++;
+        }
+    }
     indexPlan();
     resolvePlacement();
     indexPlan();
@@ -785,7 +843,7 @@ void World::resolvePlacement() {
     auto movable = [](int k) {
         return k != S_BRIDGE && k != S_FIELD && k != S_PEN && k != S_DOCK && k != S_CASTLE_WALL && k != S_GATE && k != S_PALISADE &&
                k != S_CAVE && k != S_MINE && k != S_WAYSTONE && k != S_RUIN_WALL && k != S_KEEP && k != S_PORTAL && k != S_FENCE &&
-               k != S_PIER && k != S_ZIGGURAT && k != S_SPHINX && k != S_PAGODA && k != S_ARCHWAY && k != S_COLONNADE && k != S_LIGHTHOUSE;
+               k != S_PIER && k != S_GEYSER && k != S_SKYISLAND && k != S_ZIGGURAT && k != S_SPHINX && k != S_PAGODA && k != S_ARCHWAY && k != S_COLONNADE && k != S_LIGHTHOUSE;
     };
     auto small = [](int k) { return k == S_LANTERN || k == S_STALL || k == S_WELL || k == S_BANNER || k == S_CAMPFIRE || k == S_STATUE || k == S_OBELISK || k == S_ALTAR; };
     auto inside = [](const Structure& s, vec2 p, float m) {
@@ -1284,6 +1342,35 @@ float World::groundHeight(float x, float z) const {
     return h;
 }
 
+bool World::skyDeck(vec3 p, float& deckY) const {
+    int cx = (int)std::floor(p.x / CHUNK), cz = (int)std::floor(p.z / CHUNK);
+    bool found = false;
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int ci = chunkIndex(cx + dx, cz + dz);
+            if (ci < 0) continue;
+            for (int si : chunkStructures[ci]) {
+                const Structure& s = structures[si];
+                if (s.kind != S_SKYISLAND) continue;
+                float deck = s.variant / 100.f;
+                float d = length(vec2(p.x, p.z) - s.pos);
+                if (d < SKY_ISLAND_R * 0.93f && p.y >= deck - 0.7f) { float y = deck + 0.3f * (1.f - d / SKY_ISLAND_R); if (!found || y > deckY) deckY = y; found = true; }
+            }
+        }
+    return found;
+}
+
+int World::geyserNear(vec2 p, float r) const {
+    int cx = (int)std::floor(p.x / CHUNK), cz = (int)std::floor(p.y / CHUNK);
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int ci = chunkIndex(cx + dx, cz + dz);
+            if (ci < 0) continue;
+            for (int si : chunkStructures[ci]) if (structures[si].kind == S_GEYSER && length(structures[si].pos - p) < r) return si;
+        }
+    return -1;
+}
+
 float World::bridgeDeck(const Structure& s, float along) const {
     float L = bridgeHalfLen(s);
     vec2 dir(std::sin(s.rot), std::cos(s.rot));
@@ -1336,6 +1423,8 @@ static const std::vector<ScatterEntry>& scatterTable(int r) {
         {{P_ACACIA, 0.7f, 0.9f, 1.5f, true}, {P_BIRCH, 0.4f, 0.8f, 1.2f, true}, {P_BOULDER, 0.9f, 0.7f, 1.6f, true}, {P_ROCK, 1.2f, 0.6f, 1.5f, true}, {P_DRYBUSH, 1.6f, 0.7f, 1.3f, false}, {P_STANDSTONE, 0.12f, 0.9f, 1.3f, true}, {P_HAYBALE, 0.1f, 1, 1, true}, {P_FLOWERS, 1.4f, 0.8f, 1.3f, false}, {P_BONES, 0.1f, 0.8f, 1.1f, false}},
         // 2.4.0 Emerald Jungle: giant canopy trees, banana plants, ferns everywhere, willows by the water, mossy ruins
         {{P_ELDERTREE, 2.4f, 1.0f, 1.6f, true}, {P_BANANA, 2.2f, 0.9f, 1.4f, true}, {P_PALM, 0.8f, 0.9f, 1.4f, true}, {P_FERN, 5.f, 0.9f, 1.6f, false}, {P_TROPBUSH, 3.f, 0.9f, 1.5f, false}, {P_WILLOW, 0.6f, 0.9f, 1.3f, true}, {P_GIANTSHROOM, 0.3f, 0.7f, 1.2f, true}, {P_RUINCOLUMN, 0.12f, 0.8f, 1.2f, true}, {P_LOG, 0.5f, 0.9f, 1.3f, true}, {P_SMALLSHROOMS, 0.8f, 0.8f, 1.3f, false}},
+        // 2.8.0 Lands of Aurora: crystal-leaf trees, aurora spires, glowing giant mushrooms, crystal shards, ferns
+        {{P_CRYSTALTREE, 2.6f, 0.8f, 1.4f, true}, {P_AURORASPIRE, 0.7f, 0.7f, 1.5f, true}, {P_GIANTSHROOM, 1.0f, 0.8f, 1.6f, true}, {P_MAGICCRYSTAL, 1.2f, 0.6f, 1.3f, true}, {P_FERN, 2.f, 0.8f, 1.3f, false}, {P_BIRCH, 0.4f, 0.8f, 1.2f, true}, {P_ROCK, 0.8f, 0.6f, 1.4f, true}, {P_SMALLSHROOMS, 1.f, 0.8f, 1.3f, false}},
     };
     return T[r];
 }
@@ -1352,6 +1441,7 @@ static float forestDensity(int r, float x, float z) {
     case R_CORAL: return 0.35f + smoothstepf(0.35f, 0.7f, n) * 0.5f;
     case R_STEPPE: return 0.06f + smoothstepf(0.6f, 0.8f, n) * 0.22f;   // open grassland: a few trees and rocks
     case R_JUNGLE: return 0.75f + n * 0.25f;                             // the densest vegetation of the world
+    case R_AURORA: return 0.15f + smoothstepf(0.45f, 0.72f, n) * 0.55f;  // 2.8.0 crystal groves and open glowing meadows
     default: return 0.12f + smoothstepf(0.5f, 0.75f, n) * 0.4f;
     }
 }
@@ -1400,6 +1490,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 case R_AMBER: wSand += w * (0.82f + 0.16f * smoothstepf(0.35f, 0.7f, n1)); wRock += w * smoothstepf(0.62f, 0.85f, n2) * 0.45f; wDirt += w * smoothstepf(0.7f, 0.9f, n1) * 0.18f; break;
                 case R_STEPPE: wDirt += w * smoothstepf(0.66f, 0.86f, n1) * 0.35f; wRock += w * smoothstepf(0.7f, 0.9f, n2) * 0.25f; break;
                 case R_JUNGLE: wMud += w * smoothstepf(0.5f, 0.75f, n1) * 0.4f; wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;
+                case R_AURORA: wRock += w * smoothstepf(0.68f, 0.86f, n1) * 0.3f; wSnow += w * smoothstepf(0.8f, 0.92f, n2) * 0.25f; break;   // 2.8.0 pale crystal dust
                 case R_CORAL: wSand += w * (1.f - smoothstepf(0.9f, 3.0f, y)) * 0.92f; wDirt += w * smoothstepf(0.68f, 0.85f, n2) * 0.22f; wMud += w * smoothstepf(0.75f, 0.9f, n1) * 0.12f; break;
                 }
             }
@@ -1627,8 +1718,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             {{P_SHELLS, 2.f, 0.8f, 1.3f}, {P_FLOWERS, 1.5f, 0.8f, 1.3f}, {P_FERN, 2.f, 0.6f, 1.f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.2f, 0.8f, 1.2f}},
             {{P_FLOWERS, 2.f, 0.7f, 1.2f}, {P_TALLGRASS, 3.f, 0.8f, 1.3f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_BONES, 0.1f, 0.7f, 1.f}},           // 2.4.0 steppe
             {{P_FERN, 3.f, 0.7f, 1.2f}, {P_SMALLSHROOMS, 1.2f, 0.8f, 1.2f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}},    // 2.4.0 jungle
+            {{P_FLOWERS, 2.5f, 0.8f, 1.3f}, {P_SMALLSHROOMS, 2.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.5f, 0.8f, 1.2f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}},  // 2.8.0 aurora
         };
-        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16};
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16, 14};
         Rng cr(hash2i(k.x, k.z, 9191));
         int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
         for (int t = 0; t < n; t++) {
@@ -1794,6 +1886,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         case R_AMBER: t = p < 0.18f ? NodeType::Rock : p < 0.34f ? NodeType::CopperOre : p < 0.48f ? NodeType::GoldOre : p < 0.62f ? NodeType::Cactus : p < 0.74f ? NodeType::AmberRock : p < 0.86f ? NodeType::RareOre : p < 0.94f ? NodeType::Crystal : NodeType::Herb; tier = 3; break;
         case R_STEPPE: t = p < 0.18f ? NodeType::Flax : p < 0.34f ? NodeType::Herb : p < 0.48f ? NodeType::Berries : p < 0.62f ? NodeType::Rock : p < 0.74f ? NodeType::CopperOre : p < 0.86f ? NodeType::SilverOre : NodeType::Tree; tier = 3; break;
         case R_JUNGLE: t = p < 0.24f ? NodeType::Tree : p < 0.4f ? NodeType::Herb : p < 0.52f ? NodeType::Mushroom : p < 0.64f ? NodeType::Berries : p < 0.74f ? NodeType::FireRoot : p < 0.84f ? NodeType::GoldOre : p < 0.93f ? NodeType::Crystal : NodeType::RareOre; tier = 3; break;
+        case R_AURORA: t = p < 0.3f ? NodeType::AuroraCrystal : p < 0.45f ? NodeType::Crystal : p < 0.6f ? NodeType::Herb : p < 0.72f ? NodeType::Mushroom : p < 0.84f ? NodeType::SilverOre : p < 0.93f ? NodeType::Tree : NodeType::RareOre; tier = 3; break;   // 2.8.0
         case R_CORAL: t = p < 0.24f ? NodeType::Tree : p < 0.42f ? NodeType::Berries : p < 0.58f ? NodeType::Shells : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
         default: t = p < 0.24f ? NodeType::IronOre : p < 0.38f ? NodeType::SilverOre : p < 0.5f ? NodeType::GoldOre : p < 0.62f ? NodeType::RareOre : p < 0.76f ? NodeType::Rock : p < 0.88f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
         }
@@ -1900,7 +1993,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
 
 float World::tallGrassAmount(float x, float z) const {
     int r = regionId(x, z);
-    float rw = r == R_GREENHAVEN ? 1.f : r == R_SHADOWS ? 0.75f : r == R_ELDERWOOD ? 0.6f : r == R_HIGHCROWNS ? 0.45f : r == R_STEPPE ? 1.f : r == R_JUNGLE ? 0.55f : 0.f;
+    float rw = r == R_GREENHAVEN ? 1.f : r == R_SHADOWS ? 0.75f : r == R_ELDERWOOD ? 0.6f : r == R_HIGHCROWNS ? 0.45f : r == R_STEPPE ? 1.f : r == R_JUNGLE ? 0.55f : r == R_AURORA ? 0.5f : 0.f;
     if (rw <= 0.f) return 0.f;
     float n = fbm2(x * 0.011f, z * 0.011f, 3, 4242) * 0.5f + 0.5f;          // meadows ~60-120 m across
     float a = (r == R_STEPPE ? smoothstepf(0.4f, 0.5f, n) : smoothstepf(0.55f, 0.64f, n)) * rw;   // 2.4.0 the steppe: waist-high grass almost everywhere
@@ -2276,7 +2369,7 @@ void World::buildFarMesh(MeshBuilder& b, int res) const {
                 float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
                               std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
                 RegionWeights rw = regionAt(x, z);
-                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34};
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x4a9a9a};
                 c = vec3(0);
                 for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
                 c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
@@ -2322,7 +2415,7 @@ void World::generateMapImage() {
             float x = (i + 0.5f) * s, z = (j + 0.5f) * s;
             float h = hh[(size_t)j * R + i];
             RegionWeights rw = regionAt(x, z);
-            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48)};
+            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x5ac0b8)};
             vec3 c(0);
             for (int r = 0; r < R_COUNT; r++) c += rc[r] * rw.w[r];
             float hx = hh[(size_t)j * R + std::min(R - 1, i + 1)] - h, hz = hh[(size_t)std::min(R - 1, j + 1) * R + i] - h;
