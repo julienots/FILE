@@ -1057,6 +1057,24 @@ std::vector<UISystem::ListRow> UISystem::listRows(const UIItemListComponent& lis
     return shown;
 }
 
+std::vector<i32> UISystem::listSelection(const UIItemListComponent& list) {
+    std::vector<i32> out;
+    if (!list.multiSelect) {
+        if (list.selected >= 0) out.push_back(list.selected);
+        return out;
+    }
+    std::string cur;
+    for (char c : list.selection + ",") {
+        if (c == ',') {
+            if (!cur.empty()) out.push_back(std::atoi(cur.c_str()));
+            cur.clear();
+        } else if (c >= '0' && c <= '9') {
+            cur += c;
+        }
+    }
+    return out;
+}
+
 void UISystem::clickList(Scene& scene, ecs::Entity e, Vec2 position) {
     auto* list = scene.registry().tryGet<UIItemListComponent>(e);
     const Element* el = elementOf(e);
@@ -1087,6 +1105,36 @@ void UISystem::clickList(Scene& scene, ecs::Entity e, Vec2 position) {
         return;
     }
     const f64 now = m_uiClock.elapsedSeconds();
+    if (list->multiSelect) {
+        std::vector<i32> sel = listSelection(*list);
+        if (m_shift && list->selected >= 0) {  // range between the anchor and this row (in display order)
+            i32 a = -1, b = -1;
+            for (usize k = 0; k < rows.size(); ++k) {
+                if (rows[k].index == list->selected) a = static_cast<i32>(k);
+                if (rows[k].index == r.index) b = static_cast<i32>(k);
+            }
+            if (a < 0) a = b;
+            if (!m_ctrl) sel.clear();
+            for (i32 k = std::min(a, b); k <= std::max(a, b); ++k)
+                if (std::find(sel.begin(), sel.end(), rows[static_cast<usize>(k)].index) == sel.end()) sel.push_back(rows[static_cast<usize>(k)].index);
+        } else if (m_ctrl) {
+            if (auto it = std::find(sel.begin(), sel.end(), r.index); it != sel.end()) sel.erase(it);
+            else sel.push_back(r.index);
+            list->selected = r.index;
+        } else {
+            sel = {r.index};
+            list->selected = r.index;
+        }
+        std::sort(sel.begin(), sel.end());
+        std::string text;
+        for (i32 v : sel) text += (text.empty() ? "" : ",") + std::to_string(v);
+        if (text != list->selection) {
+            list->selection = text;
+            m_events.push_back({UIEventType::ValueChanged, e, static_cast<float>(r.index), {}});
+        }
+        m_lastListClick = {e, r.index, now};
+        return;
+    }
     if (list->selected != r.index) {
         list->selected = r.index;
         m_events.push_back({UIEventType::ValueChanged, e, static_cast<float>(r.index), {}});
@@ -1542,10 +1590,11 @@ void UISystem::drawElement(Scene& scene, const Element& el, float scale, const U
         const auto rows = listRows(*list);
         const Vec4 accent = th ? th->accent : list->selectedColor;
         const Vec4 arrow = th ? th->text : list->textColor;
+        const std::vector<i32> selection = listSelection(*list);
         for (usize i = 0; i < rows.size(); ++i) {
             const float y = r.y + static_cast<float>(i) * rowH - list->scroll * scale;
             if (y + rowH < r.y || y > r.y + r.w) continue;
-            if (rows[i].index == list->selected) quad(r.x, y, r.x + r.z, y + rowH, {accent.x, accent.y, accent.z, accent.w * 0.45f});
+            if (std::find(selection.begin(), selection.end(), rows[i].index) != selection.end()) quad(r.x, y, r.x + r.z, y + rowH, {accent.x, accent.y, accent.z, accent.w * 0.45f});
             if (list->tree && rows[i].hasChildren) {  // stepped triangle: right when folded, down when open
                 const float a = std::min(rowH * 0.18f, indent * 0.35f), cx = r.x + indent * (static_cast<float>(rows[i].depth) + 0.5f), cy = y + rowH * 0.5f;
                 for (int k = 0; k < 4; ++k) {

@@ -33,7 +33,7 @@ des modèles et test de bout en bout de l'éditeur.
 | `UIDropdown` | Liste déroulante : options séparées par `;`, `selected` ; un clic ouvre la liste **par-dessus tout** (au-dessus si la place manque en bas), survol surligné, choix = `onValueChanged(index)` et `message(liste, index)` ; un clic ailleurs la ferme sans rien toucher d'autre ; au clavier / à la manette, Entrée passe à l'option suivante |
 | `UITabs` | Onglets : noms séparés par `;`, `current` ; le *i*-ème enfant est la page du *i*-ème onglet, seule la page courante est affichée sous la barre d'onglets ; clic sur un onglet = `onValueChanged(index)` et `message(onglets, index)` |
 | `UITooltip` | Infobulle : texte affiché dans une boîte près du pointeur après `delay` secondes de survol |
-| `UIItemList` | **Liste ou arbre** : éléments séparés par `;` ; avec `tree`, des `>` en tête donnent la profondeur (`Armes;>Épée;>Arc;>>Arc long`) et un clic sur la flèche replie / déplie (`collapsed` garde les repliés, sauvegardé) ; clic = sélection (`onValueChanged(index)`), **double clic** = `onSubmit(libellé)` ; molette ou glisser pour défiler, lignes découpées au bord |
+| `UIItemList` | **Liste ou arbre** : éléments séparés par `;` ; avec `tree`, des `>` en tête donnent la profondeur (`Armes;>Épée;>Arc;>>Arc long`) et un clic sur la flèche replie / déplie (`collapsed` garde les repliés, sauvegardé) ; clic = sélection (`onValueChanged(index)`), **double clic** = `onSubmit(libellé)` ; `multiSelect` : Ctrl+clic ajoute / retire, Maj+clic sélectionne une plage, `selection` = indices (`"1,4,5"`) ; molette ou glisser pour défiler, lignes découpées au bord |
 | `UIDialog` | **Boîte de dialogue modale** : `open` affiche un voile sur tout l'écran (qui bloque le reste de l'UI) et un panneau centré avec `title`, `text` et des `buttons` (`Annuler;Quitter`) ; le panneau grandit pour contenir le texte ; un bouton la ferme (`open = false`, `result` = son index) et appelle `onValueChanged(index)` / `message(dialogue, index)` |
 | `UIColorPicker` | **Sélecteur de couleur** : carré saturation / luminosité, barre de teinte, barre d'opacité (`alpha`) ; appuyer ou glisser change `color` (`onValueChanged(alpha)`) ; la teinte est gardée sur les gris |
 | `UIScrollView` | Zone défilante : ses enfants sont le contenu, déplacés par `scroll` et **découpés** au bord ; molette, glisser du doigt ou de la souris (un glisser annule le clic du bouton touché), barre de défilement ; limites calculées d'après le contenu |
@@ -133,7 +133,7 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
   le contour) ; pas de rayon différent par coin.
 - Champs de texte : pas de répétition automatique des touches maintenues, pas d'annulation (Ctrl+Z),
   pas de défilement horizontal d'un champ d'une ligne trop long ; arbres sans glisser-déposer des
-  éléments ; listes sans sélection multiple.
+  éléments ; listes : sélection multiple sans glisser (Ctrl / Maj + clic).
 - Rotation : les zones défilantes contenues dans un élément tourné découpent selon le rectangle non
   tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent

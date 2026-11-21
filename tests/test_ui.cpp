@@ -979,4 +979,38 @@ TEST_CASE("rich text: italic, strike-through and clickable links") {
     f.pointers({{0, {110, 50}, false}});
     CHECK(f.ui.takeEvents().empty());
 }
+
+TEST_CASE("item lists: multi-selection with Ctrl (toggle) and Shift (range)") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto e = f.element("List", f.canvas, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {300, 240});
+    auto& list = f.scene.registry().emplace<UIItemListComponent>(e);
+    list.items = "A;B;C;D;E";
+    list.multiSelect = true;
+    f.ui.layout(f.scene, 800, 600);
+    auto click = [&](int row, bool ctrl, bool shift) {
+        f.ui.setModifiers(ctrl, shift);
+        const math::Vec2 p{100, 48.0f * static_cast<float>(row) + 24.0f};
+        f.pointers({{0, p, true}});
+        f.pointers({{0, p, false}});
+        f.ui.setModifiers(false, false);
+    };
+    auto sel = [&] { return f.scene.registry().get<UIItemListComponent>(e).selection; };
+    click(1, false, false);
+    CHECK(sel() == "1");
+    click(3, true, false);
+    CHECK(sel() == "1,3");
+    click(4, false, true);  // range from the last clicked (3)
+    CHECK(sel() == "3,4");
+    click(1, true, true);   // Ctrl+Shift: range added to the selection
+    CHECK(sel() == "1,2,3,4");
+    click(2, true, false);  // Ctrl: toggled off
+    CHECK(sel() == "1,3,4");
+    CHECK(UISystem::listSelection(f.scene.registry().get<UIItemListComponent>(e)) == std::vector<i32>{1, 3, 4});
+    click(0, false, false);  // a plain click starts over
+    CHECK(sel() == "0");
+    bool changed = false;
+    for (const auto& ev : f.ui.takeEvents()) changed |= ev.type == UIEventType::ValueChanged;
+    CHECK(changed);
+}
 }  // TEST_SUITE

@@ -234,6 +234,9 @@ struct UITooltipComponent {
 struct UIItemListComponent {
     std::string items = "Item 1;Item 2;Item 3";
     i32 selected = -1;
+    /// Several items at once: Ctrl+click adds / removes one, Shift+click a range from `selected`.
+    bool multiSelect = false;
+    std::string selection;           ///< multiSelect: selected indices, comma-separated ("1,4,5").
     bool tree = false;
     std::string collapsed;           ///< Tree: indices of the folded items, comma-separated.
     float itemHeight = 48.0f;

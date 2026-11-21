@@ -87,6 +87,8 @@ void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
         // Outside the game view the mouse is absent, unless it holds an element (slider drag).
         if (inside(p) || down || in.mouseReleased(MouseButton::Left)) pointers.push_back({0, p, down});
     }
+    m_ui->setModifiers(in.keyDown(Key::LeftCtrl) || in.keyDown(Key::RightCtrl) || in.keyDown(Key::LeftSuper) || in.keyDown(Key::RightSuper),
+                       in.keyDown(Key::LeftShift) || in.keyDown(Key::RightShift));
     m_ui->processInput(scene, pointers);
     // Mouse wheel over a scroll view.
     if (in.wheel().x != 0.0f || in.wheel().y != 0.0f) m_ui->scrollAt(scene, toUI(in.mousePosition()), in.wheel());

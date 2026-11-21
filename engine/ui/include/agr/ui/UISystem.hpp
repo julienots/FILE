@@ -102,6 +102,10 @@ public:
     /// Typing for the focused text field: UTF-8 text, backspaces, Enter. Typing replaces the
     /// selection and goes in at the caret.
     void processText(Scene& scene, std::string_view typed, u32 backspaces, bool enter);
+    /// Keyboard modifiers held (multi-selection in lists), set each frame by the UI plugin.
+    void setModifiers(bool ctrl, bool shift) { m_ctrl = ctrl, m_shift = shift; }
+    /// Indices of a list's selection ("1,4,5" -> {1, 4, 5}; single selection: {selected}).
+    static std::vector<i32> listSelection(const UIItemListComponent& list);
     /// Caret movement and editing keys of the focused field (shift extends the selection).
     enum class TextKey { Left, Right, Up, Down, Home, End, Delete, SelectAll, Copy, Cut, Paste };
     void processTextKey(Scene& scene, TextKey key, bool shift = false, bool word = false);
@@ -261,6 +265,7 @@ private:
     };
     std::vector<CaretStop> m_caretStops;
     usize m_caret = 0, m_anchor = 0;
+    bool m_ctrl = false, m_shift = false;
     bool m_selectingText = false;
     std::string m_clipboard;
     std::function<std::string()> m_clipboardGet;
