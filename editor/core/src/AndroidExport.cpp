@@ -275,6 +275,10 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
             fs::copy_file(tools.templates / "android" / abi / lib, main / "jniLibs" / abi / lib, fs::copy_options::overwrite_existing, ec);
             if (ec) return makeError(Error::Code::IOError, std::string("cannot copy ") + lib + " (" + abi + "): " + ec.message());
         }
+    if (auto key = exportPackKey(project); !key) return key.error();
+    else if (key.value())
+        for (const std::string& abi : x.abis)
+            if (Status s = embedPackKey(main / "jniLibs" / abi / "libmain.so", *key.value()); !s) return s.error();
     fs::create_directories(main / "java", ec);
     fs::copy(tools.templates / "android" / "java" / "org", main / "java" / "org", fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
     if (ec) return makeError(Error::Code::IOError, "cannot copy the SDL Java sources: " + ec.message());

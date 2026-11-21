@@ -1,11 +1,15 @@
 #pragma once
 #include "agr/core/FileSystem.hpp"
+#include "agr/core/Pack.hpp"
 
 namespace agr {
 
 /// Read-only files opened through SDL. On Android, relative paths are read from the
 /// APK's assets folder (AAssetManager); elsewhere from the file system. Used to mount
 /// the game data of an exported game.
+/// Random-access reader of a pack opened through SDL (APK assets on Android), null if absent.
+PackReader sdlPackReader(const std::string& path);
+
 class SdlFileProvider final : public FileProvider {
 public:
     explicit SdlFileProvider(std::string root) : m_root(std::move(root)) {}

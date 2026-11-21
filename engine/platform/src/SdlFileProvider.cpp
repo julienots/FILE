@@ -1,3 +1,4 @@
+#include <mutex>
 #include "agr/platform/SdlFileProvider.hpp"
 
 #include <SDL3/SDL.h>
@@ -14,6 +15,29 @@ bool SdlFileProvider::exists(std::string_view relativePath) const {
     if (!io) return false;
     SDL_CloseIO(io);
     return true;
+}
+
+PackReader sdlPackReader(const std::string& path) {
+    SDL_IOStream* io = SDL_IOFromFile(path.c_str(), "rb");
+    if (!io) return {};
+    struct Handle {
+        SDL_IOStream* io;
+        std::mutex mutex;
+        ~Handle() { SDL_CloseIO(io); }
+    };
+    auto h = std::make_shared<Handle>();
+    h->io = io;
+    return [h](u64 offset, void* out, u64 size) {
+        std::lock_guard lock(h->mutex);
+        if (SDL_SeekIO(h->io, static_cast<Sint64>(offset), SDL_IO_SEEK_SET) < 0) return false;
+        u64 done = 0;
+        while (done < size) {
+            const usize n = SDL_ReadIO(h->io, static_cast<u8*>(out) + done, static_cast<usize>(size - done));
+            if (n == 0) return false;
+            done += n;
+        }
+        return true;
+    };
 }
 
 Result<ByteBuffer> SdlFileProvider::read(std::string_view relativePath) const {

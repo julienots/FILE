@@ -665,6 +665,8 @@ private:
     void start(EditorShared& s, const std::string& editorDirectory);
     int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle
     std::string m_output;
+    std::string m_patchBase;  // game.agrpak (or an earlier patch) the next patch is made against
+    bool m_patch = false;     // the next start() exports a patch
     std::string m_storePassword, m_keyPassword;
     std::string m_newAlias = "game", m_newOwner, m_newPassword;
     std::thread m_thread;

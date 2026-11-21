@@ -53,6 +53,8 @@ public:
     void mount(const std::string& scheme, std::unique_ptr<FileProvider> provider);
     void unmount(const std::string& scheme);
     bool isMounted(const std::string& scheme) const;
+    /// Provider of a mount point (null if not mounted).
+    FileProvider* provider(const std::string& scheme) const;
 
     bool exists(std::string_view uri) const;
     Result<ByteBuffer> readBytes(std::string_view uri) const;

@@ -32,13 +32,14 @@ namespace {
 /// Command-line tasks without a window (continuous integration, scripts):
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
+///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
 ///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
 [[maybe_unused]] int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {  // desktop only
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
-    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -48,6 +49,7 @@ namespace {
         else if (a == "--project") projectDir = next();
         else if (a == "--export") exportKind = next();
         else if (a == "--output") output = next();
+        else if (a == "--base") basePack = next();
     }
     if (create.empty() && exportKind.empty()) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
@@ -89,13 +91,16 @@ namespace {
     }
     if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
     Result<ExportReport> report = makeError(Error::Code::InvalidArgument,
-                                            "unknown export '" + exportKind + "' (desktop, windows, android-apk, android-release-apk, android-aab)");
+                                            "unknown export '" + exportKind + "' (desktop, windows, patch, android-apk, android-release-apk, android-aab)");
 #if defined(_WIN32)
     const fs::path player = exeDir / "agr_player.exe";
 #else
     const fs::path player = exeDir / "agr_player";
 #endif
     if (exportKind == "desktop") report = exportDesktop(project.value(), output, player);
+    if (exportKind == "patch")
+        report = basePack.empty() ? Result<ExportReport>(makeError(Error::Code::InvalidArgument, "--export patch needs --base GAME_OR_PATCH.agrpak"))
+                                  : exportPatch(project.value(), basePack, output);
     if (exportKind == "windows") {
         const fs::path winPlayer = findWindowsPlayer(exeDir);
         report = winPlayer.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player not found (export_templates/windows-x64/agr_player.exe)"))

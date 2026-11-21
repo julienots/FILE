@@ -1,6 +1,7 @@
 add_executable(agr_tests
     main.cpp
     test_core.cpp
+    test_pack.cpp
     test_jobs.cpp
     test_math.cpp
     test_ecs.cpp

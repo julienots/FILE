@@ -3,6 +3,9 @@
 #include <string>
 #include <vector>
 
+#include <optional>
+
+#include "agr/core/Pack.hpp"
 #include "agr/editor/Project.hpp"
 #include "agr/runtime/GameManifest.hpp"
 
@@ -44,5 +47,24 @@ Status zipFolder(const std::filesystem::path& dir, const std::filesystem::path& 
 /// export_templates/ next to the editor (windows-x64/agr_player.exe), the cross-compiled build
 /// tree (build/windows-x64/bin), or the editor's own player on Windows. Empty when none exists.
 std::filesystem::path findWindowsPlayer(const std::filesystem::path& editorDirectory);
+
+// ---------------------------------------------------------------- data packs
+/// Key of the project's encrypted packs, kept in <project>/keys/data.key (64 hex digits, created
+/// on first use; keys/ is git-ignored). The same key must be used by every patch of a game.
+Result<crypto::AesKey> projectPackKey(const Project& project);
+/// Key of an export (encryptData on), nullopt otherwise.
+Result<std::optional<crypto::AesKey>> exportPackKey(const Project& project);
+/// Moves every file of `gameDir` (except game.json) into gameDir/game.agrpak.
+Status packGameFolder(const std::filesystem::path& gameDir, const crypto::AesKey* key);
+/// Writes the key into the player executable / library (its reserved key slot); fails when
+/// the binary has no slot (an old player).
+Status embedPackKey(const std::filesystem::path& binary, const crypto::AesKey& key);
+/// The key embedded in a player binary (nullopt: no slot, or an empty one).
+std::optional<crypto::AesKey> readEmbeddedPackKey(const std::filesystem::path& binary);
+/// Patch / DLC pack: the files of the project's current game data that differ from (or are not
+/// in) `basePack` (a game.agrpak or an earlier patch of the same game). Players load
+/// game/patches/*.agrpak and user://packs/*.agrpak over the game (alphabetical order), and
+/// agr.game.loadPack(uri) at run time. Report: files = changed files.
+Result<ExportReport> exportPatch(const Project& project, const std::filesystem::path& basePack, const std::filesystem::path& outputPack);
 
 } // namespace agr::editor

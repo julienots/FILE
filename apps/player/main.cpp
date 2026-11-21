@@ -9,6 +9,9 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <algorithm>
+#include <optional>
+#include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -16,6 +19,7 @@
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
 #include "agr/core/Log.hpp"
+#include "agr/core/Pack.hpp"
 #include "agr/physics2d/Physics2DPlugin.hpp"
 #include "agr/net/NetPlugin.hpp"
 #include "agr/navigation/NavigationPlugin.hpp"
@@ -31,6 +35,11 @@
 #include "agr/twod/TwoDPlugin.hpp"
 #include "agr/ui/UIComponents.hpp"
 #include "agr/ui/UIPlugin.hpp"
+
+/// Data key slot: the exporter writes the game's key after the marker (byte 48 = 1 when set).
+/// volatile: the compiler must read it at run time, not fold the placeholder.
+extern "C" volatile unsigned char agr_pack_key_slot[64];
+volatile unsigned char agr_pack_key_slot[64] = {'A', 'G', 'R', 'P', 'A', 'C', 'K', 'K', 'E', 'Y', 'S', 'L', 'O', 'T', '0', '1'};
 
 namespace {
 
@@ -159,6 +168,47 @@ private:
     int m_failures = 0;
 };
 
+std::unique_ptr<FileProvider> gameProvider(const std::string& root);
+
+std::optional<crypto::AesKey> embeddedKey() {
+    if (agr_pack_key_slot[48] != 1) return std::nullopt;
+    crypto::AesKey k;
+    for (int i = 0; i < 32; ++i) k[i] = agr_pack_key_slot[16 + i];
+    return k;
+}
+
+/// game:// = the game folder (or game.agrpak) with patch packs layered on top.
+std::shared_ptr<OverlayFileProvider> mountGame(Engine& engine, const std::string& gameDir) {
+    namespace fs = std::filesystem;
+    auto overlay = std::make_shared<OverlayFileProvider>();
+    overlay->addLayer(std::shared_ptr<FileProvider>(gameProvider(gameDir)));
+    const std::optional<crypto::AesKey> key = embeddedKey();
+    setGamePackKey(key ? &*key : nullptr);
+    auto addPack = [&](PackReader reader, const std::string& name) {
+        if (!reader) return;
+        auto pack = PackFileProvider::open(std::move(reader), key ? &*key : nullptr);
+        if (!pack) {
+            AGR_LOG_ERROR("Player", "{}: {}", name, pack.error().message);
+            return;
+        }
+        AGR_LOG_INFO("Player", "data pack {}: {} files{}", name, pack.value()->entries().size(), pack.value()->encrypted() ? " (encrypted)" : "");
+        overlay->addLayer(std::shared_ptr<FileProvider>(std::move(pack.value())));
+    };
+    addPack(sdlPackReader(gameDir + "/game.agrpak"), "game.agrpak");
+    // Patches next to the game (desktop) and packs installed in user://packs (DLC, downloads).
+    std::vector<fs::path> packs;
+    std::error_code ec;
+    for (const fs::path& dir : {fs::path(gameDir) / "patches", fs::path(engine.config().userDirectory) / "packs"})
+        if (fs::is_directory(dir, ec))
+            for (const auto& e : fs::directory_iterator(dir, ec))
+                if (e.path().extension() == ".agrpak") packs.push_back(e.path());
+    std::sort(packs.begin(), packs.end(), [](const fs::path& a, const fs::path& b) { return a.filename() < b.filename(); });
+    for (const fs::path& p : packs) addPack(packFileReader(p), p.filename().string());
+    engine.vfs().mount("game", std::make_unique<SubdirFileProvider>(overlay, ""));
+    engine.vfs().mount("assets", std::make_unique<SubdirFileProvider>(overlay, "assets"));
+    return overlay;
+}
+
 std::unique_ptr<FileProvider> gameProvider(const std::string& root) {
 #if defined(AGR_PLATFORM_ANDROID)
     return std::make_unique<SdlFileProvider>(root);  // APK assets
@@ -242,8 +292,7 @@ int main(int argc, char** argv) {
     engine.plugins().addStatic(std::make_unique<AudioPlugin>());
     if (Status s = engine.initialize(std::make_unique<SdlPlatform>()); !s) return 1;
     // Game data: read-only; on Android straight from the APK.
-    engine.vfs().mount("game", gameProvider(options.gameDir));
-    engine.vfs().mount("assets", gameProvider(options.gameDir + "/assets"));
+    const auto gameFiles = mountGame(engine, options.gameDir);
     if (m.keepScreenOn) SDL_DisableScreenSaver();
 
     PlayerApp app(m, options);

@@ -1,3 +1,5 @@
+#include <chrono>
+#include <utility>
 #include <filesystem>
 
 #include <SDL3/SDL.h>
@@ -33,21 +35,33 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
     m_running = true;
     // The thread works on copies: the editor keeps running meanwhile.
     Project project = s.ctx.project();
-    const fs::path output = m_output.empty() ? project.root() / "build" / kTargetDirs[m_target] : fs::path(m_output);
-    const int target = m_target;
+    const bool patch = std::exchange(m_patch, false);
+    const fs::path patchBase = m_patchBase;
+    const fs::path output = patch ? project.root() / "build" / "patches" /
+                                        ("patch-" + std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                                                                       std::chrono::system_clock::now().time_since_epoch()).count()) + ".agrpak")
+                          : m_output.empty() ? project.root() / "build" / kTargetDirs[m_target]
+                                             : fs::path(m_output);
+    const int target = patch ? -1 : m_target;
+    if (patch) {
+        std::error_code ec;
+        fs::create_directories(output.parent_path(), ec);
+    }
     AndroidBuildOptions options;
     options.kind = target == 1 ? AndroidBuildKind::DebugApk : target == 2 ? AndroidBuildKind::ReleaseApk : AndroidBuildKind::ReleaseBundle;
     options.storePassword = m_storePassword;
     options.keyPassword = m_keyPassword;
     const fs::path exeDir = editorDirectory;
-    m_thread = std::thread([this, project, output, target, options, exeDir] {
+    m_thread = std::thread([this, project, output, target, options, exeDir, patchBase] {
         auto log = [this](const std::string& line) {
             std::lock_guard lock(m_mutex);
             m_log.push_back(line);
             if (m_log.size() > 4000) m_log.erase(m_log.begin(), m_log.begin() + 1000);
         };
         Result<ExportReport> report = makeError(Error::Code::Unknown, "not run");
-        if (target == kWindowsTarget) {
+        if (target == -1) {
+            report = exportPatch(project, patchBase, output);
+        } else if (target == kWindowsTarget) {
             const fs::path player = findWindowsPlayer(exeDir);
             report = player.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player (agr_player.exe) not found"))
                                     : exportDesktop(project, output, player);
@@ -123,6 +137,28 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     ImGui::SameLine();
     changed |= ImGui::Checkbox("Bouton Retour : quitter", &x.backQuits);
     if (m_target == 0 || m_target == kWindowsTarget) changed |= ImGui::Checkbox("Archive .zip du dossier (pour le mettre en ligne)", &x.zipPackage);
+    ImGui::SeparatorText("Données du jeu");
+    changed |= ImGui::Checkbox("Un seul fichier (game.agrpak)", &x.dataPack);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Les assets et scènes dans une archive lue sur place, au lieu de fichiers séparés");
+    ImGui::BeginDisabled(!x.dataPack);
+    ImGui::SameLine();
+    changed |= ImGui::Checkbox("Chiffrer (AES-256)", &x.encryptData);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Clé dans keys/data.key (gardez-la : les patchs en ont besoin), intégrée au lecteur exporté.\n"
+                          "Empêche de lire ou d'extraire les assets simplement ; pas une protection absolue (la clé est dans le jeu).");
+    ImGui::EndDisabled();
+    if (ImGui::TreeNode("Patch / DLC")) {
+        ImGui::TextWrapped("Un patch contient seulement les fichiers changés depuis un export : déposez-le dans game/patches/ "
+                           "(PC), dans user://packs/, ou chargez-le en jeu avec agr.loadPack(uri).");
+        ImGui::InputTextWithHint("Base", "chemin de game.agrpak (ou d'un patch précédent)", &m_patchBase);
+        ImGui::BeginDisabled(m_patchBase.empty() || m_running.load());
+        if (ImGui::Button("Exporter un patch")) {
+            m_patch = true;
+            start(s, editorDirectory);
+        }
+        ImGui::EndDisabled();
+        ImGui::TreePop();
+    }
     ImGui::SeparatorText("Écran de démarrage");
     changed |= ImGui::InputTextWithHint("Image", "assets://splash.png (vide : aucun)", &x.splashImage);
     changed |= ImGui::ColorEdit4("Fond", &x.splashColor.x, ImGuiColorEditFlags_NoInputs);

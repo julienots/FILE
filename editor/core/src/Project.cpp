@@ -130,6 +130,8 @@ Result<Project> Project::open(const fs::path& folder) {
         x.network = e.value("network", x.network);
         x.microphone = e.value("microphone", x.microphone);
         x.zipPackage = e.value("zipPackage", x.zipPackage);
+        x.dataPack = e.value("dataPack", x.dataPack);
+        x.encryptData = e.value("encryptData", x.encryptData);
         if (e.contains("iconBackground") && e["iconBackground"].is_array() && e["iconBackground"].size() == 4)
             x.iconBackground = {e["iconBackground"][0].get<float>(), e["iconBackground"][1].get<float>(), e["iconBackground"][2].get<float>(),
                                 e["iconBackground"][3].get<float>()};
@@ -185,6 +187,8 @@ Status Project::save() const {
                    {"splashSeconds", x.splashSeconds},
                    {"microphone", x.microphone},
                    {"zipPackage", x.zipPackage},
+                   {"dataPack", x.dataPack},
+                   {"encryptData", x.encryptData},
                    {"iconBackground", {x.iconBackground.x, x.iconBackground.y, x.iconBackground.z, x.iconBackground.w}}};
     return writeFile(m_root / kFileName, j.dump(2));
 }

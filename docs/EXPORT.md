@@ -21,6 +21,32 @@ sinon (composant inconnu de l'éditeur, prefab introuvable, fichier modifié à 
 telle quelle. `ExportReport::binaryScenes` compte les scènes converties. L'éditeur utilise le même format
 pour ses instantanés (annuler / rétablir, mode Jeu).
 
+## Paquet de données, chiffrement, patchs et DLC
+
+Option *Données du jeu › Un seul fichier* : au lieu de milliers de fichiers, `game/` contient
+`game.json` (lisible : nom, orientation...) et **`game.agrpak`**, une archive lue sur place (accès direct,
+rien n'est extrait), sur PC comme dans l'APK.
+
+- **Chiffrer (AES-256)** : l'index (les noms de fichiers) et chaque fichier sont chiffrés (AES-256-CTR,
+  un nonce par fichier). La clé est créée au premier export dans `keys/data.key` (exclu de git ; **gardez
+  une copie** : les patchs doivent utiliser la même) et **écrite dans le lecteur exporté** (un
+  emplacement réservé de l'exécutable ou de `libmain.so` ; un ancien lecteur sans emplacement est
+  refusé plutôt que de livrer un jeu illisible). Comme pour tous les moteurs, la clé voyage avec le
+  jeu : cela empêche d'ouvrir ou d'extraire les assets simplement, pas un attaquant décidé.
+- **Patch / DLC** : *Patch / DLC › Exporter un patch* (ou `agr_editor --project P --export patch
+  --base game.agrpak --output 001-fix.agrpak`) compare les données actuelles à un export précédent
+  (empreintes SHA-256 de l'index) et n'emballe que les fichiers **nouveaux ou modifiés**, chiffrés avec
+  la même clé. Le lecteur empile au démarrage `game/patches/*.agrpak` (PC) puis `user://packs/*.agrpak`
+  (DLC téléchargés), par ordre alphabétique : le dernier qui contient un fichier gagne. En jeu,
+  `agr.loadPack("user://dlc/niveaux.agrpak")` ajoute un paquet sans redémarrer (les assets déjà chargés
+  gardent leur version jusqu'à leur rechargement). Un fichier supprimé ne peut pas être retiré par un
+  patch (remplacez-le).
+- Vérifié de bout en bout : la Vitrine 2D exportée chiffrée (213 fichiers, 5,5 Mo) démarre et passe
+  `--autotest` ; un patch de 2 scripts modifiés est chargé par-dessus (le nouveau script s'exécute) ; le
+  format a été relu par un déchiffreur AES indépendant (Python `cryptography`). Code :
+  `engine/core/include/agr/core/Pack.hpp`, `Crypto.hpp` (SHA-256, AES-256 testés sur les vecteurs
+  NIST / FIPS-197).
+
 ## Depuis l'éditeur
 
 *Fichier › Exporter le jeu...* :

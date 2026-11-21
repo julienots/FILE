@@ -8,6 +8,8 @@
 
 #include <cstdio>
 #include <optional>
+#include <random>
+#include <cstring>
 
 #include <nlohmann/json.hpp>
 
@@ -143,7 +145,13 @@ GameManifest gameManifest(const Project& project) {
     return m;
 }
 
-Result<ExportReport> packageGameData(const Project& project, const fs::path& gameDir) {
+namespace {
+Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack);
+}
+Result<ExportReport> packageGameData(const Project& project, const fs::path& gameDir) { return packageGameDataImpl(project, gameDir, true); }
+
+namespace {
+Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack) {
     ExportReport report;
     report.output = gameDir;
     const fs::path startup = project.root() / project.settings().startupScene;
@@ -189,10 +197,16 @@ Result<ExportReport> packageGameData(const Project& project, const fs::path& gam
         ++report.files;
         report.bytes += text.size();
     }
+    if (allowPack && project.settings().exportSettings.dataPack) {
+        auto key = exportPackKey(project);
+        if (!key) return key.error();
+        if (Status s = packGameFolder(gameDir, key.value() ? &*key.value() : nullptr); !s) return s.error();
+    }
     AGR_LOG_INFO("Export", "game data: {} files, {:.1f} MB, {} binary scene(s) -> {}", report.files,
                  static_cast<double>(report.bytes) / (1024.0 * 1024.0), report.binaryScenes, gameDir.string());
     return report;
 }
+}  // namespace
 
 Result<ExportReport> exportDesktop(const Project& project, const fs::path& outputDir, const fs::path& playerExecutable) {
     std::error_code ec;
@@ -208,6 +222,9 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
     fs::copy_file(playerExecutable, exe, fs::copy_options::overwrite_existing, ec);
     if (ec) return makeError(Error::Code::IOError, "cannot copy the player: " + ec.message());
     fs::permissions(exe, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::add, ec);
+    if (auto key = exportPackKey(project); !key) return key.error();
+    else if (key.value())
+        if (Status s = embedPackKey(exe, *key.value()); !s) return s.error();
     // Icon next to the executable (assets/icon.png, else the AGR mark), and on Linux a desktop entry.
     fs::path icon = project.assetsDirectory() / "icon.png";
     if (!fs::is_regular_file(icon, ec)) icon = project.assetsDirectory() / "textures" / "agr_mark.png";
@@ -299,6 +316,137 @@ fs::path findWindowsPlayer(const fs::path& editorDirectory) {
     for (const fs::path& p : candidates)
         if (fs::is_regular_file(p, ec)) return fs::weakly_canonical(p, ec);
     return {};
+}
+
+// ---------------------------------------------------------------- data packs
+namespace {
+/// The player's key slot starts with this marker; it is assembled at run time so that the
+/// editor (which links the same core) never contains the marker bytes itself.
+std::string keySlotMarker() {
+    std::string m = "BHSQBDLLFZTMPU12";  // "AGRPACKKEYSLOT01" shifted by one
+    for (char& c : m) c = static_cast<char>(c - 1);
+    return m;
+}
+std::optional<std::string> readAll(const fs::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    if (!in) return std::nullopt;
+    return std::string((std::istreambuf_iterator<char>(in)), {});
+}
+}  // namespace
+
+Result<crypto::AesKey> projectPackKey(const Project& project) {
+    const fs::path file = project.root() / "keys" / "data.key";
+    std::error_code ec;
+    crypto::AesKey key{};
+    if (auto text = readAll(file)) {
+        std::string hex;
+        for (char c : *text)
+            if (std::isxdigit(static_cast<unsigned char>(c))) hex += c;
+        if (hex.size() != 64) return makeError(Error::Code::ParseError, "keys/data.key: 64 hexadecimal digits expected");
+        for (int i = 0; i < 32; ++i) key[i] = static_cast<u8>(std::stoi(hex.substr(i * 2, 2), nullptr, 16));
+        return key;
+    }
+    crypto::randomBytes(key.data(), key.size());
+    fs::create_directories(file.parent_path(), ec);
+    std::ofstream out(file, std::ios::binary);
+    if (!out) return makeError(Error::Code::IOError, "cannot write keys/data.key");
+    out << crypto::toHex(key.data(), key.size()) << "\n";
+    AGR_LOG_INFO("Export", "new data key: {} (keep it: patches need the same key)", file.string());
+    return key;
+}
+
+Result<std::optional<crypto::AesKey>> exportPackKey(const Project& project) {
+    const ExportSettings& x = project.settings().exportSettings;
+    if (!x.dataPack || !x.encryptData) return std::optional<crypto::AesKey>{};
+    auto key = projectPackKey(project);
+    if (!key) return key.error();
+    return std::optional<crypto::AesKey>(key.value());
+}
+
+Status packGameFolder(const fs::path& gameDir, const crypto::AesKey* key) {
+    PackWriter w;
+    std::error_code ec;
+    std::vector<fs::path> moved;
+    for (auto it = fs::recursive_directory_iterator(gameDir, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        if (!it->is_regular_file()) continue;
+        const std::string rel = fs::relative(it->path(), gameDir, ec).generic_string();
+        if (rel == "game.json" || rel == ".agr-export" || rel == "game.agrpak") continue;
+        auto bytes = readAll(it->path());
+        if (!bytes) return makeError(Error::Code::IOError, "cannot read " + it->path().string());
+        w.add(rel, ByteBuffer(bytes->begin(), bytes->end()));
+        moved.push_back(it->path());
+    }
+    if (Status s = w.write(gameDir / "game.agrpak", key); !s) return s;
+    for (const fs::path& p : moved) fs::remove(p, ec);
+    for (const auto& e : std::vector<fs::directory_entry>(fs::directory_iterator(gameDir, ec), fs::directory_iterator()))
+        if (e.is_directory()) fs::remove_all(e.path(), ec);
+    AGR_LOG_INFO("Export", "game data packed: {} files into game.agrpak{}", w.count(), key ? " (encrypted)" : "");
+    return {};
+}
+
+Status embedPackKey(const fs::path& binary, const crypto::AesKey& key) {
+    auto data = readAll(binary);
+    if (!data) return makeError(Error::Code::IOError, "cannot read " + binary.string());
+    const std::string marker = keySlotMarker();
+    const auto at = data->find(marker);
+    if (at == std::string::npos || data->find(marker, at + 1) != std::string::npos || at + 64 > data->size())
+        return makeError(Error::Code::Unsupported, binary.filename().string() + " has no data key slot (rebuild the player / export templates)");
+    std::memcpy(data->data() + at + 16, key.data(), 32);
+    (*data)[at + 48] = 1;  // slot in use
+    std::ofstream out(binary, std::ios::binary | std::ios::trunc);
+    if (!out || !out.write(data->data(), static_cast<std::streamsize>(data->size()))) return makeError(Error::Code::IOError, "cannot write " + binary.string());
+    return {};
+}
+
+std::optional<crypto::AesKey> readEmbeddedPackKey(const fs::path& binary) {
+    auto data = readAll(binary);
+    if (!data) return std::nullopt;
+    const auto at = data->find(keySlotMarker());
+    if (at == std::string::npos || at + 64 > data->size() || (*data)[at + 48] != 1) return std::nullopt;
+    crypto::AesKey key;
+    std::memcpy(key.data(), data->data() + at + 16, 32);
+    return key;
+}
+
+Result<ExportReport> exportPatch(const Project& project, const fs::path& basePack, const fs::path& outputPack) {
+    auto key = projectPackKey(project);
+    std::unique_ptr<PackFileProvider> base;
+    if (auto plain = PackFileProvider::openFile(basePack)) base = std::move(plain.value());
+    else if (key) {
+        auto enc = PackFileProvider::openFile(basePack, &key.value());
+        if (!enc) return enc.error();
+        base = std::move(enc.value());
+    } else {
+        return plain.error();
+    }
+    const fs::path tmp = fs::temp_directory_path() / ("agr_patch_" + std::to_string(std::random_device{}()));
+    auto data = packageGameDataImpl(project, tmp, false);  // loose files, compared one by one
+    if (!data) return data.error();
+    PackWriter w;
+    ExportReport report;
+    report.output = outputPack;
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(tmp, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file()) continue;
+        const std::string rel = fs::relative(it->path(), tmp, ec).generic_string();
+        if (rel == "game.json" || rel == ".agr-export") continue;
+        auto bytes = readAll(it->path());
+        if (!bytes) continue;
+        const auto hash = crypto::sha256(bytes->data(), bytes->size());
+        const auto& entries = base->entries();
+        const bool same = std::any_of(entries.begin(), entries.end(), [&](const PackEntry& e) { return e.path == rel && e.hash == hash; });
+        if (same) continue;
+        report.files += 1;
+        report.bytes += bytes->size();
+        w.add(rel, ByteBuffer(bytes->begin(), bytes->end()));
+    }
+    fs::remove_all(tmp, ec);
+    if (w.count() == 0) report.warnings.push_back("nothing changed since the base pack: the patch is empty");
+    const crypto::AesKey* k = base->encrypted() && key ? &key.value() : nullptr;
+    if (Status s = w.write(outputPack, k); !s) return s.error();
+    AGR_LOG_INFO("Export", "patch: {} changed file(s) -> {}", report.files, outputPack.string());
+    return report;
 }
 
 } // namespace agr::editor

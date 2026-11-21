@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "ScriptInternal.hpp"
+#include "agr/core/Pack.hpp"
 #include "agr/render/Renderer.hpp"
 
 namespace agr {
@@ -118,6 +119,28 @@ int a_loadScene(lua_State* L) {
     return 0;
 }
 
+/// agr.loadPack(uri) -> true | false, error: layers a data pack (DLC, mod, downloaded patch) over
+/// the game's files (game:// and assets://); its files win over the game's from now on (assets
+/// already loaded keep their old version until reloaded).
+int a_loadPack(lua_State* L) {
+    const char* uri = luaL_checkstring(L, 1);
+    auto& m = implOf(L);
+    auto* overlay = dynamic_cast<OverlayFileProvider*>(m.vfs.provider("game"));
+    auto fail = [&](const std::string& why) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, why.c_str());
+        return 2;
+    };
+    if (!overlay) return fail("packs can be loaded only in an exported game (or the player)");
+    auto bytes = m.vfs.readBytes(uri);
+    if (!bytes) return fail(bytes.error().message);
+    auto pack = PackFileProvider::open(packMemoryReader(std::move(bytes.value())), gamePackKey());
+    if (!pack) return fail(pack.error().message);
+    overlay->addLayer(std::shared_ptr<FileProvider>(std::move(pack.value())));
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 } // namespace
 
 void openGameBindings(lua_State* L) {
@@ -126,6 +149,8 @@ void openGameBindings(lua_State* L) {
     lua_setfield(L, -2, "clone");
     lua_pushcfunction(L, a_loadScene);
     lua_setfield(L, -2, "loadScene");
+    lua_pushcfunction(L, a_loadPack);
+    lua_setfield(L, -2, "loadPack");
     lua_pop(L, 1);
     static const luaL_Reg camera[] = {{"ray", c_ray}, {"screenToWorld", c_screenToWorld}, {"worldToScreen", c_worldToScreen}, {nullptr, nullptr}};
     addAgrLibrary(L, "camera", camera);

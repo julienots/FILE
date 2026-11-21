@@ -133,6 +133,7 @@ composant).
 | `agr.camera.screenToWorld(x, y [, hauteur])` → x, y, z | point du jeu sous un clic ou un doigt : plan z = 0 pour une caméra orthographique (2D), sinon sol horizontal y = hauteur (0 par défaut) ; `nil` si le rayon le manque |
 | `agr.camera.worldToScreen(x, y, z)` → x, y, visible ; `agr.camera.ray(x, y)` → origine, direction | sens inverse (barres de vie au-dessus des unités) et rayon de la caméra (avec `agr.physics3d.raycast`) |
 | `agr.loadScene(uri)` | change de scène à la fin de l'image (`"game://scenes/niveau2.agrscene"`) ; dans le player, Retour / Échap ramène à la scène de départ |
+| `agr.loadPack(uri)` | ajoute un paquet de données (`.agrpak` : DLC, mod, patch téléchargé) par-dessus les fichiers du jeu ; renvoie `true` ou `false, erreur` ([EXPORT.md](EXPORT.md)) |
 | `agr.net.*` | multijoueur en réseau : héberger, rejoindre, envoyer des tables, événements ; voir [NETWORK.md](NETWORK.md) |
 | `agr.profile.begin(nom)`, `agr.profile.finish()` | section mesurée dans le profileur de l'éditeur (imbriquable) |
 | `agr.time.setScale(s)`, `agr.time.scale()` | vitesse du jeu (ralenti 0,3, pause 0, accéléré 2) ; revient à 1 quand le jeu s'arrête |

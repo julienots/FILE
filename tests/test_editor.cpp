@@ -1429,3 +1429,54 @@ TEST_CASE("curve editor: screen mapping, tangent handles and making a key Custom
     c.keys[1].outTangent = c.keys[1].inTangent = 0.0f;  // flattened handles
     CHECK(c.evaluate(1.1f) < before2);
 }
+
+TEST_CASE("data pack export: encrypted game.agrpak, key embedded in the player, patch of the changed files") {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    auto& x = f.ctx->project().settings().exportSettings;
+    x.dataPack = true;
+    x.encryptData = true;
+    // A fake player with an empty key slot (the marker, 32 key bytes, the "in use" byte).
+    std::string marker = "AGRPACKKEYSLOT01";
+    std::string fake = "ELF fake player..." + marker + std::string(48, '\0') + "...end";
+    const fs::path player = f.root / "agr_player";
+    { std::ofstream(player, std::ios::binary) << fake; }
+    CHECK_FALSE(readEmbeddedPackKey(player));
+    auto report = exportDesktop(f.ctx->project(), f.root / "out", player);
+    REQUIRE_MESSAGE(report, (report ? "" : report.error().message));
+    const fs::path game = report.value().output / "game";
+    CHECK(fs::exists(game / "game.json"));
+    CHECK(fs::exists(game / "game.agrpak"));
+    CHECK_FALSE(fs::exists(game / "assets"));  // nothing left loose
+    CHECK_FALSE(fs::exists(game / "scenes"));
+    auto key = projectPackKey(f.ctx->project());
+    REQUIRE(key);
+    CHECK(fs::exists(f.ctx->project().root() / "keys" / "data.key"));
+    const fs::path exe = report.value().output / report.value().output.filename();
+    auto embedded = readEmbeddedPackKey(exe);
+    REQUIRE(embedded);
+    CHECK(*embedded == key.value());
+    CHECK(projectPackKey(f.ctx->project()).value() == key.value());  // stable
+    CHECK_FALSE(PackFileProvider::openFile(game / "game.agrpak"));   // useless without the key
+    auto pack = PackFileProvider::openFile(game / "game.agrpak", &key.value());
+    REQUIRE(pack);
+    CHECK(pack.value()->exists(f.ctx->project().settings().startupScene));
+
+    // Nothing changed: an empty patch. One asset changed: a one-file patch.
+    auto empty = exportPatch(f.ctx->project(), game / "game.agrpak", f.root / "p0.agrpak");
+    REQUIRE(empty);
+    CHECK(empty.value().files == 0);
+    const fs::path asset = f.ctx->project().assetsDirectory() / "notes.txt";
+    { std::ofstream(asset) << "new in 1.1"; }
+    auto patch = exportPatch(f.ctx->project(), game / "game.agrpak", f.root / "p1.agrpak");
+    REQUIRE(patch);
+    CHECK(patch.value().files == 1);
+    auto p1 = PackFileProvider::openFile(f.root / "p1.agrpak", &key.value());
+    REQUIRE(p1);
+    REQUIRE(p1.value()->entries().size() == 1);
+    CHECK(p1.value()->entries()[0].path == "assets/notes.txt");
+    // A player without a slot is refused rather than shipping an unreadable game.
+    { std::ofstream(f.root / "old_player", std::ios::binary) << "no slot here"; }
+    CHECK_FALSE(embedPackKey(f.root / "old_player", key.value()));
+}

@@ -106,6 +106,11 @@ void VirtualFileSystem::mount(const std::string& scheme, std::unique_ptr<FilePro
     m_mounts[scheme] = std::move(provider);
 }
 void VirtualFileSystem::unmount(const std::string& scheme) { m_mounts.erase(scheme); }
+FileProvider* VirtualFileSystem::provider(const std::string& scheme) const {
+    auto it = m_mounts.find(scheme);
+    return it == m_mounts.end() ? nullptr : it->second.get();
+}
+
 bool VirtualFileSystem::isMounted(const std::string& scheme) const { return m_mounts.contains(scheme); }
 
 Result<FileProvider*> VirtualFileSystem::resolve(std::string_view uri, std::string& outPath) const {
