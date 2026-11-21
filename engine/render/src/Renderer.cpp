@@ -35,9 +35,10 @@ struct Lights2DUniforms {
     Vec4 posRadius[Renderer::kMaxLights2D];
     Vec4 colorFalloff[Renderer::kMaxLights2D];
     Vec4 shadow[Renderer::kMaxLights2D];  // row (-1: none), softness, strength
+    Vec4 dirShadow[Renderer::kMaxLights2D];  // directional: across min, 1 / across range, along min, 1 / along range
     i32 count[4];
 };
-static_assert(sizeof(Lights2DUniforms) == 784);
+static_assert(sizeof(Lights2DUniforms) == 1040);
 
 /// Distance from `o` along unit direction `dir` to segment [a, b], or a negative value.
 float raySegment(Vec2 o, Vec2 dir, Vec2 a, Vec2 b) {
@@ -551,6 +552,54 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 lights.posRadius[n] = Vec4(d.x, d.y, std::max(l.height, 0.0f), -1.0f);
                 lights.colorFalloff[n] = Vec4(srgbToLinear(l.color) * l.intensity, 1.0f);
                 lights.shadow[n] = Vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+                if (l.castShadows && shadowRows < kShadowRows2D) {
+                    // Parallel shadow map over the view: for 512 lines along the light, the first
+                    // occluder met (distance along the light, normalized).
+                    if (!occludersCollected) collectOccluders();
+                    const Vec2 dir{d.x, d.y}, perp{-d.y, d.x};
+                    const Mat4 inv = math::inverse(viewProj);
+                    float pmin = 1e30f, pmax = -1e30f, amin = 1e30f, amax = -1e30f;
+                    for (int c = 0; c < 8; ++c) {
+                        const Vec3 q = inv.transformPoint({(c & 1) ? 1.0f : -1.0f, (c & 2) ? 1.0f : -1.0f, (c & 4) ? 1.0f : (m_glClipSpace ? -1.0f : 0.0f)});
+                        const float p = q.x * perp.x + q.y * perp.y, a = q.x * dir.x + q.y * dir.y;
+                        pmin = std::min(pmin, p), pmax = std::max(pmax, p), amin = std::min(amin, a), amax = std::max(amax, a);
+                    }
+                    const float margin = (pmax - pmin) * 0.05f + 0.01f;
+                    pmin -= margin, pmax += margin;
+                    for (const Edge& ed : edges) {  // occluders before the view still cast into it
+                        amin = std::min({amin, ed.a.x * dir.x + ed.a.y * dir.y, ed.b.x * dir.x + ed.b.y * dir.y});
+                    }
+                    amax += margin;
+                    const float pr = std::max(pmax - pmin, 1e-4f), ar = std::max(amax - amin, 1e-4f);
+                    std::fill(m_shadow2DBins.begin(), m_shadow2DBins.end(), 1.0f);
+                    const float bins = static_cast<float>(kShadowBins2D);
+                    for (const Edge& ed : edges) {
+                        const float pa = ed.a.x * perp.x + ed.a.y * perp.y, pb = ed.b.x * perp.x + ed.b.y * perp.y;
+                        const float aa = (ed.a.x * dir.x + ed.a.y * dir.y - amin) / ar, ab = (ed.b.x * dir.x + ed.b.y * dir.y - amin) / ar;
+                        const float ua = (pa - pmin) / pr * bins, ub = (pb - pmin) / pr * bins;
+                        if (std::max(ua, ub) < 0.0f || std::min(ua, ub) > bins) continue;
+                        ++m_stats.occluderEdges2D;
+                        const i32 first = std::max(0, static_cast<i32>(std::floor(std::min(ua, ub)))), last = std::min(static_cast<i32>(kShadowBins2D) - 1, static_cast<i32>(std::floor(std::max(ua, ub))));
+                        for (i32 b = first; b <= last; ++b) {
+                            const float center = static_cast<float>(b) + 0.5f;
+                            const float t = std::fabs(ub - ua) < 1e-6f ? 0.0f : std::clamp((center - ua) / (ub - ua), 0.0f, 1.0f);
+                            const float a = std::fabs(ub - ua) < 1e-6f ? std::min(aa, ab) : aa + (ab - aa) * t;
+                            m_shadow2DBins[static_cast<usize>(b)] = std::min(m_shadow2DBins[static_cast<usize>(b)], std::clamp(a, 0.0f, 1.0f));
+                        }
+                    }
+                    u8* row = &m_shadow2DPixels[static_cast<usize>(shadowRows) * kShadowBins2D * 4];
+                    for (u32 b = 0; b < kShadowBins2D; ++b) {
+                        const u32 q = static_cast<u32>(std::clamp(m_shadow2DBins[b], 0.0f, 1.0f) * 65535.0f + 0.5f);
+                        row[b * 4 + 0] = static_cast<u8>(q >> 8);
+                        row[b * 4 + 1] = static_cast<u8>(q & 255);
+                        row[b * 4 + 2] = 0;
+                        row[b * 4 + 3] = 255;
+                    }
+                    lights.shadow[n] = Vec4(static_cast<float>(shadowRows), std::clamp(l.shadowSoftness, 0.0f, 4.0f) * 4.0f,
+                                            std::clamp(l.shadowStrength, 0.0f, 1.0f), std::max(l.shadowPenetration, 0.0f) / ar);
+                    lights.dirShadow[n] = Vec4(pmin, 1.0f / pr, amin, 1.0f / ar);
+                    ++shadowRows;
+                }
                 ++n;
                 return;
             }

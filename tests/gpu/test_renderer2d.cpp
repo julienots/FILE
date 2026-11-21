@@ -371,6 +371,40 @@ TEST_CASE("directional Light2D: uniform light, no radius, shades normal maps fro
     CHECK_MESSAGE(near(pixel(*gpu().device, 58, 58), 186, 186, 186, 5), pixel(*gpu().device, 58, 58));
 }
 
+TEST_CASE("directional Light2D shadows: parallel shadows behind occluders, lit elsewhere") {
+    Render2DFixture f;
+    f.camera();
+    f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env")).ambientIntensity = 0.0f;
+    const auto bg = f.sprite({0, 0, 0}, 10.0f);
+    f.scene.registry().get<SpriteRendererComponent>(bg).lit = true;
+    const auto wall = f.scene.createEntity("Wall");
+    f.scene.registry().get<TransformComponent>(wall).position = {-1.0f, 0, 0};
+    f.scene.registry().emplace<LightOccluder2DComponent>(wall).size = {0.6f, 2.0f};
+    const auto sun = f.scene.createEntity("Sun");  // travels toward +X (its local +X)
+    auto& l = f.scene.registry().emplace<Light2DComponent>(sun);
+    l.color = {1, 1, 1, 1};
+    l.intensity = 0.6f;
+    l.directional = true;
+    l.castShadows = true;
+    l.shadowSoftness = 0.0f;
+    l.shadowPenetration = 0.0f;
+    f.frame();
+    CHECK(f.renderer.stats().shadowedLights2D == 1);
+    // World x -> pixel: 32 + x * 6.4; y up -> pixel 32 - y * 6.4.
+    const Rgba before = pixel(*gpu().device, 32 - 26, 32);  // x = -4, in front of the wall
+    const Rgba behind = pixel(*gpu().device, 32 + 13, 32);  // x = +2, behind the wall, in its band
+    const Rgba above = pixel(*gpu().device, 32 + 13, 32 - 13);  // x = +2, y = +2: beside the band
+    CHECK_MESSAGE(before.r > 150, before);
+    CHECK_MESSAGE(behind.r < 30, behind);
+    CHECK_MESSAGE(above.r > 150, above);
+    // Turned around (toward -X): the right side is now lit, the left in shadow.
+    f.scene.registry().get<TransformComponent>(sun).rotation = math::Quat::fromAxisAngle({0, 0, 1}, math::radians(180.0f));
+    f.frame();
+    CHECK(pixel(*gpu().device, 32 + 13, 32).r > 150);
+    CHECK(pixel(*gpu().device, 32 - 26, 32).r < 30);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("particles: soft default texture, additive blending") {
     Render2DFixture f;
     f.camera();

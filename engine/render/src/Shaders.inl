@@ -53,6 +53,7 @@ layout(std140) uniform Lights2D {
     vec4 u_lightPosRadius[16];     // xy position, z height above the sprites (normal maps), w radius
     vec4 u_lightColorFalloff[16];  // rgb linear color * intensity, w falloff exponent
     vec4 u_lightShadow[16];        // shadow row (-1: none), softness (texels), strength, penetration / radius
+    vec4 u_lightDirShadow[16];     // directional: across min, 1 / across range, along min, 1 / along range
     ivec4 u_lightCount;
 };
 uniform sampler2D u_texture;
@@ -88,7 +89,22 @@ void main() {
         float dist = directional ? 0.0 : length(d) / u_lightPosRadius[i].w;
         float att = clamp(1.0 - dist, 0.0, 1.0);
         float lit = 1.0;
-        if (u_lightShadow[i].x > -0.5 && att > 0.0) {
+        if (directional && u_lightShadow[i].x > -0.5) {
+            // Parallel shadow map: first occluder along the light on this pixel's line.
+            vec2 dirL = u_lightPosRadius[i].xy, perp = vec2(-dirL.y, dirL.x);
+            vec4 ds = u_lightDirShadow[i];
+            float u = (dot(v_worldPos.xy, perp) - ds.x) * ds.y;
+            float a = (dot(v_worldPos.xy, dirL) - ds.z) * ds.w;
+            float v = (u_lightShadow[i].x + 0.5) / 8.0;
+            float spread = u_lightShadow[i].y / 512.0;
+            float sum = 0.0;
+            for (int k = -2; k <= 2; ++k) {
+                vec4 t = texture(u_shadow2D, vec2(u + float(k) * spread * 0.5, v));
+                float stored = (t.r * 255.0 * 256.0 + t.g * 255.0) / 65535.0;
+                sum += a <= stored + 0.002 + u_lightShadow[i].w ? 1.0 : 0.0;
+            }
+            lit = mix(1.0, sum / 5.0, u_lightShadow[i].z);
+        } else if (u_lightShadow[i].x > -0.5 && att > 0.0) {
             // Polar shadow map: nearest occluder in this direction; 5 taps across directions soften the edge.
             float u = atan(d.y, d.x) / 6.2831853 + 0.5;
             float v = (u_lightShadow[i].x + 0.5) / 8.0;
