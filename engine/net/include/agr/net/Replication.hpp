@@ -38,6 +38,10 @@ struct NetSyncComponent {
     /// Sends a state only when it changed (plus one per second, against losses): idle entities
     /// cost nothing.
     bool onlyChanges = true;
+    /// Network-spawned entities: exist only on the machines of the players that can see them
+    /// (visibility above): spawned for a player when it starts seeing them, removed when it stops
+    /// (hidden units, loot, big worlds). Off: they exist everywhere and only states are filtered.
+    bool spawnWhenVisible = false;
 };
 
 void registerNetComponents();
@@ -50,6 +54,7 @@ struct ReplicationStats {
     u32 rpcsSent = 0, rpcsReceived = 0;  ///< Since start.
     u32 statesSkipped = 0;   ///< Unchanged states not sent this frame (onlyChanges).
     u32 statesHidden = 0;    ///< States not sent to a player that cannot see the entity, this frame.
+    u32 spawnsHidden = 0;    ///< (Entity, player) pairs not spawned there because hidden (spawnWhenVisible).
 };
 
 class Replicator {
@@ -105,7 +110,8 @@ private:
     std::unordered_map<u64, std::string> m_lastBytes;  // uuid -> last state sent (onlyChanges)
     std::unordered_map<u64, f64> m_lastFull;    // uuid -> time of its last sent state, changed or not
     std::unordered_map<u64, std::unordered_map<u32, bool>> m_visibility;  // uuid -> peer -> forced
-    std::unordered_map<u64, std::unordered_map<u32, bool>> m_wasVisible;  // uuid -> peer -> visible last frame
+    std::unordered_map<u64, std::unordered_map<u32, bool>> m_wasVisible;
+    std::unordered_map<u64, std::unordered_map<u32, bool>> m_spawnedFor;  // uuid -> peer -> exists there (spawnWhenVisible)  // uuid -> peer -> visible last frame
     std::unordered_map<u64, Spawned> m_spawned; // uuid -> prefab (host: for late joiners)
     u32 m_sender = 0;
     u64 m_sceneGeneration = 0;

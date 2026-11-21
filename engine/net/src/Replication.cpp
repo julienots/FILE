@@ -119,7 +119,8 @@ void registerNetComponents() {
                {.tooltip = "Who receives it: everyone, its owner only, players owning an entity within visibleRange",
                 .enumEntries = {{"All", 0}, {"OwnerOnly", 1}, {"Range", 2}}})
         .field("visibleRange", &NetSyncComponent::visibleRange, {.rangeMin = 0.0f, .rangeMax = 100000.0f, .speed = 0.5f})
-        .field("onlyChanges", &NetSyncComponent::onlyChanges, {.tooltip = "Send only when the state changed (and once per second)"});
+        .field("onlyChanges", &NetSyncComponent::onlyChanges, {.tooltip = "Send only when the state changed (and once per second)"})
+        .field("spawnWhenVisible", &NetSyncComponent::spawnWhenVisible, {.tooltip = "Network-spawned: exists only for the players that can see it"});
 }
 
 void Replicator::setVisibleTo(Scene& scene, ecs::Entity e, u32 peer, bool visible) {
@@ -163,6 +164,7 @@ void Replicator::reset() {
     m_lastFull.clear();
     m_visibility.clear();
     m_wasVisible.clear();
+    m_spawnedFor.clear();
     m_spawned.clear();
     m_sender = 0;
 }
@@ -205,7 +207,8 @@ Result<ecs::Entity> Replicator::spawn(Scene& scene, NetSession& session, const s
     const Uuid id = Uuid::generate();
     const ecs::Entity e = instantiate(scene, prefab, id, position, owner);
     if (e.isNull()) return makeError(Error::Code::NotFound, "cannot instantiate '" + prefab + "'");
-    if (session.role() == NetRole::Host)
+    const auto* sync = scene.registry().tryGet<NetSyncComponent>(e);
+    if (session.role() == NetRole::Host && !(sync && sync->spawnWhenVisible))  // else: per player, when visible (update)
         sendControl(session, NetSession::kBroadcast,
                     {{"k", "spawn"}, {"prefab", prefab}, {"id", id.toString()}, {"pos", {position.x, position.y, position.z}}, {"owner", owner}});
     return e;
@@ -215,6 +218,7 @@ bool Replicator::despawn(Scene& scene, NetSession& session, ecs::Entity e) {
     if (session.role() == NetRole::Client || !scene.valid(e)) return false;
     const Uuid id = scene.uuidOf(e);
     m_spawned.erase(id.value());
+    m_spawnedFor.erase(id.value());
     m_remote.erase(id.value());
     scene.destroyEntity(e);
     if (session.role() == NetRole::Host) sendControl(session, NetSession::kBroadcast, {{"k", "despawn"}, {"id", id.toString()}});
@@ -366,6 +370,7 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
             // A late joiner gets the spawned entities and the owners.
             for (const auto& [uuid, sp] : m_spawned) {
                 const ecs::Entity e = scene.findByUuid(Uuid(uuid));
+                if (const auto* s = e.isNull() ? nullptr : reg.tryGet<NetSyncComponent>(e); s && s->spawnWhenVisible) continue;  // when visible
                 const Vec3 pos = e.isNull() ? sp.position : reg.get<TransformComponent>(e).position;
                 sendControl(session, ev.peer,
                             {{"k", "spawn"}, {"prefab", sp.prefab}, {"id", Uuid(uuid).toString()}, {"pos", {pos.x, pos.y, pos.z}}, {"owner", ownerOf(scene, e)}});
@@ -391,6 +396,28 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
     }
     if (!session.connected()) return;
     const u32 local = session.localId();
+    // Spawns that follow visibility: created / removed on each player's machine as it sees them.
+    m_stats.spawnsHidden = 0;
+    if (session.role() == NetRole::Host)
+        for (const auto& [uuid, sp] : m_spawned) {
+            const ecs::Entity e = scene.findByUuid(Uuid(uuid));
+            const auto* s = e.isNull() ? nullptr : reg.tryGet<NetSyncComponent>(e);
+            if (!s || !s->spawnWhenVisible) continue;
+            for (u32 peer : session.peers()) {
+                const bool vis = visibleTo(scene, e, peer);
+                bool& there = m_spawnedFor[uuid][peer];
+                if (vis && !there) {
+                    const Vec3 pos = reg.get<TransformComponent>(e).position;
+                    sendControl(session, peer,
+                                {{"k", "spawn"}, {"prefab", sp.prefab}, {"id", Uuid(uuid).toString()}, {"pos", {pos.x, pos.y, pos.z}}, {"owner", ownerOf(scene, e)}});
+                    m_wasVisible[uuid][peer] = false;  // its state follows at once
+                } else if (!vis && there) {
+                    sendControl(session, peer, {{"k", "despawn"}, {"id", Uuid(uuid).toString()}});
+                }
+                there = vis;
+                if (!vis) ++m_stats.spawnsHidden;
+            }
+        }
     // 2. States of what this machine is responsible for. Host: everything, to each client but the
     // owner; client: what it owns, to the host.
     struct Item {

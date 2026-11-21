@@ -494,3 +494,74 @@ TEST_CASE("replication: only changes are sent, visibility per player (owner only
     CHECK(tr(a, treasureId).position.y < tr(host, treasureId).position.y - 1.0f);
     CHECK(hidden > 0);
 }
+
+TEST_CASE("replication: spawnWhenVisible entities exist only for the players that see them") {
+    registerRenderComponents();
+    registerNetComponents();
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / ("agr_netvis_" + Uuid::generate().toString());
+    fs::create_directories(root);
+    VirtualFileSystem vfs;
+    vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
+    PrefabLibrary prefabs(vfs);
+    prefabs.install();
+    {  // a hidden "Loot" prefab: range visibility, spawned only when visible
+        Scene tmp;
+        const auto r = tmp.createEntity("Loot");
+        auto& sync = tmp.registry().emplace<NetSyncComponent>(r);
+        sync.visibility = NetVisibility::Range;
+        sync.visibleRange = 10.0f;
+        sync.spawnWhenVisible = true;
+        REQUIRE(prefabs.save("assets://loot.agrprefab", prefab::fromEntity(tmp, r)));
+    }
+    LossyNetwork netw;
+    netw.loss = 0.0f;
+    struct Machine {
+        NetSession session;
+        Scene scene;
+        Replicator rep;
+        explicit Machine(LossyNetwork& n) : session(std::make_unique<LossyTransport>(n)) {}
+    };
+    const Uuid heroId = Uuid::generate();
+    Machine host(netw), a(netw);
+    for (Machine* m : {&host, &a}) m->scene.registry().emplace<NetSyncComponent>(m->scene.createEntity("Hero", {}, heroId));
+    REQUIRE(host.session.host(7300, 4));
+    REQUIRE(a.session.join("127.0.0.1", 7300));
+    f64 now = 0.0;
+    auto step = [&](int frames) {
+        for (int i = 0; i < frames; ++i) {
+            now += 1.0 / 60.0;
+            for (Machine* m : {&host, &a}) {
+                m->session.update(now);
+                m->rep.update(m->scene, m->session, now);
+                m->session.takeEvents();
+            }
+        }
+    };
+    step(60);
+    REQUIRE(a.session.connected());
+    REQUIRE(host.rep.setOwner(host.scene, host.session, host.scene.findByUuid(heroId), a.session.localId()));
+    auto hero = [&]() -> TransformComponent& { return a.scene.registry().get<TransformComponent>(a.scene.findByUuid(heroId)); };
+    hero().position = {100, 0, 0};
+    step(30);
+    auto loot = host.rep.spawn(host.scene, host.session, "assets://loot.agrprefab", {0, 0, 0});
+    REQUIRE(loot);
+    const Uuid lootId = host.scene.uuidOf(loot.value());
+    step(30);
+    CHECK(a.scene.findByUuid(lootId).isNull());  // far away: not on A's machine at all
+    CHECK(host.rep.stats().spawnsHidden == 1);
+    hero().position = {3, 0, 0};  // walks near it
+    step(40);
+    CHECK_FALSE(a.scene.findByUuid(lootId).isNull());
+    hero().position = {100, 0, 0};  // walks away
+    step(40);
+    CHECK(a.scene.findByUuid(lootId).isNull());
+    hero().position = {2, 0, 0};
+    step(40);
+    REQUIRE_FALSE(a.scene.findByUuid(lootId).isNull());
+    REQUIRE(host.rep.despawn(host.scene, host.session, loot.value()));
+    step(20);
+    CHECK(a.scene.findByUuid(lootId).isNull());
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}

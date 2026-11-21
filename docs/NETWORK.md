@@ -107,6 +107,15 @@ par un joueur arrivé après, RPC client → tous (relayé avec le vrai expédit
 client → hôte, disparition partout, propriétés rendues à l'hôte au départ d'un joueur ; message de
 10 Ko fragmenté avec 30 % de pertes ; découverte ; permissions des RPC.
 
+## Apparitions selon la visibilité
+
+`NetSync.spawnWhenVisible` (entités créées en réseau, `agr.net.spawn`) : l'entité n'existe que sur les
+machines des joueurs qui la voient (selon `visibility` / `visibleRange` / `setVisibleTo`) : elle y est
+créée quand le joueur commence à la voir (avec son état à jour) et retirée quand il ne la voit plus.
+Brouillard de guerre, butin caché, grands mondes : rien n'est envoyé ni simulé chez les autres, et un
+client modifié ne peut pas révéler ce qu'il ne reçoit pas. `stats().spawnsHidden` compte les paires
+(entité, joueur) cachées.
+
 ## Limites actuelles
 
 - IPv4 uniquement ; pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
@@ -114,5 +123,5 @@ client → hôte, disparition partout, propriétés rendues à l'hôte au dépar
 - Pas de chiffrement (le mot de passe n'empêche que de rejoindre) : ne pas transmettre de données
   sensibles.
 - Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de
-  compensation de latence ; la visibilité filtre les états, pas les apparitions (une entité créée en
-  réseau existe chez tous les joueurs).
+  compensation de latence ; `spawnWhenVisible` ne concerne que les entités créées en réseau (les
+  entités de la scène existent partout).
