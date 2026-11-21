@@ -16,8 +16,8 @@ android {
         applicationId = "com.superessence.goddome"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
     }
     // Signature : clé fournie par variables d'environnement (jamais dans le dépôt) ; sinon clé de debug.
     val ks = System.getenv("GODDOME_KEYSTORE")

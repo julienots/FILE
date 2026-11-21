@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const rnd = mulberry32(31);
 const SHEEP_LOD = new THREE.IcosahedronGeometry(1, 1);
@@ -23,74 +24,77 @@ export function buildHumanoid(o = {}) {
   };
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
-  const M = { skin: mat(P.skin, 0.7), tunic: mat(P.tunic, 0.85), tunic2: mat(P.tunic2, 0.9), pants: mat(P.pants), boots: mat(P.boots, 0.6), hair: mat(P.hair, 0.75), belt: mat(P.belt, 0.6), eye: mat('#1a1410', 0.3) };
+  const M = { skin: mat(P.skin, 0.65), tunic: mat(P.tunic, 0.8), tunic2: mat(P.tunic2, 0.85), pants: mat(P.pants, 0.85), boots: mat(P.boots, 0.55), hair: mat(P.hair, 0.6), belt: mat(P.belt, 0.55), eye: mat('#1b1424', 0.15), white: new THREE.MeshBasicMaterial({ color: '#ffffff' }), blush: mat('#f08a8a', 0.9, { transparent: true, opacity: 0.55 }), gold: mat('#e2b85a', 0.3, { metalness: 0.7 }) };
+  const cap = (r, len, segs = 10) => new THREE.CapsuleGeometry(r, len, 6, segs);
 
-  const hips = new THREE.Group(); hips.position.y = 0.95; body.add(hips);
-  // torse
+  // style « jeu » : grosse tête ronde, corps en cloche, membres en capsules, aucune arête vive
+  const hips = new THREE.Group(); hips.position.y = 0.62; body.add(hips);
   const torso = new THREE.Group(); hips.add(torso);
-  part(new THREE.CylinderGeometry(0.2, 0.17, 0.55, 10), M.tunic, torso, 0, 0.3, 0).scale.z = 0.72;
-  part(new THREE.SphereGeometry(0.21, 12, 8), M.tunic, torso, 0, 0.55, 0).scale.set(1.05, 0.6, 0.75);
-  // tunique (jupe) + ceinture
-  part(new THREE.CylinderGeometry(0.19, 0.27, 0.42, 12, 1, true), M.tunic, torso, 0, -0.1, 0).scale.z = 0.8;
-  part(new THREE.CylinderGeometry(0.195, 0.195, 0.07, 12), M.belt, torso, 0, 0.08, 0).scale.z = 0.78;
-  part(new THREE.BoxGeometry(0.08, 0.07, 0.03), mat('#d8b25a', 0.3, { metalness: 0.8 }), torso, 0, 0.08, 0.16);
-  // col / écharpe
-  if (P.scarf) { const s = part(new THREE.TorusGeometry(0.13, 0.055, 6, 14), mat(P.scarf, 0.9), torso, 0, 0.62, 0); s.rotation.x = Math.PI / 2; s.scale.set(1, 0.8, 1); }
+  const bell = new THREE.LatheGeometry([[0, -0.2], [0.25, -0.2], [0.26, -0.15], [0.2, 0.05], [0.17, 0.2], [0.2, 0.32], [0.14, 0.42], [0, 0.45]].map(([x, y]) => new THREE.Vector2(x, y)), 28);
+  part(bell, M.tunic, torso).scale.z = 0.82;
+  const collar = part(new THREE.TorusGeometry(0.12, 0.035, 10, 24), M.tunic2, torso, 0, 0.42, 0); collar.rotation.x = Math.PI / 2;
+  const belt = part(new THREE.TorusGeometry(0.2, 0.03, 10, 28), M.belt, torso, 0, 0.02, 0); belt.rotation.x = Math.PI / 2; belt.scale.y = 0.82;
+  part(new THREE.SphereGeometry(0.04, 12, 8), M.gold, torso, 0, 0.02, 0.17).scale.z = 0.5;
+  if (P.scarf) { const sc = part(new THREE.TorusGeometry(0.13, 0.06, 12, 24), mat(P.scarf, 0.85), torso, 0, 0.43, 0); sc.rotation.x = Math.PI / 2; sc.scale.set(1, 0.85, 1); }
   // tête
-  const neck = new THREE.Group(); neck.position.y = 0.66; torso.add(neck);
-  part(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), M.skin, neck, 0, 0.03, 0);
-  const head = new THREE.Group(); head.position.y = 0.2; neck.add(head);
-  part(new THREE.SphereGeometry(0.15, 16, 12), M.skin, head, 0, 0, 0).scale.set(0.92, 1.05, 0.98);
-  part(new THREE.SphereGeometry(0.022, 6, 6), M.eye, head, -0.052, 0.01, 0.135);
-  part(new THREE.SphereGeometry(0.022, 6, 6), M.eye, head, 0.052, 0.01, 0.135);
-  part(new THREE.SphereGeometry(0.03, 6, 6), M.skin, head, 0, -0.02, 0.15);
-  // cheveux : calotte + mèches
-  const hairCap = part(new THREE.SphereGeometry(0.162, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), M.hair, head, 0, 0.012, -0.01);
-  hairCap.rotation.x = -0.25;
-  part(new THREE.SphereGeometry(0.08, 8, 6), M.hair, head, 0, 0.0, -0.12).scale.set(1.4, 1.3, 0.8);
-  if (P.ponytail) { const pt = part(new THREE.ConeGeometry(0.05, 0.28, 6), M.hair, head, 0, -0.06, -0.17); pt.rotation.x = 2.7; }
-  if (P.hood) { const h = part(new THREE.SphereGeometry(0.19, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), mat(P.hood, 0.9), head, 0, 0.01, -0.02); h.rotation.x = -0.45; }
-  if (P.hat) { part(new THREE.CylinderGeometry(0.28, 0.28, 0.02, 16), mat(P.hat, 0.9), head, 0, 0.12, 0); part(new THREE.CylinderGeometry(0.11, 0.14, 0.14, 12), mat(P.hat, 0.9), head, 0, 0.19, 0); }
+  const neck = new THREE.Group(); neck.position.y = 0.45; torso.add(neck);
+  part(cap(0.065, 0.04), M.skin, neck, 0, 0.03, 0);
+  const head = new THREE.Group(); head.position.y = 0.27; neck.add(head);
+  part(new THREE.SphereGeometry(0.26, 32, 24), M.skin, head).scale.set(1, 0.95, 0.95);
+  for (const sx of [-1, 1]) {
+    const eye = part(new THREE.SphereGeometry(0.048, 16, 12), M.eye, head, sx * 0.092, -0.01, 0.222); eye.scale.set(0.8, 1.15, 0.45);
+    part(new THREE.SphereGeometry(0.014, 8, 6), M.white, head, sx * 0.092 + 0.012, 0.018, 0.242);
+    part(new THREE.SphereGeometry(0.045, 12, 8), M.blush, head, sx * 0.15, -0.085, 0.19).scale.set(1, 0.55, 0.35);
+  }
+  part(new THREE.SphereGeometry(0.022, 10, 8), M.skin, head, 0, -0.06, 0.245);
+  // cheveux : calotte + frange en mèches arrondies
+  const hairCap = part(new THREE.SphereGeometry(0.275, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.56), M.hair, head, 0, 0.015, -0.015);
+  hairCap.rotation.x = -0.32;
+  for (let i = -2; i <= 2; i++) part(new THREE.SphereGeometry(0.085, 14, 10), M.hair, head, i * 0.075, 0.15 - Math.abs(i) * 0.018, 0.17 - Math.abs(i) * 0.03).scale.set(1, 0.8, 0.7);
+  part(new THREE.SphereGeometry(0.2, 18, 12), M.hair, head, 0, -0.02, -0.12).scale.set(1.25, 1.1, 0.9);
+  if (P.ponytail) { const pt = part(cap(0.07, 0.22), M.hair, head, 0, -0.12, -0.27); pt.rotation.x = 0.5; }
+  if (P.hood) { const h = part(new THREE.SphereGeometry(0.31, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), mat(P.hood, 0.85), head, 0, 0.01, -0.03); h.rotation.x = -0.45; }
+  if (P.hat) { part(new THREE.CylinderGeometry(0.4, 0.42, 0.03, 32), mat(P.hat, 0.85), head, 0, 0.19, 0); part(new THREE.SphereGeometry(0.2, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), mat(P.hat, 0.85), head, 0, 0.19, 0).scale.y = 0.8; }
 
   // bras
   const arm = (side) => {
-    const sh = new THREE.Group(); sh.position.set(side * 0.25, 0.53, 0); torso.add(sh);
-    part(new THREE.SphereGeometry(0.075, 8, 6), M.tunic, sh);
-    const upper = part(new THREE.CylinderGeometry(0.06, 0.052, 0.3, 8), M.tunic2, sh, 0, -0.15, 0);
-    const elbow = new THREE.Group(); elbow.position.y = -0.3; sh.add(elbow);
-    part(new THREE.CylinderGeometry(0.05, 0.043, 0.27, 8), M.skin, elbow, 0, -0.135, 0);
-    part(new THREE.CylinderGeometry(0.056, 0.056, 0.08, 8), M.belt, elbow, 0, -0.06, 0);
-    part(new THREE.SphereGeometry(0.052, 8, 6), M.skin, elbow, 0, -0.29, 0.01);
-    sh.rotation.z = side * 0.08;
+    const sh = new THREE.Group(); sh.position.set(side * 0.22, 0.36, 0); torso.add(sh);
+    part(new THREE.SphereGeometry(0.075, 14, 10), M.tunic, sh);
+    const upper = part(cap(0.055, 0.12), M.tunic2, sh, 0, -0.1, 0);
+    const elbow = new THREE.Group(); elbow.position.y = -0.2; sh.add(elbow);
+    part(cap(0.048, 0.1), M.skin, elbow, 0, -0.08, 0);
+    part(new THREE.SphereGeometry(0.062, 14, 10), M.skin, elbow, 0, -0.18, 0.01);
+    sh.rotation.z = side * 0.1;
     return { sh, elbow, upper };
   };
   const leg = (side) => {
-    const hip = new THREE.Group(); hip.position.set(side * 0.1, 0, 0); hips.add(hip);
-    part(new THREE.CylinderGeometry(0.085, 0.068, 0.45, 8), M.pants, hip, 0, -0.22, 0);
-    const knee = new THREE.Group(); knee.position.y = -0.45; hip.add(knee);
-    part(new THREE.CylinderGeometry(0.075, 0.06, 0.42, 8), M.boots, knee, 0, -0.22, 0);
-    part(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 8), M.belt, knee, 0, -0.05, 0);
-    const foot = part(new THREE.BoxGeometry(0.11, 0.07, 0.24), M.boots, knee, 0, -0.45, 0.05);
+    const hip = new THREE.Group(); hip.position.set(side * 0.1, -0.08, 0); hips.add(hip);
+    part(cap(0.075, 0.12), M.pants, hip, 0, -0.12, 0);
+    const knee = new THREE.Group(); knee.position.y = -0.25; hip.add(knee);
+    part(cap(0.07, 0.1), M.boots, knee, 0, -0.1, 0);
+    const foot = part(cap(0.068, 0.1), M.boots, knee, 0, -0.22, 0.05); foot.rotation.x = Math.PI / 2; foot.scale.set(1.05, 1, 0.75);
     return { hip, knee, foot };
   };
   const L = { armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) };
 
-  // accessoires : sac à dos roulé, bâton, cape
+  // accessoires : sac, bâton de cristal, cape
   if (P.pack) {
-    part(new THREE.BoxGeometry(0.3, 0.32, 0.14), mat('#8a5a34', 0.8), torso, 0, 0.36, -0.2);
-    const roll = part(new THREE.CylinderGeometry(0.07, 0.07, 0.38, 10), mat('#b8452f', 0.9), torso, 0, 0.58, -0.22); roll.rotation.z = Math.PI / 2;
-    const strap = part(new THREE.TorusGeometry(0.2, 0.018, 4, 16), M.belt, torso, 0, 0.35, 0); strap.rotation.set(0.0, 0, 0.75); strap.scale.set(1, 1.15, 0.85);
+    part(new RoundedBoxGeometry(0.3, 0.3, 0.15, 3, 0.05), mat('#8a5a34', 0.75), torso, 0, 0.24, -0.22);
+    const roll = part(cap(0.07, 0.24), mat('#c24a32', 0.85), torso, 0, 0.42, -0.24); roll.rotation.z = Math.PI / 2;
   }
-  if (P.staff) { const s = part(new THREE.CylinderGeometry(0.025, 0.025, 1.5, 6), mat('#7a5232', 0.7), torso, 0.0, 0.35, -0.26); s.rotation.z = 0.6; part(new THREE.IcosahedronGeometry(0.06, 0), mat('#6fe6ff', 0.2, { emissive: '#3fd0ff', emissiveIntensity: 2 }), s, 0, 0.78, 0); }
+  if (P.staff) {
+    const st = part(cap(0.025, 1.2, 6), mat('#7a5232', 0.65), torso, 0, 0.2, -0.28); st.rotation.z = 0.6;
+    const gem = part(new THREE.OctahedronGeometry(0.08, 1), mat('#9df0ff', 0.1, { emissive: '#3fd0ff', emissiveIntensity: 2.2 }), st, 0, 0.68, 0); gem.scale.y = 1.4;
+  }
   let cape = null;
   if (P.cape) {
-    const g = new THREE.PlaneGeometry(0.46, 0.75, 4, 6); g.translate(0, -0.375, 0);
-    cape = part(g, mat(P.cape, 0.95, { side: THREE.DoubleSide }), torso, 0, 0.62, -0.17); cape.rotation.x = 0.12;
+    const g = new THREE.PlaneGeometry(0.42, 0.6, 4, 6); g.translate(0, -0.3, 0);
+    cape = part(g, mat(P.cape, 0.9, { side: THREE.DoubleSide }), torso, 0, 0.42, -0.18); cape.rotation.x = 0.12;
   }
 
   // LOD : silhouette simplifiée (1 appel de dessin) quand le personnage est loin de la caméra
   const lodGeo = (() => {
-    const parts = [[new THREE.CylinderGeometry(0.2, 0.27, 1.0, 6), P.tunic, 1.15], [new THREE.CylinderGeometry(0.09, 0.09, 0.85, 5), P.pants, 0.45], [new THREE.SphereGeometry(0.16, 6, 4), P.skin, 1.82]];
+    const parts = [[new THREE.CylinderGeometry(0.18, 0.25, 0.65, 8), P.tunic, 0.82], [new THREE.CylinderGeometry(0.09, 0.09, 0.5, 6), P.pants, 0.27], [new THREE.SphereGeometry(0.26, 10, 8), P.skin, 1.36], [new THREE.SphereGeometry(0.27, 10, 6, 0, Math.PI * 2, 0, 1.6), P.hair, 1.4]];
     const geos = parts.map(([g, c, y]) => { g.translate(0, y, 0); const col = new THREE.Color(c), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) { a[i] = col.r; a[i + 1] = col.g; a[i + 2] = col.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g.toNonIndexed(); });
     const out = new THREE.BufferGeometry();
     ['position', 'normal', 'color'].forEach(k => { const arrs = geos.map(g => g.attributes[k].array); const n = arrs.reduce((t, x) => t + x.length, 0); const m = new Float32Array(n); let o = 0; arrs.forEach(x => { m.set(x, o); o += x.length; }); out.setAttribute(k, new THREE.BufferAttribute(m, 3)); });
@@ -145,7 +149,7 @@ export function buildHumanoid(o = {}) {
       L.armR.sh.rotation.z = THREE.MathUtils.lerp(L.armR.sh.rotation.z, 1.1, a);
     }
   }
-  return { root, animate, state, height: 1.8 * P.scale };
+  return { root, animate, state, height: 1.66 * P.scale };
 }
 
 // ---------- Villageois autonomes ----------

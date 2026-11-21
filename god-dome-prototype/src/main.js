@@ -14,6 +14,8 @@ import { buildGrassField, createPushers } from './grassfield.js';
 const pushers = createPushers();
 import { createGame, ITEMS } from './game.js';
 import { AtmospherePass } from './atmosphere.js';
+import { applyToonShading } from './toon.js';
+applyToonShading();
 import { loadExternalModels } from './models.js';
 import { makeVillageMaterials, buildVillage, buildHouse } from './village.js';
 import { buildHumanoid, buildVillagers, buildSheep, buildBirds } from './characters.js';
@@ -26,8 +28,8 @@ const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math
 const QUALITY = params.get('q') || (isMobile ? 'medium' : 'high');
 const Q = {
   high: { pr: Math.min(devicePixelRatio, 2), shadow: 4096, grass: 26000, flowers: 6000, msaa: 4, bloom: true, atmo: { aoSamples: 10, raySamples: 32 }, grassLayers: [{ cell: 0.05, r: 9, seg: 5 }, { cell: 0.12, rIn: 8.3, r: 30, seg: 3 }] },
-  medium: { pr: Math.min(devicePixelRatio, 1.5), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, atmo: { aoSamples: 6, raySamples: 18 }, grassLayers: [{ cell: 0.07, r: 8, seg: 4 }, { cell: 0.17, rIn: 7.3, r: 22, seg: 3 }] },
-  low: { pr: 1, shadow: 1024, grass: 7000, flowers: 1500, msaa: 0, bloom: false, atmo: null, grassLayers: [{ cell: 0.1, r: 7, seg: 3 }, { cell: 0.24, rIn: 6.3, r: 15, seg: 2 }] },
+  medium: { pr: Math.min(devicePixelRatio, 1.3), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, atmo: { aoSamples: 6, raySamples: 18 }, grassLayers: [{ cell: 0.07, r: 8, seg: 4 }, { cell: 0.17, rIn: 7.3, r: 22, seg: 3 }] },
+  low: { pr: 1, shadow: 1024, grass: 7000, flowers: 1500, msaa: 0, bloom: false, atmo: { aoSamples: 0, raySamples: 0 }, grassLayers: [{ cell: 0.1, r: 7, seg: 3 }, { cell: 0.24, rIn: 6.3, r: 15, seg: 2 }] },
 }[QUALITY] || {};
 const setMsg = m => { const e = document.getElementById('loadMsg'); if (e) e.textContent = m; };
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -266,7 +268,7 @@ function creatorPos() {
 const tp = { yaw: 0, yawT: null, pitch: 0.18, dist: 5.6, distT: 5.6, pitchT: null, head: new THREE.Vector3() };
 let mode = 'god'; // god | toPlay | play | toGod
 let entry = new THREE.Vector3(-6, 0, 4);
-const pl = { vy: 0, grounded: true, run: false, speed: 0 };
+const pl = { vy: 0, grounded: true, run: false, speed: 0, dash: 0 };
 const input = { jx: 0, jy: 0, keys: new Set() };
 
 function godPose(out = {}) {
@@ -275,7 +277,7 @@ function godPose(out = {}) {
 }
 function tpPose() {
   const p = player.root.position;
-  const head = new THREE.Vector3(p.x, p.y + 1.55, p.z);
+  const head = new THREE.Vector3(p.x, p.y + 1.42, p.z);
   const inHouse = world.insideFloor(p.x, p.z);
   const dist = inHouse ? Math.min(tp.dist, 2.8) : tp.dist;
   const off = new THREE.Vector3(Math.sin(tp.yaw) * Math.cos(tp.pitch), Math.sin(tp.pitch), Math.cos(tp.yaw) * Math.cos(tp.pitch));
@@ -484,10 +486,13 @@ function updatePlayer(dt) {
   let mx = fx * jy + rx * jx, mz = fz * jy + rz * jx;
   const ml = Math.hypot(mx, mz);
   const inWater = terrain.wetAt(p.x, p.z) > 0.6 && p.y < terrain.heightAt(p.x, p.z) + 0.2;
-  const target = ml > 0.01 ? mag * (run ? 6.8 : 3.4) * (inWater ? 0.6 : 1) : 0;
-  pl.speed += (target - pl.speed) * Math.min(1, dt * 8);
-  if (ml > 0.01) {
-    mx /= ml; mz /= ml;
+  let target = ml > 0.01 ? mag * (run ? 6.8 : 3.4) * (inWater ? 0.6 : 1) : 0;
+  // Élan : ruée de 0,25 s dans la direction du regard (ou du déplacement)
+  if (pl.dash > 0) { pl.dash -= dt; target = 17; if (ml < 0.01) { mx = Math.sin(player.root.rotation.y); mz = Math.cos(player.root.rotation.y); } }
+  pl.speed += (target - pl.speed) * Math.min(1, dt * (pl.dash > 0 ? 30 : 8));
+  const mlen = Math.hypot(mx, mz);
+  if (mlen > 0.01) {
+    mx /= mlen; mz /= mlen;
     const yaw = Math.atan2(mx, mz);
     let d = yaw - player.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
     player.root.rotation.y += d * Math.min(1, dt * 12);
@@ -576,8 +581,14 @@ function bindUI() {
   $('timeRange').addEventListener('input', e => { timeOfDay = parseFloat(e.target.value); });
   const speeds = [0, 0.04, 1.2];
   ['spd0', 'spd1', 'spd2'].forEach((id, i) => $(id).onclick = () => { timeSpeed = speeds[i]; ['spd0', 'spd1', 'spd2'].forEach(j => $(j).classList.toggle('on', j === id)); });
-  $('btnHouse').onclick = () => addHouseAt(entry.x, entry.z);
-  $('btnTree').onclick = () => { for (let i = 0; i < 5; i++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 7; const x = entry.x + Math.cos(a) * r, z = entry.z + Math.sin(a) * r; plantTree(Math.random() > 0.4 ? 'broad' : 'pine', x, z, 0.8 + Math.random() * 0.5); } };
+  $('btnHouse').onclick = () => { if (game.spendFoi(15)) addHouseAt(entry.x, entry.z); };
+  $('btnGodFoudre').onclick = () => setGodPower('foudre');
+  $('btnGodBenir').onclick = () => setGodPower('benir');
+  $('btnOnde').addEventListener('pointerdown', e => { e.preventDefault(); game.onde(); });
+  $('btnElan').addEventListener('pointerdown', e => { e.preventDefault(); if (game.elan()) pl.dash = 0.25; });
+  $('btnFoudre').addEventListener('pointerdown', e => { e.preventDefault(); game.foudreDivine(); });
+  ui.refreshFoi(); ui.refreshPowers();
+  $('btnTree').onclick = () => { if (!game.spendFoi(5)) return; for (let i = 0; i < 5; i++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 7; const x = entry.x + Math.cos(a) * r, z = entry.z + Math.sin(a) * r; plantTree(Math.random() > 0.4 ? 'broad' : 'pine', x, z, 0.8 + Math.random() * 0.5); } };
   $('btnAttack').addEventListener('pointerdown', e => { e.preventDefault(); game.attack(); });
   $('btnRain').onclick = () => { game.setWeather(game.state.weather === 'rain' ? 'clear' : 'rain'); $('btnRain').classList.toggle('on', game.state.weather === 'rain'); };
   $('btnRain').classList.toggle('on', game.state.weather === 'rain');
@@ -629,6 +640,9 @@ function bindUI() {
     if (e.code === 'Escape') startExit();
     if (e.code === 'KeyE') talk();
     if (e.code === 'KeyF') game.attack();
+    if (e.code === 'KeyR') game.onde();
+    if (e.code === 'KeyX' && game.elan()) pl.dash = 0.25;
+    if (e.code === 'KeyG') game.foudreDivine();
     if (e.code === 'KeyJ') $('btnJournal').click();
     if (e.code === 'KeyI') $('btnBag').click();
     if (e.code === 'KeyC') $('btnSky').click();
@@ -644,11 +658,20 @@ function pick(x, y) {
   ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
   const hit = ray.intersectObject(terrain.mesh)[0];
   if (hit && Math.hypot(hit.point.x, hit.point.z) < WORLD_R - 6) {
+    if (godPower) { if (game.godCast(godPower, hit.point.clone())) { setGodPower(null); } return; }
     entry.set(hit.point.x, 0, hit.point.z);
     $('hint').textContent = 'Point d\'entrée choisi · touchez « Entrer dans le monde »';
   }
 }
 let houseSeed = 100;
+let godPower = null;
+function setGodPower(p) {
+  godPower = godPower === p ? null : p;
+  ['Foudre', 'Benir'].forEach(n => $('btnGod' + n).classList.toggle('on', godPower === n.toLowerCase()));
+  $('hint').textContent = godPower === 'foudre' ? 'Touchez le sol : la foudre frappe (anéantit les Ombrelins, blesse le Cœur d\'Ombre)'
+    : godPower === 'benir' ? 'Touchez le sol : bénédiction (soigne l\'habitant, paralyse les Ombres)'
+    : 'Glissez pour tourner · pincez pour zoomer · touchez le sol pour choisir où entrer';
+}
 function plantTree(kind, x, z, s, record = true) {
   trees.userData.addTree(kind, x, z, s);
   circles.length = 0; circles.push(...trees.userData.colliders, ...rocks.userData.colliders, ...bushes.userData.colliders);
@@ -659,13 +682,29 @@ const ui = {
   refreshLife() { const l = $('life'); if (!l || !game) return; l.innerHTML = ''; for (let i = 0; i < game.state.maxHp; i++) { const s = document.createElement('i'); if (i >= game.state.hp) s.className = 'off'; l.appendChild(s); } },
   hurtFlash() { const h = $('hurt'); h.classList.add('on'); setTimeout(() => h.classList.remove('on'), 60); },
   setAction(label, pk) { actionPickup = pk; },
+  refreshFoi() { if (!game) return; const f = Math.floor(game.state.foi); document.querySelectorAll('.foi i').forEach(i => i.style.width = f + '%'); document.querySelectorAll('.foi b').forEach(b => b.textContent = f); },
+  refreshPowers() { if (!game) return; $('btnOnde').classList.toggle('locked', !game.state.onde); },
+  cooldowns(c) { for (const [k, v] of Object.entries(c)) { const el = $('btn' + k[0].toUpperCase() + k.slice(1)); if (el) el.style.setProperty('--cd', (v * 100).toFixed(1) + '%'); } },
+  actCard(kicker, title, text) { const c = $('actCard'); c.querySelector('small').textContent = kicker; c.querySelector('h2').textContent = title; c.querySelector('p').textContent = text; c.classList.remove('on'); void c.offsetWidth; c.classList.add('on'); },
+  bossBar(v) { const b = $('bossBar'); b.hidden = v === null; if (v !== null) b.querySelector('i').style.width = Math.max(0, v * 100) + '%'; },
+  story(lines, { title = '', final = null, onDone = () => {} } = {}) {
+    const box = $('story'); let i = 0;
+    const show = () => { box.querySelector('h2').textContent = title; box.querySelector('p').textContent = lines[i]; box.querySelector('.dots').textContent = lines.map((_, k) => k === i ? '●' : '○').join(' '); $('storyNext').textContent = i < lines.length - 1 ? 'Suivant' : (final || 'Commencer'); };
+    $('storyNext').onclick = () => { i++; if (i >= lines.length) { box.hidden = true; onDone(); } else show(); };
+    $('storySkip').onclick = () => { box.hidden = true; onDone(); };
+    box.hidden = false; show();
+  },
+  ending(lines, stats) {
+    ui.story([...lines, `Ombrelins chassés : ${stats.kills} · Foi : ${stats.foi}. Merci d'avoir joué. Le monde reste à vous : construisez, explorez, protégez.`], { title: 'ÉPILOGUE', final: 'Continuer à jouer' });
+  },
   refreshQuests() {
     if (!game) return;
     $('questList').innerHTML = game.quests().map(q => {
       const st = q.state; const done = st && st.stage >= 2;
       const status = !st ? `Parlez à ${q.giver}` : done ? 'Accomplie' : q.steps[0];
       return `<div class="quest ${done ? 'done' : ''}"><b><span class="tag">${q.kind === 'main' ? 'Principale' : done ? 'Terminée' : 'Secondaire'}</span>${q.title}</b><span>${status}</span></div>`;
-    }).join('');
+    }).join('') + (game.state.act >= 2 ? `<div class="quest ${game.state.won ? 'done' : ''}"><b><span class="tag">Acte II</span>Le Cœur d'Ombre</b><span>${game.state.won ? 'Vaincu — Aube est sauvée' : 'Détruire le Cœur d\'Ombre dans la Faille, au nord-ouest'}</span></div>` : '')
+      + `<h4>Chroniques d'Aube</h4>` + game.lore.chronicle.map(([t, d]) => `<div class="quest lore"><b>${t}</b><span>${d}</span></div>`).join('');
     $('objective').textContent = game.objective();
   },
   refreshInventory() {
@@ -728,13 +767,15 @@ window.GD = {
   setEntry: (x, z) => entry.set(x, 0, z),
   look: (yaw, pitch) => { tp.yaw = yaw; tp.pitch = pitch; tp.pitchT = null; },
   info: () => ({ ...renderer.info.render, fps }),
-  renderer: () => renderer, scene: () => scene, dome: () => dome, creator: () => creator, game: () => game, villagers: () => villagers.list, enemies: () => game._enemies, attack: () => game.attack(), talk: () => talk(), rain: (on = true) => game.setWeather(on ? 'rain' : 'clear'),
+  renderer: () => renderer, scene: () => scene, dome: () => dome, creator: () => creator, story: (l) => ui.story(l), actCard: (...a) => ui.actCard(...a), godPower: (p) => setGodPower(p), cast: (p, x, z) => game.godCast(p, new THREE.Vector3(x, world.groundAt(x, z), z)), onde: () => game.onde(), elan: () => { if (game.elan()) pl.dash = 0.25; }, foudre: () => game.foudreDivine(), game: () => game, villagers: () => villagers.list, enemies: () => game._enemies, attack: () => game.attack(), talk: () => talk(), rain: (on = true) => game.setWeather(on ? 'rain' : 'clear'),
   move: (jx, jy) => { input.jx = jx; input.jy = jy; },
 };
 
 (async () => {
   await buildWorld();
-  game = createGame({ scene, terrain, world, player, villagers, T, solve, ui, camera, respawn: () => placePlayer(VILLAGE.x + 3, VILLAGE.y + 4) });
+  game = createGame({ scene, terrain, world, player, villagers, T, solve, ui, camera, respawn: () => placePlayer(VILLAGE.x + 3, VILLAGE.y + 4),
+    flash: (k) => { flashT = Math.max(flashT, k); },
+    onVictory: () => { dome.uniforms.uRipplePos.value.set(0, DOME_R, 0); rippleT = 0.0001; } });
   const ext = await loadExternalModels({ scene, terrain, world, player, villagers: villagers, onProgress: setMsg });
   if (ext.length) console.info('Modèles 3D chargés :', ext.join(', '));
   for (const b of game.state.builds) { if (b.type === 'house') addHouseAt(b.x, b.z, false); if (b.type === 'tree') plantTree(b.kind, b.x, b.z, b.s, false); }
@@ -745,5 +786,9 @@ window.GD = {
   const ld = $('loading'); ld.style.opacity = 0; setTimeout(() => ld.remove(), 900);
   clock.start();
   window.GD.ready = true;
+  // prologue au premier lancement
+  if (!game.state.seenIntro && !params.has('manual')) {
+    setTimeout(() => ui.story([...game.lore.prologue, game.lore.goal], { title: 'LA VOÛTE D\'AUBE', onDone: () => { game.state.seenIntro = true; game.save(); ui.actCard('ACTE I', 'Les Éclats de la Voûte', 'Entrez dans votre monde et parlez au Vieil Oswin, près du puits.'); } }), 900);
+  }
   if (!params.has('manual')) frame();
 })();

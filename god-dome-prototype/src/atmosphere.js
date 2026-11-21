@@ -22,13 +22,13 @@ export class AtmospherePass extends Pass {
         uRes: { value: new THREE.Vector2(1, 1) },
         uSunDir: U.uSunDir, uSunColor: U.uSunColor, uHorizon: U.uSkyHorizon, uNight: U.uNight,
         uSunUV: { value: new THREE.Vector3(0.5, 0.5, 0) },
-        uInside: { value: 0 }, uAO: { value: 0.9 }, uRays: { value: 0.55 }, uFog: { value: 0.0045 }, uTime: U.uTime,
+        uInside: { value: 0 }, uOutline: { value: 1.5 }, uOutlineFar: { value: 120 }, uAO: { value: 0.9 }, uRays: { value: 0.55 }, uFog: { value: 0.0045 }, uTime: U.uTime,
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: /* glsl */`
         #include <packing>
         uniform sampler2D tDiffuse, tDepth;
-        uniform float uNear, uFar, uInside, uAO, uRays, uFog, uNight, uTime;
+        uniform float uNear, uFar, uInside, uAO, uRays, uFog, uNight, uTime, uOutline, uOutlineFar;
         uniform mat4 uProjInv, uCamWorld, uProj;
         uniform vec2 uRes; uniform vec3 uSunDir, uSunColor, uHorizon, uSunUV;
         varying vec2 vUv;
@@ -38,9 +38,20 @@ export class AtmospherePass extends Pass {
         float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main(){
           vec4 col = texture2D(tDiffuse, vUv);
-          if (uInside < 0.01) { gl_FragColor = col; return; }
           float d = rawDepth(vUv);
           bool sky = d >= 0.99999;
+          // --- 0. contours « jeu » : discontinuités de profondeur relatives (silhouettes nettes, pas de bruit dans l'herbe) ---
+          {
+            float zc = -viewZ(d);
+            vec2 px = uOutline / uRes;
+            float zl = -viewZ(rawDepth(vUv - vec2(px.x, 0.0))), zr = -viewZ(rawDepth(vUv + vec2(px.x, 0.0)));
+            float zu = -viewZ(rawDepth(vUv + vec2(0.0, px.y))), zd = -viewZ(rawDepth(vUv - vec2(0.0, px.y)));
+            float zmin = min(min(zl, zr), min(zu, zd));
+            float rel = (zc - zmin) / max(zmin, 0.001);
+            float edge = smoothstep(0.1, 0.24, rel) * smoothstep(0.35, 0.9, zc - zmin) * (1.0 - smoothstep(uOutlineFar * 0.6, uOutlineFar, zmin));
+            col.rgb = mix(col.rgb, col.rgb * vec3(0.12, 0.1, 0.16), edge * 0.85);
+          }
+          if (uInside < 0.01) { gl_FragColor = col; return; }
           vec3 vp = viewPos(vUv, d);
           vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
           vec3 camP = (uCamWorld * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -49,6 +60,7 @@ export class AtmospherePass extends Pass {
 
           // --- 1. occlusion ambiante (disque de Vogel, rotation aléatoire par pixel) ---
           float ao = 1.0;
+#if AO_SAMPLES > 0
           if (!sky && dist < 60.0) {
             float vz = vp.z;
             float rad = clamp(0.55 * uProj[1][1] * 0.5 * uRes.y / -vz, 3.0, 48.0);
@@ -65,6 +77,7 @@ export class AtmospherePass extends Pass {
             }
             ao = 1.0 - uAO * occ / float(AO_SAMPLES) * (1.0 - smoothstep(30.0, 60.0, dist));
           }
+#endif
           col.rgb *= ao;
 
           // --- 2. brouillard de hauteur + diffusion solaire ---
@@ -77,6 +90,7 @@ export class AtmospherePass extends Pass {
           }
 
           // --- 3. rayons crépusculaires ---
+#if RAY_SAMPLES > 0
           if (uSunUV.z > 0.0 && uRays > 0.0) {
             vec2 delta = (uSunUV.xy - vUv) / float(RAY_SAMPLES) * 0.85;
             vec2 uv = vUv + delta * hash(vUv * uRes);
@@ -91,6 +105,7 @@ export class AtmospherePass extends Pass {
             illum /= float(RAY_SAMPLES);
             col.rgb += uSunColor * illum * uRays * uSunUV.z * (1.0 - uNight) * uInside;
           }
+#endif
           gl_FragColor = col;
         }`,
     });
@@ -102,6 +117,8 @@ export class AtmospherePass extends Pass {
     u.uNear.value = c.near; u.uFar.value = c.far;
     u.uProjInv.value.copy(c.projectionMatrixInverse); u.uProj.value.copy(c.projectionMatrix); u.uCamWorld.value.copy(c.matrixWorld);
     u.uInside.value = inside;
+    u.uOutlineFar.value = THREE.MathUtils.lerp(900, 90, inside);
+    u.uOutline.value = THREE.MathUtils.lerp(1.2, 1.6, inside) * Math.max(1, u.uRes.value.y / 1100);
     const p = sunWorldPos.clone().project(c);
     const facing = new THREE.Vector3().subVectors(sunWorldPos, c.position).normalize().dot(c.getWorldDirection(new THREE.Vector3()));
     u.uSunUV.value.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, THREE.MathUtils.smoothstep(facing, 0.1, 0.6));

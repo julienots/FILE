@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUV } from './textures.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mulberry32 } from './noise.js';
 import { VILLAGE } from './terrain.js';
 
@@ -41,7 +42,9 @@ class Builder {
     this.parts.get(mat).push(geo);
   }
   box(mat, w, h, d, x, y, z, { rx = 0, ry = 0, rz = 0, uv = 0.25, collide = false } = {}) {
-    const g = boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, uv);
+    // arêtes arrondies : fini l'aspect « cube », les silhouettes restent lisibles et douces
+    const rad = Math.min(0.09, Math.min(w, h, d) * 0.32);
+    const g = rad > 0.012 ? projUV(new RoundedBoxGeometry(w, h, d, 2, rad), uv) : boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, uv);
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1));
     this.add(mat, g, m);
     if (collide) this.colliders.push({ x, z, hw: w / 2, hd: d / 2, rot: ry, y0: y - h / 2, y1: y + h / 2 });
@@ -391,4 +394,16 @@ function mergeStatic(root, keep) {
     m.castShadow = cast; m.receiveShadow = true;
     root.add(m);
   }
+}
+
+// UV en projection selon l'axe dominant de la normale (densité de texture constante en mètres)
+function projUV(geo, s) {
+  const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    if (ax >= ay && ax >= az) uv.setXY(i, p.getZ(i) * s, p.getY(i) * s);
+    else if (ay >= az) uv.setXY(i, p.getX(i) * s, p.getZ(i) * s);
+    else uv.setXY(i, p.getX(i) * s, p.getY(i) * s);
+  }
+  return geo;
 }

@@ -291,7 +291,7 @@ export function buildRocks(terrain, count = 140, detail = null) {
   while (n < count && tries < 20000) {
     tries++;
     const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * (WORLD_R - 6), x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (Math.hypot(x - VILLAGE.x, z - VILLAGE.y) < 24 || terrain.pathAt(x, z) > 0.2) continue;
+    if (Math.hypot(x - VILLAGE.x, z - VILLAGE.y) < 24 || terrain.pathAt(x, z) > 0.2 || Math.hypot(x + 22, z + 34) < 12) continue;
     const wet = terrain.wetAt(x, z), sl = terrain.slopeAt(x, z);
     if (rnd() > 0.04 + wet * 0.5 + sl * 0.5) continue;
     const s = (0.5 + rnd() ** 2 * 2.6) * (wet > 0.3 ? 0.7 : 1);

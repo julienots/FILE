@@ -9,6 +9,7 @@ const N = 321;                  // sommets par côté (~0,75 m)
 const STEP = SIZE / (N - 1);
 
 export const VILLAGE = new THREE.Vector2(-30, 16);
+export const RIFT = { x: -22, z: -34 }; // arène du Cœur d'Ombre (dégagée de toute végétation)
 export const LAKE = { x: 40, z: 70, r: 15, level: 0 };
 
 const RIVER_PTS = [
@@ -208,7 +209,7 @@ export function buildTerrain() {
     return Math.hypot(dx, dz) / (2 * e);
   }
   const vegetationOK = (x, z, maxSlope = 0.5) =>
-    Math.hypot(x, z) < WORLD_R - 4 && maskAt(pathMask, x, z) < 0.25 && maskAt(wetMask, x, z) < 0.2 && slopeAt(x, z) < maxSlope && heightAt(x, z) < 47;
+    Math.hypot(x, z) < WORLD_R - 4 && Math.hypot(x - RIFT.x, z - RIFT.z) > 13 && maskAt(pathMask, x, z) < 0.25 && maskAt(wetMask, x, z) < 0.2 && slopeAt(x, z) < maxSlope && heightAt(x, z) < 47;
 
   return {
     mesh, heightAt, slopeAt, vegetationOK, forestMask, heights, pathMask, wetMask, N, SIZE, STEP,

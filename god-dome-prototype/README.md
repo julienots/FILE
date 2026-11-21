@@ -29,6 +29,36 @@ Qualité forcée : `?q=high`, `?q=medium` (par défaut sur téléphone), `?q=low
 | Regarder le ciel | bouton | C |
 | Journal / Sac | boutons | J / I |
 
+
+## Histoire : la Voûte d'Aube
+
+Vous êtes le Créateur. De vos mains est né **Aube**, un monde sous une bulle de verre. Mais le Vide a trouvé une fissure : la Voûte se brise et l'Ombre s'infiltre.
+
+- **Prologue** au premier lancement, et *Chroniques d'Aube* (le lore) dans le Journal.
+- **Acte I — Les Éclats de la Voûte** : le Vieil Oswin vous envoie chercher 3 éclats (pied de la cascade, forêt de l'est, rive du lac).
+- **Acte II — Le Cœur d'Ombre** : un boss vous attend dans la Faille, au pied des falaises du nord-ouest. Il lance des orbes et invoque des Ombrelins.
+- **Épilogue** après sa destruction ; le monde reste ensuite libre à façonner.
+
+**But du jeu : retrouver les 3 éclats puis détruire le Cœur d'Ombre.**
+
+## Foi et pouvoirs
+
+La **Foi** de vos habitants (jauge en haut de l'écran) monte avec les quêtes, les éclats, les Ombrelins chassés et les prières quotidiennes. Elle alimente vos pouvoirs.
+
+| Créateur (vue du dôme) | Habitant (3e personne) |
+|---|---|
+| ⚡ **Foudre** (20) : anéantit les Ombrelins au point touché, blesse le boss | **Onde de lumière** : repousse et blesse autour de vous (débloquée au premier éclat) |
+| ✦ **Bénédiction** (25) : soigne l'habitant, paralyse les Ombres | **Élan** : ruée rapide |
+| + Maison (15), + Arbres (5), ☂ Pluie | **Foudre divine** (20) : l'habitant appelle la foudre du Créateur sur l'Ombre la plus proche |
+
+## Direction artistique
+
+Style « jeu » assumé plutôt qu'un réalisme approximatif :
+- ombrage cartoon en paliers sur tous les matériaux, avec un liseré de lumière sur les bords ;
+- contours noirs en post-traitement ;
+- personnages ronds à grosse tête ;
+- maisons aux arêtes arrondies.
+
 ## Contenu
 
 - **Mode Créateur** : vue orbitale du monde miniature, cycle jour/nuit et vitesse du temps, pluie, construction de maisons et plantation d'arbres (sauvegardées), choix du point d'entrée.

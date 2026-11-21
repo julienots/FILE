@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { U } from './shared.js';
 import { mulberry32 } from './noise.js';
-import { DOME_R, WORLD_R } from './terrain.js';
+import { DOME_R, WORLD_R, RIFT } from './terrain.js';
+export { RIFT };
 
 /*
  * GAMEPLAY : quêtes, objets à ramasser, inventaire, créatures hostiles, combat, météo, sauvegarde.
@@ -24,7 +25,7 @@ const QUESTS = {
     steps: ['Trouver les 3 éclats de voûte', 'Rapporter les éclats au Vieil Oswin'],
     need: { shard: 3 },
     progress: ['Les éclats brillent d\'une lumière bleue. Tu ne peux pas les manquer.'],
-    done: ['Ils sont tièdes… comme si quelqu\'un les avait tenus dans sa main.', 'Garde ceci, voyageur : ta force grandit. (+2 segments de vie)'],
+    done: ['Ils sont tièdes… comme si quelqu\'un les avait tenus dans sa main.', 'Écoute… ils battent tous vers le nord-ouest, au pied des falaises. Là où la Voûte saigne, une Faille s\'est ouverte.', 'Le Cœur d\'Ombre s\'y nourrit. Détruis-le, et le ciel guérira. Ta force grandit, voyageur : (+2 segments de vie).'],
   },
   apples: {
     title: 'Les pommes de Brune', giver: 'Brune', kind: 'side',
@@ -44,11 +45,39 @@ const QUESTS = {
   },
 };
 
-const SHARD_SPOTS = [[3, -40], [58, 4], [-14, -66]];
+const SHARD_SPOTS = [[3, -40], [58, 4], [30, 56]]; // cascade, forêt de l'est, rive du lac (le plateau nord était inaccessible)
+
+// ------------------------------------------------------------------ LORE
+export const LORE = {
+  prologue: [
+    'Au commencement, il n\'y avait que le Vide. Et toi.',
+    'De tes mains, tu as soufflé une bulle de verre. Et dedans, un monde : Aube.',
+    'Ses habitants vivent, aiment, travaillent… sans savoir que leur ciel est une voûte, et que tu les regardes.',
+    'Mais le Vide a trouvé une fissure. L\'Ombre s\'infiltre, la Voûte se brise, et des Ombrelins rôdent dans les bois.',
+    'Créateur, ta puissance naît de la Foi de ton peuple. Pour sauver Aube, il te faudra descendre parmi eux.',
+  ],
+  goal: 'BUT DU JEU : retrouver les 3 Éclats de la Voûte, puis détruire le Cœur d\'Ombre dans la Faille.',
+  chronicle: [
+    ['Le Dôme', 'Une bulle de verre forgée par le Créateur. Vu de l\'intérieur, c\'est le ciel ; ses joints brillent quand on lève les yeux.'],
+    ['Aube', 'Le monde sous la Voûte : le village de Clairval, la grande cascade, la forêt de l\'est et le lac.'],
+    ['La Foi', 'Chaque quête accomplie, chaque Ombrelin chassé, chaque maison bâtie nourrit la Foi. Elle alimente tes pouvoirs.'],
+    ['Le Vide', 'Ce qui existait avant toi. Il cherche à reprendre Aube par la Faille.'],
+  ],
+  epilogue: [
+    'Le Cœur d\'Ombre se brise dans un éclair de lumière.',
+    'Au-dessus de Clairval, les joints de la Voûte se referment un à un.',
+    'Les habitants lèvent les yeux. Certains jurent avoir vu deux grands yeux sourire.',
+    'Aube est sauvée. Mais le Vide attend toujours, au-delà du verre…',
+  ],
+};
+
 
 export function createGame(ctx) {
   const { scene, terrain, world, player, villagers, T, solve, ui } = ctx;
-  const state = load() || { inv: {}, quests: {}, kills: 0, hp: 8, maxHp: 8, builds: [], weather: 'clear', shards: [] };
+  const state = Object.assign({ inv: {}, quests: {}, kills: 0, hp: 8, maxHp: 8, builds: [], weather: 'clear', shards: [], foi: 40, act: 1, won: false, seenIntro: false, onde: false }, load() || {});
+  const FOI_MAX = 100;
+  function addFoi(n, why) { state.foi = Math.max(0, Math.min(FOI_MAX, state.foi + n)); ui.refreshFoi?.(); if (why && n > 0) ui.toast(`+${n} Foi · ${why}`, 'foi'); }
+  function spendFoi(n) { if (state.foi < n) { ui.toast(`Pas assez de Foi (${Math.floor(state.foi)}/${n})`, 'warn'); return false; } addFoi(-n); save(); return true; }
   const save = () => { try { localStorage.setItem('goddome-save', JSON.stringify(state)); } catch (e) { /* stockage indisponible */ } };
   function load() { try { return JSON.parse(localStorage.getItem('goddome-save')); } catch (e) { return null; } }
 
@@ -139,6 +168,7 @@ export function createGame(ctx) {
     return Object.entries(q.need).every(([k, n]) => count(k) >= n);
   }
   function objective() {
+    if (state.act === 2 && !state.won) return 'Acte II · Détruire le Cœur d\'Ombre dans la Faille (nord-ouest)';
     const order = ['main', 'gloom', 'apples'];
     for (const id of order) {
       const s = state.quests[id];
@@ -151,7 +181,9 @@ export function createGame(ctx) {
       if (q.need.kills) extra = ` (${Math.min(4, state.kills - (s.killBase || 0))}/4)`;
       return `${q.title} · ${q.steps[0]}${extra}`;
     }
-    if (!state.quests.main) return 'Parlez au Vieil Oswin, près du puits';
+    if (state.won) return 'Aube est sauvée · Explorez et façonnez votre monde';
+    if (state.act === 2) return 'Acte II · Détruire le Cœur d\'Ombre dans la Faille (nord-ouest)';
+    if (!state.quests.main) return 'Acte I · Parlez au Vieil Oswin, près du puits';
     return 'Explorez votre monde';
   }
   function linesFor(npc) {
@@ -170,12 +202,13 @@ export function createGame(ctx) {
       state.quests[id] = { stage: 1, killBase: state.kills };
       ui.toast(`Nouvelle quête : ${q.title}`, q.kind === 'main' ? 'main' : 'side');
       if (id === 'main') spawnShards();
+      addFoi(3);
     } else if (s.stage === 1 && questReady(id)) {
       s.stage = 2;
-      if (id === 'main') { give('shard', -3); state.maxHp += 2; state.hp = state.maxHp; }
+      if (id === 'main') { give('shard', -3); state.maxHp += 2; state.hp = state.maxHp; state.act = 2; spawnBoss(); setTimeout(() => ui.actCard('ACTE II', 'Le Cœur d\'Ombre', 'Rendez-vous à la Faille, au pied des falaises du nord-ouest.'), 1200); }
       if (id === 'apples') { give('apple', -5); give('gold', 30); give('apple', 1); }
       if (id === 'gloom') give('gold', 50);
-      ui.toast(`Quête accomplie : ${q.title}`, 'done');
+      ui.toast(`Quête accomplie : ${q.title}`, 'done'); addFoi(12, 'quête accomplie');
     }
     save(); ui.refreshQuests(); ui.refreshLife();
   }
@@ -200,23 +233,151 @@ export function createGame(ctx) {
     const p = player.root.position, yaw = player.root.rotation.y;
     const front = new THREE.Vector3(p.x + Math.sin(yaw) * 1.3, p.y + 1, p.z + Math.cos(yaw) * 1.3);
     setTimeout(() => burst(front, '#7fe3ff', 10, 0.7), 140);
-    for (const e of enemies) {
-      if (e.dead) continue;
-      const d = e.g.position.distanceTo(front);
-      if (d < 2.0) {
-        e.hp--; e.hit = 0.25;
-        const k = new THREE.Vector2(e.g.position.x - p.x, e.g.position.z - p.z).normalize();
-        e.vx = k.x * 9; e.vz = k.y * 9;
-        if (e.hp <= 0) {
-          e.dead = 1; state.kills++;
-          burst(e.g.position.clone().add(new THREE.Vector3(0, 0.5, 0)), '#b06bff', 22, 0.9);
-          if (rnd() < 0.7) give('essence', 1);
-          ui.toast('Ombrelin vaincu', 'side');
-          ui.refreshQuests(); save();
-        }
-      }
+    for (const e of enemies) if (!e.dead && e.g.position.distanceTo(front) < 2.0) damageEnemy(e, 1, p, 9);
+    if (boss && !boss.dead && boss.g.position.distanceTo(front) < 3.2) damageBoss(1);
+  }
+  function damageEnemy(e, n, from, knock = 9) {
+    e.hp -= n; e.hit = 0.25;
+    const k = new THREE.Vector2(e.g.position.x - from.x, e.g.position.z - from.z).normalize();
+    e.vx = k.x * knock; e.vz = k.y * knock;
+    if (e.hp <= 0) {
+      e.dead = 1; state.kills++;
+      burst(e.g.position.clone().add(new THREE.Vector3(0, 0.5, 0)), '#b06bff', 22, 0.9);
+      if (rnd() < 0.7) give('essence', 1);
+      if (e.minion) { scene.remove(e.g); enemies.splice(enemies.indexOf(e), 1); }
+      addFoi(3, 'Ombrelin chassé');
+      ui.refreshQuests(); save();
     }
   }
+
+  // ---------------------------------------------------------- POUVOIRS
+  const cds = { onde: 0, elan: 0, foudre: 0 };
+  const CD = { onde: 6, elan: 2.5, foudre: 4 };
+  function onde() {
+    if (!state.onde) { ui.toast('Pouvoir verrouillé : trouvez un Éclat de voûte', 'warn'); return; }
+    if (cds.onde > 0) return;
+    cds.onde = CD.onde;
+    const p = player.root.position;
+    shockRing(p, '#8fe8ff', 5.5);
+    for (const e of enemies) if (!e.dead && e.g.position.distanceTo(p) < 5) damageEnemy(e, 2, p, 16);
+    if (boss && !boss.dead && boss.g.position.distanceTo(p) < 6) damageBoss(2);
+  }
+  function elan() { if (cds.elan > 0) return false; cds.elan = CD.elan; burst(player.root.position.clone().add(new THREE.Vector3(0, 0.8, 0)), '#cfefff', 8, 0.5); return true; }
+  // la foudre du Créateur : depuis le mode Créateur (point touché) ou appelée par l'habitant
+  function lightning(point, { dmg = 6, radius = 6 } = {}) {
+    const top = new THREE.Vector3(point.x * 0.3, DOME_R * 0.9, point.z * 0.3);
+    const pts = []; const N = 14;
+    for (let i = 0; i <= N; i++) { const t = i / N; const q = top.clone().lerp(point, t); if (i > 0 && i < N) { q.x += (rnd() - 0.5) * 4 * (1 - t * 0.6); q.z += (rnd() - 0.5) * 4 * (1 - t * 0.6); } pts.push(q); }
+    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.1), 60, point.distanceTo(top) > 60 ? 0.45 : 0.25, 6, false);
+    const bolt = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5.5, 8), fog: false, transparent: true }));
+    const halo = new THREE.Sprite(glowMat('#bfe9ff')); halo.scale.setScalar(14); halo.position.copy(point).y += 1;
+    scene.add(bolt, halo);
+    let t = 0; const fade = () => { t += 0.05; bolt.material.opacity = halo.material.opacity = Math.max(0, 1 - t * 2.5); if (t < 0.4) setTimeout(fade, 30); else { scene.remove(bolt, halo); geo.dispose(); } }; fade();
+    ctx.flash?.(0.35);
+    burst(point.clone().add(new THREE.Vector3(0, 0.5, 0)), '#e8f8ff', 26, 1.1);
+    shockRing(point, '#ffffff', radius);
+    for (const e of enemies) if (!e.dead && e.g.position.distanceTo(point) < radius) damageEnemy(e, 99, point, 14);
+    if (boss && !boss.dead && boss.g.position.distanceTo(point) < radius + 2) damageBoss(dmg);
+  }
+  function foudreDivine() {
+    if (cds.foudre > 0) return;
+    const p = player.root.position;
+    let target = null, bd = 24;
+    if (boss && !boss.dead && boss.g.position.distanceTo(p) < bd) { target = boss.g.position; bd = 0; }
+    for (const e of enemies) { if (e.dead) continue; const d = e.g.position.distanceTo(p); if (d < bd) { bd = d; target = e.g.position; } }
+    if (!target) { ui.toast('Aucune Ombre à portée', 'warn'); return; }
+    if (!spendFoi(20)) return;
+    cds.foudre = CD.foudre;
+    lightning(target.clone());
+  }
+  function blessing(point) {
+    shockRing(point, '#ffd77a', 14);
+    for (let i = 0; i < 30; i++) burst(point.clone().add(new THREE.Vector3((rnd() - 0.5) * 16, 0.5, (rnd() - 0.5) * 16)), '#ffe08a', 1, 0.7);
+    if (player.root.position.distanceTo(point) < 18) { state.hp = state.maxHp; ui.refreshLife(); ui.toast('Le Créateur vous bénit : vie restaurée', 'done'); }
+    for (const e of enemies) if (!e.dead && e.g.position.distanceTo(point) < 14) e.stun = 8;
+    save();
+  }
+  function godCast(power, point) {
+    if (power === 'foudre') { if (!spendFoi(20)) return false; lightning(point); return true; }
+    if (power === 'benir') { if (!spendFoi(25)) return false; blessing(point); return true; }
+    return false;
+  }
+  const rings = [];
+  function shockRing(pos, color, radius) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    m.rotation.x = -Math.PI / 2; m.position.copy(pos); m.position.y = world.groundAt(pos.x, pos.z) + 0.25;
+    scene.add(m); rings.push({ m, t: 0, radius });
+  }
+
+  // ---------------------------------------------------------- BOSS : le Cœur d'Ombre
+  let boss = null;
+  function spawnBoss() {
+    if (boss) return;
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.8, 4), new THREE.MeshStandardMaterial({ color: '#170c22', roughness: 0.2, metalness: 0.3, emissive: '#6a1fb0', emissiveIntensity: 0.8 }));
+    core.castShadow = true; g.add(core);
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), eyeMat); e.position.set(sx * 0.6, 0.35, 1.55); e.scale.set(1, 0.6, 0.5); g.add(e); }
+    const aura = new THREE.Sprite(glowMat('#9a4dff')); aura.scale.setScalar(9); aura.material.opacity = 0.5; g.add(aura);
+    const orbit = new THREE.Group(); g.add(orbit);
+    for (let i = 0; i < 7; i++) { const sh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), new THREE.MeshStandardMaterial({ color: '#2a1440', emissive: '#b060ff', emissiveIntensity: 1.5 })); const a = i / 7 * 6.28; sh.position.set(Math.cos(a) * 3, Math.sin(a * 2) * 0.6, Math.sin(a) * 3); orbit.add(sh); }
+    const y0 = world.groundAt(RIFT.x, RIFT.z);
+    g.position.set(RIFT.x, y0 + 3, RIFT.z);
+    // la Faille au sol + colonne d'ombre visible de loin (et depuis le mode Créateur)
+    const rift = new THREE.Mesh(new THREE.CircleGeometry(6, 48), new THREE.MeshBasicMaterial({ color: '#5a10a0', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    rift.rotation.x = -Math.PI / 2; rift.position.set(RIFT.x, y0 + 0.15, RIFT.z);
+    const beam = new THREE.Sprite(glowMat('#8a3dff')); beam.scale.set(4, 90, 1); beam.position.set(RIFT.x, y0 + 45, RIFT.z); beam.material.opacity = 0.5;
+    scene.add(g, rift, beam);
+    boss = { g, core, orbit, rift, beam, hp: 30, max: 30, t: 0, shot: 2, summon: 6, hit: 0, dead: 0, engaged: false };
+  }
+  const orbs = [];
+  function damageBoss(n) {
+    if (!boss || boss.dead) return;
+    boss.hp -= n; boss.hit = 0.2; ui.bossBar(boss.hp / boss.max);
+    burst(boss.g.position.clone(), '#c89bff', 10, 0.9);
+    if (boss.hp <= 0) {
+      boss.dead = 1; state.won = true; state.act = 3;
+      for (let i = 0; i < 6; i++) setTimeout(() => burst(boss.g.position.clone().add(new THREE.Vector3((rnd() - 0.5) * 4, (rnd() - 0.5) * 3, (rnd() - 0.5) * 4)), i % 2 ? '#ffffff' : '#b06bff', 30, 1.4), i * 180);
+      ctx.flash?.(1.2); ctx.onVictory?.();
+      addFoi(50, 'Cœur d\'Ombre détruit');
+      enemies.filter(e => e.minion).forEach(e => { e.hp = 0; e.dead = 1; });
+      ui.bossBar(null);
+      setTimeout(() => { scene.remove(boss.g, boss.rift, boss.beam); ui.ending(LORE.epilogue, { kills: state.kills, foi: Math.floor(state.foi) }); }, 1800);
+      save();
+    }
+  }
+  function updateBoss(dt, playing) {
+    if (!boss || boss.dead) return;
+    const b = boss, p = player.root.position;
+    b.t += dt; b.hit = Math.max(0, b.hit - dt);
+    const y0 = world.groundAt(RIFT.x, RIFT.z);
+    b.g.position.y = y0 + 3 + Math.sin(b.t * 1.3) * 0.5;
+    b.orbit.rotation.y += dt * 1.2; b.orbit.rotation.x = Math.sin(b.t * 0.5) * 0.3;
+    b.core.material.emissiveIntensity = b.hit > 0 ? 4 : 0.8 + Math.sin(b.t * 3) * 0.4;
+    b.rift.material.opacity = 0.45 + Math.sin(b.t * 2) * 0.15;
+    const d = b.g.position.distanceTo(p);
+    const engaged = playing && d < 28;
+    if (engaged !== b.engaged) { b.engaged = engaged; ui.bossBar(engaged ? b.hp / b.max : null); }
+    if (!engaged) return;
+    b.g.lookAt(p.x, b.g.position.y, p.z);
+    b.shot -= dt; b.summon -= dt;
+    if (b.shot <= 0) { // orbe d'ombre lente et esquivable
+      b.shot = b.hp < 15 ? 2.2 : 3.4;
+      const o = new THREE.Sprite(glowMat('#a050ff')); o.scale.setScalar(1.6); o.position.copy(b.g.position);
+      scene.add(o); orbs.push({ o, v: new THREE.Vector3().subVectors(p.clone().add(new THREE.Vector3(0, 1, 0)), b.g.position).setLength(7), life: 5 });
+    }
+    if (b.summon <= 0) { b.summon = 14; for (let i = 0; i < 2; i++) { const e = spawnEnemy(RIFT.x + (rnd() - 0.5) * 8, RIFT.z + (rnd() - 0.5) * 8); e.minion = true; } }
+  }
+  function updateOrbs(dt) {
+    const p = player.root.position;
+    for (let i = orbs.length - 1; i >= 0; i--) {
+      const o = orbs[i]; o.life -= dt;
+      const to = new THREE.Vector3(p.x, p.y + 1, p.z).sub(o.o.position);
+      o.v.lerp(to.setLength(7), dt * 0.6); o.o.position.addScaledVector(o.v, dt);
+      if (o.o.position.distanceTo(new THREE.Vector3(p.x, p.y + 1, p.z)) < 0.9) { hurt(1, o.o.position); o.life = 0; burst(o.o.position, '#a050ff', 10, 0.7); }
+      if (o.life <= 0 || o.o.position.y < world.groundAt(o.o.position.x, o.o.position.z)) { scene.remove(o.o); orbs.splice(i, 1); }
+    }
+  }
+  if (state.act === 2 && !state.won) spawnBoss();
   let invuln = 0;
   function hurt(n, from) {
     if (invuln > 0) return;
@@ -240,7 +401,10 @@ export function createGame(ctx) {
   function collect(k) {
     scene.remove(k.g); pickups.splice(pickups.indexOf(k), 1);
     give(k.type, 1);
-    if (k.type === 'shard') { state.shards.push(k.shardId); burst(k.g.position, '#7fe3ff', 26, 1.0); ui.toast(`Éclat de voûte trouvé (${count('shard')}/3)`, 'main'); }
+    if (k.type === 'shard') {
+      state.shards.push(k.shardId); burst(k.g.position, '#7fe3ff', 26, 1.0); ui.toast(`Éclat de voûte trouvé (${count('shard')}/3)`, 'main'); addFoi(8);
+      if (!state.onde) { state.onde = true; setTimeout(() => ui.actCard('POUVOIR', 'Onde de Lumière', 'L\'éclat résonne en vous : repoussez les Ombres autour de vous.'), 900); ui.refreshPowers?.(); }
+    }
     else ui.toast(`+1 ${ITEMS[k.type].name}`, 'item');
     ui.refreshQuests(); save();
   }
@@ -250,9 +414,16 @@ export function createGame(ctx) {
     return false;
   }
 
+  let foiTick = 0;
   // ---------------------------------------------------------- boucle
   function update(dt, mode, time) {
     attackCd = Math.max(0, attackCd - dt); invuln = Math.max(0, invuln - dt);
+    for (const k in cds) cds[k] = Math.max(0, cds[k] - dt);
+    ui.cooldowns?.({ onde: cds.onde / CD.onde, elan: cds.elan / CD.elan, foudre: cds.foudre / CD.foudre });
+    // la Foi monte doucement : les habitants prient (plus vite quand il fait beau)
+    foiTick += dt; if (foiTick > 20) { foiTick = 0; addFoi(state.weather === 'rain' ? 0.5 : 1 + state.builds.length * 0.1); save(); }
+    for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt * 2.2; const k = Math.min(1, r.t); r.m.scale.setScalar(0.5 + k * r.radius); r.m.material.opacity = 0.9 * (1 - k); if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); rings.splice(i, 1); } }
+    updateBoss(dt, mode === 'play'); updateOrbs(dt);
     // objets
     for (const k of pickups) { k.t += dt; k.mesh.rotation.y += dt * (k.type === 'shard' ? 1.5 : 0.6); k.g.position.y = k.base + Math.sin(k.t * 2) * (k.type === 'shard' ? 0.2 : 0.04); }
     // particules
@@ -270,6 +441,7 @@ export function createGame(ctx) {
         continue;
       }
       e.t += dt; e.hit = Math.max(0, e.hit - dt);
+      if (e.stun > 0) { e.stun -= dt; e.body.material.emissive.set('#3fa0ff'); e.body.material.emissiveIntensity = 1.2; continue; }
       const dx = p.x - g.position.x, dz = p.z - g.position.z, d = Math.hypot(dx, dz);
       let mx = 0, mz = 0, sp = 0;
       if (playing && d < 13 && Math.abs(p.y - g.position.y) < 4) { mx = dx / d; mz = dz / d; sp = 2.7; }
@@ -316,7 +488,7 @@ export function createGame(ctx) {
   }
 
   return {
-    _enemies: enemies, state, update, attack, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
+    _enemies: enemies, state, update, attack, onde, elan, foudreDivine, godCast, spendFoi, addFoi, lore: LORE, get boss() { return boss; }, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
     get rain() { return rainLevel; },
     setWeather(w) { state.weather = w; save(); },
     quests: () => Object.entries(QUESTS).map(([id, q]) => ({ id, ...q, state: state.quests[id] })),
