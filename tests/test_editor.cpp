@@ -1334,3 +1334,20 @@ TEST_CASE("UI Builder smart guides: edges and centers snap within the threshold"
     CHECK(g.xs.empty());
     CHECK(g.ys.empty());
 }
+
+TEST_CASE("UI Builder align / distribute: offsets for edges, centers and even gaps") {
+    const std::vector<math::Vec4> r = {{10, 10, 50, 20}, {100, 40, 30, 30}, {200, 5, 20, 40}};
+    auto left = alignRects(r, AlignMode::Left);
+    CHECK(left[1].x == doctest::Approx(-90.0f));
+    CHECK(left[2].x == doctest::Approx(-190.0f));
+    CHECK(left[0].y == 0.0f);
+    auto right = alignRects(r, AlignMode::Right);
+    CHECK(right[0].x == doctest::Approx(160.0f));  // right edge 60 -> 220
+    auto middle = alignRects(r, AlignMode::Middle);  // extremes 5..70, center 37.5
+    CHECK(middle[0].y == doctest::Approx(17.5f));
+    auto dist = alignRects(r, AlignMode::DistributeX);  // span 10..220, widths 100: gaps 55
+    CHECK(dist[0].x == doctest::Approx(0.0f));
+    CHECK(dist[1].x == doctest::Approx(15.0f));  // 10 + 50 + 55 = 115
+    CHECK(dist[2].x == doctest::Approx(0.0f));
+    CHECK(alignRects({r[0], r[1]}, AlignMode::DistributeX)[1].x == 0.0f);  // needs 3
+}

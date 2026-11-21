@@ -123,7 +123,8 @@ return HUD
   près) à ceux des éléments voisins et du parent, et des lignes bleues montrent l'alignement ; Maj
   désactive l'aimantation.
 - **Sélection multiple** : Ctrl+clic ajoute un élément ; glisser l'un d'eux déplace tout le groupe (un
-  seul geste d'annulation).
+  seul geste d'annulation). Avec deux éléments ou plus, une barre en haut de la vue **aligne** (bords
+  gauche / droit / haut / bas, centres) ou **répartit** (écarts égaux, 3 éléments ou plus).
 - Inspecteur de `UIRect` : grille de **préréglages d'ancres** (gauche / centre / droite / étirer ×
   haut / milieu / bas / étirer) et taille à l'écran.
 - En mode Jeu, la vue Jeu reçoit la souris comme un écran : les boutons du HUD se cliquent.
@@ -145,5 +146,4 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
   tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent
   (il est alors vidé et reconstruit, avec un avertissement si cela ne suffit pas).
-- UI Builder : le groupe se déplace mais ne se redimensionne pas d'un bloc ; pas d'outils
-  « aligner / répartir » en un clic.
+- UI Builder : le groupe se déplace mais ne se redimensionne pas d'un bloc.

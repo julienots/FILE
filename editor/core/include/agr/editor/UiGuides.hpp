@@ -18,4 +18,9 @@ struct GuideSnap {
 /// (the closest wins per axis); the guides drawn are every line then aligned.
 GuideSnap snapToGuides(const math::Vec4& moving, const std::vector<math::Vec4>& targets, float threshold);
 
+enum class AlignMode { Left, CenterX, Right, Top, Middle, Bottom, DistributeX, DistributeY };
+/// Offsets (screen pixels) that align or evenly space `rects` (x, y, w, h): edges / centers on
+/// the first-to-last extremes, or equal gaps between the outermost ones (distribute, 3+ rects).
+std::vector<math::Vec2> alignRects(const std::vector<math::Vec4>& rects, AlignMode mode);
+
 } // namespace agr::editor

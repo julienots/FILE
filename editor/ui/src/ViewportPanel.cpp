@@ -612,6 +612,41 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
             }
     }
 
+    // Several UI elements selected: align / distribute buttons at the top of the view.
+    {
+        std::vector<std::pair<ecs::Entity, UIRectComponent*>> group;
+        for (const Uuid& id : s.ctx.selection().ids()) {
+            const ecs::Entity g = scene.findByUuid(id);
+            if (auto* r = g.isNull() ? nullptr : reg.tryGet<UIRectComponent>(g); r && !reg.has<UICanvasComponent>(g)) group.push_back({g, r});
+        }
+        if (group.size() >= 2) {
+            ImGui::SetCursorScreenPos({origin.x + 8, origin.y + 8});
+            static const std::pair<const char*, AlignMode> buttons[] = {
+                {"|<", AlignMode::Left},  {"|", AlignMode::CenterX}, {">|", AlignMode::Right},       {"^", AlignMode::Top},
+                {"-", AlignMode::Middle}, {"v", AlignMode::Bottom},  {"<->", AlignMode::DistributeX}, {"<|>", AlignMode::DistributeY}};
+            static const char* tips[] = {"Aligner à gauche", "Centrer horizontalement", "Aligner à droite", "Aligner en haut",
+                                         "Centrer verticalement", "Aligner en bas", "Répartir horizontalement (3+)", "Répartir verticalement (3+)"};
+            int clicked = -1;
+            for (int b = 0; b < 8; ++b) {
+                if (b) ImGui::SameLine(0, 2);
+                if (ImGui::SmallButton(buttons[b].first)) clicked = b;
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tips[b]);
+            }
+            if (clicked >= 0) {
+                std::vector<math::Vec4> rects;
+                for (const auto& [g, r] : group) rects.push_back(r->screenRect);
+                const auto offsets = alignRects(rects, buttons[clicked].second);
+                for (usize i = 0; i < group.size(); ++i) {
+                    const float sc = std::max(1e-3f, ui.canvasScale(ui.canvasOf(group[i].first)));
+                    group[i].second->position = {std::round(group[i].second->position.x + offsets[i].x / sc), std::round(group[i].second->position.y + offsets[i].y / sc)};
+                }
+                s.ctx.commit(std::string("UI ") + tips[clicked]);
+                return true;
+            }
+            if (ImGui::IsItemHovered()) hovered = false;
+        }
+    }
+
     // Press: a handle of the selection, else the element under the mouse.
     if (m_uiDrag == 0 && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt) {
         for (const Handle& h : handles)
