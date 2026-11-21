@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/editor/UiGuides.hpp"
 
 #include <algorithm>
@@ -1350,4 +1351,27 @@ TEST_CASE("UI Builder align / distribute: offsets for edges, centers and even ga
     CHECK(dist[1].x == doctest::Approx(15.0f));  // 10 + 50 + 55 = 115
     CHECK(dist[2].x == doctest::Approx(0.0f));
     CHECK(alignRects({r[0], r[1]}, AlignMode::DistributeX)[1].x == 0.0f);  // needs 3
+}
+
+TEST_CASE("Create > Vehicle: a dynamic body with Vehicle3D and the four named wheels") {
+    EditorFixture f;
+    const auto car = f.ctx->create(CreateKind::Vehicle);
+    REQUIRE_FALSE(car.isNull());
+    Scene& s = f.ctx->scene();
+    CHECK(s.registry().has<Vehicle3DComponent>(car));
+    CHECK(s.registry().get<RigidBodyComponent>(car).type == BodyType3D::Dynamic);
+    int wheels = 0;
+    for (ecs::Entity c : s.children(car))
+        if (s.nameOf(c).rfind("Wheel", 0) == 0) ++wheels;
+    CHECK(wheels == 4);
+    // Simulated on a ground: it rests on its wheels.
+    const auto ground = s.createEntity("Ground");
+    s.registry().get<TransformComponent>(ground).position = {0, -0.5f, 0};
+    s.registry().emplace<RigidBodyComponent>(ground).type = BodyType3D::Static;
+    s.registry().emplace<ColliderComponent>(ground).size = {100, 1, 100};
+    s.registry().get<TransformComponent>(car).position = {0, 1.0f, 0};
+    s.updateTransforms();
+    Physics3DWorld physics;
+    for (int i = 0; i < 120; ++i) physics.step(s, 1.0f / 60.0f);
+    CHECK(s.registry().get<TransformComponent>(car).position.y > 0.4f);
 }

@@ -168,6 +168,8 @@ Les scripts le conduisent en écrivant `throttle` (−1 marche arrière … 1), 
 `gear`. Des enfants nommés **WheelFL, WheelFR, WheelRL, WheelRR** (avant / arrière, gauche / droite)
 suivent leur roue : rotation, braquage, débattement. Basé sur le contrôleur de véhicule à roues de Jolt.
 Test : la voiture se pose sur ses suspensions, avance, tourne et s'arrête au freinage.
+*Créer › Véhicule* crée une voiture prête à rouler (carrosserie, `Vehicle3D`, quatre roues nommées) :
+il reste à lui donner un script qui écrit `throttle` et `steering`.
 
 ## Contrôleur de personnage 3D
 

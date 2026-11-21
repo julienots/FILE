@@ -8,6 +8,7 @@
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/audio/AudioComponents.hpp"
 #include "agr/ui/UIComponents.hpp"
+#include "agr/physics3d/Physics3DComponents.hpp"
 
 #include <cmath>
 #include <filesystem>
@@ -65,6 +66,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIItemList: return "Item List";
         case CreateKind::UIDialog: return "Dialog";
         case CreateKind::UIColorPicker: return "Color Picker";
+        case CreateKind::Vehicle: return "Vehicle";
     }
     return "Entity";
 }
@@ -374,6 +376,33 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
                 r.size = {0.0f, 0.0f};
                 auto& label = reg.emplace<UITextComponent>(page);
                 label.text = "Contenu de l'onglet " + std::to_string(i + 1);
+            }
+            break;
+        }
+        case CreateKind::Vehicle: {
+            // A car ready to drive: body (dynamic box), Vehicle3D, four wheels following it.
+            reg.emplace<MeshRendererComponent>(e).mesh = PrimitiveMesh::Cube;
+            reg.get<MeshRendererComponent>(e).color = {0.85f, 0.2f, 0.15f, 1.0f};
+            t.scale = {1.0f, 1.0f, 1.0f};
+            if (parent.isNull()) t.position.y += 1.0f;
+            auto& rb = reg.emplace<RigidBodyComponent>(e);
+            rb.mass = 1200.0f;
+            reg.emplace<ColliderComponent>(e).size = {1.8f, 0.6f, 4.0f};
+            const ecs::Entity bodyEntity = s.createEntity("Body", e);
+            auto& body = reg.emplace<MeshRendererComponent>(bodyEntity);
+            body.mesh = PrimitiveMesh::Cube;
+            body.color = {0.85f, 0.2f, 0.15f, 1.0f};
+            reg.get<MeshRendererComponent>(e).visible = false;  // the child carries the visual (scaled)
+            reg.get<TransformComponent>(bodyEntity).scale = {1.8f, 0.6f, 4.0f};
+            auto& v = reg.emplace<Vehicle3DComponent>(e);
+            v.wheelHeight = -0.1f;
+            static const char* names[4] = {"WheelFL", "WheelFR", "WheelRL", "WheelRR"};
+            for (const char* n : names) {
+                const ecs::Entity w = s.createEntity(n, e);
+                auto& mr = reg.emplace<MeshRendererComponent>(w);
+                mr.mesh = PrimitiveMesh::Sphere;
+                mr.color = {0.12f, 0.12f, 0.14f, 1.0f};
+                reg.get<TransformComponent>(w).scale = {v.wheelWidth, v.wheelRadius * 2.0f, v.wheelRadius * 2.0f};
             }
             break;
         }
