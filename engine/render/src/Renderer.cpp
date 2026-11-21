@@ -1089,6 +1089,9 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 Vec4 dof, dof2, exposure, adapt;
                 Mat4 prevViewProj;
                 Vec4 taa;
+                Vec4 fogLightPos[8];    // xyz, range
+                Vec4 fogLightColor[8];  // linear rgb * intensity
+                Vec4 fogLightInfo;      // count, scatter
             };
             // Extra targets of this frame's optional passes (released with the others).
             auto extra = [&](rhi::RenderTargetHandle& t, u32 tw, u32 th, rhi::TextureFormat f, const char* name) {
@@ -1128,6 +1131,27 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             const Vec2 sunUv = sunInFront ? Vec2{sunClip.x / sunClip.w * 0.5f + 0.5f, (m_glClipSpace ? 1.0f : -1.0f) * sunClip.y / sunClip.w * 0.5f + 0.5f} : Vec2{0.5f, 0.5f};
             const Vec3 fogLinear = postHdr ? detail::srgbToLinear(post.fogColor) : Vec3{post.fogColor.x, post.fogColor.y, post.fogColor.z};
             static_assert(sizeof(PostUniforms) == kPostUniformBytes);
+            // Lights in the fog: the 8 point / spot lights nearest to the camera.
+            struct FogLight {
+                Vec4 pos, color;
+                float dist;
+            };
+            std::vector<FogLight> fogLights;
+            if (atmos && post.heightFog && post.fogLightScatter > 0.0f) {
+                const Vec3 cam{frame.cameraPos.x, frame.cameraPos.y, frame.cameraPos.z};
+                reg.view<PointLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, PointLightComponent& l, WorldTransformComponent& w) {
+                    if (!w.activeInHierarchy || hiddenInEditor(e) || l.intensity <= 0.0f) return;
+                    const Vec3 p = w.matrix.translation();
+                    fogLights.push_back({Vec4(p, std::max(l.range, 0.01f)), Vec4(detail::srgbToLinear(l.color) * l.intensity, 0.0f), math::length(p - cam)});
+                });
+                reg.view<SpotLightComponent, WorldTransformComponent>().each([&](ecs::Entity e, SpotLightComponent& l, WorldTransformComponent& w) {
+                    if (!w.activeInHierarchy || hiddenInEditor(e) || l.intensity <= 0.0f) return;
+                    const Vec3 p = w.matrix.translation();
+                    fogLights.push_back({Vec4(p, std::max(l.range, 0.01f)), Vec4(detail::srgbToLinear(l.color) * (l.intensity * 0.5f), 0.0f), math::length(p - cam)});
+                });
+                std::sort(fogLights.begin(), fogLights.end(), [](const FogLight& a, const FogLight& b) { return a.dist < b.dist; });
+                if (fogLights.size() > 8) fogLights.resize(8);
+            }
             const Mat4 proj = rv.projectionMatrix(aspect, m_glClipSpace);
             auto add = [&](PostPass::Kind kind, rhi::RenderTargetHandle src, rhi::RenderTargetHandle dst, Vec2 srcSize, Vec2 dstSize) {
                 PostUniforms u;
@@ -1154,6 +1178,11 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                                   std::max(post.exposureMax, std::max(post.exposureMin, 0.001f)));
                 u.adapt = Vec4(adaptBlend, m_lumValid ? 1.0f : 0.0f, 0.0f, 0.0f);
                 u.prevViewProj = m_prevViewProj;
+                for (usize i = 0; i < 8; ++i) {
+                    u.fogLightPos[i] = i < fogLights.size() ? fogLights[i].pos : Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+                    u.fogLightColor[i] = i < fogLights.size() ? fogLights[i].color : Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+                }
+                u.fogLightInfo = Vec4(static_cast<float>(fogLights.size()), std::max(post.fogLightScatter, 0.0f), 0.0f, 0.0f);
                 u.taa = Vec4(std::clamp(post.taaBlend, 0.02f, 1.0f), m_taaValid ? 1.0f : 0.0f,
                              m_prevViewProjValid ? std::clamp(post.motionBlurIntensity, 0.0f, 1.0f) : 0.0f, 0.06f * static_cast<float>(renderH));
                 m_postPasses.push_back({kind, src, dst, pushUniforms(&u, sizeof u)});

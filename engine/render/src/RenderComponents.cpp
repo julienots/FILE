@@ -309,6 +309,7 @@ void registerRenderComponents() {
         .field("fogHeight", &PostProcessComponent::fogHeight, {.tooltip = "World height of the given density", .speed = 0.05f})
         .field("fogFalloff", &PostProcessComponent::fogFalloff, {.tooltip = "Thinning per world unit of height", .rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.005f})
         .field("fogColor", &PostProcessComponent::fogColor, {.flags = FieldFlag_Color})
+        .field("fogLightScatter", &PostProcessComponent::fogLightScatter, {.tooltip = "Halos of point / spot lights in the height fog", .rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("fogSunScatter", &PostProcessComponent::fogSunScatter, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
         .field("lightShafts", &PostProcessComponent::lightShafts, {.tooltip = "Rays of sunlight through gaps (god rays)"})
         .field("shaftIntensity", &PostProcessComponent::shaftIntensity, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})

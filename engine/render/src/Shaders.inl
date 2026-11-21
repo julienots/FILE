@@ -171,6 +171,9 @@ layout(std140) uniform PostData {
     vec4 u_adapt;      // blend toward the measure this frame (0..1), 1 = history valid, -, -
     mat4 u_prevViewProj;  // last frame's view-projection, without jitter (TAA)
     vec4 u_taa;        // weight of the new frame, 1 = history valid, -, -
+    vec4 u_fogLightPos[8];    // lights in the fog: position, range
+    vec4 u_fogLightColor[8];  // linear color * intensity
+    vec4 u_fogLightInfo;      // count, scatter
 };
 )";
 
@@ -614,6 +617,19 @@ void main() {
         float f = clamp(1.0 - exp(-u_fog.x * max(amount, 0.0)), 0.0, 1.0);
         vec3 fogCol = u_fogColor.rgb + u_sun.rgb * pow(toSun, 8.0) * u_fog.w;
         col = mix(col, fogCol, f);
+        // Point / spot lights scattered by the fog: closed-form integral of 1 / distance^2 along
+        // the ray (atan), weighted by the fog density at the light and faded at its range.
+        for (int i = 0; i < 8; ++i) {
+            if (float(i) >= u_fogLightInfo.x) break;
+            vec3 L = u_fogLightPos[i].xyz - cam;
+            float t0 = dot(L, dir);
+            float h2 = max(dot(L, L) - t0 * t0, 1e-3);
+            float h = sqrt(h2);
+            float scatter = (atan((dist - t0) / h) - atan(-t0 / h)) / h;
+            float density = u_fog.x * exp(-b * max(u_fogLightPos[i].y - u_fog.y, 0.0));
+            float window = clamp(1.0 - h / u_fogLightPos[i].w, 0.0, 1.0);
+            col += u_fogLightColor[i].rgb * scatter * density * window * window * u_fogLightInfo.y * 0.25;
+        }
     }
     if (u_sunDir.w > 0.5 && u_sun.w > 0.5) {
         const int kSteps = 40;

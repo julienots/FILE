@@ -357,7 +357,7 @@ private:
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
     rhi::PipelineHandle m_postPipelines[13];  // PostPass::Kind
-    static constexpr usize kPostUniformBytes = 16 * 16 + 4 * 64;  // PostData block (Shaders.inl)
+    static constexpr usize kPostUniformBytes = 33 * 16 + 4 * 64;  // PostData block (Shaders.inl)
     rhi::RenderTargetHandle m_dofTarget;                 // scene color with depth of field
     rhi::RenderTargetHandle m_ssrTarget;                 // scene color with screen-space reflections
     rhi::RenderTargetHandle m_motionTarget;               // scene color with motion blur

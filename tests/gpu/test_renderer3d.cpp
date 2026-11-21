@@ -626,6 +626,38 @@ TEST_CASE("blob shadows darken the ground under an entity and fade with height; 
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("atmosphere: point lights glow in the height fog") {
+    Render3DFixture f;
+    f.camera({0, 1, 0}, {0, 1, -10});
+    f.darkEnvironment();
+    f.mesh(PrimitiveMesh::Cube, {0, 1, -40}, {80, 80, 1}, {0.0f, 0.0f, 0.0f, 1});  // a black wall far behind
+    const auto lamp = f.scene.createEntity("Lamp");
+    f.scene.registry().get<TransformComponent>(lamp).position = {0, 1, -6};
+    auto& pl = f.scene.registry().emplace<PointLightComponent>(lamp);
+    pl.color = {1, 0.8f, 0.5f, 1};
+    pl.intensity = 6.0f;
+    pl.range = 8.0f;
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.heightFog = true;
+    post.fogDensity = 0.3f;
+    post.fogHeight = 1.0f;
+    post.fogColor = {0, 0, 0, 1};
+    post.fogLightScatter = 0.0f;
+    f.frame();
+    CHECK(f.renderer.stats().atmosphere);
+    const Rgba off = f.at({0, 1, -6});
+    post.fogLightScatter = 2.0f;
+    f.frame();
+    const Rgba glow = f.at({0, 1, -6}), side = f.at({2.5f, 1, -6}), far = f.at({3.2f, 3.2f, -6});
+    CHECK_MESSAGE(glow.r > off.r + 40, off, " -> ", glow);
+    CHECK_MESSAGE(side.r < glow.r, side);  // fades away from the lamp
+    CHECK_MESSAGE(far.r + 40 < glow.r, far);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("atmosphere: height fog thickens with distance and low down; light shafts toward the sun") {
     Render3DFixture f;
     f.camera({0, 1.0f, 6.0f}, {0, 1.0f, -10.0f});

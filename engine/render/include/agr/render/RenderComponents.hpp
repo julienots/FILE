@@ -134,6 +134,9 @@ struct PostProcessComponent {
     float fogFalloff = 0.3f;        ///< How fast it thins with height (per world unit).
     math::Color fogColor{0.68f, 0.74f, 0.84f, 1.0f};
     float fogSunScatter = 0.8f;     ///< Glow of the fog around the sun.
+    /// Point and spot lights (the 8 nearest) light up the fog around them: halos, lamp posts in
+    /// the mist, light seen through the air of a cave. 0 = off.
+    float fogLightScatter = 1.0f;
     /// Light shafts (god rays) from the sun through openings: trees, windows, clouds of objects.
     bool lightShafts = false;
     float shaftIntensity = 0.6f;
