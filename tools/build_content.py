@@ -1,28 +1,39 @@
 #!/usr/bin/env python3
 """
-NOCTÉA — pipeline de production vocale (Superessence Studio).
+NOCTÉA — pipeline de production vocale v4 (Superessence Studio).
+
+Objectif : UNE seule voix, réaliste, identique d'un bout à l'autre de l'application.
 
 1. Analyse les scripts (tools/content/library.py) et la banque du générateur (bank.py).
-2. Découpe chaque phrase sur les « ... » pour insérer de VRAIS silences.
-3. Synthétise chaque fragment avec la voix féminine française « siwis » (Piper, CC-BY 4.0),
-   débit ralenti, puis traitement studio : égalisation chaude, de-essing, compression douce,
-   légère réverbération de pièce, normalisation.
-4. Encode en Opus (Ogg) et écrit assets/voice/*.ogg + assets/content/catalog.json.
+2. Chaque phrase est rendue d'UN SEUL TENANT (la prosodie « Maintenant... tu peux fermer les yeux. »
+   reste continue), puis coupée aux silences naturels des « ... » : plus de fragments isolés qui
+   « repartent à zéro ». Les mots de comptage (Inspire, Retiens, deux, trois…) sortent d'un même rendu
+   continu : même voix, même débit, même hauteur que le reste (l'ancienne « voix de comptage »
+   était 3 demi-tons plus grave et plus rapide).
+3. Contrôle qualité automatique de CHAQUE phrase : transcription Whisper (écart avec le texte voulu)
+   et écart de hauteur avec le reste du corpus. Les rendus douteux sont refaits avec des variantes
+   (débit, ligne de style, amorce de contexte, rendu fragment par fragment) et on garde le meilleur.
+4. Chaîne studio identique pour tous les clips (voice_studio.py), encodage Opus 36 kb/s.
+5. Écrit assets/voice/*.ogg et assets/content/catalog.json (même format que les versions précédentes).
 
-Usage : python3 tools/build_content.py [--model /opt/voices/fr_FR-siwis-medium.onnx]
+Usage :
+  python3 tools/fetch_models.py                    # une fois
+  python3 tools/build_content.py                   # production complète (~1 h sur 4 cœurs, reprenable)
+  python3 tools/build_content.py --engine piper --model tools/models/piper/fr_FR-siwis-medium.onnx
 """
 import argparse
+import glob
 import hashlib
 import json
 import math
+import multiprocessing as mp
 import os
 import random
 import re
 import subprocess
 import sys
 import tempfile
-import wave
-from multiprocessing import Pool
+import time
 
 import numpy as np
 
@@ -32,26 +43,43 @@ sys.path.insert(0, HERE)
 
 import bank as BANK_MOD  # noqa: E402
 import library as LIB  # noqa: E402
+import voice_engine as E  # noqa: E402
+import voice_studio as S  # noqa: E402
 
 ROOT = os.path.dirname(HERE)
 ASSETS = os.path.join(ROOT, "app", "src", "main", "assets")
-CACHE = os.path.join(HERE, ".cache", "voice")
+CACHE_ROOT = os.path.join(HERE, ".cache", "voice_v4")
+SR = E.SR
 
-# Réglages de la voix : débit lent, prosodie stable, rythme naturel.
-VOICE = dict(length_scale=1.24, noise_scale=0.55, noise_w_scale=0.78)
-CUE_VOICE = dict(length_scale=1.02, noise_scale=0.5, noise_w_scale=0.6)  # mots de comptage (tenir en 1 s)
-CHAIN = ("highpass=f=70,equalizer=f=210:t=q:w=1.0:g=2.2,equalizer=f=3000:t=q:w=1.6:g=-1.5,"
-         "highshelf=f=7200:g=-4.5,deesser=i=0.35,"
-         "acompressor=threshold=-22dB:ratio=2:attack=12:release=220:makeup=1.5,"
-         "apad=pad_dur=0.18,aecho=0.88:0.55:23|37:0.09|0.05")
-CHAIN_VERSION = "v3"
-ELLIPSIS_PAUSE_MS = 1050
-SR = 22050
-
+RENDER_VERSION = "r1"          # change si le texte envoyé au moteur ou la découpe changent
+OPUS_KBPS = 36
+ELLIPSIS_PAUSE_RANGE = (850, 1350)   # ms : pause réelle à chaque « ... » (variable, pas métronomique)
+WER_OK = 0.15          # une variante à ce niveau est acceptée sans chercher mieux
+WER_RETRY = 0.25       # au-delà, la phrase est refaite avec des variantes
+PITCH_OK_ST = 1.25
+PITCH_OK_CUE_ST = 0.5   # le comptage doit avoir la hauteur du récit à un demi-ton près (ancien défaut : −3 dem-tons)
+PRIME = "Doucement."
 ELLIPSIS_SPLIT = re.compile(r"(\.\.\.|…)\s+(?=\S)")
 
+NUMBERS = ["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix"]
+CUES = {"in": "Inspire...", "hold": "Retiens...", "out": "Expire...", "hold2": "Pause..."}
+CUE_FRAGMENTS = [CUES["in"], CUES["hold"], CUES["out"], CUES["hold2"]] + [n.capitalize() + "." for n in NUMBERS]
+# Un fragment qui n'est QUE l'un de ces mots (« Dix... », « Inspire... », « un... ») est dit par le clip de comptage :
+# même prononciation, même voix partout (les petits mots isolés sont le point faible des moteurs neuronaux).
+CUE_WORDS = {f.lower().rstrip(".").rstrip("…").strip(): f for f in CUE_FRAGMENTS}
 
-# --------------------------------------------------------------------------- fragments
+# Prononciations forcées (texte envoyé au moteur ≠ texte affiché) — complété après contrôle Whisper.
+LEXICON = {}
+
+
+def tts_text(text):
+    t = text.replace("…", "...")
+    for k, v in LEXICON.items():
+        t = t.replace(k, v)
+    return " ".join(t.split())
+
+
+# --------------------------------------------------------------------------- unités de rendu
 def split_fragments(text):
     """'Maintenant... tu peux fermer les yeux.' → ['Maintenant...', 'tu peux fermer les yeux.']"""
     parts = []
@@ -63,128 +91,266 @@ def split_fragments(text):
     return [p for p in parts if p]
 
 
+class Unit:
+    """Une phrase rendue d'un seul tenant, puis coupée en `frags`."""
+
+    def __init__(self, frags, tts=None, kind="phrase"):
+        self.frags = list(frags)
+        self.kind = kind
+        self.tts = tts if tts is not None else tts_text(" ".join(self.frags))
+        self.ref = " ".join(self.frags)
+        self.key = hashlib.sha1(f"{RENDER_VERSION}|{kind}|{self.tts}|{'/'.join(self.frags)}".encode()).hexdigest()[:16]
+
+    def clip_key(self, i):
+        return f"{self.key}.{i}"
+
+    def to_job(self):
+        return dict(frags=self.frags, tts=self.tts, kind=self.kind)
+
+
 class Registry:
     def __init__(self):
-        self.frags = {}  # key → (text, settings_name)
+        self.units = {}
+        self.cue = None
 
-    def key(self, text, settings="voice"):
-        k = hashlib.sha1(f"{CHAIN_VERSION}|{settings}|{text}".encode()).hexdigest()[:16]
-        self.frags[k] = (text, settings)
-        return k
+    def unit(self, text):
+        u = Unit(split_fragments(text), tts_text(text))
+        self.units.setdefault(u.key, u)
+        return self.units[u.key]
+
+    def unit_from(self, frags):
+        u = Unit(frags, tts_text(" ".join(frags)))
+        self.units.setdefault(u.key, u)
+        return self.units[u.key]
+
+    def cue_unit(self):
+        if self.cue is None:
+            self.cue = Unit(CUE_FRAGMENTS, kind="cue")
+            self.units[self.cue.key] = self.cue
+        return self.cue
+
+    def cue_key(self, word):
+        u = self.cue_unit()
+        canon = CUE_WORDS[word.lower().rstrip(".").rstrip("…").strip()]
+        return u.clip_key(CUE_FRAGMENTS.index(canon))
 
 
 REG = Registry()
 
 
-def phrase_segments(text, settings="voice"):
-    segs = []
+def ellipsis_pause(text, i):
+    h = int(hashlib.sha1(f"{text}|{i}".encode()).hexdigest()[:6], 16)
+    lo, hi = ELLIPSIS_PAUSE_RANGE
+    return lo + h % (hi - lo + 1)
+
+
+def cue_word_of(fragment):
+    """Le mot de comptage que ce fragment représente exactement, sinon None."""
+    return CUE_WORDS.get(fragment.lower().rstrip(".").rstrip("…").rstrip(",").strip())
+
+
+def phrase_segments(text):
+    """Segments d'une phrase : clips + pauses réelles à chaque « ... » (durée variable, jamais métronomique)."""
     frags = split_fragments(text)
-    for i, f in enumerate(frags):
-        if i > 0:
-            segs.append(("s", ELLIPSIS_PAUSE_MS))
-        segs.append(("c", REG.key(f, settings)))
+    items, group = [], []                    # ("n", fragment-comptage) | ("u", [fragments rendus d'un tenant])
+    for f in frags:
+        if cue_word_of(f):
+            if group:
+                items.append(("u", group))
+                group = []
+            items.append(("n", f))
+        else:
+            group.append(f)
+    if group:
+        items.append(("u", group))
+    segs, k = [], 0
+    for kind, v in items:
+        if kind == "n":
+            if k > 0:
+                segs.append(("s", ellipsis_pause(text, k)))
+            segs.append(("c", REG.cue_key(v)))
+            k += 1
+        else:
+            u = REG.unit_from(v)
+            for i in range(len(v)):
+                if k > 0:
+                    segs.append(("s", ellipsis_pause(text, k)))
+                segs.append(("c", u.clip_key(i)))
+                k += 1
     return segs
 
 
-# --------------------------------------------------------------------------- rendu vocal
-_voice = None
+# --------------------------------------------------------------------------- rendu + contrôle
+_engine = None
+_whisper = None
+_jiwer = None
+_ref_f0 = None
+
+W2D = {"0": "zéro", "1": "un", "2": "deux", "3": "trois", "4": "quatre", "5": "cinq", "6": "six", "7": "sept",
+       "8": "huit", "9": "neuf", "10": "dix"}
 
 
-def _init_worker(model):
-    global _voice
-    from piper import PiperVoice
-    _voice = PiperVoice.load(model)
+def norm_words(s):
+    s = s.lower().replace("’", "'").replace("…", " ")
+    s = re.sub(r"[^\w\s']", " ", s).replace("'", " ")
+    return " ".join(W2D.get(w, w) for w in s.split())
 
 
-def _render(job):
-    key, text, settings = job
-    out_ogg = os.path.join(CACHE, key + ".ogg")
-    out_meta = os.path.join(CACHE, key + ".json")
-    if os.path.exists(out_ogg) and os.path.exists(out_meta):
-        return key, json.load(open(out_meta))["ms"]
-    from piper import SynthesisConfig
-    cfg = SynthesisConfig(**(VOICE if settings == "voice" else CUE_VOICE))
-    chunks = []
-    for chunk in _voice.synthesize(text, syn_config=cfg):
-        chunks.append(chunk.audio_int16_array.astype(np.float32) / 32768.0)
-    x = np.concatenate(chunks) if chunks else np.zeros(SR // 2, dtype=np.float32)
-    x = trim(x)
+def _init_worker(engine_kind, model, whisper_dir, threads, use_asr):
+    global _engine, _whisper, _jiwer
+    _engine = E.make_engine(engine_kind, model, threads=threads)
+    if use_asr:
+        from faster_whisper import WhisperModel
+        import jiwer
+        _whisper = WhisperModel(whisper_dir, device="cpu", compute_type="int8", cpu_threads=max(1, threads))
+        _jiwer = jiwer
+
+
+CUE_SPEED = 0.80       # le comptage est un peu plus vif que le récit, avec la MÊME voix (même style, même chaîne)
+
+
+def variants_for(engine, unit):
+    s0 = engine.default_speed
+    if unit.kind == "cue":
+        # mots isolés (Inspire, Retiens, deux, trois…) : rendus un par un, les creux d'un rendu continu y sont trop faibles
+        c = CUE_SPEED if engine.name == "kokoro" else s0
+        return [("sep", c, 0), ("sep", round(c * 0.94, 3), 0), ("sep", round(c * 1.06, 3), 0),
+                ("sep", c, 5), ("sep", c, -5)]
+    v = [("whole", s0, 0),
+         ("whole", round(s0 * 1.07, 3), 0), ("whole", round(s0 * 0.93, 3), 0),
+         ("whole", s0, 5), ("whole", s0, -5)]
+    if sum(c.isalnum() for c in unit.ref) < 70:
+        v += [("prime", s0, 0), ("prime", round(s0 * 1.07, 3), 3)]
+    v.append(("sep", s0, 0))
+    return v
+
+
+def variant_id(var):
+    return f"{var[0]}_{var[1]:.3f}_{var[2]}"
+
+
+def render_variant(unit, var):
+    mode, speed, shift = var
+    frags = unit.frags
+    weigh = getattr(_engine, "phoneme_weights", None)
+    if mode == "whole":
+        x = _engine.render(unit.tts, speed, shift)
+        return E.cut_at_pauses(x, frags, weights=weigh(frags) if weigh else None)
+    if mode == "prime":
+        x = _engine.render(PRIME + " " + unit.tts, speed, shift)
+        pieces = E.cut_at_pauses(x, [PRIME] + frags, weights=weigh([PRIME] + frags) if weigh else None)
+        return None if pieces is None else pieces[1:]
+    pieces = []
+    for f in frags:
+        y = _engine.render(tts_text(f), speed, shift)
+        a, b = E.speech_region(y)
+        pieces.append(y[a:b])
+    return pieces
+
+
+def _as_audio(pieces):
+    gap = np.zeros(int(0.7 * SR), dtype=np.float32)
+    seq = []
+    for i, p in enumerate(pieces):
+        if i:
+            seq.append(gap)
+        seq.append(p)
+    return np.concatenate(seq)
+
+
+def _evaluate(unit, pieces, use_asr):
+    import voice_qa as Q
+    x = _as_audio(pieces)
+    res = {}
+    f0, _, _ = Q.pitch_and_hnr(x, SR)
+    res["f0"] = f0
+    res["dur"] = len(x) / SR
+    if use_asr:
+        import scipy.signal as ss
+        segs, _ = _whisper.transcribe(ss.resample_poly(x, 2, 3).astype(np.float32), language="fr", beam_size=3,
+                                      condition_on_previous_text=False, vad_filter=False)
+        hyp = " ".join(s.text for s in segs)
+        ref = norm_words(unit.ref)
+        res["hyp"] = hyp.strip()
+        res["wer"] = float(_jiwer.wer(ref, norm_words(hyp))) if ref else 0.0
+    else:
+        res["wer"] = 0.0
+    return res
+
+
+def _paths(cache, unit, vid):
+    return (os.path.join(cache, "raw", f"{unit.key}__{vid}.npz"), os.path.join(cache, "raw", f"{unit.key}__{vid}.json"))
+
+
+def run_unit(job):
+    """Rend (ou relit) les variantes d'une unité jusqu'à en trouver une bonne. Retourne le meilleur résumé."""
+    cache, unit_d, variants, f0_ref, use_asr = job
+    unit = Unit(unit_d["frags"], unit_d["tts"], unit_d.get("kind", "phrase"))
+    os.makedirs(os.path.join(cache, "raw"), exist_ok=True)
+    for var in variants:
+        vid = variant_id(var)
+        npz, meta = _paths(cache, unit, vid)
+        cached = json.load(open(meta)) if os.path.exists(meta) else None
+        if cached is not None and (cached.get("ok") is False or not use_asr or "hyp" in cached):
+            info = cached
+        else:
+            pieces = render_variant(unit, var)
+            if pieces is None:
+                info = dict(ok=False, wer=1.0, f0=None, vid=vid)
+                json.dump(info, open(meta, "w"))
+                continue
+            info = _evaluate(unit, pieces, use_asr)
+            info.update(ok=True, vid=vid)
+            np.savez_compressed(npz, n=len(pieces), **{f"p{i}": (np.clip(p, -1, 1) * 32767).astype(np.int16)
+                                                      for i, p in enumerate(pieces)})
+            json.dump(info, open(meta, "w"), ensure_ascii=False)
+        if not info["ok"]:
+            continue
+        dev = None
+        if f0_ref and info.get("f0"):
+            dev = 12 * math.log2(info["f0"] / f0_ref)
+        pitch_ok = PITCH_OK_CUE_ST if unit.kind == "cue" else PITCH_OK_ST
+        if info["wer"] <= WER_OK and (dev is None or abs(dev) <= pitch_ok):
+            break
+    return unit.key
+
+
+def score(info, f0_ref):
+    dev = 0.0
+    if f0_ref and info.get("f0"):
+        dev = abs(12 * math.log2(info["f0"] / f0_ref))
+    return (round(info["wer"] / 0.05), dev)
+
+
+def best_variant(cache, unit, f0_ref):
+    best, best_s = None, None
+    for meta in glob.glob(os.path.join(cache, "raw", f"{unit.key}__*.json")):
+        info = json.load(open(meta))
+        if not info.get("ok"):
+            continue
+        s = score(info, f0_ref)
+        if best is None or s < best_s:
+            best, best_s = info, s
+    return best
+
+
+def load_pieces(cache, unit, vid):
+    z = np.load(_paths(cache, unit, vid)[0])
+    return [z[f"p{i}"].astype(np.float32) / 32767.0 for i in range(int(z["n"]))]
+
+
+# --------------------------------------------------------------------------- encodage
+def encode_opus(y, path):
+    import soundfile as sf
     with tempfile.TemporaryDirectory() as td:
-        raw = os.path.join(td, "raw.wav")
-        proc = os.path.join(td, "proc.wav")
-        write_wav(raw, x)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw, "-af", CHAIN,
-                        "-ar", str(SR), "-c:a", "pcm_f32le", proc], check=True)
-        y = read_wav_f32(proc)
-        y = trim(y, keep_tail_ms=160)
-        y = level(y)
-        n_fade_in = int(0.008 * SR)
-        n_fade_out = int(0.09 * SR)
-        y[:n_fade_in] *= np.linspace(0, 1, n_fade_in)
-        y[-n_fade_out:] *= np.linspace(1, 0, n_fade_out)
-        final = os.path.join(td, "final.wav")
-        write_wav(final, y)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", final, "-ar", "24000",
-                        "-c:a", "libopus", "-b:a", "28k", "-application", "audio", out_ogg], check=True)
-    ms = int(round(len(y) / SR * 1000))
-    json.dump({"ms": ms, "text": text}, open(out_meta, "w"), ensure_ascii=False)
-    return key, ms
-
-
-def trim(x, thresh_db=-46, keep_head_ms=30, keep_tail_ms=60):
-    win = int(0.01 * SR)
-    if len(x) < win * 3:
-        return x
-    env = np.sqrt(np.convolve(x ** 2, np.ones(win) / win, mode="same"))
-    thr = 10 ** (thresh_db / 20)
-    idx = np.where(env > thr)[0]
-    if len(idx) == 0:
-        return x
-    a = max(0, idx[0] - int(keep_head_ms / 1000 * SR))
-    b = min(len(x), idx[-1] + int(keep_tail_ms / 1000 * SR))
-    return x[a:b]
-
-
-def level(y, target_db=-20.0, peak_db=-2.0):
-    win = int(0.02 * SR)
-    frames = len(y) // win
-    if frames == 0:
-        return y
-    f = y[: frames * win].reshape(frames, win)
-    rms = np.sqrt(np.mean(f ** 2, axis=1))
-    active = rms[rms > 10 ** (-40 / 20)]
-    cur = np.sqrt(np.mean(active ** 2)) if len(active) else np.sqrt(np.mean(y ** 2)) + 1e-9
-    g = 10 ** (target_db / 20) / (cur + 1e-9)
-    y = y * g
-    pk = np.max(np.abs(y)) + 1e-9
-    lim = 10 ** (peak_db / 20)
-    if pk > lim:
-        y = np.tanh(y / lim) * lim
-    return y.astype(np.float32)
-
-
-def write_wav(path, x):
-    pcm = (np.clip(x, -1, 1) * 32767).astype("<i2")
-    with wave.open(path, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(pcm.tobytes())
-
-
-def read_wav_f32(path):
-    data = open(path, "rb").read()
-    # recherche du chunk 'data' (WAV float32 mono écrit par ffmpeg)
-    i = data.find(b"data")
-    n = int.from_bytes(data[i + 4:i + 8], "little")
-    return np.frombuffer(data[i + 8:i + 8 + n], dtype="<f4").copy()
+        wav = os.path.join(td, "c.wav")
+        sf.write(wav, y, SR, subtype="PCM_16")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav, "-ar", str(SR), "-ac", "1",
+                        "-c:a", "libopus", "-b:a", f"{OPUS_KBPS}k", "-vbr", "on", "-compression_level", "10",
+                        "-application", "audio", path], check=True)
 
 
 # --------------------------------------------------------------------------- scripts
-NUMBERS = ["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix"]
-CUES = {"in": "Inspire...", "hold": "Retiens...", "out": "Expire...", "hold2": "Pause..."}
-
-
 def parse_script(track):
     """Retourne une liste d'instructions abstraites (avant connaissance des durées)."""
     default_pause = track.get("pause", 4.0)
@@ -228,8 +394,7 @@ def register_ops(ops):
         if op[0] in ("say", "slot"):
             phrase_segments(op[1])
         elif op[0] == "cycles":
-            for w in list(CUES.values()) + NUMBERS[1:8]:
-                REG.key(w, "cue")
+            REG.cue_unit()
 
 
 def compile_ops(ops, clip_ms, fx_ms, track_id):
@@ -297,18 +462,12 @@ def compile_ops(ops, clip_ms, fx_ms, track_id):
                     st = t
                     if mode == "count":
                         for k in range(int(secs)):
-                            slot_start = t
                             word = CUES[ph] if k == 0 else NUMBERS[k]
-                            key = REG.key(word, "cue")
-                            add_clip(key)
+                            add_clip(REG.cue_key(word))
                             add_sil(max(0, 1000 * (k + 1) - (t - st)))
-                            _ = slot_start
                     elif mode == "cue":
-                        add_clip(REG.key(CUES[ph], "cue"))
-                    add_sil(total - (t - st))
-                    if t - st != total:
-                        # le mot dépasse : on resynchronise au cycle suivant
-                        pass
+                        add_clip(REG.cue_key(CUES[ph]))
+                    add_sil(total - (t - st))   # si un mot dépasse sa seconde, on se resynchronise en fin de phase
             breath_blocks.append(dict(start=block_start, inhale=int(i_s * 1000), hold=int(h_s * 1000),
                                       exhale=int(o_s * 1000), hold2=int(h2_s * 1000), count=count,
                                       end=t))
@@ -333,32 +492,32 @@ def transcript(ops):
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------- fx
+# --------------------------------------------------------------------------- bruitages
 def build_fx(voice_dir):
-    sys.path.insert(0, HERE)
     import build_sounds as BS
     BS.SR = SR
     fx = {}
-    # bol court pour l'ouverture/clôture des séances
-    L, R = BS.bell(5.0)
+    L, R = BS.bell(5.0)                      # bol court pour l'ouverture/clôture des séances
     x = (L + R) / 2
     n = len(x)
     x[-int(1.8 * SR):] *= np.linspace(1, 0, int(1.8 * SR)) ** 2
-    x = x / np.max(np.abs(x)) * 0.32
-    _encode_fx(os.path.join(voice_dir, "bell.ogg"), x)
+    x = (x / np.max(np.abs(x)) * 0.32).astype(np.float32)
+    _encode_fx(os.path.join(voice_dir, "bell.ogg"), x, 32)
     fx["bell"] = int(round(n / SR * 1000))
-    b = BS.breath_in(1.1)
-    _encode_fx(os.path.join(voice_dir, "breath.ogg"), b * 0.9)
+    b = BS.breath_in(1.1).astype(np.float32)  # respiration : même « pièce » que la voix
+    b = S.fx_chain(b * 0.9)
+    _encode_fx(os.path.join(voice_dir, "breath.ogg"), b, 32)
     fx["breath"] = int(round(len(b) / SR * 1000))
     return fx
 
 
-def _encode_fx(path, x):
+def _encode_fx(path, x, kbps):
+    import soundfile as sf
     with tempfile.TemporaryDirectory() as td:
         w = os.path.join(td, "fx.wav")
-        write_wav(w, x.astype(np.float32))
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", w, "-ar", "24000", "-c:a", "libopus",
-                        "-b:a", "32k", path], check=True)
+        sf.write(w, np.clip(x, -1, 1).astype(np.float32), SR, subtype="PCM_16")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", w, "-ar", str(SR), "-c:a", "libopus",
+                        "-b:a", f"{kbps}k", path], check=True)
 
 
 # --------------------------------------------------------------------------- main
@@ -376,17 +535,27 @@ def seg_json(segs, clip_ids):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="/opt/voices/fr_FR-siwis-medium.onnx")
-    ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--engine", default="kokoro", choices=["kokoro", "piper"])
+    ap.add_argument("--model", default="")
+    ap.add_argument("--whisper", default=os.path.join(HERE, "models", "whisper-small"))
+    ap.add_argument("--jobs", type=int, default=2, help="processus de rendu en parallèle")
+    ap.add_argument("--threads", type=int, default=0, help="threads par processus (défaut : cœurs / jobs)")
+    ap.add_argument("--no-asr", action="store_true", help="saute le contrôle Whisper (itérations rapides)")
+    ap.add_argument("--stage", default="all", choices=["render", "all"])
+    ap.add_argument("--limit", type=int, default=0, help="n'utilise que N unités (essais ; avec --stage render)")
     args = ap.parse_args()
+    if not args.model:
+        args.model = os.path.join(HERE, "models", "kokoro" if args.engine == "kokoro" else "piper",
+                                  "" if args.engine == "kokoro" else "fr_FR-siwis-medium.onnx")
+    use_asr = not args.no_asr
+    threads = args.threads or max(1, (os.cpu_count() or 4) // args.jobs)
+    cache = os.path.join(CACHE_ROOT, args.engine)
+    os.makedirs(cache, exist_ok=True)
 
-    os.makedirs(CACHE, exist_ok=True)
     voice_dir = os.path.join(ASSETS, "voice")
     content_dir = os.path.join(ASSETS, "content")
-    os.makedirs(voice_dir, exist_ok=True)
-    os.makedirs(content_dir, exist_ok=True)
 
-    # 1) enregistrement de tous les fragments
+    # 1) inventaire des unités de rendu
     track_ops = {}
     for tr in LIB.TRACKS:
         ops = parse_script(tr)
@@ -395,31 +564,114 @@ def main():
     bank_phr = {}
     for pool, items in BANK_MOD.BANK.items():
         bank_phr[pool] = [(it, phrase_segments(it)) for it in items]
+    units = sorted(REG.units.values(), key=lambda u: u.tts)
+    if args.limit:
+        units = units[: args.limit]
+    n_frag = sum(len(u.frags) for u in units)
+    print(f"{len(units)} phrases à rendre ({n_frag} clips) — moteur {args.engine}, contrôle Whisper : {use_asr}", flush=True)
 
-    jobs = [(k, t, s) for k, (t, s) in sorted(REG.frags.items())]
-    print(f"{len(jobs)} fragments vocaux à produire…", flush=True)
+    ctx = mp.get_context("spawn")
+    init = (args.engine, args.model, args.whisper, threads, use_asr)
+
+    class _Eng:  # débit par défaut, sans charger le modèle dans le processus principal
+        name = args.engine
+        default_speed = E.KokoroEngine.default_speed if args.engine == "kokoro" else E.PiperEngine.default_speed
+
+    def run_pool(jobs, label):
+        t0 = time.time()
+        done = 0
+        with ctx.Pool(args.jobs, initializer=_init_worker, initargs=init) as pool:
+            for _ in pool.imap_unordered(run_unit, jobs, chunksize=2):
+                done += 1
+                if done % 50 == 0 or done == len(jobs):
+                    el = time.time() - t0
+                    print(f"  {label} {done}/{len(jobs)}  ({el / 60:.1f} min, reste ≈ {el / done * (len(jobs) - done) / 60:.1f} min)", flush=True)
+
+    # 2) phase A : rendu standard de toutes les phrases + contrôle
+    run_pool([(cache, u.to_job(), [variants_for(_Eng, u)[0]], None, use_asr) for u in units], "A")
+    f0s = []
+    for u in units:
+        info = best_variant(cache, u, None)
+        if info and info.get("f0") and len(u.ref) > 12:
+            f0s.append(info["f0"])
+    f0_ref = float(np.median(f0s))
+    print(f"hauteur de référence du corpus : {f0_ref:.1f} Hz", flush=True)
+
+    # 3) phase B : variantes pour les rendus douteux (prononciation ou hauteur hors norme)
+    bad = []
+    for u in units:
+        info = best_variant(cache, u, f0_ref)
+        dev = 12 * math.log2(info["f0"] / f0_ref) if info and info.get("f0") else 0.0
+        if u.kind == "cue":
+            if info is None or info["wer"] > WER_OK or abs(dev) > PITCH_OK_CUE_ST:
+                bad.append(u)
+        elif info is None or info["wer"] > WER_RETRY or abs(dev) > PITCH_OK_ST:
+            bad.append(u)
+    print(f"{len(bad)} phrases à retravailler avec des variantes ({100 * len(bad) / len(units):.0f} %)", flush=True)
+    if bad:
+        run_pool([(cache, u.to_job(), variants_for(_Eng, u), f0_ref, use_asr) for u in bad], "B")
+
+    chosen = {}
+    wers, devs, still = [], [], []
+    for u in units:
+        info = best_variant(cache, u, f0_ref)
+        chosen[u.key] = info
+        wers.append(info["wer"])
+        if info.get("f0"):
+            devs.append(12 * math.log2(info["f0"] / f0_ref))
+        if info["wer"] > 0.3:
+            still.append((info["wer"], u.ref, info.get("hyp", "")))
+    print(f"contrôle : WER médian {100 * np.median(wers):.1f} %, moyen {100 * np.mean(wers):.1f} %, "
+          f"{sum(w > 0.3 for w in wers)} phrases > 30 % ; hauteur : σ {np.std(devs):.2f} dem-tons", flush=True)
+    rep = os.path.join(cache, "rapport.txt")
+    with open(rep, "w", encoding="utf-8") as f:
+        for w, ref, hyp in sorted(still, reverse=True):
+            f.write(f"{w:.2f} | {ref} | {hyp}\n")
+    print(f"phrases encore douteuses → {rep}", flush=True)
+    if args.stage == "render":
+        return
+
+    # 4) traitement studio + encodage Opus de chaque clip
+    os.makedirs(voice_dir, exist_ok=True)
+    os.makedirs(content_dir, exist_ok=True)
+    opus_dir = os.path.join(cache, "opus")
+    os.makedirs(opus_dir, exist_ok=True)
     clip_ms = {}
-    with Pool(args.jobs, initializer=_init_worker, initargs=(args.model,)) as pool:
-        for i, (k, ms) in enumerate(pool.imap_unordered(_render, jobs, chunksize=4)):
-            clip_ms[k] = ms
-            if (i + 1) % 100 == 0:
-                print(f"  {i + 1}/{len(jobs)}", flush=True)
+    clip_file = {}
+    t0 = time.time()
+    for n, u in enumerate(units):
+        info = chosen[u.key]
+        pieces = load_pieces(cache, u, info["vid"])
+        assert len(pieces) == len(u.frags), (u.ref, info["vid"])
+        for i, p in enumerate(pieces):
+            key = u.clip_key(i)
+            tag = hashlib.sha1(f"{S.CHAIN_VERSION}|{OPUS_KBPS}|{info['vid']}|{key}".encode()).hexdigest()[:10]
+            out = os.path.join(opus_dir, f"{key}.{tag}.ogg")
+            if u.kind == "cue":
+                p = S.match_pitch(p, f0_ref)      # le comptage prend exactement la hauteur du récit
+            y = S.process(p)
+            clip_ms[key] = int(round(len(y) / SR * 1000))
+            if not os.path.exists(out):
+                encode_opus(y, out)
+            clip_file[key] = out
+        if (n + 1) % 200 == 0:
+            print(f"  studio {n + 1}/{len(units)} ({(time.time() - t0) / 60:.1f} min)", flush=True)
 
-    # 2) identifiants courts et copie dans les assets
+    # 5) identifiants courts et copie dans les assets
     for f in os.listdir(voice_dir):
         if f.endswith(".ogg"):
             os.unlink(os.path.join(voice_dir, f))
-    keys = sorted(clip_ms.keys(), key=lambda k: (REG.frags[k][1], REG.frags[k][0]))
+    keys = sorted(clip_ms.keys(), key=lambda k: (REG.units[k.split(".")[0]].tts, int(k.split(".")[1])))
     clip_ids = {k: f"v{i:04d}" for i, k in enumerate(keys)}
     for k, cid in clip_ids.items():
-        with open(os.path.join(CACHE, k + ".ogg"), "rb") as src, open(os.path.join(voice_dir, cid + ".ogg"), "wb") as dst:
+        with open(clip_file[k], "rb") as src, open(os.path.join(voice_dir, cid + ".ogg"), "wb") as dst:
             dst.write(src.read())
     fx_ms = build_fx(voice_dir)
     # 60 s de silence Opus (même format que la voix → enchaînements sans reconfiguration audio)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"anullsrc=r={SR}:cl=mono",
                     "-t", "60", "-c:a", "libopus", "-b:a", "16k", os.path.join(voice_dir, "silence.ogg")], check=True)
 
-    # 3) compilation des séances
+    # 6) compilation des séances
     tracks = []
     cat_ids = [c[0] for c in LIB.CATEGORIES]
     for tr in LIB.TRACKS:
@@ -436,7 +688,7 @@ def main():
             breath=blocks, segments=seg_json(segs, clip_ids), text=transcript(ops),
         ))
 
-    # 4) banque du générateur
+    # 7) banque du générateur
     bank = {}
     for pool, items in bank_phr.items():
         entries = []
@@ -447,7 +699,9 @@ def main():
 
     catalog = dict(
         version=1,
-        voice=dict(name="Siwis (Piper, CC-BY 4.0)", engine="piper-vits", language="fr-FR"),
+        voice=dict(name=("Siwis · Kokoro-82M" if args.engine == "kokoro" else "Siwis · Piper"),
+                   engine=("kokoro-82m" if args.engine == "kokoro" else "piper-vits"), language="fr-FR",
+                   pipeline=f"{RENDER_VERSION}/{S.CHAIN_VERSION}"),
         clips={clip_ids[k]: clip_ms[k] for k in keys},
         fx=fx_ms,
         categories=[dict(id=c[0], title=c[1], subtitle=c[2]) for c in LIB.CATEGORIES],
