@@ -154,7 +154,7 @@ reçu pendant qu'on se retourne) ; le nouveau fondu part de cet état. `Animatio
 - **Import** : les *skins* glTF (articulations, matrices de liaison inverses, `JOINTS_0` /
   `WEIGHTS_0`, 4 influences par sommet, poids normalisés) et les **animations** (translation,
   rotation, échelle ; interpolation pas à pas ou linéaire ; les splines cubiques sont lues par leurs
-  valeurs, sans tangentes, avec un avertissement). Les poids de *morph targets* ne sont pas importés.
+  valeurs, sans tangentes, avec un avertissement) et les poids de *morph targets* (voir plus bas).
 - **Instanciation** : les nœuds du modèle deviennent des entités (le squelette est une hiérarchie
   d'entités ordinaires, visible et modifiable) ; un `MeshRenderer` à peau référence son skin.
 - **Clips** : une animation importée est un clip nommé `"<modèle>#<animation>"`
