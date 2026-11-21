@@ -447,6 +447,43 @@ TEST_CASE("3D particles: lit by ambient, the sun and point lights in range") {
     CHECK(f.at({0, 0, 0}).r > 150);
 }
 
+TEST_CASE("3D mesh particles: lit instanced meshes instead of billboards, casting shadows") {
+    Render3DFixture f;
+    f.camera({0, 3, 6}, {0, 0, 0});
+    f.darkEnvironment();
+    f.sun({-45, 0, 0});  // down and toward -Z: lights the side seen by the camera, shadow behind
+    f.mesh(PrimitiveMesh::Cube, {0, -0.05f, 0}, {20, 0.1f, 20}, {0.8f, 0.8f, 0.8f, 1});
+    const auto fx = f.scene.createEntity("Debris");
+    f.scene.registry().get<TransformComponent>(fx).position = {0, 2.5f, 0};
+    auto& em = f.scene.registry().emplace<ParticleEmitter3DComponent>(fx);
+    em.rate = 0.0f;
+    em.burst = 1;
+    em.seed = 1;
+    em.shape = EmitterShape3D::Point;
+    em.speedMin = em.speedMax = 0.0f;
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.startSize = em.endSize = 1.5f;
+    em.startColor = em.endColor = {0.1f, 0.9f, 0.2f, 1.0f};
+    em.meshParticles = true;
+    em.particleMesh = PrimitiveMesh::Sphere;
+    f.scene.updateTransforms();
+    simulateParticles3D(f.scene, 0.0f);
+    f.settle();
+    CHECK(f.renderer.stats().particlesVisible == 1);
+    const Rgba c = f.at({0, 2.5f, 0.6f});
+    CHECK_MESSAGE(c.g > 80, c);
+    CHECK_MESSAGE(c.g > c.r + 40, c);  // the green debris, lit by the sun
+    // Its shadow darkens the floor behind it.
+    const Rgba under = f.at({0, 0, -2.5f}), open = f.at({-3.0f, 0, -2.5f});
+    CHECK_MESSAGE(under.r + 20 < open.r, under << " vs " << open);
+    // Billboards again: no shadow.
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).meshParticles = false;
+    f.frame();
+    CHECK(f.renderer.stats().particlesVisible == 1);
+    CHECK(f.at({0, 0, -2.5f}).r + 20 >= open.r);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("toon shading: hard light steps, tinted shadows, bands, rim light, outlines") {
     Render3DFixture f;
     f.camera({0, 0, 0}, {0, 0, -1});

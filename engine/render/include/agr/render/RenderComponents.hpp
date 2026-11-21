@@ -502,6 +502,15 @@ struct ParticleEmitter3DComponent {
     /// Lit by the scene: ambient, the directional light (half-Lambert facing the camera) and
     /// point / spot lights in range, evaluated per particle (smoke and dust in a dark cave).
     bool lit = false;
+    /// Mesh particles: each particle is a small lit 3D mesh (debris, rocks, leaves, coins) that
+    /// tumbles with its rotation, instead of a camera-facing billboard. `particleMesh` = a built-in
+    /// shape, or `particleModel` (first mesh of an imported model) when set; size = scale.
+    bool meshParticles = false;
+    PrimitiveMesh particleMesh = PrimitiveMesh::Cube;
+    std::string particleModel;
+    float meshMetallic = 0.0f;
+    float meshRoughness = 0.6f;
+    bool meshCastShadows = true;
     /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
     /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
     ecs::Entity subEmitter{};

@@ -697,6 +697,83 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             }
         }
     });
+    // ------------------------------------------------------------ mesh particles
+    // Each particle is an instance of a small mesh with the emitter's built-in material (lit,
+    // shadowed, instanced like other meshes); it tumbles around an axis of its own.
+    reg.view<ParticleEmitter3DComponent, ParticleState3DComponent, WorldTransformComponent>().each(
+        [&](ecs::Entity e, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
+            if (!em.meshParticles || !w.activeInHierarchy || hidden(e) || st.particles.empty()) return;
+            rhi::BufferHandle vb, ib;
+            math::Aabb bounds;
+            u32 firstIndex = 0, indexCount = 0;
+            if (!em.particleModel.empty()) {
+                const ModelAsset* model = m_models ? m_models->get(em.particleModel) : nullptr;
+                if (!model || model->state != AssetState::Ready || model->meshes.empty()) {
+                    if (model && model->state == AssetState::Loading) ++m_stats.modelsLoading;
+                    return;
+                }
+                const ModelAsset::Mesh& mesh = model->meshes[0];
+                vb = mesh.vertices, ib = mesh.indices, bounds = mesh.bounds;
+                for (const ModelSubmesh& sm : mesh.submeshes) indexCount = std::max(indexCount, sm.firstIndex + sm.indexCount);
+            } else {
+                const GpuMesh& mesh = m_meshes[std::clamp(static_cast<int>(em.particleMesh), 0, 3)];
+                vb = mesh.vertices, ib = mesh.indices, bounds = mesh.bounds, indexCount = mesh.indexCount;
+            }
+            if (!vb || !ib || indexCount == 0) return;
+            static thread_local MaterialData mat;
+            mat = defaultMaterial();
+            mat.metallic = std::clamp(em.meshMetallic, 0.0f, 1.0f);
+            mat.roughness = std::clamp(em.meshRoughness, 0.0f, 1.0f);
+            const u64 key = mix64(0x9A871Cull, mix64(bits(mat.metallic), bits(mat.roughness)));
+            const u32 slot = materialSlot(key, mat, Vec2{1.0f, 1.0f}, false);
+            const ParticleCurvesLut* lut = m_particleCurves && !em.curves.empty() ? m_particleCurves->get(em.curves) : nullptr;
+            const float boundsRadius = math::length(bounds.max - bounds.min) * 0.5f;
+            for (usize i = 0; i < st.particles.size(); ++i) {
+                const Particle3D& p = st.particles[i];
+                const float t = std::clamp(p.age / std::max(p.lifetime, 1e-4f), 0.0f, 1.0f);
+                const float size = lut && lut->hasSize ? em.startSize * lut->sizeAt(t) : math::lerp(em.startSize, em.endSize, t);
+                if (size <= 0.0f) continue;
+                const Vec4 color = lut && lut->hasColor ? Vec4(lut->colorAt(t))
+                                                        : Vec4{math::lerp(em.startColor.x, em.endColor.x, t), math::lerp(em.startColor.y, em.endColor.y, t),
+                                                               math::lerp(em.startColor.z, em.endColor.z, t), math::lerp(em.startColor.w, em.endColor.w, t)};
+                // A fixed tumbling axis per particle (from its index and lifetime).
+                const u32 h = static_cast<u32>(i) * 2654435761u ^ bits(p.lifetime);
+                Vec3 axis{static_cast<float>(h & 255u) - 127.5f, static_cast<float>((h >> 8) & 255u) - 127.5f, static_cast<float>((h >> 16) & 255u) - 127.5f};
+                axis = math::length(axis) > 1e-3f ? math::normalize(axis) : Vec3{0, 1, 0};
+                const Vec3 pos = em.worldSpace ? p.position : w.matrix.transformPoint(p.position);
+                const Mat4 model = Mat4::trs(pos, math::Quat::fromAxisAngle(axis, p.rotation), Vec3{size});
+                const float radius = boundsRadius * size;
+                const math::Aabb box = math::Aabb::fromCenterExtents(pos, Vec3{radius});
+                const bool visible = frustum.intersects(box);
+                u32 casterMask = 0;
+                if (m_shadowsActive && em.meshCastShadows)
+                    for (u32 c = 0; c < m_shadowCascades; ++c)
+                        if (lightFrustum[c].intersects(box)) casterMask |= 1u << c;
+                if (!visible && !casterMask) continue;
+                InstanceData inst;
+                inst.model = model;
+                const Mat4 normalMatrix = math::transpose(math::inverse(model));
+                for (int k = 0; k < 3; ++k) inst.normal[k] = Vec4(normalMatrix.c[k].x, normalMatrix.c[k].y, normalMatrix.c[k].z, 0.0f);
+                inst.color = Vec4(detail::srgbToLinear(color), 1.0f);
+                MeshItem item;
+                item.vertices = vb;
+                item.indices = ib;
+                item.firstIndex = firstIndex;
+                item.indexCount = indexCount;
+                item.material = slot;
+                item.pipeline = m_frameMaterials[slot].pipeline;
+                item.instance = static_cast<u32>(m_instances.size());
+                item.depth = math::dot(pos - camPos, camForward);
+                item.skinOffset = ~0u;
+                m_instances.push_back(inst);
+                if (visible) {
+                    m_opaqueItems.push_back(item);
+                    ++m_stats.particlesVisible;
+                }
+                for (u32 c = 0; c < m_shadowCascades; ++c)
+                    if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
+            }
+        });
     // ------------------------------------------------------------ terrains
     reg.view<TerrainComponent, WorldTransformComponent>().each([&](ecs::Entity e, TerrainComponent& t, WorldTransformComponent& w) {
         if (!w.activeInHierarchy || hidden(e)) return;

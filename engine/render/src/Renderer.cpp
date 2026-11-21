@@ -858,7 +858,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         };
         reg.view<ParticleEmitter3DComponent, ParticleState3DComponent, WorldTransformComponent>().each(
             [&](ecs::Entity e, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
-                if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty()) return;
+                if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty() || em.meshParticles) return;  // meshes: 3D pass
                 if (em.lit && !plightsGathered) {
                     plightsGathered = true;
                     reg.view<PointLightComponent, WorldTransformComponent>().each([&](ecs::Entity le, PointLightComponent& l, WorldTransformComponent& lw) {
