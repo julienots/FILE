@@ -418,6 +418,10 @@ struct ParticleEmitter2DComponent {
     float direction = math::radians(90.0f);  ///< Radians, 0 = +X, 90° = up.
     float spread = math::radians(30.0f);     ///< Half angle.
     float spawnRadius = 0.0f;
+    /// Where particles start: inside the spawnRadius disc (0), on its circle (1), in a spawnSize
+    /// rectangle (2), or along a spawnSize.x long line (3, waterfalls, rain from a ledge).
+    i32 spawnShape = 0;
+    math::Vec2 spawnSize{1.0f, 1.0f};
     math::Vec2 gravity{0.0f, -2.0f};
     float drag = 0.0f;              ///< Velocity damping per second.
     math::Color startColor{1.0f, 1.0f, 1.0f, 1.0f};
@@ -489,6 +493,8 @@ struct ParticleEmitter3DComponent {
     float lifetimeMin = 0.8f, lifetimeMax = 1.6f;
     float speedMin = 1.0f, speedMax = 3.0f;
     EmitterShape3D shape = EmitterShape3D::Cone;
+    bool emitFromSurface = false;   ///< Sphere / box: start on the surface instead of inside (shells, auras).
+    bool alignToVelocity = false;   ///< Mesh particles: point their local -Z along their motion (arrows, sparks, debris).
     float shapeRadius = 0.3f;       ///< Sphere, cone base, ring (circle in the local XZ plane, emits within coneAngle of +Y).
     math::Vec3 boxSize{1.0f, 0.1f, 1.0f};
     float coneAngle = math::radians(25.0f);  ///< Half angle around +Y (cone); sphere / box emit outward / up.

@@ -633,3 +633,53 @@ TEST_CASE("tile rules: 47-tile blob autotiling with the 8 neighbours (inner corn
     r = TileRules::parse(tm, 200);
     CHECK(r.resolve(tm, 2, 2, 0.0) == 100 + index(255 - 2));
 }
+
+TEST_CASE("particles: emission on surfaces (3D sphere, box), 2D circle / rectangle / line") {
+    registerRenderComponents();
+    Scene s;
+    const auto e = s.createEntity("Fx");
+    auto& em = s.registry().emplace<ParticleEmitter3DComponent>(e);
+    em.rate = 0.0f;
+    em.burst = 200;
+    em.shape = EmitterShape3D::Sphere;
+    em.shapeRadius = 2.0f;
+    em.emitFromSurface = true;
+    em.seed = 9;
+    s.updateTransforms();
+    simulateParticles3D(s, 0.0f);
+    for (const Particle3D& p : s.registry().get<ParticleState3DComponent>(e).particles)
+        CHECK(math::length(p.position) == doctest::Approx(2.0f).epsilon(1e-3));
+    auto& em2 = s.registry().get<ParticleEmitter3DComponent>(e);
+    em2.shape = EmitterShape3D::Box;
+    em2.boxSize = {2, 4, 6};
+    restartParticles3D(s, e);
+    simulateParticles3D(s, 0.0f);
+    for (const Particle3D& p : s.registry().get<ParticleState3DComponent>(e).particles) {
+        const bool onFace = std::fabs(std::fabs(p.position.x) - 1.0f) < 1e-4f || std::fabs(std::fabs(p.position.y) - 2.0f) < 1e-4f ||
+                            std::fabs(std::fabs(p.position.z) - 3.0f) < 1e-4f;
+        CHECK(onFace);
+    }
+    const auto f2 = s.createEntity("Fx2");
+    auto& e2 = s.registry().emplace<ParticleEmitter2DComponent>(f2);
+    e2.rate = 0.0f;
+    e2.burst = 100;
+    e2.spawnRadius = 1.5f;
+    e2.spawnShape = 1;  // circle
+    e2.seed = 4;
+    s.updateTransforms();
+    simulateParticles2D(s, 0.0f);
+    for (const Particle2D& p : s.registry().get<ParticleState2DComponent>(f2).particles) CHECK(math::length(p.position) == doctest::Approx(1.5f).epsilon(1e-3));
+    auto& r = s.registry().get<ParticleEmitter2DComponent>(f2);
+    r.spawnShape = 3;  // line 4 long
+    r.spawnSize = {4.0f, 1.0f};
+    restartParticles2D(s, f2);
+    simulateParticles2D(s, 0.0f);
+    float minX = 1e9f, maxX = -1e9f;
+    for (const Particle2D& p : s.registry().get<ParticleState2DComponent>(f2).particles) {
+        CHECK(p.position.y == doctest::Approx(0.0f));
+        minX = std::min(minX, p.position.x), maxX = std::max(maxX, p.position.x);
+    }
+    CHECK(minX >= -2.0f);
+    CHECK(maxX <= 2.0f);
+    CHECK(maxX - minX > 3.0f);
+}

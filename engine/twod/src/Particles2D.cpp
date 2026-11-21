@@ -31,9 +31,17 @@ void spawn(const ParticleEmitter2DComponent& em, ParticleState2DComponent& st, c
         const float speed = range(st.rng, em.speedMin, em.speedMax);
         p.velocity = {std::cos(angle) * speed, std::sin(angle) * speed};
         math::Vec2 offset{};
-        if (em.spawnRadius > 0.0f) {
-            const float r = em.spawnRadius * std::sqrt(uniform(st.rng)), a = range(st.rng, 0.0f, 2.0f * math::kPi);
+        if (em.spawnShape == 2) {  // rectangle
+            offset = {range(st.rng, -0.5f, 0.5f) * em.spawnSize.x, range(st.rng, -0.5f, 0.5f) * em.spawnSize.y};
+        } else if (em.spawnShape == 3) {  // line along x
+            offset = {range(st.rng, -0.5f, 0.5f) * em.spawnSize.x, 0.0f};
+        } else if (em.spawnRadius > 0.0f) {  // disc or circle
+            const float r = em.spawnShape == 1 ? em.spawnRadius : em.spawnRadius * std::sqrt(uniform(st.rng)), a = range(st.rng, 0.0f, 2.0f * math::kPi);
             offset = {std::cos(a) * r, std::sin(a) * r};
+        }
+        if (em.worldSpace && (em.spawnShape >= 2)) {  // the emitter's rotation turns the rectangle / line
+            const float ca = std::cos(baseAngle), sa = std::sin(baseAngle);
+            offset = {offset.x * ca - offset.y * sa, offset.x * sa + offset.y * ca};
         }
         if (em.worldSpace) {
             p.velocity += inherited;

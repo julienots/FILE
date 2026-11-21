@@ -34,11 +34,19 @@ void spawn(const ParticleEmitter3DComponent& em, ParticleState3DComponent& st, c
             case EmitterShape3D::Point: break;
             case EmitterShape3D::Sphere: {
                 dir = randomUnit(st.rng);
-                pos = dir * (em.shapeRadius * std::cbrt(uniform(st.rng)));
+                pos = dir * (em.emitFromSurface ? em.shapeRadius : em.shapeRadius * std::cbrt(uniform(st.rng)));
                 break;
             }
             case EmitterShape3D::Box:
                 pos = {range(st.rng, -0.5f, 0.5f) * em.boxSize.x, range(st.rng, -0.5f, 0.5f) * em.boxSize.y, range(st.rng, -0.5f, 0.5f) * em.boxSize.z};
+                if (em.emitFromSurface) {  // pushed onto a face, chosen in proportion to its area
+                    const float ax = em.boxSize.y * em.boxSize.z, ay = em.boxSize.x * em.boxSize.z, az = em.boxSize.x * em.boxSize.y;
+                    const float pick = uniform(st.rng) * std::max(ax + ay + az, 1e-6f);
+                    const float side = uniform(st.rng) < 0.5f ? -0.5f : 0.5f;
+                    if (pick < ax) pos.x = side * em.boxSize.x;
+                    else if (pick < ax + ay) pos.y = side * em.boxSize.y;
+                    else pos.z = side * em.boxSize.z;
+                }
                 break;
             case EmitterShape3D::Cone:
             case EmitterShape3D::Ring: {

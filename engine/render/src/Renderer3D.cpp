@@ -754,7 +754,18 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 Vec3 axis{static_cast<float>(h & 255u) - 127.5f, static_cast<float>((h >> 8) & 255u) - 127.5f, static_cast<float>((h >> 16) & 255u) - 127.5f};
                 axis = math::length(axis) > 1e-3f ? math::normalize(axis) : Vec3{0, 1, 0};
                 const Vec3 pos = em.worldSpace ? p.position : w.matrix.transformPoint(p.position);
-                const Mat4 model = Mat4::trs(pos, math::Quat::fromAxisAngle(axis, p.rotation), Vec3{size});
+                math::Quat orient = math::Quat::fromAxisAngle(axis, p.rotation);
+                if (em.alignToVelocity) {  // local -Z along the motion
+                    const Vec3 v = em.worldSpace ? p.velocity : w.matrix.transformVector(p.velocity);
+                    if (math::length(v) > 1e-4f) {
+                        const Vec3 fwd = math::normalize(v);
+                        const Vec3 up = std::fabs(fwd.y) > 0.99f ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
+                        Vec3 sc;
+                        Vec3 tr;
+                        math::decompose(math::inverse(Mat4::lookAt(Vec3{0.0f}, fwd, up)), tr, orient, sc);
+                    }
+                }
+                const Mat4 model = Mat4::trs(pos, orient, Vec3{size});
                 const float radius = boundsRadius * size;
                 const math::Aabb box = math::Aabb::fromCenterExtents(pos, Vec3{radius});
                 const bool visible = frustum.intersects(box);
