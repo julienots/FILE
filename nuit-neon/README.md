@@ -2,6 +2,17 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.4
+
+- **Monde ouvert : Vallée Ouverte** (Balade libre) : une vallée de 7 km sur 5 traversée par 14 km de route de campagne avec circulation. On peut quitter la route et rouler partout jusqu'à 450 m de part et d'autre : prés, champs, collines (la voiture suit le relief, penche dans les pentes, ralentit en montée et accélère en descente), forêts de feuillus et de sapins, rochers. Les 1 500 arbres et rochers sont de vrais obstacles : on rebondit dessus. Pas de clôture.
+- **Quatre nouvelles ambiances**, pour tous les circuits et les balades :
+  - **Aube** : soleil rasant rose-orangé, brume dorée, longues ombres, rayons de soleil.
+  - **Brouillard** : on voit à peine à 100 m, lumière blanche diffuse, chaussée humide, montagnes noyées dans la brume.
+  - **Blizzard** : neige poussée à l'horizontale par un vent violent à rafales, le sol et le haut des feuillages blanchissent, visibilité à 80 m, sifflement du vent.
+  - **Tempête de sable** : ciel ocre, soleil voilé, grains de sable qui filent au ras du sol, rafales.
+- **Rayons de soleil** : nouveau shader de lumière volumétrique, qui part du soleil et passe entre les arbres et les nuages (plus marqué à l'aube et dans le brouillard).
+- Les effets (fumée, poussière, traces de pneus) naissent au bon niveau sur les collines du monde ouvert.
+
 ## Nouveautés de la 2.3
 
 - **Arbres** : feuillage fait de milliers de petites feuilles en bouquets de teintes différentes (jeunes pousses claires, feuilles d'ombre sombres), couronne en sept masses au lieu de quatre, intérieur de la couronne dans l'ombre, translucidité à contre-jour ; troncs évasés au pied avec six branches. En graphismes élevés, 60 % d'arbres en plus (20 % en moyens).
@@ -39,7 +50,7 @@ Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre t
 - **Élimination** : toutes les 20 secondes, le dernier est éliminé.
 - **Course à bonus** : des caisses sur la piste donnent l'un des 21 pouvoirs (voir plus bas). Le pictogramme de l'objet tenu s'affiche à l'écran et flotte au-dessus de chaque voiture qui en porte un.
 - **Foot Turbo** : match de foot en voiture, de 1 contre 1 à 3 contre 3, avec boost, saut, double saut et vol.
-- **Balade libre** : Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
+- **Balade libre** : Vallée Ouverte (monde ouvert de 7 km sur 5, on roule partout), Route des Prés (6 km avec circulation) ou Ligne Droite (8 km sans aucune voiture).
 - **Atelier** : trois circuits à créer soi-même, entièrement réglés par des nombres.
 - **Garage** : 23 voitures (dont 2 volantes et 6 hypercars suralimentées) et 4 motos à acheter, réglages à améliorer, moteur extrême.
 - **Ligne de trajectoire** : en option (écran de course, Grand Prix, options, bouton LIGNE ou touche L). La meilleure ligne du circuit est dessinée devant la voiture : verte quand on peut accélérer, jaune quand il faut lever le pied, rouge quand il faut freiner. Elle est calculée pour le véhicule choisi (`src/ligne.js`).

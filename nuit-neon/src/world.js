@@ -35,7 +35,7 @@ function colored(g, col) {
 }
 
 // bruit et couleur du sol à grande échelle, partagés entre le terrain et les brins d'herbe pour qu'ils se fondent
-const GROUND_GLSL = `uniform vec3 gc0; uniform vec3 gc1; uniform vec3 gc2; uniform vec3 gc3; uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 amb; uniform vec3 fogColor; uniform float fogDensity; uniform float time;
+const GROUND_GLSL = `uniform float blanc; uniform vec3 gc0; uniform vec3 gc1; uniform vec3 gc2; uniform vec3 gc3; uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 amb; uniform vec3 fogColor; uniform float fogDensity; uniform float time;
   float gh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
   float gn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(gh(i),gh(i+vec2(1,0)),f.x), mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x), f.y); }
   float gf(vec2 p){ float a=.5, s=0.; for(int i=0;i<3;i++){ s+=a*gn(p); p=p*2.03+17.; a*=.5; } return s; }
@@ -285,6 +285,7 @@ export function skyDome(th) {
 }
 
 export function buildWorld(def, renderer, q) {
+  let ground = null; const solids = [];   // monde ouvert : hauteur du sol (x, z, distance à la route) et obstacles fixes [x, z, rayon]
   seed = 1337 + def.id.length * 7919 + def.pts.length * 104729;
   const th = def.theme, city = th.env !== 'nature';
   const T = makeTrack(def), HALF = T.half;
@@ -539,7 +540,7 @@ export function buildWorld(def, renderer, q) {
     const ambC = new THREE.Color().fromArray(th.sky[1]).lerp(new THREE.Color(0.75, 0.78, 0.8), sombre ? 0 : 0.35).multiplyScalar((th.ambI ?? 1.5) * (sombre ? 1 : 0.78));
     const sol = th.sol;
     const gUni = () => ({ gc0: { value: new THREE.Color(sol.c[0]) }, gc1: { value: new THREE.Color(sol.c[1]) }, gc2: { value: new THREE.Color(sol.c[2]) }, gc3: { value: new THREE.Color(sol.c[3]) },
-      sunDir: { value: sunV }, sunCol: { value: sunC }, amb: { value: ambC }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, time: { value: 0 } });
+      sunDir: { value: sunV }, sunCol: { value: sunC }, amb: { value: ambC }, fogColor: { value: FOG }, fogDensity: { value: th.dens }, time: { value: 0 }, blanc: { value: th.blanc || 0 } });
     const timed = [];
     updaters.push((cam, dt, time) => { for (const m of timed) m.uniforms.time.value = time; });
 
@@ -553,6 +554,7 @@ export function buildWorld(def, renderer, q) {
       ? (x, z) => { const d = distTrack(x, z), t = Math.min(1, Math.max(0, (d - 60) / 300)), s = Math.min(1, Math.max(0, (d - 24) / 56));
           return (hills(x, z) - 0.72) * amp * t * t * (3 - 2 * t) - 8 * s * s * (3 - 2 * s); }
       : (x, z) => { const t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
+    if (!mer) ground = (x, z, lat) => { const t = Math.min(1, Math.max(0, (Math.abs(lat) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
     {
       const size = 2 * (R + 1050), seg = q.terrain;
       const g = new THREE.PlaneGeometry(size, size, seg, seg); const p = g.attributes.position;
@@ -590,6 +592,7 @@ export function buildWorld(def, renderer, q) {
               alb *= 0.95 + 0.10*gn(p*14.0)*near;
             }
             alb *= mix(0.5, 1.0, smoothstep(-0.6, 0.25, vW.y));                                // sable mouillé au bord de l'eau
+            alb = mix(alb, vec3(0.86, 0.9, 0.96) * (0.92 + 0.12*gn(p*3.0)), blanc * smoothstep(0.2, 0.6, N.y + gn(p*0.3)*0.4));   // neige fraîche du blizzard
             float cs = smoothstep(0.48, 0.72, gf(p*0.0045 + vec2(time*0.012, time*0.007)));   // ombres des nuages
             float diff = max(dot(N, sunDir), 0.0);
             vec3 col = alb * (amb*0.55 + sunCol * diff * 1.3 * (1.0 - 0.45*cs));
@@ -683,8 +686,8 @@ export function buildWorld(def, renderer, q) {
             float diff = max(dot(N, sunDir), 0.0);
             vec3 col = alb * (amb*0.6 + sunCol * diff * 1.4);
             // perspective aérienne : plus c'est loin, plus c'est clair et bleuté (la couleur du brouillard)
-            float air = 1.0 - exp(-dist / 1500.0);
-            col = mix(col, fogColor, clamp(air * 0.85, 0.0, 0.92));
+            float air = 1.0 - exp(-dist / 1500.0), fg = 1.0 - exp(-fogDensity*fogDensity*dist*dist*0.35);
+            col = mix(col, fogColor, clamp(max(air * 0.85, fg), 0.0, 1.0));
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
@@ -726,11 +729,12 @@ export function buildWorld(def, renderer, q) {
             float sway = sin(time*1.3 + w.x*0.31 + w.y*0.7 + vK*6.0) + 0.5*sin(time*2.9 + w.z*0.5);
             w.xz += sway * 0.035 * position.y * (0.5 + aAO);
             vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal); vWp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-        fragmentShader: `uniform sampler2D map; uniform vec3 tint; uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 amb; uniform vec3 fogColor; uniform float fogDensity;
+        fragmentShader: `uniform float blanc; uniform sampler2D map; uniform vec3 tint; uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 amb; uniform vec3 fogColor; uniform float fogDensity;
           varying vec2 vU; varying vec3 vN; varying vec3 vWp; varying float vAO; varying float vK;
           void main(){ vec4 t = texture2D(map, vU); if (t.a < 0.5) discard;
             vec3 toCam = cameraPosition - vWp; float dist = length(toCam); vec3 V = toCam/dist;
             vec3 alb = t.rgb * tint * (0.8 + 0.45*vK);
+            alb = mix(alb, vec3(0.88, 0.92, 0.98), blanc * 0.55 * smoothstep(-0.2, 0.6, normalize(vN).y));   // neige sur le haut des feuillages
             float l = dot(normalize(vN), sunDir)*0.5 + 0.5; l *= l;
             float back = pow(max(dot(-V, sunDir), 0.0), 3.0) * (1.0 - l);          // lumière qui traverse les feuilles à contre-jour
             float ao = mix(0.22, 1.0, smoothstep(0.15, 1.0, vAO));                    // l'intérieur de la couronne reste dans l'ombre
@@ -798,6 +802,8 @@ export function buildWorld(def, renderer, q) {
         const hy = heightAt(x, z); if (mer && hy < (kind === 'rocher' ? -3 : 0.15)) continue;   // pas d'arbre dans l'eau
         spots.push([x, z, hy, rr(s0, s1), rr(0, 6.28)]);
       }
+      const rad = kind === 'rocher' ? 1.9 : kind === 'cactus' ? 0.6 : kind === 'palmier' ? 0.45 : 0.55;
+      for (const sp of spots) solids.push([sp[0], sp[1], rad * sp[3]]);
       const place = (geo, mat) => { geo.computeVertexNormals && !geo.attributes.aAO && geo.computeVertexNormals();
         const im = new THREE.InstancedMesh(geo, mat, spots.length);
         spots.forEach(([x, z, y, s, a], i) => { d.position.set(x, y - 0.15, z); d.rotation.set(0, a, 0); d.scale.set(s, s, s); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
@@ -813,7 +819,8 @@ export function buildWorld(def, renderer, q) {
     }
 
     // --- bords de route ---
-    if (T.libre) {
+    if (T.libre && def.ouvert) { /* monde ouvert : pas de clôture, on peut sortir partout */ }
+    else if (T.libre) {
       const wood = [];
       for (let i = 0; i < T.N; i += 3) for (const s of [-1, 1]) { const o = s * (HALF + 9); wood.push(box(0.16, 1.2, 0.16, T.px[i] - T.tz[i] * o, 0.6, T.pz[i] + T.tx[i] * o)); }
       for (let i = 0; i < T.N; i += 24) { const o = -(HALF + 6); wood.push(box(0.3, 9, 0.3, T.px[i] - T.tz[i] * o, 4.5, T.pz[i] + T.tx[i] * o), box(2.2, 0.16, 0.16, T.px[i] - T.tz[i] * o, 8.4, T.pz[i] + T.tx[i] * o, Math.atan2(-T.tx[i], -T.tz[i]))); }
@@ -978,7 +985,7 @@ export function buildWorld(def, renderer, q) {
   // de 64 m autour de la caméra (repliée sur elle-même), s'estompent de près et de loin, et s'illuminent sous les éclairs.
   let rain = null;
   if (th.rain) {
-    const snow = th.rain === 'neige', heavy = !!th.orage, n = Math.round((snow ? (heavy ? 5000 : 2600) : heavy ? 9000 : 4200) * (q.rainK ?? 1));
+    const sand = th.rain === 'sable', snow = th.rain === 'neige' || sand, heavy = !!(th.orage || th.tempete), n = Math.round((sand ? 9000 : snow ? (heavy ? 7000 : 2600) : heavy ? 9000 : 4200) * (q.rainK ?? 1));
     const seed = new Float32Array(n * 4 * 4), corner = new Float32Array(n * 4 * 2), idx = new Uint32Array(n * 6);
     for (let i = 0; i < n; i++) {
       const a = rnd(), b = rnd(), c = rnd(), d = rnd();
@@ -990,9 +997,9 @@ export function buildWorld(def, renderer, q) {
     const tint = city ? new THREE.Color(th.fog).lerp(new THREE.Color(th.lamp || 0xffffff), 0.55).multiplyScalar(1.5) : new THREE.Color().fromArray(th.sky[2]).lerp(new THREE.Color(0xffffff), 0.4);
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide,
-      uniforms: { time: { value: 0 }, wind: { value: new THREE.Vector2() }, camVel: { value: new THREE.Vector3() }, fall: { value: snow ? (heavy ? 6 : 3.2) : heavy ? 34 : 26 },
-        box: { value: 64 }, hgt: { value: 26 }, snow: { value: snow ? 1 : 0 }, col: { value: snow ? new THREE.Color(1.1, 1.1, 1.15) : tint }, alpha: { value: snow ? 0.85 : heavy ? 0.5 : 0.36 }, flash: { value: 0 } },
-      vertexShader: `attribute vec4 seed; attribute vec2 corner; uniform float time; uniform vec2 wind; uniform vec3 camVel; uniform float fall; uniform float box; uniform float hgt; uniform float snow; uniform float flash;
+      uniforms: { time: { value: 0 }, wind: { value: new THREE.Vector2() }, camVel: { value: new THREE.Vector3() }, fall: { value: sand ? 1.2 : snow ? (heavy ? 6 : 3.2) : heavy ? 34 : 26 },
+        box: { value: 64 }, grain: { value: sand ? 0.35 : 1 }, hgt: { value: sand ? 10 : 26 }, snow: { value: snow ? 1 : 0 }, col: { value: sand ? new THREE.Color(0.95, 0.68, 0.4) : snow ? new THREE.Color(1.1, 1.1, 1.15) : tint }, alpha: { value: sand ? 0.55 : snow ? 0.85 : heavy ? 0.5 : 0.36 }, flash: { value: 0 } },
+      vertexShader: `attribute vec4 seed; attribute vec2 corner; uniform float time; uniform vec2 wind; uniform vec3 camVel; uniform float fall; uniform float grain; uniform float box; uniform float hgt; uniform float snow; uniform float flash;
         varying vec2 vC; varying float vA;
         void main(){
           float sp = fall * (0.75 + 0.5*seed.w);
@@ -1004,12 +1011,12 @@ export function buildWorld(def, renderer, q) {
           p.xz = cameraPosition.xz + mod(p.xz - cameraPosition.xz + box*0.5, box) - box*0.5;
           vec3 rel = v - camVel;                                   // vitesse vue depuis la caméra
           float rl = length(rel) + 1e-3; vec3 dir = rel / rl;
-          float L = snow > 0.5 ? 0.06 : clamp(rl * 0.028, 0.25, 4.5);   // flou de mouvement (exposition ~1/35 s)
+          float L = snow > 0.5 ? clamp(length(wind) * 0.02, 0.06, 0.8) : clamp(rl * 0.028, 0.25, 4.5);   // flou de mouvement (exposition ~1/35 s)
           vec3 toCam = cameraPosition - p; float dist = length(toCam);
           vec3 side = normalize(cross(dir, toCam / dist));
-          float w = snow > 0.5 ? 0.035 + 0.03*seed.w : max(0.006, dist*0.0016);
+          float w = snow > 0.5 ? (0.035 + 0.03*seed.w) * grain : max(0.006, dist*0.0016);
           vec3 wp = p - dir * L * corner.y + side * w * corner.x;
-          if (snow > 0.5) wp = p + (side * corner.x + normalize(cross(side, toCam)) * (corner.y*2.0 - 1.0)) * w;
+          if (snow > 0.5) wp = p - dir * L * corner.y + (side * corner.x + normalize(cross(side, toCam)) * (corner.y*2.0 - 1.0)) * w;
           vC = vec2(corner.x, corner.y);
           vA = smoothstep(0.6, 3.0, dist) * (1.0 - smoothstep(box*0.3, box*0.5, dist)) * (snow > 0.5 ? 1.0 : clamp(0.006 / w * 3.0, 0.25, 1.0)) * (0.6 + 0.4*seed.w) * (1.0 + flash*2.5);
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
@@ -1041,6 +1048,6 @@ export function buildWorld(def, renderer, q) {
   };
   const update = (cam, dt, time, hint) => { for (const u of updaters) u(cam, dt, time, hint); };
   const dispose = () => { for (const d of disposables) d.dispose && d.dispose(); road.dispose && road.dispose(); if (env) env.dispose(); };
-  return { T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, bend, fieldAt, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
+  return { ground, solids, T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, bend, fieldAt, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
     sunDir: th.sun ? new THREE.Vector3().fromArray(th.sun.dir).normalize() : null, sunCol: th.sun ? new THREE.Color().fromArray(th.sun.col) : null };
 }

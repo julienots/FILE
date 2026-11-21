@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { TRACKS, ROUTE_LIBRE, ROUTE_LIGNE, ambiance, COUPES, GP_POINTS } from './tracks.js';
+import { TRACKS, ROUTE_LIBRE, ROUTE_LIGNE, ROUTE_MONDE, ambiance, COUPES, GP_POINTS } from './tracks.js';
 import { buildLine } from './ligne.js';
 import { buildWorld, makeTrack, canvasTex } from './world.js';
 import { buildArena, ARENA, TEAM_COL } from './arena.js';
@@ -95,9 +95,9 @@ function setupPost() {
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.6, 1.0); composer.addPass(bloomPass);
   finalPass = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, brume: { value: 0 }, jour: { value: 0 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
+    uniforms: { tDiffuse: { value: null }, amt: { value: 0 }, time: { value: 0 }, pluie: { value: 0 }, brume: { value: 0 }, jour: { value: 0 }, rayons: { value: 0.6 }, vit: { value: 0 }, pousse: { value: 0 }, sunPos: { value: new THREE.Vector2() }, sunVis: { value: 0 }, sunCol: { value: new THREE.Color() }, aspect: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float brume; uniform float jour; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float amt; uniform float time; uniform float pluie; uniform float brume; uniform float jour; uniform float rayons; uniform float vit; uniform float pousse; uniform vec2 sunPos; uniform float sunVis; uniform vec3 sunCol; uniform float aspect; varying vec2 vUv;
       float hsh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
       // gouttes de pluie sur l'objectif : chaque case de la grille porte une goutte qui glisse et dévie l'image comme une lentille
       vec3 gouttes(vec2 uv, float sc, float sp){ vec2 g = uv*vec2(sc*aspect, sc); float col = floor(g.x); g.y += time*sp*(0.5 + hsh(vec2(col, 3.0))) ; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
@@ -125,6 +125,10 @@ function setupPost() {
             float gd = length((vUv - gp) * vec2(aspect, 1.0)); vec3 gc = i == 0 ? vec3(0.9,0.5,0.2) : i == 1 ? vec3(0.3,0.6,0.9) : i == 2 ? vec3(0.6,0.9,0.4) : vec3(0.9,0.3,0.6);
             fl += gc * sunCol * smoothstep(gs, gs*0.6, gd) * 0.07 + gc * sunCol * smoothstep(gs*0.15, 0.0, abs(gd - gs)) * 0.05; }   // reflets dans les lentilles
           col += fl * occ * sunVis;
+          // rayons de soleil : on remonte vers le soleil en accumulant ce qui est très lumineux (le ciel entre les arbres, les nuages)
+          vec2 dl = (sunPos - vUv) / 18.0; vec2 sp2 = vUv; float acc = 0.0, wt = 1.0;
+          for (int i = 0; i < 18; i++) { sp2 += dl; vec3 sc = texture2D(tDiffuse, sp2).rgb; acc += smoothstep(1.1, 2.6, dot(sc, vec3(0.33))) * wt; wt *= 0.92; }
+          col += sunCol * acc / 18.0 * 0.5 * rayons * sunVis;
         }
         // air chargé de pluie : la lumière se diffuse, les noirs se voilent légèrement, les couleurs s'adoucissent
         if (brume > 0.0) { vec3 halo = (texture2D(tDiffuse, uvp + vec2(0.004, 0.0)).rgb + texture2D(tDiffuse, uvp - vec2(0.004, 0.0)).rgb + texture2D(tDiffuse, uvp + vec2(0.0, 0.007)).rgb + texture2D(tDiffuse, uvp - vec2(0.0, 0.007)).rgb) * 0.25;
@@ -156,9 +160,12 @@ function ensureWorld(key) {
   if (worldKey === key) return;
   if (world) { scene.remove(world.group); world.dispose(); }
   fx.clear();
-  const bd = base === 'libre' ? ROUTE_LIBRE : base === 'ligne' ? ROUTE_LIGNE : TRACKS[+base];
+  const bd = base === 'libre' ? ROUTE_LIBRE : base === 'ligne' ? ROUTE_LIGNE : base === 'monde' ? ROUTE_MONDE : TRACKS[+base];
   world = key === 'arena' ? buildArena(renderer, Q) : buildWorld(Object.assign({}, bd, { theme: ambiance(bd.theme, setup.amb) }), renderer, Q);
   T = world.T || null; worldKey = key;
+  // monde ouvert : grille des arbres et rochers (cases de 8 m) pour les collisions
+  G.solid = null;
+  if (T && T.def.ouvert && world.solids) { G.solid = new Map(); for (const o of world.solids) { const k = Math.floor(o[0] / 8) + ',' + Math.floor(o[1] / 8); if (!G.solid.has(k)) G.solid.set(k, []); G.solid.get(k).push(o); } }
   scene.add(world.group); scene.fog = world.fog;
   scene.environment = null;
   scene.environment = world.captureEnv(scene);
@@ -381,6 +388,8 @@ function hitWall(c, nx, nz, dt, sp) {
   }
   c.onWall = true; void sp;
 }
+// monde ouvert : hauteur du sol sous un point (la route et ses abords sont à plat, les collines commencent à 34 m)
+function groundAt(x, z, idx) { return T && T.def.ouvert && world && world.ground ? world.ground(x, z, T.lateral(x, z, idx)) : 0; }
 function trackConstrain(c, dt) {
   const prev = c.idx, N = T.N, sp = Math.abs(c.v);
   c.idx = T.nearest(c.x, c.z, c.idx);
@@ -395,7 +404,17 @@ function trackConstrain(c, dt) {
     hitWall(c, -T.tz[i] * s, T.tx[i] * s, dt, sp);
   } else {
     c.onWall = false;
-    if (T.libre && Math.abs(d) > T.half + 0.4) { c.offroad = true; if (sp > 14) c.v -= c.v * (1.3 + 0.9 * c.wheat) * dt; } // l'herbe freine, le blé haut encore plus
+    if (T.libre && Math.abs(d) > T.half + 0.4) { c.offroad = true; if (sp > 14) c.v -= c.v * (T.def.ouvert ? 0.3 : 1.3 + 0.9 * c.wheat) * dt; } // l'herbe freine, le blé haut encore plus
+  }
+  if (G.solid) {
+    // arbres et rochers : on rebondit dessus
+    const D = discs(c), fxh = -Math.sin(c.h), fzh = -Math.cos(c.h), ix = Math.floor(c.x / 8), iz = Math.floor(c.z / 8);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = G.solid.get((ix + a) + ',' + (iz + b)); if (!L) continue;
+      for (const o of L) { if (c.y > o[2] * 3) continue;
+        for (const off of D.offs) { const px = c.x + fxh * off, pz = c.z + fzh * off, dx = o[0] - px, dz = o[1] - pz, dd = Math.hypot(dx, dz), m = o[2] + D.r; if (dd >= m || dd < 1e-3) continue;
+          const nx = dx / dd, nz = dz / dd; c.x -= nx * (m - dd); c.z -= nz * (m - dd); c.wx = o[0] - nx * o[2]; c.wz = o[1] - nz * o[2]; hitWall(c, nx, nz, dt, sp); break; } } }
+    // pente : on ralentit en montée, on prend de la vitesse en descente
+    if (c.gPitch) c.v -= 9.8 * Math.sin(c.gPitch) * dt;
   }
   if (T.libre) { if (prev !== c.idx) { let dd = c.idx - prev; if (dd > N / 2) dd -= N; if (dd < -N / 2) dd += N; G.dist += Math.abs(dd) * T.ds; } return; }
   if (prev > N * 0.75 && c.idx < N * 0.25) { c.lap++; onLap(c); }
@@ -1093,9 +1112,10 @@ function chaseCam(c, dt, snap) {
   const i = T.nearest(x, z, c.idx, 10), d = T.lateral(x, z, i);
   if (Math.abs(d) > T.limit + 0.5) { const s = Math.sign(d), p = Math.abs(d) - T.limit - 0.5; x -= -T.tz[i] * s * p; z -= T.tx[i] * s * p; }
   const shake = (c.bump || 0) * 0.25 + ratio * ratio * 0.012 + (c.boosting ? 0.02 : 0);
-  camPos.set(x + (Math.random() - 0.5) * shake, hgt + (Math.random() - 0.5) * shake, z);
+  const gC = c.gY || 0, gCam = G.solid ? Math.max(gC, groundAt(x, z, c.idx) + 0.8) : 0;
+  camPos.set(x + (Math.random() - 0.5) * shake, Math.max(hgt + gC, gCam + 0.6) + (Math.random() - 0.5) * shake, z);
   camera.position.copy(camPos); // position rigide : pas de retard qui éloignerait le véhicule à haute vitesse
-  camLook.set(c.x - Math.sin(camH) * 7, (moto ? 0.45 : 0.85) + c.y * (c.fly ? 1 : 0.8), c.z - Math.cos(camH) * 7);
+  camLook.set(c.x - Math.sin(camH) * 7, (moto ? 0.45 : 0.85) + c.y * (c.fly ? 1 : 0.8) + gC, c.z - Math.cos(camH) * 7);
   camera.lookAt(camLook);
   camRoll += ((moto ? c.vis.roll * 0.3 : clamp(-c.yaw * 0.07, -0.05, 0.05)) - camRoll) * (1 - Math.exp(-5 * dt)); camera.rotateZ(camRoll);
   setFov(fov, snap ? 0 : dt);
@@ -1203,11 +1223,11 @@ function buildSetup(type) {
   filtre();
   chips($('diffs'), DIFFS.map((d, i) => [i, d.nom]), () => setup.diff, (v) => { setup.diff = v; });
   chips($('laps'), [[1, '1'], [3, '3'], [5, '5'], [10, '10'], [25, '25'], [99, '99']], () => setup.laps, (v) => { setup.laps = v; });
-  chips($('ambs'), [['def', "D'origine"], ['jour', 'Jour'], ['nuit', 'Nuit'], ['orage', 'Orage violent']], () => setup.amb, (v) => { setup.amb = v; });
+  chips($('ambs'), [['def', "D'origine"], ['jour', 'Jour'], ['aube', 'Aube'], ['nuit', 'Nuit'], ['brouillard', 'Brouillard'], ['orage', 'Orage violent'], ['blizzard', 'Blizzard'], ['sable', 'Tempête de sable']], () => setup.amb, (v) => { setup.amb = v; });
   chips($('lignes'), [[false, 'Masquée'], [true, 'Affichée']], () => opts.ligne, (v) => { opts.ligne = v; store.set('opts', opts); });
   chips($('obst'), [[0, 'Aucun'], [1, 'Parfois'], [2, 'Souvent'], [3, 'Chaos']], () => setup.obst, (v) => { setup.obst = v; });
   chips($('bots'), [[1, '1'], [3, '3'], [5, '5'], [7, '7'], [11, '11'], [15, '15'], [23, '23'], [31, '31']], () => setup.bots, (v) => { setup.bots = v; });
-  chips($('routes'), [['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
+  chips($('routes'), [['monde', 'Monde ouvert · vallée de 7 km'], ['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
   chips($('teams'), [[1, '1 contre 1'], [2, '2 contre 2'], [3, '3 contre 3']], () => setup.team, (v) => { setup.team = v; });
   chips($('durs'), [[120, '2 min'], [180, '3 min'], [300, '5 min']], () => setup.dur, (v) => { setup.dur = v; });
 }
@@ -1475,7 +1495,7 @@ function showGains() {
 function settleFree() { if (G.type === 'free' && (mode === 'race' || mode === 'pause')) { const g = payout(); if (g && g.tot) toast('Balade : +' + cr(g.tot)); } }
 function startGame(type) {
   if (!gp.on) store.set('setup', setup); store.set('car', CARS[selCar].id);
-  show('loading'); $('loadmsg').textContent = type === 'foot' ? 'Foot Turbo' : type === 'free' ? (setup.route === 'ligne' ? ROUTE_LIGNE : ROUTE_LIBRE).nom : TRACKS[setup.track].nom;
+  show('loading'); $('loadmsg').textContent = type === 'foot' ? 'Foot Turbo' : type === 'free' ? (setup.route === 'ligne' ? ROUTE_LIGNE : setup.route === 'monde' ? ROUTE_MONDE : ROUTE_LIBRE).nom : TRACKS[setup.track].nom;
   setTimeout(() => {
     RU = (type !== 'foot' && type !== 'free' && TRACKS[setup.track].regles) || REGLES_BASE;
     G.dr = { cur: 0, total: 0, hold: 0 }; G.paid = false; G.sonic = false; music.setDuck(1);
@@ -1494,12 +1514,12 @@ function startGame(type) {
       }
       kickoff(); raceTime = 0;
     } else if (type === 'free') {
-      const route = setup.route === 'ligne' ? 'ligne' : 'libre';
+      const route = setup.route === 'ligne' || setup.route === 'monde' ? setup.route : 'libre';
       ensureWorld(route); clearGame();
       G.boost = true; G.drain = 30; G.regen = 7;
       player = makeCarEntity(CARS[selCar], carColor(CARS[selCar]), true, 'Toi', DIFFS[1]);
       T.point(5, 2.3, tmp); Object.assign(player, { x: tmp.x, z: tmp.z, h: T.heading(5), idx: 5 });
-      if (route === 'libre') spawnTraffic(22);
+      if (route === 'libre') spawnTraffic(22); else if (route === 'monde') spawnTraffic(14);
       { const pc = obstaclePreset(setup.obst, T.L); spawnObstacles(pc.obstacles, pc.tremplins, pc.turbos); }
       raceTime = 0;
     } else {
@@ -1688,7 +1708,7 @@ function iconTex(it) {
 function ambientFx(dt, focus) {
   if (!focus || mode === 'pause' || !world || !world.theme) return;
   const th = world.theme, fwd = camera.getWorldDirection(sunW);
-  if (world.rain && world.rain.visible && th.rain !== 'neige') { const n = th.orage ? 7 : 2;
+  if (world.rain && world.rain.visible && th.rain === true) { const n = th.orage ? 7 : 2;
     for (let i = 0; i < n; i++) { const d = 4 + Math.random() * 30, a = (Math.random() - 0.5) * 1.6, x = camera.position.x + (fwd.x * Math.cos(a) - fwd.z * Math.sin(a)) * d, z = camera.position.z + (fwd.z * Math.cos(a) + fwd.x * Math.sin(a)) * d; fx.splash(x, 0.05, z, 0, 0, 0.45); } }
   if (th.feuille && Math.random() < 0.7) { const d = 4 + Math.random() * 40, a = (Math.random() - 0.5) * 2, x = camera.position.x + (fwd.x * Math.cos(a) - fwd.z * Math.sin(a)) * d, z = camera.position.z + (fwd.z * Math.cos(a) + fwd.x * Math.sin(a)) * d, k = Math.random(); fx.leaf(x, 2 + Math.random() * 7, z, 0.9 - 0.3 * k, 0.25 + 0.4 * k, 0.05); }
   if (th.braises) for (let i = 0; i < 3; i++) { const d = 5 + Math.random() * 45, a = (Math.random() - 0.5) * 2, x = camera.position.x + (fwd.x * Math.cos(a) - fwd.z * Math.sin(a)) * d, z = camera.position.z + (fwd.z * Math.cos(a) + fwd.x * Math.sin(a)) * d; fx.ember(x, Math.random() * 7, z, 3, 4, 1); }
@@ -1714,6 +1734,7 @@ function stepStorm(dt) {
   const on = world && world.theme && world.theme.orage && mode !== 'loading';
   const pl = world && world.theme && world.theme.rain === true && (mode === 'race' || mode === 'count') ? (world.theme.orage ? 1 : 0.55) : 0;
   audio.rain(pl);
+  audio.wind(world && world.theme && world.theme.vent && (mode === 'race' || mode === 'count') ? 1 : 0);
   if (!on) { if (renderer.toneMappingExposure !== 0.95) renderer.toneMappingExposure = 0.95; if (storm.bolt) storm.bolt.visible = false; storm.flash = 0; return; }
   if (mode === 'pause') return;
   storm.t -= dt; if (storm.t <= 0) { storm.t = 2 + Math.random() * 7; strikeBolt(); }
@@ -1852,7 +1873,13 @@ function emit(c, dt) {
 function syncVisuals(dt) {
   for (const c of cars) {
     if (c.out) continue;
-    c.vis.root.position.set(c.x, c.y, c.z); c.vis.root.rotation.set(c.pitch, c.h + c.spinA + c.driftA, 0);
+    let gy = 0, gp = 0, gr = 0;
+    if (G.solid) { const h = c.h, fx_ = -Math.sin(h), fz_ = -Math.cos(h), hw = Math.max(0.8, c.vis.half);
+      gy = groundAt(c.x, c.z, c.idx); const f = groundAt(c.x + fx_ * 1.6, c.z + fz_ * 1.6, c.idx), bk = groundAt(c.x - fx_ * 1.6, c.z - fz_ * 1.6, c.idx);
+      const rt = groundAt(c.x - fz_ * hw, c.z + fx_ * hw, c.idx), lf = groundAt(c.x + fz_ * hw, c.z - fx_ * hw, c.idx);
+      gp = Math.atan2(f - bk, 3.2); gr = Math.atan2(rt - lf, hw * 2); }
+    c.gY = gy; c.gPitch = (c.gPitch || 0) + (gp - (c.gPitch || 0)) * Math.min(1, dt * 10); c.gRoll = (c.gRoll || 0) + (gr - (c.gRoll || 0)) * Math.min(1, dt * 10);
+    c.vis.root.position.set(c.x, c.y + gy, c.z); c.vis.root.rotation.set(c.pitch + c.gPitch, c.h + c.spinA + c.driftA, c.gRoll);
     if (c.vis.root.scale.x !== c.scale) c.vis.root.scale.setScalar(c.scale);
     setGhost(c.vis, c.ghostT > 0);
     if (G.type === 'items') { if (c.item && !c.vis.itemSp) { c.vis.itemSp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false })); c.vis.itemSp.layers.set(1); c.vis.root.add(c.vis.itemSp); }
@@ -1864,7 +1891,7 @@ function syncVisuals(dt) {
     if (c.vis.heads) { const dx = camera.position.x - c.x, dz = camera.position.z - c.z, dl = Math.hypot(dx, dz) || 1, f = (-Math.sin(c.h) * dx - Math.cos(c.h) * dz) / dl;
       for (const hd of c.vis.heads) hd.material.opacity *= clamp(f * 2 + 0.2, 0, 1); for (const g of c.vis.glows) g.material.opacity *= clamp(-f * 2 + 0.4, 0, 1); }
     if (world.sun && c.vis.shadow) { const sx = -world.sun[0] * 1.1, sz = -world.sun[1] * 1.1, ch = Math.cos(c.h), sh = Math.sin(c.h); c.vis.shadow.position.set(sx * ch - sz * sh, 0.015 - c.y, sx * sh + sz * ch); }
-    emit(c, dt);
+    fx.setGround(c.gY || 0); emit(c, dt); fx.setGround(0);
   }
 }
 let last = performance.now(), hudT = 0, fpsAcc = 0, fpsN = 0, good = 0;
@@ -1941,14 +1968,14 @@ function frame(now) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').hidden = true; }
   if (mode !== 'pause') fx.update(dt);
   if (focus) world.update(camera, dt, time, focus.idx || 0);
-  { const wd = world.theme && world.theme.orage ? 16 + Math.sin(time * 0.7) * 8 : world.theme && world.theme.rain === true ? 3 + Math.sin(time * 0.4) * 2 : 0;
+  { const wd = world.theme && world.theme.vent ? 24 + Math.sin(time * 0.6) * 9 + Math.sin(time * 2.3) * 4 : world.theme && world.theme.orage ? 16 + Math.sin(time * 0.7) * 8 : world.theme && world.theme.rain === true ? 3 + Math.sin(time * 0.4) * 2 : 0;
     world.updateRain(camera, mode === 'pause' ? 0 : dt, focus ? -Math.sin(focus.h) * focus.v : 0, focus ? -Math.cos(focus.h) * focus.v : 0, wd, wd * 0.4);
     if (world.rain) world.rain.material.uniforms.flash.value = Math.max(0, storm.flash); }
   if (composer) {
     finalPass.uniforms.amt.value = blur; finalPass.uniforms.time.value = time;
-    { const th = world.theme || {}, wetAir = th.rain === true ? (th.orage ? 1 : 0.6) : 0; bloomPass.strength += ((world.day && !th.rain ? 0.28 : 0.42) + 0.22 * wetAir - bloomPass.strength) * Math.min(1, dt * 2); bloomPass.radius = 0.6 + 0.25 * wetAir; bloomPass.threshold = world.day && !th.rain ? 1.7 : 1.0; finalPass.uniforms.brume.value = wetAir; finalPass.uniforms.jour.value = world.day && !th.rain ? 1 : 0; }
+    { const th = world.theme || {}, wetAir = th.rain === true ? (th.orage ? 1 : 0.6) : 0; bloomPass.strength += ((world.day && !th.rain ? 0.28 : 0.42) + 0.22 * wetAir - bloomPass.strength) * Math.min(1, dt * 2); bloomPass.radius = 0.6 + 0.25 * wetAir; bloomPass.threshold = world.day && !th.rain ? 1.7 : 1.0; finalPass.uniforms.brume.value = wetAir; finalPass.uniforms.jour.value = world.day && !th.rain ? 1 : 0; finalPass.uniforms.rayons.value = th.rayons ?? 0.6; }
     { const u = finalPass.uniforms, th = world.theme || {}, race = (mode === 'race' || mode === 'count') && player, kp = 1 - Math.exp(-6 * dt);
-      u.pluie.value += (Math.max(world.rain && world.rain.visible && th.rain !== 'neige' ? (th.orage ? 1 : 0.45) : 0, race ? G.lens : 0) - u.pluie.value) * Math.min(1, kp * (G.lens > u.pluie.value ? 4 : 1));   // une flaque traversée mouille l'objectif
+      u.pluie.value += (Math.max(world.rain && world.rain.visible && th.rain === true ? (th.orage ? 1 : 0.45) : 0, race ? G.lens : 0) - u.pluie.value) * Math.min(1, kp * (G.lens > u.pluie.value ? 4 : 1));   // une flaque traversée mouille l'objectif
       u.vit.value += ((race ? clamp((Math.abs(player.v) - 60) / 70, 0, 1) : 0) - u.vit.value) * kp;
       u.pousse.value += ((race && player.boosting ? (player.nitroT > 0 ? 1.4 : 1) : 0) - u.pousse.value) * kp; }
     const fu = finalPass.uniforms; fu.sunVis.value = 0;

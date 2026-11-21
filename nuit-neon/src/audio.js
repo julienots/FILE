@@ -439,3 +439,16 @@ export function offroad(amount) {
   const a = on ? Math.min(1, Math.max(0, amount)) : 0, t = ctx.currentTime;
   offG.gain.setTargetAtTime(a * (0.32 + Math.random() * 0.12), t, 0.05); if (a > 0) offF.frequency.setTargetAtTime(500 + a * 900 + Math.random() * 300, t, 0.08);
 }
+
+// vent de tempête (blizzard, tempête de sable) : souffle grave et sifflement aigu qui montent et retombent par rafales
+let ventG = null, ventF = null, ventH = null, ventT = 0;
+export function wind(level) {
+  if (!ctx) return;
+  if (!ventG) { const s = ctx.createBufferSource(); s.buffer = noise(); s.loop = true; ventF = ctx.createBiquadFilter(); ventF.type = 'bandpass'; ventF.frequency.value = 400; ventF.Q.value = 0.8;
+    ventH = ctx.createBiquadFilter(); ventH.type = 'bandpass'; ventH.frequency.value = 1800; ventH.Q.value = 6; const hg = ctx.createGain(); hg.gain.value = 0.35;
+    ventG = ctx.createGain(); ventG.gain.value = 0; s.connect(ventF); ventF.connect(ventG); s.connect(ventH); ventH.connect(hg); hg.connect(ventG); ventG.connect(master); s.start(); }
+  const t = ctx.currentTime; ventT += 0.016;
+  const gust = 0.55 + 0.3 * Math.sin(ventT * 0.9) + 0.15 * Math.sin(ventT * 2.7 + 1.3);
+  ventG.gain.setTargetAtTime(on ? level * 0.22 * gust : 0, t, 0.25);
+  ventF.frequency.setTargetAtTime(280 + gust * 380, t, 0.3); ventH.frequency.setTargetAtTime(1300 + gust * 1100, t, 0.3);
+}

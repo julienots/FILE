@@ -153,6 +153,13 @@ export const ROUTE_LIGNE = { id: 'ligne', nom: 'Ligne Droite', desc: 'Balade san
   pts: [[0,0],[0,-1500],[0,-3000],[120,-3220],[330,-3290],[540,-3220],[660,-3000],[660,-1500],[660,0],[540,220],[330,290],[120,220]],
   theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 700, 22, 300, 0.8, 2.0], ['rocher', 60, 18, 220, 0.4, 1.0]] }) };
 
+// Monde ouvert : une grande vallée de 7 km sur 5 traversée par une route de campagne. On peut quitter la route
+// et rouler partout (prés, collines, forêts) jusqu'à 450 m de part et d'autre ; arbres et rochers sont des obstacles.
+export const ROUTE_MONDE = { id: 'monde', nom: 'Vallée Ouverte', desc: 'Monde ouvert', echelle: 1, half: 5.5, limit: 450, libre: true, ouvert: true,
+  pts: [[0,0],[0,-700],[250,-1500],[900,-2100],[1800,-2300],[2700,-2000],[3300,-1300],[3500,-400],[3200,500],[3600,1300],[3300,2200],[2400,2600],[1400,2400],[700,1800],[300,1100]],
+  theme: Object.assign({}, NATURE.prairie, { relief: 30, dens: 0.0011,
+    flore: [['feuillu', 820, 14, 420, 0.8, 2.0], ['sapin', 380, 30, 440, 0.8, 1.7], ['rocher', 110, 20, 440, 0.5, 1.6]] }) };
+
 // Ambiance choisie au départ : chaque circuit peut se courir de jour, de nuit ou sous un orage violent.
 // On part du décor d'origine et on change le ciel, la lumière, le brouillard et la météo.
 export function ambiance(th, mode) {
@@ -166,6 +173,23 @@ export function ambiance(th, mode) {
     if (city) return th;                                   // les circuits de ville sont déjà de nuit
     Object.assign(o, { sky: [[0.004, 0.008, 0.03], [0.015, 0.03, 0.09], [0.04, 0.07, 0.16]], fog: 0x070b18, dens: th.dens * 1.15, sun: { dir: [0.3, 0.55, -0.78], col: [0.6, 0.7, 1.0], road: 0.9 },
       sunI: 0.6, ambI: 0.42, cloud: 0.16, phares: true, flare: 0.3, ombre: 0.25, nuit: true });
+  } else if (mode === 'aube') {
+    // lever du soleil : soleil rasant rose-orangé, longues ombres, brume dorée au ras du sol
+    if (city) return ambiance(th, 'jour');
+    Object.assign(o, { sky: [[0.12, 0.16, 0.40], [0.86, 0.56, 0.52], [1.0, 0.70, 0.42]], fog: 0xe8b090, dens: th.dens * 1.5, sun: { dir: [0.62, 0.1, -0.78], col: [1.0, 0.62, 0.36], road: 2.6 },
+      sunI: 2.3, ambI: 1.15, cloud: 0.85, phares: false, flare: 1.2, ombre: 0.5, rayons: 1.5 });
+  } else if (mode === 'brouillard') {
+    // brouillard épais : on voit à peine à 100 m, lumière blanche diffuse, chaussée humide, rayons de soleil dans la brume
+    Object.assign(o, { fog: city ? new Color(th.fog).lerp(new Color(0x8890a0), 0.6).getHex() : 0xc4c8cc, dens: Math.max(0.011, th.dens * 4), wet: 0.8, phares: true, flare: 0.6, ombre: 0.15, rayons: 2.2, cloud: 0.6 });
+    if (!city) Object.assign(o, { sky: [[0.55, 0.58, 0.62], [0.72, 0.74, 0.76], [0.80, 0.81, 0.82]], sun: { dir: [0.3, 0.35, -0.89], col: [0.95, 0.92, 0.85], road: 1.2 }, sunI: 1.4, ambI: 1.6 });
+  } else if (mode === 'blizzard') {
+    // blizzard : neige poussée à l'horizontale par un vent violent, tout blanchit, on voit à 80 m
+    Object.assign(o, { rain: 'neige', tempete: true, vent: 1, blanc: 0.8, wet: 0.9, phares: true, flare: 0, ombre: 0.1, dens: Math.max(0.012, th.dens * 4.5), fog: city ? 0x5a6478 : 0xc8d2de, nuit: !city ? false : th.nuit });
+    if (!city) Object.assign(o, { sky: [[0.50, 0.55, 0.62], [0.68, 0.72, 0.78], [0.78, 0.82, 0.86]], sun: { dir: [0.2, 0.6, -0.77], col: [0.8, 0.85, 0.95], road: 0.8 }, sunI: 1.1, ambI: 1.9, cloud: 0.4 });
+  } else if (mode === 'sable') {
+    // tempête de sable : ciel ocre, soleil voilé en disque pâle, sable qui file au ras du sol, rafales
+    Object.assign(o, { rain: 'sable', tempete: true, vent: 1, wet: 0.05, phares: true, flare: 0.3, ombre: 0.2, dens: Math.max(0.014, th.dens * 4.5), fog: city ? 0x6a4424 : 0xc08a50, rayons: 0.8 });
+    if (!city) Object.assign(o, { sky: [[0.45, 0.30, 0.16], [0.72, 0.50, 0.28], [0.82, 0.60, 0.36]], sun: { dir: [0.3, 0.45, -0.84], col: [1.0, 0.78, 0.5], road: 1.4 }, sunI: 1.7, ambI: 1.4, cloud: 0.35 });
   } else if (mode === 'orage') {
     Object.assign(o, { orage: true, rain: th.rain === 'neige' ? 'neige' : true, wet: 1, phares: true, flare: 0, dens: th.dens * 2.1, ombre: 0.2 });
     if (city) { o.sky = [[0.0, 0.0, 0.015], [0.03, 0.03, 0.07], [0.09, 0.08, 0.14]]; o.fog = new Color(th.fog).multiplyScalar(0.45).getHex(); }

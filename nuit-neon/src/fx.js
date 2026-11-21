@@ -41,6 +41,7 @@ class Pool {
     this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.layers.set(1); this.points.renderOrder = additive ? 9 : 8;
   }
   spawn(x, y, z, vx, vy, vz, life, s0, s1, r, g, b, a, grav = 0, drag = 1) {
+    y += OFF;
     const i = this.i; this.i = (i + 1) % this.n;
     this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z; this.v[i * 3] = vx; this.v[i * 3 + 1] = vy; this.v[i * 3 + 2] = vz;
     this.life[i] = life; this.max[i] = life; this.s0[i] = s0; this.s1[i] = s1; this.a0[i] = a; this.grav[i] = grav; this.drag[i] = drag;
@@ -62,6 +63,8 @@ class Pool {
   clear() { this.life.fill(0); }
 }
 
+// monde ouvert : hauteur du sol sous la voiture qui émet (les effets naissent au bon niveau sur les collines)
+let OFF = 0;
 export class FX {
   constructor(scene) {
     this.smokeP = new Pool(1100, false, FRAG_SMOKE); this.fireP = new Pool(420, true); this.dropP = new Pool(900, false, FRAG, true);
@@ -148,6 +151,7 @@ export class FX {
     for (let i = 0; i < 5 + 7 * power; i++) { const s = i % 2 ? 1 : -1, k = 0.8 + Math.random() * 0.2;
       this.smokeP.spawn(x - fz_ * s * half, 0.2, z + fx_ * s * half, -fz_ * s * (2 + Math.random() * 4) + vx * 0.3, 1.5 + Math.random() * 3.5 * power, fx_ * s * (2 + Math.random() * 4) + vz * 0.3, 0.7 + Math.random() * 0.7, 0.6, 4.2 * power, 0.85 * k * w, 0.9 * k * w, 0.97 * k * w, 0.34, 2.2, 1.6); }
   }
+  setGround(h) { OFF = h; }
   update(dt) { this.t += dt; this.smokeP.mat.uniforms.time.value = this.t; this.smokeP.update(dt); this.fireP.update(dt); this.dropP.update(dt); }
   clear() { this.smokeP.clear(); this.fireP.clear(); this.dropP.clear(); }
 }
@@ -165,8 +169,8 @@ export class Skids {
   mark(tr, x, z, w = 0.24) {
     if (tr) { const dx = x - tr.x, dz = z - tr.z, l = Math.hypot(dx, dz);
       if (l > 0.25 && l < 6) { const nx = -dz / l * w / 2, nz = dx / l * w / 2, k = this.i * 12, p = this.p; this.i = (this.i + 1) % this.n;
-        p[k] = tr.x - nx; p[k + 1] = 0.022; p[k + 2] = tr.z - nz; p[k + 3] = tr.x + nx; p[k + 4] = 0.022; p[k + 5] = tr.z + nz;
-        p[k + 6] = x - nx; p[k + 7] = 0.022; p[k + 8] = z - nz; p[k + 9] = x + nx; p[k + 10] = 0.022; p[k + 11] = z + nz;
+        p[k] = tr.x - nx; p[k + 1] = 0.022 + OFF; p[k + 2] = tr.z - nz; p[k + 3] = tr.x + nx; p[k + 4] = 0.022 + OFF; p[k + 5] = tr.z + nz;
+        p[k + 6] = x - nx; p[k + 7] = 0.022 + OFF; p[k + 8] = z - nz; p[k + 9] = x + nx; p[k + 10] = 0.022 + OFF; p[k + 11] = z + nz;
         this.mesh.geometry.attributes.position.needsUpdate = true; }
       else if (l <= 0.25) return tr; }
     return { x, z };
