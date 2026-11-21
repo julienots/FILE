@@ -487,6 +487,7 @@ void registerRenderComponents() {
         .field("sheet", &SpriteRendererComponent::sheet, {.tooltip = "Sprite sheet (.agrsheet): texture and frames", .flags = FieldFlag_AssetPath})
         .field("frame", &SpriteRendererComponent::frame, {.tooltip = "Frame index in the sheet (-1 = none)", .rangeMin = -1, .rangeMax = 100000, .speed = 0.2f})
         .field("lit", &SpriteRendererComponent::lit, {.tooltip = "Lit by Light2D components"})
+        .field("shader", &SpriteRendererComponent::shader, {.tooltip = "Sprite shader (.agrshader with void sprite(inout Sprite s))", .flags = FieldFlag_AssetPath})
         .field("normalMap", &SpriteRendererComponent::normalMap,
                {.tooltip = "Normal map of the texture (lit sprites): the lights shade its relief", .flags = FieldFlag_AssetPath});
 

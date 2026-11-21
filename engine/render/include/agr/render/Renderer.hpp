@@ -128,6 +128,7 @@ struct RenderStats {
     bool screenSpaceReflections = false;  ///< SSR pass this frame.
     u32 morphedMeshes = 0;        ///< Meshes drawn with blended morph targets.
     bool temporalAA = false;      ///< TAA pass this frame.
+    u32 shadedSprites = 0;        ///< Sprites drawn with a sprite shader.
     bool motionBlur = false;      ///< Motion blur pass this frame.
     bool autoExposure = false;    ///< Auto exposure measured this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
@@ -433,6 +434,16 @@ private:
     MaterialLibrary* m_materials = nullptr;
     ParticleCurvesLibrary* m_particleCurves = nullptr;
     ShaderLibrary* m_shaders = nullptr;
+    /// Sprite shaders: pipeline per .agrshader (rebuilt when the file changes); items use
+    /// pipeline id 4 + index in m_spriteShaderPipelines.
+    struct SpriteShader {
+        u32 index = 0;
+        u64 version = 0;
+        bool ok = false;
+    };
+    std::unordered_map<std::string, SpriteShader> m_spriteShaders;
+    std::vector<rhi::PipelineHandle> m_spriteShaderPipelines;
+    i32 spriteShaderPipeline(const std::string& uri);  ///< -1: standard drawing
     // Custom shaders: pipeline ids kCustomPipelineBase + set * kCustomStride + variant
     // (alphaMode * 2 + doubleSided); compiled on first use, rebuilt when the source changes.
     static constexpr u32 kCustomPipelineBase = 1000, kCustomStride = 8;

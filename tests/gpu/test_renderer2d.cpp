@@ -7,6 +7,7 @@
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/render/ShaderLibrary.hpp"
 #include "agr/render/Skin2D.hpp"
 #include "agr/render/ParticleCurves.hpp"
 #include "agr/twod/Particles2D.hpp"
@@ -457,6 +458,32 @@ TEST_CASE("particles: lit 2D particles follow the Light2D") {
     l.radius = 6.0f;
     f.frame();
     CHECK_MESSAGE(pixel(*gpu().device, 32, 32).r > 150, pixel(*gpu().device, 32, 32));
+}
+
+TEST_CASE("sprite shaders: sprite(inout Sprite s) with parameters, uv and fallback") {
+    Render2DFixture f;
+    ShaderLibrary shaders(f.vfs);
+    f.renderer.setShaders(&shaders);
+    f.camera();
+    REQUIRE(f.vfs.writeText("assets://split.agrshader",
+                            "param color tint = (0.0, 1.0, 0.0, 1.0);\n"
+                            "void sprite(inout Sprite s) {\n"
+                            "    s.color.rgb = tint.rgb;\n"
+                            "    if (s.uv.x > 0.5) s.color.rgb = vec3(0.0, 0.0, 1.0);\n"
+                            "}\n"));
+    const auto sp = f.sprite({0, 0, 0}, 8.0f);
+    f.scene.registry().get<SpriteRendererComponent>(sp).shader = "assets://split.agrshader";
+    f.frame();
+    CHECK(f.renderer.stats().shadedSprites == 1);
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32 - 10, 32), 0, 255, 0), pixel(*gpu().device, 22, 32));
+    CHECK_MESSAGE(near(pixel(*gpu().device, 32 + 10, 32), 0, 0, 255), pixel(*gpu().device, 42, 32));
+    // Broken shader: drawn as a plain sprite (white), no crash.
+    REQUIRE(f.vfs.writeText("assets://broken.agrshader", "void sprite(inout Sprite s) { s.color = undefinedThing; }\n"));
+    f.scene.registry().get<SpriteRendererComponent>(sp).shader = "assets://broken.agrshader";
+    f.frame();
+    CHECK(f.renderer.stats().shadedSprites == 0);
+    CHECK(near(pixel(*gpu().device, 32, 32), 255, 255, 255));
+    CHECK(gpu().device->validationErrorCount() == 0);
 }
 
 TEST_CASE("particles: over-lifetime curves and flipbook frames") {

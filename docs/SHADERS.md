@@ -48,6 +48,32 @@ constantes) sont autorisées.
 `TIME` donne le temps en secondes (horloge de rendu, qui avance aussi en mode édition). Les fonctions
 GLSL standard (`sin`, `mix`, `texture`, `smoothstep`…) sont disponibles.
 
+## Shaders de sprites (2D)
+
+Le même format sert aux sprites : un `.agrshader` avec `void sprite(inout Sprite s)`, choisi dans
+`SpriteRenderer.shader` (contours, dissolution, flash de dégâts, ondulation, changement de palette).
+
+```glsl
+param color flash = (1.0, 1.0, 1.0, 1.0);
+param float speed = 6.0;
+
+void sprite(inout Sprite s) {
+    float k = 0.5 + 0.5 * sin(TIME * speed);
+    s.color.rgb = mix(s.color.rgb, flash.rgb, k * s.color.a);   // clignote vers la couleur
+    // Un pixel voisin : texture(TEXTURE, s.uv + vec2(0.01, 0.0))
+}
+```
+
+| `Sprite s` | Rôle |
+|---|---|
+| `color` (vec4) | texture × teinte du sprite (linéaire), à écrire |
+| `uv`, `tint`, `worldPos` | lecture : coordonnées de texture, couleur du sprite, position monde (xy) |
+
+`TIME` et `TEXTURE` (la texture du sprite) sont disponibles. Les paramètres prennent leur **valeur par
+défaut** (pas de réglage par sprite) ; un paramètre `texture` désigne la texture du sprite. Les sprites
+avec shader ne sont pas éclairés par les `Light2D`. Un shader invalide est signalé une fois dans la
+console et le sprite est dessiné normalement.
+
 ## Paramètres
 
 ```glsl
@@ -106,7 +132,7 @@ Un fichier modifié hors de l'éditeur est rechargé automatiquement (comme les 
 
 ## Limites actuelles
 
-- Shaders de surface pour le rendu 3D PBR uniquement : pas de shaders pour les sprites, l'interface,
+- Shaders de surface pour le rendu 3D PBR et shaders de sprites non éclairés : pas de shaders pour l'interface,
   le ciel, l'eau, le terrain ni le post-traitement ; pas d'éditeur de shaders par nœuds (graphe).
 - La passe d'ombre applique `vertex` mais pas `surface` : un shader qui découpe des trous dans
   `surface` garde une ombre pleine (utiliser le mode de transparence *Découpe* du matériau).

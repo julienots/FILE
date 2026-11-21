@@ -93,6 +93,7 @@ Renderer::~Renderer() {
     m_device.destroyTexture(m_shadow2D);
     m_device.destroyRenderTarget(m_shadowTarget);
     m_device.destroyRenderTarget(m_spotShadowTarget);
+    for (rhi::PipelineHandle p : m_spriteShaderPipelines) m_device.destroyPipeline(p);
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteLitNormalPipeline);
@@ -726,8 +727,14 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             if (s.flipY) std::swap(item.uv.y, item.uv.w);
             item.color = packColor(s.color);
             item.pipeline = s.lit ? 1u : 0u;
+            if (!s.shader.empty()) {
+                if (const i32 custom = spriteShaderPipeline(s.shader); custom >= 0) {
+                    item.pipeline = 4u + static_cast<u32>(custom);
+                    ++m_stats.shadedSprites;
+                }
+            }
             item.texture = textureFor(texture, pixelArt);
-            if (s.lit && !s.normalMap.empty()) {
+            if (s.lit && !s.normalMap.empty() && item.pipeline < 4) {
                 item.normalMap = resolveDataTexture(s.normalMap, pixelArt);
                 item.pipeline = 3;
                 ++m_stats.normalMappedSprites;
@@ -1313,6 +1320,64 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     m_stats.cpuMs = cpu.elapsedMilliseconds();
 }
 
+i32 Renderer::spriteShaderPipeline(const std::string& uri) {
+    if (uri.empty() || !m_shaders) return -1;
+    const ShaderAsset* asset = m_shaders->get(uri);
+    if (!asset) return -1;
+    SpriteShader& entry = m_spriteShaders[uri];
+    if (entry.version == asset->version + 1) return entry.ok ? static_cast<i32>(entry.index) : -1;
+    entry.version = asset->version + 1;
+    entry.ok = false;
+    if (!asset->parsed.valid() || !asset->parsed.hasSprite) {
+        AGR_LOG_WARN("Render", "sprite shader '{}': {}", uri, asset->parsed.valid() ? "no 'void sprite(inout Sprite s)' function" : asset->parsed.errors[0].message);
+        return -1;
+    }
+    // Parameters: constants with their default values (colors converted to linear).
+    std::string consts;
+    for (const ShaderParam& p : asset->parsed.params) {
+        const math::Vec4 v = p.defaultValue;
+        switch (p.type) {
+            case ShaderParamType::Float: consts += std::format("const float {} = {};\n", p.name, v.x); break;
+            case ShaderParamType::Vec2: consts += std::format("const vec2 {} = vec2({}, {});\n", p.name, v.x, v.y); break;
+            case ShaderParamType::Vec3: consts += std::format("const vec3 {} = vec3({}, {}, {});\n", p.name, v.x, v.y, v.z); break;
+            case ShaderParamType::Vec4: consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, v.x, v.y, v.z, v.w); break;
+            case ShaderParamType::Color: {
+                const math::Vec3 l = detail::srgbToLinear(math::Color{v.x, v.y, v.z, v.w});
+                consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, l.x, l.y, l.z, v.w);
+                break;
+            }
+            case ShaderParamType::Texture: consts += std::format("#define {} u_texture\n", p.name); break;  // the sprite's own texture
+        }
+    }
+    rhi::PipelineDesc d;
+    d.debugName = "agr.sprite.custom";
+    d.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kSpriteVertex;
+    d.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kSpriteShaderPrefix + consts + "#line 1 1\n" + asset->parsed.code + shaders::kSpriteShaderMain;
+    d.layout.stride = sizeof(SpriteVertex);
+    d.layout.attributes = {{0, rhi::VertexFormat::Float3, offsetof(SpriteVertex, position)},
+                           {1, rhi::VertexFormat::Float2, offsetof(SpriteVertex, uv)},
+                           {2, rhi::VertexFormat::UByte4Norm, offsetof(SpriteVertex, color)}};
+    d.cull = rhi::CullMode::None;
+    d.blend = rhi::BlendMode::Alpha;
+    d.depthWrite = false;
+    d.uniformBlocks = {"FrameData"};
+    d.samplers = {"u_texture"};
+    auto p = m_device.createPipeline(d);
+    if (!p) {
+        AGR_LOG_ERROR("Render", "sprite shader '{}' does not compile: {}", uri, p.error().message);
+        return -1;
+    }
+    if (entry.ok && entry.index < m_spriteShaderPipelines.size()) {
+        m_device.destroyPipeline(m_spriteShaderPipelines[entry.index]);
+        m_spriteShaderPipelines[entry.index] = p.value();
+    } else {
+        entry.index = static_cast<u32>(m_spriteShaderPipelines.size());
+        m_spriteShaderPipelines.push_back(p.value());
+    }
+    entry.ok = true;
+    return static_cast<i32>(entry.index);
+}
+
 void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
     if (items.empty()) return;
 
@@ -1364,8 +1429,10 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
     auto normalAt = [&](u32 i) { return items[m_spriteKeys[i].index].normalMap; };
     for (u32 i = 1; i <= count; ++i) {
         if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart) || normalAt(i) != normalAt(batchStart)) {
-            const u32 pipeline = std::min(pipelineAt(batchStart), 3u);
-            m_device.bindPipeline(pipelines[pipeline]);
+            const u32 id = pipelineAt(batchStart);
+            const u32 pipeline = std::min(id, 3u);
+            if (id >= 4 && id - 4 < m_spriteShaderPipelines.size()) m_device.bindPipeline(m_spriteShaderPipelines[id - 4]);
+            else m_device.bindPipeline(pipelines[pipeline]);
             m_device.bindTexture(0, textureAt(batchStart));
             if (pipeline == 1 || pipeline == 3) {
                 m_device.bindTexture(1, m_shadow2D ? m_shadow2D : m_assets.whiteTexture());

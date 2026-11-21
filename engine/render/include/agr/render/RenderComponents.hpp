@@ -270,6 +270,9 @@ struct SpriteRendererComponent {
     math::Vec2 size{1.0f, 1.0f};         ///< World units.
     math::Vec2 pivot{0.5f, 0.5f};        ///< 0..1, (0,0) = bottom-left.
     math::Vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};  ///< u0, v0, u1, v1 (v = 0 is the top row): sprite sheets.
+    /// Sprite shader (.agrshader with `void sprite(inout Sprite s)`): outlines, dissolves, flashes,
+    /// waves, palette swaps. Unlit sprites; empty = standard drawing.
+    std::string shader;
     bool flipX = false;
     bool flipY = false;
     i32 sortingLayer = 0;

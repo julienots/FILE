@@ -130,6 +130,34 @@ void main() {
 }
 )";
 
+/// Sprite shaders: the user's `sprite(inout Sprite s)` between this prefix and kSpriteShaderMain.
+inline constexpr const char* kSpriteShaderPrefix = R"(
+uniform sampler2D u_texture;
+in vec2 v_uv;
+in vec4 v_color;
+in vec3 v_worldPos;
+layout(location = 0) out vec4 o_color;
+struct Sprite {
+    vec4 color;        // texture * tint (linear), written back
+    vec2 uv;           // read: texture coordinates
+    vec4 tint;         // read: the sprite's color
+    vec2 worldPos;     // read: position in the world
+};
+#define TIME (u_time.x)
+#define TEXTURE u_texture
+)";
+inline constexpr const char* kSpriteShaderMain = R"(
+void main() {
+    Sprite s;
+    s.uv = v_uv;
+    s.tint = v_color;
+    s.worldPos = v_worldPos.xy;
+    s.color = texture(u_texture, v_uv) * v_color;
+    sprite(s);
+    o_color = vec4(u_fogParams.w > 0.5 ? s.color.rgb : pow(clamp(s.color.rgb, 0.0, 1.0), vec3(1.0 / 2.2)), s.color.a);
+}
+)";
+
 inline constexpr const char* kSpriteFragment = R"(
 uniform sampler2D u_texture;
 in vec2 v_uv;

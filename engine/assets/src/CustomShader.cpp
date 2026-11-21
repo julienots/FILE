@@ -37,7 +37,7 @@ const std::unordered_set<std::string_view>& reservedNames() {
         "smoothstep", "length", "distance", "dot", "cross", "normalize", "reflect", "refract", "texture", "textureLod",
         "dFdx", "dFdy", "fwidth", "round", "trunc", "transpose", "inverse", "faceforward", "matrixCompMult",
         // engine API
-        "main", "surface", "vertex", "Surface", "Vertex", "TIME", "param", "range", "srgb"};
+        "main", "surface", "vertex", "sprite", "Surface", "Vertex", "Sprite", "TIME", "TEXTURE", "param", "range", "srgb"};
     return names;
 }
 
@@ -315,8 +315,9 @@ CustomShader parseCustomShader(std::string_view source) {
     FunctionRange r;
     out.hasSurface = findFunction(clean, "surface", r);
     out.hasVertex = findFunction(clean, "vertex", r);
-    if (!out.hasSurface && !out.hasVertex)
-        out.errors.push_back({0, "no 'void surface(inout Surface s)' or 'void vertex(inout Vertex v)' function"});
+    out.hasSprite = findFunction(clean, "sprite", r);
+    if (!out.hasSurface && !out.hasVertex && !out.hasSprite)
+        out.errors.push_back({0, "no 'void surface(inout Surface s)', 'void vertex(inout Vertex v)' or 'void sprite(inout Sprite s)' function"});
 
     // Global declarations the engine generates itself.
     int depth = 0;
