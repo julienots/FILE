@@ -1234,3 +1234,37 @@ TEST_CASE("multi-selection component edits are one undo step; history jumps back
     CHECK_FALSE(f.ctx->jumpToHistory(latest));  // already there
     CHECK_FALSE(f.ctx->jumpToHistory(9999));
 }
+
+TEST_CASE("Windows export: the cross-compiled player is found in the export templates, the game is packaged") {
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    const fs::path templates = f.root / "templates";
+    const fs::path editorDir = f.root / "editor" / "bin";
+    fs::create_directories(editorDir);
+    CHECK(findWindowsPlayer(editorDir).empty());
+    fs::create_directories(templates / "windows-x64");
+    { std::ofstream(templates / "windows-x64" / "agr_player.exe") << "MZ fake player"; }
+#if defined(_WIN32)
+    _putenv_s("AGR_EXPORT_TEMPLATES", templates.string().c_str());
+#else
+    setenv("AGR_EXPORT_TEMPLATES", templates.string().c_str(), 1);
+#endif
+    const fs::path player = findWindowsPlayer(editorDir);
+#if defined(_WIN32)
+    _putenv_s("AGR_EXPORT_TEMPLATES", "");
+#else
+    unsetenv("AGR_EXPORT_TEMPLATES");
+#endif
+    REQUIRE_FALSE(player.empty());
+    CHECK(player.filename() == "agr_player.exe");
+    auto report = exportDesktop(f.ctx->project(), f.root / "out", player);
+    REQUIRE_MESSAGE(report, (report ? "" : report.error().message));
+    const bool exe = fs::exists(report.value().output / (report.value().output.filename().string() + ".exe"));
+    CHECK(exe);  // <Name>/<Name>.exe
+    CHECK(fs::exists(report.value().output / "game" / "game.json"));
+    // Next to the editor (export_templates/) also works.
+    fs::create_directories(editorDir / "export_templates" / "windows-x64");
+    fs::copy_file(templates / "windows-x64" / "agr_player.exe", editorDir / "export_templates" / "windows-x64" / "agr_player.exe");
+    CHECK_FALSE(findWindowsPlayer(editorDir).empty());
+}

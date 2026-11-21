@@ -87,6 +87,20 @@
       "cacheVariables": {
         "AGR_BUILD_EDITOR": "ON"
       }
+    },
+    {
+      "name": "windows-x64",
+      "inherits": "base",
+      "displayName": "Windows x64 (cross-compiled with MinGW-w64: game player and tests)",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "AGR_BUILD_TESTS": "ON",
+        "AGR_BUILD_BENCHMARKS": "OFF",
+        "AGR_BUILD_SANDBOX": "OFF",
+        "AGR_BUILD_EDITOR": "OFF",
+        "AGR_BUILD_PLUGINS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -125,6 +139,14 @@
       "configurePreset": "android-editor-arm64",
       "targets": [
         "agr_editor"
+      ]
+    },
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "targets": [
+        "agr_player",
+        "agr_tests"
       ]
     }
   ],

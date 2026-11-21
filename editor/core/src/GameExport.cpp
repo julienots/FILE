@@ -206,4 +206,17 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
     return report;
 }
 
+fs::path findWindowsPlayer(const fs::path& editorDirectory) {
+    std::error_code ec;
+    std::vector<fs::path> candidates;
+    if (const char* t = std::getenv("AGR_EXPORT_TEMPLATES"); t && *t) candidates.push_back(fs::path(t) / "windows-x64" / "agr_player.exe");
+    candidates.push_back(editorDirectory / "export_templates" / "windows-x64" / "agr_player.exe");
+    candidates.push_back(editorDirectory / ".." / ".." / "export_templates" / "windows-x64" / "agr_player.exe");
+    candidates.push_back(editorDirectory / ".." / ".." / "windows-x64" / "bin" / "agr_player.exe");  // build/<preset>/bin -> build/windows-x64/bin
+    candidates.push_back(editorDirectory / "agr_player.exe");
+    for (const fs::path& p : candidates)
+        if (fs::is_regular_file(p, ec)) return fs::weakly_canonical(p, ec);
+    return {};
+}
+
 } // namespace agr::editor

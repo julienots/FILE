@@ -12,8 +12,10 @@ namespace agr::editor {
 namespace fs = std::filesystem;
 
 namespace {
-constexpr const char* kTargets[] = {"PC (dossier)", "Android : APK de test (debug)", "Android : APK signé (release)", "Android : App Bundle (Google Play)"};
-constexpr const char* kTargetDirs[] = {"desktop", "android", "android", "android"};
+constexpr const char* kTargets[] = {"PC (dossier)", "Android : APK de test (debug)", "Android : APK signé (release)", "Android : App Bundle (Google Play)",
+                                    "Windows x64 (dossier, .exe)"};
+constexpr const char* kTargetDirs[] = {"desktop", "android", "android", "android", "windows"};
+constexpr int kWindowsTarget = 4;
 }
 
 ExportPanel::~ExportPanel() {
@@ -45,7 +47,11 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
             if (m_log.size() > 4000) m_log.erase(m_log.begin(), m_log.begin() + 1000);
         };
         Result<ExportReport> report = makeError(Error::Code::Unknown, "not run");
-        if (target == 0) {
+        if (target == kWindowsTarget) {
+            const fs::path player = findWindowsPlayer(exeDir);
+            report = player.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player (agr_player.exe) not found"))
+                                    : exportDesktop(project, output, player);
+        } else if (target == 0) {
 #if defined(_WIN32)
             report = exportDesktop(project, output, exeDir / "agr_player.exe");
 #else
@@ -87,8 +93,8 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     ImGui::BeginDisabled(running);
 
     ImGui::SetNextItemWidth(320);
-    ImGui::Combo("Cible", &m_target, kTargets, 4);
-    const bool android = m_target > 0, release = m_target >= 2;
+    ImGui::Combo("Cible", &m_target, kTargets, 5);
+    const bool android = m_target >= 1 && m_target <= 3, release = m_target == 2 || m_target == 3;
 
     ImGui::SeparatorText("Jeu");
     changed |= ImGui::InputText("Nom", &ps.name);
@@ -187,6 +193,11 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         ImGui::TextDisabled("Modèles d'export : %s", tools.templates.empty() ? "introuvables" : tools.templates.string().c_str());
         if (release && x.keystorePath.empty()) problems.push_back("choisissez ou créez un keystore");
         if (release && m_storePassword.empty()) problems.push_back("saisissez le mot de passe du keystore");
+    }
+    if (m_target == kWindowsTarget) {
+        const fs::path player = findWindowsPlayer(editorDirectory);
+        ImGui::TextDisabled("Lecteur Windows : %s", player.empty() ? "introuvable" : player.string().c_str());
+        if (player.empty()) problems.push_back("lecteur Windows introuvable : export_templates/windows-x64/agr_player.exe (preset CMake windows-x64)");
     }
     if (s.ctx.dirty()) problems.push_back("la scène a des modifications non enregistrées (le jeu exporte les fichiers enregistrés)");
     for (const std::string& p : problems) ImGui::TextColored(palette::toVec4(palette::kWarning), "%s", p.c_str());

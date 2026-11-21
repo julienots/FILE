@@ -89,13 +89,18 @@ namespace {
     }
     if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
     Result<ExportReport> report = makeError(Error::Code::InvalidArgument,
-                                            "unknown export '" + exportKind + "' (desktop, android-apk, android-release-apk, android-aab)");
+                                            "unknown export '" + exportKind + "' (desktop, windows, android-apk, android-release-apk, android-aab)");
 #if defined(_WIN32)
     const fs::path player = exeDir / "agr_player.exe";
 #else
     const fs::path player = exeDir / "agr_player";
 #endif
     if (exportKind == "desktop") report = exportDesktop(project.value(), output, player);
+    if (exportKind == "windows") {
+        const fs::path winPlayer = findWindowsPlayer(exeDir);
+        report = winPlayer.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player not found (export_templates/windows-x64/agr_player.exe)"))
+                                   : exportDesktop(project.value(), output, winPlayer);
+    }
     if (exportKind.rfind("android", 0) == 0) {
         AndroidBuildOptions o;
         o.kind = exportKind == "android-aab" ? AndroidBuildKind::ReleaseBundle

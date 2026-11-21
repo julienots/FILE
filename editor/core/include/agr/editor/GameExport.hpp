@@ -36,4 +36,9 @@ Result<ExportReport> packageGameData(const Project& project, const std::filesyst
 /// and its game/ folder.
 Result<ExportReport> exportDesktop(const Project& project, const std::filesystem::path& outputDir, const std::filesystem::path& playerExecutable);
 
+/// Windows x64 game player (agr_player.exe) for exports from any system: AGR_EXPORT_TEMPLATES or
+/// export_templates/ next to the editor (windows-x64/agr_player.exe), the cross-compiled build
+/// tree (build/windows-x64/bin), or the editor's own player on Windows. Empty when none exists.
+std::filesystem::path findWindowsPlayer(const std::filesystem::path& editorDirectory);
+
 } // namespace agr::editor

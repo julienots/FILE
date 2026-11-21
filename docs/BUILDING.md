@@ -33,6 +33,7 @@ ctest --preset debug
 | `release` | Optimisé ; à utiliser pour les benchmarks |
 | `asan` | Debug + AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang) |
 | `headless` | Sans SDL3 : core, ECS, scène, runtime, tests. Pour CI et serveurs |
+| `windows-x64` | Compilation croisée depuis Linux avec MinGW-w64 : `agr_player.exe` et `agr_tests.exe` |
 
 Tous les binaires (exécutables, plugins) sont produits dans `build/<preset>/bin/`.
 
@@ -92,6 +93,21 @@ Les tests GPU ont besoin d'un affichage. Sous Linux sans écran : `xvfb-run -a .
 (rendu logiciel Mesa llvmpipe, OpenGL 4.5 et OpenGL ES 3.2). Sans affichage, `agr_gpu_tests`
 s'arrête avec le message « GPU tests skipped » et le code 0, sauf si `AGR_REQUIRE_GPU_TESTS=1`
 est défini (c'est le cas en CI) : l'absence d'affichage devient alors un échec.
+
+## Windows (compilation croisée depuis Linux)
+
+```bash
+sudo apt install mingw-w64                                  # GCC 13, threads POSIX
+cmake --preset windows-x64 && cmake --build --preset windows-x64
+mkdir -p build/export_templates/windows-x64 && cp build/windows-x64/bin/agr_player.exe build/export_templates/windows-x64/
+```
+
+Toolchain : `cmake/toolchains/mingw-w64-x86_64.cmake`. Le lecteur est un **exécutable autonome** de
+25 Mo (libstdc++, libgcc et winpthread liées statiquement) qui n'importe que des DLL de Windows
+(KERNEL32, USER32, GDI32, WS2_32, WINMM...) ; il s'ouvre sans console (sous-système GUI). Les sources
+des dépendances déjà téléchargées peuvent être réutilisées avec `-DFETCHCONTENT_SOURCE_DIR_<NOM>=...`.
+L'ensemble du moteur et des tests compile sans erreur avec MinGW-w64 ; l'exécution n'a pas encore été
+vérifiée sur Windows (Wine ne démarre pas dans l'environnement de développement).
 
 ## Android
 

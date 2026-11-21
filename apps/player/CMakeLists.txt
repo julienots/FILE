@@ -15,3 +15,7 @@ else()
     target_link_libraries(agr_player PRIVATE SDL3::SDL3)
 endif()
 set_target_properties(agr_player PROPERTIES FOLDER "Apps")
+if(WIN32)
+    # A game window without a console (SDL_main provides WinMain).
+    set_target_properties(agr_player PROPERTIES WIN32_EXECUTABLE ON)
+endif()

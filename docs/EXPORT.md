@@ -27,7 +27,7 @@ pour ses instantanés (annuler / rétablir, mode Jeu).
 
 | Réglage | Rôle |
 |---|---|
-| Cible | PC (dossier), Android : APK de test (debug), APK signé (release), App Bundle (Google Play) |
+| Cible | PC (dossier), Android : APK de test (debug), APK signé (release), App Bundle (Google Play), **Windows x64** (depuis n'importe quel système) |
 | Nom, organisation, version, code de version | Identité ; le **code de version** doit augmenter à chaque envoi sur Google Play |
 | Orientation | Paysage, portrait, ou les deux (capteur) |
 | Cadence | Celle de l'écran, ou 30 / 60 images/s (30 économise la batterie) |
@@ -50,6 +50,7 @@ que s'il a été créé par un export précédent.
 ```bash
 agr_editor --create-project MonJeu --template showcase2d          # optionnel : créer depuis un modèle
 agr_editor --project MonJeu --export desktop --output sortie/
+agr_editor --project MonJeu --export windows --output sortie/          # Windows x64, depuis Linux aussi
 agr_editor --project MonJeu --export android-apk --output sortie/
 AGR_STORE_PASSWORD=... agr_editor --project MonJeu --export android-aab --output sortie/
 ```
@@ -59,6 +60,15 @@ AGR_STORE_PASSWORD=... agr_editor --project MonJeu --export android-aab --output
 Le dossier `<Nom>/` contient l'exécutable (renommé d'après le jeu) et `game/`. Options utiles du
 lecteur : `--opengl`, `--gles`, `--vulkan`, `--frames N`, `--autotest` (vérifie que la scène, les
 scripts, le rendu, l'interface et l'audio fonctionnent).
+
+## Windows x64
+
+L'export Windows fonctionne depuis Linux ou Windows : il assemble `<Nom>/<Nom>.exe` et `<Nom>/game/` à
+partir du **lecteur Windows précompilé**, cherché dans `AGR_EXPORT_TEMPLATES/windows-x64/`,
+`export_templates/windows-x64/` à côté de l'éditeur, puis `build/windows-x64/bin/` (preset CMake
+`windows-x64`, compilation croisée MinGW-w64 : [BUILDING.md](BUILDING.md)). Aucun compilateur n'est
+nécessaire au moment de l'export. Le `.exe` est autonome (DLL système uniquement) et s'ouvre sans
+console. Exemple : la Vitrine 2D exportée pèse 31 Mo (25 Mo de lecteur + 5,5 Mo de données).
 
 ## Android
 
@@ -96,7 +106,9 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
   n'en dispose pas (pas de virtualisation matérielle pour l'émulateur). La compilation, l'assemblage, la
   signature et le contenu des APK / AAB sont vérifiés ; le démarrage, les performances, la mémoire et la
   consommation sur appareil restent à mesurer.
-- Pas d'export iOS, Web ni macOS ; l'export PC produit un exécutable pour le système de l'éditeur.
+- Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
+  contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas d'icône intégrée au
+  `.exe` ni d'installateur.
 - Pas d'écran de démarrage personnalisé, d'icône adaptative Android (icône simple), de compression de
   textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
