@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
 
+#include "agr/editor/CurveView.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/scene/Reflection.hpp"
 
@@ -601,7 +602,7 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
         ImGui::TableNextColumn();
         // Curve of the selected track.
         if (m_track >= 0 && m_track < static_cast<int>(m_clip.tracks.size()) && !AnimationSystem::isTextTrack(m_clip.tracks[static_cast<usize>(m_track)])) {
-            const Curve& c = m_clip.tracks[static_cast<usize>(m_track)].curve;
+            Curve& c = m_clip.tracks[static_cast<usize>(m_track)].curve;
             const ImVec2 p = ImGui::GetCursorScreenPos();
             const ImVec2 sz{std::max(100.0f, ImGui::GetContentRegionAvail().x), std::max(60.0f, ImGui::GetContentRegionAvail().y - 4)};
             ImDrawList* cdl = ImGui::GetWindowDrawList();
@@ -612,10 +613,16 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
                 const float v = c.evaluate(end * static_cast<float>(i) / 120.0f);
                 lo = std::min(lo, v), hi = std::max(hi, v);
             }
+            for (const Keyframe& k : c.keys) lo = std::min(lo, k.value), hi = std::max(hi, k.value);
             if (hi - lo < 1e-4f) lo -= 0.5f, hi += 0.5f;
             const float pad = (hi - lo) * 0.1f;
             lo -= pad, hi += pad;
-            auto pt = [&](float t, float v) { return ImVec2{p.x + t / std::max(end, 1e-3f) * sz.x, p.y + sz.y - (v - lo) / (hi - lo) * sz.y}; };
+            if (m_curveDrag) lo = m_curveLo, hi = m_curveHi;  // no rescaling under the mouse
+            const CurveView view{{p.x, p.y}, {sz.x, sz.y}, std::max(end, 1e-3f), lo, hi};
+            auto pt = [&](float t, float v) {
+                const math::Vec2 s2 = view.toScreen(t, v);
+                return ImVec2{s2.x, s2.y};
+            };
             ImVec2 prev = pt(0.0f, c.evaluate(0.0f));
             for (int i = 1; i <= 160; ++i) {
                 const float t = end * static_cast<float>(i) / 160.0f;
@@ -623,12 +630,79 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
                 cdl->AddLine(prev, q, palette::kAmber, 1.5f);
                 prev = q;
             }
-            for (const Keyframe& k : c.keys) cdl->AddCircleFilled(pt(k.time, k.value), 3.5f, palette::kText);
+            // Interactive: drag a key (time and value), drag the selected key's tangent handles
+            // (Bézier; Alt = break them apart), double-click the curve to add a key.
+            ImGui::InvisibleButton("##curve", sz);
+            const bool hovered = ImGui::IsItemHovered(), active = ImGui::IsItemActive();
+            const ImVec2 mouse = ImGui::GetIO().MousePos;
+            const bool selValid = m_key >= 0 && m_key < static_cast<int>(c.keys.size());
+            auto slopeOf = [&](usize i, int side) {
+                const Keyframe& k = c.keys[i];
+                return k.interpolation == Interpolation::Custom ? (side < 0 ? k.inTangent : k.outTangent) : c.autoSlope(i);
+            };
+            auto dist2 = [](ImVec2 a, ImVec2 b) { return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y); };
+            if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                m_curveDrag = 0;
+                if (selValid)
+                    for (int side : {-1, 1}) {
+                        const math::Vec2 h = view.handle(c.keys[static_cast<usize>(m_key)], slopeOf(static_cast<usize>(m_key), side), side);
+                        if (dist2({h.x, h.y}, mouse) < 49.0f) m_curveDrag = side < 0 ? 2 : 3;
+                    }
+                if (!m_curveDrag)
+                    for (usize i = 0; i < c.keys.size(); ++i)
+                        if (dist2(pt(c.keys[i].time, c.keys[i].value), mouse) < 49.0f) {
+                            m_key = static_cast<int>(i);
+                            m_curveDrag = 1;
+                        }
+                m_curveLo = lo, m_curveHi = hi;
+                if (m_curveDrag >= 2) c.makeCustom(static_cast<usize>(m_key));
+            }
+            if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && m_curveDrag == 0) {
+                const float t = std::clamp(view.timeAt(mouse.x), 0.0f, std::max(end, 0.0f));
+                c.setKey(t, c.evaluate(t));
+                for (usize i = 0; i < c.keys.size(); ++i)
+                    if (std::fabs(c.keys[i].time - t) < 1e-4f) m_key = static_cast<int>(i);
+                m_dirty = true;
+            }
+            if (active && m_curveDrag && m_key >= 0 && m_key < static_cast<int>(c.keys.size())) {
+                Keyframe& k = c.keys[static_cast<usize>(m_key)];
+                if (m_curveDrag == 1) {
+                    k.value = view.valueAt(mouse.y);
+                    const float t = std::max(0.0f, view.timeAt(mouse.x));
+                    if (std::fabs(t - k.time) > 1e-4f) {
+                        k.time = t;
+                        const float keep = t;
+                        c.sort();
+                        for (usize i = 0; i < c.keys.size(); ++i)
+                            if (c.keys[i].time == keep) m_key = static_cast<int>(i);
+                    }
+                } else {
+                    const int side = m_curveDrag == 2 ? -1 : 1;
+                    const float slope = view.slopeFromHandle(k, {mouse.x, mouse.y}, side);
+                    (side < 0 ? k.inTangent : k.outTangent) = slope;
+                    if (!ImGui::GetIO().KeyAlt) (side < 0 ? k.outTangent : k.inTangent) = slope;  // linked handles
+                }
+                m_dirty = true;
+            }
+            if (!active) m_curveDrag = 0;
+            for (usize i = 0; i < c.keys.size(); ++i) {
+                const bool sel = static_cast<int>(i) == m_key;
+                cdl->AddCircleFilled(pt(c.keys[i].time, c.keys[i].value), sel ? 5.0f : 3.5f, sel ? palette::kAmber : palette::kText);
+            }
+            if (m_key >= 0 && m_key < static_cast<int>(c.keys.size())) {
+                const usize i = static_cast<usize>(m_key);
+                const ImVec2 kp = pt(c.keys[i].time, c.keys[i].value);
+                for (int side : {-1, 1}) {
+                    const math::Vec2 h = view.handle(c.keys[i], slopeOf(i, side), side);
+                    cdl->AddLine(kp, {h.x, h.y}, palette::kTextMuted, 1.0f);
+                    cdl->AddCircle({h.x, h.y}, 4.0f, palette::kTextMuted, 0, 1.5f);
+                }
+            }
+            if (hovered && !m_curveDrag) ImGui::SetTooltip("Glisser une clé ; poignées = tangentes (Alt : séparées) ; double-clic : nouvelle clé");
             cdl->AddLine(pt(m_time, lo), pt(m_time, hi), palette::kError);
             char range[64];
             std::snprintf(range, sizeof range, "%.3g .. %.3g", static_cast<double>(lo + pad), static_cast<double>(hi - pad));
             cdl->AddText({p.x + 4, p.y + 2}, palette::kTextMuted, range);
-            ImGui::Dummy(sz);
         }
         ImGui::EndTable();
     }

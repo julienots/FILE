@@ -38,6 +38,15 @@ float autoTangent(const std::vector<Keyframe>& k, usize i) {
 
 } // namespace
 
+float Curve::autoSlope(usize index) const { return autoTangent(keys, index); }
+
+void Curve::makeCustom(usize index) {
+    if (index >= keys.size() || keys[index].interpolation == Interpolation::Custom) return;
+    const float slope = keys[index].interpolation == Interpolation::Smooth ? autoTangent(keys, index) : 0.0f;
+    keys[index].inTangent = keys[index].outTangent = slope;
+    keys[index].interpolation = Interpolation::Custom;
+}
+
 const char* interpolationName(Interpolation i) { return kInterpNames[std::min<u8>(static_cast<u8>(i), 3)]; }
 
 float Curve::evaluate(float t) const {

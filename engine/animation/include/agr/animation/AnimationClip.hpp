@@ -38,6 +38,11 @@ struct Curve {
     Keyframe& setKey(float time, float value, Interpolation interpolation = Interpolation::Smooth);
     void removeKey(usize index);
     void sort();
+    /// Slope a Smooth key gets automatically (value per second).
+    float autoSlope(usize index) const;
+    /// Gives a key its own tangents (Custom), starting from the automatic ones so the curve
+    /// does not jump; already Custom: unchanged.
+    void makeCustom(usize index);
     float duration() const { return keys.empty() ? 0.0f : keys.back().time; }
 };
 

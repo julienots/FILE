@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "agr/physics3d/Physics3DComponents.hpp"
+#include "agr/editor/CurveView.hpp"
 #include "agr/editor/UiGuides.hpp"
 
 #include <algorithm>
@@ -1392,4 +1393,39 @@ TEST_CASE("zipFolder: a stored ZIP of the export folder") {
     CHECK(zip.find("Game/game/game.json") != std::string::npos);
     std::error_code ec;
     fs::remove_all(root, ec);
+}
+
+TEST_CASE("curve editor: screen mapping, tangent handles and making a key Custom keeps the curve") {
+    using agr::editor::CurveView;
+    const CurveView v{{100, 50}, {400, 200}, 2.0f, -1.0f, 1.0f};
+    const auto p = v.toScreen(1.0f, 0.0f);
+    CHECK(p.x == doctest::Approx(300.0f));
+    CHECK(p.y == doctest::Approx(150.0f));
+    CHECK(v.timeAt(p.x) == doctest::Approx(1.0f));
+    CHECK(v.valueAt(50.0f) == doctest::Approx(1.0f));
+    Keyframe k;
+    k.time = 1.0f;
+    // A handle placed along a slope reads back as that slope, on both sides.
+    for (float slope : {0.0f, 0.5f, -2.0f}) {
+        const auto out = v.handle(k, slope, 1), in = v.handle(k, slope, -1);
+        CHECK(std::hypot(out.x - p.x, out.y - p.y) == doctest::Approx(40.0f));
+        CHECK(v.slopeFromHandle(k, out, 1) == doctest::Approx(slope).epsilon(0.01));
+        CHECK(v.slopeFromHandle(k, in, -1) == doctest::Approx(slope).epsilon(0.01));
+    }
+    // An out handle dragged behind the key: a steep slope, not a flipped one.
+    CHECK(v.slopeFromHandle(k, {p.x - 10, p.y - 10}, 1) >= 99.0f);
+
+    Curve c;
+    c.setKey(0.0f, 0.0f);
+    c.setKey(1.0f, 1.0f);
+    c.setKey(2.0f, 3.0f);
+    const float before = c.evaluate(0.7f), before2 = c.evaluate(1.4f);
+    CHECK(c.autoSlope(1) > 0.0f);
+    c.makeCustom(1);
+    CHECK(c.keys[1].interpolation == Interpolation::Custom);
+    CHECK(c.keys[1].outTangent == doctest::Approx(c.autoSlope(1)));
+    CHECK(c.evaluate(0.7f) == doctest::Approx(before));  // same shape until a handle moves
+    CHECK(c.evaluate(1.4f) == doctest::Approx(before2));
+    c.keys[1].outTangent = c.keys[1].inTangent = 0.0f;  // flattened handles
+    CHECK(c.evaluate(1.1f) < before2);
 }

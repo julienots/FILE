@@ -381,6 +381,8 @@ private:
     std::vector<KeyRef> m_keySel;         // selected keys (Ctrl+click, Ctrl+A)
     std::vector<CopiedKey> m_keyClipboard;
     float m_dragStartTime = 0.0f, m_dragApplied = 0.0f;
+    int m_curveDrag = 0;              // curve editor: 0 none, 1 key, 2 in handle, 3 out handle
+    float m_curveLo = 0.0f, m_curveHi = 1.0f;  // value range frozen while dragging
     std::string m_newClipName = "clip";
     // add-track popup
     int m_addTarget = 0, m_addComponent = 0, m_addField = 0;

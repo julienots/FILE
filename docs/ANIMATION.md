@@ -19,6 +19,12 @@ par sa machine à états), test de bout en bout de l'éditeur.
   (en degrés d'Euler) et textes (`SpriteAnimator.clip`, une texture...).
 - **Clés** : interpolation constante, linéaire, **lissée** (tangentes automatiques, sans dépassement
   aux extrémums ni sur des données monotones) ou à **tangentes** réglables.
+- **Éditeur de courbe** (panneau Animation, à droite de la piste choisie) : glisser une clé change
+  son instant et sa valeur ; la clé sélectionnée montre ses **poignées de tangentes (Bézier)** à
+  tirer (liées ; **Alt** = les séparer, pour un angle) : la clé passe en mode *Tangentes* en gardant
+  la forme qu'elle avait ; **double-clic** sur la courbe = nouvelle clé à cet endroit. L'échelle
+  verticale ne bouge pas pendant un glissement. C++ : `Curve::makeCustom`, `Curve::autoSlope`,
+  `editor::CurveView`.
 - **Événements** : à un instant donné, le script de l'entité reçoit `onAnimationEvent(nom)` (une
   fois par passage, boucles comprises : bruits de pas, tirs...).
 - Durée, boucle ; un clip non bouclé garde sa dernière valeur.
