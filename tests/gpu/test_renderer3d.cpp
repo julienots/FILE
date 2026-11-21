@@ -1473,6 +1473,49 @@ TEST_CASE("screen-space reflections: a mirror floor reflects what is on screen, 
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("temporal AA: jittered frames accumulate into smooth edges, moved objects leave no ghost") {
+    Render3DFixture f;
+    f.camera({0, 0, 0}, {0, 0, -10});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    const auto cube = f.mesh(PrimitiveMesh::Cube, {0, 0, -4.0f}, Vec3{1.6f}, {1, 1, 1, 1});
+    f.scene.registry().get<TransformComponent>(cube).rotation = math::Quat::fromAxisAngle({0, 0, 1}, math::radians(27.0f));
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.filmicToneMapping = false;
+    auto partial = [&] {
+        int n = 0;
+        for (u32 y = kHeight / 2 - 12; y < kHeight / 2 + 12; y += 3) n += partialPixels(y, 0, kWidth);
+        return n;
+    };
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().temporalAA);
+    const int hard = partial();
+    post.temporalAA = true;
+    post.taaBlend = 0.15f;
+    for (int i = 0; i < 16; ++i) f.frame();
+    CHECK(f.renderer.stats().temporalAA);
+    const int smooth = partial();
+    CHECK_MESSAGE(smooth >= hard + 4, hard, " -> ", smooth);
+    const Rgba center = f.at({0, 0, -4.0f});
+    CHECK_MESSAGE(center.r > 200, center);  // flat areas stay as they are
+    // The cube moves away: the history is clamped to the new neighborhood, no trail.
+    f.scene.registry().get<TransformComponent>(cube).position = {30, 0, -4.0f};
+    f.frame();
+    f.frame();
+    CHECK_MESSAGE(f.at({0, 0, -4.0f}).r < 30, f.at({0, 0, -4.0f}));
+    // Orthographic cameras and low profiles skip it.
+    GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
+    p.renderScale = 1.0f;
+    f.renderer.setProfile(p);
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().temporalAA);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("auto exposure: dark scenes are brightened, bright ones darkened (HDR)") {
     Render3DFixture f;
     f.camera({0, 0, 3}, {0, 0, 0});

@@ -148,6 +148,11 @@ struct PostProcessComponent {
     /// Screen-space reflections: smooth and metallic opaque surfaces reflect what is on screen
     /// (wet floors, polished metal, calm water), traced in the scene depth (MSAA off). Where
     /// the ray leaves the screen, the sky / reflection probes stay.
+    /// Temporal anti-aliasing (perspective cameras): the projection moves by a fraction of a
+    /// pixel each frame and the frames are blended along the camera motion; smooths edges and
+    /// thin details better than FXAA, slight blur in motion.
+    bool temporalAA = false;
+    float taaBlend = 0.1f;          ///< Weight of the new frame (lower = smoother, more ghosting).
     bool screenSpaceReflections = false;
     float ssrIntensity = 1.0f;      ///< 0..2.
     float ssrMaxDistance = 12.0f;   ///< World units a reflected ray travels at most.

@@ -29,6 +29,7 @@ struct GraphicsProfile {
     bool atmosphere = true;      ///< PostProcess height fog and light shafts allowed (full-screen pass).
     bool depthOfField = true;    ///< PostProcess depth of field allowed (32 taps per pixel).
     bool ssr = true;             ///< PostProcess screen-space reflections allowed (ray march per pixel).
+    bool taa = true;             ///< PostProcess temporal anti-aliasing allowed (history buffer).
 };
 
 GraphicsProfile graphicsProfile(GraphicsTier tier);

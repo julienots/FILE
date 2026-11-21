@@ -18,10 +18,10 @@ GraphicsProfile graphicsProfile(GraphicsTier tier) {
             p = {tier, "medium", 1.0f, 2, 2048, 0, 16ull << 20, 1024, true, 4, true, true, 2, true, true, true};
             break;
         case GraphicsTier::Low:
-            p = {tier, "low", 0.75f, 1, 1024, 60, 8ull << 20, 1024, false, 4, false, true, 1, false, true, false, false};
+            p = {tier, "low", 0.75f, 1, 1024, 60, 8ull << 20, 1024, false, 4, false, true, 1, false, true, false, false, false};
             break;
         case GraphicsTier::UltraMobile:
-            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2, false, false, 1, false, false, false, false};
+            p = {tier, "ultra-mobile", 0.5f, 1, 512, 30, 4ull << 20, 0, false, 2, false, false, 1, false, false, false, false, false};
             break;
     }
     return p;

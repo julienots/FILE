@@ -153,6 +153,8 @@ layout(std140) uniform PostData {
     vec4 u_dof2;       // 1 = far blur, -, -, -
     vec4 u_exposure;   // 1 = auto exposure, target, min, max
     vec4 u_adapt;      // blend toward the measure this frame (0..1), 1 = history valid, -, -
+    mat4 u_prevViewProj;  // last frame's view-projection, without jitter (TAA)
+    vec4 u_taa;        // weight of the new frame, 1 = history valid, -, -
 };
 )";
 
@@ -449,6 +451,52 @@ void main() {
     float fade = edge.x * edge.y * (1.0 - smoothstep(0.6, 1.0, hi / maxDist)) * (1.0 - towardCamera);
     vec3 reflected = texture(u_source, huv).rgb;
     o_color = vec4(scene.rgb + reflected * clamp(reflectivity, 0.0, 1.0) * fade, 1.0);
+}
+)";
+
+/// Temporal anti-aliasing: the history (last output) is fetched where this pixel was last frame
+/// (reprojected through the depth), clamped to the 3 x 3 neighborhood of the new frame (no
+/// ghosting of moved objects), then blended with the new, jittered frame.
+inline constexpr const char* kTaa = R"(
+uniform sampler2D u_source;   // new frame (jittered)
+uniform sampler2D u_depth;    // its depth
+uniform sampler2D u_history;  // last output
+layout(location = 0) out vec4 o_color;
+vec2 uvToNdc(vec2 uv) {
+    vec2 n = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n;
+}
+vec2 ndcToUv(vec2 n) {
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n * 0.5 + 0.5;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec4 cur = texture(u_source, uv);
+    if (u_taa.y < 0.5) {
+        o_color = cur;
+        return;
+    }
+    float d = texture(u_depth, uv).r;
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec4 w = u_invViewProj * vec4(uvToNdc(uv), z, 1.0);
+    w /= w.w;
+    vec4 pc = u_prevViewProj * vec4(w.xyz, 1.0);
+    vec2 puv = ndcToUv(pc.xy / pc.w);
+    if (pc.w <= 0.0 || puv.x < 0.0 || puv.y < 0.0 || puv.x > 1.0 || puv.y > 1.0) {
+        o_color = cur;
+        return;
+    }
+    vec3 mn = cur.rgb, mx = cur.rgb;
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x) {
+            vec3 c = texture(u_source, uv + vec2(float(x), float(y)) * u_texel.xy).rgb;
+            mn = min(mn, c);
+            mx = max(mx, c);
+        }
+    vec3 h = clamp(texture(u_history, puv).rgb, mn, mx);
+    o_color = vec4(mix(h, cur.rgb, u_taa.x), cur.a);  // alpha (SSR reflectivity) from the new frame
 }
 )";
 

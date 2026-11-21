@@ -369,7 +369,35 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     const Mat4 view = rv.view;
     const float aspect = static_cast<float>(renderW) / static_cast<float>(renderH);
     const auto range = m_glClipSpace ? Mat4::DepthRange::NegativeOneToOne : Mat4::DepthRange::ZeroToOne;
-    const Mat4 viewProj = rv.projectionMatrix(aspect, m_glClipSpace) * view;
+    // Post-processing: first active PostProcess component (not for direct previews).
+    PostProcessComponent post;
+    bool postActive = false;
+    if (!rv.direct)
+        reg.view<PostProcessComponent>().each([&](ecs::Entity e, PostProcessComponent& c) {
+            if (!postActive && scene.isActiveInHierarchy(e)) {
+                post = c;
+                postActive = true;
+            }
+        });
+    // Temporal AA: the projection moves inside the pixel every frame (Halton 2, 3 over 8 frames).
+    const bool taa = postActive && post.temporalAA && m_profile.taa && rv.projection == Projection::Perspective;
+    Mat4 proj = rv.projectionMatrix(aspect, m_glClipSpace);
+    const Mat4 unjitteredViewProj = proj * view;
+    if (taa) {
+        auto halton = [](u32 i, u32 b) {
+            float f = 1.0f, r = 0.0f;
+            for (; i > 0; i /= b) {
+                f /= static_cast<float>(b);
+                r += f * static_cast<float>(i % b);
+            }
+            return r;
+        };
+        const u32 k = static_cast<u32>(m_frame % 8) + 1;
+        const float jx = (halton(k, 2) - 0.5f) * 2.0f / static_cast<float>(renderW), jy = (halton(k, 3) - 0.5f) * 2.0f / static_cast<float>(renderH);
+        proj.c[2].x += jx;  // clip x += jx * view z, w = -view z: a constant NDC offset
+        proj.c[2].y += jy;
+    }
+    const Mat4 viewProj = proj * view;
     const math::Frustum frustum = math::Frustum::fromMatrix(viewProj, range);
     auto* states = reg.findPool<StateComponent>();
     auto hiddenInEditor = [&](ecs::Entity e) {
@@ -432,16 +460,6 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         frame.fogParams = Vec4(env.fogStart, std::max(env.fogEnd, env.fogStart + 0.01f), std::max(env.exposure, 0.0f), 0.0f);
         m_drawSky = (gradient || image) && rv.projection == Projection::Perspective;
     }
-    // Post-processing: first active PostProcess component (not for direct previews).
-    PostProcessComponent post;
-    bool postActive = false;
-    if (!rv.direct)
-        reg.view<PostProcessComponent>().each([&](ecs::Entity e, PostProcessComponent& c) {
-            if (!postActive && scene.isActiveInHierarchy(e)) {
-                post = c;
-                postActive = true;
-            }
-        });
     const bool postHdr = postActive && m_device.info().halfFloatRenderTargets;
     frame.fogParams.w = postHdr || (m_probeCaptureMode && m_probeLinear) ? 1.0f : 0.0f;  // shaders output linear light; the composite pass tone maps
     if (!m_probeCaptureMode) m_probeExposure = frame.fogParams.z;
@@ -1010,7 +1028,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         const bool dof = m_profile.depthOfField && post.depthOfField && post.dofBlur > 0.0f && (post.dofNear || post.dofFar);
         const bool autoExposure = post.autoExposure && postHdr;
         const bool ssr = m_profile.ssr && post.screenSpaceReflections && post.ssrIntensity > 0.0f;
-        const bool readDepth = ao || atmos || dof || ssr;  // a single-sampled, sampleable scene depth
+        const bool readDepth = ao || atmos || dof || ssr || taa;  // a single-sampled, sampleable scene depth
         m_postReadDepth = readDepth;
         if (ensurePostTargets(renderW, renderH, readDepth ? 1u : samples, width, height, postHdr, bloom, fxaa, ao, atmos)) {
             struct PostUniforms {
@@ -1019,6 +1037,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 Vec4 fog, fogColor, shafts, sun, camera, sunDir;
                 Mat4 invViewProj;
                 Vec4 dof, dof2, exposure, adapt;
+                Mat4 prevViewProj;
+                Vec4 taa;
             };
             // Extra targets of this frame's optional passes (released with the others).
             auto extra = [&](rhi::RenderTargetHandle& t, u32 tw, u32 th, rhi::TextureFormat f, const char* name) {
@@ -1027,6 +1047,10 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 if (r) t = r.value();
                 else AGR_LOG_ERROR("Render", "post-processing target '{}': {}", name, r.error().message);
             };
+            if (taa) {
+                extra(m_taaTargets[0], renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.taa.a");
+                extra(m_taaTargets[1], renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.taa.b");
+            }
             if (ssr) extra(m_ssrTarget, renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.ssr");
             if (dof) extra(m_dofTarget, renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.dof");
             if (autoExposure) {
@@ -1078,11 +1102,20 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 u.exposure = Vec4(lumReady ? 1.0f : 0.0f, std::max(post.exposureTarget, 0.001f), std::max(post.exposureMin, 0.001f),
                                   std::max(post.exposureMax, std::max(post.exposureMin, 0.001f)));
                 u.adapt = Vec4(adaptBlend, m_lumValid ? 1.0f : 0.0f, 0.0f, 0.0f);
+                u.prevViewProj = m_prevViewProj;
+                u.taa = Vec4(std::clamp(post.taaBlend, 0.02f, 1.0f), m_taaValid ? 1.0f : 0.0f, 0.0f, 0.0f);
                 m_postPasses.push_back({kind, src, dst, pushUniforms(&u, sizeof u)});
             };
             const Vec2 renderSize{static_cast<float>(renderW), static_cast<float>(renderH)}, outSize{static_cast<float>(width), static_cast<float>(height)};
             rhi::RenderTargetHandle sceneColor = m_postResolve ? m_postResolve : m_postScene;
-            if (ssr && m_ssrTarget) {  // first: reflections are fogged and blurred with the rest
+            const bool taaReady = taa && m_taaTargets[0] && m_taaTargets[1];
+            if (taaReady) {  // first: every later pass sees the accumulated, anti-aliased image
+                m_taaIndex ^= 1u;  // write one target, read the other as the history
+                add(PostPass::Taa, sceneColor, m_taaTargets[m_taaIndex], renderSize, renderSize);
+                sceneColor = m_taaTargets[m_taaIndex];
+                m_stats.temporalAA = true;
+            }
+            if (ssr && m_ssrTarget) {  // reflections are fogged and blurred with the rest
                 add(PostPass::Ssr, sceneColor, m_ssrTarget, renderSize, renderSize);
                 sceneColor = m_ssrTarget;
                 m_stats.screenSpaceReflections = true;
@@ -1117,11 +1150,14 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             add(PostPass::Composite, sceneColor, fxaa ? m_postLdr : outputTarget, renderSize, outSize);
             if (fxaa) add(PostPass::Fxaa, m_postLdr, outputTarget, outSize, outSize);
             m_stats.postProcessing = true;
+            m_taaValid = taaReady;
             m_stats.hdr = postHdr;
             m_stats.bloomLevels = bloom ? static_cast<u32>(m_bloomLevels.size()) : 0u;
         }
     }
 
+    if (!postActive || !taa) m_taaValid = false;
+    m_prevViewProj = unjitteredViewProj;  // TAA reprojection next frame
     m_stats.collectMs = cpu.elapsedMilliseconds();
     pushProbeConversion();
     Stopwatch submit;
@@ -1312,12 +1348,12 @@ u32 packColor(math::Vec4 c) {
 }
 
 Status Renderer::createPostPipelines() {
-    const char* fragments[11] = {shaders::kBloomPrefilter, shaders::kBloomDownsample, shaders::kBloomUpsample, shaders::kComposite, shaders::kFxaa,
+    const char* fragments[12] = {shaders::kBloomPrefilter, shaders::kBloomDownsample, shaders::kBloomUpsample, shaders::kComposite, shaders::kFxaa,
                                  shaders::kSsao,           shaders::kSsaoBlur,       shaders::kAtmosphere,     shaders::kDof,      shaders::kLuminance,
-                                 shaders::kSsr};
-    const char* names[11] = {"agr.post.prefilter", "agr.post.down", "agr.post.up",        "agr.post.composite", "agr.post.fxaa",
-                             "agr.post.ssao",      "agr.post.ssao.blur", "agr.post.atmosphere", "agr.post.dof",   "agr.post.luminance", "agr.post.ssr"};
-    for (int k = 0; k < 11; ++k) {
+                                 shaders::kSsr,            shaders::kTaa};
+    const char* names[12] = {"agr.post.prefilter", "agr.post.down", "agr.post.up",        "agr.post.composite", "agr.post.fxaa",
+                             "agr.post.ssao",      "agr.post.ssao.blur", "agr.post.atmosphere", "agr.post.dof",   "agr.post.luminance", "agr.post.ssr", "agr.post.taa"};
+    for (int k = 0; k < 12; ++k) {
         rhi::PipelineDesc p;
         p.debugName = names[k];
         p.shader.vertex = shaders::kPostVertex;
@@ -1332,6 +1368,7 @@ Status Renderer::createPostPipelines() {
         p.samplers = k == PostPass::Composite                          ? std::vector<std::string>{"u_scene", "u_bloomTex", "u_aoTex", "u_exposureTex"}
                      : k == PostPass::Atmosphere || k == PostPass::Dof || k == PostPass::Ssr ? std::vector<std::string>{"u_source", "u_depth"}
                      : k == PostPass::Luminance                        ? std::vector<std::string>{"u_source", "u_history"}
+                     : k == PostPass::Taa                              ? std::vector<std::string>{"u_source", "u_depth", "u_history"}
                                                                        : std::vector<std::string>{"u_source"};
         auto r = m_device.createPipeline(p);
         if (!r) return r.error();
@@ -1343,7 +1380,8 @@ Status Renderer::createPostPipelines() {
 void Renderer::releasePostTargets() {
     for (rhi::RenderTargetHandle t : {m_postScene, m_postResolve, m_postLdr, m_aoTarget, m_aoBlurTarget, m_atmosTarget}) m_device.destroyRenderTarget(t);
     m_atmosTarget = {};
-    for (rhi::RenderTargetHandle* t : {&m_dofTarget, &m_ssrTarget, &m_lumTargets[0], &m_lumTargets[1]}) {
+    m_taaValid = false;
+    for (rhi::RenderTargetHandle* t : {&m_dofTarget, &m_ssrTarget, &m_taaTargets[0], &m_taaTargets[1], &m_lumTargets[0], &m_lumTargets[1]}) {
         m_device.destroyRenderTarget(*t);
         *t = {};
     }
@@ -1409,12 +1447,14 @@ void Renderer::runPost(rhi::RenderTargetHandle output) {
         const bool composite = pass.kind == PostPass::Composite;
         if (composite && !m_bloomLevels.empty()) m_device.prepareTextureForSampling(bloom);
         if (composite && m_postAo) m_device.prepareTextureForSampling(ao);
-        const bool atmosPass = pass.kind == PostPass::Atmosphere || pass.kind == PostPass::Dof || pass.kind == PostPass::Ssr;
+        const bool atmosPass = pass.kind == PostPass::Atmosphere || pass.kind == PostPass::Dof || pass.kind == PostPass::Ssr || pass.kind == PostPass::Taa;
         const rhi::TextureHandle sceneDepth = atmosPass ? m_device.renderTargetDepthTexture(m_postScene) : rhi::TextureHandle{};
         if (atmosPass) m_device.prepareTextureForSampling(sceneDepth);
-        const bool lumPass = pass.kind == PostPass::Luminance;
-        const rhi::TextureHandle history = lumPass ? m_device.renderTargetTexture(m_lumTargets[m_lumIndex ^ 1u]) : rhi::TextureHandle{};
-        if (lumPass) m_device.prepareTextureForSampling(history);
+        const bool lumPass = pass.kind == PostPass::Luminance, taaPass = pass.kind == PostPass::Taa;
+        const rhi::TextureHandle history = lumPass   ? m_device.renderTargetTexture(m_lumTargets[m_lumIndex ^ 1u])
+                                           : taaPass ? m_device.renderTargetTexture(m_taaTargets[m_taaIndex ^ 1u])
+                                                     : rhi::TextureHandle{};
+        if (lumPass || taaPass) m_device.prepareTextureForSampling(history);
         const bool exposurePass = composite && m_lumValid && m_lumTargets[m_lumIndex];
         const rhi::TextureHandle exposure = exposurePass ? m_device.renderTargetTexture(m_lumTargets[m_lumIndex]) : m_assets.whiteTexture();
         if (exposurePass) m_device.prepareTextureForSampling(exposure);
@@ -1425,6 +1465,7 @@ void Renderer::runPost(rhi::RenderTargetHandle output) {
         m_device.bindTexture(0, src);
         if (atmosPass) m_device.bindTexture(1, sceneDepth);
         if (lumPass) m_device.bindTexture(1, history);
+        if (taaPass) m_device.bindTexture(2, history);
         if (composite) {
             m_device.bindTexture(1, bloom);
             m_device.bindTexture(2, ao);
