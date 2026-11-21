@@ -43,6 +43,7 @@ void registerIK2DComponents() {
         .field("boneCount", &ChainIK2DComponent::boneCount, {.rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("iterations", &ChainIK2DComponent::iterations, {.rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("maxAngle", &ChainIK2DComponent::maxAngle, {.tooltip = "Bend limit at each joint", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f})
+        .field("jointLimits", &ChainIK2DComponent::jointLimits, {.tooltip = "Per joint limits in degrees, from the first inner joint: \"30, 90, 45\""})
         .field("weight", &ChainIK2DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("enabled", &ChainIK2DComponent::enabled);
 }
@@ -69,7 +70,8 @@ u32 solveIK2D(Scene& scene) {
         for (Vec3& q : p) q.z = z;
         Vec3 t = scene.worldMatrix(ik.target).transformPoint(Vec3(0.0f));
         t.z = z;
-        fabrik::solve(p, t, std::clamp(ik.iterations, 1, 64), std::clamp(ik.maxAngle, 0.0f, 3.1416f), nullptr);
+        const float maxA = std::clamp(ik.maxAngle, 0.0f, 3.1416f);
+        fabrik::solve(p, t, std::clamp(ik.iterations, 1, 64), maxA, nullptr, fabrik::parseJointLimits(ik.jointLimits, maxA));
         const float w = std::clamp(ik.weight, 0.0f, 1.0f);
         for (usize i = 0; i < bones.size(); ++i) {  // each bone turns about Z toward its solved next joint
             const Mat4 world = scene.worldMatrix(bones[i]);

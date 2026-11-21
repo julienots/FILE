@@ -128,6 +128,10 @@ Coût : 500 personnages avec un espace de mélange de 5 clips et une couche masq
 
 ## Cinématique inverse 3D (IK)
 
+`ChainIK3D` / `ChainIK2D.jointLimits` (`"0, 90, 45"`) : limite de pliage de chaque articulation à partir de
+la première articulation intérieure (une entrée vide garde `maxAngle`) : un coude plie, une colonne
+reste droite.
+
 Résolue après les clips (et les couches), à chaque image du jeu ; `AnimationStats::ik3DChains`.
 
 | Composant | Rôle |
@@ -241,8 +245,8 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- IK : contraintes d'angle identiques pour toutes les articulations d'une chaîne (pas de limites
-  par axe) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
+- IK : limites d'angle par articulation (`jointLimits`, en degrés) mais pas par axe (pas de rotule
+  limitée différemment en avant et sur le côté) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
   (un gros maillage très déformé coûte), pas d'import FBX ; au plus 128
   articulations par maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).

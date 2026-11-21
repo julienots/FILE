@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include "agr/scene/Scene.hpp"
 
 namespace agr {
@@ -37,6 +38,9 @@ struct ChainIK3DComponent {
     i32 boneCount = 3;
     i32 iterations = 12;
     float maxAngle = 3.1416f;  ///< Radians, between a bone and its parent bone.
+    /// Per joint bend limits in degrees, from the first inner joint ("30, 90, 45"); missing
+    /// entries use maxAngle (knees and elbows bend more than a spine).
+    std::string jointLimits;
     float weight = 1.0f;
     bool enabled = true;
 };

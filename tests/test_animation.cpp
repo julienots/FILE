@@ -943,4 +943,31 @@ TEST_CASE("clip key operations: copy / paste at a time, move several keys, remov
     CHECK(c.tracks[0].curve.keys.size() == 3);
     CHECK(c.tracks[1].curve.keys.size() == 1);
 }
+
+TEST_CASE("chain IK: per joint bend limits") {
+    Scene scene;
+    registerAnimationComponents();
+    registerRenderComponents();
+    using math::Vec3;
+    std::vector<ecs::Entity> bones{scene.createEntity("B0")};
+    for (int i = 1; i <= 4; ++i) {
+        bones.push_back(scene.createEntity(("B" + std::to_string(i)).c_str(), bones.back()));
+        scene.registry().get<TransformComponent>(bones.back()).position = {0, 1, 0};
+    }
+    const auto target = scene.createEntity("Target");
+    scene.registry().get<TransformComponent>(target).position = {2.0f, 1.0f, 0};
+    auto& ik = scene.registry().emplace<ChainIK3DComponent>(bones[0]);
+    ik.target = target;
+    ik.boneCount = 4;
+    ik.jointLimits = "0, , 10";  // joint 1 straight, joint 2 free (maxAngle), joint 3 at most 10 degrees
+    auto wpos = [&](ecs::Entity e) { return scene.worldMatrix(e).transformPoint(Vec3(0.0f)); };
+    auto bend = [&](int j) {
+        const Vec3 a = math::normalize(wpos(bones[j]) - wpos(bones[j - 1])), b = math::normalize(wpos(bones[j + 1]) - wpos(bones[j]));
+        return std::acos(std::clamp(math::dot(a, b), -1.0f, 1.0f));
+    };
+    solveChainIK3D(scene, bones[0], ik);
+    CHECK(bend(1) < math::radians(1.0f));
+    CHECK(bend(3) <= math::radians(10.0f) + 0.02f);
+    CHECK(bend(2) > math::radians(20.0f));  // the free joint takes the bend
+}
 }  // TEST_SUITE

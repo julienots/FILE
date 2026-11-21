@@ -3,6 +3,8 @@
 // bend limit per joint and an optional pole. Shared by the 2D and 3D chain IK.
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 #include "agr/math/Math.hpp"
@@ -28,7 +30,26 @@ inline math::Vec3 limitAngle(math::Vec3 dir, math::Vec3 ref, float maxAngle) {
 }
 
 /// Solves in place; `p[0]` stays where it is. Returns the final distance to the target.
-inline float solve(std::vector<math::Vec3>& p, math::Vec3 target, int iterations, float maxAngle, const math::Vec3* pole) {
+/// "30, 60, 90" (degrees) -> radians per joint; empty entries keep `fallback`.
+inline std::vector<float> parseJointLimits(const std::string& text, float fallback) {
+    std::vector<float> out;
+    std::string cur;
+    for (char c : text + ",") {
+        if (c == ',' || c == ';') {
+            out.push_back(cur.empty() ? fallback : std::clamp(std::strtof(cur.c_str(), nullptr), 0.0f, 180.0f) * 0.017453292f);
+            cur.clear();
+        } else if (c != ' ') {
+            cur += c;
+        }
+    }
+    if (!out.empty() && text.empty()) out.clear();
+    return out;
+}
+
+/// Solves in place; `p[0]` stays where it is. Returns the final distance to the target.
+/// `limits[k]`: bend limit of joint k + 1 (between bone k and bone k + 1), else `maxAngle`.
+inline float solve(std::vector<math::Vec3>& p, math::Vec3 target, int iterations, float maxAngle, const math::Vec3* pole,
+                   const std::vector<float>& limits = {}) {
     const usize n = p.size();
     if (n < 2) return 0.0f;
     std::vector<float> len(n - 1);
@@ -49,7 +70,8 @@ inline float solve(std::vector<math::Vec3>& p, math::Vec3 target, int iterations
             for (usize i = 0; i + 1 < n; ++i) {
                 math::Vec3 d = safeNormalize(p[i + 1] - p[i], rootRef);
                 const math::Vec3 ref = i == 0 ? d : safeNormalize(p[i] - p[i - 1], d);
-                if (i > 0 && maxAngle < 3.14159f) d = limitAngle(d, ref, maxAngle);
+                const float limit = i > 0 && i - 1 < limits.size() ? limits[i - 1] : maxAngle;
+                if (i > 0 && limit < 3.14159f) d = limitAngle(d, ref, limit);
                 p[i + 1] = p[i] + d * len[i];
             }
             if (math::length(p[n - 1] - target) < tolerance) break;

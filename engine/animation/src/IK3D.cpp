@@ -75,6 +75,7 @@ void registerIK3DComponents() {
         .field("boneCount", &ChainIK3DComponent::boneCount, {.tooltip = "Bones in the chain (following the first child)", .rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("iterations", &ChainIK3DComponent::iterations, {.rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("maxAngle", &ChainIK3DComponent::maxAngle, {.tooltip = "Bend limit at each joint", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f})
+        .field("jointLimits", &ChainIK3DComponent::jointLimits, {.tooltip = "Per joint limits in degrees, from the first inner joint: \"30, 90, 45\""})
         .field("weight", &ChainIK3DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("enabled", &ChainIK3DComponent::enabled);
 }
@@ -93,7 +94,8 @@ bool solveChainIK3D(Scene& scene, ecs::Entity root, const ChainIK3DComponent& ik
     const Vec3 target = worldPose(scene, ik.target).position;
     Vec3 pole;
     if (scene.valid(ik.pole)) pole = worldPose(scene, ik.pole).position;
-    fabrik::solve(p, target, std::clamp(ik.iterations, 1, 64), std::clamp(ik.maxAngle, 0.0f, 3.1416f), scene.valid(ik.pole) ? &pole : nullptr);
+    const float maxA = std::clamp(ik.maxAngle, 0.0f, 3.1416f);
+    fabrik::solve(p, target, std::clamp(ik.iterations, 1, 64), maxA, scene.valid(ik.pole) ? &pole : nullptr, fabrik::parseJointLimits(ik.jointLimits, maxA));
     // Turn each bone (root first) so that its child lands on the solved position.
     auto& reg = scene.registry();
     const float w = std::clamp(ik.weight, 0.0f, 1.0f);
