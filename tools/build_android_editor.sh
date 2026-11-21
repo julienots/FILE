@@ -22,7 +22,10 @@ cp "$SDL_SRC"/android-project/app/src/main/java/org/libsdl/app/*.java "$TPL/andr
 cp "$SDL_SRC/LICENSE.txt" "$TPL/android/java/SDL-LICENSE.txt"
 printf 'AGR ENGINE Android export templates (editor)\nengine %s\nabis arm64-v8a\n' "$(git describe --always --dirty 2>/dev/null || echo unknown)" > "$TPL/android/VERSION"
 mkdir -p "$(dirname "$OUT_APK")"
-cmake --build --preset debug --target agr_tests
+# The packaging step is a unit test: reuse a configured host build (release first), else make a debug one.
+HOST=release
+[ -d build/release ] || { HOST=debug; [ -d build/debug ] || cmake --preset debug; }
+cmake --build "build/$HOST" --target agr_tests
 AGR_EXPORT_TEMPLATES="$PWD/$TPL" AGR_EDITOR_APK="$PWD/$OUT_APK" \
-    ./build/debug/bin/agr_tests -tc="Android editor APK*"
+    "./build/$HOST/bin/agr_tests" -tc="Android editor APK*"
 echo "editor APK: $OUT_APK"

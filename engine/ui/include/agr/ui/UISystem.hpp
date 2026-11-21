@@ -59,6 +59,26 @@ struct UIStats {
 /// Game UI: lays out the UICanvas hierarchies for a screen size, handles pointers
 /// (mouse and multi-touch: hover, press, click, slider drag) and produces the overlay
 /// drawn by the Renderer. Main thread.
+/// Auto-repeat of a held key: the press fires once, then after `delay` every `interval`.
+struct KeyRepeater {
+    f32 delay = 0.45f, interval = 0.035f;
+    /// Number of times the key acts this frame.
+    u32 update(bool pressed, bool down, f32 dt) {
+        if (pressed) {
+            m_timer = delay;
+            return 1;
+        }
+        if (!down) return 0;
+        m_timer -= dt;
+        u32 n = 0;
+        while (m_timer <= 0.0f && n < 8) m_timer += interval, ++n;
+        return n;
+    }
+
+private:
+    f32 m_timer = 0.0f;
+};
+
 class UISystem final : public OverlaySource {
 public:
     explicit UISystem(VirtualFileSystem& vfs);
@@ -109,7 +129,7 @@ public:
     /// Item index of a list under a point (UI pixels), -1 outside its rows.
     i32 listRowAt(ecs::Entity list, math::Vec2 position) const;
     /// Caret movement and editing keys of the focused field (shift extends the selection).
-    enum class TextKey { Left, Right, Up, Down, Home, End, Delete, SelectAll, Copy, Cut, Paste };
+    enum class TextKey { Left, Right, Up, Down, Home, End, Delete, SelectAll, Copy, Cut, Paste, Undo, Redo };
     void processTextKey(Scene& scene, TextKey key, bool shift = false, bool word = false);
     /// Caret and selection of the focused field, in code points (anchor == caret: no selection).
     usize caret() const { return m_caret; }
@@ -119,6 +139,9 @@ public:
     void setClipboard(std::function<std::string()> get, std::function<void(const std::string&)> set) {
         m_clipboardGet = std::move(get), m_clipboardSet = std::move(set);
     }
+    /// Undo / redo history of the focused field (cleared when the focus changes).
+    usize undoDepth() const { return m_undo.size(); }
+    usize redoDepth() const { return m_redo.size(); }
     ecs::Entity focusedField() const { return m_focusedField; }
     bool wantsText() const { return !m_focusedField.isNull(); }
     void focusField(ecs::Entity field);  ///< null = none (hides the on-screen keyboard)
@@ -271,6 +294,14 @@ private:
     bool m_ctrl = false, m_shift = false;
     bool m_selectingText = false;
     std::string m_clipboard;
+    struct TextSnapshot {
+        std::string text;
+        usize caret = 0, anchor = 0;
+    };
+    std::vector<TextSnapshot> m_undo, m_redo;
+    bool m_typingGroup = false;   // the last edit was plain typing (merged into one undo step)
+    bool m_suppressUndo = false;  // inside a paste: one step for the whole paste
+    void recordUndo(const std::string& before, usize caret, usize anchor, bool typing);
     std::function<std::string()> m_clipboardGet;
     std::function<void(const std::string&)> m_clipboardSet;
     usize caretAt(math::Vec2 p) const;

@@ -2,6 +2,7 @@
 #include <optional>
 
 #include "agr/runtime/Plugin.hpp"
+#include "agr/runtime/Input.hpp"
 #include "agr/ui/UISystem.hpp"
 
 namespace agr {
@@ -38,6 +39,8 @@ private:
 
     std::unique_ptr<UISystem> m_ui;
 
+    KeyRepeater m_repeater;
+    Key m_repeatKey = Key::Unknown;  // text-field key being held (auto-repeat)
     int m_stickDir = 0;  // gamepad stick direction last frame (navigation edges)
     Renderer* m_renderer = nullptr;
     std::optional<Viewport> m_viewport;

@@ -47,7 +47,7 @@ void UIPlugin::setRunning(bool running) {
 
 void UIPlugin::setViewport(math::Vec4 rect, u32 w, u32 h) { m_viewport = Viewport{rect, w, h}; }
 
-void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
+void UIPlugin::onUpdate(Engine& engine, const FrameTime& time) {
     bindRenderer(engine);
     // Safe area in UI pixels (also used when drawing in edit mode).
     if (m_safeOverride) {
@@ -99,16 +99,28 @@ void UIPlugin::onUpdate(Engine& engine, const FrameTime&) {
         using TK = UISystem::TextKey;
         const std::pair<Key, TK> keys[] = {{Key::Left, TK::Left}, {Key::Right, TK::Right}, {Key::Up, TK::Up},   {Key::Down, TK::Down},
                                            {Key::Home, TK::Home}, {Key::End, TK::End},     {Key::Delete, TK::Delete}};
+        // Held arrows / Delete / Backspace repeat like a desktop text box.
+        const f32 dt = static_cast<f32>(time.unscaledDeltaSeconds);
+        u32 backspaces = 0;
+        if (m_repeatKey != Key::Unknown && !in.keyDown(m_repeatKey)) m_repeatKey = Key::Unknown;
+        auto repeats = [&](Key k) -> u32 {
+            if (in.keyPressed(k)) m_repeatKey = k;
+            if (k != m_repeatKey) return 0;
+            return m_repeater.update(in.keyPressed(k), in.keyDown(k), dt);
+        };
         for (const auto& [k, tk] : keys)
-            if (in.keyPressed(k)) m_ui->processTextKey(scene, tk, shift, ctrl);
+            for (u32 n = repeats(k); n > 0; --n) m_ui->processTextKey(scene, tk, shift, ctrl);
+        backspaces = repeats(Key::Backspace);
         if (ctrl) {
+            if (in.keyPressed(Key::Z)) m_ui->processTextKey(scene, shift ? TK::Redo : TK::Undo);
+            if (in.keyPressed(Key::Y)) m_ui->processTextKey(scene, TK::Redo);
             if (in.keyPressed(Key::A)) m_ui->processTextKey(scene, TK::SelectAll);
             if (in.keyPressed(Key::C)) m_ui->processTextKey(scene, TK::Copy);
             if (in.keyPressed(Key::X)) m_ui->processTextKey(scene, TK::Cut);
             if (in.keyPressed(Key::V)) m_ui->processTextKey(scene, TK::Paste);
         }
         // Shortcut letters typed with Ctrl are not text.
-        m_ui->processText(scene, ctrl ? std::string_view{} : in.textInput(), in.keyPressed(Key::Backspace) ? 1u : 0u, in.keyPressed(Key::Return));
+        m_ui->processText(scene, ctrl ? std::string_view{} : in.textInput(), backspaces, in.keyPressed(Key::Return));
     }
     // Keyboard / gamepad navigation (canvases with keyboardNavigation), not while typing.
     if (!m_ui->wantsText() && m_ui->navigationEnabled()) {

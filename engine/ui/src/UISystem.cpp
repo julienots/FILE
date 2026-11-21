@@ -814,8 +814,20 @@ void UISystem::focusField(ecs::Entity field) {
     m_caret = m_anchor = static_cast<usize>(-1);  // the end of the text (clamped on use)
     m_caretStops.clear();
     m_selectingText = false;
+    m_undo.clear(), m_redo.clear();
+    m_typingGroup = false;
     m_caretClock.restart();
     if (m_textInputHandler && had != !field.isNull()) m_textInputHandler(!field.isNull());
+}
+
+void UISystem::recordUndo(const std::string& before, usize caret, usize anchor, bool typing) {
+    if (m_suppressUndo) return;
+    m_redo.clear();
+    if (!(typing && m_typingGroup && !m_undo.empty())) {
+        m_undo.push_back({before, caret, anchor});
+        if (m_undo.size() > 100) m_undo.erase(m_undo.begin());
+    }
+    m_typingGroup = typing;
 }
 
 void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces, bool enter) {
@@ -830,6 +842,7 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
     const std::string before = f->text;
     usize len = utf8Length(f->text);
     m_caret = std::min(m_caret, len), m_anchor = std::min(m_anchor, len);
+    const usize caretBefore = m_caret, anchorBefore = m_anchor;
     auto eraseRange = [&](usize from, usize to) {  // code points [from, to)
         if (to <= from) return;
         const usize a = utf8Offset(f->text, from), b = utf8Offset(f->text, to);
@@ -862,7 +875,12 @@ void UISystem::processText(Scene& scene, std::string_view typed, u32 backspaces,
         insert("\n");
         enter = false;
     }
-    if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+    if (f->text != before) {
+        // Letters typed in a row are one undo step; a space, a deletion or a caret jump ends it.
+        const bool typing = backspaces == 0 && !hadSelection && !typed.empty() && typed.find(' ') == std::string_view::npos;
+        recordUndo(before, caretBefore, anchorBefore, typing);
+        m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+    }
     if (enter) {
         m_events.push_back({UIEventType::Submit, m_focusedField, 0.0f, f->text});
         focusField({});
@@ -894,6 +912,7 @@ void UISystem::processTextKey(Scene& scene, TextKey key, bool shift, bool word) 
         return i;
     };
     const std::string before = f->text;
+    const usize caretBefore = m_caret, anchorBefore = m_anchor;
     switch (key) {
         case TextKey::Left:
             if (!shift && selA != selB) move(selA);
@@ -981,6 +1000,8 @@ void UISystem::processTextKey(Scene& scene, TextKey key, bool shift, bool word) 
             std::string typed;
             for (char c : clip)  // processText drops control characters: keep new lines for multiline fields
                 if (c != '\r') typed += c;
+            const std::string pasteBefore = f->text;
+            m_suppressUndo = true;
             if (f->multiline) {
                 usize start = 0;
                 for (usize i = 0; i <= typed.size(); ++i)
@@ -991,10 +1012,33 @@ void UISystem::processTextKey(Scene& scene, TextKey key, bool shift, bool word) 
             } else {
                 processText(scene, typed, 0, false);
             }
+            m_suppressUndo = false;
+            if (f->text != pasteBefore) recordUndo(pasteBefore, caretBefore, anchorBefore, false);
             return;  // processText reported the change
         }
+        case TextKey::Undo:
+        case TextKey::Redo: {
+            auto& from = key == TextKey::Undo ? m_undo : m_redo;
+            auto& to = key == TextKey::Undo ? m_redo : m_undo;
+            if (from.empty()) break;
+            to.push_back({f->text, m_caret, m_anchor});
+            TextSnapshot s = std::move(from.back());
+            from.pop_back();
+            f->text = std::move(s.text);
+            const usize n = utf8Length(f->text);
+            m_caret = std::min(s.caret, n), m_anchor = std::min(s.anchor, n);
+            m_typingGroup = false;
+            if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+            m_caretClock.restart();
+            return;
+        }
     }
-    if (f->text != before) m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+    if (f->text != before) {
+        recordUndo(before, caretBefore, anchorBefore, false);
+        m_events.push_back({UIEventType::TextChanged, m_focusedField, 0.0f, f->text});
+    } else if (m_caret != caretBefore) {
+        m_typingGroup = false;  // moving the caret starts a new undo step
+    }
     m_caretClock.restart();
 }
 

@@ -1040,4 +1040,51 @@ TEST_CASE("item lists: reorderable rows move by drag and drop") {
     f.pointers({{0, {100, 130}, false}});
     CHECK(f.scene.registry().get<UIItemListComponent>(e).items == "B;C;A;D");
 }
+TEST_CASE("text editing: undo / redo groups typing, key repeat timing") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto field = f.element("Name", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {400, 50});
+    f.scene.registry().emplace<UIInputFieldComponent>(field).maxLength = 0;
+    f.scene.registry().emplace<UITextComponent>(field);
+    f.ui.layout(f.scene, 800, 600);
+    f.ui.focusField(field);
+    using TK = UISystem::TextKey;
+    auto text = [&] { return f.scene.registry().get<UIInputFieldComponent>(field).text; };
+    for (const char* c : {"h", "e", "l", "l", "o"}) f.ui.processText(f.scene, c, 0, false);
+    f.ui.processText(f.scene, " ", 0, false);
+    for (const char* c : {"y", "o", "u"}) f.ui.processText(f.scene, c, 0, false);
+    CHECK(text() == "hello you");
+    CHECK(f.ui.undoDepth() == 3);  // "hello", " ", "you"
+    f.ui.processTextKey(f.scene, TK::Undo);
+    CHECK(text() == "hello ");
+    f.ui.processTextKey(f.scene, TK::Undo);
+    CHECK(text() == "hello");
+    CHECK(f.ui.caret() == 5);
+    f.ui.processTextKey(f.scene, TK::Redo);
+    CHECK(text() == "hello ");
+    f.ui.processText(f.scene, "", 2, false);  // backspaces: a new step, redo history dropped
+    CHECK(text() == "hell");
+    CHECK(f.ui.redoDepth() == 0);
+    f.ui.processTextKey(f.scene, TK::Undo);
+    CHECK(text() == "hello ");
+    f.ui.processTextKey(f.scene, TK::SelectAll);
+    f.ui.processTextKey(f.scene, TK::Cut);
+    CHECK(text().empty());
+    f.ui.processTextKey(f.scene, TK::Paste);
+    f.ui.processTextKey(f.scene, TK::Paste);
+    CHECK(text() == "hello hello ");
+    f.ui.processTextKey(f.scene, TK::Undo);  // a paste is one step
+    CHECK(text() == "hello ");
+    f.ui.processTextKey(f.scene, TK::Undo);
+    CHECK(text().empty());
+    f.ui.focusField({});
+    CHECK(f.ui.undoDepth() == 0);
+
+    KeyRepeater r;
+    CHECK(r.update(true, true, 0.016f) == 1);
+    CHECK(r.update(false, true, 0.3f) == 0);   // before the delay
+    CHECK(r.update(false, true, 0.17f) == 1);  // 0.47 s held: past the delay
+    CHECK(r.update(false, true, 0.07f) == 2);  // then every 35 ms
+    CHECK(r.update(false, false, 1.0f) == 0);  // released
+}
 }  // TEST_SUITE
