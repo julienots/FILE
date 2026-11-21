@@ -217,6 +217,14 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
             }
             F.flat = false;
         }
+        // 2.6.2 the wind moves the branch tips, not the whole layer: weight grows with the distance to the trunk
+        // (0 on the axis, where the cone is fixed to the trunk) and a little with the height. Each cone used to
+        // slide as one block and the crown came apart from its trunk in strong wind.
+        for (auto& v : F.v) {
+            float dr = std::sqrt(v.px * v.px + v.pz * v.pz);
+            float w = clampf(dr / 2.6f, 0.f, 1.f) * (0.55f + 0.45f * clampf(v.py / h, 0.f, 1.f));
+            v.wind = (uint8_t)clampf(w * 0.75f * 255.f, 0, 255);
+        }
         t.radius = 0.35f; t.height = h + 1.5f;
         break;
     }

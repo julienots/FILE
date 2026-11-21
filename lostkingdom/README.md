@@ -6,12 +6,19 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.6.1 (versionCode 38), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.6.0 : elle s'installe par-dessus). SHA-256 : `be84edef92d2d471215dd8dbd518a4f16479ef19d4f5ec7f7316a8b16777d0a3`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.6.2 (versionCode 39), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.6.1 : elle s'installe par-dessus). SHA-256 : `88837cd6ce060914e52747b2431a8c3b3bb2ec6f680685d7c7e271badbf09a6e`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Correctifs 2.6.2 (herbe et arbres dans le vent)
+
+- **L'herbe ne s'enfonce plus dans le sol.** Avec un vent fort (neige, tempête, steppe), le haut des brins était poussé de côté sans limite et descendait sous le terrain. Le brin plie maintenant autour de son pied en gardant sa longueur, jusqu'à environ 55° : il ne passe jamais sous le sol. L'herbe écrasée par le héros ou la monture reste elle aussi au-dessus du sol.
+- **Les sapins ne se séparent plus de leur tronc.** Chaque étage de feuillage glissait d'un bloc, avec une force différente pour chaque étage, alors que le tronc ne bouge pas. Désormais, seul le bout des branches bouge : le point d'attache au tronc reste fixe. Le balancement de tous les feuillages (chênes, bouleaux…) est aussi limité à environ 30 cm, pour qu'aucune couronne ne quitte son tronc.
+- **Vérifié sur ordinateur** : nouveau scénario `wind`, avec des captures dans les sapins de Frostheim sous la neige (force du vent 0,6) et dans la prairie de Brindlemere sous la tempête (force 1,1). Tests unitaires réussis.
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone.
 
 ### Correctifs 2.6.1 (crash du menu Mods depuis l'écran titre)
 

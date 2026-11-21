@@ -1826,6 +1826,25 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "wind") {
+        // 2.6.2 strong wind: pine crowns stay on their trunks, grass bends but never sinks into the ground (pictures)
+        auto setW = [](Game& g, int w) { g.weather = g.weatherNext = w; g.weatherBlend = 1; g.weatherTimer = 999; };
+        s.push_back({4.f, [setW](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; setW(g, Game::W_SNOW);
+            teleport(g, 900, 420, 0.8f); g.camPitch = 0.15f; g.camDist = g.camDistTarget = 9.f; },
+            [](Game& g, float) { g.camIdleT = 0; }, "snow"});
+        static const float spots[3][2] = {{900, 420}, {380, 560}, {1450, 380}};
+        for (int i = 0; i < 3; i++) {
+            s.push_back({2.5f, [i](Game& g) { teleport(g, spots[i][0], spots[i][1], 0.8f); g.camPitch = 0.15f; g.camDist = g.camDistTarget = 9.f; }, [](Game& g, float) { g.camIdleT = 0; }, "wait"});
+            s.push_back({0.05f, [i](Game& g) { AGR_LOG("WIND snow strength %.2f", g.env.windStrength); g.requestScreenshot("build/shots/W" + std::to_string(i) + "_pines.png"); }, idle, "shot"});
+        }
+        s.push_back({4.f, [setW](Game& g) { setW(g, Game::W_STORM); const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 60, b->pos.y + 40, 0.f);
+            g.camPitch = 0.12f; g.camDist = g.camDistTarget = 5.f; }, [](Game& g, float) { g.camIdleT = 0; }, "storm"});
+        for (int i = 0; i < 3; i++) {
+            s.push_back({0.6f, none, [](Game& g, float) { g.camIdleT = 0; }, "wait"});
+            s.push_back({0.05f, [i](Game& g) { AGR_LOG("WIND storm strength %.2f", g.env.windStrength); g.requestScreenshot("build/shots/W" + std::to_string(i + 3) + "_grass.png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "titlemenus") {
         // 2.6.1 regression: on the title screen (no hero yet), "Mods" then a journal tab ("Équipement") crashed.
         // Cold start (the hero is removed), open Mods / Paramètres / Parties / Nouvelle partie and tap every tab shown,

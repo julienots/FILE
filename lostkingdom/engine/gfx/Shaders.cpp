@@ -67,7 +67,10 @@ float windWave(vec3 wp) {
     return w * w * w * clamp(uWind.z * 1.4, 0.0, 1.0);
 }
 
-vec3 windOffset(vec3 wp, float weight) {
+// 2.6.2 h > 0: height of the vertex above its root (grass blades). The blade BENDS around its root with its length
+// kept: it leans at most ~55 degrees and its tip never goes below the ground (it used to shear sideways and sink
+// into the soil in strong wind). h <= 0: tree foliage, a bounded sway so the crown never leaves its trunk.
+vec3 windOffset(vec3 wp, float weight, float h) {
     float t = uCamPos.w;
     float phase = dot(wp.xz, vec2(0.13, 0.17));
     float sway = sin(t * 1.3 + phase) * 0.6 + sin(t * 2.7 + phase * 1.7) * 0.3;
@@ -75,7 +78,15 @@ vec3 windOffset(vec3 wp, float weight) {
     gust += windWave(wp) * 0.9;                                   // travelling gust fronts
     vec2 off = uWind.xy * (sway * 0.35 + gust) * uWind.z * weight;
     off += vec2(sin(t * 7.3 + wp.x * 3.1 + wp.z * 1.7), cos(t * 6.1 + wp.z * 2.9)) * 0.04 * weight * uWind.z;
-    return vec3(off.x, -dot(off, off) * 0.35, off.y);
+    float L = length(off);
+    if (h > 0.0) {
+        float m = h * 0.82;
+        if (L > m) { off *= m / L; L = m; }
+        return vec3(off.x, -(h - sqrt(max(h * h - L * L, 0.0))), off.y);
+    }
+    float m = 0.28 * weight + 0.02;
+    if (L > m) { off *= m / L; L = m; }
+    return vec3(off.x, -L * L * 0.3, off.y);
 }
 
 void main() {
@@ -100,10 +111,14 @@ void main() {
     float grassDown = 0.0;
 #ifdef WIND
     float wweight = aMat.a;
+    float bladeH = -1.0;
   #ifdef INSTANCED
     wweight *= iScale;
   #endif
-    wp += windOffset(wp, wweight);
+  #if defined(GRASS) && defined(INSTANCED)
+    bladeH = max(p.y * iScale, 0.001);
+  #endif
+    wp += windOffset(wp, wweight, bladeH);
   #ifdef GRASS
     float sheen = windWave(wp) * aMat.a;
     // grass bent by the hero, his trail (it stays down a moment, then springs back with a little wobble),
@@ -128,7 +143,7 @@ void main() {
     // bend grows with the blade's height: tall meadow grass parts around the body, short grass just flattens
     float bendH = clamp(wweight * max(p.y, 0.75) * 1.15, 0.0, 1.4);
     wp.xz += pushv * bendH * 0.75;
-    wp.y -= grassDown * bendH * 0.5;
+    wp.y -= min(grassDown * bendH * 0.5, bladeH > 0.0 ? bladeH * 0.8 : 0.3);   // trodden, never into the soil
   #endif
 #endif
     n = normalize(n);
