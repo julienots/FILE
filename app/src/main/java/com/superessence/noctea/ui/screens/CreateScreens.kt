@@ -248,7 +248,7 @@ fun CustomTextScreen() {
         GlassCard(Modifier.fillMaxWidth().padding(horizontal = 20.dp), padding = 14.dp) {
             Text("Voix utilisée : ${if (useRemote) "Serveur vocal personnalisé" else "Voix de l'appareil (Android)"}", style = MaterialTheme.typography.titleSmall)
             Text(
-                if (useRemote) "La qualité dépend du serveur configuré." else "Les textes libres utilisent le moteur vocal de ton téléphone : la qualité dépend de l'appareil. La voix premium de NOCTÉA est utilisée pour la bibliothèque et le générateur.",
+                if (useRemote) "La qualité dépend du serveur configuré." else "Les textes libres utilisent le moteur vocal de ton téléphone. NOCTÉA harmonise leur niveau, leur tonalité et leurs silences, mais le timbre reste celui du téléphone. Pour retrouver exactement la voix de la bibliothèque, connecte un serveur vocal NOCTÉA (Réglages de la voix).",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))

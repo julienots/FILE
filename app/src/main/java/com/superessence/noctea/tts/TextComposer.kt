@@ -70,6 +70,10 @@ object TextComposer {
         return res.filter { it.first.isNotBlank() }
     }
 
+    /** Un serveur NOCTÉA applique déjà la chaîne studio : on ne la double pas. */
+    fun needsFinishing(provider: VoiceProvider): Boolean =
+        !(provider is RemoteHttpTtsProvider && provider.studioProcessed)
+
     /** Synthétise tous les fragments dans [dir]. */
     suspend fun synthesize(
         provider: VoiceProvider,
@@ -79,11 +83,13 @@ object TextComposer {
     ): List<TextClip> {
         dir.mkdirs()
         val clips = mutableListOf<TextClip>()
+        provider.prepare()
         fragments.forEachIndexed { i, f ->
             onProgress(i, fragments.size)
             val ext = if (provider.id == "system") "wav" else "audio"
             val file = File(dir, "f%03d.%s".format(i, ext))
-            val ms = provider.synthesize(f.text, file)
+            var ms = provider.synthesize(f.text, file)
+            if (needsFinishing(provider) && VoiceFinisher.finish(file)) ms = AudioFiles.durationMs(file)
             clips += TextClip(file.absolutePath, ms.coerceAtLeast(300), f.pauseAfterMs)
         }
         onProgress(fragments.size, fragments.size)

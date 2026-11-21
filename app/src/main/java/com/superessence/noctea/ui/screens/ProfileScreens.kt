@@ -240,7 +240,12 @@ fun VoiceSettingsScreen() {
         scope.launch {
             try {
                 val f = File(ctx.cacheDir, "voice_preview_${UUID.randomUUID()}.${if (provider.id == "system") "wav" else "audio"}")
-                val ms = provider.synthesize(sample, f)
+                provider.prepare()
+                var ms = provider.synthesize(sample, f)
+                // même finition que pour « Mon texte » : l'aperçu correspond à ce qui sera réellement entendu
+                if (com.superessence.noctea.tts.TextComposer.needsFinishing(provider) &&
+                    com.superessence.noctea.tts.VoiceFinisher.finish(f)
+                ) ms = com.superessence.noctea.tts.AudioFiles.durationMs(f)
                 val mp = android.media.MediaPlayer()
                 mp.setDataSource(f.absolutePath)
                 mp.setOnCompletionListener { it.release(); f.delete() }
@@ -294,7 +299,7 @@ fun VoiceSettingsScreen() {
             }
         } else {
             Text(
-                "Connecte un serveur de synthèse vocale (par exemple un serveur Piper auto-hébergé avec la voix « fr_FR-siwis-medium », ou une passerelle vers un fournisseur premium). NOCTÉA envoie une requête POST JSON {\"text\", \"voice\", \"length_scale\"} et attend un fichier audio en réponse. La clé éventuelle reste sur ton appareil.",
+                "Connecte un serveur de synthèse vocale. Pour retrouver EXACTEMENT la voix NOCTÉA dans tes textes, lance sur un ordinateur ou un serveur « tools/noctea_voice_server.py » (même modèle, même chaîne studio) et saisis son adresse ci-dessous. Tu peux aussi utiliser un serveur Piper ou une passerelle vers un fournisseur premium. NOCTÉA envoie une requête POST JSON {\"text\", \"voice\", \"length_scale\"} et attend un fichier audio en réponse. La clé éventuelle reste sur ton appareil.",
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(20.dp, 10.dp),
             )
             val colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = p.accent, unfocusedBorderColor = p.cardBorder)
@@ -352,7 +357,7 @@ fun AboutScreen() {
             GlassCard(Modifier.fillMaxWidth()) {
                 Text("Crédits", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Voix : ${app.catalog.voiceName}, modèle neuronal Piper entraîné sur le corpus SIWIS (Université d'Édimbourg), traitement audio Superessence Studio.\n" +
+                    "Voix : ${app.catalog.voiceName} — modèle neuronal libre (Apache 2.0) entraîné sur le corpus SIWIS (Université d'Édimbourg, CC-BY 4.0), traitement audio Superessence Studio.\n" +
                         "Ambiances et musiques : synthèse procédurale originale Superessence Studio.\n" +
                         "Polices : Cormorant Garamond, Nunito, Fredoka (SIL Open Font License).\n" +
                         "Lecture audio : AndroidX Media3 (Apache 2.0).\n\n" +

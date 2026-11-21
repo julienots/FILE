@@ -36,13 +36,19 @@ interface VoiceProvider {
     /** Description honnête de la qualité attendue. */
     val qualityNote: String
 
+    /**
+     * Appelé UNE fois avant une série de fragments d'un même texte : fige la voix et les réglages pour que
+     * tous les fragments soient dits par la même voix (jamais de repli silencieux vers une autre voix).
+     */
+    suspend fun prepare() {}
+
     /** Synthétise [text] dans [out]. Retourne la durée en ms. */
     suspend fun synthesize(text: String, out: File): Long
 }
 
 object EmbeddedVoice {
     const val NAME = "Voix NOCTÉA (préenregistrée)"
-    const val NOTE = "Voix féminine française douce, produite en studio à partir d'un modèle neuronal libre (Piper « Siwis », CC-BY 4.0). Disponible hors connexion."
+    const val NOTE = "Voix féminine française douce, produite en studio à partir d'un modèle neuronal libre (Kokoro-82M, voix « Siwis » du corpus SIWIS, CC-BY 4.0). Une seule voix : même timbre, même hauteur et même niveau d'un bout à l'autre de chaque séance. Disponible hors connexion."
 }
 
 class TtsException(message: String) : Exception(message)
@@ -53,7 +59,8 @@ class SystemTtsProvider(private val context: Context) : VoiceProvider {
     override val displayName = "Voix de l'appareil"
     override val qualityNote =
         "Utilise le moteur vocal installé sur ton téléphone. La qualité dépend de l'appareil : " +
-            "les voix « réseau neuronal » de Google sont naturelles, d'autres peuvent sembler synthétiques."
+            "les voix « réseau neuronal » de Google sont naturelles, d'autres peuvent sembler synthétiques. " +
+            "NOCTÉA ajuste le niveau, la tonalité et les silences pour que tous les passages sonnent pareil."
 
     private var tts: TextToSpeech? = null
     private val mutex = Mutex()
@@ -85,20 +92,49 @@ class SystemTtsProvider(private val context: Context) : VoiceProvider {
     suspend fun frenchVoices(): List<Voice> = try {
         engine().voices.orEmpty()
             .filter { it.locale.language == "fr" && !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
-            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { -it.quality }, { it.name }))
+            .sortedWith(voiceOrder)
     } catch (e: Exception) {
         emptyList()
     }
 
+    /** Ordre stable : hors ligne d'abord, France avant les autres pays, meilleure qualité, puis nom. */
+    private val voiceOrder = compareBy<Voice>(
+        { it.isNetworkConnectionRequired },
+        { it.locale.country != "FR" },
+        { -it.quality },
+        { it.name },
+    )
+
+    private var resolved: Voice? = null
+
+    /** Voix retenue pour tout le texte : celle choisie par l'utilisateur, sinon la meilleure voix hors ligne. */
+    private suspend fun resolveVoice(t: TextToSpeech) = withContext(Dispatchers.Main) {
+        val all = t.voices.orEmpty()
+        val chosen = all.firstOrNull { it.name == voiceName }
+            ?: all.filter {
+                it.locale.language == "fr" && !it.isNetworkConnectionRequired &&
+                    !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+            }.sortedWith(voiceOrder).firstOrNull()
+        resolved = chosen
+        chosen?.let { t.voice = it }
+        t.setSpeechRate(rate)
+        t.setPitch(pitch)
+    }
+
+    override suspend fun prepare() {
+        mutex.withLock { resolveVoice(engine()) }
+    }
+
     override suspend fun synthesize(text: String, out: File): Long = mutex.withLock {
         val t = engine()
+        if (resolved == null) resolveVoice(t)       // appel direct sans prepare() (aperçu) : même règle de choix
         withContext(Dispatchers.Main) {
+            // Même voix pour tous les fragments : on la réaffirme avant chaque phrase (certains moteurs
+            // reviennent à leur voix par défaut entre deux appels).
+            val v = resolved
+            if (v != null && t.voice?.name != v.name) t.voice = v
             t.setSpeechRate(rate)
             t.setPitch(pitch)
-            val chosen = t.voices.orEmpty().firstOrNull { it.name == voiceName }
-                ?: t.voices.orEmpty().filter { it.locale.language == "fr" && !it.isNetworkConnectionRequired }
-                    .maxByOrNull { it.quality }
-            chosen?.let { t.voice = it }
         }
         val uid = UUID.randomUUID().toString()
         val done = CompletableDeferred<Boolean>()
@@ -108,7 +144,13 @@ class SystemTtsProvider(private val context: Context) : VoiceProvider {
             pending.remove(uid); throw TtsException("La synthèse a échoué.")
         }
         val ok = withTimeout(60_000) { done.await() }
-        if (!ok || !out.exists() || out.length() < 100) throw TtsException("La synthèse a échoué pour : « ${text.take(40)} »")
+        if (!ok || !out.exists() || out.length() < 100) {
+            val v = resolved
+            if (v != null && v.isNetworkConnectionRequired) {
+                throw TtsException("La voix « ${v.name} » demande une connexion Internet. Choisis une voix hors ligne dans Profil › Voix.")
+            }
+            throw TtsException("La synthèse a échoué pour : « ${text.take(40)} »")
+        }
         AudioFiles.durationMs(out)
     }
 
@@ -128,6 +170,10 @@ class RemoteHttpTtsProvider(
     private val speed: Float,
 ) : VoiceProvider {
     override val id = "remote"
+
+    /** Vrai si le serveur a déjà appliqué la chaîne studio NOCTÉA (en-tête X-Noctea-Studio: 1). */
+    @Volatile var studioProcessed = false
+        private set
     override val displayName = "Serveur vocal personnalisé"
     override val qualityNote = "Qualité définie par le serveur configuré (ex. voix neuronale premium). Nécessite une connexion."
 
@@ -152,6 +198,7 @@ class RemoteHttpTtsProvider(
             conn.outputStream.use { it.write(body.toByteArray()) }
             val code = conn.responseCode
             if (code !in 200..299) throw TtsException("Le serveur vocal a répondu $code.")
+            studioProcessed = conn.getHeaderField("X-Noctea-Studio") == "1"
             conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
         } finally {
             conn.disconnect()

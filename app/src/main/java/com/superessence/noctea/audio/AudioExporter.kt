@@ -216,20 +216,8 @@ class AudioExporter(private val context: Context) {
         }
         codec.stop(); codec.release()
         val mono = pcm.toArray()
-        return resample(mono, outRate)
-    }
-
-    private fun resample(src: ShortArray, rate: Int): FloatArray {
-        if (rate == sr) return FloatArray(src.size) { src[it] / 32768f }
-        val ratio = rate.toDouble() / sr
-        val n = (src.size / ratio).toInt()
-        return FloatArray(n) { i ->
-            val x = i * ratio
-            val i0 = x.toInt().coerceAtMost(src.size - 1)
-            val i1 = (i0 + 1).coerceAtMost(src.size - 1)
-            val t = (x - i0).toFloat()
-            (src[i0] * (1 - t) + src[i1] * t) / 32768f
-        }
+        // sinc fenêtré (voir Resampler) : le fichier exporté garde le timbre de la lecture en direct
+        return Resampler.resample(mono, outRate, sr)
     }
 
     private class ShortArrayBuilder {
