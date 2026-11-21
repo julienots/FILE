@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <string>
 
 #include "agr/core/Result.hpp"
@@ -27,6 +28,11 @@ struct GameManifest {
     bool backQuits = true;                     ///< Android back button / Escape-less desktop: quits the game.
     bool vibration = true;                     ///< Android: VIBRATE permission.
     bool keepScreenOn = true;
+    /// Splash screen before the startup scene: an image (assets:// URI, empty = none) centered on
+    /// `splashColor` (sRGB) for at least `splashSeconds`.
+    std::string splashImage;
+    std::array<float, 4> splashColor{0.06f, 0.07f, 0.09f, 1.0f};
+    float splashSeconds = 1.5f;
     std::string engineVersion;
 
     std::string toJson() const;

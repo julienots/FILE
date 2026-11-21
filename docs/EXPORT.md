@@ -32,6 +32,7 @@ pour ses instantanés (annuler / rétablir, mode Jeu).
 | Orientation | Paysage, portrait, ou les deux (capteur) |
 | Cadence | Celle de l'écran, ou 30 / 60 images/s (30 économise la batterie) |
 | Écran allumé, bouton Retour | Garder l'écran allumé pendant le jeu ; le bouton Retour d'Android quitte le jeu |
+| Écran de démarrage | Image (`assets://...`), couleur de fond et durée minimale : affichée par le lecteur (toutes plateformes) avant la scène de départ, centrée, proportions gardées |
 | Identifiant Android | `com.studio.jeu` (par défaut : organisation + nom) |
 | API minimale / cible, processeurs | Android 8.0 (API 26) minimum ; `arm64-v8a` (téléphones), `x86_64` (émulateurs, Chromebooks) |
 | Signature | Keystore (fichier), alias, mots de passe ; *Créer un keystore* (`keys/release.p12`) |
@@ -109,7 +110,7 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
 - Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
   contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas d'icône intégrée au
   `.exe` ni d'installateur.
-- Pas d'écran de démarrage personnalisé, d'icône adaptative Android (icône simple), de compression de
+- Pas d'icône adaptative Android (icône simple), de compression de
   textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
 - Pas de publication automatique sur Google Play ni d'ouverture directe sur un appareil connecté.

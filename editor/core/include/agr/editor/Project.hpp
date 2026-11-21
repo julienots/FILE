@@ -8,6 +8,7 @@
 
 #include "agr/core/Result.hpp"
 #include "agr/core/Types.hpp"
+#include "agr/math/Math.hpp"
 
 namespace agr::editor {
 
@@ -38,6 +39,9 @@ struct ExportSettings {
     u32 minSdk = 26;     ///< Android 8.0
     u32 targetSdk = 35;
     std::vector<std::string> abis{"arm64-v8a"};
+    std::string splashImage;   ///< Splash screen image (assets://...), empty = none.
+    math::Color splashColor{0.06f, 0.07f, 0.09f, 1.0f};
+    float splashSeconds = 1.5f;
     std::string keystorePath;  ///< Release keystore (empty = debug signing only).
     std::string keyAlias;
 };

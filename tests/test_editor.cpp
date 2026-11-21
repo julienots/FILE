@@ -1268,3 +1268,30 @@ TEST_CASE("Windows export: the cross-compiled player is found in the export temp
     fs::copy_file(templates / "windows-x64" / "agr_player.exe", editorDir / "export_templates" / "windows-x64" / "agr_player.exe");
     CHECK_FALSE(findWindowsPlayer(editorDir).empty());
 }
+
+TEST_CASE("splash screen: project export settings reach game.json and read back") {
+    GameManifest m;
+    CHECK(m.splashImage.empty());
+    m.splashImage = "assets://splash.png";
+    m.splashColor = {1.0f, 0.5f, 0.25f, 1.0f};
+    m.splashSeconds = 2.5f;
+    auto back = GameManifest::fromJson(m.toJson());
+    REQUIRE(back);
+    CHECK(back.value().splashImage == "assets://splash.png");
+    CHECK(back.value().splashColor[1] == doctest::Approx(0.5f));
+    CHECK(back.value().splashSeconds == doctest::Approx(2.5f));
+
+    EditorFixture f(ProjectMode::Mode2D);
+    ExportSettings& x = f.ctx->project().settings().exportSettings;
+    x.splashImage = "assets://logo.png";
+    x.splashColor = {0.1f, 0.2f, 0.3f, 1.0f};
+    x.splashSeconds = 0.75f;
+    REQUIRE(f.ctx->project().save());
+    auto reopened = Project::open(f.ctx->project().root());
+    REQUIRE(reopened);
+    CHECK(reopened.value().settings().exportSettings.splashImage == "assets://logo.png");
+    CHECK(reopened.value().settings().exportSettings.splashColor.z == doctest::Approx(0.3f));
+    const GameManifest gm = gameManifest(reopened.value());
+    CHECK(gm.splashImage == "assets://logo.png");
+    CHECK(gm.splashSeconds == doctest::Approx(0.75f));
+}

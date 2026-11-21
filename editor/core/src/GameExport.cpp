@@ -133,6 +133,9 @@ GameManifest gameManifest(const Project& project) {
     m.backQuits = x.backQuits;
     m.vibration = x.vibration;
     m.keepScreenOn = x.keepScreenOn;
+    m.splashImage = x.splashImage;
+    m.splashColor = {x.splashColor.x, x.splashColor.y, x.splashColor.z, x.splashColor.w};
+    m.splashSeconds = x.splashSeconds;
     m.engineVersion = std::to_string(AGR_VERSION_MAJOR) + "." + std::to_string(AGR_VERSION_MINOR) + "." + std::to_string(AGR_VERSION_PATCH);
     return m;
 }

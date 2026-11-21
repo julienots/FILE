@@ -122,6 +122,12 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     changed |= ImGui::Checkbox("Garder l'écran allumé", &x.keepScreenOn);
     ImGui::SameLine();
     changed |= ImGui::Checkbox("Bouton Retour : quitter", &x.backQuits);
+    ImGui::SeparatorText("Écran de démarrage");
+    changed |= ImGui::InputTextWithHint("Image", "assets://splash.png (vide : aucun)", &x.splashImage);
+    changed |= ImGui::ColorEdit4("Fond", &x.splashColor.x, ImGuiColorEditFlags_NoInputs);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120);
+    changed |= ImGui::DragFloat("Durée (s)", &x.splashSeconds, 0.05f, 0.0f, 10.0f, "%.1f");
 
     if (android) {
         ImGui::SeparatorText("Android");

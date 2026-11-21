@@ -28,6 +28,9 @@ std::string GameManifest::toJson() const {
            {"backQuits", backQuits},
            {"vibration", vibration},
            {"keepScreenOn", keepScreenOn},
+           {"splashImage", splashImage},
+           {"splashColor", splashColor},
+           {"splashSeconds", splashSeconds},
            {"engineVersion", engineVersion}};
     return j.dump(2);
 }
@@ -52,6 +55,10 @@ Result<GameManifest> GameManifest::fromJson(std::string_view text) {
         m.backQuits = j.value("backQuits", m.backQuits);
         m.vibration = j.value("vibration", m.vibration);
         m.keepScreenOn = j.value("keepScreenOn", m.keepScreenOn);
+        m.splashImage = j.value("splashImage", m.splashImage);
+        if (j.contains("splashColor") && j["splashColor"].is_array() && j["splashColor"].size() == 4)
+            for (usize i = 0; i < 4; ++i) m.splashColor[i] = j["splashColor"][i].get<float>();
+        m.splashSeconds = j.value("splashSeconds", m.splashSeconds);
         m.engineVersion = j.value("engineVersion", "");
     } catch (const json::exception& e) {
         return makeError(Error::Code::ParseError, std::string("game.json: ") + e.what());

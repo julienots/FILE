@@ -129,6 +129,10 @@ Result<Project> Project::open(const fs::path& folder) {
         x.vibration = e.value("vibration", x.vibration);
         x.network = e.value("network", x.network);
         x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
+        x.splashImage = e.value("splashImage", x.splashImage);
+        if (e.contains("splashColor") && e["splashColor"].is_array() && e["splashColor"].size() == 4)
+            x.splashColor = {e["splashColor"][0].get<float>(), e["splashColor"][1].get<float>(), e["splashColor"][2].get<float>(), e["splashColor"][3].get<float>()};
+        x.splashSeconds = e.value("splashSeconds", x.splashSeconds);
         x.backQuits = e.value("backQuits", x.backQuits);
         x.minSdk = e.value("minSdk", x.minSdk);
         x.targetSdk = e.value("targetSdk", x.targetSdk);
@@ -171,7 +175,9 @@ Status Project::save() const {
                    {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps},
                    {"vibration", x.vibration}, {"network", x.network},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
                    {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
-                   {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias}};
+                   {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias},
+                   {"splashImage", x.splashImage},   {"splashColor", {x.splashColor.x, x.splashColor.y, x.splashColor.z, x.splashColor.w}},
+                   {"splashSeconds", x.splashSeconds}};
     return writeFile(m_root / kFileName, j.dump(2));
 }
 

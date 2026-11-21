@@ -22,6 +22,7 @@
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/platform/SdlFileProvider.hpp"
 #include "agr/platform/SdlPlatform.hpp"
+#include "agr/render/RenderComponents.hpp"
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
 #include "agr/runtime/Events.hpp"
@@ -47,6 +48,38 @@ public:
     PlayerApp(GameManifest manifest, Options options) : m_manifest(std::move(manifest)), m_options(std::move(options)) {}
 
     Status onStart(Engine& engine) override {
+        if (!m_manifest.splashImage.empty() && m_manifest.splashSeconds > 0.0f) {
+            showSplash(engine);  // the startup scene follows in onUpdate
+            return {};
+        }
+        return startGame(engine);
+    }
+
+    /// Splash: a camera clearing to the splash color and a full-screen canvas with the image
+    /// (aspect kept, at most 60 % of the screen).
+    void showSplash(Engine& engine) {
+        Scene& scene = engine.scene();
+        const auto cam = scene.createEntity("Splash Camera");
+        auto& c = scene.registry().emplace<CameraComponent>(cam);
+        c.projection = Projection::Orthographic;
+        const auto& sc = m_manifest.splashColor;
+        c.clearColor = {sc[0], sc[1], sc[2], sc[3]};
+        const auto canvas = scene.createEntity("Splash");
+        scene.registry().emplace<UICanvasComponent>(canvas);
+        const auto image = scene.createEntity("Splash Image", canvas);
+        auto& r = scene.registry().emplace<UIRectComponent>(image);
+        r.anchorMin = {0.2f, 0.2f};
+        r.anchorMax = {0.8f, 0.8f};
+        r.size = {0.0f, 0.0f};
+        auto& img = scene.registry().emplace<UIImageComponent>(image);
+        img.texture = m_manifest.splashImage;
+        img.preserveAspect = true;
+        scene.updateTransforms();
+        m_splash = true;
+        AGR_LOG_INFO("Player", "splash screen: {} ({} s)", m_manifest.splashImage, m_manifest.splashSeconds);
+    }
+
+    Status startGame(Engine& engine) {
         const std::string uri = "game://" + m_manifest.startupScene;
         if (Status s = engine.loadScene(uri); !s) {
             AGR_LOG_ERROR("Player", "cannot load the startup scene '{}': {}", uri, s.error().message);
@@ -73,6 +106,14 @@ public:
                     m_screenshotTaken = true;
                 }
             }
+        if (m_splash) {
+            m_splashTime += time.unscaledDeltaSeconds;
+            if (m_splashTime >= m_manifest.splashSeconds && time.frameIndex >= 2) {
+                m_splash = false;
+                if (Status s = startGame(engine); !s) engine.requestQuit();
+            }
+            return;
+        }
         if (m_options.autotest && engine.config().maxFrames > 0 && time.frameIndex + 2 == engine.config().maxFrames) autotest(engine);
         if (m_options.autotest && time.frameIndex == 30) m_rendered = renderedSomething(engine);
     }
@@ -113,6 +154,8 @@ private:
     u64 m_screenshotFrame = m_options.screenshotFrame;
     bool m_screenshotTaken = false;
     bool m_rendered = false;
+    bool m_splash = false;
+    f64 m_splashTime = 0.0;
     int m_failures = 0;
 };
 
