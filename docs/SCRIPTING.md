@@ -230,6 +230,11 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
   Échap ferme la liste ;
 - indentation automatique après `then`, `do`, `else`, `function(...)`, `{` ;
 - colonne **API** : l'arbre de `agr` et des méthodes d'entité, un clic insère le nom ;
+- **onglets** : chaque script ouvert a son onglet (astérisque si modifié, texte gardé en mémoire en
+  passant d'un onglet à l'autre ; fermer un onglet modifié demande d'enregistrer) ;
+- liste **Fonctions...** du fichier (`function a:b(`, `nom = function(`) pour y sauter ; **F12** sur
+  un nom va à sa définition, dans le fichier ou dans un autre script du projet (ouvert dans un onglet) ;
+- **Ctrl+F** rechercher / remplacer, **Ctrl+Maj+F** rechercher dans tous les scripts ;
 - **Ctrl+S** enregistre : le jeu recharge le script à chaud ; un fichier modifié par un éditeur externe
   est relu tant qu'il n'y a pas de modification en cours.
 
@@ -271,10 +276,8 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 
 ## Limites actuelles
 
-- **Éditeur de logique visuelle** (événements, conditions, actions sans code) : **non réalisé** ; il était
-  prévu en phase 6 et reste à faire.
-- Éditeur intégré : pas de recherche / remplacement ni de plusieurs fichiers ouverts en onglets ; la
-  complétion ne connaît pas les types (une variable locale n'est pas suivie jusqu'à sa table).
-- Un script par entité ; pas de types statiques (Lua 5.4 standard, pas Luau).
+- Éditeur intégré : la complétion ne connaît pas les types (une variable locale n'est pas suivie
+  jusqu'à sa table) ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
+- Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche
   rien, `emit` rend 0).

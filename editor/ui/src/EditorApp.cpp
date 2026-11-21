@@ -1708,6 +1708,15 @@ void EditorApp::smokeTest(const FrameTime&) {
                   "find in files reports the file and line");
             check(m_scriptEditor.replaceAll(*m_shared, "spin", "turn") == 2 && m_shared->scriptDirty, "replace all in the script");
             m_scriptEditor.edit(*m_shared, smokeCoinScript());  // back to the saved text
+            // Outline and go to definition (in another script: it opens in a second tab).
+            const auto defs = ScriptEditorPanel::definitions(smokeCoinScript());
+            check(defs.size() == 1 && defs[0].name == "Coin:onUpdate" && defs[0].line == 2, "the outline lists the functions");
+            check(static_cast<bool>(m_engine->vfs().writeText("assets://scripts/smoke_util.lua",
+                                                               "local U = {}\n\nlocal helper = function() end\nfunction U.clamp01(x)\n  return x\nend\nreturn U\n")),
+                  "second script written");
+            check(m_scriptEditor.gotoDefinition(*m_shared, "onUpdate") && m_scriptEditor.pendingLine() == 2, "go to a definition in the file");
+            check(m_scriptEditor.gotoDefinition(*m_shared, "clamp01") && m_shared->openScriptRequest == "assets://scripts/smoke_util.lua",
+                  "go to a definition in another script");
             // Command palette: creation and selection commands; the history panel jumps between states.
             const auto commands = buildCommands();
             auto find = [&](const std::string& label) {
@@ -1729,6 +1738,12 @@ void EditorApp::smokeTest(const FrameTime&) {
             ImGui::SetWindowFocus("Shader");
             captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_shader.png").string());
             break;
+        case 215:
+            check(m_scriptEditor.uri() == "assets://scripts/smoke_util.lua" && m_scriptEditor.tabCount() == 2, "the other script opens in a new tab");
+            check(m_scriptEditor.pendingLine() == 4 || m_scriptEditor.pendingLine() == 0, "at the definition's line");
+            ImGui::SetWindowFocus("Script");
+            break;
+        case 217: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_script.png").string()); break;
         case 216: {  // visual logic: a new graph, nodes linked, saved, attached to a cube, run in play mode
             check(fs::exists(fs::path(m_options.smokeTestDir) / "editor_shader.png"), "shader editor screenshot written");
             check(static_cast<bool>(m_shaderPreview.texture(*m_shared)), "shader preview sphere rendered");

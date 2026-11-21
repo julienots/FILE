@@ -136,7 +136,31 @@ private:
     void findNext(EditorShared& s, bool backwards);
     void searchFiles(EditorShared& s);
 
+    // Tabs: the active file lives in m_uri / m_text / m_saved; the others are kept here.
+    struct OpenTab {
+        std::string uri, text, saved;
+        int cursorLine = 1;
+    };
+    std::vector<OpenTab> m_tabs;
+    int m_activeTab = -1, m_closeTab = -1;
+    bool m_selectTab = false;  ///< The active tab changed from code: select it in the tab bar.
+    void stashActive();
+    void activateTab(EditorShared& s, int index);
+    void closeTab(EditorShared& s, int index);
+    void drawTabs(EditorShared& s);
+
 public:
+    /// Tabs (automated tests).
+    usize tabCount() const { return m_tabs.size(); }
+    /// Functions defined in a Lua text: name and 1-based line ("function a.b:c(" or "x = function(").
+    struct Definition {
+        std::string name;
+        int line;
+    };
+    static std::vector<Definition> definitions(const std::string& text);
+    /// Goes to the definition of `word` (this file first, then every script); false if none.
+    bool gotoDefinition(EditorShared& s, const std::string& word);
+    int pendingLine() const { return m_gotoLine; }
     /// Find / replace helpers (automated tests).
     int replaceAll(EditorShared& s, const std::string& what, const std::string& with);
     const std::vector<FileHit>& searchProject(EditorShared& s, const std::string& what) {

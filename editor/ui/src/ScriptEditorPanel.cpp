@@ -494,17 +494,176 @@ void ScriptEditorPanel::drawCode(EditorShared& s, float height) {
     ImGui::EndChild();
 }
 
+void ScriptEditorPanel::stashActive() {
+    if (m_activeTab < 0 || m_activeTab >= static_cast<int>(m_tabs.size())) return;
+    OpenTab& t = m_tabs[static_cast<usize>(m_activeTab)];
+    t.uri = m_uri, t.text = m_text, t.saved = m_saved, t.cursorLine = m_cursorLine;
+}
+
+void ScriptEditorPanel::activateTab(EditorShared& s, int index) {
+    if (index < 0 || index >= static_cast<int>(m_tabs.size()) || index == m_activeTab) return;
+    stashActive();
+    const OpenTab& t = m_tabs[static_cast<usize>(index)];
+    m_activeTab = index;
+    m_selectTab = true;
+    m_uri = t.uri, m_text = t.text, m_saved = t.saved;
+    m_cursorLine = t.cursorLine;
+    m_gotoLine = t.cursorLine;
+    m_refocus = true;
+    m_suggestions.clear();
+    s.scriptDirty = m_text != m_saved;
+    check(s);
+}
+
+void ScriptEditorPanel::closeTab(EditorShared& s, int index) {
+    if (index < 0 || index >= static_cast<int>(m_tabs.size())) return;
+    stashActive();
+    m_tabs.erase(m_tabs.begin() + index);
+    if (m_tabs.empty()) {
+        m_activeTab = -1;
+        m_uri.clear(), m_text.clear(), m_saved.clear();
+        s.scriptDirty = false;
+        m_error.reset();
+        return;
+    }
+    const int next = std::min(index, static_cast<int>(m_tabs.size()) - 1);
+    m_activeTab = -1;  // force a reload of the tab's state
+    activateTab(s, next);
+}
+
+void ScriptEditorPanel::drawTabs(EditorShared& s) {
+    if (m_tabs.empty() && !m_uri.empty()) {  // opened before tabs existed (tests): adopt it
+        m_tabs.push_back({m_uri, m_text, m_saved, m_cursorLine});
+        m_activeTab = 0;
+    }
+    if (!ImGui::BeginTabBar("##scriptTabs", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_FittingPolicyScroll))
+        return;
+    int select = -1, close = -1;
+    for (usize i = 0; i < m_tabs.size(); ++i) {
+        const bool active = static_cast<int>(i) == m_activeTab;
+        const bool dirty = active ? m_text != m_saved : m_tabs[i].text != m_tabs[i].saved;
+        const std::string& uri = active ? m_uri : m_tabs[i].uri;
+        bool open = true;
+        const std::string label = uri.substr(uri.find_last_of('/') + 1) + (dirty ? " *" : "") + "###tab" + uri;
+        ImGuiTabItemFlags flags = dirty ? ImGuiTabItemFlags_UnsavedDocument : 0;
+        if (active && m_selectTab) flags |= ImGuiTabItemFlags_SetSelected;
+        if (ImGui::BeginTabItem(label.c_str(), &open, flags)) {
+            if (!active && !m_selectTab) select = static_cast<int>(i);  // a click on another tab
+            ImGui::EndTabItem();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", uri.c_str());
+        if (!open) close = static_cast<int>(i);
+    }
+    ImGui::EndTabBar();
+    m_selectTab = false;
+    if (close >= 0) {
+        if (close != m_activeTab) activateTab(s, close);
+        if (s.scriptDirty) {  // ask first
+            m_closeTab = m_activeTab;
+            m_askSave = true;
+        } else {
+            closeTab(s, m_activeTab);
+        }
+    } else if (select >= 0) {
+        activateTab(s, select);
+    }
+}
+
+std::vector<ScriptEditorPanel::Definition> ScriptEditorPanel::definitions(const std::string& text) {
+    std::vector<Definition> out;
+    int line = 1;
+    usize start = 0;
+    auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.' || c == ':'; };
+    while (start <= text.size()) {
+        usize end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        std::string l = text.substr(start, end - start);
+        const usize first = l.find_first_not_of(" \t");
+        if (first != std::string::npos) {
+            l = l.substr(first);
+            if (l.rfind("local ", 0) == 0) l = l.substr(6);
+            if (l.rfind("function ", 0) == 0) {  // function a.b:c(
+                usize i = 9;
+                while (i < l.size() && l[i] == ' ') ++i;
+                usize j = i;
+                while (j < l.size() && ident(l[j])) ++j;
+                if (j > i) out.push_back({l.substr(i, j - i), line});
+            } else {  // name = function(
+                usize j = 0;
+                while (j < l.size() && ident(l[j])) ++j;
+                usize k = j;
+                while (k < l.size() && l[k] == ' ') ++k;
+                if (j > 0 && k < l.size() && l[k] == '=' && (k + 1 >= l.size() || l[k + 1] != '=')) {
+                    usize m = k + 1;
+                    while (m < l.size() && l[m] == ' ') ++m;
+                    if (l.compare(m, 8, "function") == 0) out.push_back({l.substr(0, j), line});
+                }
+            }
+        }
+        if (end == text.size()) break;
+        start = end + 1;
+        ++line;
+    }
+    return out;
+}
+
+bool ScriptEditorPanel::gotoDefinition(EditorShared& s, const std::string& word) {
+    if (word.empty()) return false;
+    auto matches = [&](const std::string& name) {  // "spin", "M.spin", "M:spin" all define spin
+        if (name == word) return true;
+        const usize cut = name.find_last_of(".:");
+        return cut != std::string::npos && name.substr(cut + 1) == word;
+    };
+    for (const Definition& d : definitions(m_text))
+        if (matches(d.name)) {
+            m_gotoLine = d.line;
+            m_refocus = true;
+            return true;
+        }
+    // Other scripts of the project.
+    std::error_code ec;
+    const auto assets = s.ctx.project().assetsDirectory();
+    for (auto it = std::filesystem::recursive_directory_iterator(assets, ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec) || it->path().extension() != ".lua") continue;
+        const std::string uri = "assets://" + std::filesystem::relative(it->path(), assets, ec).generic_string();
+        if (uri == m_uri) continue;
+        auto text = s.engine.vfs().readText(uri);
+        if (!text) continue;
+        for (const Definition& d : definitions(text.value()))
+            if (matches(d.name)) {
+                s.openScriptRequest = uri;
+                m_gotoAfterOpen = d.line;
+                return true;
+            }
+    }
+    return false;
+}
+
 void ScriptEditorPanel::draw(EditorShared& s) {
     if (!s.openScriptRequest.empty()) {
         const std::string uri = std::move(s.openScriptRequest);
         s.openScriptRequest.clear();
         s.showScriptEditor = true;
         if (uri != m_uri) {
-            if (s.scriptDirty) {
-                m_afterUri = uri;
-                m_askSave = true;
-            } else {
+            int found = -1;
+            for (usize i = 0; i < m_tabs.size(); ++i)
+                if (m_tabs[i].uri == uri) found = static_cast<int>(i);
+            if (found >= 0) {
+                const int line = m_gotoAfterOpen;
+                activateTab(s, found);
+                if (line > 0) {
+                    m_gotoLine = line;
+                    m_refocus = true;
+                }
+                m_gotoAfterOpen = 0;
+            } else {  // a new tab
+                stashActive();
                 open(s, uri);
+                if (m_uri == uri) {
+                    m_tabs.push_back({m_uri, m_text, m_saved, 1});
+                    m_activeTab = static_cast<int>(m_tabs.size()) - 1;
+                    m_selectTab = true;
+                }
             }
         }
     }
@@ -524,9 +683,16 @@ void ScriptEditorPanel::draw(EditorShared& s) {
             const bool ok = choice == 2 || (choice == 1 && save(s));
             if (ok) {
                 s.scriptDirty = false;
-                if (m_afterUri.empty()) s.showScriptEditor = false;
-                else open(s, m_afterUri);
+                if (m_closeTab >= 0) {
+                    m_text = m_saved;  // changes dropped (or saved)
+                    closeTab(s, m_closeTab);
+                } else if (m_afterUri.empty()) {
+                    s.showScriptEditor = false;
+                } else {
+                    open(s, m_afterUri);
+                }
             }
+            m_closeTab = -1;
             m_afterUri.clear();
             ImGui::CloseCurrentPopup();
         }
@@ -539,14 +705,7 @@ void ScriptEditorPanel::draw(EditorShared& s) {
     if (m_pendingCheck && ImGui::GetTime() - m_editTime >= kCheckDelay) check(s);
     bool visible = true;
     const bool shown = ImGui::Begin("Script", &visible);
-    if (!visible) {
-        if (s.scriptDirty) {
-            m_afterUri.clear();
-            m_askSave = true;
-        } else {
-            s.showScriptEditor = false;
-        }
-    }
+    if (!visible) s.showScriptEditor = false;  // tabs keep their unsaved text until closed
     if (!shown) {
         ImGui::End();
         return;
@@ -557,10 +716,11 @@ void ScriptEditorPanel::draw(EditorShared& s) {
         ImGui::End();
         return;
     }
-    ImGui::PushFont(s.fonts.semibold, 0.0f);
-    ImGui::TextUnformatted((m_uri.substr(m_uri.find_last_of('/') + 1) + (s.scriptDirty ? " *" : "")).c_str());
-    ImGui::PopFont();
-    ImGui::SameLine();
+    drawTabs(s);
+    if (m_uri.empty()) {
+        ImGui::End();
+        return;
+    }
     ImGui::BeginDisabled(!s.scriptDirty);
     if (ImGui::Button("Enregistrer")) save(s);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort | ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Ctrl+S quand l'éditeur a le focus");
@@ -570,7 +730,34 @@ void ScriptEditorPanel::draw(EditorShared& s) {
     ImGui::SameLine();
     if (m_error) ImGui::TextColored(palette::toVec4(palette::kError), "Ligne %d : %s", m_error->line, m_error->message.c_str());
     else ImGui::TextColored(palette::toVec4(palette::kSuccess), "Syntaxe correcte");
+    {  // outline: the functions of the file
+        const std::vector<Definition> defs = definitions(m_text);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(180);
+        if (ImGui::BeginCombo("##outline", "Fonctions...", ImGuiComboFlags_HeightLarge)) {
+            if (defs.empty()) ImGui::TextDisabled("Aucune fonction");
+            for (usize i = 0; i < defs.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::Selectable((defs[i].name + "  :" + std::to_string(defs[i].line)).c_str())) {
+                    m_gotoLine = defs[i].line;
+                    m_refocus = true;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aller à une fonction du fichier · F12 sur un nom : aller à sa définition");
+    }
     const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    if (focused && ImGui::IsKeyPressed(ImGuiKey_F12, false)) {  // the identifier under the cursor
+        const usize pos = static_cast<usize>(std::clamp(m_cursorPos, 0, static_cast<int>(m_text.size())));
+        auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+        usize a = pos, b = pos;
+        while (a > 0 && ident(m_text[a - 1])) --a;
+        while (b < m_text.size() && ident(m_text[b])) ++b;
+        const std::string word = m_text.substr(a, b - a);
+        if (!word.empty() && !gotoDefinition(s, word)) s.notify("Définition introuvable : " + word);
+    }
     if (focused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false) && s.scriptDirty) save(s);
     if (focused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
         m_findOpen = m_findFocus = true;
