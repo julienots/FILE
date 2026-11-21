@@ -1826,6 +1826,42 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "modfun") {
+        // 2.7.0 the special mods in play: moon jump, giant enemies, eternal night under the snow (log + pictures)
+        static float y0, apex; static int ok[3];
+        auto mod = [](const char* l) { std::string e; if (!applyModDataLine(l, e)) AGR_LOG("MODFUN bad line %s: %s", l, e.c_str()); };
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; for (int& o : ok) o = 0;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 60, b->pos.y + 40, 0.f); }, idle, "setup"});
+        s.push_back({0.1f, [mod](Game& g) { mod("game.gravity = 0.35"); mod("game.jump = 1.35"); y0 = apex = g.pc().pos.y; g.stamina = g.maxStamina; g.playerJump(false); }, idle, "moon jump"});
+        s.push_back({3.5f, none, [](Game& g, float) { apex = std::max(apex, g.pc().pos.y); g.camIdleT = 0; }, "fly"});
+        s.push_back({0.1f, [](Game& g) { ok[0] = apex - y0 > 3.f && g.pc().grounded; AGR_LOG("MODFUN moon jump apex %.1f m (normal about 1 m), landed %d -> %d", apex - y0, g.pc().grounded, ok[0]);
+            gameTuning() = GameTuning(); }, idle, "check"});
+        s.push_back({0.1f, [mod](Game& g) { mod("game.enemy_scale = 2"); Character& c = g.pc();
+            Entity e = g.spawnEnemy(enemyIndex("wolf"), c.pos + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 6.f);
+            Character* w = g.reg.get<Character>(e); ok[1] = w && w->vis.scale > 1.6f;
+            if (AIBrain* ai = g.reg.get<AIBrain>(e)) ai->state = AIState::Idle;
+            AGR_LOG("MODFUN giant wolf scale %.2f -> %d", w ? w->vis.scale : 0.f, ok[1]); g.camYaw = c.yaw + PI; g.camPitch = 0.15f; g.camDist = g.camDistTarget = 9.f; }, idle, "giant"});
+        s.push_back({0.8f, none, [](Game& g, float) { g.camIdleT = 0; }, "look"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/MF0_giant.png"); gameTuning() = GameTuning(); }, idle, "shot"});
+        s.push_back({4.f, [mod](Game& g) { mod("game.hour = 23.5"); mod("game.weather = neige"); }, [](Game& g, float) { g.camIdleT = 0; }, "night snow"});
+        s.push_back({0.05f, [](Game& g) { ok[2] = std::fabs(g.timeOfDay - 23.5f) < 0.01f && g.weatherNext == Game::W_SNOW; AGR_LOG("MODFUN eternal night %.2f h, weather %d -> %d", g.timeOfDay, g.weatherNext, ok[2]);
+            g.requestScreenshot("build/shots/MF1_night_snow.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game&) { gameTuning() = GameTuning(); bool all = true; for (int o : ok) all = all && o; AGR_LOG("MODFUN TEST %s", all ? "PASSED" : "FAILED"); }, idle, "end"});
+        return s;
+    }
+    if (name == "trees") {
+        // 2.7.0 trees and grass close up in several regions (pictures; LK_SHOT_TAG names the set: before / after)
+        static std::string tag; tag = getenv("LK_SHOT_TAG") ? getenv("LK_SHOT_TAG") : "x";
+        static const float spots[][3] = {{1300, 1850, 0.4f}, {2600, 620, 2.2f}, {430, 1450, 1.f}, {1500, 1500, 3.4f}};
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1;
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
+        for (int i = 0; i < 4; i++) {
+            s.push_back({3.5f, [i](Game& g) { teleport(g, spots[i][0], spots[i][1], spots[i][2]); g.camPitch = 0.12f; g.camDist = g.camDistTarget = 8.f; g.camYaw = spots[i][2] + PI; },
+                [](Game& g, float) { g.camIdleT = 0; }, "go"});
+            s.push_back({0.05f, [i](Game& g) { g.requestScreenshot("build/shots/TR_" + tag + std::to_string(i) + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "wind") {
         // 2.6.2 strong wind: pine crowns stay on their trunks, grass bends but never sinks into the ground (pictures)
         auto setW = [](Game& g, int w) { g.weather = g.weatherNext = w; g.weatherBlend = 1; g.weatherTimer = 999; };

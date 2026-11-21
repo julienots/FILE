@@ -196,7 +196,9 @@ std::vector<LoreDef>& loreMutable();
 struct DigTuning { float digRadius = 1.6f, digDepth = 0.55f, bombRadius = 3.4f, bombDepth = 2.4f, bombDamage = 70.f, bombFuse = 2.2f; };
 DigTuning& digTuning();
 // 2.6.0 whole-game multipliers a mod can set ("game.enemy_hp = 1.5", "game.gold = 2"...)
-struct GameTuning { float enemyHp = 1, enemyAtk = 1, xp = 1, gold = 1, playerSpeed = 1, staminaRegen = 1; };
+struct GameTuning { float enemyHp = 1, enemyAtk = 1, xp = 1, gold = 1, playerSpeed = 1, staminaRegen = 1;
+    // 2.7.0 "game.gravity", "game.jump", "game.time_speed", "game.mount_speed", "game.enemy_scale", "game.weather", "game.hour"
+    float gravity = 1, jump = 1, timeSpeed = 1, mountSpeed = 1, enemyScale = 1, hour = -1; int weather = -1; };
 GameTuning& gameTuning();
 bool applyModDataLine(const std::string& line, std::string& err);
 

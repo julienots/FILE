@@ -295,7 +295,7 @@ bool Game::playerJump(bool buffered) {
     // 1.11.2 a running jump goes higher and further, and keeps the sprint speed in the air
     float hs = length(vec2(c.vel.x, c.vel.z));
     bool fast = hs > 5.8f;
-    c.vel.y = fast ? 7.1f : 6.4f;
+    c.vel.y = (fast ? 7.1f : 6.4f) * gameTuning().jump;   // 2.7.0 mods: jump
     if (fast) { c.vel.x *= 1.08f; c.vel.z *= 1.08f; sprintJump = true; particles.dust(c.pos, 0.8f); }
     c.grounded = false;
     play("jump", 0.6f, fast ? 0.92f : 1.f);
@@ -725,7 +725,7 @@ void Game::updatePlayer(float dt) {
         Character& m = *reg.get<Character>(mountEnt);
         const MountDef& md = mounts()[m.mountDef];
         sprinting = input.sprint && stamina > 5 && mag > 0.5f;
-        float spd = mag * (sprinting ? md.sprint : md.speed);
+        float spd = mag * (sprinting ? md.sprint : md.speed) * gameTuning().mountSpeed;   // 2.7.0 mods
         if (sprinting) { stamina -= dt * 10.f; staminaRegenDelay = 0.5f; }
         vec3 dv = want * spd;
         m.vel.x = damp(m.vel.x, dv.x, 3.f, dt); m.vel.z = damp(m.vel.z, dv.z, 3.f, dt);

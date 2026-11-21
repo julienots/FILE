@@ -1,0 +1,2 @@
+# Destrier céleste (mod livré avec LOST KINGDOM 2.7.0)
+game.mount_speed = 2.2

@@ -1,0 +1,2 @@
+# Hiver éternel (mod livré avec LOST KINGDOM 2.7.0)
+game.weather = neige

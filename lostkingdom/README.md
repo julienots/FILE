@@ -6,12 +6,37 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.6.2 (versionCode 39), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.6.1 : elle s'installe par-dessus). SHA-256 : `88837cd6ce060914e52747b2431a8c3b3bb2ec6f680685d7c7e271badbf09a6e`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.7.0 (versionCode 40), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.6.2 : elle s'installe par-dessus). SHA-256 : `5d04b26931b98e9637a3b19a427159dcffd249845a430bc21e5db49100e15f12`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.7.0 (arbres et herbe plus réalistes, 8 mods spéciaux)
+
+- **Sapins refaits.** Ils sont désormais faits de sept étages de branches en étoile, chacun tourné au hasard. Chaque branche part du tronc, se cambre puis retombe, avec des encoches entre les branches. Le feuillage est sombre près du tronc et plus clair au bout des aiguilles, avec un dessous dans l'ombre. Le tronc s'affine vers le haut, a des racines au pied et une flèche au sommet. Les sapins enneigés ont de la neige sur chaque étage. Au loin, une version allégée de quatre étages est utilisée.
+- **Chênes et bouleaux refaits.** La couronne est maintenant portée par les branches : chaque branche quitte le tronc, se divise une fois et porte sa propre masse de feuilles. La silhouette est irrégulière, on voit le bois entre les touffes, et les masses de feuilles sont plus bosselées. Les feuilles sont plus petites, plus claires sur le dessus et dépassent du volume.
+- **Herbe plus réaliste et mieux plantée.** Chaque touffe pousse d'un seul pied : 8 brins fins (10 près du héros) qui montent, se courbent puis retombent vers l'extérieur. Le pied est sombre et enfoncé de 2 cm dans le sol, la pointe est plus claire et un peu dorée, et chaque brin a sa propre teinte. Le milieu des brins bouge moins que la pointe dans le vent.
+- **Vraies fleurs.** Les coquelicots et les marguerites ont maintenant une coupe de pétales relevés autour d'un cœur, à la place de carrés plats. La lavande a des épis de petites fleurs. Les fleurs des prés ont une tige courbée avec deux feuilles et six pétales.
+- **Huit mods spéciaux livrés avec le jeu**, ce qui en fait 14 au total. Ils sont désactivés par défaut, à activer dans le menu *Mods*, et se combinent entre eux :
+  - *Lune basse* : gravité lunaire, sauts d'environ 5 m ;
+  - *Monde des géants* : ennemis deux fois plus grands, plus de vie, double expérience ;
+  - *Mini-monstres* : ennemis deux fois plus petits ;
+  - *Hiver éternel* : il neige partout ;
+  - *Nuit éternelle* : il est toujours 23 h 30 ;
+  - *Destrier céleste* : montures 2,2 fois plus rapides ;
+  - *Apocalypse* : orage permanent, ennemis géants et enragés, plus d'or et d'expérience ;
+  - *Terrassier* : pelle et bombes gigantesques.
+- **Nouvelles clés de mod** (voir `docs/MODDING.md`) : `game.gravity`, `game.jump`, `game.time_speed`, `game.hour`, `game.weather` (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal), `game.mount_speed` et `game.enemy_scale`.
+- **La carte** : elle a déjà été agrandie en 2.4.0. Elle mesure 6 144 m × 6 144 m (contre 4 608 m avant), avec les Steppes de Valdor et la Jungle d'Émeraude. Elle n'a pas changé dans cette version.
+- **Vérifié sur ordinateur** :
+  - scénario `trees` : captures avant et après dans quatre régions ;
+  - scénario `modfun` : un saut lunaire monte à 5,2 m contre environ 1 m d'habitude, un loup géant est à l'échelle 2, la nuit éternelle et la neige forcée fonctionnent ;
+  - tests unitaires : 2734 réussis, dont les 14 mods livrés appliqués sans erreur et le refus d'une météo inconnue ;
+  - scénarios `newgame` et `titlemenus` réussis.
+- **Coût en triangles** (scénario `perf`, avant puis après) : Brindlemere 552 k → 560 k, Port-Azur 471 k → 464 k, Shirokawa 554 k → 570 k, Chênebrune (la plus boisée) 831 k → 947 k (+14 %). Pour compenser des touffes plus fournies, l'herbe est un peu plus espacée. **L'effet en images par seconde sur téléphone n'est pas mesuré.**
+- **Non vérifié** : rien n'a été essayé sur un vrai téléphone. Les palmiers, les arbres de la jungle et les autres essences n'ont pas été refaits.
 
 ### Correctifs 2.6.2 (herbe et arbres dans le vent)
 

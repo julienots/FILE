@@ -521,7 +521,7 @@ void Game::updateProjectiles(float dt) {
 void Game::physicsStep(Entity e, Character& c, float dt) {
     bool frozen = c.status.freeze > 0 || c.status.stun > 0;
     if (e == player) heroFlightPhysics(c, dt);
-    if (!c.grounded || c.swimming) c.vel.y -= (c.swimming ? 0.f : 20.f) * dt;
+    if (!c.grounded || c.swimming) c.vel.y -= (c.swimming ? 0.f : 20.f * gameTuning().gravity) * dt;   // 2.7.0 mods: gravity
     vec3 move = vec3(c.vel.x, 0, c.vel.z) * (frozen ? 0.f : 1.f) + c.knock;
     c.pos += move * dt + vec3(0, c.vel.y * dt, 0);
     c.knock = c.knock * std::exp(-8.f * dt);

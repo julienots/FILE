@@ -1442,6 +1442,19 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         if (key == "game.gold") return num(g.gold, 0.1f, 10.f);
         if (key == "game.player_speed") return num(g.playerSpeed, 0.5f, 2.5f);
         if (key == "game.stamina_regen") return num(g.staminaRegen, 0.2f, 5.f);
+        if (key == "game.gravity") return num(g.gravity, 0.15f, 3.f);         // 2.7.0
+        if (key == "game.jump") return num(g.jump, 0.5f, 3.f);
+        if (key == "game.time_speed") return num(g.timeSpeed, 0.f, 20.f);     // 0 = time stands still
+        if (key == "game.mount_speed") return num(g.mountSpeed, 0.5f, 3.f);
+        if (key == "game.enemy_scale") return num(g.enemyScale, 0.4f, 3.f);
+        if (key == "game.hour") return num(g.hour, 0.f, 23.99f);              // the clock stays at this hour
+        if (key == "game.weather") {
+            static const char* names[] = {"clair", "nuageux", "pluie", "orage", "neige", "brouillard", "cendres", "sable"};
+            std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+            if (v == "normal" || v == "auto") { g.weather = -1; return true; }
+            for (int i = 0; i < 8; i++) if (v == names[i]) { g.weather = i; return true; }
+            err = "météo inconnue : " + val + " (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal)"; return false;
+        }
     }
     if (key == "lore.add") {   // lore.add = id | Titre | Texte
         size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);

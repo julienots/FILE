@@ -278,7 +278,7 @@ Entity Game::spawnEnemy(int def, vec3 pos, bool elite, uint32_t uid) {
     c.radius = d.radius * (elite ? 1.15f : 1.f); c.level = d.level + (elite ? 2 : 0);
     float hpm = elite ? 1.8f : 1.f;
     c.maxHp = c.hp = d.hp * hpm * difficultyEnemyHp(); c.atk = d.atk * (elite ? 1.3f : 1.f) * difficultyEnemyAtk(); c.def = d.def; c.maxPoise = c.poise = d.poise * hpm;   // 2.6.0 difficulty + mods
-    float sc = d.scale * (elite ? 1.18f : 1.f);
+    float sc = d.scale * (elite ? 1.18f : 1.f) * gameTuning().enemyScale;   // 2.7.0 mods: giants / minis
     if (d.arch == Arch::Humanoid) {
         HumanoidLook L = d.hlook;
         setupVisualHumanoid(c.vis, L, d.weapon, d.offhand, sc);

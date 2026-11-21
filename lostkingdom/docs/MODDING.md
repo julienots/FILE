@@ -45,6 +45,7 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 | `lore.add` (chronique) | `identifiant \| Titre \| Texte` | `lore.add = ma_page \| Mon titre \| Mon texte` |
 | `dig` (pelle, 2.4.0) | `dig.radius` (0,6 à 4 m), `dig.depth` (0,1 à 3 m par coup) | `dig.depth = 1.2` |
 | `game` (toute la partie, 2.6.0) | `game.enemy_hp` et `game.enemy_atk` (0,2 à 10), `game.xp` et `game.gold` (0,1 à 10), `game.player_speed` (0,5 à 2,5), `game.stamina_regen` (0,2 à 5) — des multiplicateurs | `game.gold = 3` |
+| `game` (2.7.0) | `game.gravity` (0,15 à 3), `game.jump` (0,5 à 3), `game.time_speed` (0 à 20 ; 0 fige le temps), `game.hour` (0 à 23,99 : l'horloge reste à cette heure), `game.mount_speed` (0,5 à 3), `game.enemy_scale` (0,4 à 3), `game.weather` = `clair`, `nuageux`, `pluie`, `orage`, `neige`, `brouillard`, `cendres`, `sable` ou `normal` | `game.weather = neige` |
 | `bomb` (bombes, 2.4.0) | `bomb.radius` (1 à 12 m), `bomb.depth` (0,2 à 10 m), `bomb.damage` (0 à 2000), `bomb.fuse` (0,3 à 10 s) | `bomb.radius = 8` |
 
 - **Valeurs** : les nombres sont limités à des valeurs raisonnables (par exemple `crit` entre 0 et 1, `scale` entre 0,3 et 6).
@@ -63,7 +64,7 @@ Si plusieurs mods remplacent le même fichier, c'est le premier mod actif (par o
 
 ### Mods livrés avec le jeu (2.6.0)
 
-Six mods sont inclus dans l'APK, dans `assets/mods/<id>/` (avec la liste `assets/mods/index.txt`). Au premier lancement, ils sont copiés dans le dossier des mods, **désactivés**, puis s'activent dans le menu Mods. Ce sont de bons exemples à copier pour écrire les vôtres.
+Quatorze mods sont inclus dans l'APK (six depuis la 2.6.0, huit de plus en 2.7.0 : Lune basse, Monde des géants, Mini-monstres, Hiver éternel, Nuit éternelle, Destrier céleste, Apocalypse, Terrassier), dans `assets/mods/<id>/` (avec la liste `assets/mods/index.txt`). Au premier lancement, ils sont copiés dans le dossier des mods, **désactivés**, puis s'activent dans le menu Mods. Ce sont de bons exemples à copier pour écrire les vôtres.
 
 ## 3. Ce que les mods ne font pas (encore)
 

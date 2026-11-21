@@ -1,0 +1,4 @@
+name = Apocalypse
+author = Superessence Studio
+version = 1.0
+description = Orage permanent, ennemis géants et enragés… mais des trésors à la hauteur. Pour les héros confirmés.

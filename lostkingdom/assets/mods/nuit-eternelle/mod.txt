@@ -1,0 +1,4 @@
+name = Nuit éternelle
+author = Superessence Studio
+version = 1.0
+description = Le soleil ne se lève plus : étoiles, lune et monstres de la nuit pour toujours.

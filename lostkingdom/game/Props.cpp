@@ -63,9 +63,11 @@ static void clump(MeshBuilder& m, vec3 c, vec3 r, vec3 col, float wind, uint32_t
     Rng rng(seed);
     size_t from = m.v.size();
     float ph1 = rng.f() * 6.f, ph2 = rng.f() * 6.f;
-    auto lump = [&](vec3 u) { return 1.f + 0.11f * std::sin(u.x * 3.1f + ph1) * std::sin(u.z * 2.7f + ph2) + 0.07f * std::sin(u.y * 4.3f + ph1 * 1.7f); };
+    // 2.7.0 lumpier: leaf masses bulge out of the clump instead of a smooth ball
+    auto lump = [&](vec3 u) { return 1.f + 0.17f * std::sin(u.x * 3.1f + ph1) * std::sin(u.z * 2.7f + ph2) + 0.1f * std::sin(u.y * 4.3f + ph1 * 1.7f) + 0.08f * std::sin(u.x * 7.3f + u.z * 6.1f + ph2 * 2.3f); };
     // core volume (slightly smaller: the leaf shell provides the outer silhouette)
-    const int seg = gLiteBuild ? 7 : 9, rings = gLiteBuild ? 5 : 6;
+    bool small = (r.x + r.y + r.z) / 3.f < 1.0f;   // 2.7.0 small clumps get a coarser core (the leaf cards carry the detail)
+    const int seg = gLiteBuild || small ? 7 : 9, rings = gLiteBuild || small ? 4 : 6;
     uint32_t base = (uint32_t)m.v.size();
     for (int j = 0; j <= rings; j++) {
         float th = PI * j / rings;
@@ -83,19 +85,20 @@ static void clump(MeshBuilder& m, vec3 c, vec3 r, vec3 col, float wind, uint32_t
             m.tri(a, d, b); m.tri(b, d, e);
         }
     // leaf cards on the surface, oriented in the tangent plane, sharing the volume normal
-    int cards = gLiteBuild ? 0 : (int)clampf(6.f + (r.x + r.z) * 5.f, 8.f, 22.f);
+    // 2.7.0 twice as many, smaller leaf sprays that stand out of the volume: a broken, leafy silhouette
+    int cards = gLiteBuild ? 0 : (int)clampf(6.f + (r.x + r.z) * 6.f, 10.f, 24.f);
     float avgR = (r.x + r.y + r.z) / 3.f;
     for (int k = 0; k < cards; k++) {
         vec3 u = rng.onSphere();
         if (u.y < -0.55f) u.y = -u.y * 0.5f;                 // few cards underneath
         u = normalize(u);
-        vec3 p = c + u * r * rng.range(0.92f, 1.08f) * lump(u);
+        vec3 p = c + u * r * rng.range(0.95f, 1.16f) * lump(u);
         vec3 n = normalize(normalize(vec3(u.x / r.x, u.y / r.y, u.z / r.z)) + vec3(0, 0.3f, 0));
         vec3 t = normalize(cross(n, std::fabs(n.y) > 0.9f ? vec3(1, 0, 0) : vec3(0, 1, 0)));
         float a = rng.f() * TAU;
         vec3 tx = t * std::cos(a) + cross(n, t) * std::sin(a), ty = cross(n, tx);
-        float sz = avgR * rng.range(0.4f, 0.62f);
-        vec3 lc = col * rng.range(0.85f, 1.18f);
+        float sz = avgR * rng.range(0.26f, 0.42f);
+        vec3 lc = col * rng.range(0.78f, 1.3f) * (0.85f + 0.3f * clampf(u.y * 0.5f + 0.5f, 0.f, 1.f));   // sunlit on top
         lc = lerp(lc, vec3(lc.x * 1.1f, lc.y * 1.08f, lc.z * 0.8f), rng.f() * 0.4f);  // sun-warmed leaves
         Mat lm(lc, 0.7f, 0, 0, wind);
         // irregular diamond (pointed leaf cluster), tilted outwards a bit
@@ -128,6 +131,44 @@ static void ringOfRoots(MeshBuilder& m, float r, int n, vec3 col, Rng& rng) {
         float a = i * TAU / n + rng.range(-0.2f, 0.2f);
         vec3 d{std::cos(a), 0, std::sin(a)};
         m.tube(d * r * 0.4f + vec3(0, r * 0.6f, 0), d * r * 1.6f + vec3(0, -0.15f, 0), r * 0.32f, r * 0.08f, Mat(col, 0.9f), 6, false);
+    }
+}
+
+// 2.7.0 one tier of a conifer: a jagged star of boughs around the trunk. Each bough arches out from the trunk and
+// droops at its tip; notches between them sit higher and closer. Dark and dense near the trunk, lighter needles at
+// the tips, a dark underside. (Replaces the smooth stacked cones.)
+static void pineTier(MeshBuilder& F, float y, float r, float rise, int pts, vec3 col, Rng& rng, bool mid, bool snowCap) {
+    const int n = pts * 2;
+    float rot = rng.f() * TAU;
+    vec3 top{0, y + rise, 0}, under{0, y - r * 0.08f, 0};
+    std::vector<vec3> rim(n), mr(n);
+    for (int i = 0; i < n; i++) {
+        float a = rot + TAU * i / n + rng.range(-0.1f, 0.1f);
+        bool tip = (i & 1) == 0;
+        float rr = tip ? r * rng.range(0.82f, 1.1f) : r * rng.range(0.42f, 0.58f);
+        float droop = tip ? r * rng.range(0.34f, 0.5f) : r * 0.1f;
+        rim[i] = vec3(std::cos(a) * rr, y - droop + (tip ? 0.f : rise * 0.2f), std::sin(a) * rr);
+        mr[i] = lerp(top, rim[i], 0.55f) + vec3(0, r * (tip ? 0.12f : 0.05f), 0);   // the bough arches before it droops
+    }
+    auto V = [&](vec3 p, vec3 nrm, vec3 c, float ao) { uint32_t k = F.vert(p, normalize(nrm), Mat(c, 0.85f)); F.v[k].a = (uint8_t)clampf(ao * 255.f, 0, 255); return k; };
+    vec3 deep = col * 0.55f, light = lerp(col * 1.12f, vec3(col.x * 1.15f, col.y * 1.2f, col.z * 0.85f), 0.4f);
+    if (snowCap) { deep = pal::snow * 0.82f; light = pal::snow; }
+    uint32_t it = V(top, {0, 1, 0}, deep, 0.6f);
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        auto out = [&](vec3 p, float up) { vec3 h{p.x, 0, p.z}; float l = length(h); return (l > 1e-4f ? h / l : vec3(0)) * 0.65f + vec3(0, up, 0); };
+        vec3 ci = lerp(deep, light, (i & 1) ? 0.55f : 1.f), cj = lerp(deep, light, (j & 1) ? 0.55f : 1.f);
+        uint32_t ri = V(rim[i], out(rim[i], 0.55f), ci, (i & 1) ? 0.75f : 1.f), rj = V(rim[j], out(rim[j], 0.55f), cj, (j & 1) ? 0.75f : 1.f);
+        if (mid) {
+            uint32_t mi = V(mr[i], out(mr[i], 0.9f), lerp(deep, light, 0.45f), 0.8f), mj = V(mr[j], out(mr[j], 0.9f), lerp(deep, light, 0.45f), 0.8f);
+            F.tri(it, mj, mi);
+            F.tri(mi, mj, rj); F.tri(mi, rj, ri);
+        } else F.tri(it, rj, ri);
+        if (!snowCap) {   // underside: needles in the shade of the tier
+            uint32_t u = V(under, {0, -1, 0}, col * 0.3f, 0.35f);
+            uint32_t ui = V(rim[i], {0, -1, 0}, col * 0.45f, 0.5f), uj = V(rim[j], {0, -1, 0}, col * 0.45f, 0.5f);
+            F.tri(u, ui, uj);
+        }
     }
 }
 
@@ -176,53 +217,63 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
         S.tube(top * 0.55f, top, r0 * 0.8f, r0 * 0.45f, Mat(birch ? pal::birch : pal::bark, 0.9f, 0, 0, 0.1f), 7, false);
         if (birch) for (auto& v : S.v) if (std::fmod(std::fabs(v.py * 3.7f + v.px * 5), 1.f) < 0.18f) { v.r = 50; v.g = 45; v.b = 40; }
         if (!birch) { Rng r2(var); ringOfRoots(S, r0 * 1.2f, 4, pal::barkDark, r2); }
-        for (int i = 0; i < 3; i++) {
-            float a = i * TAU / 3 + rng.f();
-            vec3 bs = top * rng.range(0.55f, 0.8f);
-            S.tube(bs, bs + vec3(std::cos(a) * 1.1f, 0.8f, std::sin(a) * 1.1f), r0 * 0.4f, r0 * 0.15f, Mat(birch ? pal::birch : pal::bark, 0.9f, 0, 0, 0.3f), 5, false);
-        }
-        int nc = birch ? 6 : 8;
-        vec3 cc = top + vec3(0, birch ? 0.6f : 1.2f, 0);
+        // 2.7.0 a crown made of the branches: each limb leaves the trunk, forks once and carries its own leaf mass,
+        // so the crown is irregular with gaps where light passes, and the wood shows between the clumps
+        vec3 cc = top + vec3(0, birch ? 0.6f : 1.1f, 0);
         float cr = birch ? 1.3f : 2.2f;
         vec3 base = birch ? hexColor(0x7fa83c) : (var % 4 == 3 ? pal::leafAut : pal::leaf1);
-        for (int i = 0; i < nc; i++) {
-            vec3 o = rng.onSphere() * vec3(cr, cr * 0.55f, cr);
-            vec3 col = lerp(base, i % 2 ? pal::leaf2 : pal::leaf3, rng.f() * 0.5f);
-            clump(F, cc + o, vec3(cr * rng.range(0.6f, 0.85f), cr * rng.range(0.45f, 0.6f), cr * rng.range(0.6f, 0.85f)), col, 0.8f, rng.next());
+        Mat wood(birch ? pal::birch : pal::bark, 0.9f);
+        int nb = birch ? 4 : 5;
+        float a0 = rng.f() * TAU;
+        for (int i = 0; i < nb; i++) {
+            float a = a0 + i * TAU / nb + rng.range(-0.35f, 0.35f);
+            vec3 out{std::cos(a), 0, std::sin(a)};
+            vec3 bs = top * rng.range(0.5f, 0.85f);
+            float reach = cr * rng.range(0.75f, 1.05f);
+            vec3 be = bs + out * reach + vec3(0, rng.range(0.9f, 1.6f) * (birch ? 1.2f : 1.f), 0);
+            S.tube(bs, be, r0 * 0.42f, r0 * 0.16f, wood, 5, false);
+            vec3 fork = be + vec3(-out.z, 0.5f, out.x) * rng.range(0.4f, 0.7f) * (rng.chance(0.5f) ? 1.f : -1.f);
+            S.tube(lerp(bs, be, 0.6f), fork, r0 * 0.2f, r0 * 0.08f, wood, 4, false);
+            vec3 col = lerp(base, i % 2 ? pal::leaf2 : pal::leaf3, rng.f() * 0.55f) * rng.range(0.88f, 1.1f);
+            float s = cr * rng.range(0.5f, 0.66f);
+            clump(F, be + vec3(0, s * 0.25f, 0), vec3(s, s * 0.72f, s), col, 0.8f, rng.next());
+            uint32_t fs = rng.next();
+            if (!gLiteBuild) clump(F, fork + vec3(0, s * 0.15f, 0), vec3(s * 0.7f, s * 0.55f, s * 0.7f), lerp(col, base, 0.3f), 0.85f, fs);   // mid distance: no small clumps
         }
-        clump(F, cc + vec3(0, cr * 0.4f, 0), vec3(cr * 0.8f, cr * 0.6f, cr * 0.8f), lerp(base, pal::leaf2, 0.4f), 1.f, rng.next());
+        clump(F, cc + vec3(0, cr * 0.35f, 0), vec3(cr * 0.72f, cr * 0.55f, cr * 0.72f), lerp(base, pal::leaf2, 0.4f), 1.f, rng.next());
+        uint32_t is = rng.next();
+        if (!gLiteBuild) clump(F, cc + vec3(rng.range(-0.4f, 0.4f), -cr * 0.05f, rng.range(-0.4f, 0.4f)), vec3(cr * 0.6f, cr * 0.45f, cr * 0.6f), base * 0.85f, 0.7f, is);
         t.radius = r0 * 1.2f; t.height = h + cr * 2;
         break;
     }
     case P_PINE: case P_SNOWPINE: {
-        float h = rng.range(6.f, 8.5f);
-        S.tube({0, -0.3f, 0}, {0, h * 0.85f, 0}, 0.28f, 0.08f, Mat(pal::bark, 0.9f), 7, false);
-        int layers = 5;
+        // 2.7.0 a real conifer: a tapering trunk with a root flare, 8 tiers of drooping boughs (5 at mid distance),
+        // each tier turned at random, darker and denser towards the trunk, a spire at the top
+        float h = rng.range(6.5f, 9.5f);
+        S.tube({0, -0.3f, 0}, {0, h * 0.35f, 0}, 0.3f, 0.2f, Mat(pal::bark, 0.95f), 8, false);
+        S.tube({0, h * 0.35f, 0}, {0, h * 0.94f, 0}, 0.2f, 0.05f, Mat(pal::bark, 0.95f), 6, false);
+        if (!gLiteBuild) { Rng r2(var * 13 + 5); ringOfRoots(S, 0.26f, 5, pal::barkDark, r2); }
+        int layers = gLiteBuild ? 4 : 7;
+        float y0 = rng.range(1.1f, 1.6f), y1 = h - 0.9f;
+        vec3 base = lerp(pal::pine, pal::pine2, rng.f() * 0.6f);
         for (int i = 0; i < layers; i++) {
-            float y = 1.2f + i * (h - 1.6f) / layers;
-            float r = (1.0f - (float)i / layers) * 2.3f + 0.45f;
-            F.flat = true;
-            size_t from = F.v.size();
-            F.cone({0, y, 0}, {0, y + 1.9f, 0}, r, Mat(lerp(pal::pine, pal::pine2, rng.f()), 0.8f, 0, 0, 0.25f + 0.15f * i), 9);
-            for (size_t q = from; q < F.v.size(); q++) {
-                // droop at the rim and darker underside
-                float dr = std::sqrt(F.v[q].px * F.v[q].px + F.v[q].pz * F.v[q].pz);
-                F.v[q].py -= dr * 0.18f;
-                if (F.v[q].ny < 0) F.v[q].a = 130;
-            }
-            if (k == P_SNOWPINE) {
-                size_t sf = F.v.size();
-                F.cone({0, y + 0.55f, 0}, {0, y + 1.95f, 0}, r * 0.78f, Mat(pal::snow, 0.6f, 0, 0, 0.2f + 0.15f * i), 9);
-                for (size_t q = sf; q < F.v.size(); q++) F.v[q].py += 0.05f;
-            }
-            F.flat = false;
+            float f = (float)i / (layers - 1);
+            float y = y0 + (y1 - y0) * f;
+            float r = (1.f - f) * 2.5f * rng.range(0.92f, 1.08f) + 0.38f;
+            float rise = (y1 - y0) / (layers - 1) * 1.35f + 0.25f;
+            vec3 col = lerp(base, pal::pine2, rng.f() * 0.35f) * rng.range(0.9f, 1.08f);
+            pineTier(F, y, r, rise, gLiteBuild ? 5 : (r > 1.4f ? 6 : 5), col, rng, !gLiteBuild, false);
+            if (k == P_SNOWPINE) pineTier(F, y + 0.12f, r * 0.82f, rise * 0.85f, 5, col, rng, false, true);
         }
+        F.flat = true;
+        F.cone({0, y1 + 0.3f, 0}, {0, h + 0.5f, 0}, 0.32f, Mat(k == P_SNOWPINE ? pal::snow : base * 0.9f, 0.85f), 6);   // the spire
+        F.flat = false;
         // 2.6.2 the wind moves the branch tips, not the whole layer: weight grows with the distance to the trunk
         // (0 on the axis, where the cone is fixed to the trunk) and a little with the height. Each cone used to
         // slide as one block and the crown came apart from its trunk in strong wind.
         for (auto& v : F.v) {
             float dr = std::sqrt(v.px * v.px + v.pz * v.pz);
-            float w = clampf(dr / 2.6f, 0.f, 1.f) * (0.55f + 0.45f * clampf(v.py / h, 0.f, 1.f));
+            float w = clampf(dr / 2.8f, 0.f, 1.f) * (0.55f + 0.45f * clampf(v.py / h, 0.f, 1.f)) + (v.py > h - 1.f ? 0.15f : 0.f);
             v.wind = (uint8_t)clampf(w * 0.75f * 255.f, 0, 255);
         }
         t.radius = 0.35f; t.height = h + 1.5f;
@@ -458,8 +509,28 @@ static void buildProp(PropKind k, int var, PropTemplate& t) {
             F.blade(base, top, 0.03f, {1, 0, 0}, Mat(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), Mat(hexColor(0x5a8a34), 0.9f, 0, 0, 0.8f));
             vec3 pc = hexColor(petals[var % 3][rng.irange(0, 2)]);
             Mat pm(pc, 0.6f, 0, 0.06f, 1.f);
-            if (var % 3 == 1) F.blade(top - vec3(0, 0.02f, 0), top + vec3(0, 0.16f, 0), 0.06f, {1, 0, 0}, pm, pm);   // lavender spike
-            else F.plane(top, vec2(rng.range(0.07f, 0.1f)), pm, quat::axisAngle({0, 1, 0}, rng.f() * TAU));
+            if (gLiteBuild) {   // mid distance: the cheap flat heads
+                if (var % 3 == 1) F.blade(top - vec3(0, 0.02f, 0), top + vec3(0, 0.16f, 0), 0.06f, {1, 0, 0}, pm, pm);
+                else F.plane(top, vec2(rng.range(0.07f, 0.1f)), pm, quat::axisAngle({0, 1, 0}, rng.f() * TAU));
+                continue;
+            }
+            // 2.7.0 real flower heads: a lavender spike of small florets, or a cup of petals turned up around a heart
+            if (var % 3 == 1) {
+                for (int q = 0; q < 4; q++) {
+                    float a = rng.f() * TAU; vec3 d{std::cos(a), 0, std::sin(a)};
+                    vec3 p0 = top + vec3(0, q * 0.04f, 0);
+                    F.blade(p0, p0 + d * 0.03f + vec3(0, 0.05f, 0), 0.045f - q * 0.007f, vec3(-d.z, 0, d.x), pm, pm);
+                }
+            } else {
+                int np = var % 3 == 0 ? 6 : 4;
+                float pr = var % 3 == 0 ? rng.range(0.055f, 0.075f) : rng.range(0.06f, 0.085f);
+                float rot = rng.f() * TAU;
+                for (int q = 0; q < np; q++) {
+                    float a = rot + q * TAU / np; vec3 d{std::cos(a), var % 3 == 0 ? 0.3f : 0.9f, std::sin(a)};
+                    F.blade(top, top + normalize(d) * pr, pr * (var % 3 == 0 ? 0.55f : 1.0f), vec3(-d.z, 0, d.x), pm, pm);
+                }
+                F.ellipsoid(top + vec3(0, 0.01f, 0), vec3(0.018f, 0.014f, 0.018f), Mat(var % 3 == 0 ? hexColor(0xf0c030) : hexColor(0x2a1a14), 0.7f, 0, 0, 1.f), 5, 3);
+            }
         }
         t.radius = 0; t.height = 0.5f;
         break;

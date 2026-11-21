@@ -210,16 +210,22 @@ void MeshBuilder::plane(vec3 c, vec2 h, const Mat& m, quat rot) {
     quadP(c - X + Z, c + X + Z, c + X - Z, c - X - Z, m);
 }
 
-void MeshBuilder::blade(vec3 root, vec3 tip, float width, vec3 side, const Mat& mr, const Mat& mt) {
+void MeshBuilder::blade(vec3 root, vec3 tip, float width, vec3 side, const Mat& mr, const Mat& mt, float curve) {
     vec3 s = normalize(side) * (width * 0.5f);
     vec3 mid = lerp(root, tip, 0.5f);
+    if (curve > 0.f) {   // the middle stays more upright than the root-tip line: the blade arcs over at its tip
+        vec3 d = tip - root; vec3 lean{d.x, 0, d.z};
+        mid += vec3(0, d.y * 0.12f * curve, 0) - lean * 0.22f * curve;
+    }
     vec3 n = normalize(cross(s, tip - root));
+    // 2.7.0 the middle of the blade sways less than the tip (it used to move as much as the tip)
+    Mat mm = mt; mm.wind = lerpf(mr.wind, mt.wind, 0.4f); mm.color = lerp(mr.color, mt.color, 0.5f);
     uint32_t a = vert(root - s, n, mr), b = vert(root + s, n, mr);
-    uint32_t c = vert(mid + s * 0.8f, n, lerpf(0, 1, 0.5f) > 0 ? mt : mr), d = vert(mid - s * 0.8f, n, mt);
+    uint32_t c = vert(mid + s * 0.8f, n, mm), d = vert(mid - s * 0.8f, n, mm);
     uint32_t t = vert(tip, n, mt);
     quad(a, b, c, d); tri(d, c, t);
     // back side
-    uint32_t a2 = vert(root - s, -n, mr), b2 = vert(root + s, -n, mr), c2 = vert(mid + s * 0.8f, -n, mt), d2 = vert(mid - s * 0.8f, -n, mt), t2 = vert(tip, -n, mt);
+    uint32_t a2 = vert(root - s, -n, mr), b2 = vert(root + s, -n, mr), c2 = vert(mid + s * 0.8f, -n, mm), d2 = vert(mid - s * 0.8f, -n, mm), t2 = vert(tip, -n, mt);
     quad(a2, d2, c2, b2); tri(d2, t2, c2);
 }
 

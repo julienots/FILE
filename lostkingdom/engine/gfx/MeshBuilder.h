@@ -60,7 +60,7 @@ public:
     void prism(const std::vector<vec2>& poly, float y0, float y1, const Mat& m);
     void plane(vec3 c, vec2 half, const Mat& m, quat rot = quat());
     // Thin blade/leaf card (double sided) from root to tip with given width.
-    void blade(vec3 root, vec3 tip, float width, vec3 side, const Mat& mRoot, const Mat& mTip);
+    void blade(vec3 root, vec3 tip, float width, vec3 side, const Mat& mRoot, const Mat& mTip, float curve = 0.f);   // curve > 0: rises, then arcs over (2.7.0)
     // Irregular rock: displaced ellipsoid, faceted.
     void rock(vec3 c, vec3 radii, const Mat& m, uint32_t seed, int detail = 1);
 

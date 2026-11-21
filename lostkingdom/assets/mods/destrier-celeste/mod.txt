@@ -1,0 +1,4 @@
+name = Destrier céleste
+author = Superessence Studio
+version = 1.0
+description = Le cheval (et toutes les montures) galope plus de deux fois plus vite.

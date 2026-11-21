@@ -310,7 +310,8 @@ void Game::updatePlaying(float dt) {
     gameTime += dt;
     playSeconds += dt;
     // time of day: 1 in-game hour = 60 s
-    timeOfDay += dt / 60.f;
+    timeOfDay += dt / 60.f * gameTuning().timeSpeed;   // 2.7.0 mods: time speed (0 = frozen)
+    if (gameTuning().hour >= 0.f) timeOfDay = gameTuning().hour;   // 2.7.0 mods: a fixed hour (eternal night...)
     if (timeOfDay >= 24.f) { timeOfDay -= 24.f; day++; }
     gProfFrames++;
     PROF(0, updatePlayer(dt));
@@ -415,6 +416,7 @@ void Game::updateEnvironment(float dt) {
 
     // --- weather state machine (per region)
     weatherTimer -= dt;
+    if (gameTuning().weather >= 0) weatherNext = gameTuning().weather;   // 2.7.0 a mod fixes the weather (at once)
     if (weatherTimer <= 0 && state == GameState::Playing) {
         int r = rw.dominant;
         Rng wr((uint64_t)(gameTime * 13) + day);
@@ -432,6 +434,7 @@ void Game::updateEnvironment(float dt) {
         case R_JUNGLE: next = p < 0.35f ? W_CLEAR : p < 0.55f ? W_FOG : p < 0.85f ? W_RAIN : W_STORM; break;     // 2.4.0 hot rain and morning mist
         default: next = p < 0.55f ? W_CLEAR : p < 0.75f ? W_CLOUDY : W_SNOW; break;
         }
+        if (gameTuning().weather >= 0) next = gameTuning().weather;   // 2.7.0 a mod fixes the weather
         weatherNext = next;
         weatherTimer = wr.range(90.f, 240.f);
     }

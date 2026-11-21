@@ -1,0 +1,4 @@
+name = Hiver éternel
+author = Superessence Studio
+version = 1.0
+description = Il neige partout et tout le temps, même dans les sables et la jungle.

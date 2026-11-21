@@ -1861,7 +1861,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     };
     if (lod == 0) {
         // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
-        float spacing = 0.7f / std::sqrt(std::max(0.05f, grassDensity));
+        float spacing = 0.8f / std::sqrt(std::max(0.05f, grassDensity));   // 2.7.0 fuller tufts, slightly fewer of them
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
         if (grassDensity >= 0.5f) scatter(778, spacing * 1.05f, out.grassNear, nullptr, 1.05f, 1.85f);
         // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
@@ -2013,37 +2013,66 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
     }
     if (!b.grass.empty() || !b.flowers.empty() || !b.grassNear.empty()) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer
-        static MeshBuilder blade, flower;
+        static MeshBuilder blade, bladeNear, flower;
         if (blade.v.empty()) {
-            // a clump of 7 blades (one instance) - denser look for fewer instances
-            Mat root(hexColor(0x3a5f22), 0.9f, 0, 0, 0.f), tip(hexColor(0x9cc25a), 0.7f, 0, 0, 1.f);
-            Rng br(5);
-            for (int i = 0; i < 7; i++) {
-                float a = i * TAU / 7 + br.range(-0.3f, 0.3f);
-                vec3 side{std::cos(a), 0, std::sin(a)};
-                vec2 off = br.inDisk() * 0.28f;
-                vec3 base{off.x, 0, off.y};
-                vec3 lean = vec3(off.x, 0, off.y) * 0.6f + vec3(-side.z, 0, side.x) * 0.1f;
-                blade.blade(base, base + vec3(0, br.range(0.45f, 0.75f), 0) + lean, 0.12f, side, root, tip);
+            // 2.7.0 a tuft grows from one root: thin blades that rise from a tight base, arc over and lean outwards
+            // (9 blades; 13 plus seed stalks for the layer drawn close to the hero). The root is dark and sits in
+            // the soil, the tips are lighter and warmer, each blade has its own shade.
+            auto tuft = [](MeshBuilder& m, int n, float hMin, float hMax, int seeds, uint32_t seed) {
+                Rng br(seed);
+                for (int i = 0; i < n; i++) {
+                    float a = i * TAU / n + br.range(-0.35f, 0.35f);
+                    vec3 side{std::cos(a), 0, std::sin(a)};
+                    vec2 off = br.inDisk() * 0.12f;
+                    vec3 base{off.x, -0.02f, off.y};
+                    float h = br.range(hMin, hMax);
+                    vec3 outw = vec3(-side.z, 0, side.x) * (br.chance(0.5f) ? 1.f : -1.f);
+                    vec3 lean = outw * h * br.range(0.18f, 0.5f) + vec3(off.x, 0, off.y) * 1.2f;
+                    float sh = br.range(0.82f, 1.12f);
+                    Mat root(hexColor(0x2c4a1a) * sh, 0.9f, 0, 0, 0.f), tip(hexColor(0xa8c860) * sh, 0.7f, 0, 0, 1.f);
+                    m.blade(base, base + vec3(0, h, 0) + lean, br.range(0.055f, 0.085f), side, root, tip, 1.f);
+                }
+                for (int i = 0; i < seeds; i++) {   // a few seed stalks above the tuft
+                    float a = br.range(0, TAU);
+                    vec3 side{std::cos(a), 0, std::sin(a)};
+                    vec3 base{br.range(-0.05f, 0.05f), -0.02f, br.range(-0.05f, 0.05f)};
+                    vec3 top = base + vec3(br.range(-0.12f, 0.12f), hMax * br.range(1.15f, 1.35f), br.range(-0.12f, 0.12f));
+                    Mat stem(hexColor(0x5a7a32), 0.9f, 0, 0, 0.f), head(hexColor(0xd8c890), 0.8f, 0, 0, 1.f);
+                    m.blade(base, top, 0.025f, side, stem, stem.withWind(0.9f));
+                    m.blade(top - (top - base) * 0.16f, top + (top - base) * 0.04f, 0.06f, side, head.withWind(0.95f), head);
+                }
+            };
+            tuft(blade, 8, 0.4f, 0.72f, 0, 5);
+            tuft(bladeNear, 10, 0.4f, 0.7f, 0, 6);
+            // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
+            Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);
+            vec3 head{0.04f, 0.4f, 0.02f};
+            flower.blade({0, -0.02f, 0}, head, 0.022f, {1, 0, 0}, stem, stem.withWind(0.8f), 1.f);
+            flower.blade({0, 0, 0}, {0.13f, 0.14f, 0.03f}, 0.05f, {0, 0, 1}, stem, stem.withWind(0.3f), 1.f);
+            flower.blade({0, 0, 0}, {-0.1f, 0.12f, -0.06f}, 0.045f, {0, 0, 1}, stem, stem.withWind(0.3f), 1.f);
+            for (int i = 0; i < 6; i++) {
+                float a = i * TAU / 6;
+                vec3 d{std::cos(a), 0.75f, std::sin(a)};
+                flower.blade(head, head + d * 0.075f, 0.055f, vec3(-d.z, 0, d.x), petal, petal);
             }
-            Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f);
-            flower.blade({0, 0, 0}, {0, 0.42f, 0}, 0.05f, {1, 0, 0}, stem, stem.withWind(0.8f));
-            for (int i = 0; i < 5; i++) {
-                float a = i * TAU / 5;
-                vec3 d{std::cos(a), 0.35f, std::sin(a)};
-                flower.blade({0, 0.42f, 0}, vec3(0, 0.42f, 0) + d * 0.12f, 0.09f, vec3(-d.z, 0, d.x), petal, petal);
-            }
-            for (auto& v : blade.v) {
-                v.r = v.g = v.b = (uint8_t)clampf(150 + v.py * 160, 0, 255);  // tinted per instance (x2 in shader)
-                // ground-like normals so blades shade like the terrain they grow on (no dark "hairs")
-                vec3 n = normalize(unpackNormal(v) * 0.25f + vec3(0, 1, 0));
-                v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
-                v.a = (uint8_t)clampf(140 + v.py * 200, 0, 255);  // AO darker at the root
-            }
-            for (auto& v : flower.v) { if (v.py < 0.4f) { v.r = 70; v.g = 120; v.b = 50; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
+            flower.ellipsoid(head + vec3(0, 0.015f, 0), vec3(0.022f, 0.016f, 0.022f), heart, 5, 3);
+            for (MeshBuilder* m : {&blade, &bladeNear})
+                for (auto& v : m->v) {
+                    // tinted per instance (x2 in shader): keep the blade's own shade, darker at the root, a touch
+                    // warmer (yellower) at the tip
+                    float k = clampf(v.py / 0.8f, 0.f, 1.f);
+                    float lum = (v.r + v.g + v.b) / (3.f * 255.f);
+                    float base = (120 + k * 150) * (0.75f + 0.5f * lum);
+                    v.r = (uint8_t)clampf(base * (1.f + 0.1f * k), 0, 255); v.g = (uint8_t)clampf(base, 0, 255); v.b = (uint8_t)clampf(base * (1.f - 0.18f * k), 0, 255);
+                    // ground-like normals so blades shade like the terrain they grow on (no dark "hairs")
+                    vec3 n = normalize(unpackNormal(v) * 0.3f + vec3(0, 1, 0));
+                    v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
+                    v.a = (uint8_t)clampf(95 + k * 230, 0, 255);  // AO: the root is in the shade of the tuft
+                }
+            for (auto& v : flower.v) { if (v.py < 0.39f) { v.r = 70; v.g = 120; v.b = 50; } else if (v.g > 150 && v.b < 90) { v.r = 255; v.g = 210; v.b = 60; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
         }
         if (!b.grass.empty()) { blade.upload(c.grass); c.grass.setInstances(b.grass); }
-        if (!b.grassNear.empty()) { blade.upload(c.grassNear); c.grassNear.setInstances(b.grassNear); }
+        if (!b.grassNear.empty()) { bladeNear.upload(c.grassNear); c.grassNear.setInstances(b.grassNear); }
         if (!b.flowers.empty()) { flower.upload(c.flowers); c.flowers.setInstances(b.flowers); }
     }
     c.colliders = std::move(b.colliders);

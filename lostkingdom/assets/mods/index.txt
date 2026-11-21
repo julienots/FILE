@@ -4,3 +4,11 @@ ennemis-coriaces
 fortune-des-rois
 heros-veloce
 armurerie-legendaire
+lune-basse
+monde-des-geants
+mini-monstres
+hiver-eternel
+nuit-eternelle
+destrier-celeste
+apocalypse
+terrassier
