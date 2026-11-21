@@ -132,6 +132,7 @@ void registerNavigationComponents() {
         .field("agentRadius2D", &NavigationSettingsComponent::agentRadius2D, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("cellSize", &NavigationSettingsComponent::cellSize, {.rangeMin = 0.02f, .rangeMax = 5.0f, .speed = 0.01f})
         .field("agentRadius", &NavigationSettingsComponent::agentRadius, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("agentSizes", &NavigationSettingsComponent::agentSizes, {.tooltip = "Extra agent radii, ';'-separated (\"0.8;1.5\"): a grid and a mesh per size"})
         .field("agentHeight", &NavigationSettingsComponent::agentHeight, {.rangeMin = 0.1f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("agentMaxClimb", &NavigationSettingsComponent::agentMaxClimb, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
         .field("agentMaxSlope", &NavigationSettingsComponent::agentMaxSlope, {.rangeMin = 0.0f, .rangeMax = 89.0f, .speed = 0.5f})
@@ -188,6 +189,7 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
         });
     for (float f : {st.gridCellSize, st.agentRadius2D, st.cellSize, st.agentRadius, st.agentHeight, st.agentMaxClimb, st.agentMaxSlope}) h = mixf(h, f);
     h = mix(h, st.meshRenderersAsSources ? 1 : 2);
+    h = mix(h, std::hash<std::string>{}(st.agentSizes));
     return h;
 }
 
@@ -270,23 +272,47 @@ void NavigationSystem::rebuild(Scene& s) {
         const Vec3 p = worldPosition(s, e);
         grow({p.x, p.y}, {p.x, p.y});
     });
-    m_grid.reset({0, 0}, 1.0f, 0, 0);
-    if (m_stats.sourceShapes2D > 0) {
+    // Extra agent sizes.
+    std::vector<float> sizes;
+    {
+        std::string cur;
+        for (char ch : st.agentSizes + ";") {
+            if (ch == ';' || ch == ',') {
+                const float r = cur.empty() ? 0.0f : std::strtof(cur.c_str(), nullptr);
+                if (r > 0.0f) sizes.push_back(r);
+                cur.clear();
+            } else if (ch != ' ') {
+                cur += ch;
+            }
+        }
+        std::sort(sizes.begin(), sizes.end());
+        sizes.erase(std::unique(sizes.begin(), sizes.end()), sizes.end());
+        std::erase_if(sizes, [&](float r) { return r <= std::max(st.agentRadius2D, st.agentRadius) + 1e-4f; });
+    }
+    m_layers.clear();
+    for (float r : sizes) {
+        m_layers.push_back(std::make_unique<SizeLayer>());
+        m_layers.back()->radius = r;
+    }
+    auto buildGrid = [&](NavGrid& grid, float radius) {
+        grid.reset({0, 0}, 1.0f, 0, 0);
+        if (m_stats.sourceShapes2D == 0) return;
         const float cell = std::max(st.gridCellSize, 0.05f);
-        const float margin = cell * 8.0f;
-        lo = lo - Vec2{margin, margin};
-        hi = hi + Vec2{margin, margin};
-        const u32 w = std::min<u32>(2048, static_cast<u32>(std::ceil((hi.x - lo.x) / cell)) + 1);
-        const u32 h = std::min<u32>(2048, static_cast<u32>(std::ceil((hi.y - lo.y) / cell)) + 1);
-        m_grid.reset(lo, cell, w, h);
-        for (const Rect2& r : rects) m_grid.blockRect(r.mn, r.mx, st.agentRadius2D);
-        for (const Circle2& c : circles) m_grid.blockCircle(c.c, c.r, st.agentRadius2D);
+        const float margin = cell * 8.0f + radius;
+        const Vec2 glo = lo - Vec2{margin, margin}, ghi = hi + Vec2{margin, margin};
+        const u32 w = std::min<u32>(2048, static_cast<u32>(std::ceil((ghi.x - glo.x) / cell)) + 1);
+        const u32 h = std::min<u32>(2048, static_cast<u32>(std::ceil((ghi.y - glo.y) / cell)) + 1);
+        grid.reset(glo, cell, w, h);
+        for (const Rect2& r : rects) grid.blockRect(r.mn, r.mx, radius);
+        for (const Circle2& c : circles) grid.blockCircle(c.c, c.r, radius);
         reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
             if (!o.carve || !s.isActiveInHierarchy(e)) return;
             const Vec3 p = worldPosition(s, e);
-            m_grid.blockCircle({p.x, p.y}, o.radius, st.agentRadius2D);
+            grid.blockCircle({p.x, p.y}, o.radius, radius);
         });
-    }
+    };
+    buildGrid(m_grid, st.agentRadius2D);
+    for (auto& l : m_layers) buildGrid(l->grid, l->radius);
     m_stats.links = 0;
     std::vector<NavMeshLink> meshLinks;
     reg.view<NavLinkComponent>().each([&](ecs::Entity e, NavLinkComponent& l) {
@@ -294,6 +320,8 @@ void NavigationSystem::rebuild(Scene& s) {
         const Mat4 m = s.worldMatrix(e);
         const Vec3 a = m.transformPoint({0, 0, 0}), b = m.transformPoint(l.end);
         if (!m_grid.empty()) m_grid.addLink({a.x, a.y}, {b.x, b.y}, l.bidirectional, l.cost);
+        for (auto& layer : m_layers)
+            if (!layer->grid.empty()) layer->grid.addLink({a.x, a.y}, {b.x, b.y}, l.bidirectional, l.cost);
         meshLinks.push_back({a, b, l.bidirectional});
         ++m_stats.links;
     });
@@ -369,19 +397,23 @@ void NavigationSystem::rebuild(Scene& s) {
     });
     m_mesh.clear();
     m_stats.lastError.clear();
-    if (!idx.empty()) {
+    auto buildMesh = [&](NavMesh& mesh, float radius) {
+        mesh.clear();
+        if (idx.empty()) return;
         NavMeshBuildSettings bs;
         bs.cellSize = st.cellSize;
         bs.cellHeight = std::max(st.cellSize * 0.5f, 0.02f);
-        bs.agentRadius = st.agentRadius;
+        bs.agentRadius = radius;
         bs.agentHeight = st.agentHeight;
         bs.agentMaxClimb = st.agentMaxClimb;
         bs.agentMaxSlope = st.agentMaxSlope;
-        if (Status r = m_mesh.build(verts, idx, bs, meshLinks); !r) {
+        if (Status r = mesh.build(verts, idx, bs, meshLinks); !r) {
             m_stats.lastError = r.error().message;
-            AGR_LOG_WARN("Navigation", "navigation mesh not built: {}", r.error().message);
+            AGR_LOG_WARN("Navigation", "navigation mesh (agent radius {}) not built: {}", radius, r.error().message);
         }
-    }
+    };
+    buildMesh(m_mesh, st.agentRadius);
+    for (auto& l : m_layers) buildMesh(l->mesh, l->radius);
     m_stats.meshPolygons = m_mesh.stats().polygons;
     ++m_stats.builds;
     m_stats.lastBuildMs = sw.elapsedMilliseconds();
@@ -393,7 +425,17 @@ void NavigationSystem::rebuild(Scene& s) {
     }
 }
 
+i32 NavigationSystem::layerFor(float radius) const {
+    if (m_layers.empty() || !m_scene) return -1;
+    const NavigationSettingsComponent st = settingsOf(*const_cast<Scene*>(m_scene));
+    if (radius <= std::max(st.agentRadius2D, st.agentRadius) + 1e-3f) return -1;
+    for (usize i = 0; i < m_layers.size(); ++i)
+        if (m_layers[i]->radius + 1e-3f >= radius) return static_cast<i32>(i);
+    return static_cast<i32>(m_layers.size()) - 1;  // the largest built
+}
+
 void NavigationSystem::reset() {
+    m_layers.clear();
     m_agents.clear();
     m_grid.reset({0, 0}, 1.0f, 0, 0);
     m_mesh.clear();
@@ -426,17 +468,21 @@ bool NavigationSystem::navigateTo(Scene& s, ecs::Entity e, Vec3 destination) {
     ensureBuilt(s);
     Agent& a = m_agents[e.packed()];
     a.use3D = uses3D(s, e);
+    const auto* agentComp = s.registry().tryGet<NavAgentComponent>(e);
+    a.layer = layerFor(agentComp ? agentComp->radius : 0.0f);
+    const NavGrid& grid = gridOf(a.layer);
+    const NavMesh& mesh = meshOf(a.layer);
     a.next = 1;
     a.corners.clear();
     const Vec3 from = worldPosition(s, e);
     bool found = false, complete = true;
     if (a.use3D) {
-        found = m_mesh.findPath(from, destination, a.corners, &complete);
+        found = mesh.findPath(from, destination, a.corners, &complete);
     } else {
         std::vector<Vec2> pts;
-        found = m_grid.findPath({from.x, from.y}, {destination.x, destination.y}, pts);
+        found = grid.findPath({from.x, from.y}, {destination.x, destination.y}, pts);
         for (const Vec2& p : pts) a.corners.push_back({p.x, p.y, from.z});
-        complete = found && math::length(Vec2{destination.x, destination.y} - pts.back()) < m_grid.cellSize();
+        complete = found && math::length(Vec2{destination.x, destination.y} - pts.back()) < grid.cellSize();
     }
     if (!found || a.corners.empty()) {
         a.status = NavStatus::Unreachable;
@@ -595,7 +641,7 @@ void NavigationSystem::update(Scene& s, float dt) {
                     const Vec2 next = me + v * dt;
                     if (!a.use3D && !m_grid.empty()) {
                         i32 cx, cy;
-                        if (m_grid.cellOf(next, cx, cy) && m_grid.blocked(cx, cy)) return;
+                        if (gridOf(a.layer).cellOf(next, cx, cy) && gridOf(a.layer).blocked(cx, cy)) return;
                     }
                     const float ttc = timeToCollision(v);
                     const float score = math::length(v - pref) * 1.0f + math::length(v - current) * 0.25f + (ttc < 3.0f ? 2.0f * speed / std::max(ttc, 0.05f) : 0.0f);
@@ -620,7 +666,7 @@ void NavigationSystem::update(Scene& s, float dt) {
                 if (a.use3D) {
                     Vec3 p3{moved.x, pos.y, moved.y};
                     Vec3 onMesh;
-                    if (m_mesh.nearestPoint(p3, onMesh, {r, 2.0f, r})) p3 = onMesh;
+                    if (meshOf(a.layer).nearestPoint(p3, onMesh, {r, 2.0f, r})) p3 = onMesh;
                     pos = p3;
                 } else {
                     pos = {moved.x, moved.y, pos.z};

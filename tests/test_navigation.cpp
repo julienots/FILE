@@ -393,4 +393,43 @@ TEST_CASE("crowds: an agent blocked by a closed ring of standing agents gets thr
     CHECK(nav.status(walker) == NavStatus::Arrived);
     CHECK(std::hypot(position(s, walker).x, position(s, walker).y) < 0.5f);
 }
+
+TEST_CASE("agent sizes: a narrow gap lets small agents through, large ones go around") {
+    registerAll();
+    Scene s;
+    box2(s, {-10.7f, 0}, {20, 0.5f});  // a wall with a 1.4 wide gap at x = 0
+    box2(s, {10.7f, 0}, {20, 0.5f});
+    auto& st = s.registry().emplace<NavigationSettingsComponent>(s.createEntity("Nav"));
+    st.agentSizes = "1.0";
+    auto spawn = [&](const char* name, float radius) {
+        const auto e = s.createEntity(name);
+        s.registry().get<TransformComponent>(e).position = {0, -5, 0};
+        auto& a = s.registry().emplace<NavAgentComponent>(e);
+        a.radius = radius;
+        a.plane = NavPlane::Grid2D;
+        a.avoidance = false;
+        return e;
+    };
+    const auto small = spawn("Small", 0.3f), big = spawn("Big", 0.9f);
+    s.updateTransforms();
+    NavigationSystem nav;
+    REQUIRE(nav.navigateTo(s, small, {0, 5, 0}));
+    REQUIRE(nav.navigateTo(s, big, {0, 5, 0}));
+    CHECK(nav.sizeLayerCount() == 1);
+    CHECK(nav.sizeLayerFor(0.3f) == -1);
+    CHECK(nav.sizeLayerFor(0.9f) == 0);
+    CHECK(nav.sizeLayerFor(3.0f) == 0);  // larger than every size: the largest
+    auto length = [&](ecs::Entity e) {
+        const auto p = nav.path(e);
+        float l = 0.0f;
+        math::Vec3 prev{0, -5, 0};
+        for (const auto& q : p) {
+            l += math::length(q - prev);
+            prev = q;
+        }
+        return l;
+    };
+    CHECK_MESSAGE(length(small) < 12.0f, length(small));  // straight through the gap
+    CHECK_MESSAGE(length(big) > 35.0f, length(big));      // around the wall
+}
 }

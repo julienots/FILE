@@ -80,10 +80,20 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
   actif par défaut) et les colliders **Mesh** / **Convex** fournissent leurs vrais triangles (même cache
   que la physique 3D) : un niveau importé est navigable sans collider ajouté.
 
+## Tailles d'agents
+
+`NavigationSettings.agentSizes` (`"0.8;1.5"`) : pour chaque rayon, une grille 2D et un maillage 3D de
+plus sont construits, avec les obstacles élargis de ce rayon. Chaque `NavAgent` utilise la plus petite
+taille qui contient son `radius` (les réglages par défaut `agentRadius2D` / `agentRadius` s'ils
+suffisent, sinon la plus grande taille construite) : un char ou un géant contourne les passages où
+seul un humain se faufile. Test : un mur percé d'une ouverture de 1,4 m, traversée par un agent de
+rayon 0,3, contournée par un agent de rayon 0,9.
+
 ## Limites actuelles
 
 - Évitement local (sans planification de foule globale) : dans un couloir très étroit, deux groupes
   face à face peuvent ralentir avant de se départager.
 - Un seul maillage 3D (une tuile) : pour de très grands mondes, augmenter `cellSize` ; pas de
   construction par tuiles ni en arrière-plan (la reconstruction bloque l'image le temps du calcul).
-- Une seule taille d'agent par scène (celle des réglages).
+- Tailles d'agents : une grille et un maillage par taille listée dans `agentSizes` (mémoire et temps de
+  construction multipliés d'autant).

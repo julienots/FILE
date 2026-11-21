@@ -52,6 +52,10 @@ struct NavigationSettingsComponent {
     float agentHeight = 1.8f;
     float agentMaxClimb = 0.4f;
     float agentMaxSlope = 45.0f;   ///< Degrees.
+    /// Larger agents (tanks, giants, vehicles): extra radii, ';'-separated ("0.8;1.5"). A grid and
+    /// a mesh are built for each, with obstacles grown by that radius; every NavAgent uses the
+    /// smallest one that fits its `radius` (the default sizes above if they do).
+    std::string agentSizes;
     /// Static imported models (MeshRenderer with a model, no moving body) are walkable geometry
     /// too, like static colliders.
     bool meshRenderersAsSources = true;

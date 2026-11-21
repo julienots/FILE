@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <memory>
 #include <vector>
 
 #include "agr/navigation/NavGrid.hpp"
@@ -50,6 +51,9 @@ public:
     const NavGrid& grid() const { return m_grid; }
     const NavMesh& mesh() const { return m_mesh; }
     const NavigationStats& stats() const { return m_stats; }
+    /// Radii of the extra agent sizes built, and the layer an agent of `radius` uses (-1 = default).
+    usize sizeLayerCount() const { return m_layers.size(); }
+    i32 sizeLayerFor(float radius) const { return layerFor(radius); }
     /// Triangles of models (Mesh / Convex colliders, static MeshRenderers): set by the plugin.
     void setMeshSource(CollisionMeshSource source) { m_meshSource = std::move(source); }
     bool hasMeshSource() const { return static_cast<bool>(m_meshSource); }
@@ -65,7 +69,18 @@ private:
         math::Vec3 velocity{0.0f};  ///< Last move (avoidance).
         float stuckTime = 0.0f;     ///< Seconds the avoidance made no progress toward the next corner.
         float ghostTime = 0.0f;     ///< > 0: follows its path through the other agents (unjams crowds).
+        i32 layer = -1;             ///< Agent size: -1 = default grid / mesh, else m_layers index.
     };
+    /// Grid and mesh built for a larger agent radius (NavigationSettings.agentSizes).
+    struct SizeLayer {
+        float radius = 0.0f;
+        NavGrid grid;
+        NavMesh mesh;
+    };
+    std::vector<std::unique_ptr<SizeLayer>> m_layers;
+    i32 layerFor(float radius) const;
+    const NavGrid& gridOf(i32 layer) const { return layer >= 0 ? m_layers[static_cast<usize>(layer)]->grid : m_grid; }
+    const NavMesh& meshOf(i32 layer) const { return layer >= 0 ? m_layers[static_cast<usize>(layer)]->mesh : m_mesh; }
     bool uses3D(Scene& scene, ecs::Entity e) const;
     u64 geometryHash(Scene& scene) const;
 
