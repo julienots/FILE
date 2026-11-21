@@ -9,6 +9,7 @@
 #include "agr/render/Skin2D.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
+#include "agr/editor/UiGuides.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/navigation/NavigationPlugin.hpp"
 #include "agr/render/ModelLibrary.hpp"
@@ -625,7 +626,16 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
                 s.ctx.selection().toggle(scene.uuidOf(hit));
                 return true;
             }
-            s.ctx.selection().set(scene.uuidOf(hit));
+            const Uuid hitId = scene.uuidOf(hit);
+            if (s.ctx.selection().contains(hitId) && s.ctx.selection().ids().size() > 1) {
+                // A click inside a multiple selection drags all of it; the clicked element leads.
+                std::vector<Uuid> ids = s.ctx.selection().ids();
+                std::erase(ids, hitId);
+                ids.push_back(hitId);
+                s.ctx.selection().assign(ids);
+            } else {
+                s.ctx.selection().set(hitId);
+            }
             rect = reg.tryGet<UIRectComponent>(hit);
             m_uiDrag = rect ? 1 : 0;
         }
@@ -634,6 +644,13 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
             m_uiStartPos = rect->position;
             m_uiStartSize = rect->size;
             m_uiChanged = false;
+            m_uiGroupStart.clear();
+            if (m_uiDrag == 1)
+                for (const Uuid& id : s.ctx.selection().ids()) {
+                    const ecs::Entity o = scene.findByUuid(id);
+                    if (o.isNull() || id == s.ctx.selection().primary()) continue;
+                    if (const auto* r = reg.tryGet<UIRectComponent>(o)) m_uiGroupStart.push_back({id, r->position});
+                }
         }
         return true;
     }
@@ -652,7 +669,33 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
         const float snapStep = (snap || io.KeyCtrl) ? 10.0f : 0.0f;
         auto snapValue = [&](float v) { return snapStep > 0.0f ? std::round(v / snapStep) * snapStep : std::round(v); };
         if (m_uiDrag == 1) {
-            rect->position = {snapValue(m_uiStartPos.x + d.x), snapValue(m_uiStartPos.y + d.y)};
+            math::Vec2 move = d;
+            if (snapStep == 0.0f && !io.KeyShift) {
+                // Smart guides: edges and centers of the siblings and of the parent (Shift: off).
+                const math::Vec4 start = rect->screenRect;
+                const math::Vec2 dScreen{(io.MousePos.x - m_uiDragStart.x) * k, (io.MousePos.y - m_uiDragStart.y) * k};
+                const math::Vec2 alreadyMoved{(rect->position.x - m_uiStartPos.x) * scale, (rect->position.y - m_uiStartPos.y) * scale};
+                const math::Vec4 moving{start.x - alreadyMoved.x + dScreen.x, start.y - alreadyMoved.y + dScreen.y, start.z, start.w};
+                std::vector<math::Vec4> targets;
+                const ecs::Entity parent = scene.parent(target);
+                if (const auto* pr = reg.tryGet<UIRectComponent>(parent); pr && !reg.has<UICanvasComponent>(parent)) targets.push_back(pr->screenRect);
+                else targets.push_back({0, 0, static_cast<float>(m_width), static_cast<float>(m_height)});
+                scene.forEachChild(parent, [&](ecs::Entity c) {
+                    if (c == target || s.ctx.selection().contains(scene.uuidOf(c))) return;
+                    if (const auto* r = reg.tryGet<UIRectComponent>(c)) targets.push_back(r->screenRect);
+                });
+                const GuideSnap g = snapToGuides(moving, targets, 6.0f * k);
+                move = {d.x + g.offset.x / scale, d.y + g.offset.y / scale};
+                const ImU32 guide = IM_COL32(60, 200, 255, 220);
+                for (float x : g.xs) dl->AddLine(toScreen(x, 0), toScreen(x, static_cast<float>(m_height)), guide, 1.0f);
+                for (float y : g.ys) dl->AddLine(toScreen(0, y), toScreen(static_cast<float>(m_width), y), guide, 1.0f);
+            }
+            rect->position = {snapValue(m_uiStartPos.x + move.x), snapValue(m_uiStartPos.y + move.y)};
+            for (const auto& [id, startPos] : m_uiGroupStart) {  // the rest of the selection follows
+                const ecs::Entity o = scene.findByUuid(id);
+                if (auto* r = o.isNull() ? nullptr : reg.tryGet<UIRectComponent>(o))
+                    r->position = {startPos.x + (rect->position.x - m_uiStartPos.x), startPos.y + (rect->position.y - m_uiStartPos.y)};
+            }
         } else {
             math::Vec2 size2 = m_uiStartSize, pos = m_uiStartPos;
             const float* sign = &m_uiHandle.x;

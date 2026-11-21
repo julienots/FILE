@@ -275,6 +275,7 @@ private:
     ImVec2 m_uiDragStart{};
     math::Vec2 m_uiStartPos{}, m_uiStartSize{};
     bool m_uiChanged = false;
+    std::vector<std::pair<Uuid, math::Vec2>> m_uiGroupStart;  ///< Other selected UI elements moved along.
 };
 
 class AssetBrowserPanel {

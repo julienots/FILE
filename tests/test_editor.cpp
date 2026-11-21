@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "agr/editor/UiGuides.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1294,4 +1295,25 @@ TEST_CASE("splash screen: project export settings reach game.json and read back"
     const GameManifest gm = gameManifest(reopened.value());
     CHECK(gm.splashImage == "assets://logo.png");
     CHECK(gm.splashSeconds == doctest::Approx(0.75f));
+}
+
+TEST_CASE("UI Builder smart guides: edges and centers snap within the threshold") {
+    const std::vector<math::Vec4> targets = {{0, 0, 800, 600}, {100, 100, 200, 50}};
+    // Left edge 3 px right of the other element's left edge: snaps back by 3.
+    GuideSnap g = snapToGuides({103, 310, 120, 40}, targets, 6.0f);
+    CHECK(g.offset.x == doctest::Approx(-3.0f));
+    CHECK(g.offset.y == doctest::Approx(0.0f));  // nothing within 6 px vertically
+    REQUIRE_FALSE(g.xs.empty());
+    CHECK(g.xs[0] == doctest::Approx(100.0f));
+    CHECK(g.ys.empty());
+    // Center on the parent's center (400, 300).
+    g = snapToGuides({338, 276, 120, 40}, targets, 6.0f);
+    CHECK(g.offset.x == doctest::Approx(2.0f));
+    CHECK(g.offset.y == doctest::Approx(4.0f));
+    // Too far: no snap, no guide.
+    g = snapToGuides({500, 400, 50, 50}, targets, 6.0f);
+    CHECK(g.offset.x == 0.0f);
+    CHECK(g.offset.y == 0.0f);
+    CHECK(g.xs.empty());
+    CHECK(g.ys.empty());
 }
