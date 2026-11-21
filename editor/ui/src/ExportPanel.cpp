@@ -122,6 +122,7 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     changed |= ImGui::Checkbox("Garder l'écran allumé", &x.keepScreenOn);
     ImGui::SameLine();
     changed |= ImGui::Checkbox("Bouton Retour : quitter", &x.backQuits);
+    if (m_target == 0 || m_target == kWindowsTarget) changed |= ImGui::Checkbox("Archive .zip du dossier (pour le mettre en ligne)", &x.zipPackage);
     ImGui::SeparatorText("Écran de démarrage");
     changed |= ImGui::InputTextWithHint("Image", "assets://splash.png (vide : aucun)", &x.splashImage);
     changed |= ImGui::ColorEdit4("Fond", &x.splashColor.x, ImGuiColorEditFlags_NoInputs);

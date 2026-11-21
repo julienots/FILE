@@ -34,7 +34,8 @@ struct ExportSettings {
     u32 targetFps = 0;
     bool vibration = true;
     bool network = false;  ///< Android INTERNET permission (multiplayer: agr.net).
-    bool microphone = false;  ///< Android RECORD_AUDIO permission (agr.audio.startRecording).
+    bool microphone = false;
+    bool zipPackage = false;  ///< PC exports: also a <Name>.zip of the folder (store pages, sharing).  ///< Android RECORD_AUDIO permission (agr.audio.startRecording).
     math::Color iconBackground{1.0f, 1.0f, 1.0f, 1.0f};  ///< Android adaptive icon background.
     bool keepScreenOn = true;
     bool backQuits = true;

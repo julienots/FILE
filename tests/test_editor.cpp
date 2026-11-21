@@ -1375,3 +1375,21 @@ TEST_CASE("Create > Vehicle: a dynamic body with Vehicle3D and the four named wh
     for (int i = 0; i < 120; ++i) physics.step(s, 1.0f / 60.0f);
     CHECK(s.registry().get<TransformComponent>(car).position.y > 0.4f);
 }
+
+TEST_CASE("zipFolder: a stored ZIP of the export folder") {
+    const fs::path root = fs::temp_directory_path() / ("agr_zip_" + Uuid::generate().toString());
+    fs::create_directories(root / "Game" / "game");
+    { std::ofstream(root / "Game" / "Game") << "player"; }
+    { std::ofstream(root / "Game" / "game" / "game.json") << "{}"; }
+    { std::ofstream(root / "Game" / ".agr-export") << "marker"; }
+    REQUIRE(zipFolder(root / "Game", root / "Game.zip"));
+    const std::string zip = readTextFile(root / "Game.zip");
+    REQUIRE(zip.size() > 22);
+    CHECK(zip.compare(0, 4, "PK\x03\x04") == 0);
+    const usize end = zip.size() - 22;  // end of central directory: entry count at +10
+    CHECK(zip.compare(end, 4, "PK\x05\x06") == 0);
+    CHECK((static_cast<unsigned char>(zip[end + 10]) | (static_cast<unsigned char>(zip[end + 11]) << 8)) == 2);  // the marker is left out
+    CHECK(zip.find("Game/game/game.json") != std::string::npos);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}

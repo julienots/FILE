@@ -36,6 +36,10 @@ Result<ExportReport> packageGameData(const Project& project, const std::filesyst
 /// and its game/ folder.
 Result<ExportReport> exportDesktop(const Project& project, const std::filesystem::path& outputDir, const std::filesystem::path& playerExecutable);
 
+/// Writes `zipPath`, a ZIP archive (stored, no compression) of every file under `dir`, paths
+/// relative to dir's parent (the archive opens on the game's folder); Unix permissions kept.
+Status zipFolder(const std::filesystem::path& dir, const std::filesystem::path& zipPath);
+
 /// Windows x64 game player (agr_player.exe) for exports from any system: AGR_EXPORT_TEMPLATES or
 /// export_templates/ next to the editor (windows-x64/agr_player.exe), the cross-compiled build
 /// tree (build/windows-x64/bin), or the editor's own player on Windows. Empty when none exists.

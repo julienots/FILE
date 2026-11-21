@@ -1,6 +1,7 @@
 #include "agr/editor/GameExport.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
@@ -221,7 +222,70 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
         report.files += 1;
     }
     AGR_LOG_INFO("Export", "desktop build: {}", exe.string());
+    if (project.settings().exportSettings.zipPackage) {
+        const fs::path zip = outputDir / (dir.filename().string() + (playerExecutable.extension() == ".exe" ? "-windows" : "") + ".zip");
+        if (Status s = zipFolder(dir, zip); !s) report.warnings.push_back("zip: " + s.error().message);
+        else AGR_LOG_INFO("Export", "archive: {}", zip.string());
+    }
     return report;
+}
+
+Status zipFolder(const fs::path& dir, const fs::path& zipPath) {
+    static const auto crcTable = [] {
+        std::array<u32, 256> t{};
+        for (u32 i = 0; i < 256; ++i) {
+            u32 c = i;
+            for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            t[i] = c;
+        }
+        return t;
+    }();
+    auto crc32 = [&](const std::string& data) {
+        u32 c = 0xFFFFFFFFu;
+        for (unsigned char b : data) c = crcTable[(c ^ b) & 0xFF] ^ (c >> 8);
+        return c ^ 0xFFFFFFFFu;
+    };
+    std::string out, central;
+    auto u16le = [](std::string& s, u32 v) { s += static_cast<char>(v & 0xFF), s += static_cast<char>((v >> 8) & 0xFF); };
+    auto u32le = [&](std::string& s, u32 v) { u16le(s, v & 0xFFFF), u16le(s, v >> 16); };
+    std::error_code ec;
+    std::vector<fs::path> files;
+    for (auto it = fs::recursive_directory_iterator(dir, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+        if (it->is_regular_file(ec) && it->path().filename() != ".agr-export") files.push_back(it->path());  // not the export marker
+    std::sort(files.begin(), files.end());
+    u32 count = 0;
+    for (const fs::path& f : files) {
+        std::ifstream in(f, std::ios::binary);
+        const std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const std::string name = fs::relative(f, dir.parent_path(), ec).generic_string();
+        if (data.size() > 0xFFFFFFFEu) return makeError(Error::Code::Unsupported, "zip: file larger than 4 GB: " + name);
+        const u32 crc = crc32(data), offset = static_cast<u32>(out.size());
+        const fs::perms perms = fs::status(f, ec).permissions();
+        const u32 mode = 0100000u | (static_cast<u32>(perms) & 0777u);  // regular file + permissions (executables stay executable)
+        // Local header.
+        u32le(out, 0x04034b50u), u16le(out, 20), u16le(out, 0x0800), u16le(out, 0), u16le(out, 0), u16le(out, 0x21);
+        u32le(out, crc), u32le(out, static_cast<u32>(data.size())), u32le(out, static_cast<u32>(data.size()));
+        u16le(out, static_cast<u32>(name.size())), u16le(out, 0);
+        out += name;
+        out += data;
+        // Central directory entry.
+        u32le(central, 0x02014b50u), u16le(central, 0x0314), u16le(central, 20), u16le(central, 0x0800), u16le(central, 0), u16le(central, 0),
+            u16le(central, 0x21);
+        u32le(central, crc), u32le(central, static_cast<u32>(data.size())), u32le(central, static_cast<u32>(data.size()));
+        u16le(central, static_cast<u32>(name.size())), u16le(central, 0), u16le(central, 0), u16le(central, 0), u16le(central, 0);
+        u32le(central, mode << 16), u32le(central, offset);
+        central += name;
+        ++count;
+    }
+    if (out.size() > 0xFFFFFFFEu) return makeError(Error::Code::Unsupported, "zip: archive larger than 4 GB");
+    const u32 centralOffset = static_cast<u32>(out.size());
+    out += central;
+    u32le(out, 0x06054b50u), u16le(out, 0), u16le(out, 0), u16le(out, count), u16le(out, count);
+    u32le(out, static_cast<u32>(central.size())), u32le(out, centralOffset), u16le(out, 0);
+    std::ofstream zip(zipPath, std::ios::binary);
+    if (!zip) return makeError(Error::Code::IOError, "cannot write " + zipPath.string());
+    zip.write(out.data(), static_cast<std::streamsize>(out.size()));
+    return {};
 }
 
 fs::path findWindowsPlayer(const fs::path& editorDirectory) {
