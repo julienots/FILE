@@ -349,7 +349,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.6.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v2.6.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
@@ -707,27 +707,38 @@ void Game::drawMenus(float dt) {
     // 2.3.5 phone layout: the whole screen, big labelled tabs that scroll with the thumb, a large close button,
     // and every text of the pages 12 % larger
     u.consumeAll();
+    // 2.6.1 outside a game (title screen) only the pages that need no hero: settings, mods, saves.
+    // The other pages read the hero / the world: opening them from the title crashed.
+    bool noGame = state != GameState::Playing || player == NullEntity || !reg.valid(player);
+    if (noGame && menu != Menu::Settings && menu != Menu::Mods && menu != Menu::Saves) menu = Menu::Settings;
+    static const char* T_TABS[] = {"Paramètres", "Mods", "Parties"};
+    static const Menu T_MENU[] = {Menu::Settings, Menu::Mods, Menu::Saves};
+    static const char* T_ICON[] = {"i_settings", "i_settings", "i_save"};
+    const char* const* tabs = noGame ? T_TABS : TABS;
+    const Menu* tabMenu = noGame ? T_MENU : TAB_MENU;
+    const char* const* tabIcon = noGame ? T_ICON : TAB_ICON;
+    const int tabCount = noGame ? 3 : TAB_COUNT;
     Rect f = journalFrame(u);
     u.rect({f.x + 6, f.y + 8, f.w, f.h}, vec4(0, 0, 0, 0.45f));
     u.nine("book", f, vec4(1, 1, 1, 1), 0.62f);
     const float railW = 232.f;
     Rect rail{f.x + 40, f.y + 92, railW, f.h - 132};
-    u.text("Journal", f.x + 40 + railW / 2, f.y + 40, 34, GOLDT, F_TITLE, A_CENTER, 0, true);
+    u.text(noGame ? "Options" : "Journal", f.x + 40 + railW / 2, f.y + 40, 34, GOLDT, F_TITLE, A_CENTER, 0, true);
     u.pushClip(rail);
     const float tabH = 64.f, tabGap = 6.f;
-    float so = u.scrollArea("journal_tabs", rail, TAB_COUNT * (tabH + tabGap));
-    for (int i = 0; i < TAB_COUNT; i++) {
-        bool active = TAB_MENU[i] == menu;
+    float so = u.scrollArea("journal_tabs", rail, tabCount * (tabH + tabGap));
+    for (int i = 0; i < tabCount; i++) {
+        bool active = tabMenu[i] == menu;
         Rect t{rail.x - (active ? 0.f : 10.f), rail.y + i * (tabH + tabGap) - so, rail.w + (active ? 14.f : 0.f), tabH};
         if (t.y + t.h < rail.y || t.y > rail.y + rail.h) continue;
         u.nine(active ? "tab_hi" : "tab", t, vec4(1, 1, 1, active ? 1.f : 0.92f), 0.9f);
-        u.sprite(TAB_ICON[i], {t.x + 16, t.y + 12, 40, 40}, vec4(1, 1, 1, active ? 1.f : 0.8f));
-        u.text(TABS[i], t.x + 66, t.y + 19, 22, active ? rgba(0xfff0c8) : PALE, F_SERIF, A_LEFT, 0, active);
-        u.tag(t, TABS[i]);
-        if (u.button(t)) { menu = TAB_MENU[i]; selItem = selSlot = selRecipe = selSkill = selQuest = selEnemy = -1; play("ui_click", 0.5f); }
+        u.sprite(tabIcon[i], {t.x + 16, t.y + 12, 40, 40}, vec4(1, 1, 1, active ? 1.f : 0.8f));
+        u.text(tabs[i], t.x + 66, t.y + 19, 22, active ? rgba(0xfff0c8) : PALE, F_SERIF, A_LEFT, 0, active);
+        u.tag(t, tabs[i]);
+        if (u.button(t)) { if (noGame && tabMenu[i] == Menu::Mods) scanMods(); menu = tabMenu[i]; selItem = selSlot = selRecipe = selSkill = selQuest = selEnemy = -1; play("ui_click", 0.5f); }
     }
     u.popClip();
-    if (TAB_COUNT * (tabH + tabGap) > rail.h) u.text(so < 4 ? "Glissez pour plus d'onglets" : "", rail.x + rail.w / 2, rail.y + rail.h + 6, 15, DIM, F_BODY, A_CENTER);
+    if (tabCount * (tabH + tabGap) > rail.h) u.text(so < 4 ? "Glissez pour plus d'onglets" : "", rail.x + rail.w / 2, rail.y + rail.h + 6, 15, DIM, F_BODY, A_CENTER);
     if (u.iconButton({f.x + f.w - 96, f.y + 22, 74, 74}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
     Rect c{rail.x + rail.w + 34, f.y + 66, f.x + f.w - 56 - (rail.x + rail.w + 34), f.h - 108};
     u.textScale = 1.12f;

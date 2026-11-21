@@ -1826,6 +1826,32 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "titlemenus") {
+        // 2.6.1 regression: on the title screen (no hero yet), "Mods" then a journal tab ("Équipement") crashed.
+        // Cold start (the hero is removed), open Mods / Paramètres / Parties / Nouvelle partie and tap every tab shown,
+        // then force every other menu: none may crash, the menus that need a hero fall back to the settings.
+        static int fid = 1200; static int alive = 0;
+        auto tap = [&s, idle](std::string label) {
+            s.push_back({0.2f, [label](Game& g) { const Rect* r = g.ui.findWidget(label);
+                if (!r) { AGR_LOG("TITLEMENUS widget '%s' not shown", label.c_str()); return; }
+                fid++; float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, fid, (r->x + r->w * 0.5f) * k, (r->y + r->h * 0.5f) * k}); }, idle, "tap"});
+            s.push_back({0.3f, [label](Game& g) { for (auto& f : g.ui.fingers) if (f.id == fid && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, fid, f.x * k, f.y * k}); }
+                AGR_LOG("TITLEMENUS tapped '%s' -> menu %d", label.c_str(), (int)g.menu); alive++; }, idle, "release"});
+        };
+        s.push_back({1.f, [](Game& g) { g.ui.recordWidgets = true; g.menu = Menu::None; g.state = GameState::Title; g.stateT = 3.f;
+            if (g.player != NullEntity) { g.reg.destroy(g.player); g.player = NullEntity; } }, idle, "cold title"});
+        tap("Mods");
+        s.push_back({0.1f, shot("T0_title_mods"), idle, "shot"});
+        for (const char* t : {"Équipement", "Inventaire", "Compétences", "Carte", "Paramètres", "Parties", "Mods"}) tap(t);
+        s.push_back({0.1f, shot("T1_title_tabs"), idle, "shot"});
+        for (int m = 1; m <= (int)Menu::NewGame; m++) {
+            if (m == (int)Menu::LayoutEdit || m == (int)Menu::HeroWheel || m == (int)Menu::Death) continue;   // in-game only overlays, never reachable from the title
+            s.push_back({0.25f, [m](Game& g) { g.state = GameState::Title; g.menu = (Menu)m; }, idle, "force"});
+            s.push_back({0.05f, [m](Game& g) { AGR_LOG("TITLEMENUS forced menu %d -> now %d", m, (int)g.menu); alive++; }, idle, "check"});
+        }
+        s.push_back({0.1f, [](Game& g) { (void)g; AGR_LOG("TITLEMENUS TEST %s (%d steps survived)", alive > 20 ? "PASSED" : "FAILED", alive); }, idle, "end"});
+        return s;
+    }
     if (name == "newgame") {
         // 2.6.0 title screen -> "Nouvelle partie": slot, difficulty, options; the game starts in that slot; Parties and Mods menus
         static int ok[5]; static float hp0 = 0;
@@ -1906,7 +1932,7 @@ static std::vector<Step> scenario(const std::string& name) {
         tapWidget("tap Reprendre", [](Game&) { return std::string("Reprendre"); }, 0.25f, [](Game& g) { res[2] = g.menu == Menu::None; AGR_LOG("UI pause 'Reprendre': menu %d", (int)g.menu); });
         // journal: tab then close button
         s.push_back({0.3f, [](Game& g) { g.menu = Menu::Inventory; }, idle, "journal"});
-        tapWidget("tap tab", [](Game&) { return std::string("Quêtes"); }, 0.2f, [](Game& g) { res[3] = g.menu == Menu::Quests; AGR_LOG("UI journal tab: menu %d (quests %d)", (int)g.menu, (int)Menu::Quests); g.requestScreenshot("build/shots/97_ui_quests.png"); });
+        tapWidget("tap tab", [](Game&) { return std::string("Compétences"); }, 0.2f, [](Game& g) { res[3] = g.menu == Menu::Skills; AGR_LOG("UI journal tab: menu %d (skills %d)", (int)g.menu, (int)Menu::Skills); g.requestScreenshot("build/shots/97_ui_quests.png"); });
         tapWidget("tap close", [](Game&) { return std::string("close"); }, 0.15f, [](Game& g) { res[4] = g.menu == Menu::None; AGR_LOG("UI journal close: menu %d", (int)g.menu); });
         // settings toggle
         s.push_back({0.3f, [](Game& g) { g.menu = Menu::Settings; yaw0 = g.settings.showFps ? 1.f : 0.f; }, idle, "settings"});

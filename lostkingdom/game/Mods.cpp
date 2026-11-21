@@ -62,12 +62,16 @@ static void installBundledMods() {
         id = trimS(id);
         if (id.empty()) continue;
         std::string dir = modsDir() + "/" + id;
-        if (platform::fileExists(dir + "/mod.txt")) continue;
+        bool had = platform::fileExists(dir + "/mod.txt");
         platform::makeDirectory(dir);
+        // 2.6.1 a game update refreshes the bundled mods (new description, new values); the on/off choice is kept
         for (const char* f : {"mod.txt", "data.txt"}) {
-            std::vector<uint8_t> b;
-            if (platform::readAsset(std::string("mods/") + id + "/" + f, b)) platform::writeFileAtomic(dir + "/" + f, std::string(b.begin(), b.end()));
+            std::vector<uint8_t> b; std::string cur;
+            if (!platform::readAsset(std::string("mods/") + id + "/" + f, b)) continue;
+            std::string want(b.begin(), b.end());
+            if (!platform::readFile(dir + "/" + f, cur) || cur != want) platform::writeFileAtomic(dir + "/" + f, want);
         }
+        if (had) continue;
         if (en.find("!" + id) == std::string::npos && en.find(id + "\n") == std::string::npos) { en += "!" + id + "\n"; changed = true; }
     }
     if (changed) platform::writeFileAtomic(platform::writableDir() + "/mods_enabled.txt", en);
