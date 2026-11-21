@@ -36,7 +36,6 @@ sys.path.insert(0, HERE)
 import voice_engine as E  # noqa: E402
 import voice_studio as S  # noqa: E402
 
-PRIME = "Doucement."
 MAX_CHARS = 700
 LOCK = threading.Lock()
 ENGINE = None
@@ -46,12 +45,13 @@ KEY = ""
 def render_fragment(text, speed_factor=1.0):
     """Une phrase isolée → clip studio. Une amorce de contexte évite l'attaque instable des phrases très courtes."""
     speed = min(1.0, max(0.5, E.KokoroEngine.default_speed * speed_factor))
-    primed = ENGINE.render(PRIME + " " + text, speed)
-    pieces = E.cut_at_pauses(primed, [PRIME, text])
-    if pieces is not None:
-        piece = pieces[1]
+    spoken = E.strip_final(text)          # sans ponctuation finale : pas de son parasite après le dernier mot
+    rest = E.cut_after_primer(ENGINE.render(E.PRIME + " " + spoken, speed))
+    if rest is not None:
+        a, b = E.speech_region(rest)
+        piece = rest[a:b]
     else:
-        x = ENGINE.render(text, speed)
+        x = ENGINE.render(spoken, speed)
         a, b = E.speech_region(x)
         piece = x[a:b]
     return S.process(piece)

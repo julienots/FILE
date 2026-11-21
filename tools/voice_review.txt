@@ -1,30 +1,17 @@
-# Phrases que le contrôle Whisper juge douteuses après les variantes (écart WER | texte voulu | transcription).
-# À écouter en priorité. Beaucoup sont des faux positifs (homophones : silencieuses/silencieuse, serre/serrent) ou des mots isolés.
+# Phrases que le contrôle Whisper (small) juge douteuses après les variantes (écart WER | texte voulu | transcription).
+# Beaucoup sont des faux positifs : homophones (silencieuses/silencieuse, serre/serrent, ferme/fermes) ou mots isolés.
 # Régénéré à chaque production dans tools/.cache/voice_v4/kokoro/rapport.txt.
-1.00 | Ta respiration ralentit... | de la respiration ralentie.
-1.00 | Silencieuses... | silencieuse.
+1.00 | Silencieuses... | Silencieuse.
 1.00 | Lointaines... | lointaine.
-0.80 | Et maintenant... pense à toi. | Il est maintenant. Pensez-toi.
-0.50 | Tu entres... et la chaleur t'enveloppe aussitôt. | et la chaleur t'enveloppe aussi tôt.
-0.50 | Les lucioles brillent... puis s'éteignent... puis brillent à nouveau... | la léluciole brille, puis s'éteigne, puis brite à nouveau.
-0.50 | Et expire... | et d'expire.
-0.50 | Essayons ensemble. | Essayons d'ensemble.
-0.50 | Dors bien... | Le dors bien.
-0.50 | Commençons par les pieds. Recroqueville les orteils... serre... | Commençons par les pieds, recroque-villes et les orteils, serres.
-0.46 | Tu t'allonges dans un lit aux draps de lin, frais et légers. | Tu t'allonges dans un lit au drap de l'un, fraise et légeste.
-0.45 | Ses volets sont bleus... délavés par le sel et le soleil. | s'évolait son bleu, délavé par le sel et le soleil.
-0.44 | Une barque... puis une autre... elles s'éloignent doucement. | Une barque qui appuie une autre, elle s'éloigne doucement.
-0.43 | Élargis encore... aux sons autour de toi. | et l'élargit encore aux sons autour de toi.
-0.43 | Certaines brillent fort, comme des petites lanternes. | et certaines brilles fortes comme des petites lanternes.
-0.40 | Les mains... serre les poings... | Les mains serrent les pointes.
+0.70 | Comme un hamac... d'un côté... puis de l'autre. | Je commande à Mac qui se donne côté, puis de l'autre.
+0.67 | Ta respiration ralentit... | respiration ralentie.
+0.60 | Des nuages passent... lents... légers... | Des nuages passent.  L'an, léger.
+0.54 | Tu t'allonges dans un lit aux draps de lin, frais et légers. | que tu t'allonges dans un lit au drap de l'un fraise et léger.
+0.40 | Les mains... serre les poings... | Les mains serrent les points.
 0.40 | Les cuisses... contracte-les doucement... | Les cuisses contractent les doucements.
-0.40 | Le calme revient... lentement... sûrement. | et le calme revient lentement surmente.
-0.40 | Des nuages passent... lents... légers... | Des nuages passent.  Lang, léger.
-0.33 | Tu t'y allonges... et il te soutient parfaitement. | Tu tiens longe et il te soutient parfaitement.
-0.33 | Tu es déconnecté... en mode repos... | Utilisez déconnecté en mode repos.
+0.40 | De chaque côté, les champs dorment... les blés ondulent à peine, sous une brise légère. | De chaque côté, les champs d'orment.  Les blesses ont du lente à peine sous une brise légère.
+0.38 | Écoute les sons de la nature... l'eau, le vent, quelques chants lointains. | et écoutent les sons de la nature, l'eau levant quelques champs lointains.
 0.33 | Tout s'apaise... | Tout s'apaisent.
-0.33 | Serre doucement les poings... et relâche. | Laissez serre doucement les points et relâche.
-0.33 | De chaque côté, les champs dorment... les blés ondulent à peine, sous une brise légère. | De chaque côté, les champs d'orment.  Les blés ont du lente à peine sous une brise légère.
-0.33 | Chaque instant est neuf... frais... entier. | le temps est neuf, frais, entier.
+0.33 | Ferme les yeux... | Fermes les yeux.
+0.33 | Dehors, la neige tombe à gros flocons... lents, silencieux. | Dehors, la neige tombe à gros flecon, l'an silencieux.
 0.33 | Ce mail difficile... dans le feu. | se mêle difficile dans le feu.
-0.31 | Écoute les sons de la nature... l'eau, le vent, quelques chants lointains. | Écoutent les sons de la nature, l'eau levant quelques champs lointains.

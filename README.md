@@ -6,7 +6,7 @@ NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) d
 
 <p align="center"><img src="branding/noctea-logo.png" width="320" alt="Logo NOCTÉA"/></p>
 
-- **APK installable** : [`release/NOCTEA-Superessence-Studio.apk`](release/NOCTEA-Superessence-Studio.apk) (Android 8.0+, signé, ~22 Mo, fonctionne hors connexion)
+- **APK installable** : [`release/NOCTEA-Superessence-Studio.apk`](release/NOCTEA-Superessence-Studio.apk) (Android 8.0+, signé, ~27 Mo, fonctionne hors connexion)
 - **Aperçus audio** (mixage réel de l'application) : [`branding/apercu-endormissement-profond.mp3`](branding/apercu-endormissement-profond.mp3), [`branding/apercu-histoire-cabane.mp3`](branding/apercu-histoire-cabane.mp3)
 
 ---
@@ -17,7 +17,7 @@ NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) d
 |---|---|
 | Écran de lancement | Présentation animée lente « SuperEssence. » (lettre par lettre, ombre portée, reflet lumineux, « STUDIO · présente »), puis apparition du logo NOCTÉA. Toucher pour passer. |
 | Bibliothèque | **29 séances guidées**, soit près de 4 heures de contenu : Sommeil (6), Relaxation (5), Respiration (5), Méditation (5), Histoires du soir (6), Réveil doux (2). Chaque séance a un titre, une description, une durée, une illustration et son texte. |
-| Voix | Voix féminine française douce, **préenregistrée** (1 572 clips, 64 min de parole), **une seule voix pour toute l'application** (même timbre, même hauteur, même niveau d'un clip à l'autre, comptage des respirations compris), débit de méditation (≈ 140 mots/min de parole active), vraies pauses intégrées à l'audio. |
+| Voix | Voix féminine française douce, **préenregistrée** (1 572 clips, 59 min de parole), **une seule voix pour toute l'application** (même timbre, même hauteur, même niveau d'un clip à l'autre, comptage des respirations compris), débit de méditation (≈ 155 mots/min de parole active), vraies pauses intégrées à l'audio. |
 | Créer ma méditation | Générateur : 10 objectifs × 8 durées (3 à 60 min) × 10 ambiances × 6 styles × 3 intensités musicales. Il produit un script cohérent (intention, installation, respiration, scan corporel, visualisation, cœur de l'objectif, approfondissement, conclusion), affichable, avec la voix NOCTÉA, à la **durée exacte** demandée. Historique des créations, variantes, favoris. |
 | Mon texte | Transforme un texte libre en séance audio : « ... » = pause, ligne vide = pause longue, `[pause 10]` = 10 s de silence. Voix de l'appareil (Android TTS, ramenée au même niveau, à la même tonalité et aux mêmes silences que la bibliothèque) ou **serveur vocal NOCTÉA** pour retrouver exactement la voix de la bibliothèque. |
 | Lecteur | Lecture/pause, ±15 s, barre de progression, temps restant, minuteur de sommeil (fondu de 25 s, ou « fin de la séance »), lecture en arrière-plan et écran éteint, commandes sur l'écran verrouillé et en Bluetooth, volume voix / volume musique séparés, réglage de chaque couche d'ambiance, vitesse (×0,8 à ×1,1), favoris, reprise automatique, texte de la séance, **téléchargement en fichier audio .m4a** (voix + ambiance, dans Musique/NOCTEA), mode écran minimaliste, cercle de respiration synchronisé. |
@@ -38,26 +38,28 @@ NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) d
 | Synchronisation de compte | Pas de compte pour l'instant. Les préférences s'exportent et s'importent en JSON (Réglages › Données), dans le format qu'utiliserait une synchronisation. |
 
 ### À propos de la voix (en toute transparence)
-La voix embarquée est produite avec **Kokoro-82M** (synthèse neuronale libre, Apache-2.0) et sa voix féminine française **« Siwis »** (entraînée sur le corpus SIWIS, CC-BY 4.0), puis traitée comme une production studio. Elle remplace la version précédente (Piper « Siwis ») après un diagnostic **mesuré** sur les 1 492 clips de l'ancien APK, pour supprimer ce qui s'entendait comme « une autre voix » en cours de séance :
+La voix embarquée est produite avec **Kokoro-82M** (synthèse neuronale libre, Apache-2.0) et sa voix féminine française **« Siwis »** (entraînée sur le corpus SIWIS, CC-BY 4.0), puis traitée comme une production studio. Elle remplace la version précédente (Piper « Siwis ») après un diagnostic **mesuré** sur les 1 492 clips de l'ancien APK, pour supprimer ce qui s'entendait comme « une autre voix » en cours de séance, puis pour corriger les mots mal prononcés :
 
 | Mesure (29 séances, 1 945 passages d'un clip au suivant) | Avant (Piper) | Après (Kokoro, chaîne v4) |
 |---|---|---|
-| Hauteur de la voix de comptage (« Inspire… un, deux… ») par rapport au récit | **−2,8 dem-tons** : plus grave, plus rapide, moins nette | **+0,0 dem-ton** : mêmes voix, hauteur et débit |
-| Saut de hauteur entre deux clips voisins : médian / 90ᵉ perc. / max | 1,54 / 4,36 / **10,56** dem-tons | 0,68 / 2,22 / **6,30** dem-tons |
-| Dispersion de hauteur entre clips (écart-type) | 1,66 dem-ton | 0,91 dem-ton (0,4–0,5 pour les phrases de plus de 2,5 s) |
-| Niveau de parole entre clips (écart-type) | 0,30 dB | 0,06 dB |
-| Débit de parole active | 14,6 car/s (≈ 180 mots/min : débit de conversation) | 11,6 car/s (≈ 140 mots/min) |
-| Aigus (énergie 5–10 kHz / 0,1–5 kHz ; ≈ −20 dB pour une voix naturelle) | −23 dB (voix étouffée) | −20,6 dB |
+| Hauteur de la voix de comptage (« Inspire… un, deux… ») par rapport au récit | **−2,8 dem-tons** : plus grave, plus rapide, moins nette | **−0,4 dem-ton** : mêmes voix, hauteur et débit |
+| Saut de hauteur entre deux clips voisins : médian / 90ᵉ perc. / max | 1,54 / 4,36 / **10,56** dem-tons | 1,05 / 2,62 / **7,00** dem-tons |
+| Dispersion de hauteur entre clips (écart-type) | 1,66 dem-ton | 1,00 dem-ton (0,5–0,7 pour les clips de plus de 2,5 s) |
+| Niveau de parole entre clips (écart-type) | 0,30 dB | 0,07 dB |
+| Débit de parole active | 14,6 car/s (≈ 180 mots/min : débit de conversation) | 12,6 car/s (≈ 155 mots/min) |
+| Aigus (énergie 5–10 kHz / 0,1–5 kHz ; ≈ −20 dB pour une voix naturelle) | −23 dB (voix étouffée) | −21,8 dB |
 
 **Ce qui a changé dans la production** (`tools/`) :
 - **Un seul moteur, déterministe** : le même texte donne exactement la même voix (Piper tire un bruit aléatoire à chaque rendu). Mesuré sur 100 phrases réelles rendues telles quelles : dispersion de hauteur entre phrases 0,27 dem-ton (Kokoro) contre 1,22 (Piper), dispersion du niveau 0,30 dB contre 1,06 dB, dispersion du timbre (pente spectrale) 0,48 contre 1,06 dB/octave.
 - **Phrases rendues d'un seul tenant, puis coupées aux silences naturels des « ... »** : la mélodie de « Maintenant... tu peux fermer les yeux. » reste continue, au lieu de deux fragments isolés qui « repartent à zéro ». Les pauses réelles (850–1 350 ms, variables, jamais métronomiques) sont insérées après la coupe.
+- **Débuts de phrase propres (amorce de contexte)** : rendue seule, une phrase courte commençait par une syllabe parasite (« Ta respiration » → « Eta respiration », « Tu es déconnecté » → « Utilisez déconnecté », « Essayons ensemble » → « et essayons en stem bleu »). Chaque phrase est donc rendue précédée de l'amorce « Tout doucement... », coupée ensuite au creux qui la suit. Mesuré sur 18 phrases difficiles (Whisper *medium*) : 49 % d'écart sans amorce, 4 % avec.
+- **Fins de phrase propres (sans ponctuation finale)** : le point ou les « ... » en fin d'énoncé faisaient ajouter au moteur un petit son après le dernier mot (« fois » → « foisse », « poings » → « poingues », « temps » → « tangles », « toi » → « toire »). Le texte envoyé au moteur n'a plus de ponctuation finale (le point d'interrogation est conservé). Mesuré sur 33 phrases : mots finaux en écart 19 avec la ponctuation, 9 avec une virgule, 3 sans.
 - **Un seul timbre pour le comptage** : les nombres isolés (un… dix) et les consignes (Inspire, Retiens, Expire, Pause) sont dits par des clips dédiés, calés sur la hauteur du récit (PSOLA : le timbre ne bouge pas), partout où ils apparaissent.
-- **Contrôle automatique de chaque phrase** : transcription Whisper comparée au texte voulu et écart de hauteur avec le reste du corpus ; une phrase douteuse est refaite avec des variantes (débit, ligne de style, amorce, rendu fragment par fragment) et on garde la meilleure. Résultat : écart de transcription médian 9 %, dispersion de hauteur entre phrases 0,34 dem-ton (écart-type) ; 27 phrases sur 870 (3 %) restent signalées (`tools/voice_review.txt`, à écouter en priorité ; surtout des mots isolés et des homophones que Whisper confond : « silencieuses/silencieuse »).
-- **Phonétique corrigée** : espeak-ng bascule vers l'anglais sur cinq mots français (« dos », « rythme », « assieds », « stress », « mail ») et laisse des balises que Kokoro prononce comme des syllabes parasites (sans correction, « assieds-toi » était transcrit « iain recidze fre toi »). La table `FR_FIX` (`tools/voice_engine.py`) donne la prononciation française.
+- **Phonétique corrigée mot par mot** (`RESPELL`, `IPA_FIX`, `FR_FIX` dans `tools/voice_engine.py`, testées sur tout le corpus par `tools/test_voice_tools.py`). espeak-ng bascule vers l'anglais sur « dos », « rythme », « assieds », « t'assieds », « stress », « mail » (et laisse des balises que Kokoro prononce comme des syllabes parasites). Il lit aussi mal : **« sens »** (verbe sentir, 27 phrases : lu comme le nom /sɑ̃s/, « essence »), « ressens », « floues », « joues », « dénouent » (lus sans leur voyelle), « apesanteur », « lucioles », « cosmos », les mots en « -ose » (o fermé), « montagnes/éloignent/éteignent/accompagner » (« gn »), « hamac » (liaison), « dehors », « moelleux », « accueilli ».
+- **Contrôle automatique de chaque phrase** : transcription Whisper *small* comparée au texte voulu et écart de hauteur avec le reste du corpus ; une phrase douteuse est refaite avec des variantes (débit, ligne de style, amorce, rendu fragment par fragment) et on garde la meilleure. Sur les 870 phrases, de la première version Kokoro à l'actuelle : écart de transcription médian 9,1 % → 0 %, moyen 10,3 % → 4,4 %, phrases à plus de 30 % d'écart 27 → 14 (surtout des homophones). **Revue fine** (`tools/voice_verify.py`) : Whisper *medium*, mot par mot, **sans compter les homophones** (même prononciation, comme prend/prends ou pierres plates/pierre plate) ; pour les phrases encore en écart, `--fix` note chaque variante et garde la meilleure dans `tools/voice_choices.json` (36 + 5 choix : de 1 à 4 mots en écart à 0 dans la grande majorité des cas).
 - **Chaîne studio identique pour tous les clips** (`voice_studio.py`) : passe-haut 70 Hz, chaleur de proximité, aigus ramenés au niveau d'une voix naturelle (le brut du modèle est ≈ 5 dB plus brillant), de-esser par bande, compression douce, **vraie pièce** (réponse impulsionnelle fixe, RT60 ≈ 0,3 s) à la place des deux échos à 23/37 ms de l'ancienne chaîne qui coloraient la voix comme un filtre en peigne, niveau commun −20,5 dBFS, limiteur à genou doux, queue de réverbération conservée. La respiration est passée dans la même « pièce ». Opus 36 kb/s (28 kb/s auparavant).
 
-C'est une voix douce et naturelle pour une synthèse libre, mais **ce n'est pas une comédienne enregistrée**, et sa cohérence est **mesurée**, pas « écoutée » : les chiffres ci-dessus ne remplacent pas une écoute attentive sur téléphone. Pour aller plus loin, il suffit de remplacer les fichiers `assets/voice/*.ogg` par des enregistrements humains, ou de régénérer le contenu avec un autre moteur (voir plus bas) : l'application n'a pas à être modifiée. Durée totale de voix : 64 min (52 min avant : une parole plus lente allonge les séances de 5 % en moyenne).
+C'est une voix douce et naturelle pour une synthèse libre, mais **ce n'est pas une comédienne enregistrée**, et sa cohérence est **mesurée**, pas « écoutée » : les chiffres ci-dessus ne remplacent pas une écoute attentive sur téléphone. Il reste des mots isolés que le contrôle automatique signale (`tools/voice_review.txt`, surtout des homophones que Whisper confond : « silencieuses/silencieuse »). Pour aller plus loin, il suffit de remplacer les fichiers `assets/voice/*.ogg` par des enregistrements humains, ou de régénérer le contenu avec un autre moteur (voir plus bas) : l'application n'a pas à être modifiée. Durée totale de voix : 59 min (52 min avant) ; les 29 séances durent 244 min au total (237 avant, soit +3 %).
 
 **« Mon texte »** : la voix de l'appareil est une autre voix (celle du téléphone). NOCTÉA la fige pour tout le texte, ramène chaque fragment au même niveau, à la même égalisation et à des silences réguliers, et la convertit en 24 kHz comme la bibliothèque (plus de reconfiguration de la piste audio entre un fragment et un silence). Pour obtenir **exactement la voix de la bibliothèque**, lancez `tools/noctea_voice_server.py` (voir plus haut). La version embarquée sur le téléphone n'a pas été faite : elle demanderait espeak-ng (licence GPL) et ≈ 90 Mo de modèle dans l'APK, sans appareil pour la tester ici.
 
@@ -84,7 +86,9 @@ tools/
 │                      Whisper → chaîne studio → Opus + catalog.json
 ├── voice_engine.py    Moteurs (Kokoro par défaut, Piper en option), phonèmes français, coupe aux silences
 ├── voice_studio.py    Chaîne studio identique pour tous les clips (égalisation, de-esser, compression, pièce, niveau)
-├── voice_qa.py        Mesures : hauteur, niveau, timbre, débit, sauts entre clips voisins, intelligibilité
+├── voice_qa.py        Mesures : hauteur, niveau, timbre, débit, sauts entre clips voisins
+├── voice_verify.py    Revue fine de la prononciation : Whisper medium, mot par mot, sans les homophones ; --fix choisit la meilleure variante
+├── voice_choices.json Variantes retenues par la revue fine (clé de phrase → variante)
 ├── fetch_models.py    Télécharge Kokoro, Whisper (et Piper en option) dans tools/models/
 ├── noctea_voice_server.py  Serveur HTTP : la voix de la bibliothèque pour « Mon texte »
 ├── test_voice_tools.py     Tests de la chaîne vocale (sans modèle)
@@ -107,7 +111,7 @@ Prérequis : JDK 17 ou plus récent, Android SDK (plateforme 35, build-tools 35.
 echo "sdk.dir=/chemin/vers/android-sdk" > local.properties
 ./gradlew assembleRelease          # → app/build/outputs/apk/release/app-release.apk
 ./gradlew testDebugUnitTest        # 41 tests (contenu, générateur, moteur audio, voix de l'appareil, rééchantillonnage, 18 écrans, parcours)
-python3 tools/test_voice_tools.py  # 8 tests de la chaîne vocale (niveau, coupes, queue de pièce, phonèmes)
+python3 tools/test_voice_tools.py  # 15 tests de la chaîne vocale (niveau, coupes, amorce, queue de pièce, phonétique de tout le corpus)
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true   # captures dans app/build/screenshots
 ```
 
@@ -120,6 +124,7 @@ pip install numpy scipy soundfile onnxruntime kokoro-onnx praat-parselmouth fast
 python3 tools/fetch_models.py                       # Kokoro (voix ff_siwis) + Whisper → tools/models/
 python3 tools/build_content.py                      # régénère voix + catalogue (≈ 1 h sur 4 cœurs, reprenable : tout est mis en cache)
 python3 tools/voice_qa.py app/src/main/assets       # mesure la cohérence de la voix du résultat
+python3 tools/voice_verify.py --min-wer 0.10        # revue mot par mot (Whisper medium : python3 tools/fetch_models.py --with-medium)
 python3 tools/build_sounds.py app/src/main/assets/sounds   # régénère les ambiances
 python3 tools/make_icons.py                         # régénère logo et icônes
 ```

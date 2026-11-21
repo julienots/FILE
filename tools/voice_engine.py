@@ -28,6 +28,9 @@ FR_FIX = {
     "ɹˈɪθm": "ʁˈitm",       # rythme
     "dˈɒs": "dˈo",          # dos
     "ɐsˈɪdz": "asjˈɛ",      # assieds
+    "tˈiːˈasɪdz": "tasjˈɛ",  # t'assieds
+    "ˈɛsˈasɪdz": "sasjˈɛ",   # s'assieds
+    "ˈɛmˈasɪdz": "masjˈɛ",   # m'assieds
     "stɹˈɛs": "stʁˈɛs",     # stress
     "mˈeɪl": "mˈɛl",        # mail
 }
@@ -35,9 +38,82 @@ EN_FLAGGED = re.compile(r"\(en[a-z-]*\)(.*?)(?:\(fr[a-z-]*\)|$)")
 ANY_FLAG = re.compile(r"\([a-z]{2,3}(?:-[a-z0-9]+)*\)")
 UNMAPPED = set()
 
+# espeak-ng se trompe sur quelques mots : on envoie au moteur une orthographe de remplacement dont la
+# phonétisation donne la bonne prononciation (le texte affiché ne change pas). Chaque entrée est vérifiée par
+# tools/test_voice_tools.py : la phonétisation du remplaçant doit être exactement la prononciation voulue.
+RESPELL = {
+    "sens": "san",               # verbe sentir (« sens la chaleur », « tu te sens ») = /sɑ̃/ ; espeak lisait le nom /sɑ̃s/ → « essence »
+    "ressens": "ressan",         # /ʁəsɑ̃/ (espeak : /ʁəsɛn/) ; sans s final : pas de fausse liaison
+    "floues": "floue",           # /flu/ (espeak : /flw/)
+    "joues": "joue",             # /ʒu/ (espeak : /ʒw/)
+    "dénouent": "dénoue",        # /denu/ (espeak : /denw/)
+    "apesanteur": "apeuzanteur",  # /apəzɑ̃tœʁ/ (espeak oubliait la voyelle : « absenteur »)
+    "lucioles": "luciolles",     # /lysjɔl/
+    "cosmos": "cosmoss",         # /kɔsmɔs/ : le s final se prononce
+    "rose": "rauze", "chose": "chauze", "pose": "pauze", "repose": "repauze", "dépose": "dépauze",   # o fermé : /ʁoz/, /ʃoz/…
+    "montagnes": "montagne", "éloignent": "éloigne", "éteignent": "éteigne",                       # « gn » = /ɲ/
+    "hamac": "amac",             # h muet : « un hamac » se lie, /œ̃n amak/ (sans liaison : « zamak »)
+    "dehors": "deuhors",         # /dəɔʁ/ : la voyelle de liaison rend le mot net (sinon « d'or », « zor »)
+}
+_RESPELL_RE = re.compile(r"(?<![\wÀ-ÿ])(" + "|".join(re.escape(k) for k in sorted(RESPELL, key=len, reverse=True)) + r")(?![\wÀ-ÿ])", re.I)
 
-def _cache_dir():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
+# corrections directes sur la phonétique, quand aucune orthographe de remplacement ne convient
+IPA_FIX = {
+    "mwalˈø": "mwalˈœ",          # moelleux : voyelle finale plus ouverte, sinon « moelleurs », « moelus »
+    "akœjˈi": "akøjˈi",          # accueilli, accueillir : sinon « accri »
+    "elwanjˈe": "elwaɲˈe",       # éloigner, éloigné : « gn » = /ɲ/
+    "akɔ̃panjˈe": "akɔ̃paɲˈe",    # accompagner
+    "bɛnjˈe": "bɛɲˈe",           # baigné
+    "kɔ̃panˈi": "kɔ̃paɲˈi",       # compagnie
+}
+
+
+def respell(text):
+    """Texte → texte envoyé au moteur (orthographes de remplacement ; idempotent)."""
+    def sub(m):
+        w = m.group(1)
+        r = RESPELL[w.lower()]
+        return r[0].upper() + r[1:] if w[0].isupper() else r
+    return _RESPELL_RE.sub(sub, text)
+
+
+# La ponctuation finale d'un énoncé fait ajouter au moteur un petit son parasite après le dernier mot (« fois » →
+# « foisse », « poings » → « poingues », « temps » → « tangles »). Mesuré sur 33 phrases (Whisper medium, hors
+# homophones) : mots finaux en écart 19 avec le point ou « ... », 9 avec une virgule, 3 sans ponctuation.
+# Le point d'interrogation est conservé (il porte l'intonation montante).
+_FINAL_PUNCT = re.compile(r"\s*(?:\.\.\.|…|[.,;:])+\s*$")
+
+
+def strip_final(text):
+    return _FINAL_PUNCT.sub("", text)
+
+
+_TOKENIZER = None
+
+
+def phonemize_fr(text, lang="fr-fr"):
+    """
+    Texte → phonèmes (espeak-ng « fr-fr », sans modèle) : orthographes corrigées, balises de langue retirées
+    (mots anglais remplacés par leur prononciation française), corrections de phonétique.
+    """
+    global _TOKENIZER
+    if _TOKENIZER is None:
+        from kokoro_onnx.tokenizer import Tokenizer
+        _TOKENIZER = Tokenizer()
+    ph = _TOKENIZER.phonemize(respell(text), lang)
+
+    def fix(m):
+        chunk = m.group(1)
+        if chunk in FR_FIX:
+            return FR_FIX[chunk]
+        UNMAPPED.add((chunk, text))
+        return chunk
+
+    ph = EN_FLAGGED.sub(fix, ph)
+    ph = ANY_FLAG.sub("", ph)
+    for wrong, right in IPA_FIX.items():
+        ph = ph.replace(wrong, right)
+    return " ".join(ph.split())
 
 
 class KokoroEngine:
@@ -66,18 +142,7 @@ class KokoroEngine:
         self.lang = lang
 
     def phonemize(self, text):
-        """Texte → phonèmes (espeak-ng « fr-fr »), balises de langue retirées et mots anglais corrigés."""
-        ph = self.k.tokenizer.phonemize(text, self.lang)
-
-        def fix(m):
-            chunk = m.group(1)
-            if chunk in FR_FIX:
-                return FR_FIX[chunk]
-            UNMAPPED.add((chunk, text))
-            return chunk
-
-        ph = EN_FLAGGED.sub(fix, ph)
-        return " ".join(ANY_FLAG.sub("", ph).split())
+        return phonemize_fr(text, self.lang)
 
     def phoneme_weights(self, fragments):
         """Poids de durée de chaque fragment = nombre de phonèmes prononcés (espeak), bien plus fidèle que les lettres."""
@@ -223,3 +288,31 @@ def cut_at_pauses(x, fragments, keep_ms=45, weights=None):
         if len(p) < 0.10 * SR or not (lim[0] < share / exp < lim[1]):
             return None
     return pieces
+
+
+# --------------------------------------------------------------------------- amorce de contexte
+# Mesuré sur 18 phrases difficiles (Whisper medium, écart avec le texte voulu) : rendues seules, 49 % d'écart
+# (syllabes parasites au début : « Eta respiration », « Utilisez déconnecté », « et d'expirer ») ; précédées de
+# l'amorce « Tout doucement... » puis coupées, 4 %. Le moteur traite alors la phrase comme la suite d'un discours.
+PRIME = "Tout doucement..."
+
+
+def cut_after_primer(x, lo_s=0.62, hi_s=1.55):
+    """
+    Retire l'amorce rendue en tête de x. Retourne l'audio qui suit le creux entre l'amorce et la phrase
+    (jusqu'à la fin de la parole), ou None si ce creux est introuvable.
+    """
+    a, b = speech_region(x)
+    cand = []
+    for thr, mn in ((-30.0, 100), (-26.0, 70), (-22.0, 50)):          # seuils de plus en plus tolérants
+        cand = [g for g in find_gaps(x, thr, mn)
+                if lo_s * SR <= g[0] - a <= hi_s * SR and g[1] < b - 0.15 * SR]
+        if cand:
+            break
+    if not cand:
+        return None
+    # le creux de l'amorce : le plus long de la fenêtre, à longueur voisine le plus proche de 0,95 s
+    g = max(cand, key=lambda g: (g[1] - g[0]) / SR * 1000 - 40 * abs((g[0] - a) / SR - 0.95))
+    keep = int(0.045 * SR)
+    start = max(g[1] - keep, (g[0] + g[1]) // 2)
+    return x[start:b]

@@ -51,14 +51,13 @@ ASSETS = os.path.join(ROOT, "app", "src", "main", "assets")
 CACHE_ROOT = os.path.join(HERE, ".cache", "voice_v4")
 SR = E.SR
 
-RENDER_VERSION = "r1"          # change si le texte envoyé au moteur ou la découpe changent
+RENDER_VERSION = "r3"          # change si le texte envoyé au moteur, l'amorce ou la découpe changent
 OPUS_KBPS = 36
 ELLIPSIS_PAUSE_RANGE = (850, 1350)   # ms : pause réelle à chaque « ... » (variable, pas métronomique)
 WER_OK = 0.15          # une variante à ce niveau est acceptée sans chercher mieux
 WER_RETRY = 0.25       # au-delà, la phrase est refaite avec des variantes
 PITCH_OK_ST = 1.25
 PITCH_OK_CUE_ST = 0.5   # le comptage doit avoir la hauteur du récit à un demi-ton près (ancien défaut : −3 dem-tons)
-PRIME = "Doucement."
 ELLIPSIS_SPLIT = re.compile(r"(\.\.\.|…)\s+(?=\S)")
 
 NUMBERS = ["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix"]
@@ -68,15 +67,9 @@ CUE_FRAGMENTS = [CUES["in"], CUES["hold"], CUES["out"], CUES["hold2"]] + [n.capi
 # même prononciation, même voix partout (les petits mots isolés sont le point faible des moteurs neuronaux).
 CUE_WORDS = {f.lower().rstrip(".").rstrip("…").strip(): f for f in CUE_FRAGMENTS}
 
-# Prononciations forcées (texte envoyé au moteur ≠ texte affiché) — complété après contrôle Whisper.
-LEXICON = {}
-
-
 def tts_text(text):
-    t = text.replace("…", "...")
-    for k, v in LEXICON.items():
-        t = t.replace(k, v)
-    return " ".join(t.split())
+    """Texte affiché → texte envoyé au moteur (points de suspension normalisés, orthographes de remplacement)."""
+    return " ".join(E.respell(text.replace("…", "...")).split())
 
 
 # --------------------------------------------------------------------------- unités de rendu
@@ -97,7 +90,7 @@ class Unit:
     def __init__(self, frags, tts=None, kind="phrase"):
         self.frags = list(frags)
         self.kind = kind
-        self.tts = tts if tts is not None else tts_text(" ".join(self.frags))
+        self.tts = E.strip_final(tts if tts is not None else tts_text(" ".join(self.frags)))
         self.ref = " ".join(self.frags)
         self.key = hashlib.sha1(f"{RENDER_VERSION}|{kind}|{self.tts}|{'/'.join(self.frags)}".encode()).hexdigest()[:16]
 
@@ -211,18 +204,19 @@ CUE_SPEED = 0.80       # le comptage est un peu plus vif que le récit, avec la 
 
 def variants_for(engine, unit):
     s0 = engine.default_speed
+    if engine.name != "kokoro":      # Piper n'a pas le défaut d'attaque : rendu direct
+        return [("whole", s0, 0), ("whole", round(s0 * 1.07, 3), 0), ("whole", round(s0 * 0.93, 3), 0), ("sep", s0, 0)]
     if unit.kind == "cue":
-        # mots isolés (Inspire, Retiens, deux, trois…) : rendus un par un, les creux d'un rendu continu y sont trop faibles
-        c = CUE_SPEED if engine.name == "kokoro" else s0
-        return [("sep", c, 0), ("sep", round(c * 0.94, 3), 0), ("sep", round(c * 1.06, 3), 0),
-                ("sep", c, 5), ("sep", c, -5)]
-    v = [("whole", s0, 0),
-         ("whole", round(s0 * 1.07, 3), 0), ("whole", round(s0 * 0.93, 3), 0),
-         ("whole", s0, 5), ("whole", s0, -5)]
-    if sum(c.isalnum() for c in unit.ref) < 70:
-        v += [("prime", s0, 0), ("prime", round(s0 * 1.07, 3), 3)]
-    v.append(("sep", s0, 0))
-    return v
+        # mots isolés (Inspire, Retiens, deux, trois…) : un rendu par mot, chacun précédé de l'amorce
+        c = CUE_SPEED
+        return [("psep", c, 0), ("psep", round(c * 0.94, 3), 0), ("psep", round(c * 1.06, 3), 0),
+                ("psep", c, 5), ("psep", c, -5), ("sep", c, 0)]
+    # phrase : rendue après l'amorce de contexte, sinon directement, avec des variantes de débit et de style
+    return [("prime", s0, 0), ("whole", s0, 0),
+            ("prime", round(s0 * 1.07, 3), 0), ("prime", round(s0 * 0.93, 3), 0),
+            ("prime", s0, 5), ("prime", s0, -5),
+            ("whole", round(s0 * 1.07, 3), 0), ("whole", round(s0 * 0.93, 3), 0),
+            ("whole", s0, 5), ("whole", s0, -5), ("psep", s0, 0), ("sep", s0, 0)]
 
 
 def variant_id(var):
@@ -233,18 +227,27 @@ def render_variant(unit, var):
     mode, speed, shift = var
     frags = unit.frags
     weigh = getattr(_engine, "phoneme_weights", None)
+    spoken = [tts_text(f) for f in frags]                 # texte de chaque fragment (poids de durée)
+    alone = [E.strip_final(t) for t in spoken]            # fragment rendu seul : sans ponctuation finale
     if mode == "whole":
         x = _engine.render(unit.tts, speed, shift)
-        return E.cut_at_pauses(x, frags, weights=weigh(frags) if weigh else None)
+        return E.cut_at_pauses(x, frags, weights=weigh(spoken) if weigh else None)
     if mode == "prime":
-        x = _engine.render(PRIME + " " + unit.tts, speed, shift)
-        pieces = E.cut_at_pauses(x, [PRIME] + frags, weights=weigh([PRIME] + frags) if weigh else None)
-        return None if pieces is None else pieces[1:]
+        x = _engine.render(E.PRIME + " " + unit.tts, speed, shift)
+        rest = E.cut_after_primer(x)
+        return None if rest is None else E.cut_at_pauses(rest, frags, weights=weigh(spoken) if weigh else None)
     pieces = []
-    for f in frags:
-        y = _engine.render(tts_text(f), speed, shift)
-        a, b = E.speech_region(y)
-        pieces.append(y[a:b])
+    for f in alone:
+        if mode == "psep":
+            rest = E.cut_after_primer(_engine.render(E.PRIME + " " + f, speed, shift))
+            if rest is None:
+                return None
+            a, b = E.speech_region(rest)
+            pieces.append(rest[a:b])
+        else:  # "sep"
+            y = _engine.render(f, speed, shift)
+            a, b = E.speech_region(y)
+            pieces.append(y[a:b])
     return pieces
 
 
@@ -315,22 +318,47 @@ def run_unit(job):
     return unit.key
 
 
-def score(info, f0_ref):
+class _Stub:
+    """Débit par défaut d'un moteur, sans charger le modèle (processus principal, outils de contrôle)."""
+    def __init__(self, name):
+        self.name = name
+        self.default_speed = E.KokoroEngine.default_speed if name == "kokoro" else E.PiperEngine.default_speed
+
+
+def score(info, f0_ref, order):
     dev = 0.0
     if f0_ref and info.get("f0"):
         dev = abs(12 * math.log2(info["f0"] / f0_ref))
-    return (round(info["wer"] / 0.05), dev)
+    return (round(info["wer"] / 0.10), 1 if dev > PITCH_OK_ST else 0, order)
 
 
-def best_variant(cache, unit, f0_ref):
+CHOICES_FILE = os.path.join(HERE, "voice_choices.json")
+_choices_cache = None
+
+
+def choices():
+    """Variantes retenues par la revue fine (voice_verify.py --fix) : clé d'unité → identifiant de variante."""
+    global _choices_cache
+    if _choices_cache is None:
+        _choices_cache = json.load(open(CHOICES_FILE, encoding="utf-8")) if os.path.exists(CHOICES_FILE) else {}
+    return _choices_cache
+
+
+def best_variant(cache, unit, f0_ref, engine="kokoro"):
+    chosen = choices().get(unit.key)
+    if chosen:
+        meta = _paths(cache, unit, chosen)[1]
+        if os.path.exists(meta):
+            return json.load(open(meta))
+    order = {variant_id(v): i for i, v in enumerate(variants_for(_Stub(engine), unit))}
     best, best_s = None, None
     for meta in glob.glob(os.path.join(cache, "raw", f"{unit.key}__*.json")):
         info = json.load(open(meta))
         if not info.get("ok"):
             continue
-        s = score(info, f0_ref)
-        if best is None or s < best_s:
-            best, best_s = info, s
+        s_ = score(info, f0_ref, order.get(info.get("vid"), 99))
+        if best is None or s_ < best_s:
+            best, best_s = info, s_
     return best
 
 
@@ -520,6 +548,20 @@ def _encode_fx(path, x, kbps):
                         "-b:a", f"{kbps}k", path], check=True)
 
 
+def inventory():
+    """Enregistre toutes les phrases des scripts et de la banque. Retourne (ops par séance, banque, unités de rendu triées)."""
+    track_ops = {}
+    for tr in LIB.TRACKS:
+        ops = parse_script(tr)
+        register_ops(ops)
+        track_ops[tr["id"]] = ops
+    bank_phr = {}
+    for pool, items in BANK_MOD.BANK.items():
+        bank_phr[pool] = [(it, phrase_segments(it)) for it in items]
+    units = sorted(REG.units.values(), key=lambda u: u.tts)
+    return track_ops, bank_phr, units
+
+
 # --------------------------------------------------------------------------- main
 def seg_json(segs, clip_ids):
     out = []
@@ -556,15 +598,7 @@ def main():
     content_dir = os.path.join(ASSETS, "content")
 
     # 1) inventaire des unités de rendu
-    track_ops = {}
-    for tr in LIB.TRACKS:
-        ops = parse_script(tr)
-        register_ops(ops)
-        track_ops[tr["id"]] = ops
-    bank_phr = {}
-    for pool, items in BANK_MOD.BANK.items():
-        bank_phr[pool] = [(it, phrase_segments(it)) for it in items]
-    units = sorted(REG.units.values(), key=lambda u: u.tts)
+    track_ops, bank_phr, units = inventory()
     if args.limit:
         units = units[: args.limit]
     n_frag = sum(len(u.frags) for u in units)
@@ -573,9 +607,7 @@ def main():
     ctx = mp.get_context("spawn")
     init = (args.engine, args.model, args.whisper, threads, use_asr)
 
-    class _Eng:  # débit par défaut, sans charger le modèle dans le processus principal
-        name = args.engine
-        default_speed = E.KokoroEngine.default_speed if args.engine == "kokoro" else E.PiperEngine.default_speed
+    _Eng = _Stub(args.engine)
 
     def run_pool(jobs, label):
         t0 = time.time()
@@ -591,7 +623,7 @@ def main():
     run_pool([(cache, u.to_job(), [variants_for(_Eng, u)[0]], None, use_asr) for u in units], "A")
     f0s = []
     for u in units:
-        info = best_variant(cache, u, None)
+        info = best_variant(cache, u, None, args.engine)
         if info and info.get("f0") and len(u.ref) > 12:
             f0s.append(info["f0"])
     f0_ref = float(np.median(f0s))
@@ -600,7 +632,7 @@ def main():
     # 3) phase B : variantes pour les rendus douteux (prononciation ou hauteur hors norme)
     bad = []
     for u in units:
-        info = best_variant(cache, u, f0_ref)
+        info = best_variant(cache, u, f0_ref, args.engine)
         dev = 12 * math.log2(info["f0"] / f0_ref) if info and info.get("f0") else 0.0
         if u.kind == "cue":
             if info is None or info["wer"] > WER_OK or abs(dev) > PITCH_OK_CUE_ST:
@@ -614,7 +646,7 @@ def main():
     chosen = {}
     wers, devs, still = [], [], []
     for u in units:
-        info = best_variant(cache, u, f0_ref)
+        info = best_variant(cache, u, f0_ref, args.engine)
         chosen[u.key] = info
         wers.append(info["wer"])
         if info.get("f0"):

@@ -88,12 +88,79 @@ class Cutting(unittest.TestCase):
         self.assertAlmostEqual(len(pieces[0]) / SR, 0.8, delta=0.1)
 
 
+class Primer(unittest.TestCase):
+    def test_primer_is_removed_at_its_gap(self):
+        # amorce (0,9 s) · creux 180 ms · phrase (1,6 s)
+        x = np.concatenate([burst(900, seed=5), silence(180), burst(1600, seed=6)])
+        rest = E.cut_after_primer(x)
+        self.assertIsNotNone(rest)
+        self.assertAlmostEqual(len(rest) / SR, 1.6, delta=0.12)
+
+    def test_no_gap_in_window_means_no_cut(self):
+        self.assertIsNone(E.cut_after_primer(burst(3000)))
+
+    def test_phrase_gap_is_not_mistaken_for_the_primer_gap(self):
+        # le creux de l'amorce (≈ 0,9 s) doit l'emporter sur un creux plus tardif de la phrase
+        x = np.concatenate([burst(900, seed=5), silence(200), burst(1200, seed=6), silence(150), burst(800, seed=7)])
+        rest = E.cut_after_primer(x)
+        self.assertAlmostEqual(len(rest) / SR, 1.2 + 0.15 + 0.8, delta=0.15)
+
+
 class Phonemes(unittest.TestCase):
     def test_english_flagged_words_are_fixed(self):
         # espeak-ng marque « dos » / « rythme » comme anglais ; les balises ne doivent jamais atteindre le modèle
         self.assertTrue(all(v and "(" not in v for v in E.FR_FIX.values()))
         self.assertTrue(E.EN_FLAGGED.search("sˈy lə (en)dˈɒs(fr), si"))
         self.assertEqual(E.EN_FLAGGED.sub(lambda m: E.FR_FIX[m.group(1)], "sˈy lə (en)dˈɒs(fr), si"), "sˈy lə dˈo, si")
+
+    def test_misread_words_get_their_french_pronunciation(self):
+        # (mot dans une phrase, prononciation française attendue de ce mot)
+        cases = [
+            ("Tu te sens léger.", "sˈɑ̃"),             # verbe sentir : /sɑ̃/ et non le nom /sɑ̃s/ (« essence »)
+            ("Sens la détente.", "sˈɑ̃"),
+            ("Ce que tu ressens est passager.", "ʁəsˈɑ̃"),
+            ("Les lucioles deviennent floues.", "flˈu"),
+            ("Tes joues se relâchent.", "ʒˈu"),
+            ("Tes muscles se dénouent.", "denˈu"),
+            ("Le dos droit.", "dˈo"),
+            ("Assieds-toi.", "asjˈɛ"),
+            ("Tu t'assieds près du poêle.", "tasjˈɛ"),
+            ("Un peu de stress.", "stʁˈɛs"),
+            ("Pose une main.", "pˈoz"),
+            ("Comme on pose un sac.", "pˈoz"),
+            ("Il s'éloigne.", "elwˈaɲ"),
+            ("Dehors, la neige tombe.", "døˈɔʁ"),
+            ("Comme un hamac.", "œ̃n amˈak"),
+            ("Des coussins moelleux.", "mwalˈœ"),
+            ("Tout est accueilli.", "akøjˈi"),
+            ("Pour t'accompagner.", "akɔ̃paɲˈe"),
+        ]
+        for text, expected in cases:
+            ph = E.phonemize_fr(text)
+            self.assertIn(expected, ph, f"{text!r} → {ph!r}")
+            self.assertNotIn("(", ph)
+
+    def test_final_punctuation_is_stripped_but_not_the_question_mark(self):
+        self.assertEqual(E.strip_final("Respire avec moi... inspire sur quatre temps..."), "Respire avec moi... inspire sur quatre temps")
+        self.assertEqual(E.strip_final("Ce moment est à toi."), "Ce moment est à toi")
+        self.assertEqual(E.strip_final("Bonsoir…"), "Bonsoir")
+        self.assertEqual(E.strip_final("Où la sens-tu ?"), "Où la sens-tu ?")        # intonation montante conservée
+        self.assertEqual(E.strip_final("Un... deux... trois"), "Un... deux... trois")  # le milieu ne change pas
+
+    def test_displayed_text_is_untouched_and_respelling_is_idempotent(self):
+        t = "Sens ton ventre… pose les épaules."
+        self.assertEqual(E.respell(E.respell(t)), E.respell(t))
+        self.assertTrue(E.respell(t).startswith("San "))      # la majuscule est conservée
+
+    def test_whole_corpus_has_no_english_flag_left(self):
+        import build_content as B
+        _, _, units = B.inventory()
+        E.UNMAPPED.clear()
+        for u in units:
+            ph = E.phonemize_fr(u.tts)
+            self.assertNotIn("(", ph, u.ref)
+            self.assertNotIn(")", ph, u.ref)
+        self.assertEqual(E.UNMAPPED, set(), "mot balisé anglais inconnu : ajouter son entrée à FR_FIX")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ NOCTÉA — télécharge les modèles nécessaires à la production vocale dans 
 
   tools/models/kokoro/        Kokoro-82M (ONNX, Apache-2.0) + voix française ff_siwis
   tools/models/whisper-small/ faster-whisper « small » : contrôle d'intelligibilité de chaque clip
+  tools/models/whisper-medium/ (option --with-medium) revue fine de la prononciation (tools/voice_verify.py)
   tools/models/piper/         (option --with-piper) ancienne voix Piper « siwis medium »
 
 Usage : python3 tools/fetch_models.py [--with-piper]
@@ -25,6 +26,10 @@ FILES = {
     "whisper-small": [
         (f"https://huggingface.co/Systran/faster-whisper-small/resolve/main/{n}", n, s)
         for n, s in [("config.json", 1_000), ("model.bin", 480_000_000), ("tokenizer.json", 2_000_000), ("vocabulary.txt", 400_000)]
+    ],
+    "whisper-medium": [
+        (f"https://huggingface.co/Systran/faster-whisper-medium/resolve/main/{n}", n, sz)
+        for n, sz in [("config.json", 1_000), ("model.bin", 1_400_000_000), ("tokenizer.json", 2_000_000), ("vocabulary.txt", 400_000)]
     ],
     "piper": [
         ("https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx", "fr_FR-siwis-medium.onnx", 60_000_000),
@@ -53,8 +58,9 @@ def download(url, dest, min_size):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-piper", action="store_true")
+    ap.add_argument("--with-medium", action="store_true", help="Whisper medium (1,5 Go) pour tools/voice_verify.py")
     args = ap.parse_args()
-    groups = ["kokoro", "whisper-small"] + (["piper"] if args.with_piper else [])
+    groups = ["kokoro", "whisper-small"] + (["whisper-medium"] if args.with_medium else []) + (["piper"] if args.with_piper else [])
     for g in groups:
         d = os.path.join(MODELS, g)
         os.makedirs(d, exist_ok=True)
