@@ -50,6 +50,24 @@ def same_sound(ref, heard):
     return len(a) >= 5 and difflib.SequenceMatcher(a=a, b=b).ratio() >= 0.88
 
 
+def signature(pieces):
+    """Empreinte de l'audio d'une phrase (échantillons 16 bits) : deux rendus identiques ont la même."""
+    import hashlib
+    h = hashlib.sha1()
+    for p in pieces:
+        h.update(np.round(np.clip(p, -1, 1) * 32767).astype(np.int16).tobytes())
+    return h.hexdigest()[:16]
+
+
+def _same_audio(old, cache, unit, info, prev_path):
+    """Le rendu retenu est-il celui que la revue précédente a écouté ? Même variante ne suffit pas : un changement
+    de phonétique refait l'audio sous le même nom de variante. Sans empreinte enregistrée, on compare les dates."""
+    if "pcm" in old:
+        return old["pcm"] == signature(B.load_pieces(cache, unit, info["vid"]))
+    npz = B._paths(cache, unit, info["vid"])[0]
+    return os.path.getmtime(npz) <= os.path.getmtime(prev_path)
+
+
 def word_diffs(ref_words, hyp_words):
     """
     [(mot voulu, mot entendu ou '∅')] pour chaque mot de référence en écart. Les écarts sont comparés par blocs :
@@ -157,6 +175,9 @@ def main():
     ap.add_argument("--also", default="", help="avec --fix : expressions régulières de phrases à revoir en plus")
     ap.add_argument("--max-variants", type=int, default=7)
     ap.add_argument("--only", default="", help="avec --fix : ne revoit que les phrases qui correspondent à cette expression régulière")
+    ap.add_argument("--update", default="", help="JSON d'une revue complète précédente : ne revoit que les phrases dont le rendu retenu a changé depuis "
+                    "et reprend les autres telles quelles (une revue complète dure plus d'une heure)")
+    ap.add_argument("--review", default="", help="écrit la liste des phrases encore en écart (format de tools/voice_review.txt)")
     args = ap.parse_args()
 
     from faster_whisper import WhisperModel
@@ -171,14 +192,19 @@ def main():
     cache = os.path.join(B.CACHE_ROOT, args.engine)
     if args.fix:
         return fix(args, wm, units, cache)
-    todo = []
+    prev = json.load(open(args.update, encoding="utf-8")) if args.update else {}
+    todo, reused = [], {}
     for u in units:
         info = B.best_variant(cache, u, args.f0_ref)
         if info is None:
             continue
-        if args.all or info.get("wer", 1) >= args.min_wer:
+        old = prev.get(u.key)
+        if old and old.get("vid") == info["vid"] and old.get("ref") == u.ref and _same_audio(old, cache, u, info, args.update):
+            reused[u.key] = old                    # même audio qu'à la revue précédente : même verdict
+        elif args.all or args.update or info.get("wer", 1) >= args.min_wer:
             todo.append((u, info))
-    print(f"{len(todo)} phrases à revoir sur {len(units)} (modèle {os.path.basename(mdir)})", flush=True)
+    print(f"{len(todo)} phrases à revoir sur {len(units)} (modèle {os.path.basename(mdir)})"
+          + (f", {len(reused)} reprises de {os.path.basename(args.update)}" if args.update else ""), flush=True)
     results = {}
     t0 = time.time()
     for n, (u, info) in enumerate(todo):
@@ -196,10 +222,12 @@ def main():
         hyp = " ".join(s.text for s in segs).strip()
         ref_w, hyp_w = B.norm_words(u.ref).split(), B.norm_words(hyp).split()
         results[u.key] = dict(ref=u.ref, hyp=hyp, wer=float(jiwer.wer(" ".join(ref_w), " ".join(hyp_w))) if ref_w else 0.0,
-                              vid=info["vid"], small=info.get("wer"), diffs=word_diffs(ref_w, hyp_w))
+                              vid=info["vid"], small=info.get("wer"), diffs=word_diffs(ref_w, hyp_w), pcm=signature(pcs))
         if (n + 1) % 25 == 0:
             el = time.time() - t0
             print(f"  {n + 1}/{len(todo)} ({el / 60:.1f} min, reste ≈ {el / (n + 1) * (len(todo) - n - 1) / 60:.1f} min)", flush=True)
+    results.update(reused)
+    results = {u.key: results[u.key] for u in units if u.key in results}     # ordre du corpus
     # écarts réels : on retire les homophones (même prononciation que le mot voulu)
     real = {}
     for k, r in results.items():
@@ -216,6 +244,22 @@ def main():
     for word, hits in sorted(real.items(), key=lambda kv: -len(kv[1]))[:40]:
         heard = ", ".join(sorted({h for h, _ in hits})[:3])
         print(f"  {word:16s} ×{len(hits)}  entendu : {heard}")
+    if args.review:
+        write_review(args.review, results, os.path.basename(mdir))
+
+
+def write_review(path, results, model):
+    """Liste lisible des phrases où le modèle entend encore un autre mot (hors homophones) : à écouter en priorité."""
+    bad = [r for r in results.values() if r["errors"]]
+    lines = [f"# Revue fine de la prononciation (tools/voice_verify.py, {model}, les {len(results)} phrases, homophones exclus).",
+             f"# {len(bad)} phrases sur {len(results)} ont encore un mot que le modèle entend différemment ; les {len(results) - len(bad)} autres sont transcrites sans écart.",
+             "# Un écart est souvent une erreur de transcription (hausse → osse, les sons → laissons : mêmes sons) plutôt qu'un défaut de voix : à écouter en priorité pour trancher.",
+             "# Format : mots en écart | texte voulu | transcription du modèle"]
+    for r in bad:
+        lines.append(f"{', '.join(f'{w}→{h}' for w, h in r['errors'])} | {r['ref']} | {r['hyp']}")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"revue écrite → {path} ({len(bad)} phrases)")
 
 
 if __name__ == "__main__":

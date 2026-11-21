@@ -61,11 +61,17 @@ _RESPELL_RE = re.compile(r"(?<![\wÀ-ÿ])(" + "|".join(re.escape(k) for k in sor
 IPA_FIX = {
     "mwalˈø": "mwalˈœ",          # moelleux : voyelle finale plus ouverte, sinon « moelleurs », « moelus »
     "akœjˈi": "akøjˈi",          # accueilli, accueillir : sinon « accri »
+    "akœjˈɑ̃": "akøjˈɑ̃",          # accueillant : sinon « accrayant »
+    "ɛnɛʒˈe": "ɑ̃nɛʒˈe",          # enneigés : « en- » est nasal
     "elwanjˈe": "elwaɲˈe",       # éloigner, éloigné : « gn » = /ɲ/
     "akɔ̃panjˈe": "akɔ̃paɲˈe",    # accompagner
     "bɛnjˈe": "bɛɲˈe",           # baigné
     "kɔ̃panˈi": "kɔ̃paɲˈi",       # compagnie
+    "ki eklˈɛʁ": "ki, eklˈɛʁ",   # « qui éclaire » : l'hiatus i-é se fond, Whisper entend « qui déclare » (0/9 → 6/9 avec une micro-pause)
 }
+
+# « est ta » : le « t » de « ta » tombe après « est » (/ɛ ta/ → /ɛ a/, entendu « à ») ; le doubler le rend net (0/9 → 7/9)
+_EST_TA = re.compile(r"(?<![^\s])(s?ɛ) tˈ?a ")
 
 
 def respell(text):
@@ -89,6 +95,39 @@ def strip_final(text):
 
 
 _TOKENIZER = None
+_STRESS = re.compile(r"[ˈˌː]")
+
+
+_VOWEL_CHARS = set("aeiouyɑɛɔøœəɐ̃")        # voyelles (et tilde de nasalisation) du jeu de phonèmes espeak-ng
+
+
+def _no_forbidden_liaison(text, ph, lang):
+    """
+    Retire deux liaisons que le français parlé ne fait pas et qu'espeak-ng insère pourtant :
+      · devant « et » : « doux et large » ≠ « douze large » (routes et → ʁutz e, frais et → fʁɛz e, vont et → vɔ̃t e…) ;
+      · après un verbe en « -ent » (3e personne du pluriel) : « transforment en » devenait « transformentɑ̃ », entendu « dans ».
+        Les mots en « -ent » qui se terminent par une voyelle nasale (souvent, moment…) gardent leur liaison.
+    On retire la consonne de liaison quand le mot, dit seul, ne la porte pas.
+    Alignement mot du texte ↔ mot phonétique (même nombre dans 869 phrases sur 870 du corpus ; sinon on ne touche à rien).
+    """
+    words, toks = text.split(" "), ph.split(" ")
+    if len(words) != len(toks):
+        return ph
+    for i in range(len(words) - 1):
+        if re.search(r"[^\wÀ-ÿœŒ'’-]$", words[i]):
+            continue                                        # ponctuation entre les deux mots : pas de liaison
+        core = _STRESS.sub("", toks[i])
+        if not core:
+            continue
+        before_et = re.sub(r"[^\wÀ-ÿœŒ]", "", words[i + 1]).lower() == "et" and core[-1] in "ztn"
+        verb_ent = (re.search(r"\w{3,}ent$", words[i], re.I) is not None and core[-1] == "t"
+                    and len(core) > 1 and core[-2] not in _VOWEL_CHARS)
+        if not (before_et or verb_ent):
+            continue
+        iso = _STRESS.sub("", ANY_FLAG.sub("", _TOKENIZER.phonemize(words[i], lang))).strip().split(" ")[-1]
+        if not iso.endswith(core[-1]):
+            toks[i] = toks[i][:-1]
+    return " ".join(toks)
 
 
 def phonemize_fr(text, lang="fr-fr"):
@@ -100,7 +139,8 @@ def phonemize_fr(text, lang="fr-fr"):
     if _TOKENIZER is None:
         from kokoro_onnx.tokenizer import Tokenizer
         _TOKENIZER = Tokenizer()
-    ph = _TOKENIZER.phonemize(respell(text), lang)
+    text = " ".join(respell(text).split())
+    ph = _TOKENIZER.phonemize(text, lang)
 
     def fix(m):
         chunk = m.group(1)
@@ -111,9 +151,11 @@ def phonemize_fr(text, lang="fr-fr"):
 
     ph = EN_FLAGGED.sub(fix, ph)
     ph = ANY_FLAG.sub("", ph)
+    ph = " ".join(ph.split())
+    ph = _no_forbidden_liaison(text, ph, lang)
     for wrong, right in IPA_FIX.items():
         ph = ph.replace(wrong, right)
-    return " ".join(ph.split())
+    return _EST_TA.sub(r"\1t tˈa ", ph)
 
 
 class KokoroEngine:

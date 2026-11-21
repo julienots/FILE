@@ -134,11 +134,38 @@ class Phonemes(unittest.TestCase):
             ("Des coussins moelleux.", "mwalˈœ"),
             ("Tout est accueilli.", "akøjˈi"),
             ("Pour t'accompagner.", "akɔ̃paɲˈe"),
+            ("Ce calme est ta vraie nature.", "ɛt tˈa"),         # le « t » de « ta » tombait : « est à »
+            ("C'est ta respiration.", "sɛt tˈa"),
+            ("Une lanterne qui éclaire doucement.", "ki, eklˈɛʁ"),  # hiatus « qui éclaire » : « qui déclare »
         ]
         for text, expected in cases:
             ph = E.phonemize_fr(text)
             self.assertIn(expected, ph, f"{text!r} → {ph!r}")
             self.assertNotIn("(", ph)
+
+    def test_no_liaison_before_et(self):
+        # « doux et large » ≠ « douze large » ; mais une consonne qui appartient au mot reste (« sel et », « calme et »)
+        cases = [("un escalier, doux et large", "dˈu e"), ("Les routes et les villes", "ʁˈut e"),
+                 ("Des mots simples et efficaces", "sˈɛ̃pl e"), ("Tu t'allonges dans un lit frais et léger", "fʁˈɛ e"),
+                 ("Les vagues vont et viennent", "vˈɔ̃ e"), ("Il sent le sel et la nuit", "sˈɛl e"),
+                 ("Un souffle calme et doux", "kˈalm e")]
+        for text, expected in cases:
+            ph = E.phonemize_fr(text)
+            self.assertIn(expected, ph, f"{text!r} → {ph!r}")
+
+    def test_no_liaison_after_third_person_plural_verbs(self):
+        # « ils transforment en » ne se lit pas « transformentɑ̃ » (Whisper entendait « dans ») ; les liaisons qui se font restent
+        for text, present, absent in [("Les flammes les transforment en chaleur", "tʁɑ̃sfˈɔʁm ɑ̃", "ɔʁmt"),
+                                      ("Elles dansent autour de toi", "dˈɑ̃s ", "dˈɑ̃st"),
+                                      ("Ils voyagent eux aussi", "vwajˈaʒ øz", "ʒt"),
+                                      ("Les étoiles brillent à l'horizon", "bʁˈij a", "bʁˈijt"),
+                                      ("Ils sont en route", "sɔ̃t ɑ̃", None),              # « sont » : liaison obligatoire
+                                      ("Tout est calme", "tut ɛ", None),
+                                      ("Elles sentent en elles la chaleur", "sˈɑ̃t", None)]:   # le « t » fait partie du mot
+            ph = E.phonemize_fr(text)
+            self.assertIn(present, ph, f"{text!r} → {ph!r}")
+            if absent:
+                self.assertNotIn(absent, ph, f"{text!r} → {ph!r}")
 
     def test_final_punctuation_is_stripped_but_not_the_question_mark(self):
         self.assertEqual(E.strip_final("Respire avec moi... inspire sur quatre temps..."), "Respire avec moi... inspire sur quatre temps")

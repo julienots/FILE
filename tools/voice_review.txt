@@ -1,17 +1,7 @@
-# Phrases que le contrôle Whisper (small) juge douteuses après les variantes (écart WER | texte voulu | transcription).
-# Beaucoup sont des faux positifs : homophones (silencieuses/silencieuse, serre/serrent, ferme/fermes) ou mots isolés.
-# Régénéré à chaque production dans tools/.cache/voice_v4/kokoro/rapport.txt.
-1.00 | Silencieuses... | Silencieuse.
-1.00 | Lointaines... | lointaine.
-0.70 | Comme un hamac... d'un côté... puis de l'autre. | Je commande à Mac qui se donne côté, puis de l'autre.
-0.67 | Ta respiration ralentit... | respiration ralentie.
-0.60 | Des nuages passent... lents... légers... | Des nuages passent.  L'an, léger.
-0.54 | Tu t'allonges dans un lit aux draps de lin, frais et légers. | que tu t'allonges dans un lit au drap de l'un fraise et léger.
-0.40 | Les mains... serre les poings... | Les mains serrent les points.
-0.40 | Les cuisses... contracte-les doucement... | Les cuisses contractent les doucements.
-0.40 | De chaque côté, les champs dorment... les blés ondulent à peine, sous une brise légère. | De chaque côté, les champs d'orment.  Les blesses ont du lente à peine sous une brise légère.
-0.38 | Écoute les sons de la nature... l'eau, le vent, quelques chants lointains. | et écoutent les sons de la nature, l'eau levant quelques champs lointains.
-0.33 | Tout s'apaise... | Tout s'apaisent.
-0.33 | Ferme les yeux... | Fermes les yeux.
-0.33 | Dehors, la neige tombe à gros flocons... lents, silencieux. | Dehors, la neige tombe à gros flecon, l'an silencieux.
-0.33 | Ce mail difficile... dans le feu. | se mêle difficile dans le feu.
+# Revue fine de la prononciation (tools/voice_verify.py, whisper-medium, les 870 phrases, homophones exclus).
+# 3 phrases sur 870 ont encore un mot que le modèle entend différemment ; les 867 autres sont transcrites sans écart.
+# Un écart est souvent une erreur de transcription (hausse → osse, les sons → laissons : mêmes sons) plutôt qu'un défaut de voix : à écouter en priorité pour trancher.
+# Format : mots en écart | texte voulu | transcription du modèle
+hausse→osse | Hausse les épaules vers les oreilles... et laisse-les retomber, lourdement. | Osse les épaules vers les oreilles et laisse les retomber lourdement.
+laiteuse→léteuse | La Voie lactée traverse le ciel, comme une rivière laiteuse. | La voie lactée traverse le ciel comme une rivière léteuse.
+sons→laissons, sons→laissons | Les sons proches... les sons lointains... et le silence entre eux. | Les laissons proches, les laissons lointains et le silence entre eux.
