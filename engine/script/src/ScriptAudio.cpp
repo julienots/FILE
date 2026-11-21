@@ -179,6 +179,35 @@ int au_spectrum(lua_State* L) {
     return 1;
 }
 
+int au_generator(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    if (!a) return 0;
+    PlayParams p;
+    p.volume = static_cast<float>(luaL_optnumber(L, 1, 1.0));
+    auto v = a->playGenerator(p, static_cast<u32>(luaL_optinteger(L, 2, 44100)));
+    if (!v) return 0;
+    lua_pushinteger(L, static_cast<lua_Integer>(v.value()));
+    return 1;
+}
+int au_push(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    const VoiceId id = static_cast<VoiceId>(luaL_checkinteger(L, 1));
+    luaL_checktype(L, 2, LUA_TTABLE);
+    std::vector<float> samples(static_cast<usize>(lua_rawlen(L, 2)));
+    for (usize i = 0; i < samples.size(); ++i) {
+        lua_rawgeti(L, 2, static_cast<lua_Integer>(i + 1));
+        samples[i] = static_cast<float>(lua_tonumber(L, -1));
+        lua_pop(L, 1);
+    }
+    lua_pushinteger(L, a ? a->pushGenerator(id, samples.data(), static_cast<u32>(samples.size())) : 0);
+    return 1;
+}
+int au_queued(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    lua_pushinteger(L, a ? a->generatorQueued(static_cast<VoiceId>(luaL_checkinteger(L, 1))) : 0);
+    return 1;
+}
+
 int au_startRecording(lua_State* L) {
     AudioSystem* a = audioOf(L);
     lua_pushboolean(L, a && a->startRecording());
@@ -263,6 +292,7 @@ void openAudioBindings(lua_State* L) {
                                      {"busVolume", au_busVolume}, {"setBusMuted", au_setBusMuted},
                                      {"busMuted", au_busMuted},   {"addBusEffect", au_addBusEffect},
                                      {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects}, {"spectrum", au_spectrum},
+                                     {"generator", au_generator}, {"push", au_push}, {"queued", au_queued},
                                      {"startRecording", au_startRecording}, {"stopRecording", au_stopRecording},
                                      {"recordingLevel", au_recordingLevel}, {"isRecording", au_isRecording},
                                      {"busEffectCount", au_busEffectCount}, {nullptr, nullptr}};

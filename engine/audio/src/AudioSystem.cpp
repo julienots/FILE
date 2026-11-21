@@ -8,6 +8,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,8 +36,52 @@ struct Clip {
     i64 modifiedTime = 0;
 };
 
+/// Procedural sound: mono samples pushed by the game, read by the mixer (silence when empty).
+struct GeneratorSource {
+    ma_data_source_base base{};
+    std::mutex mutex;
+    std::deque<float> samples;
+    u32 sampleRate = 44100;
+    usize capacity = 88200;
+    static ma_result read(ma_data_source* ds, void* out, ma_uint64 frames, ma_uint64* read) {
+        auto* g = reinterpret_cast<GeneratorSource*>(ds);
+        auto* dst = static_cast<float*>(out);
+        std::lock_guard lock(g->mutex);
+        for (ma_uint64 i = 0; i < frames; ++i) {
+            if (g->samples.empty()) {
+                dst[i] = 0.0f;
+                continue;
+            }
+            dst[i] = g->samples.front();
+            g->samples.pop_front();
+        }
+        if (read) *read = frames;
+        return MA_SUCCESS;
+    }
+    static ma_result seek(ma_data_source*, ma_uint64) { return MA_SUCCESS; }
+    static ma_result format(ma_data_source* ds, ma_format* f, ma_uint32* channels, ma_uint32* rate, ma_channel* map, size_t mapCap) {
+        auto* g = reinterpret_cast<GeneratorSource*>(ds);
+        if (f) *f = ma_format_f32;
+        if (channels) *channels = 1;
+        if (rate) *rate = g->sampleRate;
+        if (map && mapCap > 0) map[0] = MA_CHANNEL_MONO;
+        return MA_SUCCESS;
+    }
+    static ma_result cursor(ma_data_source*, ma_uint64* c) {
+        if (c) *c = 0;
+        return MA_SUCCESS;
+    }
+    static ma_result length(ma_data_source*, ma_uint64* l) {
+        if (l) *l = 0;  // unknown: never ends by itself
+        return MA_NOT_IMPLEMENTED;
+    }
+};
+ma_data_source_vtable kGeneratorVtable = {GeneratorSource::read, GeneratorSource::seek, GeneratorSource::format, GeneratorSource::cursor,
+                                          GeneratorSource::length, nullptr, 0};
+
 struct Voice {
     VoiceId id = 0;
+    std::unique_ptr<GeneratorSource> generator;
     ma_sound sound{};
     ma_audio_buffer_ref buffer{};
     ma_decoder decoder{};
@@ -59,6 +104,7 @@ struct Voice {
 
     ~Voice() {
         if (soundInit) ma_sound_uninit(&sound);
+        if (generator) ma_data_source_uninit(&generator->base);
         if (decoderInit) ma_decoder_uninit(&decoder);
         if (bufferInit) ma_audio_buffer_ref_uninit(&buffer);
     }
@@ -308,6 +354,35 @@ struct AudioSystem::Impl {
         if (p.fadeInSeconds > 0.0f)
             ma_sound_set_fade_in_milliseconds(&v->sound, 0.0f, 1.0f, static_cast<ma_uint64>(p.fadeInSeconds * 1000.0f));
         if (ma_result r = ma_sound_start(&v->sound); r != MA_SUCCESS) return makeError(Error::Code::Unknown, v->uri + ": " + resultText(r));
+        const VoiceId id = v->id;
+        voices.emplace(id, std::move(v));
+        return id;
+    }
+
+    Result<VoiceId> playGenerator(const PlayParams& p, u32 sampleRate) {
+        if (!engineInit) return makeError(Error::Code::InvalidArgument, "audio is not initialized");
+        enforceVoiceLimit();
+        auto v = std::make_unique<Voice>();
+        v->id = nextId++;
+        v->order = nextOrder++;
+        v->uri = "generator";
+        v->bus = p.bus;
+        v->loop = true;  // never released by the voice limit as a finished one-shot
+        v->spatial = p.spatial;
+        v->generator = std::make_unique<GeneratorSource>();
+        v->generator->sampleRate = std::clamp<u32>(sampleRate, 8000, 192000);
+        v->generator->capacity = static_cast<usize>(v->generator->sampleRate) * 2;
+        ma_data_source_config dsc = ma_data_source_config_init();
+        dsc.vtable = &kGeneratorVtable;
+        if (ma_result r = ma_data_source_init(&dsc, &v->generator->base); r != MA_SUCCESS) return makeError(Error::Code::Unknown, resultText(r));
+        const i32 bus = std::clamp(static_cast<i32>(p.bus), 0, kAudioBusCount - 1);
+        if (ma_result r = ma_sound_init_from_data_source(&engine, &v->generator->base, MA_SOUND_FLAG_NO_PITCH, &groups[bus], &v->sound); r != MA_SUCCESS)
+            return makeError(Error::Code::Unknown, resultText(r));
+        v->soundInit = true;
+        ma_sound_set_volume(&v->sound, std::max(0.0f, p.volume));
+        applySpatial(*v, p.spatial, p.position, p.minDistance, p.maxDistance);
+        if (!p.spatial) ma_sound_set_pan(&v->sound, std::clamp(p.pan, -1.0f, 1.0f));
+        if (ma_result r = ma_sound_start(&v->sound); r != MA_SUCCESS) return makeError(Error::Code::Unknown, resultText(r));
         const VoiceId id = v->id;
         voices.emplace(id, std::move(v));
         return id;
@@ -601,6 +676,25 @@ void AudioSystem::setPaused(VoiceId voice, bool paused) {
     v->paused = paused;
     if (paused) ma_sound_stop(&v->sound);
     else ma_sound_start(&v->sound);
+}
+
+Result<VoiceId> AudioSystem::playGenerator(const PlayParams& params, u32 sampleRate) { return m->playGenerator(params, sampleRate); }
+
+u32 AudioSystem::pushGenerator(VoiceId voice, const float* samples, u32 count) {
+    Voice* v = m->find(voice);
+    if (!v || !v->generator || !samples) return 0;
+    std::lock_guard lock(v->generator->mutex);
+    const usize room = v->generator->capacity > v->generator->samples.size() ? v->generator->capacity - v->generator->samples.size() : 0;
+    const u32 n = static_cast<u32>(std::min<usize>(room, count));
+    v->generator->samples.insert(v->generator->samples.end(), samples, samples + n);
+    return n;
+}
+
+u32 AudioSystem::generatorQueued(VoiceId voice) const {
+    Voice* v = m->find(voice);
+    if (!v || !v->generator) return 0;
+    std::lock_guard lock(v->generator->mutex);
+    return static_cast<u32>(v->generator->samples.size());
 }
 
 bool AudioSystem::isPlaying(VoiceId voice) const {

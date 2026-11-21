@@ -102,6 +102,14 @@ d'un cœur de la machine de test ; avec une réverbération et un passe-bas sur 
 sur `Master` : ~0,17 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : `audio effects` et `bus effects`
 (`tests/test_audio.cpp`), API Lua (`tests/test_script.cpp`).
 
+## Générateur (son procédural)
+
+`agr.audio.generator([volume [, fréquence]])` ouvre une voix qui joue les échantillons que le jeu lui
+pousse (mono, −1 à 1) : `agr.audio.push(id, {…})` (rend le nombre accepté, la file garde 2 s au plus),
+`agr.audio.queued(id)` (en attente : garder au moins une image d'avance), `agr.audio.stopSound(id)`.
+Silence quand la file est vide (la voix continue). Synthés, bips calculés, sons de moteur. C++ :
+`AudioSystem::playGenerator`, `pushGenerator`, `generatorQueued`.
+
 ## Microphone
 
 `agr.audio.startRecording()` commence à enregistrer le micro (mono, au taux du mixeur ;

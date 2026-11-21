@@ -633,3 +633,37 @@ TEST_CASE("audio: recording (fed samples in virtual output), level meter, WAV wr
     std::error_code ec;
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("audio: generator voices play the samples pushed, silence when empty") {
+    VirtualFileSystem vfs;
+    AudioSystem audio(vfs);
+    REQUIRE(audio.initialize({.output = AudioOutput::Manual, .sampleRate = kRate}));
+    auto g = audio.playGenerator({}, kRate);
+    REQUIRE(g);
+    std::vector<float> tone(kRate / 10);
+    for (usize i = 0; i < tone.size(); ++i) tone[i] = 0.5f * std::sin(static_cast<float>(i) * 0.2f);
+    CHECK(audio.pushGenerator(g.value(), tone.data(), static_cast<u32>(tone.size())) == tone.size());
+    CHECK(audio.generatorQueued(g.value()) == tone.size());
+    std::vector<float> out(512 * 2);
+    float peak = 0.0f;
+    for (int k = 0; k < 4; ++k) {
+        audio.mix(out.data(), 512);
+        for (float v : out) peak = std::max(peak, std::fabs(v));
+    }
+    CHECK(peak > 0.2f);
+    CHECK(audio.generatorQueued(g.value()) < tone.size());
+    // Drained: silence, but the voice keeps playing until stopped.
+    for (int k = 0; k < 20; ++k) audio.mix(out.data(), 512);
+    audio.mix(out.data(), 512);
+    float tail = 0.0f;
+    for (float v : out) tail = std::max(tail, std::fabs(v));
+    CHECK(tail < 1e-3f);
+    CHECK(audio.isPlaying(g.value()));
+    std::vector<float> lots(kRate * 3, 0.1f);
+    CHECK(audio.pushGenerator(g.value(), lots.data(), static_cast<u32>(lots.size())) == kRate * 2);  // 2 s at most
+    audio.stop(g.value());
+    audio.update(0.0);
+    audio.mix(out.data(), 512);
+    audio.update(0.0);
+    CHECK_FALSE(audio.isPlaying(g.value()));
+}

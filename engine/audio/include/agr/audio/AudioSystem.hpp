@@ -86,6 +86,13 @@ public:
     void setPitch(VoiceId voice, float pitch);
     void setPosition(VoiceId voice, math::Vec3 position);
     void stopAll();
+    /// Procedural sound (synthesizers, computed effects): a voice playing the mono samples pushed
+    /// with pushGenerator (at `sampleRate`), silence when its queue is empty. stop() ends it.
+    Result<VoiceId> playGenerator(const PlayParams& params = {}, u32 sampleRate = 44100);
+    /// Appends samples (-1..1); returns how many fit (the queue holds 2 s at most).
+    u32 pushGenerator(VoiceId voice, const float* samples, u32 count);
+    /// Samples waiting to be played (keep it above a frame's worth to avoid gaps).
+    u32 generatorQueued(VoiceId voice) const;
 
     // -------------------------------------------------------------------- mixer
     void setBusVolume(AudioBus bus, float volume);
