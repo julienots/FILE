@@ -152,6 +152,10 @@ struct PostProcessComponent {
     /// pixel each frame and the frames are blended along the camera motion; smooths edges and
     /// thin details better than FXAA, slight blur in motion.
     bool temporalAA = false;
+    /// Motion blur from the camera's movement (turning, running, vehicles): each pixel is smeared
+    /// along its motion on screen since the last frame. Static objects only (no per-object blur).
+    bool motionBlur = false;
+    float motionBlurIntensity = 0.5f;  ///< Fraction of the frame's motion (shutter), 0..1.
     float taaBlend = 0.1f;          ///< Weight of the new frame (lower = smoother, more ghosting).
     bool screenSpaceReflections = false;
     float ssrIntensity = 1.0f;      ///< 0..2.

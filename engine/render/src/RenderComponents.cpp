@@ -281,6 +281,8 @@ void registerRenderComponents() {
         .field("dofBlur", &PostProcessComponent::dofBlur, {.tooltip = "Largest blur radius (fraction of the image height)", .rangeMin = 0.0f, .rangeMax = 0.05f, .speed = 0.0005f})
         .field("dofNear", &PostProcessComponent::dofNear)
         .field("dofFar", &PostProcessComponent::dofFar)
+        .field("motionBlur", &PostProcessComponent::motionBlur, {.tooltip = "Blur along the camera's motion"})
+        .field("motionBlurIntensity", &PostProcessComponent::motionBlurIntensity, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("temporalAA", &PostProcessComponent::temporalAA, {.tooltip = "Temporal anti-aliasing: smoother edges, accumulated over frames"})
         .field("taaBlend", &PostProcessComponent::taaBlend, {.tooltip = "Weight of the new frame", .rangeMin = 0.02f, .rangeMax = 1.0f, .speed = 0.005f})
         .field("screenSpaceReflections", &PostProcessComponent::screenSpaceReflections,

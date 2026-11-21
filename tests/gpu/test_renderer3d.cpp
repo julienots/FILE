@@ -1516,6 +1516,43 @@ TEST_CASE("temporal AA: jittered frames accumulate into smooth edges, moved obje
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("motion blur: none while the camera stands still, edges smeared when it turns") {
+    Render3DFixture f;
+    f.camera({0, 0, 0}, {0, 0, -10});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    f.mesh(PrimitiveMesh::Cube, {0, 0, -4.0f}, Vec3{1.6f}, {1, 1, 1, 1});
+    const auto camera = f.scene.findByName("Camera");
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(camera);
+    post.bloom = false;
+    post.fxaa = false;
+    post.vignette = 0.0f;
+    post.filmicToneMapping = false;
+    post.motionBlur = true;
+    post.motionBlurIntensity = 1.0f;
+    const u32 row = kHeight / 2;
+    f.frame();
+    f.frame();
+    CHECK(f.renderer.stats().motionBlur);
+    const int still = partialPixels(row, 0, kWidth);
+    CHECK_MESSAGE(still <= 4, still);
+    float yaw = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        yaw += 4.0f;
+        f.scene.registry().get<TransformComponent>(camera).rotation = math::Quat::fromAxisAngle({0, 1, 0}, math::radians(yaw));
+        f.frame();
+    }
+    const int moving = partialPixels(row, 0, kWidth);
+    CHECK_MESSAGE(moving >= still + 3, still, " -> ", moving);  // ~4 px smear per edge at 64 px (capped at 6 % of the height)
+    post.motionBlur = false;
+    f.scene.registry().get<TransformComponent>(camera).rotation = math::Quat::fromAxisAngle({0, 1, 0}, math::radians(yaw + 4.0f));
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().motionBlur);
+    CHECK(partialPixels(row, 0, kWidth) <= 4);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("auto exposure: dark scenes are brightened, bright ones darkened (HDR)") {
     Render3DFixture f;
     f.camera({0, 0, 3}, {0, 0, 0});

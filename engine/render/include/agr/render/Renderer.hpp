@@ -128,6 +128,7 @@ struct RenderStats {
     bool screenSpaceReflections = false;  ///< SSR pass this frame.
     u32 morphedMeshes = 0;        ///< Meshes drawn with blended morph targets.
     bool temporalAA = false;      ///< TAA pass this frame.
+    bool motionBlur = false;      ///< Motion blur pass this frame.
     bool autoExposure = false;    ///< Auto exposure measured this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
@@ -330,7 +331,7 @@ private:
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {
-        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere, Dof, Luminance, Ssr, Taa } kind;
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere, Dof, Luminance, Ssr, Taa, MotionBlur } kind;
         rhi::RenderTargetHandle source, target;  // target null = output
         u32 uniformOffset = 0;
     };
@@ -355,10 +356,12 @@ private:
 
     rhi::PipelineHandle m_spritePipeline, m_spriteLitPipeline, m_spriteLitNormalPipeline, m_spriteAdditivePipeline, m_overlayPipeline;
     OverlaySource* m_overlaySource = nullptr;
-    rhi::PipelineHandle m_postPipelines[12];  // PostPass::Kind
+    rhi::PipelineHandle m_postPipelines[13];  // PostPass::Kind
     static constexpr usize kPostUniformBytes = 16 * 16 + 4 * 64;  // PostData block (Shaders.inl)
     rhi::RenderTargetHandle m_dofTarget;                 // scene color with depth of field
     rhi::RenderTargetHandle m_ssrTarget;                 // scene color with screen-space reflections
+    rhi::RenderTargetHandle m_motionTarget;               // scene color with motion blur
+    bool m_prevViewProjValid = false;
     rhi::RenderTargetHandle m_taaTargets[2];             // temporal AA output / history (ping-pong)
     u32 m_taaIndex = 0;
     bool m_taaValid = false;

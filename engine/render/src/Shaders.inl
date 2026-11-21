@@ -500,6 +500,50 @@ void main() {
 }
 )";
 
+/// Camera motion blur: the pixel's world position (depth) projected with last frame's camera gives
+/// its motion on screen; 12 samples along it (scaled by the shutter u_taa.z, at most u_taa.w px).
+inline constexpr const char* kMotionBlur = R"(
+uniform sampler2D u_source;
+uniform sampler2D u_depth;
+layout(location = 0) out vec4 o_color;
+vec2 uvToNdc(vec2 uv) {
+    vec2 n = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n;
+}
+vec2 ndcToUv(vec2 n) {
+    if (u_ao.w < 0.5) n.y = -n.y;
+    return n * 0.5 + 0.5;
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    vec4 cur = texture(u_source, uv);
+    float d = texture(u_depth, uv).r;
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec4 w = u_invViewProj * vec4(uvToNdc(uv), z, 1.0);
+    w /= w.w;
+    vec4 pc = u_prevViewProj * vec4(w.xyz, 1.0);
+    if (u_taa.z <= 0.0 || pc.w <= 0.0) {
+        o_color = cur;
+        return;
+    }
+    vec2 velocity = (uv - ndcToUv(pc.xy / pc.w)) * u_taa.z;  // uv units this frame moved
+    float lengthPx = length(velocity / u_texel.xy);
+    if (lengthPx < 0.5) {
+        o_color = cur;
+        return;
+    }
+    velocity *= min(1.0, u_taa.w / lengthPx);
+    vec3 sum = cur.rgb;
+    const int kSamples = 12;
+    for (int i = 1; i < kSamples; ++i) {
+        float t = float(i) / float(kSamples - 1) - 0.5;
+        sum += texture(u_source, uv + velocity * t).rgb;
+    }
+    o_color = vec4(sum / float(kSamples), cur.a);
+}
+)";
+
 /// Auto exposure: average log luminance of a 16 x 16 grid of the scene, blended toward the
 /// previous frame's value (u_history) by u_adapt.x. Output in r of a 1 x 1 target.
 inline constexpr const char* kLuminance = R"(
