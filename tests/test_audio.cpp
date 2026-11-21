@@ -601,3 +601,35 @@ TEST_CASE("audio: attenuation models, directivity cones, Doppler, random variati
     CHECK(*std::max_element(bands.begin(), bands.end()) > 0.2f);
     CHECK(f.audio.spectrum(AudioBus::Music, 8).empty());
 }
+
+TEST_CASE("audio: recording (fed samples in virtual output), level meter, WAV written and playable") {
+    VirtualFileSystem vfs;
+    const fs::path root = fs::temp_directory_path() / ("agr_audio_rec_" + Uuid::generate().toString());
+    fs::create_directories(root);
+    vfs.mount("user", std::make_unique<NativeFileProvider>(root.string(), false));
+    {
+        AudioSystem audio(vfs);
+        REQUIRE(audio.initialize({.output = AudioOutput::Virtual, .sampleRate = kRate}));
+        CHECK_FALSE(audio.isRecording());
+        CHECK_FALSE(audio.stopRecording("user://none.wav"));
+        REQUIRE(audio.startRecording());
+        CHECK_FALSE(audio.startRecording());  // already
+        CHECK_FALSE(audio.recordingFromDevice());
+        CHECK(audio.recordingLevel() == 0.0f);
+        std::vector<float> tone(kRate / 2);
+        for (usize i = 0; i < tone.size(); ++i) tone[i] = 0.5f * std::sin(static_cast<float>(i) * 0.1f);
+        audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+        CHECK(audio.recordingLevel() == doctest::Approx(0.5f / std::sqrt(2.0f)).epsilon(0.05));
+        auto seconds = audio.stopRecording("user://voice.wav");
+        REQUIRE(seconds);
+        CHECK(seconds.value() == doctest::Approx(0.5));
+        CHECK_FALSE(audio.isRecording());
+        CHECK(fs::exists(root / "voice.wav"));
+        auto d = audio.clipDuration("user://voice.wav");
+        REQUIRE(d);
+        CHECK(d.value() == doctest::Approx(0.5).epsilon(0.01));
+        CHECK(audio.play("user://voice.wav"));
+    }
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}

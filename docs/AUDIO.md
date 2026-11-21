@@ -102,9 +102,19 @@ d'un cœur de la machine de test ; avec une réverbération et un passe-bas sur 
 sur `Master` : ~0,17 ms ([BENCHMARKS.md](BENCHMARKS.md)). Tests : `audio effects` et `bus effects`
 (`tests/test_audio.cpp`), API Lua (`tests/test_script.cpp`).
 
+## Microphone
+
+`agr.audio.startRecording()` commence à enregistrer le micro (mono, au taux du mixeur ;
+`agr.audio.isRecording()`), `agr.audio.recordingLevel()` donne le niveau des 50 dernières ms (0 à 1 :
+vumètre, « souffler pour jouer »), `agr.audio.stopRecording("user://voix.wav")` arrête et écrit un WAV
+16 bits jouable aussitôt (`agr.audio.play`), et rend son chemin et sa durée. Sans micro (ou en sortie
+virtuelle), l'enregistrement reçoit les échantillons passés à `AudioSystem::feedRecording` (tests,
+sources personnalisées). Sur Android, la permission `RECORD_AUDIO` n'est pas encore ajoutée par l'export.
+
 ## Limites actuelles
 
-- Pas d'enregistrement (microphone) ni d'occlusion automatique (un script peut baisser le volume ou
+- Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` (pas de
+  traitement en direct du flux du micro) ; pas d'occlusion automatique (un script peut baisser le volume ou
   ajouter un passe-bas selon un rayon) ; pas de bus créés par l'utilisateur (les six bus sont fixes).
 - Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
   hauteur pendant une image).

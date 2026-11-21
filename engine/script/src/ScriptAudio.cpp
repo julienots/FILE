@@ -179,6 +179,36 @@ int au_spectrum(lua_State* L) {
     return 1;
 }
 
+int au_startRecording(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->startRecording());
+    return 1;
+}
+int au_stopRecording(lua_State* L) {
+    const std::string uri = luaL_optstring(L, 1, "user://recording.wav");
+    AudioSystem* a = audioOf(L);
+    if (!a) return 0;
+    auto r = a->stopRecording(uri);
+    if (!r) {
+        lua_pushnil(L);
+        lua_pushstring(L, r.error().message.c_str());
+        return 2;
+    }
+    lua_pushstring(L, uri.c_str());
+    lua_pushnumber(L, r.value());
+    return 2;
+}
+int au_recordingLevel(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    lua_pushnumber(L, a ? a->recordingLevel() : 0.0f);
+    return 1;
+}
+int au_isRecording(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->isRecording());
+    return 1;
+}
+
 int au_setBusVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
     const float x = static_cast<float>(luaL_checknumber(L, 2));
@@ -233,6 +263,8 @@ void openAudioBindings(lua_State* L) {
                                      {"busVolume", au_busVolume}, {"setBusMuted", au_setBusMuted},
                                      {"busMuted", au_busMuted},   {"addBusEffect", au_addBusEffect},
                                      {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects}, {"spectrum", au_spectrum},
+                                     {"startRecording", au_startRecording}, {"stopRecording", au_stopRecording},
+                                     {"recordingLevel", au_recordingLevel}, {"isRecording", au_isRecording},
                                      {"busEffectCount", au_busEffectCount}, {nullptr, nullptr}};
     addAgrLibrary(L, "audio", audio);
     static const luaL_Reg methods[] = {

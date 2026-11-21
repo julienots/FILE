@@ -1,4 +1,5 @@
 #include "agr/audio/AudioSystem.hpp"
+#include "agr/audio/Wav.hpp"
 #include "agr/core/Time.hpp"
 
 #include <algorithm>
@@ -117,6 +118,17 @@ struct AudioSystem::Impl {
     ma_device device{};
     ma_sound_group groups[kAudioBusCount]{};
     bool engineInit = false, deviceInit = false, deviceRunning = false, suspended = false;
+    // Recording (microphone): filled by the capture thread or feedRecording.
+    ma_device capture{};
+    bool captureInit = false, recording = false;
+    mutable std::mutex recordMutex;
+    std::vector<float> recorded;
+    static void captureCallback(ma_device* d, void*, const void* input, ma_uint32 frames) {
+        auto* self = static_cast<Impl*>(d->pUserData);
+        const auto* in = static_cast<const float*>(input);
+        std::lock_guard lock(self->recordMutex);
+        if (self->recording && in) self->recorded.insert(self->recorded.end(), in, in + frames);
+    }
     bool groupInit[kAudioBusCount]{};
     std::unique_ptr<EffectNode> effectNodes[kAudioBusCount];
     std::vector<AudioEffect> busEffects[kAudioBusCount];
@@ -446,7 +458,73 @@ Status AudioSystem::initialize(const AudioConfig& config) {
     return {};
 }
 
+bool AudioSystem::startRecording() {
+    if (m->recording || !m->engineInit) return false;
+    {
+        std::lock_guard lock(m->recordMutex);
+        m->recorded.clear();
+        m->recording = true;
+    }
+    if (m->output == AudioOutput::Device && !m->captureInit) {
+        ma_device_config dc = ma_device_config_init(ma_device_type_capture);
+        dc.capture.format = ma_format_f32;
+        dc.capture.channels = 1;
+        dc.sampleRate = m->stats.sampleRate;
+        dc.dataCallback = &Impl::captureCallback;
+        dc.pUserData = m.get();
+        if (ma_device_init(nullptr, &dc, &m->capture) == MA_SUCCESS) {
+            m->captureInit = true;
+            if (ma_device_start(&m->capture) != MA_SUCCESS) {
+                ma_device_uninit(&m->capture);
+                m->captureInit = false;
+            }
+        }
+        if (!m->captureInit) AGR_LOG_WARN("Audio", "no microphone available: recording receives fed samples only");
+    }
+    return true;
+}
+
+bool AudioSystem::isRecording() const { return m->recording; }
+bool AudioSystem::recordingFromDevice() const { return m->captureInit; }
+
+void AudioSystem::feedRecording(const float* samples, u32 count) {
+    std::lock_guard lock(m->recordMutex);
+    if (m->recording && samples) m->recorded.insert(m->recorded.end(), samples, samples + count);
+}
+
+float AudioSystem::recordingLevel() const {
+    std::lock_guard lock(m->recordMutex);
+    const usize n = std::min<usize>(m->recorded.size(), std::max<u32>(m->stats.sampleRate, 8000) / 20);
+    if (n == 0) return 0.0f;
+    double sum = 0.0;
+    for (usize i = m->recorded.size() - n; i < m->recorded.size(); ++i) sum += static_cast<double>(m->recorded[i]) * m->recorded[i];
+    return std::clamp(static_cast<float>(std::sqrt(sum / static_cast<double>(n))), 0.0f, 1.0f);
+}
+
+Result<f64> AudioSystem::stopRecording(const std::string& uri) {
+    if (!m->recording) return makeError(Error::Code::InvalidArgument, "not recording");
+    if (m->captureInit) {
+        ma_device_uninit(&m->capture);
+        m->captureInit = false;
+    }
+    std::vector<float> samples;
+    {
+        std::lock_guard lock(m->recordMutex);
+        m->recording = false;
+        samples.swap(m->recorded);
+    }
+    const u32 rate = std::max<u32>(m->stats.sampleRate, 8000);
+    const ByteBuffer wav = encodeWav16(samples.data(), static_cast<u32>(samples.size()), 1, rate);
+    if (Status st = m->vfs.writeBytes(uri, wav.data(), wav.size()); !st) return st.error();
+    return static_cast<f64>(samples.size()) / static_cast<f64>(rate);
+}
+
 void AudioSystem::shutdown() {
+    if (m->captureInit) {
+        ma_device_uninit(&m->capture);
+        m->captureInit = false;
+    }
+    m->recording = false;
     if (m->deviceInit) {
         ma_device_uninit(&m->device);  // stops the audio thread before anything is destroyed
         m->deviceInit = m->deviceRunning = false;

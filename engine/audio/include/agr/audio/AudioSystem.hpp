@@ -133,6 +133,22 @@ public:
     /// Stops the voices of the scene sources (game stopped, scene changed).
     void resetScene();
 
+    // ---------------------------------------------------------------- recording
+    /// Starts recording the microphone (mono, the mixer's rate). Without a capture device (or in
+    /// Virtual / Manual output), samples come from feedRecording (tests, custom sources). False if
+    /// already recording.
+    bool startRecording();
+    bool isRecording() const;
+    /// Level of the last ~50 ms recorded (RMS, 0..1): voice meters, "blow to play".
+    float recordingLevel() const;
+    /// Stops and writes the recording as a 16-bit WAV to `uri` (e.g. "user://voice.wav"), playable
+    /// with play(uri). Returns the duration in seconds.
+    Result<f64> stopRecording(const std::string& uri);
+    /// Appends samples to the recording (mono floats), when recording.
+    void feedRecording(const float* samples, u32 count);
+    /// Whether a real microphone is being captured (false: fed samples only).
+    bool recordingFromDevice() const;
+
     const AudioStats& stats() const;
     AudioMeter takeMeter();
 
