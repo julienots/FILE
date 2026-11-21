@@ -431,6 +431,34 @@ TEST_CASE("particles: soft default texture, additive blending") {
     CHECK(near(pixel(*gpu().device, 4, 4), 0, 0, 0));
 }
 
+TEST_CASE("particles: lit 2D particles follow the Light2D") {
+    Render2DFixture f;
+    f.camera();
+    f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env")).ambientIntensity = 0.0f;
+    const auto e = f.scene.createEntity("Emitter");
+    auto& em = f.scene.registry().emplace<ParticleEmitter2DComponent>(e);
+    em.rate = 0.0f;
+    em.burst = 1;
+    em.speedMin = em.speedMax = 0.0f;
+    em.gravity = {0, 0};
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.startSize = em.endSize = 4.0f;
+    em.startColor = em.endColor = {1, 1, 1, 1};
+    em.texture = "assets://two.png";  // opaque square (no soft disc)
+    em.lit = true;
+    em.seed = 1;
+    f.scene.updateTransforms();
+    simulateParticles2D(f.scene, 0.016f);
+    f.settle();
+    CHECK(pixel(*gpu().device, 32, 32).r < 10);  // no light: dark
+    auto& l = f.scene.registry().emplace<Light2DComponent>(f.scene.createEntity("Light"));
+    l.color = {1, 1, 1, 1};
+    l.intensity = 0.6f;
+    l.radius = 6.0f;
+    f.frame();
+    CHECK_MESSAGE(pixel(*gpu().device, 32, 32).r > 150, pixel(*gpu().device, 32, 32));
+}
+
 TEST_CASE("particles: over-lifetime curves and flipbook frames") {
     Render2DFixture f;
     f.camera();  // 6.4 pixels per unit, world (0, 0) at pixel (32, 32)

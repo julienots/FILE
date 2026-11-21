@@ -458,6 +458,7 @@ struct ParticleEmitter2DComponent {
     ecs::Entity subEmitter{};
     SubEmitTrigger subEmitOn = SubEmitTrigger::Death;
     i32 subEmitCount = 8;
+    bool lit = false;               ///< Lit by Light2D (and their shadows) like lit sprites; not with additive.
     bool additive = false;
     bool worldSpace = true;         ///< Particles stay where emitted when the emitter moves.
     i32 sortingLayer = 0;

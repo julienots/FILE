@@ -888,7 +888,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 item.depth = depth;
                 item.uv = uv;
                 item.color = packColor(color);
-                item.pipeline = em.additive ? 2u : 0u;
+                item.pipeline = em.additive ? 2u : em.lit ? 1u : 0u;
                 item.texture = tex;
                 m_spriteItems.push_back(item);
                 ++m_stats.particlesVisible;

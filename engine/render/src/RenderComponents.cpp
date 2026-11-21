@@ -582,6 +582,7 @@ void registerRenderComponents() {
         .field("subEmitter", &ParticleEmitter2DComponent::subEmitter, {.tooltip = "Emitter that bursts where a particle dies or hits something"})
         .field("subEmitOn", &ParticleEmitter2DComponent::subEmitOn, {.enumEntries = {{"Death", 0}, {"Collision", 1}}})
         .field("subEmitCount", &ParticleEmitter2DComponent::subEmitCount, {.rangeMin = 0.0f, .rangeMax = 1000.0f})
+        .field("lit", &ParticleEmitter2DComponent::lit, {.tooltip = "Lit by Light2D like lit sprites (not with additive)"})
         .field("additive", &ParticleEmitter2DComponent::additive, {.tooltip = "Additive blending (fire, light, magic)"})
         .field("worldSpace", &ParticleEmitter2DComponent::worldSpace)
         .field("sortingLayer", &ParticleEmitter2DComponent::sortingLayer, {.speed = 1.0f})
