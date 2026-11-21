@@ -19,6 +19,14 @@ des modèles, test de bout en bout de l'éditeur).
 |---|---|
 | `Master` | Tout le son ; les autres bus y sont reliés |
 | `Music`, `Effects`, `Ambient`, `Interface`, `Voice` | Volume et coupure par catégorie |
+| **Bus personnalisés** (8 au plus) | Nommés par le projet (`Footsteps`, `Weapons`…), chacun **routé vers un autre bus** (`Master` par défaut) : son volume, sa coupure et ses effets s'ajoutent à ceux du bus parent (`Gravel` → `Footsteps` → `Effects` → `Master`) |
+
+- Bus personnalisés : bouton **+ Bus** du mixeur, puis nom, *Sortie vers* et *Supprimer le bus* ;
+  ils apparaissent dans la liste `bus` de l'`AudioSource` et sont enregistrés dans
+  `audio_buses.json` (nom, emplacement, parent). Le routage change en direct ; une boucle (un bus
+  qui se nourrirait lui-même) est refusée. Lua : `agr.audio.createBus("Footsteps", "Effects")`,
+  `agr.audio.setBusParent(bus, parent)`, `agr.audio.busParent(bus)` ; C++ : `setAudioBusName`,
+  `AudioSystem::setBusParent` / `busParent`.
 
 - Chaque bus a un volume et une coupure. La **pause du jeu** suspend toutes les voix sauf celles du
   bus `Interface` (sons des menus).

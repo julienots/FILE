@@ -404,7 +404,14 @@ std::string AudioBusLayout::toJson() const {
                           {"attack", e.attack}, {"release", e.release}, {"gain", e.gain}, {"drive", e.drive}, {"rate", e.rate}, {"depth", e.depth},
                           {"mix", e.mix}, {"lowGain", e.lowGain}, {"midGain", e.midGain}, {"highGain", e.highGain}, {"lowFreq", e.lowFreq},
                           {"midFreq", e.midFreq}, {"highFreq", e.highFreq}, {"pitch", e.pitch}});
-        buses[audioBusName(static_cast<AudioBus>(b))] = {{"volume", volume[b]}, {"muted", muted[b]}, {"effects", std::move(fx)}};
+        const bool custom = b >= kAudioBuiltinBusCount;
+        if (custom && names[b].empty()) continue;  // unused slot
+        json bj = {{"volume", volume[b]}, {"muted", muted[b]}, {"effects", std::move(fx)}};
+        if (custom) {
+            bj["slot"] = b;
+            bj["parent"] = parent[b] >= kAudioBuiltinBusCount ? names[parent[b]] : audioBusName(static_cast<AudioBus>(parent[b]));
+        }
+        buses[custom ? names[b] : std::string(audioBusName(static_cast<AudioBus>(b)))] = std::move(bj);
     }
     j["buses"] = std::move(buses);
     return j.dump(2);
@@ -417,10 +424,25 @@ Result<AudioBusLayout> AudioBusLayout::fromJson(std::string_view text) {
     AudioBusLayout l;
     try {
         const json buses = j.value("buses", json::object());
+        // Custom buses first (their slot and name), so parents can name one another.
         for (const auto& [name, bj] : buses.items()) {
-            AudioBus bus;
-            if (!audioBusFromName(name, bus)) continue;
-            const i32 b = static_cast<i32>(bus);
+            const i32 slot = bj.value("slot", -1);
+            if (slot >= kAudioBuiltinBusCount && slot < kAudioBusCount) l.names[slot] = name;
+        }
+        auto lookup = [&](const std::string& name, i32& out) {
+            for (i32 i = kAudioBuiltinBusCount; i < kAudioBusCount; ++i)
+                if (!l.names[i].empty() && l.names[i] == name) return out = i, true;
+            AudioBus builtin;
+            if (audioBusFromName(name, builtin) && !audioBusIsCustom(builtin)) return out = static_cast<i32>(builtin), true;
+            return false;
+        };
+        for (const auto& [name, bj] : buses.items()) {
+            i32 b = -1;
+            if (!lookup(name, b)) continue;
+            if (b >= kAudioBuiltinBusCount) {
+                i32 p = 0;
+                if (lookup(bj.value("parent", std::string("Master")), p) && p != b) l.parent[b] = p;
+            }
             l.volume[b] = std::clamp(bj.value("volume", 1.0f), 0.0f, 4.0f);
             l.muted[b] = bj.value("muted", false);
             for (const json& e : bj.value("effects", json::array())) {

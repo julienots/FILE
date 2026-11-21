@@ -8,6 +8,7 @@
 #include <numbers>
 #include <vector>
 
+#include "agr/scene/Reflection.hpp"
 #include "agr/audio/AudioSystem.hpp"
 #include "agr/audio/Wav.hpp"
 #include "agr/core/Uuid.hpp"
@@ -666,4 +667,61 @@ TEST_CASE("audio: generator voices play the samples pushed, silence when empty")
     audio.mix(out.data(), 512);
     audio.update(0.0);
     CHECK_FALSE(audio.isPlaying(g.value()));
+}
+
+TEST_CASE("audio: custom buses are named, routed into another bus and saved in the layout") {
+    AudioFixture f;
+    f.sine("assets://tone.wav", 1.0);
+    const auto steps = static_cast<AudioBus>(kAudioBuiltinBusCount);
+    const auto sub = static_cast<AudioBus>(kAudioBuiltinBusCount + 1);
+    CHECK_FALSE(audioBusActive(steps));
+    setAudioBusName(steps, "Footsteps");
+    setAudioBusName(sub, "Gravel");
+    AudioBus found{};
+    REQUIRE(audioBusFromName("footsteps", found));
+    CHECK(found == steps);
+    CHECK(f.audio.setBusParent(steps, AudioBus::Effects));
+    CHECK(f.audio.setBusParent(sub, steps));
+    CHECK_FALSE(f.audio.setBusParent(steps, sub));                   // a loop
+    CHECK_FALSE(f.audio.setBusParent(AudioBus::Music, AudioBus::Voice));  // built-ins feed Master
+    REQUIRE(f.audio.play("assets://tone.wav", {.bus = sub, .loop = true}));
+    const float full = f.run(0.05).peak();
+    CHECK(full > 0.3f);
+    f.audio.setBusMuted(AudioBus::Effects, true);  // muting the parent silences the chain
+    f.run(0.02);
+    CHECK(f.run(0.05).peak() < 0.01f);
+    f.audio.setBusMuted(AudioBus::Effects, false);
+    f.audio.setBusVolume(steps, 0.5f);
+    f.run(0.02);
+    CHECK(f.run(0.05).peak() == doctest::Approx(full * 0.5f).epsilon(0.1));
+    f.audio.setBusParent(sub, AudioBus::Master);  // re-routed live: no longer through Footsteps
+    f.run(0.02);
+    CHECK(f.run(0.05).peak() == doctest::Approx(full).epsilon(0.1));
+
+    // Layout round trip: names, routing, volumes.
+    f.audio.setBusParent(sub, steps);
+    const auto json = f.audio.layout().toJson();
+    CHECK(json.find("\"Footsteps\"") != std::string::npos);
+    setAudioBusName(steps, "");
+    setAudioBusName(sub, "");
+    f.audio.setBusParent(sub, AudioBus::Master);
+    auto loaded = AudioBusLayout::fromJson(json);
+    REQUIRE(loaded);
+    CHECK(loaded.value().names[kAudioBuiltinBusCount] == "Footsteps");
+    f.audio.applyLayout(loaded.value());
+    CHECK(std::string(audioBusName(sub)) == "Gravel");
+    CHECK(f.audio.busParent(sub) == steps);
+    CHECK(f.audio.busParent(steps) == AudioBus::Effects);
+    CHECK(f.audio.busVolume(steps) == doctest::Approx(0.5f));
+    // The inspector's bus list follows the names.
+    const ComponentInfo* info = ComponentRegistry::instance().find<AudioSourceComponent>();
+    REQUIRE(info);
+    bool listed = false;
+    for (const FieldInfo& fi : info->fields)
+        if (fi.name == "bus")
+            for (const EnumEntry& e : fi.enumEntries) listed |= e.name == "Gravel";
+    CHECK(listed);
+    setAudioBusName(steps, "");
+    setAudioBusName(sub, "");
+    CHECK_FALSE(audioBusActive(sub));
 }

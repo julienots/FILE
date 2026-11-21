@@ -1,23 +1,64 @@
 #include "agr/audio/AudioComponents.hpp"
 
 #include <cctype>
+#include <string>
+#include <vector>
 
 #include "agr/scene/Reflection.hpp"
 
 namespace agr {
 
 namespace {
-constexpr const char* kBusNames[kAudioBusCount] = {"Master", "Music", "Effects", "Ambient", "Interface", "Voice"};
+constexpr const char* kBuiltinNames[kAudioBuiltinBusCount] = {"Master", "Music", "Effects", "Ambient", "Interface", "Voice"};
+std::string g_customNames[kAudioBusCount - kAudioBuiltinBusCount];
+std::string g_slotNames[kAudioBusCount - kAudioBuiltinBusCount];  // "Bus7".."Bus14"
+
+const std::string& slotName(i32 i) {
+    std::string& s = g_slotNames[i - kAudioBuiltinBusCount];
+    if (s.empty()) s = "Bus" + std::to_string(i + 1);
+    return s;
 }
+
+std::vector<EnumEntry> busEntries() {
+    std::vector<EnumEntry> buses;
+    for (i32 i = 0; i < kAudioBusCount; ++i)
+        if (audioBusActive(static_cast<AudioBus>(i))) buses.push_back({audioBusName(static_cast<AudioBus>(i)), i});
+    return buses;
+}
+}  // namespace
 
 const char* audioBusName(AudioBus bus) {
     const i32 i = static_cast<i32>(bus);
-    return i >= 0 && i < kAudioBusCount ? kBusNames[i] : "?";
+    if (i < 0 || i >= kAudioBusCount) return "?";
+    if (i < kAudioBuiltinBusCount) return kBuiltinNames[i];
+    const std::string& custom = g_customNames[i - kAudioBuiltinBusCount];
+    return custom.empty() ? slotName(i).c_str() : custom.c_str();
+}
+
+bool audioBusActive(AudioBus bus) {
+    const i32 i = static_cast<i32>(bus);
+    if (i < 0 || i >= kAudioBusCount) return false;
+    return i < kAudioBuiltinBusCount || !g_customNames[i - kAudioBuiltinBusCount].empty();
+}
+
+void setAudioBusName(AudioBus bus, std::string_view name) {
+    const i32 i = static_cast<i32>(bus);
+    if (i < kAudioBuiltinBusCount || i >= kAudioBusCount) return;
+    std::string clean;
+    for (char c : name)
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == ' ') clean += c;
+    AudioBus existing;
+    if (!clean.empty() && audioBusFromName(clean, existing) && existing != bus) clean += "_" + std::to_string(i + 1);  // keep names unique
+    g_customNames[i - kAudioBuiltinBusCount] = clean;
+    // The AudioSource "bus" list in the inspector follows the names.
+    if (const ComponentInfo* info = ComponentRegistry::instance().find<AudioSourceComponent>())
+        for (const FieldInfo& f : info->fields)
+            if (f.name == "bus") const_cast<FieldInfo&>(f).enumEntries = busEntries();
 }
 
 bool audioBusFromName(std::string_view name, AudioBus& out) {
     for (i32 i = 0; i < kAudioBusCount; ++i) {
-        const std::string_view candidate = kBusNames[i];
+        const std::string_view candidate = audioBusName(static_cast<AudioBus>(i));
         if (candidate.size() != name.size()) continue;
         bool same = true;
         for (usize c = 0; c < name.size() && same; ++c)
@@ -33,8 +74,7 @@ bool audioBusFromName(std::string_view name, AudioBus& out) {
 void registerAudioComponents() {
     auto& reg = ComponentRegistry::instance();
     if (reg.find<AudioSourceComponent>()) return;
-    std::vector<EnumEntry> buses;
-    for (i32 i = 0; i < kAudioBusCount; ++i) buses.push_back({kBusNames[i], i});
+    std::vector<EnumEntry> buses = busEntries();
     reg.add<AudioSourceComponent>("AudioSource")
         .category("Audio")
         .description("Plays a sound or music (.wav, .ogg, .mp3, .flac), optionally positioned in space.")

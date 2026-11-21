@@ -107,7 +107,12 @@ public:
     /// Spectrum of what the bus mixes, measured by an Analyzer effect on it (`bands` levels 0..1,
     /// log-spaced 40 Hz .. 16 kHz); empty without one. For visualizers and rhythm games.
     std::vector<float> spectrum(AudioBus bus, u32 bands) const;
-    /// Volumes, mutes and effects of every bus at once (assets://audio_buses.json).
+    /// Routing of a custom bus: its output goes into `parent` (Master by default) and so goes
+    /// through that bus's volume and effects. Built-in buses always feed Master; a route that
+    /// would loop back is refused (false).
+    bool setBusParent(AudioBus bus, AudioBus parent);
+    AudioBus busParent(AudioBus bus) const;
+    /// Volumes, mutes, effects, custom names and routing of every bus (assets://audio_buses.json).
     void applyLayout(const AudioBusLayout& layout);
     AudioBusLayout layout() const;
     /// Suspends the output device (application in background) or resumes it.

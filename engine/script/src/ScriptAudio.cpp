@@ -13,7 +13,7 @@ AudioBus checkBus(lua_State* L, int idx) {
     AudioBus bus{};
     const char* name = luaL_checkstring(L, idx);
     if (!audioBusFromName(name, bus))
-        luaL_error(L, "unknown audio bus '%s' (Master, Music, Effects, Ambient, Interface, Voice)", name);
+        luaL_error(L, "unknown audio bus '%s' (Master, Music, Effects, Ambient, Interface, Voice or a custom bus)", name);
     return bus;
 }
 
@@ -238,6 +238,41 @@ int au_isRecording(lua_State* L) {
     return 1;
 }
 
+/// agr.audio.createBus(name [, parent = "Master"]) -> true if a free custom slot took it
+/// (an existing bus of that name is just re-routed).
+int au_createBus(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    AudioBus bus{};
+    if (!audioBusFromName(name, bus) || !audioBusIsCustom(bus)) {
+        bool found = false;
+        for (i32 i = kAudioBuiltinBusCount; i < kAudioBusCount && !found; ++i)
+            if (!audioBusActive(static_cast<AudioBus>(i))) bus = static_cast<AudioBus>(i), found = true;
+        AudioBus clash{};
+        if (!found || audioBusFromName(name, clash)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        setAudioBusName(bus, name);
+    }
+    const AudioBus parent = lua_isnoneornil(L, 2) ? AudioBus::Master : checkBus(L, 2);
+    if (AudioSystem* a = audioOf(L)) a->setBusParent(bus, parent);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+/// agr.audio.setBusParent(bus, parent) -> false when the route is refused (built-in bus, loop).
+int au_setBusParent(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1), parent = checkBus(L, 2);
+    AudioSystem* a = audioOf(L);
+    lua_pushboolean(L, a && a->setBusParent(bus, parent));
+    return 1;
+}
+int au_busParent(lua_State* L) {
+    const AudioBus bus = checkBus(L, 1);
+    AudioSystem* a = audioOf(L);
+    lua_pushstring(L, audioBusName(a ? a->busParent(bus) : AudioBus::Master));
+    return 1;
+}
+
 int au_setBusVolume(lua_State* L) {
     const AudioBus bus = checkBus(L, 1);
     const float x = static_cast<float>(luaL_checknumber(L, 2));
@@ -295,7 +330,8 @@ void openAudioBindings(lua_State* L) {
                                      {"generator", au_generator}, {"push", au_push}, {"queued", au_queued},
                                      {"startRecording", au_startRecording}, {"stopRecording", au_stopRecording},
                                      {"recordingLevel", au_recordingLevel}, {"isRecording", au_isRecording},
-                                     {"busEffectCount", au_busEffectCount}, {nullptr, nullptr}};
+                                     {"busEffectCount", au_busEffectCount}, {"createBus", au_createBus},
+                                     {"setBusParent", au_setBusParent}, {"busParent", au_busParent}, {nullptr, nullptr}};
     addAgrLibrary(L, "audio", audio);
     static const luaL_Reg methods[] = {
         {"playSound", e_playSound}, {"stopSound", e_stopSound}, {"isSoundPlaying", e_isSoundPlaying}, {nullptr, nullptr}};

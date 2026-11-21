@@ -9,8 +9,16 @@ namespace agr {
 /// Mixer buses. Every bus except Master is routed into Master.
 enum class AudioBus : i32 { Master = 0, Music = 1, Effects = 2, Ambient = 3, Interface = 4, Voice = 5 };
 enum class AudioAttenuation : i32 { None = 0, Inverse = 1, Linear = 2, Exponential = 3 };
-inline constexpr i32 kAudioBusCount = 6;
+inline constexpr i32 kAudioBuiltinBusCount = 6;
+/// Built-in buses then 8 custom slots (named by the project: "Footsteps", "Weapons"...).
+inline constexpr i32 kAudioBusCount = kAudioBuiltinBusCount + 8;
+inline constexpr bool audioBusIsCustom(AudioBus bus) { return static_cast<i32>(bus) >= kAudioBuiltinBusCount; }
+/// Name of a bus: the built-in name, a custom slot's name, or "Bus7".."Bus14" for an unnamed slot.
 const char* audioBusName(AudioBus bus);
+/// Names a custom slot (empty = unused); ignored for built-in buses. Updates the inspector list.
+void setAudioBusName(AudioBus bus, std::string_view name);
+/// Built-in, or a custom slot that has a name.
+bool audioBusActive(AudioBus bus);
 /// Bus from its name ("Music"...), case-insensitive; false if unknown.
 bool audioBusFromName(std::string_view name, AudioBus& out);
 

@@ -66,9 +66,15 @@ private:
 /// Volumes, mutes and effects of every bus (assets://audio_buses.json), loaded by the audio
 /// plugin at start and edited in the mixer.
 struct AudioBusLayout {
-    float volume[kAudioBusCount]{1, 1, 1, 1, 1, 1};
+    AudioBusLayout() {
+        for (float& v : volume) v = 1.0f;
+    }
+    float volume[kAudioBusCount];
     bool muted[kAudioBusCount]{};
     std::vector<AudioEffect> effects[kAudioBusCount];
+    /// Custom slots: name (empty = unused) and the bus they feed (Master by default).
+    std::string names[kAudioBusCount];
+    i32 parent[kAudioBusCount]{};
     static constexpr const char* kUri = "assets://audio_buses.json";
     std::string toJson() const;
     static Result<AudioBusLayout> fromJson(std::string_view json);

@@ -178,7 +178,8 @@ struct AudioSystem::Impl {
     bool groupInit[kAudioBusCount]{};
     std::unique_ptr<EffectNode> effectNodes[kAudioBusCount];
     std::vector<AudioEffect> busEffects[kAudioBusCount];
-    float busVolumes[kAudioBusCount]{1, 1, 1, 1, 1, 1};
+    float busVolumes[kAudioBusCount]{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    i32 busParents[kAudioBusCount]{};
     bool busMutedFlags[kAudioBusCount]{};
     AudioOutput output = AudioOutput::Manual;
 
@@ -497,7 +498,7 @@ Status AudioSystem::initialize(const AudioConfig& config) {
         m->effectNodes[i] = std::move(node);
     }
     for (i32 i = kAudioBusCount - 1; i >= 0; --i) {
-        ma_node* parent = i == 0 ? ma_engine_get_endpoint(&m->engine) : static_cast<ma_node*>(&m->groups[0]);
+        ma_node* parent = i == 0 ? ma_engine_get_endpoint(&m->engine) : static_cast<ma_node*>(&m->groups[m->busParents[i]]);
         ma_node_attach_output_bus(&m->groups[i], 0, &m->effectNodes[i]->base, 0);
         ma_node_attach_output_bus(&m->effectNodes[i]->base, 0, parent, 0);
         setBusEffects(static_cast<AudioBus>(i), m->busEffects[i]);  // effects set before initialize()
@@ -648,7 +649,28 @@ const std::vector<AudioEffect>& AudioSystem::busEffects(AudioBus bus) const {
     return m->busEffects[std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1)];
 }
 
+bool AudioSystem::setBusParent(AudioBus bus, AudioBus parent) {
+    const i32 b = static_cast<i32>(bus), p = static_cast<i32>(parent);
+    if (b < kAudioBuiltinBusCount || b >= kAudioBusCount || p < 0 || p >= kAudioBusCount || p == b) return false;
+    for (i32 up = p, guard = 0; up != 0 && guard < kAudioBusCount; up = m->busParents[up], ++guard)
+        if (up == b) return false;  // would feed itself
+    m->busParents[b] = p;
+    if (m->groupInit[b] && m->effectNodes[b]) ma_node_attach_output_bus(&m->effectNodes[b]->base, 0, &m->groups[p], 0);
+    return true;
+}
+
+AudioBus AudioSystem::busParent(AudioBus bus) const {
+    const i32 b = static_cast<i32>(bus);
+    return static_cast<AudioBus>(b >= 0 && b < kAudioBusCount ? m->busParents[b] : 0);
+}
+
 void AudioSystem::applyLayout(const AudioBusLayout& layout) {
+    for (i32 b = kAudioBuiltinBusCount; b < kAudioBusCount; ++b) {
+        setAudioBusName(static_cast<AudioBus>(b), layout.names[b]);
+        m->busParents[b] = 0;
+    }
+    for (i32 b = kAudioBuiltinBusCount; b < kAudioBusCount; ++b)
+        if (!setBusParent(static_cast<AudioBus>(b), static_cast<AudioBus>(layout.parent[b]))) setBusParent(static_cast<AudioBus>(b), AudioBus::Master);
     for (i32 b = 0; b < kAudioBusCount; ++b) {
         setBusVolume(static_cast<AudioBus>(b), layout.volume[b]);
         setBusMuted(static_cast<AudioBus>(b), layout.muted[b]);
@@ -662,6 +684,8 @@ AudioBusLayout AudioSystem::layout() const {
         l.volume[b] = busVolume(static_cast<AudioBus>(b));
         l.muted[b] = busMuted(static_cast<AudioBus>(b));
         l.effects[b] = m->busEffects[b];
+        if (b >= kAudioBuiltinBusCount && audioBusActive(static_cast<AudioBus>(b))) l.names[b] = audioBusName(static_cast<AudioBus>(b));
+        l.parent[b] = m->busParents[b];
     }
     return l;
 }

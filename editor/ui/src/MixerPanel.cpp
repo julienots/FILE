@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 #include <imgui.h>
 
@@ -44,6 +46,7 @@ void MixerPanel::draw(EditorShared& s, const FrameTime& time) {
     const float h = std::clamp(ImGui::GetContentRegionAvail().y * 0.35f, 80.0f, 220.0f);
     for (i32 i = 0; i < kAudioBusCount; ++i) {
         const auto bus = static_cast<AudioBus>(i);
+        if (!audioBusActive(bus)) continue;  // unused custom slot
         if (i) ImGui::SameLine(0, 12);
         ImGui::BeginGroup();
         ImGui::PushID(i);
@@ -62,8 +65,56 @@ void MixerPanel::draw(EditorShared& s, const FrameTime& time) {
         const std::string name = std::string(audioBusName(bus)) + (fxCount ? " (" + std::to_string(fxCount) + ")" : "");
         if (ImGui::Selectable(name.c_str(), m_bus == i, 0, {60, 0})) m_bus = i;
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Effets de ce bus");
+        if (audioBusIsCustom(bus)) ImGui::TextDisabled("> %s", audioBusName(audio.busParent(bus)));
         ImGui::PopID();
         ImGui::EndGroup();
+    }
+    // Custom buses: add one in a free slot.
+    ImGui::SameLine(0, 12);
+    i32 freeSlot = -1;
+    for (i32 i = kAudioBuiltinBusCount; i < kAudioBusCount && freeSlot < 0; ++i)
+        if (!audioBusActive(static_cast<AudioBus>(i))) freeSlot = i;
+    ImGui::BeginDisabled(freeSlot < 0);
+    if (ImGui::Button("+ Bus")) {
+        setAudioBusName(static_cast<AudioBus>(freeSlot), "Bus" + std::to_string(freeSlot + 1));
+        audio.setBusParent(static_cast<AudioBus>(freeSlot), AudioBus::Effects);
+        m_bus = freeSlot;
+        m_dirty = true;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Nouveau bus (8 au plus), routé vers Effects");
+    if (m_bus >= kAudioBuiltinBusCount && audioBusActive(static_cast<AudioBus>(m_bus))) {
+        const auto bus = static_cast<AudioBus>(m_bus);
+        ImGui::SeparatorText("Bus personnalisé");
+        char name[64];
+        std::snprintf(name, sizeof name, "%s", audioBusName(bus));
+        ImGui::SetNextItemWidth(180);
+        if (ImGui::InputText("Nom", name, sizeof name, ImGuiInputTextFlags_EnterReturnsTrue) && name[0]) {
+            setAudioBusName(bus, name);
+            m_dirty = true;
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160);
+        if (ImGui::BeginCombo("Sortie vers", audioBusName(audio.busParent(bus)))) {
+            for (i32 p = 0; p < kAudioBusCount; ++p) {
+                const auto pb = static_cast<AudioBus>(p);
+                if (p == m_bus || !audioBusActive(pb)) continue;
+                if (ImGui::Selectable(audioBusName(pb), audio.busParent(bus) == pb)) m_dirty |= audio.setBusParent(bus, pb);
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Supprimer le bus")) {
+            for (i32 c = kAudioBuiltinBusCount; c < kAudioBusCount; ++c)  // buses routed into it go to Master
+                if (audio.busParent(static_cast<AudioBus>(c)) == bus) audio.setBusParent(static_cast<AudioBus>(c), AudioBus::Master);
+            audio.setBusEffects(bus, {});
+            audio.setBusVolume(bus, 1.0f);
+            audio.setBusMuted(bus, false);
+            audio.setBusParent(bus, AudioBus::Master);
+            setAudioBusName(bus, "");
+            m_bus = 0;
+            m_dirty = true;
+        }
     }
     drawEffects(s, audio);
     ImGui::End();
