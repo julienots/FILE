@@ -6,12 +6,34 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.8.1 (versionCode 42), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.8.0 : elle s'installe par-dessus). SHA-256 : `9f73bc984e7996f6987acaf6b4fcfd1c036b1a02eef6c2de8133dc779a9671a3`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.9.0 (versionCode 43), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.8.1 : elle s'installe par-dessus). SHA-256 : `9eee98f80cbeb68d0591ca893a68f444d54e8b4e063a4d037ea2c1d3d430cc39`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 2.9.0 (vrais modèles 3D réalistes de la galerie Tripo : villageois, loup, sanglier, cerf)
+
+- **Modèles réalistes en jeu**, tous choisis dans la galerie publique de Tripo (« Free 3D Models »), puis squelettés et animés par les outils du jeu :
+  - **villageois** : un paysan en tunique brune (11 k triangles), une paysanne au tablier et au foulard (7,6 k), une autre en robe rouge (7,6 k) et un homme au gilet de fourrure très léger (1 k). Le jeu tire au hasard entre ces variantes, donc les villages ne sont plus des clones. Les personnages nommés féminins sans modèle propre utilisent aussi ces paysannes ;
+  - **loup gris** réaliste (19 k triangles), utilisé par tous les loups qui n'ont pas leur propre modèle (loup gris, des neiges, des steppes, boréal) ;
+  - **sanglier** réaliste (18,5 k triangles, texture 4K réduite à 1K) ;
+  - **cerf** (daim) réaliste pour les cerfs sauvages du monde : 805 k triangles d'origine, simplifiés à 20 k, et les bois suivent la tête.
+- **Banque de modèles dans ton Google Drive**, dossier « Tripo / LOST KINGDOM - Banque de modèles ». Chaque modèle y est rangé sous un nom clair (catégorie, description, nombre de faces) pour rester utilisable après la fin de l'abonnement Tripo. Les doublons créés par les essais d'export ont été mis à la corbeille (récupérables). Le loup gris (10 Mo) et le sanglier (6,4 Mo) n'ont pas pu être envoyés depuis l'environnement de développement (limite de 4,2 Mo par envoi) ; ils sont à exporter depuis Tripo.
+- **Outils d'import améliorés** :
+  - `tools/import_character.py` : option `--yaw` pour les modèles livrés tournés (les modèles squelettés de la galerie regardent vers +X) ; il applique aussi la transformation du nœud du maillage (conversions FBX : rotation de −90° et échelle ×100) ;
+  - `tools/import_quadruped.py` : options `--fwd` (sens de la tête) et `--anat` (fichier JSON des articulations), pour importer d'autres animaux que le cheval. La règle `head_above` rattache bois et cornes à la tête ;
+  - **chaîne de récupération** : les fichiers « meshopt » de la galerie sont décompressés avec `gltf-transform dequantize`, les FBX convertis avec FBX2glTF, et les modèles trop lourds simplifiés avec `tools/simplify_glb.py` (pymeshlab).
+- **Vérifié sur ordinateur** :
+  - nouveau scénario `fauna` : villageois, cerf, sanglier et loup côte à côte, les 5 avec un modèle importé texturé ;
+  - scénarios `npcs`, `modfun` (loup géant) et `interior` réussis ;
+  - tests unitaires : 2794 réussis ;
+  - coût en triangles des personnages animés : Brindlemere +13 k, Solmar +17 k, Port-Azur +39 k.
+- **Écartés** :
+  - une deuxième paysanne en robe verte : ses proportions trapues trompent la détection des épaules (elle est dans la banque mais pas dans le jeu) ;
+  - un villageois très détaillé de 734 k triangles et un loup blanc de 1,9 million : trop lourds.
+- **Non vérifié** : rien n'a été essayé sur un téléphone. Le loup a la tête légèrement tournée sur le côté (c'est le modèle d'origine).
 
 ### Correctifs 2.8.1 (Terres d'Aurore refaites en réaliste)
 

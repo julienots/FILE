@@ -301,6 +301,9 @@ Entity Game::spawnEnemy(int def, vec3 pos, bool elite, uint32_t uid) {
         c.height = 1.8f * sc;
     } else {
         setupVisualCreature(c.vis, d.arch, d.clook, sc);
+        // 2.9.0 imported animals (Tripo gallery models): models/<enemy id>.lkm, or the family's model (every wolf
+        // without its own model uses "wolf")
+        if (d.arch == Arch::Quadruped && !applyImportedModel(c.vis, d.id, Arch::Quadruped) && d.family == "Loups") applyImportedModel(c.vis, "wolf", Arch::Quadruped);
         c.height = (d.arch == Arch::Spider ? 0.8f : 1.1f) * sc;
     }
     c.vis.anim.gait.walkSpeed = std::min(1.6f, d.speed * 0.4f);
@@ -424,6 +427,7 @@ Entity Game::spawnAnimal(int kind, vec3 pos) {
     else { L.c1 = hexColor(0x9a8a7a); L.c2 = hexColor(0xe8e0d8); }
     c.name = kind == 4 ? "Cerf" : "Lièvre";
     setupVisualCreature(c.vis, Arch::Quadruped, L, kind == 5 ? 0.35f : 1.3f);
+    if (kind == 4) applyImportedModel(c.vis, "deer", Arch::Quadruped);   // 2.9.0 the realistic stag (Tripo gallery)
     c.vis.anim.gait.runSpeed = kind == 5 ? 6.f : 8.f; c.vis.anim.gait.walkSpeed = 1.f;
     c.radius = kind == 5 ? 0.2f : 0.5f; c.height = kind == 5 ? 0.3f : 1.4f;
     c.vis.outline = false;

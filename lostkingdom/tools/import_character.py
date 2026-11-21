@@ -49,15 +49,32 @@ def load_glb(path):
 
     Ps, Ns, UVs, Is, base = [], [], [], [], 0
     tex = None
-    for node in j.get("nodes", []):
+    # 2.9.0 node transforms (and their parents) are applied: FBX conversions put a -90 deg X turn and a x100 scale on
+    # the mesh node. Skinned meshes follow the same rule here (their bind pose is the rest pose for these models).
+    nodes = j.get("nodes", [])
+    parent = {}
+    for pi, nd in enumerate(nodes):
+        for c in nd.get("children", []): parent[c] = pi
+    def local(nd):
+        if "matrix" in nd: return np.array(nd["matrix"], dtype=np.float64).reshape(4, 4).T
+        t = np.array(nd.get("translation", [0, 0, 0]), dtype=np.float64); x, y, z, w = nd.get("rotation", [0, 0, 0, 1]); s = np.array(nd.get("scale", [1, 1, 1]), dtype=np.float64)
+        R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)], [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)], [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+        M = np.eye(4); M[:3, :3] = R * s[None, :]; M[:3, 3] = t; return M
+    def world(i):
+        M = local(nodes[i])
+        while i in parent: i = parent[i]; M = local(nodes[i]) @ M
+        return M
+    for ni, node in enumerate(nodes):
         if "mesh" not in node:
             continue
-        if any(k in node for k in ("matrix", "rotation", "scale")):
-            print("warning: node transform ignored (", node.get("name"), ")")
+        Wm = local(node)   # the mesh node's own transform only (parents hold armature offsets that the skin already cancels)
         for pr in j["meshes"][node["mesh"]]["primitives"]:
             at = pr["attributes"]
             P = acc(at["POSITION"]).astype(np.float64)
             N = acc(at["NORMAL"]).astype(np.float64) if "NORMAL" in at else np.zeros_like(P)
+            if not np.allclose(Wm, np.eye(4)):
+                P = P @ Wm[:3, :3].T + Wm[:3, 3]
+                Ninv = np.linalg.inv(Wm[:3, :3]).T; N = N @ Ninv.T; N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
             UV = acc(at["TEXCOORD_0"]).astype(np.float64) if "TEXCOORD_0" in at else np.zeros((len(P), 2))
             I = acc(pr["indices"]).astype(np.int64) if "indices" in pr else np.arange(len(P))
             Ps.append(P); Ns.append(N); UVs.append(UV); Is.append(I + base); base += len(P)
@@ -92,9 +109,14 @@ def main():
     ap.add_argument("--height", type=float, default=1.8)
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--preview", default="")
+    ap.add_argument("--yaw", type=float, default=0.0, help="turn the source model about the vertical axis first (degrees), e.g. 90 for a model facing +X")
     a = ap.parse_args()
 
     P, N, UV, I, tex = load_glb(a.glb)
+    if a.yaw:   # 2.9.0 models delivered facing another way (Tripo rigged gallery models face +X)
+        c, s_ = np.cos(np.radians(a.yaw)), np.sin(np.radians(a.yaw))
+        R = np.array([[c, 0, s_], [0, 1, 0], [-s_, 0, c]])
+        P = P @ R.T; N = N @ R.T
     # ---- normalise: feet on the ground, target height, body axis centred ------------------------
     P[:, 1] -= P[:, 1].min()
     H0 = P[:, 1].max()

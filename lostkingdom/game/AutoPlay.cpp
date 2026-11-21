@@ -1826,6 +1826,31 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "fauna") {
+        // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
+        static std::vector<Entity> ents;
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1; ents.clear();
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 70, b->pos.y + 50, 0.f); }, idle, "setup"});
+        s.push_back({0.2f, [](Game& g) { Character& c = g.pc(); vec3 f{std::sin(c.yaw), 0, std::cos(c.yaw)}, r{f.z, 0, -f.x};
+            auto at = [&](float side, float fwd) { vec3 p = c.pos + f * fwd + r * side; p.y = g.groundAt(p.x, p.z); return p; };
+            ents.push_back(g.spawnAnimal(4, at(-3.5f, 7.f)));
+            ents.push_back(g.spawnEnemy(enemyIndex("boar"), at(0.5f, 6.f)));
+            ents.push_back(g.spawnEnemy(enemyIndex("wolf"), at(3.5f, 6.5f)));
+            ents.push_back(g.spawnVillager(at(-1.8f, 4.5f), g.world.nearestPoi(c.pos.xz(), 400.f), 7));
+            ents.push_back(g.spawnVillager(at(1.8f, 4.5f), g.world.nearestPoi(c.pos.xz(), 400.f), 8));
+            int imported = 0;
+            for (Entity e : ents) { if (AIBrain* ai = g.reg.get<AIBrain>(e)) { ai->state = AIState::Idle; ai->timer = 99; }
+                if (Character* ch = g.reg.get<Character>(e)) { ch->yaw = c.yaw + PI + 0.9f; imported += ch->vis.albedo != 0; if (AnimalBrain* ab = g.reg.get<AnimalBrain>(e)) { ab->home = ab->dest = ch->pos; ab->timer = 99; } } }
+            AGR_LOG("FAUNA %zu spawned, %d with an imported textured model", ents.size(), imported);
+            g.camYaw = c.yaw + PI; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 6.f; }, [](Game& g, float) { g.camIdleT = 0; }, "spawn"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; for (Entity e : ents) if (Character* ch = g.reg.get<Character>(e)) ch->vel = vec3(0); }, "settle"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/FA0_fauna.png"); }, idle, "shot"});
+        s.push_back({0.6f, [](Game& g) { Character& c = g.pc(); Character* b = g.reg.get<Character>(ents[1]); c.pos = b->pos + vec3(std::sin(b->yaw), 0, std::cos(b->yaw)) * 2.5f + vec3(std::cos(b->yaw), 0, -std::sin(b->yaw)) * 1.5f;
+            c.yaw = std::atan2(b->pos.x - c.pos.x, b->pos.z - c.pos.z); g.camYaw = c.yaw + PI * 0.8f; g.camDist = g.camDistTarget = 4.f; g.camPitch = 0.2f; }, [](Game& g, float) { g.camIdleT = 0; }, "boar close"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/FA1_boar.png"); }, idle, "shot"});
+        return s;
+    }
     if (name == "aurora") {
         // 2.8.0 the Lands of Aurora: landscapes by day and by night (pictures)
         static const float spots[][3] = {{1080, 4700, 3.1f}, {1500, 5350, 0.6f}, {2300, 5450, 2.2f}, {800, 5600, 4.0f}};

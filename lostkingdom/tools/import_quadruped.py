@@ -14,7 +14,7 @@ The generated model (Tripo...) is a static mesh. This tool:
 Usage: python3 tools/import_quadruped.py horse.glb horse_mount [--preview out.png]
 Anatomy defaults fit the Tripo horse delivered with 2.3.3 (head towards +X, 0.857 tall).
 """
-import argparse, os, struct, sys
+import argparse, json, os, struct, sys
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -46,9 +46,26 @@ def main():
     ap.add_argument("glb"); ap.add_argument("name")
     ap.add_argument("--tex", type=int, default=512)
     ap.add_argument("--preview")
+    ap.add_argument("--fwd", default="x", choices=["x", "-x", "z", "-z"], help="2.9.0 axis the animal's head points to in the source")
+    ap.add_argument("--anat", help="2.9.0 JSON file: {anat:{bone:[fwd,up]}, tips:{...}, saddle:[fwd,up], leg_w, belly_y} for another animal")
     a = ap.parse_args()
+    global ANAT, TIPS, SADDLE_X, SADDLE_Y, LEG_W, BELLY_Y
+    head_above = None
+    if a.anat:
+        cfg = json.load(open(a.anat))
+        head_above = cfg.get("head_above")   # 2.9.0 antlers / horns: everything above this height, ahead of the chest, rides the head
+        ANAT = {k: tuple(v) for k, v in cfg["anat"].items()}; TIPS = {k: tuple(v) for k, v in cfg["tips"].items()}
+        SADDLE_X, SADDLE_Y = cfg["saddle"]; LEG_W = cfg["leg_w"]; BELLY_Y = cfg["belly_y"]
     P, N, UV, I, tex = load_glb(a.glb)
     P = P.copy(); N = N.copy()
+    # bring the source to the tool's frame: head towards +X, side along Z
+    if a.fwd != "x":
+        def turn(V):
+            x, y, z = V[:, 0].copy(), V[:, 1].copy(), V[:, 2].copy()
+            if a.fwd == "-x": return np.stack([-x, y, -z], 1)
+            if a.fwd == "z": return np.stack([z, y, -x], 1)
+            return np.stack([-z, y, x], 1)   # -z
+        P = turn(P); N = turn(N)
     P[:, 1] -= P[:, 1].min()
     k = SKEL_SADDLE / SADDLE_Y
 
@@ -132,6 +149,10 @@ def main():
     w1 = np.where(np.isfinite(g1), 0.5 * np.clip(1 - (g1 - g0) / blend, 0, 1), 0)
     W0 = 1 - w1
     b0, b1 = order[:, 0], np.where(np.isfinite(g1), order[:, 1], order[:, 0])
+    if head_above is not None:
+        hm = (Pg[:, 1] > head_above * k) & (Pg[:, 2] > J[B["spine"], 2] - 0.1 * k)
+        b0 = np.where(hm, B["head"], b0); b1 = np.where(hm, B["head"], b1); W0 = np.where(hm, 1.0, W0)
+        print(f"  head_above: {int(hm.sum())} vertices ride the head")
     print(f"  skinning: {nW} welded nodes, {int(unreached.sum())} without surface path")
     for n in NAMES: print(f"   {n:6s} {int((b0 == B[n]).sum()):5d} verts  joint {np.round(J[B[n]], 3)}")
 
