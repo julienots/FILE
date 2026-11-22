@@ -314,6 +314,37 @@ void UISystem::roundBox(OverlayDrawList& out, Vec4 rect, float radius, u32 color
         }
 }
 
+void UISystem::roundBox(OverlayDrawList& out, Vec4 rect, Vec4 radii, u32 color, bool soft) {
+    if (rect.z <= 0.0f || rect.w <= 0.0f) return;
+    if (radii.x == radii.y && radii.y == radii.z && radii.z == radii.w) return roundBox(out, rect, radii.x, color, soft);
+    const rhi::TextureHandle tex = soft ? m_softTexture : m_discTexture;
+    const float lim = std::min(rect.z, rect.w) * 0.5f;
+    const float tl = std::clamp(radii.x, 0.0f, lim), tr = std::clamp(radii.y, 0.0f, lim), br = std::clamp(radii.z, 0.0f, lim),
+                bl = std::clamp(radii.w, 0.0f, lim);
+    const float x0 = rect.x, x1 = rect.x + rect.z, y0 = rect.y, y1 = rect.y + rect.w;
+    auto fill = [&](float ax, float ay, float bx, float by) {
+        if (bx > ax && by > ay) emit(out, {ax, ay}, {bx, by}, {0, 0, 1, 1}, color, {});
+    };
+    auto corner = [&](float ax, float ay, float r, Vec4 uv) {
+        if (r <= 0.0f) return;
+        if (tex) emit(out, {ax, ay}, {ax + r, ay + r}, uv, color, tex);
+        else fill(ax, ay, ax + r, ay + r);
+    };
+    // Quarter discs (texture quadrants), then bands that cover the rest exactly once.
+    corner(x0, y0, tl, {0.0f, 0.0f, 0.5f, 0.5f});
+    corner(x1 - tr, y0, tr, {0.5f, 0.0f, 1.0f, 0.5f});
+    corner(x1 - br, y1 - br, br, {0.5f, 0.5f, 1.0f, 1.0f});
+    corner(x0, y1 - bl, bl, {0.0f, 0.5f, 0.5f, 1.0f});
+    const float top = std::max(tl, tr), bottom = std::max(bl, br);
+    fill(x0 + tl, y0, x1 - tr, y0 + top);            // top band between the corners
+    fill(x0, y0 + tl, x0 + tl, y0 + top);            // under a smaller top-left corner
+    fill(x1 - tr, y0 + tr, x1, y0 + top);            // under a smaller top-right corner
+    fill(x0, y0 + top, x1, y1 - bottom);             // middle
+    fill(x0 + bl, y1 - bottom, x1 - br, y1);         // bottom band
+    fill(x0, y1 - bottom, x0 + bl, y1 - bl);         // above a smaller bottom-left corner
+    fill(x1 - br, y1 - bottom, x1, y1 - br);         // above a smaller bottom-right corner
+}
+
 void UISystem::setRenderer(Renderer* renderer) { m_renderer = renderer; }
 
 float UISystem::canvasScale(ecs::Entity canvas) const {
@@ -815,6 +846,7 @@ void UISystem::focusField(ecs::Entity field) {
     m_caretStops.clear();
     m_selectingText = false;
     m_undo.clear(), m_redo.clear();
+    m_fieldScroll = 0.0f;
     m_typingGroup = false;
     m_caretClock.restart();
     if (m_textInputHandler && had != !field.isNull()) m_textInputHandler(!field.isNull());
@@ -1526,27 +1558,31 @@ void UISystem::drawImage(const UIImageComponent& img, Vec4 rect, Vec4 tint, floa
         }
     }
     const u32 packed = packColor(color);
-    if (img.texture.empty() && (img.cornerRadius > 0.0f || img.outlineWidth > 0.0f || img.shadowSize > 0.0f)) {
+    const bool anyCorner = img.cornerRadii.x > 0.0f || img.cornerRadii.y > 0.0f || img.cornerRadii.z > 0.0f || img.cornerRadii.w > 0.0f;
+    if (img.texture.empty() && (img.cornerRadius > 0.0f || anyCorner || img.outlineWidth > 0.0f || img.shadowSize > 0.0f)) {
         // Flat style box: shadow, then outline (the whole box), then the fill inset by the outline.
         ensureShapeTextures();
-        const float radius = std::max(img.cornerRadius, 0.0f) * scale;
+        const float base = std::max(img.cornerRadius, 0.0f);
+        const Vec4 radii{(img.cornerRadii.x < 0.0f ? base : img.cornerRadii.x) * scale, (img.cornerRadii.y < 0.0f ? base : img.cornerRadii.y) * scale,
+                         (img.cornerRadii.z < 0.0f ? base : img.cornerRadii.z) * scale, (img.cornerRadii.w < 0.0f ? base : img.cornerRadii.w) * scale};
+        auto grow = [](Vec4 r, float d) { return Vec4{std::max(r.x + d, 0.0f), std::max(r.y + d, 0.0f), std::max(r.z + d, 0.0f), std::max(r.w + d, 0.0f)}; };
         if (img.shadowSize > 0.0f) {
             const Vec4 sc = mul(img.shadowColor, Vec4{1, 1, 1, tint.w});
             const float s = img.shadowSize * scale;
             if (sc.w > 0.0f)
                 roundBox(out, {rect.x + img.shadowOffset.x * scale - s, rect.y + img.shadowOffset.y * scale - s, rect.z + 2.0f * s, rect.w + 2.0f * s},
-                         radius + 2.0f * s, packColor(sc), true);
+                         grow(radii, 2.0f * s), packColor(sc), true);
         }
         Vec4 inner = rect;
-        float innerRadius = radius;
+        Vec4 innerRadii = radii;
         if (img.outlineWidth > 0.0f) {
             const Vec4 oc = mul(img.outlineColor, Vec4{1, 1, 1, tint.w});
-            if (oc.w > 0.0f) roundBox(out, rect, radius, packColor(oc), false);
+            if (oc.w > 0.0f) roundBox(out, rect, radii, packColor(oc), false);
             const float w = std::min(img.outlineWidth * scale, std::min(rect.z, rect.w) * 0.5f);
             inner = {rect.x + w, rect.y + w, rect.z - 2.0f * w, rect.w - 2.0f * w};
-            innerRadius = std::max(radius - w, 0.0f);
+            innerRadii = grow(radii, -w);
         }
-        roundBox(out, inner, innerRadius, packed, false);
+        roundBox(out, inner, innerRadii, packed, false);
         return;
     }
     const bool sliced = texW > 0.0f && (img.border.x > 0 || img.border.y > 0 || img.border.z > 0 || img.border.w > 0);
@@ -1940,8 +1976,26 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             const auto* field = reg.tryGet<UIInputFieldComponent>(el.entity);
             const bool focusedField = field && el.entity == m_focusedField;
             bool stopsDrawn = false;
+            const bool singleLine = field && !field->multiline;
+            if (singleLine) m_clip = intersect(el.clip, el.rect);  // long text stays inside the field
             for (; ti < m_texts.size() && m_texts[ti].canvas == ci && m_texts[ti].element == ei; ++ti) {
-                const PendingText& pt = m_texts[ti];
+                PendingText scrolled;
+                const PendingText* ptp = &m_texts[ti];
+                if (focusedField && singleLine && !field->text.empty()) {
+                    // Scroll so that the caret stays inside the field (padding of 4 px).
+                    computeCaretStops(*ptp, field->text);
+                    const float pad = 4.0f * pass.scale, left = el.rect.x + pad, right = el.rect.x + el.rect.z - pad;
+                    const float caretX = m_caretStops[std::min(m_caret, m_caretStops.size() - 1)].x - m_fieldScroll;
+                    if (caretX > right) m_fieldScroll += caretX - right;
+                    if (caretX < left) m_fieldScroll -= left - caretX;
+                    m_fieldScroll = std::clamp(m_fieldScroll, 0.0f, std::max(0.0f, m_caretStops.back().x - right));
+                    if (m_fieldScroll > 0.0f) {
+                        scrolled = *ptp;
+                        scrolled.origin.x -= m_fieldScroll;
+                        ptp = &scrolled;
+                    }
+                }
+                const PendingText& pt = *ptp;
                 if (focusedField && !stopsDrawn && !field->text.empty()) {
                     // Caret stops for clicks and arrows, and the selection under the text.
                     computeCaretStops(pt, field->text);

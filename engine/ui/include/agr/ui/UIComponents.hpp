@@ -61,6 +61,9 @@ struct UIImageComponent {
     bool blocksPointer = true;                  ///< false: clicks and touches go through (overlays, decorations).
     // Flat style box (images without a texture): rounded corners, outline, drop shadow.
     float cornerRadius = 0.0f;                  ///< Canvas units.
+    /// Per corner (top-left, top-right, bottom-right, bottom-left), canvas units; a negative
+    /// value uses cornerRadius (tabs rounded on top only, speech bubbles...).
+    math::Vec4 cornerRadii{-1.0f, -1.0f, -1.0f, -1.0f};
     float outlineWidth = 0.0f;                  ///< Canvas units, drawn inside the rectangle.
     math::Vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f};
     float shadowSize = 0.0f;                    ///< Canvas units of soft shadow around the box, 0 = none.

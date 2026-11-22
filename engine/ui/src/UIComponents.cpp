@@ -40,6 +40,7 @@ void registerUIComponents() {
         .field("pixelArt", &UIImageComponent::pixelArt, {.tooltip = "Sharp pixels (nearest filtering)"})
         .field("blocksPointer", &UIImageComponent::blocksPointer, {.tooltip = "Off: clicks and touches go through the image"})
         .field("cornerRadius", &UIImageComponent::cornerRadius, {.tooltip = "Rounded corners (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.25f})
+        .field("cornerRadii", &UIImageComponent::cornerRadii, {.tooltip = "Per corner: top-left, top-right, bottom-right, bottom-left (negative = cornerRadius)", .rangeMin = -1.0f, .rangeMax = 1000.0f, .speed = 0.25f})
         .field("outlineWidth", &UIImageComponent::outlineWidth, {.tooltip = "Outline inside the box (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 200.0f, .speed = 0.1f})
         .field("outlineColor", &UIImageComponent::outlineColor, {.flags = FieldFlag_Color})
         .field("shadowSize", &UIImageComponent::shadowSize, {.tooltip = "Soft drop shadow around the box (no texture), canvas units", .rangeMin = 0.0f, .rangeMax = 200.0f, .speed = 0.1f})

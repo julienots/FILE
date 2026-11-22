@@ -1087,4 +1087,66 @@ TEST_CASE("text editing: undo / redo groups typing, key repeat timing") {
     CHECK(r.update(false, true, 0.07f) == 2);  // then every 35 ms
     CHECK(r.update(false, false, 1.0f) == 0);  // released
 }
+TEST_CASE("text editing: a long single-line field scrolls to keep the caret visible, its text stays inside") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto field = f.element("Long", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {200, 40});
+    f.scene.registry().emplace<UIInputFieldComponent>(field).maxLength = 0;
+    auto& tc = f.scene.registry().emplace<UITextComponent>(field);
+    tc.hAlign = UIHAlign::Left;
+    tc.wrap = false;
+    f.ui.layout(f.scene, 800, 600);
+    f.ui.focusField(field);
+    using TK = UISystem::TextKey;
+    OverlayDrawList out;
+    f.ui.processText(f.scene, "short", 0, false);
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    CHECK(f.ui.fieldScroll() == 0.0f);  // fits: no scroll
+    f.ui.processText(f.scene, " and then a much longer sentence that cannot fit in two hundred pixels", 0, false);
+    out = {};
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    CHECK(f.ui.fieldScroll() > 50.0f);
+    for (const auto& v : out.vertices) {  // nothing drawn outside the field
+        CHECK(v.position.x >= 100.0f - 0.01f);
+        CHECK(v.position.x <= 300.0f + 0.01f);
+    }
+    f.ui.processTextKey(f.scene, TK::Home);
+    out = {};
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    CHECK(f.ui.fieldScroll() == 0.0f);  // back to the start
+    f.ui.processTextKey(f.scene, TK::End);
+    out = {};
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    const float atEnd = f.ui.fieldScroll();
+    CHECK(atEnd > 50.0f);
+    f.ui.processTextKey(f.scene, TK::Left);  // moving inside the visible part: no scroll change
+    out = {};
+    f.ui.buildOverlay(f.scene, 800, 600, out);
+    CHECK(f.ui.fieldScroll() == doctest::Approx(atEnd));
+    f.ui.focusField({});
+    CHECK(f.ui.fieldScroll() == 0.0f);
+}
+TEST_CASE("style boxes: a different radius per corner covers the box exactly once") {
+    for (const math::Vec4 radii : {math::Vec4{20, 0, 0, 20}, math::Vec4{30, 10, 0, 5}, math::Vec4{0, 0, 40, 0}, math::Vec4{-1, 8, -1, 8}}) {
+        UIFixture f;
+        f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+        const auto box = f.element("Tab", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {200, 120});
+        auto& img = f.scene.registry().emplace<UIImageComponent>(box);
+        img.cornerRadius = 16.0f;  // used where radii are negative
+        img.cornerRadii = radii;
+        f.ui.layout(f.scene, 800, 600);
+        OverlayDrawList out;
+        f.ui.buildOverlay(f.scene, 800, 600, out);
+        double area = 0.0;
+        for (usize t = 0; t + 2 < out.indices.size(); t += 3) {
+            const auto& a = out.vertices[out.indices[t]].position;
+            const auto& b = out.vertices[out.indices[t + 1]].position;
+            const auto& c = out.vertices[out.indices[t + 2]].position;
+            area += std::fabs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) * 0.5;
+            CHECK(std::min({a.x, b.x, c.x}) >= 100.0f - 0.01f);
+            CHECK(std::max({a.y, b.y, c.y}) <= 220.0f + 0.01f);
+        }
+        CHECK(area == doctest::Approx(200.0 * 120.0).epsilon(0.001));  // corner quads included: no gap, no overlap
+    }
+}
 }  // TEST_SUITE

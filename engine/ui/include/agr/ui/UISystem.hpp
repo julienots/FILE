@@ -141,6 +141,8 @@ public:
     }
     /// Undo / redo history of the focused field (cleared when the focus changes).
     usize undoDepth() const { return m_undo.size(); }
+    /// Horizontal scroll (pixels) of the focused single-line field: keeps the caret visible.
+    float fieldScroll() const { return m_fieldScroll; }
     usize redoDepth() const { return m_redo.size(); }
     ecs::Entity focusedField() const { return m_focusedField; }
     bool wantsText() const { return !m_focusedField.isNull(); }
@@ -282,6 +284,8 @@ private:
 
     /// Rounded box (axis-aligned rect in screen pixels) from the 9-sliced disc / blurred disc.
     void roundBox(OverlayDrawList& out, math::Vec4 rect, float radius, u32 color, bool soft);
+    /// Radii per corner: x top-left, y top-right, z bottom-right, w bottom-left.
+    void roundBox(OverlayDrawList& out, math::Vec4 rect, math::Vec4 radii, u32 color, bool soft);
     void ensureShapeTextures();
 
     /// Caret positions (screen pixels: x, line top, line height) of the focused field for each
@@ -294,6 +298,7 @@ private:
     bool m_ctrl = false, m_shift = false;
     bool m_selectingText = false;
     std::string m_clipboard;
+    float m_fieldScroll = 0.0f;
     struct TextSnapshot {
         std::string text;
         usize caret = 0, anchor = 0;
