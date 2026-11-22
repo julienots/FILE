@@ -241,10 +241,9 @@ export function createGame(ctx) {
     const k = new THREE.Vector2(e.g.position.x - from.x, e.g.position.z - from.z).normalize();
     e.vx = k.x * knock; e.vz = k.y * knock;
     if (e.hp <= 0) {
-      e.dead = 1; state.kills++;
+      e.dead = 0.0001; state.kills++; // > 0 = mort ; rétrécit en ~0,3 s
       burst(e.g.position.clone().add(new THREE.Vector3(0, 0.5, 0)), '#b06bff', 22, 0.9);
       if (rnd() < 0.7) give('essence', 1);
-      if (e.minion) { scene.remove(e.g); enemies.splice(enemies.indexOf(e), 1); }
       addFoi(3, 'Ombrelin chassé');
       ui.refreshQuests(); save();
     }
@@ -286,7 +285,7 @@ export function createGame(ctx) {
     const bolt = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5.5, 8), fog: false, transparent: true }));
     const halo = new THREE.Sprite(glowMat('#bfe9ff')); halo.scale.setScalar(14); halo.position.copy(point).y += 1;
     scene.add(bolt, halo);
-    let t = 0; const fade = () => { t += 0.05; bolt.material.opacity = halo.material.opacity = Math.max(0, 1 - t * 2.5); if (t < 0.4) setTimeout(fade, 30); else { scene.remove(bolt, halo); geo.dispose(); } }; fade();
+    let t = 0; const fade = () => { t += 0.05; bolt.material.opacity = halo.material.opacity = Math.max(0, 1 - t * 2.5); if (t < 0.4) setTimeout(fade, 30); else { scene.remove(bolt, halo); geo.dispose(); bolt.material.dispose(); halo.material.dispose(); } }; fade();
     ctx.flash?.(0.35);
     burst(point.clone().add(new THREE.Vector3(0, 0.5, 0)), '#e8f8ff', 26, 1.1);
     shockRing(point, '#ffffff', radius);
@@ -353,7 +352,7 @@ export function createGame(ctx) {
       for (let i = 0; i < 6; i++) setTimeout(() => burst(boss.g.position.clone().add(new THREE.Vector3((rnd() - 0.5) * 4, (rnd() - 0.5) * 3, (rnd() - 0.5) * 4)), i % 2 ? '#ffffff' : '#b06bff', 30, 1.4), i * 180);
       ctx.flash?.(1.2); ctx.onVictory?.();
       addFoi(50, 'Cœur d\'Ombre détruit');
-      enemies.filter(e => e.minion).forEach(e => { e.hp = 0; e.dead = 1; });
+      enemies.filter(e => e.minion).forEach(e => { e.hp = 0; e.dead = 0.0001; });
       ui.bossBar(null);
       setTimeout(() => { scene.remove(boss.g, boss.rift, boss.beam); ui.ending(LORE.epilogue, { kills: state.kills, foi: Math.floor(state.foi) }); }, 1800);
       save();
@@ -388,7 +387,7 @@ export function createGame(ctx) {
       const to = new THREE.Vector3(p.x, p.y + 1, p.z).sub(o.o.position);
       o.v.lerp(to.setLength(7), dt * 0.6); o.o.position.addScaledVector(o.v, dt);
       if (o.o.position.distanceTo(new THREE.Vector3(p.x, p.y + 1, p.z)) < 0.9) { hurt(1, o.o.position); o.life = 0; burst(o.o.position, '#a050ff', 10, 0.7); }
-      if (o.life <= 0 || o.o.position.y < world.groundAt(o.o.position.x, o.o.position.z)) { scene.remove(o.o); orbs.splice(i, 1); }
+      if (o.life <= 0 || o.o.position.y < world.groundAt(o.o.position.x, o.o.position.z)) { scene.remove(o.o); o.o.material.dispose(); orbs.splice(i, 1); }
     }
   }
   if (state.act === 2 && !state.won) spawnBoss();
@@ -436,7 +435,7 @@ export function createGame(ctx) {
     ui.cooldowns?.({ onde: cds.onde / CD.onde, elan: cds.elan / CD.elan, foudre: cds.foudre / CD.foudre });
     // la Foi monte doucement : les habitants prient (plus vite quand il fait beau)
     foiTick += dt; if (foiTick > 20) { foiTick = 0; addFoi(state.weather === 'rain' ? 0.5 : 1 + state.builds.length * 0.1); save(); }
-    for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt * 2.2; const k = Math.min(1, r.t); r.m.scale.setScalar(0.5 + k * r.radius); r.m.material.opacity = 0.9 * (1 - k); if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); rings.splice(i, 1); } }
+    for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt * 2.2; const k = Math.min(1, r.t); r.m.scale.setScalar(0.5 + k * r.radius); r.m.material.opacity = 0.9 * (1 - k); if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); } }
     updateBoss(dt, mode === 'play'); updateOrbs(dt);
     // objets
     for (const k of pickups) { k.t += dt; k.mesh.rotation.y += dt * (k.type === 'shard' ? 1.5 : 0.6); k.g.position.y = k.base + Math.sin(k.t * 2) * (k.type === 'shard' ? 0.2 : 0.04); }
@@ -447,6 +446,14 @@ export function createGame(ctx) {
     }
     // créatures
     const p = player.root.position, playing = mode === 'play';
+    // sbires du boss morts : retirés (et libérés) une fois l'animation finie — jamais pendant un parcours de la liste
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e.minion && e.dead > 0.4) {
+        scene.remove(e.g); enemies.splice(i, 1);
+        e.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== eyeMat) o.material.dispose(); });
+      }
+    }
     for (const e of enemies) {
       const g = e.g;
       if (e.dead) {
@@ -502,7 +509,7 @@ export function createGame(ctx) {
   }
 
   return {
-    _enemies: enemies, blast, rayHit, state, update, attack, onde, elan, foudreDivine, godCast, spendFoi, addFoi, lore: LORE, get boss() { return boss; }, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
+    _enemies: enemies, _spawnBoss: spawnBoss, _damageBoss: damageBoss, blast, rayHit, state, update, attack, onde, elan, foudreDivine, godCast, spendFoi, addFoi, lore: LORE, get boss() { return boss; }, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
     get rain() { return rainLevel; },
     setWeather(w) { state.weather = w; save(); },
     quests: () => Object.entries(QUESTS).map(([id, q]) => ({ id, ...q, state: state.quests[id] })),

@@ -41,6 +41,7 @@ export function buildGrassField(terrain, { layers }) {
     const tall = clamp(0.5 + fbm(x * 0.04 - 5, z * 0.04 + 2, 2) * 1.8, 0, 1);
     mData[k * 4] = dens * 255; mData[k * 4 + 1] = dry * 255; mData[k * 4 + 2] = terrain.forestMask(x, z) * 255; mData[k * 4 + 3] = tall * 255;
   }
+  let pending = false, flushT = 0;
   const mTex = new THREE.DataTexture(mData, N, N, THREE.RGBAFormat);
   mTex.magFilter = mTex.minFilter = THREE.LinearFilter; mTex.needsUpdate = true;
 
@@ -175,8 +176,9 @@ vec2 gtex(vec2 w){ vec2 t = (w + uSize*0.5) / uSize; return t * (uN - 1.0) / uN 
         const d = Math.hypot(-SIZE / 2 + ix * STEP - x0, -SIZE / 2 + iz * STEP - z0);
         if (d < r * 0.62) mData[k * 4] = 0; else if (d < r * 0.8) mData[k * 4] = Math.min(mData[k * 4], 60);
       }
-      hTex.needsUpdate = true; mTex.needsUpdate = true;
+      pending = true; // envoi groupé (au plus ~6 fois/s) : le Rayon creuse 11 fois par seconde
     },
+    flush(dt) { flushT -= dt; if (pending && flushT <= 0) { hTex.needsUpdate = true; mTex.needsUpdate = true; pending = false; flushT = 0.16; } },
     /** retire l'herbe sur un rectangle orienté (maison posée en mode Créateur) */
     clearRect(x0, z0, hw, hd, rot) {
       const c = Math.cos(rot), s = Math.sin(rot), m = hw + hd + 1;

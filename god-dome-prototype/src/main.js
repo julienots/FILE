@@ -29,7 +29,7 @@ const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math
 const QUALITY = params.get('q') || (isMobile ? 'medium' : 'high');
 const Q = {
   high: { pr: Math.min(devicePixelRatio, 2), shadow: 4096, grass: 26000, flowers: 6000, msaa: 4, bloom: true, atmo: { aoSamples: 10, raySamples: 32 }, grassLayers: [{ cell: 0.05, r: 9, seg: 5 }, { cell: 0.12, rIn: 8.3, r: 30, seg: 3 }] },
-  medium: { pr: Math.min(devicePixelRatio, 1.3), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, atmo: { aoSamples: 6, raySamples: 18 }, grassLayers: [{ cell: 0.07, r: 8, seg: 4 }, { cell: 0.17, rIn: 7.3, r: 22, seg: 3 }] },
+  medium: { pr: Math.min(devicePixelRatio, 1.3), shadow: 2048, grass: 12000, flowers: 3000, msaa: 2, bloom: true, atmo: { aoSamples: 4, raySamples: 12 }, grassLayers: [{ cell: 0.07, r: 8, seg: 4 }, { cell: 0.17, rIn: 7.3, r: 22, seg: 3 }] },
   low: { pr: 1, shadow: 1024, grass: 7000, flowers: 1500, msaa: 0, bloom: false, atmo: { aoSamples: 0, raySamples: 0 }, grassLayers: [{ cell: 0.1, r: 7, seg: 3 }, { cell: 0.24, rIn: 6.3, r: 15, seg: 2 }] },
 }[QUALITY] || {};
 const setMsg = m => { const e = document.getElementById('loadMsg'); if (e) e.textContent = m; };
@@ -452,14 +452,14 @@ function update(dt) {
   // onde du dôme / éclair
   if (rippleT > 0) { rippleT = Math.min(1, rippleT + dt / 2.4); dome.uniforms.uRippleT.value = rippleT >= 1 ? 0 : rippleT; if (rippleT >= 1) rippleT = 0; }
   flashT = Math.max(0, flashT - dt * 1.6);
-  flashEl.style.opacity = (flashT * flashT * 0.85).toFixed(3);
+  setCss(flashEl, 'opacity', (flashT * flashT * 0.85).toFixed(2));
   grade.uniforms.uFlash.value = flashT * 0.25;
   shakeT = Math.max(0, shakeT - dt * 1.8); shockT = Math.min(1, shockT + dt * 1.4); darkT = Math.max(0, darkT - dt);
   grade.uniforms.uShock.value.z = shockT; grade.uniforms.uChroma.value = shakeT * 2.2; grade.uniforms.uDark.value = Math.min(1, darkT) * inside;
   grade.uniforms.uSpeed.value += (smoothstep(12, 30, flySpeed) - grade.uniforms.uSpeed.value) * Math.min(1, dt * 4);
   grade.uniforms.uAspect.value = innerWidth / innerHeight;
   powers.update(dt);
-  $('cross').hidden = mode !== 'play';
+  if ($('cross').hidden !== (mode !== 'play')) $('cross').hidden = mode !== 'play';
   // ombres : cadrage large en vue divine, serré et net autour de l'habitant
   const focus = mode === 'god' || mode === 'toGod' && !tr?.crossed ? new THREE.Vector3(0, 0, 0) : player.root.position;
   const half = lerp(128, 42, inside);
@@ -471,10 +471,12 @@ function update(dt) {
   // lumière d'intérieur de maison
   const inHouse = mode === 'play' && world.insideFloor(player.root.position.x, player.root.position.z);
   interior.intensity += ((inHouse ? 6 : 0) - interior.intensity) * Math.min(1, dt * 4);
+  interior.visible = interior.intensity > 0.05; // éteinte = aucun coût d'éclairage par pixel
   if (inHouse) interior.position.set(inHouse.x, inHouse.y + 2.4, inHouse.z);
   // particules autour de l'habitant
   motes.mat.uniforms.uCenter.value.copy(player.root.position);
   // l'herbe haute définition suit le regard (devant la caméra) en mode habitant
+  grassField.userData.flush(dt);
   { const gc = grassField.userData.uniforms; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; if (fwd.lengthSq() > 0) fwd.normalize();
     gc.uCenter.value.copy(player.root.position).addScaledVector(fwd, mode === 'god' ? 0 : 4); gc.uFade.value = smoothstep(0.3, 0.9, inside); grassField.visible = inside > 0.3;
     const farR = Q.grassLayers[1].r + 2;
@@ -604,10 +606,16 @@ function talk() {
   $('dlgName').textContent = dialogNPC.name; $('dlgText').textContent = dialogLines[dialogIdx];
   $('dialog').hidden = false;
 }
+let lastTimeTxt = '';
+/** écrit une propriété de style seulement si elle change (évite un recalcul de style à chaque image) */
+const _css = new Map();
+function setCss(el, prop, v) { const k = el.id + prop; if (_css.get(k) === v) return; _css.set(k, v); if (prop.startsWith('--')) el.style.setProperty(prop, v); else el.style[prop] = v; }
 function syncTimeUI() {
   const h = Math.floor(timeOfDay), m = Math.floor((timeOfDay - h) * 60);
   const lbl = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  const el = $('timeLabel'); if (el.textContent !== lbl) el.textContent = (timeOfDay > 6 && timeOfDay < 18 ? '☀ ' : '☾ ') + lbl;
+  const txt = (timeOfDay > 6 && timeOfDay < 18 ? '☀ ' : '☾ ') + lbl;
+  if (txt === lastTimeTxt) return; // le DOM n'est touché qu'une fois par minute de jeu (et non à chaque image)
+  lastTimeTxt = txt; $('timeLabel').textContent = txt;
   if (document.activeElement !== $('timeRange')) $('timeRange').value = timeOfDay;
 }
 function bindUI() {
@@ -755,12 +763,13 @@ function bindPowerWheel() {
   };
   btn.addEventListener('pointerdown', e => {
     e.preventDefault(); btn.setPointerCapture(e.pointerId); start = { x: e.clientX, y: e.clientY }; open = false; hl = null;
+    // Rayon : l'appui long sert à MAINTENIR le faisceau ; la roue ne s'ouvre alors qu'en glissant
     if (curPower === 'beam') castPower('beam', true);
-    timer = setTimeout(() => { if (!open) { if (curPower === 'beam') castPower('beam', false); openWheel(); } }, 380);
+    else timer = setTimeout(() => { if (!open) openWheel(); }, 380);
   });
   btn.addEventListener('pointermove', e => {
     if (!start) return;
-    if (!open && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 22) { clearTimeout(timer); if (curPower === 'beam') castPower('beam', false); openWheel(); }
+    if (!open && Math.hypot(e.clientX - start.x, e.clientY - start.y) > (curPower === 'beam' ? 40 : 22)) { clearTimeout(timer); if (curPower === 'beam') castPower('beam', false); openWheel(); }
     if (open) { let best = null, bd = 60; for (const it of items) { const d = Math.hypot(e.clientX - it.x, e.clientY - it.y); if (d < bd) { bd = d; best = it; } } hl = best; items.forEach(it => it.el.classList.toggle('hl', it === best)); }
   });
   const end = () => {
@@ -771,7 +780,22 @@ function bindPowerWheel() {
     start = null; open = false;
   };
   btn.addEventListener('pointerup', end); btn.addEventListener('pointercancel', end);
+  resetWheel = () => { clearTimeout(timer); wheel.hidden = true; start = null; open = false; };
 }
+let resetWheel = () => {};
+/** application en arrière-plan / perte de focus : plus aucune commande « collée » au retour */
+function releaseInputs() {
+  input.jx = input.jy = 0; input.jumpHeld = false; input.keys.clear();
+  if (powers) powers.setBeam(false);
+  resetWheel();
+  const k = document.getElementById('knob'); if (k) k.style.transform = '';
+}
+addEventListener('blur', releaseInputs);
+// Android peut retirer le contexte WebGL à l'application en arrière-plan : au lieu d'un écran noir,
+// on sauvegarde et on relance proprement (la partie est conservée dans la sauvegarde locale).
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); try { game && game.save(); } catch (_) {} setMsg?.('Reprise du jeu…'); });
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseInputs(); else clock.getDelta(); });
 let godPower = null;
 function setGodPower(p) {
   godPower = godPower === p ? null : p;
@@ -790,10 +814,10 @@ const ui = {
   refreshLife() { const l = $('life'); if (!l || !game) return; l.innerHTML = ''; for (let i = 0; i < game.state.maxHp; i++) { const s = document.createElement('i'); if (i >= game.state.hp) s.className = 'off'; l.appendChild(s); } },
   hurtFlash() { const h = $('hurt'); h.classList.add('on'); setTimeout(() => h.classList.remove('on'), 60); },
   setAction(label, pk) { actionPickup = pk; },
-  energy(v, cd) { $('energy').style.width = v.toFixed(0) + '%'; const c = curPower === 'comet' ? cd.comet : curPower === 'storm' ? cd.storm : 0; $('btnPower').style.setProperty('--cd', (c * 100).toFixed(0) + '%'); },
+  energy(v, cd) { setCss($('energy'), 'width', v.toFixed(0) + '%'); const c = curPower === 'comet' ? cd.comet : curPower === 'storm' ? cd.storm : 0; setCss($('btnPower'), '--cd', (c * 100).toFixed(0) + '%'); },
   refreshFoi() { if (!game) return; const f = Math.floor(game.state.foi); document.querySelectorAll('.foi i').forEach(i => i.style.width = f + '%'); document.querySelectorAll('.foi b').forEach(b => b.textContent = f); },
   refreshPowers() { },
-  cooldowns(c) { for (const [k, v] of Object.entries(c)) { const el = $('btn' + k[0].toUpperCase() + k.slice(1)); if (el) el.style.setProperty('--cd', (v * 100).toFixed(1) + '%'); } },
+  cooldowns(c) { for (const [k, v] of Object.entries(c)) { const el = $('btn' + k[0].toUpperCase() + k.slice(1)); if (el) setCss(el, '--cd', (v * 100).toFixed(0) + '%'); } },
   actCard(kicker, title, text) { const c = $('actCard'); c.querySelector('small').textContent = kicker; c.querySelector('h2').textContent = title; c.querySelector('p').textContent = text; c.classList.remove('on'); void c.offsetWidth; c.classList.add('on'); },
   bossBar(v) { const b = $('bossBar'); b.hidden = v === null; if (v !== null) b.querySelector('i').style.width = Math.max(0, v * 100) + '%'; },
   story(lines, { title = '', final = null, onDone = () => {} } = {}) {
@@ -839,23 +863,66 @@ function addHouseAt(x, z, record = true) {
   return h;
 }
 
+/**
+ * Préchauffage : compile au chargement les shaders de TOUT ce qui peut apparaître (objets cachés en vue divine,
+ * herbe proche, effets) et les variantes « lumière d'explosion / de maison allumée ». Sans cela, le premier
+ * cratère ou la première entrée dans le monde figent l'image le temps de compiler (saccade de 0,5 à 2 s sur téléphone).
+ */
+function warmupShaders() {
+  const hidden = [];
+  scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+  const bi = powers.boomLight.intensity, ii = interior.intensity;
+  powers.boomLight.intensity = 0; interior.intensity = 0; // variantes compilées ET réellement tracées une fois (les pilotes mobiles finalisent les shaders au premier tracé)
+  const pass = (boom, inn) => {
+    powers.boomLight.visible = boom; interior.visible = inn;
+    const prevRT = renderer.getRenderTarget(); renderer.setRenderTarget(composer.readBuffer); // même cible que le vrai rendu (HDR, sans tone mapping)
+    renderer.compile(scene, camera);
+    renderer.setRenderTarget(prevRT);
+    composer.render();
+  };
+  try { pass(true, false); pass(false, true); pass(false, false); } catch (e) { console.warn('préchauffage des shaders', e); }
+  for (const o of hidden) o.visible = false;
+  powers.boomLight.visible = false; interior.visible = false; powers.boomLight.intensity = bi; interior.intensity = ii;
+  try { composer.render(); } catch (e) { console.warn(e); }
+}
 let showPerf = true;
-function frame() {
+// Boucle : plafonnée à 60 i/s (les écrans 120 Hz chauffaient le téléphone puis le faisaient ralentir par à-coups),
+// résolution dynamique avec hystérésis (chaque changement réalloue les tampons : on évite le va-et-vient),
+// puis niveau « économie » (ombres une image sur deux, sans halo lumineux) si le téléphone peine encore.
+let lastFrameT = 0, slowS = 0, fastS = 0, eco = 0, frameNo = 0;
+function setEco(level) {
+  eco = level;
+  bloom.enabled = Q.bloom && eco < 1;
+  renderer.shadowMap.autoUpdate = eco < 1;
+}
+function frame(now) {
   requestAnimationFrame(frame);
+  if (now - lastFrameT < 1000 / 60 - 2.5) return;
+  lastFrameT = now;
   const dt = Math.min(0.05, clock.getDelta());
   update(dt);
+  if (eco >= 1 && (++frameNo & 1)) renderer.shadowMap.needsUpdate = true;
+  renderer.info.autoReset = false; renderer.info.reset(); // compteur = image entière (toutes les passes), pas seulement la dernière
   composer.render();
-  // performances + résolution dynamique (vise ≥ 40 i/s sur téléphone)
   fpsAcc += dt; fpsN++; perfT += dt;
   if (perfT > 1) {
     fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; perfT = 0;
-    if (!params.has('fixed') && isMobile) {
-      if (fps < 36 && dynPR > 0.7) dynPR = Math.max(0.7, dynPR - 0.15);
-      else if (fps > 55 && dynPR < Q.pr) dynPR = Math.min(Q.pr, dynPR + 0.1);
-      if (renderer.getPixelRatio() !== dynPR) { renderer.setPixelRatio(dynPR); composer.setPixelRatio(dynPR); composer.setSize(innerWidth, innerHeight); }
+    if (!params.has('fixed') && isMobile && !document.hidden) {
+      slowS = fps < 40 ? slowS + 1 : 0; fastS = fps > 56 ? fastS + 1 : 0;
+      let pr = dynPR;
+      if (slowS >= 2) {
+        slowS = 0;
+        if (dynPR > 0.75) pr = Math.max(0.75, dynPR - 0.15);
+        else if (eco < 1) setEco(1);
+      } else if (fastS >= 4) {
+        fastS = 0;
+        if (eco > 0) setEco(0);
+        else if (dynPR < Q.pr) pr = Math.min(Q.pr, dynPR + 0.1);
+      }
+      if (pr !== dynPR) { dynPR = pr; renderer.setPixelRatio(dynPR); composer.setPixelRatio(dynPR); composer.setSize(innerWidth, innerHeight); }
     }
     const info = renderer.info.render;
-    perfEl.innerHTML = showPerf ? `<b>${fps.toFixed(0)}</b> i/s · ${QUALITY}<br>${info.calls} appels · ${(info.triangles / 1e6).toFixed(2)} M tri<br>rés. ×${renderer.getPixelRatio().toFixed(2)}` : '<b>' + fps.toFixed(0) + '</b>';
+    perfEl.innerHTML = showPerf ? `<b>${fps.toFixed(0)}</b> i/s · ${QUALITY}${eco ? ' · éco' : ''}<br>${info.calls} appels · ${(info.triangles / 1e6).toFixed(2)} M tri<br>rés. ×${renderer.getPixelRatio().toFixed(2)}` : '<b>' + fps.toFixed(0) + '</b>';
   }
 }
 addEventListener('resize', () => {
@@ -865,7 +932,7 @@ addEventListener('resize', () => {
 });
 
 // API de pilotage (captures automatisées / tests)
-window.__THREE = THREE;
+window.__THREE = THREE; window.GDcam = camera;
 window.GD = {
   get mode() { return mode; }, god, tp, player: () => player, entry,
   setTime: h => { timeOfDay = h; timeSpeed = 0; },
@@ -903,6 +970,7 @@ window.GD = {
   placePlayer(entry.x, entry.z);
   updateSky();
   setUI();
+  warmupShaders();
   const ld = $('loading'); ld.style.opacity = 0; setTimeout(() => ld.remove(), 900);
   clock.start();
   window.GD.ready = true;
@@ -910,5 +978,5 @@ window.GD = {
   if (!game.state.seenIntro && !params.has('manual')) {
     setTimeout(() => ui.story([...game.lore.prologue, game.lore.goal], { title: 'LA VOÛTE D\'AUBE', onDone: () => { game.state.seenIntro = true; game.save(); ui.actCard('ACTE I', 'Les Éclats de la Voûte', 'Entrez dans votre monde et parlez au Vieil Oswin, près du puits.'); } }), 900);
   }
-  if (!params.has('manual')) frame();
+  if (!params.has('manual')) requestAnimationFrame(frame);
 })();

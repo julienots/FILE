@@ -47,22 +47,27 @@ export function createPowers(ctx) {
   let debI = 0; const dm = new THREE.Object3D();
   debris.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(DEB * 3).fill(1), 3);
   scene.add(debris);
+  const _dc = new THREE.Color(), HOT = new THREE.Color(3, 1.2, 0.3), _off = new THREE.Vector3();
   function spawnDebris(pos, n, power, hot = 0.6) {
     for (let i = 0; i < n; i++) {
       const d = deb[debI = (debI + 1) % DEB];
       const a = Math.random() * 6.28, up = 0.5 + Math.random();
-      d.p.copy(pos).add(new THREE.Vector3(Math.cos(a), 0.3, Math.sin(a)).multiplyScalar(0.5));
+      d.p.copy(pos).add(_off.set(Math.cos(a), 0.3, Math.sin(a)).multiplyScalar(0.5));
       d.v.set(Math.cos(a) * power * (0.4 + Math.random()), power * up * 1.2, Math.sin(a) * power * (0.4 + Math.random()));
       d.w.set(Math.random() * 8, Math.random() * 8, Math.random() * 8); d.s = 0.3 + Math.random() * Math.random() * 1.1; d.life = 5 + Math.random() * 2;
-      debris.setColorAt(debI, new THREE.Color().setScalar(0.7 + Math.random() * 0.5).lerp(new THREE.Color(3, 1.2, 0.3), Math.random() < hot ? 0.7 : 0));
+      debris.setColorAt(debI, _dc.setScalar(0.7 + Math.random() * 0.5).lerp(HOT, Math.random() < hot ? 0.7 : 0));
     }
+    debAlive = 1;
     debris.instanceColor.needsUpdate = true;
   }
+  let debAlive = 0;
   function updateDebris(dt) {
+    if (debAlive <= 0) return; // rien à animer : aucun envoi GPU
+    let alive = 0;
     for (let i = 0; i < DEB; i++) {
       const d = deb[i];
       if (d.life <= 0) { dm.position.set(0, -999, 0); dm.scale.setScalar(0.001); dm.updateMatrix(); debris.setMatrixAt(i, dm.matrix); continue; }
-      d.life -= dt; d.v.y -= 22 * dt; d.p.addScaledVector(d.v, dt);
+      alive++; d.life -= dt; d.v.y -= 22 * dt; d.p.addScaledVector(d.v, dt);
       const g = terrain.heightAt(d.p.x, d.p.z) + 0.15 * d.s;
       if (d.p.y < g) { d.p.y = g; d.v.y *= -0.35; d.v.x *= 0.6; d.v.z *= 0.6; d.w.multiplyScalar(0.6); }
       d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
@@ -70,6 +75,7 @@ export function createPowers(ctx) {
       debris.setMatrixAt(i, dm.matrix);
     }
     debris.instanceMatrix.needsUpdate = true;
+    if (!alive) debAlive = 0; // dernière passe faite : tout est rangé sous le sol
   }
 
   // ------------------------------------------------------------ étincelles + poussière (particules GPU)
@@ -88,6 +94,7 @@ export function createPowers(ctx) {
   sparks.frustumCulled = false; sparks.renderOrder = 8; scene.add(sparks);
   let spkI = 0;
   function emitSparks(pos, n, speed, col = [1, 0.55, 0.15], life = 1.2) {
+    spkActive = true;
     for (let i = 0; i < n; i++) {
       const k = spkI = (spkI + 1) % SPK;
       const a = Math.random() * 6.28, el = Math.random() * 1.3;
@@ -98,15 +105,20 @@ export function createPowers(ctx) {
       spkCol[k * 3] = col[0]; spkCol[k * 3 + 1] = col[1]; spkCol[k * 3 + 2] = col[2];
     }
   }
+  let spkActive = false;
   function updateSparks(dt) {
+    if (!spkActive) return;
+    let any = false;
     for (let k = 0; k < SPK; k++) {
       if (spkLife[k] <= 0) continue;
+      any = true;
       spkLife[k] -= dt;
       spkVel[k * 3 + 1] -= 9 * dt;
       spkPos[k * 3] += spkVel[k * 3] * dt; spkPos[k * 3 + 1] += spkVel[k * 3 + 1] * dt; spkPos[k * 3 + 2] += spkVel[k * 3 + 2] * dt;
       spkVel[k * 3] *= 0.985; spkVel[k * 3 + 2] *= 0.985;
     }
     spkGeo.attributes.position.needsUpdate = true; spkGeo.attributes.aLife.needsUpdate = true; spkGeo.attributes.aCol.needsUpdate = true;
+    spkActive = any;
   }
   // poussière / fumée : sprites qui gonflent
   const dusts = [];
@@ -126,19 +138,24 @@ export function createPowers(ctx) {
     }
   }
   // lumière d'explosion (une seule, réutilisée)
-  const boomLight = new THREE.PointLight(0xff8a3a, 0, 40, 1.6); scene.add(boomLight);
+  const boomLight = new THREE.PointLight(0xff8a3a, 0, 40, 1.6); boomLight.visible = false; scene.add(boomLight);
 
   // ------------------------------------------------------------ destruction : cratère + végétation soufflée
-  const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+  const _m = new THREE.Matrix4(), _w = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
   function blowVegetation(x, z, r) {
     for (const mesh of vegetation) {
       let changed = false;
+      const A = mesh.instanceMatrix.array, wm = mesh.matrixWorld.elements, rr = (r + 1) * (r + 1);
       for (let i = 0; i < mesh.count; i++) {
+        // test rapide sur la translation brute (éléments 12..14), sans décomposer les milliers d'instances lointaines
+        const o = i * 16, tx = A[o + 12] * wm[0] + A[o + 14] * wm[8] + wm[12], tz = A[o + 12] * wm[2] + A[o + 14] * wm[10] + wm[14];
+        if ((tx - x) * (tx - x) + (tz - z) * (tz - z) > rr) continue;
         mesh.getMatrixAt(i, _m); _m.decompose(_p, _q, _s);
         if (_s.x < 0.01) continue;
-        const d = Math.hypot(_p.x - x, _p.z - z);
+        _w.copy(_p).applyMatrix4(mesh.matrixWorld);
+        const d = Math.hypot(_w.x - x, _w.z - z);
         if (d < r) {
-          if (mesh.userData.isTree && mesh.userData.isTrunk) { spawnDebris(_p.clone().setY(_p.y + 2), 6, 9, 0.2); emitSparks(_p.clone().setY(_p.y + 4), 20, 6, [0.5, 0.9, 0.3], 1.5); }
+          if (mesh.userData.isTree && mesh.userData.isTrunk) { spawnDebris(_w.clone().setY(_w.y + 2), 6, 9, 0.2); emitSparks(_w.clone().setY(_w.y + 4), 20, 6, [0.5, 0.9, 0.3], 1.5); }
           _s.setScalar(0.0001); _m.compose(_p, _q, _s); mesh.setMatrixAt(i, _m); changed = true;
         }
       }
@@ -159,8 +176,8 @@ export function createPowers(ctx) {
     spawnDebris(c, Math.round(6 + r * 4), 6 + r * 2.2, heat);
     emitSparks(c, Math.round(40 + r * 30), 8 + r * 3, color, 1.4);
     emitDust(c, Math.round(3 + r), r * 2.2);
-    boomLight.position.copy(c).y += 3; boomLight.intensity = 14 * r; boomLight.color.setRGB(color[0], color[1] * 0.9, color[2] + 0.1);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(color[0] * 2, color[1] * 2, color[2] * 2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    boomLight.visible = true; boomLight.position.copy(c).y += 3; boomLight.intensity = 14 * r; boomLight.color.setRGB(color[0], color[1] * 0.9, color[2] + 0.1);
+    const ring = new THREE.Mesh(RING_GEO, new THREE.MeshBasicMaterial({ color: new THREE.Color(color[0] * 2, color[1] * 2, color[2] * 2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.copy(c); scene.add(ring); rings.push({ m: ring, t: 0, r: r * 3.2 });
     const flash = new THREE.Sprite(glow(new THREE.Color(color[0] * 0.55, color[1] * 0.55, color[2] * 0.55))); flash.position.copy(c).y += 0.8; flash.scale.setScalar(r * 3.5); scene.add(flash); flashes.push({ s: flash, t: 0 });
     game.blast(c, r * 2.2, dmg, 18);
@@ -169,6 +186,7 @@ export function createPowers(ctx) {
     fx.shock(c, Math.min(1, r * 4 / Math.max(6, dist)));
   }
   const rings = [], flashes = [];
+  const RING_GEO = new THREE.RingGeometry(0.85, 1, 64);
 
   // ------------------------------------------------------------ COMÈTE
   const comets = [];
@@ -192,7 +210,7 @@ export function createPowers(ctx) {
       let hit = p.y < terrain.heightAt(p.x, p.z) + 0.2 || p.length() > DOME_R - 1 || c.life <= 0;
       for (const e of game._enemies) if (!e.dead && e.g.position.distanceTo(p) < 1.3) hit = true;
       const b = game.boss; if (b && !b.dead && b.g.position.distanceTo(p) < 2.3) hit = true;
-      if (hit) { explode(p.clone(), 2.6, { dmg: 3, color: [0.45, 0.9, 1.0], heat: 0.8 }); scene.remove(c.s); comets.splice(i, 1); }
+      if (hit) { explode(p.clone(), 2.6, { dmg: 3, color: [0.45, 0.9, 1.0], heat: 0.8 }); scene.remove(c.s); c.s.material.dispose(); c.s.children[0].material.dispose(); comets.splice(i, 1); }
     }
   }
 
@@ -358,14 +376,15 @@ export function createPowers(ctx) {
     else if (!S.beam) S.energy = Math.min(100, S.energy + 16 * dt);
     updateComets(dt); updateBeam(dt); updateDebris(dt); updateSparks(dt); updateDust(dt); updateFlightFx(dt);
     boomLight.intensity *= Math.pow(0.002, dt);
-    for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt * 2.4; const k = Math.min(1, r.t); r.m.scale.setScalar(0.4 + k * r.r); r.m.material.opacity = (1 - k); if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); rings.splice(i, 1); } }
+    boomLight.visible = boomLight.intensity > 0.05; // éteinte = retirée de l'éclairage de tous les matériaux (programmes préchauffés au chargement)
+    for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt * 2.4; const k = Math.min(1, r.t); r.m.scale.setScalar(0.4 + k * r.r); r.m.material.opacity = (1 - k); if (k >= 1) { scene.remove(r.m); r.m.material.dispose(); rings.splice(i, 1); } }
     for (let i = flashes.length - 1; i >= 0; i--) {
       const f = flashes[i]; f.t += dt;
       const life = f.bolt ? 0.35 : 0.3;
       f.s.material.opacity = Math.max(0, 1 - f.t / life) * (f.bolt ? (0.6 + 0.4 * Math.sin(f.t * 80)) : 1);
-      if (f.t > life) { scene.remove(f.s); if (f.extra) { scene.remove(f.extra); f.extra.geometry.dispose(); } if (f.s.geometry && f.bolt) f.s.geometry.dispose(); flashes.splice(i, 1); }
+      if (f.t > life) { scene.remove(f.s); if (f.extra) { scene.remove(f.extra); f.extra.geometry.dispose(); } if (f.bolt) f.s.geometry.dispose(); f.s.material.dispose(); flashes.splice(i, 1); }
     }
     ctx.ui.energy?.(S.energy, { comet: S.cds.comet / 0.35, storm: S.cds.storm / 8 });
   }
-  return { S, update, comet, setBeam, storm, toggleFlight, fly, explode, get flying() { return S.flying; } };
+  return { S, boomLight, update, comet, setBeam, storm, toggleFlight, fly, explode, get flying() { return S.flying; } };
 }

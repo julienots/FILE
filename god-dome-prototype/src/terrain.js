@@ -194,6 +194,7 @@ export function buildTerrain() {
     const ix = Math.round((pos.getX(i) + SIZE / 2) / STEP), iz = Math.round((pos.getZ(i) + SIZE / 2) / STEP);
     gridVert[iz * N + ix] = i;
   }
+  for (let k = 0; k < N * N; k++) if (gridVert[k] !== k) { console.warn('terrain: ordre de grille inattendu'); break; }
 
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
   const mesh = new THREE.Mesh(geo, mat);
@@ -232,8 +233,18 @@ export function buildTerrain() {
         if (h > 0.05) Bb.setXY(v, Math.max(h, Bb.getX(v) * Math.exp(-(now - Bb.getY(v)) * 0.35)), now);
       }
     }
-    P.needsUpdate = true; Cc.needsUpdate = true; Bb.needsUpdate = true; Mm.needsUpdate = true;
-    geo.computeVertexNormals();
+    // normales recalculées LOCALEMENT depuis la grille (différences centrées), et envoi au GPU des seules lignes modifiées :
+    // un cratère coûte ~0,3 ms au lieu de recalculer/renvoyer les 103 000 sommets du terrain.
+    const Nn = geo.attributes.normal;
+    const a0 = Math.max(1, i0 - 1), a1 = Math.min(N - 2, i1 + 1), b0 = Math.max(1, j0 - 1), b1 = Math.min(N - 2, j1 + 1);
+    for (let iz = b0; iz <= b1; iz++) for (let ix = a0; ix <= a1; ix++) {
+      const v = gridVert[iz * N + ix]; if (v < 0) continue;
+      const nx = heights[iz * N + ix - 1] - heights[iz * N + ix + 1], nz = heights[(iz - 1) * N + ix] - heights[(iz + 1) * N + ix], ny = 2 * STEP;
+      const il = 1 / Math.hypot(nx, ny, nz);
+      Nn.setXYZ(v, nx * il, ny * il, nz * il);
+    }
+    const first = b0 * N, count = (b1 - b0 + 1) * N;
+    for (const A of [P, Cc, Bb, Mm, Nn]) { A.addUpdateRange(first * A.itemSize, count * A.itemSize); A.needsUpdate = true; }
     return { i0, i1, j0, j1 };
   }
   function heightAt(x, z) {

@@ -73,6 +73,23 @@ La destruction est réelle : le relief, les collisions, l'herbe et la végétati
 - Un menu ☰ (Journal, Sac, Ciel, Commandes).
 - En mode Créateur : barre d'icônes compacte.
 
+## Fluidité et stabilité (v0.6)
+
+- **Cratères instantanés** : seules les lignes du terrain touchées sont recalculées et renvoyées au GPU, avec des normales locales. Une explosion coûte ~0,5 ms au lieu de 20 à 30 ms de calcul plus un gros transfert ; le Rayon et la Tempête ne saccadent plus.
+- **Shaders préchauffés au chargement** : premier cratère, lumière d'explosion, intérieur des maisons, herbe proche. Plus de gel d'une seconde à la première utilisation.
+- **Sans fuites mémoire** : géométries et matériaux des effets libérés. Le nombre d'objets GPU reste stable après des centaines d'explosions.
+- **Économie au repos** : particules et débris inactifs ne sont plus envoyés au GPU, et la lumière d'explosion comme celle de maison sont retirées de l'éclairage quand elles sont éteintes. L'interface n'écrit dans la page que ce qui change.
+- **Boucle plafonnée à 60 i/s** : un écran 120 Hz ne fait plus chauffer puis ralentir le téléphone.
+- **Résolution dynamique avec hystérésis** : elle ne fait plus de va-et-vient qui saccade. Un mode « éco » automatique (ombres une image sur deux, sans halo) prend le relais si le téléphone peine encore.
+- **Corrections de jeu** :
+  - le Rayon tient vraiment tant qu'on maintient le doigt (l'appui long ouvrait la roue) ;
+  - les commandes sont relâchées quand l'appli passe en arrière-plan ;
+  - reprise propre si Android retire le contexte graphique (au lieu d'un écran noir) ;
+  - la lave des cratères a des bords ronds (et non plus en escalier) ;
+  - les sbires du boss ne réapparaissent plus après sa mort ;
+  - les Ombrelins rétrécissent en mourant ;
+  - le compteur d'appels de dessin compte toute l'image.
+
 ## Direction artistique
 
 Style « jeu » assumé plutôt qu'un réalisme approximatif :
