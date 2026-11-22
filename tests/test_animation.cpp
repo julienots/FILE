@@ -866,9 +866,16 @@ TEST_CASE("interruptible transitions and weighted masks") {
     f.step(0.1f);
     CHECK(f.anim.currentState(e) == "B");
     f.step(0.2f);  // mid-fade toward B (1 s)
+    const float before = f.x(e);
+    CHECK(before > 1.0f);
+    CHECK(before < 6.0f);
     f.anim.setTrigger(f.scene, e, "hit");
     f.step(0.05f);
     CHECK(f.anim.currentState(e) == "C");  // interrupted the A -> B fade
+    // No jump: the B -> C fade (0.5 s) starts from the pose on screen, not from B's 10.
+    const float after = f.x(e);
+    CHECK(after < before + 0.5f);
+    CHECK(after > before - 2.5f);
     CHECK(f.anim.stats().interruptions == 1);
     for (int i = 0; i < 20; ++i) f.step(0.05f);
     CHECK(f.x(e) == doctest::Approx(-10.0f).epsilon(0.01));

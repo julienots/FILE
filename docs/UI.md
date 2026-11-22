@@ -140,8 +140,7 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 - Texte enrichi : images carrées d'un caractère (pas de taille réglable) ; l'italique est une inclinaison des glyphes (pas de police italique).
 - Boîtes stylées : le contour est dessiné sous le remplissage (un remplissage transparent laisse voir
   le contour) ; pas de rayon différent par coin.
-- Champs de texte : pas de répétition automatique des touches maintenues, pas d'annulation (Ctrl+Z),
-  pas de défilement horizontal d'un champ d'une ligne trop long ; arbres sans glisser-déposer des
+- Champs de texte : pas de défilement horizontal d'un champ d'une ligne trop long ; arbres sans glisser-déposer des
   éléments (les listes simples se réordonnent) ; listes : sélection multiple sans glisser (Ctrl / Maj + clic).
 - Rotation : les zones défilantes contenues dans un élément tourné découpent selon le rectangle non
   tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.

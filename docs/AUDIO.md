@@ -131,7 +131,7 @@ sources personnalisées). Sur Android, cocher *Microphone* dans l'export ajoute 
 
 - Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` (pas de
   traitement en direct du flux du micro) ; pas d'occlusion automatique (un script peut baisser le volume ou
-  ajouter un passe-bas selon un rayon) ; pas de bus créés par l'utilisateur (les six bus sont fixes).
+  ajouter un passe-bas selon un rayon) ; bus personnalisés : 8 au plus.
 - Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
   hauteur pendant une image).
 - Pas encore testé sur un appareil Android (sortie AAudio / OpenSL ES de miniaudio : phase 8).

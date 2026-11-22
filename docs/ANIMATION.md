@@ -256,9 +256,9 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
   (un gros maillage très déformé coûte), pas d'import FBX ; au plus 128
   articulations par maillage, 4 influences par sommet.
 - Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
-- Une transition interrompue repart de son état d'arrivée (la part de l'état de départ encore visible
-  disparaît) ; une seule transition par image.
-- Timeline : pas de poignées de tangentes à glisser (valeurs numériques) ; le copier-coller de clés
+- Une transition interrompue repart de la **pose affichée à cet instant** (figée puis fondue vers le
+  nouvel état, sans saut) ; une seule transition par image.
+- Timeline : le copier-coller de clés
   reste dans l'éditeur (pas de presse-papiers du système) ; les modifications d'un clip ou d'une machine à états ne passent pas
   par *Annuler* (elles sont enregistrées dans leur fichier avec *Enregistrer*).
 - L'aperçu de la timeline ne fonctionne qu'en mode Édition.

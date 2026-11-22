@@ -264,6 +264,12 @@ struct AnimationSystem::Runtime {
     bool fading = false;
     float fade = 0.0f, fadeDuration = 0.0f;
     bool fadeInterruptible = false;  // the running crossfade comes from an interruptible transition
+    // Interrupted crossfade: the new one starts from the pose shown at that moment (frozen values
+    // keyed by component / field / channel; pointers are only compared, never followed).
+    bool useSnapshot = false, snapshotPending = false;
+    Playback interruptedA, interruptedB;
+    std::unordered_map<u64, float> frozenProps;
+    std::unordered_map<u64, math::Vec4> frozenXforms;
     float stateTime = 0.0f;
     bool valid = false;  // false: missing assets (reported once)
 };
@@ -615,7 +621,18 @@ AnimationSystem::Runtime* AnimationSystem::runtime(Scene& scene, ecs::Entity e) 
 
 void AnimationSystem::enterState(Scene& scene, ecs::Entity e, Runtime& rt, const AnimatorState* state, float fade) {
     rt.fadeInterruptible = false;
-    if (fade > 0.0f && rt.current.clip) {
+    rt.useSnapshot = false;
+    if (fade > 0.0f && rt.fading) {  // interrupting a crossfade: blend from what is on screen now
+        rt.interruptedA = std::move(rt.current);
+        rt.interruptedB = std::move(rt.previous);
+        rt.previous = {};
+        rt.useSnapshot = rt.snapshotPending = true;
+        rt.frozenProps.clear();
+        rt.frozenXforms.clear();
+        rt.fading = true;
+        rt.fade = 0.0f;
+        rt.fadeDuration = fade;
+    } else if (fade > 0.0f && rt.current.clip) {
         rt.previous = std::move(rt.current);
         rt.fading = true;
         rt.fade = 0.0f;
@@ -772,6 +789,9 @@ void AnimationSystem::stepMachine(Scene& scene, ecs::Entity e, Runtime& rt, floa
         if (rt.fade >= rt.fadeDuration) {
             rt.fading = false;
             rt.previous = {};
+            rt.useSnapshot = false;
+            rt.frozenProps.clear();
+            rt.frozenXforms.clear();
         }
     }
     // Transitions (one per frame; while crossfading only when the running one is interruptible).
@@ -920,7 +940,46 @@ void AnimationSystem::applyLayer(Scene& scene, ecs::Entity e, Runtime& rt, const
     sample(rt.current, cur, false);
     if (fade < 1.0f) {
         // Crossfade: from the previous state's values (or the current value where it had none).
-        sample(rt.previous, prev, false);
+        if (rt.useSnapshot) {
+            // Values on screen when the crossfade was interrupted (captured once, then fixed).
+            auto capture = [&](const Pose& pose) {
+                for (const auto& p : pose.props) {
+                    const u64 k = Pose::key(p.comp, p.field, p.channel);
+                    if (!rt.frozenProps.count(k))
+                        if (auto v = readChannel(p.comp, *p.field, p.channel)) rt.frozenProps[k] = *v;
+                }
+                for (const auto& x : pose.xforms) {
+                    const u64 k = Pose::key(x.tr, nullptr, static_cast<i32>(x.path));
+                    if (!rt.frozenXforms.count(k)) rt.frozenXforms[k] = currentXform(*x.tr, x.path);
+                }
+            };
+            if (rt.snapshotPending) {
+                for (Runtime::Playback* pb : {&rt.interruptedA, &rt.interruptedB})
+                    if (pb->clip || !pb->motions.empty()) {
+                        sample(*pb, prev, false);
+                        capture(prev);
+                    }
+                rt.interruptedA = {};
+                rt.interruptedB = {};
+                rt.snapshotPending = false;
+            }
+            capture(cur);  // targets new to this state start from their current value
+            prev.clear();
+            for (const auto& p : cur.props)
+                if (auto it = rt.frozenProps.find(Pose::key(p.comp, p.field, p.channel)); it != rt.frozenProps.end()) {
+                    auto& q = prev.prop(p.comp, p.field, p.channel);
+                    q.sum = it->second;
+                    q.weight = 1.0f;
+                }
+            for (const auto& x : cur.xforms)
+                if (auto it = rt.frozenXforms.find(Pose::key(x.tr, nullptr, static_cast<i32>(x.path))); it != rt.frozenXforms.end()) {
+                    auto& q = prev.xform(x.tr, x.path);
+                    q.sum = it->second;
+                    q.weight = 1.0f;
+                }
+        } else {
+            sample(rt.previous, prev, false);
+        }
         for (auto& p : cur.props) {
             if (!p.weight) continue;
             const auto* o = prev.findProp(p.comp, p.field, p.channel);
