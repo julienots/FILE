@@ -1149,4 +1149,50 @@ TEST_CASE("style boxes: a different radius per corner covers the box exactly onc
         CHECK(area == doctest::Approx(200.0 * 120.0).epsilon(0.001));  // corner quads included: no gap, no overlap
     }
 }
+TEST_CASE("trees: drag and drop moves an item with its children before, inside or after another") {
+    const std::string start = "A;>A1;>A2;B;>B1;C";
+    UIItemListComponent t;
+    t.tree = true;
+    t.items = start;
+    i32 at = -1;
+    REQUIRE(UISystem::moveTreeItem(t, 3, 0, -1, &at));  // B (with B1) before A
+    CHECK(t.items == "B;>B1;A;>A1;>A2;C");
+    CHECK(at == 0);
+    t.items = start;
+    REQUIRE(UISystem::moveTreeItem(t, 5, 0, 0, &at));  // C into A, as its last child
+    CHECK(t.items == "A;>A1;>A2;>C;B;>B1");
+    CHECK(at == 3);
+    t.items = start;
+    CHECK_FALSE(UISystem::moveTreeItem(t, 0, 1, 0));  // A into its own child
+    CHECK(t.items == start);
+    REQUIRE(UISystem::moveTreeItem(t, 1, 3, 1, &at));  // A1 after B's branch, at B's depth
+    CHECK(t.items == "A;>A2;B;>B1;A1;C");
+    CHECK(at == 4);
+    t.items = start;
+    REQUIRE(UISystem::moveTreeItem(t, 0, 4, 0, &at));  // A's branch under B1: one level deeper each
+    CHECK(t.items == "B;>B1;>>A;>>>A1;>>>A2;C");
+    // A folded item stays folded at its new index.
+    t.items = start;
+    t.collapsed = "3";
+    REQUIRE(UISystem::moveTreeItem(t, 5, 0, -1));
+    CHECK(t.items == "C;A;>A1;>A2;B;>B1");
+    CHECK(t.collapsed == "4");
+
+    // With the pointer: drag C onto the middle of A's row.
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto e = f.element("Tree", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {300, 400});
+    auto& list = f.scene.registry().emplace<UIItemListComponent>(e);
+    list.tree = true;
+    list.reorderable = true;
+    list.items = start;
+    list.itemHeight = 40.0f;
+    f.ui.layout(f.scene, 800, 600);
+    f.ui.takeEvents();
+    f.pointers({{0, {150, 100 + 5 * 40 + 20}, true}});   // press on C (row 5)
+    f.pointers({{0, {150, 100 + 0 * 40 + 10}, true}});   // drag
+    f.pointers({{0, {150, 100 + 0 * 40 + 20}, true}});   // middle of A's row
+    f.pointers({{0, {150, 100 + 0 * 40 + 20}, false}});  // drop
+    CHECK(f.scene.registry().get<UIItemListComponent>(e).items == "A;>A1;>A2;>C;B;>B1");
+}
 }  // TEST_SUITE

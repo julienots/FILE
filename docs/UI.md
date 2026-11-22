@@ -142,8 +142,8 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
   le contour) ; rayon par coin : `cornerRadii` (haut-gauche, haut-droit, bas-droit, bas-gauche ; négatif =
   `cornerRadius`), pour des onglets arrondis en haut ou des bulles.
 - Champs de texte : un champ d'une ligne trop long **défile horizontalement** pour garder le curseur
-  visible (son texte reste découpé dans le champ) ; arbres sans glisser-déposer des
-  éléments (les listes simples se réordonnent) ; listes : sélection multiple sans glisser (Ctrl / Maj + clic).
+  visible (son texte reste découpé dans le champ) ; arbres : glisser-déposer d'un
+  élément avec ses enfants (quart haut = avant, milieu = dedans, quart bas = après ; replis conservés) ; listes : sélection multiple sans glisser (Ctrl / Maj + clic).
 - Rotation : les zones défilantes contenues dans un élément tourné découpent selon le rectangle non
   tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent

@@ -642,7 +642,7 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
             const bool picker = pressedIt != m_pressed.end() && reg.has<UIColorPickerComponent>(pressedIt->second);
             const bool slider = pressedIt != m_pressed.end() && (reg.has<UISliderComponent>(pressedIt->second) || picker);
             const auto* reorderList = pressedIt != m_pressed.end() ? reg.tryGet<UIItemListComponent>(pressedIt->second) : nullptr;
-            const bool reordering = reorderList && reorderList->reorderable && !reorderList->tree;  // drags move items (wheel scrolls)
+            const bool reordering = reorderList && reorderList->reorderable;  // drags move items (wheel scrolls)
             if (!ps.dragging && !ps.scrollView.isNull() && !slider && !reordering && math::length(p.position - ps.down) > 12.0f) {
                 ps.dragging = true;  // a drag scrolls the view and cancels the press inside it
                 if (pressedIt != m_pressed.end()) {
@@ -675,6 +675,18 @@ void UISystem::processInput(Scene& scene, std::span<const UIPointer> pointers) {
                         if (el && n > 0 && p.position.y < el->rect.y + tabs->headerHeight * scale)
                             selectOption(scene, pressed, std::clamp(static_cast<i32>((p.position.x - el->rect.x) / std::max(1.0f, el->rect.z) * static_cast<float>(n)), 0,
                                                                     static_cast<i32>(n) - 1));
+                    } else if (auto* tl = reg.tryGet<UIItemListComponent>(pressed); tl && tl->reorderable && tl->tree &&
+                                                                                    listRowAt(pressed, ps.down) >= 0 && listRowAt(pressed, p.position) >= 0 &&
+                                                                                    listRowAt(pressed, ps.down) != listRowAt(pressed, p.position)) {
+                        // Tree: before / inside / after the row under the pointer (quarter, half, quarter).
+                        const Element* el = elementOf(pressed);
+                        const float sc = el ? std::max(el->scale, 0.01f) : 1.0f, rowH = std::max(tl->itemHeight * sc, 1.0f);
+                        const Vec2 lp = el ? localPoint(*el, p.position) : p.position;
+                        const float within = el ? std::fmod(lp.y - el->rect.y + tl->scroll * sc, rowH) / rowH : 0.5f;
+                        const i32 section = within < 0.25f ? -1 : within > 0.75f ? 1 : 0;
+                        i32 to = 0;
+                        if (moveTreeItem(*tl, listRowAt(pressed, ps.down), listRowAt(pressed, p.position), section, &to))
+                            m_events.push_back({UIEventType::ValueChanged, pressed, static_cast<float>(to), {}});
                     } else if (auto* list = reg.tryGet<UIItemListComponent>(pressed); list && list->reorderable && !list->tree &&
                                                                                  listRowAt(pressed, ps.down) >= 0 && listRowAt(pressed, p.position) >= 0 &&
                                                                                  listRowAt(pressed, ps.down) != listRowAt(pressed, p.position)) {
@@ -1157,6 +1169,70 @@ std::vector<UISystem::ListRow> UISystem::listRows(const UIItemListComponent& lis
         shown.push_back(std::move(r));
     }
     return shown;
+}
+
+bool UISystem::moveTreeItem(UIItemListComponent& list, i32 from, i32 target, i32 section, i32* newIndex) {
+    std::vector<std::string> items = splitList(list.items);
+    const i32 n = static_cast<i32>(items.size());
+    if (from < 0 || from >= n || target < 0 || target >= n) return false;
+    auto depth = [&](i32 i) {
+        i32 d = 0;
+        while (d < static_cast<i32>(items[static_cast<usize>(i)].size()) && items[static_cast<usize>(i)][static_cast<usize>(d)] == '>') ++d;
+        return d;
+    };
+    auto subtreeEnd = [&](i32 i) {  // one past the last descendant
+        i32 j = i + 1;
+        while (j < n && depth(j) > depth(i)) ++j;
+        return j;
+    };
+    const i32 end = subtreeEnd(from);
+    if (target >= from && target < end) return false;  // into itself or its own branch
+    const i32 newDepth = section == 0 ? depth(target) + 1 : depth(target);
+    const i32 delta = newDepth - depth(from);
+    // Old indices in their new order.
+    std::vector<i32> order;
+    for (i32 i = 0; i < n; ++i)
+        if (i < from || i >= end) order.push_back(i);
+    const i32 insertAfterOld = section < 0 ? -1 : section == 0 ? subtreeEnd(target) - 1 : subtreeEnd(target) - 1;
+    usize pos = 0;
+    if (section < 0) {
+        pos = static_cast<usize>(std::find(order.begin(), order.end(), target) - order.begin());
+    } else {
+        pos = static_cast<usize>(std::find(order.begin(), order.end(), insertAfterOld) - order.begin()) + 1;
+    }
+    std::vector<i32> moved;
+    for (i32 i = from; i < end; ++i) moved.push_back(i);
+    order.insert(order.begin() + static_cast<std::ptrdiff_t>(pos), moved.begin(), moved.end());
+    std::vector<i32> newOf(static_cast<usize>(n));
+    std::string joined;
+    for (usize k = 0; k < order.size(); ++k) {
+        const i32 old = order[k];
+        newOf[static_cast<usize>(old)] = static_cast<i32>(k);
+        std::string label = items[static_cast<usize>(old)];
+        if (old >= from && old < end) {
+            const i32 d = depth(old);
+            label = std::string(static_cast<usize>(std::max(0, d + delta)), '>') + label.substr(static_cast<usize>(d));
+        }
+        joined += (k ? ";" : "") + label;
+    }
+    list.items = joined;
+    // Folded items keep their state under their new index.
+    std::string folded, cur;
+    for (char c : list.collapsed + ",") {
+        if (c == ',') {
+            if (!cur.empty()) {
+                const i32 old = std::atoi(cur.c_str());
+                if (old >= 0 && old < n) folded += (folded.empty() ? "" : ",") + std::to_string(newOf[static_cast<usize>(old)]);
+            }
+            cur.clear();
+        } else if (c != ' ') {
+            cur += c;
+        }
+    }
+    list.collapsed = folded;
+    list.selected = newOf[static_cast<usize>(from)];
+    if (newIndex) *newIndex = list.selected;
+    return true;
 }
 
 i32 UISystem::listRowAt(ecs::Entity e, Vec2 position) const {

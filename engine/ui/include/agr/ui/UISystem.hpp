@@ -126,6 +126,10 @@ public:
     void setModifiers(bool ctrl, bool shift) { m_ctrl = ctrl, m_shift = shift; }
     /// Indices of a list's selection ("1,4,5" -> {1, 4, 5}; single selection: {selected}).
     static std::vector<i32> listSelection(const UIItemListComponent& list);
+    /// Tree drag and drop: moves item `from` (with its children) before (section -1), inside as the
+    /// last child (0) or after (1) item `target`; false when refused (into its own branch).
+    /// Folded items stay folded. Returns the new index of the moved item through `newIndex`.
+    static bool moveTreeItem(UIItemListComponent& list, i32 from, i32 target, i32 section, i32* newIndex = nullptr);
     /// Item index of a list under a point (UI pixels), -1 outside its rows.
     i32 listRowAt(ecs::Entity list, math::Vec2 position) const;
     /// Caret movement and editing keys of the focused field (shift extends the selection).
