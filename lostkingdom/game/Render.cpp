@@ -333,6 +333,16 @@ void Game::renderWorld(float dt) {
             renderer.submit(d);
         } else if (p.kind == ProjKind::Boulder && boulderMesh) {
             DrawItem d; d.mesh = boulderMesh.get(); d.model = mat4::trs(p.pos, quat::euler(realTime * 3, realTime * 2, 0), vec3(p.radius * 1.2f)); renderer.submit(d);
+        } else if (p.kind != ProjKind::Arrow && p.kind != ProjKind::Web) {
+            // 3.0.1 spells fly as orbs of energy: a white-hot core, a swirling surface and a glowing shell
+            vec3 ec = elementColor(p.elem);
+            float r = std::max(0.22f, p.radius * 0.9f) * (p.kind == ProjKind::Fireball ? 1.35f : 1.f);
+            FxItem f; f.shape = FX_SPHERE; f.style = 2; f.color = vec4(lerp(ec, vec3(1.f), 0.45f), 1); f.color2 = vec4(ec, 1);
+            f.age = 0.5f; f.time = realTime; f.seed = (float)((size_t)&p % 97); f.intensity = 2.6f;
+            f.model = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, realTime * 3.f), vec3(r));
+            renderer.submitFx(f);
+            f.style = 0; f.intensity = 1.4f; f.model = mat4::trs(p.pos, quat::axisAngle({0, 1, 0}, -realTime * 2.f), vec3(r * 1.9f));
+            renderer.submitFx(f);
         }
     });
     // pickups (loot bags glow with their rarity colour)
@@ -372,6 +382,7 @@ void Game::renderWorld(float dt) {
         PointLight pl; pl.pos = pc().pos + vec3(0, 1.1f, 0); pl.radius = 4.f + 4.f * heroAura; pl.color = vec3(1.f, 0.78f, 0.35f) * (1.2f + 1.8f * heroAura); pl.flicker = 0.3f;
         lights.push_back({0.f, pl});
     }
+    renderVfx(lights);   // 3.0.1 shader effects of the powers (they light their surroundings)
     // nearest lights win (renderer budget)
     std::sort(lights.begin(), lights.end(), [](auto& a, auto& b) { return a.first < b.first; });
     for (size_t i = 0; i < lights.size() && i < 8; i++) renderer.addLight(lights[i].second);

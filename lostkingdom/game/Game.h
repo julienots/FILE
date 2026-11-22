@@ -710,6 +710,29 @@ public:
     bool heroHasPowers() const;
     void castHeroPower(int slot);
     void updateHeroAbilities(float dt);
+    // 3.0.1 shader effects of the powers and spells (Vfx.cpp): magic circles, shockwaves, beams, pillars,
+    // vortices, explosion / shield / orb spheres, blade slashes, burning ground; each one lights its surroundings
+    struct Vfx {
+        int shape = 0, style = 0;
+        vec3 pos, dir{0, 1, 0};
+        float radius = 1, length = 1, age = 0, life = 1, intensity = 1.35f, seed = 0, grow = 0, yaw = 0, tilt = 0;
+        vec3 col{1, 1, 1}, col2{1, 1, 1};
+        Entity follow = NullEntity; vec3 followOff{0, 0, 0};
+        float light = 1.f;   // point light strength (0 = none)
+    };
+    std::vector<Vfx> vfxList;
+    Vfx& vfxAdd(int shape, int style, vec3 pos, vec3 col, vec3 col2, float radius, float life);
+    void vfxShockwave(vec3 p, vec3 col, float radius, float life = 0.7f);
+    void vfxCircle(vec3 p, vec3 col, float radius, float life = 1.2f, Entity follow = NullEntity, vec3 dir = vec3(0, 1, 0));
+    void vfxBeam(vec3 a, vec3 b, vec3 col, float width, float life = 0.6f);
+    void vfxPillar(vec3 p, vec3 col, float radius, float height, float life = 1.f);
+    void vfxVortex(vec3 p, vec3 col, float radius, float height, float life = 1.f, Entity follow = NullEntity);
+    void vfxSphere(vec3 p, vec3 col, vec3 col2, float radius, float life, int style, float grow = 0, Entity follow = NullEntity);
+    void vfxSlash(vec3 p, float yaw, float tilt, vec3 col, float radius, float life = 0.32f);
+    void vfxGround(vec3 p, vec3 col, vec3 col2, float radius, float life);
+    void vfxRays(vec3 p, vec3 col, float radius, float life);
+    void updateVfx(float dt);
+    void renderVfx(std::vector<std::pair<float, PointLight>>& lights);
     bool heroJump();
     void heroFlightPhysics(Character& c, float dt);
     void drawHeroWheel();

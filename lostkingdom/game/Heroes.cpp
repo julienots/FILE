@@ -76,6 +76,10 @@ void Game::castHeroPower(int slot) {
             if (tc && i == 0) dir = normalize(tc->pos + vec3(0, tc->height * 0.55f, 0) - chest);
             fireProjectile(player, ProjKind::Arrow, chest + fwd * 0.4f, dir, 32.f, power, Element::Physical, Team::Player, i == 0 ? t : NullEntity);
         }
+        // 3.0.1 a rune flares at her hand and a violet wind slash leaves with the blades
+        vfxCircle(chest + fwd * 0.7f, vec3(0.62f, 0.32f, 1.f), 0.75f, 0.45f, NullEntity, fwd);
+        vfxSlash(chest + fwd * 0.6f - vec3(0, 0.2f, 0), c.yaw, 0.35f, vec3(0.62f, 0.32f, 1.f), 2.4f, 0.3f);
+        vfxSlash(chest + fwd * 0.6f - vec3(0, 0.2f, 0), c.yaw, -0.25f, vec3(0.4f, 0.8f, 1.f), 2.0f, 0.34f);
         play("bow", 0.6f, 1.6f);
         break;
     }
@@ -88,11 +92,19 @@ void Game::castHeroPower(int slot) {
         vec3 tmp = to; collideStatic(tmp, c.radius, c.pos.y); to = tmp; to.y = groundAt(to.x, to.z);
         for (int i = 0; i < 12; i++) particles.magicTrail(lerp(from, to, i / 11.f) + vec3(0, 1.f, 0), vec3(0.35f, 0.25f, 0.6f), 1.2f);
         particles.smoke(from + vec3(0, 0.8f, 0), 1.2f, 0.2f, vec3(0.15f, 0.12f, 0.2f));
+        // 3.0.1 a shadow vortex swallows her, a violet streak, and she bursts out of a dark star behind the target
+        vfxVortex(from, vec3(0.62f, 0.32f, 1.f), 1.1f, 2.8f, 0.7f);
+        vfxBeam(from + vec3(0, 1.f, 0), to + vec3(0, 1.f, 0), vec3(0.62f, 0.32f, 1.f), 0.22f, 0.32f);
+        vfxSphere(to + vec3(0, 1.f, 0), vec3(0.8f, 0.5f, 1.f), vec3(0.25f, 0.05f, 0.45f), 0.8f, 0.45f, 1, 1.6f);
+        vfxCircle(to, vec3(0.62f, 0.32f, 1.f), 1.6f, 0.7f);
         c.pos = to; c.vel = vec3(0); c.invuln = 0.5f;
         if (tc) {
             c.yaw = std::atan2(tc->pos.x - c.pos.x, tc->pos.z - c.pos.z);
             c.vis.anim.play(&clip(C_DG_HEAVY), 1.4f, false, 0.04f);
             dealDamage(player, t, power * (stealthT > 0 ? 1.5f : 1.f), Element::Shadow, normalize(tc->pos - c.pos), 45, true, true);
+            vec3 hp = tc->pos + vec3(0, tc->height * 0.55f, 0);   // a crossed slash on the target
+            vfxSlash(hp - fwd * 0.4f, c.yaw, 0.8f, vec3(0.62f, 0.32f, 1.f), 2.2f, 0.3f);
+            vfxSlash(hp - fwd * 0.4f, c.yaw + 0.2f, -0.8f, vec3(0.9f, 0.6f, 1.f), 2.2f, 0.34f);
             hitStop = std::max(hitStop, 0.08f);
         }
         play("shadow", 0.8f);
@@ -102,6 +114,10 @@ void Game::castHeroPower(int slot) {
     case HeroPower::SmokeBomb: {
         for (int i = 0; i < 4; i++) particles.smoke(c.pos + vec3(particles.rng.range(-1.5f, 1.5f), 0.5f, particles.rng.range(-1.5f, 1.5f)), 2.2f, 0.25f, vec3(0.42f, 0.42f, 0.46f));
         particles.shockwave(c.pos, vec3(0.6f, 0.6f, 0.65f), 5.5f);
+        // 3.0.1 a dome of smoke swells around her, a violet circle seals it
+        vfxSphere(c.pos + vec3(0, 0.4f, 0), vec3(0.55f, 0.5f, 0.7f), vec3(0.35f, 0.2f, 0.6f), 1.8f, 1.6f, 0, 1.6f);
+        vfxShockwave(c.pos, vec3(0.7f, 0.6f, 0.9f), 5.5f, 0.75f);
+        vfxCircle(c.pos, vec3(0.62f, 0.32f, 1.f), 3.2f, 1.5f);
         reg.each<Character>([&](Entity e, Character& o) {
             if (o.team != Team::Enemy || o.dead || distXZ(o.pos, c.pos) > 5.5f) return;
             o.status.stun = std::max(o.status.stun, 2.f);
@@ -117,6 +133,11 @@ void Game::castHeroPower(int slot) {
         vec3 dir = tc ? normalize(tc->pos + vec3(0, tc->height * 0.5f, 0) - chest) : fwd;
         vec3 end = chest + dir * 22.f;
         particles.lightningArc(chest + dir * 0.5f, end, vec3(1.f, 0.9f, 0.5f));
+        // 3.0.1 a golden rune circle opens before her hands and a beam of starlight tears through it
+        vfxCircle(chest + dir * 1.0f, vec3(1.f, 0.78f, 0.32f), 1.4f, 0.8f, NullEntity, dir);
+        vfxBeam(chest + dir * 1.0f, end, vec3(1.f, 0.78f, 0.32f), 0.6f, 0.7f);
+        vfxSphere(end, vec3(1.f, 0.95f, 0.7f), vec3(1.f, 0.55f, 0.15f), 1.2f, 0.55f, 1, 1.2f);
+        vfxSphere(chest + dir * 1.0f, vec3(1.f, 1.f, 0.9f), vec3(1.f, 0.78f, 0.32f), 0.5f, 0.5f, 2);
         for (int i = 0; i < 14; i++) particles.magicTrail(lerp(chest, end, i / 13.f), vec3(1.f, 0.85f, 0.4f), 1.2f);
         reg.each<Character>([&](Entity e, Character& o) {
             if (o.team != Team::Enemy || o.dead) return;
@@ -134,6 +155,8 @@ void Game::castHeroPower(int slot) {
         else { c.vel.y = 10.f; c.grounded = false; c.vel.x = fwd.x * 5.f; c.vel.z = fwd.z * 5.f; }
         c.invuln = 1.f;
         particles.magicBurst(chest, vec3(1.f, 0.6f, 0.25f), 1.f, 24);
+        vfxCircle(c.pos, vec3(1.f, 0.55f, 0.2f), 2.2f, 0.9f);                                      // 3.0.1 take-off rune
+        vfxSphere(chest, vec3(1.f, 0.8f, 0.4f), vec3(1.f, 0.4f, 0.1f), 1.2f, 1.2f, 0, 0.f, player);   // burning aura while she falls
         play("fireball", 0.8f, 0.8f);
         break;
     }
@@ -146,6 +169,13 @@ void Game::castHeroPower(int slot) {
         floatText(c.pos + vec3(0, 2.4f, 0), "+" + std::to_string((int)heal), vec3(0.5f, 1.f, 0.6f));
         particles.shockwave(c.pos, vec3(1.f, 0.85f, 0.4f), 8.f);
         particles.magicBurst(chest, vec3(1.f, 0.9f, 0.5f), 2.4f, 60);
+        // 3.0.1 a sun circle on the ground, a column of light, rays and two rings of fire rolling outwards
+        vfxCircle(c.pos, vec3(1.f, 0.78f, 0.32f), 8.f, 1.6f);
+        vfxPillar(c.pos, vec3(1.f, 0.78f, 0.32f), 1.8f, 14.f, 1.1f);
+        vfxRays(c.pos, vec3(1.f, 0.78f, 0.32f), 9.f, 0.9f);
+        vfxShockwave(c.pos, vec3(1.f, 0.7f, 0.25f), 8.5f, 0.8f);
+        vfxShockwave(c.pos, vec3(1.f, 0.9f, 0.5f), 6.f, 1.1f);
+        vfxSphere(chest, vec3(1.f, 1.f, 0.85f), vec3(1.f, 0.6f, 0.2f), 1.f, 0.55f, 1, 2.2f);
         play("holy", 1.f, 0.8f);
         addShake(0.35f);
         break;
@@ -188,6 +218,12 @@ void Game::updateHeroAbilities(float dt) {
         });
         particles.explosion(c.pos, 1.2f, vec3(1.f, 0.6f, 0.25f));
         particles.shockwave(c.pos, vec3(1.f, 0.7f, 0.3f), 6.f);
+        // 3.0.1 the impact: a fireball, a ring of flame, the ground cracked and glowing, a pillar of fire
+        vfxSphere(c.pos + vec3(0, 0.8f, 0), vec3(1.f, 0.85f, 0.5f), vec3(1.f, 0.35f, 0.05f), 1.5f, 0.75f, 1, 1.8f);
+        vfxShockwave(c.pos, vec3(1.f, 0.55f, 0.15f), 9.f, 0.8f);
+        vfxGround(c.pos, vec3(1.f, 0.6f, 0.15f), vec3(0.8f, 0.15f, 0.02f), 6.5f, 3.f);
+        vfxPillar(c.pos, vec3(1.f, 0.5f, 0.12f), 2.2f, 12.f, 0.9f);
+        vfxRays(c.pos, vec3(1.f, 0.6f, 0.2f), 7.f, 0.7f);
         particles.dust(c.pos, 2.f);
         play("explosion", 1.f);
         addShake(0.6f); hitStop = std::max(hitStop, 0.1f);

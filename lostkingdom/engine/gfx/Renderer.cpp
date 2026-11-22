@@ -137,6 +137,7 @@ bool Renderer::init(const GraphicsSettings& s) {
     ok &= particleAlpha.build("particles", U + shaders::PARTICLE_VS, U + L + shaders::PARTICLE_FS, "");
     ok &= particleAdd.build("particlesAdd", U + shaders::PARTICLE_VS, U + L + shaders::PARTICLE_FS, "#define ADDITIVE\n");
     ok &= ribbon.build("ribbon", U + shaders::RIBBON_VS, U + shaders::RIBBON_FS, "");
+    ok &= fxShader.build("fx", U + shaders::FX_VS, U + shaders::FX_FS, "");
     ok &= buildFS(bloomDown, "bloomDown", shaders::BLOOM_DOWN_FS);
     ok &= buildFS(bloomUp, "bloomUp", shaders::BLOOM_UP_FS);
     ok &= buildFS(composite, "composite", shaders::COMPOSITE_FS);
@@ -148,6 +149,8 @@ bool Renderer::init(const GraphicsSettings& s) {
     for (Shader* sh : {&water, &lava, &particleAlpha, &particleAdd}) { sh->use(); sh->set("uShadowMap", 0); sh->set("uNoiseTex", 1); sh->set("uAtlas", 4); }
     sky.use(); sky.set("uNoiseTex", 1);
     ribbon.use(); ribbon.set("uNoiseTex", 1);
+    fxShader.use(); fxShader.set("uNoiseTex", 1);
+    buildFxMeshes();
     ui.use(); ui.set("uAtlas", 0); ui.set("uFont", 1); ui.set("uImage", 2);
 
     // Shader warm-up: compile every variant used in-game now to avoid hitches later.
@@ -246,7 +249,8 @@ void Renderer::shutdown() {
     destroyTargets();
     for (auto& kv : litVariants) kv.second.destroy();
     litVariants.clear();
-    for (Shader* s : {&water, &lava, &sky, &particleAlpha, &particleAdd, &ribbon, &bloomDown, &bloomUp, &composite, &fxaa, &blit, &ui, &ssao}) s->destroy();
+    for (Shader* s : {&water, &lava, &sky, &particleAlpha, &particleAdd, &ribbon, &bloomDown, &bloomUp, &composite, &fxaa, &blit, &ui, &ssao, &fxShader}) s->destroy();
+    for (Mesh& m : fxMesh) m.destroy();
     noiseTex.destroy(); terrainTex.destroy(); terrainNrm.destroy(); particleTex.destroy();
     quadMesh.destroy(); fsMesh.destroy();
     if (frameUbo) glDeleteBuffers(1, &frameUbo);
@@ -255,8 +259,29 @@ void Renderer::shutdown() {
 
 void Renderer::begin(const Camera& cam, const Environment& e) {
     camera = cam; env = e;
-    items.clear(); waters.clear(); ribbons.clear(); lights.clear();
+    items.clear(); waters.clear(); ribbons.clear(); lights.clear(); fxItems.clear();
     stats = RenderStats();
+}
+
+// 3.0.1 the procedural shapes of the shader effects (positions only: the FX shader derives the rest)
+void Renderer::buildFxMeshes() {
+    auto V = [](float x, float y, float z) { Vertex v{}; v.px = x; v.py = y; v.pz = z; v.ny = 127; v.r = v.g = v.b = v.a = 255; return v; };
+    auto grid = [&](Mesh& m, int nu, int nv, auto pos, bool wrapU) {
+        std::vector<Vertex> vs; std::vector<uint32_t> id;
+        for (int j = 0; j <= nv; j++) for (int i = 0; i <= nu; i++) { vec3 p = pos((float)i / nu, (float)j / nv); vs.push_back(V(p.x, p.y, p.z)); }
+        for (int j = 0; j < nv; j++) for (int i = 0; i < nu; i++) {
+            uint32_t a = j * (nu + 1) + i, b = a + 1, c = a + (nu + 1), d = c + 1;
+            id.insert(id.end(), {a, c, b, b, c, d});
+        }
+        (void)wrapU;
+        m.upload(vs, id);
+    };
+    const float T = 6.2831853f;
+    grid(fxMesh[FX_DISC], 64, 10, [&](float u, float v) { float a = u * T, r = v; return vec3(std::cos(a) * r, 0.f, std::sin(a) * r); }, true);
+    grid(fxMesh[FX_CYLINDER], 32, 10, [&](float u, float v) { float a = u * T; return vec3(std::cos(a), v, std::sin(a)); }, true);
+    grid(fxMesh[FX_SPHERE], 32, 18, [&](float u, float v) { float a = u * T, b = (v - 0.5f) * 3.14159265f; return vec3(std::cos(a) * std::cos(b), std::sin(b), std::sin(a) * std::cos(b)); }, true);
+    grid(fxMesh[FX_ARC], 40, 4, [&](float u, float v) { float a = u * 3.14159265f, r = 0.7f + v * 0.3f; return vec3(std::cos(a) * r, 0.f, std::sin(a) * r); }, false);
+    grid(fxMesh[FX_CONE], 32, 10, [&](float u, float v) { float a = u * T, r = 0.25f + 0.75f * v; return vec3(std::cos(a) * r, v, std::sin(a) * r); }, true);
 }
 
 void Renderer::updateFrameUBO(const Camera& cam, const Environment& e, const mat4& sm, bool withShadow) {
@@ -492,6 +517,22 @@ void Renderer::render(ParticleSystem* particles) {
     glBlendFunc(GL_ONE, GL_ONE);
     ribbon.use();
     for (auto& r : ribbons) { ribbon.set("uIntensity", r.intensity / hdrScale); r.m->draw(); stats.drawCalls++; }
+    // 3.0.1 shader effects: additive, depth-tested, both faces
+    if (!fxItems.empty()) {
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_FALSE);
+        fxShader.use();
+        noiseTex.bind(1);
+        for (const FxItem& f : fxItems) {
+            if (f.shape < 0 || f.shape >= FX_SHAPES) continue;
+            fxShader.set("uModel", f.model);
+            fxShader.set("uShape", f.shape); fxShader.set("uStyle", f.style);
+            fxShader.set("uCol", f.color); fxShader.set("uCol2", f.color2);
+            fxShader.set("uP", vec4(f.age, f.intensity / hdrScale, f.seed, f.time));
+            fxMesh[f.shape].draw();
+            stats.drawCalls++;
+        }
+    }
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glEnable(GL_CULL_FACE);

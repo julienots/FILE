@@ -6,12 +6,51 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.0 (versionCode 45), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.9.1 : elle s'installe par-dessus). SHA-256 : `bcce618f6203acf5a54951e94ad21924a2c30a4d0cf3a00c9899d0b1efeda561`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.1 (versionCode 46), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.0 : elle s'installe par-dessus). SHA-256 : `1426e21931eb63e515b0f5d8f0c4d1ddf068038a72b53839b0e96222dbce5432`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.0.1 (pouvoirs spectaculaires : vrais effets en shader)
+
+- **Nouveau moteur d'effets** : chaque pouvoir dessine maintenant de vraies formes 3D animées par un shader, qui brillent avec le bloom et éclairent le décor et les personnages autour d'elles. Les formes disponibles :
+  - ondes de choc ;
+  - cercles magiques à runes qui se tracent puis tournent, avec un hexagramme ;
+  - rayons d'énergie à cœur blanc ;
+  - piliers de lumière et tornades en spirale ;
+  - sphères d'explosion qui se consument ;
+  - boucliers en dôme ;
+  - arcs de lame ;
+  - sol fissuré et brûlant ;
+  - rayons de soleil.
+- **Kaede** :
+  - Shuriken : une rune s'ouvre devant sa main et deux lames de vent violettes partent avec les shurikens ;
+  - Pas de l'ombre : une tornade d'ombre l'avale, une traînée violette, une étoile noire qui éclate derrière la cible, puis une double coupe en croix ;
+  - Bombe fumigène : un dôme de fumée qui gonfle, scellé par un cercle de runes.
+  - Dans l'ombre, elle porte un voile violet.
+- **Astra** :
+  - Rayon stellaire : un cercle de runes doré s'ouvre devant ses mains, traversé par un rayon de lumière, avec une explosion à l'impact ;
+  - Onde solaire : cercle solaire au sol, colonne de lumière, rayons et deux anneaux de feu ;
+  - Frappe météore : aura de feu pendant la chute, puis boule de feu, anneau de flammes, sol fissuré qui rougeoie quelques secondes et pilier de feu.
+  - En vol, elle porte une aura dorée et projette un cercle solaire au sol sous elle.
+- **Sorts de l'Errant** :
+  - rune devant la main pour les projectiles ;
+  - cercle et onde pour les sorts de zone, avec une forme selon l'école : sol en feu, dôme de glace, tornade de nature, rayons ;
+  - colonne de lumière pour les soins ;
+  - vrai dôme visible pour l'Égide ;
+  - tornade et traînée pour la ruée ;
+  - arcs et éclats pour l'éclair en chaîne ;
+  - une colonne de lumière par éclair pour le tonnerre ;
+  - rayon pour le drain.
+- **Projectiles magiques** (les tiens et ceux des ennemis) : ce sont maintenant des orbes d'énergie, avec un cœur brillant et une coque qui tourbillonne.
+- **Attaques lourdes, chargées et fin de combo** : un croissant lumineux reste dans l'air, aux couleurs de l'élément de l'arme.
+- **Vérifié sur ordinateur seulement** :
+  - nouveau scénario `powers` : 12 pouvoirs déclenchés au crépuscule, en captures ;
+  - scénario `heroes` toujours réussi ;
+  - 2 985 tests passés.
+- **Pas testé sur téléphone.** Chaque effet ne coûte qu'un appel de dessin et quelques milliers de triangles, mais un combat chargé peut en empiler beaucoup (96 au maximum) ; les plus récents remplacent les plus anciens.
 
 ### Nouveautés 3.0.0 (Monts Titans, cités aux ruelles tortueuses, forteresses de la Légion, château et armée)
 

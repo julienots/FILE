@@ -1034,6 +1034,151 @@ void main() {
 }
 )";
 
+
+// ----------------------------------------------------------------------------------------------
+// 3.0.1 shader effects (powers, spells, impacts): procedural meshes (disc, cylinder, sphere, arc, cone)
+// shaded with animated noise, fresnel and procedural runes; additive HDR (they feed the bloom).
+// uShape: 0 disc (xz, r <= 1), 1 cylinder (y 0..1, r 1), 2 sphere (r 1), 3 arc (xz, r 0.7..1, angle 0..pi), 4 cone
+// uP: x age 0..1, y intensity, z seed, w seconds since the effect started
+const char* FX_VS = R"(
+in vec3 aPos;
+uniform mat4 uModel;
+uniform int uShape;
+out vec3 vLocal;
+out vec3 vWorld;
+out vec3 vNrm;
+void main() {
+    vLocal = aPos;
+    vec4 w = uModel * vec4(aPos, 1.0);
+    vWorld = w.xyz;
+    vec3 nl = aPos;
+    if (uShape == 1 || uShape == 4) nl.y = 0.0;
+    if (uShape == 0 || uShape == 3) nl = vec3(0.0, 1.0, 0.0);
+    vNrm = normalize(mat3(uModel) * nl + vec3(1e-5));
+    gl_Position = uViewProj * w;
+}
+)";
+
+const char* FX_FS = R"(
+in vec3 vLocal;
+in vec3 vWorld;
+in vec3 vNrm;
+uniform sampler2D uNoiseTex;
+uniform vec4 uCol;    // core colour, a: opacity
+uniform vec4 uCol2;   // edge colour
+uniform vec4 uP;      // age 0..1, intensity, seed, time (s)
+uniform int uShape;
+uniform int uStyle;
+out vec4 fragColor;
+float nz(vec2 uv) { return texture(uNoiseTex, uv).r; }
+float fbmN(vec2 uv) { return nz(uv) * 0.6 + nz(uv * 2.3 + 0.37) * 0.3 + nz(uv * 5.1 + 0.71) * 0.1; }
+float line(vec2 p, vec2 a, vec2 b, float w) { vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return exp(-pow(length(pa - ba * h) / w, 2.0)); }
+void main() {
+    float age = uP.x, t = uP.w, seed = uP.z;
+    vec3 V = normalize(uCamPos.xyz - vWorld);
+    float a = 0.0;
+    vec3 col = uCol.rgb;
+    if (uShape == 0) {
+        float r = length(vLocal.xz), ang = atan(vLocal.z, vLocal.x);
+        if (uStyle == 0) {            // shockwave ring
+            float R = mix(0.05, 1.0, 1.0 - pow(1.0 - age, 2.5));
+            float n = fbmN(vec2(ang * 0.8 + seed, r * 2.0 - t * 1.5));
+            float w = 0.05 + 0.09 * age;
+            float ring = exp(-pow((r - R + 0.06 * (n - 0.5)) / w, 2.0));
+            float inner = smoothstep(R, 0.0, r) * 0.15 * n;
+            a = (ring * 1.5 + inner) * (1.0 - age);
+            col = mix(uCol2.rgb, uCol.rgb, ring);
+        } else if (uStyle == 1) {     // magic circle: rings, runes, hexagram, drawn in then fading
+            float rot = t * 0.9 + seed;
+            float ang2 = ang + rot;
+            float rings = exp(-pow((r - 0.96) / 0.022, 2.0)) + exp(-pow((r - 0.83) / 0.016, 2.0)) + 0.8 * exp(-pow((r - 0.47) / 0.018, 2.0)) + 0.7 * exp(-pow((r - 0.22) / 0.014, 2.0));
+            float band = step(0.85, r) * step(r, 0.94);
+            float cells = 28.0;
+            float seg = fract((ang2 + 3.14159) * cells / 6.2831853), cell = floor((ang2 + 3.14159) * cells / 6.2831853);
+            float h = fract(sin(cell * 12.9898 + seed * 7.0) * 43758.5453);
+            float rv = (r - 0.85) / 0.09;
+            float glyph = band * step(0.18, seg) * step(seg, 0.82) * step(0.35, fract(h * 5.0 + floor(rv * 3.0) * 0.37)) * step(abs(rv - 0.5), 0.4);
+            float star = 0.0;
+            for (int i = 0; i < 6; i++) {
+                float aa = float(i) * 1.0471976 - rot * 1.6;
+                star = max(star, line(vLocal.xz, vec2(cos(aa), sin(aa)) * 0.83, vec2(cos(aa + 2.0943951), sin(aa + 2.0943951)) * 0.83, 0.011));
+            }
+            float sweep = clamp(age * 5.0 - (ang + 3.14159) / 6.2831853, 0.0, 1.0);   // the circle is traced in a sweep
+            float fadeOut = 1.0 - smoothstep(0.78, 1.0, age);
+            a = (rings + glyph * 1.3 + star * 0.9) * sweep * fadeOut + smoothstep(1.0, 0.0, r) * 0.05 * fadeOut * smoothstep(0.0, 0.2, age);
+            a *= step(r, 1.0);
+            col = mix(uCol2.rgb, uCol.rgb, clamp(rings + glyph, 0.0, 1.0));
+        } else if (uStyle == 2) {     // burning / cracked ground
+            float n = fbmN(vLocal.xz * 0.9 + seed);
+            float cracks = 1.0 - smoothstep(0.0, 0.06, abs(n - 0.5));
+            float fall = smoothstep(1.0, 0.25, r);
+            a = (cracks * 1.6 + fall * 0.35 * n) * fall * (1.0 - age);
+            col = mix(uCol2.rgb, uCol.rgb, cracks);
+        } else {                      // sun rays bursting out
+            float rays = pow(abs(sin(ang * 8.0 + seed + t * 0.6)), 16.0);
+            float R = age * 1.15;
+            a = rays * smoothstep(R, R * 0.2, r) * smoothstep(0.0, 0.08, r) * (1.0 - age) * 1.6 + exp(-pow((r - R * 0.9) / 0.05, 2.0)) * (1.0 - age);
+        }
+    } else if (uShape == 1 || uShape == 4) {
+        float ang = atan(vLocal.z, vLocal.x), v = vLocal.y;
+        float facing = abs(dot(normalize(vNrm), V));
+        if (uStyle == 0) {            // energy beam: white-hot core, flowing noise, glowing edge
+            float n = fbmN(vec2(ang * 0.5, v * 3.0 - t * 7.0) + seed);
+            float core = pow(facing, 4.0), edge = pow(1.0 - facing, 2.0);
+            float ends = smoothstep(0.0, 0.03, v) * smoothstep(1.0, 0.94, v);
+            float life = smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.55, 1.0, age));
+            a = (core * 1.6 + n * 0.7 * facing + edge * 0.25) * ends * life;
+            col = mix(uCol2.rgb, mix(uCol.rgb, vec3(1.0), core * 0.5), facing);
+        } else {                      // 1: pillar of light, 2: vortex (spiralling streaks)
+            float spiral = uStyle == 2 ? ang * 3.0 + v * 7.0 - t * 9.0 : ang;
+            float n = fbmN(vec2(spiral * 0.32, v * 1.6 - t * (uStyle == 2 ? 1.6 : 2.6)) + seed);
+            float streak = smoothstep(0.45, 0.88, n);
+            float fadeV = (1.0 - v) * smoothstep(0.0, 0.06, v);
+            float life = smoothstep(0.0, 0.1, age) * (1.0 - smoothstep(0.55, 1.0, age));
+            a = (streak * 1.2 + pow(facing, 2.0) * 0.12) * fadeV * life;
+            col = mix(uCol2.rgb, uCol.rgb, streak);
+        }
+    } else if (uShape == 2) {
+        vec3 N = normalize(vNrm);
+        float facing = abs(dot(N, V)), fres = pow(1.0 - facing, 2.5);
+        vec2 suv = vec2(atan(vLocal.z, vLocal.x) * 0.3183, vLocal.y * 0.5 + 0.5);
+        if (uStyle == 0) {            // shield / aura shell: fresnel rim, flowing cells
+            float n = fbmN(suv * vec2(3.0, 2.0) + vec2(t * 0.15, -t * 0.3) + seed);
+            float cells = smoothstep(0.42, 0.5, abs(fract(suv.x * 12.0) - 0.5)) + smoothstep(0.42, 0.5, abs(fract(suv.y * 8.0 + t * 0.2) - 0.5));
+            float life = smoothstep(0.0, 0.1, age) * (1.0 - smoothstep(0.8, 1.0, age));
+            a = (fres * 1.25 + n * 0.08 + cells * 0.3 * fres) * life;
+            col = mix(uCol.rgb, uCol2.rgb, fres);
+        } else if (uStyle == 1) {     // explosion: hot core, burning away as it grows
+            float n = fbmN(suv * vec2(2.0, 1.5) + vec2(0.0, -t * 0.8) + seed);
+            float burn = smoothstep(age * 1.1 - 0.15, age * 1.1, n);
+            float hot = pow(facing, 1.5);
+            a = (hot * 1.15 + 0.25) * burn * (1.0 - age * 0.6);
+            col = mix(uCol2.rgb, mix(uCol.rgb, vec3(1.0, 0.95, 0.85), hot * 0.35), hot);
+        } else {                      // energy orb (projectiles): bright core, swirling surface
+            float core = pow(facing, 3.0);
+            float n = fbmN(suv * 3.0 + vec2(t * 0.6, t * 0.9) + seed);
+            a = core * 1.5 + fres * 0.7 + n * 0.3 * facing;
+            col = mix(uCol2.rgb, mix(uCol.rgb, vec3(1.0), core * 0.45), core);
+        }
+    } else {                          // arc: a blade slash sweeping through the air
+        float r = length(vLocal.xz), ang = atan(vLocal.z, vLocal.x);
+        float u = clamp(ang / 3.14159, 0.0, 1.0);
+        float head = age * 1.5;
+        float trail = smoothstep(head - 0.75, head, u) * step(u, head);
+        float w = (r - 0.7) / 0.3;
+        float thick = smoothstep(0.0, 0.35, w) * smoothstep(1.0, 0.75, w);
+        float edgeL = exp(-pow((w - 0.86) / 0.07, 2.0));
+        float n = fbmN(vec2(u * 3.0 - t * 2.0, w) + seed);
+        a = (thick * 0.75 * (0.6 + 0.6 * n) + edgeL * 1.6) * trail * (1.0 - smoothstep(0.7, 1.0, age));
+        col = mix(uCol2.rgb, uCol.rgb, edgeL);
+    }
+    float dist = length(vWorld - uCamPos.xyz);
+    a *= exp(-max(dist - 35.0, 0.0) * uFogColor.w * 0.5);
+    a = max(a, 0.0) * uCol.a;
+    fragColor = vec4(col * a * uP.y, 0.0);
+}
+)";
+
 // ----------------------------------------------------------------------------------------------
 // Post-processing
 const char* FULLSCREEN_VS = R"(

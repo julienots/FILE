@@ -105,6 +105,15 @@ struct DrawItem {
     vec4 farClip{0, 0, 0, 0};      // LIT_FAR: x, z of the centre, z = radius drawn by the detailed chunks
 };
 
+// 3.0.1 shader effect (powers, spells, impacts): one procedural shape, additive, animated in the FX shader
+enum FxShape { FX_DISC = 0, FX_CYLINDER = 1, FX_SPHERE = 2, FX_ARC = 3, FX_CONE = 4, FX_SHAPES = 5 };
+struct FxItem {
+    int shape = FX_DISC, style = 0;
+    mat4 model;
+    vec4 color{1, 1, 1, 1}, color2{1, 1, 1, 1};   // core, edge
+    float age = 0, intensity = 1, seed = 0, time = 0;
+};
+
 struct WaterItem { const Mesh* mesh; mat4 model; vec3 deep, shallow; float frozen; bool lava; };
 
 struct Camera {
@@ -132,6 +141,7 @@ public:
     void submit(const DrawItem& d) { items.push_back(d); }
     void submitWater(const WaterItem& w) { waters.push_back(w); }
     void submitRibbon(const Mesh* m, float intensity) { ribbons.push_back({m, intensity}); }
+    void submitFx(const FxItem& f) { fxItems.push_back(f); }
     void addLight(const PointLight& l) { lights.push_back(l); }
     void render(ParticleSystem* particles);
     // Draw an arbitrary set of items into an offscreen target (item icons, NPC portraits).
@@ -165,7 +175,10 @@ private:
     void postProcess();
 
     std::map<int, Shader> litVariants;
-    Shader water, lava, sky, particleAlpha, particleAdd, ribbon, bloomDown, bloomUp, composite, fxaa, blit, ui, ssao;
+    Shader water, lava, sky, particleAlpha, particleAdd, ribbon, bloomDown, bloomUp, composite, fxaa, blit, ui, ssao, fxShader;
+    Mesh fxMesh[FX_SHAPES];
+    std::vector<FxItem> fxItems;
+    void buildFxMeshes();
     GLuint frameUbo = 0;
     RenderTarget shadowRT, sceneRT, ldrRT, blurRT, aoRT;
     RenderTarget reflRT, depthCopyRT;   // 1.12.0 copies of the opaque scene (colour, half res) and depth for water reflections

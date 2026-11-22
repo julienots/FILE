@@ -14,6 +14,8 @@ extern const char* PARTICLE_VS;
 extern const char* PARTICLE_FS;
 extern const char* RIBBON_VS;
 extern const char* RIBBON_FS;
+extern const char* FX_VS;
+extern const char* FX_FS;
 extern const char* FULLSCREEN_VS;
 extern const char* BLOOM_DOWN_FS;
 extern const char* BLOOM_UP_FS;

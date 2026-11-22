@@ -211,6 +211,14 @@ void Game::playerAttack(bool heavy, bool charged) {
     if (const ItemDef* w = item(equipment[SL_WEAPON].id)) spd = 1.f + w->speed;
     startAttack(player, c, cl, mult, c.element, spd);
     play(heavy ? "swing_heavy" : "swing", 0.8f, particles.rng.range(0.9f, 1.1f));
+    // 3.0.1 heavy and charged blows leave a glowing crescent in the air (the weapon's element, or steel)
+    if ((heavy || charged || comboStep == 0) && stance != ST_BOW && stance != ST_STAFF && stance != ST_UNARMED) {
+        vec3 ec = c.element == Element::Physical ? vec3(0.75f, 0.85f, 1.f) : elementColor(c.element);
+        float r = stance == ST_TWOHAND ? 2.8f : stance == ST_SPEAR ? 3.2f : 2.3f;
+        vec3 at = c.pos + vec3(0, 1.1f, 0) + vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 0.3f;
+        vfxSlash(at, c.yaw, charged ? 0.f : (heavy ? -0.5f : 0.35f), ec, r * (charged ? 1.3f : 1.f), charged ? 0.38f : 0.3f);
+        if (charged) { vfxShockwave(c.pos, ec, 4.f, 0.5f); vfxSlash(at, c.yaw, 1.2f, lerp(ec, vec3(1.f), 0.4f), r * 1.1f, 0.42f); }
+    }
 }
 
 void Game::playerDodge() {
@@ -333,6 +341,7 @@ void Game::castSpell(int slot) {
     switch (s.kind) {
     case SpellKind::Projectile: {
         c.vis.anim.play(&clip(C_CAST_FORWARD), 1.3f, true);
+        vfxCircle(hand + fwd * 0.3f, col, 0.8f, 0.5f, NullEntity, fwd);   // 3.0.1 a rune opens before the hand
         if (s.id == "missiles") {
             for (int i = 0; i < 3; i++) fireProjectile(player, ProjKind::Arcane, hand + perpVec(fwd) * (i - 1) * 0.4f, normalize(fwd + perpVec(fwd) * (i - 1) * 0.3f + vec3(0, 0.1f, 0)), 16.f, power, s.school, Team::Player, t);
         } else {
@@ -347,6 +356,13 @@ void Game::castSpell(int slot) {
         vec3 center = s.id == "flamewave" ? c.pos + fwd * 3.5f : c.pos;
         areaDamage(player, center, s.radius, power, s.school, Team::Player, 30);
         particles.shockwave(center, col, s.radius);
+        // 3.0.1 the circle of the spell, its wave, and a shape per school
+        vfxCircle(center, col, s.radius, 1.2f);
+        vfxShockwave(center, col, s.radius * 1.05f, 0.75f);
+        if (s.school == Element::Fire) vfxGround(center, vec3(1.f, 0.6f, 0.15f), vec3(0.8f, 0.15f, 0.02f), s.radius * 0.9f, 2.2f);
+        else if (s.school == Element::Ice) vfxSphere(center, vec3(0.75f, 0.95f, 1.f), vec3(0.3f, 0.6f, 1.f), s.radius * 0.35f, 0.9f, 0, 1.8f);
+        else if (s.school == Element::Nature) vfxVortex(center, col, s.radius * 0.5f, 3.5f, 1.2f);
+        else vfxRays(center, col, s.radius, 0.8f);
         particles.magicBurst(center + vec3(0, 0.8f, 0), col, 2.f, 40);
         if (s.id == "flamewave") for (int i = 0; i < 6; i++) particles.explosion(c.pos + fwd * (1.5f + i * 0.9f) + perpVec(fwd) * particles.rng.range(-1.5f, 1.5f), 0.4f, col);
         if (s.id == "frostnova") particles.iceShards(c.pos + vec3(0, 0.5f, 0), 30);
@@ -359,17 +375,26 @@ void Game::castSpell(int slot) {
     case SpellKind::Self: {
         c.vis.anim.play(&clip(C_CAST_SELF), 1.2f, true);
         float healMul = 1.f + skillBonus(skills, &SkillNode::heal);
+        vfxCircle(c.pos, col, 2.2f, 1.3f, player);                   // 3.0.1 healing light: a circle at the feet, a column of light
+        vfxPillar(c.pos, col, 1.1f, 5.f, 1.2f);
+        vfxSphere(c.pos + vec3(0, 1.f, 0), lerp(col, vec3(1.f), 0.4f), col, 1.1f, 1.2f, 0, 0.3f, player);
         if (s.id == "regrowth") { c.status.regen = s.duration; particles.heal(c.pos, col); }
         else { c.hp = std::min(c.maxHp, c.hp + power * 1.2f * healMul); particles.heal(c.pos, col); areaDamage(player, c.pos, s.radius, power, s.school, Team::Player, 20); particles.shockwave(c.pos, col, s.radius); floatText(c.pos + vec3(0, 2.4f, 0), "+" + std::to_string((int)(power * 1.2f * healMul)), vec3(0.4f, 1.f, 0.5f)); }
         break;
     }
-    case SpellKind::Shield: c.vis.anim.play(&clip(C_CAST_SELF), 1.2f, true); c.status.shield = c.maxHp * 0.35f; particles.magicBurst(c.pos + vec3(0, 1, 0), col, 1.5f, 30); break;
+    case SpellKind::Shield: c.vis.anim.play(&clip(C_CAST_SELF), 1.2f, true); c.status.shield = c.maxHp * 0.35f; particles.magicBurst(c.pos + vec3(0, 1, 0), col, 1.5f, 30);
+        vfxSphere(c.pos + vec3(0, 1.f, 0), lerp(col, vec3(1.f), 0.3f), col, 1.35f, 6.f, 0, 0.f, player);   // 3.0.1 a visible barrier around the hero
+        vfxCircle(c.pos, col, 1.8f, 1.f, player);
+        break;
     case SpellKind::Dash: {
         vec3 from = c.pos;
         vec3 to = c.pos + fwd * s.radius;
         vec3 tmp = to; collideStatic(tmp, c.radius, c.pos.y);
         to = tmp; to.y = groundAt(to.x, to.z);
         for (int i = 0; i < 10; i++) particles.magicTrail(lerp(from, to, i / 9.f) + vec3(0, 1, 0), col, 1.5f);
+        vfxVortex(from, col, 1.f, 2.4f, 0.6f);                                          // 3.0.1
+        vfxBeam(from + vec3(0, 1.f, 0), to + vec3(0, 1.f, 0), col, 0.3f, 0.35f);
+        vfxShockwave(to, col, 3.f, 0.5f);
         reg.each<Character>([&](Entity e, Character& o) {
             if (o.team != Team::Enemy || o.dead) return;
             float tt; float d = distToSegment(o.pos.xz(), from.xz(), to.xz(), &tt);
@@ -385,6 +410,8 @@ void Game::castSpell(int slot) {
             Character* cc = reg.get<Character>(cur);
             if (!cc) break;
             particles.lightningArc(prev, cc->pos + vec3(0, cc->height * 0.6f, 0), col);
+            vfxBeam(prev, cc->pos + vec3(0, cc->height * 0.6f, 0), col, 0.12f, 0.35f);            // 3.0.1
+            vfxSphere(cc->pos + vec3(0, cc->height * 0.6f, 0), lerp(col, vec3(1.f), 0.5f), col, 0.6f, 0.4f, 1, 1.2f);
             dealDamage(player, cur, power * (1.f - j * 0.15f), s.school, normalize(cc->pos - prev), 25, true, true);
             hit.push_back(cur);
             prev = cc->pos + vec3(0, cc->height * 0.6f, 0);
@@ -405,7 +432,10 @@ void Game::castSpell(int slot) {
             vec2 o = particles.rng.inDisk() * s.radius;
             vec3 p = c.pos + vec3(o.x, 0, o.y);
             particles.lightningArc(p + vec3(0, 12, 0), p, col);
+            vfxPillar(p, col, 0.35f, 14.f, 0.5f);                                       // 3.0.1 each bolt is a column of light
+            vfxShockwave(p, col, 2.2f, 0.45f);
         }
+        vfxCircle(c.pos, col, s.radius, 1.3f);
         areaDamage(player, c.pos, s.radius, power, s.school, Team::Player, 50);
         particles.shockwave(c.pos, col, s.radius);
         env.lightning = 0.6f; lightningFlash = 0.6f;
@@ -416,6 +446,7 @@ void Game::castSpell(int slot) {
         c.vis.anim.play(&clip(C_CAST_FORWARD), 1.0f, true);
         if (tc) {
             particles.lightningArc(hand, tc->pos + vec3(0, tc->height * 0.5f, 0), col);
+            vfxBeam(hand, tc->pos + vec3(0, tc->height * 0.5f, 0), col, 0.25f, 0.45f);   // 3.0.1
             float dmg = dealDamage(player, t, power, s.school, fwd, 10, true, true);
             c.hp = std::min(c.maxHp, c.hp + dmg * 0.5f);
             particles.heal(c.pos, col);

@@ -1939,6 +1939,47 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "save"});
         return s;
     }
+    if (name == "powers") {
+        // 3.0.1 the shader effects of every power: Kaede, Astra, then the Wanderer's spells, at dusk (they glow)
+        static Entity dummy = NullEntity;
+        auto refill = [](Game& g) { g.mp = g.maxMp; g.stamina = g.maxStamina; for (float& c : g.heroCD) c = 0; for (auto& c : g.spellCD) c = 0; g.pc().invuln = 1.f; };
+        auto target = [](Game& g) {
+            if (dummy != NullEntity && g.reg.valid(dummy)) { Character* c = g.reg.get<Character>(dummy); if (c && !c->dead) { c->hp = c->maxHp; return; } }
+            Character& p = g.pc(); vec3 sp = p.pos + vec3(0, 0, 7.f); sp.y = g.groundAt(sp.x, sp.z);
+            dummy = g.spawnEnemy(enemyIndex("goblin"), sp, false, 777);
+            if (Character* c = g.reg.get<Character>(dummy)) { c->maxHp = c->hp = 1e7f; }
+            if (AIBrain* ai = g.reg.get<AIBrain>(dummy)) ai->home = sp;
+            g.lockTarget = dummy;
+        };
+        s.push_back({2.f, [](Game& g) {
+            g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.level = 30; g.recomputeStats();
+            g.timeOfDay = 19.6f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            teleport(g, 1600, 1500, 0.f); g.pc().yaw = 0; dummy = NullEntity;
+            g.unlockHero("kaede", false); g.unlockHero("astra", false);
+        }, idle, "setup"});
+        struct Cast { int hero; int slot; const char* spell; float wait; const char* shot; };
+        static const Cast casts[] = {
+            {1, 0, nullptr, 0.12f, "PW0_shuriken"}, {1, 1, nullptr, 0.1f, "PW1_shadowstep"}, {1, 2, nullptr, 0.35f, "PW2_smoke"},
+            {2, 0, nullptr, 0.18f, "PW3_starbeam"}, {2, 2, nullptr, 0.3f, "PW4_solarwave"}, {2, 1, nullptr, 1.05f, "PW5_meteor"},
+            {0, 0, "fireball", 0.3f, "PW6_fireball"}, {0, 0, "frostnova", 0.25f, "PW7_frostnova"}, {0, 0, "chain", 0.1f, "PW8_chain"},
+            {0, 0, "thunder", 0.15f, "PW9_thunder"}, {0, 0, "aegis", 0.5f, "PW10_aegis"}, {0, 0, "holylight", 0.4f, "PW11_holylight"},
+        };
+        for (const Cast& cs : casts) {
+            const Cast* q = &cs;
+            s.push_back({1.2f, [q, refill, target](Game& g) {
+                if (g.activeHero != q->hero) g.switchHero(q->hero);
+                teleport(g, 1600, 1500, 1.2f); g.pc().yaw = 0; g.flying = false;
+                g.camPitch = 0.42f; g.camDist = g.camDistTarget = 12.f;
+                refill(g); target(g);
+            }, [](Game& g, float) { g.camIdleT = 0; g.camYaw = 1.2f; g.pc().invuln = 1.f; }, "ready"});
+            s.push_back({q->wait, [q, refill](Game& g) {
+                refill(g); g.pc().yaw = 0;
+                if (q->spell) { g.equippedSpells[0] = spellIndex(q->spell); g.castSpell(0); } else g.castHeroPower(q->slot);
+            }, [](Game& g, float) { g.camYaw = 1.2f; g.camIdleT = 0; }, "cast"});
+            s.push_back({0.1f, [q](Game& g) { AGR_LOG("POWERS %s (effects alive %zu)", q->shot, g.vfxList.size()); g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "titandungeons") {
         // 3.0.0 the three dungeons of the Titan Mountains: enter each from its entrance, check its dwellers are
         // raised to the dungeon's level, look at the boss room, come back out
