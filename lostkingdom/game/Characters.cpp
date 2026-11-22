@@ -414,76 +414,156 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
 // ------------------------------------------------------------------------------------------ quadrupeds
 static vec3 QJ(const Skeleton& sk, int b) { return sk.bones[b].bindWorld; }
 
-// 3.1.0 a real wolf, built by the game (the imported Tripo model is no longer used): a lean body with a deep chest
-// and a tucked waist, a dark saddle on the back and a pale underside (countershading), a thick ruff around the
-// neck, a broad skull with a long tapering muzzle, tall pointed ears, amber eyes, a bushy tail with a dark tip and
-// long legs with pale socks and paws. Same skeleton and bones as every quadruped (all clips work).
+// 3.1.0 a real wolf, built by the game (the imported Tripo model is no longer used). Shape: a deep chest, a tucked
+// waist, muscled shoulders and thighs, long legs with big paws, a broad skull with a long muzzle, wide triangular
+// ears, a thick ruff and a bushy tail held low; locks of fur break the outline at the neck, cheeks, thighs, belly
+// and tail. Coat: painted per vertex AFTER the shape is built, so it blends smoothly over the whole body like a
+// real pelt - a dark saddle along the back, grizzled flanks, a cream belly, throat and inner legs, a pale mask on
+// the muzzle and cheeks, warm tones on the legs, the ears and the bridge of the nose, a dark tail tip. Same skeleton
+// and bones as every quadruped (all clips work).
 static void wolfBody(MeshBuilder& mb, const CreatureLook& L) {
     const Skeleton& sk = skeleton(Arch::Quadruped);
     float g = L.girth;
-    vec3 c1 = L.c1, c2 = L.c2, c3 = lerp(L.c1, L.c3, 0.55f);
-    Mat fur(c1, 0.92f), pale(c2, 0.92f), saddle(c3, 0.92f), mid(lerp(c1, c2, 0.45f), 0.92f), nose(hexColor(0x141212), 0.35f);
-    vec3 R = QJ(sk, Q_ROOT), S = QJ(sk, Q_SPINE), C = QJ(sk, Q_CHEST), H = QJ(sk, Q_HEAD);
-    // hips, waist (narrow, the belly tucked up) and the deep chest with a pale bib
+    Rng rng(L.seed * 31 + 7);
+    Mat fur(L.c1, 0.92f);
+    vec3 R = QJ(sk, Q_ROOT), S = QJ(sk, Q_SPINE), C = QJ(sk, Q_CHEST), N = QJ(sk, Q_NECK), H = QJ(sk, Q_HEAD), J = QJ(sk, Q_JAW);
+    vec3 T1 = QJ(sk, Q_TAIL1), T2 = QJ(sk, Q_TAIL2), T3 = QJ(sk, Q_TAIL3);
+    size_t v0 = mb.v.size();
+    // a lock of fur: a short, blunt, flattened tuft (never a spike)
+    auto lock = [&](vec3 a, vec3 b, float r) { vec3 d = b - a; float len = length(d); if (len < 1e-4f) return;
+        b = a + d / len * std::min(len, 0.07f); mb.tube(a, b, r, r * 0.45f, fur, 5, true); };
+    // ---- torso
     mb.setBone(Q_ROOT);
-    mb.ellipsoid(R + vec3(0, 0.0f, 0.03f), vec3(0.125f, 0.15f, 0.2f) * g, fur, 12, 8);
-    mb.ellipsoid(R + vec3(0, -0.06f, 0.06f) * g, vec3(0.1f, 0.1f, 0.15f) * g, pale, 10, 6);
+    mb.ellipsoid(R + vec3(0, 0.0f, 0.04f), vec3(0.125f, 0.15f, 0.2f) * g, fur, 14, 10);
     mb.setBone(Q_SPINE);
-    mb.ellipsoid(S + vec3(0, 0.025f, 0), vec3(0.108f, 0.125f, 0.25f) * g, fur, 12, 8);
-    mb.ellipsoid(S + vec3(0, -0.04f, 0.02f) * g, vec3(0.085f, 0.095f, 0.22f) * g, pale, 10, 6);
-    mb.ellipsoid(S + vec3(0, 0.1f, -0.02f) * g, vec3(0.085f, 0.05f, 0.3f) * g, saddle, 10, 5);   // dark saddle along the back
+    mb.ellipsoid(S + vec3(0, 0.02f, 0), vec3(0.112f, 0.13f, 0.27f) * g, fur, 14, 10);
+    mb.ellipsoid(S + vec3(0, -0.045f, 0.06f) * g, vec3(0.095f, 0.11f, 0.2f) * g, fur, 12, 8);
     mb.setBone(Q_CHEST);
-    mb.ellipsoid(C + vec3(0, -0.02f, 0.02f), vec3(0.14f, 0.2f, 0.19f) * g, fur, 12, 8);
-    mb.ellipsoid(C + vec3(0, -0.09f, 0.11f) * g, vec3(0.1f, 0.13f, 0.09f) * g, pale, 10, 6);          // chest bib
-    mb.ellipsoid(C + vec3(0, 0.12f, -0.04f) * g, vec3(0.1f, 0.06f, 0.16f) * g, saddle, 10, 5);
-    // ruff: layered fur around the neck and shoulders (soft lumps, not spikes)
-    float ruff = L.mane ? 1.f : 0.8f;
-    mb.ellipsoid(C + vec3(0, 0.08f, 0.12f) * g, vec3(0.16f, 0.17f, 0.15f) * g * ruff, mid, 12, 8);
-    for (int sd = -1; sd <= 1; sd += 2) mb.ellipsoid(C + vec3(sd * 0.075f, 0.02f, 0.12f) * g, vec3(0.07f, 0.13f, 0.1f) * g * ruff, fur, 8, 6);
-    mb.tube(C + vec3(0, 0.08f, 0.1f) * g, H + vec3(0, -0.02f, -0.03f), 0.12f * g, 0.085f * g, fur, 10, false, Q_NECK, Q_HEAD, 0.55f);
+    mb.ellipsoid(C + vec3(0, -0.04f, 0.02f), vec3(0.135f, 0.235f, 0.2f) * g, fur, 14, 10);    // deep chest down to the elbows
+    mb.ellipsoid(C + vec3(0, -0.12f, 0.12f) * g, vec3(0.095f, 0.14f, 0.1f) * g, fur, 10, 8);   // brisket
+    // ---- ruff and neck
+    float ruff = L.mane ? 1.f : 0.85f;
+    mb.ellipsoid(C + vec3(0, 0.07f, 0.13f) * g, vec3(0.15f, 0.17f, 0.15f) * g * ruff, fur, 14, 10);
+    mb.tube(C + vec3(0, 0.07f, 0.1f) * g, H + vec3(0, -0.02f, -0.03f), 0.12f * g, 0.085f * g, fur, 12, false, Q_NECK, Q_HEAD, 0.55f);
     mb.setBone(Q_NECK);
-    mb.ellipsoid(QJ(sk, Q_NECK) + vec3(0, -0.05f, 0.05f) * g, vec3(0.09f, 0.1f, 0.08f) * g, pale, 8, 6);   // pale throat
-    // head: broad skull, cheek ruffs, a long tapering muzzle, black nose, tall ears
+    mb.ellipsoid(N + vec3(0, -0.06f, 0.04f) * g, vec3(0.1f, 0.11f, 0.09f) * g, fur, 10, 8);
+    for (int i = 0; i < 16; i++) {   // locks around the ruff, swept back and down
+        float a = -PI * 0.95f + i * (PI * 1.9f / 15.f);
+        vec3 o{std::sin(a) * 0.13f, std::cos(a) * 0.13f + 0.04f, 0.1f};
+        vec3 root = C + o * g, dir = normalize(vec3(o.x * 0.8f, o.y * 0.5f - 0.35f, -0.9f));
+        lock(root, root + dir * rng.range(0.09f, 0.14f) * g, 0.03f * g);
+    }
+    // ---- head
     mb.setBone(Q_HEAD);
-    mb.ellipsoid(H + vec3(0, 0.025f, 0.0f), vec3(0.085f, 0.075f, 0.095f) * g, fur, 12, 8);
-    mb.ellipsoid(H + vec3(0, 0.07f, 0.02f) * g, vec3(0.05f, 0.025f, 0.07f) * g, saddle, 8, 4);    // dark brow
-    for (int sd = -1; sd <= 1; sd += 2) mb.ellipsoid(H + vec3(sd * 0.065f, -0.02f, -0.02f) * g, vec3(0.045f, 0.06f, 0.06f) * g, pale, 8, 6);   // cheeks
-    mb.tube(H + vec3(0, 0.0f, 0.06f) * g, H + vec3(0, -0.025f, 0.22f) * g, 0.052f * g, 0.026f * g, fur, 10, true);
-    mb.tube(H + vec3(0, -0.03f, 0.06f) * g, H + vec3(0, -0.045f, 0.2f) * g, 0.04f * g, 0.02f * g, pale, 8, true);   // pale lips
-    mb.ellipsoid(H + vec3(0, -0.018f, 0.225f) * g, vec3(0.022f, 0.018f, 0.018f) * g, nose, 6, 4);
+    mb.ellipsoid(H + vec3(0, 0.025f, -0.005f), vec3(0.088f, 0.078f, 0.095f) * g, fur, 12, 10);
     for (int sd = -1; sd <= 1; sd += 2) {
-        vec3 e = H + vec3(sd * 0.042f, 0.035f, 0.075f) * g;
-        mb.ellipsoid(e + vec3(sd * 0.004f, 0.002f, -0.004f), vec3(0.02f, 0.012f, 0.014f) * g, Mat(hexColor(0x1a1612), 0.5f), 6, 4);     // dark rim
-        mb.ellipsoid(e, vec3(0.013f, 0.01f, 0.01f) * g, Mat(L.glow, 0.2f, 0, 0.6f + L.emissiveEyes * 2.4f), 6, 4);
-        vec3 eb = H + vec3(sd * 0.045f, 0.07f, -0.02f) * g, et = H + vec3(sd * 0.065f, 0.19f, -0.045f) * g;
-        mb.cone(eb, et, 0.04f * g, fur, 5);
-        mb.cone(eb + vec3(0, 0.005f, 0.012f) * g, et + vec3(0, -0.03f, 0.012f) * g, 0.026f * g, saddle, 4);   // ear hollow
+        mb.ellipsoid(H + vec3(sd * 0.062f, -0.012f, 0.0f) * g, vec3(0.05f, 0.058f, 0.068f) * g, fur, 10, 8);   // cheeks
+        for (int k = 0; k < 3; k++) lock(H + vec3(sd * 0.07f, -0.02f - k * 0.02f, -0.03f) * g, H + vec3(sd * 0.085f, -0.04f - k * 0.025f, -0.1f) * g, 0.02f * g);
+    }
+    mb.ellipsoid(H + vec3(0, 0.045f, 0.06f) * g, vec3(0.042f, 0.03f, 0.05f) * g, fur, 8, 6);                    // stop / brow
+    mb.tube(H + vec3(0, 0.01f, 0.05f) * g, H + vec3(0, -0.02f, 0.225f) * g, 0.05f * g, 0.027f * g, fur, 12, true);   // muzzle
+    mb.tube(H + vec3(0, -0.035f, 0.06f) * g, H + vec3(0, -0.042f, 0.2f) * g, 0.042f * g, 0.022f * g, fur, 10, true); // upper lip
+    // ears: wide, thick triangles tilted back, a little outwards
+    for (int sd = -1; sd <= 1; sd += 2) {
+        vec3 b = H + vec3(sd * 0.05f, 0.07f, -0.02f) * g;
+        vec3 o = vec3(sd * 0.036f, 0, 0.005f) * g, i2 = vec3(-sd * 0.032f, 0, 0.01f) * g, tip = b + vec3(sd * 0.03f, 0.11f, -0.035f) * g, back = vec3(0, 0, -0.028f) * g;
+        vec3 p0 = b + o, p1 = b + i2;
+        mb.triP(p0, tip, p1, fur); mb.triP(p1, tip, p0, fur);
+        mb.triP(p0 + back, p1 + back, tip + back * 0.3f, fur); mb.triP(p1 + back, p0 + back, tip + back * 0.3f, fur);
+        mb.quadP(p0, p0 + back, tip + back * 0.3f, tip, fur); mb.quadP(tip, tip + back * 0.3f, p0 + back, p0, fur);
+        mb.quadP(p1, tip, tip + back * 0.3f, p1 + back, fur); mb.quadP(p1 + back, tip + back * 0.3f, tip, p1, fur);
+        mb.ellipsoid(b + vec3(0, 0.0f, -0.012f) * g, vec3(0.04f, 0.022f, 0.03f) * g, fur, 8, 5);   // ear base blends into the skull
     }
     mb.setBone(Q_JAW);
-    vec3 J = QJ(sk, Q_JAW);
-    mb.tube(J + vec3(0, 0, -0.03f), J + vec3(0, -0.005f, 0.14f) * g, 0.036f * g, 0.018f * g, pale, 8, true);
-    for (int sd = -1; sd <= 1; sd += 2) mb.cone(J + vec3(sd * 0.018f, 0.012f, 0.12f) * g, J + vec3(sd * 0.016f, 0.05f, 0.125f) * g, 0.007f, Mat(hexColor(0xeee6d0), 0.4f), 4);   // fangs
-    // bushy tail hanging in a curve, dark tip
-    mb.tube(QJ(sk, Q_TAIL1) + vec3(0, 0.02f, 0.04f), QJ(sk, Q_TAIL2), 0.045f * g, 0.062f * g, fur, 8, false, Q_TAIL1, Q_TAIL2);
-    mb.tube(QJ(sk, Q_TAIL2), QJ(sk, Q_TAIL3), 0.062f * g, 0.058f * g, fur, 8, false, Q_TAIL2, Q_TAIL3);
+    mb.tube(J + vec3(0, 0, -0.03f), J + vec3(0, -0.005f, 0.15f) * g, 0.036f * g, 0.018f * g, fur, 10, true);
+    lock(J + vec3(0, -0.02f, 0.0f), J + vec3(0, -0.07f, -0.05f) * g, 0.025f * g);   // chin tuft
+    // ---- tail: thick, held low with a slight curve, locks along its underside
+    mb.tube(T1 + vec3(0, 0.02f, 0.04f), T2, 0.048f * g, 0.066f * g, fur, 10, false, Q_TAIL1, Q_TAIL2);
+    mb.tube(T2, T3, 0.066f * g, 0.062f * g, fur, 10, false, Q_TAIL2, Q_TAIL3);
     mb.setBone(Q_TAIL3);
-    mb.tube(QJ(sk, Q_TAIL3), QJ(sk, Q_TAIL3) + vec3(0, -0.07f, -0.14f) * g, 0.058f * g, 0.035f * g, fur, 8, false);
-    mb.tube(QJ(sk, Q_TAIL3) + vec3(0, -0.07f, -0.14f) * g, QJ(sk, Q_TAIL3) + vec3(0, -0.11f, -0.22f) * g, 0.035f * g, 0.008f, saddle, 7, true);
-    // legs: muscled upper legs, slim pale lower legs, oval paws
+    vec3 te = T3 + vec3(0, -0.08f, -0.15f) * g, tt = T3 + vec3(0, -0.13f, -0.24f) * g;
+    mb.tube(T3, te, 0.062f * g, 0.04f * g, fur, 10, false);
+    mb.tube(te, tt, 0.04f * g, 0.008f, fur, 8, true);
+    for (int i = 0; i < 6; i++) { float u = i / 5.f; vec3 q = lerp(T3, tt, u); mb.setBone(Q_TAIL3); lock(q + vec3(0, -0.03f, 0), q + vec3(rng.range(-0.02f, 0.02f), -0.08f, -0.07f) * g, 0.026f * g); }
+    // ---- legs: shoulders and thighs blend into the body, slim cannons, big oval paws
     int legs[4][3] = {{Q_FL1, Q_FL2, Q_FL3}, {Q_FR1, Q_FR2, Q_FR3}, {Q_BL1, Q_BL2, Q_BL3}, {Q_BR1, Q_BR2, Q_BR3}};
     for (int l = 0; l < 4; l++) {
         bool back = l >= 2;
         vec3 a = QJ(sk, legs[l][0]), k = QJ(sk, legs[l][1]), f = QJ(sk, legs[l][2]);
+        float sdx = a.x > 0 ? 1.f : -1.f;
         mb.setBone(legs[l][0]);
-        if (back) mb.ellipsoid(a + vec3(0, -0.07f, -0.02f), vec3(0.065f, 0.13f, 0.095f) * g, fur, 10, 6);   // thigh
-        else mb.ellipsoid(a + vec3(0, -0.05f, 0.0f), vec3(0.055f, 0.11f, 0.07f) * g, fur, 10, 6);           // shoulder
-        mb.tube(a + vec3(0, 0.04f, 0), k, (back ? 0.072f : 0.062f) * g, 0.038f * g, fur, 8, false, legs[l][0], legs[l][1]);
-        mb.tube(k, f, 0.038f * g, 0.028f * g, mid, 7, false, legs[l][1], legs[l][2]);
+        if (back) {
+            mb.ellipsoid(a + vec3(0, -0.06f, -0.02f), vec3(0.072f, 0.15f, 0.11f) * g, fur, 12, 8);   // thigh
+            for (int t = 0; t < 3; t++) lock(a + vec3(sdx * 0.03f, -0.1f - t * 0.04f, -0.1f) * g, a + vec3(sdx * 0.035f, -0.17f - t * 0.04f, -0.16f) * g, 0.022f * g);   // "pants"
+        } else mb.ellipsoid(a + vec3(0, -0.05f, 0.01f), vec3(0.06f, 0.13f, 0.08f) * g, fur, 12, 8);      // shoulder
+        mb.tube(a + vec3(0, 0.02f, 0), k, (back ? 0.07f : 0.06f) * g, 0.036f * g, fur, 10, false, legs[l][0], legs[l][1]);
+        mb.tube(k, f, 0.034f * g, 0.026f * g, fur, 8, false, legs[l][1], legs[l][2]);
         mb.setBone(legs[l][2]);
-        mb.ellipsoid(f + vec3(0, -0.03f, 0.03f), vec3(0.042f, 0.03f, 0.058f) * g, pale, 7, 4);
-        mb.ellipsoid(f + vec3(0, -0.045f, 0.07f), vec3(0.03f, 0.012f, 0.014f) * g, Mat(hexColor(0x1e1a16), 0.5f), 5, 3);   // toes / claws
+        mb.ellipsoid(f + vec3(0, -0.028f, 0.035f), vec3(0.046f, 0.03f, 0.064f) * g, fur, 10, 6);
+        if (!back) lock(k + vec3(0, 0.03f, -0.03f), k + vec3(0, -0.04f, -0.07f) * g, 0.02f * g);   // feathering behind the forearm
     }
-    mb.applyColorJitter(0, 0.035f, L.seed);
+
+    // ---- the coat, painted over everything built so far
+    vec3 c1 = L.c1, c2 = L.c2, c3 = lerp(L.c1, L.c3, 0.68f);
+    vec3 warm = c1 * vec3(1.12f, 0.98f, 0.82f), cream = lerp(c2, c2 * vec3(1.04f, 1.0f, 0.9f), 0.6f);
+    for (size_t i = v0; i < mb.v.size(); i++) {
+        Vertex& v = mb.v[i];
+        vec3 p(v.px, v.py, v.pz), n = unpackNormal(v);
+        float hgt = p.y - lerpf(R.y, C.y, clampf((p.z - R.z) / std::max(0.01f, C.z - R.z), 0.f, 1.f));   // height above the body line
+        vec3 col = c1;
+        bool head = p.z > N.z + 0.03f && p.y > N.y - 0.08f, tail = p.z < R.z - 0.1f && p.y > 0.45f, leg = p.y < 0.5f && !tail;
+        if (head) {
+            float muzzle = smoothstepf(H.z + 0.04f, H.z + 0.12f, p.z), low = smoothstepf(H.y + 0.0f, H.y - 0.04f, p.y);
+            col = lerp(c1, warm, 0.35f);
+            col = lerp(col, c3, smoothstepf(0.4f, 0.9f, n.y) * (1.f - muzzle) * 0.7f);              // dark crown
+            col = lerp(col, warm * 1.05f, smoothstepf(0.5f, 0.9f, n.y) * muzzle * 0.8f);            // tan bridge of the nose
+            col = lerp(col, cream, std::max(low, smoothstepf(0.5f, 0.85f, std::fabs(n.x)) * smoothstepf(H.y + 0.02f, H.y - 0.03f, p.y)));   // pale mask
+            if (p.y > H.y + 0.09f) col = lerp(warm, c3, smoothstepf(-0.2f, -0.8f, n.z) * 0.8f);       // ears: warm front, dark back
+        } else if (tail) {
+            float tip = smoothstepf(T3.z - 0.12f, T3.z - 0.24f, p.z);
+            col = lerp(lerp(c1, c3, smoothstepf(0.0f, 0.8f, n.y) * 0.85f), cream, smoothstepf(-0.2f, -0.8f, n.y) * 0.7f);
+            col = lerp(col, c3 * 0.75f, tip);
+            if (p.z > T1.z - 0.06f && p.z < T1.z + 0.02f && n.y > 0.3f) col = c3 * 0.8f;              // the dark violet-gland spot
+        } else if (leg) {
+            float inner = smoothstepf(0.f, 0.7f, -n.x * (p.x > 0 ? 1.f : -1.f));
+            col = lerp(lerp(warm, c1, 0.4f), cream, std::max(inner * 0.8f, smoothstepf(0.25f, 0.08f, p.y) * 0.5f));
+            if (p.z > C.z - 0.1f && n.z > 0.5f && p.y > 0.12f) col = lerp(col, c3, 0.45f);            // dark stripe down the front of the forelegs
+        } else {
+            float saddle = smoothstepf(0.15f, 0.75f, n.y) * smoothstepf(-0.04f, 0.05f, hgt);
+            float belly = std::max(smoothstepf(-0.1f, -0.7f, n.y), smoothstepf(-0.12f, -0.2f, hgt));
+            float throat = smoothstepf(N.y - 0.0f, N.y - 0.12f, p.y) * smoothstepf(C.z, C.z + 0.12f, p.z);
+            col = lerp(c1, c3, saddle);
+            col = lerp(col, cream, std::max(belly * 0.85f, throat));
+            col = lerp(col, warm, smoothstepf(0.1f, -0.3f, n.y) * (1.f - belly) * 0.35f);           // warm lower flanks
+        }
+        // grizzle: guard hairs tipped light and dark, in fine patches
+        float gz = hashf(hash3i((int)(p.x * 90.f), (int)(p.y * 90.f), (int)(p.z * 90.f), L.seed + 5));
+        col *= 0.9f + 0.2f * gz;
+        if (gz > 0.86f) col = lerp(col, c3, 0.35f);
+        Color8 c8 = toColor8(col, 1.f);
+        v.r = c8.r; v.g = c8.g; v.b = c8.b;
+    }
+    // ---- details that keep their own colour: eyes, nose, lips, claws, fangs, ear hollows
+    mb.setBone(Q_HEAD);
+    Mat nose(hexColor(0x121010), 0.3f), lip(hexColor(0x1a1614), 0.6f);
+    mb.ellipsoid(H + vec3(0, -0.012f, 0.232f) * g, vec3(0.024f, 0.019f, 0.018f) * g, nose, 8, 6);
+    for (int sd = -1; sd <= 1; sd += 2) {
+        mb.tube(H + vec3(sd * 0.03f, -0.05f, 0.08f) * g, H + vec3(sd * 0.02f, -0.052f, 0.2f) * g, 0.006f, 0.005f, lip, 4, false);   // dark lip line
+        vec3 e = H + vec3(sd * 0.043f, 0.035f, 0.072f) * g;
+        mb.ellipsoid(e + vec3(sd * 0.003f, 0.001f, -0.002f), vec3(0.021f, 0.011f, 0.015f) * g, lip, 7, 5);                        // dark rim, almond shaped
+        mb.ellipsoid(e, vec3(0.014f, 0.009f, 0.011f) * g, Mat(L.emissiveEyes > 0.6f ? L.glow : hexColor(0xd89a2a), 0.15f, 0, 0.3f + L.emissiveEyes * 2.f), 7, 5);
+        mb.ellipsoid(e + vec3(sd * 0.002f, 0, 0.008f) * g, vec3(0.005f, 0.006f, 0.004f) * g, nose, 4, 3);                         // pupil
+        vec3 b = H + vec3(sd * 0.05f, 0.075f, -0.016f) * g, tip = b + vec3(sd * 0.026f, 0.09f, -0.028f) * g;
+        mb.triP(b + vec3(sd * 0.024f, 0, 0.012f) * g, tip + vec3(0, 0, 0.012f) * g, b + vec3(-sd * 0.02f, 0, 0.014f) * g, Mat(lerp(L.c2, hexColor(0xd8b898), 0.5f), 0.9f));
+        mb.triP(b + vec3(-sd * 0.02f, 0, 0.014f) * g, tip + vec3(0, 0, 0.012f) * g, b + vec3(sd * 0.024f, 0, 0.012f) * g, Mat(lerp(L.c2, hexColor(0xd8b898), 0.5f), 0.9f));
+    }
+    mb.setBone(Q_JAW);
+    for (int sd = -1; sd <= 1; sd += 2) mb.cone(J + vec3(sd * 0.018f, 0.012f, 0.13f) * g, J + vec3(sd * 0.016f, 0.045f, 0.135f) * g, 0.007f, Mat(hexColor(0xeee6d0), 0.4f), 4);
+    for (int l = 0; l < 4; l++) {
+        mb.setBone(legs[l][2]);
+        vec3 f = QJ(sk, legs[l][2]);
+        for (int t = -1; t <= 1; t++) mb.cone(f + vec3(t * 0.022f, -0.045f, 0.08f) * g, f + vec3(t * 0.024f, -0.055f, 0.105f) * g, 0.008f, Mat(hexColor(0x1e1a16), 0.5f), 4);
+    }
 }
 
 void buildQuadruped(MeshBuilder& mb, const CreatureLook& L) {
@@ -563,7 +643,7 @@ void buildQuadruped(MeshBuilder& mb, const CreatureLook& L) {
         vec3 base = lerp(QJ(sk, Q_ROOT), QJ(sk, Q_CHEST), t) + vec3(0, 0.15f * g, 0);
         mb.cone(base, base + vec3(0, 0.14f, -0.05f), 0.04f, L.crystal ? Mat(L.glow, 0.15f, 0, 2.f) : dark, 5);
     }
-    mb.applyColorJitter(0, 0.06f, L.seed);
+    if (L.kind != 0 && L.kind != 6) mb.applyColorJitter(0, 0.06f, L.seed);
 }
 
 void buildSpider(MeshBuilder& mb, const CreatureLook& L) {

@@ -24,7 +24,10 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
   - elle est maintenant une butte rocheuse **enfoncée dans le sol**, avec une galerie étayée (trois cadres de bois qui s'enfoncent dans le noir), un auvent en planches, une enseigne, une lanterne suspendue, des rails, un wagonnet de minerai, un treuil, un tas de minerai, une pioche, des caisses et un tonneau ;
   - les collisions et la lumière de la lanterne suivent la nouvelle forme (la lumière tourne avec la mine).
 - **Les loups n'utilisent plus le modèle Tripo** :
-  - ils sont dessinés par le jeu : corps élancé au poitrail profond, dos sombre et ventre clair, collerette de fourrure, long museau, oreilles pointues, yeux ambrés, crocs, queue touffue au bout sombre, pattes fines ;
+  - ils sont dessinés par le jeu. **Forme** : poitrail profond jusqu'aux coudes, taille fine, épaules et cuisses musclées, longues pattes aux grosses pattes ovales avec griffes, crâne large et long museau, oreilles triangulaires épaisses inclinées vers l'arrière, collerette épaisse, queue touffue portée bas ;
+  - **mèches de fourrure** courtes et arrondies qui cassent la silhouette : collerette, joues, menton, arrière des cuisses, avant-bras et dessous de la queue ;
+  - **pelage peint sur tout le corps, en dégradé continu** (plus de taches séparées) : selle sombre sur le dos, flancs grisonnants, ventre, gorge et intérieur des pattes crème, masque clair sur le museau et les joues, tons fauves sur les pattes, les oreilles et le chanfrein, raie sombre devant les pattes avant, bout de queue sombre, poils de jarre clairs et sombres mêlés ;
+  - **détails** : yeux ambrés en amande cerclés de noir avec pupille, truffe noire, babines sombres, crocs, intérieur des oreilles clair ;
   - cela vaut pour tous les loups (gris, des neiges, des steppes, boréal, des Titans, molosses de l'Abîme) et pour Fenra, le loup géant monture ;
   - `assets/models/wolf.lkm` et `wolf.jpg` sont supprimés, ce qui allège l'APK d'environ 10 Mo.
 - **Donjons habillés** (tous sauf le Royaume Céleste, qui garde ses îles) :
