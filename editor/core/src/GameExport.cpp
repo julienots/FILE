@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <format>
 
 #include <cstdio>
 #include <optional>
@@ -13,8 +14,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include "agr/assets/Image.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/scene/SceneSerializer.hpp"
+#include "agr/editor/SceneTemplates.hpp"
 
 namespace agr::editor {
 
@@ -95,8 +98,24 @@ std::optional<std::vector<u8>> binaryScene(const fs::path& file) {
     Scene source;
     if (!SceneSerializer::fromJson(source, original)) return std::nullopt;
     std::vector<u8> bin = SceneSerializer::toBinary(source);
+    // Lossless means: the binary loads to exactly what the JSON loads to (fields added since the
+    // file was saved take their defaults either way), and no component of the file was dropped
+    // on the way (a type unknown here would be lost).
     Scene check;
-    if (!SceneSerializer::fromBinary(check, bin) || SceneSerializer::toJson(check) != original) {
+    const auto loaded = SceneSerializer::toJson(source);
+    bool same = SceneSerializer::fromBinary(check, bin) && SceneSerializer::toJson(check) == loaded;
+    if (same && original.contains("entities") && loaded.contains("entities") && original["entities"].size() == loaded["entities"].size()) {
+        for (usize i = 0; i < original["entities"].size() && same; ++i) {
+            const auto& a = original["entities"][i];
+            const auto& b = loaded["entities"][i];
+            if (!a.contains("components") || !a["components"].is_object()) continue;
+            for (const auto& [name, value] : a["components"].items())
+                if (!b.contains("components") || !b["components"].contains(name)) same = false;
+        }
+    } else if (same) {
+        same = false;
+    }
+    if (!same) {
         AGR_LOG_INFO("Export", "{}: kept as text (not converted to binary losslessly)", file.filename().string());
         return std::nullopt;
     }
@@ -152,6 +171,7 @@ Result<ExportReport> packageGameData(const Project& project, const fs::path& gam
 
 namespace {
 Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack) {
+    registerAllComponentTypes();  // scenes are converted without the editor's plugins (command line)
     ExportReport report;
     report.output = gameDir;
     const fs::path startup = project.root() / project.settings().startupScene;
@@ -225,6 +245,12 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
     if (auto key = exportPackKey(project); !key) return key.error();
     else if (key.value())
         if (Status s = embedPackKey(exe, *key.value()); !s) return s.error();
+    if (playerExecutable.extension() == ".exe") {  // the game's icon in the executable (Explorer, taskbar)
+        auto png = squareIconPng(project, 256);
+        if (png && png.value().size() > 200 * 1024) png = squareIconPng(project, 128);
+        if (!png) report.warnings.push_back("icon: " + png.error().message);
+        else if (Status st = embedWindowsIcon(exe, png.value()); !st) report.warnings.push_back("icon: " + st.error().message);
+    }
     // Icon next to the executable (assets/icon.png, else the AGR mark), and on Linux a desktop entry.
     fs::path icon = project.assetsDirectory() / "icon.png";
     if (!fs::is_regular_file(icon, ec)) icon = project.assetsDirectory() / "textures" / "agr_mark.png";
@@ -447,6 +473,131 @@ Result<ExportReport> exportPatch(const Project& project, const fs::path& basePac
     if (Status s = w.write(outputPack, k); !s) return s.error();
     AGR_LOG_INFO("Export", "patch: {} changed file(s) -> {}", report.files, outputPack.string());
     return report;
+}
+
+// ---------------------------------------------------------------- Windows icon
+namespace {
+struct PeView {
+    std::string data;
+    struct Section {
+        u32 va, vsize, raw, rawSize;
+    };
+    std::vector<Section> sections;
+    u32 rsrcRva = 0;
+    bool ok = false;
+    u32 u32at(usize o) const { return o + 4 <= data.size() ? static_cast<u32>(static_cast<u8>(data[o]) | static_cast<u8>(data[o + 1]) << 8 | static_cast<u8>(data[o + 2]) << 16 | static_cast<u32>(static_cast<u8>(data[o + 3])) << 24) : 0; }
+    u16 u16at(usize o) const { return o + 2 <= data.size() ? static_cast<u16>(static_cast<u8>(data[o]) | static_cast<u8>(data[o + 1]) << 8) : 0; }
+    void put32(usize o, u32 v) {
+        for (int i = 0; i < 4; ++i) data[o + i] = static_cast<char>(v >> (8 * i));
+    }
+    explicit PeView(std::string bytes) : data(std::move(bytes)) {
+        if (data.size() < 0x40 || data[0] != 'M' || data[1] != 'Z') return;
+        const u32 pe = u32at(0x3C);
+        if (pe + 24 > data.size() || data.compare(pe, 4, std::string("PE\0\0", 4)) != 0) return;
+        const u16 nsec = u16at(pe + 6), optSize = u16at(pe + 20);
+        const usize opt = pe + 24;
+        const u16 magic = u16at(opt);
+        const usize dirs = opt + (magic == 0x20B ? 112 : 96);
+        rsrcRva = u32at(dirs + 2 * 8);
+        const usize sec = opt + optSize;
+        for (u16 i = 0; i < nsec; ++i) {
+            const usize h = sec + i * 40u;
+            sections.push_back({u32at(h + 12), u32at(h + 8), u32at(h + 20), u32at(h + 16)});
+        }
+        ok = rsrcRva != 0;
+    }
+    usize offsetOf(u32 rva) const {
+        for (const Section& s : sections)
+            if (rva >= s.va && rva < s.va + std::max(s.vsize, s.rawSize)) return s.raw + (rva - s.va);
+        return 0;
+    }
+    /// File offset of the first data entry of resource type `type` (IMAGE_RESOURCE_DATA_ENTRY).
+    usize firstDataEntry(u32 type) const {
+        const usize root = offsetOf(rsrcRva);
+        if (!root) return 0;
+        auto find = [&](usize dir, std::optional<u32> id) -> u32 {  // offset (relative to root) of the entry's target
+            const u16 named = u16at(dir + 12), ids = u16at(dir + 14);
+            for (u32 i = 0; i < u32(named) + ids; ++i) {
+                const usize e = dir + 16 + i * 8u;
+                if (!id || (!(u32at(e) & 0x80000000u) && u32at(e) == *id)) return u32at(e + 4);
+            }
+            return 0xFFFFFFFFu;
+        };
+        u32 t = find(root, type);
+        if (t == 0xFFFFFFFFu || !(t & 0x80000000u)) return 0;
+        u32 n = find(root + (t & 0x7FFFFFFFu), std::nullopt);
+        if (n == 0xFFFFFFFFu || !(n & 0x80000000u)) return 0;
+        u32 l = find(root + (n & 0x7FFFFFFFu), std::nullopt);
+        if (l == 0xFFFFFFFFu || (l & 0x80000000u)) return 0;
+        return root + l;
+    }
+};
+}  // namespace
+
+Status embedWindowsIcon(const fs::path& exe, std::span<const u8> png) {
+    auto bytes = readAll(exe);
+    if (!bytes) return makeError(Error::Code::IOError, "cannot read " + exe.string());
+    PeView pe(std::move(*bytes));
+    if (!pe.ok) return makeError(Error::Code::Unsupported, exe.filename().string() + ": not a Windows executable with resources");
+    const usize icon = pe.firstDataEntry(3), group = pe.firstDataEntry(14);  // RT_ICON, RT_GROUP_ICON
+    if (!icon || !group) return makeError(Error::Code::Unsupported, exe.filename().string() + " has no icon resource (rebuild the Windows player)");
+    const u32 iconRva = pe.u32at(icon), capacity = pe.u32at(icon + 4);
+    const usize iconAt = pe.offsetOf(iconRva);
+    if (!iconAt || png.size() > capacity || iconAt + capacity > pe.data.size())
+        return makeError(Error::Code::InvalidArgument, std::format("icon too large ({} bytes, room for {})", png.size(), capacity));
+    std::memcpy(pe.data.data() + iconAt, png.data(), png.size());
+    std::memset(pe.data.data() + iconAt + png.size(), 0, capacity - png.size());
+    pe.put32(icon + 4, static_cast<u32>(png.size()));
+    // GRPICONDIR: count at +4, then 14-byte entries (bytesInRes at +8 of each).
+    const usize groupAt = pe.offsetOf(pe.u32at(group));
+    if (groupAt && pe.u16at(groupAt + 4) >= 1) {
+        pe.data[groupAt + 6] = 0, pe.data[groupAt + 7] = 0;  // width, height: 0 = 256
+        pe.put32(groupAt + 6 + 8, static_cast<u32>(png.size()));
+    }
+    std::ofstream out(exe, std::ios::binary | std::ios::trunc);
+    if (!out || !out.write(pe.data.data(), static_cast<std::streamsize>(pe.data.size()))) return makeError(Error::Code::IOError, "cannot write " + exe.string());
+    return {};
+}
+
+std::vector<u8> readWindowsIcon(const fs::path& exe) {
+    auto bytes = readAll(exe);
+    if (!bytes) return {};
+    PeView pe(std::move(*bytes));
+    const usize icon = pe.ok ? pe.firstDataEntry(3) : 0;
+    if (!icon) return {};
+    const usize at = pe.offsetOf(pe.u32at(icon));
+    const u32 size = pe.u32at(icon + 4);
+    if (!at || at + size > pe.data.size()) return {};
+    return std::vector<u8>(pe.data.begin() + static_cast<std::ptrdiff_t>(at), pe.data.begin() + static_cast<std::ptrdiff_t>(at + size));
+}
+
+Result<std::vector<u8>> squareIconPng(const Project& project, u32 size) {
+    fs::path file = project.assetsDirectory() / "icon.png";
+    std::error_code ec;
+    if (!fs::is_regular_file(file, ec)) file = project.assetsDirectory() / "textures" / "agr_mark.png";
+    auto bytes = readAll(file);
+    if (!bytes) return makeError(Error::Code::NotFound, "no icon (assets/icon.png)");
+    auto img = decodeImage(std::span<const u8>(reinterpret_cast<const u8*>(bytes->data()), bytes->size()), file.string());
+    if (!img) return img.error();
+    const Image& src = img.value();
+    // Fit inside size x size (aspect kept, transparent margins), box-filtered.
+    const float k = std::min(static_cast<float>(size) / static_cast<float>(src.width), static_cast<float>(size) / static_cast<float>(src.height));
+    const u32 w = std::max(1u, static_cast<u32>(std::lround(src.width * k))), h = std::max(1u, static_cast<u32>(std::lround(src.height * k)));
+    const u32 ox = (size - w) / 2, oy = (size - h) / 2;
+    std::vector<u8> out(static_cast<usize>(size) * size * 4, 0);
+    for (u32 y = 0; y < h; ++y)
+        for (u32 x = 0; x < w; ++x) {
+            const u32 x0 = x * src.width / w, x1 = std::max(x0 + 1, (x + 1) * src.width / w);
+            const u32 y0 = y * src.height / h, y1 = std::max(y0 + 1, (y + 1) * src.height / h);
+            u32 acc[4] = {0, 0, 0, 0}, n = 0;
+            for (u32 sy = y0; sy < y1 && sy < src.height; ++sy)
+                for (u32 sx = x0; sx < x1 && sx < src.width; ++sx, ++n)
+                    for (int c = 0; c < 4; ++c) acc[c] += src.pixels[(static_cast<usize>(sy) * src.width + sx) * 4 + c];
+            for (int c = 0; c < 4; ++c) out[((static_cast<usize>(y + oy)) * size + x + ox) * 4 + c] = static_cast<u8>(acc[c] / std::max(n, 1u));
+        }
+    auto png = encodePng(size, size, out);
+    if (!png) return png.error();
+    return std::vector<u8>(png.value().begin(), png.value().end());
 }
 
 } // namespace agr::editor

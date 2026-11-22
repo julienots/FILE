@@ -1543,3 +1543,41 @@ TEST_CASE("package repository: index, dependency order, checked downloads, insta
     std::error_code ec;
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("Windows export: the game's icon replaces the player's placeholder icon resource") {
+    // Needs the cross-compiled player (preset windows-x64); skipped without it.
+    fs::path player;
+    for (const fs::path& p : {fs::path(AGR_SOURCE_DIR) / "build" / "windows-x64" / "bin" / "agr_player.exe"})
+        if (fs::exists(p)) player = p;
+    if (player.empty()) {
+        WARN_MESSAGE(false, "no Windows player built: icon test skipped");
+        return;
+    }
+    const std::vector<u8> placeholder = readWindowsIcon(player);
+    REQUIRE(placeholder.size() > 1000);  // the placeholder's PNG and its room
+    EditorFixture f(ProjectMode::Mode2D);
+    f.ctx->newScene(SceneTemplate::Showcase2D);
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    // A 300 x 200 red icon: fitted into 256 x 256 with transparent margins.
+    std::vector<u8> red(300 * 200 * 4);
+    for (usize i = 0; i < red.size(); i += 4) red[i] = 220, red[i + 1] = 40, red[i + 2] = 40, red[i + 3] = 255;
+    auto png = encodePng(300, 200, red);
+    REQUIRE(png);
+    { std::ofstream(f.ctx->project().assetsDirectory() / "icon.png", std::ios::binary).write(reinterpret_cast<const char*>(png.value().data()), static_cast<std::streamsize>(png.value().size())); }
+    auto report = exportDesktop(f.ctx->project(), f.root / "out", player);
+    REQUIRE(report);
+    CHECK(report.value().warnings.empty());
+    const fs::path exe = report.value().output / (report.value().output.filename().string() + ".exe");
+    const std::vector<u8> icon = readWindowsIcon(exe);
+    auto expected = squareIconPng(f.ctx->project(), 256);
+    REQUIRE(expected);
+    CHECK(icon == expected.value());
+    auto decoded = decodeImage(icon);
+    REQUIRE(decoded);
+    CHECK(decoded.value().width == 256);
+    CHECK(decoded.value().pixels[(128 * 256 + 128) * 4] == 220);    // red in the middle
+    CHECK(decoded.value().pixels[(5 * 256 + 128) * 4 + 3] == 0);    // transparent margin above
+    CHECK(readWindowsIcon(player) == placeholder);                  // the template is untouched
+    // Too large an image is refused rather than corrupting the executable.
+    CHECK_FALSE(embedWindowsIcon(exe, std::vector<u8>(512 * 1024, 7)));
+}

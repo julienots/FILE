@@ -17,6 +17,7 @@ d'export le rappelle).
 JSON (composants et champs par nom, références par UUID, instances de prefabs avec leurs modifications),
 sans arbre JSON intermédiaire : pour 100 000 entités, ~0,1 s de chargement au lieu de ~0,7 s. La
 conversion est **vérifiée** : relue, la scène binaire doit redonner exactement le document JSON du disque ;
+(les champs ajoutés depuis l'enregistrement du fichier prennent leur valeur par défaut des deux côtés) ;
 sinon (composant inconnu de l'éditeur, prefab introuvable, fichier modifié à la main) la scène est copiée
 telle quelle. `ExportReport::binaryScenes` compte les scènes converties. L'éditeur utilise le même format
 pour ses instantanés (annuler / rétablir, mode Jeu).
@@ -99,7 +100,10 @@ partir du **lecteur Windows précompilé**, cherché dans `AGR_EXPORT_TEMPLATES/
 `export_templates/windows-x64/` à côté de l'éditeur, puis `build/windows-x64/bin/` (preset CMake
 `windows-x64`, compilation croisée MinGW-w64 : [BUILDING.md](BUILDING.md)). Aucun compilateur n'est
 nécessaire au moment de l'export. Le `.exe` est autonome (DLL système uniquement) et s'ouvre sans
-console. Exemple : la Vitrine 2D exportée pèse 31 Mo (25 Mo de lecteur + 5,5 Mo de données).
+console. **L'icône du jeu** (`assets/icon.png`, sinon le logo AGR) est écrite dans le `.exe` (icône de
+l'Explorateur et de la barre des tâches) : le lecteur Windows réserve une ressource d'icône que l'export
+remplace par l'image ramenée à 256 × 256 (proportions gardées, marges transparentes) ; vérifiée en la
+relisant avec `wrestool` (icoutils). Exemple : la Vitrine 2D exportée pèse 31 Mo (25 Mo de lecteur + 5,5 Mo de données).
 
 ## Android
 
@@ -140,7 +144,7 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
   consommation sur appareil restent à mesurer.
 - Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
   contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas d'icône intégrée au
-  `.exe` ni d'installateur.
+  installateur (l'icône est intégrée au `.exe`).
 - Pas de compression de
   textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).

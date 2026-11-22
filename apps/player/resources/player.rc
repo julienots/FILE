@@ -1,0 +1,3 @@
+// Windows resources of the game player. The icon is a placeholder with room for a 256 x 256 PNG:
+// the exporter writes the game's icon over it (editor/core/src/GameExport.cpp, embedWindowsIcon).
+1 ICON "placeholder.ico"

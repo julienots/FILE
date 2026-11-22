@@ -18,4 +18,6 @@ set_target_properties(agr_player PROPERTIES FOLDER "Apps")
 if(WIN32)
     # A game window without a console (SDL_main provides WinMain).
     set_target_properties(agr_player PROPERTIES WIN32_EXECUTABLE ON)
+    # Icon resource (replaced by the game's icon at export).
+    target_sources(agr_player PRIVATE resources/player.rc)
 endif()

@@ -10,6 +10,9 @@ namespace agr::editor {
 
 /// Fills an empty scene with the content of a template. Every template is
 /// playable as is: a camera, lighting where relevant and visible content.
+/// Registers every component type of the engine (idempotent): scenes can be read and written
+/// without the plugins (command-line export, tools).
+void registerAllComponentTypes();
 void buildSceneTemplate(Scene& scene, SceneTemplate tmpl);
 SceneTemplate defaultTemplateFor(ProjectMode mode);
 /// Templates offered for a project mode (the default first).

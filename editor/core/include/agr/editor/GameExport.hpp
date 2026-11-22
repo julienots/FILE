@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <optional>
+#include <span>
 
 #include "agr/core/Pack.hpp"
 #include "agr/editor/Project.hpp"
@@ -47,6 +48,14 @@ Status zipFolder(const std::filesystem::path& dir, const std::filesystem::path& 
 /// export_templates/ next to the editor (windows-x64/agr_player.exe), the cross-compiled build
 /// tree (build/windows-x64/bin), or the editor's own player on Windows. Empty when none exists.
 std::filesystem::path findWindowsPlayer(const std::filesystem::path& editorDirectory);
+
+/// Replaces the icon of a Windows executable built with the player's placeholder icon resource
+/// (RT_ICON / RT_GROUP_ICON) by `png` (a PNG of at most 256 x 256 that fits the reserved room).
+Status embedWindowsIcon(const std::filesystem::path& exe, std::span<const u8> png);
+/// The PNG currently in the executable's first icon (empty when it has none).
+std::vector<u8> readWindowsIcon(const std::filesystem::path& exe);
+/// The project's icon (assets/icon.png, else the AGR mark) as a square PNG of `size` pixels.
+Result<std::vector<u8>> squareIconPng(const Project& project, u32 size);
 
 // ---------------------------------------------------------------- data packs
 /// Key of the project's encrypted packs, kept in <project>/keys/data.key (64 hex digits, created

@@ -14,6 +14,11 @@
 #include "agr/audio/AudioComponents.hpp"
 #include "agr/ui/UIComponents.hpp"
 #include "agr/navigation/NavigationComponents.hpp"
+#include "agr/animation/IK2D.hpp"
+#include "agr/animation/IK3D.hpp"
+#include "agr/net/Replication.hpp"
+#include "agr/scene/Prefab.hpp"
+#include "agr/scene/Terrain.hpp"
 
 namespace agr::editor {
 
@@ -554,7 +559,7 @@ void buildShowcase3D(Scene& scene) {
 
 } // namespace
 
-void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
+void registerAllComponentTypes() {
     registerRenderComponents();
     registerSpriteAnimatorComponent();
     registerPhysics2DComponents();
@@ -564,6 +569,15 @@ void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
     registerUIComponents();
     registerAnimationComponents();
     registerNavigationComponents();
+    registerIK2DComponents();
+    registerIK3DComponents();
+    net::registerNetComponents();
+    registerTerrainComponents();
+    registerPrefabComponents();
+}
+
+void buildSceneTemplate(Scene& scene, SceneTemplate tmpl) {
+    registerAllComponentTypes();
     auto& reg = scene.registry();
     const char* mark = "assets://textures/agr_mark.png";
     const char* grid = "assets://textures/grid.png";
