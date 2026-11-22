@@ -53,6 +53,8 @@ enum class JointType3D : i32 {
     Distance = 2,  ///< Keeps the anchors between lowerLimit / upperLimit (rope) or at `length`, optionally springy.
     Slider = 3,    ///< Translation along `axis` only (elevators, drawers); limits, motor.
     Ball = 4,      ///< Free rotation about the anchor (chains, ragdoll shoulders).
+    Pulley = 5,    ///< Rope over two fixed points: lengthA + ratio * lengthB stays constant (lifts, counterweights). Needs a connected body.
+    SwingTwist = 6,  ///< Ragdoll joint: swing inside a cone of half angle `swingLimit` around `axis`, twist between lowerAngle / upperAngle.
 };
 
 /// Joins the body of this entity (it needs a RigidBody) to `connectedBody` (another body, or none
@@ -79,6 +81,10 @@ struct Joint3DComponent {
     float breakForce = 0.0f;           ///< N; 0 = unbreakable.
     bool collideConnected = false;
     bool broken = false;
+    math::Vec3 pulleyPoint{0.0f, 2.0f, 0.0f};           ///< Pulley: fixed world point the rope goes up to from this body.
+    math::Vec3 connectedPulleyPoint{1.0f, 2.0f, 0.0f};  ///< Pulley: fixed world point above the connected body.
+    float ratio = 1.0f;                                 ///< Pulley: block and tackle ratio (2 = the connected side moves half as far).
+    float swingLimit = 0.7853982f;                      ///< SwingTwist: cone half angle (radians).
 };
 
 /// Kinematic character (Jolt CharacterVirtual): a capsule moved by its velocity (set by scripts

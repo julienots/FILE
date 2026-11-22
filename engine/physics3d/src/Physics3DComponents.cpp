@@ -40,7 +40,7 @@ void registerPhysics3DComponents() {
     reg.add<Joint3DComponent>("Joint3D")
         .category("Physics 3D")
         .description("Joint between this body and another one (or the world): fixed, hinge, distance / spring, slider, ball.")
-        .field("type", &Joint3DComponent::type, {.enumEntries = {{"Fixed", 0}, {"Hinge", 1}, {"Distance", 2}, {"Slider", 3}, {"Ball", 4}}})
+        .field("type", &Joint3DComponent::type, {.enumEntries = {{"Fixed", 0}, {"Hinge", 1}, {"Distance", 2}, {"Slider", 3}, {"Ball", 4}, {"Pulley", 5}, {"SwingTwist", 6}}})
         .field("connectedBody", &Joint3DComponent::connectedBody, {.tooltip = "Other body (none = a fixed point of the world)"})
         .field("anchor", &Joint3DComponent::anchor, {.tooltip = "Joint point, local to this entity", .speed = 0.01f})
         .field("autoConnectedAnchor", &Joint3DComponent::autoConnectedAnchor, {.tooltip = "The connected anchor is the same world point as the anchor when the joint is created"})
@@ -59,7 +59,11 @@ void registerPhysics3DComponents() {
         .field("maxMotorForce", &Joint3DComponent::maxMotorForce, {.tooltip = "N (N·m for a hinge)", .rangeMin = 0.0f, .rangeMax = 1e9f, .speed = 1.0f})
         .field("breakForce", &Joint3DComponent::breakForce, {.tooltip = "N; 0 = unbreakable", .rangeMin = 0.0f, .rangeMax = 1e9f, .speed = 1.0f})
         .field("collideConnected", &Joint3DComponent::collideConnected, {.tooltip = "The two bodies still collide with each other"})
-        .field("broken", &Joint3DComponent::broken, {.tooltip = "The joint broke (untick to rebuild it)", .flags = FieldFlag_Transient});
+        .field("broken", &Joint3DComponent::broken, {.tooltip = "The joint broke (untick to rebuild it)", .flags = FieldFlag_Transient})
+        .field("pulleyPoint", &Joint3DComponent::pulleyPoint, {.tooltip = "Pulley: fixed world point above this body", .speed = 0.01f})
+        .field("connectedPulleyPoint", &Joint3DComponent::connectedPulleyPoint, {.tooltip = "Pulley: fixed world point above the connected body", .speed = 0.01f})
+        .field("ratio", &Joint3DComponent::ratio, {.tooltip = "Pulley ratio", .rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
+        .field("swingLimit", &Joint3DComponent::swingLimit, {.tooltip = "SwingTwist: cone half angle", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1415926f, .speed = 0.01f});
     reg.add<CharacterController3DComponent>("CharacterController3D")
         .category("Physics 3D")
         .description("Character capsule moved by its velocity: slides along walls, climbs steps and slopes, pushes bodies. Feet at the entity origin.")

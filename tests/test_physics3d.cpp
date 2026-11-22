@@ -578,4 +578,49 @@ TEST_CASE("Vehicle3D: rests on its suspension, drives forward, steers, brakes; w
     w.run(0.5f);
     CHECK(w.physics.hasBody(car));
 }
+TEST_CASE("joints 3D: pulley keeps the rope length, the heavy side goes down; swing-twist stays inside its cone") {
+    World3D w;
+    const auto heavy = w.box("Heavy", {0, 5, 0}, {0.5f, 0.5f, 0.5f}, BodyType3D::Dynamic);
+    const auto light = w.box("Light", {3, 5, 0}, {0.5f, 0.5f, 0.5f}, BodyType3D::Dynamic);
+    w.scene.registry().get<RigidBodyComponent>(heavy).mass = 3.0f;
+    w.scene.registry().get<RigidBodyComponent>(light).mass = 1.0f;
+    auto& pu = w.scene.registry().emplace<Joint3DComponent>(heavy);
+    pu.type = JointType3D::Pulley;
+    pu.connectedBody = light;
+    pu.pulleyPoint = {0, 9, 0};
+    pu.connectedPulleyPoint = {3, 9, 0};
+    w.run(0.8f);
+    const Vec3 a = w.position(heavy), b = w.position(light);
+    CHECK(a.y < 4.0f);  // went down
+    CHECK(b.y > 6.0f);  // pulled up
+    const float rope = math::length(a - Vec3{0, 9, 0}) + math::length(b - Vec3{3, 9, 0});
+    CHECK(rope == doctest::Approx(8.0f).epsilon(0.02));
+    CHECK(w.physics.jointValue(heavy).value() == doctest::Approx(8.0f).epsilon(0.02));
+    // Pulley without a connected body: refused (warning), no crash.
+    const auto lone = w.box("Lone", {10, 5, 0}, {0.5f, 0.5f, 0.5f}, BodyType3D::Dynamic);
+    w.scene.registry().emplace<Joint3DComponent>(lone).type = JointType3D::Pulley;
+    w.run(0.1f);
+    CHECK_FALSE(w.physics.jointValue(lone));
+
+    // Ragdoll limb hanging 1 m below a world point, kicked sideways hard: the swing stays within 30 degrees.
+    const auto limb = w.box("Limb", {20, 5, 0}, {0.2f, 1.0f, 0.2f}, BodyType3D::Dynamic);
+    auto& st = w.scene.registry().emplace<Joint3DComponent>(limb);
+    st.type = JointType3D::SwingTwist;
+    st.anchor = {0, 1, 0};
+    st.axis = {0, 1, 0};
+    st.swingLimit = 0.5235988f;
+    st.lowerAngle = -0.2f;
+    st.upperAngle = 0.2f;
+    w.run(0.05f);
+    CHECK(w.physics.applyImpulse(limb, {120, 0, 40}));
+    float worst = 0.0f;
+    for (int i = 0; i < 60; ++i) {
+        w.run(1.0f / 60.0f);
+        const Vec3 p = w.position(limb);
+        const float tilt = std::atan2(std::hypot(p.x - 20.0f, p.z), 6.0f - p.y);
+        worst = std::max(worst, tilt);
+    }
+    CHECK(worst > 0.3f);       // it did swing
+    CHECK(worst < 0.5236f + 0.06f);  // but not past the cone
+}
 }  // TEST_SUITE

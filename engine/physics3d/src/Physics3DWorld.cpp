@@ -29,6 +29,8 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/PulleyConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
@@ -911,7 +913,7 @@ struct Physics3DWorld::Impl {
                 const ecs::Entity ownerB = owner(s, j.connectedBody);
                 b = find(ownerB.isNull() ? j.connectedBody : ownerB);
             }
-            if (!a || a->type == BodyType3D::Static || (!j.connectedBody.isNull() && !b) || (b && b == a)) {
+            if (!a || a->type == BodyType3D::Static || (!j.connectedBody.isNull() && !b) || (b && b == a) || (j.type == JointType3D::Pulley && !b)) {
                 if (!rec.warned)
                     AGR_LOG_WARN("Physics3D", "'{}': Joint3D needs a non-static RigidBody on the entity and a body on its connected entity", s.nameOf(e));
                 rec.warned = true;
@@ -920,7 +922,9 @@ struct Physics3DWorld::Impl {
             seen.insert(e.packed());
             u64 p = mix(static_cast<u64>(j.type) + 1, j.connectedBody.packed());
             for (float f : {j.anchor.x, j.anchor.y, j.anchor.z, j.connectedAnchor.x, j.connectedAnchor.y, j.connectedAnchor.z, j.axis.x, j.axis.y, j.axis.z,
-                            j.length, j.springFrequency, j.springDamping, j.lowerAngle, j.upperAngle, j.lowerLimit, j.upperLimit})
+                            j.length, j.springFrequency, j.springDamping, j.lowerAngle, j.upperAngle, j.lowerLimit, j.upperLimit,
+                            j.pulleyPoint.x, j.pulleyPoint.y, j.pulleyPoint.z, j.connectedPulleyPoint.x, j.connectedPulleyPoint.y,
+                            j.connectedPulleyPoint.z, j.ratio, j.swingLimit})
                 p = mixf(p, f);
             p = mix(p, static_cast<u64>(j.autoConnectedAnchor) | (static_cast<u64>(j.enableLimits) << 1) | (static_cast<u64>(j.collideConnected) << 2));
             const JPH::BodyID idA = a->id, idB = b ? b->id : JPH::BodyID();
@@ -1005,6 +1009,37 @@ struct Physics3DWorld::Impl {
                     settings = pt;
                     break;
                 }
+                case JointType3D::Pulley: {
+                    // Body 1 = the connected body, body 2 = this one (CreateConstraint(settings, idB, idA)).
+                    auto* pu = new JPH::PulleyConstraintSettings();
+                    const Vec3 worldB = j.autoConnectedAnchor ? s.worldMatrix(j.connectedBody)[3].xyz() : rec.worldB;
+                    pu->mBodyPoint1 = JPH::RVec3(worldB.x, worldB.y, worldB.z);
+                    pu->mFixedPoint1 = JPH::RVec3(j.connectedPulleyPoint.x, j.connectedPulleyPoint.y, j.connectedPulleyPoint.z);
+                    pu->mBodyPoint2 = pA;
+                    pu->mFixedPoint2 = JPH::RVec3(j.pulleyPoint.x, j.pulleyPoint.y, j.pulleyPoint.z);
+                    pu->mRatio = std::max(j.ratio, 0.01f);
+                    if (j.enableLimits) {
+                        pu->mMinLength = std::max(0.0f, std::min(j.lowerLimit, j.upperLimit));
+                        pu->mMaxLength = std::max({0.0f, j.lowerLimit, j.upperLimit});
+                    } else {
+                        pu->mMinLength = 0.0f;
+                        pu->mMaxLength = -1.0f;  // the length when created
+                    }
+                    settings = pu;
+                    break;
+                }
+                case JointType3D::SwingTwist: {
+                    auto* st = new JPH::SwingTwistConstraintSettings();
+                    st->mPosition1 = pB;
+                    st->mPosition2 = pA;
+                    st->mTwistAxis1 = st->mTwistAxis2 = axis;
+                    st->mPlaneAxis1 = st->mPlaneAxis2 = perpendicular(axis);
+                    st->mNormalHalfConeAngle = st->mPlaneHalfConeAngle = std::clamp(j.swingLimit, 0.0f, JPH::JPH_PI);
+                    st->mTwistMinAngle = std::clamp(std::min(j.lowerAngle, j.upperAngle), -JPH::JPH_PI, 0.0f);
+                    st->mTwistMaxAngle = std::clamp(std::max(j.lowerAngle, j.upperAngle), 0.0f, JPH::JPH_PI);
+                    settings = st;
+                    break;
+                }
             }
             rec.c = bi.CreateConstraint(settings, idB, idA);
             if (!rec.c) return;
@@ -1067,6 +1102,8 @@ struct Physics3DWorld::Impl {
                 return std::sqrt(l[0] * l[0] + l[1] * l[1]) + std::fabs(sl->GetTotalLambdaPositionLimits());
             }
             case JointType3D::Ball: return static_cast<JPH::PointConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition().Length();
+            case JointType3D::Pulley: return std::fabs(static_cast<JPH::PulleyConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition());
+            case JointType3D::SwingTwist: return static_cast<JPH::SwingTwistConstraint*>(rec.c.GetPtr())->GetTotalLambdaPosition().Length();
         }
         return 0.0f;
     }
@@ -1289,7 +1326,9 @@ std::optional<float> Physics3DWorld::jointValue(ecs::Entity e) const {
             };
             return math::length(world(rec.a, rec.localA) - world(rec.b, rec.localB));
         }
+        case JointType3D::Pulley: return static_cast<JPH::PulleyConstraint*>(rec.c.GetPtr())->GetCurrentLength();
         case JointType3D::Fixed:
+        case JointType3D::SwingTwist:
         case JointType3D::Ball: return 0.0f;
     }
     return std::nullopt;

@@ -142,6 +142,8 @@ sans corps connecté, à un point fixe du monde.
 | `Distance` | corde (butées 0..max), barre, **ressort** (`springFrequency`, `springDamping`) | `length` (0 = distance initiale) |
 | `Slider` | ascenseurs, pistons, tiroirs | axe, butées `lowerLimit` / `upperLimit`, moteur (m/s) |
 | `Ball` (3D) | chaînes, épaules | — |
+| `Pulley` (3D) | ascenseur à contrepoids, palan : `longueurA + ratio × longueurB` constante, la corde passe par `pulleyPoint` (au-dessus de ce corps) et `connectedPulleyPoint` (au-dessus du corps relié, obligatoire) ; `jointValue` = longueur totale | `enableLimits` : longueur min / max (`lowerLimit` / `upperLimit`) |
+| `SwingTwist` (3D) | articulations de ragdoll (épaule, hanche, cou) : balancement dans un cône de demi-angle `swingLimit` autour de `axis`, torsion entre `lowerAngle` et `upperAngle` | sous un choc très violent la limite cède un peu (~6° pour 300 N·s sur un membre léger) puis revient |
 
 - `anchor` est dans le repère de l'entité. Avec `autoConnectedAnchor`, l'autre ancrage est le même point
   du monde à la création ; sinon `connectedAnchor` est dans le repère du corps connecté (ou un point du
@@ -235,7 +237,7 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
   qui a au moins un déclencheur est entièrement un capteur.
 - 2D : pentes de tilemap à 45° ou 22,5° (sur deux cellules) seulement ; deux
   `CharacterController2D` se traversent.
-- Articulations : pas de poulie ni d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
+- Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
   seulement (pas de moto ni de chenilles) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
 - Personnage 3D : capsule verticale uniquement ; entre deux personnages, simple collision des capsules.
