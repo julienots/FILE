@@ -1250,9 +1250,16 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "install + apply"});
         s.push_back({0.6f, [](Game& g) { g.menu = Menu::Mods; g.scanMods(); }, idle, "mods menu"});
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/E0_mods_menu.png"); res[3] = g.ui.findWidget("Importer un mod (.zip)") != nullptr; }, idle, "shot"});
-        // toggle the mod off with a held tap on its switch (the only switch on this page)
+        // toggle the mod off with a held tap on ITS switch. 3.1.0: the 14 built-in mods (2.7.0) are listed too, so the
+        // list is scrolled to the test mod and the switch on its row is pressed (it used to press the first switch)
+        static int modIdx = -1;
+        s.push_back({1.0f, [](Game& g) { modIdx = -1; for (int i = 0; i < (int)g.mods.size(); i++) if (g.mods[i].id == "test_mod") modIdx = i; g.ui.setScroll("mods", modIdx * 96.f); }, idle, "scroll to the test mod"});
         s.push_back({0.25f, [](Game& g) {
-            for (auto& w : g.ui.lastWidgets) if (w.second.empty()) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 610, (w.first.x + w.first.w / 2) * k, (w.first.y + w.first.h / 2) * k}); break; }
+            const Rect* imp = g.ui.findWidget("Importer un mod (.zip)");
+            if (!imp || modIdx < 0) return;
+            float listY = imp->y + 6.f + 110.f, so = g.ui.scrollOf("mods");
+            float want = listY - so + modIdx * 96.f + 24.f;
+            for (auto& w : g.ui.lastWidgets) if (w.second.empty() && std::fabs(w.first.y - want) < 3.f) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 610, (w.first.x + w.first.w / 2) * k, (w.first.y + w.first.h / 2) * k}); break; }
         }, idle, "press switch"});
         s.push_back({0.4f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 610) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 610, f.x * k, f.y * k}); } }, idle, "release"});
         s.push_back({0.2f, [](Game& g) {

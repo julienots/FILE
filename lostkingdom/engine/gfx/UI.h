@@ -76,6 +76,8 @@ public:
     bool pressedIn(Rect r);                  // a finger went down inside this frame (consumes it)
     // vertical scroll area: returns scroll offset (persistent per key)
     float scrollArea(const std::string& key, Rect r, float contentH);
+    float scrollOf(const std::string& key) const { auto it = scrolls.find(key); return it == scrolls.end() ? 0.f : it->second; }   // 3.1.0 (tests)
+    void setScroll(const std::string& key, float v) { scrolls[key] = v; }
     bool anyFingerOver(Rect r) const;
     void consumeAll();                       // modal UIs: block world input (sets `blocked`, buttons still work)
     // Test support: when enabled, every labelled widget drawn this frame is recorded (rect + label).
