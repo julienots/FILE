@@ -10,7 +10,10 @@
 namespace lk {
 
 static const float BASE_RADIUS = 44.f;     // levelled ground of the domain (fully flat up to 33 m: every building of the 34 m circle)
-static const float BUILD_RADIUS = 34.f;    // buildings must fit inside this circle
+// 3.0.0 the domain grows: village (44 m), town (62 m), castle (80 m); buildings fit 10 m inside
+float Game::baseRadius() const { static const float R[3] = {44.f, 62.f, 80.f}; return R[std::min(2, std::max(0, base.level))]; }
+float Game::baseBuildRadius() const { return baseRadius() - 10.f; }
+static bool wallLike(const std::string& id) { return id == "palisade" || id == "stonewall" || id == "castletower" || id == "gatehouse"; }
 
 const std::vector<BaseBuildDef>& baseBuildings() {
     static std::vector<BaseBuildDef> d;
@@ -30,6 +33,17 @@ const std::vector<BaseBuildDef>& baseBuildings() {
         B("pen", "Enclos", S_PEN, 1, {{"wood", 24}}, 7.2f, "Élevage : 4 cochons et 2 chevaux par enclos.");
         B("stall", "Étal de marché", S_STALL, 2, {{"wood", 12}}, 2.2f, "15 pièces d'or par jour, si un habitant le tient.");
         B("inn", "Grande maison", S_INN, 1, {{"wood", 60}, {"stone", 30}}, 6.8f, "Loge 6 habitants.").housing = 6;
+        // 3.0.0 the castle: ramparts, towers, a gatehouse, the keep, barracks, a chapel, the domain's own dungeon
+        B("stonewall", "Muraille de pierre", S_CASTLE_WALL, 1, {{"stone", 30}}, 5.f, "Un pan de rempart de 10 m. Alignez-les entre des tours.");
+        B("castletower", "Tour de rempart", S_CASTLE_TOWER, 1, {{"stone", 50}, {"wood", 10}}, 3.6f, "+2 soldats. À poser aux angles des murailles.").guards = 2;
+        B("gatehouse", "Porte fortifiée", S_GATE, 1, {{"stone", 40}, {"wood", 20}, {"iron_bar", 4}}, 5.2f, "L'entrée du château, entre deux pans de muraille.");
+        { auto& k = B("keep", "Donjon", S_KEEP, 1, {{"stone", 120}, {"wood", 60}, {"iron_bar", 10}}, 9.5f, "La tour maîtresse de votre château : +4 soldats, loge 4 habitants. Il faut un domaine agrandi."); k.unique = true; k.guards = 4; k.housing = 4; }
+        B("barracks", "Caserne", S_LONGHOUSE, 2, {{"wood", 50}, {"stone", 20}}, 6.8f, "+5 soldats. Permet de former des chevaliers.").guards = 5;
+        { auto& c = B("chapel", "Chapelle", S_CHAPEL, 1, {{"stone", 40}, {"wood", 20}}, 6.2f, "Chaque matin, deux soldats tombés au combat reviennent dans vos rangs."); c.unique = true; }
+        { auto& c = B("crypt", "Donjon du domaine", S_CRYPT, 1, {{"stone", 80}, {"iron_bar", 6}, {"crystal", 4}}, 4.8f, "Votre propre donjon sous le domaine : des salles, des monstres et un trésor, au niveau que vous choisissez."); c.unique = true; }
+        B("windmill", "Moulin", S_WINDMILL, 1, {{"wood", 40}, {"stone", 10}}, 4.f, "+50 % de pain récolté dans les champs.").unique = true;
+        B("statue", "Statue", S_STATUE, 1, {{"stone", 25}}, 1.8f, "Un héros de pierre sur la place.");
+        B("lantern", "Lanterne", S_LANTERN, 1, {{"iron_bar", 1}, {"wood", 2}}, 0.8f, "Éclaire les rues la nuit.");
     });
     return d;
 }
@@ -37,7 +51,7 @@ int baseBuildIndex(const std::string& id) { auto& d = baseBuildings(); for (int 
 
 int Game::baseCount(const std::string& id) const { int i = baseBuildIndex(id), n = 0; for (auto& b : base.built) if (b.def == i) n++; return n; }
 int Game::baseHousing() const { int n = 0; for (auto& b : base.built) n += baseBuildings()[b.def].housing; return n; }
-int Game::baseGuardCap() const { int n = 0; for (auto& b : base.built) n += baseBuildings()[b.def].guards; return n; }
+int Game::baseGuardCap() const { int n = 0; for (auto& b : base.built) n += baseBuildings()[b.def].guards; return n + 4 * conqueredForts(); }   // 3.0.0 + 4 per conquered fortress
 bool Game::baseCanAfford(const BaseBuildDef& d) const { for (auto& c : d.cost) if (countItem(c.first) < c.second) return false; return true; }
 
 // ------------------------------------------------------------------------------------------ founding
@@ -84,7 +98,7 @@ void Game::foundBase() {
 // adds the domain (POI + banner + buildings) to the world; used when founding and after loading a save
 void Game::applyBaseToWorld() {
     if (!base.founded) return;
-    Poi p; p.id = "player_base"; p.name = base.name; p.type = PoiType::Village; p.pos = base.center; p.radius = BASE_RADIUS;
+    Poi p; p.id = "player_base"; p.name = base.name; p.type = PoiType::Village; p.pos = base.center; p.radius = baseRadius();
     base.poi = world.addRuntimePoi(p);
     Structure s; s.kind = S_BANNER; s.pos = base.center; s.rot = 0; s.region = world.pois[base.poi].region; s.poi = base.poi;
     world.addRuntimeStructure(s);
@@ -99,6 +113,41 @@ void Game::clearBase() {
     base = PlayerBase();
     soldierEnts.clear(); livestockEnts.clear();
     buildMode = false; buildGhost.reset(); buildGhostModels.clear();
+}
+
+// 3.0.0 the domain grows: village -> town (62 m) -> castle (80 m). The levelled ground and the building circle
+// grow with it; the neighbours (villages, roads...) must leave room.
+bool Game::upgradeBase(std::string& why, bool doIt) {
+    if (!base.founded) { why = "Pas de domaine."; return false; }
+    if (base.level >= 2) { why = "Votre domaine est déjà un château."; return false; }
+    int next = base.level + 1;
+    static const float R[3] = {44.f, 62.f, 80.f};
+    int g = next == 1 ? 1500 : 4000, st = next == 1 ? 100 : 250, wd = next == 1 ? 80 : 150, ib = next == 1 ? 0 : 12;
+    for (const Poi& p : world.pois) if (p.id != "player_base" && length(p.pos - base.center) < p.radius + R[next] + 30.f) { why = "Trop près de « " + p.name + " » pour s'agrandir."; return false; }
+    for (int i = 0; i < 24; i++) {
+        float a = i * TAU / 24; vec2 q = base.center + vec2(std::cos(a), std::sin(a)) * R[next];
+        float h = world.height(q.x, q.y), wl = world.waterLevel(q.x, q.y);
+        if (wl > -1e8f && h < wl + 0.5f) { why = "L'eau est trop proche pour s'agrandir."; return false; }
+        if (world.roadInfluence(q.x, q.y) > 0.5f) { why = "Une route passe trop près."; return false; }
+    }
+    if (gold < g || countItem("stone") < st || countItem("wood") < wd || countItem("iron_bar") < ib) {
+        why = "Il faut " + std::to_string(g) + " or, " + std::to_string(st) + " pierre, " + std::to_string(wd) + " bois" + (ib ? ", " + std::to_string(ib) + " lingots de fer" : "") + ".";
+        return false;
+    }
+    if (!doIt) return true;
+    gold -= g; removeItem("stone", st); removeItem("wood", wd); if (ib) removeItem("iron_bar", ib);
+    base.level = next;
+    world.resetRuntime();
+    applyBaseToWorld();
+    world.refreshArea(base.center, R[next] + 40.f);
+    refreshBaseNpcs();
+    for (Entity e : soldierEnts) reg.destroyLater(e);
+    soldierEnts.clear();
+    particles.magicBurst(vec3(base.center.x, world.pois[base.poi].height + 2.f, base.center.y), vec3(1.f, 0.85f, 0.45f), 4.f, 90);
+    play("quest", 1.f);
+    notify(next == 1 ? "Votre domaine devient un bourg : plus de place pour bâtir, et le donjon (tour maîtresse) se débloque."
+                     : "Votre domaine devient un château ! Bâtissez murailles, tours et porte fortifiée tout autour.", vec3(1.f, 0.85f, 0.4f), "i_castle");
+    return true;
 }
 
 // ------------------------------------------------------------------------------------------ building
@@ -119,14 +168,16 @@ void Game::updateBuildMode() {
     vec2 fwd(std::sin(c.yaw), std::cos(c.yaw));
     buildPos = c.pos.xz() + fwd * (d.radius + 2.2f);
     buildOk = true; buildWhy.clear();
-    if (length(buildPos - base.center) + d.radius > BUILD_RADIUS) { buildOk = false; buildWhy = "Hors du domaine (approchez de l'étendard)."; }
+    if (length(buildPos - base.center) + d.radius > baseBuildRadius()) { buildOk = false; buildWhy = "Hors du domaine (approchez de l'étendard)."; }
     else if (length(buildPos - base.center) < d.radius + 2.2f) { buildOk = false; buildWhy = "Trop près de l'étendard."; }
     for (const BaseBuilt& b : base.built) {
         const BaseBuildDef& o = baseBuildings()[b.def];
         float overlap = (d.id == "palisade" && o.id == "palisade") ? 0.6f : 0.f;
+        if (wallLike(d.id) && wallLike(o.id)) overlap = std::min(d.radius, o.radius) * 1.4f;   // 3.0.0 ramparts join their towers
         if (length(b.pos - buildPos) < d.radius + o.radius - overlap) { buildOk = false; buildWhy = "Trop près : " + o.name + "."; break; }
     }
     if (buildOk && d.unique && baseCount(d.id) > 0) { buildOk = false; buildWhy = "Déjà construit."; }
+    if (buildOk && d.id == "keep" && base.level < 1) { buildOk = false; buildWhy = "Agrandissez d'abord le domaine (bourg)."; }
     if (buildOk && !baseCanAfford(d)) { buildOk = false; buildWhy = "Ressources insuffisantes."; }
 }
 
@@ -196,7 +247,12 @@ void Game::baseNewDay() {
     float mult = baseCount("well") > 0 ? 1.25f : 1.f;
     int workers = base.residents;
     int fields = std::min(baseCount("field"), workers);
-    add("bread", (int)std::round(fields * 2 * mult));
+    add("bread", (int)std::round(fields * 2 * mult * (baseCount("windmill") > 0 ? 1.5f : 1.f)));   // 3.0.0 the mill
+    if (baseCount("chapel") > 0 && base.fallen > 0) {   // 3.0.0 the chapel: the fallen come back (if there is room in the ranks)
+        int room = baseGuardCap() - armySize();
+        int n = std::min(std::min(2, base.fallen), std::max(0, room));
+        if (n > 0) { base.soldiers += n; base.fallen -= n; notify(std::to_string(n) + (n > 1 ? " soldats soignés à la chapelle reprennent leur poste." : " soldat soigné à la chapelle reprend son poste."), vec3(0.9f, 0.95f, 1.f), "i_attack"); }
+    }
     workers -= fields;
     int stalls = std::min(baseCount("stall"), std::max(0, workers));
     int coins = (int)std::round(stalls * 15 * mult);
@@ -223,33 +279,48 @@ void Game::updateBase(float dt) {
     const Poi& P = world.pois[base.poi];
     vec3 c3(base.center.x, P.height, base.center.y);
     // soldiers: keep the roster spawned while the hero is around (or escorting him)
+    // 3.0.0 the army: swordsmen, archers and knights; they follow the hero into the dungeons on the escort order
     soldierEnts.erase(std::remove_if(soldierEnts.begin(), soldierEnts.end(), [&](Entity e) {
         Character* c = reg.valid(e) ? reg.get<Character>(e) : nullptr;
-        if (c && c->dead) { base.soldiers = std::max(0, base.soldiers - 1); notify(c->name + " est tombé au combat.", vec3(1.f, 0.6f, 0.5f), "i_village"); return true; }
+        if (c && c->dead) {
+            SoldierBrain* sb = reg.get<SoldierBrain>(e);
+            int u = sb ? sb->unit : 0;
+            int& n = u == 1 ? base.archers : u == 2 ? base.knights : base.soldiers;
+            n = std::max(0, n - 1); base.fallen++;
+            notify(c->name + " a succombé au combat.", vec3(1.f, 0.6f, 0.5f), "i_village");
+            return true;
+        }
         return !c;
     }), soldierEnts.end());
-    bool wantSoldiers = !dungeon.active && (d < 200.f || base.escort);
-    if (!wantSoldiers) { for (Entity e : soldierEnts) reg.destroyLater(e); soldierEnts.clear(); }
-    else while ((int)soldierEnts.size() < base.soldiers) {
+    bool inInterior = dungeon.active && dungeon.interior;
+    bool wantSoldiers = !inInterior && ((!dungeon.active && d < 200.f) || base.escort);
+    int army = armySize();
+    if (!wantSoldiers || (int)soldierEnts.size() > army) { for (Entity e : soldierEnts) reg.destroyLater(e); soldierEnts.clear(); }
+    if (wantSoldiers) while ((int)soldierEnts.size() < army) {
         int slot = (int)soldierEnts.size();
-        static const char* names[] = {"Garde Odric", "Garde Ilse", "Garde Matthis", "Garde Sorenne", "Garde Brune", "Garde Aymar", "Garde Ysault", "Garde Thibaut", "Garde Alix"};
-        vec3 sp = (d < 200.f) ? c3 + vec3(std::cos(slot * 2.1f) * 4.f, 0, std::sin(slot * 2.1f) * 4.f) : p.pos + vec3(std::cos(slot * 2.1f) * 3.f, 0, std::sin(slot * 2.1f) * 3.f);
-        sp.y = groundAt(sp.x, sp.z);
-        Entity e = reg.create();
-        Character c; c.team = Team::Player; c.pos = sp; c.name = names[slot % 9];
-        c.maxHp = c.hp = 140.f + level * 14.f; c.atk = 12.f + level * 1.4f; c.def = 6.f + level * 0.6f; c.radius = 0.45f; c.maxPoise = c.poise = 40;
-        HumanoidLook L; L.seed = 300 + slot; L.female = slot % 3 == 1; L.body = Body::Chain; L.helm = Helm::Iron; L.c1 = hexColor(0x8a1f1f); L.c2 = hexColor(0x5a4030); L.trim = hexColor(0xd8b040);
-        L.hair = L.female ? Hair::Braids : Hair::Short;
-        setupVisualHumanoid(c.vis, L, WeaponType::Sword, WeaponType::Shield, 1.f);
-        c.vis.anim.stance = ST_ONEHAND;
-        c.height = 1.8f;
-        reg.add<Character>(e, c);
-        SoldierBrain sb; sb.slot = slot;
-        float a = slot * TAU / std::max(1, base.soldiers) + 0.4f;
-        sb.post = c3 + vec3(std::cos(a) * 12.f, 0, std::sin(a) * 12.f);
-        reg.add<SoldierBrain>(e, sb);
+        int unit = slot < base.soldiers ? 0 : (slot < base.soldiers + base.archers ? 1 : 2);
+        bool home = !dungeon.active && d < 200.f && !base.escort;
+        vec3 sp = home ? c3 + vec3(std::cos(slot * 2.1f) * 4.f, 0, std::sin(slot * 2.1f) * 4.f) : p.pos + vec3(std::cos(slot * 2.1f) * 3.f, 0, std::sin(slot * 2.1f) * 3.f);
+        Entity e = spawnArmyUnit(unit, sp, slot, -1);
+        if (SoldierBrain* sb = reg.get<SoldierBrain>(e)) {
+            float a = slot * TAU / std::max(1, army) + 0.4f;
+            float rr = std::min(baseBuildRadius() - 4.f, 12.f + base.level * 8.f) * (unit == 1 ? 0.7f : 1.f);
+            sb->post = c3 + vec3(std::cos(a) * rr, 0, std::sin(a) * rr);
+        }
         soldierEnts.push_back(e);
     }
+    // 3.0.0 escort: soldiers left far behind (fast travel, a dungeon's stairs) are out of the AI's update range:
+    // bring them to the hero here, in formation
+    if (base.escort)
+        for (size_t k = 0; k < soldierEnts.size(); k++) {
+            Character* c = reg.valid(soldierEnts[k]) ? reg.get<Character>(soldierEnts[k]) : nullptr;
+            if (!c || c->dead || distXZ(c->pos, p.pos) < 60.f) continue;
+            int row = (int)k / 3, col = (int)k % 3;
+            vec2 back{-std::sin(p.yaw), -std::cos(p.yaw)}, side{std::cos(p.yaw), -std::sin(p.yaw)};
+            vec2 g2 = p.pos.xz() + back * (2.6f + row * 1.9f) + side * ((col - 1) * 1.9f);
+            if (dungeon.active) { float a = k * 2.4f; g2 = p.pos.xz() + vec2(std::cos(a), std::sin(a)) * (1.4f + 0.25f * (k % 3)); }   // inside: stay on the hero's floor
+            c->pos = vec3(g2.x, groundAt(g2.x, g2.y), g2.y); c->vel = vec3(0);
+        }
     // livestock in the pens
     livestockEnts.erase(std::remove_if(livestockEnts.begin(), livestockEnts.end(), [&](Entity e) { return !reg.valid(e); }), livestockEnts.end());
     if (d > 220.f || dungeon.active) { for (Entity e : livestockEnts) reg.destroyLater(e); livestockEnts.clear(); }
@@ -285,35 +356,58 @@ void Game::updateSoldier(Entity e, Character& c, SoldierBrain& sb, float dt) {
     sb.cd = std::max(0.f, sb.cd - dt);
     sb.think -= dt;
     Character& p = pc();
-    vec3 anchor = base.escort ? p.pos : sb.post;
+    bool follow = base.escort && sb.fort < 0;            // 3.0.0 the guards of a conquered fortress hold their post
+    bool charge = follow && base.charge;                  // "attack at will": they range further from the hero
+    vec3 anchor = follow ? p.pos : sb.post;
     if (sb.think <= 0) {
         sb.think = 0.3f;
         sb.target = NullEntity;
         float best = 1e9f;
+        float seek = charge ? 34.f : (sb.unit == 1 ? 26.f : 22.f), leash = charge ? 40.f : (follow ? 20.f : 36.f);
         reg.each<Character>([&](Entity o, Character& oc) {
             if (oc.dead || oc.team != Team::Enemy) return;
             float dd = distXZ(oc.pos, c.pos);
-            if (dd < 22.f && distXZ(oc.pos, anchor) < (base.escort ? 20.f : 36.f) && dd < best) { best = dd; sb.target = o; }
+            if (dd < seek && distXZ(oc.pos, anchor) < leash && dd < best) { best = dd; sb.target = o; }
         });
     }
     vec2 mv{0, 0}; float spd = 0;
     Character* t = sb.target != NullEntity && reg.valid(sb.target) ? reg.get<Character>(sb.target) : nullptr;
-    if (t && !t->dead) {
+    if (t && !t->dead && sb.unit == 1) {
+        // 3.0.0 archers keep their distance and shoot
+        float dd = distXZ(t->pos, c.pos);
+        if (dd > 18.f) { mv = steer(c, t->pos, dt); spd = 4.4f; }
+        else if (dd < 6.f) { vec2 away = normalize(c.pos.xz() - t->pos.xz()); mv = away; spd = 3.6f; }
+        c.yaw = dampAngle(c.yaw, std::atan2(t->pos.x - c.pos.x, t->pos.z - c.pos.z), 10, dt);
+        if (dd < 22.f && sb.cd <= 0 && !c.attackClip && c.hitStun <= 0) {
+            const Clip* cl = &clip(C_BOW_SHOT);
+            an.play(cl, 1.f, false, 0.06f);
+            vec3 from = c.pos + vec3(0, 1.4f, 0);
+            vec3 to = t->pos + vec3(0, t->height * 0.55f, 0) + t->vel * (dd / 34.f);
+            fireProjectile(e, ProjKind::Arrow, from, normalize(to - from), 34.f, c.atk * 1.1f, Element::Physical, Team::Player);
+            play3D("bow", c.pos, 0.5f, 1.05f);
+            sb.cd = 1.5f + particles.rng.range(0.f, 0.5f);
+        }
+    } else if (t && !t->dead) {
         float dd = distXZ(t->pos, c.pos);
         if (dd > 1.7f + t->radius) { mv = steer(c, t->pos, dt); spd = 4.6f; }
         c.yaw = dampAngle(c.yaw, std::atan2(t->pos.x - c.pos.x, t->pos.z - c.pos.z), 10, dt);
         if (dd < 2.2f + t->radius && sb.cd <= 0 && !c.attackClip && c.hitStun <= 0) {
-            const Clip* cl = &clip(particles.rng.chance(0.5f) ? C_1H_A1 : C_1H_A2);
+            const Clip* cl = &clip(sb.unit == 2 ? (particles.rng.chance(0.5f) ? C_2H_A1 : C_2H_A3) : (particles.rng.chance(0.5f) ? C_1H_A1 : C_1H_A2));
             an.play(cl, 1.f, false, 0.06f);
-            c.attackClip = cl; c.attackMult = 1.f; c.hitThisSwing.clear(); c.attackIdx = 0; c.lastMotion = 0;
-            sb.cd = 1.1f + particles.rng.range(0.f, 0.5f);
+            c.attackClip = cl; c.attackMult = sb.unit == 2 ? 1.3f : 1.f; c.hitThisSwing.clear(); c.attackIdx = 0; c.lastMotion = 0;
+            sb.cd = (sb.unit == 2 ? 1.5f : 1.1f) + particles.rng.range(0.f, 0.5f);
         }
     } else {
         vec3 goal = anchor;
-        if (base.escort) { float a = sb.slot * 1.9f + 2.4f; goal = p.pos + vec3(std::cos(a + p.yaw) * 2.8f, 0, std::sin(a + p.yaw) * 2.8f); }
+        if (follow) {   // 3.0.0 a formation behind the hero: rows of three, archers at the back
+            int row = sb.slot / 3, col = sb.slot % 3;
+            vec2 back{-std::sin(p.yaw), -std::cos(p.yaw)}, side{std::cos(p.yaw), -std::sin(p.yaw)};
+            vec2 g2 = p.pos.xz() + back * (2.6f + row * 1.9f + (sb.unit == 1 ? 1.5f : 0.f)) + side * ((col - 1) * 1.9f);
+            goal = vec3(g2.x, p.pos.y, g2.y);
+        }
         float dd = distXZ(goal, c.pos);
         if (dd > 1.2f) { mv = steer(c, goal, dt); spd = dd > 8.f ? 5.f : 1.9f; }
-        if (base.escort && dd > 60.f) { c.pos = goal; c.pos.y = groundAt(goal.x, goal.z); }   // caught up (teleports, fast travel)
+        if (follow && dd > 60.f) { c.pos = goal; c.pos.y = groundAt(goal.x, goal.z); }   // caught up (teleports, fast travel, dungeons)
         c.hp = std::min(c.maxHp, c.hp + dt * 4.f);
     }
     vec3 w = vec3(mv.x, 0, mv.y) * spd;
@@ -330,6 +424,7 @@ void Game::saveBase(std::ostream& o) const {
     o << "base_found " << base.center.x << " " << base.center.y << "\n";
     o << "base_name " << base.name << "\n";
     o << "base_n " << base.residents << " " << base.soldiers << " " << base.pigs << " " << base.horses << " " << base.lastDay << " " << base.foalDays << " " << (base.escort ? 1 : 0) << "\n";
+    o << "base_army " << base.archers << " " << base.knights << " " << (base.charge ? 1 : 0) << " " << base.level << " " << base.dunLevel << " " << base.fallen << "\n";   // 3.0.0
     for (auto& b : base.built) o << "base_b " << baseBuildings()[b.def].id << " " << b.pos.x << " " << b.pos.y << " " << b.rot << " " << b.variant << "\n";
     for (auto& s : base.storage) o << "base_store " << s.first << " " << s.second << "\n";
 }
@@ -339,6 +434,7 @@ bool Game::loadBaseLine(const std::string& k, std::istream& l, PlayerBase* into)
     if (k == "base_found") { base.founded = true; l >> base.center.x >> base.center.y; return true; }
     if (k == "base_name") { std::string s; std::getline(l, s); if (!s.empty() && s[0] == ' ') s.erase(0, 1); if (!s.empty()) base.name = s.substr(0, 40); return true; }
     if (k == "base_n") { int esc = 0; l >> base.residents >> base.soldiers >> base.pigs >> base.horses >> base.lastDay >> base.foalDays >> esc; base.escort = esc != 0; return true; }
+    if (k == "base_army") { int ch = 0; l >> base.archers >> base.knights >> ch >> base.level >> base.dunLevel >> base.fallen; base.charge = ch != 0; base.level = std::min(2, std::max(0, base.level)); return true; }
     if (k == "base_b") {
         std::string id; BaseBuilt b; l >> id >> b.pos.x >> b.pos.y >> b.rot >> b.variant;
         b.def = baseBuildIndex(id);
@@ -373,7 +469,8 @@ void Game::drawBaseMenu(Rect c) {
     }
     char b[160];
     u.text(base.name, c.x, c.y - 4, 28, GOLDT, F_TITLE);
-    snprintf(b, sizeof b, "Habitants %d/%d · Soldats %d/%d · Cochons %d · Chevaux %d · Bâtiments %zu", base.residents, baseHousing(), base.soldiers, baseGuardCap(), base.pigs, base.horses, base.built.size());
+    static const char* lvName[3] = {"Village", "Bourg", "Château"};
+    snprintf(b, sizeof b, "%s · Habitants %d/%d · Armée %d/%d (%d épées, %d arcs, %d chevaliers) · Bétail %d · Bâtiments %zu", lvName[std::min(2, base.level)], base.residents, baseHousing(), armySize(), baseGuardCap(), base.soldiers, base.archers, base.knights, base.pigs + base.horses, base.built.size());
     u.text(b, c.x, c.y + 36, 18, PALE, F_BODY);
     // left: buildings
     Rect L{c.x, c.y + 74, c.w * 0.6f - 10, c.h - 74};
@@ -396,21 +493,50 @@ void Game::drawBaseMenu(Rect c) {
     u.popClip();
     // right: people, livestock, production
     Rect R{c.x + c.w * 0.6f + 10, c.y + 74, c.w * 0.4f - 10, c.h - 74};
-    float y = R.y;
-    auto act = [&](const std::string& label, bool en, const std::string& tag) { Rect r{R.x, y, R.w, 56}; u.tag(r, tag); y += 64; return u.fancyButton(r, label, en, "button_dark", 18); };
+    u.pushClip(R);
+    float rso = u.scrollArea("baseActs", R, 15 * 64 + 120);   // 3.0.0 more orders: the panel scrolls
+    float y = R.y - rso;
+    auto act = [&](const std::string& label, bool en, const std::string& tag) { Rect r{R.x, y, R.w - 8, 56}; u.tag(r, tag); y += 64; return u.fancyButton(r, label, en, "button_dark", 18); };
     snprintf(b, sizeof b, "Recruter un habitant (40 or)");
     if (act(b, gold >= 40 && base.residents < baseHousing(), "recruit")) { gold -= 40; base.residents++; refreshBaseNpcs(); play("coin", 0.6f); notify("Un nouvel habitant s'installe au domaine.", vec3(0.8f, 1.f, 0.7f), "i_village"); }
-    if (act("Recruter un soldat (120 or)", gold >= 120 && base.soldiers < baseGuardCap(), "soldier")) { gold -= 120; base.soldiers++; play("coin", 0.6f); notify("Un soldat rejoint votre garde.", vec3(0.8f, 0.9f, 1.f), "i_attack"); }
+    bool room = armySize() < baseGuardCap();
+    if (act("Recruter un soldat (120 or)", gold >= 120 && room, "soldier")) { gold -= 120; base.soldiers++; play("coin", 0.6f); notify("Un soldat rejoint votre armée.", vec3(0.8f, 0.9f, 1.f), "i_attack"); }
+    // 3.0.0 the army: archers (ranged) and knights (heavy, need barracks)
+    if (act("Recruter un archer (150 or)", gold >= 150 && room, "archer")) { gold -= 150; base.archers++; play("coin", 0.6f); notify("Un archer rejoint votre armée.", vec3(0.8f, 0.9f, 1.f), "i_cl_archer"); }
+    if (act(baseCount("barracks") ? "Former un chevalier (400 or, 2 lingots)" : "Chevalier : il faut une caserne", baseCount("barracks") > 0 && gold >= 400 && countItem("iron_bar") >= 2 && room, "knight")) { gold -= 400; removeItem("iron_bar", 2); base.knights++; play("coin", 0.6f); notify("Un chevalier prête serment.", vec3(0.8f, 0.9f, 1.f), "i_block"); }
     if (act("Acheter un cochon (35 or)", gold >= 35 && base.pigs < baseCount("pen") * 4, "pig")) { gold -= 35; base.pigs++; refreshBaseNpcs(); play("coin", 0.6f); }
     if (act("Acheter un cheval (250 or)", gold >= 250 && base.horses < baseCount("pen") * 2, "horse")) { gold -= 250; base.horses++; refreshBaseNpcs(); play("horse", 0.6f); }
-    if (act(base.escort ? "Soldats : m'escorter (actif)" : "Soldats : garder le domaine", base.soldiers > 0, "escort")) { base.escort = !base.escort; notify(base.escort ? "Vos soldats vous suivent." : "Vos soldats gardent le domaine.", vec3(0.8f, 0.9f, 1.f), "i_attack"); }
+    {   // 3.0.0 three orders: guard the domain / escort me (also into the dungeons) / attack at will
+        const char* ord = !base.escort ? "Ordre : garder le domaine" : (base.charge ? "Ordre : attaquer à volonté" : "Ordre : m'escorter (donjons aussi)");
+        if (act(ord, armySize() > 0, "escort")) {
+            if (!base.escort) { base.escort = true; base.charge = false; } else if (!base.charge) base.charge = true; else { base.escort = false; base.charge = false; }
+            notify(!base.escort ? "Votre armée garde le domaine." : base.charge ? "Votre armée attaque tout ennemi à portée !" : "Votre armée vous suit, même dans les donjons.", vec3(0.8f, 0.9f, 1.f), "i_attack");
+        }
+    }
     std::string st;
     for (auto& s : base.storage) { const ItemDef* it = item(s.first); st += (st.empty() ? "" : ", ") + std::to_string(s.second) + " " + (it ? it->name : s.first); }
     if (act(st.empty() ? "Rien à récolter" : "Récolter : " + st, !base.storage.empty(), "collect")) {
         for (auto& s : base.storage) addItem(s.first, s.second);
         base.storage.clear(); play("pickup", 0.8f);
     }
-    u.text("La production arrive chaque matin. Un habitant cultive un champ ou tient un étal.", R.x, y + 4, 15, DIM, F_BODY, A_LEFT, R.w);
+    {   // 3.0.0 grow the domain (town, castle)
+        std::string why; bool ok = upgradeBase(why, false);
+        std::string lab = base.level == 0 ? "Agrandir en bourg (1500 or)" : base.level == 1 ? "Agrandir en château (4000 or)" : "Votre domaine est un château";
+        if (act(lab, ok, "upgrade")) upgradeBase(why, true);
+        if (!ok && base.level < 2) { u.text(why, R.x, y - 6, 14, rgba(0xe89a7a), F_BODY, A_LEFT, R.w); y += u.textHeight(why, 14, F_BODY, R.w) + 4; }
+    }
+    if (baseCount("crypt") > 0) {   // 3.0.0 the domain's dungeon: pick its level
+        int lv = std::max(5, base.dunLevel > 0 ? base.dunLevel : level);
+        Rect r1{R.x, y, 90, 56}, r2{R.x + R.w - 98, y, 90, 56};
+        u.tag(r1, "dun-"); u.tag(r2, "dun+");
+        if (u.fancyButton(r1, "-", lv > 5, "button_dark", 22)) base.dunLevel = std::max(5, lv - 5);
+        if (u.fancyButton(r2, "+", lv < 50, "button_dark", 22)) base.dunLevel = std::min(50, lv + 5);
+        snprintf(b, sizeof b, "Donjon du domaine : niveau %d", lv);
+        u.text(b, R.x + R.w * 0.5f - 4, y + 16, 17, PALE, F_BOLD, A_CENTER);
+        y += 64;
+    }
+    u.text("La production arrive chaque matin. Un habitant cultive un champ ou tient un étal. Chaque forteresse conquise ajoute 4 places à l'armée.", R.x, y + 4, 15, DIM, F_BODY, A_LEFT, R.w - 8);
+    u.popClip();
 }
 
 void Game::drawBuildHud() {

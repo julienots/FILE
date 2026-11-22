@@ -333,6 +333,7 @@ void Game::enterDungeon(int idx) {
     if (riding) toggleMount();
     fadeTransition([this, idx, back, D] {
         buildDungeon(idx);
+        dungeon.levelOverride = D.id == "domaine" ? std::max(5, base.dunLevel > 0 ? base.dunLevel : level) : 0;   // 3.0.0 the domain's dungeon
         dungeon.active = true;
         dungeon.returnPos = back;
         Character& c = pc();
@@ -341,6 +342,17 @@ void Game::enterDungeon(int idx) {
         respawnPos = back;
         // populate rooms (except entrance and puzzle room)
         Rng r(D.seed + day);
+        // 3.0.0 the dungeon's level is that of its strongest dweller: weaker kinds (a draugr in the Titans' abyss) are
+        // raised to it, so a late dungeon stays a late dungeon whatever creatures it borrows from older lands
+        int dunLevel = 0;
+        for (auto& id : D.enemies) { int ei = enemyIndex(id); if (ei >= 0) dunLevel = std::max(dunLevel, enemies()[ei].level); }
+        if (dungeon.levelOverride > 0) dunLevel = dungeon.levelOverride;   // the domain's own dungeon (Base.cpp)
+        auto raise = [&](Entity e) {
+            Character* c = reg.get<Character>(e);
+            if (!c || c->level >= dunLevel) return;
+            float dl = (float)(dunLevel - c->level);
+            c->maxHp *= 1.f + dl * 0.25f; c->hp = c->maxHp; c->atk *= 1.f + dl * 0.12f; c->def += dl; c->level = dunLevel;
+        };
         for (size_t i = 1; i < dungeon.rooms.size(); i++) {
             auto& rm = dungeon.rooms[i];
             if (rm.kind == 2 || rm.kind == 3) continue;
@@ -348,7 +360,7 @@ void Game::enterDungeon(int idx) {
             for (int k = 0; k < n; k++) {
                 vec3 sp = dungeon.origin + vec3((rm.x + r.range(0.5f, rm.w - 0.5f)) * TILE, 0, (rm.z + r.range(0.5f, rm.h - 0.5f)) * TILE);
                 int ei = enemyIndex(D.enemies[r.irange(0, (int)D.enemies.size() - 1)]);
-                if (ei >= 0) { Entity e = spawnEnemy(ei, sp, r.chance(0.1f), 0); reg.get<AIBrain>(e)->home = sp; }
+                if (ei >= 0) { Entity e = spawnEnemy(ei, sp, r.chance(0.1f), 0); reg.get<AIBrain>(e)->home = sp; raise(e); }
             }
         }
         // a reward chest in the final room for dungeons without a boss, and one in the puzzle room
@@ -397,8 +409,19 @@ void Game::updateDungeon(float dt) {
             dungeonPrompt = std::string("Entrer : ") + (s.kind == S_INN ? "l'auberge" : s.kind == S_CHAPEL ? "la chapelle" : s.kind == S_FORGE ? "la forge" : s.kind == S_STILT_HUT || s.kind == S_BEACHHUT ? "la cabane" : "la maison");
             if (input.interact && transitionT < 0) { enterInterior(nearDoor); return; }
         }
+        // 3.0.0 the domain's own dungeon: down the stairs of the crypt the player built
+        if (base.founded && dungeonPrompt.empty()) {
+            int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == "domaine") di = i;
+            for (const BaseBuilt& b : base.built)
+                if (di >= 0 && baseBuildings()[b.def].id == "crypt" && length(b.pos - p.pos.xz()) < 6.5f) {
+                    int lv = std::max(5, base.dunLevel > 0 ? base.dunLevel : level);
+                    nearDungeon = di;
+                    dungeonPrompt = "Descendre : Donjon du domaine (niveau " + std::to_string(lv) + ")";
+                    if (input.interact && transitionT < 0) enterDungeon(di);
+                }
+        }
         for (int i = 0; i < (int)dungeons().size(); i++) {
-            const Poi* poi = world.poiById(dungeons()[i].poi);
+            const Poi* poi = dungeons()[i].poi.empty() ? nullptr : world.poiById(dungeons()[i].poi);
             if (!poi) continue;
             float d = length(poi->pos - p.pos.xz());
             if (d < 9.f) {

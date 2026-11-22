@@ -1826,6 +1826,172 @@ static std::vector<Step> scenario(const std::string& name) {
                     g.countItem("gold_ore") && g.countItem("silver_ore") && g.countItem("coal") && g.countItem("cactus_fruit") && g.countItem("seashell") && g.countItem("flax") && g.countItem("amber") && g.countItem("fire_root") ? "RES TEST PASSED" : "RES TEST FAILED"); }, idle, "harvest"});
         return s;
     }
+    if (name == "army") {
+        // 3.0.0 the castle and the army: found a domain, grow it to a castle, build barracks / keep / crypt / ramparts,
+        // recruit swordsmen, archers and knights, take them into the domain's dungeon, then storm the Iron Citadel
+        // (its garrison, its warlord), check the conquest, the guards, the tribute and that everything is saved.
+        static int res[12]; static vec2 spot;
+        auto aim = [](Game& g, int def, vec2 at, float yaw) {
+            float r = baseBuildings()[def].radius + 2.2f;
+            vec2 from = at - vec2(std::sin(yaw), std::cos(yaw)) * r;
+            teleport(g, from.x, from.y, yaw); g.pc().yaw = yaw;
+        };
+        s.push_back({0.1f, [](Game& g) {
+            for (int& r : res) r = 0;
+            g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1;
+            const Poi* b = g.world.poiById("brindlemere"); bool found = false;
+            for (float rr = 200.f; rr < 1200.f && !found; rr += 25.f)
+                for (float a = 0; a < TAU && !found; a += 0.3f) {
+                    vec2 p = b->pos + vec2(std::cos(a), std::sin(a)) * rr;
+                    teleport(g, p.x, p.y, 0.f);
+                    g.addItem("wood", 10, Rarity::Count, false);
+                    std::string why; if (g.canFoundBase(why)) { g.foundBase(); found = g.base.founded; spot = p; }
+                    // a castle needs room: keep looking until the domain could grow to 80 m
+                    if (found) { g.gold = 99999; g.addItem("stone", 2000, Rarity::Count, false); g.addItem("wood", 2000, Rarity::Count, false); g.addItem("iron_bar", 200, Rarity::Count, false);
+                                 std::string w2; bool up1 = g.upgradeBase(w2, false); g.base.level = 1; bool up2 = up1 && g.upgradeBase(w2, false); g.base.level = 0;
+                                 if (!up2) { g.clearBase(); found = false; } }
+                }
+            AGR_LOG("ARMY domain at (%.0f, %.0f) founded %d", spot.x, spot.y, g.base.founded);
+            g.addItem("crystal", 20, Rarity::Count, false);
+            g.level = 25; g.recomputeStats(); g.pc().hp = g.pc().maxHp;
+            g.timeOfDay = 10.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+        }, idle, "found"});
+        s.push_back({2.f, [](Game& g) {
+            std::string why;
+            bool a = g.upgradeBase(why, true); bool b2 = g.upgradeBase(why, true);
+            const Poi* p = g.world.poiById("player_base");
+            res[0] = a && b2 && g.base.level == 2 && p && p->radius > 79.f;
+            AGR_LOG("ARMY upgraded to castle %d (level %d, radius %.0f) %s", res[0], g.base.level, p ? p->radius : 0.f, why.c_str());
+        }, idle, "upgrade"});
+        struct B { const char* id; float a, d, yaw; };
+        static const B builds[] = {{"barracks", 0.3f, 30.f, 0.f}, {"keep", 2.2f, 30.f, 0.f}, {"crypt", 4.0f, 26.f, 0.f}, {"chapel", 5.3f, 34.f, 0.f}, {"castletower", 1.2f, 62.f, 0.f}, {"stonewall", 1.28f, 57.f, 1.2f + PI / 2}};
+        for (const B& bd : builds) {
+            const B* q = &bd;
+            s.push_back({0.5f, [aim, q](Game& g) { int def = baseBuildIndex(q->id); vec2 at = g.base.center + vec2(std::cos(q->a), std::sin(q->a)) * q->d; aim(g, def, at, q->yaw); g.startBuilding(def); g.buildRot = q->yaw; }, idle, "aim"});
+            s.push_back({0.5f, [q](Game& g) { bool ok = g.placeBuilding(); AGR_LOG("ARMY built %s: %d (%s)", q->id, ok, g.buildWhy.c_str()); if (ok) res[1]++; }, idle, "place"});
+        }
+        s.push_back({0.5f, [](Game& g) {
+            int cap = g.baseGuardCap();
+            g.base.soldiers = 4; g.base.archers = 3; g.base.knights = 2; g.base.escort = true;
+            AGR_LOG("ARMY cap %d, army %d", cap, g.armySize());
+            res[2] = cap >= 9;
+            teleport(g, g.base.center.x + 5, g.base.center.y + 5, 0.f);
+        }, idle, "recruit"});
+        s.push_back({3.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "army spawns"});
+        s.push_back({0.1f, [](Game& g) {
+            int n = 0, bows = 0, kn = 0;
+            for (Entity e : g.soldierEnts) if (SoldierBrain* sb = g.reg.get<SoldierBrain>(e)) { n++; if (sb->unit == 1) bows++; if (sb->unit == 2) kn++; }
+            res[3] = n == 9 && bows == 3 && kn == 2;
+            AGR_LOG("ARMY spawned %d (archers %d, knights %d) -> %d", n, bows, kn, res[3]);
+            g.camPitch = 0.45f; g.camDist = g.camDistTarget = 16.f;
+        }, idle, "count"});
+        s.push_back({0.1f, shot("AR0_army"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { for (auto& b : g.base.built) if (baseBuildings()[b.def].id == "crypt") { teleport(g, b.pos.x + 3.f, b.pos.y + 3.f, 0.f); } }, idle, "to crypt"});
+        s.push_back({0.4f, none, [](Game& g, float) { g.input.interact = true; }, "enter"});
+        s.push_back({4.f, none, [](Game& g, float) { g.input.interact = false; g.pc().invuln = 1.f; }, "inside"});
+        s.push_back({0.1f, [](Game& g) {
+            int near = 0;
+            for (Entity e : g.soldierEnts) if (Character* c = g.reg.get<Character>(e)) if (distXZ(c->pos, g.pc().pos) < 25.f && c->pos.x > WORLD_SIZE) near++;
+            res[4] = g.dungeon.active && g.dungeon.levelOverride >= 25 && near >= 6;
+            AGR_LOG("ARMY domain dungeon active %d level %d, soldiers with the hero %d -> %d", g.dungeon.active, g.dungeon.levelOverride, near, res[4]);
+            g.camPitch = 0.6f; g.camDist = g.camDistTarget = 14.f;
+        }, idle, "dungeon check"});
+        s.push_back({0.1f, shot("AR1_dungeon"), idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { g.exitDungeon(); }, idle, "exit"});
+        s.push_back({3.f, none, idle, "out"});
+        // storm the Iron Citadel
+        s.push_back({0.5f, [](Game& g) { const Poi* p = g.world.poiById("citadelle_fer"); teleport(g, p->pos.x - p->radius - 60.f, p->pos.y, PI * 0.5f); g.pc().yaw = PI * 0.5f; }, idle, "to citadel"});
+        s.push_back({4.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "approach"});
+        s.push_back({0.1f, [](Game& g) {
+            const Poi* p = g.world.poiById("citadelle_fer"); int pi = (int)(p - &g.world.pois[0]);
+            auto it = g.fortGarrison.find(pi);
+            int n = it == g.fortGarrison.end() ? 0 : (int)it->second.size();
+            res[5] = n >= 10;
+            AGR_LOG("ARMY citadel garrison %d -> %d", n, res[5]);
+            teleport(g, p->pos.x - 20.f, p->pos.y + 10.f, PI * 0.5f); g.camPitch = 0.35f; g.camDist = g.camDistTarget = 18.f;
+        }, idle, "garrison"});
+        s.push_back({2.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "inside"});
+        s.push_back({0.1f, shot("AR2_citadel"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) {
+            g.reg.each<Character>([&](Entity e, Character& c) { if (!c.dead && c.enemyDef >= 0 && enemies()[c.enemyDef].id == "legion_warlord") g.killCharacter(e, c, g.player); });
+            res[6] = g.fortConquered("citadelle_fer");
+            AGR_LOG("ARMY warlord down, citadel conquered %d", res[6]);
+        }, idle, "warlord"});
+        s.push_back({3.f, none, [](Game& g, float) { g.pc().invuln = 1.f; }, "guards"});
+        s.push_back({0.1f, [](Game& g) {
+            const Poi* p = g.world.poiById("citadelle_fer"); int pi = (int)(p - &g.world.pois[0]);
+            int guards = g.fortGuards.count(pi) ? (int)g.fortGuards[pi].size() : 0;
+            int legion = 0; g.reg.each<Character>([&](Entity, Character& c) { if (!c.dead && c.enemyDef >= 0 && enemies()[c.enemyDef].family == "Légion de Fer" && distXZ(c.pos, vec3(p->pos.x, 0, p->pos.y)) < p->radius + 20.f) legion++; });
+            res[7] = guards == 6 && legion == 0 && g.baseGuardCap() >= 4 + 9;
+            AGR_LOG("ARMY guards %d, legion left %d, cap %d -> %d", guards, legion, g.baseGuardCap(), res[7]);
+            int g0 = g.gold; g.day++; g.updateFortresses(0.1f); res[8] = g.gold > g0;
+            AGR_LOG("ARMY tribute %d -> %d", g.gold - g0, res[8]);
+        }, idle, "after"});
+        s.push_back({0.1f, shot("AR3_conquered"), idle, "shot"});
+        s.push_back({0.5f, [](Game& g) {
+            g.saveGame(g.saveSlot);
+            g.storyFlags.erase("conq_citadelle_fer"); g.base.level = 0; g.base.archers = 0;
+            bool ok = g.loadGame(g.saveSlot);
+            res[9] = ok && g.fortConquered("citadelle_fer") && g.base.level == 2 && g.base.archers == 3 && g.base.knights == 2 && g.baseCount("crypt") == 1;
+            AGR_LOG("ARMY save/load %d -> %d (level %d, archers %d)", ok, res[9], g.base.level, g.base.archers);
+            int pass = res[0] + (res[1] >= 5) + res[2] + res[3] + res[4] + res[5] + res[6] + res[7] + res[8] + res[9];
+            AGR_LOG("ARMY %s (%d/10, built %d)", pass == 10 ? "TEST PASSED" : "TEST FAILED", pass, res[1]);
+        }, idle, "save"});
+        return s;
+    }
+    if (name == "titandungeons") {
+        // 3.0.0 the three dungeons of the Titan Mountains: enter each from its entrance, check its dwellers are
+        // raised to the dungeon's level, look at the boss room, come back out
+        static int ok[3];
+        static const char* ids[] = {"gouffre", "mines_fer", "tombe_geant"};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.level = 28; g.recomputeStats(); ok[0] = ok[1] = ok[2] = 0; }, idle, "setup"});
+        for (int k = 0; k < 3; k++) {
+            s.push_back({0.5f, [k](Game& g) {
+                int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == ids[k]) di = i;
+                const Poi* p = g.world.poiById(dungeons()[di].poi);
+                teleport(g, p->pos.x + 3.f, p->pos.y + 3.f, 0.f);
+            }, idle, "to entrance"});
+            s.push_back({2.5f, none, [](Game& g, float) { g.input.interact = true; g.pc().invuln = 1.f; }, "enter"});
+            s.push_back({3.f, none, [](Game& g, float) { g.input.interact = false; g.pc().invuln = 1.f; }, "inside"});
+            s.push_back({0.1f, [k](Game& g) {
+                int n = 0, low = 0, lvl = 0;
+                g.reg.each<Character>([&](Entity, Character& c) { if (c.team == Team::Enemy && c.pos.x > WORLD_SIZE && !c.dead) { n++; lvl = std::max(lvl, c.level); if (c.level < 24) low++; } });
+                const DungeonDef& D = dungeons()[std::max(0, g.dungeon.def)];
+                ok[k] = g.dungeon.active && D.id == ids[k] && n > 0 && low == 0 && D.boss >= 0;
+                AGR_LOG("TDUN %s active %d, enemies %d (below 24: %d, top level %d), boss %d -> %d", ids[k], g.dungeon.active, n, low, lvl, D.boss, ok[k]);
+                g.camPitch = 0.7f; g.camDist = g.camDistTarget = 14.f;
+            }, idle, "check"});
+            s.push_back({0.1f, [k](Game& g) { g.requestScreenshot(std::string("build/shots/TD") + std::to_string(k) + ".png"); }, idle, "shot"});
+            s.push_back({0.3f, [](Game& g) { g.exitDungeon(); }, idle, "exit"});
+            s.push_back({2.5f, none, idle, "out"});
+        }
+        s.push_back({0.1f, [](Game& g) { (void)g; AGR_LOG("TDUN %s", ok[0] && ok[1] && ok[2] ? "TEST PASSED" : "TEST FAILED"); }, idle, "result"});
+        return s;
+    }
+    if (name == "titans") {
+        // 3.0.0 a tour of the Titan Mountains: the cities (avenue, plaza, ramparts), the villages, the fortresses, the peaks
+        struct Spot { float x, z, yaw, pitch, dist; const char* shot; };
+        static const Spot spots[] = {
+            {6760, 2560, 3.14f, 0.18f, 9.f, "TI0_avenue"}, {6735, 2650, 1.6f, 0.35f, 14.f, "TI1_plaza"}, {6760, 2470, 0.0f, 0.25f, 16.f, "TI2_gate"},
+            {6690, 2560, 2.4f, 0.55f, 40.f, "TI3_city_above"}, {6600, 4330, 3.14f, 0.2f, 10.f, "TI4_rochebrune"}, {6300, 1290, 3.6f, 0.3f, 12.f, "TI5_col"},
+            {7150, 2410, 0.6f, 0.4f, 20.f, "TI6_citadel"}, {6780, 3100, 1.2f, 0.12f, 12.f, "TI7_peaks"}, {6450, 5060, 3.3f, 0.3f, 12.f, "TI8_tomb"},
+        };
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); g.tutStep = -1; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, idle, "setup"});
+        for (const Spot& sp : spots) {
+            const Spot* q = &sp;
+            s.push_back({4.f, [q](Game& g) { teleport(g, q->x, q->z, q->yaw); g.camPitch = q->pitch; g.camDist = g.camDistTarget = q->dist; g.timeOfDay = 11.f; }, [q](Game& g, float) { g.camIdleT = 0; g.camYaw = q->yaw; g.camPitch = q->pitch; g.pc().invuln = 1.f; }, "go"});
+            s.push_back({0.1f, [q](Game& g) { AGR_LOG("TITANS %s", q->shot); g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
+    if (name == "worldmap") {
+        // 3.0.0 the whole map with every place discovered (geography check of the bigger world)
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; for (auto& p : g.world.pois) g.discovered.insert(p.id); std::fill(g.fog.begin(), g.fog.end(), 255); }, idle, "setup"});
+        s.push_back({0.5f, [](Game& g) { g.menu = Menu::Map; }, idle, "map"});
+        s.push_back({4.f, none, idle, "map wait"});
+        s.push_back({0.1f, shot("WM_map"), idle, "shot"});
+        return s;
+    }
     if (name == "wheat") {
         // 2.9.1 wheat fields: find one near Brindlemere, overview, walk through it (the stalks part), log counts
         static vec2 spot; static int ok[2];

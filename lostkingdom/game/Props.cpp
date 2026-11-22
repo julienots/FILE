@@ -31,6 +31,7 @@ vec3 regionGroundTint(int r) {
     case R_STEPPE: return {1.08f, 1.0f, 0.78f};    // 2.4.0 golden grassland
     case R_JUNGLE: return {0.82f, 1.02f, 0.84f};   // deep, wet green
     case R_AURORA: return {0.95f, 1.0f, 0.93f};   // 2.8.0 cool moss
+    case R_TITANS: return {0.93f, 1.0f, 0.9f};    // 3.0.0 alpine pasture
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
@@ -49,6 +50,7 @@ vec3 foliageColor(int r, float t) {
     case R_STEPPE: return ramp3(0x8a8a40, 0xb8a452, 0xd8c070, t);   // 2.4.0 straw and gold
     case R_JUNGLE: return ramp3(0x1f5a2a, 0x2f7a32, 0x5a9a3a, t);   // 2.4.0 emerald
     case R_AURORA: return ramp3(0x3f6236, 0x667f40, 0xa29c62, t);   // 2.8.0 northern moss and dry golden grass
+    case R_TITANS: return ramp3(0x3e6a2e, 0x5f8a3c, 0x9aa25a, t);   // 3.0.0 lush alpine green, dry tips
     default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }
@@ -2182,7 +2184,7 @@ void dressStructure(ChunkBuild& out, const Structure& s, const World& w) {
             if (cj < 0) continue;
             for (int si : w.chunkStructures[cj]) {
                 const Structure& o = w.structures[si];
-                if (o.kind == S_FIELD || o.kind == S_LANTERN || o.kind == S_STALL) { if (o.kind != S_FIELD && length(o.pos - wp) < 1.6f) return false; continue; }
+                if (o.kind == S_FIELD || o.kind == S_LANTERN || o.kind == S_STALL) { if (o.kind != S_FIELD && length(o.pos - wp) < (o.kind == S_STALL ? 2.6f : 1.6f)) return false; continue; }   // 3.0.0 a stall's corners reach 1.8 m
                 if (o.kind == S_PEN) continue;
                 vec2 f2 = structureFootprint(o.kind) * o.scale;
                 vec2 l = rotate(wp - o.pos, o.rot);

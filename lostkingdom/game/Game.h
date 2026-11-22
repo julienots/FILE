@@ -139,7 +139,11 @@ struct NetPuppet {
     vec3 target; float targetYaw = 0, speed = 0, lastUpdate = 0;
     int16_t clip = -1; uint8_t clipSeq = 0, body = 0;
 };
-struct SoldierBrain { vec3 post; Entity target = NullEntity; float cd = 0, think = 0; int slot = 0; };
+struct SoldierBrain {
+    vec3 post; Entity target = NullEntity; float cd = 0, think = 0; int slot = 0;
+    int unit = 0;    // 3.0.0 0 swordsman, 1 archer, 2 knight
+    int fort = -1;   // 3.0.0 >= 0: guard of a conquered fortress (POI index): holds its post, never follows the hero
+};
 struct BaseBuildDef {
     std::string id, name, desc;
     int kind, variants;
@@ -160,6 +164,11 @@ struct PlayerBase {
     int residents = 0, soldiers = 0, pigs = 0, horses = 0;
     int lastDay = -1, foalDays = 0;
     bool escort = false;
+    // 3.0.0 the army and the castle: archers and knights besides the swordsmen, the "charge" order, the size of the
+    // domain (0 village, 1 town, 2 castle), the level of the domain's own dungeon, the fallen (raised by the chapel)
+    int archers = 0, knights = 0;
+    bool charge = false;
+    int level = 0, dunLevel = 0, fallen = 0;
     std::vector<std::pair<std::string, int>> storage;   // production waiting at the banner
 };
 
@@ -251,6 +260,7 @@ struct DungeonRoom { int x, z, w, h; int kind; bool cleared = false, visited = f
 struct DungeonState {
     int def = -1;
     bool active = false;
+    int levelOverride = 0;          // 3.0.0 the domain's dungeon: level chosen by the player (0 = the dungeon's own)
     vec3 origin;                    // world position of tile (0,0)
     float roomW = 0, roomD = 0;     // 2.6.0 interior room size (metres)
     int W = 0, H = 0;
@@ -677,6 +687,18 @@ public:
     void drawBuildHud();
     void renderBuildGhost();
     void saveBase(std::ostream& o) const;
+    // 3.0.0 army, castle, the domain's dungeon, the Iron Legion's fortresses
+    int armySize() const { return base.soldiers + base.archers + base.knights; }
+    float baseRadius() const;      // levelled ground of the domain (grows with its level)
+    float baseBuildRadius() const; // buildings must fit inside
+    bool upgradeBase(std::string& why, bool doIt);
+    std::map<int, std::vector<Entity>> fortGarrison, fortGuards;   // POI index -> spawned enemies / allied guards
+    int fortTributeDay = -1;
+    bool fortConquered(const std::string& id) const { return storyFlags.count("conq_" + id) > 0; }
+    int conqueredForts() const;
+    void updateFortresses(float dt);
+    void onWarlordKilled(vec3 pos);
+    Entity spawnArmyUnit(int unit, vec3 pos, int slot, int fort);
     bool loadBaseLine(const std::string& k, std::istream& l, PlayerBase* into = nullptr);
     float tallGrassHere = 0;     // 1.9.1: how deep the hero is in a tall grass meadow (0..1, smoothed)
     float birdFlushCD = 0;

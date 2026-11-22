@@ -22,24 +22,27 @@
 namespace lk {
 using namespace agr;
 
-constexpr float WORLD_SIZE = 6144.f;   // 2.4.0: 4608 -> 6144 m (2.0.0: 3072 -> 4608); old coordinates kept, the new lands lie east and south-east
+constexpr float WORLD_SIZE = 7680.f;   // 3.0.0: 6144 -> 7680 m (the Titan Mountains in the east); 2.4.0: 4608 -> 6144; old coordinates kept
+constexpr float OLD_WORLD_SIZE = 6144.f;   // 3.0.0 the size before the Titans (old coastlines, old save grids)
 // 2.4.0 the land is no longer the whole square: the old kingdom plus an eastern strip, and a south-eastern block;
 // the south-west stays open sea (the Coral Coast keeps its shore). Distance (m) from (x, z) into the sea border.
 inline float landEdgeDistance(float x, float z) {
-    float a = std::min(std::min(x, z), std::min(WORLD_SIZE - x, 4608.f - z));              // north: whole width, down to the old south shore
-    float b = std::min(std::min(x - 3500.f, z - 2600.f), std::min(WORLD_SIZE - x, WORLD_SIZE - z));   // south-east block
+    float a = std::min(std::min(x, z), std::min(OLD_WORLD_SIZE - x, 4608.f - z));              // north: whole width, down to the old south shore
+    float b = std::min(std::min(x - 3500.f, z - 2600.f), std::min(OLD_WORLD_SIZE - x, OLD_WORLD_SIZE - z));   // south-east block
     // 2.8.0 the Lands of Aurora: a big island in the south-west sea, joined to the Coral Coast by a wide isthmus
     // (west of Port-Azur, so the harbour and the lighthouse keep their shore)
-    float c = std::min(std::min(x - 200.f, z - 4840.f), std::min(3450.f - x, WORLD_SIZE - 110.f - z));
+    float c = std::min(std::min(x - 200.f, z - 4840.f), std::min(3450.f - x, OLD_WORLD_SIZE - 110.f - z));
     float d = std::min(std::min(x - 740.f, z - 4300.f), std::min(1420.f - x, 5400.f - z));
-    return std::max(std::max(a, b), std::max(c, d));
+    // 3.0.0 the Titan Mountains: a long range east of the steppes and of the jungle (one coast with them)
+    float e = std::min(std::min(x - 5500.f, z - 260.f), std::min(7470.f - x, 5980.f - z));   // starts well inside the old land: no channel at the seam
+    return std::max(std::max(std::max(a, b), std::max(c, d)), e);
 }
 constexpr float CHUNK = 32.f;
 constexpr int CHUNKS = (int)(WORLD_SIZE / CHUNK);
 constexpr float SEA_LEVEL = 0.f;
 constexpr float SKY_ISLAND_R = 9.f;   // 2.8.0 radius of a floating island's deck
 
-enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_AURORA, R_COUNT };   // 2.8.0 + Terres d'Aurore   // 2.4.0 + Steppes, Jungle
+enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_AURORA, R_TITANS, R_COUNT };   // 3.0.0 + Monts Titans   // 2.8.0 + Terres d'Aurore   // 2.4.0 + Steppes, Jungle
 const char* regionName(int r);
 const char* regionSubtitle(int r);
 
@@ -58,6 +61,8 @@ struct Poi {
     int boss = -1;         // boss index for arenas
     bool discovered = false;
     bool coastal = false;  // 2.0.0 harbour: kept low so the sea stays where the piers are
+    bool hostile = false;  // 3.0.0 enemy fortress: a garrison of the Iron Legion holds it until its warlord falls
+    bool city = false;     // 3.0.0 walled city: avenues, alleys, market square, ramparts (see buildPlan)
 };
 
 struct Road { std::vector<vec2> pts; float width; bool cobble; };

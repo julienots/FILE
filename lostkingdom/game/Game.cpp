@@ -324,6 +324,7 @@ void Game::updatePlaying(float dt) {
     if (dungeon.active) digMode = false;
     if (!cine.active) updateNightHunters(dt);
     updateBase(dt);
+    if (!cine.active) updateFortresses(dt);   // 3.0.0 the Iron Legion
     updateRaces(dt);
     updateChallenges(dt);
     updateStory(dt);
@@ -375,6 +376,7 @@ static const RegionGrade GRADE[R_COUNT] = {
     {{0.015f, 0.01f, 0.0f}, {1.01f, 1.0f, 0.98f}, {1.06f, 1.0f, 0.86f}, 1.04f, 1.08f, 0.35f, 0.6f, 0, {1.02f, 0.97f, 0.86f}, 1.06f},     // 2.4.0 Valdor Steppes: golden light, clear far horizon
     {{0.0f, 0.015f, 0.01f}, {1.0f, 1.0f, 1.0f}, {0.94f, 1.04f, 0.94f}, 1.12f, 1.1f, -0.05f, 1.45f, 0, {0.78f, 0.95f, 0.82f}, 0.96f},     // 2.4.0 Emerald Jungle: humid green haze
     {{0.0f, 0.006f, 0.014f}, {1.0f, 1.0f, 1.0f}, {0.98f, 1.0f, 1.03f}, 0.97f, 1.1f, -0.18f, 1.05f, 0, {0.88f, 0.93f, 1.0f}, 1.0f},     // 2.8.0 Lands of Aurora: clean, cool northern light
+    {{0.0f, 0.004f, 0.012f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 1.0f, 1.12f, -0.05f, 0.7f, 0, {0.92f, 0.96f, 1.04f}, 1.02f},     // 3.0.0 Titan Mountains: crisp alpine air, far views
 };
 
 void Game::updateEnvironment(float dt) {
@@ -433,6 +435,7 @@ void Game::updateEnvironment(float dt) {
         case R_AMBER: next = p < 0.55f ? W_CLEAR : p < 0.8f ? W_SANDSTORM : p < 0.92f ? W_CLOUDY : W_CLEAR; break;
         case R_CORAL: next = p < 0.5f ? W_CLEAR : p < 0.68f ? W_CLOUDY : p < 0.9f ? W_RAIN : W_STORM; break;
         case R_STEPPE: next = p < 0.6f ? W_CLEAR : p < 0.85f ? W_CLOUDY : p < 0.95f ? W_STORM : W_RAIN; break;   // 2.4.0 big skies, summer storms
+        case R_TITANS: next = p < 0.42f ? W_CLEAR : p < 0.66f ? W_CLOUDY : p < 0.82f ? W_FOG : p < 0.93f ? W_RAIN : W_SNOW; break;   // 3.0.0 mountain weather
         case R_AURORA: next = p < 0.5f ? W_CLEAR : p < 0.72f ? W_CLOUDY : p < 0.88f ? W_FOG : W_RAIN; break;   // 2.8.0 northern skies: clear nights, sea mist, showers
         case R_JUNGLE: next = p < 0.35f ? W_CLEAR : p < 0.55f ? W_FOG : p < 0.85f ? W_RAIN : W_STORM; break;     // 2.4.0 hot rain and morning mist
         default: next = p < 0.55f ? W_CLEAR : p < 0.75f ? W_CLOUDY : W_SNOW; break;
@@ -806,7 +809,7 @@ void Game::updateAudioDirector(float dt) {
     else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm"};   // 2.8.0 Aurora: the ethereal score
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm", "highcrowns"};   // 3.0.0 the Titans: the mountain score   // 2.8.0 Aurora: the ethereal score
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);

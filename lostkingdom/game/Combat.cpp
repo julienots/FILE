@@ -273,6 +273,7 @@ void Game::killCharacter(Entity e, Character& c, Entity killer) {
         gainXp(xpGain);
         floatText(c.pos + vec3(0, c.height + 0.5f, 0), "+" + std::to_string(xpGain) + " XP", vec3(0.6f, 0.9f, 1.f), 18);
         advanceQuests(StepKind::Kill, d.id, 1);
+        if (d.id == "legion_warlord") onWarlordKilled(c.pos);   // 3.0.0 the fortress falls with its warlord
         if (c.elite) killedUnique.insert(c.uid);
         dropLoot(c, c.pos);
         // remember cleared chunks so groups do not respawn instantly (10 minutes)

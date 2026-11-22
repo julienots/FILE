@@ -6,12 +6,54 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 2.9.1 (versionCode 44), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.9.0 : elle s'installe par-dessus). SHA-256 : `a5684a44d2d155cceba04e88753607ad8415c537338d3c9b551cc2db1ac26a40`. Taille : environ 57 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.0 (versionCode 45), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 2.9.1 : elle s'installe par-dessus). SHA-256 : `bcce618f6203acf5a54951e94ad21924a2c30a4d0cf3a00c9899d0b1efeda561`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.0.0 (Monts Titans, cités aux ruelles tortueuses, forteresses de la Légion, château et armée)
+
+- **Carte agrandie** : 7 680 m × 7 680 m (6 144 m avant). Les anciennes terres ne bougent pas : on gagne une longue bande à l'est, les **Monts Titans**, reliée aux Steppes de Valdor et à la Jungle d'Émeraude par des cols.
+- **Les Monts Titans** : des vallées vertes et des cuvettes où vivent les villes, puis des versants raides et des sommets enneigés (jusqu'à environ 200 m, neige à partir de ~90 m). Il y a des forêts de pins, des éboulis et une météo de montagne. On y trouve de l'acier-titan (fer, charbon, or), des loups des Titans, des trolls des cimes, des wyvernes et des contrebandiers.
+- **Deux grandes cités fortifiées, construites comme de vraies villes** :
+  - **Hautebrume** et **Rochebrune**, chacune entourée de remparts (20 tours, 4 portes) ;
+  - pas d'avenues droites : des rues principales qui serpentent des portes jusqu'à une place de marché irrégulière, puis des dizaines de ruelles et de venelles qui partent dans tous les sens, tournent, se rejoignent ou finissent en cul-de-sac ;
+  - les maisons suivent les courbes des deux côtés de chaque rue, avec des écarts irréguliers ;
+  - cathédrale, donjon du seigneur, auberges, forges, halle, puits, étals, lanternes aux coins de rue, caisses et tonneaux, 30 habitants ;
+  - champs, moulin et enclos hors des murs.
+  - Les deux villages de montagne (Col-des-Aigles, Pied-de-Lance) poussent de la même façon, sans remparts.
+  - Les anciens villages gardent leur plan d'avant.
+- **La Légion de Fer** tient 3 forteresses : la Citadelle de Fer-Noir, Fort Corbeau, et Khar-Vos dans les steppes.
+  - Garnison : légionnaires, arbalétriers, piquiers, un chevalier noir, et un seigneur de guerre devant le donjon.
+  - Tuez le seigneur de guerre et la garnison se rend. La forteresse est à vous :
+    - vos gardes la tiennent ;
+    - elle paie 180 pièces d'or chaque matin ;
+    - elle ajoute 4 places à votre armée ;
+    - vous pouvez y aller en voyage rapide depuis la carte.
+  - Sur la carte, un anneau rouge marque une forteresse ennemie, un anneau doré une forteresse conquise.
+- **3 nouveaux donjons avec leur boss** : le Gouffre des Titans (le Ver des Glaces), les Mines de Fer-Noir (le Maître-Forge) et le Tombeau du Roi-Géant (Ymrir). Les créatures plus faibles qu'ils empruntent à d'autres régions sont remontées au niveau du donjon.
+- **Votre domaine devient un château** :
+  - on l'agrandit en bourg (62 m), puis en château (80 m) ;
+  - nouveaux bâtiments : murailles de pierre, tours de rempart, porte fortifiée, donjon (tour maîtresse), caserne, chapelle (2 soldats tombés reviennent chaque matin), moulin, statues, lanternes ;
+  - **donjon du domaine** : une crypte à bâtir, qui mène à votre propre donjon, au niveau que vous choisissez (5 à 50).
+- **Votre armée** :
+  - épéistes, archers (ils tirent à distance) et chevaliers (il faut une caserne) ;
+  - trois ordres : garder le domaine, m'escorter (ils vous suivent en formation, **même dans les donjons**), ou attaquer à volonté.
+- **Personnages et quêtes** :
+  - Capitaine Héloïse (les 3 forteresses), Bjorn Ferrecœur (l'acier-titan, le Maître-Forge), Sibylle (le Ver et le Roi-Géant), Arno le chasseur, Maud l'aubergiste ;
+  - 8 quêtes ;
+  - nouvelles armes : hache du seigneur de guerre, lame d'acier-titan, marteau du Roi-Géant, lance du Ver, arbalète et pavois de la Légion, chevalière du conquérant.
+- **Herbe plus serrée** : touffes plus fournies et plus rapprochées près du héros, éclaircies plus tôt au loin pour que le coût reste celui d'avant.
+- **Anciennes sauvegardes** : elles se chargent. La carte explorée et les trous creusés sont convertis au nouveau format.
+- **Vérifié sur ordinateur seulement** :
+  - 2 985 tests passés, dont : bâtiments posés au sol, aucun chevauchement, rien sur les routes, données cohérentes ;
+  - scénario `army` (10/10) : domaine agrandi en château, 6 bâtiments, 9 soldats dont 3 archers et 2 chevaliers, l'armée qui suit dans le donjon du domaine, garnison de la citadelle (11), conquête, gardes, tribut, sauvegarde et rechargement ;
+  - scénario `titandungeons` : les 3 donjons, ennemis au bon niveau, boss présents ;
+  - scénario `titans` : visite en captures.
+  - **Pas testé sur téléphone.** Les combats complets contre les nouveaux boss n'ont pas été joués de bout en bout.
+- **Coût** : scénario `titans` : cités entre 410k et 615k triangles, vallées sauvages des Titans entre 780k et 980k (Chênebrune, l'endroit le plus chargé d'avant, est à 898k). Avec l'herbe plus serrée, Brindlemere passe de 582k à 664k, Port-Azur et Chênebrune baissent un peu. Ces chiffres sont mesurés sur ordinateur, pas sur un téléphone : si ça rame, baisser la qualité de l'herbe dans les Paramètres.
 
 ### Nouveautés 2.9.1 (champs de blé doré qu'on traverse)
 
@@ -124,7 +166,7 @@ Retour reçu sur la 2.8.0 : « l'île n'est pas réaliste, trop bleue, mal faite
   - *Apocalypse* : orage permanent, ennemis géants et enragés, plus d'or et d'expérience ;
   - *Terrassier* : pelle et bombes gigantesques.
 - **Nouvelles clés de mod** (voir `docs/MODDING.md`) : `game.gravity`, `game.jump`, `game.time_speed`, `game.hour`, `game.weather` (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal), `game.mount_speed` et `game.enemy_scale`.
-- **La carte** : elle a déjà été agrandie en 2.4.0. Elle mesure 6 144 m × 6 144 m (contre 4 608 m avant), avec les Steppes de Valdor et la Jungle d'Émeraude. Elle n'a pas changé dans cette version.
+- **La carte** : elle a déjà été agrandie en 2.4.0. Elle mesurait alors 6 144 m × 6 144 m (contre 4 608 m avant), avec les Steppes de Valdor et la Jungle d’Émeraude ; elle a de nouveau grandi en 3.0.0 (7 680 m, les Monts Titans).
 - **Vérifié sur ordinateur** :
   - scénario `trees` : captures avant et après dans quatre régions ;
   - scénario `modfun` : un saut lunaire monte à 5,2 m contre environ 1 m d'habitude, un loup géant est à l'échelle 2, la nuit éternelle et la neige forcée fonctionnent ;

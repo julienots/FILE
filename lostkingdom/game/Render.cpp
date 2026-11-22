@@ -233,14 +233,15 @@ void Game::renderWorld(float dt) {
                 bi.tint = vec4(1, 1, 1, ch.snow * 0.55f); bi.castShadow = db < 44.f;
                 renderer.submit(bi);
             }
-            if (d < 48.f && gs.grassDensity > 0.01f) {
+            if (d < 46.f && gs.grassDensity > 0.01f) {
                 it.castShadow = false; it.tint.w = 0;
                 // 2.3.6 distance thinning: all of it up close, down to 35 % at the edge (the clumps are tiny there)
-                float keep = clampf(1.f - (d - 20.f) / 40.f, 0.35f, 1.f);
+                // 3.0.0 denser grass near the hero, thinned sooner further away (the cost stays where it is seen)
+                float keep = clampf(1.f - (d - 16.f) / 34.f, 0.25f, 1.f);
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.grass.instanceCount * keep); renderer.submit(it); }
                 if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.flowers.instanceCount * keep); renderer.submit(it); }
                 it.instances = -1;
-                if (d < 30.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+                if (d < 24.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             }
             // 2.9.1 wheat fields: thinned with distance (the golden ground carries the field further away)
             if (d < 62.f && ch.wheat.valid() && gs.grassDensity > 0.01f) {

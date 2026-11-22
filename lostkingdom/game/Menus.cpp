@@ -349,7 +349,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v2.9.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v3.0.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
@@ -995,7 +995,9 @@ void Game::drawMenus(float dt) {
             vec2 m = toMap(P.pos);
             const char* ic = P.type == PoiType::Village || P.type == PoiType::Mill ? "i_village" : P.type == PoiType::Castle ? "i_castle" : (P.type == PoiType::Cave || P.type == PoiType::Mine || P.type == PoiType::Graveyard) ? "i_cave" : P.type == PoiType::Waystone ? "i_waypoint" : P.type == PoiType::BossArena ? "i_boss" : P.type == PoiType::Monastery || P.type == PoiType::Tower ? "i_tower" : "i_star";
             u.sprite(ic, {m.x - 15, m.y - 15, 30, 30});
-            if (mapZoom > 1.3f || P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Monastery) u.text(P.name, m.x, m.y + 15, 15, rgba(0x2a1a10), F_BOLD, A_CENTER);
+            if (P.hostile) u.ring(m, 16, 19, 0, TAU, fortConquered(P.id) ? vec4(1.f, 0.85f, 0.3f, 0.9f) : vec4(0.75f, 0.1f, 0.08f, 0.9f), 24);   // 3.0.0 Iron Legion
+            if (mapZoom > 1.3f || P.type == PoiType::Village || P.type == PoiType::Castle || P.type == PoiType::Monastery)
+                u.text(P.hostile ? P.name + (fortConquered(P.id) ? " (à vous)" : " (Légion de Fer)") : P.name, m.x, m.y + 15, 15, P.hostile && !fortConquered(P.id) ? rgba(0x7a1410) : rgba(0x2a1a10), F_BOLD, A_CENTER);
         }
         // 2.2.0 every dungeon entrance is on the map: found ones with their name, the others as a "?" to look for
         for (int di = 0; di < (int)dungeons().size(); di++) {
@@ -1013,7 +1015,7 @@ void Game::drawMenus(float dt) {
         static std::string wayPick;
         bool tapUsed = false;
         for (auto& P : world.pois) {
-            if (P.type != PoiType::Waystone || !discovered.count(P.id)) continue;
+            if ((P.type != PoiType::Waystone && !(P.hostile && fortConquered(P.id))) || !discovered.count(P.id)) continue;   // 3.0.0 + your fortresses
             vec2 m = toMap(P.pos);
             if (P.id == wayPick) u.ring(m, 20, 25, 0, TAU, vec4(1.f, 0.85f, 0.3f, 0.6f + 0.4f * std::sin(realTime * 6.f)), 28);
             for (auto& fg : u.fingers) if (fg.released && fg.t < 0.35f && length(vec2(fg.x - fg.sx, fg.y - fg.sy)) < 14.f && length(vec2(fg.x, fg.y) - m) < 26.f && c.contains(fg.x, fg.y)) { wayPick = P.id; tapUsed = true; play("ui_click", 0.5f); }
@@ -1037,7 +1039,7 @@ void Game::drawMenus(float dt) {
             tapUsed = true;
         }
         // region names
-        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}, {1800, 5450}};
+        static const vec2 rc[R_COUNT] = {{1500, 1500}, {900, 430}, {2520, 2150}, {430, 1450}, {1150, 2650}, {2600, 620}, {3800, 2900}, {1500, 3900}, {5350, 1300}, {5100, 4500}, {1800, 5450}, {6900, 3300}};
         for (int r = 0; r < R_COUNT; r++) { vec2 m = toMap(rc[r]); u.text(regionName(r), m.x, m.y - 40, 20, rgba(0x3a2410, 0.75f), F_SERIF, A_CENTER); }
         bool has; vec3 qm = questMarker(&has);
         if (has) { vec2 m = toMap(qm.xz()); u.sprite("i_quest_marker", {m.x - 14, m.y - 38, 28, 38}); }

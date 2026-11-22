@@ -118,6 +118,12 @@ static void buildItems() {
         {"sword_aurora", "Lame d'aurore", WeaponType::Sword, 4, Rarity::Legendary, 42, 0.12f, 0.06f, Element::Arcane, 14, "Taillée dans un seul cristal. La nuit, elle éclaire le chemin."},
         {"staff_aurora", "Sceptre boréal", WeaponType::Staff, 4, Rarity::Legendary, 19, 0.1f, 0, Element::Ice, 26, "Les voiles du ciel dansent dans son cristal."},
         {"bow_aurora", "Arc de lumière", WeaponType::Bow, 4, Rarity::Legendary, 30, 0.16f, 0.06f, Element::Light, 10, "Sa corde est un fil d'aurore tressé."},
+        // 3.0.0 the Titan Mountains and the Iron Legion
+        {"axe_warlord", "Hache du Seigneur de guerre", WeaponType::Axe, 4, Rarity::Legendary, 46, 0.1f, -0.02f, Element::Physical, 0, "Elle a fendu plus de portes que de boucliers. La Légion la remettait à ses conquérants."},
+        {"sword_titansteel", "Lame d'acier-titan", WeaponType::Sword, 4, Rarity::Epic, 38, 0.1f, 0.05f, Element::Physical, 0, "Forgée à Rochebrune avec l'acier noir des mines, plus dur que la montagne."},
+        {"hammer_giant", "Marteau du Roi-Géant", WeaponType::Hammer, 5, Rarity::Ancestral, 58, 0.08f, -0.08f, Element::Lightning, 16, "Ymrir l'abattait sur les cimes pour appeler l'orage."},
+        {"spear_wyrm", "Lance du Ver des Glaces", WeaponType::Spear, 5, Rarity::Legendary, 44, 0.12f, 0.04f, Element::Ice, 14, "Taillée dans une dent du ver. Elle givre ce qu'elle touche."},
+        {"crossbow_legion", "Arbalète de la Légion", WeaponType::Crossbow, 4, Rarity::Epic, 34, 0.14f, -0.06f, Element::Physical, 0, "Un mécanisme d'acier noir. Les arbalétriers de Fer-Noir ne manquaient jamais."},
     };
     for (auto& w : ws) {
         ItemDef& d = addItem(w.id, w.name, ItemKind::Weapon, w.r, 20 + w.tier * w.tier * 60 + (int)w.r * 80, w.desc);
@@ -129,6 +135,7 @@ static void buildItems() {
         {"shield_wood", "Bouclier de bois", 0, Rarity::Common, 6, hexColor(0x8e2a24), "Quelques planches et beaucoup d'espoir."},
         {"shield_iron", "Écu de fer", 2, Rarity::Rare, 14, hexColor(0x2a4f7a), "Aux couleurs des Gardiens de Greenhaven."},
         {"shield_aegis", "Égide de Highspire", 4, Rarity::Legendary, 26, hexColor(0xe8dcc0), "Bénie par Sœur Odile. Elle repousse l'ombre."},
+        {"shield_legion", "Pavois de Fer-Noir", 4, Rarity::Epic, 22, hexColor(0x2a2a30), "Le grand bouclier des légionnaires, frappé d'un poing de fer."},   // 3.0.0
     };
     for (auto& s : ss) { ItemDef& d = addItem(s.id, s.name, ItemKind::Shield, s.r, 30 + s.tier * 120, s.desc); d.weapon = WeaponType::Shield; d.def = s.def; d.tier = s.tier; d.color = s.c; d.icon = "i_block"; }
 
@@ -180,6 +187,7 @@ static void buildItems() {
         {"ring_gold", "Anneau d'or", ItemKind::Ring, Rarity::Epic, 25, 10, 0.05f, 3, 2, 0.02f, "L'or des Sables, poli au sable."},
         {"amulet_pearl", "Collier de perle", ItemKind::Amulet, Rarity::Epic, 30, 40, 0.03f, 0, 3, 0.03f, "Une perle de la Côte, sertie d'argent."},
         {"amulet_aurora", "Cœur d'aurore", ItemKind::Amulet, Rarity::Legendary, 45, 45, 0.06f, 6, 4, 0.04f, "Un cristal vivant qui bat doucement contre la poitrine."},   // 2.8.0
+        {"ring_legion", "Chevalière du conquérant", ItemKind::Ring, Rarity::Legendary, 40, 0, 0.06f, 8, 4, 0.02f, "Prise au doigt d'un seigneur de guerre. Les soldats saluent celui qui la porte."},   // 3.0.0
         {"amulet_silence", "Joyau du Silence", ItemKind::Amulet, Rarity::Ancestral, 70, 70, 0.1f, 12, 8, 0.06f, "Le septième joyau de la Couronne. Il fait taire le monde, pour mieux l'entendre."},
     };
     for (auto& t : ts) {
@@ -258,6 +266,8 @@ static void buildItems() {
     mat("flax", "Lin", Rarity::Common, 3, "i_sickle", "Tiges souples aux fleurs bleues.");
     mat("linen", "Toile de lin", Rarity::Common, 9, "i_hunt", "Tissée serrée, pour les bandages et les vêtements.");
     mat("fire_root", "Racine de braise", Rarity::Rare, 14, "i_sickle", "Chaude au toucher, elle pousse dans les cendres.");
+    mat("titan_steel", "Acier-titan", Rarity::Epic, 50, "i_anvil", "Le minerai noir des Monts Titans, fondu à Rochebrune. Plus dur que l'acier ordinaire.");   // 3.0.0
+    mat("legion_insignia", "Insigne de la Légion", Rarity::Rare, 25, "i_relic", "Un poing de fer sur un disque noir. Les forges et les capitaines de Hautebrume le rachètent.");   // 3.0.0
     mat("aurora_crystal", "Cristal d'aurore", Rarity::Epic, 45, "i_crystal", "Il garde la lumière des aurores et la rend la nuit. Il ne pousse qu'aux Terres d'Aurore.");   // 2.8.0
     // ---- quest items & relics -------------------------------------------------------------------
     auto quest = [&](const char* id, const char* nm, Rarity r, const char* desc, const char* icon = "i_relic") {
@@ -377,6 +387,10 @@ const std::vector<Recipe>& recipes() {
         {"bandage", 2, {{"linen", 1}, {"herb", 1}}, ST_ALCHEMY, 1},
         {"tool_shovel", 1, {{"iron_bar", 2}, {"wood", 2}}, ST_FORGE, 1},   // 2.4.0
         {"sword_aurora", 1, {{"aurora_crystal", 5}, {"steel_bar", 2}}, ST_FORGE, 14},   // 2.8.0
+        {"titan_steel", 1, {{"iron_ore", 3}, {"coal", 2}, {"gold_ore", 1}}, ST_FORGE, 15},   // 3.0.0 the Titan Mountains
+        {"sword_titansteel", 1, {{"titan_steel", 4}, {"leather", 2}}, ST_FORGE, 15},
+        {"shield_legion", 1, {{"titan_steel", 3}, {"legion_insignia", 4}, {"wood", 2}}, ST_FORGE, 15},
+        {"crossbow_legion", 1, {{"titan_steel", 2}, {"legion_insignia", 3}, {"wood", 3}}, ST_WORKBENCH, 15},
         {"staff_aurora", 1, {{"aurora_crystal", 4}, {"wood", 2}, {"crystal", 2}}, ST_FORGE, 14},
         {"bow_aurora", 1, {{"aurora_crystal", 4}, {"wood", 3}, {"spider_silk", 1}}, ST_WORKBENCH, 14},
         {"amulet_aurora", 1, {{"aurora_crystal", 3}, {"silver_bar", 1}}, ST_FORGE, 12},
@@ -807,6 +821,67 @@ static void buildEnemies() {
       e.attacks = {{C_CAST_FORWARD, AttackType::Projectile, 28, 1.2f, 2.2f, 0.5f, Element::Arcane, 2.5f, 0}, {C_CAST_AREA, AttackType::Area, 8, 1.6f, 7, 0.9f, Element::Arcane, 9.f, 0}, {C_STAFF_CAST, AttackType::Beam, 22, 0.5f, 10, 0.9f, Element::Ice, 1.5f, 1},
                    {C_B_ROAR, AttackType::Summon, 40, 0, 18, 0.6f, Element::Ice, 0, 1}, melee(C_STAFF_HEAVY, 4.f, 1.6f, 6, 0.7f), {C_CAST_SELF, AttackType::Area, 30, 1.2f, 14, 1.4f, Element::Arcane, 30.f, 2}};
       e.weak = Element::Fire; e.resist = Element::Arcane; e.xp = 5200; e.gold = 2400; }
+
+    // ============================================================ 3.0.0 the Titan Mountains
+    { auto& e = E("rock_troll", "Troll des cimes", "Trolls", R_TITANS, 25, 820, 50, 26, 3.6f, Behavior::Tank, "Il dort debout contre la falaise, si gris qu'on le prend pour un rocher. Jusqu'à ce que le rocher se retourne.");
+      e.hlook = humanLook(Species::Troll, Body::Rags, 0x5a5048, 0x3a342e, Helm::None, 181); e.hlook.skin = hexColor(0x8a8a82); e.hlook.bulk = 1.8f; e.hlook.hair = Hair::Mohawk; e.hlook.hairCol = hexColor(0x4a4038);
+      e.scale = 1.9f; e.radius = 0.95f; e.poise = 140;
+      e.attacks = {melee(C_B_SWIPE, 3.3f, 1, 2.2f, 0.55f), {C_B_SLAM, AttackType::Area, 3.6f, 1.6f, 5, 0.8f, Element::Physical, 3.8f, 0}, {C_B_THROW, AttackType::Projectile, 20, 1.4f, 7, 0.8f, Element::Physical, 2.4f, 0}};
+      e.loot = {{"troll_hide", 0.6f}, {"stone", 0.8f}, {"iron_ore", 0.4f}, {"gold_ore", 0.15f}}; e.weak = Element::Fire; e.gold = 80; }
+    { auto& e = E("titan_wolf", "Loup des Titans", "Loups", R_TITANS, 24, 300, 44, 14, 7.2f, Behavior::Pack, "Plus grand qu'un poney, gris comme la roche. Les meutes suivent les troupeaux jusqu'aux neiges.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0x6a6862); e.clook.c2 = hexColor(0xc8c4b8); e.clook.mane = true; e.group = 3; e.radius = 0.6f; e.scale = 1.35f; e.night = true;
+      e.attacks = {melee(C_Q_BITE, 2.1f, 1.1f, 1.4f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 8, 1.5f, 5, 0.45f, Element::Physical, 1.8f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.7f}, {"leather", 0.5f}, {"meat", 0.5f}}; }
+    { auto& e = E("mountain_wyvern", "Wyverne des cimes", "Dragons", R_TITANS, 26, 520, 52, 18, 5.6f, Behavior::Ranged, "Elle niche sous les corniches de neige et plonge sur tout ce qui traverse les cols.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x5a6470); e.clook.c2 = hexColor(0xb8c0c8); e.clook.c3 = hexColor(0x2a3440); e.clook.glow = hexColor(0xa0e0ff); e.scale = 1.9f; e.radius = 0.9f;
+      e.attacks = {melee(C_D_BITE, 2.8f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 9, 0.38f, 7, 0.7f, Element::Ice, 2.2f, 0}, melee(C_D_TAIL, 3.2f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.25f}, {"rare_ore", 0.3f}}; e.weak = Element::Lightning; e.gold = 90; }
+    { auto& e = E("titan_bandit", "Contrebandier des cols", "Bandits", R_TITANS, 24, 380, 46, 20, 4.8f, Behavior::Melee, "Il fait passer l'acier noir des mines aux légionnaires, et les voyageurs dans le ravin.");
+      e.hlook = humanLook(Species::Human, Body::Fur, 0x4a4a52, 0x2a2a30, Helm::Leather, 182); e.hlook.beard = true; e.weapon = WeaponType::Axe; e.group = 2;
+      e.attacks = {melee(C_1H_A1, 2.3f, 1, 1.4f, 0.4f), melee(C_1H_A3, 2.4f, 1.3f, 3, 0.5f), melee(C_1H_HEAVY, 2.8f, 1.6f, 7, 0.6f)};
+      e.loot = {{"fur", 0.4f}, {"titan_steel", 0.12f}, {"potion_great", 0.1f}}; e.gold = 70; }
+    // ---- the Iron Legion: garrisons of the enemy fortresses (region -1: never spawned by the chunks)
+    { auto& e = E("legion_soldier", "Légionnaire de Fer", "Légion de Fer", -1, 24, 460, 46, 26, 4.4f, Behavior::Melee, "Plastron noir, poing de fer peint sur l'écu. La Légion ne recule pas : elle se reforme.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x2a2a30, 0x8a1a1a, Helm::Iron, 191); e.hlook.metal = hexColor(0x3a3a42); e.hlook.cape = true;
+      e.weapon = WeaponType::Sword; e.offhand = WeaponType::Shield; e.poise = 70; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.2f, 1, 1.5f, 0.4f), melee(C_1H_A3, 2.3f, 1.3f, 3.5f, 0.5f), melee(C_SHIELD_BASH, 2.f, 0.8f, 6, 0.3f)};
+      e.loot = {{"legion_insignia", 0.45f}, {"iron_bar", 0.4f}, {"potion_heal", 0.2f}, {"shield_legion", 0.02f}}; e.gold = 60; }
+    { auto& e = E("legion_crossbow", "Arbalétrier de la Légion", "Légion de Fer", -1, 24, 320, 44, 16, 4.2f, Behavior::Ranged, "Il tire depuis les créneaux et recharge sans quitter sa cible des yeux.");
+      e.hlook = humanLook(Species::Human, Body::Chain, 0x2a2a30, 0x8a1a1a, Helm::Iron, 192); e.weapon = WeaponType::Crossbow;
+      e.attacks = {{C_BOW_SHOT, AttackType::Projectile, 22, 1.2f, 2.4f, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"legion_insignia", 0.4f}, {"wood", 0.4f}, {"crossbow_legion", 0.02f}}; e.gold = 55; }
+    { auto& e = E("legion_pikeman", "Piquier de la Légion", "Légion de Fer", -1, 25, 480, 48, 24, 4.4f, Behavior::Melee, "Sa pique tient trois hommes à distance. Ou un cheval.");
+      e.hlook = humanLook(Species::Knight, Body::Chain, 0x2a2a30, 0x6a1414, Helm::Great, 193); e.hlook.metal = hexColor(0x34343c); e.weapon = WeaponType::Spear; e.poise = 80;
+      e.attacks = {melee(C_SP_A1, 3.f, 1, 1.5f, 0.4f), melee(C_SP_A2, 3.f, 1.2f, 3, 0.45f), {C_SP_HEAVY, AttackType::Leap, 7, 1.6f, 8, 0.5f, Element::Physical, 2.f, 0}};
+      e.loot = {{"legion_insignia", 0.45f}, {"iron_bar", 0.4f}}; e.gold = 60; }
+    { auto& e = E("legion_knight", "Chevalier noir de la Légion", "Légion de Fer", -1, 27, 900, 56, 34, 4.f, Behavior::Tank, "Un capitaine de la Légion. Son armure a été forgée pour encaisser un rocher lancé par un troll.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x18181c, 0xa01818, Helm::Great, 194); e.hlook.metal = hexColor(0x26262c); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.bulk = 1.15f;
+      e.weapon = WeaponType::Longsword; e.scale = 1.12f; e.poise = 160;
+      e.attacks = {melee(C_2H_A1, 2.8f, 1, 2.f, 0.5f), melee(C_2H_A3, 2.9f, 1.5f, 4.5f, 0.7f), melee(C_2H_HEAVY, 3.2f, 1.8f, 8, 0.8f)};
+      e.loot = {{"legion_insignia", 1.f}, {"titan_steel", 0.4f}, {"potion_great", 0.3f}}; e.gold = 150; }
+    { auto& e = E("legion_warlord", "Seigneur de guerre de la Légion", "Légion de Fer", -1, 30, 3200, 64, 38, 4.2f, Behavior::Tank, "Il tient la forteresse au nom du Poing de Fer. Tant qu'il vit, la garnison se bat ; s'il tombe, elle se rend.");
+      e.hlook = humanLook(Species::Knight, Body::Plate, 0x141418, 0xc02020, Helm::Horned, 195); e.hlook.metal = hexColor(0x2a2228); e.hlook.cape = true; e.hlook.pauldrons = true; e.hlook.bulk = 1.4f;
+      e.hlook.emissiveEyes = 1.5f; e.hlook.eyes = hexColor(0xff5030); e.hlook.glow = hexColor(0xff4020);
+      e.weapon = WeaponType::Axe; e.offhand = WeaponType::Shield; e.scale = 1.45f; e.radius = 0.75f; e.poise = 420; e.aggro = 26;
+      e.attacks = {melee(C_1H_A1, 2.8f, 1.1f, 1.6f, 0.45f), melee(C_1H_A3, 2.9f, 1.4f, 3.5f, 0.6f), melee(C_1H_HEAVY, 3.4f, 1.9f, 7, 0.8f), melee(C_SHIELD_BASH, 2.4f, 0.9f, 6, 0.35f),
+                   {C_SP_HEAVY, AttackType::Leap, 10, 1.7f, 9, 0.7f, Element::Fire, 3.5f, 0}, {C_ROAR_H, AttackType::Summon, 30, 0, 22, 0.6f, Element::Physical, 0, 0}};
+      e.loot = {{"legion_insignia", 1.f}, {"titan_steel", 1.f}, {"potion_great", 1.f}}; e.xp = 2600; e.gold = 900; }
+    // ---- bosses of the three new dungeons
+    { auto& e = E("b_frost_wyrm", "Le Ver des Glaces", "Boss", R_TITANS, 26, 5200, 54, 24, 4.2f, Behavior::Boss, "Il a creusé le Gouffre en remontant des profondeurs, et la glace a gelé derrière lui.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0xb8d0e0); e.clook.c2 = hexColor(0xe8f4ff); e.clook.c3 = hexColor(0x4a6a8a); e.clook.glow = hexColor(0x9ae6ff);
+      e.scale = 4.6f; e.radius = 2.3f; e.poise = 600;
+      e.attacks = {melee(C_D_BITE, 6.f, 1, 2.2f, 0.6f), melee(C_D_TAIL, 7.f, 1.3f, 5, 0.6f), {C_D_BREATH, AttackType::Breath, 14, 0.45f, 8, 0.9f, Element::Ice, 3.f, 0}, {C_D_WING, AttackType::Area, 10.f, 0.8f, 10, 0.8f, Element::Ice, 10.f, 1}};
+      e.weak = Element::Fire; e.resist = Element::Ice; e.xp = 4200; e.gold = 1600; }
+    { auto& e = E("b_forgemaster", "Le Maître-Forge", "Boss", R_TITANS, 27, 5600, 58, 32, 3.8f, Behavior::Boss, "Il forgeait les armures de la Légion au cœur des mines. Il s'est forgé lui-même, plaque après plaque.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0x3a3030, 0x1a1414, Helm::None, 196); e.hlook.glow = hexColor(0xff7a26); e.hlook.bulk = 1.9f; e.hlook.emissiveEyes = 2.5f; e.hlook.eyes = hexColor(0xffa040);
+      e.weapon = WeaponType::Hammer; e.scale = 2.6f; e.radius = 1.3f; e.poise = 650;
+      e.attacks = {melee(C_B_SWIPE, 4.5f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 5.f, 1.7f, 6, 0.9f, Element::Fire, 6.f, 0}, {C_B_THROW, AttackType::Projectile, 24, 1.4f, 7, 0.9f, Element::Fire, 3.f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.3f, 9, 0.9f, Element::Fire, 10.f, 1}};
+      e.weak = Element::Ice; e.resist = Element::Fire; e.xp = 4400; e.gold = 1800; }
+    { auto& e = E("b_giant_king", "Ymrir, le Roi-Géant", "Boss", R_TITANS, 29, 7200, 62, 30, 3.6f, Behavior::Boss, "Le dernier roi des géants qui ont donné leur nom aux montagnes. Son tombeau ne voulait pas de visiteurs.");
+      e.hlook = humanLook(Species::Troll, Body::Plate, 0x6a6a72, 0x3a3a44, Helm::Crown, 197); e.hlook.skin = hexColor(0x9aa0a8); e.hlook.bulk = 1.9f; e.hlook.emissiveEyes = 2.f; e.hlook.eyes = hexColor(0x9ad8ff); e.hlook.glow = hexColor(0x9ad8ff); e.hlook.beard = true;
+      e.weapon = WeaponType::Hammer; e.scale = 3.4f; e.radius = 1.7f; e.poise = 700;
+      e.attacks = {melee(C_B_SWIPE, 5.5f, 1, 2.6f, 0.6f), {C_B_SLAM, AttackType::Area, 6.f, 1.7f, 6, 1.f, Element::Lightning, 7.f, 0}, {C_B_STOMP, AttackType::Area, 6.f, 1.3f, 9, 0.9f, Element::Lightning, 11.f, 1}, {C_B_ROAR, AttackType::Summon, 40, 0, 20, 0.6f, Element::Physical, 0, 1}};
+      e.weak = Element::Fire; e.resist = Element::Lightning; e.xp = 5600; e.gold = 2600; }
 }
 
 const std::vector<EnemyDef>& enemies() { std::call_once(gEnemiesOnce, buildEnemies); return gEnemies; }
@@ -848,6 +923,13 @@ const std::vector<BossDef>& bosses() {
         // ---- 2.2.1 (index 12) the warden of the celestial realm
         B("ether_warden", "Le Gardien de l'Éther", "Veilleur des îles du ciel", "b_ether_warden", "portal_ether", 9, {0.6f, 0.3f}, {"bow_ancestral", "amulet_star", "potion_great"}, "",
           "« Tu as franchi le portail. Peu reviennent assez légers pour retraverser. »", "Le gardien se disperse en lumière d'étoile. Les îles, un instant, cessent de dériver.");
+        // ---- 3.0.0 (indices 13..15) the dungeons of the Titan Mountains
+        B("frost_wyrm", "Le Ver des Glaces", "Seigneur du Gouffre", "b_frost_wyrm", "gouffre_titans", 11, {0.6f, 0.3f}, {"spear_wyrm", "frost_crystal", "potion_great"}, "",
+          "Le sol de glace se soulève. Une tête plus large qu'une porte de ville sort de la crevasse.", "Le ver se fige, et la glace le reprend. Le Gouffre se tait.");
+        B("forgemaster", "Le Maître-Forge", "Forgeron de la Légion", "b_forgemaster", "mines_fer_noir", 12, {0.6f, 0.3f}, {"titan_steel", "titan_steel", "sword_titansteel", "shield_legion"}, "",
+          "Les soufflets s'arrêtent. L'enclume se redresse : ce n'était pas une enclume.", "Le métal refroidit en craquant. Les forges de la Légion s'éteignent pour de bon.");
+        B("giant_king", "Ymrir, le Roi-Géant", "Dernier roi des Titans", "b_giant_king", "tombe_geant", 13, {0.66f, 0.33f}, {"hammer_giant", "amulet_star", "ring_legion"}, "",
+          "« Petit homme. Les montagnes portent mon nom. Toi, tu porteras ma pierre tombale. »", "Le géant s'assoit sur son trône, ferme les yeux, et redevient montagne.");
     });
     return b;
 }
@@ -1013,6 +1095,24 @@ const std::vector<NpcDef>& npcs() {
           N("aila", "Aïla", "Cristallière de Lumenhaven", NpcRole::Merchant, "lumenhaven", l, {7, -6}, {"Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.", "Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter."},
             {"Les cristaux d'aurore gardent la lumière du ciel. Taillés, ils font des armes qui éclairent la nuit.", "Les golems de cristal se réveillent quand on arrache trop de cristaux à la fois. Prudence.", "Sur chaque île du ciel, quelqu'un a laissé un coffre. On ne sait pas qui. On ne sait pas comment."},
             {"potion_great", "potion_mana", "bandage", "crystal", "bomb", "potion_stamina"}, -1); }
+        // ================================================================ 3.0.0 the Titan Mountains
+        { HumanoidLook l = villagerLook(true, 0x8a1f1f, 0x2a1a10, Hair::Braids, Body::Plate, 201); l.helm = Helm::None; l.cape = true; l.c2 = hexColor(0x3a3a44); l.metal = hexColor(0xc8ccd4);
+          N("heloise", "Capitaine Héloïse", "Commandante de Hautebrume", NpcRole::Guard, "hautebrume", l, {11, -8}, {"Hautebrume tient depuis mille ans. La Légion de Fer veut que ça s'arrête cette année.", "Vous avez l'air de savoir tenir une épée. J'ai trois forteresses à reprendre."},
+            {"La Légion de Fer s'est installée dans les vieilles forteresses des cols. Tant que leurs seigneurs de guerre vivent, les garnisons tiennent.", "Tuez le seigneur de guerre, et la garnison jette ses armes. Je l'ai vu de mes yeux à Fort Corbeau, il y a dix ans. Puis ils sont revenus.", "Une forteresse reprise paie son tribut à celui qui l'a prise. C'est la loi des montagnes."},
+            {"potion_great", "potion_stamina", "bandage", "shield_iron", "bomb"}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x3a3a6a, 0xc8c8d0, Hair::Long, Body::Robe, 202, true);
+          N("sibylle", "Sibylle", "Archiviste des Titans", NpcRole::Scholar, "hautebrume", l, {-10, 9}, {"Les montagnes portent le nom des géants. Personne ne se souvient pourquoi, sauf moi.", "Le Gouffre, le Tombeau, les Mines… Trois portes sous la montagne. Aucune ne s'ouvre pour rien."},
+            {"Ymrir fut le dernier roi des géants. On dit qu'il dort sous la vallée, au sud de Rochebrune, assis sur son trône.", "Le Gouffre des Titans s'est ouvert quand un ver de glace est remonté des profondeurs. Il y est toujours.", "Les géants n'ont pas disparu. Ils sont devenus les montagnes."}, {}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x5a3a2a, 0x8a4a2a, Hair::Short, Body::Apron, 203, true);
+          N("bjorn_forge", "Bjorn Ferrecœur", "Maître-forgeron de Rochebrune", NpcRole::Blacksmith, "rochebrune", l, {-11, 8}, {"L'acier-titan ne se forge qu'ici. Le reste du monde tape sur du fer mou.", "Rapporte-moi du minerai noir, je te fais une lame qui coupe la montagne."},
+            {"La Légion a pris nos meilleures mines. Leur Maître-Forge travaille au fond des Mines de Fer-Noir, à l'est.", "Les insignes de la Légion, je les fonds. Rapporte-les, ça fait de bons boucliers."},
+            {"titan_steel", "sword_titansteel", "shield_legion", "crossbow_legion", "iron_bar", "steel_bar", "potion_great"}, -1); }
+        { HumanoidLook l = villagerLook(false, 0x4a5a3a, 0x3a2a1a, Hair::Short, Body::Fur, 204, true);
+          N("arno", "Arno", "Chasseur des cols", NpcRole::Hunter, "pied_lance", l, {8, 6}, {"Les loups des Titans descendent quand la neige monte.", "Un troll des cimes, ça ressemble à un rocher. Jusqu'au moment où ça n'en est plus un."},
+            {"Au-dessus de cent mètres, il neige même en été. Les wyvernes nichent sous les corniches."}, {"meat", "bandage", "potion_heal", "bow_hunter"}, -1); }
+        { HumanoidLook l = villagerLook(true, 0x6a4a2a, 0xd8c8a0, Hair::Bun, Body::Dress, 205);
+          N("maud", "Maud", "Aubergiste du Col", NpcRole::Innkeeper, "col_aigles", l, {9, -6}, {"Le dernier lit chaud avant les Titans. Après, c'est la pierre et le vent.", "Les caravanes de Valdor passent ici pour monter à Hautebrume."},
+            {"Hautebrume est au sud, en suivant la vallée. Une vraie ville, avec des remparts et quatre portes."}, {"bread", "meat", "potion_heal", "potion_stamina"}, -1); }
         // Oasis de Kheft, Tamrak, Zafir
         { HumanoidLook l = villagerLook(true, 0x3a7a5a, 0xe0e0d0, Hair::Bun, Body::Robe, 52); l.hat = 0;
           N("nadira", "Nadira", "Guérisseuse de l'oasis", NpcRole::Alchemist, "kheft", l, {6, 7}, {"L'eau est un remède avant d'être un luxe.", "Les herbes de l'oasis ne poussent qu'à l'ombre des palmiers."},
@@ -1265,6 +1365,31 @@ const std::vector<QuestDef>& quests() {
         Q("s_skyisles", "Les îles du ciel", QuestType::Side, "aila", "Des coffres attendent sur les îles qui flottent.",
           "Sur chaque île du ciel, il y a un coffre et, dedans, un éclat du ciel. Rapporte-m'en trois. Pour monter, marche dans la source jaillissante au pied de l'île : elle te lancera là-haut.", "Les îles flottent au-dessus des prairies. Cherche la source lumineuse à leur pied.", "Trois éclats du ciel… Avec eux, je peux tailler une lame comme on n'en a pas vu depuis mille ans. Elle est à toi.",
           {{"Trouver des éclats du ciel", K::Collect, "sky_shard", 3, ""}}, 3400, 600, {"sword_aurora"}, -1, 0);
+        // ---- 3.0.0 the Titan Mountains and the Iron Legion
+        Q("t_citadel", "Le Poing de Fer", QuestType::Side, "heloise", "Reprendre la Citadelle de Fer-Noir à la Légion.",
+          "La Citadelle de Fer-Noir, à l'est de Hautebrume, au bout de la vallée. Dix légionnaires, des arbalétriers sur les remparts, et un seigneur de guerre devant le donjon. Tuez-le, et la citadelle est à vous. Emmenez des soldats si vous en avez.", "La citadelle est à l'est de la porte est de Hautebrume.", "La citadelle est à vous. Ce soir, Hautebrume dormira tranquille. Prenez ceci : vous l'avez mérité.",
+          {{"Conquérir la Citadelle de Fer-Noir (vaincre son seigneur de guerre)", K::Discover, "conq_citadelle_fer", 1, "citadelle_fer"}}, 6000, 1200, {"ring_legion", "potion_great"}, -1, 0);
+        Q("t_corbeau", "Le Fort aux Corbeaux", QuestType::Side, "heloise", "Reprendre Fort Corbeau, au sud-est de Rochebrune.",
+          "Fort Corbeau garde la route des mines. Sa garnison est plus petite, mais elle est bien placée. Même méthode : le seigneur de guerre d'abord.", "Fort Corbeau est au sud-est de Rochebrune, après les Mines de Fer-Noir.", "Deux forteresses. La Légion va devoir compter avec vous.",
+          {{"Conquérir Fort Corbeau", K::Discover, "conq_fort_corbeau", 1, "fort_corbeau"}}, 5000, 1000, {"potion_great", "potion_great"}, -1, 0, "t_citadel");
+        Q("t_kharvos", "La forteresse des steppes", QuestType::Side, "heloise", "La Légion tient aussi Khar-Vos, dans les steppes de Valdor.",
+          "La Légion a une forteresse dans les steppes, Khar-Vos, sur la route entre Valdor et la jungle. Elle pille les caravanes. Reprenez-la et les routes du sud seront libres.", "Khar-Vos est au sud de Valdor, sur la route d'Émeraude.", "Plus une seule forteresse de la Légion debout. Les bardes vont avoir du travail.",
+          {{"Conquérir la Forteresse de Khar-Vos", K::Discover, "conq_khar_vos", 1, "khar_vos"}}, 5000, 1000, {"axe_steel", "potion_great"}, -1, 0, "t_corbeau");
+        Q("t_steel", "L'acier des Titans", QuestType::Side, "bjorn_forge", "Bjorn veut de l'acier-titan.",
+          "Fonds-moi trois lingots d'acier-titan à la forge : du minerai de fer, du charbon et un peu d'or. Les montagnes en sont pleines. Rapporte-les-moi, je t'apprends ce qu'on en fait.", "Le minerai de fer, le charbon et l'or se trouvent partout dans les Monts Titans. Forge l'acier-titan à une forge.", "Bel acier. Tiens, voilà ce qu'on en fait quand on sait s'y prendre.",
+          {{"Rapporter de l'acier-titan à Bjorn", K::Deliver, "titan_steel", 3, "rochebrune"}}, 4200, 600, {"sword_titansteel"}, -1, 0);
+        Q("t_forge", "Les forges éteintes", QuestType::Side, "bjorn_forge", "Abattre le Maître-Forge au fond des Mines de Fer-Noir.",
+          "Le Maître-Forge fabrique les armures de la Légion au fond des Mines de Fer-Noir. Tant qu'il travaille, la Légion aura de l'acier. Éteins sa forge.", "Les Mines de Fer-Noir sont à l'est de Rochebrune.", "Plus une étincelle là-dessous. Les forges de Rochebrune vont pouvoir respirer.",
+          {{"Vaincre le Maître-Forge (Mines de Fer-Noir)", K::KillBoss, "forgemaster", 1, "mines_fer_noir"}}, 7000, 1500, {"shield_legion"}, -1, 0, "t_steel");
+        Q("t_wyrm", "Le Gouffre des Titans", QuestType::Side, "sibylle", "Le ver de glace du Gouffre.",
+          "Au nord du Col-des-Aigles, une gorge mène au Gouffre des Titans. Le ver qui l'a creusé dort au fond. Ses écailles valent plus que tout ce que j'ai lu.", "Le Gouffre est au nord du Col-des-Aigles, au bout de la gorge.", "Tu l'as vu de près… Raconte-moi tout. Non, attends, je prends des notes.",
+          {{"Vaincre le Ver des Glaces (Gouffre des Titans)", K::KillBoss, "frost_wyrm", 1, "gouffre_titans"}}, 7000, 1400, {"potion_great", "potion_great"}, -1, 0);
+        Q("t_giant", "Le Roi sous la montagne", QuestType::Side, "sibylle", "Le tombeau d'Ymrir, le dernier Roi-Géant.",
+          "Le Tombeau du Roi-Géant est au sud de Rochebrune. Ceux qui y sont entrés ne sont pas ressortis. Si quelqu'un peut voir le trône d'Ymrir et revenir, c'est toi.", "Le Tombeau est au sud de Rochebrune, au bout de la route.", "Il s'est rendormi… Pour de bon, cette fois. Les montagnes te doivent quelque chose.",
+          {{"Vaincre Ymrir, le Roi-Géant (Tombeau du Roi-Géant)", K::KillBoss, "giant_king", 1, "tombe_geant"}}, 9000, 2200, {"potion_great", "amulet_star"}, -1, 0, "t_wyrm");
+        Q("t_hunt", "Contrat : les bêtes des cols", QuestType::Hunt, "arno", "Les loups et les trolls des cimes menacent les troupeaux.",
+          "Cinq loups des Titans et trois trolls des cimes. Après ça, les bergers pourront remonter aux alpages.", "Partout dans les vallées des Monts Titans, surtout la nuit pour les loups.", "Les alpages sont à nouveau à nous. Tiens, c'est la paye.",
+          {{"Vaincre des loups des Titans", K::Kill, "titan_wolf", 5, ""}, {"Vaincre des trolls des cimes", K::Kill, "rock_troll", 3, ""}}, 4800, 800, {"potion_great"}, -1, 0);
         Q("s_jaguar", "Le réveil du Jaguar", QuestType::Side, "itzel", "Le Temple du Jaguar s'est réveillé.",
           "Descends dans le Temple du Jaguar et ramène la paix aux gardiens de jade. La jungle te le rendra.", "Le temple est au sud-est d'Émeraude, sous les grands arbres.", "Le temple dort de nouveau. Merci, voyageur.",
           {{"Explorer le Temple du Jaguar", K::Dungeon, "jaguar", 1, "temple_jaguar"}, {"Retourner voir Itzel", K::Talk, "itzel", 1, "emeraude"}}, 3000, 500, {"amulet_pearl", "ember_tonic"}, -1, 0);
@@ -1353,6 +1478,12 @@ const std::vector<DungeonDef>& dungeons() {
         {"ether", "Le Royaume Céleste", "portal_ether", R_HIGHCROWNS, 1010, 9, {"wisp", "specter", "drakeling"}, 12, 8, "relic_star_glass"},
         // 2.4.0 (index 10): under the Jaguar Temple of the Emerald Jungle
         {"jaguar", "Temple du Jaguar", "jaguar_door", R_JUNGLE, 1111, 9, {"tlaloc_warrior", "jade_golem", "jungle_spider", "jaguar"}, -1, 6, "amulet_pearl"},
+        // 3.0.0 (indices 11..13): the Titan Mountains
+        {"gouffre", "Gouffre des Titans", "gouffre_titans", R_TITANS, 1212, 9, {"frost_elemental", "draugr", "rock_troll", "titan_wolf"}, 13, 4, ""},
+        {"mines_fer", "Mines de Fer-Noir", "mines_fer_noir", R_TITANS, 1313, 9, {"legion_soldier", "legion_crossbow", "ember_elemental", "legion_pikeman"}, 14, 3, ""},
+        {"tombe_geant", "Tombeau du Roi-Géant", "tombe_geant", R_TITANS, 1414, 10, {"draugr", "specter", "skeleton", "rock_troll"}, 15, 1, ""},
+        // 3.0.0 (index 14): the domain's own dungeon, under the crypt the player builds (no world POI: entered from the crypt)
+        {"domaine", "Donjon du domaine", "", R_GREENHAVEN, 1515, 8, {"skeleton", "ghoul", "dark_knight", "legion_soldier", "specter", "giant_spider"}, -1, 1, ""},
     };
     return d;
 }

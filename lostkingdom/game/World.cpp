@@ -8,11 +8,11 @@
 namespace lk {
 
 const char* regionName(int r) {
-    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude", "Terres d'Aurore"};
+    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude", "Terres d'Aurore", "Monts Titans"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "?";
 }
 const char* regionSubtitle(int r) {
-    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde", "Le pays des cristaux vivants"};
+    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde", "Le pays des cristaux vivants", "Les cimes des géants"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "";
 }
 
@@ -54,7 +54,35 @@ static const Seed SEEDS[] = {
     // 2.8.0 the Lands of Aurora: the island of living crystals in the south-west sea
     {{1100, 5000}, R_AURORA}, {{600, 5350}, R_AURORA}, {{1300, 5450}, R_AURORA}, {{2000, 5250}, R_AURORA}, {{2700, 5300}, R_AURORA},
     {{3150, 5600}, R_AURORA}, {{900, 5800}, R_AURORA}, {{1700, 5800}, R_AURORA}, {{2450, 5800}, R_AURORA},
+    // 3.0.0 the Titan Mountains: the great range of the far east (valleys, passes and peaks above the clouds)
+    {{6650, 700}, R_TITANS}, {{6950, 1300}, R_TITANS}, {{6700, 1900}, R_TITANS}, {{7050, 2500}, R_TITANS}, {{6700, 3000}, R_TITANS},
+    {{7100, 3500}, R_TITANS}, {{6700, 4000}, R_TITANS}, {{7050, 4600}, R_TITANS}, {{6650, 5000}, R_TITANS}, {{6800, 5600}, R_TITANS},
 };
+
+// 3.0.0 the valleys of the Titan Mountains: the peaks rise away from these lines and basins, so the settlements,
+// the roads and the passes to the steppes and the jungle stay on walkable ground.
+struct TitanSeg { vec2 a, b; };
+static const TitanSeg TITAN_VALLEYS[] = {
+    {{6080, 1250}, {6320, 1260}}, {{6320, 1260}, {6560, 1420}}, {{6560, 1420}, {6720, 1800}}, {{6720, 1800}, {6780, 2300}}, {{6780, 2300}, {6760, 2650}},
+    {{6760, 2650}, {6800, 3100}}, {{6800, 3100}, {6780, 3600}}, {{6780, 3600}, {6660, 4100}}, {{6660, 4100}, {6600, 4450}}, {{6600, 4450}, {6460, 5000}},
+    {{6460, 5000}, {6300, 5450}},
+    {{6780, 2300}, {7000, 2340}}, {{7000, 2340}, {7180, 2390}},          // to the Iron Citadel
+    {{6800, 3100}, {6460, 3240}}, {{6460, 3240}, {6080, 3330}},          // the jungle pass
+    {{6660, 4100}, {6880, 4480}}, {{6880, 4480}, {7000, 4920}},          // to Fort Corbeau
+    {{6320, 1260}, {6440, 820}}, {{6440, 820}, {6700, 540}},             // the northern gorge
+};
+struct TitanBasin { vec2 c; float r; };
+static const TitanBasin TITAN_BASINS[] = {
+    {{6760, 2650}, 260}, {{6600, 4450}, 230}, {{7180, 2390}, 150}, {{7000, 4930}, 125}, {{6300, 1250}, 120}, {{6790, 3600}, 105}, {{6700, 540}, 95},
+    {{6460, 5000}, 90}, {{6880, 4480}, 70},
+};
+static float titanValleyDist(float x, float z) {
+    vec2 p{x, z};
+    float d = 1e9f;
+    for (const TitanSeg& s : TITAN_VALLEYS) d = std::min(d, distToSegment(p, s.a, s.b));
+    for (const TitanBasin& b : TITAN_BASINS) d = std::min(d, std::max(0.f, length(p - b.c) - b.r));
+    return d;
+}
 
 RegionWeights World::regionAt(float x, float z) const {
     RegionWeights rw;
@@ -165,6 +193,16 @@ static float regionHeight(int r, float x, float z) {
         float ridge = std::pow(saturate(ridged2(w.x * 0.0042f, w.y * 0.0042f, 4, 173) - 0.42f) * 1.75f, 2.2f) * 38.f;
         float pin = 26.f * std::pow(saturate(fbm2(x * 0.011f, z * 0.011f, 2, 174) - 0.34f) * 2.6f, 4.f);
         return 7.f + basins + terrace(ridge, 6.f, 0.1f) + pin + 1.5f * fbm2(x * 0.025f, z * 0.025f, 2, 175);
+    }
+    case R_TITANS: {
+        // 3.0.0 the Titan Mountains: flat green valley floors, then steep flanks and snowy peaks up to ~300 m
+        float vd = titanValleyDist(x, z);
+        float floorH = 16.f + 6.f * fbm2(x * 0.004f, z * 0.004f, 3, 191) + 1.5f * fbm2(x * 0.02f, z * 0.02f, 2, 192);
+        float mask = smoothstepf(55.f, 340.f, vd + 40.f * fbm2(x * 0.006f, z * 0.006f, 2, 193)) * smoothstepf(6120.f, 6460.f, x);
+        if (mask <= 0.f) return floorH;
+        float mf = mountainField(x, z, 0.0021f, 194);
+        float peaks = 45.f + 240.f * mf + 18.f * ridged2(x * 0.012f, z * 0.012f, 3, 195) * smoothstepf(0.2f, 0.6f, mf);
+        return floorH + mask * peaks * (0.55f + 0.45f * mask);
     }
     case R_CORAL: {
         // 2.0.0 the Coral Coast: soft jungle hills, kept above sea level (the lagoons are carved by lakes)
@@ -401,6 +439,22 @@ void World::buildPlan() {
     Pf("ws_emeraude", "Pierre d'Émeraude", PoiType::Waystone, 5390, 3330, 10);
     Pf("ws_xochi", "Pierre de Xochi", PoiType::Waystone, 4690, 4830, 10);
     Pf("ws_jaguar", "Pierre du Jaguar", PoiType::Waystone, 5420, 4500, 10);
+    // ---- 3.0.0 the Titan Mountains (placed on the valley floors and basins of TITAN_VALLEYS / TITAN_BASINS)
+    P("hautebrume", "Hautebrume, la Cité des Titans", PoiType::Village, 6760, 2650, 150); pois.back().city = true;
+    P("rochebrune", "Rochebrune, la Cité des Forges", PoiType::Village, 6600, 4450, 135); pois.back().city = true;
+    P("col_aigles", "Col-des-Aigles", PoiType::Village, 6300, 1250, 64);
+    P("pied_lance", "Pied-de-Lance", PoiType::Village, 6790, 3600, 58);
+    P("citadelle_fer", "Citadelle de Fer-Noir", PoiType::Castle, 7180, 2390, 100); pois.back().hostile = true;
+    P("fort_corbeau", "Fort Corbeau", PoiType::Castle, 7000, 4930, 80); pois.back().hostile = true;
+    P("gouffre_titans", "Gouffre des Titans", PoiType::Cave, 6700, 540, 26, 11);
+    P("mines_fer_noir", "Mines de Fer-Noir", PoiType::Mine, 6880, 4480, 24, 12);
+    P("tombe_geant", "Tombeau du Roi-Géant", PoiType::Graveyard, 6460, 5000, 48, 13);
+    P("ws_hautebrume", "Pierre de Hautebrume", PoiType::Waystone, 6760, 2470, 10);
+    P("ws_rochebrune", "Pierre de Rochebrune", PoiType::Waystone, 6600, 4295, 10);
+    P("ws_col", "Pierre du Col", PoiType::Waystone, 6390, 1300, 10);
+    for (int i = (int)pois.size() - 12; i < (int)pois.size(); i++) keep.push_back({pois[i].pos, pois[i].radius + 22.f});
+    // ---- 3.0.0 the Iron Legion also holds a fortress in the steppes, on the road between Valdor and the jungle
+    Pf("khar_vos", "Forteresse de Khar-Vos", PoiType::Castle, 5200, 2700, 78, -1, -1, 260); pois.back().hostile = true;
 
     // Lakes
     lakes.push_back({{1700, 1390}, 85, 0, false, false});      // Lac Miroir (level computed below)
@@ -511,6 +565,20 @@ void World::buildPlan() {
     addRoad(*this, {pos("xochi"), {4400, 5250}, pos("tlaloc")}, 3, false);
     addRoad(*this, {pos("ws_port"), {1380, 4230}, {1180, 4520}, {1080, 4800}, {1150, 5100}, pos("lumenhaven")}, 4, false);   // 2.8.0 across the isthmus (from the waystone, round the harbour)
     addRoad(*this, {pos("lumenhaven"), {1900, 5450}, pos("crystal_crater")}, 3, false);
+    // 3.0.0 the Titan Mountains: the roads end at the city gates (the avenues inside are laid out with the city)
+    {
+        auto gate = [&](const char* id, float dx, float dz) { const Poi* q = poiById(id); return q->pos + vec2(dx, dz) * (q->radius * 1.06f); };
+        addRoad(*this, {pos("valdor"), {5700, 1250}, {6080, 1250}, pos("col_aigles")}, 5, false);
+        addRoad(*this, {pos("col_aigles"), {6560, 1420}, {6720, 1800}, {6780, 2300}, gate("hautebrume", 0, -1)}, 6, true);
+        addRoad(*this, {gate("hautebrume", 0, 1), {6800, 3100}, pos("pied_lance")}, 6, true);
+        addRoad(*this, {pos("pied_lance"), {6660, 4100}, gate("rochebrune", 0, -1)}, 6, true);
+        addRoad(*this, {gate("hautebrume", 1, 0), {7000, 2340}, pos("citadelle_fer")}, 5, false);
+        addRoad(*this, {gate("rochebrune", 1, 0), {6800, 4440}, pos("mines_fer_noir"), {6940, 4700}, pos("fort_corbeau")}, 4, false);
+        addRoad(*this, {gate("rochebrune", 0, 1), {6520, 4800}, pos("tombe_geant")}, 4, false);
+        addRoad(*this, {pos("col_aigles"), {6440, 820}, pos("gouffre_titans")}, 4, false);
+        addRoad(*this, {pos("emeraude"), {5800, 3380}, {6080, 3330}, {6460, 3240}, {6800, 3100}}, 5, false);   // the jungle pass
+        addRoad(*this, {pos("valdor"), {5150, 2000}, pos("khar_vos"), {5050, 3000}, pos("emeraude")}, 4, false);
+    }
 
     // ---- structures ----------------------------------------------------------------------
     auto S = [&](int kind, vec2 p, float rot, int poi, float scale = 1, int variant = 0) {
@@ -608,12 +676,214 @@ void World::buildPlan() {
             for (int i = 0; i < 8; i++) S(S_LANTERN, polar(sea + (i - 3.5f) * 0.38f, R * 0.56f), 0, pi);
             for (int i = 0; i < 10; i++) { vec2 q = polar(rng.range(0, TAU), rng.range(R * 0.2f, R * 0.7f)); S(i % 3 == 0 ? S_LANTERN : S_STALL, q, rng.range(0, TAU), pi, 1.f, -1 - (i % 3)); }
         };
+        // ---- 3.0.0 an organic town, grown like a real one (no straight avenues): winding main streets from the
+        // gates to an irregular market square, then lanes and alleys branching off them in every direction, curving,
+        // joining other streets or ending in a court. Houses line every street on both sides, turned to follow
+        // the curve, with irregular gaps and setbacks; nothing overlaps a house or a street (checked one by one).
+        // walled: a city with ramparts, four gates, a keep, a cathedral... (Hautebrume, Rochebrune); otherwise a
+        // mountain village (no walls, fewer and narrower lanes).
+        auto organicTown = [&](bool walled) {
+            const float R = p.radius;
+            const size_t firstS = structures.size();
+            const float plazaR = walled ? 17.f : 11.f;
+            const float inner = walled ? R * 0.85f : R * 0.9f;     // houses stay inside this radius (walls beyond)
+            struct Street { std::vector<vec2> pts; float w; };
+            std::vector<Street> streets;
+            auto face = [&](vec2 q, vec2 target) { return std::atan2(target.x - q.x, target.y - q.y); };
+            // distance from a point to the nearest street edge (negative: on the street)
+            auto streetGap = [&](vec2 q) {
+                float best = 1e9f;
+                for (const Street& st : streets) for (size_t i = 0; i + 1 < st.pts.size(); i++) best = std::min(best, distToSegment(q, st.pts[i], st.pts[i + 1]) - st.w * 0.5f);
+                return best;
+            };
+            auto nearStreet = [&](vec2 q, float d, int skip) {   // index of a street passing within d of q (not `skip`)
+                for (int s = 0; s < (int)streets.size(); s++) { if (s == skip) continue; const Street& st = streets[s]; for (size_t i = 0; i + 1 < st.pts.size(); i++) if (distToSegment(q, st.pts[i], st.pts[i + 1]) < d) return s; }
+                return -1;
+            };
+            // ---- main streets: gate (or village edge) -> square, winding
+            int nMain = walled ? 4 : 3;
+            float a0 = rng.range(0.f, TAU);
+            for (int k = 0; k < nMain; k++) {
+                float ga = walled ? k * PI / 2 : a0 + k * TAU / nMain + rng.range(-0.3f, 0.3f);   // the gates sit on the avenue angles of the ramparts
+                vec2 gd{std::cos(ga), std::sin(ga)};
+                vec2 from = p.pos + vec2(std::cos(ga + rng.range(-0.5f, 0.5f)), std::sin(ga + rng.range(-0.5f, 0.5f))) * plazaR;
+                vec2 to = p.pos + gd * (walled ? R * 0.94f : R * 0.98f);
+                Street st; st.w = walled ? 5.5f : 4.f;
+                int n = (int)(length(to - from) / 7.f);
+                float amp = R * rng.range(0.07f, 0.12f), ph = rng.range(0.f, TAU), fr = rng.range(1.2f, 2.2f);
+                for (int i = 0; i <= n; i++) {
+                    float t = (float)i / n;
+                    vec2 q = lerp(from, to, t) + perp(gd) * (amp * std::sin(t * PI) * std::sin(ph + t * fr * PI) + 2.5f * std::sin(t * 9.f + ph));
+                    st.pts.push_back(q);
+                }
+                if (walled) st.pts.push_back(p.pos + gd * (R * 1.08f));   // straight through the gate to the road outside
+                streets.push_back(st);
+            }
+            // a loose ring of short lanes around the square
+            { Street st; st.w = 4.5f; for (int i = 0; i <= 14; i++) { float a = i * TAU / 14; st.pts.push_back(p.pos + vec2(std::cos(a), std::sin(a)) * (plazaR + 2.f + rng.range(-1.5f, 1.5f))); } st.pts.back() = st.pts.front(); streets.push_back(st); }
+            // ---- lanes and alleys branching off any street, curving, joining another street or ending in a court
+            int want = walled ? (int)(R / 3.8f) : (int)(R / 8.f);
+            for (int tries = 0; tries < want * 25 && (int)streets.size() < nMain + 1 + want; tries++) {
+                int si = rng.irange(0, (int)streets.size() - 1);
+                const Street& par = streets[si];
+                if (par.pts.size() < 4) continue;
+                int pi0 = rng.irange(1, (int)par.pts.size() - 3);
+                vec2 a = par.pts[pi0], b = par.pts[pi0 + 1];
+                vec2 tg = normalize(b - a);
+                float side = rng.chance(0.5f) ? 1.f : -1.f;
+                float head = std::atan2(tg.y, tg.x) + side * rng.range(1.0f, 2.1f);
+                vec2 q = lerp(a, b, rng.f()) + vec2(std::cos(head), std::sin(head)) * (par.w * 0.5f);
+                if (length(q - p.pos) > inner - 8.f || length(q - p.pos) < plazaR + 6.f) continue;
+                Street st; st.w = rng.chance(0.35f) ? 3.f : 3.8f;
+                st.pts.push_back(q);
+                float len = rng.range(R * 0.25f, R * 0.6f), turn = rng.range(-0.18f, 0.18f);
+                bool joined = false;
+                for (float d = 0; d < len; d += 6.f) {
+                    head += turn + rng.range(-0.3f, 0.3f);
+                    vec2 nq = st.pts.back() + vec2(std::cos(head), std::sin(head)) * 6.f;
+                    if (length(nq - p.pos) > inner - 6.f || length(nq - p.pos) < plazaR + 4.f) break;
+                    int hit = st.pts.size() > 2 ? nearStreet(nq, 9.f, -1) : nearStreet(nq, 9.f, si);
+                    if (hit >= 0) {   // meets another street: join it and stop
+                        float bd = 1e9f; vec2 bq = nq; const Street& o = streets[hit];
+                        for (size_t i = 0; i + 1 < o.pts.size(); i++) { float t; float dd = distToSegment(nq, o.pts[i], o.pts[i + 1], &t); if (dd < bd) { bd = dd; bq = lerp(o.pts[i], o.pts[i + 1], t); } }
+                        if (st.pts.size() >= 3) { st.pts.push_back(bq); joined = true; }
+                        break;
+                    }
+                    st.pts.push_back(nq);
+                }
+                if (st.pts.size() < (joined ? 4u : 5u)) continue;
+                streets.push_back(st);
+            }
+            for (const Street& st : streets) roads.push_back({st.pts, st.w, walled});   // cobbles in the cities, beaten earth in the villages
+            // ---- buildings: an overlap test against everything placed so far, and against the streets
+            struct Placed { vec2 c; float rot; vec2 f; };
+            std::vector<Placed> placed;
+            auto overlaps = [&](vec2 c, float rot, vec2 f, float margin) {
+                for (const Placed& o : placed) {
+                    if (length(o.c - c) > length(o.f) + length(f) + margin) continue;
+                    // separating axis test on the 4 axes of the two rectangles
+                    vec2 ax[4] = {rotate(vec2(1, 0), -rot), rotate(vec2(0, 1), -rot), rotate(vec2(1, 0), -o.rot), rotate(vec2(0, 1), -o.rot)};
+                    bool sep = false;
+                    for (vec2 n : ax) {
+                        auto proj = [&](vec2 cc, float rr, vec2 ff) { vec2 u = rotate(vec2(1, 0), -rr), v = rotate(vec2(0, 1), -rr); return std::fabs(dot(u, n)) * ff.x + std::fabs(dot(v, n)) * ff.y; };
+                        if (std::fabs(dot(o.c - c, n)) > proj(c, rot, f) + proj(o.c, o.rot, o.f) + margin) { sep = true; break; }
+                    }
+                    if (!sep) return true;
+                }
+                return false;
+            };
+            auto clearOfStreets = [&](vec2 c, float rot, vec2 f, float margin) {
+                for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) if (streetGap(rotate(vec2(f.x * i, f.y * j), -rot) + c) < margin) return false;
+                return true;
+            };
+            auto tryPlace = [&](int kind, vec2 c, float rot, float sc, float margin) {
+                vec2 f = structureFootprint(kind) * sc;
+                if (length(c - p.pos) + std::max(f.x, f.y) > inner || length(c - p.pos) < plazaR + 4.f + std::max(f.x, f.y)) return false;
+                if (overlaps(c, rot, f, margin) || !clearOfStreets(c, rot, f, 0.6f)) return false;
+                placed.push_back({c, rot, f});
+                S(kind, c, rot, pi, sc, rng.irange(0, 3));
+                return true;
+            };
+            // landmarks first, set back from the main streets
+            std::vector<int> lms = walled ? std::vector<int>{S_CHAPEL, S_KEEP, S_INN, S_INN, S_BAZAAR, S_FORGE, S_FORGE, S_TOWER, S_WELL, S_WELL, S_WELL}
+                                          : std::vector<int>{S_INN, S_FORGE, S_WELL};
+            for (int kind : lms) {
+                float sc = kind == S_CHAPEL ? 1.3f : kind == S_KEEP ? 0.9f : kind == S_BAZAAR ? 1.25f : 1.f;
+                vec2 f = structureFootprint(kind) * sc;
+                for (int t = 0; t < 120; t++) {
+                    const Street& st = streets[rng.irange(0, nMain - 1)];
+                    int i = rng.irange(1, (int)st.pts.size() - 2);
+                    vec2 a = st.pts[i], b = st.pts[i + 1], n = perp(normalize(b - a)) * (rng.chance(0.5f) ? 1.f : -1.f);
+                    vec2 on = lerp(a, b, 0.5f), c = on + n * (st.w * 0.5f + f.y + 1.5f);
+                    if (tryPlace(kind, c, face(c, on), sc, 1.5f)) break;
+                }
+            }
+            // houses along every street, both sides, following the curve
+            for (const Street& st : streets) {
+                for (int sd = -1; sd <= 1; sd += 2) {
+                    float carry = rng.range(0.f, 4.f);
+                    for (size_t i = 0; i + 1 < st.pts.size(); i++) {
+                        vec2 a = st.pts[i], b = st.pts[i + 1];
+                        float L = length(b - a); if (L < 0.5f) continue;
+                        vec2 tg = (b - a) / L, n = perp(tg) * (float)sd;
+                        float t = carry;
+                        while (t < L) {
+                            int kind = rng.chance(0.18f) ? S_STONEHOUSE : (rng.chance(0.06f) ? S_LONGHOUSE : S_HOUSE);
+                            if (p.region == R_TITANS && rng.chance(0.35f)) kind = S_STONEHOUSE;
+                            float sc = rng.range(0.88f, 1.04f);
+                            vec2 f = structureFootprint(kind) * sc;
+                            vec2 on = a + tg * t;
+                            vec2 c = on + n * (st.w * 0.5f + f.y + rng.range(0.8f, 2.2f));
+                            float rot = face(c, on) + rng.range(-0.12f, 0.12f);
+                            if (tryPlace(kind, c, rot, sc, rng.range(0.9f, 2.2f))) t += f.x * 2.f + rng.range(1.2f, 4.f);
+                            else t += 2.5f;
+                        }
+                        carry = t - L;
+                    }
+                }
+            }
+            // the square: a statue (city) or a well (village), stalls around it, lanterns
+            S(walled ? S_STATUE : S_WELL, p.pos, 0, pi, walled ? 1.6f : 1.f);
+            placed.push_back({p.pos, 0.f, vec2(2.f)});
+            for (int i = 0; i < (walled ? 10 : 5); i++) {
+                float a = (i + rng.range(0.2f, 0.8f)) * TAU / (walled ? 10 : 5);
+                vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (plazaR * rng.range(0.55f, 0.75f));
+                if (!overlaps(q, face(q, p.pos), structureFootprint(S_STALL), 0.8f) && streetGap(q) > 1.2f) { placed.push_back({q, face(q, p.pos), structureFootprint(S_STALL)}); S(S_STALL, q, face(q, p.pos), pi, 1.f, i % 3); }
+            }
+            // lanterns on the street corners, crates and barrels against the walls of the houses
+            for (const Street& st : streets) for (size_t i = 2; i + 1 < st.pts.size(); i += 3) {
+                vec2 a = st.pts[i], b = st.pts[i + 1], n = perp(normalize(b - a)) * ((i / 3) % 2 ? 1.f : -1.f);
+                vec2 q = a + n * (st.w * 0.5f + 0.7f);
+                if (length(q - p.pos) < inner && !overlaps(q, 0.f, vec2(0.6f), 0.4f) && streetGap(q) > 0.3f) { placed.push_back({q, 0.f, vec2(0.6f)}); S(S_LANTERN, q, 0, pi); }
+            }
+            for (int i = 0; i < (walled ? 60 : 14); i++) {
+                float a = rng.range(0, TAU), d = rng.range(plazaR + 4.f, inner - 3.f); vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * d;
+                if (overlaps(q, 0.f, vec2(1.f), 1.2f) || streetGap(q) < 0.6f) continue;
+                placed.push_back({q, 0.f, vec2(1.f)});
+                S(S_STALL, q, rng.range(0, TAU), pi, 1.f, -1 - (i % 3));
+            }
+            if (walled) {
+                // ramparts: 20 towers, walls between, a gate where each main street leaves the city
+                const int NT = 20; const float Rw = R * 0.94f;
+                for (int i = 0; i < NT; i++) {
+                    float a = (i + 0.5f) * TAU / NT;
+                    S(S_CASTLE_TOWER, p.pos + vec2(std::cos(a), std::sin(a)) * Rw, a, pi, 1.f, 0);
+                    float a2 = (i + 1) * TAU / NT, half = Rw * std::sin(PI / NT);
+                    vec2 m = p.pos + vec2(std::cos(a2), std::sin(a2)) * Rw * std::cos(PI / NT);
+                    float rot = -a2 + PI / 2;
+                    if ((i + 1) % 5 != 0) { S(S_CASTLE_WALL, m, rot, pi, 2.f * half / 10.f, 0); continue; }
+                    S(S_GATE, m, rot, pi, 1.f, 0);
+                    vec2 along{-std::sin(a2), std::cos(a2)};
+                    float L = half - 5.2f;
+                    for (int sd = -1; sd <= 1; sd += 2) S(S_CASTLE_WALL, m + along * (sd * (5.2f + L * 0.5f)), rot, pi, L / 10.f, 0);
+                }
+            }
+            // outside: fields, a windmill, pens
+            for (int i = 0; i < (walled ? 6 : 3); i++) {
+                float a = a0 + 0.6f + i * 0.35f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (R * (walled ? 1.22f : 1.15f));
+                S(i == 2 ? S_WINDMILL : S_FIELD, q, a, pi, 1.f, i % 3);
+            }
+            for (int i = 0; i < 2; i++) { float a = a0 + 3.9f + i * 0.5f; S(S_PEN, p.pos + vec2(std::cos(a), std::sin(a)) * (R * (walled ? 1.18f : 1.1f)), a, pi); }
+            (void)firstS;
+        };
+        auto cityTown = [&]() { organicTown(true); };
+        // ---- 3.0.0 an enemy fortress (the Iron Legion): the castle ring plus a war camp inside, braziers, a forge
+        auto legionFort = [&]() {
+            const float R = p.radius;
+            for (int i = 0; i < 6; i++) { float a = i * TAU / 6 + 0.3f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (R * 0.5f); S(S_TENT, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.1f, i % 2); }
+            for (int i = 0; i < 5; i++) { float a = i * TAU / 5 + 0.9f; S(S_CAMPFIRE, p.pos + vec2(std::cos(a), std::sin(a)) * (R * 0.33f), 0, pi); }
+            S(S_FORGE, p.pos + vec2(R * 0.3f, R * 0.28f), -0.6f, pi, 1.f, 1);
+            for (int i = 0; i < 4; i++) { float a = 0.82f + i * PI / 2; S(S_TOWER, p.pos + vec2(std::cos(a), std::sin(a)) * (R * 0.45f), 0, pi, 1.f, 1); }   // watchtowers between the tents
+            for (int i = 0; i < 10; i++) { float a = rng.range(0, TAU), d = rng.range(10.f, R * 0.6f); S(S_STALL, p.pos + vec2(std::cos(a), std::sin(a)) * d, rng.range(0, TAU), pi, 1.f, -1 - (i % 3)); }
+        };
         switch (p.type) {
         case PoiType::Village: case PoiType::Mill: case PoiType::Monastery: {
+            if (p.city) { cityTown(); break; }
+            if (p.type == PoiType::Village && (reg == R_TITANS || p.id == "col_aigles" || p.id == "pied_lance")) { organicTown(false); break; }   // 3.0.0 mountain villages grow the same way
             if (p.type == PoiType::Village && reg == R_AMBER) { desertTown(); break; }
             if (p.type == PoiType::Village && reg == R_CORAL) { coastTown(); break; }
             S(S_WELL, p.pos, 0, pi);
-            int house = reg == R_AURORA ? S_LONGHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN ? S_STONEHOUSE : S_HOUSE));
+            int house = reg == R_AURORA ? S_LONGHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN || reg == R_TITANS ? S_STONEHOUSE : S_HOUSE));
             int n = p.type == PoiType::Village ? 9 : 6;
             ring(n, p.radius * 0.62f, [&](int i) {
                 if (i == 0) return (int)S_INN;
@@ -658,7 +928,7 @@ void World::buildPlan() {
                 for (int i = 0; i < n2; i++) {
                     float a = (i + 0.5f) * TAU / n2 + rng.range(-0.12f, 0.12f);
                     vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * ((reg == R_SHADOWS || reg == R_ASHEN) ? rng.range(0.7f, 0.78f) : rng.range(0.86f, 0.96f));
-                    int kind = reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_ASHEN || reg == R_HIGHCROWNS ? S_STONEHOUSE : S_HOUSE));
+                    int kind = reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_ASHEN || reg == R_HIGHCROWNS || reg == R_TITANS ? S_STONEHOUSE : S_HOUSE));
                     if (i % 5 == 4) kind = S_STONEHOUSE;
                     if (reg == R_ELDERWOOD) kind = i % 2 ? S_HOUSE : S_TENT;
                     S(kind, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.f, rng.irange(0, 3));
@@ -681,6 +951,7 @@ void World::buildPlan() {
             if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0));
             else S(S_STATUE, p.pos + vec2(0, -p.radius * 0.45f), 0, pi, 1.6f);
             for (int i = 0; i < 4; i++) S(S_LANTERN, p.pos + vec2(i < 2 ? -12.f : 12.f, i % 2 ? -12.f : 12.f), 0, pi);
+            if (p.hostile) legionFort();
             break;
         }
         case PoiType::Temple: {
@@ -1103,7 +1374,7 @@ std::string World::saveDigs() const {
     std::string out;
     char b[48];
     for (auto& kv : digs) {
-        out += "digs " + std::to_string(kv.first);
+        out += "digs2 " + std::to_string(kv.first % CHUNKS) + " " + std::to_string(kv.first / CHUNKS);   // 3.0.0 chunk x z (the grid grew)
         for (int i = 0; i < 33 * 33; i++) if (std::fabs(kv.second->h[i]) > 0.005f) { snprintf(b, sizeof b, " %d:%.2f", i, kv.second->h[i]); out += b; }
         out += "\n";
     }
@@ -1113,8 +1384,10 @@ std::string World::saveDigs() const {
 void World::loadDigs(const std::string& line) {
     std::istringstream in(line);
     std::string tag; int ci = -1;
-    in >> tag >> ci;
-    if (tag != "digs" || ci < 0 || ci >= CHUNKS * CHUNKS) return;
+    in >> tag;
+    if (tag == "digs2") { int cx = -1, cz = -1; in >> cx >> cz; ci = chunkIndex(cx, cz); }
+    else if (tag == "digs") { int old = -1; in >> old; const int OC = (int)(OLD_WORLD_SIZE / CHUNK); if (old >= 0) ci = chunkIndex(old % OC, old / OC); }   // 3.0.0 older save: 192-chunk rows
+    if (ci < 0 || ci >= CHUNKS * CHUNKS) return;
     std::unique_lock<std::shared_mutex> l(digMtx);
     auto& g = digs[ci];
     if (!g) g = std::make_unique<DigGrid>();
@@ -1244,6 +1517,14 @@ float World::heightNoDig(float x, float z) const {
                 vec2 q = lerp(rd.pts[s], rd.pts[s + 1], t);
                 RegionWeights qw = regionAt(q.x, q.y);
                 target = baseHeight(q.x, q.y, qw);
+                // 3.0.0 a street inside a settlement follows the levelled ground of the place, not the wild terrain
+                // under it (the city avenues were pulling the houses' corners up and down)
+                for (int pi : chunkPois[ci]) {
+                    const Poi& p = pois[pi];
+                    if (p.type == PoiType::Lake) continue;
+                    float pw = 1.f - smoothstepf(p.radius * 0.75f, p.radius + 22.f, length(q - p.pos));
+                    if (pw > 0) target = lerpf(target, p.height, pw);
+                }
             }
         }
         bool harbour = false;
@@ -1426,6 +1707,8 @@ static const std::vector<ScatterEntry>& scatterTable(int r) {
         // 2.8.0 (reworked) Lands of Aurora, a northern volcanic island: silver aurora birches, mossy boulders, pines
         // in the hollows, ferns and heather, and here and there an outcrop of pale quartz
         {{P_CRYSTALTREE, 2.4f, 0.8f, 1.3f, true}, {P_BIRCH, 1.2f, 0.8f, 1.2f, true}, {P_PINE, 0.6f, 0.7f, 1.1f, true}, {P_BOULDER, 0.9f, 0.6f, 1.4f, true}, {P_ROCK, 1.4f, 0.6f, 1.5f, true}, {P_AURORASPIRE, 0.22f, 0.6f, 1.2f, true}, {P_FERN, 2.2f, 0.8f, 1.3f, false}, {P_BUSH, 1.2f, 0.7f, 1.2f, false}, {P_SMALLSHROOMS, 0.4f, 0.8f, 1.2f, false}},
+        // 3.0.0 Titan Mountains (index R_TITANS, last row): larch and pine forests in the valleys, boulders, snowy rocks
+        {{P_PINE, 3.f, 0.8f, 1.5f, true}, {P_SNOWPINE, 1.4f, 0.8f, 1.4f, true}, {P_BIRCH, 0.6f, 0.8f, 1.2f, true}, {P_BOULDER, 1.4f, 0.8f, 1.8f, true}, {P_ROCK, 2.f, 0.7f, 1.7f, true}, {P_SNOWROCK, 0.6f, 0.7f, 1.5f, true}, {P_BUSH, 1.f, 0.7f, 1.1f, false}, {P_FERN, 0.8f, 0.8f, 1.2f, false}, {P_STUMP, 0.2f, 0.8f, 1.1f, true}, {P_LOG, 0.15f, 0.9f, 1.1f, true}},
     };
     return T[r];
 }
@@ -1443,6 +1726,7 @@ static float forestDensity(int r, float x, float z) {
     case R_STEPPE: return 0.06f + smoothstepf(0.6f, 0.8f, n) * 0.22f;   // open grassland: a few trees and rocks
     case R_JUNGLE: return 0.75f + n * 0.25f;                             // the densest vegetation of the world
     case R_AURORA: return 0.15f + smoothstepf(0.45f, 0.72f, n) * 0.55f;  // 2.8.0 crystal groves and open glowing meadows
+    case R_TITANS: return 0.08f + smoothstepf(0.45f, 0.7f, n) * 0.45f;   // 3.0.0 conifer woods in the valleys, open alpine meadows
     default: return 0.12f + smoothstepf(0.5f, 0.75f, n) * 0.4f;
     }
 }
@@ -1496,6 +1780,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 case R_AMBER: wSand += w * (0.82f + 0.16f * smoothstepf(0.35f, 0.7f, n1)); wRock += w * smoothstepf(0.62f, 0.85f, n2) * 0.45f; wDirt += w * smoothstepf(0.7f, 0.9f, n1) * 0.18f; break;
                 case R_STEPPE: wDirt += w * smoothstepf(0.66f, 0.86f, n1) * 0.35f; wRock += w * smoothstepf(0.7f, 0.9f, n2) * 0.25f; break;
                 case R_JUNGLE: wMud += w * smoothstepf(0.5f, 0.75f, n1) * 0.4f; wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;
+                case R_TITANS: wRock += w * (0.08f + smoothstepf(0.6f, 0.8f, n1) * 0.3f + smoothstepf(40.f, 70.f, y) * 0.35f); wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;   // 3.0.0 alpine pasture, scree higher up
                 case R_AURORA: wRock += w * smoothstepf(0.62f, 0.84f, n1) * 0.35f; wDirt += w * smoothstepf(0.7f, 0.88f, n2) * 0.25f; break;   // 2.8.0 moss over lava rock, bare patches
                 case R_CORAL: wSand += w * (1.f - smoothstepf(0.9f, 3.0f, y)) * 0.92f; wDirt += w * smoothstepf(0.68f, 0.85f, n2) * 0.22f; wMud += w * smoothstepf(0.75f, 0.9f, n1) * 0.12f; break;
                 }
@@ -1644,6 +1929,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             for (int pi : chunkPois[ci]) {
                 const Poi& p = pois[pi];
                 float rr = p.type == PoiType::Waystone ? 8.f : (p.type == PoiType::Cave || p.type == PoiType::Mine ? p.radius + 4 : (p.type == PoiType::Village || p.type == PoiType::Monastery || p.type == PoiType::Mill ? p.radius * 0.5f : p.radius * 0.95f));   // 2.0.0 villages keep their plaza and houses clear, trees grow in between
+                if (p.city) rr = p.radius + 2.f;   // 3.0.0 no wild trees inside the ramparts (houses of the next chunk are not in out.colliders yet)
                 if (length(vec2(x, z) - p.pos) < rr + margin) return true;
             }
         for (auto& c : out.colliders) {
@@ -1710,7 +1996,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     auto clutterBlocked = [&](float x, float z, float margin) {
         if (roadInfluence(x, z) > 0.05f) return true;
         if (ci >= 0)
-            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < p.radius * 0.55f + margin) return true; }
+            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < (p.city ? p.radius : p.radius * 0.55f) + margin) return true; }
         for (auto& c : out.colliders) { float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f; if (length(vec2(x, z) - c.c) < rr + margin) return true; }
         return false;
     };
@@ -1730,8 +2016,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             {{P_FLOWERS, 2.f, 0.7f, 1.2f}, {P_TALLGRASS, 3.f, 0.8f, 1.3f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}, {P_BONES, 0.1f, 0.7f, 1.f}},           // 2.4.0 steppe
             {{P_FERN, 3.f, 0.7f, 1.2f}, {P_SMALLSHROOMS, 1.2f, 0.8f, 1.2f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}},    // 2.4.0 jungle
             {{P_FLOWERS, 2.5f, 0.8f, 1.3f}, {P_SMALLSHROOMS, 2.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.5f, 0.8f, 1.2f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}},  // 2.8.0 aurora
+            {{P_FLOWERS, 2.2f, 0.7f, 1.1f}, {P_PEBBLES, 2.f, 0.8f, 1.5f}, {P_TALLGRASS, 1.5f, 0.7f, 1.1f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}},   // 3.0.0 titans: alpine flowers, scree
         };
-        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16, 14};
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16, 14, 13};
         Rng cr(hash2i(k.x, k.z, 9191));
         int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
         for (int t = 0; t < n; t++) {
@@ -1763,7 +2050,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // ---- road furniture (1.5): fences along country roads, lanterns and carts near settlements, signposts
     auto blockedNoRoad = [&](float x, float z, float margin) {   // POIs and structures only (furniture sits beside roads)
         if (ci >= 0)
-            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < p.radius * 0.6f + margin) return true; }
+            for (int pi : chunkPois[ci]) { const Poi& p = pois[pi]; if (length(vec2(x, z) - p.pos) < (p.city ? p.radius : p.radius * 0.6f) + margin) return true; }
         for (auto& c : out.colliders) { float rr = c.r > 0 ? c.r : std::max(c.hx, c.hz) * 1.2f; if (length(vec2(x, z) - c.c) < rr + margin) return true; }
         return false;
     };
@@ -1899,6 +2186,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         case R_STEPPE: t = p < 0.18f ? NodeType::Flax : p < 0.34f ? NodeType::Herb : p < 0.48f ? NodeType::Berries : p < 0.62f ? NodeType::Rock : p < 0.74f ? NodeType::CopperOre : p < 0.86f ? NodeType::SilverOre : NodeType::Tree; tier = 3; break;
         case R_JUNGLE: t = p < 0.24f ? NodeType::Tree : p < 0.4f ? NodeType::Herb : p < 0.52f ? NodeType::Mushroom : p < 0.64f ? NodeType::Berries : p < 0.74f ? NodeType::FireRoot : p < 0.84f ? NodeType::GoldOre : p < 0.93f ? NodeType::Crystal : NodeType::RareOre; tier = 3; break;
         case R_AURORA: t = p < 0.3f ? NodeType::AuroraCrystal : p < 0.45f ? NodeType::Crystal : p < 0.6f ? NodeType::Herb : p < 0.72f ? NodeType::Mushroom : p < 0.84f ? NodeType::SilverOre : p < 0.93f ? NodeType::Tree : NodeType::RareOre; tier = 3; break;   // 2.8.0
+        case R_TITANS: t = p < 0.2f ? NodeType::Tree : p < 0.36f ? NodeType::IronOre : p < 0.48f ? NodeType::SilverOre : p < 0.58f ? NodeType::GoldOre : p < 0.68f ? NodeType::Coal : p < 0.8f ? NodeType::Herb : p < 0.9f ? NodeType::RareOre : NodeType::Crystal; tier = 3; break;   // 3.0.0 the mines of the giants
         case R_CORAL: t = p < 0.24f ? NodeType::Tree : p < 0.42f ? NodeType::Berries : p < 0.58f ? NodeType::Shells : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
         default: t = p < 0.24f ? NodeType::IronOre : p < 0.38f ? NodeType::SilverOre : p < 0.5f ? NodeType::GoldOre : p < 0.62f ? NodeType::RareOre : p < 0.76f ? NodeType::Rock : p < 0.88f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
         }
@@ -1927,6 +2215,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // ---- grass & flowers (instanced, near LOD only)
     // 1.6.1: denser base layer, plus a "near" layer of taller clumps drawn only close to the hero (Render.cpp),
     // so the meadows look full where the player walks without paying for it in the distance.
+    // 3.0.0 cities: inside the ramparts the ground is trodden (yards, gardens): a third of the grass
+    const Poi* cityHere = nullptr;
+    for (const Poi& p : pois) if (p.city && length(p.pos - vec2(x0 + CHUNK / 2, z0 + CHUNK / 2)) < p.radius + CHUNK) { cityHere = &p; break; }
     auto scatter = [&](uint32_t seed, float spacing, std::vector<InstanceData>& dst, std::vector<InstanceData>* flowersOut, float sMin, float sMax) {
         Rng g(hash2i(k.x, k.z, seed));
         int GN = (int)(CHUNK / spacing);
@@ -1934,6 +2225,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             for (int i = 0; i < GN; i++) {
                 float x = x0 + (i + g.f()) * spacing, z = z0 + (j + g.f()) * spacing;
                 if (wheatChunk && wheatAmount(x, z) > 0.6f) continue;   // 2.9.1 the wheat replaces the grass
+                if (cityHere && length(cityHere->pos - vec2(x, z)) < cityHere->radius * 0.92f && g.f() < 0.66f) continue;
                 // grass weight from terrain splats (bilinear lookup in our vertex grid)
                 int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
                 const Vertex& tv = T.v[vj * (N + 1) + vi];
@@ -1942,6 +2234,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 int r = regionId(x, z);
                 float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.35f : (r == R_HIGHCROWNS ? 0.6f : (r == R_AMBER ? 0.05f : (r == R_CORAL ? 0.8f : 1.f))));
                 if (r == R_STEPPE) gd = 1.15f;   // 2.4.0 the steppe is a sea of grass
+                if (r == R_TITANS) gd = 0.62f;   // 3.0.0 alpine pasture: shorter, thinner sward between stones and flowers
                 if (g.f() > wg * gd * 1.1f) continue;
                 float y = hAt(vi, vj);
                 float wl = waterLevel(x, z);
@@ -1967,9 +2260,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     };
     if (lod == 0) {
         // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
-        float spacing = 0.8f / std::sqrt(std::max(0.05f, grassDensity));   // 2.7.0 fuller tufts, slightly fewer of them
+        float spacing = 0.72f / std::sqrt(std::max(0.05f, grassDensity));   // 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
-        if (grassDensity >= 0.5f) scatter(778, spacing * 1.05f, out.grassNear, nullptr, 1.05f, 1.85f);
+        if (grassDensity >= 0.5f) scatter(778, spacing * 0.95f, out.grassNear, nullptr, 1.05f, 1.85f);
         // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
         Rng sh(hash2i(k.x, k.z, 9001));
         for (auto* v : {&out.grass, &out.flowers})
@@ -2031,7 +2324,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
 
 float World::tallGrassAmount(float x, float z) const {
     int r = regionId(x, z);
-    float rw = r == R_GREENHAVEN ? 1.f : r == R_SHADOWS ? 0.75f : r == R_ELDERWOOD ? 0.6f : r == R_HIGHCROWNS ? 0.45f : r == R_STEPPE ? 1.f : r == R_JUNGLE ? 0.55f : r == R_AURORA ? 0.5f : 0.f;
+    float rw = r == R_GREENHAVEN ? 1.f : r == R_SHADOWS ? 0.75f : r == R_ELDERWOOD ? 0.6f : r == R_HIGHCROWNS ? 0.45f : r == R_STEPPE ? 1.f : r == R_JUNGLE ? 0.55f : r == R_AURORA ? 0.5f : r == R_TITANS ? 0.35f : 0.f;
     if (rw <= 0.f) return 0.f;
     float n = fbm2(x * 0.011f, z * 0.011f, 3, 4242) * 0.5f + 0.5f;          // meadows ~60-120 m across
     float a = (r == R_STEPPE ? smoothstepf(0.4f, 0.5f, n) : smoothstepf(0.55f, 0.64f, n)) * rw;   // 2.4.0 the steppe: waist-high grass almost everywhere
@@ -2258,8 +2551,8 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                     m.blade(top - (top - base) * 0.16f, top + (top - base) * 0.04f, 0.06f, side, head.withWind(0.95f), head);
                 }
             };
-            tuft(blade, 8, 0.4f, 0.72f, 0, 5);
-            tuft(bladeNear, 10, 0.4f, 0.7f, 0, 6);
+            tuft(blade, 10, 0.4f, 0.72f, 0, 5);   // 3.0.0 fuller tufts (8 -> 10, near 10 -> 12)
+            tuft(bladeNear, 12, 0.4f, 0.7f, 0, 6);
             // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);
             vec3 head{0.04f, 0.4f, 0.02f};
@@ -2492,12 +2785,12 @@ void World::buildFarMesh(MeshBuilder& b, int res) const {
                 float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
                               std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
                 RegionWeights rw = regionAt(x, z);
-                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x5e7a48};
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x5e7a48, 0x5f7a4a};
                 c = vec3(0);
                 for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
                 c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
-                float snowLine = 52.f - 22.f * rw.w[R_FROSTHEIM];
-                c = lerp(c, hexColor(0xe6edf2), smoothstepf(snowLine, snowLine + 12.f, hc) * (rw.w[R_FROSTHEIM] + rw.w[R_HIGHCROWNS]));
+                float snowLine = 52.f - 22.f * rw.w[R_FROSTHEIM] + 36.f * rw.w[R_TITANS];   // 3.0.0 the Titans keep green valleys, snow from ~90 m
+                c = lerp(c, hexColor(0xe6edf2), smoothstepf(snowLine, snowLine + 12.f, hc) * (rw.w[R_FROSTHEIM] + rw.w[R_HIGHCROWNS] + rw.w[R_TITANS]));
                 float e = landEdgeDistance(x, z);
                 if (hc < SEA_LEVEL + 2.f && e < 400.f) c = lerp(c, hexColor(0xc8b88a), 0.7f);           // beaches
                 bool lv = false, fr = false;
@@ -2538,12 +2831,13 @@ void World::generateMapImage() {
             float x = (i + 0.5f) * s, z = (j + 0.5f) * s;
             float h = hh[(size_t)j * R + i];
             RegionWeights rw = regionAt(x, z);
-            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x7a9a62)};
+            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x7a9a62), hexColor(0x6e8a5a)};
             vec3 c(0);
             for (int r = 0; r < R_COUNT; r++) c += rc[r] * rw.w[r];
             float hx = hh[(size_t)j * R + std::min(R - 1, i + 1)] - h, hz = hh[(size_t)std::min(R - 1, j + 1) * R + i] - h;
             float shade = clampf(1.f - (hx + hz) * 0.08f, 0.6f, 1.35f);
             c = c * shade * (0.85f + clampf(h / 120.f, 0, 0.4f));
+            c = lerp(c, hexColor(0xeef2f6) * shade, smoothstepf(95.f, 125.f, h) * 0.9f);   // 3.0.0 snowy peaks (Titans, High Crowns)
             bool lv, fr;
             float wl = waterLevel(x, z, &lv, &fr);
             if (wl > -1e8f && h < wl) {

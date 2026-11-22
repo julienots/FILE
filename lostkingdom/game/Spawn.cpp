@@ -522,7 +522,7 @@ void Game::updateSpawning(float dt) {
             Rng r(hash2i(k.x, k.z, 31 + day / 3));
             int region = ch->region;
             int poi = world.nearestPoi(cc, 90.f);
-            bool safe = poi >= 0 && (world.pois[poi].type == PoiType::Village || world.pois[poi].type == PoiType::Monastery || world.pois[poi].type == PoiType::Mill || world.pois[poi].type == PoiType::Farm);
+            bool safe = poi >= 0 && (world.pois[poi].type == PoiType::Village || world.pois[poi].type == PoiType::Monastery || world.pois[poi].type == PoiType::Mill || world.pois[poi].type == PoiType::Farm || world.pois[poi].hostile);   // 3.0.0 fortresses: their garrison only
             if (safe) continue;
             bool camp = poi >= 0 && world.pois[poi].type == PoiType::Camp;
             float chance = camp ? 1.f : 0.3f + env.night * 0.15f;
@@ -583,7 +583,7 @@ void Game::updateSpawning(float dt) {
                     sp.y = groundAt(sp.x, sp.z);
                     spawnNpc(n, sp, i);
                 }
-            int generic = P.type == PoiType::Tower ? 0 : (P.type == PoiType::Village ? 12 : 5);   // 1.13.0 livelier villages (was 8)
+            int generic = P.type == PoiType::Tower ? 0 : (P.type == PoiType::Village ? (P.city ? 30 : 12) : 5);   // 1.13.0 livelier villages (was 8); 3.0.0 the cities: 30
             if (P.id == "player_base") generic = base.residents;   // 1.9.2 the hero's domain: only the recruited inhabitants
             for (int g = 0; g < generic; g++) {
                 uint32_t seed = hash2i(i, g, 555);

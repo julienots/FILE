@@ -1,6 +1,7 @@
 // LOST KINGDOM — unit tests (desktop only, built as lk_tests when tests/test_*.cpp exist).
 // Pure CPU checks: ECS, maths, data integrity (content cross-references), world generation
 // determinism, chunk generation, audio asset decoding. Run: ./build/desk/lk_tests [assetsDir]
+#include "../engine/third_party/stb_image_write.h"
 #include "../engine/core/ECS.h"
 #include "../engine/core/Math.h"
 #include "../engine/audio/Audio.h"
@@ -149,11 +150,12 @@ static void testWorld(World& w) {
     CHECK(regions.size() == (size_t)R_COUNT, "all %d regions present (%zu)", (int)R_COUNT, regions.size());
     CHECK(nan == 0, "%d non-finite heights", nan);
     // every dungeon / boss arena referenced by data exists as a POI
-    for (auto& d : dungeons()) CHECK(w.poiById(d.poi) != nullptr, "dungeon poi %s", d.poi.c_str());
+    for (auto& d : dungeons()) if (!d.poi.empty()) CHECK(w.poiById(d.poi) != nullptr, "dungeon poi %s", d.poi.c_str());   // 3.0.0 (the domain's dungeon has none)
     for (auto& b : bosses()) if (b.dungeon < 0) CHECK(w.poiById(b.arenaPoi) != nullptr, "boss arena %s", b.arenaPoi.c_str());
     for (auto& n : npcs()) CHECK(w.poiById(n.home) != nullptr, "npc %s home %s", n.id.c_str(), n.home.c_str());
     // 2.0.0 the data refer to each other by index (dungeon, boss): the world plan and the data must agree
     for (int i = 0; i < (int)dungeons().size(); i++) {
+        if (dungeons()[i].poi.empty()) continue;
         const Poi* p = w.poiById(dungeons()[i].poi);
         CHECK(p && p->dungeon == i, "dungeon %s: its entrance POI must carry index %d (has %d)", dungeons()[i].id.c_str(), i, p ? p->dungeon : -99);
         if (dungeons()[i].boss >= 0) CHECK(bosses()[dungeons()[i].boss].dungeon == i, "dungeon %s boss %d must be a dungeon boss of index %d", dungeons()[i].id.c_str(), dungeons()[i].boss, i);
@@ -410,7 +412,7 @@ static void testBuildingsGrounded(World& w) {
         }
         float gOld = oldY - lo, gNew = newY - structurePlinth(s, w) - lo;   // a foundation fills the gap under a raised building
         if (gOld > 0.3f) floatingOld++;
-        if (gNew > 0.05f) floatingNew++;
+        if (gNew > 0.05f) { floatingNew++; if (getenv("LK_VERBOSE")) std::printf("    building %d floats %.2f m at (%.0f, %.0f)\n", s.kind, gNew, s.pos.x, s.pos.y); }
         worstOld = std::max(worstOld, gOld); worstNew = std::max(worstNew, gNew); if (hi - newY > deepest) { deepest = hi - newY; deepKind = s.kind; }
     }
     std::printf("  %d buildings: floating before %d (worst %.2f m), now %d (worst %.2f m); deepest uphill embedding %.2f m (kind %d)\n", n, floatingOld, worstOld, floatingNew, worstNew, deepest, deepKind);
@@ -784,6 +786,48 @@ int lkRunTests(int argc, char** argv) {
     testData();
     initPropTemplates();
     World w; w.buildPlan();
+    if (const char* mp = getenv("LK_MAPPNG")) {
+        // development aid (3.0.0): the world map image with the POIs (red), roads (brown) and structures (black)
+        w.mapRes = 1024; w.generateMapImage();
+        std::vector<uint8_t> img = w.mapImage;
+        int R = w.mapRes; float s = R / WORLD_SIZE;
+        auto dot = [&](vec2 p, int rad, uint8_t r, uint8_t g, uint8_t b) { int cx = (int)(p.x * s), cz = (int)(p.y * s); for (int j = -rad; j <= rad; j++) for (int i = -rad; i <= rad; i++) { int x = cx + i, z = cz + j; if (x < 0 || z < 0 || x >= R || z >= R) continue; uint8_t* q = &img[((size_t)z * R + x) * 4]; q[0] = r; q[1] = g; q[2] = b; q[3] = 255; } };
+        for (auto& rd : w.roads) for (size_t i = 0; i + 1 < rd.pts.size(); i++) for (float t = 0; t < 1; t += 0.1f) dot(lerp(rd.pts[i], rd.pts[i + 1], t), 0, 120, 70, 30);
+        for (auto& st : w.structures) dot(st.pos, 0, 0, 0, 0);
+        for (auto& p : w.pois) dot(p.pos, 2, 230, 20, 20);
+        stbi_write_png(mp, R, R, 4, img.data(), R * 4);
+        printf("map written: %s\n", mp);
+        if (const char* zm = getenv("LK_MAPZOOM")) {   // "cx,cz,size": plan view (roads at width, building footprints)
+            float cx = 0, cz = 0, sz = 400; sscanf(zm, "%f,%f,%f", &cx, &cz, &sz);
+            const int Z = 1024; std::vector<uint8_t> im((size_t)Z * Z * 4);
+            float m2p = Z / sz; vec2 o{cx - sz / 2, cz - sz / 2};
+            for (int j = 0; j < Z; j++) for (int i = 0; i < Z; i++) {
+                vec2 q = o + vec2((i + 0.5f) / m2p, (j + 0.5f) / m2p);
+                float h = w.height(q.x, q.y); uint8_t* px = &im[((size_t)j * Z + i) * 4];
+                vec3 c = lerp(hexColor(0x6a8a4a), hexColor(0xffffff), saturate((h - 10) / 200.f));
+                float ri = w.roadInfluence(q.x, q.y); if (ri > 0.3f) c = hexColor(0xb8a070);
+                float wl = w.waterLevel(q.x, q.y); if (wl > -1e8f && h < wl) c = hexColor(0x3a6aa0);
+                Color8 k = toColor8(c, 1); px[0] = k.r; px[1] = k.g; px[2] = k.b; px[3] = 255;
+            }
+            for (auto& st : w.structures) {
+                if (length(st.pos - vec2(cx, cz)) > sz) continue;
+                vec2 f = structureFootprint(st.kind) * st.scale; if (st.kind == S_CASTLE_WALL) f = vec2(st.scale * 5.f, 1.5f);
+                bool small = st.kind == S_LANTERN || (st.kind == S_STALL && st.variant < 0);
+                uint8_t r = small ? 255 : 40, g = small ? 220 : 30, b = small ? 0 : 30;
+                if (st.kind == S_CASTLE_WALL || st.kind == S_CASTLE_TOWER || st.kind == S_GATE) { r = 90; g = 90; b = 110; }
+                for (float ly = -f.y; ly <= f.y; ly += 0.4f) for (float lx = -f.x; lx <= f.x; lx += 0.4f) {
+                    vec2 wp = rotate(vec2(lx, ly), -st.rot) + st.pos; int i = (int)((wp.x - o.x) * m2p), j = (int)((wp.y - o.y) * m2p);
+                    if (i < 0 || j < 0 || i >= Z || j >= Z) continue; uint8_t* px = &im[((size_t)j * Z + i) * 4]; px[0] = r; px[1] = g; px[2] = b;
+                    if (ly > f.y - 0.5f) { px[0] = 255; px[1] = 60; px[2] = 60; }   // door side (+Z local)
+                }
+            }
+            stbi_write_png("build/shots/mapzoom.png", Z, Z, 4, im.data(), Z * 4);
+            for (auto& st : w.structures) if (length(st.pos - vec2(cx, cz)) < 15.f) printf("  structure kind %d var %d at (%.1f, %.1f) rot %.2f scale %.2f\n", st.kind, st.variant, st.pos.x, st.pos.y, st.rot, st.scale);
+            printf("zoom written\n");
+        }
+        for (float z : {1300.f, 2000.f, 3000.f, 4000.f, 5000.f}) { printf("z=%5.0f:", z); for (float x = 5800; x < 7600; x += 100) printf(" %4.0f", w.height(x, z)); printf("\n"); }
+        return 0;
+    }
     if (const char* pr = getenv("LK_PROBE")) {
         // development aid (2.0.0): ASCII relief and region map of the whole world, to place settlements. LK_PROBE=<cell metres>
         float cell = (float)atof(pr); if (cell < 16.f) cell = 48.f;

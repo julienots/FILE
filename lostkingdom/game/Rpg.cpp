@@ -636,7 +636,7 @@ bool Game::saveGame(int slot) {
     for (auto& h : world.harvested) o << "harv " << h.first << " " << h.second << "\n";
     for (auto& cs : clearedSpawns) if (cs.second > gameTime) o << "clear " << cs.first << " " << cs.second << "\n";
     o << "rep"; for (int i = 0; i < FA_COUNT; i++) o << " " << reputation[i]; o << "\n";
-    o << "fog ";
+    o << "fog2 ";   // 3.0.0 the grid covers the 7680 m world ("fog": the old 6144 m grid, converted on load)
     // run-length encoded discovery map
     for (size_t i = 0; i < fog.size();) { uint8_t v = fog[i]; size_t j = i; while (j < fog.size() && fog[j] == v && j - i < 9999) j++; o << (v ? 1 : 0) << ":" << (j - i) << ","; i = j; }
     o << "\n";
@@ -687,7 +687,7 @@ bool Game::loadGame(int slot) {
         std::string k; l >> k;
         if (k == "player") { l >> pos.x >> pos.y >> pos.z >> yaw >> hp >> mp >> stamina; }
         else if (k == "respawn") l >> respawnPos.x >> respawnPos.y >> respawnPos.z;
-        else if (k == "digs") { world.loadDigs(line); hadDigs = true; }
+        else if (k == "digs" || k == "digs2") { world.loadDigs(line); hadDigs = true; }
         else if (k == "gameopts") { int dd = 1, ee = 1, pp = 1; l >> dd >> ee >> pp; gameOpts.difficulty = std::clamp(dd, 0, 3); gameOpts.events = ee != 0; gameOpts.prologue = pp != 0; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
@@ -725,15 +725,21 @@ bool Game::loadGame(int slot) {
         else if (k == "harv") { uint32_t u; double t; l >> u >> t; world.harvested[u] = t; }
         else if (k == "clear") { std::string s; double t; l >> s >> t; clearedSpawns[s] = t; }
         else if (k == "rep") for (int i = 0; i < FA_COUNT; i++) l >> reputation[i];
-        else if (k == "fog") {
+        else if (k == "fog" || k == "fog2") {
             std::string rle; l >> rle;
+            std::vector<uint8_t> g(fog.size(), 0);
             size_t idx = 0, p0 = 0;
-            while (p0 < rle.size() && idx < fog.size()) {
+            while (p0 < rle.size() && idx < g.size()) {
                 size_t c = rle.find(':', p0), e = rle.find(',', p0);
                 if (c == std::string::npos || e == std::string::npos) break;
                 int v = std::atoi(rle.substr(p0, c - p0).c_str()), n = std::atoi(rle.substr(c + 1, e - c - 1).c_str());
-                for (int i = 0; i < n && idx < fog.size(); i++) fog[idx++] = v ? 255 : 0;
+                for (int i = 0; i < n && idx < g.size(); i++) g[idx++] = v ? 255 : 0;
                 p0 = e + 1;
+            }
+            if (k == "fog2") fog = g;
+            else for (int j = 0; j < 128; j++) for (int i = 0; i < 128; i++) {   // 3.0.0 an older save: its grid covered 6144 m
+                int oi = (int)((i + 0.5f) * WORLD_SIZE / 128.f / OLD_WORLD_SIZE * 128.f), oj = (int)((j + 0.5f) * WORLD_SIZE / 128.f / OLD_WORLD_SIZE * 128.f);
+                fog[j * 128 + i] = (oi < 128 && oj < 128) ? g[oj * 128 + oi] : 0;
             }
         }
         else if (k == "weather") l >> weather >> weatherTimer;
