@@ -397,7 +397,8 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
         "        versionCode " + std::to_string(x.versionCode) + "\n"
         "        versionName " + groovy(x.version) + "\n"
         "        ndk { abiFilters " + abis + " }\n"
-        "    }\n";
+        "    }\n"
+        "    androidResources { noCompress += 'agrpak' }  // read in place (random access)\n";
     if (!keystore.empty()) {
         gradle += "    signingConfigs {\n"
                   "        release {\n"

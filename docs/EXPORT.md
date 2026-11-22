@@ -42,7 +42,7 @@ rien n'est extrait), sur PC comme dans l'APK.
   gardent leur version jusqu'à leur rechargement). Un fichier supprimé ne peut pas être retiré par un
   patch (remplacez-le).
 - Vérifié de bout en bout : la Vitrine 2D exportée chiffrée (213 fichiers, 5,5 Mo) démarre et passe
-  `--autotest` ; un patch de 2 scripts modifiés est chargé par-dessus (le nouveau script s'exécute) ; le
+  `--autotest` ; dans l'APK, `game.agrpak` est stocké sans compression (accès direct) et la clé est bien écrite dans `libmain.so` ; un patch de 2 scripts modifiés est chargé par-dessus (le nouveau script s'exécute) ; le
   format a été relu par un déchiffreur AES indépendant (Python `cryptography`). Code :
   `engine/core/include/agr/core/Pack.hpp`, `Crypto.hpp` (SHA-256, AES-256 testés sur les vecteurs
   NIST / FIPS-197).
