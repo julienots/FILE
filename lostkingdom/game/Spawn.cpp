@@ -303,13 +303,14 @@ Entity Game::spawnEnemy(int def, vec3 pos, bool elite, uint32_t uid) {
         setupVisualCreature(c.vis, d.arch, d.clook, sc);
         // 2.9.0 imported animals (Tripo gallery models): models/<enemy id>.lkm. 3.1.0 never for wolves: they are
         // all drawn by the game (wolfBody in Characters.cpp), the Tripo wolf skin is gone.
-        if (d.arch == Arch::Quadruped && d.family != "Loups") applyImportedModel(c.vis, d.id, Arch::Quadruped);
+        if (d.arch == Arch::Quadruped && (d.family != "Loups" || d.modded)) applyImportedModel(c.vis, d.id, Arch::Quadruped);   // 3.1.1 a mod creature may bring its own
         c.height = (d.arch == Arch::Spider ? 0.8f : 1.1f) * sc;
     }
     c.vis.anim.gait.walkSpeed = std::min(1.6f, d.speed * 0.4f);
     c.vis.anim.gait.runSpeed = d.speed;
     c.vis.anim.gait.sprintSpeed = d.speed * 1.5f;
     c.vis.rim = 0.35f;
+    c.vis.tint = d.tint;   // 3.1.1 mods
     if (elite) { c.vis.outlineColor = vec4(0.9f, 0.6f, 0.1f, 1); c.vis.emissiveBoost = 0.6f; c.name = "Élite : " + c.name; }
     c.mass = sc * sc;
     c.yaw = particles.rng.range(0, TAU);
@@ -538,7 +539,10 @@ void Game::updateSpawning(float dt) {
                     cands.push_back(i);
                 }
                 if (!cands.empty()) {
-                    int def = cands[r.irange(0, (int)cands.size() - 1)];
+                    // 3.1.1 weighted by spawnWeight (1 for the game's creatures; mods can make theirs rarer or commoner)
+                    float tot = 0; for (int c : cands) tot += E[c].spawnWeight;
+                    float pick = r.f() * tot; int def = cands.back();
+                    for (int c : cands) { pick -= E[c].spawnWeight; if (pick <= 0) { def = c; break; } }
                     int n = std::max(1, std::min(4, E[def].group + r.irange(-1, 1)));
                     if (camp) n = 3;
                     for (int i = 0; i < n; i++) {

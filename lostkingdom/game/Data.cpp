@@ -65,6 +65,7 @@ const char* factionName(int f) {
 // ============================================================================================ items
 static std::vector<ItemDef> gItems;
 static std::unordered_map<std::string, int> gItemIdx;
+static int gBaseItemCount = 1 << 30;   // 3.1.1 items below this index belong to the game (mods may not overwrite them)
 static std::once_flag gItemsOnce;
 
 static ItemDef& addItem(const std::string& id, const std::string& name, ItemKind k, Rarity r, int value, const std::string& desc) {
@@ -75,6 +76,7 @@ static ItemDef& addItem(const std::string& id, const std::string& name, ItemKind
 }
 
 static void buildItems() {
+    gItems.reserve(4096);   // 3.1.1 mods add items later: pointers handed out by item() must never move
     // ---- weapons -----------------------------------------------------------------------------
     struct W { const char* id; const char* name; WeaponType t; int tier; Rarity r; float atk, crit, speed; Element e; float ed; const char* desc; };
     const W ws[] = {
@@ -322,7 +324,7 @@ static void buildItems() {
     dye("dye_gold", "Teinture d'or", 0xc9a45c, Rarity::Epic);
 }
 
-const std::vector<ItemDef>& allItems() { std::call_once(gItemsOnce, buildItems); return gItems; }
+const std::vector<ItemDef>& allItems() { std::call_once(gItemsOnce, [] { buildItems(); gBaseItemCount = (int)gItems.size(); }); return gItems; }
 const ItemDef* item(const std::string& id) {
     allItems();
     auto it = gItemIdx.find(id);
@@ -487,6 +489,7 @@ static HumanoidLook humanLook(Species sp, Body body, uint32_t c1, uint32_t c2, H
 }
 
 static void buildEnemies() {
+    gEnemies.reserve(512);   // 3.1.1 mods add creatures later (enemy.add): no reallocation
     auto E = [&](const char* id, const char* name, const char* family, int region, int level, float hp, float atk, float def, float speed, Behavior b, const char* desc) -> EnemyDef& {
         EnemyDef e; e.id = id; e.name = name; e.family = family; e.region = region; e.level = level; e.hp = hp; e.atk = atk; e.def = def; e.speed = speed; e.behavior = b; e.desc = desc;
         e.xp = (int)(8 + level * level * 3); e.gold = 2 + level * 2;
@@ -1588,6 +1591,33 @@ static std::string trimStr(const std::string& s) {
 DigTuning& digTuning() { static DigTuning t; return t; }
 GameTuning& gameTuning() { static GameTuning t; return t; }
 
+// 3.1.1 mods 2.0 ------------------------------------------------------------------------------------------
+static bool modIdOk(const std::string& id) {
+    if (id.empty() || id.size() > 40) return false;
+    for (char ch : id) if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_')) return false;
+    return true;
+}
+static bool parseHexColor(const std::string& v0, vec3& out) {
+    std::string v = v0; if (!v.empty() && v[0] == '#') v = v.substr(1);
+    if (v.size() != 6) return false;
+    char* end = nullptr; unsigned long h = std::strtoul(v.c_str(), &end, 16);
+    if (*end) return false;
+    out = hexColor((uint32_t)h); return true;
+}
+static int regionFromName(const std::string& v0) {
+    std::string v = v0; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+    static const char* n[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans"};
+    for (int i = 0; i < R_COUNT; i++) if (v == n[i]) return i;
+    char* end = nullptr; long k = std::strtol(v.c_str(), &end, 10);
+    if (end != v.c_str() && !*end && k >= 0 && k < R_COUNT) return (int)k;
+    return -1;
+}
+static std::vector<std::string> splitBar(const std::string& v) {
+    std::vector<std::string> out; size_t a = 0;
+    while (true) { size_t b = v.find('|', a); out.push_back(trimStr(v.substr(a, b == std::string::npos ? std::string::npos : b - a))); if (b == std::string::npos) break; a = b + 1; }
+    return out;
+}
+
 bool applyModDataLine(const std::string& raw, std::string& err) {
     std::string line = trimStr(raw);
     if (line.empty() || line[0] == '#') return true;
@@ -1631,6 +1661,43 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
             err = "météo inconnue : " + val + " (clair, nuageux, pluie, orage, neige, brouillard, cendres, sable, normal)"; return false;
         }
     }
+    // 3.1.1 mods 2.0: new creatures and new items, cloned from an existing one, then patched with the usual fields
+    if (key == "enemy.add") {   // enemy.add = id | base | Nom
+        auto f = splitBar(val);
+        if (f.size() < 3) { err = "format : enemy.add = id | ennemi de base | Nom"; return false; }
+        if (!modIdOk(f[0])) { err = "identifiant invalide (a-z, 0-9, _) : " + f[0]; return false; }
+        int bi = enemyIndex(f[1]);
+        if (bi < 0) { err = "ennemi de base inconnu : " + f[1]; return false; }
+        if (enemies()[bi].behavior == Behavior::Boss) { err = "un boss ne peut pas servir de base : " + f[1]; return false; }
+        auto& E = const_cast<std::vector<EnemyDef>&>(enemies());
+        int ex = enemyIndex(f[0]);
+        EnemyDef d = E[bi]; d.id = f[0]; d.name = f[2]; d.modded = true; d.hunter = false;
+        if (f.size() > 3 && !f[3].empty()) d.desc = f[3];
+        if (ex >= 0) { if (!E[ex].modded) { err = "cet identifiant existe déjà dans le jeu : " + f[0]; return false; } E[ex] = d; }
+        else { if (E.size() >= 500) { err = "trop de créatures"; return false; } E.push_back(d); }
+        return true;
+    }
+    if (key == "item.add") {   // item.add = id | base | Nom
+        auto f = splitBar(val);
+        if (f.size() < 3) { err = "format : item.add = id | objet de base | Nom"; return false; }
+        if (!modIdOk(f[0])) { err = "identifiant invalide (a-z, 0-9, _) : " + f[0]; return false; }
+        const ItemDef* b = item(f[1]);
+        if (!b) { err = "objet de base inconnu : " + f[1]; return false; }
+        ItemDef d = *b; d.id = f[0]; d.name = f[2];
+        if (f.size() > 3 && !f[3].empty()) d.desc = f[3];
+        auto it = gItemIdx.find(d.id);
+        if (it != gItemIdx.end()) { if (it->second < gBaseItemCount) { err = "cet identifiant existe déjà dans le jeu : " + f[0]; return false; } gItems[it->second] = d; }
+        else { if (gItems.size() >= 4000) { err = "trop d'objets"; return false; } gItems.push_back(d); gItemIdx[d.id] = (int)gItems.size() - 1; }
+        return true;
+    }
+    if (key == "game.start_item") {   // game.start_item = id | nombre
+        auto f = splitBar(val);
+        if (!item(f[0])) { err = "objet inconnu : " + f[0]; return false; }
+        int n = f.size() > 1 ? std::max(1, std::min(999, std::atoi(f[1].c_str()))) : 1;
+        gameTuning().startItems.push_back({f[0], n}); return true;
+    }
+    if (key == "game.start_weapon") { if (!item(val) || item(val)->weapon == WeaponType::None) { err = "arme inconnue : " + val; return false; } gameTuning().startWeapon = val; return true; }
+    if (key == "game.start_gold") { float v; if (!num(v, 0, 1e7f)) return false; gameTuning().startGold = (int)v; return true; }
     if (key == "lore.add") {   // lore.add = id | Titre | Texte
         size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);
         if (p2 == std::string::npos) { err = "format : lore.add = id | Titre | Texte"; return false; }
@@ -1656,6 +1723,17 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         if (field == "crit") return num(it->crit, 0, 1);
         if (field == "speed") return num(it->speed, -0.5f, 1.f);
         if (field == "value") { float v; if (!num(v, 0, 1e7f)) return false; it->value = (int)v; return true; }
+        if (field == "stamina") return num(it->stamina, 0, 99999);              // 3.1.1
+        if (field == "heal") return num(it->heal, 0, 99999);
+        if (field == "mana") return num(it->mana, 0, 99999);
+        if (field == "elem_dmg") return num(it->elemDmg, 0, 9999);
+        if (field == "color") { if (!parseHexColor(val, it->color)) { err = "couleur attendue : #rrggbb"; return false; } return true; }
+        if (field == "rarity") {
+            static const char* n[] = {"commun", "rare", "epique", "legendaire", "mythique", "ancestral"};
+            std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+            for (int i = 0; i < 6; i++) if (v == n[i]) { it->rarity = (Rarity)i; return true; }
+            err = "rareté : commun, rare, epique, legendaire, mythique, ancestral"; return false;
+        }
         err = "champ d'objet inconnu : " + field; return false;
     }
     if (type == "enemy") {
@@ -1669,6 +1747,21 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         if (field == "speed") return num(e->speed, 0.2f, 20.f);
         if (field == "scale") return num(e->scale, 0.3f, 6.f);
         if (field == "aggro") return num(e->aggro, 1, 80);
+        // 3.1.1 mods 2.0
+        if (field == "tint") { if (!parseHexColor(val, e->tint)) { err = "couleur attendue : #rrggbb"; return false; } return true; }
+        if (field == "region") { int r = regionFromName(val); if (r < 0) { err = "région inconnue : " + val + " (greenhaven, frostheim, ashen, elderwood, ombres, highcrowns, ambre, corail, steppes, jungle, aurore, titans)"; return false; } e->region = r; return true; }
+        if (field == "spawn") return num(e->spawnWeight, 0.f, 20.f);
+        if (field == "level") { float v; if (!num(v, 1, 99)) return false; e->level = (int)v; return true; }
+        if (field == "xp") { float v; if (!num(v, 0, 1e6f)) return false; e->xp = (int)v; return true; }
+        if (field == "gold") { float v; if (!num(v, 0, 1e6f)) return false; e->gold = (int)v; return true; }
+        if (field == "group") { float v; if (!num(v, 1, 8)) return false; e->group = (int)v; return true; }
+        if (field == "night") { e->night = val == "1" || val == "oui" || val == "true"; return true; }
+        if (field == "loot") {   // enemy.X.loot = objet | chance (0..1)
+            auto f = splitBar(val);
+            if (!item(f[0])) { err = "objet inconnu : " + f[0]; return false; }
+            float ch = f.size() > 1 ? clampf((float)std::atof(f[1].c_str()), 0.f, 1.f) : 0.5f;
+            e->loot.push_back({f[0], ch}); return true;
+        }
         err = "champ d'ennemi inconnu : " + field; return false;
     }
     if (type == "npc") {
@@ -1681,7 +1774,7 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         if (field == "lore") { n->lore.push_back(val); return true; }
         err = "champ de PNJ inconnu : " + field; return false;
     }
-    err = "type inconnu : " + type + " (item, enemy, npc, lore.add)";
+    err = "type inconnu : " + type + " (item, enemy, npc, game, lore.add, enemy.add, item.add)";
     return false;
 }
 

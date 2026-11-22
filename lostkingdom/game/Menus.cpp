@@ -294,6 +294,12 @@ void Game::newGame() {
     addItem("tool_shovel", 1, Rarity::Count, false);   // 2.5.1
     addItem("bomb", 2, Rarity::Count, false);
     addItem("shield_wood", 1, Rarity::Count, false);
+    {   // 3.1.1 mods 2.0: starting gifts
+        const GameTuning& gt = gameTuning();
+        for (auto& si : gt.startItems) if (item(si.first)) addItem(si.first, si.second, Rarity::Count, false);
+        if (gt.startGold >= 0) gold = gt.startGold;
+        if (!gt.startWeapon.empty() && item(gt.startWeapon)) equipment[SL_WEAPON] = {gt.startWeapon, 1, item(gt.startWeapon)->rarity, 0, 1, false};
+    }
     learnSpell("fireball");
     recomputeStats();
     rebuildPlayerVisual();

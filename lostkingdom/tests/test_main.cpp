@@ -755,6 +755,29 @@ static void testModData(const std::string& assets) {
     CHECK(!applyModDataLine("enemy.wolf.hp = beaucoup", err), "non-numeric value refused");
     CHECK(!applyModDataLine("code.run = rm -rf", err), "unknown type refused (mods are data only)");
     CHECK(!applyModDataLine("pas de signe egal", err), "missing = refused");
+    {   // 3.1.1 mods 2.0: new creatures and items
+        size_t ne = enemies().size(), ni = allItems().size();
+        const ItemDef* sw = item("sword_rusty");
+        CHECK(applyModDataLine("enemy.add = loup_cendre | wolf | Loup de cendre | Né des braises.", err) && enemies().size() == ne + 1, "enemy.add clones a creature (%s)", err.c_str());
+        int li = enemyIndex("loup_cendre");
+        CHECK(li >= 0 && enemies()[li].modded && enemies()[li].arch == enemies()[enemyIndex("wolf")].arch && enemies()[li].desc == "Né des braises.", "the clone keeps the base's body");
+        CHECK(applyModDataLine("enemy.loup_cendre.tint = #ff6020", err) && enemies()[li].tint.x > 0.9f, "tint");
+        CHECK(applyModDataLine("enemy.loup_cendre.region = ashen", err) && enemies()[li].region == R_ASHEN, "region by name");
+        CHECK(applyModDataLine("enemy.loup_cendre.spawn = 3", err) && enemies()[li].spawnWeight == 3.f, "spawn weight");
+        CHECK(applyModDataLine("enemy.loup_cendre.loot = sword_rusty | 0.2", err) && enemies()[li].loot.back().first == "sword_rusty", "loot added");
+        CHECK(!applyModDataLine("enemy.add = wolf | boar | Loup", err), "a game creature cannot be overwritten");
+        CHECK(!applyModDataLine("enemy.add = Mauvais-Id | wolf | X", err), "bad id refused");
+        CHECK(!applyModDataLine("enemy.loup_cendre.region = lune", err), "unknown region refused");
+        CHECK(applyModDataLine("item.add = lame_braise | sword_rusty | Lame de braise", err) && allItems().size() == ni + 1, "item.add (%s)", err.c_str());
+        CHECK(item("sword_rusty") == sw, "adding items never moves the existing ones");
+        CHECK(applyModDataLine("item.lame_braise.atk = 40", err) && item("lame_braise")->atk == 40.f && item("lame_braise")->weapon == sw->weapon, "new item patched");
+        CHECK(applyModDataLine("item.lame_braise.rarity = legendaire", err) && item("lame_braise")->rarity == Rarity::Legendary, "rarity");
+        CHECK(!applyModDataLine("item.add = sword_rusty | bread | Pain", err), "a game item cannot be overwritten");
+        CHECK(applyModDataLine("game.start_item = lame_braise | 2", err) && gameTuning().startItems.back().second == 2, "start item");
+        CHECK(applyModDataLine("game.start_weapon = lame_braise", err) && gameTuning().startWeapon == "lame_braise", "start weapon");
+        CHECK(!applyModDataLine("game.start_weapon = bread", err), "start weapon must be a weapon");
+        gameTuning().startItems.clear(); gameTuning().startWeapon.clear();
+    }
     {   // 2.6.0 the mods bundled with the game (assets/mods/<id>/) all apply without an error
         std::ifstream idx(assets + "/mods/index.txt");
         std::string id; int mods = 0;

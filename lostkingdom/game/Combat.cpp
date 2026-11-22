@@ -200,7 +200,8 @@ void Game::updateStatus(Entity e, Character& c, float dt) {
     if (s.burn > 0) { c.hp -= dt * std::max(2.f, c.maxHp * 0.012f); if (particles.rng.f() < dt * 12) particles.fire(c.pos + vec3(0, c.height * 0.5f, 0), 0.4f, 0.03f); }
     if (s.poison > 0) { c.hp -= dt * std::max(1.5f, c.maxHp * 0.008f); if (particles.rng.f() < dt * 6) particles.magicTrail(c.pos + vec3(0, c.height * 0.7f, 0), elementColor(Element::Nature), 0.5f); }
     dec(s.burn); dec(s.poison); dec(s.freeze); dec(s.slow); dec(s.root); dec(s.stun); dec(s.regen); dec(s.strength); dec(s.frostRes); dec(s.wellFed);
-    c.vis.tint = s.freeze > 0 ? vec3(0.6f, 0.85f, 1.3f) : (s.poison > 0 ? vec3(0.8f, 1.1f, 0.7f) : vec3(1));
+    vec3 base = c.enemyDef >= 0 && c.enemyDef < (int)enemies().size() ? enemies()[c.enemyDef].tint : vec3(1);   // 3.1.1 mod colour
+    c.vis.tint = s.freeze > 0 ? vec3(0.6f, 0.85f, 1.3f) : (s.poison > 0 ? vec3(0.8f, 1.1f, 0.7f) : base);
     if (c.hp <= 0 && !c.dead) killCharacter(e, c, NullEntity);
     updateBodyDetails(c, dt);
 }
