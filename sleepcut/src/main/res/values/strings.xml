@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">SleepCut</string>
+    <string name="s15">15 min</string>
+    <string name="s30">30 min</string>
+    <string name="s60">1 heure</string>
+</resources>

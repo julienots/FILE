@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- lune -->
+    <path android:fillColor="#FFFFD27A" android:pathData="M58,30 A24,24 0 1,0 78,62 A19,19 0 1,1 58,30 z" />
+    <!-- note de musique barrée -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M44,44 L58,40 L58,62 A5,4 0 1,1 55,58.5 L55,46 L47,48.3 L47,66 A5,4 0 1,1 44,62.5 z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFF7AA8" android:strokeWidth="3.2" android:strokeLineCap="round" android:pathData="M38,74 L66,36" />
+</vector>

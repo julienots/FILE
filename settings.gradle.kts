@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Noctea"
-include(":app")
+include(":app", ":pulsar", ":sleepcut")

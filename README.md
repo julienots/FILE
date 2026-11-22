@@ -1,5 +1,9 @@
 # 🌙 NOCTÉA — by Superessence Studio
 
+> **Nouveau dans ce dépôt** — deux autres applis Android :
+> - 🎧 **[PULSAR](pulsar/README.md)** : générateur de musique infini, 17 styles chill et « de malade », synthèse en temps réel. APK : [`release/PULSAR-Generateur-Musique.apk`](release/PULSAR-Generateur-Musique.apk)
+> - 🌙 **[SleepCut](sleepcut/README.md)** : minuteur qui coupe la musique de n'importe quelle appli, même téléphone en veille. APK : [`release/SleepCut-Minuteur.apk`](release/SleepCut-Minuteur.apk)
+
 **Retrouvez le calme. Retrouvez le sommeil.**
 
 NOCTÉA est une application Android native (Kotlin + Jetpack Compose + Media3) de méditation guidée, de respiration, d'histoires du soir et d'ambiances sonores, éditée par **Superessence Studio**.
@@ -75,7 +79,7 @@ Prérequis : JDK 17 ou plus récent, Android SDK (plateforme 35, build-tools 35.
 
 ```bash
 echo "sdk.dir=/chemin/vers/android-sdk" > local.properties
-./gradlew assembleRelease          # → app/build/outputs/apk/release/app-release.apk
+./gradlew assembleRelease          # → app/, pulsar/ et sleepcut/build/outputs/apk/release/
 ./gradlew testDebugUnitTest        # 34 tests (contenu, générateur, moteur audio, 18 écrans, parcours)
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true   # captures dans app/build/screenshots
 ```

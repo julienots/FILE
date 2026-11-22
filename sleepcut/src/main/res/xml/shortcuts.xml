@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="t15" android:enabled="true" android:icon="@drawable/ic_shortcut" android:shortcutShortLabel="@string/s15">
+        <intent android:action="com.superessence.sleepcut.SHORTCUT" android:targetPackage="com.superessence.sleepcut" android:targetClass="com.superessence.sleepcut.MainActivity">
+            <extra android:name="minutes" android:value="15" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="t30" android:enabled="true" android:icon="@drawable/ic_shortcut" android:shortcutShortLabel="@string/s30">
+        <intent android:action="com.superessence.sleepcut.SHORTCUT" android:targetPackage="com.superessence.sleepcut" android:targetClass="com.superessence.sleepcut.MainActivity">
+            <extra android:name="minutes" android:value="30" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="t60" android:enabled="true" android:icon="@drawable/ic_shortcut" android:shortcutShortLabel="@string/s60">
+        <intent android:action="com.superessence.sleepcut.SHORTCUT" android:targetPackage="com.superessence.sleepcut" android:targetClass="com.superessence.sleepcut.MainActivity">
+            <extra android:name="minutes" android:value="60" />
+        </intent>
+    </shortcut>
+</shortcuts>
