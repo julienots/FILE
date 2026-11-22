@@ -19,17 +19,42 @@
 #se .mot.saut { animation: se-saut 0.5s cubic-bezier(.3,1.6,.5,1) both; }
 #se .l { display: inline-block; color: #fff; text-shadow: 0.035em 0.055em 0 #3b3b3b; transform-origin: 50% 100%; opacity: 0; letter-spacing: 0.01em; }
 #se .l.j { color: #ffc727; }
-#se.go .l { animation: se-pop 0.62s cubic-bezier(.2,.9,.3,1) calc(var(--i) * 70ms + 150ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 1550ms) both; }
-#se.go .l.pt { animation: se-point 0.75s calc(var(--i) * 70ms + 330ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 1550ms) both; }
+#se.go .l { animation: se-pop 0.62s cubic-bezier(.2,.9,.3,1) calc(var(--i) * 70ms + 950ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 2350ms) both; }
+#se.go .l.pt { animation: se-point 0.75s calc(var(--i) * 70ms + 1130ms) both, se-brille 0.4s ease-in-out calc(var(--i) * 45ms + 2350ms) both; }
 #se .studio { font-size: 0.24em; letter-spacing: 0.55em; padding-left: 0.55em; color: #fff; opacity: 0; }
-#se.go .studio { animation: se-studio 0.7s ease-out 1.75s both; }
+#se.go .studio { animation: se-studio 0.7s ease-out 2.55s both; }
 @keyframes se-pop { 0% { opacity: 0; transform: translateY(-1.1em) scale(0.6, 1.4); } 45% { opacity: 1; transform: translateY(0) scale(1.28, 0.7); }
   65% { transform: translateY(-0.12em) scale(0.9, 1.12); } 82% { transform: translateY(0) scale(1.05, 0.95); } 100% { opacity: 1; transform: none; } }
 @keyframes se-point { 0% { opacity: 0; transform: scale(0); } 55% { opacity: 1; transform: scale(1.7); } 75% { transform: scale(0.8); } 100% { opacity: 1; transform: none; } }
 @keyframes se-saut { 0% { transform: none; } 40% { transform: translateY(-0.08em) scale(1.06); } 100% { transform: none; } }
 @keyframes se-brille { 0%, 100% { filter: none; } 50% { filter: brightness(1.75) drop-shadow(0 0 0.12em rgba(255,220,120,0.55)); } }   /* éclat qui court sur le nom */
 @keyframes se-studio { 0% { opacity: 0; letter-spacing: 1.2em; } 100% { opacity: 0.85; letter-spacing: 0.55em; } }
-@media (prefers-reduced-motion: reduce) { #se.go .l, #se.go .l.pt, #se.go .studio { animation: none; opacity: 1; } #se.go .studio { opacity: 0.85; } #se .mot.saut { animation: none; } }
+/* emblème : goutte d'essence dorée, « S » en creux, traits de vitesse ; il se dessine, se remplit, puis un reflet le parcourt en boucle pendant le chargement */
+#se .emb { width: 1.55em; height: 1.8em; margin-bottom: 0.12em; overflow: visible; filter: drop-shadow(0 0.04em 0.12em rgba(255,170,40,0.25)); }
+#se .emb .contour { fill: none; stroke: #ffd23f; stroke-width: 3; stroke-linejoin: round; stroke-dasharray: 330; stroke-dashoffset: 330; }
+#se .emb .corps { opacity: 0; transform-origin: 60px 80px; }
+#se .emb .s { fill: none; stroke: #0b0b10; stroke-width: 12; stroke-linecap: round; stroke-dasharray: 160; stroke-dashoffset: 160; }
+#se .emb .vit { stroke: #ffc727; stroke-width: 5; stroke-linecap: round; opacity: 0; }
+#se .emb .eclat { opacity: 0; }
+#se.go .emb .contour { animation: se-trace 0.9s cubic-bezier(.6,.1,.3,1) 0.05s forwards, se-fond 0.4s ease 1.0s forwards; }
+#se.go .emb .corps { animation: se-remplit 0.55s cubic-bezier(.2,1.4,.4,1) 0.7s forwards; }
+#se.go .emb .s { animation: se-trace 0.6s ease-out 1.05s forwards; }
+#se.go .emb .vit { animation: se-vit 0.5s ease-out calc(1.25s + var(--k) * 90ms) forwards; }
+#se.go .emb .eclat { animation: se-eclat 2.4s ease-in-out 1.9s infinite; }
+#se.go .emb { animation: se-souffle 2.4s ease-in-out 1.9s infinite; }
+@keyframes se-trace { to { stroke-dashoffset: 0; } }
+@keyframes se-fond { to { opacity: 0; } }
+@keyframes se-remplit { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: none; } }
+@keyframes se-vit { 0% { opacity: 0; transform: translateX(14px); } 100% { opacity: 1; transform: none; } }
+@keyframes se-eclat { 0% { opacity: 0; transform: translateX(-90px); } 15% { opacity: 0.9; } 45% { opacity: 0; transform: translateX(90px); } 100% { opacity: 0; transform: translateX(90px); } }
+@keyframes se-souffle { 0%, 100% { filter: drop-shadow(0 0.04em 0.12em rgba(255,170,40,0.25)); } 50% { filter: drop-shadow(0 0.04em 0.3em rgba(255,190,60,0.6)); } }
+/* chargement du jeu sous l'écran d'ouverture */
+#se .charge { position: absolute; left: 50%; bottom: max(9vh, 40px); transform: translateX(-50%); width: min(62vw, 340px); font-size: 13px; font-family: system-ui, sans-serif; font-weight: 500; color: #9a9aa6; text-align: center; opacity: 0; transition: opacity 0.6s; }
+#se.go .charge { opacity: 1; transition-delay: 2s; }
+#se .barre { height: 3px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+#se .barre i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff8a1f, #ffd23f); border-radius: 3px; transition: width 0.4s ease; box-shadow: 0 0 10px rgba(255,200,60,0.6); }
+@media (prefers-reduced-motion: reduce) { #se.go .l, #se.go .l.pt, #se.go .studio { animation: none; opacity: 1; } #se.go .studio { opacity: 0.85; } #se .mot.saut { animation: none; }
+  #se.go .emb .contour, #se.go .emb .s { animation: none; stroke-dashoffset: 0; } #se.go .emb .corps, #se.go .emb .vit { animation: none; opacity: 1; } #se.go .emb .eclat, #se.go .emb { animation: none; } }
 
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font-family: var(--display); font-weight: 500; overflow: hidden; overscroll-behavior: none; }
@@ -197,9 +222,28 @@ tr.me td { color: var(--cyan); font-weight: 700; }
 </style>
 
 
-<div id="se" aria-label="SuperEssence Studio" role="img"><div class="mot"></div><div class="studio">STUDIO</div></div>
+<div id="se" aria-label="SuperEssence Studio" role="img">
+  <svg class="emb" viewBox="0 0 120 140" aria-hidden="true">
+    <defs>
+      <linearGradient id="se-or" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset="0.35" stop-color="#ffd23f"/><stop offset="0.75" stop-color="#ffa21f"/><stop offset="1" stop-color="#e86a10"/></linearGradient>
+      <linearGradient id="se-ec" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <clipPath id="se-goutte"><path d="M68 8 C68 8 110 58 110 90 A42 42 0 0 1 26 90 C26 58 68 8 68 8 Z"/></clipPath>
+    </defs>
+    <g class="vits"><line class="vit" style="--k:0" x1="2" y1="70" x2="22" y2="70"/><line class="vit" style="--k:1" x1="-6" y1="86" x2="18" y2="86"/><line class="vit" style="--k:2" x1="4" y1="102" x2="22" y2="102"/></g>
+    <g class="corps">
+      <path d="M68 8 C68 8 110 58 110 90 A42 42 0 0 1 26 90 C26 58 68 8 68 8 Z" fill="url(#se-or)"/>
+      <path d="M50 40 C44 52 38 64 37 76" stroke="#fff8d0" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.7"/>
+    </g>
+    <path class="s" d="M84 70 C78 60 56 60 54 73 C52 86 84 84 84 100 C84 116 56 118 48 106"/>
+    <g clip-path="url(#se-goutte)"><rect class="eclat" x="20" y="0" width="34" height="140" fill="url(#se-ec)" transform="skewX(-18)"/></g>
+    <path class="contour" d="M68 8 C68 8 110 58 110 90 A42 42 0 0 1 26 90 C26 58 68 8 68 8 Z"/>
+  </svg>
+  <div class="mot"></div><div class="studio">STUDIO</div>
+  <div class="charge"><div class="barre"><i></i></div><span id="se-msg">Chargement…</span></div>
+</div>
 <script>
-// Écran d'ouverture : construit et lancé avant le chargement du jeu (game.js est lourd), puis effacé au bout de 3,4 s ; un toucher le passe.
+// Écran d'ouverture : construit et lancé avant le chargement du jeu (game.js est lourd). Il reste affiché pendant tout le chargement
+// (barre de progression, étape en cours) et s'efface quand le jeu est prêt, au plus tôt après l'animation (4 s).
 (function () {
   var se = document.getElementById('se'), mot = se.querySelector('.mot'), txt = 'SuperEssence.', n = 0, ac = null, fini = false;
   for (var i = 0; i < txt.length; i++) { var l = document.createElement('span'); l.className = 'l' + (i >= 5 ? ' j' : '') + (txt[i] === '.' ? ' pt' : ''); l.textContent = txt[i]; l.style.setProperty('--i', i); mot.appendChild(l); }
@@ -208,19 +252,26 @@ tr.me td { color: var(--cyan); font-weight: 700; }
   function pop(t, f, v, d) { if (!ac || ac.state !== 'running') return; var o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.45, t + d);
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.05); }
   function sons() { if (!ac || ac.state !== 'running') return; var t0 = ac.currentTime;
-    for (var k = 0; k < txt.length; k++) pop(t0 + 0.15 + k * 0.07 + 0.27, 520 + k * 38, 0.12, 0.12);
-    [784, 988, 1175, 1568].forEach(function (f, j) { pop(t0 + 1.5 + j * 0.06, f, 0.07, 0.6); }); }
+    for (var k = 0; k < txt.length; k++) pop(t0 + 0.95 + k * 0.07 + 0.27, 520 + k * 38, 0.12, 0.12);
+    [784, 988, 1175, 1568].forEach(function (f, j) { pop(t0 + 2.3 + j * 0.06, f, 0.07, 0.6); }); pop(t0 + 0.75, 180, 0.15, 0.35); }
+  var t0 = Date.now(), barre = se.querySelector('.barre i'), msg = document.getElementById('se-msg'), pr = 0;
+  // progression : avance doucement vers 90 % pendant le chargement, puis 100 % quand le jeu est prêt
+  var suivi = setInterval(function () {
+    var pret = !!window.__booted, lm = document.getElementById('loadmsg');
+    pr = pret ? 100 : pr + (90 - pr) * 0.04; barre.style.width = pr.toFixed(1) + '%';
+    if (lm && lm.textContent && !pret) msg.textContent = lm.textContent; else if (pret) msg.textContent = 'Prêt';
+    if ((pret && Date.now() - t0 > 4000) || window.__err) { clearInterval(suivi); setTimeout(finir, pret ? 350 : 0); }
+  }, 100);
   function finir() { if (fini) return; fini = true; se.classList.add('out'); setTimeout(function () { se.remove(); if (ac && ac.close) ac.close().catch(function () {}); }, 500); }
   function lancer() {
     se.classList.add('go'); if (ac && ac.state === 'suspended' && ac.resume) ac.resume().then(sons, function () {}); else sons();
-    setTimeout(function () { mot.classList.add('saut'); }, 1400);
-    setTimeout(finir, 3400);
+    setTimeout(function () { mot.classList.add('saut'); }, 2200);
   }
   // on attend la police (au plus 0,6 s) pour que les lettres apparaissent directement dans le bon dessin
   var parti = false, go = function () { if (!parti) { parti = true; lancer(); } };
   if (document.fonts && document.fonts.load) document.fonts.load('700 40px "Fredoka SE"').then(go, go);
   setTimeout(go, 600);
-  se.addEventListener('pointerdown', function () { if (parti) setTimeout(finir, 150); });
+  se.addEventListener('pointerdown', function () { if (parti && window.__booted) setTimeout(finir, 150); });   // un toucher passe l'animation, une fois le jeu prêt
   window.__seFinir = finir;
 })();
 </script>

@@ -157,7 +157,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     albedo = mix(albedo, vec3(0.42,0.42,0.46), paint*0.9);
     albedo = mix(albedo, mix(vec3(0.02), vec3(0.5), chk), startBand);
     albedo = mix(albedo, mix(curbCol, vec3(0.45), cs), curb);
-    float off = step(half_, ax);
+    float off = step(half_ + (curbOn > 0.5 ? 0.0 : (noise(p*0.7) - 0.5)*0.7 + (noise(p*3.1) - 0.5)*0.25), ax);   // routes de campagne : bord du bitume grignoté
     // usure : fissures, rustines de bitume, traces de gomme dans chaque voie
     float crack = smoothstep(0.03, 0.0, abs(noise(p*0.55+3.0)-0.5)) * smoothstep(0.5, 0.7, fbm(p*0.06));
     float patchK = step(0.88, hash(floor(p/vec2(3.4,7.5)) + 4.0));
@@ -165,7 +165,7 @@ const ROAD_FRAG = `uniform sampler2D tDiffuse; uniform vec3 fogColor; uniform fl
     float rubber = exp(-pow((lw2 - 0.85)/0.4, 2.0)) * step(ax, half_ - 2.0) * (0.6 + 0.4*noise(vec2(vT.x*3.0, s*0.15)));
     float bare = (1.0 - paint) * (1.0 - curb) * (1.0 - startBand);
     albedo *= 1.0 - bare * (0.55*crack + 0.30*patchK + 0.32*rubber);
-    albedo = mix(albedo, offCol*(0.8+0.4*grain), off);
+    albedo = mix(albedo, mix(offCol*(0.8+0.4*grain), vec3(0.16,0.15,0.14)*(0.7+0.6*agg), (1.0 - curbOn)*0.55*(1.0 - smoothstep(half_ + 0.6, half_ + 2.2, ax))), off);   // gravier puis terre
     float rough = mix(0.55, 0.06, pud); rough = mix(rough, rough*0.55, patchK*bare); rough = mix(rough, 0.7, crack*bare*0.6); rough = mix(rough, 0.5, max(max(paint, startBand)*0.6, curb*0.7)); rough = mix(rough, 0.9, off); rough = mix(rough, max(rough, 0.78 - 0.25*rubber), dry*(1.0 - paint));
     vec2 uv = vUv.xy / vUv.w;
     vec2 nrm = vec2(noise(p*9.0+1.7)-.5, noise(p*9.0+8.1)-.5) + 0.6*vec2(noise(p*31.)-.5, noise(p*31.+4.)-.5);
@@ -296,6 +296,9 @@ export function buildWorld(def, renderer, q) {
   const fog = new THREE.FogExp2(FOG, th.dens);
   const sky = skyDome(th); group.add(sky); disposables.push(sky.geometry, sky.material);
   sky.renderOrder = -10;
+  // le ciel est recentré sur la caméra juste avant d'être dessiné : quelle que soit la position (monde ouvert, longues routes), on reste dedans
+  sky.onBeforeRender = (r, sc, cam) => { sky.position.set(cam.position.x, 0, cam.position.z); sky.updateMatrixWorld(); sky.modelViewMatrix.multiplyMatrices(cam.matrixWorldInverse, sky.matrixWorld); };
+  sky.material.depthTest = false;
   const farFromTrack = (x, z, r) => { for (let i = 0; i < T.N; i += 3) { const dx = x - T.px[i], dz = z - T.pz[i]; if (dx * dx + dz * dz < r * r) return false; } return true; };
   let cx = 0, cz = 0, R = 0;
   for (let i = 0; i < T.N; i++) { cx += T.px[i]; cz += T.pz[i]; } cx /= T.N; cz /= T.N;
@@ -676,7 +679,7 @@ export function buildWorld(def, renderer, q) {
         vertexShader: `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; vN = normalize(normal); gl_Position = projectionMatrix*viewMatrix*w; }`,
         fragmentShader: GROUND_GLSL + `uniform vec3 rock; uniform vec3 forest; uniform float top; uniform float snow; uniform vec2 ctr; varying vec3 vW; varying vec3 vN;
           void main(){
-            vec3 N = normalize(vN); vec2 p = vW.xz; float hN = vW.y / top;
+            vec3 N = dot(vN, vN) > 1e-4 ? normalize(vN) : vec3(0.0, 1.0, 0.0); vec2 p = vW.xz; float hN = vW.y / top;
             vec3 toCam = cameraPosition - vW; float dist = length(toCam);
             N = normalize(N + vec3(gn(p*0.02)-0.5, 0.0, gn(p*0.02+7.)-0.5)*0.9 + vec3(gn(p*0.09)-0.5, 0.0, gn(p*0.09+3.)-0.5)*0.4);   // ravines et arêtes
             float slope = 1.0 - abs(N.y);
@@ -689,6 +692,7 @@ export function buildWorld(def, renderer, q) {
             // perspective aérienne : plus c'est loin, plus c'est clair et bleuté (la couleur du brouillard)
             float air = 1.0 - exp(-dist / 1500.0), fg = 1.0 - exp(-fogDensity*fogDensity*dist*dist*0.35);
             col = mix(col, fogColor, clamp(max(air * 0.85, fg), 0.0, 1.0));
+            if (!(col.r >= 0.0 && col.g >= 0.0 && col.b >= 0.0 && col.r < 1e4)) col = fogColor;   // garde-fou : jamais de pixel noir ou invalide
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
@@ -820,6 +824,13 @@ export function buildWorld(def, renderer, q) {
     }
 
     // --- bords de route ---
+    if (T.libre) {
+      // balises de bord de route (blanches, bande noire, catadioptre) tous les 50 m, en quinconce
+      const bal = [], step = Math.max(1, Math.round(50 / T.ds));
+      for (let i = 0; i < T.N; i += step) for (const sd of [-1, 1]) { const o = sd * (HALF + 2.0), x = T.px[i] - T.tz[i] * o, z = T.pz[i] + T.tx[i] * o, ang = Math.atan2(-T.tx[i], -T.tz[i]);
+        bal.push(colored(new THREE.BoxGeometry(0.12, 1.0, 0.12).rotateY(ang).translate(x, 0.5, z), 0xe8e8e4), colored(new THREE.BoxGeometry(0.125, 0.2, 0.125).rotateY(ang).translate(x, 0.82, z), 0x121214)); }
+      if (bal.length) add(mergeGeometries(bal), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 }));
+    }
     if (T.libre && def.ouvert) { /* monde ouvert : pas de clôture, on peut sortir partout */ }
     else if (T.libre) {
       const wood = [];
@@ -905,7 +916,7 @@ export function buildWorld(def, renderer, q) {
             float gh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
             void main(){
               // chaque carte porte 6 brins : hauteur, courbure et teinte propres à chacun
-              float nb = 6.0, lean = (gh(vec2(vK*91.0, 3.0)) - 0.5) * 0.6;
+              float nb = 9.0, lean = (gh(vec2(vK*91.0, 3.0)) - 0.5) * 0.6;
               float u = vU.x - lean*vU.y*vU.y; if (u < 0.0 || u > 1.0) discard;
               float i = floor(u*nb), f = fract(u*nb) - 0.5;
               float seedB = gh(vec2(i*3.7 + vK*91.0, 5.3));
@@ -922,6 +933,7 @@ export function buildWorld(def, renderer, q) {
               vec3 tip = mix(vBase*1.45 + vec3(0.03,0.06,0.0), vec3(0.62,0.52,0.26), vField*0.9);
               vec3 alb = mix(vBase*0.5, tip, t) * (0.78 + 0.44*gh(vec2(i, vK*13.0)));
               alb *= 1.0 - 0.3*abs(f)*2.0;                                                        // nervure centrale plus claire
+              alb = mix(vec3(dot(alb, vec3(0.3, 0.59, 0.11))), alb, 0.8);                         // vert naturel, moins saturé
               if (ear && t > 0.6) alb = t > 0.88 ? vec3(0.70, 0.60, 0.32) : vec3(0.60, 0.46, 0.19) * (0.7 + 0.45*abs(sin((t - 0.6)*60.0 + abs(f)*5.0)));   // grains dorés, barbes pâles
               if (flower && t > 0.88) { float fc = gh(vec2(seedB*31.0, i)); alb = fc < 0.4 ? vec3(0.85,0.06,0.04) : fc < 0.65 ? vec3(0.95,0.93,0.86) : fc < 0.85 ? vec3(0.95,0.78,0.12) : vec3(0.55,0.36,0.85); }
               vec3 V = normalize(cameraPosition - vWp);

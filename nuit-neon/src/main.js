@@ -167,6 +167,7 @@ function ensureWorld(key) {
   G.solid = null;
   if (T && T.def.ouvert && world.solids) { G.solid = new Map(); for (const o of world.solids) { const k = Math.floor(o[0] / 8) + ',' + Math.floor(o[1] / 8); if (!G.solid.has(k)) G.solid.set(k, []); G.solid.get(k).push(o); } }
   scene.add(world.group); scene.fog = world.fog;
+  renderer.setClearColor(world.fog ? world.fog.color : 0x000000);   // si un bout de ciel manque, on voit la brume et jamais du noir
   scene.environment = null;
   scene.environment = world.captureEnv(scene);
   if (world.rain) world.rain.visible = Q.rain;

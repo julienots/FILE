@@ -2,6 +2,13 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.5
+
+- **Écran de lancement SuperEssence Studio** : nouveau logo (goutte d'essence dorée, « S » en creux, traits de vitesse) qui se dessine, se remplit et brille en boucle, puis le nom tombe lettre par lettre et STUDIO s'affiche. Le jeu se charge dessous : barre de progression et étape en cours ; l'écran s'efface quand le jeu est prêt (au plus tôt après l'animation, 4 s). Une fois le jeu prêt, un toucher le passe.
+- **Plus de grande tache noire dans le ciel** (monde ouvert et longues routes) : le ciel se recentre sur la caméra à chaque image, le fond par défaut prend la couleur de la brume, et le relief lointain ne peut plus produire de pixel noir.
+- **Routes de campagne** : bord du bitume irrégulier et grignoté, bande de gravier puis de terre, balises blanches à bande noire tous les 50 m.
+- **Herbe** : brins 1,5 fois plus nombreux et plus fins, vert plus naturel.
+
 ## Nouveautés de la 2.4.1
 
 - **Herbe du monde ouvert** : les brins sont posés sur le relief (avant, ils restaient à la hauteur de la route et disparaissaient sous les collines) ; prairie 60 % plus dense, fleurs rondes à cinq pétales.
@@ -46,7 +53,7 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Ouverture
 
-Au lancement, le nom SuperEssence. apparaît lettre par lettre : chaque lettre tombe, s'écrase et rebondit, le point surgit en dernier, un éclat court sur le nom puis STUDIO s'affiche ; un petit son accompagne chaque lettre quand l'appareil le permet. L'écran disparaît au bout de 3,4 s (un toucher le passe). Il est dans `src/page.html` (police Fredoka, `fonts/fredoka-bold.ttf`).
+Au lancement, l'emblème SuperEssence (goutte d'essence dorée) se dessine, puis le nom SuperEssence. apparaît lettre par lettre (chaque lettre tombe, s'écrase et rebondit), un éclat court sur le nom puis STUDIO s'affiche ; un petit son accompagne l'animation quand l'appareil le permet. Le jeu se charge pendant ce temps (barre de progression) et l'écran s'efface quand il est prêt. Il est dans `src/page.html` (police Fredoka, `fonts/fredoka-bold.ttf`).
 
 ## Modes de jeu
 
