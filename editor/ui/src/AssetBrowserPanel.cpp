@@ -179,6 +179,27 @@ void AssetBrowserPanel::draw(EditorShared& s) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         ImGui::SetTooltip("Shader de surface (.agrshader) : code GLSL branché sur le rendu PBR, avec aperçu en direct");
     ImGui::SameLine();
+    if (ImGui::Button("Nouveau graphe de shader")) ImGui::OpenPopup("##newGraph");
+    if (ImGui::BeginPopup("##newGraph")) {
+        for (int k = 0; k < 2; ++k) {
+            const auto target = k == 0 ? ShaderGraph::Target::Surface : ShaderGraph::Target::Sprite;
+            if (ImGui::Selectable(k == 0 ? "Matériau 3D (surface)" : "Sprite 2D")) {
+                const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), k == 0 ? "nouveau_graphe" : "nouveau_graphe_sprite",
+                                                    {ShaderGraph::kExtension, ".agrshader"});
+                const std::string uri = "assets://" + join(s.assetFolder, stem + ShaderGraph::kExtension);
+                if (Status st = s.engine.vfs().writeText(uri, ShaderGraphPanel::newGraph(target)); st) {
+                    s.openShaderGraphRequest = uri;
+                    s.notify("Graphe de shader créé : " + uri + " (Enregistrer écrit " + shaderUriForGraph(uri) + ")");
+                } else {
+                    s.notify("Création impossible : " + st.error().message);
+                }
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Shader visuel (.agrshadergraph) : des nœuds reliés, compilés en .agrshader, sans écrire de GLSL");
+    ImGui::SameLine();
     if (ImGui::Button("Nouvelle logique")) {
         const std::string stem = uniqueFile(absoluteAsset(s, s.assetFolder), "nouvelle_logique", {".agrlogic"});
         const std::string uri = "assets://" + join(s.assetFolder, stem + ".agrlogic");
@@ -325,6 +346,8 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                 if (isLua && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) s.openScriptRequest = uri;  // script editor
                 if (!folder && isSheetFile(name) && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     s.openSheetRequest = uri;  // sprite sheet editor
+                const bool isGraph = !folder && fs::path(name).extension() == ShaderGraph::kExtension;
+                if (isGraph && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderGraphRequest = uri;  // visual shader editor
                 const bool isLogic = !folder && fs::path(name).extension() == ".agrlogic";
                 if (isLogic && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openLogicRequest = uri;  // visual logic editor
                 if (!folder && ImGui::BeginDragDropSource()) {

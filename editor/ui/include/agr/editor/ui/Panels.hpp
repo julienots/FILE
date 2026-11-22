@@ -20,6 +20,7 @@
 #include "agr/render/ParticleCurves.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/assets/Image.hpp"
+#include "agr/assets/ShaderGraph.hpp"
 #include "agr/editor/Package.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/core/Profiler.hpp"
@@ -601,6 +602,63 @@ private:
     bool m_scanned = false, m_scrollTop = false;
     int m_current = -1;
     std::string m_search;
+};
+
+/// Visual shader editor (.agrshadergraph): node canvas compiled to the .agrshader next to the
+/// graph, live preview (scene and sphere), undo / redo, generated code.
+class ShaderGraphPanel {
+public:
+    void draw(EditorShared& s, const MaterialPreview& preview);
+    void open(EditorShared& s, const std::string& uri);
+    bool save(EditorShared& s);
+    bool undo(EditorShared& s);
+    bool redo(EditorShared& s);
+    int addNode(EditorShared& s, const std::string& type, ImVec2 canvasPos);
+    ShaderGraph& graph() { return m_graph; }
+    const ShaderGraphCompileResult& result() const { return m_result; }
+    const Renderer::ShaderStatus& status() const { return m_status; }
+    const std::string& uri() const { return m_uri; }
+    bool dirty() const { return m_dirty; }
+    void changed(EditorShared& s);  ///< After editing graph(): marks dirty, recompiles, previews.
+    void snapshot();                ///< Before editing graph(): undo point.
+    static std::string newGraph(ShaderGraph::Target target);
+    static constexpr const char* kPreviewMaterial = "memory://shadergraph_preview.agrmat";
+
+private:
+    struct PinPos {
+        int node;
+        std::string port;
+        bool output;
+        ShaderPortType type;
+        ImVec2 pos;
+    };
+    struct Drag {
+        int node = 0;
+        std::string port;
+        bool output = false;
+        bool active = false;
+    };
+    struct Pending {
+        int node = 0;
+        std::string port;
+        bool output = false;
+    };
+    void drawCanvas(EditorShared& s);
+    void recompile(EditorShared& s);
+    std::string m_uri;
+    ShaderGraph m_graph;
+    ShaderGraphCompileResult m_result;
+    Renderer::ShaderStatus m_status;
+    std::vector<std::string> m_undo, m_redo;
+    bool m_dirty = false, m_moved = false, m_panned = false;
+    int m_selected = 0;
+    ImVec2 m_pan{40.0f, 40.0f};
+    float m_zoom = 1.0f;
+    std::vector<PinPos> m_pins;
+    Drag m_drag;
+    Pending m_pendingFrom;
+    ImVec2 m_menuPos{0.0f, 0.0f};
+    std::string m_filter;
 };
 
 /// Visual logic editor (.agrlogic): node canvas, links, add menu, variables, compile status,

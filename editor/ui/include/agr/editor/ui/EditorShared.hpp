@@ -94,6 +94,8 @@ struct EditorShared {
     bool showStateMachine = false; ///< State machine graph panel.
     bool showLogic = false;        ///< Visual logic editor.
     std::string openLogicRequest;  ///< .agrlogic to open in the visual logic editor.
+    bool showShaderGraph = false;        ///< Visual shader editor.
+    std::string openShaderGraphRequest;  ///< .agrshadergraph to open.
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.
     bool showProfiler = false;     ///< CPU profiler panel.

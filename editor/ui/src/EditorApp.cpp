@@ -632,6 +632,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_animation.draw(*m_shared, time);
     m_stateMachine.draw(*m_shared);
     m_logic.draw(*m_shared);
+    m_shaderGraph.draw(*m_shared, m_shaderPreview);
     m_docs.draw(*m_shared);
     m_packages.draw(*m_shared);
     m_profiler.draw(*m_shared);
@@ -793,6 +794,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Éditeur de shaders", nullptr, &m_shared->showShaderEditor);
         ImGui::MenuItem("Éditeur de scripts", nullptr, &m_shared->showScriptEditor);
         ImGui::MenuItem("Logique visuelle", nullptr, &m_shared->showLogic);
+        ImGui::MenuItem("Graphe de shader", nullptr, &m_shared->showShaderGraph);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
         ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
@@ -1783,6 +1785,27 @@ void EditorApp::smokeTest(const FrameTime&) {
             break;
         }
         case 218: {
+            // Visual shader editor: a new graph, nodes linked, compiled on the GPU, undo, saved as .agrshader.
+            {
+                const std::string graphUri = "assets://fx/smoke.agrshadergraph";
+                check(static_cast<bool>(m_engine->vfs().writeText(graphUri, ShaderGraphPanel::newGraph(ShaderGraph::Target::Surface))), "new shader graph written");
+                m_shaderGraph.open(*m_shared, graphUri);
+                check(m_shared->showShaderGraph && m_shaderGraph.uri() == graphUri, "the graph opens in the visual shader editor");
+                check(m_shaderGraph.result().ok(), "the starter shader graph compiles");
+                const int time = m_shaderGraph.addNode(*m_shared, "Time", {40.0f, 300.0f});
+                const int sine = m_shaderGraph.addNode(*m_shared, "Sin", {240.0f, 300.0f});
+                m_shaderGraph.snapshot();
+                check(static_cast<bool>(m_shaderGraph.graph().connect(time, "t", sine, "x")), "shader nodes linked");
+                check(static_cast<bool>(m_shaderGraph.graph().connect(sine, "out", m_shaderGraph.graph().nodes[0].id, "emissive")), "into the emission");
+                m_shaderGraph.changed(*m_shared);
+                check(m_shaderGraph.result().ok() && m_shaderGraph.result().source.find("sin(") != std::string::npos, "the graph compiles to GLSL");
+                check(m_shaderGraph.status().usable && m_shaderGraph.status().diagnostics.empty(), "the GPU compiles the generated shader");
+                check(m_shaderGraph.undo(*m_shared) && !m_shaderGraph.graph().linkTo(m_shaderGraph.graph().nodes[0].id, "emissive"), "undo removes the shader link");
+                check(m_shaderGraph.redo(*m_shared), "redo restores it");
+                check(m_shaderGraph.save(*m_shared) && !m_shaderGraph.dirty(), "shader graph saved");
+                check(m_engine->vfs().exists("assets://fx/smoke.agrshader"), "the .agrshader is generated next to the graph");
+                m_shared->showShaderGraph = false;
+            }
             check(m_shared->showLogic && m_logic.uri() == "assets://logic/smoke.agrlogic", "the graph opens in the visual logic editor");
             check(m_logic.result().ok(), "the starter graph compiles");
             const int update = m_logic.addNode("event.update", {40.0f, 220.0f});

@@ -118,6 +118,34 @@ Panneau **Shader** (clic sur un `.agrshader`, ou *Affichage › Éditeur de shad
 
 Un fichier modifié hors de l'éditeur est rechargé automatiquement (comme les matériaux).
 
+## Graphe de shader (sans code)
+
+Explorateur d'assets → **Nouveau graphe de shader** (*Matériau 3D* ou *Sprite 2D*) : un fichier
+`.agrshadergraph` s'ouvre dans le panneau **Graphe de shader** (*Affichage › Graphe de shader*). Clic
+droit (ou lâcher une liaison dans le vide) : ajouter un nœud, avec recherche ; glisser d'une sortie vers
+une entrée : relier ; les entrées non reliées se règlent dans le nœud. **Enregistrer** écrit le graphe et
+**génère le `.agrshader` à côté** (même nom), à choisir dans un matériau ou un `SpriteRenderer` comme
+n'importe quel shader : mêmes paramètres réglables par matériau, mêmes variantes, même rendu.
+
+| Catégorie | Nœuds |
+|---|---|
+| Sorties | Sortie surface (couleur, opacité, métal, rugosité, émission, normale, occlusion : seules les entrées reliées remplacent la valeur du matériau), Déplacement des sommets, Sortie sprite |
+| Entrées | UV, Temps, Position monde, Normale, Direction de vue, Couleur de l'objet, Couleur du matériau, Texture du sprite |
+| Constantes, paramètres | Nombre, Vecteur, Couleur (sRGB) ; Paramètre nombre (plage), couleur, texture — réglables dans chaque matériau |
+| Texture, UV | Lire une texture, Bruit (sans texture), Défilement, Répétition |
+| Math | Ajouter, Soustraire, Multiplier, Diviser, Minimum, Maximum, Puissance, Seuil, Mélange, Borner, Transition douce, Changer d'échelle, Paliers, 1 − x, Valeur absolue, Partie décimale / entière, Sinus, Cosinus, Borner 0..1, Opposé, Racine |
+| Vecteurs, effets | Produit scalaire, Longueur, Distance, Normaliser, Séparer, Assembler ; Fresnel |
+
+- Types : nombre, vec2, vec3, vec4 (couleur de pin), conversions automatiques (un nombre devient un
+  vecteur, un vec4 donne son xyz…) ; les nœuds de math prennent le type de leur entrée la plus large.
+  Une texture ne se relie qu'à une entrée texture ; une liaison qui ferait une boucle est refusée.
+- **Aperçu en direct** à chaque modification (scène et sphère d'aperçu), erreurs affichées sur le
+  nœud en cause (par exemple *Fresnel* dans le déplacement des sommets, qui n'a pas de direction de vue),
+  code généré visible, Annuler / Rétablir (Ctrl+Z / Ctrl+Y), Ctrl+S.
+- Vérifié : chacun des 45 types de nœuds, seul dans un graphe, est compilé par les pilotes OpenGL,
+  OpenGL ES et Vulkan des tests GPU ; un graphe (paramètre vert mélangé à du rouge) donne la couleur
+  attendue à l'écran ; le test de fumée de l'éditeur crée, relie, annule et enregistre un graphe.
+
 ## Fonctionnement et erreurs
 
 - Le moteur assemble le shader PBR, des `#define` vers les paramètres (`u_custom[i]`, textures en
@@ -133,7 +161,8 @@ Un fichier modifié hors de l'éditeur est rechargé automatiquement (comme les 
 ## Limites actuelles
 
 - Shaders de surface pour le rendu 3D PBR et shaders de sprites non éclairés : pas de shaders pour l'interface,
-  le ciel, l'eau, le terrain ni le post-traitement ; pas d'éditeur de shaders par nœuds (graphe).
+  le ciel, l'eau, le terrain ni le post-traitement (en code comme en graphe) ; le graphe n'a pas encore de
+  sous-graphes ni de nœuds écrits en GLSL.
 - La passe d'ombre applique `vertex` mais pas `surface` : un shader qui découpe des trous dans
   `surface` garde une ombre pleine (utiliser le mode de transparence *Découpe* du matériau).
 - Les boîtes englobantes ne suivent pas les déplacements de `vertex` : garder des déplacements petits

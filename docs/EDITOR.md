@@ -140,7 +140,7 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
 
 - Une seule fenêtre : les panneaux ne se détachent pas en fenêtres système (*multi-viewports* d'ImGui
   non activés, car ils nécessitent un rendu multi-fenêtres dans la RHI).
-- Pas de shaders par nœuds (les shaders s'écrivent en GLSL, [SHADERS.md](SHADERS.md)) ; la logique
+- Shaders en GLSL ou en **graphe de nœuds** ([SHADERS.md](SHADERS.md#graphe-de-shader-sans-code)) ; la logique
   visuelle, les effets de particules et les feuilles de sprites ont leurs éditeurs dédiés.
 - Pas de mode « 2.5D » dédié dans la vue : un projet 2.5D utilise la vue 3D.
 - Importeurs : images (PNG, JPEG, TGA, BMP, PSD, GIF, HDR) et modèles (glTF / GLB, OBJ, FBX) ; les

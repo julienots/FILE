@@ -99,6 +99,7 @@ private:
     AnimationPanel m_animation;
     StateMachinePanel m_stateMachine;
     LogicPanel m_logic;
+    ShaderGraphPanel m_shaderGraph;
     DocsPanel m_docs;
     PackagesPanel m_packages;
     ProfilerPanel m_profiler;
