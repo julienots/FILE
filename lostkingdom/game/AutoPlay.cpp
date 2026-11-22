@@ -2072,6 +2072,86 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/WH3_low.png"); bool all = ok[0] && ok[1]; AGR_LOG("WHEAT TEST %s", all ? "PASSED" : "FAILED"); }, idle, "shot"});
         return s;
     }
+    if (name == "minecamp") {
+        // 3.1.0 the miners' camp by the Mine des Cimes (Frostheim): tent, fire and mine entrance, near and far
+        struct V { float back, dist; const char* shot; };
+        static const V views[] = {{8.f, 7.f, "MC0_near"}, {16.f, 9.f, "MC1_mid"}, {38.f, 10.f, "MC2_far"}};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        for (const V& v : views) {
+            const V* q = &v;
+            s.push_back({4.f, [q](Game& g) {
+                const Poi* m = g.world.poiById("crown_mine"); if (!m) return;
+                vec2 at = m->pos, dir = normalize(vec2(-1.f, 0.6f));
+                for (const Structure& st : g.world.structures) if (st.kind == S_MINE && length(st.pos - m->pos) < 30.f) { at = st.pos; dir = normalize(rotate(vec2(0.35f, 1), -st.rot)); }
+                vec2 hero = at + dir * q->back;
+                teleport(g, hero.x, hero.y, 0.f);
+                g.pc().yaw = std::atan2(-dir.x, -dir.y); g.camYaw = std::atan2(dir.x, dir.y);
+                g.camDist = g.camDistTarget = q->dist; g.camPitch = 0.3f; g.timeOfDay = 15.4f;
+                g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, [](Game& g, float) { g.camIdleT = 0; }, "go"});
+            s.push_back({0.1f, [q](Game& g) { g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { AGR_LOG("MINECAMP TEST PASSED"); }, idle, "end"});
+        return s;
+    }
+    if (name == "wolves") {
+        // 3.1.0 the wolves drawn by the game (no Tripo skin): grey, snow, steppe, Titan wolves side by side, then close
+        static std::vector<Entity> ents;
+        static auto freezeWolves = [](Game& g) {
+            for (Entity e : ents) { if (AIBrain* ai = g.reg.get<AIBrain>(e)) { ai->state = AIState::Idle; ai->timer = 99; ai->target = NullEntity; }
+                if (Character* ch = g.reg.get<Character>(e)) { ch->vel = vec3(0); ch->attackClip = nullptr; } }
+            g.pc().hp = g.pc().maxHp; };
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1; ents.clear();
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 40, b->pos.y + 80, 0.f); }, idle, "setup"});
+        s.push_back({0.2f, [](Game& g) { Character& c = g.pc(); vec3 f{std::sin(c.yaw), 0, std::cos(c.yaw)}, r{f.z, 0, -f.x};
+            const char* ids[] = {"wolf", "snow_wolf", "steppe_wolf", "titan_wolf"};
+            int imported = 0;
+            for (int i = 0; i < 4; i++) { vec3 p = c.pos + f * 6.f + r * ((i - 1.5f) * 2.4f); p.y = g.groundAt(p.x, p.z);
+                Entity e = g.spawnEnemy(enemyIndex(ids[i]), p); ents.push_back(e);
+                if (AIBrain* ai = g.reg.get<AIBrain>(e)) { ai->state = AIState::Idle; ai->timer = 99; }
+                if (Character* ch = g.reg.get<Character>(e)) { ch->yaw = c.yaw + PI + 1.2f; imported += ch->vis.albedo != 0; } }
+            AGR_LOG("WOLVES %zu spawned, %d with an imported model", ents.size(), imported);
+            AGR_LOG("WOLVES TEST %s", imported == 0 && ents.size() == 4 ? "PASSED" : "FAILED");
+            g.camYaw = c.yaw + PI; g.camPitch = 0.12f; g.camDist = g.camDistTarget = 5.f; }, [](Game& g, float) { g.camIdleT = 0; }, "spawn"});
+        s.push_back({1.f, none, [](Game& g, float) { g.camIdleT = 0; freezeWolves(g); }, "settle"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/WO0_wolves.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { Character& c = g.pc(); Character* w = g.reg.get<Character>(ents[0]); if (!w) return;
+            vec3 side{std::cos(w->yaw), 0, -std::sin(w->yaw)}, fw{std::sin(w->yaw), 0, std::cos(w->yaw)};
+            c.pos = w->pos + side * 2.6f + fw * 1.2f; c.pos.y = g.groundAt(c.pos.x, c.pos.z);
+            c.yaw = std::atan2(w->pos.x - c.pos.x, w->pos.z - c.pos.z); g.camYaw = c.yaw + PI * 0.75f; g.camDist = g.camDistTarget = 3.2f; g.camPitch = 0.12f; },
+            [](Game& g, float) { g.camIdleT = 0; freezeWolves(g); }, "close"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/WO1_wolf_close.png"); }, idle, "shot"});
+        return s;
+    }
+    if (name == "dungeonlook") {
+        // 3.1.0 the dungeons dressed up: each theme seen in a room and in the boss hall (enemies cleared for the pictures)
+        static const char* ids[] = {"catacombs", "whisper_cave", "sun_temple", "abyss", "ember_mines", "ice_caves"};
+        static int nOk = 0;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; nOk = 0; }, idle, "setup"});
+        const int nd = getenv("LK_DUN_N") ? atoi(getenv("LK_DUN_N")) : 6;
+        for (int k = 0; k < nd; k++) {
+            s.push_back({2.5f, [k](Game& g) { int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == ids[k]) di = i; g.enterDungeon(di); if (dungeons()[di].boss >= 0) g.defeatedBosses.insert(bosses()[dungeons()[di].boss].id); },
+                         [](Game& g, float) { g.pc().invuln = 1.f; }, "enter"});
+            for (int v = 0; v < 2; v++) {
+                s.push_back({1.2f, [k, v](Game& g) {
+                    g.reg.each<Character>([&](Entity e, Character& c) { if (c.team == Team::Enemy) g.reg.destroyLater(e); });
+                    const DungeonRoom& rm = v == 0 ? g.dungeon.rooms[1] : g.dungeon.rooms.back();
+                    vec3 c = g.dungeon.origin + vec3((rm.x + rm.w * 0.5f) * 4.f, 0, (rm.z + rm.h * 0.5f) * 4.f);
+                    vec3 tg = g.dungeon.gatePos - c; vec3 nn = std::fabs(tg.x) > std::fabs(tg.z) ? vec3(tg.x > 0 ? 1.f : -1.f, 0, 0) : vec3(0, 0, tg.z > 0 ? 1.f : -1.f);
+                    g.pc().pos = c + (v == 0 ? vec3(0) : nn * 3.f); g.pc().vel = vec3(0); g.camFocus = g.pc().pos;
+                    g.camYaw = v == 0 ? 0.6f + k * 0.4f : std::atan2(nn.x, nn.z); g.camPitch = v == 0 ? 0.62f : 0.5f; g.camDist = g.camDistTarget = v == 0 ? 12.f : 13.f;
+                    if (v == 1) g.pc().pos = c - nn * 4.f;
+                    if (v == 0 && g.dungeon.active && g.dungeon.def >= 0 && dungeons()[g.dungeon.def].id == ids[k]) nOk++; },
+                             [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 1.f; if (g.cinematicT > 0) g.cinematicT = -1;
+                                 g.reg.each<Character>([&](Entity e, Character& c) { if (c.team == Team::Enemy) g.reg.destroyLater(e); }); g.bossEnt = NullEntity; }, "view"});
+                s.push_back({0.05f, [k, v](Game& g) { g.requestScreenshot(std::string("build/shots/DL") + std::to_string(k) + (v ? "_boss" : "_room") + ".png"); }, idle, "shot"});
+            }
+            s.push_back({0.3f, [](Game& g) { g.exitDungeon(); }, idle, "exit"});
+            s.push_back({2.f, none, idle, "out"});
+        }
+        s.push_back({0.05f, [nd](Game& g) { (void)g; AGR_LOG("DUNGEONLOOK %d/%d -> %s", nOk, nd, nOk == nd ? "TEST PASSED" : "TEST FAILED"); }, idle, "end"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

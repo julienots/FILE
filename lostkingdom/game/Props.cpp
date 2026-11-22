@@ -1412,17 +1412,71 @@ static void caveMouth(MeshBuilder& M, int variant) {
     for (auto& v : M.v) if (v.ny > 80 && rng.chance(0.5f)) { v.r = 70; v.g = 95; v.b = 50; }
 }
 
+// 3.1.0 mine entrance rebuilt. Before, it was one 10 m rock whose flat bottom stood 1.3 m above the ground: a giant
+// faceted pebble floating next to a lone door frame. Now a rocky knoll sunk into the ground (every rock's flat base is
+// below the terrain), a timbered adit (sets of posts and caps receding into the dark), a plank hood, rails with a
+// loaded ore cart, a winch, an ore pile, a pickaxe, a hanging lantern and a sign.
 static void mine(MeshBuilder& M) {
     Rng rng(9);
-    Mat rock(pal::stoneDark, 0.9f), wood(pal::timber, 0.85f);
-    M.rock({0, 2.5f, -2.f}, vec3(5.f, 3.5f, 3.f), rock, 11, 1);
-    M.box({0, 1.6f, 0.9f}, {1.8f, 1.9f, 0.3f}, Mat(pal::dark));
-    for (int s = -1; s <= 1; s += 2) M.box({s * 1.9f, 1.7f, 1.2f}, {0.18f, 1.9f, 0.18f}, wood);
-    M.box({0, 3.6f, 1.2f}, {2.3f, 0.2f, 0.25f}, wood);
-    for (int i = 0; i < 8; i++) M.box({0, 0.05f, 1.5f + i * 0.8f}, {0.8f, 0.05f, 0.12f}, wood);
-    for (int s = -1; s <= 1; s += 2) M.box({s * 0.5f, 0.12f, 4.5f}, {0.04f, 0.04f, 3.2f}, Mat(pal::iron, 0.4f, 1.f));
-    M.bevelBox({0, 0.6f, 5.5f}, {0.7f, 0.45f, 1.f}, 0.08f, Mat(hexColor(0x5a4a3a), 0.6f, 0.4f));
-    M.rock({0, 1.15f, 5.5f}, vec3(0.6f, 0.3f, 0.8f), Mat(hexColor(0x8a6a4a)), 5, 0);
+    Mat rock(pal::stoneDark, 0.9f), rockL(lerp(pal::stoneDark, pal::stone, 0.55f), 0.9f), wood(pal::timber, 0.85f), plank(pal::wood, 0.85f);
+    Mat iron(pal::iron, 0.45f, 0.9f), dark(pal::dark, 1.f);
+    auto sunk = [&](vec3 c, vec3 r, const Mat& m, uint32_t seed, int det) { c.y = std::min(c.y, r.y * 0.35f - 0.4f); M.rock(c, r, m, seed, det); };
+    size_t r0 = M.v.size();
+    // the knoll: a long back ridge, two shoulders framing the adit, crown rocks and scree
+    sunk({0, 1.0f, -5.2f}, {7.0f, 4.6f, 4.4f}, rock, 11, 2);
+    sunk({-2.5f, 2.2f, -7.f}, {4.5f, 6.0f, 3.6f}, rockL, 12, 2);
+    sunk({3.0f, 1.6f, -6.5f}, {4.2f, 5.0f, 3.8f}, rock, 13, 2);
+    for (int sd = -1; sd <= 1; sd += 2) {
+        sunk({sd * 3.6f, 0.5f, -1.0f}, {2.3f, 3.3f, 2.6f}, sd < 0 ? rockL : rock, 20 + sd, 1);
+        sunk({sd * 4.9f, 0.3f, 0.6f}, {1.4f, 1.8f, 1.5f}, rock, 30 + sd, 1);
+        for (int i = 0; i < 4; i++) sunk({sd * rng.range(2.6f, 5.6f), 0.f, rng.range(1.f, 3.2f)}, vec3(rng.range(0.25f, 0.55f)), rockL, 40 + i + sd * 7, 0);
+    }
+    sunk({0, 4.2f, -2.6f}, {3.4f, 1.6f, 2.0f}, rockL, 50, 1);   // the brow over the adit
+    for (size_t i = r0; i < M.v.size(); i += 3) if (M.v[i].ny > 90 && rng.chance(0.45f)) for (size_t j = i; j < i + 3 && j < M.v.size(); j++) { Vertex& q = M.v[j]; Color8 c = toColor8(lerp(pal::moss, pal::stoneDark, 0.45f), 1); q.r = (uint8_t)((q.r + c.r) / 2); q.g = (uint8_t)((q.g + c.g) / 2); q.b = (uint8_t)((q.b + c.b) / 2); }
+    // the adit: a dark tunnel, then three timber sets receding into it
+    M.box({0, 1.55f, -1.6f}, {1.55f, 1.7f, 2.2f}, dark);
+    for (int k = 0; k < 3; k++) {
+        float z = 1.0f - k * 1.15f, h = 3.15f - k * 0.08f, x = 1.62f - k * 0.04f;
+        Mat w = k == 0 ? wood : wood.withColor(pal::timber * (0.8f - k * 0.2f));
+        for (int sd = -1; sd <= 1; sd += 2) M.tube({sd * (x + 0.12f), -0.3f, z}, {sd * x, h, z}, 0.16f, 0.14f, w, 6, true);
+        M.bevelBox({0, h + 0.1f, z}, {x + 0.4f, 0.16f, 0.18f}, 0.03f, w);
+    }
+    for (int sd = -1; sd <= 1; sd += 2) M.tube({sd * 1.6f, 2.2f, 1.0f}, {sd * 0.95f, 3.2f, 1.0f}, 0.07f, 0.07f, wood, 5, false);   // knee braces
+    // plank hood over the mouth
+    for (int i = 0; i < 6; i++) {
+        float x = -1.85f + i * 0.74f;
+        M.box({x, 3.62f, 1.35f}, {0.36f, 0.05f, 0.75f}, plank.withColor(pal::wood * (0.85f + 0.12f * (i % 2))), quat::axisAngle({1, 0, 0}, 0.22f));
+    }
+    M.box({0, 3.85f, 0.55f}, {2.2f, 0.12f, 0.14f}, wood);
+    // the sign: a board on the lintel with a crossed pick and hammer
+    M.bevelBox({0, 4.15f, 1.32f}, {0.9f, 0.26f, 0.05f}, 0.02f, plank);
+    M.box({0, 4.15f, 1.38f}, {0.55f, 0.04f, 0.01f}, Mat(hexColor(0x2a1d12)), quat::axisAngle({0, 0, 1}, 0.6f));
+    M.box({0, 4.15f, 1.38f}, {0.55f, 0.04f, 0.01f}, Mat(hexColor(0x2a1d12)), quat::axisAngle({0, 0, 1}, -0.6f));
+    // the hanging lantern under the lintel (the structure's lantern light sits right here)
+    M.tube({0, 3.15f, 1.15f}, {0, 2.75f, 1.15f}, 0.015f, 0.015f, iron, 4, false);
+    M.box({0, 2.6f, 1.15f}, {0.11f, 0.15f, 0.11f}, iron);
+    M.box({0, 2.6f, 1.15f}, {0.085f, 0.12f, 0.12f}, Mat(pal::window, 0.4f).withEmis(2.5f));
+    // rails out of the tunnel and down the spoil track
+    for (int i = 0; i < 12; i++) M.box({0, 0.04f, -1.6f + i * 0.75f}, {0.75f, 0.06f, 0.11f}, wood.withColor(pal::timber * (0.85f + 0.2f * rng.f())));
+    for (int sd = -1; sd <= 1; sd += 2) M.box({sd * 0.48f, 0.13f, 2.5f}, {0.035f, 0.045f, 4.3f}, iron);
+    // the ore cart on the rails, loaded
+    M.bevelBox({0, 0.7f, 4.6f}, {0.62f, 0.38f, 0.85f}, 0.06f, Mat(hexColor(0x4a3c30), 0.7f, 0.3f));
+    for (int sd = -1; sd <= 1; sd += 2) for (int e = -1; e <= 1; e += 2) M.lathe({{0.01f, -0.04f}, {0.2f, -0.04f}, {0.2f, 0.04f}, {0.01f, 0.04f}}, iron, 10, {sd * 0.5f, 0.24f, 4.6f + e * 0.5f}, quat::axisAngle({0, 0, 1}, PI / 2));
+    M.box({0, 1.1f, 4.6f}, {0.65f, 0.04f, 0.9f}, iron);
+    for (int i = 0; i < 6; i++) M.rock({rng.range(-0.35f, 0.35f), 1.12f, 4.6f + rng.range(-0.5f, 0.5f)}, vec3(rng.range(0.18f, 0.28f)), Mat(i % 3 == 0 ? hexColor(0x9a6a40) : hexColor(0x6a625a), 0.7f, i % 3 == 0 ? 0.5f : 0.f), 60 + i, 0);
+    // ore pile and tools beside the track
+    for (int i = 0; i < 9; i++) M.rock({2.6f + rng.range(-0.8f, 0.8f), 0.05f, 3.4f + rng.range(-0.7f, 0.7f)}, vec3(rng.range(0.2f, 0.4f)), Mat(i % 3 == 0 ? hexColor(0xa07848) : hexColor(0x625c55), 0.75f, i % 3 == 0 ? 0.4f : 0.f), 70 + i, 0);
+    M.tube({2.1f, 0.0f, 1.9f}, {2.2f, 1.15f, 1.6f}, 0.035f, 0.03f, plank, 5, true);   // pickaxe against the rock
+    M.box({2.2f, 1.17f, 1.6f}, {0.32f, 0.04f, 0.04f}, iron, quat::axisAngle({0, 0, 1}, 0.25f));
+    // the winch on the left: two posts, a drum and a rope down the track
+    for (int e = -1; e <= 1; e += 2) M.bevelBox({-2.4f, 0.55f, 2.6f + e * 0.55f}, {0.09f, 0.6f, 0.09f}, 0.02f, wood);
+    M.lathe({{0.01f, -0.5f}, {0.22f, -0.5f}, {0.22f, 0.5f}, {0.01f, 0.5f}}, plank, 10, {-2.4f, 0.95f, 2.6f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    M.lathe({{0.01f, -0.42f}, {0.25f, -0.42f}, {0.25f, 0.42f}, {0.01f, 0.42f}}, Mat(hexColor(0x8a7a58), 0.95f), 10, {-2.4f, 0.95f, 2.6f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    M.tube({-2.4f, 1.0f, 3.15f}, {-2.4f, 1.0f, 3.6f}, 0.05f, 0.05f, wood, 4, false);   // crank
+    // two crates and a barrel by the cart
+    M.bevelBox({-1.7f, 0.35f, 5.2f}, {0.35f, 0.35f, 0.35f}, 0.04f, plank);
+    M.bevelBox({-1.6f, 0.95f, 5.15f}, {0.25f, 0.25f, 0.25f}, 0.03f, plank.withColor(pal::woodLight));
+    M.lathe({{0.3f, 0}, {0.36f, 0.45f}, {0.3f, 0.9f}, {0.01f, 0.9f}}, plank, 10, {1.6f, 0, 5.4f});
 }
 
 static void waystone(MeshBuilder& M) {
@@ -2331,7 +2385,8 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_CAVE: caveMouth(M, s.variant); addCircleCollider(out, s, gy, {-4.2f, 0}, 1.8f, 6.f); addCircleCollider(out, s, gy, {4.2f, 0}, 1.8f, 6.f); addBoxCollider(out, s, gy, {0, -2.5f}, 4.f, 2.f, 6.f);
         if (s.variant == 1) out.lights.push_back(vec4(s.pos.x, gy + 2.f, s.pos.y, LI_MAGIC));
         break;
-    case S_MINE: mine(M); addBoxCollider(out, s, gy, {0, -2.f}, 4.5f, 2.6f, 6.f); out.lights.push_back(vec4(s.pos.x, gy + 3.f, s.pos.y, LI_LANTERN)); break;
+    case S_MINE: { mine(M); addBoxCollider(out, s, gy, {0, -4.2f}, 6.5f, 3.4f, 6.f); addCircleCollider(out, s, gy, {-3.6f, -1.f}, 2.1f, 4.f); addCircleCollider(out, s, gy, {3.6f, -1.f}, 2.1f, 4.f);
+        vec2 lp = s.pos + rotate(vec2(0, 1.15f), -s.rot); out.lights.push_back(vec4(lp.x, gy + 2.6f, lp.y, LI_LANTERN)); break; }
     case S_WAYSTONE: waystone(M); addCircleCollider(out, s, gy, L, 0.7f, 3.f); out.lights.push_back(vec4(s.pos.x, gy + 2.2f, s.pos.y, LI_MAGIC)); out.emitters.push_back(vec4(s.pos.x, gy + 1.f, s.pos.y, EM_SPARKLES)); break;
     case S_CAMPFIRE: campfire(M); out.lights.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y, LI_FIRE)); out.emitters.push_back(vec4(s.pos.x, gy + 0.2f, s.pos.y, EM_FIRE)); break;
     case S_BRIDGE: bridgeV2(M, out, s, w, gy); break;

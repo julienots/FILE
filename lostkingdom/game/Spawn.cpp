@@ -301,9 +301,9 @@ Entity Game::spawnEnemy(int def, vec3 pos, bool elite, uint32_t uid) {
         c.height = 1.8f * sc;
     } else {
         setupVisualCreature(c.vis, d.arch, d.clook, sc);
-        // 2.9.0 imported animals (Tripo gallery models): models/<enemy id>.lkm, or the family's model (every wolf
-        // without its own model uses "wolf")
-        if (d.arch == Arch::Quadruped && !applyImportedModel(c.vis, d.id, Arch::Quadruped) && d.family == "Loups") applyImportedModel(c.vis, "wolf", Arch::Quadruped);
+        // 2.9.0 imported animals (Tripo gallery models): models/<enemy id>.lkm. 3.1.0 never for wolves: they are
+        // all drawn by the game (wolfBody in Characters.cpp), the Tripo wolf skin is gone.
+        if (d.arch == Arch::Quadruped && d.family != "Loups") applyImportedModel(c.vis, d.id, Arch::Quadruped);
         c.height = (d.arch == Arch::Spider ? 0.8f : 1.1f) * sc;
     }
     c.vis.anim.gait.walkSpeed = std::min(1.6f, d.speed * 0.4f);

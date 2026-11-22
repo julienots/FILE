@@ -31,6 +31,285 @@ bool Game::dungeonFloor(float x, float z, float& y) const {
     return true;
 }
 
+
+// ============================================================================================ 3.1.0 dressing
+// The dungeons were bare blocks: one flat slab of wall per tile, a few torches. Now every face of wall that looks onto
+// a room or a corridor is dressed by theme (stone courses, a plinth and a cornice, pilasters; timber sets in the mines;
+// rock and icicles in the caves), with sconces, banners, skull niches and cobwebs. Doorways get frames, the rooms get
+// furniture along their walls (sarcophagi, statues, weapon racks, tables with candles, shelves, crates, ore carts,
+// coral, crystals) and the boss hall becomes a throne room: dais, throne or altar, carpet, four great braziers.
+namespace dpal { const vec3 gold = hexColor(0xc9a45c), timber = hexColor(0x4a3322), dark = hexColor(0x0d0b0a), ember = hexColor(0xff7a26); }
+namespace {
+struct Dresser {
+    DungeonState& d; int theme; const Theme& th; MeshBuilder& wl; MeshBuilder& pp; Rng r;
+    bool built() const { return theme == 1 || theme == 5 || theme == 6 || theme == 7; }
+    bool cave() const { return theme == 0 || theme == 2 || theme == 4; }
+    TileType T(int x, int z) const { return (x < 0 || z < 0 || x >= d.W || z >= d.H) ? TileType::Void : d.tiles[z * d.W + x]; }
+    static bool walk(TileType t) { return t != TileType::Void && t != TileType::Pit; }
+    int roomAt(int x, int z) const { for (size_t i = 0; i < d.rooms.size(); i++) { auto& m = d.rooms[i]; if (x >= m.x && x < m.x + m.w && z >= m.z && z < m.z + m.h) return (int)i; } return -1; }
+    vec3 C(int x, int z) const { return d.origin + vec3((x + 0.5f) * TILE, 0, (z + 0.5f) * TILE); }
+    vec3 banner() const { return theme == 1 ? hexColor(0x6e1c1c) : theme == 5 ? hexColor(0x3e1660) : theme == 6 ? hexColor(0x1c3f7a) : theme == 7 ? hexColor(0x165656) : theme == 3 ? hexColor(0x5a2a14) : hexColor(0x3a4a2a); }
+    // a box on a wall face: n = outward normal of the face (into the room), t = along the face
+    void fbox(MeshBuilder& M, vec3 fc, vec3 n, vec3 t, float on, float ot, float y, float hn, float ht, float hy, const Mat& m, float bevel = 0.f) {
+        vec3 c = fc + n * on + t * ot + vec3(0, y, 0);
+        vec3 h = vec3(std::fabs(n.x) * hn + std::fabs(t.x) * ht, hy, std::fabs(n.z) * hn + std::fabs(t.z) * ht);
+        if (bevel > 0) M.bevelBox(c, h, bevel, m); else M.box(c, h, m);
+    }
+    void light(vec3 p, int kind) { d.lights.push_back(vec4(p, (float)kind)); }
+    void sconce(vec3 fc, vec3 n, vec3 t, float ot) {
+        Mat iron(hexColor(0x2a2624), 0.45f, 0.8f);
+        fbox(wl, fc, n, t, 0.04f, ot, 2.5f, 0.04f, 0.12f, 0.2f, iron);
+        wl.tube(fc + n * 0.06f + t * ot + vec3(0, 2.4f, 0), fc + n * 0.42f + t * ot + vec3(0, 2.75f, 0), 0.025f, 0.025f, iron, 5, false);
+        wl.lathe({{0.01f, -0.18f}, {0.09f, 0.0f}, {0.11f, 0.08f}, {0.01f, 0.08f}}, iron, 7, fc + n * 0.45f + t * ot + vec3(0, 2.8f, 0));
+        wl.ellipsoid(fc + n * 0.45f + t * ot + vec3(0, 3.0f, 0), vec3(0.1f, 0.2f, 0.1f), Mat(theme == 5 ? hexColor(0xb060ff) : (theme == 7 ? hexColor(0x60fff0) : hexColor(0xffa040)), 0.5f, 0, 4.f), 6, 4);
+        vec3 lp = fc + n * 0.9f + t * ot + vec3(0, 3.1f, 0);
+        light(lp, theme == 5 || theme == 7 ? LI_MAGIC : LI_FIRE);
+        d.emitters.push_back(vec4(fc + n * 0.45f + t * ot + vec3(0, 3.05f, 0), theme == 5 || theme == 7 ? EM_SPARKLES : EM_FIRE));
+    }
+    void hangBanner(vec3 fc, vec3 n, vec3 t, float ot, float len) {
+        Mat cloth(banner(), 0.95f), gold(dpal::gold, 0.4f, 0.8f);
+        fbox(wl, fc, n, t, 0.12f, ot, 4.0f, 0.05f, 0.75f, 0.05f, Mat(dpal::timber, 0.8f));                  // rod
+        fbox(wl, fc, n, t, 0.1f, ot, 4.0f - len * 0.5f, 0.02f, 0.62f, len * 0.5f, cloth);
+        wl.triP(fc + n * 0.11f + t * (ot - 0.62f) + vec3(0, 4.f - len, 0), fc + n * 0.11f + t * (ot + 0.62f) + vec3(0, 4.f - len, 0), fc + n * 0.11f + t * ot + vec3(0, 3.6f - len, 0), cloth);
+        wl.triP(fc + n * 0.09f + t * (ot + 0.62f) + vec3(0, 4.f - len, 0), fc + n * 0.09f + t * (ot - 0.62f) + vec3(0, 4.f - len, 0), fc + n * 0.09f + t * ot + vec3(0, 3.6f - len, 0), cloth);
+        fbox(wl, fc, n, t, 0.125f, ot, 4.0f - len * 0.45f, 0.01f, 0.22f, 0.22f, gold);                        // emblem
+        fbox(wl, fc, n, t, 0.125f, ot, 3.9f, 0.01f, 0.6f, 0.03f, gold);
+    }
+    // ---- one face of wall looking into a walkable tile
+    void face(int x, int z, int dx, int dz, bool roomSide, bool boss) {
+        vec3 n(dx, 0, dz), t(dz != 0 ? 1.f : 0.f, 0, dx != 0 ? 1.f : 0.f);
+        vec3 fc = C(x, z) + n * (TILE * 0.5f);
+        Mat stone(lerp(th.wall, th.trim, 0.25f), theme == 4 ? 0.35f : 0.88f), trim(th.trim, 0.8f);
+        if (built()) {
+            // plinth, three courses of dressed stone (staggered), a cornice
+            fbox(wl, fc, n, t, 0.12f, 0, 0.25f, 0.12f, TILE * 0.5f, 0.25f, trim);
+            for (int row = 0; row < 3; row++) {
+                float y = 0.85f + row * 1.05f, off = (row % 2) * 0.66f;
+                for (int b = -2; b <= 2; b++) {
+                    float a = b * 1.33f + off - 0.66f, e = a + 1.26f;
+                    a = std::max(a, -TILE * 0.5f + 0.02f); e = std::min(e, TILE * 0.5f - 0.02f);
+                    if (e - a < 0.2f) continue;
+                    fbox(wl, fc, n, t, 0.035f, (a + e) * 0.5f, y, 0.035f, (e - a) * 0.5f - 0.03f, 0.48f, stone.withColor(stone.color * r.range(0.86f, 1.1f)));
+                }
+            }
+            fbox(wl, fc, n, t, 0.16f, 0, 4.25f, 0.16f, TILE * 0.5f, 0.12f, trim);
+            if (((x + z) & 1) == 0) {   // pilaster
+                fbox(wl, fc, n, t, 0.2f, TILE * 0.5f - 0.02f, 2.2f, 0.2f, 0.32f, 2.05f, trim, 0.05f);
+                fbox(wl, fc, n, t, 0.26f, TILE * 0.5f - 0.02f, 4.0f, 0.26f, 0.4f, 0.14f, trim, 0.04f);
+            }
+        } else if (theme == 3) {
+            // mine gallery: timber sets against raw rock, a plank lagging between them
+            Mat wood(hexColor(0x4a3322), 0.85f);
+            if (((x + z) & 1) == 0) {
+                for (int s = -1; s <= 1; s += 2) wl.tube(fc + n * 0.2f + t * (s * 1.6f) + vec3(0, -0.1f, 0), fc + n * 0.2f + t * (s * 1.5f) + vec3(0, 3.8f, 0), 0.14f, 0.12f, wood, 6, false);
+                fbox(wl, fc, n, t, 0.22f, 0, 3.85f, 0.16f, 1.9f, 0.14f, wood, 0.03f);
+            }
+            for (int i = 0; i < 4; i++) fbox(wl, fc, n, t, 0.06f, 0, 0.5f + i * 0.85f, 0.04f, 1.45f, 0.36f, wood.withColor(hexColor(0x5a4030) * r.range(0.8f, 1.1f)));
+        } else {
+            // natural cave wall: lumps of rock, ice gets icicles hanging from the brow
+            for (int i = 0; i < 3; i++) wl.rock(fc + n * r.range(0.1f, 0.4f) + t * r.range(-1.6f, 1.6f) + vec3(0, r.range(0.3f, 3.8f), 0), vec3(r.range(0.5f, 0.9f), r.range(0.5f, 1.1f), r.range(0.4f, 0.7f)), stone, r.next(), 0);
+            if (theme == 4) for (int i = 0; i < 4; i++) { vec3 b = fc + n * r.range(0.2f, 0.6f) + t * r.range(-1.8f, 1.8f) + vec3(0, 4.4f, 0); wl.cone(b, b - vec3(0, r.range(0.6f, 1.6f), 0), r.range(0.08f, 0.18f), Mat(hexColor(0xc8ecff), 0.15f, 0, 0.4f), 5); }
+            if (theme == 2 && r.chance(0.35f)) {   // cobweb across the corner
+                Mat web(hexColor(0xd8d8e0), 0.9f, 0, 0.15f);
+                vec3 a = fc + n * 0.05f + t * (TILE * 0.5f) + vec3(0, 4.2f, 0);
+                for (int k = 0; k < 3; k++) wl.triP(a, a - t * (1.2f + k * 0.4f) + n * 0.02f * k, a + n * (1.0f + k * 0.3f) - vec3(0, 0.8f + k * 0.5f, 0), web);
+            }
+            if (theme == 0 && r.chance(0.08f)) { light(fc + n * 0.6f + vec3(0, 1.f, 0), LI_MAGIC); wl.rock(fc + n * 0.3f + vec3(0, 0.4f, 0), vec3(0.3f), Mat(th.accent, 0.3f, 0, 2.f), r.next(), 0); }   // glowing moss stone
+        }
+        // furniture of the wall
+        float roll = r.f();
+        if (roll < (boss ? 0.3f : 0.17f)) sconce(fc, n, t, r.range(-0.8f, 0.8f));
+        else if (roomSide && (built() || theme == 3) && roll < (boss ? 0.62f : 0.27f)) hangBanner(fc, n, t, 0, r.range(1.6f, 2.4f));
+        else if (theme == 1 && roll < 0.45f) {   // burial niche with a skull
+            fbox(wl, fc, n, t, 0.015f, 0, 1.6f, 0.02f, 0.65f, 0.35f, Mat(dpal::dark, 1.f));
+            wl.ellipsoid(fc + n * 0.12f + vec3(0, 1.45f, 0), vec3(0.13f, 0.12f, 0.14f), Mat(hexColor(0xd8d0b8), 0.7f), 7, 5);
+            wl.ellipsoid(fc + n * 0.22f + t * 0.04f + vec3(0, 1.45f, 0), vec3(0.025f), Mat(dpal::dark), 4, 3);
+            wl.ellipsoid(fc + n * 0.22f - t * 0.04f + vec3(0, 1.45f, 0), vec3(0.025f), Mat(dpal::dark), 4, 3);
+        } else if ((theme == 5 || theme == 1) && roll < 0.55f) {   // chains
+            for (int s = -1; s <= 1; s += 2) for (int k = 0; k < 6; k++) wl.ellipsoid(fc + n * 0.08f + t * (s * 0.5f) + vec3(0, 3.6f - k * 0.18f, 0), vec3(0.03f, 0.08f, 0.03f), Mat(hexColor(0x3a3634), 0.4f, 0.9f), 5, 3);
+        }
+    }
+    // ---- door frames where a corridor meets a room
+    void doorway(int x, int z, int dx, int dz) {
+        vec3 n(dx, 0, dz), t(dz != 0 ? 1.f : 0.f, 0, dx != 0 ? 1.f : 0.f);
+        vec3 b = C(x, z) + n * (TILE * 0.5f);   // the boundary between the corridor tile and the room tile
+        if (theme == 3) {
+            Mat wood(hexColor(0x4a3322), 0.85f);
+            for (int s = -1; s <= 1; s += 2) wl.tube(b + t * (s * 1.75f), b + t * (s * 1.7f) + vec3(0, 3.6f, 0), 0.17f, 0.15f, wood, 6, true);
+            wl.bevelBox(b + vec3(0, 3.7f, 0), t * 2.2f + vec3(0, 0.17f, 0) + n * 0.2f, 0.03f, wood);
+            return;
+        }
+        if (!built()) return;
+        Mat trim(th.trim, 0.75f), dk(th.trim * 0.7f, 0.8f);
+        for (int s = -1; s <= 1; s += 2) {
+            wl.bevelBox(b + t * (s * 1.78f) + vec3(0, 1.9f, 0), t * 0.3f + n * 0.38f + vec3(0, 1.9f, 0), 0.05f, trim);
+            wl.bevelBox(b + t * (s * 1.78f) + vec3(0, 0.15f, 0), t * 0.38f + n * 0.46f + vec3(0, 0.15f, 0), 0.04f, dk);
+        }
+        // a flattened arch: lintel, two haunches and a keystone in the accent colour
+        wl.bevelBox(b + vec3(0, 4.0f, 0), t * 2.1f + n * 0.42f + vec3(0, 0.22f, 0), 0.05f, trim);
+        for (int s = -1; s <= 1; s += 2) wl.triP(b + t * (s * 1.5f) + vec3(0, 3.78f, 0) + n * 0.4f, b + t * (s * 0.6f) + vec3(0, 3.78f, 0) + n * 0.4f, b + t * (s * 1.5f) + vec3(0, 3.2f, 0) + n * 0.4f, trim);
+        wl.bevelBox(b + vec3(0, 4.05f, 0) + n * 0.05f, t * 0.28f + n * 0.46f + vec3(0, 0.32f, 0), 0.04f, Mat(theme == 6 ? dpal::gold : th.accent * 0.7f, 0.4f, theme == 6 ? 0.8f : 0.f, theme == 6 ? 0.f : 1.2f));
+    }
+    // ---- furniture in a room tile against a wall (n points from the wall into the room)
+    void furnish(vec3 at, vec3 n, int roomKind) {
+        vec3 t(std::fabs(n.z), 0, std::fabs(n.x));
+        vec3 p = at - n * 1.05f;   // close to the wall
+        float pick = r.f();
+        Mat stone(th.trim, 0.8f), wood(hexColor(0x5a3e28), 0.85f), dark(hexColor(0x3a2a1c), 0.85f), iron(hexColor(0x4a4c52), 0.4f, 0.85f);
+        auto collider = [&](vec3 c, float rad) { Collider col; col.c = c.xz(); col.r = rad; col.base = -1; col.top = 2.f; d.colliders.push_back(col); };
+        auto candles = [&](vec3 base, int k) { for (int i = 0; i < k; i++) { vec3 q = base + t * ((i - (k - 1) * 0.5f) * 0.16f) + n * r.range(-0.08f, 0.08f); pp.tube(q, q + vec3(0, r.range(0.12f, 0.26f), 0), 0.03f, 0.03f, Mat(hexColor(0xe8dcc0), 0.6f), 5, true); pp.ellipsoid(q + vec3(0, 0.3f, 0), vec3(0.025f, 0.05f, 0.025f), Mat(hexColor(0xffc060), 0.5f, 0, 5.f), 4, 3); } light(base + vec3(0, 0.9f, 0) + n * 0.4f, LI_FIRE); };
+        if (theme == 1 || theme == 5) {
+            if (pick < 0.35f) {   // sarcophagus with an effigy, candles at its head
+                vec3 c = p + n * 0.25f;
+                pp.bevelBox(c + vec3(0, 0.38f, 0), t * 1.05f + n * 0.5f + vec3(0, 0.38f, 0), 0.06f, stone);
+                pp.bevelBox(c + vec3(0, 0.82f, 0), t * 1.12f + n * 0.56f + vec3(0, 0.08f, 0), 0.04f, stone.withColor(th.trim * 1.12f));
+                pp.ellipsoid(c + vec3(0, 0.98f, 0), t * 0.75f + n * 0.2f + vec3(0, 0.1f, 0), stone.withColor(th.trim * 1.2f), 8, 5);
+                pp.ellipsoid(c + t * 0.82f + vec3(0, 1.02f, 0), vec3(0.14f), stone.withColor(th.trim * 1.2f), 6, 4);
+                candles(c - t * 1.45f + vec3(0, 0, 0), 3);
+                collider(c, 1.0f);
+            } else if (pick < 0.6f) {   // robed statue on a plinth holding a sword
+                pp.bevelBox(p + vec3(0, 0.3f, 0), vec3(0.55f, 0.3f, 0.55f), 0.05f, stone);
+                pp.lathe({{0.42f, 0.6f}, {0.36f, 1.4f}, {0.24f, 2.2f}, {0.2f, 2.35f}, {0.01f, 2.4f}}, stone.withColor(th.trim * 1.1f), 10, p);
+                pp.ellipsoid(p + vec3(0, 2.6f, 0), vec3(0.17f, 0.21f, 0.17f), stone.withColor(th.trim * 1.1f), 8, 6);
+                pp.tube(p + n * 0.3f + vec3(0, 0.75f, 0), p + n * 0.32f + vec3(0, 2.1f, 0), 0.04f, 0.03f, stone.withColor(th.trim * 0.95f), 5, true);
+                pp.box(p + n * 0.32f + vec3(0, 1.9f, 0), t * 0.25f + n * 0.04f + vec3(0, 0.04f, 0), stone.withColor(th.trim * 0.95f));
+                collider(p, 0.6f);
+            } else if (pick < 0.8f) {   // shelves of urns and books
+                pp.bevelBox(p + vec3(0, 1.2f, 0), t * 0.95f + n * 0.25f + vec3(0, 1.2f, 0), 0.03f, dark);
+                for (int sh = 0; sh < 3; sh++) for (int i = 0; i < 5; i++) {
+                    vec3 q = p + t * (-0.7f + i * 0.35f) + n * 0.12f + vec3(0, 0.35f + sh * 0.75f, 0);
+                    if (r.chance(0.5f)) pp.lathe({{0.08f, 0}, {0.12f, 0.15f}, {0.06f, 0.32f}, {0.01f, 0.32f}}, Mat(hexColor(r.chance(0.5f) ? 0x8a5a3a : 0x6a6a7a), 0.6f), 6, q);
+                    else pp.box(q + vec3(0, 0.17f, 0), t * 0.13f + n * 0.12f + vec3(0, 0.17f, 0), Mat(hexColor(r.chance(0.5f) ? 0x5a1e1e : 0x2a3a5a), 0.8f));
+                }
+                collider(p, 0.7f);
+            } else { const PropTemplate& tp = propTemplate(P_BONES, 0); MeshBuilder tmp; tmp.append(tp.solid); for (auto& v : tmp.v) { v.px += p.x; v.py += p.y; v.pz += p.z; } pp.append(tmp); candles(p + t * 0.6f, 2); }
+        } else if (theme == 6 || theme == 7) {
+            if (pick < 0.45f) {   // great urn / coral bloom on a plinth
+                pp.bevelBox(p + vec3(0, 0.2f, 0), vec3(0.5f, 0.2f, 0.5f), 0.04f, stone);
+                if (theme == 6) pp.lathe({{0.2f, 0.4f}, {0.42f, 0.8f}, {0.38f, 1.3f}, {0.18f, 1.55f}, {0.24f, 1.7f}, {0.01f, 1.7f}}, Mat(hexColor(0xb8763a), 0.5f, 0.3f), 10, p);
+                else for (int i = 0; i < 6; i++) { vec3 q = p + vec3(r.range(-0.3f, 0.3f), 0.4f, r.range(-0.3f, 0.3f)); pp.cone(q, q + vec3(r.range(-0.3f, 0.3f), r.range(0.6f, 1.3f), r.range(-0.3f, 0.3f)), r.range(0.06f, 0.12f), Mat(th.accent * 0.8f, 0.3f, 0, 1.5f), 5); }
+                if (theme == 7) light(p + vec3(0, 1.2f, 0), LI_MAGIC);
+                collider(p, 0.55f);
+            } else if (pick < 0.75f) {   // guardian statue
+                pp.bevelBox(p + vec3(0, 0.3f, 0), vec3(0.6f, 0.3f, 0.6f), 0.05f, stone);
+                pp.lathe({{0.35f, 0.6f}, {0.4f, 1.6f}, {0.3f, 2.3f}, {0.01f, 2.35f}}, stone.withColor(th.trim * 1.15f), 8, p);
+                pp.ellipsoid(p + vec3(0, 2.55f, 0) + n * 0.05f, vec3(0.2f, 0.24f, 0.24f), stone.withColor(th.trim * 1.15f), 8, 6);
+                for (int s = -1; s <= 1; s += 2) pp.cone(p + t * (s * 0.1f) + vec3(0, 2.7f, 0), p + t * (s * 0.18f) + vec3(0, 3.0f, 0), 0.07f, stone.withColor(th.trim * 1.15f), 4);   // ears / crown
+                pp.tube(p + t * 0.45f + vec3(0, 0.6f, 0), p + t * 0.45f + vec3(0, 3.1f, 0), 0.04f, 0.04f, Mat(dpal::gold, 0.4f, 0.8f), 6, true);
+                collider(p, 0.65f);
+            } else { pp.box(p + vec3(0, 0.75f, 0), t * 0.9f + n * 0.4f + vec3(0, 0.05f, 0), wood); for (int k = 0; k < 4; k++) pp.box(p + t * ((k % 2 ? 0.8f : -0.8f)) + n * ((k / 2 ? 0.3f : -0.3f)) + vec3(0, 0.36f, 0), vec3(0.05f, 0.36f, 0.05f), wood); candles(p + vec3(0, 0.8f, 0), 3); collider(p, 0.8f); }
+        } else if (theme == 3) {
+            if (pick < 0.4f) {   // ore cart on a stub of rails
+                for (int s = -1; s <= 1; s += 2) pp.box(p + t * (s * 0.4f) + vec3(0, 0.05f, 0), t * 0.03f + n * 1.4f + vec3(0, 0.04f, 0), iron);
+                pp.bevelBox(p + vec3(0, 0.6f, 0), t * 0.55f + n * 0.75f + vec3(0, 0.35f, 0), 0.05f, Mat(hexColor(0x4a3c30), 0.6f, 0.4f));
+                for (int i = 0; i < 5; i++) pp.rock(p + vec3(r.range(-0.3f, 0.3f), 1.0f, r.range(-0.3f, 0.3f)), vec3(r.range(0.15f, 0.25f)), Mat(i % 2 ? hexColor(0xff7a26) : hexColor(0x3a2a24), 0.6f, 0, i % 2 ? 2.f : 0.f), r.next(), 0);
+                collider(p, 0.8f);
+            } else { for (int i = 0; i < 3; i++) pp.bevelBox(p + t * (i - 1) * 0.7f + vec3(0, 0.33f + (i == 1 ? 0.66f : 0.f), 0), vec3(0.33f), 0.04f, wood.withColor(hexColor(0x6a4a2e) * r.range(0.85f, 1.1f))); pp.lathe({{0.3f, 0}, {0.36f, 0.45f}, {0.3f, 0.9f}, {0.01f, 0.9f}}, wood, 10, p + n * 0.6f + t * 1.3f); collider(p, 0.9f); }
+        } else if (theme == 4) {
+            const PropTemplate& tp = propTemplate(P_ICECRYSTAL, r.irange(0, 2)); MeshBuilder tmp; tmp.append(tp.solid);
+            for (auto& v : tmp.v) { v.px = v.px * 1.3f + p.x; v.py = v.py * 1.3f + p.y; v.pz = v.pz * 1.3f + p.z; } pp.append(tmp); light(p + vec3(0, 1.f, 0), LI_CRYSTAL); collider(p, 0.6f);
+        } else {
+            if (pick < 0.5f) { for (int i = 0; i < 2; i++) pp.bevelBox(p + t * (i ? 0.45f : -0.4f) + vec3(0, 0.33f, 0), vec3(0.33f), 0.04f, wood); pp.lathe({{0.3f, 0}, {0.36f, 0.45f}, {0.3f, 0.9f}, {0.01f, 0.9f}}, wood, 10, p + t * 1.2f); collider(p, 0.8f); }
+            else if (theme == 2) { for (int i = 0; i < 4; i++) pp.ellipsoid(p + vec3(r.range(-0.5f, 0.5f), 0.25f, r.range(-0.5f, 0.5f)), vec3(0.22f, 0.28f, 0.22f), Mat(hexColor(0xd8d0c0), 0.5f, 0, 0.3f), 7, 5); }   // egg sacs
+            else { // goblin weapon rack and a cooking pot
+                for (int s = -1; s <= 1; s += 2) pp.tube(p + t * (s * 0.7f), p + t * (s * 0.7f) + vec3(0, 1.5f, 0), 0.05f, 0.05f, wood, 5, true);
+                pp.tube(p - t * 0.75f + vec3(0, 1.2f, 0), p + t * 0.75f + vec3(0, 1.2f, 0), 0.04f, 0.04f, wood, 5, true);
+                for (int k = 0; k < 3; k++) pp.tube(p + t * (-0.4f + k * 0.4f) + n * 0.1f, p + t * (-0.4f + k * 0.4f) + vec3(0, 1.8f, 0), 0.025f, 0.02f, wood, 4, true);
+                pp.lathe({{0.01f, 0}, {0.35f, 0.1f}, {0.4f, 0.45f}, {0.32f, 0.5f}}, iron, 10, p + n * 1.2f);
+                collider(p, 0.7f);
+            }
+        }
+        (void)roomKind;
+    }
+    // ---- the boss hall: dais, throne or altar, carpet, four great braziers
+    void throneRoom() {
+        const DungeonRoom& rm = d.rooms.back();
+        vec3 ctr = d.origin + vec3((rm.x + rm.w * 0.5f) * TILE, 0, (rm.z + rm.h * 0.5f) * TILE);
+        vec3 toGate = d.gatePos - ctr; toGate.y = 0;
+        vec3 n = std::fabs(toGate.x) > std::fabs(toGate.z) ? vec3(toGate.x > 0 ? 1.f : -1.f, 0, 0) : vec3(0, 0, toGate.z > 0 ? 1.f : -1.f);   // towards the way in
+        vec3 t(std::fabs(n.z), 0, std::fabs(n.x));
+        float half = (std::fabs(n.x) > 0 ? rm.w : rm.h) * TILE * 0.5f, side = (std::fabs(n.x) > 0 ? rm.h : rm.w) * TILE * 0.5f;
+        vec3 back = ctr - n * (half - 2.2f);
+        Mat stone(lerp(th.trim, th.floor2, 0.4f) * 1.1f, 0.6f), dk(lerp(th.floor, th.trim, 0.5f), 0.7f), gold(dpal::gold, 0.35f, 0.85f), cloth(banner(), 0.95f);
+        // two-step dais
+        pp.bevelBox(back + vec3(0, 0.05f, 0), t * 4.2f + n * 2.0f + vec3(0, 0.05f, 0), 0.05f, dk);
+        pp.bevelBox(back - n * 0.4f + vec3(0, 0.13f, 0), t * 3.2f + n * 1.5f + vec3(0, 0.04f, 0), 0.04f, stone);
+        // carpet from the way in to the dais, with a gold edge
+        float len = half * 2.f - 4.4f;
+        vec3 cm = ctr + n * (half - len * 0.5f - 0.2f) - n * 2.2f;
+        pp.box(cm + vec3(0, 0.015f, 0), t * 1.25f + n * (len * 0.5f) + vec3(0, 0.012f, 0), cloth);
+        for (int s = -1; s <= 1; s += 2) pp.box(cm + t * (s * 1.2f) + vec3(0, 0.03f, 0), t * 0.07f + n * (len * 0.5f) + vec3(0, 0.01f, 0), gold);
+        vec3 seat = back - n * 0.6f + vec3(0, 0.17f, 0);
+        if (built() || theme == 3) {
+            // throne: seat, tall back with a crest, armrests, gems
+            pp.bevelBox(seat + vec3(0, 0.45f, 0), t * 0.85f + n * 0.7f + vec3(0, 0.45f, 0), 0.06f, stone);
+            pp.bevelBox(seat - n * 0.6f + vec3(0, 1.9f, 0), t * 0.85f + n * 0.14f + vec3(0, 1.9f, 0), 0.06f, stone);
+            pp.cone(seat - n * 0.6f + vec3(0, 3.8f, 0), seat - n * 0.6f + vec3(0, 4.7f, 0), 0.55f, gold, 4);
+            for (int s = -1; s <= 1; s += 2) {
+                pp.bevelBox(seat + t * (s * 0.9f) + vec3(0, 1.05f, 0), t * 0.14f + n * 0.7f + vec3(0, 0.12f, 0), 0.04f, gold);
+                pp.lathe({{0.15f, 0}, {0.12f, 1.0f}, {0.01f, 1.05f}}, stone, 8, seat + t * (s * 0.9f) + n * 0.6f);
+            }
+            pp.box(seat - n * 0.45f + vec3(0, 1.0f, 0), t * 0.6f + n * 0.02f + vec3(0, 0.08f, 0), cloth);   // cushion back
+            pp.ellipsoid(seat - n * 0.45f + vec3(0, 3.2f, 0), vec3(0.18f), Mat(th.accent, 0.2f, 0, 3.f), 8, 6);
+            light(seat + vec3(0, 3.3f, 0) + n * 0.5f, LI_MAGIC);
+        } else {
+            // altar of rough stone with a glowing relic
+            pp.rock(seat + vec3(0, 0.5f, 0), t * 1.3f + n * 0.8f + vec3(0, 0.9f, 0), stone, r.next(), 1);
+            pp.ellipsoid(seat + vec3(0, 1.45f, 0), vec3(0.25f), Mat(th.accent, 0.2f, 0, 3.f), 8, 6);
+            light(seat + vec3(0, 2.f, 0), LI_MAGIC); d.emitters.push_back(vec4(seat + vec3(0, 1.5f, 0), EM_SPARKLES));
+        }
+        { Collider col; col.c = seat.xz(); col.r = 1.1f; col.base = -1; col.top = 4.f; d.colliders.push_back(col); }
+        // four great braziers on pedestals
+        for (int k = 0; k < 4; k++) {
+            vec3 q = ctr + t * ((k % 2 ? 1.f : -1.f) * (side - 2.6f)) + n * ((k / 2 ? 1.f : -1.f) * (half - 5.0f));
+            pp.lathe({{0.45f, 0}, {0.3f, 0.2f}, {0.2f, 0.9f}, {0.35f, 1.05f}, {0.7f, 1.35f}, {0.6f, 1.4f}, {0.01f, 1.25f}}, Mat(hexColor(0x3a3430), 0.4f, 0.8f), 10, q);
+            pp.ellipsoid(q + vec3(0, 1.38f, 0), vec3(0.5f, 0.08f, 0.5f), Mat(theme == 5 || theme == 7 ? th.accent : dpal::ember, 0.5f, 0, 3.f), 8, 3);
+            light(q + vec3(0, 2.2f, 0), theme == 5 || theme == 7 ? LI_MAGIC : LI_FIRE);
+            d.emitters.push_back(vec4(q + vec3(0, 1.45f, 0), theme == 5 || theme == 7 ? EM_SPARKLES : EM_FIRE));
+            Collider col; col.c = q.xz(); col.r = 0.6f; col.base = -1; col.top = 2.f; d.colliders.push_back(col);
+        }
+    }
+};
+}
+
+static void dressDungeon(DungeonState& d, int theme, const Theme& th, MeshBuilder& wl, MeshBuilder& pp, uint32_t seed) {
+    Dresser D{d, theme, th, wl, pp, Rng(seed * 7 + 3)};
+    const int bossRoom = (int)d.rooms.size() - 1;
+    // wall faces and door frames
+    for (int z = 0; z < d.H; z++) for (int x = 0; x < d.W; x++) {
+        TileType t = D.T(x, z);
+        for (int k = 0; k < 4; k++) {
+            int dx = k == 0 ? 1 : k == 1 ? -1 : 0, dz = k == 2 ? 1 : k == 3 ? -1 : 0;
+            TileType nb = D.T(x + dx, z + dz);
+            if (!Dresser::walk(t) && t != TileType::Pit && Dresser::walk(nb)) {
+                int ri = D.roomAt(x + dx, z + dz);
+                D.face(x, z, dx, dz, ri >= 0, ri == bossRoom);
+            } else if (Dresser::walk(t) && Dresser::walk(nb) && D.roomAt(x, z) < 0 && D.roomAt(x + dx, z + dz) >= 0) {
+                D.doorway(x, z, dx, dz);
+            }
+        }
+    }
+    // furniture along the walls of the ordinary rooms (not the entrance hall, the puzzle room or the boss hall)
+    for (size_t i = 1; i + 1 < d.rooms.size(); i++) {
+        const DungeonRoom& rm = d.rooms[i];
+        if (rm.kind == 3) continue;
+        for (int z = rm.z; z < rm.z + rm.h; z++) for (int x = rm.x; x < rm.x + rm.w; x++) {
+            bool jet = false;
+            for (const vec3& f : d.fireJets) if (distXZ(f, D.C(x, z)) < 2.5f) jet = true;
+            if (jet) continue;
+            for (int k = 0; k < 4; k++) {
+                int dx = k == 0 ? 1 : k == 1 ? -1 : 0, dz = k == 2 ? 1 : k == 3 ? -1 : 0;
+                if (D.T(x + dx, z + dz) != TileType::Void) continue;   // only against a solid wall (never in a doorway)
+                bool corner = D.T(x - dx, z - dz) == TileType::Void;   // narrow room: skip
+                if (corner || !D.r.chance(0.34f)) continue;
+                D.furnish(D.C(x, z), vec3(-dx, 0, -dz), rm.kind);
+                break;
+            }
+        }
+    }
+    if (bossRoom >= 1) D.throneRoom();
+}
+
 void Game::buildDungeon(int idx) {
     const DungeonDef& D = dungeons()[idx];
     DungeonState& d = dungeon;
@@ -169,17 +448,6 @@ void Game::buildDungeon(int idx) {
                 if (D.theme == 0 || D.theme == 2 || D.theme == 4) wl.rock(c + vec3(r.range(-1, 1), h, r.range(-1, 1)), vec3(1.6f, 0.8f, 1.6f), Mat(th.wall, 0.9f), r.next(), 0);
                 Collider col; col.c = c.xz(); col.hx = TILE * 0.5f; col.hz = TILE * 0.5f; col.base = -1; col.top = 8;
                 d.colliders.push_back(col);
-                // torches on walls facing a room
-                for (int k = 0; k < 4; k++) {
-                    int dx = k == 0 ? 1 : k == 1 ? -1 : 0, dz = k == 2 ? 1 : k == 3 ? -1 : 0;
-                    if (T(x + dx, z + dz) == TileType::Floor && r.chance(0.09f)) {
-                        vec3 tp = c + vec3(dx, 0, dz) * (TILE * 0.55f) + vec3(0, 2.6f, 0);
-                        wl.box(tp - vec3(0, 0.25f, 0), {0.06f, 0.3f, 0.06f}, Mat(hexColor(0x3a2a1a)));
-                        wl.ellipsoid(tp + vec3(0, 0.12f, 0), vec3(0.12f, 0.18f, 0.12f), Mat(hexColor(0xffa040), 0.5f, 0, 4.f), 6, 4);
-                        d.lights.push_back(vec4(tp + vec3(dx, 0.3f, dz) * 0.5f, LI_FIRE));
-                        d.emitters.push_back(vec4(tp + vec3(0, 0.2f, 0), EM_FIRE));
-                    }
-                }
             }
         }
     if (D.theme == 8) {
@@ -316,6 +584,7 @@ void Game::buildDungeon(int idx) {
             if (fr.chance(0.5f)) pp.lathe({{0.01f, 0}, {sc * 0.12f, sc * 0.4f}, {0.01f, sc * 0.9f}}, Mat(th.accent, 0.2f, 0, 2.5f), 6, c + vec3(0, sc * 0.3f, 0));
         }
     }
+    if (D.theme != 8) dressDungeon(d, D.theme, th, wl, pp, (uint32_t)D.seed);   // 3.1.0
     // exit portal (the way back up)
     pp.lathe({{1.2f, 0.02f}, {0.01f, 0.04f}}, Mat(hexColor(0x8ad8ff), 0.2f, 0, 3.f), 20, d.exitPos);
     for (int i = 0; i < 6; i++) { float a = i * TAU / 6; pp.rock(d.exitPos + vec3(std::cos(a) * 1.5f, 0, std::sin(a) * 1.5f), vec3(0.3f, 0.5f, 0.3f), Mat(th.trim), 300 + i, 0); }

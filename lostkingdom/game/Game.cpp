@@ -211,7 +211,7 @@ void Game::updateDynamicResolution(float dtRaw) {
     float avg = drsAcc / drsFrames; drsAcc = 0; drsFrames = 0;
     float target = 1.f / std::max(20, renderer.settings.fpsCap);
     float k = renderer.dynamicScale;
-    if (avg > target * 1.18f && k > 0.75f) {   // 3.0.2 floor 0.75 (was 0.5: the picture turned blurry and pixelated)
+    if (avg > target * 1.18f && k > 0.85f) {   // 3.1.0 floor 0.8 (3.0.2: 0.75, before 0.5): sharper grass when the phone is busy
         if (drsJustRaised) drsWaitUp = std::min(120.f, drsWaitUp * 2.f);
         renderer.setDynamicScale(k - 0.1f); drsStable = 0; drsJustRaised = false;
         AGR_LOG("dynamic resolution: %.0f ms/frame -> scale %.2f", avg * 1000, renderer.dynamicScale);
@@ -538,13 +538,10 @@ void Game::updateEnvironment(float dt) {
     env.grain = 0.012f;
     env.chromatic = 0;
     // depth of field: tilt-shift diorama in gameplay, real DoF during dialogues & cinematics
-    env.tiltShift = state == GameState::Playing ? 0.12f : 0.55f;   // 3.0.2 a light touch in play (the top of the screen was blurred)
-    if (state == GameState::Playing) {
-        // free camera: zoomed far out = "map" view (fog pushed away, miniature tilt-shift);
-        // close-ups and low "sky" shots keep the hero sharp
-        env.fogDensity *= lerpf(1.f, 0.4f, camRig.mapK);
-        env.tiltShift = lerpf(env.tiltShift, 0.8f, camRig.mapK) * (1.f - 0.7f * camRig.nearK) * (1.f - 0.75f * camRig.lowK);
-    }
+    // 3.1.0 no tilt-shift at all in play: it blurred the bottom of the screen, where the near grass is (and much
+    // more when zoomed out). The picture stays sharp; real depth of field only in dialogues and cinematics.
+    env.tiltShift = state == GameState::Playing ? 0.f : 0.55f;
+    if (state == GameState::Playing) env.fogDensity *= lerpf(1.f, 0.4f, camRig.mapK);   // zoomed far out: fog pushed away
     dofAmount = damp(dofAmount, (dialog.open || cinematicT > 0) ? 1.f : 0.f, 4.f, dt);
     env.dofAmount = dofAmount;
     env.dofFocus = dofFocus;
@@ -558,16 +555,16 @@ void Game::updateEnvironment(float dt) {
     if (dungeon.active) {
         // underground: no sun, warm torch light, darker fog
         env.sunIntensity = 0.25f; env.shadowStrength = 0.3f; env.sunColor = srgb(0x8a9aff);
-        env.skyAmbient = srgb(0x2a2a3a) * 0.9f; env.groundAmbient = srgb(0x2a2018) * 0.7f;
+        env.skyAmbient = srgb(0x48485c) * 0.95f; env.groundAmbient = srgb(0x3e3024) * 0.8f;   // 3.1.0 brighter: the dressed walls and rooms read
         int th = dungeon.interior ? 9 : dungeons()[dungeon.def].theme;
         env.fogColor = th == 3 ? srgb(0x2a1410) : (th == 4 ? srgb(0x18283a) : (th == 5 ? srgb(0x1a0a24) : (th == 6 ? srgb(0x3a2a14) : (th == 7 ? srgb(0x0e2a34) : (th == 8 ? srgb(0xc8a8e8) : srgb(0x141216))))));
         env.fogDensity = 0.025f; env.fogBase = -10.f; env.cloudShadows = 0; env.snowCover = 0; env.wetness = 0.2f;
-        env.exposure = 1.25f; env.tiltShift = 0.25f;
+        env.exposure = 1.35f; env.tiltShift = 0.f;
         env.night = 1.f;  // window/lantern glows on
         if (dungeon.interior) {   // 2.4.1 indoors: warm lamplight, a little daylight through the windows, no fog
             env.sunIntensity = 0.22f; env.sunColor = srgb(0xffe8c8); env.shadowStrength = 0.35f;
             env.skyAmbient = srgb(0x5a5248) * 0.6f; env.groundAmbient = srgb(0x3a3028) * 0.55f;
-            env.fogColor = srgb(0x2a241e); env.fogDensity = 0.004f; env.exposure = 0.92f; env.tiltShift = 0.1f;
+            env.fogColor = srgb(0x2a241e); env.fogDensity = 0.004f; env.exposure = 0.92f; env.tiltShift = 0.f;
         }
         if (th == 8) {
             // 2.2.1 the celestial realm is open sky: low golden sun, violet zenith, aurora, light mist far below
@@ -576,7 +573,7 @@ void Game::updateEnvironment(float dt) {
             env.skyTop = srgb(0x3a2a8a); env.skyHorizon = srgb(0xe8a8c8); env.cloudCover = 0.45f;
             env.fogColor = srgb(0x8a74b8); env.fogDensity = 0.0022f; env.fogBase = -30.f;
             env.night = 0.35f; env.exposure = 0.82f; env.aurora = 0.9f; env.saturation = 1.12f; env.contrast = 1.12f; env.dust = 0.f; env.heat = 0.f; env.sandVeil = 0.f;
-            env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.2f; env.wetness = 0.f;
+            env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.f; env.wetness = 0.f;
         }
     }
     audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));

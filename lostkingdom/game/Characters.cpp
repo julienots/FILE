@@ -414,63 +414,138 @@ void buildHumanoid(MeshBuilder& mb, const HumanoidLook& L) {
 // ------------------------------------------------------------------------------------------ quadrupeds
 static vec3 QJ(const Skeleton& sk, int b) { return sk.bones[b].bindWorld; }
 
+// 3.1.0 a real wolf, built by the game (the imported Tripo model is no longer used): a lean body with a deep chest
+// and a tucked waist, a dark saddle on the back and a pale underside (countershading), a thick ruff around the
+// neck, a broad skull with a long tapering muzzle, tall pointed ears, amber eyes, a bushy tail with a dark tip and
+// long legs with pale socks and paws. Same skeleton and bones as every quadruped (all clips work).
+static void wolfBody(MeshBuilder& mb, const CreatureLook& L) {
+    const Skeleton& sk = skeleton(Arch::Quadruped);
+    float g = L.girth;
+    vec3 c1 = L.c1, c2 = L.c2, c3 = lerp(L.c1, L.c3, 0.55f);
+    Mat fur(c1, 0.92f), pale(c2, 0.92f), saddle(c3, 0.92f), mid(lerp(c1, c2, 0.45f), 0.92f), nose(hexColor(0x141212), 0.35f);
+    vec3 R = QJ(sk, Q_ROOT), S = QJ(sk, Q_SPINE), C = QJ(sk, Q_CHEST), H = QJ(sk, Q_HEAD);
+    // hips, waist (narrow, the belly tucked up) and the deep chest with a pale bib
+    mb.setBone(Q_ROOT);
+    mb.ellipsoid(R + vec3(0, 0.0f, 0.03f), vec3(0.125f, 0.15f, 0.2f) * g, fur, 12, 8);
+    mb.ellipsoid(R + vec3(0, -0.06f, 0.06f) * g, vec3(0.1f, 0.1f, 0.15f) * g, pale, 10, 6);
+    mb.setBone(Q_SPINE);
+    mb.ellipsoid(S + vec3(0, 0.025f, 0), vec3(0.108f, 0.125f, 0.25f) * g, fur, 12, 8);
+    mb.ellipsoid(S + vec3(0, -0.04f, 0.02f) * g, vec3(0.085f, 0.095f, 0.22f) * g, pale, 10, 6);
+    mb.ellipsoid(S + vec3(0, 0.1f, -0.02f) * g, vec3(0.085f, 0.05f, 0.3f) * g, saddle, 10, 5);   // dark saddle along the back
+    mb.setBone(Q_CHEST);
+    mb.ellipsoid(C + vec3(0, -0.02f, 0.02f), vec3(0.14f, 0.2f, 0.19f) * g, fur, 12, 8);
+    mb.ellipsoid(C + vec3(0, -0.09f, 0.11f) * g, vec3(0.1f, 0.13f, 0.09f) * g, pale, 10, 6);          // chest bib
+    mb.ellipsoid(C + vec3(0, 0.12f, -0.04f) * g, vec3(0.1f, 0.06f, 0.16f) * g, saddle, 10, 5);
+    // ruff: layered fur around the neck and shoulders (soft lumps, not spikes)
+    float ruff = L.mane ? 1.f : 0.8f;
+    mb.ellipsoid(C + vec3(0, 0.08f, 0.12f) * g, vec3(0.16f, 0.17f, 0.15f) * g * ruff, mid, 12, 8);
+    for (int sd = -1; sd <= 1; sd += 2) mb.ellipsoid(C + vec3(sd * 0.075f, 0.02f, 0.12f) * g, vec3(0.07f, 0.13f, 0.1f) * g * ruff, fur, 8, 6);
+    mb.tube(C + vec3(0, 0.08f, 0.1f) * g, H + vec3(0, -0.02f, -0.03f), 0.12f * g, 0.085f * g, fur, 10, false, Q_NECK, Q_HEAD, 0.55f);
+    mb.setBone(Q_NECK);
+    mb.ellipsoid(QJ(sk, Q_NECK) + vec3(0, -0.05f, 0.05f) * g, vec3(0.09f, 0.1f, 0.08f) * g, pale, 8, 6);   // pale throat
+    // head: broad skull, cheek ruffs, a long tapering muzzle, black nose, tall ears
+    mb.setBone(Q_HEAD);
+    mb.ellipsoid(H + vec3(0, 0.025f, 0.0f), vec3(0.085f, 0.075f, 0.095f) * g, fur, 12, 8);
+    mb.ellipsoid(H + vec3(0, 0.07f, 0.02f) * g, vec3(0.05f, 0.025f, 0.07f) * g, saddle, 8, 4);    // dark brow
+    for (int sd = -1; sd <= 1; sd += 2) mb.ellipsoid(H + vec3(sd * 0.065f, -0.02f, -0.02f) * g, vec3(0.045f, 0.06f, 0.06f) * g, pale, 8, 6);   // cheeks
+    mb.tube(H + vec3(0, 0.0f, 0.06f) * g, H + vec3(0, -0.025f, 0.22f) * g, 0.052f * g, 0.026f * g, fur, 10, true);
+    mb.tube(H + vec3(0, -0.03f, 0.06f) * g, H + vec3(0, -0.045f, 0.2f) * g, 0.04f * g, 0.02f * g, pale, 8, true);   // pale lips
+    mb.ellipsoid(H + vec3(0, -0.018f, 0.225f) * g, vec3(0.022f, 0.018f, 0.018f) * g, nose, 6, 4);
+    for (int sd = -1; sd <= 1; sd += 2) {
+        vec3 e = H + vec3(sd * 0.042f, 0.035f, 0.075f) * g;
+        mb.ellipsoid(e + vec3(sd * 0.004f, 0.002f, -0.004f), vec3(0.02f, 0.012f, 0.014f) * g, Mat(hexColor(0x1a1612), 0.5f), 6, 4);     // dark rim
+        mb.ellipsoid(e, vec3(0.013f, 0.01f, 0.01f) * g, Mat(L.glow, 0.2f, 0, 0.6f + L.emissiveEyes * 2.4f), 6, 4);
+        vec3 eb = H + vec3(sd * 0.045f, 0.07f, -0.02f) * g, et = H + vec3(sd * 0.065f, 0.19f, -0.045f) * g;
+        mb.cone(eb, et, 0.04f * g, fur, 5);
+        mb.cone(eb + vec3(0, 0.005f, 0.012f) * g, et + vec3(0, -0.03f, 0.012f) * g, 0.026f * g, saddle, 4);   // ear hollow
+    }
+    mb.setBone(Q_JAW);
+    vec3 J = QJ(sk, Q_JAW);
+    mb.tube(J + vec3(0, 0, -0.03f), J + vec3(0, -0.005f, 0.14f) * g, 0.036f * g, 0.018f * g, pale, 8, true);
+    for (int sd = -1; sd <= 1; sd += 2) mb.cone(J + vec3(sd * 0.018f, 0.012f, 0.12f) * g, J + vec3(sd * 0.016f, 0.05f, 0.125f) * g, 0.007f, Mat(hexColor(0xeee6d0), 0.4f), 4);   // fangs
+    // bushy tail hanging in a curve, dark tip
+    mb.tube(QJ(sk, Q_TAIL1) + vec3(0, 0.02f, 0.04f), QJ(sk, Q_TAIL2), 0.045f * g, 0.062f * g, fur, 8, false, Q_TAIL1, Q_TAIL2);
+    mb.tube(QJ(sk, Q_TAIL2), QJ(sk, Q_TAIL3), 0.062f * g, 0.058f * g, fur, 8, false, Q_TAIL2, Q_TAIL3);
+    mb.setBone(Q_TAIL3);
+    mb.tube(QJ(sk, Q_TAIL3), QJ(sk, Q_TAIL3) + vec3(0, -0.07f, -0.14f) * g, 0.058f * g, 0.035f * g, fur, 8, false);
+    mb.tube(QJ(sk, Q_TAIL3) + vec3(0, -0.07f, -0.14f) * g, QJ(sk, Q_TAIL3) + vec3(0, -0.11f, -0.22f) * g, 0.035f * g, 0.008f, saddle, 7, true);
+    // legs: muscled upper legs, slim pale lower legs, oval paws
+    int legs[4][3] = {{Q_FL1, Q_FL2, Q_FL3}, {Q_FR1, Q_FR2, Q_FR3}, {Q_BL1, Q_BL2, Q_BL3}, {Q_BR1, Q_BR2, Q_BR3}};
+    for (int l = 0; l < 4; l++) {
+        bool back = l >= 2;
+        vec3 a = QJ(sk, legs[l][0]), k = QJ(sk, legs[l][1]), f = QJ(sk, legs[l][2]);
+        mb.setBone(legs[l][0]);
+        if (back) mb.ellipsoid(a + vec3(0, -0.07f, -0.02f), vec3(0.065f, 0.13f, 0.095f) * g, fur, 10, 6);   // thigh
+        else mb.ellipsoid(a + vec3(0, -0.05f, 0.0f), vec3(0.055f, 0.11f, 0.07f) * g, fur, 10, 6);           // shoulder
+        mb.tube(a + vec3(0, 0.04f, 0), k, (back ? 0.072f : 0.062f) * g, 0.038f * g, fur, 8, false, legs[l][0], legs[l][1]);
+        mb.tube(k, f, 0.038f * g, 0.028f * g, mid, 7, false, legs[l][1], legs[l][2]);
+        mb.setBone(legs[l][2]);
+        mb.ellipsoid(f + vec3(0, -0.03f, 0.03f), vec3(0.042f, 0.03f, 0.058f) * g, pale, 7, 4);
+        mb.ellipsoid(f + vec3(0, -0.045f, 0.07f), vec3(0.03f, 0.012f, 0.014f) * g, Mat(hexColor(0x1e1a16), 0.5f), 5, 3);   // toes / claws
+    }
+    mb.applyColorJitter(0, 0.035f, L.seed);
+}
+
 void buildQuadruped(MeshBuilder& mb, const CreatureLook& L) {
     const Skeleton& sk = skeleton(Arch::Quadruped);
     Rng rng(L.seed);
     Mat fur(L.c1, 0.9f), belly(L.c2, 0.9f), dark(L.c3, 0.7f), hoof(hexColor(0x2a2420), 0.5f);
     float g = L.girth;
     bool hoofed = L.kind == 3 || L.kind == 4 || L.kind == 7;
-    // body: hips, belly, chest (overlapping ellipsoids)
-    mb.setBone(Q_ROOT); mb.ellipsoid(QJ(sk, Q_ROOT) + vec3(0, 0, 0.02f), vec3(0.17f, 0.18f, 0.22f) * g, fur, 12, 8);
-    mb.setBone(Q_SPINE); mb.ellipsoid(QJ(sk, Q_SPINE), vec3(0.16f, 0.17f, 0.25f) * g, fur, 12, 8);
-    mb.ellipsoid(QJ(sk, Q_SPINE) + vec3(0, -0.07f * g, 0), vec3(0.13f, 0.12f, 0.22f) * g, belly, 10, 6);
-    mb.setBone(Q_CHEST); mb.ellipsoid(QJ(sk, Q_CHEST) + vec3(0, 0.0f, 0.02f), vec3(0.18f, 0.22f, 0.2f) * g, fur, 12, 8);
-    if (L.mane) { mb.flat = true; mb.rock(QJ(sk, Q_CHEST) + vec3(0, 0.12f, 0.04f), vec3(0.2f, 0.17f, 0.2f) * g, Mat(L.c2 * 0.9f, 0.95f), 7, 1); mb.flat = false; }
-    if (L.kind == 1) {  // boar: bristly hump
-        mb.flat = true; mb.rock(QJ(sk, Q_CHEST) + vec3(0, 0.17f, -0.05f), vec3(0.14f, 0.12f, 0.25f) * g, dark, 9, 0); mb.flat = false;
-    }
-    // neck & head
-    mb.tube(QJ(sk, Q_CHEST) + vec3(0, 0.08f, 0.1f), QJ(sk, Q_HEAD), 0.11f * g, 0.08f * g, fur, 10, false, Q_NECK, Q_HEAD, 0.6f);
-    mb.setBone(Q_HEAD);
-    vec3 h = QJ(sk, Q_HEAD);
-    float snout = (L.kind == 1 ? 0.18f : (L.kind == 2 ? 0.12f : (hoofed ? 0.2f : 0.16f)));
-    mb.ellipsoid(h + vec3(0, 0.02f, 0.02f), vec3(0.1f, 0.095f, 0.11f) * g, fur, 10, 7);
-    mb.tube(h + vec3(0, 0.0f, 0.05f), h + vec3(0, -0.02f, 0.05f + snout), 0.065f * g, 0.045f * g, fur, 8, true);
-    mb.ellipsoid(h + vec3(0, -0.01f, 0.05f + snout), vec3(0.03f, 0.025f, 0.02f), dark, 6, 4);  // nose
-    mb.setBone(Q_JAW);
-    mb.tube(QJ(sk, Q_JAW) + vec3(0, 0, -0.02f), QJ(sk, Q_JAW) + vec3(0, -0.01f, snout * 0.9f), 0.04f * g, 0.03f * g, belly, 7, true);
-    if (L.tusks || L.kind == 1) for (int s = -1; s <= 1; s += 2) mb.cone(QJ(sk, Q_JAW) + vec3(s * 0.035f, 0, snout * 0.75f), QJ(sk, Q_JAW) + vec3(s * 0.06f, 0.09f, snout * 0.85f), 0.014f, Mat(hexColor(0xeee6d0), 0.4f), 5);
-    mb.setBone(Q_HEAD);
-    for (int s = -1; s <= 1; s += 2) {
-        mb.ellipsoid(h + vec3(s * 0.06f, 0.04f, 0.09f), vec3(0.016f), Mat(L.glow, 0.2f, 0, 1.f + L.emissiveEyes * 3.f), 6, 4);
-        if (L.kind == 0 || L.kind == 6 || L.kind == 3 || L.kind == 4 || L.kind == 7) mb.cone(h + vec3(s * 0.05f, 0.08f, -0.02f), h + vec3(s * 0.07f, 0.2f, -0.04f), 0.035f, fur, 5);  // ears
-        else mb.ellipsoid(h + vec3(s * 0.07f, 0.08f, -0.02f), vec3(0.03f, 0.03f, 0.015f), fur, 6, 4);
-        if (L.horns || L.kind == 4 || L.kind == 7) {
-            vec3 b = h + vec3(s * 0.04f, 0.1f, 0.0f);
-            mb.tube(b, b + vec3(s * 0.08f, 0.18f, -0.06f), 0.018f, 0.012f, Mat(hexColor(0xd8c8a8), 0.5f), 5, false);
-            mb.tube(b + vec3(s * 0.08f, 0.18f, -0.06f), b + vec3(s * 0.05f, 0.3f, -0.12f), 0.012f, 0.004f, Mat(hexColor(0xd8c8a8), 0.5f), 5, true);
-            mb.tube(b + vec3(s * 0.06f, 0.12f, -0.04f), b + vec3(s * 0.12f, 0.2f, 0.02f), 0.01f, 0.004f, Mat(hexColor(0xd8c8a8), 0.5f), 4, true);
+    if (L.kind == 0 || L.kind == 6) wolfBody(mb, L);   // 3.1.0 every wolf is drawn by the game (no imported model)
+    else {
+        // body: hips, belly, chest (overlapping ellipsoids)
+        mb.setBone(Q_ROOT); mb.ellipsoid(QJ(sk, Q_ROOT) + vec3(0, 0, 0.02f), vec3(0.17f, 0.18f, 0.22f) * g, fur, 12, 8);
+        mb.setBone(Q_SPINE); mb.ellipsoid(QJ(sk, Q_SPINE), vec3(0.16f, 0.17f, 0.25f) * g, fur, 12, 8);
+        mb.ellipsoid(QJ(sk, Q_SPINE) + vec3(0, -0.07f * g, 0), vec3(0.13f, 0.12f, 0.22f) * g, belly, 10, 6);
+        mb.setBone(Q_CHEST); mb.ellipsoid(QJ(sk, Q_CHEST) + vec3(0, 0.0f, 0.02f), vec3(0.18f, 0.22f, 0.2f) * g, fur, 12, 8);
+        if (L.mane) { mb.flat = true; mb.rock(QJ(sk, Q_CHEST) + vec3(0, 0.12f, 0.04f), vec3(0.2f, 0.17f, 0.2f) * g, Mat(L.c2 * 0.9f, 0.95f), 7, 1); mb.flat = false; }
+        if (L.kind == 1) {  // boar: bristly hump
+            mb.flat = true; mb.rock(QJ(sk, Q_CHEST) + vec3(0, 0.17f, -0.05f), vec3(0.14f, 0.12f, 0.25f) * g, dark, 9, 0); mb.flat = false;
         }
-    }
-    // tail
-    float tl = L.kind == 2 || L.kind == 5 ? 0.3f : 1.f;
-    mb.tube(QJ(sk, Q_TAIL1), lerp(QJ(sk, Q_TAIL1), QJ(sk, Q_TAIL2), 1.f), 0.05f * g, 0.045f * g * tl, fur, 7, false, Q_TAIL1, Q_TAIL2);
-    if (tl > 0.5f) {
-        mb.tube(QJ(sk, Q_TAIL2), QJ(sk, Q_TAIL3), 0.045f * g, 0.035f * g, fur, 7, false, Q_TAIL2, Q_TAIL3);
-        mb.setBone(Q_TAIL3);
-        mb.tube(QJ(sk, Q_TAIL3), QJ(sk, Q_TAIL3) + vec3(0, -0.05f, -0.18f), 0.035f * g, 0.01f, hoofed ? dark : belly, 6, true);
-    }
-    // legs
-    int legs[4][3] = {{Q_FL1, Q_FL2, Q_FL3}, {Q_FR1, Q_FR2, Q_FR3}, {Q_BL1, Q_BL2, Q_BL3}, {Q_BR1, Q_BR2, Q_BR3}};
-    for (int l = 0; l < 4; l++) {
-        bool back = l >= 2;
-        float r0 = (back ? 0.085f : 0.07f) * g, r1 = 0.04f * g, r2 = 0.03f * g;
-        mb.tube(QJ(sk, legs[l][0]) + vec3(0, 0.06f, 0), QJ(sk, legs[l][1]), r0, r1, fur, 8, false, legs[l][0], legs[l][1]);
-        mb.tube(QJ(sk, legs[l][1]), QJ(sk, legs[l][2]), r1, r2, hoofed ? fur : fur, 7, false, legs[l][1], legs[l][2]);
-        mb.setBone(legs[l][2]);
-        vec3 f = QJ(sk, legs[l][2]);
-        if (hoofed) mb.tube(f + vec3(0, 0.0f, 0), f + vec3(0, -0.06f, 0.01f), r2 * 1.1f, r2 * 1.3f, hoof, 7, true);
-        else mb.ellipsoid(f + vec3(0, -0.035f, 0.03f), vec3(0.04f, 0.03f, 0.055f) * g, L.kind == 2 ? dark : fur, 7, 4);
+        // neck & head
+        mb.tube(QJ(sk, Q_CHEST) + vec3(0, 0.08f, 0.1f), QJ(sk, Q_HEAD), 0.11f * g, 0.08f * g, fur, 10, false, Q_NECK, Q_HEAD, 0.6f);
+        mb.setBone(Q_HEAD);
+        vec3 h = QJ(sk, Q_HEAD);
+        float snout = (L.kind == 1 ? 0.18f : (L.kind == 2 ? 0.12f : (hoofed ? 0.2f : 0.16f)));
+        mb.ellipsoid(h + vec3(0, 0.02f, 0.02f), vec3(0.1f, 0.095f, 0.11f) * g, fur, 10, 7);
+        mb.tube(h + vec3(0, 0.0f, 0.05f), h + vec3(0, -0.02f, 0.05f + snout), 0.065f * g, 0.045f * g, fur, 8, true);
+        mb.ellipsoid(h + vec3(0, -0.01f, 0.05f + snout), vec3(0.03f, 0.025f, 0.02f), dark, 6, 4);  // nose
+        mb.setBone(Q_JAW);
+        mb.tube(QJ(sk, Q_JAW) + vec3(0, 0, -0.02f), QJ(sk, Q_JAW) + vec3(0, -0.01f, snout * 0.9f), 0.04f * g, 0.03f * g, belly, 7, true);
+        if (L.tusks || L.kind == 1) for (int s = -1; s <= 1; s += 2) mb.cone(QJ(sk, Q_JAW) + vec3(s * 0.035f, 0, snout * 0.75f), QJ(sk, Q_JAW) + vec3(s * 0.06f, 0.09f, snout * 0.85f), 0.014f, Mat(hexColor(0xeee6d0), 0.4f), 5);
+        mb.setBone(Q_HEAD);
+        for (int s = -1; s <= 1; s += 2) {
+            mb.ellipsoid(h + vec3(s * 0.06f, 0.04f, 0.09f), vec3(0.016f), Mat(L.glow, 0.2f, 0, 1.f + L.emissiveEyes * 3.f), 6, 4);
+            if (L.kind == 0 || L.kind == 6 || L.kind == 3 || L.kind == 4 || L.kind == 7) mb.cone(h + vec3(s * 0.05f, 0.08f, -0.02f), h + vec3(s * 0.07f, 0.2f, -0.04f), 0.035f, fur, 5);  // ears
+            else mb.ellipsoid(h + vec3(s * 0.07f, 0.08f, -0.02f), vec3(0.03f, 0.03f, 0.015f), fur, 6, 4);
+            if (L.horns || L.kind == 4 || L.kind == 7) {
+                vec3 b = h + vec3(s * 0.04f, 0.1f, 0.0f);
+                mb.tube(b, b + vec3(s * 0.08f, 0.18f, -0.06f), 0.018f, 0.012f, Mat(hexColor(0xd8c8a8), 0.5f), 5, false);
+                mb.tube(b + vec3(s * 0.08f, 0.18f, -0.06f), b + vec3(s * 0.05f, 0.3f, -0.12f), 0.012f, 0.004f, Mat(hexColor(0xd8c8a8), 0.5f), 5, true);
+                mb.tube(b + vec3(s * 0.06f, 0.12f, -0.04f), b + vec3(s * 0.12f, 0.2f, 0.02f), 0.01f, 0.004f, Mat(hexColor(0xd8c8a8), 0.5f), 4, true);
+            }
+        }
+        // tail
+        float tl = L.kind == 2 || L.kind == 5 ? 0.3f : 1.f;
+        mb.tube(QJ(sk, Q_TAIL1), lerp(QJ(sk, Q_TAIL1), QJ(sk, Q_TAIL2), 1.f), 0.05f * g, 0.045f * g * tl, fur, 7, false, Q_TAIL1, Q_TAIL2);
+        if (tl > 0.5f) {
+            mb.tube(QJ(sk, Q_TAIL2), QJ(sk, Q_TAIL3), 0.045f * g, 0.035f * g, fur, 7, false, Q_TAIL2, Q_TAIL3);
+            mb.setBone(Q_TAIL3);
+            mb.tube(QJ(sk, Q_TAIL3), QJ(sk, Q_TAIL3) + vec3(0, -0.05f, -0.18f), 0.035f * g, 0.01f, hoofed ? dark : belly, 6, true);
+        }
+        // legs
+        int legs[4][3] = {{Q_FL1, Q_FL2, Q_FL3}, {Q_FR1, Q_FR2, Q_FR3}, {Q_BL1, Q_BL2, Q_BL3}, {Q_BR1, Q_BR2, Q_BR3}};
+        for (int l = 0; l < 4; l++) {
+            bool back = l >= 2;
+            float r0 = (back ? 0.085f : 0.07f) * g, r1 = 0.04f * g, r2 = 0.03f * g;
+            mb.tube(QJ(sk, legs[l][0]) + vec3(0, 0.06f, 0), QJ(sk, legs[l][1]), r0, r1, fur, 8, false, legs[l][0], legs[l][1]);
+            mb.tube(QJ(sk, legs[l][1]), QJ(sk, legs[l][2]), r1, r2, hoofed ? fur : fur, 7, false, legs[l][1], legs[l][2]);
+            mb.setBone(legs[l][2]);
+            vec3 f = QJ(sk, legs[l][2]);
+            if (hoofed) mb.tube(f + vec3(0, 0.0f, 0), f + vec3(0, -0.06f, 0.01f), r2 * 1.1f, r2 * 1.3f, hoof, 7, true);
+            else mb.ellipsoid(f + vec3(0, -0.035f, 0.03f), vec3(0.04f, 0.03f, 0.055f) * g, L.kind == 2 ? dark : fur, 7, 4);
+        }
     }
     if (L.saddle) {
         mb.setBone(Q_SPINE);
