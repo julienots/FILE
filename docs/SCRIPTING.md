@@ -148,6 +148,9 @@ Les équivalents des signaux, `await`, `Timer`, groupes et *autoloads* de Godot 
 -- Signaux d'entité : n'importe quel nom, n'importe quels arguments.
 coffre:connect("ouvert", function(qui, or_) score = score + or_ end, self.entity)  -- propriétaire facultatif
 coffre:emit("ouvert", joueur, 50)        -- rend le nombre de fonctions appelées
+-- Signaux déclarés (facultatif) dans le script de l'entité : un nom mal orthographié dans connect / emit,
+-- ou un argument du mauvais type, est signalé une fois dans la console ("string?" = facultatif ; "any").
+Coffre.signals = { ouvert = {"entity", "number"}, verrouille = {} }
 
 -- Bus d'événements global (UI, succès, son...).
 agr.events.on("partieFinie", function(gagnant) ... end)
@@ -293,5 +296,5 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
   méthodes d'entité, ni les types) ; la complétion suit les variables locales affectées directement
   (`local x = agr...`), pas les valeurs de retour en général ni les tables construites ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
 - Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
-- Pas de typage statique des signaux (ils ne sont pas déclarés : un nom mal orthographié ne déclenche
-  rien, `emit` rend 0).
+- Signaux : la vérification des signaux déclarés (`signals = {...}`) se fait à l'exécution (premier
+  `connect` / `emit`), pas dans l'éditeur ; un script sans déclaration n'est pas vérifié.

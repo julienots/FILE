@@ -4,6 +4,7 @@
 #include <chrono>
 #include <filesystem>
 
+#include "agr/core/Log.hpp"
 #include "agr/audio/Wav.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/runtime/PlatformLayer.hpp"
@@ -1373,5 +1374,49 @@ return S
     CHECK(done);
     CHECK(f.scene.findByName("opened").isNull());
     CHECK(f.scene.findByName("bad state").isNull());
+    CHECK(f.scripts.stats().errors == 0);
+}
+
+TEST_CASE("declared signals: a misspelled name or a wrong argument type is reported once; correct use is silent") {
+    struct Capture final : LogSink {
+        std::vector<std::string> warnings;
+        void write(const LogMessage& m) override {
+            if (m.level == LogLevel::Warning) warnings.emplace_back(m.text);
+        }
+    };
+    auto sink = std::make_shared<Capture>();
+    Log::addSink(sink);
+    ScriptFixture f;
+    f.write("assets://s/door.lua", R"(
+local Door = {}
+Door.signals = { opened = {"entity"}, damaged = {"number", "string?"} }
+function Door:onStart()
+    local me = self.entity
+    me:connect("opened", function(who) end)
+    me:connect("opend", function() end)        -- typo
+    me:emit("opened", me)                       -- fine
+    me:emit("damaged", 5)                        -- fine (optional string omitted)
+    me:emit("damaged", "lots")                   -- wrong type
+    me:emit("damaged", "lots")                   -- reported only once
+end
+return Door
+)");
+    f.write("assets://s/free.lua", R"(
+local Free = {}
+function Free:onStart() self.entity:emit("anything", 1) end   -- no declarations: no checks
+return Free
+)");
+    f.scripted("Door", "assets://s/door.lua");
+    f.scripted("Free", "assets://s/free.lua");
+    f.update();
+    Log::removeSink(sink);
+    auto count = [&](const std::string& needle) {
+        return std::count_if(sink->warnings.begin(), sink->warnings.end(), [&](const std::string& w) { return w.find(needle) != std::string::npos; });
+    };
+    CHECK(count("'opend' is not declared") == 1);
+    CHECK(count("declared: damaged, opened") == 1);
+    CHECK(count("'damaged' argument 1: number expected, got string") == 1);
+    CHECK(count("'opened'") == 0);
+    CHECK(count("anything") == 0);
     CHECK(f.scripts.stats().errors == 0);
 }

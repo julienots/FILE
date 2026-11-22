@@ -106,6 +106,25 @@ int a_group(lua_State* L) {
     return 1;
 }
 
+/// agr._signals(entity) -> the `signals` table declared by the entity's script, or nil.
+int a_signals(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    auto& m = implOf(L);
+    auto it = m.instances.find(e.packed());
+    if (it == m.instances.end()) return 0;
+    ScriptEngine::Impl::Class* cls = m.classFor(it->second.uri);
+    if (!cls || cls->ref == LUA_NOREF) return 0;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cls->ref);
+    lua_getfield(L, -1, "signals");
+    lua_remove(L, -2);
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    lua_pushstring(L, it->second.uri.c_str());
+    return 2;
+}
+
 constexpr const char* kPrelude = R"lua(
 local agr = agr
 local E = ...  -- entity methods table
@@ -155,7 +174,39 @@ function agr.events.emit(name, ...)
 end
 
 -- Entity signals ---------------------------------------------------------------------------
+-- A script may declare its signals: signals = { damaged = {"number", "entity"}, opened = {} }.
+-- Then connecting to / emitting an undeclared name, or emitting the wrong argument types, is
+-- reported once (a typo would otherwise silently do nothing).
+local warned = {}
+local function warnOnce(key, msg) if not warned[key] then warned[key] = true agr.warn(msg) end end
+local function isEntity(v)
+  if type(v) ~= "userdata" then return false end
+  local ok, f = pcall(function() return v.isValid end)
+  return ok and f ~= nil
+end
+local function checkSignal(entity, signal, args)
+  local decl, uri = agr._signals(entity)
+  if not decl then return end
+  local types = decl[signal]
+  if types == nil then
+    local names = {}
+    for k in pairs(decl) do names[#names + 1] = k end
+    table.sort(names)
+    warnOnce(uri .. "#" .. signal, "signal '" .. signal .. "' is not declared by " .. uri .. " (declared: " .. table.concat(names, ", ") .. ")")
+    return
+  end
+  if not args or type(types) ~= "table" then return end
+  for i, t in ipairs(types) do
+    local v = args[i]
+    local ok = t == "any" or (t == "entity" and isEntity(v)) or (t ~= "entity" and type(v) == t) or (v == nil and t:sub(-1) == "?")
+    if t:sub(-1) == "?" and v ~= nil then local base = t:sub(1, -2) ok = base == "any" or (base == "entity" and isEntity(v)) or type(v) == base end
+    if not ok then
+      warnOnce(uri .. "#" .. signal .. "#" .. i, "signal '" .. signal .. "' argument " .. i .. ": " .. t .. " expected, got " .. (isEntity(v) and "entity" or type(v)))
+    end
+  end
+end
 function E:connect(signal, fn, owner)
+  checkSignal(self, signal, nil)
   local k = self:key()
   local s = rt.signals[k] or {}
   rt.signals[k] = s
@@ -167,6 +218,7 @@ function E:connect(signal, fn, owner)
 end
 function E:disconnect(h) if h then h.cancelled = true end end
 function E:emit(signal, ...)
+  checkSignal(self, signal, table.pack(...))
   local s = rt.signals[self:key()]
   local list = s and s[signal]
   if not list then return 0 end
@@ -309,7 +361,7 @@ void openRuntimeBindings(lua_State* L) {
     static const luaL_Reg methods[] = {{"key", e_key},         {"addToGroup", e_addToGroup}, {"removeFromGroup", e_removeFromGroup},
                                        {"inGroup", e_inGroup}, {"groups", e_groups},         {nullptr, nullptr}};
     addEntityMethods(L, methods);
-    static const luaL_Reg funcs[] = {{"group", a_group}, {nullptr, nullptr}};
+    static const luaL_Reg funcs[] = {{"group", a_group}, {"_signals", a_signals}, {nullptr, nullptr}};
     lua_getglobal(L, "agr");
     luaL_setfuncs(L, funcs, 0);
     lua_pop(L, 1);
