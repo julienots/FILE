@@ -18,6 +18,7 @@ add_executable(agr_tests
     test_input_actions.cpp
     test_localization.cpp
     test_custom_shader.cpp
+    test_shader_graph.cpp
     test_net.cpp
     test_navigation.cpp
     test_terrain.cpp

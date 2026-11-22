@@ -7,6 +7,7 @@
 
 #include "GpuFixture.hpp"
 #include "agr/assets/AssetManager.hpp"
+#include "agr/assets/ShaderGraph.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/render/ModelLibrary.hpp"
 #include "agr/assets/Image.hpp"
@@ -1618,5 +1619,69 @@ TEST_CASE("auto exposure: dark scenes are brightened, bright ones darkened (HDR)
     post.exposureMin = 0.05f;
     for (int i = 0; i < 4; ++i) f.frame();
     CHECK_MESSAGE(pixel(*gpu().device, kWidth / 2, kHeight / 2).r < bright - 20, bright);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("shader graphs: every node compiles on the GPU, a graph colors the mesh") {
+    Render3DFixture f;
+    f.camera({0, 0, 4}, {0, 0, 0});
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, 0});
+    MaterialData m;
+    m.unlit = true;
+    m.shader = "assets://fx/graph.agrshader";
+    REQUIRE(f.materials.save("assets://fx/graph.agrmat", m));
+    f.scene.registry().get<MeshRendererComponent>(ball).material = "assets://fx/graph.agrmat";
+    {
+        std::vector<u8> px(4 * 4 * 4, 255);
+        auto png = encodePng(4, 4, px);
+        REQUIRE(png);
+        REQUIRE(f.vfs.writeBytes("assets://fx/white.png", png.value().data(), png.value().size()));
+    }
+    // Each node type alone, wired to the emission (surface graphs): the GPU compiler accepts it.
+    int checked = 0;
+    for (const ShaderNodeDef& d : shaderNodeDefs()) {
+        if (!(d.targets & 1) || d.outputs.empty()) continue;
+        ShaderGraph g = ShaderGraph::create(ShaderGraph::Target::Surface);
+        const int n = g.addNode(d.type, 0, 0);
+        if (d.type == "SampleTexture") {
+            const int tex = g.addNode("ParamTexture", 0, 0);
+            g.node(tex)->values["path"] = "assets://fx/white.png";
+            REQUIRE(g.connect(tex, "tex", n, "tex"));
+        }
+        std::string port;
+        for (const ShaderPortDef& o : d.outputs)
+            if (o.type != ShaderPortType::Sampler && port.empty()) port = o.id;
+        if (port.empty()) continue;
+        REQUIRE(g.connect(n, port, g.nodes[0].id, "emissive"));
+        const auto r = compileShaderGraph(g);
+        REQUIRE(r.ok());
+        f.shaders.preview("assets://fx/graph.agrshader", r.source);
+        f.frame();
+        const auto st = f.renderer.shaderStatus("assets://fx/graph.agrshader");
+        INFO(d.type, "\n", r.source);
+        CHECK(st.usable);
+        CHECK(st.diagnostics.empty());
+        ++checked;
+    }
+    CHECK(checked >= 35);
+    // A real graph: base color = color parameter (green) mixed toward red by a constant 0.25.
+    ShaderGraph g = ShaderGraph::create(ShaderGraph::Target::Surface);
+    const int green = g.addNode("ParamColor", 0, 0);
+    g.node(green)->values["name"] = "tint";
+    g.node(green)->values["value"] = "0,1,0,1";
+    const int red = g.addNode("Color", 0, 0);
+    g.node(red)->values["value"] = "1,0,0,1";
+    const int mix = g.addNode("Mix", 0, 0);
+    REQUIRE(g.connect(green, "rgb", mix, "a"));
+    REQUIRE(g.connect(red, "rgb", mix, "b"));
+    g.node(mix)->values["t"] = "0.25";
+    REQUIRE(g.connect(mix, "out", g.nodes[0].id, "baseColor"));
+    const auto r = compileShaderGraph(g);
+    REQUIRE(r.ok());
+    f.shaders.preview("assets://fx/graph.agrshader", r.source);
+    f.frame();
+    // Linear mix (0.25, 0.75, 0) shown in sRGB: about (137, 225, 0).
+    const auto px = f.at({0, 0, 0});
+    CHECK_MESSAGE(near(px, 137, 225, 0, 10), int(px.r), " ", int(px.g), " ", int(px.b));
     CHECK(gpu().device->validationErrorCount() == 0);
 }

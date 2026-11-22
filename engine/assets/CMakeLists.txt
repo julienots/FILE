@@ -3,6 +3,7 @@ agr_add_module(assets
         src/Image.cpp
         src/AssetManager.cpp
         src/CustomShader.cpp
+        src/ShaderGraph.cpp
         src/Environment.cpp
         src/Material.cpp
         src/Model.cpp
