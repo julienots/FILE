@@ -32,10 +32,7 @@ void EnvironmentLibrary::start(EnvironmentAsset& asset) {
             p.uri = uri;
             p.version = version;
             p.modifiedTime = m_vfs.modifiedTime(uri);
-            auto bytes = m_vfs.readBytes(uri);
-            if (!bytes) {
-                p.error = bytes.error().message;
-            } else if (auto img = decodeImageLinear(bytes.value(), uri); !img) {
+            if (auto img = loadSkyImage(m_vfs, uri); !img) {  // equirectangular, cube layout image or .agrcube
                 p.error = img.error().message;
             } else if (auto env = buildEnvironmentMap(img.value(), maxWidth); !env) {
                 p.error = env.error().message;

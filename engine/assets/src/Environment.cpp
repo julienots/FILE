@@ -1,4 +1,6 @@
 #include "agr/assets/Environment.hpp"
+#include "agr/core/FileSystem.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <bit>
@@ -218,4 +220,119 @@ Result<EnvironmentMap> buildEnvironmentMap(const ImageF& src, u32 maxWidth) {
     return env;
 }
 
-} // namespace agr
+// ------------------------------------------------------------------ cube map skies
+CubeLayout detectCubeLayout(u32 w, u32 h) {
+    if (w == 0 || h == 0) return CubeLayout::None;
+    if (w * 3 == h * 4 && w % 4 == 0) return CubeLayout::HorizontalCross;
+    if (w * 4 == h * 3 && w % 3 == 0) return CubeLayout::VerticalCross;
+    if (w == h * 6) return CubeLayout::Strip6x1;
+    if (w * 2 == h * 3 && w % 3 == 0) return CubeLayout::Grid3x2;
+    return CubeLayout::None;
+}
+
+Result<CubeFaces> splitCubeImage(const ImageF& img, CubeLayout layout) {
+    u32 s = 0;
+    // Face cell (column, row) per face +X, -X, +Y, -Y, +Z, -Z; `flip` = rotated 180 degrees.
+    std::array<std::array<u32, 2>, 6> cells{};
+    std::array<bool, 6> flip{};
+    switch (layout) {
+        case CubeLayout::HorizontalCross:  // . +Y . . / -X +Z +X -Z / . -Y . .
+            s = img.width / 4;
+            cells = {{{2, 1}, {0, 1}, {1, 0}, {1, 2}, {1, 1}, {3, 1}}};
+            break;
+        case CubeLayout::VerticalCross:  // . +Y . / -X +Z +X / . -Y . / . -Z . (upside down)
+            s = img.width / 3;
+            cells = {{{2, 1}, {0, 1}, {1, 0}, {1, 2}, {1, 1}, {1, 3}}};
+            flip[5] = true;
+            break;
+        case CubeLayout::Strip6x1:
+            s = img.height;
+            cells = {{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}}};
+            break;
+        case CubeLayout::Grid3x2:  // +X -X +Y / -Y +Z -Z
+            s = img.width / 3;
+            cells = {{{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}}};
+            break;
+        case CubeLayout::None: return makeError(Error::Code::InvalidArgument, "not a cube map layout");
+    }
+    CubeFaces faces;
+    for (int f = 0; f < 6; ++f) {
+        ImageF& face = faces[static_cast<usize>(f)];
+        face.width = face.height = s;
+        face.rgb.resize(static_cast<usize>(s) * s * 3);
+        for (u32 y = 0; y < s; ++y)
+            for (u32 x = 0; x < s; ++x) {
+                const u32 sx = flip[f] ? s - 1 - x : x, sy = flip[f] ? s - 1 - y : y;
+                const usize src = (static_cast<usize>(cells[f][1] * s + sy) * img.width + cells[f][0] * s + sx) * 3;
+                const usize dst = (static_cast<usize>(y) * s + x) * 3;
+                for (int c = 0; c < 3; ++c) face.rgb[dst + c] = img.rgb[src + c];
+            }
+    }
+    return faces;
+}
+
+Result<ImageF> cubeToEquirect(const CubeFaces& faces, u32 width) {
+    const u32 s = faces[0].width;
+    for (const ImageF& f : faces)
+        if (f.width != s || f.height != s || f.rgb.size() != static_cast<usize>(s) * s * 3 || s == 0)
+            return makeError(Error::Code::InvalidArgument, "cube map faces must be square and the same size");
+    width = std::max(8u, width & ~1u);
+    ImageF out;
+    out.width = width;
+    out.height = width / 2;
+    out.rgb.resize(static_cast<usize>(out.width) * out.height * 3);
+    auto sample = [&](const ImageF& f, float u, float v, float* rgb) {  // bilinear, clamped
+        const float fx = std::clamp(u * s - 0.5f, 0.0f, s - 1.0f), fy = std::clamp(v * s - 0.5f, 0.0f, s - 1.0f);
+        const u32 x0 = static_cast<u32>(fx), y0 = static_cast<u32>(fy), x1 = std::min(x0 + 1, s - 1), y1 = std::min(y0 + 1, s - 1);
+        const float tx = fx - x0, ty = fy - y0;
+        for (int c = 0; c < 3; ++c) {
+            auto at = [&](u32 x, u32 y) { return f.rgb[(static_cast<usize>(y) * s + x) * 3 + c]; };
+            rgb[c] = (at(x0, y0) * (1 - tx) + at(x1, y0) * tx) * (1 - ty) + (at(x0, y1) * (1 - tx) + at(x1, y1) * tx) * ty;
+        }
+    };
+    for (u32 y = 0; y < out.height; ++y)
+        for (u32 x = 0; x < out.width; ++x) {
+            const math::Vec3 d = equirectDirection((x + 0.5f) / out.width, (y + 0.5f) / out.height);
+            const float ax = std::fabs(d.x), ay = std::fabs(d.y), az = std::fabs(d.z);
+            int face;
+            float sc, tc, ma;
+            if (ax >= ay && ax >= az) face = d.x > 0 ? 0 : 1, ma = ax, sc = d.x > 0 ? -d.z : d.z, tc = -d.y;
+            else if (ay >= az) face = d.y > 0 ? 2 : 3, ma = ay, sc = d.x, tc = d.y > 0 ? d.z : -d.z;
+            else face = d.z > 0 ? 4 : 5, ma = az, sc = d.z > 0 ? d.x : -d.x, tc = -d.y;
+            sample(faces[static_cast<usize>(face)], (sc / ma + 1.0f) * 0.5f, (tc / ma + 1.0f) * 0.5f,
+                   &out.rgb[(static_cast<usize>(y) * out.width + x) * 3]);
+        }
+    return out;
+}
+
+Result<ImageF> loadSkyImage(VirtualFileSystem& vfs, const std::string& uri) {
+    if (uri.size() > 8 && uri.compare(uri.size() - 8, 8, ".agrcube") == 0) {
+        auto text = vfs.readText(uri);
+        if (!text) return text.error();
+        const auto j = nlohmann::json::parse(text.value(), nullptr, false);
+        if (j.is_discarded() || !j.is_object()) return makeError(Error::Code::ParseError, uri + ": invalid JSON");
+        CubeFaces faces;
+        const char* keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
+        for (int i = 0; i < 6; ++i) {
+            const std::string face = j.value(keys[i], "");
+            if (face.empty()) return makeError(Error::Code::ParseError, uri + ": missing face \"" + keys[i] + "\"");
+            auto bytes = vfs.readBytes(face);
+            if (!bytes) return bytes.error();
+            auto img = decodeImageLinear(bytes.value(), face);
+            if (!img) return img.error();
+            faces[static_cast<usize>(i)] = std::move(img.value());
+        }
+        return cubeToEquirect(faces, faces[0].width * 4);
+    }
+    auto bytes = vfs.readBytes(uri);
+    if (!bytes) return bytes.error();
+    auto img = decodeImageLinear(bytes.value(), uri);
+    if (!img) return img.error();
+    const CubeLayout layout = detectCubeLayout(img.value().width, img.value().height);
+    if (layout == CubeLayout::None) return img;
+    auto faces = splitCubeImage(img.value(), layout);
+    if (!faces) return faces.error();
+    return cubeToEquirect(faces.value(), faces.value()[0].width * 4);
+}
+
+}  // namespace agr

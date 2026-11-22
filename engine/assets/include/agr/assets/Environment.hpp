@@ -3,6 +3,7 @@
 // longitude) image: a mip chain prefiltered for increasing roughness (specular reflections)
 // and order-2 spherical harmonics of the irradiance (diffuse light).
 #include <array>
+#include <string>
 #include <vector>
 
 #include "agr/assets/Image.hpp"
@@ -34,6 +35,22 @@ Result<EnvironmentMap> buildEnvironmentMap(const ImageF& equirect, u32 maxWidth 
 /// Order-2 SH basis (9 values) for a unit direction; same constants as the shaders.
 std::array<float, 9> shBasis(math::Vec3 n);
 math::Vec3 evaluateIrradiance(const std::array<math::Vec3, 9>& sh, math::Vec3 n);
+
+// ---- cube map skies (converted to the equirectangular layout used everywhere else)
+/// Faces in the order +X, -X, +Y, -Y, +Z, -Z (OpenGL cube map convention, seen from inside).
+using CubeFaces = std::array<ImageF, 6>;
+enum class CubeLayout : u8 { None, HorizontalCross, VerticalCross, Strip6x1, Grid3x2 };
+/// Layout of a single image holding the six faces (4:3 cross, 3:4 cross, 6:1 strip, 3:2 grid as
+/// Godot's), None for an ordinary 2:1 equirectangular image.
+CubeLayout detectCubeLayout(u32 width, u32 height);
+/// Cuts the faces out of such an image.
+Result<CubeFaces> splitCubeImage(const ImageF& image, CubeLayout layout);
+/// Resamples six square faces into an equirectangular image `width` x `width / 2`.
+Result<ImageF> cubeToEquirect(const CubeFaces& faces, u32 width);
+/// Sky image from a URI: an equirectangular image, a cube layout image, or a .agrcube file
+/// ({"px": uri, "nx": uri, "py": ..., "ny": ..., "pz": ..., "nz": ...}).
+class VirtualFileSystem;
+Result<ImageF> loadSkyImage(VirtualFileSystem& vfs, const std::string& uri);
 
 /// Bilinear sample of a level (u wraps, v clamps).
 math::Vec3 sampleEquirect(const std::vector<float>& rgb, u32 width, u32 height, math::Vec2 uv);

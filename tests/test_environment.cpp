@@ -133,3 +133,72 @@ TEST_CASE("Radiance .hdr round trip keeps values above 1") {
 }
 
 }
+
+TEST_CASE("cube map skies: layouts detected, faces cut, each direction gets its face (and .agrcube files)") {
+    const math::Vec3 colors[6] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 0}, {0, 1, 1}, {1, 0, 1}};  // +X -X +Y -Y +Z -Z
+    const math::Vec3 dirs[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    const u32 s = 16;
+    CubeFaces faces;
+    for (int f = 0; f < 6; ++f) {
+        faces[f].width = faces[f].height = s;
+        for (u32 i = 0; i < s * s; ++i) faces[f].rgb.insert(faces[f].rgb.end(), {colors[f].x, colors[f].y, colors[f].z});
+    }
+    auto check = [&](const ImageF& eq) {
+        for (int f = 0; f < 6; ++f) {
+            const math::Vec3 c = sampleEquirect(eq.rgb, eq.width, eq.height, equirectUv(dirs[f]));
+            INFO("face ", f);
+            CHECK(c.x == doctest::Approx(colors[f].x).epsilon(0.05));
+            CHECK(c.y == doctest::Approx(colors[f].y).epsilon(0.05));
+            CHECK(c.z == doctest::Approx(colors[f].z).epsilon(0.05));
+        }
+    };
+    auto eq = cubeToEquirect(faces, 128);
+    REQUIRE(eq);
+    CHECK(eq.value().width == 128);
+    CHECK(eq.value().height == 64);
+    check(eq.value());
+
+    // Pack the faces in each single-image layout, then read them back.
+    CHECK(detectCubeLayout(1024, 512) == CubeLayout::None);  // a normal equirectangular sky
+    struct L {
+        CubeLayout layout;
+        u32 w, h;
+        std::array<std::array<u32, 2>, 6> cells;
+        int flipped;
+    };
+    const L layouts[] = {{CubeLayout::HorizontalCross, 4 * s, 3 * s, {{{2, 1}, {0, 1}, {1, 0}, {1, 2}, {1, 1}, {3, 1}}}, -1},
+                         {CubeLayout::VerticalCross, 3 * s, 4 * s, {{{2, 1}, {0, 1}, {1, 0}, {1, 2}, {1, 1}, {1, 3}}}, 5},
+                         {CubeLayout::Strip6x1, 6 * s, s, {{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}}}, -1},
+                         {CubeLayout::Grid3x2, 3 * s, 2 * s, {{{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}}}, -1}};
+    for (const L& l : layouts) {
+        CHECK(detectCubeLayout(l.w, l.h) == l.layout);
+        ImageF img;
+        img.width = l.w, img.height = l.h;
+        img.rgb.assign(static_cast<usize>(l.w) * l.h * 3, 0.0f);
+        for (int f = 0; f < 6; ++f)
+            for (u32 y = 0; y < s; ++y)
+                for (u32 x = 0; x < s; ++x) {
+                    const usize o = (static_cast<usize>(l.cells[f][1] * s + y) * l.w + l.cells[f][0] * s + x) * 3;
+                    img.rgb[o] = colors[f].x, img.rgb[o + 1] = colors[f].y, img.rgb[o + 2] = colors[f].z;
+                }
+        auto cut = splitCubeImage(img, l.layout);
+        REQUIRE(cut);
+        auto e2 = cubeToEquirect(cut.value(), 64);
+        REQUIRE(e2);
+        check(e2.value());
+    }
+    // Orientation inside a face: a marker in the top-left corner of +Z (seen from inside, up = +Y,
+    // left = -X) lands up and to the left when looking toward +Z.
+    CubeFaces marked = faces;
+    for (u32 y = 0; y < s / 2; ++y)
+        for (u32 x = 0; x < s / 2; ++x) {
+            float* p = &marked[4].rgb[(static_cast<usize>(y) * s + x) * 3];
+            p[0] = p[1] = p[2] = 5.0f;
+        }
+    auto e3 = cubeToEquirect(marked, 256);
+    REQUIRE(e3);
+    const math::Vec3 upLeft = sampleEquirect(e3.value().rgb, 256, 128, equirectUv(math::normalize(math::Vec3{-0.5f, 0.5f, 1.0f})));
+    const math::Vec3 downRight = sampleEquirect(e3.value().rgb, 256, 128, equirectUv(math::normalize(math::Vec3{0.5f, -0.5f, 1.0f})));
+    CHECK(upLeft.x == doctest::Approx(5.0f));
+    CHECK(downRight.x == doctest::Approx(colors[4].x).epsilon(0.05));
+}
