@@ -143,8 +143,8 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
   signature et le contenu des APK / AAB sont vérifiés ; le démarrage, les performances, la mémoire et la
   consommation sur appareil restent à mesurer.
 - Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
-  contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas d'icône intégrée au
-  installateur (l'icône est intégrée au `.exe`).
+  contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas
+  d'installateur (l'icône est intégrée au `.exe`).
 - Pas de compression de
   textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
