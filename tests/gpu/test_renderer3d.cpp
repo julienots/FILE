@@ -478,6 +478,17 @@ TEST_CASE("3D mesh particles: lit instanced meshes instead of billboards, castin
     // Its shadow darkens the floor behind it.
     const Rgba under = f.at({0, 0, -2.5f}), open = f.at({-3.0f, 0, -2.5f});
     CHECK_MESSAGE(under.r + 20 < open.r, under << " vs " << open);
+    // A .agrmat material (unlit white, tinted by the particle color): pure green, unshaded.
+    MaterialData unlit;
+    unlit.unlit = true;
+    REQUIRE(f.materials.save("assets://fx/debris.agrmat", unlit));
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).particleMaterial = "assets://fx/debris.agrmat";
+    f.settle();
+    {
+        const Rgba m = f.at({0, 2.5f, 0.6f});
+        CHECK_MESSAGE(near(m, 26, 230, 51, 14), int(m.r), " ", int(m.g), " ", int(m.b));  // the particle color itself (sRGB): no lighting applied
+    }
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).particleMaterial.clear();
     // Billboards again: no shadow.
     f.scene.registry().get<ParticleEmitter3DComponent>(fx).meshParticles = false;
     f.frame();

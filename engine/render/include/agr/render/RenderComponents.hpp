@@ -545,6 +545,9 @@ struct ParticleEmitter3DComponent {
     float meshMetallic = 0.0f;
     float meshRoughness = 0.6f;
     bool meshCastShadows = true;
+    /// Mesh particles: a material (.agrmat: textures, PBR values, custom shader, transparency)
+    /// instead of the built-in one; the particle color still tints it.
+    std::string particleMaterial;
     /// Another emitter of the same kind (usually not emitting itself) that bursts `subEmitCount`
     /// particles where a particle dies or hits something (explosions throwing sparks, splashes).
     ecs::Entity subEmitter{};

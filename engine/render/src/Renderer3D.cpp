@@ -733,11 +733,19 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 vb = mesh.vertices, ib = mesh.indices, bounds = mesh.bounds, indexCount = mesh.indexCount;
             }
             if (!vb || !ib || indexCount == 0) return;
-            static thread_local MaterialData mat;
-            mat = defaultMaterial();
-            mat.metallic = std::clamp(em.meshMetallic, 0.0f, 1.0f);
-            mat.roughness = std::clamp(em.meshRoughness, 0.0f, 1.0f);
-            const u64 key = mix64(0x9A871Cull, mix64(bits(mat.metallic), bits(mat.roughness)));
+            static thread_local MaterialData builtIn;
+            const MaterialData* custom = em.particleMaterial.empty() || !m_materials ? nullptr : m_materials->get(em.particleMaterial);
+            u64 key;
+            if (custom) {
+                key = mix64(0x9A871Dull, reinterpret_cast<u64>(custom));
+            } else {
+                builtIn = defaultMaterial();
+                builtIn.metallic = std::clamp(em.meshMetallic, 0.0f, 1.0f);
+                builtIn.roughness = std::clamp(em.meshRoughness, 0.0f, 1.0f);
+                key = mix64(0x9A871Cull, mix64(bits(builtIn.metallic), bits(builtIn.roughness)));
+            }
+            const MaterialData& mat = custom ? *custom : builtIn;
+            const bool blendMat = mat.alphaMode == AlphaMode::Blend;
             const u32 slot = materialSlot(key, mat, Vec2{1.0f, 1.0f}, false);
             const ParticleCurvesLut* lut = m_particleCurves && !em.curves.empty() ? m_particleCurves->get(em.curves) : nullptr;
             const float boundsRadius = math::length(bounds.max - bounds.min) * 0.5f;
@@ -791,11 +799,12 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 item.skinOffset = ~0u;
                 m_instances.push_back(inst);
                 if (visible) {
-                    m_opaqueItems.push_back(item);
+                    (blendMat ? m_transparentItems : m_opaqueItems).push_back(item);
                     ++m_stats.particlesVisible;
                 }
-                for (u32 c = 0; c < m_shadowCascades; ++c)
-                    if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
+                if (!blendMat)
+                    for (u32 c = 0; c < m_shadowCascades; ++c)
+                        if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
             }
         });
     // ------------------------------------------------------------ terrains

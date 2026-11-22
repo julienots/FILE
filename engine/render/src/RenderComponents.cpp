@@ -267,6 +267,7 @@ void registerRenderComponents() {
         .field("meshRoughness", &ParticleEmitter3DComponent::meshRoughness, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("meshCastShadows", &ParticleEmitter3DComponent::meshCastShadows)
         .field("subEmitter", &ParticleEmitter3DComponent::subEmitter, {.tooltip = "Emitter that bursts where a particle dies or hits something"})
+        .field("particleMaterial", &ParticleEmitter3DComponent::particleMaterial, {.tooltip = "Mesh particles: .agrmat material (textures, shader, transparency); the particle color tints it", .flags = FieldFlag_AssetPath})
         .field("subEmitOn", &ParticleEmitter3DComponent::subEmitOn, {.enumEntries = {{"Death", 0}, {"Collision", 1}}})
         .field("subEmitCount", &ParticleEmitter3DComponent::subEmitCount, {.rangeMin = 0.0f, .rangeMax = 1000.0f})
         .field("additive", &ParticleEmitter3DComponent::additive, {.tooltip = "Adds light (fire, sparks, magic)"})
