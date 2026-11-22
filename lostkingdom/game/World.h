@@ -124,7 +124,7 @@ struct Chunk {
     ChunkKey key;
     int lod = -1;
     bool ready = false;
-    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass, wheat;
+    Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass, wheat, grassFar;
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
     std::vector<vec4> lights, emitters;

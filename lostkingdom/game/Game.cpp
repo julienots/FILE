@@ -211,7 +211,7 @@ void Game::updateDynamicResolution(float dtRaw) {
     float avg = drsAcc / drsFrames; drsAcc = 0; drsFrames = 0;
     float target = 1.f / std::max(20, renderer.settings.fpsCap);
     float k = renderer.dynamicScale;
-    if (avg > target * 1.18f && k > 0.55f) {
+    if (avg > target * 1.18f && k > 0.75f) {   // 3.0.2 floor 0.75 (was 0.5: the picture turned blurry and pixelated)
         if (drsJustRaised) drsWaitUp = std::min(120.f, drsWaitUp * 2.f);
         renderer.setDynamicScale(k - 0.1f); drsStable = 0; drsJustRaised = false;
         AGR_LOG("dynamic resolution: %.0f ms/frame -> scale %.2f", avg * 1000, renderer.dynamicScale);
@@ -538,7 +538,7 @@ void Game::updateEnvironment(float dt) {
     env.grain = 0.012f;
     env.chromatic = 0;
     // depth of field: tilt-shift diorama in gameplay, real DoF during dialogues & cinematics
-    env.tiltShift = state == GameState::Playing ? 0.35f : 0.55f;
+    env.tiltShift = state == GameState::Playing ? 0.12f : 0.55f;   // 3.0.2 a light touch in play (the top of the screen was blurred)
     if (state == GameState::Playing) {
         // free camera: zoomed far out = "map" view (fog pushed away, miniature tilt-shift);
         // close-ups and low "sky" shots keep the hero sharp

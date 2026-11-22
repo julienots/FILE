@@ -6,12 +6,29 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.1 (versionCode 46), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.0 : elle s'installe par-dessus). SHA-256 : `1426e21931eb63e515b0f5d8f0c4d1ddf068038a72b53839b0e96222dbce5432`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.2 (versionCode 47), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.1 : elle s'installe par-dessus). SHA-256 : `968821e5e8ee91692047471937811d02416f260889acf8f4a84799f4683bcdbe`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.0.2 (image nette, plus de trames ni de lignes, herbe partout)
+
+- **Plus de trames de points ni de lignes** :
+  - les arbres et objets entre la caméra et le héros s'effaçaient selon une grille régulière de points, qui faisait des lignes sur téléphone. Ils se dissolvent maintenant avec un motif naturel, ancré dans le monde ;
+  - sur les grandes pentes de montagne, la roche se répétait en bandes. Une deuxième texture, tournée et plus grande, casse ces stries.
+- **Image plus nette** :
+  - quand le téléphone ralentit, la résolution automatique ne descend plus sous 75 % (elle pouvait tomber à 50 %, d'où le flou et la pixellisation) ;
+  - un filtre de netteté rend le détail, plus fort quand la résolution baisse ;
+  - le flou de miniature en haut et en bas de l'écran est presque supprimé en jeu.
+- **Herbe partout et serrée** :
+  - l'herbe proche reste dense plus loin (jamais moins de 60 %) ;
+  - une nouvelle couche de touffes légères porte la prairie jusqu'à environ 100 m (avant, plus rien après 46 m) ;
+  - herbe plus fournie dans les régions froides et les montagnes.
+- **Et pourtant moins cher qu'avant** : un brin d'herbe était dessiné recto et verso alors que l'herbe est déjà affichée sans élimination des faces. Un seul côté suffit, ce qui divise son coût par deux.
+  - Scénario `perf` : Brindlemere 572k triangles (664k en 3.0.0), Chênebrune 788k (898k), vallées des Titans 730k à 950k (jusqu'à 980k avant).
+- **Vérifié sur ordinateur seulement** : 2 985 tests passés, captures regardées. **Pas testé sur téléphone.**
 
 ### Nouveautés 3.0.1 (pouvoirs spectaculaires : vrais effets en shader)
 

@@ -624,6 +624,11 @@ void Renderer::postProcess() {
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
     composite.set("uFx0", vec4(env.heat, env.sandVeil, 0.f, 0.f));
+    {   // 3.0.2 sharpen more when the internal resolution is lower
+        float sc = settings.renderScale * dynamicScale;
+        float k = clampf(0.3f + (1.f - sc) * 1.1f, 0.3f, 0.75f);
+        composite.set("uSharp", vec4(k, 1.f / std::max(1, sceneRT.w), 1.f / std::max(1, sceneRT.h), 0.f));
+    }
     {   // 2.0.0 lens flare: where the sun falls on the screen (clip space of a far point along the sun direction)
         vec4 sc = camera.viewProj * vec4(camera.pos + normalize(env.sunDir) * 2000.f, 1.f);
         float amt = env.flare * (sc.w > 0.f ? 1.f : 0.f);

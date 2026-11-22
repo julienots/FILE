@@ -25,7 +25,7 @@ float distToSegment(vec2 p, vec2 a, vec2 b, float* t) {
 }
 
 void Chunk::destroy() {
-    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy(); tallGrass.destroy(); wheat.destroy();
+    terrain.destroy(); props.destroy(); foliage.destroy(); water.destroy(); lava.destroy(); grass.destroy(); flowers.destroy(); grassNear.destroy(); tallGrass.destroy(); wheat.destroy(); grassFar.destroy();
     ready = false;
 }
 
@@ -2232,9 +2232,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float wg = 1.f - (tv.rough + tv.metal + tv.emis + tv.wind + tv.b0 + tv.b1 + tv.w0) / 255.f;
                 if (tv.ny < 105) continue;
                 int r = regionId(x, z);
-                float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.35f : (r == R_HIGHCROWNS ? 0.6f : (r == R_AMBER ? 0.05f : (r == R_CORAL ? 0.8f : 1.f))));
+                float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.7f : (r == R_HIGHCROWNS ? 0.9f : (r == R_AMBER ? 0.05f : (r == R_CORAL ? 0.95f : 1.f))));   // 3.0.2 fuller in the cold lands
                 if (r == R_STEPPE) gd = 1.15f;   // 2.4.0 the steppe is a sea of grass
-                if (r == R_TITANS) gd = 0.62f;   // 3.0.0 alpine pasture: shorter, thinner sward between stones and flowers
+                if (r == R_TITANS) gd = 0.9f;    // 3.0.2 alpine pasture (thicker again, as asked)
                 if (g.f() > wg * gd * 1.1f) continue;
                 float y = hAt(vi, vj);
                 float wl = waterLevel(x, z);
@@ -2267,6 +2267,12 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         Rng sh(hash2i(k.x, k.z, 9001));
         for (auto* v : {&out.grass, &out.flowers})
             for (int i = (int)v->size() - 1; i > 0; i--) std::swap((*v)[i], (*v)[sh.irange(0, i)]);
+    } else if (lod == 1 && grassDensity >= 0.3f) {
+        // 3.0.2 the middle distance (56-100 m) keeps its grass too: a lighter layer of cheap tufts
+        float spacing = 0.72f / std::sqrt(std::max(0.05f, grassDensity)) * 1.45f;
+        scatter(777, spacing, out.grass, nullptr, 1.0f, 1.7f);
+        Rng sh(hash2i(k.x, k.z, 9001));
+        for (int i = (int)out.grass.size() - 1; i > 0; i--) std::swap(out.grass[i], out.grass[sh.irange(0, i)]);
     }
     // ---- 1.9.1 tall grass meadows: waist-high clumps, dense inside the patches, shorter at their edges
     if (lod == 0 && grassDensity >= 0.3f) {
@@ -2453,6 +2459,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
         // tall clump: 8 thin blades up to 1.35 m, two seed heads, leaning out like a real tussock (~60 triangles)
         static MeshBuilder tall;
         if (tall.v.empty()) {
+            tall.bladeBack = false;   // 3.0.2 (drawn without face culling)
             Mat root(hexColor(0x3a5a22), 0.9f, 0, 0, 0.f), tip(hexColor(0xb8c470), 0.75f, 0, 0, 1.f), seed(hexColor(0xd8c890), 0.8f, 0, 0, 1.f);
             Rng br(11);
             for (int i = 0; i < 8; i++) {
@@ -2522,8 +2529,10 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
     }
     if (!b.grass.empty() || !b.flowers.empty() || !b.grassNear.empty()) {
         // grass blade / flower templates are shared meshes; per-chunk VAO with instance buffer
-        static MeshBuilder blade, bladeNear, flower;
+        static MeshBuilder blade, bladeNear, flower, bladeFar;
         if (blade.v.empty()) {
+            // 3.0.2 grass is drawn without face culling (LIT_WIND): one side per blade is enough, half the triangles
+            blade.bladeBack = bladeNear.bladeBack = bladeFar.bladeBack = flower.bladeBack = false;
             // 2.7.0 a tuft grows from one root: thin blades that rise from a tight base, arc over and lean outwards
             // (9 blades; 13 plus seed stalks for the layer drawn close to the hero). The root is dark and sits in
             // the soil, the tips are lighter and warmer, each blade has its own shade.
@@ -2553,6 +2562,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
             };
             tuft(blade, 10, 0.4f, 0.72f, 0, 5);   // 3.0.0 fuller tufts (8 -> 10, near 10 -> 12)
             tuft(bladeNear, 12, 0.4f, 0.7f, 0, 6);
+            tuft(bladeFar, 4, 0.48f, 0.78f, 0, 7);   // 3.0.2 the cheap tuft of the middle distance (4 wide blades)
             // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);
             vec3 head{0.04f, 0.4f, 0.02f};
@@ -2565,7 +2575,8 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                 flower.blade(head, head + d * 0.075f, 0.055f, vec3(-d.z, 0, d.x), petal, petal);
             }
             flower.ellipsoid(head + vec3(0, 0.015f, 0), vec3(0.022f, 0.016f, 0.022f), heart, 5, 3);
-            for (MeshBuilder* m : {&blade, &bladeNear})
+            for (auto& v : bladeFar.v) { v.px *= 1.6f; v.pz *= 1.6f; }   // wider blades: they cover as much ground as a full tuft from afar
+            for (MeshBuilder* m : {&blade, &bladeNear, &bladeFar})
                 for (auto& v : m->v) {
                     // tinted per instance (x2 in shader): keep the blade's own shade, darker at the root, a touch
                     // warmer (yellower) at the tip
@@ -2580,7 +2591,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                 }
             for (auto& v : flower.v) { if (v.py < 0.39f) { v.r = 70; v.g = 120; v.b = 50; } else if (v.g > 150 && v.b < 90) { v.r = 255; v.g = 210; v.b = 60; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
         }
-        if (!b.grass.empty()) { blade.upload(c.grass); c.grass.setInstances(b.grass); }
+        if (!b.grass.empty()) { blade.upload(c.grass); c.grass.setInstances(b.grass); bladeFar.upload(c.grassFar); c.grassFar.setInstances(b.grass); }
         if (!b.grassNear.empty()) { bladeNear.upload(c.grassNear); c.grassNear.setInstances(b.grassNear); }
         if (!b.flowers.empty()) { flower.upload(c.flowers); c.flowers.setInstances(b.flowers); }
     }

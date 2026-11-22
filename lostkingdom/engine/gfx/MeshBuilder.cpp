@@ -224,6 +224,7 @@ void MeshBuilder::blade(vec3 root, vec3 tip, float width, vec3 side, const Mat& 
     uint32_t c = vert(mid + s * 0.8f, n, mm), d = vert(mid - s * 0.8f, n, mm);
     uint32_t t = vert(tip, n, mt);
     quad(a, b, c, d); tri(d, c, t);
+    if (!bladeBack) return;
     // back side
     uint32_t a2 = vert(root - s, -n, mr), b2 = vert(root + s, -n, mr), c2 = vert(mid + s * 0.8f, -n, mm), d2 = vert(mid - s * 0.8f, -n, mm), t2 = vert(tip, -n, mt);
     quad(a2, d2, c2, b2); tri(d2, t2, c2);

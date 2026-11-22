@@ -35,6 +35,7 @@ public:
     float jitter = 0.f;
     uint32_t jitterSeed = 1;
     bool flat = false;  // faceted shading (duplicate vertices per face)
+    bool bladeBack = true;   // 3.0.2 blade(): also emit the back side (off for meshes drawn without face culling: grass)
     float ao = 1.f;     // AO value written to albedo alpha
 
     void clear() { v.clear(); idx.clear(); xf = mat4(); bone0 = bone1 = 0; w0 = 1; }

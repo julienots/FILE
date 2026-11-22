@@ -406,8 +406,11 @@ void main() {
         vec4 top = cliff < 0.99 ? sampleLayer(2, uvT, tX, tY) : vec4(0.0);
         vec4 side = vec4(0.0);
         if (cliff > 0.01) {
-            if (bxw > 0.01) side += sampleLayer(2, uvX, xX, xY) * bxw;
-            if (bzw > 0.01) side += sampleLayer(2, uvZ, zX, zY) * bzw;
+            // 3.0.2 a second, rotated and larger sample breaks the repeating strata on big mountain flanks
+            float tbs = smoothstep(0.25, 0.75, texture(uNoiseTex, vWorld.xz * 0.017 + vWorld.y * 0.011).g);
+            mat2 rs = mat2(0.6, -0.8, 0.8, 0.6);
+            if (bxw > 0.01) side += mix(sampleLayer(2, uvX, xX, xY), sampleLayer(2, rs * uvX * 0.43 + 0.31, rs * xX * 0.43, rs * xY * 0.43), tbs * 0.7) * bxw;
+            if (bzw > 0.01) side += mix(sampleLayer(2, uvZ, zX, zY), sampleLayer(2, rs * uvZ * 0.43 + 0.57, rs * zX * 0.43, rs * zY * 0.43), tbs * 0.7) * bzw;
         }
         smp[2] = mix(top, side, cliff);
     }
@@ -517,8 +520,9 @@ void main() {
         float t = clamp(dot(vWorld - a, ab) / dot(ab, ab), 0.0, 1.0);
         float d = length(vWorld - (a + ab * t));
         float occ = (1.0 - smoothstep(2.2, 4.2, d)) * step(0.06, t) * step(uPlayer.y + 1.2, vWorld.y);
-        float dither = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + 0.125);
-        if (occ * 0.85 > dither) discard;
+        // 3.0.2 an organic dissolve in world space (the old screen-door grid drew lines at low resolution)
+        float dn = texture(uNoiseTex, vWorld.xz * 0.55 + vec2(vWorld.y * 0.37, -vWorld.y * 0.21)).a;
+        if (occ * 1.15 > dn) discard;
     }
 #endif
 #ifdef DISSOLVE
@@ -1310,6 +1314,7 @@ uniform vec3 uEye, uSunC;
 uniform vec4 uSunS;   // xyz direction towards the sun, w amount (0 = off)
 uniform vec4 uFx0;    // 2.0.0 x heat shimmer (mirage), y sand veil (sandstorm)
 uniform vec4 uSunScr; // 2.0.0 lens flare: xy sun position on screen (uv), z aspect, w amount
+uniform vec4 uSharp;  // 3.0.2 x sharpening amount, yz scene texel size
 out vec4 fragColor;
 
 vec3 aces(vec3 x) {
@@ -1335,6 +1340,11 @@ void main() {
         vec2 dir = (uv - 0.5) * uPost0.w * 0.012;
         col = vec3(texture(uScene, uv + dir).r, texture(uScene, uv).g, texture(uScene, uv - dir).b);
     } else col = texture(uScene, uv).rgb;
+    if (uSharp.x > 0.0) {   // 3.0.2 restores the detail lost to a reduced internal resolution and to FXAA
+        vec3 nb = texture(uScene, uv + vec2(uSharp.y, 0.0)).rgb + texture(uScene, uv - vec2(uSharp.y, 0.0)).rgb +
+                  texture(uScene, uv + vec2(0.0, uSharp.z)).rgb + texture(uScene, uv - vec2(0.0, uSharp.z)).rgb;
+        col = max(col + (col - nb * 0.25) * uSharp.x, vec3(0.0));
+    }
     col *= uProj.z;
     if (uAoOn.x > 0.0) {
         // 4 bilinear taps = soft 4x4 blur of the half-resolution AO
