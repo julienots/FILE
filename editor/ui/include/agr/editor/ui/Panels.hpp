@@ -474,6 +474,7 @@ public:
     }
 
 private:
+    bool m_traceWanted = false;  // a capture is running: write it when it ends
     std::vector<Profiler::ScopeStats> m_rows;
     std::vector<float> m_history = std::vector<float>(240, 0.0f);
     usize m_head = 0;

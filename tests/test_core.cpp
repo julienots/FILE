@@ -11,6 +11,8 @@
 #include "agr/core/Result.hpp"
 #include "agr/core/StringId.hpp"
 #include "agr/core/Uuid.hpp"
+#include "agr/core/Profiler.hpp"
+#include <nlohmann/json.hpp>
 
 using namespace agr;
 using namespace agr::literals;
@@ -259,4 +261,38 @@ TEST_CASE("profiler: nested scopes, calls, averages, CSV, scopes left open are c
     CHECK(p.snapshot().size() == 3);
     p.setEnabled(true);
     p.reset();
+}
+
+TEST_CASE("profiler capture: nested scopes on a timeline, exported as a Chrome trace") {
+    Profiler& p = Profiler::instance();
+    p.setEnabled(true);
+    p.startCapture(2);
+    for (int f = 0; f < 3; ++f) {  // the third frame is not captured
+        p.beginFrame();
+        p.push("Update");
+        p.push("Physics");
+        p.pop();
+        p.push("Script");
+        p.pop();
+        p.pop();
+        p.endFrame();
+    }
+    CHECK_FALSE(p.capturing());
+    const auto& ev = p.capture();
+    REQUIRE(ev.size() == 8);  // per frame: Physics, Script, Update, Frame
+    CHECK(ev[0].name == "Physics");
+    CHECK(ev[0].depth == 2);
+    CHECK(ev[2].name == "Update");
+    CHECK(ev[2].depth == 1);
+    CHECK(ev[3].name == "Frame");
+    // Children inside their parent, frames in order.
+    CHECK(ev[0].startUs >= ev[2].startUs);
+    CHECK(ev[0].startUs + ev[0].durationUs <= ev[2].startUs + ev[2].durationUs + 1e-3);
+    CHECK(ev[7].startUs >= ev[3].startUs + ev[3].durationUs - 1e-3);
+    const std::string trace = p.captureToChromeTrace();
+    CHECK(trace.find("\"traceEvents\"") != std::string::npos);
+    CHECK(trace.find("\"name\":\"Physics\",\"cat\":\"agr\",\"ph\":\"X\"") != std::string::npos);
+    const auto j = nlohmann::json::parse(trace, nullptr, false);  // valid JSON
+    REQUIRE_FALSE(j.is_discarded());
+    CHECK(j["traceEvents"].size() == 8);
 }

@@ -44,6 +44,19 @@ public:
     std::string toCsv() const;
     void reset();
 
+    /// Timeline capture: every scope of the next `frames` frames with its start and duration
+    /// (microseconds since the capture started), plus one "Frame" event per frame.
+    struct TraceEvent {
+        std::string name;
+        f64 startUs = 0.0, durationUs = 0.0;
+        u32 depth = 0;
+    };
+    void startCapture(u32 frames);
+    bool capturing() const { return m_captureLeft > 0; }
+    const std::vector<TraceEvent>& capture() const { return m_trace; }
+    /// The capture in the Chrome trace event format (chrome://tracing, ui.perfetto.dev).
+    std::string captureToChromeTrace() const;
+
 private:
     struct Node {
         std::string name;
@@ -56,6 +69,7 @@ private:
     struct Open {
         int node;
         Stopwatch clock;
+        f64 traceStart = 0.0;
     };
     bool onMainThread() const { return std::this_thread::get_id() == m_thread; }
     int child(int parent, std::string_view name);
@@ -68,6 +82,11 @@ private:
     std::vector<Open> m_stack;
     Stopwatch m_frameClock;
     f64 m_frameMs = 0.0, m_windowTime = 0.0;
+    u32 m_captureLeft = 0;
+    bool m_captureFrameOpen = false;
+    f64 m_captureFrameStart = 0.0;
+    Stopwatch m_captureClock;
+    std::vector<TraceEvent> m_trace;
 };
 
 /// RAII scope: AGR_PROFILE_SCOPE("Shadows");

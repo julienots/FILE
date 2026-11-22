@@ -44,6 +44,24 @@ void ProfilerPanel::draw(EditorShared& s) {
         f << prof.toCsv();
         s.notify(f ? "Profil exporté : " + out.string() : "Export impossible : " + out.string());
     }
+    ImGui::SameLine();
+    // Timeline: the next 120 frames, every scope with its start and duration, written as a
+    // Chrome trace (open it in ui.perfetto.dev or chrome://tracing).
+    if (prof.capturing()) {
+        ImGui::TextDisabled("Capture...");
+        m_traceWanted = true;
+    } else if (m_traceWanted) {
+        m_traceWanted = false;
+        const std::filesystem::path out = s.ctx.project().root() / "profiler_trace.json";
+        std::ofstream f(out, std::ios::binary);
+        f << prof.captureToChromeTrace();
+        s.notify(f ? "Trace écrite : " + out.string() + " (" + std::to_string(prof.capture().size()) + " événements ; ouvrir dans ui.perfetto.dev)"
+                   : "Écriture impossible : " + out.string());
+    } else if (ImGui::Button("Capturer une trace")) {
+        prof.setEnabled(true);
+        prof.startCapture(120);
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Les 120 prochaines images, chaque section avec son début et sa durée,\nau format Chrome trace (ui.perfetto.dev, chrome://tracing)");
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-FLT_MIN);

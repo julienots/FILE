@@ -187,4 +187,7 @@ ombres, passes, présentation). Colonnes : dernière image, moyenne, pic des 2 d
 part de l'image, appels ; historique des temps d'image ; pause, filtre, export CSV
 (`<projet>/profiler.csv`). Les jeux ajoutent leurs sections : `AGR_PROFILE_SCOPE("nom")` en C++,
 `agr.profile.begin("nom") ... agr.profile.finish()` en Lua (une section oubliée est refermée en fin
-d'image). Code : `engine/core/include/agr/core/Profiler.hpp`.
+d'image). **Capturer une trace** : les 120 images suivantes, chaque section avec son début et sa
+durée exacts, écrites dans `<projet>/profiler_trace.json` au format *Chrome trace* — à ouvrir dans
+ui.perfetto.dev ou chrome://tracing pour voir la frise des images (pics isolés, ordre des systèmes).
+C++ : `Profiler::startCapture`, `captureToChromeTrace`. Code : `engine/core/include/agr/core/Profiler.hpp`.
