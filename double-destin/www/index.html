@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Double Destin</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- Écran studio -->
+  <section id="splash" class="screen active">
+    <div class="studio">
+      <div class="studio-word" id="studioWord"></div>
+      <div class="studio-sub">STUDIO · présente</div>
+    </div>
+  </section>
+
+  <!-- Logo du jeu -->
+  <section id="title" class="screen">
+    <div class="title-wrap">
+      <div id="bigLogo"></div>
+      <div class="tap-hint">Touchez pour commencer</div>
+    </div>
+  </section>
+
+  <!-- Menu principal -->
+  <section id="menu" class="screen">
+    <div class="menu-head"><div id="smallLogo"></div></div>
+    <div class="menu-cards">
+      <button class="mode-card life" id="goLife">
+        <div class="mc-icon">🧬</div>
+        <div class="mc-txt"><b>UNE VIE</b><span>Naissez, grandissez, aimez, travaillez… et vivez chaque année de A à Z. Simulateur de vie complet.</span></div>
+      </button>
+      <button class="mode-card empire" id="goEmpire">
+        <div class="mc-icon">🌍</div>
+        <div class="mc-txt"><b>EMPIRE MONDIAL</b><span>Devenez président d'un pays réel, gouvernez, négociez et conquérez la planète.</span></div>
+      </button>
+    </div>
+    <div class="menu-foot">
+      <button class="ghost" id="btnSettings">⚙️ Réglages</button>
+      <button class="ghost" id="btnCredits">ℹ️ Crédits</button>
+    </div>
+    <div class="menu-sign">SuperEssence Studio · v1.0</div>
+  </section>
+
+  <!-- UNE VIE -->
+  <section id="life" class="screen"></section>
+  <!-- EMPIRE MONDIAL -->
+  <section id="empire" class="screen"></section>
+</div>
+
+<div id="modalLayer"></div>
+<div id="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/lifedata.js"></script>
+<script src="js/life.js"></script>
+<script src="js/worlddata.js"></script>
+<script src="js/empire.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
