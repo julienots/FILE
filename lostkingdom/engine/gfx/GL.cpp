@@ -45,7 +45,7 @@ static GLuint compileStage(GLenum type, const std::string& src, const std::strin
 
 bool Shader::build(const std::string& n, const std::string& vs, const std::string& fs, const std::string& defines) {
     name = n;
-    std::string head = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision mediump sampler2DArray;\nprecision mediump sampler2DShadow;\n" + defines + "\n";
+    std::string head = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision mediump sampler2DArray;\nprecision mediump sampler2DShadow;\n" + defines + "\n";
     GLuint v = compileStage(GL_VERTEX_SHADER, head + vs, n);
     GLuint f = compileStage(GL_FRAGMENT_SHADER, head + fs, n);
     if (!v || !f) return false;

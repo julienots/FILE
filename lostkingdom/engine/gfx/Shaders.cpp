@@ -1301,7 +1301,7 @@ void main() {
         float sz = linZ(texture(uDepth, suv).r);
         float diff = -S.z - sz;                                  // > 0: something in front of the sample
         float range = smoothstep(0.0, 1.0, R / max(abs(z - sz), 1e-3));
-        occ += step(0.02 + z * 0.0015, diff) * range;
+        occ += step(0.03 + z * 0.003, diff) * range;   // 3.0.4 a little more bias: flat ground never shades itself
     }
     float ao = clamp(1.0 - occ / 10.0 * uAoParams.y, 0.0, 1.0);
     ao = mix(ao, 1.0, smoothstep(uAoParams.z * 0.6, uAoParams.z, z));

@@ -6,12 +6,23 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.3 (versionCode 48), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.2 : elle s'installe par-dessus). SHA-256 : `825142ddfb2b16e0ac1157d67cb7f3a5ae4d14e26ce654d1cc176964bb6116c4`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.4 (versionCode 49), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.3 : elle s'installe par-dessus). SHA-256 : `4c76850d7002d0d928c56d650ece7b18416df2c428acc01f3d04e9891c04f2d1`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.0.4 (les cercles sur le sol autour du héros)
+
+- **Cause** : en OpenGL ES, un shader lit les textures 2D en **basse précision** par défaut, sauf déclaration contraire. Le moteur ne déclarait rien pour les textures 2D.
+  - Sur téléphone, l'ombrage ambiant (SSAO) et les rayons de lumière lisaient donc la profondeur de la scène sur environ 10 bits.
+  - Le sol reconstruit faisait des marches, d'où des cercles concentriques autour de la caméra, très visibles sur l'herbe.
+  - Sur ordinateur, cette précision est ignorée : le défaut ne s'y voyait pas.
+- **Correction** :
+  - toutes les textures 2D sont maintenant lues en haute précision ;
+  - l'ombrage ambiant a un peu plus de marge, pour qu'un sol plat ne s'assombrisse jamais lui-même.
+- **Vérifié sur ordinateur seulement** (2 985 tests, rendu inchangé). **À confirmer sur ton téléphone.**
 
 ### Nouveautés 3.0.3 (lignes sur le sol, herbe sous la pluie)
 
