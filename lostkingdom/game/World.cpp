@@ -2293,7 +2293,8 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float patch = fbm2(x * 0.03f, z * 0.03f, 2, 777) * 0.5f + 0.5f;
                 vec3 col = foliageColor(r, clampf(patch * 0.6f + g.f() * 0.3f, 0.f, 1.f));
                 vec3 straw = r == R_SHADOWS ? hexColor(0x6a6440) : hexColor(0xc8b46a);
-                col = lerp(col, straw, clampf((r == R_HIGHCROWNS ? 0.55f : 0.22f) + (patch - 0.5f) * 0.5f + g.range(-0.08f, 0.12f), 0.f, 0.8f));
+                col = lerp(col, straw, clampf((r == R_HIGHCROWNS ? 0.45f : (r == R_STEPPE ? 0.3f : 0.1f)) + (patch - 0.5f) * 0.4f + g.range(-0.08f, 0.1f), 0.f, 0.6f));   // 3.0.2 greener meadows (they were washed-out yellow)
+                col *= 0.88f;
                 InstanceData d;
                 d.x = x; d.y = height(x, z) - 0.04f; d.z = z; d.rotY = g.range(0, TAU);
                 d.scale = g.range(0.85f, 1.2f) * (0.55f + 0.45f * a);
@@ -2476,7 +2477,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                 }
             }
             for (auto& v : tall.v) {
-                v.r = v.g = v.b = (uint8_t)clampf(140 + v.py * 90, 0, 255);
+                v.r = v.g = v.b = (uint8_t)clampf(125 + v.py * 75, 0, 230);   // 3.0.2 tips no longer clip to white
                 vec3 n = normalize(unpackNormal(v) * 0.3f + vec3(0, 1, 0));
                 v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
                 v.a = (uint8_t)clampf(120 + v.py * 140, 0, 255);   // darker at the root (ambient occlusion)
@@ -2562,7 +2563,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
             };
             tuft(blade, 10, 0.4f, 0.72f, 0, 5);   // 3.0.0 fuller tufts (8 -> 10, near 10 -> 12)
             tuft(bladeNear, 12, 0.4f, 0.7f, 0, 6);
-            tuft(bladeFar, 4, 0.48f, 0.78f, 0, 7);   // 3.0.2 the cheap tuft of the middle distance (4 wide blades)
+            tuft(bladeFar, 5, 0.45f, 0.75f, 0, 7);   // 3.0.2 the cheap tuft of the middle distance (4 wide blades)
             // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);
             vec3 head{0.04f, 0.4f, 0.02f};
@@ -2575,7 +2576,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                 flower.blade(head, head + d * 0.075f, 0.055f, vec3(-d.z, 0, d.x), petal, petal);
             }
             flower.ellipsoid(head + vec3(0, 0.015f, 0), vec3(0.022f, 0.016f, 0.022f), heart, 5, 3);
-            for (auto& v : bladeFar.v) { v.px *= 1.6f; v.pz *= 1.6f; }   // wider blades: they cover as much ground as a full tuft from afar
+            for (auto& v : bladeFar.v) { v.px *= 1.25f; v.pz *= 1.25f; }   // wider blades: they cover as much ground as a full tuft from afar
             for (MeshBuilder* m : {&blade, &bladeNear, &bladeFar})
                 for (auto& v : m->v) {
                     // tinted per instance (x2 in shader): keep the blade's own shade, darker at the root, a touch

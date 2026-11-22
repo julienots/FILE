@@ -6,12 +6,31 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.2 (versionCode 47), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.1 : elle s'installe par-dessus). SHA-256 : `968821e5e8ee91692047471937811d02416f260889acf8f4a84799f4683bcdbe`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.0.3 (versionCode 48), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé locale que les APK 2.0.0 à 3.0.2 : elle s'installe par-dessus). SHA-256 : `825142ddfb2b16e0ac1157d67cb7f3a5ae4d14e26ce654d1cc176964bb6116c4`. Taille : environ 58 Mo (la bande originale orchestrale en fait 22).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.0.3 (lignes sur le sol, herbe sous la pluie)
+
+- **Les lignes sur le sol, vraie cause** : plusieurs effets tiraient leur aléatoire de `fract(sin(x) × 43758)`. Sur les GPU de téléphone (Mali notamment), `sin()` perd sa précision sur les grandes valeurs (coordonnées du monde, pixels de l'écran, temps) et ce calcul se met à dessiner des bandes et des lignes. Les effets touchés :
+  - le flou des ombres (sous les arbres) ;
+  - les ondes de pluie sur le sol et sur l'eau ;
+  - les paillettes de neige et de sable ;
+  - le grain de l'image (sur tout l'écran) ;
+  - la tempête de sable.
+
+  Ils utilisent maintenant un hachage entier, exact sur tous les GPU.
+- **Rayons de soleil dans la brume** : leur bruit en diagonale traçait des stries. Il est remplacé par un bruit sans direction.
+- **Pluie** : les petites ondes des gouttes ne s'affichent plus qu'à moins de 26 m (au loin, elles formaient un quadrillage).
+- **Herbe** :
+  - sous la pluie, elle devient plus sombre et plus riche au lieu de grise et brillante comme du plastique ;
+  - les hautes herbes sont plus vertes, et leurs pointes ne saturent plus en blanc-jaune ;
+  - le reflet du vent et le contre-jour sont plus doux (les couchers de soleil rougissaient tout) ;
+  - les touffes lointaines sont plus fines (5 brins au lieu de 4 brins élargis).
+- **Vérifié sur ordinateur seulement** : nouveau scénario `grasslook` (jour, pluie, Titans, crépuscule), 2 985 tests passés. Les lignes n'apparaissaient pas sur mon rendu d'ordinateur : la correction vise la cause identifiée dans le code, mais **elle n'a pas été vérifiée sur ton téléphone**.
 
 ### Nouveautés 3.0.2 (image nette, plus de trames ni de lignes, herbe partout)
 

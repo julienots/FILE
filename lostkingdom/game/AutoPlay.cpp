@@ -1939,6 +1939,20 @@ static std::vector<Step> scenario(const std::string& name) {
         }, idle, "save"});
         return s;
     }
+    if (name == "grasslook") {
+        // 3.0.2 the meadow by day, at dusk and in the rain (ground lines, grass look), Greenhaven and the Titans
+        struct Look { float x, z, hour; int weather; const char* shot; };
+        static const Look looks[] = {{1600, 1500, 11.f, 0, "GL0_day"}, {1600, 1500, 11.f, 2, "GL1_rain"}, {6780, 3100, 15.f, 0, "GL2_titans"}, {6780, 3100, 15.f, 2, "GL3_titans_rain"}, {1600, 1500, 18.8f, 0, "GL4_dusk"}};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        for (const Look& l : looks) {
+            const Look* q = &l;
+            s.push_back({4.f, [q](Game& g) { teleport(g, q->x, q->z, 0.9f); g.camPitch = 0.3f; g.camDist = g.camDistTarget = 9.f; g.timeOfDay = q->hour;
+                                             g.weather = g.weatherNext = q->weather; g.weatherBlend = 1; g.weatherTimer = 999; },
+                         [q](Game& g, float) { g.camIdleT = 0; g.camYaw = 0.9f; g.timeOfDay = q->hour; if (q->weather == 2) g.env.wetness = 1.f; else g.env.wetness = 0.f; }, "go"});
+            s.push_back({0.1f, [q](Game& g) { g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "powers") {
         // 3.0.1 the shader effects of every power: Kaede, Astra, then the Wanderer's spells, at dusk (they glow)
         static Entity dummy = NullEntity;

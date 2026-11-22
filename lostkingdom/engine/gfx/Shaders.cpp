@@ -27,6 +27,14 @@ layout(std140) uniform Frame {
     vec4 uPushers[8];  // grass benders: xyz position, w = sign(strength) * (floor(|strength| * 64) + radius / 4)
 };
 const float PI = 3.14159265;
+// 3.0.2 integer hash: exact on every GPU (the classic fract(sin(x) * 43758) breaks into bands and lines on
+// mobile GPUs, whose sin() loses its precision on large arguments - world coordinates, screen pixels, time)
+float hash12(vec2 p) {
+    uvec2 q = uvec2(ivec2(floor(p)) + ivec2(1048576));
+    uint h = (q.x * 1597334673u) ^ (q.y * 3812015801u);
+    h ^= h >> 16u; h *= 2246822519u; h ^= h >> 13u; h *= 3266489917u; h ^= h >> 16u;
+    return float(h & 0x00FFFFFFu) / 16777216.0;
+}
 )";
 
 // ----------------------------------------------------------------------------------------------
@@ -158,7 +166,7 @@ void main() {
     vColor.rgb *= iTint.rgb * 2.0;
 #endif
 #if defined(WIND) && defined(GRASS)
-    vColor.rgb *= 1.0 + sheen * vec3(0.38, 0.34, 0.16);   // silvery-gold sheen as the gust passes
+    vColor.rgb *= 1.0 + sheen * vec3(0.22, 0.2, 0.1);     // silvery-gold sheen as the gust passes (3.0.2 subtler)
     vColor.rgb *= 1.0 - 0.2 * grassDown;                    // trodden grass: a slightly darker path
 #endif
     vMat = aMat;
@@ -188,7 +196,7 @@ float shadowPCF(vec4 sc, float NdL) {
     const vec2 k[12] = vec2[12](vec2(-0.326,-0.406), vec2(-0.840,-0.074), vec2(-0.696,0.457), vec2(-0.203,0.621),
                                vec2(0.962,-0.195), vec2(0.473,-0.480), vec2(0.519,0.767), vec2(0.185,-0.893),
                                vec2(0.507,0.064), vec2(0.896,0.412), vec2(-0.322,-0.933), vec2(-0.792,-0.598));
-    float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831;
+    float a = hash12(gl_FragCoord.xy) * 6.2831;
     mat2 r = mat2(cos(a), sin(a), -sin(a), cos(a));
     for (int i = 0; i < 12; i++) s += texture(uShadowMap, vec3(p.xy + r * k[i] * t * 2.2, p.z - bias));
     s /= 12.0;
@@ -222,7 +230,7 @@ vec2 rainRipples(vec2 p, float t) {
         float sc = L == 0 ? 2.1 : 3.3;
         vec2 q = p * sc + float(L) * 17.3;
         vec2 cell = floor(q), f = fract(q) - 0.5;
-        float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5);
+        float h = hash12(cell);
         float ph = fract(t * (1.1 + 0.5 * h) + h);
         vec2 c = (vec2(h, fract(h * 7.3)) - 0.5) * 0.5;
         vec2 d = f - c;
@@ -495,8 +503,12 @@ void main() {
   #ifndef TERRAIN_SIMPLE
     // raindrops: rings in the puddles, a finer shimmer of impacts on all wet ground
     if (wet > 0.05) {
-        vec2 rr = rainRipples(vWorld.xz, uCamPos.w);
-        N = normalize(N + vec3(rr.x, 0.0, rr.y) * (puddle * 0.9 + wet * 0.12));
+        // 3.0.2 only near the camera: further away the little rings alias into a grid of lines
+        float rfade = 1.0 - smoothstep(10.0, 26.0, length(vWorld - uCamPos.xyz));
+        if (rfade > 0.0) {
+            vec2 rr = rainRipples(vWorld.xz, uCamPos.w);
+            N = normalize(N + vec3(rr.x, 0.0, rr.y) * (puddle * 0.9 + wet * 0.12) * rfade);
+        }
     }
   #endif
     puddleK = puddle;
@@ -508,8 +520,14 @@ void main() {
     float snow = max(uTint.a, uFogParams.z) * smoothstep(0.45, 0.8, N.y);
     albedo = mix(albedo, vec3(0.5, 0.55, 0.64) * (0.85 + nz * 0.3), snow);
     rough = mix(rough, 0.55, snow);
+  #ifdef WIND
+    // 3.0.2 rain-soaked grass and leaves: deeper, richer colours - no grey plastic gloss
+    albedo *= mix(1.0, 0.8, wet);
+    albedo = max(mix(vec3(dot(albedo, vec3(0.3, 0.59, 0.11))), albedo, 1.0 + 0.15 * wet), 0.0);
+  #else
     albedo *= mix(1.0, 0.7, wet * (1.0 - metal) * (0.4 + 0.6 * N.y));
     rough = mix(rough, rough * 0.4, wet * smoothstep(0.0, 0.6, N.y));
+  #endif
 #endif
 
 #if !defined(SKINNED) && !defined(TERRAIN) && !defined(GRASS)
@@ -546,7 +564,7 @@ void main() {
 #ifdef WIND
     // back-lit leaves glow
     float trans = pow(max(dot(-V, uSunDir.xyz), 0.0), 3.0) * vMat.a;
-    col += albedo * uSunColor.rgb * trans * 0.6 * sh;
+    col += albedo * uSunColor.rgb * trans * 0.42 * sh;   // 3.0.2 softer (sunsets turned the meadows red-orange)
 #endif
 #ifdef TERRAIN
     col += vec3(1.0, 0.28, 0.05) * emis;
@@ -556,7 +574,7 @@ void main() {
         float gk = max(max(wSnow, snowFx), wSand * (0.55 + 0.45 * wet)) * (1.0 - puddleK);
         if (gk > 0.05) {
             vec2 gp = vWorld.xz * 7.0, gc = floor(gp);
-            float rnd = fract(sin(dot(gc, vec2(12.9898, 78.233))) * 43758.5453);
+            float rnd = hash12(gc);
             vec2 ctr = vec2(fract(rnd * 7.0), fract(rnd * 13.0)) * 0.5 + 0.25;   // a point-like crystal inside the cell
             float dotk = smoothstep(0.42, 0.1, length(fract(gp) - ctr));
             vec3 fn = normalize(vec3(rnd - 0.5, 0.7, fract(rnd * 17.0) - 0.5));
@@ -719,11 +737,11 @@ void main() {
     if (wet > 0.01) {
         vec2 cell = floor(vWorld.xz * 1.6);
         vec2 f = fract(vWorld.xz * 1.6) - 0.5;
-        float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5);
+        float h = hash12(cell);
         float ph = fract(t * 1.3 + h);
         float r = length(f - (vec2(h, fract(h * 7.3)) - 0.5) * 0.4);
         float ring = sin((r - ph * 0.5) * 40.0) * (1.0 - ph) * smoothstep(0.5 * ph + 0.05, 0.5 * ph, r);
-        dn.xy += vec2(ring) * 0.5 * wet;
+        dn.xy += vec2(ring) * 0.5 * wet * (1.0 - smoothstep(14.0, 34.0, length(vWorld - uCamPos.xyz)));   // 3.0.2 near only (no grid far away)
     }
     vec3 N = normalize(vec3(dn.x, 1.0, dn.y));
     float frozen = uWaterShallow.a;
@@ -1099,7 +1117,7 @@ void main() {
             float band = step(0.85, r) * step(r, 0.94);
             float cells = 28.0;
             float seg = fract((ang2 + 3.14159) * cells / 6.2831853), cell = floor((ang2 + 3.14159) * cells / 6.2831853);
-            float h = fract(sin(cell * 12.9898 + seed * 7.0) * 43758.5453);
+            float h = hash12(vec2(cell, seed * 13.0));
             float rv = (r - 0.85) / 0.09;
             float glyph = band * step(0.18, seg) * step(seg, 0.82) * step(0.35, fract(h * 5.0 + floor(rv * 3.0) * 0.37)) * step(abs(rv - 0.5), 0.4);
             float star = 0.0;
@@ -1368,7 +1386,7 @@ void main() {
         vec4 wp = uInvVP * vec4(uv * 2.0 - 1.0, texture(uDepth, uv).r * 2.0 - 1.0, 1.0);
         vec3 P = wp.xyz / wp.w, V = P - uEye;
         float L = min(length(V), 70.0); vec3 dir = V / max(length(V), 1e-3);
-        float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + uTime * 0.618);
+        float jit = hash12(gl_FragCoord.xy);   // 3.0.2 white noise (the interleaved gradient drew diagonal stripes in the haze)
         float lit = 0.0;
         for (int i = 0; i < 14; i++) {
             vec3 q = uEye + dir * (L * (float(i) + jit) / 14.0);
@@ -1407,8 +1425,8 @@ void main() {
     // grain
     // 2.0.0 sandstorm: a veil of ochre grit racing across the picture, in long horizontal streaks
     if (uFx0.y > 0.0) {
-        float s1 = fract(sin(dot(floor(vec2(uv0.x * 5.0 - uTime * 2.4, uv0.y * 90.0)), vec2(12.9898, 78.233))) * 43758.5453);
-        float s2 = fract(sin(dot(floor(vec2(uv0.x * 11.0 - uTime * 4.6, uv0.y * 160.0)), vec2(39.346, 11.135))) * 24634.634);
+        float s1 = hash12(vec2(uv0.x * 5.0 - uTime * 2.4, uv0.y * 90.0));
+        float s2 = hash12(vec2(uv0.x * 11.0 - uTime * 4.6, uv0.y * 160.0) + 4099.0);
         float streak = smoothstep(0.55, 1.0, s1) * 0.55 + smoothstep(0.7, 1.0, s2) * 0.45;
         vec3 sandc = vec3(0.80, 0.56, 0.32) * (0.55 + 0.45 * smoothstep(0.1, 0.9, dot(col, vec3(0.33))));
         col = mix(col, sandc, uFx0.y * (0.22 + 0.2 * streak));
@@ -1443,7 +1461,8 @@ void main() {
             col += fl * vis * uSunScr.w;
         }
     }
-    float n = fract(sin(dot(uv * (uTime + 1.37), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+    float fr = floor(uTime * 24.0);
+    float n = hash12(gl_FragCoord.xy + vec2(fr * 37.0, fr * 91.0)) - 0.5;   // 3.0.2 per-pixel film grain (no bands)
     col += n * uPost1.w;
     col = mix(col, uFade.rgb, uFade.a);
     float outA = uAlphaFromScene > 0.5 ? texture(uScene, uv).a : dot(clamp(col, 0.0, 1.0), vec3(0.299, 0.587, 0.114));
