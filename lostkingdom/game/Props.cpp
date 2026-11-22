@@ -1838,6 +1838,7 @@ vec2 structureFootprint(int kind) {
     case S_LIGHTHOUSE: return {3.2f, 3.2f}; case S_PAGODA: return {5.4f, 11.f}; case S_SPHINX: return {3.2f, 7.3f}; case S_PIER: return {1.4f, 7.f};
     case S_PORTAL: return {6.f, 1.4f};
     case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
+    case S_MINE: return {6.5f, 6.f};   // 3.1.0 the knoll, the adit and the cart track (neighbours are pushed off it)
     case S_GEYSER: return {1.6f, 1.6f}; case S_SKYISLAND: return {0.5f, 0.5f};   // 2.8.0 (the island floats: the ground under it stays free)
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};

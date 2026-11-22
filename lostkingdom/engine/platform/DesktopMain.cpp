@@ -35,7 +35,8 @@ bool readAsset(const std::string& path, std::vector<uint8_t>& out) {
 }
 std::string writableDir() { return gSaveDir; }
 void vibrate(int, int) {}
-void requestQuit() {}
+static bool gQuitReq = false;
+void requestQuit() { if (getenv("LK_EXIT_AT_END")) gQuitReq = true; }   // 3.1.0 desktop: end the run when a scenario finishes (opt-in)
 void requestScreenshot(const std::string& path) { gScreenshotQueue.push_back(path); }
 const std::vector<std::string>& launchArgs() { return gArgs; }
 bool isHeadlessTest() { return true; }
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
             audio.insert(audio.end(), abuf.begin(), abuf.end());
         }
         eglSwapBuffers(dpy, surf);
+        if (platform::gQuitReq) { frames = f + 1; break; }
     }
     AGR_LOG("desktop run: %d frames, avg %.1f ms, max %.1f ms (software rasteriser)", frames, frameMsTotal / std::max(1, frames), frameMsMax);
     app->pause();

@@ -152,8 +152,10 @@ void Game::drawSpeedometer() {
     const VehicleDef& d = vehicleDefs()[v.def];
     float kmh = std::fabs(v.speed) * 3.6f, top = d.maxSpeed * 3.6f;
     float k = saturate(kmh / std::max(1.f, top));
-    vec2 c{u.W * 0.5f, 150.f};   // under the quest tracker: clear of the thumbs and of the interaction label
-    float R = 58.f;
+    // 3.1.0 a compact dial on the left, between the stats and the joystick: it used to sit in the middle of the
+    // screen (over the road ahead) right under the quest tracker
+    float R = 40.f;
+    vec2 c{R + 46.f, u.H * 0.45f};
     u.circle(c, R + 10, vec4(0.03f, 0.025f, 0.02f, 0.78f), 40);
     const float a0 = PI * 0.75f, a1 = PI * 2.25f;
     u.ring(c, R - 6, R, a0, a1, vec4(1, 1, 1, 0.18f), 48);
@@ -165,12 +167,12 @@ void Game::drawSpeedometer() {
     }
     float an = a0 + (a1 - a0) * k;
     vec2 nd{std::cos(an), std::sin(an)};
-    for (int i = 0; i < 10; i++) u.circle(c + nd * (6.f + i * 5.f), 2.6f - i * 0.15f, vec4(1.f, 0.55f, 0.3f, 1.f), 6);
+    for (int i = 0; i < 10; i++) u.circle(c + nd * (5.f + i * (R - 12.f) / 10.f), 2.4f - i * 0.15f, vec4(1.f, 0.55f, 0.3f, 1.f), 6);
     u.circle(c, 6, vec4(0.9f, 0.9f, 0.9f, 1), 10);
     char b[16]; snprintf(b, sizeof b, "%d", (int)std::round(kmh));
-    u.text(b, c.x, c.y + 14, 34, rgba(0xf4f0e6), F_BOLD, A_CENTER, 0, true);
-    u.text("km/h", c.x, c.y + 50, 14, rgba(0xb8b0a0), F_BODY, A_CENTER);
-    if (v.speed < -0.3f) u.text("R", c.x + R * 0.55f, c.y - 18, 20, rgba(0xffb070), F_BOLD, A_CENTER);
+    u.text(b, c.x, c.y + 8, 26, rgba(0xf4f0e6), F_BOLD, A_CENTER, 0, true);
+    u.text("km/h", c.x, c.y + 34, 12, rgba(0xb8b0a0), F_BODY, A_CENTER);
+    if (v.speed < -0.3f) u.text("R", c.x + R * 0.55f, c.y - 16, 16, rgba(0xffb070), F_BOLD, A_CENTER);
 }
 
 void Game::exitVehicle() {

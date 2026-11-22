@@ -98,6 +98,10 @@ void Game::drawPinsHud() {
     if (mapPins.empty() || player == NullEntity || dungeon.active || cine.active) return;
     UI& u = ui;
     Character& p = pc();
+    // 3.1.0 pins pushed to the top edge used to sit on the quest tracker (y 10..76) and on each other: the top edge
+    // is now below the tracker, and markers that would overlap are stacked under the previous one
+    std::vector<vec2> placed;
+    const float m = 60.f, top = 104.f;
     for (size_t i = 0; i < mapPins.size(); i++) {
         vec2 w = mapPins[i];
         float d = length(w - p.pos.xz());
@@ -105,15 +109,21 @@ void Game::drawPinsHud() {
         vec3 wp(w.x, world.height(w.x, w.y) + 2.2f, w.y);
         bool on;
         vec2 sp = worldToScreen(wp, &on);
-        float m = 60.f;
-        bool inside = on && sp.x > m && sp.x < u.W - m && sp.y > 120 && sp.y < u.H - m;
+        bool inside = on && sp.x > m && sp.x < u.W - m && sp.y > top && sp.y < u.H - m;
         if (!inside) {
-            // direction on screen from the camera's forward: project onto the screen edge
+            // direction on screen from the camera's forward: project onto the screen edge (the top edge sits under the tracker)
             vec2 dir = normalize(minimapProject(w - p.pos.xz(), camYaw) + vec2(1e-4f));
-            vec2 cc{u.W / 2, u.H / 2};
-            float tx = dir.x != 0 ? (u.W / 2 - m) / std::fabs(dir.x) : 1e9f, ty = dir.y != 0 ? (u.H / 2 - m) / std::fabs(dir.y) : 1e9f;
+            vec2 cc{u.W / 2, (top + u.H - m) / 2};
+            float hy = dir.y < 0 ? cc.y - top : (u.H - m) - cc.y;
+            float tx = dir.x != 0 ? (u.W / 2 - m) / std::fabs(dir.x) : 1e9f, ty = dir.y != 0 ? hy / std::fabs(dir.y) : 1e9f;
             sp = cc + dir * std::min(tx, ty);
         }
+        for (int guard = 0; guard < 8; guard++) {
+            bool hit = false;
+            for (const vec2& q : placed) if (std::fabs(q.x - sp.x) < 64.f && std::fabs(q.y - sp.y) < 36.f) { sp.y = q.y + (q.y > u.H * 0.5f ? -38.f : 38.f); hit = true; }   // away from the nearest edge
+            if (!hit) break;
+        }
+        placed.push_back(sp);
         vec4 col(0.35f, 0.9f, 1.f, 0.95f);
         u.circle(sp, 13.f, vec4(0.03f, 0.08f, 0.12f, 0.85f), 4);
         u.circle(sp, 9.f, col, 4);

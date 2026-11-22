@@ -1475,7 +1475,8 @@ static std::vector<Step> scenario(const std::string& name) {
     }
     if (name == "garage") {
         // 2.2.1 call the car to the hero, drive it, speedometer (look at the pictures)
-        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); if (g.vehicles.empty()) g.initVehicles(); g.spawnVehicleEntities(); teleport(g, 1600, 1560, 0.f); }, idle, "new game"});
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); if (g.vehicles.empty()) g.initVehicles(); g.spawnVehicleEntities(); teleport(g, 1600, 1560, 0.f);
+            g.mapPins = {vec2(1600, 4100), vec2(1660, 4000), vec2(1540, 3900), vec2(2400, 300), vec2(2450, 340)}; }, idle, "new game"});   // 3.1.0 pins in clusters: no overlap, none on the tracker
         s.push_back({2.f, none, idle, "settle"});
         s.push_back({0.1f, [](Game& g) { g.garageOpen = true; }, idle, "open"});
         s.push_back({0.3f, none, idle, "wait"});
@@ -2753,6 +2754,7 @@ void Game::updateAutoplay(float dt) {
         stepT = 0;
         if (autoplayStep < (int)steps.size()) { if (steps[autoplayStep].start) steps[autoplayStep].start(*this); }
         else AGR_LOG("autoplay finished: player hp %.0f/%.0f level %d, %zu entities, %zu chunks, last frame %d draw calls %dk triangles", player != NullEntity ? pc().hp : 0.f, player != NullEntity ? pc().maxHp : 0.f, level, reg.count(), world.loadedChunks(), renderer.stats.drawCalls, renderer.stats.triangles / 1000);
+        if (autoplayStep >= (int)steps.size() && platform::isHeadlessTest()) platform::requestQuit();   // desktop harness: stops the run when LK_EXIT_AT_END is set
     }
 }
 

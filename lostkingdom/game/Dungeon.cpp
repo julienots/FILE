@@ -635,7 +635,12 @@ void Game::enterDungeon(int idx) {
         // a reward chest in the final room for dungeons without a boss, and one in the puzzle room
         auto& last = dungeon.rooms.back();
         NodeSpawn chest; chest.type = NodeType::Chest; chest.tier = 2;
-        chest.pos = dungeon.origin + vec3((last.x + last.w * 0.5f) * TILE, 0, (last.z + last.h - 1.f) * TILE);
+        {   // 3.1.0 at the foot of the dais (the back of the hall now holds the throne or the altar)
+            vec3 ctr = dungeon.origin + vec3((last.x + last.w * 0.5f) * TILE, 0, (last.z + last.h * 0.5f) * TILE), tg = dungeon.gatePos - ctr;
+            vec3 n = std::fabs(tg.x) > std::fabs(tg.z) ? vec3(tg.x > 0 ? 1.f : -1.f, 0, 0) : vec3(0, 0, tg.z > 0 ? 1.f : -1.f);
+            float half = (std::fabs(n.x) > 0 ? last.w : last.h) * TILE * 0.5f;
+            chest.pos = ctr - n * std::max(0.f, half - 5.2f);
+        }
         chest.uid = hash32(9000 + idx * 17 + day); chest.rot = 0;
         if (D.boss < 0) spawnNode(chest);
         notify(D.name, vec3(0.85f, 0.8f, 1.f), "i_cave");
