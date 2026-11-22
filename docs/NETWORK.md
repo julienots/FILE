@@ -156,6 +156,32 @@ local recu, total = agr.http.progress(id)   -- barre de progression ; agr.http.c
   (le proxy bloque les sites de test badssl.com) ; compilé pour Linux, Windows (DLL système
   seulement) et Android.
 
+## WebSocket (`agr.ws`)
+
+Client WebSocket (RFC 6455) sur `ws://` et `wss://` (même TLS, proxy et vérification de certificats que
+HTTPS) : chat, salons de jeu, serveurs de matchmaking, services temps réel.
+
+```lua
+local id = agr.ws.connect("wss://jeu.exemple.com/salon", {
+    onOpen = function() agr.ws.send(id, {type = "join", name = "Zoé"}) end,  -- table = JSON
+    onMessage = function(data, binary) local m = agr.json.decode(data) ... end,
+    onClose = function(code, err) agr.log("fermé", code, err) end,
+}, {Authorization = "Bearer ..."})
+agr.ws.send(id, "texte")  ;  agr.ws.send(id, octets, true)  -- binaire
+agr.ws.state(id)          -- "connecting", "open", "closing", "closed"
+agr.ws.close(id [, 1000, "raison"])
+```
+
+- Fil dédié par connexion ; les rappels arrivent sur le fil principal, dans l'ordre (ouverture,
+  messages, fermeture). Pings du serveur auto-répondus, messages fragmentés réassemblés, poignée de
+  fermeture faite dans les deux sens, sous-protocoles (`Sec-WebSocket-Protocol`), messages jusqu'à 16 Mo.
+- C++ : `net::WebSocket` (`connect`, `send`, `sendBinary`, `receive`, `close`, `state`, `closeCode`).
+- Vérifié contre un serveur de test local (texte, binaire de 70 000 octets — longueur sur 64 bits —,
+  fragments, ping / pong, fermeture par le serveur avec son code et par le client, refus d'un serveur
+  HTTP ordinaire, valeur d'acceptation de la RFC). `wss://` vers Internet n'a pas pu être essayé
+  (le proxy de l'environnement de développement refuse les serveurs d'écho publics) ; sa couche TLS
+  est celle d'HTTPS, testée.
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système
@@ -163,7 +189,7 @@ local recu, total = agr.http.progress(id)   -- barre de progression ; agr.http.c
   La découverte LAN reste en IPv4 (diffusion). Le chemin IPv6 réel n'a pas pu être testé dans la VM
   de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
 - Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
-  ouvrir son port UDP) ; pas de WebSocket / WebRTC (pas encore d'export Web).
+  ouvrir son port UDP) ; pas de WebRTC ni de serveur WebSocket (client seulement).
 - Pas de chiffrement (le mot de passe n'empêche que de rejoindre) : ne pas transmettre de données
   sensibles.
 - Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de

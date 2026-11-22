@@ -222,6 +222,179 @@ TEST_CASE("HTTP client: content-length, chunked, redirects, POST, errors, timeou
     }
     CHECK(client.pending() == 0);
 }
+
+namespace {
+/// WebSocket echo server for one client at a time ("frag" -> two fragments, "ping" -> a ping
+/// first, "bye" -> the server closes with 4000).
+struct WsServer {
+    int listener = -1;
+    u16 port = 0;
+    std::atomic<bool> stop{false};
+    std::atomic<int> pongs{0}, clientCloses{0};
+    std::thread thread;
+    WsServer() {
+        listener = ::socket(AF_INET, SOCK_STREAM, 0);
+        int yes = 1;
+        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+        sockaddr_in a{};
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        ::bind(listener, reinterpret_cast<sockaddr*>(&a), sizeof a);
+        ::listen(listener, 4);
+        socklen_t len = sizeof a;
+        getsockname(listener, reinterpret_cast<sockaddr*>(&a), &len);
+        port = ntohs(a.sin_port);
+        thread = std::thread([this] { run(); });
+    }
+    ~WsServer() {
+        stop = true;
+        thread.join();
+        ::close(listener);
+    }
+    static void frame(int c, u8 op, const std::string& p, bool fin = true) {
+        std::string f;
+        f.push_back(static_cast<char>((fin ? 0x80 : 0) | op));
+        if (p.size() < 126) f.push_back(static_cast<char>(p.size()));
+        else if (p.size() < 65536) f += {char(126), char(p.size() >> 8), char(p.size() & 0xFF)};
+        else {
+            f.push_back(char(127));
+            for (int i = 7; i >= 0; --i) f.push_back(static_cast<char>(static_cast<u64>(p.size()) >> (8 * i)));
+        }
+        f += p;
+        TestServer::sendAll(c, f);
+    }
+    void run() {
+        while (!stop) {
+            pollfd pfd{listener, POLLIN, 0};
+            if (::poll(&pfd, 1, 50) <= 0) continue;
+            const int c = ::accept(listener, nullptr, nullptr);
+            if (c < 0) continue;
+            timeval tv{0, 50000};
+            setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+            std::string in;
+            char buf[65536];
+            while (in.find("\r\n\r\n") == std::string::npos && !stop) {
+                const auto n = ::recv(c, buf, sizeof buf, 0);
+                if (n > 0) in.append(buf, static_cast<usize>(n));
+                else if (n == 0) break;
+            }
+            const auto k = in.find("Sec-WebSocket-Key: ");
+            const std::string key = in.substr(k + 19, in.find("\r\n", k) - k - 19);
+            TestServer::sendAll(c, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " +
+                                       webSocketAccept(key) + "\r\nSec-WebSocket-Protocol: chat\r\n\r\n");
+            in.erase(0, in.find("\r\n\r\n") + 4);
+            bool open = true;
+            while (open && !stop) {
+                const auto n = ::recv(c, buf, sizeof buf, 0);
+                if (n == 0) break;
+                if (n > 0) in.append(buf, static_cast<usize>(n));
+                while (in.size() >= 2) {
+                    const u8 op = static_cast<u8>(in[0]) & 0x0F;
+                    u64 len = static_cast<u8>(in[1]) & 0x7F;
+                    usize h = 2;
+                    if (len == 126) {
+                        if (in.size() < 4) break;
+                        len = (u64(static_cast<u8>(in[2])) << 8) | static_cast<u8>(in[3]), h = 4;
+                    } else if (len == 127) {
+                        if (in.size() < 10) break;
+                        len = 0;
+                        for (int i = 0; i < 8; ++i) len = (len << 8) | static_cast<u8>(in[2 + i]);
+                        h = 10;
+                    }
+                    if (in.size() < h + 4 + len) break;
+                    std::string p = in.substr(h + 4, static_cast<usize>(len));
+                    for (usize i = 0; i < p.size(); ++i) p[i] = static_cast<char>(p[i] ^ in[h + (i % 4)]);  // clients always mask
+                    in.erase(0, h + 4 + static_cast<usize>(len));
+                    if (op == 0xA) ++pongs;
+                    else if (op == 0x8) {
+                        ++clientCloses;
+                        frame(c, 0x8, p);
+                        open = false;
+                        break;
+                    } else if (p == "frag") {
+                        frame(c, 0x1, "abc", false);
+                        frame(c, 0x0, "def", true);
+                    } else if (p == "ping") {
+                        frame(c, 0x9, "are you there");
+                        frame(c, 0x1, "pinged");
+                    } else if (p == "bye") {
+                        frame(c, 0x8, std::string("\x0F\xA0", 2) + "server done");
+                        open = false;
+                        break;
+                    } else {
+                        frame(c, op, p);  // echo
+                    }
+                }
+            }
+            ::close(c);
+        }
+    }
+};
+template <typename F>
+bool waitFor(F cond, int ms = 3000) {
+    for (int i = 0; i < ms / 5; ++i) {
+        if (cond()) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return cond();
+}
+}  // namespace
+
+TEST_CASE("WebSocket client: handshake, echo of small and large messages, fragments, ping, closes from both sides") {
+    WsServer server;
+    WebSocket ws;
+    WebSocket::Options o;
+    o.protocols = {"chat"};
+    ws.connect("ws://127.0.0.1:" + std::to_string(server.port) + "/live", o);
+    REQUIRE(waitFor([&] { return ws.state() == WebSocket::State::Open; }));
+    CHECK(ws.protocol() == "chat");
+    std::vector<WebSocket::Message> got;
+    auto collect = [&](usize n) {
+        return waitFor([&] {
+            for (auto& m : ws.receive()) got.push_back(std::move(m));
+            return got.size() >= n;
+        });
+    };
+    CHECK(ws.send("hello"));
+    REQUIRE(collect(1));
+    CHECK(got[0].data == "hello");
+    CHECK_FALSE(got[0].binary);
+    const std::string medium(3000, 'm'), big(70000, 'b');
+    CHECK(ws.send(medium));
+    CHECK(ws.sendBinary(big));
+    REQUIRE(collect(3));
+    CHECK(got[1].data == medium);
+    CHECK(got[2].data == big);
+    CHECK(got[2].binary);
+    CHECK(ws.send("frag"));
+    REQUIRE(collect(4));
+    CHECK(got[3].data == "abcdef");  // reassembled
+    CHECK(ws.send("ping"));
+    REQUIRE(collect(5));
+    CHECK(got[4].data == "pinged");
+    CHECK(waitFor([&] { return server.pongs.load() == 1; }));  // the ping was answered
+    CHECK(ws.send("bye"));
+    REQUIRE(waitFor([&] { return ws.state() == WebSocket::State::Closed; }));
+    CHECK(ws.closeCode() == 4000);
+    CHECK_FALSE(ws.send("too late"));
+
+    // Client-side close: the server sees the close frame and answers.
+    WebSocket ws2;
+    ws2.connect("ws://127.0.0.1:" + std::to_string(server.port) + "/");
+    REQUIRE(waitFor([&] { return ws2.state() == WebSocket::State::Open; }));
+    ws2.close(1000, "done");
+    REQUIRE(waitFor([&] { return ws2.state() == WebSocket::State::Closed; }));
+    CHECK(server.clientCloses.load() == 1);
+    CHECK(ws2.closeCode() == 1000);
+
+    // A plain HTTP server refuses the upgrade: reported, not hung.
+    TestServer http;
+    WebSocket ws3;
+    ws3.connect("ws://127.0.0.1:" + std::to_string(http.port) + "/hello");
+    REQUIRE(waitFor([&] { return ws3.state() == WebSocket::State::Closed; }));
+    CHECK(ws3.error().find("refused") != std::string::npos);
+    CHECK(webSocketAccept("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");  // RFC 6455 example
+}
 #endif
 
 TEST_CASE("HTTPS on the Internet (through HTTPS_PROXY when set): certificate checked, bad certificate refused") {

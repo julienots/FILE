@@ -1348,3 +1348,30 @@ return S
     CHECK(done);
     CHECK(f.scripts.stats().errors == 0);
 }
+
+TEST_CASE("agr.ws: callbacks on the main thread; a refused connection calls onClose with the error, not onOpen") {
+    ScriptFixture f;
+    f.write("assets://s/ws.lua", R"(
+local S = {}
+function S:onStart()
+    local e = self.entity
+    self.id = agr.ws.connect("ws://127.0.0.1:1/live", {
+        onOpen = function() e:setName("opened") end,
+        onClose = function(code, err) if err ~= "" then e:setName("closed with error") end end,
+    })
+    if agr.ws.state(self.id) ~= "connecting" then e:setName("bad state") end
+end
+return S
+)");
+    f.scripted("Ws", "assets://s/ws.lua");
+    bool done = false;
+    for (int i = 0; i < 300 && !done; ++i) {
+        f.update();
+        done = !f.scene.findByName("closed with error").isNull();
+        if (!done) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(done);
+    CHECK(f.scene.findByName("opened").isNull());
+    CHECK(f.scene.findByName("bad state").isNull());
+    CHECK(f.scripts.stats().errors == 0);
+}

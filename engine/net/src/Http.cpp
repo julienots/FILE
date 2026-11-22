@@ -33,6 +33,8 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/error.h>
 #include <mbedtls/net_sockets.h>
+#include <mbedtls/base64.h>
+#include <mbedtls/sha1.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 #include <psa/crypto.h>
@@ -338,6 +340,21 @@ struct Stream {
         }
     }
 };
+
+/// One read attempt (the socket's short receive timeout): >0 bytes, 0 nothing yet, -1 closed.
+int tryRead(Stream& st, char* out, usize len) {
+    int n;
+    if (st.tls) {
+        n = mbedtls_ssl_read(&st.ssl, reinterpret_cast<unsigned char*>(out), len);
+        if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE || n == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) return 0;
+        if (n == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY || n == 0) return -1;
+    } else {
+        n = Stream::bioRecv(&st, reinterpret_cast<unsigned char*>(out), len);
+        if (n == MBEDTLS_ERR_SSL_WANT_READ) return 0;
+        if (n == 0) return -1;
+    }
+    return n < 0 ? -1 : n;
+}
 
 /// Buffered reader over a Stream.
 struct Reader {
@@ -750,6 +767,277 @@ std::pair<u64, u64> HttpClient::progress(RequestId id) const {
 usize HttpClient::pending() const {
     std::lock_guard lock(m_mutex);
     return m_jobs.size();
+}
+
+// ------------------------------------------------------------------ WebSocket
+std::string webSocketAccept(std::string_view key) {
+    const std::string in = std::string(key) + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    unsigned char digest[20];
+    mbedtls_sha1(reinterpret_cast<const unsigned char*>(in.data()), in.size(), digest);
+    unsigned char b64[64];
+    size_t n = 0;
+    mbedtls_base64_encode(b64, sizeof b64, &n, digest, sizeof digest);
+    return std::string(reinterpret_cast<char*>(b64), n);
+}
+
+WebSocket::~WebSocket() {
+    if (m_thread.joinable()) {
+        close();
+        // Give the close handshake a moment, then stop.
+        for (int i = 0; i < 50 && m_state.load() != State::Closed; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        m_stop = true;
+        m_thread.join();
+    }
+}
+
+void WebSocket::connect(std::string url, Options options) {
+    if (m_thread.joinable()) {
+        m_stop = true;
+        m_thread.join();
+    }
+    m_stop = false;
+    m_closeCode = 0;
+    {
+        std::lock_guard lock(m_mutex);
+        m_outgoing.clear();
+        m_incoming.clear();
+        m_error.clear();
+        m_protocol.clear();
+        m_closeRequested = false;
+    }
+    m_state = State::Connecting;
+    m_thread = std::thread([this, u = std::move(url), o = std::move(options)]() mutable { run(std::move(u), std::move(o)); });
+}
+
+bool WebSocket::send(std::string_view text) {
+    const State st = m_state.load();
+    if (st != State::Open && st != State::Connecting) return false;
+    std::lock_guard lock(m_mutex);
+    m_outgoing.emplace_back(0x1, std::string(text));
+    return true;
+}
+
+bool WebSocket::sendBinary(std::string_view bytes) {
+    const State st = m_state.load();
+    if (st != State::Open && st != State::Connecting) return false;
+    std::lock_guard lock(m_mutex);
+    m_outgoing.emplace_back(0x2, std::string(bytes));
+    return true;
+}
+
+std::vector<WebSocket::Message> WebSocket::receive() {
+    std::lock_guard lock(m_mutex);
+    return std::exchange(m_incoming, {});
+}
+
+void WebSocket::close(u16 code, std::string reason) {
+    std::lock_guard lock(m_mutex);
+    if (m_state.load() == State::Closed) return;
+    m_closeRequested = true;
+    m_closeSendCode = code;
+    m_closeReason = std::move(reason);
+}
+
+std::string WebSocket::error() const {
+    std::lock_guard lock(m_mutex);
+    return m_error;
+}
+
+std::string WebSocket::protocol() const {
+    std::lock_guard lock(m_mutex);
+    return m_protocol;
+}
+
+void WebSocket::run(std::string url, Options o) {
+    auto fail = [&](const std::string& why) {
+        {
+            std::lock_guard lock(m_mutex);
+            if (m_error.empty()) m_error = why;
+        }
+        m_state = State::Closed;
+    };
+    // ws(s):// -> the HTTP URL rules (port, host, path).
+    std::string httpUrl = url;
+    if (httpUrl.rfind("wss://", 0) == 0) httpUrl = "https://" + httpUrl.substr(6);
+    else if (httpUrl.rfind("ws://", 0) == 0) httpUrl = "http://" + httpUrl.substr(5);
+    auto parsed = Url::parse(httpUrl);
+    if (!parsed) return fail(parsed.error().message);
+    const Url& u = parsed.value();
+    Stream s;
+    s.cancel = &m_stop;
+    s.deadline = Clock::now() + std::chrono::milliseconds(static_cast<i64>(std::max(0.5, o.connectTimeoutSeconds) * 1000.0));
+    const std::optional<Url> proxy = proxyFor(u);
+    if (std::string e = connectTcp(s.tcp, proxy ? proxy->host : u.host, proxy ? proxy->port : u.port, s.deadline, &m_stop); !e.empty())
+        return fail(proxy ? "proxy: " + e : e);
+    if (proxy) {  // tunnel for ws:// and wss:// alike
+        const std::string target = (u.host.find(':') != std::string::npos ? "[" + u.host + "]" : u.host) + ":" + std::to_string(u.port);
+        if (std::string e = s.writeAll("CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n\r\n"); !e.empty()) return fail("proxy: " + e);
+        Reader r{s};
+        Parsed head;
+        if (std::string e = readHead(r, head); !e.empty()) return fail("proxy: " + e);
+        if (head.status != 200) return fail(std::format("proxy refused the connection to {} (HTTP {})", target, head.status));
+    }
+    if (u.scheme == "https")
+        if (std::string e = s.startTls(u.host, o.verifyCertificates, o.extraCaPem); !e.empty()) return fail(e);
+    // Handshake.
+    u8 nonce[16];
+    for (u8& b : nonce) b = static_cast<u8>(std::rand());
+    {
+        unsigned char rnd[16];
+        if (drbgRandom(nullptr, rnd, sizeof rnd) == 0) std::memcpy(nonce, rnd, 16);
+    }
+    unsigned char keyB64[32];
+    size_t keyLen = 0;
+    mbedtls_base64_encode(keyB64, sizeof keyB64, &keyLen, nonce, sizeof nonce);
+    const std::string key(reinterpret_cast<char*>(keyB64), keyLen);
+    std::string req = "GET " + u.target + " HTTP/1.1\r\nHost: " + u.hostHeader() +
+                      "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: " + key + "\r\n";
+    if (!o.protocols.empty()) {
+        std::string list;
+        for (const std::string& p : o.protocols) list += (list.empty() ? "" : ", ") + p;
+        req += "Sec-WebSocket-Protocol: " + list + "\r\n";
+    }
+    bool hasAgent = false;
+    for (const auto& [k, v] : o.headers) {
+        hasAgent |= iequals(k, "user-agent");
+        req += k + ": " + v + "\r\n";
+    }
+    if (!hasAgent) req += "User-Agent: AGR-Engine\r\n";
+    req += "\r\n";
+    if (std::string e = s.writeAll(req); !e.empty()) return fail(e);
+    Reader r{s};
+    Parsed head;
+    if (std::string e = readHead(r, head); !e.empty()) return fail(e);
+    if (head.status != 101) return fail(std::format("the server refused the WebSocket (HTTP {})", head.status));
+    if (headerOf(head.headers, "sec-websocket-accept") != webSocketAccept(key)) return fail("bad WebSocket handshake (Sec-WebSocket-Accept)");
+    {
+        std::lock_guard lock(m_mutex);
+        m_protocol = headerOf(head.headers, "sec-websocket-protocol");
+    }
+    s.deadline = Clock::time_point::max();  // the session lives until closed
+#if defined(_WIN32)
+    DWORD tv = 15;
+    setsockopt(s.tcp.s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof tv);
+#else
+    timeval tv{0, 15000};
+    setsockopt(s.tcp.s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+#endif
+    m_state = State::Open;
+
+    std::string in = r.buf.substr(r.pos);  // bytes read past the handshake
+    std::string fragments;
+    u8 fragmentOpcode = 0;
+    bool closeSent = false;
+    auto frame = [&](u8 opcode, std::string_view payload) {
+        std::string f;
+        f.push_back(static_cast<char>(0x80 | opcode));
+        const u64 n = payload.size();
+        if (n < 126) f.push_back(static_cast<char>(0x80 | n));
+        else if (n < 65536) {
+            f.push_back(static_cast<char>(0x80 | 126));
+            f.push_back(static_cast<char>(n >> 8)), f.push_back(static_cast<char>(n));
+        } else {
+            f.push_back(static_cast<char>(0x80 | 127));
+            for (int i = 7; i >= 0; --i) f.push_back(static_cast<char>(n >> (8 * i)));
+        }
+        unsigned char mask[4];
+        drbgRandom(nullptr, mask, 4);
+        f.append(reinterpret_cast<char*>(mask), 4);
+        const usize start = f.size();
+        f.append(payload);
+        for (usize i = 0; i < payload.size(); ++i) f[start + i] = static_cast<char>(f[start + i] ^ mask[i % 4]);
+        const Clock::time_point keep = s.deadline;
+        s.deadline = Clock::now() + std::chrono::seconds(10);
+        const std::string e = s.writeAll(f);
+        s.deadline = keep;
+        return e.empty();
+    };
+    auto sendClose = [&](u16 code, const std::string& reason) {
+        std::string p;
+        p.push_back(static_cast<char>(code >> 8)), p.push_back(static_cast<char>(code));
+        p += reason.substr(0, 120);
+        closeSent = true;
+        m_state = State::Closing;
+        return frame(0x8, p);
+    };
+    Clock::time_point closingSince{};
+    while (!m_stop.load()) {
+        // Outgoing.
+        std::vector<std::pair<u8, std::string>> out;
+        bool wantClose = false;
+        u16 code = 1000;
+        std::string reason;
+        {
+            std::lock_guard lock(m_mutex);
+            out = std::exchange(m_outgoing, {});
+            wantClose = m_closeRequested && !closeSent;
+            code = m_closeSendCode;
+            reason = m_closeReason;
+        }
+        for (const auto& [op, data] : out)
+            if (!closeSent && !frame(op, data)) return fail("connection lost while sending");
+        if (wantClose) {
+            sendClose(code, reason);
+            closingSince = Clock::now();
+        }
+        if (closeSent && Clock::now() - closingSince > std::chrono::seconds(3)) break;  // no answer to our close
+        // Incoming.
+        char buf[16384];
+        const int n = tryRead(s, buf, sizeof buf);
+        if (n < 0) {
+            if (!closeSent) return fail("connection closed by the server");
+            break;
+        }
+        if (n > 0) in.append(buf, static_cast<usize>(n));
+        // Frames available in `in`.
+        for (;;) {
+            if (in.size() < 2) break;
+            const u8 b0 = static_cast<u8>(in[0]), b1 = static_cast<u8>(in[1]);
+            const bool fin = b0 & 0x80, masked = b1 & 0x80;
+            const u8 op = b0 & 0x0F;
+            u64 len = b1 & 0x7F;
+            usize hdr = 2;
+            if (len == 126) {
+                if (in.size() < 4) break;
+                len = (u64(static_cast<u8>(in[2])) << 8) | static_cast<u8>(in[3]);
+                hdr = 4;
+            } else if (len == 127) {
+                if (in.size() < 10) break;
+                len = 0;
+                for (int i = 0; i < 8; ++i) len = (len << 8) | static_cast<u8>(in[2 + i]);
+                hdr = 10;
+            }
+            if (len > o.maxMessageBytes) return fail("WebSocket message too large");
+            const usize maskLen = masked ? 4 : 0;
+            if (in.size() < hdr + maskLen + len) break;
+            std::string payload = in.substr(hdr + maskLen, static_cast<usize>(len));
+            if (masked)
+                for (usize i = 0; i < payload.size(); ++i) payload[i] = static_cast<char>(payload[i] ^ in[hdr + (i % 4)]);
+            in.erase(0, hdr + maskLen + static_cast<usize>(len));
+            if (op == 0x9) {  // ping -> pong
+                frame(0xA, payload);
+            } else if (op == 0xA) {
+            } else if (op == 0x8) {
+                const u16 c = payload.size() >= 2 ? static_cast<u16>((static_cast<u8>(payload[0]) << 8) | static_cast<u8>(payload[1])) : 1005;
+                m_closeCode = c;
+                if (!closeSent) sendClose(c == 1005 ? 1000 : c, "");
+                m_state = State::Closed;
+                return;
+            } else if (op == 0x1 || op == 0x2 || op == 0x0) {
+                if (op != 0x0) fragmentOpcode = op, fragments.clear();
+                fragments += payload;
+                if (fragments.size() > o.maxMessageBytes) return fail("WebSocket message too large");
+                if (fin) {
+                    std::lock_guard lock(m_mutex);
+                    m_incoming.push_back({fragmentOpcode == 0x2, std::move(fragments)});
+                    fragments.clear();
+                }
+            } else {
+                return fail("unknown WebSocket frame");
+            }
+        }
+    }
+    m_state = State::Closed;
 }
 
 } // namespace agr::net

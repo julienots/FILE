@@ -345,11 +345,103 @@ int h_pending(lua_State* L) {
     return 1;
 }
 
+// ---------------------------------------------------------------- agr.ws
+/// agr.ws.connect(url, {onOpen = f(), onMessage = f(data, binary), onClose = f(code, error)} [, headers]) -> id
+int w_connect(lua_State* L) {
+    auto& m = implOf(L);
+    const char* url = luaL_checkstring(L, 1);
+    ScriptEngine::Impl::WebSocketHandle h;
+    h.ws = std::make_shared<net::WebSocket>();
+    if (lua_istable(L, 2)) {
+        lua_pushvalue(L, 2);
+        h.handlers = luaL_ref(L, LUA_REGISTRYINDEX);
+    }
+    net::WebSocket::Options o;
+    readHeaders(L, 3, o.headers);
+    h.ws->connect(url, std::move(o));
+    const u64 id = m.nextWebSocket++;
+    m.webSockets[id] = std::move(h);
+    lua_pushinteger(L, static_cast<lua_Integer>(id));
+    return 1;
+}
+net::WebSocket* wsOf(lua_State* L) {
+    auto& m = implOf(L);
+    auto it = m.webSockets.find(static_cast<u64>(luaL_checkinteger(L, 1)));
+    return it == m.webSockets.end() ? nullptr : it->second.ws.get();
+}
+/// agr.ws.send(id, text | table) -> true when queued (a table is sent as JSON text)
+int w_send(lua_State* L) {
+    net::WebSocket* ws = wsOf(L);
+    bool ok = false;
+    if (ws) {
+        if (lua_istable(L, 2)) ok = ws->send(toJson(L, 2).dump());
+        else {
+            size_t n = 0;
+            const char* t = luaL_checklstring(L, 2, &n);
+            ok = lua_toboolean(L, 3) ? ws->sendBinary(std::string_view(t, n)) : ws->send(std::string_view(t, n));
+        }
+    }
+    lua_pushboolean(L, ok);
+    return 1;
+}
+int w_close(lua_State* L) {
+    if (net::WebSocket* ws = wsOf(L)) ws->close(static_cast<u16>(luaL_optinteger(L, 2, 1000)), luaL_optstring(L, 3, ""));
+    return 0;
+}
+/// agr.ws.state(id) -> "connecting" | "open" | "closing" | "closed"
+int w_state(lua_State* L) {
+    net::WebSocket* ws = wsOf(L);
+    static const char* names[] = {"connecting", "open", "closing", "closed"};
+    lua_pushstring(L, ws ? names[static_cast<int>(ws->state())] : "closed");
+    return 1;
+}
+
 } // namespace
 
 void dispatchHttp(ScriptEngine::Impl& m) {
-    if (!m.http) return;
     lua_State* L = m.L;
+    // WebSockets: open, messages, close, in that order.
+    for (auto it = m.webSockets.begin(); it != m.webSockets.end();) {
+        auto& h = it->second;
+        auto call = [&](const char* name, auto pushArgs, int nargs) {
+            if (h.handlers == LUA_NOREF || h.handlers == -2) return;
+            lua_rawgeti(L, LUA_REGISTRYINDEX, h.handlers);
+            if (lua_getfield(L, -1, name) == LUA_TFUNCTION) {
+                pushArgs();
+                if (lua_pcall(L, nargs, 0, 0) != LUA_OK) {
+                    m.reportError(std::string("agr.ws ") + name, lua_tostring(L, -1));
+                    lua_pop(L, 1);
+                }
+            } else {
+                lua_pop(L, 1);
+            }
+            lua_pop(L, 1);  // handlers table
+        };
+        const auto state = h.ws->state();
+        if (!h.opened && (state == net::WebSocket::State::Open || state == net::WebSocket::State::Closing ||
+                          (state == net::WebSocket::State::Closed && h.ws->error().empty()))) {
+            h.opened = true;
+            call("onOpen", [] {}, 0);
+        }
+        for (auto& msg : h.ws->receive())
+            call("onMessage", [&] {
+                lua_pushlstring(L, msg.data.data(), msg.data.size());
+                lua_pushboolean(L, msg.binary);
+            }, 2);
+        if (state == net::WebSocket::State::Closed) {
+            const std::string err = h.ws->error();
+            const int code = h.ws->closeCode();
+            call("onClose", [&] {
+                lua_pushinteger(L, code);
+                lua_pushstring(L, err.c_str());
+            }, 2);
+            if (h.handlers != LUA_NOREF && h.handlers != -2) luaL_unref(L, LUA_REGISTRYINDEX, h.handlers);
+            it = m.webSockets.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (!m.http) return;
     for (auto& [id, r] : m.http->takeFinished()) {
         auto it = m.httpCallbacks.find(id);
         if (it == m.httpCallbacks.end()) continue;
@@ -389,6 +481,8 @@ void openNetBindings(lua_State* L) {
     static const luaL_Reg http[] = {{"request", h_request}, {"get", h_get},         {"post", h_post},     {"cancel", h_cancel},
                                     {"progress", h_progress}, {"pending", h_pending}, {nullptr, nullptr}};
     addAgrLibrary(L, "http", http);
+    static const luaL_Reg ws[] = {{"connect", w_connect}, {"send", w_send}, {"close", w_close}, {"state", w_state}, {nullptr, nullptr}};
+    addAgrLibrary(L, "ws", ws);
     static const luaL_Reg funcs[] = {{"host", n_host}, {"join", n_join}, {"leave", n_leave}, {"role", n_role}, {"id", n_id},
                                      {"port", n_port}, {"peers", n_peers}, {"send", n_send}, {"broadcast", n_broadcast},
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},

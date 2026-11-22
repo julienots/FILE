@@ -22,6 +22,7 @@
 namespace agr {
 namespace net {
 class HttpClient;
+class WebSocket;
 }
 namespace net {
 class NetSession;
@@ -105,6 +106,13 @@ struct ScriptEngine::Impl {
     net::NetSession* net = nullptr;
     std::shared_ptr<net::HttpClient> http;         ///< agr.http (created on first use)
     std::unordered_map<u64, int> httpCallbacks;    ///< request id -> Lua callback ref
+    struct WebSocketHandle {
+        std::shared_ptr<net::WebSocket> ws;
+        int handlers = -2;  ///< LUA_NOREF: table {onOpen, onMessage, onClose}
+        bool opened = false;
+    };
+    std::unordered_map<u64, WebSocketHandle> webSockets;  ///< agr.ws handles
+    u64 nextWebSocket = 1;
     net::Replicator* replicator = nullptr;
     /// Runs `fn` of the entity's script for an RPC. `remote`: checks the script's rpc table
     /// ("any" / "authority"); returns false when refused or missing.

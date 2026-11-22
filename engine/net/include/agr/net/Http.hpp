@@ -94,4 +94,61 @@ private:
     RequestId m_next = 1;
 };
 
+struct WebSocketOptions {
+    HttpHeaders headers;                 ///< Extra handshake headers (Authorization, Origin...).
+    std::vector<std::string> protocols;  ///< Sec-WebSocket-Protocol offers.
+    f64 connectTimeoutSeconds = 15.0;
+    bool verifyCertificates = true;
+    std::string extraCaPem;
+    u64 maxMessageBytes = 16ull << 20;
+};
+
+/// WebSocket client (RFC 6455) over ws:// or wss:// (same TLS, proxy and certificate rules as
+/// HTTPS). It runs on its own thread: send() queues, receive() drains what arrived. Pings are
+/// answered, fragmented messages reassembled, the close handshake done.
+class WebSocket {
+public:
+    enum class State : u8 { Connecting, Open, Closing, Closed };
+    struct Message {
+        bool binary = false;
+        std::string data;
+    };
+    using Options = WebSocketOptions;
+    WebSocket() = default;
+    ~WebSocket();
+    WebSocket(const WebSocket&) = delete;
+    WebSocket& operator=(const WebSocket&) = delete;
+
+    /// Starts connecting (State::Connecting, then Open or Closed with error()).
+    void connect(std::string url, Options options = {});
+    /// Queues a message; false unless connecting or open.
+    bool send(std::string_view text);
+    bool sendBinary(std::string_view bytes);
+    /// Messages received since the last call.
+    std::vector<Message> receive();
+    /// Starts the close handshake (code 1000 = normal).
+    void close(u16 code = 1000, std::string reason = {});
+    State state() const { return m_state.load(); }
+    std::string error() const;
+    u16 closeCode() const { return m_closeCode.load(); }
+    std::string protocol() const;  ///< Sub-protocol chosen by the server.
+
+private:
+    void run(std::string url, Options options);
+    std::thread m_thread;
+    std::atomic<State> m_state{State::Closed};
+    std::atomic<bool> m_stop{false};
+    std::atomic<u16> m_closeCode{0};
+    mutable std::mutex m_mutex;
+    std::vector<std::pair<u8, std::string>> m_outgoing;  // opcode, payload
+    std::vector<Message> m_incoming;
+    std::string m_error, m_protocol;
+    bool m_closeRequested = false;
+    u16 m_closeSendCode = 1000;
+    std::string m_closeReason;
+};
+
+/// Sec-WebSocket-Accept value for a handshake key (base64 of SHA-1 of key + RFC GUID).
+std::string webSocketAccept(std::string_view key);
+
 } // namespace agr::net
