@@ -2,6 +2,8 @@
 // the project's plugin folder (load now, load when the project opens), installed packages
 // (uninstall with a preview that keeps modified files), the local repository (install with a
 // preview of new / replaced / identical files) and package creation from project assets.
+#include <chrono>
+#include <future>
 #include <algorithm>
 #include <filesystem>
 
@@ -331,6 +333,86 @@ void PackagesPanel::drawCreate(EditorShared& s) {
     if (!valid && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Un nom valide et au moins un élément à inclure");
 }
 
+void PackagesPanel::drawOnline(EditorShared& s) {
+    using namespace std::chrono_literals;
+    ProjectSettings& ps = s.ctx.project().settings();
+    if (m_onlineUrl.empty()) m_onlineUrl = ps.onlineRepository;
+    ImGui::TextWrapped("Un dépôt en ligne = un index.json et des fichiers .agrpkg sur n'importe quel site statique "
+                       "(GitHub Pages, serveur web, dossier file://). Les téléchargements sont vérifiés (taille, SHA-256) ; "
+                       "les dépendances s'installent d'abord.");
+    ImGui::SetNextItemWidth(-140);
+    ImGui::InputTextWithHint("##url", "https://exemple.github.io/paquets/", &m_onlineUrl);
+    ImGui::SameLine();
+    const bool fetching = m_indexJob.valid();
+    ImGui::BeginDisabled(fetching || m_onlineUrl.empty());
+    if (ImGui::Button(fetching ? "Chargement..." : "Charger l'index")) {
+        ps.onlineRepository = m_onlineUrl;
+        (void)s.ctx.project().save();
+        m_onlineError.clear();
+        m_indexJob = std::async(std::launch::async, [url = m_onlineUrl] { return fetchRepositoryIndex(url); });
+    }
+    ImGui::EndDisabled();
+    if (m_indexJob.valid() && m_indexJob.wait_for(0s) == std::future_status::ready) {
+        auto r = m_indexJob.get();
+        if (r) m_online = std::move(r.value());
+        else m_onlineError = r.error().message, m_online.reset();
+    }
+    if (!m_onlineError.empty()) ImGui::TextColored(palette::toVec4(palette::kError), "%s", m_onlineError.c_str());
+    if (!m_online) return;
+    if (!m_online->title.empty()) ImGui::SeparatorText(m_online->title.c_str());
+    ImGui::SetNextItemWidth(240);
+    ImGui::InputTextWithHint("##filter", "Rechercher", &m_onlineFilter);
+    std::set<std::string> installed;
+    for (const InstalledPackage& p : installedPackages(s.ctx.project().assetsDirectory())) installed.insert(p.name + "@" + p.version);
+    const bool busy = m_onlineInstall.valid();
+    if (busy && m_onlineInstall.wait_for(0s) == std::future_status::ready) {
+        auto r = m_onlineInstall.get();
+        m_onlineResult = r ? "Installé : " + std::to_string(r.value().size()) + " paquet(s)" : "Échec : " + r.error().message;
+        s.notify(m_onlineResult);
+    }
+    if (!m_onlineResult.empty()) ImGui::TextWrapped("%s", m_onlineResult.c_str());
+    std::string lastName;
+    if (ImGui::BeginChild("##online", {0, 0}, ImGuiChildFlags_Borders)) {
+        for (const OnlinePackage& p : m_online->packages) {
+            if (p.name == lastName) continue;  // older versions
+            lastName = p.name;
+            const std::string hay = p.name + " " + p.description + " " + p.author;
+            std::string f = m_onlineFilter;
+            if (!f.empty()) {
+                auto low = [](std::string t) {
+                    for (char& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    return t;
+                };
+                if (low(hay).find(low(f)) == std::string::npos) continue;
+            }
+            ImGui::PushID(p.name.c_str());
+            ImGui::Text("%s  %s", p.name.c_str(), p.version.c_str());
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s  %.1f Ko", p.author.c_str(), static_cast<double>(p.size) / 1024.0);
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 90 + ImGui::GetCursorPosX());
+            const bool have = installed.count(p.name + "@" + p.version) > 0;
+            ImGui::BeginDisabled(busy || have);
+            if (ImGui::SmallButton(have ? "Installé" : "Installer")) {
+                m_onlineResult = "Installation de " + p.name + "...";
+                m_onlineInstall = std::async(std::launch::async, [idx = *m_online, name = p.name, dl = s.ctx.project().root() / "packages",
+                                                                  assets = s.ctx.project().assetsDirectory()] {
+                    return installFromRepository(name, idx, dl, assets, false);
+                });
+            }
+            ImGui::EndDisabled();
+            if (!p.description.empty()) ImGui::TextWrapped("%s", p.description.c_str());
+            if (!p.dependencies.empty()) {
+                std::string d;
+                for (const std::string& x : p.dependencies) d += (d.empty() ? "" : ", ") + x;
+                ImGui::TextDisabled("Dépend de : %s", d.c_str());
+            }
+            ImGui::Separator();
+            ImGui::PopID();
+        }
+    }
+    ImGui::EndChild();
+}
+
 void PackagesPanel::draw(EditorShared& s) {
     if (!s.showPackages) return;
     ImGui::SetNextWindowSize({760, 560}, ImGuiCond_FirstUseEver);
@@ -351,6 +433,10 @@ void PackagesPanel::draw(EditorShared& s) {
             }
             if (ImGui::BeginTabItem("Installer")) {
                 drawRepository(s);
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("En ligne")) {
+                drawOnline(s);
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("Créer un paquet")) {

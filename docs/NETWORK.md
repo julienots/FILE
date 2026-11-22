@@ -124,6 +124,38 @@ Brouillard de guerre, butin caché, grands mondes : rien n'est envoyé ni simul�
 client modifié ne peut pas révéler ce qu'il ne reçoit pas. `stats().spawnsHidden` compte les paires
 (entité, joueur) cachées.
 
+## HTTP et HTTPS (`agr.http`)
+
+Client HTTP/1.1 intégré (TLS 1.2 / 1.3 par **mbedTLS 3.6**), sur des fils de travail : le jeu ne se
+bloque jamais, le rappel est appelé sur le fil principal au début d'une image.
+
+```lua
+agr.http.get("https://api.exemple.com/scores", function(r)
+    if r.ok then local scores = agr.json.decode(r.body) else agr.warn(r.status, r.error) end
+end)
+agr.http.post("https://api.exemple.com/score", {name = "Zoé", score = 1200}, onSent)  -- table = JSON
+local id = agr.http.request{url = "https://cdn.exemple.com/dlc1.agrpak", download = "user://packs/dlc1.agrpak",
+                            timeout = 120, headers = {Authorization = "Bearer ..."}}
+local recu, total = agr.http.progress(id)   -- barre de progression ; agr.http.cancel(id)
+-- ensuite : agr.loadPack("user://packs/dlc1.agrpak")
+```
+
+- Réponse : `status`, `ok` (2xx sans erreur), `body`, `headers` (noms en minuscules), `error`, `url`
+  (après redirections), `bytes`.
+- Méthodes quelconques (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`), corps et en-têtes libres,
+  redirections suivies (5 au plus), corps « chunked », délai global, annulation, téléchargement direct
+  dans un fichier de `user://` (écrit en `.part` puis renommé : jamais de fichier à moitié reçu).
+- Certificats vérifiés avec les autorités du système (Linux : `/etc/ssl/certs`, Windows : magasin
+  `ROOT`, Android : `/system/etc/security/cacerts`) ; `SSL_CERT_FILE` ou `AGR_CA_BUNDLE` les remplacent.
+  Proxy : `HTTPS_PROXY` / `HTTP_PROXY` (tunnel `CONNECT`), `NO_PROXY` respecté. IPv4 et IPv6.
+- C++ : `net::httpRequest` (bloquant) et `net::HttpClient` (asynchrone) dans `agr/net/Http.hpp`.
+- Vérifié : serveur local de test (longueur, chunked, fermeture, redirections et boucle, POST, 404,
+  hôte inconnu, connexion refusée, délai, annulation, téléchargement de 2 Mo avec progression) et
+  une vraie requête HTTPS sur Internet à travers le proxy de l'environnement de développement,
+  certificat contrôlé. Le refus d'un certificat expiré / auto-signé n'a pas pu être montré en ligne
+  (le proxy bloque les sites de test badssl.com) ; compilé pour Linux, Windows (DLL système
+  seulement) et Android.
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système

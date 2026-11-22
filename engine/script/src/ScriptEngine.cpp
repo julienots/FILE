@@ -288,6 +288,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
         m->callRuntime("_sceneChanged", -1.0);
     }
     fxBeginFrame(*m, scene);
+    dispatchHttp(*m);
     // 1. Sync instances with the Script components.
     std::vector<u64> seen;
     std::vector<u64> created;

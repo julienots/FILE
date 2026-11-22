@@ -12,6 +12,7 @@
 #include <fstream>
 
 #include "agr/core/Platform.hpp"
+#include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -33,13 +34,16 @@ namespace {
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
+///   agr_editor --package-index FOLDER [--name TITLE]        (index.json to publish a folder of .agrpkg)
+///   agr_editor --project DIR --install-package NAME --repository URL
+///   agr_editor --project DIR --create-package NAME --include a,b [--version V] [--depends x,y] --output F.agrpkg
 ///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
 [[maybe_unused]] int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {  // desktop only
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
-    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, packageName, includes, version = "1.0.0", depends;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -50,9 +54,76 @@ namespace {
         else if (a == "--export") exportKind = next();
         else if (a == "--output") output = next();
         else if (a == "--base") basePack = next();
+        else if (a == "--package-index") indexFolder = next();
+        else if (a == "--install-package") installName = next();
+        else if (a == "--repository") repository = next();
+        else if (a == "--create-package") packageName = next();
+        else if (a == "--include") includes = next();
+        else if (a == "--version") version = next();
+        else if (a == "--depends") depends = next();
     }
-    if (create.empty() && exportKind.empty()) return -1;
+    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty()) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
+    if (!indexFolder.empty()) {
+        auto idx = writeRepositoryIndex(indexFolder, name.empty() ? std::string("AGR packages") : name);
+        if (!idx) {
+            AGR_LOG_ERROR("Packages", "{}", idx.error().message);
+            return 1;
+        }
+        AGR_LOG_INFO("Packages", "index.json: {} package(s) in {}", idx.value().packages.size(), indexFolder);
+        return 0;
+    }
+    auto split = [](const std::string& list) {
+        std::vector<std::string> out;
+        usize start = 0;
+        while (start < list.size()) {
+            usize end = list.find(',', start);
+            if (end == std::string::npos) end = list.size();
+            if (end > start) out.push_back(list.substr(start, end - start));
+            start = end + 1;
+        }
+        return out;
+    };
+    if (!packageName.empty()) {
+        auto project = Project::open(projectDir);
+        if (!project) {
+            AGR_LOG_ERROR("Editor", "{}", project.error().message);
+            return 1;
+        }
+        PackageManifest m;
+        m.name = packageName;
+        m.version = version;
+        m.dependencies = split(depends);
+        const fs::path out = output.empty() ? fs::path(projectDir) / "packages" / (packageName + "-" + version + ".agrpkg") : fs::path(output);
+        std::error_code ec;
+        fs::create_directories(out.parent_path(), ec);
+        auto written = writePackage(out, m, project.value().assetsDirectory(), split(includes));
+        if (!written) {
+            AGR_LOG_ERROR("Packages", "{}", written.error().message);
+            return 1;
+        }
+        AGR_LOG_INFO("Packages", "{}: {} file(s)", out.string(), written.value().files.size());
+        return 0;
+    }
+    if (!installName.empty()) {
+        auto project = Project::open(projectDir);
+        if (!project) {
+            AGR_LOG_ERROR("Editor", "{}", project.error().message);
+            return 1;
+        }
+        auto idx = fetchRepositoryIndex(repository);
+        if (!idx) {
+            AGR_LOG_ERROR("Packages", "{}", idx.error().message);
+            return 1;
+        }
+        auto done = installFromRepository(installName, idx.value(), fs::path(projectDir) / "packages", project.value().assetsDirectory(), false);
+        if (!done) {
+            AGR_LOG_ERROR("Packages", "{}", done.error().message);
+            return 1;
+        }
+        AGR_LOG_INFO("Packages", "installed: {} package(s)", done.value().size());
+        return 0;
+    }
     if (!create.empty()) {
         struct Named {
             const char* name;

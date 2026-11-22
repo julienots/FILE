@@ -64,6 +64,8 @@ struct ProjectSettings {
     std::vector<std::string> plugins;
     /// Folder of .agrpkg packages (local repository); empty = <project>/packages.
     std::string packageRepository;
+    /// URL of an online repository (index.json), remembered by the Packages window.
+    std::string onlineRepository;
 };
 
 /// A project folder:

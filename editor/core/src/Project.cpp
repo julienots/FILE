@@ -116,6 +116,7 @@ Result<Project> Project::open(const fs::path& folder) {
     for (const auto& pl : j.value("plugins", json::array()))
         if (pl.is_string()) s.plugins.push_back(pl.get<std::string>());
     s.packageRepository = j.value("packageRepository", std::string());
+    s.onlineRepository = j.value("onlineRepository", std::string());
     if (j.contains("export") && j["export"].is_object()) {
         const json& e = j["export"];
         ExportSettings& x = s.exportSettings;
@@ -177,6 +178,7 @@ Status Project::save() const {
     j["graphicsProfile"] = m_settings.graphicsProfile;
     j["plugins"] = m_settings.plugins;
     j["packageRepository"] = m_settings.packageRepository;
+    j["onlineRepository"] = m_settings.onlineRepository;
     const ExportSettings& x = m_settings.exportSettings;
     j["export"] = {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
                    {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps},

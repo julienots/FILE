@@ -143,6 +143,24 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android|Darwin")
 endif()
 add_library(agr::lua ALIAS agr_lua)
 
+# --- TLS: mbedTLS 3.6 LTS (Apache-2.0) for HTTPS (agr::net HttpClient).
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
+FetchContent_Declare(mbedtls
+    URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.4/mbedtls-3.6.4.tar.bz2
+    URL_HASH SHA256=ec35b18a6c593cf98c3e30db8b98ff93e8940a8c4e690e66b41dfc011d678110
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(mbedtls)
+foreach(t mbedtls mbedx509 mbedcrypto)
+    set_target_properties(${t} PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+    if(NOT MSVC)
+        target_compile_options(${t} PRIVATE -w)
+    endif()
+endforeach()
+
 # --- Audio: miniaudio 0.11.25 (public domain / MIT-0) with stb_vorbis for Ogg Vorbis.
 #     Built from the single-file sources; the resource manager is not used (clips are decoded by AGR).
 FetchContent_Declare(miniaudio

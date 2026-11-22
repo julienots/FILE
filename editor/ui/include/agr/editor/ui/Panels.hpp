@@ -1,4 +1,6 @@
 #pragma once
+#include <future>
+#include <optional>
 #include <atomic>
 #include <optional>
 #include <filesystem>
@@ -19,6 +21,7 @@
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/assets/Image.hpp"
 #include "agr/editor/Package.hpp"
+#include "agr/editor/PackageRepository.hpp"
 #include "agr/core/Profiler.hpp"
 #include <algorithm>
 
@@ -431,6 +434,14 @@ private:
     void drawInstalled(EditorShared& s);
     void drawRepository(EditorShared& s);
     void drawCreate(EditorShared& s);
+    void drawOnline(EditorShared& s);
+    std::string m_onlineUrl;
+    std::string m_onlineFilter;
+    std::future<Result<OnlineIndex>> m_indexJob;
+    std::optional<OnlineIndex> m_online;
+    std::string m_onlineError;
+    std::future<Result<std::vector<std::string>>> m_onlineInstall;
+    std::string m_onlineResult;
 
     std::string m_uninstall;
     UninstallPlan m_uninstallPlan;

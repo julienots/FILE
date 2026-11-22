@@ -6,6 +6,7 @@
 add_library(agr_editor_core STATIC
     core/src/Project.cpp
     core/src/Package.cpp
+    core/src/PackageRepository.cpp
     core/src/SceneTemplates.cpp
     core/src/Scatter.cpp
     core/src/UiGuides.cpp

@@ -21,6 +21,9 @@
 
 namespace agr {
 namespace net {
+class HttpClient;
+}
+namespace net {
 class NetSession;
 class Replicator;
 }
@@ -100,6 +103,8 @@ struct ScriptEngine::Impl {
     PhysicsLayers physicsLayers;  ///< Names of assets://physics_layers.json (agr.physics*.layer / mask), refreshed on use.
     NavigationSystem* navigation = nullptr;
     net::NetSession* net = nullptr;
+    std::shared_ptr<net::HttpClient> http;         ///< agr.http (created on first use)
+    std::unordered_map<u64, int> httpCallbacks;    ///< request id -> Lua callback ref
     net::Replicator* replicator = nullptr;
     /// Runs `fn` of the entity's script for an RPC. `remote`: checks the script's rpc table
     /// ("any" / "authority"); returns false when refused or missing.
@@ -191,6 +196,8 @@ void openAnimationBindings(lua_State* L);
 void openMobileBindings(lua_State* L);
 void openNavigationBindings(lua_State* L);
 void openGameBindings(lua_State* L);
+/// Calls the callbacks of finished agr.http requests (once per frame).
+void dispatchHttp(ScriptEngine::Impl& m);
 void openNetBindings(lua_State* L);
 void openFxBindings(lua_State* L);
 void openRuntimeBindings(lua_State* L);

@@ -1,3 +1,4 @@
+#include <thread>
 #include <doctest/doctest.h>
 
 #include <chrono>
@@ -1323,4 +1324,27 @@ TEST_CASE("data helpers: agr.json, agr.file (user://), agr.base64, agr.sha256") 
     )");
     CHECK_MESSAGE(st.ok(), (st ? "" : st.error().message));
     CHECK(fs::exists(user / "notes.txt"));
+}
+
+TEST_CASE("agr.http: the callback runs on the main thread with the response (here a refused connection)") {
+    ScriptFixture f;
+    f.write("assets://s/net.lua", R"(
+local S = {}
+function S:onStart()
+    local e = self.entity
+    self.id = agr.http.get("http://127.0.0.1:1/scores", function(r)
+        e:setName(r.ok and "ok" or ("failed " .. r.status))
+    end)
+end
+return S
+)");
+    f.scripted("Net", "assets://s/net.lua");
+    bool done = false;
+    for (int i = 0; i < 300 && !done; ++i) {
+        f.update();
+        done = !f.scene.findByName("failed 0").isNull();
+        if (!done) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(done);
+    CHECK(f.scripts.stats().errors == 0);
 }

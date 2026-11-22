@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/editor/CurveView.hpp"
+#include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
 
 #include <algorithm>
@@ -1479,4 +1480,66 @@ TEST_CASE("data pack export: encrypted game.agrpak, key embedded in the player, 
     // A player without a slot is refused rather than shipping an unreadable game.
     { std::ofstream(f.root / "old_player", std::ios::binary) << "no slot here"; }
     CHECK_FALSE(embedPackKey(f.root / "old_player", key.value()));
+}
+
+TEST_CASE("package repository: index, dependency order, checked downloads, install from the repository") {
+    const fs::path root = fs::temp_directory_path() / ("agr_repo_" + Uuid::generate().toString());
+    const fs::path src = root / "src", repo = root / "site", dst = root / "game" / "assets";
+    fs::create_directories(dst);
+    auto write = [](const fs::path& p, const std::string& text) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p, std::ios::binary) << text;
+    };
+    write(src / "core" / "util.lua", "return {}");
+    write(src / "enemies" / "slime.lua", "return {}");
+    write(src / "levels" / "cave.agrscene", "{}");
+    auto pkg = [&](const std::string& name, const std::string& version, std::vector<std::string> deps, const std::string& dir) {
+        PackageManifest m;
+        m.name = name, m.version = version, m.dependencies = std::move(deps);
+        REQUIRE(writePackage(repo / (name + "-" + version + ".agrpkg"), m, src, {dir}));
+    };
+    pkg("core", "1.0.0", {}, "core");
+    pkg("enemies", "1.0.0", {"core"}, "enemies");
+    pkg("enemies", "1.10.0", {"core"}, "enemies");
+    pkg("caves", "2.0.0", {"enemies"}, "levels");
+    auto index = writeRepositoryIndex(repo, "Test store");
+    REQUIRE(index);
+    CHECK(fs::exists(repo / "index.json"));
+    auto fetched = fetchRepositoryIndex("file://" + repo.generic_string() + "/");
+    REQUIRE(fetched);
+    const OnlineIndex& idx = fetched.value();
+    CHECK(idx.title == "Test store");
+    CHECK(idx.packages.size() == 4);
+    REQUIRE(idx.find("enemies"));
+    CHECK(idx.find("enemies")->version == "1.10.0");  // latest first (numeric order)
+
+    auto order = resolveInstallOrder("caves", idx, {});
+    REQUIRE(order);
+    CHECK(order.value() == std::vector<std::string>{"core", "enemies", "caves"});
+    CHECK(resolveInstallOrder("caves", idx, {"core"}).value() == std::vector<std::string>{"enemies", "caves"});
+    CHECK_FALSE(resolveInstallOrder("dragons", idx, {}));
+
+    // A cycle and a missing dependency are reported, not looped on.
+    OnlineIndex bad = idx;
+    bad.packages.push_back({"a", "1", "", "", {"b"}, "x", std::string(64, '0'), 0});
+    bad.packages.push_back({"b", "1", "", "", {"a"}, "x", std::string(64, '0'), 0});
+    bad.packages.push_back({"c", "1", "", "", {"zzz"}, "x", std::string(64, '0'), 0});
+    CHECK(resolveInstallOrder("a", bad, {}).error().message.find("cycle") != std::string::npos);
+    CHECK(resolveInstallOrder("c", bad, {}).error().message.find("zzz") != std::string::npos);
+
+    // Install with dependencies, in order.
+    auto done = installFromRepository("caves", idx, root / "downloads", dst, false);
+    REQUIRE_MESSAGE(done, (done ? "" : done.error().message));
+    CHECK(done.value().size() == 3);
+    CHECK(fs::exists(dst / "core" / "util.lua"));
+    CHECK(fs::exists(dst / "levels" / "cave.agrscene"));
+    CHECK(installedPackages(dst).size() == 3);
+
+    // A tampered file is refused and not kept.
+    OnlinePackage tampered = *idx.find("core");
+    tampered.sha256 = std::string(64, 'a');
+    CHECK_FALSE(downloadPackage(tampered, root / "dl2"));
+    CHECK_FALSE(fs::exists(root / "dl2" / "core-1.0.0.agrpkg"));
+    std::error_code ec;
+    fs::remove_all(root, ec);
 }

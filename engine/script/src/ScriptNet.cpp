@@ -1,5 +1,6 @@
 // agr.net: multiplayer sessions (NetPlugin). Messages are Lua tables sent as JSON.
 #include "ScriptInternal.hpp"
+#include "agr/net/Http.hpp"
 #include "agr/net/NetSession.hpp"
 #include "agr/net/Replication.hpp"
 
@@ -240,7 +241,154 @@ int n_games(lua_State* L) {
 
 } // namespace
 
+// ---------------------------------------------------------------- agr.http
+namespace {
+
+net::HttpClient& httpOf(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.http) m.http = std::make_shared<net::HttpClient>();
+    return *m.http;
+}
+
+/// Starts a request; the callback (function at `cb`) is called with the response table.
+int startHttp(lua_State* L, net::HttpRequest req, int cb) {
+    auto& m = implOf(L);
+    const u64 id = httpOf(L).send(std::move(req));
+    if (cb && lua_isfunction(L, cb)) {
+        lua_pushvalue(L, cb);
+        m.httpCallbacks[id] = luaL_ref(L, LUA_REGISTRYINDEX);
+    }
+    lua_pushinteger(L, static_cast<lua_Integer>(id));
+    return 1;
+}
+
+void readHeaders(lua_State* L, int t, net::HttpHeaders& out) {
+    if (!lua_istable(L, t)) return;
+    lua_pushnil(L);
+    while (lua_next(L, t)) {
+        if (lua_type(L, -2) == LUA_TSTRING) out.emplace_back(lua_tostring(L, -2), luaL_tolstring(L, -1, nullptr)), lua_pop(L, 1);
+        lua_pop(L, 1);
+    }
+}
+
+/// user://path -> a file of the user folder (downloads go only there).
+std::string downloadTarget(lua_State* L, const char* uri) {
+    auto parsed = VirtualFileSystem::parse(uri);
+    if (!parsed || parsed.value().scheme != "user") luaL_error(L, "agr.http: downloads go to user:// (got '%s')", uri);
+    auto* native = dynamic_cast<NativeFileProvider*>(implOf(L).vfs.provider("user"));
+    if (!native) luaL_error(L, "agr.http: user:// is not a folder here");
+    return native->root() + "/" + parsed.value().path;
+}
+
+/// agr.http.request{url=, method="GET", headers={...}, body="", timeout=30, download="user://f"} [, callback] -> id
+int h_request(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    net::HttpRequest req;
+    lua_getfield(L, 1, "url");
+    req.url = luaL_checkstring(L, -1);
+    lua_pop(L, 1);
+    if (lua_getfield(L, 1, "method") == LUA_TSTRING) req.method = lua_tostring(L, -1);
+    lua_pop(L, 1);
+    for (char& c : req.method) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (lua_getfield(L, 1, "body") == LUA_TSTRING) {
+        size_t n = 0;
+        const char* b = lua_tolstring(L, -1, &n);
+        req.body.assign(b, n);
+    }
+    lua_pop(L, 1);
+    if (lua_getfield(L, 1, "timeout") == LUA_TNUMBER) req.timeoutSeconds = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "headers");
+    readHeaders(L, lua_gettop(L), req.headers);
+    lua_pop(L, 1);
+    if (lua_getfield(L, 1, "download") == LUA_TSTRING) req.downloadPath = downloadTarget(L, lua_tostring(L, -1));
+    lua_pop(L, 1);
+    return startHttp(L, std::move(req), lua_isfunction(L, 2) ? 2 : 0);
+}
+/// agr.http.get(url, callback [, headers]) -> id
+int h_get(lua_State* L) {
+    net::HttpRequest req;
+    req.url = luaL_checkstring(L, 1);
+    readHeaders(L, 3, req.headers);
+    return startHttp(L, std::move(req), lua_isfunction(L, 2) ? 2 : 0);
+}
+/// agr.http.post(url, body, callback [, headers]) -> id ; a table body is sent as JSON.
+int h_post(lua_State* L) {
+    net::HttpRequest req;
+    req.method = "POST";
+    req.url = luaL_checkstring(L, 1);
+    if (lua_istable(L, 2)) {
+        req.body = toJson(L, 2).dump();
+        req.headers.emplace_back("Content-Type", "application/json");
+    } else {
+        size_t n = 0;
+        const char* b = luaL_optlstring(L, 2, "", &n);
+        req.body.assign(b, n);
+    }
+    readHeaders(L, 4, req.headers);
+    return startHttp(L, std::move(req), lua_isfunction(L, 3) ? 3 : 0);
+}
+int h_cancel(lua_State* L) {
+    httpOf(L).cancel(static_cast<u64>(luaL_checkinteger(L, 1)));
+    return 0;
+}
+/// agr.http.progress(id) -> received, total (0 = unknown)
+int h_progress(lua_State* L) {
+    const auto [got, total] = httpOf(L).progress(static_cast<u64>(luaL_checkinteger(L, 1)));
+    lua_pushinteger(L, static_cast<lua_Integer>(got));
+    lua_pushinteger(L, static_cast<lua_Integer>(total));
+    return 2;
+}
+int h_pending(lua_State* L) {
+    auto& m = implOf(L);
+    lua_pushinteger(L, m.http ? static_cast<lua_Integer>(m.http->pending()) : 0);
+    return 1;
+}
+
+} // namespace
+
+void dispatchHttp(ScriptEngine::Impl& m) {
+    if (!m.http) return;
+    lua_State* L = m.L;
+    for (auto& [id, r] : m.http->takeFinished()) {
+        auto it = m.httpCallbacks.find(id);
+        if (it == m.httpCallbacks.end()) continue;
+        const int ref = it->second;
+        m.httpCallbacks.erase(it);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        lua_createtable(L, 0, 7);
+        lua_pushinteger(L, r.status);
+        lua_setfield(L, -2, "status");
+        lua_pushboolean(L, r.ok());
+        lua_setfield(L, -2, "ok");
+        lua_pushlstring(L, r.body.data(), r.body.size());
+        lua_setfield(L, -2, "body");
+        lua_pushstring(L, r.error.c_str());
+        lua_setfield(L, -2, "error");
+        lua_pushstring(L, r.finalUrl.c_str());
+        lua_setfield(L, -2, "url");
+        lua_pushinteger(L, static_cast<lua_Integer>(r.bytesReceived));
+        lua_setfield(L, -2, "bytes");
+        lua_createtable(L, 0, static_cast<int>(r.headers.size()));
+        for (const auto& [k, v] : r.headers) {
+            std::string key = k;
+            for (char& c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            lua_pushstring(L, v.c_str());
+            lua_setfield(L, -2, key.c_str());
+        }
+        lua_setfield(L, -2, "headers");
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            m.reportError("agr.http callback", lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+}
+
 void openNetBindings(lua_State* L) {
+    static const luaL_Reg http[] = {{"request", h_request}, {"get", h_get},         {"post", h_post},     {"cancel", h_cancel},
+                                    {"progress", h_progress}, {"pending", h_pending}, {nullptr, nullptr}};
+    addAgrLibrary(L, "http", http);
     static const luaL_Reg funcs[] = {{"host", n_host}, {"join", n_join}, {"leave", n_leave}, {"role", n_role}, {"id", n_id},
                                      {"port", n_port}, {"peers", n_peers}, {"send", n_send}, {"broadcast", n_broadcast},
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
