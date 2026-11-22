@@ -8,6 +8,24 @@
 
 namespace agr {
 
+bool lineBlocked(const Physics3DWorld& world, const Scene& scene, math::Vec3 from, math::Vec3 to, ecs::Entity ignore) {
+    math::Vec3 start = from;
+    for (int tries = 0; tries < 12; ++tries) {
+        const math::Vec3 d = to - start;
+        const float dist = math::length(d);
+        if (dist < 0.05f) return false;
+        const auto hit = world.raycast(start, d / dist, dist - 0.05f);
+        if (!hit) return false;
+        bool own = false;  // the source's own body (or a parent body carrying it)
+        for (ecs::Entity e = ignore; !e.isNull() && !own; e = scene.parent(e)) own = e == hit->entity;
+        if (!own && hit->distance > 0.02f) return true;
+        // Started inside a collider (the listener's head or capsule), or met the source's own body:
+        // continue past it (25 cm steps inside, just past the hit otherwise).
+        start = (hit->distance <= 0.02f ? start : hit->point) + d / dist * (hit->distance <= 0.02f ? 0.25f : 0.05f);
+    }
+    return false;
+}
+
 PluginInfo Physics3DPlugin::info() const {
     return {"Physics3D", "1.0", "3D rigid bodies, colliders and triggers (Jolt Physics)", "Superessence Studio", {}};
 }
@@ -39,11 +57,16 @@ Status Physics3DPlugin::onLoad(Engine& engine) {
         return result;
     });
     engine.registerService<Physics3DPlugin>(this);
+    m_lineOfSight.blocked = [this, &engine](math::Vec3 from, math::Vec3 to, ecs::Entity ignore) {
+        return lineBlocked(*m_world, engine.scene(), from, to, ignore);
+    };
+    engine.registerService<LineOfSightService>(&m_lineOfSight);
     return {};
 }
 
 void Physics3DPlugin::onUnload(Engine& engine) {
     engine.registerService<Physics3DPlugin>(nullptr);
+    engine.registerService<LineOfSightService>(nullptr);
     m_world.reset();  // detaches from engine.jobs() before the engine shuts it down
 }
 

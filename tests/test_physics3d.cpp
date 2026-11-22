@@ -6,6 +6,7 @@
 #include "agr/core/JobSystem.hpp"
 
 #include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/render/RenderComponents.hpp"
 
 using namespace agr;
@@ -622,5 +623,22 @@ TEST_CASE("joints 3D: pulley keeps the rope length, the heavy side goes down; sw
     }
     CHECK(worst > 0.3f);       // it did swing
     CHECK(worst < 0.5236f + 0.06f);  // but not past the cone
+}
+TEST_CASE("line of sight (audio occlusion): a wall blocks, the source's own body and the listener's do not") {
+    World3D w;
+    const auto wall = w.box("Wall", {0, 1, 0}, {0.2f, 4, 4}, BodyType3D::Static);
+    const auto speaker = w.box("Speaker", {3, 1, 0}, {0.5f, 0.5f, 0.5f}, BodyType3D::Static);
+    const auto listener = w.box("Head", {-3, 1, 0}, {0.4f, 0.4f, 0.4f}, BodyType3D::Static);
+    (void)wall;
+    (void)listener;
+    w.run(0.02f);
+    CHECK(lineBlocked(w.physics, w.scene, {-3, 1, 0}, {3, 1, 0}, speaker));        // through the wall
+    CHECK_FALSE(lineBlocked(w.physics, w.scene, {-3, 1, 5}, {3, 1, 5}, speaker));  // beside it
+    CHECK_FALSE(lineBlocked(w.physics, w.scene, {1, 1, 0}, {3, 1, 0}, speaker));   // only its own box in the way
+    // A child entity of the speaker body carries the AudioSource: same answer.
+    const auto child = w.scene.createEntity("Source", speaker);
+    w.scene.updateTransforms();
+    CHECK_FALSE(lineBlocked(w.physics, w.scene, {1, 1, 0}, {3, 1, 0}, child));
+    CHECK(lineBlocked(w.physics, w.scene, {-3, 1, 0}, {3, 1, 0}, child));
 }
 }  // TEST_SUITE

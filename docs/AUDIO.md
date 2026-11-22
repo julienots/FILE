@@ -70,6 +70,18 @@ miniaudio, sur le fil audio : modifier un effet pendant que les sons jouent ne c
 - C++ : `AudioSystem::setBusEffects`, `busEffects`, `applyLayout`, `layout` ; `AudioEffectChain`
   traite aussi du son hors mixeur (rendu hors ligne).
 
+## Occlusion
+
+`AudioSource.occlusion` (sources spatiales) : quand un collider 3D se trouve entre l'auditeur et la
+source (un mur, une porte fermée), le son est **étouffé** (passe-bas de 20 kHz vers 700 Hz, propre à
+cette voix) et **baissé** (jusqu'à la moitié), selon `occlusionStrength` (0..1), avec une transition de
+0,15 s. Le rayon part de l'auditeur et ignore le corps de la source (et un corps parent qui la porte) ainsi
+que le collider dans lequel se trouve l'auditeur (sa tête, sa capsule). Fourni par la physique 3D via le
+service `LineOfSightService` (sans Physics3D : pas d'occlusion). C++ : `AudioSystem::setOcclusion(voix,
+0..1)` pour un contrôle manuel, `setOcclusionTest`, `setOcclusionSmoothing`. Tests : un son de 6 kHz derrière
+un mur perd plus de 80 % de son amplitude et la retrouve à découvert ; murs, corps de la source et
+collider de l'auditeur sur un vrai monde Jolt.
+
 ## Composants
 
 | Composant | Champs |
@@ -130,8 +142,8 @@ sources personnalisées). Sur Android, cocher *Microphone* dans l'export ajoute 
 ## Limites actuelles
 
 - Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` (pas de
-  traitement en direct du flux du micro) ; pas d'occlusion automatique (un script peut baisser le volume ou
-  ajouter un passe-bas selon un rayon) ; bus personnalisés : 8 au plus.
+  traitement en direct du flux du micro) ; occlusion : un seul rayon (pas de diffraction autour des
+  obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus.
 - Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
   hauteur pendant une image).
 - Pas encore testé sur un appareil Android (sortie AAudio / OpenSL ES de miniaudio : phase 8).

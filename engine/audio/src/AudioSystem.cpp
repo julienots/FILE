@@ -101,9 +101,14 @@ struct Voice {
     float volumeMul = 1.0f, pitchMul = 1.0f;  ///< Random variation picked at start.
     math::Vec3 lastPosition{0.0f};
     bool hasLast = false;
+    // Occlusion: a low-pass node between the sound and its bus, created on first use.
+    ma_lpf_node lpf{};
+    bool lpfInit = false;
+    float occlusion = 0.0f, occlusionTarget = 0.0f, appliedCutoff = 0.0f;
 
     ~Voice() {
         if (soundInit) ma_sound_uninit(&sound);
+        if (lpfInit) ma_lpf_node_uninit(&lpf, nullptr);
         if (generator) ma_data_source_uninit(&generator->base);
         if (decoderInit) ma_decoder_uninit(&decoder);
         if (bufferInit) ma_audio_buffer_ref_uninit(&buffer);
@@ -163,6 +168,30 @@ struct AudioSystem::Impl {
     ma_engine engine{};
     ma_device device{};
     ma_sound_group groups[kAudioBusCount]{};
+    AudioSystem::OcclusionTest occlusionTest;
+    float occlusionSmoothing = 0.15f;
+    u32 rate = 48000;
+    /// Applies a voice's occlusion: cutoff 20 kHz -> 700 Hz (exponential), volume down to 50 %.
+    void applyOcclusion(Voice& v, float strength) {
+        const float k = std::clamp(v.occlusion * strength, 0.0f, 1.0f);
+        if (k <= 0.001f && !v.lpfInit) return;
+        if (!v.lpfInit) {
+            ma_lpf_node_config cfg = ma_lpf_node_config_init(kChannels, rate, 20000.0, 2);
+            if (ma_lpf_node_init(ma_engine_get_node_graph(&engine), &cfg, nullptr, &v.lpf) != MA_SUCCESS) return;
+            v.lpfInit = true;
+            const i32 bus = std::clamp(static_cast<i32>(v.bus), 0, kAudioBusCount - 1);
+            ma_node_attach_output_bus(&v.lpf, 0, &groups[bus], 0);
+            ma_node_attach_output_bus(&v.sound, 0, &v.lpf, 0);
+            v.appliedCutoff = 20000.0f;
+        }
+        const float cutoff = 20000.0f * std::pow(700.0f / 20000.0f, k);
+        if (std::fabs(cutoff - v.appliedCutoff) > v.appliedCutoff * 0.01f) {
+            ma_lpf_config c = ma_lpf_config_init(ma_format_f32, kChannels, rate, cutoff, 2);
+            ma_lpf_node_reinit(&c, &v.lpf);
+            v.appliedCutoff = cutoff;
+        }
+        ma_node_set_output_bus_volume(&v.lpf, 0, 1.0f - 0.5f * k);
+    }
     bool engineInit = false, deviceInit = false, deviceRunning = false, suspended = false;
     // Recording (microphone): filled by the capture thread or feedRecording.
     ma_device capture{};
@@ -504,6 +533,7 @@ Status AudioSystem::initialize(const AudioConfig& config) {
         setBusEffects(static_cast<AudioBus>(i), m->busEffects[i]);  // effects set before initialize()
     }
     m->stats.sampleRate = rate;
+    m->rate = rate;
 
     m->output = config.output;
     if (config.output == AudioOutput::Device) {
@@ -763,6 +793,19 @@ bool AudioSystem::busMuted(AudioBus bus) const {
     return i >= 0 && i < kAudioBusCount && m->busMutedFlags[i];
 }
 
+void AudioSystem::setOcclusionTest(OcclusionTest test) { m->occlusionTest = std::move(test); }
+void AudioSystem::setOcclusionSmoothing(float seconds) { m->occlusionSmoothing = std::max(0.0f, seconds); }
+void AudioSystem::setOcclusion(VoiceId voice, float amount) {
+    if (Voice* v = m->find(voice)) {
+        v->occlusion = v->occlusionTarget = std::clamp(amount, 0.0f, 1.0f);
+        m->applyOcclusion(*v, 1.0f);
+    }
+}
+float AudioSystem::occlusion(VoiceId voice) const {
+    const Voice* v = m->find(voice);
+    return v ? v->occlusion : 0.0f;
+}
+
 void AudioSystem::setListener(math::Vec3 p, math::Vec3 forward, math::Vec3 up) {
     if (!m->engineInit) return;
     const f64 now = m->sceneClock.elapsedSeconds();
@@ -903,6 +946,16 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
             ma_sound_set_looping(&v->sound, s.loop ? MA_TRUE : MA_FALSE);
         }
         if (v->spatial != s.spatial || s.spatial) Impl::applySpatial(*v, s.spatial, w.matrix.translation(), s.minDistance, s.maxDistance);
+        // Occlusion: line of sight from the listener, smoothed.
+        if (s.occlusion && s.spatial && m->occlusionTest && m->listenerHasLast)
+            v->occlusionTarget = m->occlusionTest(m->listenerLast, w.matrix.translation(), e) ? 1.0f : 0.0f;
+        else if (!s.occlusion)
+            v->occlusionTarget = 0.0f;
+        if (v->occlusion != v->occlusionTarget || v->lpfInit) {
+            const float step = m->occlusionSmoothing <= 0.0f ? 1.0f : static_cast<float>(dt) / m->occlusionSmoothing;
+            v->occlusion += std::clamp(v->occlusionTarget - v->occlusion, -step, step);
+            m->applyOcclusion(*v, s.occlusionStrength);
+        }
         if (v->sourceClip != s.clip || v->bus != s.bus || v->streamed != s.stream) {
             // Clip, bus or streaming changed while playing: restart with the new settings.
             m->forget(it->second);

@@ -49,6 +49,8 @@ struct AudioSourceComponent {
     /// (';'-separated, with `clip`), pitch and volume randomly varied by up to these amounts.
     std::string alternateClips;
     float randomPitch = 0.0f;        ///< e.g. 0.1 = between 0.9x and 1.1x.
+    bool occlusion = false;          ///< Spatial: muffled and quieter when a 3D collider is between it and the listener.
+    float occlusionStrength = 0.8f;  ///< 0..1: how much a wall removes (highs and volume).
     float randomVolume = 0.0f;       ///< e.g. 0.2 = between 80% and 100%.
 };
 

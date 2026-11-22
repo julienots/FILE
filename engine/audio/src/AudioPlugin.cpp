@@ -2,6 +2,7 @@
 
 #include "agr/core/Log.hpp"
 #include "agr/runtime/Engine.hpp"
+#include "agr/runtime/LineOfSight.hpp"
 #include "agr/runtime/Events.hpp"
 
 namespace agr {
@@ -47,6 +48,13 @@ void AudioPlugin::setPaused(bool paused) {
 
 void AudioPlugin::onUpdate(Engine& engine, const FrameTime& time) {
     if (!m_audio) return;
+    // Occlusion through the 3D physics when it is loaded.
+    if (const LineOfSightService* los = engine.service<LineOfSightService>(); los && los->blocked) {
+        if (!m_occlusionSet) m_audio->setOcclusionTest(los->blocked), m_occlusionSet = true;
+    } else if (m_occlusionSet) {
+        m_audio->setOcclusionTest({});
+        m_occlusionSet = false;
+    }
     // The project's bus layout (volumes, mutes, effects): applied when the file appears or changes.
     m_layoutTimer += time.unscaledDeltaSeconds;
     if (m_layoutTimer >= 0.5 || m_layoutModified < 0) {

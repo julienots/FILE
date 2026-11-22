@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -137,6 +138,16 @@ public:
     /// or inactive sources, and places the listener. With running = false every
     /// source voice stops (editor edit mode). Detects scene reloads.
     void updateScene(Scene& scene, bool running);
+    /// Line of sight for occlusion: true when something solid is between `from` (listener) and
+    /// `to` (source); `source` is the source's entity (its own colliders do not count). Set by the
+    /// audio plugin from the 3D physics; none = no occlusion.
+    using OcclusionTest = std::function<bool(math::Vec3 from, math::Vec3 to, ecs::Entity source)>;
+    void setOcclusionTest(OcclusionTest test);
+    /// Seconds to go from clear to occluded (and back); 0 = immediate.
+    void setOcclusionSmoothing(float seconds);
+    /// Occlusion of a voice: 0 clear .. 1 fully behind walls (low-pass and volume, per voice).
+    void setOcclusion(VoiceId voice, float amount);
+    float occlusion(VoiceId voice) const;
     VoiceId playSource(Scene& scene, ecs::Entity entity);
     void stopSource(ecs::Entity entity, float fadeOutSeconds = 0.0f);
     /// Game pause: pauses (or resumes) every voice except those of the Interface bus.

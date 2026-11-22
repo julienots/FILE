@@ -97,6 +97,8 @@ void registerAudioComponents() {
         .field("coneOuterVolume", &AudioSourceComponent::coneOuterVolume, {.tooltip = "Volume outside the outer angle", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("alternateClips", &AudioSourceComponent::alternateClips, {.tooltip = "Other clips picked at random (';'-separated)"})
         .field("randomPitch", &AudioSourceComponent::randomPitch, {.tooltip = "Pitch varies by up to this (0.1 = 0.9x .. 1.1x)", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.005f})
+        .field("occlusion", &AudioSourceComponent::occlusion, {.tooltip = "Spatial: muffled and quieter behind 3D colliders (walls)"})
+        .field("occlusionStrength", &AudioSourceComponent::occlusionStrength, {.tooltip = "How much a wall removes (0..1)", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("randomVolume", &AudioSourceComponent::randomVolume, {.tooltip = "Volume lowered by up to this (0.2 = 80% .. 100%)", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.005f});
     reg.add<AudioListenerComponent>("AudioListener")
         .category("Audio")

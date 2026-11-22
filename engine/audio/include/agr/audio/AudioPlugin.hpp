@@ -25,6 +25,7 @@ public:
 private:
     AudioConfig m_config;
     std::unique_ptr<AudioSystem> m_audio;
+    bool m_occlusionSet = false;
     SubscriptionId m_lifecycle{};
     bool m_running = true;
     bool m_paused = false;

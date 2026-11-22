@@ -725,3 +725,56 @@ TEST_CASE("audio: custom buses are named, routed into another bus and saved in t
     setAudioBusName(sub, "");
     CHECK_FALSE(audioBusActive(sub));
 }
+
+TEST_CASE("audio: occlusion muffles (low-pass) and lowers a source behind a wall, smoothly back when clear") {
+    AudioFixture f;
+    // 6 kHz tone: well above the occluded cutoff (700 Hz).
+    const u32 frames = kRate;
+    std::vector<float> tone(frames);
+    for (u32 i = 0; i < frames; ++i) tone[i] = 0.5f * static_cast<float>(std::sin(2.0 * std::numbers::pi * 6000.0 * i / kRate));
+    const ByteBuffer wav = encodeWav16(tone.data(), frames, 1, kRate);
+    REQUIRE(f.vfs.writeBytes("assets://high.wav", wav.data(), wav.size()));
+    Scene scene;
+    const auto cam = scene.createEntity("Camera");
+    scene.registry().emplace<CameraComponent>(cam);
+    const auto e = scene.createEntity("Speaker");
+    auto& src = scene.registry().emplace<AudioSourceComponent>(e);
+    src.clip = "assets://high.wav";
+    src.loop = true;
+    src.spatial = true;
+    src.minDistance = 10.0f;  // no distance attenuation here
+    src.occlusion = true;
+    src.occlusionStrength = 1.0f;
+    scene.registry().get<TransformComponent>(e).position = {0, 0, -2};
+    scene.updateTransforms();
+    bool wall = false;
+    ecs::Entity asked;
+    f.audio.setOcclusionTest([&](math::Vec3, math::Vec3, ecs::Entity source) {
+        asked = source;
+        return wall;
+    });
+    f.audio.setOcclusionSmoothing(0.0f);
+    f.audio.updateScene(scene, true);  // starts the voice
+    f.audio.updateScene(scene, true);  // then follows it (occlusion from here)
+    f.run(0.05);
+    const float clear = f.run(0.1).peak();
+    CHECK(clear > 0.2f);
+    CHECK(asked == e);
+    wall = true;
+    f.audio.updateScene(scene, true);
+    f.run(0.05);
+    const float behind = f.run(0.1).peak();
+    CHECK(behind < clear * 0.2f);  // highs removed (and half the volume)
+    wall = false;
+    f.audio.updateScene(scene, true);
+    f.run(0.05);
+    CHECK(f.run(0.1).peak() == doctest::Approx(clear).epsilon(0.1));
+    // Off: never asked, never filtered.
+    src.occlusion = false;
+    wall = true;
+    asked = {};
+    f.audio.updateScene(scene, true);
+    f.run(0.05);
+    CHECK(asked.isNull());
+    CHECK(f.run(0.1).peak() == doctest::Approx(clear).epsilon(0.1));
+}
