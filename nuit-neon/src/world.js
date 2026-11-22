@@ -295,6 +295,7 @@ export function buildWorld(def, renderer, q) {
   const FOG = new THREE.Color(th.fog);
   const fog = new THREE.FogExp2(FOG, th.dens);
   const sky = skyDome(th); group.add(sky); disposables.push(sky.geometry, sky.material);
+  sky.renderOrder = -10;
   const farFromTrack = (x, z, r) => { for (let i = 0; i < T.N; i += 3) { const dx = x - T.px[i], dz = z - T.pz[i]; if (dx * dx + dz * dz < r * r) return false; } return true; };
   let cx = 0, cz = 0, R = 0;
   for (let i = 0; i < T.N; i++) { cx += T.px[i]; cz += T.pz[i]; } cx /= T.N; cz /= T.N;
@@ -859,7 +860,7 @@ export function buildWorld(def, renderer, q) {
     // --- herbe : brins individuels qui suivent la caméra, en deux couches (tapis ras + herbes hautes) ---
     if (th.grass && q.grass > 0) {
       // véhicules qui couchent l'herbe : push = (x, z, rayon, force) autour de chaque véhicule ; trail = (x, z, direction × force) le long du sillage
-      bend = { push: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 1, 0)), trail: Array.from({ length: 20 }, () => new THREE.Vector4(0, 0, 0, 0)), focus: new THREE.Vector3(0, 0, 0) };
+      bend = { push: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 1, 0)), trail: Array.from({ length: 32 }, () => new THREE.Vector4(0, 0, 0, 0)), focus: new THREE.Vector3(0, 0, 0) };
       const layer = (n, S, hgt, wid, tall) => {
         const g = new THREE.InstancedBufferGeometry();
         const base = mergeGeometries([new THREE.PlaneGeometry(wid, 1, 1, 3).translate(0, 0.5, 0), new THREE.PlaneGeometry(wid, 1, 1, 3).translate(0, 0.5, 0).rotateY(Math.PI / 2 * 0.9)]);
@@ -867,10 +868,11 @@ export function buildWorld(def, renderer, q) {
         const off = new Float32Array(n * 4);
         for (let i = 0; i < n; i++) { off[i * 4] = rr(-S / 2, S / 2); off[i * 4 + 1] = rr(-S / 2, S / 2); off[i * 4 + 2] = 0; off[i * 4 + 3] = rr(0, 6.28); }
         const attr = new THREE.InstancedBufferAttribute(off, 4); attr.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aOff', attr);
+        const hs = new Float32Array(n), hAttr = new THREE.InstancedBufferAttribute(hs, 1); hAttr.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aH', hAttr);   // hauteur du sol sous chaque touffe
         g.instanceCount = n;
         const mat = new THREE.ShaderMaterial({
           side: THREE.DoubleSide, uniforms: Object.assign(gUni(), { hgt: { value: hgt }, tall: { value: tall }, half_: { value: S / 2 }, push: { value: bend.push }, trail: { value: bend.trail }, focus: { value: bend.focus } }),
-          vertexShader: GROUND_GLSL + `attribute vec4 aOff; uniform float hgt; uniform float tall; uniform float half_; uniform vec4 push[6]; uniform vec4 trail[20]; uniform vec3 focus;
+          vertexShader: GROUND_GLSL + `attribute vec4 aOff; attribute float aH; uniform float hgt; uniform float tall; uniform float half_; uniform vec4 push[6]; uniform vec4 trail[32]; uniform vec3 focus; varying float vFlat;
             varying vec2 vU; varying float vD; varying float vK; varying float vField; varying vec3 vBase; varying vec3 vWp; varying float vCs;
             void main(){ vU = uv; float c = cos(aOff.w), sn = sin(aOff.w);
               vK = gh(aOff.xy*0.37 + 1.3);
@@ -883,13 +885,13 @@ export function buildWorld(def, renderer, q) {
               vec2 lay = vec2(0.0); float flat_ = 0.0;
               if (focus.z > 0.5 && distance(aOff.xy, focus.xy) < 60.0) {
                 for (int i = 0; i < 6; i++) { vec2 d = aOff.xy - push[i].xy; float l = length(d); float k = push[i].w * smoothstep(push[i].z, push[i].z*0.4, l); lay += d / max(l, 0.05) * k; flat_ = max(flat_, k); }
-                for (int i = 0; i < 20; i++) { vec2 d = aOff.xy - trail[i].xy; float st = length(trail[i].zw); if (st < 0.01) continue; float k = st * smoothstep(1.75, 0.75, length(d)); lay += trail[i].zw / st * k * 1.3 + d * 0.25 * k; flat_ = max(flat_, k); }
+                for (int i = 0; i < 32; i++) { vec2 d = aOff.xy - trail[i].xy; float st = length(trail[i].zw); if (st < 0.01) continue; float k = st * smoothstep(1.75, 0.75, length(d)); lay += trail[i].zw / st * k * 1.3 + d * 0.25 * k; flat_ = max(flat_, k); }
               }
               float ll = length(lay); if (ll > 1.0) lay /= ll; flat_ = min(flat_, 1.0);
-              float h0 = h; h *= 1.0 - 0.8*flat_;
+              float h0 = h; h *= 1.0 - 0.8*flat_; vFlat = flat_;
               vec3 p = position; p.y *= h;
               p = vec3(p.x*c - p.z*sn, p.y, p.x*sn + p.z*c);
-              vec3 w = vec3(aOff.x, 0.0, aOff.y) + p;
+              vec3 w = vec3(aOff.x, aH, aOff.y) + p;
               // vent : grandes rafales qui traversent le champ + frémissement
               float gust = gn(w.xz*0.045 + vec2(time*0.55, time*0.3)) * 2.0 - 0.6;
               float sway = gust + 0.35*sin(time*3.3 + w.x*1.1 + w.z*0.9 + vK*6.0);
@@ -899,7 +901,7 @@ export function buildWorld(def, renderer, q) {
               w.xz += lay * uv.y * h0 * 0.85;                                                                                          // la tige se couche
               vWp = w; vec4 mv = viewMatrix * vec4(w, 1.0); vD = -mv.z; gl_Position = projectionMatrix * mv; }`,
           fragmentShader: `uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 amb; uniform vec3 fogColor; uniform float fogDensity;
-            varying vec2 vU; varying float vD; varying float vK; varying float vField; varying vec3 vBase; varying vec3 vWp; varying float vCs;
+            varying vec2 vU; varying float vD; varying float vK; varying float vField; varying vec3 vBase; varying vec3 vWp; varying float vCs; varying float vFlat;
             float gh(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
             void main(){
               // chaque carte porte 6 brins : hauteur, courbure et teinte propres à chacun
@@ -908,24 +910,25 @@ export function buildWorld(def, renderer, q) {
               float i = floor(u*nb), f = fract(u*nb) - 0.5;
               float seedB = gh(vec2(i*3.7 + vK*91.0, 5.3));
               bool ear = vField > 0.5 && seedB < 0.6;                 // épi de blé
-              bool flower = vField < 0.35 && seedB > 0.92;            // fleur des prés
+              bool flower = vField < 0.35 && seedB > 0.95;            // fleur des prés
               float hi = 0.45 + 0.55*gh(vec2(i*7.31 + vK*57.0, 1.7)); if (ear) hi = max(hi, 0.82);
               float t = vU.y / hi;
               float wd = 0.47*(1.0 - pow(t, 1.7));
               if (ear && t > 0.6) { float e = (t - 0.6) / 0.28;
                 wd = e < 1.0 ? 0.3*(0.7 + 0.3*abs(sin(e*17.0 + abs(f)*5.0)))*smoothstep(0.0, 0.12, e)*(1.0 - 0.45*smoothstep(0.7, 1.0, e))   // grains en chevrons
                   : (min(min(abs(f), abs(f - (t - 0.88)*2.6)), abs(f + (t - 0.88)*2.6)) < 0.045 ? 0.5 : 0.0); }                              // barbes : trois fils fins
-              if (flower && t > 0.86) wd = 0.5;
+              if (flower && t > 0.88) { float fy = (t - 0.94) / 0.06; wd = 0.3 * sqrt(max(0.0, 1.0 - fy*fy)) * (0.75 + 0.25*cos(atan(f, fy*0.3)*5.0)); }   // corolle ronde à cinq pétales
               if (t > 1.0 || abs(f) > wd) discard;
               vec3 tip = mix(vBase*1.45 + vec3(0.03,0.06,0.0), vec3(0.62,0.52,0.26), vField*0.9);
               vec3 alb = mix(vBase*0.5, tip, t) * (0.78 + 0.44*gh(vec2(i, vK*13.0)));
               alb *= 1.0 - 0.3*abs(f)*2.0;                                                        // nervure centrale plus claire
               if (ear && t > 0.6) alb = t > 0.88 ? vec3(0.70, 0.60, 0.32) : vec3(0.60, 0.46, 0.19) * (0.7 + 0.45*abs(sin((t - 0.6)*60.0 + abs(f)*5.0)));   // grains dorés, barbes pâles
-              if (flower && t > 0.86) { float fc = gh(vec2(seedB*31.0, i)); alb = fc < 0.4 ? vec3(0.85,0.06,0.04) : fc < 0.65 ? vec3(0.95,0.93,0.86) : fc < 0.85 ? vec3(0.95,0.78,0.12) : vec3(0.55,0.36,0.85); }
+              if (flower && t > 0.88) { float fc = gh(vec2(seedB*31.0, i)); alb = fc < 0.4 ? vec3(0.85,0.06,0.04) : fc < 0.65 ? vec3(0.95,0.93,0.86) : fc < 0.85 ? vec3(0.95,0.78,0.12) : vec3(0.55,0.36,0.85); }
               vec3 V = normalize(cameraPosition - vWp);
               float back = pow(max(dot(-V, sunDir), 0.0), 3.0);                                    // contre-jour : la lumière traverse les brins
               float sheen = pow(max(dot(reflect(-sunDir, vec3(0.0,1.0,0.0)), V), 0.0), 9.0);       // reflet du soleil sur les brins
               vec3 col = alb * (amb*0.55 + sunCol*(0.5 + 0.6*t)*(1.0 - 0.45*vCs)) + tip*sunCol*(back*0.6 + sheen*0.25)*t;
+              col *= 1.0 - 0.28*vFlat;                                                             // herbe écrasée : plus sombre, montre son envers
               col = mix(col, fogColor, 1.0 - exp(-fogDensity*fogDensity*vD*vD));
               gl_FragColor = vec4(col, 1.0);
               #include <tonemapping_fragment>
@@ -941,16 +944,17 @@ export function buildWorld(def, renderer, q) {
             while (x - fx > S / 2) { x -= S; moved = true; } while (x - fx < -S / 2) { x += S; moved = true; }
             while (z - fz > S / 2) { z -= S; moved = true; } while (z - fz < -S / 2) { z += S; moved = true; }
             if (!moved) continue;
-            const j = T.nearest(x, z, hint, 30), lat = Math.abs(T.lateral(x, z, j));
-            off[k4] = x; off[k4 + 1] = z; off[k4 + 2] = lat < HALF + (T.libre ? 1.3 : 1.0) ? 0 : 1; dirty = true;
+            const j = T.nearest(x, z, hint, 30), sl = T.lateral(x, z, j), lat = Math.abs(sl);
+            off[k4] = x; off[k4 + 1] = z; off[k4 + 2] = lat < HALF + (T.libre ? 1.3 : 1.0) ? 0 : 1; hs[i] = ground ? ground(x, z, sl) - 0.1 : 0; dirty = true;
           }
           first = false;
-          if (dirty) attr.needsUpdate = true;
+          if (dirty) { attr.needsUpdate = true; hAttr.needsUpdate = true; }
         });
       };
       const dens = th.grass.dens || 1;
-      layer(Math.floor(q.grass * 2 * dens), 46, (th.grass.h || 1.3) * 0.34, 1.5, 0);   // tapis ras et dense
-      layer(Math.floor(q.grass * dens), 72, th.grass.h || 1.3, 1.9, 1);                 // herbes hautes
+      const ow = def.ouvert ? 1.6 : 1;                                                  // monde ouvert : on roule dedans, prairie plus fournie
+      layer(Math.floor(q.grass * 2 * dens * ow), def.ouvert ? 52 : 46, (th.grass.h || 1.3) * 0.34, 1.5, 0);   // tapis ras et dense
+      layer(Math.floor(q.grass * dens * ow), def.ouvert ? 80 : 72, th.grass.h || 1.3, 1.9, 1);                 // herbes hautes
     }
     group.add(new THREE.HemisphereLight(new THREE.Color().fromArray(th.sky[1]), gcol, (th.ambI ?? 1.5) * (sombre ? 1 : 0.8)));
     const sunL = new THREE.DirectionalLight(new THREE.Color().fromArray(th.sun.col), (th.sunI ?? 2.6) * (sombre ? 1 : 1.2)); sunL.position.copy(sunV).multiplyScalar(100); group.add(sunL);
@@ -1046,7 +1050,7 @@ export function buildWorld(def, renderer, q) {
     env = captureEnv(renderer, scene, new THREE.Vector3(T.px[4], 1.6, T.pz[4]), q.env, road, city ? new THREE.Color(th.fog).multiplyScalar(0.5) : new THREE.Color(th.ground).multiplyScalar(0.6));
     return env;
   };
-  const update = (cam, dt, time, hint) => { for (const u of updaters) u(cam, dt, time, hint); };
+  const update = (cam, dt, time, hint) => { sky.position.set(cam.position.x, 0, cam.position.z); for (const u of updaters) u(cam, dt, time, hint); };   // le ciel suit la caméra (sinon il disparaît loin du centre)
   const dispose = () => { for (const d of disposables) d.dispose && d.dispose(); road.dispose && road.dispose(); if (env) env.dispose(); };
   return { ground, solids, T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, bend, fieldAt, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
     sunDir: th.sun ? new THREE.Vector3().fromArray(th.sun.dir).normalize() : null, sunCol: th.sun ? new THREE.Color().fromArray(th.sun.col) : null };

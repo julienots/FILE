@@ -2,6 +2,12 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.4.1
+
+- **Herbe du monde ouvert** : les brins sont posés sur le relief (avant, ils restaient à la hauteur de la route et disparaissaient sous les collines) ; prairie 60 % plus dense, fleurs rondes à cinq pétales.
+- **Rouler dans l'herbe** : la carrosserie couche les tiges, qui restent écrasées (plus sombres, on voit leur envers) dans un sillage d'une quarantaine de mètres puis se relèvent lentement ; les roues arrachent des brins verts, de la paille et des mottes de terre, beaucoup plus en patinant ou en dérapant, avec un nuage de terre retournée.
+- **Ciel** : il suit la caméra ; il ne devient plus noir quand on s'éloigne du centre de la Vallée Ouverte.
+
 ## Nouveautés de la 2.4
 
 - **Monde ouvert : Vallée Ouverte** (Balade libre) : une vallée de 7 km sur 5 traversée par 14 km de route de campagne avec circulation. On peut quitter la route et rouler partout jusqu'à 450 m de part et d'autre : prés, champs, collines (la voiture suit le relief, penche dans les pentes, ralentit en montée et accélère en descente), forêts de feuillus et de sapins, rochers. Les 1 500 arbres et rochers sont de vrais obstacles : on rebondit dessus. Pas de clôture.

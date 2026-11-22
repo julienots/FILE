@@ -853,7 +853,7 @@ function stepBend(dt) {
   for (let i = n; i < P.length; i++) P[i].w = 0;
   const p = player;
   if (p && p.offroad && p.y < 0.3 && T && T.libre && mode === 'race') {
-    if (!trailLast || Math.hypot(p.x - trailLast.x0, p.z - trailLast.z0) > 1.25) { const [vx, vz] = velOf(p), l = Math.hypot(vx, vz);
+    if (!trailLast || Math.hypot(p.x - trailLast.x0, p.z - trailLast.z0) > 1.1) { const [vx, vz] = velOf(p), l = Math.hypot(vx, vz);
       if (l > 0.5) { trailLast = { x0: p.x, z0: p.z, x: p.x + Math.sin(p.h) * p.vis.len * 0.5, z: p.z + Math.cos(p.h) * p.vis.len * 0.5, dx: vx / l, dz: vz / l, s: 1 }; trail.push(trailLast); if (trail.length > B.trail.length) trail.shift(); } }
   } else trailLast = null;
   if (mode !== 'pause') for (let i = trail.length - 1; i >= 0; i--) { trail[i].s -= dt / 22; if (trail[i].s <= 0) trail.splice(i, 1); }   // le blé se relève très lentement
@@ -1828,8 +1828,18 @@ function emit(c, dt) {
     if (c.offroad && sp > 5) {
       const lum = world.day ? 1 : 0.45; c.wheat = world.bend && world.fieldAt ? world.fieldAt(c.x, c.z) : 0;
       if (Math.random() < 0.65) fx.dirt(rx, 0.3, rz, vx * 0.3, 1.1, vz * 0.3, 1.1 + sp / 40, S[0], S[1], S[2], 0.24);
-      if (world.bend) for (let k = 0; k < (c.wheat > 0.5 ? 3 : 1); k++) { const [bx, bz] = side((Math.random() * 2 - 1) * hw, (Math.random() * 2 - 1) * len);
-        if (c.wheat > 0.5) fx.bits(bx, 0.3 + Math.random() * 0.8, bz, vx * 0.55, 2.5 + Math.random() * 3, vz * 0.55, 0.78 * lum, 0.62 * lum, 0.24 * lum, 0.11, 8); else if (Math.random() < 0.5) fx.bits(bx, 0.2, bz, vx * 0.4, 2, vz * 0.4, 0.2 * lum, 0.42 * lum, 0.1 * lum, 0.09, 12); }
+      if (world.bend) {
+        // les roues arrachent l'herbe : brins verts projetés derrière chaque roue, mottes de terre ; beaucoup plus en patinant ou en dérapant
+        const rage = (c.drifting || c.slip > 1.2 || Math.abs(c.u) > 2.5 || (gas > 0.7 && sp < 18)) ? 1 : 0, rough = Math.min(1, sp / 40);
+        const nb = (c.wheat > 0.5 ? 3 : 2) + rage * 5 + Math.round(rough * 2);
+        for (let k = 0; k < nb; k++) { const s2 = Math.random() < 0.5 ? -1 : 1, [bx, bz] = side(s2 * hw * 0.85, len * (0.5 + Math.random() * 0.2)), up = 2 + Math.random() * (3 + rage * 4), spread = 1.5 + rage * 3;
+          const ex = vx * (0.25 + Math.random() * 0.3) + (Math.random() - 0.5) * spread + ch * s2 * rage * 2, ez = vz * (0.25 + Math.random() * 0.3) + (Math.random() - 0.5) * spread - sh * s2 * rage * 2;
+          if (c.wheat > 0.5 && Math.random() < 0.6) fx.bits(bx, 0.3 + Math.random() * 0.6, bz, ex, up, ez, 0.78 * lum, 0.62 * lum, 0.24 * lum, 0.1 + Math.random() * 0.05, 8);   // paille
+          else { const gk = 0.7 + Math.random() * 0.6; fx.bits(bx, 0.15, bz, ex, up, ez, 0.16 * gk * lum, 0.40 * gk * lum, 0.09 * gk * lum, 0.07 + Math.random() * 0.07, 9); }     // brins d'herbe
+          if (Math.random() < 0.25 + rage * 0.35) fx.bits(bx, 0.12, bz, ex * 0.8, up * 0.7, ez * 0.8, 0.30 * lum, 0.22 * lum, 0.14 * lum, 0.09 + Math.random() * 0.08, 18);   // motte de terre
+        }
+        if (rage && Math.random() < 0.5) { const s2 = Math.random() < 0.5 ? -1 : 1, [bx, bz] = side(s2 * hw * 0.85, len * 0.6); fx.dirt(bx, 0.2, bz, vx * 0.2 + (Math.random() - 0.5) * 2, 1.4, vz * 0.2 + (Math.random() - 0.5) * 2, 1.2 + sp / 30, S[0], S[1], S[2], 0.3); }   // poussière de terre retournée
+      }
     } else {
       c.wheat = 0;
       if (T && !T.libre && G.soilKind >= 0 && sp > 14) {
