@@ -2152,6 +2152,26 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.05f, [nd](Game& g) { (void)g; AGR_LOG("DUNGEONLOOK %d/%d -> %s", nOk, nd, nOk == nd ? "TEST PASSED" : "TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "castlelook") {
+        // 3.1.0 Fort Aldren rebuilt: the gatehouse from outside, the keep and its courtyard, a wall from high up
+        struct V { float ang, dist, camD, pitch, yawOff; const char* shot; };
+        static const V views[] = {{1.178f, 1.05f, 20.f, 0.22f, 0.f, "CA0_gate"}, {1.178f, 0.25f, 30.f, 0.32f, 0.f, "CA1_keep"}, {2.4f, 0.55f, 26.f, 0.55f, 0.6f, "CA2_walls"}};
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        for (const V& v : views) {
+            const V* q = &v;
+            s.push_back({4.5f, [q](Game& g) {
+                const Poi* c = g.world.poiById("fort_aldren"); if (!c) return;
+                vec2 dir{std::cos(q->ang), std::sin(q->ang)};
+                vec2 hero = c->pos + dir * (c->radius * q->dist);
+                teleport(g, hero.x, hero.y, 0.f);
+                g.camYaw = std::atan2(dir.x, dir.y) + q->yawOff; g.pc().yaw = g.camYaw + PI;
+                g.camDist = g.camDistTarget = q->camD; g.camPitch = q->pitch; g.timeOfDay = 16.f;
+                g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; }, [](Game& g, float) { g.camIdleT = 0; }, "go"});
+            s.push_back({0.1f, [q](Game& g) { g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        s.push_back({0.05f, [](Game& g) { (void)g; AGR_LOG("CASTLELOOK TEST PASSED"); }, idle, "end"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

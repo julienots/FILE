@@ -951,6 +951,14 @@ void World::buildPlan() {
             if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0));
             else S(S_STATUE, p.pos + vec2(0, -p.radius * 0.45f), 0, pi, 1.6f);
             for (int i = 0; i < 4; i++) S(S_LANTERN, p.pos + vec2(i < 2 ? -12.f : 12.f, i % 2 ? -12.f : 12.f), 0, pi);
+            if (!p.hostile) {
+                // 3.1.0 a lived-in courtyard: two barracks along the walls, a well, market stalls, banners at the keep door
+                const float R = p.radius;
+                for (int sd = -1; sd <= 1; sd += 2) { vec2 q = p.pos + vec2(sd * R * 0.5f, -R * 0.05f); S(S_LONGHOUSE, q, std::atan2(p.pos.x - q.x, p.pos.y - q.y), pi, 1.f, 1); }
+                S(S_WELL, p.pos + vec2(-R * 0.22f, R * 0.22f), 0.3f, pi);
+                for (int i = 0; i < 3; i++) S(S_STALL, p.pos + vec2(-R * 0.36f + i * 4.2f, R * 0.42f), PI, pi, 1.f, i);
+                if (p.boss < 0) for (int sd = -1; sd <= 1; sd += 2) S(S_BANNER, p.pos + vec2(sd * 5.f, -R * 0.25f + 11.f), 0, pi, 1.f, reg == R_SHADOWS ? 1 : 0);
+            }
             if (p.hostile) legionFort();
             break;
         }

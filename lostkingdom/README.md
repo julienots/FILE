@@ -13,6 +13,43 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 3.1.0 (herbe nette, entrée de mine refaite, vrais loups, donjons et châteaux habillés)
+
+- **Plus de flou sur l'herbe** :
+  - **cause** : un effet « tilt-shift » (miniature) floutait le bas de l'écran, là où se trouve l'herbe proche. Il montait jusqu'à 80 % quand on dézoomait ;
+  - il est **supprimé en jeu**, en extérieur comme dans les donjons. Le vrai flou de profondeur reste réservé aux dialogues et aux cinématiques ;
+  - la résolution dynamique ne descend plus sous 80 % (avant : 75 %), donc l'image reste plus nette quand le téléphone est chargé.
+- **Le « caillou bizarre » près des mines est corrigé** :
+  - **cause** : l'entrée de mine était un seul rocher de 10 m dont la base plate flottait 1,3 m au-dessus du sol, à côté d'un cadre de porte isolé ;
+  - elle est maintenant une butte rocheuse **enfoncée dans le sol**, avec une galerie étayée (trois cadres de bois qui s'enfoncent dans le noir), un auvent en planches, une enseigne, une lanterne suspendue, des rails, un wagonnet de minerai, un treuil, un tas de minerai, une pioche, des caisses et un tonneau ;
+  - les collisions et la lumière de la lanterne suivent la nouvelle forme (la lumière tourne avec la mine).
+- **Les loups n'utilisent plus le modèle Tripo** :
+  - ils sont dessinés par le jeu : corps élancé au poitrail profond, dos sombre et ventre clair, collerette de fourrure, long museau, oreilles pointues, yeux ambrés, crocs, queue touffue au bout sombre, pattes fines ;
+  - cela vaut pour tous les loups (gris, des neiges, des steppes, boréal, des Titans, molosses de l'Abîme) et pour Fenra, le loup géant monture ;
+  - `assets/models/wolf.lkm` et `wolf.jpg` sont supprimés, ce qui allège l'APK d'environ 10 Mo.
+- **Donjons habillés** (tous sauf le Royaume Céleste, qui garde ses îles) :
+  - **murs** :
+    - temples, catacombes, Abîme et sanctuaires : murs maçonnés (trois assises décalées), plinthe, corniche et pilastres ;
+    - mines : cadres de bois et planches ;
+    - grottes : blocs de roche, stalactites de glace dans les cavernes gelées, toiles d'araignée dans l'antre ;
+  - **décor des murs** : appliques avec flamme et lumière, bannières aux couleurs du thème, niches à crânes, chaînes ;
+  - **portes** : encadrement en pierre avec clé de voûte entre chaque couloir et chaque salle (bois dans les mines) ;
+  - **mobilier par thème le long des murs** : sarcophages avec gisant et bougies, statues sur socle, étagères d'urnes et de livres, grandes jarres, statues de gardiens, tables à bougies, wagonnets de minerai, caisses et tonneaux, râteliers et marmites gobelines, œufs d'araignée, cristaux de glace. Les gros meubles ont des collisions ;
+  - **salle du boss** transformée en salle du trône : estrade à deux marches, trône à haut dossier avec cimier doré (autel de pierre dans les grottes), tapis bordé d'or depuis l'entrée, quatre grands braseros ;
+  - **lumière** : les donjons sont un peu plus clairs pour que le décor se voie.
+- **Châteaux refaits** :
+  - **murailles** : talus, cordons, pierres de taille, contrefort, meurtrières, mâchicoulis et chemin de ronde ;
+  - **tours** : base évasée, anneaux, meurtrières, parapet en encorbellement à 12 créneaux, toit à avant-toit, épi doré et fanion ;
+  - **donjon (corps de logis)** : socle, contreforts, mâchicoulis, escalier et porte en arc, blason, fenêtres à meneaux sur deux étages, tour centrale à flèche, grandes bannières ;
+  - **porte** : porterie entre deux tours rondes, arc à claveaux, herse levée, battants ouverts, blason et lanternes ;
+  - **cour des châteaux non hostiles** : deux casernes, un puits, trois étals et deux bannières devant le donjon.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 2 985 réussis ;
+  - scénarios `grass`, `camera`, `ui`, `titandungeons`, `mine` et `interior` réussis ;
+  - nouveaux scénarios avec captures : `minecamp` (la mine), `wolves` (aucun loup avec un modèle importé : WOLVES TEST PASSED), `dungeonlook` (six donjons, salle et salle du trône) et `castlelook` (Fort Aldren).
+- **À confirmer sur ton téléphone**.
+- **Coût en triangles** : un donjon dessiné passe à environ 150 000 à 220 000 triangles (le monde extérieur en affiche 700 000 à 1 100 000).
+
 ### Nouveautés 3.0.4 (les cercles sur le sol autour du héros)
 
 - **Cause** : en OpenGL ES, un shader lit les textures 2D en **basse précision** par défaut, sauf déclaration contraire. Le moteur ne déclarait rien pour les textures 2D.

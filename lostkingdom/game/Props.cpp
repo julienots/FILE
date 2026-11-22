@@ -1261,69 +1261,160 @@ static void crenellations(MeshBuilder& M, float x0, float x1, float y, float z, 
     for (int i = 0; i < n; i += 2) M.box({x0 + (i + 0.5f) * (x1 - x0) / n, y + 0.4f, z}, {(x1 - x0) / n * 0.5f, 0.4f, depth}, m);
 }
 
+// 3.1.0 castles rebuilt: they were one plain box per wall and smooth cylinders. Now the walls have a battered
+// plinth, string courses, ashlar blocks, a buttress, arrow slits and machicolations under the crenels; the towers
+// get a flared base, rings, slits, a corbelled parapet, a roof with eaves, a finial and a pennant; the keep is a
+// real lord's hall (plinth, buttresses, arched door up a flight of steps, mullioned windows, a central donjon with
+// a spire, great banners); the gate is a gatehouse between two round towers with an arch, open doors, a raised
+// portcullis, a coat of arms and lanterns.
+static vec3 castleRoof(int variant) { return variant == 2 ? hexColor(0x3c5468) : (variant == 3 ? hexColor(0x8a5a2a) : hexColor(0x6a2a26)); }
+static vec3 castleCloth(int variant) { return variant == 1 ? hexColor(0x3e1660) : (variant == 2 ? hexColor(0x1c3f7a) : (variant == 3 ? hexColor(0xb8862e) : pal::cloth1)); }
+
+static void slit(MeshBuilder& M, vec3 c, float yaw, float h = 0.6f) {
+    M.box(c, {0.09f, h, 0.06f}, Mat(pal::dark), quat::axisAngle({0, 1, 0}, yaw));
+    M.box(c + vec3(0, 0, 0), {0.28f, 0.06f, 0.055f}, Mat(pal::dark), quat::axisAngle({0, 1, 0}, yaw));
+}
+
+static void pennant(MeshBuilder& M, vec3 top, const Mat& cloth) {
+    M.tube(top, top + vec3(0, 2.2f, 0), 0.05f, 0.04f, Mat(pal::iron, 0.4f, 1.f), 4, false);
+    M.triP(top + vec3(0, 2.1f, 0), top + vec3(1.6f, 1.75f, 0.1f), top + vec3(0, 1.4f, 0), cloth);
+    M.triP(top + vec3(0, 1.4f, 0), top + vec3(1.6f, 1.75f, 0.1f), top + vec3(0, 2.1f, 0), cloth);
+}
+
 static void castleWall(MeshBuilder& M, int variant, float lengthScale) {
-    // built in unit length (10 m) then scaled by the structure scale along X only through repetition
-    (void)lengthScale;
-    Mat s(castleStone(variant), 0.9f);
+    (void)lengthScale;   // built in 10 m modules, repeated by the caller
+    vec3 sc = castleStone(variant);
+    Mat s(sc, 0.9f), dk(sc * 0.82f, 0.9f), lt(sc * 1.08f, 0.88f);
+    Rng rng(variant * 13 + 5);
     M.jitter = 0.07f; M.jitterSeed = variant * 3 + 1;
     M.box({0, 3.f, 0}, {5.2f, 4.2f, 1.1f}, s);
-    M.box({0, 7.3f, 0}, {5.2f, 0.15f, 1.3f}, Mat(castleStone(variant) * 0.85f, 0.9f));
-    crenellations(M, -5.2f, 5.2f, 7.45f, 0.95f, 0.25f, s);
-    crenellations(M, -5.2f, 5.2f, 7.45f, -0.95f, 0.25f, s);
     M.jitter = 0;
-    if (variant == 1) {  // ruined: a breach
-        M.v.size();
+    M.box({0, 0.2f, 0}, {5.2f, 1.0f, 1.45f}, dk);                       // battered plinth
+    M.box({0, 1.35f, 0}, {5.2f, 0.18f, 1.28f}, dk);
+    for (int sd = -1; sd <= 1; sd += 2) {
+        float z = sd * 1.1f;
+        M.box({0, 3.9f, z + sd * 0.05f}, {5.2f, 0.1f, 0.06f}, dk);        // string course
+        for (int i = 0; i < 6; i++) M.box({rng.range(-4.6f, 4.6f), rng.range(1.8f, 6.4f), z + sd * 0.02f}, {rng.range(0.35f, 0.6f), 0.22f, 0.03f}, (i % 2 ? lt : dk));   // ashlar
+        for (int i = -1; i <= 1; i += 2) slit(M, {i * 2.6f, 4.9f, z + sd * 0.01f}, 0.f);
+        // machicolations: corbels under a projecting parapet
+        for (int i = 0; i < 9; i++) M.box({-4.6f + i * 1.15f, 6.75f, z + sd * 0.18f}, {0.16f, 0.3f, 0.18f}, dk);
+        M.box({0, 7.25f, z + sd * 0.28f}, {5.2f, 0.22f, 0.12f}, s);
     }
+    M.box({0, 3.f, 1.25f}, {0.55f, 4.0f, 0.25f}, dk);                     // buttress (outside face)
+    M.box({0, 7.3f, 0}, {5.2f, 0.15f, 1.3f}, Mat(sc * 0.85f, 0.9f));   // wall walk
+    crenellations(M, -5.2f, 5.2f, 7.45f, 1.3f, 0.25f, s);
+    crenellations(M, -5.2f, 5.2f, 7.45f, -1.3f, 0.25f, s);
 }
 
 static void castleTower(MeshBuilder& M, int variant) {
-    Mat s(castleStone(variant), 0.9f);
+    vec3 sc = castleStone(variant);
+    Mat s(sc, 0.9f), dk(sc * 0.82f, 0.9f);
     M.jitter = 0.07f; M.jitterSeed = variant + 77;
-    M.lathe({{3.4f, -1.f}, {3.2f, 1.f}, {3.f, 9.f}, {3.5f, 9.4f}, {3.5f, 10.f}, {3.0f, 10.f}, {3.0f, 9.5f}, {0.01f, 9.5f}}, s, 14);
+    M.lathe({{3.9f, -1.f}, {3.55f, 1.6f}, {3.2f, 2.2f}, {3.f, 8.6f}, {0.01f, 8.6f}}, s, 16);
     M.jitter = 0;
-    for (int i = 0; i < 7; i++) {
-        float a = i * TAU / 7;
-        M.box({std::cos(a) * 3.3f, 10.4f, std::sin(a) * 3.3f}, {0.45f, 0.45f, 0.3f}, s, quat::axisAngle({0, 1, 0}, -a + PI / 2));
-    }
-    for (int i = 0; i < 3; i++) {
-        float a = i * 2.2f;
-        M.box({std::cos(a) * 3.02f, 4.5f + i * 1.5f, std::sin(a) * 3.02f}, {0.12f, 0.5f, 0.12f}, Mat(pal::window * 0.35f, 0.3f).nightGlow(3.f), quat::axisAngle({0, 1, 0}, -a));
-    }
+    for (float y : {2.2f, 5.4f}) M.lathe({{3.28f, y - 0.1f}, {3.28f, y + 0.1f}}, dk, 16);   // rings
+    // corbel ring and a projecting crenellated parapet
+    for (int i = 0; i < 16; i++) { float a = i * TAU / 16; M.box({std::cos(a) * 3.15f, 8.7f, std::sin(a) * 3.15f}, {0.18f, 0.35f, 0.22f}, dk, quat::axisAngle({0, 1, 0}, -a)); }
+    M.lathe({{3.6f, 9.0f}, {3.6f, 9.9f}, {3.2f, 9.9f}, {3.2f, 9.3f}, {0.01f, 9.3f}}, s, 16);
+    for (int i = 0; i < 12; i++) { float a = i * TAU / 12; M.box({std::cos(a) * 3.4f, 10.3f, std::sin(a) * 3.4f}, {0.42f, 0.42f, 0.2f}, s, quat::axisAngle({0, 1, 0}, -a + PI / 2)); }
+    for (int i = 0; i < 6; i++) { float a = i * TAU / 6 + 0.3f; slit(M, {std::cos(a) * 3.04f, 3.6f + (i % 2) * 2.4f, std::sin(a) * 3.04f}, -a + PI / 2); }
+    for (int i = 0; i < 3; i++) { float a = i * 2.2f; M.box({std::cos(a) * 3.02f, 7.2f, std::sin(a) * 3.02f}, {0.22f, 0.45f, 0.12f}, Mat(pal::window * 0.35f, 0.3f).nightGlow(3.f), quat::axisAngle({0, 1, 0}, -a + PI / 2)); }
     if (variant != 1) {
-        M.flat = true;
-        M.cone({0, 9.5f, 0}, {0, 15.f, 0}, 3.2f, Mat(variant == 2 ? hexColor(0x3c5468) : hexColor(0x6a2a26), 0.6f), 12);
-        M.flat = false;
-        M.tube({0, 15.f, 0}, {0, 17.f, 0}, 0.05f, 0.05f, Mat(pal::iron, 0.4f, 1.f), 4, false);
+        Mat roof(castleRoof(variant), 0.6f);
+        M.lathe({{3.75f, 9.6f}, {3.2f, 10.4f}, {0.01f, 16.f}}, roof, 16);   // roof with eaves
+        M.lathe({{0.22f, 16.f}, {0.3f, 16.4f}, {0.01f, 16.8f}}, Mat(pal::gold, 0.3f, 1.f), 8);
+        pennant(M, {0, 16.6f, 0}, Mat(castleCloth(variant), 0.9f));
+    } else {
+        for (int i = 0; i < 5; i++) { float a = i * 1.3f; M.rock({std::cos(a) * 3.f, 9.6f, std::sin(a) * 3.f}, vec3(0.6f, 0.4f, 0.6f), dk, 400 + i, 0); }   // ruined top
     }
 }
 
 static void keep(MeshBuilder& M, int variant) {
-    Mat s(castleStone(variant), 0.9f);
+    vec3 sc = castleStone(variant);
+    Mat s(sc, 0.9f), dk(sc * 0.8f, 0.9f), lt(sc * 1.1f, 0.85f), roof(castleRoof(variant), 0.6f), cloth(castleCloth(variant), 0.9f), gold(pal::gold, 0.35f, 0.9f);
     M.jitter = 0.06f; M.jitterSeed = 31;
     M.box({0, 6.f, 0}, {9.f, 7.f, 7.f}, s);
     M.jitter = 0;
-    crenellations(M, -9.f, 9.f, 13.f, 6.8f, 0.3f, s);
-    crenellations(M, -9.f, 9.f, 13.f, -6.8f, 0.3f, s);
+    M.box({0, 0.4f, 0}, {9.4f, 1.0f, 7.4f}, dk);                                  // plinth
+    for (float y : {4.6f, 9.4f}) M.box({0, y, 0}, {9.08f, 0.12f, 7.08f}, dk);      // string courses
+    for (int i = -1; i <= 1; i += 2) for (int k = -1; k <= 1; k += 2) M.box({i * 3.4f, 5.f, k * 7.15f}, {0.45f, 6.f, 0.3f}, dk);   // buttresses
+    // machicolations and crenels
+    for (int i = 0; i < 15; i++) for (int k = -1; k <= 1; k += 2) M.box({-7.f + i * 1.0f, 12.6f, k * 7.15f}, {0.15f, 0.3f, 0.2f}, dk);
+    M.box({0, 13.05f, 0}, {9.1f, 0.15f, 7.25f}, s);
+    crenellations(M, -9.f, 9.f, 13.2f, 7.1f, 0.3f, s);
+    crenellations(M, -9.f, 9.f, 13.2f, -7.1f, 0.3f, s);
+    // corner towers with roofs and pennants
     for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) {
-        M.lathe({{2.2f, -1.f}, {2.2f, 15.f}, {2.6f, 15.4f}, {0.01f, 15.4f}}, s, 10, {i * 9.f, 0, j * 7.f});
-        M.flat = true;
-        M.cone({i * 9.f, 15.4f, j * 7.f}, {i * 9.f, 20.f, j * 7.f}, 2.6f, Mat(hexColor(0x6a2a26), 0.6f), 10);
-        M.flat = false;
+        vec3 c{i * 9.f, 0, j * 7.f};
+        M.lathe({{2.6f, -1.f}, {2.3f, 1.4f}, {2.2f, 14.6f}, {2.6f, 15.f}, {2.6f, 15.6f}, {0.01f, 15.6f}}, s, 12, c);
+        for (int m = 0; m < 8; m++) { float a = m * TAU / 8; M.box(c + vec3(std::cos(a) * 2.45f, 15.9f, std::sin(a) * 2.45f), {0.36f, 0.32f, 0.16f}, s, quat::axisAngle({0, 1, 0}, -a + PI / 2)); }
+        M.lathe({{2.85f, 15.5f}, {2.3f, 16.2f}, {0.01f, 21.f}}, roof, 12, c);
+        pennant(M, c + vec3(0, 21.f, 0), cloth);
+        for (int m = 0; m < 3; m++) slit(M, c + vec3(i * 1.6f, 4.f + m * 3.5f, j * 1.6f), i * j > 0 ? -PI / 4 : PI / 4);
     }
-    M.box({0, 2.4f, 7.05f}, {1.6f, 2.4f, 0.1f}, Mat(hexColor(0x3a2818)));
-    for (int i = -3; i <= 3; i++) M.box({i * 2.4f, 8.f, 7.05f}, {0.25f, 0.7f, 0.05f}, Mat(pal::window * 0.4f).nightGlow(3.f));
-    // banners
-    for (int i = -1; i <= 1; i += 2) M.box({i * 4.f, 9.f, 7.08f}, {0.8f, 2.2f, 0.03f}, Mat(pal::cloth2, 0.8f));
+    // central donjon with a spire
+    M.box({0, 15.5f, -1.f}, {3.2f, 3.f, 3.2f}, lt);
+    for (int k = 0; k < 4; k++) M.box({(k % 2 ? 1.f : -1.f) * 1.4f, 16.f, -1.f + (k / 2 ? 3.22f : -3.22f)}, {0.25f, 0.6f, 0.05f}, Mat(pal::window * 0.4f).nightGlow(3.f));
+    M.flat = true; M.cone({0, 18.5f, -1.f}, {0, 26.f, -1.f}, 4.3f, roof, 4); M.flat = false;
+    M.lathe({{0.25f, 26.f}, {0.35f, 26.4f}, {0.01f, 26.9f}}, gold, 8, {0, 0, -1.f});
+    pennant(M, {0, 26.7f, -1.f}, cloth);
+    // arched door up a flight of steps, a coat of arms above it
+    for (int i = 0; i < 4; i++) M.box({0, 0.15f + i * 0.3f, 8.9f - i * 0.45f}, {2.6f - i * 0.15f, 0.15f, 0.3f}, dk);
+    M.box({0, 3.f, 7.05f}, {1.7f, 1.9f, 0.1f}, Mat(hexColor(0x3a2818)));
+    M.lathe({{1.7f, 0.f}, {0.01f, 0.f}}, Mat(hexColor(0x3a2818)), 12, {0, 4.9f, 7.06f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    for (int sd = -1; sd <= 1; sd += 2) M.box({sd * 2.0f, 3.2f, 7.15f}, {0.3f, 2.4f, 0.2f}, lt);
+    M.box({0, 6.9f, 7.15f}, {2.3f, 0.3f, 0.2f}, lt);
+    M.ellipsoid({0, 8.3f, 7.12f}, vec3(0.9f, 1.1f, 0.08f), gold, 10, 6);          // coat of arms
+    M.ellipsoid({0, 8.3f, 7.18f}, vec3(0.7f, 0.9f, 0.06f), cloth, 10, 6);
+    // mullioned windows on both storeys, front and back
+    for (int k = -1; k <= 1; k += 2) for (int fl = 0; fl < 2; fl++) for (int i = -3; i <= 3; i++) {
+        if (k > 0 && std::abs(i) < 1 && fl == 0) continue;
+        float y = 6.4f + fl * 4.2f, x = i * 2.4f, z = k * 7.06f;
+        M.box({x, y, z}, {0.42f, 0.85f, 0.05f}, Mat(pal::window * 0.4f).nightGlow(3.f));
+        M.box({x, y, z + k * 0.04f}, {0.05f, 0.85f, 0.03f}, dk);
+        M.box({x, y - 0.95f, z + k * 0.1f}, {0.55f, 0.08f, 0.12f}, lt);
+    }
+    // great banners
+    for (int i = -1; i <= 1; i += 2) {
+        M.box({i * 5.6f, 11.4f, 7.2f}, {1.1f, 0.06f, 0.08f}, Mat(pal::timber));
+        M.box({i * 5.6f, 8.3f, 7.12f}, {0.95f, 3.1f, 0.03f}, cloth);
+        M.triP({i * 5.6f - 0.95f, 5.2f, 7.13f}, {i * 5.6f + 0.95f, 5.2f, 7.13f}, {i * 5.6f, 4.4f, 7.13f}, cloth);
+        M.box({i * 5.6f, 9.4f, 7.15f}, {0.4f, 0.4f, 0.02f}, gold);
+    }
 }
 
 static void gate(MeshBuilder& M, int variant) {
-    Mat s(castleStone(variant), 0.9f);
-    M.box({-3.7f, 3.f, 0}, {1.5f, 4.2f, 1.3f}, s);
-    M.box({3.7f, 3.f, 0}, {1.5f, 4.2f, 1.3f}, s);
-    M.box({0, 6.3f, 0}, {2.3f, 1.1f, 1.3f}, s);
-    crenellations(M, -5.2f, 5.2f, 7.4f, 1.1f, 0.3f, s);
-    for (int i = -2; i <= 2; i++) M.box({i * 0.45f, 6.f, 0.9f}, {0.05f, 0.6f, 0.05f}, Mat(pal::iron, 0.4f, 1.f));  // raised portcullis
-    M.lathe({{0.3f, 6.6f}, {0.3f, 8.2f}, {0.01f, 8.3f}}, Mat(pal::gold, 0.3f, 1.f), 6, {0, 0, 1.35f});
+    vec3 sc = castleStone(variant);
+    Mat s(sc, 0.9f), dk(sc * 0.8f, 0.9f), lt(sc * 1.1f, 0.85f), wood(hexColor(0x4a3020), 0.85f), iron(pal::iron, 0.4f, 1.f), cloth(castleCloth(variant), 0.9f);
+    // flanking round towers
+    for (int sd = -1; sd <= 1; sd += 2) {
+        vec3 c{sd * 3.7f, 0, 0.2f};
+        M.lathe({{1.75f, -1.f}, {1.55f, 1.2f}, {1.5f, 8.6f}, {1.75f, 8.9f}, {1.75f, 9.4f}, {0.01f, 9.4f}}, s, 12, c);
+        for (int m = 0; m < 8; m++) { float a = m * TAU / 8; M.box(c + vec3(std::cos(a) * 1.6f, 9.75f, std::sin(a) * 1.6f), {0.3f, 0.35f, 0.14f}, s, quat::axisAngle({0, 1, 0}, -a + PI / 2)); }
+        slit(M, c + vec3(0, 5.f, 1.52f), 0.f, 0.7f);
+        if (variant != 1) { M.lathe({{1.95f, 9.3f}, {0.01f, 13.f}}, Mat(castleRoof(variant), 0.6f), 12, c); pennant(M, c + vec3(0, 13.f, 0), cloth); }
+        // lantern beside the arch
+        M.box({sd * 2.05f, 3.2f, 1.45f}, {0.05f, 0.05f, 0.2f}, iron);
+        M.box({sd * 2.05f, 2.95f, 1.6f}, {0.1f, 0.15f, 0.1f}, Mat(pal::window, 0.4f).nightGlow(3.f));
+    }
+    // the gatehouse block over the passage, its arch and the dark passage
+    M.box({0, 6.3f, 0}, {2.3f, 1.3f, 1.3f}, s);
+    M.box({0, 6.3f, 0}, {2.3f, 0.12f, 1.36f}, dk);
+    for (int i = 0; i <= 6; i++) { float a = PI * i / 6.f; M.box({std::cos(a) * 2.05f, 4.6f + std::sin(a) * 0.9f, 1.32f}, {0.32f, 0.2f, 0.1f}, (i == 3 ? Mat(pal::gold, 0.3f, 1.f) : lt), quat::axisAngle({0, 0, 1}, a + PI / 2)); }   // voussoirs
+    for (int i = 0; i < 6; i++) M.box({-1.9f + i * 0.76f, 7.75f, 1.45f}, {0.13f, 0.25f, 0.16f}, dk);       // machicolations
+    crenellations(M, -2.3f, 2.3f, 7.6f, 1.25f, 0.3f, s);
+    crenellations(M, -2.3f, 2.3f, 7.6f, -1.25f, 0.3f, s);
+    // raised portcullis and open doors
+    for (int i = -2; i <= 2; i++) M.box({i * 0.42f, 5.9f, 0.9f}, {0.05f, 0.7f, 0.05f}, iron);
+    for (int k = 0; k < 2; k++) M.box({0, 5.4f + k * 0.6f, 0.9f}, {1.0f, 0.04f, 0.05f}, iron);
+    for (int sd = -1; sd <= 1; sd += 2) {
+        M.box({sd * 2.05f, 2.3f, -0.6f}, {0.08f, 2.3f, 0.9f}, wood);
+        for (int k = 0; k < 3; k++) M.box({sd * 1.95f, 0.8f + k * 1.5f, -0.6f}, {0.03f, 0.08f, 0.85f}, iron);
+    }
+    // coat of arms over the arch
+    M.ellipsoid({0, 6.4f, 1.34f}, vec3(0.6f, 0.75f, 0.06f), Mat(pal::gold, 0.3f, 1.f), 10, 6);
+    M.ellipsoid({0, 6.4f, 1.39f}, vec3(0.45f, 0.6f, 0.05f), cloth, 10, 6);
+    M.lathe({{0.3f, 8.6f}, {0.3f, 9.4f}, {0.01f, 9.5f}}, Mat(pal::gold, 0.3f, 1.f), 6, {0, 0, 0});
 }
 
 static void chapel(MeshBuilder& M, int variant) {
