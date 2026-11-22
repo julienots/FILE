@@ -79,6 +79,7 @@ EditorContext::EditorContext(Engine& engine) : m_engine(engine) {
     registerAnimationComponents();
     m_engine.setTimeScale(0.0);  // edit mode: gameplay systems are frozen
     m_undo.reset(scene(), {});
+    setAssetWriter({});
 }
 
 // ------------------------------------------------------------------ project
@@ -144,6 +145,15 @@ void EditorContext::newScene(SceneTemplate tmpl) {
 void EditorContext::commit(const std::string& label) {
     if (m_playState != PlayState::Edit) return;  // play-mode changes are discarded by stop()
     m_undo.commit(label, scene(), m_selection.ids());
+}
+
+void EditorContext::commitAssetFile(const std::string& label, const std::string& uri, std::string before, std::string after) {
+    m_undo.commitFiles(label, scene(), m_selection.ids(), {{uri, std::move(before), std::move(after)}});
+}
+
+void EditorContext::setAssetWriter(std::function<void(const std::string& uri, const std::string& content)> writer) {
+    if (writer) m_undo.setFileWriter(std::move(writer));
+    else m_undo.setFileWriter([this](const std::string& uri, const std::string& content) { (void)m_engine.vfs().writeText(uri, content); });
 }
 
 bool EditorContext::undo() {

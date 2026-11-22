@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,14 @@ public:
     /// Restores state `i` directly (History panel): one step back or many at once.
     bool jumpTo(usize i, Scene& scene, std::vector<Uuid>& selection);
 
+    /// Asset file edits (materials...) recorded in the same history: undoing the state writes the
+    /// files back to `before`, redoing writes `after`, through the writer.
+    struct FileChange {
+        std::string uri, before, after;
+    };
+    void commitFiles(const std::string& label, const Scene& scene, const std::vector<Uuid>& selection, std::vector<FileChange> files);
+    void setFileWriter(std::function<void(const std::string& uri, const std::string& content)> writer) { m_writeFile = std::move(writer); }
+
     void markSaved() { m_savedPos = static_cast<i64>(m_pos); }
     bool dirty() const { return m_savedPos != static_cast<i64>(m_pos); }
 
@@ -44,8 +53,11 @@ private:
         std::string label;
         std::vector<u8> scene;  ///< Binary snapshot (SceneSerializer::toBinary): fast to take and restore.
         std::vector<Uuid> selection;
+        std::vector<FileChange> files;  ///< Files changed by the action that produced this state.
     };
     bool restore(Scene& scene, std::vector<Uuid>& selection);
+    void applyFiles(const State& s, bool forward);
+    std::function<void(const std::string&, const std::string&)> m_writeFile;
 
     std::vector<State> m_states;
     usize m_pos = 0;

@@ -145,8 +145,9 @@ agr_editor (app)  ──►  agr_editor_ui   Dear ImGui (docking) + ImGuizmo, re
 - Pas de mode « 2.5D » dédié dans la vue : un projet 2.5D utilise la vue 3D.
 - Importeurs : images (PNG, JPEG, TGA, BMP, PSD, GIF, HDR) et modèles (glTF / GLB, OBJ, FBX) ; les
   feuilles de sprites et les matériaux sont créés dans l'éditeur ou écrits à la main. Les modifications de
-  matériaux, de clips d'animation et de machines à états sont enregistrées dans leur fichier et ne sont pas
-  dans l'historique Ctrl+Z de la scène. Les autres fichiers sont copiés dans le
+  **matériaux** sont dans l'historique Ctrl+Z (avec la scène, dans l'ordre ; le fichier est remis à
+  son état précédent) ; celles de clips d'animation et de machines à états sont enregistrées dans leur
+  fichier sans passer par l'historique. Les autres fichiers sont copiés dans le
   projet, avec un avertissement qu'aucun importeur n'existe encore pour eux.
 - **Plusieurs entités sélectionnées** : l'inspecteur montre les composants qu'elles ont toutes ; un champ
   modifié est appliqué à toutes (les champs aux valeurs différentes sont en ambre, « ≠ ») ; ajouter ou

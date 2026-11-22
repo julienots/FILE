@@ -60,6 +60,10 @@ public:
     // ------------------------------------------------------------- editing
     /// Records the current scene in the undo history. Call after each user action.
     void commit(const std::string& label);
+    /// Records an asset file edit (material...) in the undo history; `before` / `after` = the
+    /// file's text. The writer (default: the VFS) puts the file back on undo / redo.
+    void commitAssetFile(const std::string& label, const std::string& uri, std::string before, std::string after);
+    void setAssetWriter(std::function<void(const std::string& uri, const std::string& content)> writer);
     bool undo();
     bool redo();
 

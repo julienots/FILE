@@ -1581,3 +1581,37 @@ TEST_CASE("Windows export: the game's icon replaces the player's placeholder ico
     // Too large an image is refused rather than corrupting the executable.
     CHECK_FALSE(embedWindowsIcon(exe, std::vector<u8>(512 * 1024, 7)));
 }
+
+TEST_CASE("undo history: asset file edits (materials) are undone and redone with the scene changes, in order") {
+    EditorFixture f(ProjectMode::Mode3D);
+    auto& vfs = f.engine->vfs();
+    const std::string uri = "assets://red.agrmat";
+    REQUIRE(vfs.writeText(uri, "v1"));
+    REQUIRE(vfs.writeText(uri, "v2"));
+    f.ctx->commitAssetFile("Material red", uri, "v1", "v2");
+    const auto cube = f.ctx->create(CreateKind::Cube);  // a scene action after it
+    f.ctx->commit("Create Cube");
+    const Uuid cubeId = f.ctx->scene().uuidOf(cube);
+    REQUIRE(vfs.writeText(uri, "v3"));
+    f.ctx->commitAssetFile("Material red", uri, "v2", "v3");
+    auto text = [&] { return vfs.readText(uri).value(); };
+    REQUIRE(f.ctx->undo());
+    CHECK(text() == "v2");
+    CHECK_FALSE(f.ctx->scene().findByUuid(cubeId).isNull());  // the cube is still there
+    REQUIRE(f.ctx->undo());
+    CHECK(text() == "v2");
+    CHECK(f.ctx->scene().findByUuid(cubeId).isNull());  // creation undone
+    REQUIRE(f.ctx->undo());
+    CHECK(text() == "v1");
+    REQUIRE(f.ctx->redo());
+    CHECK(text() == "v2");
+    // Jumping in the history applies every file change on the way.
+    REQUIRE(f.ctx->jumpToHistory(f.ctx->undoStack().size() - 1));
+    CHECK(text() == "v3");
+    REQUIRE(f.ctx->jumpToHistory(0));
+    CHECK(text() == "v1");
+    // An edit that changes nothing is not recorded.
+    const usize n = f.ctx->undoStack().size();
+    f.ctx->commitAssetFile("Material red", uri, "same", "same");
+    CHECK(f.ctx->undoStack().size() == n);
+}

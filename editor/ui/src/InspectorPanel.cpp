@@ -1131,11 +1131,13 @@ void InspectorPanel::drawMaterialAsset(EditorShared& s, const MaterialPreview& p
     }
     if (changed) lib->preview(uri, m);  // live preview while dragging
     if (commit) {
+        // In the undo history (Ctrl+Z puts the previous file back).
+        auto before = s.engine.vfs().readText(uri);
         if (Status st = lib->save(uri, m); !st) s.notify("Enregistrement impossible : " + st.error().message);
+        else if (before) s.ctx.commitAssetFile("Matériau " + uri.substr(uri.find_last_of('/') + 1), uri, before.value(), materialToJson(m));
     }
     ImGui::Spacing();
-    ImGui::TextDisabled("Enregistré automatiquement dans le fichier.");
-    ImGui::TextDisabled("Non annulable avec Ctrl+Z (Ctrl+Z annule les modifications de scène).");
+    ImGui::TextDisabled("Enregistré automatiquement dans le fichier (Ctrl+Z annule).");
     ImGui::TextDisabled("Glissez le matériau sur un objet de la scène pour l'appliquer.");
 }
 

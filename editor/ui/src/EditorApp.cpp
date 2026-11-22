@@ -133,6 +133,15 @@ Status EditorApp::onStart(Engine& engine) {
     render->setHotReload(true);
 
     m_ctx = std::make_unique<EditorContext>(engine);
+    // Asset edits undone / redone through the libraries, so the scene shows them at once.
+    m_ctx->setAssetWriter([this](const std::string& uri, const std::string& content) {
+        if (uri.size() > 7 && uri.compare(uri.size() - 7, 7, ".agrmat") == 0 && m_shared && m_shared->materials())
+            if (auto mat = parseMaterial(content)) {
+                (void)m_shared->materials()->save(uri, mat.value());
+                return;
+            }
+        (void)m_engine->vfs().writeText(uri, content);
+    });
     m_shared = std::make_unique<EditorShared>(EditorShared{engine, *m_ctx});
     m_shared->platform = m_platform;
     m_shared->render = render;
