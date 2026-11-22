@@ -12,3 +12,6 @@ nuit-eternelle
 destrier-celeste
 apocalypse
 terrassier
+bestiaire-legendaire
+arsenal-des-legendes
+invasion-des-ombres

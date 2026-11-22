@@ -789,7 +789,7 @@ static void testModData(const std::string& assets) {
             CHECK(mt.good() && n > 0 && bad == 0, "bundled mod %s: mod.txt %d, %d bad lines of %d", id.c_str(), (int)mt.good(), bad, n);
             mods++;
         }
-        CHECK(mods == 14, "14 bundled mods listed (%d)", mods);
+        CHECK(mods == 17, "17 bundled mods listed (%d)", mods);   // 3.2.0 + bestiary, arsenal, shadow invasion
         CHECK(gameTuning().playerSpeed > 1.2f && digTuning().bombRadius >= 8.f, "bundled mods change the game tuning");
         CHECK(gameTuning().gravity < 0.5f && gameTuning().mountSpeed > 2.f && gameTuning().hour > 23.f && gameTuning().weather >= 0, "2.7.0 keys: gravity, mount speed, hour, weather");
         std::string e2;

@@ -1,0 +1,4 @@
+name = Bestiaire légendaire
+author = Superessence Studio
+version = 2.0
+description = 30 créatures nouvelles dans toutes les régions : loups de cendre, golems d'ambre, wyvernes, géants des cimes... Chacune a sa couleur, sa taille et son butin.

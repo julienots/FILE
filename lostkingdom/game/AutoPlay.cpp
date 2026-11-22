@@ -2272,6 +2272,26 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("TREASURES results: world %d totem %d djump %d steps %d %d %d summit %d glide %d orb %d bag %d -> %s", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[9], ok == 10 ? "TREASURES TEST PASSED" : "TREASURES TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "bigmods") {
+        // 3.2.0 the big mods: the Legendary Bestiary applied, six of its creatures side by side
+        static std::vector<Entity> ents; static int bad = 0;
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 10.5f; g.toastHint.clear(); g.tutStep = -1; ents.clear(); bad = 0;
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            for (const char* m : {"mods/bestiaire-legendaire/data.txt", "mods/arsenal-des-legendes/data.txt", "mods/invasion-des-ombres/data.txt"}) {
+                std::vector<uint8_t> b; if (!platform::readAsset(m, b)) { bad += 100; continue; }
+                std::string txt(b.begin(), b.end()), line; size_t a = 0;
+                while (a < txt.size()) { size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size(); line = txt.substr(a, e - a); a = e + 1; std::string err; if (!applyModDataLine(line, err)) { bad++; AGR_LOG("BIGMODS %s -> %s", line.c_str(), err.c_str()); } }
+            }
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 40, b->pos.y + 80, 0.f); }, idle, "setup"});
+        s.push_back({0.2f, [](Game& g) { Character& c = g.pc(); vec3 f{std::sin(c.yaw), 0, std::cos(c.yaw)}, r{f.z, 0, -f.x};
+            const char* ids[] = {"loup_cendre", "golem_ambre", "ours_glacier", "araignee_sang", "chevalier_soleil", "sanglier_titan"};
+            for (int i = 0; i < 6; i++) { vec3 p = c.pos + f * (8.f + (i / 3) * 6.f) + r * ((i % 3 - 1) * 5.f); p.y = g.groundAt(p.x, p.z); int ei = enemyIndex(ids[i]); if (ei < 0) { bad++; continue; } ents.push_back(g.spawnEnemy(ei, p)); }
+            AGR_LOG("BIGMODS %zu creatures, %zu enemies in total, %d bad lines -> %s", ents.size(), enemies().size(), bad, ents.size() == 6 && bad == 0 ? "BIGMODS TEST PASSED" : "BIGMODS TEST FAILED");
+            g.camYaw = c.yaw + PI; g.camPitch = 0.2f; g.camDist = g.camDistTarget = 9.f; }, [](Game& g, float) { g.camIdleT = 0; }, "spawn"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.camIdleT = 0; g.pc().hp = g.pc().maxHp; for (Entity e : ents) { if (AIBrain* ai = g.reg.get<AIBrain>(e)) { ai->state = AIState::Idle; ai->timer = 99; ai->target = NullEntity; } if (Character* ch = g.reg.get<Character>(e)) { ch->vel = vec3(0); ch->attackClip = nullptr; } } }, "settle"});
+        s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/BM0_bestiary.png"); }, idle, "shot"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

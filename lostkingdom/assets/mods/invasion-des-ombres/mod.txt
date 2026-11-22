@@ -1,0 +1,4 @@
+name = Invasion des ombres
+author = Superessence Studio
+version = 2.0
+description = La nuit, 16 créatures d'ombre parcourent toutes les régions. Plus dures, mais elles lâchent des éclats d'étoile et des élixirs. +40 % d'XP, +60 % d'or.

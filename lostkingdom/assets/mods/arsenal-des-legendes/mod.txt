@@ -1,0 +1,4 @@
+name = Arsenal des légendes
+author = Superessence Studio
+version = 2.0
+description = 24 armes nouvelles, de rares à ancestrales, chacune lâchée par une créature précise. Commence avec le Couteau du Seigneur gobelin.
