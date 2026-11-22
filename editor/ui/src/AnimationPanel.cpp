@@ -306,6 +306,54 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
             }
         }
     }
+    // Imported clips ("model.glb#Walk") are read-only: offer an editable .agranim copy.
+    std::vector<std::string> imported;
+    if (animator.clip.find('#') != std::string::npos) imported.push_back(animator.clip);
+    if (!animator.controller.empty() && s.animation)
+        if (auto ctrl = s.animation->animation().library().controller(animator.controller))
+            for (const AnimatorState& st : ctrl.value()->states)
+                if (st.clip.find('#') != std::string::npos && std::find(imported.begin(), imported.end(), st.clip) == imported.end())
+                    imported.push_back(st.clip);
+    if (!imported.empty() && editMode) {
+        ImGui::SameLine();
+        if (ImGui::Button("Rendre modifiable...")) ImGui::OpenPopup("##editable");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Copie un clip importé avec le modèle en .agranim modifiable dans la timeline");
+        if (ImGui::BeginPopup("##editable")) {
+            for (const std::string& src : imported)
+                if (ImGui::Selectable(src.c_str())) {
+                    auto clip = s.animation->animation().library().clip(src);
+                    if (!clip) {
+                        s.notify("Clip illisible : " + clip.error().message);
+                    } else {
+                        std::string name = src.substr(src.find_last_of('/') + 1);
+                        for (char& c : name)
+                            if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-') c = '_';
+                        const std::string uri = "assets://animations/" + name + ".agranim";
+                        std::filesystem::create_directories(s.ctx.project().assetsDirectory() / "animations");
+                        const AnimationClip editable = makeEditableClip(*clip.value());
+                        if (Status st = s.engine.vfs().writeText(uri, editable.toJson()); !st) {
+                            s.notify(st.error().message);
+                        } else {
+                            // Point the animator (and its state machine) at the copy.
+                            if (animator.clip == src) {
+                                animator.clip = uri;
+                                s.ctx.commit("Editable Animation Clip");
+                            }
+                            if (!animator.controller.empty())
+                                if (auto text = s.engine.vfs().readText(animator.controller)) {
+                                    std::string t = text.value();
+                                    const std::string from = "\"" + src + "\"", to = "\"" + uri + "\"";
+                                    for (usize at = t.find(from); at != std::string::npos; at = t.find(from, at + to.size())) t.replace(at, from.size(), to);
+                                    if (t != text.value()) (void)s.engine.vfs().writeText(animator.controller, t);
+                                }
+                            loadClip(s, uri);
+                            s.notify("Clip modifiable créé : " + uri + " (" + std::to_string(editable.tracks.size()) + " courbes)");
+                        }
+                    }
+                }
+            ImGui::EndPopup();
+        }
+    }
     if (m_uri.empty()) {
         ImGui::TextDisabled("Créez un clip, ou indiquez-en un dans l'Animator (champ Clip) ou dans un état de sa machine à états.");
         ImGui::End();

@@ -977,4 +977,41 @@ TEST_CASE("chain IK: per joint bend limits") {
     CHECK(bend(3) <= math::radians(10.0f) + 0.02f);
     CHECK(bend(2) > math::radians(20.0f));  // the free joint takes the bend
 }
+TEST_CASE("imported clips become editable curves: faithful, unwrapped rotations, redundant keys removed") {
+    AnimationClip imported;
+    imported.duration = 2.0f;
+    imported.events = {{1.0f, "step"}};
+    TransformTrack move{"Body", TransformTrack::Path::Translation};
+    TransformTrack spin{"Body/Head", TransformTrack::Path::Rotation};
+    for (int i = 0; i <= 120; ++i) {
+        const float t = i / 60.0f;
+        move.times.push_back(t);
+        move.values.push_back({3.0f * t, 1.0f, 0.0f, 0.0f});  // straight line: 2 keys are enough
+        spin.times.push_back(t);
+        const math::Quat q = math::Quat::fromEuler({0.0f, t * 2.0f * 3.14159265f, 0.0f});  // two full turns
+        spin.values.push_back({q.x, q.y, q.z, q.w});
+    }
+    imported.transformTracks = {move, spin};
+    const AnimationClip e = makeEditableClip(imported);
+    CHECK(e.transformTracks.empty());
+    CHECK(e.events.size() == 1);
+    CHECK(e.duration == doctest::Approx(2.0f));
+    const AnimationTrack* x = e.findTrack("Body", "Transform", "position", 0);
+    const AnimationTrack* y = e.findTrack("Body", "Transform", "position", 1);
+    const AnimationTrack* yaw = e.findTrack("Body/Head", "Transform", "rotation", 1);
+    REQUIRE(x);
+    REQUIRE(y);
+    REQUIRE(yaw);
+    CHECK(x->curve.keys.size() == 2);  // the straight line
+    CHECK(y->curve.keys.size() == 2);  // constant
+    CHECK(yaw->curve.keys.size() < 121);
+    for (float t : {0.0f, 0.37f, 1.0f, 1.61f, 2.0f}) {
+        CHECK(x->curve.evaluate(t) == doctest::Approx(3.0f * t).epsilon(0.002));
+        CHECK(yaw->curve.evaluate(t) == doctest::Approx(t * 360.0f).epsilon(0.002));  // unwrapped: no jump back at 180
+    }
+    // Round trip through the .agranim format.
+    auto back = AnimationClip::fromJson(e.toJson());
+    REQUIRE(back);
+    CHECK(back.value().tracks.size() == e.tracks.size());
+}
 }  // TEST_SUITE

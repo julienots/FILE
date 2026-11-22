@@ -312,4 +312,52 @@ Result<AnimationClip> AnimationClip::fromJson(std::string_view text) {
     return c;
 }
 
+AnimationClip makeEditableClip(const AnimationClip& imported, float tolerance) {
+    AnimationClip out;
+    out.duration = imported.duration;
+    out.loop = imported.loop;
+    out.events = imported.events;
+    out.tracks = imported.tracks;
+    for (const TransformTrack& t : imported.transformTracks) {
+        if (t.times.empty()) continue;
+        const char* field = t.path == TransformTrack::Path::Translation ? "position" : t.path == TransformTrack::Path::Rotation ? "rotation" : "scale";
+        // Values per channel (rotations as Euler degrees, unwrapped so curves do not jump 360).
+        std::vector<math::Vec3> values(t.times.size());
+        for (usize i = 0; i < t.times.size(); ++i) {
+            const math::Vec4 v = t.values[i];
+            if (t.path == TransformTrack::Path::Rotation) {
+                const math::Vec3 e = math::Quat{v.x, v.y, v.z, v.w}.toEuler() * (180.0f / 3.14159265f);
+                math::Vec3 u = e;
+                if (i > 0)
+                    for (int c = 0; c < 3; ++c) {
+                        while (u[c] - values[i - 1][c] > 180.0f) u[c] -= 360.0f;
+                        while (u[c] - values[i - 1][c] < -180.0f) u[c] += 360.0f;
+                    }
+                values[i] = u;
+            } else {
+                values[i] = {v.x, v.y, v.z};
+            }
+        }
+        const float tol = t.path == TransformTrack::Path::Rotation ? tolerance * 100.0f : tolerance;
+        for (int c = 0; c < 3; ++c) {
+            // Greedy reduction: keep a key when dropping it would move the curve more than `tol`.
+            std::vector<usize> keep{0};
+            for (usize i = 1; i + 1 < t.times.size(); ++i) {
+                const usize a = keep.back(), b = i + 1;
+                bool needed = false;
+                for (usize k = a + 1; k <= i && !needed; ++k) {
+                    const float u = (t.times[k] - t.times[a]) / std::max(t.times[b] - t.times[a], 1e-6f);
+                    const float predicted = values[a][c] + (values[b][c] - values[a][c]) * u;
+                    needed = std::fabs(predicted - values[k][c]) > tol;
+                }
+                if (needed) keep.push_back(i);
+            }
+            if (t.times.size() > 1) keep.push_back(t.times.size() - 1);
+            AnimationTrack& tr = out.track(t.target, "Transform", field, c);
+            for (usize i : keep) tr.curve.setKey(t.times[i], values[i][c], t.step ? Interpolation::Constant : Interpolation::Linear);
+        }
+    }
+    return out;
+}
+
 } // namespace agr

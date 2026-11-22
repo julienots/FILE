@@ -122,4 +122,10 @@ struct AnimationClip {
     static Result<AnimationClip> fromJson(std::string_view json);
 };
 
+/// Editable copy of an imported clip ("model.glb#Walk"): each sampled transform track becomes
+/// Transform.position / rotation (Euler degrees, unwrapped) / scale curves with linear keys,
+/// keys that linear interpolation already predicts within `tolerance` removed (rotations: the
+/// tolerance in degrees x 100). Events, duration and looping are kept.
+AnimationClip makeEditableClip(const AnimationClip& imported, float tolerance = 0.001f);
+
 } // namespace agr

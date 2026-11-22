@@ -255,7 +255,11 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
   limitée différemment en avant et sur le côté) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
   (un gros maillage très déformé coûte), pas d'import FBX ; au plus 128
   articulations par maillage, 4 influences par sommet.
-- Les clips importés ne s'éditent pas dans la timeline (ils viennent du fichier du modèle).
+- Les clips importés (`modèle.glb#Marche`) restent en lecture seule ; **Rendre modifiable...** (panneau
+  Animation) en fait une copie `.agranim` : chaque piste échantillonnée devient des courbes
+  `Transform.position / rotation / scale` (rotations en degrés, déroulées pour ne pas sauter de 360°),
+  les clés redondantes retirées (une ligne droite garde 2 clés), événements gardés ; l'Animator et la
+  machine à états pointent ensuite sur la copie. C++ : `makeEditableClip`.
 - Une transition interrompue repart de la **pose affichée à cet instant** (figée puis fondue vers le
   nouvel état, sans saut) ; une seule transition par image.
 - Timeline : le copier-coller de clés
