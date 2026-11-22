@@ -271,7 +271,7 @@ bool Game::heroJump() {
             return true;
         }
     }
-    if (h.doubleJump && !c.grounded && !c.swimming && !usedDoubleJump && c.airTime > 0.08f && stamina > 6) {
+    if ((h.doubleJump || hasPower(KP_DOUBLEJUMP)) && !c.grounded && !c.swimming && !usedDoubleJump && c.airTime > 0.08f && stamina > 6) {   // 3.2.0 zephyr boots
         usedDoubleJump = true; stamina -= 6;
         c.vel.y = 7.2f;
         c.vis.anim.play(&clip(C_ROLL), 1.6f, false, 0.04f);

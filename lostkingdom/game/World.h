@@ -93,7 +93,8 @@ struct Structure {
 // Harvestable / interactive node spawned with chunks.
 enum class NodeType : uint8_t { Tree, Rock, IronOre, CopperOre, RareOre, Herb, Crystal, Chest, FishingSpot, Relic, Mushroom, Berries,
     // 2.3.5 more resources
-    GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, AuroraCrystal /* 2.8.0 */, NodeTypeCount };
+    GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, AuroraCrystal /* 2.8.0 */,
+    Totem, Orb /* 3.2.0 totems of power, ancient orbs */, NodeTypeCount };
 struct NodeSpawn { NodeType type; vec3 pos; float rot; uint32_t uid; int tier; };
 
 struct ChunkKey {
@@ -159,7 +160,7 @@ public:
     // 2.8.0 floating islands: the deck under a character at p (only from above: walking under an island does not
     // put you on it). Returns false when p is not over an island deck.
     bool skyDeck(vec3 p, float& deckY) const;
-    int geyserNear(vec2 p, float r) const;   // index of a launch geyser within r metres, -1 if none
+    int geyserNear(vec2 p, float r, float y = 1e9f) const;   // index of a launch geyser within r metres, -1 if none (3.2.0: y picks the deck geysers of the sky islands)
     // 1.11.2 one deck profile for the bridge mesh, the walkable ground and the railings: `along` in metres from
     // the centre (-halfLen..halfLen), returns the world height of the deck top. It meets the road at both ends.
     static float bridgeHalfLen(const Structure& s) { return 8.f * s.scale + 4.f; }
@@ -218,6 +219,11 @@ public:
     std::vector<River> rivers;
     std::vector<Lake> lakes;
     std::vector<Structure> structures;
+    // 3.2.0 hidden treasures planned once for the whole world: totems of power, ancient orbs, sky chests
+    struct Special { uint8_t type; vec3 pos; uint32_t uid; int reward; int region; bool sky = false; };   // type 0 totem, 1 orb, 2 sky chest
+    std::vector<Special> specials;
+    void planTreasures();
+    void settleTreasures();
     std::vector<std::vector<int>> chunkStructures;   // per chunk index -> structures
     std::vector<std::vector<int>> chunkRoads;        // per chunk index -> road segment ids (packed road<<16|seg)
     const Poi* poiById(const std::string& id) const;
@@ -263,6 +269,7 @@ private:
 
 // World helpers
 inline ChunkKey chunkOf(float x, float z) { return {(int)std::floor(x / CHUNK), (int)std::floor(z / CHUNK)}; }
+void addChunkTreasures(const World& w, ChunkKey k, ChunkBuild& out);   // 3.2.0 (Treasures.cpp)
 inline int chunkIndex(int cx, int cz) { return (cx < 0 || cz < 0 || cx >= CHUNKS || cz >= CHUNKS) ? -1 : cz * CHUNKS + cx; }
 float distToSegment(vec2 p, vec2 a, vec2 b, float* t = nullptr);
 

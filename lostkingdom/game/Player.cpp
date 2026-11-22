@@ -42,6 +42,11 @@ void Game::recomputeStats() {
         const SkillNode& n = skillTree()[i];
         atkPct += n.atk; def += n.def; maxHp += n.hp; mpMax += n.mp; stMax += n.stamina; crit += n.crit; cdmg += n.critDmg; speed += n.speed;
     }
+    {   // 3.2.0 totems of power, ancient orbs, the wind hoof
+        TreasureBonus tb = treasureBonus();
+        maxHp += tb.hp; stMax += tb.stamina; mpMax += tb.mp; atkPct += tb.atk;
+        if (hasPower(KP_SWIFT)) speed += 0.1f;
+    }
     c.maxHp = maxHp; c.hp = std::min(maxHp, hpRatio * maxHp);
     c.atk = atk * (1 + atkPct); c.def = def; c.element = elem; c.elemDmg = elemDmg;
     maxMp = mpMax; mp = std::min(mp, maxMp); maxStamina = stMax; stamina = std::min(stamina, maxStamina);
@@ -565,6 +570,7 @@ void Game::playerInteract() {
         int tier = n->node.tier + (world.regionId(n->node.pos.x, n->node.pos.z) == R_GREENHAVEN ? 0 : 1);
         gold += r.irange(20, 60) * (1 + tier);
         play("coin", 0.7f);
+        if (n->node.uid & 0x80000000u) { shards += 3; itemGet("i_crystal", "Coffre du ciel", "+3 éclats d'étoile", "", rarityColor(Rarity::Epic), false); }   // 3.2.0 sky chests
         // treasure: weapon/armour of the region tier with rolled rarity
         const auto& items = allItems();
         std::vector<int> pool;
@@ -598,6 +604,7 @@ void Game::playerInteract() {
         c.yaw = std::atan2(ns.pos.x - c.pos.x, ns.pos.z - c.pos.z);
         std::string give; int count = 1; const char* snd = "harvest_herb"; ClipId cl = C_HERB_PICK;
         Rng r(ns.uid + (uint32_t)gameTime);
+        if (ns.type == NodeType::Totem || ns.type == NodeType::Orb) { collectTreasure(ns); return; }   // 3.2.0 (TreasureHunt.cpp)
         switch (ns.type) {
         case NodeType::Tree: give = "wood"; count = r.irange(2, 4); snd = "harvest_wood"; cl = C_GATHER_SWING; break;
         case NodeType::Rock: give = "stone"; count = r.irange(2, 3); snd = "harvest_stone"; cl = C_GATHER_SWING; break;
@@ -825,7 +832,7 @@ void Game::updatePlayer(float dt) {
     // ---- locomotion
     float baseSpeed = mag < 0.55f ? 2.1f : 4.9f;
     sprinting = input.sprint && mag > 0.6f && stamina > 3 && !blocking;
-    if (sprinting) { baseSpeed = 7.2f; stamina -= dt * (c.swimming ? 9.f : 13.f); staminaRegenDelay = 0.6f; }   // in the water: the front crawl
+    if (sprinting) { baseSpeed = 7.2f; stamina -= dt * (c.swimming ? 9.f : 13.f) * (hasPower(KP_SWIFT) ? 0.5f : 1.f); staminaRegenDelay = 0.6f; }   // 3.2.0 wind hoof   // in the water: the front crawl
     if (blocking) baseSpeed = std::min(baseSpeed, 1.8f);
     if (sprintJump && !c.grounded && mag > 0.5f) baseSpeed = std::max(baseSpeed, 7.2f);   // momentum of a running jump
     if (flying) { baseSpeed = sprinting ? 17.f : 11.f; sprinting = false; }   // Astra's flight (no sprint stamina cost)
@@ -869,7 +876,7 @@ void Game::updatePlayer(float dt) {
     a.swimCrawl = approach(a.swimCrawl, c.swimming && sprinting && !diving ? 1.f : 0.f, dt * 3.f);
     a.swimDive = approach(a.swimDive, diving ? 1.f : 0.f, dt * 2.f);
     if (diving) {
-        breath -= dt / BREATH_SECONDS;
+        if (!hasPower(KP_BREATH)) breath -= dt / BREATH_SECONDS;   // 3.2.0 triton scale
         if (particles.rng.f() < dt * 4.f) particles.magicTrail(c.pos + vec3(particles.rng.range(-0.2f, 0.2f), 1.5f, particles.rng.range(-0.2f, 0.2f)), vec3(0.75f, 0.9f, 1.f), 0.25f);
         if (breath <= 0.25f && breath + dt / BREATH_SECONDS > 0.25f) notify("Vous manquez d'air : remontez (Saut ou Esquive) !", vec3(0.6f, 0.85f, 1.f), "i_info");
         if (breath <= 0) {
@@ -949,7 +956,7 @@ void Game::updatePlayer(float dt) {
     // pickups: magnet & auto-collect
     reg.each<Pickup>([&](Entity e, Pickup& pk) {
         float d = distXZ(pk.pos, c.pos);
-        if (pk.t > 0.6f && d < 2.4f) {
+        if (pk.t > 0.6f && d < (hasPower(KP_MAGNET) ? 3.2f : 2.4f)) {
             pk.pos = lerp(pk.pos, c.pos + vec3(0, 0.8f, 0), std::min(1.f, dt * 8));
             if (d < 0.7f && addItem(pk.item, pk.count, pk.rarity)) { reg.destroyLater(e); play("pickup", 0.6f, 1.1f); }
         }

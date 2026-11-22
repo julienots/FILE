@@ -17,11 +17,26 @@ bool Game::addItem(const std::string& id, int count, Rarity r, bool notifyUser) 
         return true;
     }
     if (d->kind == ItemKind::Relic) relicsFound.insert(id);
+    if (id == "star_shard") {   // 3.2.0 the Wonders currency: counted, never takes a slot
+        shards += count;
+        if (notifyUser) itemGet("i_crystal", "Éclats d'étoile", "+" + std::to_string(count) + " éclat" + (count > 1 ? "s" : ""), "", rarityColor(Rarity::Epic), false);
+        return true;
+    }
+    if (d->kind == ItemKind::Key) {   // 3.2.0 key items: one of each, outside the bag
+        if (countItem(id) > 0) return true;
+        ItemStack s; s.id = id; s.count = 1; s.rarity = d->rarity; inventory.push_back(s);
+        if (notifyUser) itemGet(d->icon, "Objet clé obtenu", d->name, d->desc, rarityColor(d->rarity), true);
+        recomputeStats();
+        return true;
+    }
     if (d->stack > 1) {
         for (auto& s : inventory)
             if (s.id == id && s.count < d->stack * 5) { s.count += count; goto added; }
     }
-    if (inventory.size() >= 120) { notify("Inventaire plein !", vec3(1, 0.5f, 0.4f), "i_inventory"); return false; }
+    if (bagUsed() >= bagCapacity()) {   // 3.2.0 bag slots (the message at most every 5 s: the magnet would repeat it every frame)
+        if (realTime - bagFullT > 5.f) { bagFullT = realTime; notify("Sac plein ! Des sacs plus grands se trouvent chez les marchands.", vec3(1, 0.5f, 0.4f), "i_inventory"); }
+        return false;
+    }
     {
         ItemStack s; s.id = id; s.count = count; s.rarity = rr; s.uid = (uint32_t)(gameTime * 1000) ^ (uint32_t)inventory.size() * 2654435761u;
         inventory.push_back(s);
@@ -30,7 +45,9 @@ added:
     if (notifyUser) {
         char b[160];
         if (count > 1) snprintf(b, sizeof b, "%s ×%d", d->name.c_str(), count); else snprintf(b, sizeof b, "%s", d->name.c_str());
-        notify(b, rarityColor(rr), d->icon);
+        // 3.2.0 rare and better: the small "item obtained" card; common things stay a line in the feed
+        if ((int)rr >= (int)Rarity::Rare && d->kind != ItemKind::Material) itemGet(d->icon.empty() ? "i_star" : d->icon, std::string(rarityName(rr)) + " obtenu", b, "", rarityColor(rr), false);
+        else notify(b, rarityColor(rr), d->icon);
     }
     advanceQuests(StepKind::Collect, id, 0);  // re-evaluate collect steps
     return true;
@@ -100,6 +117,12 @@ void Game::useItem(int i) {
     const ItemDef* d = item(inventory[i].id);
     if (!d) return;
     if (d->kind != ItemKind::Consumable) { equip(i); return; }
+    if (d->bagSlots > 0) {   // 3.2.0 bags: more slots for good
+        invCap = std::min(160, invCap + d->bagSlots);
+        itemGet("i_inventory", "Sac agrandi", "+" + std::to_string(d->bagSlots) + " emplacements", "Votre sac compte maintenant " + std::to_string(bagCapacity()) + " emplacements.", rarityColor(d->rarity), false);
+        if (--inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
+        return;
+    }
     if (d->id == "bomb") {   // 2.4.0 thrown, not drunk
         if (--inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
         menu = Menu::None; throwBomb(); return;
@@ -607,6 +630,7 @@ bool Game::saveGame(int slot) {
     o << "pins " << mapPins.size(); for (vec2 pp : mapPins) o << " " << pp.x << " " << pp.y; o << "\n";   // 2.2.0
     o << world.saveDigs();   // 2.4.0 the holes and craters you made
     o << "gameopts " << gameOpts.difficulty << " " << (int)gameOpts.events << " " << (int)gameOpts.prologue << "\n";   // 2.6.0
+    o << "treasure " << invCap << " " << shards << " " << phoenixDay << "\n";   // 3.2.0
     o << "prog " << level << " " << xp << " " << gold << " " << skillPoints << " " << gameTime << " " << timeOfDay << " " << day << " " << playSeconds << "\n";
     for (auto& s : inventory) o << "inv " << s.id << " " << s.count << " " << (int)s.rarity << " " << s.level << "\n";
     for (int i = 0; i < SL_COUNT; i++) if (!equipment[i].id.empty()) o << "eq " << i << " " << equipment[i].id << " " << (int)equipment[i].rarity << " " << equipment[i].level << "\n";
@@ -679,6 +703,7 @@ bool Game::loadGame(int slot) {
     fog.assign(128 * 128, 0);
     dye.clear();
     dungeon = DungeonState();
+    invCap = 120; shards = 0; phoenixDay = -1; itemGets.clear();   // 3.2.0 saves from before the bags keep their 120 slots
     std::istringstream in(data);
     std::string line;
     vec3 pos; float yaw = 0, hp = -1;
@@ -690,6 +715,7 @@ bool Game::loadGame(int slot) {
         else if (k == "digs" || k == "digs2") { world.loadDigs(line); hadDigs = true; }
         else if (k == "gameopts") { int dd = 1, ee = 1, pp = 1; l >> dd >> ee >> pp; gameOpts.difficulty = std::clamp(dd, 0, 3); gameOpts.events = ee != 0; gameOpts.prologue = pp != 0; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
+        else if (k == "treasure") { l >> invCap >> shards >> phoenixDay; invCap = std::clamp(invCap, 40, 160); }   // 3.2.0
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
         else if (k == "inv") { ItemStack s; int r; l >> s.id >> s.count >> r >> s.level; s.rarity = (Rarity)r; s.isNew = false; if (item(s.id)) inventory.push_back(s); }
         else if (k == "eq") { int i, r; ItemStack s; l >> i >> s.id >> r >> s.level; s.rarity = (Rarity)r; if (i >= 0 && i < SL_COUNT && item(s.id)) equipment[i] = s; }

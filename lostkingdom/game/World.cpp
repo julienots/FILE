@@ -1108,10 +1108,12 @@ void World::buildPlan() {
             free_++;
         }
     }
+    planTreasures();   // 3.2.0 sky archipelagos, totems of power, ancient orbs
     indexPlan();
     resolvePlacement();
     indexPlan();
     levelBuildings();
+    settleTreasures();
 }
 
 // 1.12.0 placement pass: the village layouts are drawn before the roads, so a house could stand in the middle of
@@ -1122,7 +1124,7 @@ void World::resolvePlacement() {
     auto movable = [](int k) {
         return k != S_BRIDGE && k != S_FIELD && k != S_PEN && k != S_DOCK && k != S_CASTLE_WALL && k != S_GATE && k != S_PALISADE &&
                k != S_CAVE && k != S_MINE && k != S_WAYSTONE && k != S_RUIN_WALL && k != S_KEEP && k != S_PORTAL && k != S_FENCE &&
-               k != S_PIER && k != S_GEYSER && k != S_SKYISLAND && k != S_ZIGGURAT && k != S_SPHINX && k != S_PAGODA && k != S_ARCHWAY && k != S_COLONNADE && k != S_LIGHTHOUSE;
+               k != S_PIER && k != S_GEYSER && k != S_SKYISLAND && k != S_SKYGEYSER && k != S_ZIGGURAT && k != S_SPHINX && k != S_PAGODA && k != S_ARCHWAY && k != S_COLONNADE && k != S_LIGHTHOUSE;
     };
     auto small = [](int k) { return k == S_LANTERN || k == S_STALL || k == S_WELL || k == S_BANNER || k == S_CAMPFIRE || k == S_STATUE || k == S_OBELISK || k == S_ALTAR; };
     auto inside = [](const Structure& s, vec2 p, float m) {
@@ -1649,13 +1651,18 @@ bool World::skyDeck(vec3 p, float& deckY) const {
     return found;
 }
 
-int World::geyserNear(vec2 p, float r) const {
+int World::geyserNear(vec2 p, float r, float y) const {
     int cx = (int)std::floor(p.x / CHUNK), cz = (int)std::floor(p.y / CHUNK);
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++) {
             int ci = chunkIndex(cx + dx, cz + dz);
             if (ci < 0) continue;
-            for (int si : chunkStructures[ci]) if (structures[si].kind == S_GEYSER && length(structures[si].pos - p) < r) return si;
+            for (int si : chunkStructures[ci]) {
+                const Structure& s = structures[si];
+                if (length(s.pos - p) >= r) continue;
+                if (s.kind == S_GEYSER && (y > 1e8f || std::fabs(y - height(s.pos.x, s.pos.y)) < 3.f)) return si;   // a ground spring, from the ground only
+                if (s.kind == S_SKYGEYSER && y < 1e8f && std::fabs(y - s.variant / 100.f) < 1.6f) return si;   // 3.2.0 only from the deck it stands on
+            }
         }
     return -1;
 }
@@ -1933,6 +1940,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     const int CN = (int)(CHUNK / cell);
     auto blocked = [&](float x, float z, float margin) {
         if (roadInfluence(x, z) > 0.05f) return true;
+        for (const Special& sp : specials) if (!sp.sky && std::fabs(sp.pos.x - x) < 6.f + margin && std::fabs(sp.pos.z - z) < 6.f + margin && length(vec2(x, z) - sp.pos.xz()) < 4.5f + margin) return true;   // 3.2.0 a clearing round the totems and orbs
         if (ci >= 0)
             for (int pi : chunkPois[ci]) {
                 const Poi& p = pois[pi];
@@ -1947,7 +1955,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         if (ci >= 0)   // 2.0.0 the whole footprint of this chunk's own buildings (a forge's collider covers only its hearth), piers included
             for (int si : chunkStructures[ci]) {
                 const Structure& s = structures[si];
-                if (s.kind == S_FIELD || s.kind == S_PEN) continue;
+                if (s.kind == S_FIELD || s.kind == S_PEN || s.kind == S_SKYGEYSER) continue;
                 vec2 fp = s.kind == S_PIER ? vec2(1.6f, 7.5f) : structureFootprint(s.kind) * s.scale;
                 vec2 l = rotate(vec2(x, z) - s.pos, s.rot);
                 if (std::fabs(l.x) < fp.x + margin && std::fabs(l.y) < fp.y + margin) return true;
@@ -2200,6 +2208,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         }
         addNode(t, x, z, tier);
     }
+    addChunkTreasures(*this, k, out);   // 3.2.0 totems, orbs, sky chests
     // rare treasure chests away from settlements; relics near ruins
     if (rng.chance(0.045f)) {
         float x = x0 + rng.range(4, CHUNK - 4), z = z0 + rng.range(4, CHUNK - 4);

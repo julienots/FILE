@@ -16,7 +16,10 @@ const char* rarityName(Rarity r);
 vec3 rarityColor(Rarity r);
 float rarityMult(Rarity r);
 
-enum class ItemKind : uint8_t { Weapon, Shield, Head, Chest, Hands, Feet, Ring, Amulet, Consumable, Material, Quest, Tool, MountToken, Relic, Cosmetic };
+enum class ItemKind : uint8_t { Weapon, Shield, Head, Chest, Hands, Feet, Ring, Amulet, Consumable, Material, Quest, Tool, MountToken, Relic, Cosmetic,
+    Key /* 3.2.0 key items: a permanent power while carried, never take a bag slot */ };
+// 3.2.0 powers of the key items (found on the totems of power, or bought from the Wonders merchant)
+enum KeyPower { KP_NONE = 0, KP_DOUBLEJUMP, KP_GLIDE, KP_MAGNET, KP_COMPASS, KP_BREATH, KP_PHOENIX, KP_LUCK, KP_SWIFT, KP_COUNT };
 enum EquipSlot { SL_WEAPON = 0, SL_OFFHAND, SL_HEAD, SL_CHEST, SL_HANDS, SL_FEET, SL_RING, SL_AMULET, SL_COUNT };
 const char* slotName(int s);
 int slotForKind(ItemKind k);
@@ -34,6 +37,9 @@ struct ItemDef {
     int value = 1;
     int stack = 1;
     std::string icon;          // atlas icon name (i_*) used when no 3D icon applies
+    int power = KP_NONE;       // 3.2.0 key items: the power they grant
+    int bagSlots = 0;          // 3.2.0 bags: inventory slots added when used
+    int shardPrice = 0;        // 3.2.0 sold by the Wonders merchant for star shards
     // visuals (armour)
     Helm helm = Helm::None;
     Body body = Body::Tunic;

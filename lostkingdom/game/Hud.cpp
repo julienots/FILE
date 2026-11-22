@@ -93,6 +93,13 @@ void Game::updateTouchControls() {
         }
         if (!f->down) { dodgeFinger = -1; dodgeSlideJump = false; }
     } else dodgeFinger = -1;
+    {   // 3.2.0 a finger kept on Saut (the feather cape glides)
+        input.jumpHeld = false;
+        if (ctlVisible(CTL_JUMP)) {
+            Rect jr = ctlRect(*this, CTL_JUMP);
+            for (auto& f : ui.fingers) if (f.down && length(vec2(f.x, f.y) - vec2(jr.x + jr.w / 2, jr.y + jr.h / 2)) < jr.w * 0.5f + 12.f) input.jumpHeld = true;
+        }
+    }
     // block: held while the finger stays down (a quick tap still opens the parry window for one frame)
     if (UI::Finger* f = finger(blockFinger)) {
         f->consumed = true;
@@ -504,7 +511,14 @@ void Game::drawHud(float dt) {
     // gold
     u.sprite("i_coin", {16, 134, 28, 28});
     u.text(std::to_string(gold), 50, 136, 20, rgba(0xf6dc9a), F_BOLD, A_LEFT, 0, true);
-    if (skillPoints > 0) { u.sprite("i_skills", {100, 134, 28, 28}, rgba(0xf8d050, 0.7f + 0.3f * std::sin(realTime * 4))); u.text(std::to_string(skillPoints), 132, 136, 20, rgba(0xf8d050), F_BOLD, A_LEFT, 0, true); }
+    float hx = 50 + u.textWidth(std::to_string(gold), 20, F_BOLD) + 18;
+    if (shards > 0) {   // 3.2.0 star shards, the currency of the Wonders
+        u.sprite("i_crystal", {hx, 134, 26, 26}, rgba(0xb8a0ff));
+        u.text(std::to_string(shards), hx + 30, 136, 20, rgba(0xc8b8ff), F_BOLD, A_LEFT, 0, true);
+        hx += 30 + u.textWidth(std::to_string(shards), 20, F_BOLD) + 18;
+    }
+    hx = std::max(hx, 100.f);
+    if (skillPoints > 0) { u.sprite("i_skills", {hx, 134, 28, 28}, rgba(0xf8d050, 0.7f + 0.3f * std::sin(realTime * 4))); u.text(std::to_string(skillPoints), hx + 32, 136, 20, rgba(0xf8d050), F_BOLD, A_LEFT, 0, true); }
 
     // ---- top-right: shortcuts & minimap
     // drawn only: their taps are handled in updateTouchControls (before the simulation). Using iconButton here
@@ -651,6 +665,7 @@ void Game::drawHud(float dt) {
         u.text(diving ? "Air  ·  Saut ou Esquive pour remonter" : "Air", br.x + br.w / 2, br.y - 22, 15, rgba(0xcfefff), F_BOLD, A_CENTER, 0, true);
     }
     drawPinsHud();
+    drawTreasureHud();   // 3.2.0 compass, "item obtained"
     drawWorldEventHud();
     drawSpeedometer();
     drawTutorial(dt);

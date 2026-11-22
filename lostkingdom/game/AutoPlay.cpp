@@ -2180,6 +2180,98 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.05f, [](Game& g) { (void)g; AGR_LOG("CASTLELOOK TEST PASSED"); }, idle, "end"});
         return s;
     }
+    if (name == "treasures") {
+        // 3.2.0 the treasure hunt: a totem of power and its key item, the double jump, a sky archipelago climbed by its
+        // springs up to the summit totem, an orb, the bag's slots and bags, the inventory and the Wonders shop
+        static int res[10]; static int arch = -1; static float y0; static vec3 summit;
+        auto near = [](Game& g, int type, bool sky) { int best = -1; float bd = 1e9f; vec3 p = g.pc().pos;
+            for (int i = 0; i < (int)g.world.specials.size(); i++) { auto& sp = g.world.specials[i]; if (sp.type != type || sp.sky != sky || g.world.harvested.count(sp.uid)) continue; float d = distXZ(sp.pos, p); if (d < bd) { bd = d; best = i; } } return best; };
+        auto stand = [](Game& g, vec3 at, vec3 from) { Character& c = g.pc(); vec3 d = normalize(vec3(at.x - from.x, 0, at.z - from.z) + vec3(1e-4f, 0, 0));
+            c.pos = vec3(at.x - d.x * 1.8f, at.y + 0.1f, at.z - d.z * 1.8f); c.vel = vec3(0); c.yaw = std::atan2(d.x, d.z); g.camFocus = c.pos; g.camYaw = c.yaw + PI; };
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 11.f; for (auto& r : res) r = 0;
+            g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
+            AGR_LOG("TREASURES world: %d totems, %d orbs, bag %d/%d", g.treasureTotal(0), g.treasureTotal(1), g.bagUsed(), g.bagCapacity());
+            res[0] = g.treasureTotal(0) >= 20 && g.treasureTotal(1) >= 40 && g.bagCapacity() == 40; }, idle, "setup"});
+        // 1. the nearest ground totem
+        s.push_back({3.f, [near](Game& g) { int t = near(g, 0, false); if (t < 0) return; const auto& sp = g.world.specials[t]; teleport(g, sp.pos.x + 2.5f, sp.pos.z + 1.f, 0.f); g.pc().yaw = std::atan2(-2.5f, -1.f); g.camDist = g.camDistTarget = 9.f; g.camPitch = 0.25f; g.camYaw = g.pc().yaw + PI; },
+            [](Game& g, float) { g.camIdleT = 0; }, "to the totem"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR0_totem.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("TREASURES interact target: %s", g.interactTarget != NullEntity && g.reg.get<Interact>(g.interactTarget) ? g.reg.get<Interact>(g.interactTarget)->text.c_str() : "none"); g.input.interact = true; }, idle, "awaken"});
+        s.push_back({1.2f, none, idle, "fanfare"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR1_fanfare.png"); res[1] = g.totemsTaken() == 1 && g.hasPower(KP_COMPASS) && g.shards >= 5;
+            AGR_LOG("TREASURES totem: taken %d, compass %d, shards %d, popups %zu", g.totemsTaken(), g.hasPower(KP_COMPASS), g.shards, g.itemGets.size()); }, idle, "check"});
+        // 2. the zephyr boots: a double jump
+        s.push_back({0.2f, [](Game& g) { g.itemGets.clear(); g.addItem("key_zephyr", 1, Rarity::Count, false); y0 = g.pc().pos.y; g.input.jump = true; }, idle, "jump"});
+        s.push_back({0.9f, [](Game& g) { g.input.jump = true; }, [](Game& g, float) { res[2] = std::max(res[2], (int)((g.pc().pos.y - y0) * 100)); }, "double jump"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("TREASURES double jump peak %.2f m", res[2] / 100.f); res[2] = res[2] > 160; }, idle, "check"});
+        // 3. a sky archipelago: the ground spring, then the deck springs
+        s.push_back({3.f, [](Game& g) {
+            arch = -1; float bd = 1e9f;
+            for (int i = 0; i < (int)g.world.structures.size(); i++) { const Structure& st = g.world.structures[i]; if (st.kind != S_GEYSER || st.variant <= 0 || st.region == R_AURORA) continue; float d = distXZ(vec3(st.pos.x, 0, st.pos.y), g.pc().pos); if (d < bd) { bd = d; arch = i; } }
+            if (arch < 0) return;
+            const Structure& ge = g.world.structures[arch];
+            teleport(g, ge.pos.x - std::sin(ge.rot) * 4.f, ge.pos.y - std::cos(ge.rot) * 4.f, 0.f);
+            g.pc().yaw = ge.rot; g.camYaw = ge.rot + PI; g.camDist = g.camDistTarget = 14.f; g.camPitch = 0.1f;
+            AGR_LOG("TREASURES archipelago spring in %s", regionName(ge.region)); }, [](Game& g, float) { g.camIdleT = 0; }, "to the archipelago"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR2_archipelago.png"); }, idle, "shot"});
+        s.push_back({2.5f, [](Game& g) { if (arch < 0) return; const Structure& ge = g.world.structures[arch]; Character& c = g.pc();   // the whole archipelago from afar
+            vec2 back = ge.pos - vec2(std::sin(ge.rot), std::cos(ge.rot)) * 55.f + vec2(std::cos(ge.rot), -std::sin(ge.rot)) * 25.f;
+            teleport(g, back.x, back.y, 0.f); c.yaw = std::atan2(ge.pos.x - back.x, ge.pos.y - back.y); g.camYaw = c.yaw + PI; g.camDist = g.camDistTarget = 16.f; g.camPitch = -0.05f; },
+            [](Game& g, float) { g.camIdleT = 0; }, "afar"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR2b_archipelago_far.png"); }, idle, "shot"});
+        for (int k = 0; k < 3; k++) {
+            s.push_back({4.f, [k](Game& g) {
+                if (arch < 0) return;
+                // walk into the nearest spring (ground first, then the one on the deck)
+                int best = -1; float bd = 1e9f; Character& c = g.pc();
+                for (int i = 0; i < (int)g.world.structures.size(); i++) { const Structure& st = g.world.structures[i]; bool ok = k == 0 ? i == arch : (st.kind == S_SKYGEYSER && std::fabs(st.variant / 100.f - c.pos.y) < 2.f); if (!ok) continue; float d = distXZ(vec3(st.pos.x, 0, st.pos.y), c.pos); if (d < bd) { bd = d; best = i; } }
+                if (best < 0) { AGR_LOG("TREASURES no spring at step %d (y %.1f)", k, c.pos.y); return; }
+                const Structure& st = g.world.structures[best];
+                c.pos.x = st.pos.x; c.pos.z = st.pos.y; c.vel = vec3(0); if (k == 0) c.pos.y = g.world.groundHeight(st.pos.x, st.pos.y);
+                AGR_LOG("TREASURES step %d: spring %s at y %.1f", k, st.kind == S_SKYGEYSER ? "on a deck" : "on the ground", c.pos.y); },
+                [](Game& g, float) { g.camIdleT = 0; g.camYaw = g.pc().yaw + PI; }, "ride"});
+            s.push_back({0.1f, [k](Game& g) { Character& c = g.pc(); float dk = 0; bool on = g.world.skyDeck(c.pos, dk);
+                AGR_LOG("TREASURES after step %d: y %.1f, on a deck %d (%.1f), grounded %d", k, c.pos.y, on, dk, c.grounded); if (on && c.grounded) res[3 + k] = 1;
+                g.requestScreenshot("build/shots/TR3_step" + std::to_string(k) + ".png"); }, idle, "check"});
+        }
+        // the summit totem
+        s.push_back({1.5f, [near, stand](Game& g) { int t = near(g, 0, true); if (t < 0) return; summit = g.world.specials[t].pos; stand(g, summit, g.pc().pos); g.camDist = g.camDistTarget = 12.f; g.camPitch = 0.2f; }, [](Game& g, float) { g.camIdleT = 0; }, "summit"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR4_summit.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.input.interact = true; }, idle, "awaken"});
+        s.push_back({1.2f, none, idle, "fanfare"});
+        s.push_back({0.1f, [](Game& g) { res[6] = g.totemsTaken() == 2; g.requestScreenshot("build/shots/TR5_summit_fanfare.png"); AGR_LOG("TREASURES summit totem: taken %d", g.totemsTaken()); g.itemGets.clear(); }, idle, "check"});
+        // glide down with the feather cape
+        s.push_back({0.1f, [](Game& g) { g.addItem("key_feather", 1, Rarity::Count, false); Character& c = g.pc(); c.pos += vec3(std::sin(c.yaw), 0, std::cos(c.yaw)) * 40.f; c.pos.y = g.groundAt(c.pos.x, c.pos.z) + 40.f; c.vel = vec3(0); c.grounded = false; y0 = c.pos.y; }, idle, "jump off"});
+        s.push_back({0.3f, none, idle, "fall a little"});
+        s.push_back({2.f, [](Game& g) { float k = g.ui.scale; Rect r = ctlRect(g, CTL_JUMP); g.touch(TouchEvent{TouchEvent::Down, 902, (r.x + r.w / 2) * k, (r.y + r.h / 2) * k}); y0 = g.pc().pos.y; },
+                     [](Game& g, float) { g.input.move = vec2(0, 1); g.camIdleT = 0; }, "glide (finger held on Saut)"});
+        s.push_back({0.1f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 902 && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 902, f.x * k, f.y * k}); }
+            float fell = y0 - g.pc().pos.y; AGR_LOG("TREASURES glide: fell %.1f m in 2 s, gliding %d", fell, g.gliding); res[7] = fell < 12.f; g.input.move = vec2(0); g.requestScreenshot("build/shots/TR6_glide.png"); }, idle, "check"});
+        // an orb, the bag, the screens
+        s.push_back({2.f, [near](Game& g) { int o = near(g, 1, false); if (o < 0) return; const auto& sp = g.world.specials[o]; teleport(g, sp.pos.x + 1.f, sp.pos.z, 0.f); }, [](Game& g, float) { g.camIdleT = 0; }, "orb"});
+        s.push_back({0.1f, [](Game& g) { g.input.interact = true; }, idle, "take"});
+        s.push_back({0.6f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { res[8] = g.orbsTaken() == 1; g.requestScreenshot("build/shots/TR7_orb.png");
+            int before = g.bagUsed(); for (int i = 0; i < 60; i++) g.addItem("sword_iron", 1, Rarity::Common, false);
+            int full = g.bagUsed(); g.addItem("bag_adventurer", 1, Rarity::Count, false);
+            AGR_LOG("TREASURES bag: %d -> %d of %d (full), bag item added %d", before, full, g.bagCapacity(), g.countItem("bag_adventurer"));
+            res[9] = full == g.bagCapacity() && g.countItem("bag_adventurer") == 0; }, idle, "bag"});
+        s.push_back({0.1f, [](Game& g) { for (int i = (int)g.inventory.size() - 1; i >= 0 && g.bagUsed() > 20; i--) if (g.inventory[i].id == "sword_iron") g.inventory.erase(g.inventory.begin() + i);
+            g.addItem("bag_adventurer", 1, Rarity::Count, false); int cap0 = g.bagCapacity();
+            for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "bag_adventurer") { g.useItem(i); break; }
+            AGR_LOG("TREASURES bag used: %d -> %d", cap0, g.bagCapacity()); if (g.bagCapacity() != cap0 + 15) res[9] = 0;
+            g.addItem("sword_knight", 1, Rarity::Legendary, true); g.shards = 30; g.menu = Menu::Inventory; g.selItem = -1; }, idle, "inventory"});
+        s.push_back({0.4f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { AGR_LOG("TREASURES menu at shot: %d", (int)g.menu); g.requestScreenshot("build/shots/TR8_inventory.png"); }, idle, "shot"});
+        s.push_back({0.05f, [](Game& g) { g.menu = Menu::None; }, idle, "close"});
+        s.push_back({0.2f, [](Game& g) { for (int i = 0; i < (int)npcs().size(); i++) if (!npcs()[i].shop.empty()) { g.shopNpc = i; break; } g.menu = Menu::Shop; g.shopSell = 0; }, idle, "shop"});
+        s.push_back({0.4f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TR9_shop.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.menu = Menu::None;
+            int ok = 0; for (int r : res) ok += r != 0;
+            AGR_LOG("TREASURES results: world %d totem %d djump %d steps %d %d %d summit %d glide %d orb %d bag %d -> %s", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8], res[9], ok == 10 ? "TREASURES TEST PASSED" : "TREASURES TEST FAILED"); }, idle, "end"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

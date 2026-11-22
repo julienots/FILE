@@ -227,6 +227,41 @@ void Game::buildSharedMeshes() {
             case NodeType::Mushroom: for (int i = 0; i < 5; i++) { vec3 p{r.range(-0.35f, 0.35f), 0, r.range(-0.35f, 0.35f)}; float h = r.range(0.2f, 0.4f); b.tube(p, p + vec3(0, h, 0), 0.04f, 0.035f, Mat(hexColor(0xe8e0cc)), 5, false); b.lathe({{0.02f, h}, {0.14f, h - 0.02f}, {0.1f, h + 0.07f}, {0.01f, h + 0.09f}}, Mat(hexColor(0x6ad0ff), 0.4f, 0, 2.f), 8, p); } break;
             case NodeType::Berries: b.flat = true; for (int i = 0; i < 4; i++) b.rock({r.range(-0.3f, 0.3f), 0.45f, r.range(-0.3f, 0.3f)}, vec3(0.45f, 0.35f, 0.45f), Mat(hexColor(0x3f6a2a)), r.next(), 0); b.flat = false;
                 for (int i = 0; i < 14; i++) { vec3 d = r.onSphere(); d.y = std::fabs(d.y); b.ellipsoid(vec3(d.x * 0.5f, 0.4f + d.y * 0.35f, d.z * 0.5f), vec3(0.06f), Mat(hexColor(0x5a2a8a), 0.3f, 0, 0.2f), 5, 3); } break;
+            case NodeType::Totem: {
+                // 3.2.0 a totem of power: a stepped plinth with glowing runes, a carved monolith with three faces,
+                // a crown of horns, a rune crystal floating above it, and a faint beam of light rising to the sky
+                Mat stone(hexColor(0x6a665e), 0.85f), dark(hexColor(0x3c3a36), 0.9f), gold(hexColor(0xd8b058), 0.3f, 0.9f), rune(hexColor(0x7af0ff), 0.3f, 0, 3.5f);
+                b.flat = true;
+                b.lathe({{1.6f, 0}, {1.6f, 0.25f}, {1.25f, 0.25f}, {1.25f, 0.5f}, {0.95f, 0.5f}, {0.95f, 0.7f}, {0.01f, 0.7f}}, stone, 8);
+                b.flat = false;
+                for (int i = 0; i < 8; i++) { float a = i * TAU / 8; b.box({std::cos(a) * 1.42f, 0.27f, std::sin(a) * 1.42f}, {0.16f, 0.02f, 0.05f}, rune, quat::axisAngle({0, 1, 0}, -a)); }
+                b.flat = true;
+                b.lathe({{0.55f, 0.7f}, {0.5f, 2.6f}, {0.62f, 2.85f}, {0.4f, 3.05f}, {0.01f, 3.1f}}, stone, 6);
+                b.flat = false;
+                for (int f = 0; f < 3; f++) {   // three carved faces, glowing eyes
+                    float a = f * TAU / 3; vec3 n{std::cos(a), 0, std::sin(a)};
+                    quat q = quat::axisAngle({0, 1, 0}, -a + PI / 2);
+                    b.box(n * 0.5f + vec3(0, 2.15f, 0), {0.28f, 0.06f, 0.05f}, dark, q);
+                    for (int s2 = -1; s2 <= 1; s2 += 2) b.ellipsoid(n * 0.52f + vec3(0, 2.25f, 0) + vec3(n.z, 0, -n.x) * (s2 * 0.13f), vec3(0.05f, 0.035f, 0.05f), rune, 6, 4);
+                    b.box(n * 0.5f + vec3(0, 1.6f, 0), {0.2f, 0.18f, 0.04f}, dark, q);
+                    b.box(n * 0.51f + vec3(0, 1.1f, 0), {0.06f, 0.3f, 0.03f}, rune, q);
+                }
+                for (int i = 0; i < 4; i++) { float a = i * TAU / 4 + 0.4f; vec3 d{std::cos(a), 0, std::sin(a)}; b.cone(d * 0.42f + vec3(0, 2.95f, 0), d * 0.85f + vec3(0, 3.6f, 0), 0.09f, gold, 5); }
+                b.flat = true;
+                b.lathe({{0.01f, 3.6f}, {0.22f, 3.95f}, {0.01f, 4.45f}}, rune, 6);   // the floating crystal
+                b.flat = false;
+                b.tube({0, 4.5f, 0}, {0, 40.f, 0}, 0.12f, 0.35f, Mat(hexColor(0x9af4ff), 0.2f, 0, 1.6f), 6, false);   // the beam
+                break;
+            }
+            case NodeType::Orb: {
+                // 3.2.0 an ancient orb: a luminous sphere in a cage of gold rings, over a small rune stone
+                Mat gold(hexColor(0xd8b058), 0.3f, 0.9f), glow(hexColor(0xffe08a), 0.2f, 0, 4.f);
+                b.flat = true; b.lathe({{0.35f, -1.1f}, {0.3f, -0.85f}, {0.18f, -0.8f}, {0.01f, -0.8f}}, Mat(hexColor(0x6a665e), 0.8f), 6); b.flat = false;
+                b.ellipsoid({0, 0, 0}, vec3(0.28f), glow, 12, 8);
+                for (int i = 0; i < 3; i++) b.lathe({{0.4f, -0.015f}, {0.4f, 0.015f}, {0.37f, 0.015f}, {0.37f, -0.015f}}, gold, 16, {}, quat::axisAngle(normalize(vec3(i == 0, i == 1, i == 2)), PI / 2));
+                b.tube({0, 0.35f, 0}, {0, 18.f, 0}, 0.05f, 0.18f, Mat(hexColor(0xffe8a0), 0.2f, 0, 1.2f), 6, false);   // a thin golden beam
+                break;
+            }
             default: break;
             }
             b.bakeHeightAO(0, 0.6f, 0.7f);
@@ -483,6 +518,8 @@ void Game::spawnNode(const NodeSpawn& n) {
     case NodeType::Shells: it.kind = InterKind::Node; it.text = "Ramasser les coquillages"; break;
     case NodeType::Chest: it.kind = InterKind::Chest; it.text = "Ouvrir le coffre"; break;
     case NodeType::Relic: it.kind = InterKind::Node; it.text = "Examiner la relique"; break;
+    case NodeType::Totem: it.kind = InterKind::Node; it.text = "Éveiller le totem de pouvoir"; it.radius = 3.2f; break;   // 3.2.0
+    case NodeType::Orb: it.kind = InterKind::Node; it.text = "Prendre l'orbe ancien"; it.radius = 2.4f; break;
     case NodeType::FishingSpot: it.kind = InterKind::Fishing; it.text = "Pêcher"; it.radius = 4.5f; break;
     default: break;
     }

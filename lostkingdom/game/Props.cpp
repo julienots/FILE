@@ -1839,7 +1839,7 @@ vec2 structureFootprint(int kind) {
     case S_PORTAL: return {6.f, 1.4f};
     case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
     case S_MINE: return {6.5f, 6.f};   // 3.1.0 the knoll, the adit and the cart track (neighbours are pushed off it)
-    case S_GEYSER: return {1.6f, 1.6f}; case S_SKYISLAND: return {0.5f, 0.5f};   // 2.8.0 (the island floats: the ground under it stays free)
+    case S_GEYSER: return {1.6f, 1.6f}; case S_SKYISLAND: case S_SKYGEYSER: return {0.5f, 0.5f};   // 2.8.0 (the island floats: the ground under it stays free)
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};
     }
@@ -1879,6 +1879,7 @@ static void groundUnder(const Structure& s, const World& w, float& lo, float& hi
 }
 
 float structureGroundY(const Structure& s, const World& w) {
+    if (s.kind == S_SKYGEYSER) return s.variant / 100.f;   // 3.2.0 stands on a floating island's deck
     float gy = w.height(s.pos.x, s.pos.y);
     if (s.poi >= 0) gy = w.pois[s.poi].height;
     if (s.kind == S_BRIDGE) return s.variant / 100.f + 1.2f;
@@ -2512,8 +2513,8 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_BEACHHUT: beachHut(M, Fo, s.variant); addBoxCollider(out, s, gy, {0, 0.4f}, 2.5f, 2.9f, 3.f); break;
     case S_COLONNADE: colonnade(M, s.variant, rng); for (int i = 0; i < 5; i++) addCircleCollider(out, s, gy, {(i - 2) * 2.5f, 0}, 0.5f, 4.f); break;
     case S_ARCHWAY: archway(M, s.variant); addBoxCollider(out, s, gy, {-3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {3.4f, 0}, 1.0f, 1.1f, 7.f); addBoxCollider(out, s, gy, {0, 0}, 3.0f, 1.0f, 3.f); out.colliders.back().base = gy + 6.f; out.colliders.back().top = 3.f; break;
-    case S_GEYSER: {
-        // 2.8.0 (reworked) a hot spring geyser: terraces of cream and ochre sinter round a clear blue-green pool,
+    case S_GEYSER: case S_SKYGEYSER: {
+        // 2.8.0 (reworked) a hot spring geyser (3.2.0: also the wind springs on the decks of the sky islands): terraces of cream and ochre sinter round a clear blue-green pool,
         // a pale throat in the middle, wet dark stones, and a column of steam
         Mat sinter(hexColor(0xd8ccb0), 0.7f), ochre(hexColor(0xb88a50), 0.8f), wet(hexColor(0x4a4844), 0.4f);
         M.lathe({{2.6f, -0.05f}, {2.2f, 0.08f}, {1.75f, 0.12f}, {1.5f, 0.22f}, {1.3f, 0.2f}}, sinter, 20);   // outer terrace
@@ -2528,6 +2529,11 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
         M.ellipsoid({0, 0.12f, 0}, vec3(0.42f, 0.03f, 0.42f), Mat(hexColor(0xbfe8e0), 0.05f, 0.f, 0.6f), 10, 3);   // the throat
         out.emitters.push_back(vec4(s.pos.x, gy + 0.4f, s.pos.y, EM_MIST));
         out.emitters.push_back(vec4(s.pos.x, gy + 1.4f, s.pos.y, EM_MIST));
+        if (s.kind == S_SKYGEYSER) {   // a ring of wind runes and a beacon: "jump in, it goes up"
+            for (int i = 0; i < 8; i++) { float a = i * TAU / 8; M.box({std::cos(a) * 2.9f, 0.08f, std::sin(a) * 2.9f}, {0.22f, 0.04f, 0.08f}, Mat(hexColor(0x9ae8ff), 0.3f, 0, 3.f), quat::axisAngle({0, 1, 0}, -a)); }
+            out.emitters.push_back(vec4(s.pos.x, gy + 0.5f, s.pos.y, EM_SPARKLES));
+            out.lights.push_back(vec4(s.pos.x, gy + 1.5f, s.pos.y, LI_CRYSTAL));
+        }
         break;
     }
     case S_SKYISLAND: {
@@ -2554,8 +2560,15 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
             if (top) {
                 v.py += n * 0.25f * std::min(1.f, std::sqrt(v.px * v.px + v.pz * v.pz) / R);   // gentle hummocks
                 float m = fbm2(v.px * 0.25f + 11.f + s.pos.x, v.pz * 0.25f + s.pos.y, 2, 992) * 0.5f + 0.5f;
-                vec3 c = lerp(hexColor(0x3c5628), hexColor(0x6e6c3a), smoothstepf(0.4f, 0.75f, m)) * 0.85f;   // moss -> dry grass
-                if (m < 0.22f) c = lerp(c, hexColor(0x5a4a36), 0.7f);                                    // bare earth
+                // 3.2.0 the islands of every region wear its ground: snow, sand, ash, violet moss, or grass
+                uint32_t g0 = 0x3c5628, g1 = 0x6e6c3a, ea = 0x5a4a36;
+                if (s.region == R_FROSTHEIM || s.region == R_TITANS) { g0 = 0xdfe6ee; g1 = 0xbcc6cf; ea = 0x6a6a6e; }
+                else if (s.region == R_AMBER) { g0 = 0xd2b072; g1 = 0xc0965a; ea = 0x9a7448; }
+                else if (s.region == R_ASHEN) { g0 = 0x48403a; g1 = 0x6a5a4a; ea = 0x2a2220; }
+                else if (s.region == R_SHADOWS) { g0 = 0x2e3a2c; g1 = 0x4a3e52; ea = 0x2a2230; }
+                else if (s.region == R_JUNGLE || s.region == R_CORAL) { g0 = 0x2e6a2a; g1 = 0x5a8a34; ea = 0x5a4a36; }
+                vec3 c = lerp(hexColor(g0), hexColor(g1), smoothstepf(0.4f, 0.75f, m)) * 0.85f;   // moss -> dry grass
+                if (m < 0.22f) c = lerp(c, hexColor(ea), 0.7f);                                    // bare earth
                 v.r = (uint8_t)clampf(c.x * 255, 0, 255); v.g = (uint8_t)clampf(c.y * 255, 0, 255); v.b = (uint8_t)clampf(c.z * 255, 0, 255);
             } else {
                 float depth = off - v.py;

@@ -12,8 +12,8 @@ void Game::updateGeysers(float dt) {
     if (c.dead || c.swimming || geyserCD > 0.f) return;
     if (!c.grounded && c.pos.y - c.groundY > 0.4f) return;
     // a geyser re-arms only once you have stepped out of it (you used to fall back into the pool and fly again, forever)
-    if (geyserLast >= 0 && world.geyserNear(c.pos.xz(), 2.6f) != geyserLast) geyserLast = -1;
-    int gi = world.geyserNear(c.pos.xz(), 1.25f);
+    if (geyserLast >= 0 && world.geyserNear(c.pos.xz(), 2.6f, c.pos.y) != geyserLast) geyserLast = -1;
+    int gi = world.geyserNear(c.pos.xz(), 1.25f, c.pos.y);
     if (gi < 0 || gi == geyserLast) return;
     geyserLast = gi;
     const Structure& s = world.structures[gi];
@@ -21,11 +21,24 @@ void Game::updateGeysers(float dt) {
     vec3 v;
     if (s.variant > 0) {
         // aimed: the top of the arc 2.5 m above the island deck, landing about 9 m in from the geyser
-        float H = s.variant / 100.f + 2.5f;
+        // 3.2.0 deck geysers (S_SKYGEYSER) carry their own climb and distance, to the next island up
+        bool deck = s.kind == S_SKYGEYSER;
+        float climb = s.variant / 100.f, dist = 3.5f + SKY_ISLAND_R * 0.6f;
+        vec2 dir{std::sin(s.rot), std::cos(s.rot)};
+        if (deck) {   // aim at the next island up, ahead of the spring
+            climb = 0; float best = 1e9f;
+            for (const Structure& o : world.structures) {
+                if (o.kind != S_SKYISLAND) continue;
+                vec2 to = o.pos - s.pos; float d = length(to);
+                float dy = o.variant / 100.f - s.variant / 100.f;
+                if (d < 5.f || d > 45.f || dy < 2.f || dot(to / d, dir) < 0.7f) continue;
+                if (d < best) { best = d; climb = dy + 0.4f; dist = d - SKY_ISLAND_R * 0.35f; }
+            }
+            if (climb <= 0) { climb = 6.f; dist = 3.f; }
+        }
+        float H = climb + 2.5f;
         float vy = std::sqrt(2.f * g * H);
         float t = vy / g + std::sqrt(2.f * 2.5f / g);
-        vec2 dir{std::sin(s.rot), std::cos(s.rot)};
-        float dist = 3.5f + SKY_ISLAND_R * 0.6f + (length(s.pos - c.pos.xz()) * 0.f);
         v = vec3(dir.x * dist / t, vy, dir.y * dist / t);
         // the launch starts from the centre of the pool, so every jump lands in the same place
         c.pos.x = s.pos.x; c.pos.z = s.pos.y;

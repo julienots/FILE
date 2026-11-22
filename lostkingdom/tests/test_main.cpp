@@ -399,7 +399,7 @@ static void testBuildingsGrounded(World& w) {
     int n = 0, floatingOld = 0, floatingNew = 0, deepKind = -1; float worstOld = 0, worstNew = 0, deepest = 0;
     for (const Structure& s : w.structures) {
         if (s.kind == S_FIELD || s.kind == S_PEN) continue;   // they follow the terrain vertex by vertex
-        if (s.kind == S_BRIDGE || s.kind == S_DOCK || s.kind == S_PIER || s.kind == S_CASTLE_WALL || s.kind == S_CAVE || s.kind == S_MINE || s.kind == S_RUIN_WALL || s.kind == S_ELVEN_ARCH || s.kind == S_PORTAL || s.kind == S_SKYISLAND || s.kind == S_GEYSER) continue;   // 2.8.0 islands float on purpose, geysers are pools
+        if (s.kind == S_BRIDGE || s.kind == S_DOCK || s.kind == S_PIER || s.kind == S_CASTLE_WALL || s.kind == S_CAVE || s.kind == S_MINE || s.kind == S_RUIN_WALL || s.kind == S_ELVEN_ARCH || s.kind == S_PORTAL || s.kind == S_SKYISLAND || s.kind == S_GEYSER || s.kind == S_SKYGEYSER) continue;   // 2.8.0 islands float on purpose, geysers are pools (3.2.0 and their deck springs)
         n++;
         float oldY = s.poi >= 0 ? w.pois[s.poi].height : w.height(s.pos.x, s.pos.y);
         float newY = structureGroundY(s, w);

@@ -316,6 +316,7 @@ void Game::updatePlaying(float dt) {
     gProfFrames++;
     PROF(0, updatePlayer(dt));
     updateGeysers(dt);   // 2.8.0
+    updateTreasures(dt);   // 3.2.0
     updateVfx(dt);       // 3.0.1
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));

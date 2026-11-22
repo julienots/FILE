@@ -247,6 +247,7 @@ struct Input {
     float attackHoldT = 0;
     bool heavy = false;
     bool dodge = false, jump = false, block = false, interact = false, potion = false, mount = false;
+    bool jumpHeld = false;    // 3.2.0 a finger on Saut (gliding)
     bool skill[3] = {false, false, false};
     vec2 camDrag;             // camera drag in pixels: x = yaw, y = pitch (finger moving up = look up)
     float pinch = 0;
@@ -576,6 +577,28 @@ public:
     float flightAlt = 6.f, stealthT = 0, meteorPower = 0, fallSafeT = 0;
     float geyserT = 0, geyserCD = 0; int geyserLaunches = 0, geyserLast = -1;   // 2.8.0 launch geysers (no air braking while launched)
     void updateGeysers(float dt);
+    // 3.2.0 the treasure hunt (TreasureHunt.cpp): key items, bags and slots, star shards, totems and orbs
+    int invCap = 40, shards = 0, phoenixDay = -1, compassTarget = -1;
+    bool gliding = false;
+    struct ItemGetFx { std::string icon, title, name, desc; vec3 color{1, 1, 1}; bool big = false; float t = 0; };
+    std::deque<ItemGetFx> itemGets;
+    struct TreasureBonus { float hp = 0, stamina = 0, mp = 0, atk = 0; };
+    bool hasPower(int kp) const;
+    int bagUsed() const;
+    int bagCapacity() const;
+    int orbsTaken() const;
+    int totemsTaken() const;
+    int treasureTotal(int type) const;
+    TreasureBonus treasureBonus() const;
+    void itemGet(const std::string& icon, const std::string& title, const std::string& name, const std::string& desc, vec3 color, bool big);
+    void collectTreasure(const NodeSpawn& ns);
+    void updateTreasures(float dt);
+    void treasurePhysics(Character& c, float dt);
+    bool tryPhoenix(Character& c);
+    void drawTreasureHud();
+    std::shared_ptr<Mesh> lootBeamMesh;
+    int shopSell = -1;   // 3.2.0 the item selected for sale
+    double bagFullT = -100;
     float heroCD[3] = {0, 0, 0};
     float heroAura = 0;
     // 1.9.2 night hunters director

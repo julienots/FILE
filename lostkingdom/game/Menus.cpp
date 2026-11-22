@@ -265,6 +265,7 @@ void Game::newGame() {
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
     riding = false;
     level = 1; xp = 0; gold = 60; skillPoints = 1;
+    invCap = 40; shards = 0; phoenixDay = -1; itemGets.clear();   // 3.2.0 a new bag: 40 slots
     inventory.clear(); for (auto& e : equipment) e = ItemStack();
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); activeMount = -1;
     mapPins.clear(); tele = TeleFx(); questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear(); bestiary.clear(); loreFound.clear(); relicsFound.clear(); talkedTo.clear();
@@ -670,28 +671,59 @@ void Game::drawMenus(float dt) {
         return;
     }
     if (menu == Menu::Shop) {
+        // 3.2.0 the shop: the merchant's goods, the Wonders (paid in star shards), and a bag you sell from in two taps
         u.consumeAll();
         Rect f = journalFrame(u);
         const NpcDef& n = npcs()[shopNpc];
         u.panel(f, n.name + " — Commerce");
-        if (u.iconButton({f.x + f.w - 60, f.y - 10, 64, 64}, "close")) { menu = Menu::None; play("ui_close", 0.5f); return; }
-        u.text("Or : " + std::to_string(gold), f.x + 50, f.y + 40, 22, GOLDT, F_BOLD);
-        Rect left{f.x + 40, f.y + 80, f.w * 0.5f - 60, f.h - 110}, right{f.x + f.w * 0.5f + 10, f.y + 80, f.w * 0.5f - 50, f.h - 110};
+        if (u.iconButton({f.x + f.w - 60, f.y - 10, 64, 64}, "close")) { menu = Menu::None; shopSell = -1; play("ui_close", 0.5f); return; }
+        u.sprite("i_coin", {f.x + 46, f.y + 36, 30, 30});
+        u.text(std::to_string(gold), f.x + 82, f.y + 38, 22, GOLDT, F_BOLD);
+        u.sprite("i_crystal", {f.x + 190, f.y + 36, 28, 28}, rgba(0xb8a0ff));
+        u.text(std::to_string(shards) + " éclats", f.x + 222, f.y + 38, 22, rgba(0xc8b8ff), F_BOLD);
+        char cb[48]; snprintf(cb, sizeof cb, "Sac %d/%d", bagUsed(), bagCapacity());
+        u.text(cb, f.x + 420, f.y + 38, 20, bagUsed() >= bagCapacity() ? rgba(0xe07060) : PALE, F_BOLD);
+        Rect left{f.x + 40, f.y + 80, f.w * 0.5f - 60, f.h - 110}, right{f.x + f.w * 0.5f + 10, f.y + 80, f.w * 0.5f - 50, f.h - 200};
         u.text("À vendre", left.x, left.y - 30, 20, PALE, F_SERIF);
-        u.text("Votre sac (toucher pour vendre)", right.x, right.y - 30, 20, PALE, F_SERIF);
+        u.text("Votre sac : touchez pour vendre", right.x, right.y - 30, 20, PALE, F_SERIF);
+        // goods: the merchant's list (+ a leather satchel everywhere), then the Wonders for shards
+        std::vector<std::pair<std::string, bool>> goods;   // id, paid in shards
+        for (auto& id : n.shop) goods.push_back({id, false});
+        if (std::find(n.shop.begin(), n.shop.end(), "bag_leather") == n.shop.end()) goods.push_back({"bag_leather", false});
+        int wondersAt = (int)goods.size();
+        for (auto& d : allItems()) if (d.shardPrice > 0) goods.push_back({d.id, true});
         u.pushClip(left);
-        float so = u.scrollArea("shopL", left, n.shop.size() * 76.f);
+        float so = u.scrollArea("shopL", left, goods.size() * 76.f + 46.f);
         float y = left.y - so;
-        for (auto& id : n.shop) {
+        for (int gi = 0; gi < (int)goods.size(); gi++) {
+            if (gi == wondersAt) {   // the Wonders header
+                u.rectGrad({left.x, y + 4, left.w - 12, 36}, rgba(0x6a50c8, 0.55f), rgba(0x2a2050, 0.35f));
+                u.text("Merveilles · payées en éclats d'étoile", left.x + 12, y + 10, 19, rgba(0xd8c8ff), F_SERIF);
+                y += 46;
+            }
+            const std::string& id = goods[gi].first;
+            bool sh = goods[gi].second;
             const ItemDef* d = item(id);
             if (!d) continue;
-            int price = d->kind == ItemKind::MountToken ? mounts()[d->mount].price : itemPrice(id, false);
+            bool owned = d->kind == ItemKind::Key && countItem(id) > 0;
+            int price = sh ? d->shardPrice : (d->kind == ItemKind::MountToken ? mounts()[d->mount].price : itemPrice(id, false));
+            bool afford = sh ? shards >= price : gold >= price;
             Rect row{left.x, y, left.w - 12, 70};
+            vec3 rc = rarityColor(d->rarity);
             u.nine("slot", row, vec4(1, 1, 1, 0.9f), 0.5f);
+            if ((int)d->rarity >= 2) u.rectGrad(row.inset(4), vec4(rc, 0.f), vec4(rc, 0.18f));
+            if ((int)d->rarity >= 3) u.sprite("glow", {row.x - 6, row.y - 6, 82, 82}, vec4(rc, 0.3f + 0.1f * std::sin(realTime * 3 + gi)));
             itemIcon(id, {row.x + 6, row.y + 5, 60, 60});
-            u.text(d->name, row.x + 78, row.y + 8, 20, vec4(rarityColor(d->rarity), 1), F_BODY);
-            u.text(std::to_string(price) + " or", row.x + 78, row.y + 38, 17, gold >= price ? GOLDT : rgba(0xd06050), F_BOLD);
-            if (u.button(row)) buyItem(id, price);
+            u.text(d->name, row.x + 78, row.y + 6, 20, vec4(rc, 1), F_BODY);
+            u.text(rarityName(d->rarity), row.x + row.w - 10, row.y + 8, 14, vec4(rc * 0.9f, 0.9f), F_BOLD, A_RIGHT);
+            if (owned) u.text("Possédé", row.x + 78, row.y + 38, 17, DIM, F_BOLD);
+            else u.text(std::to_string(price) + (sh ? " éclats" : " or"), row.x + 78, row.y + 38, 17, afford ? (sh ? rgba(0xc8b8ff) : GOLDT) : rgba(0xd06050), F_BOLD);
+            if (u.button(row) && !owned) {
+                if (sh) {
+                    if (shards < price) notify("Pas assez d'éclats d'étoile : totems, orbes, boss et coffres du ciel en donnent.", vec3(0.8f, 0.7f, 1.f), "i_crystal");
+                    else if (addItem(id, 1)) { shards -= price; play("coin", 0.8f, 1.3f); }
+                } else buyItem(id, price);
+            }
             y += 76;
         }
         u.popClip();
@@ -700,13 +732,29 @@ void Game::drawMenus(float dt) {
         float so2 = u.scrollArea("shopR", right, ((inventory.size() + cols - 1) / cols) * 86.f);
         for (int i = 0; i < (int)inventory.size(); i++) {
             Rect s{right.x + (i % cols) * 86, right.y + (i / cols) * 86 - so2, 80, 80};
-            u.nine("slot", s, vec4(1, 1, 1, 0.9f), 0.4f);
+            u.nine(i == shopSell ? "slot_sel" : "slot", s, vec4(1, 1, 1, 0.9f), 0.4f);
+            vec3 rc = rarityColor(inventory[i].rarity);
+            if ((int)inventory[i].rarity >= 2) u.sprite("glow", s.inset(-5), vec4(rc, 0.22f));
             itemIcon(inventory[i].id, s.inset(6));
-            u.rect({s.x + 6, s.y + s.h - 8, s.w - 12, 3}, vec4(rarityColor(inventory[i].rarity), 0.9f));
+            u.rect({s.x + 6, s.y + s.h - 8, s.w - 12, 3}, vec4(rc, 0.9f));
             if (inventory[i].count > 1) u.text(std::to_string(inventory[i].count), s.x + s.w - 8, s.y + s.h - 28, 16, PALE, F_BOLD, A_RIGHT, 0, true);
-            if (u.button(s)) { sellItem(i); break; }
+            if (u.button(s)) { shopSell = i; play("ui_click", 0.4f); }
         }
         u.popClip();
+        // the selected item: its value and a sell button (no more selling by mistake)
+        Rect sb{right.x, right.y + right.h + 14, right.w, 80};
+        if (shopSell >= 0 && shopSell < (int)inventory.size()) {
+            const ItemStack& st = inventory[shopSell];
+            const ItemDef* d = item(st.id);
+            bool sellable = d && d->kind != ItemKind::Quest && d->kind != ItemKind::Key;
+            int price = d ? (int)(itemPrice(d->id, true) * rarityMult(st.rarity)) : 0;
+            u.text(d ? d->name : st.id, sb.x, sb.y + 4, 19, vec4(rarityColor(st.rarity), 1), F_BOLD);
+            u.text(sellable ? ("Valeur : " + std::to_string(price) + " or") : std::string("Ne se vend pas"), sb.x, sb.y + 32, 16, DIM, F_BODY);
+            if (sellable && u.fancyButton({sb.x + sb.w - 230, sb.y + 6, 230, 58}, "Vendre " + std::to_string(price) + " or", true, "button", 19)) {
+                sellItem(shopSell);
+                if (shopSell >= (int)inventory.size() || inventory[shopSell].id != st.id) shopSell = -1;
+            }
+        } else u.text("Touchez un objet de votre sac pour voir sa valeur.", sb.x, sb.y + 20, 16, DIM, F_BODY);
         return;
     }
     // ---------------------------------------------------------------- journal: a leather-bound book, bookmark tabs on the left
@@ -752,10 +800,33 @@ void Game::drawMenus(float dt) {
     switch (menu) {
     // ---------------------------------------------------------------- inventory
     case Menu::Inventory: {
-        Rect grid{c.x, c.y + 40, c.w * 0.58f, c.h - 40};
-        u.text("Sac · " + std::to_string(inventory.size()) + "/120", c.x, c.y, 22, PALE, F_SERIF);
-        u.sprite("i_coin", {c.x + c.w * 0.58f - 140, c.y - 4, 30, 30});
-        u.text(std::to_string(gold), c.x + c.w * 0.58f - 104, c.y, 22, GOLDT, F_BOLD);
+        // 3.2.0 the bag has slots (40 to start, more with bags and orbs), key items live in their own strip
+        std::vector<int> keys, bagIdx;
+        for (int i = 0; i < (int)inventory.size(); i++) { const ItemDef* d = item(inventory[i].id); (d && d->kind == ItemKind::Key ? keys : bagIdx).push_back(i); }
+        float keyH = 74;
+        Rect grid{c.x, c.y + 40 + keyH, c.w * 0.58f, c.h - 40 - keyH};
+        int cap = bagCapacity();
+        u.text("Sac · " + std::to_string((int)bagIdx.size()) + "/" + std::to_string(cap), c.x, c.y, 22, (int)bagIdx.size() >= cap ? rgba(0xe07060) : PALE, F_SERIF);
+        u.sprite("i_coin", {c.x + c.w * 0.58f - 230, c.y - 4, 30, 30});
+        u.text(std::to_string(gold), c.x + c.w * 0.58f - 194, c.y, 22, GOLDT, F_BOLD);
+        u.sprite("i_crystal", {c.x + c.w * 0.58f - 110, c.y - 4, 28, 28}, rgba(0xb8a0ff));
+        u.text(std::to_string(shards), c.x + c.w * 0.58f - 78, c.y, 22, rgba(0xc8b8ff), F_BOLD);
+        {   // key items strip + the hunt counters
+            Rect ks{c.x, c.y + 40, c.w * 0.58f, keyH - 8};
+            u.nine("card", ks, vec4(1, 1, 1, 0.55f), 0.5f);
+            char hb[96]; snprintf(hb, sizeof hb, "Totems %d/%d · Orbes %d/%d", totemsTaken(), treasureTotal(0), orbsTaken(), treasureTotal(1));
+            u.text(hb, ks.x + ks.w - 12, ks.y + 6, 15, rgba(0x9ae8ff), F_BOLD, A_RIGHT);
+            if (keys.empty()) u.text("Objets clés : éveillez les totems de pouvoir (lueur bleue dans le ciel) pour en obtenir.", ks.x + 12, ks.y + 30, 15, DIM, F_BODY, A_LEFT, ks.w - 24);
+            for (int k = 0; k < (int)keys.size(); k++) {
+                Rect s{ks.x + 8 + k * 56, ks.y + 10, 48, 48};
+                if (s.x + s.w > ks.x + ks.w - 4) break;
+                const ItemDef* d = item(inventory[keys[k]].id);
+                u.sprite("glow", s.inset(-8), vec4(rarityColor(d->rarity), 0.35f + 0.15f * std::sin(realTime * 3 + k)));
+                u.nine(keys[k] == selItem ? "slot_sel" : "slot", s, vec4(1, 1, 1, 1), 0.35f);
+                itemIcon(d->id, s.inset(6));
+                if (u.button(s)) { selItem = keys[k]; play("ui_click", 0.4f); }
+            }
+        }
         if (u.fancyButton({c.x + 250, c.y - 8, 150, 42}, "Trier", true, "button_dark", 18)) {
             std::stable_sort(inventory.begin(), inventory.end(), [](const ItemStack& a, const ItemStack& b) {
                 const ItemDef *da = item(a.id), *db = item(b.id);
@@ -766,14 +837,27 @@ void Game::drawMenus(float dt) {
             selItem = -1;
         }
         int cols = std::max(4, (int)(grid.w / 92));
+        int shown = std::max((int)bagIdx.size(), cap) + 10;   // the slots, then a row of locked ones to come
         u.pushClip(grid);
-        float so = u.scrollArea("inv", grid, ((inventory.size() + cols - 1) / cols + 1) * 92.f);
-        for (int i = 0; i < (int)inventory.size(); i++) {
-            Rect s{grid.x + (i % cols) * 92, grid.y + (i / cols) * 92 - so, 86, 86};
+        float so = u.scrollArea("inv", grid, ((shown + cols - 1) / cols + 1) * 92.f);
+        for (int k = (int)bagIdx.size(); k < shown; k++) {   // empty and locked slots
+            Rect s{grid.x + (k % cols) * 92, grid.y + (k / cols) * 92 - so, 86, 86};
+            if (s.y > grid.y + grid.h || s.y + s.h < grid.y) continue;
+            bool locked = k >= cap;
+            u.nine("slot", s, vec4(1, 1, 1, locked ? 0.28f : 0.6f), 0.45f);
+            if (locked) {
+                u.sprite("i_lock", s.inset(26), vec4(1, 1, 1, 0.45f));
+                if (u.button(s)) notify("Emplacement verrouillé : utilisez un sac (marchands, Merveilles) ou trouvez des orbes anciens.", vec3(0.8f, 0.75f, 1.f), "i_lock");
+            }
+        }
+        for (int k = 0; k < (int)bagIdx.size(); k++) {
+            int i = bagIdx[k];
+            Rect s{grid.x + (k % cols) * 92, grid.y + (k / cols) * 92 - so, 86, 86};
             if (s.y > grid.y + grid.h || s.y + s.h < grid.y) continue;
             u.nine(i == selItem ? "slot_sel" : "slot", s, vec4(1, 1, 1, 1), 0.45f);
             vec3 rc = rarityColor(inventory[i].rarity);
-            if ((int)inventory[i].rarity >= 2) u.sprite("glow", s.inset(-6), vec4(rc, 0.25f));
+            if ((int)inventory[i].rarity >= 1) u.sprite("glow", s.inset(-6), vec4(rc, (int)inventory[i].rarity >= 3 ? 0.3f + 0.12f * std::sin(realTime * 3.f + i) : 0.22f));   // 3.2.0 rare items glow, legendary ones breathe
+            if ((int)inventory[i].rarity >= 2) u.rectGrad(s.inset(5), vec4(rc, 0.0f), vec4(rc, 0.22f));
             itemIcon(inventory[i].id, s.inset(8));
             u.rect({s.x + 8, s.y + s.h - 9, s.w - 16, 3}, vec4(rc, 0.95f));
             if (inventory[i].count > 1) u.text(std::to_string(inventory[i].count), s.x + s.w - 8, s.y + s.h - 30, 17, PALE, F_BOLD, A_RIGHT, 0, true);
@@ -790,7 +874,7 @@ void Game::drawMenus(float dt) {
             bool equipable = slotForKind(d->kind) >= 0 || d->kind == ItemKind::Cosmetic;
             if (d->kind == ItemKind::Consumable && u.fancyButton({bx, by, bw, 56}, "Utiliser", true, "button", 22)) { useItem(selItem); if (selItem >= (int)inventory.size()) selItem = -1; }
             if (equipable && u.fancyButton({bx, by, bw, 56}, "Équiper", true, "button", 22)) { equip(selItem); selItem = -1; }
-            if (d->kind != ItemKind::Quest && u.fancyButton({bx + bw + 12, by, bw, 56}, "Jeter", true, "button_dark", 22)) {
+            if (d->kind != ItemKind::Quest && d->kind != ItemKind::Key && u.fancyButton({bx + bw + 12, by, bw, 56}, "Jeter", true, "button_dark", 22)) {
                 Character& p = pc();
                 spawnPickup(s.id, 1, s.rarity, p.pos + vec3(std::sin(p.yaw), 0, std::cos(p.yaw)) * 1.5f);
                 if (--inventory[selItem].count <= 0) { inventory.erase(inventory.begin() + selItem); selItem = -1; }

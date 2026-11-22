@@ -253,6 +253,7 @@ void Game::updateBodyDetails(Character& c, float dt) {
 void Game::killCharacter(Entity e, Character& c, Entity killer) {
     if (c.team == Team::Enemy && !c.dead) coopOnEnemyKilled(e);   // 1.13.0 the guest sees it die (and gets its share)
     if (c.dead) return;
+    if (e == player && tryPhoenix(c)) return;   // 3.2.0
     c.dead = true; c.hp = 0; c.deathT = 0; c.attackClip = nullptr;
     ClipId dc = c.vis.arch == Arch::Humanoid ? C_DEATH : (c.vis.arch == Arch::Spider ? C_S_DEATH : (c.vis.arch == Arch::Dragon ? C_D_DEATH : C_Q_DEATH));
     c.vis.anim.play(&clip(dc), 1.f, false, 0.05f);
@@ -315,7 +316,7 @@ void Game::dropLoot(Character& c, vec3 pos) {
     Rng r((uint64_t)(realTime * 1000) + c.uid);
     int g = d.gold + r.irange(0, d.gold);
     if (c.elite) g *= 3;
-    g = (int)std::round(g * gameTuning().gold);   // 2.6.0 mods
+    g = (int)std::round(g * gameTuning().gold * (hasPower(KP_LUCK) ? 1.5f : 1.f));   // 2.6.0 mods, 3.2.0 golden clover
     gold += g;
     if (g > 0) play("coin", 0.4f, 1.1f);
     for (auto& l : d.loot) {
@@ -323,7 +324,8 @@ void Game::dropLoot(Character& c, vec3 pos) {
         if (r.f() < ch) spawnPickup(l.first, 1, item(l.first) ? item(l.first)->rarity : Rarity::Common, pos + vec3(r.range(-0.5f, 0.5f), 0, r.range(-0.5f, 0.5f)));
     }
     // random equipment with rolled rarity
-    float eqChance = c.elite ? 0.6f : 0.07f;
+    float eqChance = (c.elite ? 0.6f : 0.07f) * (hasPower(KP_LUCK) ? 1.5f : 1.f);
+    if (r.f() < (c.elite ? 0.5f : 0.03f)) spawnPickup("star_shard", 1, Rarity::Epic, pos + vec3(0, 0.3f, 0));   // 3.2.0 shards from the strong
     if (r.f() < eqChance) {
         const auto& items = allItems();
         std::vector<int> pool;
@@ -334,7 +336,7 @@ void Game::dropLoot(Character& c, vec3 pos) {
         }
         if (!pool.empty()) {
             const ItemDef& it = items[pool[r.irange(0, (int)pool.size() - 1)]];
-            float roll = r.f() + (c.elite ? 0.25f : 0.f);
+            float roll = r.f() + (c.elite ? 0.25f : 0.f) + (hasPower(KP_LUCK) ? 0.15f : 0.f);
             Rarity rr = roll < 0.55f ? Rarity::Common : roll < 0.85f ? Rarity::Rare : roll < 0.97f ? Rarity::Epic : roll < 1.15f ? Rarity::Legendary : Rarity::Mythic;
             if ((int)rr < (int)it.rarity) rr = it.rarity;
             spawnPickup(it.id, 1, rr, pos + vec3(0, 0.2f, 0));
@@ -522,7 +524,7 @@ void Game::updateProjectiles(float dt) {
 // ============================================================================================ physics & character update
 void Game::physicsStep(Entity e, Character& c, float dt) {
     bool frozen = c.status.freeze > 0 || c.status.stun > 0;
-    if (e == player) heroFlightPhysics(c, dt);
+    if (e == player) { heroFlightPhysics(c, dt); treasurePhysics(c, dt); }
     if (!c.grounded || c.swimming) c.vel.y -= (c.swimming ? 0.f : 20.f * gameTuning().gravity) * dt;   // 2.7.0 mods: gravity
     vec3 move = vec3(c.vel.x, 0, c.vel.z) * (frozen ? 0.f : 1.f) + c.knock;
     c.pos += move * dt + vec3(0, c.vel.y * dt, 0);

@@ -360,6 +360,12 @@ void Game::renderWorld(float dt) {
         d.tint = vec4(rc, 0); d.fx.w = 1.5f; d.outline = true; d.outlineColor = vec4(rc * 0.6f, 1); d.outlineWidth = 0.02f;
         renderer.submit(d);
         if ((int)pk.rarity >= (int)Rarity::Rare && particles.rng.f() < dt * 5) particles.magicTrail(*pos + vec3(0, 0.4f, 0), rc, 0.6f);
+        if ((int)pk.rarity >= (int)Rarity::Rare) {   // 3.2.0 a beam of light in the rarity colour, taller for the best loot
+            if (!lootBeamMesh) { MeshBuilder b; b.tube({0, 0, 0}, {0, 1, 0}, 0.07f, 0.16f, Mat(vec3(1), 0.2f, 0, 2.2f), 8, false); lootBeamMesh = std::make_shared<Mesh>(); b.upload(*lootBeamMesh); }
+            float hgt = pk.rarity == Rarity::Rare ? 3.5f : pk.rarity == Rarity::Epic ? 6.f : 10.f;
+            DrawItem bm; bm.mesh = lootBeamMesh.get(); bm.model = mat4::trs(*pos + vec3(0, 0.3f, 0), quat(), vec3(1.f + 0.15f * std::sin(realTime * 4.f + e), hgt, 1.f));
+            bm.tint = vec4(rc, 0); bm.castShadow = false; renderer.submit(bm);
+        }
         PointLight pl; pl.pos = *pos + vec3(0, 0.6f, 0); pl.radius = 3; pl.color = srgb(0xffffff) * rc * 1.5f; pl.flicker = 0;
         lights.push_back({length2(*pos - focus) + 50.f, pl});
     });

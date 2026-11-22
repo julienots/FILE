@@ -31,6 +31,7 @@ enum StructureKind : uint8_t {
     // 2.0.0 sandstone towns, harbours, the temple of Shirokawa
     S_DOMEHOUSE, S_BAZAAR, S_MINARET, S_ZIGGURAT, S_LIGHTHOUSE, S_PAGODA, S_SPHINX, S_PIER, S_BEACHHUT, S_COLONNADE, S_ARCHWAY,
     S_GEYSER, S_SKYISLAND,   // 2.8.0 the Lands of Aurora: launch geysers, floating islands
+    S_SKYGEYSER,             // 3.2.0 a wind spring on a floating island's deck: variant = deck height (cm); it aims at the next island up
     S_COUNT
 };
 

@@ -85,6 +85,7 @@ static void buildItems() {
         {"sword_knight", "Lame du chevalier", WeaponType::Sword, 2, Rarity::Rare, 19, 0.07f, 0, Element::Physical, 0, "Gravée aux armes de Fort Aldren."},
         {"sword_ember", "Épée de braise", WeaponType::Sword, 3, Rarity::Epic, 26, 0.08f, 0, Element::Fire, 8, "Le métal garde la chaleur des Ashen Lands."},
         {"sword_aldric", "Aube d'Aldric", WeaponType::Sword, 5, Rarity::Ancestral, 44, 0.12f, 0.05f, Element::Light, 16, "L'épée du Haut-Roi. Elle se souvient de la Couronne."},
+        {"sword_ancients", "Lame des Anciens", WeaponType::Sword, 5, Rarity::Ancestral, 56, 0.15f, 0.08f, Element::Arcane, 24, "Forgée de quarante orbes. Elle bourdonne comme un totem éveillé."},   // 3.2.0
         {"longsword_iron", "Épée longue", WeaponType::Longsword, 1, Rarity::Common, 20, 0.05f, -0.1f, Element::Physical, 0, "Deux mains, deux fois plus de conviction."},
         {"longsword_frost", "Croc-de-givre", WeaponType::Longsword, 3, Rarity::Epic, 34, 0.07f, -0.08f, Element::Ice, 10, "Forgée par Sigrun dans un bloc de glace éternelle."},
         {"longsword_fallen", "Serment brisé", WeaponType::Longsword, 4, Rarity::Mythic, 46, 0.1f, -0.05f, Element::Shadow, 14, "La lame du Chevalier Déchu. Elle pleure encore."},
@@ -314,6 +315,27 @@ static void buildItems() {
     mtok("mount_boar", "Sifflet : Sanglier de guerre", 3, Rarity::Rare, "Appelle un sanglier caparaçonné.");
     mtok("mount_spectral", "Sifflet : Destrier spectral", 4, Rarity::Mythic, "Le destrier du Chevalier Déchu, libéré.");
     mtok("mount_dune", "Sifflet : Destrier d'ambre", 5, Rarity::Epic, "Un coursier des dunes, infatigable sous le soleil.");
+    // ---- 3.2.0 key items: a power for as long as they are carried (totems of power, the Wonders merchant) -----
+    auto key = [&](const char* id, const char* nm, int pw, Rarity r, int shards, const char* icon, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Key, r, 0, desc); d.power = pw; d.icon = icon; d.shardPrice = shards; };
+    key("key_compass", "Boussole des Anciens", KP_COMPASS, Rarity::Epic, 8, "i_compass", "Une aiguille d'or pointe vers le totem de pouvoir ou l'orbe ancien le plus proche. Ils apparaissent aussi sur la mini-carte.");
+    key("key_zephyr", "Bottes de Zéphyr", KP_DOUBLEJUMP, Rarity::Legendary, 0, "i_jump", "Un second saut en plein air. Indispensable pour atteindre le sommet des îles du ciel.");
+    key("key_feather", "Cape de plume de roc", KP_GLIDE, Rarity::Legendary, 0, "i_star", "En l'air, maintenez le saut pour planer. Une chute du haut des îles devient un vol.");
+    key("key_magnet", "Anneau-aimant", KP_MAGNET, Rarity::Epic, 12, "i_coin", "Le butin vole vers vous dans un rayon de 10 m.");
+    key("key_triton", "Écaille de triton", KP_BREATH, Rarity::Epic, 10, "i_drop", "Respirez sous l'eau sans limite et nagez plus vite.");
+    key("key_phoenix", "Plume de phénix", KP_PHOENIX, Rarity::Mythic, 0, "i_heart", "Une fois par jour, elle vous relève avec la moitié de votre vie quand vous tombez au combat.");
+    key("key_clover", "Trèfle d'or", KP_LUCK, Rarity::Legendary, 0, "i_star", "+50 % d'or ramassé, et le butin est plus souvent rare, épique ou légendaire.");
+    key("key_swift", "Sabot de vent", KP_SWIFT, Rarity::Legendary, 0, "i_mount", "Le sprint coûte moitié moins d'endurance et vous courez 10 % plus vite.");
+    // bags: used from the bag, they add slots for good
+    auto bag = [&](const char* id, const char* nm, int slots, Rarity r, int value, int shards, const char* desc) {
+        ItemDef& d = addItem(id, nm, ItemKind::Consumable, r, value, desc); d.bagSlots = slots; d.icon = "i_inventory"; d.shardPrice = shards; };
+    bag("bag_leather", "Sacoche de cuir", 10, Rarity::Rare, 300, 0, "Utilisez-la : +10 emplacements dans le sac, pour toujours.");
+    bag("bag_adventurer", "Sac d'aventurier", 15, Rarity::Epic, 900, 6, "Utilisez-le : +15 emplacements dans le sac, pour toujours.");
+    bag("bag_bottomless", "Sac sans fond", 25, Rarity::Legendary, 0, 15, "Cousu de fil d'aurore. Utilisez-le : +25 emplacements dans le sac, pour toujours.");
+    { ItemDef& d = addItem("star_shard", "Éclat d'étoile", ItemKind::Material, Rarity::Epic, 0, "La monnaie des Merveilles. Les totems, les orbes anciens, les boss et les coffres du ciel en donnent."); d.icon = "i_crystal"; }
+    // a few wonders sold for shards
+    { ItemDef& d = addItem("elixir_titan", "Élixir du titan", ItemKind::Consumable, Rarity::Legendary, 400, "Force décuplée pendant 2 minutes."); d.buff = 2; d.buffTime = 120; d.heal = 120; d.icon = "i_potion"; d.shardPrice = 3; }
+    { ItemDef& d = addItem("elixir_phoenix", "Larme de phénix", ItemKind::Consumable, Rarity::Mythic, 600, "Rend toute la vie, la mana et l'endurance."); d.heal = 9999; d.mana = 9999; d.stam = 9999; d.icon = "i_potion_mana"; d.shardPrice = 4; }
     // ---- cosmetics (dyes) ---------------------------------------------------------------------------
     auto dye = [&](const char* id, const char* nm, uint32_t c, Rarity r) { ItemDef& d = addItem(id, nm, ItemKind::Cosmetic, r, 60, "Teinture d'armure (apparence)."); d.color = hexColor(c); d.icon = "i_star"; };
     dye("dye_royal", "Teinture bleu royal", 0x2a4f9a, Rarity::Common);
@@ -432,6 +454,11 @@ const std::vector<SpellDef>& spells() {
         {"aegis", "Égide radieuse", "Un bouclier absorbe les dégâts.", "i_sp_radiantshield", Element::Light, SpellKind::Shield, 28, 18, 1.f, 0, 8},
         {"missiles", "Projectiles arcaniques", "Trois projectiles à tête chercheuse.", "i_sp_missiles", Element::Arcane, SpellKind::Projectile, 20, 3, 0.9f, 1.f, 0},
         {"arcanenova", "Nova arcanique", "Repousse violemment les ennemis.", "i_sp_arcanenova", Element::Arcane, SpellKind::Area, 28, 9, 1.4f, 6.f, 0},
+        // 3.2.0 legendary spells: only the totems of power and the ancient orbs teach them
+        {"skyfall", "Colère céleste", "Un orage s'abat sur tout ce qui vous entoure. (Totem de pouvoir)", "i_sp_thunder", Element::Lightning, SpellKind::Rain, 55, 22, 5.5f, 13.f, 0},
+        {"dragonfire", "Souffle du dragon", "Un torrent de flammes ravage le terrain devant vous. (Totem de pouvoir)", "i_sp_flamewave", Element::Fire, SpellKind::Area, 50, 16, 4.6f, 11.f, 0},
+        {"glacier", "Ère glaciaire", "Tout gèle dans un grand rayon. (Totem de pouvoir)", "i_sp_frostnova", Element::Ice, SpellKind::Area, 55, 24, 2.6f, 14.f, 5},
+        {"starstorm", "Pluie d'étoiles", "Des étoiles tombent sur vos ennemis. (Orbes anciens)", "i_sp_missiles", Element::Arcane, SpellKind::Rain, 60, 26, 6.f, 14.f, 0},
     };
     return s;
 }
