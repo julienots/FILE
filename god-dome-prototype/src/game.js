@@ -262,6 +262,20 @@ export function createGame(ctx) {
     for (const e of enemies) if (!e.dead && e.g.position.distanceTo(p) < 5) damageEnemy(e, 2, p, 16);
     if (boss && !boss.dead && boss.g.position.distanceTo(p) < 6) damageBoss(2);
   }
+  // dégâts de zone et en ligne (utilisés par les pouvoirs de powers.js)
+  function blast(point, radius, dmg, knock = 14) {
+    let n = 0;
+    for (const e of enemies) if (!e.dead && e.g.position.distanceTo(point) < radius) { damageEnemy(e, dmg, point, knock); n++; }
+    if (boss && !boss.dead && boss.g.position.distanceTo(point) < radius + 2) { damageBoss(Math.max(1, Math.round(dmg / 2))); n++; }
+    return n;
+  }
+  const _ab = new THREE.Vector3(), _ap = new THREE.Vector3();
+  function rayHit(a, b, width, dmg) {
+    _ab.subVectors(b, a); const L2 = _ab.lengthSq();
+    const test = (pos, w) => { _ap.subVectors(pos, a); const t = Math.max(0, Math.min(1, _ap.dot(_ab) / L2)); return _ap.addScaledVector(_ab, -t).length() < w; };
+    for (const e of enemies) if (!e.dead && test(e.g.position.clone().setY(e.g.position.y + 0.5), width)) damageEnemy(e, dmg, a, 4);
+    if (boss && !boss.dead && test(boss.g.position, width + 1.8)) damageBoss(dmg);
+  }
   function elan() { if (cds.elan > 0) return false; cds.elan = CD.elan; burst(player.root.position.clone().add(new THREE.Vector3(0, 0.8, 0)), '#cfefff', 8, 0.5); return true; }
   // la foudre du Créateur : depuis le mode Créateur (point touché) ou appelée par l'habitant
   function lightning(point, { dmg = 6, radius = 6 } = {}) {
@@ -488,7 +502,7 @@ export function createGame(ctx) {
   }
 
   return {
-    _enemies: enemies, state, update, attack, onde, elan, foudreDivine, godCast, spendFoi, addFoi, lore: LORE, get boss() { return boss; }, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
+    _enemies: enemies, blast, rayHit, state, update, attack, onde, elan, foudreDivine, godCast, spendFoi, addFoi, lore: LORE, get boss() { return boss; }, linesFor, dialogEnd, objective, useItem, collect, nearestPickup, count, save, give,
     get rain() { return rainLevel; },
     setWeather(w) { state.weather = w; save(); },
     quests: () => Object.entries(QUESTS).map(([id, q]) => ({ id, ...q, state: state.quests[id] })),

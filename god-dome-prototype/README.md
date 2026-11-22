@@ -51,6 +51,28 @@ La **Foi** de vos habitants (jauge en haut de l'écran) monte avec les quêtes, 
 | ✦ **Bénédiction** (25) : soigne l'habitant, paralyse les Ombres | **Élan** : ruée rapide |
 | + Maison (15), + Arbres (5), ☂ Pluie | **Foudre divine** (20) : l'habitant appelle la foudre du Créateur sur l'Ombre la plus proche |
 
+
+## Pouvoirs de l'habitant (v0.5)
+
+Un seul bouton **Pouvoir**. Touchez-le pour lancer le pouvoir choisi ; glissez dessus ou maintenez-le pour ouvrir la roue et en changer.
+
+| Pouvoir | Effet |
+|---|---|
+| ☄ Comète | Projectile d'énergie : explosion, **cratère réellement creusé** dans le sol, lave qui refroidit, débris de roche, onde de choc à l'écran |
+| ✷ Rayon (maintenir) | Faisceau continu qui laboure une tranchée incandescente |
+| ϟ Tempête | 12 éclairs autour de la cible : arbres soufflés, sol criblé de cratères |
+| 🜁 Envol | Vol libre (on vole là où l'on regarde), traînées lumineuses, lignes de vitesse ; piquer vers le sol = **Impact météore** |
+| ◎ Onde, ➤ Élan | Repousser autour de soi, ruée |
+
+La destruction est réelle : le relief, les collisions, l'herbe et la végétation suivent les cratères. L'énergie (jauge bleue) se recharge seule.
+
+## Interface mobile
+
+- Joystick à gauche (à fond = courir).
+- 3 boutons à droite : action contextuelle (Frapper / Parler / Ramasser), Sauter (Monter en vol), Pouvoir.
+- Un menu ☰ (Journal, Sac, Ciel, Commandes).
+- En mode Créateur : barre d'icônes compacte.
+
 ## Direction artistique
 
 Style « jeu » assumé plutôt qu'un réalisme approximatif :

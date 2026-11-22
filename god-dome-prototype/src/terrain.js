@@ -185,6 +185,15 @@ export function buildTerrain() {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aMat', new THREE.BufferAttribute(matW, 4));
+  // aBurn = (chaleur, instant de l'impact) : cratères incandescents qui refroidissent
+  const burn = new Float32Array(pos.count * 2); for (let i = 0; i < pos.count; i++) burn[i * 2 + 1] = -1000;
+  geo.setAttribute('aBurn', new THREE.BufferAttribute(burn, 2));
+  // correspondance case de la grille -> sommet du maillage
+  const gridVert = new Int32Array(N * N).fill(-1);
+  for (let i = 0; i < pos.count; i++) {
+    const ix = Math.round((pos.getX(i) + SIZE / 2) / STEP), iz = Math.round((pos.getZ(i) + SIZE / 2) / STEP);
+    gridVert[iz * N + ix] = i;
+  }
 
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
   const mesh = new THREE.Mesh(geo, mat);
@@ -192,6 +201,41 @@ export function buildTerrain() {
   mesh.name = 'terrain';
 
   // --- requêtes ---
+  /**
+   * DESTRUCTION RÉELLE DU SOL : creuse un cratère (bourrelet sur le pourtour), carbonise et fait rougeoyer le fond.
+   * Le relief physique (collisions, herbe, eau) suit : c'est le même tableau de hauteurs.
+   */
+  const charred = new THREE.Color('#2b211c'), ember = new THREE.Color('#4a3a2e');
+  function deform(x, z, r, depth, heat = 1, now = 0) {
+    const rr = r * 1.5;
+    const i0 = clamp(Math.floor((x - rr + SIZE / 2) / STEP), 0, N - 1), i1 = clamp(Math.ceil((x + rr + SIZE / 2) / STEP), 0, N - 1);
+    const j0 = clamp(Math.floor((z - rr + SIZE / 2) / STEP), 0, N - 1), j1 = clamp(Math.ceil((z + rr + SIZE / 2) / STEP), 0, N - 1);
+    const P = geo.attributes.position, Cc = geo.attributes.color, Bb = geo.attributes.aBurn, Mm = geo.attributes.aMat;
+    const c = new THREE.Color();
+    for (let iz = j0; iz <= j1; iz++) for (let ix = i0; ix <= i1; ix++) {
+      const gx = -SIZE / 2 + ix * STEP, gz = -SIZE / 2 + iz * STEP;
+      if (Math.hypot(gx, gz) > WORLD_R - 2) continue;
+      const d = Math.hypot(gx - x, gz - z) / r;
+      if (d > 1.5) continue;
+      const k = iz * N + ix;
+      const n = noise(gx * 0.7, gz * 0.7) * 0.25;
+      const dh = d < 1 ? -depth * (1 - d * d) * (1 + n) : depth * 0.28 * Math.exp(-Math.pow((d - 1.08) / 0.16, 2));
+      heights[k] += dh;
+      const v = gridVert[k]; if (v < 0) continue;
+      P.setY(v, heights[k]);
+      if (d < 1.15) {
+        const t = smoothstep(1.15, 0.3, d);
+        c.setRGB(Cc.getX(v), Cc.getY(v), Cc.getZ(v)).lerp(d < 0.7 ? charred : ember, t * 0.85);
+        Cc.setXYZ(v, c.r, c.g, c.b);
+        Mm.setX(v, Math.max(Mm.getX(v), t * 0.9)); // le fond du cratère devient roche nue
+        const h = heat * smoothstep(1.0, 0.2, d);
+        if (h > 0.05) Bb.setXY(v, Math.max(h, Bb.getX(v) * Math.exp(-(now - Bb.getY(v)) * 0.35)), now);
+      }
+    }
+    P.needsUpdate = true; Cc.needsUpdate = true; Bb.needsUpdate = true; Mm.needsUpdate = true;
+    geo.computeVertexNormals();
+    return { i0, i1, j0, j1 };
+  }
   function heightAt(x, z) {
     const fx = (x + SIZE / 2) / STEP, fz = (z + SIZE / 2) / STEP;
     const ix = clamp(Math.floor(fx), 0, N - 2), iz = clamp(Math.floor(fz), 0, N - 2);
@@ -212,7 +256,7 @@ export function buildTerrain() {
     Math.hypot(x, z) < WORLD_R - 4 && Math.hypot(x - RIFT.x, z - RIFT.z) > 13 && maskAt(pathMask, x, z) < 0.25 && maskAt(wetMask, x, z) < 0.2 && slopeAt(x, z) < maxSlope && heightAt(x, z) < 47;
 
   return {
-    mesh, heightAt, slopeAt, vegetationOK, forestMask, heights, pathMask, wetMask, N, SIZE, STEP,
+    mesh, heightAt, slopeAt, vegetationOK, forestMask, deform, heights, pathMask, wetMask, N, SIZE, STEP,
     pathAt: (x, z) => maskAt(pathMask, x, z),
     wetAt: (x, z) => maskAt(wetMask, x, z),
     river, bed, riverWidth,

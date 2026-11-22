@@ -237,6 +237,7 @@ export function buildTrees(terrain, T, { broadleaf = 190, conifer = 200, extra =
   const mk = (geo, mat, n, depthMap) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = true; m.receiveShadow = true; m.count = 0; if (depthMap) m.customDepthMaterial = depthFor(depthMap); group.add(m); return m; };
   const bT = mk(B.trunk, barkMat, broadleaf + extra), bC = mk(B.canopy, coreMat, broadleaf + extra), bK = mk(B.cards, cardMat, broadleaf + extra, T.leaves);
   const cT = mk(K.trunk, barkMat, conifer + extra), cC = mk(K.core, coreMat, conifer + extra), cF = mk(K.branches, firMat, conifer + extra, T.fir);
+  [bT, cT].forEach(m => { m.userData.isTree = m.userData.isTrunk = true; });
   const colliders = [];
   const tint = new THREE.Color();
 

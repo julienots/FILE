@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { U } from './shared.js';
 import { makeSimplex, mulberry32 } from './noise.js';
 
 /*
@@ -90,12 +91,13 @@ export function applyGroundShader(material, detail) {
   material.onBeforeCompile = (s) => {
     s.uniforms.uDetail = { value: detail };
     s.uniforms.uBump = { value: 0.9 };
+    s.uniforms.uTime = U.uTime;
     s.vertexShader = s.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aMat; varying vec4 vMat; varying vec3 vWPos; varying vec3 vWN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMat = aMat; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * normal);');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aMat; attribute vec2 aBurn; varying vec4 vMat; varying vec2 vBurn; varying vec3 vWPos; varying vec3 vWN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMat = aMat; vBurn = aBurn; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * normal);');
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform sampler2D uDetail; uniform float uBump; varying vec4 vMat; varying vec3 vWPos; varying vec3 vWN;
+uniform sampler2D uDetail; uniform float uBump; uniform float uTime; varying vec4 vMat; varying vec2 vBurn; varying vec3 vWPos; varying vec3 vWN;
 float gd_h(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float gd_n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(gd_h(i),gd_h(i+vec2(1,0)),f.x), mix(gd_h(i+vec2(0,1)),gd_h(i+vec2(1,1)),f.x), f.y); }`)
@@ -133,11 +135,19 @@ float gd_n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
   // occlusion au pied des pentes
   diffuseColor.rgb *= mix(1.0, 0.85, rock * (1.0 - bw.y));
 }`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+{
+  // lave des cratères : fissures incandescentes qui refroidissent en ~10 s
+  float age = uTime - vBurn.y;
+  float heat = vBurn.x * exp(-age * 0.3);
+  float cracks = smoothstep(0.55, 0.8, texture2D(uDetail, vWPos.xz * 0.6).b + 0.25 * sin(uTime * 3.0 + vWPos.x));
+  totalEmissiveRadiance += mix(vec3(1.0, 0.25, 0.02), vec3(1.0, 0.75, 0.3), heat) * heat * (0.8 + 3.5 * cracks) * 3.0;
+}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.55, vMat.z * 0.6 * (1.0 - vMat.x));`)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n normal = normalize(normal + (viewMatrix * vec4(gdBumpW, 0.0)).xyz);');
   };
-  material.customProgramCacheKey = () => 'ground-v3';
+  material.customProgramCacheKey = () => 'ground-v4';
   return material;
 }
 

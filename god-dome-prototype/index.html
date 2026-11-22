@@ -67,7 +67,7 @@
   .act.on { background: rgba(127,227,255,0.28); border-color: var(--cyan); }
   .act[hidden] { display: none !important; }
   .act.strike { background: rgba(127,227,255,0.2); border-color: rgba(127,227,255,0.6); }
-  .objective { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 52px); left: max(16px, env(safe-area-inset-left)); max-width: min(360px, 60vw); font-size: 12.5px; font-weight: 800; line-height: 1.35; padding: 7px 11px; border-radius: 10px; background: var(--glass); border-left: 3px solid var(--gold); }
+  .objective { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 62px); left: max(16px, env(safe-area-inset-left)); max-width: min(360px, 60vw); font-size: 12.5px; font-weight: 800; line-height: 1.35; padding: 7px 11px; border-radius: 10px; background: var(--glass); border-left: 3px solid var(--gold); }
   .topright .row { display: flex; gap: 8px; }
   .dialog small { display: block; margin-top: 8px; font-size: 11px; color: var(--ink-dim); font-weight: 700; }
   .sheet { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 32px)); max-height: 76vh; overflow: auto; padding: 16px 18px; border-radius: 18px; background: var(--glass-strong); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 9; }
@@ -93,7 +93,13 @@
   .boss i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #6a1fb0, #c07bff); transition: width 0.2s ease; }
   .tool em { font-style: normal; font-size: 11px; color: var(--gold); margin-left: 4px; }
   .tool.power { border-color: rgba(233,194,122,0.5); } .tool.on { background: rgba(127,227,255,0.28); border-color: var(--cyan); }
-  .powers { position: absolute; right: calc(max(18px, env(safe-area-inset-right)) + 152px); bottom: max(26px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
+  .powers { position: absolute; right: calc(max(18px, env(safe-area-inset-right)) + 150px); bottom: max(22px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, 54px); gap: 9px; }
+  .pw.fly { border-color: rgba(160,240,255,0.9); } .pw.on { background: rgba(127,227,255,0.35); box-shadow: 0 0 16px rgba(127,227,255,0.7); }
+  .energy { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 46px); left: max(16px, env(safe-area-inset-left)); }
+  .energy div { width: 150px; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  .energy i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #3fb8ff, #b8f4ff); box-shadow: 0 0 10px rgba(80,200,255,0.9); }
+  .cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.75); box-shadow: 0 0 6px rgba(0,0,0,0.6); }
+  .cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff; }
   .pw { --cd: 0%; position: relative; width: 52px; height: 52px; border-radius: 50%; font-size: 10.5px; font-weight: 800; background: var(--glass); border: 1.5px solid rgba(127,227,255,0.55); overflow: hidden; }
   .pw::after { content: ""; position: absolute; inset: 0; background: conic-gradient(rgba(10,8,20,0.72) var(--cd), transparent 0); pointer-events: none; }
   .pw.gold { border-color: rgba(233,194,122,0.8); color: #ffe6a8; } .pw.locked { opacity: 0.35; }
@@ -144,6 +150,44 @@
     .act { width: 58px; height: 58px; } .actions { grid-template-columns: repeat(2, 58px); }
     .stick { width: 120px; height: 120px; }
   }
+
+  /* ---- HUD mobile épuré ---- */
+  .godbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 22px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: calc(100% - 24px); }
+  .godbar .chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 58px; height: 46px; border-radius: 14px; background: rgba(255,255,255,0.07); font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .godbar .chip small { font-size: 10px; color: var(--gold); }
+  .ic { position: relative; width: 46px; height: 46px; border-radius: 14px; font-size: 20px; background: rgba(255,255,255,0.07); border: 1px solid var(--line); }
+  .ic em { position: absolute; right: 3px; bottom: 1px; font-style: normal; font-size: 9.5px; font-weight: 800; color: var(--gold); }
+  .ic.on { background: rgba(127,227,255,0.3); border-color: var(--cyan); }
+  .godbar .enter { margin-left: 4px; height: 46px; padding: 0 16px; }
+  .hint { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px); }
+  .status { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 30px); left: max(14px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 5px; }
+  .status .life { position: static; }
+  .status .energy { position: static; width: 130px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.14); overflow: hidden; }
+  .status .energy i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #3fb8ff, #b8f4ff); }
+  .status .objective { position: static; max-width: min(300px, 44vw); font-size: 11.5px; padding: 5px 9px; }
+  body.playing .brand h1 { display: none; }
+  .corner { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); display: flex; gap: 8px; }
+  .round { width: 44px; height: 44px; border-radius: 50%; font-size: 19px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .round.god { color: var(--gold); border-color: rgba(233,194,122,0.6); }
+  .perf { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
+  .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .menu-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); font-size: 22px; }
+  .menu-grid span { font-size: 12.5px; font-weight: 800; }
+  .pad { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); width: 190px; height: 170px; }
+  .pad .b { position: absolute; border-radius: 50%; font-weight: 800; background: var(--glass); border: 1.5px solid rgba(255,255,255,0.32); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); touch-action: none; }
+  .pad .main { right: 0; bottom: 0; width: 84px; height: 84px; font-size: 13px; background: rgba(127,227,255,0.18); border-color: rgba(127,227,255,0.7); }
+  .pad .main.ctx { background: rgba(233,194,122,0.25); border-color: var(--gold); }
+  .pad .jump { right: 6px; bottom: 98px; width: 60px; height: 60px; font-size: 11px; }
+  .pad .power { --cd: 0%; right: 98px; bottom: 6px; width: 66px; height: 66px; overflow: hidden; border-color: rgba(233,194,122,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .pad .power span { font-size: 22px; line-height: 1; } .pad .power small { font-size: 9.5px; margin-top: 2px; }
+  .pad .power::after { content: ""; position: absolute; inset: 0; background: conic-gradient(rgba(10,8,20,0.7) var(--cd), transparent 0); pointer-events: none; }
+  .pad .power.on { box-shadow: 0 0 18px rgba(127,227,255,0.8); background: rgba(127,227,255,0.3); }
+  .wheel { position: fixed; inset: 0; z-index: 9; pointer-events: none; background: radial-gradient(circle at var(--wx) var(--wy), rgba(8,6,18,0.55), transparent 260px); }
+  .wheel .w { position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--glass-strong); border: 1.5px solid var(--line); font-size: 20px; transition: transform 0.08s ease; }
+  .wheel .w small { font-size: 9px; font-weight: 800; }
+  .wheel .w.hl { transform: scale(1.22); border-color: var(--cyan); background: rgba(127,227,255,0.35); }
+  .wheel .w.cur { border-color: var(--gold); }
+  .stick { width: 124px; height: 124px; }
   @media (prefers-reduced-motion: reduce) { .bars::before, .bars::after, .caption, .loading { transition: none; } }
 </style>
 <script type="importmap">
@@ -168,44 +212,49 @@
   <!-- Mode Créateur -->
   <div id="godUI">
     <div class="hint passive" id="hint">Glissez pour tourner · pincez pour zoomer · touchez le sol pour choisir où entrer</div>
-    <div class="panel">
-      <div class="time">
-        <label for="timeRange" id="timeLabel">09:30</label>
-        <input type="range" id="timeRange" min="0" max="24" step="0.05" value="9.5" aria-label="Heure du jour">
-        <div class="seg" role="group" aria-label="Vitesse du temps">
-          <button id="spd0">❚❚</button><button id="spd1" class="on">×1</button><button id="spd2">×30</button>
-        </div>
-      </div>
-      <button class="tool power" id="btnGodFoudre">⚡ Foudre <em>20</em></button>
-      <button class="tool power" id="btnGodBenir">✦ Bénir <em>25</em></button>
-      <button class="tool" id="btnRain">☂ Pluie</button>
-      <button class="tool" id="btnHouse">+ Maison <em>15</em></button>
-      <button class="tool" id="btnTree">+ Arbres <em>5</em></button>
-      <button class="enter" id="btnEnter">Entrer dans le monde</button>
+    <div class="godbar">
+      <button class="chip" id="timeChip" aria-label="Vitesse du temps"><span id="timeLabel">09:30</span><small id="spdLabel">×1</small></button>
+      <button class="ic" id="btnGodFoudre" aria-label="Foudre (20 Foi)">⚡<em>20</em></button>
+      <button class="ic" id="btnGodBenir" aria-label="Bénédiction (25 Foi)">✦<em>25</em></button>
+      <button class="ic" id="btnRain" aria-label="Pluie">☂</button>
+      <button class="ic" id="btnHouse" aria-label="Maison (15 Foi)">⌂<em>15</em></button>
+      <button class="ic" id="btnTree" aria-label="Arbres (5 Foi)">♣<em>5</em></button>
+      <button class="enter" id="btnEnter">Entrer</button>
+      <input type="range" id="timeRange" min="0" max="24" step="0.05" value="9.5" hidden>
+      <div hidden><button id="spd0"></button><button id="spd1"></button><button id="spd2"></button></div>
     </div>
   </div>
 
-  <!-- Mode Habitant -->
+  <!-- Mode Habitant : joystick à gauche, 3 boutons à droite, un menu -->
   <div id="playUI" hidden>
-    <div class="life passive" id="life"></div>
-    <div class="objective passive" id="objective"></div>
-    <div class="topright">
-      <button class="pill god" id="btnExit">⤴ Redevenir le Créateur</button>
-      <button class="pill" id="btnSky">Regarder le ciel</button>
-      <div class="row"><button class="pill" id="btnJournal">Journal</button><button class="pill" id="btnBag">Sac</button></div>
+    <div class="status passive">
+      <div class="life" id="life"></div>
+      <div class="energy"><i id="energy"></i></div>
+      <div class="objective" id="objective"></div>
+    </div>
+    <div class="corner">
+      <button class="round god" id="btnExit" aria-label="Redevenir le Créateur">⤴</button>
+      <button class="round" id="btnMenu" aria-label="Menu">☰</button>
+    </div>
+    <div class="sheet menu" id="menu" hidden>
+      <header><h3>Menu</h3><button class="pill" data-close>Fermer</button></header>
+      <div class="menu-grid">
+        <button id="btnJournal">📜<span>Journal</span></button>
+        <button id="btnBag">🎒<span>Sac</span></button>
+        <button id="btnSky">☁<span>Regarder le ciel</span></button>
+        <button id="btnHelp">?<span>Commandes</span></button>
+      </div>
+      <p class="note" id="helpText" hidden>Joystick : se déplacer (à fond = courir). Glissez à droite de l'écran : caméra. Bouton ✦ : touchez pour lancer le pouvoir choisi, glissez ou maintenez pour ouvrir la roue des pouvoirs. Rayon : maintenez. En vol, « Monter » maintenu fait prendre de l'altitude ; piquez vers le sol pour un Impact météore.</p>
     </div>
     <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
-    <div class="powers">
-      <button class="pw" id="btnOnde" title="Onde de lumière (R)">Onde</button>
-      <button class="pw" id="btnElan" title="Élan (X)">Élan</button>
-      <button class="pw gold" id="btnFoudre" title="Foudre divine, 20 Foi (G)">Foudre</button>
+    <div class="cross passive" id="cross" hidden></div>
+    <div class="pad">
+      <button class="b jump" id="btnJump">Sauter</button>
+      <button class="b power" id="btnPower"><span id="powerIcon">☄</span><small id="powerName">Comète</small></button>
+      <button class="b main" id="btnAttack">Frapper</button>
     </div>
-    <div class="actions">
-      <button class="act" id="btnTalk" hidden>Parler</button>
-      <button class="act strike" id="btnAttack">Frapper</button>
-      <button class="act" id="btnRun">Courir</button>
-      <button class="act big" id="btnJump">Sauter</button>
-    </div>
+    <div class="wheel" id="wheel" hidden></div>
+    <button id="btnTalk" hidden></button>
     <div class="dialog" id="dialog" hidden><b id="dlgName"></b><p id="dlgText"></p><small>Touchez « Parler » pour continuer</small></div>
     <div class="sheet" id="journal" hidden><header><h3>Journal de quêtes</h3><button class="pill" data-close>Fermer</button></header><div id="questList"></div></div>
     <div class="sheet" id="bag" hidden><header><h3>Sac</h3><button class="pill" data-close>Fermer</button></header><div class="inv" id="invList"></div><p class="note">Touchez une pomme ou une herbe pour vous soigner.</p></div>

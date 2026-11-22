@@ -165,6 +165,18 @@ vec2 gtex(vec2 w){ vec2 t = (w + uSize*0.5) / uSize; return t * (uN - 1.0) / uN 
 
   group.userData = {
     uniforms: shared,
+    /** recopie le relief creusé (cratères) dans la texture de hauteur et arrache l'herbe au fond */
+    syncTerrain(x0, z0, r) {
+      const i0 = Math.max(0, Math.floor((x0 - r + SIZE / 2) / STEP)), i1 = Math.min(N - 1, Math.ceil((x0 + r + SIZE / 2) / STEP));
+      const j0 = Math.max(0, Math.floor((z0 - r + SIZE / 2) / STEP)), j1 = Math.min(N - 1, Math.ceil((z0 + r + SIZE / 2) / STEP));
+      for (let iz = j0; iz <= j1; iz++) for (let ix = i0; ix <= i1; ix++) {
+        const k = iz * N + ix;
+        hData[k] = THREE.DataUtils.toHalfFloat(heights[k]);
+        const d = Math.hypot(-SIZE / 2 + ix * STEP - x0, -SIZE / 2 + iz * STEP - z0);
+        if (d < r * 0.62) mData[k * 4] = 0; else if (d < r * 0.8) mData[k * 4] = Math.min(mData[k * 4], 60);
+      }
+      hTex.needsUpdate = true; mTex.needsUpdate = true;
+    },
     /** retire l'herbe sur un rectangle orienté (maison posée en mode Créateur) */
     clearRect(x0, z0, hw, hd, rot) {
       const c = Math.cos(rot), s = Math.sin(rot), m = hw + hd + 1;

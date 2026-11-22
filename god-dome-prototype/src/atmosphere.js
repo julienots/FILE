@@ -14,6 +14,7 @@ export class AtmospherePass extends Pass {
     super();
     this.camera = camera;
     this.material = new THREE.ShaderMaterial({
+      depthTest: false, depthWrite: false,
       defines: { AO_SAMPLES: aoSamples, RAY_SAMPLES: raySamples },
       uniforms: {
         tDiffuse: { value: null }, tDepth: { value: null },
@@ -38,6 +39,8 @@ export class AtmospherePass extends Pass {
         float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main(){
           vec4 col = texture2D(tDiffuse, vUv);
+          // garde-fou HDR : une valeur infinie ou invalide contaminerait tout le bloom (carrés noirs / blancs)
+          col.rgb = clamp(col.rgb, 0.0, 48.0); if (any(isnan(col.rgb))) col.rgb = vec3(0.0);
           float d = rawDepth(vUv);
           bool sky = d >= 0.99999;
           // --- 0. contours « jeu » : discontinuités de profondeur relatives (silhouettes nettes, pas de bruit dans l'herbe) ---

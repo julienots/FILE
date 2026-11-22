@@ -17,6 +17,7 @@ import { AtmospherePass } from './atmosphere.js';
 import { applyToonShading } from './toon.js';
 applyToonShading();
 import { loadExternalModels } from './models.js';
+import { createPowers } from './powers.js';
 import { makeVillageMaterials, buildVillage, buildHouse } from './village.js';
 import { buildHumanoid, buildVillagers, buildSheep, buildBirds } from './characters.js';
 import { buildDome, buildCosmos, buildPedestal, buildCreator, buildSunMoon, buildClouds } from './dome.js';
@@ -60,21 +61,39 @@ const fill = new THREE.DirectionalLight(0xffe6c8, 0.25); fill.position.set(-1, 0
 const interior = new THREE.PointLight(0xffb873, 0, 9, 1.6); scene.add(interior);
 
 // post-production : bloom HDR + étalonnage (vignette, saturation, teinte chaude) + tone mapping ACES
-const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Q.msaa });
+const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: params.has('msaa') ? +params.get('msaa') : Q.msaa });
 rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType;
 const composer = new EffectComposer(renderer, rt);
+// Le second tampon doit avoir SA propre texture de profondeur : un clone partage la même source GPU,
+// ce qui crée une boucle lecture/écriture (écran noir sans anticrénelage, p. ex. sur certains téléphones).
+composer.renderTarget2.depthTexture = new THREE.DepthTexture(1, 1); composer.renderTarget2.depthTexture.type = THREE.UnsignedIntType;
 composer.setPixelRatio(Q.pr);
 composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
-const atmo = Q.atmo ? new AtmospherePass(camera, Q.atmo) : null;
+const atmo = Q.atmo && !params.has('noatmo') ? new AtmospherePass(camera, Q.atmo) : null;
 if (atmo) composer.addPass(atmo);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.55, 0.92);
 if (Q.bloom) composer.addPass(bloom);
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, uVig: { value: 0.32 }, uSat: { value: 1.06 }, uWarm: { value: 0.025 }, uFlash: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uShock: { value: new THREE.Vector3(0.5, 0.5, 1) }, uShockStr: { value: 0 }, uChroma: { value: 0 }, uSpeed: { value: 0 }, uDark: { value: 0 }, uAspect: { value: 1 }, uTime: U.uTime, uVig: { value: 0.32 }, uSat: { value: 1.06 }, uWarm: { value: 0.025 }, uFlash: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig, uSat, uWarm, uFlash; varying vec2 vUv;
-    void main(){ vec4 c = texture2D(tDiffuse, vUv);
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig, uSat, uWarm, uFlash, uShockStr, uChroma, uSpeed, uDark, uAspect, uTime; uniform vec3 uShock; varying vec2 vUv;
+    float hs(float n){ return fract(sin(n) * 43758.5453); }
+    void main(){
+      // onde de choc : anneau de distorsion qui s'élargit depuis l'impact
+      vec2 uv = vUv;
+      vec2 dd = (uv - uShock.xy) * vec2(uAspect, 1.0);
+      float dl = length(dd), front = uShock.z * 1.3;
+      float ring = exp(-pow((dl - front) * 9.0, 2.0)) * uShockStr * (1.0 - uShock.z);
+      uv -= normalize(dd + 1e-5) / vec2(uAspect, 1.0) * ring * 0.045;
+      // aberration chromatique (impacts + vitesse)
+      vec2 ca = (uv - 0.5) * (uChroma * 0.012 + uSpeed * 0.006);
+      vec4 c = vec4(texture2D(tDiffuse, uv + ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - ca).b, 1.0);
+      c.rgb += vec3(0.7, 0.9, 1.0) * ring * 0.6;
+      // lignes de vitesse en vol
+      if (uSpeed > 0.01) { vec2 q = vUv - 0.5; float ang = atan(q.y, q.x); float id = floor(ang * 70.0);
+        float ln = step(0.82, hs(id + floor(uTime * 14.0) * 13.1)) * smoothstep(0.25, 0.75, length(q * vec2(uAspect, 1.0)));
+        c.rgb = mix(c.rgb, vec3(0.85, 0.97, 1.0), ln * uSpeed * 0.55); }
       float l = dot(c.rgb, vec3(0.2126,0.7152,0.0722));
       c.rgb = mix(vec3(l), c.rgb, uSat);
       // virage partiel : ombres légèrement bleutées, hautes lumières chaudes
@@ -82,6 +101,7 @@ const grade = new ShaderPass({
       c.rgb *= vec3(1.0 + uWarm, 1.0, 1.0 - uWarm);
       vec2 d = vUv - 0.5; c.rgb *= 1.0 - uVig * smoothstep(0.25, 0.85, dot(d,d)*2.2);
       c.rgb += vec3(0.6,0.9,1.0) * uFlash;
+      c.rgb *= 1.0 - uDark * 0.45;
       gl_FragColor = c; }`,
 });
 composer.addPass(grade);
@@ -89,7 +109,7 @@ composer.addPass(new OutputPass());
 
 // ------------------------------------------------------------------ monde (UNE seule scène pour les deux modes)
 const world = { village: VILLAGE };
-let bushes, game, grassField, detailTex, terrain, village, trees, rocks, grass, dome, creator, sunMoon, clouds, birds, sheep, villagers, player, pedestal, beacon, motes, M, T;
+let flowersMesh, bushes, game, grassField, detailTex, terrain, village, trees, rocks, grass, dome, creator, sunMoon, clouds, birds, sheep, villagers, player, pedestal, beacon, motes, M, T;
 const colliders = [], circles = [], floors = [], surfaces = [];
 
 async function buildWorld() {
@@ -103,7 +123,7 @@ async function buildWorld() {
   scene.add(buildWater(terrain));
   setMsg('Pousse de la végétation…'); await nextFrame();
   grass = buildGrass(terrain, Q.grass); scene.add(grass);
-  scene.add(buildFlowers(terrain, Q.flowers));
+  flowersMesh = buildFlowers(terrain, Q.flowers); scene.add(flowersMesh);
   trees = buildTrees(terrain, T, { detail: detailTex }); scene.add(trees);
   rocks = buildRocks(terrain, 160, detailTex); scene.add(rocks);
   grassField = buildGrassField(terrain, { layers: Q.grassLayers }); scene.add(grassField);
@@ -288,6 +308,9 @@ function tpPose() {
     if (colliders.some(k => { if (q.y < k.y0 - 0.2 || q.y > k.y1 + 0.2) return false; const dx = q.x - k.x, dz = q.z - k.z, c = Math.cos(k.rot), s2 = Math.sin(k.rot); return Math.abs(dx * c - dz * s2) < k.hw + 0.25 && Math.abs(dx * s2 + dz * c) < k.hd + 0.25; })) { free = Math.max(0.6, t - 0.3); break; }
   }
   const pos = head.clone().addScaledVector(off, free);
+  // caméra par-dessus l'épaule : le viseur au centre n'est pas masqué par l'habitant
+  const shoulder = new THREE.Vector3(Math.cos(tp.yaw), 0, -Math.sin(tp.yaw)).multiplyScalar(inHouse ? 0.2 : 0.7 * Math.min(1, free / 3));
+  pos.add(shoulder);
   const g = world.groundAt(pos.x, pos.z, pos.y + 5) + 0.35;
   if (pos.y < g) pos.y = g;
   const look = pos.clone().addScaledVector(off, -10);
@@ -366,6 +389,7 @@ function updateTransition(dt) {
     tr = null; setUI();
   }
 }
+let flySpeed = 0, shakeT = 0, shockT = 1, darkT = 0, powers = null;
 let rippleT = 0, flashT = 0, uiTick = 0, actionPickup = null;
 
 // ------------------------------------------------------------------ boucle
@@ -430,6 +454,12 @@ function update(dt) {
   flashT = Math.max(0, flashT - dt * 1.6);
   flashEl.style.opacity = (flashT * flashT * 0.85).toFixed(3);
   grade.uniforms.uFlash.value = flashT * 0.25;
+  shakeT = Math.max(0, shakeT - dt * 1.8); shockT = Math.min(1, shockT + dt * 1.4); darkT = Math.max(0, darkT - dt);
+  grade.uniforms.uShock.value.z = shockT; grade.uniforms.uChroma.value = shakeT * 2.2; grade.uniforms.uDark.value = Math.min(1, darkT) * inside;
+  grade.uniforms.uSpeed.value += (smoothstep(12, 30, flySpeed) - grade.uniforms.uSpeed.value) * Math.min(1, dt * 4);
+  grade.uniforms.uAspect.value = innerWidth / innerHeight;
+  powers.update(dt);
+  $('cross').hidden = mode !== 'play';
   // ombres : cadrage large en vue divine, serré et net autour de l'habitant
   const focus = mode === 'god' || mode === 'toGod' && !tr?.crossed ? new THREE.Vector3(0, 0, 0) : player.root.position;
   const half = lerp(128, 42, inside);
@@ -480,38 +510,48 @@ function updatePlayer(dt) {
   if (k.has('KeyA') || k.has('ArrowLeft') || k.has('KeyQ')) jx = -1;
   if (k.has('KeyD') || k.has('ArrowRight')) jx = 1;
   const mag = Math.min(1, Math.hypot(jx, jy));
-  const run = pl.run || k.has('ShiftLeft') || mag > 0.97 && input.jx !== 0 && false;
+  const run = pl.run || k.has('ShiftLeft') || Math.hypot(input.jx, input.jy) > 0.9; // joystick à fond = courir
   const p = player.root.position;
-  const fx = -Math.sin(tp.yaw), fz = -Math.cos(tp.yaw), rx = Math.cos(tp.yaw), rz = -Math.sin(tp.yaw);
-  let mx = fx * jy + rx * jx, mz = fz * jy + rz * jx;
-  const ml = Math.hypot(mx, mz);
-  const inWater = terrain.wetAt(p.x, p.z) > 0.6 && p.y < terrain.heightAt(p.x, p.z) + 0.2;
-  let target = ml > 0.01 ? mag * (run ? 6.8 : 3.4) * (inWater ? 0.6 : 1) : 0;
-  // Élan : ruée de 0,25 s dans la direction du regard (ou du déplacement)
-  if (pl.dash > 0) { pl.dash -= dt; target = 17; if (ml < 0.01) { mx = Math.sin(player.root.rotation.y); mz = Math.cos(player.root.rotation.y); } }
-  pl.speed += (target - pl.speed) * Math.min(1, dt * (pl.dash > 0 ? 30 : 8));
-  const mlen = Math.hypot(mx, mz);
-  if (mlen > 0.01) {
-    mx /= mlen; mz /= mlen;
-    const yaw = Math.atan2(mx, mz);
-    let d = yaw - player.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
-    player.root.rotation.y += d * Math.min(1, dt * 12);
-    const nx = p.x + mx * pl.speed * dt, nz = p.z + mz * pl.speed * dt;
-    // falaises infranchissables
-    const g0 = world.groundAt(p.x, p.z, p.y), g1 = world.groundAt(nx, nz, p.y);
-    if (g1 - g0 < Math.max(0.45, pl.speed * dt * 1.6) || !pl.grounded) {
-      const s = solve(nx, nz, 0.35); p.x = s.x; p.z = s.z;
+  let ml = 0;
+  if (powers.flying) {
+    // ENVOL : on vole là où l'on regarde ; Sauter (maintenu) = monter
+    flySpeed = powers.fly(dt, jx, jy, run, k.has('Space') || input.jumpHeld);
+    pl.vy = 0; pl.grounded = false; pl.speed = 0;
+    player.animate(dt, 0, false, 1);
+  } else {
+    flySpeed = 0;
+    const p = player.root.position;
+    const fx = -Math.sin(tp.yaw), fz = -Math.cos(tp.yaw), rx = Math.cos(tp.yaw), rz = -Math.sin(tp.yaw);
+    let mx = fx * jy + rx * jx, mz = fz * jy + rz * jx;
+    ml = Math.hypot(mx, mz);
+    const inWater = terrain.wetAt(p.x, p.z) > 0.6 && p.y < terrain.heightAt(p.x, p.z) + 0.2;
+    let target = ml > 0.01 ? mag * (run ? 6.8 : 3.4) * (inWater ? 0.6 : 1) : 0;
+    // Élan : ruée de 0,25 s dans la direction du regard (ou du déplacement)
+    if (pl.dash > 0) { pl.dash -= dt; target = 17; if (ml < 0.01) { mx = Math.sin(player.root.rotation.y); mz = Math.cos(player.root.rotation.y); } }
+    pl.speed += (target - pl.speed) * Math.min(1, dt * (pl.dash > 0 ? 30 : 8));
+    const mlen = Math.hypot(mx, mz);
+    if (mlen > 0.01) {
+      mx /= mlen; mz /= mlen;
+      const yaw = Math.atan2(mx, mz);
+      let d = yaw - player.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+      player.root.rotation.y += d * Math.min(1, dt * 12);
+      const nx = p.x + mx * pl.speed * dt, nz = p.z + mz * pl.speed * dt;
+      // falaises infranchissables
+      const g0 = world.groundAt(p.x, p.z, p.y), g1 = world.groundAt(nx, nz, p.y);
+      if (g1 - g0 < Math.max(0.45, pl.speed * dt * 1.6) || !pl.grounded) {
+        const s = solve(nx, nz, 0.35); p.x = s.x; p.z = s.z;
+      }
     }
+    // saut & gravité
+    const ground = world.groundAt(p.x, p.z, p.y);
+    if ((k.has('Space') || input.jump) && pl.grounded) { pl.vy = 6.2; pl.grounded = false; input.jump = false; }
+    pl.vy -= 18 * dt;
+    p.y += pl.vy * dt;
+    if (p.y <= ground) { p.y = pl.grounded ? lerp(p.y, ground, 1) : ground; pl.vy = 0; pl.grounded = true; }
+    else if (p.y - ground > 0.3) pl.grounded = false;
+    else { p.y = ground; pl.vy = Math.max(pl.vy, 0); pl.grounded = pl.vy <= 0 ? true : pl.grounded; }
+    player.animate(dt, pl.speed, pl.grounded, pl.vy);
   }
-  // saut & gravité
-  const ground = world.groundAt(p.x, p.z, p.y);
-  if ((k.has('Space') || input.jump) && pl.grounded) { pl.vy = 6.2; pl.grounded = false; input.jump = false; }
-  pl.vy -= 18 * dt;
-  p.y += pl.vy * dt;
-  if (p.y <= ground) { p.y = pl.grounded ? lerp(p.y, ground, 1) : ground; pl.vy = 0; pl.grounded = true; }
-  else if (p.y - ground > 0.3) pl.grounded = false;
-  else { p.y = ground; pl.vy = Math.max(pl.vy, 0); pl.grounded = pl.vy <= 0 ? true : pl.grounded; }
-  player.animate(dt, pl.speed, pl.grounded, pl.vy);
 
   // caméra 3e personne
   if (tp.pitchT !== null) { tp.pitch += (tp.pitchT - tp.pitch) * Math.min(1, dt * 2.5); if (Math.abs(tp.pitch - tp.pitchT) < 0.01) tp.pitchT = null; }
@@ -521,17 +561,20 @@ function updatePlayer(dt) {
     let d = (player.root.rotation.y + Math.PI) - tp.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
     tp.yaw += d * Math.min(1, dt * 0.8);
   }
+  tp.dist += ((powers.flying ? 7.5 : tp.distT) - tp.dist) * Math.min(1, dt * 2);
   const pose = tpPose();
-  camera.position.lerp(pose.pos, Math.min(1, dt * 14));
+  camera.position.lerp(pose.pos, Math.min(1, dt * (powers.flying ? 9 : 14)));
   camera.lookAt(pose.look);
-  camera.fov += (60 + (run && pl.speed > 4 ? 6 : 0) - camera.fov) * Math.min(1, dt * 4);
+  // tremblement de caméra (explosions, foudre)
+  if (shakeT > 0.001) { const a = shakeT * shakeT; camera.position.add(new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)).multiplyScalar(a * 0.9)); camera.rotation.z += (Math.random() - 0.5) * a * 0.06; }
+  camera.fov += (60 + (run && pl.speed > 4 ? 6 : 0) + Math.min(22, flySpeed * 0.6) - camera.fov) * Math.min(1, dt * 4);
   camera.updateProjectionMatrix();
 
   // villageois proches : bouton Parler
   let near = null, nd = 2.8;
   for (const v of villagers.list) { const d = v.root.position.distanceTo(p); if (d < nd) { nd = d; near = v; } }
   talkTarget = near;
-  if (near) { btnTalk.hidden = false; btnTalk.textContent = 'Parler'; } else if (actionPickup) { btnTalk.hidden = false; btnTalk.textContent = 'Ramasser'; } else btnTalk.hidden = true;
+  { const lbl = near ? 'Parler' : actionPickup ? 'Ramasser' : 'Frapper'; const b = $('btnAttack'); if (b.textContent !== lbl) { b.textContent = lbl; b.classList.toggle('ctx', lbl !== 'Frapper'); } }
   if (!near && dialogNPC) closeDialog();
 }
 
@@ -540,6 +583,7 @@ const $ = id => document.getElementById(id);
 const btnTalk = $('btnTalk');
 let talkTarget = null, dialogNPC = null, dialogIdx = 0, dialogLines = [];
 function setUI() {
+  document.body.classList.toggle('playing', mode === 'play' || mode === 'toPlay');
   const playing = mode === 'play';
   $('godUI').hidden = mode !== 'god';
   $('playUI').hidden = !playing;
@@ -575,8 +619,7 @@ function bindUI() {
       tp.yawT = Math.atan2(-(c.x - p.x), -(c.z - p.z)); tp.pitchT = -0.92;
     } else { tp.pitchT = 0.16; tp.yawT = null; }
   };
-  $('btnRun').onclick = () => { pl.run = !pl.run; $('btnRun').classList.toggle('on', pl.run); };
-  $('btnJump').addEventListener('pointerdown', e => { e.preventDefault(); input.jump = true; });
+  $('btnJump').addEventListener('pointerdown', e => { e.preventDefault(); input.jump = true; input.jumpHeld = true; });
   btnTalk.onclick = talk;
   $('timeRange').addEventListener('input', e => { timeOfDay = parseFloat(e.target.value); });
   const speeds = [0, 0.04, 1.2];
@@ -584,12 +627,19 @@ function bindUI() {
   $('btnHouse').onclick = () => { if (game.spendFoi(15)) addHouseAt(entry.x, entry.z); };
   $('btnGodFoudre').onclick = () => setGodPower('foudre');
   $('btnGodBenir').onclick = () => setGodPower('benir');
-  $('btnOnde').addEventListener('pointerdown', e => { e.preventDefault(); game.onde(); });
-  $('btnElan').addEventListener('pointerdown', e => { e.preventDefault(); if (game.elan()) pl.dash = 0.25; });
-  $('btnFoudre').addEventListener('pointerdown', e => { e.preventDefault(); game.foudreDivine(); });
+  $('btnJump').addEventListener('pointerup', () => { input.jumpHeld = false; });
+  $('btnJump').addEventListener('pointercancel', () => { input.jumpHeld = false; });
   ui.refreshFoi(); ui.refreshPowers();
   $('btnTree').onclick = () => { if (!game.spendFoi(5)) return; for (let i = 0; i < 5; i++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 7; const x = entry.x + Math.cos(a) * r, z = entry.z + Math.sin(a) * r; plantTree(Math.random() > 0.4 ? 'broad' : 'pine', x, z, 0.8 + Math.random() * 0.5); } };
-  $('btnAttack').addEventListener('pointerdown', e => { e.preventDefault(); game.attack(); });
+  // bouton principal contextuel : Parler / Ramasser / Frapper
+  $('btnAttack').addEventListener('pointerdown', e => { e.preventDefault(); if (talkTarget || actionPickup) talk(); else game.attack(); });
+  // menu (Journal, Sac, Ciel, Commandes)
+  $('btnMenu').onclick = () => { $('menu').hidden = !$('menu').hidden; $('journal').hidden = $('bag').hidden = true; };
+  $('btnHelp').onclick = () => { $('helpText').hidden = !$('helpText').hidden; };
+  ['btnJournal', 'btnBag', 'btnSky'].forEach(id => $(id).addEventListener('click', () => { $('menu').hidden = true; }));
+  // temps : la puce change la vitesse (×1 → ×30 → pause)
+  $('timeChip').onclick = () => { const order = [0.04, 1.2, 0]; const i = (order.indexOf(timeSpeed) + 1) % 3; timeSpeed = order[i]; $('spdLabel').textContent = ['×1', '×30', '❚❚'][i]; };
+  bindPowerWheel();
   $('btnRain').onclick = () => { game.setWeather(game.state.weather === 'rain' ? 'clear' : 'rain'); $('btnRain').classList.toggle('on', game.state.weather === 'rain'); };
   $('btnRain').classList.toggle('on', game.state.weather === 'rain');
   $('btnJournal').onclick = () => { ui.refreshQuests(); $('journal').hidden = !$('journal').hidden; $('bag').hidden = true; };
@@ -641,13 +691,17 @@ function bindUI() {
     if (e.code === 'KeyE') talk();
     if (e.code === 'KeyF') game.attack();
     if (e.code === 'KeyR') game.onde();
+    if (e.code === 'Digit1') powers.comet();
+    if (e.code === 'Digit2') powers.setBeam(true);
+    if (e.code === 'Digit3' || e.code === 'KeyG') powers.storm();
+    if (e.code === 'KeyV') powers.toggleFlight();
     if (e.code === 'KeyX' && game.elan()) pl.dash = 0.25;
     if (e.code === 'KeyG') game.foudreDivine();
     if (e.code === 'KeyJ') $('btnJournal').click();
     if (e.code === 'KeyI') $('btnBag').click();
     if (e.code === 'KeyC') $('btnSky').click();
   });
-  addEventListener('keyup', e => input.keys.delete(e.code));
+  addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Digit2') powers.setBeam(false); });
 }
 function zoom(d) {
   if (mode === 'god') god.dist = clamp(god.dist * (1 + d), 150, 700);
@@ -664,6 +718,60 @@ function pick(x, y) {
   }
 }
 let houseSeed = 100;
+// ------------------------------------------------------------ roue des pouvoirs (1 seul bouton)
+const POWERS = [
+  { id: 'comet', icon: '☄', name: 'Comète' }, { id: 'beam', icon: '✷', name: 'Rayon' }, { id: 'storm', icon: 'ϟ', name: 'Tempête' },
+  { id: 'fly', icon: '🜁', name: 'Envol' }, { id: 'onde', icon: '◎', name: 'Onde' }, { id: 'elan', icon: '➤', name: 'Élan' },
+];
+let curPower = 'comet';
+function castPower(id, down = true) {
+  if (id === 'beam') { powers.setBeam(down); return; }
+  if (!down) return;
+  if (id === 'comet') powers.comet();
+  else if (id === 'storm') powers.storm();
+  else if (id === 'fly') powers.toggleFlight();
+  else if (id === 'onde') game.onde();
+  else if (id === 'elan') { if (game.elan()) pl.dash = 0.25; }
+}
+function selectPower(id) {
+  curPower = id; const P = POWERS.find(p => p.id === id);
+  $('powerIcon').textContent = P.icon; $('powerName').textContent = P.name;
+  $('btnPower').classList.toggle('on', id === 'fly' && powers.flying);
+}
+function bindPowerWheel() {
+  const btn = $('btnPower'), wheel = $('wheel');
+  let start = null, open = false, timer = 0, hl = null, items = [];
+  const openWheel = () => {
+    open = true; const r = btn.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    wheel.style.setProperty('--wx', cx + 'px'); wheel.style.setProperty('--wy', cy + 'px');
+    wheel.innerHTML = ''; items = [];
+    POWERS.forEach((P, i) => {
+      const a = (40 + i * (150 / (POWERS.length - 1))) * Math.PI / 180, R = 135; // éventail au-dessus du bouton
+      const x = Math.min(innerWidth - 34, cx + Math.cos(a) * R), y = Math.min(innerHeight - 34, cy - Math.sin(a) * R);
+      const el = document.createElement('div'); el.className = 'w' + (P.id === curPower ? ' cur' : ''); el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.innerHTML = `${P.icon}<small>${P.name}</small>`; wheel.appendChild(el); items.push({ el, x, y, id: P.id });
+    });
+    wheel.hidden = false;
+  };
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault(); btn.setPointerCapture(e.pointerId); start = { x: e.clientX, y: e.clientY }; open = false; hl = null;
+    if (curPower === 'beam') castPower('beam', true);
+    timer = setTimeout(() => { if (!open) { if (curPower === 'beam') castPower('beam', false); openWheel(); } }, 380);
+  });
+  btn.addEventListener('pointermove', e => {
+    if (!start) return;
+    if (!open && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 22) { clearTimeout(timer); if (curPower === 'beam') castPower('beam', false); openWheel(); }
+    if (open) { let best = null, bd = 60; for (const it of items) { const d = Math.hypot(e.clientX - it.x, e.clientY - it.y); if (d < bd) { bd = d; best = it; } } hl = best; items.forEach(it => it.el.classList.toggle('hl', it === best)); }
+  });
+  const end = () => {
+    if (!start) return; clearTimeout(timer);
+    if (open) { wheel.hidden = true; if (hl) { selectPower(hl.id); if (hl.id === 'fly') castPower('fly'); } }
+    else if (curPower === 'beam') castPower('beam', false);
+    else castPower(curPower);
+    start = null; open = false;
+  };
+  btn.addEventListener('pointerup', end); btn.addEventListener('pointercancel', end);
+}
 let godPower = null;
 function setGodPower(p) {
   godPower = godPower === p ? null : p;
@@ -682,8 +790,9 @@ const ui = {
   refreshLife() { const l = $('life'); if (!l || !game) return; l.innerHTML = ''; for (let i = 0; i < game.state.maxHp; i++) { const s = document.createElement('i'); if (i >= game.state.hp) s.className = 'off'; l.appendChild(s); } },
   hurtFlash() { const h = $('hurt'); h.classList.add('on'); setTimeout(() => h.classList.remove('on'), 60); },
   setAction(label, pk) { actionPickup = pk; },
+  energy(v, cd) { $('energy').style.width = v.toFixed(0) + '%'; const c = curPower === 'comet' ? cd.comet : curPower === 'storm' ? cd.storm : 0; $('btnPower').style.setProperty('--cd', (c * 100).toFixed(0) + '%'); },
   refreshFoi() { if (!game) return; const f = Math.floor(game.state.foi); document.querySelectorAll('.foi i').forEach(i => i.style.width = f + '%'); document.querySelectorAll('.foi b').forEach(b => b.textContent = f); },
-  refreshPowers() { if (!game) return; $('btnOnde').classList.toggle('locked', !game.state.onde); },
+  refreshPowers() { },
   cooldowns(c) { for (const [k, v] of Object.entries(c)) { const el = $('btn' + k[0].toUpperCase() + k.slice(1)); if (el) el.style.setProperty('--cd', (v * 100).toFixed(1) + '%'); } },
   actCard(kicker, title, text) { const c = $('actCard'); c.querySelector('small').textContent = kicker; c.querySelector('h2').textContent = title; c.querySelector('p').textContent = text; c.classList.remove('on'); void c.offsetWidth; c.classList.add('on'); },
   bossBar(v) { const b = $('bossBar'); b.hidden = v === null; if (v !== null) b.querySelector('i').style.width = Math.max(0, v * 100) + '%'; },
@@ -756,6 +865,7 @@ addEventListener('resize', () => {
 });
 
 // API de pilotage (captures automatisées / tests)
+window.__THREE = THREE;
 window.GD = {
   get mode() { return mode; }, god, tp, player: () => player, entry,
   setTime: h => { timeOfDay = h; timeSpeed = 0; },
@@ -769,6 +879,7 @@ window.GD = {
   info: () => ({ ...renderer.info.render, fps }),
   renderer: () => renderer, scene: () => scene, dome: () => dome, creator: () => creator, story: (l) => ui.story(l), actCard: (...a) => ui.actCard(...a), godPower: (p) => setGodPower(p), cast: (p, x, z) => game.godCast(p, new THREE.Vector3(x, world.groundAt(x, z), z)), onde: () => game.onde(), elan: () => { if (game.elan()) pl.dash = 0.25; }, foudre: () => game.foudreDivine(), game: () => game, villagers: () => villagers.list, enemies: () => game._enemies, attack: () => game.attack(), talk: () => talk(), rain: (on = true) => game.setWeather(on ? 'rain' : 'clear'),
   move: (jx, jy) => { input.jx = jx; input.jy = jy; },
+  powers: () => powers, comet: () => powers.comet(), beam: (on) => powers.setBeam(on), storm: () => powers.storm(), fly: () => powers.toggleFlight(), hold: (h) => { input.jumpHeld = h; },
 };
 
 (async () => {
@@ -776,6 +887,15 @@ window.GD = {
   game = createGame({ scene, terrain, world, player, villagers, T, solve, ui, camera, respawn: () => placePlayer(VILLAGE.x + 3, VILLAGE.y + 4),
     flash: (k) => { flashT = Math.max(flashT, k); },
     onVictory: () => { dome.uniforms.uRipplePos.value.set(0, DOME_R, 0); rippleT = 0.0001; } });
+  const fx = {
+    shake: (k) => { shakeT = Math.min(1.6, Math.max(shakeT, k)); },
+    flash: (k) => { flashT = Math.max(flashT, k); },
+    darken: (s) => { darkT = Math.max(darkT, s); },
+    shock: (worldPos, str) => { const v = worldPos.clone().project(camera); if (v.z > 1) return; grade.uniforms.uShock.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5, 0); grade.uniforms.uShockStr.value = str; shockT = 0; },
+  };
+  const vegetation = [grass, flowersMesh, rocks, ...trees.children, ...bushes.children].filter(m => m && m.isInstancedMesh);
+  powers = createPowers({ scene, terrain, world, player, camera, game, T, grassField, vegetation, circles, fx, ui,
+    onFlight: (on) => { $('btnPower').classList.toggle('on', on && curPower === 'fly'); $('btnJump').textContent = on ? 'Monter' : 'Sauter'; if (!on) { pl.vy = 0; } } });
   const ext = await loadExternalModels({ scene, terrain, world, player, villagers: villagers, onProgress: setMsg });
   if (ext.length) console.info('Modèles 3D chargés :', ext.join(', '));
   for (const b of game.state.builds) { if (b.type === 'house') addHouseAt(b.x, b.z, false); if (b.type === 'tree') plantTree(b.kind, b.x, b.z, b.s, false); }
