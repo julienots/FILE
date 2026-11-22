@@ -14,6 +14,7 @@ void NavGrid::reset(Vec2 origin, float cellSize, u32 width, u32 height) {
     m_width = width;
     m_height = height;
     m_blocked.assign(static_cast<usize>(width) * height, 0);
+    m_cost.clear();
     m_links.clear();
 }
 
@@ -37,6 +38,24 @@ bool NavGrid::cellOf(Vec2 p, i32& x, i32& y) const {
     x = static_cast<i32>(std::floor((p.x - m_origin.x) / m_cell));
     y = static_cast<i32>(std::floor((p.y - m_origin.y) / m_cell));
     return x >= 0 && y >= 0 && x < static_cast<i32>(m_width) && y < static_cast<i32>(m_height);
+}
+
+void NavGrid::costRect(Vec2 mn, Vec2 mx, float c) {
+    if (m_width == 0 || m_height == 0) return;
+    if (m_cost.empty()) m_cost.assign(static_cast<usize>(m_width) * m_height, 1.0f);
+    i32 x0, y0, x1, y1;
+    cellOf(mn, x0, y0);
+    cellOf(mx, x1, y1);
+    for (i32 y = std::max(y0, 0); y <= std::min(y1, static_cast<i32>(m_height) - 1); ++y)
+        for (i32 x = std::max(x0, 0); x <= std::min(x1, static_cast<i32>(m_width) - 1); ++x) {
+            const Vec2 cc = cellCenter(x, y);
+            if (cc.x >= mn.x && cc.x <= mx.x && cc.y >= mn.y && cc.y <= mx.y) m_cost[static_cast<usize>(y) * m_width + static_cast<usize>(x)] = std::max(c, 1.0f);
+        }
+}
+
+float NavGrid::cost(i32 x, i32 y) const {
+    if (m_cost.empty() || x < 0 || y < 0 || x >= static_cast<i32>(m_width) || y >= static_cast<i32>(m_height)) return 1.0f;
+    return m_cost[static_cast<usize>(y) * m_width + static_cast<usize>(x)];
 }
 
 void NavGrid::blockRect(Vec2 mn, Vec2 mx, float margin) {
@@ -149,7 +168,7 @@ bool NavGrid::findPath(Vec2 from, Vec2 to, std::vector<Vec2>& out, bool smooth, 
                 if (dx != 0 && dy != 0 && (blocked(cx + dx, cy) || blocked(cx, cy + dy))) continue;  // no corner cutting
                 const usize nb = index(cx + dx, cy + dy);
                 if (closed[nb]) continue;
-                const float cost = g[cur] + ((dx != 0 && dy != 0) ? 1.41421356f : 1.0f);
+                const float cost = g[cur] + ((dx != 0 && dy != 0) ? 1.41421356f : 1.0f) * this->cost(cx + dx, cy + dy);
                 if (cost < g[nb]) {
                     g[nb] = cost;
                     parent[nb] = static_cast<i32>(cur);
@@ -182,8 +201,23 @@ bool NavGrid::findPath(Vec2 from, Vec2 to, std::vector<Vec2>& out, bool smooth, 
     // String pulling: keep a point only when the next ones are not directly visible.
     out.push_back(cells.front());
     usize anchor = 0;
+    // A shortcut must not cross cells of another cost (it would cut through mud the search avoided).
+    auto sameCost = [&](Vec2 a, Vec2 b) {
+        if (m_cost.empty()) return true;
+        i32 ax, ay;
+        cellOf(a, ax, ay);
+        const float c0 = cost(ax, ay);
+        const float len = math::length(b - a);
+        const i32 steps = std::max(1, static_cast<i32>(len / (m_cell * 0.5f)));
+        for (i32 k = 1; k <= steps; ++k) {
+            i32 x, y;
+            cellOf(a + (b - a) * (static_cast<float>(k) / static_cast<float>(steps)), x, y);
+            if (cost(x, y) != c0) return false;
+        }
+        return true;
+    };
     for (usize i = 2; i < cells.size(); ++i)
-        if (!lineOfSight(cells[anchor], cells[i])) {
+        if (!lineOfSight(cells[anchor], cells[i]) || !sameCost(cells[anchor], cells[i])) {
             out.push_back(cells[i - 1]);
             anchor = i - 1;
         }

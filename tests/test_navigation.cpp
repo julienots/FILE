@@ -463,3 +463,68 @@ TEST_CASE("background navigation mesh rebuilds: the old mesh serves until the ne
     CHECK(path.size() == 2);  // straight now
 }
 }
+
+TEST_CASE("navigation areas: costly zones avoided when the detour is worth it, forbidden zones never crossed") {
+    auto maxAbs = [](const auto& path, auto get) {
+        float m = 0.0f;
+        for (const auto& p : path) m = std::max(m, std::fabs(get(p)));
+        return m;
+    };
+    // 2D grid 40 x 20: a swamp band x in [18, 22], y in [5, 15] across the straight line y = 10.
+    NavGrid g;
+    g.reset({0, 0}, 1.0f, 40, 20);
+    g.costRect({18, 5}, {22, 15}, 10.0f);
+    std::vector<Vec2> path;
+    REQUIRE(g.findPath({2.5f, 10.5f}, {37.5f, 10.5f}, path));
+    float maxDev = 0.0f;
+    for (const Vec2& p : path) maxDev = std::max(maxDev, std::fabs(p.y - 10.5f));
+    CHECK(maxDev > 4.0f);  // went around the swamp (top or bottom)
+    for (usize i = 0; i + 1 < path.size(); ++i) {  // and no smoothed segment cuts through it
+        for (int k = 0; k <= 20; ++k) {
+            const Vec2 q = path[i] + (path[i + 1] - path[i]) * (k / 20.0f);
+            CHECK_FALSE((q.x > 18.6f && q.x < 21.4f && q.y > 5.6f && q.y < 14.4f));
+        }
+    }
+    g.costRect({18, 5}, {22, 15}, 1.2f);  // cheap mud: straight through
+    REQUIRE(g.findPath({2.5f, 10.5f}, {37.5f, 10.5f}, path));
+    maxDev = 0.0f;
+    for (const Vec2& p : path) maxDev = std::max(maxDev, std::fabs(p.y - 10.5f));
+    CHECK(maxDev < 1.0f);
+
+    // 3D floor 40 x 20 with an expensive box in the middle, then a forbidden one.
+    std::vector<Vec3> v = {{-20, 0, -10}, {20, 0, -10}, {20, 0, 10}, {-20, 0, 10}};
+    std::vector<u32> idx = {0, 2, 1, 0, 3, 2};
+    NavMeshBuildSettings bs;
+    bs.cellSize = 0.25f;
+    NavMesh mesh;
+    REQUIRE(mesh.build(v, idx, bs, {}, {{{-3, -1, -5}, {3, 1, 5}, 20.0f, true}}));
+    std::vector<Vec3> p3;
+    REQUIRE(mesh.findPath({-15, 0, 0}, {15, 0, 0}, p3));
+    CHECK(maxAbs(p3, [](const Vec3& p) { return p.z; }) > 4.5f);  // around the costly zone
+    NavMesh cheap;
+    REQUIRE(cheap.build(v, idx, bs, {}, {{{-3, -1, -5}, {3, 1, 5}, 1.0f, true}}));
+    REQUIRE(cheap.findPath({-15, 0, 0}, {15, 0, 0}, p3));
+    CHECK(maxAbs(p3, [](const Vec3& p) { return p.z; }) < 0.5f);  // cost 1: straight
+    NavMesh hole;
+    REQUIRE(hole.build(v, idx, bs, {}, {{{-3, -1, -12}, {3, 1, 6}, 1.0f, false}}));
+    bool complete = false;
+    REQUIRE(hole.findPath({-15, 0, 0}, {15, 0, 0}, p3, &complete));
+    CHECK(complete);
+    CHECK(maxAbs(p3, [](const Vec3& p) { return p.z; }) > 5.5f);  // through the gap at z > 6
+    // Through the scene: a NavArea component (2D: its x / y rectangle) and a 3D floor collider.
+    registerAll();
+    Scene scene;
+    box2(scene, {0, -30}, {1, 1});  // any 2D source: the grid is built around the scene's shapes
+    const auto swamp = scene.createEntity("Swamp");
+    scene.registry().get<TransformComponent>(swamp).position = {10, 0, 0};
+    auto& area = scene.registry().emplace<NavAreaComponent>(swamp);
+    area.size = {4, 10, 2};
+    area.walkable = false;
+    scene.updateTransforms();
+    NavigationSystem nav;
+    std::vector<Vec3> sp;
+    REQUIRE(nav.findPath(scene, {0, 0, 0}, {20, 0, 0}, false, sp));
+    float dev = 0.0f;
+    for (const Vec3& q : sp) dev = std::max(dev, std::fabs(q.y));
+    CHECK(dev > 4.5f);  // around the forbidden 4 x 10 rectangle centered on (10, 0)
+}

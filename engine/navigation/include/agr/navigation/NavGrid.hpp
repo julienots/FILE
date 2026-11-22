@@ -25,6 +25,10 @@ public:
     /// Blocks every cell whose center is within `radius + margin` of `center`.
     void blockCircle(math::Vec2 center, float radius, float margin);
     u32 blockedCount() const;
+    /// Travel cost of the cells whose center is inside the rectangle (>= 1: 3 = mud, avoided
+    /// unless the detour costs more). Paths are not smoothed across cells of different costs.
+    void costRect(math::Vec2 min, math::Vec2 max, float cost);
+    float cost(i32 x, i32 y) const;
 
     math::Vec2 cellCenter(i32 x, i32 y) const;
     bool cellOf(math::Vec2 p, i32& x, i32& y) const;
@@ -47,6 +51,7 @@ private:
     float m_cell = 1.0f;
     u32 m_width = 0, m_height = 0;
     std::vector<u8> m_blocked;
+    std::vector<float> m_cost;  // per cell, empty = all 1
     struct Link {
         usize from, to;
         float cost;

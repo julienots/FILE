@@ -76,6 +76,13 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
   échelle, un téléporteur. Il part de l'entité et arrive à `end` (relatif) ; `bidirectional`, `cost`
   (grille 2D). En 3D ce sont des connexions hors maillage de Detour ; en 2D des arêtes de l'A*. Les
   agents le traversent en ligne droite.
+- **`NavArea`** (`size`, `cost`, `walkable`) : une zone où marcher coûte plus (boue, eau peu profonde :
+  `cost` 3 = évitée sauf si le détour est plus de 3 fois plus long) ou est **interdite** (`walkable`
+  décoché : un trou dans la navigation). Boîte centrée sur l'entité (en 2D, son rectangle x / y).
+  En 3D ce sont des aires Recast (coût par aire du filtre Detour, 62 zones au plus) ; en 2D un coût par
+  cellule de l'A*, et le lissage du chemin ne coupe jamais à travers une zone d'un autre coût. Tests :
+  un marais de coût 10 contourné, de la boue à 1,2 traversée, une zone interdite contournée (grille,
+  maillage et scène).
 - **Modèles importés** : un `MeshRenderer` statique avec un modèle (`NavigationSettings.meshRenderersAsSources`,
   actif par défaut) et les colliders **Mesh** / **Convex** fournissent leurs vrais triangles (même cache
   que la physique 3D) : un niveau importé est navigable sans collider ajouté.

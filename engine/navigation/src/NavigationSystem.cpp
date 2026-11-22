@@ -119,6 +119,12 @@ void registerNavigationComponents() {
         .field("radius", &NavObstacleComponent::radius, {.rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
         .field("height", &NavObstacleComponent::height, {.rangeMin = 0.01f, .rangeMax = 100.0f, .speed = 0.01f})
         .field("carve", &NavObstacleComponent::carve, {.tooltip = "Cut out of the navigation (rebuilt when it moves)"});
+    reg.add<NavAreaComponent>("NavArea")
+        .category("Navigation")
+        .description("Zone where walking costs more (mud, water) or is forbidden: a box centered on the entity.")
+        .field("size", &NavAreaComponent::size, {.speed = 0.05f})
+        .field("cost", &NavAreaComponent::cost, {.tooltip = "Path cost multiplier (1 = normal, 3 = avoided unless much shorter)", .rangeMin = 1.0f, .rangeMax = 100.0f, .speed = 0.05f})
+        .field("walkable", &NavAreaComponent::walkable, {.tooltip = "Off: a forbidden zone (a hole in the navigation)"});
     reg.add<NavLinkComponent>("NavLink")
         .category("Navigation")
         .description("Shortcut for paths (jump, ladder, teleporter) from this entity to `end` (relative).")
@@ -179,6 +185,11 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
     reg.view<NavLinkComponent>().each([&](ecs::Entity e, NavLinkComponent& l) {
         if (!s.isActiveInHierarchy(e)) return;
         h = mix(mixf(mixf(mixf(mixf(h, l.end.x), l.end.y), l.end.z), l.cost), l.bidirectional ? 3 : 5);
+        mat(e);
+    });
+    reg.view<NavAreaComponent>().each([&](ecs::Entity e, NavAreaComponent& a) {
+        if (!s.isActiveInHierarchy(e)) return;
+        h = mix(mixf(mixf(mixf(mixf(h, a.size.x), a.size.y), a.size.z), a.cost), a.walkable ? 7 : 11);
         mat(e);
     });
     const NavigationSettingsComponent st = settingsOf(s);
@@ -325,6 +336,17 @@ void NavigationSystem::rebuild(Scene& s) {
             const Vec3 p = worldPosition(s, e);
             grid.blockCircle({p.x, p.y}, o.radius, radius);
         });
+        reg.view<NavAreaComponent>().each([&](ecs::Entity e, NavAreaComponent& a) {
+            if (!s.isActiveInHierarchy(e)) return;
+            const Mat4 m = s.worldMatrix(e);
+            Vec2 mn{1e30f, 1e30f}, mx{-1e30f, -1e30f};
+            for (int k = 0; k < 4; ++k) {  // corners of the (possibly rotated / scaled) rectangle
+                const Vec3 c = m.transformPoint({(k & 1 ? 0.5f : -0.5f) * a.size.x, (k & 2 ? 0.5f : -0.5f) * a.size.y, 0.0f});
+                mn = {std::min(mn.x, c.x), std::min(mn.y, c.y)}, mx = {std::max(mx.x, c.x), std::max(mx.y, c.y)};
+            }
+            if (a.walkable) grid.costRect(mn, mx, a.cost);
+            else grid.blockRect(mn, mx, radius);
+        });
     };
     buildGrid(m_grid, st.agentRadius2D);
     for (auto& l : m_layers) buildGrid(l->grid, l->radius);
@@ -339,6 +361,18 @@ void NavigationSystem::rebuild(Scene& s) {
             if (!layer->grid.empty()) layer->grid.addLink({a.x, a.y}, {b.x, b.y}, l.bidirectional, l.cost);
         meshLinks.push_back({a, b, l.bidirectional});
         ++m_stats.links;
+    });
+    std::vector<NavMeshArea> meshAreas;
+    reg.view<NavAreaComponent>().each([&](ecs::Entity e, NavAreaComponent& a) {
+        if (!s.isActiveInHierarchy(e)) return;
+        const Mat4 m = s.worldMatrix(e);
+        NavMeshArea box{{1e30f, 1e30f, 1e30f}, {-1e30f, -1e30f, -1e30f}, a.cost, a.walkable};
+        for (int k = 0; k < 8; ++k) {
+            const Vec3 c = m.transformPoint({(k & 1 ? 0.5f : -0.5f) * a.size.x, (k & 2 ? 0.5f : -0.5f) * a.size.y, (k & 4 ? 0.5f : -0.5f) * a.size.z});
+            box.min = {std::min(box.min.x, c.x), std::min(box.min.y, c.y), std::min(box.min.z, c.z)};
+            box.max = {std::max(box.max.x, c.x), std::max(box.max.y, c.y), std::max(box.max.z, c.z)};
+        }
+        meshAreas.push_back(box);
     });
     m_stats.gridCells = m_grid.width() * m_grid.height();
     m_stats.gridBlocked = m_grid.blockedCount();
@@ -421,7 +455,7 @@ void NavigationSystem::rebuild(Scene& s) {
         bs.agentHeight = st.agentHeight;
         bs.agentMaxClimb = st.agentMaxClimb;
         bs.agentMaxSlope = st.agentMaxSlope;
-        if (Status r = mesh.build(verts, idx, bs, meshLinks); !r) {
+        if (Status r = mesh.build(verts, idx, bs, meshLinks, meshAreas); !r) {
             m_stats.lastError = r.error().message;
             AGR_LOG_WARN("Navigation", "navigation mesh (agent radius {}) not built: {}", radius, r.error().message);
         }
@@ -436,9 +470,9 @@ void NavigationSystem::rebuild(Scene& s) {
         bs.agentHeight = st.agentHeight;
         bs.agentMaxClimb = st.agentMaxClimb;
         bs.agentMaxSlope = st.agentMaxSlope;
-        m_pendingMesh = std::async(std::launch::async, [verts, idx, bs, meshLinks]() -> std::unique_ptr<NavMesh> {
+        m_pendingMesh = std::async(std::launch::async, [verts, idx, bs, meshLinks, meshAreas]() -> std::unique_ptr<NavMesh> {
             auto mesh = std::make_unique<NavMesh>();
-            if (!mesh->build(verts, idx, bs, meshLinks)) return nullptr;
+            if (!mesh->build(verts, idx, bs, meshLinks, meshAreas)) return nullptr;
             return mesh;
         });
     } else {

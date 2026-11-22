@@ -41,6 +41,15 @@ struct NavLinkComponent {
     float cost = 1.0f;              ///< Multiplies its length in the path cost (2D grid).
 };
 
+/// Zone where walking costs more or is forbidden (Godot's navigation region travel cost): a box of
+/// `size` centered on the entity (2D: its x / y rectangle). Agents go around a cost-3 swamp unless
+/// the detour is more than 3 times longer; not walkable = a hole in the navigation.
+struct NavAreaComponent {
+    math::Vec3 size{4.0f, 2.0f, 4.0f};
+    float cost = 3.0f;
+    bool walkable = true;
+};
+
 /// Scene-wide build parameters (first active one). Without it, defaults are used.
 struct NavigationSettingsComponent {
     // 2D grid

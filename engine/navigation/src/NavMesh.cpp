@@ -55,7 +55,8 @@ struct RecastData {
 };
 } // namespace
 
-Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& s, const std::vector<NavMeshLink>& links) {
+Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& s, const std::vector<NavMeshLink>& links,
+                      const std::vector<NavMeshArea>& areaBoxes) {
     Stopwatch sw;
     clear();
     if (vertices.empty() || indices.size() < 3) return makeError(Error::Code::InvalidArgument, "no walkable geometry");
@@ -102,6 +103,13 @@ Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>&
     if (!r.chf || !rcBuildCompactHeightfield(&r.ctx, cfg.walkableHeight, cfg.walkableClimb, *r.solid, *r.chf))
         return makeError(Error::Code::Unknown, "navmesh: compact heightfield failed");
     if (!rcErodeWalkableArea(&r.ctx, cfg.walkableRadius, *r.chf)) return makeError(Error::Code::Unknown, "navmesh: erosion failed");
+    // Cost areas (ids 1..62) and forbidden boxes, marked on the voxels before the regions.
+    const usize areaCount = std::min<usize>(areaBoxes.size(), 62);
+    for (usize i = 0; i < areaCount; ++i) {
+        const NavMeshArea& a = areaBoxes[i];
+        const float bmin[3] = {a.min.x, a.min.y, a.min.z}, bmax[3] = {a.max.x, a.max.y, a.max.z};
+        rcMarkBoxArea(&r.ctx, bmin, bmax, a.walkable ? static_cast<unsigned char>(i + 1) : RC_NULL_AREA, *r.chf);
+    }
     if (!rcBuildDistanceField(&r.ctx, *r.chf)) return makeError(Error::Code::Unknown, "navmesh: distance field failed");
     if (!rcBuildRegions(&r.ctx, *r.chf, 0, cfg.minRegionArea, cfg.mergeRegionArea))
         return makeError(Error::Code::Unknown, "navmesh: regions failed");
@@ -182,6 +190,8 @@ Status NavMesh::build(const std::vector<Vec3>& vertices, const std::vector<u32>&
     }
     m->filter.setIncludeFlags(0xffff);
     m->filter.setExcludeFlags(0);
+    m->filter.setAreaCost(0, 1.0f);
+    for (usize i = 0; i < areaCount; ++i) m->filter.setAreaCost(static_cast<int>(i + 1), std::max(areaBoxes[i].cost, 1.0f));
     m_stats.polygons = static_cast<u32>(r.pmesh->npolys);
     m_stats.vertices = static_cast<u32>(r.pmesh->nverts);
     m_stats.inputTriangles = static_cast<u32>(ntris);

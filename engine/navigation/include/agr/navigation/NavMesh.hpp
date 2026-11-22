@@ -18,6 +18,13 @@ struct NavMeshBuildSettings {
     float agentMaxSlope = 45.0f;  ///< Degrees.
 };
 
+/// Box where walking costs more (mud, water: cost >= 1) or is forbidden (walkable = false).
+struct NavMeshArea {
+    math::Vec3 min, max;
+    float cost = 3.0f;
+    bool walkable = true;
+};
+
 /// Off-mesh connection (jump, ladder, teleporter) between two points near the mesh.
 struct NavMeshLink {
     math::Vec3 start, end;
@@ -42,7 +49,7 @@ public:
     /// Builds from triangles (indices into `vertices`, counter-clockwise seen from above
     /// for walkable surfaces). Replaces the previous mesh; an error leaves it empty.
     Status build(const std::vector<math::Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& settings,
-                 const std::vector<NavMeshLink>& links = {});
+                 const std::vector<NavMeshLink>& links = {}, const std::vector<NavMeshArea>& areas = {});
     void clear();
     bool empty() const;
     /// Exchanges two meshes (a mesh built in the background replaces the live one at once).
