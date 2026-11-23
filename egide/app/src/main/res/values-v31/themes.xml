@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Egide.Splash" parent="Theme.Egide">
+        <item name="android:windowSplashScreenBackground">@color/ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/transparent</item>
+    </style>
+</resources>
