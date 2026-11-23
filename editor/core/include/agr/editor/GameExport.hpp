@@ -55,6 +55,9 @@ std::set<std::string> usedAssets(const Project& project);
 /// Desktop build: `outputDir`/<Name>/ with the player executable (renamed after the game)
 /// and its game/ folder.
 Result<ExportReport> exportDesktop(const Project& project, const std::filesystem::path& outputDir, const std::filesystem::path& playerExecutable);
+/// Dedicated server: the desktop export (Linux or Windows player) flagged as a server — no window,
+/// no rendering, no sound, a fixed tick rate — without images and sounds (smaller, for a host).
+Result<ExportReport> exportDedicatedServer(const Project& project, const std::filesystem::path& outputDir, const std::filesystem::path& playerExecutable);
 
 /// Writes `zipPath`, a ZIP archive (stored, no compression) of every file under `dir`, paths
 /// relative to dir's parent (the archive opens on the game's folder); Unix permissions kept.

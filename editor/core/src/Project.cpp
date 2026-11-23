@@ -127,6 +127,7 @@ Result<Project> Project::open(const fs::path& folder) {
         const std::string o = e.value("orientation", std::string("landscape"));
         x.orientation = o == "portrait" ? ScreenOrientation::Portrait : o == "sensor" ? ScreenOrientation::Sensor : ScreenOrientation::Landscape;
         x.targetFps = e.value("targetFps", x.targetFps);
+        x.serverTickRate = std::clamp<u32>(e.value("serverTickRate", x.serverTickRate), 1, 1000);
         x.vibration = e.value("vibration", x.vibration);
         x.network = e.value("network", x.network);
         x.microphone = e.value("microphone", x.microphone);
@@ -186,7 +187,7 @@ Status Project::save() const {
     j["onlineRepository"] = m_settings.onlineRepository;
     const ExportSettings& x = m_settings.exportSettings;
     j["export"] = {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
-                   {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps},
+                   {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps}, {"serverTickRate", x.serverTickRate},
                    {"vibration", x.vibration}, {"network", x.network},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
                    {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
                    {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias},

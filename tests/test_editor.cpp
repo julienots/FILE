@@ -3,6 +3,7 @@
 #include "agr/editor/ApiReference.hpp"
 #include "agr/core/Etc2.hpp"
 #include "agr/editor/CurveView.hpp"
+#include "agr/runtime/GameManifest.hpp"
 #include "agr/editor/AssetRefactor.hpp"
 #include "agr/editor/EditHistory.hpp"
 #include "agr/editor/PackageRepository.hpp"
@@ -2058,3 +2059,68 @@ TEST_CASE("Android device log: logcat lines parsed, each poll returns only the n
     fs::remove_all(dir);
 }
 #endif
+
+TEST_CASE("dedicated server export: no images nor sounds, flagged as a server; the real player runs it with no display and the script hosts") {
+    EditorFixture f(ProjectMode::Mode2D);
+    Project& project = f.ctx->project();
+    const fs::path assets = project.assetsDirectory();
+    fs::create_directories(assets / "scripts");
+    std::ofstream(assets / "scripts" / "server.lua") << R"(
+local S = {}
+function S:onStart()
+    if agr.isServer() then
+        assert(agr.net.host(0, 8))
+        agr.file.write("user://server.txt", "hosting " .. agr.net.port())
+    else
+        agr.file.write("user://server.txt", "client")
+    end
+end
+return S
+)";
+    Scene& scene = f.ctx->scene();
+    scene.registry().emplace<ScriptComponent>(scene.createEntity("Server")).script = "assets://scripts/server.lua";
+    REQUIRE(f.ctx->saveSceneAs("scenes/main.agrscene"));
+    project.settings().startupScene = "scenes/main.agrscene";
+    project.settings().exportSettings.serverTickRate = 30;
+#if defined(__linux__)
+    const fs::path player = fs::read_symlink("/proc/self/exe").parent_path() / "agr_player";
+#else
+    const fs::path player;
+#endif
+    fs::path fake = f.root / "fake_player";
+    { std::ofstream(fake) << "player"; }
+    auto report = exportDedicatedServer(project, f.root / "out", fs::exists(player) ? player : fake);
+    REQUIRE_MESSAGE(report, (report ? "" : report.error().message));
+    const fs::path dir = report.value().output;
+    CHECK(dir.filename().string().find("Server") != std::string::npos);
+    int images = 0, sounds = 0, scripts = 0;
+    for (const auto& e : fs::recursive_directory_iterator(dir)) {
+        const std::string ext = e.path().extension().string();
+        images += ext == ".png" && e.path().parent_path() != dir;  // the icon next to the executable is fine
+        sounds += ext == ".wav" || ext == ".ogg";
+        scripts += ext == ".lua";
+    }
+    CHECK(images == 0);
+    CHECK(sounds == 0);
+    CHECK(scripts >= 1);
+    std::ifstream manifestIn(dir / "game" / "game.json");
+    const std::string manifest((std::istreambuf_iterator<char>(manifestIn)), {});
+    CHECK(manifest.find("\"dedicatedServer\": true") != std::string::npos);
+    CHECK(manifest.find("\"serverTickRate\": 30") != std::string::npos);
+#if defined(__linux__)
+    if (fs::exists(player)) {
+        // No DISPLAY: a server must not need one. 30 ticks per second, 60 ticks = about 2 s.
+        const fs::path exe = dir / (GameManifest::safeName(project.settings().name + " Server"));
+        const fs::path user = f.root / "server_user";
+        const std::string cmd = "env -u DISPLAY -u WAYLAND_DISPLAY SDL_AUDIODRIVER=dummy '" + exe.string() + "' --frames 60 --user '" + user.string() + "' > '" +
+                                (f.root / "server.log").string() + "' 2>&1";
+        const auto start = std::chrono::steady_clock::now();
+        CHECK(std::system(cmd.c_str()) == 0);
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        CHECK_MESSAGE(seconds > 1.5, seconds);  // paced at the tick rate, not as fast as possible
+        std::ifstream in(user / "server.txt");
+        const std::string said((std::istreambuf_iterator<char>(in)), {});
+        CHECK_MESSAGE(said.rfind("hosting ", 0) == 0, said);
+    }
+#endif
+}

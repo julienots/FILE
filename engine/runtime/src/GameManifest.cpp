@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "agr/runtime/GameManifest.hpp"
 
 #include <cctype>
@@ -28,6 +29,8 @@ std::string GameManifest::toJson() const {
            {"backQuits", backQuits},
            {"vibration", vibration},
            {"keepScreenOn", keepScreenOn},
+           {"dedicatedServer", dedicatedServer},
+           {"serverTickRate", serverTickRate},
            {"splashImage", splashImage},
            {"splashColor", splashColor},
            {"splashSeconds", splashSeconds},
@@ -55,6 +58,8 @@ Result<GameManifest> GameManifest::fromJson(std::string_view text) {
         m.backQuits = j.value("backQuits", m.backQuits);
         m.vibration = j.value("vibration", m.vibration);
         m.keepScreenOn = j.value("keepScreenOn", m.keepScreenOn);
+        m.dedicatedServer = j.value("dedicatedServer", m.dedicatedServer);
+        m.serverTickRate = std::clamp<u32>(j.value("serverTickRate", m.serverTickRate), 1, 1000);
         m.splashImage = j.value("splashImage", m.splashImage);
         if (j.contains("splashColor") && j["splashColor"].is_array() && j["splashColor"].size() == 4)
             for (usize i = 0; i < 4; ++i) m.splashColor[i] = j["splashColor"][i].get<float>();

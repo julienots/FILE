@@ -31,6 +31,7 @@ struct EngineConfig {
     std::string organization = "Superessence Studio";
     WindowConfig window;
     bool headless = false;           ///< No window: servers, tests, CI.
+    bool dedicatedServer = false;    ///< Runs as a dedicated game server (agr.isServer()).
     f64 fixedTimestep = 1.0 / 60.0;  ///< Physics / gameplay tick.
     u32 maxFixedStepsPerFrame = 5;   ///< Avoids the "spiral of death" on slow devices.
     f64 maxFrameDelta = 0.25;        ///< Clamp after hitches (debugger, app resume).

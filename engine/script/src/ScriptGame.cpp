@@ -119,6 +119,11 @@ int a_loadScene(lua_State* L) {
     return 0;
 }
 
+/// agr.isServer() -> true when the game runs as a dedicated server (no screen, no sound).
+int a_isServer(lua_State* L) {
+    lua_pushboolean(L, implOf(L).dedicatedServer);
+    return 1;
+}
 /// agr.loadSceneAsync(uri [, switchWhenReady = true]): loads in the background (loading screens).
 int a_loadSceneAsync(lua_State* L) {
     const char* uri = luaL_checkstring(L, 1);
@@ -178,6 +183,8 @@ void openGameBindings(lua_State* L) {
     lua_setfield(L, -2, "loadScene");
     lua_pushcfunction(L, a_loadPack);
     lua_setfield(L, -2, "loadPack");
+    lua_pushcfunction(L, a_isServer);
+    lua_setfield(L, -2, "isServer");
     lua_pushcfunction(L, a_loadSceneAsync);
     lua_setfield(L, -2, "loadSceneAsync");
     lua_pushcfunction(L, a_sceneLoadProgress);

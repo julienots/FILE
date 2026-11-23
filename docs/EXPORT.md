@@ -177,6 +177,18 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
 | Écran | plein écran, orientation du projet, zones sûres (encoche) respectées par l'interface |
 | Capteurs, vibration | accéléromètre, gyroscope, vibreur ([SCRIPTING.md](SCRIPTING.md)) |
 
+## Serveur dédié
+
+Cible *Serveur dédié (sans écran ni son)* de l'export (CLI : `--export server`, ou `windows-server` avec
+le lecteur Windows) — comme l'export « Dedicated Server » de Godot : le jeu sans fenêtre, sans rendu et
+sans son, pour héberger des parties en ligne sur une machine sans écran (VPS, Raspberry Pi, PC d'un
+ami). Les images et les sons sont laissés de côté (dossier plus léger), la boucle tourne à *Mises à jour
+par seconde* (60 par défaut, `serverTickRate` du projet), et les scripts le savent avec
+`agr.isServer()` (par exemple : `if agr.isServer() then agr.net.host(7777, 16) end`). Un jeu normal se
+lance aussi en serveur avec `./Jeu --server`. Test : export d'un projet dont le script héberge en mode
+serveur ; ni image ni son dans le dossier ; le vrai lecteur, lancé **sans affichage** (`DISPLAY` retiré),
+tourne au rythme demandé (60 mises à jour à 30 par seconde ≈ 2 s) et son script héberge la partie.
+
 ## Limites actuelles
 
 - **Rien n'a encore tourné sur un téléphone réel ni sur un émulateur** : l'environnement de développement

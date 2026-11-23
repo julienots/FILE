@@ -22,6 +22,7 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_engine = &engine;
     m_scripts = std::make_unique<ScriptEngine>(engine.vfs());
     m_scripts->setInput(&engine.input());
+    m_scripts->setDedicatedServer(engine.config().dedicatedServer);
     m_scripts->setGestures(&engine.gestures());
     m_scripts->setActions(&engine.actions());
     m_scripts->setLocalization(&engine.localization(), [&engine](std::string_view code) { return engine.setLanguage(code); });

@@ -156,6 +156,8 @@ GameManifest gameManifest(const Project& project) {
     m.graphicsProfile = s.graphicsProfile;
     m.orientation = x.orientation;
     m.targetFps = x.targetFps;
+    m.serverTickRate = x.serverTickRate;
+    m.dedicatedServer = x.dedicatedServer;
     m.backQuits = x.backQuits;
     m.vibration = x.vibration;
     m.keepScreenOn = x.keepScreenOn;
@@ -315,6 +317,21 @@ Result<ExportReport> exportDesktop(const Project& project, const fs::path& outpu
         if (Status s = zipFolder(dir, zip); !s) report.warnings.push_back("zip: " + s.error().message);
         else AGR_LOG_INFO("Export", "archive: {}", zip.string());
     }
+    return report;
+}
+
+Result<ExportReport> exportDedicatedServer(const Project& project, const fs::path& outputDir, const fs::path& playerExecutable) {
+    // The same game without what only a screen and speakers need, flagged as a server.
+    Project server = project;
+    ProjectSettings& s = server.settings();
+    s.name += " Server";
+    ExportSettings& x = s.exportSettings;
+    const std::string media = "*.png, *.jpg, *.jpeg, *.webp, *.bmp, *.tga, *.ktx, *.hdr, *.agrcube, *.wav, *.ogg, *.mp3, *.flac";
+    x.excludeFilter = x.excludeFilter.empty() ? media : x.excludeFilter + ", " + media;
+    x.compressTextures = false;
+    x.dedicatedServer = true;
+    auto report = exportDesktop(server, outputDir, playerExecutable);
+    if (report) AGR_LOG_INFO("Export", "dedicated server: run it with no screen (images and sounds left out)");
     return report;
 }
 

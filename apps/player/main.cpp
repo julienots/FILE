@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
     namespace fs = std::filesystem;
     Options options;
     EngineConfig config;
-    bool userDirSet = false;
+    bool userDirSet = false, forceServer = false;
 #if defined(AGR_PLATFORM_ANDROID)
     options.gameDir = "game";
 #else
@@ -241,6 +241,7 @@ int main(int argc, char** argv) {
         else if (a == "--screenshot" && i + 1 < argc) options.screenshot = argv[++i];
         else if (a == "--screenshot-frame" && i + 1 < argc) options.screenshotFrame = std::strtoull(argv[++i], nullptr, 10);
         else if (a == "--autotest") options.autotest = true;
+        else if (a == "--server") forceServer = true;
         else if (a == "--user" && i + 1 < argc) {
             config.userDirectory = argv[++i];
             userDirSet = true;
@@ -273,6 +274,13 @@ int main(int argc, char** argv) {
             SDL_free(pref);
         }
     }
+    const bool server = forceServer || m.dedicatedServer;
+    if (server) {  // dedicated server: no window, no renderer, no audio, fixed tick rate
+        config.headless = true;
+        config.dedicatedServer = true;
+        config.targetFps = m.serverTickRate;
+        SDL_Log("AGR player: dedicated server, %u ticks per second", m.serverTickRate);
+    }
     switch (m.orientation) {
         case ScreenOrientation::Landscape: SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight"); break;
         case ScreenOrientation::Portrait: SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait"); break;
@@ -280,7 +288,7 @@ int main(int argc, char** argv) {
     }
 
     Engine engine(config);
-    engine.plugins().addStatic(std::make_unique<RenderPlugin>());
+    if (!server) engine.plugins().addStatic(std::make_unique<RenderPlugin>());
     engine.plugins().addStatic(std::make_unique<TwoDPlugin>());
     engine.plugins().addStatic(std::make_unique<UIPlugin>());
     engine.plugins().addStatic(std::make_unique<ScriptPlugin>());
@@ -289,8 +297,8 @@ int main(int argc, char** argv) {
     engine.plugins().addStatic(std::make_unique<NavigationPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics2DPlugin>());
     engine.plugins().addStatic(std::make_unique<Physics3DPlugin>());
-    engine.plugins().addStatic(std::make_unique<AudioPlugin>());
-    if (Status s = engine.initialize(std::make_unique<SdlPlatform>()); !s) return 1;
+    if (!server) engine.plugins().addStatic(std::make_unique<AudioPlugin>());
+    if (Status s = engine.initialize(server ? nullptr : std::make_unique<SdlPlatform>()); !s) return 1;
     // Game data: read-only; on Android straight from the APK.
     const auto gameFiles = mountGame(engine, options.gameDir);
     if (m.keepScreenOn) SDL_DisableScreenSaver();

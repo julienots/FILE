@@ -32,6 +32,8 @@ struct ExportSettings {
     std::string packageId;  ///< Android application id; empty = derived from the organization and the name.
     ScreenOrientation orientation = ScreenOrientation::Landscape;
     u32 targetFps = 0;
+    u32 serverTickRate = 60;  ///< Dedicated server exports: game loop updates per second.
+    bool dedicatedServer = false;  ///< Set by exportDedicatedServer (not saved in the project).
     bool vibration = true;
     bool network = false;  ///< Android INTERNET permission (multiplayer: agr.net).
     bool microphone = false;

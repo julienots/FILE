@@ -28,6 +28,10 @@ struct GameManifest {
     bool backQuits = true;                     ///< Android back button / Escape-less desktop: quits the game.
     bool vibration = true;                     ///< Android: VIBRATE permission.
     bool keepScreenOn = true;
+    /// Dedicated server build: no window, no rendering, no sound; the game loop runs at
+    /// serverTickRate per second (scripts: agr.isServer()).
+    bool dedicatedServer = false;
+    u32 serverTickRate = 60;
     /// Splash screen before the startup scene: an image (assets:// URI, empty = none) centered on
     /// `splashColor` (sRGB) for at least `splashSeconds`.
     std::string splashImage;

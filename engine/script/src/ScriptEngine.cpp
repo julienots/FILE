@@ -264,6 +264,7 @@ bool ScriptEngine::callNetInput(Scene& scene, ecs::Entity e, const std::string& 
 }
 void ScriptEngine::setGestures(const GestureRecognizer* gestures) { m->gestures = gestures; }
 void ScriptEngine::setSceneLoader(std::function<void(std::string)> loader) { m->sceneLoader = std::move(loader); }
+void ScriptEngine::setDedicatedServer(bool server) { m->dedicatedServer = server; }
 void ScriptEngine::setAsyncSceneLoading(AsyncSceneLoading loading) { m->asyncScenes = std::move(loading); }
 void ScriptEngine::setTimeControl(std::function<void(double)> setScale, std::function<double()> scale) {
     m->setTimeScale = std::move(setScale);

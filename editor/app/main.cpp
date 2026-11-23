@@ -36,7 +36,7 @@ namespace {
 
 /// Command-line tasks without a window (continuous integration, scripts):
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d|platformer|rpg2d|towerdefense|cards|farm|idle|tycoon|survival|strategy|racing|arena|adventure25d] [--name NAME]
-///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
+///   agr_editor --project DIR --export desktop|windows|server|windows-server|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
 ///   agr_editor --compile-shader-graph FILE.agrshadergraph   (writes the .agrshader next to it)
 ///   agr_editor --compress-textures FOLDER                   (images -> ETC2 KTX in place, as the Android export)
@@ -237,13 +237,19 @@ namespace {
     }
     if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
     Result<ExportReport> report = makeError(Error::Code::InvalidArgument,
-                                            "unknown export '" + exportKind + "' (desktop, windows, patch, android-apk, android-release-apk, android-aab)");
+                                            "unknown export '" + exportKind + "' (desktop, windows, server, windows-server, patch, android-apk, android-release-apk, android-aab)");
 #if defined(_WIN32)
     const fs::path player = exeDir / "agr_player.exe";
 #else
     const fs::path player = exeDir / "agr_player";
 #endif
     if (exportKind == "desktop") report = exportDesktop(project.value(), output, player);
+    if (exportKind == "server") report = exportDedicatedServer(project.value(), output, player);
+    if (exportKind == "windows-server") {
+        const fs::path winPlayer = findWindowsPlayer(exeDir);
+        report = winPlayer.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player not found"))
+                                   : exportDedicatedServer(project.value(), output, winPlayer);
+    }
     if (exportKind == "patch")
         report = basePack.empty() ? Result<ExportReport>(makeError(Error::Code::InvalidArgument, "--export patch needs --base GAME_OR_PATCH.agrpak"))
                                   : exportPatch(project.value(), basePack, output);

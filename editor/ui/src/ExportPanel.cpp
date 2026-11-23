@@ -16,9 +16,10 @@ namespace fs = std::filesystem;
 
 namespace {
 constexpr const char* kTargets[] = {"PC (dossier)", "Android : APK de test (debug)", "Android : APK signé (release)", "Android : App Bundle (Google Play)",
-                                    "Windows x64 (dossier, .exe)"};
-constexpr const char* kTargetDirs[] = {"desktop", "android", "android", "android", "windows"};
+                                    "Windows x64 (dossier, .exe)", "Serveur dédié (sans écran ni son)"};
+constexpr const char* kTargetDirs[] = {"desktop", "android", "android", "android", "windows", "server"};
 constexpr int kWindowsTarget = 4;
+constexpr int kServerTarget = 5;
 }
 
 ExportPanel::~ExportPanel() {
@@ -76,6 +77,12 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
         Result<ExportReport> report = makeError(Error::Code::Unknown, "not run");
         if (target == -1) {
             report = exportPatch(project, patchBase, output);
+        } else if (target == kServerTarget) {
+#if defined(_WIN32)
+            report = exportDedicatedServer(project, output, exeDir / "agr_player.exe");
+#else
+            report = exportDedicatedServer(project, output, exeDir / "agr_player");
+#endif
         } else if (target == kWindowsTarget) {
             const fs::path player = findWindowsPlayer(exeDir);
             report = player.empty() ? Result<ExportReport>(makeError(Error::Code::NotFound, "Windows player (agr_player.exe) not found"))
@@ -140,7 +147,16 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     ImGui::BeginDisabled(running);
 
     ImGui::SetNextItemWidth(320);
-    ImGui::Combo("Cible", &m_target, kTargets, 5);
+    ImGui::Combo("Cible", &m_target, kTargets, 6);
+    if (m_target == kServerTarget) {
+        int tick = static_cast<int>(x.serverTickRate);
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::InputInt("Mises à jour par seconde", &tick)) {
+            x.serverTickRate = static_cast<u32>(std::clamp(tick, 1, 1000));
+            changed = true;
+        }
+        ImGui::TextDisabled("Pour héberger les parties en ligne : sans fenêtre ni son, images et sons laissés de côté ;\nles scripts le savent avec agr.isServer(). Lancer : ./Jeu_Server (ou --server sur un jeu normal).");
+    }
     const bool android = m_target >= 1 && m_target <= 3, release = m_target == 2 || m_target == 3;
 
     ImGui::SeparatorText("Jeu");

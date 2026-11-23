@@ -132,6 +132,8 @@ public:
     bool callRpc(Scene& scene, ecs::Entity e, const std::string& function, const std::string& argsJson, u32 sender);
     /// agr.loadScene(uri): asks the host to switch scenes at the end of the frame.
     void setSceneLoader(std::function<void(std::string)> loader);
+    /// The game runs as a dedicated server (agr.isServer()).
+    void setDedicatedServer(bool server);
     /// Background scene loading for agr.loadSceneAsync / agr.sceneLoadProgress / agr.switchScene.
     struct AsyncSceneLoading {
         std::function<void(std::string, bool)> begin;               ///< uri, switch when ready
