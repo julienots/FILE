@@ -58,6 +58,7 @@ void AnimationPanel::loadClip(EditorShared& s, const std::string& uri) {
     m_playing = false;
     m_dirty = false;
     m_clip = {};
+    m_history.reset(m_clip.toJson());
     auto text = s.engine.vfs().readText(uri);
     if (!text) {
         s.notify("Clip introuvable : " + uri);
@@ -69,6 +70,7 @@ void AnimationPanel::loadClip(EditorShared& s, const std::string& uri) {
         return;
     }
     m_clip = std::move(clip.value());
+    m_history.reset(m_clip.toJson());
 }
 
 bool AnimationPanel::saveClip(EditorShared& s) {
@@ -755,6 +757,23 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
         ImGui::EndTable();
     }
     ImGui::EndChild();
+    // Undo / redo of the clip's edits (keys, curves, tracks, events) while the panel has focus.
+    if (!m_uri.empty() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+        const bool typing = ImGui::GetIO().WantTextInput;
+        m_history.observe(m_clip.toJson(), typing || ImGui::IsMouseDown(ImGuiMouseButton_Left) || m_draggingKey || m_curveDrag != 0);
+        std::optional<std::string> restore;
+        if (!typing && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z)) restore = m_history.undo();
+        if (!typing && (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))) restore = m_history.redo();
+        if (restore) {
+            if (auto clip = AnimationClip::fromJson(*restore)) {
+                m_clip = std::move(clip.value());
+                m_dirty = true;
+                m_track = m_key = m_event = -1;
+                m_keySel.clear();
+                if (m_previewing) applyPreview(s);
+            }
+        }
+    }
     ImGui::End();
 }
 

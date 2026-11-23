@@ -48,6 +48,7 @@ void StateMachinePanel::load(EditorShared& s, const std::string& uri) {
     m_layer = -1;
     m_dirty = false;
     m_ctrl = {};
+    m_history.reset(m_ctrl.toJson());
     auto text = s.engine.vfs().readText(uri);
     if (!text) {
         s.notify("Machine à états introuvable : " + uri);
@@ -59,6 +60,7 @@ void StateMachinePanel::load(EditorShared& s, const std::string& uri) {
         return;
     }
     m_ctrl = std::move(c.value());
+    m_history.reset(m_ctrl.toJson());
 }
 
 void StateMachinePanel::drawLayerBar(EditorShared& s) {
@@ -553,6 +555,22 @@ void StateMachinePanel::draw(EditorShared& s) {
     ImGui::BeginChild("props", {0, 0}, ImGuiChildFlags_Borders);
     drawProperties(s);
     ImGui::EndChild();
+    // Undo / redo of the state machine's edits while the panel has focus.
+    if (!m_uri.empty() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+        const bool typing = ImGui::GetIO().WantTextInput;
+        m_history.observe(m_ctrl.toJson(), typing || ImGui::IsMouseDown(ImGuiMouseButton_Left) || m_dragState >= 0);
+        std::optional<std::string> restore;
+        if (!typing && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z)) restore = m_history.undo();
+        if (!typing && (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))) restore = m_history.redo();
+        if (restore) {
+            if (auto c = AnimatorController::fromJson(*restore)) {
+                m_ctrl = std::move(c.value());
+                m_dirty = true;
+                m_state = m_transition = -1;
+                if (m_layer >= static_cast<int>(m_ctrl.layers.size())) m_layer = -1;
+            }
+        }
+    }
     ImGui::End();
 }
 

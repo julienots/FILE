@@ -263,6 +263,8 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 - Une transition interrompue repart de la **pose affichée à cet instant** (figée puis fondue vers le
   nouvel état, sans saut) ; une seule transition par image.
 - Timeline : le copier-coller de clés
-  reste dans l'éditeur (pas de presse-papiers du système) ; les modifications d'un clip ou d'une machine à états ne passent pas
-  par *Annuler* (elles sont enregistrées dans leur fichier avec *Enregistrer*).
+  reste dans l'éditeur (pas de presse-papiers du système). Les modifications d'un clip ou d'une machine à
+  états s'**annulent** avec Ctrl+Z / Ctrl+Y quand leur panneau a le focus (historique propre au panneau,
+  100 étapes ; un glissement de clé ou de nœud, une saisie de nom = une étape) ; elles restent
+  enregistrées dans leur fichier par *Enregistrer* (l'historique est perdu en rouvrant le fichier).
 - L'aperçu de la timeline ne fonctionne qu'en mode Édition.

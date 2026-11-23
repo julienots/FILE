@@ -3,6 +3,7 @@
 #include "agr/editor/ApiReference.hpp"
 #include "agr/core/Etc2.hpp"
 #include "agr/editor/CurveView.hpp"
+#include "agr/editor/EditHistory.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
 
@@ -1846,3 +1847,35 @@ TEST_CASE("Android one-click deploy: adb devices parsed, APK installed then star
     fs::remove_all(dir);
 }
 #endif
+
+TEST_CASE("edit history: one step per change, drags merged, undo / redo, new branch clears redo") {
+    EditHistory h(3);
+    h.reset("a");
+    CHECK_FALSE(h.canUndo());
+    h.observe("a", false);  // unchanged
+    CHECK_FALSE(h.canUndo());
+    h.observe("b", false);
+    h.observe("c", false);
+    CHECK(h.undoCount() == 2);
+    // A drag: many intermediate states while interacting, one step.
+    h.observe("c1", true);
+    h.observe("c2", true);
+    h.observe("c3", true);
+    h.observe("c3", false);
+    CHECK(h.undoCount() == 3);
+    CHECK(h.undo() == "c");
+    CHECK(h.undo() == "b");
+    CHECK(h.redo() == "c");
+    CHECK(h.canRedo());
+    h.observe("x", false);  // new edit: redo dropped
+    CHECK_FALSE(h.canRedo());
+    CHECK(h.undo() == "c");
+    // Limit: the oldest steps are forgotten.
+    h.reset("0");
+    for (const char* s : {"1", "2", "3", "4", "5"}) h.observe(s, false);
+    CHECK(h.undoCount() == 3);
+    CHECK(h.undo() == "4");
+    CHECK(h.undo() == "3");
+    CHECK(h.undo() == "2");
+    CHECK_FALSE(h.undo());
+}

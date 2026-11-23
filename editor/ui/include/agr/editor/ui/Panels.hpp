@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "agr/editor/AndroidExport.hpp"
+#include "agr/editor/EditHistory.hpp"
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
@@ -373,6 +374,7 @@ private:
     std::string m_uri;          // clip being edited
     AnimationClip m_clip;
     bool m_dirty = false;
+    EditHistory m_history;      // Ctrl+Z / Ctrl+Y on the clip
     Uuid m_entity;              // animated root
     float m_time = 0.0f;
     bool m_playing = false;
@@ -413,6 +415,7 @@ private:
 
     std::string m_uri;
     AnimatorController m_ctrl;
+    EditHistory m_history;      // Ctrl+Z / Ctrl+Y on the state machine
     int m_layer = -1;
     std::string m_maskText;
     bool m_dirty = false;
