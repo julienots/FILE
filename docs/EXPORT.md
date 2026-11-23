@@ -90,7 +90,7 @@ rien n'est extrait), sur PC comme dans l'APK.
 | Écran de démarrage | Image (`assets://...`), couleur de fond et durée minimale : affichée par le lecteur (toutes plateformes) avant la scène de départ, centrée, proportions gardées |
 | Microphone | Permission `RECORD_AUDIO` (jeux qui enregistrent : `agr.audio.startRecording`) |
 | Identifiant Android | `com.studio.jeu` (par défaut : organisation + nom) |
-| API minimale / cible, processeurs | Android 8.0 (API 26) minimum ; `arm64-v8a` (téléphones), `x86_64` (émulateurs, Chromebooks) |
+| API minimale / cible, processeurs | Android 8.0 (API 26) minimum ; `arm64-v8a` (téléphones), `armeabi-v7a` (anciens téléphones 32 bits d'entrée de gamme, NEON), `x86_64` (émulateurs, Chromebooks) |
 | Signature | Keystore (fichier), alias, mots de passe ; *Créer un keystore* (`keys/release.p12`) |
 
 Les réglages sont enregistrés dans le projet ; **les mots de passe jamais** (ni sur le disque, ni sur une
@@ -176,6 +176,14 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
 | Arrière-plan | son suspendu, sauvegarde écrite, rendu arrêté |
 | Écran | plein écran, orientation du projet, zones sûres (encoche) respectées par l'interface |
 | Capteurs, vibration | accéléromètre, gyroscope, vibreur ([SCRIPTING.md](SCRIPTING.md)) |
+
+## Téléphones 32 bits (`armeabi-v7a`)
+
+Cocher `armeabi-v7a` dans les processeurs de l'export Android ajoute la version 32 bits (anciens
+téléphones d'entrée de gamme ; le Play Store installe la bonne). Modèles : `tools/build_android_templates.sh
+build/export_templates arm64-v8a armeabi-v7a x86_64` (préréglage CMake `android-armv7`). Le moteur
+compile en 32 bits ARM sans erreur ni avertissement de taille de pointeur, et l'APK contient bien
+`lib/armeabi-v7a/` ; **il n'a pas été exécuté en 32 bits** (ni téléphone ni bibliothèques 32 bits ici).
 
 ## Serveur dédié
 

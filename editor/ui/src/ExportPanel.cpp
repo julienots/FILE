@@ -238,7 +238,7 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         ImGui::SetNextItemWidth(120);
         if (ImGui::InputInt("API cible", &targetSdk)) x.targetSdk = static_cast<u32>(std::clamp(targetSdk, 26, 40)), changed = true;
         ImGui::TextUnformatted("Processeurs :");
-        for (const char* abi : {"arm64-v8a", "x86_64"}) {
+        for (const char* abi : {"arm64-v8a", "armeabi-v7a", "x86_64"}) {
             ImGui::SameLine();
             bool on = std::find(x.abis.begin(), x.abis.end(), abi) != x.abis.end();
             if (ImGui::Checkbox(abi, &on)) {
@@ -249,7 +249,7 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(?)");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("arm64-v8a : téléphones et tablettes ; x86_64 : émulateurs et Chromebooks");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("arm64-v8a : téléphones et tablettes ; armeabi-v7a : anciens téléphones 32 bits (entrée de gamme) ; x86_64 : émulateurs et Chromebooks");
     }
     if (release) {
         ImGui::SeparatorText("Signature");

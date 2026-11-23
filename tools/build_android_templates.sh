@@ -19,6 +19,7 @@ for abi in "${ABIS[@]}"; do
     case "$abi" in
         arm64-v8a) preset=android-arm64 ;;
         x86_64) preset=android-x86_64 ;;
+        armeabi-v7a) preset=android-armv7 ;;
         *) echo "unsupported ABI: $abi" >&2; exit 1 ;;
     esac
     cmake --preset "$preset"

@@ -81,6 +81,24 @@
       }
     },
     {
+      "name": "android-armv7",
+      "inherits": "base",
+      "displayName": "Android armeabi-v7a (32-bit phones, game player, needs ANDROID_NDK_HOME)",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "armeabi-v7a",
+        "ANDROID_PLATFORM": "android-26",
+        "ANDROID_STL": "c++_static",
+        "AGR_BUILD_TESTS": "OFF",
+        "AGR_BUILD_BENCHMARKS": "OFF",
+        "AGR_BUILD_SANDBOX": "OFF",
+        "AGR_BUILD_EDITOR": "OFF",
+        "AGR_BUILD_PLUGINS": "OFF",
+        "ANDROID_ARM_NEON": "ON"
+      }
+    },
+    {
       "name": "android-editor-arm64",
       "inherits": "android-arm64",
       "displayName": "Android arm64 editor (AGR ENGINE on mobile, needs ANDROID_NDK_HOME)",
@@ -147,6 +165,13 @@
       "targets": [
         "agr_player",
         "agr_tests"
+      ]
+    },
+    {
+      "name": "android-armv7",
+      "configurePreset": "android-armv7",
+      "targets": [
+        "agr_player"
       ]
     }
   ],

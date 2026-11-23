@@ -60,13 +60,6 @@ std::string utf8At(const std::string& s, usize index) {
     const usize a = utf8Offset(s, index), b = utf8Offset(s, index + 1);
     return s.substr(a, b - a);
 }
-void utf8PopBack(std::string& s) {
-    while (!s.empty()) {
-        const unsigned char c = static_cast<unsigned char>(s.back());
-        s.pop_back();
-        if ((c & 0xC0) != 0x80) break;
-    }
-}
 
 Vec4 mul(Vec4 a, Vec4 b) { return {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
 
