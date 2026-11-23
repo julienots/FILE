@@ -1,6 +1,7 @@
 // Automated play-test (desktop harness): drives the real game through a scripted session,
 // validates core systems and captures screenshots. Enabled with --autoplay=<scenario>.
 #include "Game.h"
+#include "Props.h"
 #include "../engine/core/Platform.h"
 #include <algorithm>
 #include <functional>
@@ -2345,6 +2346,88 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.6f, none, [](Game& g, float) { peak = std::max(peak, g.pc().pos.y); g.camIdleT = 0; g.pc().invuln = 1.f; }, "airborne"});
         s.push_back({0.1f, [](Game& g) { res[2] = peak - y0 > 2.f; g.requestScreenshot("build/shots/CO3_jump.png");
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
+        return s;
+    }
+    if (name == "cellar") {
+        // 3.6.0 the underground base: craft-free (the hatch is given), set it down, go down, dig three blocks with
+        // a pickaxe (one holds ore), come back up, save and load: the dug halls are still there
+        static int res[6]; static int mined0;
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 11.f; for (int& r : res) r = 0;
+            const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 70.f, p->pos.y - 30.f, 0.f);
+            g.addItem("cellar_hatch", 1, Rarity::Epic, true); g.addItem("tool_pickaxe", 1, Rarity::Common, true); g.itemGets.clear(); }, idle, "setup"});
+        s.push_back({1.f, [](Game& g) { for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "cellar_hatch") { g.useItem(i); break; }
+            res[0] = g.cellar.owned && g.reg.valid(g.cellarEnt); AGR_LOG("CELLAR hatch placed %d at %.0f %.0f", res[0], g.cellar.hatch.x, g.cellar.hatch.z); g.itemGets.clear(); }, idle, "place"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CE0_hatch.png"); }, idle, "shot"});
+        s.push_back({2.f, [](Game& g) { Character& c = g.pc(); c.pos = g.cellar.hatch + vec3(1.f, 0, 0); g.findInteractTarget(); AGR_LOG("CELLAR target %d", (int)(g.interactTarget == g.cellarEnt)); if (g.interactTarget == g.cellarEnt) g.playerInteract(); }, idle, "down"});
+        s.push_back({0.5f, [](Game& g) { res[1] = g.inCellar(); AGR_LOG("CELLAR inside %d", res[1]);
+            for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "tool_pickaxe") { g.equip(i); break; }
+            mined0 = g.cellar.mined; }, idle, "inside"});
+        for (int k = 0; k < 9; k++) s.push_back({1.0f, [k](Game& g) { Character& c = g.pc(); c.yaw = k < 3 ? PI / 2 : (k < 6 ? -PI / 2 : 0.f); c.attackClip = nullptr; g.playerAttack(false, false); }, idle, "dig"});
+        s.push_back({0.1f, [](Game& g) { res[2] = g.cellar.mined >= mined0 + 3; res[3] = g.countItem("stone") > 0;
+            AGR_LOG("CELLAR mined %d blocks, stone %d iron %d coal %d", g.cellar.mined - mined0, g.countItem("stone"), g.countItem("iron_ore"), g.countItem("coal")); g.camPitch = 0.9f; g.camDist = g.camDistTarget = 11.f; }, idle, "count"});
+        s.push_back({1.f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CE1_cellar.png"); }, idle, "shot"});
+        s.push_back({3.f, [](Game& g) { Character& c = g.pc(); c.pos = g.dungeon.exitPos; g.input.interact = true; g.updateDungeon(0.016f); }, idle, "up"});
+        s.push_back({1.f, [](Game& g) { res[4] = !g.dungeon.active; g.saveGame(3); bool ok = g.loadGame(3); res[5] = ok && g.cellar.owned && g.cellar.mined >= 3;
+            AGR_LOG("CELLAR back up %d, reloaded %d (mined %d)", res[4], res[5], g.cellar.mined); }, idle, "save"});
+        s.push_back({0.2f, [](Game& g) { bool ok = res[0] && res[1] && res[2] && res[3] && res[4] && res[5]; AGR_LOG("CELLAR -> %s", ok ? "CELLAR TEST PASSED" : "CELLAR TEST FAILED"); }, idle, "check"});
+        return s;
+    }
+    if (name == "fpview") {
+        // 3.6.0 first person: walk through Brindlemere, strike, look around, then back to the usual view
+        static int res[3];
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.5f; for (int& r : res) r = 0;
+            const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 8.f, p->pos.y + 6.f, 0.4f); g.settings.firstPerson = true; g.camPitch = CameraRig::PITCH_DEFAULT; }, idle, "on"});
+        s.push_back({2.5f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camIdleT = 0; g.camPitch = CameraRig::PITCH_DEFAULT; }, "walk"});
+        s.push_back({0.1f, [](Game& g) { res[0] = g.fpActive && distXZ(g.cam.pos, g.pc().pos) < 0.6f; AGR_LOG("FP active %d eye-body %.2f m, yaw %.2f body %.2f weapon %d wt %d equip %s", g.fpActive, distXZ(g.cam.pos, g.pc().pos), g.fpYaw, g.pc().yaw, (int)(bool)g.pc().vis.weapon, (int)g.pc().vis.wt, g.equipment[SL_WEAPON].id.c_str()); g.requestScreenshot("build/shots/FP0_walk.png"); }, [](Game& g, float) { g.input.move = vec2(0, 1); }, "shot"});
+        s.push_back({0.25f, [](Game& g) { g.input.move = vec2(0); g.playerAttack(false, false); }, idle, "strike"});
+        s.push_back({0.1f, [](Game& g) { res[1] = g.pc().attackClip != nullptr; g.requestScreenshot("build/shots/FP1_strike.png"); }, idle, "shot"});
+        s.push_back({2.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 90.f, p->pos.y - 70.f, 1.2f); }, [](Game& g, float) { g.camPitch = CameraRig::PITCH_DEFAULT + 0.25f; }, "field"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/FP3_field.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { g.playerAttack(true, false); }, idle, "heavy"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/FP4_field_strike.png"); }, idle, "shot"});
+        s.push_back({1.5f, none, [](Game& g, float) { g.camPitch = CameraRig::PITCH_DEFAULT - 0.6f; g.camYaw += 0.01f; }, "look up"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/FP2_lookup.png"); }, idle, "shot"});
+        s.push_back({1.f, [](Game& g) { g.settings.firstPerson = false; g.camPitch = CameraRig::PITCH_DEFAULT; }, idle, "off"});
+        s.push_back({0.2f, [](Game& g) { res[2] = !g.fpActive && distXZ(g.cam.pos, g.pc().pos) > 3.f; bool ok = res[0] && res[1] && res[2]; AGR_LOG("FP back to third person %d -> %s", res[2], ok ? "FP TEST PASSED" : "FP TEST FAILED"); }, idle, "check"});
+        return s;
+    }
+    if (name == "chop") {
+        // 3.6.0 felling a tree: an axe, a few swings, the tree falls, wood in the bag, a stump, and it grows back
+        static TreeRef tree; static int wood0, res[4];
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.f; for (int& r : res) r = 0;
+            const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 60.f, p->pos.y - 40.f, 0.f);
+            g.addItem("axe_lumber", 1, Rarity::Common, true); g.itemGets.clear();
+            for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "axe_lumber") { g.equip(i); break; } }, idle, "setup"});
+        s.push_back({0.5f, [](Game& g) {
+            float bd = 1e9f; tree.uid = 0; vec3 pp = g.pc().pos;
+            g.world.forEachVisibleChunk([&](Chunk& ch) { if (ch.lod != 0) return; for (const TreeRef& t : ch.trees) { float d = distXZ(t.pos, pp); if (d < bd && t.kind == P_OAK) { bd = d; tree = t; } } });
+            if (!tree.uid) g.world.forEachVisibleChunk([&](Chunk& ch) { if (ch.lod != 0) return; for (const TreeRef& t : ch.trees) { float d = distXZ(t.pos, pp); if (d < bd) { bd = d; tree = t; } } });
+            AGR_LOG("CHOP tree %u kind %d at %.1f m", tree.uid, tree.kind, bd);
+            Character& c = g.pc(); c.pos = tree.pos + vec3(-1.4f, 0, 0); c.pos.y = g.groundAt(c.pos.x, c.pos.z); c.yaw = PI / 2; g.camFocus = c.pos; g.camYaw = 0.3f; g.camPitch = 0.45f; g.camDist = g.camDistTarget = 10.f;
+            wood0 = g.countItem("wood"); }, idle, "find"});
+        for (int k = 0; k < 4; k++) s.push_back({0.9f, [](Game& g) { Character& c = g.pc(); c.pos = tree.pos + vec3(-1.4f, 0, 0); c.pos.y = g.groundAt(c.pos.x, c.pos.z); c.yaw = PI / 2; g.playerAttack(false, false); }, idle, "swing"});
+        s.push_back({0.8f, none, idle, "falling"});
+        s.push_back({0.1f, [](Game& g) { res[0] = g.world.isFelled(tree.uid); res[1] = g.countItem("wood") > wood0; AGR_LOG("CHOP felled %d wood %d -> %d, falling %d", res[0], wood0, g.countItem("wood"), (int)g.fallingTrees.size()); g.requestScreenshot("build/shots/CH0_falling.png"); }, idle, "shot"});
+        s.push_back({4.f, none, idle, "settle"});
+        s.push_back({0.1f, [](Game& g) { bool stillThere = false; g.world.forEachVisibleChunk([&](Chunk& ch) { for (const TreeRef& t : ch.trees) if (t.uid == tree.uid) stillThere = true; });
+            res[2] = !stillThere; AGR_LOG("CHOP chunk rebuilt without the tree: %d", res[2]); g.requestScreenshot("build/shots/CH1_stump.png"); }, idle, "shot"});
+        s.push_back({3.f, [](Game& g) { int n = g.world.regrowTrees((float)g.gameTime + 2000.f, 24.f * 60.f); res[3] = n >= 1 && !g.world.isFelled(tree.uid); AGR_LOG("CHOP regrew %d", n); }, idle, "regrow"});
+        s.push_back({0.2f, [](Game& g) { bool ok = res[0] && res[1] && res[2] && res[3]; AGR_LOG("CHOP -> %s", ok ? "CHOP TEST PASSED" : "CHOP TEST FAILED"); }, idle, "check"});
+        return s;
+    }
+    if (name == "skylook") {
+        // 3.6.0 volumetric clouds: a clear morning, an afternoon with more clouds, a sunset, seen with the camera low
+        auto shot = [&](float hour, int weather, const char* file) {
+            s.push_back({6.f, [=](Game& g) { const Poi* p = g.world.poiById("brindlemere"); g.timeOfDay = hour; g.weather = g.weatherNext = weather; teleport(g, p->pos.x + 30.f, p->pos.y + 40.f, 0.f); },
+                [=](Game& g, float t) { g.timeOfDay = hour; g.camPitch = -0.3f; g.camDist = g.camDistTarget = 7.f; vec3 sd = g.env.sunDir; g.camYaw = std::atan2(-sd.x, -sd.z) + 0.9f;
+                    if (t > 5.5f && t < 5.6f) g.requestScreenshot(file); }, "sky"});
+        };
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        shot(9.5f, 0, "build/shots/SK0_clear.png");
+        shot(14.f, 1, "build/shots/SK1_clouds.png");
+        shot(18.3f, 0, "build/shots/SK2_sunset.png");
+        s.push_back({0.2f, [](Game& g) { AGR_LOG("SKY cover %.2f -> SKY TEST PASSED", g.env.cloudCover); }, idle, "end"});
         return s;
     }
     if (name == "reef") {

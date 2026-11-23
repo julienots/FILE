@@ -123,6 +123,11 @@ void Game::useItem(int i) {
         if (--inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
         return;
     }
+    if (d->id == "cellar_hatch") {   // 3.6.0 set down: the way into your own underground base
+        if (placeCellarHatch() && --inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
+        menu = Menu::None;
+        return;
+    }
     if (d->id == "bomb") {   // 2.4.0 thrown, not drunk
         if (--inventory[i].count <= 0) inventory.erase(inventory.begin() + i);
         menu = Menu::None; throwBomb(); return;
@@ -630,6 +635,8 @@ bool Game::saveGame(int slot) {
     o << "respawn " << respawnPos.x << " " << respawnPos.y << " " << respawnPos.z << "\n";
     o << "pins " << mapPins.size(); for (vec2 pp : mapPins) o << " " << pp.x << " " << pp.y; o << "\n";   // 2.2.0
     o << world.saveDigs();   // 2.4.0 the holes and craters you made
+    o << world.saveFelled();   // 3.6.0 the trees you felled
+    o << saveCellar();         // 3.6.0 your underground base
     o << "gameopts " << gameOpts.difficulty << " " << (int)gameOpts.events << " " << (int)gameOpts.prologue << "\n";   // 2.6.0
     o << "treasure " << invCap << " " << shards << " " << phoenixDay << "\n";   // 3.2.0
     o << "vunlock"; for (const std::string& v : vehiclesUnlocked) o << " " << v; o << "\n";   // 3.4.0
@@ -683,17 +690,18 @@ int Game::latestSlot() const {
 
 bool Game::loadGame(int slot) {
     mapPins.clear(); tele = TeleFx();
-    bool hadDigs = world.dugChunks() > 0;
+    bool hadDigs = world.dugChunks() > 0 || !world.felled.empty();
     if (coop.mode != CoopState::Off && slot != 99) coopLeave(true);   // 1.13.0 loading another save ends the session
     std::string data;
     if (!platform::readFile(slotPath(slot), data)) return false;
     if (data.rfind("LOSTKINGDOM_SAVE", 0) != 0 || data.find("\nend\n") == std::string::npos) { AGR_ERR("corrupt save slot %d", slot); return false; }
     // reset world-dependent state
     reg.clear();
-    world.clearDigs(); bombs.clear(); digMode = false;   // 2.4.0
+    world.clearDigs(); world.clearFelled(); bombs.clear(); digMode = false;   // 2.4.0 (3.6.0 + felled trees)
     gameOpts = GameOpts();   // 2.6.0 (older saves: normal difficulty)
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
     vehicles.clear(); vehicleEnts.clear(); driving = -1; vehiclesUnlocked.clear();
+    cellar = CellarState(); cellarEnt = NullEntity; cellarHits.clear();   // 3.6.0
     raceBest.clear(); race = RaceState();
     nightHunters.clear();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
@@ -715,6 +723,8 @@ bool Game::loadGame(int slot) {
         if (k == "player") { l >> pos.x >> pos.y >> pos.z >> yaw >> hp >> mp >> stamina; }
         else if (k == "respawn") l >> respawnPos.x >> respawnPos.y >> respawnPos.z;
         else if (k == "digs" || k == "digs2") { world.loadDigs(line); hadDigs = true; }
+        else if (k == "felled") { world.loadFelled(line); hadDigs = true; }   // 3.6.0
+        else if (k == "cellar") loadCellar(l);   // 3.6.0
         else if (k == "gameopts") { int dd = 1, ee = 1, pp = 1; l >> dd >> ee >> pp; gameOpts.difficulty = std::clamp(dd, 0, 3); gameOpts.events = ee != 0; gameOpts.prologue = pp != 0; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
         else if (k == "vunlock") { std::string v; while (l >> v) vehiclesUnlocked.insert(v); }   // 3.4.0
@@ -792,6 +802,7 @@ bool Game::loadGame(int slot) {
     camFocus = pos;
     weatherNext = weather;
     refreshVehicleUnlocks(false);   // 3.4.0 older saves: what the story progress has already earned
+    spawnCellarHatch();             // 3.6.0
     return true;
 }
 
@@ -821,6 +832,7 @@ void Game::saveSettings() {
     o << "camera " << settings.camSensitivity << " " << settings.joystickDeadzone << " " << (settings.invertCamera ? 1 : 0) << " " << (settings.cameraShake ? 1 : 0) << "\n";
     o << "camera2 " << (settings.invertCameraY ? 1 : 0) << "\n";
     o << "camera3 " << (settings.cameraSmooth ? 1 : 0) << "\n";
+    o << "fpview " << (settings.firstPerson ? 1 : 0) << "\n";   // 3.6.0
     o << "flags " << settings.haptics << " " << settings.showFps << " " << settings.autoTarget << " " << settings.chromatic << "\n";
     o << "hero " << (settings.importedHero ? 1 : 0) << "\n";
     o << "layoutver " << LAYOUT_VERSION << "\n";
@@ -848,6 +860,7 @@ void Game::loadSettings() {
         else if (k == "camera") { int inv, sh; l >> settings.camSensitivity >> settings.joystickDeadzone >> inv >> sh; settings.invertCamera = inv; settings.cameraShake = sh; }
         else if (k == "camera2") { int iy = 0; l >> iy; settings.invertCameraY = iy != 0; }
         else if (k == "camera3") { int sm = 0; l >> sm; settings.cameraSmooth = sm != 0; }
+        else if (k == "fpview") { int fp = 0; l >> fp; settings.firstPerson = false; }   // 3.6.0 (the first-person view is withdrawn: not good enough)
         else if (k == "flags") l >> settings.haptics >> settings.showFps >> settings.autoTarget >> settings.chromatic;
         else if (k == "layoutver") l >> layoutVer;
         else if (k == "hero") { int h = 1; l >> h; settings.importedHero = h != 0; }

@@ -145,6 +145,7 @@ public:
     void resize(int w, int h);
     void begin(const Camera& cam, const Environment& env);
     void submit(const DrawItem& d) { items.push_back(d); }
+    size_t itemCount() const { return items.size(); }
     void submitWater(const WaterItem& w) { waters.push_back(w); }
     void submitRibbon(const Mesh* m, float intensity) { ribbons.push_back({m, intensity}); }
     void submitFx(const FxItem& f) { fxItems.push_back(f); }

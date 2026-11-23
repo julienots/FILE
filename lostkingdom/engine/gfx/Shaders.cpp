@@ -548,8 +548,9 @@ void main() {
 #endif
 
 #if !defined(SKINNED) && !defined(TERRAIN) && !defined(GRASS)
-    // see-through: geometry between the camera and the player is dithered away
-    if (uPlayer.w > 0.0) {
+    // see-through: geometry between the camera and the player is dithered away (3.6.0 not in first person: the
+    // eye is in the hero's head, and the hands and weapon are right in front of it)
+    if (uPlayer.w > 0.0 && length(uCamPos.xyz - uPlayer.xyz - vec3(0.0, 1.6, 0.0)) > 0.9) {
         vec3 a = uPlayer.xyz + vec3(0.0, 1.0, 0.0), b = uCamPos.xyz;
         vec3 ab = b - a;
         float t = clamp(dot(vWorld - a, ab) / dot(ab, ab), 0.0, 1.0);
@@ -1046,24 +1047,55 @@ void main() {
         }
         col += acc * 0.34 * au * smoothstep(0.04, 0.4, d.y) * night;
     }
-    // ---- clouds: a fat cumulus layer lit from the sun's side (self-shadow, silver edges, dark underside) and thin high cirrus
+    // ---- 3.6.0 volumetric cumulus: the view ray crosses a slab of cloud (flat bases, rounded towers that thin out
+    // towards the top) in 11 jittered steps; each step looks once towards the sun (Beer's law + "powder" darkening
+    // of the thick cores), so the clouds get bright sunlit tops, dark grey bellies, silver edges against the sun
+    // and pink-orange undersides at sunset. They drift with the wind and fade into the haze at the horizon.
     if (d.y > 0.0) {
         float cover = uSkyHorizon.a;
-        vec2 wdir = uWind.xy * uCamPos.w * 0.0028;
-        vec2 cuv = d.xz / (d.y + 0.07) * 0.24 + wdir;
-        float dens = cloudDens(cuv, cover);
-        float fade = smoothstep(0.0, 0.22, d.y);
-        if (dens > 0.002) {
-            vec2 sdir = normalize(S.xz + vec2(1e-3)) * 0.03;
-            float toward = cloudDens(cuv + sdir, cover);
-            float thick = clamp((dens - toward) * 2.4 + dens * 0.35, 0.0, 1.0);
-            vec3 litC = uSunColor.rgb * min(sun, 1.5) * 0.85 + uSkyTop.rgb * 0.45;
-            vec3 shdC = uSkyHorizon.rgb * 0.5 + uSkyTop.rgb * 0.18 + vec3(0.02, 0.025, 0.04);
-            vec3 cc = mix(litC, shdC, thick * 0.9);
-            float edge = (1.0 - dens) * smoothstep(0.0, 0.35, dens);
-            cc += uSunColor.rgb * edge * pow(sd, 3.0) * sun * 1.4;                              // silver lining against the sun
-            cc += vec3(1.0, 0.5, 0.22) * low * pow(sd, 2.0) * (1.0 - thick) * 0.55 * (1.0 - night);   // glowing underside at sunset
-            col = mix(col, cc, dens * 0.93 * fade);
+        vec2 wdir = uWind.xy * uCamPos.w * 0.0022;
+        float fade = smoothstep(0.0, 0.05, d.y);
+        if (fade > 0.0 && cover > 0.02) {
+            const float H0 = 1.0, H1 = 1.55;
+            float t0 = H0 / d.y, t1 = min(H1 / d.y, t0 + 3.0);
+            const int N = 11;
+            float dt = (t1 - t0) / float(N);
+            float jit = hash12(gl_FragCoord.xy);
+            float T = 1.0;
+            vec3 acc = vec3(0.0);
+            float hg = 0.25 + 0.75 * pow(sd, 6.0) + 0.6 * pow(sd, 40.0);   // forward scattering: bright towards the sun
+            vec3 amb = mix(uSkyHorizon.rgb, uSkyTop.rgb, 0.4) * 0.9 + vec3(0.03);
+            for (int i = 0; i < N; i++) {
+                float t = t0 + (float(i) + jit) * dt;
+                vec3 p = d * t;
+                float h = clamp((p.y - H0) / (H1 - H0), 0.0, 1.0);
+                vec2 q = p.xz * 0.11 + wdir;
+                float base = clamp((texture(uNoiseTex, q).b * 0.65 + texture(uNoiseTex, q * 2.3 + 0.37).g * 0.35 - 0.5) * 2.8 + 0.5, 0.0, 1.0);   // the noise is narrow: stretched
+                float det = texture(uNoiseTex, q * 6.1 + vec2(0.11, uCamPos.w * 0.002)).r;
+                float prof = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.25 + 0.6 * base, 1.0, h));   // flat base, rounded top
+                float thr = 0.85 - cover * 0.75;   // fair-weather cumulus on a clear day, a grey lid when overcast
+                float dens = clamp((base - thr) * 2.6 - (det - 0.5) * 0.5 * (0.5 + h), 0.0, 1.0) * prof;
+                if (dens < 0.01) continue;
+                // light march: one sample towards the sun
+                vec2 ql = q + S.xz * 0.05;
+                float hl = clamp(h + S.y * 0.45, 0.0, 1.0);
+                float bl = clamp((texture(uNoiseTex, ql).b * 0.65 + texture(uNoiseTex, ql * 2.3 + 0.37).g * 0.35 - 0.5) * 2.8 + 0.5, 0.0, 1.0);
+                float dl = clamp((bl - thr) * 2.6, 0.0, 1.0) * (1.0 - smoothstep(0.25 + 0.6 * bl, 1.0, hl));
+                float beer = exp(-dl * 2.6 - dens * 0.6);
+                float powder = 1.0 - exp(-dens * 5.0);
+                vec3 sunL = uSunColor.rgb * min(sun, 1.6) * beer * mix(1.0, powder, 0.5) * hg * 1.6;
+                vec3 sunset = vec3(1.0, 0.45, 0.22) * low * (1.0 - h) * 0.5 * (1.0 - night);
+                vec3 Lc = sunL * 1.15 + amb * (0.28 + 0.62 * h) + sunset * beer;
+                float a = 1.0 - exp(-dens * dt * 5.0);
+                acc += T * a * Lc;
+                T *= 1.0 - a;
+                if (T < 0.04) break;
+            }
+            float haze = exp(-t0 * 0.045);   // far clouds melt into the horizon haze
+            vec3 cl = col * T + acc * (1.0 - night * 0.75);
+            cl = mix(mix(col, uSkyHorizon.rgb * (1.0 - night * 0.7), 1.0 - T), cl, haze);
+            float k = fade * (1.0 - night * 0.6);
+            col = mix(col, cl, k);
         }
         vec2 cir = d.xz / (d.y + 0.18) * vec2(0.09, 0.55) + wdir * 0.4 + vec2(0.0, 7.0);
         float ci = smoothstep(0.55, 0.85, texture(uNoiseTex, cir).r * 0.7 + texture(uNoiseTex, cir * 3.1).g * 0.3);

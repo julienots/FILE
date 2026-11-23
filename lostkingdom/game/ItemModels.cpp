@@ -44,6 +44,7 @@ vec3 liquidColour(const std::string& id) {
     if (has(id, "titan")) return hexColor(0x9a5aff);
     if (has(id, "phoenix")) return hexColor(0xff5020);
     if (has(id, "venom")) return hexColor(0x9ae040);
+    if (has(id, "deep")) return hexColor(0x1ab8c8);
     return hexColor(0xe8283a);
 }
 
@@ -262,9 +263,17 @@ void amulet(MeshBuilder& b, vec3 gemc, int style) {
 // ---- armour (in the item's colour)
 void helm(MeshBuilder& b, const ItemDef& d) {
     const std::string& id = d.id;
-    Mat m(d.color, has(id, "leather") || has(id, "sylvan") || has(id, "shadow") ? 0.85f : 0.3f, has(id, "leather") || has(id, "sylvan") || has(id, "shadow") ? 0.f : 0.85f);
+    bool softH = has(id, "leather") || has(id, "sylvan") || has(id, "shadow") || has(id, "canyon");
+    Mat m(d.color, softH ? 0.85f : 0.3f, softH ? 0.f : 0.85f);
     if (has(id, "crown")) { crown(b, hexColor(0xd83a3a), 0); return; }
-    if (has(id, "sylvan") || has(id, "shadow")) {   // a hood
+    if (has(id, "star")) {   // 3.6.0 a circlet of star metal with a glowing gem
+        torus(b, {0, 0.12f, 0}, 0.16f, 0.018f, Mat(d.color * 1.3f, 0.2f, 0.9f), quat(), 24);
+        for (int i = 0; i < 5; i++) { float a = PI / 2 + (i - 2) * 0.3f; b.cone(vec3(std::cos(a) * 0.16f, 0.13f, std::sin(a) * 0.16f), vec3(std::cos(a) * 0.17f, 0.2f + (2 - std::abs(i - 2)) * 0.03f, std::sin(a) * 0.17f), 0.02f, Mat(d.color * 1.3f, 0.2f, 0.9f), 4); }
+        cutGem(b, {0, 0.14f, 0.165f}, 0.035f, hexColor(0xb8a0ff), quat::axisAngle({1, 0, 0}, PI / 2));
+        b.ellipsoid({0, 0.14f, 0.17f}, vec3(0.05f), glow(hexColor(0xb8a0ff), 1.2f), 8, 5);
+        return;
+    }
+    if (has(id, "sylvan") || has(id, "shadow") || has(id, "canyon")) {   // a hood
         b.ellipsoid({0, 0.17f, 0}, vec3(0.16f, 0.18f, 0.17f), m, 16, 10);
         b.cone({0, 0.3f, -0.08f}, {0, 0.36f, -0.22f}, 0.07f, m, 8);
         b.ellipsoid({0, 0.15f, 0.08f}, vec3(0.11f, 0.13f, 0.12f), Mat(hexColor(0x14100c), 0.9f), 12, 8);
@@ -278,9 +287,12 @@ void helm(MeshBuilder& b, const ItemDef& d) {
     for (int s = -1; s <= 1; s += 2) b.bevelBox({s * 0.13f, 0.0f, 0.06f}, {0.03f, 0.07f, 0.07f}, 0.01f, m, quat::axisAngle({0, 1, 0}, s * 0.5f));
     b.box({0, 0.03f, 0.17f}, {0.016f, 0.07f, 0.012f}, m);
     if (has(id, "chain")) { for (int i = 0; i < 20; i++) { float a = PI * 0.25f + i * PI * 1.5f / 19; torus(b, vec3(std::sin(a) * 0.16f, -0.02f, std::cos(a) * 0.16f), 0.018f, 0.005f, IRON, quat::axisAngle({0, 1, 0}, a), 6); } }
+    if (has(id, "dragon")) for (int s = -1; s <= 1; s += 2) { b.tube({s * 0.14f, 0.2f, -0.02f}, {s * 0.2f, 0.34f, -0.12f}, 0.03f, 0.02f, Mat(hexColor(0x1a2a1a), 0.4f), 8, false); b.cone({s * 0.2f, 0.34f, -0.12f}, {s * 0.19f, 0.46f, -0.24f}, 0.02f, Mat(hexColor(0x1a2a1a), 0.4f), 6); }
+    if (has(id, "coral")) for (int i = 0; i < 4; i++) b.blade({0, 0.29f, 0.08f - i * 0.07f}, {0, 0.42f - i * 0.02f, 0.02f - i * 0.08f}, 0.08f, {1, 0, 0}, Mat(hexColor(0xff8a9a), 0.5f), Mat(hexColor(0xffc0c8), 0.5f));
+    if (has(id, "titan")) b.tube({0, 0.3f, 0.12f}, {0, 0.36f, -0.2f}, 0.035f, 0.02f, Mat(hexColor(0x5a8ad8), 0.4f, 0.f, 0.6f), 8, true);
     if (has(id, "frost")) for (int s = -1; s <= 1; s += 2) { b.tube({s * 0.15f, 0.18f, 0}, {s * 0.27f, 0.28f, -0.02f}, 0.035f, 0.025f, Mat(hexColor(0xe8e4d8), 0.5f), 8, false); b.cone({s * 0.27f, 0.28f, -0.02f}, {s * 0.3f, 0.42f, -0.06f}, 0.025f, Mat(hexColor(0xe8e4d8), 0.5f), 6); }
     if (has(id, "ember")) for (int i = 0; i < 5; i++) b.cone({0, 0.28f, 0.06f - i * 0.05f}, {0, 0.38f + (2 - std::abs(i - 2)) * 0.04f, 0.04f - i * 0.05f}, 0.03f, glow(hexColor(0xff7a2a), 1.6f), 5);
-    if (!has(id, "frost") && !has(id, "ember") && !has(id, "leather")) { b.tube({0, 0.3f, 0.1f}, {0, 0.32f, -0.15f}, 0.02f, 0.02f, Mat(hexColor(0xa8282a), 0.9f), 6, true); }
+    if (!has(id, "frost") && !has(id, "ember") && !has(id, "leather") && !has(id, "dragon") && !has(id, "coral") && !has(id, "titan")) { b.tube({0, 0.3f, 0.1f}, {0, 0.32f, -0.15f}, 0.02f, 0.02f, Mat(hexColor(0xa8282a), 0.9f), 6, true); }
 }
 void cuirass(MeshBuilder& b, const ItemDef& d) {
     bool soft = d.body == Body::Robe || d.body == Body::Leather || d.body == Body::Fur || d.body == Body::Tunic;
@@ -296,7 +308,7 @@ void cuirass(MeshBuilder& b, const ItemDef& d) {
     if (d.body == Body::Fur) for (int i = 0; i < 12; i++) { float a = i * TAU / 12; b.cone({std::cos(a) * 0.1f, 0.45f, std::sin(a) * 0.08f}, {std::cos(a) * 0.15f, 0.48f, std::sin(a) * 0.12f}, 0.03f, Mat(hexColor(0xd8ccb8), 0.95f), 4); }
 }
 void gauntlet(MeshBuilder& b, const ItemDef& d) {
-    bool soft = has(d.id, "leather") || has(d.id, "sylvan") || has(d.id, "shadow");
+    bool soft = has(d.id, "leather") || has(d.id, "sylvan") || has(d.id, "shadow") || has(d.id, "canyon") || has(d.id, "star");
     Mat m(d.color, soft ? 0.85f : 0.3f, soft ? 0.f : 0.85f);
     b.lathe({{0.075f, 0}, {0.085f, 0.06f}, {0.07f, 0.16f}, {0.06f, 0.18f}}, m, 14);
     b.bevelBox({0, 0.23f, 0}, {0.06f, 0.06f, 0.035f}, 0.015f, m);
@@ -305,7 +317,7 @@ void gauntlet(MeshBuilder& b, const ItemDef& d) {
     torus(b, {0, 0.16f, 0}, 0.074f, 0.012f, soft ? Mat(d.color * 0.6f) : GOLD, quat(), 14);
 }
 void boot(MeshBuilder& b, const ItemDef& d) {
-    bool soft = has(d.id, "leather") || has(d.id, "sylvan") || has(d.id, "shadow") || has(d.id, "fur");
+    bool soft = has(d.id, "leather") || has(d.id, "sylvan") || has(d.id, "shadow") || has(d.id, "fur") || has(d.id, "canyon") || has(d.id, "star");
     Mat m(d.color, soft ? 0.85f : 0.35f, soft ? 0.f : 0.8f);
     b.tube({0, 0.08f, -0.03f}, {0, 0.32f, -0.04f}, 0.07f, 0.075f, m, 14, true);
     b.ellipsoid({0, 0.06f, 0.06f}, vec3(0.07f, 0.06f, 0.14f), m, 14, 8);
@@ -371,7 +383,15 @@ bool buildItemModel(MeshBuilder& b, const ItemDef& d) {
         if (has(id, "bag_")) { sack(b, has(id, "bottomless") ? hexColor(0x2a2050) : (has(id, "adventurer") ? hexColor(0x5a6a3a) : hexColor(0x8a5a32)), has(id, "bottomless")); return true; }
         if (id == "bomb") { b.ellipsoid({0, 0.15f, 0}, vec3(0.15f), Mat(hexColor(0x1c1c22), 0.35f, 0.6f), 16, 10); b.tube({0, 0.28f, 0}, {0, 0.32f, 0}, 0.04f, 0.04f, IRON, 8, true);
             b.tube({0, 0.32f, 0}, {0.05f, 0.42f, 0.02f}, 0.012f, 0.01f, Mat(hexColor(0x8a6a3a)), 6, true); b.ellipsoid({0.05f, 0.43f, 0.02f}, vec3(0.03f), glow(hexColor(0xffb040), 3.f), 6, 4); return true; }
+        if (id == "cellar_hatch") { for (int k = -2; k <= 2; k++) b.box({k * 0.08f, 0.03f, 0}, {0.037f, 0.025f, 0.2f}, k % 2 ? WOODM : DARKWOOD);
+            for (int s2 = -1; s2 <= 1; s2 += 2) b.box({0, 0.058f, s2 * 0.12f}, {0.2f, 0.006f, 0.02f}, IRON);
+            torus(b, {0.1f, 0.07f, 0}, 0.04f, 0.008f, IRON, quat(), 12); return true; }
         if (id == "bread") { bread(b); return true; }
+        if (id == "apple") { b.ellipsoid({0, 0.1f, 0}, vec3(0.1f, 0.09f, 0.1f), Mat(hexColor(0xc8282a), 0.35f), 14, 9); b.ellipsoid({0.03f, 0.13f, 0.06f}, vec3(0.03f, 0.02f, 0.02f), Mat(hexColor(0xffe0a0), 0.3f, 0, 0.2f), 6, 4);
+            b.tube({0, 0.17f, 0}, {0.01f, 0.23f, 0}, 0.008f, 0.006f, Mat(hexColor(0x5a3a1a)), 5, true); b.blade({0.01f, 0.21f, 0}, {0.08f, 0.24f, 0.02f}, 0.05f, {0, 0, 1}, Mat(hexColor(0x3a7a2a)), Mat(hexColor(0x6aa03a))); return true; }
+        if (id == "honey_cake") { b.lathe({{0.15f, 0}, {0.15f, 0.08f}, {0.13f, 0.1f}, {0.01f, 0.1f}}, Mat(hexColor(0xd8a050), 0.8f), 20); b.lathe({{0.13f, 0.1f}, {0.01f, 0.115f}}, Mat(hexColor(0xf0b030), 0.15f, 0, 0.3f), 20);
+            for (int i = 0; i < 6; i++) { float a = i * TAU / 6; b.ellipsoid({std::cos(a) * 0.14f, 0.07f, std::sin(a) * 0.14f}, vec3(0.02f, 0.035f, 0.02f), Mat(hexColor(0xf0b030), 0.15f, 0, 0.3f), 6, 4); } return true; }
+        if (id == "mushroom_soup") { bowl(b, hexColor(0x9a8a6a), false); b.lathe({{0.01f, 0.13f}, {0.04f, 0.14f}, {0.03f, 0.16f}, {0.01f, 0.165f}}, glow(hexColor(0x6ad0ff), 1.f), 8, {0.04f, 0, 0.03f}); return true; }
         if (id == "stew" || id == "fish_stew") { bowl(b, id == "stew" ? hexColor(0x8a4a24) : hexColor(0xd8a860), id == "fish_stew"); return true; }
         if (id == "fish_grilled" || id == "salted_fish") { fishModel(b, id == "fish_grilled" ? hexColor(0xb8742a) : hexColor(0xb8b0a0), true); return true; }
         if (id == "berries") { cluster(b, hexColor(0x4a2a8a), 9, 0.05f, 11, true); return true; }
@@ -384,6 +404,11 @@ bool buildItemModel(MeshBuilder& b, const ItemDef& d) {
         return true;
     case ItemKind::Material:
         if (id == "wood") { logs(b); return true; }
+        if (id == "resin") { b.flat = true; for (int i = 0; i < 3; i++) b.rock({(i - 1) * 0.08f, 0.05f + (i % 2) * 0.03f, (i % 2) * 0.05f}, vec3(0.06f, 0.05f, 0.05f), Mat(hexColor(0xe0901a), 0.1f, 0.f, 0.45f), 60 + i, 0); b.flat = false; return true; }
+        if (id == "honey") { b.lathe({{0.01f, 0}, {0.1f, 0.0f}, {0.12f, 0.05f}, {0.12f, 0.16f}, {0.08f, 0.2f}, {0.08f, 0.22f}}, Mat(hexColor(0xf0a820), 0.12f, 0.f, 0.35f), 16);
+            b.lathe({{0.09f, 0.22f}, {0.1f, 0.25f}, {0.01f, 0.26f}}, Mat(hexColor(0xd8c8a0), 0.9f), 14); torus(b, {0, 0.215f, 0}, 0.085f, 0.008f, Mat(hexColor(0x8a5a2a)), quat(), 14); return true; }
+        if (id == "bird_nest") { Mat tw(hexColor(0x8a6a3a), 0.95f); for (int i = 0; i < 22; i++) { float a = i * TAU / 22, a2 = a + 1.3f; b.tube(vec3(std::cos(a) * 0.15f, 0.05f + (i % 3) * 0.02f, std::sin(a) * 0.15f), vec3(std::cos(a2) * 0.14f, 0.07f - (i % 2) * 0.03f, std::sin(a2) * 0.14f), 0.012f, 0.01f, tw, 4, false); }
+            b.lathe({{0.13f, 0.02f}, {0.01f, 0.0f}}, tw, 12); for (int i = 0; i < 3; i++) b.ellipsoid({(i - 1) * 0.05f, 0.06f, (i == 1) * 0.04f}, vec3(0.035f, 0.045f, 0.035f), Mat(i == 2 ? hexColor(0xffd060) : hexColor(0xb8d8e8), 0.3f, i == 2 ? 0.9f : 0.f), 8, 6); return true; }
         if (id == "stone") { b.rock({0, 0.12f, 0}, vec3(0.2f, 0.13f, 0.17f), Mat(hexColor(0x8a867e), 0.9f), 21, 1); b.rock({0.18f, 0.06f, 0.1f}, vec3(0.08f), Mat(hexColor(0x7a766e), 0.9f), 22, 0); return true; }
         if (id == "coal") { b.rock({0, 0.11f, 0}, vec3(0.17f, 0.12f, 0.15f), Mat(hexColor(0x1e1e22), 0.6f, 0.3f), 31, 1); return true; }
         if (has(id, "_ore")) {

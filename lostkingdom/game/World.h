@@ -98,6 +98,8 @@ enum class NodeType : uint8_t { Tree, Rock, IronOre, CopperOre, RareOre, Herb, C
     GoldOre, SilverOre, Coal, Cactus, Shells, Flax, AmberRock, FireRoot, AuroraCrystal /* 2.8.0 */,
     Totem, Orb /* 3.2.0 totems of power, ancient orbs */, NodeTypeCount };
 struct NodeSpawn { NodeType type; vec3 pos; float rot; uint32_t uid; int tier; };
+// 3.6.0 a tree that can be felled: its slot in the scatter (uid), where it stands and how it was stamped
+struct TreeRef { uint32_t uid; vec3 pos; int kind, var; float rot, scale; vec3 tint; };
 
 struct ChunkKey {
     int x, z;
@@ -115,6 +117,7 @@ struct ChunkBuild {
     std::vector<InstanceData> wheat;                       // 2.9.1 wheat fields around villages (part around the body)
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
+    std::vector<TreeRef> trees;    // 3.6.0 trees that can be felled (near LOD)
     std::vector<vec4> lights;      // xyz + kind (lanterns, braziers, lava glow)
     std::vector<vec4> emitters;    // xyz + kind (chimney smoke, fire, waterfall mist, fireflies)
     int region = 0;
@@ -130,6 +133,7 @@ struct Chunk {
     Mesh terrain, props, foliage, water, lava, grass, flowers, grassNear, tallGrass, wheat, grassFar;
     std::vector<Collider> colliders;
     std::vector<NodeSpawn> nodes;
+    std::vector<TreeRef> trees;
     std::vector<vec4> lights, emitters;
     std::vector<std::pair<int, mat4>> models;
     AABB bounds;
@@ -186,6 +190,16 @@ public:
     int addRuntimeStructure(const Structure& s);
     void resetRuntime();                        // back to the generated plan (new game / load)
     void refreshArea(vec2 c, float r);
+    // 3.6.0 felled trees: a stump stands in their place until they grow back
+    bool isFelled(uint32_t uid) const { std::shared_lock<std::shared_mutex> l(felledMtx); return felled.count(uid) > 0; }
+    void fell(uint32_t uid, float when, vec2 at) { { std::unique_lock<std::shared_mutex> l(felledMtx); felled[uid] = {when, at}; } refreshArea(at, 2.f); }
+    int regrowTrees(float now, float after);   // trees felled before now - after grow back
+    std::string saveFelled() const;
+    void loadFelled(const std::string& line);
+    void clearFelled() { std::unique_lock<std::shared_mutex> l(felledMtx); felled.clear(); }
+    struct Felled { float when; vec2 at; };
+    std::unordered_map<uint32_t, Felled> felled;
+    mutable std::shared_mutex felledMtx;
     // 2.4.0 diggable ground: a sparse offset layer over the procedural terrain (1 m grid, one 33x33 grid per
     // chunk that has been dug). Shovel strikes and explosions carve it; height() reads it; saved with the game.
     struct DigGrid { float h[33 * 33] = {}; };

@@ -1409,6 +1409,31 @@ bool World::dig(vec2 c, float radius, float depth, bool explosion) {
     return true;
 }
 
+int World::regrowTrees(float now, float after) {
+    std::vector<vec2> back;
+    { std::unique_lock<std::shared_mutex> l(felledMtx);
+      for (auto it = felled.begin(); it != felled.end();) { if (now - it->second.when > after || now < it->second.when - 1.f) { back.push_back(it->second.at); it = felled.erase(it); } else ++it; } }
+    for (vec2 p : back) refreshArea(p, 2.f);
+    return (int)back.size();
+}
+
+std::string World::saveFelled() const {
+    std::shared_lock<std::shared_mutex> l(felledMtx);
+    std::string out;
+    char b[80];
+    for (auto& kv : felled) { snprintf(b, sizeof b, "felled %u %.0f %.1f %.1f\n", kv.first, kv.second.when, kv.second.at.x, kv.second.at.y); out += b; }
+    return out;
+}
+
+void World::loadFelled(const std::string& line) {
+    std::istringstream in(line);
+    std::string tag; uint32_t uid = 0; float w = 0, x = 0, z = 0;
+    in >> tag >> uid >> w >> x >> z;
+    if (tag != "felled" || !in) return;
+    std::unique_lock<std::shared_mutex> l(felledMtx);
+    felled[uid] = {w, {x, z}};
+}
+
 std::string World::saveDigs() const {
     std::shared_lock<std::shared_mutex> l(digMtx);
     std::string out;
@@ -2040,8 +2065,14 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             vec3 tint = vec3(1.f) * rng.range(0.88f, 1.1f);
             int var = rng.irange(0, propVariants(ent->k) - 1);
             float rot = rng.range(0, TAU);
+            // 3.6.0 trees can be felled: a felled one leaves a stump until it grows back
+            PropKind pk = ent->k;
+            bool tree = pk == P_OAK || pk == P_BIRCH || pk == P_PINE || pk == P_SNOWPINE || pk == P_DEADTREE || pk == P_CHARRED || pk == P_ELDERTREE || pk == P_WILLOW || pk == P_TWISTED || pk == P_ACACIA || pk == P_DATEPALM || pk == P_PALM;
+            uint32_t tuid = tree ? hash3i(k.x, k.z, j * CN + i, 31337) : 0;
+            if (tree && isFelled(tuid)) { if (lod < 2) stampProp(out, P_STUMP, 0, {x, y - 0.05f, z}, rot, std::max(0.7f, sc * 0.75f), tint, false); continue; }
             // 3.4.1 far view: trees and rocks only; the random sequence is the same at every LOD (nothing moves)
             if (lod < 2 || ent->collide) stampProp(out, ent->k, var, {x, y - 0.05f, z}, rot, sc, tint, ent->collide);
+            if (tree && lod == 0) out.trees.push_back({tuid, {x, y - 0.05f, z}, (int)ent->k, var, rot, sc, tint});
             if ((ent->k == P_GIANTSHROOM || ent->k == P_MAGICCRYSTAL) && rng.chance(0.5f)) out.lights.push_back(vec4(x, y + 2.f * sc, z, ent->k == P_GIANTSHROOM ? LI_MAGIC : LI_CRYSTAL));
         }
     // ---- 3.5.0 under the water: sea grass and kelp swaying in the current, corals in warm seas (branches, fans,
@@ -2759,6 +2790,7 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
     }
     c.colliders = std::move(b.colliders);
     c.nodes = std::move(b.nodes);
+    c.trees = std::move(b.trees);
     c.lights = std::move(b.lights);
     c.emitters = std::move(b.emitters);
     c.models = std::move(b.models);

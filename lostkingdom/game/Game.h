@@ -11,6 +11,7 @@
 #include "World.h"
 #include "../engine/net/Net.h"
 #include <deque>
+#include <sstream>
 #include "Props.h"
 #include "Characters.h"
 #include "Data.h"
@@ -192,7 +193,7 @@ struct Pickup { std::string item; int count; Rarity rarity; float t = 0; vec3 po
 
 struct NodeComp { NodeSpawn node; std::shared_ptr<Mesh> mesh; float hits = 0; float shake = 0; };
 
-enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle };
+enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle, Cellar };
 // 1.11.0 vehicles (Vehicles.cpp)
 struct VehicleRef { int idx; };
 struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; bool fly = false; };   // 3.4.0 fly: the sky-ship (procedural, no model file)
@@ -325,6 +326,7 @@ struct Settings {
     float master = 0.9f, music = 0.6f, sfx = 0.9f, ambience = 0.7f;
     float camSensitivity = 1.f, joystickDeadzone = 0.12f;
     bool haptics = true, showFps = false, autoTarget = true, subtitles = true, cameraShake = true, invertCamera = false, invertCameraY = false, cameraSmooth = false;
+    bool firstPerson = false;   // 3.6.0 first-person view (Settings)
     float uiScale = 1.f;
     ControlLayout layout;
     bool chromatic = false;
@@ -533,6 +535,33 @@ public:
     const ItemModel* itemModel(const std::string& id);
     RenderTarget showcaseRT[2]; int showcaseUsed = 0; float showcaseT = -1.f;
     void itemShowcase(const std::string& id, Rect r, Rarity rar);
+    // 3.6.0 first-person view: where the eye is and where it looks (Render.cpp), the hands and weapon drawn in view
+    bool fpActive = false; float fpYaw = 0, fpPitch = 0, fpBob = 0;
+    vec3 fpEye, fpFwd{0, 0, 1}, fpRight{1, 0, 0}, fpUp{0, 1, 0};
+    std::shared_ptr<Mesh> fpArmMesh;
+    void renderViewModel(Character& c);
+    // 3.6.0 the underground base (Cellar.cpp)
+    struct CellarState { bool owned = false; vec3 hatch; uint32_t seed = 1; int mined = 0; std::vector<uint8_t> cells; } cellar;
+    std::map<int, int> cellarHits; Entity cellarEnt = NullEntity;
+    void initCellar(uint32_t seed);
+    void rebuildCellar();
+    void buildCellar();
+    void enterCellar();
+    bool inCellar() const;
+    bool mineCellar(Character& c);
+    bool placeCellarHatch();
+    void spawnCellarHatch();
+    void renderCellarHatch();
+    std::string saveCellar() const;
+    void loadCellar(std::istringstream& l);
+    // 3.6.0 felling trees (Forestry.cpp)
+    bool tryChopTree(Character& c);
+    void updateForestry(float dt);
+    void renderFallingTrees();
+    struct FallingTree { std::shared_ptr<Mesh> props, foliage; vec3 pos, dir; float t = 0, angle = 0, scale = 1; };
+    std::vector<FallingTree> fallingTrees;
+    std::map<uint32_t, int> treeHits;
+    float regrowT = 5.f; int treesFelled = 0;
     // 3.5.0 schools of fish (Underwater.cpp)
     void renderFish();
     std::shared_ptr<Mesh> fishMesh; std::vector<InstanceData> fishInst;

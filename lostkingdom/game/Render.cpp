@@ -120,6 +120,27 @@ void Game::updateCamera(float dt) {
           env.waterTint = lerp(deep, shallow, 0.4f) * 0.9f;
       }
     }
+    // 3.6.0 first person (Settings): the eye in the hero's head, the drag turns the view, a gentle head bob
+    fpActive = settings.firstPerson && state == GameState::Playing && player != NullEntity && !cine.active && cinematicT <= 0 && camCineBlend <= 0 && !dialog.open;
+    if (fpActive) {
+        Character& c = pc();
+        vec3 f3 = look - eye;
+        vec2 f2 = vec2(f3.x, f3.z);
+        if (length(f2) > 1e-4f) fpYaw = std::atan2(f2.x, f2.y);
+        fpPitch = clampf((camPitch - CameraRig::PITCH_DEFAULT) * 1.3f, -1.2f, 1.25f);
+        vec3 head = c.pos + vec3(0, 1.62f * c.vis.scale, 0);
+        if (c.vis.anim.skeleton && c.vis.visY > -1e8f) head = vec3(c.pos.x, c.vis.visY, c.pos.z) + quat::axisAngle({0, 1, 0}, c.vis.visYaw).rotate(c.vis.pw.wpos[H_HEAD] * c.vis.scale);
+        vec3 fw{std::sin(fpYaw), 0, std::cos(fpYaw)};
+        fpFwd = normalize(vec3(std::sin(fpYaw) * std::cos(fpPitch), -std::sin(fpPitch), std::cos(fpYaw) * std::cos(fpPitch)));
+        fpRight = normalize(cross(fpFwd, vec3(0, 1, 0)));
+        fpUp = cross(fpRight, fpFwd);
+        float sp = saturate(length(vec2(c.vel.x, c.vel.z)) / 7.f) * (c.grounded ? 1.f : 0.f);
+        fpBob = c.vis.anim.phase * TAU;
+        eye = head + fw * 0.16f + vec3(0, 0.06f, 0);
+        eye += vec3(0, std::sin(fpBob * 2.f) * 0.04f * sp, 0) + fpRight * std::cos(fpBob) * 0.025f * sp;
+        look = eye + fpFwd;
+        fpEye = eye;
+    }
     float cineFov = 0;
     if (cine.active) {
         vec3 ce, cl;
@@ -143,7 +164,9 @@ void Game::updateCamera(float dt) {
     }
     cam.pos = eye; cam.target = look;
     cam.fovY = cineFov > 0 ? cineFov : (dungeon.active ? 40.f : 38.f) * DEG;
+    if (fpActive) cam.fovY = (62.f + 4.f * saturate(length(vec2(pc().vel.x, pc().vel.z)) / 7.f - 0.5f)) * DEG;   // 3.6.0 first person: a human field of view (wider when running)
     cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
+    if (fpActive) cam.zNear = 0.06f;   // 3.6.0 the hands and weapon are close to the eye
     cam.zFar = dungeon.active ? 420.f : 1500.f;   // the horizon relief reaches the whole island (fog hides the rest)
     cam.update((float)W / std::max(1, H));
     dofFocus = length(look - eye);
@@ -316,6 +339,8 @@ void Game::renderWorld(float dt) {
         });
     }
     renderFish();   // 3.5.0
+    renderFallingTrees();   // 3.6.0
+    renderCellarHatch();    // 3.6.0
     if (dungeon.active) {
         renderDungeon();
         for (const vec4& l : dungeon.lights) {
@@ -431,6 +456,47 @@ void Game::renderWorld(float dt) {
     renderer.render(&particles);
 }
 
+
+// 3.6.0 first person: the forearm and the weapon held in front of the eye. They sway as you walk, lag a little
+// behind a turn, and the weapon sweeps across the view when you strike (from the right, a downward cut for heavy
+// blows); a bow is held up in the left hand, a shield comes up when you guard.
+void Game::renderViewModel(Character& c) {
+    if (!fpArmMesh) fpArmMesh = cachedMesh("fp_arm", [](MeshBuilder& b) {
+        Mat sleeve(hexColor(0x7a5a3e), 0.85f), glove(hexColor(0x5a3e28), 0.8f), cuff(hexColor(0xb08a5a), 0.5f, 0.4f);
+        b.tube({0, -0.03f, -0.36f}, {0, 0, -0.06f}, 0.042f, 0.036f, sleeve, 10, true);
+        b.lathe({{0.048f, -0.1f}, {0.05f, -0.06f}, {0.046f, -0.04f}}, cuff, 10, {}, quat::axisAngle({1, 0, 0}, PI / 2));
+        b.ellipsoid({0, 0, 0.0f}, vec3(0.045f, 0.05f, 0.06f), glove, 10, 7);
+        for (int i = 0; i < 4; i++) b.tube({-0.03f + i * 0.02f, 0.035f, 0.02f}, {-0.03f + i * 0.02f, 0.03f, 0.06f}, 0.012f, 0.011f, glove, 5, true);
+    });
+    vec3 F = fpFwd, R = fpRight, U = fpUp;
+    float sp = saturate(length(vec2(c.vel.x, c.vel.z)) / 7.f) * (c.grounded ? 1.f : 0.f);
+    vec3 sway = R * std::sin(fpBob) * 0.018f * sp + U * std::fabs(std::cos(fpBob)) * 0.02f * sp;
+    // the strike: 0..1 through the attack clip
+    float swing = 0.f; bool heavy = false;
+    if (c.attackClip) { swing = saturate(c.vis.anim.actionTime()); heavy = c.attackClip->duration > 0.9f; }
+    float arc = std::sin(swing * PI);
+    bool bow = c.vis.wt == WeaponType::Bow || c.vis.wt == WeaponType::Crossbow;
+    // the hand: low right, the weapon pointing forward and up
+    vec3 hand = fpEye + F * 0.45f + R * (bow ? -0.06f : 0.2f) - U * 0.16f + sway;
+    mat4 basis = mat4::rotate(quat::axisAngle({0, 1, 0}, fpYaw) * quat::axisAngle({1, 0, 0}, fpPitch));   // the view's orientation (local +Z = where you look)
+    quat hold = bow ? quat::axisAngle({0, 0, 1}, -0.25f) : quat::axisAngle({0, 1, 0}, -0.35f) * quat::axisAngle({1, 0, 0}, -0.55f);   // blade forward, up and towards the centre
+    if (swing > 0 && !bow) {
+        if (heavy) hold = quat::axisAngle({1, 0, 0}, -1.4f + swing * 2.3f) * hold;                    // overhead, then down
+        else hold = quat::axisAngle({0, 1, 0}, 0.9f - swing * 2.0f) * quat::axisAngle({0, 0, 1}, -arc * 0.6f) * hold;   // a sweep right to left
+        hand += R * (-arc * 0.18f) + F * (arc * 0.12f);
+    }
+    if (input.block && c.vis.ot == WeaponType::Shield) hand += U * 0.05f;
+    mat4 handM = mat4::translate(hand) * basis * mat4::rotate(hold);
+    DrawItem d; d.castShadow = false;
+    d.mesh = fpArmMesh.get(); d.model = handM; renderer.submit(d);
+    if (c.vis.weapon) { d.mesh = c.vis.weapon.get(); d.model = handM; d.outline = false; renderer.submit(d); }
+    // the left hand: a shield raised when guarding, otherwise just the forearm at the edge of the view
+    vec3 lhand = fpEye + F * 0.4f - R * 0.26f - U * (input.block ? 0.12f : 0.3f) + sway * 0.7f;
+    mat4 lM = mat4::translate(lhand) * basis * mat4::rotate(quat::axisAngle({1, 0, 0}, -0.3f));
+    d.mesh = fpArmMesh.get(); d.model = lM; renderer.submit(d);
+    if (c.vis.offhand) { d.mesh = c.vis.offhand.get(); d.model = lM * mat4::rotate(quat::axisAngle({0, 1, 0}, PI / 2)); renderer.submit(d); }
+}
+
 // ============================================================================================ characters
 static void buildCapeMesh(Visual& v) {
     const VerletCloth& c = v.cloth;
@@ -469,6 +535,13 @@ static void buildCapeMesh(Visual& v) {
 void Game::renderCharacter(Entity e, Character& c) {
     Visual& v = c.vis;
     if (!v.visible || !v.mesh) return;
+    if (fpActive && e == player) {   // 3.6.0 first person: the body is not drawn, only the hands and the weapon in view
+        if (v.anim.skeleton) computeWorld(*v.anim.skeleton, v.anim.pose, v.pw);   // keeps the head bone for the eye
+        v.visY = c.pos.y; v.visLastT = realTime;   // (kept current: the eye is placed from it)
+        v.visYaw = c.yaw;
+        renderViewModel(c);
+        return;
+    }
     if (c.npcDef >= 0) { NpcBrain* nb = reg.get<NpcBrain>(e); if (nb && nb->indoors) return; }
     if (distXZ(c.pos, camFocus) > renderer.settings.drawDistance * 0.75f) return;
     // 3.4.0 smooth motion: the drawn body eases over steps and bumps instead of popping, turns without

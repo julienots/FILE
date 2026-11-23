@@ -317,6 +317,7 @@ void Game::updatePlaying(float dt) {
     PROF(0, updatePlayer(dt));
     updateGeysers(dt);   // 2.8.0
     updateTreasures(dt);   // 3.2.0
+    updateForestry(dt);    // 3.6.0
     updateVfx(dt);       // 3.0.1
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
@@ -591,6 +592,10 @@ void Game::updateEnvironment(float dt) {
             env.sunIntensity = 0.22f; env.sunColor = srgb(0xffe8c8); env.shadowStrength = 0.35f;
             env.skyAmbient = srgb(0x5a5248) * 0.6f; env.groundAmbient = srgb(0x3a3028) * 0.55f;
             env.fogColor = srgb(0x2a241e); env.fogDensity = 0.004f; env.exposure = 0.92f; env.tiltShift = 0.f;
+            if (dungeon.interiorKind == -2) {   // 3.6.0 the cellar: rock and torchlight, a cool shaft of day at the ladder
+                env.sunIntensity = 0.08f; env.skyAmbient = srgb(0x3a3640) * 0.55f; env.groundAmbient = srgb(0x2a2018) * 0.5f;
+                env.fogColor = srgb(0x121010); env.fogDensity = 0.02f; env.exposure = 1.25f;
+            }
         }
         if (th == 8) {
             // 2.2.1 the celestial realm is open sky: low golden sun, violet zenith, aurora, light mist far below
@@ -871,7 +876,7 @@ void Game::updateAudioDirector(float dt) {
     audio.setAmbience("amb_rain", under ? 0 : rainAmt);
     audio.setAmbience("amb_lava", under ? (!dungeon.interior && dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
     audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f + regionW[R_JUNGLE] * 0.35f);   // 2.4.0 the jungle croaks too
-    audio.setAmbience("amb_cave", under && !dungeon.interior ? 0.8f : 0.f);
+    audio.setAmbience("amb_cave", under && (!dungeon.interior || dungeon.interiorKind == -2) ? 0.8f : 0.f);   // 3.6.0 + your cellar
     float river = 0;
     if (!under) { vec2 fl; bool lv, fr; float wl = world.waterLevel(p.pos.x, p.pos.z, &lv, &fr, &fl); river = (wl > -1e8f && length(fl) > 0.01f) ? 0.8f : 0.f; }
     audio.setAmbience("amb_river", river);

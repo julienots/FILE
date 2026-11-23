@@ -127,6 +127,15 @@ static void buildItems() {
         {"hammer_giant", "Marteau du Roi-Géant", WeaponType::Hammer, 5, Rarity::Ancestral, 58, 0.08f, -0.08f, Element::Lightning, 16, "Ymrir l'abattait sur les cimes pour appeler l'orage."},
         {"spear_wyrm", "Lance du Ver des Glaces", WeaponType::Spear, 5, Rarity::Legendary, 44, 0.12f, 0.04f, Element::Ice, 14, "Taillée dans une dent du ver. Elle givre ce qu'elle touche."},
         {"crossbow_legion", "Arbalète de la Légion", WeaponType::Crossbow, 4, Rarity::Epic, 34, 0.14f, -0.06f, Element::Physical, 0, "Un mécanisme d'acier noir. Les arbalétriers de Fer-Noir ne manquaient jamais."},
+        // 3.6.0 new weapons
+        {"axe_lumber", "Hache de bûcheron", WeaponType::Axe, 1, Rarity::Common, 12, 0.04f, 0, Element::Physical, 0, "Large et bien affûtée : elle abat un arbre en deux coups de moins."},
+        {"sword_coral", "Lame de corail", WeaponType::Sword, 3, Rarity::Epic, 30, 0.1f, 0.05f, Element::Ice, 10, "Un corail vivant, taillé en lame sous la mer. Elle garde le froid des abysses."},
+        {"spear_abyss", "Trident des abysses", WeaponType::Spear, 4, Rarity::Legendary, 40, 0.12f, 0.03f, Element::Lightning, 12, "Trouvé dans une épave. Les marins disent qu'il appelle l'orage."},
+        {"sword_dragon", "Croc du dragon", WeaponType::Longsword, 5, Rarity::Legendary, 52, 0.12f, 0.02f, Element::Fire, 18, "Une dent de dragon montée sur une garde d'or. Elle fume encore."},
+        {"staff_star", "Bâton stellaire", WeaponType::Staff, 5, Rarity::Mythic, 24, 0.12f, 0.04f, Element::Arcane, 30, "Un fragment de comète au bout d'un bois des Confins. Il chante dans le noir."},
+        {"hammer_canyon", "Masse des falaises", WeaponType::Hammer, 3, Rarity::Rare, 34, 0.06f, -0.06f, Element::Physical, 0, "Taillée dans le grès des Canyons Écarlates. Lourde comme une falaise."},
+        {"dagger_scorpion", "Crochet de vipère", WeaponType::Dagger, 3, Rarity::Epic, 22, 0.18f, 0.1f, Element::Nature, 10, "Enduite de venin de scorpion. Rapide, discrète, mortelle."},
+        {"bow_wyvern", "Arc de la wyverne", WeaponType::Bow, 4, Rarity::Epic, 32, 0.14f, 0.04f, Element::Fire, 8, "Une côte de wyverne tendue d'un nerf brûlant."},
     };
     for (auto& w : ws) {
         ItemDef& d = addItem(w.id, w.name, ItemKind::Weapon, w.r, 20 + w.tier * w.tier * 60 + (int)w.r * 80, w.desc);
@@ -152,6 +161,12 @@ static void buildItems() {
         {"sylvan", "sylvestre", 4, 3, Rarity::Epic, Helm::Circlet, Body::Leather, hexColor(0x2f7a5a), 8, false, Element::Nature},
         {"shadow", "du voile", 5, 4, Rarity::Legendary, Helm::Hood, Body::Leather, hexColor(0x2a2230), 11, false, Element::Shadow},
         {"crown", "ancestral", 6, 5, Rarity::Ancestral, Helm::Crown, Body::Plate, hexColor(0xd8b060), 18, true, Element::Light},
+        // 3.6.0 new sets
+        {"canyon", "du nomade écarlate", 7, 2, Rarity::Rare, Helm::Hood, Body::Leather, hexColor(0xb8502a), 8, false, Element::Fire},
+        {"coral", "des abysses", 8, 4, Rarity::Epic, Helm::Great, Body::Plate, hexColor(0x2a8aa8), 13, true, Element::Ice},
+        {"titan", "titanesque", 9, 5, Rarity::Legendary, Helm::Great, Body::Plate, hexColor(0x3a4a6a), 20, true, Element::Lightning},
+        {"dragon", "du dragon", 10, 5, Rarity::Legendary, Helm::Horned, Body::Plate, hexColor(0x2a8a5a), 17, true, Element::Fire},
+        {"star", "stellaire", 11, 5, Rarity::Mythic, Helm::Circlet, Body::Robe, hexColor(0x4a3ab8), 14, false, Element::Arcane},
     };
     const char* pieceName[4] = {"Casque", "Plastron", "Gants", "Bottes"};
     const ItemKind pieceKind[4] = {ItemKind::Head, ItemKind::Chest, ItemKind::Hands, ItemKind::Feet};
@@ -166,6 +181,7 @@ static void buildItems() {
             if (p == 1 && a.body == Body::Leather) nm = std::string("Pourpoint ") + a.setName;
             if (p == 1 && a.body == Body::Fur) nm = std::string("Manteau ") + a.setName;
             if (p == 1 && a.body == Body::Chain) nm = std::string("Cotte de mailles ") + a.setName;
+            if (p == 1 && a.body == Body::Robe) nm = std::string("Robe ") + a.setName;   // 3.6.0
             ItemDef& d = addItem(id, nm, pieceKind[p], a.r, (int)(25 * (a.tier + 1) * (a.tier + 1) * pieceMul[p] + 10), "Pièce d'ensemble.");
             d.set = a.set; d.tier = a.tier; d.def = a.def * pieceMul[p]; d.color = a.c; d.helm = a.helm; d.body = a.body;
             d.pauldrons = a.pauld && p == 1; d.gauntlets = p == 2 && a.tier >= 2; d.greaves = p == 3 && a.tier >= 2;
@@ -191,6 +207,8 @@ static void buildItems() {
         {"amulet_pearl", "Collier de perle", ItemKind::Amulet, Rarity::Epic, 30, 40, 0.03f, 0, 3, 0.03f, "Une perle de la Côte, sertie d'argent."},
         {"amulet_aurora", "Cœur d'aurore", ItemKind::Amulet, Rarity::Legendary, 45, 45, 0.06f, 6, 4, 0.04f, "Un cristal vivant qui bat doucement contre la poitrine."},   // 2.8.0
         {"ring_legion", "Chevalière du conquérant", ItemKind::Ring, Rarity::Legendary, 40, 0, 0.06f, 8, 4, 0.02f, "Prise au doigt d'un seigneur de guerre. Les soldats saluent celui qui la porte."},   // 3.0.0
+        {"ring_dragon", "Anneau de l'écaille", ItemKind::Ring, Rarity::Legendary, 35, 0, 0.07f, 7, 4, 0.02f, "Une écaille de dragon sertie d'or. Elle reste chaude."},   // 3.6.0
+        {"amulet_tide", "Coquille des marées", ItemKind::Amulet, Rarity::Epic, 30, 35, 0.03f, 0, 3, 0.04f, "On y entend la mer, même au fond d'une mine."},   // 3.6.0
         {"amulet_silence", "Joyau du Silence", ItemKind::Amulet, Rarity::Ancestral, 70, 70, 0.1f, 12, 8, 0.06f, "Le septième joyau de la Couronne. Il fait taire le monde, pour mieux l'entendre."},
     };
     for (auto& t : ts) {
@@ -222,6 +240,11 @@ static void buildItems() {
     cons("cactus_juice", "Jus de figue de barbarie", Rarity::Common, 10, 15, 0, 60, 0, 0, "i_potion_mana", "Rend de l'endurance, et un peu de vie.");
     cons("ember_tonic", "Tonique de braise", Rarity::Rare, 28, 60, 20, 40, 0, 0, "i_potion", "Réchauffe jusqu'aux os : vie, mana et endurance.");
     cons("salted_fish", "Poisson salé", Rarity::Common, 9, 40, 0, 20, 0, 0, "i_heart", "Se garde des semaines en voyage.");
+    cons("cellar_hatch", "Trappe de souterrain", Rarity::Epic, 120, 0, 0, 0, 0, 0, "i_pickaxe", "Posez-la dehors : une échelle descend vers une salle taillée dans la roche. Creusez-y votre base souterraine.");   // 3.6.0
+    cons("apple", "Pomme", Rarity::Common, 3, 18, 0, 20, 0, 0, "i_heart", "Croquante, tombée d'un chêne de Greenhaven.");   // 3.6.0
+    cons("honey_cake", "Gâteau au miel", Rarity::Rare, 20, 60, 20, 40, 4, 120, "i_heart", "Rend 60 PV et accélère la régénération.");   // 3.6.0
+    cons("mushroom_soup", "Velouté des bois", Rarity::Common, 12, 50, 30, 0, 0, 0, "i_heart", "Champignons lumineux et herbes : vie et mana.");   // 3.6.0
+    cons("potion_deep", "Potion des profondeurs", Rarity::Rare, 45, 40, 0, 60, 1, 120, "i_potion_mana", "Vie, endurance pleine : de quoi plonger plus longtemps.");   // 3.6.0
     cons("elixir_sun", "Élixir solaire", Rarity::Epic, 90, 0, 0, 0, 2, 180, "i_potion", "+20 % de dégâts pendant 3 minutes.");
     // ---- materials -----------------------------------------------------------------------------
     auto mat = [&](const char* id, const char* nm, Rarity r, int v, const char* icon, const char* desc) {
@@ -269,6 +292,9 @@ static void buildItems() {
     mat("flax", "Lin", Rarity::Common, 3, "i_sickle", "Tiges souples aux fleurs bleues.");
     mat("linen", "Toile de lin", Rarity::Common, 9, "i_hunt", "Tissée serrée, pour les bandages et les vêtements.");
     mat("fire_root", "Racine de braise", Rarity::Rare, 14, "i_sickle", "Chaude au toucher, elle pousse dans les cendres.");
+    mat("resin", "Résine", Rarity::Common, 4, "i_crystal", "Ambre tendre des arbres abattus. Elle colle les manches et cire les arcs.");   // 3.6.0
+    mat("bird_nest", "Nid d'oiseau", Rarity::Rare, 25, "i_star", "Tombé d'un arbre abattu. Il y a parfois quelque chose de brillant dedans.");   // 3.6.0
+    mat("honey", "Miel sauvage", Rarity::Common, 6, "i_potion", "Pris dans un tronc creux.");   // 3.6.0
     mat("titan_steel", "Acier-titan", Rarity::Epic, 50, "i_anvil", "Le minerai noir des Monts Titans, fondu à Rochebrune. Plus dur que l'acier ordinaire.");   // 3.0.0
     mat("legion_insignia", "Insigne de la Légion", Rarity::Rare, 25, "i_relic", "Un poing de fer sur un disque noir. Les forges et les capitaines de Hautebrume le rachètent.");   // 3.0.0
     mat("aurora_crystal", "Cristal d'aurore", Rarity::Epic, 45, "i_crystal", "Il garde la lumière des aurores et la rend la nuit. Il ne pousse qu'aux Terres d'Aurore.");   // 2.8.0
@@ -363,6 +389,12 @@ const std::vector<SetDef>& sets() {
         {"Ensemble sylvestre", "+30 mana", "+10 % critique, attaques de nature (+8)", 0, 0, 0, 0.1f, 0, 30, 0, 0, Element::Nature, 8},
         {"Ensemble du voile", "+8 % critique", "Attaques d'ombre (+15)", 0, 0, 0, 0.08f, 6, 0, 0, 0.06f, Element::Shadow, 15},
         {"Ensemble ancestral", "+20 attaque, +10 défense", "+120 PV, attaques de lumière (+20)", 20, 10, 0, 0.05f, 10, 50, 10, 0.05f, Element::Light, 20},
+        // 3.6.0
+        {"Ensemble du nomade écarlate", "+40 PV", "+6 % vitesse, attaques de feu (+8)", 0, 0, 40, 0.03f, 0, 0, 0, 0.06f, Element::Fire, 8},
+        {"Ensemble des abysses", "+10 défense", "+80 PV, attaques de glace (+14)", 0, 10, 0, 0, 0, 30, 0, 0, Element::Ice, 14},
+        {"Ensemble titanesque", "+15 défense, +60 PV", "+20 attaque, attaques de foudre (+18)", 0, 15, 60, 0.04f, 20, 0, 10, 0, Element::Lightning, 18},
+        {"Ensemble du dragon", "+15 attaque", "+10 % critique, attaques de feu (+22)", 15, 0, 0, 0.1f, 10, 0, 8, 0.03f, Element::Fire, 22},
+        {"Ensemble stellaire", "+60 mana", "+12 % critique, attaques arcaniques (+24)", 0, 0, 0, 0.12f, 6, 60, 0, 0.06f, Element::Arcane, 24},
     };
     return s;
 }
@@ -376,6 +408,28 @@ const std::vector<Recipe>& recipes() {
         {"longsword_iron", 1, {{"iron_bar", 5}, {"leather", 2}}, ST_FORGE, 3},
         {"dagger_iron", 1, {{"iron_bar", 2}, {"leather", 1}}, ST_FORGE, 2},
         {"axe_iron", 1, {{"iron_bar", 3}, {"wood", 2}}, ST_FORGE, 2},
+        // 3.6.0 the new weapons, armour and food
+        {"axe_lumber", 1, {{"iron_bar", 2}, {"wood", 4}, {"resin", 1}}, ST_FORGE, 1},
+        {"hammer_canyon", 1, {{"stone", 12}, {"iron_bar", 3}, {"leather", 2}}, ST_FORGE, 5},
+        {"sword_coral", 1, {{"coral_shard", 6}, {"pearl", 2}, {"silver_bar", 2}}, ST_FORGE, 8},
+        {"dagger_scorpion", 1, {{"steel_bar", 2}, {"scorpion_venom", 3}, {"leather", 1}}, ST_FORGE, 8},
+        {"bow_wyvern", 1, {{"wood", 6}, {"bone", 4}, {"ember_core", 1}, {"resin", 2}}, ST_WORKBENCH, 10},
+        {"sword_dragon", 1, {{"dragon_scale", 4}, {"gold_bar", 3}, {"titan_steel", 2}}, ST_FORGE, 14},
+        {"staff_star", 1, {{"star_bar", 3}, {"star_shard", 3}, {"wood", 4}}, ST_WORKBENCH, 16},
+        {"canyon_head", 1, {{"linen", 3}, {"leather", 1}}, ST_WORKBENCH, 4}, {"canyon_chest", 1, {{"leather", 4}, {"linen", 3}}, ST_WORKBENCH, 4},
+        {"canyon_hands", 1, {{"leather", 2}}, ST_WORKBENCH, 4}, {"canyon_feet", 1, {{"leather", 3}}, ST_WORKBENCH, 4},
+        {"coral_head", 1, {{"coral_shard", 4}, {"silver_bar", 2}}, ST_FORGE, 9}, {"coral_chest", 1, {{"coral_shard", 6}, {"silver_bar", 4}, {"pearl", 1}}, ST_FORGE, 9},
+        {"coral_hands", 1, {{"coral_shard", 3}, {"silver_bar", 1}}, ST_FORGE, 9}, {"coral_feet", 1, {{"coral_shard", 3}, {"silver_bar", 2}}, ST_FORGE, 9},
+        {"titan_head", 1, {{"titan_steel", 4}}, ST_FORGE, 13}, {"titan_chest", 1, {{"titan_steel", 7}, {"leather", 2}}, ST_FORGE, 13},
+        {"titan_hands", 1, {{"titan_steel", 3}}, ST_FORGE, 13}, {"titan_feet", 1, {{"titan_steel", 3}, {"leather", 1}}, ST_FORGE, 13},
+        {"dragon_head", 1, {{"dragon_scale", 3}, {"gold_bar", 1}}, ST_FORGE, 15}, {"dragon_chest", 1, {{"dragon_scale", 5}, {"gold_bar", 2}, {"titan_steel", 2}}, ST_FORGE, 15},
+        {"dragon_hands", 1, {{"dragon_scale", 2}, {"gold_bar", 1}}, ST_FORGE, 15}, {"dragon_feet", 1, {{"dragon_scale", 2}, {"leather", 2}}, ST_FORGE, 15},
+        {"star_head", 1, {{"star_bar", 2}, {"star_shard", 1}}, ST_FORGE, 17}, {"star_chest", 1, {{"star_bar", 3}, {"linen", 4}, {"star_shard", 2}}, ST_FORGE, 17},
+        {"star_hands", 1, {{"star_bar", 1}, {"linen", 2}}, ST_FORGE, 17}, {"star_feet", 1, {{"star_bar", 1}, {"leather", 2}}, ST_FORGE, 17},
+        {"cellar_hatch", 1, {{"wood", 12}, {"iron_bar", 3}, {"stone", 6}}, ST_WORKBENCH, 1},   // 3.6.0
+        {"honey_cake", 1, {{"honey", 2}, {"bread", 1}}, ST_CAMPFIRE, 1},
+        {"mushroom_soup", 1, {{"glowcap", 2}, {"herb", 1}}, ST_CAMPFIRE, 1},
+        {"potion_deep", 1, {{"coral_shard", 1}, {"herb", 2}, {"sea_salt", 1}}, ST_ALCHEMY, 3},
         {"hammer_iron", 1, {{"iron_bar", 6}, {"wood", 2}}, ST_FORGE, 4},
         {"spear_iron", 1, {{"iron_bar", 2}, {"wood", 4}}, ST_FORGE, 2},
         {"bow_hunter", 1, {{"wood", 5}, {"leather", 2}}, ST_WORKBENCH, 1},

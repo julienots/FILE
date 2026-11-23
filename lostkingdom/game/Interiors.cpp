@@ -323,7 +323,7 @@ bool Game::updateInterior(float dt) {
     Character& p = pc();
     DungeonState& d = dungeon;
     if (distXZ(p.pos, d.exitPos) < 1.6f) {
-        dungeonPrompt = "Sortir";
+        dungeonPrompt = d.interiorKind == -2 ? "Remonter à la surface" : "Sortir";
         if (input.interact && transitionT < 0) { exitDungeon(); return true; }
     } else if (d.hasBed && distXZ(p.pos, d.bedPos) < 1.9f) {
         dungeonPrompt = "Dormir jusqu'au matin";

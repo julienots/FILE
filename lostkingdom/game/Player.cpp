@@ -177,6 +177,7 @@ static const Clip* heavyClip(int stance) {
 void Game::playerAttack(bool heavy, bool charged) {
     Character& c = pc();
     if (c.dead || riding || c.swimming || c.hitStun > 0) return;
+    if (digMode && inCellar()) digMode = false;   // 3.6.0 in your cellar the pickaxe cuts the rock face (no surface digging)
     // 2.4.0 dig mode: the sword button digs; a charged press throws a bomb (if you carry one)
     if (digMode && !flying) {
         if (charged && countItem("bomb") > 0) { removeItem("bomb", 1); throwBomb(); }
@@ -216,6 +217,7 @@ void Game::playerAttack(bool heavy, bool charged) {
     if (const ItemDef* w = item(equipment[SL_WEAPON].id)) spd = 1.f + w->speed;
     startAttack(player, c, cl, mult, c.element, spd);
     play(heavy ? "swing_heavy" : "swing", 0.8f, particles.rng.range(0.9f, 1.1f));
+    if (t == NullEntity && stance != ST_BOW && stance != ST_STAFF && !mineCellar(c)) tryChopTree(c);   // 3.6.0 a swing at a tree, or at the rock of your cellar
     // 3.0.1 heavy and charged blows leave a glowing crescent in the air (the weapon's element, or steel)
     if ((heavy || charged || comboStep == 0) && stance != ST_BOW && stance != ST_STAFF && stance != ST_UNARMED) {
         vec3 ec = c.element == Element::Physical ? vec3(0.75f, 0.85f, 1.f) : elementColor(c.element);
@@ -510,6 +512,7 @@ void Game::findInteractTarget() {
         if (Character* o = reg.get<Character>(e)) { if (o->dead || e == player) return; p = o->pos; if (e == mountEnt && riding) return; }
         else if (NodeComp* n = reg.get<NodeComp>(e)) { p = n->node.pos; if (n->node.type == NodeType::Chest && openedChests.count(n->node.uid)) return; if (n->node.type != NodeType::Chest && n->node.type != NodeType::FishingSpot && !world.nodeAvailable(n->node.uid, gameTime)) return; }
         else if (Pickup* pk = reg.get<Pickup>(e)) p = pk->pos;
+        else if (e == cellarEnt) { if (!cellar.owned || dungeon.active) return; p = cellar.hatch; }   // 3.6.0
         else if (VehicleRef* vr = reg.get<VehicleRef>(e)) { if (driving >= 0 || vr->idx >= (int)vehicles.size() || !vehicleUnlocked(vr->idx)) return; p = vehicles[vr->idx].pos; }
         else return;
         float d = distXZ(p, c.pos);
@@ -673,6 +676,7 @@ void Game::playerInteract() {
         break;
     }
     case InterKind::Mount: toggleMount(); break;
+    case InterKind::Cellar: enterCellar(); break;   // 3.6.0
     case InterKind::Vehicle:
         if (driving >= 0) exitVehicle();
         else enterVehicle(it->param);
@@ -854,7 +858,11 @@ void Game::updatePlayer(float dt) {
     c.vel.x = damp(c.vel.x, dv.x, rate, dt);
     c.vel.z = damp(c.vel.z, dv.z, rate, dt);
     float hs = length(vec2(c.vel.x, c.vel.z));
-    if (!busy && mag > 0.15f) {
+    if (fpActive && !busy && driving < 0 && !riding && lockTarget == NullEntity) {   // 3.6.0 first person: the body faces where you look, you walk and strafe
+        float prev = c.yaw;
+        c.yaw = dampAngle(c.yaw, fpYaw, 20.f, dt);
+        a.turnRate = wrapAngle(c.yaw - prev) / std::max(dt, 1e-4f);
+    } else if (!busy && mag > 0.15f) {
         float target = std::atan2(want.x, want.z);
         if (lockTarget != NullEntity && reg.valid(lockTarget)) { Character* t = reg.get<Character>(lockTarget); if (t) target = std::atan2(t->pos.x - c.pos.x, t->pos.z - c.pos.z); }
         float prev = c.yaw;

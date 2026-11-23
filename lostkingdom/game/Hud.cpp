@@ -652,6 +652,10 @@ void Game::drawHud(float dt) {
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
     // 2.4.0 under water: a blue-green veil with darker edges, and the air gauge (bubbles) while diving
+    if (fpActive) {   // 3.6.0 first person: a discreet aiming dot
+        u.circle({u.W * 0.5f, u.H * 0.5f}, 3.5f, vec4(0, 0, 0, 0.45f), 10);
+        u.circle({u.W * 0.5f, u.H * 0.5f}, 2.2f, vec4(1, 1, 1, 0.85f), 10);
+    }
     // 3.5.0 the flat veil is gone: the water colour, murk and light shafts are drawn by the post-process shader
     if (player != NullEntity && (diving || breath < 0.999f)) {
         Rect br{u.W * 0.5f - 120, u.H - 150, 240, 26};

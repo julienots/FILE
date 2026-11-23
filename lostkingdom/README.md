@@ -6,13 +6,61 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.5.0 (versionCode 56), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.4.1 : elle s'installe par-dessus). SHA-256 : `0f332316579de56359e72b1e4a8762a6ee0579a114cb5dd2debdc2f9bda1384b`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.6.0 (versionCode 57), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.5.0 : elle s'installe par-dessus). SHA-256 : `0f332316579de56359e72b1e4a8762a6ee0579a114cb5dd2debdc2f9bda1384b`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.6.0 (vrais nuages, couper les arbres, base souterraine, nouvelles armures)
+
+- **De vrais nuages en volume.** Avant, c'était une couche plate en 2D : le ciel est maintenant traversé par une couche de cumulus calculée en 11 pas.
+  - Les nuages ont une base plate, des tours arrondies qui s'effilent vers le haut, des sommets éclatants au soleil, des ventres gris, un liseré argenté à contre-jour, et des dessous roses et orangés au coucher.
+  - Ils dérivent avec le vent et se fondent dans la brume à l'horizon. Il y en a quelques-uns par beau temps, et ils couvrent le ciel quand il se couvre.
+- **Couper les arbres**, avec n'importe quelle arme, en frappant un arbre devant soi quand aucun ennemi n'est visé.
+  - Il faut 3 coups à la hache, 2 à la nouvelle **hache de bûcheron**, 5 avec une autre arme, et un de plus pour les grands arbres.
+  - Les copeaux volent, l'arbre craque, puis bascule à l'opposé de vous et s'écrase dans un nuage de poussière.
+  - **Récolte** : du bois (plus pour les grands arbres), parfois de la résine, des pommes (chênes), des noix de coco ou des dattes (palmiers), du miel, et rarement un nid d'oiseau.
+  - Une souche reste à sa place, et l'arbre repousse au bout d'un jour de jeu. Les arbres coupés sont sauvegardés.
+- **Votre base souterraine.**
+  - Fabriquez une **Trappe de souterrain** à l'établi (12 bois, 3 lingots de fer, 6 pierres) et posez-la n'importe où dehors. Une échelle descend vers une petite salle taillée dans la roche.
+  - **Creusez vos galeries** en frappant la paroi : avec une pioche dans le sac, un bloc tombe en un coup (en trois sinon) et devient du sol.
+  - Chaque bloc donne de la pierre. Les filons visibles dans la paroi donnent du **fer, du charbon, de l'argent, de l'or ou du cristal**, plus riches loin de l'échelle. Le bord est en roche-mère.
+  - Des torches éclairent les galeries au fur et à mesure, les cristaux luisent, la lumière du jour tombe par la trappe.
+  - L'ensemble fait 40 × 40 blocs de 2 m. Tout est sauvegardé ; une trappe reposée ailleurs mène au même souterrain.
+- **Cinq nouvelles armures complètes** (casque, plastron, gants, bottes), avec leurs bonus d'ensemble, leurs recettes et leurs modèles 3D :
+  - **du nomade écarlate** (cuir et lin) ;
+  - **des abysses** (corail, argent et perle, avec une crête de nageoires) ;
+  - **titanesque** (acier-titan, plumet de foudre) ;
+  - **du dragon** (écailles et or, cornes noires) ;
+  - **stellaire** (métal d'étoile, diadème à la gemme lumineuse).
+- **Nouvelles armes** :
+  - hache de bûcheron ;
+  - lame de corail ;
+  - Trident des abysses ;
+  - Croc du dragon ;
+  - Bâton stellaire ;
+  - masse des falaises ;
+  - Crochet de vipère ;
+  - arc de la wyverne.
+- **Nouveaux objets** :
+  - **bijoux** : Anneau de l'écaille, Coquille des marées ;
+  - **à manger et à boire** : pomme, gâteau au miel, velouté des bois, potion des profondeurs ;
+  - **matériaux** : résine, miel sauvage, nid d'oiseau.
+  - Chacun a son modèle 3D et sa recette (forge, établi, feu de camp ou alchimie).
+- **Vue à la première personne : retirée.** Elle a été essayée (bras et arme à l'écran, balancement de la tête), mais le résultat n'était pas assez beau. Elle n'apparaît pas dans les paramètres.
+- **Corrigé** :
+  - souterrain : le ciel ne transparaît plus à travers la roche près de la caméra ;
+  - deux nouvelles armes avaient un identifiant déjà pris ; elles sont renommées.
+- **Vérifié sur ordinateur seulement** :
+  - 3 209 tests unitaires réussis ;
+  - nouveaux scénarios automatiques :
+    - `chop` : un chêne abattu en 4 coups, 6 bois, la souche, la repousse ;
+    - `cellar` : la trappe posée, la descente, 3 blocs creusés, la remontée, puis sauvegarde et rechargement ;
+    - `skylook` : les nuages le matin, par temps couvert et au coucher ;
+  - scénarios de régression passés.
 
 ### Nouveautés 3.5.0 (un vrai modèle 3D pour chaque objet, et le monde sous l'eau)
 
