@@ -250,6 +250,10 @@ struct ReflectionProbeComponent {
     Update update = Update::Once;        ///< Once: when added or moved; Always: 6 frames per refresh.
     float maxDistance = 200.0f;          ///< Far plane of the capture.
     bool enabled = true;
+    /// Indirect diffuse light (global illumination): surfaces in the box get the ambient light of
+    /// the captured room (its most blurred level) instead of the sky's: a red wall tints what is
+    /// next to it, a dark cellar stays dark under a bright sky. 0 = off.
+    float diffuseGI = 1.0f;
 };
 
 /// Hides what is behind it from the renderer (occlusion culling): a simple box or rectangle

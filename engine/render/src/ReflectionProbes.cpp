@@ -234,7 +234,7 @@ void Renderer::gatherProbes(ecs::Registry& reg, detail::LightUniforms& lights) {
         lights.probeMin[n] = Vec4(box.min, std::max(p.blendDistance, 0.0f));
         lights.probeMax[n] = Vec4(box.max, std::max(p.intensity, 0.0f));
         lights.probePos[n] = Vec4(world.translation(), p.boxProjection ? 1.0f : 0.0f);
-        lights.probeRow[n] = Vec4(static_cast<float>(i), 0.0f, 0.0f, 0.0f);
+        lights.probeRow[n] = Vec4(static_cast<float>(i), std::max(p.diffuseGI, 0.0f), 0.0f, 0.0f);
         ++n;
     }
     lights.probeAtlas = Vec4(1.0f / static_cast<float>(detail::kProbeLevels), 1.0f / static_cast<float>(detail::kMaxProbes),

@@ -75,7 +75,7 @@ struct LightUniforms {
     math::Vec4 probeMin[kMaxProbes];     // box min (world), blend distance
     math::Vec4 probeMax[kMaxProbes];     // box max (world), intensity
     math::Vec4 probePos[kMaxProbes];     // capture point (world), 1 = box projection
-    math::Vec4 probeRow[kMaxProbes];     // atlas row, -, -, -
+    math::Vec4 probeRow[kMaxProbes];     // atlas row, diffuse GI strength, -, -
     math::Vec4 probeAtlas;               // tile width (uv), tile height (uv), levels, -
 };
 static_assert(sizeof(LightUniforms) == 528 + 128 + 16 + 32 + 384 + 96 + kMaxDecals * (64 + 48) + kMaxProbes * 64 + 16);

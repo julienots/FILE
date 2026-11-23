@@ -449,7 +449,8 @@ void registerRenderComponents() {
         .field("boxProjection", &ReflectionProbeComponent::boxProjection, {.tooltip = "Line reflections up with the walls of a room the size of the box"})
         .field("update", &ReflectionProbeComponent::update, {.tooltip = "Once: when added or moved. Always: refreshed continuously (6 frames each)"})
         .field("maxDistance", &ReflectionProbeComponent::maxDistance, {.rangeMin = 1.0f, .rangeMax = 5000.0f, .speed = 1.0f})
-        .field("enabled", &ReflectionProbeComponent::enabled);
+        .field("enabled", &ReflectionProbeComponent::enabled)
+        .field("diffuseGI", &ReflectionProbeComponent::diffuseGI, {.tooltip = "Indirect diffuse light from the capture (global illumination), 0 = off", .rangeMin = 0.0f, .rangeMax = 4.0f, .speed = 0.01f});
 
     reg.add<DecalComponent>("Decal")
         .category("Rendering")

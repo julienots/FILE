@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (74, 728 champs)
+## Composants (74, 729 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -994,6 +994,7 @@ Captures the scene around it: shiny surfaces inside its box reflect the surround
 | `update` | enum | Once: when added or moved. Always: refreshed continuously (6 frames each) |
 | `maxDistance` | float | plage 1 .. 5000 |
 | `enabled` | bool |  |
+| `diffuseGI` | float | Indirect diffuse light from the capture (global illumination), 0 = off ; plage 0 .. 4 |
 
 ### SpotLight
 

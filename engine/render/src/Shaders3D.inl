@@ -366,6 +366,32 @@ vec3 agrProbeRadiance(vec3 R, float roughness, vec3 fallback) {
     return mix(fallback, mix(c0, c1, lv - l0) * u_probeMax[best].w, bestW);
 }
 
+// Indirect diffuse light from the reflection probes (their roughest level, along the normal, no
+// box projection): the ambient of the captured room instead of the sky's.
+vec3 agrProbeIrradiance(vec3 N, vec3 fallback) {
+    int best = -1;
+    float bestW = -1.0;
+    for (int i = 0; i < 8; ++i) {
+        if (i >= u_lightCount.z) break;
+        if (u_probeRow[i].y <= 0.0) continue;
+        vec3 inside = min(v_worldPos - u_probeMin[i].xyz, u_probeMax[i].xyz - v_worldPos);
+        float d = min(inside.x, min(inside.y, inside.z));
+        if (d < 0.0) continue;
+        float w = u_probeMin[i].w > 0.0 ? clamp(d / u_probeMin[i].w, 0.0, 1.0) : 1.0;
+        if (w > bestW) {
+            bestW = w;
+            best = i;
+        }
+    }
+    if (best < 0 || bestW <= 0.0) return fallback;
+    vec3 dir = normalize(N);
+    vec2 e = vec2(0.5 + atan(dir.x, -dir.z) * 0.15915494, acos(clamp(dir.y, -1.0, 1.0)) * 0.31830989);
+    e = clamp(e, vec2(0.004, 0.008), vec2(0.996, 0.992));
+    float levels = u_probeAtlasInfo.z;
+    vec3 c = textureLod(u_probeAtlas, vec2((levels - 1.0 + e.x) * u_probeAtlasInfo.x, (u_probeRow[best].x + e.y) * u_probeAtlasInfo.y), 0.0).rgb;
+    return mix(fallback, c * u_probeMax[best].w * u_probeRow[best].y, bestW);
+}
+
 float distributionGGX(float NoH, float a) {
     float a2 = a * a;
     float f = (NoH * a2 - NoH) * NoH + 1.0;
@@ -618,9 +644,9 @@ void main() {
     vec3 R = reflect(-V, N);
     if (u_envParams.x > 0.5) {  // image sky: SH irradiance + prefiltered reflections
         vec3 reflected = agrProbeRadiance(R, roughness, agrEnvRadiance(R, roughness) * u_groundColor.w);
-        color += (diffuseColor * agrEnvIrradiance(N) * u_groundColor.w + envSpecular * reflected) * occlusion;
+        color += (diffuseColor * agrProbeIrradiance(N, agrEnvIrradiance(N) * u_groundColor.w) + envSpecular * reflected) * occlusion;
     } else {
-        color += (diffuseColor * hemisphere(N) + envSpecular * agrProbeRadiance(R, roughness, hemisphere(R))) * occlusion;
+        color += (diffuseColor * agrProbeIrradiance(N, hemisphere(N)) + envSpecular * agrProbeRadiance(R, roughness, hemisphere(R))) * occlusion;
     }
     color += emissive;
     if (u_fogColor.w > 0.5) {

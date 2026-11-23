@@ -1708,3 +1708,33 @@ TEST_CASE("shader graphs: every node compiles on the GPU, a graph colors the mes
     CHECK_MESSAGE(near(px, 137, 225, 0, 10), int(px.r), " ", int(px.g), " ", int(px.b));
     CHECK(gpu().device->validationErrorCount() == 0);
 }
+
+TEST_CASE("probe global illumination: a white ball in a red room takes the room's color as ambient light") {
+    Render3DFixture f;
+    f.camera({0, 0, 3.0f}, {0, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};  // white ambient: without GI the ball stays neutral
+    const auto ball = f.mesh(PrimitiveMesh::Sphere, {0, 0, 0}, Vec3{1.2f}, {1, 1, 1, 1});
+    f.scene.registry().get<MeshRendererComponent>(ball).roughness = 1.0f;
+    // Red room around it (open toward the camera).
+    for (const auto& [pos, size] : std::vector<std::pair<Vec3, Vec3>>{{{-4, 0, 0}, {0.5f, 8, 12}}, {{4, 0, 0}, {0.5f, 8, 12}}, {{0, 4, 0}, {8, 0.5f, 12}},
+                                                                     {{0, -4, 0}, {8, 0.5f, 12}}, {{0, 0, -5}, {8, 8, 0.5f}}})
+        f.mesh(PrimitiveMesh::Cube, pos, size, {1, 0.05f, 0.05f, 1});
+    f.settle();
+    const Rgba before = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 10);
+    CHECK_MESSAGE(std::abs(int(before.r) - int(before.g)) < 20, int(before.r), " ", int(before.g));
+    const auto probe = f.scene.createEntity("Probe");
+    auto& p = f.scene.registry().emplace<ReflectionProbeComponent>(probe);
+    p.size = {7.5f, 7.5f, 11};
+    p.boxProjection = false;
+    for (int i = 0; i < 8; ++i) f.frame();
+    const Rgba lit = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 10);
+    CHECK_MESSAGE(int(lit.r) > int(lit.g) + 40, int(lit.r), " ", int(lit.g), " ", int(lit.b));  // tinted by the red walls
+    // diffuseGI = 0: back to the white ambient.
+    f.scene.registry().get<ReflectionProbeComponent>(probe).diffuseGI = 0.0f;
+    f.frame();
+    const Rgba off = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 10);
+    CHECK_MESSAGE(std::abs(int(off.r) - int(before.r)) < 12, int(off.r), " vs ", int(before.r));
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
