@@ -60,8 +60,8 @@ button:focus-visible{outline:2px solid var(--rift);outline-offset:3px}
 #joyHint{position:absolute;left:calc(26px + var(--sal));bottom:calc(26px + var(--sab));width:110px;height:110px;border-radius:50%;border:1.5px dashed rgba(255,255,255,.22);display:grid;place-items:center;font-size:10px;letter-spacing:.16em;color:rgba(255,255,255,.45)}
 
 /* action buttons */
-#btns{position:absolute;right:calc(0px + var(--sar));bottom:calc(0px + var(--sab));width:300px;height:300px;transform-origin:100% 100%}
-.ab{position:absolute;border-radius:50%;border:1.5px solid rgba(67,243,255,.55);background:radial-gradient(circle at 45% 35%,rgba(60,90,130,.55),rgba(6,12,26,.72));display:grid;place-items:center;padding:0;touch-action:none;box-shadow:0 0 14px rgba(67,243,255,.18),inset 0 0 12px rgba(67,243,255,.12);overflow:hidden}
+#btns{position:absolute;right:calc(0px + var(--sar));bottom:calc(0px + var(--sab));width:300px;height:300px;transform-origin:100% 100%;pointer-events:none}
+.ab{pointer-events:auto;position:absolute;border-radius:50%;border:1.5px solid rgba(67,243,255,.55);background:radial-gradient(circle at 45% 35%,rgba(60,90,130,.55),rgba(6,12,26,.72));display:grid;place-items:center;padding:0;touch-action:none;box-shadow:0 0 14px rgba(67,243,255,.18),inset 0 0 12px rgba(67,243,255,.12);overflow:hidden}
 .ab svg{width:46%;height:46%;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1}
 .ab span{position:absolute;bottom:9%;font-size:8.5px;letter-spacing:.12em;font-weight:700;color:rgba(234,246,255,.8);z-index:1}
 .ab::after{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(0,0,0,.62) calc(var(--cd,0)*1turn),transparent 0)}
@@ -126,7 +126,7 @@ button:focus-visible{outline:2px solid var(--rift);outline-offset:3px}
   <div id="dmgs"></div>
   <div id="joyHint">BOUGER</div>
   <div id="joy"><div id="joyk"></div></div>
-  <div id="btns" class="pe"></div>
+  <div id="btns"></div>
 </div>
 
 <section id="title" class="screen" hidden>
@@ -275,7 +275,7 @@ function readStore(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function writeStore(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let saved=null;try{saved=JSON.parse(readStore(SAVE_KEY)||'null')}catch(e){saved=null}
 
-const G={sens:+(readStore('anomalie-sens')||1.3),started:false,paused:true,time:0,quality:readStore('anomalie-q')||(isTouch?'med':'high'),sound:readStore('anomalie-snd')!=='0',
+const G={sens:+(readStore('anomalie-sens2')||1),started:false,paused:true,time:0,quality:readStore('anomalie-q')||(isTouch?'med':'high'),sound:readStore('anomalie-snd')!=='0',
   fragsTaken:new Set(),pylonsDown:0,unlocked:{grav:false,chrono:false,nova:false},breachOpen:false,boss:null,bossDead:false,
   slow:0,glitch:0,shake:0,hurt:0,lastHurt:-99,kills:0,spawnT:6,won:false,hints:0,freeRoam:false,title:true};
 if(!QUAL[G.quality])G.quality='med';
@@ -1261,7 +1261,7 @@ function buildHeroModel(){
   const root=new THREE.Group(),body=new THREE.Group(),holder=new THREE.Group();body.position.y=0.95;holder.position.y=-0.95;holder.rotation.y=Math.PI;holder.add(model);body.add(holder);root.add(body);scene.add(root);
   const mixer=new THREE.AnimationMixer(model);const act={};for(const n of['Idle','Walk','Run']){act[n]=mixer.clipAction(clipBy(g,n));act[n].play();act[n].setEffectiveWeight(n==='Idle'?1:0)}
   const bone=n=>model.getObjectByName('mixamorig'+n);
-  const B={};for(const n of['RightArm','RightForeArm','RightHand','LeftArm','LeftForeArm','LeftHand','RightUpLeg','RightLeg','RightFoot','LeftUpLeg','LeftLeg','LeftFoot','Head','Spine','Hips','Neck'])B[n]=bone(n);
+  const B={};for(const n of['RightArm','RightForeArm','RightHand','LeftArm','LeftForeArm','LeftHand','RightUpLeg','RightLeg','RightFoot','LeftUpLeg','LeftLeg','LeftFoot','Head','Spine','Hips','Neck','RightToeBase','LeftToeBase'])B[n]=bone(n);
   Object.assign(hero,{B,root,body,holder,model,mixer,act,w:{Idle:1,Walk:0,Run:0},neck:bone('Neck'),spine:bone('Spine2'),rArm:bone('RightArm'),lArm:bone('LeftArm'),
     arms:[{hand:bone('LeftHand')},{hand:bone('RightHand')}]});
   // lignes d'énergie de l'anomalie : anneaux lumineux autour des poignets
@@ -1291,9 +1291,11 @@ function aimBone(bone,child,dir,w){if(!bone||!child||w<0.01)return;bone.getWorld
   _qa.setFromUnitVectors(_bb,dir);if(w<1)_qa.slerp(_qI,1-w);bone.getWorldQuaternion(_qb);_qb.premultiply(_qa);bone.parent.getWorldQuaternion(_bq).invert();bone.quaternion.copy(_bq.multiply(_qb));bone.updateMatrixWorld(true)}
 const POSES={
   // directions dans le repère du corps : +Y tête, +Z avant, -X main droite
-  fly:{RightArm:[-0.12,1,0.3],RightForeArm:[-0.05,1,0.2],LeftArm:[0.35,-0.85,-0.3],LeftForeArm:[0.2,-1,-0.1],RightUpLeg:[-0.07,-1,-0.06],RightLeg:[-0.04,-1,-0.32],LeftUpLeg:[0.09,-1,0.02],LeftLeg:[0.05,-1,-0.12]},
+  fly:{RightArm:[-0.12,1,0.3],RightForeArm:[-0.05,1,0.2],LeftArm:[0.35,-0.85,-0.3],LeftForeArm:[0.2,-1,-0.1],RightUpLeg:[-0.07,-1,-0.06],RightLeg:[-0.04,-1,-0.32],LeftUpLeg:[0.09,-1,0.02],LeftLeg:[0.05,-1,-0.12],RightFoot:[0,-1,-0.15],LeftFoot:[0,-1,-0.1]},
+  fly_feet:{},
   boost:{RightArm:[-0.3,-0.9,-0.45],RightForeArm:[-0.25,-1,-0.4],LeftArm:[0.3,-0.9,-0.45],LeftForeArm:[0.25,-1,-0.4],RightUpLeg:[-0.05,-1,-0.1],RightLeg:[-0.03,-1,-0.2],LeftUpLeg:[0.05,-1,-0.1],LeftLeg:[0.03,-1,-0.2]},
-  hover:{RightArm:[-0.85,-0.55,0.15],RightForeArm:[-0.6,-0.75,0.35],LeftArm:[0.85,-0.55,0.15],LeftForeArm:[0.6,-0.75,0.35],RightUpLeg:[-0.08,-1,0.15],RightLeg:[-0.05,-1,-0.45],LeftUpLeg:[0.1,-1,-0.05],LeftLeg:[0.06,-1,-0.2]},
+  hover:{RightArm:[-0.8,-0.55,-0.2],RightForeArm:[0.75,-0.45,0.3],LeftArm:[0.8,-0.55,-0.2],LeftForeArm:[-0.75,-0.45,0.3],RightUpLeg:[-0.03,-1,0.0],RightLeg:[-0.02,-1,-0.04],LeftUpLeg:[0.05,-1,0.2],LeftLeg:[0.02,-1,-0.32],RightFoot:[0,-1,0.45],LeftFoot:[0,-1,0.4]},
+  hoverX:{RightArm:[-0.35,-0.7,0.5],RightForeArm:[0.95,0.12,0.28],LeftArm:[0.35,-0.7,0.5],LeftForeArm:[-0.95,0.2,0.32],RightUpLeg:[-0.03,-1,0.0],RightLeg:[-0.02,-1,-0.04],LeftUpLeg:[0.05,-1,0.2],LeftLeg:[0.02,-1,-0.32],RightFoot:[0,-1,0.45],LeftFoot:[0,-1,0.4]},
   dive:{RightArm:[-0.15,1,0.25],RightForeArm:[-0.1,1,0.1],LeftArm:[0.15,1,0.25],LeftForeArm:[0.1,1,0.1],RightUpLeg:[-0.06,-1,-0.1],RightLeg:[-0.04,-1,-0.25],LeftUpLeg:[0.06,-1,-0.1],LeftLeg:[0.04,-1,-0.25]},
   jump:{RightArm:[-0.6,0.15,0.75],RightForeArm:[-0.3,0.6,0.7],LeftArm:[0.6,-0.4,-0.5],LeftForeArm:[0.5,-0.6,-0.1],RightUpLeg:[-0.06,-0.55,0.85],RightLeg:[-0.04,-1,-0.25],LeftUpLeg:[0.08,-1,-0.25],LeftLeg:[0.05,-0.75,-0.7]},
   fall:{RightArm:[-0.95,0.3,0.1],RightForeArm:[-0.8,0.6,0.1],LeftArm:[0.95,0.3,0.1],LeftForeArm:[0.8,0.6,0.1],RightUpLeg:[-0.15,-1,0.25],RightLeg:[-0.08,-1,-0.35],LeftUpLeg:[0.15,-1,0.05],LeftLeg:[0.08,-1,-0.4]},
@@ -1308,7 +1310,7 @@ const POSES={
   slam:{RightArm:[-0.25,-0.7,0.7],RightForeArm:[-0.1,-1,0.4],LeftArm:[0.25,-0.7,0.7],LeftForeArm:[0.1,-1,0.4],RightUpLeg:[-0.15,-0.5,0.85],RightLeg:[-0.05,-1,-0.3],LeftUpLeg:[0.15,-0.8,-0.5],LeftLeg:[0.05,-1,-0.6]},
   cast:{RightArm:[-0.15,0.25,1],RightForeArm:[-0.1,0.15,1]}
 };
-const BONE_CHAIN=[['RightArm','RightForeArm'],['RightForeArm','RightHand'],['LeftArm','LeftForeArm'],['LeftForeArm','LeftHand'],['RightUpLeg','RightLeg'],['RightLeg','RightFoot'],['LeftUpLeg','LeftLeg'],['LeftLeg','LeftFoot']];
+const BONE_CHAIN=[['RightArm','RightForeArm'],['RightForeArm','RightHand'],['LeftArm','LeftForeArm'],['LeftForeArm','LeftHand'],['RightUpLeg','RightLeg'],['RightLeg','RightFoot'],['LeftUpLeg','LeftLeg'],['LeftLeg','LeftFoot'],['RightFoot','RightToeBase'],['LeftFoot','LeftToeBase']];
 const _pd=new V3(),_pacc={};
 const _aimO=new V3(),_aimD=new V3();
 function applyPoses(weights,wig=0){
@@ -1320,10 +1322,16 @@ function applyPoses(weights,wig=0){
 function animHeroModel(dt){
   const r=hero.root;r.position.copy(P.pos);r.rotation.y=P.yaw;r.visible=!P.dead;
   const hv=Math.hypot(P.vel.x,P.vel.z),sp3=P.vel.length();let body=0,roll=0,tI=0,tW=0,tR=0,tsW=1,tsR=1,tsI=1,yOff=0;
-  const W=hero.pw||(hero.pw={fly:0,boost:0,hover:0,dive:0,jump:0,fall:0,land:0,slam:0,superland:0,slamUp:0,push:0,nova:0,dash:0,skid:0,hurt:0});const T={fly:0,boost:0,hover:0,dive:0,jump:0,fall:0,land:0,slam:0,superland:0,slamUp:0,push:0,nova:0,dash:0,skid:0,hurt:0};let bank=0,wig=0;
+  const W=hero.pw||(hero.pw={hoverX:0,fly:0,boost:0,hover:0,dive:0,jump:0,fall:0,land:0,slam:0,superland:0,slamUp:0,push:0,nova:0,dash:0,skid:0,hurt:0});const T={hoverX:0,fly:0,boost:0,hover:0,dive:0,jump:0,fall:0,land:0,slam:0,superland:0,slamUp:0,push:0,nova:0,dash:0,skid:0,hurt:0};let bank=0,wig=0;
   if(P.diving){body=2.75;tI=1;tsI=0.2;T.dive=1}
-  else if(P.fly){const f=smooth(3,20,sp3),boost=smooth(34,44,sp3);const traj=Math.atan2(hv,P.vel.y);body=lerp(0.12,clamp(traj,0.35,2.6),f);bank=clamp(-P.yawRate*0.55*f,-1.25,1.25);wig=0.4+0.6*f;tI=1;tsI=0.4;
-    T.hover=1-f;T.fly=f*(1-boost);T.boost=boost;yOff=Math.sin(G.time*2.2)*0.12*(1-f)}
+  else if(P.fly){const f=smooth(3,20,sp3),boost=smooth(34,44,sp3);const traj=Math.atan2(hv,P.vel.y);body=lerp(-0.07,clamp(traj,0.35,2.6),f);bank=clamp(-P.yawRate*0.55*f,-1.25,1.25);wig=0.4+0.6*f;tI=1;tsI=0.4;
+    const hv0=1-f;P.hoverT=hv0>0.7?(P.hoverT||0)+dt:0;const crossed=(Math.floor(P.hoverT/7)%2)===1;
+    T.hover=hv0*(crossed?0:1);T.hoverX=hv0*(crossed?1:0);T.fly=f*(1-boost);T.boost=boost;
+    yOff=(Math.sin(G.time*1.9)*0.16+Math.sin(G.time*0.7)*0.06)*hv0;bank+=Math.sin(G.time*0.55)*0.05*hv0;wig*=f;
+    if(hv0>0.6){const gy=floorAt(P.pos.x,P.pos.z,P.pos.y),hgt=P.pos.y-gy;
+      if(fx()<0.5){hero.B.RightFoot.getWorldPosition(_ba);glow.emit(_ba.x+R(-0.15,0.15),_ba.y-0.1,_ba.z+R(-0.15,0.15),R(-0.3,0.3),R(-2.5,-1),R(-0.3,0.3),0.6,R(0.25,0.5),0x7ff6ff,0.8,0,1.5,2)}
+      if(hgt<7){hero.hoverRing=(hero.hoverRing||0)-dt;if(hero.hoverRing<=0){hero.hoverRing=0.9;ring(P.pos.x,gy+0.15,P.pos.z,4.5-hgt*0.3,0x9ffcff,0.9)}
+        if(fx()<0.5*(1-hgt/7)){const a=R(0,6.28),r=R(0.5,3);(gy<0.3?particles:particles).emit(P.pos.x+Math.sin(a)*r,gy+0.1,P.pos.z+Math.cos(a)*r,Math.sin(a)*R(2,5),R(0.2,1.2),Math.cos(a)*R(2,5),R(0.8,1.4),R(1,2),gy<0.3?0xeaf6ff:0xd8c9a8,0.4,0,1)}}}}
   else if(!P.onGround){tR=1;tsR=0.15;if(P.vel.y>2)T.jump=1;else T.fall=smooth(2,-14,P.vel.y)}
   else{tW=smooth(0.4,3,hv)*(1-smooth(6,10,hv));tR=smooth(6,10,hv);tI=1-tW-tR;tsW=clamp(hv/1.9,0.7,1.8);tsR=clamp(hv/6.5,0.9,2.6);body=0.06*smooth(4,12,hv)+0.22*smooth(18,30,hv);roll=clamp(-P.yawRate*hv*0.018,-0.35,0.35)}
   if(P.superLand>0){T.superland=1;yOff=-0.5;body=0.42;tI=1;tW=tR=0}
@@ -1384,7 +1392,7 @@ function updateCape(dt){const{w,h,p,o}=CAPE;const B=hero.B;
   for(let i=0;i<w;i++){const k=i;p[k].copy(mid).addScaledVector(span,(i/(w-1)-0.5)*0.82).addScaledVector(back,0.13).addScaledVector(up,0.03);o[k].copy(p[k])}
   for(let k=w;k<w*h;k++){const a=p[k],b=o[k];_v4.subVectors(a,b).multiplyScalar(0.975);b.copy(a);a.add(_v4);a.y-=9.8*hh*hh;
     const j=(k/w)|0,i=k%w;const n=Math.sin(G.time*(14+flut*18)+j*0.9+i*0.6)*Math.sin(G.time*7.3+i*1.3);
-    a.addScaledVector(up,n*0.012*flut*j/h);a.addScaledVector(back,n*0.008*flut);a.x+=Math.sin(G.time*0.9)*0.0006;}
+    a.addScaledVector(up,n*0.012*flut*j/h);a.addScaledVector(back,n*0.008*flut);if(P.fly&&sp<8){const hn=Math.sin(G.time*2.6+j*0.55+i*0.3);a.addScaledVector(back,(0.0022+0.0016*hn)*j/h);a.y+=0.0012*j/h*(1+hn)}a.x+=Math.sin(G.time*0.9)*0.0006;}
   const rw=_cA.distanceTo(_cB)*0.82/(w-1),rh=0.105;
   const hip=_cA.copy(hero.root.position).setY(hero.root.position.y),neck=B.Neck.getWorldPosition(_cB);B.Hips.getWorldPosition(hip);
   for(let it=0;it<6;it++){
@@ -1944,7 +1952,7 @@ touchEl.addEventListener('pointermove',e=>{
     camYaw-=dx*0.0045*G.sens;camPitch=clamp(camPitch+dy*0.0035*G.sens,-0.6,1.3);lookLast={x:e.clientX,y:e.clientY};lookIdle=0;return}
   if(e.pointerId===joyId){let dx=e.clientX-joyO.x,dy=e.clientY-joyO.y;const d=Math.hypot(dx,dy),mx=42;if(d>mx){dx*=mx/d;dy*=mx/d}
     const dz=Math.max(0,(Math.min(d,mx)-4)/(mx-4))/Math.max(Math.min(d,mx)/mx,1e-3);input.mx=clamp(dx/mx*dz*1.08,-1,1);input.my=clamp(-dy/mx*dz*1.08,-1,1);$('#joyk').style.transform=`translate(${dx}px,${dy}px)`}
-  else if(e.pointerId===lookId){const dx=e.clientX-lookLast.x,dy=e.clientY-lookLast.y;const acc=1+Math.min(1.5,Math.hypot(dx,dy)/18);const sens=G.sens*0.0125*acc;camYaw-=dx*sens;camPitch=clamp(camPitch+dy*sens*0.75,-0.6,1.3);lookLast={x:e.clientX,y:e.clientY};lookIdle=0}});
+  else if(e.pointerId===lookId){const dx=e.clientX-lookLast.x,dy=e.clientY-lookLast.y;const acc=1+Math.min(0.6,Math.hypot(dx,dy)/40);const sens=G.sens*0.0075*acc;camYaw-=dx*sens;camPitch=clamp(camPitch+dy*sens*0.75,-0.6,1.3);lookLast={x:e.clientX,y:e.clientY};lookIdle=0}});
 const endPtr=e=>{if(e.pointerType==='mouse'){if(mouseDown&&mouseMoved<6&&!G.paused){press('atk');setTimeout(()=>release('atk'),120)}mouseDown=false;return}
   if(e.pointerId===joyId){joyId=null;input.mx=input.my=0;$('#joy').classList.remove('on');$('#joyk').style.transform=''}if(e.pointerId===lookId)lookId=null};
 touchEl.addEventListener('pointerup',endPtr);touchEl.addEventListener('pointercancel',endPtr);
@@ -2170,7 +2178,7 @@ $('#fsBtn').onclick=()=>{const d=document.documentElement;try{(d.requestFullscre
 document.querySelectorAll('.chip[data-q]').forEach(b=>b.onclick=()=>{G.quality=b.dataset.q;writeStore('anomalie-q',G.quality);applyQuality();onResize()});
 $('#sndBtn').onclick=()=>{G.sound=!G.sound;writeStore('anomalie-snd',G.sound?'1':'0');$('#sndBtn').setAttribute('aria-pressed',String(G.sound));if(AU.master)AU.master.gain.value=G.sound?0.55:0};
 $('#sndBtn').setAttribute('aria-pressed',String(G.sound));
-{const r=$('#sensR');r.value=G.sens;$('#sensV').textContent=G.sens.toFixed(1);r.oninput=()=>{G.sens=+r.value;$('#sensV').textContent=G.sens.toFixed(1);writeStore('anomalie-sens',String(G.sens))}}
+{const r=$('#sensR');r.value=G.sens;$('#sensV').textContent=G.sens.toFixed(1);r.oninput=()=>{G.sens=+r.value;$('#sensV').textContent=G.sens.toFixed(1);writeStore('anomalie-sens2',String(G.sens))}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.started&&!G.paused&&!G.won&&!P.dead)togglePause(true)});
 addEventListener('resize',onResize);
 
@@ -2204,5 +2212,5 @@ window.ANOM={back(){if(G.started&&!G.won&&!P.dead&&$('#intro').hidden)togglePaus
   setCam(yaw,pitch){camYaw=yaw;camPitch=pitch},
   place(x,z,y){P.pos.set(x,y??floorAt(x,z,999),z);camTarget.set(P.pos.x,P.pos.y+1.5,P.pos.z)},
   fly(v){P.fly=v},target:()=>currentTarget, castGravity, castNova,getH,ISLANDS,LAKE,VILLAGE,
-  get camera(){return camera}, glow:()=>glow};
+  get camera(){return camera}, get yaw(){return camYaw}, glow:()=>glow};
 </script>
