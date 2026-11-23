@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <!-- engrenage -->
+  <path android:fillColor="#FBBF24" android:pathData="M54,30l4,0l1.5,6.5a18,18 0 0,1 5,2.1l5.7,-3.5l2.8,2.8l-3.5,5.7a18,18 0 0,1 2.1,5l6.5,1.5l0,4l-6.5,1.5a18,18 0 0,1 -2.1,5l3.5,5.7l-2.8,2.8l-5.7,-3.5a18,18 0 0,1 -5,2.1l-1.5,6.5l-4,0l-1.5,-6.5a18,18 0 0,1 -5,-2.1l-5.7,3.5l-2.8,-2.8l3.5,-5.7a18,18 0 0,1 -2.1,-5l-6.5,-1.5l0,-4l6.5,-1.5a18,18 0 0,1 2.1,-5l-3.5,-5.7l2.8,-2.8l5.7,3.5a18,18 0 0,1 5,-2.1z"/>
+  <path android:fillColor="#1E3A8A" android:pathData="M56,44a10,10 0 1,0 0.01,0z"/>
+  <path android:fillColor="#FFFFFF" android:pathData="M49,51h14v2h-14zM49,55h14v2h-14z"/>
+</vector>
