@@ -766,6 +766,7 @@ std::vector<ScriptEngine::SyntaxError> ScriptEngine::lint(std::string_view code,
                 lua_getfield(L, -1, key.c_str());
                 lua_remove(L, -2);
                 path += "." + key;
+                if (path == "agr.globals") break;  // the game's own data, not API
                 if (lua_isnil(L, -1)) {
                     const int l = luaG_getfuncline(p, q);
                     if (reported.insert(path + "@" + std::to_string(l)).second) out.push_back({l, "'" + path + "' n'existe pas dans l'API"});

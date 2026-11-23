@@ -59,22 +59,22 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
     items(basic, 1);
     ImGui::Separator();
     if (ImGui::BeginMenu("Formes 3D")) {
-        items(shapes, 4);
+        items(shapes, std::size(shapes));
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("2D")) {
-        items(twoD, 5);
+        items(twoD, std::size(twoD));
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Caméra et lumières")) {
-        items(scene, 5);
+        items(scene, std::size(scene));
         ImGui::EndMenu();
     }
     static const Item ui[] = {{"Canvas", CreateKind::UICanvas}, {"Panneau", CreateKind::UIPanel}, {"Texte", CreateKind::UIText},
                               {"Bouton", CreateKind::UIButton}, {"Curseur", CreateKind::UISlider}, {"Colonne (mise en page)", CreateKind::UIColumn},
                               {"Case à cocher", CreateKind::UIToggle}, {"Champ de saisie", CreateKind::UIInputField}, {"Zone défilante", CreateKind::UIScrollView}};
     if (ImGui::BeginMenu("Interface (UI)")) {
-        items(ui, 6);
+        items(ui, std::size(ui));
         ImGui::EndMenu();
     }
     if (ImGui::MenuItem("Source audio")) s.ctx.create(CreateKind::AudioSource, parent);

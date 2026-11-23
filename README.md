@@ -16,6 +16,9 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 > L'éditeur de logique visuelle et la phase 9 (modèles, outils, plugins) sont les étapes suivantes.
 > L'avancement détaillé et honnête est dans [docs/ROADMAP.md](docs/ROADMAP.md).
 
+**Pour commencer** : [tutoriel 2D](docs/TUTORIAL_2D.md) (un jeu de plateforme en 30 minutes) et
+[tutoriel 3D](docs/TUTORIAL_3D.md) (orbes et ennemi qui poursuit) ; leurs scripts sont exécutés par les tests.
+
 ![Éditeur AGR](docs/images/editor.png)
 
 *L'éditeur AGR (Vulkan). Capture produite par le test automatisé de bout en bout.*

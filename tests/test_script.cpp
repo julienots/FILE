@@ -1301,6 +1301,7 @@ TEST_CASE("lint: unknown globals and missing agr paths, with their lines; clean 
     CHECK(w[2].line == 5);
     CHECK(w[2].message.find("undefinedThing") != std::string::npos);
     CHECK(f.scripts.lint("local x = = 1").empty());  // syntax errors are checkSyntax's job
+    CHECK(f.scripts.lint("agr.globals.score = (agr.globals.score or 0) + 1").empty());  // game data, not API
 }
 
 TEST_CASE("lint: self fields never defined, unknown self methods and entity methods") {
