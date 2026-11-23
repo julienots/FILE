@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <optional>
+#include <set>
 #include <span>
 
 #include "agr/core/Pack.hpp"
@@ -22,6 +23,7 @@ struct ExportReport {
     u32 files = 0;                  ///< Game data files.
     u64 bytes = 0;                  ///< Game data size.
     u32 binaryScenes = 0;           ///< Scenes converted to the binary format (faster loading).
+    u32 skippedAssets = 0;          ///< Asset files left out by the export filters.
     std::vector<std::string> warnings;
     std::string log;                ///< Output of external tools (Gradle).
 };
@@ -35,6 +37,14 @@ Status prepareExportFolder(const std::filesystem::path& dir);
 /// converted to the binary scene format (same file name, loading detects the format) when
 /// the conversion is verified lossless; otherwise it is copied as saved on disk.
 Result<ExportReport> packageGameData(const Project& project, const std::filesystem::path& gameDir);
+
+/// Glob match of a relative asset path ('/' separators): '*' any run inside a name, "**" any
+/// run across folders, '?' one character. A pattern without '/' matches the file name.
+bool exportPatternMatch(std::string_view pattern, std::string_view relativePath);
+/// Assets reachable from the project's scenes and settings files through "assets://" references
+/// (scenes, prefabs, materials, scripts, logic graphs, controllers, clips, shaders, UI themes...),
+/// relative to the assets folder. Models bring the files next to them (textures, .bin, .mtl).
+std::set<std::string> usedAssets(const Project& project);
 
 /// Desktop build: `outputDir`/<Name>/ with the player executable (renamed after the game)
 /// and its game/ folder.

@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <optional>
+#include <functional>
 #include <random>
 #include <cstring>
 
@@ -180,8 +181,36 @@ Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path&
         return makeError(Error::Code::NotFound, "the startup scene '" + project.settings().startupScene + "' does not exist (save it first)");
     if (Status s = prepareExportFolder(gameDir); !s) return s.error();
 
-    // Assets (hidden files and folders skipped).
+    // Assets (hidden files and folders skipped), filtered by the export settings.
     const fs::path assets = project.assetsDirectory();
+    const ExportSettings& xs = project.settings().exportSettings;
+    auto patterns = [](const std::string& list) {
+        std::vector<std::string> out;
+        std::string cur;
+        for (char c : list + ",") {
+            if (c == ',') {
+                while (!cur.empty() && cur.back() == ' ') cur.pop_back();
+                if (!cur.empty()) out.push_back(cur);
+                cur.clear();
+            } else if (!(c == ' ' && cur.empty())) {
+                cur += c;
+            }
+        }
+        return out;
+    };
+    const std::vector<std::string> includes = patterns(xs.includeFilter), excludes = patterns(xs.excludeFilter);
+    std::set<std::string> used;
+    if (xs.onlyUsedAssets) used = usedAssets(project);
+    u32 skipped = 0;
+    auto wanted = [&](const std::string& rel) {
+        for (const std::string& p : excludes)
+            if (exportPatternMatch(p, rel)) return false;
+        if (!xs.onlyUsedAssets) return true;
+        if (used.count(rel)) return true;
+        for (const std::string& p : includes)
+            if (exportPatternMatch(p, rel)) return true;
+        return false;
+    };
     if (fs::is_directory(assets, ec)) {
         for (auto it = fs::recursive_directory_iterator(assets, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
             if (ec) break;
@@ -191,9 +220,15 @@ Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path&
                 continue;
             }
             if (!it->is_regular_file()) continue;
+            if (!wanted(rel.generic_string())) {
+                ++skipped;
+                continue;
+            }
             if (Status s = copyFile(it->path(), gameDir / "assets" / rel, report); !s) return s.error();
         }
     }
+    if (skipped) AGR_LOG_INFO("Export", "{} asset file(s) left out (export filters / unused)", skipped);
+    report.skippedAssets = skipped;
     // Scenes (wherever they are in the project, outside assets/ and hidden folders).
     for (const std::string& scene : project.listScenes()) {
         if (hidden(fs::path(scene))) continue;
@@ -598,6 +633,91 @@ Result<std::vector<u8>> squareIconPng(const Project& project, u32 size) {
     auto png = encodePng(size, size, out);
     if (!png) return png.error();
     return std::vector<u8>(png.value().begin(), png.value().end());
+}
+
+// ---------------------------------------------------------------- export filters
+bool exportPatternMatch(std::string_view pattern, std::string_view path) {
+    if (pattern.find('/') == std::string_view::npos) {  // file name only
+        const auto slash = path.find_last_of('/');
+        if (slash != std::string_view::npos) path = path.substr(slash + 1);
+    }
+    // Iterative glob with backtracking; "**" crosses '/', '*' does not.
+    std::function<bool(usize, usize)> match = [&](usize p, usize s) -> bool {
+        while (p < pattern.size()) {
+            if (pattern[p] == '*') {
+                const bool deep = p + 1 < pattern.size() && pattern[p + 1] == '*';
+                const usize next = p + (deep ? 2 : 1);
+                for (usize k = s; k <= path.size(); ++k) {
+                    if (match(next, k)) return true;
+                    if (k < path.size() && path[k] == '/' && !deep) return false;
+                }
+                return false;
+            }
+            if (s >= path.size()) return false;
+            if (pattern[p] != '?' && pattern[p] != path[s]) return false;
+            if (pattern[p] == '?' && path[s] == '/') return false;
+            ++p, ++s;
+        }
+        return s == path.size();
+    };
+    return match(0, 0);
+}
+
+std::set<std::string> usedAssets(const Project& project) {
+    const fs::path assets = project.assetsDirectory();
+    std::set<std::string> found;
+    std::vector<fs::path> queue;
+    std::error_code ec;
+    std::function<void(std::string)> add;
+    add = [&](std::string rel) {
+        if (const auto hash = rel.find('#'); hash != std::string::npos) rel.erase(hash);  // "model.glb#Walk"
+        while (!rel.empty() && rel.front() == '/') rel.erase(rel.begin());
+        if (rel.empty() || rel.find("..") != std::string::npos || found.count(rel)) return;
+        const fs::path file = assets / rel;
+        if (!fs::is_regular_file(file, ec)) return;
+        found.insert(rel);
+        queue.push_back(file);
+        // Models load their textures / buffers by relative path: bring the files beside them.
+        const std::string ext = file.extension().string();
+        if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx")
+            for (const auto& e : fs::directory_iterator(file.parent_path(), ec)) {
+                const std::string x = e.path().extension().string();
+                if (x == ".png" || x == ".jpg" || x == ".jpeg" || x == ".bin" || x == ".mtl" || x == ".tga" || x == ".ktx2")
+                    add(fs::relative(e.path(), assets, ec).generic_string());
+            }
+    };
+    // Seeds: every scene, and the settings files the engine reads by name.
+    for (const std::string& scene : project.listScenes()) queue.push_back(project.root() / scene);
+    for (const char* settings : {"icon.png", "localization.csv", "audio_buses.json", "physics_layers.json", "input_actions.json", "theme.agrtheme"})
+        add(settings);
+    for (const auto& e : fs::directory_iterator(assets, ec))
+        if (e.is_regular_file() && (e.path().extension() == ".json" || e.path().extension() == ".csv")) add(e.path().filename().string());
+    const std::string& splash = project.settings().exportSettings.splashImage;
+    if (splash.rfind("assets://", 0) == 0) add(splash.substr(9));
+    static const std::string prefix = "assets://";
+    while (!queue.empty()) {
+        const fs::path file = queue.back();
+        queue.pop_back();
+        const std::string ext = file.extension().string();
+        // Images, sounds and models carry no references (models: siblings handled above).
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac" ||
+            ext == ".glb" || ext == ".bin" || ext == ".ttf" || ext == ".otf")
+            continue;
+        auto text = readAll(file);
+        if (!text) continue;
+        for (usize at = text->find(prefix); at != std::string::npos; at = text->find(prefix, at + prefix.size())) {
+            usize end = at + prefix.size();
+            while (end < text->size()) {
+                const char c = (*text)[end];
+                if (c == '"' || c == '\'' || c == '\n' || c == '\r' || c == ' ' || c == '\t' || c == ')' || c == ';' || c == ',' || c == '\\' ||
+                    static_cast<unsigned char>(c) < 0x20)
+                    break;
+                ++end;
+            }
+            add(text->substr(at + prefix.size(), end - at - prefix.size()));
+        }
+    }
+    return found;
 }
 
 } // namespace agr::editor

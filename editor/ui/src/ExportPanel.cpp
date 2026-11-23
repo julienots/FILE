@@ -138,6 +138,12 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     changed |= ImGui::Checkbox("Bouton Retour : quitter", &x.backQuits);
     if (m_target == 0 || m_target == kWindowsTarget) changed |= ImGui::Checkbox("Archive .zip du dossier (pour le mettre en ligne)", &x.zipPackage);
     ImGui::SeparatorText("Données du jeu");
+    changed |= ImGui::Checkbox("Seulement les assets utilisés", &x.onlyUsedAssets);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Les assets atteints depuis les scènes (matériaux, scripts, prefabs, sons...) ; les chemins\n"
+                          "construits en jeu (\"assets://niveau\" .. n) sont à ajouter dans « Inclure »");
+    changed |= ImGui::InputTextWithHint("Inclure", "levels/*.agrscene, music/**", &x.includeFilter);
+    changed |= ImGui::InputTextWithHint("Exclure", "*.psd, sources/**", &x.excludeFilter);
     changed |= ImGui::Checkbox("Un seul fichier (game.agrpak)", &x.dataPack);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Les assets et scènes dans une archive lue sur place, au lieu de fichiers séparés");
     ImGui::BeginDisabled(!x.dataPack);

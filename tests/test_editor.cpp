@@ -1615,3 +1615,56 @@ TEST_CASE("undo history: asset file edits (materials) are undone and redone with
     f.ctx->commitAssetFile("Material red", uri, "same", "same");
     CHECK(f.ctx->undoStack().size() == n);
 }
+
+TEST_CASE("export filters: glob patterns, assets reached from the scenes through materials and scripts") {
+    CHECK(exportPatternMatch("*.psd", "art/hero.psd"));
+    CHECK_FALSE(exportPatternMatch("*.psd", "art/hero.png"));
+    CHECK(exportPatternMatch("sources/*", "sources/a.blend"));
+    CHECK_FALSE(exportPatternMatch("sources/*", "sources/deep/a.blend"));
+    CHECK(exportPatternMatch("sources/**", "sources/deep/a.blend"));
+    CHECK(exportPatternMatch("levels/lvl?.agrscene", "levels/lvl3.agrscene"));
+    CHECK_FALSE(exportPatternMatch("levels/lvl?.agrscene", "levels/lvl10.agrscene"));
+
+    EditorFixture f(ProjectMode::Mode3D);
+    const fs::path a = f.ctx->project().assetsDirectory();
+    auto write = [&](const std::string& rel, const std::string& text) {
+        fs::create_directories((a / rel).parent_path());
+        std::ofstream(a / rel, std::ios::binary) << text;
+    };
+    write("mat/rock.agrmat", R"({"baseColorTexture": "assets://tex/rock.png", "shader": "assets://fx/wet.agrshader"})");
+    write("tex/rock.png", "PNG");
+    write("fx/wet.agrshader", "param texture n = \"assets://tex/noise.png\";\nvoid surface(inout Surface s) {}\n");
+    write("tex/noise.png", "PNG");
+    write("scripts/boss.lua", "local S = {}\nfunction S:onStart() agr.audio.play('assets://sfx/roar.ogg') end\nreturn S\n");
+    write("sfx/roar.ogg", "OGG");
+    write("models/ship.gltf", "{}");
+    write("models/ship.bin", "BIN");
+    write("models/ship_albedo.png", "PNG");
+    write("unused/old.png", "PNG");
+    write("unused/notes.txt", "x");
+    // A scene that references the material, the script and the model.
+    const auto e = f.ctx->create(CreateKind::Cube);
+    f.ctx->scene().registry().get<MeshRendererComponent>(e).material = "assets://mat/rock.agrmat";
+    f.ctx->scene().registry().emplace<ScriptComponent>(e).script = "assets://scripts/boss.lua";
+    const auto ship = f.ctx->create(CreateKind::Cube);
+    f.ctx->scene().registry().get<MeshRendererComponent>(ship).model = "assets://models/ship.gltf#0";
+    REQUIRE(f.ctx->saveSceneAs(f.ctx->project().settings().startupScene));
+    const auto used = usedAssets(f.ctx->project());
+    for (const char* rel : {"mat/rock.agrmat", "tex/rock.png", "fx/wet.agrshader", "tex/noise.png", "scripts/boss.lua", "sfx/roar.ogg", "models/ship.gltf",
+                            "models/ship.bin", "models/ship_albedo.png"})
+        CHECK_MESSAGE(used.count(rel), rel);
+    CHECK_FALSE(used.count("unused/old.png"));
+    // Export: only the used ones, plus the include filter, minus the exclude filter.
+    auto& x = f.ctx->project().settings().exportSettings;
+    x.onlyUsedAssets = true;
+    x.includeFilter = "unused/*.txt";
+    x.excludeFilter = "*.bin";
+    const fs::path out = fs::temp_directory_path() / ("agr_filter_" + Uuid::generate().toString());
+    auto report = packageGameData(f.ctx->project(), out);
+    REQUIRE_MESSAGE(report, (report ? "" : report.error().message));
+    CHECK(fs::exists(out / "assets" / "sfx" / "roar.ogg"));
+    CHECK(fs::exists(out / "assets" / "unused" / "notes.txt"));
+    CHECK_FALSE(fs::exists(out / "assets" / "unused" / "old.png"));
+    CHECK_FALSE(fs::exists(out / "assets" / "models" / "ship.bin"));
+    CHECK(report.value().skippedAssets >= 2);
+}

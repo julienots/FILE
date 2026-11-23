@@ -22,6 +22,18 @@ sinon (composant inconnu de l'éditeur, prefab introuvable, fichier modifié à 
 telle quelle. `ExportReport::binaryScenes` compte les scènes converties. L'éditeur utilise le même format
 pour ses instantanés (annuler / rétablir, mode Jeu).
 
+## Filtres : seulement ce qui sert
+
+*Données du jeu › Seulement les assets utilisés* : l'export part des scènes et des fichiers de réglages
+(icône, traductions, bus audio, couches physiques, écran de démarrage, `.json` / `.csv` à la racine des
+assets) et suit tous les chemins `assets://` qu'ils contiennent — matériaux, textures, shaders, scripts
+Lua, graphes de logique, prefabs, machines à états, clips, thèmes —, récursivement ; un modèle emporte
+les fichiers à côté de lui (textures, `.bin`, `.mtl`). **Inclure** ajoute des motifs (chemins construits
+en jeu : `levels/*.agrscene`, `music/**`), **Exclure** en retire toujours (`*.psd, sources/**`) ; `*` ne
+traverse pas les dossiers, `**` si, `?` = un caractère, un motif sans `/` porte sur le nom de fichier.
+La Vitrine 2D passe de 5,5 Mo à 0,9 Mo (29 fichiers au lieu de 214) et passe `--autotest` sans fichier
+manquant.
+
 ## Paquet de données, chiffrement, patchs et DLC
 
 Option *Données du jeu › Un seul fichier* : au lieu de milliers de fichiers, `game/` contient

@@ -35,6 +35,11 @@ struct ExportSettings {
     bool vibration = true;
     bool network = false;  ///< Android INTERNET permission (multiplayer: agr.net).
     bool microphone = false;
+    /// Export only the assets the scenes reference (directly or through materials, scripts,
+    /// prefabs, controllers... found by their "assets://" paths), plus includeFilter.
+    bool onlyUsedAssets = false;
+    std::string includeFilter;  ///< Always exported: comma-separated patterns ("levels/*.agrscene, *.ogg").
+    std::string excludeFilter;  ///< Never exported ("*.psd, sources/*").
     bool dataPack = false;     ///< Game data in one game.agrpak instead of loose files.
     bool encryptData = false;  ///< Encrypt game.agrpak (AES-256; key in keys/data.key, embedded in the player).
     bool zipPackage = false;  ///< PC exports: also a <Name>.zip of the folder (store pages, sharing).  ///< Android RECORD_AUDIO permission (agr.audio.startRecording).
