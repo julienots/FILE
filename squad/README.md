@@ -8,6 +8,7 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
 ![Écrans](branding/squad-ecrans.png)
 ![Baston](branding/squad-baston.png)
 ![Muscu et fête](branding/squad-muscu-fete.png)
+![Salle et street](branding/squad-salle-street.png)
 
 ## Ce que fait l'appli
 - **Ouverture animée SuperEssence Studio** : hexagone jaune avec monogramme S, nom lettre par lettre, reflet. Toucher pour passer.
@@ -25,10 +26,15 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
   - **lâche un gars sur un autre** : ça part en baston ; bouton **« Défier »** dans sa fiche ;
   - palmarès (victoires/défaites) et **relations** : meilleur pote, pote, rival, ennemi juré.
 - **Séances de muscu collectives** : à ton heure de sport (et parfois au hasard), les sportifs vont chercher le matos au bord de l'écran, le portent au-dessus de la tête et le posent : banc de développé couché, poulie haute (la pile de poids monte), rack à squat, sac de frappe (il balance sous les coups), haltères. Ils tournent sur les postes ; s'il n'y a plus de poste libre, ils coachent un pote. À la fin ils rangent tout (+forme, +XP, +amitié). Le matos se déplace au doigt.
+- **Salle encore plus complète** : tapis de course, presse à cuisses, rameur, pec deck, barre de traction, barres parallèles en plus. Magnésie avant les séries, shaker et étirements entre deux, sueur à l'effort.
+- **Spot et PR** : au banc et au squat, un gars tente un record, un pote vient le parer et hurle « TOUT TOI ! ». Le lifter force (visage rouge, veine, sueur, il tremble). Soit « NEW PR ! » et toute la salle crie, soit le pareur rattrape la barre. Records gardés dans la fiche.
+- **Street workout** : tractions, muscle-up, front lever, dips, ATR et ATR sur un bras (aussi dans leur temps libre).
+- **Le bordel** : haltères, disques, kettlebells, barres, shakers, serviettes restent par terre après la séance (on les déplace, on tape dedans, ou on les lâche sur la croix).
+- **Écran dégueulasse** : quand ils mangent, ketchup, sauce BBQ, moutarde, miettes, traces de gras, éclaboussures de shaker… et des rots. Bouton « Nettoyer l'écran » (ou notification) : le Sergent passe l'éponge et ramasse tout ; il le fait aussi tout seul quand c'est trop sale.
 - **Fêtes** : surtout le vendredi et le samedi soir. La boule à facettes descend du haut, la sono pulse et envoie des notes, le buffet a ses bouteilles, gobelets et chips. Ils dansent (4 styles, dont le robot), trinquent, puis rangent. Toucher la sono = tout le monde danse.
 - Boutons « Séance muscu » / « Faire la fête » dans l'appli pour les lancer tout de suite.
 - **Style** : coupe, barbe, tenue, accessoire, couleurs de peau/cheveux/tenue/pantalon, tatouages, cicatrice.
-- Réglages : taille, vitesse, bavardage, fréquence des rencontres, bastons, séances muscu et fêtes on/off, visibles ou non pendant leur sommeil, vibrations.
+- Réglages : taille, vitesse, bavardage, fréquence des rencontres, bastons, séances muscu, street workout, saleté et fêtes on/off, visibles ou non pendant leur sommeil, vibrations.
 
 ## Compiler
 ```bash

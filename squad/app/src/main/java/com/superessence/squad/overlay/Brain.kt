@@ -46,14 +46,18 @@ class Brain(private val rnd: Random = Random.Default) {
         if (act == Act.WALK && arrived) left = 0f
         if (left <= 0f) {
             act = when (phase) {
-                Phase.WORKOUT -> pick(mapOf(Act.TRAIN to 4, Act.PUSHUP to 3, Act.FLEX to 2, Act.WALK to 1))
-                Phase.WAKING -> pick(mapOf(Act.COFFEE to 5, Act.YAWN to 2, Act.WALK to 1))
+                Phase.WORKOUT -> pick(mapOf(Act.TRAIN to 4, Act.PUSHUP to 3, Act.FLEX to 2, Act.HANDSTAND to 2, Act.DRINK to 1, Act.WALK to 1))
+                Phase.WAKING -> pick(mapOf(Act.COFFEE to 5, Act.YAWN to 2, Act.STRETCH to 3, Act.WALK to 1))
                 Phase.WIND_DOWN -> pick(mapOf(Act.YAWN to 3, Act.IDLE to 3, Act.WALK to 2, Act.PHONE to 1))
                 else -> {
                     val w = a.hobbies.toMutableMap()
                     w[Act.WALK] = (w[Act.WALK] ?: 1) + 3
                     w[Act.IDLE] = (w[Act.IDLE] ?: 0) + 2
-                    if (m.energy < 30f) { w[Act.YAWN] = 3; w[Act.IDLE] = (w[Act.IDLE] ?: 0) + 4 }
+                    if (a.hobbies.containsKey(Act.TRAIN) || a.hobbies.containsKey(Act.PUSHUP)) {
+                        w[Act.HANDSTAND] = 1; w[Act.STRETCH] = 1; w[Act.DRINK] = 1
+                        if (m.fitness > 55f) w[Act.ONE_ARM_HS] = 1
+                    } else w[Act.STRETCH] = 1
+                    if (m.energy < 30f) { w[Act.YAWN] = 3; w[Act.IDLE] = (w[Act.IDLE] ?: 0) + 4; w.remove(Act.HANDSTAND); w.remove(Act.ONE_ARM_HS) }
                     pick(w)
                 }
             }
@@ -63,6 +67,8 @@ class Brain(private val rnd: Random = Random.Default) {
                 Act.WAVE -> 3f
                 Act.FLEX -> 4f
                 Act.TALK -> 4f
+                Act.HANDSTAND, Act.ONE_ARM_HS -> 5f
+                Act.DRINK, Act.STRETCH -> 3.5f
                 else -> 6f + rnd.nextFloat() * 10f
             }
             wantsTarget = act == Act.WALK

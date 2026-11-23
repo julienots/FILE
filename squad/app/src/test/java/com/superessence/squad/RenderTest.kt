@@ -91,7 +91,7 @@ class RenderTest {
             c.save(); c.translate((i * cw).toFloat(), 0f)
             com.superessence.squad.render.PropPainter.draw(c, ty, cw.toFloat(), ch.toFloat(), 0.8f, null)
             c.restore()
-            val o = Archetypes.byId(users[i]).let { com.superessence.squad.render.Occupant(it.look, 60f, 2) }
+            val o = Archetypes.byId(users[i % users.size]).let { com.superessence.squad.render.Occupant(it.look, 60f, 2) }
             c.save(); c.translate((i * cw).toFloat(), ch.toFloat())
             com.superessence.squad.render.PropPainter.draw(c, ty, cw.toFloat(), ch.toFloat(), 0.8f, if (ty.gym) o else null)
             c.restore()
@@ -105,6 +105,51 @@ class RenderTest {
             c.restore()
         }
         save(bmp, "events.png")
+    }
+
+    @Test fun street() {
+        val types = com.superessence.squad.model.PropType.entries.filter { it.gym }
+        val cw = 300; val ch = 330
+        val bmp = Bitmap.createBitmap(cw * 6, ch * 4 + 220, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); c.drawColor(Color.rgb(40, 44, 52))
+        val users = listOf("tank", "rocco", "sarge", "ragnar", "kenji", "boss", "marco", "zero", "duke", "jo", "ace")
+        types.forEachIndexed { i, ty ->
+            val a = Archetypes.byId(users[i % users.size])
+            val pr = ty.pr != null
+            val o = com.superessence.squad.render.Occupant(a.look, 60f, i, grind = if (pr) 0.45f else -1f, strain = if (pr) 0.9f else 0f, label = if (pr) "PR 142,5 kg" else null)
+            c.save(); c.translate(((i % 6) * cw).toFloat(), ((i / 6) * ch).toFloat())
+            com.superessence.squad.render.PropPainter.draw(c, ty, cw.toFloat(), ch.toFloat(), 1.7f + i * 2.1f, o)
+            c.restore()
+        }
+        // barre de traction : les 3 figures
+        for (j in 0..2) {
+            val o = com.superessence.squad.render.Occupant(Archetypes.byId("kenji").look, 60f, j)
+            c.save(); c.translate((j * cw).toFloat(), ch * 2f)
+            com.superessence.squad.render.PropPainter.draw(c, com.superessence.squad.model.PropType.PULLUP_BAR, cw.toFloat(), ch.toFloat(), 0.9f + (if (j == 1) 2.0f else 0f), o)
+            c.restore()
+        }
+        val acts = listOf(Act.ONE_ARM_HS, Act.SPOTTING, Act.DRINK)
+        val p = Pose()
+        acts.forEachIndexed { i, a ->
+            p.act = a; p.t = 1.3f + i; p.seed = i; p.carry = null; p.fx = null; p.strain = 0f; p.k = -1f
+            c.save(); c.translate((3 + i) * cw.toFloat(), ch * 2f)
+            MascotPainter.draw(c, Archetypes.all[i + 3].look, p, cw.toFloat(), ch.toFloat())
+            c.restore()
+        }
+        val acts2 = listOf(Act.WIPE, Act.CHALK, Act.STRETCH, Act.HANDSTAND)
+        acts2.forEachIndexed { i, a ->
+            p.act = a; p.t = 1.1f + i; p.seed = i
+            c.save(); c.translate(i * cw.toFloat(), ch * 3f)
+            MascotPainter.draw(c, Archetypes.all[i + 6].look, p, cw.toFloat(), ch.toFloat())
+            c.restore()
+        }
+        com.superessence.squad.model.Clutter.entries.forEachIndexed { i, cl ->
+            c.save(); c.translate(i * 150f, ch * 4f); com.superessence.squad.render.PropPainter.clutter(c, cl, 140f, 100f, i); c.restore()
+        }
+        com.superessence.squad.model.Stain.entries.forEachIndexed { i, st ->
+            c.save(); c.translate(1200f + (i % 4) * 150f, ch * 3f + (i / 4) * 150f); com.superessence.squad.render.PropPainter.stain(c, st, 140f, 140f, i * 7, 1f); c.restore()
+        }
+        save(bmp, "street.png")
     }
 
     @Test fun phasesFollowSchedule() {

@@ -97,7 +97,18 @@ class BubbleView(ctx: Context, private val density: Float) : View(ctx) {
     /** Position horizontale de la pointe (0..1). */
     var tailAt = 0.5f
 
-    fun set(name: String, text: String, maxW: Int): Pair<Int, Int> {
+    /** Bulle « cri » : rouge, grosses lettres. */
+    var shout = false
+        private set
+
+    fun set(name: String, text0: String, maxW: Int, shout: Boolean = false): Pair<Int, Int> {
+        this.shout = shout
+        val text = if (shout) text0.uppercase() else text0
+        tp.textSize = (if (shout) 17f else 14f) * density
+        tp.color = if (shout) 0xFFB71C1C.toInt() else 0xFF111111.toInt()
+        bg.color = if (shout) 0xFFFFF59D.toInt() else 0xFFFFFFFF.toInt()
+        border.color = if (shout) 0xFFE53935.toInt() else 0xFFFFC928.toInt()
+        border.strokeWidth = (if (shout) 3.5f else 2.5f) * density
         this.name = name.uppercase()
         val inner = (maxW - 2 * pad).toInt().coerceAtLeast(80)
         val want = StaticLayout.getDesiredWidth(text, tp).toInt().coerceAtMost(inner)
@@ -175,5 +186,49 @@ class PropView(ctx: Context, val type: com.superessence.squad.model.PropType) : 
             MotionEvent.ACTION_UP -> if (!moved) listener?.onPropTap(this)
         }
         return true
+    }
+}
+
+
+/** Objet qui traîne par terre : on peut le déplacer, le lâcher sur la croix pour le ranger, ou taper dedans. */
+@SuppressLint("ViewConstructor")
+class ClutterView(ctx: Context, val type: com.superessence.squad.model.Clutter, val seed: Int) : View(ctx) {
+    interface Listener {
+        fun onClutterDrag(v: ClutterView, rawX: Float, rawY: Float, dx: Float, dy: Float)
+        fun onClutterDrop(v: ClutterView, rawX: Float, rawY: Float)
+        fun onClutterTap(v: ClutterView)
+    }
+    var listener: Listener? = null
+    var spin = 0f
+    private var lastX = 0f; private var lastY = 0f; private var downX = 0f; private var downY = 0f
+    private var moved = false
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
+
+    override fun onDraw(c: Canvas) {
+        c.save(); c.rotate(spin, width / 2f, height / 2f)
+        com.superessence.squad.render.PropPainter.clutter(c, type, width.toFloat(), height.toFloat(), seed)
+        c.restore()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { lastX = e.rawX; lastY = e.rawY; downX = e.rawX; downY = e.rawY; moved = false }
+            MotionEvent.ACTION_MOVE -> {
+                if (!moved && hypot(e.rawX - downX, e.rawY - downY) > slop) moved = true
+                if (moved) { listener?.onClutterDrag(this, e.rawX, e.rawY, e.rawX - lastX, e.rawY - lastY); lastX = e.rawX; lastY = e.rawY }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (moved) listener?.onClutterDrop(this, e.rawX, e.rawY) else if (e.actionMasked == MotionEvent.ACTION_UP) listener?.onClutterTap(this)
+        }
+        return true
+    }
+}
+
+/** Tache de bouffe sur l'écran (non tactile). */
+@SuppressLint("ViewConstructor")
+class StainView(ctx: Context, val type: com.superessence.squad.model.Stain, val seed: Int) : View(ctx) {
+    var fade = 1f
+    override fun onDraw(c: Canvas) {
+        com.superessence.squad.render.PropPainter.stain(c, type, width.toFloat(), height.toFloat(), seed, fade)
     }
 }

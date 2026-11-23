@@ -35,6 +35,10 @@ class Pose {
     var fxAge: Float = 0f
     /** Matériel porté au-dessus de la tête. */
     var carry: com.superessence.squad.model.PropType? = null
+    /** Effort (0..1) : visage rouge, sueur, veine, tremblement. */
+    var strain: Float = 0f
+    /** Position imposée dans le mouvement (0..1), -1 = automatique. */
+    var k: Float = -1f
 }
 
 /**
@@ -86,7 +90,7 @@ object MascotPainter {
         val running = act == Act.RUN
         val walking = act == Act.WALK || running || act == Act.CARRY
         val dance = if (act == Act.DANCE) danceMove(P) else -1
-        val squatK = if (act == Act.SQUAT) (sin(t * 2f) + 1f) / 2f else 0f
+        val squatK = if (act == Act.SQUAT) (if (P.k >= 0f) 1f - P.k else (sin(t * 2f) + 1f) / 2f) else 0f
         val ko = act == Act.KO
         val sitting = sleeping || ko
         val legHz = if (running) 15f else 9f
@@ -106,7 +110,7 @@ object MascotPainter {
         val broad = (P.fitness - 30f) * 0.09f // gains visibles
 
         // Ombre au sol
-        if (!dragged) {
+        if (!dragged && act != Act.PULLUP && act != Act.MUSCLEUP && act != Act.DIPS) {
             fill(0x40000000)
             r.set(24f, 131f, 76f, 139f); c.drawOval(r, p)
         }
@@ -119,12 +123,24 @@ object MascotPainter {
             Act.PUNCH -> (4f + 6f * P.punch) * P.facing
             Act.HIT -> -14f * P.facing
             Act.GUARD -> -3f * P.facing
+            Act.STRETCH -> sin(t * 1.2f) * 12f
             Act.DANCE -> when (dance) { 0 -> sin(t * 3f) * 6f; 2 -> sin(t * 1.5f) * 8f; 3 -> sin(t * 6f) * 10f; else -> 0f }
             else -> 0f
         }
+        val handstand = act == Act.HANDSTAND || act == Act.ONE_ARM_HS
+        val hanging = act == Act.PULLUP || act == Act.MUSCLEUP || act == Act.DIPS
+        if (act == Act.FRONT_LEVER) { drawFrontLever(c, L, P); return }
         c.save()
         if (lean != 0f) c.rotate(lean, 50f, 134f)
-        c.translate(0f, bob + sitDrop)
+        if (P.strain > 0f) c.translate(sin(t * 47f) * 0.8f * P.strain, cos(t * 53f) * 0.5f * P.strain)
+        if (handstand) { c.translate(0f, 3f); c.rotate(180f + sin(t * 2.3f) * (if (act == Act.ONE_ARM_HS) 4f else 2f), 50f, 70f) }
+        val hangDy = when (act) {
+            Act.PULLUP -> 26f - ((sin(t * 2f) + 1f) / 2f) * 38f
+            Act.MUSCLEUP -> muscleUpDy(t)
+            Act.DIPS -> (sin(t * 2.2f) + 1f) / 2f * 14f
+            else -> 0f
+        }
+        c.translate(0f, bob + sitDrop + hangDy)
 
         // ---------------- Jambes
         if (sitting) {
@@ -140,6 +156,8 @@ object MascotPainter {
                 if (act == Act.SQUAT) { lift = squatK * 16f; swing = if (side == 0) 10f * squatK else -10f * squatK }
                 if (dance == 3) swing = sin(t * 6f + side * 3.1f) * 10f
                 if (dance == 0) lift = maxOf(0f, sin(t * 6f + side * PI.toFloat())) * 4f
+                if (hanging) { swing = (if (side == 0) 4f else -4f) + sin(t * 1.3f) * 3f; if (act == Act.DIPS) lift = 10f }
+                if (handstand) swing = if (side == 0) -3f + sin(t * 2f) * 2f else 3f
                 if (dragged) swing = sin(t * 7f + side * 1.7f) * 12f
                 c.save()
                 c.translate(x, 100f)
@@ -174,8 +192,21 @@ object MascotPainter {
         c.restore()
 
         // ---------------- Bras
-        drawArm(c, L, sh + 2f, 68f, la, isLeft = true, P = P)
-        drawArm(c, L, shR - 2f, 68f, ra, isLeft = false, P = P)
+        if (hanging) {
+            // mains fixées sur la barre
+            val by = if (act == Act.DIPS) 95f else 40f
+            val hx = if (act == Act.DIPS) 14f else 16f
+            val dy = hangDy + bob + sitDrop
+            drawArmTo(c, L, sh + 2f, 68f, hx, by - dy, true, P)
+            drawArmTo(c, L, shR - 2f, 68f, 100f - hx, by - dy, false, P)
+        } else if (handstand) {
+            drawArm(c, L, sh + 2f, 68f, 176f, isLeft = true, P = P, len = 56f)
+            if (act == Act.ONE_ARM_HS) drawArm(c, L, shR - 2f, 68f, 95f + sin(t * 2.3f) * 8f, isLeft = false, P = P)
+            else drawArm(c, L, shR - 2f, 68f, 176f, isLeft = false, P = P, len = 56f)
+        } else {
+            drawArm(c, L, sh + 2f, 68f, la, isLeft = true, P = P)
+            drawArm(c, L, shR - 2f, 68f, ra, isLeft = false, P = P)
+        }
         if (act == Act.PULLDOWN || act == Act.SQUAT) {
             val hlx = sh + 2f - 31f * sin(Math.toRadians(la.toDouble()).toFloat())
             val hly = 68f + 31f * cos(Math.toRadians(la.toDouble()).toFloat())
@@ -198,6 +229,7 @@ object MascotPainter {
             sleeping -> 14f + sin(t * 0.9f) * 2f
             ko -> 22f + sin(t * 3f) * 6f
             act == Act.HIT -> -8f * P.facing
+            act == Act.DRINK -> -10f
             act == Act.PHONE -> 6f
             act == Act.TRAIN -> sin(t * 5f) * 2f
             dragged -> sin(t * 4f) * 6f
@@ -218,6 +250,14 @@ object MascotPainter {
                 val sx = 50f + cos(a) * 22f
                 val sy = 18f + sitDrop + sin(a) * 5f
                 star(c, sx, sy, 4.2f, 0xFFFFC928.toInt())
+            }
+        }
+        // ---------------- Nuage de magnésie
+        if (act == Act.CHALK) {
+            for (i in 0..5) {
+                val ph = ((t * 1.4f + i / 6f) % 1f)
+                fill((((1f - ph) * 200).toInt() shl 24) or 0xFFFFFF)
+                c.drawCircle(50f + cos(i * 1.05f) * (6f + ph * 18f), 58f + sin(i * 1.05f) * (4f + ph * 10f) - ph * 8f, 3f + ph * 5f, p)
             }
         }
         // ---------------- Effet BD (POW !)
@@ -250,6 +290,12 @@ object MascotPainter {
         Act.HIT -> 55f + sin(t * 20f) * 15f to 55f - sin(t * 20f) * 15f
         Act.KO -> 35f to 35f
         Act.CARRY -> 172f to 172f
+        Act.SPOTTING -> 132f + sin(t * 3f) * 6f to 132f - sin(t * 3f) * 6f
+        Act.DRINK -> 12f to -150f
+        Act.WIPE -> 10f to 95f + sin(t * 10f) * 35f
+        Act.CHALK -> { val k = abs(sin(t * 9f)); -95f - 30f * k to -95f - 30f * k }
+        Act.STRETCH -> 176f + sin(t * 1.2f) * 4f to 176f - sin(t * 1.2f) * 4f
+        Act.PECDECK -> { val k = (sin(t * 2.2f) + 1f) / 2f; 92f - 140f * k to 92f - 140f * k }
         Act.CHEERS -> 10f + sin(t * 2f) * 4f to 140f + sin(t * 3f) * 8f
         Act.PULLDOWN -> { val k = (sin(t * 2.4f) + 1f) / 2f; 165f - 38f * k to 165f - 38f * k }
         Act.SQUAT -> 150f to 150f
@@ -365,6 +411,86 @@ object MascotPainter {
         fill(0xFFC9A227.toInt()); rr(47f, 99f, 53f, 104f, 1f, p, c)
     }
 
+    private fun muscleUpDy(t: Float): Float {
+        val ph = (t / 3.2f) % 1f
+        return when {
+            ph < 0.35f -> 26f - 38f * (ph / 0.35f)
+            ph < 0.5f -> -12f - 32f * ((ph - 0.35f) / 0.15f)
+            ph < 0.75f -> -44f
+            else -> -44f + 70f * ((ph - 0.75f) / 0.25f)
+        }
+    }
+
+    /** Front lever : vue de profil, corps à l'horizontale sous la barre (barre en 40,40). */
+    private fun drawFrontLever(c: Canvas, L: Look, P: Pose) {
+        val wob = sin(P.t * 31f) * 0.6f
+        val sx = 47f; val sy = 70f + wob
+        c.save(); c.scale(1.12f, 1.12f, 40f, 40f)
+        sideBody(c, L, P, sx, sy, -2f + sin(P.t * 1.1f) * 2f, 0f, 0f, 40f, 40f, faceUp = true, armsBehind = false)
+        txt.color = 0xFFFFC928.toInt(); txt.textSize = 9f; txt.alpha = 255
+        c.restore()
+        c.drawText((P.t % 10f).toInt().let { "${it}s" }, 88f, 58f, txt)
+    }
+
+    private fun limb(c: Canvas, x1: Float, y1: Float, x2: Float, y2: Float, w: Float, col: Int) {
+        s.color = col; s.strokeWidth = w; c.drawLine(x1, y1, x2, y2, s)
+    }
+
+    /** Jambe à deux segments (cinématique inverse simple). */
+    fun knee(hx: Float, hy: Float, fx: Float, fy: Float, l1: Float, l2: Float, bend: Float): Pair<Float, Float> {
+        val dx = fx - hx; val dy = fy - hy
+        val d = kotlin.math.hypot(dx, dy).coerceIn(1f, l1 + l2 - 0.01f)
+        val a = (l1 * l1 - l2 * l2 + d * d) / (2f * d)
+        val h = kotlin.math.sqrt((l1 * l1 - a * a).coerceAtLeast(0f))
+        val mx = hx + dx * a / d; val my = hy + dy * a / d
+        return (mx - bend * h * dy / d) to (my + bend * h * dx / d)
+    }
+
+    /**
+     * Corps vu de profil. Épaule en (sx, sy), torse orienté selon [torsoDeg] (de l'épaule vers la hanche),
+     * cuisses/tibias selon [thighDeg]/[shinDeg] relatifs, mains en (hx, hy).
+     * Si [legTarget] est donné, les pieds y sont posés (genoux calculés).
+     */
+    fun sideBody(
+        c: Canvas, L: Look, P: Pose, sx: Float, sy: Float, torsoDeg: Float, thighDeg: Float, shinDeg: Float,
+        hx: Float, hy: Float, faceUp: Boolean, armsBehind: Boolean, legTarget: Pair<Float, Float>? = null, kneeBend: Float = 1f,
+    ) {
+        val tr = Math.toRadians(torsoDeg.toDouble()).toFloat()
+        val dx = cos(tr); val dy = sin(tr)
+        val hipX = sx + dx * 30f; val hipY = sy + dy * 30f
+        val body = when (L.outfit) { Outfit.BARE -> L.skin; Outfit.APRON, Outfit.VEST -> 0xFFEDEDED.toInt(); else -> L.outfitColor }
+        val armC = sleeveColor(L) ?: L.skin
+        val (kx, ky, fx, fy) = if (legTarget != null) {
+            val k = knee(hipX, hipY, legTarget.first, legTarget.second, 21f, 21f, kneeBend)
+            listOf(k.first, k.second, legTarget.first, legTarget.second)
+        } else {
+            val a1 = tr + Math.toRadians(thighDeg.toDouble()).toFloat()
+            val k1x = hipX + cos(a1) * 21f; val k1y = hipY + sin(a1) * 21f
+            val a2 = a1 + Math.toRadians(shinDeg.toDouble()).toFloat()
+            listOf(k1x, k1y, k1x + cos(a2) * 21f, k1y + sin(a2) * 21f)
+        }
+        // bras arrière
+        limb(c, sx, sy, hx + 2f, hy + 1f, 8f, shade(armC, 0.78f))
+        // jambes
+        limb(c, hipX, hipY, kx, ky, 11f, shade(L.pantsColor, 0.85f))
+        limb(c, kx, ky, fx, fy, 10f, L.pantsColor)
+        fill(INK); c.drawCircle(fx, fy, 5.5f, p)
+        // torse
+        limb(c, sx, sy, hipX, hipY, 17f, body)
+        fill(INK); c.drawCircle(hipX, hipY, 3f, p)
+        // tête
+        val nx = -dy * (if (faceUp) 1f else -1f); val ny = dx * (if (faceUp) 1f else -1f)
+        val hcx = sx - dx * 13f; val hcy = sy - dy * 13f
+        fill(L.skin); c.drawCircle(hcx, hcy, 10f, p)
+        if (L.hair != HairStyle.BALD) { fill(L.hairColor); r.set(hcx - 10f, hcy - 10f, hcx + 10f, hcy + 10f); c.drawArc(r, Math.toDegrees(kotlin.math.atan2(-ny, -nx).toDouble()).toFloat() - 70f, 200f, true, p) }
+        if (L.beard == Beard.FULL || L.beard == Beard.VIKING || L.beard == Beard.STUBBLE) { fill(if (L.beard == Beard.STUBBLE) (L.hairColor and 0x00FFFFFF) or 0x55000000 else L.hairColor); c.drawCircle(hcx + nx * 4f + dx * 4f, hcy + ny * 4f + dy * 4f, 5.5f, p) }
+        fill(INK); c.drawCircle(hcx + nx * 5f - dx * 2f, hcy + ny * 5f - dy * 2f, 1.4f, p)
+        if (P.strain > 0f) { fill(((P.strain * 110).toInt() shl 24) or 0xE53935); c.drawCircle(hcx, hcy, 10f, p) }
+        // bras avant
+        limb(c, sx, sy, hx, hy, 9f, armC)
+        fill(L.skin); c.drawCircle(hx, hy, 4.8f, p)
+    }
+
     private fun danceMove(P: Pose) = ((P.seed + (P.t / 4f).toInt()) % 4 + 4) % 4
 
     private fun sleeveColor(L: Look): Int? = when (L.outfit) {
@@ -373,16 +499,22 @@ object MascotPainter {
         else -> L.outfitColor
     }
 
-    private fun drawArm(c: Canvas, L: Look, x: Float, y: Float, angle: Float, isLeft: Boolean, P: Pose) {
+    private fun drawArmTo(c: Canvas, L: Look, sx: Float, sy: Float, hx: Float, hy: Float, isLeft: Boolean, P: Pose) {
+        val vx = hx - sx; val vy = hy - sy
+        val rot = Math.toDegrees(kotlin.math.atan2(-vx, vy).toDouble()).toFloat()
+        val len = kotlin.math.hypot(vx, vy).coerceAtLeast(8f)
+        drawArm(c, L, sx, sy, if (isLeft) rot else -rot, isLeft, P, len)
+    }
+
+    private fun drawArm(c: Canvas, L: Look, x: Float, y: Float, angle: Float, isLeft: Boolean, P: Pose, len: Float = 31f) {
         val a = if (isLeft) angle else -angle
         c.save()
         c.translate(x, y)
         c.rotate(a)
         val sleeve = sleeveColor(L)
-        val len = 31f
         val wid = 7f + (P.fitness - 30f) * 0.02f
         fill(L.skin); rr(-wid, -3f, wid, len, wid, p, c)
-        if (sleeve != null) { fill(sleeve); rr(-wid - 0.6f, -4f, wid + 0.6f, len - 7f, wid, p, c) }
+        if (sleeve != null) { fill(sleeve); rr(-wid - 0.6f, -4f, wid + 0.6f, maxOf(len - 7f, 4f), wid, p, c) }
         else if (L.outfit == Outfit.FUR) { fill(0xFF6B4A2B.toInt()); rr(-wid - 0.5f, 16f, wid + 0.5f, 24f, 3f, p, c) }
         // biceps gonflé quand il pose
         if (P.act == Act.FLEX && sleeve == null) { fill(shade(L.skin, 1.04f)); c.drawCircle(if (isLeft) -3f else 3f, 11f, wid + 2.5f, p) }
@@ -407,6 +539,19 @@ object MascotPainter {
                 fill(0xFF9B5523.toInt()); r.set(-6f, -13f, 6f, 2f); c.drawOval(r, p)
                 fill(0x55FFFFFF); r.set(-3f, -11f, 0f, -5f); c.drawOval(r, p)
                 c.restore()
+            }
+            P.act == Act.DRINK && !isLeft -> {
+                fill(0xFF151515.toInt()); rr(-5f, len - 14f, 5f, len + 4f, 2f, p, c)
+                fill(0xFFF2F2F2.toInt()); rr(-5f, len - 8f, 5f, len - 3f, 0f, p, c)
+                fill(0xFFFFC928.toInt()); rr(-3f, len - 17f, 3f, len - 14f, 1f, p, c)
+            }
+            P.act == Act.WIPE && !isLeft -> {
+                fill(0xFFFFD54F.toInt()); rr(-7f, len - 4f, 7f, len + 6f, 2.5f, p, c)
+                fill(0xFF4CAF50.toInt()); rr(-7f, len + 3f, 7f, len + 6f, 1.5f, p, c)
+                fill(0xCCFFFFFF.toInt()); c.drawCircle(-6f + sin(P.t * 9f) * 2f, len - 6f, 2.4f, p); c.drawCircle(5f, len - 7f + cos(P.t * 7f), 1.8f, p)
+            }
+            P.act == Act.PECDECK -> {
+                fill(0xFF1E1E1E.toInt()); rr(-5f, len - 14f, 5f, len + 8f, 2.5f, p, c)
             }
             P.act == Act.CHEERS && !isLeft -> {
                 fill(0xFFE53935.toInt()); path.reset(); path.moveTo(-6f, len - 12f); path.lineTo(6f, len - 12f); path.lineTo(4.5f, len + 3f); path.lineTo(-4.5f, len + 3f); path.close(); c.drawPath(path, p)
@@ -476,7 +621,7 @@ object MascotPainter {
         }
         // sourcils épais
         val browY = if (act == Act.DRAGGED) -2.5f else 0f
-        val angry = act == Act.PUNCH || act == Act.GUARD || act == Act.PULLDOWN || act == Act.SQUAT
+        val angry = act == Act.PUNCH || act == Act.GUARD || act == Act.PULLDOWN || act == Act.SQUAT || act == Act.SPOTTING || act == Act.PULLUP || act == Act.MUSCLEUP || act == Act.DIPS || P.strain > 0f
         fill(shade(L.hairColor, 0.8f))
         c.save(); c.rotate(if (act == Act.DRAGGED) -8f else if (angry) 18f else 8f, 42f, 32f); rr(36.5f, 30.5f + browY, 47f, 33.5f + browY, 1.5f, p, c); c.restore()
         c.save(); c.rotate(if (act == Act.DRAGGED) 8f else if (angry) -18f else -8f, 58f, 32f); rr(53f, 30.5f + browY, 63.5f, 33.5f + browY, 1.5f, p, c); c.restore()
@@ -497,13 +642,15 @@ object MascotPainter {
                 line(INK, 1.4f); path.reset(); path.moveTo(45f, 51f); path.quadTo(47.5f, 49f, 50f, 51f); path.quadTo(52.5f, 53f, 55f, 51f); c.drawPath(path, s)
                 fill(0xFFE57373.toInt()); rr(51f, 51f, 55f, 56f, 2f, p, c)
             }
-            act == Act.PUNCH || act == Act.GUARD || act == Act.PULLDOWN || act == Act.SQUAT -> {
+            act == Act.SPOTTING || P.strain > 0.6f -> { fill(0xFF5A1A1A.toInt()); rr(44f, 47.5f, 56f, 55f, 3.5f, p, c); fill(0xFFFFFFFF.toInt()); rr(45.5f, 47.5f, 54.5f, 49.5f, 1f, p, c) }
+            act == Act.DRINK -> { fill(0xFF5A1A1A.toInt()); r.set(47f, 48.5f, 53f, 52.5f); c.drawOval(r, p) }
+            act == Act.PUNCH || act == Act.GUARD || act == Act.PULLDOWN || act == Act.SQUAT || act == Act.PULLUP || act == Act.MUSCLEUP || act == Act.DIPS || act == Act.HANDSTAND || act == Act.ONE_ARM_HS || act == Act.PECDECK || P.strain > 0f -> {
                 fill(0xFFFFFFFF.toInt()); rr(45f, 48.5f, 55f, 52f, 1.2f, p, c)
                 line(INK, 0.8f); c.drawLine(45f, 50.2f, 55f, 50.2f, s); c.drawLine(48.3f, 48.5f, 48.3f, 52f, s); c.drawLine(51.7f, 48.5f, 51.7f, 52f, s)
             }
             act == Act.EAT -> { val o = abs(sin(P.t * 8f)) * 3f; fill(0xFF5A1A1A.toInt()); rr(46f, 49f, 54f, 50.5f + o, 2f, p, c) }
             talkOpen -> { fill(0xFF5A1A1A.toInt()); rr(45f, 48.5f, 55f, 53f, 2.5f, p, c) }
-            act == Act.FLEX || act == Act.TRAIN || act == Act.WAVE || act == Act.VICTORY || act == Act.HIGHFIVE || act == Act.RUN || act == Act.DANCE || act == Act.CHEERS || act == Act.CARRY -> {
+            act == Act.FLEX || act == Act.TRAIN || act == Act.WAVE || act == Act.VICTORY || act == Act.HIGHFIVE || act == Act.RUN || act == Act.DANCE || act == Act.CHEERS || act == Act.CARRY || act == Act.WIPE || act == Act.STRETCH || act == Act.CHALK -> {
                 fill(0xFFFFFFFF.toInt()); path.reset(); path.moveTo(44f, 48.5f); path.lineTo(56f, 48.5f); path.quadTo(55f, 54f, 50f, 54f); path.quadTo(45f, 54f, 44f, 48.5f); c.drawPath(path, p)
                 line(INK, 1f); c.drawPath(path, s)
             }
@@ -513,6 +660,22 @@ object MascotPainter {
 
         // ----- accessoires
         drawAccessory(c, L, P)
+
+        // ----- effort
+        if (P.strain > 0f) {
+            fill(((P.strain * 110).toInt() shl 24) or 0xE53935); r.set(33f, 22f, 67f, 57f); c.drawOval(r, p)
+            line(0xCC7B1FA2.toInt(), 1.3f)
+            path.reset(); path.moveTo(56f, 20f); path.lineTo(58f, 23f); path.lineTo(56f, 26f); path.lineTo(58.5f, 29f); c.drawPath(path, s)
+        }
+        if (P.strain > 0f || act == Act.TRAIN || act == Act.PUSHUP || act == Act.PULLUP || act == Act.MUSCLEUP || act == Act.DIPS || act == Act.HANDSTAND || act == Act.ONE_ARM_HS || act == Act.SQUAT) {
+            fill(0xDD7FC8FF.toInt())
+            for (i in 0..1) {
+                val ph = ((P.t * 0.9f + i * 0.5f) % 1f)
+                val x = if (i == 0) 33f else 66f
+                c.drawCircle(x, 32f + ph * 22f, 1.8f, p)
+                path.reset(); path.moveTo(x - 1.8f, 32f + ph * 22f); path.lineTo(x, 28f + ph * 22f); path.lineTo(x + 1.8f, 32f + ph * 22f); path.close(); c.drawPath(path, p)
+            }
+        }
     }
 
     private fun drawHair(c: Canvas, L: Look) {
@@ -674,8 +837,8 @@ object MascotPainter {
     }
 
     /** Développé couché, vue de profil, dans la boîte du banc (150 x 95). */
-    fun drawBenchPress(c: Canvas, L: Look, t: Float, fitness: Float) {
-        val k = (sin(t * 2.2f) + 1f) / 2f // 1 = bras tendus
+    fun drawBenchPress(c: Canvas, L: Look, t: Float, fitness: Float, kOverride: Float = -1f, strain: Float = 0f, label: String? = null) {
+        val k = if (kOverride >= 0f) kOverride + sin(t * 40f) * 0.02f * strain else (sin(t * 2.2f) + 1f) / 2f // 1 = bras tendus
         val body = when (L.outfit) { Outfit.BARE -> L.skin; Outfit.APRON, Outfit.VEST -> 0xFFEDEDED.toInt(); else -> L.outfitColor }
         val broad = (fitness - 30f) * 0.04f
         // jambes : cuisse sur le banc, tibia vers le sol
@@ -691,6 +854,7 @@ object MascotPainter {
         if (L.hair != HairStyle.BALD) { r.set(26f, 37.5f, 46f, 56.5f); c.drawArc(r, 90f, 180f, true, p) }
         if (L.beard == Beard.FULL || L.beard == Beard.VIKING) { r.set(34f, 38f, 46f, 56f); c.drawArc(r, -60f, 120f, true, p) }
         fill(INK); c.drawCircle(39f, 44.5f, 1.3f, p)
+        if (strain > 0f) { fill(((strain * 120).toInt() shl 24) or 0xE53935); c.drawCircle(36f, 47f, 9.5f, p); fill(0xDD7FC8FF.toInt()); c.drawCircle(30f, 40f + (t * 20f) % 10f, 1.6f, p) }
         // bras + barre
         val handY = 20f + (1f - k) * 16f
         val armC = sleeveColor(L) ?: L.skin
@@ -701,7 +865,7 @@ object MascotPainter {
         fill(INK); c.drawCircle(54.5f, handY, 4f, p)
         fill(0xFF9AA0A6.toInt()); c.drawCircle(54.5f, handY, 1.8f, p)
         txt.color = 0xFFFFC928.toInt(); txt.textSize = 11f; txt.alpha = 255
-        c.drawText("×" + ((t * 2.2f / (2f * PI.toFloat())).toInt() % 12 + 1), 80f, 26f, txt)
+        c.drawText(label ?: ("×" + ((t * 2.2f / (2f * PI.toFloat())).toInt() % 12 + 1)), if (label != null) 98f else 80f, if (label != null) 16f else 26f, txt)
     }
 
     /** Pompes : vue allongée, rendu dédié. */

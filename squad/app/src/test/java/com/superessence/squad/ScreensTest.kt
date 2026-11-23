@@ -47,7 +47,11 @@ class ScreensTest {
 
     private fun seed() {
         Squad.init(ApplicationProvider.getApplicationContext())
-        if (Squad.state.value.mascots.isEmpty()) listOf("tank", "ragnar", "boss", "kenji").forEach { Squad.add(Archetypes.byId(it)) }
+        if (Squad.state.value.mascots.isEmpty()) {
+            listOf("tank", "ragnar", "boss", "kenji").forEach { Squad.add(Archetypes.byId(it)) }
+            val r = Squad.state.value.mascots[1].id
+            Squad.recordPr(r, "Squat", 160f, true); Squad.recordPr(r, "Développé couché", 122.5f, true)
+        }
     }
 
     @Test fun splash() {

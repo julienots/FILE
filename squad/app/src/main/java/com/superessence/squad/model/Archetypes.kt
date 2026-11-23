@@ -6,7 +6,7 @@ import com.superessence.squad.model.HairStyle as H
 import com.superessence.squad.model.Outfit as O
 
 /** Situations dans lesquelles une mascotte parle. */
-enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED, GYM_START, CARRY, SPOT, GYM_END, PARTY, DANCE, CHEERS, PARTY_END }
+enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED, GYM_START, CARRY, SPOT, GYM_END, PARTY, DANCE, CHEERS, PARTY_END, PR_TRY, PR_SPOT, PR_WIN, PR_CHEER, PR_FAIL, PR_SAVE, BURP, STREET_START, STREET, CLEAN, SNORE, SHAKER }
 
 /** Ce que fait la mascotte (utilisé par le moteur et le rendu). */
 enum class Act(val label: String) {
@@ -14,7 +14,10 @@ enum class Act(val label: String) {
     PHONE("Sur son tel"), COFFEE("Café"), WAVE("Salue"), SLEEP("Dort"), YAWN("Baille"),
     DRAGGED("Porté"), TALK("Parle"), PUSHUP("Pompes"),
     RUN("Court"), PUNCH("Cogne"), GUARD("En garde"), HIT("Encaisse"), KO("K.O."), VICTORY("Victoire"), HIGHFIVE("Check"),
-    CARRY("Porte du matos"), DANCE("Danse"), CHEERS("Trinque"), PULLDOWN("Tirage poulie"), SQUAT("Squat"), BENCH("Développé couché")
+    CARRY("Porte du matos"), DANCE("Danse"), CHEERS("Trinque"), PULLDOWN("Tirage poulie"), SQUAT("Squat"), BENCH("Développé couché"),
+    PULLUP("Tractions"), MUSCLEUP("Muscle-up"), FRONT_LEVER("Front lever"), HANDSTAND("Équilibre"), ONE_ARM_HS("Équilibre sur un bras"),
+    DIPS("Dips"), SPOTTING("Pare un pote"), DRINK("Boit son shaker"), WIPE("Nettoie"), CHALK("Magnésie"), STRETCH("S'étire"),
+    PECDECK("Pec deck")
 }
 
 class Archetype(

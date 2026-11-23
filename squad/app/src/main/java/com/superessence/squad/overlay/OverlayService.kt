@@ -37,6 +37,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
+import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -65,11 +67,19 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         const val ACTION_FIGHT = "com.superessence.squad.FIGHT"
         const val ACTION_GYM = "com.superessence.squad.GYM"
         const val ACTION_PARTY = "com.superessence.squad.PARTY"
+        const val ACTION_STREET = "com.superessence.squad.STREET"
+        const val ACTION_CLEAN = "com.superessence.squad.CLEAN"
 
-        /** Lance une séance collective ou une fête tout de suite. */
-        fun happening(ctx: Context, party: Boolean) {
+        /** Lance tout de suite : séance muscu (« gym »), street workout (« street ») ou fête (« party »). */
+        fun happening(ctx: Context, kind: String) {
             if (!canRun(ctx)) return
-            ContextCompat.startForegroundService(ctx, Intent(ctx, OverlayService::class.java).setAction(if (party) ACTION_PARTY else ACTION_GYM))
+            val a = when (kind) { "party" -> ACTION_PARTY; "street" -> ACTION_STREET; else -> ACTION_GYM }
+            ContextCompat.startForegroundService(ctx, Intent(ctx, OverlayService::class.java).setAction(a))
+        }
+
+        fun clean(ctx: Context) {
+            if (!canRun(ctx)) return
+            ContextCompat.startForegroundService(ctx, Intent(ctx, OverlayService::class.java).setAction(ACTION_CLEAN))
         }
         const val EXTRA_A = "a"
         const val EXTRA_B = "b"
@@ -99,6 +109,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         var hp = 100f
         var punchT = 0f
         var parked = false
+        var stainT = 5f
         val cx get() = x + lp.width / 2f
         val cy get() = y + lp.height / 2f
     }
@@ -152,6 +163,14 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         else startForeground(NOTIF_ID, buildNotif(Squad.state.value))
         registerReceiver(screenReceiver, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) })
         scope.launch { Squad.state.collectLatest { sync(it) } }
+        scope.launch {
+            Squad.pings.collect { (k, id) ->
+                val sp = sprites[id] ?: return@collect
+                if (sp.enc != null || inEvent(sp) || sp === cleaner || sp.dragged) return@collect
+                sp.brain.force(if (k == "eat") Act.EAT else Act.TRAIN, 7f)
+                sp.stainT = 1.5f
+            }
+        }
         startLoop()
     }
 
@@ -163,10 +182,11 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
                 return START_NOT_STICKY
             }
             ACTION_RECALL -> Squad.edit { s -> s.copy(mascots = s.mascots.map { it.copy(onScreen = true) }) }
-            ACTION_GYM, ACTION_PARTY -> {
+            ACTION_GYM, ACTION_PARTY, ACTION_STREET -> {
                 Squad.edit { s -> s.copy(mascots = s.mascots.map { it.copy(onScreen = true) }) }
-                requestHappening(if (intent.action == ACTION_PARTY) EvKind.PARTY else EvKind.GYM, 0)
+                requestHappening(when (intent.action) { ACTION_PARTY -> EvKind.PARTY; ACTION_STREET -> EvKind.STREET; else -> EvKind.GYM }, 0)
             }
+            ACTION_CLEAN -> android.os.Handler(mainLooper).postDelayed({ startClean(manual = true) }, 300)
             ACTION_FIGHT -> {
                 val a = intent.getStringExtra(EXTRA_A); val b = intent.getStringExtra(EXTRA_B)
                 if (a != null && b != null && a != b) {
@@ -182,6 +202,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
     override fun onDestroy() {
         stopLoop()
         happening?.let { e -> e.stations.forEach { removeStation(it) }; e.crew.forEach { unpark(it) } }
+        stains.toList().forEach { removeStain(it) }
+        mess.toList().forEach { removeClutter(it) }
         runCatching { unregisterReceiver(screenReceiver) }
         savePositions()
         sprites.values.toList().forEach { removeSprite(it) }
@@ -317,7 +339,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             }
             val arrived = hypot(sp.tx - sp.x, sp.ty - sp.y) < 4f
             if (!sp.dragged) {
-                val busy = sp.enc != null || inEvent(sp)
+                val busy = sp.enc != null || inEvent(sp) || sp === cleaner
                 if (!busy) {
                     val line = sp.brain.step(dt, m, phase, st.settings.chatter, arrived)
                     if (line != null) say(sp, m, line)
@@ -351,6 +373,13 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             pose.punch = if (sp.punchT > 0f) 1f else 0.1f
             if (pose.fx != null) { pose.fxAge += dt; if (pose.fxAge > 0.55f) pose.fx = null }
             sp.view.dimmed = pose.act == Act.SLEEP
+            // ils mangent salement
+            if (pose.act == Act.EAT && st.settings.mess && !sp.parked && !sp.dragged) {
+                sp.stainT -= dt
+                if (sp.stainT <= 0f) { sp.stainT = 6f + rnd.nextFloat() * 9f; spawnStain(sp, m) }
+            }
+            if (pose.act == Act.CHEERS && st.settings.mess && rnd.nextFloat() < dt * 0.02f) spawnStain(sp, m, com.superessence.squad.model.Stain.SODA)
+            if (pose.act == Act.SLEEP && sp.bubble == null && rnd.nextFloat() < dt * 0.012f * st.settings.chatter) say(sp, m, Say.SNORE)
             if (sp.parked) {
                 if (sp.bubble != null) { sp.bubbleLeft -= dt; if (sp.bubbleLeft <= 0f) hideBubble(sp) else placeBubble(sp) }
                 continue
@@ -368,13 +397,22 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             }
         }
         happenings(dt, phase, st.settings)
+        cleaning(dt)
+        for (c in mess) if (c.view.spin != c.spinTo) { c.view.spin += (c.spinTo - c.view.spin) * minOf(1f, dt * 8f); c.view.invalidate() }
         encounters(dt, phase, st.settings)
     }
 
     // ------------------------------------------------------------------ séances de muscu et fêtes
 
-    private enum class EvKind { GYM, PARTY }
-    private enum class Job { NONE, FETCH, CARRY, GO_USE, USE, SPOT, HANG, GO_PACK, CARRY_BACK, DONE }
+    private enum class EvKind { GYM, PARTY, STREET }
+    private enum class Job { NONE, FETCH, CARRY, GO_USE, CHALKING, USE, SPOT, SPOT_PR, FREESTYLE, HANG, GO_PACK, CARRY_BACK, DONE }
+
+    /** Tentative de record. */
+    private inner class Pr(val lifter: Sprite, val spotter: Sprite?, val lift: String, val kg: Float, val ok: Boolean) {
+        var t = 0f
+        var step = 0
+        var done = false
+    }
 
     private inner class Station(val type: PropType) {
         var x = 0f; var y = 0f
@@ -382,6 +420,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         var lp: WindowManager.LayoutParams? = null
         var occupant: Sprite? = null
         var reserved: Sprite? = null
+        var pr: Pr? = null
+        var prLabel: String? = null
         var placed = false
         var removed = false
         val w get() = (type.w * density * Squad.state.value.settings.size).toInt()
@@ -396,6 +436,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         val timer = HashMap<Sprite, Float>()
         val queue = HashMap<Sprite, ArrayDeque<Station>>()
         val used = HashMap<Sprite, MutableSet<PropType>>()
+        val freeAct = HashMap<Sprite, Act>()
         var duration = 100f
     }
 
@@ -414,16 +455,20 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         happeningCheck -= dt
         if (happeningCheck > 0f) return
         happeningCheck = 30f
+        if (cleaner == null && stains.size + mess.size >= 10 && phase != Phase.SLEEP && rnd.nextFloat() < 0.3f) startClean(manual = false)
         if (phase == Phase.SLEEP || phase.isMeal) return
         val cal = java.util.Calendar.getInstance()
         val day = cal.get(java.util.Calendar.DAY_OF_YEAR)
         val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
         val minute = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
         val sch = Squad.state.value.schedule
-        if (set.gym) {
-            val sporty = gymCrew()
-            if (sporty.size >= 2 && ((phase == Phase.WORKOUT && lastGymDay != day) || (phase == Phase.FREE && rnd.nextFloat() < 0.02f))) {
-                startGym(sporty); return
+        val sporty = gymCrew()
+        if (sporty.size >= 2 && (set.gym || set.street)) {
+            val due = (phase == Phase.WORKOUT && lastGymDay != day) || (phase == Phase.FREE && rnd.nextFloat() < 0.025f)
+            if (due) {
+                val street = set.street && (!set.gym || rnd.nextFloat() < 0.35f)
+                if (street) startStreet(sporty) else startGym(sporty)
+                return
             }
         }
         if (set.parties) {
@@ -437,7 +482,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         }
     }
 
-    private fun freeForEvent(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !sp.parked
+    private fun freeForEvent(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !sp.parked && sp !== cleaner
 
     private fun gymCrew(): List<Sprite> {
         val free = sprites.values.filter { freeForEvent(it) }
@@ -453,7 +498,12 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             return
         }
         free.forEach { sp -> sp.enc?.let { endEncounter(it) } }
-        if (kind == EvKind.GYM) startGym(gymCrew().ifEmpty { free }.let { if (it.size < 2) free else it }) else startParty(free)
+        val sporty = gymCrew().let { if (it.size < 2) free else it }
+        when (kind) {
+            EvKind.GYM -> startGym(sporty)
+            EvKind.STREET -> startStreet(sporty)
+            EvKind.PARTY -> startParty(free)
+        }
     }
 
     private fun stationPos(st: Station, i: Int, n: Int) {
@@ -467,8 +517,11 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
 
     private fun startGym(people: List<Sprite>) {
         lastGymDay = today()
-        val crew = people.shuffled().take(4).toMutableList()
-        val types = PropType.entries.filter { it.gym }.shuffled().take((crew.size + 1).coerceIn(2, 4))
+        val crew = people.shuffled().take(5).toMutableList()
+        val pool = PropType.entries.filter { it.gym && !it.street }.shuffled()
+        // le banc ou le rack presque toujours là, pour les PR
+        val must = listOf(PropType.BENCH, PropType.RACK).shuffled().take(if (rnd.nextFloat() < 0.5f) 2 else 1)
+        val types = (must + pool.filter { it !in must } + listOf(PropType.PULLUP_BAR)).take((crew.size + 1).coerceIn(3, 5)).shuffled()
         val stations = types.map { Station(it) }.toMutableList()
         stations.forEachIndexed { i, st -> stationPos(st, i, stations.size) }
         val e = Happening(EvKind.GYM, crew, stations).apply { duration = 95f + rnd.nextFloat() * 30f }
@@ -477,6 +530,20 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         stations.forEachIndexed { i, st -> e.queue[crew[i % crew.size]]!!.addLast(st) }
         crew.forEach { nextCarry(e, it) }
         Squad.get(crew[0].id)?.let { say(crew[0], it, Say.GYM_START) }
+    }
+
+    private fun startStreet(people: List<Sprite>) {
+        lastGymDay = today()
+        val crew = people.shuffled().take(5).toMutableList()
+        val types = listOf(PropType.PULLUP_BAR, PropType.DIP_BARS) + (if (crew.size >= 4) listOf(PropType.PULLUP_BAR) else emptyList())
+        val stations = types.map { Station(it) }.toMutableList()
+        stations.forEachIndexed { i, st -> stationPos(st, i, stations.size) }
+        val e = Happening(EvKind.STREET, crew, stations).apply { duration = 90f + rnd.nextFloat() * 30f }
+        happening = e
+        crew.forEach { e.queue[it] = ArrayDeque(); e.used[it] = mutableSetOf(); it.brain.clearForce(); it.encSpeed = 1.15f }
+        stations.forEachIndexed { i, st -> e.queue[crew[i % crew.size]]!!.addLast(st) }
+        crew.forEach { nextCarry(e, it) }
+        Squad.get(crew[0].id)?.let { say(crew[0], it, Say.STREET_START) }
     }
 
     private fun startParty(people: List<Sprite>) {
@@ -587,11 +654,11 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             sp.view.pose.carry = null
             sp.encAct = null; sp.encMove = false; sp.encSpeed = 1f
             sp.tx = sp.x; sp.ty = sp.y
-            if (!sp.dragged) sp.brain.force(if (e.kind == EvKind.GYM) Act.FLEX else Act.YAWN, 2.5f)
+            if (!sp.dragged) sp.brain.force(if (e.kind != EvKind.PARTY) Act.FLEX else Act.YAWN, 2.5f)
         }
         if (reward) {
             val ids = e.crew.map { it.id }
-            if (e.kind == EvKind.GYM) Squad.recordGym(ids, e.stations.map { it.type.label.substringAfter(' ') })
+            if (e.kind != EvKind.PARTY) Squad.recordGym(ids, e.stations.map { it.type.label.substringAfter(' ') }.distinct())
             else Squad.recordParty(ids)
         }
         happening = null
@@ -614,14 +681,28 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
                 val ny = lp.y + (goal - lp.y) * minOf(1f, dt * 1.5f)
                 if (ny.toInt() != lp.y) { lp.y = ny.toInt(); runCatching { wm.updateViewLayout(v, lp) } }
             }
-            v.occupant = st.occupant?.let { o -> Squad.get(o.id)?.let { com.superessence.squad.render.Occupant(it.look, it.fitness, o.view.pose.seed) } }
+            v.occupant = st.occupant?.takeIf { it.parked }?.let { o ->
+                Squad.get(o.id)?.let { m ->
+                    val pr = st.pr
+                    if (pr != null && !pr.done) {
+                        val tt = pr.t
+                        val g = when {
+                            tt < 1.2f -> 1f - tt / 1.2f
+                            pr.ok -> ((tt - 1.2f) / 4.3f).coerceIn(0f, 1f).pow(1.6f)
+                            tt < 5.5f -> minOf(0.42f, (tt - 1.2f) / 4.3f * 0.6f)
+                            else -> (0.42f + (tt - 5.5f) / 1.5f * 0.58f).coerceAtMost(1f)
+                        }
+                        com.superessence.squad.render.Occupant(m.look, m.fitness, o.view.pose.seed, g, if (tt < 1.2f) 0.3f else 1f, "${pr.lift.uppercase()} ${Squad.fmtKg(pr.kg)}")
+                    } else com.superessence.squad.render.Occupant(m.look, m.fitness, o.view.pose.seed, label = st.prLabel)
+                }
+            }
             v.invalidate()
         }
         // fin de la séance : on range
         if (e.stage == 1 && e.t > e.duration) {
             e.stage = 2
-            Squad.get(e.crew[0].id)?.let { say(e.crew[0], it, if (e.kind == EvKind.GYM) Say.GYM_END else Say.PARTY_END) }
-            e.stations.forEach { it.occupant?.let { o -> leaveStation(e, o) }; it.reserved = null }
+            Squad.get(e.crew[0].id)?.let { say(e.crew[0], it, if (e.kind == EvKind.PARTY) Say.PARTY_END else Say.GYM_END) }
+            e.stations.forEach { st -> st.pr?.done = true; st.occupant?.let { o -> leaveStation(e, o) }; st.reserved = null }
             val movable = e.stations.filter { it.type != PropType.DISCO && it.placed && !it.removed }
             e.crew.forEach { e.queue[it]!!.clear() }
             movable.forEachIndexed { i, st -> e.queue[e.crew[i % e.crew.size]]!!.addLast(st) }
@@ -657,24 +738,63 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
                 Job.HANG -> {
                     e.timer[sp] = (e.timer[sp] ?: 0f) - dt
                     if (e.stage != 1) continue
-                    if (e.kind == EvKind.GYM) gymPick(e, sp, m) else partyPick(e, sp, m)
+                    if (e.kind == EvKind.PARTY) partyPick(e, sp, m) else gymPick(e, sp, m)
                 }
                 Job.GO_USE -> if (arrived(sp)) {
                     val st = e.target[sp]!!
                     if (st.occupant != null) { st.reserved = null; e.job[sp] = Job.HANG; e.timer[sp] = 0f; continue }
                     st.occupant = sp; st.reserved = null
-                    park(sp)
-                    hideBubble(sp)
                     e.used[sp]!!.add(st.type)
-                    e.job[sp] = Job.USE; e.timer[sp] = 14f + rnd.nextFloat() * 8f
-                    if (rnd.nextFloat() < 0.4f) say(sp, m, Say.TRAIN)
+                    // tentative de PR avec un pareur ?
+                    val spotter = if (e.kind == EvKind.GYM && st.type.pr != null && (st.type == PropType.BENCH || st.type == PropType.RACK) && rnd.nextFloat() < 0.5f)
+                        e.crew.firstOrNull { it !== sp && !it.dragged && !it.parked && (e.job[it] == Job.HANG || e.job[it] == Job.SPOT) } else null
+                    if (spotter != null) {
+                        val lift = st.type.pr!!
+                        val ok = rnd.nextFloat() < 0.55f + m.mood / 400f + m.energy / 500f
+                        st.pr = Pr(sp, spotter, lift, Squad.prTarget(m, lift), ok)
+                        e.job[spotter] = Job.SPOT_PR; e.target[spotter] = st
+                        val (x, y) = spotPoint(spotter, st)
+                        goTo(spotter, x, y)
+                        say(sp, m, Say.PR_TRY)
+                    }
+                    sp.encMove = false; sp.encAct = Act.CHALK
+                    e.job[sp] = Job.CHALKING
+                    e.timer[sp] = if (st.pr != null || rnd.nextFloat() < 0.35f) 1.6f else 0f
                 }
-                Job.USE -> {
+                Job.CHALKING -> {
                     e.timer[sp] = (e.timer[sp] ?: 0f) - dt
                     if ((e.timer[sp] ?: 0f) <= 0f) {
-                        leaveStation(e, sp)
-                        sp.encAct = Act.FLEX; e.timer[sp] = 2f
+                        val st = e.target[sp]!!
+                        if (st.occupant !== sp) { e.job[sp] = Job.HANG; e.timer[sp] = 0f; continue }
+                        val (x, y) = standPoint(sp, st)
+                        sp.x = x; sp.y = y; sp.tx = x; sp.ty = y
+                        park(sp)
+                        e.job[sp] = Job.USE; e.timer[sp] = if (st.pr != null) 13f else 14f + rnd.nextFloat() * 8f
+                        if (st.pr == null && rnd.nextFloat() < 0.4f) say(sp, m, if (e.kind == EvKind.STREET) Say.STREET else Say.TRAIN)
                     }
+                }
+                Job.USE -> {
+                    val st = e.stations.firstOrNull { it.occupant === sp }
+                    st?.pr?.let { stepPr(e, st, it, dt) }
+                    e.timer[sp] = (e.timer[sp] ?: 0f) - dt
+                    if ((e.timer[sp] ?: 0f) <= 0f && (st?.pr == null || st.pr!!.done)) {
+                        leaveStation(e, sp)
+                        val r = rnd.nextFloat()
+                        sp.encAct = when { r < 0.4f -> Act.DRINK; r < 0.65f -> Act.FLEX; else -> Act.STRETCH }
+                        e.timer[sp] = 2.6f
+                        if (sp.encAct == Act.DRINK && rnd.nextFloat() < 0.35f) say(sp, m, Say.SHAKER)
+                        if (sp.encAct == Act.DRINK && rnd.nextFloat() < 0.3f) addClutter(com.superessence.squad.model.Clutter.SHAKER, sp.cx + (rnd.nextFloat() - 0.5f) * 40 * density, sp.y + sp.lp.height - 30 * density)
+                    }
+                }
+                Job.SPOT_PR -> {
+                    val st = e.target[sp]
+                    if (st == null || st.pr == null || st.pr!!.spotter !== sp || st.pr!!.done) { e.job[sp] = Job.HANG; e.timer[sp] = 1f; continue }
+                    if (arrived(sp)) { sp.encMove = false; sp.encAct = Act.SPOTTING; sp.view.pose.facing = if (st.x + st.w / 2f > sp.cx) 1f else -1f }
+                }
+                Job.FREESTYLE -> {
+                    e.timer[sp] = (e.timer[sp] ?: 0f) - dt
+                    if (arrived(sp) && sp.encMove) { sp.encMove = false; sp.encAct = e.freeAct[sp] ?: Act.HANDSTAND }
+                    if ((e.timer[sp] ?: 0f) <= 0f) { e.job[sp] = Job.HANG; e.timer[sp] = 0f; sp.encAct = Act.IDLE }
                 }
                 Job.SPOT -> {
                     e.timer[sp] = (e.timer[sp] ?: 0f) - dt
@@ -694,7 +814,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             }
         }
         if (e.stage == 2 && e.crew.all { e.job[it] == Job.DONE } && e.stations.none { it.type == PropType.DISCO && (it.lp?.y ?: -9999) > -it.h + 4 }) {
-            Squad.get(e.crew[0].id)?.let { say(e.crew[0], it, if (e.kind == EvKind.GYM) Say.GYM_END else Say.PARTY_END) }
+            Squad.get(e.crew[0].id)?.let { say(e.crew[0], it, if (e.kind == EvKind.PARTY) Say.PARTY_END else Say.GYM_END) }
             endHappening(e, true)
         }
         if (e.t > 400f) endHappening(e, false) // garde-fou
@@ -702,15 +822,72 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
 
     private fun packNext(e: Happening, sp: Sprite) {
         val st = e.queue[sp]?.removeFirstOrNull()
-        if (st == null) { e.job[sp] = Job.DONE; sp.encMove = false; sp.encAct = if (e.kind == EvKind.GYM) Act.FLEX else Act.YAWN; return }
+        if (st == null) { e.job[sp] = Job.DONE; sp.encMove = false; sp.encAct = if (e.kind != EvKind.PARTY) Act.FLEX else Act.YAWN; return }
         e.target[sp] = st; e.job[sp] = Job.GO_PACK
         val (x, y) = standPoint(sp, st)
         goTo(sp, x, y)
     }
 
+    private fun spotPoint(sp: Sprite, st: Station): Pair<Float, Float> {
+        val y = (st.y + st.h - sp.lp.height).coerceIn(0f, (screenH - sp.lp.height).toFloat())
+        val x = if (st.type == PropType.BENCH) st.x - sp.lp.width * 0.3f else st.x + st.w - sp.lp.width * 0.55f
+        return x.coerceIn(0f, (screenW - sp.lp.width).toFloat()) to y
+    }
+
+    private val shoutSet = setOf(Say.PR_SPOT, Say.PR_WIN, Say.PR_CHEER, Say.PR_SAVE, Say.BURP)
+
+    /** Déroulé d'une tentative de record : le pareur crie, la barre monte… ou pas. */
+    private fun stepPr(e: Happening, st: Station, pr: Pr, dt: Float) {
+        if (pr.done) return
+        pr.t += dt
+        val ml = Squad.get(pr.lifter.id) ?: return
+        val spot = pr.spotter
+        val ms = spot?.let { Squad.get(it.id) }
+        fun at(i: Int, time: Float, f: () -> Unit) { if (pr.step == i - 1 && pr.t >= time) { pr.step = i; f() } }
+        at(1, 1.4f) { if (spot != null && ms != null) say(spot, ms, Say.PR_SPOT) }
+        at(2, 3.5f) { if (spot != null && ms != null) say(spot, ms, Say.PR_SPOT) }
+        if (pr.ok) at(3, 5.5f) {
+            say(pr.lifter, ml, Say.PR_WIN)
+            Squad.recordPr(pr.lifter.id, pr.lift, pr.kg, true)
+            st.prLabel = "NEW PR ! ${Squad.fmtKg(pr.kg)}"
+            if (Squad.state.value.settings.vibrate) st.view?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            var cheered = false
+            for (o in e.crew) {
+                if (o === pr.lifter || o.parked || o.dragged) continue
+                val j = e.job[o]
+                if (j == Job.HANG || j == Job.SPOT || j == Job.SPOT_PR || j == Job.FREESTYLE || j == Job.NONE) {
+                    o.encMove = false; o.encAct = Act.VICTORY; e.job[o] = Job.HANG; e.timer[o] = 3f
+                    if (!cheered) { Squad.get(o.id)?.let { say(o, it, Say.PR_CHEER) }; cheered = true }
+                }
+            }
+            pr.done = true
+            e.timer[pr.lifter] = 5f
+        } else {
+            at(3, 5.5f) { if (spot != null && ms != null) say(spot, ms, Say.PR_SAVE) }
+            at(4, 7.2f) {
+                say(pr.lifter, ml, Say.PR_FAIL)
+                Squad.recordPr(pr.lifter.id, pr.lift, pr.kg, false)
+                spot?.let { e.job[it] = Job.HANG; e.timer[it] = 1.5f; it.encAct = Act.IDLE }
+                pr.done = true
+                e.timer[pr.lifter] = 3f
+            }
+        }
+    }
+
     private fun leaveStation(e: Happening, sp: Sprite) {
         val st = e.stations.firstOrNull { it.occupant === sp } ?: return
         st.occupant = null
+        st.pr = null; st.prLabel = null
+        // le bordel : ils laissent traîner du matos
+        if (Squad.state.value.settings.mess && e.kind != EvKind.PARTY && rnd.nextFloat() < 0.45f) {
+            val type = when (st.type) {
+                PropType.DUMBBELLS -> listOf(com.superessence.squad.model.Clutter.DUMBBELL, com.superessence.squad.model.Clutter.DUMBBELL, com.superessence.squad.model.Clutter.KETTLEBELL).random()
+                PropType.RACK, PropType.BENCH, PropType.LEG_PRESS -> listOf(com.superessence.squad.model.Clutter.PLATE, com.superessence.squad.model.Clutter.PLATE, com.superessence.squad.model.Clutter.BAR).random()
+                PropType.PULLEY, PropType.PEC_DECK -> com.superessence.squad.model.Clutter.TOWEL
+                else -> listOf(com.superessence.squad.model.Clutter.TOWEL, com.superessence.squad.model.Clutter.SHAKER, com.superessence.squad.model.Clutter.KETTLEBELL).random()
+            }
+            addClutter(type, st.x + rnd.nextFloat() * st.w, st.y + st.h - rnd.nextFloat() * 24 * density)
+        }
         val (x, y) = standPoint(sp, st)
         sp.x = (x + (if (x > screenW / 2f) -1 else 1) * sp.lp.width * 0.6f).coerceIn(0f, (screenW - sp.lp.width).toFloat())
         sp.y = y; sp.tx = sp.x; sp.ty = sp.y
@@ -729,6 +906,13 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             e.target[sp] = st; e.job[sp] = Job.GO_USE
             val (x, y) = standPoint(sp, st)
             goTo(sp, x, y)
+        } else if (e.kind == EvKind.STREET || (rnd.nextFloat() < 0.3f && m.fitness > 40f)) {
+            // en attendant : figures au sol
+            val st2 = e.stations.random()
+            e.job[sp] = Job.FREESTYLE; e.timer[sp] = 7f + rnd.nextFloat() * 4f
+            e.freeAct[sp] = listOf(Act.HANDSTAND, if (m.fitness > 45f) Act.ONE_ARM_HS else Act.HANDSTAND, Act.PUSHUP, Act.STRETCH, Act.CHALK).random()
+            goTo(sp, st2.x + (rnd.nextFloat() - 0.5f) * st2.w * 1.6f, st2.y + st2.h - sp.lp.height + rnd.nextFloat() * 40 * density)
+            if (rnd.nextFloat() < 0.4f) say(sp, m, Say.STREET)
         } else {
             // pas de poste libre : il coache un pote
             val busy = e.stations.filter { it.occupant != null }.randomOrNull() ?: return
@@ -762,7 +946,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
 
     private fun power(m: Mascot) = m.archetype.skill * (0.6f + m.fitness / 100f * 0.6f + m.level * 0.03f) * (0.7f + m.energy / 100f * 0.3f)
 
-    private fun free(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !inEvent(sp) && !sp.parked
+    private fun free(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !inEvent(sp) && !sp.parked && sp !== cleaner
 
     /** De temps en temps, deux gars vont interagir. */
     private fun encounters(dt: Float, phase: Phase, set: com.superessence.squad.model.Settings) {
@@ -987,18 +1171,190 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         }
     }
 
+    // ------------------------------------------------------------------ taches, bordel et ménage
+
+    private inner class StainItem(val view: StainView, val lp: WindowManager.LayoutParams) {
+        val born = System.currentTimeMillis()
+        var wiping = false
+        val cx get() = lp.x + lp.width / 2f
+        val cy get() = lp.y + lp.height / 2f
+    }
+
+    private inner class ClutterItem(val view: ClutterView, val lp: WindowManager.LayoutParams) {
+        var spinTo = 0f
+        val cx get() = lp.x + lp.width / 2f
+        val cy get() = lp.y + lp.height / 2f
+    }
+
+    private val stains = mutableListOf<StainItem>()
+    private val mess = mutableListOf<ClutterItem>()
+    private var cleaner: Sprite? = null
+    private val cleanQueue = ArrayDeque<Any>()
+    private var cleanTarget: Any? = null
+    private var cleanT = 0f
+
+    private fun foodStain(arch: String): com.superessence.squad.model.Stain {
+        return when (arch) {
+            "marco" -> listOf(com.superessence.squad.model.Stain.BBQ, com.superessence.squad.model.Stain.KETCHUP, com.superessence.squad.model.Stain.GREASE, com.superessence.squad.model.Stain.MUSTARD)
+            "tank" -> listOf(com.superessence.squad.model.Stain.SHAKE, com.superessence.squad.model.Stain.CRUMBS, com.superessence.squad.model.Stain.GREASE)
+            "ragnar" -> listOf(com.superessence.squad.model.Stain.GREASE, com.superessence.squad.model.Stain.BBQ, com.superessence.squad.model.Stain.CRUMBS)
+            "zero" -> listOf(com.superessence.squad.model.Stain.SODA, com.superessence.squad.model.Stain.CRUMBS, com.superessence.squad.model.Stain.KETCHUP)
+            "rex" -> listOf(com.superessence.squad.model.Stain.KETCHUP, com.superessence.squad.model.Stain.MUSTARD, com.superessence.squad.model.Stain.GREASE)
+            "jo" -> listOf(com.superessence.squad.model.Stain.CHOCO, com.superessence.squad.model.Stain.CRUMBS, com.superessence.squad.model.Stain.GREASE)
+            "kenji" -> listOf(com.superessence.squad.model.Stain.CRUMBS, com.superessence.squad.model.Stain.SODA)
+            else -> com.superessence.squad.model.Stain.entries
+        }.random()
+    }
+
+    private fun spawnStain(sp: Sprite, m: Mascot, type0: com.superessence.squad.model.Stain? = null) {
+        val type = type0 ?: foodStain(m.arch)
+        val size = ((38 + rnd.nextInt(44)) * density).toInt()
+        val v = StainView(this, type, rnd.nextInt())
+        val lp = WindowManager.LayoutParams(
+            size, size, overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            alpha = 0.8f
+            x = (sp.cx + (rnd.nextFloat() - 0.5f) * 140 * density - size / 2f).toInt().coerceIn(0, screenW - size)
+            y = (sp.y + rnd.nextFloat() * sp.lp.height - size / 2f).toInt().coerceIn(0, screenH - size)
+        }
+        runCatching { wm.addView(v, lp); stains += StainItem(v, lp) }
+        while (stains.size > 30) removeStain(stains.first())
+        if (rnd.nextFloat() < 0.28f) say(sp, m, Say.BURP)
+    }
+
+    private fun removeStain(s: StainItem) {
+        runCatching { wm.removeView(s.view) }
+        stains.remove(s)
+    }
+
+    private fun addClutter(type: com.superessence.squad.model.Clutter, cx: Float, bottomY: Float) {
+        val k = Squad.state.value.settings.size
+        val w = (type.w * density * k).toInt(); val h = (type.h * density * k).toInt()
+        val v = ClutterView(this, type, rnd.nextInt(100))
+        v.listener = clutterListener
+        val lp = WindowManager.LayoutParams(
+            w, h, overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (cx - w / 2f).toInt().coerceIn(0, screenW - w)
+            y = (bottomY - h).toInt().coerceIn(0, screenH - h)
+        }
+        val item = ClutterItem(v, lp)
+        v.spin = (rnd.nextFloat() - 0.5f) * 30f; item.spinTo = v.spin
+        runCatching { wm.addView(v, lp); mess += item }
+        while (mess.size > 16) removeClutter(mess.first())
+    }
+
+    private fun removeClutter(c: ClutterItem) {
+        runCatching { wm.removeView(c.view) }
+        mess.remove(c)
+    }
+
+    private val clutterListener = object : ClutterView.Listener {
+        override fun onClutterDrag(v: ClutterView, rawX: Float, rawY: Float, dx: Float, dy: Float) {
+            val c = mess.firstOrNull { it.view === v } ?: return
+            showTrash()
+            c.lp.x = (c.lp.x + dx).toInt().coerceIn(0, screenW - c.lp.width)
+            c.lp.y = (c.lp.y + dy).toInt().coerceIn(0, screenH - c.lp.height)
+            runCatching { wm.updateViewLayout(v, c.lp) }
+            trash?.hot = overTrash(rawX, rawY)
+        }
+
+        override fun onClutterDrop(v: ClutterView, rawX: Float, rawY: Float) {
+            val c = mess.firstOrNull { it.view === v } ?: return
+            val gone = overTrash(rawX, rawY)
+            hideTrash()
+            if (gone) { removeClutter(c); if (Squad.state.value.settings.vibrate) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+        }
+
+        override fun onClutterTap(v: ClutterView) {
+            // petit coup de pied dedans
+            val c = mess.firstOrNull { it.view === v } ?: return
+            c.lp.x = (c.lp.x + (rnd.nextFloat() - 0.5f) * 60 * density).toInt().coerceIn(0, screenW - c.lp.width)
+            c.spinTo += (rnd.nextFloat() - 0.5f) * 120f
+            runCatching { wm.updateViewLayout(v, c.lp) }
+            if (Squad.state.value.settings.vibrate) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+    }
+
+    /** Un gars prend l'éponge et range tout le bordel. */
+    private fun startClean(manual: Boolean) {
+        if (cleaner != null) return
+        if (stains.isEmpty() && mess.isEmpty()) return
+        val pool = sprites.values.filter { free(it) }
+        val who = pool.firstOrNull { it.id.let { id -> Squad.get(id)?.arch == "sarge" } } ?: pool.randomOrNull()
+        if (who == null) {
+            if (manual) { stains.toList().forEach { removeStain(it) }; mess.toList().forEach { removeClutter(it) } }
+            return
+        }
+        cleaner = who
+        cleanQueue.clear(); cleanQueue.addAll(stains); cleanQueue.addAll(mess)
+        cleanTarget = null
+        who.brain.clearForce(); who.encSpeed = 1.5f
+        Squad.get(who.id)?.let { say(who, it, Say.CLEAN) }
+    }
+
+    private fun cleaning(dt: Float) {
+        val sp = cleaner ?: return
+        if (sprites[sp.id] !== sp) { cleaner = null; return }
+        if (sp.dragged) return
+        val tgt = cleanTarget
+        if (tgt == null) {
+            // le plus proche d'abord
+            val next = cleanQueue.minByOrNull { val (x, y) = posOf(it); hypot(x - sp.cx, y - sp.cy) }
+            if (next == null) {
+                cleaner = null; sp.encAct = null; sp.encMove = false; sp.encSpeed = 1f
+                sp.brain.force(Act.FLEX, 2f)
+                Squad.editMascot(sp.id) { it.withEvent("A nettoyé l'écran") }
+                return
+            }
+            cleanQueue.remove(next)
+            if (next is StainItem && next !in stains || next is ClutterItem && next !in mess) return
+            cleanTarget = next; cleanT = 0f
+            val (x, y) = posOf(next)
+            goTo(sp, x - sp.lp.width / 2f, y - sp.lp.height * 0.45f)
+            return
+        }
+        if (!arrived(sp)) return
+        sp.encMove = false
+        cleanT += dt
+        when (tgt) {
+            is StainItem -> {
+                sp.encAct = Act.WIPE
+                tgt.view.fade = (1f - cleanT / 1.6f).coerceAtLeast(0f); tgt.view.invalidate()
+                if (cleanT >= 1.6f) { removeStain(tgt); cleanTarget = null }
+            }
+            is ClutterItem -> {
+                sp.encAct = Act.CARRY
+                if (cleanT >= 0.8f) { removeClutter(tgt); cleanTarget = null }
+            }
+            else -> cleanTarget = null
+        }
+    }
+
+    private fun posOf(o: Any): Pair<Float, Float> = when (o) {
+        is StainItem -> o.cx to o.cy
+        is ClutterItem -> o.cx to o.cy
+        else -> 0f to 0f
+    }
+
     // ------------------------------------------------------------------ paroles
 
     private fun say(sp: Sprite, m: Mascot, what: Say) {
         val lines = m.archetype.lines(what)
         if (lines.isEmpty()) return
-        showBubble(sp, m.name, lines.random())
+        showBubble(sp, m.name, lines.random(), what in shoutSet)
     }
 
-    private fun showBubble(sp: Sprite, name: String, text: String) {
+    private fun showBubble(sp: Sprite, name: String, text: String, shout: Boolean = false) {
         val maxW = (220 * density).toInt().coerceAtMost(screenW - (16 * density).toInt())
         val b = sp.bubble ?: BubbleView(this, density)
-        val (bw, bh) = b.set(name, text, maxW)
+        val (bw, bh) = b.set(name, text, maxW, shout)
         val lp = sp.bubbleLp ?: WindowManager.LayoutParams(
             bw, bh, overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -1023,7 +1379,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         val bx = (cx - lp.width / 2f).coerceIn(0f, (screenW - lp.width).toFloat().coerceAtLeast(0f))
         val by = (sp.y - lp.height + sp.lp.height * 0.12f).coerceAtLeast(0f)
         b.tailAt = ((cx - bx) / lp.width).coerceIn(0.1f, 0.9f)
-        val nx = bx.toInt(); val ny = by.toInt()
+        val jit = if (b.shout) (sin(t * 70f) * 2.5f * density) else 0f
+        val nx = (bx + jit).toInt(); val ny = by.toInt()
         if (add) {
             lp.x = nx; lp.y = ny
             runCatching { wm.addView(b, lp) }.onFailure { sp.bubble = null; sp.bubbleLp = null }
@@ -1204,6 +1561,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             .setOngoing(true)
             .setSilent(true)
             .addAction(0, "Tout rappeler", recall)
+            .addAction(0, "Nettoyer", PendingIntent.getService(this, 3, Intent(this, OverlayService::class.java).setAction(ACTION_CLEAN), flags))
             .addAction(0, "Arrêter", stop)
             .build()
     }

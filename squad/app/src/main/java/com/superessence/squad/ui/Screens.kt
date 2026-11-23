@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.SportsGymnastics
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -129,7 +131,7 @@ private fun Wordmark() {
 fun HomeScreen(
     state: SquadState, overlayAllowed: Boolean,
     onOpen: (String) -> Unit, onRecruit: () -> Unit, onRhythm: () -> Unit, onOverlay: (Boolean) -> Unit,
-    onHappening: (Boolean) -> Unit = {},
+    onHappening: (String) -> Unit = {},
 ) {
     val phase = Life.phaseNow(state.schedule)
     val t = animTime()
@@ -194,13 +196,18 @@ fun HomeScreen(
                     Text("LA SQUAD S'ORGANISE", style = Label)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Les sportifs montent une salle sur ton écran (banc, poulie, rack, sac de frappe, haltères) à l'heure du sport. Le vendredi et le samedi soir, c'est la fête.",
+                        "À l'heure du sport, les sportifs montent une salle sur ton écran : banc, rack, poulie, presse, rameur, tapis… Ils se parent, tentent des PR et laissent traîner leur matos. Street workout : tractions, muscle-up, front lever, ATR. Vendredi et samedi soir : la fête.",
                         style = Small,
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GhostButton("Séance muscu", Icons.Filled.FitnessCenter, Modifier.weight(1f), color = C.yellow) { onHappening(false) }
-                        GhostButton("Faire la fête", Icons.Filled.Celebration, Modifier.weight(1f), color = C.yellow) { onHappening(true) }
+                        GhostButton("Séance muscu", Icons.Filled.FitnessCenter, Modifier.weight(1f), color = C.yellow) { onHappening("gym") }
+                        GhostButton("Street workout", Icons.Filled.SportsGymnastics, Modifier.weight(1f), color = C.yellow) { onHappening("street") }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GhostButton("Faire la fête", Icons.Filled.Celebration, Modifier.weight(1f), color = C.yellow) { onHappening("party") }
+                        GhostButton("Nettoyer l'écran", Icons.Filled.CleaningServices, Modifier.weight(1f)) { onHappening("clean") }
                     }
                 }
             }
@@ -389,6 +396,22 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
                     Spacer(Modifier.height(10.dp))
                     Text("Plats préférés : ${a.food.joinToString(", ")}", style = Small)
                     Text("Il t'appelle « ${a.nick} »", style = Small)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Card {
+                Column {
+                    Text("SES RECORDS", style = Label)
+                    Spacer(Modifier.height(8.dp))
+                    if (m.prs.isEmpty()) Text("Pas encore de PR. Ça viendra pendant une séance collective, avec un pote pour le parer.", style = Small)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        m.prs.entries.sortedBy { it.key }.forEach { (k, v) ->
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(C.card2).padding(10.dp)) {
+                                Text(Squad.fmtKg(v), style = H2.copy(color = C.yellow, fontSize = 18.sp))
+                                Text(k, style = Small.copy(fontSize = 12.sp))
+                            }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -711,6 +734,8 @@ fun RhythmScreen(state: SquadState, onBack: () -> Unit, onBattery: () -> Unit) {
                     SliderRow("Bavardage", st.chatter, 0f..2.5f) { v -> sett { it.copy(chatter = v) } }
                     SliderRow("Rencontres entre eux", st.social, 0f..3f) { v -> sett { it.copy(social = v) } }
                     ToggleRow("Séances de muscu collectives", st.gym, "Ils ramènent le matos et s'entraînent ensemble") { v -> sett { it.copy(gym = v) } }
+                    ToggleRow("Street workout", st.street, "Barre de traction, barres parallèles, ATR…") { v -> sett { it.copy(street = v) } }
+                    ToggleRow("Ils salissent l'écran", st.mess, "Taches de bouffe quand ils mangent, matos qui traîne après la séance") { v -> sett { it.copy(mess = v) } }
                     ToggleRow("Fêtes", st.parties, "Sono, buffet, boule à facettes : surtout le vendredi et le samedi soir") { v -> sett { it.copy(parties = v) } }
                     ToggleRow("Bastons", st.fights, "Ils peuvent se battre entre eux. Lâche un gars sur un autre pour lancer la bagarre.") { v -> sett { it.copy(fights = v) } }
                     ToggleRow("Rester visibles en dormant", st.showSleeping, "Sinon ils disparaissent la nuit et reviennent au réveil") { v -> sett { it.copy(showSleeping = v) } }

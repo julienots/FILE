@@ -27,6 +27,8 @@ data class Mascot(
     val losses: Int = 0,
     /** Affinité avec chaque autre mascotte (-100..100). */
     val rel: Map<String, Int> = emptyMap(),
+    /** Records perso (exercice -> kg). */
+    val prs: Map<String, Float> = emptyMap(),
 ) {
     fun relWith(other: String) = rel[other] ?: 0
     fun bond(other: String, d: Int) = copy(rel = rel + (other to (relWith(other) + d).coerceIn(-100, 100)))
@@ -46,6 +48,7 @@ data class Mascot(
         .put("log", JSONArray().apply { log.forEach { put(JSONObject().put("t", it.t).put("x", it.text)) } })
         .put("wins", wins).put("losses", losses)
         .put("rel", JSONObject().apply { rel.forEach { (k, v) -> put(k, v) } })
+        .put("prs", JSONObject().apply { prs.forEach { (k, v) -> put(k, v.toDouble()) } })
 
     companion object {
         fun fromJson(o: JSONObject): Mascot {
@@ -61,6 +64,7 @@ data class Mascot(
                 log = (0 until la.length()).map { la.getJSONObject(it).let { e -> LifeEvent(e.getLong("t"), e.getString("x")) } },
                 wins = o.optInt("wins"), losses = o.optInt("losses"),
                 rel = o.optJSONObject("rel")?.let { r -> r.keys().asSequence().associateWith { k -> r.getInt(k) } } ?: emptyMap(),
+                prs = o.optJSONObject("prs")?.let { r -> r.keys().asSequence().associateWith { k -> r.getDouble(k).toFloat() } } ?: emptyMap(),
             )
         }
 
@@ -109,10 +113,12 @@ data class Settings(
     val fights: Boolean = true,
     val gym: Boolean = true,
     val parties: Boolean = true,
+    val street: Boolean = true,
+    val mess: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("size", size.toDouble()).put("speed", speed.toDouble())
         .put("chatter", chatter.toDouble()).put("showSleeping", showSleeping).put("vibrate", vibrate).put("overlayOn", overlayOn)
-        .put("social", social.toDouble()).put("fights", fights).put("gym", gym).put("parties", parties)
+        .put("social", social.toDouble()).put("fights", fights).put("gym", gym).put("parties", parties).put("street", street).put("mess", mess)
 
     companion object {
         fun fromJson(o: JSONObject?): Settings {
@@ -122,6 +128,7 @@ data class Settings(
                 o.optBoolean("showSleeping", true), o.optBoolean("vibrate", true), o.optBoolean("overlayOn", false),
                 o.optDouble("social", 1.0).toFloat(), o.optBoolean("fights", true),
                 o.optBoolean("gym", true), o.optBoolean("parties", true),
+                o.optBoolean("street", true), o.optBoolean("mess", true),
             )
         }
     }

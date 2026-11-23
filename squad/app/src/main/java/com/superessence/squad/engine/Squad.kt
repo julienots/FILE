@@ -28,6 +28,9 @@ object Squad {
 
     const val MAX = 8
 
+    /** Petits signaux de l'appli vers l'écran (« eat », « train »). */
+    val pings = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 16)
+
     fun init(ctx: Context) {
         if (::prefs.isInitialized) return
         prefs = ctx.getSharedPreferences("squad", Context.MODE_PRIVATE)
@@ -86,6 +89,7 @@ object Squad {
             it.copy(satiety = (it.satiety + 35).coerceAtMost(100f), mood = (it.mood + 8).coerceAtMost(100f))
                 .withEvent("Tu lui as servi : $food")
         }
+        pings.tryEmit("eat" to id)
         return food
     }
 
@@ -98,6 +102,7 @@ object Squad {
                 satiety = (it.satiety - 6).coerceAtLeast(0f), mood = (it.mood + 4).coerceAtMost(100f),
             ).withEvent("Séance avec toi : +15 XP")
         }
+        pings.tryEmit("train" to id)
         return true
     }
 
@@ -145,6 +150,22 @@ object Squad {
             }
         })
     }
+
+    /** Charge à tenter pour un PR (kg). */
+    fun prTarget(m: com.superessence.squad.model.Mascot, lift: String): Float {
+        val base = when (lift) { "Squat" -> 90f; "Presse" -> 160f; else -> 70f } * m.archetype.skill
+        val start = base + m.fitness * (if (lift == "Presse") 2f else 0.9f) + m.level * 2f
+        val cur = m.prs[lift] ?: (start - 5f)
+        return (((maxOf(cur, start - 10f) + 2.5f + (0..3).random() * 2.5f) / 2.5f).toInt() * 2.5f)
+    }
+
+    fun recordPr(id: String, lift: String, kg: Float, ok: Boolean) = editMascot(id) {
+        if (ok) it.copy(prs = it.prs + (lift to kg), xp = it.xp + 25, mood = (it.mood + 15f).coerceAtMost(100f))
+            .withEvent("NOUVEAU PR au $lift : ${fmtKg(kg)} !")
+        else it.copy(mood = (it.mood - 5f).coerceAtLeast(0f)).withEvent("PR raté au $lift (${fmtKg(kg)})")
+    }
+
+    fun fmtKg(kg: Float) = if (kg % 1f == 0f) "${kg.toInt()} kg" else "%.1f kg".format(kg).replace('.', ',')
 
     /** Fin d'une fête. */
     fun recordParty(ids: List<String>) = edit { s ->

@@ -85,10 +85,16 @@ class MainActivity : ComponentActivity() {
         OverlayService.stop(this)
     }
 
-    fun startHappening(party: Boolean) {
+    fun startHappening(kind: String) {
         if (!OverlayService.canRun(this)) { enableOverlay(); return }
         Squad.edit { it.copy(settings = it.settings.copy(overlayOn = true)) }
-        OverlayService.happening(this, party)
+        OverlayService.happening(this, kind)
+        moveTaskToBack(true)
+    }
+
+    fun cleanScreen() {
+        if (!OverlayService.canRun(this)) return
+        OverlayService.clean(this)
         moveTaskToBack(true)
     }
 
@@ -123,7 +129,7 @@ class MainActivity : ComponentActivity() {
                             state, overlayAllowed.value,
                             onOpen = { nav = "detail:$it" }, onRecruit = { nav = "recruit" }, onRhythm = { nav = "rhythm" },
                             onOverlay = { on -> if (on) enableOverlay() else disableOverlay() },
-                            onHappening = { party -> startHappening(party) },
+                            onHappening = { kind -> if (kind == "clean") cleanScreen() else startHappening(kind) },
                         )
                         route == "recruit" -> RecruitScreen(state, onBack = { nav = "home" }, onDone = { nav = "detail:$it" })
                         route == "rhythm" -> RhythmScreen(state, onBack = { nav = "home" }, onBattery = { openBatterySettings() })
