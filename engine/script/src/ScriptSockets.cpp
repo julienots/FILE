@@ -1,6 +1,7 @@
 // agr.tcp, agr.udp, agr.wsserver: low-level sockets for scripts (polled, non-blocking).
 #include "ScriptInternal.hpp"
 
+#include "agr/net/CryptoBox.hpp"
 #include "agr/net/Upnp.hpp"
 
 namespace agr {
@@ -261,9 +262,52 @@ int p_status(lua_State* L) {
     return 2;
 }
 
+// ---- agr.crypto
+std::string_view arg(lua_State* L, int i) {
+    size_t n = 0;
+    const char* s = luaL_checklstring(L, i, &n);
+    return {s, n};
+}
+void pushBytes(lua_State* L, const std::string& s) { lua_pushlstring(L, s.data(), s.size()); }
+/// agr.crypto.hmac(key, message) -> 32 raw bytes (agr.base64.encode to print)
+int c_hmac(lua_State* L) {
+    pushBytes(L, net::cryptobox::hmacSha256(arg(L, 1), arg(L, 2)));
+    return 1;
+}
+/// agr.crypto.randomBytes(n) -> n secure random bytes
+int c_random(lua_State* L) {
+    const lua_Integer n = luaL_checkinteger(L, 1);
+    if (n < 0 || n > (1 << 20)) return luaL_error(L, "agr.crypto.randomBytes: 0 .. 1048576 bytes");
+    pushBytes(L, net::cryptobox::randomBytes(static_cast<usize>(n)));
+    return 1;
+}
+/// agr.crypto.deriveKey(password, salt [, iterations]) -> 32-byte key (PBKDF2-SHA-256)
+int c_derive(lua_State* L) {
+    pushBytes(L, net::cryptobox::deriveKey(arg(L, 1), arg(L, 2), static_cast<u32>(luaL_optinteger(L, 3, 10000))));
+    return 1;
+}
+/// agr.crypto.encrypt(key, text) -> sealed bytes (AES-256-GCM)
+int c_encrypt(lua_State* L) {
+    pushBytes(L, net::cryptobox::encrypt(arg(L, 1), arg(L, 2)));
+    return 1;
+}
+/// agr.crypto.decrypt(key, sealed) -> text | nil (changed data or wrong key)
+int c_decrypt(lua_State* L) {
+    auto r = net::cryptobox::decrypt(arg(L, 1), arg(L, 2));
+    if (!r) {
+        lua_pushnil(L);
+        return 1;
+    }
+    pushBytes(L, *r);
+    return 1;
+}
+
 } // namespace
 
 void openSocketBindings(lua_State* L) {
+    static const luaL_Reg cryptoLib[] = {{"hmac", c_hmac}, {"randomBytes", c_random}, {"deriveKey", c_derive}, {"encrypt", c_encrypt},
+                                         {"decrypt", c_decrypt}, {nullptr, nullptr}};
+    addAgrLibrary(L, "crypto", cryptoLib);
     static const luaL_Reg upnp[] = {{"openPort", p_open}, {"closePort", p_close}, {"status", p_status}, {nullptr, nullptr}};
     addAgrLibrary(L, "upnp", upnp);
     static const luaL_Reg tcp[] = {{"listen", t_listen}, {"accept", t_accept}, {"connect", t_connect}, {"send", t_send},

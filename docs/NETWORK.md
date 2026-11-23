@@ -265,6 +265,21 @@ Tests : le client WebSocket du moteur se connecte au serveur et échange texte, 
 100 Ko et 70 Ko, diffusion, fermeture ; TCP avec 200 Ko envoyés en plusieurs fois, fermeture détectée ;
 UDP aller ; les mêmes depuis Lua.
 
+## Cryptographie (`agr.crypto`)
+
+Comme `Crypto` / `HMACContext` / `AESContext` de Godot (mbedTLS) :
+
+| Fonction | Rôle |
+|---|---|
+| `agr.crypto.hmac(clé, message)` → 32 octets | HMAC-SHA-256 : signer un score, une sauvegarde, une requête vers son serveur |
+| `agr.crypto.randomBytes(n)` | octets aléatoires sûrs (jetons, sels, identifiants) |
+| `agr.crypto.deriveKey(motDePasse, sel [, itérations])` → 32 octets | PBKDF2-SHA-256 |
+| `agr.crypto.encrypt(clé, texte)`, `agr.crypto.decrypt(clé, scellé)` → texte \| `nil` | AES-256-GCM authentifié (nonce aléatoire) : `nil` si les données ont été modifiées ou la clé est fausse |
+
+Les résultats sont des octets bruts (`agr.base64.encode` pour les afficher ou les stocker en JSON).
+C++ : `agr::net::cryptobox`. Test : vecteur officiel RFC 4231 pour HMAC, déchiffrement refusé après une
+modification d'un octet ou avec une autre clé.
+
 ## Ouvrir un port sur la box (UPnP)
 
 Pour héberger depuis chez soi une partie jointe par Internet, le port doit être redirigé par la box
@@ -298,7 +313,7 @@ zéro*. C++ : `NetSession::bandwidthHistory`, `Replicator::profile`. Testé : co
   La découverte LAN reste en IPv4 (diffusion). Le chemin IPv6 réel n'a pas pu être testé dans la VM
   de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
 - Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte ouvre son port UDP, par
-  UPnP si sa box le permet) ; pas de WebRTC ; serveur WebSocket en `ws://` seulement (pas de TLS intégré
+  UPnP si sa box le permet) ; pas de WebRTC ; pas de certificats ni de clés RSA / ECDSA dans `agr.crypto` ; serveur WebSocket en `ws://` seulement (pas de TLS intégré
   côté serveur) ; sockets bas niveau en IPv4.
 - Chiffrement à **clé partagée** (le mot de passe) : pas d'échange de clés Diffie-Hellman ni de
   certificats ; qui connaît le mot de passe et a enregistré la poignée de main peut déchiffrer la

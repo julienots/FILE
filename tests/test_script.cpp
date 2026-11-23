@@ -368,6 +368,28 @@ TEST_CASE("agr.upnp runs in the background and reports a missing router") {
     REQUIRE(f.scripts.run("local s, why = agr.upnp.status(); assert(s == 'failed' or s == 'done', s); assert(why and #why > 0)"));
 }
 
+TEST_CASE("agr.crypto: HMAC (RFC 4231 vector), random bytes, key derivation, authenticated encryption") {
+    ScriptFixture f;
+    const Status st = f.scripts.run(R"(
+-- RFC 4231 test case 2
+local mac = agr.crypto.hmac("Jefe", "what do ya want for nothing?")
+local hex = mac:gsub(".", function(c) return string.format("%02x", c:byte()) end)
+assert(hex == "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843", hex)
+local r1, r2 = agr.crypto.randomBytes(32), agr.crypto.randomBytes(32)
+assert(#r1 == 32 and r1 ~= r2)
+local k = agr.crypto.deriveKey("mot de passe", "sel", 1000)
+assert(#k == 32 and k == agr.crypto.deriveKey("mot de passe", "sel", 1000) and k ~= agr.crypto.deriveKey("autre", "sel", 1000))
+local box = agr.crypto.encrypt(k, "score=12345")
+assert(#box == 12 + 11 + 16 and not box:find("12345"))
+assert(agr.crypto.decrypt(k, box) == "score=12345")
+assert(agr.crypto.decrypt("mauvaise clé", box) == nil)
+local tampered = box:sub(1, 15) .. string.char((box:byte(16) + 1) % 256) .. box:sub(17)
+assert(agr.crypto.decrypt(k, tampered) == nil)
+assert(agr.crypto.encrypt(k, "same") ~= agr.crypto.encrypt(k, "same"))  -- random nonce
+)");
+    CHECK_MESSAGE(st, (st ? "" : st.error().message));
+}
+
 TEST_CASE("debugger: pause request and break on error") {
     ScriptFixture f;
     f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");
