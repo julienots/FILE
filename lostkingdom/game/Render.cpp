@@ -98,7 +98,28 @@ void Game::updateCamera(float dt) {
     camRig = CameraRig::compute(ri);
     if (camRig.yawFix != 0 && state == GameState::Playing && !cine.active) camYaw = wrapAngle(camYaw + camRig.yawFix * std::min(1.f, dt * 3.f));   // 1.12.0
     vec3 eye = camRig.eye, look = camRig.look;
-    { float wle = dungeon.active ? -1e9f : waterAt(eye.x, eye.z); underwaterView = wle > -1e8f && eye.y < wle - 0.05f; }   // 2.4.0
+    { float wle = dungeon.active ? -1e9f : waterAt(eye.x, eye.z); underwaterView = wle > -1e8f && eye.y < wle - 0.05f;   // 2.4.0
+      // 3.5.0 the water near the camera: caustics on everything under it, the underwater look when the eye is below
+      bool lv = false, fr = false;
+      vec3 f = camFocus;
+      float wl = dungeon.active ? -1e9f : waterAt(f.x, f.z, &lv, &fr);
+      if (wl < -1e8f && !dungeon.active)   // on the shore: the water a few metres away
+          for (int k = 0; k < 4 && wl < -1e8f; k++) { vec2 o = vec2(std::cos(k * 1.5708f), std::sin(k * 1.5708f)) * 9.f; wl = waterAt(f.x + o.x, f.z + o.y, &lv, &fr); }
+      bool ok = wl > -1e8f && !lv && !fr;
+      env.waterLevel = ok ? wl : -1e9f;
+      env.caustics = ok ? (1.f - env.night) * clampf(env.sunIntensity / 2.5f, 0.25f, 1.f) : 0.f;
+      env.underwater = underwaterView ? 1.f : 0.f;
+      env.underDepth = underwaterView ? wle - eye.y : 0.f;
+      if (underwaterView) {
+          int rg = world.regionId(eye.x, eye.z);
+          vec3 deep = srgb(0x164a58), shallow = srgb(0x4a9488);
+          if (rg == R_CORAL || rg == R_JUNGLE) { deep = srgb(0x0a5a82); shallow = srgb(0x35d6c8); }
+          else if (rg == R_FROSTHEIM || rg == R_AURORA) { deep = srgb(0x1a3a5a); shallow = srgb(0x6ab0d0); }
+          else if (rg == R_SHADOWS) { deep = srgb(0x14200e); shallow = srgb(0x3a4a26); }
+          else if (rg == R_AMBER || rg == R_CANYON) { deep = srgb(0x0e5260); shallow = srgb(0x4ac0a0); }
+          env.waterTint = lerp(deep, shallow, 0.4f) * 0.9f;
+      }
+    }
     float cineFov = 0;
     if (cine.active) {
         vec3 ce, cl;
@@ -294,6 +315,7 @@ void Game::renderWorld(float dt) {
             }
         });
     }
+    renderFish();   // 3.5.0
     if (dungeon.active) {
         renderDungeon();
         for (const vec4& l : dungeon.lights) {
@@ -356,6 +378,13 @@ void Game::renderWorld(float dt) {
         DrawItem d; d.mesh = pickupMesh.get();
         float bob = std::sin(realTime * 3.f + e) * 0.08f;
         d.model = mat4::trs(*pos + vec3(0, 0.25f + bob, 0), quat::axisAngle({0, 1, 0}, realTime * 1.5f), vec3(1));
+        // 3.5.0 the item itself floats there (about 0.6 m across), turning, instead of a sack
+        if (const ItemModel* im = itemModel(pk.item)) {
+            float sc = 0.3f / im->radius;
+            quat q = quat::axisAngle({0, 1, 0}, realTime * 1.5f) * (im->longAxis ? quat::axisAngle({0, 0, 1}, -PI / 4) * quat::axisAngle({1, 0, 0}, -PI / 2) : quat());
+            d.mesh = im->mesh.get();
+            d.model = mat4::trs(*pos + vec3(0, 0.75f + bob, 0), q, vec3(sc)) * mat4::translate(-im->center);
+        }
         vec3 rc = rarityColor(pk.rarity);
         d.tint = vec4(rc, 0); d.fx.w = 1.5f; d.outline = true; d.outlineColor = vec4(rc * 0.6f, 1); d.outlineWidth = 0.02f;
         renderer.submit(d);

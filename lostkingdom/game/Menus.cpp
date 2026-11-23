@@ -55,41 +55,91 @@ bool Game::itemIcon(const std::string& id, Rect r, float a) {
     return true;
 }
 
-// Item icons for weapons & shields are rendered from their actual 3D models.
+// 3.5.0 the 3D model of an item, built once: mesh, centre and radius (for framing and for items on the ground)
+const Game::ItemModel* Game::itemModel(const std::string& id) {
+    auto it = itemModels.find(id);
+    if (it != itemModels.end()) return it->second.mesh ? &it->second : nullptr;
+    ItemModel& m = itemModels[id];
+    const ItemDef* d = item(id);
+    if (!d) return nullptr;
+    MeshBuilder b;
+    if (!buildItemModel(b, *d) || b.v.empty()) return nullptr;
+    vec3 lo(1e9f), hi(-1e9f);
+    for (const Vertex& v : b.v) { vec3 p(v.px, v.py, v.pz); lo = vmin(lo, p); hi = vmax(hi, p); }
+    m.center = (lo + hi) * 0.5f;
+    m.radius = std::max(0.05f, length(hi - lo) * 0.5f);
+    m.longAxis = (d->kind == ItemKind::Weapon || d->kind == ItemKind::Tool) && (hi.z - lo.z) > 1.6f * std::max(hi.x - lo.x, hi.y - lo.y);   // built along +Z: shown diagonally
+    m.mesh = std::make_shared<Mesh>();
+    b.upload(*m.mesh);
+    return &m;
+}
+
+// The orientation an item is shown in: long weapons and tools diagonally, everything else in a three-quarter view
+// from slightly above.
+static quat itemPose(const Game::ItemModel& m, float spin) {
+    if (m.longAxis) return quat::axisAngle({0, 0, 1}, -PI / 4) * quat::axisAngle({1, 0, 0}, -PI / 2) * quat::axisAngle({0, 1, 0}, 0.3f + spin);
+    return quat::axisAngle({1, 0, 0}, 0.38f) * quat::axisAngle({0, 1, 0}, -0.65f + spin);
+}
+
+static Environment itemLight() {
+    Environment e; e.sunDir = normalize(vec3(-0.45f, 0.75f, 0.6f)); e.sunIntensity = 2.7f; e.sunColor = srgb(0xfff2dc);
+    e.skyAmbient = srgb(0xa0b4d8) * 0.95f; e.groundAmbient = srgb(0x6a5440) * 0.75f; e.fogDensity = 0; e.exposure = 1.0f; e.saturation = 1.15f; e.contrast = 1.06f;
+    return e;
+}
+
+// Renders an item model into a square target, framed to fill it.
+static void renderItemCell(Game& g, RenderTarget& rt, const Game::ItemModel& m, float spin) {
+    quat q = itemPose(m, spin);
+    // fit: the extent of the rotated mesh seen from +Z (bounds of the rotated bounding sphere, tightened)
+    float R = m.radius;
+    Camera c; c.fovY = 24 * DEG; c.zNear = 0.02f; c.zFar = 50.f;
+    float dist = (R * 1.02f) / std::tan(c.fovY * 0.5f);
+    c.target = vec3(0); c.pos = vec3(0, 0, dist); c.update(1.f);
+    DrawItem di; di.mesh = m.mesh.get();
+    di.model = mat4::rotate(q) * mat4::translate(-m.center);
+    di.outline = true; di.outlineColor = vec4(0.05f, 0.03f, 0.02f, 1); di.outlineWidth = 0.008f * R;
+    g.renderer.renderToTarget(rt, c, itemLight(), {di}, vec4(0, 0, 0, 0));
+}
+
+// Item icons, rendered from the items' 3D models into one atlas (every item that has a model; the others keep
+// their 2D icon).
 void Game::renderItemIcons() {
     if (iconsReady) return;
-    const int cell = 128, cols = 8;
+    const int cell = 112, cols = 20;   // 400 items
     if (!iconRT.fbo) iconRT.create(cell * cols, cell * cols, GL_RGBA8, true);
-    std::vector<const ItemDef*> list;
-    for (auto& d : allItems()) if (d.kind == ItemKind::Weapon || d.kind == ItemKind::Shield || d.kind == ItemKind::Tool) list.push_back(&d);
-    Environment e; e.sunDir = normalize(vec3(-0.4f, 0.8f, 0.6f)); e.sunIntensity = 3.2f; e.sunColor = srgb(0xfff2dc);
-    e.skyAmbient = srgb(0x9ab0d0) * 1.1f; e.groundAmbient = srgb(0x5a4a3a) * 0.8f; e.fogDensity = 0; e.exposure = 1.1f; e.saturation = 1.1f; e.contrast = 1.05f;
-    RenderTarget cellRT; cellRT.create(cell, cell, GL_RGBA8, false);
-    // render each icon into its own small target then copy into the atlas
-    for (size_t i = 0; i < list.size() && i < (size_t)(cols * cols); i++) {
-        const ItemDef* d = list[i];
-        float tip = 0.8f;
-        auto mesh = weaponMesh(d->weapon, d->tier, d->weapon == WeaponType::Shield ? d->color : elementColor(d->element), &tip);
-        Camera c;
-        float len = d->weapon == WeaponType::Shield ? 0.7f : std::max(0.5f, tip + 0.3f);
-        vec3 center = d->weapon == WeaponType::Shield ? vec3(0.08f, 0, 0) : vec3(0, 0, tip * 0.42f);
-        quat q = d->weapon == WeaponType::Shield ? quat::axisAngle({0, 1, 0}, -PI / 2 + 0.35f) : quat::axisAngle({1, 0, 0}, -PI / 2) * quat::axisAngle({0, 1, 0}, 0.3f);
-        c.target = vec3(0); c.pos = vec3(0.f, 0.1f, len * 1.35f); c.fovY = 40 * DEG; c.zNear = 0.05f; c.zFar = 20;
-        c.update(1.f);
-        DrawItem di; di.mesh = mesh.get();
-        di.model = mat4::rotate(quat::axisAngle({0, 0, 1}, -PI / 4) * q) * mat4::translate(-center);
-        di.outline = true; di.outlineColor = vec4(0.05f, 0.03f, 0.02f, 1); di.outlineWidth = 0.004f * len;
-        renderer.renderToTarget(cellRT, c, e, {di}, vec4(0, 0, 0, 0));
-        int cx = (int)(i % cols), cy = (int)(i / cols);
+    RenderTarget cellRT; cellRT.create(cell, cell, GL_RGBA8, true);
+    int n = 0;
+    for (auto& d : allItems()) {
+        if (n >= cols * cols) break;
+        const ItemModel* m = itemModel(d.id);
+        if (!m) continue;
+        renderItemCell(*this, cellRT, *m, 0.f);
+        int cx = n % cols, cy = n / cols;
         glBindFramebuffer(GL_READ_FRAMEBUFFER, cellRT.fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, iconRT.fbo);
         glBlitFramebuffer(0, 0, cell, cell, cx * cell, cy * cell, (cx + 1) * cell, (cy + 1) * cell, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         float s = 1.f / cols;
-        iconUV[d->id] = vec4(cx * s, (cy + 1) * s, (cx + 1) * s, cy * s);  // flipped (GL origin bottom-left)
+        iconUV[d.id] = vec4(cx * s, (cy + 1) * s, (cx + 1) * s, cy * s);  // flipped (GL origin bottom-left)
+        n++;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     cellRT.destroy();
     iconsReady = true;
+    AGR_LOG("item icons: %d items rendered from their 3D models", n);
+}
+
+// 3.5.0 the selected item turning slowly in a halo of its rarity (falls back to the icon)
+void Game::itemShowcase(const std::string& id, Rect r, Rarity rar) {
+    const ItemModel* m = itemModel(id);
+    vec3 rc = rarityColor(rar);
+    ui.sprite("glow", r.inset(-r.w * 0.12f), vec4(rc, 0.35f + 0.1f * std::sin(realTime * 2.5f)));
+    if (!m) { itemIcon(id, r); return; }
+    if (showcaseT != realTime) { showcaseT = realTime; showcaseUsed = 0; }
+    if (showcaseUsed >= 2) { itemIcon(id, r); return; }
+    RenderTarget& rt = showcaseRT[showcaseUsed++];
+    if (!rt.fbo) rt.create(256, 256, GL_RGBA8, true);
+    renderItemCell(*this, rt, *m, realTime * 0.9f);
+    ui.image(rt.color.id, r, vec4(0, 1, 1, 0));
 }
 
 // Close-up portrait of an NPC (rendered with the dialogue depth of field look).
@@ -356,7 +406,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v3.4.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v3.5.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods
@@ -466,13 +516,14 @@ static void itemTooltip(Game& g, Rect r, const ItemStack& s, bool equipped) {
     u.nine("panel_plain", r, vec4(1, 1, 1, 0.95f), 0.7f);
     vec3 rc = rarityColor(s.rarity);
     float y = r.y + 18;
-    g.itemIcon(s.id, {r.x + 18, y, 80, 80});
+    g.itemShowcase(s.id, {r.x + 10, y - 8, 124, 124}, s.rarity);   // 3.5.0 the item itself, turning
     std::string nm = d->name + (s.level > 0 ? " +" + std::to_string(s.level) : "");
-    u.text(nm, r.x + 112, y, 24, vec4(rc, 1), F_SERIF, A_LEFT, r.w - 130);
-    y += u.textHeight(nm, 24, F_SERIF, r.w - 130) + 2;
-    static const char* kinds[] = {"Arme", "Bouclier", "Tête", "Torse", "Mains", "Pieds", "Anneau", "Amulette", "Consommable", "Matériau", "Objet de quête", "Outil", "Monture", "Relique", "Apparence"};
-    u.text(std::string(rarityName(s.rarity)) + " · " + kinds[(int)d->kind], r.x + 112, y, 17, vec4(rc * 0.85f, 1), F_BODY);
-    y = std::max(y + 30, r.y + 110);
+    u.text(nm, r.x + 146, y, 24, vec4(rc, 1), F_SERIF, A_LEFT, r.w - 164);
+    y += u.textHeight(nm, 24, F_SERIF, r.w - 164) + 2;
+    static const char* kinds[] = {"Arme", "Bouclier", "Tête", "Torse", "Mains", "Pieds", "Anneau", "Amulette", "Consommable", "Matériau", "Objet de quête", "Outil", "Monture", "Relique", "Apparence", "Objet clé"};
+    int ki = (int)d->kind; const char* kn = ki >= 0 && ki < (int)(sizeof kinds / sizeof kinds[0]) ? kinds[ki] : "Objet";   // 3.5.0 (key items read past the list)
+    u.text(std::string(rarityName(s.rarity)) + " · " + kn, r.x + 146, y, 17, vec4(rc * 0.85f, 1), F_BODY);
+    y = std::max(y + 30, r.y + 140);
     float m = rarityMult(s.rarity) * (1.f + 0.12f * s.level);
     auto stat = [&](const char* label, float v, const char* fmt) { if (v == 0) return; char b[64]; snprintf(b, sizeof b, fmt, v); u.text(label, r.x + 22, y, 19, DIM, F_BODY); u.text(b, r.x + r.w - 22, y, 19, GOLDT, F_BOLD, A_RIGHT); y += 26; };
     stat("Attaque", d->atk * m, "+%.0f");

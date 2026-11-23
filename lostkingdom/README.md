@@ -6,13 +6,50 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.4.1 (versionCode 55), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.4.0 : elle s'installe par-dessus). SHA-256 : `7b8a8d86350712955c2203d80a4ba7798f15766da4df505745a02284865016c9`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.5.0 (versionCode 56), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.4.1 : elle s'installe par-dessus). SHA-256 : `7b8a8d86350712955c2203d80a4ba7798f15766da4df505745a02284865016c9`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.5.0 (un vrai modèle 3D pour chaque objet, et le monde sous l'eau)
+
+- **Chacun des 212 objets a son propre modèle 3D** (`game/ItemModels.cpp`). Avant, seules les armes en avaient un, minuscule, et les autres objets partageaient quelques icônes : un cœur pour le pain, une pioche pour tous les minerais, une pièce pour toutes les bagues.
+  - **Potions** : flacons de couleur avec bouchon de liège, reflet et étiquette ; les grandes ont un col doré et une gemme.
+  - **Élixirs** : bouteilles taillées dans une cage d'or, avec un bouchon en étoile qui brille.
+  - **Nourriture** : pain, ragoûts dans un bol, poissons grillés, baies, dattes, noix de coco, viande, et aussi bombe et bandage.
+  - **Minerais** : roches veinées de fer, cuivre, or, argent ou minerai rare ; charbon.
+  - **Lingots** : empilés, avec le poinçon du forgeron ; ceux d'étoile et d'acier titan luisent.
+  - **Cristaux** : en grappes de couleur ; ambre, corail, sablier, éclat d'étoile.
+  - **Plantes** : herbes, lys de givre, champignons lumineux, racine de braise, lin.
+  - **Autres matériaux** : peaux, fourrure, toile, soie d'araignée, os, essence d'ombre, écaille de dragon, pièces de pirate, coquillages, perle.
+  - **Bijoux** : bagues avec gemme taillée (anneau de cuivre, d'argent ou d'or selon la bague) et amulettes en pendentif (soleil, feuille de chêne, médaillon).
+  - **Armures** : casques (cuir, cotte de mailles, cornes de givre, crête de braise, capuches sylvestre et d'ombre, couronne), cuirasses, gantelets et bottes, dans la couleur de l'objet.
+  - **Objets de quête et reliques** : pierre d'écho à la rune lumineuse, Couronne-Mère, cartes en rouleau, lettre cachetée, lanterne, harpe elfique, cor du jarl, longue-vue, masque solaire, cloche marine, œil du sphinx, comète.
+  - **Objets clés** : boussole, botte ailée, plume de phénix, aimant, trident, trèfle, fer à cheval ailé.
+  - **Le reste** : sacs (le sac sans fond scintille d'étoiles), montures (fer à cheval doré et ruban), teintures en pot, et une vraie pelle.
+- **Où on les voit :**
+  - **Inventaire** : chaque icône est rendue depuis le modèle, cadrée pour remplir la case (les longues armes en diagonale, le reste de trois quarts).
+  - **Fiche d'un objet** : l'objet tourne lentement dans un halo de sa rareté.
+  - **Au sol** : l'objet lui-même flotte et tourne, au lieu d'un sac, au-dessus de son rayon de lumière.
+- **Le monde sous l'eau** :
+  - **la couleur** : l'eau absorbe le rouge puis le reste avec la distance ; une brume bleu-vert se referme vers 40 m, plus sombre en profondeur ; l'eau prend la couleur de sa région (lagons turquoise, mers froides, marais) ;
+  - **la lumière** : des rayons descendent de la surface, et des **caustiques** (le filet de lumière des vagues) dansent sur le fond, les rochers et le plongeur. On les voit aussi depuis la surface en eau peu profonde ;
+  - **le mouvement** : l'image ondule doucement ; l'ancien voile vert plat est supprimé ;
+  - **la vie du fond** : forêts de laminaires qui ondulent dans le courant, herbiers, rochers avec anémones et étoiles de mer, coquillages ; dans les mers chaudes, **coraux** branchus, éventails et coraux cerveaux de toutes les couleurs. Les lacs et rivières ont aussi leurs herbes ;
+  - **des bancs de poissons** (6 à 15 par banc, 8 couleurs) tournent entre le fond et la surface et ondulent en nageant ;
+  - **des épaves** gisent au fond de la mer, entre 6,5 et 15 m, à peu près un morceau de mer profonde sur 40 : coque éventrée, mât couché, lambeau de voile, cloche. **Un coffre** brille à l'intérieur et s'ouvre sous l'eau ;
+  - **on plonge maintenant jusqu'à 15 m** (7 m avant), en gardant un œil sur la jauge d'air.
+- **Bug corrigé** : la fiche d'un objet clé lisait en dehors de la liste des catégories. Elle affiche maintenant « Objet clé ».
+- **Vérifié sur ordinateur seulement** :
+  - 3 049 tests unitaires réussis ;
+  - nouveaux scénarios automatiques :
+    - `items3d` : les 212 objets ont un modèle ; sac, fiche et objets au sol en images ;
+    - `reef` : sous l'eau, 71 poissons, caustiques, une épave à 14 m, puis le coffre ouvert sous l'eau ;
+  - scénarios de régression passés.
+- **Coût sur téléphone non mesuré** : la vie sous-marine ajoute de la géométrie aux morceaux de mer, et les poissons sont dessinés en une seule passe.
 
 ### Nouveautés 3.4.1 (on voit beaucoup plus loin)
 

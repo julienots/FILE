@@ -2044,6 +2044,106 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             if (lod < 2 || ent->collide) stampProp(out, ent->k, var, {x, y - 0.05f, z}, rot, sc, tint, ent->collide);
             if ((ent->k == P_GIANTSHROOM || ent->k == P_MAGICCRYSTAL) && rng.chance(0.5f)) out.lights.push_back(vec4(x, y + 2.f * sc, z, ent->k == P_GIANTSHROOM ? LI_MAGIC : LI_CRYSTAL));
         }
+    // ---- 3.5.0 under the water: sea grass and kelp swaying in the current, corals in warm seas (branches, fans,
+    // brain corals), rocks with anemones, starfish and shells; now and then a shipwreck half-sunk in the sand,
+    // with a chest to dive for. Lakes and rivers get their weeds too.
+    if (lod < 2) {
+        Rng ur(hash2i(k.x, k.z, 8181));
+        const float uc = 3.2f;
+        const int UN = (int)(CHUNK / uc);
+        int placed = 0;
+        for (int j = 0; j < UN && placed < 90; j++)
+            for (int i = 0; i < UN && placed < 90; i++) {
+                float x = x0 + (i + ur.f()) * uc, z = z0 + (j + ur.f()) * uc;
+                float pick = ur.f(), hsz = ur.f(), col = ur.f();
+                bool lv = false, fr = false;
+                float wl = waterLevel(x, z, &lv, &fr);
+                if (wl < -1e8f || lv || fr) continue;
+                float y = height(x, z), depth = wl - y;
+                if (depth < 1.1f) continue;
+                int r = regionId(x, z);
+                bool warm = r == R_CORAL || r == R_JUNGLE || r == R_AMBER || r == R_CANYON;
+                bool sea = y < 0.5f;
+                placed++;
+                if (pick < 0.3f) {   // kelp: a ribbon of leaves on a stem, almost to the surface in deep water
+                    float h = std::min(depth - 0.5f, (sea ? 1.6f : 0.9f) + hsz * (sea ? 3.2f : 1.4f));
+                    if (h < 0.5f) continue;
+                    vec3 kc = lerp(hexColor(0x3a5a1e), hexColor(0x6a6a26), col);
+                    int seg = 4 + (int)(h / 1.1f);
+                    for (int st = 0; st < 2; st++) {
+                        float a = col * 6.28f + st * 2.1f;
+                        vec3 base{x + std::cos(a) * 0.2f, y - 0.05f, z + std::sin(a) * 0.2f};
+                        vec3 prev = base;
+                        for (int sgi = 1; sgi <= seg; sgi++) {
+                            float t = (float)sgi / seg;
+                            vec3 p = base + vec3(std::sin(t * 3.f + a) * 0.25f * t, h * t * (st ? 0.8f : 1.f), std::cos(t * 2.5f + a) * 0.25f * t);
+                            Mat m0(kc * (0.75f + 0.25f * t), 0.6f, 0.f, 0.f, std::min(1.f, 0.25f + t * 0.9f));
+                            out.foliage.blade(prev, p, 0.16f + 0.08f * std::sin(t * 3.14f), {std::cos(a), 0, std::sin(a)}, m0, m0.withWind(std::min(1.f, 0.35f + t)));
+                            if (sgi % 2 == 0) out.foliage.blade(p, p + vec3(std::cos(a + sgi) * 0.35f, 0.15f, std::sin(a + sgi) * 0.35f), 0.12f, {0, 1, 0}, m0, m0.withWind(1.f));
+                            prev = p;
+                        }
+                    }
+                } else if (pick < 0.55f) {   // sea grass
+                    vec3 gc = lerp(hexColor(0x2f6a2a), hexColor(0x5a8a3a), col);
+                    for (int b = 0; b < 7; b++) {
+                        float a = b * 0.9f + col * 5.f;
+                        vec3 base{x + std::cos(a) * 0.25f, y - 0.03f, z + std::sin(a) * 0.25f};
+                        float h = 0.35f + 0.35f * std::fabs(std::sin(a * 3.f));
+                        out.foliage.blade(base, base + vec3(std::cos(a) * 0.1f, h, std::sin(a) * 0.1f), 0.07f, {-std::sin(a), 0, std::cos(a)}, Mat(gc * 0.7f, 0.7f, 0, 0, 0.f), Mat(gc, 0.6f, 0, 0, 0.9f), 0.6f);
+                    }
+                } else if (pick < 0.8f && warm && sea) {   // coral
+                    static const uint32_t cc[] = {0xff6a8a, 0xff9a3a, 0xb06cff, 0xffd84a, 0x3ad8c8, 0xff4a5a};
+                    vec3 c = hexColor(cc[(int)(col * 5.99f)]);
+                    Mat cm(c, 0.55f, 0.f, 0.08f);
+                    int kind = (int)(hsz * 3.f);
+                    if (kind == 0) {   // branching
+                        for (int b = 0; b < 6; b++) { float a = b * 1.05f + col * 4.f, l = 0.35f + 0.3f * std::fabs(std::sin(b * 1.7f));
+                            vec3 b0{x, y - 0.05f, z}, b1 = b0 + vec3(std::cos(a) * l * 0.5f, l, std::sin(a) * l * 0.5f);
+                            out.props.tube(b0, b1, 0.06f, 0.04f, cm, 6, false); out.props.tube(b1, b1 + vec3(std::cos(a + 0.8f) * 0.18f, 0.25f, std::sin(a + 0.8f) * 0.18f), 0.04f, 0.025f, cm, 5, true);
+                            out.props.ellipsoid(b1 + vec3(std::cos(a + 0.8f) * 0.18f, 0.25f, std::sin(a + 0.8f) * 0.18f), vec3(0.035f), Mat(lerp(c, vec3(1.f), 0.4f), 0.4f, 0, 0.2f), 5, 3); }
+                    } else if (kind == 1) {   // a fan
+                        float a = col * 6.28f;
+                        for (int b = 0; b < 4; b++) out.props.blade({x, y - 0.05f, z}, vec3(x + std::cos(a) * (b - 1.5f) * 0.25f, y + 0.9f + 0.1f * b, z + std::sin(a) * (b - 1.5f) * 0.25f), 0.45f, {std::cos(a), 0, std::sin(a)}, cm, Mat(lerp(c, vec3(1.f), 0.3f), 0.5f, 0, 0.15f));
+                    } else {   // brain coral
+                        out.props.ellipsoid({x, y + 0.1f, z}, vec3(0.45f, 0.35f, 0.4f), cm, 12, 7);
+                        for (int b = 0; b < 5; b++) out.props.ellipsoid({x + (b - 2) * 0.13f, y + 0.4f, z}, vec3(0.04f, 0.04f, 0.32f), Mat(c * 0.75f, 0.6f), 6, 4);
+                    }
+                } else if (pick < 0.92f) {   // a rock with life on it
+                    float rs = 0.35f + hsz * 0.6f;
+                    out.props.rock({x, y + rs * 0.3f, z}, vec3(rs, rs * 0.7f, rs * 0.85f), Mat(lerp(hexColor(0x5a6058), hexColor(0x4a5a46), col), 0.9f), (uint32_t)(i * 31 + j * 7 + k.x * 3 + k.z), 0);
+                    if (col < 0.5f) for (int b = 0; b < 6; b++) { float a = b * 1.05f; vec3 p{x + std::cos(a) * 0.08f, y + rs * 0.95f, z + std::sin(a) * 0.08f};   // an anemone
+                        out.foliage.blade(p, p + vec3(std::cos(a) * 0.12f, 0.2f, std::sin(a) * 0.12f), 0.04f, {-std::sin(a), 0, std::cos(a)}, Mat(hexColor(0xff7ab0), 0.5f, 0, 0.3f, 0.3f), Mat(hexColor(0xffd0e8), 0.5f, 0, 0.4f, 0.8f)); }
+                    else { vec3 p{x + rs * 0.6f, y + 0.04f, z};   // a starfish beside it
+                        for (int b = 0; b < 5; b++) { float a = b * TAU / 5; out.props.ellipsoid(p + vec3(std::cos(a) * 0.08f, 0, std::sin(a) * 0.08f), vec3(0.08f, 0.025f, 0.03f), Mat(hexColor(0xe8603a), 0.6f), 6, 3, quat::axisAngle({0, 1, 0}, -a)); } }
+                } else {   // shells on the sand
+                    for (int b = 0; b < 3; b++) { float a = b * 2.1f + col * 3.f; out.props.ellipsoid({x + std::cos(a) * 0.3f, y + 0.02f, z + std::sin(a) * 0.3f}, vec3(0.08f, 0.03f, 0.06f), Mat(lerp(hexColor(0xf0d8c0), hexColor(0xe8a8a0), col), 0.35f), 7, 4, quat::axisAngle({0, 1, 0}, a)); }
+                }
+            }
+        // a shipwreck on the sea floor (one chunk in ~40 where the sea is deep enough), with a chest
+        if (lod == 0 && ur.f() < 0.025f) {
+            float cx = x0 + CHUNK * 0.5f, cz = z0 + CHUNK * 0.5f;
+            bool lv = false, fr = false;
+            float wl = waterLevel(cx, cz, &lv, &fr), gy = height(cx, cz);
+            if (wl > -1e8f && !lv && !fr && wl - gy > 6.5f && wl - gy < 15.f && gy < 0.f) {   // deep enough that the mast stays under the surface
+                float yaw = ur.range(0, TAU), roll = ur.range(0.25f, 0.45f);
+                mat4 X = mat4::trs({cx, gy - 0.5f, cz}, quat::axisAngle({0, 1, 0}, yaw) * quat::axisAngle({0, 0, 1}, roll), vec3(1));
+                MeshBuilder W; W.xf = X;
+                Mat wood(hexColor(0x4a3a2a), 0.9f), dark(hexColor(0x2a2018), 0.95f), moss(hexColor(0x3a5a3a), 0.9f), brass(hexColor(0x8a7a4a), 0.5f, 0.6f);
+                for (int rib = 0; rib < 8; rib++) { float zz = -4.f + rib * 1.1f, w = 1.9f * std::sqrt(std::max(0.1f, 1.f - (zz / 5.f) * (zz / 5.f)));
+                    for (int sd = -1; sd <= 1; sd += 2) { W.tube({0, 0.2f, zz}, {sd * w, 1.1f, zz}, 0.09f, 0.08f, rib % 3 == 0 ? moss : dark, 5, false); W.tube({sd * w, 1.1f, zz}, {sd * w * 1.05f, 2.4f - (rib % 2) * 0.6f, zz}, 0.08f, 0.06f, dark, 5, true); } }
+                for (int pl = 0; pl < 6; pl++) W.box({-1.f + pl * 0.35f, 0.25f, -0.5f}, {0.14f, 0.05f, 3.6f - pl * 0.2f}, pl % 2 ? wood : moss);
+                for (int pl = 0; pl < 4; pl++) W.box({-1.55f, 1.0f + pl * 0.35f, -1.f + pl * 0.4f}, {0.05f, 0.15f, 2.2f - pl * 0.3f}, wood, quat::axisAngle({0, 0, 1}, 0.25f));
+                W.box({0, 0.3f, -4.6f}, {1.2f, 1.1f, 0.15f}, wood);   // stern board
+                W.tube({0.4f, 0.6f, 0.5f}, {4.5f, 0.3f, 3.6f}, 0.18f, 0.12f, dark, 7, true);   // the broken mast, lying
+                W.box({3.f, 0.45f, 2.6f}, {0.9f, 0.04f, 0.6f}, Mat(hexColor(0xb8a888), 0.95f), quat::axisAngle({0, 1, 0}, 0.6f));   // a shred of sail
+                W.lathe({{0.35f, 0}, {0.4f, 0.25f}, {0.35f, 0.5f}, {0.01f, 0.52f}}, brass, 10, {-0.6f, 0.2f, 3.2f}, quat::axisAngle({1, 0, 0}, 1.4f));   // a bell
+                out.props.append(W);
+                vec3 cp = X.transformPoint(vec3(0.f, 0.4f, -1.5f)); cp.y = height(cp.x, cp.z);
+                out.nodes.push_back({NodeType::Chest, cp, yaw, hash3i(k.x, k.z, 4747, 999), 3});
+                out.lights.push_back(vec4(cp.x, cp.y + 1.2f, cp.z, LI_MAGIC));
+            }
+        }
+    }
     // Small decorations only avoid roads, buildings and the core of settlements (the full POI radius covers
     // the surrounding fields, which is exactly where flowers and fences belong).
     auto clutterBlocked = [&](float x, float z, float margin) {

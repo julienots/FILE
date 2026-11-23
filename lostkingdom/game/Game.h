@@ -527,6 +527,15 @@ public:
     float hintT = 0;
     GLuint mapTex = 0;
     RenderTarget iconRT; bool iconsReady = false;
+    // 3.5.0 the 3D model of every item (ItemModels.cpp): inventory icons, the rotating showcase, items on the ground
+    struct ItemModel { std::shared_ptr<Mesh> mesh; vec3 center; float radius = 0.3f; bool longAxis = false; };
+    std::map<std::string, ItemModel> itemModels;
+    const ItemModel* itemModel(const std::string& id);
+    RenderTarget showcaseRT[2]; int showcaseUsed = 0; float showcaseT = -1.f;
+    void itemShowcase(const std::string& id, Rect r, Rarity rar);
+    // 3.5.0 schools of fish (Underwater.cpp)
+    void renderFish();
+    std::shared_ptr<Mesh> fishMesh; std::vector<InstanceData> fishInst;
     std::map<std::string, vec4> iconUV;      // 3D-rendered item icons (uv rect in iconRT)
     RenderTarget portraitRT; int portraitNpc = -2;
 

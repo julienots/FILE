@@ -61,6 +61,8 @@ void buildDragon(MeshBuilder& mb, const CreatureLook& L);
 enum class WeaponType : uint8_t { None, Sword, Longsword, Dagger, Axe, Hammer, Spear, Bow, Crossbow, Staff, Shield, Pickaxe, WoodAxe, FishingRod, Torch, Count };
 // Weapon meshes are built along +Z from the grip (origin). tipOut receives the blade tip (for trails).
 void buildWeapon(MeshBuilder& mb, WeaponType t, int tier, vec3 accent, float* tipOut = nullptr);
+struct ItemDef;
+bool buildItemModel(MeshBuilder& b, const ItemDef& d);   // 3.5.0 ItemModels.cpp
 
 // ---- Stances & animation ---------------------------------------------------------------------
 enum Stance { ST_UNARMED = 0, ST_ONEHAND, ST_TWOHAND, ST_DAGGER, ST_SPEAR, ST_BOW, ST_STAFF, ST_TOOL };

@@ -652,11 +652,7 @@ void Game::drawHud(float dt) {
         u.text(label, lr.x + lr.w / 2, lr.y + 7, 19, rgba(0xf4e7c4), F_BODY, A_CENTER);
     }
     // 2.4.0 under water: a blue-green veil with darker edges, and the air gauge (bubbles) while diving
-    if (underwaterView && player != NullEntity) {
-        u.rect({0, 0, u.W, u.H}, vec4(0.05f, 0.28f, 0.34f, 0.38f));
-        u.sprite("glow", {-u.W * 0.25f, -u.H * 0.25f, u.W * 1.5f, u.H * 1.5f}, vec4(0.f, 0.05f, 0.08f, 0.0f));
-        for (int i = 0; i < 4; i++) u.rect({0, u.H - (i + 1) * 40.f, u.W, 40.f}, vec4(0.01f, 0.06f, 0.09f, 0.08f));
-    }
+    // 3.5.0 the flat veil is gone: the water colour, murk and light shafts are drawn by the post-process shader
     if (player != NullEntity && (diving || breath < 0.999f)) {
         Rect br{u.W * 0.5f - 120, u.H - 150, 240, 26};
         int n = 10, full = (int)std::ceil(breath * n - 0.01f);

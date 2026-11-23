@@ -2347,6 +2347,81 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "reef") {
+        // 3.5.0 under the sea: a warm reef (corals, kelp, fish, caustics, light shafts, the water colour), then a
+        // shipwreck with its chest, opened under water
+        static vec3 reef, wreck; static int res[4]; static int fish0;
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 12.f; g.weatherNext = 0; g.toastHint.clear(); g.tutStep = -1; for (int& r : res) r = 0;
+            float best = 0;
+            for (float z = 4250; z < 4600 && best < 9.f; z += 4) for (float x = 2600; x < 2900; x += 6) {
+                bool lv = false, fr = false; float wl = g.world.waterLevel(x, z, &lv, &fr); if (wl < -1e8f || lv || fr) continue;
+                float dep = wl - g.world.height(x, z);
+                if (dep > 6.f && dep < 11.f && dep > best) { best = dep; reef = vec3(x, wl, z); }
+            }
+            AGR_LOG("REEF at %.0f %.0f depth %.1f region %d", reef.x, reef.z, best, g.world.regionId(reef.x, reef.z));
+            teleport(g, reef.x, reef.z, 0.f); g.pc().pos = vec3(reef.x, reef.y - 1.2f, reef.z); g.camFocus = g.pc().pos; g.pc().swimming = true; g.playerDodge(); }, idle, "reef"});
+        s.push_back({5.f, none, [](Game& g, float) { g.input.move = vec2(0, 0.25f); g.camIdleT = 0; g.camPitch = 0.02f; g.camDist = g.camDistTarget = 6.5f; }, "dive"});
+        s.push_back({0.1f, [](Game& g) { res[0] = g.underwaterView && g.env.underwater > 0.5f; fish0 = (int)g.fishInst.size(); res[1] = fish0 > 0;
+            AGR_LOG("REEF underwater %d depth %.1f fish %d caustics %.2f", g.underwaterView, g.env.underDepth, fish0, g.env.caustics); g.requestScreenshot("build/shots/RF0_reef.png"); }, [](Game& g, float) { g.input.move = vec2(0, 0.25f); g.camPitch = 0.02f; }, "shot"});
+        s.push_back({0.5f, [](Game& g) {
+            // find a wreck: generate the deep sea chunks along the coasts and look for an underwater chest
+            int found = 0;
+            for (int cz = 0; cz < CHUNKS && !found; cz += 1) for (int cx = 0; cx < CHUNKS && !found; cx += 1) {
+                float x = (cx + 0.5f) * CHUNK, z = (cz + 0.5f) * CHUNK;
+                bool lv = false, fr = false; float wl = g.world.waterLevel(x, z, &lv, &fr);
+                if (wl < -1e8f || lv || fr || wl - g.world.height(x, z) < 6.5f || g.world.height(x, z) > 0.f) continue;
+                if (length(vec2(x, z) - reef.xz()) > 900.f) continue;
+                ChunkBuild b; g.world.generateChunkSync({cx, cz}, 0, b);
+                for (const NodeSpawn& n : b.nodes) if (n.type == NodeType::Chest && g.world.waterLevel(n.pos.x, n.pos.z) - n.pos.y > 3.f) { wreck = n.pos; found = 1; break; }
+            }
+            res[2] = found;
+            AGR_LOG("REEF wreck %d at %.0f %.0f (%.1f m deep)", found, wreck.x, wreck.z, found ? g.world.waterLevel(wreck.x, wreck.z) - wreck.y : 0.f);
+            if (found) { float wl = g.world.waterLevel(wreck.x, wreck.z); teleport(g, wreck.x - 5.f, wreck.z - 5.f, 0.78f); g.pc().pos = vec3(wreck.x - 5.f, wl - 1.2f, wreck.z - 5.f); g.camFocus = g.pc().pos; g.pc().swimming = true; g.diving = true; } }, idle, "wreck"});
+        s.push_back({5.f, none, [](Game& g, float) { g.diving = true; g.breath = 1.f; g.camIdleT = 0; g.camPitch = 0.1f; g.camDist = g.camDistTarget = 8.f; g.camYaw = 0.78f + PI; }, "sink"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/RF1_wreck.png"); }, idle, "shot"});
+        s.push_back({2.f, [](Game& g) {
+            Character& c = g.pc(); float wl = g.world.waterLevel(wreck.x, wreck.z);
+            c.pos = vec3(wreck.x - 1.3f, std::max(wreck.y + 0.8f, wl - 7.f), wreck.z); c.yaw = PI / 2; g.camFocus = c.pos; g.diving = true; }, [](Game& g, float) { g.diving = true; g.breath = 1.f; Character& c = g.pc(); c.pos.x = wreck.x - 1.3f; c.pos.z = wreck.z; c.yaw = PI / 2; g.findInteractTarget(); }, "approach"});
+        s.push_back({0.5f, [](Game& g) { size_t before = g.openedChests.size(); g.findInteractTarget(); if (g.interactTarget != NullEntity) { g.input.interact = true; g.playerInteract(); }
+            res[3] = g.openedChests.size() > before; AGR_LOG("REEF chest opened under water: %d (target %d)", res[3], (int)(g.interactTarget != NullEntity)); }, idle, "open"});
+        s.push_back({0.3f, [](Game& g) { bool ok = res[0] && res[1] && res[2] && res[3]; AGR_LOG("REEF -> %s", ok ? "REEF TEST PASSED" : "REEF TEST FAILED"); }, idle, "check"});
+        return s;
+    }
+    if (name == "items3d") {
+        // 3.5.0 every item has a 3D model: the bag full of different things, the selected item turning in its
+        // showcase, and items lying on the ground
+        static const char* ids[] = {"potion_minor", "potion_heal", "potion_great", "potion_mana", "potion_stamina", "elixir_strength", "elixir_titan", "elixir_phoenix",
+            "bread", "stew", "fish_grilled", "berries", "coco", "bomb", "bandage", "tea_mint", "bag_bottomless", "wood", "stone", "iron_ore", "gold_ore", "rare_ore",
+            "iron_bar", "gold_bar", "star_bar", "crystal", "aurora_crystal", "ember_core", "amber", "coral_shard", "herb", "glowcap", "frost_lily", "fur", "linen",
+            "spider_silk", "bone", "shadow_essence", "dragon_scale", "fish", "meat", "pirate_coin", "pearl", "star_shard", "ring_sapphire", "ring_abyss", "amulet_sun",
+            "amulet_oak", "chain_head", "frost_head", "ember_head", "shadow_head", "crown_head", "echo_stone", "mother_crown", "treasure_map", "relic_sun_mask",
+            "relic_jarl_horn", "relic_star_glass", "relic_comet", "key_compass", "key_zephyr", "key_phoenix", "key_triton", "key_clover", "mount_spectral", "dye_crimson",
+            "tool_shovel", "sword_knight"};
+        static int modelled;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.invCap = 160; g.inventory.clear();
+            modelled = 0; int n = 0;
+            for (const ItemDef& d : allItems()) { n++; if (g.itemModel(d.id)) modelled++; }
+            for (const char* id : ids) if (item(id)) g.addItem(id, 1, item(id)->rarity, true);
+            g.itemGets.clear();
+            for (auto& st : g.inventory) { const ItemDef* d = item(st.id); if (d && (d->kind == ItemKind::Chest || d->kind == ItemKind::Feet || d->kind == ItemKind::Hands)) continue; }
+            for (const ItemDef& d : allItems()) if ((d.kind == ItemKind::Chest || d.kind == ItemKind::Hands || d.kind == ItemKind::Feet) && d.rarity >= Rarity::Rare) g.addItem(d.id, 1, d.rarity, true);
+            g.itemGets.clear();
+            AGR_LOG("ITEMS3D %d of %d items have a 3D model, %d in the bag", modelled, n, (int)g.inventory.size());
+            g.menu = Menu::Inventory; g.selItem = -1; }, idle, "bag"});
+        s.push_back({0.6f, none, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/IT0_bag.png"); }, idle, "shot"});
+        s.push_back({0.6f, [](Game& g) { for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "elixir_phoenix") g.selItem = i; }, idle, "select"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/IT1_showcase.png"); }, idle, "shot"});
+        s.push_back({0.6f, [](Game& g) { for (int i = 0; i < (int)g.inventory.size(); i++) if (g.inventory[i].id == "frost_head") g.selItem = i; }, idle, "select"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/IT2_showcase_helm.png"); }, idle, "shot"});
+        s.push_back({2.f, [](Game& g) { g.menu = Menu::None; Character& c = g.pc();
+            const char* drop[] = {"sword_knight", "potion_great", "gold_bar", "aurora_crystal", "mother_crown", "key_phoenix", "bread", "ring_sapphire"};
+            for (int i = 0; i < 8; i++) { float a = i * TAU / 8; g.spawnPickup(drop[i], 1, item(drop[i])->rarity, c.pos + vec3(std::cos(a) * 2.2f, 0, std::sin(a) * 2.2f)); }
+            g.camPitch = 0.55f; g.camDist = g.camDistTarget = 7.f; }, idle, "ground"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/IT3_ground.png"); }, idle, "shot"});
+        s.push_back({0.3f, [](Game& g) { bool ok = modelled >= 200; AGR_LOG("ITEMS3D -> %s", ok ? "ITEMS3D TEST PASSED" : "ITEMS3D TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "farview") {
         // 3.4.1 render distance: a wide view from a hill over Greenhaven (villages and forests far away), the
         // LOD 2 chunks must carry buildings and trees, and the frame must stay within budget

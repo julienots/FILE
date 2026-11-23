@@ -25,6 +25,7 @@ layout(std140) uniform Frame {
     vec4 uLightPos[8]; // xyz, w radius
     vec4 uLightCol[8]; // rgb * intensity, w flicker phase
     vec4 uPushers[8];  // grass benders: xyz position, w = sign(strength) * (floor(|strength| * 64) + radius / 4)
+    vec4 uWater;       // 3.5.0 x water surface level near the camera, y caustics strength (0 = off), z camera under water
 };
 const float PI = 3.14159265;
 // 3.0.2 integer hash: exact on every GPU (the classic fract(sin(x) * 43758) breaks into bands and lines on
@@ -283,6 +284,22 @@ vec3 shade(vec3 albedo, vec3 N, vec3 V, vec3 P, float rough, float metal, float 
     // Rim light improves character readability against the ground (2.5D).
     col += rim * pow(1.0 - NdV, 3.0) * (uSkyColor.rgb * 0.6 + uSunColor.rgb * 0.4) * (0.5 + 0.5 * shadow);
     return col;
+}
+
+// 3.5.0 caustics: the sunlight focused by the waves, a moving net of bright lines on whatever lies under the
+// water near the camera (sea floor, rocks, wrecks, divers). Two warped wave layers, sharpened.
+float causticNet(vec2 p, float t) {
+    p += 0.55 * vec2(sin(p.y * 1.3 + t * 0.9), cos(p.x * 1.1 - t * 0.8));
+    float w = sin(dot(p, vec2(0.8, 0.6)) * 1.9 + t * 1.2) + sin(dot(p, vec2(-0.5, 0.86)) * 2.3 - t * 1.4)
+            + sin(dot(p, vec2(0.25, -0.97)) * 1.7 + t * 1.0) + sin(dot(p, vec2(-0.92, -0.38)) * 2.6 - t * 0.8);
+    return pow(1.0 - abs(sin(w * 0.9)), 7.0);
+}
+float caustics(vec3 P, vec3 N) {
+    if (uWater.y <= 0.0 || P.y > uWater.x - 0.05) return 0.0;
+    float depth = uWater.x - P.y;
+    float t = uCamPos.w;
+    float c = causticNet(P.xz * 0.9, t) * 0.65 + causticNet(P.xz * 1.7 + 13.7, t * 1.3) * 0.45;
+    return c * exp(-depth * 0.13) * smoothstep(0.05, 0.5, depth) * max(N.y * 0.75 + 0.25, 0.0) * uWater.y;
 }
 
 vec3 applyFog(vec3 col, vec3 P) {
@@ -596,6 +613,7 @@ void main() {
 #ifdef DISSOLVE
     col += uDissolveColor.rgb * edge * 6.0;
 #endif
+    col += albedo * uSunColor.rgb * uSunDir.w * caustics(vWorld, N) * (0.35 + 0.65 * sh) * 1.4;   // 3.5.0 light dancing under the water
     col = mix(col, vec3(1.5, 1.42, 1.35), uFx.x);  // hit flash (readable, not blinding)
     // lightning flash
     col += albedo * uMisc.w * 2.0 * max(N.y, 0.2);
@@ -1432,6 +1450,8 @@ uniform vec4 uSunS;   // xyz direction towards the sun, w amount (0 = off)
 uniform vec4 uFx0;    // 2.0.0 x heat shimmer (mirage), y sand veil (sandstorm)
 uniform vec4 uSunScr; // 2.0.0 lens flare: xy sun position on screen (uv), z aspect, w amount
 uniform vec4 uSharp;  // 3.0.2 x sharpening amount, yz scene texel size
+uniform vec4 uUnder;  // 3.5.0 x camera under water (0..1), y depth below the surface (m), z daylight
+uniform vec3 uUnderC; // 3.5.0 the colour of the water
 out vec4 fragColor;
 
 vec3 aces(vec3 x) {
@@ -1462,6 +1482,11 @@ void main() {
         uv.x += rise * 0.0011 * m;
         uv.y += sin(uv0.x * 120.0 - tt * 3.3) * 0.0006 * m;
     }
+    // 3.5.0 under water the picture ripples gently
+    if (uUnder.x > 0.0) {
+        float tt = uTime;
+        uv += vec2(sin(uv0.y * 24.0 + tt * 1.6) + 0.5 * sin(uv0.y * 61.0 - tt * 2.3), cos(uv0.x * 21.0 + tt * 1.3) + 0.5 * cos(uv0.x * 47.0 + tt * 2.1)) * 0.0022 * uUnder.x;
+    }
     if (uPost0.w > 0.0) {
         vec2 dir = (uv - 0.5) * uPost0.w * 0.012;
         col = vec3(texture(uScene, uv + dir).r, texture(uScene, uv).g, texture(uScene, uv - dir).b);
@@ -1488,6 +1513,23 @@ void main() {
         coc = max(coc, clamp(abs(d - uGamma.a) / max(uGamma.a, 1.0) * 1.6, 0.0, 1.0) * dofAmt);
     }
     if (coc > 0.01) col = mix(col, texture(uBlur, uv).rgb * uProj.z, clamp(coc, 0.0, 1.0));
+    // 3.5.0 under water: the water absorbs red first, then everything, with distance; a blue-green murk
+    // closes in at ~40 m, darker the deeper you go; shafts of sunlight slant down from the surface
+    if (uUnder.x > 0.0) {
+        float dh = linDepth(texture(uDepth, uv).r);
+        float deep = exp(-uUnder.y * 0.07);
+        vec3 wc = uUnderC * (0.35 + 0.65 * deep) * (0.25 + 0.75 * clamp(uUnder.z / 2.5, 0.0, 1.0));
+        vec3 absorb = exp(-dh * vec3(0.11, 0.035, 0.025));
+        vec3 uw = col * absorb;
+        float murk = 1.0 - exp(-dh * 0.055);
+        uw = mix(uw, wc, murk);
+        float tt = uTime;
+        float sx = uv0.x + uv0.y * 0.35;   // the shafts lean with the sun
+        float rays = pow(0.5 + 0.5 * sin(sx * 31.0 + tt * 0.35 + sin(sx * 7.0 - tt * 0.2) * 2.0), 6.0) * 0.6 + pow(0.5 + 0.5 * sin(sx * 57.0 - tt * 0.5), 10.0) * 0.4;
+        rays *= smoothstep(0.15, 1.0, uv0.y) * deep * clamp(uUnder.z / 2.5, 0.0, 1.0) * smoothstep(2.0, 18.0, dh);
+        uw += uUnderC * vec3(1.4, 1.6, 1.5) * rays * 0.55;
+        col = mix(col, uw, uUnder.x);
+    }
     if (uSunS.w > 0.0) {
         // Volumetric sunlight: 14 shadow-map taps along the view ray (jittered, max 70 m). Where trees, roofs or
         // cliffs block the sun the air stays dark, elsewhere it glows: visible shafts in the haze.

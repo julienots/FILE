@@ -79,6 +79,7 @@ struct FrameUBO {
     float camPos[4], sunDir[4], sunColor[4], skyColor[4], groundColor[4], fogColor[4], fogParams[4], wind[4], player[4], misc[4];
     float lightPos[8][4], lightCol[8][4];
     float pushers[8][4];
+    float water[4];   // 3.5.0
 };
 
 static std::string litDefines(int f) {
@@ -309,6 +310,7 @@ void Renderer::updateFrameUBO(const Camera& cam, const Environment& e, const mat
         s4(u.lightCol[i], lights[i].color.x, lights[i].color.y, lights[i].color.z, lights[i].flicker);
     }
     for (int i = 0; i < 8; i++) s4(u.pushers[i], e.pushers[i].x, e.pushers[i].y, e.pushers[i].z, e.pushers[i].w);
+    s4(u.water, e.waterLevel, e.caustics, e.underwater, 0.f);
     glBindBuffer(GL_UNIFORM_BUFFER, frameUbo);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(FrameUBO), &u);
 }
@@ -624,6 +626,8 @@ void Renderer::postProcess() {
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
     composite.set("uFx0", vec4(env.heat, env.sandVeil, env.scorch, 0.f));
+    composite.set("uUnder", vec4(env.underwater, env.underDepth, env.sunIntensity * (1.f - env.night), 0.f));   // 3.5.0
+    composite.set("uUnderC", env.waterTint);
     {   // 3.0.2 sharpen more when the internal resolution is lower
         float sc = settings.renderScale * dynamicScale;
         float k = clampf(0.3f + (1.f - sc) * 1.1f, 0.3f, 0.75f);
@@ -695,6 +699,7 @@ void Renderer::renderToTarget(RenderTarget& rt, const Camera& cam, const Environ
     composite.set("uProj", vec4(cam.zNear, cam.zFar, hdrScale, 0));
     composite.set("uTime", 0.f);
     composite.set("uFx0", vec4(0, 0, 0, 0)); composite.set("uSunScr", vec4(0.5f, 0.5f, 1.f, 0.f));   // no mirage or flare in previews
+    composite.set("uUnder", vec4(0, 0, 0, 0));
     composite.set("uSunS", vec4(0, 1, 0, 0));
     composite.set("uAlphaFromScene", 1.f);
     fsMesh.draw();

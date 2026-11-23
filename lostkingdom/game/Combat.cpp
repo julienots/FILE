@@ -555,7 +555,7 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
         float surf = wl - (c.team == Team::Player ? lerpf(0.6f, 0.3f, c.vis.anim.swimCrawl) : c.height * 0.6f);
         // 2.4.0 diving: down to 0.7 m above the bottom (at most 7 m under the surface), slower to change depth
         bool dive = e == player && diving;
-        if (dive) surf = std::max(gy + 0.7f, std::min(surf, wl - 0.6f - 7.f));
+        if (dive) surf = std::max(gy + 0.7f, std::min(surf, wl - 0.6f - 15.f));   // 3.5.0 down to 15 m (reefs and wrecks)
         c.pos.y = damp(c.pos.y, surf, dive ? 1.8f : 6.f, dt);
         c.vel.y = 0; c.grounded = true;
         if (!wasSwim) { particles.splash(c.pos + vec3(0, 1.2f, 0), 1.f); play3D("splash", c.pos, 0.8f); }

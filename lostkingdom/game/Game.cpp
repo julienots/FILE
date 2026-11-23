@@ -559,7 +559,8 @@ void Game::updateEnvironment(float dt) {
             env.temperature += 0.25f * env.scorch;
         }
     }
-    env.vignette = 0.32f;
+    if (underwaterView) { env.flare = 0.f; env.heat = 0.f; env.shafts = 0.f; env.scorch = 0.f; env.bloomIntensity += 0.03f; }   // 3.5.0 the underwater look replaces them
+    env.vignette = underwaterView ? 0.55f : 0.32f;
     env.grain = 0.012f;
     env.chromatic = 0;
     // depth of field: tilt-shift diorama in gameplay, real DoF during dialogues & cinematics
