@@ -62,6 +62,7 @@ add_library(agr_editor_ui STATIC
     ui/src/DocsPanel.cpp
     ui/src/PackagesPanel.cpp
     ui/src/ProfilerPanel.cpp
+    ui/src/NetworkPanel.cpp
     ui/src/ScriptDebuggerPanel.cpp
     ui/src/ParticlePanel.cpp
     ui/src/SpriteSheetPanel.cpp

@@ -334,6 +334,11 @@ void Replicator::runRpc(Scene& scene, ecs::Entity e, const std::string& fn, cons
     if (!m_rpc || !scene.valid(e)) return;
     m_sender = sender;
     ++m_stats.rpcsReceived;
+    {
+        EntityTraffic& tr = m_profile[scene.uuidOf(e).value()];
+        ++tr.rpcsIn;
+        ++tr.rpcCalls[fn];
+    }
     m_rpc(scene, e, fn, args, sender);
     m_sender = 0;
 }
@@ -342,6 +347,11 @@ bool Replicator::rpc(Scene& scene, NetSession& session, ecs::Entity e, const std
     if (!session.connected() || !scene.valid(e)) return false;
     const json msg = {{"k", "rpc"}, {"id", scene.uuidOf(e).toString()}, {"fn", function}, {"args", args}, {"to", target}, {"from", session.localId()}};
     ++m_stats.rpcsSent;
+    {
+        EntityTraffic& tr = m_profile[scene.uuidOf(e).value()];
+        ++tr.rpcsOut;
+        ++tr.rpcCalls[function];
+    }
     if (session.role() == NetRole::Host) {
         if (target == NetSession::kHostId) {
             runRpc(scene, e, function, args, NetSession::kHostId);
@@ -414,6 +424,7 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
     Reader r{data, 0};
     const u16 count = r.get<u16>();
     for (u16 i = 0; i < count && r.ok; ++i) {
+        const usize itemStart = r.at;
         const u64 uuid = r.get<u64>();
         const u8 flags = r.get<u8>();
         Vec3 p, s;
@@ -433,6 +444,11 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
             r.at += n;
         }
         if (!r.ok) return;
+        {
+            EntityTraffic& tr = m_profile[uuid];
+            tr.stateBytesIn += r.at - itemStart;
+            ++tr.statesIn;
+        }
         const ecs::Entity e = scene.findByUuid(Uuid(uuid));
         if (e.isNull()) continue;
         const auto* sync = scene.registry().tryGet<NetSyncComponent>(e);
@@ -622,6 +638,9 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
             u16 n = 0;
             while (i < list.size() && packet.size() + list[i]->bytes.size() <= kPacketBudget) {
                 packet += list[i]->bytes;
+                EntityTraffic& tr = m_profile[list[i]->uuid];
+                tr.stateBytesOut += list[i]->bytes.size();
+                ++tr.statesOut;
                 ++n, ++i;
             }
             if (n == 0) {  // one entity alone too large: skipped

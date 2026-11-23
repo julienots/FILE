@@ -114,6 +114,15 @@ public:
     /// Forgets the session's state (game stopped, scene changed).
     void reset();
     const ReplicationStats& stats() const { return m_stats; }
+    /// Network profiler: traffic per entity since start (or the last clearProfile()).
+    struct EntityTraffic {
+        u64 stateBytesOut = 0, stateBytesIn = 0;
+        u32 statesOut = 0, statesIn = 0;
+        u32 rpcsOut = 0, rpcsIn = 0;
+        std::unordered_map<std::string, u32> rpcCalls;  ///< function -> calls (both ways)
+    };
+    const std::unordered_map<u64, EntityTraffic>& profile() const { return m_profile; }  ///< uuid -> traffic
+    void clearProfile() { m_profile.clear(); }
 
 private:
     struct Remote {
@@ -144,6 +153,7 @@ private:
     void handleInput(Scene& scene, u32 from, std::string_view data);
     RpcHandler m_rpc;
     InputHandler m_input;
+    std::unordered_map<u64, EntityTraffic> m_profile;
     std::unordered_map<u64, Prediction> m_prediction;  // uuid -> inputs
     std::unordered_map<u64, std::deque<std::pair<f64, math::Vec3>>> m_history;  // host: uuid -> (time, position), 1 s
     f64 m_viewDelay = 0.05;

@@ -100,6 +100,7 @@ struct EditorShared {
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.
     bool showProfiler = false;     ///< CPU profiler panel.
+    bool showNetwork = false;      ///< Network profiler panel.
     bool showScriptDebugger = false;  ///< Lua debugger panel.
     bool showParticles = false;   ///< Particle effects panel.
     bool showSheetEditor = false;  ///< Sprite sheet editor.

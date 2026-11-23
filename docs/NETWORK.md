@@ -267,6 +267,16 @@ publique, reçoit une redirection (adresse locale, protocole, description échap
 refuse d'en retirer une absente avec sa raison ; sans box, échec clair. **Pas essayé avec une vraie
 box** (la machine de développement n'en a pas).
 
+## Profileur réseau (éditeur)
+
+*Affichage › Réseau (profileur)* (comme le profileur réseau du débogueur de Godot) : rôle, joueurs avec
+leur ping et l'état du chiffrement, octets et paquets (renvoyés, rejetés, périmés), gain de la
+compression, **débit par seconde sur la dernière minute** (envoi et réception), synchronisation (entités,
+états envoyés / reçus / ignorés / cachés, RPC, prédiction) et un tableau des **entités** classées par
+trafic : états envoyés et reçus (nombre et octets), RPC envoyées / reçues et par fonction ; *Remettre à
+zéro*. C++ : `NetSession::bandwidthHistory`, `Replicator::profile`. Testé : compteurs par entité et
+échantillons de débit (test de prédiction), panneau ouvert dans le test de bout en bout de l'éditeur.
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système

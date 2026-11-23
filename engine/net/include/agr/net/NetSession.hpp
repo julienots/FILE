@@ -161,6 +161,11 @@ public:
     /// so, the other side needs no setting). JSON game states often shrink 2 to 5 times.
     void setCompression(bool on) { m_compress = on; }
     bool compression() const { return m_compress; }
+    /// Bytes sent and received per second over the last minute (oldest first): network profiler.
+    struct Bandwidth {
+        u64 sent = 0, received = 0;
+    };
+    const std::deque<Bandwidth>& bandwidthHistory() const { return m_bandwidth; }
     bool encryption() const { return m_encrypt; }
     /// True when the link to this peer is encrypted.
     bool encrypted(u32 peer) const {
@@ -225,6 +230,9 @@ private:
     std::string m_password, m_joinError;
     bool m_encrypt = false;
     bool m_compress = false;
+    std::deque<Bandwidth> m_bandwidth;
+    f64 m_bandwidthStart = -1.0;
+    u64 m_bandwidthSent = 0, m_bandwidthReceived = 0;
 };
 
 } // namespace agr::net

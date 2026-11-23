@@ -665,6 +665,15 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
 
 void NetSession::update(f64 now) {
     m_now = now;
+    if (m_bandwidthStart < 0.0) m_bandwidthStart = now;
+    while (now - m_bandwidthStart >= 1.0) {  // one sample per second of traffic
+        m_bandwidth.push_back({m_stats.bytesSent - m_bandwidthSent, m_stats.bytesReceived - m_bandwidthReceived});
+        m_bandwidthSent = m_stats.bytesSent;
+        m_bandwidthReceived = m_stats.bytesReceived;
+        if (m_bandwidth.size() > 60) m_bandwidth.pop_front();
+        m_bandwidthStart += 1.0;
+        if (now - m_bandwidthStart > 60.0) m_bandwidthStart = now;  // long pause: no flood of empty samples
+    }
     if (m_discoverPort != 0 && m_role == NetRole::None) {
         if (m_lastDiscover < 0.0 || now - m_lastDiscover >= 1.0) {  // ask again every second
             Peer everyone;

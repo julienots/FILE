@@ -773,6 +773,12 @@ TEST_CASE("prediction: the controller moves at once, the host is the authority, 
     CHECK(x(host) <= hostX + 5.0f * 0.25f + 0.01f);
     CHECK(x(client) == doctest::Approx(x(host)).epsilon(0.001));  // the client is corrected to the host's
 
+    // Network profiler: per-entity traffic and one bandwidth sample per second.
+    CHECK(host.rep.profile().at(heroId.value()).statesOut > 0);
+    CHECK(client.rep.profile().at(heroId.value()).statesIn > 0);
+    CHECK(client.rep.profile().at(heroId.value()).stateBytesIn > 0);
+    CHECK(host.session.bandwidthHistory().size() >= 4);
+    CHECK(host.session.bandwidthHistory().back().sent > 0);
     // Lag compensation: the host remembers where the target was.
     const auto target = host.scene.findByUuid(targetId);
     const f64 t0 = host.session.networkTime();

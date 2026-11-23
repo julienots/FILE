@@ -646,6 +646,7 @@ void EditorApp::drawEditor(const FrameTime& time) {
     m_docs.draw(*m_shared);
     m_packages.draw(*m_shared);
     m_profiler.draw(*m_shared);
+    m_network.draw(*m_shared);
     m_scriptDebugger.draw(*m_shared);
     m_particles.draw(*m_shared, m_options.resourcesDir + "/templates/assets");
     m_sheetEditor.draw(*m_shared);
@@ -807,6 +808,7 @@ void EditorApp::drawMenuBar() {
         ImGui::MenuItem("Graphe de shader", nullptr, &m_shared->showShaderGraph);
         ImGui::MenuItem("Plugins et paquets", nullptr, &m_shared->showPackages);
         ImGui::MenuItem("Profileur", nullptr, &m_shared->showProfiler);
+        ImGui::MenuItem("Réseau (profileur)", nullptr, &m_shared->showNetwork);
         ImGui::MenuItem("Débogueur de scripts", nullptr, &m_shared->showScriptDebugger);
         ImGui::MenuItem("Effets de particules", nullptr, &m_shared->showParticles);
         ImGui::MenuItem("Feuilles de sprites", nullptr, &m_shared->showSheetEditor);
@@ -1880,9 +1882,11 @@ void EditorApp::smokeTest(const FrameTime&) {
             check(m_profiler.hasScope("Ombres") || m_profiler.hasScope("Renderer"), "profiler: renderer stages");
             break;
         }
+        case 238: m_shared->showNetwork = true; break;  // drawn with no session: must not fail
         case 239: captureNextFrame((fs::path(m_options.smokeTestDir) / "editor_profiler.png").string()); break;
         case 240: {  // UI widgets created from the menu: toggle, text field, scroll view with items
             m_shared->showProfiler = false;
+            m_shared->showNetwork = false;
             m_shared->showLogic = false;
             ImGui::SetWindowFocus("Scène");
             m_viewport.gameView = true;  // the game's interface is drawn in the game view

@@ -483,6 +483,11 @@ public:
 };
 
 /// CPU profiler: scope tree (phases, plugins, scripts, renderer, agr.profile) and history.
+class NetworkPanel {
+public:
+    void draw(EditorShared& s);
+};
+
 class ProfilerPanel {
 public:
     void draw(EditorShared& s);  ///< Samples every frame, draws when visible.

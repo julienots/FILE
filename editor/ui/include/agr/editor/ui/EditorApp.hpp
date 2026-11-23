@@ -103,6 +103,7 @@ private:
     DocsPanel m_docs;
     PackagesPanel m_packages;
     ProfilerPanel m_profiler;
+    NetworkPanel m_network;
     ScriptDebuggerPanel m_scriptDebugger;
     ParticlePanel m_particles;
     SpriteSheetPanel m_sheetEditor;
