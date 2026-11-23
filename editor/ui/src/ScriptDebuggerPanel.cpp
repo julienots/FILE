@@ -35,13 +35,18 @@ const char* reasonText(ScriptBreak::Reason r) {
 void ScriptDebuggerPanel::toggleBreakpoint(const std::string& uri, int line) {
     const auto key = std::make_pair(uri, line);
     if (!m_breakpoints.erase(key)) m_breakpoints.insert(key);
+    else m_breakOptions.erase(key);
     m_dirty = true;
 }
 
 void ScriptDebuggerPanel::sync(ScriptEngine* scripts) {
     if (!scripts || (!m_dirty && scripts == m_synced)) return;
     scripts->clearBreakpoints();
-    for (const auto& [uri, line] : m_breakpoints) scripts->setBreakpoint(uri, line);
+    for (const auto& [uri, line] : m_breakpoints) {
+        scripts->setBreakpoint(uri, line);
+        if (auto it = m_breakOptions.find({uri, line}); it != m_breakOptions.end())
+            scripts->setBreakpointOptions(uri, line, it->second.condition, it->second.hitCount, it->second.log);
+    }
     scripts->setBreakOnError(breakOnError);
     m_synced = scripts;
     m_dirty = false;
@@ -142,6 +147,7 @@ void ScriptDebuggerPanel::draw(EditorShared& s) {
     ImGui::SameLine();
     if (ImGui::SmallButton("Tout supprimer")) {
         m_breakpoints.clear();
+        m_breakOptions.clear();
         m_dirty = true;
     }
     std::pair<std::string, int> remove{"", 0}, go{"", 0};
@@ -149,7 +155,27 @@ void ScriptDebuggerPanel::draw(EditorShared& s) {
         ImGui::PushID((bp.first + std::to_string(bp.second)).c_str());
         if (ImGui::SmallButton("x")) remove = bp;
         ImGui::SameLine();
-        if (ImGui::Selectable((bp.first + ":" + std::to_string(bp.second)).c_str())) go = bp;
+        BreakOptions& o = m_breakOptions[bp];
+        std::string label = bp.first + ":" + std::to_string(bp.second);
+        if (!o.log.empty()) label += "   (journal : " + o.log + ")";
+        else if (!o.condition.empty()) label += "   si " + o.condition;
+        if (o.hitCount > 0) label += "   à partir du passage " + std::to_string(o.hitCount);
+        if (ImGui::Selectable(label.c_str())) go = bp;
+        if (ImGui::BeginPopupContextItem("##opts")) {  // right click: condition, hit count, logpoint
+            ImGui::TextDisabled("Point d'arrêt %s", (bp.first + ":" + std::to_string(bp.second)).c_str());
+            ImGui::SetNextItemWidth(280);
+            if (ImGui::InputTextWithHint("Condition", "self.hp < 10", &o.condition)) m_dirty = true;
+            ImGui::SetNextItemWidth(120);
+            if (ImGui::InputInt("Arrêter à partir du passage", &o.hitCount)) {
+                o.hitCount = std::max(0, o.hitCount);
+                m_dirty = true;
+            }
+            ImGui::SetNextItemWidth(280);
+            if (ImGui::InputTextWithHint("Journal (sans arrêt)", "hp = {self.hp}", &o.log)) m_dirty = true;
+            if (m_synced) ImGui::TextDisabled("Passages : %d", m_synced->breakpointHits(bp.first, bp.second));
+            ImGui::EndPopup();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clic droit : condition, nombre de passages, message de journal");
         ImGui::PopID();
     }
     if (remove.second) toggleBreakpoint(remove.first, remove.second);

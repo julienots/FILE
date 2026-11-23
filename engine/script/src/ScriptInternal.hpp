@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <set>
 #include <functional>
 #include "agr/runtime/InputActions.hpp"
@@ -144,6 +145,14 @@ struct ScriptEngine::Impl {
         bool breakOnError = true;
         bool inBreak = false;
         std::vector<int> frameLevels;  // lua_getstack levels of the frames of the current break
+        struct Options {
+            std::string condition;  // stops only when true
+            int hitCount = 0;       // stops from the Nth time the line runs
+            std::string log;        // logpoint: writes this ({expressions} filled in) and does not stop
+            int hits = 0;
+        };
+        std::map<std::pair<std::string, int>, Options> options;
+        bool inCondition = false;
     } dbg;
     std::unordered_map<std::string, Class> classes;
     std::unordered_map<u64, Instance> instances;

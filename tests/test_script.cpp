@@ -241,6 +241,65 @@ TEST_CASE("debugger: breakpoints, call stack, variables, evaluation, stepping") 
     CHECK(f.scripts.breakpoints().empty());
 }
 
+TEST_CASE("debugger: conditional breakpoints, hit counts, logpoints") {
+    struct Capture final : LogSink {
+        std::vector<std::string> lines;
+        void write(const LogMessage& m) override { lines.emplace_back(m.text); }
+    };
+    auto sink = std::make_shared<Capture>();
+    Log::addSink(sink);
+    Log::setLevel(LogLevel::Info);  // logpoints write at the info level
+    ScriptFixture f;
+    f.write("assets://s/cond.lua",
+            "local C = {}\n"                                  // 1
+            "function C:onUpdate(dt)\n"                       // 2
+            "  self.n = (self.n or 0) + 1\n"                  // 3
+            "  local hp = 100 - self.n * 10\n"                // 4
+            "  self.hp = hp\n"                                // 5
+            "end\n"                                           // 6
+            "return C\n");
+    f.scripted("C", "assets://s/cond.lua");
+    std::vector<int> stoppedAtN;
+    std::vector<std::string> messages;
+    f.scripts.setBreakHandler([&](const ScriptBreak& b) {
+        stoppedAtN.push_back(std::stoi(f.scripts.evaluate("self.n").value()));
+        messages.push_back(b.message);
+        return ScriptDebugAction::Continue;
+    });
+    // Condition: stops only when hp drops below 50 (n >= 6).
+    f.scripts.setBreakpoint("assets://s/cond.lua", 5);
+    f.scripts.setBreakpointOptions("assets://s/cond.lua", 5, "hp < 50");
+    for (int i = 0; i < 7; ++i) f.update();
+    CHECK(stoppedAtN == std::vector<int>{6, 7});
+    CHECK(f.scripts.breakpointHits("assets://s/cond.lua", 5) == 7);
+    // Hit count: from the 3rd time on.
+    stoppedAtN.clear();
+    f.scripts.setBreakpointOptions("assets://s/cond.lua", 5, "", 3);
+    for (int i = 0; i < 4; ++i) f.update();
+    CHECK(stoppedAtN == std::vector<int>{10, 11});
+    // A broken condition stops and says why.
+    stoppedAtN.clear();
+    f.scripts.setBreakpointOptions("assets://s/cond.lua", 5, "hp <");
+    f.update();
+    REQUIRE(stoppedAtN.size() == 1);
+    CHECK(messages.back().find("condition error") != std::string::npos);
+    // Logpoint: writes the values, never stops.
+    stoppedAtN.clear();
+    f.scripts.setBreakpointOptions("assets://s/cond.lua", 5, "", 0, "n = {self.n}, hp = {hp}, {'text'}");
+    f.update();
+    f.update();
+    CHECK(stoppedAtN.empty());
+    CHECK(f.scripts.stats().logpoints == 2);
+    bool logged = false;
+    for (const auto& l : sink->lines) logged |= l.find("assets://s/cond.lua:5: n = 14, hp = -40, text") != std::string::npos;
+    CHECK(logged);
+    Log::setLevel(LogLevel::Warning);
+    // Clearing removes the options too.
+    f.scripts.clearBreakpoints();
+    CHECK(f.scripts.breakpointHits("assets://s/cond.lua", 5) == 0);
+    Log::removeSink(sink);
+}
+
 TEST_CASE("debugger: pause request and break on error") {
     ScriptFixture f;
     f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");

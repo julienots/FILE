@@ -53,6 +53,7 @@ struct ScriptStats {
     u32 errors = 0;       ///< Errors reported since the last reset.
     f64 updateMs = 0.0;   ///< Last update (all onUpdate calls).
     usize memoryKb = 0;   ///< Lua heap.
+    u32 logpoints = 0;    ///< Debugger logpoint messages written.
 };
 
 /// A variable seen by the debugger: its value is a short readable text.
@@ -195,6 +196,13 @@ public:
     void clearBreakpoints();
     /// All breakpoints, sorted by uri then line.
     std::vector<std::pair<std::string, int>> breakpoints() const;
+    /// Options of a breakpoint (set it with setBreakpoint): `condition` (a Lua expression in the
+    /// line's scope, "self.hp < 10": stops only when true; an error in it stops and says so),
+    /// `hitCount` (stops from the Nth time the line runs), `log` (a logpoint: writes the text with
+    /// its {expressions} filled in, "hp = {self.hp}", to the console and does not stop).
+    void setBreakpointOptions(const std::string& uri, int line, std::string condition, int hitCount = 0, std::string log = {});
+    /// How many times the breakpoint's line ran since it was set.
+    int breakpointHits(const std::string& uri, int line) const;
     /// Stop in the handler when a callback raises an error, before it is reported (default on).
     void setBreakOnError(bool enabled);
     /// Stops at the next script line that runs.

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <optional>
 #include <filesystem>
+#include <map>
 #include <set>
 #include <deque>
 #include <thread>
@@ -518,6 +519,11 @@ private:
     void drawSource(EditorShared& s, int current, float height);
 
     std::set<std::pair<std::string, int>> m_breakpoints;
+    struct BreakOptions {
+        std::string condition, log;
+        int hitCount = 0;
+    };
+    std::map<std::pair<std::string, int>, BreakOptions> m_breakOptions;  ///< Condition / hit count / logpoint.
     ScriptEngine* m_synced = nullptr;
     bool m_dirty = true;
     std::string m_file;

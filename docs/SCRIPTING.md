@@ -266,6 +266,12 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
 - **Points d'arrêt** : cliquez sur un numéro de ligne dans la vue du code (point rouge) ; la liste en bas
   permet d'y aller ou de les supprimer. Ils fonctionnent aussi dans les graphes de logique visuelle
   (sur les lignes du Lua généré).
+- **Points d'arrêt conditionnels et de journal** (clic droit sur un point d'arrêt de la liste) :
+  *Condition* (expression Lua évaluée à cette ligne, `self.hp < 10` : arrêt seulement si elle est vraie ;
+  une condition fautive arrête et affiche l'erreur), *Arrêter à partir du passage* N, et *Journal* : un
+  **point de journal** écrit `hp = {self.hp}` (expressions entre accolades remplacées par leur valeur)
+  dans la console sans arrêter le jeu. Le nombre de passages s'affiche. C++ :
+  `ScriptEngine::setBreakpointOptions`, `breakpointHits`.
 - **Pause (F6)** pendant le jeu : arrêt sur la prochaine ligne de script exécutée.
 - **Arrêt sur erreur** (activé par défaut) : quand un script lève une erreur, le débogueur s'ouvre à
   l'endroit exact de l'erreur, avec les variables intactes, avant qu'elle soit signalée.

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "agr/core/Log.hpp"
 #include "ScriptInternal.hpp"
 
 namespace agr {
@@ -105,6 +106,8 @@ std::string valueText(lua_State* L, int idx) {
 
 } // namespace
 
+Result<std::string> evaluateAt(lua_State* L, int level, std::string_view expression, bool* truthy);
+
 void debugHook(lua_State* L, lua_Debug* ar) {
     auto& m = implOf(L);
     if (ar->event == LUA_HOOKCOUNT) {  // watchdog: stops callbacks that run longer than the budget
@@ -115,7 +118,7 @@ void debugHook(lua_State* L, lua_Debug* ar) {
         }
         return;
     }
-    if (ar->event != LUA_HOOKLINE || m.dbg.inBreak || !m.dbg.handler) return;
+    if (ar->event != LUA_HOOKLINE || m.dbg.inBreak || m.dbg.inCondition || !m.dbg.handler) return;
     using Step = ScriptEngine::Impl::Debugger::Step;
     ScriptBreak::Reason reason = ScriptBreak::Reason::Breakpoint;
     bool stop = false;
@@ -133,9 +136,55 @@ void debugHook(lua_State* L, lua_Debug* ar) {
     if (!stop) {
         if (!m.dbg.lineCount.contains(ar->currentline)) return;  // most lines: one hash lookup
         lua_getinfo(L, "S", ar);
-        auto it = m.dbg.breakpoints.find(sourceUri(ar->source));
+        const std::string uri = sourceUri(ar->source);
+        auto it = m.dbg.breakpoints.find(uri);
         if (it == m.dbg.breakpoints.end() || !it->second.contains(ar->currentline)) return;
         reason = ScriptBreak::Reason::Breakpoint;
+        if (auto o = m.dbg.options.find({uri, ar->currentline}); o != m.dbg.options.end()) {
+            auto& opt = o->second;
+            ++opt.hits;
+            if (opt.hitCount > 0 && opt.hits < opt.hitCount) return;
+            std::string message;
+            m.dbg.inCondition = true;
+            if (!opt.condition.empty()) {
+                bool yes = false;
+                auto r = evaluateAt(L, 0, opt.condition, &yes);
+                if (!r) message = "condition error: " + r.error().message;  // stops, with the reason
+                else if (!yes) {
+                    m.dbg.inCondition = false;
+                    return;
+                }
+            }
+            if (!opt.log.empty() && message.empty()) {  // logpoint: {expr} filled in, no stop
+                std::string text;
+                for (usize i = 0; i < opt.log.size();) {
+                    const usize open = opt.log.find('{', i);
+                    if (open == std::string::npos) {
+                        text += opt.log.substr(i);
+                        break;
+                    }
+                    const usize close = opt.log.find('}', open);
+                    if (close == std::string::npos) {
+                        text += opt.log.substr(i);
+                        break;
+                    }
+                    text += opt.log.substr(i, open - i);
+                    bool dummy = false;
+                    auto v = evaluateAt(L, 0, opt.log.substr(open + 1, close - open - 1), &dummy);
+                    text += v ? v.value() : "<" + v.error().message + ">";
+                    i = close + 1;
+                }
+                m.dbg.inCondition = false;
+                AGR_LOG_INFO("Script", "{}:{}: {}", uri, ar->currentline, text);
+                ++m.stats.logpoints;
+                return;
+            }
+            m.dbg.inCondition = false;
+            if (!message.empty()) {
+                if (m.debugBreak(reason, message) == ScriptDebugAction::Stop) luaL_error(L, "%s", kStopMessage);
+                return;
+            }
+        }
     }
     if (m.debugBreak(reason, {}) == ScriptDebugAction::Stop) luaL_error(L, "%s", kStopMessage);
 }
@@ -248,8 +297,22 @@ bool ScriptEngine::hasBreakpoint(const std::string& uri, int line) const {
 
 void ScriptEngine::clearBreakpoints() {
     m->dbg.breakpoints.clear();
+    m->dbg.options.clear();
     m->dbg.lineCount.clear();
     m->updateHook();
+}
+
+void ScriptEngine::setBreakpointOptions(const std::string& uri, int line, std::string condition, int hitCount, std::string log) {
+    auto& o = m->dbg.options[{uri, line}];
+    o.condition = std::move(condition);
+    o.hitCount = hitCount;
+    o.log = std::move(log);
+    o.hits = 0;
+}
+
+int ScriptEngine::breakpointHits(const std::string& uri, int line) const {
+    auto it = m->dbg.options.find({uri, line});
+    return it == m->dbg.options.end() ? 0 : it->second.hits;
 }
 
 std::vector<std::pair<std::string, int>> ScriptEngine::breakpoints() const {
@@ -272,10 +335,13 @@ bool ScriptEngine::inBreak() const { return m->dbg.inBreak; }
 Result<std::string> ScriptEngine::evaluate(std::string_view expression, usize frame) {
     if (!m->dbg.inBreak) return makeError(Error::Code::InvalidArgument, "the scripts are not stopped in the debugger");
     if (frame >= m->dbg.frameLevels.size()) return makeError(Error::Code::InvalidArgument, "no such stack frame");
-    lua_State* L = m->L;
+    return evaluateAt(m->L, m->dbg.frameLevels[frame], expression, nullptr);
+}
+
+Result<std::string> evaluateAt(lua_State* L, int level, std::string_view expression, bool* truthy) {
     const int top = lua_gettop(L);
     lua_Debug ar;
-    if (!lua_getstack(L, m->dbg.frameLevels[frame], &ar)) return makeError(Error::Code::InvalidArgument, "no such stack frame");
+    if (!lua_getstack(L, level, &ar)) return makeError(Error::Code::InvalidArgument, "no such stack frame");
 
     const std::string code = "return " + std::string(expression);
     if (luaL_loadbufferx(L, code.data(), code.size(), "=watch", "t") != LUA_OK) {
@@ -318,9 +384,11 @@ Result<std::string> ScriptEngine::evaluate(std::string_view expression, usize fr
         return makeError(Error::Code::InvalidArgument, err);
     }
     std::string out;
+    if (truthy) *truthy = lua_gettop(L) > top && lua_toboolean(L, top + 1);
     for (int i = top + 1; i <= lua_gettop(L); ++i) {
         if (!out.empty()) out += ", ";
-        out += valueText(L, i);
+        if (truthy && lua_type(L, i) == LUA_TSTRING) out += lua_tostring(L, i);  // logpoints: strings as they are
+        else out += valueText(L, i);
     }
     lua_settop(L, top);
     return out.empty() ? std::string("nil") : out;
