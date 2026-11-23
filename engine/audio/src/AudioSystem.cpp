@@ -90,6 +90,7 @@ struct Voice {
     std::shared_ptr<const ByteBuffer> encoded;
     std::string uri;
     AudioBus bus = AudioBus::Effects;
+    AudioBus routed = AudioBus::Effects;  ///< Bus the voice's output feeds (an AudioZone may change it).
     bool loop = false;
     bool paused = false;
     bool stopping = false;
@@ -179,7 +180,7 @@ struct AudioSystem::Impl {
             ma_lpf_node_config cfg = ma_lpf_node_config_init(kChannels, rate, 20000.0, 2);
             if (ma_lpf_node_init(ma_engine_get_node_graph(&engine), &cfg, nullptr, &v.lpf) != MA_SUCCESS) return;
             v.lpfInit = true;
-            const i32 bus = std::clamp(static_cast<i32>(v.bus), 0, kAudioBusCount - 1);
+            const i32 bus = std::clamp(static_cast<i32>(v.routed), 0, kAudioBusCount - 1);
             ma_node_attach_output_bus(&v.lpf, 0, &groups[bus], 0);
             ma_node_attach_output_bus(&v.sound, 0, &v.lpf, 0);
             v.appliedCutoff = 20000.0f;
@@ -191,6 +192,12 @@ struct AudioSystem::Impl {
             v.appliedCutoff = cutoff;
         }
         ma_node_set_output_bus_volume(&v.lpf, 0, 1.0f - 0.5f * k);
+    }
+    /// Sends a voice's output to another bus without restarting it (AudioZone).
+    void reroute(Voice& v, AudioBus bus) {
+        const i32 b = std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1);
+        ma_node_attach_output_bus(v.lpfInit ? static_cast<ma_node*>(&v.lpf) : static_cast<ma_node*>(&v.sound), 0, &groups[b], 0);
+        v.routed = static_cast<AudioBus>(b);
     }
     bool engineInit = false, deviceInit = false, deviceRunning = false, suspended = false;
     // Recording (microphone): filled by the capture thread or feedRecording.
@@ -351,6 +358,7 @@ struct AudioSystem::Impl {
         v->uri = std::string(uri);
         v->clip = clip.value();
         v->bus = p.bus;
+        v->routed = p.bus;
         v->loop = p.loop;
         v->entity = entity;
         v->spatial = p.spatial;
@@ -397,6 +405,7 @@ struct AudioSystem::Impl {
         v->order = nextOrder++;
         v->uri = "generator";
         v->bus = p.bus;
+        v->routed = p.bus;
         v->loop = true;  // never released by the voice limit as a finished one-shot
         v->spatial = p.spatial;
         v->generator = std::make_unique<GeneratorSource>();
@@ -801,6 +810,11 @@ void AudioSystem::setOcclusion(VoiceId voice, float amount) {
         m->applyOcclusion(*v, 1.0f);
     }
 }
+AudioBus AudioSystem::voiceBus(VoiceId voice) const {
+    const Voice* v = m->find(voice);
+    return v ? v->routed : AudioBus::Master;
+}
+
 float AudioSystem::occlusion(VoiceId voice) const {
     const Voice* v = m->find(voice);
     return v ? v->occlusion : 0.0f;
@@ -909,6 +923,33 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
         });
     }
 
+    // Zones: inverse world matrices, to test points in the zone's local space.
+    struct Zone {
+        math::Mat4 inv;
+        AudioZoneComponent z;
+    };
+    std::vector<Zone> zones;
+    reg.view<AudioZoneComponent, WorldTransformComponent>().each([&](ecs::Entity e, AudioZoneComponent& z, WorldTransformComponent& w) {
+        if (scene.isActiveInHierarchy(e)) zones.push_back({math::inverse(w.matrix), z});
+    });
+    auto inside = [](const Zone& zone, math::Vec3 p) {
+        const math::Vec3 l = zone.inv.transformPoint(p);
+        if (zone.z.shape == AudioZoneShape::Sphere) return math::dot(l, l) <= zone.z.radius * zone.z.radius;
+        return std::fabs(l.x) <= zone.z.size.x * 0.5f && std::fabs(l.y) <= zone.z.size.y * 0.5f && std::fabs(l.z) <= zone.z.size.z * 0.5f;
+    };
+    const Zone* listenerZone = nullptr;
+    if (m->listenerHasLast)
+        for (const Zone& zone : zones)
+            if (zone.z.mode == AudioZoneMode::Listener && (!listenerZone || zone.z.priority > listenerZone->z.priority) && inside(zone, m->listenerLast))
+                listenerZone = &zone;
+    auto routeFor = [&](const AudioSourceComponent& s, math::Vec3 pos) {
+        if (!s.spatial || s.bus == AudioBus::Interface || s.bus == AudioBus::Music) return s.bus;
+        const Zone* best = listenerZone;
+        for (const Zone& zone : zones)
+            if (zone.z.mode == AudioZoneMode::Sources && (!best || zone.z.priority > best->z.priority) && inside(zone, pos)) best = &zone;
+        return best ? best->z.bus : s.bus;
+    };
+
     // Sources: start, follow, stop.
     std::unordered_set<u64> alive;
     reg.view<AudioSourceComponent, WorldTransformComponent>().each([&](ecs::Entity e, AudioSourceComponent& s, WorldTransformComponent& w) {
@@ -956,6 +997,7 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
             v->occlusion += std::clamp(v->occlusionTarget - v->occlusion, -step, step);
             m->applyOcclusion(*v, s.occlusionStrength);
         }
+        if (const AudioBus route = routeFor(s, w.matrix.translation()); route != v->routed && !v->stopping) m->reroute(*v, route);
         if (v->sourceClip != s.clip || v->bus != s.bus || v->streamed != s.stream) {
             // Clip, bus or streaming changed while playing: restart with the new settings.
             m->forget(it->second);

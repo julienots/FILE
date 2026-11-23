@@ -53,6 +53,7 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UISlider: return "Slider";
         case CreateKind::UIColumn: return "Column";
         case CreateKind::AudioSource: return "Audio Source";
+        case CreateKind::AudioZone: return "Audio Zone";
         case CreateKind::Terrain: return "Terrain";
         case CreateKind::Water: return "Water";
         case CreateKind::Particles3D: return "Particles 3D";
@@ -349,6 +350,7 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
             break;
         }
         case CreateKind::AudioSource: reg.emplace<AudioSourceComponent>(e); break;
+        case CreateKind::AudioZone: reg.emplace<AudioZoneComponent>(e); break;
         case CreateKind::UIProgressBar:
             uiRect({400, 36});
             reg.emplace<UIProgressBarComponent>(e).value = 0.65f;

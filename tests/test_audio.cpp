@@ -778,3 +778,75 @@ TEST_CASE("audio: occlusion muffles (low-pass) and lowers a source behind a wall
     CHECK(asked.isNull());
     CHECK(f.run(0.1).peak() == doctest::Approx(clear).epsilon(0.1));
 }
+
+TEST_CASE("audio: AudioZone re-routes spatial sources inside it, or all of them while the listener is inside") {
+    AudioFixture f;
+    f.sine("assets://hum.wav", 1.0);
+    const auto cave = static_cast<AudioBus>(kAudioBuiltinBusCount + 2);
+    setAudioBusName(cave, "Cave");
+    Scene scene;
+    const auto cam = scene.createEntity("Camera");
+    scene.registry().emplace<CameraComponent>(cam);
+    const auto speaker = scene.createEntity("Speaker");
+    scene.registry().get<TransformComponent>(speaker).position = {0.0f, 0.0f, -2.0f};
+    auto& src = scene.registry().emplace<AudioSourceComponent>(speaker);
+    src.clip = "assets://hum.wav";
+    src.loop = true;
+    src.spatial = true;
+    src.playOnStart = false;
+    const auto zoneEntity = scene.createEntity("Cave zone");
+    scene.registry().get<TransformComponent>(zoneEntity).position = {0.0f, 0.0f, -40.0f};
+    auto& zone = scene.registry().emplace<AudioZoneComponent>(zoneEntity);
+    zone.bus = cave;
+    zone.size = {6.0f, 6.0f, 6.0f};
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    const VoiceId voice = f.audio.playSource(scene, speaker);
+    REQUIRE(voice != 0);
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == AudioBus::Effects);  // zone far away
+    const float open = f.run(0.05).peak();
+    CHECK(open > 0.05f);
+
+    // The source walks into the zone: routed to Cave (muted here to hear it), without restarting.
+    f.audio.setBusMuted(cave, true);
+    scene.registry().get<TransformComponent>(speaker).position = {1.0f, 0.0f, -41.0f};
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == cave);
+    CHECK(f.audio.sourcePlaying(speaker));
+    f.run(0.02);
+    CHECK(f.run(0.05).peak() < 0.001f);
+    // Rotated and scaled zone: the local box follows the transform.
+    scene.registry().get<TransformComponent>(zoneEntity).scale = {0.1f, 0.1f, 0.1f};
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == AudioBus::Effects);
+
+    // Listener mode: every spatial source is re-routed while the camera is in the zone.
+    scene.registry().get<TransformComponent>(speaker).position = {0.0f, 0.0f, -2.0f};
+    auto& z = scene.registry().get<AudioZoneComponent>(zoneEntity);
+    z.mode = AudioZoneMode::Listener;
+    z.shape = AudioZoneShape::Sphere;
+    z.radius = 3.0f;
+    scene.registry().get<TransformComponent>(zoneEntity).scale = {1.0f, 1.0f, 1.0f};
+    scene.registry().get<TransformComponent>(zoneEntity).position = {0.0f, 0.0f, 0.0f};
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);  // listener position comes from this update
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == cave);
+    scene.registry().get<TransformComponent>(cam).position = {0.0f, 0.0f, 10.0f};  // walks out
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == AudioBus::Effects);
+    // Interface and Music sources are never re-routed.
+    scene.registry().get<TransformComponent>(cam).position = {0.0f, 0.0f, 0.0f};
+    scene.registry().get<AudioSourceComponent>(speaker).bus = AudioBus::Music;
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    f.audio.updateScene(scene, true);
+    REQUIRE(f.audio.sourcePlaying(speaker));
+    f.audio.setBusMuted(cave, false);
+    setAudioBusName(cave, "");
+}

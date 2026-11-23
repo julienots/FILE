@@ -22,7 +22,7 @@ enum class PlayState : u8 { Edit, Playing, Paused };
 enum class CreateKind : u8 {
     Empty, Cube, Sphere, Plane, Quad, Sprite, Camera, DirectionalLight, Environment,
     Tilemap, Particles2D, Light2D, ParallaxLayer, PointLight, SpotLight,
-    UICanvas, UIPanel, UIText, UIButton, UISlider, UIColumn, AudioSource, Terrain, Water, Particles3D,
+    UICanvas, UIPanel, UIText, UIButton, UISlider, UIColumn, AudioSource, AudioZone, Terrain, Water, Particles3D,
     UIToggle, UIInputField, UIScrollView, Skeleton2D, UIProgressBar, UIDropdown, UITabs, Decal, ReflectionProbe, UIItemList, UIDialog, UIColorPicker, Vehicle, Cloth, SoftBall
 };
 const char* createKindName(CreateKind kind);

@@ -2,13 +2,13 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (75, 741 champs)
+## Composants (76, 747 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
 **Animation** : [Animator](#Animator), [ChainIK3D](#ChainIK3D), [LookAtIK3D](#LookAtIK3D), [TwoBoneIK3D](#TwoBoneIK3D)
 
-**Audio** : [AudioListener](#AudioListener), [AudioSource](#AudioSource)
+**Audio** : [AudioListener](#AudioListener), [AudioSource](#AudioSource), [AudioZone](#AudioZone)
 
 **Core** : [Name](#Name), [State](#State), [Transform](#Transform)
 
@@ -334,6 +334,21 @@ Plays a sound or music (.wav, .ogg, .mp3, .flac), optionally positioned in space
 | `occlusion` | bool | Spatial: muffled and quieter behind 3D colliders (walls) |
 | `occlusionStrength` | float | How much a wall removes (0..1) ; plage 0 .. 1 |
 | `randomVolume` | float | Volume lowered by up to this (0.2 = 80% .. 100%) ; plage 0 .. 1 |
+
+### AudioZone
+
+Re-routes spatial sounds to another bus (reverb, underwater...) inside a box or sphere, or everywhere while the listener is inside.
+
+*Audio*
+
+| Champ | Type | Détails |
+|---|---|---|
+| `shape` | enum | valeurs : `Box`, `Sphere` |
+| `size` | vec3 | Box size (before scale) |
+| `radius` | float | Sphere radius (before scale) ; plage 0 .. 10000 |
+| `bus` | enum | Bus the sounds play on (give it a Reverb in the mixer) ; valeurs : `Master`, `Music`, `Effects`, `Ambient`, `Interface`, `Voice` |
+| `mode` | enum | Sources: sounds inside the zone. Listener: every sound while the listener is inside ; valeurs : `Sources`, `Listener` |
+| `priority` | int | Highest wins where zones overlap |
 
 ### Name
 

@@ -148,6 +148,8 @@ public:
     /// Occlusion of a voice: 0 clear .. 1 fully behind walls (low-pass and volume, per voice).
     void setOcclusion(VoiceId voice, float amount);
     float occlusion(VoiceId voice) const;
+    /// Bus a voice's output feeds now (its own, or the one an AudioZone routes it to).
+    AudioBus voiceBus(VoiceId voice) const;
     VoiceId playSource(Scene& scene, ecs::Entity entity);
     void stopSource(ecs::Entity entity, float fadeOutSeconds = 0.0f);
     /// Game pause: pauses (or resumes) every voice except those of the Interface bus.

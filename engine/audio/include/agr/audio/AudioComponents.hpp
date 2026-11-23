@@ -60,6 +60,23 @@ struct AudioListenerComponent {
     bool active = true;
 };
 
+enum class AudioZoneShape : i32 { Box = 0, Sphere = 1 };
+enum class AudioZoneMode : i32 { Sources = 0, Listener = 1 };
+/// A volume of space that re-routes spatial sources to another bus (a "Cave" bus with a reverb,
+/// an "Underwater" bus with a low-pass...). Mode `Sources`: the sources inside the zone play on
+/// `bus`. Mode `Listener`: while the listener is inside, every spatial source plays on `bus` (the
+/// whole world sounds like a cathedral once you enter it). The zone follows the entity's world
+/// transform (position, rotation, scale); the highest `priority` wins where zones overlap.
+/// Sources on the Interface or Music bus are never re-routed.
+struct AudioZoneComponent {
+    AudioZoneShape shape = AudioZoneShape::Box;
+    math::Vec3 size{10.0f, 4.0f, 10.0f};  ///< Box: full size (before scale).
+    float radius = 5.0f;                  ///< Sphere (before scale).
+    AudioBus bus = AudioBus::Effects;
+    AudioZoneMode mode = AudioZoneMode::Sources;
+    i32 priority = 0;
+};
+
 /// Registers the reflection data (idempotent).
 void registerAudioComponents();
 

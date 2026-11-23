@@ -82,12 +82,28 @@ service `LineOfSightService` (sans Physics3D : pas d'occlusion). C++ : `AudioSys
 un mur perd plus de 80 % de son amplitude et la retrouve à découvert ; murs, corps de la source et
 collider de l'auditeur sur un vrai monde Jolt.
 
+## Zones audio (réverbération par lieu)
+
+`AudioZone` (boîte `size` ou sphère `radius`, qui suit la position, la rotation et l'échelle de
+l'entité) **change le bus** des sources spatiales, sans les relancer :
+
+- `mode = Sources` : les sons *dans* la zone jouent sur `bus` (une grotte : les pas qu'on y entend
+  résonnent, même depuis dehors) ;
+- `mode = Listener` : tant que l'auditeur est dans la zone, *tous* les sons spatiaux jouent sur `bus`
+  (entrer dans une cathédrale, plonger sous l'eau).
+
+Créer un bus personnalisé (`Cave`, routé vers `Effects`) avec une `Reverb` dans le mixeur, puis le
+choisir dans la zone. Où des zones se chevauchent, la plus haute `priority` gagne ; une zone de
+sources prioritaire l'emporte sur la zone de l'auditeur. Les sources des bus `Interface` et `Music`
+ne sont jamais déplacées. C++ : `AudioSystem::voiceBus(voix)` donne le bus actuel d'une voix.
+
 ## Composants
 
 | Composant | Champs |
 |---|---|
 | `AudioSource` | `clip`, `bus`, `volume`, `pitch` (vitesse), `loop`, `playOnStart`, `spatial`, `minDistance`, `maxDistance`, `stream` ; spatial : `attenuation` (`None`, `Inverse`, `Linear`, `Exponential`), `rolloff`, `doppler` (0 = sans, 1 = réaliste : un véhicule qui approche sonne plus aigu), cône de directivité (`coneInnerAngle`, `coneOuterAngle`, `coneOuterVolume` ; avant = -Z de l'entité : haut-parleur, voix d'un personnage) ; variations à chaque départ (pas, impacts) : `alternateClips` (autres clips tirés au hasard), `randomPitch`, `randomVolume` |
 | `AudioListener` | `active` : position et orientation d'écoute (par défaut la caméra principale) |
+| `AudioZone` | `shape` (`Box`, `Sphere`), `size`, `radius`, `bus`, `mode` (`Sources`, `Listener`), `priority` : voir *Zones audio* |
 
 Les sources suivent la scène : démarrage avec le jeu (`playOnStart`), position mise à jour à chaque
 image, changement de volume / hauteur en direct, arrêt quand l'entité est désactivée, détruite ou que
@@ -143,7 +159,9 @@ sources personnalisées). Sur Android, cocher *Microphone* dans l'export ajoute 
 
 - Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` (pas de
   traitement en direct du flux du micro) ; occlusion : un seul rayon (pas de diffraction autour des
-  obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus.
+  obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus ; zones audio : bascule d'un
+  bus à l'autre (pas de fondu ni d'envoi partiel vers la réverbération), sources de scène seulement
+  (pas les sons joués par `agr.audio.play`).
 - Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
   hauteur pendant une image).
 - Pas encore testé sur un appareil Android (sortie AAudio / OpenSL ES de miniaudio : phase 8).

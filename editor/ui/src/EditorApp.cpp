@@ -55,7 +55,7 @@ std::span<const std::pair<const char*, CreateKind>> createMenuItems() {
         {"UI : Champ de saisie", CreateKind::UIInputField}, {"UI : Zone défilante", CreateKind::UIScrollView},
         {"UI : Barre de progression", CreateKind::UIProgressBar}, {"UI : Liste déroulante", CreateKind::UIDropdown},
         {"UI : Onglets", CreateKind::UITabs}, {"UI : Liste / arbre", CreateKind::UIItemList}, {"UI : Boîte de dialogue", CreateKind::UIDialog},
-        {"UI : Sélecteur de couleur", CreateKind::UIColorPicker}, {nullptr, {}}, {"Source audio", CreateKind::AudioSource}};
+        {"UI : Sélecteur de couleur", CreateKind::UIColorPicker}, {nullptr, {}}, {"Source audio", CreateKind::AudioSource}, {"Zone audio", CreateKind::AudioZone}};
     return items;
 }
 

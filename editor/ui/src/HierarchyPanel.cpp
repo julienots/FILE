@@ -78,6 +78,7 @@ void HierarchyPanel::createMenu(EditorShared& s, ecs::Entity parent) {
         ImGui::EndMenu();
     }
     if (ImGui::MenuItem("Source audio")) s.ctx.create(CreateKind::AudioSource, parent);
+    if (ImGui::MenuItem("Zone audio (réverbération)")) s.ctx.create(CreateKind::AudioZone, parent);
 }
 
 void HierarchyPanel::contextMenu(EditorShared& s, ecs::Entity e) {

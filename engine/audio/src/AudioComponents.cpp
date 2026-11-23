@@ -104,6 +104,16 @@ void registerAudioComponents() {
         .category("Audio")
         .description("Position and orientation from which spatial sounds are heard (default: the primary camera).")
         .field("active", &AudioListenerComponent::active);
+    reg.add<AudioZoneComponent>("AudioZone")
+        .category("Audio")
+        .description("Re-routes spatial sounds to another bus (reverb, underwater...) inside a box or sphere, or everywhere while the listener is inside.")
+        .field("shape", &AudioZoneComponent::shape, {.enumEntries = {{"Box", 0}, {"Sphere", 1}}})
+        .field("size", &AudioZoneComponent::size, {.tooltip = "Box size (before scale)", .speed = 0.05f})
+        .field("radius", &AudioZoneComponent::radius, {.tooltip = "Sphere radius (before scale)", .rangeMin = 0.0f, .rangeMax = 10000.0f, .speed = 0.05f})
+        .field("bus", &AudioZoneComponent::bus, {.tooltip = "Bus the sounds play on (give it a Reverb in the mixer)", .enumEntries = buses})
+        .field("mode", &AudioZoneComponent::mode,
+               {.tooltip = "Sources: sounds inside the zone. Listener: every sound while the listener is inside", .enumEntries = {{"Sources", 0}, {"Listener", 1}}})
+        .field("priority", &AudioZoneComponent::priority, {.tooltip = "Highest wins where zones overlap"});
 }
 
 } // namespace agr
