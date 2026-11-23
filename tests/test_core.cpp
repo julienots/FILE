@@ -296,3 +296,45 @@ TEST_CASE("profiler capture: nested scopes on a timeline, exported as a Chrome t
     REQUIRE_FALSE(j.is_discarded());
     CHECK(j["traceEvents"].size() == 8);
 }
+
+#include "agr/core/Compression.hpp"
+#include <random>
+
+TEST_CASE("LZ compression: round trips, shrinks repetitive data, rejects corrupt input safely") {
+    auto roundTrip = [](const std::vector<u8>& data) {
+        const auto packed = lz::compress(data);
+        const auto back = lz::decompress(packed, data.size() + 16);
+        REQUIRE(back);
+        CHECK(*back == data);
+        return packed.size();
+    };
+    roundTrip({});
+    roundTrip({1});
+    roundTrip({1, 2, 3});
+    std::vector<u8> text;
+    const std::string json = R"({"kind":"state","x":12.5,"y":3.25,"hp":100,"name":"player"},)";
+    for (int i = 0; i < 40; ++i) text.insert(text.end(), json.begin(), json.end());
+    CHECK(roundTrip(text) < text.size() / 5);  // repetitive JSON: 5x smaller at least
+    std::vector<u8> zeros(5000, 0);
+    CHECK(roundTrip(zeros) < 64);  // long runs (overlapping copies)
+    std::mt19937 rng(7);
+    std::vector<u8> noise(3000);
+    for (auto& b : noise) b = static_cast<u8>(rng());
+    CHECK(roundTrip(noise) <= noise.size() + noise.size() / 64 + 16);  // incompressible: small overhead
+    for (int len : {16, 255, 256, 270, 1000, 70000}) {  // long literal / match lengths, offsets near 65535
+        std::vector<u8> d(static_cast<usize>(len));
+        for (int k = 0; k < len; ++k) d[static_cast<usize>(k)] = static_cast<u8>((k * 7) % 251 + (k / 300 % 2));
+        roundTrip(d);
+    }
+    // Corrupt input never crashes or overflows: random mutations and truncations.
+    const auto packed = lz::compress(text);
+    for (int t = 0; t < 2000; ++t) {
+        std::vector<u8> bad = packed;
+        const int edits = 1 + static_cast<int>(rng() % 4);
+        for (int e = 0; e < edits; ++e) bad[rng() % bad.size()] = static_cast<u8>(rng());
+        if (rng() % 3 == 0) bad.resize(rng() % bad.size());
+        const auto out = lz::decompress(bad, text.size());
+        if (out) CHECK(out->size() <= text.size());
+    }
+    CHECK_FALSE(lz::decompress(packed, text.size() - 1));  // too big for the limit
+}

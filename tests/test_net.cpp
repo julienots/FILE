@@ -822,3 +822,34 @@ TEST_CASE("unreliable ordered channels: late packets are dropped, channels are i
     for (const auto& e : got) delivered += e.type == NetEvent::Type::Message;
     CHECK(delivered == 5);
 }
+
+TEST_CASE("compression: smaller packets, same messages, also with encryption and losses") {
+    for (bool encrypt : {false, true}) {
+        LossyNetwork network;
+        network.loss = 0.15f;
+        NetSession host(std::make_unique<LossyTransport>(network)), client(std::make_unique<LossyTransport>(network));
+        host.setPassword("raclette");
+        client.setPassword("raclette");
+        host.setEncryption(encrypt);
+        client.setCompression(true);  // only the client compresses: the host reads it anyway
+        REQUIRE(host.host(9400, 2));
+        REQUIRE(client.join("127.0.0.1", 9400));
+        f64 now = 0.0;
+        REQUIRE(pump({&host, &client}, now, [&] { return client.connected(); }));
+        std::string state;
+        for (int i = 0; i < 12; ++i) state += R"({"kind":"state","id":)" + std::to_string(i) + R"(,"x":12.5,"y":3.25,"hp":100,"team":"red"},)";
+        const std::string big(6000, 'Q');
+        std::vector<NetEvent> got;
+        REQUIRE(client.send(NetSession::kHostId, state, true));
+        REQUIRE(client.send(NetSession::kHostId, big, true));
+        REQUIRE(pump({&host, &client}, now, [&] {
+            collect(got, host);
+            int n = 0;
+            for (const auto& e : got) n += e.type == NetEvent::Type::Message && (e.data == state || e.data == big);
+            return n == 2;
+        }));
+        const auto& st = client.stats();
+        CHECK(st.bytesAfterCompression * 3 < st.bytesBeforeCompression);
+        CHECK(client.encrypted(NetSession::kHostId) == encrypt);
+    }
+}

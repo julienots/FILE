@@ -6,6 +6,7 @@ agr_add_module(core
         src/Memory.cpp
         src/JobSystem.cpp
         src/FileSystem.cpp
+        src/Compression.cpp
         src/SharedLibrary.cpp
         src/Uuid.cpp
         src/Profiler.cpp

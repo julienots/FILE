@@ -24,6 +24,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/pkcs5.h>
 
+#include "agr/core/Compression.hpp"
 #include "agr/core/Log.hpp"
 
 namespace agr::net {
@@ -46,7 +47,8 @@ u64 passwordProof(const std::string& password, u32 token) {
     }
     return h;
 }
-constexpr u8 kEncryptedBit = 0x80;  // packet type flag: payload = counter (8) + ciphertext + tag (16)
+constexpr u8 kEncryptedBit = 0x80;
+constexpr u8 kCompressedBit = 0x40;  // payload compressed (lz), before encryption  // packet type flag: payload = counter (8) + ciphertext + tag (16)
 constexpr usize kTag = 16;
 
 /// Per-connection key: PBKDF2-HMAC-SHA-256(password, "AGRNET1" + token), 4096 rounds.
@@ -299,6 +301,17 @@ void NetSession::close() {
 
 void NetSession::sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload) {
     std::string out;
+    const bool handshakeType = type == Hello || type == Welcome || type == Full || type == Denied || type == Discover || type == Info;
+    std::vector<u8> packed;
+    if (m_compress && !handshakeType && payload.size() >= 48) {
+        packed = lz::compress({reinterpret_cast<const u8*>(payload.data()), payload.size()});
+        if (packed.size() + 8 < payload.size()) {
+            m_stats.bytesBeforeCompression += payload.size();
+            m_stats.bytesAfterCompression += packed.size();
+            payload = std::string_view(reinterpret_cast<const char*>(packed.data()), packed.size());
+            type = static_cast<u8>(type | kCompressedBit);
+        }
+    }
     out.reserve(kHeader + payload.size());
     out.append(reinterpret_cast<const char*>(kMagic), 4);
     out.push_back(static_cast<char>(type));
@@ -306,8 +319,7 @@ void NetSession::sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload)
     putU32(out, seq);
     putU32(out, m_token);
     out.append(payload);
-    const bool handshake = type == Hello || type == Welcome || type == Full || type == Denied || type == Discover || type == Info;
-    if (p.encrypted && !handshake && !seal(p, out)) return;
+    if (p.encrypted && !handshakeType && !seal(p, out)) return;
     if (m_transport->send(p.address, out.data(), out.size())) {
         ++m_stats.packetsSent;
         m_stats.bytesSent += out.size();
@@ -468,7 +480,7 @@ bool NetSession::sendOrdered(u32 peer, std::string_view data, u8 channel) {
 void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 now) {
     if (packet.size() < kHeader || std::memcmp(packet.data(), kMagic, 4) != 0) return;  // not ours
     const u8 rawType = packet[4];
-    const u8 type = rawType & static_cast<u8>(~kEncryptedBit);
+    const u8 type = rawType & static_cast<u8>(~(kEncryptedBit | kCompressedBit));
     const u32 sender = getU32(packet.data() + 5), seq = getU32(packet.data() + 9), token = getU32(packet.data() + 13);
     Peer* p = findPeer(from);
     std::string decrypted;
@@ -482,6 +494,16 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
     } else if (p && p->encrypted && type != Hello && type != Welcome && type != Full && type != Denied && type != Discover && type != Info) {
         ++m_stats.rejected;
         return;  // an encrypted link only accepts encrypted packets
+    }
+    std::string inflated;
+    if (rawType & kCompressedBit) {
+        auto out = lz::decompress({reinterpret_cast<const u8*>(payload.data()), payload.size()}, kMaxPayload + 64);
+        if (!out) {
+            ++m_stats.rejected;
+            return;  // corrupt
+        }
+        inflated.assign(out->begin(), out->end());
+        payload = inflated;
     }
 
     // LAN discovery: anyone may ask a host; answers are recorded while discovering.

@@ -98,6 +98,13 @@ function Ship:fire(power) agr.fx.burst(...) end    -- partout, l'appelant compri
   paquets) ou non chiffré sur un lien chiffré est jeté (`stats().rejected`). Test : messages fiables
   fragmentés et non fiables reçus, aucun texte lisible dans les datagrammes, paquet rejoué et paquet
   modifié rejetés. 24 octets de plus par paquet.
+- **Compression** : `agr.net.setCompression(true)` (C++ : `NetSession::setCompression`) compresse ce
+  que cette machine envoie (LZ77 rapide du moteur, seulement quand le paquet y gagne ; chaque paquet le
+  signale, l'autre côté n'a rien à régler ; avant le chiffrement). Les états de jeu en JSON répétitifs
+  pèsent 3 à 5 fois moins (`stats().bytesBeforeCompression` / `bytesAfterCompression`). Le
+  décompresseur vérifie chaque longueur (2 000 paquets corrompus au hasard dans les tests, aucun
+  débordement). Test : messages fiables fragmentés reçus intacts avec 15 % de pertes, avec et sans
+  chiffrement, plus de 3 fois moins d'octets.
 - **Latence et trafic** : `agr.net.ping(joueur)` → aller-retour en millisecondes (lissé),
   `agr.net.stats()` → octets et paquets envoyés / reçus, renvois.
 - **Gros messages** : les messages fiables sont découpés et recollés automatiquement (jusqu'à

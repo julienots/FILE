@@ -89,7 +89,8 @@ struct LanGame {
 struct NetStats {
     u64 packetsSent = 0, packetsReceived = 0, bytesSent = 0, bytesReceived = 0, resent = 0;
     u64 rejected = 0;
-    u64 staleDropped = 0;  ///< Unreliable ordered messages dropped because a newer one had arrived.  ///< Encrypted links: forged, tampered, replayed or unencrypted packets dropped.
+    u64 staleDropped = 0;
+    u64 bytesBeforeCompression = 0, bytesAfterCompression = 0;  ///< Payloads that were compressed.  ///< Unreliable ordered messages dropped because a newer one had arrived.  ///< Encrypted links: forged, tampered, replayed or unencrypted packets dropped.
 };
 
 class NetSession {
@@ -156,6 +157,10 @@ public:
     /// the shared secret. Clients follow the host (told in its welcome). Tampered, replayed or
     /// unencrypted packets from an encrypted peer are dropped.
     void setEncryption(bool on) { m_encrypt = on; }
+    /// Compresses the messages this machine sends (LZ, only when it saves bytes; each packet says
+    /// so, the other side needs no setting). JSON game states often shrink 2 to 5 times.
+    void setCompression(bool on) { m_compress = on; }
+    bool compression() const { return m_compress; }
     bool encryption() const { return m_encrypt; }
     /// True when the link to this peer is encrypted.
     bool encrypted(u32 peer) const {
@@ -219,6 +224,7 @@ private:
     std::vector<u8> m_buffer;
     std::string m_password, m_joinError;
     bool m_encrypt = false;
+    bool m_compress = false;
 };
 
 } // namespace agr::net

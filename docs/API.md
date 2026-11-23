@@ -1453,7 +1453,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-242 fonctions.
+243 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
@@ -1480,7 +1480,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.locale`** : `get`, `list`, `set`
 - `agr.log`
 - **`agr.nav`** : `path`, `rebuild`
-- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `positionAt`, `role`, `send`, `sender`, `setController`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`, `viewTime`
+- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `positionAt`, `role`, `send`, `sender`, `setCompression`, `setController`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`, `viewTime`
 - **`agr.physics2d`** : `castBox`, `castCircle`, `gravity`, `layer`, `mask`, `overlapBox`, `overlapCircle`, `raycast`, `setGravity`
 - **`agr.physics3d`** : `castSphere`, `layer`, `mask`, `overlapBox`, `overlapSphere`, `raycast`, `setGravity`
 - **`agr.profile`** : `begin`, `finish`

@@ -38,6 +38,11 @@ int n_host(lua_State* L) {
 /// agr.net.join(address, port) -> true or nil, message (then a "connected" event)
 int n_join(lua_State* L) { return pushStatus(L, netOf(L).join(luaL_checkstring(L, 1), checkPort(L, 2))); }
 /// agr.net.setEncryption(on): host encrypts the session (needs a password); agr.net.encrypted([peer]).
+/// agr.net.setCompression(on): compresses what this machine sends (when it saves bytes).
+int n_setCompression(lua_State* L) {
+    netOf(L).setCompression(lua_toboolean(L, 1) != 0);
+    return 0;
+}
 int n_setEncryption(lua_State* L) {
     netOf(L).setEncryption(lua_toboolean(L, 1) != 0);
     return 0;
@@ -551,7 +556,7 @@ void openNetBindings(lua_State* L) {
                                      {"port", n_port}, {"peers", n_peers}, {"send", n_send}, {"broadcast", n_broadcast},
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
                                      {"sender", n_sender}, {"advertise", n_advertise}, {"discover", n_discover},
-                                     {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {"setPassword", n_setPassword}, {"setEncryption", n_setEncryption}, {"encrypted", n_encrypted},
+                                     {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {"setPassword", n_setPassword}, {"setEncryption", n_setEncryption}, {"setCompression", n_setCompression}, {"encrypted", n_encrypted},
                                      {"joinError", n_joinError}, {"ping", n_ping}, {"time", n_time}, {"setController", n_setController}, {"positionAt", n_positionAt}, {"viewTime", n_viewTime}, {"stats", n_stats}, {"setVisible", n_setVisible},
                                      {nullptr, nullptr}};
     addAgrLibrary(L, "net", funcs);
