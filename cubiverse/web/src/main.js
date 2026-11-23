@@ -15,7 +15,7 @@ import { EVENT_LABELS } from './sim/events.js';
 import { $, $$, el, esc, toast, bindActs, fmtTime, confirmBox, promptBox } from './ui/dom.js';
 import { playIntro, APP_LOGO_SVG } from './ui/intro.js';
 
-const DEFAULTS = { quality: 'medium', shadows: true, bubbles: true, battery: false, simRadius: 3.2, maxActive: 48, detail: 8, maxDetail: 260, maxChars: 900, autoRotateMenu: true };
+const DEFAULTS = { style: 'pixel', maxScreens: 48, quality: 'medium', shadows: true, bubbles: true, battery: false, simRadius: 3.2, maxActive: 48, detail: 8, maxDetail: 260, maxChars: 900, autoRotateMenu: true };
 const EMO_ICON = { joy: '😄', sadness: '😢', anger: '😠', fear: '😨', surprise: '😮', neutral: '🙂' };
 const SKILL_LABEL = { cuisine: 'Cuisine', sport: 'Sport', art: 'Art', science: 'Science', jardinage: 'Jardinage', 'pêche': 'Pêche', construction: 'Construction', musique: 'Musique', social: 'Social', lecture: 'Lecture' };
 const ACT_LABEL = { sleep: 'Dormir', sit: "S'asseoir", eatTable: 'Manger à table', eat: 'Grignoter', drink: 'Boire', cook: 'Cuisiner', watch: 'Regarder la télé', read: 'Lire', draw: 'Dessiner', garden: 'Jardiner', fish: 'Pêcher', run: 'Courir', lift: 'Musculation', work: 'Travailler', experiment: 'Expériences', operate: 'Machines', playArcade: 'Arcade', teach: 'Écrire au tableau', study: 'Étudier', swim: 'Nager', danceMusic: 'Danser (musique)', playPiano: 'Piano', build: 'Construire', observe: 'Observer', warm: 'Feu de camp', swing: 'Balançoire', snack: 'En-cas', wash: 'Vaisselle', clean: 'Nettoyer', reign: 'Jouer au roi', sunbathe: 'Bronzer', buildSand: 'Château de sable', pilot: 'Piloter', mine: 'Extraire', climbRock: 'Admirer la vue', drive: 'Conduire', slide: 'Toboggan', water: 'Arroser', wander: 'Se promener', jog: 'Courir partout', dance: 'Danser', jump: 'Sauter', roll: 'Roulades', explore: 'Explorer', visit: 'Rendre visite', talk: 'Discuter', joke: 'Blagues', hug: 'Câlins', chase: 'Jouer à chat', hide: 'Cache-cache', ball: 'Ballon', wave: 'Faire coucou', handshake: 'Serrer la main', danceDuo: 'Danser à deux', argue: 'Se disputer', fight: 'Bagarres', gift: 'Offrir', serve: 'Servir', order: 'Commander', sitFloor: 'Assis par terre', sulk: 'Bouder', cry: 'Pleurer', laugh: 'Rire', juggle: 'Jongler', readOwn: 'Lire son livre', eatItem: 'Manger', napFloor: 'Sieste', pick: 'Cueillir', takeBall: 'Prendre un ballon', restTree: "Repos sous l'arbre", lean: "S'adosser", salute: 'Saluer', newspaper: 'Journal' };
@@ -56,7 +56,10 @@ class App {
     // centre la caméra sur le premier cube
     let cx = 0, cz = 0, n = 0; for (const c of w.cubes.values()) { cx += c.x; cz += c.z; n++; if (n > 50) break; }
     const t = new THREE.Vector3((cx / Math.max(1, n)) * CUBE, 1, (cz / Math.max(1, n)) * CUBE);
-    this.r3d.controls.target.copy(t); this.r3d.camera.position.set(t.x + 7, 8.5, t.z + 13);
+    let ext = 0; for (const c of w.cubes.values()) { ext = Math.max(ext, Math.abs(c.x * CUBE - t.x), Math.abs(c.y * CUBE)); if (ext > 40) break; }
+    t.y = Math.min(ext, 8) * 0.4 + 1.5;
+    const d = Math.min(60, 14 + ext * 2.6);
+    this.r3d.controls.target.copy(t); this.r3d.camera.position.set(t.x + d * 0.12, t.y + d * 0.28, t.z + d);
     this.sim.focus = [t.x, t.y, t.z]; this.sim.refreshLOD();
   }
   applySimSettings() { this.sim.radius = this.settings.simRadius; this.sim.maxActive = this.settings.maxActive; }
@@ -680,6 +683,8 @@ class App {
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-act="set" data-k="${key}" data-v="${v}" class="${String(s[key]) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     const d = this.openScreen('Paramètres', `
       <div class="sec">Graphismes</div>
+      <div class="setting"><div>Style d'affichage<small>Rétro pixel : cubes en plastique avec écran · 3D : maisons de poupée en coupe</small></div>${seg('style', [['pixel', 'Rétro pixel'], ['3d', '3D']])}</div>
+      <div class="setting"><div>Écrans animés<small>Nombre de cubes proches dont l'écran est animé</small></div>${seg('maxScreens', [[24, '24'], [48, '48'], [96, '96']])}</div>
       <div class="setting"><div>Qualité<small>Résolution et ombres plus fines</small></div>${seg('quality', [['low', 'Éco'], ['medium', 'Normal'], ['high', 'Haute']])}</div>
       <div class="setting"><div>Ombres dynamiques</div><input type="checkbox" data-chk="shadows" ${s.shadows ? 'checked' : ''}/></div>
       <div class="setting"><div>Bulles d'émotion</div><input type="checkbox" data-chk="bubbles" ${s.bubbles ? 'checked' : ''}/></div>

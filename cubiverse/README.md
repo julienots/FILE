@@ -18,6 +18,7 @@ rivaux, et passent d'un cube à l'autre par les portes et les échelles.
 
 | Domaine | Contenu |
 |---|---|
+| Style rétro pixel (par défaut) | Cubes en plastique brillant posés sur une table, écran rétroéclairé coloré dans un cadre noir sur la face avant, habitants en bonshommes pixelisés (tête ronde évidée, yeux, sourire) animés à partir des mêmes 45 poses que la 3D, objets en sprites, bulles en glyphes, effet LCD (ombre de l'encre, trame). Les habitants passent d'un écran à l'autre (côtés, échelle vers l'écran du dessus). Paramètres › Style pour revenir à la vue 3D en coupe. |
 | Lancement | Animation « SuperEssence. STUDIO » : un cube jaune tombe, rebondit, tourne puis devient le point final du logo pendant que les lettres apparaissent. Toucher pour passer. Puis logo Cubiverse et menu. |
 | Cubes | Nombre illimité (aucune limite codée). 16 thèmes : maison, jardin, forêt, plage, ville, laboratoire, salle de sport, restaurant, parc, école, usine, espace, montagne, piscine, arcade, château. |
 | Connexions | 6 côtés (4 latéraux + dessus/dessous). Deux cubes sont connectés s'ils sont adjacents **et** que les deux côtés sont ouverts. Portes en arche sur les côtés, échelle + trappe entre étages. Fermer un côté bloque réellement le passage. |
@@ -79,6 +80,6 @@ Polices : Fredoka et Nunito (SIL Open Font License, voir `FONTS_LICENSE_OFL.txt`
 
 ## Captures
 
-| Lancement | Menu | Univers | Édition | Fiche | 400 cubes |
-|---|---|---|---|---|---|
-| ![](branding/captures/intro.png) | ![](branding/captures/menu.png) | ![](branding/captures/univers.png) | ![](branding/captures/edition.png) | ![](branding/captures/fiche.png) | ![](branding/captures/ville-400-cubes.png) |
+| Rétro pixel | Écran | Lancement | Menu | Univers | Édition | Fiche | 400 cubes |
+|---|---|---|---|---|---|---|---|
+| ![](branding/captures/retro-pixel.png) | ![](branding/captures/retro-pixel-ecran.png) | ![](branding/captures/intro.png) | ![](branding/captures/menu.png) | ![](branding/captures/univers.png) | ![](branding/captures/edition.png) | ![](branding/captures/fiche.png) | ![](branding/captures/ville-400-cubes.png) |

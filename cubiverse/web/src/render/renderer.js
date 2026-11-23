@@ -6,6 +6,7 @@ import { OBJECT_TYPES } from '../sim/themes.js';
 import { CubeRenderer } from './cubes.js';
 import { CharacterRenderer } from './characters.js';
 import { FxRenderer } from './fx.js';
+import { PixelRenderer } from './pixel.js';
 
 function toonGradient() {
   const data = new Uint8Array([120, 120, 120, 255, 185, 185, 185, 255, 235, 235, 235, 255, 255, 255, 255, 255]);
@@ -48,11 +49,12 @@ export class Renderer3D {
     const ground = new THREE.Mesh(new THREE.CircleGeometry(600, 64), new THREE.MeshLambertMaterial({ color: '#a6d98c' }));
     ground.rotation.x = -Math.PI / 2; ground.position.y = -0.12; ground.receiveShadow = true; this.scene.add(ground);
     this.ground = ground;
-    const grid = new THREE.GridHelper(400, 100, 0x000000, 0x000000); grid.material.opacity = 0.05; grid.material.transparent = true; grid.position.y = -0.11; grid.position.x = CUBE / 2 * 0; this.scene.add(grid);
+    const grid = new THREE.GridHelper(400, 100, 0x000000, 0x000000); grid.material.opacity = 0.05; grid.material.transparent = true; grid.position.y = -0.11; this.scene.add(grid); this.grid = grid;
 
     this.cubes = new CubeRenderer(this.scene, grad);
     this.chars = new CharacterRenderer(this.scene, grad);
     this.fx = new FxRenderer(this.scene, grad);
+    this.pixel = new PixelRenderer(this.scene, this.renderer, grad);
     this.ray = new THREE.Raycaster();
     this.tmpV = new THREE.Vector3(); this.tmpV2 = new THREE.Vector3(); this.camDir = new THREE.Vector3();
     this.flyTo = null;
@@ -102,7 +104,9 @@ export class Renderer3D {
     this.sun.color.setHSL(0.1, 0.6, 0.65 + day * 0.3);
     this.hemi.intensity = 0.65 + day * 0.7;
     this.hemi.color.copy(bg).lerp(new THREE.Color(0xffffff), 0.55);
-    this.ground.material.color.set(day > 0.3 ? '#a6d98c' : '#4a6a5a');
+    const px = this.settings.style !== '3d';
+    this.ground.material.color.set(px ? (day > 0.3 ? '#e8e2d6' : '#6d6a66') : (day > 0.3 ? '#a6d98c' : '#4a6a5a'));
+    this.grid.visible = !px;
     const t = this.controls.target;
     const sx = Math.cos(sunAng) * 20, sy = Math.max(6, Math.abs(elev) * 30 + 6), sz = 12;
     this.sun.position.set(t.x + sx, t.y + sy, t.z + sz);
@@ -133,30 +137,39 @@ export class Renderer3D {
     this.camDir.copy(this.camera.position).sub(this.controls.target).normalize();
     const focus = this.controls.target;
     const dist = this.camera.position.distanceTo(focus);
-    const detail = Math.max(4, Math.min(this.settings.detail, dist / CUBE + 3));
-    this.cubes.update(world, focus, this.camDir, { cutY: this.cutY, detail, maxDetail: this.settings.maxDetail }, state.forceRebuild);
-    state.forceRebuild = false;
-    this.dirtyTimer = (this.dirtyTimer || 0) + dt;
-    if (this.dirtyTimer > 1) { this.dirtyTimer = 0; this.cubes.updateDirty(world); }
-    // personnages visibles : cubes détaillés, triés par distance, plafonnés
-    const vis = [];
-    const visCubes = new Set();
-    const maxChars = this.settings.maxChars;
-    for (const cb of this.cubes.detailed) {
-      if (vis.length >= maxChars) break;
-      visCubes.add(cb.id);
-      for (const id of cb.chars) { const ch = world.chars.get(id); if (ch) { vis.push(ch); if (!cb.awake) { ch.animT += dt; if (ch.blend < 1) ch.blend = Math.min(1, ch.blend + dt * 4); } } }
+    const pixel = this.settings.style !== '3d';
+    this.pixel.setVisible(pixel); this.cubes.group.visible = !pixel;
+    if (pixel) {
+      this.pixel.maxScreens = this.settings.maxScreens || 48;
+      this.pixel.update(world, focus, dt, { ...state, bubbles: this.settings.bubbles }, { cutY: this.cutY });
+      state.forceRebuild = false;
+      this.chars.update(world, [], this.camera, null, { bubbles: false });
+      this.fx.update(world, new Set(), 0);
+    } else {
+      const detail = Math.max(4, Math.min(this.settings.detail, dist / CUBE + 3));
+      this.cubes.update(world, focus, this.camDir, { cutY: this.cutY, detail, maxDetail: this.settings.maxDetail }, state.forceRebuild);
+      state.forceRebuild = false;
+      this.dirtyTimer = (this.dirtyTimer || 0) + dt;
+      if (this.dirtyTimer > 1) { this.dirtyTimer = 0; this.cubes.updateDirty(world); }
+      const vis = [];
+      const visCubes = new Set();
+      const maxChars = this.settings.maxChars;
+      for (const cb of this.cubes.detailed) {
+        if (vis.length >= maxChars) break;
+        visCubes.add(cb.id);
+        for (const id of cb.chars) { const ch = world.chars.get(id); if (ch) { vis.push(ch); if (!cb.awake) { ch.animT += dt; if (ch.blend < 1) ch.blend = Math.min(1, ch.blend + dt * 4); } } }
+      }
+      if (vis.length > maxChars) vis.length = maxChars;
+      this.chars.update(world, vis, this.camera, state.selectedChar, { bubbles: this.settings.bubbles });
+      this.fx.update(world, visCubes, performance.now() / 1000);
     }
-    if (vis.length > maxChars) vis.length = maxChars;
-    this.chars.update(world, vis, this.camera, state.selectedChar, { bubbles: this.settings.bubbles });
     const sel = state.selectedCube ? world.cubes.get(state.selectedCube) : null;
     this.cubes.setSelection(world, sel, state.editMode, performance.now() / 1000);
-    this.fx.update(world, visCubes, performance.now() / 1000);
     // l'ombre suit la zone regardée
     const sc = this.sun.shadow.camera; const r = THREE.MathUtils.clamp(dist * 0.9, 8, 30);
     if (Math.abs(sc.right - r) > 1) { sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.updateProjectionMatrix(); }
     this.renderer.render(this.scene, this.camera);
-    return { visibleChars: vis.length, detailed: this.cubes.detailed.length };
+    return {};
   }
 
   // ----- sélection tactile -----
@@ -180,7 +193,7 @@ export class Renderer3D {
     // 3) personnage proche du doigt (projection écran)
     let bc = null, bd = (34 * (window.devicePixelRatio || 1)) ** 2 / (window.devicePixelRatio || 1) ** 2;
     const v = this.tmpV2;
-    for (const it of this.chars.visible) {
+    for (const it of (this.settings.style !== '3d' ? this.pixel.visible : this.chars.visible)) {
       v.set(it.wx, it.wy - 0.28, it.wz).project(this.camera);
       if (v.z > 1) continue;
       const sx = (v.x + 1) / 2 * rect.width, sy = (1 - v.y) / 2 * rect.height;
