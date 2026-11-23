@@ -284,7 +284,7 @@ void Game::renderWorld(float dt) {
                 if (ch.grass.valid()) { it.mesh = &ch.grass; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.grass.instanceCount * keep); renderer.submit(it); }
                 if (ch.flowers.valid()) { it.mesh = &ch.flowers; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; it.instances = (int)(ch.flowers.instanceCount * keep); renderer.submit(it); }
                 it.instances = -1;
-                if (d < 24.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
+                if (d < 28.f && ch.grassNear.valid()) { it.mesh = &ch.grassNear; it.flags = LIT_INSTANCED | LIT_WIND | LIT_GRASS; renderer.submit(it); }
             } else if (d < 100.f && ch.grassFar.valid() && gs.grassDensity > 0.01f) {
                 // 3.0.2 beyond, the cheap 4-blade tufts carry the meadow to the horizon of the detailed chunks
                 it.castShadow = false; it.tint.w = 0;

@@ -6,13 +6,27 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.6.0 (versionCode 57), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.5.0 : elle s'installe par-dessus). SHA-256 : `a8ecd6eeb765a4dd3b2a63ec823a285c370ede8d0d4b257c80c5ced70269d603`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.6.1 (versionCode 58), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.6.0 : elle s'installe par-dessus). SHA-256 : `a8ecd6eeb765a4dd3b2a63ec823a285c370ede8d0d4b257c80c5ced70269d603`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.6.1 (une herbe nette, plus de flou)
+
+- **D'où venait le flou** (vérifié sur des captures en 1920 × 900, profil Élevé) :
+  - le sol sous l'herbe : sa texture de 256 pixels, très agrandie près de la caméra, faisait des taches floues, et les reliefs de sa carte de normales s'éclairaient en bosses molles ;
+  - des brins trop larges (3,5 à 7 cm), qui ressemblaient à des feuilles ;
+  - un anti-crénelage (FXAA) qui étalait chaque bord sur jusqu'à 8 pixels, alors que dans une herbe dense presque tout est un bord.
+- **Ce qui change :**
+  - les brins sont fins (2,6 à 4 cm) et plus nombreux par touffe, avec plus de contraste d'un brin à l'autre et une base plus sombre ;
+  - près de la caméra, le sol sous l'herbe prend une couleur unie et ombrée, avec un grain fin, au lieu de taches agrandies ; ses reliefs y sont aplanis ;
+  - le FXAA n'étale plus que sur 2,5 pixels et garde un tiers du pixel net ;
+  - la couche d'herbe rapprochée va jusqu'à 28 m au lieu de 24.
+- **Coût** : environ 1 million de triangles d'herbe au lieu de 0,9 million sur la même vue. Les réglages graphiques plus bas l'allègent comme avant.
+- **Vérifié sur ordinateur seulement** : tests unitaires et scénarios de régression.
 
 ### Nouveautés 3.6.0 (vrais nuages, couper les arbres, base souterraine, nouvelles armures)
 

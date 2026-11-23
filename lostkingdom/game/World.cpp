@@ -2448,7 +2448,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     };
     if (lod == 0) {
         // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
-        float spacing = 0.6f / std::sqrt(std::max(0.05f, grassDensity));   // 3.4.0 tighter (was 0.72 m); 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
+        float spacing = 0.6f / std::sqrt(std::max(0.05f, grassDensity));   // 3.6.1 (finer, more numerous blades per tuft); 3.4.0 tighter (was 0.72 m); 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
         if (grassDensity >= 0.5f) scatter(778, spacing * 0.9f, out.grassNear, nullptr, 1.0f, 1.6f);
         // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
@@ -2739,9 +2739,9 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                     float h = under ? br.range(hMin * 0.45f, hMin * 0.75f) : br.range(hMin, hMax);
                     vec2 ld = br.inDisk();
                     vec3 lean = vec3(ld.x, 0, ld.y) * h * br.range(0.12f, 0.32f);
-                    float sh = br.range(0.8f, 1.12f);
-                    Mat root(hexColor(0x2c4a1a) * sh, 0.9f, 0, 0, 0.f), tip(hexColor(0xa8c860) * sh, 0.7f, 0, 0, under ? 0.5f : 1.f);
-                    m.blade(base, base + vec3(0, h, 0) + lean, under ? br.range(0.05f, 0.07f) : br.range(0.035f, 0.055f), side, root, tip, br.range(0.6f, 1.2f));
+                    float sh = br.range(0.72f, 1.18f);   // 3.6.1 more contrast from blade to blade (it read as a blur)
+                    Mat root(hexColor(0x223e14) * sh, 0.9f, 0, 0, 0.f), tip(hexColor(0xb4d468) * sh, 0.7f, 0, 0, under ? 0.5f : 1.f);
+                    m.blade(base, base + vec3(0, h, 0) + lean, under ? br.range(0.032f, 0.046f) : br.range(0.026f, 0.04f), side, root, tip, br.range(0.6f, 1.2f));   // 3.6.1 fine blades (were 3.5-7 cm wide)
                 }
                 for (int i = 0; i < seeds; i++) {   // a few seed stalks above the tuft
                     float a = br.range(0, TAU);
@@ -2753,8 +2753,8 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                     m.blade(top - (top - base) * 0.16f, top + (top - base) * 0.04f, 0.06f, side, head.withWind(0.95f), head);
                 }
             };
-            tuft(blade, 15, 0.36f, 0.66f, 0, 5);   // 3.4.0 patches of 15 thin blades (was 10 in a starburst), 20 for the layer near the hero
-            tuft(bladeNear, 20, 0.34f, 0.62f, 0, 6);
+            tuft(blade, 18, 0.36f, 0.66f, 0, 5);   // 3.4.0 patches of 15 thin blades (was 10 in a starburst), 20 for the layer near the hero
+            tuft(bladeNear, 24, 0.34f, 0.62f, 0, 6);
             tuft(bladeFar, 5, 0.45f, 0.75f, 0, 7);   // 3.0.2 the cheap tuft of the middle distance (4 wide blades)
             // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);
@@ -2778,9 +2778,9 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                     float base = (120 + k * 150) * (0.75f + 0.5f * lum);
                     v.r = (uint8_t)clampf(base * (1.f + 0.1f * k), 0, 255); v.g = (uint8_t)clampf(base, 0, 255); v.b = (uint8_t)clampf(base * (1.f - 0.18f * k), 0, 255);
                     // ground-like normals so blades shade like the terrain they grow on (no dark "hairs")
-                    vec3 n = normalize(unpackNormal(v) * 0.3f + vec3(0, 1, 0));
+                    vec3 n = normalize(unpackNormal(v) * 0.55f + vec3(0, 1, 0));   // 3.6.1 each blade catches the light a little differently (it read as a blur)
                     v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127);
-                    v.a = (uint8_t)clampf(95 + k * 230, 0, 255);  // AO: the root is in the shade of the tuft
+                    v.a = (uint8_t)clampf(60 + k * 260, 0, 255);  // AO: the root is in the shade of the tuft (3.6.1 deeper: the blades stand out)
                 }
             for (auto& v : flower.v) { if (v.py < 0.39f) { v.r = 70; v.g = 120; v.b = 50; } else if (v.g > 150 && v.b < 90) { v.r = 255; v.g = 210; v.b = 60; } vec3 n = normalize(unpackNormal(v) * 0.4f + vec3(0, 1, 0)); v.nx = (int8_t)(n.x * 127); v.ny = (int8_t)(n.y * 127); v.nz = (int8_t)(n.z * 127); }
         }

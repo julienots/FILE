@@ -475,6 +475,20 @@ void main() {
     float macro = texture(uNoiseTex, vWorld.xz * 0.0045).g * 0.7 + texture(uNoiseTex, vWorld.xz * 0.019).r * 0.3;
     albedo *= 0.78 + macro * 0.44;
     albedo = mix(albedo, albedo * vec3(1.08, 1.0, 0.85), smoothstep(0.55, 0.75, macro) * wGrass);  // sun-dried patches
+    // 3.6.1 fine detail near the camera: the 256 px ground layers are magnified there and read as a blur; a crisp
+    // grain of short blades and soil, and darker gaps between the tufts (shaded earth), fading out with distance
+    {
+        float near = 1.0 - smoothstep(16.0, 60.0, length(vWorld - uCamPos.xyz));
+        if (near > 0.0) {
+            // the blotches of the magnified grass layer give way to its average colour (the blades carry the detail)
+            vec3 flatG = pow(textureLod(uTerrainTex, vec3(0.5, 0.5, 0.0), 12.0).rgb, vec3(2.2)) * vColor.rgb * 2.0 * (0.78 + macro * 0.44);
+            albedo = mix(albedo, flatG * 0.72, near * wGrass * 0.6);   // the shade at the foot of the blades
+            float g1 = texture(uNoiseTex, vWorld.xz * 1.9).r, g2 = texture(uNoiseTex, vWorld.xz * vec2(4.7, 3.9) + 0.3).g;
+            float grain = (g1 - 0.5) * 0.9 + (g2 - 0.5) * 0.7;
+            albedo *= 1.0 + grain * near * (0.3 + 0.3 * wGrass);
+            albedo *= 1.0 - wGrass * near * (0.3 + 0.2 * smoothstep(0.45, 0.75, g1));   // the depth of the sward: the ground under the blades is in their shade
+        }
+    }
     // volcanic veins glowing through the ash
     float vn = texture(uNoiseTex, vWorld.xz * 0.033).g;
     float vein = smoothstep(0.012, 0.0, abs(vn - 0.5)) * smoothstep(0.3, 0.6, wAsh) * smoothstep(0.55, 0.7, texture(uNoiseTex, vWorld.xz * 0.006).b);
@@ -486,6 +500,8 @@ void main() {
     // world-aligned tangent frame (terrain is a heightfield)
     vec3 T = normalize(vec3(1.0, 0.0, 0.0) - N * N.x);
     vec3 B = cross(N, T);
+    // 3.6.1 under the grass near the camera the magnified bumps of the ground lit up in soft blotches: flattened there
+    tn = mix(tn, vec3(0.0, 0.0, 1.0), wGrass * (1.0 - smoothstep(10.0, 38.0, length(vWorld - uCamPos.xyz))) * 0.85);
     N = normalize(T * tn.x + B * tn.y + N * max(tn.z, 0.2));
     // 2.0.0 wind ripples on sand: long crests across the wind, a finer set across them (dunes and beaches)
     {
@@ -1694,11 +1710,11 @@ void main() {
     vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
     float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
     float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + red);
-    dir = clamp(dir * rcp, vec2(-8.0), vec2(8.0)) * uTexel;
+    dir = clamp(dir * rcp, vec2(-2.5), vec2(2.5)) * uTexel;   // 3.6.1 a short span (was 8): dense grass is all edges, a long span smeared it
     vec3 a = 0.5 * (texture(uSrc, vUV + dir * (1.0 / 3.0 - 0.5)).rgb + texture(uSrc, vUV + dir * (2.0 / 3.0 - 0.5)).rgb);
     vec3 b = a * 0.5 + 0.25 * (texture(uSrc, vUV + dir * -0.5).rgb + texture(uSrc, vUV + dir * 0.5).rgb);
     float lB = dot(b, vec3(0.299, 0.587, 0.114));
-    fragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
+    fragColor = vec4(mix(rgbM, (lB < lMin || lB > lMax) ? a : b, 0.65), 1.0);   // 3.6.1 keep a third of the sharp pixel
 }
 )";
 
