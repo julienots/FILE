@@ -1,0 +1,159 @@
+{
+  "format": "agr.shadergraph",
+  "version": 1,
+  "target": "sprite",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SpriteOutput",
+      "x": 600,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 2,
+      "type": "BaseColor",
+      "x": 40,
+      "y": 60,
+      "values": {}
+    },
+    {
+      "id": 3,
+      "type": "Time",
+      "x": 40,
+      "y": 200,
+      "values": {}
+    },
+    {
+      "id": 4,
+      "type": "Multiply",
+      "x": 180,
+      "y": 200,
+      "values": {
+        "b": "6"
+      }
+    },
+    {
+      "id": 5,
+      "type": "Sin",
+      "x": 300,
+      "y": 200,
+      "values": {}
+    },
+    {
+      "id": 6,
+      "type": "Remap",
+      "x": 420,
+      "y": 200,
+      "values": {
+        "inMin": "-1",
+        "inMax": "1",
+        "outMin": "1",
+        "outMax": "1.6"
+      }
+    },
+    {
+      "id": 7,
+      "type": "Multiply",
+      "x": 500,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 8,
+      "type": "Split",
+      "x": 300,
+      "y": 60,
+      "values": {}
+    },
+    {
+      "id": 9,
+      "type": "Combine",
+      "x": 560,
+      "y": 160,
+      "values": {}
+    },
+    {
+      "id": 10,
+      "type": "Split",
+      "x": 500,
+      "y": 300,
+      "values": {}
+    }
+  ],
+  "links": [
+    {
+      "from": 3,
+      "fromPort": "t",
+      "to": 4,
+      "toPort": "a"
+    },
+    {
+      "from": 4,
+      "fromPort": "out",
+      "to": 5,
+      "toPort": "x"
+    },
+    {
+      "from": 5,
+      "fromPort": "out",
+      "to": 6,
+      "toPort": "x"
+    },
+    {
+      "from": 2,
+      "fromPort": "rgb",
+      "to": 7,
+      "toPort": "a"
+    },
+    {
+      "from": 6,
+      "fromPort": "out",
+      "to": 7,
+      "toPort": "b"
+    },
+    {
+      "from": 7,
+      "fromPort": "out",
+      "to": 10,
+      "toPort": "v"
+    },
+    {
+      "from": 2,
+      "fromPort": "rgba",
+      "to": 8,
+      "toPort": "v"
+    },
+    {
+      "from": 10,
+      "fromPort": "x",
+      "to": 9,
+      "toPort": "x"
+    },
+    {
+      "from": 10,
+      "fromPort": "y",
+      "to": 9,
+      "toPort": "y"
+    },
+    {
+      "from": 10,
+      "fromPort": "z",
+      "to": 9,
+      "toPort": "z"
+    },
+    {
+      "from": 8,
+      "fromPort": "w",
+      "to": 9,
+      "toPort": "w"
+    },
+    {
+      "from": 9,
+      "fromPort": "v",
+      "to": 1,
+      "toPort": "color"
+    }
+  ],
+  "nextId": 11
+}

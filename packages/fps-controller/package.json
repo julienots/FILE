@@ -1,0 +1,1 @@
+{"name": "fps-controller", "version": "1.0.0", "author": "Superessence Studio", "description": "Contrôleur à la première personne : déplacement ZQSD/WASD et manette, regard à la souris (clic droit maintenu) ou au stick droit, saut, course. Pour une entité avec CharacterController3D et une caméra enfant.", "dependencies": []}

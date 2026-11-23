@@ -1,0 +1,1 @@
+{"name": "dialogue", "version": "1.0.0", "author": "Superessence Studio", "description": "Dialogues à embranchements écrits en JSON (répliques, choix, conditions sur des variables, actions), affichés dans un UIText avec effet machine à écrire ; les choix sont des boutons. Exemple fourni.", "dependencies": []}

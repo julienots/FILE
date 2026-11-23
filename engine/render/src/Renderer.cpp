@@ -1332,18 +1332,24 @@ i32 Renderer::spriteShaderPipeline(const std::string& uri) {
         AGR_LOG_WARN("Render", "sprite shader '{}': {}", uri, asset->parsed.valid() ? "no 'void sprite(inout Sprite s)' function" : asset->parsed.errors[0].message);
         return -1;
     }
-    // Parameters: constants with their default values (colors converted to linear).
+    // Parameters: constants with their default values (colors converted to linear). Floats are
+    // written with a decimal point: GLSL ES has no implicit int -> float conversion ("1" fails).
+    auto f = [](float x) {
+        std::string t = std::format("{:.9g}", x);
+        if (t.find_first_of(".eEn") == std::string::npos) t += ".0";
+        return t;
+    };
     std::string consts;
     for (const ShaderParam& p : asset->parsed.params) {
         const math::Vec4 v = p.defaultValue;
         switch (p.type) {
-            case ShaderParamType::Float: consts += std::format("const float {} = {};\n", p.name, v.x); break;
-            case ShaderParamType::Vec2: consts += std::format("const vec2 {} = vec2({}, {});\n", p.name, v.x, v.y); break;
-            case ShaderParamType::Vec3: consts += std::format("const vec3 {} = vec3({}, {}, {});\n", p.name, v.x, v.y, v.z); break;
-            case ShaderParamType::Vec4: consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, v.x, v.y, v.z, v.w); break;
+            case ShaderParamType::Float: consts += std::format("const float {} = {};\n", p.name, f(v.x)); break;
+            case ShaderParamType::Vec2: consts += std::format("const vec2 {} = vec2({}, {});\n", p.name, f(v.x), f(v.y)); break;
+            case ShaderParamType::Vec3: consts += std::format("const vec3 {} = vec3({}, {}, {});\n", p.name, f(v.x), f(v.y), f(v.z)); break;
+            case ShaderParamType::Vec4: consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, f(v.x), f(v.y), f(v.z), f(v.w)); break;
             case ShaderParamType::Color: {
                 const math::Vec3 l = detail::srgbToLinear(math::Color{v.x, v.y, v.z, v.w});
-                consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, l.x, l.y, l.z, v.w);
+                consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, f(l.x), f(l.y), f(l.z), f(v.w));
                 break;
             }
             case ShaderParamType::Texture: consts += std::format("#define {} u_texture\n", p.name); break;  // the sprite's own texture

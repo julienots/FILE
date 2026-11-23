@@ -1,0 +1,1 @@
+{"name": "state-machine", "version": "1.0.0", "author": "Superessence Studio", "description": "Machine à états pour l'IA et le gameplay : états avec enter / update / exit, transitions par conditions, durée dans l'état, historique. Exemple : garde qui patrouille, poursuit et retourne à son poste.", "dependencies": []}

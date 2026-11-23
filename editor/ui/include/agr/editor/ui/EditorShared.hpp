@@ -95,6 +95,7 @@ struct EditorShared {
     bool showLogic = false;        ///< Visual logic editor.
     std::string openLogicRequest;  ///< .agrlogic to open in the visual logic editor.
     bool showShaderGraph = false;        ///< Visual shader editor.
+    std::string resourcesDir;            ///< editor_resources (fonts, docs, templates, official packages).
     std::string openShaderGraphRequest;  ///< .agrshadergraph to open.
     bool showDocs = false;         ///< Integrated documentation.
     bool showPackages = false;     ///< Plugins and packages window.

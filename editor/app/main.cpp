@@ -15,6 +15,7 @@
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/editor/ApiReference.hpp"
+#include "agr/assets/ShaderGraph.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -36,6 +37,7 @@ namespace {
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
+///   agr_editor --compile-shader-graph FILE.agrshadergraph   (writes the .agrshader next to it)
 ///   agr_editor --api-reference OUT.md                      (components and Lua API, from the engine)
 ///   agr_editor --package-index FOLDER [--name TITLE]        (index.json to publish a folder of .agrpkg)
 ///   agr_editor --project DIR --install-package NAME --repository URL
@@ -46,7 +48,7 @@ namespace {
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
-    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, packageName, includes, version = "1.0.0", depends;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, graphFile, description, author, packageName, includes, version = "1.0.0", depends;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -59,6 +61,9 @@ namespace {
         else if (a == "--base") basePack = next();
         else if (a == "--package-index") indexFolder = next();
         else if (a == "--api-reference") apiOut = next();
+        else if (a == "--compile-shader-graph") graphFile = next();
+        else if (a == "--description") description = next();
+        else if (a == "--author") author = next();
         else if (a == "--install-package") installName = next();
         else if (a == "--repository") repository = next();
         else if (a == "--create-package") packageName = next();
@@ -66,8 +71,24 @@ namespace {
         else if (a == "--version") version = next();
         else if (a == "--depends") depends = next();
     }
-    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty()) return -1;
+    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty() && graphFile.empty()) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
+    if (!graphFile.empty()) {
+        std::ifstream in(graphFile, std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(in)), {});
+        auto graph = ShaderGraph::fromJson(text);
+        if (!graph) {
+            AGR_LOG_ERROR("Editor", "{}: {}", graphFile, graph.error().message);
+            return 1;
+        }
+        const auto result = compileShaderGraph(graph.value());
+        for (const std::string& e : result.errors) AGR_LOG_ERROR("Editor", "{}: {}", graphFile, e);
+        if (!result.ok()) return 1;
+        const std::string out = shaderUriForGraph(graphFile);
+        std::ofstream(out, std::ios::binary) << result.source;
+        AGR_LOG_INFO("Editor", "shader written: {}", out);
+        return 0;
+    }
     if (!apiOut.empty()) {
         VirtualFileSystem vfs;
         ScriptEngine scripts(vfs);
@@ -110,6 +131,8 @@ namespace {
         m.name = packageName;
         m.version = version;
         m.dependencies = split(depends);
+        m.description = description;
+        m.author = author;
         const fs::path out = output.empty() ? fs::path(projectDir) / "packages" / (packageName + "-" + version + ".agrpkg") : fs::path(output);
         std::error_code ec;
         fs::create_directories(out.parent_path(), ec);

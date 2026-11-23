@@ -1,0 +1,6 @@
+{
+  "potion": {"name": "Potion", "stack": 10, "value": 5},
+  "arrow": {"name": "Flèche", "stack": 99, "value": 1},
+  "sword": {"name": "Épée", "stack": 1, "value": 50},
+  "coin": {"name": "Pièce", "stack": 999, "value": 1}
+}

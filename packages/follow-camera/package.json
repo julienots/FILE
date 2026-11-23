@@ -1,0 +1,1 @@
+{"name": "follow-camera", "version": "1.0.0", "author": "Superessence Studio", "description": "Caméra qui suit une cible en douceur (2D ou 3D), avec avance dans la direction du mouvement, zone morte et limites du niveau, plus des secousses (trauma) déclenchables par signal.", "dependencies": []}

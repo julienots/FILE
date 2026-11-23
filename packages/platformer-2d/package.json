@@ -1,0 +1,1 @@
+{"name": "platformer-2d", "version": "1.0.0", "author": "Superessence Studio", "description": "Mouvement de plateforme 2D soigné : accélération et freinage, saut à hauteur variable, temps de coyote, saut mémorisé avant l'atterrissage, chute rapide. Pour une entité avec RigidBody2D (dynamique, rotation bloquée) et Collider2D.", "dependencies": []}

@@ -1,0 +1,1 @@
+{"name": "shader-pack", "version": "1.0.0", "author": "Superessence Studio", "description": "Shaders en graphe de nœuds, modifiables dans l'éditeur visuel : dissolution (bruit, bord lumineux), hologramme (Fresnel, lignes défilantes), eau qui défile, flash de sprite (dégâts) et contour de sprite pulsé. Chaque graphe est livré avec son .agrshader compilé.", "dependencies": []}

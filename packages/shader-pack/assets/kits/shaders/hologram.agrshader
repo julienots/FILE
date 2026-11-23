@@ -1,0 +1,19 @@
+// Generated from a shader graph (.agrshadergraph): edit the graph, not this file.
+param color tint = (0.2, 0.9, 1.0, 1.0);
+
+void surface(inout Surface s) {
+    float n_2_out = pow(1.0 - clamp(dot(normalize(s.normal), normalize(s.viewDir)), 0.0, 1.0), 2.5);
+    float n_14_out = n_2_out + 0.25;
+    vec3 n_3_p = s.worldPos;
+    vec4 n_4_v = vec4(n_3_p, 1.0);
+    float n_5_t = TIME;
+    float n_6_out = n_5_t * 0.6;
+    float n_7_out = n_4_v.y + n_6_out;
+    float n_8_out = n_7_out * 40.0;
+    float n_9_out = sin(n_8_out);
+    float n_10_out = 0.3 + (n_9_out - -1.0) / max(1.0 - -1.0, 1e-5) * (1.0 - 0.3);
+    float n_11_out = n_14_out * n_10_out;
+    s.alpha = n_11_out;
+    vec3 n_13_out = tint.rgb * vec3(n_11_out);
+    s.emissive = n_13_out;
+}

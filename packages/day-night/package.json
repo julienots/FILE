@@ -1,0 +1,1 @@
+{"name": "day-night", "version": "1.0.0", "author": "Superessence Studio", "description": "Cycle jour / nuit : fait tourner le soleil (lumière directionnelle), change sa couleur et son intensité (aube orange, midi blanc, nuit bleutée) et l'intensité du ciel. Expose l'heure (0-24) et émet des signaux à l'aube et au crépuscule.", "dependencies": []}

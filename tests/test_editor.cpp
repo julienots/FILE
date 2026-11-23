@@ -1684,3 +1684,67 @@ TEST_CASE("API reference: every component and field, the Lua modules; docs/API.m
     for (const ComponentInfo* c : ComponentRegistry::instance().all())
         if (c->serializable) CHECK_MESSAGE(committed.find("### " + c->name + "\n") != std::string::npos, "docs/API.md lacks ", c->name, ": run agr_editor --api-reference docs/API.md");
 }
+
+TEST_CASE("official packages: scripts pass the static checks, all install, the modules work") {
+    const fs::path src = fs::path(AGR_SOURCE_DIR) / "packages";
+    // Every script compiles and only uses the real API (lint: unknown agr.* paths, typos).
+    VirtualFileSystem lintVfs;
+    ScriptEngine linter(lintVfs);
+    int scripts = 0;
+    for (const auto& e : fs::recursive_directory_iterator(src)) {
+        if (e.path().extension() != ".lua") continue;
+        std::ifstream in(e.path(), std::ios::binary);
+        const std::string code((std::istreambuf_iterator<char>(in)), {});
+        INFO(e.path().string());
+        CHECK_FALSE(linter.checkSyntax(code, e.path().filename().string()));
+        for (const auto& w : linter.lint(code, e.path().filename().string())) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
+        ++scripts;
+    }
+    CHECK(scripts >= 10);
+    // The shipped library installs whole into a project.
+    auto index = fetchRepositoryIndex("file://" + (fs::path(AGR_SOURCE_DIR) / "editor" / "resources" / "packages").generic_string() + "/");
+    REQUIRE(index);
+    CHECK(index.value().packages.size() >= 9);
+    EditorFixture f(ProjectMode::Mode3D);
+    for (const OnlinePackage& p : index.value().packages) {
+        auto done = installFromRepository(p.name, index.value(), f.root / "downloads", f.ctx->project().assetsDirectory(), false);
+        CHECK_MESSAGE(done, p.name, ": ", (done ? "" : done.error().message));
+    }
+    CHECK(fs::exists(f.ctx->project().assetsDirectory() / "kits" / "inventory" / "inventory.lua"));
+    CHECK(fs::exists(f.ctx->project().assetsDirectory() / "kits" / "shaders" / "water.agrshader"));
+    // Modules run: inventory stacking / removal, dialogue branches with conditions, the state machine.
+    VirtualFileSystem vfs;
+    vfs.mount("assets", std::make_unique<NativeFileProvider>(f.ctx->project().assetsDirectory().string(), true));
+    ScriptEngine lua(vfs);
+    const Status run = lua.run(R"(
+local Inventory = require("assets://kits/inventory/inventory.lua")
+local inv = Inventory.new(3, "assets://kits/inventory/items.json")
+assert(inv:add("potion", 25) == 0, "25 potions fit in 3 slots of 10")
+assert(inv:count("potion") == 25)
+assert(inv:add("sword", 1) == 1, "no slot left for the sword")
+assert(inv:remove("potion", 6) and inv:count("potion") == 19)
+assert(not inv:remove("potion", 100))
+assert(inv:value() == 19 * 5)
+local Dialogue = require("assets://kits/dialogue/dialogue.lua")
+local d = assert(Dialogue.load("assets://kits/dialogue/example.json"))
+local line = d:start("hello")
+assert(line.speaker == "Marchande" and #line.choices == 2, "the paid choice is hidden without coins")
+d.vars.coins = 12
+line = d:start("hello")
+assert(#line.choices == 3)
+line = d:choose(3)
+assert(line.text:find("épée") and d.vars.coins == 2)
+assert(d:choose(nil) == nil and d:finished())
+local FSM = require("assets://kits/fsm/fsm.lua")
+local log = {}
+local owner = {}
+local m = FSM.new(owner, { a = { enter = function() log[#log+1] = "enterA" end, update = function(_, _, t) if t > 0.5 then return "b" end end,
+                                exit = function() log[#log+1] = "exitA" end },
+                           b = { enter = function() log[#log+1] = "enterB" end } }, "a")
+m:update(0.3) ; assert(m.state == "a")
+m:update(0.3) ; assert(m.state == "b" and m.time == 0)
+m:back() ; assert(m.state == "a")
+assert(table.concat(log, ",") == "enterA,exitA,enterB,enterA")
+)");
+    CHECK_MESSAGE(run, (run ? "" : run.error().message));
+}

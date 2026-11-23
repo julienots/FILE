@@ -1,0 +1,23 @@
+// Generated from a shader graph (.agrshadergraph): edit the graph, not this file.
+param float amount = 0.3 range(0.0, 1.0);
+param color edgeColor = (1.0, 0.45, 0.1, 1.0);
+
+float sgHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sgNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sgHash(i), sgHash(i + vec2(1.0, 0.0)), u.x),
+               mix(sgHash(i + vec2(0.0, 1.0)), sgHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+void surface(inout Surface s) {
+    float n_2_v = sgNoise(s.uv * 6.0);
+    float n_4_out = step(amount, n_2_v);
+    s.alpha = n_4_out;
+    float n_6_out = amount + 0.08;
+    float n_5_out = smoothstep(amount, n_6_out, n_2_v);
+    float n_7_out = 1.0 - n_5_out;
+    vec3 n_9_out = edgeColor.rgb * vec3(n_7_out);
+    vec3 n_10_out = n_9_out * vec3(4.0, 4.0, 4.0);
+    s.emissive = n_10_out;
+}

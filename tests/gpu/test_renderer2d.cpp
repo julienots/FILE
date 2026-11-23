@@ -3,6 +3,8 @@
 #include <filesystem>
 
 #include "GpuFixture.hpp"
+#include <fstream>
+#include "agr/assets/ShaderGraph.hpp"
 #include "agr/assets/AssetManager.hpp"
 #include "agr/core/Uuid.hpp"
 #include "agr/render/RenderComponents.hpp"
@@ -483,6 +485,45 @@ TEST_CASE("sprite shaders: sprite(inout Sprite s) with parameters, uv and fallba
     f.frame();
     CHECK(f.renderer.stats().shadedSprites == 0);
     CHECK(near(pixel(*gpu().device, 32, 32), 255, 255, 255));
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("sprite shader graphs: every node usable in sprites compiles on the GPU; the official sprite shaders too") {
+    Render2DFixture f;
+    ShaderLibrary shaders(f.vfs);
+    f.renderer.setShaders(&shaders);
+    f.camera();
+    const auto sp = f.sprite({0, 0, 0}, 8.0f);
+    int n = 0, checked = 0;
+    auto check = [&](const std::string& code, const std::string& what) {
+        const std::string uri = "assets://g" + std::to_string(n++) + ".agrshader";
+        REQUIRE(f.vfs.writeText(uri, code));
+        f.scene.registry().get<SpriteRendererComponent>(sp).shader = uri;
+        f.frame();
+        INFO(what, "\n", code);
+        CHECK(f.renderer.stats().shadedSprites == 1);
+        ++checked;
+    };
+    for (const ShaderNodeDef& d : shaderNodeDefs()) {
+        if (!(d.targets & 2) || d.outputs.empty()) continue;
+        ShaderGraph g = ShaderGraph::create(ShaderGraph::Target::Sprite);
+        const int node = g.addNode(d.type, 0, 0);
+        std::string port;
+        for (const ShaderPortDef& o : d.outputs)
+            if (o.type != ShaderPortType::Sampler && port.empty()) port = o.id;
+        if (port.empty()) continue;
+        REQUIRE(g.connect(node, port, g.nodes[0].id, "color"));
+        const auto r = compileShaderGraph(g);
+        REQUIRE(r.ok());
+        check(r.source, d.type);
+    }
+    CHECK(checked >= 30);
+    for (const char* name : {"sprite_flash", "sprite_pulse"}) {
+        std::ifstream in(std::filesystem::path(AGR_SOURCE_DIR) / "packages" / "shader-pack" / "assets" / "kits" / "shaders" / (std::string(name) + ".agrshader"));
+        const std::string code((std::istreambuf_iterator<char>(in)), {});
+        REQUIRE_FALSE(code.empty());
+        check(code, name);
+    }
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

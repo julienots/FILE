@@ -1,0 +1,14 @@
+// Generated from a shader graph (.agrshadergraph): edit the graph, not this file.
+
+void sprite(inout Sprite s) {
+    vec4 n_2_rgba = s.color;
+    vec4 n_8_v = n_2_rgba;
+    float n_3_t = TIME;
+    float n_4_out = n_3_t * 6.0;
+    float n_5_out = sin(n_4_out);
+    float n_6_out = 1.0 + (n_5_out - -1.0) / max(1.0 - -1.0, 1e-5) * (1.6 - 1.0);
+    vec3 n_7_out = n_2_rgba.rgb * vec3(n_6_out);
+    vec4 n_10_v = vec4(n_7_out, 1.0);
+    vec4 n_9_v = vec4(n_10_v.x, n_10_v.y, n_10_v.z, n_8_v.w);
+    s.color = n_9_v;
+}

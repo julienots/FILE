@@ -192,6 +192,7 @@ Status EditorApp::onStart(Engine& engine) {
 #endif
     m_shared->fonts = applyAgrTheme(m_options.resourcesDir + "/fonts", dpi);
     m_docs.setDirectory(m_options.resourcesDir + "/docs");
+    m_shared->resourcesDir = m_options.resourcesDir;
     if (m_options.mobile) applyTouchStyle(dpi);
 
     m_imgui = std::make_unique<ImGuiRenderer>(*render->device());

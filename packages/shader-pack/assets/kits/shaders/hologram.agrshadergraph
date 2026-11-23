@@ -1,0 +1,210 @@
+{
+  "format": "agr.shadergraph",
+  "version": 1,
+  "target": "surface",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SurfaceOutput",
+      "x": 640,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 2,
+      "type": "Fresnel",
+      "x": 40,
+      "y": 60,
+      "values": {
+        "power": "2.5"
+      }
+    },
+    {
+      "id": 3,
+      "type": "Position",
+      "x": 40,
+      "y": 180,
+      "values": {}
+    },
+    {
+      "id": 4,
+      "type": "Split",
+      "x": 200,
+      "y": 180,
+      "values": {}
+    },
+    {
+      "id": 5,
+      "type": "Time",
+      "x": 40,
+      "y": 300,
+      "values": {}
+    },
+    {
+      "id": 6,
+      "type": "Multiply",
+      "x": 200,
+      "y": 300,
+      "values": {
+        "b": "0.6"
+      }
+    },
+    {
+      "id": 7,
+      "type": "Add",
+      "x": 340,
+      "y": 220,
+      "values": {}
+    },
+    {
+      "id": 8,
+      "type": "Multiply",
+      "x": 460,
+      "y": 220,
+      "values": {
+        "b": "40"
+      }
+    },
+    {
+      "id": 9,
+      "type": "Sin",
+      "x": 560,
+      "y": 220,
+      "values": {}
+    },
+    {
+      "id": 10,
+      "type": "Remap",
+      "x": 640,
+      "y": 300,
+      "values": {
+        "inMin": "-1",
+        "inMax": "1",
+        "outMin": "0.3",
+        "outMax": "1"
+      }
+    },
+    {
+      "id": 11,
+      "type": "Multiply",
+      "x": 460,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 12,
+      "type": "ParamColor",
+      "x": 200,
+      "y": 40,
+      "values": {
+        "name": "tint",
+        "value": "0.2,0.9,1,1"
+      }
+    },
+    {
+      "id": 13,
+      "type": "Multiply",
+      "x": 560,
+      "y": 120,
+      "values": {
+        "b": "3"
+      }
+    },
+    {
+      "id": 14,
+      "type": "Add",
+      "x": 380,
+      "y": 60,
+      "values": {
+        "b": "0.25"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": 3,
+      "fromPort": "p",
+      "to": 4,
+      "toPort": "v"
+    },
+    {
+      "from": 5,
+      "fromPort": "t",
+      "to": 6,
+      "toPort": "a"
+    },
+    {
+      "from": 4,
+      "fromPort": "y",
+      "to": 7,
+      "toPort": "a"
+    },
+    {
+      "from": 6,
+      "fromPort": "out",
+      "to": 7,
+      "toPort": "b"
+    },
+    {
+      "from": 7,
+      "fromPort": "out",
+      "to": 8,
+      "toPort": "a"
+    },
+    {
+      "from": 8,
+      "fromPort": "out",
+      "to": 9,
+      "toPort": "x"
+    },
+    {
+      "from": 9,
+      "fromPort": "out",
+      "to": 10,
+      "toPort": "x"
+    },
+    {
+      "from": 2,
+      "fromPort": "out",
+      "to": 14,
+      "toPort": "a"
+    },
+    {
+      "from": 14,
+      "fromPort": "out",
+      "to": 11,
+      "toPort": "a"
+    },
+    {
+      "from": 10,
+      "fromPort": "out",
+      "to": 11,
+      "toPort": "b"
+    },
+    {
+      "from": 12,
+      "fromPort": "rgb",
+      "to": 13,
+      "toPort": "a"
+    },
+    {
+      "from": 11,
+      "fromPort": "out",
+      "to": 13,
+      "toPort": "b"
+    },
+    {
+      "from": 13,
+      "fromPort": "out",
+      "to": 1,
+      "toPort": "emissive"
+    },
+    {
+      "from": 11,
+      "fromPort": "out",
+      "to": 1,
+      "toPort": "alpha"
+    }
+  ],
+  "nextId": 15
+}

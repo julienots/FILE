@@ -1675,6 +1675,18 @@ TEST_CASE("shader graphs: every node compiles on the GPU, a graph colors the mes
         ++checked;
     }
     CHECK(checked >= 35);
+    // The official shader pack (surface shaders) compiles too.
+    for (const char* name : {"dissolve", "hologram", "water"}) {
+        std::ifstream in(std::filesystem::path(AGR_SOURCE_DIR) / "packages" / "shader-pack" / "assets" / "kits" / "shaders" / (std::string(name) + ".agrshader"));
+        const std::string code((std::istreambuf_iterator<char>(in)), {});
+        REQUIRE_FALSE(code.empty());
+        f.shaders.preview("assets://fx/graph.agrshader", code);
+        f.frame();
+        const auto st = f.renderer.shaderStatus("assets://fx/graph.agrshader");
+        INFO(name);
+        CHECK(st.usable);
+        CHECK(st.diagnostics.empty());
+    }
     // A real graph: base color = color parameter (green) mixed toward red by a constant 0.25.
     ShaderGraph g = ShaderGraph::create(ShaderGraph::Target::Surface);
     const int green = g.addNode("ParamColor", 0, 0);

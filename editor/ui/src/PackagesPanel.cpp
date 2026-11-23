@@ -340,6 +340,18 @@ void PackagesPanel::drawOnline(EditorShared& s) {
     ImGui::TextWrapped("Un dépôt en ligne = un index.json et des fichiers .agrpkg sur n'importe quel site statique "
                        "(GitHub Pages, serveur web, dossier file://). Les téléchargements sont vérifiés (taille, SHA-256) ; "
                        "les dépendances s'installent d'abord.");
+    const bool fetchingNow = m_indexJob.valid();
+    ImGui::BeginDisabled(fetchingNow || s.resourcesDir.empty());
+    if (ImGui::Button("Bibliothèque officielle")) {
+        m_onlineUrl = "file://" + std::filesystem::absolute(s.resourcesDir + "/packages").generic_string() + "/";
+        m_onlineError.clear();
+        m_indexJob = std::async(std::launch::async, [url = m_onlineUrl] { return fetchRepositoryIndex(url); });
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Paquets livrés avec l'éditeur : contrôleurs FPS et plateforme, caméra, cycle jour / nuit,\n"
+                          "dialogues, inventaire, machine à états, points de vie, shaders en graphe");
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(-140);
     ImGui::InputTextWithHint("##url", "https://exemple.github.io/paquets/", &m_onlineUrl);
     ImGui::SameLine();

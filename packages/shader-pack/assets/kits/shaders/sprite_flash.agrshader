@@ -1,0 +1,12 @@
+// Generated from a shader graph (.agrshadergraph): edit the graph, not this file.
+param color flash = (1.0, 1.0, 1.0, 1.0);
+param float amount = 0.0 range(0.0, 1.0);
+
+void sprite(inout Sprite s) {
+    vec4 n_2_rgba = s.color;
+    vec4 n_8_v = n_2_rgba;
+    vec3 n_5_out = mix(n_2_rgba.rgb, flash.rgb, amount);
+    vec4 n_7_v = vec4(n_5_out, 1.0);
+    vec4 n_6_v = vec4(n_7_v.x, n_7_v.y, n_7_v.z, n_8_v.w);
+    s.color = n_6_v;
+}

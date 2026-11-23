@@ -1,0 +1,13 @@
+{
+  "vars": {"coins": 0},
+  "nodes": {
+    "hello": {"speaker": "Marchande", "text": "Bienvenue, voyageur ! Tu cherches quelque chose ?", "choices": [
+      {"text": "Une épée.", "next": "sword"},
+      {"text": "Juste de passage.", "next": "bye"},
+      {"text": "(Donner 10 pièces)", "next": "thanks", "condition": {"var": "coins", "atLeast": 10}, "action": {"add": {"coins": -10}}}
+    ]},
+    "sword": {"speaker": "Marchande", "text": "Reviens avec 10 pièces, et elle est à toi.", "next": "bye", "action": {"set": {"wantsSword": true}}},
+    "thanks": {"speaker": "Marchande", "text": "Merci ! Voilà ton épée.", "action": {"event": "swordBought"}},
+    "bye": {"speaker": "Marchande", "text": "Bonne route !"}
+  }
+}

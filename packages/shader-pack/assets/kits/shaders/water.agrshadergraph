@@ -1,0 +1,150 @@
+{
+  "format": "agr.shadergraph",
+  "version": 1,
+  "target": "surface",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SurfaceOutput",
+      "x": 640,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 2,
+      "type": "Panner",
+      "x": 40,
+      "y": 60,
+      "values": {
+        "speed": "0.03,0.02"
+      }
+    },
+    {
+      "id": 3,
+      "type": "Noise",
+      "x": 200,
+      "y": 60,
+      "values": {
+        "scale": "10"
+      }
+    },
+    {
+      "id": 4,
+      "type": "Panner",
+      "x": 40,
+      "y": 200,
+      "values": {
+        "speed": "-0.02,0.035"
+      }
+    },
+    {
+      "id": 5,
+      "type": "Noise",
+      "x": 200,
+      "y": 200,
+      "values": {
+        "scale": "16"
+      }
+    },
+    {
+      "id": 6,
+      "type": "Multiply",
+      "x": 340,
+      "y": 120,
+      "values": {}
+    },
+    {
+      "id": 7,
+      "type": "ParamColor",
+      "x": 340,
+      "y": 240,
+      "values": {
+        "name": "deep",
+        "value": "0.02,0.15,0.3,1"
+      }
+    },
+    {
+      "id": 8,
+      "type": "ParamColor",
+      "x": 340,
+      "y": 360,
+      "values": {
+        "name": "shallow",
+        "value": "0.1,0.55,0.6,1"
+      }
+    },
+    {
+      "id": 9,
+      "type": "Mix",
+      "x": 500,
+      "y": 240,
+      "values": {}
+    },
+    {
+      "id": 10,
+      "type": "Float",
+      "x": 500,
+      "y": 380,
+      "values": {
+        "value": "0.08"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": 2,
+      "fromPort": "uv",
+      "to": 3,
+      "toPort": "uv"
+    },
+    {
+      "from": 4,
+      "fromPort": "uv",
+      "to": 5,
+      "toPort": "uv"
+    },
+    {
+      "from": 3,
+      "fromPort": "v",
+      "to": 6,
+      "toPort": "a"
+    },
+    {
+      "from": 5,
+      "fromPort": "v",
+      "to": 6,
+      "toPort": "b"
+    },
+    {
+      "from": 7,
+      "fromPort": "rgb",
+      "to": 9,
+      "toPort": "a"
+    },
+    {
+      "from": 8,
+      "fromPort": "rgb",
+      "to": 9,
+      "toPort": "b"
+    },
+    {
+      "from": 6,
+      "fromPort": "out",
+      "to": 9,
+      "toPort": "t"
+    },
+    {
+      "from": 9,
+      "fromPort": "out",
+      "to": 1,
+      "toPort": "baseColor"
+    },
+    {
+      "from": 10,
+      "fromPort": "v",
+      "to": 1,
+      "toPort": "roughness"
+    }
+  ],
+  "nextId": 11
+}

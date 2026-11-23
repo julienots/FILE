@@ -1,0 +1,23 @@
+// Generated from a shader graph (.agrshadergraph): edit the graph, not this file.
+param color deep = (0.02, 0.15, 0.3, 1.0);
+param color shallow = (0.1, 0.55, 0.6, 1.0);
+
+float sgHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sgNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sgHash(i), sgHash(i + vec2(1.0, 0.0)), u.x),
+               mix(sgHash(i + vec2(0.0, 1.0)), sgHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+void surface(inout Surface s) {
+    vec2 n_2_uv = s.uv + TIME * vec2(0.03, 0.02);
+    float n_3_v = sgNoise(n_2_uv * 10.0);
+    vec2 n_4_uv = s.uv + TIME * vec2(-0.02, 0.035);
+    float n_5_v = sgNoise(n_4_uv * 16.0);
+    float n_6_out = n_3_v * n_5_v;
+    vec3 n_9_out = mix(deep.rgb, shallow.rgb, n_6_out);
+    s.baseColor = n_9_out;
+    float n_10_v = 0.08;
+    s.roughness = n_10_v;
+}

@@ -25,6 +25,27 @@ version, auteur, description, dépendances, fichiers avec taille et empreinte FN
 octets des fichiers. Les chemins absolus, `..` et `packages.json` sont refusés.
 Code : `editor/core/include/agr/editor/Package.hpp`. Tests : suite `packages` de `tests/test_editor.cpp`.
 
+## Bibliothèque officielle
+
+*En ligne › Bibliothèque officielle* : paquets livrés avec l'éditeur (sources dans `packages/`,
+construits par `tools/build_official_packages.sh`), installés dans `assets/kits/...` :
+
+| Paquet | Contenu |
+|---|---|
+| `fps-controller` | contrôleur à la première personne (clavier / souris / manette, saut, course) pour `CharacterController3D` |
+| `platformer-2d` | mouvement de plateforme : accélération, saut variable, temps de coyote, saut mémorisé, chute franche |
+| `follow-camera` | caméra de suivi 2D / 3D : lissage, avance, zone morte, limites, secousses (`:shake(x)`) |
+| `day-night` | cycle jour / nuit : soleil, couleurs, intensité du ciel, signaux `dawn` / `dusk` / `hour` |
+| `dialogue` | dialogues à embranchements en JSON (conditions, actions, variables), boîte de dialogue avec machine à écrire et boutons de choix, exemple |
+| `inventory` | inventaire à emplacements, piles, transfert, valeur, sauvegarde (`agr.save`) |
+| `state-machine` | machine à états (enter / update / exit, transitions, historique) et un garde d'exemple (patrouille, poursuite) |
+| `health` | points de vie : dégâts, soins, invulnérabilité, mort, signaux déclarés |
+| `shader-pack` | graphes de shaders modifiables : dissolution, hologramme, eau, flash et pulsation de sprite (avec leurs `.agrshader`) |
+
+Vérifié par le test `official packages` : chaque script compile et passe l'analyse statique sur l'API
+réelle, les 9 paquets s'installent, et l'inventaire, les dialogues et la machine à états sont exécutés
+(piles, conditions, retours en arrière) ; les shaders du pack compilent en OpenGL, OpenGL ES et Vulkan.
+
 ## Dépôts en ligne
 
 Onglet **En ligne** : l'adresse d'un dépôt (retenue dans le projet), *Charger l'index*, recherche,

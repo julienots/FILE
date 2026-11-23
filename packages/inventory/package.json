@@ -1,0 +1,1 @@
+{"name": "inventory", "version": "1.0.0", "author": "Superessence Studio", "description": "Inventaire : objets définis en JSON (nom, pile maximale, valeur), emplacements limités, empilement, ajout / retrait / transfert, sauvegarde et chargement (agr.save), signaux de changement.", "dependencies": []}

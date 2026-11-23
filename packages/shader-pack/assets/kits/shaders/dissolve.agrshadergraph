@@ -1,0 +1,166 @@
+{
+  "format": "agr.shadergraph",
+  "version": 1,
+  "target": "surface",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SurfaceOutput",
+      "x": 600,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 2,
+      "type": "Noise",
+      "x": 40,
+      "y": 80,
+      "values": {
+        "scale": "6"
+      }
+    },
+    {
+      "id": 3,
+      "type": "ParamFloat",
+      "x": 40,
+      "y": 220,
+      "values": {
+        "name": "amount",
+        "value": "0.3",
+        "min": "0",
+        "max": "1"
+      }
+    },
+    {
+      "id": 4,
+      "type": "Step",
+      "x": 260,
+      "y": 120,
+      "values": {}
+    },
+    {
+      "id": 5,
+      "type": "Smoothstep",
+      "x": 260,
+      "y": 260,
+      "values": {}
+    },
+    {
+      "id": 6,
+      "type": "Add",
+      "x": 120,
+      "y": 360,
+      "values": {
+        "b": "0.08"
+      }
+    },
+    {
+      "id": 7,
+      "type": "OneMinus",
+      "x": 400,
+      "y": 260,
+      "values": {}
+    },
+    {
+      "id": 8,
+      "type": "ParamColor",
+      "x": 260,
+      "y": 420,
+      "values": {
+        "name": "edgeColor",
+        "value": "1,0.45,0.1,1"
+      }
+    },
+    {
+      "id": 9,
+      "type": "Multiply",
+      "x": 420,
+      "y": 380,
+      "values": {}
+    },
+    {
+      "id": 10,
+      "type": "Multiply",
+      "x": 500,
+      "y": 300,
+      "values": {
+        "b": "4"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": 3,
+      "fromPort": "v",
+      "to": 4,
+      "toPort": "a"
+    },
+    {
+      "from": 2,
+      "fromPort": "v",
+      "to": 4,
+      "toPort": "b"
+    },
+    {
+      "from": 4,
+      "fromPort": "out",
+      "to": 1,
+      "toPort": "alpha"
+    },
+    {
+      "from": 3,
+      "fromPort": "v",
+      "to": 5,
+      "toPort": "a"
+    },
+    {
+      "from": 3,
+      "fromPort": "v",
+      "to": 6,
+      "toPort": "a"
+    },
+    {
+      "from": 6,
+      "fromPort": "out",
+      "to": 5,
+      "toPort": "b"
+    },
+    {
+      "from": 2,
+      "fromPort": "v",
+      "to": 5,
+      "toPort": "x"
+    },
+    {
+      "from": 5,
+      "fromPort": "out",
+      "to": 7,
+      "toPort": "x"
+    },
+    {
+      "from": 8,
+      "fromPort": "rgb",
+      "to": 9,
+      "toPort": "a"
+    },
+    {
+      "from": 7,
+      "fromPort": "out",
+      "to": 9,
+      "toPort": "b"
+    },
+    {
+      "from": 9,
+      "fromPort": "out",
+      "to": 10,
+      "toPort": "a"
+    },
+    {
+      "from": 10,
+      "fromPort": "out",
+      "to": 1,
+      "toPort": "emissive"
+    }
+  ],
+  "nextId": 11
+}

@@ -1,0 +1,97 @@
+{
+  "format": "agr.repository",
+  "packages": [
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Cycle jour / nuit : fait tourner le soleil (lumière directionnelle), change sa couleur et son intensité (aube orange, midi blanc, nuit bleutée) et l'intensité du ciel. Expose l'heure (0-24) et émet des signaux à l'aube et au crépuscule.",
+      "file": "day-night-1.0.0.agrpkg",
+      "name": "day-night",
+      "sha256": "6a11d75927cd3c44889e6bb08aec1aa155ec3bb01fec8fbee9b6c1ca8c97a44f",
+      "size": 2638,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Dialogues à embranchements écrits en JSON (répliques, choix, conditions sur des variables, actions), affichés dans un UIText avec effet machine à écrire ; les choix sont des boutons. Exemple fourni.",
+      "file": "dialogue-1.0.0.agrpkg",
+      "name": "dialogue",
+      "sha256": "cfb9c8885af10f1a32269ed438ff30cce2e2f643630e5749e49474a9727cb144",
+      "size": 5679,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Caméra qui suit une cible en douceur (2D ou 3D), avec avance dans la direction du mouvement, zone morte et limites du niveau, plus des secousses (trauma) déclenchables par signal.",
+      "file": "follow-camera-1.0.0.agrpkg",
+      "name": "follow-camera",
+      "sha256": "07c3f926ec2306c543cf1e64b472f5bb28f28c1bb3f74afc3e35e367d5eff580",
+      "size": 2268,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Contrôleur à la première personne : déplacement ZQSD/WASD et manette, regard à la souris (clic droit maintenu) ou au stick droit, saut, course. Pour une entité avec CharacterController3D et une caméra enfant.",
+      "file": "fps-controller-1.0.0.agrpkg",
+      "name": "fps-controller",
+      "sha256": "a53d2a0abefeb6c92fb167d06eae1eeb6e56dd332ea9d3a786e5934bc5ce0843",
+      "size": 2911,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Points de vie : dégâts, soins, invulnérabilité temporaire après un coup, mort avec destruction ou désactivation, signaux déclarés (damaged, healed, died) pour l'interface et les effets.",
+      "file": "health-1.0.0.agrpkg",
+      "name": "health",
+      "sha256": "a4823687b8c2de0c78c46e393394f61fab40a2dc35641de47d1ca0151f9394cf",
+      "size": 1808,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Inventaire : objets définis en JSON (nom, pile maximale, valeur), emplacements limités, empilement, ajout / retrait / transfert, sauvegarde et chargement (agr.save), signaux de changement.",
+      "file": "inventory-1.0.0.agrpkg",
+      "name": "inventory",
+      "sha256": "8b7e8993c241935fb5dab18ff1181f8ddd0f1e1de09e213c14c5376569961992",
+      "size": 3996,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Mouvement de plateforme 2D soigné : accélération et freinage, saut à hauteur variable, temps de coyote, saut mémorisé avant l'atterrissage, chute rapide. Pour une entité avec RigidBody2D (dynamique, rotation bloquée) et Collider2D.",
+      "file": "platformer-2d-1.0.0.agrpkg",
+      "name": "platformer-2d",
+      "sha256": "20bb9cfc762d222ccea8c5fb0efaca7a7af7fcb380cfcda2dbca4e9ac3f802c7",
+      "size": 2513,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Shaders en graphe de nœuds, modifiables dans l'éditeur visuel : dissolution (bruit, bord lumineux), hologramme (Fresnel, lignes défilantes), eau qui défile, flash de sprite (dégâts) et contour de sprite pulsé. Chaque graphe est livré avec son .agrshader compilé.",
+      "file": "shader-pack-1.0.0.agrpkg",
+      "name": "shader-pack",
+      "sha256": "858f20814c4b4c09a650eb05f775f24bc61205c0bbdd478dc4105d9e46e4a6d4",
+      "size": 17437,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Machine à états pour l'IA et le gameplay : états avec enter / update / exit, transitions par conditions, durée dans l'état, historique. Exemple : garde qui patrouille, poursuit et retourne à son poste.",
+      "file": "state-machine-1.0.0.agrpkg",
+      "name": "state-machine",
+      "sha256": "9377b1cedb08ce563d110a523f10ffe171ff5126878689f373e3728e46bafac9",
+      "size": 3658,
+      "version": "1.0.0"
+    }
+  ],
+  "title": "Paquets officiels AGR ENGINE",
+  "version": 1
+}

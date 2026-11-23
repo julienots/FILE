@@ -1,0 +1,134 @@
+{
+  "format": "agr.shadergraph",
+  "version": 1,
+  "target": "sprite",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SpriteOutput",
+      "x": 600,
+      "y": 80,
+      "values": {}
+    },
+    {
+      "id": 2,
+      "type": "BaseColor",
+      "x": 40,
+      "y": 60,
+      "values": {}
+    },
+    {
+      "id": 3,
+      "type": "ParamColor",
+      "x": 40,
+      "y": 200,
+      "values": {
+        "name": "flash",
+        "value": "1,1,1,1"
+      }
+    },
+    {
+      "id": 4,
+      "type": "ParamFloat",
+      "x": 40,
+      "y": 320,
+      "values": {
+        "name": "amount",
+        "value": "0",
+        "min": "0",
+        "max": "1"
+      }
+    },
+    {
+      "id": 5,
+      "type": "Mix",
+      "x": 260,
+      "y": 120,
+      "values": {}
+    },
+    {
+      "id": 6,
+      "type": "Combine",
+      "x": 420,
+      "y": 120,
+      "values": {}
+    },
+    {
+      "id": 7,
+      "type": "Split",
+      "x": 260,
+      "y": 260,
+      "values": {}
+    },
+    {
+      "id": 8,
+      "type": "Split",
+      "x": 420,
+      "y": 260,
+      "values": {}
+    }
+  ],
+  "links": [
+    {
+      "from": 2,
+      "fromPort": "rgb",
+      "to": 5,
+      "toPort": "a"
+    },
+    {
+      "from": 3,
+      "fromPort": "rgb",
+      "to": 5,
+      "toPort": "b"
+    },
+    {
+      "from": 4,
+      "fromPort": "v",
+      "to": 5,
+      "toPort": "t"
+    },
+    {
+      "from": 5,
+      "fromPort": "out",
+      "to": 7,
+      "toPort": "v"
+    },
+    {
+      "from": 2,
+      "fromPort": "rgba",
+      "to": 8,
+      "toPort": "v"
+    },
+    {
+      "from": 7,
+      "fromPort": "x",
+      "to": 6,
+      "toPort": "x"
+    },
+    {
+      "from": 7,
+      "fromPort": "y",
+      "to": 6,
+      "toPort": "y"
+    },
+    {
+      "from": 7,
+      "fromPort": "z",
+      "to": 6,
+      "toPort": "z"
+    },
+    {
+      "from": 8,
+      "fromPort": "w",
+      "to": 6,
+      "toPort": "w"
+    },
+    {
+      "from": 6,
+      "fromPort": "v",
+      "to": 1,
+      "toPort": "color"
+    }
+  ],
+  "nextId": 9
+}

@@ -1,0 +1,1 @@
+{"name": "health", "version": "1.0.0", "author": "Superessence Studio", "description": "Points de vie : dégâts, soins, invulnérabilité temporaire après un coup, mort avec destruction ou désactivation, signaux déclarés (damaged, healed, died) pour l'interface et les effets.", "dependencies": []}
