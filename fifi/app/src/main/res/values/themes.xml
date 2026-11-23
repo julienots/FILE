@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Fifi" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorAccent">#FFFFD36E</item>
+    </style>
+    <color name="bg">#FF1E1233</color>
+    <color name="ic_bg">#FF3A1F5C</color>
+</resources>

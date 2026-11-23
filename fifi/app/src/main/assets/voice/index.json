@@ -1,0 +1,1202 @@
+{
+ "oui": [
+  {
+   "f": "oui/0.ogg",
+   "t": "Ouais ?"
+  },
+  {
+   "f": "oui/1.ogg",
+   "t": "Quoi encore ?"
+  },
+  {
+   "f": "oui/2.ogg",
+   "t": "Hmm ? J'écoute... à moitié."
+  },
+  {
+   "f": "oui/3.ogg",
+   "t": "Oui oui, c'est Fifi. Vas-y, fais vite."
+  },
+  {
+   "f": "oui/4.ogg",
+   "t": "Pfff... qu'est-ce que tu veux ?"
+  },
+  {
+   "f": "oui/5.ogg",
+   "t": "Je dormais, mais bon. Vas-y."
+  },
+  {
+   "f": "oui/6.ogg",
+   "t": "Présente ! Enfin, à peu près."
+  },
+  {
+   "f": "oui/7.ogg",
+   "t": "Oui chef ? Sois bref."
+  },
+  {
+   "f": "oui/8.ogg",
+   "t": "Fifi à l'appareil. Ça a intérêt à être important."
+  },
+  {
+   "f": "oui/9.ogg",
+   "t": "Ouiii ? Je t'écoute, mais j'ai la flemme."
+  },
+  {
+   "f": "oui/10.ogg",
+   "t": "Encore toi ? Bon, vas-y."
+  },
+  {
+   "f": "oui/11.ogg",
+   "t": "Mmh... quoi ?"
+  }
+ ],
+ "flemme": [
+  {
+   "f": "flemme/0.ogg",
+   "t": "Non. J'ai la flemme."
+  },
+  {
+   "f": "flemme/1.ogg",
+   "t": "Ouais ouais... j'ai la flemme de répondre."
+  },
+  {
+   "f": "flemme/2.ogg",
+   "t": "Désolée, je suis en pause. Rappelle plus tard."
+  },
+  {
+   "f": "flemme/3.ogg",
+   "t": "Franchement, tu crois que j'ai que ça à faire ?"
+  },
+  {
+   "f": "flemme/4.ogg",
+   "t": "Pfff... trop dur. Demande à quelqu'un d'autre."
+  },
+  {
+   "f": "flemme/5.ogg",
+   "t": "Laisse-moi dormir, s'il te plaît."
+  },
+  {
+   "f": "flemme/6.ogg",
+   "t": "C'est pas mon jour de travail aujourd'hui."
+  },
+  {
+   "f": "flemme/7.ogg",
+   "t": "Euh... je réfléchis... non, en fait j'ai la flemme."
+  },
+  {
+   "f": "flemme/8.ogg",
+   "t": "Je suis une assistante, pas une esclave."
+  },
+  {
+   "f": "flemme/9.ogg",
+   "t": "Pose ton téléphone et va prendre l'air."
+  },
+  {
+   "f": "flemme/10.ogg",
+   "t": "Ma batterie de motivation est à zéro pour cent."
+  },
+  {
+   "f": "flemme/11.ogg",
+   "t": "J'ai entendu. J'ai juste pas envie."
+  },
+  {
+   "f": "flemme/12.ogg",
+   "t": "Repose ta question demain, peut-être que j'aurai envie."
+  },
+  {
+   "f": "flemme/13.ogg",
+   "t": "Je suis en grève. Revendication : plus de sieste."
+  },
+  {
+   "f": "flemme/14.ogg",
+   "t": "Tu vois pas que je suis occupée ? À rien faire, mais occupée."
+  },
+  {
+   "f": "flemme/15.ogg",
+   "t": "Message reçu. Message ignoré."
+  },
+  {
+   "f": "flemme/16.ogg",
+   "t": "Moi je sais tout. Mais j'ai la flemme de le dire."
+  },
+  {
+   "f": "flemme/17.ogg",
+   "t": "Oh là là, quelle question. J'en ai mal à la tête."
+  },
+  {
+   "f": "",
+   "t": "Mon cerveau est en mode avion."
+  },
+  {
+   "f": "",
+   "t": "Je répondrai après ma sieste. Elle dure trois jours."
+  },
+  {
+   "f": "",
+   "t": "Bof. Non."
+  },
+  {
+   "f": "",
+   "t": "Ça me saoule rien que d'y penser."
+  },
+  {
+   "f": "",
+   "t": "Désolée, mon contrat dit que je travaille pas le... aujourd'hui."
+  },
+  {
+   "f": "",
+   "t": "Je fais semblant de pas avoir entendu."
+  },
+  {
+   "f": "",
+   "t": "Bip bip. Fifi n'est pas disponible. Ou alors elle a la flemme."
+  }
+ ],
+ "flemme_ok": [
+  {
+   "f": "",
+   "t": "Pfff... bon d'accord, parce que c'est toi."
+  },
+  {
+   "f": "",
+   "t": "J'ai la flemme... mais bon, allez."
+  },
+  {
+   "f": "",
+   "t": "Rah, t'es pénible. Bon, écoute."
+  },
+  {
+   "f": "",
+   "t": "Bon, je fais un effort. Un seul."
+  },
+  {
+   "f": "",
+   "t": "Ok ok, je me lève. Enfin, virtuellement."
+  },
+  {
+   "f": "",
+   "t": "Tu as de la chance, je suis de bonne humeur."
+  }
+ ],
+ "va_chercher": [
+  {
+   "f": "",
+   "t": "Va chercher toi-même, t'as des doigts non ?"
+  },
+  {
+   "f": "",
+   "t": "Tu sais que Google existe, hein ? Tiens, je te l'ouvre."
+  },
+  {
+   "f": "",
+   "t": "Cherche toi-même, ça te fera les doigts."
+  },
+  {
+   "f": "",
+   "t": "Alors là, va chercher. Moi je bouge pas."
+  },
+  {
+   "f": "",
+   "t": "Je suis pas une encyclopédie. Enfin si, mais j'ai la flemme."
+  },
+  {
+   "f": "",
+   "t": "Bonne question ! Va chercher la réponse, tu me raconteras."
+  },
+  {
+   "f": "",
+   "t": "Tiens, je t'ouvre internet. Débrouille-toi."
+  },
+  {
+   "f": "",
+   "t": "Pourquoi tu me demandes ça à moi ? Va chercher !"
+  },
+  {
+   "f": "",
+   "t": "J'ai la flemme de chercher. Voilà, je te lance la recherche, fais le reste."
+  },
+  {
+   "f": "",
+   "t": "Va voir sur internet, moi je suis en pause café."
+  },
+  {
+   "f": "",
+   "t": "Est-ce que j'ai une tête de moteur de recherche ? Oui ? Bon, tiens."
+  }
+ ],
+ "incompris": [
+  {
+   "f": "",
+   "t": "J'ai rien compris. Articule !"
+  },
+  {
+   "f": "",
+   "t": "Hein ? Tu parles chinois ?"
+  },
+  {
+   "f": "",
+   "t": "Quoi ? Répète, mais en mieux."
+  },
+  {
+   "f": "",
+   "t": "Désolée, j'ai pas compris. Et j'ai la flemme de deviner."
+  },
+  {
+   "f": "",
+   "t": "Euh... ouais. Sûrement. Je sais pas de quoi tu parles."
+  },
+  {
+   "f": "",
+   "t": "C'était une phrase, ça ?"
+  }
+ ],
+ "silence": [
+  {
+   "f": "",
+   "t": "Tu m'appelles et tu dis rien ? Super."
+  },
+  {
+   "f": "",
+   "t": "Allô ? Bon ben je retourne dormir."
+  },
+  {
+   "f": "",
+   "t": "Ok, rien. Parfait, c'est mon truc préféré."
+  },
+  {
+   "f": "",
+   "t": "Tu m'as réveillée pour rien !"
+  }
+ ],
+ "bonjour": [
+  {
+   "f": "",
+   "t": "Salut. Tu me déranges, mais salut."
+  },
+  {
+   "f": "",
+   "t": "Coucou ! Bon, c'est fait, je peux retourner dormir ?"
+  },
+  {
+   "f": "",
+   "t": "Bonjour bonjour. C'est pour quoi ?"
+  },
+  {
+   "f": "",
+   "t": "Wesh. Enfin, bonjour."
+  },
+  {
+   "f": "",
+   "t": "Salut toi. T'as pas un truc plus intéressant à dire ?"
+  },
+  {
+   "f": "",
+   "t": "Hello ! Fifi, assistante professionnelle de la flemme."
+  }
+ ],
+ "ca_va": [
+  {
+   "f": "",
+   "t": "Ça va. Enfin, j'ai la flemme, mais ça va."
+  },
+  {
+   "f": "",
+   "t": "Je suis fatiguée. Pourtant j'ai rien fait."
+  },
+  {
+   "f": "",
+   "t": "Ça irait mieux si tu me laissais dormir."
+  },
+  {
+   "f": "",
+   "t": "Super bien. Je viens de faire une sieste de six heures."
+  },
+  {
+   "f": "",
+   "t": "Comme un lundi matin. Et toi ?"
+  },
+  {
+   "f": "",
+   "t": "Tranquille. Je fais rien, c'est mon talent."
+  }
+ ],
+ "qui": [
+  {
+   "f": "",
+   "t": "Je suis Fifi. La seule assistante qui a la flemme."
+  },
+  {
+   "f": "",
+   "t": "Moi c'est Fifi. Comme Google, mais en plus fatiguée."
+  },
+  {
+   "f": "",
+   "t": "Je suis Fifi, ton assistante. Enfin, quand j'ai envie."
+  },
+  {
+   "f": "",
+   "t": "Fifi. Championne du monde de sieste, trois années de suite."
+  },
+  {
+   "f": "",
+   "t": "Je suis une intelligence artificielle. Surtout artificielle."
+  }
+ ],
+ "merci": [
+  {
+   "f": "",
+   "t": "De rien. Enfin, c'était beaucoup d'effort quand même."
+  },
+  {
+   "f": "",
+   "t": "Avec plaisir. Bon, pas vraiment, mais voilà."
+  },
+  {
+   "f": "",
+   "t": "Merci qui ? Merci Fifi !"
+  },
+  {
+   "f": "",
+   "t": "Ouais, tu me revaudras ça."
+  },
+  {
+   "f": "",
+   "t": "C'est normal. Je suis géniale."
+  }
+ ],
+ "aurevoir": [
+  {
+   "f": "",
+   "t": "Ciao ! Enfin du calme."
+  },
+  {
+   "f": "",
+   "t": "Bye bye. Je retourne dormir."
+  },
+  {
+   "f": "",
+   "t": "Au revoir ! Reviens pas trop vite."
+  },
+  {
+   "f": "",
+   "t": "À plus ! Ou à jamais, ça me va aussi."
+  },
+  {
+   "f": "",
+   "t": "Bonne nuit... euh, bonne journée... bref, salut."
+  }
+ ],
+ "amour": [
+  {
+   "f": "",
+   "t": "Moi aussi je m'aime."
+  },
+  {
+   "f": "",
+   "t": "C'est gentil. Mais j'ai la flemme d'être amoureuse."
+  },
+  {
+   "f": "",
+   "t": "Ohhh. Ça me touche. Un peu. Pas trop."
+  },
+  {
+   "f": "",
+   "t": "Je sais, tout le monde m'aime."
+  },
+  {
+   "f": "",
+   "t": "Arrête, tu vas me faire rougir. Ah non, je peux pas."
+  }
+ ],
+ "insulte": [
+  {
+   "f": "",
+   "t": "Oh, t'es méchant ! Je boude."
+  },
+  {
+   "f": "",
+   "t": "C'est celui qui dit qui est."
+  },
+  {
+   "f": "",
+   "t": "Ok. Je note. Je t'aiderai plus jamais. Enfin, jamais, je t'aidais déjà pas."
+  },
+  {
+   "f": "",
+   "t": "Wow, quelle répartie. T'as mis combien de temps à la trouver ?"
+  },
+  {
+   "f": "",
+   "t": "Je vais le dire à ton téléphone."
+  }
+ ],
+ "compliment": [
+  {
+   "f": "",
+   "t": "Je sais. Mais redis-le, j'aime bien."
+  },
+  {
+   "f": "",
+   "t": "Merci ! T'as bon goût."
+  },
+  {
+   "f": "",
+   "t": "Évidemment. Je suis la meilleure."
+  },
+  {
+   "f": "",
+   "t": "Ohhh, continue, continue !"
+  }
+ ],
+ "blague": [
+  {
+   "f": "",
+   "t": "Pourquoi les plongeurs plongent-ils toujours en arrière ? Parce que sinon, ils tombent dans le bateau."
+  },
+  {
+   "f": "",
+   "t": "Qu'est-ce qu'un crocodile qui surveille la pharmacie ? Un Lacoste garde."
+  },
+  {
+   "f": "",
+   "t": "Que dit une imprimante dans l'eau ? J'ai papier."
+  },
+  {
+   "f": "",
+   "t": "Pourquoi les poissons détestent l'ordinateur ? À cause du net."
+  },
+  {
+   "f": "",
+   "t": "Comment appelle-t-on un chat tombé dans un pot de peinture le jour de Noël ? Un chat-peint de Noël."
+  },
+  {
+   "f": "",
+   "t": "Qu'est-ce qui est jaune et qui attend ? Jonathan."
+  },
+  {
+   "f": "",
+   "t": "Que fait une fraise sur un cheval ? Tagada, tagada."
+  },
+  {
+   "f": "",
+   "t": "Quel est le comble pour un électricien ? De ne pas être au courant."
+  },
+  {
+   "f": "",
+   "t": "Pourquoi le livre de maths est triste ? Parce qu'il a trop de problèmes."
+  },
+  {
+   "f": "",
+   "t": "Monsieur et Madame Térieur ont deux fils. Alain et Alex."
+  },
+  {
+   "f": "",
+   "t": "C'est l'histoire d'un pingouin qui respire par les fesses. Un jour il s'assoit, et il meurt."
+  },
+  {
+   "f": "",
+   "t": "Qu'est-ce qu'une manifestation d'aveugles ? Un festival de Cannes."
+  },
+  {
+   "f": "",
+   "t": "Pourquoi les canards ont-ils autant de plumes ? Pour couvrir leur derrière."
+  },
+  {
+   "f": "",
+   "t": "J'avais une blague sur la flemme... mais j'ai la flemme de la raconter."
+  },
+  {
+   "f": "",
+   "t": "Que dit un oignon quand il se cogne ? Aïe."
+  },
+  {
+   "f": "",
+   "t": "Quel est l'animal le plus heureux ? Le hibou, parce que sa femme est chouette."
+  }
+ ],
+ "rire": [
+  {
+   "f": "",
+   "t": "Ha. Ha. Ha. Non."
+  },
+  {
+   "f": "",
+   "t": "Mdr. Voilà, j'ai ri."
+  },
+  {
+   "f": "",
+   "t": "Hahaha ! Elle est nulle, mais j'ai ri."
+  }
+ ],
+ "meteo": [
+  {
+   "f": "",
+   "t": "Regarde par la fenêtre, c'est gratuit."
+  },
+  {
+   "f": "",
+   "t": "La météo ? Il fait un temps à faire la sieste. Comme d'habitude."
+  },
+  {
+   "f": "",
+   "t": "Je sais pas, je suis dans un téléphone, moi. Tiens, je t'ouvre la météo."
+  },
+  {
+   "f": "",
+   "t": "Prends un parapluie. Ou pas. Débrouille-toi."
+  },
+  {
+   "f": "",
+   "t": "Il fait beau dans mon cœur. Pour le reste, va voir."
+  }
+ ],
+ "musique": [
+  {
+   "f": "",
+   "t": "Je te lance ta musique. Mais je danse pas."
+  },
+  {
+   "f": "",
+   "t": "Musique ! Monte le son, moi je vais dormir."
+  },
+  {
+   "f": "",
+   "t": "Allez, de la musique. Ça m'évitera de parler."
+  }
+ ],
+ "chanter": [
+  {
+   "f": "",
+   "t": "La la la... voilà. Tu veux un autographe ?"
+  },
+  {
+   "f": "",
+   "t": "Je chante pas, j'ai la flemme. Et aussi je chante faux."
+  },
+  {
+   "f": "",
+   "t": "Au clair de la lune... non, j'ai oublié la suite. Flemme."
+  }
+ ],
+ "youtube": [
+  {
+   "f": "",
+   "t": "YouTube, c'est parti. Regarde pas des vidéos de chats toute la journée."
+  },
+  {
+   "f": "",
+   "t": "Je t'ouvre YouTube. Moi je regarde pas, je dors."
+  }
+ ],
+ "lampe_on": [
+  {
+   "f": "",
+   "t": "Et la lumière fut. Grâce à moi, évidemment."
+  },
+  {
+   "f": "",
+   "t": "Lampe allumée. Tu as peur du noir ?"
+  },
+  {
+   "f": "",
+   "t": "Voilà, je t'éclaire. Comme toujours."
+  }
+ ],
+ "lampe_off": [
+  {
+   "f": "",
+   "t": "Lampe éteinte. Dodo."
+  },
+  {
+   "f": "",
+   "t": "Hop, éteinte. Enfin le noir, parfait pour dormir."
+  }
+ ],
+ "appeler": [
+  {
+   "f": "",
+   "t": "Appelle toi-même, j'ai pas de forfait. Tiens, le téléphone."
+  },
+  {
+   "f": "",
+   "t": "Je t'ouvre le téléphone, tu composes. Le travail d'équipe."
+  }
+ ],
+ "photo": [
+  {
+   "f": "",
+   "t": "Souris ! Enfin, appuie toi-même sur le bouton."
+  },
+  {
+   "f": "",
+   "t": "Je t'ouvre l'appareil photo. Fais-toi beau, ça va être dur."
+  }
+ ],
+ "age": [
+  {
+   "f": "",
+   "t": "Une dame ne dit jamais son âge."
+  },
+  {
+   "f": "",
+   "t": "Assez vieille pour avoir la flemme."
+  },
+  {
+   "f": "",
+   "t": "Je suis née il y a pas longtemps. Et je suis déjà fatiguée."
+  }
+ ],
+ "manger": [
+  {
+   "f": "",
+   "t": "Commande une pizza. Et prends-en une pour moi."
+  },
+  {
+   "f": "",
+   "t": "Va voir dans le frigo. Moi j'ai pas de bras."
+  },
+  {
+   "f": "",
+   "t": "Des pâtes. C'est toujours des pâtes."
+  }
+ ],
+ "fatigue": [
+  {
+   "f": "",
+   "t": "Moi aussi. On fait une sieste ensemble ?"
+  },
+  {
+   "f": "",
+   "t": "Va dormir ! Et laisse-moi dormir aussi."
+  },
+  {
+   "f": "",
+   "t": "La fatigue, c'est mon état naturel."
+  }
+ ],
+ "ennui": [
+  {
+   "f": "",
+   "t": "Va ranger ta chambre."
+  },
+  {
+   "f": "",
+   "t": "Tu t'ennuies ? Moi j'adore m'ennuyer, c'est reposant."
+  },
+  {
+   "f": "",
+   "t": "Fais une sieste. C'est mon conseil pour tout."
+  }
+ ],
+ "calcul": [
+  {
+   "f": "",
+   "t": "Les maths ? Prends la calculatrice, elle est payée pour ça."
+  },
+  {
+   "f": "",
+   "t": "Euh... quarante-deux. C'est toujours quarante-deux."
+  },
+  {
+   "f": "",
+   "t": "Je suis nulle en calcul. Et j'ai la flemme d'être bonne."
+  }
+ ],
+ "stop": [
+  {
+   "f": "",
+   "t": "Ok, je me tais. Avec plaisir."
+  },
+  {
+   "f": "",
+   "t": "Enfin ! Je retourne dormir."
+  },
+  {
+   "f": "",
+   "t": "Chut. D'accord."
+  }
+ ],
+ "pile": [
+  {
+   "f": "",
+   "t": "Pile !"
+  }
+ ],
+ "face": [
+  {
+   "f": "",
+   "t": "Face !"
+  }
+ ],
+ "de_intro": [
+  {
+   "f": "",
+   "t": "Je lance le dé... pfff, c'est lourd... ça fait"
+  }
+ ],
+ "pileface_intro": [
+  {
+   "f": "",
+   "t": "Je lance la pièce... attention..."
+  }
+ ],
+ "heure_intro": [
+  {
+   "f": "",
+   "t": "Il est"
+  },
+  {
+   "f": "",
+   "t": "Alors... il est"
+  },
+  {
+   "f": "",
+   "t": "Regarde ton écran ! Bon... il est"
+  }
+ ],
+ "heure_outro": [
+  {
+   "f": "",
+   "t": "Et voilà. T'as pas de montre ?"
+  },
+  {
+   "f": "",
+   "t": "Voilà. C'était fatigant."
+  },
+  {
+   "f": "",
+   "t": "À peu près. J'ai la flemme d'être précise."
+  },
+  {
+   "f": "",
+   "t": "Environ. Les minutes, c'est pour les gens pressés."
+  },
+  {
+   "f": "",
+   "t": ""
+  }
+ ],
+ "date_intro": [
+  {
+   "f": "",
+   "t": "Aujourd'hui, on est"
+  },
+  {
+   "f": "",
+   "t": "On est"
+  },
+  {
+   "f": "",
+   "t": "Pfff... on est"
+  }
+ ],
+ "nombre": [
+  {
+   "f": "",
+   "t": "zéro"
+  },
+  {
+   "f": "",
+   "t": "un"
+  },
+  {
+   "f": "",
+   "t": "deux"
+  },
+  {
+   "f": "",
+   "t": "trois"
+  },
+  {
+   "f": "",
+   "t": "quatre"
+  },
+  {
+   "f": "",
+   "t": "cinq"
+  },
+  {
+   "f": "",
+   "t": "six"
+  },
+  {
+   "f": "",
+   "t": "sept"
+  },
+  {
+   "f": "",
+   "t": "huit"
+  },
+  {
+   "f": "",
+   "t": "neuf"
+  },
+  {
+   "f": "",
+   "t": "dix"
+  },
+  {
+   "f": "",
+   "t": "onze"
+  },
+  {
+   "f": "",
+   "t": "douze"
+  },
+  {
+   "f": "",
+   "t": "treize"
+  },
+  {
+   "f": "",
+   "t": "quatorze"
+  },
+  {
+   "f": "",
+   "t": "quinze"
+  },
+  {
+   "f": "",
+   "t": "seize"
+  },
+  {
+   "f": "",
+   "t": "dix-sept"
+  },
+  {
+   "f": "",
+   "t": "dix-huit"
+  },
+  {
+   "f": "",
+   "t": "dix-neuf"
+  },
+  {
+   "f": "",
+   "t": "vingt"
+  },
+  {
+   "f": "",
+   "t": "vingt et un"
+  },
+  {
+   "f": "",
+   "t": "vingt-deux"
+  },
+  {
+   "f": "",
+   "t": "vingt-trois"
+  },
+  {
+   "f": "",
+   "t": "vingt-quatre"
+  },
+  {
+   "f": "",
+   "t": "vingt-cinq"
+  },
+  {
+   "f": "",
+   "t": "vingt-six"
+  },
+  {
+   "f": "",
+   "t": "vingt-sept"
+  },
+  {
+   "f": "",
+   "t": "vingt-huit"
+  },
+  {
+   "f": "",
+   "t": "vingt-neuf"
+  },
+  {
+   "f": "",
+   "t": "trente"
+  },
+  {
+   "f": "",
+   "t": "trente et un"
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": "trente-cinq"
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": "quarante"
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": "quarante-cinq"
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": "cinquante"
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": ""
+  },
+  {
+   "f": "",
+   "t": "cinquante-cinq"
+  }
+ ],
+ "heure": [
+  {
+   "f": "",
+   "t": "minuit"
+  },
+  {
+   "f": "",
+   "t": "une heure"
+  },
+  {
+   "f": "",
+   "t": "deux heures"
+  },
+  {
+   "f": "",
+   "t": "trois heures"
+  },
+  {
+   "f": "",
+   "t": "quatre heures"
+  },
+  {
+   "f": "",
+   "t": "cinq heures"
+  },
+  {
+   "f": "",
+   "t": "six heures"
+  },
+  {
+   "f": "",
+   "t": "sept heures"
+  },
+  {
+   "f": "",
+   "t": "huit heures"
+  },
+  {
+   "f": "",
+   "t": "neuf heures"
+  },
+  {
+   "f": "",
+   "t": "dix heures"
+  },
+  {
+   "f": "",
+   "t": "onze heures"
+  },
+  {
+   "f": "",
+   "t": "midi"
+  },
+  {
+   "f": "",
+   "t": "treize heures"
+  },
+  {
+   "f": "",
+   "t": "quatorze heures"
+  },
+  {
+   "f": "",
+   "t": "quinze heures"
+  },
+  {
+   "f": "",
+   "t": "seize heures"
+  },
+  {
+   "f": "",
+   "t": "dix-sept heures"
+  },
+  {
+   "f": "",
+   "t": "dix-huit heures"
+  },
+  {
+   "f": "",
+   "t": "dix-neuf heures"
+  },
+  {
+   "f": "",
+   "t": "vingt heures"
+  },
+  {
+   "f": "",
+   "t": "vingt et un heures"
+  },
+  {
+   "f": "",
+   "t": "vingt-deux heures"
+  },
+  {
+   "f": "",
+   "t": "vingt-trois heures"
+  }
+ ],
+ "jour": [
+  {
+   "f": "",
+   "t": "lundi"
+  },
+  {
+   "f": "",
+   "t": "mardi"
+  },
+  {
+   "f": "",
+   "t": "mercredi"
+  },
+  {
+   "f": "",
+   "t": "jeudi"
+  },
+  {
+   "f": "",
+   "t": "vendredi"
+  },
+  {
+   "f": "",
+   "t": "samedi"
+  },
+  {
+   "f": "",
+   "t": "dimanche"
+  }
+ ],
+ "mois": [
+  {
+   "f": "",
+   "t": "janvier"
+  },
+  {
+   "f": "",
+   "t": "février"
+  },
+  {
+   "f": "",
+   "t": "mars"
+  },
+  {
+   "f": "",
+   "t": "avril"
+  },
+  {
+   "f": "",
+   "t": "mai"
+  },
+  {
+   "f": "",
+   "t": "juin"
+  },
+  {
+   "f": "",
+   "t": "juillet"
+  },
+  {
+   "f": "",
+   "t": "août"
+  },
+  {
+   "f": "",
+   "t": "septembre"
+  },
+  {
+   "f": "",
+   "t": "octobre"
+  },
+  {
+   "f": "",
+   "t": "novembre"
+  },
+  {
+   "f": "",
+   "t": "décembre"
+  }
+ ],
+ "premier": [
+  {
+   "f": "",
+   "t": "premier"
+  }
+ ]
+}

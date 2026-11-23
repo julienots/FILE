@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- tête -->
+    <path android:fillColor="#FFFFB347" android:pathData="M54,26a28,28 0 1,0 0.01,0z"/>
+    <!-- yeux mi-clos -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M37,50a7,7 0 0,0 14,0z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M57,50a7,7 0 0,0 14,0z"/>
+    <path android:fillColor="#FF2B1B3D" android:pathData="M41,50a3,3 0 0,0 6,0z"/>
+    <path android:fillColor="#FF2B1B3D" android:pathData="M61,50a3,3 0 0,0 6,0z"/>
+    <path android:strokeColor="#FF2B1B3D" android:strokeWidth="2" android:strokeLineCap="round" android:pathData="M36,50L52,50M56,50L72,50"/>
+    <!-- moue -->
+    <path android:strokeColor="#FF2B1B3D" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M46,64Q54,66 62,62"/>
+    <!-- z -->
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M72,28h7l-7,8h7"/>
+</vector>
