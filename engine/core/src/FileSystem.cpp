@@ -104,8 +104,12 @@ Result<VirtualFileSystem::ParsedUri> VirtualFileSystem::parse(std::string_view u
 
 void VirtualFileSystem::mount(const std::string& scheme, std::unique_ptr<FileProvider> provider) {
     m_mounts[scheme] = std::move(provider);
+    ++m_mountGeneration;
 }
-void VirtualFileSystem::unmount(const std::string& scheme) { m_mounts.erase(scheme); }
+void VirtualFileSystem::unmount(const std::string& scheme) {
+    m_mounts.erase(scheme);
+    ++m_mountGeneration;
+}
 FileProvider* VirtualFileSystem::provider(const std::string& scheme) const {
     auto it = m_mounts.find(scheme);
     return it == m_mounts.end() ? nullptr : it->second.get();

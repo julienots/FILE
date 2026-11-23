@@ -52,6 +52,8 @@ class VirtualFileSystem {
 public:
     void mount(const std::string& scheme, std::unique_ptr<FileProvider> provider);
     void unmount(const std::string& scheme);
+    /// Changes at every mount() / unmount(): lets users of the files notice new content.
+    u64 mountGeneration() const { return m_mountGeneration; }
     bool isMounted(const std::string& scheme) const;
     /// Provider of a mount point (null if not mounted).
     FileProvider* provider(const std::string& scheme) const;
@@ -73,6 +75,7 @@ public:
     static Result<ParsedUri> parse(std::string_view uri);
 
 private:
+    u64 m_mountGeneration = 0;
     Result<FileProvider*> resolve(std::string_view uri, std::string& outPath) const;
     std::unordered_map<std::string, std::unique_ptr<FileProvider>> m_mounts;
 };

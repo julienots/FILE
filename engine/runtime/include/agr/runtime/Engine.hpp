@@ -136,6 +136,7 @@ private:
 
     EngineConfig m_config;
     std::string m_pendingScene, m_sceneUri;
+    u64 m_settingsMounts = 0;  ///< VFS mount generation the game settings were read with.
     // Background scene loading.
     struct AsyncSceneLoad;
     std::shared_ptr<AsyncSceneLoad> m_asyncLoad;

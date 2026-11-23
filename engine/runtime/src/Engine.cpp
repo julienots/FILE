@@ -180,6 +180,7 @@ int Engine::run(Application& app) {
         AGR_LOG_ERROR("Engine", "run() called before a successful initialize()");
         return 1;
     }
+    if (m_vfs.mountGeneration() != m_settingsMounts) reloadGameSettings();  // before the game's first scene
     if (Status s = app.onStart(*this); !s) {
         AGR_LOG_ERROR("Engine", "application failed to start: {}", s.error().message);
         shutdown(&app);
@@ -253,6 +254,9 @@ void Engine::advance(Application& app, f64 delta) {
 }
 
 void Engine::tick(Application& app, f64 rawDelta) {
+    // Files mounted (or unmounted) since the game settings were read: read them again
+    // (a host that mounts the game after initialize(), a mod folder...).
+    if (m_vfs.mountGeneration() != m_settingsMounts) reloadGameSettings();
     const f64 delta = std::clamp(rawDelta, 0.0, m_config.maxFrameDelta);
     m_time.unscaledDeltaSeconds = delta;
     m_time.deltaSeconds = delta * m_time.timeScale;
@@ -313,6 +317,7 @@ void Engine::tick(Application& app, f64 rawDelta) {
 }
 
 void Engine::reloadGameSettings() {
+    m_settingsMounts = m_vfs.mountGeneration();
     if (Status s = m_actions.load(m_vfs); !s) {
         AGR_LOG_ERROR("Engine", "input actions: {} (defaults used)", s.error().message);
         m_actions.setMap(InputMap::defaults());

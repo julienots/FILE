@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 #include "agr/runtime/Engine.hpp"
@@ -337,4 +338,27 @@ TEST_CASE("gestures: tap, double tap, long press, drag and swipe, pinch, mouse a
     in.addWheel({0, 2});
     frame();
     CHECK(g.pinchScale() == doctest::Approx(1.21f));
+}
+
+TEST_CASE("game files mounted after initialize (exported players): translations and input actions are read from them") {
+    // Same order as the player: the engine starts with an empty assets folder, the game comes after.
+    Engine engine(headlessConfig(2));
+    REQUIRE(engine.initialize(nullptr));
+    CHECK(engine.localization().tr("menu.play") == "menu.play");  // nothing yet
+    const std::string game = tempDir("game");
+    {
+        std::ofstream(std::filesystem::path(game) / "localization.csv") << "key,fr,en\nmenu.play,Jouer,Play\n";
+    }
+    engine.vfs().mount("assets", std::make_unique<NativeFileProvider>(game, false));
+    struct ReadAtStart : Application {
+        std::string atStart;
+        Status onStart(Engine& e) override {
+            atStart = e.localization().tr("menu.play");  // the first scene's scripts read it here
+            return {};
+        }
+        void onUpdate(Engine&, const FrameTime&) override {}
+    } app;
+    CHECK(engine.run(app) == 0);
+    CHECK((app.atStart == "Jouer" || app.atStart == "Play"));
+    CHECK(engine.localization().languages().size() == 2);
 }
