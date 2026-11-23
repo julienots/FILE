@@ -170,6 +170,33 @@ const std::vector<ConvLine>* conversation(const std::string& key) {
             {'H', "Là-dessous, il parlait avec la mienne.", 2},
             {'N', "Et tu ne lui as pas répondu. Va montrer le joyau à Kaede. Elle attend depuis quinze ans.", 1},
         }},
+        // ======================================================================= 3.9.0 Aldrenbourg
+        {"meet:gaspard", {
+            {'N', "Un étranger qui regarde la fontaine au lieu des étals ! Ça ne m'arrive pas souvent.", 5},
+            {'H', "La statue… ce chevalier, l'épée levée. Qui est-ce ?", 4},
+            {'N', "Le Haut-Roi Aldric, voyons ! Le sculpteur ne l'a jamais vu, remarque. Il l'a fait d'après les chansons.", 1},
+            {'N', "Gaspard de Vaux, bourgmestre d'Aldrenbourg. La plus grande ville libre de Greenhaven : quatre portes, vingt tours et un marché tous les jours.", 0},
+            {'N', "Et dans trois jours, la Grande Foire. Si elle a lieu. Entre les voleurs et le four de Colette, je ne dors plus.", 2},
+            {'H', "Je peux peut-être aider.", 0},
+            {'N', "Ah ! Voilà une phrase que j'aime entendre. Va voir Colette à la boulangerie, et le Sergent Garin au guet. Ensuite, reviens me voir.", 1},
+        }},
+        {"offer:al_fair", {
+            {'N', "Colette m'a raconté. Le four ronfle, la fournée sera prête !", 1},
+            {'N', "Mais une Foire sans confiseries, c'est un enterrement avec des étals. Il me faut du miel, trois pots.", 3},
+            {'H', "Et la musique ?", 0},
+            {'N', "Mélisande cherche encore la chanson d'ouverture. Elle dit qu'il lui manque « une histoire neuve ». Toi, peut-être ?", 4},
+        }},
+        {"done:al_fair", {
+            {'N', "(Les tambours roulent sur la place. Mélisande chante l'histoire d'un naufragé sans nom, et toute la ville reprend le refrain.)", 4},
+            {'H', "C'est… mon histoire.", 4},
+            {'N', "Les meilleures chansons parlent toujours de quelqu'un qui ne se souvient pas de son nom. C'est elle qui le dit.", 1},
+            {'N', "La Grande Foire est ouverte ! Aldrenbourg te doit sa fête. Prends ceci, et reviens quand tu veux : ici, tu es chez toi.", 1},
+        }},
+        {"meet:melisande", {
+            {'N', "Chut… écoute la fontaine. Elle a un rythme, tu l'entends ? Trois temps, comme une valse.", 5},
+            {'H', "Je n'entends que de l'eau.", 0},
+            {'N', "C'est bien le problème des héros : ils n'écoutent jamais. Je suis Mélisande. Je chante ce que les autres oublient.", 1},
+        }},
         {"meet:kaede_s", {
             {'N', "Tu as fini par venir. La mer te l'avait dit.", 5},
             {'H', "Tu es partie sans m'attendre, à Port-Azur.", 3},

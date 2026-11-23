@@ -1202,6 +1202,25 @@ const std::vector<NpcDef>& npcs() {
           N("aila", "Aïla", "Cristallière de Lumenhaven", NpcRole::Merchant, "lumenhaven", l, {7, -6}, {"Bienvenue aux Terres d'Aurore, voyageur. Ici, la lumière pousse dans la terre.", "Tu as vu les îles qui flottent ? Les sources jaillissantes peuvent t'y porter."},
             {"Les cristaux d'aurore gardent la lumière du ciel. Taillés, ils font des armes qui éclairent la nuit.", "Les golems de cristal se réveillent quand on arrache trop de cristaux à la fois. Prudence.", "Sur chaque île du ciel, quelqu'un a laissé un coffre. On ne sait pas qui. On ne sait pas comment."},
             {"potion_great", "potion_mana", "bandage", "crystal", "bomb", "potion_stamina"}, -1); }
+        // ================================================================ 3.9.0 Aldrenbourg, the market town of Greenhaven
+        { HumanoidLook l = villagerLook(false, 0x2a3f6a, 0x8a8478, Hair::Short, Body::Robe, 301, true); l.cape = true; l.trim = hexColor(0xd8b050);
+          N("gaspard", "Gaspard de Vaux", "Bourgmestre d'Aldrenbourg", NpcRole::Elder, "aldrenbourg", l, {7, -6}, {"Bienvenue à Aldrenbourg ! Le plus grand marché de Greenhaven, et le plus honnête… presque.", "La Foire approche, et rien n'est prêt. Rien !"},
+            {"Aldrenbourg est née d'un marché au pied de Fort Aldren. Les marchands ont bâti les remparts avec leurs propres deniers.", "Chaque automne, la Grande Foire attire les marchands de tout le royaume, jusqu'à Port-Azur.", "La fontaine de la place montre le Haut-Roi, l'épée levée. On dit qu'il a bu à cette source avant la Brisure."}, {}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0xc89a5a, 0x5a3a22, Hair::Bun, Body::Apron, 302);
+          N("colette", "Colette", "Boulangère", NpcRole::Merchant, "aldrenbourg", l, {-8, 5}, {"Pain chaud ! Sortie du four, la croûte qui chante !", "Goûte-moi ce gâteau au miel, et dis-moi qu'il y a mieux à Brindlemere."},
+            {"Mon four brûle du bois de hêtre. C'est le secret, et maintenant tu le connais : ne le répète pas."}, {"bread", "honey_cake", "apple", "stew", "mushroom_soup", "berries"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x7a2a4a, 0x2a1a10, Hair::Ponytail, Body::Tunic, 303);
+          N("fabien", "Fabien", "Drapier", NpcRole::Merchant, "aldrenbourg", l, {9, 7}, {"Du lin de Millbrook, des teintures de Solmar, du cuir de Frostheim. Touche, ça ne mord pas.", "Une couleur pour ta cape ? Le pourpre royal est revenu à la mode."},
+            {"Les teintures les plus chères viennent des coquillages de Port-Azur. Il en faut dix mille pour un manteau."}, {"dye_crimson", "dye_forest", "dye_gold", "dye_ivory", "dye_night", "dye_royal", "linen", "leather"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x3a2a5a, 0xd8c8a0, Hair::Long, Body::Dress, 304);
+          N("orane", "Orane", "Joaillière", NpcRole::Merchant, "aldrenbourg", l, {-6, -9}, {"Approche, mais garde les mains derrière le dos.", "Un saphir de Frostheim, taillé ici même. Il porte chance aux voyageurs."},
+            {"L'or de Solmar, l'argent des Titans, les perles de la côte : tout passe par mon établi un jour ou l'autre."}, {"ring_silver", "ring_gold", "ring_sapphire", "amulet_oak", "silver_bar", "gold_bar"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(false, 0x5a5a62, 0x3a2a1a, Hair::Short, Body::Plate, 305, true); l.helm = Helm::None; l.metal = hexColor(0xb8bcc4);
+          N("garin", "Sergent Garin", "Guet d'Aldrenbourg", NpcRole::Guard, "aldrenbourg", l, {0, 12}, {"Le guet veille. Garde ta bourse près du cœur, voyageur : le marché grouille de tire-laine.", "Si tu cherches les ennuis, cherche-les hors des remparts."},
+            {"Quatre portes, vingt tours, et seulement douze hommes au guet. Les Écorcheurs le savent."}, {"potion_heal", "bandage", "shield_iron", "bomb"}, FA_GREENHAVEN); }
+        { HumanoidLook l = villagerLook(true, 0x2a6a4a, 0xb04a2a, Hair::Braids, Body::Dress, 306);
+          N("melisande", "Mélisande", "Ménestrelle", NpcRole::Bard, "aldrenbourg", l, {12, -2}, {"Une chanson, voyageur ? Celle du Roi qui revint par la mer, peut-être ?", "Je cherche une histoire neuve pour la Foire. Tu en as une, toi, ça se voit."},
+            {"On chante ici que le Haut-Roi reviendra le jour où la fontaine débordera. Elle n'a jamais débordé.", "Les meilleures chansons parlent toujours de quelqu'un qui ne se souvient pas de son nom."}, {}, FA_GREENHAVEN); }
         // ================================================================ 3.0.0 the Titan Mountains
         { HumanoidLook l = villagerLook(true, 0x8a1f1f, 0x2a1a10, Hair::Braids, Body::Plate, 201); l.helm = Helm::None; l.cape = true; l.c2 = hexColor(0x3a3a44); l.metal = hexColor(0xc8ccd4);
           N("heloise", "Capitaine Héloïse", "Commandante de Hautebrume", NpcRole::Guard, "hautebrume", l, {11, -8}, {"Hautebrume tient depuis mille ans. La Légion de Fer veut que ça s'arrête cette année.", "Vous avez l'air de savoir tenir une épée. J'ai trois forteresses à reprendre."},
@@ -1277,6 +1296,19 @@ const std::vector<QuestDef>& quests() {
         Q("m7", "L'Abîme", QuestType::Main, "", "L'Abîme s'ouvre sous Morneval. Malgrath et Alaric attendent. Corwin l'a dit : la Couronne reforgée ouvre plus qu'elle ne ferme. À vous de décider de son sort.", "", "", "",
           {{"Descendre dans l'Abîme et vaincre le Seigneur des Abysses", K::KillBoss, "abyss_lord", 1, "abyss"}}, 6000, 1500, {}, -1, 0, "m6");
         // ---- Side quests
+        // ---- 3.9.0 Aldrenbourg
+        Q("al_oven", "Le four froid", QuestType::Side, "colette", "Le four de Colette s'est éteint : plus de bois de hêtre pour la fournée de la Foire.",
+          "Mon four est froid, et la Foire est dans trois jours ! Il me faut du bois, beaucoup de bois. Douze bûches, et je te nourris tout l'hiver.", "Le four attend toujours son bois…", "Ah ! Entends-tu ? Il ronfle déjà. Tiens, prends ça, c'est encore chaud.",
+          {{"Rapporter du bois à Colette", K::Deliver, "wood", 12, "aldrenbourg"}}, 180, 30, {"honey_cake", "honey_cake", "bread", "bread"}, FA_GREENHAVEN, 10);
+        Q("al_cutpurses", "Les tire-laine du marché", QuestType::Side, "garin", "Les Écorcheurs envoient des voleurs dans les rues d'Aldrenbourg. Le Sergent Garin veut frapper leur camp.",
+          "Les voleurs du marché viennent du Camp des Écorcheurs, à l'est. Mes hommes ne peuvent pas quitter les remparts. Toi, si. Six bandits, pas un de moins.", "Le camp des Écorcheurs tient toujours.", "Six ! Les étals dormiront tranquilles cette nuit. Le guet te doit une fière chandelle.",
+          {{"Vaincre des bandits", K::Kill, "bandit", 6, "bandit_camp"}, {"Revenir voir le Sergent Garin", K::Talk, "garin", 1, "aldrenbourg"}}, 320, 80, {"potion_heal", "shield_iron"}, FA_GREENHAVEN, 15);
+        Q("al_ring", "L'anneau de la mariée", QuestType::Side, "orane", "Orane doit livrer un anneau d'or pour un mariage pendant la Foire, mais son or n'est jamais arrivé.",
+          "Le convoi d'or de Solmar a été pillé. Une mariée m'attend, et je n'ai rien à fondre. Un lingot d'or suffirait. Tu sauras en trouver, j'en suis sûre.", "Toujours pas d'or ?", "Il chante sous le marteau. La mariée aura son anneau, et toi le mien : un saphir, pour la route.",
+          {{"Apporter un lingot d'or à Orane", K::Deliver, "gold_bar", 1, "aldrenbourg"}}, 260, 0, {"ring_sapphire"}, FA_GREENHAVEN, 10);
+        Q("al_fair", "La Grande Foire", QuestType::Side, "gaspard", "Le bourgmestre Gaspard veut que la Grande Foire d'Aldrenbourg ait lieu malgré tout. Il faut du miel pour les confiseurs et une chanson pour la place.",
+          "Le four de Colette chauffe, le guet tient les rues… Il manque le miel des confiseurs, et Mélisande cherche encore sa chanson. Aide-moi, et la Foire aura lieu !", "La Foire ne se fera pas sans miel ni chanson.", "Écoute ! Les tambours, les rires… La Grande Foire est ouverte, grâce à toi. Aldrenbourg ne l'oubliera pas.",
+          {{"Parler à Mélisande, la ménestrelle", K::Talk, "melisande", 1, "aldrenbourg"}, {"Apporter du miel au bourgmestre", K::Deliver, "honey", 3, "aldrenbourg"}}, 600, 200, {"ring_gold", "dye_royal", "honey_cake"}, FA_GREENHAVEN, 25, "al_oven");
         Q("s_wolves", "Le loup de la lisière", QuestType::Side, "tomas", "Tomas veut éloigner les loups qui rôdent près de Brindlemere.",
           "Les loups gris s'approchent trop du village. Abats-en cinq et je te paierai en cuir et en or.", "Encore des loups dans les bois…", "Bon travail. Les enfants pourront de nouveau jouer près de la lisière.",
           {{"Tuer des loups gris", K::Kill, "wolf", 5, ""}}, 150, 40, {"leather_head", "potion_minor"}, FA_GREENHAVEN, 10);

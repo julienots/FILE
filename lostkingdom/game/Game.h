@@ -572,6 +572,7 @@ public:
     bool placeCellarHatch();
     void spawnCellarHatch();
     void renderCellarHatch();
+    void renderFairBunting();   // 3.9.0
     std::string saveCellar() const;
     void loadCellar(std::istringstream& l);
     // 3.6.0 felling trees (Forestry.cpp)
@@ -591,6 +592,7 @@ public:
     std::map<std::string, std::string> convQueue;   // npc id -> conversation to play at the next talk (quest endings)
     float dlgCamK = 0; vec3 dlgEye, dlgLook; bool dlgCamInit = false;
     float heroIdleT = 0;
+    vec3 camFocusTmp;   // autoplay: a point to frame
     // 3.8.1 riding: inertia of the rider (spring), the last speed, hoof beats, the gait shake on the camera
     float rideLean = 0, rideLeanV = 0, rideHsPrev = 0, rideBob = 0, ridePhasePrev = 0, rideSnortT = 4.f, rideCreakT = 0, rideSlope = 0;
     void playConversation(const std::string& key, bool prepend);

@@ -67,7 +67,7 @@ void Game::loadAssets() {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/music/") + m + ".ogg", b)) audio.addMusic(m, std::move(b));
     }
-    static const char* amb[] = {"amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_swamp", "amb_cave", "amb_river", "amb_village", "amb_sea", "amb_meadow", "amb_underwater", "amb_desert"};   // 3.7.1 + meadow, underwater, desert
+    static const char* amb[] = {"amb_forest_day", "amb_night", "amb_wind", "amb_rain", "amb_lava", "amb_swamp", "amb_cave", "amb_river", "amb_village", "amb_sea", "amb_meadow", "amb_underwater", "amb_desert", "amb_town"};   // 3.7.1 + meadow, underwater, desert; 3.9.0 + town
     for (const char* a : amb) {
         std::vector<uint8_t> b;
         if (platform::readAsset(std::string("audio/amb/") + a + ".ogg", b)) audio.addAmbience(a, std::move(b));

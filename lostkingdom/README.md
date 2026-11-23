@@ -6,13 +6,48 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.8.1 (versionCode 62), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.8.0 : elle s'installe par-dessus). SHA-256 : `354665d729558d08118b0de555bbf440cef6cf03d480148de98417239fb5dc8e`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.9.0 (versionCode 63), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.8.1 : elle s'installe par-dessus). SHA-256 : `354665d729558d08118b0de555bbf440cef6cf03d480148de98417239fb5dc8e`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.9.0 (Aldrenbourg, la grande ville du marché, et la Grande Foire)
+
+- **Aldrenbourg, la Ville du Marché**. Une grande ville fortifiée de Greenhaven, au nord de Brindlemere, entre Fort Aldren et les Ruines de Vael :
+  - remparts à 20 tours et 4 portes ;
+  - rues pavées sinueuses et ruelles ;
+  - plus de 100 maisons ;
+  - une trentaine d'habitants qui vont et viennent ;
+  - une pierre de voyage devant la porte sud.
+  - Des routes la relient à Brindlemere, Fort Aldren et Vael.
+- **4 nouveaux bâtiments** :
+  - **fontaine** de la place, avec le Haut-Roi l'épée levée ;
+  - **halle de marché** couverte : piliers de chêne, étals garnis, tentures, caisses et sacs ;
+  - **mairie** : arcades de pierre, étage à colombages en encorbellement, beffroi avec horloge, bannières de la couronne ;
+  - **maison de ville à colombages** : rez-de-chaussée de pierre avec boutique et auvent, étage en saillie sur la rue, lucarne, enseigne.
+  - Dans Aldrenbourg, ces maisons de ville bordent les rues avec les maisons existantes, et la chapelle est plus grande.
+- **6 nouveaux personnages**, avec leurs scènes de dialogue :
+  - Gaspard de Vaux, le bourgmestre ;
+  - Colette, la boulangère (pain, gâteaux au miel, soupes) ;
+  - Fabien, le drapier (toutes les teintures, lin, cuir) ;
+  - Orane, la joaillière (anneaux, amulette, lingots) ;
+  - le Sergent Garin, du guet ;
+  - Mélisande, la ménestrelle.
+- **4 nouvelles quêtes** :
+  - *Le four froid* ;
+  - *Les tire-laine du marché* ;
+  - *L'anneau de la mariée* ;
+  - *La Grande Foire* : elle se termine par une scène où Mélisande chante l'histoire du naufragé sans nom. Ensuite, la place se pare de mâts et de guirlandes de fanions qui flottent au vent.
+- **Ambiance sonore de ville** (nouveau son `amb_town`) : brouhaha du marché, pas sur les pavés, forge lointaine, rires.
+- **Corrections** :
+  - l'ambiance de village ne s'entendait qu'à moins de 70 m du centre, donc pas dans les rues des grandes villes ;
+  - hors des remparts, un moulin ou un enclos pouvait être posé sur une route qui sort de la ville (une borne se retrouvait dans le moulin) ;
+  - en intérieur, la caméra des dialogues se rapproche pour ne pas traverser les murs.
+- Tests : nouveau scénario `town` (bâtiments, habitants, rencontre du bourgmestre, quête du four, la Foire).
+- Les modèles 3D du Drive ne sont pas encore intégrés : les fichiers font 58 à 63 Mo, au-delà de la limite de 10 Mo du connecteur. Ils le seront dès qu'une version allégée sera déposée.
 
 ### Nouveautés 3.8.1 (un cheval qui bouge comme un vrai cheval, et un cavalier qui le ressent)
 

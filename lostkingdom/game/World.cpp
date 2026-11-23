@@ -463,6 +463,9 @@ void World::buildPlan() {
     Pf("ws_roc", "Pierre de Roc-Écarlate", PoiType::Waystone, 4480, 6560, 10);
     Pf("ws_aiguille", "Pierre d'Aiguille-Rouge", PoiType::Waystone, 6320, 6880, 10);
     Pf("ws_jaguar", "Pierre du Jaguar", PoiType::Waystone, 5420, 4500, 10);
+    // ---- 3.9.0 Aldrenbourg, the big walled market town of Greenhaven (north of Brindlemere, between Fort Aldren and Vael)
+    Pf("aldrenbourg", "Aldrenbourg, la Ville du Marché", PoiType::Village, 1610, 1320, 118, -1, -1, 160); pois.back().city = true;
+    { vec2 c = pois.back().pos; Pf("ws_aldren", "Pierre d'Aldrenbourg", PoiType::Waystone, c.x + 14.f, c.y + 118.f * 1.2f, 10, -1, -1, 30); }
     // ---- 3.0.0 the Titan Mountains (placed on the valley floors and basins of TITAN_VALLEYS / TITAN_BASINS)
     P("hautebrume", "Hautebrume, la Cité des Titans", PoiType::Village, 6760, 2650, 150); pois.back().city = true;
     P("rochebrune", "Rochebrune, la Cité des Forges", PoiType::Village, 6600, 4450, 135); pois.back().city = true;
@@ -592,6 +595,10 @@ void World::buildPlan() {
     // 3.0.0 the Titan Mountains: the roads end at the city gates (the avenues inside are laid out with the city)
     {
         auto gate = [&](const char* id, float dx, float dz) { const Poi* q = poiById(id); return q->pos + vec2(dx, dz) * (q->radius * 1.06f); };
+        // 3.9.0 Aldrenbourg: its south gate to Brindlemere, the west gate to Fort Aldren, the east gate to Vael
+        addRoad(*this, {gate("aldrenbourg", 0, 1), pos("ws_aldren"), {1560, 1500}, pos("brindlemere")}, 6, false);
+        addRoad(*this, {gate("aldrenbourg", -1, 0), {1440, 1300}, pos("fort_aldren")}, 5, false);
+        addRoad(*this, {gate("aldrenbourg", 1, 0), {1790, 1340}, pos("vael_ruins")}, 4, false);
         addRoad(*this, {pos("valdor"), {5700, 1250}, {6080, 1250}, pos("col_aigles")}, 5, false);
         addRoad(*this, {pos("col_aigles"), {6560, 1420}, {6720, 1800}, {6780, 2300}, gate("hautebrume", 0, -1)}, 6, true);
         addRoad(*this, {gate("hautebrume", 0, 1), {6800, 3100}, pos("pied_lance")}, 6, true);
@@ -814,10 +821,12 @@ void World::buildPlan() {
                 return true;
             };
             // landmarks first, set back from the main streets
-            std::vector<int> lms = walled ? std::vector<int>{S_CHAPEL, S_KEEP, S_INN, S_INN, S_BAZAAR, S_FORGE, S_FORGE, S_TOWER, S_WELL, S_WELL, S_WELL}
+            const bool market = walled && reg == R_GREENHAVEN;   // 3.9.0 Aldrenbourg: a market town, half-timbered
+            std::vector<int> lms = market ? std::vector<int>{S_CHAPEL, S_TOWNHALL, S_INN, S_INN, S_MARKET_HALL, S_MARKET_HALL, S_FORGE, S_FORGE, S_FOUNTAIN, S_WELL, S_WELL}
+                                 : walled ? std::vector<int>{S_CHAPEL, S_KEEP, S_INN, S_INN, S_BAZAAR, S_FORGE, S_FORGE, S_TOWER, S_WELL, S_WELL, S_WELL}
                                           : std::vector<int>{S_INN, S_FORGE, S_WELL};
             for (int kind : lms) {
-                float sc = kind == S_CHAPEL ? 1.3f : kind == S_KEEP ? 0.9f : kind == S_BAZAAR ? 1.25f : 1.f;
+                float sc = kind == S_CHAPEL ? (market ? 1.5f : 1.3f) : kind == S_KEEP ? 0.9f : kind == S_BAZAAR ? 1.25f : 1.f;
                 vec2 f = structureFootprint(kind) * sc;
                 for (int t = 0; t < 120; t++) {
                     const Street& st = streets[rng.irange(0, nMain - 1)];
@@ -839,6 +848,7 @@ void World::buildPlan() {
                         while (t < L) {
                             int kind = rng.chance(0.18f) ? S_STONEHOUSE : (rng.chance(0.06f) ? S_LONGHOUSE : S_HOUSE);
                             if (p.region == R_TITANS && rng.chance(0.35f)) kind = S_STONEHOUSE;
+                            if (market) kind = rng.chance(0.45f) ? S_TOWNHOUSE : (rng.chance(0.15f) ? S_STONEHOUSE : S_HOUSE);   // tall shop-houses along the streets
                             float sc = rng.range(0.88f, 1.04f);
                             vec2 f = structureFootprint(kind) * sc;
                             vec2 on = a + tg * t;
@@ -852,12 +862,12 @@ void World::buildPlan() {
                 }
             }
             // the square: a statue (city) or a well (village), stalls around it, lanterns
-            S(walled ? S_STATUE : S_WELL, p.pos, 0, pi, walled ? 1.6f : 1.f);
-            placed.push_back({p.pos, 0.f, vec2(2.f)});
+            S(market ? S_FOUNTAIN : (walled ? S_STATUE : S_WELL), p.pos, 0, pi, market ? 1.2f : (walled ? 1.6f : 1.f));
+            placed.push_back({p.pos, 0.f, vec2(market ? 3.3f : 2.f)});
             for (int i = 0; i < (walled ? 10 : 5); i++) {
                 float a = (i + rng.range(0.2f, 0.8f)) * TAU / (walled ? 10 : 5);
                 vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (plazaR * rng.range(0.55f, 0.75f));
-                if (!overlaps(q, face(q, p.pos), structureFootprint(S_STALL), 0.8f) && streetGap(q) > 1.2f) { placed.push_back({q, face(q, p.pos), structureFootprint(S_STALL)}); S(S_STALL, q, face(q, p.pos), pi, 1.f, i % 3); }
+                if (!overlaps(q, face(q, p.pos), structureFootprint(S_STALL), 0.8f) && streetGap(q) > 1.2f && length(q - p.pos) > (market ? 5.2f : 0.f)) { placed.push_back({q, face(q, p.pos), structureFootprint(S_STALL)}); S(S_STALL, q, face(q, p.pos), pi, 1.f, i % 3); }
             }
             // lanterns on the street corners, crates and barrels against the walls of the houses
             for (const Street& st : streets) for (size_t i = 2; i + 1 < st.pts.size(); i += 3) {
@@ -888,11 +898,18 @@ void World::buildPlan() {
                 }
             }
             // outside: fields, a windmill, pens
+            // (3.9.0 never across a road that leaves the town: a windmill had a roadside post inside it)
+            auto offRoad = [&](vec2 q, float clear) {
+                for (const Road& rd : roads) for (size_t i = 0; i + 1 < rd.pts.size(); i++) if (distToSegment(q, rd.pts[i], rd.pts[i + 1]) < clear + rd.width * 0.5f) return false;
+                return true;
+            };
             for (int i = 0; i < (walled ? 6 : 3); i++) {
                 float a = a0 + 0.6f + i * 0.35f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (R * (walled ? 1.22f : 1.15f));
-                S(i == 2 ? S_WINDMILL : S_FIELD, q, a, pi, 1.f, i % 3);
+                int kind = i == 2 ? S_WINDMILL : S_FIELD;
+                if (!offRoad(q, std::max(structureFootprint(kind).x, structureFootprint(kind).y) + 3.f)) continue;
+                S(kind, q, a, pi, 1.f, i % 3);
             }
-            for (int i = 0; i < 2; i++) { float a = a0 + 3.9f + i * 0.5f; S(S_PEN, p.pos + vec2(std::cos(a), std::sin(a)) * (R * (walled ? 1.18f : 1.1f)), a, pi); }
+            for (int i = 0; i < 2; i++) { float a = a0 + 3.9f + i * 0.5f; vec2 q = p.pos + vec2(std::cos(a), std::sin(a)) * (R * (walled ? 1.18f : 1.1f)); if (offRoad(q, 8.f)) S(S_PEN, q, a, pi); }
             (void)firstS;
         };
         auto cityTown = [&]() { organicTown(true); };

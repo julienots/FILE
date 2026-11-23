@@ -885,7 +885,11 @@ void Game::updateAudioDirector(float dt) {
     audio.setAmbience("amb_river", river);
     int vi = world.nearestPoi(p.pos.xz(), 70.f);
     bool villageNear = !under && vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Mill || world.pois[vi].type == PoiType::Monastery);
-    audio.setAmbience("amb_village", villageNear ? (1 - env.night) * 0.6f : 0.f);
+    // 3.9.0 inside a walled city (its streets reach far beyond 70 m from the centre): the bustle of a market town
+    float townAmt = 0.f;
+    if (!under && !dungeon.active) for (const Poi& q : world.pois) if (q.city) { float d = length(p.pos.xz() - q.pos); if (d < q.radius * 1.05f) { townAmt = std::max(townAmt, 1.f - smoothstepf(q.radius * 0.55f, q.radius * 1.05f, d)); villageNear = villageNear || d < q.radius; } }
+    audio.setAmbience("amb_village", villageNear ? (1 - env.night) * 0.6f * (1.f - townAmt * 0.6f) : 0.f);
+    audio.setAmbience("amb_town", townAmt * (1.f - env.night * 0.85f) * (1.f - rainAmt * 0.6f) * 0.75f);
     // 3.7.1 the surf wherever the sea is near (it was only heard on the Coral Coast); under the water everything
     // above is muffled and the deep rumble takes over; grasshoppers in the meadows; dry wind over the sands
     float coast = 0;

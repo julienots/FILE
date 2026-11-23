@@ -1827,6 +1827,169 @@ int propModelFor(int kind, int variant) {
 
 PropModel* propModel(int i) { return i >= 0 && i < (int)gPropModels.size() ? gPropModels[i].get() : nullptr; }
 
+
+// ============================================================================================ 3.9.0 the big town
+// The square's fountain: a carved octagonal basin, a pillar with a small knight, water falling in four jets.
+static void fountain(MeshBuilder& M) {
+    Mat st(pal::stoneLight, 0.85f), st2(pal::stone, 0.9f), water(hexColor(0x3a7a90), 0.05f, 0.2f);
+    M.jitter = 0.04f;
+    M.lathe({{2.6f, -0.2f}, {2.6f, 0.55f}, {2.35f, 0.7f}, {2.2f, 0.7f}, {2.2f, -0.2f}}, st2, 8);
+    M.jitter = 0;
+    M.lathe({{2.25f, 0.45f}, {0.01f, 0.45f}}, water, 16);                     // the pool
+    M.lathe({{0.55f, 0.4f}, {0.45f, 1.6f}, {1.2f, 1.75f}, {1.15f, 1.95f}, {0.35f, 2.0f}, {0.3f, 3.0f}, {0.5f, 3.15f}, {0.01f, 3.2f}}, st, 10);   // bowl and pillar
+    M.lathe({{1.05f, 1.85f}, {0.01f, 1.85f}}, water, 12);                     // the upper bowl
+    // the little knight on top
+    M.tube({0, 3.2f, 0}, {0, 4.1f, 0}, 0.2f, 0.17f, st, 8, true);
+    M.ellipsoid({0, 4.35f, 0}, vec3(0.17f, 0.2f, 0.17f), st, 8, 6);
+    M.tube({0.18f, 3.95f, 0}, {0.42f, 4.6f, 0.05f}, 0.06f, 0.05f, st, 6, true);
+    M.box({0.48f, 4.9f, 0.05f}, {0.03f, 0.55f, 0.02f}, Mat(pal::iron, 0.4f, 0.8f));   // a raised sword
+    // jets: thin streams from the upper bowl into the pool
+    Mat jet(hexColor(0xbfe8f0), 0.05f, 0, 0.4f);
+    for (int i = 0; i < 4; i++) { float a = i * PI / 2 + PI / 4; vec3 d{std::cos(a), 0, std::sin(a)};
+        M.tube(d * 1.15f + vec3(0, 1.9f, 0), d * 1.55f + vec3(0, 1.3f, 0), 0.05f, 0.06f, jet, 5, false);
+        M.tube(d * 1.55f + vec3(0, 1.3f, 0), d * 1.7f + vec3(0, 0.5f, 0), 0.06f, 0.08f, jet, 5, false); }
+    for (auto& v : M.v) if (v.ny > 100 && v.py < 0.8f && v.py > 0.6f) { v.r = 110; v.g = 125; v.b = 80; }   // moss on the rim
+    M.bakeHeightAO(-0.2f, 2.f, 0.6f);
+}
+
+// A covered market: oak posts under a big tiled roof, tables of goods, crates and sacks, lanterns.
+static void marketHall(MeshBuilder& M, MeshBuilder& Fo, int variant) {
+    Rng rng(variant * 31 + 7);
+    Mat post(pal::timber, 0.85f), beam(hexColor(0x5a3e28), 0.85f), table(pal::woodLight, 0.85f), floor(pal::stoneLight, 0.9f);
+    const float w = 12.f, l = 8.f, h = 3.4f;
+    M.bevelBox({0, -0.25f, 0}, {w / 2 + 0.3f, 0.4f, l / 2 + 0.3f}, 0.08f, floor);
+    for (int i = 0; i <= 4; i++) for (int j = 0; j <= 2; j++) {
+        if (j == 1 && i > 0 && i < 4) continue;
+        vec3 c{-w / 2 + i * w / 4, 0.15f + h / 2, -l / 2 + j * l / 2};
+        M.bevelBox(c, {0.2f, h / 2, 0.2f}, 0.04f, post);
+        M.bevelBox(c - vec3(0, h / 2 - 0.15f, 0), {0.3f, 0.15f, 0.3f}, 0.03f, Mat(pal::stoneDark, 0.9f));
+        if (j != 1) { M.box(c + vec3(0.35f, h / 2 - 0.4f, 0), {0.35f, 0.07f, 0.08f}, beam, quat::axisAngle({0, 0, 1}, -0.7f)); M.box(c + vec3(-0.35f, h / 2 - 0.4f, 0), {0.35f, 0.07f, 0.08f}, beam, quat::axisAngle({0, 0, 1}, 0.7f)); }
+    }
+    for (int j = 0; j <= 2; j += 2) M.box({0, h + 0.2f, -l / 2 + j * l / 2}, {w / 2 + 0.2f, 0.16f, 0.16f}, beam);
+    for (int i = 0; i <= 4; i++) M.box({-w / 2 + i * w / 4, h + 0.4f, 0}, {0.14f, 0.12f, l / 2 + 0.2f}, beam);
+    gableRoof(M, w, l, h + 0.5f, 2.8f, 0.8f, Mat(pal::tile, 0.78f));
+    gableRoof(M, 2.4f, 1.6f, h + 3.2f, 0.9f, 0.2f, Mat(pal::tile * 0.85f, 0.78f));   // a little ridge lantern
+    M.box({0, h + 3.1f, 0}, {1.1f, 0.25f, 0.7f}, beam);
+    // tables of goods under the roof
+    vec3 goods[] = {hexColor(0xd9a440), hexColor(0x9c3a2a), hexColor(0x6a8a36), hexColor(0xe0d6c0), hexColor(0x7a4a8a), hexColor(0xc96a2a)};
+    for (int i = 0; i < 4; i++) for (int sd = -1; sd <= 1; sd += 2) {
+        vec3 c{-w / 2 + 1.6f + i * 2.9f, 0.85f, sd * 1.7f};
+        M.box(c, {1.1f, 0.06f, 0.55f}, table);
+        for (int k = -1; k <= 1; k += 2) for (int q = -1; q <= 1; q += 2) M.box(c + vec3(k * 0.95f, -0.42f, q * 0.45f), {0.05f, 0.42f, 0.05f}, post);
+        for (int g = 0; g < 5; g++) {
+            vec3 gp = c + vec3(rng.range(-0.9f, 0.9f), 0.14f, rng.range(-0.4f, 0.4f));
+            vec3 gc = goods[rng.irange(0, 5)];
+            if (rng.chance(0.5f)) M.ellipsoid(gp + vec3(0, 0.05f, 0), vec3(0.12f, 0.1f, 0.12f), Mat(gc, 0.7f), 6, 4);
+            else M.box(gp + vec3(0, 0.06f, 0), {0.16f, 0.08f, 0.12f}, Mat(gc, 0.8f));
+        }
+        M.box(c + vec3(0, 0.6f, sd * 0.5f), {1.15f, 0.04f, 0.05f}, beam);   // a bar for hanging cloth
+        Fo.box(c + vec3(0, 0.35f, sd * 0.52f), {1.0f, 0.25f, 0.015f}, Mat(i % 2 ? pal::cloth1 : pal::cloth2, 0.85f, 0, 0, 0.5f));
+    }
+    for (int i = 0; i < 6; i++) {   // crates and sacks around the posts
+        vec3 c{rng.range(-w / 2, w / 2), 0.35f, (rng.chance(0.5f) ? 1.f : -1.f) * (l / 2 + rng.range(-0.2f, 0.6f))};
+        if (rng.chance(0.5f)) M.bevelBox(c, {0.35f, 0.35f, 0.35f}, 0.03f, Mat(pal::wood, 0.9f), quat::axisAngle({0, 1, 0}, rng.range(0, 1.5f)));
+        else M.ellipsoid(c, vec3(0.3f, 0.38f, 0.28f), Mat(hexColor(0xc9b48a), 0.95f), 7, 5);
+    }
+    Mat glow = Mat(pal::window * 0.6f, 0.3f).nightGlow(5.f);
+    for (int i = 1; i < 4; i++) M.ellipsoid({-w / 2 + i * w / 4, h - 0.2f, 0}, vec3(0.16f, 0.22f, 0.16f), glow, 6, 4);
+    M.bakeHeightAO(-0.2f, 2.f, 0.6f);
+}
+
+// The town hall: a stone arcade on the ground floor, a half-timbered upper floor jutting over it, a belfry with
+// a clock, banners of the crown on each side of the steps.
+static void townHall(MeshBuilder& M, MeshBuilder& Fo) {
+    Mat stone(pal::stoneLight, 0.9f), dark(pal::stoneDark, 0.9f), wall(hexColor(0xeadfc4), 0.9f), beam(pal::timber, 0.85f);
+    const float w = 12.f, l = 9.f, h1 = 3.6f, h2 = 3.2f;
+    M.bevelBox({0, -0.2f, 0}, {w / 2 + 0.3f, 0.5f, l / 2 + 0.3f}, 0.08f, dark);
+    // ground floor: stone walls with an arcade on the front
+    M.box({0, h1 / 2 + 0.3f, -0.6f}, {w / 2, h1 / 2, l / 2 - 0.6f}, stone);
+    // the arcade: five piers, four round arches of wedge stones, a shaded walk behind them
+    float bay = (w - 1.2f) / 4, archR = bay / 2 - 0.38f, springY = h1 + 0.3f - archR - 0.35f;
+    for (int i = 0; i < 5; i++) {
+        float x = -w / 2 + 0.6f + i * bay;
+        M.bevelBox({x, h1 / 2 + 0.3f, l / 2 - 0.4f}, {0.38f, h1 / 2, 0.38f}, 0.05f, stone);
+        M.bevelBox({x, springY, l / 2 - 0.4f}, {0.46f, 0.1f, 0.44f}, 0.03f, dark);   // impost
+        if (i < 4) {
+            float xm = x + bay / 2;
+            for (int k = 0; k <= 8; k++) {
+                float a = k * PI / 8;
+                vec3 c{xm + std::cos(a) * (archR + 0.18f), springY + std::sin(a) * (archR + 0.18f), l / 2 - 0.4f};
+                M.box(c, {0.2f, 0.13f, 0.4f}, k == 4 ? dark : stone, quat::axisAngle({0, 0, 1}, a + PI / 2));
+            }
+            // spandrel above the arch
+            M.box({xm, springY + archR + 0.55f + (h1 + 0.3f - springY - archR - 0.55f) / 2, l / 2 - 0.4f}, {bay / 2 - 0.3f, std::max(0.05f, (h1 + 0.3f - springY - archR - 0.55f) / 2 + 0.2f), 0.36f}, stone);
+        }
+    }
+    M.box({0, h1 + 0.3f, l / 2 - 0.4f}, {w / 2, 0.25f, 0.42f}, stone);
+    M.box({0, h1 / 2 + 0.3f, l / 2 - 1.1f}, {w / 2 - 0.2f, h1 / 2, 0.04f}, Mat(pal::stoneDark * 0.8f, 0.95f));   // the shaded back wall of the walk
+    M.box({0, 1.5f, l / 2 - 1.15f}, {0.8f, 1.2f, 0.05f}, Mat(hexColor(0x4a2e1c), 0.8f));   // the great door under the arcade
+    for (int i = 0; i < 4; i++) M.box({0, 0.12f - i * 0.0f, l / 2 + 0.4f + i * 0.35f}, {1.8f - i * 0.0f, 0.12f + (3 - i) * 0.0f, 0.18f}, dark);   // steps
+    // upper floor: overhanging timber frame
+    float y2 = h1 + 0.55f;
+    M.box({0, y2 + h2 / 2, 0.2f}, {w / 2 + 0.3f, h2 / 2, l / 2 + 0.2f}, wall);
+    for (int i = 0; i <= 8; i++) { float x = -w / 2 - 0.3f + i * (w + 0.6f) / 8; M.box({x, y2 + h2 / 2, l / 2 + 0.42f}, {0.11f, h2 / 2, 0.06f}, beam); }
+    for (float y : {y2 + 0.1f, y2 + h2}) M.box({0, y, l / 2 + 0.43f}, {w / 2 + 0.35f, 0.1f, 0.07f}, beam);
+    for (int i = 0; i < 8; i += 2) { float x = -w / 2 - 0.3f + (i + 0.5f) * (w + 0.6f) / 8; M.box({x, y2 + h2 / 2, l / 2 + 0.44f}, {0.07f, h2 * 0.62f, 0.05f}, beam, quat::axisAngle({0, 0, 1}, 0.55f)); }
+    Mat win = Mat(pal::window * 0.45f, 0.3f).nightGlow(3.5f);
+    for (int i = 0; i < 8; i++) if (i % 2) { float x = -w / 2 - 0.3f + (i + 0.5f) * (w + 0.6f) / 8; M.box({x, y2 + h2 * 0.55f, l / 2 + 0.43f}, {0.4f, 0.55f, 0.03f}, win); }
+    gableRoof(M, w + 0.6f, l + 0.4f, y2 + h2, 3.6f, 0.6f, Mat(pal::slate, 0.65f));
+    // belfry with a clock face and a spire
+    float by = y2 + h2 + 2.2f;
+    M.box({0, by + 1.4f, 0.2f}, {1.2f, 1.6f, 1.2f}, wall);
+    for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) M.box({i * 1.2f, by + 1.4f, 0.2f + j * 1.2f}, {0.1f, 1.6f, 0.1f}, beam);
+    M.lathe({{0.75f, 0.f}, {0.75f, 0.06f}, {0.01f, 0.08f}}, Mat(hexColor(0xf0e8d0), 0.5f), 16, {0, by + 1.7f, 1.43f}, quat::axisAngle({1, 0, 0}, PI / 2));
+    M.box({0, by + 1.9f, 1.53f}, {0.04f, 0.3f, 0.02f}, Mat(pal::dark, 0.4f));
+    M.box({0.18f, by + 1.7f, 1.53f}, {0.22f, 0.035f, 0.02f}, Mat(pal::dark, 0.4f));
+    M.cone({0, by + 3.0f, 0.2f}, {0, by + 6.0f, 0.2f}, 1.6f, Mat(pal::slate, 0.6f), 4);
+    M.tube({0, by + 6.0f, 0.2f}, {0, by + 6.9f, 0.2f}, 0.04f, 0.03f, Mat(pal::gold, 0.3f, 1.f), 5, true);
+    // banners of the crown either side of the steps
+    for (int sd = -1; sd <= 1; sd += 2) {
+        M.tube({sd * 2.6f, 0.2f, l / 2 + 1.0f}, {sd * 2.6f, 5.4f, l / 2 + 1.0f}, 0.07f, 0.06f, beam, 6, true);
+        Fo.box({sd * 2.6f + sd * 0.45f, 4.3f, l / 2 + 1.0f}, {0.42f, 1.0f, 0.02f}, Mat(pal::cloth2, 0.8f, 0, 0, 0.6f));
+        Fo.box({sd * 2.6f + sd * 0.45f, 4.6f, l / 2 + 1.03f}, {0.16f, 0.14f, 0.01f}, Mat(pal::gold, 0.4f, 0.8f, 0, 0.6f));
+    }
+    M.bakeHeightAO(-0.2f, 3.f, 0.6f);
+}
+
+// A tall half-timbered townhouse: stone ground floor (a shop front), an upper floor jutting over the street, a
+// steep roof with a dormer, a hanging sign.
+static void townHouse(MeshBuilder& M, MeshBuilder& Fo, int variant) {
+    Rng rng(variant * 41 + 3);
+    const float w = 5.2f, l = 6.4f, h1 = 2.8f, h2 = 2.6f;
+    vec3 plaster = lerp(pal::plaster, (variant % 3 == 0) ? hexColor(0xe8c9a0) : (variant % 3 == 1 ? hexColor(0xd6dbc2) : hexColor(0xe9d6b0)), 0.6f);
+    Mat stone(lerp(pal::stone, pal::stoneLight, rng.f()), 0.9f), wall(plaster, 0.9f), beam(pal::timber, 0.85f);
+    M.jitter = 0.05f; M.jitterSeed = variant;
+    M.bevelBox({0, h1 / 2 - 0.2f, 0}, {w / 2, h1 / 2 + 0.4f, l / 2}, 0.08f, stone);
+    M.jitter = 0;
+    // shop front: a wide window with a counter and an awning
+    Mat win = Mat(pal::window * 0.45f, 0.3f).nightGlow(3.4f);
+    M.box({-0.9f, 1.4f, l / 2 + 0.03f}, {1.0f, 0.65f, 0.03f}, win);
+    M.box({-0.9f, 0.75f, l / 2 + 0.25f}, {1.1f, 0.06f, 0.25f}, Mat(pal::woodLight, 0.85f));
+    Fo.box({-0.9f, 2.25f, l / 2 + 0.45f}, {1.2f, 0.03f, 0.45f}, Mat(variant % 2 ? pal::cloth1 : pal::cloth2, 0.85f, 0, 0, 0.3f), quat::axisAngle({1, 0, 0}, 0.35f));
+    M.box({1.4f, 1.15f, l / 2 + 0.04f}, {0.5f, 1.05f, 0.05f}, Mat(hexColor(0x4a3020), 0.8f));
+    // jetty upper floor
+    float y2 = h1 + 0.2f, over = 0.45f;
+    M.box({0, y2 + h2 / 2, over / 2}, {w / 2 + 0.1f, h2 / 2, l / 2 + over / 2}, wall);
+    for (int i = 0; i <= 5; i++) { float x = -w / 2 - 0.1f + i * (w + 0.2f) / 5; M.box({x, y2 + h2 / 2, l / 2 + over + 0.02f}, {0.1f, h2 / 2, 0.06f}, beam); }
+    for (float y : {y2 + 0.05f, y2 + h2 / 2, y2 + h2}) M.box({0, y, l / 2 + over + 0.03f}, {w / 2 + 0.15f, 0.08f, 0.06f}, beam);
+    for (int sd = -1; sd <= 1; sd += 2) { M.box({sd * (w / 2 + 0.12f), y2 + h2 / 2, over / 2}, {0.06f, h2 / 2, l / 2 + over / 2}, beam);
+        M.box({sd * (w / 2 + 0.13f), y2 + h2 / 2, over / 2}, {0.05f, h2 * 0.6f, 0.07f}, beam, quat::axisAngle({1, 0, 0}, 0.6f)); }
+    for (int i = 0; i < 5; i++) M.box({-w / 2 + 0.4f + i * (w - 0.8f) / 4, y2 - 0.15f, l / 2 + over * 0.5f}, {0.08f, 0.08f, over * 0.6f}, beam);   // corbels
+    for (int i = 0; i < 2; i++) { float x = (i ? 1.f : -1.f) * w * 0.25f; M.box({x, y2 + h2 * 0.62f, l / 2 + over + 0.04f}, {0.38f, 0.42f, 0.03f}, win);
+        Fo.ellipsoid({x, y2 + h2 * 0.35f, l / 2 + over + 0.2f}, vec3(0.35f, 0.12f, 0.1f), Mat(rng.chance(0.5f) ? hexColor(0xd94b5f) : hexColor(0xe8c040), 0.7f, 0, 0, 0.3f), 7, 4); }
+    float ry = y2 + h2;
+    gableRoof(M, w + 0.2f, l + over, ry, 3.2f, 0.45f, variant % 2 ? Mat(pal::tile, 0.75f) : Mat(pal::slate, 0.65f));
+    // dormer on the street side
+    M.box({0, ry + 1.0f, l / 2 + 0.2f}, {0.6f, 0.55f, 0.6f}, wall);
+    M.box({0, ry + 1.0f, l / 2 + 0.82f}, {0.32f, 0.35f, 0.03f}, win);
+    gableRoof(M, 1.2f, 1.3f, ry + 1.5f, 0.6f, 0.15f, variant % 2 ? Mat(pal::tile, 0.75f) : Mat(pal::slate, 0.65f));
+    M.bevelBox({-w * 0.28f, ry + 2.4f, -l * 0.2f}, {0.32f, 1.3f, 0.32f}, 0.04f, Mat(pal::stoneDark, 0.9f));
+    // hanging sign (a loaf, a boot, a ring... only the colour changes)
+    M.box({w / 2 + 0.45f, y2 + 0.4f, l / 2 + 0.2f}, {0.45f, 0.04f, 0.04f}, beam);
+    M.box({w / 2 + 0.7f, y2 - 0.05f, l / 2 + 0.2f}, {0.03f, 0.32f, 0.38f}, Mat(variant % 4 == 0 ? pal::gold : (variant % 4 == 1 ? pal::cloth1 : (variant % 4 == 2 ? pal::cloth2 : pal::woodLight)), 0.6f, 0.3f));
+    M.bakeHeightAO(-0.2f, 2.f, 0.7f);
+}
+
 // footprint (half extents, metres) the model is fitted into: the code-built structure's collider
 vec2 structureFootprint(int kind) {
     switch (kind) {
@@ -1842,6 +2005,7 @@ vec2 structureFootprint(int kind) {
     case S_BEACHHUT: return {2.7f, 3.4f}; case S_COLONNADE: return {6.4f, 1.f}; case S_ARCHWAY: return {5.f, 1.2f};
     case S_MINE: return {6.5f, 6.f};   // 3.1.0 the knoll, the adit and the cart track (neighbours are pushed off it)
     case S_GEYSER: return {1.6f, 1.6f}; case S_SKYISLAND: case S_SKYGEYSER: return {0.5f, 0.5f};   // 2.8.0 (the island floats: the ground under it stays free)
+    case S_FOUNTAIN: return {2.6f, 2.6f}; case S_MARKET_HALL: return {6.2f, 4.4f}; case S_TOWNHALL: return {6.6f, 5.6f}; case S_TOWNHOUSE: return {3.0f, 3.6f};   // 3.9.0
     case S_OBELISK: return {0.9f, 0.9f}; case S_ALTAR: return {1.6f, 0.9f}; case S_WAYSTONE: return {0.7f, 0.7f}; case S_CAMPFIRE: return {0.8f, 0.8f}; case S_LANTERN: return {0.6f, 0.3f};
     default: return {2.f, 2.f};
     }
@@ -1854,7 +2018,8 @@ static bool restsOnFootprint(int kind) {
     case S_HOUSE: case S_INN: case S_STONEHOUSE: case S_LONGHOUSE: case S_STILT_HUT: case S_TOWER: case S_WINDMILL: case S_WELL: case S_STALL:
     case S_FIELD: case S_CHAPEL: case S_CRYPT: case S_FORGE: case S_TENT: case S_PEN: case S_BANNER: case S_MONASTERY: case S_STATUE: case S_KEEP:
     case S_CASTLE_TOWER: case S_OBELISK: case S_ALTAR: case S_LANTERN: case S_PALISADE: case S_GATE: case S_WAYSTONE: case S_CAMPFIRE:
-    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT: case S_COLONNADE: case S_ARCHWAY: case S_PORTAL: return true;
+    case S_DOMEHOUSE: case S_BAZAAR: case S_MINARET: case S_ZIGGURAT: case S_LIGHTHOUSE: case S_PAGODA: case S_SPHINX: case S_BEACHHUT: case S_COLONNADE: case S_ARCHWAY: case S_PORTAL:
+    case S_FOUNTAIN: case S_MARKET_HALL: case S_TOWNHALL: case S_TOWNHOUSE: return true;
     default: return false;
     }
 }
@@ -2498,6 +2663,15 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
     case S_TENT: tent(M, s.variant); addBoxCollider(out, s, gy, L, 2.f, 3.f, 2.4f); break;
     case S_MONASTERY: monastery(M); addBoxCollider(out, s, gy, L, 10.3f, 7.3f, 12.f); break;
     case S_STATUE: statue(M); addBoxCollider(out, s, gy, L, 1.6f, 1.6f, 5.f); break;
+    // 3.9.0 the big town
+    case S_FOUNTAIN: fountain(M); addCircleCollider(out, s, gy, L, 2.5f, 1.0f); out.colliders.back().climb = 1; addCircleCollider(out, s, gy, L, 0.6f, 4.5f); out.lights.push_back(vec4(s.pos.x, gy + 1.f, s.pos.y, LI_LANTERN)); break;
+    case S_MARKET_HALL: marketHall(M, Fo, s.variant);
+        for (int i = 0; i <= 4; i++) for (int j = 0; j <= 2; j += 2) addCircleCollider(out, s, gy, {-6.f + i * 3.f, -4.f + j * 4.f}, 0.3f, 3.6f);
+        for (int i = 0; i < 4; i++) for (int sd = -1; sd <= 1; sd += 2) addBoxCollider(out, s, gy, {-4.4f + i * 2.9f, sd * 1.7f}, 1.1f, 0.55f, 0.9f);
+        out.lights.push_back(vec4(s.pos.x, gy + 3.f, s.pos.y, LI_LANTERN)); break;
+    case S_TOWNHALL: townHall(M, Fo); addBoxCollider(out, s, gy, {0, -0.6f}, 6.f, 3.9f, 12.f); addBoxCollider(out, s, gy, {-5.6f, 4.1f}, 0.4f, 0.4f, 4.f); addBoxCollider(out, s, gy, {5.6f, 4.1f}, 0.4f, 0.4f, 4.f);
+        out.emitters.push_back(vec4(rotate(vec2(2.6f, 5.5f) * s.scale, -s.rot).x + s.pos.x, gy + 4.4f, rotate(vec2(2.6f, 5.5f) * s.scale, -s.rot).y + s.pos.y, EM_BANNER)); break;
+    case S_TOWNHOUSE: townHouse(M, Fo, s.variant); addBoxCollider(out, s, gy, L, 2.6f, 3.2f, 6.5f); break;
     case S_FORGE: forge(M); addBoxCollider(out, s, gy, {-1.3f, -1.2f}, 1.f, 0.8f, 3.f); out.lights.push_back(vec4(s.pos.x, gy + 1.5f, s.pos.y, LI_FIRE)); { vec2 ch = rotate(vec2(-1.3f, -1.4f) * s.scale, -s.rot) + s.pos; out.emitters.push_back(vec4(ch.x, gy + 4.4f, ch.y, EM_SMOKE)); } break;
     case S_LANTERN: lantern(M); addCircleCollider(out, s, gy, L, 0.15f, 2.6f); { vec2 lp = rotate(vec2(0.55f, 0) * s.scale, -s.rot) + s.pos; out.lights.push_back(vec4(lp.x, gy + 2.2f, lp.y, LI_LANTERN)); } break;
     case S_PALISADE: palisade(M); addBoxCollider(out, s, gy, L, 1.9f, 0.25f, 3.f); break;

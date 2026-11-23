@@ -2349,6 +2349,56 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "town") {
+        // 3.9.0 Aldrenbourg: the walled market town of Greenhaven (fountain, market halls, town hall, townhouses,
+        // its people and their quests)
+        static int res[6];
+        s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.5f; g.weather = g.weatherNext = 0; for (int& r : res) r = 0;
+            const Poi* p = g.world.poiById("aldrenbourg"); if (!p) { AGR_LOG("TOWN no poi"); return; }
+            int k[4] = {0, 0, 0, 0}, houses = 0;
+            for (const Structure& st : g.world.structures) if (length(st.pos - p->pos) < p->radius * 1.1f) {
+                if (st.kind >= S_FOUNTAIN && st.kind <= S_TOWNHOUSE) k[st.kind - S_FOUNTAIN]++;
+                if (st.kind == S_HOUSE || st.kind == S_STONEHOUSE || st.kind == S_TOWNHOUSE) houses++; }
+            res[0] = k[0] >= 1 && k[1] >= 1 && k[2] == 1 && k[3] >= 15 && houses >= 40;
+            AGR_LOG("TOWN at %.0f %.0f r %.0f region %d: fountain %d market %d townhall %d townhouses %d, houses %d", p->pos.x, p->pos.y, p->radius, p->region, k[0], k[1], k[2], k[3], houses);
+            teleport(g, p->pos.x + 6.f, p->pos.y + 10.f, 0.f); }, idle, "go"});
+        s.push_back({3.f, none, [](Game& g, float) { g.camYaw = 0.5f; g.camPitch = 0.55f; g.camDist = g.camDistTarget = 22.f; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TW0_square.png"); }, idle, "shot"});
+        s.push_back({2.f, none, [](Game& g, float) { g.camYaw = 2.6f; g.camPitch = 0.25f; g.camDist = g.camDistTarget = 12.f; }, "street"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TW1_street.png"); }, idle, "shot"});
+        // the market hall and the town hall, close up
+        auto visit = [&](int kind, const char* file) {
+            s.push_back({2.5f, [kind](Game& g) { const Poi* p = g.world.poiById("aldrenbourg"); for (const Structure& st : g.world.structures) if (st.kind == kind && length(st.pos - p->pos) < p->radius) {
+                    vec2 fr = st.pos + rotate(vec2(0, 9.f), -st.rot); teleport(g, fr.x, fr.y, 0.f); g.camFocusTmp = vec3(st.pos.x, 0, st.pos.y); break; } },
+                [](Game& g, float) { vec3 d = g.camFocusTmp - g.pc().pos; g.camYaw = std::atan2(-d.x, -d.z); g.camPitch = 0.22f; g.camDist = g.camDistTarget = 14.f; }, "visit"});
+            s.push_back({0.1f, [file](Game& g) { g.requestScreenshot(file); }, idle, "shot"});
+        };
+        visit(S_MARKET_HALL, "build/shots/TW2_market.png");
+        visit(S_TOWNHALL, "build/shots/TW3_townhall.png");
+        visit(S_TOWNHOUSE, "build/shots/TW4_townhouse.png");
+        // from above
+        s.push_back({2.5f, [](Game& g) { const Poi* p = g.world.poiById("aldrenbourg"); teleport(g, p->pos.x, p->pos.y + 20.f, 0.f); },
+            [](Game& g, float) { g.camYaw = 0.3f; g.camPitch = 1.05f; g.camDist = g.camDistTarget = 90.f; }, "air"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TW5_aerial.png"); }, idle, "shot"});
+        // its people, a quest and its ending
+        s.push_back({0.5f, [](Game& g) { int found = 0; Entity gasp = NullEntity;
+            g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0) { const std::string& id = npcs()[c.npcDef].id; if (id == "gaspard" || id == "colette" || id == "orane" || id == "garin" || id == "fabien" || id == "melisande") found++; if (id == "gaspard") gasp = e; } });
+            res[1] = found == 6; AGR_LOG("TOWN npcs %d/6", found);
+            if (gasp != NullEntity) { g.openDialog(gasp); res[2] = g.dialog.lines.size() >= 7; AGR_LOG("TOWN gaspard meet %zu lines", g.dialog.lines.size()); g.dialog.open = false; } }, idle, "people"});
+        s.push_back({0.5f, [](Game& g) { g.startQuest("al_oven"); g.addItem("wood", 12, Rarity::Common, true); g.itemGets.clear(); Entity col = NullEntity;
+            g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0 && npcs()[c.npcDef].id == "colette") col = e; });
+            if (col != NullEntity) { g.openDialog(col); for (auto& ch : g.dialog.choices) if (ch.action == "deliver:al_oven") { g.dialogAction(ch.action); break; } }
+            res[3] = g.questsDone.count("al_oven") > 0; g.dialog.open = false;
+            // the fair: its scenes
+            res[4] = conversation("offer:al_fair") && conversation("done:al_fair");
+            AGR_LOG("TOWN oven quest done %d, fair scenes %d", res[3], res[4]); }, idle, "quest"});
+        // the Grande Foire: the square dressed for the feast
+        s.push_back({3.f, [](Game& g) { g.questsDone.insert("al_fair"); const Poi* p = g.world.poiById("aldrenbourg"); teleport(g, p->pos.x + 4.f, p->pos.y + 22.f, 0.f); },
+            [](Game& g, float) { g.camYaw = 0.15f; g.camPitch = 0.32f; g.camDist = g.camDistTarget = 20.f; }, "fair"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/TW6_fair.png"); }, idle, "shot"});
+        s.push_back({0.2f, [](Game& g) { bool ok = res[0] && res[1] && res[2] && res[3] && res[4]; AGR_LOG("TOWN %d%d%d%d%d -> %s", res[0], res[1], res[2], res[3], res[4], ok ? "TOWN TEST PASSED" : "TOWN TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "ride") {
         // 3.8.1 riding like a real horse: walk, trot (posting), gallop (forward seat), filmed from the side; the
         // horse's back rises and rocks with each gait and the rider moves with it

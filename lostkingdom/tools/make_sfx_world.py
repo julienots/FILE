@@ -255,7 +255,35 @@ def saddle_creak():
     return norm(v + jingle * 0.08, 0.4)
 
 
+def amb_town(d=24.0):
+    # 3.9.0 a busy market town: a murmur of many voices (formant syllables at random), footsteps on cobbles,
+    # a far-off hammer, a cart, now and then a laugh
+    rng = np.random.default_rng(311); n = int(d * SR); out = np.zeros(n)
+    vowels = ((700, 1200), (400, 2000), (550, 900), (300, 2300), (600, 1700))
+    for _ in range(1400):
+        dur = rng.uniform(0.06, 0.16); t = t_(dur); f0 = rng.uniform(110, 260) * (1 + 0.08 * np.sin(2 * np.pi * rng.uniform(3, 7) * t))
+        ph = np.cumsum(f0) / SR; pulse = (np.mod(ph, 1.0) < 0.4).astype(float) - 0.4
+        F1, F2 = vowels[rng.integers(0, len(vowels))]
+        syl = bp(pulse, F1 * 0.8, F1 * 1.2, 2) + 0.5 * bp(pulse, F2 * 0.85, F2 * 1.15, 2)
+        syl *= np.sin(np.pi * t / dur) ** 2 * rng.uniform(0.2, 1.0)
+        add(out, syl, rng.uniform(0, d - dur))
+    out = lp(out, 2600) * 0.9
+    for _ in range(70):   # steps on the cobbles
+        at = rng.uniform(0, d - 0.1); t = t_(0.05)
+        add(out, bp(rng.standard_normal(len(t)), 900, 3500, 2) * np.exp(-t * 90) * rng.uniform(0.04, 0.12), at)
+    for k in range(18):   # the smith, far away
+        at = 3.0 + k * 0.62 + (k // 6) * 2.5; t = t_(0.4)
+        if at < d - 0.5: add(out, (np.sin(2 * np.pi * 1840 * t) + 0.6 * np.sin(2 * np.pi * 2710 * t)) * np.exp(-t * 14) * 0.05, at)
+    for at in (6.5, 17.0):   # a laugh
+        for j in range(5):
+            t = t_(0.09); f = 300 + rng.uniform(-20, 20)
+            add(out, np.sin(2 * np.pi * f * t) * np.sin(np.pi * t / 0.09) ** 2 * 0.12, at + j * 0.13)
+    return MA.loopify(norm(out, 0.5))
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--town":
+        MA.write_ogg(os.path.join(OUT, "amb", "amb_town.ogg"), amb_town()); print("wrote amb_town"); return
     if len(sys.argv) > 1 and sys.argv[1] == "--ride":
         for i in range(3): MA.write_ogg(os.path.join(OUT, "sfx", "hoof%d.ogg" % (i + 1)), hoof(i))
         MA.write_ogg(os.path.join(OUT, "sfx", "horse_snort.ogg"), horse_snort())
@@ -267,7 +295,7 @@ def main():
            "tree_fall": tree_fall(), "leaves": leaves(), "item_get": item_get(), "voice": voice(), "hoof1": hoof(0), "hoof2": hoof(1), "hoof3": hoof(2), "horse_snort": horse_snort(), "saddle_creak": saddle_creak()}
     for k, v in sfx.items():
         MA.write_ogg(os.path.join(OUT, "sfx", k + ".ogg"), v)
-    for k, f in (("amb_meadow", amb_meadow), ("amb_underwater", amb_underwater), ("amb_desert", amb_desert)):
+    for k, f in (("amb_meadow", amb_meadow), ("amb_underwater", amb_underwater), ("amb_desert", amb_desert), ("amb_town", amb_town)):
         MA.write_ogg(os.path.join(OUT, "amb", k + ".ogg"), f())
     print("wrote", len(sfx), "sounds and 3 ambiences")
 

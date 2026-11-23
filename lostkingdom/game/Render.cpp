@@ -156,7 +156,8 @@ void Game::updateCamera(float dt) {
             float L = std::max(0.6f, length(d)); d = d / L;
             vec3 side = normalize(cross(vec3(0, 1, 0), d));
             float sd = heroTalks ? -1.f : 1.f;   // stay on the same side of the line of action (180° rule)
-            vec3 e2 = lis - d * 1.5f + side * sd * 1.05f + vec3(0, 0.18f, 0);
+            float kin = dungeon.active ? 0.55f : 1.f;   // 3.9.0 indoors: closer, so the camera stays inside the room
+            vec3 e2 = lis - d * (1.5f * kin) + side * sd * (1.05f * kin) + vec3(0, 0.18f, 0);
             vec3 l2 = lerp(spk, lis, 0.3f) + side * sd * 0.15f + vec3(0, -0.38f, 0);
             if (!dungeon.active) e2.y = std::max(e2.y, world.height(e2.x, e2.z) + 0.5f);
             if (!dlgCamInit) { dlgEye = e2; dlgLook = l2; dlgCamInit = true; }
@@ -369,6 +370,7 @@ void Game::renderWorld(float dt) {
     renderFish();   // 3.5.0
     renderFallingTrees();   // 3.6.0
     renderCellarHatch();    // 3.6.0
+    renderFairBunting();    // 3.9.0
     renderBirds();          // 3.7.0
     if (dungeon.active) {
         renderDungeon();
