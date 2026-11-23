@@ -241,6 +241,20 @@ struct Dresser {
         vec3 cm = ctr + n * (half - len * 0.5f - 0.2f) - n * 2.2f;
         pp.box(cm + vec3(0, 0.015f, 0), t * 1.25f + n * (len * 0.5f) + vec3(0, 0.012f, 0), cloth);
         for (int s = -1; s <= 1; s += 2) pp.box(cm + t * (s * 1.2f) + vec3(0, 0.03f, 0), t * 0.07f + n * (len * 0.5f) + vec3(0, 0.01f, 0), gold);
+        {   // 3.3.1 a woven pattern: a darker inner border, a row of diamond medallions, and fringes at the end
+            Mat deep(cloth.color * 0.55f, 0.95f), pale(lerp(cloth.color, gold.color, 0.55f), 0.7f);
+            quat q45 = quat::axisAngle({0, 1, 0}, std::atan2(n.x, n.z) + PI / 4);
+            for (int s = -1; s <= 1; s += 2) pp.box(cm + t * (s * 0.95f) + vec3(0, 0.029f, 0), t * 0.05f + n * (len * 0.5f - 0.25f) + vec3(0, 0.003f, 0), deep);
+            int nm = std::max(2, (int)(len / 2.2f));
+            for (int k = 0; k < nm; k++) {
+                vec3 q = cm + n * ((k + 0.5f) / nm - 0.5f) * (len - 0.8f) + vec3(0, 0.03f, 0);
+                pp.box(q, {0.5f, 0.003f, 0.5f}, pale, q45);
+                pp.box(q + vec3(0, 0.002f, 0), {0.32f, 0.003f, 0.32f}, deep, q45);
+                pp.box(q + vec3(0, 0.004f, 0), {0.1f, 0.003f, 0.1f}, gold, q45);
+            }
+            vec3 endc = cm + n * (len * 0.5f + 0.06f);
+            for (int k = -8; k <= 8; k++) pp.box(endc + t * (k * 0.145f) + vec3(0, 0.016f, 0), t * 0.025f + n * 0.08f + vec3(0, 0.006f, 0), pale);
+        }
         vec3 seat = back - n * 0.6f + vec3(0, 0.17f, 0);
         if (built() || theme == 3) {
             // throne: seat, tall back with a crest, armrests, gems
@@ -401,7 +415,7 @@ void Game::buildDungeon(int idx) {
     // ---- meshes & colliders
     Theme th = theme(D.theme);
     MeshBuilder fl, wl, pp;
-    d.colliders.clear(); d.lights.clear(); d.emitters.clear();
+    d.colliders.clear(); d.lights.clear(); d.emitters.clear(); d.sigils.clear();
     Rng r(D.seed + 99);
     auto T = [&](int x, int z) { return (x < 0 || z < 0 || x >= d.W || z >= d.H) ? TileType::Void : d.tiles[z * d.W + x]; };
     fl.jitter = 0.1f; wl.jitter = 0.08f;
@@ -556,6 +570,48 @@ void Game::buildDungeon(int idx) {
         for (const Collider& c : d.realm.colliders) d.colliders.push_back(c);
         for (const vec4& l : d.realm.lights) d.lights.push_back(l);
     }
+    // 3.3.1 a rune circle set into the floor (it replaces the flat coloured disc): a sunken ring of dressed
+    // stone flush with the floor, inlaid metal bands, eight rune stones with glowing glyphs round the rim, a
+    // carved centre stone with a crystal, all lit by an animated circle of light drawn by the FX shader
+    auto runeCircle = [&](vec3 c, float R, vec3 acc, int kind) {
+        Rng cr((uint32_t)(c.x * 13.f + c.z * 7.f) + 5);
+        Mat dressed(lerp(th.floor, th.wall, 0.5f) * 0.72f, 0.88f), dark(th.trim * 0.45f, 0.9f);
+        Mat metal(lerp(hexColor(0xb89a5a), acc, 0.25f), 0.35f, 0.85f), glyph(lerp(acc, vec3(1.f), 0.2f), 0.3f, 0.f, kind == 1 ? 3.f : 2.2f);
+        // outer kerb: a low ring of dressed stone blocks with joints, slightly rough
+        int nb = 18;
+        for (int i = 0; i < nb; i++) {
+            float a = (i + 0.5f) * TAU / nb, w = R * TAU / nb * 0.46f;
+            vec3 q = c + vec3(std::cos(a) * (R + 0.18f), 0.035f, std::sin(a) * (R + 0.18f));
+            pp.bevelBox(q, {w, 0.05f + cr.range(0.f, 0.02f), 0.2f}, 0.03f, Mat(dressed.color * cr.range(0.85f, 1.08f), 0.85f), quat::axisAngle({0, 1, 0}, -a + PI / 2));
+        }
+        // inlaid metal bands (thin, almost flush) and a dark groove between them
+        pp.lathe({{R - 0.02f, 0.012f}, {R - 0.1f, 0.018f}}, metal, 48, c);
+        pp.lathe({{R * 0.62f + 0.04f, 0.012f}, {R * 0.62f - 0.04f, 0.016f}}, metal, 40, c);
+        pp.lathe({{R - 0.12f, 0.008f}, {R * 0.62f + 0.06f, 0.008f}}, dark, 40, c);
+        // the spokes of a star between the bands
+        for (int i = 0; i < 8; i++) {
+            float a = i * TAU / 8;
+            vec3 q = c + vec3(std::cos(a), 0, std::sin(a)) * (R * 0.81f);
+            pp.box(q + vec3(0, 0.014f, 0), {0.03f, 0.006f, R * 0.17f}, metal, quat::axisAngle({0, 1, 0}, -a + PI / 2 + PI / 2));
+        }
+        // rune stones on the rim, each with a glowing glyph on top and a tiny floating shard
+        for (int i = 0; i < 8; i++) {
+            float a = i * TAU / 8 + PI / 8;
+            vec3 q = c + vec3(std::cos(a), 0, std::sin(a)) * (R + 0.55f);
+            quat qr = quat::axisAngle({0, 1, 0}, -a);
+            float h = cr.range(0.32f, 0.5f) * (kind == 1 ? 1.4f : 1.f);
+            pp.bevelBox(q + vec3(0, h * 0.5f, 0), {0.2f, h * 0.5f, 0.16f}, 0.05f, dressed, qr);
+            pp.box(q + vec3(0, h + 0.005f, 0), {0.11f, 0.008f, 0.025f}, glyph, qr);
+            pp.box(q + vec3(0, h + 0.005f, 0), {0.025f, 0.008f, 0.09f}, glyph, qr);
+            vec3 n{std::cos(a), 0, std::sin(a)};
+            pp.box(q - n * 0.165f + vec3(0, h * 0.55f, 0), {0.012f, h * 0.3f, 0.07f}, glyph, qr);   // glyph on the inner face
+        }
+        // the centre stone: a carved octagonal dais with a crystal
+        pp.lathe({{R * 0.3f, 0.0f}, {R * 0.3f, 0.06f}, {R * 0.24f, 0.1f}, {0.01f, 0.1f}}, dressed, 8, c);
+        pp.lathe({{R * 0.2f, 0.102f}, {R * 0.17f, 0.106f}}, metal, 24, c);
+        if (kind == 0) pp.lathe({{0.01f, 0.1f}, {0.11f, 0.3f}, {0.01f, 0.62f}}, Mat(lerp(acc, vec3(1.f), 0.3f), 0.15f, 0, 3.f), 6, c);
+        d.sigils.push_back({c, R, lerp(acc, vec3(1.f), 0.35f), acc, kind});
+    };
     // pillars & accent glows in rooms, cobwebs, lava cracks
     for (size_t i = 0; i < d.rooms.size(); i++) {
         auto& rm = d.rooms[i];
@@ -572,7 +628,7 @@ void Game::buildDungeon(int idx) {
             Collider col; col.c = p.xz(); col.r = 0.6f; col.base = -1; col.top = 8; d.colliders.push_back(col);
         }
         vec3 rc = d.origin + vec3((rm.x + rm.w * 0.5f) * TILE, 0, (rm.z + rm.h * 0.5f) * TILE);
-        if (rm.kind == 2 || i == 0) { pp.lathe({{2.6f, 0.02f}, {0.01f, 0.03f}}, Mat(th.accent, 0.3f, 0, skyRealm(D.theme) ? 0.6f : 2.f), 24, rc); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
+        if (rm.kind == 2 || i == 0) { runeCircle(rc, 2.3f, th.accent, 0); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
     }
     if (th.lava) for (int i = 0; i < 12; i++) { auto& rm = d.rooms[r.irange(0, (int)d.rooms.size() - 1)]; vec3 p = d.origin + vec3((rm.x + r.f() * rm.w) * TILE, 0.01f, (rm.z + r.f() * rm.h) * TILE); pp.box(p, {r.range(0.8f, 2.f), 0.02f, 0.06f}, Mat(hexColor(0xff6a1a), 0.5f, 0, 5.f), quat::axisAngle({0, 1, 0}, r.range(0, PI))); }
     if (skyRealm(D.theme)) {
@@ -602,8 +658,7 @@ void Game::buildDungeon(int idx) {
     }
     if (!skyRealm(D.theme)) dressDungeon(d, D.theme, th, wl, pp, (uint32_t)D.seed);   // 3.1.0
     // exit portal (the way back up)
-    pp.lathe({{1.2f, 0.02f}, {0.01f, 0.04f}}, Mat(hexColor(0x8ad8ff), 0.2f, 0, 3.f), 20, d.exitPos);
-    for (int i = 0; i < 6; i++) { float a = i * TAU / 6; pp.rock(d.exitPos + vec3(std::cos(a) * 1.5f, 0, std::sin(a) * 1.5f), vec3(0.3f, 0.5f, 0.3f), Mat(th.trim), 300 + i, 0); }
+    runeCircle(d.exitPos, 1.15f, hexColor(0x8ad8ff), 1);   // 3.3.1 the way back up: a smaller circle, tall rune stones
     d.lights.push_back(vec4(d.exitPos + vec3(0, 1.5f, 0), LI_MAGIC));
     if (d.floor.vao) d.floor.destroy();
     if (d.walls.vao) d.walls.destroy();
@@ -832,6 +887,27 @@ void Game::renderDungeon() {
     }
     if (d.props.valid()) { it.mesh = &d.props; renderer.submit(it); }
     float t = (float)gameTime;
+    // 3.3.1 the rune circles come alive: a slowly turning circle of glyphs and a hexagram, a pulse of light
+    // rolling outwards every few seconds, motes of light rising from the rim; brighter when you stand on it
+    static float lastRT = 0; float fdt = clampf(realTime - lastRT, 0.f, 0.1f); lastRT = realTime;
+    for (size_t i = 0; i < d.sigils.size(); i++) {
+        const DungeonState::Sigil& s = d.sigils[i];
+        float dp = distXZ(pc().pos, s.p);
+        if (dp > 60.f) continue;
+        float on = clampf(1.f - (dp - s.r * 0.6f) / (s.r * 1.2f), 0.f, 1.f);
+        FxItem f; f.shape = FX_DISC; f.style = 1; f.color = vec4(s.c, 1); f.color2 = vec4(s.c2, 1);
+        f.age = 0.5f; f.time = realTime * (0.25f + 0.35f * on); f.seed = (float)i * 1.7f; f.intensity = 0.9f + 0.9f * on;
+        f.model = mat4::trs(s.p + vec3(0, 0.03f, 0), quat(), vec3(s.r * 0.98f, 1, s.r * 0.98f));
+        renderer.submitFx(f);
+        float ph = std::fmod(realTime * 0.33f + i * 0.37f, 1.f);   // the outward pulse
+        f.style = 0; f.age = ph; f.intensity = 0.6f + 0.6f * on; f.color = vec4(s.c, 1); f.color2 = vec4(s.c2 * 0.6f, 1);
+        f.model = mat4::trs(s.p + vec3(0, 0.035f, 0), quat(), vec3(s.r * 1.25f, 1, s.r * 1.25f));
+        renderer.submitFx(f);
+        if (particles.rng.f() < fdt * (2.5f + 6.f * on)) {
+            float a = particles.rng.range(0, TAU), rr = s.r * particles.rng.range(0.3f, 1.05f);
+            particles.magicTrail(s.p + vec3(std::cos(a) * rr, 0.15f, std::sin(a) * rr), s.c, 0.45f);
+        }
+    }
     for (size_t i = 0; i < d.braziers.size(); i++) {
         DrawItem b; b.mesh = brazierMesh.get(); b.model = mat4::translate(d.braziers[i]); renderer.submit(b);
         if (d.brazierLit[i]) {

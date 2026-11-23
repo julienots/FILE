@@ -278,6 +278,8 @@ struct DungeonState {
     // puzzles: rune braziers (light in order), pressure plates, levers
     std::vector<int> puzzleOrder;
     std::vector<vec3> braziers;
+    struct Sigil { vec3 p; float r; vec3 c, c2; int kind; };   // 3.3.1 rune circles on the floor, animated in the FX shader
+    std::vector<Sigil> sigils;
     std::vector<bool> brazierLit;
     int puzzleProgress = 0;
     bool puzzleSolved = false;
