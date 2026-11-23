@@ -306,6 +306,33 @@ trafic : états envoyés et reçus (nombre et octets), RPC envoyées / reçues e
 zéro*. C++ : `NetSession::bandwidthHistory`, `Replicator::profile`. Testé : compteurs par entité et
 échantillons de débit (test de prédiction), panneau ouvert dans le test de bout en bout de l'éditeur.
 
+## Comparaison avec Godot 4
+
+| Fonction | Godot 4 | AGR ENGINE |
+|---|---|---|
+| Synchronisation d'état, intervalle, différences seulement, visibilité par joueur | oui (`MultiplayerSynchronizer`) | oui (`NetSync`) |
+| Apparitions réseau, retardataires, apparition selon la visibilité | oui (`MultiplayerSpawner`) | oui |
+| RPC : n'importe qui / autorité, appel local, fiable / non fiable / non fiable ordonné, canaux | oui | oui |
+| Fiable, non fiable, non fiable ordonné sur canaux, compression | oui (ENet) | oui |
+| Chiffrement | DTLS avec certificats | AES-256-GCM avec le mot de passe (sans certificat, sans échange de clés) |
+| Transport WebSocket pour le multijoueur, serveur WebSocket | oui | oui (`ws://` ; pas de serveur `wss://`) |
+| TCP, UDP, HTTP / HTTPS, client WebSocket / `wss://` | oui | oui |
+| UPnP (redirection de port) | oui | oui (essayé contre une fausse box seulement) |
+| Cryptographie pour les scripts | HMAC, AES, clés RSA, certificats, signatures | HMAC, AES-GCM, PBKDF2, aléa sûr (pas de RSA ni de certificats) |
+| Profileur réseau | oui (débogueur) | oui (débit, joueurs, entités, RPC) |
+| IPv6 | oui | oui (non testé en vrai IPv6 ici) |
+| WebRTC (pair à pair, traversée de NAT) | oui (extension officielle) | **non** |
+| **Prédiction côté client + réconciliation** | non (à écrire soi-même ou greffon tiers) | **oui** (`NetSync.controller`, `onNetInput`) |
+| **Compensation de latence** (historique des positions) | non | **oui** (`positionAt`, `viewTime`) |
+| **Découverte des parties en réseau local** | non (à écrire) | **oui** (`advertise` / `discover`) |
+| **Horloge réseau partagée** | non | **oui** (`agr.net.time`) |
+| **Mot de passe de partie** | non | **oui** |
+
+Bilan : AGR fait tout ce que fait le réseau de Godot sauf WebRTC, le serveur TLS et la partie
+certificats / RSA de la cryptographie, et ajoute la prédiction avec réconciliation, la compensation de
+latence, la découverte LAN, l'horloge partagée et le mot de passe — ce qu'un jeu d'action en ligne doit
+sinon écrire lui-même sous Godot.
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système
