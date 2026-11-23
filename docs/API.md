@@ -2,13 +2,15 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (71, 720 champs)
+## Composants (74, 728 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
 **Animation** : [Animator](#Animator), [ChainIK3D](#ChainIK3D), [LookAtIK3D](#LookAtIK3D), [TwoBoneIK3D](#TwoBoneIK3D)
 
 **Audio** : [AudioListener](#AudioListener), [AudioSource](#AudioSource)
+
+**Core** : [Name](#Name), [State](#State), [Transform](#Transform)
 
 **Effects** : [ParticleAttractor](#ParticleAttractor), [ParticleCollider](#ParticleCollider), [Trail](#Trail)
 
@@ -332,6 +334,37 @@ Plays a sound or music (.wav, .ogg, .mp3, .flac), optionally positioned in space
 | `occlusion` | bool | Spatial: muffled and quieter behind 3D colliders (walls) |
 | `occlusionStrength` | float | How much a wall removes (0..1) ; plage 0 .. 1 |
 | `randomVolume` | float | Volume lowered by up to this (0.2 = 80% .. 100%) ; plage 0 .. 1 |
+
+### Name
+
+*Core* — ajouté par le moteur
+
+| Champ | Type | Détails |
+|---|---|---|
+| `name` | string |  |
+
+### State
+
+*Core* — ajouté par le moteur
+
+| Champ | Type | Détails |
+|---|---|---|
+| `active` | bool | Inactive entities and their children are skipped by systems. |
+| `layer` | uint | plage 0 .. 31 |
+| `hiddenInEditor` | bool |  |
+| `lockedInEditor` | bool |  |
+
+### Transform
+
+Position, rotation and scale relative to the parent entity.
+
+*Core* — ajouté par le moteur
+
+| Champ | Type | Détails |
+|---|---|---|
+| `position` | vec3 |  |
+| `rotation` | rotation |  |
+| `scale` | vec3 |  |
 
 ### ParticleAttractor
 

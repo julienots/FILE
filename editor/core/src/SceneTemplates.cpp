@@ -18,6 +18,7 @@
 #include "agr/animation/IK3D.hpp"
 #include "agr/net/Replication.hpp"
 #include "agr/scene/Prefab.hpp"
+#include "agr/scene/Components.hpp"
 #include "agr/scene/Terrain.hpp"
 
 namespace agr::editor {
@@ -560,6 +561,7 @@ void buildShowcase3D(Scene& scene) {
 } // namespace
 
 void registerAllComponentTypes() {
+    registerSceneComponents();
     registerRenderComponents();
     registerSpriteAnimatorComponent();
     registerPhysics2DComponents();
