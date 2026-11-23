@@ -15,6 +15,7 @@
 #include "agr/scene/Terrain.hpp"
 #include "agr/twod/Particles2D.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/scene/DynamicMesh.hpp"
 #include "agr/render/ShaderLibrary.hpp"
 
 using namespace agr;
@@ -1736,5 +1737,45 @@ TEST_CASE("probe global illumination: a white ball in a red room takes the room'
     f.frame();
     const Rgba off = pixel(*gpu().device, kWidth / 2, kHeight / 2 + 10);
     CHECK_MESSAGE(std::abs(int(off.r) - int(before.r)) < 12, int(off.r), " vs ", int(before.r));
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("dynamic meshes (soft bodies): drawn with the MeshRenderer material, updated when their vertices change") {
+    Render3DFixture f;
+    f.camera({0, 0, 4}, {0, 0, 0});
+    auto& env = f.darkEnvironment();
+    env.ambientIntensity = 1.0f;
+    env.ambientColor = {1, 1, 1, 1};
+    const auto e = f.scene.createEntity("Cloth");
+    auto& mr = f.scene.registry().emplace<MeshRendererComponent>(e);
+    mr.color = {1, 0.1f, 0.1f, 1};
+    auto& dm = f.scene.registry().emplace<DynamicMeshComponent>(e);
+    dm.positions = {{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {-1, 1, 0}};
+    dm.uvs = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+    dm.indices = {0, 1, 2, 0, 2, 3};
+    dm.worldSpace = true;
+    dm.doubleSided = true;
+    dm.version = 1;
+    f.settle();
+    const Rgba center = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE(int(center.r) > int(center.g) + 60, int(center.r), " ", int(center.g));
+    // Faces turned away (winding reversed): still drawn, the mesh is double sided.
+    {
+        auto& d = f.scene.registry().get<DynamicMeshComponent>(e);
+        d.indices = {0, 2, 1, 0, 3, 2};
+        ++d.version;
+    }
+    f.frame();
+    const Rgba back = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE(int(back.r) > int(back.g) + 60, int(back.r), " ", int(back.g));
+    // Moved 5 m aside: the center shows the background again.
+    {
+        auto& d = f.scene.registry().get<DynamicMeshComponent>(e);
+        for (auto& p : d.positions) p.x += 5.0f;
+        ++d.version;
+    }
+    f.frame();
+    const Rgba moved = pixel(*gpu().device, kWidth / 2, kHeight / 2);
+    CHECK_MESSAGE(int(moved.r) < int(center.r) - 60, int(moved.r), " vs ", int(center.r));
     CHECK(gpu().device->validationErrorCount() == 0);
 }

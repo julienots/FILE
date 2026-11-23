@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (74, 729 champs)
+## Composants (75, 741 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -20,7 +20,7 @@ Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-m�
 
 **Physics 2D** : [CharacterController2D](#CharacterController2D), [Collider2D](#Collider2D), [Joint2D](#Joint2D), [RigidBody2D](#RigidBody2D), [TilemapCollider2D](#TilemapCollider2D)
 
-**Physics 3D** : [CharacterController3D](#CharacterController3D), [Collider](#Collider), [Joint3D](#Joint3D), [RigidBody](#RigidBody), [Vehicle3D](#Vehicle3D)
+**Physics 3D** : [CharacterController3D](#CharacterController3D), [Collider](#Collider), [Joint3D](#Joint3D), [RigidBody](#RigidBody), [SoftBody3D](#SoftBody3D), [Vehicle3D](#Vehicle3D)
 
 **Rendering** : [BlobShadow](#BlobShadow), [Camera](#Camera), [Decal](#Decal), [DirectionalLight](#DirectionalLight), [Environment](#Environment), [MeshRenderer](#MeshRenderer), [Occluder](#Occluder), [ParticleEmitter3D](#ParticleEmitter3D), [PointLight](#PointLight), [PostProcess](#PostProcess), [ReflectionProbe](#ReflectionProbe), [SpotLight](#SpotLight), [SpriteRenderer](#SpriteRenderer), [Terrain](#Terrain), [Water](#Water)
 
@@ -690,6 +690,27 @@ Joint between this body and another one (or the world): fixed, hinge, distance /
 | `freezeRotation` | bool | Translation only (characters) |
 | `bullet` | bool | Continuous collision for fast bodies |
 | `initialVelocity` | vec3 |  |
+
+### SoftBody3D
+
+Deformable body (cloth, jelly, balloon) simulated by Jolt, drawn with the entity's MeshRenderer material.
+
+*Physics 3D*
+
+| Champ | Type | Détails |
+|---|---|---|
+| `shape` | enum | valeurs : `Cloth`, `Box`, `Sphere` |
+| `size` | vec3 | Cloth: x by z; box: xyz; sphere: x = diameter |
+| `resolution` | uint | Vertices per side (rings for a sphere) ; plage 2 .. 64 |
+| `mass` | float | plage 0.001 .. 10000 |
+| `stiffness` | float | Stretch resistance ; plage 0 .. 1 |
+| `bendStiffness` | float | Fold resistance ; plage 0 .. 1 |
+| `pressure` | float | Closed shapes: > 0 inflates (balloon) ; plage 0 .. 100000 |
+| `pin` | enum | Cloth: vertices held by the entity ; valeurs : `None`, `Edge`, `Corners` |
+| `iterations` | uint | plage 1 .. 30 |
+| `damping` | float | plage 0 .. 10 |
+| `gravityScale` | float | plage -10 .. 10 |
+| `enabled` | bool |  |
 
 ### Vehicle3D
 

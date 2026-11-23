@@ -13,6 +13,7 @@
 #include "Shaders3D.inl"
 #include "agr/core/Log.hpp"
 #include "agr/render/Renderer.hpp"
+#include "agr/scene/DynamicMesh.hpp"
 
 namespace agr {
 
@@ -553,6 +554,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
     }
     reg.view<MeshRendererComponent, WorldTransformComponent>().each([&](ecs::Entity e, MeshRendererComponent& mr, WorldTransformComponent& w) {
         if (!mr.visible || !w.activeInHierarchy || hidden(e)) return;
+        if (const auto* dyn = reg.tryGet<DynamicMeshComponent>(e); dyn && !dyn->positions.empty()) return;  // drawn below
         // Geometry: built-in mesh or a mesh of an imported model.
         rhi::BufferHandle vb, ib;
         math::Aabb bounds;
@@ -710,6 +712,95 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             }
         }
     });
+    // ------------------------------------------------------------ dynamic meshes (soft bodies)
+    reg.view<DynamicMeshComponent, MeshRendererComponent, WorldTransformComponent>().each(
+        [&](ecs::Entity e, DynamicMeshComponent& dm, MeshRendererComponent& mr, WorldTransformComponent& w) {
+            if (!mr.visible || !w.activeInHierarchy || hidden(e) || dm.positions.empty() || dm.indices.size() < 3) return;
+            DynamicMeshGpu& g = m_dynamicMeshes[e.packed()];
+            g.lastFrame = m_frame;
+            if (g.version != dm.version || !g.vertices) {
+                // Vertices with smooth normals (area-weighted face normals).
+                m_dynamicScratch.assign(dm.positions.size(), ModelVertex{});
+                for (usize i = 0; i < dm.positions.size(); ++i) {
+                    m_dynamicScratch[i].position = dm.positions[i];
+                    m_dynamicScratch[i].normal = Vec3{0.0f};
+                    m_dynamicScratch[i].tangent = Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                    m_dynamicScratch[i].uv = i < dm.uvs.size() ? dm.uvs[i] : math::Vec2{0.0f, 0.0f};
+                }
+                for (usize t = 0; t + 2 < dm.indices.size(); t += 3) {
+                    const u32 a = dm.indices[t], b = dm.indices[t + 1], c = dm.indices[t + 2];
+                    if (a >= dm.positions.size() || b >= dm.positions.size() || c >= dm.positions.size()) continue;
+                    const Vec3 n = math::cross(dm.positions[b] - dm.positions[a], dm.positions[c] - dm.positions[a]);
+                    m_dynamicScratch[a].normal = m_dynamicScratch[a].normal + n;
+                    m_dynamicScratch[b].normal = m_dynamicScratch[b].normal + n;
+                    m_dynamicScratch[c].normal = m_dynamicScratch[c].normal + n;
+                }
+                for (auto& v : m_dynamicScratch) {
+                    const float len = math::length(v.normal);
+                    v.normal = len > 1e-8f ? v.normal * (1.0f / len) : Vec3{0, 1, 0};
+                }
+                const usize vbytes = m_dynamicScratch.size() * sizeof(ModelVertex), ibytes = dm.indices.size() * sizeof(u32);
+                if (g.vertices && g.vertexCount == dm.positions.size() && g.indexCount == dm.indices.size()) {
+                    (void)m_device.updateBuffer(g.vertices, 0, m_dynamicScratch.data(), vbytes);
+                    (void)m_device.updateBuffer(g.indices, 0, dm.indices.data(), ibytes);
+                } else {
+                    m_device.destroyBuffer(g.vertices);
+                    m_device.destroyBuffer(g.indices);
+                    auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Dynamic, vbytes, m_dynamicScratch.data(), "agr.dynmesh.vb"});
+                    auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Dynamic, ibytes, dm.indices.data(), "agr.dynmesh.ib"});
+                    if (!vb || !ib) return;
+                    g.vertices = vb.value();
+                    g.indices = ib.value();
+                    g.vertexCount = dm.positions.size();
+                    g.indexCount = dm.indices.size();
+                }
+                g.version = dm.version;
+            }
+            // Material: the MeshRenderer's (.agrmat or built-in), both sides for cloth.
+            const MaterialData* custom = mr.material.empty() || !m_materials ? nullptr : m_materials->get(mr.material);
+            static thread_local MaterialData built;
+            u64 key;
+            if (custom) {
+                built = *custom;
+                key = mix64(0xD1A3ull, reinterpret_cast<u64>(custom));
+            } else {
+                built = defaultMaterial();
+                built.baseColorTexture = mr.texture;
+                built.metallic = std::clamp(mr.metallic, 0.0f, 1.0f);
+                built.roughness = std::clamp(mr.roughness, 0.0f, 1.0f);
+                key = mix64(0xD1A4ull, mix64(std::hash<std::string>{}(mr.texture), mix64(bits(built.metallic), bits(built.roughness))));
+            }
+            if (dm.doubleSided) built.doubleSided = true;
+            key = mix64(key, dm.doubleSided ? 2u : 1u);
+            const u32 slot = materialSlot(key, built, mr.uvScale, false);
+            const Mat4 model = dm.worldSpace ? Mat4::identity() : w.matrix;
+            math::Aabb box;
+            for (const Vec3& p : dm.positions) box.expand(dm.worldSpace ? p : model.transformPoint(p));
+            const bool visible = frustum.intersects(box);
+            u32 casterMask = 0;
+            if (m_shadowsActive && mr.castShadows && built.alphaMode != AlphaMode::Blend)
+                for (u32 c = 0; c < m_shadowCascades; ++c)
+                    if (lightFrustum[c].intersects(box)) casterMask |= 1u << c;
+            if (!visible && !casterMask) return;
+            InstanceData inst;
+            inst.model = model;
+            const Mat4 normalMatrix = math::transpose(math::inverse(model));
+            for (int k = 0; k < 3; ++k) inst.normal[k] = Vec4(normalMatrix.c[k].x, normalMatrix.c[k].y, normalMatrix.c[k].z, 0.0f);
+            inst.color = Vec4(detail::srgbToLinear(mr.color), mr.color.w);
+            MeshItem item;
+            item.vertices = g.vertices;
+            item.indices = g.indices;
+            item.indexCount = static_cast<u32>(g.indexCount);
+            item.material = slot;
+            item.pipeline = m_frameMaterials[slot].pipeline;
+            item.instance = static_cast<u32>(m_instances.size());
+            item.depth = math::dot(box.center() - camPos, camForward);
+            item.skinOffset = ~0u;
+            m_instances.push_back(inst);
+            if (visible) (built.alphaMode == AlphaMode::Blend ? m_transparentItems : m_opaqueItems).push_back(item);
+            for (u32 c = 0; c < m_shadowCascades; ++c)
+                if (casterMask & (1u << c)) m_shadowItems[c].push_back(item);
+        });
     // ------------------------------------------------------------ mesh particles
     // Each particle is an instance of a small mesh with the emitter's built-in material (lit,
     // shadowed, instanced like other meshes); it tumbles around an axis of its own.
@@ -965,6 +1056,15 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
                 ++it;
             }
         }
+    for (auto it = m_dynamicMeshes.begin(); it != m_dynamicMeshes.end();) {
+        if (m_frame > it->second.lastFrame + 60) {
+            m_device.destroyBuffer(it->second.vertices);
+            m_device.destroyBuffer(it->second.indices);
+            it = m_dynamicMeshes.erase(it);
+        } else {
+            ++it;
+        }
+    }
     if (m_frame % 300 == 0)  // GPU data of terrains that no longer exist
         for (auto it = m_terrains.begin(); it != m_terrains.end();) {
             if (m_frame > it->second.lastFrame + 300) {

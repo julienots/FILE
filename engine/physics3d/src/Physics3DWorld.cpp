@@ -1,4 +1,5 @@
 #include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/scene/DynamicMesh.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -30,6 +31,10 @@
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/PulleyConstraint.h>
+#include <Jolt/Physics/SoftBody/SoftBodyCreationSettings.h>
+#include <Jolt/Physics/SoftBody/SoftBodyMotionProperties.h>
+#include <Jolt/Physics/SoftBody/SoftBodySharedSettings.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
@@ -396,6 +401,193 @@ struct Physics3DWorld::Impl {
     }
 
     /// Vehicle constraints for Vehicle3D components (rebuilt when their settings or body change).
+    // ------------------------------------------------------------ soft bodies
+    struct SoftRec {
+        ecs::Entity entity;
+        JPH::BodyID id;
+        u64 hash = 0;
+        std::vector<u32> pinned;
+        std::vector<Vec3> rest;  // entity-space rest positions (pins follow the entity)
+    };
+    std::unordered_map<u64, SoftRec> softs;
+
+    static void buildSoftMesh(const SoftBody3DComponent& c, Vec3 scale, std::vector<Vec3>& pos, std::vector<math::Vec2>& uv, std::vector<u32>& idx,
+                              std::vector<u32>& pinned) {
+        const u32 n = std::clamp<u32>(c.resolution, 2, 64);
+        auto weld = [&](Vec3 p, math::Vec2 t) -> u32 {  // shared vertices along box edges
+            for (u32 i = 0; i < pos.size(); ++i)
+                if (math::length(pos[i] - p) < 1e-5f) return i;
+            pos.push_back(p);
+            uv.push_back(t);
+            return static_cast<u32>(pos.size() - 1);
+        };
+        if (c.shape == SoftBodyShape3D::Cloth) {
+            for (u32 z = 0; z < n; ++z)
+                for (u32 x = 0; x < n; ++x) {
+                    const float u = static_cast<float>(x) / (n - 1), v = static_cast<float>(z) / (n - 1);
+                    pos.push_back(Vec3{(u - 0.5f) * c.size.x, 0.0f, (v - 0.5f) * c.size.z} * scale);
+                    uv.push_back({u, v});
+                    if ((c.pin == SoftBodyPin3D::Edge && z == 0) || (c.pin == SoftBodyPin3D::Corners && z == 0 && (x == 0 || x == n - 1)))
+                        pinned.push_back(z * n + x);
+                }
+            for (u32 z = 0; z + 1 < n; ++z)
+                for (u32 x = 0; x + 1 < n; ++x) {
+                    const u32 i = z * n + x;
+                    idx.insert(idx.end(), {i, i + n, i + 1, i + 1, i + n, i + n + 1});
+                }
+        } else if (c.shape == SoftBodyShape3D::Box) {
+            const Vec3 h = c.size * 0.5f;
+            const Vec3 axes[6][3] = {{{1, 0, 0}, {0, 0, -1}, {0, 1, 0}}, {{-1, 0, 0}, {0, 0, 1}, {0, 1, 0}}, {{0, 1, 0}, {1, 0, 0}, {0, 0, -1}},
+                                     {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}},  {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}},  {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}}};
+            for (const auto& a : axes) {  // normal, u axis, v axis
+                std::vector<u32> grid(n * n);
+                for (u32 j = 0; j < n; ++j)
+                    for (u32 i = 0; i < n; ++i) {
+                        const float u = static_cast<float>(i) / (n - 1) * 2.0f - 1.0f, v = static_cast<float>(j) / (n - 1) * 2.0f - 1.0f;
+                        const Vec3 p = (a[0] + a[1] * u + a[2] * v) * h * scale;
+                        grid[j * n + i] = weld(p, {(u + 1) * 0.5f, (v + 1) * 0.5f});
+                    }
+                for (u32 j = 0; j + 1 < n; ++j)
+                    for (u32 i = 0; i + 1 < n; ++i) {
+                        const u32 q0 = grid[j * n + i], q1 = grid[j * n + i + 1], q2 = grid[(j + 1) * n + i], q3 = grid[(j + 1) * n + i + 1];
+                        idx.insert(idx.end(), {q0, q1, q3, q0, q3, q2});
+                    }
+            }
+        } else {  // sphere
+            const u32 rings = std::max<u32>(n, 3), segs = rings * 2;
+            const float r = c.size.x * 0.5f;
+            pos.push_back(Vec3{0, r, 0} * scale);
+            uv.push_back({0.5f, 0.0f});
+            for (u32 j = 1; j < rings; ++j)
+                for (u32 i = 0; i < segs; ++i) {
+                    const float th = 3.14159265f * j / rings, ph = 6.2831853f * i / segs;
+                    pos.push_back(Vec3{r * std::sin(th) * std::cos(ph), r * std::cos(th), r * std::sin(th) * std::sin(ph)} * scale);
+                    uv.push_back({static_cast<float>(i) / segs, static_cast<float>(j) / rings});
+                }
+            pos.push_back(Vec3{0, -r, 0} * scale);
+            uv.push_back({0.5f, 1.0f});
+            const u32 bottom = static_cast<u32>(pos.size() - 1);
+            auto ring = [&](u32 j, u32 i) { return 1 + (j - 1) * segs + (i % segs); };
+            for (u32 i = 0; i < segs; ++i) idx.insert(idx.end(), {0, ring(1, i + 1), ring(1, i)});
+            for (u32 j = 1; j + 1 < rings; ++j)
+                for (u32 i = 0; i < segs; ++i) idx.insert(idx.end(), {ring(j, i), ring(j, i + 1), ring(j + 1, i + 1), ring(j, i), ring(j + 1, i + 1), ring(j + 1, i)});
+            for (u32 i = 0; i < segs; ++i) idx.insert(idx.end(), {bottom, ring(rings - 1, i), ring(rings - 1, i + 1)});
+        }
+    }
+
+    void removeSoft(SoftRec& r) {
+        if (r.id.IsInvalid()) return;
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        bi.RemoveBody(r.id);
+        bi.DestroyBody(r.id);
+        r.id = {};
+    }
+
+    void syncSoftBodies(Scene& s) {
+        auto& reg = s.registry();
+        std::unordered_set<u64> seen;
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        reg.view<SoftBody3DComponent>().each([&](ecs::Entity e, SoftBody3DComponent& c) {
+            if (!c.enabled || !s.isActiveInHierarchy(e)) return;
+            seen.insert(e.packed());
+            const Mat4 world = s.worldMatrix(e);
+            const Pose pose = poseOf(world);
+            u64 h = mix(static_cast<u64>(c.shape) + 1, static_cast<u64>(c.pin) + 7 * c.resolution + 131 * c.iterations);
+            for (float f : {c.size.x, c.size.y, c.size.z, c.mass, c.stiffness, c.bendStiffness, c.pressure, c.damping, c.gravityScale, pose.scale.x,
+                            pose.scale.y, pose.scale.z})
+                h = mixf(h, f);
+            SoftRec& rec = softs[e.packed()];
+            rec.entity = e;
+            if (!rec.id.IsInvalid() && rec.hash == h) return;
+            removeSoft(rec);
+            rec.hash = h;
+            std::vector<Vec3> pos;
+            std::vector<math::Vec2> uv;
+            std::vector<u32> idx, pinned;
+            buildSoftMesh(c, pose.scale, pos, uv, idx, pinned);
+            JPH::Ref<JPH::SoftBodySharedSettings> ss = new JPH::SoftBodySharedSettings;
+            const float invMass = static_cast<float>(pos.size()) / std::max(c.mass, 1e-4f);
+            std::vector<bool> isPinned(pos.size(), false);
+            for (u32 p : pinned) isPinned[p] = true;
+            for (usize i = 0; i < pos.size(); ++i)
+                ss->mVertices.emplace_back(JPH::Float3(pos[i].x, pos[i].y, pos[i].z), JPH::Float3(0, 0, 0), isPinned[i] ? 0.0f : invMass);
+            for (usize t = 0; t + 2 < idx.size(); t += 3) {
+                const JPH::SoftBodySharedSettings::Face f(idx[t], idx[t + 1], idx[t + 2]);
+                if (!f.IsDegenerate()) ss->AddFace(f);
+            }
+            const float k = std::clamp(1.0f - c.stiffness, 0.0f, 1.0f), kb = std::clamp(1.0f - c.bendStiffness, 0.0f, 1.0f);
+            const JPH::SoftBodySharedSettings::VertexAttributes va(k * k * 0.01f, k * k * 0.01f, kb * kb * 1.0f);
+            ss->CreateConstraints(&va, 1, JPH::SoftBodySharedSettings::EBendType::Distance);
+            ss->Optimize();
+            JPH::SoftBodyCreationSettings cs(ss, JPH::RVec3(pose.position.x, pose.position.y, pose.position.z), toJ(math::normalize(pose.rotation)), Layers::kMoving);
+            cs.mNumIterations = std::clamp<u32>(c.iterations, 1, 30);
+            cs.mLinearDamping = std::max(c.damping, 0.0f);
+            cs.mPressure = c.shape == SoftBodyShape3D::Cloth ? 0.0f : std::max(c.pressure, 0.0f);
+            cs.mGravityFactor = c.gravityScale;
+            cs.mUserData = e.packed();
+            rec.id = bi.CreateAndAddSoftBody(cs, JPH::EActivation::Activate);
+            if (rec.id.IsInvalid()) {
+                AGR_LOG_ERROR("Physics3D", "'{}': soft body not created", s.nameOf(e));
+                return;
+            }
+            rec.pinned = pinned;
+            rec.rest = pos;  // scaled, entity rotation not applied (body space)
+            auto& mesh = reg.has<DynamicMeshComponent>(e) ? reg.get<DynamicMeshComponent>(e) : reg.emplace<DynamicMeshComponent>(e);
+            mesh.indices = idx;
+            mesh.uvs = uv;
+            mesh.positions.assign(pos.size(), Vec3{0.0f});
+            for (usize i = 0; i < pos.size(); ++i) mesh.positions[i] = pose.position + pose.rotation * pos[i];
+            mesh.worldSpace = true;
+            mesh.doubleSided = c.shape == SoftBodyShape3D::Cloth;
+            ++mesh.version;
+        });
+        for (auto it = softs.begin(); it != softs.end();) {
+            if (seen.count(it->first)) {
+                ++it;
+                continue;
+            }
+            removeSoft(it->second);
+            if (s.valid(it->second.entity) && s.registry().has<DynamicMeshComponent>(it->second.entity)) s.registry().remove<DynamicMeshComponent>(it->second.entity);
+            it = softs.erase(it);
+        }
+        // Pinned vertices follow the entity (a pole carrying a flag).
+        for (auto& [key, rec] : softs) {
+            if (rec.id.IsInvalid() || rec.pinned.empty()) continue;
+            const Pose pose = poseOf(s.worldMatrix(rec.entity));
+            JPH::BodyLockWrite lock(system->GetBodyLockInterface(), rec.id);
+            if (!lock.Succeeded()) continue;
+            JPH::Body& b = lock.GetBody();
+            auto* mp = static_cast<JPH::SoftBodyMotionProperties*>(b.GetMotionProperties());
+            const JPH::RMat44 inv = b.GetCenterOfMassTransform().InversedRotationTranslation();
+            auto& verts = mp->GetVertices();
+            for (u32 p : rec.pinned) {
+                if (p >= verts.size()) continue;
+                const Vec3 w = pose.position + pose.rotation * rec.rest[p];
+                verts[p].mPosition = JPH::Vec3(inv * JPH::RVec3(w.x, w.y, w.z));
+                verts[p].mVelocity = JPH::Vec3::sZero();
+            }
+        }
+    }
+
+    void readSoftBodies(Scene& s) {
+        for (auto& [key, rec] : softs) {
+            if (rec.id.IsInvalid() || !s.valid(rec.entity) || !s.registry().has<DynamicMeshComponent>(rec.entity)) continue;
+            JPH::BodyLockRead lock(system->GetBodyLockInterface(), rec.id);
+            if (!lock.Succeeded()) continue;
+            const JPH::Body& b = lock.GetBody();
+            const auto* mp = static_cast<const JPH::SoftBodyMotionProperties*>(b.GetMotionProperties());
+            const JPH::RMat44 com = b.GetCenterOfMassTransform();
+            auto& mesh = s.registry().get<DynamicMeshComponent>(rec.entity);
+            const auto& verts = mp->GetVertices();
+            mesh.positions.resize(verts.size());
+            for (usize i = 0; i < verts.size(); ++i) {
+                const JPH::RVec3 w = com * verts[i].mPosition;
+                mesh.positions[i] = {static_cast<float>(w.GetX()), static_cast<float>(w.GetY()), static_cast<float>(w.GetZ())};
+            }
+            ++mesh.version;
+        }
+    }
+
     void syncVehicles(Scene& s) {
         auto& reg = s.registry();
         std::unordered_set<u64> seen;
@@ -529,6 +721,8 @@ struct Physics3DWorld::Impl {
         if (!system) return;
         for (auto& [key, v] : vehicles) removeVehicle(v);
         vehicles.clear();
+        for (auto& [key, r] : softs) removeSoft(r);
+        softs.clear();
         for (auto& [key, j] : joints) removeJoint(j);
         joints.clear();
         for (auto& [key, c] : characters) destroyCharacter(c);
@@ -1210,6 +1404,7 @@ struct Physics3DWorld::Impl {
             }
         }
         stepCharacters(s, dt);
+        syncSoftBodies(s);
         syncVehicles(s);
         driveVehicles(s);
         if (dt > 0.0f) {
@@ -1273,6 +1468,7 @@ struct Physics3DWorld::Impl {
             }
         }
         readVehicles(s);
+        readSoftBodies(s);
         checkBreaks(s, dt);
         stats.bodies = static_cast<u32>(bodies.size());
         stats.activeBodies = active;

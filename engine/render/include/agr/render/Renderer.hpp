@@ -400,6 +400,14 @@ private:
         u64 lastFrame = 0;
     };
     std::unordered_map<u64, TerrainGpu> m_terrains;  // by entity
+    struct DynamicMeshGpu {  // DynamicMeshComponent (soft bodies, procedural meshes)
+        rhi::BufferHandle vertices, indices;
+        usize vertexCount = 0, indexCount = 0;
+        u32 version = ~0u;
+        u64 lastFrame = 0;
+    };
+    std::unordered_map<u64, DynamicMeshGpu> m_dynamicMeshes;  // by entity
+    std::vector<ModelVertex> m_dynamicScratch;
     /// Vertex buffer with an entity's morph targets blended in (rewritten each frame it is drawn).
     struct MorphGpu {
         rhi::BufferHandle buffer;

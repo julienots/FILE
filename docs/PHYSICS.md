@@ -174,6 +174,28 @@ Test : la voiture se pose sur ses suspensions, avance, tourne et s'arrête au fr
 *Créer › Véhicule* crée une voiture prête à rouler (carrosserie, `Vehicle3D`, quatre roues nommées) :
 il reste à lui donner un script qui écrit `throttle` et `steering`.
 
+## Corps mous (`SoftBody3D`)
+
+Tissus, drapeaux, rideaux, capes, gelées et ballons simulés par les *soft bodies* de Jolt : ils
+tombent, se plient, s'appuient sur les autres corps et les poussent. *Créer › Tissu (corps mou)* ou
+*Balle molle*.
+
+| Champ | Rôle |
+|---|---|
+| `shape` | `Cloth` (grille dans le plan XZ de l'entité, bord à −z), `Box` (gelée), `Sphere` (balle, ballon) |
+| `size`, `resolution` | dimensions (échelle de l'entité comprise) et nombre de sommets par côté (anneaux pour une sphère) |
+| `mass`, `stiffness`, `bendStiffness` | masse répartie sur les sommets ; résistance à l'étirement et au pliage (0..1) |
+| `pressure` | formes fermées : > 0 gonfle (ballon), 0 = gelée qui s'affaisse |
+| `pin` | tissu : `Edge` (le bord −z tient), `Corners`, `None` ; les sommets tenus **suivent l'entité** (un mât qui bouge emporte son drapeau) |
+| `iterations`, `damping`, `gravityScale` | précision, frottement de l'air (0,5 par défaut : un tissu se pose au lieu de balancer), gravité |
+
+Le maillage déformé est rendu avec le **matériau du `MeshRenderer`** de l'entité (couleur, texture,
+`.agrmat`), les deux faces pour un tissu, avec ombres (`DynamicMeshComponent` : aussi utilisable pour
+de la géométrie procédurale). Tests : un tissu de 2 m tenu par un bord pend à ~2 m sous son attache et
+suit l'entité déplacée ; un ballon lâché de 3 m se pose sur le sol sans le traverser et reste rond ;
+le rendu du maillage dynamique (deux faces, mises à jour) en OpenGL, OpenGL ES et Vulkan. Limites : pas
+de déchirure, pas de collision du tissu avec lui-même, pas de fixation à un autre corps que l'entité.
+
 ## Contrôleur de personnage 3D
 
 `CharacterController3D` (Jolt *CharacterVirtual*) remplace un `RigidBody` pour un héros ou un PNJ : une

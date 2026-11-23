@@ -87,6 +87,29 @@ struct Joint3DComponent {
     float swingLimit = 0.7853982f;                      ///< SwingTwist: cone half angle (radians).
 };
 
+/// Shape of a soft body: a cloth (flag, curtain, cape), or a closed jelly / balloon.
+enum class SoftBodyShape3D : i32 { Cloth = 0, Box = 1, Sphere = 2 };
+/// Which cloth vertices hold still (follow the entity, so a moving pole carries its flag).
+enum class SoftBodyPin3D : i32 { None = 0, Edge = 1, Corners = 2 };
+
+/// Deformable body simulated by Jolt (cloth, jelly, balloon): collides with the other bodies and
+/// is drawn by the entity's MeshRenderer material (DynamicMeshComponent). The rest shape is built
+/// from `shape`, `size` and `resolution` in the entity's space (its scale included).
+struct SoftBody3DComponent {
+    SoftBodyShape3D shape = SoftBodyShape3D::Cloth;
+    math::Vec3 size{2.0f, 2.0f, 2.0f};  ///< Cloth: x by z (in the XZ plane, edge at -z); box: xyz; sphere: x = diameter.
+    u32 resolution = 12;                ///< Vertices per side (cloth / box), rings of a sphere.
+    float mass = 1.0f;                  ///< kg, spread over the vertices.
+    float stiffness = 0.95f;            ///< 0..1: stretching resistance (1 = inextensible).
+    float bendStiffness = 0.3f;         ///< 0..1: folding resistance.
+    float pressure = 0.0f;              ///< Closed shapes: > 0 inflates (balloon), 0 = jelly.
+    SoftBodyPin3D pin = SoftBodyPin3D::Edge;  ///< Cloth only.
+    u32 iterations = 6;
+    float damping = 0.5f;               ///< Air drag: a cloth settles instead of swinging for long.
+    float gravityScale = 1.0f;
+    bool enabled = true;
+};
+
 /// Kinematic character (Jolt CharacterVirtual): a capsule moved by its velocity (set by scripts
 /// with setVelocity), that slides along walls, climbs steps and slopes up to maxSlope, sticks to
 /// the ground going down, stands on moving platforms and pushes dynamic bodies. Gravity is added

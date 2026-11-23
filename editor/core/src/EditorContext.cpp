@@ -67,6 +67,8 @@ const char* createKindName(CreateKind kind) {
         case CreateKind::UIDialog: return "Dialog";
         case CreateKind::UIColorPicker: return "Color Picker";
         case CreateKind::Vehicle: return "Vehicle";
+        case CreateKind::Cloth: return "Cloth";
+        case CreateKind::SoftBall: return "Soft Ball";
     }
     return "Entity";
 }
@@ -414,6 +416,25 @@ ecs::Entity EditorContext::create(CreateKind kind, ecs::Entity parent) {
                 mr.color = {0.12f, 0.12f, 0.14f, 1.0f};
                 reg.get<TransformComponent>(w).scale = {v.wheelWidth, v.wheelRadius * 2.0f, v.wheelRadius * 2.0f};
             }
+            break;
+        }
+        case CreateKind::Cloth:
+        case CreateKind::SoftBall: {
+            // Soft body (Jolt): a flag pinned along one edge, or a squishy pressurized ball.
+            auto& mr = reg.emplace<MeshRendererComponent>(e);
+            mr.color = kind == CreateKind::Cloth ? math::Color{0.85f, 0.25f, 0.2f, 1.0f} : math::Color{0.3f, 0.75f, 0.35f, 1.0f};
+            mr.roughness = 0.8f;
+            auto& sb = reg.emplace<SoftBody3DComponent>(e);
+            if (kind == CreateKind::Cloth) {
+                sb.size = {2.0f, 0.0f, 1.4f};
+                t.rotation = math::Quat::fromEuler({math::radians(-90.0f), 0.0f, 0.0f});  // hangs from its top edge
+            } else {
+                sb.shape = SoftBodyShape3D::Sphere;
+                sb.size = {1.0f, 1.0f, 1.0f};
+                sb.resolution = 10;
+                sb.pressure = 1500.0f;
+            }
+            if (parent.isNull()) t.position.y += 2.0f;
             break;
         }
         case CreateKind::Skeleton2D: {

@@ -6,6 +6,7 @@
 #include "agr/core/JobSystem.hpp"
 
 #include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/scene/DynamicMesh.hpp"
 #include "agr/physics3d/Physics3DPlugin.hpp"
 #include "agr/render/RenderComponents.hpp"
 
@@ -640,5 +641,57 @@ TEST_CASE("line of sight (audio occlusion): a wall blocks, the source's own body
     w.scene.updateTransforms();
     CHECK_FALSE(lineBlocked(w.physics, w.scene, {1, 1, 0}, {3, 1, 0}, child));
     CHECK(lineBlocked(w.physics, w.scene, {-3, 1, 0}, {3, 1, 0}, child));
+}
+TEST_CASE("soft bodies: a pinned cloth hangs and drapes, its edge follows the entity; a balloon rests on the ground") {
+    World3D w;
+    w.box("Ground", {0, -0.5f, 0}, {40, 1, 40}, BodyType3D::Static, false);
+    // A 2 x 2 cloth, flat at y = 3, pinned along its -z edge: it swings down and hangs.
+    const auto flag = w.scene.createEntity("Flag");
+    w.scene.registry().get<TransformComponent>(flag).position = {0, 3, 0};
+    auto& c = w.scene.registry().emplace<SoftBody3DComponent>(flag);
+    c.size = {2, 0, 2};
+    c.resolution = 10;
+    c.damping = 1.5f;
+    w.scene.updateTransforms();
+    w.run(4.0f);
+    REQUIRE(w.scene.registry().has<DynamicMeshComponent>(flag));
+    const auto& mesh = w.scene.registry().get<DynamicMeshComponent>(flag);
+    CHECK(mesh.positions.size() == 100);
+    CHECK(mesh.indices.size() == 9 * 9 * 6);
+    float lowest = 1e9f, pinnedY = 0.0f;
+    for (usize i = 0; i < mesh.positions.size(); ++i) {
+        lowest = std::min(lowest, mesh.positions[i].y);
+        if (i < 10) pinnedY += mesh.positions[i].y / 10.0f;
+    }
+    CHECK(pinnedY == doctest::Approx(3.0f).epsilon(0.01));  // the pinned edge stays
+    CHECK(lowest < 1.4f);                                    // the free edge fell ~2 m (cloth ~inextensible)
+    CHECK(lowest > 0.8f);
+    // Moving the entity carries the pinned edge.
+    w.scene.registry().get<TransformComponent>(flag).position = {5, 3, 0};
+    w.scene.updateTransforms();
+    w.run(1.0f);
+    float px = 0.0f;
+    for (usize i = 0; i < 10; ++i) px += mesh.positions[i].x / 10.0f;
+    CHECK(px == doctest::Approx(5.0f).epsilon(0.02));
+    // A balloon (pressurized sphere) dropped from 3 m comes to rest on the ground, round.
+    const auto ball = w.scene.createEntity("Balloon");
+    w.scene.registry().get<TransformComponent>(ball).position = {10, 3, 0};
+    auto& b = w.scene.registry().emplace<SoftBody3DComponent>(ball);
+    b.shape = SoftBodyShape3D::Sphere;
+    b.size = {1, 1, 1};
+    b.resolution = 8;
+    b.pressure = 2000.0f;
+    w.scene.updateTransforms();
+    w.run(3.0f);
+    const auto& bm = w.scene.registry().get<DynamicMeshComponent>(ball);
+    float lo = 1e9f, hi = -1e9f;
+    for (const Vec3& p : bm.positions) lo = std::min(lo, p.y), hi = std::max(hi, p.y);
+    CHECK(lo > -0.05f);  // on the ground, not through it
+    CHECK(lo < 0.15f);
+    CHECK(hi - lo > 0.6f);  // still inflated (diameter 1)
+    // Removing the component removes the body and its mesh.
+    w.scene.registry().remove<SoftBody3DComponent>(ball);
+    w.run(0.1f);
+    CHECK_FALSE(w.scene.registry().has<DynamicMeshComponent>(ball));
 }
 }  // TEST_SUITE
