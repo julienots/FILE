@@ -263,11 +263,13 @@ bool Replicator::isOwner(Scene& scene, NetSession& session, ecs::Entity e) const
     return ownerOf(scene, e) == local;
 }
 
-void Replicator::sendControl(NetSession& session, u32 peer, const json& msg) {
+void Replicator::sendControl(NetSession& session, u32 peer, const json& msg, Delivery delivery, u8 channel) {
     std::string data(1, NetSession::kSystemTag);
     data += kControl;
     data += msg.dump();
-    session.send(peer, data, true);
+    if (data.size() > NetSession::kMaxPayload) delivery = Delivery::Reliable;  // too big for one datagram
+    if (delivery == Delivery::Ordered) session.sendOrdered(peer, data, channel);
+    else session.send(peer, data, delivery == Delivery::Reliable);
 }
 
 ecs::Entity Replicator::instantiate(Scene& scene, const std::string& prefab, Uuid id, Vec3 position, u32 owner) {
@@ -344,8 +346,17 @@ void Replicator::runRpc(Scene& scene, ecs::Entity e, const std::string& fn, cons
 }
 
 bool Replicator::rpc(Scene& scene, NetSession& session, ecs::Entity e, const std::string& function, const json& args, u32 target) {
+    return rpc(scene, session, e, function, args, target, Delivery::Reliable, 0);
+}
+
+bool Replicator::rpc(Scene& scene, NetSession& session, ecs::Entity e, const std::string& function, const json& args, u32 target, Delivery delivery,
+                     u8 channel) {
     if (!session.connected() || !scene.valid(e)) return false;
-    const json msg = {{"k", "rpc"}, {"id", scene.uuidOf(e).toString()}, {"fn", function}, {"args", args}, {"to", target}, {"from", session.localId()}};
+    json msg = {{"k", "rpc"}, {"id", scene.uuidOf(e).toString()}, {"fn", function}, {"args", args}, {"to", target}, {"from", session.localId()}};
+    if (delivery != Delivery::Reliable) {
+        msg["d"] = delivery == Delivery::Ordered ? "o" : "u";
+        msg["ch"] = channel;
+    }
     ++m_stats.rpcsSent;
     {
         EntityTraffic& tr = m_profile[scene.uuidOf(e).value()];
@@ -357,14 +368,14 @@ bool Replicator::rpc(Scene& scene, NetSession& session, ecs::Entity e, const std
             runRpc(scene, e, function, args, NetSession::kHostId);
             return true;
         }
-        sendControl(session, target == 0 ? NetSession::kBroadcast : target, msg);
+        sendControl(session, target == 0 ? NetSession::kBroadcast : target, msg, delivery, channel);
         return true;
     }
     if (target == session.localId()) {  // to ourselves
         runRpc(scene, e, function, args, session.localId());
         return true;
     }
-    sendControl(session, NetSession::kHostId, msg);
+    sendControl(session, NetSession::kHostId, msg, delivery, channel);
     return true;
 }
 
@@ -401,6 +412,9 @@ void Replicator::handleControl(Scene& scene, NetSession& session, u32 from, cons
         const std::string fn = msg.value("fn", "");
         const json args = msg.value("args", json::array());
         const u32 to = msg.value("to", 0u);
+        const std::string d = msg.value("d", "");
+        const Delivery delivery = d == "o" ? Delivery::Ordered : d == "u" ? Delivery::Unreliable : Delivery::Reliable;
+        const u8 channel = static_cast<u8>(msg.value("ch", 0));
         if (session.role() == NetRole::Host) {
             // From a client (its id is `from`, whatever it claims): run here and / or relay.
             json relayed = msg;
@@ -408,11 +422,11 @@ void Replicator::handleControl(Scene& scene, NetSession& session, u32 from, cons
             if (to == 0) {
                 runRpc(scene, e, fn, args, from);
                 for (u32 peer : session.peers())
-                    if (peer != from) sendControl(session, peer, relayed);
+                    if (peer != from) sendControl(session, peer, relayed, delivery, channel);
             } else if (to == NetSession::kHostId) {
                 runRpc(scene, e, fn, args, from);
             } else {
-                sendControl(session, to, relayed);
+                sendControl(session, to, relayed, delivery, channel);
             }
         } else if (fromHost) {
             runRpc(scene, e, fn, args, msg.value("from", NetSession::kHostId));

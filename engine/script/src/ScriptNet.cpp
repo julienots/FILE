@@ -186,7 +186,11 @@ int doRpc(lua_State* L, ecs::Entity e, u32 target, const std::string& fn, int fi
     const std::string mode = m.rpcMode(e, fn);
     if (mode.empty()) return luaL_error(L, "rpc '%s': declare it in the script's rpc table (rpc = { %s = \"any\" })", fn.c_str(), fn.c_str());
     bool sent = false;
-    if (m.net && m.replicator && m.net->connected()) sent = m.replicator->rpc(sceneOf(L), *m.net, e, fn, args, target);
+    // Delivery words in the declaration: "unreliable" or "ordered" (default reliable, in order).
+    const auto delivery = mode.find("ordered") != std::string::npos      ? net::Replicator::Delivery::Ordered
+                          : mode.find("unreliable") != std::string::npos ? net::Replicator::Delivery::Unreliable
+                                                                         : net::Replicator::Delivery::Reliable;
+    if (m.net && m.replicator && m.net->connected()) sent = m.replicator->rpc(sceneOf(L), *m.net, e, fn, args, target, delivery);
     const bool local = mode.find("local") != std::string::npos;
     if (local && (target == 0 || (m.net && target == m.net->localId()))) {
         const u32 self = m.net && m.net->connected() ? m.net->localId() : net::NetSession::kHostId;

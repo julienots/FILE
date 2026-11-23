@@ -109,6 +109,10 @@ public:
     /// Calls `function` of the entity's script on `target` (0 = every other machine, 1 = host,
     /// n = that peer), through the host. Reliable and in order.
     bool rpc(Scene& scene, NetSession& session, ecs::Entity e, const std::string& function, const nlohmann::json& args, u32 target = 0);
+    /// Delivery of an RPC (Godot's reliable / unreliable / unreliable_ordered): reliable by default.
+    enum class Delivery : u8 { Reliable, Unreliable, Ordered };
+    bool rpc(Scene& scene, NetSession& session, ecs::Entity e, const std::string& function, const nlohmann::json& args, u32 target, Delivery delivery,
+             u8 channel = 0);
     /// Peer whose RPC is running (0 outside an RPC).
     u32 rpcSender() const { return m_sender; }
     /// Forgets the session's state (game stopped, scene changed).
@@ -136,7 +140,7 @@ private:
     };
     void handleControl(Scene& scene, NetSession& session, u32 from, const nlohmann::json& msg);
     void handleState(Scene& scene, u32 from, std::string_view data, f64 now);
-    void sendControl(NetSession& session, u32 peer, const nlohmann::json& msg);
+    void sendControl(NetSession& session, u32 peer, const nlohmann::json& msg, Delivery delivery = Delivery::Reliable, u8 channel = 0);
     void runRpc(Scene& scene, ecs::Entity e, const std::string& fn, const nlohmann::json& args, u32 sender);
     ecs::Entity instantiate(Scene& scene, const std::string& prefab, Uuid id, math::Vec3 position, u32 owner);
 

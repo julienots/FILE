@@ -69,6 +69,10 @@ Par-dessus les messages, `net::Replicator` (dans `NetPlugin`) fait le travail de
   peuvent être appelées à distance — `"any"` (n'importe quel joueur) ou `"authority"` (le propriétaire
   de l'entité ou l'hôte) ; `",local"` en plus les exécute aussi sur la machine qui appelle (et hors
   ligne). `agr.net.sender()` donne le joueur à l'origine de l'appel en cours.
+  **Livraison** (comme Godot) : fiable et dans l'ordre par défaut ; le mot `unreliable` dans la
+  déclaration (`aim = "authority,unreliable"`) l'envoie sans garantie (visée, effets jetables), `ordered`
+  (`move = "authority,ordered"`) en non fiable ordonné (une RPC plus ancienne que la dernière reçue est
+  jetée). L'hôte relaie avec la même livraison. C++ : `Replicator::rpc(..., Delivery, canal)`.
 
 ```lua
 local Ship = { rpc = { fire = "authority,local", chat = "any" } }

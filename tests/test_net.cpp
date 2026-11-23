@@ -1072,3 +1072,45 @@ TEST_CASE("UPnP: router found by SSDP, description read, public address, port ma
     REQUIRE_FALSE(missing);
     CHECK(missing.error().message.find("no UPnP router") != std::string::npos);
 }
+
+TEST_CASE("RPC delivery modes: unreliable and ordered RPCs arrive and are relayed by the host") {
+    registerRenderComponents();
+    registerNetComponents();
+    LossyNetwork netw;
+    netw.loss = 0.0f;
+    struct Machine {
+        NetSession session;
+        Scene scene;
+        Replicator rep;
+        std::vector<std::string> calls;
+        explicit Machine(LossyNetwork& n) : session(std::make_unique<LossyTransport>(n)) {
+            rep.setRpcHandler([this](Scene&, ecs::Entity, const std::string& fn, const nlohmann::json& args, u32) { calls.push_back(fn + args.dump()); });
+        }
+    };
+    const Uuid id = Uuid::generate();
+    Machine host(netw), a(netw), b(netw);
+    for (Machine* m : {&host, &a, &b}) m->scene.registry().emplace<NetSyncComponent>(m->scene.createEntity("Ship", {}, id));
+    REQUIRE(host.session.host(7400, 4));
+    REQUIRE(a.session.join("127.0.0.1", 7400));
+    REQUIRE(b.session.join("127.0.0.1", 7400));
+    f64 now = 0.0;
+    auto step = [&](int frames) {
+        for (int i = 0; i < frames; ++i) {
+            now += 1.0 / 60.0;
+            for (Machine* m : {&host, &a, &b}) {
+                m->session.update(now);
+                m->rep.update(m->scene, m->session, now);
+                m->session.takeEvents();
+            }
+        }
+    };
+    step(60);
+    REQUIRE(b.session.connected());
+    const auto ship = a.scene.findByUuid(id);
+    REQUIRE(a.rep.rpc(a.scene, a.session, ship, "aim", {1}, 0, Replicator::Delivery::Unreliable));
+    REQUIRE(a.rep.rpc(a.scene, a.session, ship, "move", {2}, 0, Replicator::Delivery::Ordered, 3));
+    step(10);
+    CHECK(std::find(host.calls.begin(), host.calls.end(), "aim[1]") != host.calls.end());
+    CHECK(std::find(b.calls.begin(), b.calls.end(), "move[2]") != b.calls.end());  // relayed by the host, same delivery
+    CHECK(std::find(b.calls.begin(), b.calls.end(), "aim[1]") != b.calls.end());
+}
