@@ -17,6 +17,8 @@ namespace fs = std::filesystem;
 namespace {
 constexpr const char* kTargets[] = {"PC (dossier)", "Android : APK de test (debug)", "Android : APK signé (release)", "Android : App Bundle (Google Play)",
                                     "Windows x64 (dossier, .exe)", "Serveur dédié (sans écran ni son)"};
+// Preset target names, in the order of kTargets.
+constexpr const char* kTargetNames[] = {"desktop", "android-apk", "android-release-apk", "android-aab", "windows", "server"};
 constexpr const char* kTargetDirs[] = {"desktop", "android", "android", "android", "windows", "server"};
 constexpr int kWindowsTarget = 4;
 constexpr int kServerTarget = 5;
@@ -147,6 +149,56 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     ImGui::BeginDisabled(running);
 
     ImGui::SetNextItemWidth(320);
+    // Presets: named export configurations (target, settings, output), saved in the project.
+    {
+        auto& presets = ps.exportPresets;
+        ImGui::SetNextItemWidth(220);
+        const char* current = m_preset >= 0 && m_preset < static_cast<int>(presets.size()) ? presets[static_cast<usize>(m_preset)].name.c_str() : "(aucun préréglage)";
+        if (ImGui::BeginCombo("Préréglage", current)) {
+            for (int i = 0; i < static_cast<int>(presets.size()); ++i)
+                if (ImGui::Selectable(presets[static_cast<usize>(i)].name.c_str(), i == m_preset)) {
+                    m_preset = i;
+                    const ExportPreset& pr = presets[static_cast<usize>(i)];  // load it
+                    x = pr.settings;
+                    for (int t = 0; t < 6; ++t)
+                        if (pr.target == kTargetNames[t]) m_target = t;
+                    m_output = pr.output.empty() ? std::string() : (project.root() / pr.output).string();
+                    changed = true;
+                }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160);
+        ImGui::InputTextWithHint("##presetName", "nom du préréglage", &m_presetName);
+        ImGui::SameLine();
+        ImGui::BeginDisabled(m_presetName.empty());
+        if (ImGui::Button("Enregistrer")) {
+            ExportPreset pr;
+            pr.name = m_presetName;
+            pr.target = kTargetNames[m_target];
+            pr.settings = x;
+            if (!m_output.empty()) {
+                std::error_code ec;
+                const fs::path rel = fs::relative(m_output, project.root(), ec);
+                pr.output = ec || rel.empty() || rel.native()[0] == '.' ? m_output : rel.generic_string();
+            }
+            auto it = std::find_if(presets.begin(), presets.end(), [&](const ExportPreset& p) { return p.name == pr.name; });
+            if (it != presets.end()) *it = pr;
+            else presets.push_back(pr);
+            m_preset = static_cast<int>(std::find_if(presets.begin(), presets.end(), [&](const ExportPreset& p) { return p.name == pr.name; }) - presets.begin());
+            changed = true;
+            s.notify("Préréglage enregistré : " + pr.name + " (agr_editor --project ... --preset \"" + pr.name + "\")");
+        }
+        ImGui::EndDisabled();
+        if (m_preset >= 0 && m_preset < static_cast<int>(presets.size())) {
+            ImGui::SameLine();
+            if (ImGui::Button("Supprimer le préréglage")) {
+                presets.erase(presets.begin() + m_preset);
+                m_preset = -1;
+                changed = true;
+            }
+        }
+    }
     ImGui::Combo("Cible", &m_target, kTargets, 6);
     if (m_target == kServerTarget) {
         int tick = static_cast<int>(x.serverTickRate);

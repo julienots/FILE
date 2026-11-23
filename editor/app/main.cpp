@@ -46,6 +46,7 @@ namespace {
 ///   agr_editor --project DIR --create-package NAME --include a,b [--version V] [--depends x,y] --output F.agrpkg
 ///   agr_editor --project DIR --export android-apk --deploy [--device SERIAL]  (install and start on a phone)
 ///   agr_editor --list-devices                               (Android devices seen by adb)
+///   agr_editor --project DIR --preset NAME [--output DIR]     (an export preset; --list-presets to see them)
 ///   (release builds read the keystore passwords from AGR_STORE_PASSWORD / AGR_KEY_PASSWORD)
 /// Returns -1 when no command-line task was given (the editor opens).
 [[maybe_unused]] int runCommandLine(int argc, char** argv, const std::filesystem::path& exeDir) {  // desktop only
@@ -53,7 +54,8 @@ namespace {
     using namespace agr::editor;
     namespace fs = std::filesystem;
     std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, graphFile, description, author, compressFolder, packageName, includes, version = "1.0.0", depends, device;
-    bool deploy = false, listDevices = false;
+    bool deploy = false, listDevices = false, listPresets = false;
+    std::string presetName;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -65,6 +67,8 @@ namespace {
         else if (a == "--deploy") deploy = true;
         else if (a == "--device") device = next();
         else if (a == "--list-devices") listDevices = true;
+        else if (a == "--preset") presetName = next();
+        else if (a == "--list-presets") listPresets = true;
         else if (a == "--output") output = next();
         else if (a == "--base") basePack = next();
         else if (a == "--package-index") indexFolder = next();
@@ -80,7 +84,7 @@ namespace {
         else if (a == "--version") version = next();
         else if (a == "--depends") depends = next();
     }
-    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty() && graphFile.empty() && compressFolder.empty() && !listDevices) return -1;
+    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty() && graphFile.empty() && compressFolder.empty() && !listDevices && presetName.empty() && !listPresets) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
     if (!compressFolder.empty()) {
         u64 saved = 0;
@@ -229,12 +233,34 @@ namespace {
         for (const AndroidDevice& d : devices.value()) std::printf("%s\t%s\t%s\n", d.serial.c_str(), d.state.c_str(), d.model.c_str());
         if (exportKind.empty()) return 0;
     }
+    if (listPresets || !presetName.empty()) {  // export presets of the project
+        auto p = Project::open(projectDir);
+        if (!p) {
+            AGR_LOG_ERROR("Editor", "{}", p.error().message);
+            return 1;
+        }
+        if (listPresets) {
+            for (const ExportPreset& pr : p.value().settings().exportPresets) std::printf("%s\t%s\t%s\n", pr.name.c_str(), pr.target.c_str(), pr.output.c_str());
+            if (presetName.empty()) return 0;
+        }
+        const auto& presets = p.value().settings().exportPresets;
+        auto it = std::find_if(presets.begin(), presets.end(), [&](const ExportPreset& pr) { return pr.name == presetName; });
+        if (it == presets.end()) {
+            AGR_LOG_ERROR("Editor", "no export preset named '{}' (--list-presets)", presetName);
+            return 1;
+        }
+        exportKind = it->target;
+        if (output.empty() && !it->output.empty()) output = (fs::path(projectDir) / it->output).string();
+    }
     if (exportKind.empty()) return 0;
     auto project = Project::open(projectDir);
     if (!project) {
         AGR_LOG_ERROR("Editor", "{}", project.error().message);
         return 1;
     }
+    if (!presetName.empty())  // the preset's own settings for this export (the project file is not changed)
+        for (const ExportPreset& pr : project.value().settings().exportPresets)
+            if (pr.name == presetName) project.value().settings().exportSettings = pr.settings;
     if (output.empty()) output = (fs::path(projectDir) / "build" / exportKind).string();
     Result<ExportReport> report = makeError(Error::Code::InvalidArgument,
                                             "unknown export '" + exportKind + "' (desktop, windows, server, windows-server, patch, android-apk, android-release-apk, android-aab)");

@@ -761,7 +761,9 @@ public:
 
 private:
     void start(EditorShared& s, const std::string& editorDirectory);
-    int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle
+    int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle, 4 Windows, 5 server
+    int m_preset = -1;          // selected export preset
+    std::string m_presetName;   // name for "Enregistrer"
     std::string m_output;
     bool m_deploy = false;              // Android APK: install and start on the device afterwards
     std::thread m_deviceLogThread;      // the game's log on the device, while it runs

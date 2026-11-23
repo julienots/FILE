@@ -2124,3 +2124,34 @@ return S
     }
 #endif
 }
+
+TEST_CASE("export presets: saved in the project with their own settings, reloaded") {
+    EditorFixture f(ProjectMode::Mode2D);
+    Project& project = f.ctx->project();
+    ExportPreset store;
+    store.name = "Play Store";
+    store.target = "android-aab";
+    store.settings = project.settings().exportSettings;
+    store.settings.versionCode = 42;
+    store.settings.abis = {"arm64-v8a", "armeabi-v7a"};
+    ExportPreset demo;
+    demo.name = "Démo PC";
+    demo.target = "desktop";
+    demo.output = "build/demo";
+    demo.settings = project.settings().exportSettings;
+    demo.settings.excludeFilter = "levels/secret/**";
+    project.settings().exportPresets = {store, demo};
+    REQUIRE(project.save());
+    auto again = Project::open(project.root());
+    REQUIRE(again);
+    const auto& presets = again.value().settings().exportPresets;
+    REQUIRE(presets.size() == 2);
+    CHECK(presets[0].name == "Play Store");
+    CHECK(presets[0].target == "android-aab");
+    CHECK(presets[0].settings.versionCode == 42);
+    CHECK(presets[0].settings.abis == std::vector<std::string>{"arm64-v8a", "armeabi-v7a"});
+    CHECK(presets[1].name == "Démo PC");
+    CHECK(presets[1].output == "build/demo");
+    CHECK(presets[1].settings.excludeFilter == "levels/secret/**");
+    CHECK(again.value().settings().exportSettings.versionCode != 42);  // the project's own settings are untouched
+}

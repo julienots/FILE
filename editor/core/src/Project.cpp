@@ -99,6 +99,68 @@ Result<Project> Project::create(const fs::path& folder, const ProjectSettings& s
     return p;
 }
 
+namespace {
+void exportSettingsFromJson(const json& e, ExportSettings& x) {
+    x.organization = e.value("organization", x.organization);
+    x.version = e.value("version", x.version);
+    x.versionCode = e.value("versionCode", x.versionCode);
+    x.packageId = e.value("packageId", x.packageId);
+    const std::string o = e.value("orientation", std::string("landscape"));
+    x.orientation = o == "portrait" ? ScreenOrientation::Portrait : o == "sensor" ? ScreenOrientation::Sensor : ScreenOrientation::Landscape;
+    x.targetFps = e.value("targetFps", x.targetFps);
+    x.serverTickRate = std::clamp<u32>(e.value("serverTickRate", x.serverTickRate), 1, 1000);
+    x.vibration = e.value("vibration", x.vibration);
+    x.network = e.value("network", x.network);
+    x.microphone = e.value("microphone", x.microphone);
+    x.zipPackage = e.value("zipPackage", x.zipPackage);
+    x.dataPack = e.value("dataPack", x.dataPack);
+    x.compressTextures = e.value("compressTextures", x.compressTextures);
+    x.textureCompressionExclude = e.value("textureCompressionExclude", x.textureCompressionExclude);
+    x.onlyUsedAssets = e.value("onlyUsedAssets", x.onlyUsedAssets);
+    x.includeFilter = e.value("includeFilter", x.includeFilter);
+    x.excludeFilter = e.value("excludeFilter", x.excludeFilter);
+    x.encryptData = e.value("encryptData", x.encryptData);
+    if (e.contains("iconBackground") && e["iconBackground"].is_array() && e["iconBackground"].size() == 4)
+        x.iconBackground = {e["iconBackground"][0].get<float>(), e["iconBackground"][1].get<float>(), e["iconBackground"][2].get<float>(),
+                            e["iconBackground"][3].get<float>()};
+    x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
+    x.splashImage = e.value("splashImage", x.splashImage);
+    if (e.contains("splashColor") && e["splashColor"].is_array() && e["splashColor"].size() == 4)
+        x.splashColor = {e["splashColor"][0].get<float>(), e["splashColor"][1].get<float>(), e["splashColor"][2].get<float>(), e["splashColor"][3].get<float>()};
+    x.splashSeconds = e.value("splashSeconds", x.splashSeconds);
+    x.backQuits = e.value("backQuits", x.backQuits);
+    x.minSdk = e.value("minSdk", x.minSdk);
+    x.targetSdk = e.value("targetSdk", x.targetSdk);
+    if (e.contains("abis") && e["abis"].is_array()) {
+        x.abis.clear();
+        for (const auto& a : e["abis"])
+            if (a.is_string()) x.abis.push_back(a.get<std::string>());
+    }
+    x.keystorePath = e.value("keystore", x.keystorePath);
+    x.keyAlias = e.value("keyAlias", x.keyAlias);
+}
+
+json exportSettingsToJson(const ExportSettings& x) {
+    return {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
+                   {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps}, {"serverTickRate", x.serverTickRate},
+                   {"vibration", x.vibration}, {"network", x.network},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
+                   {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
+                   {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias},
+                   {"splashImage", x.splashImage},   {"splashColor", {x.splashColor.x, x.splashColor.y, x.splashColor.z, x.splashColor.w}},
+                   {"splashSeconds", x.splashSeconds},
+                   {"microphone", x.microphone},
+                   {"zipPackage", x.zipPackage},
+                   {"dataPack", x.dataPack},
+                   {"compressTextures", x.compressTextures},
+                   {"textureCompressionExclude", x.textureCompressionExclude},
+                   {"onlyUsedAssets", x.onlyUsedAssets},
+                   {"includeFilter", x.includeFilter},
+                   {"excludeFilter", x.excludeFilter},
+                   {"encryptData", x.encryptData},
+                   {"iconBackground", {x.iconBackground.x, x.iconBackground.y, x.iconBackground.z, x.iconBackground.w}}};
+}
+} // namespace
+
 Result<Project> Project::open(const fs::path& folder) {
     auto text = readFile(folder / kFileName);
     if (!text) return makeError(Error::Code::NotFound, "'" + folder.string() + "' is not an AGR project (no " + kFileName + ")");
@@ -117,46 +179,16 @@ Result<Project> Project::open(const fs::path& folder) {
         if (pl.is_string()) s.plugins.push_back(pl.get<std::string>());
     s.packageRepository = j.value("packageRepository", std::string());
     s.onlineRepository = j.value("onlineRepository", std::string());
-    if (j.contains("export") && j["export"].is_object()) {
-        const json& e = j["export"];
-        ExportSettings& x = s.exportSettings;
-        x.organization = e.value("organization", x.organization);
-        x.version = e.value("version", x.version);
-        x.versionCode = e.value("versionCode", x.versionCode);
-        x.packageId = e.value("packageId", x.packageId);
-        const std::string o = e.value("orientation", std::string("landscape"));
-        x.orientation = o == "portrait" ? ScreenOrientation::Portrait : o == "sensor" ? ScreenOrientation::Sensor : ScreenOrientation::Landscape;
-        x.targetFps = e.value("targetFps", x.targetFps);
-        x.serverTickRate = std::clamp<u32>(e.value("serverTickRate", x.serverTickRate), 1, 1000);
-        x.vibration = e.value("vibration", x.vibration);
-        x.network = e.value("network", x.network);
-        x.microphone = e.value("microphone", x.microphone);
-        x.zipPackage = e.value("zipPackage", x.zipPackage);
-        x.dataPack = e.value("dataPack", x.dataPack);
-        x.compressTextures = e.value("compressTextures", x.compressTextures);
-        x.textureCompressionExclude = e.value("textureCompressionExclude", x.textureCompressionExclude);
-        x.onlyUsedAssets = e.value("onlyUsedAssets", x.onlyUsedAssets);
-        x.includeFilter = e.value("includeFilter", x.includeFilter);
-        x.excludeFilter = e.value("excludeFilter", x.excludeFilter);
-        x.encryptData = e.value("encryptData", x.encryptData);
-        if (e.contains("iconBackground") && e["iconBackground"].is_array() && e["iconBackground"].size() == 4)
-            x.iconBackground = {e["iconBackground"][0].get<float>(), e["iconBackground"][1].get<float>(), e["iconBackground"][2].get<float>(),
-                                e["iconBackground"][3].get<float>()};
-        x.keepScreenOn = e.value("keepScreenOn", x.keepScreenOn);
-        x.splashImage = e.value("splashImage", x.splashImage);
-        if (e.contains("splashColor") && e["splashColor"].is_array() && e["splashColor"].size() == 4)
-            x.splashColor = {e["splashColor"][0].get<float>(), e["splashColor"][1].get<float>(), e["splashColor"][2].get<float>(), e["splashColor"][3].get<float>()};
-        x.splashSeconds = e.value("splashSeconds", x.splashSeconds);
-        x.backQuits = e.value("backQuits", x.backQuits);
-        x.minSdk = e.value("minSdk", x.minSdk);
-        x.targetSdk = e.value("targetSdk", x.targetSdk);
-        if (e.contains("abis") && e["abis"].is_array()) {
-            x.abis.clear();
-            for (const auto& a : e["abis"])
-                if (a.is_string()) x.abis.push_back(a.get<std::string>());
-        }
-        x.keystorePath = e.value("keystore", x.keystorePath);
-        x.keyAlias = e.value("keyAlias", x.keyAlias);
+    if (j.contains("export") && j["export"].is_object()) exportSettingsFromJson(j["export"], s.exportSettings);
+    for (const auto& pj : j.value("exportPresets", json::array())) {
+        if (!pj.is_object()) continue;
+        ExportPreset preset;
+        preset.name = pj.value("name", std::string("Preset"));
+        preset.target = pj.value("target", std::string("desktop"));
+        preset.output = pj.value("output", std::string());
+        preset.settings = s.exportSettings;  // fields a preset does not list keep the project's
+        if (pj.contains("export") && pj["export"].is_object()) exportSettingsFromJson(pj["export"], preset.settings);
+        s.exportPresets.push_back(std::move(preset));
     }
     s.targetDesktop = s.targetAndroid = false;
     if (j.contains("targets") && j["targets"].is_array()) {
@@ -185,24 +217,11 @@ Status Project::save() const {
     j["plugins"] = m_settings.plugins;
     j["packageRepository"] = m_settings.packageRepository;
     j["onlineRepository"] = m_settings.onlineRepository;
-    const ExportSettings& x = m_settings.exportSettings;
-    j["export"] = {{"organization", x.organization}, {"version", x.version},         {"versionCode", x.versionCode},
-                   {"packageId", x.packageId},       {"orientation", enumName(x.orientation)}, {"targetFps", x.targetFps}, {"serverTickRate", x.serverTickRate},
-                   {"vibration", x.vibration}, {"network", x.network},       {"keepScreenOn", x.keepScreenOn}, {"backQuits", x.backQuits},
-                   {"minSdk", x.minSdk},             {"targetSdk", x.targetSdk},     {"abis", x.abis},
-                   {"keystore", x.keystorePath},     {"keyAlias", x.keyAlias},
-                   {"splashImage", x.splashImage},   {"splashColor", {x.splashColor.x, x.splashColor.y, x.splashColor.z, x.splashColor.w}},
-                   {"splashSeconds", x.splashSeconds},
-                   {"microphone", x.microphone},
-                   {"zipPackage", x.zipPackage},
-                   {"dataPack", x.dataPack},
-                   {"compressTextures", x.compressTextures},
-                   {"textureCompressionExclude", x.textureCompressionExclude},
-                   {"onlyUsedAssets", x.onlyUsedAssets},
-                   {"includeFilter", x.includeFilter},
-                   {"excludeFilter", x.excludeFilter},
-                   {"encryptData", x.encryptData},
-                   {"iconBackground", {x.iconBackground.x, x.iconBackground.y, x.iconBackground.z, x.iconBackground.w}}};
+    j["export"] = exportSettingsToJson(m_settings.exportSettings);
+    json presets = json::array();
+    for (const ExportPreset& preset : m_settings.exportPresets)
+        presets.push_back({{"name", preset.name}, {"target", preset.target}, {"output", preset.output}, {"export", exportSettingsToJson(preset.settings)}});
+    j["exportPresets"] = presets;
     return writeFile(m_root / kFileName, j.dump(2));
 }
 

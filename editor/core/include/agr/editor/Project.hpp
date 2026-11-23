@@ -61,6 +61,16 @@ struct ExportSettings {
     std::string keyAlias;
 };
 
+/// A named export configuration (like Godot's export presets): target, output folder and its own
+/// export settings ("Android Play Store", "PC demo", "Server").
+struct ExportPreset {
+    std::string name;
+    /// desktop, windows, server, windows-server, android-apk, android-release-apk, android-aab
+    std::string target = "desktop";
+    std::string output;  ///< Folder relative to the project (empty = build/<target>).
+    ExportSettings settings;
+};
+
 struct ProjectSettings {
     std::string name = "New Project";
     ProjectMode mode = ProjectMode::Mode3D;
@@ -70,6 +80,7 @@ struct ProjectSettings {
     std::string graphicsProfile = "auto";
     std::string engineVersion;  ///< Written on save.
     ExportSettings exportSettings;
+    std::vector<ExportPreset> exportPresets;
     /// Plugin libraries of the project's plugins/ folder loaded when the project opens (file names).
     std::vector<std::string> plugins;
     /// Folder of .agrpkg packages (local repository); empty = <project>/packages.

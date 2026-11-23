@@ -185,6 +185,17 @@ build/export_templates arm64-v8a armeabi-v7a x86_64` (préréglage CMake `androi
 compile en 32 bits ARM sans erreur ni avertissement de taille de pointeur, et l'APK contient bien
 `lib/armeabi-v7a/` ; **il n'a pas été exécuté en 32 bits** (ni téléphone ni bibliothèques 32 bits ici).
 
+## Préréglages d'export
+
+Comme les *export presets* de Godot : en haut du panneau d'export, *Préréglage* recharge une
+configuration enregistrée (cible, dossier de sortie et **tous** ses réglages : version, processeurs
+Android, filtres, compression, chiffrement, signature, rythme du serveur...) ; un nom puis *Enregistrer*
+crée ou remplace le préréglage avec les réglages affichés ; *Supprimer le préréglage*. Ils sont gardés
+dans `project.agrproject` (`exportPresets`). En ligne de commande : `agr_editor --project DIR
+--list-presets` et `agr_editor --project DIR --preset "Play Store"` (le fichier du projet n'est pas
+modifié). Tests : aller-retour de deux préréglages aux réglages différents (version, processeurs,
+filtres, dossier) ; export réel d'un préréglage « Serveur » en ligne de commande (rythme 20 / s gardé).
+
 ## Serveur dédié
 
 Cible *Serveur dédié (sans écran ni son)* de l'export (CLI : `--export server`, ou `windows-server` avec
