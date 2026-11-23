@@ -13,6 +13,8 @@
 
 #include "agr/core/Platform.hpp"
 #include "agr/editor/PackageRepository.hpp"
+#include "agr/script/ScriptEngine.hpp"
+#include "agr/editor/ApiReference.hpp"
 #include "agr/editor/ui/EditorApp.hpp"
 #include "agr/platform/SdlPlatform.hpp"
 #include "agr/animation/AnimationPlugin.hpp"
@@ -34,6 +36,7 @@ namespace {
 ///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
+///   agr_editor --api-reference OUT.md                      (components and Lua API, from the engine)
 ///   agr_editor --package-index FOLDER [--name TITLE]        (index.json to publish a folder of .agrpkg)
 ///   agr_editor --project DIR --install-package NAME --repository URL
 ///   agr_editor --project DIR --create-package NAME --include a,b [--version V] [--depends x,y] --output F.agrpkg
@@ -43,7 +46,7 @@ namespace {
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
-    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, packageName, includes, version = "1.0.0", depends;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, packageName, includes, version = "1.0.0", depends;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -55,6 +58,7 @@ namespace {
         else if (a == "--output") output = next();
         else if (a == "--base") basePack = next();
         else if (a == "--package-index") indexFolder = next();
+        else if (a == "--api-reference") apiOut = next();
         else if (a == "--install-package") installName = next();
         else if (a == "--repository") repository = next();
         else if (a == "--create-package") packageName = next();
@@ -62,8 +66,20 @@ namespace {
         else if (a == "--version") version = next();
         else if (a == "--depends") depends = next();
     }
-    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty()) return -1;
+    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty()) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
+    if (!apiOut.empty()) {
+        VirtualFileSystem vfs;
+        ScriptEngine scripts(vfs);
+        const std::string md = apiReferenceMarkdown(&scripts);
+        std::ofstream out(apiOut, std::ios::binary);
+        if (!out || !(out << md)) {
+            AGR_LOG_ERROR("Editor", "cannot write {}", apiOut);
+            return 1;
+        }
+        AGR_LOG_INFO("Editor", "API reference written: {} ({} KB)", apiOut, md.size() / 1024);
+        return 0;
+    }
     if (!indexFolder.empty()) {
         auto idx = writeRepositoryIndex(indexFolder, name.empty() ? std::string("AGR packages") : name);
         if (!idx) {

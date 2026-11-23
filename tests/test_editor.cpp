@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "agr/physics3d/Physics3DComponents.hpp"
+#include "agr/editor/ApiReference.hpp"
 #include "agr/editor/CurveView.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
@@ -1667,4 +1668,19 @@ TEST_CASE("export filters: glob patterns, assets reached from the scenes through
     CHECK_FALSE(fs::exists(out / "assets" / "unused" / "old.png"));
     CHECK_FALSE(fs::exists(out / "assets" / "models" / "ship.bin"));
     CHECK(report.value().skippedAssets >= 2);
+}
+
+TEST_CASE("API reference: every component and field, the Lua modules; docs/API.md is up to date") {
+    VirtualFileSystem vfs;
+    ScriptEngine scripts(vfs);
+    const std::string md = apiReferenceMarkdown(&scripts);
+    CHECK(md.find("### NavArea") != std::string::npos);
+    CHECK(md.find("`occlusionStrength`") != std::string::npos);
+    CHECK(md.find("**`agr.http`**") != std::string::npos);
+    CHECK(md.find("`agr.loadPack`") != std::string::npos);
+    // The committed reference lists every registered component (regenerate it after adding one).
+    std::ifstream in(fs::path(AGR_SOURCE_DIR) / "docs" / "API.md", std::ios::binary);
+    const std::string committed((std::istreambuf_iterator<char>(in)), {});
+    for (const ComponentInfo* c : ComponentRegistry::instance().all())
+        if (c->serializable) CHECK_MESSAGE(committed.find("### " + c->name + "\n") != std::string::npos, "docs/API.md lacks ", c->name, ": run agr_editor --api-reference docs/API.md");
 }

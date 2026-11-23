@@ -844,7 +844,7 @@ void EditorApp::drawMenuBar() {
         ImGui::Separator();
         if (ImGui::MenuItem("Documentation", "F1")) m_shared->showDocs = true;
         if (ImGui::BeginMenu("Guides")) {
-            const char* guides[][2] = {{"Éditeur", "EDITOR.md"},          {"Scripts Lua", "SCRIPTING.md"}, {"Logique visuelle", "LOGIC.md"},
+            const char* guides[][2] = {{"Éditeur", "EDITOR.md"},          {"Scripts Lua", "SCRIPTING.md"}, {"Référence de l'API", "API.md"}, {"Logique visuelle", "LOGIC.md"},
                                        {"Rendu 3D", "3D.md"},            {"2D", "2D.md"},                 {"Physique", "PHYSICS.md"},
                                        {"Animation", "ANIMATION.md"},    {"Interface (UI)", "UI.md"},     {"Audio", "AUDIO.md"},
                                        {"Export PC / Android", "EXPORT.md"}, {"Plugins", "PLUGINS.md"},  {"Paquets", "PACKAGES.md"}};
