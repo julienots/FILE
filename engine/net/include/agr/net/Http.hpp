@@ -43,6 +43,7 @@ struct HttpRequest {
     bool verifyCertificates = true;  ///< Turn off only for local tests with self-signed certificates.
     /// Extra trusted certificates (PEM), e.g. a self-signed server's.
     std::string extraCaPem;
+    bool direct = false;  ///< Never through a proxy (devices on the local network: routers, consoles).
 };
 
 struct HttpResponse {

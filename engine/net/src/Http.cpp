@@ -482,7 +482,7 @@ HttpResponse exchange(const HttpRequest& req, const Url& url, Clock::time_point 
     Stream s;
     s.cancel = cancel;
     s.deadline = deadline;
-    const std::optional<Url> proxy = proxyFor(url);
+    const std::optional<Url> proxy = req.direct ? std::nullopt : proxyFor(url);
     const bool viaProxy = proxy.has_value();
     if (std::string e = connectTcp(s.tcp, viaProxy ? proxy->host : url.host, viaProxy ? proxy->port : url.port, deadline, cancel); !e.empty()) {
         resp.error = viaProxy ? "proxy: " + e : e;

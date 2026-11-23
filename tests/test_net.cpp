@@ -1,5 +1,6 @@
 // Networking: real UDP sessions on the loopback interface, reliable ordered delivery over a
 // lossy, reordering transport, capacity, disconnects and timeouts; agr.net from Lua.
+#include <set>
 #include <cctype>
 #include <doctest/doctest.h>
 #include <functional>
@@ -965,4 +966,103 @@ TEST_CASE("WebSocket server: the engine's own WebSocket client connects, text an
         return answer.find("400") != std::string::npos;
     });
     CHECK(answer.find("400 Bad Request") != std::string::npos);
+}
+
+#include "agr/net/Upnp.hpp"
+#include <atomic>
+#include <mutex>
+
+TEST_CASE("UPnP: router found by SSDP, description read, public address, port mapping added and removed (fake router on loopback)") {
+    // A fake Internet gateway: SSDP answers on UDP, description and SOAP control over HTTP.
+    auto ssdp = UdpSocket::open(0);
+    auto http = TcpServer::listen(0, true);
+    REQUIRE(ssdp);
+    REQUIRE(http);
+    const u16 httpPort = http.value()->port();
+    std::atomic<bool> stop{false};
+    std::mutex mutex;
+    std::vector<std::string> soapCalls;
+    std::set<u16> mapped;
+    std::thread router([&] {
+        std::vector<std::unique_ptr<TcpConnection>> conns;
+        std::vector<std::string> buffers;
+        while (!stop) {
+            for (const auto& d : ssdp.value()->receive())
+                if (d.data.rfind("M-SEARCH", 0) == 0)
+                    ssdp.value()->sendTo(d.host, d.port, "HTTP/1.1 200 OK\r\nST: upnp:rootdevice\r\nLocation: http://127.0.0.1:" + std::to_string(httpPort) + "/rootDesc.xml\r\n\r\n");
+            while (auto c = http.value()->accept()) {
+                conns.push_back(std::move(c));
+                buffers.emplace_back();
+            }
+            for (usize i = 0; i < conns.size(); ++i) {
+                conns[i]->poll();
+                buffers[i] += conns[i]->receive();
+                const usize headEnd = buffers[i].find("\r\n\r\n");
+                if (headEnd == std::string::npos) continue;
+                const std::string head = buffers[i].substr(0, headEnd);
+                usize length = 0;
+                if (const usize cl = head.find("Content-Length: "); cl != std::string::npos) length = std::stoul(head.substr(cl + 16));
+                if (buffers[i].size() < headEnd + 4 + length) continue;
+                const std::string body = buffers[i].substr(headEnd + 4, length);
+                buffers[i].clear();
+                std::string reply, status = "200 OK";
+                if (head.rfind("GET /rootDesc.xml", 0) == 0) {
+                    reply = "<?xml version=\"1.0\"?><root><device><deviceType>urn:schemas-upnp-org:device:InternetGatewayDevice:1</deviceType><deviceList><device>"
+                            "<serviceList><service><serviceType>urn:schemas-upnp-org:service:WANIPConnection:1</serviceType>"
+                            "<controlURL>/ctl/IPConn</controlURL></service></serviceList></device></deviceList></device></root>";
+                } else if (head.rfind("POST /ctl/IPConn", 0) == 0) {
+                    std::lock_guard lock(mutex);
+                    soapCalls.push_back(head + "\n" + body);
+                    auto value = [&](const char* tag) {
+                        const std::string open = std::string("<") + tag + ">", close = std::string("</") + tag + ">";
+                        const usize a = body.find(open), b = body.find(close);
+                        return a == std::string::npos ? std::string() : body.substr(a + open.size(), b - a - open.size());
+                    };
+                    if (head.find("#GetExternalIPAddress") != std::string::npos) {
+                        reply = "<s:Envelope><s:Body><u:GetExternalIPAddressResponse><NewExternalIPAddress>203.0.113.7</NewExternalIPAddress></u:GetExternalIPAddressResponse></s:Body></s:Envelope>";
+                    } else if (head.find("#AddPortMapping") != std::string::npos) {
+                        mapped.insert(static_cast<u16>(std::stoi(value("NewExternalPort"))));
+                    } else if (head.find("#DeletePortMapping") != std::string::npos) {
+                        if (!mapped.erase(static_cast<u16>(std::stoi(value("NewExternalPort"))))) {
+                            status = "500 Internal Server Error";
+                            reply = "<s:Envelope><s:Body><s:Fault><detail><UPnPError><errorCode>714</errorCode><errorDescription>NoSuchEntryInArray</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>";
+                        }
+                    }
+                }
+                conns[i]->send("HTTP/1.1 " + status + "\r\nContent-Type: text/xml\r\nContent-Length: " + std::to_string(reply.size()) + "\r\nConnection: close\r\n\r\n" + reply);
+                conns[i]->poll();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    auto gateway = UpnpGateway::discover(3.0, "127.0.0.1", ssdp.value()->port());
+    REQUIRE_MESSAGE(gateway, (gateway ? "" : gateway.error().message));
+    CHECK(gateway.value().controlUrl() == "http://127.0.0.1:" + std::to_string(httpPort) + "/ctl/IPConn");
+    CHECK(gateway.value().serviceType() == "urn:schemas-upnp-org:service:WANIPConnection:1");
+    CHECK(gateway.value().localAddress() == "127.0.0.1");
+    auto ip = gateway.value().externalAddress();
+    REQUIRE(ip);
+    CHECK(ip.value() == "203.0.113.7");
+    REQUIRE(gateway.value().addPortMapping(7777, 7777, "UDP", "Mon jeu <AGR>"));
+    {
+        std::lock_guard lock(mutex);
+        CHECK(mapped.count(7777) == 1);
+        const std::string& add = soapCalls.back();
+        CHECK(add.find("SOAPAction: \"urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping\"") != std::string::npos);
+        CHECK(add.find("<NewInternalClient>127.0.0.1</NewInternalClient>") != std::string::npos);
+        CHECK(add.find("<NewProtocol>UDP</NewProtocol>") != std::string::npos);
+        CHECK(add.find("Mon jeu &lt;AGR&gt;") != std::string::npos);  // escaped
+    }
+    REQUIRE(gateway.value().deletePortMapping(7777, "UDP"));
+    auto again = gateway.value().deletePortMapping(7777, "UDP");
+    REQUIRE_FALSE(again);
+    CHECK(again.error().message.find("NoSuchEntryInArray") != std::string::npos);
+    stop = true;
+    router.join();
+    // Nobody answers: a clear failure after the timeout.
+    auto none = UdpSocket::open(0);
+    REQUIRE(none);
+    auto missing = UpnpGateway::discover(0.3, "127.0.0.1", none.value()->port());
+    REQUIRE_FALSE(missing);
+    CHECK(missing.error().message.find("no UPnP router") != std::string::npos);
 }

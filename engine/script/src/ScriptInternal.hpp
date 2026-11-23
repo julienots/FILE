@@ -1,4 +1,7 @@
 #pragma once
+#include <atomic>
+#include <thread>
+#include <memory>
 #include <map>
 #include <set>
 #include <functional>
@@ -121,7 +124,19 @@ struct ScriptEngine::Impl {
         std::unordered_map<u64, std::unique_ptr<net::UdpSocket>> udp;
         std::unordered_map<u64, std::unique_ptr<net::WebSocketServer>> wsServers;
         u64 next = 1;
+        // agr.upnp: one router job at a time, on a worker thread.
+        struct UpnpJob {
+            std::atomic<bool> done{false};
+            bool ok = false;
+            std::string externalAddress, error;
+            std::thread worker;
+            ~UpnpJob() {
+                if (worker.joinable()) worker.join();
+            }
+        };
+        std::shared_ptr<UpnpJob> upnp;
         void clear() {
+            upnp.reset();
             tcpServers.clear();
             tcp.clear();
             udp.clear();

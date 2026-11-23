@@ -112,6 +112,22 @@ std::string lowerCase(std::string s) {
 
 } // namespace
 
+std::string localAddressFor(const std::string& host) {
+    ensureSockets();
+    sockaddr_in a{};
+    if (!resolve(host, 9, SOCK_DGRAM, a)) return {};
+    const i64 s = asHandle(::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
+    if (s == kNone) return {};
+    std::string out;
+    if (::connect(sock(s), reinterpret_cast<sockaddr*>(&a), sizeof a) == 0) {  // no packet is sent
+        sockaddr_in local{};
+        SockLen len = sizeof local;
+        if (getsockname(sock(s), reinterpret_cast<sockaddr*>(&local), &len) == 0) out = addressText(local);
+    }
+    closeSock(s);
+    return out;
+}
+
 // ------------------------------------------------------------------ TCP
 TcpConnection::~TcpConnection() { close(); }
 

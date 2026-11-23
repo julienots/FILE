@@ -5,6 +5,7 @@ agr_add_module(net
         src/Replication.cpp
         src/Http.cpp
         src/Sockets.cpp
+        src/Upnp.cpp
     PUBLIC_DEPS
         agr::runtime)
 target_link_libraries(agr_net PRIVATE mbedtls mbedx509 mbedcrypto)

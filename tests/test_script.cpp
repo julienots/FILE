@@ -359,6 +359,15 @@ agr.wsserver.close(ws)
     CHECK_MESSAGE(st, (st ? "" : st.error().message));
 }
 
+TEST_CASE("agr.upnp runs in the background and reports a missing router") {
+    ScriptFixture f;
+    REQUIRE(f.scripts.run("assert(agr.upnp.status() == 'idle'); agr.upnp.openPort(7777)"));
+    REQUIRE(f.scripts.run("assert(agr.upnp.status() == 'working')"));  // the game keeps running meanwhile
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));  // the search gives up after 2 s
+    // No UPnP router in the test machine: a clear failure (a real router would give "done", ip).
+    REQUIRE(f.scripts.run("local s, why = agr.upnp.status(); assert(s == 'failed' or s == 'done', s); assert(why and #why > 0)"));
+}
+
 TEST_CASE("debugger: pause request and break on error") {
     ScriptFixture f;
     f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");

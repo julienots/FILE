@@ -15,6 +15,10 @@
 
 namespace agr::net {
 
+/// This machine's IPv4 address on the route to `host` ("" if unknown): what a router or a LAN
+/// peer sees.
+std::string localAddressFor(const std::string& host);
+
 class TcpConnection {
 public:
     ~TcpConnection();

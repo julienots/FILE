@@ -251,14 +251,30 @@ Tests : le client WebSocket du moteur se connecte au serveur et échange texte, 
 100 Ko et 70 Ko, diffusion, fermeture ; TCP avec 200 Ko envoyés en plusieurs fois, fermeture détectée ;
 UDP aller ; les mêmes depuis Lua.
 
+## Ouvrir un port sur la box (UPnP)
+
+Pour héberger depuis chez soi une partie jointe par Internet, le port doit être redirigé par la box
+vers la machine. `agr.upnp.openPort(7777 [, "UDP" | "TCP" [, description]])` le demande à la box
+(UPnP IGD, comme la classe `UPNP` de Godot), **en arrière-plan** : `agr.upnp.status()` → `"working"`, puis
+`"done", adresse publique` (à donner aux amis) ou `"failed", raison` (UPnP désactivé sur la box, pas
+de box). `agr.upnp.closePort(7777)` retire la redirection. C++ : `agr::net::UpnpGateway` (`discover`,
+`externalAddress`, `addPortMapping`, `deletePortMapping`), appels bloquants.
+
+Recherche SSDP (multicast `239.255.255.250:1900`), description de la box, service `WANIPConnection` ou
+`WANPPPConnection` (adresse de contrôle relative ou absolue), requêtes SOAP ; jamais par un proxy HTTP.
+Test : une fausse box sur la boucle locale (SSDP, description, SOAP) est trouvée, donne son adresse
+publique, reçoit une redirection (adresse locale, protocole, description échappée), la retire, et
+refuse d'en retirer une absente avec sa raison ; sans box, échec clair. **Pas essayé avec une vraie
+box** (la machine de développement n'en a pas).
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système
   l'a) ; `join("::1", port)`, `join("[2001:db8::7]", port)` ou un nom (IPv4 préféré quand il a les deux).
   La découverte LAN reste en IPv4 (diffusion). Le chemin IPv6 réel n'a pas pu être testé dans la VM
   de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
-- Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
-  ouvrir son port UDP) ; pas de WebRTC ; serveur WebSocket en `ws://` seulement (pas de TLS intégré
+- Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte ouvre son port UDP, par
+  UPnP si sa box le permet) ; pas de WebRTC ; serveur WebSocket en `ws://` seulement (pas de TLS intégré
   côté serveur) ; sockets bas niveau en IPv4.
 - Chiffrement à **clé partagée** (le mot de passe) : pas d'échange de clés Diffie-Hellman ni de
   certificats ; qui connaît le mot de passe et a enregistré la poignée de main peut déchiffrer la

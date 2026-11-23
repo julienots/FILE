@@ -1,6 +1,8 @@
 // agr.tcp, agr.udp, agr.wsserver: low-level sockets for scripts (polled, non-blocking).
 #include "ScriptInternal.hpp"
 
+#include "agr/net/Upnp.hpp"
+
 namespace agr {
 
 namespace {
@@ -212,9 +214,58 @@ int w_close(lua_State* L) {
     return 0;
 }
 
+// ---- UPnP (router port forwarding), in the background
+int startUpnp(lua_State* L, bool open) {
+    auto& s = socketsOf(L);
+    if (s.upnp && !s.upnp->done) return luaL_error(L, "agr.upnp: a request is already running");
+    const u16 port = static_cast<u16>(luaL_checkinteger(L, 1));
+    std::string protocol = luaL_optstring(L, 2, "UDP");
+    for (char& c : protocol) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (protocol != "UDP" && protocol != "TCP") return luaL_error(L, "agr.upnp: protocol must be UDP or TCP");
+    const std::string description = luaL_optstring(L, 3, "AGR game");
+    s.upnp = std::make_shared<std::remove_reference_t<decltype(s)>::UpnpJob>();
+    auto* job = s.upnp.get();
+    job->worker = std::thread([job, port, protocol, description, open] {
+        auto gw = net::UpnpGateway::discover(2.0);
+        if (!gw) {
+            job->error = gw.error().message;
+        } else {
+            Status st = open ? gw.value().addPortMapping(port, port, protocol, description) : gw.value().deletePortMapping(port, protocol);
+            if (!st) job->error = st.error().message;
+            else {
+                job->ok = true;
+                if (auto ip = gw.value().externalAddress()) job->externalAddress = ip.value();
+            }
+        }
+        job->done = true;
+    });
+    return 0;
+}
+/// agr.upnp.openPort(port [, "UDP" | "TCP" [, description]]): asks the router to forward the port here.
+int p_open(lua_State* L) { return startUpnp(L, true); }
+/// agr.upnp.closePort(port [, protocol])
+int p_close(lua_State* L) { return startUpnp(L, false); }
+/// agr.upnp.status() -> "idle" | "working" | "done" | "failed", public address or error
+int p_status(lua_State* L) {
+    auto& s = socketsOf(L);
+    if (!s.upnp) {
+        lua_pushstring(L, "idle");
+        return 1;
+    }
+    if (!s.upnp->done) {
+        lua_pushstring(L, "working");
+        return 1;
+    }
+    lua_pushstring(L, s.upnp->ok ? "done" : "failed");
+    lua_pushstring(L, (s.upnp->ok ? s.upnp->externalAddress : s.upnp->error).c_str());
+    return 2;
+}
+
 } // namespace
 
 void openSocketBindings(lua_State* L) {
+    static const luaL_Reg upnp[] = {{"openPort", p_open}, {"closePort", p_close}, {"status", p_status}, {nullptr, nullptr}};
+    addAgrLibrary(L, "upnp", upnp);
     static const luaL_Reg tcp[] = {{"listen", t_listen}, {"accept", t_accept}, {"connect", t_connect}, {"send", t_send},
                                    {"receive", t_receive}, {"state", t_state}, {"close", t_close}, {nullptr, nullptr}};
     addAgrLibrary(L, "tcp", tcp);
