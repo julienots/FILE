@@ -262,7 +262,7 @@ On the root bone of a chain (spine, tail, tentacle, crane): FABRIK, the chain's 
 | `boneCount` | int | Bones in the chain (following the first child) ; plage 1 .. 64 |
 | `iterations` | int | plage 1 .. 64 |
 | `maxAngle` | angle | Bend limit at each joint ; plage 0 .. 3.1416 |
-| `jointLimits` | string | Per joint limits in degrees, from the first inner joint: "30, 90, 45" |
+| `jointLimits` | string | Per joint limits in degrees, from the first inner joint: "30, 90x15, 45" (FxS: front toward the pole x sideways) |
 | `weight` | float | plage 0 .. 1 |
 | `enabled` | bool |  |
 
@@ -1450,7 +1450,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-231 fonctions.
+233 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startRecording`, `stop`, `stopRecording`
@@ -1476,7 +1476,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.locale`** : `get`, `list`, `set`
 - `agr.log`
 - **`agr.nav`** : `path`, `rebuild`
-- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `role`, `send`, `sender`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`
+- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `role`, `send`, `sender`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`
 - **`agr.physics2d`** : `castBox`, `castCircle`, `gravity`, `layer`, `mask`, `overlapBox`, `overlapCircle`, `raycast`, `setGravity`
 - **`agr.physics3d`** : `castSphere`, `layer`, `mask`, `overlapBox`, `overlapSphere`, `raycast`, `setGravity`
 - **`agr.profile`** : `begin`, `finish`

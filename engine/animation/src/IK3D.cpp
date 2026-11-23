@@ -75,7 +75,7 @@ void registerIK3DComponents() {
         .field("boneCount", &ChainIK3DComponent::boneCount, {.tooltip = "Bones in the chain (following the first child)", .rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("iterations", &ChainIK3DComponent::iterations, {.rangeMin = 1.0f, .rangeMax = 64.0f})
         .field("maxAngle", &ChainIK3DComponent::maxAngle, {.tooltip = "Bend limit at each joint", .flags = FieldFlag_Angle, .rangeMin = 0.0f, .rangeMax = 3.1416f})
-        .field("jointLimits", &ChainIK3DComponent::jointLimits, {.tooltip = "Per joint limits in degrees, from the first inner joint: \"30, 90, 45\""})
+        .field("jointLimits", &ChainIK3DComponent::jointLimits, {.tooltip = "Per joint limits in degrees, from the first inner joint: \"30, 90x15, 45\" (FxS: front toward the pole x sideways)"})
         .field("weight", &ChainIK3DComponent::weight, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("enabled", &ChainIK3DComponent::enabled);
 }

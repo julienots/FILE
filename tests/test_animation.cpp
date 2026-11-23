@@ -977,6 +977,53 @@ TEST_CASE("chain IK: per joint bend limits") {
     CHECK(bend(3) <= math::radians(10.0f) + 0.02f);
     CHECK(bend(2) > math::radians(20.0f));  // the free joint takes the bend
 }
+TEST_CASE("chain IK: elliptical joint limits (front x side) bend freely one way and barely the other") {
+    Scene scene;
+    registerAnimationComponents();
+    registerRenderComponents();
+    using math::Vec3;
+    // A chain along +X; "front" = up (no pole), "side" = Z.
+    std::vector<ecs::Entity> bones{scene.createEntity("B0")};
+    for (int i = 1; i <= 3; ++i) {
+        bones.push_back(scene.createEntity(("B" + std::to_string(i)).c_str(), bones.back()));
+        scene.registry().get<TransformComponent>(bones.back()).position = {1, 0, 0};
+    }
+    const auto target = scene.createEntity("Target");
+    auto& ik = scene.registry().emplace<ChainIK3DComponent>(bones[0]);
+    ik.target = target;
+    ik.boneCount = 3;
+    ik.iterations = 32;
+    ik.jointLimits = "10x80, 10x80";  // 10 degrees up / down, 80 sideways
+    auto wpos = [&](ecs::Entity e) { return scene.worldMatrix(e).transformPoint(Vec3(0.0f)); };
+    auto reset = [&] {
+        for (int i = 1; i <= 3; ++i) scene.registry().get<TransformComponent>(bones[i]).rotation = math::Quat::identity();
+        scene.registry().get<TransformComponent>(bones[0]).rotation = math::Quat::identity();
+        scene.updateTransforms();
+    };
+    auto reach = [&](Vec3 goal) {
+        reset();
+        scene.registry().get<TransformComponent>(target).position = goal;
+        scene.updateTransforms();
+        solveChainIK3D(scene, bones[0], ik);
+        scene.updateTransforms();
+        return math::length(wpos(bones[3]) - goal);
+    };
+    auto joint = [&](int j) {  // bend of joint j split into its up (y) and sideways (z) parts
+        const Vec3 a = math::normalize(wpos(bones[j]) - wpos(bones[j - 1])), b = math::normalize(wpos(bones[j + 1]) - wpos(bones[j]));
+        return std::acos(std::clamp(math::dot(a, b), -1.0f, 1.0f));
+    };
+    // Curling sideways (in the XZ plane) is allowed: reached.
+    CHECK(reach({1.6f, 0, 1.6f}) < 0.05f);
+    // Curling up as much is not: the inner joints stay within ~10 degrees, the target is missed.
+    const float upMiss = reach({1.6f, 1.6f, 0});
+    CHECK(upMiss > 0.3f);
+    CHECK(joint(1) <= math::radians(10.0f) + 0.03f);
+    CHECK(joint(2) <= math::radians(10.0f) + 0.03f);
+    // The same chain with round 80 degree limits reaches both.
+    ik.jointLimits = "80, 80";
+    CHECK(reach({1.6f, 1.6f, 0}) < 0.05f);
+}
+
 TEST_CASE("imported clips become editable curves: faithful, unwrapped rotations, redundant keys removed") {
     AnimationClip imported;
     imported.duration = 2.0f;

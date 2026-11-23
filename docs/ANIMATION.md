@@ -251,8 +251,10 @@ test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- IK : limites d'angle par articulation (`jointLimits`, en degrés) mais pas par axe (pas de rotule
-  limitée différemment en avant et sur le côté) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
+- IK : limites par articulation (`jointLimits`, en degrés) : `"30"` = cône rond, `"90x15"` = cône
+  **elliptique** (90° vers l'avant — le côté du pôle, sinon le haut — et 15° sur le côté : un genou, une
+  queue qui balaie latéralement) ; en 3D (en 2D, la chaîne reste dans son plan : un seul nombre suffit) ;
+  pas de limite de torsion ni de limite asymétrique (plus vers l'avant que vers l'arrière) ; pas de poids peints à la main pour les peaux 2D ; *morph targets* : 8 au plus, mélangés sur le CPU
   (un gros maillage très déformé coûte), pas d'import FBX ; au plus 128
   articulations par maillage, 4 influences par sommet.
 - Les clips importés (`modèle.glb#Marche`) restent en lecture seule ; **Rendre modifiable...** (panneau
