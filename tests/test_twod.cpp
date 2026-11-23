@@ -683,3 +683,33 @@ TEST_CASE("particles: emission on surfaces (3D sphere, box), 2D circle / rectang
     CHECK(maxX <= 2.0f);
     CHECK(maxX - minX > 3.0f);
 }
+
+TEST_CASE("tile rules: terrain transitions by corners (F:c)") {
+    TilemapComponent tm;
+    tm.width = 5;
+    tm.height = 5;
+    tilemapFillRect(tm, 0, 0, 4, 4, 0);  // grass everywhere (frame 0)
+    tilemapSet(tm, 2, 2, 32);            // one cell of sand (the set at 32)
+    tm.autotile = "32:c";
+    TileRules r = TileRules::parse(tm, 64);
+    CHECK(r.resolve(tm, 2, 2, 0.0) == 32 + 15);      // the sand cell itself: all corners sand
+    CHECK(r.resolve(tm, 1, 2, 0.0) == 32 + 2 + 8);   // left of it: its right corners
+    CHECK(r.resolve(tm, 3, 2, 0.0) == 32 + 1 + 4);   // right: its left corners
+    CHECK(r.resolve(tm, 2, 3, 0.0) == 32 + 4 + 8);   // above (+y): its lower corners
+    CHECK(r.resolve(tm, 2, 1, 0.0) == 32 + 1 + 2);   // below: its upper corners
+    CHECK(r.resolve(tm, 1, 3, 0.0) == 32 + 8);       // diagonal up-left: one corner
+    CHECK(r.resolve(tm, 3, 1, 0.0) == 32 + 1);       // diagonal down-right: one corner
+    CHECK(r.resolve(tm, 0, 0, 0.0) == 0);            // far: plain grass
+    // A 2x2 patch: inner corners full, the edges blend.
+    tilemapSet(tm, 3, 2, 33);
+    tilemapSet(tm, 2, 3, 40);
+    tilemapSet(tm, 3, 3, 32);
+    r = TileRules::parse(tm, 64);
+    CHECK(r.resolve(tm, 4, 2, 0.0) == 32 + 1 + 4);
+    CHECK(r.resolve(tm, 4, 3, 0.0) == 32 + 1 + 4);
+    CHECK(r.resolve(tm, 4, 4, 0.0) == 32 + 4);
+    // Empty cells stay empty.
+    tilemapSet(tm, 1, 2, -1);
+    r = TileRules::parse(tm, 64);
+    CHECK(r.resolve(tm, 1, 2, 0.0) == -1);
+}

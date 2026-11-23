@@ -67,7 +67,9 @@ TileRules TileRules::parse(const TilemapComponent& tm, usize frameCount) {
             i32 base = 0;
             const usize colon = e.find(':');
             const bool blob = colon != std::string_view::npos && e.substr(colon + 1).find("47") != std::string_view::npos;
+            const bool corners = colon != std::string_view::npos && e.substr(colon + 1).find('c') != std::string_view::npos;
             if (!toInt(colon == std::string_view::npos ? e : e.substr(0, colon), base) || base < 0) return;
+            if (corners) r.cornerSets.push_back(base);
             const i32 count = blob ? 47 : 16;
             for (i32 k = 0; k < count; ++k)
                 if (static_cast<usize>(base + k) < frameCount) {
@@ -105,7 +107,25 @@ TileRules TileRules::parse(const TilemapComponent& tm, usize frameCount) {
 i32 TileRules::resolve(const TilemapComponent& tm, u32 x, u32 y, double time) const {
     i32 id = tm.tileAt(x, y);
     if (id < 0) return id;
-    if (!group.empty() && static_cast<usize>(id) < group.size() && group[static_cast<usize>(id)] >= 0) {
+    bool cornered = false;
+    for (const i32 set : cornerSets) {  // terrain transitions by corners
+        auto in = [&](i64 nx, i64 ny) {
+            if (nx < 0 || ny < 0) return false;
+            const i32 n = tm.tileAt(static_cast<u32>(nx), static_cast<u32>(ny));
+            return n >= 0 && static_cast<usize>(n) < group.size() && group[static_cast<usize>(n)] == set;
+        };
+        const i64 ix = x, iy = y;
+        const bool self = in(ix, iy);
+        const bool l = in(ix - 1, iy), r = in(ix + 1, iy), u = in(ix, iy + 1), d = in(ix, iy - 1);
+        const int mask = ((self || l || u || in(ix - 1, iy + 1)) ? 1 : 0) | ((self || r || u || in(ix + 1, iy + 1)) ? 2 : 0) |
+                         ((self || l || d || in(ix - 1, iy - 1)) ? 4 : 0) | ((self || r || d || in(ix + 1, iy - 1)) ? 8 : 0);
+        if (mask != 0) {
+            id = set + mask;
+            cornered = true;
+            break;
+        }
+    }
+    if (!cornered && !group.empty() && static_cast<usize>(id) < group.size() && group[static_cast<usize>(id)] >= 0) {
         const i32 g = group[static_cast<usize>(id)];
         auto same = [&](i64 nx, i64 ny) {
             if (nx < 0 || ny < 0) return false;

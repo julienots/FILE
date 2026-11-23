@@ -350,6 +350,11 @@ struct TilemapComponent {
     /// is drawn with F + the mask of its neighbours of the same group: paint with F, the
     /// borders and corners follow. "F:47" = a 47-frame "blob" set using the 8 neighbours
     /// (inner corners too): frame F + index of the mask in blobTileMasks().
+    /// "F:c" = a 16-frame **terrain transition** set by corners (sand over grass, water over
+    /// shore): a corner belongs to the terrain when any of the 4 cells around it holds a frame of
+    /// the set, and every painted cell touching it is drawn with F + its corner mask (up-left = 1,
+    /// up-right = 2, down-left = 4, down-right = 8; F + 15 = all terrain). The other tile shows
+    /// where no corner is terrain: paint the transition terrain over a base terrain.
     std::string autotile;
 
     i32 tileAt(u32 x, u32 y) const {
@@ -367,6 +372,7 @@ const std::array<u8, 47>& blobTileMasks();
 struct TileRules {
     std::vector<i32> group;                   ///< Frame -> base frame of its autotile group, -1 = none.
     std::vector<u8> blob;                     ///< Frame -> 1 when its group is a 47-tile (8 neighbours) set.
+    std::vector<i32> cornerSets;              ///< Base frames of "F:c" corner transition sets.
     std::vector<i32> anim;                    ///< Frame -> index in `sequences`, -1 = static.
     std::vector<std::vector<i32>> sequences;  ///< Frames of each animation.
     std::vector<float> fps;
