@@ -13,7 +13,7 @@ LK Studio est une application Android qui sert à **créer des mods pour LOST KI
 | Onglet | Contenu |
 |---|---|
 | **Projet** | Nom, auteur, version, couleur et description du mod. Modèles de départ : vide, bestiaire, arsenal, règles du monde. |
-| **Créatures** | Nouvelles créatures copiées d'une créature du jeu, qui garde son corps, ses attaques et son intelligence. Réglages : nom, description, région, couleur, taille, vie, attaque, niveau, fréquence d'apparition, surtout la nuit, butin (objets et éclats d'étoile), modèle 3D. |
+| **Créatures** | Nouvelles créatures copiées d'une créature du jeu, qui garde son corps, ses attaques et son intelligence. Réglages : nom, description, région (13 régions, Canyons Écarlates compris), couleur, taille, vie, attaque, niveau, fréquence d'apparition, surtout la nuit, butin (objets et éclats d'étoile), modèle 3D. |
 | **Objets** | Nouvelles armes, armures, anneaux et potions copiés d'un objet du jeu. Réglages : nom, rareté (de commun à ancestral), attaque ou défense, vie, critique, dégâts élémentaires, couleur, créature qui le lâche avec sa chance, cadeau au début d'une partie. |
 | **3D** | Import de modèles **.glb / .gltf** (Tripo, Meshy, Sketchfab…), réduction du nombre de triangles et **squelette automatique**. On les voit bouger : repos, marche, course, attaque, saut. Modèles possibles : le héros, Kaede, Astra, les villageois, ses créatures, les créatures du jeu, les 12 bâtiments. |
 | **Monde** | Vie, force et taille des ennemis, expérience, or, or de départ, vitesse du héros, saut, endurance, montures, gravité, vitesse du temps, heure figée, météo, bombes, pelle. |

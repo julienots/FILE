@@ -6,13 +6,37 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.2.0 (versionCode 51), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 : elle s'installe par-dessus). SHA-256 : `356904461f517572e13a7659cf0599f5c56159609056bc0ec621284f1bb581c3`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.3.0 (versionCode 52), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 et la 3.2.0 : elle s'installe par-dessus). SHA-256 : `82ddc79b7215503e984ebfbe7b37185cac46ec0d9a95b621b3e95a2b7b2a722e`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.3.0 (l'espace, et une 13e région : les Canyons Écarlates)
+
+- **Voyage dans l'espace** :
+  - l'**Observatoire des étoiles**, sur un col des Monts Titans, a une porte de basalte et d'argent avec un vortex de nuit étoilée et une sphère armillaire ;
+  - il ouvre sur **Les Confins stellaires** : des astéroïdes reliés par des ponts de lumière, au-dessus d'une planète ;
+  - un **ciel spatial entièrement en shader** : nébuleuses violettes et bleues avec leurs bandes de poussière, trois couches d'étoiles colorées qui scintillent, la bande galactique, une géante gazeuse à anneaux, le soleil avec sa couronne ;
+  - **la planète** : océans, continents, nuages qui défilent, calottes polaires sur son propre axe, reflet du soleil sur l'eau, lumières des villes côté nuit, atmosphère bleue sur le bord ;
+  - autour : une ceinture de 46 astéroïdes, des cristaux, un monolithe à anneau de lumière ;
+  - **gravité réduite** (sauts lents et longs) ;
+  - ennemis : esprits d'aurore, golems et araignées de cristal. Récompense : le *Cœur de comète*.
+- **La carte s'agrandit : les Canyons Écarlates**, une 13e région sur toute la côte sud (environ 3,9 × 1,9 km), sous la jungle et les Titans :
+  - plateaux rouges en escaliers, gorges profondes au fond de sable, aiguilles de pierre ;
+  - **lieux** : deux villages aux maisons d'adobe (Roc-Écarlate, Aiguille-Rouge), la Citadelle des Falaises (château en grès), les Arches du Couchant (ruines), le Camp des Nomades et deux pierres de voyage. Des routes les relient à Xochi ;
+  - **5 créatures** : Coyote écarlate (en meute, la nuit), Scorpion de feu, Wyverne des falaises, Pillard des gorges, Colosse de grès rouge ;
+  - **ressources** : or, cuivre, minerai rare, cactus, racine de braise, cristaux ;
+  - **ambiance** : tempêtes de poussière rouge, lumière chaude, vent du désert, page de chronique ;
+  - **ailleurs dans le monde** : un archipel du ciel, des totems et des orbes ;
+  - la taille du monde ne change pas (la région remplace la mer du sud) : **les sauvegardes et la carte de découverte restent compatibles**.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 3 049 réussis (placement des bâtiments, routes, collisions compris) ;
+  - nouveaux scénarios `cosmos` (portail, arrivée dans l'espace, saut en gravité réduite : 2,6 m) et `canyons` (4 lieux dans la région, carte) ;
+  - scénarios de régression réussis.
+- **À confirmer sur ton téléphone.**
 
 ### Nouveautés 3.2.0 (chasse aux trésors façon Zelda, îles du ciel partout, objets mis en valeur, mods 2.0, LK Studio)
 
