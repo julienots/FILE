@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <chrono>
 
 #include "agr/animation/AnimationPlugin.hpp"
 #include "agr/audio/AudioPlugin.hpp"
@@ -1732,4 +1734,49 @@ TEST_CASE("tutorial 3D (English, docs/TUTORIAL_3D_EN.md): scripts lint clean, th
     CHECK_MESSAGE(widest > 4.0f, widest);  // went around the 8 m wall
     h.lua("agr.time.setScale(1)");
     CHECK(h.scripts().stats().errors == 0);
+}
+
+TEST_CASE("background scene loading: agr.loadSceneAsync, progress, automatic or manual switch, failures") {
+    GameHarness h(SceneTemplate::Empty2D);
+    // A big level saved next to the game's scenes.
+    {
+        Scene big;
+        for (int i = 0; i < 3000; ++i) {
+            const auto e = big.createEntity(i == 2999 ? "LastOfTheBigLevel" : "Rock");
+            big.registry().get<TransformComponent>(e).position = {static_cast<float>(i % 60), static_cast<float>(i / 60), 0.0f};
+        }
+        REQUIRE(h.engine->vfs().writeText("user://big.agrscene", SceneSerializer::toString(big)));
+    }
+    // Manual switch: ready, but the current scene stays until agr.switchScene().
+    h.lua("agr.loadSceneAsync('user://big.agrscene', false)");
+    std::string status;
+    for (int i = 0; i < 1000 && status != "ready"; ++i) {  // up to 10 s of real time
+        h.frames(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        status = h.engine->sceneLoadState().ready ? "ready" : "";
+    }
+    INFO("failed: ", h.engine->sceneLoadState().failed, " error: ", h.engine->sceneLoadState().error, " progress: ", h.engine->sceneLoadState().progress);
+    REQUIRE(status == "ready");
+    CHECK(h.scene().findByName("LastOfTheBigLevel").isNull());
+    h.lua("local p, s = agr.sceneLoadProgress(); assert(p == 1 and s == 'ready', s)");
+    h.lua("agr.switchScene()");
+    h.frames(1);
+    CHECK_FALSE(h.scene().findByName("LastOfTheBigLevel").isNull());
+    CHECK(h.scene().entityCount() >= 3000);
+    h.lua("local _, s = agr.sceneLoadProgress(); assert(s == 'none', s)");
+    // Automatic switch (default).
+    REQUIRE(h.engine->vfs().writeText("user://small.agrscene", SceneSerializer::toString(Scene{})));
+    h.lua("agr.loadSceneAsync('user://small.agrscene')");
+    for (int i = 0; i < 1000 && !h.scene().findByName("LastOfTheBigLevel").isNull(); ++i) {
+        h.frames(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(h.scene().findByName("LastOfTheBigLevel").isNull());
+    // A missing file: failed with the reason, the scene stays.
+    h.lua("agr.loadSceneAsync('user://nope.agrscene')");
+    for (int i = 0; i < 1000 && !h.engine->sceneLoadState().failed; ++i) {
+        h.frames(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    h.lua("local p, s, err = agr.sceneLoadProgress(); assert(s == 'failed' and err ~= nil, s)");
 }

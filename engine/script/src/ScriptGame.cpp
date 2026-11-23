@@ -119,6 +119,33 @@ int a_loadScene(lua_State* L) {
     return 0;
 }
 
+/// agr.loadSceneAsync(uri [, switchWhenReady = true]): loads in the background (loading screens).
+int a_loadSceneAsync(lua_State* L) {
+    const char* uri = luaL_checkstring(L, 1);
+    auto& m = implOf(L);
+    if (!m.asyncScenes.begin) return luaL_error(L, "agr.loadSceneAsync: scene loading is not available here");
+    m.asyncScenes.begin(uri, lua_isnoneornil(L, 2) || lua_toboolean(L, 2));
+    return 0;
+}
+/// agr.sceneLoadProgress() -> progress (0..1), "loading" | "ready" | "failed" | "none" [, error]
+int a_sceneLoadProgress(lua_State* L) {
+    auto& m = implOf(L);
+    float progress = 0.0f;
+    std::string status = "none", error;
+    if (m.asyncScenes.state) m.asyncScenes.state(progress, status, error);
+    lua_pushnumber(L, progress);
+    lua_pushstring(L, status.c_str());
+    if (error.empty()) return 2;
+    lua_pushstring(L, error.c_str());
+    return 3;
+}
+/// agr.switchScene(): shows the scene loaded with agr.loadSceneAsync(uri, false) (end of frame, once ready).
+int a_switchScene(lua_State* L) {
+    auto& m = implOf(L);
+    if (m.asyncScenes.switchNow) m.asyncScenes.switchNow();
+    return 0;
+}
+
 /// agr.loadPack(uri) -> true | false, error: layers a data pack (DLC, mod, downloaded patch) over
 /// the game's files (game:// and assets://); its files win over the game's from now on (assets
 /// already loaded keep their old version until reloaded).
@@ -151,6 +178,12 @@ void openGameBindings(lua_State* L) {
     lua_setfield(L, -2, "loadScene");
     lua_pushcfunction(L, a_loadPack);
     lua_setfield(L, -2, "loadPack");
+    lua_pushcfunction(L, a_loadSceneAsync);
+    lua_setfield(L, -2, "loadSceneAsync");
+    lua_pushcfunction(L, a_sceneLoadProgress);
+    lua_setfield(L, -2, "sceneLoadProgress");
+    lua_pushcfunction(L, a_switchScene);
+    lua_setfield(L, -2, "switchScene");
     lua_pop(L, 1);
     static const luaL_Reg camera[] = {{"ray", c_ray}, {"screenToWorld", c_screenToWorld}, {"worldToScreen", c_worldToScreen}, {nullptr, nullptr}};
     addAgrLibrary(L, "camera", camera);

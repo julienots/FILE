@@ -1451,7 +1451,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-235 fonctions.
+238 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
@@ -1474,6 +1474,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.json`** : `decode`, `encode`
 - `agr.loadPack`
 - `agr.loadScene`
+- `agr.loadSceneAsync`
 - **`agr.locale`** : `get`, `list`, `set`
 - `agr.log`
 - **`agr.nav`** : `path`, `rebuild`
@@ -1482,12 +1483,14 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.physics3d`** : `castSphere`, `layer`, `mask`, `overlapBox`, `overlapSphere`, `raycast`, `setGravity`
 - **`agr.profile`** : `begin`, `finish`
 - **`agr.save`** : `clear`, `flush`, `get`, `has`, `remove`, `set`
+- `agr.sceneLoadProgress`
 - **`agr.screen`** : `size`
 - `agr.sha256`
 - `agr.spawn`
 - `agr.start`
 - `agr.stopTween`
 - `agr.stopTweens`
+- `agr.switchScene`
 - **`agr.time`** : `delta`, `fixedDelta`, `frame`, `now`, `scale`, `setScale`, `total`
 - `agr.tr`
 - `agr.tween`

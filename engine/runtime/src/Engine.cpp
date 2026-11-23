@@ -1,6 +1,7 @@
 #include "agr/runtime/Engine.hpp"
 #include "agr/core/Profiler.hpp"
 
+#include <atomic>
 #include <utility>
 
 #include <algorithm>
@@ -16,7 +17,10 @@ namespace agr {
 
 Engine::Engine(EngineConfig config) : m_config(std::move(config)) {}
 
-Engine::~Engine() { shutdown(nullptr); }
+Engine::~Engine() {
+    m_asyncLoad.reset();  // joins a background scene load before the file system goes away
+    shutdown(nullptr);
+}
 
 Status Engine::initialize(std::unique_ptr<PlatformLayer> platform) {
     if (m_initialized) return makeError(Error::Code::AlreadyExists, "engine already initialized");
@@ -96,6 +100,75 @@ Status Engine::loadScene(std::string_view uri) {
     m_scene = std::move(scene);
     m_sceneUri = std::string(uri);
     return {};
+}
+
+struct Engine::AsyncSceneLoad {
+    std::string uri;
+    bool switchWhenReady = true;
+    std::atomic<float> progress{0.0f};
+    std::atomic<bool> done{false};
+    std::unique_ptr<Scene> scene;  // written by the worker before `done`
+    std::string error;
+    std::thread worker;
+    ~AsyncSceneLoad() {
+        if (worker.joinable()) worker.join();
+    }
+};
+
+void Engine::beginSceneLoad(std::string uri, bool switchWhenReady) {
+    m_switchLoaded = false;
+    auto load = std::make_shared<AsyncSceneLoad>();
+    load->uri = std::move(uri);
+    load->switchWhenReady = switchWhenReady;
+    AsyncSceneLoad* l = load.get();
+    VirtualFileSystem* vfs = &m_vfs;
+    load->worker = std::thread([l, vfs] {
+        l->progress = 0.1f;
+        auto text = vfs->readText(l->uri);
+        if (!text) {
+            l->error = text.error().message;
+        } else {
+            l->progress = 0.5f;
+            auto scene = std::make_unique<Scene>();
+            if (Status s = SceneSerializer::fromBytes(*scene, text.value()); !s) l->error = s.error().message;
+            else l->scene = std::move(scene);
+        }
+        l->progress = 1.0f;
+        l->done = true;
+    });
+    m_asyncLoad = std::move(load);  // a previous load is joined and dropped
+}
+
+Engine::SceneLoadState Engine::sceneLoadState() const {
+    SceneLoadState s;
+    if (!m_asyncLoad) return s;
+    s.uri = m_asyncLoad->uri;
+    s.progress = m_asyncLoad->progress.load();
+    const bool done = m_asyncLoad->done.load();
+    s.loading = !done;
+    s.ready = done && m_asyncLoad->scene != nullptr;
+    s.failed = done && !m_asyncLoad->scene;
+    if (s.failed) s.error = m_asyncLoad->error;
+    return s;
+}
+
+void Engine::finishSceneLoad() {
+    if (!m_asyncLoad || !m_asyncLoad->done.load()) return;
+    if (!m_asyncLoad->scene) {  // failed: reported once, the state stays readable
+        if (!m_asyncLoad->error.empty()) {
+            AGR_LOG_ERROR("Engine", "cannot load scene '{}': {}", m_asyncLoad->uri, m_asyncLoad->error);
+            m_asyncLoad->error += " ";  // marks it reported (keeps the text)
+        }
+        return;
+    }
+    if (!m_asyncLoad->switchWhenReady && !m_switchLoaded) return;
+    if (m_asyncLoad->worker.joinable()) m_asyncLoad->worker.join();
+    AGR_LOG_INFO("Engine", "scene '{}' loaded in the background from {} ({} entities)", m_asyncLoad->scene->name(), m_asyncLoad->uri,
+                 m_asyncLoad->scene->entityCount());
+    m_scene = std::move(m_asyncLoad->scene);
+    m_sceneUri = m_asyncLoad->uri;
+    m_asyncLoad.reset();
+    m_switchLoaded = false;
 }
 
 Status Engine::saveScene(std::string_view uri) {
@@ -214,6 +287,7 @@ void Engine::tick(Application& app, f64 rawDelta) {
         const std::string uri = std::exchange(m_pendingScene, {});
         if (Status s = loadScene(uri); !s) AGR_LOG_ERROR("Engine", "cannot load scene '{}': {}", uri, s.error().message);
     }
+    finishSceneLoad();
     {
         AGR_PROFILE_SCOPE("Transformations");
         m_scene->updateTransforms();
@@ -261,6 +335,7 @@ bool Engine::setLanguage(std::string_view code) {
 }
 
 void Engine::shutdown(Application* app) {
+    m_asyncLoad.reset();
     if (!m_initialized) return;
     if (app) app->onShutdown(*this);
     m_plugins.unloadAll(*this);

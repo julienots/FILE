@@ -112,6 +112,20 @@ public:
     Status loadScene(std::string_view uri);
     /// Loads a scene at the end of the current frame (safe from scripts and callbacks).
     void requestScene(std::string uri) { m_pendingScene = std::move(uri); }
+    /// Background loading (loading screens): the scene file is read and decoded on a worker thread
+    /// while the current scene keeps running; it replaces it at the end of the frame where it is
+    /// ready (`switchWhenReady`), or when switchToLoadedScene() is called. A new call replaces a
+    /// load in progress (its result is dropped).
+    void beginSceneLoad(std::string uri, bool switchWhenReady = true);
+    struct SceneLoadState {
+        std::string uri;
+        float progress = 0.0f;  ///< 0..1 (reading, then decoding)
+        bool loading = false, ready = false, failed = false;
+        std::string error;
+    };
+    SceneLoadState sceneLoadState() const;
+    /// Switches to the scene loaded in the background at the end of this frame (once ready).
+    void switchToLoadedScene() { m_switchLoaded = true; }
     /// URI of the last scene loaded with loadScene() ("" for scenes set otherwise).
     const std::string& sceneUri() const { return m_sceneUri; }
     Status saveScene(std::string_view uri);
@@ -122,6 +136,11 @@ private:
 
     EngineConfig m_config;
     std::string m_pendingScene, m_sceneUri;
+    // Background scene loading.
+    struct AsyncSceneLoad;
+    std::shared_ptr<AsyncSceneLoad> m_asyncLoad;
+    bool m_switchLoaded = false;
+    void finishSceneLoad();
     std::shared_ptr<RingBufferSink> m_consoleSink;
     std::shared_ptr<FileSink> m_fileSink;
     std::unique_ptr<JobSystem> m_jobs;

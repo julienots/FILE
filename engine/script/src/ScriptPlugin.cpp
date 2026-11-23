@@ -28,6 +28,16 @@ Status ScriptPlugin::onLoad(Engine& engine) {
     m_scripts->setPlatform(&engine.platform());
     m_scripts->setSaveStore(&engine.save());
     m_scripts->setSceneLoader([&engine](std::string uri) { engine.requestScene(std::move(uri)); });
+    ScriptEngine::AsyncSceneLoading async;
+    async.begin = [&engine](std::string uri, bool autoSwitch) { engine.beginSceneLoad(std::move(uri), autoSwitch); };
+    async.state = [&engine](float& progress, std::string& status, std::string& error) {
+        const Engine::SceneLoadState st = engine.sceneLoadState();
+        progress = st.progress;
+        status = st.ready ? "ready" : st.failed ? "failed" : st.loading ? "loading" : "none";
+        error = st.error;
+    };
+    async.switchNow = [&engine] { engine.switchToLoadedScene(); };
+    m_scripts->setAsyncSceneLoading(std::move(async));
     m_scripts->setTimeControl([&engine](double s) { engine.setTimeScale(s); }, [&engine] { return engine.time().timeScale; });
     engine.registerService<ScriptPlugin>(this);
     m_collisions = engine.events().subscribe<Collision2DEvent>([this](const Collision2DEvent& e) {

@@ -121,6 +121,7 @@ struct ScriptEngine::Impl {
     /// The rpc declaration of a function of the entity's script ("" when none).
     std::string rpcMode(ecs::Entity e, const std::string& fn);
     std::function<void(std::string)> sceneLoader;
+    ScriptEngine::AsyncSceneLoading asyncScenes;
     std::function<void(double)> setTimeScale;  ///< Engine::setTimeScale (agr.time.setScale, hit stop)
     std::function<double()> timeScale;
     FxState fx;
