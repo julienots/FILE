@@ -18,6 +18,7 @@ pour des jeux commerciaux, et conçu **d'abord pour les smartphones Android**, a
 
 **Pour commencer** : [tutoriel 2D](docs/TUTORIAL_2D.md) (un jeu de plateforme en 30 minutes) et
 [tutoriel 3D](docs/TUTORIAL_3D.md) (orbes et ennemi qui poursuit) ; leurs scripts sont exécutés par les tests.
+In English: [2D tutorial](docs/TUTORIAL_2D_EN.md), [3D tutorial](docs/TUTORIAL_3D_EN.md) (tested the same way).
 
 ![Éditeur AGR](docs/images/editor.png)
 

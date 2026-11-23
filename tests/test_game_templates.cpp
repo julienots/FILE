@@ -1605,3 +1605,131 @@ TEST_CASE("tutorial 3D (docs/TUTORIAL_3D.md): scripts lint clean, the hero runs 
     h.lua("agr.time.setScale(1)");
     CHECK(h.scripts().stats().errors == 0);
 }
+
+TEST_CASE("tutorial 2D (English, docs/TUTORIAL_2D_EN.md): its scripts lint clean, the player lands, runs and collects the coin") {
+    GameHarness h(SceneTemplate::Empty2D);
+    const fs::path assets = h.root / "game" / "assets";
+    const auto scripts = tutorialScripts("TUTORIAL_2D_EN.md");
+    REQUIRE(scripts.size() == 2);
+    for (const auto& [path, code] : scripts) {
+        INFO(path);
+        CHECK_FALSE(h.scripts().checkSyntax(code, path));
+        for (const auto& w : h.scripts().lint(code, path)) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
+        fs::create_directories((assets / path).parent_path());
+        std::ofstream(assets / path) << code;
+    }
+    // The scene of the tutorial, step by step.
+    Scene& sc = h.scene();
+    auto& reg = sc.registry();
+    const auto ground = sc.createEntity("Floor");
+    reg.get<TransformComponent>(ground).position = {0, -1, 0};
+    reg.get<TransformComponent>(ground).scale = {12, 1, 1};
+    reg.emplace<SpriteRendererComponent>(ground);
+    reg.emplace<Collider2DComponent>(ground);
+    const auto player = sc.createEntity("Player");
+    reg.get<TransformComponent>(player).position = {0, 2, 0};
+    reg.emplace<SpriteRendererComponent>(player);
+    reg.emplace<CharacterController2DComponent>(player).size = {0.8f, 1.0f};
+    reg.emplace<ScriptComponent>(player).script = "assets://scripts/player.lua";
+    const auto canvas = sc.createEntity("Canvas");
+    reg.emplace<UICanvasComponent>(canvas);
+    const auto score = sc.createEntity("Score", canvas);
+    reg.emplace<UIRectComponent>(score);
+    reg.emplace<UITextComponent>(score).text = "Coins: 0";
+    const auto coin = sc.createEntity("Coin");
+    reg.get<TransformComponent>(coin).position = {3, -0.2f, 0};
+    reg.get<TransformComponent>(coin).scale = {0.4f, 0.4f, 1};
+    reg.emplace<SpriteRendererComponent>(coin);
+    reg.emplace<Collider2DComponent>(coin).isTrigger = true;
+    reg.emplace<ScriptComponent>(coin).script = "assets://scripts/coin.lua";
+
+    h.seconds(1.5);  // falls and lands on the ground
+    const float landedY = reg.get<TransformComponent>(player).position.y;
+    CHECK_MESSAGE(landedY > -0.2f, landedY);
+    CHECK_MESSAGE(landedY < 0.2f, landedY);
+    CHECK(h.text("Score") == "Coins: 0");
+    h.holdKey(Key::Right, 0.75);  // runs right through the coin (the ground ends at x = 6)
+    h.seconds(0.2);
+    CHECK(reg.get<TransformComponent>(h.find("Player")).position.x > 3.5f);
+    CHECK(h.scene().findByName("Coin").isNull());
+    CHECK(h.text("Score") == "Coins: 1");
+    // Jump: the controller leaves the floor.
+    h.key(Key::Space, true);
+    h.frames(1);
+    h.key(Key::Space, false);
+    h.seconds(0.25);
+    CHECK(h.scene().registry().get<TransformComponent>(h.find("Player")).position.y > landedY + 1.0f);
+    CHECK(h.scripts().stats().errors == 0);
+}
+
+TEST_CASE("tutorial 3D (English, docs/TUTORIAL_3D_EN.md): scripts lint clean, the hero runs and collects an orb, the enemy goes around the wall and catches him") {
+    GameHarness h(SceneTemplate::Empty3D);
+    const fs::path assets = h.root / "game" / "assets";
+    const auto scripts = tutorialScripts("TUTORIAL_3D_EN.md");
+    REQUIRE(scripts.size() == 3);
+    for (const auto& [path, code] : scripts) {
+        INFO(path);
+        CHECK_FALSE(h.scripts().checkSyntax(code, path));
+        for (const auto& w : h.scripts().lint(code, path)) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
+        fs::create_directories((assets / path).parent_path());
+        std::ofstream(assets / path) << code;
+    }
+    Scene& sc = h.scene();
+    auto& reg = sc.registry();
+    sc.destroyEntity(h.find("Cube"));
+    const auto ground = h.find("Ground");
+    reg.get<NameComponent>(ground).name = "Floor";
+    reg.get<TransformComponent>(ground).scale = {30, 1, 30};
+    reg.emplace<ColliderComponent>(ground).size = {1, 0.1f, 1};
+    const auto hero = sc.createEntity("Hero");
+    reg.get<TransformComponent>(hero).position = {0, 1, 0};
+    reg.emplace<MeshRendererComponent>(hero);
+    reg.emplace<CharacterController3DComponent>(hero);
+    reg.emplace<ScriptComponent>(hero).script = "assets://scripts/hero.lua";
+    const auto canvas = sc.createEntity("Canvas");
+    reg.emplace<UICanvasComponent>(canvas);
+    const auto score = sc.createEntity("Score", canvas);
+    reg.emplace<UIRectComponent>(score);
+    reg.emplace<UITextComponent>(score).text = "Orbs: 0";
+    const auto orb = sc.createEntity("Orb");
+    reg.get<TransformComponent>(orb).position = {4, 0.8f, 0};
+    reg.get<TransformComponent>(orb).scale = {0.6f, 0.6f, 0.6f};
+    reg.emplace<MeshRendererComponent>(orb).mesh = PrimitiveMesh::Sphere;
+    auto& orbCollider = reg.emplace<ColliderComponent>(orb);
+    orbCollider.shape = ColliderShape3D::Sphere;
+    orbCollider.isTrigger = true;
+    reg.emplace<ScriptComponent>(orb).script = "assets://scripts/orb.lua";
+
+    h.seconds(1.0);  // lands
+    const float y0 = reg.get<TransformComponent>(h.find("Hero")).position.y;
+    CHECK_MESSAGE(std::abs(y0) < 0.3f, y0);
+    CHECK(reg.get<TransformComponent>(h.find("Orb")).rotation.y != doctest::Approx(0.0f));  // spins
+    h.holdKey(Key::Right, 1.0);  // 5 m/s to the right, through the orb
+    h.seconds(0.2);
+    CHECK(reg.get<TransformComponent>(h.find("Hero")).position.x > 4.0f);
+    CHECK(h.scene().findByName("Orb").isNull());
+    CHECK(h.text("Score") == "Orbs: 1");
+
+    // The wall and the chasing enemy: it goes around the wall (|z| > 4 at some point) and catches the hero.
+    const auto wall = sc.createEntity("Wall");
+    reg.get<TransformComponent>(wall).position = {-3, 1, 0};
+    reg.get<TransformComponent>(wall).scale = {1, 2, 8};
+    reg.emplace<MeshRendererComponent>(wall);
+    reg.emplace<ColliderComponent>(wall);
+    reg.get<TransformComponent>(h.find("Hero")).position = {2, 0, 0};
+    const auto enemy = sc.createEntity("Enemy");
+    reg.get<TransformComponent>(enemy).position = {-8, 0.5f, 0};
+    reg.emplace<MeshRendererComponent>(enemy);
+    reg.emplace<NavAgentComponent>(enemy).speed = 3.0f;
+    reg.emplace<ScriptComponent>(enemy).script = "assets://scripts/enemy.lua";
+    float widest = 0.0f;
+    for (int i = 0; i < 12 * 60 && h.text("Score") != "Caught!"; ++i) {
+        h.frames(1);
+        const ecs::Entity e = h.find("Enemy");
+        widest = std::max(widest, std::abs(h.scene().registry().get<TransformComponent>(e).position.z));
+    }
+    CHECK(h.text("Score") == "Caught!");
+    CHECK_MESSAGE(widest > 4.0f, widest);  // went around the 8 m wall
+    h.lua("agr.time.setScale(1)");
+    CHECK(h.scripts().stats().errors == 0);
+}
