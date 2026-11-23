@@ -18,6 +18,8 @@ static std::string totemReward(int rank) {
 }
 std::string totemRewardForRank(int rank) { return totemReward(rank); }
 
+float Game::gravityScale() const { return gameTuning().gravity * (dungeon.active && dungeon.theme == 10 ? 0.38f : 1.f); }   // 3.2.0 space: long, floating jumps
+
 bool Game::hasPower(int kp) const {
     for (const ItemStack& s : inventory) { const ItemDef* d = item(s.id); if (d && d->kind == ItemKind::Key && d->power == kp) return true; }
     return false;
@@ -157,7 +159,7 @@ void Game::treasurePhysics(Character& c, float dt) {
     if (!hasPower(KP_GLIDE) || c.grounded || c.swimming || flying || riding || c.dead) return;
     if (!input.jumpHeld || c.vel.y > -1.f || c.airTime < 0.25f) return;
     gliding = true;
-    c.vel.y = std::max(c.vel.y, -2.4f) + 20.f * gameTuning().gravity * dt * 0.85f;   // most of the gravity is held off
+    c.vel.y = std::max(c.vel.y, -2.4f) + 20.f * gravityScale() * dt * 0.85f;   // most of the gravity is held off
     vec3 fwd{std::sin(c.yaw), 0, std::cos(c.yaw)};
     vec2 h{c.vel.x, c.vel.z};
     float sp = length(h);

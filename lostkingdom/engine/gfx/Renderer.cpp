@@ -458,7 +458,7 @@ void Renderer::render(ParticleSystem* particles) {
         sky.set("uInvViewProj", camera.viewProj.inverse());
         sky.set("uSkyTop", vec4(env.skyTop, 1));
         sky.set("uSkyHorizon", vec4(env.skyHorizon, env.cloudCover));
-        sky.set("uSkyFx", vec4(env.aurora, env.dust, env.rainbow, 0.f));
+        sky.set("uSkyFx", vec4(env.aurora, env.dust, env.rainbow, env.space));   // 3.2.0 w: outer space
         glDepthMask(GL_FALSE);
         fsMesh.draw();
         glDepthMask(GL_TRUE);

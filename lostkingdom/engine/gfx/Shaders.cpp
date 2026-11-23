@@ -858,8 +858,107 @@ float cloudDens(vec2 p, float cover) {
     return smoothstep(1.0 - cover, 1.18 - cover * 0.55, c);
 }
 
+
+// ---- 3.2.0 outer space: nebulae, three layers of stars, the galactic band, the planet seen from orbit (oceans,
+// continents, clouds, a blue atmosphere on its rim, city lights on the night side), a ringed gas giant, the sun's corona
+float vnoise(vec2 p) { return texture(uNoiseTex, p).r; }
+float fbmN(vec2 p) { float a = 0.0, w = 0.5; for (int i = 0; i < 5; i++) { a += w * texture(uNoiseTex, p).g; p = p * 2.03 + vec2(0.37, 0.11); w *= 0.5; } return a; }
+vec2 sphereUV(vec3 n) { return vec2(atan(n.z, n.x) / 6.2831853 + 0.5, asin(clamp(n.y, -1.0, 1.0)) / 3.14159265 + 0.5); }
+vec3 spaceSky(vec3 d, vec3 S, float t) {
+    // deep background with a faint violet gradient
+    vec3 col = mix(vec3(0.004, 0.003, 0.012), vec3(0.012, 0.008, 0.03), d.y * 0.5 + 0.5);
+    // nebulae: two colourful clouds with dark dust lanes
+    vec2 np = vec2(atan(d.z, d.x) * 0.9, d.y * 1.6);
+    float n1 = fbmN(np * 0.35 + vec2(0.13, 0.71)), n2 = fbmN(np * 0.55 + vec2(4.2, 1.3) + n1 * 0.3);
+    float lane = smoothstep(0.45, 0.7, fbmN(np * 1.3 + 9.0));
+    vec3 neb = vec3(0.55, 0.12, 0.65) * smoothstep(0.42, 0.85, n1) + vec3(0.05, 0.45, 0.6) * smoothstep(0.5, 0.9, n2) + vec3(0.9, 0.35, 0.2) * smoothstep(0.62, 0.95, n1 * n2 * 1.6);
+    col += neb * 0.32 * (1.0 - 0.75 * lane);
+    // the galactic band
+    vec3 gn = normalize(vec3(0.2, 0.9, 0.38));
+    float gb = dot(d, gn);
+    vec2 gp = vec2(atan(d.z, d.x) * 1.3, d.y * 3.0);
+    float mw = exp(-gb * gb * 9.0) * (0.4 + 0.6 * vnoise(gp * 1.7)) * (1.0 - 0.6 * smoothstep(0.4, 0.65, texture(uNoiseTex, gp * 0.55 + 0.2).g));
+    col += mix(vec3(0.45, 0.5, 0.95), vec3(1.0, 0.78, 0.62), smoothstep(0.5, 0.9, vnoise(gp * 0.4))) * mw * 0.55;
+    // stars: three layers, coloured, some twinkling
+    for (int l = 0; l < 3; l++) {
+        float sc = 140.0 + float(l) * 170.0;
+        vec3 cell = floor(d * sc);
+        float hs = hash13(cell + float(l) * 17.0);
+        vec3 f = fract(d * sc) - 0.5;
+        float th = l == 0 ? 0.985 : (l == 1 ? 0.992 : 0.996);
+        float st = step(th, hs) * smoothstep(0.45, 0.0, length(f)) * (0.6 + 0.4 * sin(t * (1.5 + hs * 5.0) + hs * 80.0));
+        vec3 c = mix(vec3(0.7, 0.8, 1.0), vec3(1.0, 0.78, 0.55), fract(hs * 73.1));
+        if (fract(hs * 13.7) > 0.93) c = vec3(1.0, 0.45, 0.4);
+        col += c * st * (l == 0 ? 3.5 : 1.6) * (1.0 + mw * 2.0);
+    }
+    // the sun: disc, corona streamers, wide glow
+    float sd = max(dot(d, S), 0.0);
+    float ang = atan(dot(d, normalize(cross(S, vec3(0.0, 1.0, 0.0)))), dot(d, normalize(cross(S, cross(S, vec3(0.0, 1.0, 0.0))))));
+    float streamers = 0.6 + 0.4 * sin(ang * 9.0 + t * 0.2) * sin(ang * 5.0 - t * 0.13);
+    col += vec3(1.0, 0.92, 0.8) * (pow(sd, 2400.0) * 60.0 + pow(sd, 260.0) * 3.0 * streamers + pow(sd, 18.0) * 0.25);
+    // a ringed gas giant far away
+    vec3 gc = normalize(vec3(-0.75, 0.32, -0.55));
+    float gr = 0.16, gd = dot(d, gc);
+    vec3 rn = normalize(vec3(0.25, 1.0, 0.15));
+    {   // rings (behind and in front of the giant)
+        float dn = dot(d, rn), dg = dot(gc, rn);
+        if (abs(dn) > 1e-3) {
+            vec3 hit = d * (dg / dn) - gc;
+            float rr = length(hit) / gr;
+            if (dg / dn > 0.0 && rr > 1.35 && rr < 2.35) {
+                float band = 0.55 + 0.45 * sin(rr * 38.0) * sin(rr * 11.0);
+                vec3 rc = mix(vec3(0.85, 0.75, 0.6), vec3(0.6, 0.52, 0.45), band) * smoothstep(1.35, 1.45, rr) * smoothstep(2.35, 2.2, rr);
+                bool behind = gd > sqrt(max(0.0, 1.0 - gr * gr)) && dot(d * (dg / dn), gc) > 1.0;
+                if (!behind) col = mix(col, rc * (0.25 + 0.75 * max(dot(rn, S), 0.15)), 0.75 * smoothstep(1.35, 1.5, rr));
+            }
+        }
+    }
+    float cosR = sqrt(1.0 - gr * gr);
+    if (gd > cosR) {
+        vec3 p = d * gd - gc; vec3 nrm = normalize(p + gc * (1.0 - cosR) * 0.0 + (d * gd - gc));
+        nrm = normalize(d * (gd - sqrt(max(0.0, gd * gd - cosR * cosR))) - gc);
+        float lat = dot(nrm, rn);
+        float bands = sin(lat * 26.0 + fbmN(vec2(lat * 3.0, atan(nrm.z, nrm.x)) * 0.6) * 4.0);
+        vec3 gcol = mix(vec3(0.85, 0.62, 0.42), vec3(0.95, 0.85, 0.7), bands * 0.5 + 0.5);
+        float lit = max(dot(nrm, S), 0.0);
+        col = gcol * (0.04 + 0.96 * lit) + vec3(0.9, 0.6, 0.4) * pow(1.0 - max(dot(nrm, -d), 0.0), 3.0) * 0.3 * lit;
+    }
+    // the planet below: the hero stands far above it
+    vec3 pc = normalize(vec3(0.42, -0.55, -0.62));   // low over one side of the horizon
+    float pr = 0.6, pd = dot(d, pc), cosP = sqrt(1.0 - pr * pr);
+    float rim = smoothstep(cosP - 0.06, cosP, pd);
+    if (pd > cosP - 0.06) {
+        vec3 atm = vec3(0.3, 0.6, 1.0) * (1.0 - smoothstep(cosP, cosP - 0.06, pd)) * (0.25 + 0.75 * max(dot(normalize(d - pc * pd), S) * 0.5 + 0.5, 0.0));
+        col += atm * 0.9 * (1.0 - step(cosP, pd));
+    }
+    if (pd > cosP) {
+        float dist = pd - sqrt(max(0.0, pd * pd - cosP * cosP));
+        vec3 nrm = normalize(d * dist - pc);
+        // the planet's own frame: its axis is tilted away from the viewer, so the side facing the asteroids shows
+        // oceans and continents (not a pole); it turns slowly
+        vec3 ax = normalize(vec3(0.9, 0.15, -0.4)), e1 = normalize(cross(ax, vec3(0.0, 1.0, 0.0))), e2 = cross(ax, e1);
+        float rotA = t * 0.004;
+        vec3 ln = vec3(dot(nrm, e1) * cos(rotA) - dot(nrm, e2) * sin(rotA), dot(nrm, ax), dot(nrm, e1) * sin(rotA) + dot(nrm, e2) * cos(rotA));
+        vec2 uv = sphereUV(ln);
+        float land = fbmN(uv * vec2(4.0, 2.0) + vec2(0.31, 0.77)) + 0.25 * fbmN(uv * vec2(11.0, 5.5) + 3.1) - 0.12;
+        float clouds = smoothstep(0.58, 0.82, fbmN(uv * vec2(6.0, 3.0) + vec2(t * 0.0015, 0.4))) * 0.6;
+        vec3 ocean = mix(vec3(0.01, 0.05, 0.16), vec3(0.03, 0.16, 0.3), smoothstep(0.3, 0.5, land));
+        vec3 ground = mix(vec3(0.12, 0.26, 0.08), vec3(0.42, 0.34, 0.2), smoothstep(0.62, 0.78, land));
+        vec3 surf = mix(ocean, ground, smoothstep(0.5, 0.53, land));
+        surf = mix(surf, vec3(0.85, 0.9, 0.95), smoothstep(0.86, 0.95, abs(ln.y)));   // polar caps, on its own axis
+        float lit = dot(nrm, S);
+        vec3 day = mix(surf, vec3(0.9), clouds) * (0.015 + 0.85 * max(lit, 0.0));
+        float spec = pow(max(dot(reflect(-S, nrm), -d), 0.0), 60.0) * (1.0 - smoothstep(0.5, 0.53, land)) * 0.5 * step(0.0, lit) * (1.0 - clouds);
+        vec3 nightLights = vec3(1.0, 0.72, 0.38) * smoothstep(0.53, 0.56, land) * step(0.65, vnoise(uv * 48.0)) * (1.0 - clouds) * smoothstep(0.05, -0.15, lit) * 0.7;
+        float fres = pow(1.0 - max(dot(nrm, -d), 0.0), 3.0);
+        col = day + vec3(1.0) * spec + nightLights + vec3(0.3, 0.55, 1.0) * fres * (0.15 + 0.6 * max(lit + 0.25, 0.0));
+    }
+    return col;
+}
+
 void main() {
     vec3 d = normalize(vDir);
+    if (uSkyFx.w > 0.5) { fragColor = vec4(spaceSky(d, normalize(uSunDir.xyz), uCamPos.w) * uSkyColor.w, 1.0); return; }   // 3.2.0 outer space
     float h = clamp(d.y, -0.2, 1.0);
     float night = uFogParams.w;
     float sun = uSunDir.w;                         // sunlight intensity (also dims at night)

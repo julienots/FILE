@@ -73,7 +73,7 @@ void Game::updateCamera(float dt) {
     }
     // dungeons are enclosed: beyond ~16 m the camera would see outside the level (the player's zoom is kept
     // for the overworld)
-    bool openSky = dungeon.active && dungeon.theme == 8;   // 2.2.2 the celestial realm: free camera, the sky and the far islands are the show
+    bool openSky = dungeon.active && (dungeon.theme == 8 || dungeon.theme == 10);   // 3.2.0 + space   // 2.2.2 the celestial realm: free camera, the sky and the far islands are the show
     float distCap = dungeon.active && !openSky ? 16.f : CameraRig::DIST_MAX;
     camDist = damp(camDist, std::min(distCap, std::max(camDistTarget, distMin)), settings.cameraSmooth ? 4.f : 10.f, dt);
 

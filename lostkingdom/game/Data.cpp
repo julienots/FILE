@@ -302,6 +302,7 @@ static void buildItems() {
     relic("relic_sun_mask", "Masque de Sekhmar", "Un visage d'or qui sourit à contre-jour.");
     relic("relic_sea_bell", "Cloche de l'épave", "Elle sonne seule quand la marée monte.");
     relic("relic_sphinx_eye", "Œil de la Gardienne", "Une pierre d'ambre. Elle te regarde en retour.");
+    relic("relic_comet", "Cœur de comète", "Rapporté des Confins stellaires. Il est froid comme le vide et brille comme une étoile.");   // 3.2.0
     // ---- tools & mount tokens --------------------------------------------------------------------
     auto tool = [&](const char* id, const char* nm, WeaponType w, const char* icon, const char* desc) { ItemDef& d = addItem(id, nm, ItemKind::Tool, Rarity::Common, 15, desc); d.weapon = w; d.icon = icon; };
     tool("tool_pickaxe", "Pioche", WeaponType::Pickaxe, "i_pickaxe", "Pour miner pierre et minerais.");
@@ -1514,6 +1515,8 @@ const std::vector<DungeonDef>& dungeons() {
         {"tombe_geant", "Tombeau du Roi-Géant", "tombe_geant", R_TITANS, 1414, 10, {"draugr", "specter", "skeleton", "rock_troll"}, 15, 1, ""},
         // 3.0.0 (index 14): the domain's own dungeon, under the crypt the player builds (no world POI: entered from the crypt)
         {"domaine", "Donjon du domaine", "", R_GREENHAVEN, 1515, 8, {"skeleton", "ghoul", "dark_knight", "legion_soldier", "specter", "giant_spider"}, -1, 1, ""},
+        // 3.2.0 (index 15): through the Star Observatory of the Titan Mountains, into space: asteroids over the planet
+        {"cosmos", "Les Confins stellaires", "portal_stars", R_TITANS, 1616, 10, {"aurora_wraith", "crystal_golem", "crystal_spider", "wisp"}, -1, 10, "relic_comet"},
     };
     return d;
 }

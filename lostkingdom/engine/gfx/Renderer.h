@@ -66,6 +66,7 @@ struct Environment {
     float damagePulse = 0.f;
     // 2.0.0 sky and post effects: aurora (cold regions at night), dust haze (desert, ash), rainbow, mirage shimmer, sand veil, lens flare
     float aurora = 0.f, dust = 0.f, rainbow = 0.f, heat = 0.f, sandVeil = 0.f, flare = 0.f;
+    float space = 0.f;      // 3.2.0 outer space: starfield, nebulae, the planet below, a ringed giant (sky shader)
     float shafts = 0.35f;   // 1.11.1 sunlight scattering in the air (0 = off): light shafts through trees, eaves, smoke
     vec3 playerPos;
     float time = 0.f;  // animation time for shaders (s), owned by the game clock

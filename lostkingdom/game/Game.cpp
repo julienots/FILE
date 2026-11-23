@@ -576,6 +576,15 @@ void Game::updateEnvironment(float dt) {
             env.night = 0.35f; env.exposure = 0.82f; env.aurora = 0.9f; env.saturation = 1.12f; env.contrast = 1.12f; env.dust = 0.f; env.heat = 0.f; env.sandVeil = 0.f;
             env.flare = 0.6f; env.shafts = 0.6f; env.tiltShift = 0.f; env.wetness = 0.f;
         }
+        if (th == 10) {
+            // 3.2.0 space: a hard white sun, black shadows softened by the planet's blue glow from below, no air at all
+            env.space = 1.f;
+            env.sunDir = normalize(vec3(0.62f, 0.45f, 0.4f)); env.sunColor = srgb(0xfff4e8); env.sunIntensity = 3.4f; env.shadowStrength = 0.95f;
+            env.skyAmbient = srgb(0x2a2a4a) * 0.8f; env.groundAmbient = srgb(0x3a5a9a) * 0.55f;   // the planet lights the asteroids from below
+            env.fogColor = srgb(0x05040c); env.fogDensity = 0.0004f; env.fogBase = -200.f; env.cloudCover = 0; env.cloudShadows = 0;
+            env.night = 0.f; env.exposure = 0.95f; env.aurora = 0.f; env.saturation = 1.15f; env.contrast = 1.14f; env.dust = 0.f; env.heat = 0.f; env.sandVeil = 0.f;
+            env.flare = 0.9f; env.shafts = 0.f; env.tiltShift = 0.f; env.wetness = 0.f; env.bloomIntensity = 0.1f;
+        }
     }
     audio.setReverb(dungeon.active ? (dungeon.interior ? 0.12f : 0.45f) : (underwaterView ? 0.6f : 0.f));
     applyCinematicEnvironment();
@@ -669,8 +678,9 @@ void Game::updateAmbientFx(float dt) {
     }
     // 2.2.1 the celestial portal: sparks spiralling into the vortex, motes rising from the dais
     if (!dungeon.active && player != NullEntity) {
-        static const Poi* portal = nullptr; static bool looked = false;
-        if (!looked) { looked = true; portal = world.poiById("portal_ether"); }
+        static const Poi* portals[2] = {nullptr, nullptr}; static bool looked = false;
+        if (!looked) { looked = true; portals[0] = world.poiById("portal_ether"); portals[1] = world.poiById("portal_stars"); }   // 3.2.0 + the Star Observatory
+        for (const Poi* portal : portals)
         if (portal && distXZ(pc().pos, vec3(portal->pos.x, 0, portal->pos.y)) < 90.f) {
             float gy = world.height(portal->pos.x, portal->pos.y) + 0.86f + 4.4f;
             vec3 ctr(portal->pos.x, gy, portal->pos.y);
@@ -805,7 +815,7 @@ void Game::updateAudioDirector(float dt) {
     std::string track;
     if (bossEnt != NullEntity) track = "boss";
     else if (combat) track = "combat";
-    else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
+    else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 || dungeons()[dungeon.def].theme == 10 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
         static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm", "highcrowns"};   // 3.0.0 the Titans: the mountain score   // 2.8.0 Aurora: the ethereal score

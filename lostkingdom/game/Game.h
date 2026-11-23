@@ -584,6 +584,7 @@ public:
     std::deque<ItemGetFx> itemGets;
     struct TreasureBonus { float hp = 0, stamina = 0, mp = 0, atk = 0; };
     bool hasPower(int kp) const;
+    float gravityScale() const;
     int bagUsed() const;
     int bagCapacity() const;
     int orbsTaken() const;

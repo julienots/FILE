@@ -371,6 +371,8 @@ void World::buildPlan() {
     Pf("ws_hautgel", "Pierre de Hautgel", PoiType::Waystone, 3140, 700, 10);
     // 2.2.1 the portal to the celestial realm, on the meadow east of Lac Miroir
     Pf("portal_ether", "Portail Céleste", PoiType::Temple, 1830, 1470, 26, 9, -1, 140);
+    // 3.2.0 the Star Observatory, high in the Titan Mountains: its gate opens on space
+    Pf("portal_stars", "Observatoire des étoiles", PoiType::Temple, 6560, 3300, 26, 15, -1, 320);
     // ---- more villages for the old island
     Pf("chenebrune", "Chênebrune", PoiType::Village, 1960, 1980, 62, -1, -1, 200);
     Pf("saule_rieur", "Saule-Rieur", PoiType::Village, 1130, 1800, 56, -1, -1, 160);
@@ -964,6 +966,7 @@ void World::buildPlan() {
         }
         case PoiType::Temple: {
             if (p.id == "sun_temple_door" || p.id == "jaguar_door") break;   // just the entrance trigger, in front of the ziggurat
+            if (p.id == "portal_stars") { S(S_PORTAL, p.pos, 0, pi, 1.f, 1); for (int i = 0; i < 8; i++) { float a = i * TAU / 8 + 0.3f; if (std::sin(a) > 0.4f) continue; S(S_OBELISK, p.pos + vec2(std::cos(a), std::sin(a)) * 16.f, -a, pi, 1.2f, 2); } break; }   // 3.2.0
             if (p.id == "portal_ether") { S(S_PORTAL, p.pos, 0, pi, 1.f); for (int i = 0; i < 6; i++) { float a = i * TAU / 6 + 0.5f; if (std::sin(a) > 0.4f) continue; S(S_OBELISK, p.pos + vec2(std::cos(a), std::sin(a)) * 15.f, -a, pi, 1.1f, 2); } break; }   // none in front of the gate
             if (p.id == "sphinx") {
                 S(S_SPHINX, p.pos, 0.9f, pi, 1.f);

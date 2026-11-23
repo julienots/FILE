@@ -7,8 +7,10 @@ vec3 rotate3(vec3 v, float a);
 static const float TILE = 4.f;
 
 struct Theme { vec3 floor, floor2, wall, trim, accent; bool webs, crystals, bones, lava, ice; };
+static bool skyRealm(int t) { return t == 8 || t == 10; }   // 3.2.0 the celestial realm and space: islands in the void
 static Theme theme(int t) {
     switch (t) {
+    case 10: return {hexColor(0x5a5668), hexColor(0x6a6478), hexColor(0x3a3648), hexColor(0xc8d0e8), hexColor(0x9a7aff), false, true, false, false, false};   // space: asteroid rock, silver, violet
     case 0: return {hexColor(0x5a524a), hexColor(0x6a6058), hexColor(0x4a4440), hexColor(0x6a5a4a), hexColor(0x9aff6a), false, false, true, false, false};     // goblin cave
     case 1: return {hexColor(0x4a4850), hexColor(0x58565e), hexColor(0x3e3c44), hexColor(0x6a6670), hexColor(0x6ff0ff), true, false, true, false, false};    // catacombs
     case 2: return {hexColor(0x2e2a30), hexColor(0x3a3440), hexColor(0x241f28), hexColor(0x3a3040), hexColor(0xd060ff), true, true, true, false, false};     // spider den
@@ -24,9 +26,9 @@ static Theme theme(int t) {
 bool Game::dungeonFloor(float x, float z, float& y) const {
     if (!dungeon.active || x < WORLD_SIZE) return false;
     int tx = (int)std::floor((x - dungeon.origin.x) / TILE), tz = (int)std::floor((z - dungeon.origin.z) / TILE);
-    if (tx < 0 || tz < 0 || tx >= dungeon.W || tz >= dungeon.H) { y = dungeon.theme == 8 ? dungeon.origin.y - 30.f : dungeon.origin.y; return true; }
+    if (tx < 0 || tz < 0 || tx >= dungeon.W || tz >= dungeon.H) { y = skyRealm(dungeon.theme) ? dungeon.origin.y - 30.f : dungeon.origin.y; return true; }
     TileType t = dungeon.tiles[tz * dungeon.W + tx];
-    bool open = t == TileType::Pit || (dungeon.theme == 8 && t == TileType::Void);   // 2.2.1 the realm: no walls, the edge of an island is a drop into the sky
+    bool open = t == TileType::Pit || (skyRealm(dungeon.theme) && t == TileType::Void);   // 2.2.1 the realm: no walls, the edge of an island is a drop into the sky
     y = open ? dungeon.origin.y - 30.f : dungeon.origin.y;
     return true;
 }
@@ -407,7 +409,7 @@ void Game::buildDungeon(int idx) {
         for (int x = 0; x < d.W; x++) {
             TileType t = T(x, z);
             vec3 c = d.origin + vec3((x + 0.5f) * TILE, 0, (z + 0.5f) * TILE);
-            if (D.theme == 8) {
+            if (skyRealm(D.theme)) {
                 // 2.2.1 floating islands: rooms are grassy rock with a hanging root of stone; corridors are bridges of light
                 if (t == TileType::Void || t == TileType::Pit) continue;
                 bool inRoom = false;
@@ -450,7 +452,8 @@ void Game::buildDungeon(int idx) {
                 d.colliders.push_back(col);
             }
         }
-    if (D.theme == 8) {
+    const bool space = D.theme == 10;   // 3.2.0 asteroids: bare rock and crystal, no grass, no trees
+    if (skyRealm(D.theme)) {
         // 2.2.2 celestial islands built like a world chunk: an organic island top with the world's grass and rock
         // textures (terrain shader), cliffs that drop away under a hanging root of stone, real grass, flowers, trees
         ChunkBuild cb; cb.liteProps = false; cb.region = R_ELDERWOOD;
@@ -488,8 +491,8 @@ void Game::buildDungeon(int idx) {
                 Color8 cc = toColor8(tint * 0.5f, 1.f);
                 v.r = cc.r; v.g = cc.g; v.b = cc.b; v.a = 255;
                 auto q8 = [](float f) { return (uint8_t)clampf(f * 255.f + 0.5f, 0, 255); };
-                v.rough = q8(y < -0.15f ? 1.f : 0.f);
-                v.metal = q8(y >= -0.15f ? smoothstepf(0.62f, 0.8f, n1) * 0.55f : 0.f);
+                v.rough = q8(space || y < -0.15f ? 1.f : 0.f);   // space: rock all over
+                v.metal = q8(!space && y >= -0.15f ? smoothstepf(0.62f, 0.8f, n1) * 0.55f : 0.f);
                 T.v.push_back(v);
             }
             for (int j = 0; j + 1 < nz; j++) for (int i = 0; i + 1 < nx; i++) {
@@ -519,19 +522,20 @@ void Game::buildDungeon(int idx) {
                 }
                 if (nearBridge) continue;
                 static const PropKind trees[] = {P_ELDERTREE, P_BIRCH, P_OAK, P_GIANTSHROOM};
-                PropKind pk = trees[ir.irange(0, 3)];
+                static const PropKind rocks[] = {P_MAGICCRYSTAL, P_OBSIDIAN, P_ICECRYSTAL, P_MAGICCRYSTAL};   // space: crystals and boulders
+                PropKind pk = space ? rocks[ir.irange(0, 3)] : trees[ir.irange(0, 3)];
                 stampProp(cb, pk, ir.irange(0, propVariants(pk) - 1), {pp2.x, d.origin.y - 0.05f, pp2.y}, ir.range(0, TAU), ir.range(0.75f, 1.05f), vec3(1), true);
-                if (pk == P_GIANTSHROOM || pk == P_ELDERTREE) cb.lights.push_back(vec4(pp2.x, d.origin.y + 2.5f, pp2.y, LI_MAGIC));
+                if (pk == P_GIANTSHROOM || pk == P_ELDERTREE || pk == P_MAGICCRYSTAL) cb.lights.push_back(vec4(pp2.x, d.origin.y + 2.5f, pp2.y, pk == P_MAGICCRYSTAL ? LI_CRYSTAL : LI_MAGIC));
                 if (--nTrees <= 0) break;
             }
             for (int k = 0; k < 8; k++) {
                 float ang = ir.range(0, TAU), rad = ir.range(0.55f, 0.92f);
                 vec2 q = ctr + vec2(std::cos(ang) * hx * rad, std::sin(ang) * hz * rad);
-                PropKind pk = k % 3 == 0 ? P_BUSH : (k % 3 == 1 ? P_FERN : P_FLOWERS);
+                PropKind pk = space ? (k % 2 ? P_PEBBLES : P_ICECRYSTAL) : (k % 3 == 0 ? P_BUSH : (k % 3 == 1 ? P_FERN : P_FLOWERS));
                 stampProp(cb, pk, ir.irange(0, 2), {q.x, d.origin.y - 0.03f, q.y}, ir.range(0, TAU), ir.range(0.8f, 1.2f), vec3(1), false);
             }
             // grass (and a few flowers) over the island top
-            for (float z = ctr.y - hz + 0.3f; z < ctr.y + hz - 0.2f; z += 0.62f)
+            if (!space) for (float z = ctr.y - hz + 0.3f; z < ctr.y + hz - 0.2f; z += 0.62f)
                 for (float x = ctr.x - hx + 0.3f; x < ctr.x + hx - 0.2f; x += 0.62f) {
                     float gx = x + ir.range(-0.25f, 0.25f), gz = z + ir.range(-0.25f, 0.25f);
                     if (edgeAt(gx, gz) > -0.2f) continue;
@@ -555,7 +559,7 @@ void Game::buildDungeon(int idx) {
     // pillars & accent glows in rooms, cobwebs, lava cracks
     for (size_t i = 0; i < d.rooms.size(); i++) {
         auto& rm = d.rooms[i];
-        if (D.theme == 8 && rm.w >= 4 && rm.h >= 4) for (int k = 0; k < 4; k++) {
+        if (skyRealm(D.theme) && rm.w >= 4 && rm.h >= 4) for (int k = 0; k < 4; k++) {
             vec3 p = d.origin + vec3((rm.x + (k % 2 ? rm.w - 1 : 1)) * TILE, 0, (rm.z + (k / 2 ? rm.h - 1 : 1)) * TILE);
             wl.lathe({{0.7f, 0}, {0.55f, 0.5f}, {0.01f, 0.6f}}, Mat(th.trim, 0.6f), 8, p);
             pp.lathe({{0.01f, 1.2f}, {0.45f, 2.2f}, {0.01f, 4.2f}}, Mat(th.accent * 0.8f, 0.15f, 0, 2.5f), 6, p);
@@ -568,23 +572,35 @@ void Game::buildDungeon(int idx) {
             Collider col; col.c = p.xz(); col.r = 0.6f; col.base = -1; col.top = 8; d.colliders.push_back(col);
         }
         vec3 rc = d.origin + vec3((rm.x + rm.w * 0.5f) * TILE, 0, (rm.z + rm.h * 0.5f) * TILE);
-        if (rm.kind == 2 || i == 0) { pp.lathe({{2.6f, 0.02f}, {0.01f, 0.03f}}, Mat(th.accent, 0.3f, 0, D.theme == 8 ? 0.6f : 2.f), 24, rc); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
+        if (rm.kind == 2 || i == 0) { pp.lathe({{2.6f, 0.02f}, {0.01f, 0.03f}}, Mat(th.accent, 0.3f, 0, skyRealm(D.theme) ? 0.6f : 2.f), 24, rc); d.lights.push_back(vec4(rc + vec3(0, 3, 0), LI_MAGIC)); d.emitters.push_back(vec4(rc, EM_SPARKLES)); }
     }
     if (th.lava) for (int i = 0; i < 12; i++) { auto& rm = d.rooms[r.irange(0, (int)d.rooms.size() - 1)]; vec3 p = d.origin + vec3((rm.x + r.f() * rm.w) * TILE, 0.01f, (rm.z + r.f() * rm.h) * TILE); pp.box(p, {r.range(0.8f, 2.f), 0.02f, 0.06f}, Mat(hexColor(0xff6a1a), 0.5f, 0, 5.f), quat::axisAngle({0, 1, 0}, r.range(0, PI))); }
-    if (D.theme == 8) {
-        // far islands drifting in the sky around the archipelago
+    if (skyRealm(D.theme)) {
+        // far islands drifting in the sky around the archipelago (3.2.0 space: an asteroid belt, crystal shards, a derelict monolith)
         Rng fr(D.seed + 7);
         vec3 mid = d.origin + vec3(d.W * TILE * 0.5f, 0, d.H * TILE * 0.5f);
-        for (int i = 0; i < 18; i++) {
-            float a = i * TAU / 18 + fr.range(-0.2f, 0.2f), dist = fr.range(70.f, 140.f);
-            vec3 c = mid + vec3(std::cos(a) * dist, fr.range(-25.f, 18.f), std::sin(a) * dist);
-            float sc = fr.range(4.f, 11.f);
-            wl.rock(c, vec3(sc, sc * 0.35f, sc * 0.9f), Mat(th.floor, 0.9f), fr.next(), 1);
-            wl.cone(c - vec3(0, sc * 0.2f, 0), c - vec3(fr.range(-1.f, 1.f), sc * fr.range(1.2f, 2.f), fr.range(-1.f, 1.f)), sc * 0.8f, Mat(th.wall * 0.8f, 0.9f), 7);
-            if (fr.chance(0.5f)) pp.lathe({{0.01f, 0}, {sc * 0.12f, sc * 0.4f}, {0.01f, sc * 0.9f}}, Mat(th.accent, 0.2f, 0, 2.5f), 6, c + vec3(0, sc * 0.3f, 0));
+        int nFar = space ? 46 : 18;
+        for (int i = 0; i < nFar; i++) {
+            float a = i * TAU / nFar + fr.range(-0.2f, 0.2f), dist = space ? fr.range(60.f, 190.f) : fr.range(70.f, 140.f);
+            vec3 c = mid + vec3(std::cos(a) * dist, space ? fr.range(-60.f, 45.f) : fr.range(-25.f, 18.f), std::sin(a) * dist);
+            float sc = space ? fr.range(2.f, 14.f) : fr.range(4.f, 11.f);
+            if (space) {
+                wl.rock(c, vec3(sc, sc * fr.range(0.5f, 0.9f), sc * fr.range(0.6f, 1.f)), Mat(lerp(th.wall, th.floor, fr.f()) * fr.range(0.6f, 1.f), 0.95f), fr.next(), 1);
+                for (int k = 0; k < 3; k++) { vec3 q = c + fr.onSphere() * sc * fr.range(1.3f, 2.2f); wl.rock(q, vec3(sc * fr.range(0.08f, 0.22f)), Mat(th.wall * 0.8f, 0.95f), fr.next(), 0); }
+                if (fr.chance(0.35f)) pp.lathe({{0.01f, 0}, {sc * 0.18f, sc * 0.5f}, {0.01f, sc * 1.3f}}, Mat(fr.chance(0.5f) ? th.accent : hexColor(0x7af0ff), 0.15f, 0, 3.f), 6, c + vec3(0, sc * 0.4f, 0));
+            } else {
+                wl.rock(c, vec3(sc, sc * 0.35f, sc * 0.9f), Mat(th.floor, 0.9f), fr.next(), 1);
+                wl.cone(c - vec3(0, sc * 0.2f, 0), c - vec3(fr.range(-1.f, 1.f), sc * fr.range(1.2f, 2.f), fr.range(-1.f, 1.f)), sc * 0.8f, Mat(th.wall * 0.8f, 0.9f), 7);
+                if (fr.chance(0.5f)) pp.lathe({{0.01f, 0}, {sc * 0.12f, sc * 0.4f}, {0.01f, sc * 0.9f}}, Mat(th.accent, 0.2f, 0, 2.5f), 6, c + vec3(0, sc * 0.3f, 0));
+            }
+        }
+        if (space) {   // the derelict observatory monolith, far out, with its ring of light
+            vec3 m = mid + vec3(-150.f, 30.f, 120.f);
+            wl.box(m, {6.f, 26.f, 6.f}, Mat(hexColor(0x1a1824), 0.3f, 0.6f));
+            pp.lathe({{20.f, -0.4f}, {20.f, 0.4f}, {19.f, 0.4f}, {19.f, -0.4f}}, Mat(hexColor(0x9a7aff), 0.2f, 0, 4.f), 64, m, quat::axisAngle({1, 0, 0}, 0.5f));
         }
     }
-    if (D.theme != 8) dressDungeon(d, D.theme, th, wl, pp, (uint32_t)D.seed);   // 3.1.0
+    if (!skyRealm(D.theme)) dressDungeon(d, D.theme, th, wl, pp, (uint32_t)D.seed);   // 3.1.0
     // exit portal (the way back up)
     pp.lathe({{1.2f, 0.02f}, {0.01f, 0.04f}}, Mat(hexColor(0x8ad8ff), 0.2f, 0, 3.f), 20, d.exitPos);
     for (int i = 0; i < 6; i++) { float a = i * TAU / 6; pp.rock(d.exitPos + vec3(std::cos(a) * 1.5f, 0, std::sin(a) * 1.5f), vec3(0.3f, 0.5f, 0.3f), Mat(th.trim), 300 + i, 0); }
@@ -804,7 +820,7 @@ void Game::renderDungeon() {
     DrawItem it;
     it.mesh = &d.floor; renderer.submit(it);
     it.mesh = &d.walls; renderer.submit(it);
-    if (d.theme == 8 && d.realm.ready) {   // 2.2.2 the islands, drawn like a world chunk
+    if (skyRealm(d.theme) && d.realm.ready) {   // 2.2.2 the islands, drawn like a world chunk
         Chunk& ch = d.realm;
         DrawItem r2; r2.tint = vec4(1, 1, 1, 0);
         if (ch.terrain.valid()) { r2.mesh = &ch.terrain; r2.flags = LIT_TERRAIN; renderer.submit(r2); }

@@ -2292,6 +2292,28 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/BM0_bestiary.png"); }, idle, "shot"});
         return s;
     }
+    if (name == "cosmos") {
+        // 3.2.0 the Star Observatory and space: the gate in the Titans, then the asteroids over the planet, a low-gravity jump
+        static int res[4]; static float y0, peak;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.level = 30; g.recomputeStats(); for (auto& r : res) r = 0; g.timeOfDay = 21.5f;
+            const Poi* p = g.world.poiById("portal_stars"); res[0] = p != nullptr; if (!p) return;
+            teleport(g, p->pos.x, p->pos.y + 18.f, 0.f); g.pc().yaw = PI; g.camYaw = 0.f; g.camPitch = 0.15f; g.camDist = g.camDistTarget = 14.f; }, [](Game& g, float) { g.camIdleT = 0; }, "to the observatory"});
+        s.push_back({3.f, none, [](Game& g, float) { g.camIdleT = 0; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CO0_observatory.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { int di = -1; for (int i = 0; i < (int)dungeons().size(); i++) if (dungeons()[i].id == "cosmos") di = i; if (di >= 0) g.enterDungeon(di); }, [](Game& g, float) { g.pc().invuln = 1.f; }, "enter"});
+        s.push_back({3.f, none, [](Game& g, float) { g.pc().invuln = 1.f; g.camIdleT = 0; }, "arrive"});
+        s.push_back({0.1f, [](Game& g) { res[1] = g.dungeon.active && g.dungeon.theme == 10; g.reg.each<Character>([&](Entity e, Character& c) { if (c.team == Team::Enemy) g.reg.destroyLater(e); });
+            g.camPitch = 0.12f; g.camDist = g.camDistTarget = 11.f; g.camYaw = std::atan2(-0.42f, 0.62f); }, idle, "look"});   // looking towards the planet
+        s.push_back({1.5f, none, [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 1.f; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CO1_space.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.camPitch = 0.55f; g.camDist = g.camDistTarget = 24.f; g.camYaw = 0.8f; }, idle, "high"});
+        s.push_back({1.2f, none, [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 1.f; }, "settle"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CO2_asteroids.png"); y0 = peak = g.pc().pos.y; g.input.jump = true; }, idle, "jump"});
+        s.push_back({1.6f, none, [](Game& g, float) { peak = std::max(peak, g.pc().pos.y); g.camIdleT = 0; g.pc().invuln = 1.f; }, "airborne"});
+        s.push_back({0.1f, [](Game& g) { res[2] = peak - y0 > 2.f; g.requestScreenshot("build/shots/CO3_jump.png");
+            AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

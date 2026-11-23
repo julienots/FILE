@@ -2265,8 +2265,10 @@ static void archway(MeshBuilder& M, int variant) {
 // 2.2.1 the celestial portal: a stone dais, a ring of rune-cut blocks with a burning gold inner rim, a vortex of light
 // (concentric glowing discs and spiral arms), two pylons crowned with floating crystals, rune stones orbiting. The ring
 // is open at its foot so the hero walks straight in. Facing +Z. (The swirling sparks are particles, Game.cpp.)
-static void portalGate(MeshBuilder& M, MeshBuilder& Fo) {
-    Mat stone(hexColor(0x5a5468), 0.8f), stone2(hexColor(0x6e6880), 0.8f), gold(hexColor(0xe8c060), 0.35f, 0.9f, 1.4f);
+static void portalGate(MeshBuilder& M, MeshBuilder& Fo, int variant = 0) {
+    // 3.2.0 variant 1: the Star Observatory - dark basalt and silver, a vortex of night with stars, an armillary sphere
+    bool stars = variant == 1;
+    Mat stone(hexColor(stars ? 0x2e2c3a : 0x5a5468), 0.8f), stone2(hexColor(stars ? 0x3e3a50 : 0x6e6880), 0.8f), gold(hexColor(stars ? 0xd8e0f0 : 0xe8c060), 0.3f, 0.95f, 1.4f);
     M.lathe({{6.0f, 0}, {6.0f, 0.25f}, {5.4f, 0.3f}, {5.4f, 0.55f}, {4.8f, 0.6f}, {4.8f, 0.85f}, {0.01f, 0.86f}}, stone, 24);
     for (int i = 0; i < 24; i++) { float a = i * TAU / 24; M.box({std::cos(a) * 4.8f, 0.87f, std::sin(a) * 4.8f}, {0.25f, 0.02f, 0.08f}, Mat(hexColor(0x9af0ff), 0.2f, 0, 2.5f), quat::axisAngle({0, 1, 0}, -a)); }
     const float R = 4.3f, cy = 0.86f + 4.4f;
@@ -2287,7 +2289,7 @@ static void portalGate(MeshBuilder& M, MeshBuilder& Fo) {
     // the vortex: layered discs facing +Z, hottest in the centre, with six spiral arms
     for (int k = 0; k < 5; k++) {
         float rr = (R - 0.7f) * (1.f - k * 0.18f);
-        vec3 col = lerp(hexColor(0x3a6aff), hexColor(0xf0d8ff), k / 4.f);
+        vec3 col = stars ? lerp(hexColor(0x0a0820), hexColor(0x6a3ad0), k / 4.f) : lerp(hexColor(0x3a6aff), hexColor(0xf0d8ff), k / 4.f);
         M.lathe({{rr, 0}, {0.01f, 0}}, Mat(col * 0.7f, 0.2f, 0, 1.2f + k * 0.7f), 32, {0, cy, -0.06f + k * 0.03f}, quat::axisAngle({1, 0, 0}, PI / 2));
         M.lathe({{rr, 0}, {0.01f, 0}}, Mat(col * 0.7f, 0.2f, 0, 1.2f + k * 0.7f), 32, {0, cy, 0.06f - k * 0.03f}, quat::axisAngle({1, 0, 0}, -PI / 2));
     }
@@ -2303,6 +2305,14 @@ static void portalGate(MeshBuilder& M, MeshBuilder& Fo) {
         for (int k = 0; k < 4; k++) M.box(b + vec3(0, 1.2f + k * 0.9f, 0.62f), {0.18f, 0.3f, 0.01f}, Mat(hexColor(0x9af0ff), 0.2f, 0, 2.5f));
         M.lathe({{0.01f, 0}, {0.5f, 0.7f}, {0.01f, 2.2f}}, Mat(hexColor(0xc8a8ff), 0.15f, 0, 2.8f), 6, b + vec3(0, 5.8f, 0));
         M.lathe({{0.01f, 0}, {0.22f, 0.3f}, {0.01f, 0.9f}}, Mat(hexColor(0x9af0ff), 0.15f, 0, 3.f), 6, b + vec3(0.9f * sd, 6.4f, 0.4f));
+    }
+    if (stars) {
+        // stars in the vortex, and an armillary sphere turning over the keystone
+        Rng sr(4242);
+        for (int i = 0; i < 70; i++) { float a = sr.range(0, TAU), rr = std::sqrt(sr.f()) * (R - 0.8f); M.box({std::cos(a) * rr, cy + std::sin(a) * rr, 0.14f}, vec3(sr.range(0.02f, 0.06f)), Mat(sr.chance(0.3f) ? hexColor(0xffd8a0) : hexColor(0xd8e8ff), 0.2f, 0, 5.f)); }
+        vec3 ac{0, cy + R + 3.6f, 0};
+        for (int k = 0; k < 3; k++) M.lathe({{1.5f, -0.04f}, {1.5f, 0.04f}, {1.42f, 0.04f}, {1.42f, -0.04f}}, gold, 32, ac, quat::axisAngle(normalize(vec3(k == 0, k == 1 ? 0.3f : 0.f, k == 2)), PI / 2 * (k == 1 ? 0.f : 1.f)));
+        M.ellipsoid(ac, vec3(0.45f), Mat(hexColor(0xffe0a0), 0.2f, 0, 5.f), 12, 8);
     }
     // rune stones orbiting the ring (frozen in mid-air)
     for (int i = 0; i < 8; i++) { float a = i * TAU / 8 + 0.2f; M.rock({std::cos(a) * (R + 1.8f), cy + std::sin(a) * (R + 1.4f), 0.4f * (i % 2 ? 1 : -1)}, vec3(0.35f, 0.45f, 0.3f), stone2, 700 + i, 0); }
@@ -2615,7 +2625,7 @@ void buildStructure(ChunkBuild& out, const Structure& s, const World& w) {
         cr.uid = hash32(0x5C1F0000u + (uint32_t)((int)s.pos.x * 7919 + (int)s.pos.y)); out.nodes.push_back(cr);
         break;
     }
-    case S_PORTAL: portalGate(M, Fo);
+    case S_PORTAL: portalGate(M, Fo, s.variant);
         addCircleCollider(out, s, gy, {-4.3f, 0}, 0.7f, 9.f); addCircleCollider(out, s, gy, {4.3f, 0}, 0.7f, 9.f);
         addCircleCollider(out, s, gy, {-6.6f, 0.5f}, 0.9f, 7.f); addCircleCollider(out, s, gy, {6.6f, 0.5f}, 0.9f, 7.f);
         out.lights.push_back(vec4(s.pos.x, gy + 5.2f, s.pos.y, LI_MAGIC)); out.lights.push_back(vec4(s.pos.x, gy + 1.2f, s.pos.y + 2.f, LI_CRYSTAL));
