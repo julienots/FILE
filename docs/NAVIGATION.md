@@ -68,6 +68,10 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
   en traversant les autres pendant 0,75 s, puis reprend l'évitement. Les vitesses qui mènent dans un mur (grille 2D) sont
   écartées, et en 3D l'agent est ramené sur le maillage. Sans voisin proche, le chemin est suivi
   exactement. Désactivé, les agents se traversent (`stats().avoiding` compte les agents qui ont dévié).
+- **Priorité d'évitement** (`NavAgent.priority`, 0 à 1, comme `avoidance_priority` de Godot) : un agent
+  ignore ceux de priorité plus basse (ils s'écartent) et fait tout l'évitement face à ceux de priorité
+  plus haute ; à égalité, ils se partagent le détour. Test : face à face, l'agent prioritaire reste à
+  moins de 0,3 m de sa ligne et l'autre s'écarte de plus de 0,7 m, sans contact.
 - **`NavObstacle`** (`radius`) : un rocher qui roule, une créature sans `NavAgent`, une porte fermée.
   Les agents le contournent à la volée ; sa vitesse est estimée d'une image à l'autre. Avec
   `carve`, il est aussi **découpé** de la navigation (le chemin passe autour, comme un collider

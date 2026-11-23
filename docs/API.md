@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 750 champs)
+## Composants (76, 751 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -438,6 +438,7 @@ Follows paths toward a destination given by a script (entity:navigateTo).
 | `faceMovement` | bool | 3D: turns the entity (its +Z axis) toward where it goes |
 | `plane` | enum | Auto: 3D navigation mesh if the scene has one, else the 2D grid ; valeurs : `Auto`, `Grid2D`, `Mesh3D` |
 | `avoidance` | bool | Steers around other agents and obstacles (crowds) |
+| `priority` | float | Avoidance priority 0..1: ignores lower ones, gives way to higher ones ; plage 0 .. 1 |
 | `radius` | float | plage 0.01 .. 20 |
 
 ### NavArea

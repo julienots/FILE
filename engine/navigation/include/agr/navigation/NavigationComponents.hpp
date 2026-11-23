@@ -21,6 +21,10 @@ struct NavAgentComponent {
     /// the avoidance, like RVO. Off: walks its path exactly (agents go through each other).
     bool avoidance = true;
     float radius = 0.4f;            ///< Size used by the avoidance.
+    /// Avoidance priority (0..1, like Godot's avoidance_priority): an agent ignores agents of a
+    /// lower priority (they get out of its way) and takes all the avoidance with higher ones; equal
+    /// priorities share it. A VIP, a vehicle or the player's escort walks straight through a crowd.
+    float priority = 1.0f;
 };
 
 /// Something the agents steer around: a rolling boulder, a creature without NavAgent, a closed

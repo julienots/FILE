@@ -112,6 +112,7 @@ void registerNavigationComponents() {
                {.tooltip = "Auto: 3D navigation mesh if the scene has one, else the 2D grid",
                 .enumEntries = {{"Auto", 0}, {"Grid2D", 1}, {"Mesh3D", 2}}})
         .field("avoidance", &NavAgentComponent::avoidance, {.tooltip = "Steers around other agents and obstacles (crowds)"})
+        .field("priority", &NavAgentComponent::priority, {.tooltip = "Avoidance priority 0..1: ignores lower ones, gives way to higher ones", .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("radius", &NavAgentComponent::radius, {.rangeMin = 0.01f, .rangeMax = 20.0f, .speed = 0.01f});
     reg.add<NavObstacleComponent>("NavObstacle")
         .category("Navigation")
@@ -601,6 +602,7 @@ void NavigationSystem::update(Scene& s, float dt) {
         Vec2 p, v;
         float r;
         bool use3D, agent, moving;
+        float priority = 1.0f;
     };
     std::vector<Body> bodies;
     auto planar = [](Vec3 p, bool use3D) { return use3D ? Vec2{p.x, p.z} : Vec2{p.x, p.y}; };
@@ -610,7 +612,7 @@ void NavigationSystem::update(Scene& s, float dt) {
         const bool use3D = it != m_agents.end() ? it->second.use3D : uses3D(s, e);
         const bool moving = it != m_agents.end() && it->second.status == NavStatus::Moving;
         bodies.push_back({e.packed(), planar(worldPosition(s, e), use3D), it != m_agents.end() ? planar(it->second.velocity, use3D) : Vec2{},
-                          std::max(c.radius, 0.01f), use3D, true, moving});
+                          std::max(c.radius, 0.01f), use3D, true, moving, std::clamp(c.priority, 0.0f, 1.0f)});
     });
     std::unordered_map<u64, Vec3> seenObstacles;
     reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
@@ -651,6 +653,7 @@ void NavigationSystem::update(Scene& s, float dt) {
         if (comp->avoidance && a.ghostTime <= 0.0f)
             for (const Body& b : bodies) {
                 if (b.key == e.packed() || b.use3D != a.use3D) continue;
+                if (b.agent && b.priority < std::clamp(comp->priority, 0.0f, 1.0f) - 1e-4f) continue;  // lower priority: it makes way
                 if (math::length(b.p - me) < r + b.r + speed * 1.5f + math::length(b.v) * 1.5f) near.push_back(&b);
             }
         if (near.empty()) {
@@ -695,7 +698,9 @@ void NavigationSystem::update(Scene& s, float dt) {
                     for (const Body* b : near) {
                         const Vec2 rel = b->p - me;
                         // Reciprocal for moving agents (they take half of the turn); standing ones are obstacles.
-                        const Vec2 w = b->agent && b->moving ? v * 2.0f - current - b->v : v - b->v;
+                        // A higher-priority agent does not turn: all of the avoidance is ours.
+                        const bool shared = b->agent && b->moving && b->priority <= std::clamp(comp->priority, 0.0f, 1.0f) + 1e-4f;
+                        const Vec2 w = shared ? v * 2.0f - current - b->v : v - b->v;
                         const float R = r + b->r;
                         const float c = math::dot(rel, rel) - R * R;
                         if (c < 0.0f) {  // already overlapping: only moving apart is fine

@@ -1,3 +1,4 @@
+#include <array>
 #include <thread>
 #include <chrono>
 #include <doctest/doctest.h>
@@ -627,4 +628,51 @@ TEST_CASE("navigation settings tileSize: a moved carved obstacle only rebuilds t
     CHECK(nav.stats().tilesRebuilt <= 12);  // old and new place
     REQUIRE(nav.findPath(s, {-20, 0, -20}, {20, 0, -20}, true, path));
     CHECK(path.size() > 2);
+}
+
+TEST_CASE("crowds: avoidance priority — the higher one keeps its line, the lower one makes way") {
+    registerAll();
+    Scene s;
+    box3(s, {0, -0.5f, 0}, {40, 1, 40});
+    auto spawn = [&](const char* name, Vec3 at, float priority) {
+        const auto e = s.createEntity(name);
+        s.registry().get<TransformComponent>(e).position = at;
+        auto& a = s.registry().emplace<NavAgentComponent>(e);
+        a.speed = 3.0f;
+        a.radius = 0.5f;
+        a.plane = NavPlane::Mesh3D;
+        a.priority = priority;
+        return e;
+    };
+    auto run = [&](float pa, float pb) {
+        const auto a = s.findByName("A").isNull() ? spawn("A", {-6, 0, 0.05f}, pa) : s.findByName("A");
+        const auto b = s.findByName("B").isNull() ? spawn("B", {6, 0, -0.05f}, pb) : s.findByName("B");
+        s.registry().get<TransformComponent>(a).position = {-6, 0, 0.05f};
+        s.registry().get<TransformComponent>(b).position = {6, 0, -0.05f};
+        s.registry().get<NavAgentComponent>(a).priority = pa;
+        s.registry().get<NavAgentComponent>(b).priority = pb;
+        s.updateTransforms();
+        NavigationSystem nav;
+        REQUIRE(nav.navigateTo(s, a, {6, 0, 0.05f}));
+        REQUIRE(nav.navigateTo(s, b, {-6, 0, -0.05f}));
+        float devA = 0.0f, devB = 0.0f, closest = 1e9f;
+        for (int i = 0; i < 900 && (nav.status(a) == NavStatus::Moving || nav.status(b) == NavStatus::Moving); ++i) {
+            nav.update(s, 1.0f / 60.0f);
+            s.updateTransforms();
+            devA = std::max(devA, std::abs(position(s, a).z - 0.05f));
+            devB = std::max(devB, std::abs(position(s, b).z + 0.05f));
+            const Vec3 d = position(s, a) - position(s, b);
+            closest = std::min(closest, std::hypot(d.x, d.z));
+        }
+        CHECK(nav.status(a) == NavStatus::Arrived);
+        CHECK(nav.status(b) == NavStatus::Arrived);
+        return std::array<float, 3>{devA, devB, closest};
+    };
+    const auto vip = run(1.0f, 0.2f);
+    CHECK_MESSAGE(vip[0] < 0.3f, vip[0]);        // A barely leaves its line
+    CHECK_MESSAGE(vip[1] > 0.7f, vip[1]);        // B steps aside
+    CHECK_MESSAGE(vip[2] > 0.8f, vip[2]);        // and they do not collide
+    const auto equal = run(1.0f, 1.0f);           // shared: both turn
+    CHECK_MESSAGE(equal[0] > 0.25f, equal[0]);
+    CHECK_MESSAGE(equal[1] > 0.25f, equal[1]);
 }
