@@ -17,6 +17,7 @@ struct AndroidToolchain {
     std::filesystem::path gradle;     ///< Gradle executable (8.13 or newer).
     std::filesystem::path templates;  ///< Export templates: android/<abi>/libmain.so, libSDL3.so, android/java/.
     std::filesystem::path keytool;    ///< JDK keytool (release keystores).
+    std::filesystem::path adb;        ///< Android Debug Bridge (AGR_ADB, SDK platform-tools, PATH): one-click deploy.
 };
 
 /// Locates the tools: environment variables, PATH, then the editor's folder
@@ -45,6 +46,25 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
 /// to `outputDir`. `log` receives Gradle's output line by line (from the calling thread).
 Result<ExportReport> buildAndroid(const Project& project, const AndroidToolchain& tools, const std::filesystem::path& outputDir,
                                   const AndroidBuildOptions& options, const std::function<void(const std::string&)>& log = {});
+
+/// A phone, tablet or emulator seen by adb.
+struct AndroidDevice {
+    std::string serial;  ///< adb -s <serial>
+    std::string state;   ///< "device" (ready), "unauthorized" (accept the prompt on the phone), "offline"...
+    std::string model;   ///< e.g. "Pixel_7" (empty if adb does not say)
+    bool ready() const { return state == "device"; }
+};
+/// Parses `adb devices -l`.
+std::vector<AndroidDevice> parseAdbDevices(const std::string& output);
+/// Devices connected now (USB or Wi-Fi debugging, emulators).
+Result<std::vector<AndroidDevice>> listAndroidDevices(const AndroidToolchain& tools);
+/// One-click deploy: installs the APK on the device (replacing an older install, keeping its data)
+/// and starts the game. `serial` empty = the only ready device. `log` receives adb's output.
+Status deployToAndroid(const AndroidToolchain& tools, const std::filesystem::path& apk, const std::string& packageId, const std::string& serial,
+                       const std::function<void(const std::string&)>& log = {});
+/// adb command that prints the game's log (engine messages and Lua errors, tag "AGR" and SDL),
+/// e.g. for a terminal: `adb -s SERIAL logcat -s AGR:V SDL:V`.
+std::string androidLogcatCommand(const AndroidToolchain& tools, const std::string& serial);
 
 /// Creates a release keystore with the JDK's keytool (RSA 2048, valid 30 years).
 Status createKeystore(const AndroidToolchain& tools, const std::filesystem::path& path, const std::string& alias,

@@ -188,7 +188,82 @@ AndroidToolchain findAndroidToolchain(const fs::path& editorDirectory) {
         if (!javaHome.empty() && fs::is_regular_file(fs::path(javaHome) / "bin" / ("keytool" + suffix), ec))
             t.keytool = fs::path(javaHome) / "bin" / ("keytool" + suffix);
     if (t.keytool.empty()) t.keytool = findInPath("keytool");
+    if (!env("AGR_ADB").empty()) t.adb = env("AGR_ADB");
+    for (const std::string& suffix : kExeSuffixes)
+        if (t.adb.empty() && !t.sdk.empty() && fs::is_regular_file(t.sdk / "platform-tools" / ("adb" + suffix), ec)) t.adb = t.sdk / "platform-tools" / ("adb" + suffix);
+    if (t.adb.empty()) t.adb = findInPath("adb");
     return t;
+}
+
+// ------------------------------------------------------------------ deploy
+std::vector<AndroidDevice> parseAdbDevices(const std::string& output) {
+    std::vector<AndroidDevice> devices;
+    std::istringstream in(output);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line.rfind("List of devices", 0) == 0 || line[0] == '*') continue;  // header, daemon messages
+        std::istringstream words(line);
+        AndroidDevice d;
+        if (!(words >> d.serial >> d.state)) continue;
+        std::string w;
+        while (words >> w)
+            if (w.rfind("model:", 0) == 0) d.model = w.substr(6);
+        devices.push_back(std::move(d));
+    }
+    return devices;
+}
+
+Result<std::vector<AndroidDevice>> listAndroidDevices(const AndroidToolchain& tools) {
+    if (tools.adb.empty()) return makeError(Error::Code::NotFound, "adb not found: install the Android SDK platform-tools (or set AGR_ADB)");
+    std::string out;
+    if (const int code = runProcess(quoteArg(tools.adb.string()) + " devices -l", {}, out); code != 0)
+        return makeError(Error::Code::Unknown, "adb devices failed (" + std::to_string(code) + "): " + out);
+    return parseAdbDevices(out);
+}
+
+Status deployToAndroid(const AndroidToolchain& tools, const fs::path& apk, const std::string& packageId, const std::string& serial,
+                       const std::function<void(const std::string&)>& log) {
+    std::error_code ec;
+    if (!fs::is_regular_file(apk, ec)) return makeError(Error::Code::NotFound, "APK not found: " + apk.string());
+    if (!GameManifest::validPackageId(packageId)) return makeError(Error::Code::InvalidArgument, "invalid application id '" + packageId + "'");
+    auto devices = listAndroidDevices(tools);
+    if (!devices) return devices.error();
+    std::string target = serial;
+    if (target.empty()) {
+        std::vector<std::string> ready;
+        for (const AndroidDevice& d : devices.value())
+            if (d.ready()) ready.push_back(d.serial);
+        if (ready.empty()) {
+            for (const AndroidDevice& d : devices.value())
+                if (d.state == "unauthorized")
+                    return makeError(Error::Code::Unknown, "device " + d.serial + " is unauthorized: accept the USB debugging prompt on it");
+            return makeError(Error::Code::NotFound, "no Android device connected (enable USB debugging, or start an emulator)");
+        }
+        if (ready.size() > 1) return makeError(Error::Code::InvalidArgument, "several devices are connected: choose one (" + ready.front() + ", " + ready[1] + "...)");
+        target = ready.front();
+    } else {
+        bool found = false;
+        for (const AndroidDevice& d : devices.value()) found |= d.serial == target && d.ready();
+        if (!found) return makeError(Error::Code::NotFound, "device '" + target + "' is not connected or not ready");
+    }
+    const std::string adb = quoteArg(tools.adb.string()) + " -s " + quoteArg(target);
+    std::string transcript;
+    if (log) log("Installing " + apk.filename().string() + " on " + target + "...");
+    const int install = runProcess(adb + " install -r " + quoteArg(apk.string()), log, transcript);
+    if (install != 0 || transcript.find("Failure") != std::string::npos)
+        return makeError(Error::Code::Unknown, "adb install failed: " + transcript);
+    if (log) log("Starting " + packageId + "...");
+    transcript.clear();
+    const int start = runProcess(adb + " shell am start -n " + quoteArg(packageId + "/.AgrActivity"), log, transcript);
+    if (start != 0 || transcript.find("Error") != std::string::npos) return makeError(Error::Code::Unknown, "could not start the game: " + transcript);
+    return {};
+}
+
+std::string androidLogcatCommand(const AndroidToolchain& tools, const std::string& serial) {
+    std::string cmd = quoteArg(tools.adb.empty() ? std::string("adb") : tools.adb.string());
+    if (!serial.empty()) cmd += " -s " + quoteArg(serial);
+    return cmd + " logcat -s AGR:V SDL:V SDL/APP:V";
 }
 
 std::vector<std::string> checkAndroidExport(const Project& project, const AndroidToolchain& tools) {

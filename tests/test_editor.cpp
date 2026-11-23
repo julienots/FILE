@@ -1780,3 +1780,69 @@ TEST_CASE("texture compression for Android: images become ETC2 KTX under their n
     std::error_code ec;
     fs::remove_all(dir, ec);
 }
+
+#if !defined(_WIN32)
+TEST_CASE("Android one-click deploy: adb devices parsed, APK installed then started on the chosen device") {
+    const auto devices = parseAdbDevices("* daemon started successfully\nList of devices attached\n"
+                                         "R58M123ABC             device usb:1-1 product:beyond1 model:SM_G973F device:beyond1 transport_id:1\n"
+                                         "emulator-5554          device product:sdk_gphone64 model:sdk_gphone64_x86_64 transport_id:2\n"
+                                         "0123456789             unauthorized usb:1-2 transport_id:3\n\n");
+    REQUIRE(devices.size() == 3);
+    CHECK(devices[0].serial == "R58M123ABC");
+    CHECK(devices[0].model == "SM_G973F");
+    CHECK(devices[0].ready());
+    CHECK(devices[2].state == "unauthorized");
+    CHECK_FALSE(devices[2].ready());
+
+    // A fake adb: records its arguments, answers like the real one.
+    const fs::path dir = fs::temp_directory_path() / ("agr_adb_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir);
+    const fs::path calls = dir / "calls.txt", list = dir / "devices.txt";
+    {
+        std::ofstream sh(dir / "adb");
+        sh << "#!/bin/sh\necho \"$@\" >> '" << calls.string() << "'\n"
+           << "case \"$*\" in\n"
+           << "  'devices -l') cat '" << list.string() << "' ;;\n"
+           << "  *' install -r '*) echo 'Performing Streamed Install'; echo 'Success' ;;\n"
+           << "  *' shell am start '*) echo 'Starting: Intent { cmp=x }' ;;\n"
+           << "esac\n";
+    }
+    fs::permissions(dir / "adb", fs::perms::owner_all);
+    const fs::path apk = dir / "Game-debug.apk";
+    std::ofstream(apk) << "apk";
+    AndroidToolchain tools;
+    tools.adb = dir / "adb";
+    auto setList = [&](const std::string& text) { std::ofstream(list) << "List of devices attached\n" << text; };
+    auto readCalls = [&] {
+        std::ifstream in(calls);
+        return std::string((std::istreambuf_iterator<char>(in)), {});
+    };
+
+    setList("emulator-5554\tdevice product:x model:Pixel_7 transport_id:2\n");
+    std::vector<std::string> log;
+    REQUIRE(deployToAndroid(tools, apk, "com.studio.game", "", [&](const std::string& l) { log.push_back(l); }));
+    const std::string c = readCalls();
+    CHECK(c.find("-s emulator-5554 install -r " + apk.string()) != std::string::npos);
+    CHECK(c.find("-s emulator-5554 shell am start -n com.studio.game/.AgrActivity") != std::string::npos);
+    CHECK(c.find("install") < c.find("am start"));
+    CHECK(std::find(log.begin(), log.end(), "Success") != log.end());
+    CHECK(androidLogcatCommand(tools, "emulator-5554").find("-s 'emulator-5554' logcat -s AGR:V") != std::string::npos);
+
+    // Several devices: a serial is needed, and must be ready.
+    setList("A1\tdevice\nB2\tdevice\nC3\tunauthorized\n");
+    CHECK_FALSE(deployToAndroid(tools, apk, "com.studio.game", ""));
+    CHECK(deployToAndroid(tools, apk, "com.studio.game", "B2"));
+    CHECK(readCalls().find("-s B2 install") != std::string::npos);
+    CHECK_FALSE(deployToAndroid(tools, apk, "com.studio.game", "C3"));
+    // Only an unauthorized phone: the error says what to do.
+    setList("C3\tunauthorized\n");
+    auto st = deployToAndroid(tools, apk, "com.studio.game", "");
+    REQUIRE_FALSE(st);
+    CHECK(st.error().message.find("USB debugging") != std::string::npos);
+    setList("");
+    CHECK_FALSE(deployToAndroid(tools, apk, "com.studio.game", ""));
+    CHECK_FALSE(deployToAndroid(tools, dir / "missing.apk", "com.studio.game", ""));
+    CHECK_FALSE(deployToAndroid(tools, apk, "not a package", ""));
+    fs::remove_all(dir);
+}
+#endif

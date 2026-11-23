@@ -52,7 +52,9 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
     options.storePassword = m_storePassword;
     options.keyPassword = m_keyPassword;
     const fs::path exeDir = editorDirectory;
-    m_thread = std::thread([this, project, output, target, options, exeDir, patchBase] {
+    const bool deploy = m_deploy && (target == 1 || target == 2);
+    const std::string device = m_device;
+    m_thread = std::thread([this, project, output, target, options, exeDir, patchBase, deploy, device] {
         auto log = [this](const std::string& line) {
             std::lock_guard lock(m_mutex);
             m_log.push_back(line);
@@ -73,7 +75,14 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
 #endif
         } else {
             log("Gradle compile l'application Android ; la première fois, il télécharge ses outils (quelques minutes).");
-            report = buildAndroid(project, findAndroidToolchain(exeDir), output, options, log);
+            const AndroidToolchain tools = findAndroidToolchain(exeDir);
+            report = buildAndroid(project, tools, output, options, log);
+            if (report && deploy) {
+                if (Status st = deployToAndroid(tools, report.value().output, gameManifest(project).packageId, device, log); !st)
+                    report = st.error();
+                else
+                    log("Le jeu tourne sur l'appareil. Son journal : " + androidLogcatCommand(tools, device));
+            }
         }
         std::lock_guard lock(m_mutex);
         m_resultOk = report.ok();
@@ -256,8 +265,38 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
     for (const std::string& p : problems) ImGui::TextColored(palette::toVec4(palette::kWarning), "%s", p.c_str());
     ImGui::EndDisabled();
 
+    if (m_target == 1 || m_target == 2) {  // one-click deploy (APK)
+        ImGui::BeginDisabled(running);
+        ImGui::Checkbox("Installer et lancer sur l'appareil", &m_deploy);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Après l'export : adb install, puis démarrage du jeu (débogage USB ou Wi-Fi activé sur le téléphone, ou émulateur)");
+        if (m_deploy) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(220);
+            const std::string current = m_device.empty() ? std::string("(le seul connecté)") : m_device;
+            if (ImGui::BeginCombo("##device", current.c_str())) {
+                if (ImGui::Selectable("(le seul connecté)", m_device.empty())) m_device.clear();
+                for (const AndroidDevice& d : m_devices) {
+                    const std::string label = d.serial + (d.model.empty() ? "" : " - " + d.model) + (d.ready() ? "" : " (" + d.state + ")");
+                    ImGui::BeginDisabled(!d.ready());
+                    if (ImGui::Selectable(label.c_str(), m_device == d.serial)) m_device = d.serial;
+                    ImGui::EndDisabled();
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Actualiser")) {
+                auto devices = listAndroidDevices(findAndroidToolchain(editorDirectory));
+                m_devicesError = devices ? std::string() : devices.error().message;
+                m_devices = devices ? devices.value() : std::vector<AndroidDevice>{};
+                if (devices && m_devices.empty()) m_devicesError = "aucun appareil (débogage USB activé ? câble ? émulateur lancé ?)";
+            }
+            if (!m_devicesError.empty()) ImGui::TextColored(palette::toVec4(palette::kWarning), "%s", m_devicesError.c_str());
+        }
+        ImGui::EndDisabled();
+    }
     ImGui::BeginDisabled(running || !problems.empty() || s.ctx.playState() != PlayState::Edit);
-    if (ImGui::Button(running ? "Export en cours..." : "Exporter", {160, 0})) start(s, editorDirectory);
+    if (ImGui::Button(running ? "Export en cours..." : m_deploy && (m_target == 1 || m_target == 2) ? "Exporter et lancer" : "Exporter", {160, 0}))
+        start(s, editorDirectory);
     ImGui::EndDisabled();
     if (s.ctx.dirty()) {
         ImGui::SameLine();

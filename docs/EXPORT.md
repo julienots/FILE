@@ -151,6 +151,17 @@ AGR) classiques et **adaptatives** (Android 8+ : l'image dans la zone sûre d'un
 sur la couleur de fond choisie dans l'export), puis lance Gradle et copie `Nom-version[-debug].apk` ou `.aab` dans le dossier de sortie.
 Installer un APK de test : `adb install -r build/android/Nom-1.0.0-debug.apk`.
 
+**Déploiement en un clic** : avec une cible APK, cocher *Installer et lancer sur l'appareil* (liste des
+appareils : *Actualiser* ; vide = le seul branché) ; le bouton devient *Exporter et lancer* : après
+l'export, l'APK est installé (`adb install -r`, les données du jeu sont gardées) puis le jeu démarre
+(`am start`). Le journal du panneau donne la commande pour suivre le journal du jeu sur l'appareil
+(`adb -s SERIE logcat -s AGR:V SDL:V` : messages du moteur et erreurs Lua). En ligne de commande :
+`agr_editor --project DIR --export android-apk --deploy [--device SERIE]`, et `agr_editor --list-devices`.
+adb est cherché dans `AGR_ADB`, puis `platform-tools/` du SDK, puis le `PATH`. Messages clairs pour un
+téléphone non autorisé (accepter l'invite de débogage USB), aucun appareil, ou plusieurs appareils sans
+choix. Testé avec un faux adb (commandes, ordre, choix de l'appareil, erreurs) et la liste réelle du adb
+du SDK (vide ici : **pas encore essayé avec un vrai téléphone**).
+
 Vérifié dans la chaîne de tests : un APK de test de la Vitrine 2D (13 Mo pour arm64-v8a), un AAB et un
 APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zipalign` (pages de 16 Ko).
 
@@ -175,4 +186,6 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
   d'installateur (l'icône est intégrée au `.exe`).
 - Textures : ETC2 seulement (pas d'ASTC) ; pas de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
-- Pas de publication automatique sur Google Play ni d'ouverture directe sur un appareil connecté.
+- Pas de publication automatique sur Google Play ; le déploiement sur appareil n'affiche pas le journal
+  du jeu en direct dans l'éditeur (commande `adb logcat` donnée) et n'a pas de débogueur de script à
+  distance.

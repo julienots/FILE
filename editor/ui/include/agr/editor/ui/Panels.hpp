@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
@@ -735,6 +736,10 @@ private:
     void start(EditorShared& s, const std::string& editorDirectory);
     int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle
     std::string m_output;
+    bool m_deploy = false;              // Android APK: install and start on the device afterwards
+    std::string m_device;               // adb serial (empty = the only connected device)
+    std::vector<AndroidDevice> m_devices;
+    std::string m_devicesError;
     std::string m_patchBase;  // game.agrpak (or an earlier patch) the next patch is made against
     bool m_patch = false;     // the next start() exports a patch
     std::string m_storePassword, m_keyPassword;
