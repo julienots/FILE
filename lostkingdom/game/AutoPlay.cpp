@@ -700,6 +700,7 @@ static std::vector<Step> scenario(const std::string& name) {
             for (int& r : res) r = 0;
             g.timeOfDay = 12.f; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
             g.vehicles.clear();
+            g.vehiclesUnlocked = {"car", "moto", "airship"};   // 3.4.0 the vehicles are earned in the story: this test drives them all
         }, idle, "init"});
         s.push_back({1.5f, [goTo](Game& g) { goTo(g, 0); }, idle, "walk to the car"});
         s.push_back({0.25f, tapInteract, idle, "tap: drive"});
@@ -766,7 +767,7 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.3f, [](Game& g) {
             vec3 car = g.vehicles[0].pos, moto = g.vehicles[1].pos;
             g.saveGame(3); g.loadGame(3);
-            res[8] = g.driving == -1 && g.vehicles.size() == 2 && distXZ(g.vehicles[0].pos, car) < 0.5f && distXZ(g.vehicles[1].pos, moto) < 0.5f;
+            res[8] = g.driving == -1 && g.vehicles.size() == vehicleDefs().size() && distXZ(g.vehicles[0].pos, car) < 0.5f && distXZ(g.vehicles[1].pos, moto) < 0.5f;
             AGR_LOG("VEHICLES after save/load: car %.1f m, moto %.1f m from where they were left", distXZ(g.vehicles[0].pos, car), distXZ(g.vehicles[1].pos, moto));
             AGR_LOG("VEHICLES TEST: enterCar=%d drive=%d onGround=%d turn=%d exit=%d moto=%d lean=%d seat=%d saveLoad=%d", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8]);
             bool all = true; for (int r : res) all = all && r;

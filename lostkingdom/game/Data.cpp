@@ -1063,7 +1063,7 @@ const std::vector<NpcDef>& npcs() {
             {"Il y a trois siècles, le Haut-Roi Aldric unifia six royaumes sous la Couronne-Mère.", "Quand l'Abîme s'ouvrit sous Morneval, Aldric brisa sa couronne pour sceller la faille. Six fragments, six gardiens.", "Les gardiens ont gardé les fragments… mais les fragments les ont changés."}, {}, FA_GREENHAVEN); }
         { HumanoidLook l = villagerLook(true, 0x6a4a3a, 0xa04a2a, Hair::Braids, Body::Apron, 4); l.bulk = 1.15f;
           N("hilda", "Hilda", "Forgeronne", NpcRole::Blacksmith, "brindlemere", l, {-10, 14}, {"L'acier ne ment jamais. Les hommes, si.", "Besoin d'une lame ? D'une réparation ?"},
-            {"Ma grand-mère disait que les épées d'Aldric chantaient au combat.", "Le meilleur fer vient de la Mine des Cimes. Le plus pur, de Cinderwatch."}, {"sword_iron", "axe_iron", "spear_iron", "shield_wood", "dagger_iron", "tool_pickaxe", "tool_woodaxe", "tool_shovel", "bomb", "chain_head"}, FA_GREENHAVEN); }
+            {"Ma grand-mère disait que les épées d'Aldric chantaient au combat.", "Le meilleur fer vient de la Mine des Cimes. Le plus pur, de Cinderwatch."}, {"sword_iron", "axe_iron", "axe_lumber", "spear_iron", "shield_wood", "dagger_iron", "tool_pickaxe", "tool_woodaxe", "tool_shovel", "bomb", "chain_head", "cellar_hatch"}, FA_GREENHAVEN); }   // 3.7.0 + the lumber axe and the cellar hatch
         { HumanoidLook l = villagerLook(true, 0x5a3a6a, 0x2a2a2a, Hair::Long, Body::Dress, 5);
           N("ysolde", "Mère Ysolde", "Alchimiste", NpcRole::Alchemist, "brindlemere", l, {14, -8}, {"Les plantes savent soigner. Il suffit de les écouter.", "Une potion ? J'en ai toujours une qui mijote."},
             {"Les champignons lumineux d'Elderwood décuplent la puissance des élixirs.", "Le lys de givre ne pousse que sous la neige de Frostheim."}, {"potion_minor", "potion_heal", "potion_mana", "potion_stamina", "herb"}, FA_GREENHAVEN); }
@@ -1078,7 +1078,7 @@ const std::vector<NpcDef>& npcs() {
             {"Fort Aldren tenait toute la région autrefois. Aujourd'hui, à peine la route.", "Les Gardiens recrutent quiconque sait tenir une épée."}, {}, FA_GREENHAVEN); }
         { HumanoidLook l = villagerLook(true, 0xc9a24a, 0xe8c87a, Hair::Long, Body::Dress, 9);
           N("lise", "Lise", "Marchande", NpcRole::Merchant, "brindlemere", l, {10, 16}, {"Tout s'achète, tout se vend !", "J'ai des choses de Frostheim, et même d'Elderwood."},
-            {"Les marchands d'Ashen paient cher le minerai d'étoile.", "Une carte au trésor ? J'en vends parfois… certaines sont vraies."}, {"potion_minor", "bread", "berries", "ring_copper", "amulet_oak", "tool_rod", "dye_royal", "dye_crimson", "dye_forest", "treasure_map"}, FA_GREENHAVEN); }
+            {"Les marchands d'Ashen paient cher le minerai d'étoile.", "Une carte au trésor ? J'en vends parfois… certaines sont vraies."}, {"potion_minor", "bread", "berries", "apple", "honey_cake", "ring_copper", "amulet_oak", "tool_rod", "dye_royal", "dye_crimson", "dye_forest", "treasure_map"}, FA_GREENHAVEN); }
         { HumanoidLook l = villagerLook(false, 0x6a8a3a, 0xd8a050, Hair::Short, Body::Tunic, 10);
           N("pip", "Pip", "Garnement", NpcRole::Child, "brindlemere", l, {-4, -12}, {"T'es un vrai chevalier ?!", "Je parie que je cours plus vite que toi !"},
             {"Ma mère dit qu'il ne faut pas aller dans la Grotte des Murmures. Moi j'y suis allé. Presque.", "Les lucioles sortent seulement la nuit, près du lac Miroir."}); }
