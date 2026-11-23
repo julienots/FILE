@@ -1,0 +1,1 @@
+{"name": "save-system", "version": "1.0.0", "author": "Superessence Studio", "description": "Sauvegardes par emplacement dans user:// (JSON), numéro de version et migrations des anciennes sauvegardes, horodatage, liste et suppression des emplacements.", "dependencies": []}

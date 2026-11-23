@@ -1,0 +1,1 @@
+{"name": "mobile-joystick", "version": "1.0.0", "author": "Superessence Studio", "description": "Joystick virtuel pour écrans tactiles : apparaît sous le doigt dans la moitié gauche de l'écran, zone morte, direction et intensité lues par les autres scripts (stick:value()).", "dependencies": []}

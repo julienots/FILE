@@ -1,0 +1,1 @@
+{"name": "top-down-2d", "version": "1.0.0", "author": "Superessence Studio", "description": "Déplacement vu de dessus en 2D (8 directions) : accélération et freinage, course, esquive (dash) avec temps de recharge, orientation vers la marche, manette et clavier.", "dependencies": []}

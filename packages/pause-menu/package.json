@@ -1,0 +1,1 @@
+{"name": "pause-menu", "version": "1.0.0", "author": "Superessence Studio", "description": "Menu pause : Échap, bouton Start ou retour Android met le jeu en pause (temps arrêté), affiche un panneau d'interface enfant et le cache à la reprise ; boutons Reprendre / Menu principal.", "dependencies": []}

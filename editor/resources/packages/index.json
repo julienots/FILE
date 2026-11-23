@@ -64,11 +64,61 @@
     {
       "author": "Superessence Studio",
       "dependencies": [],
+      "description": "Tables de butin pondérées : quantités aléatoires, raretés, garantie après N tirages sans objet rare (pitié), tirages reproductibles avec une graine.",
+      "file": "loot-table-1.0.0.agrpkg",
+      "name": "loot-table",
+      "sha256": "03f3b5fae03f327231b84d0df96d8e4188aa705580a6dcd2e120a87a38e44f07",
+      "size": 2932,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Joystick virtuel pour écrans tactiles : apparaît sous le doigt dans la moitié gauche de l'écran, zone morte, direction et intensité lues par les autres scripts (stick:value()).",
+      "file": "mobile-joystick-1.0.0.agrpkg",
+      "name": "mobile-joystick",
+      "sha256": "4a71f511f476bc7e45d6b1762d3cd8214aaeecb8fb3ebe303380f98222350c79",
+      "size": 2452,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Menu pause : Échap, bouton Start ou retour Android met le jeu en pause (temps arrêté), affiche un panneau d'interface enfant et le cache à la reprise ; boutons Reprendre / Menu principal.",
+      "file": "pause-menu-1.0.0.agrpkg",
+      "name": "pause-menu",
+      "sha256": "925dd0315ae098f95646be53167d88433e86206df1e230225e50c8ae36987d7d",
+      "size": 2367,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
       "description": "Mouvement de plateforme 2D soigné : accélération et freinage, saut à hauteur variable, temps de coyote, saut mémorisé avant l'atterrissage, chute rapide. Pour une entité avec RigidBody2D (dynamique, rotation bloquée) et Collider2D.",
       "file": "platformer-2d-1.0.0.agrpkg",
       "name": "platformer-2d",
       "sha256": "20bb9cfc762d222ccea8c5fb0efaca7a7af7fcb380cfcda2dbca4e9ac3f802c7",
       "size": 2513,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Journal de quêtes : objectifs à compteur, quêtes qui en débloquent d'autres, récompenses, rappels à l'accomplissement, sauvegarde et restauration de la progression.",
+      "file": "quest-log-1.0.0.agrpkg",
+      "name": "quest-log",
+      "sha256": "ac16f414b3ceb18b9e323d27ab54cba56fbe90fee05d8ef3542c00b3c83ae734",
+      "size": 3117,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Sauvegardes par emplacement dans user:// (JSON), numéro de version et migrations des anciennes sauvegardes, horodatage, liste et suppression des emplacements.",
+      "file": "save-system-1.0.0.agrpkg",
+      "name": "save-system",
+      "sha256": "ca19948531aa323a5a8e843fe69fd7754d2d623c567d1b149455cfd2b2f9863f",
+      "size": 2643,
       "version": "1.0.0"
     },
     {
@@ -89,6 +139,26 @@
       "name": "state-machine",
       "sha256": "9377b1cedb08ce563d110a523f10ffe171ff5126878689f373e3728e46bafac9",
       "size": 3658,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Déplacement vu de dessus en 2D (8 directions) : accélération et freinage, course, esquive (dash) avec temps de recharge, orientation vers la marche, manette et clavier.",
+      "file": "top-down-2d-1.0.0.agrpkg",
+      "name": "top-down-2d",
+      "sha256": "a7f7d5b469f53a0f30616de8aaa7f3c25a7cb7a074c071f2290aa190e9e29ff8",
+      "size": 2500,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Vagues d'ennemis : prefabs apparus à intervalles autour du générateur, pauses entre vagues, vague suivante quand la précédente est vaincue, signaux waveStarted / waveCleared / finished.",
+      "file": "wave-spawner-1.0.0.agrpkg",
+      "name": "wave-spawner",
+      "sha256": "6dce9fdc6514e11f64eda0c0f77b6e8cda2f6c060a0eed27474f26f4f2365a03",
+      "size": 3902,
       "version": "1.0.0"
     }
   ],

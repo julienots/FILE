@@ -1702,11 +1702,11 @@ TEST_CASE("official packages: scripts pass the static checks, all install, the m
         for (const auto& w : linter.lint(code, e.path().filename().string())) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
         ++scripts;
     }
-    CHECK(scripts >= 10);
+    CHECK(scripts >= 18);
     // The shipped library installs whole into a project.
     auto index = fetchRepositoryIndex("file://" + (fs::path(AGR_SOURCE_DIR) / "editor" / "resources" / "packages").generic_string() + "/");
     REQUIRE(index);
-    CHECK(index.value().packages.size() >= 9);
+    CHECK(index.value().packages.size() >= 16);
     EditorFixture f(ProjectMode::Mode3D);
     for (const OnlinePackage& p : index.value().packages) {
         auto done = installFromRepository(p.name, index.value(), f.root / "downloads", f.ctx->project().assetsDirectory(), false);
@@ -1747,6 +1747,57 @@ m:update(0.3) ; assert(m.state == "a")
 m:update(0.3) ; assert(m.state == "b" and m.time == 0)
 m:back() ; assert(m.state == "a")
 assert(table.concat(log, ",") == "enterA,exitA,enterB,enterA")
+-- Saves: serialized with a version, older saves migrated, newer ones refused.
+local Save = require("assets://kits/save/save.lua")
+local v1 = Save.new({ version = 1 })
+local text = v1:serialize({ coins = 7, level = 2 })
+local v2 = Save.new({ version = 2, migrations = { [2] = function(d) d.gold = d.coins; d.coins = nil end } })
+local data = assert(v2:deserialize(text))
+assert(data.gold == 7 and data.coins == nil and data.level == 2, "migrated to version 2")
+assert(v1:deserialize(v2:serialize(data)) == nil, "a newer save is refused")
+assert(v2:deserialize("not json") == nil)
+-- Loot: same seed, same drops; pity guarantees a rare item.
+local Loot = require("assets://kits/loot/loot.lua")
+local entries = { { item = "coin", weight = 95, min = 5, max = 20 }, { item = "gem", weight = 5, rare = true } }
+local a, b = Loot.new(entries, { seed = 9 }), Loot.new(entries, { seed = 9 })
+for _ = 1, 20 do
+    local x, y = a:rollOne(), b:rollOne()
+    assert(x.item == y.item and x.count == y.count, "deterministic")
+    if x.item == "coin" then assert(x.count >= 5 and x.count <= 20) end
+end
+local pity = Loot.new({ { item = "coin", weight = 1000000 }, { item = "gem", weight = 1, rare = true } }, { seed = 3, pity = 10 })
+local drops = pity:roll(10)
+assert(drops[10].item == "gem" and drops[10].rare, "10th roll forced rare")
+assert(math.abs(Loot.new(entries):chance("gem") - 0.05) < 1e-9)
+-- Quests: requirements, counted objectives, completion callback, save / restore.
+local Quests = require("assets://kits/quests/quests.lua")
+local q = Quests.new({ wolves = { title = "Chasse", objectives = { { id = "kill", count = 3 } } },
+                       den = { title = "Tanière", requires = { "wolves" }, objectives = { { id = "find" } } } })
+local done = {}
+q.onCompleted = function(id) done[#done + 1] = id end
+assert(q:status("den") == "locked" and not q:start("den"))
+assert(q:start("wolves") and q:status("wolves") == "active")
+assert(not q:progress("wolves", "kill", 2) and q:count("wolves", "kill") == 2)
+assert(q:progress("wolves", "kill", 5) and q:status("wolves") == "completed" and q:count("wolves", "kill") == 3)
+assert(q:status("den") == "available" and q:start("den"))
+local saved = agr.json.decode(agr.json.encode(q:save()))
+local q2 = Quests.new(q.defs)
+q2:restore(saved)
+assert(q2:status("wolves") == "completed" and q2:active()[1] == "den" and done[1] == "wolves")
+-- Waves: schedule with pauses, positions on a ring.
+local Waves = require("assets://kits/waves/waves.lua")
+local plan = Waves.schedule({ { prefab = "e", count = 3, interval = 1 }, { prefab = "f", count = 2, interval = 0.5 } }, 4)
+assert(#plan == 5 and plan[3].time == 2 and plan[4].time == 6 and plan[4].wave == 2 and plan[5].time == 6.5)
+local rx, rz = Waves.ring(1, 4, 2, 10, 0)
+assert(math.abs(rx - 12) < 1e-6 and math.abs(rz) < 1e-6)
+-- Joystick: dead zone, full tilt clamped, y up.
+local Stick = require("assets://kits/joystick/stick.lua")
+local sx, sy = Stick.compute(100, 100, 105, 100, 90, 0.15)
+assert(sx == 0 and sy == 0, "inside the dead zone")
+sx, sy = Stick.compute(100, 100, 400, 100, 90, 0.15)
+assert(math.abs(sx - 1) < 1e-6 and math.abs(sy) < 1e-6, "clamped to 1")
+sx, sy = Stick.compute(100, 100, 100, 55, 90, 0)
+assert(math.abs(sy - 0.5) < 1e-6, "finger up = positive y")
 )");
     CHECK_MESSAGE(run, (run ? "" : run.error().message));
 }

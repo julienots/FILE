@@ -41,10 +41,19 @@ construits par `tools/build_official_packages.sh`), installés dans `assets/kits
 | `state-machine` | machine à états (enter / update / exit, transitions, historique) et un garde d'exemple (patrouille, poursuite) |
 | `health` | points de vie : dégâts, soins, invulnérabilité, mort, signaux déclarés |
 | `shader-pack` | graphes de shaders modifiables : dissolution, hologramme, eau, flash et pulsation de sprite (avec leurs `.agrshader`) |
+| `save-system` | sauvegardes par emplacement dans `user://` (JSON), version et migrations des anciennes sauvegardes, horodatage |
+| `loot-table` | butin pondéré : quantités, raretés, objet rare garanti après N tirages, tirages reproductibles par graine, probabilités affichables |
+| `quest-log` | quêtes à objectifs comptés, quêtes débloquées par d'autres, rappels d'accomplissement, sauvegarde de la progression |
+| `wave-spawner` | vagues d'ennemis (prefabs en cercle autour du générateur, pauses, attente de la fin de la vague, signaux) |
+| `top-down-2d` | déplacement vu de dessus en 8 directions : accélération, course, esquive avec recharge, manette |
+| `mobile-joystick` | joystick virtuel tactile (sous le doigt, moitié gauche de l'écran, zone morte), lu par `:value()` |
+| `pause-menu` | menu pause : Échap / Start / retour Android arrêtent le temps et montrent le panneau, boutons Reprendre / Menu |
 
 Vérifié par le test `official packages` : chaque script compile et passe l'analyse statique sur l'API
-réelle, les 9 paquets s'installent, et l'inventaire, les dialogues et la machine à états sont exécutés
-(piles, conditions, retours en arrière) ; les shaders du pack compilent en OpenGL, OpenGL ES et Vulkan.
+réelle, les 16 paquets s'installent, et l'inventaire, les dialogues, la machine à états, les
+sauvegardes (migration, refus d'une version plus récente), le butin (même graine = mêmes tirages, pitié),
+les quêtes (prérequis, compteurs, sauvegarde), le planning des vagues et le calcul du joystick sont
+exécutés ; les shaders du pack compilent en OpenGL, OpenGL ES et Vulkan.
 
 ## Dépôts en ligne
 

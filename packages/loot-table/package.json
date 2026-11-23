@@ -1,0 +1,1 @@
+{"name": "loot-table", "version": "1.0.0", "author": "Superessence Studio", "description": "Tables de butin pondérées : quantités aléatoires, raretés, garantie après N tirages sans objet rare (pitié), tirages reproductibles avec une graine.", "dependencies": []}

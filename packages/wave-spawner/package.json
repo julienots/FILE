@@ -1,0 +1,1 @@
+{"name": "wave-spawner", "version": "1.0.0", "author": "Superessence Studio", "description": "Vagues d'ennemis : prefabs apparus à intervalles autour du générateur, pauses entre vagues, vague suivante quand la précédente est vaincue, signaux waveStarted / waveCleared / finished.", "dependencies": []}
