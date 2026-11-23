@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>The Last Block</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">{ "imports": { "three": "./js/lib/three.module.js" } }</script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <!-- Écran du studio -->
+  <div id="splash">
+    <div class="se-logo" id="seLogo"></div>
+    <div class="se-sub" id="seSub">STUDIO</div>
+    <div class="se-skip">TOUCHER POUR PASSER</div>
+  </div>
+
+  <div id="warn" class="hidden">
+    <h2>⚠ Avertissement</h2>
+    <p>Ce jeu commence comme un jeu de blocs coloré… puis devient une expérience d'horreur psychologique avec des apparitions soudaines, des flashs et des sons forts.</p>
+    <p>Vous pouvez réduire les flashs, les tremblements et l'intensité des apparitions dans <b>Paramètres</b> à tout moment.</p>
+    <p>Jouez avec un casque pour une meilleure immersion.</p>
+    <button class="btn primary" id="warnOk">J'ai compris</button>
+  </div>
+
+  <div id="menu" class="hidden">
+    <div class="title" id="title"><span class="t0">SUPERESSENCE STUDIO</span><span class="t1">THE LAST</span><span class="t2">BLOCK</span></div>
+    <div class="menu-buttons" id="menuButtons"></div>
+    <div class="studio-mark">une création <b>SuperEssence Studio</b></div>
+  </div>
+
+  <div id="panel" class="hidden"></div>
+
+  <div id="hud" class="hidden">
+    <div class="stat"><small>SCORE</small><b id="hScore">0</b></div>
+    <div class="stat"><small>NIVEAU</small><b id="hLevel">1</b></div>
+    <div class="stat"><small>LIGNES</small><b id="hLines">0</b></div>
+    <div class="grow"></div>
+    <button class="pausebtn" id="pauseBtn" aria-label="Pause">❚❚</button>
+  </div>
+  <div id="goal" class="hidden"></div>
+  <div id="popup"></div>
+
+  <div id="controls" class="hidden">
+    <div class="cluster move">
+      <button class="pad hold" data-a="hold">RÉSERVE</button>
+      <button class="pad l" data-a="left">◀</button>
+      <button class="pad d" data-a="soft">▼</button>
+      <button class="pad r" data-a="right">▶</button>
+    </div>
+    <div class="cluster act">
+      <button class="pad ccw" data-a="rotCCW">⟲</button>
+      <button class="pad cw" data-a="rotCW">⟳</button>
+      <button class="pad hard" data-a="hard">⤓</button>
+    </div>
+  </div>
+  <div id="gesturehint" class="hidden">Toucher : tourner · Glisser : déplacer · Glisser vite ↓ : chute · Glisser ↑ : réserve</div>
+
+  <div id="runhud" class="hidden">
+    <div class="meter"><i id="runMeter"></i></div>
+    <div class="meterlbl">DISTANCE</div>
+    <div class="prog" id="runProg">0%</div>
+    <div id="runPrompt"></div>
+  </div>
+  <div id="runpad" class="hidden">
+    <button class="pad" data-a="left">◀</button>
+    <button class="pad" data-a="jump">▲</button>
+    <button class="pad" data-a="slide">▼</button>
+    <button class="pad" data-a="right">▶</button>
+  </div>
+  <button id="hidebtn" class="btn danger hidden">SE CACHER</button>
+  <div id="lock" class="puzzle-lock hidden"></div>
+
+  <div id="story"></div>
+  <div id="banner" class="hidden"></div>
+  <div id="choice" class="hidden"></div>
+  <div id="modal" class="modal hidden"></div>
+  <div id="fake" class="hidden"></div>
+  <canvas id="scare"></canvas>
+  <div id="toast"></div>
+  <div id="fade"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
