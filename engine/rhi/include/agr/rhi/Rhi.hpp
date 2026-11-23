@@ -55,7 +55,10 @@ enum class TextureFormat : u8 {
     RGBA16F,
     Depth24Stencil8,
     Depth16,    ///< Sampleable depth (shadow maps): supported everywhere (Vulkan, GL 3.3, GLES 3.0).
+    ETC2_RGBA8,       ///< Compressed (ETC2 + EAC, 16 bytes per 4x4 block): only when DeviceInfo::etc2Textures.
+    ETC2_RGBA8_sRGB,
 };
+inline bool isCompressedFormat(TextureFormat f) { return f == TextureFormat::ETC2_RGBA8 || f == TextureFormat::ETC2_RGBA8_sRGB; }
 inline bool isDepthFormat(TextureFormat f) { return f == TextureFormat::Depth24Stencil8 || f == TextureFormat::Depth16; }
 u32 bytesPerPixel(TextureFormat format);
 
@@ -173,6 +176,8 @@ struct DeviceInfo {
     /// RGBA16F render targets (HDR post-processing). Always on Vulkan and desktop OpenGL; on
     /// OpenGL ES 3.0 only with EXT_color_buffer_(half_)float.
     bool halfFloatRenderTargets = false;
+    /// ETC2 compressed textures sampled natively (OpenGL ES 3.0+, OpenGL 4.3+ or ARB_ES3_compatibility).
+    bool etc2Textures = false;
 };
 
 struct FrameStats {

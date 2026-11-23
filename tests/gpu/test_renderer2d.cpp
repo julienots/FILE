@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "GpuFixture.hpp"
+#include "agr/core/Etc2.hpp"
 #include <fstream>
 #include "agr/assets/ShaderGraph.hpp"
 #include "agr/assets/AssetManager.hpp"
@@ -524,6 +525,32 @@ TEST_CASE("sprite shader graphs: every node usable in sprites compiles on the GP
         REQUIRE_FALSE(code.empty());
         check(code, name);
     }
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
+TEST_CASE("ETC2 compressed textures (KTX): sampled natively on OpenGL / OpenGL ES, decoded elsewhere, same colors") {
+    Render2DFixture f;
+    f.camera();
+    // 64 x 64: left half orange, right half blue, with alpha 1.
+    std::vector<u8> px(64 * 64 * 4);
+    for (u32 y = 0; y < 64; ++y)
+        for (u32 x = 0; x < 64; ++x) {
+            u8* p = &px[(y * 64 + x) * 4];
+            p[0] = x < 32 ? 240 : 20, p[1] = x < 32 ? 140 : 60, p[2] = x < 32 ? 20 : 230, p[3] = 255;
+        }
+    const auto ktx = etc2::writeKtx(etc2::compressWithMips(px.data(), 64, 64));
+    REQUIRE(f.vfs.writeBytes("assets://tex.ktx.png", ktx.data(), ktx.size()));  // the export keeps the original file name
+    const auto sp = f.sprite({0, 0, 0}, 8.0f);
+    f.scene.registry().get<SpriteRendererComponent>(sp).texture = "assets://tex.ktx.png";
+    const TextureAsset probe = f.assets.loadTexture("assets://tex.ktx.png", {}, LoadMode::Blocking);
+    for (int i = 0; i < 4; ++i) f.frame();
+    const auto& info = *f.assets.texture(probe);
+    CHECK(info.state == AssetState::Ready);
+    CHECK(info.compressed == gpu().device->info().etc2Textures);
+    MESSAGE("ETC2 natively: ", gpu().device->info().etc2Textures);
+    const Rgba left = pixel(*gpu().device, 32 - 10, 32), right = pixel(*gpu().device, 32 + 10, 32);
+    CHECK_MESSAGE(near(left, 240, 140, 20, 16), int(left.r), " ", int(left.g), " ", int(left.b));
+    CHECK_MESSAGE(near(right, 20, 60, 230, 16), int(right.r), " ", int(right.g), " ", int(right.b));
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 

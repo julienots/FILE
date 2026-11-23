@@ -89,10 +89,23 @@ void AssetManager::startLoad(TextureAsset h, LoadMode mode) {
     auto work = [this, h, version, uri] {
         // "model.glb#image3": image embedded in a model file (the file's date drives hot reload).
         const bool embedded = uri.find("#image") != std::string::npos;
-        Decoded d{h, version, makeError(Error::Code::Unknown, "not loaded"), m_vfs.modifiedTime(fileOf(uri))};
+        Decoded d{h, version, makeError(Error::Code::Unknown, "not loaded"), m_vfs.modifiedTime(fileOf(uri)), nullptr};
         auto bytes = embedded ? readEmbeddedImage(m_vfs, uri) : m_vfs.readBytes(uri);
-        if (!bytes) d.image = bytes.error();
-        else d.image = decodeImage(bytes.value(), uri);
+        if (!bytes) {
+            d.image = bytes.error();
+        } else if (m_device && m_device->info().etc2Textures && etc2::isKtx(bytes.value())) {
+            if (auto ktx = etc2::readKtx(bytes.value())) {  // uploaded compressed, as stored
+                Image size;
+                size.width = ktx.value().width;
+                size.height = ktx.value().height;
+                d.image = std::move(size);
+                d.compressed = std::make_shared<etc2::CompressedImage>(std::move(ktx.value()));
+            } else {
+                d.image = ktx.error();
+            }
+        } else {
+            d.image = decodeImage(bytes.value(), uri);  // KTX decoded on the CPU when the GPU lacks ETC2
+        }
         std::lock_guard lock(m_doneMutex);
         m_done.push_back(std::move(d));
     };
@@ -124,6 +137,40 @@ void AssetManager::finish(Decoded& d) {
     Image img = std::move(d.image.value());
     info.sourceWidth = img.width;
     info.sourceHeight = img.height;
+    if (d.compressed && m_device) {
+        etc2::CompressedImage& c = *d.compressed;
+        // Too large for the profile: start at a smaller level.
+        usize first = 0;
+        u32 w = c.width, hgt = c.height;
+        while (first + 1 < c.levels.size() && std::max(w, hgt) > m_maxTextureSize) ++first, w = std::max(1u, w / 2), hgt = std::max(1u, hgt / 2);
+        rhi::TextureDesc td;
+        td.width = w;
+        td.height = hgt;
+        td.format = info.options.srgb ? rhi::TextureFormat::ETC2_RGBA8_sRGB : rhi::TextureFormat::ETC2_RGBA8;
+        td.data = c.levels[first].data();
+        const bool mips = info.options.mipmaps && !info.options.pixelArt;
+        if (mips)
+            for (usize l = first + 1; l < c.levels.size(); ++l) td.mipData.push_back(c.levels[l].data());
+        td.generateMips = false;
+        const rhi::Filter f = info.options.pixelArt ? rhi::Filter::Nearest : rhi::Filter::Linear;
+        td.sampler = {f, f, mips, info.options.wrap, info.options.wrap};
+        td.debugName = info.uri.c_str();
+        auto tex = m_device->createTexture(td);
+        if (tex) {
+            if (info.gpu) m_device->destroyTexture(info.gpu);
+            info.gpu = tex.value();
+            info.width = w;
+            info.height = hgt;
+            info.compressed = true;
+            info.error.clear();
+            info.state = AssetState::Ready;
+            m_uploadedThisFrame += etc2::levelBytes(w, hgt);
+            return;
+        }
+        // Rejected by the device: decode instead.
+        img.pixels.resize(static_cast<usize>(c.width) * c.height * 4);
+        etc2::decodeEtc2Rgba(c.levels[0].data(), c.width, c.height, img.pixels.data());
+    }
     if (const u32 halvings = fitToMaxSize(img, m_maxTextureSize))
         AGR_LOG_DEBUG("Assets", "'{}' downscaled {}x for max texture size {}", info.uri, 1u << halvings, m_maxTextureSize);
     info.width = img.width;
@@ -137,6 +184,7 @@ void AssetManager::finish(Decoded& d) {
     rhi::TextureDesc td;
     td.width = img.width;
     td.height = img.height;
+    info.compressed = false;
     td.format = info.options.srgb ? rhi::TextureFormat::RGBA8_sRGB : rhi::TextureFormat::RGBA8;
     td.generateMips = info.options.mipmaps && !info.options.pixelArt;
     td.data = img.pixels.data();

@@ -261,7 +261,7 @@ Result<ExportReport> generateAndroidProject(const Project& project, const Androi
     const fs::path main = app / "src" / "main";
 
     // Game data in the APK assets (read by the player through SDL).
-    auto data = packageGameData(project, main / "assets" / "game");
+    auto data = packageGameDataCompressed(project, main / "assets" / "game");  // ETC2 textures when compressTextures
     if (!data) return data.error();
     ExportReport report = std::move(data.value());
     report.output = dir;

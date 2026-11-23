@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "agr/physics3d/Physics3DComponents.hpp"
 #include "agr/editor/ApiReference.hpp"
+#include "agr/core/Etc2.hpp"
 #include "agr/editor/CurveView.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
@@ -1747,4 +1748,35 @@ m:back() ; assert(m.state == "a")
 assert(table.concat(log, ",") == "enterA,exitA,enterB,enterA")
 )");
     CHECK_MESSAGE(run, (run ? "" : run.error().message));
+}
+
+TEST_CASE("texture compression for Android: images become ETC2 KTX under their names, excluded ones stay, loading still works") {
+    const fs::path dir = fs::temp_directory_path() / ("agr_etc_" + Uuid::generate().toString());
+    fs::create_directories(dir / "tex");
+    fs::create_directories(dir / "terrain");
+    std::vector<u8> px(32 * 32 * 4, 128);
+    auto png = encodePng(32, 32, px);
+    REQUIRE(png);
+    for (const char* rel : {"tex/wall.png", "terrain/heightmap.png", "tex/tiny.png"}) {
+        std::ofstream out(dir / rel, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(png.value().data()), static_cast<std::streamsize>(png.value().size()));
+    }
+    auto tiny = encodePng(4, 4, std::vector<u8>(64, 9));
+    { std::ofstream(dir / "tex" / "tiny.png", std::ios::binary).write(reinterpret_cast<const char*>(tiny.value().data()), static_cast<std::streamsize>(tiny.value().size())); }
+    u64 saved = 0;
+    CHECK(compressTexturesInFolder(dir, "*height*", &saved) == 1);
+    CHECK(saved > 0);
+    auto read = [&](const char* rel) {
+        std::ifstream in(dir / rel, std::ios::binary);
+        return std::vector<u8>((std::istreambuf_iterator<char>(in)), {});
+    };
+    CHECK(etc2::isKtx(read("tex/wall.png")));
+    CHECK_FALSE(etc2::isKtx(read("terrain/heightmap.png")));  // excluded: still PNG
+    CHECK_FALSE(etc2::isKtx(read("tex/tiny.png")));           // too small to bother
+    auto img = decodeImage(read("tex/wall.png"));             // CPU readers still get pixels
+    REQUIRE(img);
+    CHECK(img.value().width == 32);
+    CHECK(std::abs(int(img.value().pixels[0]) - 128) <= 3);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }

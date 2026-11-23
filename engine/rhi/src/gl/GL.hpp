@@ -107,6 +107,7 @@ constexpr GLuint GL_INVALID_INDEX = 0xFFFFFFFFu;
     X(void, glTexSubImage2D, (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))  \
     X(void, glTexParameteri, (GLenum, GLenum, GLint))                                                       \
     X(void, glGenerateMipmap, (GLenum))                                                                     \
+    X(void, glCompressedTexImage2D, (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*))  \
     X(void, glPixelStorei, (GLenum, GLint))                                                                 \
     X(GLuint, glCreateShader, (GLenum))                                                                     \
     X(void, glShaderSource, (GLuint, GLsizei, const GLchar* const*, const GLint*))                          \

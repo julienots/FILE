@@ -38,6 +38,7 @@ namespace {
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
 ///   agr_editor --compile-shader-graph FILE.agrshadergraph   (writes the .agrshader next to it)
+///   agr_editor --compress-textures FOLDER                   (images -> ETC2 KTX in place, as the Android export)
 ///   agr_editor --api-reference OUT.md                      (components and Lua API, from the engine)
 ///   agr_editor --package-index FOLDER [--name TITLE]        (index.json to publish a folder of .agrpkg)
 ///   agr_editor --project DIR --install-package NAME --repository URL
@@ -48,7 +49,7 @@ namespace {
     using namespace agr;
     using namespace agr::editor;
     namespace fs = std::filesystem;
-    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, graphFile, description, author, packageName, includes, version = "1.0.0", depends;
+    std::string create, tmplName = "showcase2d", name, projectDir, exportKind, output, basePack, indexFolder, installName, repository, apiOut, graphFile, description, author, compressFolder, packageName, includes, version = "1.0.0", depends;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -62,6 +63,7 @@ namespace {
         else if (a == "--package-index") indexFolder = next();
         else if (a == "--api-reference") apiOut = next();
         else if (a == "--compile-shader-graph") graphFile = next();
+        else if (a == "--compress-textures") compressFolder = next();
         else if (a == "--description") description = next();
         else if (a == "--author") author = next();
         else if (a == "--install-package") installName = next();
@@ -71,8 +73,14 @@ namespace {
         else if (a == "--version") version = next();
         else if (a == "--depends") depends = next();
     }
-    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty() && graphFile.empty()) return -1;
+    if (create.empty() && exportKind.empty() && indexFolder.empty() && installName.empty() && packageName.empty() && apiOut.empty() && graphFile.empty() && compressFolder.empty()) return -1;
     Log::addSink(std::make_shared<ConsoleSink>());
+    if (!compressFolder.empty()) {
+        u64 saved = 0;
+        const u32 n = compressTexturesInFolder(compressFolder, "fonts/**", &saved);
+        AGR_LOG_INFO("Editor", "{} image(s) converted to ETC2 ({:.1f} MB of GPU memory saved)", n, static_cast<double>(saved) / (1024.0 * 1024.0));
+        return 0;
+    }
     if (!graphFile.empty()) {
         std::ifstream in(graphFile, std::ios::binary);
         const std::string text((std::istreambuf_iterator<char>(in)), {});

@@ -5,6 +5,8 @@
 
 #include "agr/core/Crypto.hpp"
 #include "agr/core/Pack.hpp"
+#include "agr/core/Etc2.hpp"
+#include <cmath>
 #include "agr/core/Uuid.hpp"
 
 using namespace agr;
@@ -103,3 +105,49 @@ TEST_CASE("packs: plain and encrypted round trip, wrong key, listing, overlays f
     fs::remove_all(dir, ec);
 }
 }  // TEST_SUITE
+
+TEST_CASE("ETC2: round trip quality, alpha, odd sizes, mips and the KTX container") {
+    // A smooth gradient with a sharp edge and varying alpha.
+    const u32 w = 37, h = 22;  // not multiples of 4
+    std::vector<u8> src(w * h * 4);
+    for (u32 y = 0; y < h; ++y)
+        for (u32 x = 0; x < w; ++x) {
+            u8* p = &src[(y * w + x) * 4];
+            p[0] = static_cast<u8>(x * 255 / (w - 1));
+            p[1] = static_cast<u8>(y * 255 / (h - 1));
+            p[2] = x < w / 2 ? 30 : 220;
+            p[3] = static_cast<u8>(x < 10 ? 255 : 128 + (x * 3) % 100);
+        }
+    const auto blocks = etc2::encodeEtc2Rgba(src.data(), w, h);
+    CHECK(blocks.size() == etc2::levelBytes(w, h));
+    CHECK(blocks.size() == 10 * 6 * 16);
+    std::vector<u8> back(w * h * 4);
+    etc2::decodeEtc2Rgba(blocks.data(), w, h, back.data());
+    double se = 0, seA = 0;
+    for (usize i = 0; i < src.size(); ++i) {
+        const double d = static_cast<double>(src[i]) - back[i];
+        (i % 4 == 3 ? seA : se) += d * d;
+    }
+    const double psnr = 10.0 * std::log10(255.0 * 255.0 / (se / (w * h * 3)));
+    const double psnrA = 10.0 * std::log10(255.0 * 255.0 / std::max(seA / (w * h), 1e-9));
+    CHECK(psnr > 30.0);   // typical ETC2 quality on such content
+    CHECK(psnrA > 38.0);
+    // Flat opaque alpha stays exactly 255.
+    std::vector<u8> solid(16 * 16 * 4, 200);
+    for (usize i = 3; i < solid.size(); i += 4) solid[i] = 255;
+    const auto sb = etc2::encodeEtc2Rgba(solid.data(), 16, 16);
+    std::vector<u8> sd(16 * 16 * 4);
+    etc2::decodeEtc2Rgba(sb.data(), 16, 16, sd.data());
+    for (usize i = 0; i < sd.size(); ++i) CHECK(std::abs(int(sd[i]) - int(i % 4 == 3 ? 255 : 200)) <= 2);
+    // Mips down to 1x1 and the KTX file.
+    const auto img = etc2::compressWithMips(src.data(), w, h);
+    CHECK(img.levels.size() == 6);  // 37x22, 18x11, 9x5, 4x2, 2x1, 1x1
+    const auto ktx = etc2::writeKtx(img);
+    CHECK(etc2::isKtx(ktx));
+    auto read = etc2::readKtx(ktx);
+    REQUIRE(read);
+    CHECK(read.value().width == w);
+    CHECK(read.value().levels.size() == img.levels.size());
+    CHECK(read.value().levels[2] == img.levels[2]);
+    CHECK_FALSE(etc2::readKtx(std::vector<u8>(ktx.begin(), ktx.begin() + 70)));
+}

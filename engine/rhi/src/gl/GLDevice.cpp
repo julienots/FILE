@@ -71,6 +71,8 @@ FormatInfo toGL(TextureFormat f) {
         case TextureFormat::RGBA16F: return {GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT};
         case TextureFormat::Depth24Stencil8: return {GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8};
         case TextureFormat::Depth16: return {GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT};
+        case TextureFormat::ETC2_RGBA8: return {0x9278, GL_RGBA, GL_UNSIGNED_BYTE};
+        case TextureFormat::ETC2_RGBA8_sRGB: return {0x9279, GL_RGBA, GL_UNSIGNED_BYTE};
     }
     return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE};
 }
@@ -156,11 +158,14 @@ public:
             if (!e) continue;
             const char* name = reinterpret_cast<const char*>(e);
             if (std::strcmp(name, "GL_EXT_disjoint_timer_query") == 0) disjointTimer = true;
+            if (std::strcmp(name, "GL_ARB_ES3_compatibility") == 0) m_info.etc2Textures = true;
             if (std::strcmp(name, "GL_EXT_color_buffer_half_float") == 0 || std::strcmp(name, "GL_EXT_color_buffer_float") == 0)
                 halfFloatTargets = true;
         }
         const bool gles = m_info.backend == Backend::OpenGLES;
         m_info.halfFloatRenderTargets = !gles || halfFloatTargets;
+        if (gles && m_gl.glCompressedTexImage2D) m_info.etc2Textures = true;  // core in OpenGL ES 3.0
+        if (!m_gl.glCompressedTexImage2D) m_info.etc2Textures = false;
         m_info.gpuTimers = m_gl.glGetQueryObjectui64v && (!gles || disjointTimer);
         for (const char* sw : {"llvmpipe", "softpipe", "SwiftShader", "Software Rasterizer", "Microsoft Basic"})
             if (m_info.renderer.find(sw) != std::string::npos) m_info.softwareRenderer = true;
@@ -251,9 +256,28 @@ public:
         m_gl.glActiveTexture(GL_TEXTURE0);
         m_gl.glBindTexture(GL_TEXTURE_2D, t.id);
         const FormatInfo fi = toGL(d.format);
+        if (isCompressedFormat(d.format)) {  // compressed: level 0 + explicit levels, nothing generated
+            if (!m_info.etc2Textures || !d.data) {
+                m_gl.glDeleteTextures(1, &t.id);
+                return makeError(Error::Code::Unsupported, "ETC2 textures are not supported by this GPU");
+            }
+            u32 w = d.width, h = d.height;
+            for (usize level = 0; level <= d.mipData.size(); ++level) {
+                const GLsizei size = static_cast<GLsizei>(((w + 3) / 4) * ((h + 3) / 4) * 16);
+                m_gl.glCompressedTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), fi.internal, static_cast<GLsizei>(w), static_cast<GLsizei>(h), 0,
+                                            size, level == 0 ? d.data : d.mipData[level - 1]);
+                w = std::max(1u, w / 2), h = std::max(1u, h / 2);
+            }
+            m_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(d.mipData.size()));
+            t.mips = !d.mipData.empty();
+            t.explicitMips = true;
+            t.bytes = ((static_cast<u64>(d.width) + 3) / 4) * ((d.height + 3) / 4) * 16 * (t.mips ? 4 : 3) / 3;
+        } else {
         m_gl.glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(fi.internal), static_cast<GLsizei>(d.width),
                           static_cast<GLsizei>(d.height), 0, fi.format, fi.type, d.data);
-        if (t.explicitMips) {
+        }
+        if (isCompressedFormat(d.format)) {
+        } else if (t.explicitMips) {
             u32 w = d.width, h = d.height;
             for (usize level = 0; level < d.mipData.size(); ++level) {
                 w = std::max(1u, w / 2);

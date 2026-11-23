@@ -1,4 +1,5 @@
 #include "agr/assets/Image.hpp"
+#include "agr/core/Etc2.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,16 @@ namespace agr {
 Result<Image> decodeImage(std::span<const u8> encoded, std::string_view name) {
     if (encoded.empty()) return makeError(Error::Code::ParseError, "empty image data: '" + std::string(name) + "'");
     if (encoded.size() > static_cast<usize>(INT32_MAX)) return makeError(Error::Code::Unsupported, "image file too large");
+    if (etc2::isKtx(encoded)) {  // compressed texture (exported games): level 0 decoded
+        auto ktx = etc2::readKtx(encoded);
+        if (!ktx) return makeError(ktx.error().code, std::string(name) + ": " + ktx.error().message);
+        Image img;
+        img.width = ktx.value().width;
+        img.height = ktx.value().height;
+        img.pixels.resize(static_cast<usize>(img.width) * img.height * 4);
+        etc2::decodeEtc2Rgba(ktx.value().levels[0].data(), img.width, img.height, img.pixels.data());
+        return img;
+    }
     int w = 0, h = 0, channels = 0;
     stbi_uc* data = stbi_load_from_memory(encoded.data(), static_cast<int>(encoded.size()), &w, &h, &channels, 4);
     if (!data) {

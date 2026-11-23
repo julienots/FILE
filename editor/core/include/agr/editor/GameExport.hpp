@@ -24,6 +24,7 @@ struct ExportReport {
     u64 bytes = 0;                  ///< Game data size.
     u32 binaryScenes = 0;           ///< Scenes converted to the binary format (faster loading).
     u32 skippedAssets = 0;          ///< Asset files left out by the export filters.
+    u32 compressedTextures = 0;     ///< Images converted to ETC2.
     std::vector<std::string> warnings;
     std::string log;                ///< Output of external tools (Gradle).
 };
@@ -37,6 +38,11 @@ Status prepareExportFolder(const std::filesystem::path& dir);
 /// converted to the binary scene format (same file name, loading detects the format) when
 /// the conversion is verified lossless; otherwise it is copied as saved on disk.
 Result<ExportReport> packageGameData(const Project& project, const std::filesystem::path& gameDir);
+/// Same, converting the images to ETC2 (Android, compressTextures): KTX bytes under the original
+/// file names (loading recognizes them), mip levels included.
+Result<ExportReport> packageGameDataCompressed(const Project& project, const std::filesystem::path& gameDir);
+/// Converts the images of an exported assets folder to ETC2 KTX in place; returns how many.
+u32 compressTexturesInFolder(const std::filesystem::path& assetsDir, const std::string& excludePatterns, u64* savedBytes = nullptr);
 
 /// Glob match of a relative asset path ('/' separators): '*' any run inside a name, "**" any
 /// run across folders, '?' one character. A pattern without '/' matches the file name.

@@ -40,6 +40,9 @@ struct ExportSettings {
     bool onlyUsedAssets = false;
     std::string includeFilter;  ///< Always exported: comma-separated patterns ("levels/*.agrscene, *.ogg").
     std::string excludeFilter;  ///< Never exported ("*.psd, sources/*").
+    /// Android: images converted to ETC2 (KTX bytes under the same file name), 4x less GPU memory.
+    bool compressTextures = true;
+    std::string textureCompressionExclude = "fonts/**, *height*, *splat*";  ///< Kept as they are (data read on the CPU).
     bool dataPack = false;     ///< Game data in one game.agrpak instead of loose files.
     bool encryptData = false;  ///< Encrypt game.agrpak (AES-256; key in keys/data.key, embedded in the player).
     bool zipPackage = false;  ///< PC exports: also a <Name>.zip of the folder (store pages, sharing).  ///< Android RECORD_AUDIO permission (agr.audio.startRecording).

@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include "agr/assets/Image.hpp"
+#include "agr/core/Etc2.hpp"
 #include "agr/core/Log.hpp"
 #include "agr/scene/SceneSerializer.hpp"
 #include "agr/editor/SceneTemplates.hpp"
@@ -166,12 +167,15 @@ GameManifest gameManifest(const Project& project) {
 }
 
 namespace {
-Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack);
+Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack, bool compress = false);
 }
 Result<ExportReport> packageGameData(const Project& project, const fs::path& gameDir) { return packageGameDataImpl(project, gameDir, true); }
+Result<ExportReport> packageGameDataCompressed(const Project& project, const fs::path& gameDir) {
+    return packageGameDataImpl(project, gameDir, true, true);
+}
 
 namespace {
-Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack) {
+Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path& gameDir, bool allowPack, bool compress) {
     registerAllComponentTypes();  // scenes are converted without the editor's plugins (command line)
     ExportReport report;
     report.output = gameDir;
@@ -251,6 +255,12 @@ Result<ExportReport> packageGameDataImpl(const Project& project, const fs::path&
         std::fclose(f);
         ++report.files;
         report.bytes += text.size();
+    }
+    if (compress && project.settings().exportSettings.compressTextures) {
+        u64 saved = 0;
+        report.compressedTextures = compressTexturesInFolder(gameDir / "assets", project.settings().exportSettings.textureCompressionExclude, &saved);
+        AGR_LOG_INFO("Export", "{} texture(s) converted to ETC2 ({:.1f} MB of GPU memory saved)", report.compressedTextures,
+                     static_cast<double>(saved) / (1024.0 * 1024.0));
     }
     if (allowPack && project.settings().exportSettings.dataPack) {
         auto key = exportPackKey(project);
@@ -718,6 +728,49 @@ std::set<std::string> usedAssets(const Project& project) {
         }
     }
     return found;
+}
+
+// ---------------------------------------------------------------- texture compression
+u32 compressTexturesInFolder(const fs::path& assetsDir, const std::string& excludePatterns, u64* savedBytes) {
+    std::vector<std::string> excludes;
+    {
+        std::string cur;
+        for (char c : excludePatterns + ",") {
+            if (c == ',') {
+                while (!cur.empty() && cur.back() == ' ') cur.pop_back();
+                if (!cur.empty()) excludes.push_back(cur);
+                cur.clear();
+            } else if (!(c == ' ' && cur.empty())) {
+                cur += c;
+            }
+        }
+    }
+    std::error_code ec;
+    std::vector<fs::path> images;
+    for (auto it = fs::recursive_directory_iterator(assetsDir, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file()) continue;
+        std::string ext = it->path().extension().string();
+        for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".tga" && ext != ".bmp") continue;
+        const std::string rel = fs::relative(it->path(), assetsDir, ec).generic_string();
+        if (std::any_of(excludes.begin(), excludes.end(), [&](const std::string& p) { return exportPatternMatch(p, rel); })) continue;
+        images.push_back(it->path());
+    }
+    u32 count = 0;
+    u64 saved = 0;
+    for (const fs::path& p : images) {
+        auto bytes = readAll(p);
+        if (!bytes) continue;
+        auto img = decodeImage(std::span<const u8>(reinterpret_cast<const u8*>(bytes->data()), bytes->size()), p.string());
+        if (!img || img.value().width < 8 || img.value().height < 8) continue;  // tiny images: not worth it
+        const auto ktx = etc2::writeKtx(etc2::compressWithMips(img.value().pixels.data(), img.value().width, img.value().height));
+        std::ofstream out(p, std::ios::binary | std::ios::trunc);
+        if (!out.write(reinterpret_cast<const char*>(ktx.data()), static_cast<std::streamsize>(ktx.size()))) continue;
+        ++count;
+        saved += static_cast<u64>(img.value().width) * img.value().height * 4 * 4 / 3 - static_cast<u64>(img.value().width) * img.value().height * 4 / 3;
+    }
+    if (savedBytes) *savedBytes = saved;
+    return count;
 }
 
 } // namespace agr::editor

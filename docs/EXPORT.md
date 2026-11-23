@@ -22,6 +22,22 @@ sinon (composant inconnu de l'éditeur, prefab introuvable, fichier modifié à 
 telle quelle. `ExportReport::binaryScenes` compte les scènes converties. L'éditeur utilise le même format
 pour ses instantanés (annuler / rétablir, mode Jeu).
 
+## Textures compressées ETC2 (Android)
+
+*Android › Textures compressées ETC2* (activé par défaut) : à l'export Android, chaque image des assets
+(PNG, JPEG, TGA, BMP d'au moins 8 × 8) est convertie en **ETC2 + EAC** (RGBA, 8 bits par pixel au lieu
+de 32), avec ses niveaux de mip, dans un conteneur KTX **sous le même nom de fichier** (le chargement
+reconnaît le format à sa signature : aucune référence à changer). Sur le téléphone, le GPU (OpenGL ES 3)
+lit la texture compressée telle quelle : **4 × moins de mémoire GPU** et des chargements plus légers.
+Là où le GPU ne lit pas ETC2 (le rendu Vulkan d'AGR pour l'instant), elle est décodée à la volée, et les
+lecteurs CPU (terrain, outils) reçoivent toujours des pixels. *Ne pas compresser* garde certaines images
+intactes (par défaut `fonts/**, *height*, *splat*` : données lues en précision). Ligne de commande :
+`agr_editor --compress-textures DOSSIER`. Vérifié : le codec (encodeur ETC1/ETC2 + EAC, décodeur complet
+avec les modes T, H et planaire) est relu par le décodeur matériel de Mesa en OpenGL et OpenGL ES avec les
+bonnes couleurs ; la Vitrine 2D avec ses 91 textures compressées (11 Mo de mémoire GPU en moins) passe
+`--autotest` en OpenGL et en Vulkan. Limites : qualité ETC2 (blocs visibles sur les dégradés très fins ou
+le pixel art agrandi : l'exclure), pas d'ASTC.
+
 ## Filtres : seulement ce qui sert
 
 *Données du jeu › Seulement les assets utilisés* : l'export part des scènes et des fichiers de réglages
@@ -157,7 +173,6 @@ APK signés avec la clé du projet, contrôlés par `apksigner`, `aapt2` et `zip
 - Pas d'export iOS, Web ni macOS. L'export Windows est produit et vérifié (format PE, dépendances,
   contenu du dossier) mais **n'a pas encore été lancé sur un vrai Windows** ; pas
   d'installateur (l'icône est intégrée au `.exe`).
-- Pas de compression de
-  textures (ETC2 / ASTC) ni de découpage des assets (Play Asset Delivery).
+- Textures : ETC2 seulement (pas d'ASTC) ; pas de découpage des assets (Play Asset Delivery).
 - Le projet Gradle est régénéré à chaque export (pas de compilation incrémentale : ~30 s à 1 min).
 - Pas de publication automatique sur Google Play ni d'ouverture directe sur un appareil connecté.

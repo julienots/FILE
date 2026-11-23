@@ -132,6 +132,8 @@ Result<Project> Project::open(const fs::path& folder) {
         x.microphone = e.value("microphone", x.microphone);
         x.zipPackage = e.value("zipPackage", x.zipPackage);
         x.dataPack = e.value("dataPack", x.dataPack);
+        x.compressTextures = e.value("compressTextures", x.compressTextures);
+        x.textureCompressionExclude = e.value("textureCompressionExclude", x.textureCompressionExclude);
         x.onlyUsedAssets = e.value("onlyUsedAssets", x.onlyUsedAssets);
         x.includeFilter = e.value("includeFilter", x.includeFilter);
         x.excludeFilter = e.value("excludeFilter", x.excludeFilter);
@@ -193,6 +195,8 @@ Status Project::save() const {
                    {"microphone", x.microphone},
                    {"zipPackage", x.zipPackage},
                    {"dataPack", x.dataPack},
+                   {"compressTextures", x.compressTextures},
+                   {"textureCompressionExclude", x.textureCompressionExclude},
                    {"onlyUsedAssets", x.onlyUsedAssets},
                    {"includeFilter", x.includeFilter},
                    {"excludeFilter", x.excludeFilter},

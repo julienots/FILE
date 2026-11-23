@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "agr/assets/Image.hpp"
+#include "agr/core/Etc2.hpp"
 #include "agr/core/FileSystem.hpp"
 #include "agr/core/Handle.hpp"
 #include "agr/core/JobSystem.hpp"
@@ -33,6 +34,7 @@ struct TextureInfo {
     AssetState state = AssetState::Loading;
     u32 width = 0, height = 0;        ///< Size on the GPU (after profile downscaling).
     u32 sourceWidth = 0, sourceHeight = 0;
+    bool compressed = false;          ///< Stored compressed on the GPU (ETC2 KTX).
     rhi::TextureHandle gpu;
     std::string error;
     u32 refCount = 0;
@@ -103,6 +105,7 @@ private:
         u32 version;
         Result<Image> image;
         i64 modifiedTime;
+        std::shared_ptr<etc2::CompressedImage> compressed;  ///< KTX uploaded as is (GPU with ETC2)
     };
 
     std::string cacheKey(std::string_view uri, const TextureLoadOptions& o) const;

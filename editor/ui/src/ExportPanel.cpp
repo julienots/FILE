@@ -174,6 +174,8 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
 
     if (android) {
         ImGui::SeparatorText("Android");
+        changed |= ImGui::Checkbox("Textures compressées ETC2 (4x moins de mémoire GPU)", &x.compressTextures);
+        if (x.compressTextures) changed |= ImGui::InputTextWithHint("Ne pas compresser", "fonts/**, *height*", &x.textureCompressionExclude);
         changed |= ImGui::InputTextWithHint("Identifiant", defaultPackageId(ps).c_str(), &x.packageId);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Identifiant unique de l'application (com.studio.jeu) ; vide = généré");
         changed |= ImGui::Checkbox("Vibration (permission VIBRATE)", &x.vibration);

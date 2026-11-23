@@ -132,6 +132,8 @@ VkFormat toVk(TextureFormat f, VkFormat depthFormat) {
         case TextureFormat::RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
         case TextureFormat::Depth24Stencil8: return depthFormat;
         case TextureFormat::Depth16: return VK_FORMAT_D16_UNORM;  // mandatory: depth attachment + sampled
+        case TextureFormat::ETC2_RGBA8: return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+        case TextureFormat::ETC2_RGBA8_sRGB: return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
     }
     return VK_FORMAT_R8G8B8A8_UNORM;
 }
@@ -312,6 +314,8 @@ public:
     // --------------------------------------------------------------- textures
     Result<TextureHandle> createTexture(const TextureDesc& d) override {
         if (d.width == 0 || d.height == 0) return makeError(Error::Code::InvalidArgument, "texture size must be > 0");
+        // Compressed uploads are not wired on Vulkan yet (etc2Textures = false): callers decode first.
+        if (isCompressedFormat(d.format)) return makeError(Error::Code::Unsupported, "ETC2 textures are not supported by the Vulkan backend yet");
         if (d.width > m_info.maxTextureSize || d.height > m_info.maxTextureSize)
             return makeError(Error::Code::Unsupported, "texture larger than GPU limit " + std::to_string(m_info.maxTextureSize));
         VkTextureRes t;

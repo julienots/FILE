@@ -11,6 +11,7 @@ agr_add_module(core
         src/Profiler.cpp
         src/Crypto.cpp
         src/Pack.cpp
+        src/Etc2.cpp
     PUBLIC_DEPS
         Threads::Threads
         ${CMAKE_DL_LIBS})

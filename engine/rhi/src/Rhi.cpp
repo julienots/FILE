@@ -19,6 +19,8 @@ u32 bytesPerPixel(TextureFormat format) {
         case TextureFormat::R8: return 1;
         case TextureFormat::RGBA16F: return 8;
         case TextureFormat::Depth16: return 2;
+        case TextureFormat::ETC2_RGBA8:
+        case TextureFormat::ETC2_RGBA8_sRGB: return 1;  // 8 bits per pixel
     }
     return 4;
 }
