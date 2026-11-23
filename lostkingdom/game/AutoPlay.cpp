@@ -2347,6 +2347,23 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "farview") {
+        // 3.4.1 render distance: a wide view from a hill over Greenhaven (villages and forests far away), the
+        // LOD 2 chunks must carry buildings and trees, and the frame must stay within budget
+        static int farProps;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.f; }, idle, "setup"});
+        s.push_back({14.f, [](Game& g) { const Poi* p = g.world.poiById("brindlemere"); teleport(g, p->pos.x + 40.f, p->pos.y + 60.f, 0.f);
+                if (g.vehicles.empty()) g.initVehicles(); g.vehiclesUnlocked = {"car", "moto", "airship"}; g.spawnVehicleEntities();
+                int ship = (int)g.vehicles.size() - 1; VehicleState& v = g.vehicles[ship]; v.pos = g.pc().pos; v.yaw = 0.6f; g.enterVehicle(ship); v.alt = 55.f;
+                g.camYaw = 0.6f + PI; g.camPitch = 0.3f; g.camDist = g.camDistTarget = 30.f; },
+            [](Game& g, float t) { g.camPitch = 0.3f; if (g.driving >= 0) g.camYaw = g.vehicles[g.driving].yaw + PI; static bool sh = false; if (!sh && t > 13.f) { sh = true;
+                farProps = 0; int n2 = 0; g.world.forEachVisibleChunk([&](Chunk& ch) { if (ch.lod == 2) { n2++; if (ch.props.valid() || ch.foliage.valid() || !ch.models.empty()) farProps++; } });
+                AGR_LOG("FARVIEW draw distance %.0f m, %d far chunks, %d with buildings or trees; fog %.4f falloff %.3f base %.1f scorch %.2f shafts %.2f heat %.2f weather %d mist %.2f haze %.2f", g.renderer.settings.drawDistance, n2, farProps, g.env.fogDensity, g.env.fogFalloff, g.env.fogBase, g.env.scorch, g.env.shafts, g.env.heat, g.weather, g.morningMist, g.forestHaze);
+                g.requestScreenshot("build/shots/FV0_far.png"); } }, "hill"});
+        s.push_back({0.5f, [](Game& g) { bool ok = g.renderer.settings.drawDistance >= 160.f && farProps > 10;
+            AGR_LOG("FARVIEW -> %s", ok ? "FARVIEW TEST PASSED" : "FARVIEW TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "sunlook") {
         // 3.4.0 the blazing sun: midday in the Scarlet Canyons and in Greenhaven (bleached highlights, deep
         // shade, heat haze), and a low camera turned towards the afternoon sun (starburst)

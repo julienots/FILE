@@ -1525,7 +1525,8 @@ void main() {
     // 3.4.0 the blazing sun: highlights burn to a warm white, the shade stays cool and deep
     if (uFx0.z > 0.0) {
         float lb = dot(clamp(col, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
-        col = mix(col, vec3(1.0, 0.95, 0.84), smoothstep(0.62, 1.0, lb) * 0.38 * uFx0.z);
+        float nearK = 1.0 - smoothstep(50.0, 170.0, linDepth(texture(uDepth, uv0).r));   // 3.4.1 the distance stays readable (no white veil over the horizon)
+        col = mix(col, vec3(1.0, 0.95, 0.84), smoothstep(0.62, 1.0, lb) * 0.38 * uFx0.z * nearK);
         col = mix(col, col * vec3(0.9, 0.95, 1.08), (1.0 - smoothstep(0.08, 0.4, lb)) * 0.5 * uFx0.z);
     }
     // split toning: cool shadows, warm highlights (cinematic separation, subtle)

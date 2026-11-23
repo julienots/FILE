@@ -1961,7 +1961,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 }
         }
     }
-    if (lod >= 2) return;  // distant chunks: terrain + water only
+    if (lod >= 3) return;  // 3.4.1 very distant chunks: terrain + water only (LOD 2 now keeps buildings and trees: villages and forests on the horizon)
 
     // ---- structures
     int ci = chunkIndex(k.x, k.z);
@@ -2038,7 +2038,10 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             if (blocked(x, z, ent->collide ? 2.5f : 1.0f)) continue;
             float sc = rng.range(ent->smin, ent->smax);
             vec3 tint = vec3(1.f) * rng.range(0.88f, 1.1f);
-            stampProp(out, ent->k, rng.irange(0, propVariants(ent->k) - 1), {x, y - 0.05f, z}, rng.range(0, TAU), sc, tint, ent->collide);
+            int var = rng.irange(0, propVariants(ent->k) - 1);
+            float rot = rng.range(0, TAU);
+            // 3.4.1 far view: trees and rocks only; the random sequence is the same at every LOD (nothing moves)
+            if (lod < 2 || ent->collide) stampProp(out, ent->k, var, {x, y - 0.05f, z}, rot, sc, tint, ent->collide);
             if ((ent->k == P_GIANTSHROOM || ent->k == P_MAGICCRYSTAL) && rng.chance(0.5f)) out.lights.push_back(vec4(x, y + 2.f * sc, z, ent->k == P_GIANTSHROOM ? LI_MAGIC : LI_CRYSTAL));
         }
     // Small decorations only avoid roads, buildings and the core of settlements (the full POI radius covers
@@ -2679,7 +2682,7 @@ void World::update(vec3 focus, float viewRadius, int uploadBudget, double now) {
             vec2 cc{(k.x + 0.5f) * CHUNK, (k.z + 0.5f) * CHUNK};
             float d = length(cc - focus.xz());
             if (d > viewRadius + CHUNK * 0.7f) continue;
-            int lod = d < 56.f ? 0 : (d < 100.f ? 1 : 2);
+            int lod = d < 56.f ? 0 : (d < 100.f ? 1 : (d < 230.f ? 2 : 3));   // 3.4.1 LOD 2 keeps buildings and trees (far view), LOD 3 terrain only
             want.push_back({d, {k, lod}});
         }
     std::sort(want.begin(), want.end(), [](auto& a, auto& b) { return a.first < b.first; });

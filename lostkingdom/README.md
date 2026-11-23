@@ -6,13 +6,31 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.4.0 (versionCode 54), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.3.1 : elle s'installe par-dessus). SHA-256 : `705286e7847e80d2ea9b80b5684db7dd76b36fedb43476aaf79b9bf1c4dff232`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.4.1 (versionCode 55), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.4.0 : elle s'installe par-dessus). SHA-256 : `705286e7847e80d2ea9b80b5684db7dd76b36fedb43476aaf79b9bf1c4dff232`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.4.1 (on voit beaucoup plus loin)
+
+- **Distance d'affichage nettement augmentée** dans tous les profils graphiques :
+  - Ultra : 130 → 200 m ;
+  - Élevé : 110 → 165 m ;
+  - Moyen : 95 → 135 m ;
+  - Bas : 80 → 110 m ;
+  - Économie : 70 → 85 m.
+- **Le lointain n'est plus vide.** Avant, au-delà de 100 m, seul le sol était affiché : les villages, les châteaux et les forêts surgissaient d'un coup en approchant.
+  - Le niveau de détail lointain (100 à 230 m) garde maintenant les bâtiments, les arbres et les rochers, en version allégée.
+  - Les petites plantes, l'herbe, les décors de route et les ressources restent réservés aux environs.
+  - Les arbres sont tirés exactement aux mêmes endroits à tous les niveaux de détail : rien ne bouge ni ne saute quand on s'approche.
+- **Brouillard allégé en proportion** (jusqu'à −40 % en Ultra), pour que ce qui est affiché plus loin se voie vraiment.
+- Le blanchiment du soleil de midi ne touche plus que le premier plan : l'horizon reste lisible.
+- **Pas de nouveaux bugs côté jeu** : les créatures, les ressources et les personnages n'apparaissent toujours qu'à proximité (même règle qu'avant). La distance ne change que ce qui est affiché.
+- **Coût sur téléphone non mesuré** : plus de morceaux de terrain sont dessinés (environ 200 appels de dessin au lieu de 120 sur une vue large, sur ordinateur). Si ça rame, le profil « Moyen » ou « Bas » reste plus loin qu'avant pour moins cher.
+- **Vérifié sur ordinateur seulement** : 3 049 tests unitaires réussis. Nouveau scénario `farview` (vue depuis le vaisseau : 80 morceaux lointains, dont 67 avec des bâtiments ou des arbres), et scénarios de régression.
 
 ### Nouveautés 3.4.0 (herbe serrée, mouvements fluides, véhicules à débloquer, vaisseau volant, soleil brûlant)
 

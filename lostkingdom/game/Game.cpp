@@ -506,6 +506,9 @@ void Game::updateEnvironment(float dt) {
         env.fogDensity += (forestHaze * 0.0045f + morningMist * 0.006f) * g.fogMul;
         if (forestHaze > 0.01f) env.fogColor = lerp(env.fogColor, env.fogColor * vec3(0.92f, 1.0f, 0.9f), forestHaze * 0.5f);   // green-tinted under the canopy
     }
+    // 3.4.1 a longer view: the fog thins with the draw distance of the quality profile, so what is now drawn
+    // further away (villages, forests) can be seen
+    env.fogDensity *= lerpf(1.f, 0.6f, saturate((renderer.settings.drawDistance - 110.f) / 90.f));
     env.fogFalloff = 0.035f;
     env.fogBase = focus.y - 2.f;
     env.wetness = damp(env.wetness, saturate(rainAmt * 1.2f), 0.15f, dt);
@@ -539,7 +542,7 @@ void Game::updateEnvironment(float dt) {
         // 3.4.0 the blazing midday sun: a clear sky from late morning to mid-afternoon, fiercest in the hot lands.
         // The sun hits harder and whiter, the shade gets deeper and cooler (less sky light), the air shimmers
         // over the ground, highlights burn and the sun itself flares in a starburst.
-        float noon = smoothstepf(0.42f, 0.78f, env.sunDir.y) * (1.f - env.night);
+        float noon = smoothstepf(0.6f, 0.88f, env.sunDir.y) * (1.f - env.night);
         float warm = 0.5f + 0.5f * saturate(regionW[R_AMBER] + regionW[R_CANYON] + regionW[R_ASHEN] * 0.6f + regionW[R_STEPPE] * 0.7f + regionW[R_JUNGLE] * 0.6f + regionW[R_CORAL] * 0.5f + regionW[R_GREENHAVEN] * 0.2f)
                      - 0.45f * saturate(regionW[R_FROSTHEIM] + regionW[R_AURORA] + regionW[R_TITANS] * 0.6f);
         float target = dungeon.active ? 0.f : saturate(noon * clear * (1.f - sandAmt) * (1.f - ashAmt * 0.7f) * saturate(warm));

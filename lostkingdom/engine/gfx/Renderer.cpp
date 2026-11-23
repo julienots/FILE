@@ -49,19 +49,19 @@ GraphicsSettings GraphicsSettings::forProfile(QualityProfile p) {
     switch (p) {
     case QualityProfile::Ultra:
         s.renderScale = 1.0f; s.shadowRes = 2048; s.softShadows = true; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 130; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; s.sunShafts = true; s.ssr = true; break;
+        s.terrainNormals = true; s.grassDensity = 1.0f; s.particleScale = 1.0f; s.drawDistance = 200; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.85f; s.sunShafts = true; s.ssr = true; break;
     case QualityProfile::High:
         s.renderScale = 0.85f; s.shadowRes = 2048; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = true;
-        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 110; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; s.sunShafts = true; s.ssr = true; break;
+        s.terrainNormals = true; s.grassDensity = 0.8f; s.particleScale = 0.85f; s.drawDistance = 165; s.maxLights = 8; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.8f; s.sunShafts = true; s.ssr = true; break;
     case QualityProfile::Medium:
         s.renderScale = 0.75f; s.shadowRes = 1024; s.softShadows = false; s.bloom = true; s.fxaa = true; s.dof = false;
-        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 95; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; s.terrainNormals = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
+        s.terrainNormals = true; s.grassDensity = 0.55f; s.particleScale = 0.65f; s.drawDistance = 135; s.maxLights = 6; s.fpsCap = 60; s.ssao = true; s.ssaoStrength = 0.7f; s.terrainNormals = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
     case QualityProfile::Low:
         s.renderScale = 0.65f; s.shadowRes = 1024; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 80; s.maxLights = 4; s.fpsCap = 30; s.ssao = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
+        s.terrainNormals = false; s.grassDensity = 0.3f; s.particleScale = 0.45f; s.drawDistance = 110; s.maxLights = 4; s.fpsCap = 30; s.ssao = false; s.shadowInterval = 2; s.bloomStart = 1; s.simpleWater = true; break;
     default:  // battery saver
         s.renderScale = 0.55f; s.shadowRes = 0; s.softShadows = false; s.bloom = false; s.fxaa = false; s.dof = false;
-        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 70; s.maxLights = 3; s.fpsCap = 30; s.ssao = false; s.simpleWater = true; break;
+        s.terrainNormals = false; s.grassDensity = 0.15f; s.particleScale = 0.3f; s.drawDistance = 85; s.maxLights = 3; s.fpsCap = 30; s.ssao = false; s.simpleWater = true; break;
     }
     return s;
 }
