@@ -35,7 +35,7 @@ constexpr usize kHeader = 4 + 1 + 4 + 4 + 4;  // magic, type, sender, seq, token
 constexpr f64 kResendInterval = 0.2, kPingInterval = 0.5, kHelloInterval = 0.25;
 constexpr usize kMaxEarly = 256, kMaxUnacked = 1024;
 
-enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8, Discover = 9, Info = 10, Denied = 11, Pong = 12 };
+enum PacketType : u8 { Hello = 1, Welcome = 2, Data = 3, Reliable = 4, Ack = 5, Ping = 6, Bye = 7, Full = 8, Discover = 9, Info = 10, Denied = 11, Pong = 12, Ordered = 13 };
 
 /// Proof of the password bound to the connection's token (FNV-1a 64, two rounds).
 u64 passwordProof(const std::string& password, u32 token) {
@@ -445,6 +445,26 @@ bool NetSession::send(u32 peer, std::string_view data, bool reliable) {
     return !targets.empty();
 }
 
+bool NetSession::sendOrdered(u32 peer, std::string_view data, u8 channel) {
+    if (data.size() > kMaxPayload || !connected()) return false;
+    channel = static_cast<u8>(channel % kChannels);
+    std::vector<u32> targets;
+    if (peer == kBroadcast) {
+        for (const auto& [id, p] : m_peers)
+            if (p.welcomed) targets.push_back(id);
+    } else if (auto it = m_peers.find(peer); it != m_peers.end() && it->second.welcomed) {
+        targets.push_back(peer);
+    }
+    for (u32 id : targets) {
+        Peer& p = m_peers[id];
+        u32& c = p.orderedOut[channel];
+        c = (c + 1) & 0xFFFFFFu;
+        if (c == 0) c = 1;  // 0 means "nothing yet" on the other side
+        sendPacket(p, Ordered, static_cast<u32>(channel) << 24 | c, data);
+    }
+    return !targets.empty();
+}
+
 void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 now) {
     if (packet.size() < kHeader || std::memcmp(packet.data(), kMagic, 4) != 0) return;  // not ours
     const u8 rawType = packet[4];
@@ -560,6 +580,18 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
     p->lastHeard = now;
     switch (type) {
         case Data: push({NetEvent::Type::Message, p->id, std::string(payload)}); break;
+        case Ordered: {  // seq = channel << 24 | 24-bit counter; older than the last delivered: dropped
+            const u32 channel = (seq >> 24) & 7u, counter = seq & 0xFFFFFFu;
+            u32& last = p->orderedIn[channel];
+            const u32 ahead = (counter - last) & 0xFFFFFFu;  // serial arithmetic (wraps after 16 M)
+            if (last != 0 && (ahead == 0 || ahead >= 0x800000u)) {
+                ++m_stats.staleDropped;
+                break;
+            }
+            last = counter;
+            push({NetEvent::Type::Message, p->id, std::string(payload)});
+            break;
+        }
         case Reliable: {
             sendPacket(*p, Ack, seq, {});
             if (seq < p->nextRecvSeq) break;  // duplicate (our ack was lost)

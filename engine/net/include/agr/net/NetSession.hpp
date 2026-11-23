@@ -88,7 +88,8 @@ struct LanGame {
 
 struct NetStats {
     u64 packetsSent = 0, packetsReceived = 0, bytesSent = 0, bytesReceived = 0, resent = 0;
-    u64 rejected = 0;  ///< Encrypted links: forged, tampered, replayed or unencrypted packets dropped.
+    u64 rejected = 0;
+    u64 staleDropped = 0;  ///< Unreliable ordered messages dropped because a newer one had arrived.  ///< Encrypted links: forged, tampered, replayed or unencrypted packets dropped.
 };
 
 class NetSession {
@@ -118,6 +119,11 @@ public:
     /// To one peer, or kBroadcast (host: every client; client: the host). False if too large
     /// (unreliable: kMaxPayload, reliable: kMaxReliable) or not connected.
     bool send(u32 peer, std::string_view data, bool reliable);
+    /// Unreliable but ordered (Godot's unreliable_ordered): a message older than the last one
+    /// received on its channel (0..7) is dropped instead of delivered late — positions, aim,
+    /// voice. At most kMaxPayload bytes.
+    bool sendOrdered(u32 peer, std::string_view data, u8 channel = 0);
+    static constexpr u8 kChannels = 8;
     std::vector<NetEvent> takeEvents();
     /// Messages of the system channel (first byte kSystemTag) and the connection events.
     std::vector<NetEvent> takeSystemEvents();
@@ -178,6 +184,7 @@ private:
         u32 nextSendSeq = 1, nextRecvSeq = 1;
         std::deque<Pending> unacked;
         std::map<u32, std::string> early;  ///< Reliable messages received ahead of order.
+        u32 orderedOut[8]{}, orderedIn[8]{};    ///< Unreliable ordered: last counter sent / delivered per channel.
         std::string assembly;  ///< Fragments of a large reliable message received so far.
         bool welcomed = false;
         f64 rtt = 0.0;

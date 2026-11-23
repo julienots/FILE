@@ -75,7 +75,7 @@ int n_stats(lua_State* L) {
     const auto& st = netOf(L).stats();
     lua_createtable(L, 0, 5);
     for (auto [k, v] : {std::pair<const char*, u64>{"bytesSent", st.bytesSent}, {"bytesReceived", st.bytesReceived}, {"packetsSent", st.packetsSent},
-                        {"packetsReceived", st.packetsReceived}, {"resent", st.resent}}) {
+                        {"packetsReceived", st.packetsReceived}, {"resent", st.resent}, {"staleDropped", st.staleDropped}, {"rejected", st.rejected}}) {
         lua_pushinteger(L, static_cast<lua_Integer>(v));
         lua_setfield(L, -2, k);
     }
@@ -110,6 +110,19 @@ int n_peers(lua_State* L) {
 int sendTo(lua_State* L, u32 peer, int valueIdx, int reliableIdx) {
     const std::string data = toJson(L, valueIdx).dump();
     if (data.size() > net::NetSession::kMaxPayload) return luaL_error(L, "agr.net: message too large (%d bytes, at most %d)", int(data.size()), int(net::NetSession::kMaxPayload));
+    // Delivery: true / "reliable", false / nil / "unreliable", or "ordered" [, channel 0..7].
+    if (lua_type(L, reliableIdx) == LUA_TSTRING) {
+        const std::string mode = lua_tostring(L, reliableIdx);
+        if (mode == "ordered") {
+            const lua_Integer channel = luaL_optinteger(L, reliableIdx + 1, 0);
+            if (channel < 0 || channel >= net::NetSession::kChannels) return luaL_error(L, "agr.net: channel %d out of range (0..7)", int(channel));
+            lua_pushboolean(L, netOf(L).sendOrdered(peer, data, static_cast<u8>(channel)));
+            return 1;
+        }
+        if (mode != "reliable" && mode != "unreliable") return luaL_error(L, "agr.net: unknown delivery '%s' (reliable, unreliable, ordered)", mode.c_str());
+        lua_pushboolean(L, netOf(L).send(peer, data, mode == "reliable"));
+        return 1;
+    }
     lua_pushboolean(L, netOf(L).send(peer, data, lua_toboolean(L, reliableIdx) != 0));
     return 1;
 }

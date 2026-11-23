@@ -1,5 +1,6 @@
 // Networking: real UDP sessions on the loopback interface, reliable ordered delivery over a
 // lossy, reordering transport, capacity, disconnects and timeouts; agr.net from Lua.
+#include <cctype>
 #include <doctest/doctest.h>
 #include <functional>
 
@@ -779,4 +780,45 @@ TEST_CASE("prediction: the controller moves at once, the host is the authority, 
     CHECK(past.x == doctest::Approx(1.5f).epsilon(0.08));
     CHECK(host.rep.positionAt(host.scene, target, t0 - 5.0).x < 0.11f);  // oldest kept
     CHECK(host.rep.positionAt(host.scene, target, host.session.networkTime() + 1.0).x == doctest::Approx(3.0f));
+}
+
+TEST_CASE("unreliable ordered channels: late packets are dropped, channels are independent") {
+    LossyNetwork network;
+    network.loss = 0.0f;  // the network still reorders datagrams
+    NetSession host(std::make_unique<LossyTransport>(network)), client(std::make_unique<LossyTransport>(network));
+    REQUIRE(host.host(9300, 2));
+    REQUIRE(client.join("127.0.0.1", 9300));
+    f64 now = 0.0;
+    REQUIRE(pump({&host, &client}, now, [&] { return client.connected(); }));
+    host.takeEvents();
+    client.takeEvents();
+    for (int i = 1; i <= 40; ++i) REQUIRE(client.sendOrdered(NetSession::kHostId, std::to_string(i), 0));
+    for (int i = 1; i <= 10; ++i) REQUIRE(client.sendOrdered(NetSession::kHostId, "c" + std::to_string(i), 3));
+    std::vector<NetEvent> got;
+    pump({&host, &client}, now, [] { return false; }, 5);
+    collect(got, host);
+    std::vector<int> ch0, ch3;
+    for (const auto& e : got)
+        if (e.type == NetEvent::Type::Message) {
+            if (e.data[0] == 'c') ch3.push_back(std::stoi(e.data.substr(1)));
+            else ch0.push_back(std::stoi(e.data));
+        }
+    // Whatever the arrival order: never an older message after a newer one, per channel.
+    CHECK(std::is_sorted(ch0.begin(), ch0.end()));
+    CHECK(std::adjacent_find(ch0.begin(), ch0.end()) == ch0.end());
+    CHECK(std::is_sorted(ch3.begin(), ch3.end()));
+    CHECK_FALSE(ch0.empty());
+    CHECK_FALSE(ch3.empty());  // channel 3 is not blocked by channel 0
+    CHECK(ch0.size() + ch3.size() + host.stats().staleDropped == 50);  // each one delivered or dropped as stale
+    CHECK(host.stats().staleDropped > 0);  // the shuffling did make some late
+    // One at a time (nothing to overtake): all delivered.
+    got.clear();
+    for (int i = 41; i <= 45; ++i) {
+        REQUIRE(client.sendOrdered(NetSession::kHostId, std::to_string(i), 0));
+        pump({&host, &client}, now, [] { return false; }, 2);
+    }
+    collect(got, host);
+    int delivered = 0;
+    for (const auto& e : got) delivered += e.type == NetEvent::Type::Message;
+    CHECK(delivered == 5);
 }

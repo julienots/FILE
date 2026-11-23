@@ -22,8 +22,8 @@ Internet (si le port de l'hôte est joignable) : un joueur **héberge**, les aut
 | `agr.net.join(adresse, port)` | rejoint (`"192.168.1.20"`, `"localhost"`, nom d'hôte) ; événement `connected` une fois accepté |
 | `agr.net.leave()` | quitte (les autres reçoivent `disconnected`) |
 | `agr.net.role()` → `"none"`, `"host"`, `"client"` ; `agr.net.id()` ; `agr.net.peers()` ; `agr.net.port()` | état |
-| `agr.net.send(joueur, valeur [, fiable])` | envoie une table (nombres, textes, booléens, tables imbriquées ; 1200 octets en JSON au plus) |
-| `agr.net.broadcast(valeur [, fiable])` | hôte : à tous les joueurs ; client : à l'hôte |
+| `agr.net.send(joueur, valeur [, livraison [, canal]])` | envoie une table (nombres, textes, booléens, tables imbriquées ; 1200 octets en JSON au plus) ; livraison : `true` / `"reliable"` (fiable, dans l'ordre), `false` / `"unreliable"` (défaut), ou `"ordered"` : **non fiable ordonné** sur un des 8 canaux (`canal` 0 à 7) — un message plus ancien que le dernier reçu sur son canal est jeté au lieu d'arriver en retard (positions, visée) ; `agr.net.stats().staleDropped` les compte. C++ : `NetSession::sendOrdered` |
+| `agr.net.broadcast(valeur [, livraison [, canal]])` | hôte : à tous les joueurs ; client : à l'hôte |
 | `agr.net.poll()` | événements reçus depuis le dernier appel : `{type = "connected" \| "disconnected" \| "message", peer = id, data = valeur}` |
 
 ```lua
