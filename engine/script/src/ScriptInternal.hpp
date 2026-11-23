@@ -19,6 +19,7 @@
 
 #include "agr/core/Time.hpp"
 #include "agr/script/ScriptEngine.hpp"
+#include "agr/net/Sockets.hpp"
 
 namespace agr {
 namespace net {
@@ -113,6 +114,20 @@ struct ScriptEngine::Impl {
         bool opened = false;
     };
     std::unordered_map<u64, WebSocketHandle> webSockets;  ///< agr.ws handles
+    /// agr.tcp / agr.udp / agr.wsserver handles (closed when the game stops).
+    struct Sockets {
+        std::unordered_map<u64, std::unique_ptr<net::TcpServer>> tcpServers;
+        std::unordered_map<u64, std::unique_ptr<net::TcpConnection>> tcp;
+        std::unordered_map<u64, std::unique_ptr<net::UdpSocket>> udp;
+        std::unordered_map<u64, std::unique_ptr<net::WebSocketServer>> wsServers;
+        u64 next = 1;
+        void clear() {
+            tcpServers.clear();
+            tcp.clear();
+            udp.clear();
+            wsServers.clear();
+        }
+    } sockets;
     u64 nextWebSocket = 1;
     net::Replicator* replicator = nullptr;
     /// Runs `fn` of the entity's script for an RPC. `remote`: checks the script's rpc table
@@ -217,6 +232,7 @@ void openGameBindings(lua_State* L);
 /// Calls the callbacks of finished agr.http requests (once per frame).
 void dispatchHttp(ScriptEngine::Impl& m);
 void openNetBindings(lua_State* L);
+void openSocketBindings(lua_State* L);
 void openFxBindings(lua_State* L);
 void openRuntimeBindings(lua_State* L);
 /// Effects frame hooks (ScriptFx.cpp): before the scripts' onUpdate (removes last frame's camera

@@ -314,6 +314,51 @@ TEST_CASE("entity:netInput runs onNetInput (single player: directly)") {
     CHECK(f.scripts.stats().errors == 0);
 }
 
+TEST_CASE("agr.tcp, agr.udp, agr.wsserver from Lua (loopback)") {
+    ScriptFixture f;
+    const Status st = f.scripts.run(R"(
+local server, port = agr.tcp.listen(0, true)
+assert(server and port > 0, "listen")
+local c = assert(agr.tcp.connect("127.0.0.1", port))
+local peer, got = nil, ""
+for i = 1, 200000 do
+    peer = peer or agr.tcp.accept(server)
+    if peer and agr.tcp.state(c) == "open" then break end
+end
+assert(peer, "accepted")
+agr.tcp.send(c, "abc")
+for i = 1, 200000 do
+    got = got .. agr.tcp.receive(peer)
+    if #got >= 3 then break end
+end
+assert(got == "abc", got)
+agr.tcp.close(c)
+local state
+for i = 1, 200000 do
+    agr.tcp.receive(peer)
+    state = agr.tcp.state(peer)
+    if state == "closed" then break end
+end
+assert(state == "closed", state)
+-- UDP
+local a, pa = agr.udp.open()
+local b, pb = agr.udp.open()
+assert(agr.udp.send(a, "127.0.0.1", pb, "ping"))
+local list = {}
+for i = 1, 200000 do
+    list = agr.udp.receive(b)
+    if #list > 0 then break end
+end
+assert(#list == 1 and list[1].data == "ping" and list[1].port == pa)
+-- WebSocket server: listens, and refuses a plain HTTP request
+local ws, wp = agr.wsserver.listen(0, true)
+assert(ws and wp > 0)
+assert(#agr.wsserver.clients(ws) == 0)
+agr.wsserver.close(ws)
+)");
+    CHECK_MESSAGE(st, (st ? "" : st.error().message));
+}
+
 TEST_CASE("debugger: pause request and break on error") {
     ScriptFixture f;
     f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");

@@ -853,3 +853,116 @@ TEST_CASE("compression: smaller packets, same messages, also with encryption and
         CHECK(client.encrypted(NetSession::kHostId) == encrypt);
     }
 }
+
+#include "agr/net/Http.hpp"
+#include "agr/net/Sockets.hpp"
+#include <thread>
+
+TEST_CASE("sockets: TCP server and connection, UDP datagrams, on loopback") {
+    auto server = TcpServer::listen(0, true);
+    REQUIRE(server);
+    auto client = TcpConnection::connect("127.0.0.1", server.value()->port());
+    REQUIRE(client);
+    std::unique_ptr<TcpConnection> peer;
+    std::string atServer, atClient;
+    const std::string big(200000, 'B');  // more than a socket buffer: sent over several polls
+    client.value()->send("hello server");
+    for (int i = 0; i < 400 && (atServer.size() < 12 + big.size() || atClient != "hello client"); ++i) {
+        if (!peer) {
+            peer = server.value()->accept();
+            if (peer) peer->send("hello client");
+        }
+        client.value()->poll();
+        if (peer) {
+            peer->poll();
+            atServer += peer->receive();
+        }
+        atClient += client.value()->receive();
+        if (i == 5) client.value()->send(big);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(client.value()->connected());
+    CHECK(atClient == "hello client");
+    CHECK(atServer == "hello server" + big);
+    // The other side closes: seen as closed.
+    peer.reset();
+    for (int i = 0; i < 100 && !client.value()->closed(); ++i) {
+        client.value()->poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(client.value()->closed());
+    CHECK_FALSE(TcpConnection::connect("no-such-host.invalid", 80));
+
+    auto a = UdpSocket::open(0), b = UdpSocket::open(0);
+    REQUIRE(a);
+    REQUIRE(b);
+    REQUIRE(a.value()->sendTo("127.0.0.1", b.value()->port(), "ping"));
+    std::vector<UdpSocket::Datagram> got;
+    for (int i = 0; i < 100 && got.empty(); ++i) {
+        got = b.value()->receive();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(got.size() == 1);
+    CHECK(got[0].data == "ping");
+    CHECK(got[0].port == a.value()->port());
+    CHECK(got[0].host == "127.0.0.1");
+}
+
+TEST_CASE("WebSocket server: the engine's own WebSocket client connects, text and binary both ways, large and fragmented-size messages, ping, close") {
+    auto server = WebSocketServer::listen(0, true);
+    REQUIRE(server);
+    WebSocketServer& s = *server.value();
+    WebSocket ws;
+    ws.connect("ws://127.0.0.1:" + std::to_string(s.port()) + "/game");
+    std::vector<WebSocketServer::Event> events;
+    auto pumpUntil = [&](const std::function<bool()>& done) {
+        for (int i = 0; i < 1500 && !done(); ++i) {
+            s.poll();
+            for (auto& e : s.takeEvents()) events.push_back(std::move(e));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return done();
+    };
+    REQUIRE(pumpUntil([&] { return ws.state() == WebSocket::State::Open && !events.empty(); }));
+    REQUIRE(events[0].type == WebSocketServer::Event::Type::Connected);
+    const u32 id = events[0].client;
+    CHECK(s.clients() == std::vector<u32>{id});
+    // Client -> server: text, binary, 100 KB (64-bit length).
+    const std::string big(100000, 'x');
+    ws.send("bonjour");
+    ws.sendBinary(std::string("\x00\x01\x02", 3));
+    ws.send(big);
+    REQUIRE(pumpUntil([&] { return events.size() >= 4; }));
+    CHECK(events[1].data == "bonjour");
+    CHECK_FALSE(events[1].binary);
+    CHECK(events[2].binary);
+    CHECK(events[2].data == std::string("\x00\x01\x02", 3));
+    CHECK(events[3].data == big);
+    // Server -> client: text, a 70 KB message, broadcast.
+    REQUIRE(s.send(id, "salut"));
+    REQUIRE(s.send(id, std::string(70000, 'y')));
+    s.broadcast("everyone");
+    std::vector<WebSocket::Message> received;
+    REQUIRE(pumpUntil([&] {
+        for (auto& m : ws.receive()) received.push_back(std::move(m));
+        return received.size() >= 3;
+    }));
+    CHECK(received[0].data == "salut");
+    CHECK(received[1].data.size() == 70000);
+    CHECK(received[2].data == "everyone");
+    // The client closes: the server reports it.
+    ws.close();
+    REQUIRE(pumpUntil([&] { return events.back().type == WebSocketServer::Event::Type::Disconnected; }));
+    CHECK(s.clients().empty());
+    // Not a WebSocket request: refused.
+    auto raw = TcpConnection::connect("127.0.0.1", s.port());
+    REQUIRE(raw);
+    raw.value()->send("GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+    std::string answer;
+    pumpUntil([&] {
+        raw.value()->poll();
+        answer += raw.value()->receive();
+        return answer.find("400") != std::string::npos;
+    });
+    CHECK(answer.find("400 Bad Request") != std::string::npos);
+}

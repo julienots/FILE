@@ -278,6 +278,7 @@ void ScriptEngine::setCallbackBudget(f64 seconds) { m->budgetSeconds = std::max(
 
 void ScriptEngine::reset() {
     m->resetInstances();
+    m->sockets.clear();  // the game stopped: its listening ports are released
     m->sceneGeneration = 0;
 }
 

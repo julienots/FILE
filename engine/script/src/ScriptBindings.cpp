@@ -1090,6 +1090,7 @@ void openAgrLibrary(lua_State* L) {
     openGameBindings(L);
     openFxBindings(L);
     openNetBindings(L);
+    openSocketBindings(L);
     openRuntimeBindings(L);  // last: its Lua prelude uses the other bindings
 }
 

@@ -229,6 +229,28 @@ agr.ws.close(id [, 1000, "raison"])
   (le proxy de l'environnement de développement refuse les serveurs d'écho publics) ; sa couche TLS
   est celle d'HTTPS, testée.
 
+## Sockets bas niveau et serveur WebSocket (`agr.tcp`, `agr.udp`, `agr.wsserver`)
+
+Pour des protocoles maison, des outils, une appli compagnon sur téléphone ou un tableau de bord web :
+non bloquants, interrogés à chaque image (pas de fil), fermés quand le jeu s'arrête.
+
+| Fonction | Rôle |
+|---|---|
+| `agr.tcp.listen(port [, localSeulement])` → serveur, port ; `agr.tcp.accept(serveur)` → connexion, adresse \| `nil` | serveur TCP (port 0 = libre) |
+| `agr.tcp.connect(hôte, port)` → connexion ; `agr.tcp.state(c)` → `"connecting"`, `"open"`, `"closed"` | client TCP (s'ouvre dans les images suivantes) |
+| `agr.tcp.send(c, octets)`, `agr.tcp.receive(c)` → octets reçus depuis le dernier appel, `agr.tcp.close(c ou serveur)` | flux d'octets |
+| `agr.udp.open([port])` → socket, port ; `agr.udp.send(s, hôte, port, octets)` ; `agr.udp.receive(s)` → `{ {host, port, data}, ... }` ; `agr.udp.close(s)` | datagrammes (diffusion `255.255.255.255` permise) |
+| `agr.wsserver.listen(port [, localSeulement])` → serveur, port ; `agr.wsserver.poll(serveur)` → `{ {type = "connected" \| "message" \| "disconnected", client, data, binary}, ... }` | **serveur WebSocket** (RFC 6455) : navigateurs, téléphones, client `agr.ws` |
+| `agr.wsserver.send(serveur, client, texte [, binaire])`, `broadcast(serveur, texte [, binaire])`, `clients(serveur)`, `close(serveur [, client])` | envoi, liste, fermeture |
+
+Serveur WebSocket : poignée de main HTTP vérifiée (requête non WebSocket → `400`), trames masquées
+exigées des clients, longueurs 7, 16 et 64 bits, messages fragmentés recollés, `ping` → `pong`,
+fermeture propre, 16 Mo par message au plus. En `ws://` seulement (pour `wss://`, un proxy TLS devant).
+C++ : `agr::net::TcpServer`, `TcpConnection`, `UdpSocket`, `WebSocketServer` (`agr/net/Sockets.hpp`).
+Tests : le client WebSocket du moteur se connecte au serveur et échange texte, binaire, messages de
+100 Ko et 70 Ko, diffusion, fermeture ; TCP avec 200 Ko envoyés en plusieurs fois, fermeture détectée ;
+UDP aller ; les mêmes depuis Lua.
+
 ## Limites actuelles
 
 - **IPv4 et IPv6** : l'hôte écoute sur les deux (même numéro de port ; IPv6 seulement si le système
@@ -236,7 +258,8 @@ agr.ws.close(id [, 1000, "raison"])
   La découverte LAN reste en IPv4 (diffusion). Le chemin IPv6 réel n'a pas pu être testé dans la VM
   de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
 - Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
-  ouvrir son port UDP) ; pas de WebRTC ni de serveur WebSocket (client seulement).
+  ouvrir son port UDP) ; pas de WebRTC ; serveur WebSocket en `ws://` seulement (pas de TLS intégré
+  côté serveur) ; sockets bas niveau en IPv4.
 - Chiffrement à **clé partagée** (le mot de passe) : pas d'échange de clés Diffie-Hellman ni de
   certificats ; qui connaît le mot de passe et a enregistré la poignée de main peut déchiffrer la
   session (pas de confidentialité persistante). La découverte LAN et la poignée de main restent en clair.
