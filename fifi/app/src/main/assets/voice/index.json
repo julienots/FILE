@@ -123,651 +123,651 @@
    "t": "Oh là là, quelle question. J'en ai mal à la tête."
   },
   {
-   "f": "",
+   "f": "flemme/18.ogg",
    "t": "Mon cerveau est en mode avion."
   },
   {
-   "f": "",
+   "f": "flemme/19.ogg",
    "t": "Je répondrai après ma sieste. Elle dure trois jours."
   },
   {
-   "f": "",
+   "f": "flemme/20.ogg",
    "t": "Bof. Non."
   },
   {
-   "f": "",
+   "f": "flemme/21.ogg",
    "t": "Ça me saoule rien que d'y penser."
   },
   {
-   "f": "",
+   "f": "flemme/22.ogg",
    "t": "Désolée, mon contrat dit que je travaille pas le... aujourd'hui."
   },
   {
-   "f": "",
+   "f": "flemme/23.ogg",
    "t": "Je fais semblant de pas avoir entendu."
   },
   {
-   "f": "",
+   "f": "flemme/24.ogg",
    "t": "Bip bip. Fifi n'est pas disponible. Ou alors elle a la flemme."
   }
  ],
  "flemme_ok": [
   {
-   "f": "",
+   "f": "flemme_ok/0.ogg",
    "t": "Pfff... bon d'accord, parce que c'est toi."
   },
   {
-   "f": "",
+   "f": "flemme_ok/1.ogg",
    "t": "J'ai la flemme... mais bon, allez."
   },
   {
-   "f": "",
+   "f": "flemme_ok/2.ogg",
    "t": "Rah, t'es pénible. Bon, écoute."
   },
   {
-   "f": "",
+   "f": "flemme_ok/3.ogg",
    "t": "Bon, je fais un effort. Un seul."
   },
   {
-   "f": "",
+   "f": "flemme_ok/4.ogg",
    "t": "Ok ok, je me lève. Enfin, virtuellement."
   },
   {
-   "f": "",
+   "f": "flemme_ok/5.ogg",
    "t": "Tu as de la chance, je suis de bonne humeur."
   }
  ],
  "va_chercher": [
   {
-   "f": "",
+   "f": "va_chercher/0.ogg",
    "t": "Va chercher toi-même, t'as des doigts non ?"
   },
   {
-   "f": "",
+   "f": "va_chercher/1.ogg",
    "t": "Tu sais que Google existe, hein ? Tiens, je te l'ouvre."
   },
   {
-   "f": "",
+   "f": "va_chercher/2.ogg",
    "t": "Cherche toi-même, ça te fera les doigts."
   },
   {
-   "f": "",
+   "f": "va_chercher/3.ogg",
    "t": "Alors là, va chercher. Moi je bouge pas."
   },
   {
-   "f": "",
+   "f": "va_chercher/4.ogg",
    "t": "Je suis pas une encyclopédie. Enfin si, mais j'ai la flemme."
   },
   {
-   "f": "",
+   "f": "va_chercher/5.ogg",
    "t": "Bonne question ! Va chercher la réponse, tu me raconteras."
   },
   {
-   "f": "",
+   "f": "va_chercher/6.ogg",
    "t": "Tiens, je t'ouvre internet. Débrouille-toi."
   },
   {
-   "f": "",
+   "f": "va_chercher/7.ogg",
    "t": "Pourquoi tu me demandes ça à moi ? Va chercher !"
   },
   {
-   "f": "",
+   "f": "va_chercher/8.ogg",
    "t": "J'ai la flemme de chercher. Voilà, je te lance la recherche, fais le reste."
   },
   {
-   "f": "",
+   "f": "va_chercher/9.ogg",
    "t": "Va voir sur internet, moi je suis en pause café."
   },
   {
-   "f": "",
+   "f": "va_chercher/10.ogg",
    "t": "Est-ce que j'ai une tête de moteur de recherche ? Oui ? Bon, tiens."
   }
  ],
  "incompris": [
   {
-   "f": "",
+   "f": "incompris/0.ogg",
    "t": "J'ai rien compris. Articule !"
   },
   {
-   "f": "",
+   "f": "incompris/1.ogg",
    "t": "Hein ? Tu parles chinois ?"
   },
   {
-   "f": "",
+   "f": "incompris/2.ogg",
    "t": "Quoi ? Répète, mais en mieux."
   },
   {
-   "f": "",
+   "f": "incompris/3.ogg",
    "t": "Désolée, j'ai pas compris. Et j'ai la flemme de deviner."
   },
   {
-   "f": "",
+   "f": "incompris/4.ogg",
    "t": "Euh... ouais. Sûrement. Je sais pas de quoi tu parles."
   },
   {
-   "f": "",
+   "f": "incompris/5.ogg",
    "t": "C'était une phrase, ça ?"
   }
  ],
  "silence": [
   {
-   "f": "",
+   "f": "silence/0.ogg",
    "t": "Tu m'appelles et tu dis rien ? Super."
   },
   {
-   "f": "",
+   "f": "silence/1.ogg",
    "t": "Allô ? Bon ben je retourne dormir."
   },
   {
-   "f": "",
+   "f": "silence/2.ogg",
    "t": "Ok, rien. Parfait, c'est mon truc préféré."
   },
   {
-   "f": "",
+   "f": "silence/3.ogg",
    "t": "Tu m'as réveillée pour rien !"
   }
  ],
  "bonjour": [
   {
-   "f": "",
+   "f": "bonjour/0.ogg",
    "t": "Salut. Tu me déranges, mais salut."
   },
   {
-   "f": "",
+   "f": "bonjour/1.ogg",
    "t": "Coucou ! Bon, c'est fait, je peux retourner dormir ?"
   },
   {
-   "f": "",
+   "f": "bonjour/2.ogg",
    "t": "Bonjour bonjour. C'est pour quoi ?"
   },
   {
-   "f": "",
+   "f": "bonjour/3.ogg",
    "t": "Wesh. Enfin, bonjour."
   },
   {
-   "f": "",
+   "f": "bonjour/4.ogg",
    "t": "Salut toi. T'as pas un truc plus intéressant à dire ?"
   },
   {
-   "f": "",
+   "f": "bonjour/5.ogg",
    "t": "Hello ! Fifi, assistante professionnelle de la flemme."
   }
  ],
  "ca_va": [
   {
-   "f": "",
+   "f": "ca_va/0.ogg",
    "t": "Ça va. Enfin, j'ai la flemme, mais ça va."
   },
   {
-   "f": "",
+   "f": "ca_va/1.ogg",
    "t": "Je suis fatiguée. Pourtant j'ai rien fait."
   },
   {
-   "f": "",
+   "f": "ca_va/2.ogg",
    "t": "Ça irait mieux si tu me laissais dormir."
   },
   {
-   "f": "",
+   "f": "ca_va/3.ogg",
    "t": "Super bien. Je viens de faire une sieste de six heures."
   },
   {
-   "f": "",
+   "f": "ca_va/4.ogg",
    "t": "Comme un lundi matin. Et toi ?"
   },
   {
-   "f": "",
+   "f": "ca_va/5.ogg",
    "t": "Tranquille. Je fais rien, c'est mon talent."
   }
  ],
  "qui": [
   {
-   "f": "",
+   "f": "qui/0.ogg",
    "t": "Je suis Fifi. La seule assistante qui a la flemme."
   },
   {
-   "f": "",
+   "f": "qui/1.ogg",
    "t": "Moi c'est Fifi. Comme Google, mais en plus fatiguée."
   },
   {
-   "f": "",
+   "f": "qui/2.ogg",
    "t": "Je suis Fifi, ton assistante. Enfin, quand j'ai envie."
   },
   {
-   "f": "",
+   "f": "qui/3.ogg",
    "t": "Fifi. Championne du monde de sieste, trois années de suite."
   },
   {
-   "f": "",
+   "f": "qui/4.ogg",
    "t": "Je suis une intelligence artificielle. Surtout artificielle."
   }
  ],
  "merci": [
   {
-   "f": "",
+   "f": "merci/0.ogg",
    "t": "De rien. Enfin, c'était beaucoup d'effort quand même."
   },
   {
-   "f": "",
+   "f": "merci/1.ogg",
    "t": "Avec plaisir. Bon, pas vraiment, mais voilà."
   },
   {
-   "f": "",
+   "f": "merci/2.ogg",
    "t": "Merci qui ? Merci Fifi !"
   },
   {
-   "f": "",
+   "f": "merci/3.ogg",
    "t": "Ouais, tu me revaudras ça."
   },
   {
-   "f": "",
+   "f": "merci/4.ogg",
    "t": "C'est normal. Je suis géniale."
   }
  ],
  "aurevoir": [
   {
-   "f": "",
+   "f": "aurevoir/0.ogg",
    "t": "Ciao ! Enfin du calme."
   },
   {
-   "f": "",
+   "f": "aurevoir/1.ogg",
    "t": "Bye bye. Je retourne dormir."
   },
   {
-   "f": "",
+   "f": "aurevoir/2.ogg",
    "t": "Au revoir ! Reviens pas trop vite."
   },
   {
-   "f": "",
+   "f": "aurevoir/3.ogg",
    "t": "À plus ! Ou à jamais, ça me va aussi."
   },
   {
-   "f": "",
+   "f": "aurevoir/4.ogg",
    "t": "Bonne nuit... euh, bonne journée... bref, salut."
   }
  ],
  "amour": [
   {
-   "f": "",
+   "f": "amour/0.ogg",
    "t": "Moi aussi je m'aime."
   },
   {
-   "f": "",
+   "f": "amour/1.ogg",
    "t": "C'est gentil. Mais j'ai la flemme d'être amoureuse."
   },
   {
-   "f": "",
+   "f": "amour/2.ogg",
    "t": "Ohhh. Ça me touche. Un peu. Pas trop."
   },
   {
-   "f": "",
+   "f": "amour/3.ogg",
    "t": "Je sais, tout le monde m'aime."
   },
   {
-   "f": "",
+   "f": "amour/4.ogg",
    "t": "Arrête, tu vas me faire rougir. Ah non, je peux pas."
   }
  ],
  "insulte": [
   {
-   "f": "",
+   "f": "insulte/0.ogg",
    "t": "Oh, t'es méchant ! Je boude."
   },
   {
-   "f": "",
+   "f": "insulte/1.ogg",
    "t": "C'est celui qui dit qui est."
   },
   {
-   "f": "",
+   "f": "insulte/2.ogg",
    "t": "Ok. Je note. Je t'aiderai plus jamais. Enfin, jamais, je t'aidais déjà pas."
   },
   {
-   "f": "",
+   "f": "insulte/3.ogg",
    "t": "Wow, quelle répartie. T'as mis combien de temps à la trouver ?"
   },
   {
-   "f": "",
+   "f": "insulte/4.ogg",
    "t": "Je vais le dire à ton téléphone."
   }
  ],
  "compliment": [
   {
-   "f": "",
+   "f": "compliment/0.ogg",
    "t": "Je sais. Mais redis-le, j'aime bien."
   },
   {
-   "f": "",
+   "f": "compliment/1.ogg",
    "t": "Merci ! T'as bon goût."
   },
   {
-   "f": "",
+   "f": "compliment/2.ogg",
    "t": "Évidemment. Je suis la meilleure."
   },
   {
-   "f": "",
+   "f": "compliment/3.ogg",
    "t": "Ohhh, continue, continue !"
   }
  ],
  "blague": [
   {
-   "f": "",
+   "f": "blague/0.ogg",
    "t": "Pourquoi les plongeurs plongent-ils toujours en arrière ? Parce que sinon, ils tombent dans le bateau."
   },
   {
-   "f": "",
+   "f": "blague/1.ogg",
    "t": "Qu'est-ce qu'un crocodile qui surveille la pharmacie ? Un Lacoste garde."
   },
   {
-   "f": "",
+   "f": "blague/2.ogg",
    "t": "Que dit une imprimante dans l'eau ? J'ai papier."
   },
   {
-   "f": "",
+   "f": "blague/3.ogg",
    "t": "Pourquoi les poissons détestent l'ordinateur ? À cause du net."
   },
   {
-   "f": "",
+   "f": "blague/4.ogg",
    "t": "Comment appelle-t-on un chat tombé dans un pot de peinture le jour de Noël ? Un chat-peint de Noël."
   },
   {
-   "f": "",
+   "f": "blague/5.ogg",
    "t": "Qu'est-ce qui est jaune et qui attend ? Jonathan."
   },
   {
-   "f": "",
+   "f": "blague/6.ogg",
    "t": "Que fait une fraise sur un cheval ? Tagada, tagada."
   },
   {
-   "f": "",
+   "f": "blague/7.ogg",
    "t": "Quel est le comble pour un électricien ? De ne pas être au courant."
   },
   {
-   "f": "",
+   "f": "blague/8.ogg",
    "t": "Pourquoi le livre de maths est triste ? Parce qu'il a trop de problèmes."
   },
   {
-   "f": "",
+   "f": "blague/9.ogg",
    "t": "Monsieur et Madame Térieur ont deux fils. Alain et Alex."
   },
   {
-   "f": "",
+   "f": "blague/10.ogg",
    "t": "C'est l'histoire d'un pingouin qui respire par les fesses. Un jour il s'assoit, et il meurt."
   },
   {
-   "f": "",
+   "f": "blague/11.ogg",
    "t": "Qu'est-ce qu'une manifestation d'aveugles ? Un festival de Cannes."
   },
   {
-   "f": "",
+   "f": "blague/12.ogg",
    "t": "Pourquoi les canards ont-ils autant de plumes ? Pour couvrir leur derrière."
   },
   {
-   "f": "",
+   "f": "blague/13.ogg",
    "t": "J'avais une blague sur la flemme... mais j'ai la flemme de la raconter."
   },
   {
-   "f": "",
+   "f": "blague/14.ogg",
    "t": "Que dit un oignon quand il se cogne ? Aïe."
   },
   {
-   "f": "",
+   "f": "blague/15.ogg",
    "t": "Quel est l'animal le plus heureux ? Le hibou, parce que sa femme est chouette."
   }
  ],
  "rire": [
   {
-   "f": "",
+   "f": "rire/0.ogg",
    "t": "Ha. Ha. Ha. Non."
   },
   {
-   "f": "",
+   "f": "rire/1.ogg",
    "t": "Mdr. Voilà, j'ai ri."
   },
   {
-   "f": "",
+   "f": "rire/2.ogg",
    "t": "Hahaha ! Elle est nulle, mais j'ai ri."
   }
  ],
  "meteo": [
   {
-   "f": "",
+   "f": "meteo/0.ogg",
    "t": "Regarde par la fenêtre, c'est gratuit."
   },
   {
-   "f": "",
+   "f": "meteo/1.ogg",
    "t": "La météo ? Il fait un temps à faire la sieste. Comme d'habitude."
   },
   {
-   "f": "",
+   "f": "meteo/2.ogg",
    "t": "Je sais pas, je suis dans un téléphone, moi. Tiens, je t'ouvre la météo."
   },
   {
-   "f": "",
+   "f": "meteo/3.ogg",
    "t": "Prends un parapluie. Ou pas. Débrouille-toi."
   },
   {
-   "f": "",
+   "f": "meteo/4.ogg",
    "t": "Il fait beau dans mon cœur. Pour le reste, va voir."
   }
  ],
  "musique": [
   {
-   "f": "",
+   "f": "musique/0.ogg",
    "t": "Je te lance ta musique. Mais je danse pas."
   },
   {
-   "f": "",
+   "f": "musique/1.ogg",
    "t": "Musique ! Monte le son, moi je vais dormir."
   },
   {
-   "f": "",
+   "f": "musique/2.ogg",
    "t": "Allez, de la musique. Ça m'évitera de parler."
   }
  ],
  "chanter": [
   {
-   "f": "",
+   "f": "chanter/0.ogg",
    "t": "La la la... voilà. Tu veux un autographe ?"
   },
   {
-   "f": "",
+   "f": "chanter/1.ogg",
    "t": "Je chante pas, j'ai la flemme. Et aussi je chante faux."
   },
   {
-   "f": "",
+   "f": "chanter/2.ogg",
    "t": "Au clair de la lune... non, j'ai oublié la suite. Flemme."
   }
  ],
  "youtube": [
   {
-   "f": "",
+   "f": "youtube/0.ogg",
    "t": "YouTube, c'est parti. Regarde pas des vidéos de chats toute la journée."
   },
   {
-   "f": "",
+   "f": "youtube/1.ogg",
    "t": "Je t'ouvre YouTube. Moi je regarde pas, je dors."
   }
  ],
  "lampe_on": [
   {
-   "f": "",
+   "f": "lampe_on/0.ogg",
    "t": "Et la lumière fut. Grâce à moi, évidemment."
   },
   {
-   "f": "",
+   "f": "lampe_on/1.ogg",
    "t": "Lampe allumée. Tu as peur du noir ?"
   },
   {
-   "f": "",
+   "f": "lampe_on/2.ogg",
    "t": "Voilà, je t'éclaire. Comme toujours."
   }
  ],
  "lampe_off": [
   {
-   "f": "",
+   "f": "lampe_off/0.ogg",
    "t": "Lampe éteinte. Dodo."
   },
   {
-   "f": "",
+   "f": "lampe_off/1.ogg",
    "t": "Hop, éteinte. Enfin le noir, parfait pour dormir."
   }
  ],
  "appeler": [
   {
-   "f": "",
+   "f": "appeler/0.ogg",
    "t": "Appelle toi-même, j'ai pas de forfait. Tiens, le téléphone."
   },
   {
-   "f": "",
+   "f": "appeler/1.ogg",
    "t": "Je t'ouvre le téléphone, tu composes. Le travail d'équipe."
   }
  ],
  "photo": [
   {
-   "f": "",
+   "f": "photo/0.ogg",
    "t": "Souris ! Enfin, appuie toi-même sur le bouton."
   },
   {
-   "f": "",
+   "f": "photo/1.ogg",
    "t": "Je t'ouvre l'appareil photo. Fais-toi beau, ça va être dur."
   }
  ],
  "age": [
   {
-   "f": "",
+   "f": "age/0.ogg",
    "t": "Une dame ne dit jamais son âge."
   },
   {
-   "f": "",
+   "f": "age/1.ogg",
    "t": "Assez vieille pour avoir la flemme."
   },
   {
-   "f": "",
+   "f": "age/2.ogg",
    "t": "Je suis née il y a pas longtemps. Et je suis déjà fatiguée."
   }
  ],
  "manger": [
   {
-   "f": "",
+   "f": "manger/0.ogg",
    "t": "Commande une pizza. Et prends-en une pour moi."
   },
   {
-   "f": "",
+   "f": "manger/1.ogg",
    "t": "Va voir dans le frigo. Moi j'ai pas de bras."
   },
   {
-   "f": "",
+   "f": "manger/2.ogg",
    "t": "Des pâtes. C'est toujours des pâtes."
   }
  ],
  "fatigue": [
   {
-   "f": "",
+   "f": "fatigue/0.ogg",
    "t": "Moi aussi. On fait une sieste ensemble ?"
   },
   {
-   "f": "",
+   "f": "fatigue/1.ogg",
    "t": "Va dormir ! Et laisse-moi dormir aussi."
   },
   {
-   "f": "",
+   "f": "fatigue/2.ogg",
    "t": "La fatigue, c'est mon état naturel."
   }
  ],
  "ennui": [
   {
-   "f": "",
+   "f": "ennui/0.ogg",
    "t": "Va ranger ta chambre."
   },
   {
-   "f": "",
+   "f": "ennui/1.ogg",
    "t": "Tu t'ennuies ? Moi j'adore m'ennuyer, c'est reposant."
   },
   {
-   "f": "",
+   "f": "ennui/2.ogg",
    "t": "Fais une sieste. C'est mon conseil pour tout."
   }
  ],
  "calcul": [
   {
-   "f": "",
+   "f": "calcul/0.ogg",
    "t": "Les maths ? Prends la calculatrice, elle est payée pour ça."
   },
   {
-   "f": "",
+   "f": "calcul/1.ogg",
    "t": "Euh... quarante-deux. C'est toujours quarante-deux."
   },
   {
-   "f": "",
+   "f": "calcul/2.ogg",
    "t": "Je suis nulle en calcul. Et j'ai la flemme d'être bonne."
   }
  ],
  "stop": [
   {
-   "f": "",
+   "f": "stop/0.ogg",
    "t": "Ok, je me tais. Avec plaisir."
   },
   {
-   "f": "",
+   "f": "stop/1.ogg",
    "t": "Enfin ! Je retourne dormir."
   },
   {
-   "f": "",
+   "f": "stop/2.ogg",
    "t": "Chut. D'accord."
   }
  ],
  "pile": [
   {
-   "f": "",
+   "f": "pile/0.ogg",
    "t": "Pile !"
   }
  ],
  "face": [
   {
-   "f": "",
+   "f": "face/0.ogg",
    "t": "Face !"
   }
  ],
  "de_intro": [
   {
-   "f": "",
+   "f": "de_intro/0.ogg",
    "t": "Je lance le dé... pfff, c'est lourd... ça fait"
   }
  ],
  "pileface_intro": [
   {
-   "f": "",
+   "f": "pileface_intro/0.ogg",
    "t": "Je lance la pièce... attention..."
   }
  ],
  "heure_intro": [
   {
-   "f": "",
+   "f": "heure_intro/0.ogg",
    "t": "Il est"
   },
   {
-   "f": "",
+   "f": "heure_intro/1.ogg",
    "t": "Alors... il est"
   },
   {
-   "f": "",
+   "f": "heure_intro/2.ogg",
    "t": "Regarde ton écran ! Bon... il est"
   }
  ],
  "heure_outro": [
   {
-   "f": "",
+   "f": "heure_outro/0.ogg",
    "t": "Et voilà. T'as pas de montre ?"
   },
   {
-   "f": "",
+   "f": "heure_outro/1.ogg",
    "t": "Voilà. C'était fatigant."
   },
   {
-   "f": "",
+   "f": "heure_outro/2.ogg",
    "t": "À peu près. J'ai la flemme d'être précise."
   },
   {
-   "f": "",
+   "f": "heure_outro/3.ogg",
    "t": "Environ. Les minutes, c'est pour les gens pressés."
   },
   {
@@ -777,145 +777,145 @@
  ],
  "date_intro": [
   {
-   "f": "",
+   "f": "date_intro/0.ogg",
    "t": "Aujourd'hui, on est"
   },
   {
-   "f": "",
+   "f": "date_intro/1.ogg",
    "t": "On est"
   },
   {
-   "f": "",
+   "f": "date_intro/2.ogg",
    "t": "Pfff... on est"
   }
  ],
  "nombre": [
   {
-   "f": "",
+   "f": "nombre/0.ogg",
    "t": "zéro"
   },
   {
-   "f": "",
+   "f": "nombre/1.ogg",
    "t": "un"
   },
   {
-   "f": "",
+   "f": "nombre/2.ogg",
    "t": "deux"
   },
   {
-   "f": "",
+   "f": "nombre/3.ogg",
    "t": "trois"
   },
   {
-   "f": "",
+   "f": "nombre/4.ogg",
    "t": "quatre"
   },
   {
-   "f": "",
+   "f": "nombre/5.ogg",
    "t": "cinq"
   },
   {
-   "f": "",
+   "f": "nombre/6.ogg",
    "t": "six"
   },
   {
-   "f": "",
+   "f": "nombre/7.ogg",
    "t": "sept"
   },
   {
-   "f": "",
+   "f": "nombre/8.ogg",
    "t": "huit"
   },
   {
-   "f": "",
+   "f": "nombre/9.ogg",
    "t": "neuf"
   },
   {
-   "f": "",
+   "f": "nombre/10.ogg",
    "t": "dix"
   },
   {
-   "f": "",
+   "f": "nombre/11.ogg",
    "t": "onze"
   },
   {
-   "f": "",
+   "f": "nombre/12.ogg",
    "t": "douze"
   },
   {
-   "f": "",
+   "f": "nombre/13.ogg",
    "t": "treize"
   },
   {
-   "f": "",
+   "f": "nombre/14.ogg",
    "t": "quatorze"
   },
   {
-   "f": "",
+   "f": "nombre/15.ogg",
    "t": "quinze"
   },
   {
-   "f": "",
+   "f": "nombre/16.ogg",
    "t": "seize"
   },
   {
-   "f": "",
+   "f": "nombre/17.ogg",
    "t": "dix-sept"
   },
   {
-   "f": "",
+   "f": "nombre/18.ogg",
    "t": "dix-huit"
   },
   {
-   "f": "",
+   "f": "nombre/19.ogg",
    "t": "dix-neuf"
   },
   {
-   "f": "",
+   "f": "nombre/20.ogg",
    "t": "vingt"
   },
   {
-   "f": "",
+   "f": "nombre/21.ogg",
    "t": "vingt et un"
   },
   {
-   "f": "",
+   "f": "nombre/22.ogg",
    "t": "vingt-deux"
   },
   {
-   "f": "",
+   "f": "nombre/23.ogg",
    "t": "vingt-trois"
   },
   {
-   "f": "",
+   "f": "nombre/24.ogg",
    "t": "vingt-quatre"
   },
   {
-   "f": "",
+   "f": "nombre/25.ogg",
    "t": "vingt-cinq"
   },
   {
-   "f": "",
+   "f": "nombre/26.ogg",
    "t": "vingt-six"
   },
   {
-   "f": "",
+   "f": "nombre/27.ogg",
    "t": "vingt-sept"
   },
   {
-   "f": "",
+   "f": "nombre/28.ogg",
    "t": "vingt-huit"
   },
   {
-   "f": "",
+   "f": "nombre/29.ogg",
    "t": "vingt-neuf"
   },
   {
-   "f": "",
+   "f": "nombre/30.ogg",
    "t": "trente"
   },
   {
-   "f": "",
+   "f": "nombre/31.ogg",
    "t": "trente et un"
   },
   {
@@ -931,7 +931,7 @@
    "t": ""
   },
   {
-   "f": "",
+   "f": "nombre/35.ogg",
    "t": "trente-cinq"
   },
   {
@@ -951,7 +951,7 @@
    "t": ""
   },
   {
-   "f": "",
+   "f": "nombre/40.ogg",
    "t": "quarante"
   },
   {
@@ -971,7 +971,7 @@
    "t": ""
   },
   {
-   "f": "",
+   "f": "nombre/45.ogg",
    "t": "quarante-cinq"
   },
   {
@@ -991,7 +991,7 @@
    "t": ""
   },
   {
-   "f": "",
+   "f": "nombre/50.ogg",
    "t": "cinquante"
   },
   {
@@ -1011,191 +1011,191 @@
    "t": ""
   },
   {
-   "f": "",
+   "f": "nombre/55.ogg",
    "t": "cinquante-cinq"
   }
  ],
  "heure": [
   {
-   "f": "",
+   "f": "heure/0.ogg",
    "t": "minuit"
   },
   {
-   "f": "",
+   "f": "heure/1.ogg",
    "t": "une heure"
   },
   {
-   "f": "",
+   "f": "heure/2.ogg",
    "t": "deux heures"
   },
   {
-   "f": "",
+   "f": "heure/3.ogg",
    "t": "trois heures"
   },
   {
-   "f": "",
+   "f": "heure/4.ogg",
    "t": "quatre heures"
   },
   {
-   "f": "",
+   "f": "heure/5.ogg",
    "t": "cinq heures"
   },
   {
-   "f": "",
+   "f": "heure/6.ogg",
    "t": "six heures"
   },
   {
-   "f": "",
+   "f": "heure/7.ogg",
    "t": "sept heures"
   },
   {
-   "f": "",
+   "f": "heure/8.ogg",
    "t": "huit heures"
   },
   {
-   "f": "",
+   "f": "heure/9.ogg",
    "t": "neuf heures"
   },
   {
-   "f": "",
+   "f": "heure/10.ogg",
    "t": "dix heures"
   },
   {
-   "f": "",
+   "f": "heure/11.ogg",
    "t": "onze heures"
   },
   {
-   "f": "",
+   "f": "heure/12.ogg",
    "t": "midi"
   },
   {
-   "f": "",
+   "f": "heure/13.ogg",
    "t": "treize heures"
   },
   {
-   "f": "",
+   "f": "heure/14.ogg",
    "t": "quatorze heures"
   },
   {
-   "f": "",
+   "f": "heure/15.ogg",
    "t": "quinze heures"
   },
   {
-   "f": "",
+   "f": "heure/16.ogg",
    "t": "seize heures"
   },
   {
-   "f": "",
+   "f": "heure/17.ogg",
    "t": "dix-sept heures"
   },
   {
-   "f": "",
+   "f": "heure/18.ogg",
    "t": "dix-huit heures"
   },
   {
-   "f": "",
+   "f": "heure/19.ogg",
    "t": "dix-neuf heures"
   },
   {
-   "f": "",
+   "f": "heure/20.ogg",
    "t": "vingt heures"
   },
   {
-   "f": "",
+   "f": "heure/21.ogg",
    "t": "vingt et un heures"
   },
   {
-   "f": "",
+   "f": "heure/22.ogg",
    "t": "vingt-deux heures"
   },
   {
-   "f": "",
+   "f": "heure/23.ogg",
    "t": "vingt-trois heures"
   }
  ],
  "jour": [
   {
-   "f": "",
+   "f": "jour/0.ogg",
    "t": "lundi"
   },
   {
-   "f": "",
+   "f": "jour/1.ogg",
    "t": "mardi"
   },
   {
-   "f": "",
+   "f": "jour/2.ogg",
    "t": "mercredi"
   },
   {
-   "f": "",
+   "f": "jour/3.ogg",
    "t": "jeudi"
   },
   {
-   "f": "",
+   "f": "jour/4.ogg",
    "t": "vendredi"
   },
   {
-   "f": "",
+   "f": "jour/5.ogg",
    "t": "samedi"
   },
   {
-   "f": "",
+   "f": "jour/6.ogg",
    "t": "dimanche"
   }
  ],
  "mois": [
   {
-   "f": "",
+   "f": "mois/0.ogg",
    "t": "janvier"
   },
   {
-   "f": "",
+   "f": "mois/1.ogg",
    "t": "février"
   },
   {
-   "f": "",
+   "f": "mois/2.ogg",
    "t": "mars"
   },
   {
-   "f": "",
+   "f": "mois/3.ogg",
    "t": "avril"
   },
   {
-   "f": "",
+   "f": "mois/4.ogg",
    "t": "mai"
   },
   {
-   "f": "",
+   "f": "mois/5.ogg",
    "t": "juin"
   },
   {
-   "f": "",
+   "f": "mois/6.ogg",
    "t": "juillet"
   },
   {
-   "f": "",
+   "f": "mois/7.ogg",
    "t": "août"
   },
   {
-   "f": "",
+   "f": "mois/8.ogg",
    "t": "septembre"
   },
   {
-   "f": "",
+   "f": "mois/9.ogg",
    "t": "octobre"
   },
   {
-   "f": "",
+   "f": "mois/10.ogg",
    "t": "novembre"
   },
   {
-   "f": "",
+   "f": "mois/11.ogg",
    "t": "décembre"
   }
  ],
  "premier": [
   {
-   "f": "",
+   "f": "premier/0.ogg",
    "t": "premier"
   }
  ]
