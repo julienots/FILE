@@ -432,6 +432,7 @@ void Game::drawHud(float dt) {
     if (player == NullEntity) return;
     if (cine.active) { drawCinematicShots(); return; }   // no HUD during story cinematics
     if (endingChoice) return;                              // 1.12.0 nor under the ending choice
+    if (dialog.open && dlgCamK > 0.3f) return;             // 3.8.0 a conversation is filmed without the HUD
     drawBuildHud();
     drawRaceHud();
     drawCoopHud();

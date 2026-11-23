@@ -93,6 +93,8 @@ enum ClipId {
     C_B_SLAM, C_B_SWIPE, C_B_STOMP, C_B_ROAR, C_B_SPIN, C_B_THROW,
     // 1.9.0 unarmed combo finisher and heavy (Astra fights with her fists)
     C_FIST_A3, C_FIST_HEAVY,
+    // 3.8.0 conversation gestures and idle life
+    C_TALK_WARM, C_TALK_GRAVE, C_TALK_FIRM, C_TALK_WONDER, C_BOW_H, C_NOD, C_IDLE_LOOK, C_IDLE_STRETCH,
     C_COUNT
 };
 // Event ids fired by clips (Animator::firedEvents)

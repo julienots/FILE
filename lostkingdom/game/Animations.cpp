@@ -1068,6 +1068,63 @@ static void humanClips() {
          .key(0.85f, {{H_UARMR, E(-172, 0, -10)}})
          .key(1.0f, {{H_UARMR, E(-30, 0, -15)}, {H_LARMR, E(-50)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}});
     }
+    // ---- 3.8.0 conversation gestures (upper body), one per mood of a line, and two idle animations
+    {   // warm: both palms open toward the listener, a small nod
+        C& c = mk(C_TALK_WARM, "talk_warm", 2.2f);
+        c.key(0.0f, {{H_UARMR, E(-10, 0, -10)}, {H_UARML, E(-10, 0, 10)}, {H_LARMR, E(-20)}, {H_LARML, E(-20)}, {H_HEAD, E(0)}})
+         .key(0.25f, {{H_UARMR, E(-40, 20, -30)}, {H_LARMR, E(-55)}, {H_HANDR, E(0, 60, 0)}, {H_UARML, E(-40, -20, 30)}, {H_LARML, E(-55)}, {H_HANDL, E(0, -60, 0)}, {H_HEAD, E(8, 0, 4)}, {H_CHEST, E(-4)}}, Ease::Out)
+         .key(0.45f, {{H_HEAD, E(-4, 0, 4)}}).key(0.6f, {{H_HEAD, E(7, 0, 3)}})
+         .key(0.75f, {{H_UARMR, E(-35, 15, -25)}, {H_UARML, E(-35, -15, 25)}, {H_HEAD, E(0, 0, 2)}})
+         .key(1.0f, {{H_UARMR, E(-10, 0, -10)}, {H_UARML, E(-10, 0, 10)}, {H_LARMR, E(-20)}, {H_LARML, E(-20)}, {H_HANDR, E(0)}, {H_HANDL, E(0)}, {H_HEAD, E(0)}, {H_CHEST, E(0)}});
+    }
+    {   // grave: the right hand on the heart, the head bowed
+        C& c = mk(C_TALK_GRAVE, "talk_grave", 2.8f);
+        c.key(0.0f, {{H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}, {H_HEAD, E(0)}, {H_CHEST, E(0)}})
+         .key(0.25f, {{H_UARMR, E(-35, 0, 15)}, {H_LARMR, E(-115)}, {H_HANDR, E(10, 0, 0)}, {H_HEAD, E(18, -6, 0)}, {H_CHEST, E(6)}, {H_SPINE, E(4)}}, Ease::Out)
+         .key(0.75f, {{H_UARMR, E(-33, 0, 14)}, {H_LARMR, E(-112)}, {H_HEAD, E(14, 5, 0)}})
+         .key(1.0f, {{H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}, {H_HANDR, E(0)}, {H_HEAD, E(0)}, {H_CHEST, E(0)}, {H_SPINE, E(0)}});
+    }
+    {   // firm: a fist, then a pointing hand toward the listener, the chest up
+        C& c = mk(C_TALK_FIRM, "talk_firm", 1.8f);
+        c.key(0.0f, {{H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}})
+         .key(0.2f, {{H_UARMR, E(-55, 0, -20)}, {H_LARMR, E(-95)}, {H_HANDR, E(20)}, {H_CHEST, E(-8)}, {H_HEAD, E(-6)}}, Ease::Out)
+         .key(0.4f, {{H_UARMR, E(-80, 10, -12)}, {H_LARMR, E(-15)}, {H_HANDR, E(0)}, {H_CHEST, E(-10, 0, 0)}, {H_SPINE, E(6)}}, Ease::OutBack)
+         .key(0.7f, {{H_UARMR, E(-76, 8, -12)}, {H_LARMR, E(-18)}})
+         .key(1.0f, {{H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}, {H_HANDR, E(0)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}, {H_SPINE, E(0)}});
+    }
+    {   // wonder: arms opening slowly, the head lifted
+        C& c = mk(C_TALK_WONDER, "talk_wonder", 2.4f);
+        c.key(0.0f, {{H_UARMR, E(-10, 0, -10)}, {H_UARML, E(-10, 0, 10)}, {H_LARMR, E(-20)}, {H_LARML, E(-20)}, {H_HEAD, E(0)}})
+         .key(0.35f, {{H_UARMR, E(-55, 0, -55)}, {H_LARMR, E(-30)}, {H_HANDR, E(0, 50, 0)}, {H_UARML, E(-55, 0, 55)}, {H_LARML, E(-30)}, {H_HANDL, E(0, -50, 0)}, {H_HEAD, E(-14, 0, 0)}, {H_CHEST, E(-8)}}, Ease::Out)
+         .key(0.7f, {{H_UARMR, E(-50, 0, -50)}, {H_UARML, E(-50, 0, 50)}, {H_HEAD, E(-10, 6, 0)}})
+         .key(1.0f, {{H_UARMR, E(-10, 0, -10)}, {H_UARML, E(-10, 0, 10)}, {H_LARMR, E(-20)}, {H_LARML, E(-20)}, {H_HANDR, E(0)}, {H_HANDL, E(0)}, {H_HEAD, E(0)}, {H_CHEST, E(0)}});
+    }
+    {   // a courteous bow
+        C& c = mk(C_BOW_H, "bow_h", 1.8f);
+        c.key(0.0f, {{H_SPINE, E(0)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}, {H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}})
+         .key(0.35f, {{H_SPINE, E(26)}, {H_CHEST, E(10)}, {H_HEAD, E(12)}, {H_UARMR, E(-30, 0, 20)}, {H_LARMR, E(-105)}}, Ease::Out)
+         .key(0.65f, {{H_SPINE, E(24)}, {H_CHEST, E(9)}, {H_HEAD, E(10)}})
+         .key(1.0f, {{H_SPINE, E(0)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}, {H_UARMR, E(-10, 0, -10)}, {H_LARMR, E(-20)}});
+    }
+    {   // listening: two nods
+        C& c = mk(C_NOD, "nod", 1.3f);
+        c.key(0.0f, {{H_HEAD, E(0)}}).key(0.2f, {{H_HEAD, E(14)}}).key(0.4f, {{H_HEAD, E(-2)}}).key(0.6f, {{H_HEAD, E(11)}}).key(1.0f, {{H_HEAD, E(0)}});
+    }
+    {   // idle: a look around
+        C& c = mk(C_IDLE_LOOK, "idle_look", 3.6f);
+        c.key(0.0f, {{H_HEAD, E(0)}, {H_CHEST, E(0)}})
+         .key(0.25f, {{H_HEAD, E(-4, 50, 0)}, {H_CHEST, E(0, 14, 0)}})
+         .key(0.45f, {{H_HEAD, E(-6, 48, 0)}, {H_CHEST, E(0, 12, 0)}})
+         .key(0.7f, {{H_HEAD, E(2, -45, 0)}, {H_CHEST, E(0, -12, 0)}})
+         .key(1.0f, {{H_HEAD, E(0)}, {H_CHEST, E(0)}});
+    }
+    {   // idle: a stretch, arms up and the back arched
+        C& c = mk(C_IDLE_STRETCH, "idle_stretch", 3.0f);
+        c.key(0.0f, {{H_UARML, E(-10, 0, 10)}, {H_UARMR, E(-10, 0, -10)}, {H_LARML, E(-20)}, {H_LARMR, E(-20)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}})
+         .key(0.35f, {{H_UARML, E(-170, 0, 15)}, {H_UARMR, E(-170, 0, -15)}, {H_LARML, E(-60)}, {H_LARMR, E(-60)}, {H_CHEST, E(-14)}, {H_HEAD, E(-22)}, {H_SPINE, E(-6)}})
+         .key(0.6f, {{H_UARML, E(-165, 0, 25)}, {H_UARMR, E(-165, 0, -25)}, {H_CHEST, E(-12, 0, 6)}, {H_HEAD, E(-18, 0, 8)}})
+         .key(1.0f, {{H_UARML, E(-10, 0, 10)}, {H_UARMR, E(-10, 0, -10)}, {H_LARML, E(-20)}, {H_LARMR, E(-20)}, {H_CHEST, E(0)}, {H_HEAD, E(0)}, {H_SPINE, E(0)}});
+    }
 }
 
 static void quadClips() {

@@ -243,7 +243,16 @@ struct DialogState {
     struct Choice { std::string text, action; };
     std::vector<Choice> choices;
     std::string speaker, title;
+    // 3.8.0 scripted conversations: who says each line ('N' the person, 'H' the hero) and the mood of it
+    std::vector<char> who;
+    std::vector<uint8_t> mood;
+    int shownLine = -1;          // the line whose gesture / voice has started
+    float blip = 0, openT = 0;   // voice blips, time since opened (letterbox)
+    char whoAt(int i) const { return i >= 0 && i < (int)who.size() ? who[i] : 'N'; }
+    int moodAt(int i) const { return i >= 0 && i < (int)mood.size() ? mood[i] : 0; }
 };
+struct ConvLine { char who; const char* text; int mood; };
+const std::vector<ConvLine>* conversation(const std::string& key);
 
 struct Input {
     vec2 move;
@@ -577,6 +586,14 @@ public:
     std::shared_ptr<Mesh> fishMesh; std::vector<InstanceData> fishInst;
     std::map<std::string, vec4> iconUV;      // 3D-rendered item icons (uv rect in iconRT)
     RenderTarget portraitRT; int portraitNpc = -2;
+    RenderTarget portraitLiveRT[2];   // 3.8.0 the speaking faces, rendered live from the characters
+    std::map<std::string, std::string> convQueue;   // npc id -> conversation to play at the next talk (quest endings)
+    float dlgCamK = 0; vec3 dlgEye, dlgLook; bool dlgCamInit = false;
+    float heroIdleT = 0;
+    void playConversation(const std::string& key, bool prepend);
+    void dialogLineStart();
+    void updateDialogScene(float dt);
+    bool renderLivePortrait(RenderTarget& rt, Entity e);
 
     // ---- camera ---------------------------------------------------------------------------------
     Camera cam;

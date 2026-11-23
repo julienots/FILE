@@ -141,6 +141,33 @@ void Game::updateCamera(float dt) {
         look = eye + fpFwd;
         fpEye = eye;
     }
+    // 3.8.0 conversations are filmed: an over-the-shoulder two-shot, on the side of whoever listens, that glides
+    // in from the gameplay camera and swaps gently with the speaker
+    {
+        Character* npc = (dialog.open && reg.valid(dialog.ent) && player != NullEntity) ? reg.get<Character>(dialog.ent) : nullptr;
+        bool want = npc && !cine.active && cinematicT <= 0 && driving < 0 && !riding && distXZ(npc->pos, pc().pos) < 6.f;
+        dlgCamK = damp(dlgCamK, want ? 1.f : 0.f, want ? 2.6f : 4.f, dt);
+        if (want) {
+            Character& p = pc();
+            bool heroTalks = dialog.whoAt(dialog.line) == 'H';
+            vec3 hp = p.pos + vec3(0, 1.62f * p.vis.scale, 0), np = npc->pos + vec3(0, npc->height * 0.9f, 0);
+            vec3 spk = heroTalks ? hp : np, lis = heroTalks ? np : hp;
+            vec3 d = spk - lis; d.y = 0;
+            float L = std::max(0.6f, length(d)); d = d / L;
+            vec3 side = normalize(cross(vec3(0, 1, 0), d));
+            float sd = heroTalks ? -1.f : 1.f;   // stay on the same side of the line of action (180° rule)
+            vec3 e2 = lis - d * 1.5f + side * sd * 1.05f + vec3(0, 0.18f, 0);
+            vec3 l2 = lerp(spk, lis, 0.3f) + side * sd * 0.15f + vec3(0, -0.38f, 0);
+            if (!dungeon.active) e2.y = std::max(e2.y, world.height(e2.x, e2.z) + 0.5f);
+            if (!dlgCamInit) { dlgEye = e2; dlgLook = l2; dlgCamInit = true; }
+            dlgEye = lerp(dlgEye, e2, 1.f - std::exp(-3.f * dt));
+            dlgLook = lerp(dlgLook, l2, 1.f - std::exp(-4.f * dt));
+        } else if (dlgCamK < 0.01f) dlgCamInit = false;
+        if (dlgCamK > 0.001f && dlgCamInit) {
+            float k = easeInOut(saturate(dlgCamK));
+            eye = lerp(eye, dlgEye, k); look = lerp(look, dlgLook, k);
+        }
+    }
     float cineFov = 0;
     if (cine.active) {
         vec3 ce, cl;

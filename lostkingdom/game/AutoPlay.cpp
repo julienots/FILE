@@ -2349,6 +2349,36 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "dialogue") {
+        // 3.8.0 the story told in scenes: meet Maëlle (a 7-line conversation, hero lines on the right, gestures,
+        // two-shot camera, live portraits), take m2 (its scripted offer), finish it (its ending scene plays at the
+        // next talk), and the hero's idle life
+        static int res[8]; static Entity mae;
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.f; for (int& r : res) r = 0; g.weather = g.weatherNext = 0;
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 2, b->pos.y + 12, 0.4f); }, idle, "setup"});
+        s.push_back({1.5f, [](Game& g) { mae = NullEntity; g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0 && npcs()[c.npcDef].id == "maelle") mae = e; });
+            if (mae == NullEntity) { AGR_LOG("DIALOGUE no Maelle"); return; }
+            Character& c = *g.reg.get<Character>(mae); teleport(g, c.pos.x + 0.8f, c.pos.z + 2.2f, 0.2f); g.openDialog(mae);
+            res[0] = g.dialog.lines.size() >= 7 && g.dialog.whoAt(1) == 'H'; AGR_LOG("DIALOGUE meet: %zu lines, line 1 by %c", g.dialog.lines.size(), g.dialog.whoAt(1)); }, idle, "meet"});
+        s.push_back({0.1f, [](Game& g) { res[1] = g.dlgCamK > 0.5f && g.portraitLiveRT[0].fbo != 0; AGR_LOG("DIALOGUE camera %.2f live portrait %d", g.dlgCamK, (int)(g.portraitLiveRT[0].fbo != 0)); g.requestScreenshot("build/shots/DL0_meet.png"); }, idle, "shot"});
+        s.push_back({2.0f, [](Game& g) { g.dialog.line = 1; g.dialog.reveal = 0; }, idle, "hero line"});
+        s.push_back({0.1f, [](Game& g) { res[2] = g.portraitLiveRT[1].fbo != 0 && g.pc().vis.anim.action() != nullptr; AGR_LOG("DIALOGUE hero portrait %d hero gesture %s", (int)(g.portraitLiveRT[1].fbo != 0), g.pc().vis.anim.action() ? g.pc().vis.anim.action()->name.c_str() : "-"); g.requestScreenshot("build/shots/DL1_hero.png"); }, idle, "shot"});
+        s.push_back({1.6f, [](Game& g) { g.dialog.line = 3; g.dialog.reveal = 0; }, idle, "wonder"});
+        s.push_back({0.1f, [](Game& g) { Character& c = *g.reg.get<Character>(mae); res[3] = c.vis.anim.action() == &clip(C_TALK_WONDER); AGR_LOG("DIALOGUE Maelle gesture %s", c.vis.anim.action() ? c.vis.anim.action()->name.c_str() : "-"); g.requestScreenshot("build/shots/DL2_wonder.png"); }, idle, "shot"});
+        s.push_back({0.5f, [](Game& g) { g.dialog.line = (int)g.dialog.lines.size() - 1; g.dialog.reveal = 1e9f; }, idle, "last"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/DL3_choices.png"); AGR_LOG("DIALOGUE choices %zu", g.dialog.choices.size()); }, idle, "shot"});
+        // the m2 offer is a scene too
+        s.push_back({0.6f, [](Game& g) { g.questsDone.insert("m1"); g.dialogAction("offer:m2"); res[4] = g.dialog.lines.size() >= 4 && g.dialog.whoAt(2) == 'H'; AGR_LOG("DIALOGUE offer m2: %zu lines", g.dialog.lines.size()); g.dialogAction("accept:m2"); g.dialogAction("close"); }, idle, "offer"});
+        // its ending plays at the next talk with Maëlle
+        s.push_back({0.6f, [](Game& g) { QuestState* q = g.questState("m2"); if (q) g.completeQuest(*q); res[5] = g.convQueue.count("maelle") > 0; g.itemGets.clear(); g.openDialog(mae);
+            res[6] = g.dialog.lines.size() >= 6 && g.convQueue.count("maelle") == 0; AGR_LOG("DIALOGUE done m2 queued %d played %d (%zu lines)", res[5], res[6], g.dialog.lines.size()); g.dialog.line = 2; g.dialog.reveal = 0; }, idle, "done"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/DL4_echo.png"); }, idle, "shot"});
+        // idle life: the hero left alone looks around or stretches
+        s.push_back({11.f, [](Game& g) { g.dialog.open = false; g.cine.active = false; g.pendingChapter.clear(); g.heroIdleT = 0; }, idle, "wait"});
+        s.push_back({0.1f, [](Game& g) { const Clip* a = g.pc().vis.anim.action(); res[7] = a == &clip(C_IDLE_LOOK) || a == &clip(C_IDLE_STRETCH) || g.heroIdleT < 0; AGR_LOG("DIALOGUE idle action %s idleT %.1f", a ? a->name.c_str() : "-", g.heroIdleT); }, idle, "idle"});
+        s.push_back({0.2f, [](Game& g) { bool ok = true; for (int r : res) ok = ok && r; AGR_LOG("DIALOGUE %d%d%d%d%d%d%d%d -> %s", res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], ok ? "DIALOGUE TEST PASSED" : "DIALOGUE TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "birds") {
         // 3.7.0 birds in 3D: swallows over Greenhaven, gulls on the coast, a bird of prey over the Titans
         static int seen[3];
@@ -2817,8 +2847,8 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({2.f, [](Game& g) { for (int& r : res) r = 0; g.ui.recordWidgets = true; const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 2, b->pos.y + 12, 0.4f); g.timeOfDay = 10.f; g.toastHint.clear(); }, idle, "setup"});
         // dialogue: open Maëlle, advance with held taps on the box, then press a choice button
         s.push_back({1.f, [](Game& g) { g.reg.each<Character>([&](Entity e, Character& c) { if (c.npcDef >= 0 && npcs()[c.npcDef].id == "maelle") { teleport(g, c.pos.x, c.pos.z + 2.5f, 0.2f); g.pc().yaw = PI; g.openDialog(e); } }); yaw0 = g.camYaw; }, idle, "talk"});
-        for (int i = 0; i < 6; i++) {
-            s.push_back({0.2f, [](Game& g) { if (!g.dialog.open || g.dialog.line + 1 >= (int)g.dialog.lines.size()) return; float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 480, g.ui.W * 0.4f * k, (g.ui.H - 150) * k}); }, idle, "hold box"});
+        for (int i = 0; i < 18; i++) {
+            s.push_back({0.2f, [](Game& g) { if (!g.dialog.open || g.dialog.line + 1 >= (int)g.dialog.lines.size()) { g.dialog.reveal = std::max(g.dialog.reveal, 1e9f); return; } float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Down, 480, g.ui.W * 0.4f * k, (g.ui.H - 150) * k}); }, idle, "hold box"});
             s.push_back({0.4f, [](Game& g) { for (auto& f : g.ui.fingers) if (f.id == 480 && f.down) { float k = g.ui.scale; g.touch(TouchEvent{TouchEvent::Up, 480, f.x * k, f.y * k}); } }, idle, "release box"});
         }
         s.push_back({0.1f, [](Game& g) { res[0] = g.dialog.open && g.dialog.line + 1 >= (int)g.dialog.lines.size() && !g.dialog.choices.empty(); sig = g.dialog.choices.empty() ? "" : g.dialog.choices[0].action; g.requestScreenshot("build/shots/96_ui_dialog.png"); AGR_LOG("UI dialogue: last line reached %d, %zu choices, first '%s'", res[0], g.dialog.choices.size(), sig.c_str()); }, idle, "dialog end"});

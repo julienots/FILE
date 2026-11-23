@@ -515,7 +515,7 @@ void Game::updateNpc(Entity e, Character& c, NpcBrain& nb, float dt) {
     float hs = length(vec2(c.vel.x, c.vel.z));
     if (hs > 0.2f) c.yaw = dampAngle(c.yaw, std::atan2(c.vel.x, c.vel.z), 6, dt);
     an.speed = hs;
-    if (dialog.open && dialog.ent == e) { c.vel = vec3(0); an.speed = 0; if (!an.action() || an.actionDone()) an.play(&clip(C_TALK), 1.f, true); }
+    if (dialog.open && dialog.ent == e) { c.vel = vec3(0); an.speed = 0; if ((!an.action() || an.actionDone()) && dialog.whoAt(dialog.line) == 'N' && dialog.reveal < 400.f) an.play(&clip(C_TALK), 1.f, true); }   // 3.8.0 listens during the hero's lines
 }
 
 void Game::updateAnimal(Entity e, Character& c, AnimalBrain& ab, float dt) {

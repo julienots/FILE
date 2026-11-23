@@ -268,6 +268,7 @@ void Game::completeQuest(QuestState& s) {
     if (!q.done.empty()) floatText(pc().pos + vec3(0, 2.6f, 0), "Quête terminée !", vec3(1, 0.9f, 0.4f), 26);
     play("quest");
     haptic(60, 150);
+    if (!q.giver.empty() && conversation("done:" + q.id)) convQueue[q.giver] = "done:" + q.id;   // 3.8.0
     if (q.id == "m6") { startQuest("m7"); notify("L'Abîme s'est ouvert au sud de Morneval.", vec3(0.8f, 0.5f, 1.f), "i_waypoint"); }
     // 1.12.0 story chapters at the turning points of the main quest
     if (q.id == "m2") queueChapter("ch_echo");
@@ -441,8 +442,12 @@ void Game::openDialog(Entity ent) {
     talkedTo.insert(n.id);
     dialog.lines.push_back(n.greetings[first ? 0 : (int)(gameTime / 20) % n.greetings.size()]);
     if (env.night > 0.7f && n.role != NpcRole::Innkeeper) dialog.lines[0] = "Il est tard, voyageur… mais je t'écoute.";
+    // 3.8.0 a main character met for the first time tells who they are, in a real conversation
+    if (first && conversation("meet:" + n.id)) { dialog.lines.clear(); playConversation("meet:" + n.id, false); }
     // story beats: talking advances Talk steps
     advanceQuests(StepKind::Talk, n.id);
+    // 3.8.0 the scene of a quest that just ended with this person
+    { auto f = convQueue.find(n.id); if (f != convQueue.end()) { std::string k = f->second; convQueue.erase(f); if (!first) { dialog.lines.clear(); dialog.who.clear(); dialog.mood.clear(); } playConversation(k, false); } }
     // deliveries
     for (auto& s : questLog) {
         if (s.done) continue;
@@ -483,14 +488,17 @@ void Game::dialogAction(const std::string& a) {
     if (a.rfind("offer:", 0) == 0) {
         const QuestDef& q = quests()[questIndex(a.substr(6))];
         dialog.lines = {q.offer.empty() ? q.desc : q.offer};
-        dialog.line = 0; dialog.reveal = 0;
+        dialog.who.clear(); dialog.mood.clear();
+        if (conversation("offer:" + q.id)) { dialog.lines.clear(); playConversation("offer:" + q.id, false); }
+        dialog.line = 0; dialog.reveal = 0; dialog.shownLine = -1;
         setChoices({{"Accepter", "accept:" + q.id}, {"Pas maintenant", "back"}});
         return;
     }
     if (a.rfind("accept:", 0) == 0) {
         startQuest(a.substr(7));
         dialog.lines = {"Que les anciens rois veillent sur toi."};
-        dialog.line = 0; dialog.reveal = 0;
+        dialog.who.clear(); dialog.mood = {1};
+        dialog.line = 0; dialog.reveal = 0; dialog.shownLine = -1;
         setChoices({{"Au revoir", "close"}});
         return;
     }
@@ -508,8 +516,9 @@ void Game::dialogAction(const std::string& a) {
             setChoices({{"Au revoir", "close"}});
             if (!dialog.ent || !reg.valid(dialog.ent)) return;
             Entity e = dialog.ent;
+            bool scene = convQueue.count(q.giver) > 0;
             openDialog(e);
-            dialog.lines.insert(dialog.lines.begin(), q.done.empty() ? "Merci, Errant." : q.done);
+            if (!scene) { dialog.lines.insert(dialog.lines.begin(), q.done.empty() ? "Merci, Errant." : q.done); dialog.who.insert(dialog.who.begin(), 'N'); dialog.mood.insert(dialog.mood.begin(), (uint8_t)1); }
         }
         return;
     }
@@ -519,7 +528,7 @@ void Game::dialogAction(const std::string& a) {
     if (a == "rest") { if (gold >= 20) { gold -= 20; dialog.open = false; restAtInn(); } else { dialog.lines = {"Vingt pièces, pas une de moins."}; dialog.line = 0; dialog.reveal = 0; } return; }
     if (a == "heal") { Character& c = pc(); c.hp = c.maxHp; mp = maxMp; particles.heal(c.pos); play("heal"); dialog.lines = {"Voilà. Que la Lumière te garde."}; dialog.line = 0; dialog.reveal = 0; setChoices({{"Merci", "close"}}); return; }
     // 2.6.0 services of the inhabitants
-    auto say = [&](const std::string& l) { dialog.lines = {l}; dialog.line = 0; dialog.reveal = 0; };
+    auto say = [&](const std::string& l) { dialog.lines = {l}; dialog.who.clear(); dialog.mood.clear(); dialog.line = 0; dialog.reveal = 0; dialog.shownLine = -1; };
     if (a == "dice") {
         if (gold < 10) { say("Pas d'or, pas de dés, l'ami."); return; }
         gold -= 10;
@@ -561,7 +570,7 @@ void Game::dialogAction(const std::string& a) {
     }
     if (a == "lore") {
         const NpcDef& n = npcs()[dialog.npc];
-        dialog.lines = n.lore; dialog.line = 0; dialog.reveal = 0;
+        dialog.lines = n.lore; dialog.who.clear(); dialog.mood.clear(); dialog.line = 0; dialog.reveal = 0; dialog.shownLine = -1;
         setChoices({{"Merci", "back"}});
         return;
     }
@@ -663,6 +672,7 @@ bool Game::saveGame(int slot) {
     for (size_t i = 0; i < vehicles.size(); i++) o << "vehicle " << i << " " << vehicles[i].pos.x << " " << vehicles[i].pos.y << " " << vehicles[i].pos.z << " " << vehicles[i].yaw << "\n";
     o << "hero " << hero().id << "\n";
     for (auto& t : talkedTo) o << "talk " << t << "\n";
+    for (auto& c : convQueue) o << "convq " << c.first << " " << c.second << "\n";   // 3.8.0
     for (auto& d : dungeonsDone) o << "dung " << d << "\n";
     for (auto u : killedUnique) o << "uniq " << u << "\n";
     for (auto u : openedChests) o << "chest " << u << "\n";
@@ -709,7 +719,7 @@ bool Game::loadGame(int slot) {
     nodeEntities.clear(); spawnedChunks.clear(); chunkSpawns.clear(); villageNpcsSpawned.clear();
     inventory.clear(); for (auto& e : equipment) e = ItemStack();
     skills.clear(); knownSpells.clear(); ownedMounts.clear(); questLog.clear(); questsDone.clear(); discovered.clear(); defeatedBosses.clear();
-    bestiary.clear(); loreFound.clear(); talkedTo.clear(); storyFlags.clear(); unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; dungeonsDone.clear(); killedUnique.clear(); openedChests.clear(); world.harvested.clear(); clearedSpawns.clear();
+    bestiary.clear(); loreFound.clear(); talkedTo.clear(); convQueue.clear(); storyFlags.clear(); unlockedHeroes.clear(); activeHero = 0; flying = false; stealthT = 0; dungeonsDone.clear(); killedUnique.clear(); openedChests.clear(); world.harvested.clear(); clearedSpawns.clear();
     fog.assign(128 * 128, 0);
     dye.clear();
     dungeon = DungeonState();
@@ -758,6 +768,7 @@ bool Game::loadGame(int slot) {
         else if (k == "vehicle") { size_t i; vec3 p; float y; l >> i >> p.x >> p.y >> p.z >> y; if (vehicles.empty()) initVehicles(); if (i < vehicles.size() && p.x > 0 && p.x < WORLD_SIZE) { vehicles[i].pos = p; vehicles[i].yaw = y; } }
         else if (k == "hero") { std::string s; l >> s; int hi = heroIndex(s); activeHero = hi >= 0 ? hi : 0; }
         else if (k == "talk") { std::string s; l >> s; talkedTo.insert(s); }
+        else if (k == "convq") { std::string a, b; l >> a >> b; if (conversation(b)) convQueue[a] = b; }
         else if (k == "dung") { std::string s; l >> s; dungeonsDone.insert(s); }
         else if (k == "uniq") { uint32_t u; l >> u; killedUnique.insert(u); }
         else if (k == "chest") { uint32_t u; l >> u; openedChests.insert(u); }

@@ -164,41 +164,116 @@ void Game::renderPortrait(int npc) {
 }
 
 // ============================================================================================ dialogue box
+// 3.8.0 a live close-up of a character in the world (its current pose: the talking gestures show in the frame)
+bool Game::renderLivePortrait(RenderTarget& rt, Entity e) {
+    Character* ch = reg.valid(e) ? reg.get<Character>(e) : nullptr;
+    if (!ch || !ch->vis.mesh || !ch->vis.anim.skeleton || ch->vis.arch != Arch::Humanoid) return false;
+    if (!rt.fbo) rt.create(256, 256, GL_RGBA8, true);
+    Visual& v = ch->vis;
+    computeWorld(*v.anim.skeleton, v.anim.pose, v.pw);
+    vec3 head = v.pw.wpos[H_HEAD] + vec3(0, 0.1f, 0);
+    vec3 chest = v.pw.wpos[H_CHEST];
+    Camera c;
+    c.target = lerp(head, chest, 0.25f); c.pos = c.target + vec3(0.2f, 0.04f, 0.95f); c.fovY = 30 * DEG; c.zNear = 0.05f; c.zFar = 10; c.update(1.f);
+    Environment en; en.sunDir = normalize(vec3(0.5f, 0.6f, 0.7f)); en.sunIntensity = 2.6f; en.sunColor = srgb(0xffe8c8);
+    en.skyAmbient = srgb(0x8a9ac0); en.groundAmbient = srgb(0x5a4030) * 0.7f; en.fogDensity = 0; en.exposure = 1.05f; en.saturation = 1.05f; en.contrast = 1.05f;
+    std::vector<DrawItem> items;
+    DrawItem d; d.mesh = v.mesh.get(); d.flags = LIT_SKINNED | (v.albedo ? LIT_TEXTURED : 0); d.albedo = v.albedo; d.bones = v.pw.skin[0].m; d.boneCount = v.anim.skeleton->size(); d.fx.z = 0.8f;
+    items.push_back(d);
+    renderer.renderToTarget(rt, c, en, items, vec4(0.16f, 0.12f, 0.1f, 1));
+    return true;
+}
+
 void Game::drawDialog() {
     UI& u = ui;
     u.consumeAll();
     float W_ = u.W, H_ = u.H;
-    Rect box{W_ * 0.08f, H_ - 250, W_ * 0.84f, 230};
+    float ot = dialog.openT;
+    auto easeO = [](float x) { x = saturate(x); return 1.f - (1.f - x) * (1.f - x) * (1.f - x); };
+    // cinematic letterbox
+    float lb = H_ * 0.085f * easeO(ot * 2.5f);
+    u.rect({0, 0, W_, lb}, vec4(0, 0, 0, 0.92f));
+    u.rect({0, H_ - lb * 0.35f, W_, lb * 0.35f}, vec4(0, 0, 0, 0.92f));
+    if (dialog.shownLine != dialog.line) dialogLineStart();
+    bool hero = dialog.whoAt(dialog.line) == 'H';
+    float slide = (1.f - easeO(ot * 3.f)) * 80.f;
+    Rect box{W_ * 0.08f, H_ - 250 + slide, W_ * 0.84f, 230};
     u.panel(box, "", true);
-    renderPortrait(dialog.npc);
-    Rect pr{box.x + 22, box.y + 22, 150, 150};
-    u.nine("slot_sel", {pr.x - 6, pr.y - 6, pr.w + 12, pr.h + 12}, vec4(1, 1, 1, 1), 0.6f);
-    if (portraitRT.fbo) u.image(portraitRT.color.id, pr, vec4(0, 1, 1, 0));
-    u.text(dialog.speaker, box.x + 196, box.y + 18, 30, rgba(0x5a2a14), F_SERIF, A_LEFT);
-    u.text(dialog.title, box.x + 196, box.y + 54, 18, rgba(0x7a5a3a), F_BODY, A_LEFT);
+    // the speaking face: the person on the left, the hero on the right
+    Entity spkE = hero ? player : dialog.ent;
+    bool live = renderLivePortrait(portraitLiveRT[hero ? 1 : 0], spkE);
+    if (!live && !hero) renderPortrait(dialog.npc);
+    float px = hero ? box.x + box.w - 172 : box.x + 22;
+    Rect pr{px, box.y + 22, 150, 150};
+    float pop = easeO(dialog.reveal / 12.f);
+    Rect prr = pr.inset(-4.f * (1.f - pop));
+    u.nine("slot_sel", {prr.x - 6, prr.y - 6, prr.w + 12, prr.h + 12}, hero ? vec4(0.75f, 0.9f, 1.f, 1) : vec4(1, 1, 1, 1), 0.6f);
+    GLuint tex = live ? portraitLiveRT[hero ? 1 : 0].color.id : (portraitRT.fbo ? portraitRT.color.id : 0);
+    if (tex) u.image(tex, prr, vec4(0, 1, 1, 0));
     std::string line = dialog.line < (int)dialog.lines.size() ? dialog.lines[dialog.line] : "";
-    dialog.reveal += u.dt * 55.f;
+    bool narr = !line.empty() && line[0] == '(';   // stage directions: no voice, in a softer ink
+    std::string heroName = heroes()[std::max(0, std::min((int)heroes().size() - 1, activeHero))].name;
+    float tx = hero ? box.x + 30 : box.x + 196;
+    bool lastLine = dialog.line + 1 >= (int)dialog.lines.size();
+    if (hero) { u.text(heroName, tx, box.y + 18, 30, rgba(0x1e3a5a), F_SERIF, A_LEFT); u.text("Vous", tx, box.y + 54, 18, rgba(0x4a6a8a), F_BODY, A_LEFT); }
+    else { u.text(dialog.speaker, tx, box.y + 18, 30, rgba(0x5a2a14), F_SERIF, A_LEFT); u.text(dialog.title, tx, box.y + 54, 18, rgba(0x7a5a3a), F_BODY, A_LEFT); }
+    // typewriter with a breath on punctuation, and a voice blip every few letters
+    size_t before = std::min(line.size(), (size_t)dialog.reveal);
+    char prev = before > 0 && before <= line.size() ? line[before - 1] : ' ';
+    bool pause = prev == '.' || prev == '!' || prev == '?' || prev == ',' || prev == ';' || prev == ':' || (unsigned char)prev == 0xA6;   // 0xA6: end of '…'
+    dialog.reveal += u.dt * (pause ? (prev == ',' ? 14.f : 7.f) : 52.f);
     size_t n = std::min(line.size(), (size_t)dialog.reveal);
     while (n < line.size() && (line[n] & 0xC0) == 0x80) n++;  // keep UTF-8 intact
-    float textW = box.w - 196 - (dialog.line + 1 >= (int)dialog.lines.size() ? 330 : 40);
-    u.text(line.substr(0, n), box.x + 196, box.y + 86, 22, INK, F_BODY, A_LEFT, textW);
-    bool lastLine = dialog.line + 1 >= (int)dialog.lines.size();
+    if (n > before && !narr && n < line.size()) {
+        for (size_t i = before; i < n; i++) if ((line[i] & 0xC0) != 0x80 && line[i] != ' ') dialog.blip += 1.f;
+        if (dialog.blip >= 3.f) {
+            dialog.blip = 0;
+            uint32_t hsh = 2166136261u; for (char ch : (hero ? heroName : dialog.speaker)) hsh = (hsh ^ (uint8_t)ch) * 16777619u;
+            float base = hero ? 1.0f : 0.78f + (hsh % 1000) / 1000.f * 0.55f;
+            float jit = 0.94f + ((n * 2654435761u) >> 16 & 255) / 255.f * 0.12f;
+            play("voice", 0.16f, base * jit);
+        }
+    }
+    float textW = box.w - 226 - (lastLine && !hero ? 330 : 30);
+    if (lastLine && hero) textW = box.w - 226 - 330;
+    vec4 ink = narr ? rgba(0x6a5a4a) : INK;
+    u.text(line.substr(0, n), tx, box.y + 86, narr ? 21 : 22, ink, F_BODY, A_LEFT, textW);
+    // progress: one dot per line of the scene
+    int total = (int)dialog.lines.size();
+    if (total > 1 && total <= 16) {
+        float dx = 16.f, x0 = box.x + box.w / 2 - (total - 1) * dx / 2;
+        for (int i = 0; i < total; i++) {
+            bool cur = i == dialog.line;
+            float r = cur ? 5.f : 3.5f;
+            vec4 col = i <= dialog.line ? (dialog.whoAt(i) == 'H' ? rgba(0x2a5a8a) : rgba(0x8a4a1a)) : rgba(0x7a5a3a, 0.35f);
+            u.rect({x0 + i * dx - r, box.y + box.h - 18 - r, r * 2, r * 2}, col);
+        }
+    }
     // tap to advance / skip typewriter
     for (auto& f : u.fingers) if (f.released && box.contains(f.x, f.y)) {
         if (n < line.size()) dialog.reveal = 1e9f;
         else if (!lastLine) { dialog.line++; dialog.reveal = 0; }
     }
-    if (!lastLine) { u.text("▸", box.x + box.w - 40, box.y + box.h - 44, 28, rgba(0x7a5a3a, 0.5f + 0.5f * std::sin(realTime * 5)), F_BOLD); return; }
-    // choices on the right
-    float y = box.y + 18;
+    if (!lastLine) {
+        float bob = std::abs(std::sin(realTime * 4.f)) * 6.f;
+        float ax = hero ? box.x + box.w - 220 : box.x + box.w - 44;
+        if (n >= line.size()) u.text("»", ax + bob * 0.8f, box.y + box.h - 56, 34, rgba(0x7a5a3a, 0.65f + 0.35f * std::sin(realTime * 5)), F_BODY);
+        return;
+    }
+    if (n < line.size()) return;   // the choices appear once the last line is written
+    // choices
     float cw = 310;
+    float y = box.y + 18;
+    float cx = hero ? box.x + box.w - cw - 190 : box.x + box.w - cw - 20;
     float ch = std::min(44.f, (box.h - 30) / std::max(1, (int)dialog.choices.size()) - 6);
     std::vector<DialogState::Choice> ch2 = dialog.choices;
+    int k = 0;
     for (auto& c : ch2) {
-        Rect br{box.x + box.w - cw - 20, y, cw, ch};
+        float app = easeO((dialog.reveal - (float)line.size()) / 18.f - k * 0.12f);
+        Rect br{cx + (1.f - app) * 40.f, y, cw, ch};
         bool special = c.action.rfind("offer:", 0) == 0 || c.action.rfind("deliver:", 0) == 0 || c.action.rfind("accept:", 0) == 0;
-        if (u.fancyButton(br, c.text, true, special ? "button" : "button_dark", std::min(19.f, ch * 0.45f))) { dialogAction(c.action); return; }
-        y += ch + 6;
+        if (u.fancyButton(br, c.text, true, special ? "button" : "button_dark", std::min(19.f, ch * 0.45f)) && app > 0.6f) { dialogAction(c.action); return; }
+        y += ch + 6; k++;
     }
 }
 
@@ -407,7 +482,7 @@ void Game::drawTitle(float dt) {
     if (btn("Paramètres", true)) { menu = Menu::Settings; play("ui_open"); }
     if (btn("Crédits", true)) { state = GameState::Credits; stateT = 0; creditsT = 0; play("ui_open"); }
     u.text("Created by SUPERESSENCE STUDIO", W_ / 2, H_ - 30, 16, rgba(0xc8bca0, ba), F_SERIF, A_CENTER, 0, true);
-    u.text("v3.7.1 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
+    u.text("v3.8.0 · AGR Engine", W_ - 16, H_ - 30, 14, rgba(0x8a8070, ba), F_BOLD, A_RIGHT);
 }
 
 // 2.6.0 the new-game screen: which game slot, the difficulty, the options, the active mods

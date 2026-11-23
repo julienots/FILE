@@ -56,7 +56,7 @@ void Game::loadAssets() {
                                    // 2.3.4 variants (a step never sounds twice the same) and the sand
                                    "step_grass2", "step_grass3", "step_stone2", "step_stone3", "step_snow2", "step_snow3", "step_wood2", "step_wood3",
                                    "step_water2", "step_water3", "step_sand", "step_sand2", "step_sand3", "horse2", "horse3",
-                                   "bird_chirp", "bird_chirp2", "bird_chirp3", "gull", "eagle", "owl", "frog", "crow", "cuckoo", "bubbles", "chop", "pick_stone", "tree_fall", "leaves", "item_get"};   // 3.7.1
+                                   "bird_chirp", "bird_chirp2", "bird_chirp3", "gull", "eagle", "owl", "frog", "crow", "cuckoo", "bubbles", "chop", "pick_stone", "tree_fall", "leaves", "item_get", "voice"};   // 3.7.1, 3.8.0
     int loaded = 0;
     for (const char* s : sounds) {
         std::vector<uint8_t> b;

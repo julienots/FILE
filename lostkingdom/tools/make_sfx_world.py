@@ -11,7 +11,8 @@ One-shots (played around the hero by Game::updateSoundscape, or by the actions):
   bubbles, chop, pick_stone, tree_fall, leaves, item_get
 Usage: python3 -I tools/make_sfx_world.py
 """
-import os, sys
+import os
+import sys, sys
 import numpy as np
 from scipy import signal
 
@@ -216,10 +217,23 @@ def amb_desert(d=22.0):
     return MA.loopify(norm(hiss * 0.5 + low * 0.3 + grains * gust, 0.5))
 
 
+def voice():
+    # 3.8.0 a soft spoken syllable for the dialogue typewriter: a glottal pulse train through two vowel formants
+    d = 0.085; t = t_(d)
+    f0 = 190 * (1 + 0.06 * np.sin(2 * np.pi * 9 * t))
+    ph = np.cumsum(f0) / SR
+    pulse = (np.mod(ph, 1.0) < 0.35).astype(float) - 0.35
+    v = bp(pulse, 560, 860, 2) * 0.9 + bp(pulse, 1050, 1450, 2) * 0.45 + bp(pulse, 2300, 2900, 2) * 0.12
+    e = np.minimum(1, t / 0.012) * np.exp(-np.maximum(0, t - 0.02) * 32)
+    return norm(lp(v * e, 4200), 0.55)
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--voice":
+        MA.write_ogg(os.path.join(OUT, "sfx", "voice.ogg"), voice()); print("wrote voice"); return
     sfx = {"bird_chirp": bird(0), "bird_chirp2": bird(1), "bird_chirp3": bird(2), "gull": gull(), "eagle": eagle(), "owl": owl(),
            "frog": frog(), "crow": crow(), "cuckoo": cuckoo(), "bubbles": bubbles(), "chop": chop(), "pick_stone": pick_stone(),
-           "tree_fall": tree_fall(), "leaves": leaves(), "item_get": item_get()}
+           "tree_fall": tree_fall(), "leaves": leaves(), "item_get": item_get(), "voice": voice()}
     for k, v in sfx.items():
         MA.write_ogg(os.path.join(OUT, "sfx", k + ".ogg"), v)
     for k, f in (("amb_meadow", amb_meadow), ("amb_underwater", amb_underwater), ("amb_desert", amb_desert)):

@@ -320,6 +320,7 @@ void Game::updatePlaying(float dt) {
     updateForestry(dt);    // 3.6.0
     updateBirds(dt);       // 3.7.0
     updateSoundscape(dt);  // 3.7.1
+    updateDialogScene(dt); // 3.8.0
     updateVfx(dt);       // 3.0.1
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));

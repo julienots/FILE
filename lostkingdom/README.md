@@ -6,13 +6,47 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.7.1 (versionCode 60), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.7.0 : elle s'installe par-dessus). SHA-256 : `9f5d95d584e0d2ad10b56779d5c4b5c7492dcf1535b0544a0385141211d4a369`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.8.0 (versionCode 61), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.7.1 : elle s'installe par-dessus). SHA-256 : `6a0f21078497994a8dbd9d47299ae0e0f47ea710b3e525ffe50fe82263af74b1`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.8.0 (une histoire racontée en vraies scènes de dialogue, animations de conversation)
+
+- **Dialogues complets de l'histoire** (`game/Conversations.cpp`). Chaque tournant des actes I et II était une seule phrase. C'est maintenant une vraie conversation, réplique par réplique, entre le héros et son interlocuteur :
+  - première rencontre avec Maëlle, Alaric, Orla, Hanzo, Zahra et Kaede (qui ils sont, ce qu'ils savent) ;
+  - proposition des quêtes principales m2 à m6 et n1 à n9 ;
+  - scène de fin de chaque quête (la Pierre d'écho qui parle avec la voix d'Aldric, la Couronne reforgée, le pardon de Solmar, le joyau rendu à la mer…).
+  - Le héros répond enfin : ses répliques s'affichent à droite, sous son nom, avec son portrait.
+  - La scène de fin d'une quête se joue à la prochaine discussion avec la personne concernée, avant le chapitre cinématique. Elle est conservée dans la sauvegarde.
+- **Conversations filmées** :
+  - bandes noires de cinéma ;
+  - plan par-dessus l'épaule de celui qui écoute, qui glisse depuis la caméra de jeu et change de côté selon qui parle (sans franchir l'axe) ;
+  - les deux personnages se tournent l'un vers l'autre ;
+  - le HUD disparaît.
+- **Animations de dialogue** :
+  - six nouveaux gestes, choisis par l'humeur de chaque réplique :
+    - chaleureux (paumes ouvertes, petit hochement) ;
+    - grave (main sur le cœur, tête baissée) ;
+    - ferme (poing, puis doigt pointé) ;
+    - émerveillé (bras qui s'ouvrent, tête levée) ;
+    - révérence ;
+    - salut de la main ;
+  - celui qui écoute hoche la tête ;
+  - le PNJ se tait pendant les répliques du héros.
+- **Portraits vivants** : le visage de celui qui parle est rendu en direct à partir du personnage du monde, avec ses gestes. Le portrait apparaît avec un petit effet de pop.
+- **Texte animé** :
+  - machine à écrire qui respire sur la ponctuation ;
+  - petites voix synthétisées (nouveau son `voice`), avec un timbre différent pour chaque personnage ;
+  - didascalies (entre parenthèses) dans une encre plus douce, sans voix ;
+  - points de progression de la scène ;
+  - flèche qui avance ;
+  - choix qui glissent un à un.
+- **Vie au repos** : laissé immobile une dizaine de secondes, le héros regarde autour de lui ou s'étire.
+- Tests : nouveau scénario `dialogue` (rencontre, gestes, caméra, portraits, proposition et fin de quête, vie au repos). Le scénario `ui` couvre maintenant les scènes plus longues.
 
 ### Nouveautés 3.7.1 (champs sans carrés, herbe plus serrée, herbe moins écrasée, plein de nouveaux sons)
 
