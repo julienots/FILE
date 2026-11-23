@@ -48,6 +48,27 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 | `game` (2.7.0) | `game.gravity` (0,15 à 3), `game.jump` (0,5 à 3), `game.time_speed` (0 à 20 ; 0 fige le temps), `game.hour` (0 à 23,99 : l'horloge reste à cette heure), `game.mount_speed` (0,5 à 3), `game.enemy_scale` (0,4 à 3), `game.weather` = `clair`, `nuageux`, `pluie`, `orage`, `neige`, `brouillard`, `cendres`, `sable` ou `normal` | `game.weather = neige` |
 | `bomb` (bombes, 2.4.0) | `bomb.radius` (1 à 12 m), `bomb.depth` (0,2 à 10 m), `bomb.damage` (0 à 2000), `bomb.fuse` (0,3 à 10 s) | `bomb.radius = 8` |
 
+### Mods 2.0 (LOST KINGDOM 3.2.0) : nouvelles créatures, nouveaux objets
+
+| Ligne | Effet |
+|---|---|
+| `enemy.add = id \| base \| Nom \| Description` | Nouvelle créature, copie de la créature `base` (corps, attaques, comportement). Ensuite, `enemy.id.*` la règle. |
+| `enemy.id.region` | `greenhaven`, `frostheim`, `ashen`, `elderwood`, `ombres`, `highcrowns`, `ambre`, `corail`, `steppes`, `jungle`, `aurore`, `titans` |
+| `enemy.id.tint` | Couleur `#rrggbb` |
+| `enemy.id.spawn` | Fréquence dans la région : 0 à 20, et 1 = comme les créatures du jeu |
+| `enemy.id.level`, `xp`, `gold`, `group`, `night` | Niveau, récompenses, taille des groupes, `1` = surtout la nuit |
+| `enemy.id.loot = objet \| chance` | Ajoute un objet au butin (chance de 0 à 1). Exemple : `star_shard` pour des éclats d'étoile. |
+| `item.add = id \| base \| Nom \| Description` | Nouvel objet, copie de l'objet `base` (type, apparence). Ensuite, `item.id.*` le règle. |
+| `item.id.rarity` | `commun`, `rare`, `epique`, `legendaire`, `mythique`, `ancestral` |
+| `item.id.color`, `elem_dmg`, `stamina`, `heal`, `mana` | Couleur `#rrggbb`, dégâts élémentaires, bonus |
+| `game.start_item = objet \| nombre` | Objet donné au début d'une nouvelle partie |
+| `game.start_weapon`, `game.start_gold` | Arme équipée et or au départ |
+
+- **Identifiants** : minuscules, chiffres et `_`. Un identifiant du jeu ne peut pas être remplacé par `add`.
+- **Ordre** : un objet doit être créé (`item.add`) avant d'être utilisé dans un `loot` ou un `start_item`.
+- **Modèle 3D** : une créature ajoutée peut avoir son propre modèle, `assets/models/<id>.lkm` et `.jpg`, à condition que sa base soit humanoïde ou quadrupède.
+- **Sans ordinateur** : l'application **LK Studio** (`release/LK-Studio.apk`) écrit tout cela et importe les modèles .glb avec un squelette automatique.
+
 - **Valeurs** : les nombres sont limités à des valeurs raisonnables (par exemple `crit` entre 0 et 1, `scale` entre 0,3 et 6).
 - **Erreurs** : une ligne invalide est ignorée et signalée dans le menu Mods. Le reste du mod s'applique quand même.
 - **Identifiants** : objets, ennemis et PNJ sont listés dans `game/Data.cpp`. Les ennemis et les PNJ sont aussi repris dans `docs/TRIPO_PROMPTS.md`.
@@ -68,9 +89,9 @@ Quatorze mods sont inclus dans l'APK (six depuis la 2.6.0, huit de plus en 2.7.0
 
 ## 3. Ce que les mods ne font pas (encore)
 
-- Pas de nouveaux objets, ennemis, quêtes ou régions : seulement modifier l'existant et ajouter des chroniques.
+- Pas de nouvelles quêtes, régions ou attaques. Depuis la 3.2.0, on peut ajouter des créatures et des objets, mais ce sont des copies réglables de créatures et d'objets du jeu.
 - Pas de scripts ni de code, volontairement (sécurité).
-- Pas d'import direct de GLB sur le téléphone : il faut passer par `tools/import_character.py` sur un ordinateur, ou me demander de le faire.
+- Import de GLB sur le téléphone : avec l'application LK Studio (3.2.0). Sur ordinateur : `tools/import_character.py`.
 
 ## 4. Sur ordinateur (harnais de test)
 

@@ -798,8 +798,48 @@ static void testModData(const std::string& assets) {
     }
 }
 
+// 3.2.0 the game's tables for LOST KINGDOM Studio (the mod maker): LK_DUMP_STUDIO=path.json ./lk_tests assets
+static std::string jsonStr(const std::string& v) {
+    std::string o = "\"";
+    for (unsigned char ch : v) { if (ch == '"' || ch == '\\') { o += '\\'; o += (char)ch; } else if (ch == '\n') o += "\\n"; else if (ch < 0x20) o += ' '; else o += (char)ch; }
+    return o + "\"";
+}
+static void dumpStudio(const char* path) {
+    std::string o = "{\n\"regions\":[";
+    static const char* rid[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans"};
+    for (int r = 0; r < R_COUNT; r++) o += std::string(r ? "," : "") + "{\"id\":" + jsonStr(rid[r]) + ",\"name\":" + jsonStr(regionName(r)) + "}";
+    o += "],\n\"enemies\":[";
+    bool first = true;
+    for (const EnemyDef& e : enemies()) {
+        char b[512]; snprintf(b, sizeof b, "{\"id\":%s,\"name\":%s,\"family\":%s,\"region\":%d,\"arch\":%d,\"level\":%d,\"hp\":%.0f,\"atk\":%.0f,\"def\":%.0f,\"speed\":%.1f,\"scale\":%.2f,\"boss\":%d}",
+                 jsonStr(e.id).c_str(), jsonStr(e.name).c_str(), jsonStr(e.family).c_str(), e.region, (int)e.arch, e.level, e.hp, e.atk, e.def, e.speed, e.scale, e.behavior == Behavior::Boss ? 1 : 0);
+        o += std::string(first ? "" : ",\n") + b; first = false;
+    }
+    o += "],\n\"items\":[";
+    first = true;
+    for (const ItemDef& d : allItems()) {
+        char b[1024]; snprintf(b, sizeof b, "{\"id\":%s,\"name\":%s,\"kind\":%d,\"rarity\":%d,\"weapon\":%d,\"atk\":%.0f,\"def\":%.0f,\"hp\":%.0f,\"value\":%d,\"icon\":%s,\"desc\":%s}",
+                 jsonStr(d.id).c_str(), jsonStr(d.name).c_str(), (int)d.kind, (int)d.rarity, (int)d.weapon, d.atk, d.def, d.hp, d.value, jsonStr(d.icon).c_str(), jsonStr(d.desc).c_str());
+        o += std::string(first ? "" : ",\n") + b; first = false;
+    }
+    o += "],\n\"npcs\":[";
+    first = true;
+    for (const NpcDef& n : npcs()) { o += std::string(first ? "" : ",") + "{\"id\":" + jsonStr(n.id) + ",\"name\":" + jsonStr(n.name) + ",\"title\":" + jsonStr(n.title) + "}"; first = false; }
+    o += "],\n";
+    for (int a = 0; a < 2; a++) {   // the game skeletons (bind pose, model space) and their parents
+        const Skeleton& sk = skeleton(a == 0 ? Arch::Humanoid : Arch::Quadruped);
+        o += a == 0 ? "\"humanSkel\":[" : ",\n\"quadSkel\":[";
+        for (int i = 0; i < sk.size(); i++) { char b[128]; snprintf(b, sizeof b, "%s[%.4f,%.4f,%.4f,%d]", i ? "," : "", sk.bones[i].bindWorld.x, sk.bones[i].bindWorld.y, sk.bones[i].bindWorld.z, sk.bones[i].parent); o += b; }
+        o += "]";
+    }
+    o += "\n}\n";
+    platform::writeFileAtomic(path, o);
+    std::printf("studio tables -> %s (%zu enemies, %zu items, %zu npcs)\n", path, enemies().size(), allItems().size(), npcs().size());
+}
+
 int lkRunTests(int argc, char** argv) {
     std::string assets = argc > 1 ? argv[1] : "assets";
+    if (const char* sp = getenv("LK_DUMP_STUDIO")) { dumpStudio(sp); return 0; }
     testECS();
     testMath();
     testMapOrientation();

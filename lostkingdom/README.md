@@ -14,6 +14,66 @@ LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbi
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
 
+### Nouveautés 3.2.0 (chasse aux trésors façon Zelda, îles du ciel partout, objets mis en valeur, mods 2.0, LK Studio)
+
+- **Totems de pouvoir** (34 dans le monde) :
+  - deux par région, sur les hauteurs, plus un au sommet de chaque archipel du ciel ;
+  - de loin, on les repère à un rayon de lumière bleue ;
+  - les éveiller donne un pouvoir ou un bonus permanent, avec une petite fanfare. L'ordre suit la distance depuis Brindlemere, totems au sol d'abord : boussole des Anciens, bottes de Zéphyr, cœur, sort Colère céleste, anneau-aimant, cape de plume, etc. ;
+  - chaque totem donne aussi 5 éclats d'étoile et rend toute la vie.
+- **Orbes anciens** (58) :
+  - cachés dans toutes les régions, avec un rayon doré ;
+  - chacun donne 2 éclats ;
+  - paliers : 5 orbes = +10 cases de sac, 10 = +20 de vie, 15 = +10 cases, 20 = +10 % d'attaque, 25 = sort Pluie d'étoiles, 30 = +20 d'endurance et de mana, 40 = la Lame des Anciens.
+- **Objets clés** (pouvoirs permanents tant qu'on les porte, hors du sac) :
+  - Bottes de Zéphyr : double saut ;
+  - Cape de plume de roc : planer en gardant le doigt sur Saut ;
+  - Anneau-aimant : le butin vient à vous, jusqu'à 10 m ;
+  - Boussole des Anciens : une flèche pointe vers le totem ou l'orbe le plus proche ;
+  - Écaille de triton : respiration illimitée sous l'eau ;
+  - Plume de phénix : vous relève une fois par jour ;
+  - Trèfle d'or : +50 % d'or et un butin plus rare ;
+  - Sabot de vent : sprint deux fois moins coûteux et +10 % de vitesse.
+- **Archipels du ciel dans toutes les régions** :
+  - trois îles en escalier (environ 15, 24 et 33 m au-dessus du sol), aux couleurs de la région : neige, sable, cendre, mousse violette ou herbe ;
+  - un geyser au sol vous lance sur la première île, puis un geyser du vent sur chaque île vous lance sur la suivante ;
+  - au sommet : un totem ; sur l'île du milieu : un orbe ; sur la première : un coffre du ciel (+3 éclats).
+- **Économie** :
+  - **éclats d'étoile**, la nouvelle monnaie, affichée à côté de l'or. On les gagne aux totems, aux orbes, aux coffres du ciel et sur les ennemis forts ;
+  - **Merveilles** chez tous les marchands, payées en éclats : sacs, boussole, aimant, écaille, élixirs ;
+  - la vente se fait maintenant en deux touches (choisir l'objet, puis « Vendre X or ») : plus de vente par erreur.
+- **Sac à cases** :
+  - une nouvelle partie commence avec 40 cases ;
+  - on en gagne avec la sacoche de cuir (+10, en or chez tous les marchands), le sac d'aventurier (+15), le sac sans fond (+25) et les paliers d'orbes ;
+  - le sac affiche ses cases vides et une rangée de cases verrouillées ;
+  - les anciennes sauvegardes gardent leurs 120 cases.
+- **Objets mis en valeur** :
+  - le butin rare, épique ou légendaire au sol a un **rayon de lumière** de sa couleur, plus haut pour les meilleurs objets ;
+  - une **petite carte « objet obtenu »** apparaît au-dessus des boutons, et une **fanfare** au centre pour les pouvoirs ;
+  - dans le sac, les objets rares brillent et les légendaires « respirent ».
+- **Sorts légendaires** :
+  - Colère céleste, Souffle du dragon et Ère glaciaire (totems) ;
+  - Pluie d'étoiles (palier de 25 orbes).
+- **Interface** :
+  - les repères de carte collés au bord de l'écran ne passent plus sur l'encadré de quête et ne se chevauchent plus ;
+  - le compteur de vitesse est plus petit et placé à gauche, il ne cache plus la route ;
+  - « Sac plein » ne s'affiche plus en boucle.
+- **Mods 2.0** :
+  - nouvelles créatures et nouveaux objets (`enemy.add`, `item.add`) ;
+  - couleur, région, fréquence, niveau et butin des créatures ;
+  - rareté et couleur des objets ;
+  - objets, arme et or de départ. Voir `docs/MODDING.md`.
+- **Trois gros mods livrés** (désactivés par défaut) :
+  - **Bestiaire légendaire** : 30 créatures nouvelles ;
+  - **Arsenal des légendes** : 24 armes ;
+  - **Invasion des ombres** : 16 créatures de nuit.
+- **LK Studio**, une nouvelle application (`release/LK-Studio.apk`, voir `lkstudio/README.md`) pour créer des mods sur le téléphone : créatures, objets, règles du monde, modèles 3D importés avec squelette automatique, sons, export direct.
+- **Vérifié sur ordinateur seulement** :
+  - tests unitaires : 3 020 réussis ;
+  - nouveau scénario `treasures` : totem, double saut, montée d'un archipel par ses 3 geysers, totem du sommet, plané, orbe, sac plein, sacs, inventaire et boutique ;
+  - scénario `bigmods` et suite complète des scénarios réussis.
+- **À confirmer sur ton téléphone.**
+
 ### Nouveautés 3.1.0 (herbe nette, entrée de mine refaite, vrais loups, donjons et châteaux habillés)
 
 - **Plus de flou sur l'herbe** :
