@@ -3,6 +3,7 @@
 #include "agr/editor/ApiReference.hpp"
 #include "agr/core/Etc2.hpp"
 #include "agr/editor/CurveView.hpp"
+#include "agr/editor/AssetRefactor.hpp"
 #include "agr/editor/EditHistory.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
@@ -1929,4 +1930,57 @@ TEST_CASE("edit history: one step per change, drags merged, undo / redo, new bra
     CHECK(h.undo() == "3");
     CHECK(h.undo() == "2");
     CHECK_FALSE(h.undo());
+}
+
+TEST_CASE("asset refactoring: renaming or moving an asset rewrites every reference in the project") {
+    // Whole paths only; model sub-assets and folders.
+    std::string t = R"({"a": "assets://tex/hero.png", "b": "assets://tex/hero.png2", "c": "assets://tex/hero.png#x", "d": "assets://tex/heroes.png"})";
+    CHECK(rewriteAssetReferences(t, "assets://tex/hero.png", "assets://chars/hero.png", false) == 2);
+    CHECK(t == R"({"a": "assets://chars/hero.png", "b": "assets://tex/hero.png2", "c": "assets://chars/hero.png#x", "d": "assets://tex/heroes.png"})");
+    std::string f = "require(\"assets://kits/fsm/fsm.lua\") -- assets://kits/fsmx/a.lua assets://kits/fsm";
+    CHECK(rewriteAssetReferences(f, "assets://kits/fsm", "assets://lib/fsm", true) == 1);
+    CHECK(f == "require(\"assets://lib/fsm/fsm.lua\") -- assets://kits/fsmx/a.lua assets://kits/fsm");
+
+    EditorFixture fx(ProjectMode::Mode2D);
+    Project& project = fx.ctx->project();
+    const fs::path assets = project.assetsDirectory();
+    fs::create_directories(assets / "tex");
+    fs::create_directories(assets / "scripts" / "lib");
+    std::ofstream(assets / "tex" / "hero.png") << "png";
+    std::ofstream(assets / "scripts" / "lib" / "util.lua") << "return {}";
+    std::ofstream(assets / "scripts" / "player.lua") << "local U = require(\"assets://scripts/lib/util.lua\")\nreturn {}";
+    std::ofstream(assets / "hero.agrmat") << R"({"albedoTexture": "assets://tex/hero.png"})";
+    // A scene that uses the image, saved.
+    Scene& scene = fx.ctx->scene();
+    const auto e = scene.createEntity("Hero");
+    scene.registry().emplace<SpriteRendererComponent>(e).texture = "assets://tex/hero.png";
+    REQUIRE(fx.ctx->saveSceneAs("scenes/level.agrscene"));
+
+    auto r = moveAsset(project.root(), assets, "tex/hero.png", "characters/hero_v2.png");
+    REQUIRE(r);
+    CHECK(fs::exists(assets / "characters" / "hero_v2.png"));
+    CHECK_FALSE(fs::exists(assets / "tex" / "hero.png"));
+    CHECK(r.value().references == 2);
+    CHECK(r.value().updatedFiles.size() == 2);
+    auto read = [](const fs::path& p) {
+        std::ifstream in(p);
+        return std::string((std::istreambuf_iterator<char>(in)), {});
+    };
+    CHECK(read(assets / "hero.agrmat").find("assets://characters/hero_v2.png") != std::string::npos);
+    REQUIRE(fx.ctx->loadScene("scenes/level.agrscene"));
+    const auto hero = fx.ctx->scene().findByName("Hero");
+    REQUIRE_FALSE(hero.isNull());
+    CHECK(fx.ctx->scene().registry().get<SpriteRendererComponent>(hero).texture == "assets://characters/hero_v2.png");
+
+    // A folder: every path under it follows, scripts included.
+    r = moveAsset(project.root(), assets, "scripts/lib", "shared/lib");
+    REQUIRE(r);
+    CHECK(read(assets / "scripts" / "player.lua").find("assets://shared/lib/util.lua") != std::string::npos);
+    // Refusals: an existing destination, a folder into itself, outside the assets folder, a missing asset.
+    std::ofstream(assets / "taken.png") << "x";
+    CHECK_FALSE(moveAsset(project.root(), assets, "characters/hero_v2.png", "taken.png"));
+    CHECK_FALSE(moveAsset(project.root(), assets, "shared", "shared/inner/shared"));
+    CHECK_FALSE(moveAsset(project.root(), assets, "taken.png", "../outside.png"));
+    CHECK_FALSE(moveAsset(project.root(), assets, "nope.png", "a.png"));
+    CHECK(fs::exists(assets / "characters" / "hero_v2.png"));
 }

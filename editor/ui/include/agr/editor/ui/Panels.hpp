@@ -291,6 +291,8 @@ public:
 
 private:
     void drawFolderTree(EditorShared& s, const std::string& folder);
+    /// Moves / renames an asset, rewrites the project's references to it, reloads the open scene.
+    void moveAssetAndReload(EditorShared& s, const std::string& fromRel, const std::string& toRel);
     std::string m_filter;
     std::string m_pendingDelete;
     std::string m_renameTarget, m_renameBuffer;

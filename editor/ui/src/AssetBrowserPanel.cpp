@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "agr/editor/AssetRefactor.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/SpriteSheet.hpp"
 #include "agr/twod/Atlas.hpp"
@@ -83,6 +84,42 @@ void AssetBrowserPanel::importFiles(EditorShared& s, const std::vector<std::stri
             AGR_LOG_INFO("Editor", "'{}': a .gltf file references its .bin and textures; import them too (same folder layout)", fname);
     }
     if (imported) s.notify(std::to_string(imported) + " fichier(s) importé(s) dans assets/" + s.assetFolder);
+}
+
+void AssetBrowserPanel::moveAssetAndReload(EditorShared& s, const std::string& fromRel, const std::string& toRel) {
+    if (s.ctx.playState() != PlayState::Edit) {
+        s.notify("Arrêtez le jeu avant de déplacer un asset.");
+        return;
+    }
+    // The open scene is saved first, so that its references are rewritten with the others.
+    if (s.ctx.dirty()) {
+        if (s.ctx.scenePath().empty()) {
+            s.notify("Enregistrez d'abord la scène (ses références ne pourraient pas être mises à jour).");
+            return;
+        }
+        if (Status st = s.ctx.saveScene(); !st) {
+            s.notify("Enregistrement de la scène impossible : " + st.error().message);
+            return;
+        }
+    }
+    Project& project = s.ctx.project();
+    auto report = moveAsset(project.root(), project.assetsDirectory(), fromRel, toRel);
+    if (!report) {
+        s.notify("Déplacement impossible : " + report.error().message);
+        return;
+    }
+    if (s.inspectedAsset == "assets://" + fromRel) s.inspectedAsset = "assets://" + toRel;
+    const fs::path scene = s.ctx.scenePath().empty() ? fs::path() : fs::weakly_canonical(project.root() / s.ctx.scenePath());
+    bool sceneChanged = false;
+    for (const fs::path& f : report.value().updatedFiles) {
+        std::error_code ec;
+        sceneChanged |= !scene.empty() && fs::weakly_canonical(f, ec) == scene;
+    }
+    if (sceneChanged) {
+        if (Status st = s.ctx.loadScene(s.ctx.scenePath()); !st) s.notify("Rechargement de la scène impossible : " + st.error().message);
+    }
+    s.notify("assets/" + fromRel + " → assets/" + toRel + " : " + std::to_string(report.value().references) + " référence(s) mise(s) à jour dans " +
+             std::to_string(report.value().updatedFiles.size()) + " fichier(s)");
 }
 
 void AssetBrowserPanel::drawFolderTree(EditorShared& s, const std::string& folder) {
@@ -334,6 +371,16 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                                 folder ? palette::kAmber : palette::kTextMuted);
                 }
                 if (folder && hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) s.assetFolder = rel;
+                if (folder && ImGui::BeginDragDropTarget()) {  // drop an asset on a folder: move it there
+                    if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(kPayloadAsset)) {
+                        const std::string dropped = static_cast<const char*>(pl->Data);
+                        if (dropped.rfind("assets://", 0) == 0) {
+                            const std::string src = dropped.substr(9);
+                            moveAssetAndReload(s, src, rel + "/" + fs::path(src).filename().generic_string());
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
                 const bool isMaterial = !folder && fs::path(name).extension() == kMaterialExtension;
                 if (isMaterial && ImGui::IsItemClicked(ImGuiMouseButton_Left)) {  // edit it in the inspector
                     s.inspectedAsset = uri;
@@ -417,12 +464,11 @@ void AssetBrowserPanel::draw(EditorShared& s) {
     if (ImGui::BeginPopupModal("Renommer l'asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
         const bool enter = ImGui::InputText("##name", &m_renameBuffer, ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::TextDisabled("Les références dans les scènes ne sont pas mises à jour automatiquement.");
+        ImGui::TextDisabled("Les références (scènes, prefabs, matériaux, clips, scripts...) sont mises à jour.");
         if ((ImGui::Button("Renommer", {120, 0}) || enter) && !m_renameBuffer.empty() &&
             m_renameBuffer.find_first_of("/\\") == std::string::npos) {
-            const fs::path from = absoluteAsset(s, m_renameTarget);
-            fs::rename(from, from.parent_path() / m_renameBuffer, ec);
-            if (ec) s.notify("Renommage impossible : " + ec.message());
+            const std::string parent = fs::path(m_renameTarget).parent_path().generic_string();
+            moveAssetAndReload(s, m_renameTarget, parent.empty() ? m_renameBuffer : parent + "/" + m_renameBuffer);
             m_renameTarget.clear();
             ImGui::CloseCurrentPopup();
         }
