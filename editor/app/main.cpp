@@ -30,11 +30,12 @@
 #include "agr/runtime/Engine.hpp"
 #include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/GameExport.hpp"
+#include "agr/editor/SceneTemplates.hpp"
 
 namespace {
 
 /// Command-line tasks without a window (continuous integration, scripts):
-///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d] [--name NAME]
+///   agr_editor --create-project DIR [--template showcase2d|showcase3d|empty2d|empty25d|empty3d|duel|rpg3d|platformer|rpg2d|towerdefense|cards|farm|idle|tycoon|survival|strategy|racing|arena|adventure25d] [--name NAME]
 ///   agr_editor --project DIR --export desktop|android-apk|android-release-apk|android-aab --output DIR
 ///   agr_editor --project DIR --export patch --base OLD.agrpak --output PATCH.agrpak
 ///   agr_editor --compile-shader-graph FILE.agrshadergraph   (writes the .agrshader next to it)
@@ -189,7 +190,19 @@ namespace {
                                           {"showcase2d", SceneTemplate::Showcase2D, ProjectMode::Mode2D},
                                           {"showcase3d", SceneTemplate::Showcase3D, ProjectMode::Mode3D},
                                           {"duel", SceneTemplate::GameArenaBattle, ProjectMode::Mode3D},
-                                          {"rpg3d", SceneTemplate::GameRpg3D, ProjectMode::Mode3D}};
+                                          {"rpg3d", SceneTemplate::GameRpg3D, ProjectMode::Mode3D},
+                                          {"platformer", SceneTemplate::GamePlatformer, ProjectMode::Mode2D},
+                                          {"rpg2d", SceneTemplate::GameRpg2D, ProjectMode::Mode2D},
+                                          {"towerdefense", SceneTemplate::GameTowerDefense, ProjectMode::Mode2D},
+                                          {"cards", SceneTemplate::GameCards, ProjectMode::Mode2D},
+                                          {"farm", SceneTemplate::GameFarm, ProjectMode::Mode2D},
+                                          {"idle", SceneTemplate::GameIdle, ProjectMode::Mode2D},
+                                          {"tycoon", SceneTemplate::GameTycoon, ProjectMode::Mode2D},
+                                          {"survival", SceneTemplate::GameSurvival, ProjectMode::Mode2D},
+                                          {"strategy", SceneTemplate::GameStrategy, ProjectMode::Mode2D},
+                                          {"racing", SceneTemplate::GameRacing, ProjectMode::Mode3D},
+                                          {"arena", SceneTemplate::GameArena, ProjectMode::Mode2D},
+                                          {"adventure25d", SceneTemplate::GameAdventure25D, ProjectMode::Mode25D}};
         const Named* chosen = nullptr;
         for (const Named& t : templates)
             if (tmplName == t.name) chosen = &t;
@@ -199,7 +212,7 @@ namespace {
         }
         ProjectSettings settings;
         settings.name = name.empty() ? fs::path(create).filename().string() : name;
-        settings.mode = chosen->mode;
+        settings.mode = templateMode(chosen->tmpl);
         auto project = Project::create(create, settings, chosen->tmpl, exeDir / "editor_resources" / "templates" / "assets");
         if (!project) {
             AGR_LOG_ERROR("Editor", "{}", project.error().message);
