@@ -20,6 +20,10 @@
 #    include <unistd.h>
 #endif
 
+#include <mbedtls/gcm.h>
+#include <mbedtls/md.h>
+#include <mbedtls/pkcs5.h>
+
 #include "agr/core/Log.hpp"
 
 namespace agr::net {
@@ -42,6 +46,19 @@ u64 passwordProof(const std::string& password, u32 token) {
     }
     return h;
 }
+constexpr u8 kEncryptedBit = 0x80;  // packet type flag: payload = counter (8) + ciphertext + tag (16)
+constexpr usize kTag = 16;
+
+/// Per-connection key: PBKDF2-HMAC-SHA-256(password, "AGRNET1" + token), 4096 rounds.
+std::array<u8, 32> connectionKey(const std::string& password, u32 token) {
+    std::array<u8, 32> key{};
+    u8 salt[11] = {'A', 'G', 'R', 'N', 'E', 'T', '1'};
+    for (int i = 0; i < 4; ++i) salt[7 + i] = static_cast<u8>(token >> (8 * i));
+    mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256, reinterpret_cast<const unsigned char*>(password.data()), password.size(), salt, sizeof salt,
+                                  4096, static_cast<u32>(key.size()), key.data());
+    return key;
+}
+
 // First byte of every reliable payload: a whole message, or a fragment of a large one.
 constexpr char kWhole = 'M', kFragment = 'F', kLastFragment = 'L';
 
@@ -289,10 +306,63 @@ void NetSession::sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload)
     putU32(out, seq);
     putU32(out, m_token);
     out.append(payload);
+    const bool handshake = type == Hello || type == Welcome || type == Full || type == Denied || type == Discover || type == Info;
+    if (p.encrypted && !handshake && !seal(p, out)) return;
     if (m_transport->send(p.address, out.data(), out.size())) {
         ++m_stats.packetsSent;
         m_stats.bytesSent += out.size();
     }
+}
+
+bool NetSession::seal(Peer& p, std::string& packet) {
+    // Nonce: 4 bytes of direction (the sender id) + the 8-byte counter, never reused for a key.
+    const u64 counter = ++p.sendCounter;
+    u8 nonce[12];
+    const u32 me = m_localId;
+    for (int i = 0; i < 4; ++i) nonce[i] = static_cast<u8>(me >> (8 * i));
+    for (int i = 0; i < 8; ++i) nonce[4 + i] = static_cast<u8>(counter >> (8 * i));
+    packet[4] = static_cast<char>(static_cast<u8>(packet[4]) | kEncryptedBit);
+    const usize plainSize = packet.size() - kHeader;
+    std::string out = packet.substr(0, kHeader);
+    out.append(reinterpret_cast<const char*>(nonce + 4), 8);
+    out.resize(kHeader + 8 + plainSize + kTag);
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    bool ok = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, p.key.data(), 256) == 0 &&
+              mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, plainSize, nonce, sizeof nonce, reinterpret_cast<const u8*>(out.data()), kHeader,
+                                        reinterpret_cast<const u8*>(packet.data() + kHeader), reinterpret_cast<u8*>(out.data() + kHeader + 8), kTag,
+                                        reinterpret_cast<u8*>(out.data() + kHeader + 8 + plainSize)) == 0;
+    mbedtls_gcm_free(&gcm);
+    packet = std::move(out);
+    return ok;
+}
+
+bool NetSession::open(Peer& p, const std::vector<u8>& packet, std::string& payload) {
+    if (packet.size() < kHeader + 8 + kTag) return false;
+    u64 counter = 0;
+    for (int i = 0; i < 8; ++i) counter |= u64(packet[kHeader + i]) << (8 * i);
+    // Replays: a 64-packet window below the highest counter seen.
+    if (counter == 0 || (counter + 64 <= p.recvHighest) || (counter <= p.recvHighest && (p.recvWindow >> (p.recvHighest - counter)) & 1u)) return false;
+    u8 nonce[12];
+    const u32 sender = getU32(packet.data() + 5);
+    for (int i = 0; i < 4; ++i) nonce[i] = static_cast<u8>(sender >> (8 * i));
+    std::memcpy(nonce + 4, packet.data() + kHeader, 8);
+    const usize size = packet.size() - kHeader - 8 - kTag;
+    payload.resize(size);
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    const bool ok = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, p.key.data(), 256) == 0 &&
+                    mbedtls_gcm_auth_decrypt(&gcm, size, nonce, sizeof nonce, packet.data(), kHeader, packet.data() + kHeader + 8 + size, kTag,
+                                             packet.data() + kHeader + 8, reinterpret_cast<u8*>(payload.data())) == 0;
+    mbedtls_gcm_free(&gcm);
+    if (!ok) return false;
+    if (counter > p.recvHighest) {
+        const u64 shift = counter - p.recvHighest;
+        p.recvWindow = shift >= 64 ? 0 : p.recvWindow << shift;
+        p.recvHighest = counter;
+    }
+    p.recvWindow |= u64(1) << (p.recvHighest - counter);
+    return true;
 }
 
 NetSession::Peer* NetSession::findPeer(const Address& a) {
@@ -377,10 +447,22 @@ bool NetSession::send(u32 peer, std::string_view data, bool reliable) {
 
 void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 now) {
     if (packet.size() < kHeader || std::memcmp(packet.data(), kMagic, 4) != 0) return;  // not ours
-    const u8 type = packet[4];
+    const u8 rawType = packet[4];
+    const u8 type = rawType & static_cast<u8>(~kEncryptedBit);
     const u32 sender = getU32(packet.data() + 5), seq = getU32(packet.data() + 9), token = getU32(packet.data() + 13);
-    const std::string_view payload(reinterpret_cast<const char*>(packet.data() + kHeader), packet.size() - kHeader);
     Peer* p = findPeer(from);
+    std::string decrypted;
+    std::string_view payload(reinterpret_cast<const char*>(packet.data() + kHeader), packet.size() - kHeader);
+    if (rawType & kEncryptedBit) {
+        if (!p || !p->encrypted || !open(*p, packet, decrypted)) {
+            ++m_stats.rejected;
+            return;  // forged, tampered, replayed or not for us
+        }
+        payload = decrypted;
+    } else if (p && p->encrypted && type != Hello && type != Welcome && type != Full && type != Denied && type != Discover && type != Info) {
+        ++m_stats.rejected;
+        return;  // an encrypted link only accepts encrypted packets
+    }
 
     // LAN discovery: anyone may ask a host; answers are recorded while discovering.
     if (type == Discover) {
@@ -410,6 +492,7 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
             p->lastHeard = now;
             std::string body;
             putU32(body, token);
+            body.push_back(p->encrypted ? 1 : 0);
             sendPacket(*p, Welcome, p->id, body);
             return;
         }
@@ -438,7 +521,13 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
         np.welcomed = true;
         std::string body;
         putU32(body, token);
+        const bool encrypt = m_encrypt && !m_password.empty();
+        body.push_back(encrypt ? 1 : 0);
         sendPacket(np, Welcome, np.id, body);
+        if (encrypt) {
+            np.encrypted = true;
+            np.key = connectionKey(m_password, token);
+        }
         AGR_LOG_INFO("Net", "player {} joined from {}", np.id, from.toString());
         push({NetEvent::Type::Connected, np.id, {}});
         m_peers[np.id] = std::move(np);
@@ -457,6 +546,10 @@ void NetSession::handle(const Address& from, const std::vector<u8>& packet, f64 
         if (m_localId == 0) {
             m_localId = seq;
             p->welcomed = true;
+            if (payload.size() >= 5 && payload[4] == 1) {
+                p->encrypted = true;
+                p->key = connectionKey(m_password, m_token);
+            }
             AGR_LOG_INFO("Net", "joined as player {}", m_localId);
             push({NetEvent::Type::Connected, kHostId, {}});
         }

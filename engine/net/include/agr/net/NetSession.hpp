@@ -88,6 +88,7 @@ struct LanGame {
 
 struct NetStats {
     u64 packetsSent = 0, packetsReceived = 0, bytesSent = 0, bytesReceived = 0, resent = 0;
+    u64 rejected = 0;  ///< Encrypted links: forged, tampered, replayed or unencrypted packets dropped.
 };
 
 class NetSession {
@@ -144,6 +145,17 @@ public:
     /// Game password: the host refuses players whose password differs (set it before host() /
     /// join()). Checked with a hash bound to each connection attempt; it does not encrypt.
     void setPassword(std::string password) { m_password = std::move(password); }
+    /// Host: encrypts every message of the session (AES-256-GCM, a key per connection derived from
+    /// the password and the connection's random token with PBKDF2-SHA-256). Needs a password: it is
+    /// the shared secret. Clients follow the host (told in its welcome). Tampered, replayed or
+    /// unencrypted packets from an encrypted peer are dropped.
+    void setEncryption(bool on) { m_encrypt = on; }
+    bool encryption() const { return m_encrypt; }
+    /// True when the link to this peer is encrypted.
+    bool encrypted(u32 peer) const {
+        auto it = m_peers.find(peer);
+        return it != m_peers.end() && it->second.encrypted;
+    }
     /// Last reason a join failed ("full", "wrong password"), empty otherwise.
     const std::string& joinError() const { return m_joinError; }
     /// Round-trip time to a peer in seconds (smoothed; 0 until measured).
@@ -169,7 +181,13 @@ private:
         std::string assembly;  ///< Fragments of a large reliable message received so far.
         bool welcomed = false;
         f64 rtt = 0.0;
+        // Encryption (AES-256-GCM, key from the password and this connection's token).
+        bool encrypted = false;
+        std::array<u8, 32> key{};
+        u64 sendCounter = 0, recvHighest = 0, recvWindow = 0;
     };
+    bool seal(Peer& p, std::string& packet);                     ///< Encrypts after the header.
+    bool open(Peer& p, const std::vector<u8>& packet, std::string& payload);  ///< Checks and decrypts.
     void sendPacket(Peer& p, u8 type, u32 seq, std::string_view payload);
     void handle(const Address& from, const std::vector<u8>& packet, f64 now);
     Peer* findPeer(const Address& a);
@@ -193,6 +211,7 @@ private:
     u32 m_clockSamples = 0;
     std::vector<u8> m_buffer;
     std::string m_password, m_joinError;
+    bool m_encrypt = false;
 };
 
 } // namespace agr::net

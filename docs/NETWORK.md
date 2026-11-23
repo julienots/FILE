@@ -89,7 +89,15 @@ function Ship:fire(power) agr.fx.burst(...) end    -- partout, l'appelant compri
   ne coûte rien. `ReplicationStats::statesSkipped` / `statesHidden`.
 - **Mot de passe** : `agr.net.setPassword("...")` avant `host` / `join` ; l'hôte refuse un mot de passe
   différent (`agr.net.joinError()` → `"wrong password"`, ou `"full"`). Vérifié par une empreinte liée à
-  chaque tentative de connexion (le mot de passe ne circule pas en clair) ; ce n'est pas un chiffrement.
+  chaque tentative de connexion (le mot de passe ne circule pas en clair).
+- **Chiffrement** : `agr.net.setEncryption(true)` sur l'hôte, avec un mot de passe (C++ :
+  `NetSession::setEncryption`). Tous les paquets après la poignée de main sont chiffrés et authentifiés
+  en **AES-256-GCM** (mbedTLS), avec une clé par connexion dérivée du mot de passe et du jeton aléatoire
+  de la connexion (PBKDF2-SHA-256, 4096 tours) ; les clients suivent l'hôte (annoncé dans son
+  accueil), `agr.net.encrypted([joueur])` le confirme. Un paquet modifié, rejoué (fenêtre de 64
+  paquets) ou non chiffré sur un lien chiffré est jeté (`stats().rejected`). Test : messages fiables
+  fragmentés et non fiables reçus, aucun texte lisible dans les datagrammes, paquet rejoué et paquet
+  modifié rejetés. 24 octets de plus par paquet.
 - **Latence et trafic** : `agr.net.ping(joueur)` → aller-retour en millisecondes (lissé),
   `agr.net.stats()` → octets et paquets envoyés / reçus, renvois.
 - **Gros messages** : les messages fiables sont découpés et recollés automatiquement (jusqu'à
@@ -190,8 +198,9 @@ agr.ws.close(id [, 1000, "raison"])
   de développement (noyau sans IPv6) : seul le repli IPv4 l'est.
 - Pas de traversée de NAT ni de serveur relais fourni (sur Internet, l'hôte doit
   ouvrir son port UDP) ; pas de WebRTC ni de serveur WebSocket (client seulement).
-- Pas de chiffrement (le mot de passe n'empêche que de rejoindre) : ne pas transmettre de données
-  sensibles.
+- Chiffrement à **clé partagée** (le mot de passe) : pas d'échange de clés Diffie-Hellman ni de
+  certificats ; qui connaît le mot de passe et a enregistré la poignée de main peut déchiffrer la
+  session (pas de confidentialité persistante). La découverte LAN et la poignée de main restent en clair.
 - Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de
   compensation de latence ; `spawnWhenVisible` ne concerne que les entités créées en réseau (les
   entités de la scène existent partout).

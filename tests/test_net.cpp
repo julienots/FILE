@@ -417,6 +417,86 @@ TEST_CASE("game password, round-trip time") {
     CHECK(good.rtt(NetSession::kHostId) < 0.1);
 }
 
+TEST_CASE("encryption: messages arrive, the wire shows no plaintext, tampered and replayed packets are dropped") {
+    LossyNetwork network;
+    network.loss = 0.0f;
+    // A transport that records what goes on the wire.
+    struct Tap final : NetTransport {
+        LossyTransport inner;
+        std::vector<std::vector<u8>>* wire;
+        Tap(LossyNetwork& n, std::vector<std::vector<u8>>* w) : inner(n), wire(w) {}
+        Status open(u16 port) override { return inner.open(port); }
+        void close() override { inner.close(); }
+        u16 localPort() const override { return inner.localPort(); }
+        Status send(const Address& to, const void* data, usize size) override {
+            wire->emplace_back(static_cast<const u8*>(data), static_cast<const u8*>(data) + size);
+            return inner.send(to, data, size);
+        }
+        bool receive(Address& from, std::vector<u8>& data) override { return inner.receive(from, data); }
+    };
+    std::vector<std::vector<u8>> wire;
+    NetSession host(std::make_unique<Tap>(network, &wire)), client(std::make_unique<Tap>(network, &wire));
+    host.setPassword("fondue savoyarde");
+    host.setEncryption(true);
+    client.setPassword("fondue savoyarde");
+    REQUIRE(host.host(9200, 4));
+    REQUIRE(client.join("127.0.0.1", 9200));
+    f64 now = 0.0;
+    REQUIRE(pump({&host, &client}, now, [&] { return client.connected(); }));
+    CHECK(client.encrypted(NetSession::kHostId));
+    CHECK(host.encrypted(client.localId()));
+    const std::string secret = "position du tresor: 42,17";
+    const std::string big(5000, 'Z');  // fragmented reliable message
+    REQUIRE(client.send(NetSession::kHostId, secret, true));
+    REQUIRE(client.send(NetSession::kHostId, big, true));
+    REQUIRE(host.send(client.localId(), "unreliable hello", false));
+    std::vector<NetEvent> hostEvents, clientEvents;
+    REQUIRE(pump({&host, &client}, now, [&] {
+        collect(hostEvents, host);
+        collect(clientEvents, client);
+        int got = 0;
+        for (const auto& e : hostEvents) got += e.type == NetEvent::Type::Message && (e.data == secret || e.data == big);
+        bool unreliable = false;
+        for (const auto& e : clientEvents) unreliable |= e.type == NetEvent::Type::Message && e.data == "unreliable hello";
+        return got == 2 && unreliable;
+    }));
+    // Nothing readable on the wire.
+    for (const auto& d : wire) {
+        const std::string bytes(d.begin(), d.end());
+        CHECK(bytes.find("tresor") == std::string::npos);
+        CHECK(bytes.find("ZZZZZZZZ") == std::string::npos);
+        CHECK(bytes.find("unreliable") == std::string::npos);
+    }
+    // Replay an encrypted packet, then a tampered copy: both dropped, nothing delivered.
+    std::vector<u8> captured;
+    for (const auto& d : wire)
+        if (d.size() > 40 && (d[4] & 0x80)) captured = d;
+    REQUIRE_FALSE(captured.empty());
+    const u64 before = host.stats().rejected + client.stats().rejected;
+    std::vector<u8> tampered = captured;
+    tampered[tampered.size() - 20] ^= 1;
+    // Deliver straight into both sessions' inboxes (whoever it was meant for will check it).
+    for (const u16 port : {u16(9200), client.port()}) {
+        network.inFlight.push_back({{0x7F000001, port == 9200 ? client.port() : u16(9200)}, {0x7F000001, port}, captured});
+        network.inFlight.push_back({{0x7F000001, port == 9200 ? client.port() : u16(9200)}, {0x7F000001, port}, tampered});
+    }
+    hostEvents.clear();
+    clientEvents.clear();
+    pump({&host, &client}, now, [] { return false; }, 20);
+    collect(hostEvents, host);
+    collect(clientEvents, client);
+    CHECK(host.stats().rejected + client.stats().rejected >= before + 2);
+    for (const auto& e : hostEvents) CHECK(e.type != NetEvent::Type::Message);
+    // Wrong password: refused as before; without encryption on the host, links stay clear.
+    NetSession plainHost(std::make_unique<LossyTransport>(network)), plainClient(std::make_unique<LossyTransport>(network));
+    plainHost.setPassword("x");
+    plainClient.setPassword("x");
+    REQUIRE(plainHost.host(9201, 2));
+    REQUIRE(plainClient.join("127.0.0.1", 9201));
+    REQUIRE(pump({&plainHost, &plainClient}, now, [&] { return plainClient.connected(); }));
+    CHECK_FALSE(plainClient.encrypted(NetSession::kHostId));
+}
+
 TEST_CASE("replication: only changes are sent, visibility per player (owner only, range, overrides)") {
     registerRenderComponents();
     registerNetComponents();
