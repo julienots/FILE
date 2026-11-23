@@ -540,6 +540,13 @@ public:
     vec3 fpEye, fpFwd{0, 0, 1}, fpRight{1, 0, 0}, fpUp{0, 1, 0};
     std::shared_ptr<Mesh> fpArmMesh;
     void renderViewModel(Character& c);
+    // 3.7.0 birds in 3D (Birds.cpp)
+    struct Flock { int kind = 0, n = 0; vec3 anchor, vel; float t = 0, life = 20, radius = 20, speed = 0.2f, scale = 1; vec3 tint{0.2f}; std::vector<vec4> offs; };
+    std::vector<Flock> flocks; float flockT = 6.f;
+    std::shared_ptr<Mesh> birdMesh[3];
+    void spawnFlock(vec3 around);
+    void updateBirds(float dt);
+    void renderBirds();
     // 3.6.0 the underground base (Cellar.cpp)
     struct CellarState { bool owned = false; vec3 hatch; uint32_t seed = 1; int mined = 0; std::vector<uint8_t> cells; } cellar;
     std::map<int, int> cellarHits; Entity cellarEnt = NullEntity;

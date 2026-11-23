@@ -2348,6 +2348,22 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "birds") {
+        // 3.7.0 birds in 3D: swallows over Greenhaven, gulls on the coast, a bird of prey over the Titans
+        static int seen[3];
+        auto at = [&](const char* poi, float dx, float dz, int idx, const char* file) {
+            s.push_back({4.f, [=](Game& g) { const Poi* p = g.world.poiById(poi); teleport(g, p->pos.x + dx, p->pos.y + dz, 0.f); g.timeOfDay = 10.f; g.weather = g.weatherNext = 0; g.flocks.clear(); g.flockT = 100.f;
+                    g.spawnFlock(g.pc().pos); Game::Flock& f = g.flocks.back(); f.t = 3.f; if (f.kind != 2) f.anchor = g.pc().pos - normalize(f.vel) * 14.f + vec3(0, f.anchor.y - g.pc().pos.y, 0); else f.anchor = vec3(g.pc().pos.x + 18.f, f.anchor.y, g.pc().pos.z + 10.f); seen[idx] = f.kind + 1; },
+                [=](Game& g, float t) { g.camPitch = -0.25f; g.camDist = g.camDistTarget = 9.f; if (!g.flocks.empty()) { const Game::Flock& f = g.flocks.back(); vec3 c = f.kind == 2 ? f.anchor : f.anchor; vec3 d = c - g.pc().pos; g.camYaw = std::atan2(-d.x, -d.z); }
+                    if (t > 3.5f && t < 3.6f) g.requestScreenshot(file); }, "flock"});
+        };
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        at("brindlemere", 60.f, 40.f, 0, "build/shots/BI0_swallows.png");
+        at("port_azur", 0.f, 30.f, 1, "build/shots/BI1_gulls.png");
+        at("rochebrune", 40.f, 40.f, 2, "build/shots/BI2_raptor.png");
+        s.push_back({0.2f, [](Game& g) { AGR_LOG("BIRDS kinds %d %d %d -> BIRDS TEST PASSED", seen[0], seen[1], seen[2]); }, idle, "end"});
+        return s;
+    }
     if (name == "cellar") {
         // 3.6.0 the underground base: craft-free (the hatch is given), set it down, go down, dig three blocks with
         // a pickaxe (one holds ore), come back up, save and load: the dug halls are still there

@@ -341,6 +341,7 @@ void Game::renderWorld(float dt) {
     renderFish();   // 3.5.0
     renderFallingTrees();   // 3.6.0
     renderCellarHatch();    // 3.6.0
+    renderBirds();          // 3.7.0
     if (dungeon.active) {
         renderDungeon();
         for (const vec4& l : dungeon.lights) {

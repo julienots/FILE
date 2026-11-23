@@ -318,6 +318,7 @@ void Game::updatePlaying(float dt) {
     updateGeysers(dt);   // 2.8.0
     updateTreasures(dt);   // 3.2.0
     updateForestry(dt);    // 3.6.0
+    updateBirds(dt);       // 3.7.0
     updateVfx(dt);       // 3.0.1
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
@@ -795,8 +796,8 @@ void Game::updateAmbientFx(float dt) {
         p.c0 = vec4(col * 1.6f, 1); p.c1 = vec4(col, 0); p.frame = PF_LEAF; p.additive = false; p.rotVel = 20.f;
         particles.spawn(p);
     }
-    // birds: a flock crossing the sky now and then (daytime, outdoors)
-    if (!dungeon.active && r.f() < spawnRate * 0.12f * (1 - env.night) * (1 - stormAmt)) {
+    // birds: a flock crossing the sky now and then (daytime, outdoors) — 3.7.0 now 3D flocks (Birds.cpp); the dots stay off
+    if (false && !dungeon.active && r.f() < spawnRate * 0.12f * (1 - env.night) * (1 - stormAmt)) {
         vec3 dir = normalize(vec3(r.range(-1, 1), 0, r.range(-1, 1)));
         vec3 start = c - dir * 40.f + vec3(0, r.range(12.f, 18.f), 0);
         int n = r.irange(5, 11);
