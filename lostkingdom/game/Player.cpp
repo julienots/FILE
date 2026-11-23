@@ -468,6 +468,8 @@ void Game::toggleMount() {
     Character& c = pc();
     if (riding) {
         riding = false;
+        c.vis.tiltPitch = c.vis.tiltRoll = c.vis.rideY = 0; for (float& r : c.vis.anim.ride) r = 0; rideBob = 0;   // 3.8.1
+        if (reg.valid(mountEnt)) if (Character* mm = reg.get<Character>(mountEnt)) { mm->vis.tiltPitch = mm->vis.tiltRoll = mm->vis.rideY = 0; mm->vis.anim.ride[5] = 0; }
         c.vis.anim.setState(BodyState::Locomotion, 0.25f);
         c.vis.anim.play(&clip(C_DISMOUNT), 1.f);
         if (reg.valid(mountEnt)) {
@@ -790,11 +792,77 @@ void Game::updatePlayer(float dt) {
             float hip = c.vis.anim.skeleton ? c.vis.anim.skeleton->bones[0].offset.y : 0.98f;
             seat = (0.72f + 0.05f) * m.vis.scale - hip * 0.92f;
         }
-        c.pos = m.pos + vec3(0, seat, 0) + vec3(std::sin(m.yaw), 0, std::cos(m.yaw)) * 0.05f * m.vis.scale;
+        // 3.8.1 a real horse's motion: walk (4 beats, the back swaying), trot (2 beats, jolts: the rider posts),
+        // gallop (3 beats, the body rocking fore and aft: the rider leans forward in the stirrups). The horse's body
+        // carries it (height, pitch, roll on the model), the rider sits on that moving back and reacts to it.
+        const GaitParams& gp = m.vis.anim.gait;
+        float asp = m.vis.anim.speed;
+        float moving = smoothstepf(0.05f, 0.6f, asp);
+        float trotK = saturate((asp - gp.walkSpeed * 0.8f) / gp.walkSpeed);
+        float galK = saturate((asp - gp.runSpeed) / std::max(0.1f, gp.sprintSpeed - gp.runSpeed));
+        float walkW = moving * (1.f - trotK), trotW = moving * trotK * (1.f - galK), galW = moving * galK;
+        float gaitC = moving * (1.f + trotK + galK);   // 0 stand, 1 walk, 2 trot, 3 gallop
+        float ph = m.vis.anim.phase * TAU;
+        float S = m.vis.scale;
+        // the back: height, pitch (nose up +), roll (+X side up) — in metres and radians
+        float trotJolt = std::fabs(std::sin(ph)) - 0.64f;                       // two sharp landings per stride
+        float galRock = std::sin(ph), galRock2 = std::cos(ph);
+        float bob = (walkW * 0.018f * std::cos(2.f * ph) + trotW * 0.075f * trotJolt + galW * 0.065f * galRock) * S;
+        float pitch = (walkW * 1.2f * std::sin(2.f * ph) + trotW * 1.0f * std::sin(2.f * ph) + galW * 7.5f * galRock2) * DEG;
+        float roll = (walkW * 3.2f * std::sin(ph) + trotW * 1.6f * std::sin(ph) + galW * 2.f * std::sin(ph + 0.6f)) * DEG;
+        // leaning into turns, climbing and descending
+        float turn = clampf(m.vis.anim.turnRate * hs * 0.035f, -0.32f, 0.32f);
+        roll -= turn;
+        {
+            vec3 f{std::sin(m.yaw), 0, std::cos(m.yaw)};
+            float L = 1.1f * S;
+            float sl = (groundAt(m.pos.x + f.x * L, m.pos.z + f.z * L) - groundAt(m.pos.x - f.x * L, m.pos.z - f.z * L)) / (2.f * L);
+            rideSlope = damp(rideSlope, clampf(std::atan(sl), -0.4f, 0.4f), 6.f, dt);
+        }
+        pitch += rideSlope;
+        m.vis.tiltPitch = pitch; m.vis.tiltRoll = roll; m.vis.rideY = bob;
+        m.vis.anim.ride[5] = 1.f;
+        rideBob = bob;
+        // the rider's inertia: thrown back when the horse surges, forward when it brakes (a spring with a little overshoot)
+        float acc = (hs - rideHsPrev) / std::max(dt, 1e-4f);
+        rideHsPrev = hs;
+        float tgt = clampf(-acc * 0.09f, -1.f, 1.f);
+        rideLeanV += ((tgt - rideLean) * 38.f - rideLeanV * 7.f) * dt;
+        rideLean = clampf(rideLean + rideLeanV * dt, -1.2f, 1.2f);
+        quat rh = quat::axisAngle({0, 1, 0}, m.yaw) * quat::axisAngle({1, 0, 0}, -pitch) * quat::axisAngle({0, 0, 1}, roll);
+        c.pos = m.pos + rh.rotate(vec3(0, seat, 0.05f * S));
+        c.vis.tiltPitch = pitch; c.vis.tiltRoll = roll; c.vis.rideY = bob;
         c.yaw = m.yaw; c.vel = m.vel; c.grounded = true;
         a.aux[1] = saturate(hs / md.speed);
+        a.ride[0] = gaitC; a.ride[1] = turn / 0.32f; a.ride[2] = rideLean; a.ride[3] = pitch / DEG; a.ride[4] = roll / DEG;
         a.phase = m.vis.anim.phase;
         a.speed = 0;
+        // hoof beats in time with the legs (each hoof lands when its leg passes under the body)
+        {
+            static const float walkOff[4] = {0.25f, 0.75f, 0.0f, 0.5f}, trotOff[4] = {0.0f, 0.5f, 0.5f, 0.0f}, galOff[4] = {0.0f, 0.12f, 0.55f, 0.65f};
+            float p0 = ridePhasePrev, p1 = m.vis.anim.phase;
+            if (moving > 0.3f && p1 != p0) {
+                for (int l = 0; l < 4; l++) {
+                    float off = lerpf(lerpf(walkOff[l], trotOff[l], trotK), galOff[l], galK);
+                    float a0 = p0 + off - 0.25f, a1 = p1 + off - 0.25f;
+                    if (p1 < p0) a1 += 1.f;
+                    if (std::floor(a1) > std::floor(a0)) {
+                        bool front = l < 2;
+                        float vol = (0.22f + 0.25f * trotW + 0.4f * galW) * (front ? 1.f : 0.85f);
+                        if (trotW > 0.5f && (l == 1 || l == 3)) continue;   // a diagonal pair lands as one beat
+                        if (m.inWater) play3D(variant("step_water"), m.pos, vol, 0.8f);
+                        else play3D("hoof" + std::to_string(1 + ((l + (int)(gameTime * 7)) % 3)), m.pos, vol, 0.9f + 0.05f * l + (front ? 0.f : -0.06f));
+                    }
+                }
+            }
+            ridePhasePrev = p1;
+        }
+        // leather and breath
+        rideCreakT -= dt * (0.5f + trotW * 2.f + galW * 1.5f) * moving;
+        if (rideCreakT < 0.f) { rideCreakT = 1.6f + particles.rng.f() * 1.4f; play3D("saddle_creak", c.pos, 0.25f + 0.2f * trotW, 0.9f + particles.rng.f() * 0.2f); }
+        rideSnortT -= dt * (0.25f + galW * 1.2f + (moving < 0.1f ? 0.4f : 0.f));
+        if (rideSnortT < 0.f) { rideSnortT = 6.f + particles.rng.f() * 8.f; play3D("horse_snort", m.pos + vec3(std::sin(m.yaw), 1.4f, std::cos(m.yaw)) * S, 0.45f, 0.9f + particles.rng.f() * 0.2f); }
+        if (galW > 0.6f && particles.rng.f() < dt * 6.f) particles.dust(m.pos - vec3(std::sin(m.yaw), 0, std::cos(m.yaw)) * S, 0.4f);   // dust thrown by the hooves
         if (input.jump) toggleMount();
         if (input.attack) { notify("Descendez de monture pour combattre.", vec3(1, 0.8f, 0.6f)); }
         if (mag > 0.1f && footstepT <= 0) { footstepT = 0.35f; }

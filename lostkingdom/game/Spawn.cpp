@@ -56,7 +56,7 @@ void Game::loadAssets() {
                                    // 2.3.4 variants (a step never sounds twice the same) and the sand
                                    "step_grass2", "step_grass3", "step_stone2", "step_stone3", "step_snow2", "step_snow3", "step_wood2", "step_wood3",
                                    "step_water2", "step_water3", "step_sand", "step_sand2", "step_sand3", "horse2", "horse3",
-                                   "bird_chirp", "bird_chirp2", "bird_chirp3", "gull", "eagle", "owl", "frog", "crow", "cuckoo", "bubbles", "chop", "pick_stone", "tree_fall", "leaves", "item_get", "voice"};   // 3.7.1, 3.8.0
+                                   "bird_chirp", "bird_chirp2", "bird_chirp3", "gull", "eagle", "owl", "frog", "crow", "cuckoo", "bubbles", "chop", "pick_stone", "tree_fall", "leaves", "item_get", "voice", "hoof1", "hoof2", "hoof3", "horse_snort", "saddle_creak"};   // 3.7.1, 3.8.0, 3.8.1
     int loaded = 0;
     for (const char* s : sounds) {
         std::vector<uint8_t> b;
@@ -481,7 +481,7 @@ Entity Game::spawnMount(int def, vec3 pos) {
     c.team = Team::Mount; c.pos = pos; c.mountDef = def; c.name = m.name; c.maxHp = c.hp = 300;
     setupVisualCreature(c.vis, Arch::Quadruped, m.look, m.scale);
     if (m.id == "horse") applyImportedModel(c.vis, "horse_mount", Arch::Quadruped);   // 2.3.3 the detailed horse (falls back to the built one)
-    c.vis.anim.gait.walkSpeed = 2.f; c.vis.anim.gait.runSpeed = m.speed; c.vis.anim.gait.sprintSpeed = m.sprint;
+    c.vis.anim.gait.walkSpeed = 1.6f; c.vis.anim.gait.runSpeed = m.speed * 0.68f; c.vis.anim.gait.sprintSpeed = m.speed * 0.9f;   // 3.8.1 the speeds actually reached: walk, trot at the usual pace, gallop when spurred
     c.radius = 0.6f; c.height = 1.6f;
     reg.add<Character>(e, c);
     Interact it; it.kind = InterKind::Mount; it.param = def; it.text = "Monter"; it.radius = 2.5f;

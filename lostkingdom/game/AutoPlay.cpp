@@ -2349,6 +2349,47 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "ride") {
+        // 3.8.1 riding like a real horse: walk, trot (posting), gallop (forward seat), filmed from the side; the
+        // horse's back rises and rocks with each gait and the rider moves with it
+        static float bobMin[4], bobMax[4], pMin[4], pMax[4], postMax[4]; static int gaitSeen[4];
+        static int shotN = 0;
+        s.push_back({2.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.timeOfDay = 10.f; g.weather = g.weatherNext = 0;
+            for (int i = 0; i < 4; i++) { bobMin[i] = pMin[i] = 1e9f; bobMax[i] = pMax[i] = postMax[i] = -1e9f; gaitSeen[i] = 0; }
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + 60.f, b->pos.y + 60.f, 0.f);
+            g.ownedMounts.push_back("horse"); g.activeMount = -1; g.toggleMount(); }, idle, "call"});
+        s.push_back({1.5f, [](Game& g) { if (g.reg.valid(g.mountEnt)) { Character* m = g.reg.get<Character>(g.mountEnt); m->pos = g.pc().pos + vec3(1.f, 0, 0); m->yaw = g.pc().yaw = 0.f; } AGR_LOG("RIDE before: valid %d active %d dungeon %d dist %.1f", (int)g.reg.valid(g.mountEnt), g.activeMount, (int)g.dungeon.active, g.reg.valid(g.mountEnt) ? distXZ(g.reg.get<Character>(g.mountEnt)->pos, g.pc().pos) : -1.f); if (!g.riding) g.toggleMount(); AGR_LOG("RIDE mounted %d", (int)g.riding); }, idle, "mount"});
+        auto gait = [&](const char* nm, int gi, float mv, bool spr, float dur) {
+            s.push_back({dur, none, [=](Game& g, float t) {
+                g.input.move = vec2(0, mv); g.input.sprint = spr; g.stamina = g.maxStamina;
+                g.camYaw = g.pc().yaw + PI * 0.5f; g.camPitch = 0.18f; g.camDist = g.camDistTarget = 7.f;
+                if (t > dur * 0.5f) {
+                    const Animator& a = g.pc().vis.anim;
+                    int k = std::max(0, std::min(3, (int)std::lround(a.ride[0])));
+                    gaitSeen[gi] = std::max(gaitSeen[gi], k);
+                    bobMin[gi] = std::min(bobMin[gi], g.rideBob); bobMax[gi] = std::max(bobMax[gi], g.rideBob);
+                    float gp = a.ride[3] - g.rideSlope / DEG; pMin[gi] = std::min(pMin[gi], gp); pMax[gi] = std::max(pMax[gi], gp);   // the gait alone (without the slope)
+                    postMax[gi] = std::max(postMax[gi], a.pose.rootOffset.y);
+                    if (std::fabs(t - dur * 0.75f) < 0.017f && g.reg.valid(g.mountEnt)) { Character* m = g.reg.get<Character>(g.mountEnt); AGR_LOG("RIDE %s: horse speed %.2f anim %.2f (run %.1f sprint %.1f) stamina %.0f", nm, length(vec2(m->vel.x, m->vel.z)), m->vis.anim.speed, m->vis.anim.gait.runSpeed, m->vis.anim.gait.sprintSpeed, g.stamina); }
+                }
+                for (int j = 0; j < 3; j++) if (std::fabs(t - (dur - 1.2f + j * 0.37f)) < 0.017f) {
+                    char f[96]; snprintf(f, sizeof f, "build/shots/RD%d_%s_%d.png", gi, nm, j); g.requestScreenshot(f); }
+            }, nm});
+        };
+        gait("walk", 1, 0.35f, false, 4.f);
+        gait("trot", 2, 1.f, false, 4.f);
+        gait("gallop", 3, 1.f, true, 4.f);
+        s.push_back({0.2f, [](Game& g) {
+            bool ok = g.riding;
+            for (int i = 1; i <= 3; i++) {
+                AGR_LOG("RIDE gait %d: seen %d bob %.3f..%.3f m pitch %.1f..%.1f deg rider rise %.3f", i, gaitSeen[i], bobMin[i], bobMax[i], pMin[i], pMax[i], postMax[i]);
+                ok = ok && gaitSeen[i] == i && bobMax[i] - bobMin[i] > 0.01f;
+            }
+            ok = ok && (pMax[3] - pMin[3]) > (pMax[1] - pMin[1]) && postMax[2] > 0.04f;   // the gallop rocks more than the walk, the trot is posted
+            g.input.move = vec2(0); g.input.sprint = false; if (g.riding) g.toggleMount();
+            AGR_LOG("RIDE -> %s", ok ? "RIDE TEST PASSED" : "RIDE TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "dialogue") {
         // 3.8.0 the story told in scenes: meet Maëlle (a 7-line conversation, hero lines on the right, gestures,
         // two-shot camera, live portraits), take m2 (its scripted offer), finish it (its ending scene plays at the

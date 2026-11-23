@@ -228,12 +228,43 @@ def voice():
     return norm(lp(v * e, 4200), 0.55)
 
 
+def hoof(i):
+    # 3.8.1 one hoof on packed earth: a low thump, the click of the shoe, a little grit
+    r = np.random.default_rng(40 + i); d = 0.22; t = t_(d); n = len(t)
+    thump = np.sin(2 * np.pi * (70 + 15 * i) * t * (1 - 0.4 * t / d)) * np.exp(-t * 38)
+    click = bp(r.standard_normal(n), 1800 + 300 * i, 4200, 2) * np.exp(-t * 160) * 0.5
+    grit = bp(r.standard_normal(n), 500, 2500, 2) * np.exp(-t * 22) * 0.18
+    return norm(thump + click + grit, 0.8)
+
+
+def horse_snort():
+    r = np.random.default_rng(77); d = 0.9; t = t_(d); n = len(t)
+    air = bp(r.standard_normal(n), 250, 1600, 2)
+    flutter = 1 + 0.6 * np.sin(2 * np.pi * 34 * t)
+    e = np.minimum(1, t / 0.05) * np.exp(-np.maximum(0, t - 0.12) * 5.5)
+    return norm(air * flutter * e + lp(r.standard_normal(n), 200) * e * 0.4, 0.6)
+
+
+def saddle_creak():
+    r = np.random.default_rng(91); d = 0.35; t = t_(d)
+    f = 140 + 60 * np.sin(2 * np.pi * 3 * t)
+    ph = np.cumsum(f) / SR
+    stick = (np.mod(ph, 1.0) < 0.15).astype(float)
+    v = bp(stick, 300, 1800, 2) * np.sin(np.pi * t / d) ** 2
+    jingle = sum(np.sin(2 * np.pi * fr * t) * np.exp(-(t - at).clip(0) * 30) * (t > at) for fr, at in ((3200, 0.05), (4100, 0.12), (3700, 0.2)))
+    return norm(v + jingle * 0.08, 0.4)
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--ride":
+        for i in range(3): MA.write_ogg(os.path.join(OUT, "sfx", "hoof%d.ogg" % (i + 1)), hoof(i))
+        MA.write_ogg(os.path.join(OUT, "sfx", "horse_snort.ogg"), horse_snort())
+        MA.write_ogg(os.path.join(OUT, "sfx", "saddle_creak.ogg"), saddle_creak()); print("wrote ride sounds"); return
     if len(sys.argv) > 1 and sys.argv[1] == "--voice":
         MA.write_ogg(os.path.join(OUT, "sfx", "voice.ogg"), voice()); print("wrote voice"); return
     sfx = {"bird_chirp": bird(0), "bird_chirp2": bird(1), "bird_chirp3": bird(2), "gull": gull(), "eagle": eagle(), "owl": owl(),
            "frog": frog(), "crow": crow(), "cuckoo": cuckoo(), "bubbles": bubbles(), "chop": chop(), "pick_stone": pick_stone(),
-           "tree_fall": tree_fall(), "leaves": leaves(), "item_get": item_get(), "voice": voice()}
+           "tree_fall": tree_fall(), "leaves": leaves(), "item_get": item_get(), "voice": voice(), "hoof1": hoof(0), "hoof2": hoof(1), "hoof3": hoof(2), "horse_snort": horse_snort(), "saddle_creak": saddle_creak()}
     for k, v in sfx.items():
         MA.write_ogg(os.path.join(OUT, "sfx", k + ".ogg"), v)
     for k, f in (("amb_meadow", amb_meadow), ("amb_underwater", amb_underwater), ("amb_desert", amb_desert)):

@@ -368,17 +368,39 @@ static void humanMounted(const Animator& a, Pose& p) {
         }
         return;
     }
-    float trot = a.aux[1];  // mount gait intensity
-    p.rootOffset = vec3(0, std::sin(a.phase * TAU * 2) * 0.04f * trot, 0);
-    p.rot[H_SPINE] = E(6 + 10 * trot, 0, 0);
-    p.rot[H_CHEST] = E(std::sin(t * 1.6f) * 1.2f, 0, 0);
+    // 3.8.1 a rider who rides: the pelvis follows the saddle (the whole body is already carried by the horse's back),
+    // the trunk and head absorb it — the walk sways the hips, the trot is posted (rising in the stirrups every
+    // other beat, the knees opening), the gallop is ridden forward in the stirrups with the hands following the
+    // horse's neck. Turns and surges are felt too (lean into the curve, thrown back, then forward).
+    float g = a.ride[0];
+    float walkW = saturate(1.f - std::fabs(g - 1.f)), trotW = saturate(1.f - std::fabs(g - 2.f)), galW = saturate(g - 2.f), standW = saturate(1.f - g);
+    float ph = a.phase * TAU;
+    float turn = a.ride[1], lean = a.ride[2], hP = a.ride[3], hR = a.ride[4];
+    // posting trot: up on one diagonal, sit on the next (one rise per stride)
+    float post = trotW * (0.5f + 0.5f * std::sin(ph - 0.4f));
+    float sitJolt = trotW * std::max(0.f, -std::sin(2.f * ph)) * (1.f - post) * 0.02f;
+    float galUp = galW * (0.05f + 0.02f * std::sin(ph + 1.2f));   // two-point seat: hovering above the saddle
+    p.rootOffset = vec3(0, post * 0.085f + galUp - sitJolt + standW * std::sin(t * 1.3f) * 0.004f, -galW * 0.05f + post * 0.03f);
+    // the pelvis rolls and rocks with the back (walk), the trunk counters the horse's pitch and roll
+    p.rot[H_ROOT] = E(walkW * std::sin(2.f * ph) * 3.f + galW * std::cos(ph) * 4.f, walkW * std::sin(ph) * 4.f, walkW * std::sin(ph) * 3.f - turn * 6.f);
+    float fwd = 6.f + trotW * 10.f + post * 6.f + galW * 26.f + lean * 14.f;
+    p.rot[H_SPINE] = E(fwd + hP * 0.55f, -walkW * std::sin(ph) * 3.f, -hR * 0.6f - turn * 10.f);
+    p.rot[H_CHEST] = E(std::sin(t * 1.6f) * 1.2f * standW + galW * 6.f + lean * 6.f + trotW * std::sin(2.f * ph) * 2.f, walkW * std::sin(ph) * 2.f, -turn * 4.f);
+    // eyes on the horizon: the neck and head undo the body's tilt (lagging a little behind the jolts)
+    p.rot[H_NECK] = E(-(fwd * 0.45f) - galW * 8.f + trotW * std::sin(2.f * ph - 0.6f) * 3.f, 0, hR * 0.3f + turn * 5.f);
+    p.rot[H_HEAD] = E(-(fwd * 0.25f) - hP * 0.4f + trotW * std::sin(2.f * ph - 1.0f) * 2.5f + galW * std::sin(ph - 0.8f) * 3.f, turn * 18.f + standW * std::sin(t * 0.35f) * 14.f, turn * 4.f);
     for (int s = 0; s < 2; s++) {
         float side = s ? -1.f : 1.f;
-        p.rot[s ? H_THIGHR : H_THIGHL] = E(-75, side * 18, side * 28);
-        p.rot[s ? H_SHINR : H_SHINL] = E(80, 0, 0);
-        p.rot[s ? H_FOOTR : H_FOOTL] = E(-10, 0, 0);
-        p.rot[s ? H_UARMR : H_UARML] = E(-35, 0, side * 8);
-        p.rot[s ? H_LARMR : H_LARML] = E(-60, side * -15, 0);
+        // legs around the barrel, heels down, the knees taking the rising (trot) or the hovering (gallop)
+        float knee = post * 22.f + galW * 30.f;
+        p.rot[s ? H_THIGHR : H_THIGHL] = E(-72 + post * 18.f + galW * 6.f, side * 18, side * 28 - side * galW * 4.f);
+        p.rot[s ? H_SHINR : H_SHINL] = E(80 - knee * 0.4f + galW * 22.f + walkW * std::sin(ph + s * PI) * 4.f, 0, 0);
+        p.rot[s ? H_FOOTR : H_FOOTL] = E(-14 - galW * 10.f + trotW * 6.f, 0, 0);
+        // hands low and together on the reins, following the horse's neck (it nods at the walk, swings at the gallop)
+        float follow = walkW * std::cos(2.f * ph) * 7.f + galW * std::cos(ph + 0.8f) * 12.f;
+        p.rot[s ? H_UARMR : H_UARML] = E(-35 - galW * 18.f - follow, side * 6, side * 10);
+        p.rot[s ? H_LARMR : H_LARML] = E(-60 + galW * 15.f + follow * 0.5f, side * -18, 0);
+        p.rot[s ? H_HANDR : H_HANDL] = E(10, 0, side * 12);
     }
 }
 
@@ -464,13 +486,20 @@ static void quadLoco(const Animator& a, Pose& p) {
     }
     float ph = a.phase * TAU;
     float bob = (0.02f + 0.04f * gallopW) * moving;
-    p.rootOffset = vec3(0, -bob * (0.5f + 0.5f * std::cos(2 * ph)), 0);
-    p.rot[Q_ROOT] = E(std::sin(ph) * 6 * gallopW, 0, clampf(-a.turnRate * sp * 0.8f, -8, 8));
+    bool ridden = a.ride[5] > 0.f;   // 3.8.1 ridden: the body's rise, pitch and roll are carried by the model (shared with the rider)
+    if (!ridden) {
+        p.rootOffset = vec3(0, -bob * (0.5f + 0.5f * std::cos(2 * ph)), 0);
+        p.rot[Q_ROOT] = E(std::sin(ph) * 6 * gallopW, 0, clampf(-a.turnRate * sp * 0.8f, -8, 8));
+    }
     p.rot[Q_SPINE] = E(-std::sin(ph) * 10 * gallopW, std::sin(ph) * 3 * moving, 0);
     float breath = std::sin(t * 2.2f) * 1.5f * idle;
     p.rot[Q_CHEST] = E(breath + std::sin(ph) * 6 * gallopW, 0, 0);
-    p.rot[Q_NECK] = E(-10 * moving + std::cos(2 * ph) * 4 * moving - a.aux[0] * 15, std::sin(t * 0.4f) * 20 * idle, 0);
-    p.rot[Q_HEAD] = E(8 * moving + a.aux[0] * 20, std::sin(t * 0.27f) * 10 * idle, 0);
+    // 3.8.1 the neck works like a balancing pole: a deep nod at the walk (twice per stride), still at the trot,
+    // a long swing with each gallop bound
+    float walkW = moving * (1.f - trotW);
+    float nod = walkW * std::cos(2 * ph) * 9.f + (1.f - walkW) * std::cos(2 * ph) * 3.f * moving * (1.f - gallopW) + gallopW * std::cos(ph + 0.8f) * 14.f;
+    p.rot[Q_NECK] = E(-10 * moving + nod - a.aux[0] * 15 - gallopW * 8.f, std::sin(t * 0.4f) * 20 * idle, 0);
+    p.rot[Q_HEAD] = E(8 * moving - nod * 0.45f + a.aux[0] * 20, std::sin(t * 0.27f) * 10 * idle, 0);
     p.rot[Q_JAW] = E(a.aux[0] * 8 + (gallopW > 0.5f ? 8.f : 0.f), 0, 0);
     float wag = std::sin(t * (2.f + 6 * moving)) * (15 + 10 * moving);
     p.rot[Q_TAIL1] = E(-10 - 20 * gallopW - a.aux[0] * 10, wag * 0.5f, 0);

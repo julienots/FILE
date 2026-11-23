@@ -657,7 +657,7 @@ void Game::updateCharacters(float dt) {
             }
         }
         if (e == mountEnt && riding) { c.pos.y = groundAt(c.pos.x, c.pos.z); vec3 tmp = c.pos; collideStatic(c.pos, c.radius, c.pos.y); c.pos += vec3(c.vel.x, 0, c.vel.z) * dt; (void)tmp;
-            if (c.vis.anim.speed > 0.5f && c.vis.anim.footstepEvent) { c.vis.anim.footstepEvent = 0; play3D(variant("horse"), c.pos, 0.3f, 1.0f); } }
+            c.vis.anim.footstepEvent = 0; }   // 3.8.1 the hooves are heard in time with each leg (updatePlayer)
         if (c.dead) {
             c.deathT += dt;
             if (e != player && c.deathT > 1.4f) {

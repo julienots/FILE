@@ -110,6 +110,9 @@ public:
     float swimCrawl = 0.f, swimDive = 0.f;   // 2.4.0 swim styles: front crawl (fast), underwater
     int stance = 0;           // archetype-specific (weapon stance for humanoids)
     float aux[4] = {0, 0, 0, 0};  // archetype-specific parameters (e.g. fly height, aggression)
+    // 3.8.1 riding: rider {gait 0 stand..1 walk..2 trot..3 gallop, turn lean, inertia lean, horse pitch, horse roll, posting};
+    // horse: ride[5] > 0 when ridden (the body motion is carried by the model instead of the root bone)
+    float ride[6] = {0, 0, 0, 0, 0, 0};
     BodyState state = BodyState::Locomotion;
     // Outputs
     Pose pose;

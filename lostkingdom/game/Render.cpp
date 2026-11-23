@@ -184,6 +184,7 @@ void Game::updateCamera(float dt) {
         eye = lerp(eye, cineLastEye, k); look = lerp(look, cineLastLook, k);
         camCineBlend = std::max(0.f, camCineBlend - dt / 0.7f);
     }
+    if (riding && dlgCamK < 0.01f) { eye.y += rideBob * 0.3f; look.y += rideBob * 0.45f; }   // 3.8.1 the horse's gait felt in the camera (softened)
     if (shake > 0) {
         Rng r((uint64_t)(realTime * 977));
         eye += r.onSphere() * shake * 0.35f;
@@ -593,7 +594,7 @@ void Game::renderCharacter(Entity e, Character& c) {
         }
         v.slopePitch = damp(v.slopePitch, wantP, 8.f, fdt); v.slopeRoll = damp(v.slopeRoll, wantR, 8.f, fdt);
     }
-    vec3 rpos{c.pos.x, v.visY, c.pos.z};
+    vec3 rpos{c.pos.x, v.visY + v.rideY, c.pos.z};
     quat rq = quat::axisAngle({0, 1, 0}, v.visYaw);
     if (v.tiltPitch != 0 || v.tiltRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.tiltPitch) * quat::axisAngle({0, 0, 1}, v.tiltRoll);   // rider on the motorbike
     else if (v.slopePitch != 0 || v.slopeRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.slopePitch) * quat::axisAngle({0, 0, 1}, v.slopeRoll);

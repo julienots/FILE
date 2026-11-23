@@ -43,7 +43,8 @@ struct Visual {
     float tiltPitch = 0, tiltRoll = 0;
     // 3.4.0 smoothing of what is drawn (the simulation keeps its exact values): height over steps and bumps,
     // turning, and the body following the slope of the ground
-    float visY = -1e9f, visYaw = 0, visLastT = -1.f, slopePitch = 0, slopeRoll = 0;   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
+    float visY = -1e9f, visYaw = 0, visLastT = -1.f, slopePitch = 0, slopeRoll = 0;
+    float rideY = 0;   // 3.8.1 the horse's body rising and falling with its gait (horse and rider)   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
     vec3 dissolveColor{1.f, 0.5f, 0.15f};
     bool outline = true;
     vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
@@ -590,6 +591,8 @@ public:
     std::map<std::string, std::string> convQueue;   // npc id -> conversation to play at the next talk (quest endings)
     float dlgCamK = 0; vec3 dlgEye, dlgLook; bool dlgCamInit = false;
     float heroIdleT = 0;
+    // 3.8.1 riding: inertia of the rider (spring), the last speed, hoof beats, the gait shake on the camera
+    float rideLean = 0, rideLeanV = 0, rideHsPrev = 0, rideBob = 0, ridePhasePrev = 0, rideSnortT = 4.f, rideCreakT = 0, rideSlope = 0;
     void playConversation(const std::string& key, bool prepend);
     void dialogLineStart();
     void updateDialogScene(float dt);

@@ -6,13 +6,42 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.8.0 (versionCode 61), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.7.1 : elle s'installe par-dessus). SHA-256 : `6a0f21078497994a8dbd9d47299ae0e0f47ea710b3e525ffe50fe82263af74b1`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.8.1 (versionCode 62), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.8.0 : elle s'installe par-dessus). SHA-256 : `354665d729558d08118b0de555bbf440cef6cf03d480148de98417239fb5dc8e`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.8.1 (un cheval qui bouge comme un vrai cheval, et un cavalier qui le ressent)
+
+- **Trois vraies allures**, avec des seuils calés sur les vitesses réellement atteintes :
+  - **pas** au joystick à moitié poussé ;
+  - **trot** à l'allure normale ;
+  - **galop** en éperonnant (sprint).
+  - Auparavant, le cheval trottait presque toujours.
+- **Le corps du cheval porte le mouvement**. Le dos monte, descend, tangue et roule selon l'allure :
+  - **pas** : balancement à quatre temps ;
+  - **trot** : deux secousses sèches par foulée ;
+  - **galop** : bascule avant-arrière à chaque bond.
+  - Le cheval s'incline dans les virages et suit la pente.
+  - L'encolure joue le balancier : grand hochement au pas, tête stable au trot, ample au galop.
+- **Le cavalier est assis sur ce dos en mouvement** (sa position est calculée sur la selle inclinée) et il réagit :
+  - au pas, les hanches suivent le balancement ;
+  - au trot, il fait le trot enlevé : il se lève dans les étriers une foulée sur deux, genoux qui s'ouvrent, avec un petit choc quand il se rassoit ;
+  - au galop, il passe en équilibre, penché en avant au-dessus de la selle, et ses mains suivent l'encolure ;
+  - il se penche dans les virages, est rejeté en arrière quand le cheval accélère et vers l'avant quand il freine (ressort avec léger rebond) ;
+  - la tête reste stable, le regard à l'horizon, avec un petit retard sur les secousses.
+- **On le ressent** :
+  - la caméra suit une partie des secousses, adoucies ;
+  - poussière soulevée au galop.
+- **Nouveaux sons** :
+  - chaque sabot est entendu au moment où il touche le sol (4 temps au pas, 2 au trot, 3-4 au galop) ;
+  - éclaboussures dans l'eau ;
+  - grincement du cuir et tintement de la selle ;
+  - ébrouements du cheval.
+- Tests : nouveau scénario `ride` (pas, trot, galop filmés de profil). Il vérifie que chaque allure est atteinte, que le dos du cheval bouge à chaque allure, que le galop tangue plus que le pas et que le trot est enlevé.
 
 ### Nouveautés 3.8.0 (une histoire racontée en vraies scènes de dialogue, animations de conversation)
 
