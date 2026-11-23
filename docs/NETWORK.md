@@ -115,6 +115,38 @@ par un joueur arrivé après, RPC client → tous (relayé avec le vrai expédit
 client → hôte, disparition partout, propriétés rendues à l'hôte au départ d'un joueur ; message de
 10 Ko fragmenté avec 30 % de pertes ; découverte ; permissions des RPC.
 
+## Prédiction côté client et compensation de latence
+
+Ce que Godot ne fournit pas tout fait : un déplacement **décidé par l'hôte** (pas de triche sur la
+position) mais **sans retard** pour le joueur qui le commande.
+
+- `agr.net.setController(entité, joueur)` (hôte) : ce joueur pilote l'entité par ses entrées ; l'hôte
+  la possède et la simule (`NetSync.controller`).
+- Dans le script de l'entité, le déplacement s'écrit une seule fois, dans `onNetInput(input, dt)` ; le
+  joueur appelle `self.entity:netInput({ x = axe, saut = appuyé })` à chaque image :
+  ```lua
+  function Hero:onNetInput(input, dt) self.entity:translate(input.x * 5 * dt, 0, 0) end
+  function Hero:onUpdate(dt) self.entity:netInput({ x = agr.input.value("move_x") }) end
+  ```
+- **Prédiction** : l'entrée est appliquée tout de suite chez le joueur, envoyée à l'hôte (non fiable,
+  chaque paquet répète les 8 dernières entrées non confirmées), qui l'applique dans l'ordre et une seule
+  fois (au plus 0,25 s par entrée : pas d'accélération par triche). **Réconciliation** : chaque état de
+  l'hôte porte le numéro de la dernière entrée traitée ; le joueur reprend la position de l'hôte et
+  rejoue les entrées pas encore traitées. Les autres joueurs voient l'entité interpolée, comme d'habitude.
+  En solo, `netInput` applique simplement l'entrée : le même script sert hors ligne.
+- **Compensation de latence** : l'hôte garde 1 s d'historique des positions ;
+  `agr.net.positionAt(entité, temps)` donne où elle était à ce temps de l'hôte, et
+  `agr.net.viewTime()` (chez le client) le temps de ce qu'il voit (horloge réseau − demi-aller-retour −
+  délai d'interpolation) : le tireur envoie `viewTime()` avec son tir, l'hôte vérifie le tir là où la
+  cible était à l'écran du tireur.
+- Statistiques (`Replicator::stats`) : entrées envoyées, appliquées, rejouées, écart de la dernière
+  correction.
+
+Test (20 % de pertes et paquets désordonnés) : la première entrée déplace le joueur dans la même image ;
+après 60 images de course, hôte et joueur sont au même endroit à 0,1 % près, le troisième joueur aussi ;
+un autre joueur ne peut pas piloter l'entité ; une entrée qui réclame 10 s est ramenée à 0,25 s et le
+joueur est corrigé ; `positionAt` retrouve la position d'il y a 0,25 s.
+
 ## Horloge partagée
 
 `agr.net.time()` rend l'horloge de l'**hôte** (secondes) sur toutes les machines, et `true` quand elle
@@ -201,6 +233,7 @@ agr.ws.close(id [, 1000, "raison"])
 - Chiffrement à **clé partagée** (le mot de passe) : pas d'échange de clés Diffie-Hellman ni de
   certificats ; qui connaît le mot de passe et a enregistré la poignée de main peut déchiffrer la
   session (pas de confidentialité persistante). La découverte LAN et la poignée de main restent en clair.
-- Interpolation intégrée (NetSync) mais pas de prédiction / réconciliation côté client ni de
-  compensation de latence ; `spawnWhenVisible` ne concerne que les entités créées en réseau (les
+- Prédiction : le mouvement rejoué est celui du script (`onNetInput`) ; la physique (corps rigides,
+  contrôleurs de personnage) n'est pas rembobinée, et la correction est instantanée (pas de lissage
+  visuel de l'écart) ; `spawnWhenVisible` ne concerne que les entités créées en réseau (les
   entités de la scène existent partout).

@@ -255,6 +255,13 @@ bool ScriptEngine::callRpc(Scene& scene, ecs::Entity e, const std::string& funct
     const nlohmann::json args = nlohmann::json::parse(argsJson, nullptr, false);
     return m->invokeRpc(scene, e, function, args.is_discarded() ? nlohmann::json::array() : args, sender, true);
 }
+bool ScriptEngine::callNetInput(Scene& scene, ecs::Entity e, const std::string& inputJson, float dt) {
+    nlohmann::json args = nlohmann::json::array();
+    const nlohmann::json input = nlohmann::json::parse(inputJson, nullptr, false);
+    args.push_back(input.is_discarded() ? nlohmann::json::object() : input);
+    args.push_back(dt);
+    return m->invokeRpc(scene, e, "onNetInput", args, 0, false);
+}
 void ScriptEngine::setGestures(const GestureRecognizer* gestures) { m->gestures = gestures; }
 void ScriptEngine::setSceneLoader(std::function<void(std::string)> loader) { m->sceneLoader = std::move(loader); }
 void ScriptEngine::setAsyncSceneLoading(AsyncSceneLoading loading) { m->asyncScenes = std::move(loading); }

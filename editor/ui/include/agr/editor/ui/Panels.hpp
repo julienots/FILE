@@ -760,6 +760,7 @@ private:
     std::string m_output;
     bool m_deploy = false;              // Android APK: install and start on the device afterwards
     std::thread m_deviceLogThread;      // the game's log on the device, while it runs
+    std::mutex m_deviceLogMutex;        // guards m_deviceLogThread (created by the export thread)
     std::atomic<bool> m_deviceLog{false};
     void stopDeviceLog();
     std::string m_device;               // adb serial (empty = the only connected device)

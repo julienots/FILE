@@ -28,7 +28,12 @@ ExportPanel::~ExportPanel() {
 
 void ExportPanel::stopDeviceLog() {
     m_deviceLog = false;
-    if (m_deviceLogThread.joinable()) m_deviceLogThread.join();
+    std::thread t;
+    {
+        std::lock_guard lock(m_deviceLogMutex);  // the export thread may be creating it right now
+        t = std::move(m_deviceLogThread);
+    }
+    if (t.joinable()) t.join();
 }
 
 void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
@@ -92,6 +97,7 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
                     report = st.error();
                 } else {
                     log("Le jeu tourne sur l'appareil ; son journal s'affiche ci-dessous (« Arrêter le journal » pour le couper).");
+                    std::lock_guard threadLock(m_deviceLogMutex);
                     m_deviceLog = true;
                     m_deviceLogThread = std::thread([this, reader, log] {
                         while (m_deviceLog.load()) {

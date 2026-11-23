@@ -177,6 +177,47 @@ int doRpc(lua_State* L, ecs::Entity e, u32 target, const std::string& fn, int fi
     lua_pushboolean(L, sent);
     return 1;
 }
+/// entity:netInput(input [, dt]) -> applied: prediction (see NetSync.controller); the script's
+/// onNetInput(input, dt) runs here at once and on the host.
+int e_netInput(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    auto& m = implOf(L);
+    const float dt = static_cast<float>(luaL_optnumber(L, 3, m.time.deltaSeconds));
+    const nlohmann::json input = toJson(L, 2);
+    bool applied = false;
+    if (m.replicator && m.net) applied = m.replicator->sendInput(sceneOf(L), *m.net, e, input, dt);
+    else applied = m.invokeRpc(sceneOf(L), e, "onNetInput", nlohmann::json::array({input, dt}), 0, false);
+    lua_pushboolean(L, applied);
+    return 1;
+}
+/// agr.net.setController(entity, peer) (host): peer drives it with entity:netInput, predicted there.
+int n_setController(lua_State* L) {
+    auto& m = implOf(L);
+    const ecs::Entity e = checkEntity(L, 1);
+    lua_pushboolean(L, m.replicator && m.net && m.replicator->setController(sceneOf(L), *m.net, e, static_cast<u32>(luaL_checkinteger(L, 2))));
+    return 1;
+}
+/// agr.net.positionAt(entity, time) -> x, y, z (host, lag compensation: where it was at that host time)
+int n_positionAt(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    const f64 t = luaL_checknumber(L, 2);
+    net::Replicator* r = replicatorOf(L);
+    const math::Vec3 p = r ? r->positionAt(sceneOf(L), e, t) : sceneOf(L).registry().get<TransformComponent>(e).position;
+    lua_pushnumber(L, p.x);
+    lua_pushnumber(L, p.y);
+    lua_pushnumber(L, p.z);
+    return 3;
+}
+/// agr.net.viewTime() -> the host time of what this machine shows (stamp shots with it).
+int n_viewTime(lua_State* L) {
+    auto& m = implOf(L);
+    f64 t = m.net ? m.net->networkTime() : 0.0;
+    if (m.net && m.net->role() == net::NetRole::Client)
+        t -= m.net->rtt(net::NetSession::kHostId) * 0.5 + (m.replicator ? m.replicator->viewDelay() : 0.0);
+    lua_pushnumber(L, t);
+    return 1;
+}
 /// entity:rpc(fn, ...) -> sent: calls fn(...) of this entity's script on every other machine.
 int e_rpc(lua_State* L) { return doRpc(L, checkEntity(L, 1), 0, luaL_checkstring(L, 2), 3); }
 /// entity:rpcTo(peer, fn, ...): on one machine (1 = host).
@@ -498,10 +539,10 @@ void openNetBindings(lua_State* L) {
                                      {"poll", n_poll}, {"spawn", n_spawn}, {"despawn", n_despawn}, {"setOwner", n_setOwner},
                                      {"sender", n_sender}, {"advertise", n_advertise}, {"discover", n_discover},
                                      {"stopDiscovery", n_stopDiscovery}, {"games", n_games}, {"setPassword", n_setPassword}, {"setEncryption", n_setEncryption}, {"encrypted", n_encrypted},
-                                     {"joinError", n_joinError}, {"ping", n_ping}, {"time", n_time}, {"stats", n_stats}, {"setVisible", n_setVisible},
+                                     {"joinError", n_joinError}, {"ping", n_ping}, {"time", n_time}, {"setController", n_setController}, {"positionAt", n_positionAt}, {"viewTime", n_viewTime}, {"stats", n_stats}, {"setVisible", n_setVisible},
                                      {nullptr, nullptr}};
     addAgrLibrary(L, "net", funcs);
-    static const luaL_Reg methods[] = {{"rpc", e_rpc}, {"rpcTo", e_rpcTo}, {"owner", e_owner}, {"isOwner", e_isOwner}, {nullptr, nullptr}};
+    static const luaL_Reg methods[] = {{"rpc", e_rpc}, {"rpcTo", e_rpcTo}, {"netInput", e_netInput}, {"owner", e_owner}, {"isOwner", e_isOwner}, {nullptr, nullptr}};
     addEntityMethods(L, methods);
 }
 

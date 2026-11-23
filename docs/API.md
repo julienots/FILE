@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 751 champs)
+## Composants (76, 752 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -508,6 +508,7 @@ Kept in step over the network: Transform (interpolated) and listed fields, sent 
 | `owner` | int | Peer that simulates it (1 = host); set by the host at run time |
 | `syncTransform` | bool |  |
 | `interpolate` | bool | Smooth between received states |
+| `controller` | int | Peer whose inputs drive it (host-authoritative, predicted on that peer); 0 = none |
 | `rate` | float | States per second ; plage 1 .. 120 |
 | `fields` | string | Component.field separated by ';' (e.g. Health.value;SpriteRenderer.color) |
 | `visibility` | enum | Who receives it: everyone, its owner only, players owning an entity within visibleRange ; valeurs : `All`, `OwnerOnly`, `Range` |
@@ -1452,7 +1453,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-238 fonctions.
+242 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
@@ -1479,7 +1480,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.locale`** : `get`, `list`, `set`
 - `agr.log`
 - **`agr.nav`** : `path`, `rebuild`
-- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `role`, `send`, `sender`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`
+- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `positionAt`, `role`, `send`, `sender`, `setController`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`, `viewTime`
 - **`agr.physics2d`** : `castBox`, `castCircle`, `gravity`, `layer`, `mask`, `overlapBox`, `overlapCircle`, `raycast`, `setGravity`
 - **`agr.physics3d`** : `castSphere`, `layer`, `mask`, `overlapBox`, `overlapSphere`, `raycast`, `setGravity`
 - **`agr.profile`** : `begin`, `finish`
@@ -1503,4 +1504,4 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - `agr.warn`
 - **`agr.ws`** : `close`, `connect`, `send`, `state`
 
-**Méthodes d'entité** (61) : `add`, `addToGroup`, `applyForce`, `applyImpulse`, `children`, `connect`, `currentState`, `destroy`, `disconnect`, `emit`, `find`, `forward`, `get`, `getParameter`, `groundNormal`, `groups`, `has`, `inGroup`, `isActive`, `isGrounded`, `isOwner`, `isSoundPlaying`, `isValid`, `jointValue`, `key`, `layerWeight`, `name`, `navigateTo`, `navigationPath`, `navigationStatus`, `owner`, `parent`, `playSound`, `playState`, `position`, `remove`, `removeFromGroup`, `rotate`, `rotation`, `rpc`, `rpcTo`, `scale`, `script`, `set`, `setActive`, `setAngularVelocity`, `setLayerWeight`, `setName`, `setParameter`, `setPosition`, `setRotation`, `setScale`, `setText`, `setTrigger`, `setVelocity`, `stopNavigation`, `stopSound`, `text`, `translate`, `velocity`, `worldPosition`
+**Méthodes d'entité** (62) : `add`, `addToGroup`, `applyForce`, `applyImpulse`, `children`, `connect`, `currentState`, `destroy`, `disconnect`, `emit`, `find`, `forward`, `get`, `getParameter`, `groundNormal`, `groups`, `has`, `inGroup`, `isActive`, `isGrounded`, `isOwner`, `isSoundPlaying`, `isValid`, `jointValue`, `key`, `layerWeight`, `name`, `navigateTo`, `navigationPath`, `navigationStatus`, `netInput`, `owner`, `parent`, `playSound`, `playState`, `position`, `remove`, `removeFromGroup`, `rotate`, `rotation`, `rpc`, `rpcTo`, `scale`, `script`, `set`, `setActive`, `setAngularVelocity`, `setLayerWeight`, `setName`, `setParameter`, `setPosition`, `setRotation`, `setScale`, `setText`, `setTrigger`, `setVelocity`, `stopNavigation`, `stopSound`, `text`, `translate`, `velocity`, `worldPosition`

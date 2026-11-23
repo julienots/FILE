@@ -300,6 +300,20 @@ TEST_CASE("debugger: conditional breakpoints, hit counts, logpoints") {
     Log::removeSink(sink);
 }
 
+TEST_CASE("entity:netInput runs onNetInput (single player: directly)") {
+    ScriptFixture f;
+    f.write("assets://s/hero.lua",
+            "local H = {}\n"
+            "function H:onNetInput(input, dt) self.entity:translate(input.x * 5 * dt, 0, 0) end\n"
+            "function H:onUpdate(dt) assert(self.entity:netInput({ x = 1 }, 0.1)) end\n"
+            "return H\n");
+    const auto e = f.scripted("Hero", "assets://s/hero.lua");
+    f.update();
+    f.update();
+    CHECK(f.scene.registry().get<TransformComponent>(e).position.x == doctest::Approx(1.0f));
+    CHECK(f.scripts.stats().errors == 0);
+}
+
 TEST_CASE("debugger: pause request and break on error") {
     ScriptFixture f;
     f.write("assets://s/err.lua", "local E = {}\nfunction E:onUpdate(dt)\n  local t = nil\n  local v = 42\n  t.x = v\nend\nreturn E\n");

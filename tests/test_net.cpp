@@ -695,3 +695,88 @@ TEST_CASE("IPv6: address parsing and a session over ::1") {
     });
     CHECK(std::any_of(got.begin(), got.end(), [](const NetEvent& e) { return e.data == "hello v6"; }));
 }
+
+TEST_CASE("prediction: the controller moves at once, the host is the authority, corrections replay pending inputs; lag compensation") {
+    registerRenderComponents();
+    registerNetComponents();
+    LossyNetwork netw;
+    netw.loss = 0.2f;  // and reordering
+    struct Machine {
+        NetSession session;
+        Scene scene;
+        Replicator rep;
+        explicit Machine(LossyNetwork& n) : session(std::make_unique<LossyTransport>(n)) {
+            // The game's movement code (a script's onNetInput): 5 m/s along x, jump = +1 y at once.
+            rep.setInputHandler([](Scene& sc, ecs::Entity e, const nlohmann::json& in, float dt) {
+                auto& t = sc.registry().get<TransformComponent>(e);
+                t.position.x += in.value("x", 0.0f) * 5.0f * dt;
+                if (in.value("jump", false)) t.position.y += 1.0f;
+            });
+        }
+    };
+    const Uuid heroId = Uuid::generate(), targetId = Uuid::generate();
+    auto build = [&](Machine& m) {
+        const auto hero = m.scene.createEntity("Hero", {}, heroId);
+        m.scene.registry().emplace<NetSyncComponent>(hero).rate = 30.0f;
+        const auto target = m.scene.createEntity("Target", {}, targetId);
+        m.scene.registry().emplace<NetSyncComponent>(target).rate = 30.0f;
+    };
+    Machine host(netw), client(netw), other(netw);
+    build(host);
+    build(client);
+    build(other);
+    REQUIRE(host.session.host(7300, 4));
+    REQUIRE(client.session.join("127.0.0.1", 7300));
+    REQUIRE(other.session.join("127.0.0.1", 7300));
+    f64 now = 0.0;
+    std::vector<Machine*> all = {&host, &client, &other};
+    auto step = [&](int frames, const std::function<void()>& each = {}) {
+        for (int i = 0; i < frames; ++i) {
+            now += 1.0 / 60.0;
+            if (each) each();
+            for (Machine* m : all) {
+                m->session.update(now);
+                m->rep.update(m->scene, m->session, now);
+                m->session.takeEvents();
+            }
+        }
+    };
+    step(90);
+    REQUIRE(client.session.connected());
+    REQUIRE(other.session.connected());
+    const auto hostHero = host.scene.findByUuid(heroId), clientHero = client.scene.findByUuid(heroId);
+    REQUIRE(host.rep.setController(host.scene, host.session, hostHero, client.session.localId()));
+    step(60);
+    REQUIRE(client.scene.registry().get<NetSyncComponent>(clientHero).controller == static_cast<i32>(client.session.localId()));
+    auto x = [&](Machine& m) { return m.scene.registry().get<TransformComponent>(m.scene.findByUuid(heroId)).position.x; };
+
+    // Prediction: the first input moves the hero here in the same frame, before any round trip.
+    const float before = x(client);
+    REQUIRE(client.rep.sendInput(client.scene, client.session, clientHero, {{"x", 1.0}}, 1.0f / 60.0f));
+    CHECK(x(client) == doctest::Approx(before + 5.0f / 60.0f));
+    // 59 more frames of "right", then idle: host and client agree on 5 m despite losses.
+    step(59, [&] { client.rep.sendInput(client.scene, client.session, clientHero, {{"x", 1.0}}, 1.0f / 60.0f); });
+    step(90, [&] { client.rep.sendInput(client.scene, client.session, clientHero, {{"x", 0.0}}, 1.0f / 60.0f); });
+    CHECK(x(host) == doctest::Approx(before + 5.0f).epsilon(0.01));
+    CHECK(x(client) == doctest::Approx(x(host)).epsilon(0.001));
+    CHECK(x(other) == doctest::Approx(x(host)).epsilon(0.02));  // the third player sees it interpolated
+    CHECK(host.rep.stats().inputsApplied >= 140);
+    CHECK(client.rep.stats().replayed > 0);
+    CHECK(client.rep.stats().lastCorrection < 0.01f);  // the prediction matched the host
+    // Only the controller drives it; a client cannot claim more time than 0.25 s per input.
+    const float hostX = x(host);
+    CHECK_FALSE(other.rep.sendInput(other.scene, other.session, other.scene.findByUuid(heroId), {{"x", 1.0}}, 1.0f / 60.0f));
+    client.rep.sendInput(client.scene, client.session, clientHero, {{"x", 1.0}}, 10.0f);
+    step(30, [&] { client.rep.sendInput(client.scene, client.session, clientHero, {{"x", 0.0}}, 1.0f / 60.0f); });
+    CHECK(x(host) <= hostX + 5.0f * 0.25f + 0.01f);
+    CHECK(x(client) == doctest::Approx(x(host)).epsilon(0.001));  // the client is corrected to the host's
+
+    // Lag compensation: the host remembers where the target was.
+    const auto target = host.scene.findByUuid(targetId);
+    const f64 t0 = host.session.networkTime();
+    step(30, [&] { host.scene.registry().get<TransformComponent>(target).position.x += 0.1f; });  // 3 m in 0.5 s
+    const math::Vec3 past = host.rep.positionAt(host.scene, target, t0 + 0.25);
+    CHECK(past.x == doctest::Approx(1.5f).epsilon(0.08));
+    CHECK(host.rep.positionAt(host.scene, target, t0 - 5.0).x < 0.11f);  // oldest kept
+    CHECK(host.rep.positionAt(host.scene, target, host.session.networkTime() + 1.0).x == doctest::Approx(3.0f));
+}

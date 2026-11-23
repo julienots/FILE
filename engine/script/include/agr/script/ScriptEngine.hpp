@@ -127,6 +127,8 @@ public:
     void setReplicator(net::Replicator* replicator);
     /// Runs an RPC received from `sender` (called by the Replicator): the function must be
     /// declared in the script's `rpc` table ("any", or "authority": from the owner or the host).
+    /// Runs the script's onNetInput(input, dt) (network prediction; input = JSON).
+    bool callNetInput(Scene& scene, ecs::Entity e, const std::string& inputJson, float dt);
     bool callRpc(Scene& scene, ecs::Entity e, const std::string& function, const std::string& argsJson, u32 sender);
     /// agr.loadScene(uri): asks the host to switch scenes at the end of the frame.
     void setSceneLoader(std::function<void(std::string)> loader);

@@ -16,7 +16,8 @@ using math::Vec3;
 
 namespace {
 
-constexpr char kState = 'S', kControl = 'J';
+constexpr char kState = 'S', kControl = 'J', kInput = 'I';
+constexpr usize kInputRedundancy = 8;  // each input packet repeats the last unacknowledged ones (losses)
 constexpr usize kPacketBudget = NetSession::kMaxPayload - 16;
 
 void putF(std::string& out, float v) { out.append(reinterpret_cast<const char*>(&v), 4); }
@@ -113,6 +114,7 @@ void registerNetComponents() {
         .field("owner", &NetSyncComponent::owner, {.tooltip = "Peer that simulates it (1 = host); set by the host at run time"})
         .field("syncTransform", &NetSyncComponent::syncTransform)
         .field("interpolate", &NetSyncComponent::interpolate, {.tooltip = "Smooth between received states"})
+        .field("controller", &NetSyncComponent::controller, {.tooltip = "Peer whose inputs drive it (host-authoritative, predicted on that peer); 0 = none"})
         .field("rate", &NetSyncComponent::rate, {.tooltip = "States per second", .rangeMin = 1.0f, .rangeMax = 120.0f, .speed = 0.5f})
         .field("fields", &NetSyncComponent::fields, {.tooltip = "Component.field separated by ';' (e.g. Health.value;SpriteRenderer.color)"})
         .field("visibility", &NetSyncComponent::visibility,
@@ -166,7 +168,89 @@ void Replicator::reset() {
     m_wasVisible.clear();
     m_spawnedFor.clear();
     m_spawned.clear();
+    m_prediction.clear();
+    m_history.clear();
     m_sender = 0;
+}
+
+bool Replicator::sendInput(Scene& scene, NetSession& session, ecs::Entity e, const json& input, float dt) {
+    if (!scene.valid(e)) return false;
+    const auto* s = scene.registry().tryGet<NetSyncComponent>(e);
+    if (!session.connected()) {  // single player: the same script code, applied directly
+        if (m_input) m_input(scene, e, input, dt);
+        return true;
+    }
+    const u32 local = session.localId();
+    if (!s || (s->controller != static_cast<i32>(local) && !(local == NetSession::kHostId && s->controller <= 1))) return false;
+    if (m_input) m_input(scene, e, input, dt);  // applied here at once
+    if (session.role() == NetRole::Host) return true;  // the host is the authority itself
+    Prediction& pr = m_prediction[scene.uuidOf(e).value()];
+    pr.pending.push_back({pr.nextSeq++, dt, input.dump()});
+    if (pr.pending.size() > 256) pr.pending.pop_front();  // the host stopped answering: forget the oldest
+    // Packet: tag, kind, uuid, count, then (seq, dt, length, json) newest last.
+    std::string packet(1, NetSession::kSystemTag);
+    packet += kInput;
+    putU64(packet, scene.uuidOf(e).value());
+    const usize first = pr.pending.size() > kInputRedundancy ? pr.pending.size() - kInputRedundancy : 0;
+    std::string body;
+    u16 n = 0;
+    for (usize i = first; i < pr.pending.size(); ++i) {
+        const PendingInput& p = pr.pending[i];
+        if (body.size() + p.input.size() + 10 > kPacketBudget - 16) continue;
+        body.append(reinterpret_cast<const char*>(&p.seq), 4);
+        putF(body, p.dt);
+        putU16(body, static_cast<u16>(p.input.size()));
+        body += p.input;
+        ++n;
+    }
+    putU16(packet, n);
+    packet += body;
+    session.send(NetSession::kHostId, packet, false);
+    ++m_stats.inputsSent;
+    return true;
+}
+
+void Replicator::handleInput(Scene& scene, u32 from, std::string_view data) {
+    Reader r{data, 0};
+    const u64 uuid = r.get<u64>();
+    const u16 count = r.get<u16>();
+    const ecs::Entity e = scene.findByUuid(Uuid(uuid));
+    if (!r.ok || e.isNull()) return;
+    const auto* s = scene.registry().tryGet<NetSyncComponent>(e);
+    if (!s || s->controller != static_cast<i32>(from)) return;  // only its controller drives it
+    Prediction& pr = m_prediction[uuid];
+    for (u16 i = 0; i < count && r.ok; ++i) {
+        const u32 seq = r.get<u32>();
+        const float dt = r.get<float>();
+        const u16 len = r.get<u16>();
+        if (!r.ok || r.at + len > data.size()) return;
+        const std::string_view text = data.substr(r.at, len);
+        r.at += len;
+        if (seq <= pr.processed) continue;  // already applied (redundant copy)
+        const json input = json::parse(text, nullptr, false);
+        if (input.is_discarded()) continue;
+        if (m_input) m_input(scene, e, input, std::clamp(dt, 0.0f, 0.25f));  // a client cannot claim more time
+        pr.processed = seq;
+        ++m_stats.inputsApplied;
+    }
+}
+
+Vec3 Replicator::positionAt(Scene& scene, ecs::Entity e, f64 time) const {
+    if (!scene.valid(e)) return Vec3{0.0f};
+    const Vec3 now = scene.registry().get<TransformComponent>(e).position;
+    auto it = m_history.find(scene.uuidOf(e).value());
+    if (it == m_history.end() || it->second.empty()) return now;
+    const auto& h = it->second;
+    if (time >= h.back().first) return now;
+    if (time <= h.front().first) return h.front().second;
+    for (usize i = h.size() - 1; i > 0; --i)
+        if (h[i - 1].first <= time) {
+            const auto& [t0, p0] = h[i - 1];
+            const auto& [t1, p1] = h[i];
+            const float k = t1 > t0 ? static_cast<float>((time - t0) / (t1 - t0)) : 1.0f;
+            return p0 + (p1 - p0) * k;
+        }
+    return now;
 }
 
 u32 Replicator::ownerOf(Scene& scene, ecs::Entity e) const {
@@ -235,6 +319,17 @@ bool Replicator::setOwner(Scene& scene, NetSession& session, ecs::Entity e, u32 
     return true;
 }
 
+bool Replicator::setController(Scene& scene, NetSession& session, ecs::Entity e, u32 peer) {
+    if (session.role() == NetRole::Client || !scene.valid(e)) return false;
+    auto* s = scene.registry().tryGet<NetSyncComponent>(e);
+    if (!s) s = &scene.registry().emplace<NetSyncComponent>(e);
+    s->controller = static_cast<i32>(peer);
+    s->owner = static_cast<i32>(NetSession::kHostId);  // the host simulates it from the inputs
+    m_prediction.erase(scene.uuidOf(e).value());
+    if (session.role() == NetRole::Host) sendControl(session, NetSession::kBroadcast, {{"k", "controller"}, {"id", scene.uuidOf(e).toString()}, {"peer", peer}});
+    return true;
+}
+
 void Replicator::runRpc(Scene& scene, ecs::Entity e, const std::string& fn, const json& args, u32 sender) {
     if (!m_rpc || !scene.valid(e)) return;
     m_sender = sender;
@@ -282,6 +377,15 @@ void Replicator::handleControl(Scene& scene, NetSession& session, u32 from, cons
             s->owner = msg.value("owner", 1);
             m_remote.erase(id.value());
         }
+    } else if (kind == "controller" && fromHost && session.role() == NetRole::Client) {
+        if (ecs::Entity e = scene.findByUuid(id); !e.isNull()) {
+            auto* s = scene.registry().tryGet<NetSyncComponent>(e);
+            if (!s) s = &scene.registry().emplace<NetSyncComponent>(e);
+            s->controller = msg.value("peer", 0);
+            s->owner = static_cast<i32>(NetSession::kHostId);
+            m_prediction.erase(id.value());
+            m_remote.erase(id.value());
+        }
     } else if (kind == "rpc") {
         const ecs::Entity e = scene.findByUuid(id);
         const std::string fn = msg.value("fn", "");
@@ -319,6 +423,8 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
             q = {r.get<float>(), r.get<float>(), r.get<float>(), r.get<float>()};
             s = {r.get<float>(), r.get<float>(), r.get<float>()};
         }
+        u32 ack = 0;
+        if (flags & 4) ack = r.get<u32>();
         std::string fieldsJson;
         if (flags & 2) {
             const u16 n = r.get<u16>();
@@ -333,6 +439,21 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
         // Only the owner's state counts (the host relays the others' with its own).
         if (!sync || (from != static_cast<u32>(sync->owner) && from != NetSession::kHostId)) continue;
         ++m_stats.statesReceived;
+        if ((flags & 4) && (flags & 1) && m_localId != 0 && sync->controller == static_cast<i32>(m_localId)) {
+            // Reconciliation: the host's state, then the inputs it has not applied yet, again.
+            auto& t = scene.registry().get<TransformComponent>(e);
+            const Vec3 predicted = t.position;
+            t.position = p, t.rotation = q, t.scale = s;
+            Prediction& pr = m_prediction[uuid];
+            while (!pr.pending.empty() && pr.pending.front().seq <= ack) pr.pending.pop_front();
+            for (const PendingInput& in : pr.pending) {
+                const json input = json::parse(in.input, nullptr, false);
+                if (m_input && !input.is_discarded()) m_input(scene, e, input, in.dt);
+                ++m_stats.replayed;
+            }
+            m_stats.lastCorrection = math::length(t.position - predicted);
+            continue;  // not interpolated: this machine shows its own prediction
+        }
         if (flags & 1) {
             Remote& rm = m_remote[uuid];
             if (rm.received < 0.0) {
@@ -342,6 +463,7 @@ void Replicator::handleState(Scene& scene, u32 from, std::string_view data, f64 
                 rm.p0 = t.position, rm.r0 = t.rotation, rm.s0 = t.scale;
                 // States only when it moves (onlyChanges): a gap is a rest, not a slow rate.
                 rm.interval = std::clamp(std::min(now - rm.received, 1.5 / std::clamp(static_cast<f64>(sync->rate), 1.0, 120.0)), 0.01, 0.5);
+                m_viewDelay = m_viewDelay * 0.9 + rm.interval * 0.1;
             }
             rm.p1 = p, rm.r1 = q, rm.s1 = s;
             rm.received = now;
@@ -377,6 +499,7 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
             }
             reg.view<NetSyncComponent>().each([&](ecs::Entity e, NetSyncComponent& s) {
                 if (s.owner != static_cast<i32>(NetSession::kHostId)) sendControl(session, ev.peer, {{"k", "owner"}, {"id", scene.uuidOf(e).toString()}, {"owner", s.owner}});
+                if (s.controller > 1) sendControl(session, ev.peer, {{"k", "controller"}, {"id", scene.uuidOf(e).toString()}, {"peer", s.controller}});
             });
         } else if (ev.type == NetEvent::Type::Disconnected && session.role() == NetRole::Host) {
             // What the player owned comes back to the host.
@@ -386,7 +509,9 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
             });
             for (ecs::Entity e : orphans) setOwner(scene, session, e, NetSession::kHostId);
         } else if (ev.type == NetEvent::Type::Message && ev.data.size() >= 2) {
-            if (ev.data[1] == kState) {
+            if (ev.data[1] == kInput && session.role() == NetRole::Host) {
+                handleInput(scene, ev.peer, std::string_view(ev.data).substr(2));
+            } else if (ev.data[1] == kState) {
                 handleState(scene, ev.peer, std::string_view(ev.data).substr(2), now);
             } else if (ev.data[1] == kControl) {
                 const json msg = json::parse(std::string_view(ev.data).substr(2), nullptr, false);
@@ -396,6 +521,14 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
     }
     if (!session.connected()) return;
     const u32 local = session.localId();
+    m_localId = local;
+    // Host: recent positions for lag compensation (positionAt).
+    if (session.role() == NetRole::Host)
+        reg.view<NetSyncComponent, TransformComponent>().each([&](ecs::Entity e, NetSyncComponent&, TransformComponent& t) {
+            auto& h = m_history[scene.uuidOf(e).value()];
+            h.emplace_back(session.networkTime(), t.position);
+            while (!h.empty() && h.front().first < session.networkTime() - 1.0) h.pop_front();
+        });
     // Spawns that follow visibility: created / removed on each player's machine as it sees them.
     m_stats.spawnsHidden = 0;
     if (session.role() == NetRole::Host)
@@ -438,10 +571,15 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
         std::string b;
         putU64(b, uuid);
         const auto refs = s.fields.empty() ? std::vector<FieldRef>{} : parseFields(s.fields);
-        b.push_back(static_cast<char>((s.syncTransform ? 1 : 0) | (refs.empty() ? 0 : 2)));
+        const bool predicted = s.controller > 1 && session.role() == NetRole::Host;
+        b.push_back(static_cast<char>((s.syncTransform ? 1 : 0) | (refs.empty() ? 0 : 2) | (predicted ? 4 : 0)));
         if (s.syncTransform) {
             for (float v : {t.position.x, t.position.y, t.position.z, t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w, t.scale.x, t.scale.y, t.scale.z})
                 putF(b, v);
+        }
+        if (predicted) {  // the last input of the controller applied in this state
+            const u32 ack = m_prediction[uuid].processed;
+            b.append(reinterpret_cast<const char*>(&ack), 4);
         }
         if (!refs.empty()) {
             json values = json::array();
@@ -518,6 +656,7 @@ void Replicator::update(Scene& scene, NetSession& session, f64 now) {
     // 3. Show the others' entities between their last two states.
     reg.view<NetSyncComponent, TransformComponent>().each([&](ecs::Entity e, NetSyncComponent& s, TransformComponent& t) {
         if ((s.owner > 0 ? static_cast<u32>(s.owner) : NetSession::kHostId) == local || !s.syncTransform) return;
+        if (s.controller == static_cast<i32>(local)) return;  // predicted here
         auto it = m_remote.find(scene.uuidOf(e).value());
         if (it == m_remote.end() || it->second.received < 0.0) return;
         const Remote& rm = it->second;

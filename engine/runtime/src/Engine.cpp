@@ -109,6 +109,7 @@ struct Engine::AsyncSceneLoad {
     std::atomic<bool> done{false};
     std::unique_ptr<Scene> scene;  // written by the worker before `done`
     std::string error;
+    bool reported = false;  // a failure is logged once
     std::thread worker;
     ~AsyncSceneLoad() {
         if (worker.joinable()) worker.join();
@@ -155,9 +156,9 @@ Engine::SceneLoadState Engine::sceneLoadState() const {
 void Engine::finishSceneLoad() {
     if (!m_asyncLoad || !m_asyncLoad->done.load()) return;
     if (!m_asyncLoad->scene) {  // failed: reported once, the state stays readable
-        if (!m_asyncLoad->error.empty()) {
+        if (!m_asyncLoad->reported) {
             AGR_LOG_ERROR("Engine", "cannot load scene '{}': {}", m_asyncLoad->uri, m_asyncLoad->error);
-            m_asyncLoad->error += " ";  // marks it reported (keeps the text)
+            m_asyncLoad->reported = true;
         }
         return;
     }
