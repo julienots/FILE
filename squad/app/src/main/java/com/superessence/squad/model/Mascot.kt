@@ -107,10 +107,12 @@ data class Settings(
     /** Fréquence des rencontres entre mascottes (0 = jamais). */
     val social: Float = 1f,
     val fights: Boolean = true,
+    val gym: Boolean = true,
+    val parties: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("size", size.toDouble()).put("speed", speed.toDouble())
         .put("chatter", chatter.toDouble()).put("showSleeping", showSleeping).put("vibrate", vibrate).put("overlayOn", overlayOn)
-        .put("social", social.toDouble()).put("fights", fights)
+        .put("social", social.toDouble()).put("fights", fights).put("gym", gym).put("parties", parties)
 
     companion object {
         fun fromJson(o: JSONObject?): Settings {
@@ -119,6 +121,7 @@ data class Settings(
                 o.optDouble("size", 1.0).toFloat(), o.optDouble("speed", 1.0).toFloat(), o.optDouble("chatter", 1.0).toFloat(),
                 o.optBoolean("showSleeping", true), o.optBoolean("vibrate", true), o.optBoolean("overlayOn", false),
                 o.optDouble("social", 1.0).toFloat(), o.optBoolean("fights", true),
+                o.optBoolean("gym", true), o.optBoolean("parties", true),
             )
         }
     }

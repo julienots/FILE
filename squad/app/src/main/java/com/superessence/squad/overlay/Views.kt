@@ -144,3 +144,36 @@ class TrashView(ctx: Context, private val density: Float) : View(ctx) {
         c.drawText(if (hot) "Lâche pour ranger" else "Ranger ici", cx, height - 6f * density, tp)
     }
 }
+
+/** Matériel posé sur l'écran (banc, poulie, sono…). Déplaçable au doigt. */
+@SuppressLint("ViewConstructor")
+class PropView(ctx: Context, val type: com.superessence.squad.model.PropType) : View(ctx) {
+    interface Listener {
+        fun onPropDrag(v: PropView, dx: Float, dy: Float)
+        fun onPropTap(v: PropView)
+    }
+    var listener: Listener? = null
+    var t = 0f
+    var appear = 0f
+    var occupant: com.superessence.squad.render.Occupant? = null
+    private var lastX = 0f; private var lastY = 0f; private var downX = 0f; private var downY = 0f
+    private var moved = false
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
+
+    override fun onDraw(c: Canvas) {
+        com.superessence.squad.render.PropPainter.draw(c, type, width.toFloat(), height.toFloat(), t, occupant, appear)
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { lastX = e.rawX; lastY = e.rawY; downX = e.rawX; downY = e.rawY; moved = false }
+            MotionEvent.ACTION_MOVE -> {
+                if (!moved && hypot(e.rawX - downX, e.rawY - downY) > slop) moved = true
+                if (moved) { listener?.onPropDrag(this, e.rawX - lastX, e.rawY - lastY); lastX = e.rawX; lastY = e.rawY }
+            }
+            MotionEvent.ACTION_UP -> if (!moved) listener?.onPropTap(this)
+        }
+        return true
+    }
+}

@@ -85,6 +85,13 @@ class MainActivity : ComponentActivity() {
         OverlayService.stop(this)
     }
 
+    fun startHappening(party: Boolean) {
+        if (!OverlayService.canRun(this)) { enableOverlay(); return }
+        Squad.edit { it.copy(settings = it.settings.copy(overlayOn = true)) }
+        OverlayService.happening(this, party)
+        moveTaskToBack(true)
+    }
+
     fun openBatterySettings() {
         runCatching { startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
     }
@@ -116,6 +123,7 @@ class MainActivity : ComponentActivity() {
                             state, overlayAllowed.value,
                             onOpen = { nav = "detail:$it" }, onRecruit = { nav = "recruit" }, onRhythm = { nav = "rhythm" },
                             onOverlay = { on -> if (on) enableOverlay() else disableOverlay() },
+                            onHappening = { party -> startHappening(party) },
                         )
                         route == "recruit" -> RecruitScreen(state, onBack = { nav = "home" }, onDone = { nav = "detail:$it" })
                         route == "rhythm" -> RhythmScreen(state, onBack = { nav = "home" }, onBattery = { openBatterySettings() })

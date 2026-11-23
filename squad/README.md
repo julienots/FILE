@@ -7,6 +7,7 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
 ![Les 12 gars](branding/squad-lineup.png)
 ![Écrans](branding/squad-ecrans.png)
 ![Baston](branding/squad-baston.png)
+![Muscu et fête](branding/squad-muscu-fete.png)
 
 ## Ce que fait l'appli
 - **Ouverture animée SuperEssence Studio** : hexagone jaune avec monogramme S, nom lettre par lettre, reflet. Toucher pour passer.
@@ -23,8 +24,11 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
   - les bagarreurs (Ragnar, Rocco, Rex, Tank) cherchent plus souvent la baston, les calmes discutent ; les rivaux se battent plus, les potes se font des checks ;
   - **lâche un gars sur un autre** : ça part en baston ; bouton **« Défier »** dans sa fiche ;
   - palmarès (victoires/défaites) et **relations** : meilleur pote, pote, rival, ennemi juré.
+- **Séances de muscu collectives** : à ton heure de sport (et parfois au hasard), les sportifs vont chercher le matos au bord de l'écran, le portent au-dessus de la tête et le posent : banc de développé couché, poulie haute (la pile de poids monte), rack à squat, sac de frappe (il balance sous les coups), haltères. Ils tournent sur les postes ; s'il n'y a plus de poste libre, ils coachent un pote. À la fin ils rangent tout (+forme, +XP, +amitié). Le matos se déplace au doigt.
+- **Fêtes** : surtout le vendredi et le samedi soir. La boule à facettes descend du haut, la sono pulse et envoie des notes, le buffet a ses bouteilles, gobelets et chips. Ils dansent (4 styles, dont le robot), trinquent, puis rangent. Toucher la sono = tout le monde danse.
+- Boutons « Séance muscu » / « Faire la fête » dans l'appli pour les lancer tout de suite.
 - **Style** : coupe, barbe, tenue, accessoire, couleurs de peau/cheveux/tenue/pantalon, tatouages, cicatrice.
-- Réglages : taille, vitesse, bavardage, fréquence des rencontres, bastons on/off, visibles ou non pendant leur sommeil, vibrations.
+- Réglages : taille, vitesse, bavardage, fréquence des rencontres, bastons, séances muscu et fêtes on/off, visibles ou non pendant leur sommeil, vibrations.
 
 ## Compiler
 ```bash

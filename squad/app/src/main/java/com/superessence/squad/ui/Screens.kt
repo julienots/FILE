@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -128,6 +129,7 @@ private fun Wordmark() {
 fun HomeScreen(
     state: SquadState, overlayAllowed: Boolean,
     onOpen: (String) -> Unit, onRecruit: () -> Unit, onRhythm: () -> Unit, onOverlay: (Boolean) -> Unit,
+    onHappening: (Boolean) -> Unit = {},
 ) {
     val phase = Life.phaseNow(state.schedule)
     val t = animTime()
@@ -182,6 +184,23 @@ fun HomeScreen(
                             Spacer(Modifier.height(8.dp))
                             Text("Android va te demander « Afficher par-dessus les autres applis » : active-le pour SQUAD. puis reviens.", style = Small.copy(fontSize = 12.sp))
                         }
+                    }
+                }
+            }
+        }
+        if (state.mascots.size >= 2) item {
+            Card {
+                Column {
+                    Text("LA SQUAD S'ORGANISE", style = Label)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Les sportifs montent une salle sur ton écran (banc, poulie, rack, sac de frappe, haltères) à l'heure du sport. Le vendredi et le samedi soir, c'est la fête.",
+                        style = Small,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GhostButton("Séance muscu", Icons.Filled.FitnessCenter, Modifier.weight(1f), color = C.yellow) { onHappening(false) }
+                        GhostButton("Faire la fête", Icons.Filled.Celebration, Modifier.weight(1f), color = C.yellow) { onHappening(true) }
                     }
                 }
             }
@@ -691,6 +710,8 @@ fun RhythmScreen(state: SquadState, onBack: () -> Unit, onBattery: () -> Unit) {
                     SliderRow("Vitesse de marche", st.speed, 0.3f..2f) { v -> sett { it.copy(speed = v) } }
                     SliderRow("Bavardage", st.chatter, 0f..2.5f) { v -> sett { it.copy(chatter = v) } }
                     SliderRow("Rencontres entre eux", st.social, 0f..3f) { v -> sett { it.copy(social = v) } }
+                    ToggleRow("Séances de muscu collectives", st.gym, "Ils ramènent le matos et s'entraînent ensemble") { v -> sett { it.copy(gym = v) } }
+                    ToggleRow("Fêtes", st.parties, "Sono, buffet, boule à facettes : surtout le vendredi et le samedi soir") { v -> sett { it.copy(parties = v) } }
                     ToggleRow("Bastons", st.fights, "Ils peuvent se battre entre eux. Lâche un gars sur un autre pour lancer la bagarre.") { v -> sett { it.copy(fights = v) } }
                     ToggleRow("Rester visibles en dormant", st.showSleeping, "Sinon ils disparaissent la nuit et reviennent au réveil") { v -> sett { it.copy(showSleeping = v) } }
                     ToggleRow("Vibrations", st.vibrate) { v -> sett { it.copy(vibrate = v) } }

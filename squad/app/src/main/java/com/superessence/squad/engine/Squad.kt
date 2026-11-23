@@ -131,6 +131,33 @@ object Squad {
         })
     }
 
+    /** Fin d'une séance collective. */
+    fun recordGym(ids: List<String>, gear: List<String>) = edit { s ->
+        val names = s.mascots.filter { it.id in ids }.associate { it.id to it.name }
+        s.copy(mascots = s.mascots.map { m ->
+            if (m.id !in ids) m else {
+                var r = m.copy(
+                    fitness = (m.fitness + 4f).coerceAtMost(100f), xp = m.xp + 20,
+                    energy = (m.energy - 10f).coerceAtLeast(0f), mood = (m.mood + 6f).coerceAtMost(100f),
+                ).withEvent("Séance collective (${gear.joinToString(", ")}) avec ${ids.filter { it != m.id }.mapNotNull { names[it] }.joinToString(", ").ifEmpty { "lui-même" }}")
+                ids.filter { it != m.id }.forEach { r = r.bond(it, 5) }
+                r
+            }
+        })
+    }
+
+    /** Fin d'une fête. */
+    fun recordParty(ids: List<String>) = edit { s ->
+        s.copy(mascots = s.mascots.map { m ->
+            if (m.id !in ids) m else {
+                var r = m.copy(mood = (m.mood + 15f).coerceAtMost(100f), energy = (m.energy - 8f).coerceAtLeast(0f), xp = m.xp + 8)
+                    .withEvent("Grosse fête avec la squad (${ids.size} gars)")
+                ids.filter { it != m.id }.forEach { r = r.bond(it, 6) }
+                r
+            }
+        })
+    }
+
     fun pet(id: String) = editMascot(id) { it.copy(mood = (it.mood + 6).coerceAtMost(100f), xp = it.xp + 1) }
 
     fun starterArchetypes(): List<Archetype> = listOf(Archetypes.byId("tank"), Archetypes.byId("ragnar"))

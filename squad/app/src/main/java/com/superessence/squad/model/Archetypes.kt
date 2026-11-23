@@ -6,14 +6,15 @@ import com.superessence.squad.model.HairStyle as H
 import com.superessence.squad.model.Outfit as O
 
 /** Situations dans lesquelles une mascotte parle. */
-enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED }
+enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED, GYM_START, CARRY, SPOT, GYM_END, PARTY, DANCE, CHEERS, PARTY_END }
 
 /** Ce que fait la mascotte (utilisé par le moteur et le rendu). */
 enum class Act(val label: String) {
     IDLE("Tranquille"), WALK("Se balade"), EAT("Mange"), TRAIN("S'entraîne"), FLEX("Fait le beau"),
     PHONE("Sur son tel"), COFFEE("Café"), WAVE("Salue"), SLEEP("Dort"), YAWN("Baille"),
     DRAGGED("Porté"), TALK("Parle"), PUSHUP("Pompes"),
-    RUN("Court"), PUNCH("Cogne"), GUARD("En garde"), HIT("Encaisse"), KO("K.O."), VICTORY("Victoire"), HIGHFIVE("Check")
+    RUN("Court"), PUNCH("Cogne"), GUARD("En garde"), HIT("Encaisse"), KO("K.O."), VICTORY("Victoire"), HIGHFIVE("Check"),
+    CARRY("Porte du matos"), DANCE("Danse"), CHEERS("Trinque"), PULLDOWN("Tirage poulie"), SQUAT("Squat"), BENCH("Développé couché")
 }
 
 class Archetype(
@@ -34,7 +35,7 @@ class Archetype(
     private val lines: Map<Say, List<String>>,
 ) {
     fun lines(s: Say): List<String> =
-        (lines[s].orEmpty() + Fight.lines(id)[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
+        (lines[s].orEmpty() + Fight.lines(id)[s].orEmpty() + Events.lines(id)[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
 
     /** Envie de se battre (0..1). */
     val aggro: Float get() = Fight.aggro[id] ?: 0.5f

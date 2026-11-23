@@ -81,6 +81,32 @@ class RenderTest {
         save(bmp, "fight.png")
     }
 
+    @Test fun gymAndParty() {
+        val types = com.superessence.squad.model.PropType.entries
+        val cw = 330; val ch = 330
+        val bmp = Bitmap.createBitmap(cw * types.size, ch * 2 + 300, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); c.drawColor(Color.rgb(40, 44, 52))
+        val users = listOf("tank", "rocco", "sarge", "ragnar", "kenji", "boss", "marco", "zero")
+        types.forEachIndexed { i, ty ->
+            c.save(); c.translate((i * cw).toFloat(), 0f)
+            com.superessence.squad.render.PropPainter.draw(c, ty, cw.toFloat(), ch.toFloat(), 0.8f, null)
+            c.restore()
+            val o = Archetypes.byId(users[i]).let { com.superessence.squad.render.Occupant(it.look, 60f, 2) }
+            c.save(); c.translate((i * cw).toFloat(), ch.toFloat())
+            com.superessence.squad.render.PropPainter.draw(c, ty, cw.toFloat(), ch.toFloat(), 0.8f, if (ty.gym) o else null)
+            c.restore()
+        }
+        val acts = listOf(Act.CARRY, Act.DANCE, Act.DANCE, Act.DANCE, Act.DANCE, Act.CHEERS, Act.SQUAT, Act.PULLDOWN)
+        val p = Pose()
+        acts.forEachIndexed { i, a ->
+            p.act = a; p.t = 1.1f + i; p.seed = i - 1; p.carry = types[i % 5]; p.fx = null
+            c.save(); c.translate(i * 215f, ch * 2f)
+            MascotPainter.draw(c, Archetypes.all[i].look, p, 210f, 295f)
+            c.restore()
+        }
+        save(bmp, "events.png")
+    }
+
     @Test fun phasesFollowSchedule() {
         val s = Schedule(wake = 7 * 60, wakeWeekend = 9 * 60, bed = 23 * 60, breakfast = 7 * 60 + 30, lunch = 12 * 60 + 30, dinner = 20 * 60, workout = 18 * 60)
         val cal = Calendar.getInstance().apply { set(2026, Calendar.NOVEMBER, 24) } // mardi
