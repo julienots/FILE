@@ -648,7 +648,7 @@ void Game::updateCharacters(float dt) {
                     c.vel.x = damp(c.vel.x, mv.x, 4, dt); c.vel.z = damp(c.vel.z, mv.y, 4, dt);
                     float hs = length(vec2(c.vel.x, c.vel.z));
                     if (hs > 0.3f) c.yaw = dampAngle(c.yaw, std::atan2(c.vel.x, c.vel.z), 6, dt);
-                    c.vis.anim.speed = hs;
+                    c.vis.anim.speed = damp(c.vis.anim.speed, hs, 10.f, dt);
                     if (e == mountEnt && mountCalled && d < 2.6f && !pl.dead) toggleMount();
                 }
             }

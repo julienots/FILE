@@ -111,7 +111,8 @@ void Game::updateTouchControls() {
     Rect mini{u.W - 196, 80, 176, 176};
     // 2.3.2 the garage sits in the top bar (left of the bag), its list drops down left of the minimap: far from the action buttons
     Rect bGarage{u.W - 256, 14, 56, 56};
-    int garageRows = std::min((int)vehicles.size(), 2) + 1;   // + the horse
+    int garageRows = 1;   // the horse, + 3.4.0 the vehicles already earned
+    for (int i = 0; i < (int)vehicles.size(); i++) if (vehicleUnlocked(i)) garageRows++;
     Rect garagePanel{u.W - 436, 76, 224, 44.f + garageRows * 46.f};
     bool garageShown = driving < 0 && !dungeon.active;
     // 2.5.1 dig mode one tap away (top bar, left of the garage) when you carry a pickaxe or a shovel
@@ -209,9 +210,12 @@ void Game::updateTouchControls() {
             u.nine("panel_plain", garagePanel, vec4(1, 1, 1, 0.94f), 0.5f);
             u.text("Appeler", garagePanel.x + 12, garagePanel.y + 8, 16, rgba(0xf4d58a), F_BOLD);
             int row = 0;
-            for (int i = 0; i < (int)vehicles.size() && i < 2; i++, row++) {
+            for (int i = 0; i < (int)vehicles.size(); i++) {
+                if (!vehicleUnlocked(i)) continue;   // 3.4.0 earned in the story
                 Rect r{garagePanel.x + 12, garagePanel.y + 36 + row * 46.f, garagePanel.w - 24, 40};
-                if (u.fancyButton(r, vehicleDefs()[vehicles[i].def].moto ? "Moto" : "Voiture", true, "button", 18)) { summonVehicle(i); garageOpen = false; }
+                const VehicleDef& vd = vehicleDefs()[vehicles[i].def];
+                if (u.fancyButton(r, vd.fly ? "Vaisseau volant" : (vd.moto ? "Moto" : "Voiture"), true, "button", 18)) { summonVehicle(i); garageOpen = false; }
+                row++;
             }
             Rect r{garagePanel.x + 12, garagePanel.y + 36 + row * 46.f, garagePanel.w - 24, 40};
             if (u.fancyButton(r, riding ? "Cheval (en selle)" : "Cheval", !riding, "button", 18)) { summonHorse(); garageOpen = false; }

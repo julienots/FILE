@@ -254,6 +254,7 @@ void Game::completeQuest(QuestState& s) {
     const QuestDef& q = quests()[s.idx];
     s.done = true;
     questsDone.insert(q.id);
+    refreshVehicleUnlocks(true);   // 3.4.0 vehicles earned in the story
     gainXp(q.xp);
     gold += q.gold;
     for (auto& r : q.rewards) addItem(r, 1);
@@ -631,6 +632,7 @@ bool Game::saveGame(int slot) {
     o << world.saveDigs();   // 2.4.0 the holes and craters you made
     o << "gameopts " << gameOpts.difficulty << " " << (int)gameOpts.events << " " << (int)gameOpts.prologue << "\n";   // 2.6.0
     o << "treasure " << invCap << " " << shards << " " << phoenixDay << "\n";   // 3.2.0
+    o << "vunlock"; for (const std::string& v : vehiclesUnlocked) o << " " << v; o << "\n";   // 3.4.0
     o << "prog " << level << " " << xp << " " << gold << " " << skillPoints << " " << gameTime << " " << timeOfDay << " " << day << " " << playSeconds << "\n";
     for (auto& s : inventory) o << "inv " << s.id << " " << s.count << " " << (int)s.rarity << " " << s.level << "\n";
     for (int i = 0; i < SL_COUNT; i++) if (!equipment[i].id.empty()) o << "eq " << i << " " << equipment[i].id << " " << (int)equipment[i].rarity << " " << equipment[i].level << "\n";
@@ -691,7 +693,7 @@ bool Game::loadGame(int slot) {
     world.clearDigs(); bombs.clear(); digMode = false;   // 2.4.0
     gameOpts = GameOpts();   // 2.6.0 (older saves: normal difficulty)
     clearBase();   // 1.9.2 the domain of the previous game leaves the world (restored below if this save has one)
-    vehicles.clear(); vehicleEnts.clear(); driving = -1;
+    vehicles.clear(); vehicleEnts.clear(); driving = -1; vehiclesUnlocked.clear();
     raceBest.clear(); race = RaceState();
     nightHunters.clear();
     player = mountEnt = bossEnt = lockTarget = interactTarget = NullEntity;
@@ -715,6 +717,7 @@ bool Game::loadGame(int slot) {
         else if (k == "digs" || k == "digs2") { world.loadDigs(line); hadDigs = true; }
         else if (k == "gameopts") { int dd = 1, ee = 1, pp = 1; l >> dd >> ee >> pp; gameOpts.difficulty = std::clamp(dd, 0, 3); gameOpts.events = ee != 0; gameOpts.prologue = pp != 0; }
         else if (k == "pins") { size_t n = 0; l >> n; mapPins.clear(); for (size_t i = 0; i < n && i < 6; i++) { vec2 pp; if (l >> pp.x >> pp.y) mapPins.push_back(pp); } }
+        else if (k == "vunlock") { std::string v; while (l >> v) vehiclesUnlocked.insert(v); }   // 3.4.0
         else if (k == "treasure") { l >> invCap >> shards >> phoenixDay; invCap = std::clamp(invCap, 40, 160); }   // 3.2.0
         else if (k == "prog") l >> level >> xp >> gold >> skillPoints >> gameTime >> timeOfDay >> day >> playSeconds;
         else if (k == "inv") { ItemStack s; int r; l >> s.id >> s.count >> r >> s.level; s.rarity = (Rarity)r; s.isNew = false; if (item(s.id)) inventory.push_back(s); }
@@ -788,6 +791,7 @@ bool Game::loadGame(int slot) {
     saveSlot = slot == 99 ? 0 : slot;   // 2.6.0 the legacy shared autosave continues as game 1
     camFocus = pos;
     weatherNext = weather;
+    refreshVehicleUnlocks(false);   // 3.4.0 older saves: what the story progress has already earned
     return true;
 }
 

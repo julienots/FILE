@@ -510,7 +510,7 @@ void Game::findInteractTarget() {
         if (Character* o = reg.get<Character>(e)) { if (o->dead || e == player) return; p = o->pos; if (e == mountEnt && riding) return; }
         else if (NodeComp* n = reg.get<NodeComp>(e)) { p = n->node.pos; if (n->node.type == NodeType::Chest && openedChests.count(n->node.uid)) return; if (n->node.type != NodeType::Chest && n->node.type != NodeType::FishingSpot && !world.nodeAvailable(n->node.uid, gameTime)) return; }
         else if (Pickup* pk = reg.get<Pickup>(e)) p = pk->pos;
-        else if (VehicleRef* vr = reg.get<VehicleRef>(e)) { if (driving >= 0 || vr->idx >= (int)vehicles.size()) return; p = vehicles[vr->idx].pos; }
+        else if (VehicleRef* vr = reg.get<VehicleRef>(e)) { if (driving >= 0 || vr->idx >= (int)vehicles.size() || !vehicleUnlocked(vr->idx)) return; p = vehicles[vr->idx].pos; }
         else return;
         float d = distXZ(p, c.pos);
         if (d > it.radius || std::fabs(p.y - c.pos.y) > 3.f) return;
@@ -523,7 +523,7 @@ void Game::findInteractTarget() {
     // 1.11.0 at the wheel: the action button gets you out
     if (driving >= 0 && driving < (int)vehicleEnts.size() && reg.valid(vehicleEnts[driving])) {
         interactTarget = vehicleEnts[driving];
-        if (Interact* it = reg.get<Interact>(interactTarget)) it->text = vehicleDefs()[vehicles[driving].def].moto ? "Descendre de la moto" : "Sortir de la voiture";
+        if (Interact* it = reg.get<Interact>(interactTarget)) it->text = vehicleDefs()[vehicles[driving].def].fly ? "Poser le vaisseau" : (vehicleDefs()[vehicles[driving].def].moto ? "Descendre de la moto" : "Sortir de la voiture");
     }
 }
 
@@ -779,7 +779,7 @@ void Game::updatePlayer(float dt) {
             m.yaw = dampAngle(m.yaw, ty, 5.f, dt);
             m.vis.anim.turnRate = wrapAngle(m.yaw - prev) / std::max(dt, 1e-4f);
         }
-        m.vis.anim.speed = hs;
+        m.vis.anim.speed = damp(m.vis.anim.speed, hs, 10.f, dt);
         float seat = (md.look.kind == 1 ? 0.95f : 1.25f) * m.vis.scale * 0.62f;
         if (ImportedModel* im = importedModel("horse_mount", Arch::Quadruped); im && im->mesh && im->mesh == m.vis.mesh) {
             // 2.3.3 the imported horse: the rider's pelvis sits on its real back (0.72 of the unit skeleton + the saddle)
@@ -861,7 +861,7 @@ void Game::updatePlayer(float dt) {
         c.yaw = dampAngle(c.yaw, target, sprinting ? 8.f : 13.f, dt);
         a.turnRate = wrapAngle(c.yaw - prev) / std::max(dt, 1e-4f);
     } else a.turnRate = damp(a.turnRate, 0, 8, dt);
-    a.speed = hs;
+    a.speed = damp(a.speed, hs, hs > a.speed ? 9.f : 12.f, dt);   // 3.4.0 eased: no snap of the gait on starts and stops
     // combat readiness (weapon guard vs relaxed carry): threats nearby, lock-on, attacking or blocking
     {
         bool threat = lockTarget != NullEntity || bossEnt != NullEntity || input.attackHeld || input.block || c.attackClip != nullptr || comboTimer > 0.05f;

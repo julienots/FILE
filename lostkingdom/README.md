@@ -6,13 +6,49 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.3.1 (versionCode 53), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.3.0 : elle s'installe par-dessus). SHA-256 : `ec7452c4a291f34f67d0575ae1c5fe1128aed027bce965b2837ad92d99b3e02c`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.4.0 (versionCode 54), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.3.1 : elle s'installe par-dessus). SHA-256 : `705286e7847e80d2ea9b80b5684db7dd76b36fedb43476aaf79b9bf1c4dff232`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.4.0 (herbe serrée, mouvements fluides, véhicules à débloquer, vaisseau volant, soleil brûlant)
+
+- **Herbe dense et serrée**, comme une vraie prairie :
+  - chaque touffe est maintenant un petit carré de gazon de 15 brins fins et presque droits (20 près du héros), au lieu de 10 brins écartés en étoile ;
+  - les touffes, plus larges et plus rapprochées (0,60 m au lieu de 0,72 m), se chevauchent : le sol ne se voit plus entre elles ;
+  - une sous-couche de brins courts remplit le pied.
+  - Sur ordinateur : environ 885 000 triangles d'herbe au lieu de 475 000 sur la même vue. Les réglages graphiques plus bas réduisent la densité comme avant. **Coût sur téléphone non mesuré.**
+- **Mouvements plus fluides et qui suivent le terrain** :
+  - le corps affiché glisse sur les marches et les bosses au lieu de sauter d'un coup ;
+  - les demi-tours ne sont plus instantanés (environ 50 ms) ;
+  - les animaux (loups, chevaux, sangliers…) s'inclinent avec la pente, dans le sens de la marche comme sur le côté. Les personnages restent droits et se penchent un peu en montée ;
+  - la marche démarre et s'arrête en douceur.
+  - Seul l'affichage est lissé : les collisions et les coups restent exacts.
+- **Véhicules débloqués par l'histoire** (le cheval reste disponible dès le début) :
+  - la **moto** après « Les Murmures » (quête 2), la **voiture** après « La Couronne brisée » (quête 3), le **vaisseau volant** quand la Couronne est reforgée (quête 5) ;
+  - chaque déblocage a sa grande annonce ;
+  - avant, le garage ne propose que le cheval, et les véhicules ne sont pas encore garés à Brindlemere ;
+  - **anciennes sauvegardes** : vous recevez directement les véhicules que votre progression a déjà gagnés.
+- **Le vaisseau volant de l'Ordre** (nouveau véhicule) :
+  - **la coque** : coque en bois au bord doré, pont en planches, rambardes, cabine à l'arrière (fenêtres éclairées la nuit), barre à roue, figure de proue en aigle doré, lanterne ;
+  - **au-dessus** : mât, voiles latérales, deux moteurs à hélices qui tournent, un grand ballon rayé crème et rouge cerclé d'or, avec ses ailerons de queue et huit cordages ;
+  - **pour le prendre** : appelé depuis le garage, il descend des nuages et se pose près de vous ;
+  - **commandes** : joystick pour diriger, Saut maintenu pour monter, Bouclier maintenu pour descendre (jusqu'à 150 m), bouton Action pour se poser et descendre à terre ;
+  - il passe tout seul au-dessus des montagnes, glisse le long des bâtiments, se balance doucement, et ses moteurs fument.
+- **Le soleil brûlant de midi** (ciel dégagé, de la fin de matinée au milieu de l'après-midi ; plus fort dans les déserts, les canyons, la steppe et la jungle, très faible dans les terres froides) :
+  - **la lumière** : soleil plus fort et plus blanc ;
+  - **l'ombre** : plus profonde et plus froide (moins de lumière du ciel) ;
+  - **la chaleur** : l'air tremble au-dessus du sol dès une douzaine de mètres ;
+  - **les reflets** : les zones claires brûlent vers un blanc chaud ;
+  - **le soleil** : quand il est dans le champ, une étoile de rayons et un cœur aveuglant (aussi par temps clair à d'autres heures, plus discrets) ;
+  - le soir et la nuit, l'effet disparaît.
+- **Vérifié sur ordinateur seulement** :
+  - les 3 049 tests unitaires réussissent ;
+  - nouveaux scénarios automatiques : `airship` (véhicules verrouillés au départ, moto après la quête 2, vaisseau après la quête 5, il descend des nuages, monte à 43 m, parcourt 190 m, se pose et laisse le héros à terre) et `sunlook` (canyons 0,96, Greenhaven 0,62, soir et nuit 0) ;
+  - les scénarios de régression passent aussi.
 
 ### Nouveautés 3.3.1 (fini les cercles plats)
 

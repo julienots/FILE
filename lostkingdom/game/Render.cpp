@@ -442,9 +442,32 @@ void Game::renderCharacter(Entity e, Character& c) {
     if (!v.visible || !v.mesh) return;
     if (c.npcDef >= 0) { NpcBrain* nb = reg.get<NpcBrain>(e); if (nb && nb->indoors) return; }
     if (distXZ(c.pos, camFocus) > renderer.settings.drawDistance * 0.75f) return;
-    quat rq = quat::axisAngle({0, 1, 0}, c.yaw);
+    // 3.4.0 smooth motion: the drawn body eases over steps and bumps instead of popping, turns without
+    // snapping, and animals (and, a little, people) lean with the slope they walk on
+    {
+        float fdt = v.visLastT < 0.f ? 1.f : clampf(realTime - v.visLastT, 0.f, 0.1f);
+        v.visLastT = realTime;
+        bool mounted = (e == player || e == mountEnt) && (riding || driving >= 0);   // rider and mount move as one
+        bool snap = fdt >= 1.f || std::fabs(c.pos.y - v.visY) > 1.6f || !c.grounded || c.swimming || mounted;
+        v.visY = snap ? c.pos.y : damp(v.visY, c.pos.y, c.pos.y > v.visY ? 22.f : 16.f, fdt);
+        bool fast = c.attackClip != nullptr || c.dead || fdt >= 1.f || mounted;
+        v.visYaw = fast ? c.yaw : dampAngle(v.visYaw, c.yaw, 18.f, fdt);
+        float wantP = 0, wantR = 0;
+        if (c.grounded && !c.swimming && !c.dead && !dungeon.active && !mounted && v.tiltPitch == 0 && v.tiltRoll == 0) {
+            vec3 f{std::sin(v.visYaw), 0, std::cos(v.visYaw)}, r{f.z, 0, -f.x};
+            float L = v.arch == Arch::Quadruped ? std::max(0.5f, c.radius * 1.4f) : 0.45f;
+            float dp = (groundAt(c.pos.x + f.x * L, c.pos.z + f.z * L) - groundAt(c.pos.x - f.x * L, c.pos.z - f.z * L)) / (2.f * L);
+            float dr = (groundAt(c.pos.x + r.x * L * 0.6f, c.pos.z + r.z * L * 0.6f) - groundAt(c.pos.x - r.x * L * 0.6f, c.pos.z - r.z * L * 0.6f)) / (1.2f * L);
+            float k = v.arch == Arch::Quadruped ? 1.f : 0.18f;   // people stay upright, leaning only slightly into a climb
+            wantP = clampf(std::atan(dp) * k, -0.45f, 0.45f); wantR = clampf(std::atan(dr) * k * 0.7f, -0.3f, 0.3f);
+        }
+        v.slopePitch = damp(v.slopePitch, wantP, 8.f, fdt); v.slopeRoll = damp(v.slopeRoll, wantR, 8.f, fdt);
+    }
+    vec3 rpos{c.pos.x, v.visY, c.pos.z};
+    quat rq = quat::axisAngle({0, 1, 0}, v.visYaw);
     if (v.tiltPitch != 0 || v.tiltRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.tiltPitch) * quat::axisAngle({0, 0, 1}, v.tiltRoll);   // rider on the motorbike
-    mat4 model = mat4::trs(c.pos + vec3(0, v.pelvisAdj * 0.f, 0), rq, vec3(v.scale));
+    else if (v.slopePitch != 0 || v.slopeRoll != 0) rq = rq * quat::axisAngle({1, 0, 0}, -v.slopePitch) * quat::axisAngle({0, 0, 1}, v.slopeRoll);
+    mat4 model = mat4::trs(rpos, rq, vec3(v.scale));
     // frustum test with a generous sphere
     if (!cam.frustum.visibleSphere(c.pos + vec3(0, c.height * 0.5f, 0), c.height * 1.2f + 2.f)) return;
 
@@ -459,7 +482,7 @@ void Game::renderCharacter(Entity e, Character& c) {
         for (int i = 0; i < 2; i++) {
             vec3 fw = model.transformPoint(v.pw.wpos[feet[i]]);
             float g = groundAt(fw.x, fw.z);
-            offs[i] = clampf(g - c.pos.y, -0.45f, 0.45f);
+            offs[i] = clampf(g - rpos.y, -0.45f, 0.45f);
             targets[i] = fw + vec3(0, offs[i], 0);
         }
         float pelvis = std::min(0.f, std::min(offs[0], offs[1]));
@@ -467,7 +490,7 @@ void Game::renderCharacter(Entity e, Character& c) {
         Pose& p = fpose;
         p.rootOffset.y += v.pelvisAdj / v.scale;
         computeWorld(sk, p, v.pw);
-        twoBoneIK(sk, p, v.pw, H_THIGHL, H_SHINL, H_FOOTL, inv.transformPoint(targets[0]), model.inverse().transformDir(vec3(std::sin(c.yaw), 0, std::cos(c.yaw))) + vec3(0, 0, 0.5f), 0.9f);
+        twoBoneIK(sk, p, v.pw, H_THIGHL, H_SHINL, H_FOOTL, inv.transformPoint(targets[0]), model.inverse().transformDir(vec3(std::sin(v.visYaw), 0, std::cos(v.visYaw))) + vec3(0, 0, 0.5f), 0.9f);
         twoBoneIK(sk, p, v.pw, H_THIGHR, H_SHINR, H_FOOTR, inv.transformPoint(targets[1]), vec3(0, 0, 1), 0.9f);
         // look at the interaction / lock target
         Entity look = (e == player) ? (lockTarget != NullEntity ? lockTarget : interactTarget) : NullEntity;
@@ -487,7 +510,7 @@ void Game::renderCharacter(Entity e, Character& c) {
         for (int it = 0; it < 4; it++) {
             vec3 tipM = v.pw.world[pb].transformPoint(vec3(0, 0, v.tip));
             vec3 tipW = model.transformPoint(tipM);
-            float g = (groundAt(tipW.x, tipW.z) + 0.05f - c.pos.y) / std::max(0.1f, v.scale);   // model space
+            float g = (groundAt(tipW.x, tipW.z) + 0.05f - rpos.y) / std::max(0.1f, v.scale);   // model space
             float clear = (tipM.y - g) * v.scale + 0.05f;
             if (it == 0) v.tipClearRaw = clear;
             v.tipClear = clear;

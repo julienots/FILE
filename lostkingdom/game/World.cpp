@@ -2314,9 +2314,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     };
     if (lod == 0) {
         // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
-        float spacing = 0.72f / std::sqrt(std::max(0.05f, grassDensity));   // 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
+        float spacing = 0.6f / std::sqrt(std::max(0.05f, grassDensity));   // 3.4.0 tighter (was 0.72 m); 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
-        if (grassDensity >= 0.5f) scatter(778, spacing * 0.95f, out.grassNear, nullptr, 1.05f, 1.85f);
+        if (grassDensity >= 0.5f) scatter(778, spacing * 0.9f, out.grassNear, nullptr, 1.0f, 1.6f);
         // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
         Rng sh(hash2i(k.x, k.z, 9001));
         for (auto* v : {&out.grass, &out.flowers})
@@ -2592,18 +2592,22 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
             // (9 blades; 13 plus seed stalks for the layer drawn close to the hero). The root is dark and sits in
             // the soil, the tips are lighter and warmer, each blade has its own shade.
             auto tuft = [](MeshBuilder& m, int n, float hMin, float hMax, int seeds, uint32_t seed) {
+                // 3.4.0 a patch of sward rather than a starburst tuft: thin, mostly upright blades spread over a
+                // wide footprint (neighbouring patches overlap, no soil shows between them), a dense short
+                // undercoat round the base and taller blades that bend over at the tip, in every direction
                 Rng br(seed);
                 for (int i = 0; i < n; i++) {
-                    float a = i * TAU / n + br.range(-0.35f, 0.35f);
+                    float a = br.range(0, TAU);
                     vec3 side{std::cos(a), 0, std::sin(a)};
-                    vec2 off = br.inDisk() * 0.12f;
+                    vec2 off = br.inDisk() * 0.3f;
                     vec3 base{off.x, -0.02f, off.y};
-                    float h = br.range(hMin, hMax);
-                    vec3 outw = vec3(-side.z, 0, side.x) * (br.chance(0.5f) ? 1.f : -1.f);
-                    vec3 lean = outw * h * br.range(0.18f, 0.5f) + vec3(off.x, 0, off.y) * 1.2f;
-                    float sh = br.range(0.82f, 1.12f);
-                    Mat root(hexColor(0x2c4a1a) * sh, 0.9f, 0, 0, 0.f), tip(hexColor(0xa8c860) * sh, 0.7f, 0, 0, 1.f);
-                    m.blade(base, base + vec3(0, h, 0) + lean, br.range(0.055f, 0.085f), side, root, tip, 1.f);
+                    bool under = i % 3 == 0;   // one blade in three is short undercoat
+                    float h = under ? br.range(hMin * 0.45f, hMin * 0.75f) : br.range(hMin, hMax);
+                    vec2 ld = br.inDisk();
+                    vec3 lean = vec3(ld.x, 0, ld.y) * h * br.range(0.12f, 0.32f);
+                    float sh = br.range(0.8f, 1.12f);
+                    Mat root(hexColor(0x2c4a1a) * sh, 0.9f, 0, 0, 0.f), tip(hexColor(0xa8c860) * sh, 0.7f, 0, 0, under ? 0.5f : 1.f);
+                    m.blade(base, base + vec3(0, h, 0) + lean, under ? br.range(0.05f, 0.07f) : br.range(0.035f, 0.055f), side, root, tip, br.range(0.6f, 1.2f));
                 }
                 for (int i = 0; i < seeds; i++) {   // a few seed stalks above the tuft
                     float a = br.range(0, TAU);
@@ -2615,8 +2619,8 @@ void World::uploadBuild(ChunkBuild& b, Chunk& c) {
                     m.blade(top - (top - base) * 0.16f, top + (top - base) * 0.04f, 0.06f, side, head.withWind(0.95f), head);
                 }
             };
-            tuft(blade, 10, 0.4f, 0.72f, 0, 5);   // 3.0.0 fuller tufts (8 -> 10, near 10 -> 12)
-            tuft(bladeNear, 12, 0.4f, 0.7f, 0, 6);
+            tuft(blade, 15, 0.36f, 0.66f, 0, 5);   // 3.4.0 patches of 15 thin blades (was 10 in a starburst), 20 for the layer near the hero
+            tuft(bladeNear, 20, 0.34f, 0.62f, 0, 6);
             tuft(bladeFar, 5, 0.45f, 0.75f, 0, 7);   // 3.0.2 the cheap tuft of the middle distance (4 wide blades)
             // 2.7.0 a flower: a thin bent stem with two leaves, a cup of 6 petals turned up, a yellow heart
             Mat stem(hexColor(0x3f6a2a), 0.9f, 0, 0, 0.f), petal(vec3(1.f), 0.6f, 0, 0.05f, 1.f), heart(hexColor(0xf0c030), 0.6f, 0, 0.05f, 1.f);

@@ -410,7 +410,7 @@ static std::vector<Step> scenario(const std::string& name) {
             VehicleState& v = g.vehicles[0];
             v.pos = vec3(tr.start.x, g.groundAt(tr.start.x, tr.start.y), tr.start.y); v.yaw = std::atan2(tr.startDir.x, tr.startDir.y); v.speed = 0;
             teleport(g, v.pos.x + 3, v.pos.z, 0.f);
-            g.enterVehicle(0);
+            g.vehiclesUnlocked = {"car", "moto", "airship"}; g.enterVehicle(0);
             maxSlip = airTotal = 0; suspMin = suspMax = 0; landings = 0; wasAir = false; phase = 0;
         }, idle, "car"});
         s.push_back({75.f, none, [](Game& g, float t) {
@@ -541,7 +541,7 @@ static std::vector<Step> scenario(const std::string& name) {
             VehicleState& v = g.vehicles[0];
             v.pos = vec3(p.x, g.world.groundHeight(p.x, p.y), p.y); v.yaw = st.rot; v.speed = 0;
             teleport(g, p.x + 3.f * dir.y, p.y - 3.f * dir.x, st.rot + PI);
-            g.enterVehicle(0);
+            g.vehiclesUnlocked = {"car", "moto", "airship"}; g.enterVehicle(0);
             carStart = v.pos;
         }, idle, "car"});
         s.push_back({14.f, none, [](Game& g, float) {
@@ -608,7 +608,7 @@ static std::vector<Step> scenario(const std::string& name) {
             v.pos = vec3(g.races[0].start.x, g.groundAt(g.races[0].start.x, g.races[0].start.y), g.races[0].start.y);
             v.yaw = std::atan2(g.races[0].startDir.x, g.races[0].startDir.y);
             teleport(g, v.pos.x + 3, v.pos.z, 0.f);
-            g.enterVehicle(0);
+            g.vehiclesUnlocked = {"car", "moto", "airship"}; g.enterVehicle(0);
         }, idle, "on the line"});
         s.push_back({2.f, none, idle, "hold still -> countdown"});
         s.push_back({0.05f, [](Game& g) { res[1] = g.race.active == 0 && g.race.countdown > 0; AGR_LOG("RACE started %d, countdown %.1f", g.race.active, g.race.countdown); g.requestScreenshot("build/shots/T0_race_start.png"); }, idle, "countdown"});
@@ -1482,14 +1482,14 @@ static std::vector<Step> scenario(const std::string& name) {
     }
     if (name == "garage") {
         // 2.2.1 call the car to the hero, drive it, speedometer (look at the pictures)
-        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); if (g.vehicles.empty()) g.initVehicles(); g.spawnVehicleEntities(); teleport(g, 1600, 1560, 0.f);
+        s.push_back({0.5f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 11.f; g.toastHint.clear(); if (g.vehicles.empty()) g.initVehicles(); g.vehiclesUnlocked = {"car", "moto", "airship"}; g.spawnVehicleEntities(); teleport(g, 1600, 1560, 0.f);
             g.mapPins = {vec2(1600, 4100), vec2(1660, 4000), vec2(1540, 3900), vec2(2400, 300), vec2(2450, 340)}; }, idle, "new game"});   // 3.1.0 pins in clusters: no overlap, none on the tracker
         s.push_back({2.f, none, idle, "settle"});
         s.push_back({0.1f, [](Game& g) { g.garageOpen = true; }, idle, "open"});
         s.push_back({0.3f, none, idle, "wait"});
         s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/G0_garage.png"); }, idle, "shot"});
-        s.push_back({0.5f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto) car = i; g.summonVehicle(car); g.garageOpen = false; }, idle, "summon"});
-        s.push_back({0.1f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto) car = i; float d = distXZ(g.vehicles[car].pos, g.pc().pos); AGR_LOG("GARAGE car at %.1f m from the hero -> %s", d, d < 9.f ? "GARAGE SUMMON OK" : "GARAGE SUMMON FAILED"); g.enterVehicle(car); }, idle, "enter"});
+        s.push_back({0.5f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto && !vehicleDefs()[g.vehicles[i].def].fly) car = i; g.summonVehicle(car); g.garageOpen = false; }, idle, "summon"});
+        s.push_back({0.1f, [](Game& g) { int car = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) if (!vehicleDefs()[g.vehicles[i].def].moto && !vehicleDefs()[g.vehicles[i].def].fly) car = i; float d = distXZ(g.vehicles[car].pos, g.pc().pos); AGR_LOG("GARAGE car at %.1f m from the hero -> %s", d, d < 9.f ? "GARAGE SUMMON OK" : "GARAGE SUMMON FAILED"); g.enterVehicle(car); }, idle, "enter"});
         s.push_back({3.f, none, [](Game& g, float) { g.input.move = vec2(0, 1); g.camIdleT = 0; }, "drive"});
         s.push_back({0.1f, [](Game& g) { AGR_LOG("GARAGE speed %.1f km/h -> %s", std::fabs(g.vehicles[std::max(0, g.driving)].speed) * 3.6f, g.driving >= 0 ? "GARAGE TEST PASSED" : "GARAGE TEST FAILED"); g.requestScreenshot("build/shots/G1_speedometer.png"); }, idle, "shot"});
         s.push_back({0.6f, [](Game& g) { g.exitVehicle(); g.input.move = vec2(0); }, idle, "exit"});
@@ -2292,6 +2292,39 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({0.05f, [](Game& g) { g.requestScreenshot("build/shots/BM0_bestiary.png"); }, idle, "shot"});
         return s;
     }
+    if (name == "airship") {
+        // 3.4.0 vehicles earned in the story (locked at first, the horse is free), then the sky-ship: called
+        // from the clouds, boarded, climbs, flies forward, lands and lets the hero off
+        static int lockedOk, motoOk, shipOk; static float alt0, maxAlt; static vec3 start;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 13.f; g.toastHint.clear(); g.tutStep = -1; if (g.vehicles.empty()) g.initVehicles(); g.spawnVehicleEntities();
+            const Poi* b = g.world.poiById("brindlemere"); teleport(g, b->pos.x + b->radius + 30.f, b->pos.y + 20.f, 0.f);
+            int n = 0; for (int i = 0; i < (int)g.vehicles.size(); i++) n += g.vehicleUnlocked(i);
+            g.summonVehicle(0);
+            lockedOk = n == 0 && g.vehicles[0].pos.y < 1e8f;
+            AGR_LOG("AIRSHIP new game: %d vehicles unlocked (expected 0)", n); }, idle, "locked"});
+        s.push_back({1.5f, [](Game& g) { g.questsDone.insert("m2"); g.refreshVehicleUnlocks(true); motoOk = g.vehiclesUnlocked.count("moto") && !g.vehiclesUnlocked.count("airship") && !g.itemGets.empty();
+            AGR_LOG("AIRSHIP after m2: moto %d car %d ship %d, fanfare %d", (int)g.vehiclesUnlocked.count("moto"), (int)g.vehiclesUnlocked.count("car"), (int)g.vehiclesUnlocked.count("airship"), (int)g.itemGets.size()); },
+            [](Game& g, float t) { static bool sh = false; if (!sh && t > 0.8f) { sh = true; g.requestScreenshot("build/shots/AS0_unlock.png"); } }, "moto"});
+        s.push_back({4.f, [](Game& g) { g.itemGets.clear(); g.questsDone.insert("m3"); g.questsDone.insert("m5"); g.refreshVehicleUnlocks(true); g.itemGets.clear();
+            int ship = -1; for (int i = 0; i < (int)g.vehicles.size(); i++) if (vehicleDefs()[g.vehicles[i].def].fly) ship = i;
+            shipOk = ship >= 0 && g.vehicleUnlocked(ship);
+            g.summonVehicle(ship); AGR_LOG("AIRSHIP summoned: alt %.1f landing %d", g.vehicles[ship].alt, (int)g.vehicles[ship].landing); g.camDist = g.camDistTarget = 18.f; g.camPitch = 0.35f; }, idle, "summon"});
+        s.push_back({0.5f, [](Game& g) { int ship = (int)g.vehicles.size() - 1; AGR_LOG("AIRSHIP parked alt %.2f, %.1f m from the hero", g.vehicles[ship].alt, distXZ(g.vehicles[ship].pos, g.pc().pos)); g.requestScreenshot("build/shots/AS1_parked.png"); }, idle, "parked"});
+        s.push_back({0.5f, [](Game& g) { int ship = (int)g.vehicles.size() - 1; g.enterVehicle(ship); start = g.vehicles[ship].pos; alt0 = start.y; maxAlt = 0; AGR_LOG("AIRSHIP boarded: driving %d", g.driving); }, idle, "board"});
+        s.push_back({4.f, none, [](Game& g, float) { g.input.jumpHeld = true; g.input.jump = true; }, "climb"});
+        s.push_back({7.f, none, [](Game& g, float t) {
+            if (g.driving < 0) return; VehicleState& v = g.vehicles[g.driving];
+            g.input.move = vec2(0.f, 1.f); g.camYaw = v.yaw + PI; maxAlt = std::max(maxAlt, v.alt);
+            static bool sh = false; if (!sh && t > 5.f) { sh = true; g.requestScreenshot("build/shots/AS2_flying.png"); } }, "fly"});
+        s.push_back({0.2f, [](Game& g) { g.input.move = vec2(0); if (g.driving >= 0) { VehicleState& v = g.vehicles[g.driving]; AGR_LOG("AIRSHIP flew %.0f m, altitude %.1f m (max %.1f), y %.1f", distXZ(v.pos, start), v.alt, maxAlt, v.pos.y); } g.exitVehicle(); }, idle, "land"});
+        s.push_back({12.f, none, [](Game& g, float) { g.input.move = vec2(0); }, "landing"});
+        s.back().until = [](Game& g) { return g.driving < 0; };
+        s.push_back({1.f, [](Game& g) {
+            int ship = (int)g.vehicles.size() - 1; float d = distXZ(g.vehicles[ship].pos, start);
+            bool ok = lockedOk && motoOk && shipOk && maxAlt > 12.f && d > 60.f && g.driving < 0 && g.pc().grounded;
+            AGR_LOG("AIRSHIP locked %d moto %d ship %d maxAlt %.1f dist %.0f off %d -> %s", lockedOk, motoOk, shipOk, maxAlt, d, g.driving < 0, ok ? "AIRSHIP TEST PASSED" : "AIRSHIP TEST FAILED"); }, idle, "check"});
+        return s;
+    }
     if (name == "cosmos") {
         // 3.2.0 the Star Observatory and space: the gate in the Titans, then the asteroids over the planet, a low-gravity jump
         static int res[4]; static float y0, peak;
@@ -2312,6 +2345,29 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({1.6f, none, [](Game& g, float) { peak = std::max(peak, g.pc().pos.y); g.camIdleT = 0; g.pc().invuln = 1.f; }, "airborne"});
         s.push_back({0.1f, [](Game& g) { res[2] = peak - y0 > 2.f; g.requestScreenshot("build/shots/CO3_jump.png");
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
+        return s;
+    }
+    if (name == "sunlook") {
+        // 3.4.0 the blazing sun: midday in the Scarlet Canyons and in Greenhaven (bleached highlights, deep
+        // shade, heat haze), and a low camera turned towards the afternoon sun (starburst)
+        static float sc[3];
+        auto at = [](const char* poi, float hour, float yaw, float pitch, float dist) {
+            return [=](Game& g) {
+                const Poi* p = g.world.poiById(poi); g.timeOfDay = hour; g.weatherNext = 0;
+                teleport(g, p->pos.x + 24.f, p->pos.y + 18.f, yaw); g.camYaw = yaw; g.camPitch = pitch; g.camDist = g.camDistTarget = dist;
+            };
+        };
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; }, idle, "setup"});
+        s.push_back({7.f, at("roc_ecarlate", 13.f, 0.8f, 0.55f, 15.f), [](Game& g, float t) { g.timeOfDay = 13.f; static bool sh = false; if (!sh && t > 6.5f) { sh = true; sc[0] = g.env.scorch; g.requestScreenshot("build/shots/SU0_canyon_noon.png"); } }, "canyon"});
+        s.push_back({7.f, at("brindlemere", 12.5f, 2.2f, 0.5f, 14.f), [](Game& g, float t) { g.timeOfDay = 12.5f; static bool sh = false; if (!sh && t > 6.5f) { sh = true; sc[1] = g.env.scorch; g.requestScreenshot("build/shots/SU1_greenhaven_noon.png"); } }, "greenhaven"});
+        s.push_back({7.f, at("brindlemere", 17.4f, 0.f, -0.25f, 8.f), [](Game& g, float t) {
+            g.timeOfDay = 17.4f;
+            // face the sun: the camera looks from behind the hero towards it
+            vec3 sd = g.env.sunDir; g.camYaw = std::atan2(-sd.x, -sd.z); g.camPitch = -0.3f;
+            static bool sh = false; if (!sh && t > 6.5f) { sh = true; sc[2] = g.env.scorch; g.requestScreenshot("build/shots/SU2_sun_burst.png"); } }, "facing the sun"});
+        s.push_back({7.f, at("brindlemere", 12.5f, 2.2f, 0.5f, 14.f), [](Game& g, float t) { g.timeOfDay = 22.f; }, "night"});
+        s.push_back({0.5f, [](Game& g) { bool ok = sc[0] > 0.7f && sc[1] > 0.45f && sc[2] < 0.3f && g.env.scorch < 0.05f;   // the evening sun no longer blazes
+            AGR_LOG("SUN scorch canyon %.2f greenhaven %.2f evening %.2f night %.2f -> %s", sc[0], sc[1], sc[2], g.env.scorch, ok ? "SUN TEST PASSED" : "SUN TEST FAILED"); }, idle, "check"});
         return s;
     }
     if (name == "canyons") {

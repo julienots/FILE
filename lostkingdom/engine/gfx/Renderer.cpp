@@ -623,7 +623,7 @@ void Renderer::postProcess() {
     composite.set("uFade", vec4(env.fadeColor, env.fade));
     composite.set("uProj", vec4(camera.zNear, camera.zFar, hdrScale, env.damagePulse));
     composite.set("uTime", std::fmod(env.time, 100.f));
-    composite.set("uFx0", vec4(env.heat, env.sandVeil, 0.f, 0.f));
+    composite.set("uFx0", vec4(env.heat, env.sandVeil, env.scorch, 0.f));
     {   // 3.0.2 sharpen more when the internal resolution is lower
         float sc = settings.renderScale * dynamicScale;
         float k = clampf(0.3f + (1.f - sc) * 1.1f, 0.3f, 0.75f);

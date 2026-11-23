@@ -39,7 +39,10 @@ struct Visual {
     vec3 tint{1, 1, 1};
     float flash = 0, dissolve = 0, rim = 0.5f, emissiveBoost = 0;
     float breathT = 0, wetT = 0;
-    float tiltPitch = 0, tiltRoll = 0;   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
+    float tiltPitch = 0, tiltRoll = 0;
+    // 3.4.0 smoothing of what is drawn (the simulation keeps its exact values): height over steps and bumps,
+    // turning, and the body following the slope of the ground
+    float visY = -1e9f, visYaw = 0, visLastT = -1.f, slopePitch = 0, slopeRoll = 0;   // 1.11.0 rider leaning with the motorbike   // 1.9.0 realism: breath vapour in the cold, dripping after a swim
     vec3 dissolveColor{1.f, 0.5f, 0.15f};
     bool outline = true;
     vec4 outlineColor{0.06f, 0.04f, 0.03f, 1};
@@ -192,7 +195,7 @@ struct NodeComp { NodeSpawn node; std::shared_ptr<Mesh> mesh; float hits = 0; fl
 enum class InterKind : uint8_t { None, Npc, Node, Chest, Pickup, Station, DungeonEntrance, DungeonExit, Waystone, Lever, Plate, Brazier, Bed, Fishing, Mount, Board, Altar, Vehicle };
 // 1.11.0 vehicles (Vehicles.cpp)
 struct VehicleRef { int idx; };
-struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; };
+struct VehicleDef { std::string id, name, model; bool moto; float maxSpeed, accel, turn, radius, camDist; bool fly = false; };   // 3.4.0 fly: the sky-ship (procedural, no model file)
 const std::vector<VehicleDef>& vehicleDefs();
 // 1.11.1 goals (Goals.cpp): races on the roads, challenges
 struct RaceDef { std::string id, name, from, to; };
@@ -210,6 +213,7 @@ struct VehicleState {
     float velYaw = 0, vy = 0, groundPrev = 0, prevSpeed = 0, airT = 0, slip = 0;
     float suspP = 0, suspPV = 0, suspR = 0, suspRV = 0, heave = 0, heaveV = 0;
     bool air = false;
+    float alt = 0, prop = 0; bool landing = false;   // 3.4.0 the sky-ship: height above the ground, propeller angle, landing to let the hero off
     std::vector<mat4> bones;
 };
 struct Interact { InterKind kind = InterKind::None; int param = 0; std::string text; float radius = 2.f; };
@@ -616,6 +620,12 @@ public:
     std::vector<VehicleState> vehicles;
     std::vector<Entity> vehicleEnts;
     int driving = -1;
+    std::set<std::string> vehiclesUnlocked;   // 3.4.0 the vehicles are earned in the story (the horse is yours from the start)
+    bool vehicleUnlocked(int i) const;
+    void refreshVehicleUnlocks(bool announce);
+    void updateAirship(float dt, vec3 want, float mag);
+    void renderAirship(VehicleState& v);
+    std::shared_ptr<Mesh> airshipMesh, airshipProp;
     VehicleAsset* vehicleAsset(const std::string& model);
     void initVehicles();
     void spawnVehicleEntities();

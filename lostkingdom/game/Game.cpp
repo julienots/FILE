@@ -536,6 +536,25 @@ void Game::updateEnvironment(float dt) {
         env.heat = dungeon.active ? 0.f : saturate(regionW[R_AMBER] * 1.2f + regionW[R_ASHEN] * 0.35f) * (1.f - env.night) * (1.f - sandAmt) * (1.f - rainAmt) * saturate(env.sunIntensity / 2.5f);
         env.sandVeil = dungeon.active ? 0.f : sandAmt;
         env.flare = dungeon.active ? 0.f : (1.f - env.night) * saturate(env.sunIntensity / 2.2f) * (1.f - overcast * 0.9f) * (1.f - rainAmt) * (1.f - fogAmt) * 0.75f;
+        // 3.4.0 the blazing midday sun: a clear sky from late morning to mid-afternoon, fiercest in the hot lands.
+        // The sun hits harder and whiter, the shade gets deeper and cooler (less sky light), the air shimmers
+        // over the ground, highlights burn and the sun itself flares in a starburst.
+        float noon = smoothstepf(0.42f, 0.78f, env.sunDir.y) * (1.f - env.night);
+        float warm = 0.5f + 0.5f * saturate(regionW[R_AMBER] + regionW[R_CANYON] + regionW[R_ASHEN] * 0.6f + regionW[R_STEPPE] * 0.7f + regionW[R_JUNGLE] * 0.6f + regionW[R_CORAL] * 0.5f + regionW[R_GREENHAVEN] * 0.2f)
+                     - 0.45f * saturate(regionW[R_FROSTHEIM] + regionW[R_AURORA] + regionW[R_TITANS] * 0.6f);
+        float target = dungeon.active ? 0.f : saturate(noon * clear * (1.f - sandAmt) * (1.f - ashAmt * 0.7f) * saturate(warm));
+        env.scorch = damp(env.scorch, target, 0.6f, dt);
+        if (env.scorch > 0.001f) {
+            env.sunIntensity *= 1.f + 0.32f * env.scorch;
+            env.sunColor = lerp(env.sunColor, srgb(0xfff0d4), 0.45f * env.scorch);
+            env.skyAmbient = lerp(env.skyAmbient, env.skyAmbient * vec3(0.68f, 0.76f, 0.95f), env.scorch);   // cooler, darker shade
+            env.groundAmbient *= 1.f - 0.3f * env.scorch;
+            env.shadowStrength = std::max(env.shadowStrength, 0.92f * env.scorch);
+            env.heat = std::max(env.heat, env.scorch * 0.45f);
+            env.flare = std::max(env.flare, 0.85f * env.scorch);
+            env.bloomIntensity += 0.05f * env.scorch;
+            env.temperature += 0.25f * env.scorch;
+        }
     }
     env.vignette = 0.32f;
     env.grain = 0.012f;

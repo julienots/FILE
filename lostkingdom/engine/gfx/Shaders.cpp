@@ -1453,6 +1453,15 @@ void main() {
         uv.x += wob * 0.0016 * m;
         uv.y += sin(uv.x * 90.0 + tt * 1.7) * 0.0008 * m;
     }
+    // 3.4.0 the blazing sun: hot air rising off the ground, from a dozen metres away, in slow vertical waves
+    if (uFx0.z > 0.0) {
+        float dh = linDepth(texture(uDepth, uv0).r);
+        float m = smoothstep(10.0, 45.0, dh) * (1.0 - smoothstep(250.0, 380.0, dh)) * uFx0.z;
+        float tt = uTime;
+        float rise = sin(uv0.y * 210.0 + tt * 5.2 + sin(uv0.x * 40.0 + tt) * 2.0) * 0.6 + sin(uv0.y * 470.0 + tt * 7.7 + uv0.x * 60.0) * 0.4;
+        uv.x += rise * 0.0011 * m;
+        uv.y += sin(uv0.x * 120.0 - tt * 3.3) * 0.0006 * m;
+    }
     if (uPost0.w > 0.0) {
         vec2 dir = (uv - 0.5) * uPost0.w * 0.012;
         col = vec3(texture(uScene, uv + dir).r, texture(uScene, uv).g, texture(uScene, uv - dir).b);
@@ -1513,6 +1522,12 @@ void main() {
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(l), col, uPost1.x);
     col = (col - 0.5) * uPost1.y + 0.5;
+    // 3.4.0 the blazing sun: highlights burn to a warm white, the shade stays cool and deep
+    if (uFx0.z > 0.0) {
+        float lb = dot(clamp(col, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+        col = mix(col, vec3(1.0, 0.95, 0.84), smoothstep(0.62, 1.0, lb) * 0.38 * uFx0.z);
+        col = mix(col, col * vec3(0.9, 0.95, 1.08), (1.0 - smoothstep(0.08, 0.4, lb)) * 0.5 * uFx0.z);
+    }
     // split toning: cool shadows, warm highlights (cinematic separation, subtle)
     float lt = dot(clamp(col, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
     col += vec3(-0.02, 0.0, 0.035) * (1.0 - smoothstep(0.0, 0.45, lt)) + vec3(0.03, 0.012, -0.025) * smoothstep(0.55, 1.0, lt);
@@ -1556,6 +1571,16 @@ void main() {
                 float ring = smoothstep(r, r * 0.82, dg) - smoothstep(r * 0.82, r * 0.6, dg) * 0.8;
                 vec3 tint = k == 0 ? vec3(1.0, 0.6, 0.3) : (k == 1 ? vec3(0.4, 0.8, 1.0) : (k == 2 ? vec3(0.6, 1.0, 0.5) : vec3(1.0, 0.45, 0.7)));
                 fl += tint * ring * 0.05;
+            }
+            // 3.4.0 a blinding starburst round a blazing sun: long thin rays that turn slowly, a white-hot core
+            {   // (also on any clear day, stronger under the blazing sun)
+                float kb = 0.45 + 0.55 * uFx0.z;
+                vec2 dv = p - sP;
+                float ang = atan(dv.y, dv.x);
+                float rays = pow(abs(cos(ang * 6.0 + uTime * 0.05)), 60.0) + 0.6 * pow(abs(cos(ang * 9.0 - uTime * 0.03 + 0.7)), 90.0);
+                float fall = exp(-ds * 4.5);
+                fl += vec3(1.0, 0.9, 0.7) * rays * fall * 0.55 * kb;
+                fl += vec3(1.0, 0.92, 0.75) * (0.35 / (1.0 + ds * ds * 900.0) + 0.12 / (1.0 + ds * ds * 25.0)) * kb;
             }
             col += fl * vis * uSunScr.w;
         }
