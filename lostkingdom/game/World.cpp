@@ -8,11 +8,11 @@
 namespace lk {
 
 const char* regionName(int r) {
-    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude", "Terres d'Aurore", "Monts Titans"};
+    static const char* n[] = {"Greenhaven", "Frostheim", "Ashen Lands", "Elderwood", "Royaume des Ombres", "High Crowns", "Sables d'Ambre", "Côte de Corail", "Steppes de Valdor", "Jungle d'Émeraude", "Terres d'Aurore", "Monts Titans", "Canyons Écarlates"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "?";
 }
 const char* regionSubtitle(int r) {
-    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde", "Le pays des cristaux vivants", "Les cimes des géants"};
+    static const char* n[] = {"Les plaines verdoyantes", "Le royaume gelé", "Les terres de cendre", "La forêt ancienne", "Les terres maudites", "Les cimes couronnées", "L'océan de dunes", "Les lagons d'Azur", "Les herbes du vent", "Le cœur vert du monde", "Le pays des cristaux vivants", "Les cimes des géants", "Les falaises de feu"};
     return (r >= 0 && r < R_COUNT) ? n[r] : "";
 }
 
@@ -57,6 +57,9 @@ static const Seed SEEDS[] = {
     // 3.0.0 the Titan Mountains: the great range of the far east (valleys, passes and peaks above the clouds)
     {{6650, 700}, R_TITANS}, {{6950, 1300}, R_TITANS}, {{6700, 1900}, R_TITANS}, {{7050, 2500}, R_TITANS}, {{6700, 3000}, R_TITANS},
     {{7100, 3500}, R_TITANS}, {{6700, 4000}, R_TITANS}, {{7050, 4600}, R_TITANS}, {{6650, 5000}, R_TITANS}, {{6800, 5600}, R_TITANS},
+    // 3.3.0 the Scarlet Canyons: red mesas and deep gorges along the southern sea
+    {{4200, 6500}, R_CANYON}, {{4900, 6950}, R_CANYON}, {{5600, 6500}, R_CANYON}, {{6300, 6950}, R_CANYON}, {{6950, 6450}, R_CANYON},
+    {{4500, 7250}, R_CANYON}, {{5900, 7250}, R_CANYON}, {{6950, 7150}, R_CANYON}, {{5200, 6280}, R_CANYON},
 };
 
 // 3.0.0 the valleys of the Titan Mountains: the peaks rise away from these lines and basins, so the settlements,
@@ -203,6 +206,17 @@ static float regionHeight(int r, float x, float z) {
         float mf = mountainField(x, z, 0.0021f, 194);
         float peaks = 45.f + 240.f * mf + 18.f * ridged2(x * 0.012f, z * 0.012f, 3, 195) * smoothstepf(0.2f, 0.6f, mf);
         return floorH + mask * peaks * (0.55f + 0.45f * mask);
+    }
+    case R_CANYON: {
+        // 3.3.0 the Scarlet Canyons: high red plateaus in steps, cut by winding gorges with flat sandy floors,
+        // and needles of rock (hoodoos) standing alone
+        vec2 w = warp2(x, z, 100.f, 0.0016f, 201);
+        float plateau = terrace(32.f + 12.f * fbm2(w.x * 0.002f, w.y * 0.002f, 3, 202) + 16.f * fbm2(w.x * 0.0045f, w.y * 0.0045f, 2, 203), 8.f, 0.06f);
+        float gorge = smoothstepf(0.6f, 0.84f, ridged2(w.x * 0.0028f, w.y * 0.0028f, 4, 204));
+        float floorH = 8.f + 2.5f * fbm2(x * 0.01f, z * 0.01f, 2, 205);
+        float h = lerpf(plateau, floorH, gorge);
+        float spire = 34.f * std::pow(saturate((fbm2(x * 0.018f, z * 0.018f, 2, 206) * 0.5f + 0.5f - 0.66f) * 3.f), 3.f);
+        return h + spire * (1.f - gorge * 0.6f) + 1.2f * fbm2(x * 0.03f, z * 0.03f, 2, 207);
     }
     case R_CORAL: {
         // 2.0.0 the Coral Coast: soft jungle hills, kept above sea level (the lagoons are carved by lakes)
@@ -440,6 +454,14 @@ void World::buildPlan() {
     Pf("pilleurs_tombes", "Camp des Pilleurs de Tombes", PoiType::Camp, 5000, 4300, 30, -1, -1, 200);
     Pf("ws_emeraude", "Pierre d'Émeraude", PoiType::Waystone, 5390, 3330, 10);
     Pf("ws_xochi", "Pierre de Xochi", PoiType::Waystone, 4690, 4830, 10);
+    // 3.3.0 the Scarlet Canyons
+    Pf("roc_ecarlate", "Roc-Écarlate", PoiType::Village, 4400, 6650, 62, -1, -1, 260);
+    Pf("aiguille_rouge", "Aiguille-Rouge", PoiType::Village, 6400, 6950, 58, -1, -1, 260);
+    Pf("citadelle_falaises", "Citadelle des Falaises", PoiType::Castle, 5500, 7000, 80, -1, -1, 320);
+    Pf("arches_couchant", "Arches du Couchant", PoiType::Ruins, 6950, 6450, 44, -1, -1, 260);
+    Pf("camp_nomades", "Camp des Nomades", PoiType::Camp, 5000, 6350, 40, -1, -1, 260);
+    Pf("ws_roc", "Pierre de Roc-Écarlate", PoiType::Waystone, 4480, 6560, 10);
+    Pf("ws_aiguille", "Pierre d'Aiguille-Rouge", PoiType::Waystone, 6320, 6880, 10);
     Pf("ws_jaguar", "Pierre du Jaguar", PoiType::Waystone, 5420, 4500, 10);
     // ---- 3.0.0 the Titan Mountains (placed on the valley floors and basins of TITAN_VALLEYS / TITAN_BASINS)
     P("hautebrume", "Hautebrume, la Cité des Titans", PoiType::Village, 6760, 2650, 150); pois.back().city = true;
@@ -580,6 +602,11 @@ void World::buildPlan() {
         addRoad(*this, {pos("col_aigles"), {6440, 820}, pos("gouffre_titans")}, 4, false);
         addRoad(*this, {pos("emeraude"), {5800, 3380}, {6080, 3330}, {6460, 3240}, {6800, 3100}}, 5, false);   // the jungle pass
         addRoad(*this, {pos("valdor"), {5150, 2000}, pos("khar_vos"), {5050, 3000}, pos("emeraude")}, 4, false);
+        // 3.3.0 down to the Scarlet Canyons from Xochi, along the coast to the Citadel and Aiguille-Rouge
+        addRoad(*this, {pos("xochi"), {4500, 5700}, {4450, 6200}, pos("roc_ecarlate")}, 5, false);
+        addRoad(*this, {pos("roc_ecarlate"), {4950, 6800}, pos("citadelle_falaises")}, 5, false);
+        addRoad(*this, {pos("citadelle_falaises"), {6000, 7000}, pos("aiguille_rouge")}, 5, false);
+        addRoad(*this, {pos("aiguille_rouge"), {6750, 6600}, pos("arches_couchant")}, 4, false);
     }
 
     // ---- structures ----------------------------------------------------------------------
@@ -885,7 +912,7 @@ void World::buildPlan() {
             if (p.type == PoiType::Village && reg == R_AMBER) { desertTown(); break; }
             if (p.type == PoiType::Village && reg == R_CORAL) { coastTown(); break; }
             S(S_WELL, p.pos, 0, pi);
-            int house = reg == R_AURORA ? S_LONGHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN || reg == R_TITANS ? S_STONEHOUSE : S_HOUSE));
+            int house = reg == R_CANYON ? S_DOMEHOUSE : reg == R_AURORA ? S_LONGHOUSE : reg == R_FROSTHEIM ? S_LONGHOUSE : (reg == R_SHADOWS ? S_STILT_HUT : (reg == R_HIGHCROWNS || reg == R_ASHEN || reg == R_TITANS ? S_STONEHOUSE : S_HOUSE));   // 3.3.0 canyons: adobe domes
             int n = p.type == PoiType::Village ? 9 : 6;
             ring(n, p.radius * 0.62f, [&](int i) {
                 if (i == 0) return (int)S_INN;
@@ -944,13 +971,13 @@ void World::buildPlan() {
             for (int i = 0; i < n; i++) {
                 float a = i * TAU / n;
                 vec2 t = p.pos + vec2(std::cos(a), std::sin(a)) * p.radius * 0.8f;
-                S(S_CASTLE_TOWER, t, a, pi, 1.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0)));
+                S(S_CASTLE_TOWER, t, a, pi, 1.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER || reg == R_CANYON ? 3 : 0)));
                 float a2 = (i + 0.5f) * TAU / n;
                 vec2 m = p.pos + vec2(std::cos(a2), std::sin(a2)) * p.radius * 0.8f * std::cos(PI / n);
                 if (i == 1) S(S_GATE, m, -a2 + PI / 2, pi, 1.f, reg == R_SHADOWS ? 1 : 0);
-                else S(S_CASTLE_WALL, m, -a2 + PI / 2, pi, 2.f * p.radius * 0.8f * std::sin(PI / n) / 10.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0)));
+                else S(S_CASTLE_WALL, m, -a2 + PI / 2, pi, 2.f * p.radius * 0.8f * std::sin(PI / n) / 10.f, reg == R_SHADOWS ? 1 : (reg == R_FROSTHEIM ? 2 : (reg == R_AMBER || reg == R_CANYON ? 3 : 0)));
             }
-            if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : (reg == R_AMBER ? 3 : 0));
+            if (p.boss < 0) S(S_KEEP, p.pos + vec2(0, -p.radius * 0.25f), 0, pi, 1.f, reg == R_FROSTHEIM ? 2 : (reg == R_AMBER || reg == R_CANYON ? 3 : 0));
             else S(S_STATUE, p.pos + vec2(0, -p.radius * 0.45f), 0, pi, 1.6f);
             for (int i = 0; i < 4; i++) S(S_LANTERN, p.pos + vec2(i < 2 ? -12.f : 12.f, i % 2 ? -12.f : 12.f), 0, pi);
             if (!p.hostile) {
@@ -1727,6 +1754,8 @@ static const std::vector<ScatterEntry>& scatterTable(int r) {
         {{P_CRYSTALTREE, 2.4f, 0.8f, 1.3f, true}, {P_BIRCH, 1.2f, 0.8f, 1.2f, true}, {P_PINE, 0.6f, 0.7f, 1.1f, true}, {P_BOULDER, 0.9f, 0.6f, 1.4f, true}, {P_ROCK, 1.4f, 0.6f, 1.5f, true}, {P_AURORASPIRE, 0.22f, 0.6f, 1.2f, true}, {P_FERN, 2.2f, 0.8f, 1.3f, false}, {P_BUSH, 1.2f, 0.7f, 1.2f, false}, {P_SMALLSHROOMS, 0.4f, 0.8f, 1.2f, false}},
         // 3.0.0 Titan Mountains (index R_TITANS, last row): larch and pine forests in the valleys, boulders, snowy rocks
         {{P_PINE, 3.f, 0.8f, 1.5f, true}, {P_SNOWPINE, 1.4f, 0.8f, 1.4f, true}, {P_BIRCH, 0.6f, 0.8f, 1.2f, true}, {P_BOULDER, 1.4f, 0.8f, 1.8f, true}, {P_ROCK, 2.f, 0.7f, 1.7f, true}, {P_SNOWROCK, 0.6f, 0.7f, 1.5f, true}, {P_BUSH, 1.f, 0.7f, 1.1f, false}, {P_FERN, 0.8f, 0.8f, 1.2f, false}, {P_STUMP, 0.2f, 0.8f, 1.1f, true}, {P_LOG, 0.15f, 0.9f, 1.1f, true}},
+        // 3.3.0 Scarlet Canyons: red sandstone blocks, dead trees and lone acacias, cacti and agaves, dry bushes, bones
+        {{P_SANDROCK, 2.6f, 0.7f, 2.f, true}, {P_BOULDER, 1.f, 0.7f, 1.6f, true}, {P_DEADTREE, 0.9f, 0.8f, 1.3f, true}, {P_ACACIA, 0.6f, 0.8f, 1.3f, true}, {P_CACTUS, 0.9f, 0.7f, 1.3f, true}, {P_AGAVE, 0.8f, 0.8f, 1.2f, false}, {P_DRYBUSH, 1.6f, 0.7f, 1.2f, false}, {P_TUMBLEWEED, 0.5f, 0.8f, 1.2f, false}, {P_BONES, 0.25f, 0.8f, 1.2f, false}},
     };
     return T[r];
 }
@@ -1744,6 +1773,7 @@ static float forestDensity(int r, float x, float z) {
     case R_STEPPE: return 0.06f + smoothstepf(0.6f, 0.8f, n) * 0.22f;   // open grassland: a few trees and rocks
     case R_JUNGLE: return 0.75f + n * 0.25f;                             // the densest vegetation of the world
     case R_AURORA: return 0.15f + smoothstepf(0.45f, 0.72f, n) * 0.55f;  // 2.8.0 crystal groves and open glowing meadows
+    case R_CANYON: return 0.06f + smoothstepf(0.55f, 0.8f, n) * 0.22f;   // 3.3.0 sparse: the gorges hold the life
     case R_TITANS: return 0.08f + smoothstepf(0.45f, 0.7f, n) * 0.45f;   // 3.0.0 conifer woods in the valleys, open alpine meadows
     default: return 0.12f + smoothstepf(0.5f, 0.75f, n) * 0.4f;
     }
@@ -1800,6 +1830,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 case R_JUNGLE: wMud += w * smoothstepf(0.5f, 0.75f, n1) * 0.4f; wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;
                 case R_TITANS: wRock += w * (0.08f + smoothstepf(0.6f, 0.8f, n1) * 0.3f + smoothstepf(40.f, 70.f, y) * 0.35f); wDirt += w * smoothstepf(0.72f, 0.88f, n2) * 0.2f; break;   // 3.0.0 alpine pasture, scree higher up
                 case R_AURORA: wRock += w * smoothstepf(0.62f, 0.84f, n1) * 0.35f; wDirt += w * smoothstepf(0.7f, 0.88f, n2) * 0.25f; break;   // 2.8.0 moss over lava rock, bare patches
+                case R_CANYON: wSand += w * (0.55f + 0.25f * smoothstepf(0.4f, 0.7f, n1)); wRock += w * (0.25f + smoothstepf(16.f, 30.f, y) * 0.45f + smoothstepf(0.6f, 0.85f, n2) * 0.3f); break;   // 3.3.0 red sand floors, banded rock walls
                 case R_CORAL: wSand += w * (1.f - smoothstepf(0.9f, 3.0f, y)) * 0.92f; wDirt += w * smoothstepf(0.68f, 0.85f, n2) * 0.22f; wMud += w * smoothstepf(0.75f, 0.9f, n1) * 0.12f; break;
                 }
             }
@@ -2036,8 +2067,9 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             {{P_FERN, 3.f, 0.7f, 1.2f}, {P_SMALLSHROOMS, 1.2f, 0.8f, 1.2f}, {P_FLOWERS, 1.f, 0.8f, 1.2f}, {P_BRANCHES, 1.f, 0.8f, 1.2f}},    // 2.4.0 jungle
             {{P_FLOWERS, 2.5f, 0.8f, 1.3f}, {P_SMALLSHROOMS, 2.f, 0.8f, 1.3f}, {P_TALLGRASS, 1.5f, 0.8f, 1.2f}, {P_PEBBLES, 1.f, 0.8f, 1.3f}},  // 2.8.0 aurora
             {{P_FLOWERS, 2.2f, 0.7f, 1.1f}, {P_PEBBLES, 2.f, 0.8f, 1.5f}, {P_TALLGRASS, 1.5f, 0.7f, 1.1f}, {P_BRANCHES, 0.5f, 0.8f, 1.2f}},   // 3.0.0 titans: alpine flowers, scree
+            {{P_PEBBLES, 2.6f, 0.8f, 1.6f}, {P_DRYBUSH, 1.f, 0.5f, 0.9f}, {P_BONES, 0.2f, 0.7f, 1.f}, {P_BRANCHES, 0.4f, 0.8f, 1.2f}},   // 3.3.0 canyons
         };
-        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16, 14, 13};
+        static const int attempts[R_COUNT] = {16, 8, 6, 14, 10, 12, 7, 15, 14, 16, 14, 13, 8};
         Rng cr(hash2i(k.x, k.z, 9191));
         int n = (int)(attempts[crw.dominant] * clampf(grassDensity * 1.25f, 0.3f, 1.f));
         for (int t = 0; t < n; t++) {
@@ -2206,6 +2238,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         case R_JUNGLE: t = p < 0.24f ? NodeType::Tree : p < 0.4f ? NodeType::Herb : p < 0.52f ? NodeType::Mushroom : p < 0.64f ? NodeType::Berries : p < 0.74f ? NodeType::FireRoot : p < 0.84f ? NodeType::GoldOre : p < 0.93f ? NodeType::Crystal : NodeType::RareOre; tier = 3; break;
         case R_AURORA: t = p < 0.3f ? NodeType::AuroraCrystal : p < 0.45f ? NodeType::Crystal : p < 0.6f ? NodeType::Herb : p < 0.72f ? NodeType::Mushroom : p < 0.84f ? NodeType::SilverOre : p < 0.93f ? NodeType::Tree : NodeType::RareOre; tier = 3; break;   // 2.8.0
         case R_TITANS: t = p < 0.2f ? NodeType::Tree : p < 0.36f ? NodeType::IronOre : p < 0.48f ? NodeType::SilverOre : p < 0.58f ? NodeType::GoldOre : p < 0.68f ? NodeType::Coal : p < 0.8f ? NodeType::Herb : p < 0.9f ? NodeType::RareOre : NodeType::Crystal; tier = 3; break;   // 3.0.0 the mines of the giants
+        case R_CANYON: t = p < 0.2f ? NodeType::Rock : p < 0.36f ? NodeType::CopperOre : p < 0.52f ? NodeType::GoldOre : p < 0.64f ? NodeType::Cactus : p < 0.76f ? NodeType::RareOre : p < 0.86f ? NodeType::FireRoot : NodeType::Crystal; tier = 3; break;   // 3.3.0
         case R_CORAL: t = p < 0.24f ? NodeType::Tree : p < 0.42f ? NodeType::Berries : p < 0.58f ? NodeType::Shells : p < 0.72f ? NodeType::Herb : p < 0.86f ? NodeType::Rock : NodeType::Crystal; tier = 2; break;
         default: t = p < 0.24f ? NodeType::IronOre : p < 0.38f ? NodeType::SilverOre : p < 0.5f ? NodeType::GoldOre : p < 0.62f ? NodeType::RareOre : p < 0.76f ? NodeType::Rock : p < 0.88f ? NodeType::Tree : NodeType::Crystal; tier = 2; break;
         }
@@ -2255,6 +2288,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float gd = r == R_ASHEN ? 0.12f : (r == R_FROSTHEIM ? 0.7f : (r == R_HIGHCROWNS ? 0.9f : (r == R_AMBER ? 0.05f : (r == R_CORAL ? 0.95f : 1.f))));   // 3.0.2 fuller in the cold lands
                 if (r == R_STEPPE) gd = 1.15f;   // 2.4.0 the steppe is a sea of grass
                 if (r == R_TITANS) gd = 0.9f;    // 3.0.2 alpine pasture (thicker again, as asked)
+                if (r == R_CANYON) gd = 0.22f;   // 3.3.0 tufts of dry grass in the gorges
                 if (g.f() > wg * gd * 1.1f) continue;
                 float y = hAt(vi, vj);
                 float wl = waterLevel(x, z);
@@ -2817,7 +2851,7 @@ void World::buildFarMesh(MeshBuilder& b, int res) const {
                 float slope = std::fabs(height(std::min(WORLD_SIZE, x + cell * 0.5f), z) - height(std::max(0.f, x - cell * 0.5f), z)) +
                               std::fabs(height(x, std::min(WORLD_SIZE, z + cell * 0.5f)) - height(x, std::max(0.f, z - cell * 0.5f)));
                 RegionWeights rw = regionAt(x, z);
-                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x5e7a48, 0x5f7a4a};
+                static const uint32_t pal[R_COUNT] = {0x6b8a3e, 0x8f9c94, 0x4a3e3a, 0x3f6b3a, 0x4a5236, 0x8c8a7e, 0xc79a52, 0x5fa05a, 0xa89a52, 0x2f6a34, 0x5e7a48, 0x5f7a4a, 0xa8583a};
                 c = vec3(0);
                 for (int r = 0; r < R_COUNT; r++) c += hexColor(pal[r]) * rw.w[r];
                 c = lerp(c, hexColor(0x7a756c), smoothstepf(6.f, 16.f, slope));                       // cliffs: bare rock
@@ -2863,7 +2897,7 @@ void World::generateMapImage() {
             float x = (i + 0.5f) * s, z = (j + 0.5f) * s;
             float h = hh[(size_t)j * R + i];
             RegionWeights rw = regionAt(x, z);
-            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x7a9a62), hexColor(0x6e8a5a)};
+            static const vec3 rc[R_COUNT] = {hexColor(0x7d9a4e), hexColor(0xd9e2ea), hexColor(0x5a4a44), hexColor(0x3f7d6a), hexColor(0x5b5a4e), hexColor(0x9a9384), hexColor(0xe0b66a), hexColor(0x6fb888), hexColor(0xc8b468), hexColor(0x3f8a48), hexColor(0x7a9a62), hexColor(0x6e8a5a), hexColor(0xb8603e)};
             vec3 c(0);
             for (int r = 0; r < R_COUNT; r++) c += rc[r] * rw.w[r];
             float hx = hh[(size_t)j * R + std::min(R - 1, i + 1)] - h, hz = hh[(size_t)std::min(R - 1, j + 1) * R + i] - h;

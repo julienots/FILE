@@ -871,6 +871,28 @@ static void buildEnemies() {
       e.hlook = humanLook(Species::Human, Body::Fur, 0x4a4a52, 0x2a2a30, Helm::Leather, 182); e.hlook.beard = true; e.weapon = WeaponType::Axe; e.group = 2;
       e.attacks = {melee(C_1H_A1, 2.3f, 1, 1.4f, 0.4f), melee(C_1H_A3, 2.4f, 1.3f, 3, 0.5f), melee(C_1H_HEAVY, 2.8f, 1.6f, 7, 0.6f)};
       e.loot = {{"fur", 0.4f}, {"titan_steel", 0.12f}, {"potion_great", 0.1f}}; e.gold = 70; }
+    // ---- 3.3.0 the Scarlet Canyons
+    { auto& e = E("canyon_coyote", "Coyote écarlate", "Loups", R_CANYON, 26, 330, 48, 14, 7.6f, Behavior::Pack, "Roux comme la roche, il chasse en meute au fond des gorges et rit la nuit.");
+      e.arch = Arch::Quadruped; e.clook.c1 = hexColor(0xa85a32); e.clook.c2 = hexColor(0xe8c8a0); e.clook.mane = false; e.clook.girth = 0.9f; e.group = 4; e.radius = 0.5f; e.scale = 1.05f; e.night = true;
+      e.attacks = {melee(C_Q_BITE, 1.9f, 1, 1.2f, 0.25f), {C_Q_POUNCE, AttackType::Leap, 7, 1.4f, 4, 0.4f, Element::Physical, 1.5f, 0}, {C_Q_HOWL, AttackType::Summon, 30, 0, 18, 0.2f, Element::Physical, 0, 0}};
+      e.loot = {{"fur", 0.5f}, {"leather", 0.5f}, {"star_shard", 0.04f}}; e.gold = 60; }
+    { auto& e = E("canyon_scorpion", "Scorpion de feu", "Scorpions", R_CANYON, 27, 460, 52, 22, 5.6f, Behavior::Ambusher, "Il se cache dans les fissures rouges ; sa carapace brûle au toucher.");
+      e.arch = Arch::Spider; e.clook.c1 = hexColor(0xc0401a); e.clook.c2 = hexColor(0x3a1408); e.clook.c3 = hexColor(0x200804); e.clook.glow = hexColor(0xff6020); e.scale = 1.6f; e.radius = 0.85f;
+      e.attacks = {melee(C_S_BITE, 2.5f, 1, 1.4f, 0.3f), {C_S_SPIT, AttackType::Projectile, 12, 0.9f, 4, 0.5f, Element::Fire, 1.5f, 0}, {C_S_LEAP, AttackType::Leap, 9, 1.4f, 6, 0.5f, Element::Physical, 1.8f, 0}};
+      e.loot = {{"scorpion_venom", 0.4f}, {"fire_root", 0.2f}, {"star_shard", 0.05f}}; e.weak = Element::Ice; e.gold = 70; }
+    { auto& e = E("canyon_wyvern", "Wyverne des falaises", "Dragons", R_CANYON, 29, 640, 58, 22, 5.8f, Behavior::Ranged, "Elle niche dans les arches du couchant et crache un feu couleur de rouille.");
+      e.arch = Arch::Dragon; e.clook.c1 = hexColor(0x8a3a24); e.clook.c2 = hexColor(0xe0a070); e.clook.c3 = hexColor(0x40180c); e.clook.glow = hexColor(0xff8030); e.scale = 2.f; e.radius = 0.95f;
+      e.attacks = {melee(C_D_BITE, 2.9f, 1, 1.6f, 0.4f), {C_D_BREATH, AttackType::Breath, 9, 0.4f, 7, 0.7f, Element::Fire, 2.2f, 0}, melee(C_D_TAIL, 3.3f, 1.2f, 5, 0.5f)};
+      e.loot = {{"dragon_scale", 0.3f}, {"rare_ore", 0.3f}, {"star_shard", 0.1f}}; e.weak = Element::Ice; e.gold = 110; }
+    { auto& e = E("canyon_raider", "Pillard des gorges", "Pilleurs", R_CANYON, 27, 480, 54, 24, 4.9f, Behavior::Melee, "Foulard rouge, cimeterre, et la connaissance de chaque passage des canyons.");
+      e.hlook = humanLook(Species::Human, Body::Leather, 0x9a4a2a, 0x3a2418, Helm::Hood, 221); e.hlook.hat = 3; e.hlook.beard = true; e.hlook.c1 = hexColor(0xb8583a);
+      e.weapon = WeaponType::Sword; e.group = 3;
+      e.attacks = {melee(C_1H_A1, 2.f, 1, 1.4f, 0.35f), melee(C_1H_A2, 2.f, 1.1f, 1.8f, 0.35f), melee(C_1H_A3, 2.2f, 1.4f, 4.f, 0.5f)};
+      e.loot = {{"leather", 0.4f}, {"potion_great", 0.15f}, {"gold_ore", 0.15f}}; e.gold = 80; }
+    { auto& e = E("canyon_colossus", "Colosse de grès rouge", "Golems", R_CANYON, 30, 980, 62, 34, 3.2f, Behavior::Tank, "Une falaise qui s'est levée. Il dort debout entre les aiguilles de pierre.");
+      e.hlook = humanLook(Species::Golem, Body::Plate, 0xb8583a, 0xb8583a, Helm::None, 223); e.hlook.glow = hexColor(0xff7030); e.hlook.bulk = 1.8f; e.scale = 2.f; e.radius = 0.95f; e.poise = 160;
+      e.attacks = {melee(C_B_SWIPE, 3.2f, 1, 2.4f, 0.6f), {C_B_SLAM, AttackType::Area, 3.6f, 1.7f, 6, 0.9f, Element::Physical, 4.f, 0}, {C_B_THROW, AttackType::Projectile, 18, 1.4f, 8, 0.9f, Element::Fire, 2.5f, 0}};
+      e.loot = {{"stone", 0.8f}, {"gold_ore", 0.3f}, {"rare_ore", 0.25f}, {"star_shard", 0.15f}}; e.weak = Element::Ice; e.gold = 120; }
     // ---- the Iron Legion: garrisons of the enemy fortresses (region -1: never spawned by the chunks)
     { auto& e = E("legion_soldier", "Légionnaire de Fer", "Légion de Fer", -1, 24, 460, 46, 26, 4.4f, Behavior::Melee, "Plastron noir, poing de fer peint sur l'écu. La Légion ne recule pas : elle se reforme.");
       e.hlook = humanLook(Species::Knight, Body::Plate, 0x2a2a30, 0x8a1a1a, Helm::Iron, 191); e.hlook.metal = hexColor(0x3a3a42); e.hlook.cape = true;
@@ -1545,6 +1567,8 @@ const std::vector<LoreDef>& lore() {
         {"r_4", "Royaume des Ombres", "Ce fut le plus riche des six royaumes ; c'est aujourd'hui un marais de brume, de tombes et de cloches qui sonnent seules. Le château de Morneval domine la faille. Personne n'y entre. Quelque chose en sort."},
         {"r_5", "High Crowns", "Les cimes couronnées, où le ciel est si proche qu'on y voit les étoiles en plein jour. Le monastère de Highspire y garde la forge sacrée, et l'astronome de la tour prétend que les étoiles se sont déplacées."},
         {"r_10", "Terres d'Aurore", "Une île au sud de la Côte de Corail, que les marins croyaient maudite à cause des lumières qui y dansent la nuit. Les cristaux y poussent comme des arbres, et des sources jaillissent assez fort pour lancer un homme jusqu'aux îles qui flottent dans le ciel. Les Lumins y vivent depuis toujours et disent que l'aurore est un être vivant."},   // 2.8.0
+        {"r_11", "Monts Titans", "La grande chaîne de l'est. Les géants y vivaient avant les hommes ; leurs tombes sont des montagnes. On dit que l'Observatoire des étoiles, sur un col oublié, ouvre une porte vers le ciel d'au-delà du ciel."},   // 3.3.0
+        {"r_12", "Canyons Écarlates", "Au sud de la jungle, la terre devient rouge. Le vent a sculpté des plateaux en escaliers, des gorges profondes et des aiguilles de pierre. Les nomades disent que la roche se souvient du feu qui l'a faite, et qu'elle s'éveille parfois sous la forme d'un colosse."},   // 3.3.0
         // ---- memories of Aldric (one per defeated Guardian)
         {"mem_root", "Souvenir : l'arbre-mère", "Tu te souviens de la terre noire sous tes ongles. D'un jeune chevalier qui riait en tenant la pousse : « Elle verra nos petits-enfants, sire. » Corwin. Tu connais ce nom. Tu as planté cet arbre. Tu."},
         {"mem_king", "Souvenir : le serment du sénéchal", "Un homme agenouillé dans la salle du trône, la main sur l'épée. « Ma vie pour la couronne, ma mort pour le roi. » Le Roi Squelette a gardé son serment trois siècles. Avant de s'effondrer, il t'a appelé « sire »."},
@@ -1636,7 +1660,7 @@ static bool parseHexColor(const std::string& v0, vec3& out) {
 }
 static int regionFromName(const std::string& v0) {
     std::string v = v0; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
-    static const char* n[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans"};
+    static const char* n[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans", "canyons"};
     for (int i = 0; i < R_COUNT; i++) if (v == n[i]) return i;
     char* end = nullptr; long k = std::strtol(v.c_str(), &end, 10);
     if (end != v.c_str() && !*end && k >= 0 && k < R_COUNT) return (int)k;

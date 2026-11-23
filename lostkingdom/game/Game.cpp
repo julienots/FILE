@@ -379,6 +379,7 @@ static const RegionGrade GRADE[R_COUNT] = {
     {{0.0f, 0.015f, 0.01f}, {1.0f, 1.0f, 1.0f}, {0.94f, 1.04f, 0.94f}, 1.12f, 1.1f, -0.05f, 1.45f, 0, {0.78f, 0.95f, 0.82f}, 0.96f},     // 2.4.0 Emerald Jungle: humid green haze
     {{0.0f, 0.006f, 0.014f}, {1.0f, 1.0f, 1.0f}, {0.98f, 1.0f, 1.03f}, 0.97f, 1.1f, -0.18f, 1.05f, 0, {0.88f, 0.93f, 1.0f}, 1.0f},     // 2.8.0 Lands of Aurora: clean, cool northern light
     {{0.0f, 0.004f, 0.012f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.02f}, 1.0f, 1.12f, -0.05f, 0.7f, 0, {0.92f, 0.96f, 1.04f}, 1.02f},     // 3.0.0 Titan Mountains: crisp alpine air, far views
+    {{0.02f, 0.004f, 0.0f}, {1.02f, 1.0f, 0.97f}, {1.08f, 0.96f, 0.84f}, 1.08f, 1.14f, 0.5f, 0.6f, 0, {1.08f, 0.88f, 0.76f}, 1.06f},   // 3.3.0 Scarlet Canyons: red heat, long shadows
 };
 
 void Game::updateEnvironment(float dt) {
@@ -437,6 +438,7 @@ void Game::updateEnvironment(float dt) {
         case R_AMBER: next = p < 0.55f ? W_CLEAR : p < 0.8f ? W_SANDSTORM : p < 0.92f ? W_CLOUDY : W_CLEAR; break;
         case R_CORAL: next = p < 0.5f ? W_CLEAR : p < 0.68f ? W_CLOUDY : p < 0.9f ? W_RAIN : W_STORM; break;
         case R_STEPPE: next = p < 0.6f ? W_CLEAR : p < 0.85f ? W_CLOUDY : p < 0.95f ? W_STORM : W_RAIN; break;   // 2.4.0 big skies, summer storms
+        case R_CANYON: next = p < 0.6f ? W_CLEAR : p < 0.75f ? W_SANDSTORM : p < 0.9f ? W_CLOUDY : W_STORM; break;   // 3.3.0 dry heat, red dust storms
         case R_TITANS: next = p < 0.42f ? W_CLEAR : p < 0.66f ? W_CLOUDY : p < 0.82f ? W_FOG : p < 0.93f ? W_RAIN : W_SNOW; break;   // 3.0.0 mountain weather
         case R_AURORA: next = p < 0.5f ? W_CLEAR : p < 0.72f ? W_CLOUDY : p < 0.88f ? W_FOG : W_RAIN; break;   // 2.8.0 northern skies: clear nights, sea mist, showers
         case R_JUNGLE: next = p < 0.35f ? W_CLEAR : p < 0.55f ? W_FOG : p < 0.85f ? W_RAIN : W_STORM; break;     // 2.4.0 hot rain and morning mist
@@ -818,7 +820,7 @@ void Game::updateAudioDirector(float dt) {
     else if (dungeon.active) track = dungeon.interior ? "village" : (dungeons()[dungeon.def].theme == 8 || dungeons()[dungeon.def].theme == 10 ? "realm" : "dungeon");   // 2.3.4 the Celestial Realm; 2.4.1 indoors
     else {
         // 2.3.4: the Sands and the Coast have their own scores (they borrowed the Ashen / Greenhaven ones)
-        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm", "highcrowns"};   // 3.0.0 the Titans: the mountain score   // 2.8.0 Aurora: the ethereal score
+        static const char* names[] = {"greenhaven", "frostheim", "ashen", "elderwood", "shadows", "highcrowns", "sands", "coast", "steppe", "jungle", "realm", "highcrowns", "sands"};   // 3.0.0 the Titans: the mountain score   // 2.8.0 Aurora: the ethereal score
         int r = world.regionId(p.pos.x, p.pos.z);
         int vi = world.nearestPoi(p.pos.xz(), 90.f);
         bool village = vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Monastery || world.pois[vi].type == PoiType::Mill);
@@ -842,7 +844,7 @@ void Game::updateAudioDirector(float dt) {
     bool under = dungeon.active;
     audio.setAmbience("amb_forest_day", under ? 0 : forest * (1 - env.night) * (1 - rainAmt) * 0.8f);
     audio.setAmbience("amb_night", under ? 0 : env.night * (1 - rainAmt) * 0.7f);
-    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + regionW[R_STEPPE] * 0.5f + sandAmt * 0.5f, 0, 1) * 0.8f);
+    audio.setAmbience("amb_wind", under ? 0 : clampf(0.15f + env.windStrength * 0.6f + regionW[R_FROSTHEIM] * 0.3f + regionW[R_HIGHCROWNS] * 0.4f + regionW[R_AMBER] * 0.35f + regionW[R_STEPPE] * 0.5f + regionW[R_CANYON] * 0.45f + sandAmt * 0.5f, 0, 1) * 0.8f);   // 3.3.0 + canyon wind
     audio.setAmbience("amb_rain", under ? 0 : rainAmt);
     audio.setAmbience("amb_lava", under ? (!dungeon.interior && dungeons()[dungeon.def].theme == 3 ? 0.6f : 0.f) : regionW[R_ASHEN] * 0.6f);
     audio.setAmbience("amb_swamp", under ? 0 : regionW[R_SHADOWS] * 0.6f + regionW[R_JUNGLE] * 0.35f);   // 2.4.0 the jungle croaks too

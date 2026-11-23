@@ -806,7 +806,7 @@ static std::string jsonStr(const std::string& v) {
 }
 static void dumpStudio(const char* path) {
     std::string o = "{\n\"regions\":[";
-    static const char* rid[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans"};
+    static const char* rid[] = {"greenhaven", "frostheim", "ashen", "elderwood", "ombres", "highcrowns", "ambre", "corail", "steppes", "jungle", "aurore", "titans", "canyons"};
     for (int r = 0; r < R_COUNT; r++) o += std::string(r ? "," : "") + "{\"id\":" + jsonStr(rid[r]) + ",\"name\":" + jsonStr(regionName(r)) + "}";
     o += "],\n\"enemies\":[";
     bool first = true;

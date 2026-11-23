@@ -2314,6 +2314,25 @@ static std::vector<Step> scenario(const std::string& name) {
             AGR_LOG("COSMOS observatory %d, in space %d, low-gravity jump %.2f m -> %s", res[0], res[1], peak - y0, res[0] && res[1] && res[2] ? "COSMOS TEST PASSED" : "COSMOS TEST FAILED"); }, idle, "end"});
         return s;
     }
+    if (name == "canyons") {
+        // 3.3.0 the Scarlet Canyons: Roc-Écarlate, the Citadel of the Cliffs, a gorge with its needles, the world map
+        struct V { const char* poi; float dx, dz, hour, pitch, dist; const char* shot; };
+        static const V views[] = {{"roc_ecarlate", 30, 40, 16.5f, 0.25f, 16.f, "CA0_village"}, {"citadelle_falaises", 0, 70, 17.5f, 0.2f, 22.f, "CA1_citadel"}, {"arches_couchant", 40, -30, 18.6f, 0.15f, 14.f, "CA2_arches"}, {"camp_nomades", 120, 60, 11.f, 0.35f, 26.f, "CA3_gorges"}};
+        static int ok = 0;
+        s.push_back({1.f, [](Game& g) { g.newGame(); g.startPlaying(); g.toastHint.clear(); g.tutStep = -1; g.level = 30; g.recomputeStats(); ok = 0; }, idle, "setup"});
+        for (const V& v : views) {
+            const V* q = &v;
+            s.push_back({4.5f, [q](Game& g) { const Poi* p = g.world.poiById(q->poi); if (!p) return; if (g.world.regionId(p->pos.x, p->pos.y) == R_CANYON) ok++;
+                teleport(g, p->pos.x + q->dx, p->pos.y + q->dz, 0.f); vec2 d = p->pos - vec2(p->pos.x + q->dx, p->pos.y + q->dz); g.pc().yaw = std::atan2(d.x, d.y); g.camYaw = g.pc().yaw + PI;
+                g.camPitch = q->pitch; g.camDist = g.camDistTarget = q->dist; g.timeOfDay = q->hour; g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999; },
+                [](Game& g, float) { g.camIdleT = 0; g.pc().invuln = 1.f; g.reg.each<Character>([&](Entity e, Character& c) { if (c.team == Team::Enemy) g.reg.destroyLater(e); }); }, "go"});
+            s.push_back({0.1f, [q](Game& g) { g.requestScreenshot(std::string("build/shots/") + q->shot + ".png"); }, idle, "shot"});
+        }
+        s.push_back({0.5f, [](Game& g) { g.menu = Menu::Map; for (auto& p : g.world.pois) g.discovered.insert(p.id); for (auto& f : g.fog) f = 1; }, idle, "map"});
+        s.push_back({0.1f, [](Game& g) { g.requestScreenshot("build/shots/CA4_map.png"); }, idle, "shot"});
+        s.push_back({0.1f, [](Game& g) { g.menu = Menu::None; AGR_LOG("CANYONS %d/4 places in the canyons -> %s", ok, ok == 4 ? "CANYONS TEST PASSED" : "CANYONS TEST FAILED"); }, idle, "end"});
+        return s;
+    }
     if (name == "fauna") {
         // 2.9.0 the imported Tripo gallery models side by side: villagers, stag, boar, wolf (pictures + model checks)
         static std::vector<Entity> ents;

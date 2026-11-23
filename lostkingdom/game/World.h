@@ -35,14 +35,16 @@ inline float landEdgeDistance(float x, float z) {
     float d = std::min(std::min(x - 740.f, z - 4300.f), std::min(1420.f - x, 5400.f - z));
     // 3.0.0 the Titan Mountains: a long range east of the steppes and of the jungle (one coast with them)
     float e = std::min(std::min(x - 5500.f, z - 260.f), std::min(7470.f - x, 5980.f - z));   // starts well inside the old land: no channel at the seam
-    return std::max(std::max(std::max(a, b), std::max(c, d)), e);
+    // 3.3.0 the Scarlet Canyons: the southern sea strip, below the jungle and the Titans (one coast with them)
+    float f = std::min(std::min(x - 3600.f, z - 5600.f), std::min(7470.f - x, 7460.f - z));
+    return std::max(std::max(std::max(a, b), std::max(c, d)), std::max(e, f));
 }
 constexpr float CHUNK = 32.f;
 constexpr int CHUNKS = (int)(WORLD_SIZE / CHUNK);
 constexpr float SEA_LEVEL = 0.f;
 constexpr float SKY_ISLAND_R = 9.f;   // 2.8.0 radius of a floating island's deck
 
-enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_AURORA, R_TITANS, R_COUNT };   // 3.0.0 + Monts Titans   // 2.8.0 + Terres d'Aurore   // 2.4.0 + Steppes, Jungle
+enum Region : uint8_t { R_GREENHAVEN = 0, R_FROSTHEIM, R_ASHEN, R_ELDERWOOD, R_SHADOWS, R_HIGHCROWNS, R_AMBER, R_CORAL, R_STEPPE, R_JUNGLE, R_AURORA, R_TITANS, R_CANYON /* 3.3.0 */, R_COUNT };   // 3.0.0 + Monts Titans   // 2.8.0 + Terres d'Aurore   // 2.4.0 + Steppes, Jungle
 const char* regionName(int r);
 const char* regionSubtitle(int r);
 

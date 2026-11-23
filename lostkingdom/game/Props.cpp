@@ -32,6 +32,7 @@ vec3 regionGroundTint(int r) {
     case R_JUNGLE: return {0.82f, 1.02f, 0.84f};   // deep, wet green
     case R_AURORA: return {0.95f, 1.0f, 0.93f};   // 2.8.0 cool moss
     case R_TITANS: return {0.93f, 1.0f, 0.9f};    // 3.0.0 alpine pasture
+    case R_CANYON: return {1.28f, 0.8f, 0.62f};   // 3.3.0 red sandstone
     default: return {1.0f, 0.97f, 0.92f};
     }
 }
@@ -51,6 +52,7 @@ vec3 foliageColor(int r, float t) {
     case R_JUNGLE: return ramp3(0x1f5a2a, 0x2f7a32, 0x5a9a3a, t);   // 2.4.0 emerald
     case R_AURORA: return ramp3(0x3f6236, 0x667f40, 0xa29c62, t);   // 2.8.0 northern moss and dry golden grass
     case R_TITANS: return ramp3(0x3e6a2e, 0x5f8a3c, 0x9aa25a, t);   // 3.0.0 lush alpine green, dry tips
+    case R_CANYON: return ramp3(0x6a5a30, 0x93783e, 0xb89656, t);   // 3.3.0 dry ochre grass
     default: return ramp3(0x5c6c3a, 0x7c8a4a, 0xa8a26a, t);
     }
 }
