@@ -1,3 +1,4 @@
+#include <fstream>
 #include <thread>
 #include <doctest/doctest.h>
 
@@ -1300,6 +1301,57 @@ TEST_CASE("lint: unknown globals and missing agr paths, with their lines; clean 
     CHECK(w[2].line == 5);
     CHECK(w[2].message.find("undefinedThing") != std::string::npos);
     CHECK(f.scripts.lint("local x = = 1").empty());  // syntax errors are checkSyntax's job
+}
+
+TEST_CASE("lint: self fields never defined, unknown self methods and entity methods") {
+    ScriptFixture f;
+    const std::string good = "local M = { properties = { speed = 2 } }\n"
+                             "function M:onStart() self.hits = 0 end\n"
+                             "function M:hurt(n) self.hits = self.hits + n end\n"
+                             "function M:onUpdate(dt)\n"
+                             "    self:hurt(self.speed * dt)\n"
+                             "    self.entity:setPosition(0, 0, 0)\n"
+                             "    local e = self.entity\n"
+                             "    e:translate(1, 0, 0)\n"
+                             "end\n"
+                             "return M\n";
+    for (const auto& w : f.scripts.lint(good)) CHECK_MESSAGE(false, w.line, ": ", w.message);
+    const std::string bad = "local M = { properties = { speed = 2 } }\n"
+                            "function M:onUpdate(dt)\n"
+                            "    agr.log(self.sped)\n"
+                            "    self:jump()\n"
+                            "    self.entity:setPositon(0, 0, 0)\n"
+                            "end\n"
+                            "return M\n";
+    const auto w = f.scripts.lint(bad, "bad.lua");
+    REQUIRE(w.size() == 3);
+    CHECK(w[0].line == 3);
+    CHECK(w[0].message.find("self.sped") != std::string::npos);
+    CHECK(w[1].line == 4);
+    CHECK(w[1].message.find("jump") != std::string::npos);
+    CHECK(w[2].line == 5);
+    CHECK(w[2].message.find("setPositon") != std::string::npos);
+    // Fields that may come from elsewhere: no self-field warnings.
+    CHECK(f.scripts.lint("local Base = require('base')\nlocal M = setmetatable({}, {__index = Base})\n"
+                         "function M:onUpdate() agr.log(self.inherited) end\nreturn M\n")
+              .empty());
+    CHECK(f.scripts.lint("local M = {}\nfunction M:onStart() for k, v in pairs({a = 1}) do self[k] = v end end\n"
+                         "function M:onUpdate() agr.log(self.a) end\nreturn M\n")
+              .empty());
+}
+
+TEST_CASE("lint: every shipped template script passes the static checks") {
+    ScriptFixture f;
+    int scripts = 0;
+    for (const auto& e : std::filesystem::recursive_directory_iterator(std::filesystem::path(AGR_SOURCE_DIR) / "editor/resources/templates")) {
+        if (e.path().extension() != ".lua") continue;
+        std::ifstream in(e.path(), std::ios::binary);
+        const std::string code((std::istreambuf_iterator<char>(in)), {});
+        INFO(e.path().string());
+        for (const auto& w : f.scripts.lint(code, e.path().filename().string())) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
+        ++scripts;
+    }
+    CHECK(scripts >= 40);
 }
 
 TEST_CASE("data helpers: agr.json, agr.file (user://), agr.base64, agr.sha256") {

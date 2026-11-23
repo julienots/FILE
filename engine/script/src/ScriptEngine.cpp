@@ -777,6 +777,68 @@ std::vector<ScriptEngine::SyntaxError> ScriptEngine::lint(std::string_view code,
             lua_pop(L, 1);
         }
     });
+
+    // Methods: `function M:f(...)` has `self` in register 0. Fields read from it must be written
+    // somewhere in the script (any table: properties, the module, self.x = ...) or be built in;
+    // entity methods (`self.entity:m(...)`) must exist. Skipped when fields may come from
+    // elsewhere (setmetatable / require / self[k] = v).
+    auto isMethod = [](const Proto* p) {
+        return p->numparams >= 1 && p->sizelocvars >= 1 && p->locvars[0].varname && std::strcmp(getstr(p->locvars[0].varname), "self") == 0;
+    };
+    std::unordered_set<std::string> known{"entity"};
+    bool dynamicFields = false;
+    forEachProto(cl->p, [&](const Proto* p) {
+        for (int pc = 0; pc < p->sizecode; ++pc) {
+            const Instruction i = p->code[pc];
+            const OpCode op = GET_OPCODE(i);
+            if (op == OP_SETFIELD) known.insert(kString(p, GETARG_B(i)));
+            else if (op == OP_SETTABLE && isMethod(p) && GETARG_A(i) == 0) dynamicFields = true;
+            else if (op == OP_GETTABUP && isEnv(p, GETARG_B(i))) {
+                const std::string g = kString(p, GETARG_C(i));
+                if (g == "setmetatable" || g == "require" || g == "rawset") dynamicFields = true;
+            }
+        }
+    });
+    luaL_getmetatable(L, "agr.Entity");
+    lua_getfield(L, -1, "__index");
+    lua_remove(L, -2);
+    auto entityMethod = [&](const std::string& m) {
+        if (!lua_istable(L, -1)) return true;
+        lua_getfield(L, -1, m.c_str());
+        const bool ok = !lua_isnil(L, -1);
+        lua_pop(L, 1);
+        return ok;
+    };
+    forEachProto(cl->p, [&](const Proto* p) {
+        if (!isMethod(p)) return;
+        // Registers holding self.entity (until overwritten).
+        std::unordered_set<int> entityRegs;
+        for (int pc = 0; pc < p->sizecode; ++pc) {
+            const Instruction i = p->code[pc];
+            const OpCode op = GET_OPCODE(i);
+            const int line = luaG_getfuncline(p, pc);
+            if ((op == OP_GETFIELD || op == OP_SELF) && GETARG_B(i) == 0) {
+                const std::string key = op == OP_SELF ? (TESTARG_k(i) ? kString(p, GETARG_C(i)) : std::string()) : kString(p, GETARG_C(i));
+                if (!key.empty() && !dynamicFields && !known.count(key) && reported.insert("self." + key + "@" + std::to_string(line)).second)
+                    out.push_back({line, op == OP_SELF ? "'self:" + key + "' : aucune fonction '" + key + "' dans ce script"
+                                                       : "'self." + key + "' n'est jamais défini dans ce script (faute de frappe ? propriété manquante ?)"});
+                if (op == OP_GETFIELD && key == "entity") {
+                    entityRegs.insert(GETARG_A(i));
+                    continue;
+                }
+            } else if (op == OP_SELF && entityRegs.count(GETARG_B(i)) && TESTARG_k(i)) {
+                const std::string m = kString(p, GETARG_C(i));
+                if (!m.empty() && !entityMethod(m) && reported.insert("entity:" + m + "@" + std::to_string(line)).second)
+                    out.push_back({line, "'" + m + "' n'est pas une méthode d'entité"});
+            }
+            // Any other write to a register forgets what it held (good enough for straight code).
+            if (op != OP_SETFIELD && op != OP_SETTABLE && op != OP_SETI && op != OP_SETTABUP && op != OP_SETUPVAL && op != OP_SETLIST &&
+                op != OP_JMP && op != OP_RETURN && op != OP_RETURN0 && op != OP_RETURN1 && op != OP_TEST && op != OP_EQ && op != OP_LT && op != OP_LE &&
+                op != OP_EQK && op != OP_EQI && op != OP_LTI && op != OP_LEI && op != OP_GTI && op != OP_GEI)
+                entityRegs.erase(GETARG_A(i));
+        }
+    });
+    lua_pop(L, 1);  // entity methods
     lua_pop(L, 1);  // the chunk
     std::sort(out.begin(), out.end(), [](const SyntaxError& a, const SyntaxError& b) { return a.line < b.line; });
     return out;

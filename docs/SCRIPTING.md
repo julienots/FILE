@@ -243,7 +243,12 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
 - colonne **API** : l'arbre de `agr` et des méthodes d'entité, un clic insère le nom ;
 - **analyse statique** (après la syntaxe) : les noms globaux lus mais définis nulle part (`slef`, une
   variable locale oubliée) et les chemins `agr.x.y` absents de l'API réellement chargée (`agr.lgo`)
-  sont signalés en ambre, à leur ligne (gouttière, barre d'état, liste au survol, clic = aller à la
+  sont signalés en ambre, ainsi que, dans les méthodes (`function M:f()`), les **champs de `self` lus
+  mais jamais définis** dans le script (`self.sped` au lieu de `self.speed` : ni propriété, ni
+  `self.x = ...`, ni champ du module), les appels `self:f()` sans fonction `f`, et les **méthodes
+  d'entité inconnues** (`self.entity:setPositon`, aussi via `local e = self.entity`). Pas de
+  vérification des champs quand ils peuvent venir d'ailleurs (`setmetatable`, `require`,
+  `self[k] = v`). Le tout est affiché à sa ligne (gouttière, barre d'état, liste au survol, clic = aller à la
   ligne). L'analyse lit le bytecode compilé de Lua (lignes exactes) ; les scripts des modèles de jeu
   n'en déclenchent aucune (vérifié par le test de bout en bout) ;
 - **onglets** : chaque script ouvert a son onglet (astérisque si modifié, texte gardé en mémoire en
@@ -292,8 +297,8 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
 
 ## Limites actuelles
 
-- Analyse statique : noms globaux et chemins `agr.` seulement (pas les champs de `self`, ni les
-  méthodes d'entité, ni les types) ; la complétion suit les variables locales affectées directement
+- Analyse statique : noms globaux, chemins `agr.`, champs et méthodes de `self`, méthodes de
+  `self.entity` ; pas les types, ni les méthodes des entités obtenues autrement (`agr.find`) ; la complétion suit les variables locales affectées directement
   (`local x = agr...`), pas les valeurs de retour en général ni les tables construites ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
 - Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
 - Signaux : la vérification des signaux déclarés (`signals = {...}`) se fait à l'exécution (premier
