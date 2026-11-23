@@ -750,6 +750,9 @@ private:
     int m_target = 1;  // 0 PC, 1 Android debug APK, 2 Android release APK, 3 Android App Bundle
     std::string m_output;
     bool m_deploy = false;              // Android APK: install and start on the device afterwards
+    std::thread m_deviceLogThread;      // the game's log on the device, while it runs
+    std::atomic<bool> m_deviceLog{false};
+    void stopDeviceLog();
     std::string m_device;               // adb serial (empty = the only connected device)
     std::vector<AndroidDevice> m_devices;
     std::string m_devicesError;

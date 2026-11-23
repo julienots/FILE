@@ -1,4 +1,5 @@
 #include <chrono>
+#include <thread>
 #include <utility>
 #include <filesystem>
 
@@ -21,11 +22,18 @@ constexpr int kWindowsTarget = 4;
 }
 
 ExportPanel::~ExportPanel() {
-    if (m_thread.joinable()) m_thread.join();
+    if (m_thread.joinable()) m_thread.join();  // first: it may start the device log thread
+    stopDeviceLog();
+}
+
+void ExportPanel::stopDeviceLog() {
+    m_deviceLog = false;
+    if (m_deviceLogThread.joinable()) m_deviceLogThread.join();
 }
 
 void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
     if (m_thread.joinable()) m_thread.join();
+    stopDeviceLog();
     {
         std::lock_guard lock(m_mutex);
         m_log.clear();
@@ -78,10 +86,20 @@ void ExportPanel::start(EditorShared& s, const std::string& editorDirectory) {
             const AndroidToolchain tools = findAndroidToolchain(exeDir);
             report = buildAndroid(project, tools, output, options, log);
             if (report && deploy) {
-                if (Status st = deployToAndroid(tools, report.value().output, gameManifest(project).packageId, device, log); !st)
+                auto reader = std::make_shared<AndroidLogReader>(tools, device);
+                (void)reader->poll();  // marks "now": only the lines of this run are shown
+                if (Status st = deployToAndroid(tools, report.value().output, gameManifest(project).packageId, device, log); !st) {
                     report = st.error();
-                else
-                    log("Le jeu tourne sur l'appareil. Son journal : " + androidLogcatCommand(tools, device));
+                } else {
+                    log("Le jeu tourne sur l'appareil ; son journal s'affiche ci-dessous (« Arrêter le journal » pour le couper).");
+                    m_deviceLog = true;
+                    m_deviceLogThread = std::thread([this, reader, log] {
+                        while (m_deviceLog.load()) {
+                            for (const std::string& line : reader->poll()) log("[appareil] " + line);
+                            for (int i = 0; i < 10 && m_deviceLog.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                    });
+                }
             }
         }
         std::lock_guard lock(m_mutex);
@@ -305,6 +323,7 @@ void ExportPanel::draw(EditorShared& s, const std::string& editorDirectory) {
         }
     }
 
+    if (m_deviceLog.load() && ImGui::Button("Arrêter le journal de l'appareil")) stopDeviceLog();
     std::lock_guard lock(m_mutex);
     if (!m_result.empty()) {
         ImGui::TextColored(palette::toVec4(m_resultOk ? palette::kSuccess : palette::kError), "%s", m_result.c_str());

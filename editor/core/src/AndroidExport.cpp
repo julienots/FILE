@@ -1,5 +1,6 @@
 #include "agr/editor/AndroidExport.hpp"
 
+#include <chrono>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -258,6 +259,67 @@ Status deployToAndroid(const AndroidToolchain& tools, const fs::path& apk, const
     const int start = runProcess(adb + " shell am start -n " + quoteArg(packageId + "/.AgrActivity"), log, transcript);
     if (start != 0 || transcript.find("Error") != std::string::npos) return makeError(Error::Code::Unknown, "could not start the game: " + transcript);
     return {};
+}
+
+bool AndroidLogReader::parseLine(const std::string& line, double& time, std::string& text) {
+    // "  1700000000.123  1234  1250 I AGR     : [Script] message"
+    std::istringstream in(line);
+    std::string stamp, level, rest;
+    long pid = 0, tid = 0;
+    if (!(in >> stamp >> pid >> tid >> level)) return false;
+    char* end = nullptr;
+    time = std::strtod(stamp.c_str(), &end);
+    if (end == stamp.c_str() || time <= 0.0 || level.size() != 1) return false;
+    std::getline(in, rest);
+    const usize colon = rest.find(':');
+    if (colon == std::string::npos) return false;
+    std::string tag = rest.substr(0, colon);
+    while (!tag.empty() && tag.front() == ' ') tag.erase(0, 1);
+    while (!tag.empty() && tag.back() == ' ') tag.pop_back();
+    std::string message = rest.substr(colon + 1);
+    if (!message.empty() && message.front() == ' ') message.erase(0, 1);
+    text = level + " " + tag + ": " + message;
+    return true;
+}
+
+std::vector<std::string> AndroidLogReader::poll() {
+    std::vector<std::string> out;
+    if (m_tools.adb.empty()) return out;
+    std::string cmd = quoteArg(m_tools.adb.string());
+    if (!m_serial.empty()) cmd += " -s " + quoteArg(m_serial);
+    char since[64];
+    std::snprintf(since, sizeof since, "%.3f", m_last);
+    cmd += m_started ? std::string(" logcat -d -v epoch -T ") + since : std::string(" logcat -d -v epoch -t 1");
+    cmd += " -s AGR:V SDL:V SDL/APP:V";
+    std::string transcript;
+    if (runProcess(cmd, {}, transcript) != 0) return out;
+    std::istringstream in(transcript);
+    std::string line;
+    std::vector<std::string> atNewest;
+    double newest = m_last;
+    while (std::getline(in, line)) {
+        double t = 0.0;
+        std::string text;
+        if (!parseLine(line, t, text)) continue;
+        if (t < m_last) continue;
+        if (t == m_last && std::find(m_atLast.begin(), m_atLast.end(), text) != m_atLast.end()) continue;  // seen in the last poll
+        if (m_started) out.push_back(text);
+        if (t > newest) {
+            newest = t;
+            atNewest.clear();
+        }
+        if (t == newest) atNewest.push_back(text);
+    }
+    if (newest > m_last) {
+        m_last = newest;
+        m_atLast = std::move(atNewest);
+    } else {
+        for (std::string& s : atNewest) m_atLast.push_back(std::move(s));
+    }
+    if (!m_started && m_last == 0.0)  // empty log: start from the computer's clock (devices share it closely)
+        m_last = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count() - 2.0;
+    m_started = true;  // the first poll only finds where "now" is
+    return out;
 }
 
 std::string androidLogcatCommand(const AndroidToolchain& tools, const std::string& serial) {

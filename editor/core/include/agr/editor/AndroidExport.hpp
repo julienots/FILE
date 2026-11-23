@@ -62,6 +62,24 @@ Result<std::vector<AndroidDevice>> listAndroidDevices(const AndroidToolchain& to
 /// and starts the game. `serial` empty = the only ready device. `log` receives adb's output.
 Status deployToAndroid(const AndroidToolchain& tools, const std::filesystem::path& apk, const std::string& packageId, const std::string& serial,
                        const std::function<void(const std::string&)>& log = {});
+/// The game's log on the device, read in steps (no process kept open): each poll() returns the new
+/// lines of the AGR and SDL tags since the previous one (`adb logcat -d -v epoch -T <time>`).
+class AndroidLogReader {
+public:
+    AndroidLogReader(AndroidToolchain tools, std::string serial) : m_tools(std::move(tools)), m_serial(std::move(serial)) {}
+    /// New lines ("I AGR: [Script] ..."), oldest first; empty if none or adb failed.
+    std::vector<std::string> poll();
+    /// Parses one `-v epoch` line: seconds since 1970 and "LEVEL TAG: message"; false if not a log line.
+    static bool parseLine(const std::string& line, double& time, std::string& text);
+
+private:
+    AndroidToolchain m_tools;
+    std::string m_serial;
+    double m_last = 0.0;           ///< Time of the newest line seen (0 = only lines from now on).
+    std::vector<std::string> m_atLast;  ///< Lines already returned with that exact time.
+    bool m_started = false;
+};
+
 /// adb command that prints the game's log (engine messages and Lua errors, tag "AGR" and SDL),
 /// e.g. for a terminal: `adb -s SERIAL logcat -s AGR:V SDL:V`.
 std::string androidLogcatCommand(const AndroidToolchain& tools, const std::string& serial);

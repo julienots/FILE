@@ -2005,3 +2005,48 @@ TEST_CASE("UI builder group resize: the union box scaled from a corner keeps eve
     CHECK(after.z == doctest::Approx(80));
     CHECK(after.w == doctest::Approx(60));
 }
+
+#if !defined(_WIN32)
+TEST_CASE("Android device log: logcat lines parsed, each poll returns only the new lines") {
+    double t = 0;
+    std::string text;
+    REQUIRE(AndroidLogReader::parseLine("  1700000000.250  4321  4340 I AGR     : [Script] hello", t, text));
+    CHECK(t == doctest::Approx(1700000000.25));
+    CHECK(text == "I AGR: [Script] hello");
+    CHECK_FALSE(AndroidLogReader::parseLine("--------- beginning of main", t, text));
+
+    const fs::path dir = fs::temp_directory_path() / ("agr_logcat_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir);
+    const fs::path log = dir / "log.txt", calls = dir / "calls.txt";
+    {
+        std::ofstream sh(dir / "adb");
+        // A fake adb whose logcat prints the lines of log.txt at or after -T (all of them for -t 1: last one).
+        sh << "#!/bin/sh\necho \"$@\" >> '" << calls.string() << "'\n"
+           << "since=0; last=0\nwhile [ $# -gt 0 ]; do case \"$1\" in -T) since=$2; shift;; -t) last=1;; esac; shift; done\n"
+           << "if [ $last = 1 ]; then tail -n 1 '" << log.string() << "'; exit 0; fi\n"
+           << "awk -v s=\"$since\" '$1 >= s' '" << log.string() << "'\n";
+    }
+    fs::permissions(dir / "adb", fs::perms::owner_all);
+    AndroidToolchain tools;
+    tools.adb = dir / "adb";
+    auto append = [&](const std::string& l) { std::ofstream(log, std::ios::app) << l << "\n"; };
+    append("100.000 1 1 I AGR : old line from before");
+    AndroidLogReader reader(tools, "emulator-5554");
+    CHECK(reader.poll().empty());  // marks now
+    append("101.000 1 1 I AGR : [Engine] started");
+    append("101.000 1 1 W AGR : [Script] same time");
+    auto lines = reader.poll();
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0] == "I AGR: [Engine] started");
+    CHECK(lines[1] == "W AGR: [Script] same time");
+    CHECK(reader.poll().empty());  // nothing new (the -T bound repeats the last second's lines: dropped)
+    append("102.500 1 1 E AGR : [Script] boom");
+    lines = reader.poll();
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "E AGR: [Script] boom");
+    std::ifstream in(calls);
+    const std::string c((std::istreambuf_iterator<char>(in)), {});
+    CHECK(c.find("-s emulator-5554 logcat -d -v epoch -T 101.000") != std::string::npos);
+    fs::remove_all(dir);
+}
+#endif
