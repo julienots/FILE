@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 749 champs)
+## Composants (76, 750 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -154,6 +154,7 @@ Emits and simulates 2D particles (fire, smoke, sparks, magic...).
 | `sortingLayer` | int |  |
 | `orderInLayer` | int |  |
 | `seed` | uint | 0 = random, otherwise reproducible |
+| `gpu` | bool | Simulated on the GPU: hundreds of thousands of particles; no curves, collisions, attractors, lit, sorting layer |
 
 ### Skeleton2D
 
@@ -1450,10 +1451,10 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-233 fonctions.
+235 fonctions.
 
 - `agr.after`
-- **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startRecording`, `stop`, `stopRecording`
+- **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
 - **`agr.base64`** : `decode`, `encode`
 - **`agr.camera`** : `ray`, `screenToWorld`, `worldToScreen`
 - `agr.clone`

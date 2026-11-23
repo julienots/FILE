@@ -435,6 +435,60 @@ TEST_CASE("particles: soft default texture, additive blending") {
     CHECK(near(pixel(*gpu().device, 4, 4), 0, 0, 0));
 }
 
+TEST_CASE("2D GPU particles: direction, spawn shapes and hundreds of thousands drawn without CPU simulation") {
+    Render2DFixture f;
+    f.camera();
+    auto px = [](float x, float y) { return std::pair<u32, u32>{static_cast<u32>(32 + x * 6.4f), static_cast<u32>(32 - y * 6.4f)}; };
+    const auto e = f.scene.createEntity("Emitter");
+    auto& em = f.scene.registry().emplace<ParticleEmitter2DComponent>(e);
+    em.gpu = true;
+    em.rate = 0.5f;  // slot 0 at t = 0, slot 1 at t = 2
+    em.direction = 0.0f;  // to the right
+    em.spread = 0.0f;
+    em.speedMin = em.speedMax = 2.0f;
+    em.gravity = {0, 0};
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.startSize = em.endSize = 0.8f;
+    em.startColor = em.endColor = {1.0f, 0.2f, 0.1f, 1.0f};
+    em.seed = 3;
+    f.scene.updateTransforms();
+    simulateParticles2D(f.scene, 0.0f);
+    const ParticleStats2D st = simulateParticles2D(f.scene, 1.5f);  // x = 3
+    CHECK(st.particles == 1);
+    CHECK(f.scene.registry().get<ParticleState2DComponent>(e).particles.empty());  // nothing on the CPU
+    f.frame();
+    CHECK(f.renderer.stats().particlesVisible == 1);
+    auto [x3, y3] = px(3.0f, 0.0f);
+    CHECK_MESSAGE(pixel(*gpu().device, x3, y3).r > 120, pixel(*gpu().device, x3, y3));
+    auto [x0, y0] = px(0.0f, 0.0f);
+    CHECK(pixel(*gpu().device, x0, y0).r < 20);
+    // A rectangle full of short-lived specks: 150 000 of them cover it.
+    auto& big = f.scene.registry().get<ParticleEmitter2DComponent>(e);
+    big.rate = 150000.0f;
+    big.maxParticles = 200000;
+    big.lifetimeMin = big.lifetimeMax = 1.0f;
+    big.speedMin = big.speedMax = 0.0f;
+    big.spawnShape = 2;
+    big.spawnSize = {6.0f, 4.0f};
+    big.startSize = big.endSize = 0.06f;
+    restartParticles2D(f.scene, e);
+    simulateParticles2D(f.scene, 0.0f);
+    simulateParticles2D(f.scene, 2.0f);
+    f.frame();
+    CHECK(f.renderer.stats().particlesVisible > 100000);
+    int lit = 0, total = 0;
+    for (float x = -2.6f; x <= 2.6f; x += 0.4f)
+        for (float y = -1.6f; y <= 1.6f; y += 0.4f) {
+            auto [cx, cy] = px(x, y);
+            ++total;
+            lit += pixel(*gpu().device, cx, cy).r > 60 ? 1 : 0;
+        }
+    CHECK_MESSAGE(lit > total * 8 / 10, lit << " / " << total);
+    auto [ox, oy] = px(4.2f, 3.0f);
+    CHECK(pixel(*gpu().device, ox, oy).r < 20);  // outside the rectangle
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("particles: lit 2D particles follow the Light2D") {
     Render2DFixture f;
     f.camera();

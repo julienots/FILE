@@ -234,6 +234,19 @@ void main() {
             else if (pick < ax + ay) pos.y = side * gp_box.y;
             else pos.z = side * gp_box.z;
         }
+    } else if (shape >= 10) {
+        // 2D (XY plane): direction gp_shape.z +- spread gp_shape.w; disc, circle, rectangle or line.
+        float a = gp_shape.z + (agrRand(s) * 2.0 - 1.0) * gp_shape.w;
+        dir = vec3(cos(a), sin(a), 0.0);
+        if (shape == 10 || shape == 11) {
+            float r = shape == 11 ? gp_shape.y : gp_shape.y * sqrt(agrRand(s));
+            float b = agrRand(s) * 6.2831853;
+            pos = vec3(r * cos(b), r * sin(b), 0.0);
+        } else if (shape == 12) {
+            pos = vec3((agrRand(s) - 0.5) * gp_box.x, (agrRand(s) - 0.5) * gp_box.y, 0.0);
+        } else {
+            pos = vec3((agrRand(s) - 0.5) * gp_box.x, 0.0, 0.0);
+        }
     } else if (shape == 3 || shape == 4) {
         float c = mix(gp_shape.z, 1.0, agrRand(s)), sn = sqrt(max(0.0, 1.0 - c * c)), a = agrRand(s) * 6.2831853;
         dir = vec3(sn * cos(a), c, sn * sin(a));

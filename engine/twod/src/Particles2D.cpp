@@ -75,6 +75,11 @@ ParticleStats2D simulateParticles2D(Scene& scene, float dt) {
         [&](ecs::Entity, ParticleEmitter2DComponent& em, ParticleState2DComponent& st, WorldTransformComponent& w) {
             ++stats.emitters;
             if (!w.activeInHierarchy) return;  // inactive emitters are paused
+            if (em.gpu) {  // the GPU computes the particles
+                advanceGpuEmitter(em, st, dt, st.started ? 0u : em.seed ? em.seed : static_cast<u32>(std::random_device{}()));
+                stats.particles += st.gpuAlive;
+                return;
+            }
             const bool attract = em.worldSpace && em.affectedByAttractors && !world.attractors.empty();
             const bool collide = em.worldSpace && em.collisions;
             auto subBurst = [&](SubEmitTrigger when, const Particle2D& p) {

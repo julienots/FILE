@@ -1,4 +1,6 @@
 #pragma once
+#include <cmath>
+#include <algorithm>
 #include <array>
 #include <string>
 #include <vector>
@@ -477,6 +479,12 @@ struct ParticleEmitter2DComponent {
     i32 sortingLayer = 0;
     i32 orderInLayer = 0;
     u32 seed = 0;                   ///< 0 = random; otherwise deterministic.
+    /// Simulated on the GPU (see ParticleEmitter3D::gpu): hundreds of thousands of particles for
+    /// almost no CPU. Uses rate, maxParticles, lifetime, speed, direction / spread, spawn shape,
+    /// gravity, drag, colors, sizes, rotation, texture, additive, emitting, loop / duration, seed;
+    /// particles follow the emitter. Not with curves, flipbook, collisions, attractors, turbulence,
+    /// sub-emitters, bursts, lit, velocity stretch; drawn after the other sprites (no sorting layer).
+    bool gpu = false;
 };
 
 /// Runtime particles (not serialized), written by the simulation, read by the renderer.
@@ -494,6 +502,10 @@ struct ParticleState2DComponent {
     bool started = false;
     math::Vec3 lastEmitterPos{0.0f};  ///< For inheritVelocity.
     float clock = 0.0f;               ///< Seconds since start (turbulence field time).
+    double gpuTime = 0.0;             ///< GPU emitters (see ParticleState3DComponent).
+    double gpuSpawnStart = 0.0, gpuSpawnEnd = 1e30;
+    bool gpuWasEmitting = true;
+    u32 gpuAlive = 0;
 };
 
 enum class EmitterShape3D : i32 { Point = 0, Sphere = 1, Box = 2, Cone = 3, Ring = 4 };
@@ -576,12 +588,36 @@ struct ParticleEmitter3DComponent {
 };
 /// Particle slots of a GPU emitter: enough for rate x the longest lifetime, at most maxParticles
 /// (and 4 194 304). Slot i is reborn every slots / rate seconds.
-inline u32 gpuParticleCount(const ParticleEmitter3DComponent& em) {
+template <typename Emitter>
+inline u32 gpuParticleCount(const Emitter& em) {
     const double rate = em.rate > 0.0f ? em.rate : 0.0;
     const double lifeMax = em.lifetimeMax > em.lifetimeMin ? em.lifetimeMax : em.lifetimeMin;
     const double cap = em.maxParticles < (4u << 20) ? em.maxParticles : (4u << 20);
     const double need = static_cast<double>(static_cast<u64>(rate * lifeMax)) + 2.0;
     return static_cast<u32>(need < cap ? need : cap);
+}
+/// Advances a GPU emitter's clock and birth window (no particle is simulated on the CPU).
+template <typename Emitter, typename State>
+void advanceGpuEmitter(const Emitter& em, State& st, float dt, u32 seed) {
+    if (!st.started) {
+        st.started = true;
+        st.gpuTime = 0.0;
+        st.gpuSpawnStart = 0.0;
+        st.gpuSpawnEnd = em.emitting ? 1e30 : -1.0;
+        st.gpuWasEmitting = em.emitting;
+        st.rng = (seed & 0xffffffu) | 1u;
+    }
+    st.particles.clear();
+    st.gpuTime += dt;
+    if (em.emitting != st.gpuWasEmitting) {
+        st.gpuWasEmitting = em.emitting;
+        if (em.emitting) st.gpuSpawnStart = st.gpuTime, st.gpuSpawnEnd = 1e30;
+        else st.gpuSpawnEnd = st.gpuTime;
+    }
+    const double end = em.loop ? st.gpuSpawnEnd : std::min(st.gpuSpawnEnd, st.gpuSpawnStart + std::max(em.duration, 0.01f));
+    const float life = 0.5f * (em.lifetimeMin + std::max(em.lifetimeMin, em.lifetimeMax));
+    const double emitting = std::clamp(std::min(st.gpuTime, end) - std::max(st.gpuSpawnStart, st.gpuTime - life), 0.0, 1e9);
+    st.gpuAlive = static_cast<u32>(std::min<double>(gpuParticleCount(em), std::ceil(emitting * em.rate - 1e-6)));
 }
 struct Particle3D {
     math::Vec3 position, velocity;

@@ -886,6 +886,37 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     // ------------------------------------------------------------ particles
     reg.view<ParticleEmitter2DComponent, ParticleState2DComponent, WorldTransformComponent>().each(
         [&](ecs::Entity e, ParticleEmitter2DComponent& em, ParticleState2DComponent& st, WorldTransformComponent& w) {
+            if (em.gpu && w.activeInHierarchy && !hiddenInEditor(e) && st.started) {  // computed in the vertex shader
+                const u32 slots = gpuParticleCount(em);
+                const float rate = std::max(em.rate, 1e-4f);
+                const double period = static_cast<double>(slots) / rate;
+                const double wraps = std::floor(st.gpuTime / period) - 1.0;
+                const double shift = wraps > 0.0 ? wraps * period : 0.0;
+                const double end = em.loop ? st.gpuSpawnEnd : std::min(st.gpuSpawnEnd, st.gpuSpawnStart + std::max(em.duration, 0.01f));
+                GpuParticleUniforms u{};
+                Mat4 m = w.matrix;
+                const Vec3 off = parallaxOf(e);
+                m.c[3] = {m.c[3].x + off.x, m.c[3].y + off.y, m.c[3].z + off.z, 1.0f};
+                u.emitter = m;
+                u.time = {static_cast<float>(st.gpuTime - shift), rate, static_cast<float>(period), static_cast<float>(slots)};
+                u.life = {em.lifetimeMin, std::max(em.lifetimeMin, em.lifetimeMax), em.speedMin, std::max(em.speedMin, em.speedMax)};
+                u.shape = {static_cast<float>(10 + std::clamp(em.spawnShape, 0, 3)), em.spawnRadius, em.direction, em.spread};
+                u.box = {em.spawnSize.x, em.spawnSize.y, 0.0f, static_cast<float>(st.rng & 0xffffffu)};
+                const Vec3 g = math::inverse(w.matrix).transformVector({em.gravity.x, em.gravity.y, 0.0f});
+                u.gravity = {g.x, g.y, g.z, std::max(em.drag, 0.0f)};
+                u.color0 = em.startColor;
+                u.color1 = em.endColor;
+                u.spawn = {static_cast<float>(std::max(st.gpuSpawnStart - shift, -1e30)), static_cast<float>(std::min(end - shift, 1e30)), 0.0f, 0.0f};
+                u.right = {1.0f, 0.0f, 0.0f, 0.0f};  // the 2D plane
+                u.up = {0.0f, 1.0f, 0.0f, 0.0f};
+                const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
+                for (u32 first = 0; first < slots; first += kGpuParticleBatch) {
+                    u.size = {em.startSize, em.endSize, em.angularVelocity, static_cast<float>(first)};
+                    m_gpuParticleDraws.push_back({pushUniforms(&u, sizeof u), std::min(kGpuParticleBatch, slots - first), tex, em.additive});
+                }
+                m_stats.particlesVisible += st.gpuAlive;
+                return;
+            }
             if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty()) return;
             const Vec3 off = parallaxOf(e);
             const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);

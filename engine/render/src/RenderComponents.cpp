@@ -612,7 +612,8 @@ void registerRenderComponents() {
         .field("worldSpace", &ParticleEmitter2DComponent::worldSpace)
         .field("sortingLayer", &ParticleEmitter2DComponent::sortingLayer, {.speed = 1.0f})
         .field("orderInLayer", &ParticleEmitter2DComponent::orderInLayer, {.speed = 1.0f})
-        .field("seed", &ParticleEmitter2DComponent::seed, {.tooltip = "0 = random, otherwise reproducible", .speed = 1.0f});
+        .field("seed", &ParticleEmitter2DComponent::seed, {.tooltip = "0 = random, otherwise reproducible", .speed = 1.0f})
+        .field("gpu", &ParticleEmitter2DComponent::gpu, {.tooltip = "Simulated on the GPU: hundreds of thousands of particles; no curves, collisions, attractors, lit, sorting layer"});
 }
 
 } // namespace agr
