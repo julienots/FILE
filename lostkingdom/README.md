@@ -6,13 +6,40 @@
 
 LOST KINGDOM est un action-RPG en monde ouvert continu, en 2.5D (caméra 3D orbitale au-dessus du héros), pour smartphones Android. Il est écrit entièrement en **C++17 sur OpenGL ES 3.0** avec un moteur maison, l'AGR Engine. Il n'utilise ni Unity, ni Unreal, ni Godot. L'application est une `NativeActivity` ; seule une classe Java d'une soixantaine de lignes, ajoutée en 1.6.2, masque les barres système d'Android.
 
-- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.7.0 (versionCode 59), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.6.1 : elle s'installe par-dessus). SHA-256 : `1ae9f9c50a02ce21251a935bf10def8ae4630c79d41e048f51a0b7ef14b3f554`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
+- **APK** : `release/LOST-KINGDOM-SUPERESSENCE.apk`, à la racine du dépôt. Signé en v2/v3, aligné à 16 Ko, ABIs arm64-v8a, armeabi-v7a et x86_64, Android 8.0 (API 26) ou plus, OpenGL ES 3.0 requis. Version 3.7.1 (versionCode 60), construite avec le SDK/NDK Android (signature v2/v3 vérifiée par apksigner, même clé que la 3.1.0 à la 3.7.0 : elle s'installe par-dessus). SHA-256 : `1ae9f9c50a02ce21251a935bf10def8ae4630c79d41e048f51a0b7ef14b3f554`. Taille : environ 61 Mo (la bande originale orchestrale en fait 22).
   - **3.1.0 : désinstallez d'abord la 3.0.4.** La clé locale qui signait les APK 2.0.0 à 3.0.4 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était pas disponible dans l'environnement de compilation. La 3.1.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
   - Les versions 1.6.1 à 1.13.0 sont signées avec la même clé locale que la 1.6.0 : elles s'installent directement par-dessus.
   - **Depuis la 1.5.0 : désinstallez d'abord l'ancienne version.** La clé de signature locale de la 1.5.0 n'est pas versionnée (dossier `keystore/` ignoré par git) et n'était plus disponible : la 1.6.0 est signée avec une nouvelle clé locale, et Android refuse d'installer par-dessus une application signée avec une autre clé. Les sauvegardes sont dans les données internes de l'application : elles sont perdues à la désinstallation, sauf si la sauvegarde automatique d'Android les restaure (non vérifié).
 - **Langue du jeu** : français.
 
 > **Honnêteté avant tout.** Ce document distingue ce qui est implémenté et vérifié, ce qui est implémenté mais non vérifié sur un appareil réel, et ce qui manque. Lisez la section *Limites connues* avant tout.
+
+### Nouveautés 3.7.1 (champs sans carrés, herbe plus serrée, herbe moins écrasée, plein de nouveaux sons)
+
+- **Fini les grands carrés de blé** (capture envoyée depuis un téléphone) :
+  - le bord des champs n'est plus tiré à la règle : il ondule, et le blé s'éclaircit progressivement sur plusieurs mètres ;
+  - le blé pousse en zones plus ou moins denses ;
+  - le sol doré sous les champs est plus discret ;
+  - l'herbe pousse maintenant aussi sous le blé, moins dense : avant, elle y était supprimée, ce qui laissait le sol nu entre les épis ;
+  - le blé est plus serré (un pied tous les 0,42 m au lieu de 0,5 m) et moins éclairci sur les téléphones.
+- **Herbe plus serrée sur téléphone.** Les profils graphiques moins élevés l'éclaircissaient beaucoup (densité 0,55 en Moyen, 0,3 en Bas).
+  - Densités : Élevé 0,8 → 0,9 ; Moyen 0,55 → 0,7 ; Bas 0,3 → 0,45.
+  - L'espacement réagit moins à ce réglage.
+- **L'herbe s'écrase beaucoup moins** quand on passe dessus : elle s'écarte doucement au lieu de se coucher, avec une force de 0,6 au lieu de 1. La trace laissée derrière soi est légère et se redresse vite.
+- **Plein de nouveaux sons**, tous synthétisés (`tools/make_sfx_world.py`) :
+  - **ambiances** :
+    - les **sauterelles et grillons de la prairie** par beau temps, avec un vent léger dans l'herbe et une alouette au loin ;
+    - le **grondement sourd sous l'eau** avec des bulles ;
+    - le **vent sec du désert** dans les Sables et les Canyons ;
+    - le **ressac de la mer** sur toutes les côtes (avant : la Côte de Corail seulement).
+  - **la vie autour du héros**, chaque son venant de son propre endroit dans le monde :
+    - de jour : trois chants d'oiseaux différents (plus nombreux en forêt), un coucou dans les bois, des corbeaux au-dessus des champs, des mouettes sur la côte, le cri des rapaces qui tournent au-dessus des montagnes ;
+    - la nuit : des chouettes, et des grenouilles près de l'eau ;
+    - au vent : un bruissement de feuillage ;
+    - sous l'eau : des bulles.
+  - **actions** : la hache qui mord le bois, la chute d'arbre (craquement, feuillage qui siffle, fracas au moment exact où l'arbre touche le sol), la pioche qui tinte sur la roche du souterrain, un petit carillon à chaque objet obtenu.
+  - Sous l'eau, les ambiances de la surface sont étouffées.
+- **Vérifié sur ordinateur seulement** : tests unitaires et scénarios de régression (le scénario `wheat` a été adapté aux champs irréguliers). **Je n'ai pas pu écouter les sons sur un téléphone.**
 
 ### Nouveautés 3.7.0 (oiseaux en 3D, toutes les fonctions revérifiées)
 

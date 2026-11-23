@@ -1898,7 +1898,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
             wCob = std::max(wCob, plaza);
             if (wheatChunk) {   // 2.9.1 golden stubble and soil under the wheat: the fields read from far away
                 float wa = wheatAmount(x, z);
-                if (wa > 0.f) { tint = lerp(tint, vec3(1.32f, 1.05f, 0.55f), wa * 0.85f); wDirt += wa * 0.18f; wRock *= 1.f - wa; }
+                if (wa > 0.f) { tint = lerp(tint, vec3(1.22f, 1.05f, 0.62f), wa * 0.6f); wDirt += wa * 0.1f; wRock *= 1.f - wa; }   // 3.7.1 softer: the stubble no longer draws a rectangle
             }
             float total = wRock + wDirt + wSnow + wSand + wMud + wCob + wAsh;
             if (total > 1.f) { wRock /= total; wDirt /= total; wSnow /= total; wSand /= total; wMud /= total; wCob /= total; wAsh /= total; }
@@ -2411,7 +2411,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
         for (int j = 0; j < GN; j++)
             for (int i = 0; i < GN; i++) {
                 float x = x0 + (i + g.f()) * spacing, z = z0 + (j + g.f()) * spacing;
-                if (wheatChunk && wheatAmount(x, z) > 0.6f) continue;   // 2.9.1 the wheat replaces the grass
+                if (wheatChunk && g.f() < wheatAmount(x, z) * 0.5f) continue;   // 3.7.1 the wheat thins the grass (it used to remove it: bare ground between the stalks)
                 if (cityHere && length(cityHere->pos - vec2(x, z)) < cityHere->radius * 0.92f && g.f() < 0.66f) continue;
                 // grass weight from terrain splats (bilinear lookup in our vertex grid)
                 int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
@@ -2448,7 +2448,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     };
     if (lod == 0) {
         // 1.11.1: denser (-12 % spacing) and about 30 % taller, as asked
-        float spacing = 0.6f / std::sqrt(std::max(0.05f, grassDensity));   // 3.6.1 (finer, more numerous blades per tuft); 3.4.0 tighter (was 0.72 m); 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
+        float spacing = 0.6f / std::pow(std::max(0.05f, grassDensity), 0.35f);   // 3.7.1 lower profiles thin the grass less (it looked sparse on phones)   // 3.6.1 (finer, more numerous blades per tuft); 3.4.0 tighter (was 0.72 m); 3.0.0 a closer sward (was 0.8 m) of fuller tufts: the meadow reads as one carpet
         scatter(777, spacing, out.grass, &out.flowers, 0.8f, 1.5f);
         if (grassDensity >= 0.5f) scatter(778, spacing * 0.9f, out.grassNear, nullptr, 1.0f, 1.6f);
         // 2.3.6 shuffled: drawing the first N instances thins the whole chunk evenly (distance LOD of the grass)
@@ -2472,7 +2472,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
                 float x = x0 + (i + g.f()) * sp, z = z0 + (j + g.f()) * sp;
                 float a = tallGrassAmount(x, z);
                 if (a <= 0.f || g.f() > 0.35f + a * 0.65f) continue;
-                if (wheatChunk && wheatAmount(x, z) > 0.2f) continue;
+                if (wheatChunk && wheatAmount(x, z) > 0.5f) continue;
                 int vi = std::min(N, (int)((x - x0) / step + 0.5f)), vj = std::min(N, (int)((z - z0) / step + 0.5f));
                 const Vertex& tv = T.v[vj * (N + 1) + vi];
                 float wg = 1.f - (tv.rough + tv.metal + tv.emis + tv.wind + tv.b0 + tv.b1 + tv.w0) / 255.f;
@@ -2494,7 +2494,7 @@ void World::generateChunkSync(ChunkKey k, int lod, ChunkBuild& out) const {
     // ---- 2.9.1 wheat: dense tufts of ripe stalks over the parcels, shorter at the field edge, a few poppies
     if (lod == 0 && wheatChunk && grassDensity >= 0.15f) {
         Rng g(hash2i(k.x, k.z, 7171));
-        float sp = 0.5f / std::sqrt(std::min(1.f, std::max(0.3f, grassDensity)));
+        float sp = 0.42f / std::pow(std::min(1.f, std::max(0.3f, grassDensity)), 0.3f);   // 3.7.1 denser, and less thinned on phones
         int GN = (int)(CHUNK / sp);
         for (int j = 0; j < GN; j++)
             for (int i = 0; i < GN; i++) {
@@ -2564,7 +2564,11 @@ float World::wheatAmount(float x, float z) const {
     uint32_t h = hash32((uint32_t)(ci * 73856093) ^ (uint32_t)(cj * 19349663) ^ (uint32_t)best * 83492791u);
     if (h % 100 >= 58) return 0.f;   // meadow, pasture or fallow parcel
     float ex = std::min(l.x - ci * cw, (ci + 1) * cw - l.x), ez = std::min(l.y - cj * chh, (cj + 1) * chh - l.y);
-    float a = smoothstepf(1.2f, 3.2f, std::min(ex, ez)) * (1.f - smoothstepf(190.f, 230.f, bd));
+    // 3.7.1 no more rectangles: the edge of a field wanders (it was ruler-straight), thins out over several metres,
+    // and the crop itself grows in patches, denser in some places than others
+    float wob = fbm2(x * 0.07f, z * 0.07f, 3, 7474) * 5.f + fbm2(x * 0.21f, z * 0.21f, 2, 7475) * 1.5f;
+    float patchy = 0.7f + 0.3f * (fbm2(x * 0.045f, z * 0.045f, 2, 7476) * 0.5f + 0.5f);
+    float a = smoothstepf(0.5f, 7.f, std::min(ex, ez) + wob) * patchy * (1.f - smoothstepf(190.f, 230.f, bd));
     if (a < 0.02f) return 0.f;
     if (roadInfluence(x, z) > 0.02f) return 0.f;
     int cx = (int)std::floor(x / CHUNK), cz = (int)std::floor(z / CHUNK);

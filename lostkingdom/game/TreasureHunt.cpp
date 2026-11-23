@@ -66,6 +66,7 @@ Game::TreasureBonus Game::treasureBonus() const {
 
 void Game::itemGet(const std::string& icon, const std::string& title, const std::string& name, const std::string& desc, vec3 color, bool big) {
     ItemGetFx f; f.icon = icon; f.title = title; f.name = name; f.desc = desc; f.color = color; f.big = big;
+    if (!big) play("item_get", 0.55f, 1.f);   // 3.7.1 a little chime (the big ones have their fanfare)
     if (itemGets.size() < 8) itemGets.push_back(f);
 }
 

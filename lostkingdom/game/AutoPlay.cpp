@@ -2063,10 +2063,10 @@ static std::vector<Step> scenario(const std::string& name) {
         s.push_back({3.f, [](Game& g) { g.newGame(); g.startPlaying(); g.timeOfDay = 16.5f; g.toastHint.clear(); g.tutStep = -1; ok[0] = ok[1] = 0;
             g.weather = g.weatherNext = Game::W_CLEAR; g.weatherBlend = 1; g.weatherTimer = 999;
             const Poi* b = g.world.poiById("brindlemere"); float best = 0; spot = b->pos;
-            for (float r = 80; r < 260 && best < 0.99f; r += 6) for (float a = 0; a < TAU; a += 0.15f) {
+            for (float r = 80; r < 260 && best < 0.9f; r += 6) for (float a = 0; a < TAU; a += 0.15f) {
                 vec2 q = b->pos + vec2(std::cos(a), std::sin(a)) * r;
                 float w = g.world.wheatAmount(q.x, q.y);
-                if (w > best && g.world.wheatAmount(q.x + 6, q.y) > 0.9f && g.world.wheatAmount(q.x, q.y + 6) > 0.9f) { best = w; spot = q; }
+                if (w > best && g.world.wheatAmount(q.x + 6, q.y) > 0.6f && g.world.wheatAmount(q.x, q.y + 6) > 0.6f) { best = w; spot = q; }   // 3.7.1 patchy fields
             }
             AGR_LOG("WHEAT field at (%.0f, %.0f) amount %.2f", spot.x, spot.y, best);
             teleport(g, spot.x - 14, spot.y - 14, 0.78f); g.camPitch = 0.28f; g.camDist = g.camDistTarget = 16.f; g.camYaw = 0.78f + PI; }, [](Game& g, float) { g.camIdleT = 0; }, "field"});

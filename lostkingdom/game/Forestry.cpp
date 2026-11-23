@@ -34,7 +34,7 @@ bool Game::tryChopTree(Character& c) {
     vec3 toMe = normalize(vec3(c.pos.x - t.pos.x, 0, c.pos.z - t.pos.z) + vec3(1e-3f, 0, 0));
     particles.sparks(trunk + toMe * 0.3f, toMe + vec3(0, 0.6f, 0), 10, vec3(0.78f, 0.58f, 0.32f));   // wood chips
     particles.dust(trunk, 0.5f, vec3(0.55f, 0.42f, 0.28f));
-    play("hit_wood", 0.8f, particles.rng.range(0.85f, 1.05f));
+    play("chop", 0.9f, particles.rng.range(0.9f, 1.08f)); play("hit_wood", 0.35f, particles.rng.range(0.85f, 1.05f));   // 3.7.1 the axe bites
     haptic(25, 120);
     addShake(0.08f);
     if (hits < need) {
@@ -52,7 +52,7 @@ bool Game::tryChopTree(Character& c) {
     f.pos = t.pos; f.dir = -toMe; f.t = 0; f.scale = t.scale;
     fallingTrees.push_back(f);
     world.fell(t.uid, (float)gameTime, t.pos.xz());
-    play("harvest_wood", 1.f, 0.6f);
+    play3D("tree_fall", t.pos + vec3(0, 3.f, 0), 1.f, particles.rng.range(0.92f, 1.05f), 70.f);   // 3.7.1 creak, rush of leaves, crash (timed with the fall)
     // the harvest
     Rng r((uint64_t)(t.uid * 7 + (uint32_t)gameTime));
     int wood = 2 + (int)std::round(t.scale * 2.f) + r.irange(0, 2);
@@ -79,7 +79,7 @@ void Game::updateForestry(float dt) {
             vec3 tip = f.pos + f.dir * 4.f * f.scale;
             for (int k = 0; k < 6; k++) particles.dust(lerp(f.pos, tip, k / 5.f) + vec3(0, 0.3f, 0), 1.3f, vec3(0.55f, 0.5f, 0.4f));
             particles.magicTrail(tip + vec3(0, 0.5f, 0), vec3(0.45f, 0.7f, 0.3f), 0.8f);
-            play("land", 0.9f, 0.55f); play("hit_wood", 0.7f, 0.5f);
+            play("land", 0.5f, 0.55f);
             addShake(clampf(0.35f - distXZ(f.pos, pc().pos) * 0.02f, 0.05f, 0.35f));
             haptic(60, 200);
         }

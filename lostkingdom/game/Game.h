@@ -540,6 +540,9 @@ public:
     vec3 fpEye, fpFwd{0, 0, 1}, fpRight{1, 0, 0}, fpUp{0, 1, 0};
     std::shared_ptr<Mesh> fpArmMesh;
     void renderViewModel(Character& c);
+    // 3.7.1 the living soundscape (Game.cpp)
+    void updateSoundscape(float dt);
+    float sndT[5] = {3.f, 8.f, 6.f, 5.f, 4.f}, coastNear = 0;
     // 3.7.0 birds in 3D (Birds.cpp)
     struct Flock { int kind = 0, n = 0; vec3 anchor, vel; float t = 0, life = 20, radius = 20, speed = 0.2f, scale = 1; vec3 tint{0.2f}; std::vector<vec4> offs; };
     std::vector<Flock> flocks; float flockT = 6.f;

@@ -151,8 +151,8 @@ void main() {
     grassDown = min(down, 1.0);
     // bend grows with the blade's height: tall meadow grass parts around the body, short grass just flattens
     float bendH = clamp(wweight * max(p.y, 0.75) * 1.15, 0.0, 1.4);
-    wp.xz += pushv * bendH * 0.75;
-    wp.y -= min(grassDown * bendH * 0.5, bladeH > 0.0 ? bladeH * 0.8 : 0.3);   // trodden, never into the soil
+    wp.xz += pushv * bendH * 0.55;
+    wp.y -= min(grassDown * bendH * 0.28, bladeH > 0.0 ? bladeH * 0.4 : 0.15);   // trodden, never into the soil (3.7.1 bent aside more than flattened)
   #endif
 #endif
     n = normalize(n);
@@ -168,7 +168,7 @@ void main() {
 #endif
 #if defined(WIND) && defined(GRASS)
     vColor.rgb *= 1.0 + sheen * vec3(0.22, 0.2, 0.1);     // silvery-gold sheen as the gust passes (3.0.2 subtler)
-    vColor.rgb *= 1.0 - 0.2 * grassDown;                    // trodden grass: a slightly darker path
+    vColor.rgb *= 1.0 - 0.1 * grassDown;                    // trodden grass: a slightly darker path
 #endif
     vMat = aMat;
 #ifdef TEXTURED

@@ -159,7 +159,7 @@ bool Game::mineCellar(Character& c) {
     hits++;
     particles.dust(face, 0.7f, vec3(0.5f, 0.45f, 0.4f));
     particles.sparks(face, -fwd + vec3(0, 0.4f, 0), 8, vec3(0.75f, 0.7f, 0.6f));
-    play("harvest_stone", 0.7f, particles.rng.range(0.85f, 1.05f));
+    play("pick_stone", 0.8f, particles.rng.range(0.88f, 1.08f)); play("harvest_stone", 0.4f, particles.rng.range(0.85f, 1.05f));   // 3.7.1 the pick rings on the rock
     addShake(0.06f); haptic(20, 110);
     if (hits < need) return true;
     cellarHits.erase(key);

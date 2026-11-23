@@ -180,8 +180,8 @@ void Game::updateGrassPushers() {
     int n = 0;
     auto add = [&](vec3 p, float st, float r) { float w = Environment::packPusher(st, r); if (n < 8 && w != 0.f) env.pushers[n++] = vec4(p, w); };
     Character& c = pc();
-    float r = riding ? 1.7f : 1.05f;
-    add(c.pos, 1.f, r);
+    float r = riding ? 1.5f : 0.95f;
+    add(c.pos, 0.6f, r);   // 3.7.1 gentler (it flattened the grass far too much)
     if (c.grounded && distXZ(c.pos, grassTrailLast) > 0.45f) {
         grassTrail.push_front({c.pos, realTime});
         grassTrailLast = c.pos;
@@ -189,8 +189,8 @@ void Game::updateGrassPushers() {
     }
     for (auto& t : grassTrail) {
         float age = realTime - t.t;
-        float st = age < 0.7f ? 1.f : std::exp(-2.4f * (age - 0.7f)) * std::cos(5.f * (age - 0.7f));
-        add(t.p, st * 0.9f, r * 0.9f);
+        float st = age < 0.35f ? 1.f : std::exp(-3.5f * (age - 0.35f)) * std::cos(5.f * (age - 0.35f));
+        add(t.p, st * 0.4f, r * 0.85f);   // 3.7.1 a light trail that springs back quickly
     }
     std::vector<std::pair<float, Character*>> near;
     reg.each<Character>([&](Entity e, Character& o) {
@@ -199,7 +199,7 @@ void Game::updateGrassPushers() {
         if (d2 < 25.f * 25.f) near.push_back({d2, &o});
     });
     std::sort(near.begin(), near.end(), [](auto& a, auto& b) { return a.first < b.first; });
-    for (auto& o : near) add(o.second->pos, 0.85f, clampf(o.second->radius * 1.7f, 0.6f, 3.f));
+    for (auto& o : near) add(o.second->pos, 0.5f, clampf(o.second->radius * 1.6f, 0.6f, 3.f));
 }
 
 bool Game::cameraBlocked(vec3 p) const {

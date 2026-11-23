@@ -319,6 +319,7 @@ void Game::updatePlaying(float dt) {
     updateTreasures(dt);   // 3.2.0
     updateForestry(dt);    // 3.6.0
     updateBirds(dt);       // 3.7.0
+    updateSoundscape(dt);  // 3.7.1
     updateVfx(dt);       // 3.0.1
     PROF(1, updateCharacters(dt));
     PROF(2, updateProjectiles(dt));
@@ -884,7 +885,68 @@ void Game::updateAudioDirector(float dt) {
     int vi = world.nearestPoi(p.pos.xz(), 70.f);
     bool villageNear = !under && vi >= 0 && (world.pois[vi].type == PoiType::Village || world.pois[vi].type == PoiType::Mill || world.pois[vi].type == PoiType::Monastery);
     audio.setAmbience("amb_village", villageNear ? (1 - env.night) * 0.6f : 0.f);
-    audio.setAmbience("amb_sea", under ? 0.f : regionW[R_CORAL] * 0.75f);   // 2.3.4 the surf of the Coral Coast
+    // 3.7.1 the surf wherever the sea is near (it was only heard on the Coral Coast); under the water everything
+    // above is muffled and the deep rumble takes over; grasshoppers in the meadows; dry wind over the sands
+    float coast = 0;
+    if (!under) for (int k = 0; k < 6; k++) { float a = k * TAU / 6; vec2 q = p.pos.xz() + vec2(std::cos(a), std::sin(a)) * 35.f; float wq = world.waterLevel(q.x, q.y); if (wq > -1e8f && world.height(q.x, q.y) < -0.5f) coast += 1.f / 6.f; }
+    coastNear = damp(coastNear, coast, 0.8f, std::min(0.1f, dt));
+    float uw = underwaterView ? 0.12f : 1.f;
+    audio.setAmbience("amb_sea", under ? 0.f : std::max(regionW[R_CORAL] * 0.75f, std::min(1.f, coastNear * 1.6f) * 0.7f) * uw);
+    float meadow = (regionW[R_GREENHAVEN] * 0.8f + regionW[R_STEPPE] + regionW[R_HIGHCROWNS] * 0.5f + regionW[R_AURORA] * 0.3f + regionW[R_TITANS] * 0.3f) * (1.f - std::min(1.f, world.forestAt(p.pos.x, p.pos.z) * 1.4f));
+    audio.setAmbience("amb_meadow", under ? 0.f : clampf(meadow, 0.f, 1.f) * (1 - env.night) * (1 - rainAmt) * smoothstepf(0.f, 0.4f, env.sunDir.y) * 0.7f * uw);
+    audio.setAmbience("amb_desert", under ? 0.f : clampf(regionW[R_AMBER] + regionW[R_CANYON] * 0.8f, 0.f, 1.f) * (1 - rainAmt) * 0.6f * uw);
+    audio.setAmbience("amb_underwater", underwaterView ? 0.9f : 0.f);
+    if (underwaterView) { audio.setAmbience("amb_forest_day", 0.f); audio.setAmbience("amb_night", 0.f); audio.setAmbience("amb_wind", 0.f); audio.setAmbience("amb_river", 0.f); audio.setAmbience("amb_village", 0.f); }
+}
+
+// 3.7.1 the living soundscape: one-shot calls around the hero, each from its own place in the world — songbirds
+// and a cuckoo in the meadows and woods by day, crows over the fields, gulls on the coast, the cry of the birds of
+// prey circling above, owls and frogs at night, bubbles under the water, leaves rustling in a gust
+void Game::updateSoundscape(float dt) {
+    if (state != GameState::Playing || player == NullEntity || dungeon.active || menu != Menu::None) return;
+    Character& p = pc();
+    Rng& r = particles.rng;
+    auto around = [&](float dmin, float dmax, float up) { float a = r.range(0, TAU), d = r.range(dmin, dmax); vec3 q = p.pos + vec3(std::cos(a) * d, 0, std::sin(a) * d); q.y = world.height(q.x, q.z) + up; return q; };
+    float day = 1.f - env.night;
+    float rain = weather == W_RAIN || weather == W_STORM ? 1.f : 0.f;
+    float forest = world.forestAt(p.pos.x, p.pos.z);
+    bool coast = coastNear > 0.15f;
+    sndT[0] -= dt; sndT[1] -= dt; sndT[2] -= dt; sndT[3] -= dt; sndT[4] -= dt;
+    if (underwaterView) {
+        if (sndT[4] <= 0) { sndT[4] = r.range(2.f, 5.f); play3D("bubbles", p.pos + vec3(0, 1.6f, 0), r.range(0.4f, 0.7f), r.range(0.85f, 1.15f), 12.f); }
+        return;
+    }
+    if (sndT[0] <= 0) {   // songbirds by day (more in the woods), not in the rain, not in the snow lands
+        sndT[0] = r.range(2.5f, 7.f) / (0.5f + forest);
+        if (day > 0.5f && rain < 0.5f && regionW[R_FROSTHEIM] < 0.5f && regionW[R_AMBER] < 0.5f && regionW[R_CANYON] < 0.5f) {
+            static const char* songs[] = {"bird_chirp", "bird_chirp2", "bird_chirp3"};
+            play3D(songs[r.irange(0, 2)], around(8.f, 26.f, r.range(2.f, 8.f)), r.range(0.35f, 0.7f), r.range(0.9f, 1.15f), 40.f);
+        }
+    }
+    if (sndT[1] <= 0) {   // a cuckoo in the woods, crows over open land, gulls on the coast
+        sndT[1] = r.range(9.f, 20.f);
+        if (coast && day > 0.3f) play3D("gull", around(12.f, 35.f, r.range(8.f, 16.f)), r.range(0.4f, 0.7f), r.range(0.9f, 1.1f), 60.f);
+        else if (day > 0.5f && rain < 0.5f) {
+            if (forest > 0.35f && r.chance(0.5f)) play3D("cuckoo", around(25.f, 50.f, 6.f), 0.35f, r.range(0.95f, 1.05f), 70.f);
+            else if (r.chance(0.5f)) play3D("crow", around(15.f, 40.f, r.range(3.f, 12.f)), 0.4f, r.range(0.9f, 1.1f), 60.f);
+        }
+    }
+    if (sndT[2] <= 0) {   // night: owls in the trees, frogs by the water
+        sndT[2] = r.range(8.f, 18.f);
+        if (env.night > 0.6f) {
+            bool wet = world.waterLevel(p.pos.x + 12.f, p.pos.z) > -1e8f || world.waterLevel(p.pos.x - 12.f, p.pos.z) > -1e8f || regionW[R_SHADOWS] + regionW[R_JUNGLE] > 0.4f;
+            if (wet && r.chance(0.6f)) { for (int k = 0; k < 2; k++) play3D("frog", around(6.f, 20.f, 0.2f), r.range(0.4f, 0.6f), r.range(0.85f, 1.2f), 30.f); }
+            else if (forest > 0.2f || r.chance(0.3f)) play3D("owl", around(15.f, 35.f, 7.f), r.range(0.35f, 0.55f), r.range(0.92f, 1.05f), 60.f);
+        }
+    }
+    if (sndT[3] <= 0) {   // the birds of prey call as they circle
+        sndT[3] = r.range(7.f, 14.f);
+        for (const Flock& f : flocks) if (f.kind == 2) { play3D("eagle", f.anchor, 0.6f, r.range(0.92f, 1.05f), 120.f); break; }
+    }
+    if (sndT[4] <= 0) {   // a gust through the leaves
+        sndT[4] = r.range(6.f, 14.f);
+        if (forest > 0.3f && env.windStrength > 0.4f) play3D("leaves", around(4.f, 12.f, 3.f), r.range(0.25f, 0.45f), r.range(0.9f, 1.1f), 25.f);
+    }
 }
 
 }  // namespace lk
