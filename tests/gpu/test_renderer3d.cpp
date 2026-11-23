@@ -412,6 +412,69 @@ TEST_CASE("3D particles: camera-facing billboards, additive brighter, hidden beh
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("GPU particles: computed in the vertex shader, gravity, emitting window, hundreds of thousands") {
+    Render3DFixture f;
+    f.camera({0, 0, 8}, {0, 0, 0});
+    f.darkEnvironment();
+    const auto fx = f.scene.createEntity("Fx");
+    auto& em = f.scene.registry().emplace<ParticleEmitter3DComponent>(fx);
+    em.gpu = true;
+    em.rate = 0.5f;  // slot 0 born at t = 0, slot 1 at t = 2
+    em.shape = EmitterShape3D::Point;
+    em.speedMin = em.speedMax = 0.0f;
+    em.lifetimeMin = em.lifetimeMax = 100.0f;
+    em.gravity = {0.0f, -1.0f, 0.0f};
+    em.startSize = em.endSize = 0.6f;
+    em.startColor = em.endColor = {1.0f, 0.3f, 0.1f, 1.0f};
+    em.seed = 7;
+    f.scene.updateTransforms();
+    simulateParticles3D(f.scene, 0.0f);
+    simulateParticles3D(f.scene, 1.5f);  // y = -0.5 * 1 * 1.5^2 = -1.125
+    f.settle();
+    CHECK(f.renderer.stats().particlesVisible == 1);
+    const Rgba fallen = f.at({0, -1.125f, 0});
+    CHECK_MESSAGE(fallen.r > 80, fallen);
+    CHECK_MESSAGE(f.at({0, 0, 0}).r < 20, f.at({0, 0, 0}));  // nothing at the origin yet
+    // The emitter moves: its particles follow it (emitter space).
+    f.scene.registry().get<TransformComponent>(fx).position = {1.5f, 0, 0};
+    f.frame();
+    CHECK(f.at({1.5f, -1.125f, 0}).r > 80);
+    // Stopped emitting: slot 1 (due at t = 2) is never born, slot 0 keeps falling.
+    f.scene.registry().get<ParticleEmitter3DComponent>(fx).emitting = false;
+    simulateParticles3D(f.scene, 0.25f);  // t = 1.75
+    simulateParticles3D(f.scene, 0.5f);   // t = 2.25
+    f.frame();
+    CHECK(f.at({1.5f, 0, 0}).r < 20);
+    CHECK(f.at({1.5f, -0.5f * 2.25f * 2.25f, 0}).r > 80);
+
+    // A wall of 200 000 particles (4 draws of 65 536 slots): the box is almost fully covered.
+    auto& big = f.scene.registry().get<ParticleEmitter3DComponent>(fx);
+    big.emitting = true;
+    big.rate = 200000.0f;
+    big.maxParticles = 300000;
+    big.lifetimeMin = big.lifetimeMax = 1.0f;
+    big.gravity = {0, 0, 0};
+    big.shape = EmitterShape3D::Box;
+    big.boxSize = {4.0f, 4.0f, 0.0f};
+    big.startSize = big.endSize = 0.05f;
+    restartParticles3D(f.scene, fx);
+    f.scene.registry().get<TransformComponent>(fx).position = {0, 0, 0};
+    f.scene.updateTransforms();
+    simulateParticles3D(f.scene, 0.0f);
+    simulateParticles3D(f.scene, 2.0f);
+    f.frame();
+    CHECK(f.renderer.stats().particlesVisible > 150000);
+    int lit = 0, total = 0;
+    for (float x = -1.8f; x <= 1.8f; x += 0.3f)
+        for (float y = -1.8f; y <= 1.8f; y += 0.3f) {
+            ++total;
+            lit += f.at({x, y, 0}).r > 60 ? 1 : 0;
+        }
+    CHECK_MESSAGE(lit > total * 8 / 10, lit << " / " << total);
+    CHECK(f.at({2.6f, 0, 0}).r < 20);  // outside the box
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("3D particles: lit by ambient, the sun and point lights in range") {
     Render3DFixture f;
     f.camera({0, 0, 6}, {0, 0, 0});

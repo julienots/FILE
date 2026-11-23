@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 748 champs)
+## Composants (76, 749 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -945,6 +945,7 @@ Hides the objects behind it from the renderer (occlusion culling). Keep it insid
 | `meshRoughness` | float | plage 0 .. 1 |
 | `meshCastShadows` | bool |  |
 | `subEmitter` | entity | Emitter that bursts where a particle dies or hits something |
+| `gpu` | bool | Simulated on the GPU: hundreds of thousands of particles (rain, snow, dust); no curves, collisions, attractors, lit, meshes |
 | `particleMaterial` | asset | Mesh particles: .agrmat material (textures, shader, transparency); the particle color tints it |
 | `subEmitOn` | enum | valeurs : `Death`, `Collision` |
 | `subEmitCount` | int | plage 0 .. 1000 |

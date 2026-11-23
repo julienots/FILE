@@ -93,6 +93,29 @@ ParticleStats2D simulateParticles3D(Scene& scene, float dt) {
         [&](ecs::Entity, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
             ++stats.emitters;
             if (!w.activeInHierarchy) return;
+            if (em.gpu) {  // the GPU computes the particles: only the clock and the spawn window here
+                st.particles.clear();
+                if (!st.started) {
+                    st.started = true;
+                    st.gpuTime = 0.0;
+                    st.gpuSpawnStart = 0.0;
+                    st.gpuSpawnEnd = em.emitting ? 1e30 : -1.0;
+                    st.gpuWasEmitting = em.emitting;
+                    st.rng = em.seed ? em.seed : (static_cast<u32>(std::random_device{}()) & 0xffffffu) | 1u;
+                }
+                st.gpuTime += dt;
+                if (em.emitting != st.gpuWasEmitting) {
+                    st.gpuWasEmitting = em.emitting;
+                    if (em.emitting) st.gpuSpawnStart = st.gpuTime, st.gpuSpawnEnd = 1e30;
+                    else st.gpuSpawnEnd = st.gpuTime;
+                }
+                const double end = em.loop ? st.gpuSpawnEnd : std::min(st.gpuSpawnEnd, st.gpuSpawnStart + std::max(em.duration, 0.01f));
+                const float life = 0.5f * (em.lifetimeMin + std::max(em.lifetimeMin, em.lifetimeMax));
+                const double emitting = std::clamp(std::min(st.gpuTime, end) - std::max(st.gpuSpawnStart, st.gpuTime - life), 0.0, 1e9);
+                st.gpuAlive = static_cast<u32>(std::min<double>(gpuParticleCount(em), std::ceil(emitting * em.rate - 1e-6)));
+                stats.particles += st.gpuAlive;
+                return;
+            }
             const bool attract = em.worldSpace && em.affectedByAttractors && !world.attractors.empty();
             const bool collide = em.worldSpace && em.collisions;
             auto subBurst = [&](SubEmitTrigger when, const Particle3D& p) {

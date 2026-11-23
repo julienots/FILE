@@ -169,6 +169,104 @@ void main() {
 }
 )";
 
+/// GPU particles: each particle is computed from its slot index and the time (no stored state).
+/// Slot i is born at i / rate + k * period (k = its life number), with a lifetime, a start point,
+/// a direction and a speed drawn from a hash of (slot, k, seed); its position follows gravity and
+/// linear drag exactly. Dead or not-yet-born slots collapse to a point (no pixel).
+inline constexpr const char* kGpuParticleVertex = R"(
+layout(std140) uniform GpuParticles {
+    mat4 gp_emitter;      // emitter world matrix
+    vec4 gp_time;         // particle time, rate, period, slots
+    vec4 gp_life;         // lifetime min, max, speed min, max
+    vec4 gp_shape;        // shape (0 point, 1 sphere, 2 box, 3 cone, 4 ring), radius, cos(cone angle), from surface
+    vec4 gp_box;          // box size, seed
+    vec4 gp_gravity;      // gravity (emitter space), drag
+    vec4 gp_color0;
+    vec4 gp_color1;
+    vec4 gp_size;         // start size, end size, angular velocity, first slot of this draw
+    vec4 gp_spawn;        // births allowed from .. to (particle time)
+    vec4 gp_right;        // camera right (world)
+    vec4 gp_up;           // camera up (world)
+};
+layout(location = 0) in vec3 a_corner;  // corner x, y (-1 / 1), slot in the draw
+out vec2 v_uv;
+out vec4 v_color;
+out vec3 v_worldPos;
+uint agrHash(uint x) {
+    x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
+    return x;
+}
+float agrRand(inout uint s) {
+    s = agrHash(s);
+    return float(s >> 8) * (1.0 / 16777216.0);
+}
+void main() {
+    v_uv = vec2(0.0);
+    v_color = vec4(0.0);
+    v_worldPos = vec3(0.0);
+    gl_Position = vec4(0.0, 0.0, -2.0, 1.0);  // culled
+    float slot = a_corner.z + gp_size.w;
+    float rate = gp_time.y, period = gp_time.z;
+    if (slot >= gp_time.w || rate <= 0.0) return;
+    float first = slot / rate;
+    float k = floor((gp_time.x - first) / period);
+    if (k < 0.0) return;
+    float born = first + k * period;
+    if (born < gp_spawn.x || born > gp_spawn.y) return;
+    uint s = agrHash(uint(slot) * 747796405u ^ agrHash(uint(k) + 0x9e3779b9u * uint(gp_box.w)));
+    float life = max(mix(gp_life.x, gp_life.y, agrRand(s)), 0.01);
+    float age = gp_time.x - born;
+    if (age >= life) return;
+    vec3 pos = vec3(0.0);
+    vec3 dir = vec3(0.0, 1.0, 0.0);
+    int shape = int(gp_shape.x + 0.5);
+    if (shape == 1) {
+        float z = agrRand(s) * 2.0 - 1.0, a = agrRand(s) * 6.2831853, r = sqrt(max(0.0, 1.0 - z * z));
+        dir = vec3(r * cos(a), z, r * sin(a));
+        pos = dir * (gp_shape.w > 0.5 ? gp_shape.y : gp_shape.y * pow(agrRand(s), 1.0 / 3.0));
+    } else if (shape == 2) {
+        pos = (vec3(agrRand(s), agrRand(s), agrRand(s)) - 0.5) * gp_box.xyz;
+        if (gp_shape.w > 0.5) {
+            float ax = gp_box.y * gp_box.z, ay = gp_box.x * gp_box.z, az = gp_box.x * gp_box.y;
+            float pick = agrRand(s) * max(ax + ay + az, 1e-6);
+            float side = agrRand(s) < 0.5 ? -0.5 : 0.5;
+            if (pick < ax) pos.x = side * gp_box.x;
+            else if (pick < ax + ay) pos.y = side * gp_box.y;
+            else pos.z = side * gp_box.z;
+        }
+    } else if (shape == 3 || shape == 4) {
+        float c = mix(gp_shape.z, 1.0, agrRand(s)), sn = sqrt(max(0.0, 1.0 - c * c)), a = agrRand(s) * 6.2831853;
+        dir = vec3(sn * cos(a), c, sn * sin(a));
+        float r = shape == 4 ? gp_shape.y : gp_shape.y * sqrt(agrRand(s));
+        float b = agrRand(s) * 6.2831853;
+        pos = vec3(r * cos(b), 0.0, r * sin(b));
+    }
+    vec3 v0 = dir * mix(gp_life.z, gp_life.w, agrRand(s));
+    vec3 g = gp_gravity.xyz;
+    float drag = gp_gravity.w;
+    vec3 p;
+    if (drag > 1e-4) {
+        float e = (1.0 - exp(-drag * age)) / drag;
+        p = pos + (v0 - g / drag) * e + g * (age / drag);
+    } else {
+        p = pos + v0 * age + 0.5 * g * age * age;
+    }
+    float spin = agrRand(s) < 0.5 ? -1.0 : 1.0;
+    float rot = agrRand(s) * 6.2831853 + gp_size.z * spin * age;
+    float f = age / life;
+    float hs = mix(gp_size.x, gp_size.y, f) * 0.5;
+    vec4 c = mix(gp_color0, gp_color1, f);
+    v_color = vec4(pow(max(c.rgb, vec3(0.0)), vec3(2.2)), c.a);
+    vec3 center = (gp_emitter * vec4(p, 1.0)).xyz;
+    float cs = cos(rot), sr = sin(rot);
+    vec2 q = vec2(a_corner.x * cs - a_corner.y * sr, a_corner.x * sr + a_corner.y * cs) * hs;
+    vec3 world = center + gp_right.xyz * q.x + gp_up.xyz * q.y;
+    v_uv = vec2(a_corner.x * 0.5 + 0.5, 0.5 - a_corner.y * 0.5);
+    v_worldPos = world;
+    gl_Position = u_viewProj * vec4(world, 1.0);
+}
+)";
+
 // ----------------------------------------------------------------- post-processing
 // Full-screen triangle; texture coordinates come from gl_FragCoord (same convention for
 // render targets on every backend).

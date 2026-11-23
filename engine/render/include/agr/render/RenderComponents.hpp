@@ -566,7 +566,23 @@ struct ParticleEmitter3DComponent {
     bool additive = false;
     bool worldSpace = true;
     u32 seed = 0;                   ///< 0 = random.
+    /// Simulated on the GPU (in the vertex shader, from each particle's index and the time): hundreds
+    /// of thousands of particles (rain, snow, dust, sparks, stars) for almost no CPU. Uses rate,
+    /// maxParticles, lifetime, speed, shape, gravity, drag, colors, sizes, rotation, texture,
+    /// additive, emitting, loop / duration and seed; the particles follow the emitter (local space).
+    /// Not with: curves, flipbook, collisions, attractors, turbulence, sub-emitters, bursts, lit,
+    /// mesh particles, velocity stretch.
+    bool gpu = false;
 };
+/// Particle slots of a GPU emitter: enough for rate x the longest lifetime, at most maxParticles
+/// (and 4 194 304). Slot i is reborn every slots / rate seconds.
+inline u32 gpuParticleCount(const ParticleEmitter3DComponent& em) {
+    const double rate = em.rate > 0.0f ? em.rate : 0.0;
+    const double lifeMax = em.lifetimeMax > em.lifetimeMin ? em.lifetimeMax : em.lifetimeMin;
+    const double cap = em.maxParticles < (4u << 20) ? em.maxParticles : (4u << 20);
+    const double need = static_cast<double>(static_cast<u64>(rate * lifeMax)) + 2.0;
+    return static_cast<u32>(need < cap ? need : cap);
+}
 struct Particle3D {
     math::Vec3 position, velocity;
     float age = 0.0f, lifetime = 1.0f;
@@ -580,6 +596,11 @@ struct ParticleState3DComponent {
     bool started = false;
     math::Vec3 lastEmitterPos{0.0f};  ///< For inheritVelocity.
     float clock = 0.0f;               ///< Seconds since start (turbulence field time).
+    // GPU emitters: particle time, and the window in which particles may be born.
+    double gpuTime = 0.0;
+    double gpuSpawnStart = 0.0, gpuSpawnEnd = 1e30;
+    bool gpuWasEmitting = true;
+    u32 gpuAlive = 0;                 ///< Estimate (statistics).
 };
 
 /// Obstacle for particles of emitters with `collisions` (world space): a sphere (diameter

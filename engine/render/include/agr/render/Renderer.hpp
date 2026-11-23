@@ -329,6 +329,16 @@ private:
     u32 pushUniforms(const void* data, usize size);
     void uploadUniforms();
     void drawSprites(const std::vector<SpriteItem>& items);
+    void drawGpuParticles();
+    struct GpuParticleDraw {
+        u32 uniformOffset = 0;
+        u32 count = 0;
+        rhi::TextureHandle texture;
+        bool additive = false;
+    };
+    std::vector<GpuParticleDraw> m_gpuParticleDraws;
+    rhi::PipelineHandle m_gpuParticlePipeline, m_gpuParticleAdditivePipeline;
+    rhi::BufferHandle m_gpuParticleVertices, m_gpuParticleIndices;
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {

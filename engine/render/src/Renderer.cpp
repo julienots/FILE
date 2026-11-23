@@ -52,6 +52,11 @@ float raySegment(Vec2 o, Vec2 dir, Vec2 a, Vec2 b) {
 
 using detail::srgbToLinear;
 
+constexpr u32 kGpuParticleBatch = 65536;
+struct GpuParticleUniforms {
+    Mat4 emitter;
+    Vec4 time, life, shape, box, gravity, color0, color1, size, spawn, right, up;
+};
 } // namespace
 
 Renderer::Renderer(rhi::Device& device, AssetManager& assets) : m_device(device), m_assets(assets) {}
@@ -98,6 +103,10 @@ Renderer::~Renderer() {
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteLitNormalPipeline);
     m_device.destroyPipeline(m_spriteAdditivePipeline);
+    m_device.destroyPipeline(m_gpuParticlePipeline);
+    m_device.destroyPipeline(m_gpuParticleAdditivePipeline);
+    m_device.destroyBuffer(m_gpuParticleVertices);
+    m_device.destroyBuffer(m_gpuParticleIndices);
     m_device.destroyPipeline(m_overlayPipeline);
     for (auto p : m_postPipelines) m_device.destroyPipeline(p);
     releasePostTargets();
@@ -140,6 +149,22 @@ Status Renderer::createPipelines() {
     auto ap = m_device.createPipeline(additive);
     if (!ap) return ap.error();
     m_spriteAdditivePipeline = ap.value();
+
+    // GPU particles: one static batch of kGpuParticleBatch quads, drawn as many times as needed.
+    rhi::PipelineDesc gpu = sprite;
+    gpu.debugName = "agr.particles.gpu";
+    gpu.shader.vertex = std::string(shaders::kFrameBlock) + shaders::kGpuParticleVertex;
+    gpu.layout.stride = sizeof(float) * 3;
+    gpu.layout.attributes = {{0, rhi::VertexFormat::Float3, 0}};
+    gpu.uniformBlocks = {"FrameData", "GpuParticles"};
+    auto gp = m_device.createPipeline(gpu);
+    if (!gp) return gp.error();
+    m_gpuParticlePipeline = gp.value();
+    gpu.debugName = "agr.particles.gpu.additive";
+    gpu.blend = rhi::BlendMode::Additive;
+    auto gpa = m_device.createPipeline(gpu);
+    if (!gpa) return gpa.error();
+    m_gpuParticleAdditivePipeline = gpa.value();
 
     rhi::PipelineDesc overlay = sprite;
     overlay.debugName = "agr.overlay";
@@ -678,6 +703,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
 
     // ------------------------------------------------------------ sprites
     m_spriteItems.clear();
+    m_gpuParticleDraws.clear();
     std::string lastUri;
     bool lastPixelArt = false, lastHandleValid = false;
     rhi::TextureHandle lastHandle;
@@ -933,6 +959,36 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         };
         reg.view<ParticleEmitter3DComponent, ParticleState3DComponent, WorldTransformComponent>().each(
             [&](ecs::Entity e, ParticleEmitter3DComponent& em, ParticleState3DComponent& st, WorldTransformComponent& w) {
+                if (em.gpu && !em.meshParticles && w.activeInHierarchy && !hiddenInEditor(e) && st.started) {
+                    // One draw per batch of slots; the vertex shader computes every particle.
+                    const u32 slots = gpuParticleCount(em);
+                    const float rate = std::max(em.rate, 1e-4f);
+                    const double period = static_cast<double>(slots) / rate;
+                    // Particle time wrapped to a whole number of periods (keeps float precision).
+                    const double wraps = std::floor(st.gpuTime / period) - 1.0;
+                    const double shift = wraps > 0.0 ? wraps * period : 0.0;
+                    const double end = em.loop ? st.gpuSpawnEnd : std::min(st.gpuSpawnEnd, st.gpuSpawnStart + std::max(em.duration, 0.01f));
+                    GpuParticleUniforms u{};
+                    u.emitter = w.matrix;  // GPU particles follow the emitter
+                    u.time = {static_cast<float>(st.gpuTime - shift), rate, static_cast<float>(period), static_cast<float>(slots)};
+                    u.life = {em.lifetimeMin, std::max(em.lifetimeMin, em.lifetimeMax), em.speedMin, std::max(em.speedMin, em.speedMax)};
+                    u.shape = {static_cast<float>(em.shape), em.shapeRadius, std::cos(std::clamp(em.coneAngle, 0.0f, math::kPi)), em.emitFromSurface ? 1.0f : 0.0f};
+                    u.box = {em.boxSize.x, em.boxSize.y, em.boxSize.z, static_cast<float>(st.rng & 0xffffffu)};
+                    const Vec3 g = math::inverse(w.matrix).transformVector(em.gravity);
+                    u.gravity = {g.x, g.y, g.z, std::max(em.drag, 0.0f)};
+                    u.color0 = em.startColor;
+                    u.color1 = em.endColor;
+                    u.spawn = {static_cast<float>(std::max(st.gpuSpawnStart - shift, -1e30)), static_cast<float>(std::min(end - shift, 1e30)), 0.0f, 0.0f};
+                    u.right = {right.x, right.y, right.z, 0.0f};
+                    u.up = {up.x, up.y, up.z, 0.0f};
+                    const rhi::TextureHandle tex = em.texture.empty() ? m_softParticle : textureFor(em.texture, false);
+                    for (u32 first = 0; first < slots; first += kGpuParticleBatch) {
+                        u.size = {em.startSize, em.endSize, em.angularVelocity, static_cast<float>(first)};
+                        m_gpuParticleDraws.push_back({pushUniforms(&u, sizeof u), std::min(kGpuParticleBatch, slots - first), tex, em.additive});
+                    }
+                    m_stats.particlesVisible += st.gpuAlive;
+                    return;
+                }
                 if (!w.activeInHierarchy || hiddenInEditor(e) || st.particles.empty() || em.meshParticles) return;  // meshes: 3D pass
                 if (em.lit && !plightsGathered) {
                     plightsGathered = true;
@@ -1278,6 +1334,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         drawSky();
         drawMeshItems(m_transparentItems, static_cast<u32>(m_opaqueItems.size()), false);
         drawSprites(m_spriteItems);
+        drawGpuParticles();
     }
     if (!offscreen && !postPath) drawOverlay();  // same pass: the overlay ignores depth
     m_device.endPass();
@@ -1382,6 +1439,42 @@ i32 Renderer::spriteShaderPipeline(const std::string& uri) {
     }
     entry.ok = true;
     return static_cast<i32>(entry.index);
+}
+
+void Renderer::drawGpuParticles() {
+    if (m_gpuParticleDraws.empty()) return;
+    if (!m_gpuParticleVertices) {
+        std::vector<float> verts(static_cast<usize>(kGpuParticleBatch) * 12);
+        std::vector<u32> indices(static_cast<usize>(kGpuParticleBatch) * 6);
+        const float corners[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        for (u32 q = 0; q < kGpuParticleBatch; ++q) {
+            for (u32 c = 0; c < 4; ++c) {
+                float* v = &verts[(static_cast<usize>(q) * 4 + c) * 3];
+                v[0] = corners[c][0], v[1] = corners[c][1], v[2] = static_cast<float>(q);
+            }
+            const u32 b = q * 4;
+            const u32 pattern[6] = {b, b + 1, b + 2, b, b + 2, b + 3};
+            std::copy(pattern, pattern + 6, indices.begin() + static_cast<std::ptrdiff_t>(q) * 6);
+        }
+        auto vb = m_device.createBuffer({rhi::BufferUsage::Vertex, rhi::BufferMemory::Static, verts.size() * sizeof(float), verts.data(), "agr.particles.gpu.vb"});
+        auto ib = m_device.createBuffer({rhi::BufferUsage::Index, rhi::BufferMemory::Static, indices.size() * sizeof(u32), indices.data(), "agr.particles.gpu.ib"});
+        if (!vb || !ib) {
+            AGR_LOG_ERROR("Render", "GPU particle buffers allocation failed");
+            return;
+        }
+        m_gpuParticleVertices = vb.value();
+        m_gpuParticleIndices = ib.value();
+    }
+    m_device.bindVertexBuffer(m_gpuParticleVertices);
+    m_device.bindIndexBuffer(m_gpuParticleIndices, rhi::IndexType::U32);
+    for (const GpuParticleDraw& d : m_gpuParticleDraws) {
+        m_device.bindPipeline(d.additive ? m_gpuParticleAdditivePipeline : m_gpuParticlePipeline);
+        m_device.bindUniformBuffer(kSlotFrame, m_uniformBuffer, 0, sizeof(FrameUniforms));
+        m_device.bindUniformBuffer(1, m_uniformBuffer, d.uniformOffset, sizeof(GpuParticleUniforms));
+        m_device.bindTexture(0, d.texture);
+        m_device.drawIndexed(d.count * 6, 0);
+        ++m_stats.spriteBatches;
+    }
 }
 
 void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
