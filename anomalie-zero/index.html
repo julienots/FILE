@@ -1345,7 +1345,7 @@ function animHeroModel(dt){
       if(hgt<7){hero.hoverRing=(hero.hoverRing||0)-dt;if(hero.hoverRing<=0){hero.hoverRing=0.9;ring(P.pos.x,gy+0.15,P.pos.z,4.5-hgt*0.3,0x9ffcff,0.9)}
         if(fx()<0.5*(1-hgt/7)){const a=R(0,6.28),r=R(0.5,3);(gy<0.3?particles:particles).emit(P.pos.x+Math.sin(a)*r,gy+0.1,P.pos.z+Math.cos(a)*r,Math.sin(a)*R(2,5),R(0.2,1.2),Math.cos(a)*R(2,5),R(0.8,1.4),R(1,2),gy<0.3?0xeaf6ff:0xd8c9a8,0.4,0,1)}}}}
   else if(!P.onGround){tR=1;tsR=0.15;if(P.vel.y>2)T.jump=1;else T.fall=smooth(2,-14,P.vel.y)}
-  else{tW=smooth(0.4,3,hv)*(1-smooth(6,10,hv));tR=smooth(6,10,hv);tI=1-tW-tR;tsW=clamp(hv/1.9,0.7,1.8);tsR=clamp(hv/6.5,0.9,2.6);body=0.06*smooth(4,12,hv)+0.22*smooth(18,30,hv);roll=clamp(-P.yawRate*hv*0.018,-0.35,0.35)}
+  else{tW=smooth(0.3,2.2,hv)*(1-smooth(3.5,6,hv));tR=smooth(3.5,6,hv);tI=1-tW-tR;body=0.06*smooth(4,12,hv)+0.22*smooth(18,30,hv);roll=clamp(-P.yawRate*hv*0.018,-0.35,0.35)}
   if(P.superLand>0){T.superland=1;yOff=-0.5;body=0.42;tI=1;tW=tR=0}
   else if(P.takeoff>0||P.land>0){T.land=1;yOff-=0.32*(P.takeoff>0?1:P.land/0.4);body+=0.25}
   if(P.poseSlam>0){T.slam=1;yOff-=0.25;body=0.35}
@@ -1362,7 +1362,11 @@ function animHeroModel(dt){
   const k=damp(10,dt),kp=damp(12,dt);for(const n in W)W[n]=lerp(W[n],T[n],kp);
   hero.w.Idle=lerp(hero.w.Idle,tI,k);hero.w.Walk=lerp(hero.w.Walk,tW,k);hero.w.Run=lerp(hero.w.Run,tR,k);
   hero.act.Idle.setEffectiveWeight(hero.w.Idle);hero.act.Walk.setEffectiveWeight(hero.w.Walk);hero.act.Run.setEffectiveWeight(hero.w.Run);
-  hero.act.Idle.timeScale=tsI;hero.act.Walk.timeScale=tsW;hero.act.Run.timeScale=tsR;
+  hero.act.Idle.timeScale=tsI;
+  {const aW=hero.act.Walk,aR=hero.act.Run,dW=aW.getClip().duration,dR=aR.getClip().duration;
+   const lenW=1.45*dW,lenR=5.0*dR*(1+Math.max(0,hv-7)/16);
+   if(P.onGround&&!P.fly){const cyc=lerp(lenW,lenR,hero.w.Run/Math.max(1e-3,hero.w.Run+hero.w.Walk));hero.phase=((hero.phase||0)+hv*dt/cyc)%1;aW.timeScale=aR.timeScale=0;aW.time=hero.phase*dW;aR.time=hero.phase*dR}
+   else{aW.timeScale=tsW;aR.timeScale=tsR}}
   hero.mixer.update(dt);
   hero.body.rotation.x=lerp(hero.body.rotation.x,body,damp(P.fly?3.5:8,dt));hero.body.rotation.z=lerp(hero.body.rotation.z,roll,damp(5,dt));
   hero.bank=lerp(hero.bank||0,bank,damp(3,dt));let extra=0;if(P.barrel>0){P.barrel-=dt;extra=(1-Math.max(0,P.barrel)/0.5)*Math.PI*2*(hero.barrelDir||1)}hero.body.rotation.y=hero.bank+extra;
@@ -1481,7 +1485,8 @@ function updatePlayer(dt){
   P.invuln=Math.max(0,P.invuln-dt);P.aimT=Math.max(0,(P.aimT||0)-dt);P.poseGrav=Math.max(0,(P.poseGrav||0)-dt);P.poseNova=Math.max(0,(P.poseNova||0)-dt);P.hurtT=Math.max(0,(P.hurtT||0)-dt);P.poseSlam=Math.max(0,P.poseSlam-dt);P.poseCast=Math.max(0,P.poseCast-dt);
   const f=camForward(_v1),r=camRight(_v2);
   const mx=input.mx,my=input.my;const mag=Math.min(1,Math.hypot(mx,my));
-  const dir=_v3.set(0,0,0).addScaledVector(f,my).addScaledVector(r,mx);if(dir.lengthSq()>1)dir.normalize();
+  const dir=_v3.set(0,0,0).addScaledVector(f,my).addScaledVector(r,mx);if(dir.lengthSq()>1)dir.normalize();P.inMag=mag;if(mag>0.12)P.inYaw=Math.atan2(dir.x,dir.z);
+  P.coyote=P.onGround?0.12:Math.max(0,(P.coyote||0)-dt);if(input.pressed.jump)P.jumpBuf=0.14;else P.jumpBuf=Math.max(0,(P.jumpBuf||0)-dt);
   // --- capacités
   if(input.pressed.fly){if(P.fly){P.fly=false;toastHint('Atterrissage')}else if(P.en>8&&P.takeoff<=0){if(P.onGround){P.takeoff=0.28;P.vel.set(0,0,0)}else{P.fly=true;P.diving=false;P.vel.y=Math.max(P.vel.y,8);sfx('dash')}}}
   if(P.takeoff>0){P.takeoff-=dt;P.land=Math.max(P.land,0.2);if(P.takeoff<=0){P.fly=true;P.diving=false;P.onGround=false;P.vel.y=22;sfx('dash');ring(P.pos.x,P.pos.y+0.2,P.pos.z,9,0x43f3ff,0.6);ring(P.pos.x,P.pos.y+0.1,P.pos.z,5,0xffffff,0.4);
@@ -1508,7 +1513,7 @@ function updatePlayer(dt){
     const spd=30*(1+P.sprintT*0.6);
     _v4.copy(dir).multiplyScalar(spd*mag);
     let vy=pitchV*spd*Math.max(0,my)*0.9;if(input.held.jump)vy+=16;
-    _v4.y=vy;P.vel.lerp(_v4,damp(mag>0.1?1.7:1.1,dt));
+    _v4.y=vy;P.vel.lerp(_v4,damp(mag>0.1?2.8:1.8,dt));
     if(mag>0.9)P.sprintT=Math.min(1,P.sprintT+dt*0.5);else P.sprintT=Math.max(0,P.sprintT-dt);
     P.pos.addScaledVector(P.vel,dt);
     const g=floorAt(P.pos.x,P.pos.z,P.pos.y)+1.0;if(P.pos.y<g){P.pos.y=g;if(P.vel.y<0)P.vel.y=0}
@@ -1518,13 +1523,13 @@ function updatePlayer(dt){
     if(P.vel.length()>25&&fx()<0.6)glow.emit(P.pos.x+R(-0.4,0.4),P.pos.y+R(0.5,1.5),P.pos.z+R(-0.4,0.4),-P.vel.x*0.1,-P.vel.y*0.1,-P.vel.z*0.1,0.5,R(0.3,0.7),0x9ffcff,0.8,0,1,1.8);
   }else{
     if(mag>0.92&&P.onGround)P.sprintT=Math.min(1,P.sprintT+dt*0.8);else if(mag<0.5||!P.onGround&&P.sprintT<1)P.sprintT=Math.max(0,P.sprintT-dt*1.5);
-    const speed=lerp(10,34,smooth(0.55,1,P.sprintT));
+    const speed=lerp(7,26,smooth(0.55,1,P.sprintT));
     if(P.superLand>0)P.superLand-=dt;_v4.copy(dir).multiplyScalar(speed*mag*(P.superLand>0?0:1));
-    const k=P.onGround?(mag>0.1?7:9):2.2;P.vel.x=lerp(P.vel.x,_v4.x,damp(k,dt));P.vel.z=lerp(P.vel.z,_v4.z,damp(k,dt));
-    if(input.pressed.jump){if(P.onGround){P.vel.y=14;P.onGround=false;P.jumps=1;sfx('jump')}else if(P.jumps<2){P.vel.y=13.5;P.jumps=2;ring(P.pos.x,P.pos.y,P.pos.z,4,0x43f3ff,0.4);sfx('jump')}}
+    const vd=_v4.x*P.vel.x+_v4.z*P.vel.z;const k=P.onGround?(mag>0.1?(vd<0?22:13):15):3;P.vel.x=lerp(P.vel.x,_v4.x,damp(k,dt));P.vel.z=lerp(P.vel.z,_v4.z,damp(k,dt));
+    if(P.jumpBuf>0&&!P.slamPending){if(P.onGround||P.coyote>0){P.jumpBuf=0;P.coyote=0;P.vel.y=14.5;P.onGround=false;P.jumps=1;sfx('jump');particles.burst(P.pos.x,P.pos.y+0.1,P.pos.z,8,0xd8c9a8,1,4,1.5,false,-2)}else if(input.pressed.jump&&P.jumps<2){P.jumpBuf=0;P.vel.y=13.5;P.jumps=2;ring(P.pos.x,P.pos.y,P.pos.z,4,0x43f3ff,0.4);sfx('jump')}}
     if(P.slamPending){P.slamUpT-=dt;if(P.slamUpT<=0)P.vel.y=Math.min(P.vel.y,-24);P.vel.x*=0.9;P.vel.z*=0.9}
     const glide=!P.slamPending&&!P.onGround&&input.held.jump&&P.vel.y<0&&P.jumps>=2;
-    P.vel.y-=(glide?10:34)*dt;if(glide)P.vel.y=Math.max(P.vel.y,-5);
+    P.vel.y-=(glide?10:(P.vel.y>0?(input.held.jump?30:62):48))*dt;if(glide)P.vel.y=Math.max(P.vel.y,-5);
     P.pos.addScaledVector(P.vel,dt);
     const g=floorAt(P.pos.x,P.pos.z,P.pos.y);
     if(P.pos.y<=g+0.02&&P.vel.y<=0){if(!P.onGround&&P.vel.y<-28){ring(P.pos.x,g+0.3,P.pos.z,6,0xffffff,0.4);particles.burst(P.pos.x,g+0.3,P.pos.z,14,0xcfc3a8,3,7,2.5,false,-2)}
@@ -1547,7 +1552,7 @@ function updatePlayer(dt){
     if(!breachNear){P.pos.x*=lim/dw;P.pos.z*=lim/dw;_v4.set(P.pos.x,0,P.pos.z).normalize();P.vel.addScaledVector(_v4,-Math.max(0,P.vel.dot(_v4))*1.6);
       G.glitch=Math.max(G.glitch,0.6);if(!G.wallMsg||G.time-G.wallMsg>4){G.wallMsg=G.time;toast(G.breachOpen?"Le Mur rejette l'anomalie. Vise la Brèche.":"Le Mur rejette l'anomalie. Détruis les Pylônes.")}}}
   // orientation
-  const hv=Math.hypot(P.vel.x,P.vel.z);const oy=P.yaw;if(hv>0.8&&!P.diving)P.yaw=angLerp(P.yaw,Math.atan2(P.vel.x,P.vel.z),damp(P.fly?3.2:(hv>18?6:10),dt));P.yawRate=lerp(P.yawRate||0,(((P.yaw-oy+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI)/Math.max(dt,1e-4),damp(8,dt));P.land=Math.max(0,(P.land||0)-dt);
+  const hv=Math.hypot(P.vel.x,P.vel.z);const oy=P.yaw;if(!P.diving){if(!P.fly&&P.onGround&&P.inMag>0.12&&P.superLand<=0){const df=Math.abs(((P.inYaw-P.yaw+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI);P.yaw=angLerp(P.yaw,P.inYaw,damp(df>2.2&&hv<9?28:(hv>16?9:16),dt))}else if(hv>0.8)P.yaw=angLerp(P.yaw,Math.atan2(P.vel.x,P.vel.z),damp(P.fly?5:9,dt))}P.yawRate=lerp(P.yawRate||0,(((P.yaw-oy+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI)/Math.max(dt,1e-4),damp(8,dt));P.land=Math.max(0,(P.land||0)-dt);
   if(input.held.atk&&hv<3){const t=currentTarget;if(t)P.yaw=angLerp(P.yaw,Math.atan2(t.x-P.pos.x,t.z-P.pos.z),damp(14,dt))}
   // fragments et orbes
   pickups(dt);
@@ -2050,7 +2055,8 @@ function updateCamera(dt){
   const flying=P.fly||P.diving;
   const dist=flying?lerp(9.5,14,smooth(20,48,P.vel.length())):lerp(7,9,P.sprintT);camDist=lerp(camDist,dist,damp(3,dt));
   lookIdle+=dt;if(!P.fly&&lookIdle>0.35&&Math.abs(input.mx)>0.2&&G.started){camYaw-=input.mx*Math.abs(input.mx)*1.5*dt*G.sens}if(flying&&lookIdle>1.2&&input.my>0.3){camYaw=angLerp(camYaw,P.yaw+Math.PI,damp(1.2,dt))}
-  camTarget.lerp(_v1.set(P.pos.x,P.pos.y+1.55,P.pos.z),damp(P.fly?7:18,dt));
+  {const la=P.fly?0:0.22;_v2.set(clamp(P.vel.x*la,-3.5,3.5),0,clamp(P.vel.z*la,-3.5,3.5));hero.look=(hero.look||new V3()).lerp(_v2,damp(3,dt))}
+  camTarget.lerp(_v1.set(P.pos.x+hero.look.x,P.pos.y+1.55,P.pos.z+hero.look.z),damp(P.fly?7:14,dt));
   const cp=Math.cos(camPitch),sp=Math.sin(camPitch);
   camPos.set(camTarget.x+Math.sin(camYaw)*cp*camDist,camTarget.y+sp*camDist+0.6,camTarget.z+Math.cos(camYaw)*cp*camDist);
   const g=Math.max(groundAt(camPos.x,camPos.z,camPos.y),0.2)+0.6;if(camPos.y<g)camPos.y=g;
