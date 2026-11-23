@@ -154,4 +154,4 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 - UI Builder : une sélection multiple se déplace et se **redimensionne d'un bloc** (cadre bleu et ses
   poignées ; Maj sur un coin garde les proportions ; chaque élément garde sa place et sa taille relatives
   dans le cadre) ; les textes ne changent pas de taille de police. Le calcul est testé
-  (`scaleRectsInBox`), le geste à la souris seulement à la main.
+  (`scaleRectsInBox`) ; le geste à la souris lui-même n'a pas de test automatique.
