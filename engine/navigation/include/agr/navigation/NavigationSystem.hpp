@@ -19,6 +19,7 @@ const char* enumName(NavStatus s);
 struct NavigationStats {
     u32 gridCells = 0, gridBlocked = 0;
     u32 meshPolygons = 0;
+    u32 meshTiles = 0, tilesRebuilt = 0;  ///< 3D mesh tiles, tiles rebuilt by the last build.
     u32 sourceShapes2D = 0, sourceShapes3D = 0;
     u32 agentsMoving = 0;
     u32 links = 0;        ///< NavLinks in the last build.

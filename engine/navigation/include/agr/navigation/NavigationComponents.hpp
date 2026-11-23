@@ -72,6 +72,10 @@ struct NavigationSettingsComponent {
     /// Static imported models (MeshRenderer with a model, no moving body) are walkable geometry
     /// too, like static colliders.
     bool meshRenderersAsSources = true;
+    /// 3D mesh in tiles of `tileSize` x `tileSize` cells (0 = one piece). Tiles lift the size limit
+    /// (big open worlds) and a geometry change (a door, a carved obstacle) only rebuilds the tiles
+    /// it touches. 48..128 is typical.
+    i32 tileSize = 0;
 };
 
 void registerNavigationComponents();

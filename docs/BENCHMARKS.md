@@ -304,4 +304,5 @@ nav: navmesh path across (Detour)                 0.020 ms
 |---|---|
 | A* 512 × 512 : ~10 ms | Grille de 262 144 cases dont 15 % d'obstacles aléatoires, ~56 000 cases visitées. Pour des cartes de cette taille, préférer des cases plus grandes ou espacer les recherches entre les images. |
 | Construction Recast : ~51 ms | Faite au chargement et quand les obstacles statiques changent (pas à chaque image). |
+| Maillage en tuiles (64 cellules) : construction complète ~71 ms, mise à jour après le déplacement d'une boîte ~3 ms (2 tuiles sur 64), contre ~78 ms pour tout reconstruire (même machine, même passe) | `NavigationSettings.tileSize` : seules les tuiles touchées sont reconstruites. |
 | Requête Detour : ~0,02 ms | Des centaines d'agents peuvent recalculer leur chemin dans la même image. |

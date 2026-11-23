@@ -16,6 +16,10 @@ struct NavMeshBuildSettings {
     float agentHeight = 1.8f;   ///< Minimum ceiling height.
     float agentMaxClimb = 0.4f; ///< Steps the agent can walk up.
     float agentMaxSlope = 45.0f;  ///< Degrees.
+    /// Tiles of `tileSize` x `tileSize` cells (0 = one tile for the whole level). Tiled meshes
+    /// have no size limit and `update` rebuilds only the tiles whose geometry changed.
+    i32 tileSize = 0;
+    bool operator==(const NavMeshBuildSettings&) const = default;
 };
 
 /// Box where walking costs more (mud, water: cost >= 1) or is forbidden (walkable = false).
@@ -23,12 +27,14 @@ struct NavMeshArea {
     math::Vec3 min, max;
     float cost = 3.0f;
     bool walkable = true;
+    bool operator==(const NavMeshArea&) const = default;
 };
 
 /// Off-mesh connection (jump, ladder, teleporter) between two points near the mesh.
 struct NavMeshLink {
     math::Vec3 start, end;
     bool bidirectional = true;
+    bool operator==(const NavMeshLink&) const = default;
 };
 
 struct NavMeshStats {
@@ -36,6 +42,8 @@ struct NavMeshStats {
     u32 vertices = 0;
     u32 inputTriangles = 0;
     u32 links = 0;
+    u32 tiles = 0;          ///< Tiles holding polygons.
+    u32 tilesRebuilt = 0;   ///< Tiles built by the last build / update.
     f64 buildMs = 0.0;
 };
 
@@ -50,6 +58,11 @@ public:
     /// for walkable surfaces). Replaces the previous mesh; an error leaves it empty.
     Status build(const std::vector<math::Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& settings,
                  const std::vector<NavMeshLink>& links = {}, const std::vector<NavMeshArea>& areas = {});
+    /// Same as build, but a tiled mesh with the same settings, links and areas, whose new geometry
+    /// fits in its tile grid, only rebuilds the tiles touched by triangles that were added or
+    /// removed (a door closed, a carved obstacle moved). Otherwise a full build.
+    Status update(const std::vector<math::Vec3>& vertices, const std::vector<u32>& indices, const NavMeshBuildSettings& settings,
+                  const std::vector<NavMeshLink>& links = {}, const std::vector<NavMeshArea>& areas = {});
     void clear();
     bool empty() const;
     /// Exchanges two meshes (a mesh built in the background replaces the live one at once).
@@ -69,6 +82,8 @@ public:
     const NavMeshStats& stats() const { return m_stats; }
 
 private:
+    Status rebuildTile(int x, int y);
+    void countTiles();
     struct Impl;
     std::unique_ptr<Impl> m;
     NavMeshStats m_stats;

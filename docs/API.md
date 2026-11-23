@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 747 champs)
+## Composants (76, 748 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -492,6 +492,7 @@ Build parameters of the 2D grid and the 3D navigation mesh (static colliders and
 | `agentHeight` | float | plage 0.1 .. 20 |
 | `agentMaxClimb` | float | plage 0 .. 5 |
 | `agentMaxSlope` | float | plage 0 .. 89 |
+| `tileSize` | int | 3D mesh in tiles of this many cells (0 = one piece): big worlds, only changed tiles rebuilt ; plage 0 .. 1024 |
 | `meshRenderersAsSources` | bool | Static imported models are walkable geometry |
 
 ### NetSync

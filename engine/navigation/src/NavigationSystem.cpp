@@ -143,6 +143,8 @@ void registerNavigationComponents() {
         .field("agentHeight", &NavigationSettingsComponent::agentHeight, {.rangeMin = 0.1f, .rangeMax = 20.0f, .speed = 0.01f})
         .field("agentMaxClimb", &NavigationSettingsComponent::agentMaxClimb, {.rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
         .field("agentMaxSlope", &NavigationSettingsComponent::agentMaxSlope, {.rangeMin = 0.0f, .rangeMax = 89.0f, .speed = 0.5f})
+        .field("tileSize", &NavigationSettingsComponent::tileSize,
+               {.tooltip = "3D mesh in tiles of this many cells (0 = one piece): big worlds, only changed tiles rebuilt", .rangeMin = 0.0f, .rangeMax = 1024.0f})
         .field("meshRenderersAsSources", &NavigationSettingsComponent::meshRenderersAsSources, {.tooltip = "Static imported models are walkable geometry"});
 }
 
@@ -202,6 +204,7 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
     for (float f : {st.gridCellSize, st.agentRadius2D, st.cellSize, st.agentRadius, st.agentHeight, st.agentMaxClimb, st.agentMaxSlope}) h = mixf(h, f);
     h = mix(h, st.meshRenderersAsSources ? 1 : 2);
     h = mix(h, std::hash<std::string>{}(st.agentSizes));
+    h = mix(h, static_cast<u64>(static_cast<u32>(st.tileSize)));
     return h;
 }
 
@@ -446,8 +449,10 @@ void NavigationSystem::rebuild(Scene& s) {
     });
     m_stats.lastError.clear();
     auto buildMesh = [&](NavMesh& mesh, float radius) {
-        mesh.clear();
-        if (idx.empty()) return;
+        if (idx.empty()) {
+            mesh.clear();
+            return;
+        }
         NavMeshBuildSettings bs;
         bs.cellSize = st.cellSize;
         bs.cellHeight = std::max(st.cellSize * 0.5f, 0.02f);
@@ -455,12 +460,14 @@ void NavigationSystem::rebuild(Scene& s) {
         bs.agentHeight = st.agentHeight;
         bs.agentMaxClimb = st.agentMaxClimb;
         bs.agentMaxSlope = st.agentMaxSlope;
-        if (Status r = mesh.build(verts, idx, bs, meshLinks, meshAreas); !r) {
+        bs.tileSize = st.tileSize;
+        if (Status r = mesh.update(verts, idx, bs, meshLinks, meshAreas); !r) {
+            mesh.clear();
             m_stats.lastError = r.error().message;
             AGR_LOG_WARN("Navigation", "navigation mesh (agent radius {}) not built: {}", radius, r.error().message);
         }
     };
-    if (st.backgroundBuild && !m_mesh.empty() && !idx.empty()) {
+    if (st.backgroundBuild && st.tileSize <= 0 && !m_mesh.empty() && !idx.empty()) {
         // The live mesh keeps serving; the new one replaces it when ready (ensureBuilt).
         if (m_pendingMesh.valid()) m_pendingMesh.wait();  // one rebuild at a time
         NavMeshBuildSettings bs;
@@ -480,6 +487,8 @@ void NavigationSystem::rebuild(Scene& s) {
     }
     for (auto& l : m_layers) buildMesh(l->mesh, l->radius);
     m_stats.meshPolygons = m_mesh.stats().polygons;
+    m_stats.meshTiles = m_mesh.stats().tiles;
+    m_stats.tilesRebuilt = m_mesh.stats().tilesRebuilt;
     ++m_stats.builds;
     m_stats.lastBuildMs = sw.elapsedMilliseconds();
     // Moving agents follow the new geometry.

@@ -528,3 +528,103 @@ TEST_CASE("navigation areas: costly zones avoided when the detour is worth it, f
     for (const Vec3& q : sp) dev = std::max(dev, std::fabs(q.y));
     CHECK(dev > 4.5f);  // around the forbidden 4 x 10 rectangle centered on (10, 0)
 }
+
+TEST_CASE("tiled navmesh: paths across tiles, links between tiles, only the changed tiles rebuilt") {
+    std::vector<Vec3> v{{-40, 0, -40}, {40, 0, -40}, {40, 0, 40}, {-40, 0, 40}};
+    std::vector<u32> idx{0, 2, 1, 0, 3, 2};
+    auto addBox = [&](Vec3 mn, Vec3 mx) {
+        const u32 b = static_cast<u32>(v.size());
+        for (int i = 0; i < 8; ++i) v.push_back({(i & 1) ? mx.x : mn.x, (i & 2) ? mx.y : mn.y, (i & 4) ? mx.z : mn.z});
+        const u32 f[12][3] = {{2, 6, 7}, {2, 7, 3}, {0, 1, 5}, {0, 5, 4}, {0, 2, 3}, {0, 3, 1}, {4, 5, 7}, {4, 7, 6}, {0, 4, 6}, {0, 6, 2}, {1, 3, 7}, {1, 7, 5}};
+        for (const auto& t : f)
+            for (u32 k : t) idx.push_back(b + k);
+    };
+    addBox({-0.5f, 0, -40}, {0.5f, 3, 30});  // long wall: go around by z > 30
+    NavMeshBuildSettings bs;
+    bs.cellSize = 0.25f;
+    bs.cellHeight = 0.125f;
+    bs.tileSize = 48;  // 12 m tiles: 7 x 7
+    NavMesh mesh;
+    REQUIRE(mesh.build(v, idx, bs));
+    CHECK(mesh.stats().tiles == 49);
+    CHECK(mesh.stats().tilesRebuilt == 49);
+    std::vector<Vec3> path;
+    bool complete = false;
+    REQUIRE(mesh.findPath({-30, 0, -30}, {30, 0, -30}, path, &complete));
+    CHECK(complete);
+    float maxZ = -1e9f;
+    for (const Vec3& p : path) maxZ = std::max(maxZ, p.z);
+    CHECK(maxZ > 30.0f);
+    CHECK(path.back().x == doctest::Approx(30.0f).epsilon(0.02));
+
+    // A crate dropped near (20, 20): one or a few tiles rebuilt, a path through it now goes around.
+    const std::vector<Vec3> before = v;
+    const std::vector<u32> beforeIdx = idx;
+    addBox({18, 0, 10}, {22, 2, 30});
+    REQUIRE(mesh.update(v, idx, bs));
+    CHECK(mesh.stats().tilesRebuilt >= 1);
+    CHECK(mesh.stats().tilesRebuilt <= 9);
+    CHECK(mesh.stats().tiles == 49);
+    REQUIRE(mesh.findPath({20, 0, 5}, {20, 0, 35}, path, &complete));
+    CHECK(complete);
+    float maxDx = 0.0f;
+    for (const Vec3& p : path) maxDx = std::max(maxDx, std::abs(p.x - 20.0f));
+    CHECK(maxDx > 2.0f);
+    // Removed again: same few tiles, straight path back.
+    REQUIRE(mesh.update(before, beforeIdx, bs));
+    CHECK(mesh.stats().tilesRebuilt <= 9);
+    REQUIRE(mesh.findPath({20, 0, 5}, {20, 0, 35}, path, &complete));
+    maxDx = 0.0f;
+    for (const Vec3& p : path) maxDx = std::max(maxDx, std::abs(p.x - 20.0f));
+    CHECK(maxDx < 0.5f);
+    // Unchanged geometry: nothing rebuilt. Other settings: a full build.
+    REQUIRE(mesh.update(before, beforeIdx, bs));
+    CHECK(mesh.stats().tilesRebuilt == 0);
+    bs.agentRadius = 0.6f;
+    REQUIRE(mesh.update(before, beforeIdx, bs));
+    CHECK(mesh.stats().tilesRebuilt == 49);
+
+    // An off-mesh link starting in one tile and ending in another joins two islands.
+    std::vector<Vec3> iv{{0, 0, 0}, {10, 0, 0}, {10, 0, 10}, {0, 0, 10}, {14, 0, 0}, {24, 0, 0}, {24, 0, 10}, {14, 0, 10}};
+    std::vector<u32> ii{0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6};
+    NavMeshBuildSettings small;
+    small.cellSize = 0.25f;
+    small.cellHeight = 0.125f;
+    small.tileSize = 16;  // 4 m tiles
+    NavMesh islands;
+    REQUIRE(islands.build(iv, ii, small, {NavMeshLink{{9, 0, 5}, {15, 0, 5}, true}}));
+    CHECK(islands.stats().tiles > 4);
+    REQUIRE(islands.findPath({2, 0, 5}, {22, 0, 5}, path, &complete));
+    CHECK(complete);
+}
+
+TEST_CASE("navigation settings tileSize: a moved carved obstacle only rebuilds the tiles around it") {
+    registerAll();
+    Scene s;
+    box3(s, {0, -0.5f, 0}, {60, 1, 60});
+    const auto settings = s.createEntity("Navigation");
+    auto& st = s.registry().emplace<NavigationSettingsComponent>(settings);
+    st.cellSize = 0.25f;
+    st.tileSize = 32;  // 8 m tiles
+    const auto rock = s.createEntity("Crate");
+    s.registry().get<TransformComponent>(rock).position = {20, 0, 20};
+    auto& o = s.registry().emplace<NavObstacleComponent>(rock);
+    o.radius = 1.5f;
+    o.carve = true;
+    s.updateTransforms();
+    NavigationSystem nav;
+    nav.rebuild(s);
+    const u32 tiles = nav.stats().meshTiles;
+    CHECK(tiles >= 49);
+    CHECK(nav.stats().tilesRebuilt == tiles);
+    std::vector<Vec3> path;
+    REQUIRE(nav.findPath(s, {-20, 0, -20}, {20, 0, -20}, true, path));
+    CHECK(path.size() == 2);  // across tiles, straight
+    s.registry().get<TransformComponent>(rock).position = {0, 0, -20};  // now in the way
+    s.updateTransforms();
+    nav.rebuild(s);
+    CHECK(nav.stats().tilesRebuilt > 0);
+    CHECK(nav.stats().tilesRebuilt <= 12);  // old and new place
+    REQUIRE(nav.findPath(s, {-20, 0, -20}, {20, 0, -20}, true, path));
+    CHECK(path.size() > 2);
+}

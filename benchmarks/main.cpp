@@ -261,6 +261,21 @@ int main() {
         std::printf("    (%u polygons)\n", mesh.stats().polygons);
         std::vector<math::Vec3> route;
         bench("nav: navmesh path across (Detour)", 1, 20, [&] { g_sink = mesh.findPath({-48, 0, -48}, {48, 0, 48}, route) ? 1.0f : 0.0f; });
+        NavMeshBuildSettings tiled;
+        tiled.tileSize = 64;
+        NavMesh tmesh;
+        bench("nav: build tiled navmesh (64-cell tiles), same level", 1, 3, [&] { g_sink = tmesh.build(verts, idx, tiled) ? 1.0f : 0.0f; });
+        std::printf("    (%u polygons, %u tiles)\n", tmesh.stats().polygons, tmesh.stats().tiles);
+        bench("nav: tiled path across", 1, 20, [&] { g_sink = tmesh.findPath({-48, 0, -48}, {48, 0, 48}, route) ? 1.0f : 0.0f; });
+        auto moved = verts;  // one box moved: only its tiles rebuilt
+        const usize box = verts.size() - 8;
+        int flip = 0;
+        bench("nav: tiled update after moving one box", 1, 10, [&] {
+            const float dx = (++flip & 1) ? 1.5f : 0.0f;
+            for (usize k = box; k < verts.size(); ++k) moved[k].x = verts[k].x + dx;
+            g_sink = tmesh.update(moved, idx, tiled) ? 1.0f : 0.0f;
+        });
+        std::printf("    (%u tiles rebuilt)\n", tmesh.stats().tilesRebuilt);
     }
 
     // -------------------------------------------------------------- physics & scripts

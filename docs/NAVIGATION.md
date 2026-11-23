@@ -87,6 +87,26 @@ grille, erreur de construction éventuelle : pente trop forte, aucune surface pr
   actif par défaut) et les colliders **Mesh** / **Convex** fournissent leurs vrais triangles (même cache
   que la physique 3D) : un niveau importé est navigable sans collider ajouté.
 
+## Maillage en tuiles (grands mondes)
+
+`NavigationSettings.tileSize` (en cellules, 0 = un seul morceau ; 48 à 128 conseillé) découpe le
+maillage 3D en **tuiles** Detour, construites chacune avec une bordure pour qu'elles se raccordent :
+
+- plus de limite de taille (un seul morceau refuse au-delà de 4096 × 4096 cellules) ;
+- quand la géométrie change (une porte qui se ferme, un `NavObstacle` découpé qui bouge, une caisse
+  posée), seules les **tuiles touchées** sont reconstruites : les triangles ajoutés ou retirés sont
+  retrouvés par différence avec la construction précédente. Mesure : déplacer une boîte dans un
+  niveau de 100 × 100 m (64 tuiles) reconstruit 2 tuiles en ~3 ms, contre ~78 ms pour tout le niveau ;
+- les `NavLink` appartiennent à la tuile où ils commencent et peuvent arriver dans une autre.
+
+Changer les réglages, les liens ou les zones, ou ajouter de la géométrie hors de la grille de tuiles,
+reconstruit tout. C++ : `NavMeshBuildSettings::tileSize`, `NavMesh::update` (reconstruction partielle),
+`stats().tiles` / `tilesRebuilt` ; `NavigationSystem::stats().meshTiles` / `tilesRebuilt`. Avec des
+tuiles, `backgroundBuild` est ignoré (les mises à jour partielles sont faites tout de suite).
+Tests : chemins à travers les tuiles, lien entre deux tuiles, caisse ajoutée puis retirée (au plus
+9 tuiles reconstruites, chemin qui la contourne puis redevient droit), obstacle découpé déplacé
+dans une scène.
+
 ## Tailles d'agents
 
 `NavigationSettings.agentSizes` (`"0.8;1.5"`) : pour chaque rayon, une grille 2D et un maillage 3D de
@@ -100,8 +120,9 @@ rayon 0,3, contournée par un agent de rayon 0,9.
 
 - Évitement local (sans planification de foule globale) : dans un couloir très étroit, deux groupes
   face à face peuvent ralentir avant de se départager.
-- Un seul maillage 3D (une tuile) : pour de très grands mondes, augmenter `cellSize` ; pas de
-  construction par tuiles. `backgroundBuild` reconstruit sur un autre fil (l'ancien maillage sert
-  entre-temps) ; la grille 2D et les tailles d'agents supplémentaires restent reconstruites tout de suite.
+- Tuiles : pas de streaming (toutes les tuiles du niveau sont en mémoire) ni de couches superposées
+  par tuile au-delà de ce que gère Recast ; la détection des changements relit toute la géométrie
+  statique (deux fois par seconde). `backgroundBuild` (sans tuiles) reconstruit sur un autre fil ; la
+  grille 2D et les tailles d'agents supplémentaires restent reconstruites tout de suite.
 - Tailles d'agents : une grille et un maillage par taille listée dans `agentSizes` (mémoire et temps de
   construction multipliés d'autant).
