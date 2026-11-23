@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Anneau ouvert : la "lentille" qui se resserre sur le point de focus -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="6.5" android:strokeLineCap="round"
+        android:pathData="M59.18,34.68 A20,20 0 1,0 73.32,48.82"/>
+    <!-- Le point SuperEssence, au centre -->
+    <path android:fillColor="#FFC928" android:pathData="M54,54m-7.5,0a7.5,7.5 0 1,0 15,0a7.5,7.5 0 1,0 -15,0"/>
+    <!-- L'étincelle qui s'échappe de l'anneau -->
+    <path android:fillColor="#FFC928" android:pathData="M69.6,38.4m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"/>
+</vector>

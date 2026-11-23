@@ -1,0 +1,2 @@
+-keep class com.superessence.focus.core.BlockerService
+-keep class com.superessence.focus.core.NotifBlocker

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Focus.</string>
+    <string name="blocker_desc">Focus. bloque les applications non autorisées pendant vos sessions de révision. Seules la calculatrice, vos applications autorisées et la conversation avec Romane restent accessibles. Aucune donnée n\'est lue ni envoyée : le service regarde uniquement quelle application s\'ouvre.</string>
+</resources>
