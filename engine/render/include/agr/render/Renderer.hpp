@@ -399,6 +399,7 @@ private:
     u32 m_overlayFrameOffset = 0;
     rhi::PipelineHandle m_pbrPipelines[6];  // [alphaMode * 2 + doubleSided]
     rhi::PipelineHandle m_pbrSkinnedPipelines[6];
+    rhi::PipelineHandle m_pbrMirrorPipelines[6], m_pbrSkinnedMirrorPipelines[6];  // negative-scale instances
     static constexpr u32 kTerrainPipeline = 6;
     rhi::PipelineHandle m_terrainPipeline;
     struct TerrainGpu {

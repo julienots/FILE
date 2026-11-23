@@ -550,7 +550,11 @@ void main() {
     float roughness = clamp(u_pbr.y * mr.g, 0.045, 1.0);
 
     vec3 N = normalize(v_normal);
+#ifdef AGR_MIRRORED
+    if (gl_FrontFacing) N = -N;  // mirrored instance: its outside is wound the other way
+#else
     if (!gl_FrontFacing) N = -N;  // double-sided materials
+#endif
     vec3 T = v_tangent.xyz - N * dot(N, v_tangent.xyz);
     if (dot(T, T) > 1e-8) {
         T = normalize(T);
@@ -597,7 +601,11 @@ void main() {
 #endif
     if (u_lightCount.y > 0) {
         vec3 albedo = base.rgb;
+#ifdef AGR_MIRRORED
+        agrApplyDecals(albedo, emissive, normalize(gl_FrontFacing ? -v_normal : v_normal));
+#else
         agrApplyDecals(albedo, emissive, normalize(gl_FrontFacing ? v_normal : -v_normal));
+#endif
         base.rgb = albedo;
     }
     if (u_flags.z > 0.5) {  // toon: vivid colors, no filmic curve (exposure kept)

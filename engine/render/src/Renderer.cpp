@@ -86,6 +86,8 @@ Renderer::~Renderer() {
     m_device.destroyPipeline(m_terrainPipeline);
     for (auto p : m_pbrPipelines) m_device.destroyPipeline(p);
     for (auto p : m_pbrSkinnedPipelines) m_device.destroyPipeline(p);
+    for (auto p : m_pbrMirrorPipelines) m_device.destroyPipeline(p);
+    for (auto p : m_pbrSkinnedMirrorPipelines) m_device.destroyPipeline(p);
     for (CustomPipelines& set : m_customSets) destroyCustomPipelines(set);
     for (auto p : m_shadowSkinnedPipelines) m_device.destroyPipeline(p);
     for (auto p : m_outlinePipelines) m_device.destroyPipeline(p);

@@ -54,9 +54,22 @@ u64 bits(float f) { return std::bit_cast<u32>(f); }
 // Pipeline ids: 0..5 standard PBR (alphaMode * 2 + doubleSided), 6 terrain, 7 water,
 // kCustomBase + set * kCustomStride + variant for custom shaders (see Renderer.hpp).
 constexpr u32 kCustomBase = 1000, kCustomStride = 8, kCustomUnit = 7;
-u32 pipelineVariant(u32 p) { return p < 6 ? p : p >= kCustomBase ? (p - kCustomBase) % kCustomStride : 0u; }
+// Mirrored instances (negative scale): standard PBR pipelines with the front faces culled and the
+// facing test reversed, so that a mirrored mesh shows its outside with outward normals.
+constexpr u32 kMirrorBit = 0x40000000u;
+u32 pipelineVariant(u32 p) {
+    p &= ~kMirrorBit;
+    return p < 6 ? p : p >= kCustomBase ? (p - kCustomBase) % kCustomStride : 0u;
+}
 bool pipelineMasked(u32 p) { return pipelineVariant(p) / 2 == 1; }
-u32 customSetOf(u32 p) { return p >= kCustomBase ? (p - kCustomBase) / kCustomStride : ~0u; }
+u32 customSetOf(u32 p) {
+    p &= ~kMirrorBit;
+    return p >= kCustomBase ? (p - kCustomBase) / kCustomStride : ~0u;
+}
+bool mirrored(const Mat4& m) {
+    const Vec3 x{m.c[0].x, m.c[0].y, m.c[0].z}, y{m.c[1].x, m.c[1].y, m.c[1].z}, z{m.c[2].x, m.c[2].y, m.c[2].z};
+    return math::dot(x, math::cross(y, z)) < 0.0f;
+}
 
 rhi::VertexLayout modelVertexLayout() {
     rhi::VertexLayout l;
@@ -98,16 +111,18 @@ Status Renderer::create3DPipelines() {
     const std::string common = std::string(shaders::kFrameBlock) + shaders::kMaterialBlock;
     for (u32 skinned = 0; skinned < 2; ++skinned) {
         const std::string skinDefine = skinned ? "#define AGR_SKINNED 1\n" : "";
+        for (u32 mirror = 0; mirror < 2; ++mirror)
         for (u32 alpha = 0; alpha < 3; ++alpha) {
             for (u32 twoSided = 0; twoSided < 2; ++twoSided) {
                 rhi::PipelineDesc p;
-                p.debugName = skinned ? "agr.pbr.skinned" : "agr.pbr";
-                const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") + (alpha != 2 ? "#define AGR_OPAQUE 1\n" : "");
+                p.debugName = skinned ? (mirror ? "agr.pbr.skinned.mirrored" : "agr.pbr.skinned") : (mirror ? "agr.pbr.mirrored" : "agr.pbr");
+                const std::string defines = skinDefine + (alpha == 1 ? "#define AGR_ALPHA_MASK 1\n" : "") + (alpha != 2 ? "#define AGR_OPAQUE 1\n" : "") +
+                                            (mirror ? "#define AGR_MIRRORED 1\n" : "");
                 p.shader.vertex = defines + common + (skinned ? shaders::kSkinBlock : "") + shaders::kPbrVertex;
                 p.shader.fragment = defines + common + shaders::kLightBlock + shaders::kToneMapping + shaders::kEnvBlock + shaders::kPbrFragment;
                 p.layout = skinned ? skinnedVertexLayout() : modelVertexLayout();
                 p.instanceLayout = instanceLayout(true);
-                p.cull = twoSided ? rhi::CullMode::None : rhi::CullMode::Back;
+                p.cull = twoSided ? rhi::CullMode::None : mirror ? rhi::CullMode::Front : rhi::CullMode::Back;
                 if (alpha == 2) {  // blend: sorted back to front, no depth write
                     p.blend = rhi::BlendMode::Alpha;
                     p.depthWrite = false;
@@ -117,7 +132,8 @@ Status Renderer::create3DPipelines() {
                 p.samplers = litSamplers();
                 auto r = m_device.createPipeline(p);
                 if (!r) return r.error();
-                (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines)[alpha * 2 + twoSided] = r.value();
+                (mirror ? (skinned ? m_pbrSkinnedMirrorPipelines : m_pbrMirrorPipelines) : (skinned ? m_pbrSkinnedPipelines : m_pbrPipelines))[alpha * 2 + twoSided] =
+                    r.value();
             }
         }
         {  // terrain: opaque PBR blending 4 layers through a splat map
@@ -696,6 +712,7 @@ void Renderer::collect3D(Scene& scene, const RenderView& rv, const Mat4& view, c
             item.indexCount = sub.indexCount;
             item.material = slot;
             item.pipeline = m_frameMaterials[slot].pipeline;
+            if (item.pipeline < 6 && mirrored(w.matrix)) item.pipeline |= kMirrorBit;
             item.instance = instance;
             item.depth = depth;
             item.skinOffset = skinOffset;
@@ -1442,7 +1459,8 @@ void Renderer::drawMeshItems(const std::vector<MeshItem>& items, u32 firstInstan
                 else if (first.pipeline == kBlobPipeline) h = m_blobPipeline;
                 else {
                     const u32 v = pipelineVariant(first.pipeline);
-                    h = skinned ? m_pbrSkinnedPipelines[v] : m_pbrPipelines[v];
+                    if (first.pipeline & kMirrorBit) h = skinned ? m_pbrSkinnedMirrorPipelines[v] : m_pbrMirrorPipelines[v];
+                    else h = skinned ? m_pbrSkinnedPipelines[v] : m_pbrPipelines[v];
                 }
             }
             m_device.bindPipeline(h);

@@ -412,6 +412,27 @@ TEST_CASE("3D particles: camera-facing billboards, additive brighter, hidden beh
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("mirrored instances (negative scale): the outside stays visible and lit like the original") {
+    Render3DFixture f;
+    f.camera({0, 0, 6}, {0, 0, 0});
+    f.darkEnvironment();
+    f.sun({0, 0, 0});  // travels toward -Z: lights faces looking at the camera (+Z)
+    // A single-sided quad facing the camera, and its mirror image (scale x = -1) next to it.
+    f.mesh(PrimitiveMesh::Quad, {-1.2f, 0, 0}, {2, 2, 1}, {0.8f, 0.8f, 0.8f, 1});
+    f.mesh(PrimitiveMesh::Quad, {1.2f, 0, 0}, {-2, 2, 1}, {0.8f, 0.8f, 0.8f, 1});
+    // A mirrored cube: its front face is lit, as on a normal cube.
+    f.mesh(PrimitiveMesh::Cube, {0, -2.2f, 0}, {-1, 1, 1}, {0.8f, 0.8f, 0.8f, 1});
+    f.mesh(PrimitiveMesh::Cube, {0, 2.2f, 0}, {1, 1, 1}, {0.8f, 0.8f, 0.8f, 1});
+    f.settle();
+    const Rgba normal = f.at({-1.2f, 0, 0}), mirror = f.at({1.2f, 0, 0});
+    CHECK_MESSAGE(luminance(normal) > 150, normal);
+    CHECK_MESSAGE(std::abs(luminance(mirror) - luminance(normal)) < 12, mirror << " vs " << normal);  // visible, same light
+    const Rgba cubeA = f.at({0, 2.2f, 0.5f}), cubeB = f.at({0, -2.2f, 0.5f});
+    CHECK_MESSAGE(luminance(cubeA) > 150, cubeA);
+    CHECK_MESSAGE(std::abs(luminance(cubeB) - luminance(cubeA)) < 12, cubeB << " vs " << cubeA);
+    CHECK(gpu().device->validationErrorCount() == 0);
+}
+
 TEST_CASE("GPU particles: computed in the vertex shader, gravity, emitting window, hundreds of thousands") {
     Render3DFixture f;
     f.camera({0, 0, 8}, {0, 0, 0});
