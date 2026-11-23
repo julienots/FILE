@@ -208,6 +208,19 @@ int au_queued(lua_State* L) {
     return 1;
 }
 
+/// agr.audio.startMicrophone([bus [, volume]]) -> voice: the microphone heard live on a bus.
+int au_startMicrophone(lua_State* L) {
+    AudioSystem* a = audioOf(L);
+    const AudioBus bus = lua_isnoneornil(L, 1) ? AudioBus::Voice : checkBus(L, 1);
+    const float volume = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    lua_pushinteger(L, a ? static_cast<lua_Integer>(a->startMicrophone(bus, volume)) : 0);
+    return 1;
+}
+int au_stopMicrophone(lua_State* L) {
+    if (AudioSystem* a = audioOf(L)) a->stopMicrophone();
+    return 0;
+}
+
 int au_startRecording(lua_State* L) {
     AudioSystem* a = audioOf(L);
     lua_pushboolean(L, a && a->startRecording());
@@ -328,7 +341,7 @@ void openAudioBindings(lua_State* L) {
                                      {"busMuted", au_busMuted},   {"addBusEffect", au_addBusEffect},
                                      {"setBusEffect", au_setBusEffect}, {"clearBusEffects", au_clearBusEffects}, {"spectrum", au_spectrum},
                                      {"generator", au_generator}, {"push", au_push}, {"queued", au_queued},
-                                     {"startRecording", au_startRecording}, {"stopRecording", au_stopRecording},
+                                     {"startRecording", au_startRecording}, {"startMicrophone", au_startMicrophone}, {"stopMicrophone", au_stopMicrophone}, {"stopRecording", au_stopRecording},
                                      {"recordingLevel", au_recordingLevel}, {"isRecording", au_isRecording},
                                      {"busEffectCount", au_busEffectCount}, {"createBus", au_createBus},
                                      {"setBusParent", au_setBusParent}, {"busParent", au_busParent}, {nullptr, nullptr}};

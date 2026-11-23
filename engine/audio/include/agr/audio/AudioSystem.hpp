@@ -173,6 +173,13 @@ public:
     void feedRecording(const float* samples, u32 count);
     /// Whether a real microphone is being captured (false: fed samples only).
     bool recordingFromDevice() const;
+    /// Live microphone: plays what the microphone hears on `bus` as it comes (at most 100 ms behind),
+    /// through that bus's effects (a robot voice, a megaphone, a karaoke echo, the player hearing
+    /// themself). Works with or without recording; fed samples (feedRecording) go there too.
+    /// Returns the voice (its volume can change), 0 if the audio is not ready.
+    VoiceId startMicrophone(AudioBus bus = AudioBus::Voice, float volume = 1.0f);
+    void stopMicrophone();
+    bool microphoneActive() const;
 
     const AudioStats& stats() const;
     AudioMeter takeMeter();

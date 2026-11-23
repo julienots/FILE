@@ -205,11 +205,46 @@ struct AudioSystem::Impl {
     bool captureInit = false, recording = false;
     mutable std::mutex recordMutex;
     std::vector<float> recorded;
+    // Live microphone: the generator voice the captured samples are pushed into.
+    GeneratorSource* monitor = nullptr;
+    VoiceId monitorVoice = 0;
+    void captured(const float* in, usize frames) {  // under recordMutex
+        if (!in) return;
+        if (recording) recorded.insert(recorded.end(), in, in + frames);
+        if (monitor) {
+            std::lock_guard lock(monitor->mutex);
+            monitor->samples.insert(monitor->samples.end(), in, in + frames);
+            const usize maxQueued = std::max<usize>(monitor->sampleRate / 10, 256);  // 100 ms: drop the oldest beyond
+            while (monitor->samples.size() > maxQueued) monitor->samples.pop_front();
+        }
+    }
     static void captureCallback(ma_device* d, void*, const void* input, ma_uint32 frames) {
         auto* self = static_cast<Impl*>(d->pUserData);
-        const auto* in = static_cast<const float*>(input);
         std::lock_guard lock(self->recordMutex);
-        if (self->recording && in) self->recorded.insert(self->recorded.end(), in, in + frames);
+        self->captured(static_cast<const float*>(input), frames);
+    }
+    void ensureCapture() {
+        if (output != AudioOutput::Device || captureInit) return;
+        ma_device_config dc = ma_device_config_init(ma_device_type_capture);
+        dc.capture.format = ma_format_f32;
+        dc.capture.channels = 1;
+        dc.sampleRate = stats.sampleRate;
+        dc.dataCallback = &Impl::captureCallback;
+        dc.pUserData = this;
+        if (ma_device_init(nullptr, &dc, &capture) == MA_SUCCESS) {
+            captureInit = true;
+            if (ma_device_start(&capture) != MA_SUCCESS) {
+                ma_device_uninit(&capture);
+                captureInit = false;
+            }
+        }
+        if (!captureInit) AGR_LOG_WARN("Audio", "no microphone available: only fed samples are heard / recorded");
+    }
+    void releaseCaptureIfUnused() {
+        if (captureInit && !recording && !monitor) {
+            ma_device_uninit(&capture);
+            captureInit = false;
+        }
     }
     bool groupInit[kAudioBusCount]{};
     std::unique_ptr<EffectNode> effectNodes[kAudioBusCount];
@@ -341,7 +376,16 @@ struct AudioSystem::Impl {
             auto s = sources.find(it->second->entity);
             if (s != sources.end() && s->second == id) sources.erase(s);
         }
+        dropMonitor(id);
         voices.erase(it);
+    }
+    /// The live microphone's voice is going away: stop feeding it.
+    void dropMonitor(VoiceId id) {
+        std::lock_guard lock(recordMutex);
+        if (id == monitorVoice) {
+            monitor = nullptr;
+            monitorVoice = 0;
+        }
     }
 
     Result<VoiceId> play(std::string_view uri, const PlayParams& p, u64 entity) {
@@ -475,6 +519,7 @@ struct AudioSystem::Impl {
                     auto s = sources.find(v.entity);
                     if (s != sources.end() && s->second == v.id) sources.erase(s);
                 }
+                dropMonitor(v.id);
                 it = voices.erase(it);
             } else {
                 ++it;
@@ -580,31 +625,49 @@ bool AudioSystem::startRecording() {
         m->recorded.clear();
         m->recording = true;
     }
-    if (m->output == AudioOutput::Device && !m->captureInit) {
-        ma_device_config dc = ma_device_config_init(ma_device_type_capture);
-        dc.capture.format = ma_format_f32;
-        dc.capture.channels = 1;
-        dc.sampleRate = m->stats.sampleRate;
-        dc.dataCallback = &Impl::captureCallback;
-        dc.pUserData = m.get();
-        if (ma_device_init(nullptr, &dc, &m->capture) == MA_SUCCESS) {
-            m->captureInit = true;
-            if (ma_device_start(&m->capture) != MA_SUCCESS) {
-                ma_device_uninit(&m->capture);
-                m->captureInit = false;
-            }
-        }
-        if (!m->captureInit) AGR_LOG_WARN("Audio", "no microphone available: recording receives fed samples only");
-    }
+    m->ensureCapture();
     return true;
 }
+
+VoiceId AudioSystem::startMicrophone(AudioBus bus, float volume) {
+    if (!m->engineInit) return 0;
+    stopMicrophone();
+    const u32 rate = std::max<u32>(m->stats.sampleRate, 8000);
+    PlayParams p;
+    p.bus = bus;
+    p.volume = volume;
+    auto voice = m->playGenerator(p, rate);
+    if (!voice) return 0;
+    Voice* v = m->find(voice.value());
+    if (!v || !v->generator) return 0;
+    {
+        std::lock_guard lock(m->recordMutex);
+        m->monitor = v->generator.get();
+        m->monitorVoice = voice.value();
+    }
+    m->ensureCapture();
+    return voice.value();
+}
+
+void AudioSystem::stopMicrophone() {
+    VoiceId voice = 0;
+    {
+        std::lock_guard lock(m->recordMutex);
+        voice = std::exchange(m->monitorVoice, 0);
+        m->monitor = nullptr;
+    }
+    if (voice) stop(voice);
+    m->releaseCaptureIfUnused();
+}
+
+bool AudioSystem::microphoneActive() const { return m->monitorVoice != 0; }
 
 bool AudioSystem::isRecording() const { return m->recording; }
 bool AudioSystem::recordingFromDevice() const { return m->captureInit; }
 
 void AudioSystem::feedRecording(const float* samples, u32 count) {
     std::lock_guard lock(m->recordMutex);
-    if (m->recording && samples) m->recorded.insert(m->recorded.end(), samples, samples + count);
+    m->captured(samples, count);
 }
 
 float AudioSystem::recordingLevel() const {
@@ -618,16 +681,13 @@ float AudioSystem::recordingLevel() const {
 
 Result<f64> AudioSystem::stopRecording(const std::string& uri) {
     if (!m->recording) return makeError(Error::Code::InvalidArgument, "not recording");
-    if (m->captureInit) {
-        ma_device_uninit(&m->capture);
-        m->captureInit = false;
-    }
     std::vector<float> samples;
     {
         std::lock_guard lock(m->recordMutex);
         m->recording = false;
         samples.swap(m->recorded);
     }
+    m->releaseCaptureIfUnused();
     const u32 rate = std::max<u32>(m->stats.sampleRate, 8000);
     const ByteBuffer wav = encodeWav16(samples.data(), static_cast<u32>(samples.size()), 1, rate);
     if (Status st = m->vfs.writeBytes(uri, wav.data(), wav.size()); !st) return st.error();
@@ -635,6 +695,11 @@ Result<f64> AudioSystem::stopRecording(const std::string& uri) {
 }
 
 void AudioSystem::shutdown() {
+    {
+        std::lock_guard lock(m->recordMutex);
+        m->monitor = nullptr;
+        m->monitorVoice = 0;
+    }
     if (m->captureInit) {
         ma_device_uninit(&m->capture);
         m->captureInit = false;
@@ -776,6 +841,7 @@ void AudioSystem::setPosition(VoiceId voice, math::Vec3 p) {
     if (Voice* v = m->find(voice); v && v->spatial) ma_sound_set_position(&v->sound, p.x, p.y, p.z);
 }
 void AudioSystem::stopAll() {
+    m->dropMonitor(m->monitorVoice);
     m->voices.clear();
     m->sources.clear();
 }

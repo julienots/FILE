@@ -850,3 +850,44 @@ TEST_CASE("audio: AudioZone re-routes spatial sources inside it, or all of them 
     f.audio.setBusMuted(cave, false);
     setAudioBusName(cave, "");
 }
+
+TEST_CASE("audio: live microphone plays on its bus as it comes, latency capped, safe after stopAll") {
+    AudioFixture f;
+    std::vector<float> tone(kRate / 20);  // 50 ms blocks
+    for (usize i = 0; i < tone.size(); ++i) tone[i] = 0.6f * std::sin(static_cast<float>(i) * 0.12f);
+    CHECK_FALSE(f.audio.microphoneActive());
+    const VoiceId mic = f.audio.startMicrophone(AudioBus::Voice);
+    REQUIRE(mic != 0);
+    CHECK(f.audio.microphoneActive());
+    float heard = 0.0f;
+    for (int i = 0; i < 6; ++i) {
+        f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+        heard = std::max(heard, f.run(0.05).peak());
+    }
+    CHECK_MESSAGE(heard > 0.3f, heard);
+    // Through the bus: muting Voice silences it.
+    f.audio.setBusMuted(AudioBus::Voice, true);
+    f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+    f.run(0.02);
+    CHECK(f.run(0.03).peak() < 0.01f);
+    f.audio.setBusMuted(AudioBus::Voice, false);
+    // A burst of 1 s does not pile up: at most 100 ms waits.
+    std::vector<float> second(kRate, 0.2f);
+    f.audio.feedRecording(second.data(), static_cast<u32>(second.size()));
+    CHECK(f.audio.generatorQueued(mic) <= kRate / 10);
+    // Recording at the same time gets the samples too.
+    REQUIRE(f.audio.startRecording());
+    f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+    CHECK(f.audio.recordingLevel() > 0.3f);
+    // Stopped: silence. stopAll while live: no more voice, feeding stays safe.
+    f.audio.stopMicrophone();
+    CHECK_FALSE(f.audio.microphoneActive());
+    f.run(0.05);
+    f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+    CHECK(f.run(0.05).peak() < 0.01f);
+    REQUIRE(f.audio.startMicrophone(AudioBus::Effects) != 0);
+    f.audio.stopAll();
+    CHECK_FALSE(f.audio.microphoneActive());
+    f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
+    f.run(0.05);
+}

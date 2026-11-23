@@ -155,10 +155,20 @@ vumètre, « souffler pour jouer »), `agr.audio.stopRecording("user://voix.wav"
 virtuelle), l'enregistrement reçoit les échantillons passés à `AudioSystem::feedRecording` (tests,
 sources personnalisées). Sur Android, cocher *Microphone* dans l'export ajoute la permission `RECORD_AUDIO`.
 
+**Micro en direct** : `agr.audio.startMicrophone([bus [, volume]])` (bus `Voice` par défaut) fait
+entendre le micro tout de suite sur ce bus, **à travers ses effets** (voix de robot avec `PitchShift` et
+`Distortion`, mégaphone avec `HighPass`, écho de karaoké), à 100 ms de retard au plus (au-delà, le plus
+ancien est jeté) ; rend la voix (son volume se règle avec `agr.audio.setVolume`).
+`agr.audio.stopMicrophone()`. Marche en même temps que l'enregistrement. C++ :
+`AudioSystem::startMicrophone`, `stopMicrophone`, `microphoneActive`. Test : un son donné au micro
+(`feedRecording`) est entendu sur son bus, se tait quand le bus est coupé, la file ne dépasse pas
+100 ms, et `stopAll` pendant l'écoute ne laisse rien en suspens.
+
 ## Limites actuelles
 
-- Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` (pas de
-  traitement en direct du flux du micro) ; occlusion : un seul rayon (pas de diffraction autour des
+- Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` ; micro en direct
+  sans réduction d'écho (un haut-parleur près du micro peut boucler) ni envoi par le réseau (pas de
+  chat vocal intégré) ; essayé avec des échantillons fournis, pas avec un vrai micro dans la VM ; occlusion : un seul rayon (pas de diffraction autour des
   obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus ; zones audio : bascule d'un
   bus à l'autre (pas de fondu ni d'envoi partiel vers la réverbération), sources de scène seulement
   (pas les sons joués par `agr.audio.play`).
