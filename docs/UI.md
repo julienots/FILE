@@ -98,7 +98,9 @@ espaces (et dans les mots trop longs). Les modèles de projet fournissent Inter
 compris), `[s]...[/s]` (barré), `[url=id]...[/url]` (**lien** : bleu souligné ; un clic appelle
 `onLinkClicked(id)` du script du texte ou de son parent le plus proche qui a un script),
 `[img=assets://piece.png]` (**image en ligne** de la taille d'un caractère, posée sur la ligne de base :
-icônes de monnaie, de touches) ; `[[` pour
+icônes de monnaie, de touches ; `[img=assets://logo.png scale=2 aspect=3]` : hauteur en caractères et
+rapport largeur / hauteur, le texte qui suit est décalé d'autant, une image plus haute qu'un caractère
+est centrée sur la ligne) ; `[[` pour
 écrire un crochet ; une balise inconnue reste affichée telle quelle.
 
 ## Depuis Lua
@@ -137,7 +139,8 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Limites actuelles
 
-- Texte enrichi : images carrées d'un caractère (pas de taille réglable) ; l'italique est une inclinaison des glyphes (pas de police italique).
+- Texte enrichi : une image plus haute qu'un caractère n'agrandit pas la ligne (elle peut chevaucher les
+  lignes voisines) ; l'italique est une inclinaison des glyphes (pas de police italique).
 - Boîtes stylées : le contour est dessiné sous le remplissage (un remplissage transparent laisse voir
   le contour) ; rayon par coin : `cornerRadii` (haut-gauche, haut-droit, bas-droit, bas-gauche ; négatif =
   `cornerRadius`), pour des onglets arrondis en haut ou des bulles.
@@ -148,4 +151,7 @@ de test ([BENCHMARKS.md](BENCHMARKS.md)).
   tourné ; le curseur et la sélection d'un champ tourné ne suivent pas la rotation.
 - Atlas de glyphes unique : beaucoup de tailles et d'alphabets différents à la fois le remplissent
   (il est alors vidé et reconstruit, avec un avertissement si cela ne suffit pas).
-- UI Builder : le groupe se déplace mais ne se redimensionne pas d'un bloc.
+- UI Builder : une sélection multiple se déplace et se **redimensionne d'un bloc** (cadre bleu et ses
+  poignées ; Maj sur un coin garde les proportions ; chaque élément garde sa place et sa taille relatives
+  dans le cadre) ; les textes ne changent pas de taille de police. Le calcul est testé
+  (`scaleRectsInBox`), le geste à la souris seulement à la main.

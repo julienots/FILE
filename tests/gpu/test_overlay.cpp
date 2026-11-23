@@ -193,4 +193,26 @@ TEST_CASE("overlay: inline images in rich text") {
             reds += p.r > 200 && p.g < 60 && p.b < 60;
         }
     CHECK_MESSAGE(reds > 150, reds);  // ~21 x 21 pixels of image
+    // Sized: twice as high as a character and twice as wide as it is high.
+    auto& rect = f.scene.registry().get<UIRectComponent>(e);
+    rect.position = {0, 0};
+    rect.size = {64, 64};
+    f.scene.registry().get<UITextComponent>(e).text = "[img=assets://red.png scale=2 aspect=2]x";
+    f.scene.registry().get<UITextComponent>(e).fontSize = 12.0f;  // image: ~22 x 43 pixels
+    f.frame();
+    f.frame();
+    int minX = 9999, maxX = -1, minY = 9999, maxY = -1;
+    for (u32 y = 0; y < 64; ++y)
+        for (u32 x = 0; x < 64; ++x) {
+            const Rgba p = pixel(d, x, y);
+            if (p.r > 200 && p.g < 60 && p.b < 60) {
+                minX = std::min(minX, int(x)), maxX = std::max(maxX, int(x));
+                minY = std::min(minY, int(y)), maxY = std::max(maxY, int(y));
+            }
+        }
+    const int w = maxX - minX + 1, h = maxY - minY + 1;
+    CHECK_MESSAGE(h > 18, h);
+    CHECK_MESSAGE(h < 25, h);
+    CHECK_MESSAGE(w > 2 * h - 6, w << " x " << h);
+    CHECK_MESSAGE(w < 2 * h + 6, w << " x " << h);
 }

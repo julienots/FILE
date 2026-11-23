@@ -243,7 +243,9 @@ private:
         math::Vec4 color{1, 1, 1, 1};
         bool hasColor = false, bold = false, underline = false, italic = false, strike = false;
         i32 link = -1;  ///< Index into PendingText::links.
-        i32 image = -1; ///< Inline image: index into PendingText::links (its URI), drawn on an em space.
+        i32 image = -1; ///< Inline image: index into PendingText::links (its URI), drawn on an em space; -2 = more room for it.
+        float imageScale = 1.0f, imageAspect = 1.0f;  ///< Height in ems, width / height.
+        i32 imageSpan = 1;                             ///< Em spaces reserved for its width.
     };
     struct LinkBox {
         ecs::Entity entity;

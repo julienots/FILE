@@ -620,6 +620,32 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
             if (auto* r = g.isNull() ? nullptr : reg.tryGet<UIRectComponent>(g); r && !reg.has<UICanvasComponent>(g)) group.push_back({g, r});
         }
         if (group.size() >= 2) {
+            // Group box with its own handles: resizes the whole selection proportionally.
+            std::vector<math::Vec4> rs;
+            for (const auto& [g, r] : group) rs.push_back(r->screenRect);
+            const math::Vec4 box = unionRect(rs);  // follows the elements while they are resized
+            const ImVec2 a = toScreen(box.x, box.y), b = toScreen(box.x + box.z, box.y + box.w);
+            dl->AddRect(a, b, IM_COL32(60, 200, 255, 220), 0.0f, 1.0f);
+            handles.clear();
+            for (float hy = -1; hy <= 1; ++hy)
+                for (float hx = -1; hx <= 1; ++hx) {
+                    if (hx == 0 && hy == 0) continue;
+                    const ImVec2 p{(a.x + b.x) * 0.5f + hx * (b.x - a.x) * 0.5f, (a.y + b.y) * 0.5f + hy * (b.y - a.y) * 0.5f};
+                    handles.push_back({{hx, hy}, p});
+                    dl->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, IM_COL32(60, 200, 255, 255));
+                }
+            if (m_uiDrag == 0 && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt)
+                for (const Handle& h : handles)
+                    if (std::fabs(io.MousePos.x - h.pos.x) <= 6 && std::fabs(io.MousePos.y - h.pos.y) <= 6) {
+                        m_uiDrag = 3;
+                        m_uiHandle = h.sign;
+                        m_uiDragStart = io.MousePos;
+                        m_uiGroupBox = box;
+                        m_uiChanged = false;
+                        m_uiGroupItems.clear();
+                        for (const auto& [g, r] : group) m_uiGroupItems.push_back({scene.uuidOf(g), r->screenRect, r->position, r->size});
+                        return true;
+                    }
             ImGui::SetCursorScreenPos({origin.x + 8, origin.y + 8});
             static const std::pair<const char*, AlignMode> buttons[] = {
                 {"|<", AlignMode::Left},  {"|", AlignMode::CenterX}, {">|", AlignMode::Right},       {"^", AlignMode::Top},
@@ -690,6 +716,42 @@ bool ViewportPanel::handleUIEditing(EditorShared& s, ImVec2 origin, ImVec2 size,
         return true;
     }
     if (m_uiDrag == 0) return false;
+    if (m_uiDrag == 3) {  // group resize
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            const math::Vec2 d{(io.MousePos.x - m_uiDragStart.x) * k, (io.MousePos.y - m_uiDragStart.y) * k};
+            math::Vec4 box = m_uiGroupBox;
+            if (m_uiHandle.x > 0) box.z = std::max(4.0f, box.z + d.x);
+            if (m_uiHandle.x < 0) box.z = std::max(4.0f, box.z - d.x), box.x = m_uiGroupBox.x + m_uiGroupBox.z - box.z;
+            if (m_uiHandle.y > 0) box.w = std::max(4.0f, box.w + d.y);
+            if (m_uiHandle.y < 0) box.w = std::max(4.0f, box.w - d.y), box.y = m_uiGroupBox.y + m_uiGroupBox.w - box.w;
+            if (io.KeyShift && m_uiHandle.x != 0 && m_uiHandle.y != 0) {  // Shift: keep the proportions
+                const float f = std::max(box.z / std::max(m_uiGroupBox.z, 1e-3f), box.w / std::max(m_uiGroupBox.w, 1e-3f));
+                box.z = m_uiGroupBox.z * f, box.w = m_uiGroupBox.w * f;
+                if (m_uiHandle.x < 0) box.x = m_uiGroupBox.x + m_uiGroupBox.z - box.z;
+                if (m_uiHandle.y < 0) box.y = m_uiGroupBox.y + m_uiGroupBox.w - box.w;
+            }
+            std::vector<math::Vec4> starts;
+            for (const UiGroupItem& it : m_uiGroupItems) starts.push_back(it.screen);
+            const auto scaled = scaleRectsInBox(starts, m_uiGroupBox, box);
+            for (usize i = 0; i < m_uiGroupItems.size(); ++i) {
+                const ecs::Entity e = scene.findByUuid(m_uiGroupItems[i].id);
+                auto* r = e.isNull() ? nullptr : reg.tryGet<UIRectComponent>(e);
+                if (!r) continue;
+                const float sc = std::max(1e-3f, ui.canvasScale(ui.canvasOf(e)));
+                const math::Vec4& a = m_uiGroupItems[i].screen;
+                const math::Vec4& b = scaled[i];
+                // Same pivot point, moved; size scaled (in the element's own UI units).
+                const math::Vec2 pa{a.x + a.z * r->pivot.x, a.y + a.w * r->pivot.y}, pb{b.x + b.z * r->pivot.x, b.y + b.w * r->pivot.y};
+                r->position = {std::round(m_uiGroupItems[i].position.x + (pb.x - pa.x) / sc), std::round(m_uiGroupItems[i].position.y + (pb.y - pa.y) / sc)};
+                r->size = {std::round(m_uiGroupItems[i].size.x + (b.z - a.z) / sc), std::round(m_uiGroupItems[i].size.y + (b.w - a.w) / sc)};
+            }
+            if (std::fabs(d.x) + std::fabs(d.y) > 0.0f) m_uiChanged = true;
+            return true;
+        }
+        if (m_uiChanged) s.ctx.commit("Resize UI Group");
+        m_uiDrag = 0;
+        return true;
+    }
 
     const ecs::Entity target = scene.findByUuid(s.ctx.selection().primary());
     rect = target.isNull() ? nullptr : reg.tryGet<UIRectComponent>(target);

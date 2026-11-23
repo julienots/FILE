@@ -1984,3 +1984,24 @@ TEST_CASE("asset refactoring: renaming or moving an asset rewrites every referen
     CHECK_FALSE(moveAsset(project.root(), assets, "nope.png", "a.png"));
     CHECK(fs::exists(assets / "characters" / "hero_v2.png"));
 }
+
+TEST_CASE("UI builder group resize: the union box scaled from a corner keeps every element's relative place and size") {
+    const std::vector<math::Vec4> rects{{10, 10, 20, 10}, {40, 30, 10, 20}};
+    const math::Vec4 box = unionRect(rects);
+    CHECK(box.x == doctest::Approx(10));
+    CHECK(box.y == doctest::Approx(10));
+    CHECK(box.z == doctest::Approx(40));
+    CHECK(box.w == doctest::Approx(40));
+    // Dragged the bottom-right corner: twice as wide, 1.5x as high, top-left fixed.
+    const auto out = scaleRectsInBox(rects, box, {10, 10, 80, 60});
+    CHECK(out[0].x == doctest::Approx(10));
+    CHECK(out[0].z == doctest::Approx(40));
+    CHECK(out[0].w == doctest::Approx(15));
+    CHECK(out[1].x == doctest::Approx(70));
+    CHECK(out[1].y == doctest::Approx(40));
+    CHECK(out[1].z == doctest::Approx(20));
+    CHECK(out[1].w == doctest::Approx(30));
+    const math::Vec4 after = unionRect(out);
+    CHECK(after.z == doctest::Approx(80));
+    CHECK(after.w == doctest::Approx(60));
+}

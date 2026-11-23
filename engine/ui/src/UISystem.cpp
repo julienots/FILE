@@ -2,6 +2,7 @@
 
 #include "agr/runtime/Localization.hpp"
 
+#include <sstream>
 #include <algorithm>
 #include <cmath>
 
@@ -167,12 +168,33 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles, std
                 else if (tag == "/i") italic = std::max(0, italic - 1);
                 else if (tag == "s") ++strike;
                 else if (tag == "/s") strike = std::max(0, strike - 1);
-                else if (tag.rfind("img=", 0) == 0) {  // an em space the image is drawn on
-                    links.push_back(tag.substr(4));
-                    out += "\xE2\x80\x83";
+                else if (tag.rfind("img=", 0) == 0) {  // em spaces the image is drawn on
+                    // [img=URI] or [img=URI scale=2 aspect=1.5]: height in ems, width / height.
+                    std::string uri = tag.substr(4);
+                    float scale = 1.0f, aspect = 1.0f;
+                    if (const usize sp = uri.find(' '); sp != std::string::npos) {
+                        std::istringstream opts(uri.substr(sp + 1));
+                        uri.resize(sp);
+                        std::string kv;
+                        while (opts >> kv) {
+                            const usize eq = kv.find('=');
+                            if (eq == std::string::npos) continue;
+                            const float v = std::strtof(kv.c_str() + eq + 1, nullptr);
+                            if (kv.compare(0, eq, "scale") == 0 && v > 0.0f) scale = std::min(v, 8.0f);
+                            else if (kv.compare(0, eq, "aspect") == 0 && v > 0.0f) aspect = std::min(v, 16.0f);
+                        }
+                    }
+                    links.push_back(uri);
                     Style st = current();
                     st.image = static_cast<i32>(links.size()) - 1;
-                    styles.push_back(st);
+                    st.imageScale = scale;
+                    st.imageAspect = aspect;
+                    st.imageSpan = std::max(1, static_cast<i32>(std::ceil(scale * aspect - 0.05f)));
+                    for (i32 k = 0; k < st.imageSpan; ++k) {
+                        out += "\xE2\x80\x83";
+                        styles.push_back(st);
+                        st.image = -2;  // the following ones only make room
+                    }
                     i = close + 1;
                     continue;
                 } else if (tag.rfind("url=", 0) == 0) {
@@ -1988,11 +2010,17 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
         const Vec4 linkColor{0.4f, 0.7f, 1.0f, 1.0f};
         for (const TextGlyph& g : pt.layout.glyphs) {
             const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
-            if (st && st->image >= 0 && static_cast<usize>(st->image) < pt.links.size()) {  // inline image, one em, on the baseline
+            if (st && st->image == -2) continue;  // room for a wide inline image
+            if (st && st->image >= 0 && static_cast<usize>(st->image) < pt.links.size()) {  // inline image on the baseline
                 if (m_renderer) {
                     const rhi::TextureHandle tex = m_renderer->resolveTexture(pt.links[static_cast<usize>(st->image)], false);
-                    const float sz = pt.pixelSize * 0.9f, x = pt.origin.x + g.min.x + (g.advance - sz) * 0.5f, y = pt.origin.y + g.baseline - sz * 0.85f;
-                    emit(out, {x, y}, {x + sz, y + sz}, {0, 0, 1, 1}, packColor({1, 1, 1, pt.color.w}), tex);
+                    const float h = pt.pixelSize * 0.9f * st->imageScale, w = h * st->imageAspect;
+                    const float room = g.advance * static_cast<float>(st->imageSpan);
+                    const float x = pt.origin.x + g.min.x + (room - w) * 0.5f;
+                    // One em high: sits on the baseline like a capital; taller: centered on the text's middle.
+                    const float mid = pt.origin.y + g.baseline - pt.pixelSize * 0.9f * 0.85f + pt.pixelSize * 0.45f;
+                    const float y = st->imageScale <= 1.0f ? pt.origin.y + g.baseline - h * 0.85f : mid - h * 0.5f;
+                    emit(out, {x, y}, {x + w, y + h}, {0, 0, 1, 1}, packColor({1, 1, 1, pt.color.w}), tex);
                 }
                 continue;
             }

@@ -282,6 +282,14 @@ private:
     math::Vec2 m_uiStartPos{}, m_uiStartSize{};
     bool m_uiChanged = false;
     std::vector<std::pair<Uuid, math::Vec2>> m_uiGroupStart;  ///< Other selected UI elements moved along.
+    // Group resize (m_uiDrag == 3): the selection's box and each element's start state.
+    struct UiGroupItem {
+        Uuid id;
+        math::Vec4 screen;
+        math::Vec2 position, size;
+    };
+    std::vector<UiGroupItem> m_uiGroupItems;
+    math::Vec4 m_uiGroupBox{0, 0, 0, 0};
 };
 
 class AssetBrowserPanel {
