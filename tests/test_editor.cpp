@@ -1972,6 +1972,14 @@ TEST_CASE("asset refactoring: renaming or moving an asset rewrites every referen
     REQUIRE_FALSE(hero.isNull());
     CHECK(fx.ctx->scene().registry().get<SpriteRendererComponent>(hero).texture == "assets://characters/hero_v2.png");
 
+    // Find usages: the material (line 1) and the scene.
+    const auto uses = findAssetUsages(project.root(), assets, "characters/hero_v2.png");
+    REQUIRE(uses.size() == 2);
+    bool material = false;
+    for (const auto& u : uses) material |= u.file.filename() == "hero.agrmat" && u.lines == std::vector<int>{1};
+    CHECK(material);
+    CHECK(findAssetUsages(project.root(), assets, "taken_nowhere.png").empty());
+    CHECK(findAssetUsages(project.root(), assets, "scripts/lib").size() == 1);  // a folder: player.lua requires a file in it
     // A folder: every path under it follows, scripts included.
     r = moveAsset(project.root(), assets, "scripts/lib", "shared/lib");
     REQUIRE(r);

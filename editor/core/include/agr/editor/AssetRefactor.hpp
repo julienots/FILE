@@ -23,6 +23,14 @@ struct AssetMoveReport {
 /// path under "from/". Returns the number of replacements.
 usize rewriteAssetReferences(std::string& text, std::string_view fromUri, std::string_view toUri, bool folder);
 
+/// A file of the project that references an asset, with the lines where it does.
+struct AssetUsage {
+    std::filesystem::path file;
+    std::vector<int> lines;  ///< 1-based
+};
+/// Every project text file that references the asset (or, for a folder, anything under it).
+std::vector<AssetUsage> findAssetUsages(const std::filesystem::path& projectRoot, const std::filesystem::path& assetsDir, const std::string& assetRel);
+
 /// Moves or renames an asset file or folder inside the project's assets directory (paths relative
 /// to it, e.g. "textures/hero.png" -> "characters/hero.png") and rewrites the references to it in
 /// every text file of the project. Refuses to overwrite an existing file or to leave the assets folder.

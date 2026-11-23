@@ -15,6 +15,7 @@
 
 #include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/EditHistory.hpp"
+#include "agr/editor/AssetRefactor.hpp"
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
@@ -305,6 +306,8 @@ private:
     std::string m_filter;
     std::string m_pendingDelete;
     std::string m_renameTarget, m_renameBuffer;
+    std::string m_usagesOf;                 // "Find usages" window: the asset and what references it
+    std::vector<AssetUsage> m_usages;
     // "Slice as grid" dialog (image -> .agrsheet)
     std::string m_sliceTarget;
     int m_sliceW = 32, m_sliceH = 32, m_sliceMargin = 0, m_sliceSpacing = 0;

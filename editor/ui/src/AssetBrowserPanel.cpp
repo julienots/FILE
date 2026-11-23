@@ -421,6 +421,10 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                         if (s.engine.vfs().exists(sheetUri)) s.openSheetRequest = sheetUri;
                     }
                     if (!folder && isSheetFile(name) && ImGui::MenuItem("Éditer la feuille de sprites")) s.openSheetRequest = uri;
+                    if (ImGui::MenuItem("Trouver les utilisations")) {
+                        m_usagesOf = rel;
+                        m_usages = findAssetUsages(s.ctx.project().root(), s.ctx.project().assetsDirectory(), rel);
+                    }
                     if (ImGui::MenuItem("Renommer...")) {
                         m_renameTarget = rel;
                         m_renameBuffer = name;
@@ -459,6 +463,38 @@ void AssetBrowserPanel::draw(EditorShared& s) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
+    }
+    if (!m_usagesOf.empty()) {
+        bool open = true;
+        ImGui::SetNextWindowSize({520, 300}, ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Utilisations de l'asset", &open)) {
+            ImGui::Text("assets/%s : %zu fichier(s)", m_usagesOf.c_str(), m_usages.size());
+            if (m_usages.empty()) ImGui::TextDisabled("Aucune scène, aucun prefab, matériau, clip ni script n'y fait référence.");
+            const fs::path root = s.ctx.project().root();
+            for (const AssetUsage& u : m_usages) {
+                const std::string rel = fs::relative(u.file, root).generic_string();
+                std::string lines;
+                for (int l : u.lines) lines += (lines.empty() ? "" : ", ") + std::to_string(l);
+                if (ImGui::Selectable((rel + "   (ligne " + lines + ")").c_str())) {
+                    // Opens what can be opened: a scene, a script; otherwise the path is copied.
+                    const std::string ext = u.file.extension().string();
+                    if (ext == ".agrscene") {
+                        if (s.ctx.dirty()) s.notify("Enregistrez d'abord la scène ouverte.");
+                        else if (Status st = s.ctx.loadScene(rel); !st) s.notify(st.error().message);
+                    } else if (ext == ".lua" && rel.rfind("assets/", 0) == 0) {
+                        s.openScriptRequest = "assets://" + rel.substr(7);
+                    } else {
+                        ImGui::SetClipboardText(rel.c_str());
+                        s.notify("Chemin copié : " + rel);
+                    }
+                }
+            }
+        }
+        ImGui::End();
+        if (!open) {
+            m_usagesOf.clear();
+            m_usages.clear();
+        }
     }
     if (!m_renameTarget.empty()) ImGui::OpenPopup("Renommer l'asset");
     if (ImGui::BeginPopupModal("Renommer l'asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {

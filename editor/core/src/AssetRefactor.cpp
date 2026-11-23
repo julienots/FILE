@@ -1,5 +1,6 @@
 #include "agr/editor/AssetRefactor.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <set>
@@ -55,6 +56,51 @@ usize rewriteAssetReferences(std::string& text, std::string_view fromUri, std::s
     out.append(text, at, std::string::npos);
     text = std::move(out);
     return count;
+}
+
+namespace {
+template <typename Fn>
+void forEachProjectTextFile(const fs::path& projectRoot, Fn&& fn) {
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(projectRoot, fs::directory_options::skip_permission_denied, ec);
+         it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const fs::path& p = it->path();
+        const std::string name = p.filename().string();
+        if (it->is_directory(ec)) {
+            if (name == "build" || name == ".git" || name == ".agr" || (name.size() > 1 && name[0] == '.')) it.disable_recursion_pending();
+            continue;
+        }
+        if (!textExtensions().count(p.extension().string()) || it->file_size(ec) > 32u * 1024 * 1024) continue;
+        std::ifstream in(p, std::ios::binary);
+        std::string text((std::istreambuf_iterator<char>(in)), {});
+        fn(p, text);
+    }
+}
+} // namespace
+
+std::vector<AssetUsage> findAssetUsages(const fs::path& projectRoot, const fs::path& assetsDir, const std::string& assetRelIn) {
+    std::vector<AssetUsage> out;
+    std::string rel;
+    if (!normalizedRel(assetRelIn, rel)) return out;
+    std::error_code ec;
+    const bool folder = fs::is_directory(assetsDir / rel, ec);
+    const std::string uri = "assets://" + rel;
+    forEachProjectTextFile(projectRoot, [&](const fs::path& p, const std::string& text) {
+        AssetUsage use{p, {}};
+        int line = 1;
+        usize lineStart = 0;
+        for (usize at = text.find(uri); at != std::string::npos; at = text.find(uri, at + 1)) {
+            const char next = at + uri.size() < text.size() ? text[at + uri.size()] : '\0';
+            if (folder ? next != '/' : pathChar(next)) continue;
+            for (; lineStart < at; ++lineStart)
+                if (text[lineStart] == '\n') ++line;
+            if (use.lines.empty() || use.lines.back() != line) use.lines.push_back(line);
+        }
+        if (!use.lines.empty()) out.push_back(std::move(use));
+    });
+    std::sort(out.begin(), out.end(), [](const AssetUsage& a, const AssetUsage& b) { return a.file < b.file; });
+    return out;
 }
 
 Result<AssetMoveReport> moveAsset(const fs::path& projectRoot, const fs::path& assetsDir, const std::string& fromRelIn, const std::string& toRelIn) {
