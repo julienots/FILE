@@ -1,5 +1,7 @@
 #include "agr/net/Sockets.hpp"
 
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 #if defined(_WIN32)
@@ -444,6 +446,68 @@ std::vector<u32> WebSocketServer::clients() const {
     for (const auto& [id, c] : m_clients)
         if (c.open) out.push_back(id);
     return out;
+}
+
+// ------------------------------------------------------------------ WebSocket transport
+namespace {
+Address clientAddress(u32 client) { return Address{0x7F000000u | (client & 0xFFFFFFu), 1}; }  // stands for a WebSocket client
+} // namespace
+
+WebSocketTransport::WebSocketTransport() = default;
+WebSocketTransport::~WebSocketTransport() { close(); }
+
+Status WebSocketTransport::open(u16 port) {
+    close();
+    if (!m_hosting) return {};  // joining: connects on the first message (the host's address)
+    auto s = WebSocketServer::listen(port, false);
+    if (!s) return s.error();
+    m_server = std::move(s.value());
+    return {};
+}
+
+void WebSocketTransport::close() {
+    m_server.reset();
+    if (m_client) m_client->close();
+    m_client.reset();
+    m_inbox.clear();
+}
+
+u16 WebSocketTransport::localPort() const { return m_server ? m_server->port() : 0; }
+
+Status WebSocketTransport::send(const Address& to, const void* data, usize size) {
+    const std::string_view bytes(static_cast<const char*>(data), size);
+    if (m_server) {
+        if ((to.ip & 0xFF000000u) != 0x7F000000u || to.port != 1) return makeError(Error::Code::NotFound, "not a WebSocket client");
+        if (!m_server->send(to.ip & 0xFFFFFFu, bytes, true)) return makeError(Error::Code::NotFound, "WebSocket client gone");
+        return {};
+    }
+    if (!m_client) {
+        m_host = to;
+        m_client = std::make_unique<WebSocket>();
+        char ip[32];
+        std::snprintf(ip, sizeof ip, "%u.%u.%u.%u", (to.ip >> 24) & 255, (to.ip >> 16) & 255, (to.ip >> 8) & 255, to.ip & 255);
+        m_client->connect("ws://" + std::string(ip) + ":" + std::to_string(to.port) + "/agr");
+    }
+    if (!m_client->sendBinary(bytes)) return makeError(Error::Code::IOError, "WebSocket closed");
+    return {};
+}
+
+bool WebSocketTransport::receive(Address& from, std::vector<u8>& data) {
+    if (m_inbox.empty()) {
+        if (m_server) {
+            m_server->poll();
+            for (auto& e : m_server->takeEvents())
+                if (e.type == WebSocketServer::Event::Type::Message) m_inbox.emplace_back(clientAddress(e.client), std::move(e.data));
+        } else if (m_client) {
+            for (auto& m : m_client->receive()) m_inbox.emplace_back(m_host, std::move(m.data));
+        }
+        std::reverse(m_inbox.begin(), m_inbox.end());  // taken from the back, oldest first
+    }
+    if (m_inbox.empty()) return false;
+    from = m_inbox.back().first;
+    data.assign(m_inbox.back().second.begin(), m_inbox.back().second.end());
+    m_inbox.pop_back();
+    return true;
 }
 
 } // namespace agr::net

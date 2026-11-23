@@ -51,6 +51,8 @@ public:
     virtual Status send(const Address& to, const void* data, usize size) = 0;
     /// Next datagram, false when none is waiting (non-blocking).
     virtual bool receive(Address& from, std::vector<u8>& data) = 0;
+    /// Told before open(): hosting (accepting players) or joining a host.
+    virtual void setHosting(bool hosting) { (void)hosting; }
 };
 
 class UdpTransport final : public NetTransport {
@@ -105,6 +107,8 @@ public:
 
     NetSession();
     explicit NetSession(std::unique_ptr<NetTransport> transport);
+    /// Replaces the transport (e.g. WebSocketTransport) while no session is running.
+    bool setTransport(std::unique_ptr<NetTransport> transport);
     ~NetSession();
 
     /// Starts hosting on `port` (0 = any; see port()).

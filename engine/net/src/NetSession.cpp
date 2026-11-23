@@ -252,6 +252,7 @@ NetSession::~NetSession() { close(); }
 Status NetSession::host(u16 port, u32 maxPeers) {
     close();
     stopDiscovery();
+    m_transport->setHosting(true);
     if (Status s = m_transport->open(port); !s) return s;
     m_role = NetRole::Host;
     m_localId = kHostId;
@@ -272,6 +273,7 @@ Status NetSession::join(std::string_view address, u16 port) {
     stopDiscovery();
     auto addr = Address::resolve(address, port);
     if (!addr) return addr.error();
+    m_transport->setHosting(false);
     if (Status s = m_transport->open(0); !s) return s;
     m_role = NetRole::Client;
     m_localId = 0;
@@ -285,6 +287,13 @@ Status NetSession::join(std::string_view address, u16 port) {
     m_joinStarted = m_now;
     AGR_LOG_INFO("Net", "joining {}", addr.value().toString());
     return {};
+}
+
+bool NetSession::setTransport(std::unique_ptr<NetTransport> transport) {
+    if (m_role != NetRole::None || !transport) return false;
+    m_transport->close();
+    m_transport = std::move(transport);
+    return true;
 }
 
 void NetSession::close() {

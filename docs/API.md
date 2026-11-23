@@ -1453,7 +1453,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-243 fonctions.
+264 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
@@ -1480,7 +1480,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.locale`** : `get`, `list`, `set`
 - `agr.log`
 - **`agr.nav`** : `path`, `rebuild`
-- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `positionAt`, `role`, `send`, `sender`, `setCompression`, `setController`, `setEncryption`, `setOwner`, `setPassword`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`, `viewTime`
+- **`agr.net`** : `advertise`, `broadcast`, `despawn`, `discover`, `encrypted`, `games`, `host`, `id`, `join`, `joinError`, `leave`, `peers`, `ping`, `poll`, `port`, `positionAt`, `role`, `send`, `sender`, `setCompression`, `setController`, `setEncryption`, `setOwner`, `setPassword`, `setTransport`, `setVisible`, `spawn`, `stats`, `stopDiscovery`, `time`, `viewTime`
 - **`agr.physics2d`** : `castBox`, `castCircle`, `gravity`, `layer`, `mask`, `overlapBox`, `overlapCircle`, `raycast`, `setGravity`
 - **`agr.physics3d`** : `castSphere`, `layer`, `mask`, `overlapBox`, `overlapSphere`, `raycast`, `setGravity`
 - **`agr.profile`** : `begin`, `finish`
@@ -1493,15 +1493,19 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - `agr.stopTween`
 - `agr.stopTweens`
 - `agr.switchScene`
+- **`agr.tcp`** : `accept`, `close`, `connect`, `listen`, `receive`, `send`, `state`
 - **`agr.time`** : `delta`, `fixedDelta`, `frame`, `now`, `scale`, `setScale`, `total`
 - `agr.tr`
 - `agr.tween`
+- **`agr.udp`** : `close`, `open`, `receive`, `send`
 - **`agr.ui`** : `focus`, `isPressed`, `isTyping`, `pointerOverUI`
+- **`agr.upnp`** : `closePort`, `openPort`, `status`
 - `agr.wait`
 - `agr.waitFrames`
 - `agr.waitSignal`
 - `agr.waitUntil`
 - `agr.warn`
 - **`agr.ws`** : `close`, `connect`, `send`, `state`
+- **`agr.wsserver`** : `broadcast`, `clients`, `close`, `listen`, `poll`, `send`
 
 **Méthodes d'entité** (62) : `add`, `addToGroup`, `applyForce`, `applyImpulse`, `children`, `connect`, `currentState`, `destroy`, `disconnect`, `emit`, `find`, `forward`, `get`, `getParameter`, `groundNormal`, `groups`, `has`, `inGroup`, `isActive`, `isGrounded`, `isOwner`, `isSoundPlaying`, `isValid`, `jointValue`, `key`, `layerWeight`, `name`, `navigateTo`, `navigationPath`, `navigationStatus`, `netInput`, `owner`, `parent`, `playSound`, `playState`, `position`, `remove`, `removeFromGroup`, `rotate`, `rotation`, `rpc`, `rpcTo`, `scale`, `script`, `set`, `setActive`, `setAngularVelocity`, `setLayerWeight`, `setName`, `setParameter`, `setPosition`, `setRotation`, `setScale`, `setText`, `setTrigger`, `setVelocity`, `stopNavigation`, `stopSound`, `text`, `translate`, `velocity`, `worldPosition`

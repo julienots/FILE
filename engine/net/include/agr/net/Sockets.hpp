@@ -12,6 +12,7 @@
 
 #include "agr/core/Result.hpp"
 #include "agr/core/Types.hpp"
+#include "agr/net/NetSession.hpp"
 
 namespace agr::net {
 
@@ -120,6 +121,29 @@ private:
     std::unordered_map<u32, Client> m_clients;
     std::vector<Event> m_events;
     u32 m_nextId = 1;
+};
+
+/// NetSession transport over WebSocket (like Godot's WebSocketMultiplayerPeer): the whole
+/// high-level multiplayer (sync, spawns, RPCs, prediction) through ws:// — passes HTTP proxies and
+/// firewalls that block UDP, and lets a browser page or a web service talk to the host. The host
+/// listens on its port; a client connects to ws://address:port/agr.
+class WebSocketTransport final : public NetTransport {
+public:
+    WebSocketTransport();
+    ~WebSocketTransport() override;
+    Status open(u16 port) override;
+    void close() override;
+    u16 localPort() const override;
+    Status send(const Address& to, const void* data, usize size) override;
+    bool receive(Address& from, std::vector<u8>& data) override;
+    void setHosting(bool hosting) override { m_hosting = hosting; }
+
+private:
+    bool m_hosting = false;
+    std::unique_ptr<WebSocketServer> m_server;
+    std::unique_ptr<class WebSocket> m_client;
+    Address m_host;  // joining: the address messages come from
+    std::vector<std::pair<Address, std::string>> m_inbox;
 };
 
 } // namespace agr::net

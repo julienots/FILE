@@ -1114,3 +1114,45 @@ TEST_CASE("RPC delivery modes: unreliable and ordered RPCs arrive and are relaye
     CHECK(std::find(b.calls.begin(), b.calls.end(), "move[2]") != b.calls.end());  // relayed by the host, same delivery
     CHECK(std::find(b.calls.begin(), b.calls.end(), "aim[1]") != b.calls.end());
 }
+
+TEST_CASE("WebSocket transport: a whole NetSession (join, messages, encryption, compression) over ws://") {
+    NetSession host(std::make_unique<WebSocketTransport>()), client(std::make_unique<WebSocketTransport>());
+    host.setPassword("tartine");
+    client.setPassword("tartine");
+    host.setEncryption(true);
+    client.setCompression(true);
+    REQUIRE(host.host(0, 4));
+    const u16 port = host.port();
+    REQUIRE(port != 0);
+    REQUIRE(client.join("127.0.0.1", port));
+    f64 now = 0.0;
+    auto realPump = [&](const std::function<bool()>& done) {
+        for (int i = 0; i < 1500 && !done(); ++i) {
+            now += 0.01;
+            host.update(now);
+            client.update(now);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return done();
+    };
+    REQUIRE(realPump([&] { return client.connected(); }));
+    CHECK(client.encrypted(NetSession::kHostId));
+    std::vector<NetEvent> got;
+    const std::string big(20000, 'W');
+    REQUIRE(client.send(NetSession::kHostId, "hello over ws", false));
+    REQUIRE(client.send(NetSession::kHostId, big, true));
+    REQUIRE(host.send(client.localId(), "welcome", true));
+    std::vector<NetEvent> back;
+    REQUIRE(realPump([&] {
+        collect(got, host);
+        collect(back, client);
+        int n = 0;
+        for (const auto& e : got) n += e.type == NetEvent::Type::Message && (e.data == "hello over ws" || e.data == big);
+        bool w = false;
+        for (const auto& e : back) w |= e.type == NetEvent::Type::Message && e.data == "welcome";
+        return n == 2 && w;
+    }));
+    CHECK(host.peers().size() == 1);
+    // A second WebSocketTransport session cannot replace a running one.
+    CHECK_FALSE(host.setTransport(std::make_unique<WebSocketTransport>()));
+}

@@ -126,6 +126,16 @@ par un joueur arrivé après, RPC client → tous (relayé avec le vrai expédit
 client → hôte, disparition partout, propriétés rendues à l'hôte au départ d'un joueur ; message de
 10 Ko fragmenté avec 30 % de pertes ; découverte ; permissions des RPC.
 
+## Multijoueur par WebSocket
+
+`agr.net.setTransport("websocket")` avant `host` / `join` (C++ : `NetSession::setTransport(
+std::make_unique<WebSocketTransport>())`) fait passer **toute** la session par WebSocket au lieu
+d'UDP, comme `WebSocketMultiplayerPeer` de Godot : synchronisation, apparitions, RPC, prédiction,
+chiffrement et compression fonctionnent pareil. L'hôte écoute en `ws://` sur son port, les joueurs s'y
+connectent (`ws://adresse:port/agr`) ; utile derrière un pare-feu qui bloque l'UDP ou pour un service
+web. `"udp"` revient au transport par défaut. Test : connexion, messages fiables (20 Ko) et non fiables
+dans les deux sens, lien chiffré et compressé, sur la boucle locale.
+
 ## Prédiction côté client et compensation de latence
 
 Ce que Godot ne fournit pas tout fait : un déplacement **décidé par l'hôte** (pas de triche sur la
