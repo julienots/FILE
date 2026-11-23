@@ -58,6 +58,29 @@ class RenderTest {
         save(big, "lineup.png")
     }
 
+    @Test fun fightPoses() {
+        val acts = listOf(Act.RUN, Act.GUARD, Act.PUNCH, Act.HIT, Act.KO, Act.VICTORY, Act.HIGHFIVE)
+        val cw = 220; val ch = 300
+        val pairs = listOf("rocco" to "ragnar", "tank" to "boss", "kenji" to "rex")
+        val bmp = Bitmap.createBitmap(cw * 2 * acts.size, ch * pairs.size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); c.drawColor(Color.rgb(40, 44, 52))
+        val p = Pose()
+        pairs.forEachIndexed { row, (l, r) ->
+            acts.forEachIndexed { col, act ->
+                for (side in 0..1) {
+                    val a = Archetypes.byId(if (side == 0) l else r)
+                    p.act = if (side == 1 && act == Act.PUNCH) Act.HIT else act
+                    p.facing = if (side == 0) 1f else -1f; p.t = 0.7f + col * 0.3f; p.punch = 1f; p.seed = 2
+                    p.fx = if (p.act == Act.HIT) "BAM!" else if (p.act == Act.KO) "K.O." else null; p.fxAge = 0.15f
+                    c.save(); c.translate(((col * 2 + side) * cw).toFloat(), (row * ch).toFloat())
+                    MascotPainter.draw(c, a.look, p, cw.toFloat(), ch.toFloat())
+                    c.restore()
+                }
+            }
+        }
+        save(bmp, "fight.png")
+    }
+
     @Test fun phasesFollowSchedule() {
         val s = Schedule(wake = 7 * 60, wakeWeekend = 9 * 60, bed = 23 * 60, breakfast = 7 * 60 + 30, lunch = 12 * 60 + 30, dinner = 20 * 60, workout = 18 * 60)
         val cal = Calendar.getInstance().apply { set(2026, Calendar.NOVEMBER, 24) } // mardi
@@ -76,7 +99,7 @@ class RenderTest {
     }
 
     @Test fun everyoneHasLines() {
-        for (a in Archetypes.all) for (s in listOf(Say.TAP, Say.RANDOM, Say.EAT, Say.WAKE, Say.DRAG, Say.PET, Say.FRIEND, Say.HUNGRY, Say.NIGHT))
+        for (a in Archetypes.all) for (s in listOf(Say.TAP, Say.RANDOM, Say.EAT, Say.WAKE, Say.DRAG, Say.PET, Say.FRIEND, Say.HUNGRY, Say.NIGHT, Say.TAUNT, Say.WIN, Say.LOSE, Say.OUCH, Say.REPLY, Say.BUMPED))
             assertTrue("${a.id} $s", a.lines(s).isNotEmpty())
     }
 }

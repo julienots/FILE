@@ -6,13 +6,14 @@ import com.superessence.squad.model.HairStyle as H
 import com.superessence.squad.model.Outfit as O
 
 /** Situations dans lesquelles une mascotte parle. */
-enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED }
+enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED }
 
 /** Ce que fait la mascotte (utilisé par le moteur et le rendu). */
 enum class Act(val label: String) {
     IDLE("Tranquille"), WALK("Se balade"), EAT("Mange"), TRAIN("S'entraîne"), FLEX("Fait le beau"),
     PHONE("Sur son tel"), COFFEE("Café"), WAVE("Salue"), SLEEP("Dort"), YAWN("Baille"),
-    DRAGGED("Porté"), TALK("Parle"), PUSHUP("Pompes")
+    DRAGGED("Porté"), TALK("Parle"), PUSHUP("Pompes"),
+    RUN("Court"), PUNCH("Cogne"), GUARD("En garde"), HIT("Encaisse"), KO("K.O."), VICTORY("Victoire"), HIGHFIVE("Check")
 }
 
 class Archetype(
@@ -32,10 +33,16 @@ class Archetype(
     val chatty: Float,
     private val lines: Map<Say, List<String>>,
 ) {
-    fun lines(s: Say): List<String> = (lines[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
+    fun lines(s: Say): List<String> =
+        (lines[s].orEmpty() + Fight.lines(id)[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
+
+    /** Envie de se battre (0..1). */
+    val aggro: Float get() = Fight.aggro[id] ?: 0.5f
+    /** Talent au combat. */
+    val skill: Float get() = Fight.skill[id] ?: 1f
 }
 
-private fun l(vararg pairs: Pair<Say, String>): Map<Say, List<String>> =
+internal fun l(vararg pairs: Pair<Say, String>): Map<Say, List<String>> =
     pairs.associate { (k, v) -> k to v.split("|").map { it.trim() }.filter { it.isNotEmpty() } }
 
 /** Répliques communes à tous (personnalisées avec le surnom). */
@@ -47,6 +54,13 @@ object Common {
         Say.DROP to "Ok, ici c'est bien.|Merci pour le taxi.|Atterrissage validé.",
         Say.FED to "Ça, c'est un vrai repas.|Le plein est fait.|Merci {nick}, t'assures.",
         Say.LOW to "Pas la grande forme aujourd'hui…|Faut que je me reprenne.",
+        Say.OUCH to "Aïe !|Ouch !|Hmpf !|Ça pique !|Pas la tête !",
+        Say.REPLY to "Grave.|Carrément.|Ha ! Ouais.|T'as raison.|Mouais…|N'importe quoi.|Raconte pas ta vie.|Respect.|Pas faux.|Je valide.|T'es sérieux là ?",
+        Say.HIGHFIVE to "CHECK !|Tope là !|Bien joué, frérot !|La team !",
+        Say.CHASE to "Reviens ici !|Je vais t'attraper !|Cours, cours !",
+        Say.FLEE to "Tu m'auras jamais !|Trop lent !|Ha ha, essaie encore !",
+        Say.CAUGHT to "Touché !|Chat ! C'est toi !|Attrapé !",
+        Say.BUMPED to "Hé ! Tu m'es tombé dessus !|Tu cherches la bagarre ?!|Qui m'a lancé ce type ?!",
     )
 }
 

@@ -23,7 +23,14 @@ data class Mascot(
     val y: Float = -1f,
     val lastPhase: String = "",
     val log: List<LifeEvent> = emptyList(),
+    val wins: Int = 0,
+    val losses: Int = 0,
+    /** Affinité avec chaque autre mascotte (-100..100). */
+    val rel: Map<String, Int> = emptyMap(),
 ) {
+    fun relWith(other: String) = rel[other] ?: 0
+    fun bond(other: String, d: Int) = copy(rel = rel + (other to (relWith(other) + d).coerceIn(-100, 100)))
+
     val archetype get() = Archetypes.byId(arch)
     val level get() = 1 + sqrt(xp / 40f).toInt()
     val days get() = ((System.currentTimeMillis() - born) / 86_400_000L).toInt() + 1
@@ -37,6 +44,8 @@ data class Mascot(
         .put("fitness", fitness.toDouble()).put("xp", xp).put("born", born).put("updated", updated)
         .put("x", x.toDouble()).put("y", y.toDouble()).put("lastPhase", lastPhase)
         .put("log", JSONArray().apply { log.forEach { put(JSONObject().put("t", it.t).put("x", it.text)) } })
+        .put("wins", wins).put("losses", losses)
+        .put("rel", JSONObject().apply { rel.forEach { (k, v) -> put(k, v) } })
 
     companion object {
         fun fromJson(o: JSONObject): Mascot {
@@ -50,6 +59,8 @@ data class Mascot(
                 x = o.optDouble("x", -1.0).toFloat(), y = o.optDouble("y", -1.0).toFloat(),
                 lastPhase = o.optString("lastPhase"),
                 log = (0 until la.length()).map { la.getJSONObject(it).let { e -> LifeEvent(e.getLong("t"), e.getString("x")) } },
+                wins = o.optInt("wins"), losses = o.optInt("losses"),
+                rel = o.optJSONObject("rel")?.let { r -> r.keys().asSequence().associateWith { k -> r.getInt(k) } } ?: emptyMap(),
             )
         }
 
@@ -93,9 +104,13 @@ data class Settings(
     val showSleeping: Boolean = true,
     val vibrate: Boolean = true,
     val overlayOn: Boolean = false,
+    /** Fréquence des rencontres entre mascottes (0 = jamais). */
+    val social: Float = 1f,
+    val fights: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("size", size.toDouble()).put("speed", speed.toDouble())
         .put("chatter", chatter.toDouble()).put("showSleeping", showSleeping).put("vibrate", vibrate).put("overlayOn", overlayOn)
+        .put("social", social.toDouble()).put("fights", fights)
 
     companion object {
         fun fromJson(o: JSONObject?): Settings {
@@ -103,6 +118,7 @@ data class Settings(
             return Settings(
                 o.optDouble("size", 1.0).toFloat(), o.optDouble("speed", 1.0).toFloat(), o.optDouble("chatter", 1.0).toFloat(),
                 o.optBoolean("showSleeping", true), o.optBoolean("vibrate", true), o.optBoolean("overlayOn", false),
+                o.optDouble("social", 1.0).toFloat(), o.optBoolean("fights", true),
             )
         }
     }

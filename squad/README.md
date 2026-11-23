@@ -6,6 +6,7 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
 
 ![Les 12 gars](branding/squad-lineup.png)
 ![Écrans](branding/squad-ecrans.png)
+![Baston](branding/squad-baston.png)
 
 ## Ce que fait l'appli
 - **Ouverture animée SuperEssence Studio** : hexagone jaune avec monogramme S, nom lettre par lettre, reflet. Toucher pour passer.
@@ -16,8 +17,14 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
   - toucher : il parle ; double toucher : « check » ; appui long : ouvre sa fiche ;
   - glisser : tu l'emmènes où tu veux ; lâcher sur la croix en bas : il est rangé ;
   - notification : « Tout rappeler » / « Arrêter ».
+- **Ils interagissent entre eux** à l'écran :
+  - **bastons** : ils s'approchent, se provoquent, se mettent en garde, échangent des coups (POW!, BAM!), esquivent, jusqu'au K.O. (étoiles qui tournent). Le gagnant fait la danse de la victoire. L'issue dépend du talent de chaque perso, de sa forme physique, de son niveau et de son énergie ;
+  - **discussions** (vraies répliques à tour de rôle), **checks**, **jeu du chat** (l'un court après l'autre), **muscu à deux** ;
+  - les bagarreurs (Ragnar, Rocco, Rex, Tank) cherchent plus souvent la baston, les calmes discutent ; les rivaux se battent plus, les potes se font des checks ;
+  - **lâche un gars sur un autre** : ça part en baston ; bouton **« Défier »** dans sa fiche ;
+  - palmarès (victoires/défaites) et **relations** : meilleur pote, pote, rival, ennemi juré.
 - **Style** : coupe, barbe, tenue, accessoire, couleurs de peau/cheveux/tenue/pantalon, tatouages, cicatrice.
-- Réglages : taille, vitesse, bavardage, visibles ou non pendant leur sommeil, vibrations.
+- Réglages : taille, vitesse, bavardage, fréquence des rencontres, bastons on/off, visibles ou non pendant leur sommeil, vibrations.
 
 ## Compiler
 ```bash

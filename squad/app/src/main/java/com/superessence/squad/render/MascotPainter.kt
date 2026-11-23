@@ -28,6 +28,11 @@ class Pose {
     var fitness: Float = 30f
     var talking: Boolean = false
     var seed: Int = 0
+    /** 0 = poing armé, 1 = bras tendu. */
+    var punch: Float = 0f
+    /** Effet BD affiché (POW!, BAM!…) et son âge en secondes. */
+    var fx: String? = null
+    var fxAge: Float = 0f
 }
 
 /**
@@ -71,17 +76,23 @@ object MascotPainter {
         val act = P.act
         val sleeping = act == Act.SLEEP
         val dragged = act == Act.DRAGGED
-        val walking = act == Act.WALK
+        val running = act == Act.RUN
+        val walking = act == Act.WALK || running
+        val ko = act == Act.KO
+        val sitting = sleeping || ko
+        val legHz = if (running) 15f else 9f
         // Respiration : lente en dormant, normale sinon
         val breathHz = if (sleeping) 0.18f else if (act == Act.TRAIN || act == Act.PUSHUP) 0.6f else 0.27f
         val breath = sin(t * 2f * PI.toFloat() * breathHz)
         val bob = when {
-            walking -> -abs(sin(t * 9f)) * 2.5f
+            walking -> -abs(sin(t * legHz)) * (if (running) 4f else 2.5f)
+            act == Act.VICTORY -> -abs(sin(t * 7f)) * 6f
+            act == Act.GUARD || act == Act.PUNCH -> sin(t * 8f) * 1.2f
             dragged -> 0f
             act == Act.TRAIN -> sin(t * 5f) * 0.8f
             else -> breath * 0.6f
         }
-        val sitDrop = if (sleeping) 20f else 0f
+        val sitDrop = if (sitting) 20f else 0f
         val broad = (P.fitness - 30f) * 0.09f // gains visibles
 
         // Ombre au sol
@@ -92,11 +103,20 @@ object MascotPainter {
 
         if (act == Act.PUSHUP) { drawPushup(c, L, P, broad); return }
 
+        // Inclinaison du corps (course, coups, impact)
+        val lean = when (act) {
+            Act.RUN -> 9f * P.facing
+            Act.PUNCH -> (4f + 6f * P.punch) * P.facing
+            Act.HIT -> -14f * P.facing
+            Act.GUARD -> -3f * P.facing
+            else -> 0f
+        }
         c.save()
+        if (lean != 0f) c.rotate(lean, 50f, 134f)
         c.translate(0f, bob + sitDrop)
 
         // ---------------- Jambes
-        if (sleeping) {
+        if (sitting) {
             fill(L.pantsColor)
             rr(26f, 96f, 50f, 112f, 7f, p, c); rr(50f, 96f, 74f, 112f, 7f, p, c)
             fill(INK); rr(18f, 98f, 30f, 112f, 5f, p, c); rr(70f, 98f, 82f, 112f, 5f, p, c)
@@ -104,7 +124,8 @@ object MascotPainter {
             for (side in 0..1) {
                 val x = if (side == 0) 40f else 60f
                 var lift = 0f; var swing = 0f
-                if (walking) lift = maxOf(0f, sin(t * 9f + side * PI.toFloat())) * 4f
+                if (walking) lift = maxOf(0f, sin(t * legHz + side * PI.toFloat())) * (if (running) 6f else 4f)
+                if (act == Act.GUARD || act == Act.PUNCH) swing = if (side == 0) 8f else -8f
                 if (dragged) swing = sin(t * 7f + side * 1.7f) * 12f
                 c.save()
                 c.translate(x, 100f)
@@ -124,12 +145,12 @@ object MascotPainter {
             fill(L.hairColor); rr(27f, 20f, 73f, 74f, 14f, p, c)
         }
 
-        val armSwing = if (walking) sin(t * 9f) * 22f else breath * 2f
+        val armSwing = if (walking) sin(t * legHz) * (if (running) 40f else 22f) else breath * 2f
         val sh = 22f - broad / 2f // épaule gauche (x)
         val shR = 78f + broad / 2f
 
         // ---------------- Bras arrière (selon l'activité)
-        val (la, ra) = armAngles(act, t, armSwing)
+        val (la, ra) = armAngles(act, t, armSwing, P)
 
         // ---------------- Torse
         val chestScale = 1f + breath * (if (sleeping) 0.035f else 0.02f)
@@ -145,6 +166,8 @@ object MascotPainter {
         // ---------------- Cou + tête
         val headTilt = when {
             sleeping -> 14f + sin(t * 0.9f) * 2f
+            ko -> 22f + sin(t * 3f) * 6f
+            act == Act.HIT -> -8f * P.facing
             act == Act.PHONE -> 6f
             act == Act.TRAIN -> sin(t * 5f) * 2f
             dragged -> sin(t * 4f) * 6f
@@ -157,6 +180,18 @@ object MascotPainter {
         c.restore()
 
         c.restore()
+
+        // ---------------- Étoiles du K.O.
+        if (ko) {
+            for (i in 0..2) {
+                val a = t * 4f + i * 2.094f
+                val sx = 50f + cos(a) * 22f
+                val sy = 18f + sitDrop + sin(a) * 5f
+                star(c, sx, sy, 4.2f, 0xFFFFC928.toInt())
+            }
+        }
+        // ---------------- Effet BD (POW !)
+        P.fx?.let { drawFx(c, it, P) }
 
         // ---------------- Bulles de sommeil
         if (sleeping) {
@@ -171,8 +206,20 @@ object MascotPainter {
     }
 
     /** Angles des bras (degrés, 0 = pendant, positif = vers l'extérieur). */
-    private fun armAngles(act: Act, t: Float, swing: Float): Pair<Float, Float> = when (act) {
-        Act.WALK -> 8f + swing to 8f - swing
+    private fun armAngles(act: Act, t: Float, swing: Float, P: Pose): Pair<Float, Float> = when (act) {
+        Act.WALK, Act.RUN -> 8f + swing to 8f - swing
+        Act.PUNCH, Act.GUARD, Act.HIGHFIVE -> {
+            val front = when (act) {
+                Act.PUNCH -> 45f + 50f * P.punch
+                Act.HIGHFIVE -> 150f
+                else -> -150f + sin(t * 8f) * 5f
+            }
+            val back = if (act == Act.HIGHFIVE) 12f else -150f + sin(t * 8f + 1f) * 5f
+            if (P.facing >= 0f) back to front else front to back
+        }
+        Act.HIT -> 55f + sin(t * 20f) * 15f to 55f - sin(t * 20f) * 15f
+        Act.KO -> 35f to 35f
+        Act.VICTORY -> 165f + sin(t * 7f) * 10f to 165f - sin(t * 7f) * 10f
         Act.FLEX -> 125f + sin(t * 3f) * 4f to 125f + sin(t * 3f) * 4f
         Act.TRAIN -> { val k = (sin(t * 5f) + 1f) / 2f; 150f - 40f * k to 110f + 40f * k }
         Act.DRAGGED -> 160f + sin(t * 5f) * 8f to 160f - sin(t * 5f) * 8f
@@ -303,7 +350,9 @@ object MascotPainter {
         }
         // main
         val hand = if (P.act == Act.TRAIN || P.act == Act.DRAGGED) L.skin else L.skin
-        fill(shade(hand, 0.96f)); c.drawCircle(0f, len, 6.5f, p)
+        val fighting = P.act == Act.PUNCH || P.act == Act.GUARD
+        fill(shade(hand, 0.96f)); c.drawCircle(0f, len, if (fighting) 7.8f else 6.5f, p)
+        if (fighting) { line(shade(hand, 0.7f), 0.9f); c.drawLine(-4f, len + 1f, 4f, len + 1f, s) }
         // objets tenus
         when {
             P.act == Act.TRAIN -> {
@@ -359,7 +408,14 @@ object MascotPainter {
         val blink = !sleeping && ((P.t + P.seed * 0.37f) % 4.2f) < 0.13f
         val shades = L.accessory == Accessory.SHADES || L.accessory == Accessory.AVIATORS
         if (!shades) {
-            if (sleeping || blink) {
+            if (act == Act.KO) {
+                line(INK, 1.7f)
+                for (ex in floatArrayOf(42.5f, 57.5f)) { c.drawLine(ex - 2.6f, 35.8f, ex + 2.6f, 41f, s); c.drawLine(ex + 2.6f, 35.8f, ex - 2.6f, 41f, s) }
+            } else if (act == Act.HIT) {
+                line(INK, 1.8f)
+                c.drawLine(40f, 36f, 45f, 38.5f, s); c.drawLine(45f, 38.5f, 40f, 41f, s)
+                c.drawLine(60f, 36f, 55f, 38.5f, s); c.drawLine(55f, 38.5f, 60f, 41f, s)
+            } else if (sleeping || blink) {
                 line(INK, 1.6f)
                 c.drawArc(RectF(39f, 36f, 46f, 41f), 10f, 160f, false, s); c.drawArc(RectF(54f, 36f, 61f, 41f), 10f, 160f, false, s)
             } else if (act == Act.DRAGGED) {
@@ -373,9 +429,10 @@ object MascotPainter {
         }
         // sourcils épais
         val browY = if (act == Act.DRAGGED) -2.5f else 0f
+        val angry = act == Act.PUNCH || act == Act.GUARD
         fill(shade(L.hairColor, 0.8f))
-        c.save(); c.rotate(if (act == Act.DRAGGED) -8f else 8f, 42f, 32f); rr(36.5f, 30.5f + browY, 47f, 33.5f + browY, 1.5f, p, c); c.restore()
-        c.save(); c.rotate(if (act == Act.DRAGGED) 8f else -8f, 58f, 32f); rr(53f, 30.5f + browY, 63.5f, 33.5f + browY, 1.5f, p, c); c.restore()
+        c.save(); c.rotate(if (act == Act.DRAGGED) -8f else if (angry) 18f else 8f, 42f, 32f); rr(36.5f, 30.5f + browY, 47f, 33.5f + browY, 1.5f, p, c); c.restore()
+        c.save(); c.rotate(if (act == Act.DRAGGED) 8f else if (angry) -18f else -8f, 58f, 32f); rr(53f, 30.5f + browY, 63.5f, 33.5f + browY, 1.5f, p, c); c.restore()
         // nez
         line(shade(L.skin, 0.72f), 1.5f); c.drawLine(50f, 39f, 48.5f, 45f, s); c.drawLine(48.5f, 45f, 51f, 45.5f, s)
         // cicatrice
@@ -388,10 +445,18 @@ object MascotPainter {
         val talkOpen = P.talking && ((P.t * 9f).toInt() % 2 == 0)
         when {
             act == Act.YAWN -> { fill(0xFF5A1A1A.toInt()); r.set(45f, 47f, 55f, 56f); c.drawOval(r, p) }
-            act == Act.DRAGGED -> { fill(0xFF5A1A1A.toInt()); r.set(47f, 48f, 53f, 54f); c.drawOval(r, p) }
+            act == Act.DRAGGED || act == Act.HIT -> { fill(0xFF5A1A1A.toInt()); r.set(47f, 48f, 53f, 54f); c.drawOval(r, p) }
+            act == Act.KO -> {
+                line(INK, 1.4f); path.reset(); path.moveTo(45f, 51f); path.quadTo(47.5f, 49f, 50f, 51f); path.quadTo(52.5f, 53f, 55f, 51f); c.drawPath(path, s)
+                fill(0xFFE57373.toInt()); rr(51f, 51f, 55f, 56f, 2f, p, c)
+            }
+            act == Act.PUNCH || act == Act.GUARD -> {
+                fill(0xFFFFFFFF.toInt()); rr(45f, 48.5f, 55f, 52f, 1.2f, p, c)
+                line(INK, 0.8f); c.drawLine(45f, 50.2f, 55f, 50.2f, s); c.drawLine(48.3f, 48.5f, 48.3f, 52f, s); c.drawLine(51.7f, 48.5f, 51.7f, 52f, s)
+            }
             act == Act.EAT -> { val o = abs(sin(P.t * 8f)) * 3f; fill(0xFF5A1A1A.toInt()); rr(46f, 49f, 54f, 50.5f + o, 2f, p, c) }
             talkOpen -> { fill(0xFF5A1A1A.toInt()); rr(45f, 48.5f, 55f, 53f, 2.5f, p, c) }
-            act == Act.FLEX || act == Act.TRAIN || act == Act.WAVE -> {
+            act == Act.FLEX || act == Act.TRAIN || act == Act.WAVE || act == Act.VICTORY || act == Act.HIGHFIVE || act == Act.RUN -> {
                 fill(0xFFFFFFFF.toInt()); path.reset(); path.moveTo(44f, 48.5f); path.lineTo(56f, 48.5f); path.quadTo(55f, 54f, 50f, 54f); path.quadTo(45f, 54f, 44f, 48.5f); c.drawPath(path, p)
                 line(INK, 1f); c.drawPath(path, s)
             }
@@ -531,6 +596,34 @@ object MascotPainter {
                 line(0xFFDADADA.toInt(), 1f); c.drawLine(33f, 23f, 67f, 23f, s)
             }
         }
+    }
+
+    private fun star(c: Canvas, x: Float, y: Float, rad: Float, color: Int, points: Int = 5, inner: Float = 0.45f) {
+        path.reset()
+        for (i in 0 until points * 2) {
+            val a = (i * PI / points - PI / 2).toFloat()
+            val rr = if (i % 2 == 0) rad else rad * inner
+            val px = x + cos(a) * rr; val py = y + sin(a) * rr
+            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close()
+        fill(color); c.drawPath(path, p)
+    }
+
+    /** Explosion BD façon « POW ! » côté adversaire. */
+    private fun drawFx(c: Canvas, text: String, P: Pose) {
+        val k = (P.fxAge / 0.5f).coerceIn(0f, 1f)
+        val scale = 0.6f + 0.5f * kotlin.math.min(1f, P.fxAge / 0.12f)
+        val alpha = ((1f - k) * 255).toInt().coerceIn(0, 255)
+        if (alpha <= 0) return
+        val cx = 50f + P.facing * 22f
+        val cy = 24f - k * 6f
+        c.save(); c.scale(scale, scale, cx, cy)
+        star(c, cx, cy, 21f, (alpha shl 24) or 0xFFC928, points = 9, inner = 0.68f)
+        star(c, cx, cy, 15f, (alpha shl 24) or 0xE53935, points = 9, inner = 0.7f)
+        txt.color = 0xFFFFFFFF.toInt(); txt.alpha = alpha; txt.textSize = 9.5f
+        c.drawText(text, cx, cy + 3.3f, txt)
+        c.restore()
     }
 
     /** Pompes : vue allongée, rendu dédié. */

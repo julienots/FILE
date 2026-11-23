@@ -73,7 +73,7 @@ object Squad {
         return m
     }
 
-    fun remove(id: String) = edit { s -> s.copy(mascots = s.mascots.filterNot { it.id == id }) }
+    fun remove(id: String) = edit { s -> s.copy(mascots = s.mascots.filterNot { it.id == id }.map { it.copy(rel = it.rel - id) }) }
 
     fun feed(id: String): String? {
         val m = get(id) ?: return null
@@ -99,6 +99,36 @@ object Squad {
             ).withEvent("Séance avec toi : +15 XP")
         }
         return true
+    }
+
+    /** Résultat d'une baston à l'écran. */
+    fun recordFight(winner: String, loser: String) {
+        val wn = get(winner)?.name ?: return
+        val ln = get(loser)?.name ?: return
+        edit { s ->
+            s.copy(mascots = s.mascots.map {
+                when (it.id) {
+                    winner -> it.copy(
+                        wins = it.wins + 1, xp = it.xp + 12, mood = (it.mood + 8).coerceAtMost(100f), energy = (it.energy - 6).coerceAtLeast(0f),
+                    ).bond(loser, -6).withEvent("A mis une raclée à $ln")
+                    loser -> it.copy(
+                        losses = it.losses + 1, xp = it.xp + 4, mood = (it.mood - 10).coerceAtLeast(0f), energy = (it.energy - 10).coerceAtLeast(0f),
+                    ).bond(winner, -10).withEvent("S'est fait sécher par $wn")
+                    else -> it
+                }
+            })
+        }
+    }
+
+    /** Moment sympa entre deux mascottes. */
+    fun bond(a: String, b: String, d: Int, eventA: String? = null, eventB: String? = null) = edit { s ->
+        s.copy(mascots = s.mascots.map {
+            when (it.id) {
+                a -> it.bond(b, d).let { m -> if (eventA != null) m.withEvent(eventA) else m }
+                b -> it.bond(a, d).let { m -> if (eventB != null) m.withEvent(eventB) else m }
+                else -> it
+            }
+        })
     }
 
     fun pet(id: String) = editMascot(id) { it.copy(mood = (it.mood + 6).coerceAtMost(100f), xp = it.xp + 1) }

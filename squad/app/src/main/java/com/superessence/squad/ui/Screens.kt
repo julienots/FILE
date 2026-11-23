@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -160,7 +161,7 @@ fun HomeScreen(
                     Text(if (on) "LA SQUAD EST EN LIBERTÉ" else "SUR TON ÉCRAN", style = Label.copy(color = if (on) C.green else C.dim))
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        if (on) "Ils vivent par-dessus tes applis. Fais-les glisser où tu veux, lâche-les sur la croix pour les ranger. Appui long = ouvrir sa fiche."
+                        if (on) "Ils vivent par-dessus tes applis. Fais-les glisser où tu veux, lâche-les sur la croix pour les ranger. Lâche un gars sur un autre : baston ! Appui long = ouvrir sa fiche."
                         else "Lâche tes gars sur ton écran : ils marchent, mangent, dorment et parlent, même appli fermée.",
                         style = Small,
                     )
@@ -277,6 +278,8 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
     var lineKey by remember { mutableStateOf(0) }
     var rename by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var challenge by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
     LaunchedEffect(lineKey) { delay(4200); line = null }
     LaunchedEffect(forced) { if (forced != null) { delay(3500); forced = null } }
@@ -350,6 +353,10 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
                 }
                 GhostButton("Son style", Icons.Filled.Brush, Modifier.weight(1f), onClick = onStyle)
             }
+            if (state.mascots.size > 1 && state.settings.fights) {
+                Spacer(Modifier.height(8.dp))
+                YellowButton("Défier quelqu'un à l'écran", Icons.Filled.SportsMma, Modifier.fillMaxWidth()) { challenge = true }
+            }
             Spacer(Modifier.height(16.dp))
             Card {
                 Column {
@@ -363,6 +370,45 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
                     Spacer(Modifier.height(10.dp))
                     Text("Plats préférés : ${a.food.joinToString(", ")}", style = Small)
                     Text("Il t'appelle « ${a.nick} »", style = Small)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Card {
+                Column {
+                    Text("SA BANDE", style = Label)
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        Column(Modifier.weight(1f)) { Text("${m.wins}", style = H2.copy(color = C.green)); Text("victoires", style = Small) }
+                        Column(Modifier.weight(1f)) { Text("${m.losses}", style = H2.copy(color = C.red)); Text("défaites", style = Small) }
+                        Column(Modifier.weight(1f)) {
+                            val total = m.wins + m.losses
+                            Text(if (total == 0) "–" else "${m.wins * 100 / total} %", style = H2); Text("ratio", style = Small)
+                        }
+                    }
+                    val others = state.mascots.filter { it.id != m.id }
+                    if (others.isEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Recrute d'autres gars : ils se parleront, se feront des checks… ou se mettront sur la gueule.", style = Small)
+                    }
+                    others.sortedByDescending { m.relWith(it.id) }.forEach { o ->
+                        val v = m.relWith(o.id)
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(36.dp, 48.dp)) { MascotCanvas(o.look, if (v <= -20) Act.GUARD else Act.IDLE, Modifier.fillMaxSize(), o.fitness, 2) }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row {
+                                    Text(o.name, style = Body.copy(fontWeight = FontWeight.Bold), modifier = Modifier.weight(1f))
+                                    Text(com.superessence.squad.model.Fight.relLabel(v), style = Small.copy(color = if (v >= 20) C.green else if (v <= -20) C.red else C.dim, fontWeight = FontWeight.Bold))
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(C.line)) {
+                                    val f = (v + 100) / 200f
+                                    Box(Modifier.fillMaxWidth(f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(if (v >= 0) C.green else C.red))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -418,6 +464,42 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
             },
             confirmButton = { TextButton({ if (name.isNotBlank()) Squad.editMascot(m.id) { it.copy(name = name.trim()) }; rename = false }) { Text("OK", color = C.yellow) } },
             dismissButton = { TextButton({ rename = false }) { Text("Annuler", color = C.dim) } },
+            containerColor = C.card,
+        )
+    }
+    if (challenge) {
+        AlertDialog(
+            onDismissRequest = { challenge = false },
+            title = { Text("${m.name} défie…", style = H2) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Ils vont s'affronter sur ton écran. Le plus en forme a l'avantage.", style = Small)
+                    state.mascots.filter { it.id != m.id }.forEach { o ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.card2)
+                                .clickable {
+                                    challenge = false
+                                    val act = ctx as? MainActivity
+                                    if (act != null && !com.superessence.squad.overlay.OverlayService.canRun(ctx)) act.enableOverlay()
+                                    else {
+                                        Squad.edit { it.copy(settings = it.settings.copy(overlayOn = true)) }
+                                        com.superessence.squad.overlay.OverlayService.fight(ctx, m.id, o.id)
+                                        act?.moveTaskToBack(true)
+                                    }
+                                }.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(36.dp, 48.dp)) { MascotCanvas(o.look, Act.GUARD, Modifier.fillMaxSize(), o.fitness, 4, facing = -1f) }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(o.name, style = Body.copy(fontWeight = FontWeight.Bold))
+                                Text("${o.archetype.title} · ${o.wins}V ${o.losses}D", style = Small.copy(fontSize = 12.sp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton({ challenge = false }) { Text("Annuler", color = C.dim) } },
             containerColor = C.card,
         )
     }
@@ -608,6 +690,8 @@ fun RhythmScreen(state: SquadState, onBack: () -> Unit, onBattery: () -> Unit) {
                     SliderRow("Taille", st.size, 0.6f..1.6f) { v -> sett { it.copy(size = v) } }
                     SliderRow("Vitesse de marche", st.speed, 0.3f..2f) { v -> sett { it.copy(speed = v) } }
                     SliderRow("Bavardage", st.chatter, 0f..2.5f) { v -> sett { it.copy(chatter = v) } }
+                    SliderRow("Rencontres entre eux", st.social, 0f..3f) { v -> sett { it.copy(social = v) } }
+                    ToggleRow("Bastons", st.fights, "Ils peuvent se battre entre eux. Lâche un gars sur un autre pour lancer la bagarre.") { v -> sett { it.copy(fights = v) } }
                     ToggleRow("Rester visibles en dormant", st.showSleeping, "Sinon ils disparaissent la nuit et reviennent au réveil") { v -> sett { it.copy(showSleeping = v) } }
                     ToggleRow("Vibrations", st.vibrate) { v -> sett { it.copy(vibrate = v) } }
                 }
