@@ -4,3 +4,4 @@ app/src/main/assets/
 build/
 app/build/
 local.properties
+build.log
