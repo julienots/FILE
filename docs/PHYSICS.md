@@ -193,6 +193,15 @@ moto tient debout puis vire en penchant, un char pivote sur place puis avance.
 **Centre de gravité** : `RigidBody.centerOfMassOffset` déplace le centre de masse de tout corps dynamique
 (plus bas = plus stable : voitures, bateaux, culbuto).
 
+## Eau et flottaison (`WaterVolume3D`)
+
+Une boîte d'eau (`size`, centrée sur l'entité ; sa face du haut est la surface) : les corps dynamiques
+dedans **flottent** selon la part immergée de leur forme (poussée d'Archimède de Jolt : bateaux, caisses,
+tonneaux qui tanguent), sont freinés (`linearDrag`, `angularDrag`) et emportés par le courant (`flow`, m/s).
+`buoyancy` : 1 = neutre, moins = coule lentement, plus = flotte plus haut. Les personnages et les corps
+statiques ne sont pas concernés. Test : une caisse lâchée dans l'eau plonge, remonte et flotte, dérive avec
+le courant et coule quand l'eau est désactivée. (Godot n'a pas d'équivalent intégré.)
+
 ## Corps mous (`SoftBody3D`)
 
 Tissus, drapeaux, rideaux, capes, gelées et ballons simulés par les *soft bodies* de Jolt : ils
@@ -279,8 +288,7 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
 - 2D : pentes de tilemap à 45° ou 22,5° (sur deux cellules) seulement ; deux
   `CharacterController2D` se bloquent, mais l'un ne pousse pas l'autre et on ne tient pas debout sur la
   tête arrondie d'un autre (on glisse à côté, comme une capsule dans Godot).
-- Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules : pas de remorque attelée
-  ni de bateau (flottaison) ; les butées 2D sont légèrement souples
+- Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules : pas de remorque attelée ; flottaison : une surface plane (pas de vagues physiques) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
 - Personnage 3D : capsule verticale uniquement ; entre deux personnages, simple collision des capsules.
 - Pas de *debug draw* des contacts ; pas de physique en mode édition (aperçu).

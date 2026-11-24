@@ -1466,6 +1466,32 @@ struct Physics3DWorld::Impl {
         }
     }
 
+    /// Buoyancy, drag and current of the WaterVolume3D boxes on the dynamic bodies inside them.
+    void applyWater(Scene& s, float dt) {
+        auto& reg = s.registry();
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        const JPH::Vec3 g = system->GetGravity();
+        reg.view<WaterVolume3DComponent, WorldTransformComponent>().each([&](ecs::Entity e, WaterVolume3DComponent& wv, WorldTransformComponent& w) {
+            if (!wv.enabled || !w.activeInHierarchy) return;
+            const Mat4 inv = math::inverse(w.matrix);
+            const Vec3 half = wv.size * 0.5f;
+            const Vec3 top = w.matrix.transformPoint({0.0f, half.y, 0.0f});
+            const Vec3 up = math::normalize(w.matrix.transformVector({0.0f, 1.0f, 0.0f}));
+            for (auto& [key, body] : bodies) {
+                if (body.type != BodyType3D::Dynamic || body.sensor || body.entity == e) continue;
+                // Inside the box (with the body's extent, so a hull touching the water counts).
+                const JPH::AABox bounds = bi.GetTransformedShape(body.id).GetWorldSpaceBounds();
+                const JPH::Vec3 c = bounds.GetCenter(), ext = bounds.GetExtent();
+                const Vec3 local = inv.transformPoint({c.GetX(), c.GetY(), c.GetZ()});
+                const float margin = std::max({ext.GetX(), ext.GetY(), ext.GetZ()});
+                if (std::fabs(local.x) > half.x + margin || std::fabs(local.z) > half.z + margin || local.y > half.y + margin || local.y < -half.y - margin)
+                    continue;
+                bi.ApplyBuoyancyImpulse(body.id, JPH::RVec3(top.x, top.y, top.z), toJ(up), std::max(wv.buoyancy, 0.0f), std::max(wv.linearDrag, 0.0f),
+                                        std::max(wv.angularDrag, 0.0f), toJ(wv.flow), g, dt);
+            }
+        });
+    }
+
     void step(Scene& s, float dt) {
         Stopwatch sw;
         sync(s);
@@ -1492,6 +1518,7 @@ struct Physics3DWorld::Impl {
         syncSoftBodies(s);
         syncVehicles(s);
         driveVehicles(s);
+        if (dt > 0.0f) applyWater(s, dt);
         if (dt > 0.0f) {
             const JPH::EPhysicsUpdateError err = system->Update(dt, 1, temp.get(), jobs.get());
             if (err != JPH::EPhysicsUpdateError::None) AGR_LOG_WARN("Physics3D", "simulation limits reached (error {})", static_cast<int>(err));

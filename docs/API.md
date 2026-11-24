@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 768 champs)
+## Composants (78, 774 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -20,7 +20,7 @@ Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-m�
 
 **Physics 2D** : [CharacterController2D](#CharacterController2D), [Collider2D](#Collider2D), [Joint2D](#Joint2D), [RigidBody2D](#RigidBody2D), [TilemapCollider2D](#TilemapCollider2D)
 
-**Physics 3D** : [CharacterController3D](#CharacterController3D), [Collider](#Collider), [Joint3D](#Joint3D), [RigidBody](#RigidBody), [SoftBody3D](#SoftBody3D), [Vehicle3D](#Vehicle3D)
+**Physics 3D** : [CharacterController3D](#CharacterController3D), [Collider](#Collider), [Joint3D](#Joint3D), [RigidBody](#RigidBody), [SoftBody3D](#SoftBody3D), [Vehicle3D](#Vehicle3D), [WaterVolume3D](#WaterVolume3D)
 
 **Rendering** : [BlobShadow](#BlobShadow), [Camera](#Camera), [Decal](#Decal), [DirectionalLight](#DirectionalLight), [Environment](#Environment), [MeshRenderer](#MeshRenderer), [Occluder](#Occluder), [ParticleEmitter3D](#ParticleEmitter3D), [PointLight](#PointLight), [PostProcess](#PostProcess), [ReflectionProbe](#ReflectionProbe), [SpotLight](#SpotLight), [SpriteRenderer](#SpriteRenderer), [Terrain](#Terrain), [Water](#Water)
 
@@ -785,6 +785,21 @@ Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. 
 | `speed` | float | m/s forward (simulation) (non enregistré) (lecture seule) |
 | `rpm` | float |  (non enregistré) (lecture seule) |
 | `gear` | int |  (non enregistré) (lecture seule) |
+
+### WaterVolume3D
+
+Water in a box (top face = surface): dynamic bodies float, are slowed and carried by the current.
+
+*Physics 3D*
+
+| Champ | Type | Détails |
+|---|---|---|
+| `size` | vec3 |  |
+| `buoyancy` | float | 1 = neutral, > 1 floats ; plage 0 .. 5 |
+| `linearDrag` | float | plage 0 .. 10 |
+| `angularDrag` | float | plage 0 .. 10 |
+| `flow` | vec3 | Current (m/s, world) |
+| `enabled` | bool |  |
 
 ### BlobShadow
 

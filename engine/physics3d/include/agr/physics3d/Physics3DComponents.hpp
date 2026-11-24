@@ -135,6 +135,18 @@ struct CharacterController3DComponent {
 /// brake on the rear ones. The vehicle drives toward its local -Z (forward), +Y up. Children named
 /// WheelFL, WheelFR, WheelRL, WheelRR (front / rear, left / right) follow their wheel (spin,
 /// steering, suspension). Scripts drive it with throttle / steering / brake / handBrake.
+/// Water (or any liquid) in a box: its top face is the surface. Dynamic bodies in it float
+/// (Archimedes on their submerged part: boats, crates, barrels), are slowed down, and carried by
+/// `flow` (rivers). Characters and static bodies are not affected.
+struct WaterVolume3DComponent {
+    math::Vec3 size{20.0f, 4.0f, 20.0f};  ///< Full size (local units, centered on the entity; top = surface).
+    float buoyancy = 1.2f;     ///< 1 = neutral, < 1 sinks slowly, > 1 floats (higher sits higher).
+    float linearDrag = 0.6f;   ///< Slows the submerged part (water resistance).
+    float angularDrag = 0.05f;
+    math::Vec3 flow{0.0f};     ///< Current (m/s, world space).
+    bool enabled = true;
+};
+
 /// Car: 2 to 4 axles (front one steers). Motorcycle: 2 wheels in line, leans into turns.
 /// Tracked: tank tracks on each side (steering turns the tracks at different speeds, on the spot too).
 enum class VehicleKind3D : i32 { Car = 0, Motorcycle = 1, Tracked = 2 };

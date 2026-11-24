@@ -93,6 +93,15 @@ void registerPhysics3DComponents() {
         .field("layer", &CharacterController3DComponent::layer, {.tooltip = "Collision layer (0..31)", .flags = FieldFlag_Layer, .rangeMin = 0.0f, .rangeMax = 31.0f})
         .field("collidesWith", &CharacterController3DComponent::collidesWith, {.tooltip = "Layers this collides with", .flags = FieldFlag_LayerMask});
 
+    reg.add<WaterVolume3DComponent>("WaterVolume3D")
+        .category("Physics 3D")
+        .description("Water in a box (top face = surface): dynamic bodies float, are slowed and carried by the current.")
+        .field("size", &WaterVolume3DComponent::size, {.speed = 0.05f})
+        .field("buoyancy", &WaterVolume3DComponent::buoyancy, {.tooltip = "1 = neutral, > 1 floats", .rangeMin = 0.0f, .rangeMax = 5.0f, .speed = 0.01f})
+        .field("linearDrag", &WaterVolume3DComponent::linearDrag, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("angularDrag", &WaterVolume3DComponent::angularDrag, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("flow", &WaterVolume3DComponent::flow, {.tooltip = "Current (m/s, world)", .speed = 0.01f})
+        .field("enabled", &WaterVolume3DComponent::enabled);
     reg.add<Vehicle3DComponent>("Vehicle3D")
         .category("Physics 3D")
         .description("Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR (car; middle axles WheelML1/MR1...), WheelF/R (motorcycle), WheelL0../WheelR0.. (tracked) follow the wheels.")

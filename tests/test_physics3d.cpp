@@ -783,3 +783,35 @@ TEST_CASE("Vehicle3D kinds: a 3-axle truck drives, a motorcycle stays up through
     }
 }
 }
+
+TEST_SUITE("physics3d") {
+TEST_CASE("WaterVolume3D: a crate dropped in floats at the surface, drifts with the current, sinks when the water is off") {
+    World3D w;
+    w.box("Seabed", {0, -6.5f, 0}, {100, 1, 100}, BodyType3D::Static, false);
+    const auto water = w.scene.createEntity("Lake");
+    w.scene.registry().get<TransformComponent>(water).position = {0, -3, 0};
+    auto& wv = w.scene.registry().emplace<WaterVolume3DComponent>(water);
+    wv.size = {40, 6, 40};  // surface at y = 0
+    const auto crate = w.box("Crate", {0, 3, 0}, {1, 1, 1}, BodyType3D::Dynamic);
+    w.scene.updateTransforms();
+    float lowest = 1e9f;
+    for (int i = 0; i < 300; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        w.scene.updateTransforms();
+        lowest = std::min(lowest, w.position(crate).y);
+    }
+    CHECK_MESSAGE(lowest > -3.0f, lowest);              // splashed in, never reached the bottom
+    const float y = w.position(crate).y;
+    CHECK_MESSAGE(y > -0.6f, y);                        // floating at the surface
+    CHECK_MESSAGE(y < 0.6f, y);
+    // A current pushes it along +X.
+    w.scene.registry().get<WaterVolume3DComponent>(water).flow = {2, 0, 0};
+    const float x0 = w.position(crate).x;
+    w.run(2.0f);
+    CHECK_MESSAGE(w.position(crate).x > x0 + 1.0f, w.position(crate).x);
+    // No water: it sinks to the seabed.
+    w.scene.registry().get<WaterVolume3DComponent>(water).enabled = false;
+    w.run(3.0f);
+    CHECK_MESSAGE(w.position(crate).y < -5.0f, w.position(crate).y);
+}
+}
