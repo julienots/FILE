@@ -69,6 +69,11 @@ class AxonService : AccessibilityService() {
     private var currentApp = ""
     private var currentPkg = ""
     private var uiCache: List<El> = emptyList()
+    @Volatile private var lastEventAt = 0L
+    /** Dernière image de la retransmission (réutilisée par screenshot si elle est toute récente). */
+    @Volatile private var lastFrame: Triple<String, Int, Int>? = null
+    @Volatile private var lastFrameAt = 0L
+    @Volatile private var lastActionAt = 0L
 
     data class El(
         val index: Int, val text: String, val desc: String, val id: String, val type: String,
@@ -111,7 +116,9 @@ class AxonService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (event == null) return
+        lastEventAt = System.currentTimeMillis()
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg == currentPkg || pkg == "com.android.systemui") return
         currentPkg = pkg
@@ -214,6 +221,8 @@ class AxonService : AccessibilityService() {
                     val bmp = capture()
                     if (bmp != null) {
                         val (data, w, h) = encode(bmp, 720, 55)
+                        val t = System.currentTimeMillis()
+                        if (t0 > lastActionAt) { lastFrame = Triple(data, w, h); lastFrameAt = t }
                         send(JSONObject().put("type", "frame").put("mime", "image/jpeg").put("w", w).put("h", h).put("data", data))
                     }
                 } catch (_: Exception) {}
@@ -286,7 +295,9 @@ class AxonService : AccessibilityService() {
         val res = JSONObject().put("type", "result").put("id", id)
         try {
             if (prefs.paused) throw ToolError("AXON est en pause : l'utilisateur a suspendu le contrôle. Demandez-lui de le réactiver dans l'app AXON.")
-            res.put("content", tool(tool, args))
+            val content = tool(tool, args)
+            if (tool in ACTIONS || tool == "do_actions") observe(content, args.optString("observe", "elements"))
+            res.put("content", content)
         } catch (e: Exception) {
             res.put("isError", true).put("content", JSONArray().put(textPart("Erreur : ${e.message ?: e.javaClass.simpleName}")))
         }
@@ -294,16 +305,90 @@ class AxonService : AccessibilityService() {
     }
 
     private fun textPart(t: String) = JSONObject().put("type", "text").put("text", t)
+
+    /* ------------------------------------------------------------------ */
+    /* Rapidité : attente intelligente + écran renvoyé avec chaque action   */
+    /* ------------------------------------------------------------------ */
+    private val ACTIONS = setOf("tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url")
+
+    /** Attend que l'écran ne bouge plus (aucun événement depuis quietMs), au plus maxMs. */
+    private fun settle(maxMs: Long = 1500, quietMs: Long = 220) {
+        val start = System.currentTimeMillis()
+        Thread.sleep(90)
+        while (System.currentTimeMillis() - start < maxMs) {
+            if (System.currentTimeMillis() - lastEventAt >= quietMs) return
+            Thread.sleep(40)
+        }
+    }
+
+    /** Ajoute l'état de l'écran après une action, pour éviter à Claude un appel de plus. */
+    private fun observe(content: JSONArray, mode: String) {
+        if (mode == "none") return
+        settle()
+        when (mode) {
+            "screenshot" -> {
+                try { val p = screenshotParts(); for (i in 0 until p.length()) content.put(p.get(i)) }
+                catch (e: Exception) { content.put(textPart("(capture impossible : ${e.message})")) }
+                content.put(textPart(formatElements(collect())))
+            }
+            else -> content.put(textPart("Écran maintenant :\n" + formatElements(collect())))
+        }
+    }
+
+    private fun screenshotParts(): JSONArray {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw ToolError("La capture d'écran nécessite Android 11 ou plus. Utilisez get_ui_elements.")
+        val (sw, sh) = screenSize()
+        // Une image de la retransmission de moins de 0,5 s, prise après la dernière action, suffit : pas de nouvelle capture.
+        val recent = lastFrame?.takeIf { System.currentTimeMillis() - lastFrameAt < 500 && lastFrameAt > lastActionAt }
+        val (data, w, h) = recent ?: run {
+            val bmp = capture() ?: throw ToolError("Capture impossible (écran éteint ou contenu protégé).")
+            encode(bmp, 720, 60)
+        }
+        val iw = min(720, w); val ih = (h * iw.toFloat() / w).roundToInt()
+        val f = sw.toFloat() / iw
+        return JSONArray()
+            .put(JSONObject().put("type", "image").put("mimeType", "image/jpeg").put("data", data))
+            .put(textPart("Image ${iw}x${ih} ; écran réel ${sw}x${sh} px. Pour tap : x_réel = x_image × ${"%.3f".format(java.util.Locale.US, f)} (idem pour y). Préférez tap_element. App : ${currentApp.ifBlank { "?" }}."))
+    }
+
+    /** Plusieurs actions en un seul appel (beaucoup plus rapide que des appels séparés). */
+    private fun doActions(a: JSONObject): JSONArray {
+        val steps = a.optJSONArray("steps") ?: throw ToolError("Donnez steps : liste d'actions.")
+        if (steps.length() > 20) throw ToolError("20 actions maximum par appel.")
+        val log = StringBuilder()
+        for (i in 0 until steps.length()) {
+            val st = steps.getJSONObject(i)
+            val t = st.optString("tool").ifBlank { st.optString("action") }
+            try {
+                when (t) {
+                    "wait" -> Thread.sleep(min(5000L, st.optLong("ms", 500)))
+                    in ACTIONS -> {
+                        val r = tool(t, st)
+                        log.append("${i + 1}. $t ✓ ${r.optJSONObject(0)?.optString("text")?.takeIf { it != "OK" }?.take(120) ?: ""}\n")
+                        if (i < steps.length() - 1) settle(1200)
+                    }
+                    else -> throw ToolError("action inconnue « $t » (autorisées : ${ACTIONS.joinToString()}, wait)")
+                }
+            } catch (e: Exception) {
+                log.append("${i + 1}. $t ✗ ${e.message}\nArrêt : les actions suivantes n'ont pas été faites.")
+                settle()
+                throw ToolError(log.toString() + "\n\nÉcran maintenant :\n" + formatElements(collect()))
+            }
+        }
+        return ok(log.toString().trimEnd())
+    }
     private fun ok(t: String = "OK") = JSONArray().put(textPart(t))
 
-    private fun tool(name: String, a: JSONObject): JSONArray = when (name) {
+    private fun tool(name: String, a: JSONObject): JSONArray {
+        if (name in ACTIONS) lastActionAt = System.currentTimeMillis()
+        try { return toolImpl(name, a) } finally { if (name in ACTIONS) lastActionAt = System.currentTimeMillis() }
+    }
+
+    private fun toolImpl(name: String, a: JSONObject): JSONArray = when (name) {
+        "do_actions" -> doActions(a)
         "screenshot" -> {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw ToolError("La capture d'écran nécessite Android 11 ou plus. Utilisez get_ui_elements.")
-            val bmp = capture() ?: throw ToolError("Capture impossible (écran éteint ou contenu protégé).")
-            val (data, w, h) = encode(bmp, 1080, 70)
-            JSONArray()
-                .put(JSONObject().put("type", "image").put("mimeType", "image/jpeg").put("data", data))
-                .put(textPart("Écran ${w}x${h} px. App au premier plan : ${currentApp.ifBlank { "?" }}."))
+            screenshotParts()
         }
         "get_ui_elements" -> ok(formatElements(collect()))
         "tap_element" -> {

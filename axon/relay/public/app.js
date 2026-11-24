@@ -154,7 +154,7 @@
   const targetId = () => (sel === "all" ? "all" : current()?.id);
 
   const TOOL_LABEL = {
-    screenshot: "Regarde l'écran", get_ui_elements: "Analyse l'interface", tap_element: null, tap: null,
+    do_actions: "Enchaîne plusieurs actions", screenshot: "Regarde l'écran", get_ui_elements: "Analyse l'interface", tap_element: null, tap: null,
     swipe: "Fait défiler", type_text: "Écrit du texte", press_key: "Appuie sur une touche", list_apps: "Cherche une app",
     launch_app: null, open_url: null, status: "Vérifie la connexion", notify: null, get_requests: "Lit vos demandes",
     wait_for_request: "Attend vos demandes", complete_request: null,
