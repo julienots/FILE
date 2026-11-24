@@ -288,6 +288,7 @@ struct Physics2DWorld::Impl {
                 if (const auto* tc = reg.tryGet<TilemapCollider2DComponent>(c)) {
                     h = mixf(mixf(h, tc->friction), tc->restitution);
                     h = mix(mix(h, std::hash<std::string>{}(tc->oneWayTiles)), std::hash<std::string>{}(tc->slopeTiles));
+                    h = mix(mix(mix(h, std::hash<std::string>{}(tc->emptyTiles)), std::hash<std::string>{}(tc->triggerTiles)), std::hash<std::string>{}(tc->shapeTiles));
                     h = mix(mix(h, static_cast<u64>(tc->layer & 31)), tc->collidesWith);
                     if (const auto* tm = reg.tryGet<TilemapComponent>(c)) h = mix(h, tilesHash(*tm));
                 }
@@ -677,6 +678,48 @@ struct Physics2DWorld::Impl {
                     }
                 }
             }
+            // 20 no collision, 21 trigger, 100 + i: own box shapeBoxes[i].
+            auto ids = [](const std::string& list, auto&& each) {
+                std::string cur;
+                for (char c : list + ",") {
+                    if (c == ',' || c == ';') {
+                        if (!cur.empty()) each(std::atoi(cur.c_str()));
+                        cur.clear();
+                    } else if (c != ' ') {
+                        cur += c;
+                    }
+                }
+            };
+            ids(tc->emptyTiles, [&](i32 id) { kinds[id] = 20; });
+            ids(tc->triggerTiles, [&](i32 id) { kinds[id] = 21; });
+            std::vector<math::Vec4> shapeBoxes;
+            {
+                std::string entry;
+                for (char c : tc->shapeTiles + ";") {
+                    if (c == ';') {
+                        const usize colon = entry.find(':');
+                        if (colon != std::string::npos) {
+                            float v[4] = {0, 0, 1, 1};
+                            std::string rest = entry.substr(colon + 1) + ",", num;
+                            int k = 0;
+                            for (char d : rest) {
+                                if (d == ',') {
+                                    if (k < 4 && !num.empty()) v[k] = std::clamp(std::strtof(num.c_str(), nullptr), 0.0f, 1.0f);
+                                    ++k;
+                                    num.clear();
+                                } else if (d != ' ') {
+                                    num += d;
+                                }
+                            }
+                            kinds[std::atoi(entry.substr(0, colon).c_str())] = 100 + static_cast<int>(shapeBoxes.size());
+                            shapeBoxes.push_back({v[0], v[1], v[2], v[3]});
+                        }
+                        entry.clear();
+                    } else if (c != ' ') {
+                        entry += c;
+                    }
+                }
+            }
             auto kindAt = [&](u32 x, u32 y) {
                 const i32 id = tm->tileAt(x, y);
                 if (id < 0) return -1;
@@ -688,11 +731,22 @@ struct Physics2DWorld::Impl {
                 u32 x = 0;
                 while (x < tm->width) {
                     const int kind = kindAt(x, y);
-                    if (kind < 0) {
+                    if (kind < 0 || kind == 20) {  // empty cell or decor without collision
                         ++x;
                         continue;
                     }
-                    if (kind >= 2) {  // slope: under the line from (x0, hLeft) to (x1, hRight) in the cell
+                    if (kind >= 100) {  // its own box inside the cell
+                        const math::Vec4 r = shapeBoxes[static_cast<usize>(kind - 100)];
+                        if (r.z > 1e-4f && r.w > 1e-4f) {
+                            const Vec2 local{(static_cast<float>(x) + r.x + r.z * 0.5f) * cw, (static_cast<float>(y) + r.y + r.w * 0.5f) * ch};
+                            const b2Polygon box = b2MakeOffsetBox(r.z * cw * 0.5f, r.w * ch * 0.5f, toB2(rel.position + rotate(local, rel.angle)), b2MakeRot(rel.angle));
+                            b2CreatePolygonShape(body.id, &sd, &box);
+                            ++body.shapes;
+                        }
+                        ++x;
+                        continue;
+                    }
+                    if (kind >= 2 && kind < 20) {  // slope: under the line from (x0, hLeft) to (x1, hRight) in the cell
                         const float x0 = static_cast<float>(x) * cw, x1 = x0 + cw, y0 = static_cast<float>(y) * ch;
                         const bool right = kind % 2 == 0;  // 2, 4, 6 rise to the right
                         float lo = 0.0f, hi = 1.0f;          // heights (fraction of the cell) at the low / high ends
@@ -718,7 +772,9 @@ struct Physics2DWorld::Impl {
                     const Vec2 local{(static_cast<float>(start + x) * 0.5f) * cw, (static_cast<float>(y) + 0.5f) * ch};
                     const Vec2 center = rel.position + rotate(local, rel.angle);
                     const b2Polygon box = b2MakeOffsetBox(static_cast<float>(x - start) * cw * 0.5f, ch * 0.5f, toB2(center), b2MakeRot(rel.angle));
-                    const b2ShapeId shape = b2CreatePolygonShape(body.id, &sd, &box);
+                    b2ShapeDef runDef = sd;
+                    if (kind == 21) runDef.isSensor = true;  // trigger tiles
+                    const b2ShapeId shape = b2CreatePolygonShape(body.id, &runDef, &box);
                     if (kind == 1) oneWayShapes[shapeKey(shape)] = up;
                     ++body.shapes;
                 }

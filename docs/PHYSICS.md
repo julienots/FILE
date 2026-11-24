@@ -110,6 +110,14 @@ bandes horizontales (une forme par bande) ; la collision est reconstruite quand 
 un décor traversable, utiliser une seconde tilemap sans collider (comme « Decor » dans la Vitrine 2D).
 
 
+**Collisions par tuile** (comme les couches physiques d'un TileSet de Godot) : `emptyTiles` (`"4,5"`)
+n'ont aucune collision (herbe, fleurs, décor), `triggerTiles` (`"30,31"`) sont des **déclencheurs**
+(pointes, eau, échelles, drapeaux : on les traverse, `onTrigger(other, began)` est appelé sur la tilemap
+et sur l'entité), `shapeTiles` (`"7:0,0,1,0.5; 8:0.4,0,0.2,1"`) donnent à une tuile **sa propre boîte**
+en fractions de la case depuis son coin bas-gauche (demi-bloc, poteau, rebord). Test : une caisse se pose
+sur une tuile pleine et sur un demi-bloc à la bonne hauteur, traverse le décor, traverse les pointes en
+les signalant.
+
 `TilemapCollider2D.oneWayTiles` (`"12,13"`) : ces tuiles sont des **plateformes traversables** (on saute
 au travers par dessous, on se pose dessus) ; `slopeTiles` (`"20:/,21:\"`) : **pentes** à 45°, `/`
 montant vers la droite, `\` vers la gauche (un triangle par cellule) ; `/1` et `/2` (`\1`, `\2`) sont la

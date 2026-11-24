@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 756 champs)
+## Composants (76, 759 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -619,6 +619,9 @@ Static collision for the painted cells of the Tilemap.
 |---|---|---|
 | `oneWayTiles` | string | Tiles that are one-way platforms (frame indices: "12,13") |
 | `slopeTiles` | string | Slope tiles: "20:/,21:\" (/ rises to the right) |
+| `emptyTiles` | string | Tiles with no collision (decor): "4,5,9" |
+| `triggerTiles` | string | Tiles that are triggers (spikes, water, ladders): "30,31" -> onTrigger |
+| `shapeTiles` | string | Own box per tile, cell fractions from bottom-left: "7:0,0,1,0.5; 8:0.4,0,0.2,1" |
 | `friction` | float | plage 0 .. 10 |
 | `restitution` | float | plage 0 .. 1 |
 | `layer` | int | Collision layer (0..31) ; plage 0 .. 31 |

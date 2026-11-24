@@ -663,3 +663,38 @@ TEST_CASE("tilemap colliders: gentle half slopes over two cells") {
     CHECK(top(4.25f) == doctest::Approx(0.375f).epsilon(0.03)); // falling: 0.5 at its left edge
 }
 }  // TEST_SUITE
+
+TEST_SUITE("physics2d") {
+TEST_CASE("tilemap colliders per tile: decor without collision, trigger tiles, own boxes (half blocks)") {
+    World2D w;
+    const auto map = w.scene.createEntity("Map");
+    auto& tm = w.scene.registry().emplace<TilemapComponent>(map);
+    tm.width = 8;
+    tm.height = 1;
+    tilemapEnsureLayout(tm);
+    tilemapSet(tm, 0, 0, 1);  // solid
+    tilemapSet(tm, 2, 0, 2);  // grass: no collision
+    tilemapSet(tm, 4, 0, 3);  // spikes: trigger
+    tilemapSet(tm, 6, 0, 4);  // half block (lower half)
+    auto& tc = w.scene.registry().emplace<TilemapCollider2DComponent>(map);
+    tc.emptyTiles = "2";
+    tc.triggerTiles = "3";
+    tc.shapeTiles = "4:0,0,1,0.5";
+    // A crate above each tile (cells are 1 x 1, the map from (0,0)).
+    const auto onSolid = w.box("OnSolid", {0.5f, 3}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    const auto onGrass = w.box("OnGrass", {2.5f, 3}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    const auto onSpikes = w.box("OnSpikes", {4.5f, 3}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    const auto onHalf = w.box("OnHalf", {6.5f, 3}, {0.4f, 0.4f}, BodyType2D::Dynamic);
+    bool spikesTouched = false;
+    for (int i = 0; i < 120; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        for (const auto& e : w.physics.events())
+            if (e.trigger && e.begin && e.a == map && e.b == onSpikes) spikesTouched = true;
+    }
+    CHECK(w.position(onSolid).y == doctest::Approx(1.2f).epsilon(0.02));  // on top of the cell (y = 1)
+    CHECK(w.position(onHalf).y == doctest::Approx(0.7f).epsilon(0.03));   // on the half block (y = 0.5)
+    CHECK(w.position(onGrass).y < -1.0f);                                  // fell through the decor
+    CHECK(w.position(onSpikes).y < -1.0f);                                 // through the trigger...
+    CHECK(spikesTouched);                                                  // ...which reported it
+}
+}

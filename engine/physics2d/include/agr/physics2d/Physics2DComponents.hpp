@@ -85,6 +85,14 @@ struct TilemapCollider2DComponent {
     /// Slope tiles: "frame:/" rises to the right (+x), "frame:\" rises to the left; ',' between
     /// entries ("20:/,21:\"). The triangle fills the cell under the diagonal.
     std::string slopeTiles;
+    /// Tiles with no collision at all (grass, flowers, background decor): "4,5,9".
+    std::string emptyTiles;
+    /// Tiles that are triggers instead of walls (spikes, water, ladders, checkpoints): bodies pass
+    /// through and scripts get onTrigger(other, began) on the tilemap and the other entity: "30,31".
+    std::string triggerTiles;
+    /// Tiles with their own box inside the cell, as fractions of the cell from its bottom-left
+    /// corner: "frame:x,y,w,h" separated by ';' (half block "7:0,0,1,0.5", post "8:0.4,0,0.2,1").
+    std::string shapeTiles;
     float friction = 0.6f;
     float restitution = 0.0f;
     i32 layer = 0;
