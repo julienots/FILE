@@ -309,7 +309,7 @@ class AxonService : AccessibilityService() {
     /* ------------------------------------------------------------------ */
     /* Rapidité : attente intelligente + écran renvoyé avec chaque action   */
     /* ------------------------------------------------------------------ */
-    private val ACTIONS = setOf("tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url")
+    private val ACTIONS = setOf("tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url", "search", "scroll_to")
 
     /** Attend que l'écran ne bouge plus (aucun événement depuis quietMs), au plus maxMs. */
     private fun settle(maxMs: Long = 1500, quietMs: Long = 220) {
@@ -454,13 +454,11 @@ class AxonService : AccessibilityService() {
             val apps = launcherApps().filter { q.isBlank() || it.first.lowercase().contains(q) || it.second.lowercase().contains(q) }
             ok(apps.joinToString("\n") { "${it.first} — ${it.second}" }.ifBlank { "Aucune application trouvée." })
         }
+        "search" -> search(a.getString("app").trim(), a.getString("query"))
+        "scroll_to" -> scrollTo(a)
         "launch_app" -> {
             val q = a.getString("app").trim()
-            val apps = launcherApps()
-            val pkg = apps.firstOrNull { it.second.equals(q, true) }?.second
-                ?: apps.firstOrNull { it.first.equals(q, true) }?.second
-                ?: apps.firstOrNull { it.first.lowercase().contains(q.lowercase()) }?.second
-                ?: throw ToolError("Application \"$q\" introuvable. Utilisez list_apps.")
+            val pkg = findPkg(q)
             val intent = packageManager.getLaunchIntentForPackage(pkg) ?: throw ToolError("$pkg ne peut pas être ouverte.")
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             val label = appLabel(pkg)
@@ -583,13 +581,111 @@ class AxonService : AccessibilityService() {
     private fun formatElements(els: List<El>): String {
         if (els.isEmpty()) return "(aucun élément lisible — l'app dessine peut-être elle-même son interface : utilisez screenshot et tap x/y)"
         val head = "App : ${currentApp.ifBlank { "?" }}\n"
-        return head + els.joinToString("\n") { e ->
-            val flags = listOfNotNull(if (e.clickable) "cliquable" else null, if (e.editable) "champ" else null,
-                if (e.scrollable) "défilant" else null, if (e.checked) "coché" else null).joinToString(",")
-            val label = listOfNotNull(e.text.takeIf { it.isNotEmpty() }?.let { "\"$it\"" },
-                e.desc.takeIf { it.isNotEmpty() }?.let { "desc=\"$it\"" }, e.id.takeIf { it.isNotEmpty() }?.let { "#$it" }).joinToString(" ")
-            "[${e.index}] ${e.type} $label ${if (flags.isNotEmpty()) "($flags)" else ""} @${e.bounds.centerX()},${e.bounds.centerY()}"
+        // Format compact (moins de texte = Claude répond plus vite) : [n] "texte" desc #id {c=cliquable,s=champ,d=défilant,v=coché} @x,y
+        val lines = ArrayList<String>()
+        for (e in els) {
+            val hasLabel = e.text.isNotEmpty() || e.desc.isNotEmpty()
+            // Conteneurs sans texte ni rôle utile : bruit, on les saute.
+            if (!hasLabel && !e.editable && !e.scrollable && !(e.clickable && e.id.isNotEmpty())) continue
+            val flags = buildString { if (e.clickable) append('c'); if (e.editable) append('s'); if (e.scrollable) append('d'); if (e.checked) append('v') }
+            val label = buildString {
+                if (e.text.isNotEmpty()) append("\"").append(e.text.take(80)).append("\"")
+                if (e.desc.isNotEmpty() && e.desc != e.text) append(" desc=\"").append(e.desc.take(60)).append("\"")
+                if (!hasLabel && e.id.isNotEmpty()) append("#").append(e.id)
+            }
+            lines.add("[${e.index}] $label${if (flags.isNotEmpty()) " {$flags}" else ""} @${e.bounds.centerX()},${e.bounds.centerY()}")
+            if (lines.size >= 150) { lines.add("… (liste coupée)"); break }
         }
+        return head + "c=cliquable s=champ de saisie d=défilant v=coché\n" + lines.joinToString("\n")
+    }
+
+    private fun findPkg(q: String): String {
+        val apps = launcherApps()
+        return apps.firstOrNull { it.second.equals(q, true) }?.second
+            ?: apps.firstOrNull { it.first.equals(q, true) }?.second
+            ?: apps.firstOrNull { it.first.lowercase().contains(q.lowercase()) }?.second
+            ?: throw ToolError("Application \"$q\" introuvable. Utilisez list_apps.")
+    }
+
+    /* --- Tâches complètes en un appel --- */
+    /** Liens directs : la recherche s'ouvre instantanément, sans toucher l'interface. */
+    private fun searchLink(app: String, q: String): Pair<String, String?>? {
+        val e = Uri.encode(q); val a = app.lowercase()
+        return when {
+            a.contains("youtube") -> "https://www.youtube.com/results?search_query=$e" to "com.google.android.youtube"
+            a.contains("maps") -> "geo:0,0?q=$e" to "com.google.android.apps.maps"
+            a.contains("play") && a.contains("store") -> "market://search?q=$e" to "com.android.vending"
+            a.contains("spotify") -> "spotify:search:$e" to "com.spotify.music"
+            a == "google" || a.contains("chrome") || a == "web" || a == "internet" -> "https://www.google.com/search?q=$e" to null
+            else -> null
+        }
+    }
+
+    private fun search(app: String, query: String): JSONArray {
+        if (query.isBlank()) throw ToolError("query vide.")
+        searchLink(app, query)?.let { (url, pkg) ->
+            val i = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val usable = pkg?.let { p -> Intent(i).setPackage(p).takeIf { it.resolveActivity(packageManager) != null } } ?: i.takeIf { it.resolveActivity(packageManager) != null }
+            if (usable != null) {
+                activity("app", "Recherche « $query » dans $app")
+                val target = usable.`package` ?: usable.resolveActivity(packageManager)?.packageName
+                val ok = startAndWait(usable) { fg -> target == null || fg == target } || run { goHome(); startAndWait(usable) { fg -> target == null || fg == target } }
+                if (ok) return ok("Résultats de « $query » ouverts dans ${target?.let { appLabel(it) } ?: app} (lien direct).")
+            }
+        }
+        // Sinon : ouvrir l'app, trouver la recherche, écrire, valider.
+        val pkg = findPkg(app)
+        val intent = packageManager.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            ?: throw ToolError("$pkg ne peut pas être ouverte.")
+        activity("app", "Recherche « $query » dans ${appLabel(pkg)}")
+        launchVerified(pkg, appLabel(pkg), intent)
+        settle(2000)
+        var field = searchField()
+        if (field == null) {
+            val words = listOf("search", "recherch", "rechercher", "chercher", "loupe")
+            val btn = collect().firstOrNull { e -> e.clickable && words.any { w -> e.desc.lowercase().contains(w) || e.text.lowercase().contains(w) || e.id.lowercase().contains(w) } }
+                ?: throw ToolError("Barre de recherche introuvable dans ${appLabel(pkg)}. Utilisez get_ui_elements puis tap_element.")
+            clickElement(btn)
+            settle(1500)
+            field = searchField() ?: throw ToolError("Le champ de recherche ne s'est pas ouvert. Utilisez get_ui_elements.")
+        }
+        field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        val b = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query) }
+        if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b)) throw ToolError("Le champ refuse la saisie.")
+        Thread.sleep(150)
+        try { pressEnter() } catch (_: Exception) {
+            // Pas de touche Entrée : on touche la première suggestion.
+            settle(1000)
+            collect().firstOrNull { it.clickable && it.text.lowercase().contains(query.lowercase().take(20)) }?.let { clickElement(it) }
+        }
+        return ok("Recherche « $query » lancée dans ${appLabel(pkg)}.")
+    }
+
+    private fun searchField(): AccessibilityNodeInfo? =
+        focusedInput() ?: collect().firstOrNull { it.editable }?.node
+
+    /** Fait défiler jusqu'à voir un texte, et le touche si tap=true. */
+    private fun scrollTo(a: JSONObject): JSONArray {
+        val q = a.getString("text").lowercase().trim()
+        val dir = a.optString("direction", "down")
+        val (w, h) = screenSize()
+        fun find() = collect().firstOrNull { it.text.lowercase().contains(q) || it.desc.lowercase().contains(q) }
+        var el = find()
+        var n = 0
+        while (el == null && n < a.optInt("max_scrolls", 10)) {
+            when (dir) {
+                "up" -> gesture(w / 2f, h * .3f, w / 2f, h * .75f, 280)
+                "left" -> gesture(w * .2f, h / 2f, w * .85f, h / 2f, 280)
+                "right" -> gesture(w * .85f, h / 2f, w * .2f, h / 2f, 280)
+                else -> gesture(w / 2f, h * .75f, w / 2f, h * .3f, 280)
+            }
+            n++
+            settle(900, 180)
+            el = find()
+        }
+        if (el == null) throw ToolError("« ${a.getString("text")} » introuvable après $n défilements.")
+        if (a.optBoolean("tap", true)) { clickElement(el); return ok("Trouvé après $n défilement(s) et touché : ${el.text.ifBlank { el.desc }}") }
+        return ok("Trouvé après $n défilement(s) : [${el.index}] ${el.text.ifBlank { el.desc }}")
     }
 
     /* --- Ouverture d'apps vérifiée --- */

@@ -53,7 +53,7 @@ même action sur tous à la fois. L'écran de contrôle affiche un onglet par ap
 - L'interrupteur **Mettre Claude en pause** bloque instantanément toutes ses actions.
 
 ## Outils donnés à Claude
-`list_devices`, `do_actions`, `status`, `screenshot`, `get_ui_elements`, `tap_element`, `tap`, `swipe`, `type_text`, `press_key`,
+`list_devices`, `search`, `scroll_to`, `do_actions`, `status`, `screenshot`, `get_ui_elements`, `tap_element`, `tap`, `swipe`, `type_text`, `press_key`,
 `list_apps`, `launch_app`, `open_url`, `notify`, `get_requests`, `wait_for_request`, `complete_request`.
 
 ## Compiler l'APK soi-même
