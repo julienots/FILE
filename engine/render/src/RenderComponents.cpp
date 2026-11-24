@@ -514,7 +514,9 @@ void registerRenderComponents() {
         .field("lit", &SpriteRendererComponent::lit, {.tooltip = "Lit by Light2D components"})
         .field("shader", &SpriteRendererComponent::shader, {.tooltip = "Sprite shader (.agrshader with void sprite(inout Sprite s))", .flags = FieldFlag_AssetPath})
         .field("normalMap", &SpriteRendererComponent::normalMap,
-               {.tooltip = "Normal map of the texture (lit sprites): the lights shade its relief", .flags = FieldFlag_AssetPath});
+               {.tooltip = "Normal map of the texture (lit sprites): the lights shade its relief", .flags = FieldFlag_AssetPath})
+        .field("specularMap", &SpriteRendererComponent::specularMap,
+               {.tooltip = "With a normal map: highlights (rgb = strength, alpha = glossiness)", .flags = FieldFlag_AssetPath});
 
     reg.add<TilemapComponent>("Tilemap")
         .category("2D")

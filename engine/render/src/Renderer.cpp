@@ -97,6 +97,7 @@ Renderer::~Renderer() {
     m_device.destroyBuffer(m_skyVertices);
     m_device.destroyBuffer(m_instanceBuffer);
     m_device.destroyTexture(m_flatNormal);
+    m_device.destroyTexture(m_noSpecular);
     m_device.destroyTexture(m_shadow2D);
     m_device.destroyRenderTarget(m_shadowTarget);
     m_device.destroyRenderTarget(m_spotShadowTarget);
@@ -180,7 +181,7 @@ Status Renderer::createPipelines() {
     lit.debugName = "agr.sprite.lit";
     lit.shader.fragment = std::string(shaders::kFrameBlock) + shaders::kSpriteLitFragment;
     lit.uniformBlocks = {"FrameData", "Lights2D"};
-    lit.samplers = {"u_texture", "u_shadow2D", "u_normalMap"};
+    lit.samplers = {"u_texture", "u_shadow2D", "u_normalMap", "u_specularMap"};
     auto lp = m_device.createPipeline(lit);
     if (!lp) return lp.error();
     m_spriteLitPipeline = lp.value();
@@ -765,6 +766,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
             item.texture = textureFor(texture, pixelArt);
             if (s.lit && !s.normalMap.empty() && item.pipeline < 4) {
                 item.normalMap = resolveDataTexture(s.normalMap, pixelArt);
+                if (!s.specularMap.empty()) item.specularMap = resolveDataTexture(s.specularMap, pixelArt);
                 item.pipeline = 3;
                 ++m_stats.normalMappedSprites;
             }
@@ -1623,8 +1625,10 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
     auto textureAt = [&](u32 i) { return items[m_spriteKeys[i].index].texture; };
     auto pipelineAt = [&](u32 i) { return items[m_spriteKeys[i].index].pipeline; };
     auto normalAt = [&](u32 i) { return items[m_spriteKeys[i].index].normalMap; };
+    auto specularAt = [&](u32 i) { return items[m_spriteKeys[i].index].specularMap; };
     for (u32 i = 1; i <= count; ++i) {
-        if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart) || normalAt(i) != normalAt(batchStart)) {
+        if (i == count || textureAt(i) != textureAt(batchStart) || pipelineAt(i) != pipelineAt(batchStart) || normalAt(i) != normalAt(batchStart) ||
+            specularAt(i) != specularAt(batchStart)) {
             const u32 id = pipelineAt(batchStart);
             const u32 pipeline = std::min(id, 3u);
             if (id >= 4 && id - 4 < m_spriteShaderPipelines.size()) m_device.bindPipeline(m_spriteShaderPipelines[id - 4]);
@@ -1633,6 +1637,7 @@ void Renderer::drawSprites(const std::vector<SpriteItem>& items) {
             if (pipeline == 1 || pipeline == 3) {
                 m_device.bindTexture(1, m_shadow2D ? m_shadow2D : m_assets.whiteTexture());
                 m_device.bindTexture(2, normalAt(batchStart) ? normalAt(batchStart) : m_flatNormal);
+                m_device.bindTexture(3, specularAt(batchStart) ? specularAt(batchStart) : m_noSpecular);
             }
             m_device.drawIndexed((i - batchStart) * 6, batchStart * 6);
             ++m_stats.spriteBatches;

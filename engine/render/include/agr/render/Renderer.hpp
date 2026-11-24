@@ -288,6 +288,7 @@ private:
         u32 color;
         u32 pipeline = 0;       // 0 = alpha, 1 = lit (2D lights), 2 = additive, 3 = lit with a normal map
         rhi::TextureHandle normalMap{};
+        rhi::TextureHandle specularMap{};
     };
     struct CachedTexture {
         TextureAsset asset;
@@ -450,6 +451,7 @@ private:
     rhi::PipelineHandle m_shadowPipeline, m_shadowMaskPipeline, m_skyPipeline;
     rhi::BufferHandle m_skyVertices;
     rhi::TextureHandle m_flatNormal;        // (0.5, 0.5, 1): no normal map
+    rhi::TextureHandle m_noSpecular;        // black: no highlights (sprites without specularMap)
     ModelLibrary* m_models = nullptr;
     MaterialLibrary* m_materials = nullptr;
     ParticleCurvesLibrary* m_particleCurves = nullptr;

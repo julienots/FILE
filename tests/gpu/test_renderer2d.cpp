@@ -1,5 +1,6 @@
 // 2D rendering: lit sprites (Light2D), tilemaps, sprite sheet frames, particles,
 // parallax and camera scale modes, on every graphics backend.
+#include <array>
 #include <filesystem>
 
 #include "GpuFixture.hpp"
@@ -36,7 +37,8 @@ struct Render2DFixture {
         std::filesystem::create_directories(root);
         vfs.mount("assets", std::make_unique<NativeFileProvider>(root.string(), false));
         registerRenderComponents();
-        REQUIRE(renderer.initialize());
+        const Status init = renderer.initialize();
+        REQUIRE_MESSAGE(init, (init ? std::string() : init.error().message));
         GraphicsProfile p = graphicsProfile(GraphicsTier::Low);
         p.renderScale = 1.0f;
         renderer.setProfile(p);
@@ -352,6 +354,41 @@ TEST_CASE("tilemaps: animated tiles follow the renderer time, autotiles pick fra
     CHECK_MESSAGE(near(pixel(*gpu().device, 32 - 9, 32 + 9), 255, 255, 0), pixel(*gpu().device, 23, 41));
     CHECK_MESSAGE(near(pixel(*gpu().device, 32 + 9, 32 - 3), 255, 0, 255), pixel(*gpu().device, 41, 29));
     CHECK(near(pixel(*gpu().device, 32 + 9, 32 - 9), 0, 0, 0));
+}
+
+TEST_CASE("2D specular maps: highlights where the map is bright, none where it is black") {
+    Render2DFixture f;
+    f.camera();
+    auto lum = [](Rgba p) { return int(p.r) + int(p.g) + int(p.b); };
+    f.scene.registry().emplace<EnvironmentComponent>(f.scene.createEntity("Env")).ambientIntensity = 0.0f;
+    auto writePng = [&](const char* uri, std::array<u8, 4> px) {
+        std::vector<u8> pixels;
+        for (int i = 0; i < 16; ++i) pixels.insert(pixels.end(), px.begin(), px.end());
+        auto png = encodePng(4, 4, pixels);
+        REQUIRE(png);
+        REQUIRE(f.vfs.writeBytes(uri, png.value().data(), png.value().size()));
+    };
+    writePng("assets://flat_n.png", {128, 128, 255, 255});
+    writePng("assets://shiny_s.png", {255, 255, 255, 200});
+    const auto sprite = f.sprite({0, 0, 0}, 6.0f);
+    auto& sr = f.scene.registry().get<SpriteRendererComponent>(sprite);
+    sr.color = {0.15f, 0.15f, 0.15f, 1.0f};
+    sr.lit = true;
+    sr.normalMap = "assets://flat_n.png";
+    const auto light = f.scene.createEntity("Light");
+    auto& l = f.scene.registry().emplace<Light2DComponent>(light);
+    l.intensity = 1.0f;
+    l.radius = 8.0f;
+    l.height = 1.0f;
+    f.settle();
+    const int matte = lum(pixel(*gpu().device, 32, 32));
+    f.scene.registry().get<SpriteRendererComponent>(sprite).specularMap = "assets://shiny_s.png";
+    f.settle();
+    const int shiny = lum(pixel(*gpu().device, 32, 32));
+    CHECK_MESSAGE(shiny > matte + 200, matte, " -> ", shiny);  // highlight under the light
+    const int edge = lum(pixel(*gpu().device, 32 + 16, 32));    // 2.5 units aside: past the sharp highlight
+    CHECK_MESSAGE(edge < shiny - 150, edge);
+    CHECK(gpu().device->validationErrorCount() == 0);
 }
 
 TEST_CASE("directional Light2D: uniform light, no radius, shades normal maps from its direction") {

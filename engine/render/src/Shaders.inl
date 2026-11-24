@@ -59,6 +59,7 @@ layout(std140) uniform Lights2D {
 uniform sampler2D u_texture;
 uniform sampler2D u_shadow2D;  // polar shadow maps: one row per shadowed light, distance / radius in r (high) g (low)
 uniform sampler2D u_normalMap;
+uniform sampler2D u_specularMap;  // normal-mapped sprites: rgb = highlight strength, a = glossiness
 in vec2 v_uv;
 in vec4 v_color;
 in vec3 v_worldPos;
@@ -80,6 +81,9 @@ void main() {
     B = dot(B, B) > 0.0 ? normalize(B) : vec3(0.0, -1.0, 0.0);
     // v grows down the image while the normal map's green points up.
     vec3 n = normalize(T * tn.x - B * tn.y + vec3(0.0, 0.0, 1.0) * max(tn.z, 0.0));
+    vec4 sm = texture(u_specularMap, v_uv);
+    float shininess = exp2(1.0 + sm.a * 7.0);  // 2..256
+    vec3 specular = vec3(0.0);
 #endif
     for (int i = 0; i < 16; ++i) {
         if (i >= u_lightCount.x) break;
@@ -121,11 +125,19 @@ void main() {
         // Relative to a flat surface: flat areas light exactly like a sprite without a normal
         // map, slopes facing the light brighten (up to 2x), slopes facing away darken.
         vec3 L = normalize(vec3(-d, u_lightPosRadius[i].z));
+        float shadowed = lit;
         lit *= clamp(dot(n, L) / max(L.z, 0.25), 0.0, 2.0);
+        // Highlights: Blinn-Phong toward a viewer in front of the screen.
+        vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+        specular += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w) * shadowed * sm.rgb *
+                    pow(max(dot(n, H), 0.0), shininess) * step(0.0, dot(n, L));
 #endif
         light += u_lightColorFalloff[i].rgb * pow(att, u_lightColorFalloff[i].w) * lit;
     }
     vec3 lit = c.rgb * light;
+#ifdef AGR_NORMAL_MAP
+    lit += specular * c.a;
+#endif
     o_color = vec4(u_fogParams.w > 0.5 ? lit : pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2)), c.a);
 }
 )";

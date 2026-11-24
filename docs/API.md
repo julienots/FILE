@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 763 champs)
+## Composants (77, 764 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -1095,6 +1095,7 @@ Textured quad for 2D games, batched automatically.
 | `lit` | bool | Lit by Light2D components |
 | `shader` | asset | Sprite shader (.agrshader with void sprite(inout Sprite s)) |
 | `normalMap` | asset | Normal map of the texture (lit sprites): the lights shade its relief |
+| `specularMap` | asset | With a normal map: highlights (rgb = strength, alpha = glossiness) |
 
 ### Terrain
 

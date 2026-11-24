@@ -295,6 +295,9 @@ struct SpriteRendererComponent {
     /// Normal map of the texture (same layout, OpenGL convention: green up), lit sprites only:
     /// the lights shade the relief (bricks, folds, scales) from their height (Light2D.height).
     std::string normalMap;
+    /// With a normalMap: shininess of the texture (like Godot's CanvasTexture specular): rgb =
+    /// highlight strength / color (black = matte), alpha = glossiness (0 = broad, 1 = sharp).
+    std::string specularMap;
 };
 
 /// Root of a 2D skeleton: the Bone2D entities below it deform the Skin2D parts below it.

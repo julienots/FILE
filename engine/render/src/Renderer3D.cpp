@@ -246,6 +246,12 @@ Status Renderer::create3DPipelines() {
         auto t = m_device.createTexture(td);
         if (!t) return t.error();
         m_flatNormal = t.value();
+        const u8 none[4] = {0, 0, 0, 0};
+        td.data = none;
+        td.debugName = "agr.specular.none";
+        auto sp = m_device.createTexture(td);
+        if (!sp) return sp.error();
+        m_noSpecular = sp.value();
     }
     return {};
 }
