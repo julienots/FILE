@@ -142,6 +142,25 @@ composant).
 | `agr.profile.begin(nom)`, `agr.profile.finish()` | section mesurée dans le profileur de l'éditeur (imbriquable) |
 | `agr.time.setScale(s)`, `agr.time.scale()` | vitesse du jeu (ralenti 0,3, pause 0, accéléré 2) ; revient à 1 quand le jeu s'arrête |
 
+### Retour dans le temps, fantômes et replays (absent de Godot)
+
+Composant **`Rewind`** (`seconds` d'historique) : à chaque pas physique, la position, la rotation,
+l'échelle et la vitesse physique de l'entité sont gardées.
+
+```lua
+agr.rewind.start()               -- le temps recule pour toutes les entités Rewind (leurs scripts attendent)
+agr.rewind.setSpeed(2)           -- deux fois plus vite
+agr.rewind.stop()                -- elles repartent avec la vitesse qu'elles avaient à cet instant
+agr.rewind.available(joueur)     -- secondes d'historique disponibles
+
+-- Fantômes (meilleur tour d'une course), kill-cams, replays :
+local tour = agr.rewind.capture(joueur)          -- texte : à garder avec agr.save / agr.file
+agr.rewind.playGhost(fantome, tour, true)        -- rejoue le trajet sur une autre entité (true = en boucle)
+```
+
+Testé dans un jeu : une balle lancée recule d'une demi-seconde jusqu'à sa position d'alors, puis repart sur
+la même trajectoire ; son script ne tourne pas pendant le retour ; le fantôme refait le trajet enregistré.
+
 ### Signaux, minuteurs, coroutines, groupes et données globales
 
 Les équivalents des signaux, `await`, `Timer`, groupes et *autoloads* de Godot :

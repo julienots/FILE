@@ -360,6 +360,43 @@ int rm_vibrate(lua_State* L) {
     return 1;
 }
 
+// ---------------------------------------------------------------- agr.rewind
+int rw_start(lua_State* L) {
+    implOf(L).rewind.start();
+    return 0;
+}
+int rw_stop(lua_State* L) {
+    auto& m = implOf(L);
+    if (m.scene) m.rewind.stop(*m.scene);
+    return 0;
+}
+int rw_isRewinding(lua_State* L) {
+    lua_pushboolean(L, implOf(L).rewind.rewinding());
+    return 1;
+}
+int rw_setSpeed(lua_State* L) {
+    implOf(L).rewind.setSpeed(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+int rw_available(lua_State* L) {
+    lua_pushnumber(L, implOf(L).rewind.available(checkEntity(L, 1)));
+    return 1;
+}
+int rw_capture(lua_State* L) {
+    const std::string text = implOf(L).rewind.capture(checkEntity(L, 1));
+    lua_pushlstring(L, text.data(), text.size());
+    return 1;
+}
+int rw_playGhost(lua_State* L) {
+    const ecs::Entity e = checkEntity(L, 1);
+    lua_pushboolean(L, implOf(L).rewind.playGhost(e, luaL_checkstring(L, 2), lua_toboolean(L, 3)));
+    return 1;
+}
+int rw_ghostPlaying(lua_State* L) {
+    lua_pushboolean(L, implOf(L).rewind.ghostPlaying(checkEntity(L, 1)));
+    return 1;
+}
+
 } // namespace
 
 void openMobileBindings(lua_State* L) {
@@ -379,6 +416,10 @@ void openMobileBindings(lua_State* L) {
     static const luaL_Reg device[] = {{"platform", dv_platform},       {"isMobile", dv_isMobile}, {"vibrate", dv_vibrate},
                                       {"canVibrate", dv_canVibrate},   {"safeArea", dv_safeArea}, {nullptr, nullptr}};
     addAgrLibrary(L, "device", device);
+    static const luaL_Reg rewind[] = {{"start", rw_start},         {"stop", rw_stop},           {"isRewinding", rw_isRewinding},
+                                      {"setSpeed", rw_setSpeed},   {"available", rw_available}, {"capture", rw_capture},
+                                      {"playGhost", rw_playGhost}, {"ghostPlaying", rw_ghostPlaying}, {nullptr, nullptr}};
+    addAgrLibrary(L, "rewind", rewind);
     static const luaL_Reg input[] = {{"accelerometer", in_accelerometer}, {"gyroscope", in_gyroscope}, {"bindings", rm_bindings},
                                     {"setBindings", rm_setBindings},    {"capture", rm_capture},     {"saveBindings", rm_save},
                                     {"resetBindings", rm_reset},        {"vibrate", rm_vibrate},     {nullptr, nullptr}};

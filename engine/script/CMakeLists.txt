@@ -1,6 +1,7 @@
 agr_add_module(script
     SOURCES
         src/ScriptComponent.cpp
+        src/Rewind.cpp
         src/ScriptEngine.cpp
         src/ScriptDebugger.cpp
         src/ScriptBindings.cpp

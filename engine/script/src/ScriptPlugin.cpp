@@ -1,3 +1,4 @@
+#include "agr/script/Rewind.hpp"
 #include "agr/script/ScriptPlugin.hpp"
 
 #include "agr/net/NetPlugin.hpp"
@@ -19,6 +20,7 @@ PluginInfo ScriptPlugin::info() const {
 
 Status ScriptPlugin::onLoad(Engine& engine) {
     registerScriptComponent();
+    registerRewindComponent();
     m_engine = &engine;
     m_scripts = std::make_unique<ScriptEngine>(engine.vfs());
     m_scripts->setInput(&engine.input());

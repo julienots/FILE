@@ -382,6 +382,7 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
     for (u64 key : order) {
         auto it = m->instances.find(key);
         if (it == m->instances.end() || !scene.valid(it->second.entity)) continue;
+        if (m->rewind.controls(it->second.entity)) continue;  // being rewound: its script waits
         AGR_PROFILE_SCOPE(it->second.uri);  // one line per script class in the profiler
         m->call(it->second, "onUpdate", [&] {
             lua_pushnumber(L, dt);
@@ -397,6 +398,8 @@ void ScriptEngine::fixedUpdate(Scene& scene, const FrameTime& time) {
     if (scene.generation() != m->sceneGeneration) return;  // instances are created by update()
     m->scene = &scene;
     m->time = time;
+    m->rewind.setPhysics(m->physics2d, m->physics3d);
+    m->rewind.step(scene, static_cast<float>(time.fixedDeltaSeconds));
     std::vector<u64> order;
     for (auto& [key, inst] : m->instances)
         if (inst.started && !inst.faulted) order.push_back(key);
@@ -404,6 +407,7 @@ void ScriptEngine::fixedUpdate(Scene& scene, const FrameTime& time) {
     for (u64 key : order) {
         auto it = m->instances.find(key);
         if (it == m->instances.end() || !scene.valid(it->second.entity)) continue;
+        if (m->rewind.controls(it->second.entity)) continue;  // being rewound: its script waits
         m->call(it->second, "onFixedUpdate", [&] {
             lua_pushnumber(m->L, time.fixedDeltaSeconds);
             return 1;

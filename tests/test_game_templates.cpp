@@ -25,6 +25,8 @@
 #include "agr/render/RenderComponents.hpp"
 #include "agr/render/RenderPlugin.hpp"
 #include "agr/runtime/Engine.hpp"
+#include "agr/physics2d/Physics2DComponents.hpp"
+#include "agr/script/Rewind.hpp"
 #include "agr/script/ScriptComponent.hpp"
 #include "agr/script/ScriptEngine.hpp"
 #include "agr/script/ScriptPlugin.hpp"
@@ -1851,4 +1853,48 @@ TEST_CASE("official kits in a running game: moving platform, typewriter text, pa
     s.updateTransforms();
     h.frames(2);
     h.lua("assert(SPOTTED == 1, SPOTTED)");
+}
+
+TEST_CASE("rewind: a thrown ball goes back in time, then flies on with its velocity; its script waits; a ghost replays the path") {
+    GameHarness h(SceneTemplate::Empty2D);
+    Scene& s = h.scene();
+    auto& reg = s.registry();
+    const auto ball = s.createEntity("Ball");
+    reg.get<TransformComponent>(ball).position = {0, 5, 0};
+    reg.emplace<RigidBody2DComponent>(ball).initialVelocity = {4, 6};
+    reg.emplace<Collider2DComponent>(ball).shape = ColliderShape2D::Circle;
+    reg.emplace<RewindComponent>(ball).seconds = 3.0f;
+    const fs::path script = h.root / "game" / "assets" / "scripts" / "ticker.lua";
+    fs::create_directories(script.parent_path());
+    std::ofstream(script) << "local T = {}\nfunction T:onUpdate(dt) TICKS = (TICKS or 0) + 1 end\nreturn T\n";
+    reg.emplace<ScriptComponent>(ball).script = "assets://scripts/ticker.lua";
+    const auto ghost = s.createEntity("Ghost");
+    s.updateTransforms();
+    h.seconds(0.5);
+    const math::Vec3 half = h.position("Ball");
+    h.seconds(0.5);
+    const math::Vec3 full = h.position("Ball");
+    CHECK(full.x > half.x + 1.0f);
+    h.lua("assert(agr.rewind.available(agr.find('Ball')) > 0.9)");
+    h.lua("REC = agr.rewind.capture(agr.find('Ball'))");
+    // Rewind half a second: back where it was at 0.5 s; the script does not run meanwhile.
+    h.lua("TICKS = 0; agr.rewind.start()");
+    h.seconds(0.5);
+    h.lua("assert(agr.rewind.isRewinding() and TICKS == 0, TICKS)");
+    const math::Vec3 back = h.position("Ball");
+    CHECK(back.x == doctest::Approx(half.x).epsilon(0.05));
+    CHECK(back.y == doctest::Approx(half.y).epsilon(0.05));
+    h.lua("agr.rewind.stop()");
+    h.seconds(0.5);
+    const math::Vec3 again = h.position("Ball");
+    CHECK_MESSAGE(again.x == doctest::Approx(full.x).epsilon(0.05), again.x, " vs ", full.x);  // same flight again
+    CHECK(again.y == doctest::Approx(full.y).epsilon(0.08));
+    h.lua("assert(TICKS > 0)");
+    // Ghost: the captured second replayed on another entity.
+    h.lua("assert(agr.rewind.playGhost(agr.find('Ghost'), REC))");
+    h.seconds(0.5);
+    CHECK(h.position("Ghost").x == doctest::Approx(half.x).epsilon(0.1));
+    h.seconds(0.6);
+    h.lua("assert(not agr.rewind.ghostPlaying(agr.find('Ghost')))");
+    h.lua("assert(not agr.rewind.playGhost(agr.find('Ghost'), 'not a recording'))");
 }

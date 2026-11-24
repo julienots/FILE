@@ -6,6 +6,7 @@
 #include <set>
 #include <functional>
 #include "agr/runtime/InputActions.hpp"
+#include "agr/script/Rewind.hpp"
 #include "agr/runtime/Gestures.hpp"
 #include "agr/runtime/Localization.hpp"
 #include "agr/scene/PhysicsLayers.hpp"
@@ -105,6 +106,7 @@ struct ScriptEngine::Impl {
     std::function<bool(std::string_view)> setLanguage;  ///< Engine::setLanguage (remembers the choice)
     math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
+    RewindRecorder rewind;  // agr.rewind: history of Rewind entities, ghosts
     Physics3DWorld* physics3d = nullptr;
     PhysicsLayers physicsLayers;  ///< Names of assets://physics_layers.json (agr.physics*.layer / mask), refreshed on use.
     NavigationSystem* navigation = nullptr;
