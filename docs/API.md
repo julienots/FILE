@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 765 champs)
+## Composants (77, 768 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -728,6 +728,7 @@ Joint between this body and another one (or the world): fixed, hinge, distance /
 | `freezeRotation` | bool | Translation only (characters) |
 | `bullet` | bool | Continuous collision for fast bodies |
 | `initialVelocity` | vec3 |  |
+| `centerOfMassOffset` | vec3 | Moves the center of mass (down = steadier) |
 
 ### SoftBody3D
 
@@ -752,12 +753,14 @@ Deformable body (cloth, jelly, balloon) simulated by Jolt, drawn with the entity
 
 ### Vehicle3D
 
-Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR follow the wheels.
+Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR (car; middle axles WheelML1/MR1...), WheelF/R (motorcycle), WheelL0../WheelR0.. (tracked) follow the wheels.
 
 *Physics 3D*
 
 | Champ | Type | Détails |
 |---|---|---|
+| `kind` | enum | Car, Motorcycle (leans) or Tracked (tank) ; valeurs : `Car`, `Motorcycle`, `Tracked` |
+| `axles` | int | Car: axles (2..4); Tracked: road wheels per side ; plage 2 .. 8 |
 | `throttle` | float | -1 reverse .. 1 full gas (scripts) ; plage -1 .. 1 (non enregistré) |
 | `steering` | float | -1 left .. 1 right (scripts) ; plage -1 .. 1 (non enregistré) |
 | `brake` | float | plage 0 .. 1 (non enregistré) |

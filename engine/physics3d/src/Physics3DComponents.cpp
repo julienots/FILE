@@ -17,7 +17,8 @@ void registerPhysics3DComponents() {
         .field("gravityScale", &RigidBodyComponent::gravityScale, {.rangeMin = -10.0f, .rangeMax = 10.0f, .speed = 0.01f})
         .field("freezeRotation", &RigidBodyComponent::freezeRotation, {.tooltip = "Translation only (characters)"})
         .field("bullet", &RigidBodyComponent::bullet, {.tooltip = "Continuous collision for fast bodies"})
-        .field("initialVelocity", &RigidBodyComponent::initialVelocity, {.speed = 0.05f});
+        .field("initialVelocity", &RigidBodyComponent::initialVelocity, {.speed = 0.05f})
+        .field("centerOfMassOffset", &RigidBodyComponent::centerOfMassOffset, {.tooltip = "Moves the center of mass (down = steadier)", .speed = 0.01f});
     reg.add<ColliderComponent>("Collider")
         .category("Physics 3D")
         .description("3D collision shape (box, sphere, capsule, model mesh, convex hull). Static if no RigidBody on the entity or its parents.")
@@ -94,7 +95,9 @@ void registerPhysics3DComponents() {
 
     reg.add<Vehicle3DComponent>("Vehicle3D")
         .category("Physics 3D")
-        .description("Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR follow the wheels.")
+        .description("Wheeled vehicle on the dynamic RigidBody: suspension, engine, steering, brakes. Children WheelFL/FR/RL/RR (car; middle axles WheelML1/MR1...), WheelF/R (motorcycle), WheelL0../WheelR0.. (tracked) follow the wheels.")
+        .field("kind", &Vehicle3DComponent::kind, {.tooltip = "Car, Motorcycle (leans) or Tracked (tank)", .enumEntries = {{"Car", 0}, {"Motorcycle", 1}, {"Tracked", 2}}})
+        .field("axles", &Vehicle3DComponent::axles, {.tooltip = "Car: axles (2..4); Tracked: road wheels per side", .rangeMin = 2.0f, .rangeMax = 8.0f})
         .field("throttle", &Vehicle3DComponent::throttle, {.tooltip = "-1 reverse .. 1 full gas (scripts)", .flags = FieldFlag_Transient, .rangeMin = -1.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("steering", &Vehicle3DComponent::steering, {.tooltip = "-1 left .. 1 right (scripts)", .flags = FieldFlag_Transient, .rangeMin = -1.0f, .rangeMax = 1.0f, .speed = 0.01f})
         .field("brake", &Vehicle3DComponent::brake, {.flags = FieldFlag_Transient, .rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})

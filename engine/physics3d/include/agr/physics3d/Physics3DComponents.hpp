@@ -18,6 +18,9 @@ struct RigidBodyComponent {
     bool freezeRotation = false;  ///< Characters: translation only.
     bool bullet = false;          ///< Continuous collision (fast projectiles).
     math::Vec3 initialVelocity{0.0f};
+    /// Moves the center of mass from the colliders' center (local units): down = steadier (cars,
+    /// motorcycles, boats, a toy that rights itself). Dynamic bodies.
+    math::Vec3 centerOfMassOffset{0.0f};
 };
 
 enum class ColliderShape3D : i32 {
@@ -132,7 +135,13 @@ struct CharacterController3DComponent {
 /// brake on the rear ones. The vehicle drives toward its local -Z (forward), +Y up. Children named
 /// WheelFL, WheelFR, WheelRL, WheelRR (front / rear, left / right) follow their wheel (spin,
 /// steering, suspension). Scripts drive it with throttle / steering / brake / handBrake.
+/// Car: 2 to 4 axles (front one steers). Motorcycle: 2 wheels in line, leans into turns.
+/// Tracked: tank tracks on each side (steering turns the tracks at different speeds, on the spot too).
+enum class VehicleKind3D : i32 { Car = 0, Motorcycle = 1, Tracked = 2 };
+
 struct Vehicle3DComponent {
+    VehicleKind3D kind = VehicleKind3D::Car;
+    i32 axles = 2;  ///< Car: 2..4 (trucks); Tracked: road wheels per side (2..8).
     // Driver input (scripts, every frame).
     float throttle = 0.0f;   ///< -1 (reverse) .. 1 (full gas).
     float steering = 0.0f;   ///< -1 (left) .. 1 (right).

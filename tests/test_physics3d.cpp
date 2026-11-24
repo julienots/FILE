@@ -695,3 +695,91 @@ TEST_CASE("soft bodies: a pinned cloth hangs and drapes, its edge follows the en
     CHECK_FALSE(w.scene.registry().has<DynamicMeshComponent>(ball));
 }
 }  // TEST_SUITE
+
+TEST_SUITE("physics3d") {
+TEST_CASE("Vehicle3D kinds: a 3-axle truck drives, a motorcycle stays up through a turn, a tank turns on the spot") {
+    auto upDot = [](World3D& w, ecs::Entity e) { return w.scene.worldMatrix(e).transformVector({0, 1, 0}).y / math::length(w.scene.worldMatrix(e).transformVector({0, 1, 0})); };
+    SUBCASE("truck") {
+        World3D w;
+        w.box("Ground", {0, -0.5f, 0}, {400, 1, 400}, BodyType3D::Static, false);
+        const auto truck = w.box("Truck", {0, 1.2f, 0}, {2.2f, 0.8f, 7.0f}, BodyType3D::Dynamic);
+        w.scene.registry().get<RigidBodyComponent>(truck).mass = 6000.0f;
+        auto& v = w.scene.registry().emplace<Vehicle3DComponent>(truck);
+        v.axles = 3;
+        v.wheelBase = 5.0f;
+        v.trackWidth = 2.0f;
+        v.wheelRadius = 0.5f;
+        v.wheelHeight = -0.2f;
+        v.engineTorque = 2500.0f;
+        const auto middle = w.scene.createEntity("WheelML1", truck);
+        w.scene.updateTransforms();
+        w.run(2.0f);
+        const Vec3 rest = w.position(truck);
+        CHECK(std::fabs(w.scene.worldMatrix(middle).translation().z - rest.z) < 0.3f);  // middle axle under the center
+        w.scene.registry().get<Vehicle3DComponent>(truck).throttle = 1.0f;
+        w.run(3.0f);
+        CHECK_MESSAGE(w.position(truck).z < rest.z - 3.0f, w.position(truck).z);
+    }
+    SUBCASE("motorcycle") {
+        World3D w;
+        w.box("Ground", {0, -0.5f, 0}, {400, 1, 400}, BodyType3D::Static, false);
+        const auto bike = w.box("Bike", {0, 0.9f, 0}, {0.3f, 0.6f, 1.6f}, BodyType3D::Dynamic);
+        w.scene.registry().get<RigidBodyComponent>(bike).mass = 240.0f;
+        w.scene.registry().get<RigidBodyComponent>(bike).centerOfMassOffset = {0, -0.3f, 0};  // low, like the engine
+        auto& v = w.scene.registry().emplace<Vehicle3DComponent>(bike);
+        v.kind = VehicleKind3D::Motorcycle;
+        v.wheelBase = 1.4f;
+        v.wheelRadius = 0.31f;
+        v.wheelWidth = 0.05f;
+        v.wheelHeight = -0.3f;
+        v.engineTorque = 150.0f;
+        v.maxSteerAngle = 0.5f;
+        const auto front = w.scene.createEntity("WheelF", bike);
+        w.scene.updateTransforms();
+        w.run(1.0f);
+        CHECK(upDot(w, bike) > 0.95f);  // balanced at rest
+        const Vec3 rest = w.position(bike);
+        CHECK(w.scene.worldMatrix(front).translation().z < rest.z);  // front wheel at -Z
+        w.scene.registry().get<Vehicle3DComponent>(bike).throttle = 1.0f;
+        w.run(3.0f);
+        const Vec3 moved = w.position(bike);
+        CHECK_MESSAGE(moved.z < rest.z - 5.0f, moved.z);
+        w.scene.registry().get<Vehicle3DComponent>(bike).steering = 0.5f;
+        w.run(1.5f);
+        CHECK_MESSAGE(w.position(bike).x > moved.x + 0.5f, w.position(bike).x);
+        CHECK_MESSAGE(upDot(w, bike) > 0.5f, upDot(w, bike));  // leaning, not lying on the ground
+    }
+    SUBCASE("tank") {
+        World3D w;
+        w.box("Ground", {0, -0.5f, 0}, {400, 1, 400}, BodyType3D::Static, false);
+        const auto tank = w.box("Tank", {0, 1.2f, 0}, {3.0f, 1.0f, 6.0f}, BodyType3D::Dynamic);
+        w.scene.registry().get<RigidBodyComponent>(tank).mass = 4000.0f;
+        auto& v = w.scene.registry().emplace<Vehicle3DComponent>(tank);
+        v.kind = VehicleKind3D::Tracked;
+        v.axles = 5;
+        v.wheelBase = 4.5f;
+        v.trackWidth = 2.8f;
+        v.wheelRadius = 0.4f;
+        v.wheelHeight = -0.4f;
+        v.engineTorque = 3000.0f;
+        w.scene.createEntity("WheelL0", tank);
+        w.scene.updateTransforms();
+        w.run(2.0f);
+        const Vec3 rest = w.position(tank);
+        CHECK(rest.y > 0.5f);
+        auto forward = [&] { return w.scene.worldMatrix(tank).transformVector({0, 0, -1}); };
+        // Turn on the spot: heading changes, position barely moves.
+        w.scene.registry().get<Vehicle3DComponent>(tank).steering = 1.0f;
+        w.run(3.0f);
+        const Vec3 f = forward();
+        CHECK_MESSAGE(std::fabs(f.x) > 0.3f, f.x);
+        CHECK(math::length(w.position(tank) - rest) < 3.0f);  // tracks slip a little while pivoting
+        // Then drive straight.
+        w.scene.registry().get<Vehicle3DComponent>(tank).steering = 0.0f;
+        w.scene.registry().get<Vehicle3DComponent>(tank).throttle = 1.0f;
+        const Vec3 before = w.position(tank);
+        w.run(3.0f);
+        CHECK_MESSAGE(math::length(w.position(tank) - before) > 2.0f, math::length(w.position(tank) - before));
+    }
+}
+}

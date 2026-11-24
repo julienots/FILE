@@ -182,6 +182,17 @@ Test : la voiture se pose sur ses suspensions, avance, tourne et s'arrête au fr
 *Créer › Véhicule* crée une voiture prête à rouler (carrosserie, `Vehicle3D`, quatre roues nommées) :
 il reste à lui donner un script qui écrit `throttle` et `steering`.
 
+**Types** (`kind`) : `Car` (voiture ; `axles` = 2 à 4 essieux pour les camions, l'essieu avant braque,
+la propulsion entraîne tous les essieux arrière ; roues du milieu : `WheelML1`, `WheelMR1`...),
+`Motorcycle` (deux roues en ligne, `WheelF` / `WheelR`, qui **penche dans les virages** et tient debout
+à l'arrêt ; baisser son centre de gravité avec `RigidBody.centerOfMassOffset`, par exemple `(0, -0.3, 0)`)
+et `Tracked` (chenilles : `axles` galets par côté, `WheelL0`... / `WheelR0`... ; `steering` ralentit la
+chenille intérieure et, à l'arrêt, fait **tourner sur place**). Testés : un camion à 3 essieux avance, une
+moto tient debout puis vire en penchant, un char pivote sur place puis avance.
+
+**Centre de gravité** : `RigidBody.centerOfMassOffset` déplace le centre de masse de tout corps dynamique
+(plus bas = plus stable : voitures, bateaux, culbuto).
+
 ## Corps mous (`SoftBody3D`)
 
 Tissus, drapeaux, rideaux, capes, gelées et ballons simulés par les *soft bodies* de Jolt : ils
@@ -268,8 +279,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
 - 2D : pentes de tilemap à 45° ou 22,5° (sur deux cellules) seulement ; deux
   `CharacterController2D` se bloquent, mais l'un ne pousse pas l'autre et on ne tient pas debout sur la
   tête arrondie d'un autre (on glisse à côté, comme une capsule dans Godot).
-- Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
-  seulement (pas de moto ni de chenilles) ; les butées 2D sont légèrement souples
+- Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules : pas de remorque attelée
+  ni de bateau (flottaison) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
 - Personnage 3D : capsule verticale uniquement ; entre deux personnages, simple collision des capsules.
 - Pas de *debug draw* des contacts ; pas de physique en mode édition (aperçu).
