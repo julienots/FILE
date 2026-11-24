@@ -1048,7 +1048,7 @@ assert(agr.input.gamepadAxis("LeftX") == -1)
 TEST_CASE("agr.tr and agr.locale") {
     ScriptFixture f;
     Localization l;
-    REQUIRE(l.parse("key,fr,en\nhud.score,Score : {1} / {2},Score: {1} / {2}\nhello,Bonjour,Hello\n"));
+    REQUIRE(l.parse("key,fr,en\nhud.score,Score : {1} / {2},Score: {1} / {2}\nhello,Bonjour,Hello\nlife.one,{1} vie de {2},\nlife.other,{1} vies de {2},\n"));
     std::string remembered;
     f.scripts.setLocalization(&l, [&](std::string_view c) {
         if (!l.setLanguage(c)) return false;
@@ -1058,6 +1058,7 @@ TEST_CASE("agr.tr and agr.locale") {
     CHECK(f.scripts.run(R"lua(
 assert(agr.tr("hello") == "Bonjour")
 assert(agr.tr("hud.score", 3, 10) == "Score : 3 / 10")
+assert(agr.trn("life", 1, "Ada") == "1 vie de Ada" and agr.trn("life", 4, "Ada") == "4 vies de Ada")
 assert(agr.locale.get() == "fr")
 local langs = agr.locale.list()
 assert(#langs == 2 and langs[2] == "en")

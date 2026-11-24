@@ -711,6 +711,7 @@ Localization& localizationOf(lua_State* L) {
     return *m.localization;
 }
 /// agr.tr(key, ...) -> translated text with {1}, {2}... replaced by the extra arguments.
+int a_trn(lua_State* L);
 int a_tr(lua_State* L) {
     const char* key = luaL_checkstring(L, 1);
     std::vector<std::string> args;
@@ -727,6 +728,19 @@ int a_tr(lua_State* L) {
         lua_pop(L, 1);
     }
     const std::string text = localizationOf(L).format(key, args);
+    lua_pushlstring(L, text.data(), text.size());
+    return 1;
+}
+/// agr.trn("hud.coins", n, ...) -> plural form of the key for n ({1} = n, {2}... = the rest).
+int a_trn(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    const f64 n = luaL_checknumber(L, 2);
+    std::vector<std::string> args;
+    for (int i = 3; i <= lua_gettop(L); ++i) {
+        args.emplace_back(luaL_tolstring(L, i, nullptr));
+        lua_pop(L, 1);
+    }
+    const std::string text = localizationOf(L).plural(key, n, args);
     lua_pushlstring(L, text.data(), text.size());
     return 1;
 }
@@ -1039,7 +1053,7 @@ void openAgrLibrary(lua_State* L) {
     lua_pop(L, 1);
 
     // agr.*
-    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {"instantiate", a_instantiate}, {"tr", a_tr}, {nullptr, nullptr}};
+    static const luaL_Reg agr[] = {{"log", a_log}, {"warn", a_warn}, {"error", a_error}, {"find", a_find}, {"spawn", a_spawn}, {"instantiate", a_instantiate}, {"tr", a_tr}, {"trn", a_trn}, {nullptr, nullptr}};
     static const luaL_Reg locale[] = {{"get", l_get}, {"set", l_set}, {"list", l_list}, {nullptr, nullptr}};
     static const luaL_Reg input[] = {{"keyDown", i_keyDown},         {"keyPressed", i_keyPressed}, {"keyReleased", i_keyReleased},
                                      {"mouseDown", i_mouseDown},     {"mousePressed", i_mousePressed}, {"mousePosition", i_mousePosition},

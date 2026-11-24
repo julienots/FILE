@@ -1,5 +1,7 @@
 #include "agr/runtime/Localization.hpp"
 
+#include <cmath>
+
 #include <algorithm>
 #include <cctype>
 
@@ -176,6 +178,73 @@ const std::string& Localization::tr(std::string_view key) const {
     }
     fallback.assign(key);
     return fallback;
+}
+
+const char* pluralCategory(std::string_view language, f64 n) {
+    const std::string_view lang = language.substr(0, language.find_first_of("-_"));
+    const bool whole = n == std::floor(n);
+    const f64 a = std::abs(n);
+    const long long i = static_cast<long long>(a), m10 = i % 10, m100 = i % 100;
+    auto is = [&](std::initializer_list<std::string_view> list) { return std::find(list.begin(), list.end(), lang) != list.end(); };
+    if (is({"ja", "zh", "ko", "vi", "th", "id", "ms", "lo", "my", "km"})) return "other";
+    if (is({"fr", "ff", "kab", "hy"})) return a < 2.0 ? "one" : "other";
+    if (language == "pt-BR" || language == "pt_BR") return a < 2.0 ? "one" : "other";
+    if (is({"ru", "uk", "be"})) {
+        if (!whole) return "other";
+        if (m10 == 1 && m100 != 11) return "one";
+        if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "few";
+        return "many";
+    }
+    if (is({"pl"})) {
+        if (!whole) return "other";
+        if (i == 1) return "one";
+        if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "few";
+        return "many";
+    }
+    if (is({"cs", "sk"})) {
+        if (!whole) return "many";
+        return i == 1 ? "one" : (i >= 2 && i <= 4 ? "few" : "other");
+    }
+    if (is({"ar"})) {
+        if (!whole) return "other";
+        if (i == 0) return "zero";
+        if (i == 1) return "one";
+        if (i == 2) return "two";
+        if (m100 >= 3 && m100 <= 10) return "few";
+        if (m100 >= 11) return "many";
+        return "other";
+    }
+    if (is({"he", "iw"})) return whole && i == 1 ? "one" : (whole && i == 2 ? "two" : "other");
+    if (is({"lt"})) {
+        if (!whole) return "many";
+        if (m10 == 1 && (m100 < 11 || m100 > 19)) return "one";
+        if (m10 >= 2 && (m100 < 11 || m100 > 19)) return "few";
+        return "other";
+    }
+    if (is({"ro"})) return whole && i == 1 ? "one" : ((!whole || i == 0 || (m100 >= 2 && m100 <= 19)) ? "few" : "other");
+    // English, German, Dutch, Scandinavian, Spanish, Italian, Portuguese, Greek, Turkish, Hungarian...
+    return whole && i == 1 ? "one" : "other";
+}
+
+std::string Localization::plural(std::string_view key, f64 n, const std::vector<std::string>& args) const {
+    auto available = [&](const std::string& k) {
+        const auto it = m_index.find(k);
+        return it != m_index.end() && !cell(it->second, m_current).empty();
+    };
+    const std::string base(key);
+    std::string chosen = base;
+    if (n == 0.0 && available(base + ".zero")) chosen = base + ".zero";
+    else if (const std::string c = base + "." + pluralCategory(m_language, n); available(c)) chosen = c;
+    else if (available(base + ".other")) chosen = base + ".other";
+    std::vector<std::string> all;
+    std::string count = n == std::floor(n) && std::abs(n) < 1e15 ? std::to_string(static_cast<long long>(n)) : std::to_string(n);
+    if (count.find('.') != std::string::npos) {
+        while (count.back() == '0') count.pop_back();
+        if (count.back() == '.') count.pop_back();
+    }
+    all.push_back(std::move(count));
+    all.insert(all.end(), args.begin(), args.end());
+    return format(chosen, all);
 }
 
 std::string Localization::format(std::string_view key, const std::vector<std::string>& args) const {

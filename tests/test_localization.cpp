@@ -111,3 +111,42 @@ TEST_CASE("UI texts with a key show the translation and follow the language") {
 }
 
 }
+
+TEST_CASE("localization plurals: CLDR categories, zero row, fallbacks, agr.trn-style {1}") {
+    CHECK(std::string(pluralCategory("en", 1)) == "one");
+    CHECK(std::string(pluralCategory("en", 0)) == "other");
+    CHECK(std::string(pluralCategory("en-US", 2)) == "other");
+    CHECK(std::string(pluralCategory("fr", 0)) == "one");
+    CHECK(std::string(pluralCategory("fr", 1.5)) == "one");
+    CHECK(std::string(pluralCategory("fr", 2)) == "other");
+    for (int n : {1, 21, 101}) CHECK(std::string(pluralCategory("ru", n)) == "one");
+    for (int n : {2, 3, 4, 22, 104}) CHECK(std::string(pluralCategory("ru", n)) == "few");
+    for (int n : {0, 5, 11, 12, 14, 25, 111}) CHECK(std::string(pluralCategory("ru", n)) == "many");
+    CHECK(std::string(pluralCategory("pl", 22)) == "few");
+    CHECK(std::string(pluralCategory("pl", 21)) == "many");
+    CHECK(std::string(pluralCategory("ar", 2)) == "two");
+    CHECK(std::string(pluralCategory("ar", 105)) == "few");
+    CHECK(std::string(pluralCategory("ja", 1)) == "other");
+
+    Localization loc;
+    REQUIRE(loc.parse("key,en,fr,ru\n"
+                      "coins.zero,No coins,,\n"
+                      "coins.one,{1} coin,{1} pièce,{1} монета\n"
+                      "coins.few,,,{1} монеты\n"
+                      "coins.many,,,{1} монет\n"
+                      "coins.other,{1} coins,{1} pièces,{1} монеты\n"
+                      "lives,{1} lives left for {2},,\n"));
+    REQUIRE(loc.setLanguage("en"));
+    CHECK(loc.plural("coins", 0) == "No coins");
+    CHECK(loc.plural("coins", 1) == "1 coin");
+    CHECK(loc.plural("coins", 7) == "7 coins");
+    CHECK(loc.plural("coins", 2.5) == "2.5 coins");
+    CHECK(loc.plural("lives", 3, {"Ada"}) == "3 lives left for Ada");  // no forms: the key itself
+    REQUIRE(loc.setLanguage("fr"));
+    CHECK(loc.plural("coins", 0) == "0 pièce");   // .zero empty in French: the rule (0 is "one")
+    CHECK(loc.plural("coins", 3) == "3 pièces");
+    REQUIRE(loc.setLanguage("ru"));
+    CHECK(loc.plural("coins", 21) == "21 монета");
+    CHECK(loc.plural("coins", 3) == "3 монеты");
+    CHECK(loc.plural("coins", 5) == "5 монет");
+}

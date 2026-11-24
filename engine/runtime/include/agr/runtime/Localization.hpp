@@ -15,6 +15,10 @@
 
 namespace agr {
 
+/// CLDR plural category of `n` in `language` ("one", "two", "few", "many" or "other"); languages
+/// without plurals (ja, zh, ko...) and unknown ones give "other" except for English-like "one".
+const char* pluralCategory(std::string_view language, f64 n);
+
 class Localization {
 public:
     static constexpr const char* kDefaultUri = "assets://localization.csv";
@@ -38,6 +42,11 @@ public:
     /// tr() with {1}, {2}... replaced by `args`.
     std::string format(std::string_view key, const std::vector<std::string>& args) const;
     bool has(std::string_view key) const { return m_index.contains(std::string(key)); }
+    /// Plural form for the count `n` (like Godot's tr_n / gettext ngettext): uses the row
+    /// "key.zero" when n == 0 (any language, optional), else "key.<category>" of the current
+    /// language's plural rule (one, two, few, many, other: CLDR rules for the common languages),
+    /// else "key.other", else "key". {1} is n, {2}... are `args`.
+    std::string plural(std::string_view key, f64 n, const std::vector<std::string>& args = {}) const;
 
     // Editing (editor table).
     const std::vector<std::string>& keys() const { return m_keys; }
