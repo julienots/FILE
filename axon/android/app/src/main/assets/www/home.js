@@ -50,6 +50,7 @@
     $("#connector").textContent = st.connector || "(réglez d'abord le relais)";
     $("#relayInfo").textContent = st.relay ? (st.connected ? `Connecté — ${host(st.relay)}` : `Hors ligne — ${host(st.relay)}`) : "Aucun relais réglé.";
     $("#stepService").classList.toggle("done", st.serviceEnabled);
+    $("#stepBg").hidden = !st.xiaomi;
     $("#btnService").textContent = st.serviceEnabled ? "Ouvrir" : "Activer";
     $("#stepRelay").classList.toggle("done", st.connected);
     $("#pause").checked = st.paused;
@@ -71,6 +72,7 @@
   setInterval(() => { if (!$("#device").hidden) refresh(); }, 2000);
 
   $("#btnService").addEventListener("click", () => N.openAccessibility());
+  $("#btnBg").addEventListener("click", () => { $("#stepBg").classList.add("done"); N.openBackgroundStart && N.openBackgroundStart(); });
   $("#btnRelay").addEventListener("click", openSettings);
   $("#btnSettings").addEventListener("click", openSettings);
   $("#btnCopy").addEventListener("click", () => { const c = S().connector; if (c) { N.copy(c); toast("Adresse copiée. Collez-la dans Claude › Connecteurs."); } });

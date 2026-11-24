@@ -378,18 +378,22 @@ class AxonService : AccessibilityService() {
                 ?: throw ToolError("Application \"$q\" introuvable. Utilisez list_apps.")
             val intent = packageManager.getLaunchIntentForPackage(pkg) ?: throw ToolError("$pkg ne peut pas être ouverte.")
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-            main.post { startActivity(intent) }
-            Thread.sleep(900)
-            activity("app", "Ouverture de ${appLabel(pkg)}")
-            ok("${appLabel(pkg)} ($pkg) ouverte. Faites un screenshot pour vérifier.")
+            val label = appLabel(pkg)
+            activity("app", "Ouverture de $label")
+            val how = launchVerified(pkg, label, intent)
+            ok("$label ($pkg) est au premier plan$how. Faites un screenshot pour voir l'écran.")
         }
         "open_url" -> {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(a.getString("url"))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (intent.resolveActivity(packageManager) == null) throw ToolError("Aucune app ne sait ouvrir ce lien.")
-            main.post { startActivity(intent) }
-            Thread.sleep(900)
+            val target = intent.resolveActivity(packageManager) ?: throw ToolError("Aucune app ne sait ouvrir ce lien.")
             activity("app", "Ouverture de ${a.getString("url")}")
-            ok()
+            // Si le lien ouvre un sélecteur d'apps (« Ouvrir avec »), on ne peut pas connaître l'app finale : on vérifie juste un changement.
+            val pkg = target.packageName.takeUnless { it == "android" || it.contains("resolver") || it.contains("intentresolver") }
+            val before = foregroundPkg()
+            val opened = startAndWait(intent) { fg -> if (pkg != null) fg == pkg else fg != before && fg.isNotEmpty() }
+                || run { goHome(); startAndWait(intent) { fg -> if (pkg != null) fg == pkg else fg != launcherPkg() && fg.isNotEmpty() } }
+            if (!opened) throw ToolError(blockedMessage("le lien"))
+            ok("Lien ouvert${pkg?.let { " dans ${appLabel(it)}" } ?: ""}. Faites un screenshot pour vérifier.")
         }
         else -> throw ToolError("Outil inconnu : $name")
     }
@@ -501,6 +505,95 @@ class AxonService : AccessibilityService() {
                 e.desc.takeIf { it.isNotEmpty() }?.let { "desc=\"$it\"" }, e.id.takeIf { it.isNotEmpty() }?.let { "#$it" }).joinToString(" ")
             "[${e.index}] ${e.type} $label ${if (flags.isNotEmpty()) "($flags)" else ""} @${e.bounds.centerX()},${e.bounds.centerY()}"
         }
+    }
+
+    /* --- Ouverture d'apps vérifiée --- */
+    /** Package réellement au premier plan (fenêtre active), sinon le dernier vu par les événements. */
+    private fun foregroundPkg(): String = try {
+        rootInActiveWindow?.packageName?.toString()
+            ?: windows.firstOrNull { it.isActive }?.root?.packageName?.toString()
+    } catch (_: Exception) { null } ?: currentPkg
+
+    private fun launcherPkg(): String = packageManager.resolveActivity(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName ?: ""
+
+    private fun waitFor(ms: Long, ok: (String) -> Boolean): Boolean {
+        val end = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < end) {
+            if (ok(foregroundPkg())) return true
+            Thread.sleep(150)
+        }
+        return ok(foregroundPkg())
+    }
+
+    private fun startAndWait(intent: Intent, ms: Long = 2500, ok: (String) -> Boolean): Boolean {
+        main.post { try { startActivity(intent) } catch (_: Exception) {} }
+        return waitFor(ms, ok)
+    }
+
+    private fun goHome() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        val home = launcherPkg()
+        waitFor(1500) { it == home }
+        Thread.sleep(400)
+    }
+
+    private val isXiaomi get() = Build.MANUFACTURER.lowercase().let { it.contains("xiaomi") || it.contains("redmi") || it.contains("poco") }
+
+    private fun blockedMessage(what: String) =
+        "Le téléphone a bloqué l'ouverture de $what (AXON n'a pas le droit d'ouvrir une app depuis l'arrière-plan). " +
+            (if (isXiaomi) "Sur Xiaomi/Redmi/POCO : Paramètres › Applications › Gérer les applications › AXON CONNECT › Autres autorisations › activez « Afficher des fenêtres pop-up lors de l'exécution en arrière-plan » (et « Démarrage automatique »). Le bouton « Autoriser » de l'app AXON CONNECT y mène directement. "
+             else "Vérifiez les autorisations d'AXON CONNECT (ouverture en arrière-plan / superposition). ") +
+            "En attendant, essayez : press_key home, puis tap_element sur l'icône de l'app."
+
+    /**
+     * Ouvre une app et vérifie qu'elle est vraiment au premier plan.
+     * 1) lancement direct ; 2) depuis l'écran d'accueil ; 3) en touchant son icône (accueil puis tiroir d'apps).
+     * Renvoie une précision sur la méthode utilisée, ou lève ToolError si tout a échoué.
+     */
+    private fun launchVerified(pkg: String, label: String, intent: Intent): String {
+        if (foregroundPkg() == pkg) return ""
+        if (startAndWait(intent) { it == pkg }) return ""
+        goHome()
+        if (startAndWait(intent) { it == pkg }) return ""
+        if (tapIcon(pkg, label)) return " (ouverte en touchant son icône : le lancement direct est bloqué par le téléphone)"
+        throw ToolError(blockedMessage(label))
+    }
+
+    private fun findIcon(label: String): El? {
+        val q = label.lowercase().trim()
+        val els = collect()
+        return els.firstOrNull { it.text.lowercase().trim() == q || it.desc.lowercase().trim() == q }
+            ?: els.firstOrNull { it.desc.lowercase().startsWith(q) || it.text.lowercase().startsWith(q) }
+    }
+
+    private fun tapIcon(pkg: String, label: String): Boolean {
+        val (w, h) = screenSize()
+        fun tryTap(): Boolean {
+            val el = findIcon(label) ?: return false
+            clickElement(el)
+            return waitFor(3000) { it == pkg }
+        }
+        // Pages de l'écran d'accueil
+        goHome()
+        if (tryTap()) return true
+        repeat(5) {
+            try { gesture(w * .85f, h * .5f, w * .15f, h * .5f, 250) } catch (_: Exception) {}
+            Thread.sleep(500)
+            if (tryTap()) return true
+        }
+        // Tiroir d'applications (glisser vers le haut), puis défilement
+        goHome()
+        try { gesture(w / 2f, h * .85f, w / 2f, h * .25f, 300) } catch (_: Exception) {}
+        Thread.sleep(700)
+        if (tryTap()) return true
+        repeat(6) {
+            try { gesture(w / 2f, h * .75f, w / 2f, h * .3f, 350) } catch (_: Exception) {}
+            Thread.sleep(500)
+            if (tryTap()) return true
+        }
+        goHome()
+        return false
     }
 
     /* --- Applications --- */

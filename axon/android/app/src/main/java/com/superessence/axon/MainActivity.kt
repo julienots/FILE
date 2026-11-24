@@ -117,6 +117,7 @@ class MainActivity : Activity() {
             .put("deviceId", prefs.deviceId)
             .put("deviceName", prefs.deviceName)
             .put("sdk", Build.VERSION.SDK_INT)
+            .put("xiaomi", Build.MANUFACTURER.lowercase().let { it.contains("xiaomi") || it.contains("redmi") || it.contains("poco") })
             .put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
             .put("version", packageManager.getPackageInfo(packageName, 0).versionName)
             .toString()
@@ -161,6 +162,20 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun sendRequest(text: String) { AxonService.instance?.sendRequest(text) }
+
+        /** Xiaomi/Redmi/POCO : écran « Autres autorisations » (ouverture en arrière-plan). Sinon : infos de l'app. */
+        @JavascriptInterface
+        fun openBackgroundStart() = runOnUiThread {
+            val tries = listOf(
+                Intent("miui.intent.action.APP_PERM_EDITOR").setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity").putExtra("extra_pkgname", packageName),
+                Intent("miui.intent.action.APP_PERM_EDITOR").setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.AppPermissionsEditorActivity").putExtra("extra_pkgname", packageName),
+                Intent("miui.intent.action.APP_PERM_EDITOR").putExtra("extra_pkgname", packageName),
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+            )
+            for (i in tries) {
+                try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return@runOnUiThread } catch (_: Exception) {}
+            }
+        }
 
         @JavascriptInterface
         fun openAccessibility() = runOnUiThread {
