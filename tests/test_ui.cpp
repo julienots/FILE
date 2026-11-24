@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "agr/core/Uuid.hpp"
+#include "agr/ui/Bidi.hpp"
 #include "agr/ui/UISystem.hpp"
 
 using namespace agr;
@@ -1219,3 +1220,72 @@ TEST_CASE("trees: drag and drop moves an item with its children before, inside o
     CHECK(f.scene.registry().get<UIItemListComponent>(e).items == "A;>A1;>A2;>C;B;>B1");
 }
 }  // TEST_SUITE
+
+TEST_SUITE("ui") {
+TEST_CASE("bidi: Arabic joined forms, lam-alef, direction, display order with numbers and Latin words") {
+    using bidi::shapeArabic;
+    // سلام (s, l, a, m): seen initial, lam medial... alef breaks the joining after it.
+    const std::vector<u32> salam = {0x0633, 0x0644, 0x0627, 0x0645};
+    const auto shaped = shapeArabic(salam);
+    CHECK(shaped[0] == 0xFEB3);  // seen initial
+    CHECK(shaped[1] == 0xFEFC);  // lam-alef ligature, final form (joined to the seen)
+    CHECK(shaped[2] == 0);       // alef absorbed
+    CHECK(shaped[3] == 0xFEE1);  // meem isolated (alef does not join forward)
+    const auto bab = shapeArabic({0x0628, 0x0627, 0x0628});  // باب
+    CHECK(bab[0] == 0xFE91);  // beh initial
+    CHECK(bab[1] == 0xFE8E);  // alef final
+    CHECK(bab[2] == 0xFE8F);  // beh isolated
+    const auto mid = shapeArabic({0x0628, 0x0628, 0x0628});
+    CHECK(mid[1] == 0xFE92);  // medial
+    CHECK(mid[2] == 0xFE90);  // final
+    CHECK(shapeArabic({'a', 'b'}) == std::vector<u32>{'a', 'b'});
+    CHECK(shapeArabic({0x067E, 0x06CC})[0] == 0xFB58);  // Persian peh initial
+    CHECK(shapeArabic({0x067E, 0x06CC})[1] == 0xFBFD);  // farsi yeh final
+
+    CHECK(bidi::paragraphRtl({' ', 0x05D0, 'a'}));
+    CHECK_FALSE(bidi::paragraphRtl({'1', 'a', 0x05D0}));
+    // LTR paragraph with a Hebrew word: "ab אבג cd" -> the Hebrew word reversed in place.
+    const std::vector<u32> mixed = {'a', 'b', ' ', 0x05D0, 0x05D1, 0x05D2, ' ', 'c', 'd'};
+    CHECK(bidi::visualOrder(mixed, false) == std::vector<u32>{0, 1, 2, 5, 4, 3, 6, 7, 8});
+    // RTL paragraph: "אב 123 cd" -> cd 123 בא (numbers and Latin keep their own order).
+    const std::vector<u32> rtl = {0x05D0, 0x05D1, ' ', '1', '2', '3', ' ', 'c', 'd'};
+    CHECK(bidi::visualOrder(rtl, true) == std::vector<u32>{7, 8, 6, 3, 4, 5, 2, 1, 0});
+    // Decimal number inside RTL stays whole; brackets are mirrored.
+    std::vector<u32> mirrored;
+    const std::vector<u32> pi = {0x05D0, ' ', '(', '3', '.', '1', '4', ')'};
+    CHECK(bidi::visualOrder(pi, true, &mirrored) == std::vector<u32>{7, 3, 4, 5, 6, 2, 1, 0});
+    CHECK(mirrored[2] == ')');
+    CHECK(mirrored[7] == '(');
+}
+
+TEST_CASE("text layout: right-to-left lines are displayed reversed and start on the right") {
+    UIFixture f;
+    FontLibrary& fonts = f.ui.fonts();
+    auto sources = [](const TextLayout& l) {
+        std::vector<u32> s;
+        for (const TextGlyph& g : l.glyphs) s.push_back(g.source);
+        return s;
+    };
+    auto byX = [](TextLayout l) {
+        std::stable_sort(l.glyphs.begin(), l.glyphs.end(), [](const TextGlyph& a, const TextGlyph& b) { return a.min.x < b.min.x; });
+        return l;
+    };
+    // "אב cd": RTL paragraph -> "cd בא", aligned right in a Left box.
+    auto r = fonts.layout("assets://fonts/Inter-Regular.ttf", "\xD7\x90\xD7\x91 cd", 20, 300, false, 1.0f, UIHAlign::Left);
+    REQUIRE(r);
+    REQUIRE(r.value().glyphs.size() == 5);
+    CHECK(sources(byX(r.value())) == std::vector<u32>{3, 4, 2, 1, 0});
+    float right = 0.0f, left = 1e9f;
+    for (const TextGlyph& g : r.value().glyphs) right = std::max(right, g.min.x + g.advance), left = std::min(left, g.min.x);
+    CHECK(right > 280.0f);  // starts on the right
+    CHECK(left > 200.0f);
+    // A plain LTR text is unchanged.
+    auto l = fonts.layout("assets://fonts/Inter-Regular.ttf", "cd", 20, 300, false, 1.0f, UIHAlign::Left);
+    REQUIRE(l);
+    CHECK(l.value().glyphs[0].min.x < 10.0f);
+    // Arabic lam-alef: one glyph for two letters.
+    auto a = fonts.layout("assets://fonts/Inter-Regular.ttf", "\xD9\x84\xD8\xA7", 20, 300, false, 1.0f, UIHAlign::Left);
+    REQUIRE(a);
+    CHECK(a.value().glyphs.size() == 1);
+}
+}

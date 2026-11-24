@@ -3,6 +3,7 @@ agr_add_module(ui
         src/UIComponents.cpp
         src/UITheme.cpp
         src/Font.cpp
+        src/Bidi.cpp
         src/UISystem.cpp
         src/UIPlugin.cpp
     PUBLIC_DEPS

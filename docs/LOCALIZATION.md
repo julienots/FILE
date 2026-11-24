@@ -56,6 +56,11 @@ coins.other,{1} pièces,{1} coins,{1} монеты
 - Pluriels : règles CLDR des langues courantes (anglais, français, langues germaniques et romanes, russe,
   ukrainien, polonais, tchèque, arabe, hébreu, lituanien, roumain, langues sans pluriel) ; pas de genre
   grammatical ni de déclinaisons (prévoir des clés distinctes).
-- Les polices fournies (Inter) couvrent le latin, le grec et le cyrillique : pas les écritures
-  chinoise, japonaise, coréenne ou arabe (il faut fournir une police adaptée), et pas d'écriture de droite
-  à gauche.
+- Les polices fournies (Inter) couvrent le latin, le grec et le cyrillique : pour le chinois, le japonais, le
+  coréen, l'arabe ou l'hébreu, il faut fournir une police adaptée (champ `font` du texte).
+- Écritures de droite à gauche (arabe, hébreu, persan, ourdou) : lettres arabes liées (formes initiale,
+  médiane, finale, ligatures lam-alef, lettres persanes پ چ ژ ک گ ی) et ordre d'affichage selon un algorithme bidirectionnel simplifié
+  (direction du paragraphe donnée par sa première lettre, nombres et mots latins gardés de gauche à droite,
+  parenthèses retournées ; dans un paragraphe de droite à gauche, l'alignement `Left` part de la droite).
+  Pas de mise en forme OpenType complète (HarfBuzz) : les écritures indiennes (devanagari...) et les
+  diacritiques arabes empilés ne sont pas composés ; curseur des champs de saisie en ordre logique.

@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "agr/core/Log.hpp"
+#include "agr/ui/Bidi.hpp"
 
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -166,11 +167,48 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
     TextLayout out;
     std::vector<Item> line;
     float y = 0.0f;
+    bool paragraphRtl = false;
+    bool anyRtl = false;
     auto emitLine = [&](usize count, float width) {
+        // Right-to-left text: display order, mirrored brackets, positions rebuilt left to right.
+        bool hasRtl = paragraphRtl;
+        for (usize k = 0; k < count && !hasRtl; ++k) hasRtl = bidi::isRtl(line[k].cp);
+        if (hasRtl) {
+            std::vector<u32> cps(count);
+            for (usize k = 0; k < count; ++k) cps[k] = line[k].cp;
+            std::vector<u32> mirrored;
+            const std::vector<u32> order = bidi::visualOrder(cps, paragraphRtl, &mirrored);
+            std::vector<Item> visual;
+            visual.reserve(count);
+            float x = 0.0f;
+            int prev = -1;
+            for (u32 k : order) {
+                Item it = line[k];
+                if (mirrored[k]) it.g = &m->glyph(fontId, px, mirrored[k]);
+                if (prev >= 0) x += static_cast<float>(stbtt_GetGlyphKernAdvance(&f.info, prev, it.g->index)) * scale;
+                it.x = x;
+                x += it.g->advance;
+                prev = it.g->index;
+                visual.push_back(it);
+            }
+            std::copy(visual.begin(), visual.end(), line.begin());
+            if (paragraphRtl) {  // trailing spaces are now at the left: the width counts the letters only
+                usize lead = 0;
+                while (lead < count && line[lead].cp == ' ') ++lead;
+                const float shift = lead < count ? line[lead].x : 0.0f;
+                for (usize k = 0; k < count; ++k) line[k].x -= shift;
+                width = count ? std::max(0.0f, line[count - 1].x + line[count - 1].g->advance) : 0.0f;
+            } else {
+                width = x;
+            }
+        }
+        // Right-to-left paragraphs: Left / Right mean start / end (a Left label starts on the right).
+        UIHAlign a = align;
+        if (paragraphRtl && a != UIHAlign::Center) a = a == UIHAlign::Left ? UIHAlign::Right : UIHAlign::Left;
         float offset = 0.0f;
         const float box = std::max(boxWidth, 0.0f);
-        if (align == UIHAlign::Center) offset = std::round((box - width) * 0.5f);
-        else if (align == UIHAlign::Right) offset = std::round(box - width);
+        if (a == UIHAlign::Center) offset = std::round((box - width) * 0.5f);
+        else if (a == UIHAlign::Right) offset = std::round(box - width);
         const float baseline = y + ascent;
         for (usize i = 0; i < count; ++i) {
             const Item& it = line[i];
@@ -210,12 +248,38 @@ Result<TextLayout> FontLibrary::layout(std::string_view fontUri, std::string_vie
         }
         lastSpace = SIZE_MAX;
     };
+    // Decode, then Arabic joined forms and the direction of each paragraph (logical order).
+    struct Cp {
+        u32 cp, source;
+        bool rtlParagraph;
+    };
+    std::vector<Cp> decoded;
+    decoded.reserve(text.size());
     while (i < text.size()) {
         const u32 cp = nextCodepoint(text, i);
-        const u32 index = source++;
+        decoded.push_back({cp, source++, false});
+        anyRtl |= bidi::isRtl(cp);
+    }
+    if (anyRtl)
+        for (usize start = 0; start < decoded.size();) {
+            usize end = start;
+            while (end < decoded.size() && decoded[end].cp != '\n') ++end;
+            std::vector<u32> para(end - start);
+            for (usize k = start; k < end; ++k) para[k - start] = decoded[k].cp;
+            const bool rtl = bidi::paragraphRtl(para);
+            const std::vector<u32> shaped = bidi::shapeArabic(para);
+            for (usize k = start; k < end; ++k) decoded[k].cp = shaped[k - start], decoded[k].rtlParagraph = rtl;
+            start = end + 1;
+        }
+    if (!decoded.empty()) paragraphRtl = decoded[0].rtlParagraph;
+    for (usize d = 0; d < decoded.size(); ++d) {
+        const u32 cp = decoded[d].cp;
+        const u32 index = decoded[d].source;
+        if (cp == 0) continue;  // second half of a lam-alef ligature
         if (cp == '\r') continue;
         if (cp == '\n') {
             emitLine(line.size(), lineWidth(line.size()));
+            if (d + 1 < decoded.size()) paragraphRtl = decoded[d + 1].rtlParagraph;
             line.clear();
             pen = 0.0f;
             prevGlyph = -1;
