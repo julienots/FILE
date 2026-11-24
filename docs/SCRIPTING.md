@@ -316,5 +316,7 @@ appel, y compris l'accès au Transform) ; ~260 Ko de mémoire Lua. Détails : [B
   `self.entity` ; pas les types, ni les méthodes des entités obtenues autrement (`agr.find`) ; la complétion suit les variables locales affectées directement
   (`local x = agr...`), pas les valeurs de retour en général ni les tables construites ; « aller à la définition » reconnaît les fonctions par leur nom, sans portée.
 - Un script par entité (comme Godot) ; pas de types statiques (Lua 5.4 standard, pas Luau).
-- Signaux : la vérification des signaux déclarés (`signals = {...}`) se fait à l'exécution (premier
-  `connect` / `emit`), pas dans l'éditeur ; un script sans déclaration n'est pas vérifié.
+- Signaux : l'éditeur souligne (en ambre, avant de jouer) les `self.entity:emit` / `connect` et
+  `agr.waitSignal(self.entity, ...)` qui utilisent un signal absent de `signals = {...}` ; les signaux d'autres
+  entités et les types d'arguments sont vérifiés à l'exécution (premier `connect` / `emit`) ; un script sans
+  déclaration n'est pas vérifié.
