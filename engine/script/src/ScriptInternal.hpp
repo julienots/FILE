@@ -107,6 +107,7 @@ struct ScriptEngine::Impl {
     math::Vec2 screenSize{0.0f, 0.0f};
     Physics2DWorld* physics2d = nullptr;
     RewindRecorder rewind;  // agr.rewind: history of Rewind entities, ghosts
+    std::unordered_map<std::string, nlohmann::json> pendingLoads;  // agr.game.load: entity id -> its onSave data
     Physics3DWorld* physics3d = nullptr;
     PhysicsLayers physicsLayers;  ///< Names of assets://physics_layers.json (agr.physics*.layer / mask), refreshed on use.
     NavigationSystem* navigation = nullptr;

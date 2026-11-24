@@ -142,6 +142,24 @@ composant).
 | `agr.profile.begin(nom)`, `agr.profile.finish()` | section mesurée dans le profileur de l'éditeur (imbriquable) |
 | `agr.time.setScale(s)`, `agr.time.scale()` | vitesse du jeu (ralenti 0,3, pause 0, accéléré 2) ; revient à 1 quand le jeu s'arrête |
 
+### Sauvegarde de partie complète (absente de Godot)
+
+Godot n'a pas de sauvegarde de partie intégrée (chaque jeu écrit la sienne objet par objet). Ici :
+
+```lua
+agr.game.save("slot1")        -- toute la scène : entités (y compris créées en jeu), composants, vitesses physiques,
+                              -- agr.globals, et ce que rend onSave() de chaque script
+agr.game.load("slot1")        -- false si l'emplacement est vide ; la scène sauvée remplace l'actuelle en fin d'image
+agr.game.exists("slot1") ; agr.game.delete("slot1")
+
+function Hero:onSave() return { hp = self.hp, sac = self.sac } end   -- l'état propre au script
+function Hero:onLoad(d) self.hp, self.sac = d.hp, d.sac end        -- appelé juste après onStart
+```
+
+Fichiers : `user://saves/<emplacement>.agrscene` et `.json`. Testé dans un jeu : position, objet créé en
+jeu, état du script, variables globales et balle lancée (repart à sa vitesse) sont retrouvés après avoir
+tout changé.
+
 ### Retour dans le temps, fantômes et replays (absent de Godot)
 
 Composant **`Rewind`** (`seconds` d'historique) : à chaque pas physique, la position, la rotation,

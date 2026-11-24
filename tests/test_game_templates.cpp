@@ -1898,3 +1898,47 @@ TEST_CASE("rewind: a thrown ball goes back in time, then flies on with its veloc
     h.lua("assert(not agr.rewind.ghostPlaying(agr.find('Ghost')))");
     h.lua("assert(not agr.rewind.playGhost(agr.find('Ghost'), 'not a recording'))");
 }
+
+TEST_CASE("agr.game: a whole-game save brings back entities, components, velocities, globals and script state") {
+    GameHarness h(SceneTemplate::Empty2D);
+    Scene& s = h.scene();
+    auto& reg = s.registry();
+    const fs::path script = h.root / "game" / "assets" / "scripts" / "hero.lua";
+    fs::create_directories(script.parent_path());
+    std::ofstream(script) << "local Hero = {}\n"
+                             "function Hero:onStart() self.hp = self.hp or 100 end\n"
+                             "function Hero:onSave() return { hp = self.hp, bag = { 'key', 'map' } } end\n"
+                             "function Hero:onLoad(d) self.hp = d.hp ; self.bag = d.bag end\n"
+                             "return Hero\n";
+    const auto hero = s.createEntity("Hero");
+    reg.get<TransformComponent>(hero).position = {2, 3, 0};
+    reg.emplace<ScriptComponent>(hero).script = "assets://scripts/hero.lua";
+    const auto ball = s.createEntity("Ball");
+    reg.get<TransformComponent>(ball).position = {0, 10, 0};
+    reg.emplace<RigidBody2DComponent>(ball).gravityScale = 0.0f;
+    reg.emplace<Collider2DComponent>(ball).shape = ColliderShape2D::Circle;
+    s.updateTransforms();
+    h.frames(2);
+    h.lua("agr.find('Ball'):setVelocity(3, 0)");
+    h.lua("agr.find('Hero'):script().hp = 42; agr.globals.level = 3; local c = agr.spawn('Chest'); c:setPosition(5, 5, 0)");
+    h.frames(2);
+    h.lua("assert(agr.game.save('slot1')); assert(agr.game.exists('slot1') and not agr.game.exists('nope'))");
+    const float ballX = h.position("Ball").x;
+    // Everything changes after the save.
+    h.lua("agr.find('Hero'):setPosition(-9, -9, 0); agr.find('Hero'):script().hp = 1; agr.globals.level = 99; agr.globals.junk = true");
+    h.lua("agr.find('Chest'):destroy()");
+    h.frames(30);
+    h.lua("assert(agr.game.load('slot1'))");
+    h.frames(2);
+    CHECK(h.position("Hero").x == doctest::Approx(2.0f));
+    h.lua("local hs = agr.find('Hero'):script(); assert(hs.hp == 42, hs.hp); assert(hs.bag[2] == 'map')");
+    h.lua("assert(agr.globals.level == 3 and agr.globals.junk == nil)");
+    h.lua("local c = agr.find('Chest'); assert(c, 'spawned entity restored'); local x = c:position(); assert(math.abs(x - 5) < 1e-4)");
+    // The ball moves on with its saved velocity.
+    const float x0 = h.position("Ball").x;
+    CHECK(x0 == doctest::Approx(ballX).epsilon(0.1));
+    h.seconds(1.0);
+    CHECK(h.position("Ball").x == doctest::Approx(x0 + 3.0f).epsilon(0.1));
+    h.lua("assert(agr.game.delete('slot1') and not agr.game.exists('slot1') and agr.game.load('slot1') == false)");
+    h.noScriptErrors();
+}

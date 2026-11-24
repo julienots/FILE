@@ -3,6 +3,12 @@
 #include <cmath>
 
 #include "ScriptInternal.hpp"
+#include "agr/physics2d/Physics2DComponents.hpp"
+#include "agr/physics2d/Physics2DWorld.hpp"
+#include "agr/physics3d/Physics3DComponents.hpp"
+#include "agr/physics3d/Physics3DWorld.hpp"
+#include "agr/scene/SceneSerializer.hpp"
+#include "agr/core/Log.hpp"
 #include "agr/core/Pack.hpp"
 #include "agr/render/Renderer.hpp"
 
@@ -119,6 +125,125 @@ int a_loadScene(lua_State* L) {
     return 0;
 }
 
+// ---------------------------------------------------------------- agr.game: whole-game saves
+std::string saveSlot(lua_State* L, int idx) {
+    std::string slot = luaL_optstring(L, idx, "auto");
+    if (slot.empty() || slot.size() > 64) luaL_error(L, "save slot names are 1 to 64 characters");
+    for (char c : slot)
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-') luaL_error(L, "save slot '%s': letters, digits, _ and - only", slot.c_str());
+    return slot;
+}
+/// agr.game.save([slot = "auto"]) -> true: the whole scene (every entity and component, physics
+/// velocities), agr.globals and what each script's onSave() returns.
+int gm_save(lua_State* L) {
+    const std::string slot = saveSlot(L, 1);
+    auto& m = implOf(L);
+    Scene& scene = sceneOf(L);
+    auto& reg = scene.registry();
+    // Current velocities become the bodies' starting velocities in the saved file.
+    std::vector<std::pair<ecs::Entity, math::Vec2>> saved2;
+    std::vector<std::pair<ecs::Entity, math::Vec3>> saved3;
+    if (m.physics2d)
+        reg.view<RigidBody2DComponent>().each([&](ecs::Entity e, RigidBody2DComponent& rb) {
+            if (auto v = m.physics2d->velocity(e)) saved2.emplace_back(e, rb.initialVelocity), rb.initialVelocity = *v;
+        });
+    if (m.physics3d)
+        reg.view<RigidBodyComponent>().each([&](ecs::Entity e, RigidBodyComponent& rb) {
+            if (auto v = m.physics3d->velocity(e)) saved3.emplace_back(e, rb.initialVelocity), rb.initialVelocity = *v;
+        });
+    const std::string text = SceneSerializer::toString(scene);
+    for (auto& [e, v] : saved2) reg.get<RigidBody2DComponent>(e).initialVelocity = v;
+    for (auto& [e, v] : saved3) reg.get<RigidBodyComponent>(e).initialVelocity = v;
+    nlohmann::json meta = {{"format", "agr.savegame"}, {"version", 1}, {"scene", scene.name()}, {"scripts", nlohmann::json::object()}};
+    for (auto& [key, inst] : m.instances) {
+        if (!inst.started || inst.faulted || !scene.valid(inst.entity)) continue;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, inst.ref);
+        lua_getfield(L, -1, "onSave");
+        if (lua_isfunction(L, -1)) {
+            lua_pushvalue(L, -2);
+            if (lua_pcall(L, 1, 1, 0) == LUA_OK) {
+                if (!lua_isnil(L, -1)) meta["scripts"][scene.uuidOf(inst.entity).toString()] = toJson(L, -1, 0);
+            } else {
+                AGR_LOG_WARN("Script", "onSave of {}: {}", inst.uri, lua_tostring(L, -1));
+            }
+            lua_pop(L, 1);
+        } else {
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
+    }
+    lua_getglobal(L, "agr");
+    lua_getfield(L, -1, "globals");
+    meta["globals"] = lua_istable(L, -1) ? toJson(L, -1, 0) : nlohmann::json::object();
+    lua_pop(L, 2);
+    const std::string base = "user://saves/" + slot;
+    if (!m.vfs.writeText(base + ".agrscene", text) || !m.vfs.writeText(base + ".json", meta.dump())) return luaL_error(L, "agr.game.save: cannot write %s", base.c_str());
+    lua_pushboolean(L, 1);
+    return 1;
+}
+/// agr.game.load([slot = "auto"]) -> true, or false when the slot is empty: the saved scene replaces
+/// the current one at the end of the frame; agr.globals is restored now; each script gets
+/// onLoad(data) right after its onStart.
+int gm_load(lua_State* L) {
+    const std::string slot = saveSlot(L, 1);
+    auto& m = implOf(L);
+    const std::string base = "user://saves/" + slot;
+    auto text = m.vfs.readText(base + ".json");
+    if (!text || !m.vfs.exists(base + ".agrscene")) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const auto meta = nlohmann::json::parse(text.value(), nullptr, false);
+    if (meta.is_discarded() || meta.value("format", "") != "agr.savegame") {  // deleted (or not a save)
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!m.sceneLoader) return luaL_error(L, "agr.game.load: scene loading is not available here");
+    // agr.globals: emptied and refilled (references to the table stay valid).
+    lua_getglobal(L, "agr");
+    lua_getfield(L, -1, "globals");
+    if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+            lua_pop(L, 1);
+            lua_pushvalue(L, -1);
+            lua_pushnil(L);
+            lua_rawset(L, -4);
+        }
+        if (meta.contains("globals") && meta["globals"].is_object())
+            for (auto it = meta["globals"].begin(); it != meta["globals"].end(); ++it) {
+                pushJson(L, it.value());
+                lua_setfield(L, -2, it.key().c_str());
+            }
+    }
+    lua_pop(L, 2);
+    m.pendingLoads.clear();
+    if (meta.contains("scripts") && meta["scripts"].is_object())
+        for (auto it = meta["scripts"].begin(); it != meta["scripts"].end(); ++it) m.pendingLoads[it.key()] = it.value();
+    m.sceneLoader(base + ".agrscene");
+    lua_pushboolean(L, 1);
+    return 1;
+}
+int gm_exists(lua_State* L) {
+    const std::string slot = saveSlot(L, 1);
+    auto text = implOf(L).vfs.readText("user://saves/" + slot + ".json");
+    lua_pushboolean(L, text && text.value().find("agr.savegame") != std::string::npos);
+    return 1;
+}
+int gm_delete(lua_State* L) {
+    const std::string slot = saveSlot(L, 1);
+    auto& vfs = implOf(L).vfs;
+    // Overwritten with an empty marker: exists() says no (the VFS has no delete).
+    auto text = vfs.readText("user://saves/" + slot + ".json");
+    const bool had = text && text.value().find("agr.savegame") != std::string::npos;
+    if (had) {
+        (void)vfs.writeText("user://saves/" + slot + ".json", "{}");
+        (void)vfs.writeText("user://saves/" + slot + ".agrscene", "");
+    }
+    lua_pushboolean(L, had);
+    return 1;
+}
+
 /// agr.isServer() -> true when the game runs as a dedicated server (no screen, no sound).
 int a_isServer(lua_State* L) {
     lua_pushboolean(L, implOf(L).dedicatedServer);
@@ -181,6 +306,10 @@ void openGameBindings(lua_State* L) {
     lua_setfield(L, -2, "clone");
     lua_pushcfunction(L, a_loadScene);
     lua_setfield(L, -2, "loadScene");
+    static const luaL_Reg game[] = {{"save", gm_save}, {"load", gm_load}, {"exists", gm_exists}, {"delete", gm_delete}, {nullptr, nullptr}};
+    lua_newtable(L);
+    luaL_setfuncs(L, game, 0);
+    lua_setfield(L, -2, "game");
     lua_pushcfunction(L, a_loadPack);
     lua_setfield(L, -2, "loadPack");
     lua_pushcfunction(L, a_isServer);

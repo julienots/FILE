@@ -372,6 +372,16 @@ void ScriptEngine::update(Scene& scene, const FrameTime& time) {
         if (it == m->instances.end()) continue;
         it->second.started = true;
         m->call(it->second, "onStart", [] { return 0; });
+        // Restored by agr.game.load: the script gets back what its onSave returned.
+        if (!m->pendingLoads.empty())
+            if (auto p = m->pendingLoads.find(scene.uuidOf(it->second.entity).toString()); p != m->pendingLoads.end()) {
+                const nlohmann::json data = std::move(p->second);
+                m->pendingLoads.erase(p);
+                m->call(it->second, "onLoad", [&] {
+                    pushJson(m->L, data);
+                    return 1;
+                });
+            }
     }
     std::vector<u64> order;
     order.reserve(m->instances.size());
