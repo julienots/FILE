@@ -1,0 +1,9 @@
+node_modules/
+relay/node_modules/
+relay/.wrangler/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.zip

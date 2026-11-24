@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AXON</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/axon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ ÉCRAN DE CHARGEMENT ============ -->
+<div id="splash" aria-label="Chargement">
+  <div class="studio">
+    <div class="se-word"><span class="se-super">Super</span><span class="se-essence">Essence</span><span class="se-dot">.</span></div>
+    <div class="se-studio"><span></span>STUDIO<span></span></div>
+  </div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <defs>
+        <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#FFE066"/><stop offset=".55" stop-color="#FFC824"/><stop offset="1" stop-color="#FF7A00"/>
+        </linearGradient>
+      </defs>
+      <circle class="orbit" cx="256" cy="268" r="196" fill="none" stroke="url(#lg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="300 70 60 70"/>
+      <g fill="none" stroke="url(#lg)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+        <path class="leg" pathLength="1" d="M146 384 L256 132 L366 384"/>
+        <path class="wave" pathLength="1" d="M178 306 C204 268 228 344 256 306 S308 268 334 306" stroke-width="26"/>
+      </g>
+      <circle class="node core" cx="256" cy="128" r="36" fill="#FFE066"/>
+      <circle class="node" cx="256" cy="128" r="16" fill="#000"/>
+      <circle class="node n1" cx="142" cy="390" r="26" fill="url(#lg)"/>
+      <circle class="node n2" cx="370" cy="390" r="26" fill="url(#lg)"/>
+      <circle class="spark" r="9" fill="#fff"><animateMotion dur="1.6s" repeatCount="indefinite" path="M146 384 L256 132 L366 384"/></circle>
+    </svg>
+    <h1 class="axon-word">AXON</h1>
+    <p class="tagline">Claude aux commandes</p>
+    <div class="loader"><i></i></div>
+  </div>
+</div>
+
+<!-- ============ APPAIRAGE ============ -->
+<section id="pair" class="screen" hidden>
+  <div class="pair-card">
+    <img src="icons/axon.svg" alt="" class="pair-logo">
+    <h2>Connecter AXON</h2>
+    <p class="muted">Sur le téléphone piloté, ouvrez AXON › <b>Ajouter un écran de contrôle</b> et partagez le lien vers cet appareil. Ou collez-le ici.</p>
+    <label>Lien ou clé de jumelage
+      <input id="pairCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…/#k=… ou la clé">
+    </label>
+    <button id="pairBtn" class="btn primary">Connecter</button>
+    <p id="pairErr" class="err" hidden></p>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<section id="main" class="screen" hidden>
+  <header class="topbar">
+    <div class="tb-brand"><img src="icons/axon.svg" alt=""><b>AXON</b></div>
+    <span id="deviceName" class="device-name">—</span>
+    <span id="status" class="pill off">Hors ligne</span>
+    <button id="menuBtn" class="icon-btn" aria-label="Réglages">⋯</button>
+  </header>
+
+  <div class="layout">
+    <!-- Retransmission -->
+    <div class="stage">
+      <div id="phone" class="phone">
+        <img id="screen" alt="Écran de l'appareil piloté" draggable="false">
+        <div id="touchLayer" class="touch"></div>
+        <div id="empty" class="empty">
+          <div class="pulse-logo"><img src="icons/axon.svg" alt=""></div>
+          <p id="emptyText">En attente du téléphone…<br><small>Ouvrez AXON sur le téléphone piloté.</small></p>
+        </div>
+        <div id="claudeBadge" class="claude-badge" hidden>Claude agit…</div>
+      </div>
+      <div class="nav-keys">
+        <button data-key="back" aria-label="Retour">◁</button>
+        <button data-key="home" aria-label="Accueil">◯</button>
+        <button data-key="recents" aria-label="Applications récentes">▢</button>
+        <button id="kbBtn" aria-label="Clavier">⌨</button>
+      </div>
+      <form id="kbForm" class="kb" hidden>
+        <input id="kbInput" placeholder="Texte à taper sur l'appareil" autocomplete="off">
+        <button class="btn small">Envoyer</button>
+      </form>
+    </div>
+
+    <!-- Panneau Claude -->
+    <aside class="panel">
+      <form id="askForm" class="ask">
+        <div class="ask-head"><span class="spark-dot"></span>Demander à Claude</div>
+        <textarea id="askInput" rows="2" placeholder="Ex. : ouvre YouTube et lance la dernière vidéo de ma playlist"></textarea>
+        <div class="chips">
+          <button type="button" class="chip">Ouvre YouTube et cherche de la musique lo-fi</button>
+          <button type="button" class="chip">Active le mode sombre dans les paramètres</button>
+          <button type="button" class="chip">Lis mes dernières notifications</button>
+          <button type="button" class="chip">Mets une alarme demain à 7h</button>
+        </div>
+        <button class="btn primary">Envoyer à Claude</button>
+      </form>
+
+      <div class="feed-head"><b>Activité</b><span id="viewers" class="muted"></span></div>
+      <ol id="feed" class="feed"></ol>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <dialog id="menu">
+    <form method="dialog">
+      <h3>Réglages</h3>
+      <p class="muted" id="menuInfo"></p>
+      <button type="button" class="btn small" id="claudeBtn">Lier à Claude (connecteur)</button>
+      <label class="row"><input type="checkbox" id="optTouch" checked> Contrôle tactile manuel</label>
+      <label class="row"><input type="checkbox" id="optFit"> Cadre minimal</label>
+      <div class="menu-actions">
+        <button value="unpair" class="btn ghost" id="unpairBtn">Déconnecter</button>
+        <button value="close" class="btn">Fermer</button>
+      </div>
+      <p class="credit">AXON · SuperEssence Studio</p>
+    </form>
+  </dialog>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>
