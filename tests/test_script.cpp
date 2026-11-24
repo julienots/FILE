@@ -1646,3 +1646,77 @@ TEST_CASE("lint: emit / connect / waitSignal of the entity's own undeclared sign
     CHECK(f.scripts.lint("local M = {}\nfunction M:onStart() self.entity:emit('anything') end\nreturn M\n").empty());
 }
 }
+
+TEST_SUITE("script") {
+TEST_CASE("agr.procgen: dungeon rooms all connected, one cave, WFC keeps the example's adjacencies; tilemap cells from Lua") {
+    ScriptFixture f;
+    registerRenderComponents();
+    const auto map = f.scene.createEntity("Map");
+    f.scene.registry().emplace<TilemapComponent>(map);
+    const Status st = f.scripts.run(R"lua(
+local function flood(g, sx, sy)   -- 4-connected floor cells reachable from (sx, sy)
+    local seen, n, stack = {}, 0, { { sx, sy } }
+    while #stack > 0 do
+        local c = table.remove(stack)
+        local x, y = c[1], c[2]
+        local k = y * 10000 + x
+        if g[y] and g[y][x] == 1 and not seen[k] then
+            seen[k] = true ; n = n + 1
+            stack[#stack + 1] = { x + 1, y } ; stack[#stack + 1] = { x - 1, y }
+            stack[#stack + 1] = { x, y + 1 } ; stack[#stack + 1] = { x, y - 1 }
+        end
+    end
+    return n
+end
+local function count(g, v) local n = 0 for _, row in ipairs(g) do for _, c in ipairs(row) do if c == v then n = n + 1 end end end return n end
+
+local g, rooms = agr.procgen.dungeon(60, 40, { seed = 7, rooms = 10 })
+assert(#g == 40 and #g[1] == 60)
+assert(#rooms >= 6, "rooms placed: " .. #rooms)
+assert(flood(g, rooms[1].cx, rooms[1].cy) == count(g, 1), "every floor cell reachable from the first room")
+for x = 1, 60 do assert(g[1][x] == 0 and g[40][x] == 0, "border walls") end
+local g2 = agr.procgen.dungeon(60, 40, { seed = 7, rooms = 10 })
+assert(table.concat(g2[20], ",") == table.concat(g[20], ","), "same seed, same dungeon")
+
+local cave = agr.procgen.caves(50, 30, { seed = 3 })
+local floor = count(cave, 1)
+assert(floor > 300, "a real cave: " .. floor)
+local fx, fy
+for y, row in ipairs(cave) do for x, c in ipairs(row) do if c == 1 and not fx then fx, fy = x, y end end end
+assert(flood(cave, fx, fy) == floor, "one connected cave")
+
+-- WFC: water (1) never touches sand (3) directly, grass (2) is always between.
+local sample = {
+    { 1, 1, 2, 3, 3 },
+    { 1, 1, 2, 3, 3 },
+    { 2, 2, 2, 2, 2 },
+    { 3, 3, 2, 1, 1 },
+    { 3, 3, 2, 1, 1 },
+}
+local out = assert(agr.procgen.wfc(sample, 24, 16, { seed = 11, attempts = 30 }), "WFC found a map")
+assert(#out == 16 and #out[1] == 24)
+local kinds = {}
+for y = 1, 16 do
+    for x = 1, 24 do
+        local v = out[y][x]
+        kinds[v] = true
+        if x < 24 then local r = out[y][x + 1] assert(not ((v == 1 and r == 3) or (v == 3 and r == 1)), "water next to sand") end
+        if y < 16 then local u = out[y + 1][x] assert(not ((v == 1 and u == 3) or (v == 3 and u == 1)), "water above sand") end
+    end
+end
+assert(kinds[1] and kinds[2] and kinds[3], "all three tiles used")
+
+-- Tilemap cells.
+local m = agr.find("Map")
+m:setTiles(rooms and g, { [0] = 5, [1] = -1 })
+local w, h = m:tilemapSize()
+assert(w == 60 and h == 40)
+assert(m:tile(1, 1) == 5 and m:tile(rooms[1].cx, rooms[1].cy) == -1)
+m:setTile(2, 2, 9) ; assert(m:tile(2, 2) == 9)
+assert(m:tile(0, 0) == -1 and m:tile(999, 1) == -1)
+)lua", &f.scene);
+    CHECK_MESSAGE(st, (st ? std::string() : st.error().message));
+    CHECK(f.scene.registry().get<TilemapComponent>(map).width == 60);
+    CHECK_FALSE(f.scripts.run("agr.procgen.wfc({}, 5, 5)", &f.scene));
+}
+}

@@ -253,6 +253,7 @@ void openNetBindings(lua_State* L);
 void openSocketBindings(lua_State* L);
 void openFxBindings(lua_State* L);
 void openRuntimeBindings(lua_State* L);
+void openProcgenBindings(lua_State* L);
 /// Effects frame hooks (ScriptFx.cpp): before the scripts' onUpdate (removes last frame's camera
 /// shake), after it (tweens, effects, new shake), and when the scene changes.
 void fxBeginFrame(ScriptEngine::Impl& m, Scene& scene);
