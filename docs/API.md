@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (79, 780 champs)
+## Composants (79, 784 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -1476,6 +1476,10 @@ Text with a TrueType font, aligned in its rectangle.
 | `wrap` | bool | Break lines at the rectangle's width |
 | `lineSpacing` | float | plage 0.5 .. 3 |
 | `richText` | bool | [color=#ff8800]...[/color], [b]...[/b], [u]...[/u] |
+| `outlineSize` | float | Outline around the letters (pixels; 0 = none) ; plage 0 .. 16 |
+| `outlineColor` | color |  |
+| `shadowOffset` | vec2 |  |
+| `shadowColor` | color | Drop shadow (transparent = none) |
 
 ### UIToggle
 

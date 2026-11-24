@@ -1917,6 +1917,10 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
                 const Element& el = pass.elements[ei];
                 if (const auto* t = reg.tryGet<UITextComponent>(el.entity); t && !t->text.empty() && t->color.w > 0.0f) {
                     PendingText pt{ei, ci, {}, {}, t->color, {}, t->fontSize * pass.scale};
+                    pt.outline = std::max(t->outlineSize, 0.0f) * pass.scale;
+                    pt.outlineColor = t->outlineColor;
+                    pt.shadowOffset = t->shadowOffset * pass.scale;
+                    pt.shadowColor = t->shadowColor;
                     if (th && isWhite(t->color)) pt.color = Vec4{th->text.x, th->text.y, th->text.z, th->text.w * t->color.w};
                     const std::string shown = t->richText ? parseRichText(t->text, pt.styles, pt.links) : std::string();
                     auto lay = m_fonts.layout(fontOf(t->font), t->richText ? shown : t->text, pt.pixelSize, el.rect.z, t->wrap, t->lineSpacing, t->hAlign);
@@ -2034,6 +2038,33 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
         const u32 base = packColor(pt.color);
         const float boldOffset = std::max(1.0f, std::round(pt.pixelSize * 0.045f));
         const Vec4 linkColor{0.4f, 0.7f, 1.0f, 1.0f};
+        // Shadow, then outline: copies of every glyph behind the text (a ring of offsets).
+        auto backdrop = [&](Vec2 offset, Vec4 c) {
+            const u32 col = packColor({c.x, c.y, c.z, c.w * pt.color.w});
+            for (const TextGlyph& g : pt.layout.glyphs) {
+                const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
+                if (st && st->image != -1) continue;
+                if (g.max.x <= g.min.x) continue;  // spaces
+                emit(out, pt.origin + g.min + offset, pt.origin + g.max + offset, g.uv, col, m_fonts.texture());
+            }
+        };
+        if (pt.shadowColor.w > 0.0f) {
+            backdrop(pt.shadowOffset, pt.shadowColor);
+            if (pt.outline > 0.0f) backdrop(pt.shadowOffset + Vec2{pt.outline, pt.outline} * 0.7f, pt.shadowColor);
+        }
+        if (pt.outline > 0.0f && pt.outlineColor.w > 0.0f) {
+            const float r = pt.outline;
+            const int steps = r <= 1.5f ? 8 : 16;
+            for (int i = 0; i < steps; ++i) {
+                const float a = 6.2831853f * static_cast<float>(i) / static_cast<float>(steps);
+                backdrop({std::round(std::cos(a) * r), std::round(std::sin(a) * r)}, pt.outlineColor);
+            }
+            if (r > 2.5f)  // fill the inside of thick outlines
+                for (int i = 0; i < 8; ++i) {
+                    const float a = 6.2831853f * (static_cast<float>(i) + 0.5f) / 8.0f;
+                    backdrop({std::round(std::cos(a) * r * 0.5f), std::round(std::sin(a) * r * 0.5f)}, pt.outlineColor);
+                }
+        }
         for (const TextGlyph& g : pt.layout.glyphs) {
             const RichStyle* st = pt.styles.empty() || g.source >= pt.styles.size() ? nullptr : &pt.styles[g.source];
             if (st && st->image == -2) continue;  // room for a wide inline image

@@ -268,6 +268,10 @@ private:
         std::vector<RichStyle> styles;  // rich text: per code point
         float pixelSize = 0.0f;
         std::vector<std::string> links;  // rich text: ids of [url=...]
+        float outline = 0.0f;            // pixels (scaled)
+        math::Vec4 outlineColor{0, 0, 0, 0};
+        math::Vec2 shadowOffset{0, 0};
+        math::Vec4 shadowColor{0, 0, 0, 0};
     };
     struct ThemeEntry {
         std::unique_ptr<UITheme> theme;

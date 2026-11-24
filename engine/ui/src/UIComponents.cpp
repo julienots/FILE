@@ -59,7 +59,11 @@ void registerUIComponents() {
         .field("vAlign", &UITextComponent::vAlign, {.enumEntries = {{"Top", 0}, {"Middle", 1}, {"Bottom", 2}}})
         .field("wrap", &UITextComponent::wrap, {.tooltip = "Break lines at the rectangle's width"})
         .field("lineSpacing", &UITextComponent::lineSpacing, {.rangeMin = 0.5f, .rangeMax = 3.0f, .speed = 0.01f})
-        .field("richText", &UITextComponent::richText, {.tooltip = "[color=#ff8800]...[/color], [b]...[/b], [u]...[/u]"});
+        .field("richText", &UITextComponent::richText, {.tooltip = "[color=#ff8800]...[/color], [b]...[/b], [u]...[/u]"})
+        .field("outlineSize", &UITextComponent::outlineSize, {.tooltip = "Outline around the letters (pixels; 0 = none)", .rangeMin = 0.0f, .rangeMax = 16.0f, .speed = 0.1f})
+        .field("outlineColor", &UITextComponent::outlineColor, {.flags = FieldFlag_Color})
+        .field("shadowOffset", &UITextComponent::shadowOffset, {.speed = 0.1f})
+        .field("shadowColor", &UITextComponent::shadowColor, {.tooltip = "Drop shadow (transparent = none)", .flags = FieldFlag_Color});
     reg.add<UIButtonComponent>("UIButton")
         .category("UI")
         .description("Clickable / touchable element: calls onClick() on its script and a function of the target's script.")

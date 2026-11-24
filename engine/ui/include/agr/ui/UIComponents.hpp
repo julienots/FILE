@@ -90,6 +90,13 @@ struct UITextComponent {
     /// Inline tags: [color=#ff8800] or [color=red]...[/color], [b]...[/b] (bold), [u]...[/u]
     /// (underline); write [[ for a literal [.
     bool richText = false;
+    /// Outline around the letters (pixels at the reference resolution; 0 = none): readable text
+    /// over any background (Godot's outline_size).
+    float outlineSize = 0.0f;
+    math::Vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f};
+    /// Drop shadow (offset in pixels; transparent color = none).
+    math::Vec2 shadowOffset{2.0f, 2.0f};
+    math::Vec4 shadowColor{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 /// Clickable element. Tints the UIImage of the entity by state. A click calls

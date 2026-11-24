@@ -23,7 +23,7 @@ des modèles et test de bout en bout de l'éditeur.
 | Composant | Rôle |
 |---|---|
 | `UIImage` | Rectangle de couleur ou texture ; bordures **9-slice** (coins non déformés), `preserveAspect`, `pixelArt` ; sans texture, **boîte stylée** : `cornerRadius` (coins arrondis lissés), `outlineWidth` / `outlineColor` (contour intérieur), `shadowSize` / `shadowColor` / `shadowOffset` (ombre portée douce) |
-| `UIText` | Texte UTF-8 (accents compris), police TrueType, taille, couleur, alignement horizontal / vertical, retour à la ligne, interligne |
+| `UIText` | Texte UTF-8 (accents compris), police TrueType, taille, couleur, alignement horizontal / vertical, retour à la ligne, interligne ; **contour** (`outlineSize`, `outlineColor`) et **ombre portée** (`shadowOffset`, `shadowColor`) pour un texte lisible sur tout fond |
 | `UIButton` | Couleurs normal / survol / appui / désactivé (teinte de l'image) ; clic = `onClick()` du script de l'entité et `message(bouton)` du script de `target` |
 | `UISlider` | Curseur horizontal ou **vertical** (`vertical` : bas = minimum) — piste, remplissage, poignée, valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
 | `UILayout` | Range les enfants en **colonne**, **ligne**, **grille** ou **flux** (`Flow` : en ligne avec retour à la ligne quand la largeur est pleine, comme `HFlowContainer` de Godot — étiquettes, inventaires) : espacement, marges, alignement, étirement |

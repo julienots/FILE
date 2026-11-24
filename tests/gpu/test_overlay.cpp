@@ -253,3 +253,39 @@ TEST_CASE("overlay: rich text effects animate ([wave] moves glyphs, [rainbow] co
     CHECK_MESSAGE(colored > 20, colored);  // not white anymore
 }
 }
+
+TEST_SUITE("gpu.overlay") {
+TEST_CASE("overlay: text outline and drop shadow are drawn around the letters, under them") {
+    OverlayFixture f;
+    const auto e = f.box({0, 0}, {64, 64}, {0, 0, 0, 0});
+    auto& t = f.scene.registry().emplace<UITextComponent>(e);
+    t.text = "HI";
+    t.fontSize = 36.0f;
+    t.color = {1, 1, 1, 1};
+    auto& d = *gpu().device;
+    auto count = [&](auto pred) {
+        f.frame();
+        std::vector<u8> px(64 * 64 * 4);
+        REQUIRE(d.readBackbuffer(0, 0, 64, 64, px));
+        int n = 0;
+        for (usize i = 0; i < px.size(); i += 4) n += pred(int(px[i]), int(px[i + 1]), int(px[i + 2]));
+        return n;
+    };
+    auto red = [](int r, int g, int b) { return r > 150 && g < 80 && b < 80; };
+    auto green = [](int r, int g, int b) { return g > 150 && r < 80 && b < 80; };
+    auto white = [](int r, int g, int b) { return r > 200 && g > 200 && b > 200; };
+    const int letters = count(white);
+    CHECK(letters > 30);
+    CHECK(count(red) == 0);
+    t.outlineSize = 3.0f;
+    t.outlineColor = {1, 0, 0, 1};
+    const int ring = count(red);
+    CHECK_MESSAGE(ring > letters / 2, ring);              // a red border around the letters
+    CHECK_MESSAGE(count(white) > letters * 6 / 10, count(white));  // the letters stay on top
+    t.outlineSize = 0.0f;
+    t.shadowColor = {0, 1, 0, 1};
+    t.shadowOffset = {4, 4};
+    CHECK_MESSAGE(count(green) > 20, count(green));
+    CHECK(d.validationErrorCount() == 0);
+}
+}
