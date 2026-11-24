@@ -232,3 +232,55 @@ class StainView(ctx: Context, val type: com.superessence.squad.model.Stain, val 
         com.superessence.squad.render.PropPainter.stain(c, type, width.toFloat(), height.toFloat(), seed, fade)
     }
 }
+
+/** Viseur pour choisir où le Cliqueur doit toucher : on le glisse sur la cible puis « Valider ». */
+@SuppressLint("ViewConstructor")
+class PickView(ctx: Context, private val density: Float, private val name: String) : View(ctx) {
+    interface Listener {
+        fun onPickMove(v: PickView, dx: Float, dy: Float)
+        fun onPickDone(v: PickView, ok: Boolean)
+    }
+    var listener: Listener? = null
+    /** Centre de la cible dans la vue. */
+    val targetY get() = 34f * density
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+    private var lastX = 0f; private var lastY = 0f; private var downX = 0f; private var downY = 0f
+    private var moved = false
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
+    private val r = RectF()
+
+    override fun onDraw(c: Canvas) {
+        val cx = width / 2f; val cy = targetY; val d = density
+        p.style = Paint.Style.FILL; p.color = 0x55E53935; c.drawCircle(cx, cy, 26 * d, p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = 3 * d; p.color = 0xFFE53935.toInt()
+        c.drawCircle(cx, cy, 26 * d, p); c.drawCircle(cx, cy, 12 * d, p)
+        p.strokeWidth = 2 * d; p.color = 0xFFFFFFFF.toInt()
+        c.drawLine(cx - 32 * d, cy, cx - 6 * d, cy, p); c.drawLine(cx + 6 * d, cy, cx + 32 * d, cy, p)
+        c.drawLine(cx, cy - 32 * d, cx, cy - 6 * d, p); c.drawLine(cx, cy + 6 * d, cx, cy + 32 * d, p)
+        p.style = Paint.Style.FILL; p.color = 0xFFFFC928.toInt(); c.drawCircle(cx, cy, 2.5f * d, p)
+        // étiquette
+        tp.textSize = 11 * d; tp.color = 0xFFFFFFFF.toInt(); tp.setShadowLayer(4 * d, 0f, 0f, 0xFF000000.toInt())
+        c.drawText("Glisse la cible : $name cliquera ici", cx, 78 * d, tp)
+        // boutons
+        val by = 88 * d; val bh = 34 * d
+        r.set(6 * d, by, cx - 4 * d, by + bh); p.color = 0xEE222222.toInt(); c.drawRoundRect(r, bh / 2, bh / 2, p)
+        r.set(cx + 4 * d, by, width - 6 * d, by + bh); p.color = 0xFFFFC928.toInt(); c.drawRoundRect(r, bh / 2, bh / 2, p)
+        tp.clearShadowLayer(); tp.textSize = 13 * d
+        tp.color = 0xFFFFFFFF.toInt(); c.drawText("Annuler", (6 * d + cx - 4 * d) / 2, by + bh * 0.65f, tp)
+        tp.color = 0xFF000000.toInt(); c.drawText("Valider", (cx + 4 * d + width - 6 * d) / 2, by + bh * 0.65f, tp)
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { lastX = e.rawX; lastY = e.rawY; downX = e.rawX; downY = e.rawY; moved = false }
+            MotionEvent.ACTION_MOVE -> {
+                if (!moved && hypot(e.rawX - downX, e.rawY - downY) > slop) moved = true
+                if (moved) { listener?.onPickMove(this, e.rawX - lastX, e.rawY - lastY); lastX = e.rawX; lastY = e.rawY }
+            }
+            MotionEvent.ACTION_UP -> if (!moved && e.y > 84 * density) listener?.onPickDone(this, e.x > width / 2f)
+        }
+        return true
+    }
+}

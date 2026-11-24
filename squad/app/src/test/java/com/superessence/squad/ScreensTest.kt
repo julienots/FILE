@@ -95,6 +95,16 @@ class ScreensTest {
         shot("style")
     }
 
+    @Test fun task() {
+        seed()
+        val id = Squad.state.value.mascots[2].id
+        Squad.setTask(id, com.superessence.squad.model.Task(com.superessence.squad.model.TaskKind.COACH, reminders = listOf(com.superessence.squad.model.Reminder(18 * 60, "Appeler maman"))))
+        rule.mainClock.autoAdvance = false
+        rule.setContent { Box(Modifier.fillMaxSize().background(C.bg)) { com.superessence.squad.ui.TaskScreen(Squad.state.value, id, {}) } }
+        rule.mainClock.advanceTimeBy(1500)
+        shot("task")
+    }
+
     @Test fun rhythm() {
         seed()
         rule.mainClock.autoAdvance = false

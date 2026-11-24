@@ -29,6 +29,8 @@ data class Mascot(
     val rel: Map<String, Int> = emptyMap(),
     /** Records perso (exercice -> kg). */
     val prs: Map<String, Float> = emptyMap(),
+    /** Métier confié. */
+    val task: Task = Task(),
 ) {
     fun relWith(other: String) = rel[other] ?: 0
     fun bond(other: String, d: Int) = copy(rel = rel + (other to (relWith(other) + d).coerceIn(-100, 100)))
@@ -49,6 +51,7 @@ data class Mascot(
         .put("wins", wins).put("losses", losses)
         .put("rel", JSONObject().apply { rel.forEach { (k, v) -> put(k, v) } })
         .put("prs", JSONObject().apply { prs.forEach { (k, v) -> put(k, v.toDouble()) } })
+        .put("task", task.toJson())
 
     companion object {
         fun fromJson(o: JSONObject): Mascot {
@@ -65,6 +68,7 @@ data class Mascot(
                 wins = o.optInt("wins"), losses = o.optInt("losses"),
                 rel = o.optJSONObject("rel")?.let { r -> r.keys().asSequence().associateWith { k -> r.getInt(k) } } ?: emptyMap(),
                 prs = o.optJSONObject("prs")?.let { r -> r.keys().asSequence().associateWith { k -> r.getDouble(k).toFloat() } } ?: emptyMap(),
+                task = Task.fromJson(o.optJSONObject("task")),
             )
         }
 

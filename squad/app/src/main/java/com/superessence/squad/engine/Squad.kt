@@ -179,6 +179,16 @@ object Squad {
         })
     }
 
+    /** Confie un métier à une mascotte. */
+    fun setTask(id: String, task: com.superessence.squad.model.Task) {
+        editMascot(id) { m ->
+            val keepPost = m.task.kind == task.kind
+            m.copy(task = if (keepPost) task else task.copy(postX = -1f, postY = -1f))
+                .let { if (m.task.kind != task.kind) it.withEvent("Nouveau métier : ${task.kind.label}") else it }
+        }
+        pings.tryEmit("task" to id)
+    }
+
     fun pet(id: String) = editMascot(id) { it.copy(mood = (it.mood + 6).coerceAtMost(100f), xp = it.xp + 1) }
 
     fun starterArchetypes(): List<Archetype> = listOf(Archetypes.byId("tank"), Archetypes.byId("ragnar"))

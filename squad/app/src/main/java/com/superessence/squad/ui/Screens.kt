@@ -96,7 +96,7 @@ import java.util.Locale
 // =====================================================================================
 
 @Composable
-private fun TopBar(title: String, onBack: (() -> Unit)? = null, action: @Composable () -> Unit = {}) {
+internal fun TopBar(title: String, onBack: (() -> Unit)? = null, action: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
@@ -109,7 +109,7 @@ private fun TopBar(title: String, onBack: (() -> Unit)? = null, action: @Composa
 }
 
 @Composable
-private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.card).border(1.dp, C.line, RoundedCornerShape(20.dp)).padding(16.dp)) { content() }
 }
 
@@ -276,6 +276,11 @@ private fun MascotRow(m: Mascot, phase: Phase, t: Float, onClick: () -> Unit) {
                 }
             }
             Text("${m.archetype.title} · niv. ${m.level}", style = Small.copy(fontSize = 12.sp))
+            if (m.task.kind != com.superessence.squad.model.TaskKind.NONE) Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(taskIcon(m.task.kind), null, tint = C.yellow, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(m.task.kind.label, style = Small.copy(fontSize = 12.sp, color = C.yellow, fontWeight = FontWeight.Bold))
+            }
             Text("${act.label} · ${Life.mood(m)}", style = Small.copy(fontSize = 12.sp, color = C.yellow))
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -293,7 +298,7 @@ private fun MascotRow(m: Mascot, phase: Phase, t: Float, onClick: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () -> Unit) {
+fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () -> Unit, onTask: () -> Unit = {}) {
     val m = state.mascots.firstOrNull { it.id == id }
     if (m == null) { LaunchedEffect(Unit) { onBack() }; return }
     val a = m.archetype
@@ -397,6 +402,22 @@ fun DetailScreen(state: SquadState, id: String, onBack: () -> Unit, onStyle: () 
                     Text("Plats préférés : ${a.food.joinToString(", ")}", style = Small)
                     Text("Il t'appelle « ${a.nick} »", style = Small)
                 }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.card)
+                    .border(1.dp, if (m.task.kind == com.superessence.squad.model.TaskKind.NONE) C.line else C.yellow, RoundedCornerShape(20.dp))
+                    .clickable(onClick = onTask).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(taskIcon(m.task.kind), null, tint = C.yellow, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("SON MÉTIER", style = Label)
+                    Text(m.task.kind.label, style = H2.copy(fontSize = 18.sp))
+                    if (m.task.kind != com.superessence.squad.model.TaskKind.NONE) Text(m.task.summary, style = Small.copy(fontSize = 12.sp), maxLines = 2)
+                }
+                Text("Changer", style = Body.copy(color = C.yellow, fontWeight = FontWeight.Bold))
             }
             Spacer(Modifier.height(12.dp))
             Card {
@@ -571,7 +592,7 @@ private fun ActionTile(label: String, icon: ImageVector, modifier: Modifier, onC
 }
 
 @Composable
-private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text,
         style = Small.copy(color = if (selected) Color.Black else C.text, fontWeight = FontWeight.Bold, fontSize = 13.sp),
@@ -655,7 +676,7 @@ fun StyleScreen(state: SquadState, id: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+internal fun Section(title: String, content: @Composable () -> Unit) {
     Column { Text(title, style = Label); Spacer(Modifier.height(8.dp)); content() }
 }
 
@@ -674,7 +695,7 @@ private fun Swatches(colors: IntArray, selected: Int, onPick: (Int) -> Unit) {
 }
 
 @Composable
-private fun ToggleRow(label: String, value: Boolean, sub: String? = null, onChange: (Boolean) -> Unit) {
+internal fun ToggleRow(label: String, value: Boolean, sub: String? = null, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onChange(!value) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = Body)
@@ -761,7 +782,7 @@ fun RhythmScreen(state: SquadState, onBack: () -> Unit, onBattery: () -> Unit) {
 }
 
 @Composable
-private fun TimeRow(label: String, value: Int, onClick: () -> Unit) {
+internal fun TimeRow(label: String, value: Int, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = Body, modifier = Modifier.weight(1f))
         Text(fmtMin(value), style = Body.copy(fontWeight = FontWeight.Bold, color = C.yellow, fontSize = 17.sp))

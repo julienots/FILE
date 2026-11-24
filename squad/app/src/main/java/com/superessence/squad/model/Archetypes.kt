@@ -6,7 +6,7 @@ import com.superessence.squad.model.HairStyle as H
 import com.superessence.squad.model.Outfit as O
 
 /** Situations dans lesquelles une mascotte parle. */
-enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED, GYM_START, CARRY, SPOT, GYM_END, PARTY, DANCE, CHEERS, PARTY_END, PR_TRY, PR_SPOT, PR_WIN, PR_CHEER, PR_FAIL, PR_SAVE, BURP, STREET_START, STREET, CLEAN, SNORE, SHAKER }
+enum class Say { TAP, RANDOM, HUNGRY, EAT, SLEEPY, WAKE, NIGHT, DRAG, DROP, TRAIN, PET, FRIEND, LOW, FED, TAUNT, WIN, LOSE, OUCH, REPLY, HIGHFIVE, CHASE, FLEE, CAUGHT, BUMPED, GYM_START, CARRY, SPOT, GYM_END, PARTY, DANCE, CHEERS, PARTY_END, PR_TRY, PR_SPOT, PR_WIN, PR_CHEER, PR_FAIL, PR_SAVE, BURP, STREET_START, STREET, CLEAN, SNORE, SHAKER, TASK_START, OPEN_APP, TAP_GO, GUARD_OUT, WATER, MOVE, BED, MEAL_SOON, BATT_LOW, BATT_CHARGE, NEED_ACCESS }
 
 /** Ce que fait la mascotte (utilisé par le moteur et le rendu). */
 enum class Act(val label: String) {
@@ -17,7 +17,7 @@ enum class Act(val label: String) {
     CARRY("Porte du matos"), DANCE("Danse"), CHEERS("Trinque"), PULLDOWN("Tirage poulie"), SQUAT("Squat"), BENCH("Développé couché"),
     PULLUP("Tractions"), MUSCLEUP("Muscle-up"), FRONT_LEVER("Front lever"), HANDSTAND("Équilibre"), ONE_ARM_HS("Équilibre sur un bras"),
     DIPS("Dips"), SPOTTING("Pare un pote"), DRINK("Boit son shaker"), WIPE("Nettoie"), CHALK("Magnésie"), STRETCH("S'étire"),
-    PECDECK("Pec deck")
+    PECDECK("Pec deck"), SIGN("Tient sa pancarte"), TAP("Clique")
 }
 
 class Archetype(
@@ -38,7 +38,7 @@ class Archetype(
     private val lines: Map<Say, List<String>>,
 ) {
     fun lines(s: Say): List<String> =
-        (lines[s].orEmpty() + Fight.lines(id)[s].orEmpty() + Events.lines(id)[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
+        (lines[s].orEmpty() + Fight.lines(id)[s].orEmpty() + Events.lines(id)[s].orEmpty() + Work.lines[s].orEmpty() + Common.lines[s].orEmpty()).map { it.replace("{nick}", nick) }
 
     /** Envie de se battre (0..1). */
     val aggro: Float get() = Fight.aggro[id] ?: 0.5f

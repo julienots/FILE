@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">SQUAD.</string>
+    <string name="tap_service_label">SQUAD. clics</string>
+    <string name="tap_service_desc">Permet à tes mascottes « Cliqueur » de toucher l\'écran à l\'endroit que tu as choisi (une icône, un bouton), quand tu le demandes ou à l\'heure prévue. Ce service ne lit pas le contenu de l\'écran et n\'envoie rien sur Internet.</string>
 </resources>

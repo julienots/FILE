@@ -9,6 +9,7 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
 ![Baston](branding/squad-baston.png)
 ![Muscu et fête](branding/squad-muscu-fete.png)
 ![Salle et street](branding/squad-salle-street.png)
+![Métiers](branding/squad-metiers.png)
 
 ## Ce que fait l'appli
 - **Ouverture animée SuperEssence Studio** : hexagone jaune avec monogramme S, nom lettre par lettre, reflet. Toucher pour passer.
@@ -31,6 +32,16 @@ Des mascottes viriles qui vivent sur ton écran, même appli fermée.
 - **Street workout** : tractions, muscle-up, front lever, dips, ATR et ATR sur un bras (aussi dans leur temps libre).
 - **Le bordel** : haltères, disques, kettlebells, barres, shakers, serviettes restent par terre après la séance (on les déplace, on tape dedans, ou on les lâche sur la croix).
 - **Écran dégueulasse** : quand ils mangent, ketchup, sauce BBQ, moutarde, miettes, traces de gras, éclaboussures de shaker… et des rots. Bouton « Nettoyer l'écran » (ou notification) : le Sergent passe l'éponge et ramasse tout ; il le fait aussi tout seul quand c'est trop sale.
+- **Métiers à assigner** (fiche › « Son métier ») :
+  - **Agent d'entretien** : nettoie dès qu'une tache ou du matos traîne ;
+  - **Raccourci d'appli** : tient une pancarte avec l'icône d'une appli ; tu le touches, il l'ouvre ;
+  - **Cliqueur** : va toucher l'écran pour de vrai à l'endroit choisi au viseur (icône, bouton), quand tu le touches, toutes les 5/15/30/60 min ou à heure fixe. Nécessite le service d'accessibilité « SQUAD. clics » (aucune lecture de l'écran) ;
+  - **Horloge** : pancarte avec l'heure, annonce chaque heure pile ;
+  - **Coach rappels** : eau, bouger, repas, coucher + rappels perso (bulle, vibration, notification) ;
+  - **Surveillant batterie** : pancarte avec le niveau, alerte à 20/10/5 % et au branchement ;
+  - **Vigile** : garde une zone de l'écran, repousse les autres ;
+  - **Pense-bête** : tient ta note et te la rappelle.
+  Les métiers « à poste » restent à leur place : on les glisse pour déplacer leur poste. La nuit, ils dorment.
 - **Fêtes** : surtout le vendredi et le samedi soir. La boule à facettes descend du haut, la sono pulse et envoie des notes, le buffet a ses bouteilles, gobelets et chips. Ils dansent (4 styles, dont le robot), trinquent, puis rangent. Toucher la sono = tout le monde danse.
 - Boutons « Séance muscu » / « Faire la fête » dans l'appli pour les lancer tout de suite.
 - **Style** : coupe, barbe, tenue, accessoire, couleurs de peau/cheveux/tenue/pantalon, tatouages, cicatrice.

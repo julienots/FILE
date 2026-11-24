@@ -152,6 +152,29 @@ class RenderTest {
         save(bmp, "street.png")
     }
 
+    @Test fun jobs() {
+        val cw = 300; val ch = 420
+        val bmp = Bitmap.createBitmap(cw * 6, ch, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); c.drawColor(Color.rgb(40, 44, 52))
+        val icon = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(37, 211, 102)) }
+        val signs = listOf(
+            com.superessence.squad.render.Sign(listOf("WhatsApp"), icon),
+            com.superessence.squad.render.Sign(listOf("15:42")),
+            com.superessence.squad.render.Sign(listOf("BATTERIE", "18 %"), accent = 0xFFE53935.toInt()),
+            com.superessence.squad.render.Sign(listOf("Appeler", "maman ce", "soir"), accent = 0xFF4AA3FF.toInt()),
+        )
+        val p = Pose()
+        signs.forEachIndexed { i, sg ->
+            p.act = Act.SIGN; p.sign = sg; p.t = 0.4f + i; p.seed = i; p.strain = 0f; p.k = -1f
+            c.save(); c.translate(i * cw.toFloat(), 0f); MascotPainter.draw(c, Archetypes.all[i].look, p, cw.toFloat(), ch.toFloat()); c.restore()
+        }
+        p.act = Act.TAP; p.sign = null; p.facing = 1f; p.t = 0.3f
+        c.save(); c.translate(4 * cw.toFloat(), 0f); MascotPainter.draw(c, Archetypes.all[5].look, p, cw.toFloat(), ch.toFloat()); c.restore()
+        p.act = Act.GUARD; p.facing = -1f
+        c.save(); c.translate(5 * cw.toFloat(), 0f); MascotPainter.draw(c, Archetypes.all[4].look, p, cw.toFloat(), ch.toFloat()); c.restore()
+        save(bmp, "jobs.png")
+    }
+
     @Test fun phasesFollowSchedule() {
         val s = Schedule(wake = 7 * 60, wakeWeekend = 9 * 60, bed = 23 * 60, breakfast = 7 * 60 + 30, lunch = 12 * 60 + 30, dinner = 20 * 60, workout = 18 * 60)
         val cal = Calendar.getInstance().apply { set(2026, Calendar.NOVEMBER, 24) } // mardi

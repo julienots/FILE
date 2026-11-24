@@ -39,7 +39,12 @@ class Pose {
     var strain: Float = 0f
     /** Position imposée dans le mouvement (0..1), -1 = automatique. */
     var k: Float = -1f
+    /** Pancarte tenue au-dessus de la tête. */
+    var sign: Sign? = null
 }
+
+/** Contenu d'une pancarte : lignes de texte, icône d'appli éventuelle, couleur d'accent. */
+class Sign(val lines: List<String>, val icon: android.graphics.Bitmap? = null, val accent: Int = 0xFFFFC928.toInt())
 
 /**
  * Dessine une mascotte en vectoriel dans une boîte de 100 x 140 unités, mise à l'échelle
@@ -73,11 +78,12 @@ object MascotPainter {
         c.save()
         c.translate((w - W * sc) / 2f, h - H * sc)
         c.scale(sc, sc)
-        if (pose.act == Act.CARRY) {
+        if (pose.act == Act.CARRY || pose.act == Act.SIGN) {
             c.save(); c.scale(0.8f, 0.8f, 50f, 139f)
             drawUnit(c, look, pose)
             c.restore()
-            pose.carry?.let { PropPainter.icon(c, it, 6f, 2f, 94f, 52f, pose.t) }
+            if (pose.act == Act.CARRY) pose.carry?.let { PropPainter.icon(c, it, 6f, 2f, 94f, 52f, pose.t) }
+            else pose.sign?.let { drawSign(c, it, pose.t) }
         } else drawUnit(c, look, pose)
         c.restore()
     }
@@ -252,6 +258,15 @@ object MascotPainter {
                 star(c, sx, sy, 4.2f, 0xFFFFC928.toInt())
             }
         }
+        // ---------------- Clic : ondes au bout du doigt
+        if (act == Act.TAP) {
+            val hx = if (P.facing >= 0f) 99f else 1f
+            for (i in 0..1) {
+                val ph = ((t * 2.5f + i * 0.5f) % 1f)
+                s.color = (((1f - ph) * 230).toInt() shl 24) or 0xFFC928; s.strokeWidth = 2f
+                c.drawCircle(hx, 90f, 3f + ph * 14f, s)
+            }
+        }
         // ---------------- Nuage de magnésie
         if (act == Act.CHALK) {
             for (i in 0..5) {
@@ -290,6 +305,8 @@ object MascotPainter {
         Act.HIT -> 55f + sin(t * 20f) * 15f to 55f - sin(t * 20f) * 15f
         Act.KO -> 35f to 35f
         Act.CARRY -> 172f to 172f
+        Act.SIGN -> 172f + sin(t * 1.5f) * 2f to 172f - sin(t * 1.5f) * 2f
+        Act.TAP -> if (P.facing >= 0f) 12f to 48f else 48f to 12f
         Act.SPOTTING -> 132f + sin(t * 3f) * 6f to 132f - sin(t * 3f) * 6f
         Act.DRINK -> 12f to -150f
         Act.WIPE -> 10f to 95f + sin(t * 10f) * 35f
@@ -833,6 +850,38 @@ object MascotPainter {
         star(c, cx, cy, 15f, (alpha shl 24) or 0xE53935, points = 9, inner = 0.7f)
         txt.color = 0xFFFFFFFF.toInt(); txt.alpha = alpha; txt.textSize = 9.5f
         c.drawText(text, cx, cy + 3.3f, txt)
+        c.restore()
+    }
+
+    /** Pancarte tenue au-dessus de la tête, dans la zone (4..96, 2..46). */
+    private fun drawSign(c: Canvas, sg: Sign, t: Float) {
+        val bob = sin(t * 1.5f) * 1f
+        c.save(); c.translate(0f, bob)
+        // manches
+        fill(0xFF8E5B2E.toInt()); rr(28f, 40f, 32f, 58f, 1f, p, c); rr(68f, 40f, 72f, 58f, 1f, p, c)
+        fill(0xFFFFFFFF.toInt()); rr(4f, 2f, 96f, 46f, 6f, p, c)
+        line(sg.accent, 2.6f); r.set(4f, 2f, 96f, 46f); c.drawRoundRect(r, 6f, 6f, s)
+        var left = 10f
+        sg.icon?.let { bm ->
+            r.set(9f, 8f, 41f, 40f)
+            c.drawBitmap(bm, null, r, p.apply { color = 0xFFFFFFFF.toInt(); alpha = 255 })
+            left = 45f
+        }
+        val lines = sg.lines.take(3)
+        if (lines.isNotEmpty()) {
+            val maxW = 92f - left
+            var size = if (lines.size == 1) 22f else if (lines.size == 2) 13f else 10f
+            txt.textSize = size
+            val widest = lines.maxOf { txt.measureText(it) }
+            if (widest > maxW) { size *= maxW / widest; txt.textSize = size }
+            txt.color = 0xFF111111.toInt(); txt.alpha = 255
+            val total = lines.size * size * 1.12f
+            var y = 24f - total / 2f + size * 0.9f
+            lines.forEachIndexed { i, l ->
+                txt.color = if (i == 0 && lines.size > 1) shade(sg.accent, 0.75f) else 0xFF111111.toInt()
+                c.drawText(l, left + maxW / 2f, y, txt); y += size * 1.12f
+            }
+        }
         c.restore()
     }
 

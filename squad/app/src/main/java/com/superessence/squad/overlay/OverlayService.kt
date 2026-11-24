@@ -69,6 +69,13 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         const val ACTION_PARTY = "com.superessence.squad.PARTY"
         const val ACTION_STREET = "com.superessence.squad.STREET"
         const val ACTION_CLEAN = "com.superessence.squad.CLEAN"
+        const val ACTION_PICK = "com.superessence.squad.PICK"
+
+        /** Affiche le viseur pour choisir où le Cliqueur doit cliquer. */
+        fun pickPoint(ctx: Context, id: String) {
+            if (!canRun(ctx)) return
+            ContextCompat.startForegroundService(ctx, Intent(ctx, OverlayService::class.java).setAction(ACTION_PICK).putExtra(EXTRA_A, id))
+        }
 
         /** Lance tout de suite : séance muscu (« gym »), street workout (« street ») ou fête (« party »). */
         fun happening(ctx: Context, kind: String) {
@@ -162,10 +169,16 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, buildNotif(Squad.state.value), type)
         else startForeground(NOTIF_ID, buildNotif(Squad.state.value))
         registerReceiver(screenReceiver, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) })
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         scope.launch { Squad.state.collectLatest { sync(it) } }
         scope.launch {
             Squad.pings.collect { (k, id) ->
                 val sp = sprites[id] ?: return@collect
+                if (k == "task") {
+                    work.remove(id); sp.encAct = null; sp.encMove = false
+                    Squad.get(id)?.let { if (it.task.kind != com.superessence.squad.model.TaskKind.NONE) say(sp, it, Say.TASK_START) }
+                    return@collect
+                }
                 if (sp.enc != null || inEvent(sp) || sp === cleaner || sp.dragged) return@collect
                 sp.brain.force(if (k == "eat") Act.EAT else Act.TRAIN, 7f)
                 sp.stainT = 1.5f
@@ -187,6 +200,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
                 requestHappening(when (intent.action) { ACTION_PARTY -> EvKind.PARTY; ACTION_STREET -> EvKind.STREET; else -> EvKind.GYM }, 0)
             }
             ACTION_CLEAN -> android.os.Handler(mainLooper).postDelayed({ startClean(manual = true) }, 300)
+            ACTION_PICK -> intent.getStringExtra(EXTRA_A)?.let { id -> android.os.Handler(mainLooper).postDelayed({ showPicker(id) }, 500) }
             ACTION_FIGHT -> {
                 val a = intent.getStringExtra(EXTRA_A); val b = intent.getStringExtra(EXTRA_B)
                 if (a != null && b != null && a != b) {
@@ -205,6 +219,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         stains.toList().forEach { removeStain(it) }
         mess.toList().forEach { removeClutter(it) }
         runCatching { unregisterReceiver(screenReceiver) }
+        runCatching { unregisterReceiver(batteryReceiver) }
+        hidePicker()
         savePositions()
         sprites.values.toList().forEach { removeSprite(it) }
         hideTrash()
@@ -339,7 +355,10 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             }
             val arrived = hypot(sp.tx - sp.x, sp.ty - sp.y) < 4f
             if (!sp.dragged) {
-                val busy = sp.enc != null || inEvent(sp) || sp === cleaner
+                val working = isWorking(sp, m, phase)
+                val busy = sp.enc != null || inEvent(sp) || sp === cleaner || working
+                if (working) workStep(sp, m, phase, dt)
+                else ws(sp).let { w -> if (w.active) { w.active = false; w.tapRun?.let { setTouchable(sp, true) }; w.tapRun = null; if (sp.enc == null && !inEvent(sp) && sp !== cleaner) { sp.encAct = null; sp.encMove = false } } }
                 if (!busy) {
                     val line = sp.brain.step(dt, m, phase, st.settings.chatter, arrived)
                     if (line != null) say(sp, m, line)
@@ -373,6 +392,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
             pose.punch = if (sp.punchT > 0f) 1f else 0.1f
             if (pose.fx != null) { pose.fxAge += dt; if (pose.fxAge > 0.55f) pose.fx = null }
             sp.view.dimmed = pose.act == Act.SLEEP
+            pose.sign = if (pose.act == Act.SIGN) signFor(sp, m) else null
             // ils mangent salement
             if (pose.act == Act.EAT && st.settings.mess && !sp.parked && !sp.dragged) {
                 sp.stainT -= dt
@@ -398,6 +418,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         }
         happenings(dt, phase, st.settings)
         cleaning(dt)
+        guardZones(dt)
+        workChecks(dt)
         for (c in mess) if (c.view.spin != c.spinTo) { c.view.spin += (c.spinTo - c.view.spin) * minOf(1f, dt * 8f); c.view.invalidate() }
         encounters(dt, phase, st.settings)
     }
@@ -482,7 +504,8 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         }
     }
 
-    private fun freeForEvent(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !sp.parked && sp !== cleaner
+    private fun freeForEvent(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !sp.parked && sp !== cleaner && !postedTask(sp) &&
+        Squad.get(sp.id)?.task?.kind != com.superessence.squad.model.TaskKind.CLEANER
 
     private fun gymCrew(): List<Sprite> {
         val free = sprites.values.filter { freeForEvent(it) }
@@ -946,7 +969,7 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
 
     private fun power(m: Mascot) = m.archetype.skill * (0.6f + m.fitness / 100f * 0.6f + m.level * 0.03f) * (0.7f + m.energy / 100f * 0.3f)
 
-    private fun free(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !inEvent(sp) && !sp.parked && sp !== cleaner
+    private fun free(sp: Sprite) = !sp.dragged && sp.enc == null && sp.brain.act != Act.SLEEP && !inEvent(sp) && !sp.parked && sp !== cleaner && !postedTask(sp)
 
     /** De temps en temps, deux gars vont interagir. */
     private fun encounters(dt: Float, phase: Phase, set: com.superessence.squad.model.Settings) {
@@ -1171,6 +1194,370 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         }
     }
 
+    // ------------------------------------------------------------------ métiers (tâches assignées)
+
+    private inner class TapRun(val px: Float, val py: Float, val facing: Float) {
+        var stage = 0
+        var t = 0f
+        var flagsOff = false
+        var tapped = false
+    }
+
+    private inner class WorkState {
+        var active = false
+        var tapRun: TapRun? = null
+        var tapAnim = 0f
+        var fidgetT = 25f
+        var fidgeting = false
+        var lastHour = -1
+        var lastWater = System.currentTimeMillis()
+        var lastMove = System.currentTimeMillis()
+        var lastTapAt = System.currentTimeMillis()
+        val fired = HashSet<String>()
+        var noteT = 400f
+        var guardSayT = 0f
+        var checkT = 0f
+        var sign: com.superessence.squad.render.Sign? = null
+        var signT = 0f
+    }
+
+    private val work = HashMap<String, WorkState>()
+    private fun ws(sp: Sprite) = work.getOrPut(sp.id) { WorkState() }
+    private val iconCache = HashMap<String, android.graphics.Bitmap?>()
+    private var battPct = -1
+    private var charging = false
+    private var lastBattWarn = 101
+    private var workCheckT = 0f
+    private var picker: PickView? = null
+    private var pickerLp: WindowManager.LayoutParams? = null
+    private var pickerId: String? = null
+
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            val lvl = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+            val sc = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+            val st = i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+            val was = charging
+            if (lvl >= 0) battPct = lvl * 100 / maxOf(1, sc)
+            charging = st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL
+            if (charging) lastBattWarn = 101
+            for (sp in sprites.values) {
+                val m = Squad.get(sp.id) ?: continue
+                if (m.task.kind != com.superessence.squad.model.TaskKind.BATTERY || sp.brain.act == Act.SLEEP) continue
+                if (charging && !was) say(sp, m, Say.BATT_CHARGE)
+                else if (!charging && battPct in 0..20) {
+                    val step = when { battPct <= 5 -> 5; battPct <= 10 -> 10; else -> 20 }
+                    if (step < lastBattWarn) { say(sp, m, Say.BATT_LOW); if (Squad.state.value.settings.vibrate) sp.view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+                }
+            }
+            if (!charging && battPct in 0..20) lastBattWarn = when { battPct <= 5 -> 5; battPct <= 10 -> 10; else -> 20 }
+        }
+    }
+
+    private fun postedTask(sp: Sprite) = Squad.get(sp.id)?.task?.kind?.posted == true
+
+    private fun isWorking(sp: Sprite, m: Mascot, phase: Phase) =
+        m.task.kind.posted && phase != Phase.SLEEP && sp.enc == null && !inEvent(sp) && sp !== cleaner && !sp.parked
+
+    private fun postOf(sp: Sprite, m: Mascot): Pair<Float, Float> {
+        val maxX = (screenW - sp.lp.width).toFloat(); val maxY = (screenH - sp.lp.height).toFloat()
+        if (m.task.postX < 0f || m.task.postY < 0f) {
+            val fx = if (maxX > 0) sp.x / maxX else 0.5f; val fy = if (maxY > 0) sp.y / maxY else 0.5f
+            Squad.editMascot(sp.id) { it.copy(task = it.task.copy(postX = fx, postY = fy)) }
+            return sp.x to sp.y
+        }
+        return m.task.postX * maxX to m.task.postY * maxY
+    }
+
+    private fun appIcon(pkg: String): android.graphics.Bitmap? = iconCache.getOrPut(pkg) {
+        runCatching { androidx.core.graphics.drawable.DrawableCompat.wrap(packageManager.getApplicationIcon(pkg)).let { d ->
+            val b = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(b); d.setBounds(0, 0, 96, 96); d.draw(c); b
+        } }.getOrNull()
+    }
+
+    private fun wrap(text: String, width: Int, max: Int): List<String> {
+        val out = mutableListOf<String>(); var cur = ""
+        for (w in text.split(' ', '\n').filter { it.isNotBlank() }) {
+            if (cur.isEmpty()) cur = w else if (cur.length + 1 + w.length <= width) cur += " $w" else { out += cur; cur = w }
+            if (out.size == max) break
+        }
+        if (cur.isNotEmpty() && out.size < max) out += cur
+        return out.map { if (it.length > width + 2) it.take(width) + "…" else it }
+    }
+
+    private fun signFor(sp: Sprite, m: Mascot): com.superessence.squad.render.Sign? {
+        val w = ws(sp)
+        w.signT -= 1f
+        if (w.sign != null && w.signT > 0f) return w.sign
+        w.signT = 20f // ~1 s
+        val task = m.task
+        val S = com.superessence.squad.render.Sign::class
+        w.sign = when (task.kind) {
+            com.superessence.squad.model.TaskKind.LAUNCHER ->
+                if (task.pkg.isEmpty()) com.superessence.squad.render.Sign(listOf("APPLI ?", "Touche-moi"))
+                else com.superessence.squad.render.Sign(wrap(task.appLabel, 9, 2), appIcon(task.pkg))
+            com.superessence.squad.model.TaskKind.CLOCK -> com.superessence.squad.render.Sign(listOf(java.text.SimpleDateFormat("HH:mm", java.util.Locale.FRANCE).format(java.util.Date())))
+            com.superessence.squad.model.TaskKind.BATTERY -> com.superessence.squad.render.Sign(
+                listOf(if (charging) "EN CHARGE" else "BATTERIE", if (battPct >= 0) "$battPct %" else "…"),
+                accent = when { charging -> 0xFF5BC26A.toInt(); battPct in 0..20 -> 0xFFE53935.toInt(); battPct in 21..40 -> 0xFFE67E22.toInt(); else -> 0xFF5BC26A.toInt() },
+            )
+            com.superessence.squad.model.TaskKind.NOTE -> com.superessence.squad.render.Sign(if (task.note.isEmpty()) listOf("NOTE ?") else wrap(task.note, 13, 3), accent = 0xFF4AA3FF.toInt())
+            else -> null
+        }
+        return w.sign
+    }
+
+    /** Fait travailler une mascotte à son poste. */
+    private fun workStep(sp: Sprite, m: Mascot, phase: Phase, dt: Float) {
+        val w = ws(sp)
+        w.active = true
+        val task = m.task
+        val (px, py) = postOf(sp, m)
+        // clic en cours
+        w.tapRun?.let { stepTapRun(sp, m, w, it, dt, px, py); return }
+        if (w.tapAnim > 0f) { w.tapAnim -= dt; sp.encMove = false; sp.encAct = Act.TAP; return }
+        // petite bougeotte autour du poste
+        w.fidgetT -= dt
+        if (w.fidgetT <= 0f) {
+            w.fidgetT = 25f + rnd.nextFloat() * 30f
+            w.fidgeting = true
+            goTo(sp, px + (rnd.nextFloat() - 0.5f) * 70 * density, py + (rnd.nextFloat() - 0.5f) * 30 * density)
+            jobTalk(sp, m, idle = true)
+        }
+        if (!w.fidgeting && hypot(px - sp.x, py - sp.y) > 6f && !sp.encMove) goTo(sp, px, py)
+        if (sp.encMove) {
+            if (arrived(sp)) { sp.encMove = false; if (w.fidgeting) { w.fidgeting = false; goTo(sp, px, py) } }
+            else { sp.encAct = Act.WALK; return }
+        }
+        sp.encAct = when (task.kind) {
+            com.superessence.squad.model.TaskKind.LAUNCHER, com.superessence.squad.model.TaskKind.CLOCK,
+            com.superessence.squad.model.TaskKind.BATTERY, com.superessence.squad.model.TaskKind.NOTE -> Act.SIGN
+            com.superessence.squad.model.TaskKind.GUARD -> Act.GUARD
+            com.superessence.squad.model.TaskKind.COACH -> if ((t / 6f).toInt() % 3 == 0) Act.STRETCH else Act.IDLE
+            else -> Act.IDLE
+        }
+        // tâches périodiques (vérifiées toutes les 2 s)
+        w.checkT -= dt
+        if (w.checkT > 0f) return
+        w.checkT = 2f
+        val cal = java.util.Calendar.getInstance()
+        val minute = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        val doy = cal.get(java.util.Calendar.DAY_OF_YEAR)
+        val now = System.currentTimeMillis()
+        fun once(key: String, f: () -> Unit) { if (w.fired.add("$key-$doy")) f() }
+        when (task.kind) {
+            com.superessence.squad.model.TaskKind.CLOCK -> {
+                val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                if (cal.get(java.util.Calendar.MINUTE) == 0 && w.lastHour != h) {
+                    w.lastHour = h
+                    showBubble(sp, m.name, "Il est $h h pile, ${m.archetype.nick} !", shout = true)
+                    if (Squad.state.value.settings.vibrate) sp.view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                }
+            }
+            com.superessence.squad.model.TaskKind.COACH -> {
+                val sch = Squad.state.value.schedule
+                if (task.meals) for ((label, at) in listOf("petit-déj" to sch.breakfast, "déjeuner" to sch.lunch, "dîner" to sch.dinner))
+                    if (minute == ((at - 10) % 1440 + 1440) % 1440) once("meal$at") { remind(sp, m, m.archetype.lines(Say.MEAL_SOON).random(), "$label à ${com.superessence.squad.model.fmtMin(at)}") }
+                if (task.bedtime && minute == ((sch.bed - 15) % 1440 + 1440) % 1440) once("bed") { remind(sp, m, m.archetype.lines(Say.BED).random(), "Coucher à ${com.superessence.squad.model.fmtMin(sch.bed)}") }
+                if (phase == Phase.FREE || phase == Phase.WORKOUT) {
+                    if (task.water && now - w.lastWater > 75 * 60_000L) { w.lastWater = now; remind(sp, m, m.archetype.lines(Say.WATER).random(), null) }
+                    else if (task.move && now - w.lastMove > 55 * 60_000L) { w.lastMove = now; remind(sp, m, m.archetype.lines(Say.MOVE).random(), null) }
+                }
+                for (r in task.reminders) if (minute == r.at) once("r${r.at}${r.text.hashCode()}") { remind(sp, m, r.text, r.text, shout = true) }
+            }
+            com.superessence.squad.model.TaskKind.NOTE -> {
+                w.noteT -= 2f
+                if (w.noteT <= 0f && task.note.isNotEmpty()) { w.noteT = 900f; showBubble(sp, m.name, "Pense-bête : ${task.note}") }
+            }
+            com.superessence.squad.model.TaskKind.TAPPER -> {
+                if (task.tapX >= 0f) {
+                    if (task.everyMin > 0 && now - w.lastTapAt > task.everyMin * 60_000L) { w.lastTapAt = now; startTapRun(sp, m) }
+                    if (task.atMin >= 0 && minute == task.atMin) once("tap${task.atMin}") { w.lastTapAt = now; startTapRun(sp, m) }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    /** Rappel : bulle, vibration et notification. */
+    private fun remind(sp: Sprite, m: Mascot, text: String, notif: String?, shout: Boolean = false) {
+        showBubble(sp, m.name, text.replace("{nick}", m.archetype.nick), shout)
+        if (Squad.state.value.settings.vibrate) sp.view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel("squad_reminders", "Rappels de la squad", NotificationManager.IMPORTANCE_DEFAULT))
+        val n = NotificationCompat.Builder(this, "squad_reminders")
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle("${m.name} te rappelle")
+            .setContentText(notif ?: text.replace("{nick}", m.archetype.nick))
+            .setAutoCancel(true)
+            .setContentIntent(PendingIntent.getActivity(this, 9, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
+            .build()
+        nm.notify(2000 + (text.hashCode() and 0xfff), n)
+    }
+
+    /** Ce qu'il dit de son métier quand on le touche (ou de temps en temps). */
+    private fun jobTalk(sp: Sprite, m: Mascot, idle: Boolean) {
+        val task = m.task
+        val nick = m.archetype.nick
+        val txt = when (task.kind) {
+            com.superessence.squad.model.TaskKind.CLOCK -> "Il est ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.FRANCE).format(java.util.Date())}, $nick."
+            com.superessence.squad.model.TaskKind.BATTERY -> if (battPct < 0) "Je surveille ta batterie." else "Batterie à $battPct %${if (charging) ", ça charge." else "."}"
+            com.superessence.squad.model.TaskKind.NOTE -> if (task.note.isEmpty()) "Écris-moi une note dans ma fiche." else "Pense-bête : ${task.note}"
+            com.superessence.squad.model.TaskKind.COACH -> Life.nextUp(Squad.state.value.schedule) + ". Et bois de l'eau !"
+            com.superessence.squad.model.TaskKind.GUARD -> "Je surveille ma zone. Personne ne passe."
+            com.superessence.squad.model.TaskKind.LAUNCHER -> if (task.pkg.isEmpty()) "Choisis-moi une appli dans ma fiche (appui long)." else "Touche-moi et j'ouvre ${task.appLabel}."
+            com.superessence.squad.model.TaskKind.TAPPER -> if (task.tapX < 0f) "Montre-moi où cliquer, dans ma fiche." else "Touche-moi et je vais cliquer."
+            else -> null
+        } ?: return
+        if (idle && rnd.nextFloat() < 0.6f) return
+        showBubble(sp, m.name, txt)
+    }
+
+    private fun launchApp(sp: Sprite, m: Mascot) {
+        val pkg = m.task.pkg
+        if (pkg.isEmpty()) { jobTalk(sp, m, false); return }
+        ws(sp).tapAnim = 0.7f
+        say(sp, m, Say.OPEN_APP)
+        android.os.Handler(mainLooper).postDelayed({
+            val i = packageManager.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (i == null || runCatching { startActivity(i) }.isFailure) showBubble(sp, m.name, "Je trouve plus ${m.task.appLabel}…")
+        }, 450)
+    }
+
+    private fun startTapRun(sp: Sprite, m: Mascot) {
+        val w = ws(sp)
+        if (w.tapRun != null) return
+        if (m.task.tapX < 0f) { jobTalk(sp, m, false); return }
+        if (!TapService.isEnabled(this) || TapService.instance == null) { say(sp, m, Say.NEED_ACCESS); return }
+        val px = m.task.tapX * screenW; val py = m.task.tapY * screenH
+        val facing = if (px - sp.lp.width >= 0f) 1f else -1f
+        val run = TapRun(px, py, facing)
+        w.tapRun = run
+        val wx = if (facing > 0f) px - sp.lp.width else px
+        goTo(sp, wx, py - sp.lp.height * 0.643f)
+        sp.encSpeed = 1.6f
+        say(sp, m, Say.TAP_GO)
+    }
+
+    private fun setTouchable(sp: Sprite, on: Boolean) {
+        if (sp.parked) return
+        if (on) { sp.lp.flags = sp.lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv(); sp.lp.alpha = 1f }
+        else { sp.lp.flags = sp.lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE; sp.lp.alpha = 0.8f }
+        runCatching { wm.updateViewLayout(sp.view, sp.lp) }
+    }
+
+    private fun stepTapRun(sp: Sprite, m: Mascot, w: WorkState, run: TapRun, dt: Float, postX: Float, postY: Float) {
+        when (run.stage) {
+            0 -> {
+                sp.encAct = Act.RUN
+                if (arrived(sp)) { sp.encMove = false; run.stage = 1; run.t = 0f; sp.view.pose.facing = run.facing }
+            }
+            1 -> {
+                run.t += dt
+                sp.encAct = Act.TAP; sp.view.pose.facing = run.facing
+                if (run.t > 0.25f && !run.flagsOff) { run.flagsOff = true; setTouchable(sp, false) }
+                if (run.t > 0.45f && !run.tapped) {
+                    run.tapped = true
+                    // on masque aussi la bulle pendant le clic
+                    hideBubble(sp)
+                    val ok = TapService.instance?.tap(run.px, run.py) == true
+                    if (!ok) say(sp, m, Say.NEED_ACCESS)
+                    else Squad.editMascot(sp.id) { it.copy(xp = it.xp + 1) }
+                }
+                if (run.t > 1.0f) {
+                    setTouchable(sp, true)
+                    run.stage = 2
+                    goTo(sp, postX, postY); sp.encSpeed = 1.3f
+                }
+            }
+            else -> {
+                sp.encAct = Act.WALK
+                if (arrived(sp)) { sp.encMove = false; sp.encSpeed = 1f; w.tapRun = null }
+            }
+        }
+    }
+
+    /** Les vigiles repoussent ceux qui entrent dans leur zone. */
+    private fun guardZones(dt: Float) {
+        val guards = sprites.values.filter { g -> ws(g).active && Squad.get(g.id)?.task?.kind == com.superessence.squad.model.TaskKind.GUARD && g.brain.act != Act.SLEEP }
+        if (guards.isEmpty()) return
+        val rad = 115 * density * Squad.state.value.settings.size
+        for (g in guards) {
+            val w = ws(g)
+            w.guardSayT -= dt
+            for (o in sprites.values) {
+                if (o === g || o.dragged || o.parked || inEvent(o) || o.enc != null) continue
+                val dx = o.cx - g.cx; val dy = o.cy - g.cy
+                val d = hypot(dx, dy)
+                if (d < rad) {
+                    val push = 110 * density * dt
+                    val nx = if (d < 1f) 1f else dx / d; val ny = if (d < 1f) 0f else dy / d
+                    o.x = (o.x + nx * push).coerceIn(0f, (screenW - o.lp.width).toFloat())
+                    o.y = (o.y + ny * push).coerceIn(0f, (screenH - o.lp.height).toFloat())
+                    if (hypot(o.tx - g.cx, o.ty - g.cy) < rad) { o.tx = (g.cx + nx * rad * 1.4f - o.lp.width / 2f).coerceIn(0f, (screenW - o.lp.width).toFloat()); o.ty = (g.cy + ny * rad * 1.4f - o.lp.height / 2f).coerceIn(0f, (screenH - o.lp.height).toFloat()) }
+                    if (w.guardSayT <= 0f) {
+                        w.guardSayT = 9f
+                        g.view.pose.facing = if (dx > 0) 1f else -1f
+                        g.punchT = 0.25f
+                        Squad.get(g.id)?.let { showBubble(g, it.name, it.archetype.lines(Say.GUARD_OUT).random(), shout = true) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Vérifie régulièrement si un agent d'entretien a du boulot. */
+    private fun workChecks(dt: Float) {
+        workCheckT -= dt
+        if (workCheckT > 0f) return
+        workCheckT = 3f
+        if (cleaner == null && (stains.isNotEmpty() || mess.isNotEmpty())) {
+            val c = sprites.values.firstOrNull { free(it) && Squad.get(it.id)?.task?.kind == com.superessence.squad.model.TaskKind.CLEANER }
+            if (c != null) startClean(manual = false, who0 = c)
+        }
+    }
+
+    // ---- choix de l'endroit à cliquer
+
+    private fun showPicker(id: String) {
+        hidePicker()
+        val name = Squad.get(id)?.name ?: return
+        val v = PickView(this, density, name)
+        v.listener = object : PickView.Listener {
+            override fun onPickMove(v: PickView, dx: Float, dy: Float) {
+                val lp = pickerLp ?: return
+                lp.x = (lp.x + dx).toInt().coerceIn(-lp.width / 2, screenW - lp.width / 2)
+                lp.y = (lp.y + dy).toInt().coerceIn(-(v.targetY.toInt()), screenH - v.targetY.toInt())
+                runCatching { wm.updateViewLayout(v, lp) }
+            }
+
+            override fun onPickDone(v: PickView, ok: Boolean) {
+                val lp = pickerLp ?: return
+                val pid = pickerId
+                if (ok && pid != null) {
+                    val cx = lp.x + lp.width / 2f; val cy = lp.y + v.targetY
+                    Squad.editMascot(pid) { it.copy(task = it.task.copy(tapX = cx / screenW, tapY = cy / screenH)) }
+                    sprites[pid]?.let { sp -> Squad.get(pid)?.let { showBubble(sp, it.name, "Compris, je clique là !") } }
+                }
+                hidePicker()
+            }
+        }
+        val w = (230 * density).toInt(); val h = (128 * density).toInt()
+        val lp = WindowManager.LayoutParams(
+            w, h, overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = (screenW - w) / 2; y = screenH / 2 - h / 2 }
+        runCatching { wm.addView(v, lp); picker = v; pickerLp = lp; pickerId = id }
+    }
+
+    private fun hidePicker() {
+        picker?.let { runCatching { wm.removeView(it) } }
+        picker = null; pickerLp = null; pickerId = null
+    }
+
     // ------------------------------------------------------------------ taches, bordel et ménage
 
     private inner class StainItem(val view: StainView, val lp: WindowManager.LayoutParams) {
@@ -1283,11 +1670,12 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
     }
 
     /** Un gars prend l'éponge et range tout le bordel. */
-    private fun startClean(manual: Boolean) {
+    private fun startClean(manual: Boolean, who0: Sprite? = null) {
         if (cleaner != null) return
         if (stains.isEmpty() && mess.isEmpty()) return
         val pool = sprites.values.filter { free(it) }
-        val who = pool.firstOrNull { it.id.let { id -> Squad.get(id)?.arch == "sarge" } } ?: pool.randomOrNull()
+        val who = who0 ?: pool.firstOrNull { Squad.get(it.id)?.task?.kind == com.superessence.squad.model.TaskKind.CLEANER }
+            ?: pool.firstOrNull { it.id.let { id -> Squad.get(id)?.arch == "sarge" } } ?: pool.randomOrNull()
         if (who == null) {
             if (manual) { stains.toList().forEach { removeStain(it) }; mess.toList().forEach { removeClutter(it) } }
             return
@@ -1408,7 +1796,20 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         val sp = spriteOf(v) ?: return
         val m = Squad.get(sp.id) ?: return
         buzz(v)
-        if (sp.brain.act == Act.SLEEP) { say(sp, m, Say.NIGHT); return }
+        if (sp.brain.act == Act.SLEEP && !ws(sp).active) { say(sp, m, Say.NIGHT); return }
+        if (ws(sp).active) {
+            if (ws(sp).tapRun != null) return
+            when (m.task.kind) {
+                com.superessence.squad.model.TaskKind.LAUNCHER -> launchApp(sp, m)
+                com.superessence.squad.model.TaskKind.TAPPER -> startTapRun(sp, m)
+                else -> jobTalk(sp, m, idle = false)
+            }
+            return
+        }
+        if (m.task.kind == com.superessence.squad.model.TaskKind.CLEANER && sp !== cleaner) {
+            if (stains.isEmpty() && mess.isEmpty()) showBubble(sp, m.name, "Tout est propre, ${m.archetype.nick}.") else startClean(manual = true, who0 = sp.takeIf { free(it) })
+            return
+        }
         when {
             m.satiety < 25f -> say(sp, m, Say.HUNGRY)
             m.energy < 20f -> { sp.brain.force(Act.YAWN, 2.5f); say(sp, m, Say.SLEEPY) }
@@ -1474,6 +1875,15 @@ class OverlayService : Service(), SpriteView.Listener, Choreographer.FrameCallba
         saveOne(sp)
         // Lâché sur un autre gars ? Ça part en baston.
         if (inEvent(sp)) { saveOne(sp); return }
+        if (m.task.kind.posted) {
+            // on déplace son poste de travail
+            val maxX = (screenW - sp.lp.width).toFloat(); val maxY = (screenH - sp.lp.height).toFloat()
+            val fx = if (maxX > 0) sp.x / maxX else 0.5f; val fy = if (maxY > 0) sp.y / maxY else 0.5f
+            Squad.editMascot(sp.id) { it.copy(task = it.task.copy(postX = fx, postY = fy)) }
+            ws(sp).tapRun?.let { setTouchable(sp, true) }; ws(sp).tapRun = null
+            showBubble(sp, m.name, "Ok, mon poste est ici maintenant.")
+            return
+        }
         val victim = sprites.values.filter { it !== sp && !it.dragged && it.enc == null && !inEvent(it) && !it.parked }
             .minByOrNull { hypot(it.cx - sp.cx, it.cy - sp.cy) }
             ?.takeIf { hypot(it.cx - sp.cx, it.cy - sp.cy) < sp.lp.width * 0.75f }

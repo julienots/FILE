@@ -97,11 +97,11 @@ fun previewAct(m: Mascot, phase: Phase, t: Float): Act = when {
 }
 
 @Composable
-fun MascotCanvas(look: Look, act: Act, modifier: Modifier, fitness: Float = 30f, seed: Int = 0, talking: Boolean = false, facing: Float = 1f) {
+fun MascotCanvas(look: Look, act: Act, modifier: Modifier, fitness: Float = 30f, seed: Int = 0, talking: Boolean = false, facing: Float = 1f, sign: com.superessence.squad.render.Sign? = null) {
     val t = animTime()
     val pose = remember { Pose() }
     Canvas(modifier) {
-        pose.act = act; pose.t = t; pose.fitness = fitness; pose.seed = seed; pose.talking = talking; pose.facing = facing
+        pose.act = act; pose.t = t; pose.fitness = fitness; pose.seed = seed; pose.talking = talking; pose.facing = facing; pose.sign = sign
         drawIntoCanvas { MascotPainter.draw(it.nativeCanvas, look, pose, size.width, size.height) }
     }
 }

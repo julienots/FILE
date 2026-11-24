@@ -92,6 +92,11 @@ class MainActivity : ComponentActivity() {
         moveTaskToBack(true)
     }
 
+    /** Ferme l'appli vers l'écran d'accueil (pour viser une icône). */
+    fun goHome() {
+        startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     fun cleanScreen() {
         if (!OverlayService.canRun(this)) return
         OverlayService.clean(this)
@@ -119,6 +124,7 @@ class MainActivity : ComponentActivity() {
             BackHandler(enabled = nav != "home") {
                 nav = when {
                     nav.startsWith("style:") -> "detail:" + nav.removePrefix("style:")
+                    nav.startsWith("task:") -> "detail:" + nav.removePrefix("task:")
                     else -> "home"
                 }
             }
@@ -135,7 +141,11 @@ class MainActivity : ComponentActivity() {
                         route == "rhythm" -> RhythmScreen(state, onBack = { nav = "home" }, onBattery = { openBatterySettings() })
                         route.startsWith("detail:") -> {
                             val id = route.removePrefix("detail:")
-                            DetailScreen(state, id, onBack = { nav = "home" }, onStyle = { nav = "style:$id" })
+                            DetailScreen(state, id, onBack = { nav = "home" }, onStyle = { nav = "style:$id" }, onTask = { nav = "task:$id" })
+                        }
+                        route.startsWith("task:") -> {
+                            val id = route.removePrefix("task:")
+                            TaskScreen(state, id, onBack = { nav = "detail:$id" })
                         }
                         route.startsWith("style:") -> {
                             val id = route.removePrefix("style:")
