@@ -1114,3 +1114,52 @@ TEST_CASE("root motion: the root bone's walk moves the character (loops, rotatio
     CHECK(std::abs(d.x) < 0.01f);
 }
 }
+
+TEST_SUITE("animation") {
+TEST_CASE("root motion in a blend state: walk / run mixed by speed, the distance follows the weights") {
+    AnimFixture f;
+    auto makeClip = [&](const char* uri, float meters) {
+        AnimationClip c;
+        c.duration = 1.0f;
+        c.loop = true;
+        auto& x = c.track("Hips", "Transform", "position", 0).curve;
+        x.setKey(0.0f, 0.0f);
+        x.setKey(1.0f, meters);
+        f.save(uri, c);
+    };
+    makeClip("assets://walk.agranim", 2.0f);
+    makeClip("assets://run.agranim", 6.0f);
+    AnimatorController ctrl;
+    ctrl.parameters = {{"speed", ParameterType::Float, 0.0f}};
+    AnimatorState move;
+    move.name = "Move";
+    move.blendParameter = "speed";
+    move.motions = {{"assets://walk.agranim", 0.0f}, {"assets://run.agranim", 1.0f}};
+    ctrl.states = {move};
+    f.save("assets://move.agrctrl", ctrl);
+    const auto hero = f.scene.createEntity("Hero");
+    const auto hips = f.scene.createEntity("Hips", hero);
+    auto& a = f.scene.registry().emplace<AnimatorComponent>(hero);
+    a.controller = "assets://move.agrctrl";
+    a.rootMotion = "Hips";
+    f.scene.updateTransforms();
+    auto run = [&](float seconds) {
+        for (int i = 0; i < static_cast<int>(seconds * 60.0f + 0.5f); ++i) {
+            f.step(1.0f / 60.0f);
+            f.scene.updateTransforms();
+        }
+    };
+    f.anim.setFloat(f.scene, hero, "speed", 0.0f);
+    run(1.0f);
+    CHECK(f.x(hero) == doctest::Approx(2.0f).epsilon(0.03));
+    CHECK(std::abs(f.x(hips)) < 0.01f);  // pinned in place
+    f.scene.registry().get<TransformComponent>(hero).position = {0, 0, 0};
+    f.anim.setFloat(f.scene, hero, "speed", 0.5f);
+    run(1.0f);
+    CHECK(f.x(hero) == doctest::Approx(4.0f).epsilon(0.03));
+    f.scene.registry().get<TransformComponent>(hero).position = {0, 0, 0};
+    f.anim.setFloat(f.scene, hero, "speed", 1.0f);
+    run(0.5f);
+    CHECK(f.x(hero) == doctest::Approx(3.0f).epsilon(0.03));
+}
+}

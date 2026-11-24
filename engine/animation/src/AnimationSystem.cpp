@@ -1094,15 +1094,57 @@ void AnimationSystem::update(Scene& scene, float dt) {
         const AnimationClip* curBefore = rt->current.clip.get();
         const AnimationClip* prevBefore = rt->previous.clip.get();
         const float curT0 = rt->current.time, prevT0 = rt->previous.time;
+        const float curPhase0 = rt->current.phase;
+        const std::string curState0 = rt->current.state;
         stepMachine(scene, e, *rt, step, rt->params);
         for (Runtime::Layer& l : rt->layers)
             if (l.rt && l.rt->valid) stepMachine(scene, e, *l.rt, step, rt->params);
         auto isMix = [](const Runtime::Playback& pb) { return !pb.motions.empty(); };
+        // Root motion: moves the entity by `delta` (bone parent space) and pins the bone at `start`.
+        auto applyRoot = [&](math::Vec3 delta, math::Vec3 start) {
+            const ecs::Entity bone = resolvePath(scene, e, anim.rootMotion);
+            if (bone.isNull() || bone == e) return;
+            auto& bt = scene.registry().get<TransformComponent>(bone);
+            bt.position.x = start.x;
+            bt.position.z = start.z;
+            if (anim.rootMotionY) bt.position.y = start.y;
+            else delta.y = 0.0f;
+            const ecs::Entity boneParent = scene.parent(bone);
+            const math::Vec3 world = scene.worldMatrix(boneParent.isNull() ? e : boneParent).transformVector(delta);
+            anim.rootMotionDelta = world;
+            if (anim.applyRootMotion) {
+                auto& et = scene.registry().get<TransformComponent>(e);
+                const ecs::Entity p = scene.parent(e);
+                et.position = et.position + (p.isNull() ? world : math::inverse(scene.worldMatrix(p)).transformVector(world));
+            }
+        };
         if (!rt->layers.empty() || isMix(rt->current) || (rt->fading && isMix(rt->previous))) {
             // Pose path: blend states (every motion, property and transform tracks), layers with masks.
             applyLayer(scene, e, *rt, nullptr, 1.0f);
             for (Runtime::Layer& l : rt->layers)
                 if (l.rt && l.rt->valid && l.weight > 0.0f) applyLayer(scene, e, *l.rt, l.def, l.weight);
+            // Root motion of a blend state: every motion's movement over the same phase step, by weight.
+            Runtime::Playback& pb = rt->current;
+            if (!anim.rootMotion.empty() && isMix(pb) && pb.state == curState0) {
+                const ecs::Entity bone = resolvePath(scene, e, anim.rootMotion);
+                if (!bone.isNull()) {
+                    const math::Vec3 here = scene.registry().get<TransformComponent>(bone).position;
+                    math::Vec3 delta{0.0f}, start{0.0f};
+                    float total = 0.0f;
+                    for (usize i = 0; i < pb.motions.size() && i < pb.mixWeights.size(); ++i) {
+                        const float w = pb.mixWeights[i];
+                        const RootSource src = rootSource(pb.motions[i].get(), anim.rootMotion);
+                        if (w <= 0.0f || !src) continue;
+                        const AnimationClip& c = *pb.motions[i];
+                        const float d = std::max(c.duration, 1e-4f);
+                        delta = delta + (rootDisplacement(c, src, pb.phase * d) - rootDisplacement(c, src, curPhase0 * d)) * w;
+                        start = start + src.at(0.0f, here) * w;
+                        total += w;
+                    }
+                    const float fade = rt->fading && rt->fadeDuration > 0.0f ? std::clamp(rt->fade / rt->fadeDuration, 0.0f, 1.0f) : 1.0f;
+                    if (total > 0.0f) applyRoot(delta * fade, start / total);
+                }
+            }
             continue;
         }
         Runtime::Playback& now = rt->current;
@@ -1125,22 +1167,8 @@ void AnimationSystem::update(Scene& scene, float dt) {
                 }
                 const ecs::Entity bone = resolvePath(scene, e, anim.rootMotion);
                 const RootSource src = rootSource(now.clip.get(), anim.rootMotion);
-                if (!bone.isNull() && bone != e && src) {
-                    auto& bt = scene.registry().get<TransformComponent>(bone);
-                    const math::Vec3 start = src.at(0.0f, bt.position);  // the bone stays where the clip starts
-                    bt.position.x = start.x;
-                    bt.position.z = start.z;
-                    if (anim.rootMotionY) bt.position.y = start.y;
-                    else delta.y = 0.0f;
-                    const ecs::Entity boneParent = scene.parent(bone);
-                    const math::Vec3 world = scene.worldMatrix(boneParent.isNull() ? e : boneParent).transformVector(delta);
-                    anim.rootMotionDelta = world;
-                    if (anim.applyRootMotion) {
-                        auto& et = scene.registry().get<TransformComponent>(e);
-                        const ecs::Entity p = scene.parent(e);
-                        et.position = et.position + (p.isNull() ? world : math::inverse(scene.worldMatrix(p)).transformVector(world));
-                    }
-                }
+                if (!bone.isNull() && bone != e && src)  // the bone stays where the clip starts
+                    applyRoot(delta, src.at(0.0f, scene.registry().get<TransformComponent>(bone).position));
             }
         }
     }

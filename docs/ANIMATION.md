@@ -265,7 +265,7 @@ avance selon son avant, mode « delta seulement ».
 
 ## Limites actuelles
 
-- Root motion : translation seulement (pas la rotation de l'os racine) ; états de mélange (blend) : non pris en compte (états simples et fondus seulement).
+- Root motion : translation seulement (pas la rotation de l'os racine) ; états simples, fondus et états de mélange 1D / 2D (chaque motion pondérée sur la même phase) ; pas pour les couches au-dessus de la couche de base.
 
 - IK : limites par articulation (`jointLimits`, en degrés) : `"30"` = cône rond, `"90x15"` = cône
   **elliptique** (90° vers l'avant — le côté du pôle, sinon le haut — et 15° sur le côté : un genou, une
