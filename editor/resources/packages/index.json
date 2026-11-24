@@ -4,6 +4,16 @@
     {
       "author": "Superessence Studio",
       "dependencies": [],
+      "description": "Succès : définitions (nom, description, objectif, caché), progression cumulée, déblocage une seule fois avec rappel (notification), pourcentage complété, sauvegarde et rechargement en JSON (agr.save).",
+      "file": "achievements-1.0.0.agrpkg",
+      "name": "achievements",
+      "sha256": "0c4d69f725956d0003d55757c12a563c3c4294d34687752c20b62f1f5e66f7ad",
+      "size": 4006,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
       "description": "Cycle jour / nuit : fait tourner le soleil (lumière directionnelle), change sa couleur et son intensité (aube orange, midi blanc, nuit bleutée) et l'intensité du ciel. Expose l'heure (0-24) et émet des signaux à l'aube et au crépuscule.",
       "file": "day-night-1.0.0.agrpkg",
       "name": "day-night",
@@ -44,11 +54,31 @@
     {
       "author": "Superessence Studio",
       "dependencies": [],
+      "description": "A* sur une grille (jeux de tuiles, tactique, rogue-like) : cases bloquées ou à coût, 4 ou 8 directions sans couper les coins, chemin le plus court, cases atteignables en N pas (déplacement tactique), ligne de vue entre deux cases.",
+      "file": "grid-pathfinding-1.0.0.agrpkg",
+      "name": "grid-pathfinding",
+      "sha256": "08098362e2b79ac7171add8cd144540d23b0a29667d2bd3c2c0fdce96e63246e",
+      "size": 5877,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
       "description": "Points de vie : dégâts, soins, invulnérabilité temporaire après un coup, mort avec destruction ou désactivation, signaux déclarés (damaged, healed, died) pour l'interface et les effets.",
       "file": "health-1.0.0.agrpkg",
       "name": "health",
       "sha256": "a4823687b8c2de0c78c46e393394f61fab40a2dc35641de47d1ca0151f9394cf",
       "size": 1808,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Retour visuel d'un coup : le sprite clignote (couleur choisie) et tressaute brièvement ; appelé par health (signal damaged) ou par n'importe quel script avec flash().",
+      "file": "hit-flash-1.0.0.agrpkg",
+      "name": "hit-flash",
+      "sha256": "ebf436bc06a88a80343edcffbe3fd79b5023cf86feea4403af9bfe053aa585e5",
+      "size": 2106,
       "version": "1.0.0"
     },
     {
@@ -84,6 +114,26 @@
     {
       "author": "Superessence Studio",
       "dependencies": [],
+      "description": "Plateforme mobile entre des points (enfants nommés Point1, Point2...) : aller-retour ou boucle, vitesse, pause à chaque point, départ décalé ; avec un RigidBody cinématique, elle porte les personnages.",
+      "file": "moving-platform-1.0.0.agrpkg",
+      "name": "moving-platform",
+      "sha256": "9c79218862fd855642b57c4a8691aa95d02b744c114e68d27af7944af16aeaf9",
+      "size": 2409,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Garde qui patrouille entre des points, repère la cible à portée et en ligne de vue (champ de vision), la poursuit, la perd après un délai et retourne à sa ronde. 2D ou 3D, avec NavAgent si présent.",
+      "file": "patrol-ai-1.0.0.agrpkg",
+      "name": "patrol-ai",
+      "sha256": "26926bb6f8354d154759ab4ab2aa0ac199b84aa5981a3fbcc99ce52d0c2545d7",
+      "size": 3008,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
       "description": "Menu pause : Échap, bouton Start ou retour Android met le jeu en pause (temps arrêté), affiche un panneau d'interface enfant et le cache à la reprise ; boutons Reprendre / Menu principal.",
       "file": "pause-menu-1.0.0.agrpkg",
       "name": "pause-menu",
@@ -109,6 +159,16 @@
       "name": "quest-log",
       "sha256": "ac16f414b3ceb18b9e323d27ab54cba56fbe90fee05d8ef3542c00b3c83ae734",
       "size": 3117,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Hasard pour le jeu : générateur à graine reproductible (même graine = même monde), tirage pondéré, mélange, sac de tirage sans répétition (pièces de Tetris, cartes), point dans un disque, bruit de valeur 1D / 2D lissé.",
+      "file": "random-tools-1.0.0.agrpkg",
+      "name": "random-tools",
+      "sha256": "f3dcf65025106697d0b64eb9e047751f11e9a3755c34d744cd93d94905f1a009",
+      "size": 3837,
       "version": "1.0.0"
     },
     {
@@ -149,6 +209,26 @@
       "name": "top-down-2d",
       "sha256": "a7f7d5b469f53a0f30616de8aaa7f3c25a7cb7a074c071f2290aa190e9e29ff8",
       "size": 2500,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Interpolations (tweens) : une valeur ou plusieurs champs d'une table vont vers une cible en N secondes, 20 courbes d'accélération (quad, cubic, back, elastic, bounce...), délais, boucles aller-retour et rappel à la fin. Comme Tween de Godot.",
+      "file": "tween-1.0.0.agrpkg",
+      "name": "tween",
+      "sha256": "a84cea6bc4f6c9102cd3511096cb34ca3634c6f084e71f968ef12a5f98b34dd3",
+      "size": 5183,
+      "version": "1.0.0"
+    },
+    {
+      "author": "Superessence Studio",
+      "dependencies": [],
+      "description": "Texte machine à écrire pour les dialogues : les lettres apparaissent une à une (vitesse réglable, pause sur la ponctuation), un clic ou l'action affiche tout d'un coup, signal « typed » à la fin.",
+      "file": "typewriter-1.0.0.agrpkg",
+      "name": "typewriter",
+      "sha256": "202be3da6209e8c9461b3bff148739abe5f461f112e1f673d4091700607151c1",
+      "size": 2316,
       "version": "1.0.0"
     },
     {

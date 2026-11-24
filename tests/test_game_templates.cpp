@@ -1801,3 +1801,54 @@ TEST_CASE("Lua remapping: capture a key, rebind jump, save the override, reset; 
     h.lua("assert(agr.input.vibrate(1, 0.5, 0.1) == false)");
     h.lua("local ok = pcall(agr.input.setBindings, 'jump', { {type = 'key', input = 'Nope'} }); assert(not ok)");
 }
+
+TEST_CASE("official kits in a running game: moving platform, typewriter text, patrol guard spots the player") {
+    GameHarness h(SceneTemplate::Empty2D);
+    const fs::path assets = h.root / "game" / "assets";
+    for (const char* pkg : {"moving-platform", "typewriter", "patrol-ai", "hit-flash"})
+        fs::copy(fs::path(AGR_SOURCE_DIR) / "packages" / pkg / "assets", assets, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+    Scene& s = h.scene();
+    auto& reg = s.registry();
+    auto script = [&](ecs::Entity e, const char* uri, const char* props = "") {
+        auto& sc = reg.emplace<ScriptComponent>(e);
+        sc.script = uri;
+        if (*props) sc.properties = props;
+    };
+    // Platform between two points.
+    const auto plat = s.createEntity("Lift");
+    s.createEntity("Lift_Point1");
+    const auto p2 = s.createEntity("Lift_Point2");
+    reg.get<TransformComponent>(p2).position = {0, 3, 0};
+    script(plat, "assets://kits/platform/moving_platform.lua", R"({"speed": 3, "pause": 0})");
+    // Typewriter on a UI text.
+    const auto canvas = s.createEntity("Canvas");
+    reg.emplace<UICanvasComponent>(canvas);
+    const auto label = s.createEntity("Dialogue", canvas);
+    reg.emplace<UIRectComponent>(label);
+    reg.emplace<UITextComponent>(label).text = "";
+    script(label, "assets://kits/typewriter/typewriter.lua", R"({"speed": 8})");
+    // Guard and player.
+    const auto guard = s.createEntity("Guard");
+    s.createEntity("Guard_Point1");
+    reg.get<TransformComponent>(s.findByName("Guard_Point1")).position = {-5, 0, 0};
+    script(guard, "assets://kits/patrol/patrol.lua", R"({"sight": 4})");
+    const auto player = s.createEntity("Player");
+    reg.get<TransformComponent>(player).position = {20, 0, 0};
+    s.updateTransforms();
+    h.frames(2);
+    h.lua("SPOTTED = 0; agr.find('Guard'):connect('spotted', function() SPOTTED = SPOTTED + 1 end)");
+    h.lua("TYPED = nil; local d = agr.find('Dialogue'); d:connect('typed', function(t) TYPED = t end); d:script():say('Salut !')");
+    h.seconds(0.5);
+    CHECK(h.position("Lift").y == doctest::Approx(1.5f).epsilon(0.1));
+    h.lua("assert(TYPED == nil and #agr.find('Dialogue'):get('UIText', 'text') > 0)");
+    h.seconds(1.0);
+    CHECK(h.position("Lift").y == doctest::Approx(1.5f).epsilon(0.1));  // top at 1 s, then halfway back down
+    h.lua("assert(TYPED == 'Salut !', TYPED)");
+    CHECK(h.position("Guard").x < -1.0f);  // walking its round toward Point1
+    h.lua("assert(SPOTTED == 0)");
+    // The player walks in front of the guard (it faces -x on its round).
+    reg.get<TransformComponent>(player).position = h.position("Guard") + math::Vec3{-2, 0, 0};
+    s.updateTransforms();
+    h.frames(2);
+    h.lua("assert(SPOTTED == 1, SPOTTED)");
+}

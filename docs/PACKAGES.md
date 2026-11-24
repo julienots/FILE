@@ -48,6 +48,14 @@ construits par `tools/build_official_packages.sh`), installés dans `assets/kits
 | `top-down-2d` | déplacement vu de dessus en 8 directions : accélération, course, esquive avec recharge, manette |
 | `mobile-joystick` | joystick virtuel tactile (sous le doigt, moitié gauche de l'écran, zone morte), lu par `:value()` |
 | `pause-menu` | menu pause : Échap / Start / retour Android arrêtent le temps et montrent le panneau, boutons Reprendre / Menu |
+| `tween` | interpolations : champs d'une table vers une cible, 20 courbes (back, elastic, bounce...), délai, aller-retour, rappel |
+| `grid-pathfinding` | A* sur grille : cases bloquées ou à coût, 4 / 8 directions sans couper les coins, cases atteignables en N pas, ligne de vue |
+| `achievements` | succès : progression cumulée, déblocage unique avec rappel, cachés, pourcentage, sauvegarde |
+| `random-tools` | hasard reproductible (graine), tirage pondéré, mélange, sac sans répétition, point dans un disque, bruit lisse |
+| `typewriter` | texte qui s'écrit lettre à lettre (pause sur la ponctuation, saut par l'action), signal `typed` |
+| `moving-platform` | plateforme entre des points `<nom>_Point1`... : aller-retour ou boucle, vitesse, pauses |
+| `patrol-ai` | garde : ronde entre des points, vision (portée, angle, rayon contre les murs), poursuite, perte, signaux `spotted` / `lost` |
+| `hit-flash` | clignotement et tressautement du sprite au coup (relié au signal `damaged` de `health`) |
 
 Vérifié par le test `official packages` : chaque script compile et passe l'analyse statique sur l'API
 réelle, les 16 paquets s'installent, et l'inventaire, les dialogues, la machine à états, les

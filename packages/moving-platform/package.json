@@ -1,0 +1,1 @@
+{"name": "moving-platform", "version": "1.0.0", "author": "Superessence Studio", "description": "Plateforme mobile entre des points (enfants nommés Point1, Point2...) : aller-retour ou boucle, vitesse, pause à chaque point, départ décalé ; avec un RigidBody cinématique, elle porte les personnages.", "dependencies": []}

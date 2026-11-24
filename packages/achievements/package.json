@@ -1,0 +1,1 @@
+{"name": "achievements", "version": "1.0.0", "author": "Superessence Studio", "description": "Succès : définitions (nom, description, objectif, caché), progression cumulée, déblocage une seule fois avec rappel (notification), pourcentage complété, sauvegarde et rechargement en JSON (agr.save).", "dependencies": []}

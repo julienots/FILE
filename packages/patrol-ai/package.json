@@ -1,0 +1,1 @@
+{"name": "patrol-ai", "version": "1.0.0", "author": "Superessence Studio", "description": "Garde qui patrouille entre des points, repère la cible à portée et en ligne de vue (champ de vision), la poursuit, la perd après un délai et retourne à sa ronde. 2D ou 3D, avec NavAgent si présent.", "dependencies": []}

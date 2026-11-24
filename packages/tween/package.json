@@ -1,0 +1,1 @@
+{"name": "tween", "version": "1.0.0", "author": "Superessence Studio", "description": "Interpolations (tweens) : une valeur ou plusieurs champs d'une table vont vers une cible en N secondes, 20 courbes d'accélération (quad, cubic, back, elastic, bounce...), délais, boucles aller-retour et rappel à la fin. Comme Tween de Godot.", "dependencies": []}

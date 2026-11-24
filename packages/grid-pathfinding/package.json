@@ -1,0 +1,1 @@
+{"name": "grid-pathfinding", "version": "1.0.0", "author": "Superessence Studio", "description": "A* sur une grille (jeux de tuiles, tactique, rogue-like) : cases bloquées ou à coût, 4 ou 8 directions sans couper les coins, chemin le plus court, cases atteignables en N pas (déplacement tactique), ligne de vue entre deux cases.", "dependencies": []}

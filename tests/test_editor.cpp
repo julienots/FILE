@@ -1705,11 +1705,11 @@ TEST_CASE("official packages: scripts pass the static checks, all install, the m
         for (const auto& w : linter.lint(code, e.path().filename().string())) CHECK_MESSAGE(false, "line ", w.line, ": ", w.message);
         ++scripts;
     }
-    CHECK(scripts >= 18);
+    CHECK(scripts >= 26);
     // The shipped library installs whole into a project.
     auto index = fetchRepositoryIndex("file://" + (fs::path(AGR_SOURCE_DIR) / "editor" / "resources" / "packages").generic_string() + "/");
     REQUIRE(index);
-    CHECK(index.value().packages.size() >= 16);
+    CHECK(index.value().packages.size() >= 24);
     EditorFixture f(ProjectMode::Mode3D);
     for (const OnlinePackage& p : index.value().packages) {
         auto done = installFromRepository(p.name, index.value(), f.root / "downloads", f.ctx->project().assetsDirectory(), false);
@@ -1758,6 +1758,75 @@ local v2 = Save.new({ version = 2, migrations = { [2] = function(d) d.gold = d.c
 local data = assert(v2:deserialize(text))
 assert(data.gold == 7 and data.coins == nil and data.level == 2, "migrated to version 2")
 assert(v1:deserialize(v2:serialize(data)) == nil, "a newer save is refused")
+-- Tweens: easing, delay, yoyo, completion callback.
+local Tween = require("assets://kits/tween/tween.lua")
+Tween.clear()
+local obj = { x = 0 }
+local doneCount = 0
+Tween.to(obj, { x = 10 }, 1, "linear"):delay(0.5):onDone(function() doneCount = doneCount + 1 end)
+Tween.update(0.5) ; assert(obj.x == 0, "still waiting")
+Tween.update(0.5) ; assert(math.abs(obj.x - 5) < 1e-6, obj.x)
+Tween.update(0.6) ; assert(obj.x == 10 and doneCount == 1 and Tween.count() == 0)
+local seen
+Tween.value(0, 1, 1, "outBack", function(v) seen = v end)
+Tween.update(0.6) ; assert(seen > 0.9, "outBack overshoots early: " .. seen)
+for name, f in pairs(Tween.easings) do assert(math.abs(f(0)) < 1e-6 and math.abs(f(1) - 1) < 1e-6, name) end
+local yo = { a = 0 }
+Tween.clear()
+Tween.to(yo, { a = 4 }, 1, "linear"):yoyo(2)
+Tween.update(1) ; assert(yo.a == 4)
+Tween.update(1) ; assert(yo.a == 0 and Tween.count() == 0)
+-- Grid A*: around walls, no corner cutting, costs, reachable cells, line of sight.
+local Grid = require("assets://kits/pathfinding/grid.lua")
+local g = Grid.new(10, 10)
+for y = 1, 8 do g:setBlocked(5, y, true) end            -- wall with a gap at y = 9..10
+local path, cost = g:find(1, 1, 9, 1)
+assert(path and path[1].x == 1 and path[#path].x == 9, "path found")
+for _, p in ipairs(path) do assert(not g:isBlocked(p.x, p.y)) end
+assert(cost == #path - 1 and #path - 1 == 8 + 16, "4-way around the wall: " .. cost)
+g:setBlocked(5, 9, true) ; g:setBlocked(5, 10, true)
+assert(g:find(1, 1, 9, 1) == nil, "sealed")
+local d = Grid.new(3, 3, { diagonal = true })
+d:setBlocked(2, 1, true)
+local dp = d:find(1, 1, 2, 2)
+assert(#dp == 3, "no diagonal through the blocked corner")
+local mud = Grid.new(5, 1) ; mud:setCost(3, 1, 10)
+local _, c2 = mud:find(1, 1, 5, 1) ; assert(c2 == 13)
+local zone = Grid.new(5, 5):reachable(3, 3, 2)
+local n = 0 ; for _ in pairs(zone) do n = n + 1 end
+assert(n == 13, "diamond of radius 2: " .. n)
+local los = Grid.new(10, 3) ; los:setBlocked(5, 2, true)
+assert(not los:lineOfSight(1, 2, 9, 2) and los:lineOfSight(1, 1, 9, 1))
+-- Achievements: progress, single unlock notification, hidden names, save / load.
+local Achievements = require("assets://kits/achievements/achievements.lua")
+local a = Achievements.new({ { id = "coin", name = "Coin" }, { id = "rich", name = "Rich", goal = 100 }, { id = "s", name = "Secret", hidden = true } })
+local unlocked = {}
+a:onUnlock(function(def) unlocked[#unlocked + 1] = def.id end)
+assert(not a:progress("rich", 60) and a:ratio("rich") == 0.6)
+assert(a:progress("rich", 60) and a:isUnlocked("rich"))
+assert(not a:progress("rich", 5), "once")
+a:unlock("coin")
+assert(table.concat(unlocked, ",") == "rich,coin" and math.abs(a:completion() - 2 / 3) < 1e-6)
+assert(a:list()[3].name == "???")
+local b = Achievements.new({ { id = "coin", name = "Coin" }, { id = "rich", name = "Rich", goal = 100 }, { id = "s", name = "Secret", hidden = true } })
+b:fromTable(a:toTable())
+assert(b:isUnlocked("coin") and b:isUnlocked("rich") and not b:isUnlocked("s"))
+-- Random: reproducible seeds, weighted draws, bag without repeats, smooth noise.
+local Random = require("assets://kits/random/random.lua")
+local r1, r2 = Random.new(42), Random.new(42)
+for _ = 1, 5 do assert(r1:next32() == r2:next32()) end
+local counts = { a = 0, b = 0 }
+local rw = Random.new(7)
+for _ = 1, 2000 do local k = rw:weighted({ a = 90, b = 10 }) counts[k] = counts[k] + 1 end
+assert(counts.a > 1650 and counts.b > 120, counts.a .. "/" .. counts.b)
+local bag = Random.new(3):bag({ 1, 2, 3, 4 })
+local got = {}
+for _ = 1, 4 do got[bag:next()] = true end
+assert(got[1] and got[2] and got[3] and got[4], "every item once per round")
+for _ = 1, 100 do local v = Random.new(9):range(2, 5) assert(v >= 2 and v <= 5) end
+local n1, n2 = Random.noise2(3.3, 1.2, 5), Random.noise2(3.31, 1.2, 5)
+assert(n1 >= 0 and n1 <= 1 and math.abs(n1 - n2) < 0.05, "smooth")
+local x, y = Random.new(1):inCircle(2) ; assert(x * x + y * y <= 4)
 assert(v2:deserialize("not json") == nil)
 -- Loot: same seed, same drops; pity guarantees a rare item.
 local Loot = require("assets://kits/loot/loot.lua")

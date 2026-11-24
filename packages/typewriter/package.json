@@ -1,0 +1,1 @@
+{"name": "typewriter", "version": "1.0.0", "author": "Superessence Studio", "description": "Texte machine à écrire pour les dialogues : les lettres apparaissent une à une (vitesse réglable, pause sur la ponctuation), un clic ou l'action affiche tout d'un coup, signal « typed » à la fin.", "dependencies": []}

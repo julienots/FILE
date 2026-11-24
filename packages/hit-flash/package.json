@@ -1,0 +1,1 @@
+{"name": "hit-flash", "version": "1.0.0", "author": "Superessence Studio", "description": "Retour visuel d'un coup : le sprite clignote (couleur choisie) et tressaute brièvement ; appelé par health (signal damaged) ou par n'importe quel script avec flash().", "dependencies": []}

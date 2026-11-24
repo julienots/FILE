@@ -1,0 +1,1 @@
+{"name": "random-tools", "version": "1.0.0", "author": "Superessence Studio", "description": "Hasard pour le jeu : générateur à graine reproductible (même graine = même monde), tirage pondéré, mélange, sac de tirage sans répétition (pièces de Tetris, cartes), point dans un disque, bruit de valeur 1D / 2D lissé.", "dependencies": []}
