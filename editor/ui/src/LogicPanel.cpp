@@ -363,6 +363,86 @@ void LogicPanel::drawCanvas(EditorShared& s) {
     }
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_panned = false;
 
+    // ---- comment frames (behind the nodes): drag the title to move it with its nodes, the corner to resize.
+    for (int ci = 0; ci < static_cast<int>(m_graph.comments.size()); ++ci) {
+        logic::Comment& c = m_graph.comments[static_cast<usize>(ci)];
+        const ImVec2 p0 = toScreen(c.x, c.y), p1 = toScreen(c.x + c.w, c.y + c.h);
+        const float titleH = 24.0f * z;
+        const ImU32 rgb = IM_COL32((c.color >> 16) & 0xFF, (c.color >> 8) & 0xFF, c.color & 0xFF, 0);
+        dl->AddRectFilled(p0, p1, rgb | IM_COL32(0, 0, 0, 40), 6.0f * z);
+        dl->AddRectFilled(p0, {p1.x, p0.y + titleH}, rgb | IM_COL32(0, 0, 0, 150), 6.0f * z, ImDrawFlags_RoundCornersTop);
+        dl->AddRect(p0, p1, rgb | IM_COL32(0, 0, 0, 200), 6.0f * z);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * z, {p0.x + 8.0f * z, p0.y + 4.0f * z}, palette::kText, c.text.c_str());
+        ImGui::PushID(100000 + ci);
+        ImGui::SetCursorScreenPos(p0);
+        ImGui::InvisibleButton("##title", {std::max(p1.x - p0.x - 18.0f * z, 1.0f), titleH});
+        if (ImGui::IsItemActivated()) {
+            snapshot();
+            m_commentDrag = ci;
+            m_commentNodes.clear();
+            for (const logic::Node& n : m_graph.nodes)
+                if (n.x >= c.x && n.y >= c.y && n.x < c.x + c.w && n.y < c.y + c.h) m_commentNodes.push_back(n.id);
+        }
+        if (ImGui::IsItemActive() && m_commentDrag == ci && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
+            const float dx = io.MouseDelta.x / z, dy = io.MouseDelta.y / z;
+            c.x += dx, c.y += dy;
+            for (int id : m_commentNodes)
+                if (logic::Node* n = m_graph.node(id)) n->x += dx, n->y += dy;
+            m_dirty = true;
+        }
+        if (ImGui::IsItemDeactivated() && m_commentDrag == ci) m_commentDrag = -1;
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) m_commentEdit = ci;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Glisser : déplacer avec les nœuds dedans ; double-clic : renommer ; clic droit : couleur, supprimer");
+        if (ImGui::BeginPopupContextItem("##commentMenu")) {
+            static const std::pair<const char*, u32> colors[] = {{"Bleu", 0x3C6E9Bu}, {"Vert", 0x3C8B5Au}, {"Ambre", 0xB0802Cu}, {"Rouge", 0xA0453Cu}, {"Gris", 0x6A6F78u}};
+            for (const auto& [name, value] : colors)
+                if (ImGui::MenuItem(name, nullptr, c.color == value)) {
+                    snapshot();
+                    c.color = value;
+                    m_dirty = true;
+                }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Supprimer le commentaire")) {
+                snapshot();
+                m_graph.comments.erase(m_graph.comments.begin() + ci);
+                m_dirty = true;
+                ImGui::EndPopup();
+                ImGui::PopID();
+                break;
+            }
+            ImGui::EndPopup();
+        }
+        const ImVec2 grip{p1.x - 14.0f * z, p1.y - 14.0f * z};
+        ImGui::SetCursorScreenPos(grip);
+        ImGui::InvisibleButton("##resize", {14.0f * z, 14.0f * z});
+        dl->AddTriangleFilled({p1.x, grip.y}, p1, {grip.x, p1.y}, rgb | IM_COL32(0, 0, 0, 200));
+        if (ImGui::IsItemActivated()) snapshot(), m_commentResize = ci;
+        if (ImGui::IsItemActive() && m_commentResize == ci) {
+            c.w = std::max(c.w + io.MouseDelta.x / z, 80.0f);
+            c.h = std::max(c.h + io.MouseDelta.y / z, 50.0f);
+            m_dirty = true;
+        }
+        if (ImGui::IsItemDeactivated()) m_commentResize = -1;
+        ImGui::PopID();
+    }
+    if (m_commentEdit >= 0 && m_commentEdit < static_cast<int>(m_graph.comments.size())) {
+        ImGui::OpenPopup("##commentText");
+        if (ImGui::BeginPopup("##commentText")) {
+            if (ImGui::IsWindowAppearing()) {
+                snapshot();
+                ImGui::SetKeyboardFocusHere();
+            }
+            if (ImGui::InputText("##text", &m_graph.comments[static_cast<usize>(m_commentEdit)].text, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                m_commentEdit = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            m_dirty = true;
+            ImGui::EndPopup();
+        } else {
+            m_commentEdit = -1;
+        }
+    }
+
     // ---- nodes
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * z);
     const float row = ImGui::GetFrameHeight() + 4.0f * z;
@@ -564,6 +644,12 @@ void LogicPanel::drawCanvas(EditorShared& s) {
             ImGui::SetKeyboardFocusHere();
         }
         ImGui::InputTextWithHint("##search", "Rechercher un nœud…", &m_search);
+        if (!m_pendingFrom.node && ImGui::Selectable("+ Commentaire (cadre)")) {
+            snapshot();
+            m_graph.comments.push_back({m_menuPos.x, m_menuPos.y, 320.0f, 200.0f, "Commentaire", 0x3C6E9Bu});
+            m_dirty = true;
+            ImGui::CloseCurrentPopup();
+        }
         std::string lower = m_search;
         std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         std::string pick;

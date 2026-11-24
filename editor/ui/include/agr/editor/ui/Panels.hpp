@@ -754,6 +754,8 @@ private:
     Drag m_drag;
     Pending m_pendingFrom;
     ImVec2 m_menuPos{0, 0};
+    int m_commentDrag = -1, m_commentResize = -1, m_commentEdit = -1;  // comment frames being moved / resized / renamed
+    std::vector<int> m_commentNodes;  // nodes carried by the dragged comment
     std::string m_search;
 };
 

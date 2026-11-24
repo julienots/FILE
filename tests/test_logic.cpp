@@ -245,3 +245,29 @@ TEST_CASE("execution: events, variables, branches, loops, timers, messages, keys
 }
 
 }
+
+TEST_SUITE("logic") {
+TEST_CASE("logic graph comments: saved and loaded with the graph, no effect on the generated script") {
+    Graph g;
+    const int start = g.addNode("event.start", 0, 0);
+    REQUIRE(start);
+    const std::string luaBefore = compile(g).lua;
+    g.comments.push_back({10.0f, 20.0f, 400.0f, 250.0f, "Démarrage du niveau", 0xA0453Cu});
+    const std::string text = g.toJson();
+    CHECK(text.find("Démarrage du niveau") != std::string::npos);
+    auto back = Graph::fromJson(text);
+    REQUIRE(back);
+    REQUIRE(back.value().comments.size() == 1);
+    const Comment& c = back.value().comments[0];
+    CHECK(c.x == doctest::Approx(10.0f));
+    CHECK(c.w == doctest::Approx(400.0f));
+    CHECK(c.text == "Démarrage du niveau");
+    CHECK(c.color == 0xA0453Cu);
+    CHECK(compile(back.value()).lua == luaBefore);
+    // Older files without comments still load.
+    Graph empty;
+    auto old = Graph::fromJson(empty.toJson());
+    REQUIRE(old);
+    CHECK(old.value().comments.empty());
+}
+}

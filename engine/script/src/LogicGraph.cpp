@@ -658,6 +658,10 @@ std::string Graph::toJson() const {
     for (const Node& n : nodes) j["nodes"].push_back({{"id", n.id}, {"type", n.type}, {"x", n.x}, {"y", n.y}, {"values", n.values}});
     j["links"] = json::array();
     for (const Link& l : links) j["links"].push_back({{"from", l.fromNode}, {"fromPin", l.fromPin}, {"to", l.toNode}, {"toPin", l.toPin}});
+    if (!comments.empty()) {
+        j["comments"] = json::array();
+        for (const Comment& c : comments) j["comments"].push_back({{"x", c.x}, {"y", c.y}, {"w", c.w}, {"h", c.h}, {"text", c.text}, {"color", c.color}});
+    }
     return j.dump(2);
 }
 
@@ -683,6 +687,9 @@ Result<Graph> Graph::fromJson(std::string_view text) {
         }
         for (const auto& l : j.value("links", json::array()))
             g.links.push_back({l.value("from", 0), l.value("fromPin", ""), l.value("to", 0), l.value("toPin", "")});
+        for (const auto& c : j.value("comments", json::array()))
+            g.comments.push_back({c.value("x", 0.0f), c.value("y", 0.0f), std::max(c.value("w", 320.0f), 40.0f), std::max(c.value("h", 200.0f), 30.0f),
+                                  c.value("text", std::string()), c.value("color", 0x3C6E9Bu)});
         int maxId = 0;
         for (const Node& n : g.nodes) maxId = std::max(maxId, n.id);
         g.nextId = std::max(j.value("nextId", 1), maxId + 1);

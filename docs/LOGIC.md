@@ -57,7 +57,9 @@ rétablit, enregistre, l'attache à un cube et vérifie que le cube bouge en mod
 
 ## Limites actuelles
 
-- Pas de sous-graphes / fonctions réutilisables ni de commentaires sur la toile.
+- Pas de sous-graphes (une chaîne réutilisable s'écrit avec « Message reçu » + « Envoyer un message » à soi-même).
+- Commentaires : clic droit sur la toile › *+ Commentaire (cadre)* ; glisser son titre déplace les nœuds qu'il
+  contient, coin bas-droit pour le redimensionner, double-clic pour le renommer, clic droit pour la couleur.
 - Les sorties d'actions (« Cloner › Copie ») et l'index des boucles ne servent que dans la suite de
   la même chaîne.
 - Pas de débogage pas à pas (le Lua généré et la console aident).

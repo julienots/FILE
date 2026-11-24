@@ -59,7 +59,15 @@ struct Variable {
     std::string value;  ///< Default value (editable per entity in the inspector).
 };
 
+/// A note on the canvas (Godot's GraphFrame): a titled rectangle; dragging it carries the nodes inside.
+struct Comment {
+    float x = 0.0f, y = 0.0f, w = 320.0f, h = 200.0f;
+    std::string text = "Commentaire";
+    u32 color = 0x3C6E9Bu;  ///< 0xRRGGBB
+};
+
 struct Graph {
+    std::vector<Comment> comments;
     std::vector<Node> nodes;
     std::vector<Link> links;
     std::vector<Variable> variables;
