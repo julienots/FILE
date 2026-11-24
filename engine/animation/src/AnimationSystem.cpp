@@ -23,6 +23,41 @@ struct Binding {
     const FieldInfo* field = nullptr;
 };
 
+/// Root motion source in a clip: a translation track (imported models) or Transform.position
+/// curves (.agranim) of the root bone's path.
+struct RootSource {
+    const TransformTrack* track = nullptr;
+    const Curve* axis[3] = {nullptr, nullptr, nullptr};
+    explicit operator bool() const { return track || axis[0] || axis[1] || axis[2]; }
+    math::Vec3 at(float t, math::Vec3 fallback) const {
+        if (track) {
+            const math::Vec4 v = track->sample(t);
+            return {v.x, v.y, v.z};
+        }
+        return {axis[0] ? axis[0]->evaluate(t) : fallback.x, axis[1] ? axis[1]->evaluate(t) : fallback.y, axis[2] ? axis[2]->evaluate(t) : fallback.z};
+    }
+};
+RootSource rootSource(const AnimationClip* c, const std::string& path) {
+    RootSource s;
+    if (!c) return s;
+    for (const TransformTrack& t : c->transformTracks)
+        if (t.target == path && t.path == TransformTrack::Path::Translation) s.track = &t;
+    if (!s.track)
+        for (const AnimationTrack& t : c->tracks)
+            if (t.target == path && t.component == "Transform" && t.field == "position" && t.channel >= 0 && t.channel < 3) s.axis[t.channel] = &t.curve;
+    return s;
+}
+/// Root motion: displacement from time 0 to `t`, loops unrolled.
+math::Vec3 rootDisplacement(const AnimationClip& c, const RootSource& src, float t) {
+    auto at = [&](float x) { return src.at(x, math::Vec3{0.0f}); };
+    const math::Vec3 start = at(0.0f);
+    if (c.duration <= 0.0f) return math::Vec3{0.0f};
+    if (!c.loop) return at(std::clamp(t, 0.0f, c.duration)) - start;
+    const float cycles = std::floor(t / c.duration);
+    const math::Vec3 perCycle = at(c.duration) - start;
+    return perCycle * cycles + (at(t - cycles * c.duration) - start);
+}
+
 float sampleTime(const AnimationClip& c, float t) {
     if (c.duration <= 0.0f) return 0.0f;
     if (c.loop) {
@@ -1055,6 +1090,10 @@ void AnimationSystem::update(Scene& scene, float dt) {
         ++m_stats.animators;
         if (!anim.playing) continue;
         const float step = dt * anim.speed;
+        // Root motion: where the playing clips were before this step.
+        const AnimationClip* curBefore = rt->current.clip.get();
+        const AnimationClip* prevBefore = rt->previous.clip.get();
+        const float curT0 = rt->current.time, prevT0 = rt->previous.time;
         stepMachine(scene, e, *rt, step, rt->params);
         for (Runtime::Layer& l : rt->layers)
             if (l.rt && l.rt->valid) stepMachine(scene, e, *l.rt, step, rt->params);
@@ -1070,6 +1109,39 @@ void AnimationSystem::update(Scene& scene, float dt) {
         if (now.clip) {
             const float w = rt->fading && rt->fadeDuration > 0.0f ? std::clamp(rt->fade / rt->fadeDuration, 0.0f, 1.0f) : 1.0f;
             apply(scene, e, rt, rt->fading ? rt->previous.clip.get() : nullptr, rt->previous.time, *now.clip, now.time, w);
+            if (!anim.rootMotion.empty()) {
+                // Movement of the root track over this step, for the current clip and the one fading out.
+                auto movement = [&](const AnimationClip* clip, float t1, const AnimationClip* before, float t0) {
+                    const RootSource src = rootSource(clip, anim.rootMotion);
+                    if (!src) return math::Vec3{0.0f};
+                    return rootDisplacement(*clip, src, t1) - (clip == before ? rootDisplacement(*clip, src, t0) : math::Vec3{0.0f});
+                };
+                math::Vec3 delta = movement(now.clip.get(), now.time, curBefore, curT0) * w;
+                if (rt->fading && rt->previous.clip) {
+                    // The clip fading out was the current one before a transition made this frame.
+                    const AnimationClip* pc = rt->previous.clip.get();
+                    const float pt0 = pc == curBefore ? curT0 : prevT0;
+                    delta = delta + movement(pc, rt->previous.time, pc == curBefore || pc == prevBefore ? pc : nullptr, pt0) * (1.0f - w);
+                }
+                const ecs::Entity bone = resolvePath(scene, e, anim.rootMotion);
+                const RootSource src = rootSource(now.clip.get(), anim.rootMotion);
+                if (!bone.isNull() && bone != e && src) {
+                    auto& bt = scene.registry().get<TransformComponent>(bone);
+                    const math::Vec3 start = src.at(0.0f, bt.position);  // the bone stays where the clip starts
+                    bt.position.x = start.x;
+                    bt.position.z = start.z;
+                    if (anim.rootMotionY) bt.position.y = start.y;
+                    else delta.y = 0.0f;
+                    const ecs::Entity boneParent = scene.parent(bone);
+                    const math::Vec3 world = scene.worldMatrix(boneParent.isNull() ? e : boneParent).transformVector(delta);
+                    anim.rootMotionDelta = world;
+                    if (anim.applyRootMotion) {
+                        auto& et = scene.registry().get<TransformComponent>(e);
+                        const ecs::Entity p = scene.parent(e);
+                        et.position = et.position + (p.isNull() ? world : math::inverse(scene.worldMatrix(p)).transformVector(world));
+                    }
+                }
+            }
         }
     }
     m_stats.ik2DChains = solveIK2D(scene);  // after the clips: IK overrides the animated pose
@@ -1208,7 +1280,11 @@ void registerAnimationComponents() {
         .field("controller", &AnimatorComponent::controller, {.tooltip = "State machine (.agrctrl)", .flags = FieldFlag_AssetPath})
         .field("clip", &AnimatorComponent::clip, {.tooltip = "Clip played alone when there is no state machine (.agranim)", .flags = FieldFlag_AssetPath})
         .field("speed", &AnimatorComponent::speed, {.rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
-        .field("playing", &AnimatorComponent::playing);
+        .field("playing", &AnimatorComponent::playing)
+        .field("rootMotion", &AnimatorComponent::rootMotion, {.tooltip = "Bone whose movement in the clips moves this entity (\"Armature/Hips\"); empty = off"})
+        .field("rootMotionY", &AnimatorComponent::rootMotionY, {.tooltip = "Also the vertical movement (jumps, climbs)"})
+        .field("applyRootMotion", &AnimatorComponent::applyRootMotion, {.tooltip = "Move the Transform; off: read rootMotionDelta in a script (character controller)"})
+        .field("rootMotionDelta", &AnimatorComponent::rootMotionDelta, {.tooltip = "World movement of the last frame (read-only)"});
 }
 
 } // namespace agr

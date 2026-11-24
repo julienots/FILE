@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 752 champs)
+## Composants (76, 756 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -249,6 +249,10 @@ Animates fields of the entity and its children with clips (.agranim) and a state
 | `clip` | asset | Clip played alone when there is no state machine (.agranim) |
 | `speed` | float | plage 0 .. 10 |
 | `playing` | bool |  |
+| `rootMotion` | string | Bone whose movement in the clips moves this entity ("Armature/Hips"); empty = off |
+| `rootMotionY` | bool | Also the vertical movement (jumps, climbs) |
+| `applyRootMotion` | bool | Move the Transform; off: read rootMotionDelta in a script (character controller) |
+| `rootMotionDelta` | vec3 | World movement of the last frame (read-only) |
 
 ### ChainIK3D
 
@@ -1453,13 +1457,14 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-264 fonctions.
+270 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
 - **`agr.base64`** : `decode`, `encode`
 - **`agr.camera`** : `ray`, `screenToWorld`, `worldToScreen`
 - `agr.clone`
+- **`agr.crypto`** : `decrypt`, `deriveKey`, `encrypt`, `hmac`, `randomBytes`
 - **`agr.device`** : `canVibrate`, `isMobile`, `platform`, `safeArea`, `vibrate`
 - `agr.error`
 - **`agr.events`** : `emit`, `off`, `on`
@@ -1472,6 +1477,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.http`** : `cancel`, `get`, `pending`, `post`, `progress`, `request`
 - **`agr.input`** : `accelerometer`, `axis`, `down`, `drag`, `gamepadAxis`, `gamepadCount`, `gamepadDown`, `gamepadPressed`, `gestures`, `gyroscope`, `keyDown`, `keyPressed`, `keyReleased`, `mouseDown`, `mousePosition`, `mousePressed`, `pinch`, `pressed`, `released`, `tapped`, `touch`, `touchCount`, `value`
 - `agr.instantiate`
+- `agr.isServer`
 - `agr.isTweening`
 - **`agr.json`** : `decode`, `encode`
 - `agr.loadPack`

@@ -1062,3 +1062,55 @@ TEST_CASE("imported clips become editable curves: faithful, unwrapped rotations,
     CHECK(back.value().tracks.size() == e.tracks.size());
 }
 }  // TEST_SUITE
+
+TEST_SUITE("animation") {
+TEST_CASE("root motion: the root bone's walk moves the character (loops, rotation, vertical kept, delta only)") {
+    AnimFixture f;
+    AnimationClip walk;
+    walk.duration = 1.0f;
+    walk.loop = true;
+    auto& x = walk.track("Hips", "Transform", "position", 0).curve;
+    x.setKey(0.0f, 0.0f);
+    x.setKey(1.0f, 2.0f);  // 2 m per cycle
+    auto& y = walk.track("Hips", "Transform", "position", 1).curve;
+    y.setKey(0.0f, 1.0f);
+    y.setKey(0.5f, 1.2f);  // bobbing
+    y.setKey(1.0f, 1.0f);
+    f.save("assets://walk.agranim", walk);
+    const auto hero = f.scene.createEntity("Hero");
+    const auto hips = f.scene.createEntity("Hips", hero);
+    auto& a = f.scene.registry().emplace<AnimatorComponent>(hero);
+    a.clip = "assets://walk.agranim";
+    a.rootMotion = "Hips";
+    f.scene.updateTransforms();
+    for (int i = 0; i < 120; ++i) {  // 2 s in 1/60 steps: two cycles, across the loop
+        f.step(1.0f / 60.0f);
+        f.scene.updateTransforms();
+    }
+    CHECK(f.x(hero) == doctest::Approx(4.0f).epsilon(0.02));
+    CHECK(f.x(hips) == doctest::Approx(0.0f));  // the bone stays in place horizontally
+    const float hipsY = f.scene.registry().get<TransformComponent>(hips).position.y;
+    CHECK(hipsY >= 0.99f);
+    CHECK(f.scene.registry().get<TransformComponent>(hero).position.y == doctest::Approx(0.0f));  // vertical stays on the bone
+    // Turned 90 degrees: the walk goes along the character's own forward (+x local = -z world).
+    auto& t = f.scene.registry().get<TransformComponent>(hero);
+    t.position = {0, 0, 0};
+    t.rotation = math::Quat::fromAxisAngle({0, 1, 0}, math::radians(90.0f));
+    f.scene.updateTransforms();
+    for (int i = 0; i < 30; ++i) {
+        f.step(1.0f / 60.0f);
+        f.scene.updateTransforms();
+    }
+    CHECK(f.scene.registry().get<TransformComponent>(hero).position.z == doctest::Approx(-1.0f).epsilon(0.05));
+    CHECK(std::abs(f.x(hero)) < 0.01f);
+    // Delta only: the entity stays, scripts read rootMotionDelta.
+    f.scene.registry().get<AnimatorComponent>(hero).applyRootMotion = false;
+    const math::Vec3 before = f.scene.registry().get<TransformComponent>(hero).position;
+    f.step(0.1f);
+    CHECK(f.scene.registry().get<TransformComponent>(hero).position.z == doctest::Approx(before.z));
+    const math::Vec3 d = f.scene.registry().get<AnimatorComponent>(hero).rootMotionDelta;
+    CHECK(d.z < -0.1f);  // forward (smooth curve: faster mid-cycle than the 2 m/s average)
+    CHECK(d.z > -0.4f);
+    CHECK(std::abs(d.x) < 0.01f);
+}
+}

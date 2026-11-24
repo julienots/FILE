@@ -19,6 +19,14 @@ struct AnimatorComponent {
     std::string clip;
     float speed = 1.0f;
     bool playing = true;
+    /// Root motion: path of the bone whose movement in the clips moves the character ("" = off,
+    /// "Armature/Hips"). Its horizontal translation is taken out of the pose and added to this
+    /// entity (or only reported in rootMotionDelta), so a walk or a roll moves the character as
+    /// far as the animation does — no sliding feet.
+    std::string rootMotion;
+    bool rootMotionY = false;       ///< Also the vertical movement (jumps, climbs); off: the bone keeps it.
+    bool applyRootMotion = true;    ///< Moves the Transform; off: scripts use rootMotionDelta (CharacterController).
+    math::Vec3 rootMotionDelta{0.0f};  ///< World movement of the last update (read-only).
 };
 void registerAnimationComponents();
 

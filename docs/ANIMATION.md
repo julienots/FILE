@@ -249,7 +249,23 @@ manquantes) ; Suppr supprime la sélection.
 1 000 Animators (dont 500 machines à états), 3 courbes chacun : ~0,18 ms par image sur la machine de
 test ([BENCHMARKS.md](BENCHMARKS.md)).
 
+## Root motion (déplacement par l'animation)
+
+`Animator.rootMotion` = chemin de l'os racine (`"Armature/Hips"`, comme `root_motion_track` de Godot) :
+le déplacement horizontal de cet os dans les clips **déplace le personnage** au lieu de faire glisser le
+squelette — une marche, une roulade, une attaque avec pas en avant avancent exactement d'autant, les
+pieds ne patinent plus. L'os reste à sa place de départ (le balancement vertical est gardé, sauf avec
+`rootMotionY` pour les sauts et escalades). Le mouvement suit la rotation de l'entité, les boucles
+(cycles comptés sans saut au retour du début) et les fondus entre états (mélange pondéré). Avec
+`applyRootMotion` décoché, le `Transform` ne bouge pas et `rootMotionDelta` (monde, dernière image) se lit
+dans un script pour un `CharacterController3D` : `local d = e:get("Animator", "rootMotionDelta")`.
+Sources : pistes de translation des modèles importés (`.glb#Marche`) et courbes `Transform.position`
+des clips `.agranim`. Test : 2 cycles de 2 m → 4 m parcourus, os immobile, entité tournée de 90° qui
+avance selon son avant, mode « delta seulement ».
+
 ## Limites actuelles
+
+- Root motion : translation seulement (pas la rotation de l'os racine) ; états de mélange (blend) : non pris en compte (états simples et fondus seulement).
 
 - IK : limites par articulation (`jointLimits`, en degrés) : `"30"` = cône rond, `"90x15"` = cône
   **elliptique** (90° vers l'avant — le côté du pôle, sinon le haut — et 15° sur le côté : un genou, une
