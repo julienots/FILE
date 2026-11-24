@@ -302,7 +302,7 @@ function distanceField(T, cx, cz, half, cell) {
 }
 
 export function buildWorld(def, renderer, q) {
-  let ground = null, lakeDepth = () => 0, lakeList = []; const solids = [];   // monde ouvert : hauteur du sol (x, z, distance à la route) et obstacles fixes [x, z, rayon]
+  let ground = null, lakeDepth = () => 0, lakeList = []; const solids = []; const setGround = (f) => { ground = f; };   // monde ouvert : hauteur du sol (x, z, distance à la route) et obstacles fixes [x, z, rayon]
   seed = 1337 + def.id.length * 7919 + def.pts.length * 104729;
   const th = def.theme, city = th.env !== 'nature';
   const T = makeTrack(def), HALF = T.half;
@@ -567,13 +567,13 @@ export function buildWorld(def, renderer, q) {
 
     // --- relief : plat près de la piste, vallonné au-delà ---
     let distTrack = (x, z) => { let b = 1e18; for (let i = 0; i < T.N; i += 4) { const dx = x - T.px[i], dz = z - T.pz[i], d = dx * dx + dz * dz; if (d < b) b = d; } return Math.sqrt(b); };
-    if (def.ouvert) distTrack = distanceField(T, cx, cz, R + 1100, 8);   // monde ouvert : carte des distances à la route (rapide et identique pour le décor et la voiture)
+    if (def.ouvert) distTrack = distanceField(T, cx, cz, R + 1100, 10);   // monde ouvert : carte des distances à la route (rapide et identique pour le décor et la voiture)
     const amp = th.relief ?? 34;
     const hills = (x, z) => Math.sin(x * 0.0061 + 1.3) * Math.cos(z * 0.0053 + 0.4) * 0.5 + Math.sin(x * 0.013 + z * 0.011) * 0.28 + Math.sin(x * 0.031 - z * 0.027 + 2.0) * 0.1 + 0.55;
     const mer = th.mer;
     // monde ouvert : lacs creusés dans les prés (fond en cuvette, berges en pente douce) et petites bosses du terrain
     const lakes = [];
-    if (def.ouvert) for (const [f, sd, r] of [[0.16, 1, 85], [0.47, -1, 110], [0.79, 1, 75]]) {
+    if (def.ouvert) for (const [f, sd, r] of [[0.08, -1, 95], [0.24, 1, 85], [0.43, -1, 130], [0.62, 1, 90], [0.82, -1, 110]]) {
       const i = Math.floor(T.N * f), o = sd * (r + 120), x = T.px[i] - T.tz[i] * o, z = T.pz[i] + T.tx[i] * o, t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240));
       lakes.push({ x, z, r, lvl: hills(x, z) * amp * t * t * (3 - 2 * t) - 0.6 });
     }
@@ -593,9 +593,17 @@ export function buildWorld(def, renderer, q) {
     lakeDepth = (x, z) => { for (const L of lakes) { const dx = x - L.x, dz = z - L.z; if (dx * dx + dz * dz < L.r * L.r * 1.2) return Math.max(0, L.lvl - heightAt(x, z)); } return 0; };
     lakeList = lakes;
     {
-      const size = 2 * (R + 1050), seg = def.ouvert ? Math.min(Math.round(size / 13), q.terrain >= 170 ? 560 : q.terrain >= 140 ? 460 : 300) : q.terrain;   // monde ouvert : maillage fin (berges, bosses)
+      const size = 2 * (R + 1050), seg = def.ouvert ? Math.min(Math.round(size / 12), q.terrain >= 170 ? 680 : q.terrain >= 140 ? 520 : 340) : q.terrain;   // monde ouvert : maillage fin (berges, bosses)
       const g = new THREE.PlaneGeometry(size, size, seg, seg); const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) p.setZ(i, heightAt(cx + p.getX(i), cz - p.getY(i)));
+      if (def.ouvert) {
+        // la voiture et l'herbe lisent la hauteur des triangles réellement dessinés (et non la formule du relief) : plus jamais de roue
+        // dans le sol dans un creux, ni de voiture qui flotte sur une bosse
+        const cell = size / seg, n1 = seg + 1, H = new Float32Array(n1 * n1); for (let i = 0; i < H.length; i++) H[i] = p.getZ(i) - 0.1;
+        setGround((x, z) => { const fx = Math.min(seg - 1e-3, Math.max(0, (x - cx + size / 2) / cell)), fy = Math.min(seg - 1e-3, Math.max(0, (z - cz + size / 2) / cell));
+          const ix = Math.floor(fx), iy = Math.floor(fy), u = fx - ix, v = fy - iy, a = iy * n1 + ix, b = a + n1, d = a + 1, c2 = b + 1;
+          return u + v < 1 ? H[a] + (H[d] - H[a]) * u + (H[b] - H[a]) * v : H[c2] + (H[b] - H[c2]) * (1 - u) + (H[d] - H[c2]) * (1 - v); });
+      }
       g.computeVertexNormals();
       const mat = new THREE.ShaderMaterial({
         uniforms: Object.assign(gUni(), { kind: { value: sol.kind }, eau: { value: th.mer ? th.mer.niveau + 0.12 : -1e4 } }), polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8,
@@ -913,8 +921,8 @@ export function buildWorld(def, renderer, q) {
         placed.push([x, z, Math.hypot(w, d) / 2 + 2]);
       };
       // fermes : un corps de logis, une grange, un hangar, des bottes de foin dans le pré voisin
-      for (const f of [0.06, 0.22, 0.36, 0.55, 0.68, 0.88]) {
-        const sp = spotNear(f, 45, 150, 30); if (!sp) continue; const [x, z, a] = sp, ca = Math.cos(a), sa = Math.sin(a);
+      for (const f of [0.03, 0.12, 0.2, 0.3, 0.39, 0.5, 0.58, 0.67, 0.76, 0.86, 0.94]) {
+        const sp = spotNear(f, 45, 280, 30); if (!sp) continue; const [x, z, a] = sp, ca = Math.cos(a), sa = Math.sin(a);
         house(x, z, a, 11 + rnd2() * 4, 7.5, 5.6, false);
         house(x + ca * 18 + sa * 6, z - sa * 18 + ca * 6, a + Math.PI / 2, 16, 10, 6.5, true);
         if (rnd2() < 0.7) house(x - ca * 15 + sa * 10, z + sa * 15 + ca * 10, a, 8, 6.5, 3.6, false);
@@ -934,8 +942,8 @@ export function buildWorld(def, renderer, q) {
       const bladeGeo = (() => { const gs = []; for (let k = 0; k < 3; k++) { const b2 = new THREE.BoxGeometry(1.6, 26, 0.35); b2.translate(0.3, 13.5, 0); const p2 = b2.attributes.position; for (let i = 0; i < p2.count; i++) { if (p2.getY(i) > 13.5) p2.setX(i, p2.getX(i) * 0.35); } b2.rotateZ(k * Math.PI * 2 / 3); gs.push(b2); }
         gs.push(new THREE.SphereGeometry(1.4, 12, 8).scale(1, 1, 1.6)); return mergeGeometries(gs.map(g => g.toNonIndexed())); })();
       disposables.push(bladeGeo, white2);
-      for (const f of [0.1, 0.26, 0.42, 0.6, 0.74, 0.93]) {
-        const sp = spotNear(f, 300, 430, 12); if (!sp) continue; const [x, z] = sp, y = heightAt(x, z) - 1;
+      for (const f of [0.05, 0.15, 0.26, 0.35, 0.47, 0.56, 0.66, 0.74, 0.85, 0.95]) {
+        const sp = spotNear(f, 380, 760, 12); if (!sp) continue; const [x, z] = sp, y = heightAt(x, z) - 1;
         towers.push(new THREE.CylinderGeometry(1.0, 1.9, 72, 14).translate(x, y + 36, z), new THREE.BoxGeometry(2.6, 3, 7).translate(x, y + 73, z + 0.5));
         const rot = new THREE.Mesh(bladeGeo, white2); rot.position.set(x, y + 73, z - 3.4); rot.rotation.z = rnd2() * 6; group.add(rot); rotors.push([rot, 0.55 + rnd2() * 0.3]);
         solids.push([x, z, 2.2]); placed.push([x, z, 14]);

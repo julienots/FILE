@@ -2,6 +2,11 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.6.1
+
+- **La voiture ne rentre plus dans le terrain** : elle lit maintenant la hauteur des triangles réellement dessinés (écart mesuré : 0,1 mm) au lieu de la formule du relief, qui différait du terrain affiché de plusieurs dizaines de centimètres dans les creux et sur les bosses. L'herbe et la caméra utilisent la même hauteur.
+- **Vallée Ouverte agrandie** : 11 km sur 8 (au lieu de 7 sur 5), 21 km de route, on roule jusqu'à 820 m de part et d'autre ; 11 fermes, 10 éoliennes, 5 lacs, plus d'arbres et de rochers ; maillage du terrain encore plus fin.
+
 ## Nouveautés de la 2.6
 
 - **Fermes et hameaux** dans la Vallée Ouverte : maisons en pierre claire avec toit de tuiles à deux pans, fenêtres, volets colorés et cheminée, granges rouges au toit d'ardoise avec grande porte, petits bâtiments annexes, bottes de foin rondes dans les prés. Tout est solide : on rebondit contre les murs et les bottes.
@@ -24,7 +29,7 @@ Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tac
 
 ## Nouveautés de la 2.4
 
-- **Monde ouvert : Vallée Ouverte** (Balade libre) : une vallée de 7 km sur 5 traversée par 14 km de route de campagne avec circulation. On peut quitter la route et rouler partout jusqu'à 450 m de part et d'autre : prés, champs, collines (la voiture suit le relief, penche dans les pentes, ralentit en montée et accélère en descente), forêts de feuillus et de sapins, rochers. Les 1 500 arbres et rochers sont de vrais obstacles : on rebondit dessus. Pas de clôture.
+- **Monde ouvert : Vallée Ouverte** (Balade libre) : une vallée de 11 km sur 8 (depuis la 2.6.1) traversée par 21 km de route de campagne avec circulation. On peut quitter la route et rouler partout jusqu'à 450 m de part et d'autre : prés, champs, collines (la voiture suit le relief, penche dans les pentes, ralentit en montée et accélère en descente), forêts de feuillus et de sapins, rochers. Les 1 500 arbres et rochers sont de vrais obstacles : on rebondit dessus. Pas de clôture.
 - **Quatre nouvelles ambiances**, pour tous les circuits et les balades :
   - **Aube** : soleil rasant rose-orangé, brume dorée, longues ombres, rayons de soleil.
   - **Brouillard** : on voit à peine à 100 m, lumière blanche diffuse, chaussée humide, montagnes noyées dans la brume.

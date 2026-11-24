@@ -153,12 +153,12 @@ export const ROUTE_LIGNE = { id: 'ligne', nom: 'Ligne Droite', desc: 'Balade san
   pts: [[0,0],[0,-1500],[0,-3000],[120,-3220],[330,-3290],[540,-3220],[660,-3000],[660,-1500],[660,0],[540,220],[330,290],[120,220]],
   theme: Object.assign({}, NATURE.prairie, { flore: [['feuillu', 700, 22, 300, 0.8, 2.0], ['rocher', 60, 18, 220, 0.4, 1.0]] }) };
 
-// Monde ouvert : une grande vallée de 7 km sur 5 traversée par une route de campagne. On peut quitter la route
-// et rouler partout (prés, collines, forêts) jusqu'à 450 m de part et d'autre ; arbres et rochers sont des obstacles.
-export const ROUTE_MONDE = { id: 'monde', nom: 'Vallée Ouverte', desc: 'Monde ouvert', echelle: 1, half: 5.5, limit: 450, libre: true, ouvert: true,
+// Monde ouvert : une grande vallée de 11 km sur 8 traversée par 21 km de route de campagne. On peut quitter la route
+// et rouler partout (prés, collines, forêts) jusqu'à 820 m de part et d'autre ; arbres et rochers sont des obstacles.
+export const ROUTE_MONDE = { id: 'monde', nom: 'Vallée Ouverte', desc: 'Monde ouvert', echelle: 1.5, half: 5.5, limit: 820, libre: true, ouvert: true,
   pts: [[0,0],[0,-700],[250,-1500],[900,-2100],[1800,-2300],[2700,-2000],[3300,-1300],[3500,-400],[3200,500],[3600,1300],[3300,2200],[2400,2600],[1400,2400],[700,1800],[300,1100]],
   theme: Object.assign({}, NATURE.prairie, { relief: 30, dens: 0.0011,
-    flore: [['feuillu', 820, 14, 420, 0.8, 2.0], ['sapin', 380, 30, 440, 0.8, 1.7], ['rocher', 110, 20, 440, 0.5, 1.6]] }) };
+    flore: [['feuillu', 1150, 14, 800, 0.8, 2.0], ['sapin', 520, 30, 800, 0.8, 1.7], ['rocher', 170, 20, 800, 0.5, 1.6]] }) };
 
 // Ambiance choisie au départ : chaque circuit peut se courir de jour, de nuit ou sous un orage violent.
 // On part du décor d'origine et on change le ciel, la lumière, le brouillard et la météo.

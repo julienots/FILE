@@ -1230,7 +1230,7 @@ function buildSetup(type) {
   chips($('lignes'), [[false, 'Masquée'], [true, 'Affichée']], () => opts.ligne, (v) => { opts.ligne = v; store.set('opts', opts); });
   chips($('obst'), [[0, 'Aucun'], [1, 'Parfois'], [2, 'Souvent'], [3, 'Chaos']], () => setup.obst, (v) => { setup.obst = v; });
   chips($('bots'), [[1, '1'], [3, '3'], [5, '5'], [7, '7'], [11, '11'], [15, '15'], [23, '23'], [31, '31']], () => setup.bots, (v) => { setup.bots = v; });
-  chips($('routes'), [['monde', 'Monde ouvert · vallée de 7 km'], ['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
+  chips($('routes'), [['monde', 'Monde ouvert · vallée de 11 km'], ['libre', 'Route des Prés · circulation'], ['ligne', 'Ligne Droite · sans circulation']], () => setup.route, (v) => { setup.route = v; });
   chips($('teams'), [[1, '1 contre 1'], [2, '2 contre 2'], [3, '3 contre 3']], () => setup.team, (v) => { setup.team = v; });
   chips($('durs'), [[120, '2 min'], [180, '3 min'], [300, '5 min']], () => setup.dur, (v) => { setup.dur = v; });
 }
