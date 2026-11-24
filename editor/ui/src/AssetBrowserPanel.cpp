@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "agr/scene/Prefab.hpp"
 #include "agr/editor/AssetRefactor.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/render/SpriteSheet.hpp"
@@ -395,6 +396,11 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     s.openSheetRequest = uri;  // sprite sheet editor
                 const bool isGraph = !folder && fs::path(name).extension() == ShaderGraph::kExtension;
                 if (isGraph && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openShaderGraphRequest = uri;  // visual shader editor
+                const bool isPrefab = !folder && fs::path(name).extension() == prefab::kExtension;
+                if (isPrefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    if (Status st = s.ctx.openPrefab(uri); st) s.notify("Édition du prefab " + name + " : Ctrl+S enregistre, « Revenir à la scène » pour finir");
+                    else s.notify("Échec : " + st.error().message);
+                }
                 const bool isLogic = !folder && fs::path(name).extension() == ".agrlogic";
                 if (isLogic && ImGui::IsItemClicked(ImGuiMouseButton_Left)) s.openLogicRequest = uri;  // visual logic editor
                 if (!folder && ImGui::BeginDragDropSource()) {
@@ -408,6 +414,7 @@ void AssetBrowserPanel::draw(EditorShared& s) {
                     else if (isModelFile(name)) ImGui::SetTooltip("%s\nModèle 3D : glisser dans la scène pour l'ajouter", uri.c_str());
                     else if (fs::path(name).extension() == ".lua") ImGui::SetTooltip("%s\nScript : glisser sur une entité de la vue pour l'attacher", uri.c_str());
                     else if (isMaterial) ImGui::SetTooltip("%s\nMatériau : cliquer pour le modifier, glisser sur un MeshRenderer", uri.c_str());
+                    else if (isPrefab) ImGui::SetTooltip("%s\nPrefab : glisser dans la scène pour l'ajouter, double-cliquer pour l'éditer seul", uri.c_str());
                     else if (isLogic) ImGui::SetTooltip("%s\nLogique visuelle : cliquer pour l'éditer, glisser sur une entité pour l'attacher", uri.c_str());
                     else if (isShader) ImGui::SetTooltip("%s\nShader : cliquer pour l'éditer, glisser sur le champ Shader d'un matériau", uri.c_str());
                     else ImGui::SetTooltip("%s", uri.c_str());

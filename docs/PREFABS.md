@@ -68,6 +68,14 @@ end
 Les scripts des entités de l'instance démarrent à l'image suivante, comme pour toute entité créée en
 jeu.
 
+## Éditer un prefab seul
+
+Double-clic sur un `.agrprefab` dans les assets : la vue ne montre plus que ses entités (bandeau violet en
+bas). **Ctrl+S** enregistre le prefab (ses identifiants d'entités sont gardés : chaque instance garde ses
+propres modifications) ; **Revenir à la scène** retrouve la scène telle qu'elle était, modifications non
+enregistrées comprises, avec ses instances à jour. Testé : deux instances reçoivent l'édition, la
+modification propre à l'une d'elles et le travail non enregistré de la scène sont conservés.
+
 ## Variantes
 
 Clic droit sur une instance › **Créer une variante** (comme les scènes héritées de Godot) : l'instance et
@@ -78,7 +86,8 @@ d'armure). Une variante peut servir de base à une autre. Par code : `prefab::va
 
 ## Limites actuelles
 
-- Pas de mode d'édition isolé d'un prefab : on le modifie au travers d'une instance, puis *Appliquer*.
+- Édition isolée : la scène à laquelle on revient est gardée en mémoire (pas sur le disque) ; charger une
+  autre scène pendant l'édition d'un prefab abandonne ce retour.
 - Variantes : une variante ne peut pas retirer une entité de sa base (elle peut en ajouter, changer et
   retirer des composants) ; *Appliquer* sur une instance de variante écrit dans la variante, pas dans la base.
 - *Appliquer* et *Rétablir* recréent les entités de l'instance (les références depuis l'extérieur de

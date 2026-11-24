@@ -46,6 +46,7 @@ public:
     void setFileWriter(std::function<void(const std::string& uri, const std::string& content)> writer) { m_writeFile = std::move(writer); }
 
     void markSaved() { m_savedPos = static_cast<i64>(m_pos); }
+    void markUnsaved() { m_savedPos = -1; }  ///< Content differs from the file (restored unsaved work).
     bool dirty() const { return m_savedPos != static_cast<i64>(m_pos); }
 
 private:

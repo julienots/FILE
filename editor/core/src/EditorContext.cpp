@@ -109,6 +109,8 @@ Status EditorContext::openProject(Project project) {
 // ------------------------------------------------------------------- scenes
 Status EditorContext::loadScene(const std::string& path) {
     if (m_playState != PlayState::Edit) stop();
+    m_prefabUri.clear();  // another scene: prefab editing ends (its saved state stays on disk)
+    m_prefabReturnScene.clear();
     if (Status s = m_engine.loadScene("project://" + path); !s) return s;
     m_scenePath = path;
     m_selection.clear();
@@ -117,7 +119,60 @@ Status EditorContext::loadScene(const std::string& path) {
     return {};
 }
 
+Status EditorContext::openPrefab(const std::string& uri) {
+    if (m_playState != PlayState::Edit) stop();
+    if (editingPrefab()) {
+        if (uri == m_prefabUri) return {};
+        if (Status s = closePrefab(); !s) return s;
+    }
+    if (!resolvePrefab(uri)) return makeError(Error::Code::NotFound, "prefab '" + uri + "' is missing or invalid");
+    std::string snapshot = SceneSerializer::toString(scene());
+    auto s = std::make_unique<Scene>(std::filesystem::path(uri).stem().string());
+    auto root = prefab::instantiate(*s, uri);
+    if (!root) return root.error();
+    m_prefabReturnScene = std::move(snapshot);
+    m_prefabReturnPath = m_scenePath;
+    m_prefabReturnDirty = dirty();
+    m_engine.setScene(std::move(s));
+    m_prefabUri = uri;
+    m_selection.set(scene().uuidOf(root.value()));
+    scene().updateTransforms();
+    m_undo.reset(scene(), {});
+    AGR_LOG_INFO("Editor", "editing prefab {}", uri);
+    return {};
+}
+
+Status EditorContext::closePrefab() {
+    if (!editingPrefab()) return {};
+    if (m_playState != PlayState::Edit) stop();
+    auto s = std::make_unique<Scene>("Untitled");
+    if (Status st = SceneSerializer::fromString(*s, m_prefabReturnScene); !st) return st;  // instances expand from the saved prefab
+    m_engine.setScene(std::move(s));
+    m_scenePath = m_prefabReturnPath;
+    m_prefabUri.clear();
+    m_prefabReturnScene.clear();
+    m_selection.clear();
+    scene().updateTransforms();
+    m_undo.reset(scene(), {});
+    if (m_prefabReturnDirty) m_undo.markUnsaved();  // still to be saved
+    return {};
+}
+
 Status EditorContext::saveScene() {
+    if (editingPrefab()) {
+        if (m_playState != PlayState::Edit) return makeError(Error::Code::Unsupported, "stop the game before saving");
+        ecs::Entity root{};
+        for (ecs::Entity e : scene().roots())
+            if (scene().registry().has<PrefabInstanceComponent>(e)) root = e;
+        if (root.isNull()) return makeError(Error::Code::InvalidArgument, "the prefab's root entity was removed");
+        auto content = prefab::applyContent(scene(), root);
+        if (!content) return content.error();
+        auto saved = m_engine.prefabs().save(m_prefabUri, content.value());
+        if (!saved) return saved.error();
+        m_undo.markSaved();
+        AGR_LOG_INFO("Editor", "prefab saved: {}", m_prefabUri);
+        return {};
+    }
     if (m_scenePath.empty()) return makeError(Error::Code::InvalidArgument, "the scene has never been saved: use Save As");
     return saveSceneAs(m_scenePath);
 }
@@ -136,6 +191,8 @@ Status EditorContext::saveSceneAs(const std::string& path) {
 
 void EditorContext::newScene(SceneTemplate tmpl) {
     if (m_playState != PlayState::Edit) stop();
+    m_prefabUri.clear();
+    m_prefabReturnScene.clear();
     auto s = std::make_unique<Scene>("Untitled");
     buildSceneTemplate(*s, tmpl);
     m_engine.setScene(std::move(s));

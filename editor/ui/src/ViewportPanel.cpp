@@ -1218,6 +1218,23 @@ void ViewportPanel::draw(EditorShared& s, const FrameTime& time) {
         if (ImGui::IsKeyPressed(ImGuiKey_F, false)) s.ctx.focusSelection();
     }
 
+    // Prefab edited on its own: a banner at the bottom, with the way back.
+    if (s.ctx.editingPrefab()) {
+        ImDrawList* bl = ImGui::GetWindowDrawList();
+        const ImVec2 b0{origin.x, origin.y + size.y - 34.0f};
+        bl->AddRectFilled(b0, {b0.x + size.x, b0.y + 34.0f}, IM_COL32(120, 70, 160, 220));
+        bl->AddText({b0.x + 10, b0.y + 9}, IM_COL32(255, 255, 255, 255), ("Prefab : " + s.ctx.editedPrefab() + (s.ctx.dirty() ? " *" : "")).c_str());
+        ImGui::SetCursorScreenPos({b0.x + size.x - 330.0f, b0.y + 5});
+        if (ImGui::Button("Enregistrer (Ctrl+S)")) {
+            if (Status st = s.ctx.saveScene(); st) s.notify("Prefab enregistré");
+            else s.notify("Échec : " + st.error().message);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Revenir à la scène")) {
+            if (Status st = s.ctx.closePrefab(); !st) s.notify("Échec : " + st.error().message);
+        }
+    }
+
     // Toolbar overlay.
     ImGui::SetCursorScreenPos({panelOrigin.x + 8, panelOrigin.y + 8});
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {7, 3});

@@ -2237,3 +2237,52 @@ TEST_CASE("editor prefab variant: an instance becomes a variant, new instances k
     f.scene().registry().view<MeshRendererComponent>().each([&](ecs::Entity, MeshRendererComponent& m) { spheres += m.mesh == PrimitiveMesh::Sphere; });
     CHECK(spheres == 2);
 }
+
+TEST_CASE("editor: a prefab edited on its own updates every instance, keeps their own changes and the scene's unsaved state") {
+    EditorFixture f(ProjectMode::Mode3D);
+    f.ctx->newScene(SceneTemplate::Empty3D);
+    Scene& s0 = f.scene();
+    const auto tower = s0.createEntity("Tower");
+    s0.registry().emplace<MeshRendererComponent>(tower).mesh = PrimitiveMesh::Cube;
+    s0.createEntity("Flag", tower);
+    f.ctx->commit("Setup");
+    auto uri = f.ctx->createPrefab(tower);
+    REQUIRE(uri);
+    auto second = f.ctx->instantiatePrefab(uri.value(), {6, 0, 0});
+    REQUIRE(second);
+    // The second tower has its own change, and the scene has unsaved work.
+    f.scene().registry().get<TransformComponent>(f.scene().children(second.value())[0]).position.y = 7.0f;
+    f.scene().createEntity("Unsaved rock");
+    f.ctx->commit("Edits");
+    REQUIRE(f.ctx->saveSceneAs("scenes/towers.agrscene"));
+    f.scene().createEntity("Another unsaved rock");
+    f.ctx->commit("More");
+    CHECK(f.ctx->dirty());
+
+    REQUIRE(f.ctx->openPrefab(uri.value()));
+    CHECK(f.ctx->editingPrefab());
+    Scene& p = f.scene();
+    CHECK(p.findByName("Unsaved rock").isNull());  // only the prefab's entities
+    const auto root = p.findByName("Tower");
+    REQUIRE_FALSE(root.isNull());
+    p.registry().get<MeshRendererComponent>(root).mesh = PrimitiveMesh::Sphere;  // edit the prefab
+    p.createEntity("Window", root);
+    f.ctx->commit("Prefab edit");
+    REQUIRE(f.ctx->saveScene());  // writes the prefab
+    REQUIRE(f.ctx->closePrefab());
+    CHECK_FALSE(f.ctx->editingPrefab());
+    CHECK(f.ctx->scenePath() == "scenes/towers.agrscene");
+    CHECK(f.ctx->dirty());  // still unsaved
+    Scene& s = f.scene();
+    CHECK_FALSE(s.findByName("Another unsaved rock").isNull());
+    usize spheres = 0, windows = 0;
+    s.registry().view<MeshRendererComponent>().each([&](ecs::Entity, MeshRendererComponent& m) { spheres += m.mesh == PrimitiveMesh::Sphere; });
+    s.registry().view<NameComponent>().each([&](ecs::Entity, NameComponent& n) { windows += n.name == "Window"; });
+    CHECK(spheres == 2);  // both instances
+    CHECK(windows == 2);
+    bool kept = false;
+    s.registry().view<NameComponent>().each([&](ecs::Entity e, NameComponent& n) {
+        if (n.name == "Flag" && s.registry().get<TransformComponent>(e).position.y == doctest::Approx(7.0f)) kept = true;
+    });
+    CHECK(kept);  // the second tower's own change survived
+}

@@ -57,6 +57,16 @@ public:
     void newScene(SceneTemplate tmpl);
     bool dirty() const { return m_undo.dirty(); }
 
+    // ----------------------------------------------------- prefab editing
+    /// Edits a prefab on its own (like opening a scene in Godot): the scene is replaced by the
+    /// prefab's entities; saveScene() writes the prefab back (its entity ids kept, so instances
+    /// keep their own changes); closePrefab() returns to the scene as it was (unsaved changes
+    /// included), its instances updated.
+    Status openPrefab(const std::string& uri);
+    Status closePrefab();
+    bool editingPrefab() const { return !m_prefabUri.empty(); }
+    const std::string& editedPrefab() const { return m_prefabUri; }
+
     // ------------------------------------------------------------- editing
     /// Records the current scene in the undo history. Call after each user action.
     void commit(const std::string& label);
@@ -128,6 +138,10 @@ private:
     f64 m_prefabPollTimer = 0.0;
     std::optional<Project> m_project;
     std::string m_scenePath;
+    std::string m_prefabUri;           // prefab edited on its own ("" = a scene)
+    std::string m_prefabReturnScene;   // the scene to go back to (serialized, unsaved changes kept)
+    std::string m_prefabReturnPath;
+    bool m_prefabReturnDirty = false;
     Selection m_selection;
     UndoStack m_undo;
     EditorCamera m_camera;
