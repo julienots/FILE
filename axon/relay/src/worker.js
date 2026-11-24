@@ -45,6 +45,19 @@ const INSTRUCTIONS = [
   "Règles : jamais de paiement, achat, envoi d'argent, suppression de données ni modification de compte/mot de passe sans confirmation explicite. Écran de connexion : demandez-lui de se connecter lui-même. Si aucun appareil n'est connecté, dites-lui d'ouvrir AXON.",
 ].join("\n");
 
+/* Écran de contrôle : fichiers de public/ intégrés au Worker (src/assets.gen.js). */
+import ASSETS from "./assets.gen.js";
+const decoded = new Map();
+function staticFile(path, method) {
+  if (path === "/") path = "/index.html";
+  const a = ASSETS[path];
+  if (!a) return null;
+  if (!decoded.has(path)) decoded.set(path, Uint8Array.from(atob(a.b64), (c) => c.charCodeAt(0)));
+  const body = decoded.get(path);
+  const cache = /\.(png|svg)$/.test(path) ? "public, max-age=86400" : "no-cache";
+  return new Response(method === "HEAD" ? null : body, { headers: { "Content-Type": a.type, "Cache-Control": cache, "Content-Length": String(body.length) } });
+}
+
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS" };
 const json = (o, status = 200, extra = {}) => new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json", ...cors, ...extra } });
 const validKey = (k) => typeof k === "string" && /^[A-Za-z0-9_-]{16,64}$/.test(k);
@@ -53,7 +66,8 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
-    if (url.pathname === "/" ) return new Response(`AXON Relay ${VERSION} — SuperEssence Studio`, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    if (url.pathname === "/version") return new Response(`AXON Relay ${VERSION} — SuperEssence Studio`, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    if (req.method === "GET" || req.method === "HEAD") { const r = staticFile(url.pathname, req.method); if (r) return r; }
     let key = null;
     const m = url.pathname.match(/^\/mcp\/([^/]+)\/?$/);
     if (m) key = m[1];

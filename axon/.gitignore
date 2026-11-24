@@ -7,3 +7,4 @@ android/.gradle/
 android/local.properties
 *.apk
 *.zip
+src/assets.gen.js

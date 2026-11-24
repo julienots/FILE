@@ -11,7 +11,7 @@ class_name = "AxonHub"
 tag = "v1"
 new_sqlite_classes = ["AxonHub"]
 
-[assets]
-directory = "./public"
-not_found_handling = "none"
-run_worker_first = ["/mcp/*", "/device", "/view"]
+# Les fichiers de public/ (écran de contrôle) sont intégrés au Worker par ce script.
+[build]
+command = "node scripts/embed-assets.mjs"
+watch_dir = "public"
