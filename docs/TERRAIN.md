@@ -57,9 +57,20 @@ l'éditeur. Test GPU sur les 3 API (transparence, mouvement, Fresnel).
 Limites : effet visuel seulement (pas de flottaison physique ni de collision), pas de réfraction ni
 d'écume au contact des rives (il faudrait la profondeur de la scène), pas de reflets des objets.
 
+## Trous et cartes de hauteurs
+
+- Pinceaux **Trou** et **Boucher** (inspecteur du terrain) : les cases découpées n'ont plus de maillage,
+  de collision (physique 3D) ni de navigation, et les rayons les traversent (grottes, tunnels, puits).
+  Stockées dans `holes` (indices des cases), sauvegardées avec la scène.
+- **Importer la carte de hauteurs** : PNG 16 bits en niveaux de gris (précision gardée), toute autre
+  image (luminance) ou fichier RAW `.r16` / `.raw` (16 bits petit-boutiste, carré : World Machine,
+  Gaea, Unity). La résolution du terrain devient celle de l'image (2 à 1025, rééchantillonnée), le noir
+  et le blanc donnent les hauteurs choisies. **Exporter (.r16)** écrit l'inverse (et affiche la plage).
+
 ## Limites actuelles
 
 - Un seul maillage par terrain, sans niveaux de détail (LOD) ni découpage en morceaux pour le culling :
   au-delà de 257 × 257 sommets, préférer plusieurs terrains côte à côte.
-- Pas de normal maps par couche, pas de trous, pas de végétation ni d'objets répartis automatiquement.
-- Pas d'import / export de carte de hauteurs en image (prévu).
+- Pas de normal maps par couche, pas de végétation ni d'objets répartis automatiquement.
+- Trous : par case de la grille (précision de l'espacement) ; `terrain::heightAt` (utilisé par certains scripts) ignore les trous.
+- Export de carte de hauteurs en RAW 16 bits seulement (pas en PNG 16 bits).

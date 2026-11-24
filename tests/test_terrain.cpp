@@ -2,6 +2,9 @@
 
 #include <cmath>
 
+#include <nlohmann/json.hpp>
+
+#include "agr/assets/Image.hpp"
 #include "agr/navigation/NavigationSystem.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/scene/Scene.hpp"
@@ -142,4 +145,99 @@ TEST_CASE("collision: a ball rolls down the hill; navigation goes around a ridge
     CHECK(maxX > 9.0f);  // around the end of the ridge
 }
 
+}
+
+TEST_SUITE("terrain") {
+TEST_CASE("holes: brush cuts cells out of the mesh, raycast and physics; fill restores; serialized") {
+    registerPhysics3DComponents();
+    Scene s;
+    const auto e = s.createEntity("Terrain");
+    auto& t = s.registry().emplace<TerrainComponent>(e);
+    t.size = 20.0f;
+    t.resolution = 21;
+    std::vector<Vec3> pos;
+    std::vector<u32> idx;
+    terrain::buildMesh(t, pos, idx);
+    const usize full = idx.size();
+    const u64 h0 = terrain::heightsHash(t);
+    terrain::BrushSettings hole;
+    hole.brush = terrain::Brush::Hole;
+    hole.radius = 2.0f;
+    REQUIRE(terrain::applyBrush(t, {0, 0}, hole));
+    CHECK_FALSE(terrain::applyBrush(t, {0, 0}, hole));  // already cut
+    CHECK(std::is_sorted(t.holes.begin(), t.holes.end()));
+    CHECK(terrain::isHole(t, 10, 10));
+    CHECK_FALSE(terrain::isHole(t, 0, 0));
+    CHECK(terrain::heightsHash(t) != h0);  // meshes are rebuilt
+    terrain::buildMesh(t, pos, idx);
+    CHECK(idx.size() == full - t.holes.size() * 6);
+    float d = 0.0f;
+    CHECK_FALSE(terrain::raycast(t, {{0.3f, 5, 0.3f}, {0, -1, 0}}, 100.0f, d));  // falls through
+    CHECK(terrain::raycast(t, {{6, 5, 6}, {0, -1, 0}}, 100.0f, d));
+
+    const auto ball = s.createEntity("Ball");
+    s.registry().get<TransformComponent>(ball).position = {0.3f, 2.0f, 0.3f};
+    s.registry().emplace<RigidBodyComponent>(ball);
+    auto& c = s.registry().emplace<ColliderComponent>(ball);
+    c.shape = ColliderShape3D::Sphere;
+    c.radius = 0.3f;
+    const auto ball2 = s.createEntity("Ball2");
+    s.registry().get<TransformComponent>(ball2).position = {6.0f, 2.0f, 6.0f};
+    s.registry().emplace<RigidBodyComponent>(ball2);
+    s.registry().emplace<ColliderComponent>(ball2).shape = ColliderShape3D::Sphere;
+    s.updateTransforms();
+    Physics3DWorld physics;
+    for (int i = 0; i < 90; ++i) physics.step(s, 1.0f / 60.0f);
+    CHECK(s.registry().get<TransformComponent>(ball).position.y < -2.0f);   // through the hole
+    CHECK(s.registry().get<TransformComponent>(ball2).position.y > 0.0f);   // stays on the ground
+
+    auto json = SceneSerializer::toJson(s);
+    CHECK(json.dump().find("\"holes\"") != std::string::npos);
+    hole.brush = terrain::Brush::Fill;
+    hole.radius = 50.0f;
+    REQUIRE(terrain::applyBrush(t, {0, 0}, hole));
+    CHECK(t.holes.empty());
+}
+
+TEST_CASE("heightmap: import resamples 16-bit values into the range, RAW export round trips") {
+    TerrainComponent t;
+    t.size = 10.0f;
+    std::vector<u16> v(3 * 3, 0);
+    v[4] = 65535;  // white center
+    REQUIRE(terrain::importHeightmap(t, v, 3, 3, -1.0f, 4.0f));
+    CHECK(t.resolution == 3);
+    CHECK(terrain::sample(t, 1, 1) == doctest::Approx(4.0f));
+    CHECK(terrain::sample(t, 0, 0) == doctest::Approx(-1.0f));
+    CHECK_FALSE(terrain::importHeightmap(t, v, 4, 4, 0, 1));
+    float lo = 0, hi = 0;
+    const auto raw = terrain::exportHeightmapRaw(t, lo, hi);
+    CHECK(raw.size() == 3 * 3 * 2);
+    CHECK(lo == doctest::Approx(-1.0f));
+    CHECK(hi == doctest::Approx(4.0f));
+    std::vector<u16> back(9);
+    for (usize i = 0; i < 9; ++i) back[i] = static_cast<u16>(raw[2 * i] | (raw[2 * i + 1] << 8));
+    TerrainComponent t2;
+    REQUIRE(terrain::importHeightmap(t2, back, 3, 3, lo, hi));
+    CHECK(t2.heights == t.heights);
+}
+}
+
+TEST_SUITE("terrain") {
+TEST_CASE("heightmap files: RAW .r16 and an 8-bit PNG (luminance)") {
+    std::vector<u8> raw = {0, 0, 0xff, 0xff, 0x00, 0x80, 0x34, 0x12};
+    auto r = decodeHeightmap(raw, "map.R16");
+    REQUIRE(r);
+    CHECK(r.value().width == 2);
+    CHECK(r.value().values[1] == 65535);
+    CHECK(r.value().values[3] == 0x1234);
+    raw.pop_back();
+    CHECK_FALSE(decodeHeightmap(raw, "map.raw"));
+    const std::vector<u8> rgba = {0, 0, 0, 255, 255, 255, 255, 255};
+    auto png = encodePng(2, 1, rgba);
+    REQUIRE(png);
+    auto g = decodeHeightmap(png.value(), "map.png");
+    REQUIRE(g);
+    CHECK(g.value().values[0] == 0);
+    CHECK(g.value().values[1] == 65535);
+}
 }

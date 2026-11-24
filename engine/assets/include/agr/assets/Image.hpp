@@ -37,6 +37,18 @@ Image downscaleHalf(const Image& src);
 /// Repeatedly halves until both dimensions are <= maxSize. Returns the number of halvings.
 u32 fitToMaxSize(Image& image, u32 maxSize);
 
+/// Grayscale with 16 bits per pixel (heightmaps): 16-bit PNGs keep their precision, other images
+/// give their luminance scaled to 0..65535.
+struct ImageGray16 {
+    u32 width = 0;
+    u32 height = 0;
+    std::vector<u16> values;
+};
+Result<ImageGray16> decodeGray16(std::span<const u8> encoded, std::string_view nameForErrors = "");
+/// decodeGray16(), or for names ending in .r16 / .raw a square RAW file of little-endian 16-bit
+/// values (World Machine, Gaea, Unity terrains).
+Result<ImageGray16> decodeHeightmap(std::span<const u8> file, std::string_view name);
+
 /// PNG encoding (screenshots, thumbnails, generated assets).
 Result<ByteBuffer> encodePng(u32 width, u32 height, std::span<const u8> rgba);
 /// Radiance .hdr encoding of linear RGB floats (environment maps, tests).

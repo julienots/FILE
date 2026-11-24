@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 761 champs)
+## Composants (77, 762 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -1107,6 +1107,7 @@ Heightmap terrain painted with up to 4 texture layers; sculpt and paint it with 
 | `resolution` | uint | Vertices per side (2 to 1025); changing it keeps the existing heights where they fit ; plage 2 .. 1025 |
 | `heights` | int[] |  |
 | `splat` | int[] |  |
+| `holes` | int[] |  |
 | `layer0` | asset | Base layer texture |
 | `layer1` | asset |  |
 | `layer2` | asset |  |
@@ -1471,7 +1472,7 @@ Help text shown near the pointer when it rests on the element.
 
 Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)`). Détails et exemples : [SCRIPTING.md](SCRIPTING.md).
 
-270 fonctions.
+277 fonctions.
 
 - `agr.after`
 - **`agr.audio`** : `addBusEffect`, `busEffectCount`, `busMuted`, `busParent`, `busVolume`, `clearBusEffects`, `createBus`, `generator`, `isPlaying`, `isRecording`, `play`, `push`, `queued`, `recordingLevel`, `setBusEffect`, `setBusMuted`, `setBusParent`, `setBusVolume`, `setPitch`, `setVolume`, `spectrum`, `startMicrophone`, `startRecording`, `stop`, `stopMicrophone`, `stopRecording`
@@ -1489,7 +1490,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - `agr.globals`
 - `agr.group`
 - **`agr.http`** : `cancel`, `get`, `pending`, `post`, `progress`, `request`
-- **`agr.input`** : `accelerometer`, `axis`, `down`, `drag`, `gamepadAxis`, `gamepadCount`, `gamepadDown`, `gamepadPressed`, `gestures`, `gyroscope`, `keyDown`, `keyPressed`, `keyReleased`, `mouseDown`, `mousePosition`, `mousePressed`, `pinch`, `pressed`, `released`, `tapped`, `touch`, `touchCount`, `value`
+- **`agr.input`** : `accelerometer`, `axis`, `bindings`, `capture`, `down`, `drag`, `gamepadAxis`, `gamepadCount`, `gamepadDown`, `gamepadPressed`, `gestures`, `gyroscope`, `keyDown`, `keyPressed`, `keyReleased`, `mouseDown`, `mousePosition`, `mousePressed`, `pinch`, `pressed`, `released`, `resetBindings`, `saveBindings`, `setBindings`, `tapped`, `touch`, `touchCount`, `value`, `vibrate`
 - `agr.instantiate`
 - `agr.isServer`
 - `agr.isTweening`
@@ -1516,6 +1517,7 @@ Modules de `agr` (et leurs fonctions), puis les méthodes d'entité (`e:nom(...)
 - **`agr.tcp`** : `accept`, `close`, `connect`, `listen`, `receive`, `send`, `state`
 - **`agr.time`** : `delta`, `fixedDelta`, `frame`, `now`, `scale`, `setScale`, `total`
 - `agr.tr`
+- `agr.trn`
 - `agr.tween`
 - **`agr.udp`** : `close`, `open`, `receive`, `send`
 - **`agr.ui`** : `focus`, `isPressed`, `isTyping`, `pointerOverUI`

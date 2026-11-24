@@ -2,6 +2,7 @@
 #include "agr/core/Etc2.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -154,6 +155,48 @@ Result<ByteBuffer> encodeHdr(u32 width, u32 height, std::span<const float> rgb) 
         out.push_back(static_cast<u8>(std::min(255.0f, b * scale)));
         out.push_back(static_cast<u8>(std::clamp(e + 128, 0, 255)));
     }
+    return out;
+}
+
+} // namespace agr
+
+namespace agr {
+
+Result<ImageGray16> decodeGray16(std::span<const u8> encoded, std::string_view name) {
+    int w = 0, h = 0, channels = 0;
+    ImageGray16 out;
+    if (stbi_is_16_bit_from_memory(encoded.data(), static_cast<int>(encoded.size()))) {
+        stbi_us* data = stbi_load_16_from_memory(encoded.data(), static_cast<int>(encoded.size()), &w, &h, &channels, 1);
+        if (!data) return makeError(Error::Code::ParseError, "cannot decode image '" + std::string(name) + "': " + stbi_failure_reason());
+        out.values.assign(data, data + static_cast<usize>(w) * static_cast<usize>(h));
+        stbi_image_free(data);
+    } else {
+        auto img = decodeImage(encoded, name);
+        if (!img) return img.error();
+        w = static_cast<int>(img.value().width), h = static_cast<int>(img.value().height);
+        out.values.resize(static_cast<usize>(w) * static_cast<usize>(h));
+        const auto& p = img.value().pixels;
+        for (usize i = 0; i < out.values.size(); ++i) {
+            const float l = 0.2126f * p[i * 4] + 0.7152f * p[i * 4 + 1] + 0.0722f * p[i * 4 + 2];
+            out.values[i] = static_cast<u16>(std::lround(l / 255.0f * 65535.0f));
+        }
+    }
+    out.width = static_cast<u32>(w), out.height = static_cast<u32>(h);
+    return out;
+}
+
+Result<ImageGray16> decodeHeightmap(std::span<const u8> file, std::string_view name) {
+    std::string lower(name);
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (!lower.ends_with(".r16") && !lower.ends_with(".raw")) return decodeGray16(file, name);
+    const usize count = file.size() / 2;
+    const u32 n = static_cast<u32>(std::lround(std::sqrt(static_cast<double>(count))));
+    if (n < 2 || static_cast<usize>(n) * n * 2 != file.size())
+        return makeError(Error::Code::InvalidArgument, std::string(name) + ": a RAW heightmap must be square 16-bit (n x n x 2 bytes)");
+    ImageGray16 out;
+    out.width = out.height = n;
+    out.values.resize(count);
+    for (usize i = 0; i < count; ++i) out.values[i] = static_cast<u16>(file[2 * i] | (file[2 * i + 1] << 8));
     return out;
 }
 

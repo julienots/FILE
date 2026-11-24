@@ -9,6 +9,8 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include <fstream>
+#include "agr/assets/Image.hpp"
 #include "agr/scene/Prefab.hpp"
 #include "agr/scene/Terrain.hpp"
 #include "agr/editor/ui/ImGuiRenderer.hpp"
@@ -481,7 +483,9 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
                                            {terrain::Brush::Lower, "Abaisser", "Creuser"},
                                            {terrain::Brush::Smooth, "Lisser", "Adoucir les reliefs"},
                                            {terrain::Brush::Flatten, "Aplanir", "Ramener à la hauteur cible (Ctrl + clic : prendre la hauteur)"},
-                                           {terrain::Brush::Paint, "Peindre", "Peindre la couche choisie"}};
+                                           {terrain::Brush::Paint, "Peindre", "Peindre la couche choisie"},
+                                           {terrain::Brush::Hole, "Trou", "Découper le sol (grottes, tunnels) : ni rendu, ni collision, ni navigation"},
+                                           {terrain::Brush::Fill, "Boucher", "Refermer les trous"}};
         for (const BrushDef& bd : brushes) {
             const bool sel = tool.settings.brush == bd.brush;
             if (sel) ImGui::PushStyleColor(ImGuiCol_Button, palette::toVec4(palette::kSelect));
@@ -505,6 +509,31 @@ Edit drawComponentTools(EditorShared& s, const ComponentInfo& info, void* comp, 
                 if (ImGui::RadioButton((std::to_string(l) + " : " + name).c_str(), tool.settings.layer == l)) tool.settings.layer = l;
                 if (l % 2 == 0) ImGui::SameLine();
             }
+        }
+        // Heightmap import / export (16-bit PNG, any image, or RAW .r16).
+        static char hmPath[260] = "assets/heightmap.png";
+        static float hmMin = 0.0f, hmMax = 20.0f;
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##heightmap", hmPath, sizeof hmPath);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+        ImGui::DragFloatRange2("Hauteurs (noir / blanc)", &hmMin, &hmMax, 0.1f, -1000.0f, 1000.0f, "%.1f m");
+        if (ImGui::SmallButton("Importer la carte de hauteurs")) {
+            const std::filesystem::path file = (s.ctx.hasProject() ? s.ctx.project().root() : std::filesystem::path{}) / hmPath;
+            std::ifstream in(file, std::ios::binary);
+            const std::vector<u8> bytes((std::istreambuf_iterator<char>(in)), {});
+            auto img = decodeHeightmap(bytes, file.filename().string());
+            if (img && terrain::importHeightmap(tc, img.value().values, img.value().width, img.value().height, hmMin, hmMax)) s.ctx.commit("Import Heightmap");
+            else AGR_LOG_WARN("Editor", "Carte de hauteurs : {}", img ? std::string("valeurs invalides") : img.error().message);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Exporter (.r16)")) {
+            float lo = 0.0f, hi = 0.0f;
+            const std::vector<u8> raw = terrain::exportHeightmapRaw(tc, lo, hi);
+            std::filesystem::path file = (s.ctx.hasProject() ? s.ctx.project().root() : std::filesystem::path{}) / hmPath;
+            file.replace_extension(".r16");
+            std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
+            hmMin = lo, hmMax = hi;
+            AGR_LOG_INFO("Editor", "Carte de hauteurs exportée : {} ({:.2f} à {:.2f} m)", file.string(), lo, hi);
         }
         if (ImGui::Button("Tout aplanir")) ImGui::OpenPopup("##flattenAll");
         if (ImGui::BeginPopup("##flattenAll")) {

@@ -22,6 +22,7 @@ void registerTerrainComponents() {
                {.tooltip = "Vertices per side (2 to 1025); changing it keeps the existing heights where they fit", .rangeMin = 2, .rangeMax = 1025, .speed = 1})
         .field("heights", &TerrainComponent::heights, {.flags = FieldFlag_Hidden})
         .field("splat", &TerrainComponent::splat, {.flags = FieldFlag_Hidden})
+        .field("holes", &TerrainComponent::holes, {.flags = FieldFlag_Hidden})
         .field("layer0", &TerrainComponent::layer0, {.tooltip = "Base layer texture", .flags = FieldFlag_AssetPath})
         .field("layer1", &TerrainComponent::layer1, {.flags = FieldFlag_AssetPath})
         .field("layer2", &TerrainComponent::layer2, {.flags = FieldFlag_AssetPath})
@@ -117,6 +118,7 @@ void buildMesh(const TerrainComponent& t, std::vector<Vec3>& positions, std::vec
         for (u32 x = 0; x + 1 < n; ++x) {
             const u32 a = z * n + x, b = a + 1, c = a + n, d = c + 1;
             // Counter-clockwise seen from +Y: a(x,z) -> c(x,z+1) -> b(x+1,z) ...
+            if (!t.holes.empty() && isHole(t, static_cast<i32>(x), static_cast<i32>(z))) continue;
             indices.insert(indices.end(), {a, c, b, b, c, d});
         }
 }
@@ -142,7 +144,7 @@ u64 hashInts(u64 h, const std::vector<i32>& v) {
 u64 heightsHash(const TerrainComponent& t) {
     u64 h = 0xcbf29ce484222325ull ^ resolution(t);
     h = (h ^ std::bit_cast<u32>(t.size)) * 0x100000001b3ull;
-    return hashInts(h, t.heights);
+    return hashInts(hashInts(h, t.heights), t.holes);
 }
 
 u64 splatHash(const TerrainComponent& t) { return hashInts(0xcbf29ce484222325ull ^ resolution(t), t.splat); }
@@ -164,8 +166,13 @@ bool raycast(const TerrainComponent& t, const math::Ray& ray, float maxDistance,
         if (t0 > t1) return false;
     }
     const float step = spacing(t) * 0.5f;
+    const float half = std::max(t.size, 0.01f) * 0.5f, cell = spacing(t);
+    auto holeAt = [&](const Vec3& p) {
+        return !t.holes.empty() && isHole(t, static_cast<i32>(std::floor((p.x + half) / cell)), static_cast<i32>(std::floor((p.z + half) / cell)));
+    };
     auto above = [&](float s) {
         const Vec3 p = ray.at(s);
+        if (holeAt(p)) return 1.0f;  // through a hole: never below the surface
         return p.y - heightAt(t, p.x, p.z);
     };
     float prev = t0, prevH = above(t0);
@@ -189,8 +196,80 @@ bool raycast(const TerrainComponent& t, const math::Ray& ray, float maxDistance,
     return false;
 }
 
+bool isHole(const TerrainComponent& t, i32 x, i32 z) {
+    const i32 cells = static_cast<i32>(resolution(t)) - 1;
+    if (x < 0 || z < 0 || x >= cells || z >= cells) return false;
+    return std::binary_search(t.holes.begin(), t.holes.end(), z * cells + x);
+}
+
+void setHole(TerrainComponent& t, i32 x, i32 z, bool hole) {
+    const i32 cells = static_cast<i32>(resolution(t)) - 1;
+    if (x < 0 || z < 0 || x >= cells || z >= cells) return;
+    const i32 id = z * cells + x;
+    const auto it = std::lower_bound(t.holes.begin(), t.holes.end(), id);
+    const bool present = it != t.holes.end() && *it == id;
+    if (hole && !present) t.holes.insert(it, id);
+    if (!hole && present) t.holes.erase(it);
+}
+
+Status importHeightmap(TerrainComponent& t, std::span<const u16> raw, u32 w, u32 h, float minHeight, float maxHeight) {
+    if (raw.size() != static_cast<usize>(w) * h) return makeError(Error::Code::InvalidArgument, "heightmap: size does not match its values");
+    std::vector<float> values(raw.size());
+    for (usize i = 0; i < raw.size(); ++i) values[i] = static_cast<float>(raw[i]) / 65535.0f;
+    if (w < 2 || h < 2) return makeError(Error::Code::InvalidArgument, "heightmap too small");
+    t.resolution = std::clamp(std::max(w, h), 2u, 1025u);
+    const u32 n = t.resolution;
+    t.heights.assign(static_cast<usize>(n) * n, 0);
+    t.holes.clear();
+    auto px = [&](u32 x, u32 y) { return values[static_cast<usize>(std::min(y, h - 1)) * w + std::min(x, w - 1)]; };
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const float fx = static_cast<float>(x) * static_cast<float>(w - 1) / static_cast<float>(n - 1);
+            const float fz = static_cast<float>(z) * static_cast<float>(h - 1) / static_cast<float>(n - 1);
+            const u32 ix = static_cast<u32>(fx), iz = static_cast<u32>(fz);
+            const float ax = fx - static_cast<float>(ix), az = fz - static_cast<float>(iz);
+            const float v = (px(ix, iz) * (1 - ax) + px(ix + 1, iz) * ax) * (1 - az) + (px(ix, iz + 1) * (1 - ax) + px(ix + 1, iz + 1) * ax) * az;
+            t.heights[static_cast<usize>(z) * n + x] = static_cast<i32>(std::lround((minHeight + v * (maxHeight - minHeight)) * 1000.0f));
+        }
+    ensureData(t);
+    return {};
+}
+
+std::vector<u8> exportHeightmapRaw(const TerrainComponent& t, float& minHeight, float& maxHeight) {
+    const u32 n = resolution(t);
+    minHeight = 1e30f, maxHeight = -1e30f;
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const float v = sample(t, static_cast<i32>(x), static_cast<i32>(z));
+            minHeight = std::min(minHeight, v), maxHeight = std::max(maxHeight, v);
+        }
+    const float range = std::max(maxHeight - minHeight, 1e-6f);
+    std::vector<u8> out(static_cast<usize>(n) * n * 2);
+    for (u32 z = 0; z < n; ++z)
+        for (u32 x = 0; x < n; ++x) {
+            const float v = (sample(t, static_cast<i32>(x), static_cast<i32>(z)) - minHeight) / range;
+            const u16 q = static_cast<u16>(std::lround(std::clamp(v, 0.0f, 1.0f) * 65535.0f));
+            const usize i = (static_cast<usize>(z) * n + x) * 2;
+            out[i] = static_cast<u8>(q & 0xff), out[i + 1] = static_cast<u8>(q >> 8);
+        }
+    return out;
+}
+
 bool applyBrush(TerrainComponent& t, Vec2 center, const BrushSettings& b) {
     ensureData(t);
+    if (b.brush == Brush::Hole || b.brush == Brush::Fill) {
+        const i32 cells = static_cast<i32>(resolution(t)) - 1;
+        const float s = spacing(t), half = t.size * 0.5f, radius = std::max(b.radius, s * 0.5f);
+        bool changed = false;
+        for (i32 z = 0; z < cells; ++z)
+            for (i32 x = 0; x < cells; ++x) {
+                const Vec2 c{(static_cast<float>(x) + 0.5f) * s - half, (static_cast<float>(z) + 0.5f) * s - half};
+                if (math::length(c - center) > radius || isHole(t, x, z) == (b.brush == Brush::Hole)) continue;
+                setHole(t, x, z, b.brush == Brush::Hole);
+                changed = true;
+            }
+        return changed;
+    }
     const i32 n = static_cast<i32>(resolution(t));
     const float s = spacing(t), half = t.size * 0.5f, radius = std::max(b.radius, s * 0.5f);
     const i32 x0 = std::max(0, static_cast<i32>(std::floor((center.x - radius + half) / s)));

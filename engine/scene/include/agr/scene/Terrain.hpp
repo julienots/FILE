@@ -1,4 +1,6 @@
 #pragma once
+#include <span>
+#include <string_view>
 // Heightmap terrain: a square grid of heights centered on its entity (local XZ plane, Y up),
 // painted with up to 4 texture layers. Data shared by the renderer, the physics, the
 // navigation and the editor brushes.
@@ -6,6 +8,7 @@
 #include <vector>
 
 #include "agr/core/Types.hpp"
+#include "agr/core/Result.hpp"
 #include "agr/math/Geometry.hpp"
 #include "agr/math/Math.hpp"
 
@@ -16,6 +19,7 @@ struct TerrainComponent {
     u32 resolution = 129;        ///< Vertices per side (2..1025): spacing = size / (resolution - 1).
     std::vector<i32> heights;    ///< Millimeters, resolution x resolution, row-major from -Z; empty = flat.
     std::vector<i32> splat;      ///< Layer weights per vertex packed as RGBA8 (r = layer 0); empty = layer 0.
+    std::vector<i32> holes;      ///< Cells cut out (caves, tunnels): index z * (resolution - 1) + x, sorted.
     std::string layer0, layer1, layer2, layer3;  ///< Textures (grass, rock, dirt, sand...).
     math::Vec4 tiling{24.0f, 24.0f, 24.0f, 24.0f};  ///< Texture repeats across the terrain, per layer.
     math::Color color{1.0f, 1.0f, 1.0f, 1.0f};
@@ -48,7 +52,7 @@ u64 splatHash(const TerrainComponent& t);
 /// First hit of a local-space ray with the surface (ray march + refinement).
 bool raycast(const TerrainComponent& t, const math::Ray& localRay, float maxDistance, float& distance);
 
-enum class Brush : u8 { Raise, Lower, Smooth, Flatten, Paint };
+enum class Brush : u8 { Raise, Lower, Smooth, Flatten, Paint, Hole, Fill };  ///< Hole cuts cells, Fill restores them.
 struct BrushSettings {
     Brush brush = Brush::Raise;
     float radius = 4.0f;     ///< Local units.
@@ -56,6 +60,18 @@ struct BrushSettings {
     float targetHeight = 0.0f;  ///< Flatten.
     u32 layer = 1;           ///< Paint.
 };
+/// Cell (x, z) between vertices x..x+1, z..z+1 is cut out (no mesh, collision nor navigation).
+bool isHole(const TerrainComponent& t, i32 x, i32 z);
+void setHole(TerrainComponent& t, i32 x, i32 z, bool hole);
+
+/// Heightmap import from 16-bit values (decodeHeightmap() in agr/assets/Image.hpp reads PNG and
+/// RAW files): sets the resolution to the image's (clamped to 2..1025, resampled bilinearly) and
+/// heights from `minHeight` (0) to `maxHeight` (65535). Clears the holes.
+Status importHeightmap(TerrainComponent& t, std::span<const u16> values, u32 width, u32 height, float minHeight, float maxHeight);
+/// 16-bit RAW export (little-endian, resolution x resolution, row-major from -Z), the range used
+/// in `minHeight` / `maxHeight` (the lowest and highest points).
+std::vector<u8> exportHeightmapRaw(const TerrainComponent& t, float& minHeight, float& maxHeight);
+
 /// Applies a brush centered at local (x, z) with a smooth falloff. Returns false if nothing changed.
 bool applyBrush(TerrainComponent& t, math::Vec2 center, const BrushSettings& b);
 
