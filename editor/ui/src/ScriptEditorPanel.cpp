@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "agr/editor/ScriptDocs.hpp"
 #include "agr/editor/ui/Panels.hpp"
 #include "agr/script/ScriptPlugin.hpp"
 
@@ -784,6 +785,9 @@ void ScriptEditorPanel::draw(EditorShared& s) {
                     m_gotoLine = defs[i].line;
                     m_refocus = true;
                 }
+                if (ImGui::IsItemHovered())
+                    if (const ScriptSymbol* sym = findSymbol(scriptSymbols(m_text), defs[i].name); sym && !sym->doc.empty())
+                        ImGui::SetTooltip("%s\n\n%s", sym->signature.c_str(), sym->doc.c_str());
                 ImGui::PopID();
             }
             ImGui::EndCombo();
@@ -791,7 +795,51 @@ void ScriptEditorPanel::draw(EditorShared& s) {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aller à une fonction du fichier · F12 sur un nom : aller à sa définition");
     }
     const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-    if (focused && ImGui::IsKeyPressed(ImGuiKey_F12, false)) {  // the identifier under the cursor
+    // The function under the cursor: its signature and documentation comment (this file, else the project).
+    {
+        const usize pos = static_cast<usize>(std::clamp(m_cursorPos, 0, static_cast<int>(m_text.size())));
+        auto identc = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+        usize a = pos, b = pos;
+        while (a > 0 && identc(m_text[a - 1])) --a;
+        while (b < m_text.size() && identc(m_text[b])) ++b;
+        const std::string word = m_text.substr(a, b - a);
+        if (word != m_docWord) {
+            m_docWord = word;
+            m_docLine.clear();
+            m_docFull.clear();
+            if (!word.empty()) {
+                const auto syms = scriptSymbols(m_text);
+                const ScriptSymbol* sym = findSymbol(syms, word);
+                if (sym) {
+                    m_docLine = sym->signature + (sym->doc.empty() ? "" : "  —  " + sym->doc.substr(0, sym->doc.find('\n')));
+                    m_docFull = sym->signature + (sym->doc.empty() ? "" : "\n\n" + sym->doc);
+                }
+            }
+        }
+        if (!m_docLine.empty()) {
+            ImGui::TextDisabled("%s", m_docLine.c_str());
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", m_docFull.c_str());
+        }
+    }
+    if (focused && ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_F12, false)) {  // references of the word under the cursor
+        const usize pos = static_cast<usize>(std::clamp(m_cursorPos, 0, static_cast<int>(m_text.size())));
+        auto identc = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+        usize a = pos, b = pos;
+        while (a > 0 && identc(m_text[a - 1])) --a;
+        while (b < m_text.size() && identc(m_text[b])) ++b;
+        m_refWord = m_text.substr(a, b - a);
+        std::vector<std::pair<std::string, std::string>> files{{m_uri, m_text}};  // this file as edited
+        std::error_code ec;
+        const auto assets = s.ctx.project().assetsDirectory();
+        for (auto it = std::filesystem::recursive_directory_iterator(assets, ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            if (!it->is_regular_file(ec) || it->path().extension() != ".lua") continue;
+            const std::string uri = "assets://" + std::filesystem::relative(it->path(), assets, ec).generic_string();
+            if (uri == m_uri) continue;
+            if (auto text = s.engine.vfs().readText(uri)) files.emplace_back(uri, text.value());
+        }
+        m_references = findReferences(files, m_refWord);
+        m_referencesOpen = !m_refWord.empty();
+    } else if (focused && ImGui::IsKeyPressed(ImGuiKey_F12, false)) {  // the identifier under the cursor
         const usize pos = static_cast<usize>(std::clamp(m_cursorPos, 0, static_cast<int>(m_text.size())));
         auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
         usize a = pos, b = pos;
@@ -903,6 +951,28 @@ void ScriptEditorPanel::draw(EditorShared& s) {
         }
         ImGui::EndChild();
         ImGui::EndTable();
+    }
+    if (m_referencesOpen) {
+        ImGui::SetNextWindowSize({560, 260}, ImGuiCond_FirstUseEver);
+        if (ImGui::Begin(("Références de « " + m_refWord + " »###refs").c_str(), &m_referencesOpen)) {
+            ImGui::Text("%zu utilisation(s) — hors commentaires et chaînes", m_references.size());
+            for (usize i = 0; i < m_references.size(); ++i) {
+                const ScriptReference& r = m_references[i];
+                ImGui::PushID(static_cast<int>(i));
+                const std::string label = r.file + ":" + std::to_string(r.line) + (r.definition ? "  [définition]  " : "  ") + r.text;
+                if (ImGui::Selectable(label.c_str())) {
+                    if (r.file == m_uri) {
+                        m_gotoLine = r.line;
+                        m_refocus = true;
+                    } else {
+                        s.openScriptRequest = r.file;
+                        m_gotoAfterOpen = r.line;
+                    }
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::End();
     }
     ImGui::End();
 }

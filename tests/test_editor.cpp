@@ -5,6 +5,7 @@
 #include "agr/editor/CurveView.hpp"
 #include "agr/runtime/GameManifest.hpp"
 #include "agr/editor/AssetRefactor.hpp"
+#include "agr/editor/ScriptDocs.hpp"
 #include "agr/editor/EditHistory.hpp"
 #include "agr/editor/PackageRepository.hpp"
 #include "agr/editor/UiGuides.hpp"
@@ -2154,4 +2155,53 @@ TEST_CASE("export presets: saved in the project with their own settings, reloade
     CHECK(presets[1].output == "build/demo");
     CHECK(presets[1].settings.excludeFilter == "levels/secret/**");
     CHECK(again.value().settings().exportSettings.versionCode != 42);  // the project's own settings are untouched
+}
+
+TEST_CASE("script docs: functions with signature and comment docs; references outside comments and strings") {
+    const std::string player = R"(local Player = { properties = { speed = 4 } }
+
+--- Makes the player jump.
+-- height: in meters
+function Player:jump(height, double)
+    self.vy = height
+end
+
+local function helper(x) return x * 2 end  -- not documented
+
+Player.spawn = function(where) end
+
+function Player:onUpdate(dt)
+    -- jump is also mentioned here, in a comment
+    if agr.input.pressed("jump") then self:jump(helper(2)) end
+    local text = [[ jump in a long string ]]
+end
+return Player
+)";
+    const auto symbols = scriptSymbols(player);
+    const ScriptSymbol* jump = findSymbol(symbols, "jump");
+    REQUIRE(jump);
+    CHECK(jump->name == "Player:jump");
+    CHECK(jump->signature == "Player:jump(height, double)");
+    CHECK(jump->doc == "Makes the player jump.\nheight: in meters");
+    CHECK(jump->line == 5);
+    const ScriptSymbol* helper = findSymbol(symbols, "helper");
+    REQUIRE(helper);
+    CHECK(helper->doc.empty());
+    const ScriptSymbol* spawn = findSymbol(symbols, "spawn");
+    REQUIRE(spawn);
+    CHECK(spawn->signature == "Player.spawn(where)");
+    CHECK_FALSE(findSymbol(symbols, "nothing"));
+
+    const std::string enemy = "local E = {}\nfunction E:onUpdate() agr.find('Player'):script():jump(3) end\nreturn E\n";
+    const auto refs = findReferences({{"player.lua", player}, {"enemy.lua", enemy}}, "jump");
+    // player.lua: the definition (line 5) and the call (line 15); not the comment, the "jump" action string, the long string.
+    REQUIRE(refs.size() == 3);
+    CHECK(refs[0].file == "player.lua");
+    CHECK(refs[0].line == 5);
+    CHECK(refs[0].definition);
+    CHECK(refs[1].line == 15);
+    CHECK_FALSE(refs[1].definition);
+    CHECK(refs[2].file == "enemy.lua");
+    CHECK(refs[2].line == 2);
+    CHECK(findReferences({{"a.lua", "local jumper = 1 -- jump"}}, "jump").empty());  // whole words only
 }

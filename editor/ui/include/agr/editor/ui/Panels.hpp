@@ -16,6 +16,7 @@
 #include "agr/editor/AndroidExport.hpp"
 #include "agr/editor/EditHistory.hpp"
 #include "agr/editor/AssetRefactor.hpp"
+#include "agr/editor/ScriptDocs.hpp"
 #include "agr/editor/ui/EditorShared.hpp"
 #include "agr/assets/Material.hpp"
 #include "agr/animation/AnimationSystem.hpp"
@@ -137,6 +138,10 @@ private:
     std::string m_find, m_replace;
     int m_selectStart = -1, m_selectEnd = -1;  // selection to apply in the next callback
     int m_gotoAfterOpen = 0;                    // line to show once the requested file is open
+    std::string m_docWord, m_docLine, m_docFull; // help of the function under the cursor
+    std::string m_refWord;                       // Shift+F12: references
+    std::vector<ScriptReference> m_references;
+    bool m_referencesOpen = false;
     struct FileHit {
         std::string uri;
         int line;

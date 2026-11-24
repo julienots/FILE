@@ -8,6 +8,7 @@ add_library(agr_editor_core STATIC
     core/src/Package.cpp
     core/src/ApiReference.cpp
     core/src/AssetRefactor.cpp
+    core/src/ScriptDocs.cpp
     core/src/PackageRepository.cpp
     core/src/SceneTemplates.cpp
     core/src/Scatter.cpp

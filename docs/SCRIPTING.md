@@ -257,6 +257,13 @@ Affichage → Éditeur de scripts) l'ouvre dans l'onglet **Script** :
   passant d'un onglet à l'autre ; fermer un onglet modifié demande d'enregistrer) ;
 - liste **Fonctions...** du fichier (`function a:b(`, `nom = function(`) pour y sauter ; **F12** sur
   un nom va à sa définition, dans le fichier ou dans un autre script du projet (ouvert dans un onglet) ;
+- **documentation des fonctions** (comme les commentaires de doc de Godot) : les lignes `--` (ou `---`)
+  écrites juste au-dessus d'une fonction sont sa documentation ; quand le curseur est sur le nom d'une
+  fonction du fichier, sa signature et la première ligne de sa doc s'affichent sous le code (survol :
+  tout le texte), et la liste *Fonctions...* les montre au survol ;
+- **Maj+F12 : références** — toutes les utilisations du nom sous le curseur dans tous les scripts du
+  projet (mots entiers, hors commentaires et chaînes ; la définition est marquée), un clic ouvre le
+  fichier à la ligne ;
 - **Ctrl+F** rechercher / remplacer, **Ctrl+Maj+F** rechercher dans tous les scripts ;
 - **Ctrl+S** enregistre : le jeu recharge le script à chaud ; un fichier modifié par un éditeur externe
   est relu tant qu'il n'y a pas de modification en cours.
