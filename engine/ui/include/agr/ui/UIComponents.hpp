@@ -164,7 +164,8 @@ struct UIScrollViewComponent {
     math::Vec4 scrollbarColor{1.0f, 1.0f, 1.0f, 0.35f};
 };
 
-enum class UILayoutType : i32 { Vertical = 0, Horizontal = 1, Grid = 2 };
+/// Flow: a row that wraps to the next line when the width is used (tags, inventory icons, chips).
+enum class UILayoutType : i32 { Vertical = 0, Horizontal = 1, Grid = 2, Flow = 3 };
 enum class UIAlign : i32 { Start = 0, Center = 1, End = 2 };
 
 /// Arranges the children (with a UIRect) in a column, a row or a grid; their anchors and

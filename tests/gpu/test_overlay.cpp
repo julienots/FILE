@@ -1,5 +1,7 @@
 // Game UI overlay: drawn over the scene in pixels (top-left origin), directly or after
 // an off-screen pass (render scale / MSAA), with images and text, on every backend.
+#include <thread>
+#include <chrono>
 #include <filesystem>
 
 #include "GpuFixture.hpp"
@@ -215,4 +217,39 @@ TEST_CASE("overlay: inline images in rich text") {
     CHECK_MESSAGE(h < 25, h);
     CHECK_MESSAGE(w > 2 * h - 6, w << " x " << h);
     CHECK_MESSAGE(w < 2 * h + 6, w << " x " << h);
+}
+
+TEST_SUITE("gpu.overlay") {
+TEST_CASE("overlay: rich text effects animate ([wave] moves glyphs, [rainbow] colors them)") {
+    OverlayFixture f;
+    const auto e = f.box({0, 0}, {64, 64}, {0, 0, 0, 0});
+    auto& t = f.scene.registry().emplace<UITextComponent>(e);
+    t.text = "[wave]WWW[/wave]";
+    t.richText = true;
+    t.fontSize = 20.0f;
+    t.hAlign = UIHAlign::Left;
+    t.wrap = false;
+    auto& d = *gpu().device;
+    auto snapshot = [&] {
+        f.frame();
+        std::vector<u8> px(64 * 64 * 4);
+        REQUIRE(d.readBackbuffer(0, 0, 64, 64, px));
+        return px;
+    };
+    f.frame();
+    const auto a = snapshot();
+    std::this_thread::sleep_for(std::chrono::milliseconds(180));
+    const auto b = snapshot();
+    int changed = 0;
+    for (usize i = 0; i < a.size(); i += 4) changed += std::abs(int(a[i]) - int(b[i])) > 60;
+    CHECK_MESSAGE(changed > 20, changed);  // the wave moved the glyphs
+    f.scene.registry().get<UITextComponent>(e).text = "[rainbow]WWW[/rainbow]";
+    const auto c = snapshot();
+    int colored = 0;
+    for (usize i = 0; i < c.size(); i += 4) {
+        const int r = c[i], g = c[i + 1], bl = c[i + 2];
+        colored += std::max({r, g, bl}) > 120 && std::max({r, g, bl}) - std::min({r, g, bl}) > 80;
+    }
+    CHECK_MESSAGE(colored > 20, colored);  // not white anymore
+}
 }

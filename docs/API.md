@@ -1327,7 +1327,7 @@ Arranges the child elements in a column, a row or a grid.
 
 | Champ | Type | Détails |
 |---|---|---|
-| `type` | enum | valeurs : `Vertical`, `Horizontal`, `Grid` |
+| `type` | enum | valeurs : `Vertical`, `Horizontal`, `Grid`, `Flow` |
 | `spacing` | float | plage 0 .. 1000 |
 | `padding` | vec4 | left, top, right, bottom |
 | `childAlignment` | enum | valeurs : `Start`, `Center`, `End` |

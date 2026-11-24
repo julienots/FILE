@@ -131,7 +131,7 @@ template <typename Style>
 std::string parseRichText(const std::string& in, std::vector<Style>& styles, std::vector<std::string>& links) {
     std::string out;
     std::vector<Vec4> colors;
-    int bold = 0, underline = 0, italic = 0, strike = 0;
+    int bold = 0, underline = 0, italic = 0, strike = 0, wave = 0, shake = 0, rainbow = 0;
     i32 link = -1;
     auto current = [&] {
         Style st;
@@ -139,6 +139,7 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles, std
         st.hasColor = !colors.empty();
         st.bold = bold > 0, st.underline = underline > 0, st.italic = italic > 0, st.strike = strike > 0;
         st.link = link;
+        st.wave = wave > 0, st.shake = shake > 0, st.rainbow = rainbow > 0;
         return st;
     };
     for (usize i = 0; i < in.size();) {
@@ -161,6 +162,12 @@ std::string parseRichText(const std::string& in, std::vector<Style>& styles, std
                 else if (tag == "/i") italic = std::max(0, italic - 1);
                 else if (tag == "s") ++strike;
                 else if (tag == "/s") strike = std::max(0, strike - 1);
+                else if (tag == "wave") ++wave;
+                else if (tag == "/wave") wave = std::max(0, wave - 1);
+                else if (tag == "shake") ++shake;
+                else if (tag == "/shake") shake = std::max(0, shake - 1);
+                else if (tag == "rainbow") ++rainbow;
+                else if (tag == "/rainbow") rainbow = std::max(0, rainbow - 1);
                 else if (tag.rfind("img=", 0) == 0) {  // em spaces the image is drawn on
                     // [img=URI] or [img=URI scale=2 aspect=1.5]: height in ems, width / height.
                     std::string uri = tag.substr(4);
@@ -455,7 +462,33 @@ void UISystem::layoutChildren(Scene& scene, ecs::Entity parent, Vec4 pr, float s
         const Vec4 content{pr.x + lay->padding.x * s, pr.y + lay->padding.y * s, std::max(0.0f, pr.z - (lay->padding.x + lay->padding.z) * s),
                            std::max(0.0f, pr.w - (lay->padding.y + lay->padding.w) * s)};
         const float sp = lay->spacing * s;
-        if (lay->type == UILayoutType::Grid) {
+        if (lay->type == UILayoutType::Flow) {
+            // Children keep their sizes, left to right, wrapping before the right edge; each line
+            // is aligned with childAlignment, as tall as its tallest child.
+            usize start = 0;
+            float y = content.y;
+            while (start < kids.size()) {
+                float x = 0.0f, lineH = 0.0f;
+                usize end = start;
+                while (end < kids.size()) {
+                    const auto& r = reg.get<UIRectComponent>(kids[end]);
+                    const float w = r.size.x * s;
+                    if (end > start && x + w > content.z + 0.5f) break;
+                    x += w + sp;
+                    lineH = std::max(lineH, r.size.y * s);
+                    ++end;
+                }
+                const float lineW = x - sp;
+                float cx = alignIn(lay->childAlignment, content.x, content.z, lineW);
+                for (usize i = start; i < end; ++i) {
+                    const auto& r = reg.get<UIRectComponent>(kids[i]);
+                    rects[i] = {cx, y, r.size.x * s, r.size.y * s};
+                    cx += r.size.x * s + sp;
+                }
+                y += lineH + sp;
+                start = end;
+            }
+        } else if (lay->type == UILayoutType::Grid) {
             const float cw = std::max(1.0f, lay->cellSize.x * s), ch = std::max(1.0f, lay->cellSize.y * s);
             const usize cols = std::max<usize>(1, static_cast<usize>(std::floor((content.z + sp) / (cw + sp))));
             const usize used = std::min(cols, kids.size());
@@ -2019,8 +2052,26 @@ void UISystem::buildOverlay(Scene& scene, u32 width, u32 height, OverlayDrawList
             }
             const bool link = st && st->link >= 0 && static_cast<usize>(st->link) < pt.links.size();
             const Vec4 c = st && st->hasColor ? st->color : link ? linkColor : Vec4{1, 1, 1, 1};
-            const u32 color = st && (st->hasColor || link) ? packColor({c.x, c.y, c.z, c.w * pt.color.w}) : base;
-            const Vec2 mn = pt.origin + g.min, mx = pt.origin + g.max;
+            u32 color = st && (st->hasColor || link) ? packColor({c.x, c.y, c.z, c.w * pt.color.w}) : base;
+            // Animated effects: per glyph, from the UI clock.
+            Vec2 fx{0.0f, 0.0f};
+            if (st && (st->wave || st->shake || st->rainbow)) {
+                const float t = static_cast<float>(m_uiClock.elapsedSeconds());
+                const float k = static_cast<float>(g.source);
+                if (st->wave) fx.y += std::sin(t * 6.0f - k * 0.55f) * pt.pixelSize * 0.12f;
+                if (st->shake) {
+                    const u32 seed = static_cast<u32>(g.source) * 2654435761u ^ static_cast<u32>(t * 24.0f) * 40503u;
+                    fx.x += (static_cast<float>(seed & 0xFF) / 255.0f - 0.5f) * pt.pixelSize * 0.08f;
+                    fx.y += (static_cast<float>((seed >> 8) & 0xFF) / 255.0f - 0.5f) * pt.pixelSize * 0.08f;
+                }
+                if (st->rainbow) {
+                    const float h = std::fmod(t * 0.4f + k * 0.07f, 1.0f) * 6.0f;
+                    const float x = 1.0f - std::fabs(std::fmod(h, 2.0f) - 1.0f);
+                    const Vec4 rgb = h < 1 ? Vec4{1, x, 0, 1} : h < 2 ? Vec4{x, 1, 0, 1} : h < 3 ? Vec4{0, 1, x, 1} : h < 4 ? Vec4{0, x, 1, 1} : h < 5 ? Vec4{x, 0, 1, 1} : Vec4{1, 0, x, 1};
+                    color = packColor({rgb.x, rgb.y, rgb.z, pt.color.w});
+                }
+            }
+            const Vec2 mn = pt.origin + g.min + fx, mx = pt.origin + g.max + fx;
             auto glyph = [&](Vec2 off) {
                 const Vec4 clip = m_clip;
                 const bool inside = mn.x + off.x >= clip.x && mx.x + off.x + (mx.y - mn.y) * 0.25f <= clip.x + clip.z && mn.y >= clip.y && mx.y <= clip.y + clip.w;

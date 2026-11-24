@@ -246,6 +246,7 @@ private:
         i32 image = -1; ///< Inline image: index into PendingText::links (its URI), drawn on an em space; -2 = more room for it.
         float imageScale = 1.0f, imageAspect = 1.0f;  ///< Height in ems, width / height.
         i32 imageSpan = 1;                             ///< Em spaces reserved for its width.
+        bool wave = false, shake = false, rainbow = false;  ///< Animated effects ([wave] [shake] [rainbow]).
     };
     struct LinkBox {
         ecs::Entity entity;

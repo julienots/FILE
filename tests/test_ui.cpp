@@ -133,6 +133,29 @@ TEST_CASE("layouts: column, row and grid") {
     checkRect(f.rect(items[2]), {110, 120 + 65, 100, 60});
 }
 
+TEST_CASE("flow layout: children wrap to the next line, lines aligned") {
+    UIFixture f;
+    f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;
+    const auto panel = f.element("Tags", f.canvas, {0, 0}, {0, 0}, {0, 0}, {100, 100}, {300, 400});
+    auto& lay = f.scene.registry().emplace<UILayoutComponent>(panel);
+    lay.type = UILayoutType::Flow;
+    lay.spacing = 10;
+    lay.padding = {0, 0, 0, 0};
+    std::vector<ecs::Entity> tags;
+    for (float w : {120.0f, 100.0f, 90.0f, 200.0f, 50.0f})
+        tags.push_back(f.element("Tag", panel, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {w, w > 150 ? 50.0f : 30.0f}));
+    f.ui.layout(f.scene, 1000, 1000);
+    // 300 wide: 120 + 10 + 100 = 230 fits, + 10 + 90 = 330 does not -> next line.
+    checkRect(f.rect(tags[0]), {100, 100, 120, 30});
+    checkRect(f.rect(tags[1]), {230, 100, 100, 30});
+    checkRect(f.rect(tags[2]), {100, 140, 90, 30});
+    checkRect(f.rect(tags[3]), {200, 140, 200, 50});  // 90 + 10 + 200 = 300: fits exactly
+    checkRect(f.rect(tags[4]), {100, 200, 50, 30});   // line 2 is 50 tall
+    lay.childAlignment = UIAlign::Center;
+    f.ui.layout(f.scene, 1000, 1000);
+    CHECK(f.rect(tags[0]).x == doctest::Approx(100 + (300 - 230) / 2.0f));
+}
+
 TEST_CASE("an icon or a label inside a button forwards the click to the button") {
     UIFixture f;
     f.scene.registry().get<UICanvasComponent>(f.canvas).scaleMode = UIScaleMode::ConstantPixelSize;

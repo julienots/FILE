@@ -26,7 +26,7 @@ des modèles et test de bout en bout de l'éditeur.
 | `UIText` | Texte UTF-8 (accents compris), police TrueType, taille, couleur, alignement horizontal / vertical, retour à la ligne, interligne |
 | `UIButton` | Couleurs normal / survol / appui / désactivé (teinte de l'image) ; clic = `onClick()` du script de l'entité et `message(bouton)` du script de `target` |
 | `UISlider` | Curseur horizontal ou **vertical** (`vertical` : bas = minimum) — piste, remplissage, poignée, valeurs min / max, entiers ; changement = `onValueChanged(valeur)` et `message(curseur, valeur)` sur `target` |
-| `UILayout` | Range les enfants en **colonne**, **ligne** ou **grille** : espacement, marges, alignement, étirement |
+| `UILayout` | Range les enfants en **colonne**, **ligne**, **grille** ou **flux** (`Flow` : en ligne avec retour à la ligne quand la largeur est pleine, comme `HFlowContainer` de Godot — étiquettes, inventaires) : espacement, marges, alignement, étirement |
 | `UIToggle` | Case à cocher ; même `group` = boutons radio (un seul coché) ; changement = `onValueChanged(1 ou 0)` et `message(case, valeur)` sur `target` |
 | `UIInputField` | Champ de saisie (avec un `UIText` sur la même entité) : clic = focus (clavier virtuel sur téléphone), `onTextChanged(texte)`, Entrée = `onSubmit(texte)` et `message(champ, texte)` ; `placeholder`, `maxLength`, `numeric`, `password`, **`multiline`** (Entrée ajoute une ligne au lieu de valider ; mettre le `UIText` en haut avec retour à la ligne) ; curseur clignotant **placé au clic**, sélection à la souris (glisser) ou Maj + flèches, Ctrl + flèches = mot par mot, Origine / Fin (par ligne en multiligne), Haut / Bas, Suppr, Ctrl+A / C / X / V avec le presse-papiers du système, **Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z) = annuler / rétablir** (les lettres tapées à la suite forment une seule étape, un collage aussi ; historique effacé au changement de focus) ; flèches, Suppr et Retour arrière **se répètent quand on les maintient** (0,45 s puis toutes les 35 ms) ; taper remplace la sélection |
 | `UIProgressBar` | Barre de progression, de vie ou de chargement : valeur, min / max, sens de remplissage (gauche → droite, droite → gauche, bas → haut, haut → bas), couleurs, marge intérieure |
@@ -94,7 +94,7 @@ espaces (et dans les mots trop longs). Les modèles de projet fournissent Inter
 
 **Texte enrichi** (`UIText.richText`) : `[color=#ff8800]...[/color]` (ou un nom : `red`, `green`,
 `blue`, `yellow`, `orange`, `purple`, `cyan`, `gray`, `white`, `black`, couleurs imbriquables),
-`[b]...[/b]` (gras), `[i]...[/i]` (italique, glyphes inclinés), `[u]...[/u]` (souligné, espaces
+`[b]...[/b]` (gras), effets animés `[wave]...[/wave]` (vague), `[shake]...[/shake]` (tremblement), `[rainbow]...[/rainbow]` (arc-en-ciel), `[i]...[/i]` (italique, glyphes inclinés), `[u]...[/u]` (souligné, espaces
 compris), `[s]...[/s]` (barré), `[url=id]...[/url]` (**lien** : bleu souligné ; un clic appelle
 `onLinkClicked(id)` du script du texte ou de son parent le plus proche qui a un script),
 `[img=assets://piece.png]` (**image en ligne** de la taille d'un caractère, posée sur la ligne de base :

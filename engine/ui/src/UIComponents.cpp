@@ -120,7 +120,7 @@ void registerUIComponents() {
     reg.add<UILayoutComponent>("UILayout")
         .category("UI")
         .description("Arranges the child elements in a column, a row or a grid.")
-        .field("type", &UILayoutComponent::type, {.enumEntries = {{"Vertical", 0}, {"Horizontal", 1}, {"Grid", 2}}})
+        .field("type", &UILayoutComponent::type, {.enumEntries = {{"Vertical", 0}, {"Horizontal", 1}, {"Grid", 2}, {"Flow", 3}}})
         .field("spacing", &UILayoutComponent::spacing, {.rangeMin = 0.0f, .rangeMax = 1000.0f, .speed = 0.5f})
         .field("padding", &UILayoutComponent::padding, {.tooltip = "left, top, right, bottom", .speed = 0.5f})
         .field("childAlignment", &UILayoutComponent::childAlignment, {.enumEntries = {{"Start", 0}, {"Center", 1}, {"End", 2}}})
