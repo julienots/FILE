@@ -698,3 +698,39 @@ TEST_CASE("tilemap colliders per tile: decor without collision, trigger tiles, o
     CHECK(spikesTouched);                                                  // ...which reported it
 }
 }
+
+TEST_SUITE("physics2d") {
+TEST_CASE("character controller 2D: two characters block each other; one dropped on the other slides off") {
+    World2D w;
+    w.box("Ground", {0, -0.5f}, {40, 1}, BodyType2D::Static, false);
+    const auto a = w.scene.createEntity("A");
+    w.scene.registry().get<TransformComponent>(a).position = {-3, 0.8f, 0};
+    w.scene.registry().emplace<CharacterController2DComponent>(a);
+    const auto b = w.scene.createEntity("B");
+    w.scene.registry().get<TransformComponent>(b).position = {3, 0.8f, 0};
+    w.scene.registry().emplace<CharacterController2DComponent>(b);
+    auto& reg = w.scene.registry();
+    for (int i = 0; i < 120; ++i) {
+        reg.get<CharacterController2DComponent>(a).velocity.x = 4.0f;
+        reg.get<CharacterController2DComponent>(b).velocity.x = -4.0f;
+        w.physics.step(w.scene, 1.0f / 60.0f);
+    }
+    const float gap = w.position(b).x - w.position(a).x;
+    CHECK_MESSAGE(gap > 0.75f, gap);  // capsules 0.8 wide: they meet and stop, no crossing
+    CHECK(reg.get<CharacterController2DComponent>(a).onWall);
+    // Dropped onto B's round head: slides off its shoulder and lands beside it, never inside it.
+    w.scene.registry().get<TransformComponent>(a).position = {w.position(b).x, 4.0f, 0};
+    reg.get<CharacterController2DComponent>(a).velocity = {0, 0};
+    reg.get<CharacterController2DComponent>(b).velocity = {0, 0};
+    float closest = 1e9f;
+    for (int i = 0; i < 240; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        const float dx = w.position(a).x - w.position(b).x;
+        const float dy = std::max(0.0f, std::fabs(w.position(a).y - w.position(b).y) - 0.8f);  // capsule segments
+        closest = std::min(closest, std::sqrt(dx * dx + dy * dy));
+    }
+    CHECK_MESSAGE(closest > 0.76f, closest);  // radii 0.4 + 0.4
+    CHECK(reg.get<CharacterController2DComponent>(a).onFloor);
+    CHECK(w.position(a).y == doctest::Approx(0.8f).epsilon(0.03));
+}
+}

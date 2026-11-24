@@ -266,7 +266,8 @@ identiques au bit près à une simulation mono-thread (test `physics3d`). Mesure
   frottement, rebond et couche **par corps** (ceux du premier collider) ; un corps
   qui a au moins un déclencheur est entièrement un capteur.
 - 2D : pentes de tilemap à 45° ou 22,5° (sur deux cellules) seulement ; deux
-  `CharacterController2D` se traversent.
+  `CharacterController2D` se bloquent, mais l'un ne pousse pas l'autre et on ne tient pas debout sur la
+  tête arrondie d'un autre (on glisse à côté, comme une capsule dans Godot).
 - Articulations : pas d'engrenage (les roues de voiture : `Vehicle3D`) ; véhicules à 4 roues
   seulement (pas de moto ni de chenilles) ; les butées 2D sont légèrement souples
   sous un choc (Box2D) ; la rupture ne regarde que la force, pas le couple.
