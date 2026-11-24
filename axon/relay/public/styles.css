@@ -168,3 +168,6 @@ dialog h3 { margin: 0 0 6px; }
 .tile .tile-wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; padding: 10px; text-align: center; }
 .tile.active { border-color: var(--yellow); box-shadow: 0 0 0 2px rgba(255, 200, 36, .25); }
 .feed .dev-label { color: var(--yellow); font-size: 11px; }
+/* Nom : AXON CONNECT */
+.axon-sub { display: block; font-size: .3em; letter-spacing: .9em; padding-left: .9em; margin-top: 8px; }
+.tb-sub { font-size: 9px; letter-spacing: .3em; color: var(--muted); align-self: center; }

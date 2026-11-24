@@ -337,7 +337,7 @@ export class AxonHub {
         return ok({
           protocolVersion: params?.protocolVersion || "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "axon", title: "AXON — SuperEssence Studio", version: VERSION },
+          serverInfo: { name: "axon", title: "AXON CONNECT — SuperEssence Studio", version: VERSION },
           instructions: INSTRUCTIONS,
         });
       case "ping": return ok({});

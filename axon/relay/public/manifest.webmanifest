@@ -1,6 +1,6 @@
 {
-  "name": "AXON — SuperEssence Studio",
-  "short_name": "AXON",
+  "name": "AXON CONNECT — SuperEssence Studio",
+  "short_name": "AXON CONNECT",
   "description": "Claude aux commandes de vos apps, en direct sur téléphone et tablette.",
   "start_url": "./",
   "scope": "./",

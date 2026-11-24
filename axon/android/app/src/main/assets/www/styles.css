@@ -187,3 +187,6 @@ dialog h3 { margin: 0 0 6px; }
 .wrap-actions { flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
 .small-print { font-size: 12px; }
 dialog label { margin-top: 6px; }
+/* Nom : AXON CONNECT */
+.axon-sub { display: block; font-size: .3em; letter-spacing: .9em; padding-left: .9em; margin-top: 8px; }
+.tb-sub { font-size: 9px; letter-spacing: .3em; color: var(--muted); align-self: center; }

@@ -46,7 +46,7 @@
     const st = S();
     $("#model").textContent = st.deviceName || st.model || "";
     $("#roomInfo").textContent = st.connected && st.devices ? (st.devices > 1 ? `${st.devices} appareils pilotés sont connectés à ce salon.` : "Ce téléphone est le seul appareil piloté du salon pour l'instant.") : "";
-    $("#credit").textContent = `AXON ${st.version || ""} · SuperEssence Studio`;
+    $("#credit").textContent = `AXON CONNECT ${st.version || ""} · SuperEssence Studio`;
     $("#connector").textContent = st.connector || "(réglez d'abord le relais)";
     $("#relayInfo").textContent = st.relay ? (st.connected ? `Connecté — ${host(st.relay)}` : `Hors ligne — ${host(st.relay)}`) : "Aucun relais réglé.";
     $("#stepService").classList.toggle("done", st.serviceEnabled);
