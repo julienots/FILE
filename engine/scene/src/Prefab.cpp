@@ -405,6 +405,23 @@ json fromEntity(const Scene& scene, Entity root) {
     return {{"format", "agr.prefab"}, {"version", 1}, {"entities", std::move(entities)}};
 }
 
+Result<json> variantFrom(const Scene& scene, Entity root) {
+    if (!scene.valid(root) || !const_cast<Scene&>(scene).registry().has<PrefabInstanceComponent>(root))
+        return makeError(Error::Code::InvalidArgument, "a variant is made from a prefab instance");
+    json entities = json::array();
+    detail::collectSubtree(scene, root, entities, true, false);
+    entities[0].erase("parent");
+    if (!entities[0].contains("prefab")) return makeError(Error::Code::NotFound, "the base prefab of this instance is missing");
+    return json{{"format", "agr.prefab"}, {"version", 1}, {"entities", std::move(entities)}};
+}
+
+std::string baseOf(const std::string& uri) {
+    const json* p = resolvePrefab(uri);
+    if (!validPrefab(p)) return {};
+    const json& first = (*p)["entities"][0];
+    return first.contains("prefab") && first["prefab"].is_string() ? first["prefab"].get<std::string>() : std::string{};
+}
+
 Status link(Scene& scene, Entity root, const std::string& uri) {
     const json* base = resolvePrefab(uri);
     if (!validPrefab(base)) return makeError(Error::Code::NotFound, "prefab '" + uri + "' is missing or invalid");

@@ -96,6 +96,9 @@ public:
     /// Saves `e` and its subtree as assets://prefabs/<name>.agrprefab (unique name) and makes
     /// `e` its first instance. Returns the prefab URI.
     Result<std::string> createPrefab(ecs::Entity e);
+    /// Saves a prefab instance (with its changes) as a variant of its prefab, and makes it an
+    /// instance of the variant. Returns the variant's uri.
+    Result<std::string> createPrefabVariant(ecs::Entity instanceRoot);
     /// New instance of a prefab at `position`, selected, one undo step.
     Result<ecs::Entity> instantiatePrefab(const std::string& uri, math::Vec3 position, ecs::Entity parent = {});
     /// Writes the instance's changes into its prefab and updates the other instances.

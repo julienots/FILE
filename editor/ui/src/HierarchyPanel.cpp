@@ -110,6 +110,12 @@ void HierarchyPanel::contextMenu(EditorShared& s, ecs::Entity e) {
         if (ImGui::MenuItem("Rétablir le prefab")) {
             if (Status st = s.ctx.revertPrefab(e); !st) s.notify("Échec : " + st.error().message);
         }
+        if (ImGui::MenuItem("Créer une variante", nullptr, false, !playing)) {
+            if (auto uri = s.ctx.createPrefabVariant(e)) s.notify("Variante créée : " + uri.value());
+            else s.notify("Échec : " + uri.error().message);
+        }
+        if (const auto* pic = scene.registry().tryGet<PrefabInstanceComponent>(e); pic && ImGui::IsItemHovered())
+            if (const std::string base = prefab::baseOf(pic->prefab); !base.empty()) ImGui::SetTooltip("Variante de %s", base.c_str());
         if (ImGui::MenuItem("Dissocier du prefab")) s.ctx.unpackPrefab(e);
     } else if (ImGui::MenuItem("Créer un prefab", nullptr, false, !playing)) {
         if (auto uri = s.ctx.createPrefab(e)) s.notify("Prefab créé : " + uri.value());

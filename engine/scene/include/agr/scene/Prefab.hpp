@@ -68,6 +68,12 @@ Result<ecs::Entity> instantiate(Scene& scene, const std::string& uri, ecs::Entit
 /// File content for a prefab made from `root` and its subtree (root written in full; instances
 /// inside stay instances, which makes nested prefabs).
 nlohmann::ordered_json fromEntity(const Scene& scene, ecs::Entity root);
+/// Variant (like Godot's inherited scenes): file content for a prefab made from an instance of
+/// another prefab, stored as "the base + this instance's changes". Instances of the variant follow
+/// later edits of the base and keep the variant's changes. Error if `instanceRoot` is not an instance.
+Result<nlohmann::ordered_json> variantFrom(const Scene& scene, ecs::Entity instanceRoot);
+/// The prefab a variant derives from ("" for a plain prefab or an unknown uri).
+std::string baseOf(const std::string& uri);
 /// After saving fromEntity(root) as `uri`: turns `root` into an instance of it (ids of the
 /// subtree become instance ids; components and references are kept).
 Status link(Scene& scene, ecs::Entity root, const std::string& uri);

@@ -691,6 +691,24 @@ Result<std::string> EditorContext::createPrefab(ecs::Entity e) {
     return uri;
 }
 
+Result<std::string> EditorContext::createPrefabVariant(ecs::Entity e) {
+    Scene& s = scene();
+    if (m_playState != PlayState::Edit) return makeError(Error::Code::InvalidArgument, "stop the game to create a prefab");
+    auto* pic = s.valid(e) ? s.registry().tryGet<PrefabInstanceComponent>(e) : nullptr;
+    if (!pic) return makeError(Error::Code::InvalidArgument, "not a prefab instance");
+    auto content = prefab::variantFrom(s, e);
+    if (!content) return content.error();
+    std::string base = std::filesystem::path(pic->prefab.substr(pic->prefab.find("://") + 3)).stem().string() + "_variante";
+    const std::string folder = "assets://prefabs/";
+    std::string uri = folder + base + prefab::kExtension;
+    for (int i = 2; m_engine.vfs().exists(uri); ++i) uri = folder + base + "_" + std::to_string(i) + prefab::kExtension;
+    auto saved = m_engine.prefabs().save(uri, content.value());
+    if (!saved) return saved.error();
+    pic->prefab = uri;  // same ids: the variant expands to this very instance
+    commit("Create Prefab Variant");
+    return uri;
+}
+
 Result<ecs::Entity> EditorContext::instantiatePrefab(const std::string& uri, Vec3 position, ecs::Entity parent) {
     Scene& s = scene();
     auto e = prefab::instantiate(s, uri, parent);

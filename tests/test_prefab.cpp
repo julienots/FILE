@@ -347,3 +347,50 @@ TEST_CASE("revert, unpack, missing prefab placeholder, self-containing prefab") 
 }
 
 }
+
+TEST_SUITE("prefab") {
+TEST_CASE("variants: a prefab derived from another follows the base and keeps its own changes") {
+    Fixture f;
+    f.makePrefab(f.scene, f.enemy(f.scene), "assets://enemy.agrprefab");
+    // Variant: an instance with tougher armor and a renamed gun, saved as its own prefab.
+    const Entity inst = prefab::instantiate(f.scene, "assets://enemy.agrprefab").value();
+    f.scene.registry().get<ArmorComponent>(inst).value = 20.0f;
+    f.scene.registry().get<AimComponent>(f.child(f.scene, inst, "Gun")).damage = 3.0f;
+    CHECK_FALSE(prefab::variantFrom(f.scene, f.scene.findByName("Body")));  // not an instance root
+    auto variant = prefab::variantFrom(f.scene, inst);
+    REQUIRE(variant);
+    REQUIRE(f.library.save("assets://boss.agrprefab", variant.value()));
+    CHECK(prefab::baseOf("assets://boss.agrprefab") == "assets://enemy.agrprefab");
+    CHECK(prefab::baseOf("assets://enemy.agrprefab").empty());
+
+    Scene s;
+    const Entity boss = prefab::instantiate(s, "assets://boss.agrprefab").value();
+    CHECK(s.registry().get<PrefabInstanceComponent>(boss).prefab == "assets://boss.agrprefab");
+    CHECK(s.registry().get<ArmorComponent>(boss).value == doctest::Approx(20.0f));
+    const Entity gun = f.child(s, boss, "Gun");
+    REQUIRE(s.valid(gun));
+    CHECK(s.registry().get<AimComponent>(gun).damage == doctest::Approx(3.0f));
+    CHECK(s.registry().get<AimComponent>(gun).target == f.child(s, boss, "Body"));  // references stay inside
+    // This boss instance has its own change too.
+    s.registry().get<AimComponent>(gun).tag = "boss";
+    const std::string saved = SceneSerializer::toString(s);
+
+    // The base changes on disk: a new tag default... and armor of the base (overridden by the variant).
+    json base = *f.library.get("assets://enemy.agrprefab");
+    base["entities"][0]["components"]["TestArmor"]["value"] = 9.0f;
+    for (auto& e : base["entities"])
+        if (e["components"].contains("Name") && e["components"]["Name"].dump().find("Body") != std::string::npos)
+            e["components"]["Transform"]["position"] = {0, 2, 0};
+    REQUIRE(f.vfs.writeText("assets://enemy.agrprefab", base.dump()));
+    f.library.clear();
+    Scene loaded;
+    REQUIRE(SceneSerializer::fromString(loaded, saved));
+    const Entity b2 = loaded.findByName("Enemy");
+    REQUIRE(loaded.valid(b2));
+    CHECK(loaded.registry().get<ArmorComponent>(b2).value == doctest::Approx(20.0f));  // variant's change wins
+    CHECK(loaded.registry().get<TransformComponent>(f.child(loaded, b2, "Body")).position.y == doctest::Approx(2.0f));  // base edit reaches it
+    const Entity g2 = f.child(loaded, b2, "Gun");
+    CHECK(loaded.registry().get<AimComponent>(g2).damage == doctest::Approx(3.0f));
+    CHECK(loaded.registry().get<AimComponent>(g2).tag == "boss");  // the instance's own change
+}
+}

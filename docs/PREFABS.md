@@ -68,10 +68,19 @@ end
 Les scripts des entités de l'instance démarrent à l'image suivante, comme pour toute entité créée en
 jeu.
 
+## Variantes
+
+Clic droit sur une instance › **Créer une variante** (comme les scènes héritées de Godot) : l'instance et
+ses modifications deviennent un nouveau prefab `prefabs/<base>_variante.agrprefab`, enregistré comme « la
+base + ces changements ». Les instances de la variante suivent les modifications ultérieures de la base
+(un nouvel enfant, une autre couleur) et gardent ce que la variante change (un boss = un ennemi avec plus
+d'armure). Une variante peut servir de base à une autre. Par code : `prefab::variantFrom`, `prefab::baseOf`.
+
 ## Limites actuelles
 
 - Pas de mode d'édition isolé d'un prefab : on le modifie au travers d'une instance, puis *Appliquer*.
-- Pas de « variantes » de prefab (un prefab dérivé d'un autre) : on peut en revanche imbriquer.
+- Variantes : une variante ne peut pas retirer une entité de sa base (elle peut en ajouter, changer et
+  retirer des composants) ; *Appliquer* sur une instance de variante écrit dans la variante, pas dans la base.
 - *Appliquer* et *Rétablir* recréent les entités de l'instance (les références depuis l'extérieur de
   l'instance sont restaurées, les poignées d'entités tenues par un script en cours ne le sont pas).
 - Modifier un prefab n'entre pas dans l'historique d'annulation de la scène (comme les matériaux).

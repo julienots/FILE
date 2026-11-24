@@ -2205,3 +2205,35 @@ return Player
     CHECK(refs[2].line == 2);
     CHECK(findReferences({{"a.lua", "local jumper = 1 -- jump"}}, "jump").empty());  // whole words only
 }
+
+TEST_CASE("editor prefab variant: an instance becomes a variant, new instances keep its changes and follow the base") {
+    EditorFixture f(ProjectMode::Mode3D);
+    f.ctx->newScene(SceneTemplate::Empty3D);
+    Scene& s = f.scene();
+    const auto tower = s.createEntity("Tower");
+    s.registry().emplace<MeshRendererComponent>(tower).mesh = PrimitiveMesh::Cube;
+    s.createEntity("Flag", tower);
+    f.ctx->commit("Setup");
+    auto base = f.ctx->createPrefab(tower);
+    REQUIRE(base);
+    auto inst = f.ctx->instantiatePrefab(base.value(), {5, 0, 0});
+    REQUIRE(inst);
+    s.registry().get<MeshRendererComponent>(inst.value()).mesh = PrimitiveMesh::Sphere;
+    f.ctx->commit("Change");
+    auto variant = f.ctx->createPrefabVariant(inst.value());
+    REQUIRE(variant);
+    CHECK(variant.value() == "assets://prefabs/Tower_variante.agrprefab");
+    CHECK(f.ctx->undoStack().undoLabel() == "Create Prefab Variant");
+    CHECK(s.registry().get<PrefabInstanceComponent>(inst.value()).prefab == variant.value());
+    CHECK(prefab::overrideCount(s, inst.value()) == 0);  // its changes are now the variant's
+    CHECK_FALSE(f.ctx->createPrefabVariant(s.findByName("Flag")));
+    auto third = f.ctx->instantiatePrefab(variant.value(), {9, 0, 0});
+    REQUIRE(third);
+    CHECK(s.registry().get<MeshRendererComponent>(third.value()).mesh == PrimitiveMesh::Sphere);
+    CHECK(s.children(third.value()).size() == 1);
+    REQUIRE(f.ctx->saveSceneAs("scenes/variants.agrscene"));
+    REQUIRE(f.ctx->loadScene("scenes/variants.agrscene"));
+    usize spheres = 0;
+    f.scene().registry().view<MeshRendererComponent>().each([&](ecs::Entity, MeshRendererComponent& m) { spheres += m.mesh == PrimitiveMesh::Sphere; });
+    CHECK(spheres == 2);
+}
