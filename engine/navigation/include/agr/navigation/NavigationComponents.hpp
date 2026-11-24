@@ -1,4 +1,7 @@
 #pragma once
+#include <string>
+#include <vector>
+
 #include "agr/math/Math.hpp"
 
 namespace agr {
@@ -51,6 +54,15 @@ struct NavLinkComponent {
 struct NavAreaComponent {
     math::Vec3 size{4.0f, 2.0f, 4.0f};
     float cost = 3.0f;
+    bool walkable = true;
+};
+
+/// 2D walkable region drawn as a polygon (like Godot's NavigationPolygon): when a scene has
+/// walkable regions, the 2D grid is walkable only inside them (rooms, roads, a cave floor drawn by
+/// hand) and agents keep their radius away from the edges; `walkable` off cuts a hole (a pond).
+/// `points`: local, in order (any simple polygon, convex or not).
+struct NavRegion2DComponent {
+    std::vector<math::Vec2> points{{-4.0f, -3.0f}, {4.0f, -3.0f}, {4.0f, 3.0f}, {-4.0f, 3.0f}};
     bool walkable = true;
 };
 

@@ -1,5 +1,6 @@
 #include "agr/navigation/NavigationSystem.hpp"
 
+#include <unordered_set>
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -102,6 +103,11 @@ void addSphere(std::vector<Vec3>& v, std::vector<u32>& idx, const Mat4& m, float
 void registerNavigationComponents() {
     auto& reg = ComponentRegistry::instance();
     if (reg.find<NavAgentComponent>()) return;
+    reg.add<NavRegion2DComponent>("NavRegion2D")
+        .category("Navigation")
+        .description("2D walkable region drawn as a polygon (or a hole): with regions, the 2D grid is walkable only inside them.")
+        .field("points", &NavRegion2DComponent::points, {.tooltip = "Polygon (local units, in order)"})
+        .field("walkable", &NavRegion2DComponent::walkable, {.tooltip = "Off: a hole cut out of the walkable area"});
     reg.add<NavAgentComponent>("NavAgent")
         .category("Navigation")
         .description("Follows paths toward a destination given by a script (entity:navigateTo).")
@@ -169,8 +175,9 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
         for (float f : {c.size.x, c.size.y, c.radius, c.offset.x, c.offset.y}) h = mixf(h, f);
         mat(e);
     });
-    reg.view<TilemapCollider2DComponent, TilemapComponent>().each([&](ecs::Entity e, TilemapCollider2DComponent&, TilemapComponent& tm) {
+    reg.view<TilemapCollider2DComponent, TilemapComponent>().each([&](ecs::Entity e, TilemapCollider2DComponent& tc, TilemapComponent& tm) {
         if (!s.isActiveInHierarchy(e)) return;
+        h = mix(mix(h, std::hash<std::string>{}(tc.emptyTiles)), std::hash<std::string>{}(tc.triggerTiles));
         h = mix(mixf(mixf(h, tm.cellSize.x), tm.cellSize.y), (static_cast<u64>(tm.width) << 32) | tm.height);
         for (i32 t : tm.tiles) h = mix(h, static_cast<u64>(t >= 0));
         mat(e);
@@ -193,6 +200,12 @@ u64 NavigationSystem::geometryHash(Scene& s) const {
     reg.view<NavAreaComponent>().each([&](ecs::Entity e, NavAreaComponent& a) {
         if (!s.isActiveInHierarchy(e)) return;
         h = mix(mixf(mixf(mixf(mixf(h, a.size.x), a.size.y), a.size.z), a.cost), a.walkable ? 7 : 11);
+        mat(e);
+    });
+    reg.view<NavRegion2DComponent>().each([&](ecs::Entity e, NavRegion2DComponent& r) {
+        if (!s.isActiveInHierarchy(e)) return;
+        h = mix(h, r.walkable ? 13 : 17);
+        for (const Vec2& p : r.points) h = mixf(mixf(h, p.x), p.y);
         mat(e);
     });
     const NavigationSettingsComponent st = settingsOf(s);
@@ -282,12 +295,25 @@ void NavigationSystem::rebuild(Scene& s) {
         }
         ++m_stats.sourceShapes2D;
     });
-    reg.view<TilemapCollider2DComponent, TilemapComponent>().each([&](ecs::Entity e, TilemapCollider2DComponent&, TilemapComponent& tm) {
+    reg.view<TilemapCollider2DComponent, TilemapComponent>().each([&](ecs::Entity e, TilemapCollider2DComponent& tc, TilemapComponent& tm) {
         if (!s.isActiveInHierarchy(e)) return;
         const Mat4 m = s.worldMatrix(e);
+        // Decor and trigger tiles do not block walking.
+        std::unordered_set<i32> passable;
+        for (const std::string* list : {&tc.emptyTiles, &tc.triggerTiles}) {
+            std::string cur;
+            for (char ch : *list + ",") {
+                if (ch == ',' || ch == ';') {
+                    if (!cur.empty()) passable.insert(std::atoi(cur.c_str()));
+                    cur.clear();
+                } else if (ch != ' ') {
+                    cur += ch;
+                }
+            }
+        }
         for (u32 y = 0; y < tm.height; ++y)
             for (u32 x = 0; x < tm.width; ++x) {
-                if (tm.tileAt(x, y) < 0) continue;
+                if (tm.tileAt(x, y) < 0 || passable.count(tm.tileAt(x, y))) continue;
                 const Vec3 a = m.transformPoint({static_cast<float>(x) * tm.cellSize.x, static_cast<float>(y) * tm.cellSize.y, 0.0f});
                 const Vec3 b = m.transformPoint({static_cast<float>(x + 1) * tm.cellSize.x, static_cast<float>(y + 1) * tm.cellSize.y, 0.0f});
                 const Vec2 mn{std::min(a.x, b.x), std::min(a.y, b.y)}, mx{std::max(a.x, b.x), std::max(a.y, b.y)};
@@ -295,6 +321,24 @@ void NavigationSystem::rebuild(Scene& s) {
                 grow(mn, mx);
                 ++m_stats.sourceShapes2D;
             }
+    });
+    // Walkable regions and holes drawn as polygons (world space).
+    struct Region2D {
+        std::vector<Vec2> poly;
+        bool walkable;
+    };
+    std::vector<Region2D> regions;
+    reg.view<NavRegion2DComponent>().each([&](ecs::Entity e, NavRegion2DComponent& r) {
+        if (!s.isActiveInHierarchy(e) || r.points.size() < 3) return;
+        const Mat4 m = s.worldMatrix(e);
+        Region2D out{{}, r.walkable};
+        for (const Vec2& p : r.points) {
+            const Vec3 w = m.transformPoint({p.x, p.y, 0.0f});
+            out.poly.push_back({w.x, w.y});
+            grow({w.x, w.y}, {w.x, w.y});
+        }
+        regions.push_back(std::move(out));
+        ++m_stats.sourceShapes2D;
     });
     // 2D agents extend the area (they may walk around the obstacles' bounds).
     reg.view<NavAgentComponent>().each([&](ecs::Entity e, NavAgentComponent& a) {
@@ -334,6 +378,36 @@ void NavigationSystem::rebuild(Scene& s) {
         const u32 h = std::min<u32>(2048, static_cast<u32>(std::ceil((ghi.y - glo.y) / cell)) + 1);
         grid.reset(glo, cell, w, h);
         for (const Rect2& r : rects) grid.blockRect(r.mn, r.mx, radius);
+        if (!regions.empty()) {
+            auto inside = [](const std::vector<Vec2>& poly, Vec2 p) {  // even-odd rule
+                bool in = false;
+                for (usize i = 0, j = poly.size() - 1; i < poly.size(); j = i++)
+                    if ((poly[i].y > p.y) != (poly[j].y > p.y) &&
+                        p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+                        in = !in;
+                return in;
+            };
+            auto edgeDistance = [](const std::vector<Vec2>& poly, Vec2 p) {
+                float best = 1e30f;
+                for (usize i = 0, j = poly.size() - 1; i < poly.size(); j = i++) {
+                    const Vec2 a = poly[j], b = poly[i], ab = b - a;
+                    const float t = std::clamp(math::dot(p - a, ab) / std::max(math::dot(ab, ab), 1e-12f), 0.0f, 1.0f);
+                    best = std::min(best, math::length(p - (a + ab * t)));
+                }
+                return best;
+            };
+            const bool anyWalkable = std::any_of(regions.begin(), regions.end(), [](const Region2D& r) { return r.walkable; });
+            for (u32 y = 0; y < grid.height(); ++y)
+                for (u32 x = 0; x < grid.width(); ++x) {
+                    const Vec2 c = grid.cellCenter(static_cast<i32>(x), static_cast<i32>(y));
+                    bool ok = !anyWalkable;
+                    for (const Region2D& r : regions)
+                        if (r.walkable && inside(r.poly, c) && edgeDistance(r.poly, c) >= radius) ok = true;
+                    for (const Region2D& r : regions)
+                        if (!r.walkable && (inside(r.poly, c) || edgeDistance(r.poly, c) < radius)) ok = false;
+                    if (!ok) grid.setBlocked(static_cast<i32>(x), static_cast<i32>(y), true);
+                }
+        }
         for (const Circle2& c : circles) grid.blockCircle(c.c, c.r, radius);
         reg.view<NavObstacleComponent>().each([&](ecs::Entity e, NavObstacleComponent& o) {
             if (!o.carve || !s.isActiveInHierarchy(e)) return;

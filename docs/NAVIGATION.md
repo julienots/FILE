@@ -111,6 +111,18 @@ Tests : chemins à travers les tuiles, lien entre deux tuiles, caisse ajoutée p
 9 tuiles reconstruites, chemin qui la contourne puis redevient droit), obstacle découpé déplacé
 dans une scène.
 
+## Régions 2D dessinées (polygones)
+
+`NavRegion2D` (comme `NavigationPolygon` de Godot) : un polygone (`points`, locaux, dans l'ordre ;
+convexe ou non) qui définit **où l'on peut marcher** en 2D. Dès qu'une scène a une région praticable,
+la grille 2D n'est praticable qu'à l'intérieur des régions (pièces, routes, sol d'une grotte dessiné à
+la main), à la distance du rayon de l'agent des bords ; `walkable` décoché découpe un **trou** (un étang,
+un pilier). Les points s'éditent dans l'inspecteur comme ceux d'un `Collider2D` polygone ; le bouton
+*Navigation* de la vue montre les cases bloquées. Les tuiles de décor et de déclencheur d'un
+`TilemapCollider2D` (`emptyTiles`, `triggerTiles`) ne bloquent plus la grille. Test : chemin dans un
+couloir en L qui tourne au coin sans en sortir, destination hors de la région inatteignable, détour autour
+d'un étang, mur d'herbe traversé tout droit.
+
 ## Tailles d'agents
 
 `NavigationSettings.agentSizes` (`"0.8;1.5"`) : pour chaque rayon, une grille 2D et un maillage 3D de
@@ -121,6 +133,8 @@ seul un humain se faufile. Test : un mur percé d'une ouverture de 1,4 m, traver
 rayon 0,3, contournée par un agent de rayon 0,9.
 
 ## Limites actuelles
+
+- Régions 2D : appliquées case par case sur la grille (précision de `gridCellSize`), pas un vrai maillage de polygones 2D.
 
 - Évitement local (sans planification de foule globale) : dans un couloir très étroit, deux groupes
   face à face peuvent ralentir avant de se départager.

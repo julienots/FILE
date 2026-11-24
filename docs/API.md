@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (76, 759 champs)
+## Composants (77, 761 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -14,7 +14,7 @@ Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-m�
 
 **Effects** : [ParticleAttractor](#ParticleAttractor), [ParticleCollider](#ParticleCollider), [Trail](#Trail)
 
-**Navigation** : [NavAgent](#NavAgent), [NavArea](#NavArea), [NavLink](#NavLink), [NavObstacle](#NavObstacle), [NavigationSettings](#NavigationSettings)
+**Navigation** : [NavAgent](#NavAgent), [NavArea](#NavArea), [NavLink](#NavLink), [NavObstacle](#NavObstacle), [NavRegion2D](#NavRegion2D), [NavigationSettings](#NavigationSettings)
 
 **Network** : [NetSync](#NetSync)
 
@@ -480,6 +480,17 @@ Agents steer around it; with carve, it is also cut out of the navigation (paths 
 | `radius` | float | plage 0.01 .. 100 |
 | `height` | float | plage 0.01 .. 100 |
 | `carve` | bool | Cut out of the navigation (rebuilt when it moves) |
+
+### NavRegion2D
+
+2D walkable region drawn as a polygon (or a hole): with regions, the 2D grid is walkable only inside them.
+
+*Navigation*
+
+| Champ | Type | Détails |
+|---|---|---|
+| `points` | vec2[] | Polygon (local units, in order) |
+| `walkable` | bool | Off: a hole cut out of the walkable area |
 
 ### NavigationSettings
 

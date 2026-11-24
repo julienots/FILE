@@ -5,6 +5,7 @@
 
 #include <cmath>
 
+#include "agr/twod/TilemapEditing.hpp"
 #include "agr/navigation/NavigationSystem.hpp"
 #include "agr/physics3d/Physics3DWorld.hpp"
 #include "agr/physics2d/Physics2DComponents.hpp"
@@ -675,4 +676,62 @@ TEST_CASE("crowds: avoidance priority — the higher one keeps its line, the low
     const auto equal = run(1.0f, 1.0f);           // shared: both turn
     CHECK_MESSAGE(equal[0] > 0.25f, equal[0]);
     CHECK_MESSAGE(equal[1] > 0.25f, equal[1]);
+}
+
+TEST_CASE("2D navigation regions: walkable only inside the drawn polygon, holes avoided, decor tiles passable") {
+    registerAll();
+    Scene s;
+    // An L-shaped corridor: from the bottom-left room to the top-right, around the corner.
+    const auto region = s.createEntity("Corridor");
+    s.registry().emplace<NavRegion2DComponent>(region).points = {{0, 0}, {10, 0}, {10, 10}, {7, 10}, {7, 3}, {0, 3}};
+    s.updateTransforms();
+    NavigationSystem nav;
+    std::vector<Vec3> path;
+    REQUIRE(nav.findPath(s, {1, 1.5f, 0}, {8.5f, 9, 0}, false, path));
+    // The straight line would cut across (4, 6), outside the corridor: the path turns at the corner.
+    bool turns = false;
+    for (const Vec3& p : path) {
+        CHECK_MESSAGE((p.y <= 3.01f || p.x >= 6.99f), p.x << "," << p.y);  // never outside the L
+        turns |= p.x > 6.5f && p.y < 3.0f;
+    }
+    CHECK(turns);
+    // Outside the region: not reachable.
+    std::vector<Vec3> nowhere;
+    bool complete = true;
+    nav.findPath(s, {1, 1.5f, 0}, {2, 8, 0}, false, nowhere);
+    if (!nowhere.empty()) CHECK(math::length(nowhere.back() - Vec3{2, 8, 0}) > 2.0f);
+    (void)complete;
+
+    // A room with a pond (hole) in the middle: the path goes around it.
+    Scene r;
+    const auto room = r.createEntity("Room");
+    r.registry().emplace<NavRegion2DComponent>(room).points = {{-10, -10}, {10, -10}, {10, 10}, {-10, 10}};
+    const auto pond = r.createEntity("Pond");
+    auto& hole = r.registry().emplace<NavRegion2DComponent>(pond);
+    hole.points = {{-3, -3}, {3, -3}, {3, 3}, {-3, 3}};
+    hole.walkable = false;
+    r.updateTransforms();
+    NavigationSystem nav2;
+    REQUIRE(nav2.findPath(r, {-8, 0, 0}, {8, 0, 0}, false, path));
+    float maxY = 0.0f;
+    for (const Vec3& p : path) maxY = std::max(maxY, std::abs(p.y));
+    CHECK(maxY > 3.0f);
+
+    // Decor tiles of a TilemapCollider2D (emptyTiles) do not block the 2D grid.
+    Scene t;
+    const auto map = t.createEntity("Map");
+    t.registry().get<TransformComponent>(map).position = {-2, -5, 0};
+    auto& tm = t.registry().emplace<TilemapComponent>(map);
+    tm.width = 1;
+    tm.height = 10;
+    tilemapEnsureLayout(tm);
+    tilemapFillRect(tm, 0, 0, 0, 9, 2);  // a wall of grass tiles across the way
+    t.registry().emplace<TilemapCollider2DComponent>(map).emptyTiles = "2";
+    const auto far = t.createEntity("Far");  // gives the grid some area
+    t.registry().emplace<Collider2DComponent>(far);
+    t.registry().get<TransformComponent>(far).position = {20, 20, 0};
+    t.updateTransforms();
+    NavigationSystem nav3;
+    REQUIRE(nav3.findPath(t, {-5, 0, 0}, {2, 0, 0}, false, path));
+    CHECK(path.size() == 1);  // straight through the grass
 }
