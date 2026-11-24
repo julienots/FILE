@@ -85,3 +85,31 @@ mark{background:#FDE68A;color:#000;border-radius:3px}
 .fav{background:none;border:0;font-size:24px}
 .big{font-size:40px;text-align:center;margin:8px 0}
 .box.expl:before{content:none}
+.iconbtn{font-size:18px}
+.herostats{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 4px}
+.tiles a{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;text-decoration:none;color:var(--text)}
+.tiles span{display:block;font-size:26px}.tiles b{display:block;font-size:13px;line-height:1.2;margin-top:4px}.tiles small{color:var(--muted);font-size:11px}
+.exo{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:12px}
+.exot{color:var(--brand2)}
+.exo details{margin-top:10px}
+.exo summary{cursor:pointer;font-weight:700;color:var(--brand2);padding:8px 0;list-style:none}
+.exo summary:before{content:"▶ "}.exo details[open] summary:before{content:"▼ "}
+.sol{background:var(--ex);border-radius:10px;padding:10px 12px}
+.sol ol,.sol ul,.exo ol,.exo ul{padding-left:20px;margin:6px 0}
+.examhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px}
+#chrono{font-variant-numeric:tabular-nums;font-size:18px}#chrono.late{color:var(--bad)}
+.badans{color:var(--bad);margin:4px 0}.goodans{color:var(--ok);margin:4px 0;font-weight:600}
+.btn.no{background:#F97316}
+.field{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+.field span{flex:1;font-size:15px}.field small{color:var(--muted)}
+.field input{width:42%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:16px;text-align:right}
+table.res{display:table;margin:0}table.res td{border:0;border-bottom:1px solid var(--line);padding:8px 4px}table.res td:last-child{text-align:right}
+.stat{grid-template-columns:repeat(3,1fr)}
+.spark{display:flex;align-items:flex-end;gap:4px;height:64px;margin-top:10px}
+.spark i{flex:1;background:var(--line);border-radius:4px}.spark i.on{background:var(--brand2)}
+.settings>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.settings>div:last-child{border:0}.settings .chip{padding:5px 10px}
+h2.sec a{text-decoration:none}
+.formules .f{text-align:left;white-space:normal}
+@media (max-width:360px){.tiles{grid-template-columns:repeat(2,1fr)}}
