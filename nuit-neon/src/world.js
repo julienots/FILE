@@ -284,8 +284,25 @@ export function skyDome(th) {
   return m;
 }
 
+// Carte des distances à la route : grille de cases de `cell` m ; chaque case retient le point de la route le plus proche,
+// propagé en deux passes (avant puis arrière, voisins compris). Lecture interpolée : continue et très rapide.
+function distanceField(T, cx, cz, half, cell) {
+  const n = Math.ceil(half * 2 / cell) + 1, x0 = cx - half, z0 = cz - half, near = new Int32Array(n * n).fill(-1), dist = new Float32Array(n * n);
+  const d2 = (k, j) => { const x = x0 + (k % n) * cell, z = z0 + Math.floor(k / n) * cell, dx = x - T.px[j], dz = z - T.pz[j]; return dx * dx + dz * dz; };
+  for (let j = 0; j < T.N; j++) { const ix = Math.round((T.px[j] - x0) / cell), iz = Math.round((T.pz[j] - z0) / cell);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const X = ix + a, Z = iz + b; if (X < 0 || Z < 0 || X >= n || Z >= n) continue; const k = Z * n + X; if (near[k] < 0 || d2(k, j) < d2(k, near[k])) near[k] = j; } }
+  const relax = (k, k2) => { const j = near[k2]; if (j >= 0 && (near[k] < 0 || d2(k, j) < d2(k, near[k]))) near[k] = j; };
+  for (let pass = 0; pass < 2; pass++) {
+    for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) { const k = z * n + x; if (x > 0) relax(k, k - 1); if (z > 0) { relax(k, k - n); if (x > 0) relax(k, k - n - 1); if (x < n - 1) relax(k, k - n + 1); } }
+    for (let z = n - 1; z >= 0; z--) for (let x = n - 1; x >= 0; x--) { const k = z * n + x; if (x < n - 1) relax(k, k + 1); if (z < n - 1) { relax(k, k + n); if (x < n - 1) relax(k, k + n + 1); if (x > 0) relax(k, k + n - 1); } }
+  }
+  for (let k = 0; k < n * n; k++) dist[k] = near[k] < 0 ? 1e4 : Math.sqrt(d2(k, near[k]));
+  return (x, z) => { const fx = Math.min(n - 1.001, Math.max(0, (x - x0) / cell)), fz = Math.min(n - 1.001, Math.max(0, (z - z0) / cell)), ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz, k = iz * n + ix;
+    return (dist[k] * (1 - u) + dist[k + 1] * u) * (1 - v) + (dist[k + n] * (1 - u) + dist[k + n + 1] * u) * v; };
+}
+
 export function buildWorld(def, renderer, q) {
-  let ground = null; const solids = [];   // monde ouvert : hauteur du sol (x, z, distance à la route) et obstacles fixes [x, z, rayon]
+  let ground = null, lakeDepth = () => 0, lakeList = []; const solids = [];   // monde ouvert : hauteur du sol (x, z, distance à la route) et obstacles fixes [x, z, rayon]
   seed = 1337 + def.id.length * 7919 + def.pts.length * 104729;
   const th = def.theme, city = th.env !== 'nature';
   const T = makeTrack(def), HALF = T.half;
@@ -549,18 +566,34 @@ export function buildWorld(def, renderer, q) {
     updaters.push((cam, dt, time) => { for (const m of timed) m.uniforms.time.value = time; });
 
     // --- relief : plat près de la piste, vallonné au-delà ---
-    const distTrack = (x, z) => { let b = 1e18; for (let i = 0; i < T.N; i += 4) { const dx = x - T.px[i], dz = z - T.pz[i], d = dx * dx + dz * dz; if (d < b) b = d; } return Math.sqrt(b); };
+    let distTrack = (x, z) => { let b = 1e18; for (let i = 0; i < T.N; i += 4) { const dx = x - T.px[i], dz = z - T.pz[i], d = dx * dx + dz * dz; if (d < b) b = d; } return Math.sqrt(b); };
+    if (def.ouvert) distTrack = distanceField(T, cx, cz, R + 1100, 8);   // monde ouvert : carte des distances à la route (rapide et identique pour le décor et la voiture)
     const amp = th.relief ?? 34;
     const hills = (x, z) => Math.sin(x * 0.0061 + 1.3) * Math.cos(z * 0.0053 + 0.4) * 0.5 + Math.sin(x * 0.013 + z * 0.011) * 0.28 + Math.sin(x * 0.031 - z * 0.027 + 2.0) * 0.1 + 0.55;
     const mer = th.mer;
+    // monde ouvert : lacs creusés dans les prés (fond en cuvette, berges en pente douce) et petites bosses du terrain
+    const lakes = [];
+    if (def.ouvert) for (const [f, sd, r] of [[0.16, 1, 85], [0.47, -1, 110], [0.79, 1, 75]]) {
+      const i = Math.floor(T.N * f), o = sd * (r + 120), x = T.px[i] - T.tz[i] * o, z = T.pz[i] + T.tx[i] * o, t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240));
+      lakes.push({ x, z, r, lvl: hills(x, z) * amp * t * t * (3 - 2 * t) - 0.6 });
+    }
+    const bump = (x, z) => (Math.sin(x * 0.9 + Math.sin(z * 0.37) * 2) * Math.sin(z * 0.83 + Math.sin(x * 0.29) * 2)) * 0.07 + Math.sin(x * 0.21 + z * 0.17) * 0.05;
+    const lakeShape = (x, z, h) => { for (const L of lakes) { const dx = x - L.x, dz = z - L.z, d = Math.sqrt(dx * dx + dz * dz); if (d > L.r * 1.35) continue;
+        const u = d / L.r, bottom = L.lvl - 0.25 - 1.0 * Math.max(0, 1 - u * u), k = Math.min(1, Math.max(0, (L.r * 1.35 - d) / (L.r * 0.45))); h = h + (Math.min(h, bottom) - h) * k * k * (3 - 2 * k); } return h; };
     const heightAt = mer
       // côte : plage en pente douce jusqu'à la mer, quelques îles et caps au loin
       ? (x, z) => { const d = distTrack(x, z), t = Math.min(1, Math.max(0, (d - 60) / 300)), s = Math.min(1, Math.max(0, (d - 24) / 56));
           return (hills(x, z) - 0.72) * amp * t * t * (3 - 2 * t) - 8 * s * s * (3 - 2 * s); }
+      : def.ouvert
+      ? (x, z) => { const d = distTrack(x, z), t = Math.min(1, Math.max(0, (d - 34) / 240)); let h = hills(x, z) * amp * t * t * (3 - 2 * t) + bump(x, z) * Math.min(1, Math.max(0, (d - 9) / 6)); return lakes.length ? lakeShape(x, z, h) : h; }
       : (x, z) => { const t = Math.min(1, Math.max(0, (distTrack(x, z) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
-    if (!mer) ground = (x, z, lat) => { const t = Math.min(1, Math.max(0, (Math.abs(lat) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
+    if (def.ouvert) ground = (x, z) => heightAt(x, z);
+    else if (!mer) ground = (x, z, lat) => { const t = Math.min(1, Math.max(0, (Math.abs(lat) - 34) / 240)); return hills(x, z) * amp * t * t * (3 - 2 * t); };
+    // profondeur d'eau sous un point (0 hors des lacs)
+    lakeDepth = (x, z) => { for (const L of lakes) { const dx = x - L.x, dz = z - L.z; if (dx * dx + dz * dz < L.r * L.r * 1.2) return Math.max(0, L.lvl - heightAt(x, z)); } return 0; };
+    lakeList = lakes;
     {
-      const size = 2 * (R + 1050), seg = q.terrain;
+      const size = 2 * (R + 1050), seg = def.ouvert ? Math.min(Math.round(size / 13), q.terrain >= 170 ? 560 : q.terrain >= 140 ? 460 : 300) : q.terrain;   // monde ouvert : maillage fin (berges, bosses)
       const g = new THREE.PlaneGeometry(size, size, seg, seg); const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) p.setZ(i, heightAt(cx + p.getX(i), cz - p.getY(i)));
       g.computeVertexNormals();
@@ -804,7 +837,7 @@ export function buildWorld(def, renderer, q) {
         const i = Math.floor(rnd() * T.N), side = rnd() < 0.5 ? -1 : 1, off = side * (HALF + near + Math.pow(rnd(), 1.6) * farD);
         const x = T.px[i] - T.tz[i] * off, z = T.pz[i] + T.tx[i] * off;
         if (!farFromTrack(x, z, HALF + near - 1)) continue;
-        const hy = heightAt(x, z); if (mer && hy < (kind === 'rocher' ? -3 : 0.15)) continue;   // pas d'arbre dans l'eau
+        const hy = heightAt(x, z); if ((mer && hy < (kind === 'rocher' ? -3 : 0.15)) || lakeDepth(x, z) > 0) continue;   // pas d'arbre dans l'eau
         spots.push([x, z, hy, rr(s0, s1), rr(0, 6.28)]);
       }
       const rad = kind === 'rocher' ? 1.9 : kind === 'cactus' ? 0.6 : kind === 'palmier' ? 0.45 : 0.55;
@@ -824,6 +857,92 @@ export function buildWorld(def, renderer, q) {
     }
 
     // --- bords de route ---
+    if (def.ouvert) {
+      // ---------- monde ouvert : lacs, fermes, bottes de foin, éoliennes ----------
+      const rnd2 = (() => { let s2 = 4242; return () => { s2 = (s2 * 16807) % 2147483647; return s2 / 2147483647; }; })();
+      // eau des lacs : ciel reflété (Fresnel), rides du vent, éclats du soleil, bord qui s'éclaircit sur la berge
+      const lakeMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
+        uniforms: Object.assign(gUni(), { hor: { value: new THREE.Color().fromArray(th.sky[2]) }, mid: { value: new THREE.Color().fromArray(th.sky[1]) }, deep: { value: new THREE.Color(0x10303a) }, sunRaw: { value: new THREE.Color().fromArray(th.sun.col) } }),
+        vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
+        fragmentShader: GROUND_GLSL + `uniform vec3 hor; uniform vec3 mid; uniform vec3 deep; uniform vec3 sunRaw; varying vec3 vW;
+          void main(){ vec2 p = vW.xz; vec3 toCam = cameraPosition - vW; float dist = length(toCam); vec3 V = toCam / dist;
+            float e = 0.3; vec2 q = p*0.7 + vec2(time*0.35, time*0.2), q2 = p*2.3 - vec2(time*0.5, time*0.15);
+            vec2 g = vec2(gn(q + vec2(e,0.)) - gn(q - vec2(e,0.)), gn(q + vec2(0.,e)) - gn(q - vec2(0.,e))) * 0.35 + vec2(gn(q2 + vec2(e,0.)) - gn(q2 - vec2(e,0.)), gn(q2 + vec2(0.,e)) - gn(q2 - vec2(0.,e))) * 0.15;
+            vec3 N = normalize(vec3(-g.x, 1.0, -g.y)); vec3 R2 = reflect(-V, N); R2.y = abs(R2.y);
+            vec3 sky = mix(hor, mid, smoothstep(0.0, 0.25, R2.y));
+            float fres = 0.03 + 0.97*pow(1.0 - max(dot(N, V), 0.0), 5.0);
+            vec3 col = mix(deep * (amb*0.35 + sunCol*0.25), sky, fres);
+            col += sunRaw * pow(max(dot(R2, sunDir), 0.0), 400.0) * 6.0;
+            col = mix(col, fogColor, 1.0 - exp(-fogDensity*fogDensity*dist*dist));
+            gl_FragColor = vec4(col, 0.92);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }` });
+      timed.push(lakeMat); disposables.push(lakeMat);
+      for (const L of lakes) { const w = add(new THREE.CircleGeometry(L.r * 1.25, 64).rotateX(-Math.PI / 2), lakeMat); w.position.set(L.x, L.lvl, L.z); w.renderOrder = 3; }
+      // emplacement libre : sur la terre ferme, loin de la route, des lacs et des autres bâtiments
+      const placed = [];
+      const trees0 = solids.slice();
+      const freeAt = (x, z, r) => { if (distTrack(x, z) < 22 + r || lakeDepth(x, z) > 0) return false; if (r > 4) for (const o of trees0) if (Math.abs(x - o[0]) < r + 2 && Math.abs(z - o[1]) < r + 2) return false; for (const L of lakes) if (Math.hypot(x - L.x, z - L.z) < L.r * 1.4 + r) return false; for (const o of placed) if (Math.hypot(x - o[0], z - o[1]) < o[2] + r) return false; return true; };
+      const spotNear = (f, latMin, latMax, r) => { for (let k = 0; k < 40; k++) { const i = Math.floor(((f + (rnd2() - 0.5) * 0.04) % 1 + 1) % 1 * T.N), sd = rnd2() < 0.5 ? -1 : 1, o = sd * (latMin + rnd2() * (latMax - latMin));
+        const x = T.px[i] - T.tz[i] * o, z = T.pz[i] + T.tx[i] * o; if (freeAt(x, z, r)) return [x, z, Math.atan2(-T.tx[i], -T.tz[i])]; } return null; };
+      const stone = [], roofs = [], wood = [], bales = [], dark = [], white = [];
+      // une maison de ferme : murs en pierre claire, toit de tuiles à deux pans, volets, cheminée
+      const house = (x, z, a, w, d, h, barn) => {
+        const y = Math.min(heightAt(x - w / 2, z), heightAt(x + w / 2, z), heightAt(x, z - d / 2), heightAt(x, z + d / 2)) - 0.3, ca = Math.cos(a), sa = Math.sin(a);
+        const P = (lx, lz) => [x + lx * ca + lz * sa, z - lx * sa + lz * ca];
+        const wall = new THREE.BoxGeometry(w, h + 0.3, d).rotateY(a); wall.translate(x, y + (h + 0.3) / 2, z); (barn ? wood : stone).push(colored(wall, barn ? 0x7a3324 : [0xe6dcc6, 0xd8ccb0, 0xf0ead8][Math.floor(rnd2() * 3)]));
+        // toit : deux pans inclinés qui débordent un peu
+        const rh = d * 0.38, over = 0.4, rg = new THREE.BufferGeometry(), hw = w / 2 + over, hd = d / 2 + over, top = y + h + 0.3 + rh;
+        const v = [[-hw, y + h + 0.3 - 0.2, -hd], [hw, y + h + 0.3 - 0.2, -hd], [hw, top, 0], [-hw, top, 0], [-hw, y + h + 0.3 - 0.2, hd], [hw, y + h + 0.3 - 0.2, hd]];
+        const pos = []; const tri = (A, B, C) => { for (const V of [A, B, C]) { const [X, Z] = P(V[0], V[2]); pos.push(X, V[1], Z); } };
+        tri(v[0], v[1], v[2]); tri(v[0], v[2], v[3]); tri(v[5], v[4], v[3]); tri(v[5], v[3], v[2]);
+        rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.computeVertexNormals(); roofs.push(colored(rg, barn ? 0x5a5f66 : [0xb4583a, 0xa04a32, 0xc06a48][Math.floor(rnd2() * 3)]));
+        // pignons
+        const gg = new THREE.BufferGeometry(), gp = [];
+        for (const sd of [-1, 1]) for (const V of [[sd * w / 2, y + h + 0.3, -d / 2], [sd * w / 2, y + h + 0.3, d / 2], [sd * w / 2, top - 0.05, 0]]) { const [X, Z] = P(V[0], V[2]); gp.push(X, V[1], Z); }
+        gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3)); gg.computeVertexNormals(); (barn ? wood : stone).push(colored(gg, barn ? 0x7a3324 : 0xe0d6c0));
+        // fenêtres et volets, porte
+        if (!barn) { const nWin = Math.max(2, Math.floor(w / 3)); for (let k = 0; k < nWin; k++) for (const sd of [-1, 1]) for (const fl of h > 5 ? [1.6, 4.2] : [1.6]) {
+            const lx = -w / 2 + (k + 0.5) * w / nWin, [X, Z] = P(lx, sd * (d / 2 + 0.03)); const win = new THREE.BoxGeometry(0.9, 1.2, 0.08).rotateY(a).translate(X, y + 0.3 + fl, Z); dark.push(colored(win, 0x1a1e24));
+            for (const s3 of [-1, 1]) { const [X2, Z2] = P(lx + s3 * 0.72, sd * (d / 2 + 0.05)); white.push(colored(new THREE.BoxGeometry(0.42, 1.3, 0.06).rotateY(a).translate(X2, y + 0.3 + fl, Z2), [0x4a6a8a, 0x5a7a4a, 0x8a5a3a][Math.floor(rnd2() * 3)])); } }
+          const [cx2, cz2] = P(w * 0.3, 0); stone.push(colored(new THREE.BoxGeometry(0.7, 2.2, 0.7).translate(cx2, top - 0.2, cz2), 0xc8bca4));   // cheminée
+        } else { const [X, Z] = P(0, d / 2 + 0.05); dark.push(colored(new THREE.BoxGeometry(w * 0.4, h * 0.75, 0.1).rotateY(a).translate(X, y + 0.3 + h * 0.375, Z), 0x2a1a12)); }
+        // collisions : cercles le long du bâtiment
+        const n2 = Math.max(1, Math.round(w / d)); for (let k = 0; k < n2; k++) { const [X, Z] = P(-w / 2 + (k + 0.5) * w / n2, 0); solids.push([X, Z, Math.min(w / n2, d) * 0.62]); }
+        placed.push([x, z, Math.hypot(w, d) / 2 + 2]);
+      };
+      // fermes : un corps de logis, une grange, un hangar, des bottes de foin dans le pré voisin
+      for (const f of [0.06, 0.22, 0.36, 0.55, 0.68, 0.88]) {
+        const sp = spotNear(f, 45, 150, 30); if (!sp) continue; const [x, z, a] = sp, ca = Math.cos(a), sa = Math.sin(a);
+        house(x, z, a, 11 + rnd2() * 4, 7.5, 5.6, false);
+        house(x + ca * 18 + sa * 6, z - sa * 18 + ca * 6, a + Math.PI / 2, 16, 10, 6.5, true);
+        if (rnd2() < 0.7) house(x - ca * 15 + sa * 10, z + sa * 15 + ca * 10, a, 8, 6.5, 3.6, false);
+        for (let k = 0; k < 10 + rnd2() * 10; k++) { const bx = x + (rnd2() - 0.5) * 120, bz = z + (rnd2() - 0.5) * 120; if (!freeAt(bx, bz, 2)) continue;
+          const br = new THREE.CylinderGeometry(0.75, 0.75, 1.25, 16).rotateZ(Math.PI / 2).rotateY(rnd2() * 6.28); br.translate(bx, heightAt(bx, bz) + 0.68, bz); bales.push(colored(br, [0xc8a858, 0xb89848, 0xd4b468][Math.floor(rnd2() * 3)]));
+          solids.push([bx, bz, 0.8]); placed.push([bx, bz, 1.5]); }
+      }
+      const mk = (arr, m) => { if (arr.length) { const me = add(mergeGeometries(arr), m); me.castShadow = false; } };
+      mk(stone, noisy(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 }), 2.5, 0.35));
+      mk(wood, noisy(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 }), 6, 0.4));
+      mk(roofs, noisy(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0, side: THREE.DoubleSide }), 9, 0.45));
+      mk(bales, noisy(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), 14, 0.5));
+      mk(dark, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.15, metalness: 0.6 }));
+      mk(white, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }));
+      // éoliennes sur les hauteurs : mât de 70 m, nacelle, trois pales qui tournent lentement
+      const towers = [], rotors = [], white2 = new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.5, metalness: 0.1 });
+      const bladeGeo = (() => { const gs = []; for (let k = 0; k < 3; k++) { const b2 = new THREE.BoxGeometry(1.6, 26, 0.35); b2.translate(0.3, 13.5, 0); const p2 = b2.attributes.position; for (let i = 0; i < p2.count; i++) { if (p2.getY(i) > 13.5) p2.setX(i, p2.getX(i) * 0.35); } b2.rotateZ(k * Math.PI * 2 / 3); gs.push(b2); }
+        gs.push(new THREE.SphereGeometry(1.4, 12, 8).scale(1, 1, 1.6)); return mergeGeometries(gs.map(g => g.toNonIndexed())); })();
+      disposables.push(bladeGeo, white2);
+      for (const f of [0.1, 0.26, 0.42, 0.6, 0.74, 0.93]) {
+        const sp = spotNear(f, 300, 430, 12); if (!sp) continue; const [x, z] = sp, y = heightAt(x, z) - 1;
+        towers.push(new THREE.CylinderGeometry(1.0, 1.9, 72, 14).translate(x, y + 36, z), new THREE.BoxGeometry(2.6, 3, 7).translate(x, y + 73, z + 0.5));
+        const rot = new THREE.Mesh(bladeGeo, white2); rot.position.set(x, y + 73, z - 3.4); rot.rotation.z = rnd2() * 6; group.add(rot); rotors.push([rot, 0.55 + rnd2() * 0.3]);
+        solids.push([x, z, 2.2]); placed.push([x, z, 14]);
+      }
+      if (towers.length) add(mergeGeometries(towers.map(g => g.toNonIndexed())), white2);
+      updaters.push((cam, dt) => { for (const [r2, sp] of rotors) r2.rotation.z -= sp * dt; });
+    }
     if (T.libre) {
       // balises de bord de route (blanches, bande noire, catadioptre) tous les 50 m, en quinconce
       const bal = [], step = Math.max(1, Math.round(50 / T.ds));
@@ -957,7 +1076,7 @@ export function buildWorld(def, renderer, q) {
             while (z - fz > S / 2) { z -= S; moved = true; } while (z - fz < -S / 2) { z += S; moved = true; }
             if (!moved) continue;
             const j = T.nearest(x, z, hint, 30), sl = T.lateral(x, z, j), lat = Math.abs(sl);
-            off[k4] = x; off[k4 + 1] = z; off[k4 + 2] = lat < HALF + (T.libre ? 1.3 : 1.0) ? 0 : 1; hs[i] = ground ? ground(x, z, sl) - 0.1 : 0; dirty = true;
+            off[k4] = x; off[k4 + 1] = z; off[k4 + 2] = lat < HALF + (T.libre ? 1.3 : 1.0) || lakeDepth(x, z) > 0.02 ? 0 : 1; hs[i] = ground ? ground(x, z, sl) - 0.1 : 0; dirty = true;
           }
           first = false;
           if (dirty) { attr.needsUpdate = true; hAttr.needsUpdate = true; }
@@ -1064,6 +1183,6 @@ export function buildWorld(def, renderer, q) {
   };
   const update = (cam, dt, time, hint) => { sky.position.set(cam.position.x, 0, cam.position.z); for (const u of updaters) u(cam, dt, time, hint); };   // le ciel suit la caméra (sinon il disparaît loin du centre)
   const dispose = () => { for (const d of disposables) d.dispose && d.dispose(); road.dispose && road.dispose(); if (env) env.dispose(); };
-  return { ground, solids, T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, bend, fieldAt, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
+  return { ground, solids, lakeDepth: (x, z) => lakeDepth(x, z), lakes: lakeList, T, group, fog, road, rain, updateRain, update, captureEnv: capture, dispose, theme: th, bend, fieldAt, day: (!city && !th.nuit) || !!th.jourVille, lights: th.phares ?? city, sun: th.sun ? [th.sun.dir[0], th.sun.dir[2]] : null,
     sunDir: th.sun ? new THREE.Vector3().fromArray(th.sun.dir).normalize() : null, sunCol: th.sun ? new THREE.Color().fromArray(th.sun.col) : null };
 }

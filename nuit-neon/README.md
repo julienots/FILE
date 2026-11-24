@@ -2,6 +2,13 @@
 
 Jeu de course 3D pour mobile (navigateur ou application Android), jouable au tactile, au clavier ou à la manette.
 
+## Nouveautés de la 2.6
+
+- **Fermes et hameaux** dans la Vallée Ouverte : maisons en pierre claire avec toit de tuiles à deux pans, fenêtres, volets colorés et cheminée, granges rouges au toit d'ardoise avec grande porte, petits bâtiments annexes, bottes de foin rondes dans les prés. Tout est solide : on rebondit contre les murs et les bottes.
+- **Éoliennes** : six éoliennes de 72 m sur les hauteurs, dont les pales tournent.
+- **Trois lacs** : eau qui reflète le ciel, rides du vent, éclats du soleil. On peut y entrer : la voiture s'enfonce jusqu'à mi-portière, freine fort, soulève des gerbes et une vague d'étrave, l'objectif se mouille et on entend l'eau. Pas d'arbre ni d'herbe sous l'eau.
+- **Terrain** : maillage du monde ouvert trois fois plus fin (berges, collines), petites bosses hors route qui secouent la voiture, carte des distances à la route calculée une seule fois (chargement plus rapide, voiture et décor exactement au même niveau).
+
 ## Nouveautés de la 2.5
 
 - **Écran de lancement SuperEssence Studio** : nouveau logo (goutte d'essence dorée, « S » en creux, traits de vitesse) qui se dessine, se remplit et brille en boucle, puis le nom tombe lettre par lettre et STUDIO s'affiche. Le jeu se charge dessous : barre de progression et étape en cours ; l'écran s'efface quand le jeu est prêt (au plus tôt après l'animation, 4 s). Une fois le jeu prêt, un toucher le passe.

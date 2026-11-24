@@ -416,6 +416,8 @@ function trackConstrain(c, dt) {
           const nx = dx / dd, nz = dz / dd; c.x -= nx * (m - dd); c.z -= nz * (m - dd); c.wx = o[0] - nx * o[2]; c.wz = o[1] - nz * o[2]; hitWall(c, nx, nz, dt, sp); break; } } }
     // pente : on ralentit en montée, on prend de la vitesse en descente
     if (c.gPitch) c.v -= 9.8 * Math.sin(c.gPitch) * dt;
+    // dans l'eau : la résistance augmente vite avec la profondeur
+    if (c.water > 0.05) { c.v -= c.v * (0.7 + 2.6 * Math.min(1, c.water)) * dt; c.offroad = true; }
   }
   if (T.libre) { if (prev !== c.idx) { let dd = c.idx - prev; if (dd > N / 2) dd -= N; if (dd < -N / 2) dd += N; G.dist += Math.abs(dd) * T.ds; } return; }
   if (prev > N * 0.75 && c.idx < N * 0.25) { c.lap++; onLap(c); }
@@ -1826,7 +1828,12 @@ function emit(c, dt) {
     // départ arrêté pleins gaz : les roues motrices patinent et fument
     else if (!c.fly && gas > 0.7 && sp > 0.4 && sp < 12 && c.phys.accel > 13.5 && !c.offroad) { spin = true; for (const s of (c.vis.moto ? [0] : [-1, 1])) { const [wx, wz] = side(s * hw * 0.82, len * 0.6); fx.tyre(wx, 0.2, wz, sh * 2.5, 0.5, ch * 2.5, 1.0 + Math.min(1, c.phys.accel / 30), 0.34); } }
     // hors de la route : terre et brins arrachés, paille dans les champs de blé
-    if (c.offroad && sp > 5) {
+    // traversée d'un lac : gerbes de chaque côté, vague d'étrave, l'objectif se mouille
+    if (c.water > 0.05 && sp > 2.5) { const sy = c.water - Math.max(0, c.water - 0.7), pw = Math.min(1.4, sp / 18 + c.water * 0.5);
+      for (const s2 of [-1, 1]) { const [wx, wz] = side(s2 * hw * 0.95, -len * 0.2); fx.splash(wx, sy, wz, vx * 0.5 - ch * s2 * 2.5, vz * 0.5 + sh * s2 * 2.5, pw); }
+      if (Math.random() < 0.25 * pw) fx.plouf(c.x - sh * len * 0.7, c.z - ch * len * 0.7, vx, vz, pw * 0.6, hw);
+      if (c.isPlayer) { G.lens = Math.max(G.lens, 0.25 * pw); if (Math.random() < dt * 3 * pw) audio.splash(pw * 0.7); } }
+    if (c.offroad && sp > 5 && !(c.water > 0.05)) {
       const lum = world.day ? 1 : 0.45; c.wheat = world.bend && world.fieldAt ? world.fieldAt(c.x, c.z) : 0;
       if (Math.random() < 0.65) fx.dirt(rx, 0.3, rz, vx * 0.3, 1.1, vz * 0.3, 1.1 + sp / 40, S[0], S[1], S[2], 0.24);
       if (world.bend) {
@@ -1886,7 +1893,7 @@ function syncVisuals(dt) {
     if (c.out) continue;
     let gy = 0, gp = 0, gr = 0;
     if (G.solid) { const h = c.h, fx_ = -Math.sin(h), fz_ = -Math.cos(h), hw = Math.max(0.8, c.vis.half);
-      gy = groundAt(c.x, c.z, c.idx); const f = groundAt(c.x + fx_ * 1.6, c.z + fz_ * 1.6, c.idx), bk = groundAt(c.x - fx_ * 1.6, c.z - fz_ * 1.6, c.idx);
+      gy = groundAt(c.x, c.z, c.idx); c.water = world.lakeDepth ? world.lakeDepth(c.x, c.z) : 0; if (c.water > 0.7) gy += c.water - 0.7; /* dans un lac : on s'enfonce jusqu'à mi-portière au plus */ const f = groundAt(c.x + fx_ * 1.6, c.z + fz_ * 1.6, c.idx), bk = groundAt(c.x - fx_ * 1.6, c.z - fz_ * 1.6, c.idx);
       const rt = groundAt(c.x - fz_ * hw, c.z + fx_ * hw, c.idx), lf = groundAt(c.x + fz_ * hw, c.z - fx_ * hw, c.idx);
       gp = Math.atan2(f - bk, 3.2); gr = Math.atan2(rt - lf, hw * 2); }
     c.gY = gy; c.gPitch = (c.gPitch || 0) + (gp - (c.gPitch || 0)) * Math.min(1, dt * 10); c.gRoll = (c.gRoll || 0) + (gr - (c.gRoll || 0)) * Math.min(1, dt * 10);
