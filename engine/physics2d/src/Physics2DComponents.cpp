@@ -33,6 +33,15 @@ void registerPhysics2DComponents() {
         .field("points", &Collider2DComponent::points, {.tooltip = "Polygon / Chain vertices (local units)", .speed = 0.01f})
         .field("loop", &Collider2DComponent::loop, {.tooltip = "Chain: closes the outline"})
         .field("oneWay", &Collider2DComponent::oneWay, {.tooltip = "Solid only from above (local +Y): jump through it from below"});
+    reg.add<WaterVolume2DComponent>("WaterVolume2D")
+        .category("Physics 2D")
+        .description("Water in a rectangle (top = surface): dynamic bodies float, are slowed and carried by the current.")
+        .field("size", &WaterVolume2DComponent::size, {.speed = 0.05f})
+        .field("buoyancy", &WaterVolume2DComponent::buoyancy, {.tooltip = "Lift when fully under, in multiples of the weight", .rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f})
+        .field("linearDrag", &WaterVolume2DComponent::linearDrag, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f})
+        .field("angularDrag", &WaterVolume2DComponent::angularDrag, {.rangeMin = 0.0f, .rangeMax = 20.0f, .speed = 0.01f})
+        .field("flow", &WaterVolume2DComponent::flow, {.speed = 0.01f})
+        .field("enabled", &WaterVolume2DComponent::enabled);
     reg.add<CharacterController2DComponent>("CharacterController2D")
         .category("Physics 2D")
         .description("Character moved by its velocity: slides on walls and slopes, stands on floors, follows moving platforms (move and slide).")

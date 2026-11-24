@@ -202,6 +202,11 @@ tonneaux qui tanguent), sont freinés (`linearDrag`, `angularDrag`) et emportés
 statiques ne sont pas concernés. Test : une caisse lâchée dans l'eau plonge, remonte et flotte, dérive avec
 le courant et coule quand l'eau est désactivée. (Godot n'a pas d'équivalent intégré.)
 
+En 2D, `WaterVolume2D` fait de même (rectangle, haut = surface) : poussée proportionnelle à la part
+immergée de la boîte englobante du corps, appliquée au centre de cette part (un objet haut se balance),
+`buoyancy` en multiples du poids (1,5 : flotte aux deux tiers immergé), freinage et courant. Même test
+qu'en 3D.
+
 ## Corps mous (`SoftBody3D`)
 
 Tissus, drapeaux, rideaux, capes, gelées et ballons simulés par les *soft bodies* de Jolt : ils

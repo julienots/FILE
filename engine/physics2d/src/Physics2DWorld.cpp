@@ -1024,6 +1024,39 @@ struct Physics2DWorld::Impl {
         }
     }
 
+    /// WaterVolume2D: lift proportional to the submerged part of each dynamic body's box (applied at
+    /// its center, so tall bodies rock), drag on the motion relative to the current.
+    void applyWater(Scene& s, float dt) {
+        auto& reg = s.registry();
+        reg.view<WaterVolume2DComponent, WorldTransformComponent>().each([&](ecs::Entity e, WaterVolume2DComponent& wv, WorldTransformComponent& w) {
+            if (!wv.enabled || !w.activeInHierarchy) return;
+            const Mat4 inv = math::inverse(w.matrix);
+            const Vec2 half = wv.size * 0.5f;
+            const math::Vec3 topW = w.matrix.transformPoint({0.0f, half.y, 0.0f});
+            for (auto& [key, body] : bodies) {
+                if (body.type != BodyType2D::Dynamic || body.entity == e || !b2Body_IsValid(body.id)) continue;
+                const b2AABB box = b2Body_ComputeAABB(body.id);
+                const float height = std::max(box.upperBound.y - box.lowerBound.y, 1e-4f);
+                const Vec2 center{(box.lowerBound.x + box.upperBound.x) * 0.5f, (box.lowerBound.y + box.upperBound.y) * 0.5f};
+                const math::Vec3 local = inv.transformPoint({center.x, center.y, 0.0f});
+                if (std::fabs(local.x) > half.x || local.y < -half.y - height * 0.5f) continue;
+                const float depth = std::clamp((topW.y - box.lowerBound.y) / height, 0.0f, 1.0f);  // submerged fraction
+                if (depth <= 0.0f) continue;
+                const float mass = b2Body_GetMass(body.id);
+                const Vec2 lift = gravity * (-mass * std::max(wv.buoyancy, 0.0f) * depth);
+                const Vec2 rel = fromB2(b2Body_GetLinearVelocity(body.id)) - wv.flow;
+                const Vec2 drag = rel * (-mass * std::max(wv.linearDrag, 0.0f) * depth);
+                const float submergedTop = std::min(box.upperBound.y, topW.y);
+                const Vec2 at{center.x, (box.lowerBound.y + submergedTop) * 0.5f};  // center of the submerged part
+                b2Body_ApplyForce(body.id, toB2(lift), toB2(at), true);
+                b2Body_ApplyForceToCenter(body.id, toB2(drag), true);
+                const float spin = b2Body_GetAngularVelocity(body.id);
+                b2Body_ApplyTorque(body.id, -spin * b2Body_GetRotationalInertia(body.id) * std::max(wv.angularDrag, 0.0f) * depth, true);
+            }
+        });
+        (void)dt;
+    }
+
     void step(Scene& s, float dt) {
         Stopwatch sw;
         sync(s);
@@ -1047,6 +1080,7 @@ struct Physics2DWorld::Impl {
             }
         }
         moveCharacters(s, dt);
+        if (dt > 0.0f) applyWater(s, dt);
         if (dt > 0.0f) b2World_Step(world, dt, subSteps);
         writeCharacters(s);
         checkBreaks(s);

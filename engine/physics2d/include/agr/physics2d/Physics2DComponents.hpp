@@ -59,6 +59,17 @@ struct Collider2DComponent {
 /// from below and pushes dynamic bodies. Scripts set `velocity` (e.g. in onFixedUpdate) and read
 /// `onFloor` / `onWall` / `onCeiling` after the physics step; gravity is applied unless
 /// `gravityScale` is 0.
+/// Water in a rectangle (top edge = surface): dynamic bodies in it float in proportion to how
+/// deep they are (their bounding box), are slowed down and carried by `flow`.
+struct WaterVolume2DComponent {
+    math::Vec2 size{20.0f, 4.0f};  ///< Full size (local units, centered on the entity; top = surface).
+    float buoyancy = 1.5f;         ///< Lift of a fully submerged body, in multiples of its weight (1 = neutral).
+    float linearDrag = 2.0f;       ///< Per second, on the submerged part.
+    float angularDrag = 1.0f;
+    math::Vec2 flow{0.0f, 0.0f};   ///< Current (m/s, world).
+    bool enabled = true;
+};
+
 struct CharacterController2DComponent {
     math::Vec2 size{0.8f, 1.6f};    ///< Capsule width x height (world units, scaled by the entity).
     math::Vec2 offset{0.0f, 0.0f};

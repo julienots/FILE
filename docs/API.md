@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (78, 774 champs)
+## Composants (79, 780 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -18,7 +18,7 @@ Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-m�
 
 **Network** : [NetSync](#NetSync)
 
-**Physics 2D** : [CharacterController2D](#CharacterController2D), [Collider2D](#Collider2D), [Joint2D](#Joint2D), [RigidBody2D](#RigidBody2D), [TilemapCollider2D](#TilemapCollider2D)
+**Physics 2D** : [CharacterController2D](#CharacterController2D), [Collider2D](#Collider2D), [Joint2D](#Joint2D), [RigidBody2D](#RigidBody2D), [TilemapCollider2D](#TilemapCollider2D), [WaterVolume2D](#WaterVolume2D)
 
 **Physics 3D** : [CharacterController3D](#CharacterController3D), [Collider](#Collider), [Joint3D](#Joint3D), [RigidBody](#RigidBody), [SoftBody3D](#SoftBody3D), [Vehicle3D](#Vehicle3D), [WaterVolume3D](#WaterVolume3D)
 
@@ -638,6 +638,21 @@ Static collision for the painted cells of the Tilemap.
 | `restitution` | float | plage 0 .. 1 |
 | `layer` | int | Collision layer (0..31) ; plage 0 .. 31 |
 | `collidesWith` | uint | Layers this collides with |
+
+### WaterVolume2D
+
+Water in a rectangle (top = surface): dynamic bodies float, are slowed and carried by the current.
+
+*Physics 2D*
+
+| Champ | Type | Détails |
+|---|---|---|
+| `size` | vec2 |  |
+| `buoyancy` | float | Lift when fully under, in multiples of the weight ; plage 0 .. 10 |
+| `linearDrag` | float | plage 0 .. 20 |
+| `angularDrag` | float | plage 0 .. 20 |
+| `flow` | vec2 |  |
+| `enabled` | bool |  |
 
 ### CharacterController3D
 

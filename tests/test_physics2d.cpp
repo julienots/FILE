@@ -734,3 +734,33 @@ TEST_CASE("character controller 2D: two characters block each other; one dropped
     CHECK(w.position(a).y == doctest::Approx(0.8f).epsilon(0.03));
 }
 }
+
+TEST_SUITE("physics2d") {
+TEST_CASE("WaterVolume2D: a crate floats at the surface, drifts with the current, sinks when the water is off") {
+    World2D w;
+    w.box("Bottom", {0, -8.5f}, {60, 1}, BodyType2D::Static, false);
+    const auto water = w.scene.createEntity("Lake");
+    w.scene.registry().get<TransformComponent>(water).position = {0, -4, 0};
+    auto& wv = w.scene.registry().emplace<WaterVolume2DComponent>(water);
+    wv.size = {40, 8};  // surface at y = 0
+    const auto crate = w.box("Crate", {0, 3}, {1, 1}, BodyType2D::Dynamic);
+    w.scene.updateTransforms();
+    float lowest = 1e9f;
+    for (int i = 0; i < 360; ++i) {
+        w.physics.step(w.scene, 1.0f / 60.0f);
+        w.scene.updateTransforms();
+        lowest = std::min(lowest, w.position(crate).y);
+    }
+    CHECK_MESSAGE(lowest > -4.0f, lowest);
+    const float y = w.position(crate).y;
+    CHECK_MESSAGE(y > -0.6f, y);  // buoyancy 1.5: two thirds under, center slightly below the surface
+    CHECK_MESSAGE(y < 0.5f, y);
+    w.scene.registry().get<WaterVolume2DComponent>(water).flow = {2, 0};
+    const float x0 = w.position(crate).x;
+    w.run(2.0f);
+    CHECK_MESSAGE(w.position(crate).x > x0 + 1.0f, w.position(crate).x);
+    w.scene.registry().get<WaterVolume2DComponent>(water).enabled = false;
+    w.run(3.0f);
+    CHECK_MESSAGE(w.position(crate).y < -7.0f, w.position(crate).y);
+}
+}
