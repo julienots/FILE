@@ -101,6 +101,7 @@ Renderer::~Renderer() {
     m_device.destroyRenderTarget(m_shadowTarget);
     m_device.destroyRenderTarget(m_spotShadowTarget);
     for (rhi::PipelineHandle p : m_spriteShaderPipelines) m_device.destroyPipeline(p);
+    if (m_customPostPipeline) m_device.destroyPipeline(m_customPostPipeline);
     m_device.destroyPipeline(m_spritePipeline);
     m_device.destroyPipeline(m_spriteLitPipeline);
     m_device.destroyPipeline(m_spriteLitNormalPipeline);
@@ -1174,7 +1175,8 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
         const bool autoExposure = post.autoExposure && postHdr;
         const bool ssr = m_profile.ssr && post.screenSpaceReflections && post.ssrIntensity > 0.0f;
         const bool motion = post.motionBlur && post.motionBlurIntensity > 0.0f && m_profile.depthOfField && rv.projection == Projection::Perspective;
-        const bool readDepth = ao || atmos || dof || ssr || taa || motion;  // a single-sampled, sampleable scene depth
+        const bool custom = !post.shader.empty() && customPostPipeline(post.shader);
+        const bool readDepth = ao || atmos || dof || ssr || taa || motion || (custom && m_customPostDepth);  // a single-sampled, sampleable scene depth
         m_postReadDepth = readDepth;
         if (ensurePostTargets(renderW, renderH, readDepth ? 1u : samples, width, height, postHdr, bloom, fxaa, ao, atmos)) {
             struct PostUniforms {
@@ -1196,6 +1198,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 if (r) t = r.value();
                 else AGR_LOG_ERROR("Render", "post-processing target '{}': {}", name, r.error().message);
             };
+            if (custom) extra(m_customPostTarget, width, height, rhi::TextureFormat::RGBA8, "agr.post.custom");
             if (motion) extra(m_motionTarget, renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.motion");
             if (taa) {
                 extra(m_taaTargets[0], renderW, renderH, postHdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8, "agr.post.taa.a");
@@ -1272,7 +1275,7 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                               std::max(post.ssrThickness, 0.01f));
                 u.exposure = Vec4(lumReady ? 1.0f : 0.0f, std::max(post.exposureTarget, 0.001f), std::max(post.exposureMin, 0.001f),
                                   std::max(post.exposureMax, std::max(post.exposureMin, 0.001f)));
-                u.adapt = Vec4(adaptBlend, m_lumValid ? 1.0f : 0.0f, 0.0f, 0.0f);
+                u.adapt = Vec4(adaptBlend, m_lumValid ? 1.0f : 0.0f, static_cast<float>(std::fmod(m_time, 3600.0)), 0.0f);
                 u.prevViewProj = m_prevViewProj;
                 for (usize i = 0; i < 8; ++i) {
                     u.fogLightPos[i] = i < fogLights.size() ? fogLights[i].pos : Vec4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1329,7 +1332,13 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
                 add(PostPass::AoBlur, m_aoTarget, m_aoBlurTarget, half, half);
                 m_stats.ambientOcclusion = true;
             }
-            add(PostPass::Composite, sceneColor, fxaa ? m_postLdr : outputTarget, renderSize, outSize);
+            if (custom && m_customPostTarget) {
+                add(PostPass::Composite, sceneColor, m_customPostTarget, renderSize, outSize);
+                add(PostPass::Custom, m_customPostTarget, fxaa ? m_postLdr : outputTarget, outSize, outSize);
+                m_stats.customPostEffect = true;
+            } else {
+                add(PostPass::Composite, sceneColor, fxaa ? m_postLdr : outputTarget, renderSize, outSize);
+            }
             if (fxaa) add(PostPass::Fxaa, m_postLdr, outputTarget, outSize, outSize);
             m_stats.postProcessing = true;
             m_taaValid = taaReady;
@@ -1408,6 +1417,61 @@ void Renderer::renderView(Scene& scene, const RenderView& rv, rhi::RenderTargetH
     const rhi::MemoryStats mem = m_device.memoryStats();
     m_stats.gpuMemoryBytes = mem.bufferBytes + mem.textureBytes;
     m_stats.cpuMs = cpu.elapsedMilliseconds();
+}
+
+bool Renderer::customPostPipeline(const std::string& uri) {
+    if (!m_shaders) return false;
+    const ShaderAsset* asset = m_shaders->get(uri);
+    if (!asset) return false;
+    if (uri == m_customPostUri && m_customPostVersion == asset->version + 1) return m_customPostOk;
+    m_customPostUri = uri;
+    m_customPostVersion = asset->version + 1;
+    m_customPostOk = false;
+    if (!asset->parsed.valid() || !asset->parsed.hasPost) {
+        AGR_LOG_WARN("Render", "screen shader '{}': {}", uri, asset->parsed.valid() ? "no 'void post(inout Post p)' function" : asset->parsed.errors[0].message);
+        return false;
+    }
+    auto f = [](float x) {
+        std::string t = std::format("{:.9g}", x);
+        if (t.find_first_of(".eEn") == std::string::npos) t += ".0";
+        return t;
+    };
+    std::string consts;
+    for (const ShaderParam& p : asset->parsed.params) {
+        const math::Vec4 v = p.defaultValue;
+        switch (p.type) {
+            case ShaderParamType::Float: consts += std::format("const float {} = {};\n", p.name, f(v.x)); break;
+            case ShaderParamType::Vec2: consts += std::format("const vec2 {} = vec2({}, {});\n", p.name, f(v.x), f(v.y)); break;
+            case ShaderParamType::Vec3: consts += std::format("const vec3 {} = vec3({}, {}, {});\n", p.name, f(v.x), f(v.y), f(v.z)); break;
+            case ShaderParamType::Vec4:
+            case ShaderParamType::Color:  // the image is sRGB: colors as written
+                consts += std::format("const vec4 {} = vec4({}, {}, {}, {});\n", p.name, f(v.x), f(v.y), f(v.z), f(v.w));
+                break;
+            case ShaderParamType::Texture: consts += std::format("#define {} u_source\n", p.name); break;
+        }
+    }
+    rhi::PipelineDesc d;
+    d.debugName = "agr.post.custom";
+    d.shader.vertex = shaders::kPostVertex;
+    d.shader.fragment = std::string(shaders::kPostBlock) + shaders::kPostShaderPrefix + consts + "#line 1 1\n" + asset->parsed.code + shaders::kPostShaderMain;
+    d.layout.stride = sizeof(math::Vec2);
+    d.layout.attributes = {{0, rhi::VertexFormat::Float2, 0}};
+    d.cull = rhi::CullMode::None;
+    d.depthTest = false;
+    d.depthWrite = false;
+    d.blend = rhi::BlendMode::Opaque;
+    d.uniformBlocks = {"PostData"};
+    d.samplers = {"u_source", "u_depth"};
+    auto p = m_device.createPipeline(d);
+    if (!p) {
+        AGR_LOG_ERROR("Render", "screen shader '{}' does not compile: {}", uri, p.error().message);
+        return false;
+    }
+    if (m_customPostPipeline) m_device.destroyPipeline(m_customPostPipeline);
+    m_customPostPipeline = p.value();
+    m_customPostDepth = asset->parsed.code.find("DEPTH") != std::string::npos;
+    m_customPostOk = true;
+    return true;
 }
 
 i32 Renderer::spriteShaderPipeline(const std::string& uri) {
@@ -1667,7 +1731,7 @@ void Renderer::releasePostTargets() {
     for (rhi::RenderTargetHandle t : {m_postScene, m_postResolve, m_postLdr, m_aoTarget, m_aoBlurTarget, m_atmosTarget}) m_device.destroyRenderTarget(t);
     m_atmosTarget = {};
     m_taaValid = false;
-    for (rhi::RenderTargetHandle* t : {&m_dofTarget, &m_ssrTarget, &m_motionTarget, &m_taaTargets[0], &m_taaTargets[1], &m_lumTargets[0], &m_lumTargets[1]}) {
+    for (rhi::RenderTargetHandle* t : {&m_customPostTarget, &m_dofTarget, &m_ssrTarget, &m_motionTarget, &m_taaTargets[0], &m_taaTargets[1], &m_lumTargets[0], &m_lumTargets[1]}) {
         m_device.destroyRenderTarget(*t);
         *t = {};
     }
@@ -1733,7 +1797,9 @@ void Renderer::runPost(rhi::RenderTargetHandle output) {
         const bool composite = pass.kind == PostPass::Composite;
         if (composite && !m_bloomLevels.empty()) m_device.prepareTextureForSampling(bloom);
         if (composite && m_postAo) m_device.prepareTextureForSampling(ao);
-        const bool atmosPass = pass.kind == PostPass::Atmosphere || pass.kind == PostPass::Dof || pass.kind == PostPass::Ssr || pass.kind == PostPass::Taa || pass.kind == PostPass::MotionBlur;
+        const bool customPass = pass.kind == PostPass::Custom;
+        const bool atmosPass = pass.kind == PostPass::Atmosphere || pass.kind == PostPass::Dof || pass.kind == PostPass::Ssr || pass.kind == PostPass::Taa || pass.kind == PostPass::MotionBlur ||
+                               (customPass && m_customPostDepth && m_postSceneReadable);
         const rhi::TextureHandle sceneDepth = atmosPass ? m_device.renderTargetDepthTexture(m_postScene) : rhi::TextureHandle{};
         if (atmosPass) m_device.prepareTextureForSampling(sceneDepth);
         const bool lumPass = pass.kind == PostPass::Luminance, taaPass = pass.kind == PostPass::Taa;
@@ -1746,10 +1812,11 @@ void Renderer::runPost(rhi::RenderTargetHandle output) {
         if (exposurePass) m_device.prepareTextureForSampling(exposure);
         // Upsampling adds into the target: keep its content (loaded); other passes overwrite every pixel.
         m_device.beginPass(pass.target ? pass.target : output, {false, {}, false, 1.0f});
-        m_device.bindPipeline(m_postPipelines[pass.kind]);
+        m_device.bindPipeline(customPass ? m_customPostPipeline : m_postPipelines[pass.kind]);
         m_device.bindUniformBuffer(0, m_uniformBuffer, pass.uniformOffset, kPostUniformBytes);
         m_device.bindTexture(0, src);
         if (atmosPass) m_device.bindTexture(1, sceneDepth);
+        else if (customPass) m_device.bindTexture(1, m_assets.whiteTexture());
         if (lumPass) m_device.bindTexture(1, history);
         if (taaPass) m_device.bindTexture(2, history);
         if (composite) {

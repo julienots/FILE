@@ -316,8 +316,9 @@ CustomShader parseCustomShader(std::string_view source) {
     out.hasSurface = findFunction(clean, "surface", r);
     out.hasVertex = findFunction(clean, "vertex", r);
     out.hasSprite = findFunction(clean, "sprite", r);
-    if (!out.hasSurface && !out.hasVertex && !out.hasSprite)
-        out.errors.push_back({0, "no 'void surface(inout Surface s)', 'void vertex(inout Vertex v)' or 'void sprite(inout Sprite s)' function"});
+    out.hasPost = findFunction(clean, "post", r);
+    if (!out.hasSurface && !out.hasVertex && !out.hasSprite && !out.hasPost)
+        out.errors.push_back({0, "no 'void surface(inout Surface s)', 'void vertex(inout Vertex v)', 'void sprite(inout Sprite s)' or 'void post(inout Post p)' function"});
 
     // Global declarations the engine generates itself.
     int depth = 0;

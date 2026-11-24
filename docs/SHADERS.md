@@ -158,10 +158,31 @@ n'importe quel shader : mêmes paramètres réglables par matériau, mêmes vari
 - **Un shader qui ne compile pas ne casse rien** : ses matériaux sont dessinés avec le shader standard
   et l'erreur est affichée (éditeur, inspecteur du matériau, console).
 
+## Effets d'écran (post-traitement personnalisé)
+
+Un `.agrshader` avec `void post(inout Post p)` dans le champ `shader` du composant `PostProcess` de la
+caméra s'applique à toute l'image (comme les shaders `canvas_item` plein écran de Godot) : après le
+mappage de tons et l'étalonnage, avant le FXAA.
+
+```glsl
+param float lines = 240.0;
+void post(inout Post p) {               // p.color (sRGB 0..1, modifiable), p.uv (0..1, origine en bas à gauche), p.pixel
+    vec2 d = (p.uv - 0.5) * 0.004;      // aberration chromatique
+    p.color = vec3(screen(p.uv + d).r, p.color.g, screen(p.uv - d).b);
+    p.color *= 0.85 + 0.15 * sin(p.uv.y * lines * 3.14159 + TIME * 4.0);   // lignes d'un écran CRT
+    if (DEPTH(p.uv) > 60.0) p.color = mix(p.color, vec3(0.6, 0.7, 0.8), 0.5);  // distance à la caméra
+}
+```
+
+`screen(uv)` lit l'image (distorsions, flous, contours), `DEPTH(uv)` la distance à la caméra en mètres
+(1e6 pour le ciel ; utiliser `DEPTH` désactive le MSAA de la scène, remplacé par le FXAA / TAA),
+`TIME`, `SCREEN_SIZE`. Les `param` gardent leurs valeurs du fichier (pas de réglage par caméra). Un
+fichier qui ne compile pas est ignoré (l'image reste normale, l'erreur est dans la console).
+
 ## Limites actuelles
 
-- Shaders de surface pour le rendu 3D PBR et shaders de sprites non éclairés : pas de shaders pour l'interface,
-  le ciel, l'eau, le terrain ni le post-traitement (en code comme en graphe) ; le graphe n'a pas encore de
+- Shaders de surface pour le rendu 3D PBR, shaders de sprites non éclairés et effets d'écran : pas de shaders pour l'interface,
+  le ciel, l'eau ni le terrain (en code comme en graphe ; les effets d'écran : en code seulement, `DEPTH` non vérifié par les tests GPU) ; le graphe n'a pas encore de
   sous-graphes ni de nœuds écrits en GLSL.
 - La passe d'ombre applique `vertex` mais pas `surface` : un shader qui découpe des trous dans
   `surface` garde une ombre pleine (utiliser le mode de transparence *Découpe* du matériau).

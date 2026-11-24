@@ -283,6 +283,45 @@ void main() {
 // ----------------------------------------------------------------- post-processing
 // Full-screen triangle; texture coordinates come from gl_FragCoord (same convention for
 // render targets on every backend).
+/// Screen-effect shaders: the user's `post(inout Post p)` between this prefix and kPostShaderMain
+/// (after kPostBlock). The input is the tone-mapped image (sRGB, 0..1).
+inline constexpr const char* kPostShaderPrefix = R"(
+uniform sampler2D u_source;  // the image so far
+uniform sampler2D u_depth;   // scene depth (white when the shader does not use DEPTH)
+layout(location = 0) out vec4 o_color;
+struct Post {
+    vec3 color;   // read / write: the pixel (sRGB, 0..1)
+    vec2 uv;      // read: screen position (0..1, origin bottom-left)
+    vec2 pixel;   // read: size of one pixel in uv
+};
+#define TIME (u_adapt.z)
+#define SCREEN_SIZE (1.0 / u_texel.zw)
+// Targets are stored top row first on Vulkan (u_ao.w = 0): user uvs keep the origin bottom-left.
+vec2 agrPostUv(vec2 uv) { return u_ao.w > 0.5 ? uv : vec2(uv.x, 1.0 - uv.y); }
+vec3 screen(vec2 uv) { return texture(u_source, agrPostUv(uv)).rgb; }
+float screenDepth(vec2 userUv) {  // distance from the camera (world units), 1e6 for the sky
+    vec2 uv = agrPostUv(userUv);
+    float d = texture(u_depth, uv).r;
+    float z = u_ao.w > 0.5 ? d * 2.0 - 1.0 : d;
+    vec2 ndc = uv * 2.0 - 1.0;
+    if (u_ao.w < 0.5) ndc.y = -ndc.y;
+    vec4 p = u_invViewProj * vec4(ndc, z, 1.0);
+    return d >= 0.99999 ? 1e6 : length(p.xyz / p.w - u_camera.xyz);
+}
+#define DEPTH(uv) screenDepth(uv)
+)";
+inline constexpr const char* kPostShaderMain = R"(
+void main() {
+    Post p;
+    vec2 uv = gl_FragCoord.xy * u_texel.zw;
+    p.uv = agrPostUv(uv);
+    p.pixel = u_texel.zw;
+    p.color = texture(u_source, uv).rgb;
+    post(p);
+    o_color = vec4(clamp(p.color, 0.0, 1.0), 1.0);
+}
+)";
+
 inline constexpr const char* kPostVertex = R"(
 layout(location = 0) in vec2 a_position;
 void main() { gl_Position = vec4(a_position, 0.0, 1.0); }

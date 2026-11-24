@@ -174,6 +174,9 @@ struct PostProcessComponent {
     float exposureMin = 0.3f;       ///< Exposure limits (darkest scene: at most exposureMax).
     float exposureMax = 4.0f;
     float exposureSpeed = 2.0f;     ///< Adaptation speed (per second).
+    /// Custom full-screen effect: a `.agrshader` with `void post(inout Post p)` (CRT, pixelation,
+    /// outlines, distortion...), run after tone mapping, before FXAA. "" = none.
+    std::string shader;
 };
 
 enum class PrimitiveMesh : i32 { Cube = 0, Sphere = 1, Plane = 2, Quad = 3 };

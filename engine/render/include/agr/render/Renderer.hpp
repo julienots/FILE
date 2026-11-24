@@ -130,6 +130,7 @@ struct RenderStats {
     bool temporalAA = false;      ///< TAA pass this frame.
     u32 shadedSprites = 0;        ///< Sprites drawn with a sprite shader.
     bool motionBlur = false;      ///< Motion blur pass this frame.
+    bool customPostEffect = false;  ///< PostProcess.shader pass this frame.
     bool autoExposure = false;    ///< Auto exposure measured this frame.
     u32 occluders = 0;       ///< Occluder shapes rasterized this frame.
     u32 occlusionCulled = 0; ///< Meshes in the view hidden behind occluders.
@@ -342,7 +343,7 @@ private:
     void drawOverlay();
     // Post-processing (PostProcess component): HDR scene target, bloom chain, composite, FXAA.
     struct PostPass {
-        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere, Dof, Luminance, Ssr, Taa, MotionBlur } kind;
+        enum Kind : u8 { Prefilter, Down, Up, Composite, Fxaa, Ao, AoBlur, Atmosphere, Dof, Luminance, Ssr, Taa, MotionBlur, Custom } kind;
         rhi::RenderTargetHandle source, target;  // target null = output
         u32 uniformOffset = 0;
     };
@@ -463,6 +464,13 @@ private:
     std::unordered_map<std::string, SpriteShader> m_spriteShaders;
     std::vector<rhi::PipelineHandle> m_spriteShaderPipelines;
     i32 spriteShaderPipeline(const std::string& uri);  ///< -1: standard drawing
+    // PostProcess.shader: one screen-effect pipeline, rebuilt when the file or its uri changes.
+    bool customPostPipeline(const std::string& uri);  ///< false: no custom pass this frame
+    rhi::PipelineHandle m_customPostPipeline{};
+    rhi::RenderTargetHandle m_customPostTarget{};
+    std::string m_customPostUri;
+    u64 m_customPostVersion = 0;
+    bool m_customPostOk = false, m_customPostDepth = false;
     // Custom shaders: pipeline ids kCustomPipelineBase + set * kCustomStride + variant
     // (alphaMode * 2 + doubleSided); compiled on first use, rebuilt when the source changes.
     static constexpr u32 kCustomPipelineBase = 1000, kCustomStride = 8;

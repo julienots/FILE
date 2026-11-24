@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 762 champs)
+## Composants (77, 763 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -1026,6 +1026,7 @@ Image effects: bloom, anti-aliasing (FXAA), tone mapping, color grading, vignett
 | `dofFar` | bool |  |
 | `motionBlur` | bool | Blur along the camera's motion |
 | `motionBlurIntensity` | float | plage 0 .. 1 |
+| `shader` | asset | Custom screen effect (.agrshader with post()) |
 | `temporalAA` | bool | Temporal anti-aliasing: smoother edges, accumulated over frames |
 | `taaBlend` | float | Weight of the new frame ; plage 0.02 .. 1 |
 | `screenSpaceReflections` | bool | Smooth / metallic surfaces reflect what is on screen (wet floors, metal) |

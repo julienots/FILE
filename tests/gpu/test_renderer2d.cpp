@@ -543,6 +543,41 @@ TEST_CASE("sprite shaders: sprite(inout Sprite s) with parameters, uv and fallba
     CHECK(gpu().device->validationErrorCount() == 0);
 }
 
+TEST_CASE("screen shaders: PostProcess.shader runs post(inout Post p) on the whole image, uv origin bottom-left") {
+    Render2DFixture f;
+    ShaderLibrary shaders(f.vfs);
+    f.renderer.setShaders(&shaders);
+    f.camera();
+    auto& post = f.scene.registry().emplace<PostProcessComponent>(f.scene.findByName("Camera"));
+    post.bloom = false;
+    post.fxaa = false;
+    post.filmicToneMapping = false;
+    post.vignette = 0.0f;
+    REQUIRE(f.vfs.writeText("assets://fx.agrshader",
+                            "param color left = (1.0, 0.0, 0.0, 1.0);\n"
+                            "void post(inout Post p) {\n"
+                            "    if (p.uv.y > 0.8) { p.color = vec3(0.0, 0.0, 1.0); return; }\n"
+                            "    if (p.uv.x < 0.5) p.color = left.rgb;\n"
+                            "    else p.color = 1.0 - screen(p.uv);\n"
+                            "}\n"));
+    post.shader = "assets://fx.agrshader";
+    f.sprite({0, 0, 0}, 8.0f);  // white, centered
+    f.frame();
+    CHECK(f.renderer.stats().customPostEffect);
+    auto& d = *gpu().device;
+    CHECK_MESSAGE(near(pixel(d, 22, 32), 255, 0, 0), pixel(d, 22, 32));    // left half
+    CHECK_MESSAGE(near(pixel(d, 42, 32), 0, 0, 0), pixel(d, 42, 32));      // white sprite inverted
+    CHECK_MESSAGE(near(pixel(d, 60, 40), 255, 255, 255), pixel(d, 60, 40));  // black background inverted
+    CHECK_MESSAGE(near(pixel(d, 42, 3), 0, 0, 255), pixel(d, 42, 3));      // top rows (uv.y > 0.8)
+    // Broken file: no custom pass, the image is drawn normally.
+    REQUIRE(f.vfs.writeText("assets://bad.agrshader", "void post(inout Post p) { p.color = nope; }\n"));
+    post.shader = "assets://bad.agrshader";
+    f.frame();
+    CHECK_FALSE(f.renderer.stats().customPostEffect);
+    CHECK(near(pixel(d, 32, 32), 255, 255, 255));
+    CHECK(d.validationErrorCount() == 0);
+}
+
 TEST_CASE("sprite shader graphs: every node usable in sprites compiles on the GPU; the official sprite shaders too") {
     Render2DFixture f;
     ShaderLibrary shaders(f.vfs);

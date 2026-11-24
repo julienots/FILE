@@ -52,6 +52,7 @@ struct CustomShader {
     bool hasSurface = false;
     bool hasVertex = false;
     bool hasSprite = false;  ///< `void sprite(inout Sprite s)`: a 2D sprite shader (SpriteRenderer.shader).
+    bool hasPost = false;    ///< `void post(inout Post p)`: a screen effect (PostProcess.shader).
     u32 vectorCount = 0, textureCount = 0;
     std::vector<ShaderDiagnostic> errors;  ///< Parse errors; empty when the file is usable.
 

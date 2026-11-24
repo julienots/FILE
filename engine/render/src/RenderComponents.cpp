@@ -345,6 +345,7 @@ void registerRenderComponents() {
         .field("dofFar", &PostProcessComponent::dofFar)
         .field("motionBlur", &PostProcessComponent::motionBlur, {.tooltip = "Blur along the camera's motion"})
         .field("motionBlurIntensity", &PostProcessComponent::motionBlurIntensity, {.rangeMin = 0.0f, .rangeMax = 1.0f, .speed = 0.01f})
+        .field("shader", &PostProcessComponent::shader, {.tooltip = "Custom screen effect (.agrshader with post())", .flags = FieldFlag_AssetPath})
         .field("temporalAA", &PostProcessComponent::temporalAA, {.tooltip = "Temporal anti-aliasing: smoother edges, accumulated over frames"})
         .field("taaBlend", &PostProcessComponent::taaBlend, {.tooltip = "Weight of the new frame", .rangeMin = 0.02f, .rangeMax = 1.0f, .speed = 0.005f})
         .field("screenSpaceReflections", &PostProcessComponent::screenSpaceReflections,
