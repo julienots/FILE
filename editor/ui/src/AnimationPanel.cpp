@@ -86,6 +86,7 @@ bool AnimationPanel::saveClip(EditorShared& s) {
 }
 
 void AnimationPanel::endPreview(EditorShared& s) {
+    s.onionGhosts.clear();
     if (!m_previewing) return;
     m_previewing = false;
     m_playing = false;
@@ -139,6 +140,10 @@ void AnimationPanel::applyPreview(EditorShared& s) {
     m_previewing = true;
     anim.preview(scene, root, m_clip, m_time);
     scene.updateTransforms();
+    s.onionGhosts.clear();
+    if (m_onion)
+        s.onionGhosts = editor::onionSkin(scene, anim, root, m_clip, m_time, std::max(m_onionStep, 0.01f), static_cast<u32>(std::max(m_onionBefore, 0)),
+                                          static_cast<u32>(std::max(m_onionAfter, 0)), s.pickAssets());
 }
 
 void AnimationPanel::keyTracks(EditorShared& s, bool selectedOnly) {
@@ -383,6 +388,23 @@ void AnimationPanel::draw(EditorShared& s, const FrameTime& time) {
     }
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Applique le clip à la scène à l'instant choisi.\nÀ la fin de l'aperçu, les valeurs animées reprennent leur état d'origine.");
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Pelure d'oignon", &m_onion) && m_previewing) applyPreview(s);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Pendant l'aperçu : contours des objets animés avant (bleu) et après (vert) l'instant choisi, et leur trajectoire.");
+    if (m_onion) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(60);
+        bool changed = ImGui::DragInt("##onionBefore", &m_onionBefore, 0.1f, 0, 10, "-%d");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(60);
+        changed |= ImGui::DragInt("##onionAfter", &m_onionAfter, 0.1f, 0, 10, "+%d");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(70);
+        changed |= ImGui::DragFloat("##onionStep", &m_onionStep, 0.005f, 0.01f, 2.0f, "%.2f s");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Intervalle entre deux images fantômes");
+        if (changed && m_previewing) applyPreview(s);
+    }
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);

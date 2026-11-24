@@ -17,6 +17,7 @@ add_library(agr_editor_core STATIC
     core/src/UndoStack.cpp
     core/src/EditorCamera.cpp
     core/src/Picking.cpp
+    core/src/OnionSkin.cpp
     core/src/EditorContext.cpp
     core/src/GameExport.cpp
     core/src/AndroidExport.cpp

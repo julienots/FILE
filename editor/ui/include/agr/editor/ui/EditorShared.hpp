@@ -7,6 +7,7 @@
 
 #include "agr/assets/AssetManager.hpp"
 #include "agr/core/Platform.hpp"
+#include "agr/editor/OnionSkin.hpp"
 #include "agr/editor/EditorContext.hpp"
 #include "agr/editor/Picking.hpp"
 #include "agr/editor/ui/Theme.hpp"
@@ -62,6 +63,7 @@ struct EditorShared {
     bool mobile = false;  ///< Touch interface (EditorOptions::mobile).
     TilemapBrush brush;
     TerrainTool terrainTool;
+    std::vector<editor::OnionGhost> onionGhosts;  ///< Animation panel onion skinning (drawn by the viewport).
 
     rhi::Device* device() const { return render ? render->device() : nullptr; }
     Renderer* renderer() const { return render ? render->renderer() : nullptr; }

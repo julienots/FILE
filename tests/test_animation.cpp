@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "agr/editor/OnionSkin.hpp"
 #include "agr/animation/AnimationSystem.hpp"
 #include "agr/animation/IK2D.hpp"
 #include "agr/animation/IK3D.hpp"
@@ -1161,5 +1162,35 @@ TEST_CASE("root motion in a blend state: walk / run mixed by speed, the distance
     f.anim.setFloat(f.scene, hero, "speed", 1.0f);
     run(0.5f);
     CHECK(f.x(hero) == doctest::Approx(3.0f).epsilon(0.03));
+}
+}
+
+TEST_SUITE("animation") {
+TEST_CASE("onion skinning: ghosts before / after the current time, clamped to the clip, pose restored") {
+    AnimFixture f;
+    AnimationClip c;
+    c.duration = 1.0f;
+    c.loop = false;
+    auto& x = c.track("Arm", "Transform", "position", 0).curve;
+    x.setKey(0.0f, 0.0f);
+    x.setKey(1.0f, 10.0f);
+    for (auto& k : x.keys) k.interpolation = Interpolation::Linear;
+    const auto hero = f.scene.createEntity("Hero");
+    const auto arm = f.scene.createEntity("Arm", hero);
+    f.scene.registry().emplace<SpriteRendererComponent>(arm);
+    f.scene.createEntity("Empty", hero);  // animated nothing, draws nothing: no ghost
+    f.scene.updateTransforms();
+    f.anim.preview(f.scene, hero, c, 0.5f);
+    const auto ghosts = editor::onionSkin(f.scene, f.anim, hero, c, 0.5f, 0.1f, 2, 2);
+    REQUIRE(ghosts.size() == 4);
+    CHECK(ghosts[0].offset == -2);
+    CHECK(ghosts[0].entity == arm);
+    CHECK(ghosts[0].position.x == doctest::Approx(3.0f));
+    CHECK(ghosts[3].position.x == doctest::Approx(7.0f));
+    CHECK(ghosts[3].bounds.valid());
+    CHECK(f.x(arm) == doctest::Approx(5.0f));  // back at the current time
+    // Near the start of a clip that does not loop: no ghost before 0.
+    c.loop = false;
+    CHECK(editor::onionSkin(f.scene, f.anim, hero, c, 0.05f, 0.1f, 2, 1).size() == 1);
 }
 }

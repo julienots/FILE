@@ -398,6 +398,9 @@ private:
     float m_time = 0.0f;
     bool m_playing = false;
     bool m_previewing = false;
+    bool m_onion = false;  // onion skinning while previewing
+    int m_onionBefore = 2, m_onionAfter = 2;
+    float m_onionStep = 0.1f;
     std::vector<std::pair<AnimationTrack, float>> m_restore;  // values before the preview
     int m_track = -1;           // selected track
     int m_key = -1;             // selected key of the selected track

@@ -1,3 +1,4 @@
+#include <map>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -266,6 +267,50 @@ void ViewportPanel::drawOverlays(EditorShared& s, ImVec2 origin, ImVec2 size) {
         static const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
         const ImU32 col = e == scene.findByUuid(s.ctx.selection().primary()) ? palette::kSelect : IM_COL32(61, 139, 253, 140);
         for (auto& ed : edges) dl->AddLine(sp[ed[0]], sp[ed[1]], col, 1.5f);
+    }
+
+    // Onion skinning (animation panel): past in blue, future in green, fading with distance; trajectory.
+    if (!s.onionGhosts.empty() && !gameView) {
+        i32 far = 1;
+        for (const auto& g : s.onionGhosts) far = std::max(far, std::abs(g.offset));
+        for (const auto& g : s.onionGhosts) {
+            if (!scene.valid(g.entity) || !g.bounds.valid()) continue;
+            const int alpha = static_cast<int>(200.0f * (1.0f - 0.6f * static_cast<float>(std::abs(g.offset) - 1) / static_cast<float>(far)));
+            const ImU32 col = g.offset < 0 ? IM_COL32(90, 150, 255, alpha) : IM_COL32(90, 220, 120, alpha);
+            const ImU32 fill = g.offset < 0 ? IM_COL32(90, 150, 255, alpha / 6) : IM_COL32(90, 220, 120, alpha / 6);
+            const math::Aabb& b = g.bounds;
+            Vec3 corners[8];
+            for (int i = 0; i < 8; ++i) corners[i] = {(i & 1) ? b.max.x : b.min.x, (i & 2) ? b.max.y : b.min.y, (i & 4) ? b.max.z : b.min.z};
+            ImVec2 sp[8];
+            bool ok = true;
+            for (int i = 0; i < 8 && ok; ++i) ok = project(vp, corners[i], origin, size, sp[i]);
+            if (!ok) continue;
+            if (s.ctx.camera().mode2D) dl->AddQuadFilled(sp[0], sp[1], sp[3], sp[2], fill);
+            static const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+            for (auto& ed : edges) dl->AddLine(sp[ed[0]], sp[ed[1]], col, 1.0f);
+        }
+        // Trajectory of each entity through the ghosts and the current position.
+        std::map<u64, std::vector<std::pair<i32, Vec3>>> paths;
+        for (const auto& g : s.onionGhosts) paths[g.entity.packed()].emplace_back(g.offset, g.position);
+        for (auto& [key, pts] : paths) {
+            const ecs::Entity e{static_cast<u32>(key), static_cast<u32>(key >> 32)};
+            if (!scene.valid(e)) continue;
+            pts.emplace_back(0, scene.worldMatrix(e).translation());
+            std::sort(pts.begin(), pts.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+            ImVec2 prev;
+            bool hasPrev = false;
+            for (const auto& [offset, p] : pts) {
+                ImVec2 q;
+                if (!project(vp, p, origin, size, q)) {
+                    hasPrev = false;
+                    continue;
+                }
+                if (hasPrev) dl->AddLine(prev, q, IM_COL32(255, 200, 80, 170), 1.5f);
+                dl->AddCircleFilled(q, offset == 0 ? 3.5f : 2.5f, offset == 0 ? palette::kAmber : IM_COL32(255, 200, 80, 170));
+                prev = q;
+                hasPrev = true;
+            }
+        }
     }
 
     if (showColliders) drawColliders(s, origin, size, vp);

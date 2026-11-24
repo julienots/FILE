@@ -244,6 +244,11 @@ Timeline : **Ctrl+clic** ajoute / retire une clé de la sélection, **Ctrl+A** s
 glisser l'une d'elles déplace toute la sélection (pas de 10 ms) ; **Ctrl+C / Ctrl+V** copie les clés
 et les colle à la tête de lecture (mêmes pistes, mêmes écarts ; un autre clip reçoit les pistes
 manquantes) ; Suppr supprime la sélection.
+**Pelure d'oignon** (panneau Animation, pendant l'aperçu) : contours des objets animés quelques images
+avant (bleu) et après (vert) l'instant choisi, de plus en plus pâles, et leur trajectoire (points ambre) ;
+nombre d'images de chaque côté et intervalle réglables. Ce sont des contours (boîtes englobantes des sprites
+et maillages), pas des copies texturées du personnage.
+
 ## Performances
 
 1 000 Animators (dont 500 machines à états), 3 courbes chacun : ~0,18 ms par image sur la machine de
