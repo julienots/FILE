@@ -503,7 +503,7 @@ int g_gestures(lua_State* L) {
         lua_pushstring(L, enumName(e.type));
         lua_setfield(L, -2, "type");
         const std::pair<const char*, float> fields[] = {{"x", e.position.x}, {"y", e.position.y}, {"sx", e.start.x}, {"sy", e.start.y}, {"dx", e.delta.x},
-                                                        {"dy", e.delta.y}, {"scale", e.scale}, {"vx", e.velocity.x}, {"vy", e.velocity.y}};
+                                                        {"dy", e.delta.y}, {"scale", e.scale}, {"rotation", e.rotation}, {"vx", e.velocity.x}, {"vy", e.velocity.y}};
         for (const auto& [k, v] : fields) {
             lua_pushnumber(L, v);
             lua_setfield(L, -2, k);
@@ -520,14 +520,16 @@ int g_drag(lua_State* L) {
     lua_pushnumber(L, d.y);
     return 2;
 }
-/// agr.input.pinch() -> scale, panX, panY: two-finger zoom (or mouse wheel) and pan this frame.
+/// agr.input.pinch() -> scale, panX, panY, rotation: two-finger zoom (or mouse wheel), pan and twist
+/// (radians, clockwise > 0) this frame.
 int g_pinch(lua_State* L) {
     const GestureRecognizer* g = implOf(L).gestures;
     lua_pushnumber(L, g ? g->pinchScale() : 1.0f);
     const math::Vec2 p = g ? g->pinchPan() : math::Vec2{0.0f, 0.0f};
     lua_pushnumber(L, p.x);
     lua_pushnumber(L, p.y);
-    return 3;
+    lua_pushnumber(L, g ? g->pinchRotation() : 0.0f);
+    return 4;
 }
 /// agr.input.tapped() -> x, y, count (1 tap, 2 double tap) or nil.
 int g_tapped(lua_State* L) {

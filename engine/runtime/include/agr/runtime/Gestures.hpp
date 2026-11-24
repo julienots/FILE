@@ -21,6 +21,7 @@ struct GestureEvent {
     math::Vec2 start;     ///< Where the gesture began.
     math::Vec2 delta;     ///< Drag: movement this frame; pinch: center movement this frame.
     float scale = 1.0f;   ///< Pinch: distance ratio this frame (> 1 = fingers apart = zoom in).
+    float rotation = 0.0f;  ///< Pinch: two-finger twist this frame, radians (> 0 = clockwise on screen).
     math::Vec2 velocity;  ///< Swipe / DragEnd: pixels per second.
 };
 
@@ -43,6 +44,7 @@ public:
     math::Vec2 dragDelta() const;           ///< One-finger drag movement this frame.
     float pinchScale() const;               ///< Product of this frame's pinch scales (1 = none).
     math::Vec2 pinchPan() const;            ///< Two-finger pan this frame.
+    float pinchRotation() const;            ///< Two-finger twist this frame (radians, clockwise > 0).
     bool dragging() const { return m_mode == Mode::Drag; }
     bool pinching() const { return m_mode == Mode::Pinch; }
     void reset();
@@ -61,7 +63,7 @@ private:
     Mode m_mode = Mode::None;
     f64 m_time = 0.0, m_lastTapTime = -10.0;
     math::Vec2 m_lastTapPos{-1e6f, -1e6f}, m_velocity{0.0f, 0.0f}, m_pinchCenter{0.0f, 0.0f};
-    float m_pinchDistance = 0.0f;
+    float m_pinchDistance = 0.0f, m_pinchAngle = 0.0f;
     bool m_longPressed = false;
 };
 

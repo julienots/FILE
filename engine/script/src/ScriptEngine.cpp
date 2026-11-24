@@ -192,7 +192,7 @@ ScriptEngine::ScriptEngine(VirtualFileSystem& vfs) : m(std::make_unique<Impl>(vf
 ScriptEngine::~ScriptEngine() = default;
 
 void ScriptEngine::setInput(const Input* input) { m->input = input; }
-void ScriptEngine::setActions(const InputActions* actions) { m->actions = actions; }
+void ScriptEngine::setActions(InputActions* actions) { m->actions = actions; }
 void ScriptEngine::setLocalization(Localization* localization, std::function<bool(std::string_view)> setLanguage) {
     m->localization = localization;
     m->setLanguage = setLanguage ? std::move(setLanguage)

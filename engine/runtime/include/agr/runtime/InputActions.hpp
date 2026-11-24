@@ -3,6 +3,7 @@
 // gamepads and touch zones / virtual sticks. Games read actions instead of devices, so one
 // script works with a keyboard, a controller and a phone screen, and players' bindings can
 // change without touching code. Stored in assets://input.agrinput (JSON).
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -56,6 +57,13 @@ struct InputMap {
 };
 
 std::string describe(const InputBinding& b);  ///< "Key Space", "Pad South", "Touch stick (x)"...
+/// One binding <-> its JSON form ({"type": "key", "input": "Space", "scale": -1, "pad": 0}).
+/// False for an unknown type or input.
+bool bindingFromJson(const nlohmann::ordered_json& j, InputBinding& out);
+nlohmann::ordered_json bindingToJson(const InputBinding& b);
+/// What the player pressed this frame: a key, a mouse button, a pad button or a stick / trigger
+/// pushed past `axisThreshold` (scale = its direction). For "press a key" remapping menus.
+std::optional<InputBinding> capturePressed(const Input& input, float axisThreshold = 0.6f);
 
 struct ActionState {
     float value = 0.0f;  ///< Button: 0 or 1; axis: -1..1.
@@ -84,13 +92,23 @@ public:
     bool pressed(std::string_view name) const { return state(name).pressed; }
     bool released(std::string_view name) const { return state(name).released; }
 
+    // Player remapping (options menus): changes one action's bindings while the game runs.
+    /// False for an unknown action.
+    bool setBindings(std::string_view action, std::vector<InputBinding> bindings);
+    /// Back to the bindings of the game's file (or of the last setMap()).
+    void resetBindings();
+    /// {"action": [binding, ...], ...} of the actions whose bindings differ from the game's file.
+    nlohmann::ordered_json overrides() const;
+    /// Applies overrides(); unknown actions and bindings are skipped.
+    void applyOverrides(const nlohmann::ordered_json& overrides);
+
 private:
     struct Stick {
         u64 touch = 0;
         math::Vec2 origin;
         bool active = false;
     };
-    InputMap m_map;
+    InputMap m_map, m_base;
     std::vector<ActionState> m_states;
     std::vector<std::vector<Stick>> m_sticks;  // per action, per binding
     std::unordered_map<std::string, usize> m_index;

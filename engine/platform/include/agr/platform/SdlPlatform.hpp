@@ -35,6 +35,7 @@ public:
     math::Vec4 safeAreaInsets() const override;
     void vibrate(float seconds, float strength) override;
     bool canVibrate() const override { return m_haptic != nullptr; }
+    bool rumbleGamepad(u32 pad, float low, float high, float seconds) override;
     std::vector<std::string> preferredLanguages() const override;
     GraphicsApi graphicsApi() const override;
     void* graphicsProcAddress(const char* name) const override { return glProcAddress(name); }
@@ -75,6 +76,7 @@ private:
     ::SDL_Sensor* m_gyro = nullptr;
     ::SDL_Haptic* m_haptic = nullptr;
     std::vector<::SDL_Gamepad*> m_gamepads;
+    ::SDL_Gamepad* m_padBySlot[4] = {};  // Input's gamepad slots (kMaxGamepads)
     u32 m_accelId = 0, m_gyroId = 0;
 };
 

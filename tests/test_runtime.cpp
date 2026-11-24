@@ -362,3 +362,25 @@ TEST_CASE("game files mounted after initialize (exported players): translations 
     CHECK((app.atStart == "Jouer" || app.atStart == "Play"));
     CHECK(engine.localization().languages().size() == 2);
 }
+
+TEST_CASE("gestures: two-finger twist gives the rotation (clockwise on screen > 0), scale stays 1") {
+    Input in;
+    GestureRecognizer g;
+    auto at = [](float angle, float sign) { return math::Vec2{150.0f + sign * 50.0f * std::cos(angle), 100.0f + sign * 50.0f * std::sin(angle)}; };
+    in.touchDown(1, at(0.0f, -1.0f), 1.0f);
+    in.touchDown(2, at(0.0f, 1.0f), 1.0f);
+    g.update(in, 1.0 / 60.0);
+    in.beginFrame();
+    float total = 0.0f, scale = 1.0f;
+    for (int i = 1; i <= 10; ++i) {
+        const float a = 0.05f * static_cast<float>(i);
+        in.touchMove(1, at(a, -1.0f), 1.0f);
+        in.touchMove(2, at(a, 1.0f), 1.0f);
+        g.update(in, 1.0 / 60.0);
+        total += g.pinchRotation();
+        scale *= g.pinchScale();
+        in.beginFrame();
+    }
+    CHECK(total == doctest::Approx(0.5f).epsilon(0.01));
+    CHECK(scale == doctest::Approx(1.0f).epsilon(0.01));
+}

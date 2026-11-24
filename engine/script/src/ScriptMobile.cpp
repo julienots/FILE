@@ -280,6 +280,86 @@ int a_sha256(lua_State* L) {
     return 1;
 }
 
+// ---------------------------------------------------------------- player remapping
+InputActions& remapActions(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.actions) luaL_error(L, "input actions are not available");
+    return *m.actions;
+}
+const InputAction& remapAction(lua_State* L, int idx) {
+    const char* name = luaL_checkstring(L, idx);
+    const InputAction* a = remapActions(L).map().find(name);
+    if (!a) luaL_error(L, "unknown action '%s'", name);
+    return *a;
+}
+void pushBinding(lua_State* L, const InputBinding& b) {
+    pushJson(L, nlohmann::json::parse(bindingToJson(b).dump()));
+    lua_pushstring(L, describe(b).c_str());
+    lua_setfield(L, -2, "text");
+}
+/// agr.input.bindings("jump") -> { {type = "key", input = "Space", text = "Key Space"}, ... }
+int rm_bindings(lua_State* L) {
+    const InputAction& a = remapAction(L, 1);
+    lua_createtable(L, static_cast<int>(a.bindings.size()), 0);
+    for (usize i = 0; i < a.bindings.size(); ++i) {
+        pushBinding(L, a.bindings[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    return 1;
+}
+/// agr.input.setBindings("jump", { {type = "key", input = "W"}, captured, ... })
+int rm_setBindings(lua_State* L) {
+    const std::string name = remapAction(L, 1).name;
+    luaL_checktype(L, 2, LUA_TTABLE);
+    std::vector<InputBinding> bindings;
+    const lua_Integer n = luaL_len(L, 2);
+    for (lua_Integer i = 1; i <= n; ++i) {
+        lua_rawgeti(L, 2, i);
+        nlohmann::json j = toJson(L, -1, 0);
+        lua_pop(L, 1);
+        if (j.is_object()) j.erase("text");
+        InputBinding b;
+        if (!bindingFromJson(nlohmann::ordered_json::parse(j.dump()), b)) luaL_error(L, "binding %d of '%s' is not valid", static_cast<int>(i), name.c_str());
+        bindings.push_back(b);
+    }
+    remapActions(L).setBindings(name, std::move(bindings));
+    return 0;
+}
+/// agr.input.capture() -> binding table of what was pressed this frame (key, mouse, pad), or nil.
+int rm_capture(lua_State* L) {
+    const Input* input = implOf(L).input;
+    const auto b = input ? capturePressed(*input) : std::nullopt;
+    if (!b) {
+        lua_pushnil(L);
+        return 1;
+    }
+    pushBinding(L, *b);
+    return 1;
+}
+/// agr.input.saveBindings(): keeps the player's remapping in the save (applied at every start).
+int rm_save(lua_State* L) {
+    auto& m = implOf(L);
+    if (!m.save) luaL_error(L, "no save store");
+    m.save->set("agr.input", nlohmann::json::parse(remapActions(L).overrides().dump()));
+    (void)m.save->flush();
+    return 0;
+}
+/// agr.input.resetBindings(): back to the game's bindings (call saveBindings to keep it).
+int rm_reset(lua_State* L) {
+    remapActions(L).resetBindings();
+    return 0;
+}
+/// agr.input.vibrate([pad = 1], strength, seconds[, light]): controller rumble -> true if it has one.
+int rm_vibrate(lua_State* L) {
+    const lua_Integer pad = luaL_optinteger(L, 1, 1);
+    const float low = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    const float seconds = static_cast<float>(luaL_optnumber(L, 3, 0.2));
+    const float high = static_cast<float>(luaL_optnumber(L, 4, low));
+    PlatformLayer* p = implOf(L).platform;
+    lua_pushboolean(L, p && pad >= 1 && p->rumbleGamepad(static_cast<u32>(pad - 1), low, high, seconds));
+    return 1;
+}
+
 } // namespace
 
 void openMobileBindings(lua_State* L) {
@@ -299,7 +379,9 @@ void openMobileBindings(lua_State* L) {
     static const luaL_Reg device[] = {{"platform", dv_platform},       {"isMobile", dv_isMobile}, {"vibrate", dv_vibrate},
                                       {"canVibrate", dv_canVibrate},   {"safeArea", dv_safeArea}, {nullptr, nullptr}};
     addAgrLibrary(L, "device", device);
-    static const luaL_Reg input[] = {{"accelerometer", in_accelerometer}, {"gyroscope", in_gyroscope}, {nullptr, nullptr}};
+    static const luaL_Reg input[] = {{"accelerometer", in_accelerometer}, {"gyroscope", in_gyroscope}, {"bindings", rm_bindings},
+                                    {"setBindings", rm_setBindings},    {"capture", rm_capture},     {"saveBindings", rm_save},
+                                    {"resetBindings", rm_reset},        {"vibrate", rm_vibrate},     {nullptr, nullptr}};
     extendAgrLibrary(L, "input", input);
 }
 

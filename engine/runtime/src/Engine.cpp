@@ -323,6 +323,8 @@ void Engine::reloadGameSettings() {
         AGR_LOG_ERROR("Engine", "input actions: {} (defaults used)", s.error().message);
         m_actions.setMap(InputMap::defaults());
     }
+    // The player's remapping (agr.input.saveBindings), kept in the save over the game's file.
+    if (m_save && m_save->has("agr.input")) m_actions.applyOverrides(nlohmann::ordered_json::parse(m_save->get("agr.input").dump()));
     if (Status s = m_localization.load(m_vfs); !s) AGR_LOG_ERROR("Engine", "{}", s.error().message);
     std::vector<std::string> preferred;
     if (m_save && m_save->has("agr.language") && m_save->get("agr.language").is_string())

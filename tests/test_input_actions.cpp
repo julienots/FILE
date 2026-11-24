@@ -161,3 +161,62 @@ TEST_CASE("input maps: JSON round trip, invalid entries skipped, duplicates reje
 }
 
 }
+
+TEST_SUITE("input") {
+TEST_CASE("player remapping: capture what was pressed, rebind, overrides survive a reload, reset") {
+    Frame f;
+    // capture: nothing, then a key, a pad button, a stick pushed left.
+    CHECK_FALSE(capturePressed(f.input).has_value());
+    f.input.setKey(Key::W, true);
+    auto c = capturePressed(f.input);
+    REQUIRE(c);
+    CHECK(c->type == InputBinding::Type::Key);
+    CHECK(c->key == Key::W);
+    f.step();
+    CHECK_FALSE(capturePressed(f.input).has_value());  // held, not pressed again
+    f.input.setKey(Key::W, false);
+    f.input.gamepadConnect(7, "Pad");
+    f.input.setGamepadAxis(7, GamepadAxis::LeftX, -0.9f);
+    c = capturePressed(f.input);
+    REQUIRE(c);
+    CHECK(c->type == InputBinding::Type::GamepadAxis);
+    CHECK(c->scale == -1.0f);
+    f.input.setGamepadAxis(7, GamepadAxis::LeftX, 0.0f);
+    f.step();
+
+    // JSON round trip of one binding.
+    InputBinding b;
+    REQUIRE(bindingFromJson(nlohmann::ordered_json{{"type", "key"}, {"input", "W"}}, b));
+    CHECK(bindingToJson(b)["input"] == "W");
+    CHECK_FALSE(bindingFromJson(nlohmann::ordered_json{{"type", "key"}, {"input", "NoSuchKey"}}, b));
+
+    // Rebind jump to W only: Space no longer jumps.
+    REQUIRE(f.actions.setBindings("jump", {b}));
+    CHECK_FALSE(f.actions.setBindings("nope", {}));
+    f.input.setKey(Key::Space, true);
+    f.step();
+    CHECK_FALSE(f.actions.down("jump"));
+    f.input.setKey(Key::Space, false);
+    f.input.setKey(Key::W, true);
+    f.step();
+    CHECK(f.actions.down("jump"));
+    f.input.setKey(Key::W, false);
+    f.step();
+
+    // Overrides: only the changed action; applied to a fresh map (next start).
+    const auto o = f.actions.overrides();
+    CHECK(o.size() == 1);
+    CHECK(o.contains("jump"));
+    Frame g;
+    g.actions.applyOverrides(o);
+    g.input.setKey(Key::W, true);
+    g.step();
+    CHECK(g.actions.down("jump"));
+
+    f.actions.resetBindings();
+    CHECK(f.actions.overrides().empty());
+    f.input.setKey(Key::Space, true);
+    f.step();
+    CHECK(f.actions.down("jump"));
+}
+}

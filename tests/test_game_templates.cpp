@@ -1780,3 +1780,24 @@ TEST_CASE("background scene loading: agr.loadSceneAsync, progress, automatic or 
     }
     h.lua("local p, s, err = agr.sceneLoadProgress(); assert(s == 'failed' and err ~= nil, s)");
 }
+
+TEST_CASE("Lua remapping: capture a key, rebind jump, save the override, reset; pad rumble without a pad is false") {
+    GameHarness h(SceneTemplate::GamePlatformer);
+    h.frames(2);
+    h.lua("assert(agr.input.capture() == nil)");
+    h.lua("local b = agr.input.bindings('jump'); assert(#b >= 1 and b[1].text ~= nil)");
+    h.key(Key::W, true);
+    h.lua("C = agr.input.capture(); assert(C and C.type == 'key' and C.input == 'W', C and C.input)");
+    h.lua("agr.input.setBindings('jump', { C })");
+    h.frames(1);
+    h.lua("assert(agr.input.down('jump'))");
+    h.key(Key::W, false);
+    h.key(Key::Space, true);
+    h.frames(1);
+    h.lua("assert(not agr.input.down('jump'))");
+    h.key(Key::Space, false);
+    h.lua("agr.input.saveBindings(); local o = agr.save.get('agr.input'); assert(o.jump[1].input == 'W')");
+    h.lua("agr.input.resetBindings(); agr.input.saveBindings(); assert(next(agr.save.get('agr.input')) == nil)");
+    h.lua("assert(agr.input.vibrate(1, 0.5, 0.1) == false)");
+    h.lua("local ok = pcall(agr.input.setBindings, 'jump', { {type = 'key', input = 'Nope'} }); assert(not ok)");
+}

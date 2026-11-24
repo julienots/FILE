@@ -100,7 +100,7 @@ struct ScriptEngine::Impl {
     lua_State* L = nullptr;
     const Input* input = nullptr;
     const GestureRecognizer* gestures = nullptr;
-    const InputActions* actions = nullptr;
+    InputActions* actions = nullptr;
     Localization* localization = nullptr;
     std::function<bool(std::string_view)> setLanguage;  ///< Engine::setLanguage (remembers the choice)
     math::Vec2 screenSize{0.0f, 0.0f};

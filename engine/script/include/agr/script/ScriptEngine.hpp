@@ -111,7 +111,7 @@ public:
     /// Touch gestures for agr.input.gestures / drag / pinch / tapped (null = none).
     void setGestures(const GestureRecognizer* gestures);
     /// Named actions for agr.input.down / pressed / released / value.
-    void setActions(const InputActions* actions);
+    void setActions(InputActions* actions);
     /// Texts for agr.tr / agr.locale; `setLanguage` changes and remembers the language
     /// (defaults to Localization::setLanguage).
     void setLocalization(Localization* localization, std::function<bool(std::string_view)> setLanguage = {});

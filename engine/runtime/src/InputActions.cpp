@@ -197,6 +197,7 @@ std::string describe(const InputBinding& b) {
 // ------------------------------------------------------------------ evaluation
 void InputActions::setMap(InputMap map) {
     m_map = std::move(map);
+    m_base = m_map;
     m_states.assign(m_map.actions.size(), ActionState{});
     m_sticks.clear();
     m_index.clear();
@@ -299,6 +300,100 @@ void InputActions::update(const Input& input, math::Vec2 screen) {
         }
         s.pressed = s.down && !wasDown;
         s.released = !s.down && wasDown;
+    }
+}
+
+} // namespace agr
+
+namespace agr {
+
+bool bindingFromJson(const nlohmann::ordered_json& j, InputBinding& out) {
+    nlohmann::ordered_json doc = {{"format", "agr.input"}, {"actions", nlohmann::ordered_json::array()}};
+    nlohmann::ordered_json action = {{"name", "x"}, {"bindings", nlohmann::ordered_json::array()}};
+    action["bindings"].push_back(j);
+    doc["actions"].push_back(std::move(action));
+    auto map = InputMap::fromJson(doc);
+    if (!map || map.value().actions.empty() || map.value().actions[0].bindings.empty()) return false;
+    out = map.value().actions[0].bindings[0];
+    return true;
+}
+
+nlohmann::ordered_json bindingToJson(const InputBinding& b) {
+    InputMap m;
+    m.actions.push_back(InputAction{"x", InputAction::Kind::Button, 0.2f, {b}});
+    return m.toJson()["actions"][0]["bindings"][0];
+}
+
+std::optional<InputBinding> capturePressed(const Input& input, float axisThreshold) {
+    InputBinding b;
+    for (usize k = 1; k < static_cast<usize>(Key::Count); ++k)
+        if (input.keyPressed(static_cast<Key>(k)) && keyName(static_cast<Key>(k))[0] != 0) {
+            b.type = InputBinding::Type::Key;
+            b.key = static_cast<Key>(k);
+            return b;
+        }
+    for (usize m = 0; m < static_cast<usize>(MouseButton::Count); ++m)
+        if (input.mousePressed(static_cast<MouseButton>(m))) {
+            b.type = InputBinding::Type::MouseButton;
+            b.mouse = static_cast<MouseButton>(m);
+            return b;
+        }
+    for (u32 pad = 0; pad < kMaxGamepads; ++pad) {
+        if (!input.gamepadConnected(pad)) continue;
+        for (usize i = 0; i < static_cast<usize>(GamepadButton::Count); ++i)
+            if (input.gamepadPressed(pad, static_cast<GamepadButton>(i))) {
+                b.type = InputBinding::Type::GamepadButton;
+                b.button = static_cast<GamepadButton>(i);
+                return b;
+            }
+        for (usize i = 0; i < static_cast<usize>(GamepadAxis::Count); ++i) {
+            const float v = input.gamepadAxis(pad, static_cast<GamepadAxis>(i));
+            if (std::abs(v) >= axisThreshold) {
+                b.type = InputBinding::Type::GamepadAxis;
+                b.axis = static_cast<GamepadAxis>(i);
+                b.scale = v < 0.0f ? -1.0f : 1.0f;
+                return b;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+void InputActions::resetBindings() {
+    for (const InputAction& a : m_base.actions) setBindings(a.name, a.bindings);
+}
+
+bool InputActions::setBindings(std::string_view action, std::vector<InputBinding> bindings) {
+    const auto it = m_index.find(std::string(action));
+    if (it == m_index.end()) return false;
+    m_map.actions[it->second].bindings = std::move(bindings);
+    m_sticks[it->second].assign(m_map.actions[it->second].bindings.size(), Stick{});
+    return true;
+}
+
+nlohmann::ordered_json InputActions::overrides() const {
+    const InputMap& base = m_base;
+    nlohmann::ordered_json out = nlohmann::ordered_json::object();
+    const nlohmann::ordered_json mine = m_map.toJson(), theirs = base.toJson();
+    for (const auto& a : mine["actions"]) {
+        nlohmann::ordered_json original;
+        for (const auto& b : theirs["actions"])
+            if (b["name"] == a["name"]) original = b["bindings"];
+        if (original != a["bindings"]) out[a["name"].get<std::string>()] = a["bindings"];
+    }
+    return out;
+}
+
+void InputActions::applyOverrides(const nlohmann::ordered_json& overrides) {
+    if (!overrides.is_object()) return;
+    for (const auto& [name, list] : overrides.items()) {
+        if (!has(name) || !list.is_array()) continue;
+        std::vector<InputBinding> bindings;
+        for (const auto& j : list) {
+            InputBinding b;
+            if (bindingFromJson(j, b)) bindings.push_back(b);
+        }
+        setBindings(name, std::move(bindings));
     }
 }
 

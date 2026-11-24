@@ -32,6 +32,9 @@ public:
     /// Device vibration (phones) for `seconds` at `strength` (0..1); no-op without a vibrator.
     virtual void vibrate(float seconds, float strength) { (void)seconds; (void)strength; }
     virtual bool canVibrate() const { return false; }
+    /// Controller rumble on gamepad slot `pad`: `low` / `high` = strength of the heavy and light
+    /// motors (0..1) for `seconds`. False when the pad has no rumble (or is not connected).
+    virtual bool rumbleGamepad(u32 pad, float low, float high, float seconds) { (void)pad, (void)low, (void)high, (void)seconds; return false; }
     /// Text entry (shows the on-screen keyboard on phones); no-op without a window.
     virtual void setTextInput(bool enabled) { (void)enabled; }
     /// System clipboard (UTF-8); empty / no-op without a window.

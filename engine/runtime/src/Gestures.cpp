@@ -20,7 +20,7 @@ const char* enumName(GestureType type) {
 }
 
 void GestureRecognizer::emit(GestureType t, math::Vec2 p, math::Vec2 start, math::Vec2 delta, float scale, math::Vec2 velocity) {
-    m_events.push_back({t, p, start, delta, scale, velocity});
+    m_events.push_back({t, p, start, delta, scale, 0.0f, velocity});
 }
 
 void GestureRecognizer::reset() {
@@ -73,6 +73,7 @@ void GestureRecognizer::update(const Input& input, f64 dt) {
         const math::Vec2 a = m_pointers[m_order[0]].position, b = m_pointers[m_order[1]].position;
         m_pinchCenter = (a + b) * 0.5f;
         m_pinchDistance = std::max(1.0f, math::length(b - a));
+        m_pinchAngle = std::atan2(b.y - a.y, b.x - a.x);
     }
     // Moves.
     for (const Now& n : now) {
@@ -98,9 +99,18 @@ void GestureRecognizer::update(const Input& input, f64 dt) {
         const float dist = std::max(1.0f, math::length(b - a));
         const float scale = dist / m_pinchDistance;
         const math::Vec2 pan = center - m_pinchCenter;
-        if (std::abs(scale - 1.0f) > 1e-4f || pan.x != 0.0f || pan.y != 0.0f) emit(GestureType::Pinch, center, center - pan, pan, scale);
+        const float angle = std::atan2(b.y - a.y, b.x - a.x);
+        float twist = angle - m_pinchAngle;
+        constexpr float kPi = 3.14159265358979f;
+        if (twist > kPi) twist -= 2.0f * kPi;
+        if (twist < -kPi) twist += 2.0f * kPi;
+        if (std::abs(scale - 1.0f) > 1e-4f || pan.x != 0.0f || pan.y != 0.0f || std::abs(twist) > 1e-4f) {
+            emit(GestureType::Pinch, center, center - pan, pan, scale);
+            m_events.back().rotation = twist;
+        }
         m_pinchCenter = center;
         m_pinchDistance = dist;
+        m_pinchAngle = angle;
     }
     // Long press: still and held.
     if (m_mode == Mode::Press && !m_longPressed && m_order.size() == 1) {
@@ -147,6 +157,13 @@ float GestureRecognizer::pinchScale() const {
     for (const GestureEvent& e : m_events)
         if (e.type == GestureType::Pinch) s *= e.scale;
     return s;
+}
+
+float GestureRecognizer::pinchRotation() const {
+    float r = 0.0f;
+    for (const GestureEvent& e : m_events)
+        if (e.type == GestureType::Pinch) r += e.rotation;
+    return r;
 }
 
 math::Vec2 GestureRecognizer::pinchPan() const {

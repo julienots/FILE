@@ -69,7 +69,7 @@ for _, g in ipairs(agr.input.gestures()) do
     end
 end
 local dx, dy = agr.input.drag()          -- glissé de cette image (0, 0 sinon)
-local zoom, panX, panY = agr.input.pinch()
+local zoom, panX, panY, twist = agr.input.pinch()   -- twist : rotation à deux doigts (radians, > 0 = sens horaire)
 ```
 
 **Caméra de stratégie prête à l'emploi** : `assets://scripts/strategy_camera.lua` (glisser pour déplacer en
@@ -81,6 +81,33 @@ sur l'interface sont ignorés). À poser sur la caméra d'un jeu de village, de 
 au `dragBegin`, `agr.ui.isPressed(carte)` dit quelle carte est tenue ; pendant `drag`, un repère suit
 `screenToWorld(g.x, g.y)` ; au `dragEnd`, l'unité est posée si l'endroit est permis.
 
+## Remappage par le joueur et vibration des manettes
+
+Un menu d'options peut laisser le joueur changer ses touches (comme `InputMap.action_erase_events` /
+`action_add_event` de Godot), sans toucher au fichier `input.agrinput` du jeu :
+
+```lua
+-- « Appuyez sur une touche... » : capture() rend ce qui vient d'être appuyé (touche, souris,
+-- bouton de manette, stick poussé : {type =, input =, scale =, text = "Key W"}), sinon nil.
+function Options:onUpdate(dt)
+    if not self.waiting then return end
+    local b = agr.input.capture()
+    if b then
+        agr.input.setBindings(self.waiting, { b })   -- remplace les liaisons de l'action
+        agr.input.saveBindings()                      -- gardé dans la sauvegarde, réappliqué à chaque lancement
+        self.waiting = nil
+    end
+end
+-- agr.input.bindings("jump") -> liste des liaisons ({type, input, text...}) ;
+-- agr.input.resetBindings() -> celles du jeu (puis saveBindings pour l'oublier).
+```
+
+Seules les actions modifiées sont sauvegardées (clé `agr.input` de `agr.save`) : une mise à jour du jeu
+qui change d'autres actions les garde.
+
+**Vibration des manettes** : `agr.input.vibrate(manette, force, secondes[, force_légère])` (manette 1 à
+4 ; moteur lourd et moteur léger, 0..1) rend `false` si la manette n'en a pas.
+
 ## Dans l'éditeur
 
 *Affichage › Entrées* : liste des actions, type, zone morte, liaisons. Pour une touche ou un bouton de
@@ -89,9 +116,8 @@ action s'affiche en direct. Chaque modification est enregistrée.
 
 ## Limites actuelles
 
-- Pas de remappage par le joueur depuis le jeu (l'API pour réécrire les liaisons à l'exécution n'est pas
-  exposée aux scripts).
-- Pas de vibration des manettes (la vibration du téléphone existe : `agr.device.vibrate`).
 - Les manettes n'ont pas été testées sur Android avec un vrai appareil.
 - Les gestes sont testés avec des touchers simulés et la souris, pas encore sur un vrai téléphone.
-- Pas de rotation à deux doigts.
+- Vibration des manettes : passe par SDL (`SDL_RumbleGamepad`), pas essayée avec une vraie manette
+  (aucune dans la machine de développement) ; sans manette, `vibrate` rend `false` (testé).
+- Remappage : pas d'écran tout fait dans les modèles de jeu (l'API ci-dessus suffit à en écrire un).

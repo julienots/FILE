@@ -209,6 +209,12 @@ math::Vec4 SdlPlatform::safeAreaInsets() const {
             static_cast<float>(h - safe.y - safe.h)};
 }
 
+bool SdlPlatform::rumbleGamepad(u32 pad, float low, float high, float seconds) {
+    if (pad >= 4 || !m_padBySlot[pad]) return false;
+    auto motor = [](float v) { return static_cast<Uint16>(std::clamp(v, 0.0f, 1.0f) * 65535.0f); };
+    return SDL_RumbleGamepad(m_padBySlot[pad], motor(low), motor(high), static_cast<Uint32>(std::clamp(seconds, 0.0f, 10.0f) * 1000.0f));
+}
+
 void SdlPlatform::vibrate(float seconds, float strength) {
     if (!m_haptic || seconds <= 0.0f) return;
     SDL_PlayHapticRumble(m_haptic, std::clamp(strength, 0.0f, 1.0f), static_cast<Uint32>(seconds * 1000.0f));
@@ -217,6 +223,7 @@ void SdlPlatform::vibrate(float seconds, float strength) {
 void SdlPlatform::shutdown() {
     for (SDL_Gamepad* pad : m_gamepads) SDL_CloseGamepad(pad);
     m_gamepads.clear();
+    for (auto& p : m_padBySlot) p = nullptr;
     if (m_accel) SDL_CloseSensor(m_accel);
     if (m_gyro) SDL_CloseSensor(m_gyro);
     if (m_haptic) SDL_CloseHaptic(m_haptic);
@@ -334,6 +341,7 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
                     const u32 slot = input.gamepadConnect(e.gdevice.which, name ? name : "Gamepad");
                     if (slot < kMaxGamepads) {
                         m_gamepads.push_back(pad);
+                        m_padBySlot[slot] = pad;
                         AGR_LOG_INFO("Platform", "gamepad {} connected: {}", slot, name ? name : "?");
                     } else {
                         SDL_CloseGamepad(pad);
@@ -345,6 +353,8 @@ bool SdlPlatform::pollEvents(EventBus& events, Input& input) {
                 input.gamepadDisconnect(e.gdevice.which);
                 for (auto it = m_gamepads.begin(); it != m_gamepads.end(); ++it)
                     if (SDL_GetGamepadID(*it) == e.gdevice.which) {
+                        for (auto& p : m_padBySlot)
+                            if (p == *it) p = nullptr;
                         SDL_CloseGamepad(*it);
                         m_gamepads.erase(it);
                         break;
