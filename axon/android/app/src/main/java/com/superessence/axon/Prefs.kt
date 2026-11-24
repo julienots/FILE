@@ -16,11 +16,27 @@ class Prefs(ctx: Context) {
         get() = sp.getString("key", null) ?: newKey()
 
     fun newKey(): String {
-        val abc = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-        val rnd = SecureRandom()
-        val k = (1..28).map { abc[rnd.nextInt(abc.length)] }.joinToString("")
+        val k = random(28)
         sp.edit().putString("key", k).apply()
         return k
+    }
+
+    /** Rejoindre le salon d'un autre appareil (plusieurs téléphones pilotés avec la même clé). */
+    fun setKey(k: String) = sp.edit().putString("key", k).apply()
+
+    /** Identifiant stable de CE téléphone dans le salon (le relais distingue ainsi les appareils). */
+    val deviceId: String
+        get() = sp.getString("deviceId", null) ?: random(8).also { sp.edit().putString("deviceId", it).apply() }
+
+    /** Nom affiché à Claude et sur les écrans de contrôle (ex. « Téléphone de Léa »). Vide = modèle. */
+    var deviceName: String
+        get() = sp.getString("deviceName", "") ?: ""
+        set(v) = sp.edit().putString("deviceName", v.trim().take(40)).apply()
+
+    private fun random(n: Int): String {
+        val abc = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+        val rnd = SecureRandom()
+        return (1..n).map { abc[rnd.nextInt(abc.length)] }.joinToString("")
     }
 
     /** "device" = ce téléphone est piloté ; "viewer" = écran de contrôle (tablette). */

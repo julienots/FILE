@@ -73,6 +73,8 @@
   <div class="layout">
     <!-- Retransmission -->
     <div class="stage">
+      <nav id="devTabs" class="dev-tabs" hidden aria-label="Appareils"></nav>
+      <div id="grid" class="grid" hidden></div>
       <div id="phone" class="phone">
         <img id="screen" alt="Écran de l'appareil piloté" draggable="false">
         <div id="touchLayer" class="touch"></div>
@@ -99,6 +101,7 @@
       <form id="askForm" class="ask">
         <div class="ask-head"><span class="spark-dot"></span>Demander à Claude</div>
         <textarea id="askInput" rows="2" placeholder="Ex. : ouvre YouTube et lance la dernière vidéo de ma playlist"></textarea>
+        <label id="askTargetRow" hidden>Sur quel appareil ?<select id="askTarget"></select></label>
         <div class="chips">
           <button type="button" class="chip">Ouvre YouTube et cherche de la musique lo-fi</button>
           <button type="button" class="chip">Active le mode sombre dans les paramètres</button>

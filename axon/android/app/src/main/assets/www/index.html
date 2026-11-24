@@ -96,7 +96,8 @@
         </div>
       </li>
       <li>
-        <div><b>4. Écran de contrôle (facultatif)</b><small>Envoyez ce lien à votre tablette : elle verra ce téléphone en direct (navigateur ou app AXON).</small></div>
+        <div><b>4. Autres appareils (facultatif)</b><small>Envoyez ce lien :<br>• à un <b>autre téléphone</b> à piloter : dans son app AXON › « Claude pilote cet appareil » › Réglages avancés › <b>Rejoindre</b>. Claude les pilote tous, un par un ou en même temps, avec un seul connecteur ;<br>• à une <b>tablette</b> : elle voit tous les appareils en direct (navigateur ou app AXON).</small>
+          <small id="roomInfo" class="muted"></small></div>
         <button class="btn small" id="btnShare">Partager</button>
       </li>
     </ol>
@@ -135,6 +136,8 @@
 <dialog id="settings">
   <form method="dialog">
     <h3>Réglages</h3>
+    <label>Nom de cet appareil (vu par Claude)<input id="nameInput" autocomplete="off" maxlength="40" placeholder="Ex. : Téléphone de Léa"></label>
+    <div class="menu-actions wrap-actions"><button type="button" class="btn small" id="btnSaveName">Enregistrer le nom</button></div>
     <label>Adresse du relais<input id="relayInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://axon-relay.xxx.workers.dev"></label>
     <div class="menu-actions wrap-actions">
       <button type="button" class="btn small" id="btnSaveRelay">Enregistrer</button>
@@ -142,6 +145,9 @@
       <button type="button" class="btn small" data-goto-roles>Changer de rôle</button>
     </div>
     <p class="muted small-print">« Nouvelle clé » déconnecte Claude et les écrans de contrôle : il faudra recopier l'adresse du connecteur.</p>
+    <label>Rejoindre un autre appareil<input id="joinInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lien partagé : https://…/#k=…"></label>
+    <div class="menu-actions wrap-actions"><button type="button" class="btn small primary" id="btnJoin">Rejoindre</button></div>
+    <p class="muted small-print">Collez le lien « Partager » d'un téléphone AXON : cet appareil rejoint son salon, et Claude les pilote ensemble avec le même connecteur.</p>
     <div class="menu-actions"><span></span><button value="close" class="btn">Fermer</button></div>
   </form>
 </dialog>

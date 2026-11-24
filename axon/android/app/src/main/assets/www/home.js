@@ -6,7 +6,8 @@
     _s: { role: "", relay: "https://axon-relay.exemple.workers.dev", key: "DemoKey1234567890abcdefXYZ", paused: false, serviceEnabled: false, connected: false, viewers: 0, model: "Aperçu", version: "dev", viewerLink: "" },
     state() { const s = this._s; return JSON.stringify({ ...s, connector: `${s.relay}/mcp/${s.key}`, viewerUrl: `${s.relay}/#k=${s.key}` }); },
     setRole(r) { this._s.role = r; }, setRelay(u) { this._s.relay = u; }, newKey() { return this._s.key; },
-    setPaused(p) { this._s.paused = p; }, sendRequest() {}, openAccessibility() { this._s.serviceEnabled = true; this._s.connected = true; },
+    setPaused(p) { this._s.paused = p; }, sendRequest() {}, setDeviceName(n) { this._s.deviceName = n; },
+    joinRoom(l) { const m = l.match(/#k=([A-Za-z0-9_-]{16,64})/); if (!m) return false; this._s.key = m[1]; return true; }, openAccessibility() { this._s.serviceEnabled = true; this._s.connected = true; },
     copy() {}, share() {}, openClaude() {}, openUrl(u) { location.href = u; }, setViewerLink(l) { this._s.viewerLink = l; },
   };
   const S = () => JSON.parse(N.state());
@@ -33,7 +34,7 @@
 
   /* ---------- Écran de contrôle ---------- */
   function openViewer(link) {
-    const m = link.match(/^(https?:\/\/[^/#?]+)[^#]*#k=([A-Za-z0-9_-]{16,64})/);
+    const m = link.match(/(https?:\/\/[^/#?]+)[^#]*#k=([A-Za-z0-9_-]{16,64})/);
     if (!m) { $("#viewerErr").hidden = false; $("#viewerErr").textContent = "Lien invalide (il doit contenir #k=…)."; return; }
     N.setViewerLink(link);
     N.openUrl(`${m[1]}/?nosplash=1#k=${m[2]}`);
@@ -43,7 +44,8 @@
   /* ---------- Appareil piloté ---------- */
   function refresh() {
     const st = S();
-    $("#model").textContent = st.model || "";
+    $("#model").textContent = st.deviceName || st.model || "";
+    $("#roomInfo").textContent = st.connected && st.devices ? (st.devices > 1 ? `${st.devices} appareils pilotés sont connectés à ce salon.` : "Ce téléphone est le seul appareil piloté du salon pour l'instant.") : "";
     $("#credit").textContent = `AXON ${st.version || ""} · SuperEssence Studio`;
     $("#connector").textContent = st.connector || "(réglez d'abord le relais)";
     $("#relayInfo").textContent = st.relay ? (st.connected ? `Connecté — ${host(st.relay)}` : `Hors ligne — ${host(st.relay)}`) : "Aucun relais réglé.";
@@ -54,7 +56,7 @@
     const s = $("#status");
     s.className = "pill " + (st.connected ? "on" : "off");
     s.textContent = st.paused ? "En pause" : st.connected ? "Prêt" : "Hors ligne";
-    $("#viewers").textContent = st.viewers ? `${st.viewers} écran${st.viewers > 1 ? "s" : ""} de contrôle` : "";
+    $("#viewers").textContent = [st.devices > 1 ? `${st.devices} appareils` : "", st.viewers ? `${st.viewers} écran${st.viewers > 1 ? "s" : ""} de contrôle` : ""].filter(Boolean).join(" · ");
     const hero = $("#hero");
     hero.classList.toggle("ok", st.connected && !st.paused);
     if (!st.serviceEnabled) setHero("Activez AXON", "Étape 1 : autorisez AXON dans l'accessibilité pour que Claude puisse agir.");
@@ -73,10 +75,25 @@
   $("#btnSettings").addEventListener("click", openSettings);
   $("#btnCopy").addEventListener("click", () => { const c = S().connector; if (c) { N.copy(c); toast("Adresse copiée. Collez-la dans Claude › Connecteurs."); } });
   $("#btnClaude").addEventListener("click", () => N.openClaude());
-  $("#btnShare").addEventListener("click", () => { const v = S().viewerUrl; if (v) N.share(`Écran de contrôle AXON : ${v}`); });
+  $("#btnShare").addEventListener("click", () => { const v = S().viewerUrl; if (v) N.share(`Rejoindre AXON (autre téléphone à piloter ou écran de contrôle) : ${v}`); });
   $("#pause").addEventListener("change", (e) => { N.setPaused(e.target.checked); refresh(); });
 
-  function openSettings() { $("#relayInput").value = S().relay || ""; $("#settings").showModal(); }
+  function openSettings() {
+    const st = S();
+    $("#relayInput").value = st.relay || "";
+    $("#nameInput").value = st.deviceName || "";
+    $("#nameInput").placeholder = st.model || "Ex. : Téléphone de Léa";
+    // Lien reçu (partagé vers AXON) d'un autre salon : proposé pour rejoindre.
+    $("#joinInput").value = st.viewerLink && !st.viewerLink.includes(st.key) ? st.viewerLink : "";
+    $("#settings").showModal();
+  }
+  $("#btnSaveName").addEventListener("click", () => { N.setDeviceName($("#nameInput").value.trim()); refresh(); toast("Nom enregistré."); });
+  $("#btnJoin").addEventListener("click", () => {
+    const v = $("#joinInput").value.trim(); if (!v) return toast("Collez d'abord le lien partagé par l'autre téléphone.");
+    if (!confirm("Rejoindre ce salon ? Ce téléphone sera piloté avec le même connecteur Claude que l'autre appareil.")) return;
+    if (!N.joinRoom(v)) return toast("Lien invalide (il doit contenir #k=…).");
+    $("#settings").close(); refresh(); toast("Salon rejoint ✨ Claude voit maintenant les deux appareils.");
+  });
   $("#btnSaveRelay").addEventListener("click", () => {
     const v = $("#relayInput").value.trim().replace(/\/+$/, "");
     if (v && !/^https:\/\/[^/]+$/.test(v)) return toast("L'adresse doit commencer par https:// (sans chemin).");

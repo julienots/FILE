@@ -113,6 +113,9 @@ class MainActivity : Activity() {
             .put("serviceRunning", AxonService.instance != null)
             .put("connected", AxonService.connected)
             .put("viewers", AxonService.viewers)
+            .put("devices", AxonService.devices)
+            .put("deviceId", prefs.deviceId)
+            .put("deviceName", prefs.deviceName)
             .put("sdk", Build.VERSION.SDK_INT)
             .put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
             .put("version", packageManager.getPackageInfo(packageName, 0).versionName)
@@ -129,6 +132,22 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun setViewerLink(link: String) { prefs.viewerLink = link.trim() }
+
+        @JavascriptInterface
+        fun setDeviceName(n: String) { prefs.deviceName = n; AxonService.instance?.setName(prefs.deviceName) }
+
+        /** Rejoint le salon d'un autre appareil : lien https://relais/#k=CLÉ (ou clé seule). */
+        @JavascriptInterface
+        fun joinRoom(link: String): Boolean {
+            val v = link.trim()
+            val m = Regex("""(https://[^/#?\s]+)[^#\s]*#k=([A-Za-z0-9_-]{16,64})""").find(v)
+            val k = m?.groupValues?.get(2) ?: Regex("""^[A-Za-z0-9_-]{16,64}$""").find(v)?.value ?: return false
+            if (m != null) prefs.relay = m.groupValues[1]
+            prefs.setKey(k)
+            prefs.viewerLink = ""
+            runOnUiThread { AxonService.instance?.reconnect() }
+            return true
+        }
 
         @JavascriptInterface
         fun newKey(): String {

@@ -153,3 +153,18 @@ dialog h3 { margin: 0 0 6px; }
 
 .device-name { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d3d0c6; }
 .paused-badge { border-color: var(--red) !important; color: var(--red) !important; }
+
+/* ---------- Plusieurs appareils ---------- */
+.dev-tabs { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex: none; }
+.dev-tab { flex: none; display: flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 7px 12px; font-size: 13px; color: var(--text); cursor: pointer; max-width: 220px; }
+.dev-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-tab i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+.dev-tab i.paused { background: var(--red); }
+.dev-tab[aria-pressed="true"] { border-color: var(--yellow); color: var(--yellow); }
+.grid { flex: 1; min-height: 0; width: 100%; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-content: start; overflow: auto; }
+.tile { position: relative; background: #0b0b0b; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; cursor: pointer; aspect-ratio: var(--ar, 9 / 19.5); padding: 0; color: var(--text); }
+.tile img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.tile .tile-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 8px; font-size: 12px; text-align: left; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .tile-wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; padding: 10px; text-align: center; }
+.tile.active { border-color: var(--yellow); box-shadow: 0 0 0 2px rgba(255, 200, 36, .25); }
+.feed .dev-label { color: var(--yellow); font-size: 11px; }

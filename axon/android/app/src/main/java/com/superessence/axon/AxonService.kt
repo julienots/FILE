@@ -48,6 +48,8 @@ class AxonService : AccessibilityService() {
         @Volatile var uiListener: ((String) -> Unit)? = null
         @Volatile var connected = false
         @Volatile var viewers = 0
+        /** Nombre d'appareils pilotés connectés au même salon (celui-ci compris). */
+        @Volatile var devices = 0
     }
 
     private lateinit var prefs: Prefs
@@ -133,14 +135,15 @@ class AxonService : AccessibilityService() {
         if (relay.isBlank()) { emitState(); return }
         val base = relay.replaceFirst(Regex("^http"), "ws")
         val model = URLEncoder.encode("${Build.MANUFACTURER} ${Build.MODEL}".trim(), "UTF-8")
-        val req = Request.Builder().url("$base/device?key=${prefs.key}&model=$model").build()
+        val name = URLEncoder.encode(prefs.deviceName, "UTF-8")
+        val req = Request.Builder().url("$base/device?key=${prefs.key}&id=${prefs.deviceId}&model=$model&name=$name").build()
         ws = http.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 retry = 0
                 connected = true
                 emitState()
                 send(JSONObject().put("type", "state").put("info", JSONObject()
-                    .put("model", "${Build.MANUFACTURER} ${Build.MODEL}").put("app", currentApp).put("paused", prefs.paused)))
+                    .put("model", "${Build.MANUFACTURER} ${Build.MODEL}").put("name", prefs.deviceName).put("app", currentApp).put("paused", prefs.paused)))
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (webSocket !== ws) return
@@ -154,6 +157,7 @@ class AxonService : AccessibilityService() {
     private fun lost(socket: WebSocket) {
         if (socket !== ws) return
         connected = false
+        devices = 0
         streaming.set(false)
         emitState()
         if (stopped) return
@@ -164,7 +168,7 @@ class AxonService : AccessibilityService() {
     private fun send(o: JSONObject) { ws?.send(o.toString()) }
 
     private fun emitUi(o: JSONObject) { uiListener?.let { l -> main.post { l(o.toString()) } } }
-    private fun emitState() = emitUi(JSONObject().put("type", "connection").put("connected", connected).put("viewers", viewers))
+    private fun emitState() = emitUi(JSONObject().put("type", "connection").put("connected", connected).put("viewers", viewers).put("devices", devices))
 
     private fun handleMessage(text: String) {
         val m = try { JSONObject(text) } catch (e: Exception) { return }
@@ -173,6 +177,7 @@ class AxonService : AccessibilityService() {
             "manual" -> worker.execute { runManual(m) }
             "stream" -> {
                 viewers = m.optInt("viewers")
+                devices = m.optInt("devices", 1)
                 emitState()
                 if (m.optBoolean("on")) startStream() else streaming.set(false)
             }
@@ -186,6 +191,10 @@ class AxonService : AccessibilityService() {
 
     /** Envoie une demande tapée dans l'app AXON du téléphone. */
     fun sendRequest(text: String) = send(JSONObject().put("type", "request").put("text", text))
+
+    fun setName(n: String) {
+        send(JSONObject().put("type", "state").put("info", JSONObject().put("name", n.ifBlank { "${Build.MANUFACTURER} ${Build.MODEL}" })))
+    }
 
     fun setPaused(p: Boolean) {
         prefs.paused = p
