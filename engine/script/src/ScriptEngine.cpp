@@ -1,3 +1,5 @@
+#include <set>
+#include <regex>
 #include <algorithm>
 #include <cstring>
 #include <unordered_set>
@@ -851,6 +853,38 @@ std::vector<ScriptEngine::SyntaxError> ScriptEngine::lint(std::string_view code,
     });
     lua_pop(L, 1);  // entity methods
     lua_pop(L, 1);  // the chunk
+    // Signals declared by the script (`X.signals = { a = {...}, b = {} }` or `signals = {...}` in its
+    // table): the entity's own emit / connect / waitSignal must use one of them.
+    {
+        const std::string text(code);
+        static const std::regex decl(R"((?:\.|\b)signals\s*=\s*\{)");
+        std::smatch m;
+        if (std::regex_search(text, m, decl)) {
+            std::set<std::string> declared;
+            usize i = static_cast<usize>(m.position(0) + m.length(0));
+            int depth = 1;
+            std::string word;
+            for (; i < text.size() && depth > 0; ++i) {
+                const char c = text[i];
+                if (c == '{') ++depth;
+                else if (c == '}') --depth;
+                if (depth == 1 && (std::isalnum(static_cast<unsigned char>(c)) || c == '_')) word += c;
+                else {
+                    if (depth == 1 && c == '=' && !word.empty()) declared.insert(word);
+                    if (!std::isspace(static_cast<unsigned char>(c))) word.clear();
+                }
+            }
+            static const std::regex use(R"(self\.entity\s*:\s*(emit|connect)\s*\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']|agr\.waitSignal\s*\(\s*self\.entity\s*,\s*["']([A-Za-z_][A-Za-z0-9_]*)["'])");
+            std::string list;
+            for (const std::string& d : declared) list += (list.empty() ? "" : ", ") + d;
+            for (auto it = std::sregex_iterator(text.begin(), text.end(), use); it != std::sregex_iterator(); ++it) {
+                const std::string sig = (*it)[2].matched ? (*it)[2].str() : (*it)[3].str();
+                if (declared.count(sig)) continue;
+                const int line = 1 + static_cast<int>(std::count(text.begin(), text.begin() + it->position(0), '\n'));
+                out.push_back({line, "signal '" + sig + "' non déclaré dans signals (" + (list.empty() ? "aucun" : list) + ")"});
+            }
+        }
+    }
     std::sort(out.begin(), out.end(), [](const SyntaxError& a, const SyntaxError& b) { return a.line < b.line; });
     return out;
 }

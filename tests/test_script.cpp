@@ -1623,3 +1623,26 @@ return Free
     CHECK(count("anything") == 0);
     CHECK(f.scripts.stats().errors == 0);
 }
+
+TEST_SUITE("script") {
+TEST_CASE("lint: emit / connect / waitSignal of the entity's own undeclared signals are flagged with their line") {
+    ScriptFixture f;
+    const std::string code = "local Chest = {}\n"
+                             "Chest.signals = { opened = {\"entity\", \"number\"}, locked = {} }\n"
+                             "function Chest:onStart()\n"
+                             "    self.entity:emit(\"opened\", self.entity, 3)\n"
+                             "    self.entity:emit(\"opend\", self.entity, 3)\n"
+                             "    self.entity:connect('locked', function() end)\n"
+                             "    agr.start(function() agr.waitSignal(self.entity, \"lockd\") end)\n"
+                             "end\n"
+                             "return Chest\n";
+    const auto issues = f.scripts.lint(code);
+    REQUIRE(issues.size() == 2);
+    CHECK(issues[0].line == 5);
+    CHECK(issues[0].message.find("opend") != std::string::npos);
+    CHECK(issues[0].message.find("locked, opened") != std::string::npos);
+    CHECK(issues[1].line == 7);
+    // Without a declaration nothing is checked (any name is allowed).
+    CHECK(f.scripts.lint("local M = {}\nfunction M:onStart() self.entity:emit('anything') end\nreturn M\n").empty());
+}
+}
