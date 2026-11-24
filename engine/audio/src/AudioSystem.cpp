@@ -106,10 +106,17 @@ struct Voice {
     ma_lpf_node lpf{};
     bool lpfInit = false;
     float occlusion = 0.0f, occlusionTarget = 0.0f, appliedCutoff = 0.0f;
+    // Zone crossfade: a splitter feeding the previous bus (output 0) and the new one (output 1).
+    ma_splitter_node splitter{};
+    bool splitterInit = false;
+    AudioBus fadeFrom = AudioBus::Effects;
+    float fade = 1.0f, fadeSeconds = 0.0f;  // progress 0..1 toward `routed`
+    bool zoneChecked = false;               // first zone routing switches at once (a sound starting in a zone)
 
     ~Voice() {
         if (soundInit) ma_sound_uninit(&sound);
         if (lpfInit) ma_lpf_node_uninit(&lpf, nullptr);
+        if (splitterInit) ma_splitter_node_uninit(&splitter, nullptr);
         if (generator) ma_data_source_uninit(&generator->base);
         if (decoderInit) ma_decoder_uninit(&decoder);
         if (bufferInit) ma_audio_buffer_ref_uninit(&buffer);
@@ -181,7 +188,8 @@ struct AudioSystem::Impl {
             if (ma_lpf_node_init(ma_engine_get_node_graph(&engine), &cfg, nullptr, &v.lpf) != MA_SUCCESS) return;
             v.lpfInit = true;
             const i32 bus = std::clamp(static_cast<i32>(v.routed), 0, kAudioBusCount - 1);
-            ma_node_attach_output_bus(&v.lpf, 0, &groups[bus], 0);
+            if (v.splitterInit) ma_node_attach_output_bus(&v.lpf, 0, &v.splitter, 0);
+            else ma_node_attach_output_bus(&v.lpf, 0, &groups[bus], 0);
             ma_node_attach_output_bus(&v.sound, 0, &v.lpf, 0);
             v.appliedCutoff = 20000.0f;
         }
@@ -194,10 +202,41 @@ struct AudioSystem::Impl {
         ma_node_set_output_bus_volume(&v.lpf, 0, 1.0f - 0.5f * k);
     }
     /// Sends a voice's output to another bus without restarting it (AudioZone).
-    void reroute(Voice& v, AudioBus bus) {
+    /// With `seconds` > 0 the voice fades from its bus to the new one (both heard meanwhile).
+    void reroute(Voice& v, AudioBus bus, float seconds = 0.0f) {
         const i32 b = std::clamp(static_cast<i32>(bus), 0, kAudioBusCount - 1);
-        ma_node_attach_output_bus(v.lpfInit ? static_cast<ma_node*>(&v.lpf) : static_cast<ma_node*>(&v.sound), 0, &groups[b], 0);
+        ma_node* out = v.lpfInit ? static_cast<ma_node*>(&v.lpf) : static_cast<ma_node*>(&v.sound);
+        if (seconds > 0.0f && !v.splitterInit) {
+            ma_splitter_node_config cfg = ma_splitter_node_config_init(kChannels);
+            if (ma_splitter_node_init(ma_engine_get_node_graph(&engine), &cfg, nullptr, &v.splitter) == MA_SUCCESS) {
+                v.splitterInit = true;
+                ma_node_attach_output_bus(out, 0, &v.splitter, 0);
+            }
+        }
+        if (v.splitterInit) {
+            const i32 from = std::clamp(static_cast<i32>(v.routed), 0, kAudioBusCount - 1);
+            ma_node_attach_output_bus(&v.splitter, 0, &groups[from], 0);
+            ma_node_attach_output_bus(&v.splitter, 1, &groups[b], 0);
+            v.fadeFrom = static_cast<AudioBus>(from);
+            v.fadeSeconds = std::max(seconds, 0.0f);
+            v.fade = seconds > 0.0f ? 0.0f : 1.0f;
+            applyFade(v);
+        } else {
+            ma_node_attach_output_bus(out, 0, &groups[b], 0);
+        }
         v.routed = static_cast<AudioBus>(b);
+    }
+    /// Equal-power crossfade between the splitter's two outputs.
+    void applyFade(Voice& v) {
+        if (!v.splitterInit) return;
+        const float f = std::clamp(v.fade, 0.0f, 1.0f);
+        ma_node_set_output_bus_volume(&v.splitter, 0, std::cos(f * 1.5707963f));
+        ma_node_set_output_bus_volume(&v.splitter, 1, std::sin(f * 1.5707963f));
+    }
+    void advanceFade(Voice& v, float dt) {
+        if (!v.splitterInit || v.fade >= 1.0f) return;
+        v.fade = v.fadeSeconds > 0.0f ? std::min(1.0f, v.fade + dt / v.fadeSeconds) : 1.0f;
+        applyFade(v);
     }
     bool engineInit = false, deviceInit = false, deviceRunning = false, suspended = false;
     // Recording (microphone): filled by the capture thread or feedRecording.
@@ -1003,17 +1042,20 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
         if (zone.z.shape == AudioZoneShape::Sphere) return math::dot(l, l) <= zone.z.radius * zone.z.radius;
         return std::fabs(l.x) <= zone.z.size.x * 0.5f && std::fabs(l.y) <= zone.z.size.y * 0.5f && std::fabs(l.z) <= zone.z.size.z * 0.5f;
     };
+    // Leaving every zone fades back with the crossfade of the zones around (the largest).
+    float lastFade = 0.0f;
+    for (const Zone& zone : zones) lastFade = std::max(lastFade, zone.z.crossfade);
     const Zone* listenerZone = nullptr;
     if (m->listenerHasLast)
         for (const Zone& zone : zones)
             if (zone.z.mode == AudioZoneMode::Listener && (!listenerZone || zone.z.priority > listenerZone->z.priority) && inside(zone, m->listenerLast))
                 listenerZone = &zone;
     auto routeFor = [&](const AudioSourceComponent& s, math::Vec3 pos) {
-        if (!s.spatial || s.bus == AudioBus::Interface || s.bus == AudioBus::Music) return s.bus;
+        if (!s.spatial || s.bus == AudioBus::Interface || s.bus == AudioBus::Music) return std::pair{s.bus, 0.0f};
         const Zone* best = listenerZone;
         for (const Zone& zone : zones)
             if (zone.z.mode == AudioZoneMode::Sources && (!best || zone.z.priority > best->z.priority) && inside(zone, pos)) best = &zone;
-        return best ? best->z.bus : s.bus;
+        return best ? std::pair{best->z.bus, best->z.crossfade} : std::pair{s.bus, lastFade};
     };
 
     // Sources: start, follow, stop.
@@ -1063,7 +1105,9 @@ void AudioSystem::updateScene(Scene& scene, bool running) {
             v->occlusion += std::clamp(v->occlusionTarget - v->occlusion, -step, step);
             m->applyOcclusion(*v, s.occlusionStrength);
         }
-        if (const AudioBus route = routeFor(s, w.matrix.translation()); route != v->routed && !v->stopping) m->reroute(*v, route);
+        if (const auto [route, fade] = routeFor(s, w.matrix.translation()); route != v->routed && !v->stopping) m->reroute(*v, route, v->zoneChecked ? fade : 0.0f);
+        v->zoneChecked = true;
+        m->advanceFade(*v, static_cast<float>(dt));
         if (v->sourceClip != s.clip || v->bus != s.bus || v->streamed != s.stream) {
             // Clip, bus or streaming changed while playing: restart with the new settings.
             m->forget(it->second);

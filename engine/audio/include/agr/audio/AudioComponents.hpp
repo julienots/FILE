@@ -75,6 +75,7 @@ struct AudioZoneComponent {
     AudioBus bus = AudioBus::Effects;
     AudioZoneMode mode = AudioZoneMode::Sources;
     i32 priority = 0;
+    float crossfade = 0.5f;  ///< Seconds to fade from one bus to the other when a sound enters / leaves (0 = switch).
 };
 
 /// Registers the reflection data (idempotent).

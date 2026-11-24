@@ -103,7 +103,7 @@ ne sont jamais déplacées. C++ : `AudioSystem::voiceBus(voix)` donne le bus act
 |---|---|
 | `AudioSource` | `clip`, `bus`, `volume`, `pitch` (vitesse), `loop`, `playOnStart`, `spatial`, `minDistance`, `maxDistance`, `stream` ; spatial : `attenuation` (`None`, `Inverse`, `Linear`, `Exponential`), `rolloff`, `doppler` (0 = sans, 1 = réaliste : un véhicule qui approche sonne plus aigu), cône de directivité (`coneInnerAngle`, `coneOuterAngle`, `coneOuterVolume` ; avant = -Z de l'entité : haut-parleur, voix d'un personnage) ; variations à chaque départ (pas, impacts) : `alternateClips` (autres clips tirés au hasard), `randomPitch`, `randomVolume` |
 | `AudioListener` | `active` : position et orientation d'écoute (par défaut la caméra principale) |
-| `AudioZone` | `shape` (`Box`, `Sphere`), `size`, `radius`, `bus`, `mode` (`Sources`, `Listener`), `priority` : voir *Zones audio* |
+| `AudioZone` | `shape` (`Box`, `Sphere`), `size`, `radius`, `bus`, `mode` (`Sources`, `Listener`), `priority`, `crossfade` (secondes, fondu entre les bus ; 0 = bascule) : voir *Zones audio* |
 
 Les sources suivent la scène : démarrage avec le jeu (`playOnStart`), position mise à jour à chaque
 image, changement de volume / hauteur en direct, arrêt quand l'entité est désactivée, détruite ou que
@@ -169,8 +169,8 @@ ancien est jeté) ; rend la voix (son volume se règle avec `agr.audio.setVolume
 - Enregistrement : mono, au taux du mixeur, gardé en mémoire jusqu'à `stopRecording` ; micro en direct
   sans réduction d'écho (un haut-parleur près du micro peut boucler) ni envoi par le réseau (pas de
   chat vocal intégré) ; essayé avec des échantillons fournis, pas avec un vrai micro dans la VM ; occlusion : un seul rayon (pas de diffraction autour des
-  obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus ; zones audio : bascule d'un
-  bus à l'autre (pas de fondu ni d'envoi partiel vers la réverbération), sources de scène seulement
+  obstacles ni d'épaisseur des murs) ; bus personnalisés : 8 au plus ; zones audio : fondu entre l'ancien et le nouveau bus (`crossfade`, puissance constante), pas d'envoi
+  partiel permanent vers une réverbération, sources de scène seulement
   (pas les sons joués par `agr.audio.play`).
 - Doppler : vitesses estimées d'une mise à jour à l'autre (téléporter une source produit un saut de
   hauteur pendant une image).

@@ -799,6 +799,7 @@ TEST_CASE("audio: AudioZone re-routes spatial sources inside it, or all of them 
     auto& zone = scene.registry().emplace<AudioZoneComponent>(zoneEntity);
     zone.bus = cave;
     zone.size = {6.0f, 6.0f, 6.0f};
+    zone.crossfade = 0.0f;  // instant switch (crossfade: test below)
     scene.updateTransforms();
     f.audio.updateScene(scene, true);
     const VoiceId voice = f.audio.playSource(scene, speaker);
@@ -890,4 +891,48 @@ TEST_CASE("audio: live microphone plays on its bus as it comes, latency capped, 
     CHECK_FALSE(f.audio.microphoneActive());
     f.audio.feedRecording(tone.data(), static_cast<u32>(tone.size()));
     f.run(0.05);
+}
+
+TEST_SUITE("audio") {
+TEST_CASE("audio: AudioZone crossfade: entering fades the sound from its bus to the zone's") {
+    AudioFixture f;
+    f.sine("assets://hum.wav", 1.0);
+    const auto cave = static_cast<AudioBus>(kAudioBuiltinBusCount + 3);
+    setAudioBusName(cave, "Cave2");
+    Scene scene;
+    scene.registry().emplace<CameraComponent>(scene.createEntity("Camera"));
+    const auto speaker = scene.createEntity("Speaker");
+    scene.registry().get<TransformComponent>(speaker).position = {0.0f, 0.0f, -2.0f};
+    auto& src = scene.registry().emplace<AudioSourceComponent>(speaker);
+    src.clip = "assets://hum.wav";
+    src.loop = true;
+    src.spatial = true;
+    src.playOnStart = false;
+    const auto zoneEntity = scene.createEntity("Zone");
+    scene.registry().get<TransformComponent>(zoneEntity).position = {0.0f, 0.0f, -40.0f};
+    auto& zone = scene.registry().emplace<AudioZoneComponent>(zoneEntity);
+    zone.bus = cave;
+    zone.size = {6.0f, 6.0f, 6.0f};
+    zone.crossfade = 0.25f;
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    const VoiceId voice = f.audio.playSource(scene, speaker);
+    REQUIRE(voice != 0);
+    f.audio.updateScene(scene, true);
+    const float open = f.run(0.05).peak();
+    REQUIRE(open > 0.05f);
+    f.audio.setBusMuted(cave, true);
+    scene.registry().get<TransformComponent>(speaker).position = {1.0f, 0.0f, -41.0f};
+    scene.updateTransforms();
+    f.audio.updateScene(scene, true);
+    CHECK(f.audio.voiceBus(voice) == cave);
+    CHECK_MESSAGE(f.run(0.02).peak() > open * 0.5f, "still heard at the start of the fade");
+    for (int i = 0; i < 8; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        f.audio.updateScene(scene, true);
+    }
+    f.run(0.02);
+    CHECK(f.run(0.05).peak() < 0.001f);  // fully on the (muted) zone bus
+    f.audio.setBusMuted(cave, false);
+}
 }

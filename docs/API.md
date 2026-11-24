@@ -2,7 +2,7 @@
 
 Produite par `agr_editor --api-reference docs/API.md` à partir du moteur lui-même : la liste est toujours celle du code. Guides : [SCRIPTING.md](SCRIPTING.md), [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Composants (77, 764 champs)
+## Composants (77, 765 champs)
 
 **2D** : [Bone2D](#Bone2D), [ChainIK2D](#ChainIK2D), [Light2D](#Light2D), [LightOccluder2D](#LightOccluder2D), [Parallax](#Parallax), [ParticleEmitter2D](#ParticleEmitter2D), [Skeleton2D](#Skeleton2D), [Skin2D](#Skin2D), [SpriteAnimator](#SpriteAnimator), [Tilemap](#Tilemap), [TwoBoneIK2D](#TwoBoneIK2D)
 
@@ -354,6 +354,7 @@ Re-routes spatial sounds to another bus (reverb, underwater...) inside a box or 
 | `bus` | enum | Bus the sounds play on (give it a Reverb in the mixer) ; valeurs : `Master`, `Music`, `Effects`, `Ambient`, `Interface`, `Voice` |
 | `mode` | enum | Sources: sounds inside the zone. Listener: every sound while the listener is inside ; valeurs : `Sources`, `Listener` |
 | `priority` | int | Highest wins where zones overlap |
+| `crossfade` | float | Seconds to fade between buses (0 = switch) ; plage 0 .. 10 |
 
 ### Name
 

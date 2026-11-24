@@ -113,7 +113,8 @@ void registerAudioComponents() {
         .field("bus", &AudioZoneComponent::bus, {.tooltip = "Bus the sounds play on (give it a Reverb in the mixer)", .enumEntries = buses})
         .field("mode", &AudioZoneComponent::mode,
                {.tooltip = "Sources: sounds inside the zone. Listener: every sound while the listener is inside", .enumEntries = {{"Sources", 0}, {"Listener", 1}}})
-        .field("priority", &AudioZoneComponent::priority, {.tooltip = "Highest wins where zones overlap"});
+        .field("priority", &AudioZoneComponent::priority, {.tooltip = "Highest wins where zones overlap"})
+        .field("crossfade", &AudioZoneComponent::crossfade, {.tooltip = "Seconds to fade between buses (0 = switch)", .rangeMin = 0.0f, .rangeMax = 10.0f, .speed = 0.01f});
 }
 
 } // namespace agr
