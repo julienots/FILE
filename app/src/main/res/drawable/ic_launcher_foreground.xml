@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Étoile à quatre branches -->
+    <path
+        android:fillColor="#7AA2FF"
+        android:pathData="M54,22 C56,40 68,52 86,54 C68,56 56,68 54,86 C52,68 40,56 22,54 C40,52 52,40 54,22 Z" />
+    <path
+        android:fillColor="#5AE0A0"
+        android:pathData="M80,24 C80.8,30 84,33.2 90,34 C84,34.8 80.8,38 80,44 C79.2,38 76,34.8 70,34 C76,33.2 79.2,30 80,24 Z" />
+</vector>
