@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AXON CONNECT</string>
+    <string name="service_name">AXON CONNECT — contrôle par Claude</string>
+    <string name="service_summary">Laisse Claude voir l\'écran et utiliser vos applications quand vous le demandez.</string>
+    <string name="service_description">AXON (SuperEssence Studio) permet à Claude de voir l\'écran, de lire les éléments affichés et de toucher, écrire ou faire défiler à votre place, pour réaliser les tâches que vous lui demandez. Les actions passent par votre relais AXON privé. Vous pouvez mettre en pause depuis l\'app AXON ou désactiver ce service ici à tout moment.</string>
+</resources>

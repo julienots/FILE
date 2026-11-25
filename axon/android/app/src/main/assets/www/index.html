@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AXON CONNECT</title>
+    <link rel="icon" href="icons/axon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- ============ ÉCRAN DE CHARGEMENT ============ -->
+<div id="splash" aria-label="Chargement">
+  <div class="studio">
+    <div class="se-word"><span class="se-super">Super</span><span class="se-essence">Essence</span><span class="se-dot">.</span></div>
+    <div class="se-studio"><span></span>STUDIO<span></span></div>
+  </div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <defs>
+        <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#FFE066"/><stop offset=".55" stop-color="#FFC824"/><stop offset="1" stop-color="#FF7A00"/>
+        </linearGradient>
+      </defs>
+      <circle class="orbit" cx="256" cy="268" r="196" fill="none" stroke="url(#lg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="300 70 60 70"/>
+      <g fill="none" stroke="url(#lg)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+        <path class="leg" pathLength="1" d="M146 384 L256 132 L366 384"/>
+        <path class="wave" pathLength="1" d="M178 306 C204 268 228 344 256 306 S308 268 334 306" stroke-width="26"/>
+      </g>
+      <circle class="node core" cx="256" cy="128" r="36" fill="#FFE066"/>
+      <circle class="node" cx="256" cy="128" r="16" fill="#000"/>
+      <circle class="node n1" cx="142" cy="390" r="26" fill="url(#lg)"/>
+      <circle class="node n2" cx="370" cy="390" r="26" fill="url(#lg)"/>
+      <circle class="spark" r="9" fill="#fff"><animateMotion dur="1.6s" repeatCount="indefinite" path="M146 384 L256 132 L366 384"/></circle>
+    </svg>
+    <h1 class="axon-word">AXON<span class="axon-sub">CONNECT</span></h1>
+    <p class="tagline">Claude aux commandes</p>
+    <div class="loader"><i></i></div>
+  </div>
+</div>
+
+
+<!-- ============ CHOIX DU RÔLE ============ -->
+<section id="roles" class="screen home" hidden>
+  <div class="wrap">
+    <img src="icons/axon.svg" alt="" class="pair-logo">
+    <h2>Bienvenue dans AXON CONNECT</h2>
+    <p class="muted center">Que fait cet appareil ?</p>
+    <button class="role-card" data-role="device">
+      <span class="role-ico">📱</span>
+      <span><b>Claude pilote cet appareil</b><small>Claude ouvre et utilise les apps de ce téléphone quand vous le lui demandez.</small></span>
+    </button>
+    <button class="role-card" data-role="viewer">
+      <span class="role-ico">🖥️</span>
+      <span><b>Écran de contrôle</b><small>Pour une tablette : voir l'autre téléphone en direct et envoyer vos demandes à Claude.</small></span>
+    </button>
+  </div>
+</section>
+
+<!-- ============ APPAREIL PILOTÉ ============ -->
+<section id="device" class="screen home" hidden>
+  <header class="topbar">
+    <div class="tb-brand"><img src="icons/axon.svg" alt=""><b>AXON</b><small class="tb-sub">CONNECT</small></div>
+    <span class="device-name" id="model"></span>
+    <span id="status" class="pill off">Hors ligne</span>
+  </header>
+  <div class="wrap">
+    <div class="hero" id="hero">
+      <div class="hero-logo"><img src="icons/axon.svg" alt=""></div>
+      <div><b id="heroTitle">Préparation…</b><small id="heroSub" class="muted"></small></div>
+    </div>
+
+    <ol class="steps">
+      <li id="stepService">
+        <div><b>1. Autoriser AXON à utiliser l'écran</b>
+          <small>Paramètres › Accessibilité › Applications installées › <b>AXON CONNECT</b> › Activer.<br>
+          Si Android affiche « Paramètre restreint » : Paramètres › Applications › AXON CONNECT › ⋮ › <b>Autoriser les paramètres restreints</b>, puis réessayez.</small></div>
+        <button class="btn small" id="btnService">Activer</button>
+      </li>
+      <li id="stepBg" hidden>
+        <div><b>1 bis. Autoriser l'ouverture des apps (Xiaomi)</b>
+          <small>Sans ce réglage, Xiaomi empêche Claude d'ouvrir les applications. Touchez <b>Autoriser</b>, puis dans « Autres autorisations », activez <b>Afficher des fenêtres pop-up lors de l'exécution en arrière-plan</b> (et « Démarrage automatique » s'il est proposé).</small></div>
+        <button class="btn small" id="btnBg">Autoriser</button>
+      </li>
+      <li id="stepRelay">
+        <div><b>2. Relais Internet</b><small id="relayInfo"></small></div>
+        <button class="btn small" id="btnRelay">Régler</button>
+      </li>
+      <li id="stepClaude">
+        <div><b>3. Relier à Claude</b>
+          <small>Copiez l'adresse, puis dans Claude : Paramètres › Connecteurs › <b>Ajouter un connecteur personnalisé</b> › nom « AXON » › collez › Ajouter. Dans une conversation, activez AXON dans le menu des outils.</small>
+          <code id="connector" class="code"></code></div>
+        <div class="col">
+          <button class="btn small primary" id="btnCopy">Copier</button>
+          <button class="btn small" id="btnClaude">Ouvrir Claude</button>
+        </div>
+      </li>
+      <li>
+        <div><b>4. Autres appareils (facultatif)</b><small>Envoyez ce lien :<br>• à un <b>autre téléphone</b> à piloter : dans son app AXON › « Claude pilote cet appareil » › Réglages avancés › <b>Rejoindre</b>. Claude les pilote tous, un par un ou en même temps, avec un seul connecteur ;<br>• à une <b>tablette</b> : elle voit tous les appareils en direct (navigateur ou app AXON).</small>
+          <small id="roomInfo" class="muted"></small></div>
+        <button class="btn small" id="btnShare">Partager</button>
+      </li>
+    </ol>
+
+    <label class="pause-row"><span><b>Mettre Claude en pause</b><small class="muted">Bloque toutes les actions de Claude sur ce téléphone.</small></span>
+      <input type="checkbox" id="pause"></label>
+
+    <form id="askForm" class="ask">
+      <div class="ask-head"><span class="spark-dot"></span>Demander à Claude</div>
+      <textarea id="askInput" rows="2" placeholder="Ex. : ouvre YouTube et lance de la musique lo-fi"></textarea>
+      <button class="btn primary">Envoyer à Claude</button>
+      <small class="muted">Puis dans Claude : « traite mes demandes AXON ».</small>
+    </form>
+
+    <div class="feed-head"><b>Activité</b><span id="viewers" class="muted"></span></div>
+    <ol id="feed" class="feed"></ol>
+
+    <button class="link-btn" id="btnSettings">Réglages avancés</button>
+    <p class="credit" id="credit">AXON · SuperEssence Studio</p>
+  </div>
+</section>
+
+<!-- ============ ÉCRAN DE CONTRÔLE ============ -->
+<section id="viewer" class="screen home" hidden>
+  <div class="wrap">
+    <img src="icons/axon.svg" alt="" class="pair-logo">
+    <h2>Écran de contrôle</h2>
+    <p class="muted center">Sur le téléphone piloté, ouvrez AXON › « Partager » à l'étape 4, puis collez le lien ici.</p>
+    <label>Lien de jumelage<input id="viewerLink" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…/#k=…"></label>
+    <button class="btn primary" id="btnView">Ouvrir l'écran de contrôle</button>
+    <p id="viewerErr" class="err center" hidden></p>
+    <button class="link-btn" data-goto-roles>Changer le rôle de cet appareil</button>
+  </div>
+</section>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h3>Réglages</h3>
+    <label>Nom de cet appareil (vu par Claude)<input id="nameInput" autocomplete="off" maxlength="40" placeholder="Ex. : Téléphone de Léa"></label>
+    <div class="menu-actions wrap-actions"><button type="button" class="btn small" id="btnSaveName">Enregistrer le nom</button></div>
+    <label>Adresse du relais<input id="relayInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://axon-relay.xxx.workers.dev"></label>
+    <div class="menu-actions wrap-actions">
+      <button type="button" class="btn small" id="btnSaveRelay">Enregistrer</button>
+      <button type="button" class="btn small ghost" id="btnNewKey">Nouvelle clé</button>
+      <button type="button" class="btn small" data-goto-roles>Changer de rôle</button>
+    </div>
+    <p class="muted small-print">« Nouvelle clé » déconnecte Claude et les écrans de contrôle : il faudra recopier l'adresse du connecteur.</p>
+    <label>Rejoindre un autre appareil<input id="joinInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lien partagé : https://…/#k=…"></label>
+    <div class="menu-actions wrap-actions"><button type="button" class="btn small primary" id="btnJoin">Rejoindre</button></div>
+    <p class="muted small-print">Collez le lien « Partager » d'un téléphone AXON : cet appareil rejoint son salon, et Claude les pilote ensemble avec le même connecteur.</p>
+    <div class="menu-actions"><span></span><button value="close" class="btn">Fermer</button></div>
+  </form>
+</dialog>
+<div id="toast" class="toast" hidden></div>
+<script src="home.js"></script>
+</body>
+</html>

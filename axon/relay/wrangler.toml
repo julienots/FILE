@@ -1,0 +1,17 @@
+name = "axon-relay"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "AxonHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AxonHub"]
+
+# Les fichiers de public/ (écran de contrôle) sont intégrés au Worker par ce script.
+[build]
+command = "node scripts/embed-assets.mjs"
+watch_dir = "public"

@@ -1,0 +1,25 @@
+{
+  "name": "axon-bridge",
+  "version": "1.0.0",
+  "description": "AXON by SuperEssence Studio — serveur MCP local qui laisse Claude piloter des appareils Android et les retransmet dans l'app AXON.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "axon-bridge": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.5"
+  }
+}
