@@ -1563,6 +1563,25 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "rift") {
+        // 3.9.4 the Rift in the sky, seen at several hours and in a storm (dev aid: look at the pictures)
+        struct V { float x, z, tod; int weather; float yaw, pitch, dist; const char* f; };
+        static const V views[] = {
+            {3600, 3300, 11.f, Game::W_CLEAR, -0.68f, -0.25f, 6.f, "R0_day"},
+            {3600, 3300, 18.7f, Game::W_CLEAR, -0.68f, -0.25f, 6.f, "R1_sunset"},
+            {3600, 3300, 0.5f, Game::W_CLEAR, -0.68f, -0.25f, 6.f, "R2_night"},
+            {3600, 3300, 15.f, Game::W_CLOUDY, -0.68f, -0.25f, 6.f, "R3_cloudy"},
+            {3600, 3300, 9.f, Game::W_CLEAR, -0.3f, 0.15f, 14.f, "R4_wide"},
+        };
+        for (const V& v : views) {
+            s.push_back({3.4f, [v](Game& g) {
+                teleport(g, v.x, v.z, v.yaw);
+                g.timeOfDay = v.tod; g.weather = g.weatherNext = v.weather; g.weatherBlend = 1; g.weatherTimer = 999; g.toastHint.clear();
+                g.camPitch = v.pitch; g.camDist = g.camDistTarget = v.dist; }, [v](Game& g, float) { g.camIdleT = 0; g.camYaw = v.yaw; g.camPitch = v.pitch; }, "view"});
+            s.push_back({0.1f, [v](Game& g) { g.requestScreenshot(std::string("build/shots/") + v.f + ".png"); }, idle, "shot"});
+        }
+        return s;
+    }
     if (name == "lands") {
         // 2.0.0 the new lands: settlements and landmarks seen from a pleasant camera (dev aid: look at the pictures)
         // arg: LK_LANDS="id1,id2,..." picks places; default is a tour of the highlights. Each view: poi, camera distance, pitch,

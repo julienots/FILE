@@ -991,6 +991,81 @@ vec3 spaceSky(vec3 d, vec3 S, float t) {
     return col;
 }
 
+// ---- 3.9.4 the Rift: a huge tear across the sky, a breach into another universe. A jagged crack (zig-zag
+// segments at three scales) whose lips burn white-hot with a cyan / magenta chromatic fringe; through it a
+// swirling nebula, its stars and a strange planet; glowing veins split the sky around it, sparks drift off it,
+// and a violet halo darkens the sky nearby. It breathes slowly. Always there, by day and by night.
+float riftZig(float x, float n, float s) { float i = floor(x * n), f = fract(x * n); return mix(hash13(vec3(i, s, 1.7)), hash13(vec3(i + 1.0, s, 1.7)), f) - 0.5; }
+vec3 riftSky(vec3 d, vec3 col, float t, float night) {
+    const vec3 R = vec3(0.596, 0.298, -0.745);   // low over the horizon, so the gameplay camera sees it
+    float c = dot(d, R);
+    if (c < 0.42) return col;
+    vec3 e1 = normalize(cross(vec3(0.0, 1.0, 0.0), R)), e2 = cross(R, e1);
+    vec2 p = vec2(dot(d, e1), dot(d, e2)) / c;
+    const float ca = 0.9394, sa = 0.3429;   // the crack runs at a slant
+    p = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
+    const float L = 0.6;
+    float x = p.x, ax = abs(x) / L;
+    float env = pow(max(1.0 - ax * ax, 0.0), 0.65);
+    float cy = 0.1 * riftZig(x, 3.0, 1.0) + 0.05 * riftZig(x, 8.0, 2.0) + 0.016 * riftZig(x, 23.0, 3.0) + 0.005 * riftZig(x, 61.0, 5.0);
+    float w = (0.1 * (0.6 + 0.7 * (riftZig(x, 6.0, 4.0) + 0.5)) + 0.004) * env * (0.93 + 0.07 * sin(t * 0.9 + x * 4.0));
+    float pulse = 0.86 + 0.1 * sin(t * 1.3) + 0.04 * sin(t * 7.1 + x * 9.0);
+    float dy = p.y - cy;
+    float e = abs(dy) - w;          // < 0 inside the breach
+    float eo = max(e, 0.0);
+    float endFade = smoothstep(1.08, 0.75, ax);
+    // halo: the sky around the wound darkens and turns violet
+    float halo = exp(-eo * 7.0) * endFade;
+    vec3 haloC = mix(vec3(0.55, 0.12, 1.0), vec3(0.1, 0.65, 1.0), 0.5 + 0.5 * sin(x * 5.0 + t * 0.5));
+    col = mix(col, col * 0.45 + haloC * 0.1, halo * (0.5 + 0.3 * (1.0 - night)));
+    col += haloC * halo * (0.16 + 0.12 * night) * pulse;
+    // veins: ridged noise lines cracking the sky near the breach
+    vec2 vp = p * 2.1 + vec2(0.13, 0.41);
+    float v1 = abs(texture(uNoiseTex, vp).g - 0.5), v2 = abs(texture(uNoiseTex, vp * 2.7 + 0.3).r - 0.5);
+    float near = exp(-eo * 28.0) * smoothstep(1.0, 0.55, ax);
+    float veins = (smoothstep(0.01, 0.0, v1) + 0.5 * smoothstep(0.006, 0.0, v2)) * near;
+    col += mix(vec3(0.95, 0.4, 1.0), vec3(0.45, 0.95, 1.0), smoothstep(0.0, 0.016, v1)) * veins * 1.1 * pulse;
+    // inside: the other universe
+    if (e < 0.004) {
+        vec2 q = vec2(x, dy) * 1.7;
+        float rr = length(q);
+        float ang = t * 0.04 + 0.35 / (rr + 0.25);
+        q = vec2(cos(ang) * q.x - sin(ang) * q.y, sin(ang) * q.x + cos(ang) * q.y);
+        float n1 = fbmN(q * 0.9 + vec2(3.1, 1.7));
+        float n2 = fbmN(q * 1.9 + n1 * 0.7 + vec2(t * 0.004, 5.3));
+        vec3 cos3 = vec3(0.01, 0.002, 0.03)
+                  + vec3(0.75, 0.1, 0.85) * smoothstep(0.45, 0.9, n1)
+                  + vec3(0.05, 0.6, 0.95) * smoothstep(0.45, 0.9, n2) * 0.85
+                  + vec3(1.0, 0.55, 0.2) * smoothstep(0.55, 0.95, n1 * n2 * 1.8) * 1.2;
+        vec2 sg = p * 150.0; vec2 sc = floor(sg);
+        float hs = hash13(vec3(sc, 9.3));
+        cos3 += mix(vec3(0.7, 0.85, 1.0), vec3(1.0, 0.75, 0.9), fract(hs * 37.0)) * step(0.955, hs) * smoothstep(0.4, 0.0, length(fract(sg) - 0.5)) * (0.6 + 0.4 * sin(t * 3.0 + hs * 50.0)) * 3.0;
+        // a strange planet beyond, lit from inside the breach
+        vec2 pc = vec2(0.1, cy + 0.01);
+        float pr = 0.07, pdist = length(p - pc);
+        if (pdist < pr) {
+            vec3 nn = vec3((p - pc) / pr, 0.0); nn.z = sqrt(max(1.0 - dot(nn.xy, nn.xy), 0.0));
+            float lit = max(dot(nn, normalize(vec3(-0.6, 0.5, 0.6))), 0.0);
+            float bands = 0.5 + 0.5 * sin(nn.y * 18.0 + fbmN(nn.xy * 0.6 + 2.0) * 5.0);
+            vec3 pcol = mix(vec3(0.1, 0.75, 0.6), vec3(0.85, 0.95, 0.5), bands) * (0.06 + 1.1 * lit);
+            cos3 = mix(cos3, pcol * 1.6 + vec3(0.4, 0.9, 1.0) * pow(1.0 - nn.z, 3.0) * 0.8, smoothstep(pr, pr - 0.003, pdist));
+        } else cos3 += vec3(0.3, 0.8, 1.0) * exp(-(pdist - pr) * 60.0) * 0.5;
+        col = mix(col, cos3 * 0.6, smoothstep(0.004, -0.004, e));
+    }
+    // the lips: white-hot core, a cyan inner and a magenta outer fringe, a wide glow
+    float lip = (env * endFade + 0.15) * (1.0 + 0.8 * (1.0 - night));   // brighter by day, against a bright sky
+    col += vec3(0.88, 0.96, 1.0) * exp(-abs(e) * 320.0) * 1.6 * pulse * lip;
+    col += vec3(0.25, 0.9, 1.0) * exp(-abs(e + 0.004) * 260.0) * 0.8 * lip;
+    col += vec3(1.0, 0.2, 0.85) * exp(-abs(e - 0.006) * 200.0) * 0.9 * lip;
+    col += mix(vec3(0.7, 0.25, 1.0), vec3(0.3, 0.8, 1.0), 0.5 + 0.5 * sin(x * 7.0 - t)) * exp(-eo * 40.0) * step(0.0, e) * 0.4 * pulse * endFade;
+    // sparks drifting away from the breach
+    vec2 kg = vec2(x * 60.0, (p.y - cy) * 60.0 - sign(dy) * t * 0.6);
+    vec2 kc = floor(kg);
+    float kh = hash13(vec3(kc, 4.1));
+    col += vec3(0.8, 0.9, 1.0) * step(0.975, kh) * smoothstep(0.3, 0.0, length(fract(kg) - 0.5)) * exp(-eo * 9.0) * endFade * (0.5 + 0.5 * sin(t * 4.0 + kh * 40.0)) * 2.0;
+    return col;
+}
+
 void main() {
     vec3 d = normalize(vDir);
     if (uSkyFx.w > 0.5) { fragColor = vec4(spaceSky(d, normalize(uSunDir.xyz), uCamPos.w) * uSkyColor.w, 1.0); return; }   // 3.2.0 outer space
@@ -1128,6 +1203,7 @@ void main() {
             col += sp.zyx * smoothstep(0.0, 0.18, hue) * smoothstep(1.0, 0.82, hue) * rb * 0.34 * smoothstep(-0.02, 0.2, d.y);
         }
     }
+    col = riftSky(d, col, uCamPos.w, night);   // 3.9.4
     col += vec3(uMisc.w) * 0.8;
     fragColor = vec4(col * uSkyColor.w, 1.0);
 }
