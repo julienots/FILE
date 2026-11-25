@@ -667,10 +667,9 @@ void Game::renderCharacter(Entity e, Character& c) {
     d.albedo = v.albedo;
     d.bones = v.pw.skin[0].m; d.boneCount = sk.size();
     d.tint = vec4(v.tint, 0); d.fx = vec4(v.flash, v.dissolve, v.rim, v.emissiveBoost); d.dissolveColor = v.dissolveColor;
-    d.outline = v.outline && v.dissolve <= 0; d.outlineColor = v.outlineColor; d.outlineWidth = 0.028f;
-    if (e == interactTarget && c.npcDef >= 0) { d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.04f; }
-    if (e == lockTarget) { d.outlineColor = vec4(0.9f, 0.2f, 0.15f, 1); d.outlineWidth = 0.04f; }
-    if (e == player && heroAura > 0.01f) { d.outline = true; d.outlineWidth = 0.028f + 0.03f * heroAura; }
+    d.outline = v.outline && v.dissolve <= 0 && v.outlineColor.x > 0.95f; d.outlineColor = v.outlineColor; d.outlineWidth = 0.028f;   // 3.9.1 no glow around characters: only the red attack telegraph, the target and the talk marker keep one
+    if (e == interactTarget && c.npcDef >= 0) { d.outline = v.dissolve <= 0; d.outlineColor = vec4(1.f, 0.85f, 0.35f, 1); d.outlineWidth = 0.04f; }
+    if (e == lockTarget) { d.outline = v.dissolve <= 0; d.outlineColor = vec4(0.9f, 0.2f, 0.15f, 1); d.outlineWidth = 0.04f; }
     {   // 2.3.6 crowds: far version beyond 18 m, no shadow beyond 25 m, no outline beyond 22 m (unless targeted)
         float dc = distXZ(c.pos, camFocus);
         bool key = e == player || e == lockTarget || e == interactTarget || e == bossEnt || e == mountEnt;

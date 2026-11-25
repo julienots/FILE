@@ -915,8 +915,23 @@ void Game::updatePlayer(float dt) {
     if (c.grounded && !flying && !c.swimming && mag > 0.15f && length2(want) > 1e-4f) {
         vec3 w = normalize(vec3(want.x, 0, want.z));
         float sl = (groundAt(c.pos.x + w.x * 0.9f, c.pos.z + w.z * 0.9f) - groundAt(c.pos.x, c.pos.z)) / 0.9f;
-        slopeMul = clampf(1.f - sl * 0.9f, 0.62f, 1.15f);
+        slopeMul = clampf(1.f - sl * 0.45f, 0.85f, 1.15f);   // 3.9.1 climbing hardly slows you down any more
         speed *= slopeMul;
+    }
+    // 3.9.1 leaving the water: swimming into a bank (up to 1.6 m above the surface) climbs out by itself
+    if (c.swimming && !diving && !flying && mag > 0.3f && length2(want) > 1e-4f && !c.attackClip) {
+        vec3 w = normalize(vec3(want.x, 0, want.z));
+        float wl = waterAt(c.pos.x, c.pos.z);
+        for (float dd : {0.9f, 1.4f}) {
+            vec3 q = c.pos + w * dd;
+            float g = groundAt(q.x, q.z);
+            if (g > wl - 0.6f && g < wl + 1.6f && waterAt(q.x, q.z) - g < 0.9f) {
+                c.pos = vec3(q.x, g + 0.05f, q.z); c.vel = w * 2.5f; c.vel.y = 0; c.swimming = false; c.grounded = true;
+                c.vis.anim.play(&clip(C_LAND), 1.1f, false, 0.05f);
+                particles.splash(c.pos, 0.6f); play3D("splash", c.pos, 0.4f, 1.2f);
+                break;
+            }
+        }
     }
     if (fishingT >= 0) speed = 0;
     vec3 dv = (busy || c.status.root > 0 || c.status.freeze > 0) ? vec3(0) : want * speed * (mag < 0.15f ? 0 : 1);

@@ -580,7 +580,7 @@ void Game::physicsStep(Entity e, Character& c, float dt) {
         // steep slopes push characters down (no climbing cliffs)
         if (!dungeon.active && gy < world.height(c.pos.x, c.pos.z) + 0.05f) {   // 1.11.2 not on bridge decks / steps
             vec3 n = world.normal(c.pos.x, c.pos.z);
-            if (n.y < 0.66f) { c.pos.x += n.x * dt * 6.f; c.pos.z += n.z * dt * 6.f; }
+            if (n.y < 0.5f) { c.pos.x += n.x * dt * 3.f; c.pos.z += n.z * dt * 3.f; }   // 3.9.1 only real cliffs (> 60°) push back, gently
         }
     } else {
         c.grounded = false;
