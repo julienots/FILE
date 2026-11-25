@@ -194,6 +194,12 @@ void Game::updateCamera(float dt) {
     cam.pos = eye; cam.target = look;
     cam.fovY = cineFov > 0 ? cineFov : (dungeon.active ? 40.f : 38.f) * DEG;
     if (fpActive) cam.fovY = (62.f + 4.f * saturate(length(vec2(pc().vel.x, pc().vel.z)) / 7.f - 0.5f)) * DEG;   // 3.6.0 first person: a human field of view (wider when running)
+    {   // 3.9.2 speed felt in the view: the field of view opens a little while sprinting (eased, never during a cinematic or a conversation)
+        static float speedFov = 0.f;
+        float hs = (player != NullEntity && !fpActive && cineFov <= 0 && dlgCamK < 0.01f && !cine.active) ? length(vec2(pc().vel.x, pc().vel.z)) : 0.f;
+        speedFov = damp(speedFov, saturate((hs - 5.f) / 3.f), 3.f, std::min(dt, 0.05f));
+        cam.fovY += 3.f * DEG * speedFov;
+    }
     cam.zNear = std::min(0.8f, std::max(0.3f, camRig.dist * 0.12f));
     if (fpActive) cam.zNear = 0.06f;   // 3.6.0 the hands and weapon are close to the eye
     cam.zFar = dungeon.active ? 420.f : 1500.f;   // the horizon relief reaches the whole island (fog hides the rest)
