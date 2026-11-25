@@ -482,9 +482,25 @@ void Game::updateEnvironment(float dt) {
             Rng lr((uint64_t)(realTime * 1000));
             lightningT = lr.range(5.f, 14.f);
             lightningFlash = 1.f;
-            play("thunder", 0.5f + 0.4f * stormAmt, lr.range(0.8f, 1.1f));
+            // 3.9.3 a real bolt strikes the ground 25-160 m from the hero; the thunder arrives after the light (340 m/s, so up to ~0.5 s here)
+            if (player != NullEntity && state == GameState::Playing && !dungeon.active) {
+                float ang = lr.range(0.f, TAU), dd = lr.range(25.f, 160.f);
+                vec3 hp = pc().pos;
+                float bx = hp.x + std::cos(ang) * dd, bz = hp.z + std::sin(ang) * dd;
+                vec3 ground(bx, groundAt(bx, bz), bz);
+                vec3 col(0.78f, 0.85f, 1.f);
+                vec3 top = ground + vec3(lr.range(-12.f, 12.f), 130.f, lr.range(-12.f, 12.f));
+                vec3 mid = lerp(top, ground, 0.5f) + vec3(lr.range(-6.f, 6.f), 0.f, lr.range(-6.f, 6.f));
+                vfxBeam(top, mid, col, 0.5f, 0.25f);
+                vfxBeam(mid, ground, col, 0.7f, 0.3f);
+                particles.lightningArc(top, ground, col);
+                particles.explosion(ground + vec3(0, 0.3f, 0), 0.5f, col);
+                thunderDelay = dd / 340.f; thunderVol = (0.35f + 0.5f * stormAmt) * (1.f - 0.6f * saturate(dd / 200.f)); thunderPitch = lr.range(0.8f, 1.1f) - 0.15f * saturate(dd / 160.f);
+                if (dd < 60.f) addShake(0.25f);
+            } else { thunderDelay = 0.f; thunderVol = 0.5f + 0.4f * stormAmt; thunderPitch = lr.range(0.8f, 1.1f); }
         }
     }
+    if (thunderDelay >= 0.f) { thunderDelay -= dt; if (thunderDelay < 0.f) { play("thunder", thunderVol, thunderPitch); thunderDelay = -1.f; } }
     lightningFlash = std::max(0.f, lightningFlash - dt * 3.5f);
     float flash = lightningFlash > 0.5f ? 1.f : (lightningFlash > 0.25f && std::fmod(realTime * 30.f, 2.f) < 1.f ? 0.4f : 0.f);
 
