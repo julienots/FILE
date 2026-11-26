@@ -88,7 +88,7 @@ func _environment() -> void:
 	# exposition automatique (comme un appareil photo) : intérieurs lisibles, extérieurs non brûlés
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = true
-	ca.auto_exposure_scale = 0.2
+	ca.auto_exposure_scale = 0.24
 	ca.auto_exposure_speed = 4.0
 	ca.auto_exposure_min_sensitivity = 50.0
 	ca.auto_exposure_max_sensitivity = 220.0
