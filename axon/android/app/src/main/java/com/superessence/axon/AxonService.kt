@@ -19,6 +19,8 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
+import com.superessence.axon.tools.WaitForTool
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -362,12 +364,17 @@ class AxonService : AccessibilityService() {
             try {
                 when (t) {
                     "wait" -> Thread.sleep(min(5000L, st.optLong("ms", 500)))
+                    WaitForTool.NAME -> {
+                        val r = waitFor(st)
+                        if (r.timedOut) throw ToolError("délai dépassé : ${r.texts} n'est pas ${if (st.optString("mode") == "gone") "parti" else "apparu"} après ${r.waitedMs} ms")
+                        log.append("${i + 1}. wait_for ✓ ${r.matched ?: "disparu"} (${r.waitedMs} ms)\n")
+                    }
                     in ACTIONS -> {
                         val r = tool(t, st)
                         log.append("${i + 1}. $t ✓ ${r.optJSONObject(0)?.optString("text")?.takeIf { it != "OK" }?.take(120) ?: ""}\n")
                         if (i < steps.length() - 1) settle(1200)
                     }
-                    else -> throw ToolError("action inconnue « $t » (autorisées : ${ACTIONS.joinToString()}, wait)")
+                    else -> throw ToolError("action inconnue « $t » (autorisées : ${ACTIONS.joinToString()}, wait, wait_for)")
                 }
             } catch (e: Exception) {
                 log.append("${i + 1}. $t ✗ ${e.message}\nArrêt : les actions suivantes n'ont pas été faites.")
@@ -379,6 +386,20 @@ class AxonService : AccessibilityService() {
     }
     private fun ok(t: String = "OK") = JSONArray().put(textPart(t))
 
+    private class WaitResult(val matched: String?, val timedOut: Boolean, val waitedMs: Long, val texts: String, val screen: String)
+
+    /** wait_for : attend sur le téléphone qu'un texte apparaisse/disparaisse (voir tools/WaitForTool.kt). */
+    private fun waitFor(a: JSONObject): WaitResult {
+        val r = runBlocking { WaitForTool.run(this@AxonService, a) { JSONArray().put(formatElements(collect())) } }
+        return WaitResult(
+            matched = if (r.isNull("matched")) null else r.getString("matched"),
+            timedOut = r.getBoolean("timed_out"),
+            waitedMs = r.getLong("waited_ms"),
+            texts = a.optJSONArray("texts")?.toString() ?: "[]",
+            screen = r.getJSONArray("elements").optString(0),
+        )
+    }
+
     private fun tool(name: String, a: JSONObject): JSONArray {
         if (name in ACTIONS) lastActionAt = System.currentTimeMillis()
         try { return toolImpl(name, a) } finally { if (name in ACTIONS) lastActionAt = System.currentTimeMillis() }
@@ -386,6 +407,10 @@ class AxonService : AccessibilityService() {
 
     private fun toolImpl(name: String, a: JSONObject): JSONArray = when (name) {
         "do_actions" -> doActions(a)
+        WaitForTool.NAME -> {
+            val r = waitFor(a)
+            ok("wait_for : matched=${r.matched ?: "null"}, timed_out=${r.timedOut}, waited_ms=${r.waitedMs}\n\nÉcran maintenant :\n${r.screen}")
+        }
         "screenshot" -> {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw ToolError("La capture d'écran nécessite Android 11 ou plus. Utilisez get_ui_elements.")
             screenshotParts()

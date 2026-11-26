@@ -9,7 +9,7 @@
  * La clé est générée dans l'app AXON ; les autres appareils rejoignent le salon avec le lien de partage.
  */
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 /* Plusieurs appareils peuvent partager une même clé (un salon). Chaque outil d'appareil prend un
  * paramètre `device` : nom, identifiant ou numéro (voir list_devices), ou "all" pour tous à la fois. */
 const DEVICE_PARAM = { type: "string", description: "Appareil ciblé : nom, identifiant ou numéro donné par list_devices. \"all\" = tous les appareils en même temps. Facultatif s'il n'y a qu'un appareil connecté." };
@@ -28,20 +28,21 @@ const BASE_TOOLS = [
   { name: "open_url", description: "Ouvre un lien (site, lien d'app, tel:, mailto:, geo:…).", inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
   { name: "search", description: "LE PLUS RAPIDE pour chercher : ouvre l'app, trouve sa recherche, écrit et valide, en UN appel. YouTube, Google/Chrome, Maps, Play Store, Spotify : lien direct instantané. Marche aussi avec les autres apps (détection de la barre de recherche).", inputSchema: { type: "object", properties: { app: { type: "string", description: "Nom de l'app (YouTube, Google, Maps, Play Store, Spotify, Amazon…)" }, query: { type: "string" } }, required: ["app", "query"] } },
   { name: "scroll_to", description: "Fait défiler jusqu'à voir un texte, puis le touche (tap=false pour seulement le trouver). Un seul appel au lieu de swipe répétés.", inputSchema: { type: "object", properties: { text: { type: "string" }, direction: { type: "string", enum: ["down", "up", "left", "right"] }, tap: { type: "boolean" }, max_scrolls: { type: "integer", minimum: 1, maximum: 25 } }, required: ["text"] } },
-  { name: "do_actions", description: "PLUS RAPIDE : enchaîne plusieurs actions en un seul appel, dans l'ordre, sur l'appareil (attente automatique entre chaque). Chaque étape = {tool: tap|tap_element|swipe|type_text|press_key|launch_app|open_url|wait, ...ses paramètres}. S'arrête à la première erreur. Renvoie ensuite l'écran.", inputSchema: { type: "object", properties: { steps: { type: "array", maxItems: 20, items: { type: "object", properties: { tool: { type: "string", enum: ["tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url", "search", "scroll_to", "wait"] } }, required: ["tool"], additionalProperties: true } } }, required: ["steps"] } },
+  { name: "do_actions", description: "PLUS RAPIDE : enchaîne plusieurs actions en un seul appel, dans l'ordre, sur l'appareil (attente automatique entre chaque). Chaque étape = {tool: tap|tap_element|swipe|type_text|press_key|launch_app|open_url|wait|wait_for, ...ses paramètres}. S'arrête à la première erreur. Renvoie ensuite l'écran.", inputSchema: { type: "object", properties: { steps: { type: "array", maxItems: 20, items: { type: "object", properties: { tool: { type: "string", enum: ["tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url", "search", "scroll_to", "wait", "wait_for"] } }, required: ["tool"], additionalProperties: true } } }, required: ["steps"] } },
+  { name: "wait_for", description: "Attend sur l'appareil qu'un des textes apparaisse (ou disparaisse) à l'écran puis renvoie aussitôt les éléments. Idéal pour attendre son tour dans un jeu sans faire de captures en boucle. Utilisable aussi comme étape de do_actions.", inputSchema: { type: "object", properties: { texts: { type: "array", items: { type: "string" }, minItems: 1, description: "Textes à attendre (au moins un ; correspondance partielle, insensible à la casse)." }, mode: { type: "string", enum: ["appear", "gone"], description: "appear (défaut) : attend l'apparition ; gone : attend la disparition." }, clickable: { type: "boolean", description: "Ne compte que les éléments cliquables (défaut true)." }, timeout_ms: { type: "number", description: "Délai max en ms (défaut 30000, max 120000)." }, poll_ms: { type: "number", description: "Intervalle de vérification en ms (défaut 120)." } }, required: ["texts"] } },
   { name: "notify", description: "Affiche un message sur les téléphones et les écrans de contrôle (progression, question, résultat). device facultatif : sans lui, tous les appareils.", inputSchema: { type: "object", properties: { message: { type: "string" }, level: { type: "string", enum: ["info", "success", "warning", "question"] } }, required: ["message"] } },
   { name: "get_requests", description: "Demandes envoyées par l'utilisateur depuis l'app AXON (avec l'appareil d'origine).", inputSchema: { type: "object", properties: { only_pending: { type: "boolean" } } } },
   { name: "wait_for_request", description: "Attend une nouvelle demande depuis l'app AXON (max timeout_s, 50 par défaut).", inputSchema: { type: "object", properties: { timeout_s: { type: "integer", minimum: 1, maximum: 55 } } } },
   { name: "complete_request", description: "Marque une demande comme terminée et affiche la réponse dans l'app.", inputSchema: { type: "object", properties: { id: { type: "integer" }, result: { type: "string" } }, required: ["id", "result"] } },
 ];
-const DEVICE_TOOLS = new Set(["search", "scroll_to", "do_actions", "screenshot", "get_ui_elements", "tap_element", "tap", "swipe", "type_text", "press_key", "list_apps", "launch_app", "open_url"]);
+const DEVICE_TOOLS = new Set(["search", "scroll_to", "do_actions", "wait_for", "screenshot", "get_ui_elements", "tap_element", "tap", "swipe", "type_text", "press_key", "list_apps", "launch_app", "open_url"]);
 /* Les actions renvoient l'écran obtenu : pas besoin de get_ui_elements/screenshot après chaque geste. */
 const ACTION_TOOLS = new Set(["search", "scroll_to", "do_actions", "tap", "tap_element", "swipe", "type_text", "press_key", "launch_app", "open_url"]);
 const OBSERVE_PARAM = { type: "string", enum: ["elements", "screenshot", "none"], description: "Ce que renvoie l'action une fois l'écran stabilisé : elements (défaut, rapide), screenshot (image + éléments), none." };
 const TOOLS = BASE_TOOLS.map((t) => (DEVICE_TOOLS.has(t.name) || t.name === "notify"
   ? { ...t, inputSchema: { ...t.inputSchema, properties: { device: DEVICE_PARAM, ...t.inputSchema.properties, ...(ACTION_TOOLS.has(t.name) ? { observe: OBSERVE_PARAM } : {}) } } }
   : t));
-const SLOW_TOOLS = { do_actions: 90000, launch_app: 45000, search: 60000, scroll_to: 45000 };
+const SLOW_TOOLS = { wait_for: 125000, do_actions: 130000, launch_app: 45000, search: 60000, scroll_to: 45000 };
 
 const INSTRUCTIONS = [
   "AXON (SuperEssence Studio) : vous pilotez les vrais appareils Android de l'utilisateur ; il vous regarde faire en direct dans l'app AXON (sur un téléphone ou une tablette).",
