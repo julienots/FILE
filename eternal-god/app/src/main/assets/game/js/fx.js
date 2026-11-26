@@ -113,7 +113,7 @@ export class FX {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * 6.28, r = Math.random() * radius;
       this.norm.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 1.5, p.z + Math.sin(a) * r, Math.cos(a) * rand(2, 6), rand(1, 5), Math.sin(a) * rand(2, 6),
-        Math.min(9, rand(2, 4) * (radius / 6 + 0.6)), rand(2, 4.5), col[0], col[1], col[2], 0.45, 1.35, -0.3, 1.2);
+        Math.min(9, rand(2, 4) * (radius / 6 + 0.6)), rand(2, 4.5), col[0], col[1], col[2], 0.3, 1.35, -0.3, 1.4);
     }
   }
   smoke(p, n = 1, size = 6, alpha = 0.4) {
