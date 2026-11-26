@@ -126,7 +126,7 @@ func _street() -> void:
 	var asphalt := MatLib.pbr("clean_asphalt", 4.0, Color(0.78, 0.78, 0.8), 1.0, 1.0)
 	var walk := MatLib.pbr("concrete_pavement", 2.4, Color(0.9, 0.89, 0.86))
 	var curb := MatLib.pbr("concrete_pavement", 1.2, Color(0.82, 0.81, 0.79))
-	var len := 420.0
+	var len := 190.0
 	Geo.box(self, Vector3(len, 0.1, ROAD_Z1 - ROAD_Z0), Vector3(0, -0.03, (ROAD_Z0 + ROAD_Z1) * 0.5), asphalt, 0.0, true)
 	for side in [[20.5, 22.1], [30.5, 32.1]]:
 		Geo.box(self, Vector3(len, 0.16, side[1] - side[0]), Vector3(0, 0.0, (side[0] + side[1]) * 0.5), walk, 0.01, true)
@@ -238,3 +238,9 @@ func _horizon_trees() -> void:
 			var name: String = names[k % names.size()]
 			var t := Geo.prop(self, name, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
 			Geo.far_settings(t, 260.0, false)
+	# fin de rue : rideaux d'arbres (le quartier semble continuer… ou pas)
+	for side in [-1.0, 1.0]:
+		for k in 9:
+			var z := -12.0 + k * 9.0 + rng.randf_range(-2.0, 2.0)
+			var t2 := Geo.prop(self, names[k % 2], Vector3(side * (86.0 + rng.randf() * 6.0), 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(9.0, 13.0))
+			Geo.far_settings(t2, 260.0, false)
