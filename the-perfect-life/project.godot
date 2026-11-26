@@ -22,4 +22,6 @@ lights_and_shadows/directional_shadow/size=4096
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
 environment/defaults/default_clear_color=Color(0.6, 0.7, 0.8, 1)
-global_illumination/sdfgi/probe_ray_count=2
+global_illumination/sdfgi/probe_ray_count=3
+global_illumination/sdfgi/frames_to_converge=0
+global_illumination/sdfgi/frames_to_update_lights=0

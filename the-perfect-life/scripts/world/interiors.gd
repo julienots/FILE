@@ -205,7 +205,6 @@ func kitchen() -> void:
 	Geo.prop(h, "croissant", Vector3(3.9, y0 + 0.93, 2.85), 0)
 	Geo.prop(h, "tea_set_01", Vector3(1.5, y0 + 0.93, 0.42), 0)
 	Geo.prop(h, "vintage_electric_kettle", Vector3(0.45, y0 + 0.93, 1.3), 90)
-	Geo.prop(h, "wine_bottles_01", Vector3(5.95, y0 + 0.93, 0.42), 0)
 	Geo.prop(h, "potted_plant_04", Vector3(2.4, y0 + 0.93, 2.55), 0)
 	# suspensions au-dessus de l'îlot
 	for i in 3:
@@ -482,7 +481,7 @@ func lights() -> void:
 		probe.update_mode = ReflectionProbe.UPDATE_ONCE
 		probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
 		probe.ambient_color = Color(0.95, 0.88, 0.8)
-		probe.ambient_color_energy = 0.35
+		probe.ambient_color_energy = 0.8
 		probe.max_distance = 30.0
 		h.add_child(probe)
 	for p in [Vector3(12.2, 2.8, 8.4), Vector3(6.5, 2.8, 10.5), Vector3(12.0, 2.8, 2.5)]:

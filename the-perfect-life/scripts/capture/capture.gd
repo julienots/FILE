@@ -2,7 +2,7 @@ extends Node
 ## Captures de prévisualisation : positionne la caméra, attend la convergence de
 ## l'éclairage global (SDFGI) et enregistre un PNG du rendu réel du moteur.
 
-const FRAMES := 24
+const FRAMES := 36
 const SHOTS := [
 	{name = "1_exterieur_maison", pos = Vector3(20.5, 1.65, 31.2), look = Vector3(8.0, 3.6, 10.0), fov = 52.0},
 	{name = "2_salon", pos = Vector3(8.9, 1.55, 11.3), look = Vector3(13.5, 0.9, 6.0), fov = 70.0},
