@@ -118,7 +118,7 @@ export class Powers {
         const g = G.terrain.heightAt(c.x, c.z);
         G.fx.sphere(c, 48, 1.1, 0xfff0c0); G.fx.ring(c.clone().setY(g), 140, 1.6, 0xffd890); G.fx.flash(c, 9000, 1.0, 0xfff2d0); G.fx.shake(0.85, c);
         if (c.y - g < 30) { G.terrain.crater(c.x, c.z, 20, 5, { rim: 0.3, burn: 0.7, heat: 0.25 }); G.fx.rocks(c.clone().setY(g), 40, 25); G.fx.dust(c.clone().setY(g), 30, 40); }
-        G.env && (G.env.flash = 1);
+        G.env && (G.env.flash = 0.6);
         this.areaDamage(c.clone().setY(Math.max(g, c.y - 10)), 52, 900, 'blast', 'explosion');
         if (G.audio) G.audio.explosion(c, 1);
       }, 550);
@@ -210,7 +210,7 @@ export class Powers {
         G.fx.sphere(p.clone().add(new THREE.Vector3(0, 6, 0)), 55, 1.3, 0xffb060); G.fx.ring(p, 220, 2.0, 0xffb070); G.fx.flash(p.clone().add(new THREE.Vector3(0, 15, 0)), 12000, 1.4, 0xff9a40);
         G.fx.rocks(p, 60, 35); G.fx.dust(p, 30, 60, [0.35, 0.3, 0.26]); G.fx.shake(1, p); G.fx.decal(p, 70);
         for (let n = 0; n < 30; n++) G.fx.fire(p.clone().add(new THREE.Vector3(rand(-20, 20), rand(0, 6), rand(-20, 20))), 8);
-        if (G.env) G.env.flash = 1;
+        if (G.env) G.env.flash = 0.6;
         this.areaDamage(p, 60, 1600, 'blast', 'meteor');
         if (G.veg) G.veg.damageArea(p.x, p.z, 70, 2, 'burn');
         if (G.audio) G.audio.explosion(p, 1.3);

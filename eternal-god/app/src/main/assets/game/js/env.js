@@ -440,7 +440,7 @@ export class Environment {
     const alt = G.camera.position.y;
     this.scene.fog.near = lerp(160, 40, this.weatherT) + alt * 0.4;
     this.scene.fog.far = lerp(far * 1.25, far * 0.45, this.weatherT) + alt * 1.5;
-    this.renderer.toneMappingExposure = 1.0 + this.flash * 1.5;
+    this.renderer.toneMappingExposure = 1.0 + this.flash * 0.35;
 
     // nuages
     const cm = this.cloudMat.uniforms;

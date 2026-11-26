@@ -266,18 +266,38 @@ export function windmillSails() {
 }
 
 // Matériau des bâtiments : textures photo en projection triplanaire (espace objet, en mètres)
-export function buildingMaterial(tex) {
+// Injection commune : état des bâtiments fusionnés (effondré, en reconstruction, fissuré),
+// lu dans une petite texture (ligne 0 : hauteur, fissure ; ligne 1 : base x, y, z).
+export const STATE_GLSL_V = `
+  #ifdef MERGED
+    attribute float bid; uniform sampler2D tBState; varying float vCrack;
+  #endif`;
+export const STATE_GLSL_APPLY = `
+  #ifdef MERGED
+    vec4 bst = texelFetch(tBState, ivec2(int(bid), 0), 0);
+    vec4 bbase = texelFetch(tBState, ivec2(int(bid), 1), 0);
+    transformed.y = bbase.y + (transformed.y - bbase.y) * bst.r;
+    if (bst.r < 0.001) transformed = bbase.xyz;
+    vCrack = bst.g;
+  #endif`;
+
+export function buildingMaterial(tex, stateTex = null) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0 });
   if (!tex) return m;
+  if (stateTex) m.defines = { MERGED: 1 };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.tBDiff = { value: tex.diff }; sh.uniforms.tBNor = { value: tex.nor };
+    if (stateTex) sh.uniforms.tBState = { value: stateTex };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float layer; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLayer = layer; vOP = position; vON = normal; vNM0 = normalMatrix[0]; vNM1 = normalMatrix[1]; vNM2 = normalMatrix[2];');
+      .replace('#include <common>', '#include <common>\nattribute float layer; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;' + STATE_GLSL_V)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLayer = layer; vOP = position; vON = normal; vNM0 = normalMatrix[0]; vNM1 = normalMatrix[1]; vNM2 = normalMatrix[2];' + STATE_GLSL_APPLY);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         precision highp sampler2DArray;
-        uniform sampler2DArray tBDiff, tBNor; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;`)
+        uniform sampler2DArray tBDiff, tBNor; varying float vLayer; varying vec3 vOP; varying vec3 vON; varying vec3 vNM0; varying vec3 vNM1; varying vec3 vNM2;
+        #ifdef MERGED
+          varying float vCrack;
+        #endif`)
       .replace('#include <map_fragment>', `
         vec3 bN = normalize(vON); vec3 bPert = vec3(0.0); float bRough = 0.85;
         if (vLayer > -0.5) {
@@ -290,9 +310,23 @@ export function buildingMaterial(tex) {
           vec3 nx = texture(tBNor, vec3(p.zy, L)).xyz * 2.0 - 1.0, ny = texture(tBNor, vec3(p.xz, L)).xyz * 2.0 - 1.0, nz = texture(tBNor, vec3(p.xy, L)).xyz * 2.0 - 1.0;
           bPert = vec3(0.0, nx.y, nx.x) * sign(bN.x) * bw.x + vec3(ny.x, 0.0, -ny.y) * bw.y + vec3(nz.x, nz.y, 0.0) * sign(bN.z) * bw.z;
           bRough = L == 6.0 ? 0.45 : (L == 3.0 ? 0.7 : 0.88);
-        }`)
+        }
+        #ifdef MERGED
+          diffuseColor.rgb *= 1.0 - vCrack * 0.38;
+        #endif`)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = bRough;')
       .replace('#include <normal_fragment_maps>', 'normal = normalize(mat3(vNM0, vNM1, vNM2) * normalize(bN + bPert * 0.9)); if (!gl_FrontFacing) normal = -normal;');
+  };
+  return m;
+}
+
+// matériau d'ombre assorti (les bâtiments effondrés ne projettent plus d'ombre)
+export function buildingDepthMaterial(stateTex) {
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  m.defines = { MERGED: 1 };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.tBState = { value: stateTex };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + STATE_GLSL_V).replace('#include <begin_vertex>', '#include <begin_vertex>' + STATE_GLSL_APPLY);
   };
   return m;
 }

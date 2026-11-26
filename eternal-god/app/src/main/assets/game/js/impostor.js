@@ -70,11 +70,13 @@ export function impostorMaterial(imp, opts = {}) {
   const { meta } = imp;
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uEl: { value: meta.el.map((e) => e * Math.PI / 180) }, uR: { value: meta.radius }, uCY: { value: meta.center[1] },
-    tAlb: { value: imp.alb }, tNor: { value: imp.nor },
+    tAlb: { value: null }, tNor: { value: null },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) },
     uSky: { value: new THREE.Color(0.5, 0.6, 0.8) }, uGround: { value: new THREE.Color(0.2, 0.18, 0.14) },
     uTint: { value: new THREE.Color(opts.tint || 0xffffff) }, uTime: G.uniforms.time,
   }]);
+  // textures affectées après la fusion : UniformsUtils.merge les clonerait (copies en mémoire graphique)
+  uniforms.tAlb.value = imp.alb; uniforms.tNor.value = imp.nor;
   const mat = new THREE.ShaderMaterial({
     uniforms, fog: true,
     vertexShader: `${COMMON(meta)}${VFUNC}

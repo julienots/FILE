@@ -19,10 +19,11 @@ class Particles {
     this.mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       uniforms: { map: { value: tex }, scale: { value: 600 } },
-      vertexShader: `attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale;
+      vertexShader: `attribute float size; attribute vec4 color; varying vec4 vC; varying float vNear; uniform float scale;
         void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
+          vC.a *= smoothstep(1.0, 6.0, -mv.z); // s'efface près de la caméra
           gl_PointSize = min(size * scale / max(-mv.z, 0.1), 512.0); if (color.a <= 0.0) gl_PointSize = 0.0; }`,
-      fragmentShader: `uniform sampler2D map; varying vec4 vC;
+      fragmentShader: `uniform sampler2D map; varying vec4 vC; varying float vNear;
         void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vC.rgb * t.rgb, vC.a * t.a); if (gl_FragColor.a < 0.004) discard; }`,
     });
     this.points = new THREE.Points(g, this.mat);
@@ -112,7 +113,7 @@ export class FX {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * 6.28, r = Math.random() * radius;
       this.norm.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 1.5, p.z + Math.sin(a) * r, Math.cos(a) * rand(2, 6), rand(1, 5), Math.sin(a) * rand(2, 6),
-        rand(2, 4) * (radius / 4 + 0.6), rand(2, 4.5), col[0], col[1], col[2], 0.55, 1.6, -0.3, 1.2);
+        Math.min(9, rand(2, 4) * (radius / 6 + 0.6)), rand(2, 4.5), col[0], col[1], col[2], 0.45, 1.35, -0.3, 1.2);
     }
   }
   smoke(p, n = 1, size = 6, alpha = 0.4) {
@@ -200,7 +201,7 @@ export class FX {
       s.t += dt; const k = s.t / s.dur;
       if (k >= 1) { s.m.visible = false; continue; }
       s.m.scale.setScalar(Math.max(0.1, s.r1 * (1 - Math.pow(1 - k, 3))));
-      s.m.material.uniforms.uA.value = Math.pow(1 - k, 1.5) * 2;
+      s.m.material.uniforms.uA.value = Math.pow(1 - k, 1.5) * 0.9;
     }
     for (const L of this.lights) { L.t += dt; L.l.intensity = L.t < L.dur ? L.i0 * Math.pow(1 - L.t / L.dur, 2) : 0; }
     for (const b of this.bolts) { if (!b.m.visible) continue; b.t += dt; b.m.material.opacity = Math.max(0, 1 - b.t * 3) * (Math.random() < 0.5 ? 1 : 0.5); if (b.t > 0.35) b.m.visible = false; }

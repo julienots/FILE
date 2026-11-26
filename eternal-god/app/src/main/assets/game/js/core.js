@@ -7,7 +7,7 @@ export const WORLD = {
   res: 3,          // mètres entre deux points de la grille d'altitude
   n: 513,          // points par côté (size / res + 1)
   water: 6,        // niveau de l'eau
-  chunks: 16,      // tronçons de terrain par côté
+  chunks: 8,       // tronçons de terrain par côté (64 au total : peu d'appels de dessin)
 };
 WORLD.chunkSize = WORLD.size / WORLD.chunks;
 WORLD.chunkSeg = WORLD.chunkSize / WORLD.res;

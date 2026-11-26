@@ -95,11 +95,11 @@ export class Physics {
       const n = g.attributes.position.count;
       g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
       g.setAttribute('layer', new THREE.BufferAttribute(new Float32Array(n).fill(layer), 1));
-      this.pools.set(layer, new DebrisPool(scene, g, buildingMat, Math.round((layer === 0 || layer === 5 ? 260 : 140) * q)));
+      this.pools.set(layer, new DebrisPool(scene, g, buildingMat, Math.round((layer === 0 || layer === 5 ? 260 : 140) * q), q >= 1));
     }
     const rockG = new THREE.DodecahedronGeometry(0.6, 0);
     const rockM = new THREE.MeshStandardMaterial({ color: 0x6e6256, roughness: 0.95, flatShading: true });
-    this.rockPool = new DebrisPool(scene, rockG, rockM, Math.round(500 * q));
+    this.rockPool = new DebrisPool(scene, rockG, rockM, Math.round(500 * q), false);
   }
 
   // Effondrement d'un bâtiment : chaque pièce se fragmente et part selon l'impact

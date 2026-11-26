@@ -36,7 +36,7 @@ class Animal {
     this.sys = sys; this.kind = kind; this.S = S; this.home = home;
     this.model = SkeletonUtils.clone(A.gltf.scene);
     this.model.scale.setScalar(S.len / A.length * rand(0.9, 1.1));
-    this.model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    this.model.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
     this.mixer = new THREE.AnimationMixer(this.model);
     this.acts = {};
     for (const [k, c] of Object.entries(A.clips)) if (c) this.acts[k] = this.mixer.clipAction(c);
@@ -123,7 +123,7 @@ export class Fauna {
     const cam = G.camera.position;
     for (const a of this.list) {
       const d = a.pos.distanceTo(cam);
-      a.model.visible = d < 220;
+      a.model.visible = d < 140;
       a.update(dt, d < 80);
     }
     this.list = this.list.filter((a) => !a.removed);

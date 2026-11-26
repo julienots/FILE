@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G, WORLD, mulberry32, clamp, lerp, smooth, rand, emit, noise } from './core.js';
 import { REGIONS } from './terrain.js';
-import { makeBuilding, windmillSails, buildingMaterial, Builder } from './buildings.js';
+import { makeBuilding, windmillSails, buildingMaterial, buildingDepthMaterial, Builder } from './buildings.js';
 import { ImpostorField } from './impostor.js';
 
 export const PROPS = ['barrel_03', 'wooden_crate_02', 'wooden_bucket_01', 'wine_barrel_01', 'wooden_barrels_01', 'stone_fire_pit', 'wooden_picnic_table', 'wooden_lantern_01'];
@@ -38,6 +38,12 @@ export class Villages {
     this.scene = scene;
     this.props = props;
     this.mat = buildingMaterial(tex);
+    // état des bâtiments pour le maillage fusionné (1024 bâtiments au plus)
+    this.stateData = new Float32Array(1024 * 2 * 4);
+    this.stateTex = new THREE.DataTexture(this.stateData, 1024, 2, THREE.RGBAFormat, THREE.FloatType);
+    this.stateTex.minFilter = this.stateTex.magFilter = THREE.NearestFilter;
+    this.mergedMat = buildingMaterial(tex, this.stateTex);
+    this.tex = tex;
     this.buildings = [];
     this.occupied = [];       // [x, z, rayon] : zones à garder libres (arbres, rochers)
     this.propLists = {};
@@ -123,6 +129,7 @@ export class Villages {
 
   // après les routes : accessoires instanciés et clôtures
   finalize() {
+    this.mergeAll();
     for (const [name, list] of Object.entries(this.propLists)) {
       const P = this.props[name];
       if (!P || !list.length) continue;
@@ -130,13 +137,13 @@ export class Villages {
         const m = new THREE.InstancedMesh(part.geo, part.mat, list.length);
         const M = new THREE.Matrix4(), q = new THREE.Quaternion();
         list.forEach(([x, y, z, ry, s], i) => { q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry); M.compose(new THREE.Vector3(x, y - P.minY * s, z), q, new THREE.Vector3(s, s, s)); m.setMatrixAt(i, M); });
-        m.castShadow = true; m.receiveShadow = true;
+        m.castShadow = false; m.receiveShadow = true;
         this.scene.add(m);
       }
     }
     if (this.fenceGeos.length) {
       const f = new THREE.Mesh(mergeGeometries(this.fenceGeos), this.mat);
-      f.castShadow = true; f.receiveShadow = true;
+      f.castShadow = false; f.receiveShadow = true;
       this.scene.add(f);
     }
   }
@@ -162,7 +169,7 @@ export class Villages {
     mesh.position.set(x, y, z); mesh.rotation.y = ry;
     mesh.castShadow = true; mesh.receiveShadow = true;
     mesh.updateMatrixWorld(true);
-    this.scene.add(mesh);
+    this.scene.add(mesh); // remplacé par le maillage fusionné du village dans finalize()
     const local = (p) => p ? new THREE.Vector3(p[0], p[1] ?? 0, p.length > 2 ? p[2] : p[1]) : null;
     const door = b.door ? new THREE.Vector3(b.door[0], 0, b.door[1]).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry).add(mesh.position) : mesh.position.clone();
     door.y = T.heightAt(door.x, door.z);
@@ -354,9 +361,46 @@ export class Villages {
       b.hp -= power * (0.35 + k);
       hit++;
       if (b.hp <= 0) this.collapse(b, from || new THREE.Vector3(x, 0, z), power);
-      else if (b.hp < b.maxHp * 0.5 && !b.cracked) { b.cracked = true; b.mesh.material = this.crackedMat(); }
+      else if (b.hp < b.maxHp * 0.5 && !b.cracked) { b.cracked = true; this.show(b, 1, 1); }
     }
     return hit;
+  }
+
+  // visibilité/hauteur/fissures d'un bâtiment (fusionné ou non)
+  show(b, scaleY, crack = 0) {
+    if (b.merged) {
+      const i = b.id * 4;
+      this.stateData[i] = scaleY; this.stateData[i + 1] = crack;
+      this.stateTex.needsUpdate = true;
+    } else {
+      b.mesh.visible = scaleY > 0.001; b.mesh.scale.set(1, Math.max(0.05, scaleY), 1);
+      b.mesh.material = crack ? this.crackedMat() : this.mat;
+    }
+  }
+
+  // un maillage par village pour tous les bâtiments : ≈ 150 appels de dessin → 4
+  mergeAll() {
+    const byV = new Map();
+    for (const b of this.buildings) {
+      if (b.mesh.parent !== this.scene || b.id >= 1024) continue;
+      const g = b.mesh.geometry.clone();
+      g.applyMatrix4(b.mesh.matrixWorld);
+      g.setAttribute('bid', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(b.id), 1));
+      (byV.get(b.village) || byV.set(b.village, []).get(b.village)).push(g);
+      if (b.sails) { const w = new THREE.Vector3(); b.sails.getWorldPosition(w); const piv = new THREE.Group(); piv.position.copy(w); piv.rotation.y = b.ry; piv.add(b.sails); b.sails.position.set(0, 0, 0); this.scene.add(piv); }
+      this.scene.remove(b.mesh);
+      b.merged = true;
+      const i = b.id * 4; this.stateData[i] = 1; this.stateData[i + 1] = 0;
+      const j = (1024 + b.id) * 4; this.stateData[j] = b.x; this.stateData[j + 1] = b.y; this.stateData[j + 2] = b.z;
+    }
+    this.stateTex.needsUpdate = true;
+    for (const [, geos] of byV) {
+      const m = new THREE.Mesh(mergeGeometries(geos, false), this.mergedMat);
+      m.customDepthMaterial = buildingDepthMaterial(this.stateTex);
+      m.castShadow = true; m.receiveShadow = true;
+      m.geometry.computeBoundingSphere();
+      this.scene.add(m);
+    }
   }
 
   crackedMat() {
@@ -366,7 +410,7 @@ export class Villages {
 
   collapse(b, from, power) {
     b.state = 'ruin';
-    b.mesh.visible = false;
+    this.show(b, 0);
     const v = this.villages[b.village];
     v.fear = Math.min(1, v.fear + 0.08);
     emit('buildingCollapsed', { b, village: v });
@@ -395,7 +439,7 @@ export class Villages {
 
   restore(b, divine = false) {
     b.state = 'intact'; b.hp = b.maxHp; b.cracked = false; b.rebuild = 0;
-    b.mesh.visible = true; b.mesh.material = this.mat; b.mesh.scale.set(1, 1, 1);
+    this.show(b, 1, 0);
     if (b.ruin) b.ruin.visible = false;
     if (b.scaffold) { this.scene.remove(b.scaffold); b.scaffold = null; }
     emit('buildingRestored', { b, divine, village: this.villages[b.village] });
@@ -414,8 +458,7 @@ export class Villages {
       this.scene.add(b.scaffold);
     }
     // le bâtiment remonte depuis le sol pendant les travaux
-    b.mesh.visible = b.rebuild > 0.15;
-    b.mesh.scale.set(1, clamp(b.rebuild, 0.05, 1), 1);
+    this.show(b, b.rebuild > 0.15 ? clamp(b.rebuild, 0.05, 1) : 0);
     if (b.rebuild >= 1) this.restore(b);
   }
 

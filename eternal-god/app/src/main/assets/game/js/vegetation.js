@@ -89,12 +89,14 @@ export class Vegetation {
     const rockMeshes = [];
     this.A.rocks.scene.traverse((o) => { if (o.isMesh) rockMeshes.push(o); });
     const rockLists = rockMeshes.map(() => []);
-    for (let i = 0; i < 6000; i++) {
+    const rockMax = Q().label === 'Bas' ? 450 : Q().label === 'Moyen' ? 800 : 1300;
+    let rockN = 0;
+    for (let i = 0; i < 6000 && rockN < rockMax; i++) {
       const x = (rnd() - 0.5) * (WORLD.size - 60), z = (rnd() - 0.5) * (WORLD.size - 60), h = T.heightAt(x, z);
       if (h < WORLD.water - 2 || Math.hypot(x, z) < 130 || skip(x, z, 2.5)) continue;
       const n = T.normalAt(x, z);
       const want = 0.06 + (1 - n.y) * 1.6 + smooth(-150, -300, x) * 0.25;
-      if (rnd() < want) rockLists[Math.floor(rnd() * rockMeshes.length)].push([x, h, z, 0.8 + Math.pow(rnd(), 3) * 5, rnd() * 6.28, rnd() * 0.4]);
+      if (rnd() < want * 0.6 && ++rockN) rockLists[Math.floor(rnd() * rockMeshes.length)].push([x, h, z, 0.8 + Math.pow(rnd(), 3) * 5, rnd() * 6.28, rnd() * 0.4]);
     }
     this.rocks = rockMeshes.map((src, k) => {
       const list = rockLists[k];
@@ -104,7 +106,7 @@ export class Vegetation {
       const m = new THREE.InstancedMesh(geo, src.material, Math.max(1, list.length));
       const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
       list.forEach(([x, y, z, s, r, tilt], i) => { e.set(tilt * 0.3, r, tilt * 0.2); q.setFromEuler(e); M.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s, s)); m.setMatrixAt(i, M); });
-      m.count = list.length; m.castShadow = true; m.receiveShadow = true;
+      m.count = list.length; m.castShadow = false; m.receiveShadow = true;
       this.scene.add(m);
       return m;
     });
@@ -121,7 +123,7 @@ export class Vegetation {
       for (const [g, m] of parts) {
         const im = new THREE.InstancedMesh(g, m, Math.max(1, list.length)), M = new THREE.Matrix4(), q = new THREE.Quaternion();
         list.forEach(([x, y, z, s, r], i) => { q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r); M.compose(new THREE.Vector3(x, y - 0.1, z), q, new THREE.Vector3(s, s, s)); im.setMatrixAt(i, M); });
-        im.count = list.length; im.castShadow = true; im.receiveShadow = true; this.scene.add(im);
+        im.count = list.length; im.castShadow = false; im.receiveShadow = true; this.scene.add(im);
       }
     };
     const inForest = (x, z) => T.forestMask ? T.forestMask[T.idx(x, z)] > 120 : x < -150;
@@ -173,7 +175,7 @@ export class Vegetation {
     const mat = new THREE.ShaderMaterial({
       side: THREE.DoubleSide, fog: true,
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-        tMap: { value: imp.alb }, uHeight: { value: G.terrain.dataTex }, uR: { value: R }, uHalf: { value: WORLD.half },
+        tMap: { value: null }, uHeight: { value: null }, uR: { value: R }, uHalf: { value: WORLD.half },
         uMask: { value: new THREE.Vector4(...mask) }, uTint: { value: new THREE.Vector3(...tint) },
         uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSky: { value: new THREE.Color(0.5, 0.6, 0.7) },
       }]),
@@ -218,6 +220,7 @@ export class Vegetation {
           #include <fog_fragment>
         }`,
     });
+    mat.uniforms.tMap.value = imp.alb; mat.uniforms.uHeight.value = G.terrain.dataTex; // partagées, jamais clonées
     mat.uniforms.uTime = G.uniforms.time; mat.uniforms.uGust = G.uniforms.gust; mat.uniforms.uPress = G.uniforms.press; mat.uniforms.uCenter = this.groundCenter;
     this.groundMats.push(mat);
     const mesh = new THREE.Mesh(geo, mat);

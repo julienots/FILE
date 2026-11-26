@@ -58,7 +58,7 @@ class Villager {
     const tint = new Map();
     this.model.traverse((o) => {
       if (!o.isMesh) return;
-      o.castShadow = true; o.frustumCulled = false;
+      o.castShadow = false; o.frustumCulled = false;
       if (o.name === 'Backpack' && rnd() < 0.85) o.visible = false;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       const nm = mats.map((m) => {
@@ -379,6 +379,7 @@ export class People {
     this.birthT = 40;
     this.rnd = mulberry32(4242);
     this.deaths = 0;
+    this.viewDist = Q().label === 'Bas' ? 70 : Q().label === 'Moyen' ? 95 : 130;
   }
 
   spawn(v, home, role, opts = {}) {
@@ -481,12 +482,20 @@ export class People {
     for (const s of this.speech) s.t -= dt;
     this.speech = this.speech.filter((s) => s.t > 0 && !s.v.removed);
     const cam = G.camera.position;
+    // au plus N habitants affichés (les plus proches) : le reste vit sans être dessiné
+    this.capT = (this.capT || 0) - dt;
+    if (this.capT <= 0) {
+      this.capT = 0.4;
+      const maxVis = Q().label === 'Bas' ? 18 : Q().label === 'Moyen' ? 28 : 40;
+      const sorted = this.list.filter((p) => !p.removed && p.state !== 'hidden').map((p) => [p.pos.distanceToSquared(cam), p]).sort((a, b) => a[0] - b[0]);
+      this.allowed = new Set(sorted.slice(0, maxVis).map((x) => x[1]));
+    }
     for (const p of this.list) {
       if (p.removed) continue;
       const d = p.pos.distanceTo(cam);
-      const vis = d < 190 && p.state !== 'hidden';
+      const vis = d < this.viewDist && p.state !== 'hidden' && (!this.allowed || this.allowed.has(p));
       if (p.state !== 'hidden') p.model.visible = vis;
-      p.update(dt, d < 70);
+      p.update(dt, d < 45);
     }
     this.list = this.list.filter((p) => !p.removed);
     // reconstruction et naissances, village par village

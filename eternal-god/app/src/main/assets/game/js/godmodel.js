@@ -2,6 +2,7 @@
 // grandes ailes de plumes animées individuellement (une instance par plume).
 import * as THREE from 'three';
 import { canvasTexture, lerp } from './core.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 function featherTexture() {
   return canvasTexture(128, 512, (ctx, w, h) => {
@@ -340,6 +341,31 @@ export function buildGodModel(mats = createGodMaterials()) {
     fMesh.instanceMatrix.needsUpdate = true;
   }
 
+  // optimisation mobile : les pièces fixes d'une même articulation et d'un même matériau
+  // sont fusionnées en un seul maillage (≈ 200 appels de dessin → ≈ 40)
+  const keep = new Set([B.core, B.haloGlow, fMesh, B.clothF, B.clothB, B.handGlowL, B.handGlowR]);
+  const groups = [root, ...Object.values(B).filter((o) => o.isGroup)];
+  for (const g of groups) {
+    const byMat = new Map();
+    for (const c of [...g.children]) {
+      if (!c.isMesh || keep.has(c) || c.isInstancedMesh || c.children.some((k) => keep.has(k))) continue;
+      if (c.children.length) continue;
+      c.updateMatrix();
+      const geo = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone();
+      for (const a of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(a)) geo.deleteAttribute(a);
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      geo.applyMatrix4(c.matrix);
+      if (!byMat.has(c.material)) byMat.set(c.material, []);
+      byMat.get(c.material).push(geo);
+      g.remove(c);
+    }
+    for (const [mat, geos] of byMat) {
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      const m = new THREE.Mesh(merged, mat); m.castShadow = true;
+      g.add(m);
+    }
+  }
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return { root, bones: B, wings, feathers: fMesh, updateWings, mats: M };
 }
