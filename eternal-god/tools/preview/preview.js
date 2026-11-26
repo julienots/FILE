@@ -19,6 +19,8 @@ const { loadTextureSet, TERRAIN_LAYERS, BUILDING_LAYERS } = await import(base + 
 const { PhotoSky } = await import(base + 'sky.js');
 const { Villages, loadProps } = await import(base + 'village.js');
 const { People, loadPeople } = await import(base + 'people.js');
+const { Roads } = await import(base + 'roads.js');
+const { Fauna, loadFauna } = await import(base + 'fauna.js');
 
 const P = new URLSearchParams(location.search);
 const num = (k, d) => (P.has(k) ? +P.get(k) : d);
@@ -40,15 +42,23 @@ G.photoSky = new PhotoSky(); await G.photoSky.load(renderer);
 const vegAssets = await loadVegetationAssets();
 const props = await loadProps();
 const peopleAssets = await loadPeople();
+const faunaAssets = await loadFauna();
 
 const T = new Terrain(scene); G.terrain = T; T.textures = terrTex;
 T.generate();
 const villages = new Villages(scene, props, bTex); G.villages = villages;
 villages.prepare();
 villages.build();
+const roads = new Roads(scene, villages); G.roads = roads;
+console.time('routes'); roads.build(); console.timeEnd('routes');
+console.log('FIELDS', JSON.stringify(villages.villages.map(v => [v.name, Math.round(v.x), Math.round(v.z), (v.fields||[]).map(f => [Math.round(f.x), Math.round(f.z)])])));
+console.log('ROUTES', JSON.stringify(roads.routes.map(r => [r.from.name, r.to.name, r.pts.length, r.pts.filter((_, i) => i % 15 === 0).map(p => [Math.round(p.x), Math.round(p.z)])])));
+const crops = villages.dressFarms(vegAssets.grass);
+villages.finalize();
 T.build(scene);
 const veg = new Vegetation(scene, vegAssets); G.veg = veg;
 veg.build((x, z) => !villages.isFree(x, z, 2));
+veg.extraFields = crops;
 const env = new Environment(scene, renderer); G.env = env;
 env.dayTime = num('t', 0.63);
 env.build();
@@ -92,10 +102,12 @@ if (P.has('ca')) { // caméra en orbite autour du dieu, hors des bâtiments
 // ----- habitants : une minute de vie simulée -----
 const people = new People(scene, peopleAssets, villages); G.people = people;
 people.populate();
+people.addTravelers(roads, num('travelers', 8));
+const fauna = new Fauna(scene, faunaAssets); G.fauna = fauna; fauna.populate();
 if (P.has('worship')) for (const v of villages.villages) v.worship = num('worship', 0.15);
 const sim = num('sim', 60);
 G.god.pos.y += 500; // invisible pendant la simulation de routine
-for (let t = 0; t < sim; t += 0.1) { env.dayTime = num('t', 0.63); people.update(0.1); }
+for (let t = 0; t < sim; t += 0.1) { env.dayTime = num('t', 0.63); people.update(0.1); fauna.update(0.1); }
 G.god.pos.copy(gp);
 for (let t = 0; t < num('react', 4); t += 0.1) people.update(0.1);
 { const h = {}; for (const p of people.list) if (p.pos.distanceTo(gp) < 42) { const k = p.state + ':' + p.role + ':' + p.child; h[k] = (h[k] || 0) + 1; } console.log('STATES', JSON.stringify(h), 'pop', people.list.length, 'gp', gp.toArray().map(v => v.toFixed(1)).join(','), 'ground', T.groundAt(gp.x, gp.z).toFixed(1)); }

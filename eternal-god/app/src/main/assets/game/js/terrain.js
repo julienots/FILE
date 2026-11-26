@@ -20,7 +20,7 @@ export const RIVER = [
 
 const N = WORLD.n, RES = WORLD.res, HALF = WORLD.half;
 
-function distToRiver(x, z) {
+export function distToRiver(x, z) {
   let best = 1e9, bt = 0, total = 0;
   const lens = [];
   for (let i = 0; i < RIVER.length - 1; i++) { const l = Math.hypot(RIVER[i + 1][0] - RIVER[i][0], RIVER[i + 1][1] - RIVER[i][1]); lens.push(l); total += l; }
@@ -306,6 +306,13 @@ export class Terrain {
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++)
       if (Math.hypot(-HALF + i * RES - x, -HALF + j * RES - z) <= r) this.paint[j * N + i] = v;
   }
+  // peint sans écraser les pavés
+  paintDiscIf(x, z, r, v) {
+    const i0 = Math.max(0, Math.floor((x - r + HALF) / RES)), i1 = Math.min(N - 1, Math.ceil((x + r + HALF) / RES));
+    const j0 = Math.max(0, Math.floor((z - r + HALF) / RES)), j1 = Math.min(N - 1, Math.ceil((z + r + HALF) / RES));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++)
+      if (Math.hypot(-HALF + i * RES - x, -HALF + j * RES - z) <= r && this.paint[j * N + i] !== 3) this.paint[j * N + i] = v;
+  }
   paintRect(x, z, w, d, rot, v) {
     const r = Math.hypot(w, d) / 2 + RES;
     const c = Math.cos(-rot), s = Math.sin(-rot);
@@ -318,11 +325,12 @@ export class Terrain {
     }
   }
   paintPath(ax, az, bx, bz, w) {
+    if (this.paint[this.idx(ax, az)] === 3 && this.paint[this.idx(bx, bz)] === 3) return;
     const L = Math.hypot(bx - ax, bz - az), steps = Math.ceil(L / 2);
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
       const wob = noise.noise(ax + t * 10, az) * 3;
-      this.paintDisc(lerp(ax, bx, t) + wob * (bz - az) / L, lerp(az, bz, t) - wob * (bx - ax) / L, w / 2, 1);
+      this.paintDiscIf(lerp(ax, bx, t) + wob * (bz - az) / L, lerp(az, bz, t) - wob * (bx - ax) / L, w / 2, 1);
     }
   }
   // Aplanit une zone (fondations des bâtiments)

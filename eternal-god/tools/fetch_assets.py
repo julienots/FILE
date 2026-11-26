@@ -12,7 +12,7 @@ CACHE = os.path.join(ROOT, ".cache", "polyhaven")
 
 TEXTURES = [
     # terrain
-    "rocky_terrain_02", "forrest_ground_01", "mossy_rock", "snow_02", "coast_sand_01", "stony_dirt_path",
+    "rocky_terrain_02", "forrest_ground_01", "mossy_rock", "snow_02", "coast_sand_01", "grass_path_2",
     "burned_ground_01", "dark_rock", "raked_dirt", "cobblestone_floor_01", "aerial_grass_rock",
     # bâtiments
     "plastered_wall_02", "weathered_brown_planks", "clay_roof_tiles_02", "roof_slates_02",

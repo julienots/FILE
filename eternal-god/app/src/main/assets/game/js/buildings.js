@@ -21,6 +21,7 @@ for (const c of [...PALETTE.timber, PALETTE.wood, 0x3d2817, 0x4b2f1b, 0x664429])
 for (const c of [0x9c3b26, 0x7d3220, 0xa5482c, 0x8a5a2b, 0x7a2e1e, 0x8b6f4e]) LAYER.set(c, 2);
 for (const c of [0x5a4a44, 0x46525e, 0x4a4440]) LAYER.set(c, 3);
 LAYER.set(0xb8955a, 4); LAYER.set(0xc9a35a, 4);
+const HAY = new Set([0xc9a35a]);
 for (const c of [...PALETTE.stone, 0x6d6a64, 0x5a5650, 0x7b776f, 0xbdb6a8, 0x9a948a]) LAYER.set(c, 5);
 for (const c of [0xefe9dc, 0xf4efe4, 0xe9e2d2, 0xe6dcc6]) LAYER.set(c, 6);
 const LAYER_BASE = [0xe2dccf, 0x6b5440, 0xa0503a, 0x55555a, 0xb09060, 0x8a857c, 0xe8e4dc];
@@ -34,7 +35,7 @@ export class Builder {
     let c = col(color);
     if (layer >= 0) { // teinte relative à la texture photo, adoucie
       const b = col(LAYER_BASE[layer]);
-      c = new THREE.Color(Math.min(1.25, c.r / b.r), Math.min(1.25, c.g / b.g), Math.min(1.25, c.b / b.b)).lerp(new THREE.Color(1, 1, 1), 0.45);
+      c = HAY.has(color) ? new THREE.Color(1.35, 1.12, 0.62) : new THREE.Color(Math.min(1.25, c.r / b.r), Math.min(1.25, c.g / b.g), Math.min(1.25, c.b / b.b)).lerp(new THREE.Color(1, 1, 1), 0.45);
     }
     const n = g.attributes.position.count, arr = new Float32Array(n * 3), lay = new Float32Array(n);
     const v0 = 0.92 + Math.random() * 0.08;

@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G, WORLD, mulberry32, clamp, lerp, smooth, rand, emit, noise } from './core.js';
 import { REGIONS } from './terrain.js';
 import { makeBuilding, windmillSails, buildingMaterial, Builder } from './buildings.js';
+import { ImpostorField } from './impostor.js';
 
 export const PROPS = ['barrel_03', 'wooden_crate_02', 'wooden_bucket_01', 'wine_barrel_01', 'wooden_barrels_01', 'stone_fire_pit', 'wooden_picnic_table', 'wooden_lantern_01'];
 
@@ -74,7 +75,54 @@ export class Villages {
     const T = G.terrain;
     for (const v of this.villages) this.layout(v, mulberry32(1000 + v.id * 77));
     T.markDirtyArea(0, 0, WORLD.size);
-    // accessoires instanciés
+  }
+
+  // cultures (blé, légumes), meules de foin et charrettes autour des champs
+  dressFarms(grassImp) {
+    const T = G.terrain, rnd = mulberry32(555), wheat = [], veg = [];
+    const b = new Builder();
+    for (const v of this.villages) for (const f of v.fields || []) {
+      const isWheat = rnd() < 0.62;
+      const c = Math.cos(f.ry), s = Math.sin(f.ry);
+      for (let lx = -f.w / 2 + 1.2; lx < f.w / 2 - 1; lx += isWheat ? 0.95 : 1.4) {
+        for (let lz = -f.d / 2 + 1.2; lz < f.d / 2 - 1; lz += isWheat ? 0.8 : 1.1) {
+          const jx = lx + (rnd() - 0.5) * 0.3, jz = lz + (rnd() - 0.5) * 0.3;
+          const x = f.x + jx * c + jz * s, z = f.z - jx * s + jz * c;
+          (isWheat ? wheat : veg).push([x, T.heightAt(x, z) - 0.05, z, rnd() * 6.28]);
+        }
+      }
+      // meules de foin et charrette au bord du champ
+      const corner = (lx, lz) => [f.x + lx * c + lz * s, f.z - lx * s + lz * c];
+      for (let k = 0; k < 2; k++) {
+        const [x, z] = corner(f.w / 2 + 3 + k * 3.2, -f.d / 2 + 3 + rnd() * 4), y = T.heightAt(x, z);
+        b.cyl(1.4, 1.6, 2.2, x, y + 1.1, z, 0xc9a35a, 12, false);
+        b.cone(1.5, 1.4, x, y + 2.9, z, 0xc9a35a, 12);
+      }
+      if (rnd() < 0.7) {
+        const [x, z] = corner(-f.w / 2 - 3, f.d / 2 - 4), y = T.heightAt(x, z), ry = f.ry + rnd();
+        b.box(1.6, 0.5, 3.2, x, y + 1.0, z, 0x8a6440, ry, 0, 0, false);
+        for (const sd of [-1, 1]) b.box(0.08, 0.5, 3.2, x + Math.cos(ry) * sd * 0.8, y + 1.45, z - Math.sin(ry) * sd * 0.8, 0x664429, ry, 0, 0, false);
+        for (const sd of [-1, 1]) {
+          const wx = x + Math.cos(ry) * sd * 0.95, wz = z - Math.sin(ry) * sd * 0.95;
+          const g = new THREE.CylinderGeometry(0.65, 0.65, 0.14, 14); g.rotateZ(Math.PI / 2); g.rotateY(ry); g.translate(wx, y + 0.65, wz);
+          b._push(g, 0x4b2f1b, null);
+        }
+        b.box(0.1, 0.1, 2.2, x - Math.sin(ry) * 0.0 + Math.sin(ry) * 2.6, y + 0.8, z + Math.cos(ry) * 2.6, 0x664429, ry, 0.25, 0, false);
+      }
+    }
+    this.fenceGeos.push(b.geometry());
+    const mk = (list, tint, h) => {
+      const f = new ImpostorField(grassImp, Math.max(1, list.length), { tint, shadows: false });
+      const sc = h / grassImp.meta.height;
+      list.forEach(([x, y, z, r], i) => f.set(i, x, y, z, sc * (0.85 + Math.random() * 0.3), r));
+      f.commit(list.length); this.scene.add(f.mesh); return f;
+    };
+    this.cropFields = [mk(wheat, 0xf2cf86, 1.05), mk(veg, 0x9ccf6a, 0.45)];
+    return this.cropFields;
+  }
+
+  // après les routes : accessoires instanciés et clôtures
+  finalize() {
     for (const [name, list] of Object.entries(this.propLists)) {
       const P = this.props[name];
       if (!P || !list.length) continue;
@@ -154,8 +202,14 @@ export class Villages {
         x += Math.cos(a) * 6; z += Math.sin(a) * 6;
         if (T.heightAt(x, z) < WORLD.water + 1.5) break;
       }
-      for (let i = 1; i < pts.length; i++) T.paintPath(pts[i - 1].x, pts[i - 1].z, pts[i].x, pts[i].z, v.main ? 5 : 4);
-      T.paintPath(v.x, v.z, pts[0].x, pts[0].z, v.main ? 5 : 4);
+      // rue pavée au cœur du bourg, chemin de terre ensuite
+      const cob = v.main ? Math.floor(pts.length * 0.55) : 0;
+      for (let i = 1; i < pts.length; i++) {
+        T.paintPath(pts[i - 1].x, pts[i - 1].z, pts[i].x, pts[i].z, v.main ? 6.5 : 5);
+        if (i < cob) for (let k = 0; k <= 3; k++) T.paintDisc(lerp(pts[i - 1].x, pts[i].x, k / 3), lerp(pts[i - 1].z, pts[i].z, k / 3), 2.6, 3);
+      }
+      T.paintPath(v.x, v.z, pts[0].x, pts[0].z, v.main ? 6.5 : 5);
+      if (v.main) for (let k = 0; k <= 4; k++) T.paintDisc(lerp(v.x, pts[0].x, k / 4), lerp(v.z, pts[0].z, k / 4), 2.6, 3);
       streets.push(pts);
     }
     v.streetsPts = streets;
@@ -208,6 +262,7 @@ export class Villages {
       const r = this.place(v, type, x, z, face(x, z, p.x, p.z), rnd);
       if (!r) continue;
       placed++;
+      T.paintPath(r.door.x, r.door.z, p.x, p.z, 2.2);
       // accessoires contre les murs
       const n = 1 + Math.floor(rnd() * 3);
       for (let k = 0; k < n; k++) {

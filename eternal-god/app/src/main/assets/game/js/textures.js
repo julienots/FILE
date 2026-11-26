@@ -1,7 +1,7 @@
 // Chargement des textures photo (Poly Haven, CC0) en tableaux de textures WebGL2.
 import * as THREE from 'three';
 
-export const TERRAIN_LAYERS = ['rocky_terrain_02', 'forrest_ground_01', 'mossy_rock', 'snow_02', 'coast_sand_01', 'stony_dirt_path',
+export const TERRAIN_LAYERS = ['rocky_terrain_02', 'forrest_ground_01', 'mossy_rock', 'snow_02', 'coast_sand_01', 'grass_path_2',
   'burned_ground_01', 'dark_rock', 'raked_dirt', 'cobblestone_floor_01', 'aerial_grass_rock'];
 export const BUILDING_LAYERS = ['plastered_wall_02', 'weathered_brown_planks', 'clay_roof_tiles_02', 'roof_slates_02',
   'thatch_roof_angled', 'castle_wall_slates', 'marble_01'];

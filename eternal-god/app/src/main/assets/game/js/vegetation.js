@@ -34,8 +34,11 @@ export class Vegetation {
     this.dirty = true;
   }
 
-  build(skip = () => false) {
+  build(skipFn = () => false) {
     const T = G.terrain, rnd = mulberry32(2024);
+    // rien ne pousse sur les chemins, champs et places (ni juste à côté)
+    const painted = (x, z, r) => T.paint[T.idx(x, z)] || T.paint[T.idx(x + r, z)] || T.paint[T.idx(x - r, z)] || T.paint[T.idx(x, z + r)] || T.paint[T.idx(x, z - r)];
+    const skip = (x, z, r = 4) => painted(x, z, r) || skipFn(x, z);
     const density = Q().trees;
     for (let i = 0; i < 30000; i++) {
       const x = (rnd() - 0.5) * (WORLD.size - 80), z = (rnd() - 0.5) * (WORLD.size - 80);
@@ -68,7 +71,7 @@ export class Vegetation {
       if (h < WORLD.water + 1.2 || h > 125 || Math.hypot(x, z) < 110) continue;
       if (Math.hypot(x - REGIONS.volcano.x, z - REGIONS.volcano.z) < 200) continue;
       const f = smooth(-90, -200, x) * 0.7 + smooth(0.3, 0.7, noise.fbm(x * 0.01, z * 0.01 + 5, 2)) * 0.45;
-      if (rnd() < f && !skip(x, z)) shrubs.push([x, h - 0.2, z, (1.2 + rnd() * 1.6) / this.A.shrub.meta.height, rnd() * 6.28]);
+      if (rnd() < f && !skip(x, z, 2)) shrubs.push([x, h - 0.2, z, (1.2 + rnd() * 1.6) / this.A.shrub.meta.height, rnd() * 6.28]);
     }
     this.shrubField = new ImpostorField(this.A.shrub, Math.max(1, shrubs.length), { shadows: false });
     shrubs.forEach(([x, y, z, s, r], i) => this.shrubField.set(i, x, y, z, s, r));
@@ -82,7 +85,7 @@ export class Vegetation {
     const rockLists = rockMeshes.map(() => []);
     for (let i = 0; i < 6000; i++) {
       const x = (rnd() - 0.5) * (WORLD.size - 60), z = (rnd() - 0.5) * (WORLD.size - 60), h = T.heightAt(x, z);
-      if (h < WORLD.water - 2 || Math.hypot(x, z) < 130 || skip(x, z)) continue;
+      if (h < WORLD.water - 2 || Math.hypot(x, z) < 130 || skip(x, z, 2.5)) continue;
       const n = T.normalAt(x, z);
       const want = 0.06 + (1 - n.y) * 1.6 + smooth(-150, -300, x) * 0.25;
       if (rnd() < want) rockLists[Math.floor(rnd() * rockMeshes.length)].push([x, h, z, 0.8 + Math.pow(rnd(), 3) * 5, rnd() * 6.28, rnd() * 0.4]);
@@ -161,7 +164,7 @@ export class Vegetation {
         void main(){
           vec4 c = texture2D(tMap, vUv); if (c.a < 0.45) discard;
           float light = 0.55 + 0.45 * vH;
-          vec3 col = c.rgb * 1.25 * (uSunCol * (0.55 * max(uSunDir.y, 0.0) + 0.25) * light + uSky);
+          vec3 col = c.rgb * vec3(0.92, 1.18, 0.72) * 1.7 * (uSunCol * (0.55 * max(uSunDir.y, 0.0) + 0.25) * light + uSky);
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -235,7 +238,7 @@ export class Vegetation {
       const env = G.env, sunCol = env.sun.color.clone().multiplyScalar(env.sun.intensity);
       const sky = env.fogColor.clone().multiplyScalar(0.55 * (0.4 + env.dayF * 0.6) * (G.scene.environmentIntensity || 1));
       const ground = new THREE.Color(0.16, 0.14, 0.1).multiplyScalar(0.3 + env.dayF * 0.7);
-      for (const f of [...this.fields, this.shrubField]) f.light(env.sunDir.y > -0.04 ? env.sunDir : env.sky.moonDir, sunCol, sky, ground);
+      for (const f of [...this.fields, this.shrubField, ...(this.extraFields || [])]) f.light(env.sunDir.y > -0.04 ? env.sunDir : env.sky.moonDir, sunCol, sky, ground);
       if (this.grassMat) { const u = this.grassMat.uniforms; u.uSunDir.value.copy(env.sunDir); u.uSunCol.value.copy(sunCol); u.uSky.value.copy(sky); }
     }
     const T = G.terrain, q = new THREE.Quaternion();

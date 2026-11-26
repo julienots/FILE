@@ -274,8 +274,13 @@ export class Environment {
       { x: -260, z: -170, y: 235, r: 34 }, { x: 140, z: -330, y: 290, r: 26 }, { x: -430, z: 260, y: 215, r: 40 },
       { x: 60, z: 420, y: 305, r: 30 }, { x: 330, z: -40, y: 260, r: 22 },
     ];
-    const rock = new THREE.MeshStandardMaterial({ color: 0x6d6258, roughness: 0.95, flatShading: true });
-    const grass = new THREE.MeshStandardMaterial({ color: 0x5f8f3a, roughness: 0.9 });
+    const tl = new THREE.TextureLoader();
+    const rMap = tl.load('img/tex/mossy_rock_diffuse.jpg'), rNor = tl.load('img/tex/mossy_rock_nor_gl.jpg');
+    rMap.colorSpace = THREE.SRGBColorSpace;
+    for (const t of [rMap, rNor]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 3); t.anisotropy = 4; }
+    const rock = new THREE.MeshStandardMaterial({ map: rMap, normalMap: rNor, color: 0xb8b0a4, roughness: 0.95 });
+    const gMap = tl.load('img/tex/rocky_terrain_02_diffuse.jpg'); gMap.colorSpace = THREE.SRGBColorSpace; gMap.wrapS = gMap.wrapT = THREE.RepeatWrapping; gMap.repeat.set(5, 5);
+    const grass = new THREE.MeshStandardMaterial({ map: gMap, roughness: 0.9 });
     const marble = new THREE.MeshStandardMaterial({ color: 0xf1ece0, roughness: 0.4 });
     const crystal = new THREE.MeshStandardMaterial({ color: 0x9fe6ff, emissive: 0x58c8ff, emissiveIntensity: 1.6, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.9 });
     const fallMat = new THREE.ShaderMaterial({
@@ -289,12 +294,12 @@ export class Environment {
     const rnd = mulberry32(777);
     for (const d of defs) {
       const grp = new THREE.Group();
-      const cone = new THREE.ConeGeometry(d.r, d.r * 2.2, 12, 6);
+      const cone = new THREE.ConeGeometry(d.r, d.r * 2.2, 28, 14);
       cone.rotateX(Math.PI);
       const p = cone.attributes.position;
       for (let i = 0; i < p.count; i++) {
         const y = p.getY(i); const k = 1 + (rnd() - 0.5) * 0.35;
-        if (y < d.r * 1.05) { p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); p.setY(i, y + (rnd() - 0.5) * d.r * 0.2); }
+        if (y < d.r * 1.05) { const n = 1 + 0.25 * Math.sin(p.getX(i) * 0.3 + p.getZ(i) * 0.2) + 0.15 * Math.sin(y * 0.4 + p.getX(i)); p.setX(i, p.getX(i) * n); p.setZ(i, p.getZ(i) * n); p.setY(i, y + Math.sin(p.getX(i) * 0.5) * d.r * 0.06); }
       }
       cone.computeVertexNormals();
       const cm = new THREE.Mesh(cone, rock); cm.position.y = -d.r * 1.1; cm.castShadow = true;

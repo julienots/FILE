@@ -61,7 +61,7 @@ export function makeTerrainMaterial(tex) {
         float wRock = smoothstep(0.2, 0.36, slope + (nz1 - 0.5) * 0.14);
         wRock = max(wRock, smoothstep(4.0, 12.0, vFx.y) * 0.9);
         float wSnow = smoothstep(150.0, 185.0, h + nz1 * 30.0) * (1.0 - smoothstep(0.45, 0.7, slope));
-        float wSand = 1.0 - smoothstep(${(WORLD.water + 0.4).toFixed(1)}, ${(WORLD.water + 2.6).toFixed(1)}, h + nz2 * 1.2);
+        float wSand = 1.0 - smoothstep(${(WORLD.water + 0.2).toFixed(1)}, ${(WORLD.water + 1.3).toFixed(1)}, h + nz2 * 0.8);
         float wDug = smoothstep(0.25, 1.8, vFx.y) * (1.0 - wRock);
         float wFar = smoothstep(120.0, 420.0, camD);
         vec3 col = vec3(0.0), nrm = vec3(0.0); float tot = 0.0;
@@ -76,12 +76,19 @@ export function makeTerrainMaterial(tex) {
         #define OVER(L, S, W) { float w_ = (W); if (w_ > 0.002) { c2 = vec3(0.0); n2 = vec3(0.0); t2 = 0.0; layerTop(L, S, 1.0, c2, n2, t2, macro); col = mix(col, c2, w_); nrm = mix(nrm, n2, w_); } }
         OVER(4.0, 0.2, wSand)
         OVER(8.0, 0.3, vSplat.z)
-        OVER(5.0, 0.3, smoothstep(0.15, 0.7, vSplat.y + (nz2 - 0.5) * 0.35) * 0.8)
+        OVER(5.0, 0.22, smoothstep(0.12, 0.6, vSplat.y + (nz2 - 0.5) * 0.3))
         OVER(9.0, 0.3, vSplat.w)
         OVER(7.0, 0.12, vFx.z)
         OVER(5.0, 0.2, wDug)
         #ifndef LOWQ
-          if (wRock > 0.002) { c2 = vec3(0.0); n2 = vec3(0.0); t2 = 0.0; layerTri(2.0, 0.07, 1.0, Ng, c2, n2, t2); col = mix(col, c2, wRock); nrm = mix(nrm, n2, wRock); }
+          if (wRock > 0.002) {
+            c2 = vec3(0.0); n2 = vec3(0.0); t2 = 0.0;
+            // deux échelles de roche mélangées par un bruit : casse la répétition sur les grandes faces
+            layerTri(2.0, 0.06, 1.0 - macro * 0.55, Ng, c2, n2, t2);
+            layerTri(2.0, 0.017, 0.35 + macro * 0.55, Ng, c2, n2, t2);
+            c2 /= max(t2, 1e-4); n2 /= max(t2, 1e-4);
+            c2 *= 0.8 + 0.4 * vn(vWPos.xz * 0.011 + 5.0);
+            col = mix(col, c2, wRock); nrm = mix(nrm, n2, wRock); }
         #else
           OVER(2.0, 0.07, wRock)
         #endif

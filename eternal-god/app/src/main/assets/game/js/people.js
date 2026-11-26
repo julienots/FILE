@@ -18,7 +18,7 @@ const FABRICS = [0x6b4f2e, 0x8c6d46, 0x4d5a3a, 0x7a2e24, 0x3f4a5c, 0x9a8a6a, 0x5
 const HAIRS = [0x2a1d14, 0x3b2a1b, 0x6a4a2a, 0x8b6b3e, 0xb89a62, 0x1a1512, 0x9a9590];
 const MEN = ['Aubin', 'Bastien', 'Colin', 'Denis', 'Étienne', 'Firmin', 'Gaspard', 'Hugues', 'Jehan', 'Lucien', 'Mathis', 'Nicolas', 'Odon', 'Perrin', 'Renaud', 'Simon', 'Thibault', 'Urbain', 'Victor', 'Gautier', 'Anselme', 'Bertrand'];
 const WOMEN = ['Agnès', 'Blanche', 'Clémence', 'Denise', 'Éloïse', 'Flore', 'Gisèle', 'Hélène', 'Isabeau', 'Jeanne', 'Margot', 'Ninon', 'Perrine', 'Rose', 'Sibylle', 'Typhaine', 'Ysolde', 'Aliénor', 'Bertille', 'Mahaut'];
-const ROLE_FR = { farmer: 'fermier', smith: 'forgeron', merchant: 'marchand', guard: 'garde', priest: 'prêtre', innkeeper: 'aubergiste', fisher: 'pêcheur', woodcutter: 'bûcheron', shepherd: 'berger', crafter: 'artisan', child: 'enfant', chief: 'chef du village', miller: 'meunier' };
+const ROLE_FR = { farmer: 'fermier', smith: 'forgeron', merchant: 'marchand', guard: 'garde', priest: 'prêtre', innkeeper: 'aubergiste', fisher: 'pêcheur', woodcutter: 'bûcheron', shepherd: 'berger', crafter: 'artisan', child: 'enfant', chief: 'chef du village', miller: 'meunier', traveler: 'voyageur' };
 
 const SAY = {
   kneel: ['Gloire à toi, Seigneur !', 'Le Dieu est parmi nous…', 'Bénis-nous, Éternel !', 'Pardonne-nous nos fautes.', 'Il est descendu du ciel !'],
@@ -155,6 +155,7 @@ class Villager {
     if (h > 12 && h < 13.2 && !this.child) return v.tavern && v.tavern.state === 'intact' && this.vid === 0 ? { kind: 'idleAt', at: v.tavern.door, talk: true } : { kind: 'idleAt', at: this.home.door };
     if (h > 18.5) return { kind: 'idleAt', at: v.spots.plaza, talk: true, spread: 9 };
     if (this.child) return { kind: 'play' };
+    if (this.role === 'traveler') return { kind: 'travel' };
     if (this.workAt) return { kind: 'work', at: this.workAt, anim: this.workAnim };
     return { kind: 'idleAt', at: v.spots.plaza, talk: true, spread: 12 };
   }
@@ -213,7 +214,15 @@ class Villager {
     const key = r.kind + (r.at ? r.at.x.toFixed(0) : '');
     if (key !== this.planKey || (this.state === 'idle' && this.stateT > 4)) {
       this.planKey = key;
-      if (r.kind === 'home') {
+      if (r.kind === 'travel') {
+        const rt = this.sys.roads && this.sys.roads.randomRoute();
+        if (rt) {
+          const fwd = this.pos.distanceTo(rt.pts[0]) < this.pos.distanceTo(rt.pts[rt.pts.length - 1]);
+          const pts = (fwd ? rt.pts : [...rt.pts].reverse()).map((p) => p.clone().add(new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1))));
+          this.path = [pts[0], ...pts.filter((_, i) => i % 3 === 0), pts[pts.length - 1]];
+          this.running = false; this.onArrive = () => { this.setState('talk'); this.planKey = null; }; this.state = 'walk'; this.stateT = -600;
+        }
+      } else if (r.kind === 'home') {
         if (this.home.state === 'intact') this.goTo(this.home.door, false, () => { this.setState('hidden'); this.model.visible = false; });
         else this.goTo(v.spots.plaza, false, () => this.setState('sleepOut'));
       } else if (r.kind === 'play') {
@@ -500,6 +509,20 @@ export class People {
       }
     }
     if (this.birthT <= 0) this.birthT = rand(90, 160);
+  }
+
+  // voyageurs et marchands ambulants sur les routes
+  addTravelers(roads, n) {
+    this.roads = roads;
+    for (let i = 0; i < n && roads.routes.length; i++) {
+      const rt = roads.routes[i % roads.routes.length];
+      const v = rt.from;
+      const home = v.buildings.find((b) => b.type === 'house') || v.buildings[0];
+      const p = this.spawn(v, home, 'traveler');
+      const k = Math.floor(Math.random() * rt.pts.length);
+      p.pos.copy(rt.pts[k]); p.pos.y = G.terrain.heightAt(p.pos.x, p.pos.z);
+      p.workAt = null;
+    }
   }
 
   countIn(vid) { return this.list.filter((p) => p.vid === vid && p.alive).length; }
