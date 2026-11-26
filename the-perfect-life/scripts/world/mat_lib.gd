@@ -46,6 +46,27 @@ static func paint(color: Color, normal_tex := "white_plaster_02", size_m := 1.5)
 	_cache[key] = m
 	return m
 
+## Textile uni : couleur choisie + trame (normale d'un tissu scanné), éclairage doux.
+static func fabric(color: Color, normal_tex := "fabric_pattern_07", size_m := 0.25) -> ORMMaterial3D:
+	var key := "fabric|%s|%s|%s" % [color, normal_tex, size_m]
+	if _cache.has(key):
+		return _cache[key]
+	var m := ORMMaterial3D.new()
+	m.albedo_color = color
+	m.roughness = 0.95
+	m.normal_enabled = true
+	m.normal_texture = load(TEX % [normal_tex, normal_tex, "nor"])
+	m.normal_scale = 0.7
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / size_m
+	m.rim_enabled = true
+	m.rim = 0.25
+	m.rim_tint = 0.6
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_cache[key] = m
+	return m
+
 ## Matériau uni réaliste (peinture, métal, plastique…), sans texture.
 static func flat(color: Color, roughness := 0.5, metallic := 0.0, clearcoat := 0.0) -> StandardMaterial3D:
 	var key := "flat|%s|%s|%s|%s" % [color, roughness, metallic, clearcoat]

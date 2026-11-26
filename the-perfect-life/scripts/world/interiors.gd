@@ -31,7 +31,7 @@ func build_all() -> void:
 # ------------------------------------------------------------------ salon
 
 func living() -> void:
-	var rug := Geo.box(h, Vector3(3.6, 0.012, 2.8), Vector3(12.3, 0.046, 6.9), MatLib.pbr("fabric_pattern_07", 1.4, Color(0.92, 0.9, 0.86), 1.0, 0.6), 0.004)
+	var rug := Geo.box(h, Vector3(3.6, 0.012, 2.8), Vector3(12.3, 0.046, 6.9), MatLib.fabric(Color(0.8, 0.76, 0.7), "quatrefoil_jacquard_fabric", 0.6), 0.004)
 	Geo.prop(h, "sofa_02", Vector3(10.15, 0.04, 6.9), 90)
 	Geo.prop(h, "throw_pillows_01", Vector3(10.2, 0.47, 6.2), 90)
 	Geo.prop(h, "modern_coffee_table_01", Vector3(12.2, 0.05, 6.9), 90)
@@ -48,6 +48,9 @@ func living() -> void:
 	Geo.prop(h, "gaming_console", Vector3(15.5, 0.62, 6.1), -90)
 	# cadres entre les fenêtres de façade
 	Geo.prop(h, "hanging_picture_frame_02", Vector3(12.3, 1.2, 11.82), 180)
+	for wx in [10.6, 14.0]:
+		curtains(Vector3(wx, 2.6, 11.83), 2.3, 2.55, 0.0)
+	curtains(Vector3(15.83, 2.6, 9.0), 2.0, 2.55, 90.0)
 	# lampadaire d'angle
 	_floor_lamp(Vector3(8.6, 0.04, 6.0))
 
@@ -100,6 +103,41 @@ func _floor_lamp(pos: Vector3) -> void:
 	l.shadow_enabled = true
 	l.position = Vector3(0, 1.5, 0)
 	root.add_child(l)
+
+## Paire de rideaux plissés (voilages lin) + tringle, de part et d'autre d'une fenêtre.
+## pos : centre haut de la fenêtre, côté intérieur du mur ; rot_deg : orientation du mur.
+func curtains(pos: Vector3, win_w: float, height: float, rot_deg: float) -> void:
+	var root := Node3D.new()
+	h.add_child(root)
+	root.position = pos
+	root.rotation_degrees.y = rot_deg
+	var mat := MatLib.fabric(Color(0.93, 0.9, 0.84), "fabric_pattern_07", 0.15)
+	var rod := Geo.cylinder(root, 0.012, win_w + 0.8, Vector3(0, 0.05, -0.12), m_brass, 12)
+	rod.rotation.z = PI * 0.5
+	for sx in [-1, 1]:
+		var panel_w := 0.55
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var cols := 28
+		var rows := 10
+		for c in cols:
+			for r in rows:
+				var pts := []
+				for d in [[0, 0], [1, 0], [1, 1], [0, 1]]:
+					var u := float(c + d[0]) / cols
+					var v := float(r + d[1]) / rows
+					var x := u * panel_w
+					var z := sin(u * PI * 14.0) * 0.035 * (0.7 + 0.3 * v)
+					pts.append(Vector3(x, -v * height, z))
+				for i in [0, 1, 2, 0, 2, 3]:
+					st.add_vertex(pts[i])
+		st.generate_normals()
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = mat
+		var cx := win_w * 0.5 + 0.05
+		mi.position = Vector3(cx - panel_w * 0.3 if sx > 0 else -cx - panel_w * 0.7, 0.03, -0.12)
+		root.add_child(mi)
 
 # ------------------------------------------------------------------ salle à manger
 
@@ -311,7 +349,7 @@ func _pendant(pos: Vector3) -> void:
 
 func bedroom() -> void:
 	var y := F2 + 0.03
-	var rug := Geo.box(h, Vector3(3.0, 0.012, 3.6), Vector3(12.0, y + 0.006, 7.6), MatLib.pbr("fabric_pattern_07", 1.2, Color(0.95, 0.93, 0.9), 1.0, 0.5), 0.004)
+	var rug := Geo.box(h, Vector3(3.0, 0.012, 3.6), Vector3(12.0, y + 0.006, 7.6), MatLib.fabric(Color(0.82, 0.78, 0.72), "quatrefoil_jacquard_fabric", 0.5), 0.004)
 	_bed(Vector3(12.0, y, 5.12))
 	for sx in [-1, 1]:
 		var ns := Geo.prop(h, "ClassicNightstand_01", Vector3(12.0 + sx * 1.35, y, 5.4), 0)
@@ -323,7 +361,13 @@ func bedroom() -> void:
 	Geo.prop(h, "potted_plant_02", Vector3(15.35, y, 7.8), 0)
 	Geo.prop(h, "standing_picture_frame_01", Vector3(10.65, y + 0.62, 5.45), 15)
 	Geo.prop(h, "mid_century_lounge_chair", Vector3(14.6, y, 10.6), -135)
-	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 0)
+	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 180)
+	Geo.prop(h, "drawer_cabinet", Vector3(15.62, y, 9.2), -90)
+	Geo.prop(h, "ceramic_vase_03", Vector3(15.6, y + 0.82, 8.95), 0)
+	Geo.prop(h, "book_encyclopedia_set_01", Vector3(15.6, y + 0.82, 9.5), -90)
+	for wx in [10.6, 14.0]:
+		curtains(Vector3(wx, y + 2.55, 11.83), 1.6, 2.5, 0.0)
+	curtains(Vector3(15.83, y + 2.55, 9.0), 1.6, 2.5, 90.0)
 	var cl := Geo.prop(h, "modern_ceiling_lamp_01", Vector3(12.0, HouseBuilder.TOP - 0.45, 8.3), 0)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.85, 0.65); l.light_energy = 0.9; l.omni_range = 6.0
@@ -336,9 +380,9 @@ func _bed(head_pos: Vector3) -> void:
 	h.add_child(root)
 	root.position = head_pos
 	var wood := MatLib.pbr("dark_wood", 1.0, Color(0.85, 0.8, 0.75), 0.8)
-	var linen := MatLib.pbr("fabric_pattern_07", 0.5, Color(0.98, 0.97, 0.95), 1.0, 0.35)
-	var duvet := MatLib.pbr("quatrefoil_jacquard_fabric", 0.6, Color(0.86, 0.88, 0.9), 1.0, 0.5)
-	var head := MatLib.pbr("fabric_pattern_07", 0.4, Color(0.55, 0.6, 0.66), 1.0, 0.8)
+	var linen := MatLib.fabric(Color(0.95, 0.94, 0.92), "fabric_pattern_07", 0.18)
+	var duvet := MatLib.fabric(Color(0.92, 0.92, 0.9), "quatrefoil_jacquard_fabric", 0.35)
+	var head := MatLib.fabric(Color(0.42, 0.48, 0.55), "fabric_pattern_07", 0.2)
 	var L := 2.15
 	var Wd := 1.9
 	# tête de lit capitonnée
@@ -361,10 +405,10 @@ func _bed(head_pos: Vector3) -> void:
 		var p := Geo.box(root, Vector3(0.72, 0.16, 0.46), Vector3(sx, 0.66, 0.42), linen, 0.07)
 		p.rotation.x = deg_to_rad(-18)
 	for sx in [-0.42, 0.42]:
-		var p2 := Geo.box(root, Vector3(0.6, 0.14, 0.4), Vector3(sx, 0.7, 0.62), MatLib.pbr("quatrefoil_jacquard_fabric", 0.3, Color(0.62, 0.66, 0.72), 1.0, 0.6), 0.06)
+		var p2 := Geo.box(root, Vector3(0.6, 0.14, 0.4), Vector3(sx, 0.7, 0.62), MatLib.fabric(Color(0.55, 0.62, 0.7), "quatrefoil_jacquard_fabric", 0.2), 0.06)
 		p2.rotation.x = deg_to_rad(-25)
 	# plaid au pied du lit
-	Geo.box(root, Vector3(Wd + 0.1, 0.05, 0.5), Vector3(0, 0.67, 0.1 + L * 0.86), MatLib.pbr("fabric_pattern_07", 0.3, Color(0.75, 0.6, 0.48), 1.0, 0.9), 0.025)
+	Geo.box(root, Vector3(Wd + 0.1, 0.05, 0.5), Vector3(0, 0.67, 0.1 + L * 0.86), MatLib.fabric(Color(0.78, 0.66, 0.52), "fabric_pattern_07", 0.12), 0.025)
 	# banc de pied de lit
 	Geo.box(root, Vector3(1.4, 0.12, 0.42), Vector3(0, 0.46, L + 0.55), head, 0.04)
 	for sx in [-0.62, 0.62]:
