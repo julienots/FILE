@@ -15,9 +15,9 @@ const gltf = await new GLTFLoader().loadAsync(`../.cache/polyhaven/models/${name
 const root = gltf.scene;
 if (P.get('patch')) { // touffe dense : on regroupe les brins du scan au lieu de les aligner
   let k = 0; const keep = [];
-  root.traverse((o) => { if (o.isMesh && /tall|mid|large/.test(o.name)) keep.push(o); });
+  const re = new RegExp(P.get('match') || 'tall|mid|large'); root.traverse((o) => { if (o.isMesh && re.test(o.name + ' ' + (o.parent ? o.parent.name : ''))) keep.push(o); });
   const drop = []; root.traverse((o) => { if (o.isMesh && !keep.includes(o)) drop.push(o); }); drop.forEach((o) => o.parent.remove(o));
-  for (const o of keep) { const a = k * 2.4, r = 0.05 + (k % 3) * 0.07; o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.rotation.y = k * 1.7; k++; }
+  const spr = +(P.get('spread') || 1); for (const o of keep) { const a = k * 2.4, r = (0.05 + (k % 3) * 0.07) * spr; o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.rotation.y = k * 1.7; k++; }
   root.updateMatrixWorld(true);
 }
 const box = new THREE.Box3().setFromObject(root);

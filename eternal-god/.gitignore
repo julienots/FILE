@@ -4,3 +4,5 @@ local.properties
 .idea/
 *.iml
 tools/.cache/
+keystore/keystore.properties
+keystore/

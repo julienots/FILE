@@ -2,14 +2,24 @@
 // affichée en panneaux orientés vers la caméra, avec fondu entre les vues voisines, éclairage dynamique
 // par normales cuites, translucidité du feuillage, ombres portées et état calciné.
 import * as THREE from 'three';
-import { G } from './core.js';
+import { G, Q } from './core.js';
 
 const loader = new THREE.TextureLoader();
 
 export async function loadImpostor(name) {
   const meta = await (await fetch(`img/veg/${name}.json`)).json();
-  const alb = await loader.loadAsync(`img/veg/${name}_albedo.webp`);
-  const nor = await loader.loadAsync(`img/veg/${name}_normal.webp`);
+  const load = async (url) => {
+    const t = await loader.loadAsync(url);
+    const k = Q().atlas || 1;
+    if (k < 1 && t.image) { // mémoire graphique réduite sur les appareils modestes
+      const c = document.createElement('canvas'); c.width = Math.round(t.image.width * k); c.height = Math.round(t.image.height * k);
+      c.getContext('2d').drawImage(t.image, 0, 0, c.width, c.height);
+      t.dispose(); return new THREE.CanvasTexture(c);
+    }
+    return t;
+  };
+  const alb = await load(`img/veg/${name}_albedo.webp`);
+  const nor = await load(`img/veg/${name}_normal.webp`);
   alb.colorSpace = THREE.SRGBColorSpace;
   for (const t of [alb, nor]) { t.anisotropy = 4; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; }
   return { meta, alb, nor };

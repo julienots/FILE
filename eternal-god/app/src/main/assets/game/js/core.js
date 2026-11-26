@@ -22,9 +22,9 @@ export const G = {
 
 // ---------- Réglages graphiques ----------
 export const QUALITY = {
-  low:    { label: 'Bas',    pixelRatio: 0.75, shadows: 0,    bloom: false, grass: 0,    trees: 0.55, far: 1100, particles: 0.5 },
-  medium: { label: 'Moyen',  pixelRatio: 1.0,  shadows: 1024, bloom: false, grass: 5000, trees: 0.8,  far: 1500, particles: 0.8 },
-  high:   { label: 'Élevé',  pixelRatio: 1.35, shadows: 2048, bloom: true,  grass: 9000, trees: 1.0,  far: 2000, particles: 1.0 },
+  low:    { label: 'Bas',    pixelRatio: 0.7,  shadows: 0,    bloom: false, grass: 2600, trees: 0.55, far: 1000, particles: 0.5, tex: 512,  atlas: 0.5 },
+  medium: { label: 'Moyen',  pixelRatio: 0.9,  shadows: 1024, bloom: false, grass: 5500, trees: 0.8,  far: 1400, particles: 0.8, tex: 1024, atlas: 0.5 },
+  high:   { label: 'Élevé',  pixelRatio: 1.25, shadows: 2048, bloom: true,  grass: 9000, trees: 1.0,  far: 1900, particles: 1.0, tex: 1024, atlas: 1 },
 };
 
 const DEFAULTS = {

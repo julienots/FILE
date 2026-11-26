@@ -19,7 +19,13 @@ export async function loadVegetationAssets(onEach) {
   for (const s of SPECIES) { A[s.name] = await loadImpostor(s.name); if (onEach) onEach(); }
   A.shrub = await loadImpostor('shrub_02'); if (onEach) onEach();
   A.grass = await loadImpostor('grass_medium_01'); if (onEach) onEach();
+  for (const n of ['dandelion_01', 'celandine_01', 'flower_ursinia', 'flower_heliophila', 'periwinkle_plant', 'fern_02', 'nettle_plant', 'weed_plant_02']) {
+    if (Q().grass) A[n] = await loadImpostor(n);
+    if (onEach) onEach();
+  }
   A.rocks = await new GLTFLoader().loadAsync('models/rock_moss_set_01.glb'); if (onEach) onEach();
+  A.stump = await new GLTFLoader().loadAsync('models/props/tree_stump_01.glb');
+  A.log = await new GLTFLoader().loadAsync('models/props/dead_tree_trunk.glb'); if (onEach) onEach();
   return A;
 }
 
@@ -102,14 +108,54 @@ export class Vegetation {
       this.scene.add(m);
       return m;
     });
+    // souches et troncs morts dans les sous-bois
+    const scatter = (gltf, n, scaleMin, scaleMax, test) => {
+      const parts = []; gltf.scene.updateMatrixWorld(true);
+      gltf.scene.traverse((o) => { if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); parts.push([g, o.material]); } });
+      const list = [];
+      for (let i = 0; i < n * 8 && list.length < n; i++) {
+        const x = (rnd() - 0.5) * (WORLD.size - 100), z = (rnd() - 0.5) * (WORLD.size - 100), h = T.heightAt(x, z);
+        if (h < WORLD.water + 1.5 || T.normalAt(x, z).y < 0.85 || skip(x, z, 3) || !test(x, z)) continue;
+        list.push([x, h, z, scaleMin + rnd() * (scaleMax - scaleMin), rnd() * 6.28]);
+      }
+      for (const [g, m] of parts) {
+        const im = new THREE.InstancedMesh(g, m, Math.max(1, list.length)), M = new THREE.Matrix4(), q = new THREE.Quaternion();
+        list.forEach(([x, y, z, s, r], i) => { q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r); M.compose(new THREE.Vector3(x, y - 0.1, z), q, new THREE.Vector3(s, s, s)); im.setMatrixAt(i, M); });
+        im.count = list.length; im.castShadow = true; im.receiveShadow = true; this.scene.add(im);
+      }
+    };
+    const inForest = (x, z) => T.forestMask ? T.forestMask[T.idx(x, z)] > 120 : x < -150;
+    scatter(this.A.stump, Math.round(180 * density), 0.8, 1.6, inForest);
+    scatter(this.A.log, Math.round(110 * density), 0.9, 1.5, inForest);
     this.updateTrees();
-    if (Q().grass) this.buildGrass(Q().grass);
+    if (Q().grass) this.buildGround(Q().grass);
   }
 
-  // ---------- Herbe : cartes croisées texturées (scan), recyclées autour de la caméra ----------
-  buildGrass(count) {
-    const meta = this.A.grass.meta;
-    const W = 1.4, Hh = 0.78;
+  // ---------- Sol vivant : herbe, fleurs des prés, fougères, orties (scans), autour de la caméra ----------
+  buildGround(N) {
+    this.groundCenter = { value: new THREE.Vector2() };
+    this.groundMats = [];
+    const A = this.A;
+    // masque : [herbe, sous-bois, taches de fleurs, hors forêt]
+    const L = [
+      { imp: A.grass, n: N, h: 0.78, mask: [1, 0, 0, 0], tint: [1.56, 2.0, 1.22], R: N > 6000 ? 48 : 38 },
+      { imp: A.dandelion_01, n: N * 0.12, h: 0.32, mask: [0, 0, 1, 0.3], tint: [1.5, 1.5, 1.3] },
+      { imp: A.celandine_01, n: N * 0.1, h: 0.28, mask: [0, 0.4, 0.8, 0], tint: [1.5, 1.5, 1.3] },
+      { imp: A.flower_ursinia, n: N * 0.08, h: 0.34, mask: [0, 0, 1, 0], tint: [1.5, 1.45, 1.3] },
+      { imp: A.flower_heliophila, n: N * 0.06, h: 0.55, mask: [0, 0, 0.9, 0], tint: [1.5, 1.5, 1.4] },
+      { imp: A.periwinkle_plant, n: N * 0.05, h: 0.65, mask: [0, 0, 0.8, 0], tint: [1.5, 1.45, 1.4] },
+      { imp: A.fern_02, n: N * 0.28, h: 0.95, mask: [0, 1.3, 0, -0.2], tint: [1.1, 1.25, 0.9] },
+      { imp: A.nettle_plant, n: N * 0.06, h: 0.95, mask: [0.15, 0.35, 0, 0], tint: [1.4, 1.5, 1.2] },
+      { imp: A.weed_plant_02, n: N * 0.1, h: 0.4, mask: [0.35, 0, 0, 0], tint: [1.4, 1.5, 1.2] },
+    ];
+    for (const l of L) if (l.imp && l.n >= 50) this.addGroundLayer(l);
+  }
+
+  addGroundLayer({ imp, n, h, mask, tint, R = 38 }) {
+    const meta = imp.meta, count = Math.round(n);
+    // cadrage : la plante occupe [0, hauteur] dans un cadre centré sur meta.center[1] ± rayon
+    const y0 = meta.center[1] - meta.radius, v0 = clamp((0 - y0) / (2 * meta.radius), 0, 1), v1 = clamp((meta.height - y0) / (2 * meta.radius), 0, 1);
+    const Hh = h, W = h * (2 * meta.radius) / meta.height * 0.98;
     const pos = [], uv = [], nor = [];
     for (let q = 0; q < 2; q++) {
       const a = q * Math.PI / 2, cx = Math.cos(a) * W / 2, cz = Math.sin(a) * W / 2;
@@ -120,26 +166,27 @@ export class Vegetation {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-    const R = Q().grass > 6000 ? 48 : 38, off = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) { off[i * 4] = Math.random() * R * 2; off[i * 4 + 1] = Math.random() * R * 2; off[i * 4 + 2] = 0.6 + Math.random() * 0.9; off[i * 4 + 3] = Math.random(); }
+    const off = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) { off[i * 4] = Math.random() * R * 2; off[i * 4 + 1] = Math.random() * R * 2; off[i * 4 + 2] = 0.65 + Math.random() * 0.8; off[i * 4 + 3] = Math.random(); }
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
     geo.instanceCount = count;
-    this.grassCenter = { value: new THREE.Vector2() };
     const mat = new THREE.ShaderMaterial({
       side: THREE.DoubleSide, fog: true,
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-        tMap: { value: this.A.grass.alb }, uHeight: { value: G.terrain.dataTex }, uR: { value: R }, uHalf: { value: WORLD.half },
+        tMap: { value: imp.alb }, uHeight: { value: G.terrain.dataTex }, uR: { value: R }, uHalf: { value: WORLD.half },
+        uMask: { value: new THREE.Vector4(...mask) }, uTint: { value: new THREE.Vector3(...tint) },
         uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSky: { value: new THREE.Color(0.5, 0.6, 0.7) },
       }]),
       vertexShader: `
         #include <fog_pars_vertex>
-        attribute vec4 aOff; uniform float uTime, uR, uHalf; uniform vec4 uGust; uniform vec4 uPress; uniform vec2 uCenter; uniform sampler2D uHeight;
+        attribute vec4 aOff; uniform float uTime, uR, uHalf; uniform vec4 uGust; uniform vec4 uPress; uniform vec4 uMask; uniform vec2 uCenter; uniform sampler2D uHeight;
         varying vec2 vUv; varying float vH;
         void main(){
-          vUv = (vec2(floor(aOff.w * ${meta.az.toFixed(1)}), 0.0) + vec2(mix(0.02, 0.98, uv.x), mix(0.25, 0.78, uv.y))) / vec2(${meta.az.toFixed(1)}, ${meta.el.length.toFixed(1)});
+          vUv = (vec2(floor(aOff.w * ${meta.az.toFixed(1)}), 0.0) + vec2(mix(0.02, 0.98, uv.x), mix(${v0.toFixed(3)}, ${v1.toFixed(3)}, uv.y))) / vec2(${meta.az.toFixed(1)}, ${meta.el.length.toFixed(1)});
           vec2 wp = uCenter + mod(aOff.xy - uCenter + uR, 2.0 * uR) - uR;
           vec4 tex = texture2D(uHeight, (wp + uHalf) / (uHalf * 2.0));
-          float ok = step(fract(aOff.z * 7.31), tex.g);
+          float dens = tex.g * clamp(uMask.x + uMask.y * tex.b + uMask.z * tex.a + uMask.w * (1.0 - tex.b), 0.0, 1.0);
+          float ok = step(fract(aOff.z * 7.31 + aOff.w * 3.7), dens);
           float d = length(wp - uCenter); float fade = 1.0 - smoothstep(uR * 0.65, uR, d);
           float ang = aOff.w * 6.2831;
           vec3 p = position; p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz;
@@ -160,23 +207,22 @@ export class Vegetation {
       fragmentShader: `
         #include <common>
         #include <fog_pars_fragment>
-        uniform sampler2D tMap; uniform vec3 uSunDir, uSunCol, uSky; varying vec2 vUv; varying float vH;
+        uniform sampler2D tMap; uniform vec3 uSunDir, uSunCol, uSky, uTint; varying vec2 vUv; varying float vH;
         void main(){
           vec4 c = texture2D(tMap, vUv); if (c.a < 0.45) discard;
           float light = 0.55 + 0.45 * vH;
-          vec3 col = c.rgb * vec3(0.92, 1.18, 0.72) * 1.7 * (uSunCol * (0.55 * max(uSunDir.y, 0.0) + 0.25) * light + uSky);
+          vec3 col = c.rgb * uTint * (uSunCol * (0.55 * max(uSunDir.y, 0.0) + 0.25) * light + uSky);
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
         }`,
     });
-    mat.uniforms.uTime = G.uniforms.time; mat.uniforms.uGust = G.uniforms.gust; mat.uniforms.uPress = G.uniforms.press; mat.uniforms.uCenter = this.grassCenter;
-    this.grassMat = mat;
-    this.grass = new THREE.Mesh(geo, mat);
-    this.grass.frustumCulled = false;
-    this.grass.receiveShadow = false;
-    this.scene.add(this.grass);
+    mat.uniforms.uTime = G.uniforms.time; mat.uniforms.uGust = G.uniforms.gust; mat.uniforms.uPress = G.uniforms.press; mat.uniforms.uCenter = this.groundCenter;
+    this.groundMats.push(mat);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
   }
 
   updateTrees() {
@@ -233,13 +279,13 @@ export class Vegetation {
 
   update(dt) {
     if (this.dirty) { this.updateTrees(); this.dirty = false; }
-    if (this.grassCenter && G.camera) this.grassCenter.value.set(G.camera.position.x, G.camera.position.z);
+    if (this.groundCenter && G.camera) this.groundCenter.value.set(G.camera.position.x, G.camera.position.z);
     if (G.env && G.env.sun) {
       const env = G.env, sunCol = env.sun.color.clone().multiplyScalar(env.sun.intensity);
       const sky = env.fogColor.clone().multiplyScalar(0.55 * (0.4 + env.dayF * 0.6) * (G.scene.environmentIntensity || 1));
       const ground = new THREE.Color(0.16, 0.14, 0.1).multiplyScalar(0.3 + env.dayF * 0.7);
       for (const f of [...this.fields, this.shrubField, ...(this.extraFields || [])]) f.light(env.sunDir.y > -0.04 ? env.sunDir : env.sky.moonDir, sunCol, sky, ground);
-      if (this.grassMat) { const u = this.grassMat.uniforms; u.uSunDir.value.copy(env.sunDir); u.uSunCol.value.copy(sunCol); u.uSky.value.copy(sky); }
+      for (const m of this.groundMats || []) { const u = m.uniforms; u.uSunDir.value.copy(env.sunDir); u.uSunCol.value.copy(sunCol); u.uSky.value.copy(sky); }
     }
     const T = G.terrain, q = new THREE.Quaternion();
     for (let i = this.falling.length - 1; i >= 0; i--) {

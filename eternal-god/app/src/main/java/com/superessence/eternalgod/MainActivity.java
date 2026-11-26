@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        s.setOffscreenPreRaster(false);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setUseWideViewPort(true);
@@ -111,6 +112,11 @@ public class MainActivity extends Activity {
         if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
         if (p.endsWith(".ttf")) return "font/ttf";
         if (p.endsWith(".svg")) return "image/svg+xml";
+        if (p.endsWith(".webp")) return "image/webp";
+        if (p.endsWith(".glb")) return "model/gltf-binary";
+        if (p.endsWith(".gltf")) return "model/gltf+json";
+        if (p.endsWith(".hdr") || p.endsWith(".bin")) return "application/octet-stream";
+        if (p.endsWith(".txt")) return "text/plain";
         return "application/octet-stream";
     }
 
@@ -206,6 +212,10 @@ public class MainActivity extends Activity {
                         os.write(bytes);
                     }
                 } else {
+                    if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        runOnUiThread(() -> requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 7));
+                        return "permission";
+                    }
                     File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "EternalGod");
                     if (!dir.exists() && !dir.mkdirs()) return "error";
                     File f = new File(dir, name);

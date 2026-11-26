@@ -36,7 +36,15 @@ def superessence(src):
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
     pad_x, pad_y = 60, 50
     box = (max(0, x0 - pad_x), max(0, y0 - pad_y), min(w, x1 + pad_x), min(h, y1 + pad_y))
-    crop = im.crop(box)
+    crop = im.crop(box).convert("RGBA")
+    # le fond quasi noir de l'image devient transparent (pas de rectangle visible)
+    px2 = crop.load()
+    for y in range(crop.size[1]):
+        for x in range(crop.size[0]):
+            r, g, b, _ = px2[x, y]
+            m = max(r, g, b)
+            a = 0 if m < 28 else (255 if m > 60 else int((m - 28) / 32 * 255))
+            px2[x, y] = (r, g, b, a)
     crop.save(os.path.join(GAME, "img/superessence.png"), optimize=True)
     print("superessence crop", box, crop.size)
 

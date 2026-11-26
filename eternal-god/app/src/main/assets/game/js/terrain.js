@@ -261,6 +261,10 @@ export class Terrain {
       for (let cx = Math.max(0, x0); cx <= Math.min(C - 1, x1); cx++) this.dirty.add(cz * C + cx);
     this.texDirty = true;
     this.version++;
+    const bi0 = Math.max(0, Math.floor((x - rad - RES + HALF) / RES)), bi1 = Math.min(N - 1, Math.ceil((x + rad + RES + HALF) / RES));
+    const bj0 = Math.max(0, Math.floor((z - rad - RES + HALF) / RES)), bj1 = Math.min(N - 1, Math.ceil((z + rad + RES + HALF) / RES));
+    const b = this.texBox;
+    this.texBox = b ? [Math.min(b[0], bi0), Math.max(b[1], bi1), Math.min(b[2], bj0), Math.max(b[3], bj1)] : [bi0, bi1, bj0, bj1];
   }
 
   // Cratère : creuse, forme un bourrelet, brûle et chauffe le sol.
@@ -353,9 +357,22 @@ export class Terrain {
     this.dataTex.wrapS = this.dataTex.wrapT = THREE.ClampToEdgeWrapping;
     this.fillDataTexture();
   }
-  fillDataTexture() {
-    const toH = THREE.DataUtils.toHalfFloat, d = this.texData;
+  // masques statiques : sous-bois (fougères) et taches de fleurs des prés
+  buildMasks() {
+    this.forestMask = new Uint8Array(N * N); this.flowerMask = new Uint8Array(N * N);
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = -HALF + i * RES, z = -HALF + j * RES, k = j * N + i;
+      const f = smooth(-120, -250, x) * (1 - smooth(-300, -470, z)) + smooth(0.3, 0.65, noise.fbm(x * 0.006 + 20, z * 0.006, 2)) * 0.5;
+      this.forestMask[k] = clamp(f, 0, 1) * 255;
+      this.flowerMask[k] = smooth(0.15, 0.55, noise.fbm(x * 0.012 - 40, z * 0.012 + 13, 3)) * 255;
+    }
+  }
+
+  fillDataTexture(box = null) {
+    const toH = THREE.DataUtils.toHalfFloat, d = this.texData;
+    if (!this.forestMask) this.buildMasks();
+    const [i0, i1, j0, j1] = box || [0, N - 1, 0, N - 1];
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const k = j * N + i, y = this.h[k];
       const x = -HALF + i * RES, z = -HALF + j * RES;
       let dens = 1;
@@ -366,7 +383,7 @@ export class Terrain {
       if (this.paint[k]) dens = 0;
       const V = REGIONS.volcano;
       dens *= smooth(170, 240, Math.hypot(x - V.x, z - V.z));
-      d[k * 4] = toH(y); d[k * 4 + 1] = toH(dens); d[k * 4 + 2] = 0; d[k * 4 + 3] = toH(1);
+      d[k * 4] = toH(y); d[k * 4 + 1] = toH(dens); d[k * 4 + 2] = toH(this.forestMask[k] / 255); d[k * 4 + 3] = toH(this.flowerMask[k] / 255);
     }
     this.dataTex.needsUpdate = true;
   }
@@ -380,7 +397,7 @@ export class Terrain {
       if (--budget <= 0) break;
     }
     this.texTimer -= dt;
-    if (this.texDirty && this.texTimer <= 0) { this.fillDataTexture(); this.texDirty = false; this.texTimer = 0.6; }
+    if (this.texDirty && this.texTimer <= 0) { this.fillDataTexture(this.texBox); this.texBox = null; this.texDirty = false; this.texTimer = 0.6; }
     // la lave refroidit lentement
     this.heatTimer -= dt;
     if (this.heatTimer <= 0 && this.hotChunks.size) {

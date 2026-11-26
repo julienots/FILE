@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Eternal God</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{"imports":{"three":"./lib/three.module.min.js","three/addons/":"./lib/addons/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="lookzone"></div>
+<div id="hud" class="hidden"></div>
+
+<!-- Écran de chargement : SuperEssence Studio, puis le logo du jeu -->
+<div id="boot">
+  <div id="studio">
+    <img id="studioLogo" src="img/superessence.png" alt="SuperEssence">
+    <div id="studioSub">STUDIO</div>
+    <div id="bar"><div id="barFill"></div></div>
+    <div id="loadText">Chargement…</div>
+  </div>
+  <div id="title" class="hidden">
+    <img id="gameLogo" src="img/logo.png" alt="Eternal God">
+    <div id="tap">Toucher pour commencer</div>
+    <div id="credit">Une production SuperEssence Studio</div>
+  </div>
+</div>
+<div id="fatal" class="hidden"><h2>Un problème est survenu</h2><p id="fatalMsg"></p><button onclick="location.reload()">Relancer</button></div>
+
+<script>
+// Garde-fous : WebGL2 requis, et toute erreur est affichée au lieu d'un écran figé.
+window.__fatal = function (msg) {
+  var f = document.getElementById('fatal'); document.getElementById('fatalMsg').textContent = msg; f.classList.remove('hidden');
+};
+(function () {
+  var ok = false; try { ok = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+  if (!ok) window.__fatal("Votre appareil ne prend pas en charge WebGL 2, nécessaire pour afficher le monde en 3D. Mettez à jour Android System WebView depuis le Play Store puis relancez.");
+  window.addEventListener('error', function (e) { if (!window.__started) window.__fatal((e.message || 'Erreur') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); else console.error(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { if (!window.__started) window.__fatal(String(e.reason && e.reason.message || e.reason)); });
+})();
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
