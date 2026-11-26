@@ -32,6 +32,7 @@ const DEFAULTS = {
   sensitivity: 1.0,
   invertY: false,
   volume: 0.8,
+  music: 0.6,         // volume de la musique
   dayLength: 14,       // minutes réelles pour une journée
   haptics: true,
   showFps: false,

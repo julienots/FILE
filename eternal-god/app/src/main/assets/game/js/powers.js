@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { G, clamp, lerp, rand, emit, canvasTexture } from './core.js';
 import { ULTIMATES } from './ultimates.js';
 
+const damp1 = (a, b) => a + (b - a) * 0.6;
+
 export const POWERS = [
   { id: 'explosion', name: 'Explosion céleste', icon: '✺', cd: 6, desc: 'Une sphère de lumière jaillit du dieu et souffle tout alentour.' },
   { id: 'laser', name: 'Rayon divin', icon: '⟋', cd: 3, desc: 'Maintenir : un rayon qui fend la terre, les maisons et les montagnes.' },
@@ -43,12 +45,13 @@ export class Powers {
   }
 
   ready(id) { return this.cool[id] <= 0; }
-  cdFrac(id) { const p = POWERS.find((x) => x.id === id); return p ? clamp(this.cool[id] / p.cd, 0, 1) : clamp(this.cool[id] / 0.45, 0, 1); }
+  cdFrac() { return 0; } // aucun temps de recharge : un dieu ne se repose pas
 
   // ---------- dégâts de zone communs ----------
   areaDamage(p, r, power, type = 'blast', src = 'power') {
     const from = p.clone();
     let hits = 0;
+    if (!src.startsWith('monster') && !src.startsWith('dragon') && G.god) { power *= G.god.power; r *= Math.sqrt(G.god.power) * 0.8 + 0.2; } // aura : tout est démultiplié
     if (G.villages) hits += G.villages.damageArea(p.x, p.z, r, power, from);
     if (G.veg) G.veg.damageArea(p.x, p.z, r, power * 0.6, type === 'burn' ? 'burn' : (power > 300 ? 'blast' : 'push'), from);
     if (G.people) {
@@ -57,9 +60,10 @@ export class Powers {
     }
     if (G.fauna && power > 60) G.fauna.hitArea(p.x, p.z, r * 0.7);
     if (G.physics) G.physics.blast(p.x, p.z, r * 1.2, Math.min(60, power * 0.05));
-    if (G.monster && G.monster.alive) {
-      const d = G.monster.center().distanceTo(p);
-      if (d < r + G.monster.radius) G.monster.damage(power * (1 - clamp(d / (r + G.monster.radius), 0, 0.8)), from);
+    for (const e of G.enemies || []) {
+      if (!e.alive || src.startsWith(e.tag)) continue; // un ennemi ne se blesse pas lui-même
+      const d = e.center().distanceTo(p);
+      if (d < r + e.radius) e.damage(power * (1 - clamp(d / (r + e.radius), 0, 0.8)), from);
     }
     this.memory(p, r, power, hits);
     return hits;
@@ -78,34 +82,78 @@ export class Powers {
 
   handPos() { const v = new THREE.Vector3(); G.god.B.handR.getWorldPosition(v); return v; }
 
-  // ---------- poing divin ----------
+  // ---------- poing divin : combos ----------
+  // jab, jab, crochet, uppercut (projection). Le dieu fonce sur l'ennemi le plus proche.
+  nearestEnemy(maxD = 70) {
+    const god = G.god; let best = null, bd = maxD;
+    for (const e of G.enemies || []) {
+      if (!e.alive) continue;
+      const d = e.center().distanceTo(god.pos) - e.radius;
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
   punch(charged = 0) {
     if (this.cool.punch > 0) return;
-    const god = G.god;
-    this.cool.punch = charged > 0.95 ? 1.5 : 0.45;
-    god.playAction('punch', 0.5);
+    const god = G.god, now = G.time;
+    this.cool.punch = 0.2;
+    this.combo = now - (this.lastPunch || -9) < 0.75 ? ((this.combo || 0) + 1) % 4 : 0;
+    this.lastPunch = now;
+    const step = charged > 0.95 ? 4 : this.combo;
+    const kinds = ['jabR', 'jabL', 'hook', 'uppercut', 'uppercut'];
+    god.playAction(kinds[step], step >= 3 ? 0.45 : 0.32);
+    const foe = this.nearestEnemy();
+    if (foe) {
+      const c = foe.center();
+      god.rushTo(c, foe.radius + 3);
+      const d = c.clone().sub(god.pos); god.heading = Math.atan2(d.x, d.z);
+      if (god.state === 'fly' || god.state === 'air') god.pos.y = damp1(god.pos.y, Math.max(c.y - 4, god.groundAt(god.pos.x, god.pos.z)));
+    } else if (god.state === 'ground') god.pos.addScaledVector(new THREE.Vector3(Math.sin(god.heading), 0, Math.cos(god.heading)), 2.5);
+    if (G.audio && G.audio.swing) G.audio.swing();
+    setTimeout(() => this.hit(step, foe), step >= 3 ? 150 : 110);
+  }
+
+  hit(step, foe) {
+    const god = G.god, P = god.power;
     const dir = new THREE.Vector3(Math.sin(god.heading), 0, Math.cos(god.heading));
-    // petit élan vers l'avant
-    if (god.state === 'ground') god.pos.addScaledVector(dir, 2.5);
-    setTimeout(() => {
-      const p = god.pos.clone().addScaledVector(dir, 5).setY(god.pos.y + 2.5);
-      const ground = G.terrain.heightAt(p.x, p.z);
-      if (charged > 0.95) {
-        // Coup absolu : rien ne lui résiste
-        if (G.monster && G.monster.alive && G.monster.center().distanceTo(p) < G.monster.radius + 25) G.monster.damage(1e6, p);
-        G.terrain.crater(p.x, p.z, 16, 6, { rim: 0.4, burn: 0.3 });
-        G.fx.sphere(p, 22, 0.6, 0xfff0c8); G.fx.ring(p.clone().setY(ground), 90, 1.2); G.fx.flash(p, 5000, 0.6, 0xfff0d0); G.fx.shake(0.9, p);
-        G.fx.rocks(p.clone().setY(ground), 30, 22); G.fx.dust(p.clone().setY(ground), 16, 30);
-        this.areaDamage(p, 40, 1400, 'blast', 'punch');
-        if (G.audio) G.audio.explosion(p, 1);
-        emit('journal', { icon: '✊', text: 'Le Coup absolu fend la terre.' });
+    const p = god.pos.clone().addScaledVector(dir, 5).setY(god.pos.y + 2.5);
+    const ground = G.terrain.heightAt(p.x, p.z);
+    const col = P > 1 ? 0xffe070 : 0xffe8b0;
+    // contact direct avec l'ennemi : dégâts massifs et projection au dernier coup
+    if (foe && foe.alive && foe.center().distanceTo(p) < foe.radius + 10) {
+      const dmg = [260, 260, 420, 900, 2600][step] * P;
+      foe.damage(dmg, god.pos);
+      const c = foe.center();
+      G.fx.sphere(c, 6 + step * 3, 0.3, col); G.fx.sparks(c, 30 + step * 15, [1, 0.8, 0.4], 26); G.fx.shake(0.25 + step * 0.15, c);
+      if (step >= 3) {
+        foe.launch && foe.launch(dir.clone().setY(step === 4 ? 0.3 : 0.6), (step === 4 ? 95 : 55) * Math.sqrt(P));
+        G.fx.ring(c, 60 * P, 0.8, col); G.fx.flash(c, 4000, 0.35, 0xffe0a0);
+        G.hitStop = 0.14; // arrêt sur image
+        if (G.audio) G.audio.impact(c, 0.8);
       } else {
-        this.areaDamage(p, 11, 380, 'push', 'punch');
-        if (Math.abs(p.y - ground) < 5) { G.terrain.crater(p.x, p.z, 4, 1.2, { rim: 0.3 }); G.fx.decal(p.clone().setY(ground), 6); G.fx.rocks(p.clone().setY(ground), 6, 10); }
-        G.fx.sphere(p, 5, 0.3, 0xffe8b0); G.fx.sparks(p, 24); G.fx.shake(0.22, p);
-        if (G.audio) G.audio.punch(p);
+        G.hitStop = 0.05;
+        if (G.audio) G.audio.punch(c);
       }
-    }, 170);
+      this.areaDamage(c, 10 + step * 4, 150, 'push', 'punch');
+      return;
+    }
+    if (step === 4) {
+      // Coup absolu : rien ne lui résiste
+      G.terrain.crater(p.x, p.z, 16 * Math.sqrt(P), 6 * P, { rim: 0.4, burn: 0.3 });
+      G.fx.sphere(p, 22, 0.6, 0xfff0c8); G.fx.ring(p.clone().setY(ground), 90 * P, 1.2); G.fx.flash(p, 5000, 0.6, 0xfff0d0); G.fx.shake(0.9, p);
+      G.fx.rocks(p.clone().setY(ground), 30, 22); G.fx.dust(p.clone().setY(ground), 16, 30);
+      this.areaDamage(p, 40 * Math.sqrt(P), 1400, 'blast', 'punch');
+      if (G.audio) G.audio.explosion(p, 1);
+      emit('journal', { icon: '✊', text: 'Le Coup absolu fend la terre.' });
+    } else {
+      const big = step === 3;
+      this.areaDamage(p, big ? 16 : 11, big ? 600 : 380, big ? 'blast' : 'push', 'punch');
+      if (Math.abs(p.y - ground) < 5) { G.terrain.crater(p.x, p.z, big ? 7 : 4, big ? 2.5 : 1.2, { rim: 0.3 }); G.fx.decal(p.clone().setY(ground), big ? 10 : 6); G.fx.rocks(p.clone().setY(ground), big ? 12 : 6, 10); }
+      G.fx.sphere(p, big ? 8 : 5, 0.3, col); G.fx.sparks(p, 24); G.fx.shake(big ? 0.35 : 0.22, p);
+      if (big) G.fx.ring(p, 30, 0.6, col);
+      if (G.audio) G.audio.punch(p);
+    }
   }
 
   // ---------- pouvoir sélectionné ----------
@@ -147,7 +195,7 @@ export class Powers {
     } else if (G.ultimates && G.ultimates.cast(id, aim)) {
       // pouvoir ultime (voir ultimates.js)
     }
-    this.cool[id] = P.cd;
+    this.cool[id] = 0.22; // simple anti-double-appui
     return true;
   }
 
@@ -196,10 +244,10 @@ export class Powers {
         this.areaDamage(p, 9, 260, 'burn', 'laser');
         // tout ce qui se trouve sur la trajectoire est tranché
         if (G.villages) for (let s = 10; s < L; s += 8) { const q = hand.clone().addScaledVector(dir, s); if (q.y - G.terrain.heightAt(q.x, q.z) < 25) G.villages.damageArea(q.x, q.z, 3, 120, hand); }
-        if (G.monster && G.monster.alive && aim.monster) G.monster.damage(90, hand);
+        if (aim.enemy && aim.enemy.alive) aim.enemy.damage(90 * god.power, hand);
         G.fx.shake(0.06, p);
       }
-      if (this.laserT > 3.6 || !input.powerHeld) { this.laserOn = false; this.beam.visible = false; this.cool.laser = POWERS[1].cd; if (G.audio) G.audio.laser(false); god.action = null; }
+      if (this.laserT > 3.6 || !input.powerHeld) { this.laserOn = false; this.beam.visible = false; this.cool.laser = 0.1; if (G.audio) G.audio.laser(false); god.action = null; }
     }
     // météores
     for (let i = this.meteors.length - 1; i >= 0; i--) {

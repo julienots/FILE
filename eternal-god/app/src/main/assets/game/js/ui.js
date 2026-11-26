@@ -28,7 +28,7 @@ export class UI {
     h.innerHTML = `
       <div id="status"><div id="clock"></div><div id="region"></div><div id="rep"><span class="rep-l">Crainte</span><div class="rep-bar"><div class="rep-fear"></div><div class="rep-worship"></div></div><span class="rep-r">Vénération</span></div></div>
       <div id="topright"><canvas id="minimap" width="140" height="140"></canvas><button id="btnMenu" class="round small" aria-label="Menu">☰</button></div>
-      <div id="bossbar" class="hidden"><div class="boss-name">Titan de magma</div><div class="boss-track"><div class="boss-fill"></div></div></div>
+      <div id="bossbar" class="hidden"><div class="boss-name" id="bossName">Titan de magma</div><div class="boss-track"><div class="boss-fill"></div></div></div>
       <div id="crosshair"></div>
       <div id="toasts"></div>
       <div id="bubbles"></div>
@@ -42,6 +42,7 @@ export class UI {
         <button id="btnFly" class="round small" aria-label="Vol">🜁</button>
         <button id="btnInteract" class="round small hidden" aria-label="Interaction">✋</button>
         <button id="btnTeleport" class="round small" aria-label="Téléportation">✦</button>
+        <button id="btnAura" class="round small" aria-label="Aura divine">⚡</button>
       </div>
       <div id="interactLabel" class="hidden"></div>
       <div id="wheel" class="hidden"></div>
@@ -92,6 +93,7 @@ export class UI {
       <div class="row"><label>Sensibilité caméra</label><input type="range" id="sSens" min="30" max="250" value="${settings.sensitivity * 100}"></div>
       <div class="row"><label>Inverser l'axe vertical</label><input type="checkbox" id="sInv" ${settings.invertY ? 'checked' : ''}></div>
       <div class="row"><label>Volume</label><input type="range" id="sVol" min="0" max="100" value="${settings.volume * 100}"></div>
+      <div class="row"><label>Musique</label><input type="range" id="sMus" min="0" max="100" value="${settings.music * 100}"></div>
       <div class="row"><label>Vibrations</label><input type="checkbox" id="sHap" ${settings.haptics ? 'checked' : ''}></div>
       <div class="row"><label>Durée d'une journée</label><select id="sDay">${[6, 10, 14, 20, 30].map((m) => `<option value="${m}" ${settings.dayLength === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></div>
       <div class="row"><label>Afficher les images/s</label><input type="checkbox" id="sFps" ${settings.showFps ? 'checked' : ''}></div>
@@ -100,6 +102,7 @@ export class UI {
     $('#sSens').addEventListener('input', (e) => { settings.sensitivity = e.target.value / 100; saveSettings(); });
     $('#sInv').addEventListener('change', (e) => { settings.invertY = e.target.checked; saveSettings(); });
     $('#sVol').addEventListener('input', (e) => { settings.volume = e.target.value / 100; saveSettings(); G.audio && G.audio.setVolume(settings.volume); });
+    $('#sMus').addEventListener('input', (e) => { settings.music = e.target.value / 100; saveSettings(); G.music && G.music.setVolume(settings.music); });
     $('#sHap').addEventListener('change', (e) => { settings.haptics = e.target.checked; saveSettings(); });
     $('#sDay').addEventListener('change', (e) => { settings.dayLength = +e.target.value; saveSettings(); });
     $('#sFps').addEventListener('change', (e) => { settings.showFps = e.target.checked; saveSettings(); $('#fps').classList.toggle('hidden', !settings.showFps); });
@@ -175,6 +178,8 @@ export class UI {
     hold('#btnFly', () => G.god.toggleFly());
     hold('#btnInteract', () => this.interact());
     hold('#btnTeleport', () => this.openMenu('map'));
+    hold('#btnAura', () => G.aura.toggle());
+    on('aura', (a) => $('#btnAura').classList.toggle('on', a));
   }
 
   bindKeys() {
@@ -190,6 +195,7 @@ export class UI {
       if (e.code === 'KeyQ') this.castSelected(), this.input.powerHeld = true;
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyR') this.toggleWheel();
+      if (e.code === 'KeyT') G.aura.toggle();
       if (e.code === 'KeyM' || e.code === 'Escape') this.menuOpen ? this.closeMenu() : this.openMenu('map');
       if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (i >= 0 && i < POWERS.length) this.selectPower(i); }
       upd();
@@ -200,7 +206,7 @@ export class UI {
 
   castSelected() {
     const p = POWERS[this.power];
-    if (!G.powers.ready(p.id)) { this.toast('⌛', `${p.name} se recharge…`, 1.2); return; }
+    if (!G.powers.ready(p.id)) return;
     G.powers.cast(p.id, G.cam.aim());
   }
 
@@ -257,7 +263,13 @@ export class UI {
     document.querySelectorAll('.menu-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
     document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== t));
     if (t === 'map') this.drawWorldMap();
-    if (t === 'powers') $('#powerList').innerHTML = `<div class="plist">${[{ icon: '✊', name: 'Poing divin', desc: 'Bouton ✊. Maintenir pour charger le Coup absolu, qui abat tout d\'un seul coup.' }, ...POWERS].map((p, i) => `<div class="pitem ${i - 1 === this.power ? 'on' : ''}" data-i="${i - 1}"><span class="pi">${p.icon}</span><div><b>${p.name}</b><p>${p.desc}</p></div></div>`).join('')}</div>`;
+    if (t === 'powers') $('#powerList').innerHTML = `<div class="plist">${[{ icon: '✊', name: 'Poing divin', desc: 'Bouton ✊. Maintenir pour charger le Coup absolu, qui abat tout d\'un seul coup.' }, ...POWERS].map((p, i) => `<div class="pitem ${i - 1 === this.power ? 'on' : ''}" data-i="${i - 1}"><span class="pi">${p.icon}</span><div><b>${p.name}</b><p>${p.desc}</p></div></div>`).join('')}</div>
+      <div class="summon"><b>Défier un adversaire</b><div class="seg"><button id="sumTitan">🌋 Titan de magma</button>${G.dragon ? '<button id="sumDragon">🐉 Dragon des cendres</button>' : ''}</div></div>`;
+    if (t === 'powers') {
+      const sum = (e) => { if (!e.alive && e.state === 'dormant') { e.spawn(true); this.closeMenu(); } else this.toast('⚔', `${e.name} est déjà là.`, 2); };
+      $('#sumTitan').addEventListener('click', () => sum(G.monster));
+      if (G.dragon) $('#sumDragon').addEventListener('click', () => sum(G.dragon));
+    }
     if (t === 'powers') document.querySelectorAll('.pitem').forEach((x) => x.addEventListener('click', () => { const i = +x.dataset.i; if (i >= 0) { this.selectPower(i); this.tab('powers'); } }));
     if (t === 'hero') this.drawHeroes();
     if (t === 'journal') $('#journalList').innerHTML = this.journal.length ? this.journal.slice().reverse().map((j) => `<div class="jitem"><span>${j.icon}</span><div><small>Jour ${j.day}, ${j.hour}</small><p>${j.text}</p></div></div>`).join('') : '<p class="hint">Rien encore. Le monde attend vos actes.</p>';
@@ -359,6 +371,7 @@ export class UI {
   }
   monsterEvent(m) {
     const bar = $('#bossbar');
+    if (m.name) $('#bossName').textContent = m.name;
     if (m.state === 'spawn') bar.classList.remove('hidden');
     if (m.state === 'hit') bar.querySelector('.boss-fill').style.width = `${Math.max(0, m.hp) * 100}%`;
     if (m.state === 'dead') setTimeout(() => bar.classList.add('hidden'), 1500);
@@ -414,6 +427,7 @@ export class UI {
     const dot = (x, z, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc((x - god.pos.x) * k, (z - god.pos.z) * k, r, 0, 7); ctx.fill(); };
     for (const v of G.villages.villages) dot(v.x, v.z, '#f2d38a', 4);
     if (G.monster && G.monster.alive) dot(G.monster.pos.x, G.monster.pos.z, '#ff4a10', 5);
+    if (G.dragon && G.dragon.alive) dot(G.dragon.pos.x, G.dragon.pos.z, '#ff9a20', 5);
     ctx.restore();
     ctx.fillStyle = '#ffd36a'; ctx.beginPath(); ctx.moveTo(S / 2, S / 2 - 7); ctx.lineTo(S / 2 + 5, S / 2 + 5); ctx.lineTo(S / 2 - 5, S / 2 + 5); ctx.fill();
     ctx.strokeStyle = 'rgba(232,190,110,0.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2 - 2, 0, 7); ctx.stroke();

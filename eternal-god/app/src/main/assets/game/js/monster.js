@@ -31,6 +31,8 @@ export class Monster {
     this.boulders = [];
     this.target = null;
     this.engaged = false;
+    this.tag = 'monster'; this.name = 'Titan de magma';
+    this.kv = new THREE.Vector3();
   }
 
   rock(parent, r, x, y, z, sx = 1, sy = 1, sz = 1, detail = 1) {
@@ -81,12 +83,12 @@ export class Monster {
 
   center() { return this.pos.clone().add(new THREE.Vector3(0, 15, 0)); }
 
-  spawn() {
+  spawn(near = false) {
     // émerge loin du dieu, du côté des montagnes, puis marche vers le village le plus proche
     const god = G.god.pos;
     let best = null;
     for (let i = 0; i < 30; i++) {
-      const a = Math.random() * 6.28, d = rand(220, 360);
+      const a = Math.random() * 6.28, d = near ? rand(110, 170) : rand(220, 360);
       const x = clamp(god.x + Math.cos(a) * d, -WORLD.half + 80, WORLD.half - 80), z = clamp(god.z + Math.sin(a) * d, -WORLD.half + 80, WORLD.half - 80);
       if (G.terrain.heightAt(x, z) > WORLD.water + 2) { best = [x, z]; break; }
     }
@@ -97,7 +99,7 @@ export class Monster {
     const vs = G.villages ? G.villages.villages.filter((v) => v.buildings.some((b) => b.state === 'intact')) : [];
     this.target = vs.length ? vs.reduce((a, b) => (Math.hypot(a.x - this.pos.x, a.z - this.pos.z) < Math.hypot(b.x - this.pos.x, b.z - this.pos.z) ? a : b)) : null;
     emit('journal', { icon: '🌋', text: this.target ? `Un Titan de magma surgit des profondeurs et marche sur ${this.target.name} !` : 'Un Titan de magma surgit des profondeurs !' });
-    emit('monster', { state: 'spawn' });
+    emit('monster', { state: 'spawn', name: this.name });
     if (G.audio) G.audio.roar(this.pos, 1);
     G.terrain.crater(this.pos.x, this.pos.z, 18, 4, { rim: 0.6, burn: 0.4, heat: 0.8 });
   }
@@ -108,14 +110,22 @@ export class Monster {
     this.engaged = true;
     this.hitT = 0.25;
     if (G.fx) G.fx.sparks(this.center(), 20, [1, 0.5, 0.15], 16);
-    if (amount > 600 && this.state !== 'dying') { this.state = 'stagger'; this.t = 0; if (G.audio) G.audio.roar(this.pos, 0.6); }
-    emit('monster', { state: 'hit', hp: this.hp / HP });
+    if (amount > 600 && this.state !== 'dying' && this.state !== 'launched') { this.state = 'stagger'; this.t = 0; if (G.audio) G.audio.roar(this.pos, 0.6); }
+    emit('monster', { state: 'hit', hp: this.hp / HP, name: this.name });
     if (this.hp <= 0) this.die(from);
+  }
+
+  // projeté par un coup divin : le colosse décolle, tournoie et s'écrase
+  launch(dir, power) {
+    if (!this.alive || this.state === 'emerge') return;
+    this.state = 'launched'; this.t = 0;
+    this.kv.copy(dir).setY(0).normalize().multiplyScalar(power).setY(power * 0.55 + 10);
+    if (G.audio) G.audio.roar(this.pos, 0.5);
   }
 
   die(from) {
     this.state = 'dying'; this.t = 0; this.alive = false;
-    emit('monster', { state: 'dead' });
+    emit('monster', { state: 'dead', name: this.name });
     emit('journal', { icon: '⚔', text: 'Le Titan de magma s\'effondre. Les mortels n\'en reviennent pas.' });
     // protéger un village = vénération
     if (G.villages) for (const v of G.villages.villages) if (Math.hypot(v.x - this.pos.x, v.z - this.pos.z) < v.r + 260) { v.worship = clamp(v.worship + 0.18, -1, 1); v.fear = Math.max(0, v.fear - 0.1); }
@@ -203,6 +213,23 @@ export class Monster {
         if (this.t > 3.4) { this.state = 'fight'; this.t = 0; }
         break;
       }
+      case 'launched': {
+        this.kv.y -= 32 * dt;
+        this.pos.addScaledVector(this.kv, dt);
+        this.root.rotation.x = Math.max(-1.3, this.root.rotation.x - dt * 2.2);
+        if (G.fx && Math.random() < dt * 20) G.fx.dust(this.center(), 4, 2);
+        if (this.pos.y <= ground && this.t > 0.15) {
+          this.pos.y = ground; this.root.rotation.x = 0;
+          const k = clamp(Math.hypot(this.kv.x, this.kv.z) / 60, 0.4, 1.4);
+          T.crater(this.pos.x, this.pos.z, 16 * k, 4 * k, { rim: 0.6, burn: 0.2 });
+          if (G.fx) { G.fx.ring(this.pos, 110 * k, 1.2, 0xd8b890); G.fx.dust(this.pos, 22, 40); G.fx.rocks(this.pos, 30, 20); G.fx.shake(0.9, this.pos); G.fx.decal(this.pos, 30); }
+          if (G.audio) G.audio.impact(this.pos, 1);
+          if (G.powers) G.powers.areaDamage(this.pos, 30 * k, 500, 'blast', 'monster');
+          this.state = 'stagger'; this.t = 0;
+          this.damage(300 * k, this.pos);
+        }
+        break;
+      }
       case 'stagger': if (this.t > 1.4) { this.state = 'fight'; this.t = 0; } break;
       case 'dying': {
         const k = Math.min(1, this.t / 3);
@@ -237,7 +264,7 @@ export class Monster {
         if (G.powers) G.powers.areaDamage(fp, 9, 160, 'push', 'monsterStep');
       }
     }
-    if (this.state !== 'emerge' && this.state !== 'dying') this.pos.y = damp(this.pos.y, T.heightAt(this.pos.x, this.pos.z), 6, dt);
+    if (this.state !== 'emerge' && this.state !== 'dying' && this.state !== 'launched') this.pos.y = damp(this.pos.y, T.heightAt(this.pos.x, this.pos.z), 6, dt);
     this.animate(dt, walking);
     // rochers lancés
     for (let i = this.boulders.length - 1; i >= 0; i--) {
@@ -250,7 +277,7 @@ export class Monster {
         if (hitGod) god.knock(b.vel.clone(), 34, 1.0);
         if (G.fx) { G.fx.rocks(p, 14, 14); G.fx.dust(p, 6, 12); G.fx.shake(0.4, p); }
         if (b.m.position.y < g + 1) T.crater(p.x, p.z, 6, 2, { rim: 0.4 });
-        if (G.powers) G.powers.areaDamage(p, 10, 300, 'blast', 'boulder');
+        if (G.powers) G.powers.areaDamage(p, 10, 300, 'blast', 'monster');
         this.scene.remove(b.m); this.boulders.splice(i, 1);
       }
     }
@@ -268,6 +295,7 @@ export class Monster {
     const B = this.B, t = this.t;
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.heading;
+    if (this.state !== 'launched' && this.state !== 'dying') this.root.rotation.x = damp(this.root.rotation.x, 0, 4, dt);
     const s = Math.sin(this.phase), w = walking ? 1 : 0;
     B.legL.rotation.x = s * 0.45 * w; B.legR.rotation.x = -s * 0.45 * w;
     B.shinL.rotation.x = Math.max(0, -s) * 0.6 * w; B.shinR.rotation.x = Math.max(0, s) * 0.6 * w;

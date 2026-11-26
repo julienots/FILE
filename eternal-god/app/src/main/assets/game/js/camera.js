@@ -67,12 +67,13 @@ export class CameraRig {
     const origin = cam.position.clone().addScaledVector(dir, this.dist + 2);
     const hit = G.terrain.raycast(origin, dir, maxDist);
     const p = hit ? hit.point.clone() : origin.clone().addScaledVector(dir, Math.min(maxDist, 300));
-    if (G.monster && G.monster.alive) {
-      const m = G.monster.center();
+    for (const e of G.enemies || []) {
+      if (!e.alive) continue;
+      const m = e.center();
       const toM = m.clone().sub(origin), along = toM.dot(dir);
       if (along > 0 && along < (hit ? hit.distance : maxDist)) {
         const closest = origin.clone().addScaledVector(dir, along);
-        if (closest.distanceTo(m) < G.monster.radius * 1.2) return { point: closest, monster: true, dir };
+        if (closest.distanceTo(m) < e.radius * 1.4) return { point: closest, monster: true, enemy: e, dir };
       }
     }
     return { point: p, monster: false, dir, ground: !!hit };

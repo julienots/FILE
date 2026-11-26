@@ -23,6 +23,9 @@ import { CameraRig } from './camera.js';
 import { Powers } from './powers.js';
 import { Ultimates } from './ultimates.js';
 import { Monster } from './monster.js';
+import { Dragon, loadDragon } from './dragon.js';
+import { Aura } from './aura.js';
+import { Music } from './music.js';
 import { Audio } from './audio.js';
 import { UI } from './ui.js';
 
@@ -67,6 +70,8 @@ async function boot() {
   const props = await loadProps(() => step('Objets des villages…', 0.3));
   const peopleAssets = await loadPeople(() => step('Habitants…', 0.6));
   const faunaAssets = await loadFauna(() => step('Faune…', 0.3));
+  let dragonAsset = null;
+  try { dragonAsset = await loadDragon(); } catch (e) { console.error('Dragon indisponible', e); }
 
   // monde
   step('Façonnage du relief…'); await frame();
@@ -99,7 +104,11 @@ async function boot() {
   G.powers = new Powers(scene);
   G.ultimates = new Ultimates(scene);
   G.monster = new Monster(scene);
+  G.enemies = [G.monster];
+  if (dragonAsset) { G.dragon = new Dragon(scene, dragonAsset, G.powers.glowTex); G.enemies.push(G.dragon); }
+  G.aura = new Aura(scene);
   G.audio = new Audio();
+  G.music = new Music(G.audio);
   step('Les habitants s\'éveillent…', 1); await frame();
   const people = new People(scene, peopleAssets, villages); G.people = people;
   people.populate();
@@ -168,6 +177,7 @@ function loop(now) {
   fpsAvg = fpsAvg * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
   if (G.paused && !G.photoMode) { return; }
   dt *= G.slowmo || 1;
+  if (G.hitStop > 0) { G.hitStop -= dt; dt *= 0.12; } // arrêt sur image des coups
   try {
     if (!G.photoMode) {
       G.time += dt; G.uniforms.time.value = G.time;
@@ -175,8 +185,10 @@ function loop(now) {
       G.god.update(dt, input);
       G.powers.update(dt, input);
       G.ultimates.update(dt);
+      G.aura.update(dt);
       if (!G.timeStop) { // arrêt du temps : le monde se fige, seul le dieu agit
         G.monster.update(dt);
+        if (G.dragon) G.dragon.update(dt);
         G.people.update(dt);
         G.fauna.update(dt);
         G.villages.update(dt);
@@ -190,6 +202,7 @@ function loop(now) {
     G.env.update(G.photoMode ? 0 : dt);
     G.cam.update(dt);
     G.audio.update(dt);
+    G.music.update(dt);
     G.ui.update(dt, fpsAvg);
     render();
   } catch (e) {
@@ -224,6 +237,7 @@ function snapshot() {
     buildings: G.villages.serialize(), trees: G.veg.serialize(),
     terrain: G.terrain.serialize(), journal: G.ui.journal.slice(-60), deaths: G.people.deaths,
     monster: G.monster.alive ? 30 : G.monster.respawnT,
+    dragon: G.dragon ? (G.dragon.alive ? 60 : G.dragon.respawnT) : 0,
   };
 }
 function save() {
@@ -245,6 +259,7 @@ function restore(s) {
     G.ui.journal = s.journal || [];
     G.people.deaths = s.deaths || 0;
     G.monster.respawnT = s.monster ?? 60;
+    if (G.dragon && s.dragon) G.dragon.respawnT = s.dragon;
     G.restored = true;
     G.ui.journal.push({ icon: '↺', text: 'Le monde se souvient de vous.', day: G.env.day, hour: '' });
   } catch (e) { console.error('Sauvegarde illisible, nouveau monde.', e); }

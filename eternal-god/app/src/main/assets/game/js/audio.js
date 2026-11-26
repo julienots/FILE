@@ -112,6 +112,17 @@ export class Audio {
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.04, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
     o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.32); this.voices++; o.onended = () => this.voices--;
   }
+  charge(dur = 1.4) { // montée de puissance avant la transformation
+    if (!this.ctx) return;
+    this.tone({ f0: 60, f1: 180, dur, gain: 0.45, type: 'sawtooth', range: 1e9 });
+    this.burst({ dur, freq: 300, sweep: 8, type: 'bandpass', q: 1.5, gain: 0.5, range: 1e9 });
+    setTimeout(() => this.scream(), dur * 700);
+  }
+  scream() { // cri de transformation (bruit formanté)
+    this.burst({ dur: 1.1, freq: 900, type: 'bandpass', q: 3, gain: 0.45, sweep: 1.3, range: 1e9 });
+    this.tone({ f0: 210, f1: 160, dur: 1.0, gain: 0.25, type: 'sawtooth', range: 1e9 });
+  }
+  swing() { this.burst({ dur: 0.16, freq: 1600, sweep: 0.4, type: 'bandpass', q: 1.4, gain: 0.25, range: 1e9 }); }
   cricket() { this.burst({ dur: 0.18, freq: 4800, type: 'bandpass', q: 18, gain: 0.05, range: 1e9 }); }
 
   update(dt) {
@@ -122,7 +133,7 @@ export class Audio {
     this.wind.g.gain.setTargetAtTime(w, this.ctx.currentTime, 0.4);
     this.wind.f.frequency.setTargetAtTime(300 + sp * 18 + alt * 0.6, this.ctx.currentTime, 0.4);
     const divine = (G.powers && (G.powers.laserOn || G.powers.meteors.length)) ? 0.6 : (god.state === 'fly' && alt > 150 ? 0.25 : 0.05);
-    this.choir.gain.setTargetAtTime(divine * 0.5, this.ctx.currentTime, 1.2);
+    this.choir.gain.setTargetAtTime(settings.music > 0.02 ? 0 : divine * 0.5, this.ctx.currentTime, 1.2); // la musique remplace le chœur
     const night = G.env ? G.env.nightF : 0;
     this.birdT -= dt; this.cricketT -= dt;
     if (alt < 60 && night < 0.5 && this.birdT <= 0) { this.birdT = rand(1.5, 6); this.chirp(); }

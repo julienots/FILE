@@ -42,6 +42,8 @@ export class Ultimates {
   cast(id, aim) {
     const fn = this[id];
     if (!fn) return false;
+    // garde-fou invisible pour le téléphone : 10 effets massifs simultanés au plus
+    if (this.effects.length >= 10) return true;
     fn.call(this, aim);
     return true;
   }
