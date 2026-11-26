@@ -1,7 +1,8 @@
 # Consignes
 
 - Langue : français. Réponses courtes et directes, pas de récapitulatif inutile.
-- Jeux : toujours suivre le skill `game-polish` (`.claude/skills/game-polish/SKILL.md`).
+- Jeux : toujours suivre le skill `game-polish` (`claude-kit/skills/game-polish/SKILL.md`).
+- Skills perso (claude-kit) : `conception` (nouvelle idée), `prompt-upgrade` (prompt externe), `game-polish` (jeu), `ui-polish` (interface), `debug-method` (bug), `ship-check` (avant publication).
 - Prompts prêts à l'emploi : `docs/PROMPTS_JEU.md`.
 
 ## Économie de tokens

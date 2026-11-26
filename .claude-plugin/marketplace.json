@@ -1,0 +1,7 @@
+{
+  "name": "julien-kit",
+  "owner": { "name": "julienots" },
+  "plugins": [
+    { "name": "claude-kit", "source": "./claude-kit", "description": "Skills perso pour concevoir, polir, déboguer et publier." }
+  ]
+}
