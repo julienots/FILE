@@ -26,7 +26,7 @@ func _ready() -> void:
 		cap.run(camera, only)
 
 func _characters() -> void:
-	wife = Geo.prop(world.main_house, "res://assets/thirdparty/Michelle.glb", Vector3(4.2, 0.045, 1.25), 200, 0.0, 1.68)
+	wife = Geo.prop(world.main_house, "res://assets/thirdparty/Michelle.glb", Vector3(4.2, 0.045, 1.3), 36, 0.0, 1.68)
 	wife.name = "Wife"
 	var ap: AnimationPlayer = wife.find_children("*", "AnimationPlayer", true, false).front() if wife.find_children("*", "AnimationPlayer", true, false).size() > 0 else null
 	if ap:
