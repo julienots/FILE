@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#888}</style>
+<script type="importmap">{"imports":{"three":"../../app/src/main/assets/game/lib/three.module.min.js","three/addons/":"../../app/src/main/assets/game/lib/addons/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+const P = new URLSearchParams(location.search);
+const kinds = P.get('kinds').split(',');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+r.toneMapping = THREE.AgXToneMapping;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x8899aa);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.5)); const d = new THREE.DirectionalLight(0xffffff, 2.5); d.position.set(3, 5, 4); scene.add(d);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+const gl = new GLTFLoader(); gl.setMeshoptDecoder(MeshoptDecoder);
+let x = 0;
+for (const [ki, k] of kinds.entries()) {
+  const g = await gl.loadAsync('../../app/src/main/assets/game/models/chars/' + k + '.glb');
+  const o = SkeletonUtils.clone(g.scene);
+  scene.add(o); o.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(o); const h = bb.max.y - bb.min.y;
+  console.log(k, 'h', h.toFixed(2), 'min', bb.min.toArray().map(v=>v.toFixed(2)).join(','), 'anims', g.animations.length);
+  o.scale.setScalar(1.7 / h); o.position.set(x, -bb.min.y * 1.7 / h, 0); x += 1.3;
+  o.rotation.y = +(P.get('rot') || 0.6);
+  const mx = new THREE.AnimationMixer(o); const c = g.animations.find(a => /Idle_Neutral/i.test(a.name)) || g.animations[0]; if (c) { mx.clipAction(c).play(); mx.update(0.4); }
+  const bones = {}; o.traverse(b => { if (b.isBone) bones[b.name] = b; });
+  const spec = (P.get('pose' + ki) || '').split(';').filter(Boolean);
+  o.updateMatrixWorld(true);
+  const footOff = {}; for (const s of ['L', 'R']) footOff[s] = bones['LowerLeg' + s].worldToLocal(bones['Foot' + s].getWorldPosition(new THREE.Vector3()));
+  for (const t of spec) { let [bn, ax, val] = t.split(':'); bn = bn.replace('.', ''); if (bn === 'drop') { o.position.y -= +val; continue; } const e = new THREE.Euler(); e[ax] = +val; bones[bn].quaternion.multiply(new THREE.Quaternion().setFromEuler(e)); }
+  o.updateMatrixWorld(true);
+  for (const s of ['L', 'R']) { const w = bones['LowerLeg' + s].localToWorld(footOff[s].clone()); bones['Foot' + s].position.copy(bones['Foot' + s].parent.worldToLocal(w)); }
+}
+cam.position.set((x - 1.3) / 2 + 3, 1.2, 5); cam.lookAt((x - 1.3) / 2, 0.9, 0);
+r.render(scene, cam); window.__ready = true;
+</script></body></html>

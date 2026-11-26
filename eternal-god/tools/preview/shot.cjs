@@ -9,6 +9,6 @@ const { chromium } = require('playwright');
   await p.goto(url);
   await p.waitForFunction('window.__ready === true', null, { timeout: 1500000 });
   await p.waitForTimeout(+wait);
-  await p.screenshot({ path: out, type: out.endsWith('.jpg') ? 'jpeg' : 'png', quality: out.endsWith('.jpg') ? 92 : undefined });
+  await p.screenshot({ timeout: 900000, path: out, type: out.endsWith('.jpg') ? 'jpeg' : 'png', quality: out.endsWith('.jpg') ? 92 : undefined });
   await b.close();
 })();

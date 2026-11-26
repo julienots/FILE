@@ -106,7 +106,7 @@ export class Vegetation {
   // ---------- Herbe : cartes croisées texturées (scan), recyclées autour de la caméra ----------
   buildGrass(count) {
     const meta = this.A.grass.meta;
-    const W = 1.15, Hh = 0.85;
+    const W = 1.4, Hh = 0.78;
     const pos = [], uv = [], nor = [];
     for (let q = 0; q < 2; q++) {
       const a = q * Math.PI / 2, cx = Math.cos(a) * W / 2, cz = Math.sin(a) * W / 2;
@@ -121,36 +121,58 @@ export class Vegetation {
     for (let i = 0; i < count; i++) { off[i * 4] = Math.random() * R * 2; off[i * 4 + 1] = Math.random() * R * 2; off[i * 4 + 2] = 0.6 + Math.random() * 0.9; off[i * 4 + 3] = Math.random(); }
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
     geo.instanceCount = count;
-    const mat = new THREE.MeshLambertMaterial({ map: this.A.grass.alb, alphaTest: 0.45, side: THREE.DoubleSide });
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uTime = G.uniforms.time; sh.uniforms.uGust = G.uniforms.gust; sh.uniforms.uHeight = { value: G.terrain.dataTex };
-      sh.uniforms.uCenter = this.grassCenter = { value: new THREE.Vector2() }; sh.uniforms.uR = { value: R }; sh.uniforms.uHalf = { value: WORLD.half };
-      sh.uniforms.uPress = G.uniforms.press;
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', `#include <common>
-          attribute vec4 aOff; uniform float uTime, uR, uHalf; uniform vec4 uGust; uniform vec4 uPress; uniform vec2 uCenter; uniform sampler2D uHeight;`)
-        .replace('#include <uv_vertex>', `#include <uv_vertex>
-          vMapUv = (vec2(floor(aOff.w * ${meta.az.toFixed(1)}), 0.0) + vec2(mix(0.03, 0.97, uv.x), mix(0.02, 0.98, uv.y))) / vec2(${meta.az.toFixed(1)}, ${meta.el.length.toFixed(1)});`)
-        .replace('#include <begin_vertex>', `
+    this.grassCenter = { value: new THREE.Vector2() };
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide, fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+        tMap: { value: this.A.grass.alb }, uHeight: { value: G.terrain.dataTex }, uR: { value: R }, uHalf: { value: WORLD.half },
+        uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSky: { value: new THREE.Color(0.5, 0.6, 0.7) },
+      }]),
+      vertexShader: `
+        #include <fog_pars_vertex>
+        attribute vec4 aOff; uniform float uTime, uR, uHalf; uniform vec4 uGust; uniform vec4 uPress; uniform vec2 uCenter; uniform sampler2D uHeight;
+        varying vec2 vUv; varying float vH;
+        void main(){
+          vUv = (vec2(floor(aOff.w * ${meta.az.toFixed(1)}), 0.0) + vec2(mix(0.02, 0.98, uv.x), mix(0.25, 0.78, uv.y))) / vec2(${meta.az.toFixed(1)}, ${meta.el.length.toFixed(1)});
           vec2 wp = uCenter + mod(aOff.xy - uCenter + uR, 2.0 * uR) - uR;
           vec4 tex = texture2D(uHeight, (wp + uHalf) / (uHalf * 2.0));
           float ok = step(fract(aOff.z * 7.31), tex.g);
           float d = length(wp - uCenter); float fade = 1.0 - smoothstep(uR * 0.65, uR, d);
           float ang = aOff.w * 6.2831;
           vec3 p = position; p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz;
-          vec3 transformed = p * aOff.z * ok * fade;
-          float h = transformed.y;
+          vec3 toCam = normalize(cameraPosition - vec3(wp.x, tex.r, wp.y));
+          float side = smoothstep(0.92, 0.55, toCam.y); // vue plongeante : les cartes s'effacent au profit du sol
+          vec3 transformed = p * aOff.z * ok * fade * side;
+          float h = transformed.y; vH = uv.y;
           float sway = sin(uTime * 1.7 + wp.x * 0.3 + wp.y * 0.2) * 0.16 + sin(uTime * 3.3 + wp.y * 0.5) * 0.05;
           vec2 gd = wp - uGust.xz; float gl = length(gd) + 0.01; float g = uGust.w * exp(-gl / 30.0);
-          vec2 pd = wp - uPress.xy; float pl = length(pd) + 0.01; float pr = smoothstep(uPress.z, 0.0, pl) * uPress.w;
+          vec2 pd = wp - uPress.xy; float pl = length(pd) + 0.01; float pr = (1.0 - smoothstep(0.0, max(uPress.z, 0.01), pl)) * uPress.w;
           transformed.xz += (vec2(sway, sway * 0.6) + (gd / gl) * g * 0.2 + (pd / pl) * pr * 0.9) * h;
           transformed.y *= 1.0 - pr * 0.7;
-          transformed += vec3(wp.x, tex.r - 0.05, wp.y);`);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb *= 0.95;');
-    };
+          transformed += vec3(wp.x, tex.r - 0.05, wp.y);
+          vec4 mvPosition = viewMatrix * vec4(transformed, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        #include <common>
+        #include <fog_pars_fragment>
+        uniform sampler2D tMap; uniform vec3 uSunDir, uSunCol, uSky; varying vec2 vUv; varying float vH;
+        void main(){
+          vec4 c = texture2D(tMap, vUv); if (c.a < 0.45) discard;
+          float light = 0.55 + 0.45 * vH;
+          vec3 col = c.rgb * 1.25 * (uSunCol * (0.55 * max(uSunDir.y, 0.0) + 0.25) * light + uSky);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+        }`,
+    });
+    mat.uniforms.uTime = G.uniforms.time; mat.uniforms.uGust = G.uniforms.gust; mat.uniforms.uPress = G.uniforms.press; mat.uniforms.uCenter = this.grassCenter;
+    this.grassMat = mat;
     this.grass = new THREE.Mesh(geo, mat);
     this.grass.frustumCulled = false;
-    this.grass.receiveShadow = true;
+    this.grass.receiveShadow = false;
     this.scene.add(this.grass);
   }
 
@@ -214,6 +236,7 @@ export class Vegetation {
       const sky = env.fogColor.clone().multiplyScalar(0.55 * (0.4 + env.dayF * 0.6) * (G.scene.environmentIntensity || 1));
       const ground = new THREE.Color(0.16, 0.14, 0.1).multiplyScalar(0.3 + env.dayF * 0.7);
       for (const f of [...this.fields, this.shrubField]) f.light(env.sunDir.y > -0.04 ? env.sunDir : env.sky.moonDir, sunCol, sky, ground);
+      if (this.grassMat) { const u = this.grassMat.uniforms; u.uSunDir.value.copy(env.sunDir); u.uSunCol.value.copy(sunCol); u.uSky.value.copy(sky); }
     }
     const T = G.terrain, q = new THREE.Quaternion();
     for (let i = this.falling.length - 1; i >= 0; i--) {

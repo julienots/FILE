@@ -355,7 +355,7 @@ export class Terrain {
       dens *= 1 - smooth(110, 140, y);
       dens *= 1 - this.burn[k] / 255;
       dens *= 1 - smooth(0.2, 0.8, Math.abs(this.base[k] - y));
-      if (this.paint[k]) dens *= this.paint[k] === 2 ? 0 : 0.1;
+      if (this.paint[k]) dens = 0;
       const V = REGIONS.volcano;
       dens *= smooth(170, 240, Math.hypot(x - V.x, z - V.z));
       d[k * 4] = toH(y); d[k * 4 + 1] = toH(dens); d[k * 4 + 2] = 0; d[k * 4 + 3] = toH(1);
