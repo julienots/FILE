@@ -31,7 +31,7 @@ func build_all() -> void:
 # ------------------------------------------------------------------ salon
 
 func living() -> void:
-	var rug := Geo.box(h, Vector3(3.6, 0.012, 2.8), Vector3(12.3, 0.046, 6.9), MatLib.pbr("quatrefoil_jacquard_fabric", 0.9, Color(0.9, 0.88, 0.84), 1.0, 0.6), 0.004)
+	var rug := Geo.box(h, Vector3(3.6, 0.012, 2.8), Vector3(12.3, 0.046, 6.9), MatLib.pbr("fabric_pattern_07", 1.4, Color(0.92, 0.9, 0.86), 1.0, 0.6), 0.004)
 	Geo.prop(h, "sofa_02", Vector3(10.15, 0.04, 6.9), 90)
 	Geo.prop(h, "throw_pillows_01", Vector3(10.2, 0.47, 6.2), 90)
 	Geo.prop(h, "modern_coffee_table_01", Vector3(12.2, 0.05, 6.9), 90)
@@ -40,7 +40,7 @@ func living() -> void:
 	Geo.prop(h, "side_table_01", Vector3(10.1, 0.04, 8.35), 0)
 	Geo.prop(h, "ceramic_vase_01", Vector3(10.1, 0.6, 8.35), 0)
 	Geo.prop(h, "potted_plant_02", Vector3(15.35, 0.04, 11.35), 0)
-	Geo.prop(h, "potted_plant_01", Vector3(8.6, 0.04, 11.35), 0)
+	Geo.prop(h, "potted_plant_02", Vector3(8.6, 0.04, 11.35), 60)
 	Geo.prop(h, "book_encyclopedia_set_01", Vector3(12.3, 0.45, 6.75), 90)
 	# meuble TV + téléviseur sur mur droit
 	Geo.prop(h, "modern_wooden_cabinet", Vector3(15.55, 0.04, 6.9), -90, 1.9)
@@ -64,7 +64,7 @@ func _tv(pos: Vector3, rot_deg: float, width: float) -> void:
 	q.size = Vector2(width - 0.02, hh - 0.02)
 	scr.mesh = q
 	var tex: Texture2D = load("res://assets/ui/tv_show.png") if ResourceLoader.exists("res://assets/ui/tv_show.png") else null
-	scr.material_override = MatLib.screen(tex, 1.3)
+	scr.material_override = MatLib.screen(tex, 0.55)
 	scr.position = Vector3(0, 0, 0.019)
 	root.add_child(scr)
 	var glow := OmniLight3D.new()
@@ -313,7 +313,7 @@ func bedroom() -> void:
 	_wardrobe(Vector3(8.36, y, 10.6), 90)
 	Geo.prop(h, "painted_wooden_nightstand", Vector3(15.5, y, 11.2), -90)
 	Geo.prop(h, "ornate_mirror_01", Vector3(15.83, y + 1.5, 6.4), -90, 0.0, 1.1)
-	Geo.prop(h, "potted_plant_01", Vector3(15.35, y, 7.8), 0)
+	Geo.prop(h, "potted_plant_02", Vector3(15.35, y, 7.8), 0)
 	Geo.prop(h, "standing_picture_frame_01", Vector3(10.65, y + 0.62, 5.45), 15)
 	Geo.prop(h, "mid_century_lounge_chair", Vector3(14.6, y, 10.6), -135)
 	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 0)
@@ -419,8 +419,8 @@ func lights() -> void:
 	for p in [Vector3(12.2, 2.8, 8.4), Vector3(6.5, 2.8, 10.5), Vector3(12.0, 2.8, 2.5)]:
 		var l := OmniLight3D.new()
 		l.light_color = Color(1.0, 0.86, 0.7)
-		l.light_energy = 0.55
-		l.omni_range = 6.5
+		l.light_energy = 1.1
+		l.omni_range = 7.5
 		l.omni_attenuation = 1.2
 		l.position = p
 		h.add_child(l)

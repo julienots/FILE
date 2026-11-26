@@ -32,7 +32,7 @@ var m_found: Material
 var doors: Array[Node3D] = []
 
 func build() -> void:
-	m_plaster = MatLib.pbr("white_plaster_02", 2.5, Color(0.96, 0.95, 0.92), 1.0, 0.4)
+	m_plaster = MatLib.paint(Color(0.9, 0.88, 0.84))
 	m_siding = MatLib.pbr("white_planks_clean", 2.4, siding_tint, 1.0, 1.0)
 	m_trim = MatLib.flat(trim_color, 0.45)
 	m_floor_wood = MatLib.pbr("laminate_floor_02", 2.2, Color(1, 0.97, 0.93), 0.85)

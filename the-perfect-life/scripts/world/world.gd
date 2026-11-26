@@ -85,6 +85,14 @@ func _environment() -> void:
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 1.04
 	we.environment = env
+	# exposition automatique (comme un appareil photo) : intérieurs lisibles, extérieurs non brûlés
+	var ca := CameraAttributesPractical.new()
+	ca.auto_exposure_enabled = true
+	ca.auto_exposure_scale = 0.4
+	ca.auto_exposure_speed = 4.0
+	ca.auto_exposure_min_sensitivity = 50.0
+	ca.auto_exposure_max_sensitivity = 400.0
+	we.camera_attributes = ca
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"

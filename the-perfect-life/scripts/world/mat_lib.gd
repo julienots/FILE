@@ -29,6 +29,23 @@ static func pbr(name: String, size_m := 2.0, tint := Color.WHITE, rough_mul := 1
 	_cache[key] = m
 	return m
 
+## Peinture murale mate : couleur propre + micro-relief (normale du plâtre).
+static func paint(color: Color, normal_tex := "white_plaster_02", size_m := 1.5) -> ORMMaterial3D:
+	var key := "paint|%s|%s" % [color, normal_tex]
+	if _cache.has(key):
+		return _cache[key]
+	var m := ORMMaterial3D.new()
+	m.albedo_color = color
+	m.roughness = 0.92
+	m.normal_enabled = true
+	m.normal_texture = load(TEX % [normal_tex, normal_tex, "nor"])
+	m.normal_scale = 0.35
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / size_m
+	_cache[key] = m
+	return m
+
 ## Matériau uni réaliste (peinture, métal, plastique…), sans texture.
 static func flat(color: Color, roughness := 0.5, metallic := 0.0, clearcoat := 0.0) -> StandardMaterial3D:
 	var key := "flat|%s|%s|%s|%s" % [color, roughness, metallic, clearcoat]
