@@ -1565,6 +1565,16 @@ static std::vector<Step> scenario(const std::string& name) {
         }
         return s;
     }
+    if (name == "allheroes") {
+        // 3.9.6 mod "Tous les héros": with it on, every hero is playable without its quest
+        s.push_back({0.2f, [](Game& g) {
+            std::string st;
+            for (int i = 0; i < (int)heroes().size(); i++) st += heroes()[i].id + "=" + (g.heroUnlocked(i) ? "1 " : "0 ");
+            int errs = 0; for (auto& m : g.mods) if (m.id == "tous-les-heros") { errs = m.errors; AGR_LOG("ALLHEROES mod enabled=%d patches=%d errors=%d", m.enabled, m.patches, m.errors); }
+            AGR_LOG("ALLHEROES flag=%d heroes: %s", gameTuning().allHeroes, st.c_str()); (void)errs;
+        }, idle, "check"});
+        return s;
+    }
     if (name == "rift") {
         // 3.9.4 the Rift in the sky, seen at several hours and in a storm (dev aid: look at the pictures)
         struct V { float x, z, tod; int weather; float yaw, pitch, dist; const char* f; };

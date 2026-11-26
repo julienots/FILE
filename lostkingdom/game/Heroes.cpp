@@ -15,7 +15,7 @@ const HeroDef& Game::hero() const {
 bool Game::heroUnlocked(int i) const {
     const auto& H = heroes();
     if (i < 0 || i >= (int)H.size()) return false;
-    return H[i].unlockQuest.empty() || unlockedHeroes.count(H[i].id) > 0;
+    return H[i].unlockQuest.empty() || unlockedHeroes.count(H[i].id) > 0 || gameTuning().allHeroes;   // 3.9.6 mod "Tous les héros"
 }
 
 void Game::unlockHero(const std::string& id, bool announce) {

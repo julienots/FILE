@@ -1837,6 +1837,12 @@ bool applyModDataLine(const std::string& raw, std::string& err) {
         gameTuning().startItems.push_back({f[0], n}); return true;
     }
     if (key == "game.start_weapon") { if (!item(val) || item(val)->weapon == WeaponType::None) { err = "arme inconnue : " + val; return false; } gameTuning().startWeapon = val; return true; }
+    if (key == "game.all_heroes") {   // 3.9.6
+        std::string v = val; for (auto& ch : v) ch = (char)std::tolower((unsigned char)ch);
+        if (v == "1" || v == "oui" || v == "yes" || v == "true") { gameTuning().allHeroes = true; return true; }
+        if (v == "0" || v == "non" || v == "no" || v == "false") { gameTuning().allHeroes = false; return true; }
+        err = "valeur attendue : 1 ou 0"; return false;
+    }
     if (key == "game.start_gold") { float v; if (!num(v, 0, 1e7f)) return false; gameTuning().startGold = (int)v; return true; }
     if (key == "lore.add") {   // lore.add = id | Titre | Texte
         size_t p1 = val.find('|'), p2 = p1 == std::string::npos ? p1 : val.find('|', p1 + 1);

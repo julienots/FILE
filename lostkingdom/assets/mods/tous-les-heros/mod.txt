@@ -1,0 +1,4 @@
+name = Tous les héros
+author = Superessence Studio
+version = 1.0
+description = Débloque tous les personnages jouables dès le début, sans faire leurs quêtes. Désactive le mod pour revenir au jeu normal (ta sauvegarde n'est pas modifiée).

@@ -210,7 +210,9 @@ struct GameTuning { float enemyHp = 1, enemyAtk = 1, xp = 1, gold = 1, playerSpe
     // 2.7.0 "game.gravity", "game.jump", "game.time_speed", "game.mount_speed", "game.enemy_scale", "game.weather", "game.hour"
     float gravity = 1, jump = 1, timeSpeed = 1, mountSpeed = 1, enemyScale = 1, hour = -1; int weather = -1;
     // 3.1.1 mods 2.0: what a new game starts with
-    std::vector<std::pair<std::string, int>> startItems; int startGold = -1; std::string startWeapon; };
+    std::vector<std::pair<std::string, int>> startItems; int startGold = -1; std::string startWeapon;
+    bool allHeroes = false;   // 3.9.6 "game.all_heroes = 1": every hero playable, without their quest (the save is untouched)
+};
 GameTuning& gameTuning();
 bool applyModDataLine(const std::string& line, std::string& err);
 

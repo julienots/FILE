@@ -63,6 +63,7 @@ Le format est une modification par ligne : `type.identifiant.champ = valeur`. Le
 | `item.id.color`, `elem_dmg`, `stamina`, `heal`, `mana` | Couleur `#rrggbb`, dégâts élémentaires, bonus |
 | `game.start_item = objet \| nombre` | Objet donné au début d'une nouvelle partie |
 | `game.start_weapon`, `game.start_gold` | Arme équipée et or au départ |
+| `game.all_heroes = 1` | (3.9.6) Tous les héros jouables sans leur quête. La sauvegarde n'est pas modifiée : en désactivant le mod, on retrouve les héros réellement débloqués. |
 
 - **Identifiants** : minuscules, chiffres et `_`. Un identifiant du jeu ne peut pas être remplacé par `add`.
 - **Ordre** : un objet doit être créé (`item.add`) avant d'être utilisé dans un `loot` ou un `start_item`.

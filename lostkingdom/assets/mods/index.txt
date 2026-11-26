@@ -15,3 +15,4 @@ terrassier
 bestiaire-legendaire
 arsenal-des-legendes
 invasion-des-ombres
+tous-les-heros
