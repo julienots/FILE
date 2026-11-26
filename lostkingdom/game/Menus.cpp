@@ -1451,7 +1451,9 @@ void Game::drawMenus(float dt) {
             y += 96;
         }
         u.popClip();
-        if (changed) { saveModList(); notify("Redémarrez le jeu pour appliquer les mods", vec3(1, 0.9f, 0.7f), "i_settings"); }
+        if (changed) { saveModList(); bool had = gameTuning().allHeroes; refreshLiveModFlags();
+            if (had != gameTuning().allHeroes) notify(gameTuning().allHeroes ? "Tous les héros sont débloqués dans la roue" : "Héros : retour aux héros réellement débloqués", vec3(0.7f, 1.f, 0.7f), "i_character");
+            else notify("Redémarrez le jeu pour appliquer les mods", vec3(1, 0.9f, 0.7f), "i_settings"); }
         break;
     }
     // ---------------------------------------------------------------- chronicles (lore)

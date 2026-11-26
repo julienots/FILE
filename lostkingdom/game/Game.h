@@ -851,6 +851,7 @@ public:
     std::vector<ModInfo> mods;
     void scanMods();
     void saveModList();
+    void refreshLiveModFlags();   // 3.9.7 settings that follow the Mods switches at once (no restart): game.all_heroes
     void applyMods(bool force = false);   // force: tests only (patches are meant to be applied once per launch)
     void pollModImport();
     float dofFocus = 20, dofAmount = 0;

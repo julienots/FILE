@@ -44,6 +44,23 @@ void Game::scanMods() {
     }
 }
 
+// 3.9.7 some mod lines take effect at once when a mod is switched on or off (Android often keeps the game alive
+// when it is "closed", so "restart the game" did not always happen): today, game.all_heroes (the hero wheel)
+void Game::refreshLiveModFlags() {
+    gameTuning().allHeroes = false;
+    for (const auto& m : mods) {
+        if (!m.enabled) continue;
+        std::string data;
+        if (!platform::readFile(modsDir() + "/" + m.id + "/data.txt", data)) continue;
+        std::istringstream in(data); std::string l;
+        while (std::getline(in, l)) {
+            std::string t = trimS(l);
+            if (t.rfind("game.all_heroes", 0) != 0) continue;
+            std::string err; applyModDataLine(t, err);
+        }
+    }
+}
+
 void Game::saveModList() {
     std::string out;
     for (const auto& m : mods) out += (m.enabled ? "" : "!") + m.id + "\n";
@@ -106,6 +123,7 @@ void Game::applyMods(bool force) {
         AGR_LOG("mod '%s' (%s): %d patches, %d errors%s%s", m.id.c_str(), m.name.c_str(), m.patches, m.errors, m.firstError.empty() ? "" : " - ", m.firstError.c_str());
     }
     platform::setAssetOverrideRoots(roots);
+    refreshLiveModFlags();
     // forget models that were looked up and not found: a mod may provide them now
     for (auto it = importedModels.begin(); it != importedModels.end();) { if (!it->second) it = importedModels.erase(it); else ++it; }
 }
