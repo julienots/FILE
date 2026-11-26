@@ -8,11 +8,9 @@ import { buildGodModel } from './godmodel.js';
 const UP = new THREE.Vector3(0, 1, 0);
 
 export class God {
-  constructor(scene) {
-    this.model = buildGodModel();
-    this.root = this.model.root;
-    this.B = this.model.bones;
-    scene.add(this.root);
+  constructor(scene, model = null) {
+    this.scene = scene;
+    this.setModel(model || buildGodModel());
     this.pos = new THREE.Vector3(0, 60, 40);
     this.vel = new THREE.Vector3();
     this.heading = Math.PI;
@@ -29,6 +27,15 @@ export class God {
     this.stunned = 0;
     this.destroying = 0;
     this.teleportT = 0;
+  }
+
+  // change de héros en gardant position, état et caméra
+  setModel(model) {
+    if (this.root) this.scene.remove(this.root);
+    this.model = model;
+    this.root = model.root;
+    this.B = model.bones;
+    this.scene.add(this.root);
   }
 
   groundAt(x, z) {

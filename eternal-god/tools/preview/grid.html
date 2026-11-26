@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}</style>
+<script type="importmap">{"imports":{"three":"../../app/src/main/assets/game/lib/three.module.min.js","three/addons/":"../../app/src/main/assets/game/lib/addons/"}}</script>
+</head><body><canvas id="o" style="position:absolute;left:0;top:0"></canvas><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const P = new URLSearchParams(location.search), S = 900;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(S * 2, S); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdde3ea);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.5));
+const g = await new GLTFLoader().loadAsync(P.get('f')); scene.add(g.scene);
+r.setScissorTest(true);
+const views = [[new THREE.Vector3(0, 0.5, 5), 0], [new THREE.Vector3(5, 0.5, 0), 1]];
+for (const [p, i] of views) { const c = new THREE.OrthographicCamera(-0.5, 0.5, 1.0, 0, 0.01, 20); c.position.copy(p); c.lookAt(p.x ? 0 : 0, 0.5, p.z ? 0 : 0); c.position.y = 0; c.lookAt(0, 0, 0); c.position.set(p.x, 0, p.z); c.lookAt(0, 0, 0); r.setViewport(i * S, 0, S, S); r.setScissor(i * S, 0, S, S); r.render(scene, c); }
+const o = document.getElementById('o'); o.width = S * 2; o.height = S; const x = o.getContext('2d');
+x.font = '12px monospace';
+for (let k = 0; k <= 20; k++) {
+  const v = k / 20, px = v * S, py = S - v * S;
+  x.strokeStyle = k % 2 ? 'rgba(255,0,0,0.25)' : 'rgba(255,0,0,0.6)';
+  for (let h = 0; h < 2; h++) { x.beginPath(); x.moveTo(h * S + px, 0); x.lineTo(h * S + px, S); x.stroke(); }
+  x.beginPath(); x.moveTo(0, py); x.lineTo(S * 2, py); x.stroke();
+  x.fillStyle = 'red'; if (k % 2 === 0) { x.fillText((v).toFixed(2), 2, py - 2); x.fillText((v - 0.5).toFixed(2), px + 2, 12); x.fillText((v - 0.5).toFixed(2), S + px + 2, 12); }
+}
+window.__ready = true;
+</script></body></html>

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { G, WORLD, QUALITY, settings, saveSettings, clamp, on, emit } from './core.js';
 import { POWERS } from './powers.js';
 import { REGIONS } from './terrain.js';
+import { HEROES, loadHero } from './heromodel.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -59,11 +60,12 @@ export class UI {
     // menu
     const menu = el('div', 'hidden', ''); menu.id = 'menu';
     menu.innerHTML = `<div class="menu-panel">
-      <div class="menu-tabs"><button data-tab="map" class="on">Carte</button><button data-tab="powers">Pouvoirs</button><button data-tab="journal">Journal</button><button data-tab="settings">Réglages</button></div>
+      <div class="menu-tabs"><button data-tab="map" class="on">Carte</button><button data-tab="powers">Pouvoirs</button><button data-tab="journal">Journal</button><button data-tab="hero">Héros</button><button data-tab="settings">Réglages</button></div>
       <div class="menu-body">
         <div data-pane="map"><canvas id="worldmap" width="512" height="512"></canvas><p class="hint">Touchez un lieu pour vous y téléporter.</p></div>
         <div data-pane="powers" class="hidden" id="powerList"></div>
         <div data-pane="journal" class="hidden" id="journalList"></div>
+        <div data-pane="hero" class="hidden" id="heroPane"></div>
         <div data-pane="settings" class="hidden" id="settingsPane"></div>
       </div>
       <div class="menu-foot"><button id="btnPhoto">Mode photo</button><button id="btnResume" class="primary">Reprendre</button></div></div>`;
@@ -258,7 +260,28 @@ export class UI {
     if (t === 'map') this.drawWorldMap();
     if (t === 'powers') $('#powerList').innerHTML = `<div class="plist">${[{ icon: '✊', name: 'Poing divin', desc: 'Bouton ✊. Maintenir pour charger le Coup absolu, qui abat tout d\'un seul coup.' }, ...POWERS].map((p, i) => `<div class="pitem ${i - 1 === this.power ? 'on' : ''}" data-i="${i - 1}"><span class="pi">${p.icon}</span><div><b>${p.name}</b><p>${p.desc}</p></div></div>`).join('')}</div>`;
     if (t === 'powers') document.querySelectorAll('.pitem').forEach((x) => x.addEventListener('click', () => { const i = +x.dataset.i; if (i >= 0) { this.selectPower(i); this.tab('powers'); } }));
+    if (t === 'hero') this.drawHeroes();
     if (t === 'journal') $('#journalList').innerHTML = this.journal.length ? this.journal.slice().reverse().map((j) => `<div class="jitem"><span>${j.icon}</span><div><small>Jour ${j.day}, ${j.hour}</small><p>${j.text}</p></div></div>`).join('') : '<p class="hint">Rien encore. Le monde attend vos actes.</p>';
+  }
+
+  drawHeroes() {
+    const cur = settings.hero || 'celeste';
+    $('#heroPane').innerHTML = `<div class="plist">${Object.entries(HEROES).map(([id, h]) => `<div class="pitem ${id === cur ? 'on' : ''}" data-hero="${id}"><span class="pi">${id === 'celeste' ? '✦' : '◉'}</span><div><b>${h.name}</b><p>${h.desc}</p></div></div>`).join('')}</div><p class="hint" id="heroMsg">Le héros choisi est gardé pour les prochaines parties.</p>`;
+    document.querySelectorAll('[data-hero]').forEach((x) => x.addEventListener('click', () => this.chooseHero(x.dataset.hero)));
+  }
+  async chooseHero(id) {
+    if (this.heroLoading || id === (settings.hero || 'celeste')) return;
+    this.heroLoading = true;
+    $('#heroMsg').textContent = 'Incarnation en cours…';
+    try {
+      const m = await loadHero(id);
+      G.god.setModel(m);
+      settings.hero = id; saveSettings();
+      G.fx && G.fx.sphere(G.god.pos.clone().add(new THREE.Vector3(0, 3, 0)), 10, 0.7, 0xfff0c0);
+      this.log('✦', `Le dieu prend la forme : ${HEROES[id].name}.`);
+      this.drawHeroes();
+    } catch (e) { console.error(e); $('#heroMsg').textContent = 'Ce héros n\'a pas pu être chargé.'; }
+    this.heroLoading = false;
   }
 
   mapImage() {

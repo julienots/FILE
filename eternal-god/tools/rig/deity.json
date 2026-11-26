@@ -1,0 +1,111 @@
+{
+ "comment": "Divinit\u00e9 cosmique (Tripo) : positions approximatives des articulations (x, y) ; z et centrage affin\u00e9s automatiquement",
+ "joints": {
+  "hips": [
+   0.0,
+   0.47
+  ],
+  "spine": [
+   0.0,
+   0.55
+  ],
+  "chest": [
+   0.0,
+   0.63
+  ],
+  "neck": [
+   0.0,
+   0.7
+  ],
+  "head": [
+   0.0,
+   0.74
+  ],
+  "headTop": [
+   0.0,
+   0.93
+  ],
+  "upperL": [
+   -0.09,
+   0.665
+  ],
+  "foreL": [
+   -0.19,
+   0.635
+  ],
+  "handL": [
+   -0.275,
+   0.615
+  ],
+  "handTipL": [
+   -0.33,
+   0.59
+  ],
+  "upperR": [
+   0.09,
+   0.665
+  ],
+  "foreR": [
+   0.19,
+   0.635
+  ],
+  "handR": [
+   0.275,
+   0.615
+  ],
+  "handTipR": [
+   0.37,
+   0.6
+  ],
+  "thighL": [
+   -0.05,
+   0.45
+  ],
+  "shinL": [
+   -0.045,
+   0.245
+  ],
+  "footL": [
+   -0.015,
+   0.16
+  ],
+  "toeL": [
+   -0.008,
+   0.11
+  ],
+  "thighR": [
+   0.05,
+   0.45
+  ],
+  "shinR": [
+   0.045,
+   0.245
+  ],
+  "footR": [
+   0.04,
+   0.06
+  ],
+  "toeR": [
+   0.04,
+   0.01
+  ]
+ },
+ "zHint": {
+  "footL": -0.08,
+  "toeL": -0.15,
+  "footR": 0.08,
+  "toeR": 0.13,
+  "handTipL": 0.045
+ },
+ "fixed": [
+  "hips",
+  "neck",
+  "head",
+  "headTop",
+  "toeL",
+  "toeR",
+  "handTipL",
+  "handTipR"
+ ],
+ "height": 5.4
+}

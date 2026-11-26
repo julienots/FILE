@@ -35,6 +35,7 @@ const DEFAULTS = {
   dayLength: 14,       // minutes réelles pour une journée
   haptics: true,
   showFps: false,
+  hero: 'void',        // héros par défaut : le Seigneur du Néant
 };
 
 export const settings = (() => {

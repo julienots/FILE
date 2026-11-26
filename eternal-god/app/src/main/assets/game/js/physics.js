@@ -109,14 +109,18 @@ export class Physics {
     const col = new THREE.Color();
     for (const p of pieces) {
       const pool = this.pools.get(p.layer ?? -1) || this.pools.get(-1);
-      const n = p.w * p.h * p.d > 6 ? 2 : 1;
+      // les grandes pièces (pans de toit, murs) se brisent en fragments de 2 à 3 m
+      const along = p.w >= p.d ? 'w' : 'd', L = Math.max(p.w, p.d);
+      const n = Math.min(4, Math.max(1, Math.ceil(L / 2.6)));
       for (let k = 0; k < n; k++) {
-        const lx = p.x + (n > 1 ? (k - 0.5) * p.w * 0.5 : 0), lz = p.z;
+        const off = (k - (n - 1) / 2) * L / n;
+        const lx = p.x + (along === 'w' ? off : 0), lz = p.z + (along === 'd' ? off : 0);
         const x = b.x + lx * c + lz * s, z = b.z - lx * s + lz * c, y = b.y + p.y;
-        let dx = x - from.x, dz = z - from.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+        let dx = x - from.x, dz = z - from.z; const Ld = Math.hypot(dx, dz) || 1; dx /= Ld; dz /= Ld;
         const f = Math.min(40, 4 + power * 0.04) * rand(0.4, 1.2);
         col.setHex(p.layer >= 0 ? 0xffffff : p.color);
-        pool.spawn(x, y, z, Math.max(0.3, p.w / n * rand(0.6, 1)), Math.max(0.25, p.h * rand(0.3, 0.6)), Math.max(0.25, p.d * rand(0.6, 1)),
+        const pw = along === 'w' ? L / n : p.w, pd = along === 'd' ? L / n : p.d;
+        pool.spawn(x, y, z, Math.max(0.3, pw * rand(0.7, 1)), Math.max(0.25, Math.min(p.h, 2.5) * rand(0.4, 0.8)), Math.max(0.25, pd * rand(0.7, 1)),
           dx * f + rand(-2, 2), rand(2, 8) + f * 0.4, dz * f + rand(-2, 2), col);
       }
     }

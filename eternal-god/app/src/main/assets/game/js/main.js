@@ -18,6 +18,7 @@ import { Fauna, loadFauna } from './fauna.js';
 import { FX } from './fx.js';
 import { Physics } from './physics.js';
 import { God } from './god.js';
+import { loadHero, HEROES } from './heromodel.js';
 import { CameraRig } from './camera.js';
 import { Powers } from './powers.js';
 import { Monster } from './monster.js';
@@ -88,7 +89,11 @@ async function boot() {
   G.fx = new FX(scene); G.shake = (a, p) => G.fx.shake(a, p);
   G.physics = new Physics(scene, villages.mat);
   step('Éveil du dieu…', 1); await frame();
-  const god = new God(scene); G.god = god;
+  let heroModel = null;
+  if (settings.hero && settings.hero !== 'celeste') {
+    try { heroModel = await loadHero(settings.hero); } catch (e) { console.error('Héros indisponible, retour au Dieu Céleste', e); settings.hero = 'celeste'; saveSettings(); }
+  }
+  const god = new God(scene, heroModel); G.god = god;
   G.cam = new CameraRig(camera);
   G.powers = new Powers(scene);
   G.monster = new Monster(scene);

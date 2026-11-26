@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}</style>
+<script type="importmap">{"imports":{"three":"../../app/src/main/assets/game/lib/three.module.min.js","three/addons/":"../../app/src/main/assets/game/lib/addons/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+const GAME = '../../app/src/main/assets/game/';
+const _f = window.fetch; window.fetch = (u, ...a) => _f(typeof u === 'string' && /^models\//.test(u) ? GAME + u : u, ...a);
+THREE.DefaultLoadingManager.setURLModifier((u) => (/^models\//.test(u) ? GAME + u : u));
+const { G } = await import(GAME + 'js/core.js');
+G.uniforms = { time: { value: 0 } };
+const { loadHero } = await import(GAME + 'js/heromodel.js');
+const P = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+r.toneMapping = THREE.AgXToneMapping;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x8899aa);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445544, 2)); const d = new THREE.DirectionalLight(0xffffff, 2.5); d.position.set(2, 4, 5); scene.add(d);
+const poses = (P.get('poses') || 'rest').split(',');
+const W = innerWidth / poses.length;
+r.setScissorTest(true);
+for (const [i, pose] of poses.entries()) {
+  const m = await loadHero(P.get('h') || 'void');
+  const s = new THREE.Scene(); s.background = scene.background; s.add(scene.children[0].clone(), scene.children[1].clone());
+  s.add(m.root);
+  const B = m.bones;
+  if (pose === 'walk') { B.thighL.rotation.x = -0.5; B.thighR.rotation.x = 0.4; B.shinR.rotation.x = 0.6; B.upperL.rotation.set(0.5, 0, 0.18); B.upperR.rotation.set(-0.5, 0, -0.18); B.foreL.rotation.x = -0.4; B.foreR.rotation.x = -0.4; }
+  if (pose === 'punch') { B.upperR.rotation.set(-1.55, 0, -0.1); B.foreR.rotation.x = -0.05; B.upperL.rotation.set(0.2, 0, 0.3); B.chest.rotation.y = -0.4; }
+  if (pose === 'fly') { m.root.rotation.x = 1.0; B.thighL.rotation.x = 0.3; B.thighR.rotation.x = 0.1; B.shinL.rotation.x = 0.6; B.shinR.rotation.x = 0.7; B.upperL.rotation.set(0.6, 0, 0.4); B.upperR.rotation.set(0.6, 0, -0.4); }
+  m.updateWings(1, 0, 1);
+  const cam = new THREE.PerspectiveCamera(30, W / innerHeight, 0.1, 100);
+  cam.position.set(P.get('side') ? 14 : 3, 3, P.get('side') ? 0 : 13); cam.lookAt(0, 2.8, 0);
+  r.setViewport(i * W, 0, W, innerHeight); r.setScissor(i * W, 0, W, innerHeight); r.render(s, cam);
+}
+window.__ready = true;
+</script></body></html>
