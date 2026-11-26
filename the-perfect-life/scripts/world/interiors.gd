@@ -15,7 +15,7 @@ var m_steel: Material
 func _init(house: Node3D) -> void:
 	h = house
 	m_white_paint = MatLib.flat(Color(0.94, 0.94, 0.92), 0.38)
-	m_marble = MatLib.pbr("marble_01", 1.6, Color(1, 1, 1), 0.35, 0.5)
+	m_marble = MatLib.flat(Color(0.94, 0.93, 0.91), 0.12, 0.0, 0.5)
 	m_brass = MatLib.flat(Color(0.83, 0.66, 0.4), 0.28, 1.0)
 	m_black = MatLib.flat(Color(0.03, 0.03, 0.035), 0.3, 0.6)
 	m_steel = MatLib.brushed_metal()
@@ -150,6 +150,13 @@ func kitchen() -> void:
 	for i in 4:
 		_base_cabinet(Vector3(2.45 + i * 0.75, y0, 2.6), 0.75, 180.0, false)
 	_counter(Vector3(3.575, y0 + 0.88, 2.8), Vector2(3.3, 1.05), 0.0)
+	# dos et joues de l'îlot (finitions shaker côté tabourets)
+	var back := Node3D.new(); h.add_child(back); back.position = Vector3(3.575, y0 + 0.44, 2.915)
+	for i in 4:
+		var pnl := Node3D.new(); back.add_child(pnl); pnl.position = Vector3(-1.125 + i * 0.75, 0, 0)
+		_shaker_door(pnl, 0.74, 0.86, 0.0)
+	for sx in [-1, 1]:
+		Geo.box(h, Vector3(0.04, 0.88, 0.66), Vector3(3.575 + sx * 1.52, y0 + 0.44, 2.6), m_white_paint, 0.004)
 	for i in 3:
 		Geo.prop(h, "bar_chair_round_01", Vector3(2.7 + i * 0.9, y0, 3.75), 180, 0.0, 0.0)
 	# accessoires
@@ -158,7 +165,7 @@ func kitchen() -> void:
 	Geo.prop(h, "croissant", Vector3(3.9, y0 + 0.93, 2.85), 0)
 	Geo.prop(h, "tea_set_01", Vector3(1.5, y0 + 0.93, 0.42), 0)
 	Geo.prop(h, "vintage_electric_kettle", Vector3(0.45, y0 + 0.93, 1.3), 90)
-	Geo.prop(h, "wine_bottles_01", Vector3(6.15, y0 + 0.93, 0.4), 0)
+	Geo.prop(h, "wine_bottles_01", Vector3(5.95, y0 + 0.93, 0.42), 0)
 	Geo.prop(h, "potted_plant_04", Vector3(2.4, y0 + 0.93, 2.55), 0)
 	# suspensions au-dessus de l'îlot
 	for i in 3:
@@ -416,6 +423,22 @@ func hall() -> void:
 # ------------------------------------------------------------------ éclairage intérieur
 
 func lights() -> void:
+	# sondes de réflexion par pièce (projection en boîte) : métal, verre, sols vernis
+	for r in [[Vector3(4.0, 1.45, 2.5), Vector3(8.0, 2.9, 5.0)], [Vector3(12.0, 1.45, 8.5), Vector3(8.0, 2.9, 7.0)],
+			[Vector3(12.0, 1.45, 2.5), Vector3(8.0, 2.9, 5.0)], [Vector3(12.0, F2 + 1.4, 8.5), Vector3(8.0, 2.85, 7.0)],
+			[Vector3(6.5, 1.45, 8.5), Vector3(3.0, 2.9, 7.0)]]:
+		var probe := ReflectionProbe.new()
+		probe.position = r[0]
+		probe.size = r[1]
+		probe.box_projection = true
+		probe.interior = true
+		probe.enable_shadows = true
+		probe.update_mode = ReflectionProbe.UPDATE_ONCE
+		probe.ambient_mode = ReflectionProbe.AMBIENT_COLOR
+		probe.ambient_color = Color(0.95, 0.88, 0.8)
+		probe.ambient_color_energy = 0.35
+		probe.max_distance = 30.0
+		h.add_child(probe)
 	for p in [Vector3(12.2, 2.8, 8.4), Vector3(6.5, 2.8, 10.5), Vector3(12.0, 2.8, 2.5)]:
 		var l := OmniLight3D.new()
 		l.light_color = Color(1.0, 0.86, 0.7)
