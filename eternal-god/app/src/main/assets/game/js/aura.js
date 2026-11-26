@@ -5,13 +5,14 @@
 import * as THREE from 'three';
 import { G, clamp, damp, rand, emit, haptic } from './core.js';
 
+const _up = new THREE.Vector3(), _c = new THREE.Vector3(), _v = new THREE.Vector3(), _z = new THREE.Vector3(0, 0, 1), _ic = new THREE.Quaternion(), _qr = new THREE.Quaternion();
 const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const FS = `
 uniform float uT, uO, uSeed; uniform vec3 uC1, uC2; varying vec2 vUv;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
-float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ v += a * n(p); p *= 2.03; a *= 0.5; } return v; }
+float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 3; i++){ v += a * n(p); p *= 2.03; a *= 0.5; } return v; }
 void main(){
   vec2 p = vUv * 2.0 - 1.0;               // -1..1, y vers le haut
   // silhouette en goutte : large en bas autour du corps, effilée en pointes vers le haut
@@ -27,7 +28,7 @@ void main(){
   float bottom = smoothstep(-1.0, -0.75, p.y);
   float a = rim * bottom * uO;
   vec3 col = mix(uC2, uC1, clamp(rim * 1.3 + tongues * 0.3, 0.0, 1.0));
-  gl_FragColor = vec4(col * a * 1.8, a);
+  gl_FragColor = vec4(col * a * 1.5, a);
 }`;
 
 export class Aura {
@@ -40,7 +41,7 @@ export class Aura {
     this.group = new THREE.Group();
     this.layers = [];
     const geo = new THREE.PlaneGeometry(1, 1);
-    for (const [s, seed, c1, c2, o] of [[1.0, 0.0, 0xfff6c0, 0xffa818, 0.85], [0.78, 3.7, 0xffffff, 0xffd040, 0.7], [1.22, 7.1, 0xffe080, 0xff7a10, 0.4]]) {
+    for (const [s, seed, c1, c2, o] of [[1.0, 0.0, 0xfff2b0, 0xffa818, 0.8], [0.8, 3.7, 0xfff8e0, 0xffc830, 0.6]]) {
       const m = new THREE.Mesh(geo, new THREE.ShaderMaterial({
         vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
         uniforms: { uT: { value: 0 }, uO: { value: 0 }, uSeed: { value: seed }, uC1: { value: new THREE.Color(c1) }, uC2: { value: new THREE.Color(c2) } },
@@ -75,7 +76,7 @@ export class Aura {
     const g = G.terrain.heightAt(p.x, p.z);
     G.fx.sphere(p, 26, 0.7, 0xffe7a0); G.fx.ring(p.clone().setY(Math.max(g, p.y - 30)), 140, 1.4, 0xffd27a);
     G.fx.flash(p, 6000, 0.6, 0xffd890); G.fx.shake(0.8, p); G.fx.sparks(p, 90, [1, 0.85, 0.35], 40);
-    if (p.y - g < 14) { G.fx.dust(p.clone().setY(g), 26, 40); G.fx.rocks(p.clone().setY(g), 26, 18); G.terrain.crater(p.x, p.z, 10, 1.5, { rim: 0.5, burn: 0.1 }); }
+    if (p.y - g < 14) { G.fx.dust(p.clone().setY(g), 26, 40); G.fx.rocks(p.clone().setY(g), 10, 14); G.terrain.crater(p.x, p.z, 10, 1.5, { rim: 0.5, burn: 0.1 }); }
     if (G.env) G.env.flash = 0.5;
     if (G.powers) G.powers.areaDamage(p, 45, 700, 'push', 'aura');
     if (G.audio) { G.audio.explosion(p, 0.9); G.audio.roar && G.audio.roar(p, 0.4); }
@@ -110,35 +111,44 @@ export class Aura {
     this.light.intensity = vis ? (450 + Math.sin(this.t * 23) * 80) * this.k : 0;
     if (!vis) return;
     const cam = G.camera;
-    const c = god.root.position, fly = god.anim.fly;
-    // centrée sur le corps ; en vol « comète », allongée dans l'axe du vol
-    this.group.position.set(c.x, c.y + 2.7, c.z);
-    this.light.position.set(c.x, c.y + 3, c.z);
+    // centre = torse du héros (suit l'inclinaison du corps en vol), axe = axe du corps
+    const rq = god.root.quaternion;
+    _up.set(0, 1, 0).applyQuaternion(rq);
+    _c.copy(god.root.position).addScaledVector(_up, 2.7);
+    this.group.position.copy(_c);
+    this.light.position.copy(_c);
+    // la flamme se dresse dans l'axe du corps vu par la caméra (couché en vol « comète »)
+    _ic.copy(cam.quaternion).invert();
+    _v.copy(_up).applyQuaternion(_ic);
+    const roll = Math.atan2(-_v.x, _v.y);
+    _qr.setFromAxisAngle(_z, roll);
     const pulse = 1 + Math.sin(this.t * 17) * 0.03 + Math.sin(this.t * 5.3) * 0.04;
     for (const m of this.layers) {
-      m.quaternion.copy(cam.quaternion);
+      m.quaternion.copy(cam.quaternion).multiply(_qr);
       const s = m.userData.s * pulse;
-      m.scale.set(6.2 * s, 9.5 * s * (1 + god.anim.boost * 0.25), 1);
-      m.position.y = 0.6 * s - 0.5;
+      m.scale.set(6.0 * s, 9.2 * s, 1);
+      m.position.copy(_up).multiplyScalar(0.6 * s - 0.5);
       m.material.uniforms.uT.value = this.t * (1 + m.userData.s * 0.15);
       m.material.uniforms.uO.value = m.userData.o * this.k;
     }
     if (!this.active) return;
-    const p = god.pos;
-    // étincelles dorées qui montent le long du corps
-    const n = Math.round(dt * 70);
+    const p = god.pos, gv = god.vel;
+    // étincelles dorées qui montent le long du corps : elles héritent de la vitesse du héros
+    const n = Math.round(dt * 60);
     for (let i = 0; i < n; i++) {
-      const a = rand(0, 6.28), r = rand(0.8, 2.6);
-      G.fx.add.emit(p.x + Math.cos(a) * r, p.y + rand(0, 4.5), p.z + Math.sin(a) * r, rand(-1, 1), rand(8, 16), rand(-1, 1), rand(0.25, 0.6), rand(0.35, 0.7), 1, rand(0.75, 0.95), 0.35, 1, 0, -1, 0.3);
+      const a = rand(0, 6.28), r = rand(0.8, 2.4), h = rand(-2.2, 2.2);
+      const x = _c.x + Math.cos(a) * r + _up.x * h, y = _c.y + _up.y * h, z = _c.z + Math.sin(a) * r + _up.z * h;
+      const up = rand(8, 15);
+      G.fx.add.emit(x, y, z, gv.x + _up.x * up, gv.y + _up.y * up, gv.z + _up.z * up, rand(0.25, 0.55), rand(0.3, 0.6), 1, rand(0.75, 0.95), 0.35, 1, 0, -1, 0);
     }
-    // arcs électriques autour du corps
+    // arcs électriques autour du corps (seulement quand il est presque immobile : sinon ils traînent)
     this.boltT -= dt;
-    if (this.boltT <= 0) {
-      this.boltT = rand(0.12, 0.45);
-      const a = rand(0, 6.28), b = a + rand(0.6, 1.6), y0 = rand(0.5, 4.5);
-      const A = new THREE.Vector3(p.x + Math.cos(a) * 1.6, p.y + y0, p.z + Math.sin(a) * 1.6);
-      const Bp = new THREE.Vector3(p.x + Math.cos(b) * 1.8, p.y + y0 + rand(-1.5, 1.5), p.z + Math.sin(b) * 1.8);
-      G.fx.bolt(A, Bp, 0.12);
+    if (this.boltT <= 0 && gv.length() < 15) {
+      this.boltT = rand(0.15, 0.45);
+      const a = rand(0, 6.28), b = a + rand(0.6, 1.6), y0 = rand(-1.8, 1.8);
+      const A = new THREE.Vector3(_c.x + Math.cos(a) * 1.6, _c.y + y0, _c.z + Math.sin(a) * 1.6);
+      const Bp = new THREE.Vector3(_c.x + Math.cos(b) * 1.8, _c.y + y0 + rand(-1.2, 1.2), _c.z + Math.sin(b) * 1.8);
+      G.fx.bolt(A, Bp, 0.1);
     }
     // au sol : poussière en anneau et cailloux qui lévitent
     const g = G.terrain.heightAt(p.x, p.z), alt = p.y - g;

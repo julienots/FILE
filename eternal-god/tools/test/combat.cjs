@@ -13,7 +13,7 @@ const { chromium } = require('playwright');
   await p.mouse.click(450, 200); await p.waitForTimeout(1500);
   const shot = async (n, w = 2500) => { await p.waitForTimeout(w); await p.screenshot({ path: `${out}-${n}.jpg`, quality: 85, timeout: 600000 }); console.log('shot', n, await p.evaluate(() => [G.god.state, G.god.action && G.god.action.kind, G.aura.active, G.music.level, G.monster.state, G.dragon && G.dragon.state].join(' '))); };
   await p.evaluate(() => { const g = G.god; g.pos.set(30, G.terrain.groundAt(30, 60), 60); g.state = 'ground'; g.vel.set(0, 0, 0); G.cam.zoomMul = 0.55; G.cam.yaw = 0.6; G.cam.pitch = 0.1; G.cam.lastInput = G.time + 1e6; G.env.dayTime = 0.42; });
-  await p.evaluate(() => G.aura.toggle()); await shot('1-transformation', 900);
+  await p.evaluate(() => G.aura.toggle()); await shot('1-transformation', 900); await p.evaluate(() => { G.aura.transforming = 0.2; });
   await shot('2-aura', 2000);
   await p.evaluate(() => { G.god.startFly(); G.ui.input.moveY = 0.3; }); await shot('3-vol-divin', 3500);
   await p.evaluate(() => { G.ui.input.moveY = 1; }); await shot('4-vol-comete', 3000);

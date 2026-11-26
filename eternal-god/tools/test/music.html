@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"../../app/src/main/assets/game/lib/three.module.min.js","three/addons/":"../../app/src/main/assets/game/lib/addons/"}}</script>
+<script type="module">
+// Rend 24 s de musique hors ligne (niveaux 0, 1, 2) et mesure crêtes, saturation et discontinuités.
+import { Music } from '../../app/src/main/assets/game/js/music.js';
+import { settings } from '../../app/src/main/assets/game/js/core.js';
+window.run = async () => {
+  settings.music = 0.6;
+  const sr = 44100, dur = 24, c = new OfflineAudioContext(2, sr * dur, sr);
+  const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+  const lim = c.createDynamicsCompressor(); lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;
+  comp.connect(lim).connect(c.destination);
+  const m = new Music({ ctx: c, comp, limiter: lim });
+  m.init();
+  const L = m.L, set = (lvl, at) => { const T = { 0: [0.5, 0.45, 0.5, 0, 0, 0], 1: [0.4, 0.35, 0.85, 0.5, 0.55, 0], 2: [0.38, 0.45, 1, 0.55, 0.6, 0.5] }[lvl]; [L.pad, L.mel, L.drum, L.ost, L.brass, L.choir].forEach((g, i) => g.gain.setTargetAtTime(T[i], at, 0.5)); };
+  let t = 0.3, lvl = 0; set(0, 0); m.level = 0;
+  while (t < dur - 1) { const want = t < 8 ? 0 : t < 16 ? 1 : 2; if (want !== lvl) { lvl = want; m.level = lvl; set(lvl, t); } m.tick(t); t += 60 / 100 / 4; }
+  const buf = await c.startRendering();
+  const d = buf.getChannelData(0);
+  let peak = 0, clip = 0, jumps = 0, nan = 0, rms = [0, 0, 0];
+  for (let i = 1; i < d.length; i++) { const v = d[i]; if (!isFinite(v)) nan++; const a = Math.abs(v); if (a > peak) peak = a; if (a > 0.99) clip++; if (Math.abs(v - d[i - 1]) > 0.5) jumps++; rms[Math.min(2, Math.floor(i / sr / 8))] += v * v; }
+  return { peak: +peak.toFixed(3), clip, jumps, nan, rms: rms.map((x) => +Math.sqrt(x / (sr * 8)).toFixed(3)) };
+};
+window.ready = true;
+</script>

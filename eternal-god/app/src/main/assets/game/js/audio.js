@@ -4,7 +4,7 @@ import { G, settings, clamp, rand } from './core.js';
 
 export class Audio {
   constructor() {
-    this.ctx = null; this.voices = 0; this.maxVoices = 14;
+    this.ctx = null; this.voices = 0; this.maxVoices = 12;
   }
 
   // doit être appelé depuis un geste de l'utilisateur (règle des navigateurs mobiles)
@@ -12,11 +12,14 @@ export class Audio {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    try { this.ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { return; }
+    // « playback » : grands tampons audio = aucun craquement sur les téléphones Android
+    try { this.ctx = new AC({ latencyHint: 'playback' }); } catch (e) { try { this.ctx = new AC(); } catch (e2) { return; } }
     const c = this.ctx;
     this.master = c.createGain(); this.master.gain.value = settings.volume;
     this.comp = c.createDynamicsCompressor(); this.comp.threshold.value = -14; this.comp.ratio.value = 4;
-    this.master.connect(this.comp).connect(c.destination);
+    // limiteur final : le son ne sature jamais, même quand tout explose en même temps
+    this.limiter = c.createDynamicsCompressor(); this.limiter.threshold.value = -4; this.limiter.knee.value = 0; this.limiter.ratio.value = 20; this.limiter.attack.value = 0.002; this.limiter.release.value = 0.15;
+    this.master.connect(this.comp).connect(this.limiter).connect(c.destination);
     // bruit blanc réutilisable
     const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -51,22 +54,22 @@ export class Audio {
   burst({ dur = 0.5, freq = 800, q = 0.7, gain = 0.5, type = 'lowpass', sweep = 0, at = null, range = 400 }) {
     if (!this.ctx || this.voices >= this.maxVoices) return;
     const k = this.att(at, range) * gain; if (k < 0.01) return;
-    const c = this.ctx, t = c.currentTime;
+    const c = this.ctx, t = c.currentTime + 0.01;
     const src = c.createBufferSource(); src.buffer = this.noise; src.playbackRate.value = rand(0.8, 1.2);
     const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
     if (sweep) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq * sweep), t + dur);
-    const g = c.createGain(); g.gain.setValueAtTime(k, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(k, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.04);
     src.connect(f).connect(g).connect(this.master);
-    src.start(t, Math.random()); src.stop(t + dur + 0.05);
+    src.start(t, Math.random()); src.stop(t + dur + 0.06);
     this.voices++; src.onended = () => this.voices--;
   }
   tone({ f0 = 80, f1 = 40, dur = 0.4, gain = 0.5, type = 'sine', at = null, range = 400 }) {
     if (!this.ctx || this.voices >= this.maxVoices) return;
     const k = this.att(at, range) * gain; if (k < 0.01) return;
-    const c = this.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+    const c = this.ctx, t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(10, f1), t + dur);
-    g.gain.setValueAtTime(k, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(k, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.04);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.06);
     this.voices++; o.onended = () => this.voices--;
   }
 
@@ -101,7 +104,7 @@ export class Audio {
       this.laserNode = { o, o2, g };
     } else if (!on && this.laserNode) {
       const n = this.laserNode; this.laserNode = null;
-      n.g.gain.linearRampToValueAtTime(0, c.currentTime + 0.2); n.o.stop(c.currentTime + 0.25); n.o2.stop(c.currentTime + 0.25);
+      n.g.gain.cancelScheduledValues(c.currentTime); n.g.gain.setValueAtTime(n.g.gain.value, c.currentTime); n.g.gain.linearRampToValueAtTime(0, c.currentTime + 0.2); n.o.stop(c.currentTime + 0.25); n.o2.stop(c.currentTime + 0.25);
     }
   }
   chirp() { // oiseau

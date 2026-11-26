@@ -261,7 +261,7 @@ export class God {
     const landK = this.landT > 0 ? Math.min(1, this.landT / 0.35) : 0; // 1 = au sol genou à terre, puis relevé
     a.land = damp(a.land, landK, 14, dt);
     a.stance = damp(a.stance, aura && onGround && this.speed < 1 ? 1 : 0, 4, dt);
-    const targetPitch = flying ? 0.1 + cruise * 0.24 + a.boost * 1.05 - climb * 0.12 : (this.state === 'knock' ? -0.6 : (this.state === 'air' ? 0.1 : a.run * 0.12));
+    const targetPitch = flying ? 0.06 + cruise * 0.28 + a.boost * 1.05 - climb * 0.12 : (this.state === 'knock' ? -0.6 : (this.state === 'air' ? 0.1 : a.run * 0.12));
     a.pitch = damp(a.pitch, targetPitch, flying ? 2.2 : 5, dt);
     a.crouch = damp(a.crouch, 0, 3, dt);
     a.knock = damp(a.knock, this.state === 'knock' ? 1 : 0, 5, dt);
@@ -282,7 +282,7 @@ export class God {
     const shift = Math.sin(t * 0.45) * 0.04 * (1 - a.walk) * (1 - a.fly);
     this.pose('hips', 0, s * (0.1 * W + 0.16 * R), c * (0.05 * W) + shift, 16);
     this.pose('spine', 0.04 * W + 0.3 * R + a.crouch * 0.4 + a.land * 0.55 - a.knock * 0.4 + a.stance * 0.1, -s * (0.12 * W + 0.2 * R), -shift * 0.6, 14);
-    this.pose('chest', breathe + 0.05 * R - a.stance * 0.12, -s * (0.06 * W + 0.12 * R), 0, 12);
+    this.pose('chest', breathe + 0.05 * R - a.stance * 0.12 - 0.12 * a.fly * (1 - a.boost), -s * (0.06 * W + 0.12 * R), 0, 12);
     a.idleT = onGround && this.speed < 0.5 && !this.action ? a.idleT + dt : 0;
     const look = a.idleT > 5 ? Math.sin((a.idleT - 5) * 0.35) * 0.55 : 0;
     this.pose('head', -a.pitch * 0.75 + a.knock * 0.3 - a.land * 0.35 * (this.landT > 0.6 ? 1 : 0) + a.stance * 0.06, look, 0, 10);
@@ -297,9 +297,12 @@ export class God {
     zL += 0.17 * a.stance; zR -= 0.17 * a.stance; tL -= 0.25 * a.stance; tR -= 0.25 * a.stance; sL += 0.45 * a.stance; sR += 0.45 * a.stance;
     // vol divin : une jambe repliée vers l'avant, l'autre tendue, pieds pointés ; en comète, jambes tendues
     const hov = a.fly * (1 - a.boost);
-    tL = lerp(tL, 0.12 + Math.sin(t * 1.4) * 0.05 + cruise * 0.15, hov); sL = lerp(sL, 0.32 + cruise * 0.2, hov);
-    tR = lerp(tR, -0.62 + Math.sin(t * 1.4 + 1) * 0.06 + cruise * 0.35, hov); sR = lerp(sR, 1.05 - cruise * 0.3, hov);
-    fL = lerp(fL, 0.6, a.fly); fR = lerp(fR, 0.55, a.fly);
+    // lévitation : jambes presque tendues, genou droit à peine fléchi, pointes de pied vers le bas
+    const sway = Math.sin(t * 1.3);
+    tL = lerp(tL, 0.05 + sway * 0.03 + cruise * 0.2, hov); sL = lerp(sL, 0.12 + cruise * 0.25, hov);
+    tR = lerp(tR, -0.16 - sway * 0.04 + cruise * 0.38, hov); sR = lerp(sR, 0.55 + sway * 0.05 + cruise * 0.1, hov);
+    zL += 0.04 * hov; zR -= 0.04 * hov;
+    fL = lerp(fL, 0.7, a.fly); fR = lerp(fR, 0.75, a.fly);
     tL = lerp(tL, 0.08, a.boost * a.fly); tR = lerp(tR, 0.02, a.boost * a.fly); sL = lerp(sL, 0.12, a.boost * a.fly); sR = lerp(sR, 0.22, a.boost * a.fly);
     // saut / chute
     if (this.state === 'air') { const up = clamp(this.vel.y / 20, -1, 1); tL = -0.7 * Math.max(0, up) + 0.15; tR = -0.4 * Math.max(0, up) - 0.25; sL = 1.2 * Math.max(0, up) + 0.3; sR = 0.9 * Math.max(0, up) + 0.5; }
@@ -317,9 +320,10 @@ export class God {
     uL = [lerp(uL[0], -0.35, a.stance), 0, lerp(uL[2], 0.32, a.stance)]; uR = [lerp(uR[0], -0.35, a.stance), 0, lerp(uR[2], -0.32, a.stance)];
     fAL = lerp(fAL, -1.2, a.stance); fAR = lerp(fAR, -1.2, a.stance);
     // vol divin : bras détendus, écartés ; en croisière légèrement en arrière ; en comète : poing droit devant
-    uL = [lerp(uL[0], 0.12 + cruise * 0.35, hov), 0, lerp(uL[2], 0.38 + Math.sin(t * 1.4) * 0.04, hov)];
-    uR = [lerp(uR[0], 0.12 + cruise * 0.35, hov), 0, lerp(uR[2], -0.38 - Math.sin(t * 1.4) * 0.04, hov)];
-    fAL = lerp(fAL, -0.45, hov); fAR = lerp(fAR, -0.45, hov);
+    // lévitation : bras écartés et détendus, coudes souples ; en croisière ils passent en arrière
+    uL = [lerp(uL[0], -0.1 + cruise * 0.5, hov), 0, lerp(uL[2], 0.5 + sway * 0.05 - cruise * 0.15, hov)];
+    uR = [lerp(uR[0], -0.1 + cruise * 0.5, hov), 0, lerp(uR[2], -0.5 - sway * 0.05 + cruise * 0.15, hov)];
+    fAL = lerp(fAL, -0.55 + cruise * 0.3, hov); fAR = lerp(fAR, -0.55 + cruise * 0.3, hov);
     const bst = a.boost * a.fly;
     uR = [lerp(uR[0], -3.0, bst), 0, lerp(uR[2], -0.08, bst)]; fAR = lerp(fAR, -0.02, bst);
     uL = [lerp(uL[0], 0.25, bst), 0, lerp(uL[2], 0.22, bst)]; fAL = lerp(fAL, -0.2, bst);
