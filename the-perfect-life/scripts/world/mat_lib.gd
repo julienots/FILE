@@ -132,6 +132,18 @@ static func emissive(color: Color, energy := 4.0) -> StandardMaterial3D:
 	m.emission_energy_multiplier = energy
 	return m
 
+## Pelouse sans répétition (shader dédié).
+static func grass_ground() -> ShaderMaterial:
+	if _cache.has("grass"):
+		return _cache["grass"]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/grass_ground.gdshader")
+	m.set_shader_parameter("albedo_tex", load(TEX % ["leafy_grass", "leafy_grass", "diff"]))
+	m.set_shader_parameter("normal_tex", load(TEX % ["leafy_grass", "leafy_grass", "nor"]))
+	m.set_shader_parameter("orm_tex", load(TEX % ["leafy_grass", "leafy_grass", "arm"]))
+	_cache["grass"] = m
+	return m
+
 ## Eau de piscine : shader dédié (vagues, fresnel, réfraction).
 static func pool_water() -> ShaderMaterial:
 	if _cache.has("water"):

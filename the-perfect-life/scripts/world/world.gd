@@ -107,7 +107,7 @@ func _environment() -> void:
 # ---------------------------------------------------------------- sol, rue
 
 func _ground() -> void:
-	var grass := MatLib.pbr("leafy_grass", 2.6, Color(0.74, 0.86, 0.66), 1.0, 1.0)
+	var grass := MatLib.grass_ground()
 	# grande pelouse découpée autour de la piscine (x 3..12, z -12..-5)
 	var big := 600.0
 	var hole := Rect2(3.0, -12.0, 9.0, 7.0)
@@ -166,7 +166,7 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 	hb.with_interior = interior
 	root.add_child(hb)
 	hb.build()
-	var drive := MatLib.pbr("grooved_concrete_driveway", 3.0, Color(0.88, 0.87, 0.85))
+	var drive := MatLib.pbr("concrete_pavement", 3.0, Color(0.95, 0.94, 0.92))
 	var walk := MatLib.pbr("concrete_pavement", 2.0, Color(0.92, 0.9, 0.87))
 	Geo.box(root, Vector3(4.6, 0.08, 8.6), Vector3(2.5, 0.0, 16.3), drive, 0.01, true)
 	Geo.box(root, Vector3(1.3, 0.07, 6.6), Vector3(6.5, 0.0, 17.2), walk, 0.01, true)
@@ -236,5 +236,5 @@ func _horizon_trees() -> void:
 		var x := -80.0 + k * 10.5 + rng.randf_range(-2.0, 2.0)
 		for z in [-24.0 - rng.randf() * 6.0, 66.0 + rng.randf() * 6.0]:
 			var name: String = names[k % names.size()]
-						var t := Geo.prop(self, name, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
+			var t := Geo.prop(self, name, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
 			Geo.far_settings(t, 260.0, false)
