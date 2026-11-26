@@ -132,7 +132,8 @@ static func local_aabb(n: Node3D) -> AABB:
 	var out := AABB()
 	var first := true
 	for mi in n.find_children("*", "MeshInstance3D", true, false):
-		var t: Transform3D = _rel_transform(n, mi)
+		# maillage riggé : son AABB est déjà dans l'espace du modèle (le squelette fait le reste)
+		var t: Transform3D = Transform3D.IDENTITY if (mi as MeshInstance3D).skin != null else _rel_transform(n, mi)
 		var b: AABB = t * (mi as MeshInstance3D).get_aabb()
 		if first:
 			out = b; first = false
