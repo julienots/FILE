@@ -92,7 +92,7 @@ func _interior_door(axis_x: bool, fixed: float, o: Dictionary, y0: float, t: flo
 	leaf.name = "DoorLeaf"
 	holder.add_child(leaf)
 	leaf.position = Vector3(-w * 0.5 + 0.02, 0, -t * 0.5)
-	leaf.rotation.y = deg_to_rad(80)
+	leaf.rotation.y = deg_to_rad(95)
 	var lw := w - 0.04
 	Geo.box(leaf, Vector3(lw, hh - 0.02, 0.04), Vector3(lw * 0.5, hh * 0.5, -0.02), m_trim, 0.004)
 	for r in 2:

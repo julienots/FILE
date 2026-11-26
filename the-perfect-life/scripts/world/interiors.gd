@@ -487,7 +487,7 @@ func lights() -> void:
 		probe.ambient_color_energy = 0.8
 		probe.max_distance = 30.0
 		h.add_child(probe)
-	for p in [Vector3(12.2, 2.8, 8.4), Vector3(6.5, 2.8, 10.5), Vector3(12.0, 2.8, 2.5)]:
+	for p in [Vector3(12.2, 2.8, 8.4), Vector3(6.5, 2.8, 10.5), Vector3(12.0, 2.8, 2.5), Vector3(3.2, 2.8, 2.4), Vector3(1.2, 2.8, 3.8)]:
 		var l := OmniLight3D.new()
 		l.light_color = Color(1.0, 0.86, 0.7)
 		l.light_energy = 1.1
