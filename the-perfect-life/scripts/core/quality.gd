@@ -31,7 +31,7 @@ static func apply(level: int, env: Environment, sun: DirectionalLight3D, vp: Vie
 	env.volumetric_fog_enabled = ultra
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if high else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 140.0 if ultra else (90.0 if high else 50.0)
+	sun.directional_shadow_max_distance = 90.0 if ultra else (70.0 if high else 45.0)
 	sun.light_angular_distance = 0.6 if mid else 0.0
 	vp.scaling_3d_scale = 1.0 if high else (0.85 if mid else 0.7)
 	vp.msaa_3d = Viewport.MSAA_4X if ultra else (Viewport.MSAA_2X if high else Viewport.MSAA_DISABLED)

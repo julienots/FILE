@@ -155,6 +155,10 @@ static func prop(parent: Node3D, path_or_name: String, pos: Vector3, rot_y_deg :
 	var path := path_or_name
 	if not path.begins_with("res://"):
 		path = "res://assets/polyhaven/models/%s/%s.gltf" % [path_or_name, path_or_name]
+	# version mobile allégée si disponible (tools/optimize_assets.sh)
+	var opt := "res://assets/optimized/%s.glb" % path.get_file().get_basename()
+	if ResourceLoader.exists(opt):
+		path = opt
 	var ps: PackedScene = load(path)
 	if ps == null:
 		push_error("Modèle introuvable : " + path)
@@ -176,3 +180,13 @@ static func prop(parent: Node3D, path_or_name: String, pos: Vector3, rot_y_deg :
 	pivot.rotation_degrees.y = rot_y_deg
 	parent.add_child(pivot)
 	return pivot
+
+## Distance d'affichage maximale (+ ombres coupées) pour les objets lointains.
+static func far_settings(n: Node, vis_end: float, shadows := true) -> void:
+	for gi in n.find_children("*", "GeometryInstance3D", true, false):
+		var g := gi as GeometryInstance3D
+		g.visibility_range_end = vis_end
+		g.visibility_range_end_margin = vis_end * 0.1
+		g.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		if not shadows:
+			g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

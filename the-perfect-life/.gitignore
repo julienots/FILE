@@ -7,3 +7,4 @@ captures/*.png
 build/
 *.tmp
 __pycache__/
+assets/optimized/

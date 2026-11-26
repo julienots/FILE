@@ -164,7 +164,7 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 	# massifs au pied de la façade
 	var mulch: Material = MatLib.pbr("forest_floor", 2.0) if ResourceLoader.exists("res://assets/polyhaven/textures/forest_floor/forest_floor_diff.jpg") else MatLib.flat(Color(0.2, 0.13, 0.08), 0.95)
 	Geo.box(root, Vector3(7.6, 0.06, 1.3), Vector3(12.0, 0.0, 12.75), mulch, 0.01)
-	var shrubs := ["shrub_01", "shrub_02", "shrub_04", "shrub_03"]
+	var shrubs := ["shrub_02", "shrub_04", "shrub_03"]
 	for k in 6:
 		Geo.prop(root, shrubs[k % shrubs.size()], Vector3(8.8 + k * 1.3, 0.03, 12.8), k * 47.0, 0.0, 0.9 + (k % 3) * 0.15)
 	Geo.prop(root, "planter_box_01", Vector3(5.3, 0.18, 13.1), 0)
@@ -220,12 +220,13 @@ func _cars() -> void:
 	Geo.prop(self, "res://assets/drive/white_sports_car.glb", Vector3(-20.0, 0.0, 29.0), 0, 4.5)
 
 func _horizon_trees() -> void:
-	var names := ["island_tree_01", "tree_small_02", "jacaranda_tree", "island_tree_03"]
+	var names := ["island_tree_01", "jacaranda_tree", "realistic_tree"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	for k in 34:
-		var x := -90.0 + k * 5.5 + rng.randf_range(-1.5, 1.5)
-		var name: String = names[k % 2]
-		if ResourceLoader.exists("res://assets/polyhaven/models/%s/%s.gltf" % [name, name]):
-			Geo.prop(self, name, Vector3(x, 0, -24.0 - rng.randf() * 6.0), rng.randf() * 360.0, 0.0, rng.randf_range(7.0, 11.0))
-			Geo.prop(self, name, Vector3(x + 2.0, 0, 64.0 + rng.randf() * 6.0), rng.randf() * 360.0, 0.0, rng.randf_range(7.0, 11.0))
+	for k in 16:
+		var x := -80.0 + k * 10.5 + rng.randf_range(-2.0, 2.0)
+		for z in [-24.0 - rng.randf() * 6.0, 66.0 + rng.randf() * 6.0]:
+			var name: String = names[k % names.size()]
+			var path := "res://assets/drive/realistic_tree.glb" if name == "realistic_tree" else name
+			var t := Geo.prop(self, path, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
+			Geo.far_settings(t, 260.0, false)
