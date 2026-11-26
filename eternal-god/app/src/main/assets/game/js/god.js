@@ -240,6 +240,22 @@ export class God {
     this.animate(dt, 0);
   }
 
+  // ---------- forme humaine / forme divine ----------
+  setHuman(on) {
+    if (!!this.human === on || this.state === 'teleport') return;
+    if (on && !this.humanModel) { if (!G.humanAsset) return; this.humanModel = G.buildHuman(G.humanAsset); }
+    if (!this.divineModel) this.divineModel = this.model;
+    const p = this.pos.clone().add(V(0, 2, 0));
+    if (G.fx) { G.fx.sphere(p, on ? 10 : 14, 0.5, 0xfff0c0); G.fx.ring(this.pos, 30, 0.7, 0xffd27a); G.fx.flash(p, 3000, 0.4, 0xfff0d0); G.fx.sparks(p, 60, [1, 0.85, 0.4], 18); G.fx.shake(0.3, p); }
+    if (G.audio) G.audio.teleport();
+    this.human = on;
+    this.setModel(on ? this.humanModel : this.divineModel);
+    this.height = on ? 1.9 : 5.2;
+    this.action = null;
+    emit('human', on);
+    emit('journal', { icon: on ? '🧍' : '✦', text: on ? 'Le dieu prend forme humaine. Ses pouvoirs restent intacts.' : 'Le dieu reprend sa forme divine.' });
+  }
+
   theme() { const t = (this.model && this.model.theme) || { main: 0xffd27a }; return new THREE.Color(t.main); }
 
   // ---------- animation procédurale à ressorts ----------
@@ -269,14 +285,25 @@ export class God {
     const s = Math.sin(this.phase), c = Math.cos(this.phase);
     const W = a.walk * (1 - a.run), R = a.run;
     // ---- racine : position, balancement, inclinaison
-    const bank = flying ? clamp(angleDelta(this.prevHeading ?? this.heading, this.heading) / Math.max(dt, 1e-3) * 0.3, -0.7, 0.7) : 0;
+    const turn = angleDelta(this.prevHeading ?? this.heading, this.heading) / Math.max(dt, 1e-3);
+    // en vol : roulis dans les virages ; au sol : le corps se penche dans le virage et selon l'accélération
+    const bank = flying ? clamp(turn * 0.3, -0.7, 0.7) : (onGround ? clamp(turn * this.speed * 0.012, -0.28, 0.28) : 0);
     this.prevHeading = this.heading;
-    a.roll = damp(a.roll, -bank, 2.5, dt);
+    a.roll = damp(a.roll, -bank, flying ? 2.5 : 6, dt);
+    const acc = onGround ? (this.speed - (this.prevSpeed ?? this.speed)) / Math.max(dt, 1e-3) : 0;
+    this.prevSpeed = this.speed;
+    a.accLean = damp(a.accLean || 0, clamp(acc * 0.012, -0.18, 0.22), 5, dt);
+    if (onGround) a.pitch += a.accLean * dt * 6;
     const hoverBob = flying ? Math.sin(t * 1.4) * 0.35 * (1 - a.boost) : 0;
     this.root.position.copy(this.pos);
     this.root.position.y += (onGround ? -Math.abs(c) * (0.1 * W + 0.22 * R) + 0.05 * a.walk : hoverBob) - a.crouch * 0.9 - a.land * 1.55 - a.stance * 0.25;
     this.root.rotation.order = 'YXZ';
-    this.root.rotation.set(a.pitch, this.heading, a.roll + (flying ? Math.sin(t * 0.9) * 0.04 * (1 - a.boost) : 0));
+    this.root.rotation.set(a.pitch + (onGround ? a.accLean : 0), this.heading, a.roll + (flying ? Math.sin(t * 0.9) * 0.04 * (1 - a.boost) : 0));
+    // forme humaine : animations de personnage + poses par-dessus (même logique de racine)
+    if (this.model.animate) {
+      this.root.position.copy(this.pos); this.root.position.y += flying ? hoverBob * 0.3 : 0;
+      this.model.animate(this, dt); return;
+    }
     // ---- bassin, colonne, tête
     const breathe = Math.sin(t * (aura ? 2.2 : 1.25)) * (aura ? 0.035 : 0.022);
     const shift = Math.sin(t * 0.45) * 0.04 * (1 - a.walk) * (1 - a.fly);

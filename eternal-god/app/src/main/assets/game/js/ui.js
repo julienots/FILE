@@ -43,6 +43,7 @@ export class UI {
         <button id="btnInteract" class="round small hidden" aria-label="Interaction">✋</button>
         <button id="btnTeleport" class="round small" aria-label="Téléportation">✦</button>
         <button id="btnAura" class="round small" aria-label="Aura divine">⚡</button>
+        <button id="btnHuman" class="round small" aria-label="Forme humaine">🧍</button>
       </div>
       <div id="interactLabel" class="hidden"></div>
       <div id="wheel" class="hidden"></div>
@@ -180,6 +181,8 @@ export class UI {
     hold('#btnTeleport', () => this.openMenu('map'));
     hold('#btnAura', () => G.aura.toggle());
     on('aura', (a) => $('#btnAura').classList.toggle('on', a));
+    hold('#btnHuman', () => G.god.setHuman(!G.god.human));
+    on('human', (h) => { $('#btnHuman').classList.toggle('on', h); $('#btnHuman').textContent = h ? '✦' : '🧍'; });
   }
 
   bindKeys() {
@@ -196,6 +199,7 @@ export class UI {
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyR') this.toggleWheel();
       if (e.code === 'KeyT') G.aura.toggle();
+      if (e.code === 'KeyH') G.god.setHuman(!G.god.human);
       if (e.code === 'KeyM' || e.code === 'Escape') this.menuOpen ? this.closeMenu() : this.openMenu('map');
       if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (i >= 0 && i < POWERS.length) this.selectPower(i); }
       upd();

@@ -2,7 +2,7 @@
 
 Monde ouvert 3D pour Android : vous incarnez un dieu immortel, libre de protéger, d'observer ou de détruire un monde vivant.
 
-## Contenu de la version jouable (0.1)
+## Contenu de la version jouable (0.5)
 
 | Système | État |
 |---|---|
@@ -13,11 +13,16 @@ Monde ouvert 3D pour Android : vous incarnez un dieu immortel, libre de protége
 | Ciel | 8 ciels photographiques réels (série Qwantani, Poly Haven) fondus selon l'heure ; soleil, couleurs et reflets mesurés sur les photos ; nuit étoilée ; météo (orages, pluie, éclairs) |
 | Villages | 4 lieux : Vallon d'Aube, Port-Lac, Clairière des Anciens, Hameau du Col. Rues pavées et chemins, temple, auberge, forge, marché, moulin, tours, champs cultivés, ponton, accessoires scannés |
 | Chemins | Routes entre villages tracées selon le relief (A*), ponts, panneaux, bornes, lanternes, voyageurs |
-| Habitants | ~100 à 190 selon la qualité, avec nom, métier, famille et routine horaire. Ils s'agenouillent et prient, fuient, se cachent, attaquent (gardes), fêtent, meurent, reconstruisent, ont des enfants |
+| Habitants | ~140 à 280 selon la qualité, avec nom, métier, famille et routine horaire. Ils s'agenouillent et prient, fuient, se cachent, attaquent (gardes), fêtent, meurent, reconstruisent, ont des enfants. Chaque habitant est fusionné en un seul maillage animé (1 appel de dessin) avec tenue teintée propre |
+| Frimeurs | 2 à 5 par village : s'entraînent sur la place, narguent le dieu (figures, coups de pied, roulades, moqueries, jets de cailloux) et ne font plus les malins face à l'aura ou à la destruction |
+| Forme humaine | Bouton 🧍 (H) : le dieu devient un homme de 1,9 m animé par de vraies animations (marche, course, poings, coups de pied) avec poses de vol, de comète et d'atterrissage ; il garde tous ses pouvoirs |
+| Aura divine | Bouton ⚡ (T) : transformation, flammes dorées, puissance ×2,5, vitesse ×1,6 |
+| Combat | Combos (jab, jab, crochet, uppercut/coup de pied) avec poursuite éclair et arrêt sur image ; Titan projeté ; Dragon des cendres (boules de feu, piqués) ; défis depuis le menu Pouvoirs |
+| Musique | Orchestre synthétisé adaptatif (exploration, combat, aura), voix permanentes et limiteur (pas de craquements) |
 | Faune | Cerfs, biches, renards, loups, chiens, chats ; fuient le dieu |
 | Végétation | Arbres et sapins scannés (imposteurs), herbe, fleurs des prés, fougères, orties, souches, troncs morts, rochers ; vent et souffle du vol divin |
 | Destruction | Terrain déformable et persistant (cratères, tranchées, lave, brûlures), arbres renversés ou calcinés, bâtiments fissurés puis effondrés en débris physiques, ruines persistantes |
-| Pouvoirs | Poing divin (maintenir = Coup absolu), Explosion céleste, Rayon divin, Météore, Onde de choc, Éclair divin ; Bénir et Relever les ruines ; Téléportation |
+| Pouvoirs | Sans temps de recharge. Poing divin (maintenir = Coup absolu), Explosion céleste, Rayon divin, Météore, Onde de choc, Éclair divin, Singularité, Charge de comète, Chute titanesque, Pluie d'astres, Lames célestes, Cyclone divin, Gravité inversée, Arrêt du temps, Fissure tellurique, Supernova, Déferlante astrale (rayon colossal qui creuse un canyon), Chute de la lune, Lance céleste (pilier orbital qui suit le regard), Séisme titanesque ; Bénir et Relever les ruines ; Téléportation |
 | Boss | Titan de magma (~26 m) : émerge, marche sur un village, frappe au sol, lance des rochers, souffle de lave, chancelle, s'effondre ; revient plus tard |
 | Réputation | Chaque village se souvient (Crainte / Vénération) : prières ou fuite, attaques des gardes, reconstruction, naissances |
 | Interface | Joystick, caméra au doigt (pincer pour zoomer), boutons Poing / Pouvoir / Saut / Vol / Descendre / Interaction / Téléport, roue des pouvoirs, mini-carte, carte du monde, journal, réglages, mode photo (enregistre dans Images/EternalGod) |
@@ -35,6 +40,8 @@ Monde ouvert 3D pour Android : vous incarnez un dieu immortel, libre de protége
 | 🜁 Vol | F |
 | ✋ Interaction contextuelle | E |
 | ✦ Carte et téléportation, ☰ Menu | M / Échap |
+| ⚡ Aura divine | T |
+| 🧍 Forme humaine / ✦ forme divine | H |
 
 ## Architecture
 
@@ -58,6 +65,8 @@ app/src/main/assets/game/
     ├── people.js      habitants (IA, routines, réactions, poses)
     ├── fauna.js       animaux
     ├── godmodel.js    modèle du dieu ; god.js : contrôle et animation
+    ├── humanform.js   forme humaine (animations de personnage + poses)
+    ├── aura.js, music.js, dragon.js, ultimates.js
     ├── camera.js, powers.js, monster.js, fx.js, physics.js, audio.js, ui.js
 tools/                 génération des logos, conversion des ciels HDR, cuisson des imposteurs, simplification des modèles, aperçus et tests automatisés
 ```

@@ -39,9 +39,10 @@ export class CameraRig {
     const sp = god.vel.length();
     // suit doucement l'arrière du dieu quand il se déplace et que le joueur ne touche pas la caméra
     if (G.time - this.lastInput > 5 && sp > 8) this.yaw = dampAngle(this.yaw, god.heading + Math.PI, flying ? 0.5 : 0.3, dt);
-    const want = (flying ? 26 + Math.min(sp, 80) * 0.22 : 19 + god.anim.run * 4) * (this.zoomMul || 1);
+    const hs = god.human ? 0.42 : 1; // forme humaine : caméra plus proche
+    const want = (flying ? 26 + Math.min(sp, 80) * 0.22 : 19 + god.anim.run * 4) * (this.zoomMul || 1) * hs;
     this.dist = damp(this.dist, want, 2.5, dt);
-    this.target.lerp(god.pos.clone().add(new THREE.Vector3(0, flying ? 3.2 : 4.2, 0)), 1 - Math.exp(-(flying ? 8 : 12) * dt));
+    this.target.lerp(god.pos.clone().add(new THREE.Vector3(0, (flying ? 3.2 : 4.2) * (god.human ? 0.42 : 1), 0)), 1 - Math.exp(-(flying ? 8 : 12) * dt));
     const cp = Math.cos(this.pitch);
     const pos = new THREE.Vector3(this.target.x + Math.sin(this.yaw) * cp * this.dist, this.target.y + Math.sin(this.pitch) * this.dist, this.target.z + Math.cos(this.yaw) * cp * this.dist);
     // ne passe jamais sous le sol ni sous l'eau

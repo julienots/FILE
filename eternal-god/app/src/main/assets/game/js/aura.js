@@ -114,7 +114,8 @@ export class Aura {
     // centre = torse du héros (suit l'inclinaison du corps en vol), axe = axe du corps
     const rq = god.root.quaternion;
     _up.set(0, 1, 0).applyQuaternion(rq);
-    _c.copy(god.root.position).addScaledVector(_up, 2.7);
+    const S = god.human ? 0.45 : 1; // taille du porteur
+    _c.copy(god.root.position).addScaledVector(_up, 2.7 * (god.human ? 0.36 : 1));
     this.group.position.copy(_c);
     this.light.position.copy(_c);
     // la flamme se dresse dans l'axe du corps vu par la caméra (couché en vol « comète »)
@@ -126,8 +127,8 @@ export class Aura {
     for (const m of this.layers) {
       m.quaternion.copy(cam.quaternion).multiply(_qr);
       const s = m.userData.s * pulse;
-      m.scale.set(6.0 * s, 9.2 * s, 1);
-      m.position.copy(_up).multiplyScalar(0.6 * s - 0.5);
+      m.scale.set(6.0 * s * S, 9.2 * s * S, 1);
+      m.position.copy(_up).multiplyScalar((0.6 * s - 0.5) * S);
       m.material.uniforms.uT.value = this.t * (1 + m.userData.s * 0.15);
       m.material.uniforms.uO.value = m.userData.o * this.k;
     }
@@ -136,7 +137,7 @@ export class Aura {
     // étincelles dorées qui montent le long du corps : elles héritent de la vitesse du héros
     const n = Math.round(dt * 60);
     for (let i = 0; i < n; i++) {
-      const a = rand(0, 6.28), r = rand(0.8, 2.4), h = rand(-2.2, 2.2);
+      const a = rand(0, 6.28), r = rand(0.8, 2.4) * S, h = rand(-2.2, 2.2) * S;
       const x = _c.x + Math.cos(a) * r + _up.x * h, y = _c.y + _up.y * h, z = _c.z + Math.sin(a) * r + _up.z * h;
       const up = rand(8, 15);
       G.fx.add.emit(x, y, z, gv.x + _up.x * up, gv.y + _up.y * up, gv.z + _up.z * up, rand(0.25, 0.55), rand(0.3, 0.6), 1, rand(0.75, 0.95), 0.35, 1, 0, -1, 0);
@@ -145,9 +146,9 @@ export class Aura {
     this.boltT -= dt;
     if (this.boltT <= 0 && gv.length() < 15) {
       this.boltT = rand(0.15, 0.45);
-      const a = rand(0, 6.28), b = a + rand(0.6, 1.6), y0 = rand(-1.8, 1.8);
-      const A = new THREE.Vector3(_c.x + Math.cos(a) * 1.6, _c.y + y0, _c.z + Math.sin(a) * 1.6);
-      const Bp = new THREE.Vector3(_c.x + Math.cos(b) * 1.8, _c.y + y0 + rand(-1.2, 1.2), _c.z + Math.sin(b) * 1.8);
+      const a = rand(0, 6.28), b = a + rand(0.6, 1.6), y0 = rand(-1.8, 1.8) * S;
+      const A = new THREE.Vector3(_c.x + Math.cos(a) * 1.6 * S, _c.y + y0, _c.z + Math.sin(a) * 1.6 * S);
+      const Bp = new THREE.Vector3(_c.x + Math.cos(b) * 1.8 * S, _c.y + y0 + rand(-1.2, 1.2) * S, _c.z + Math.sin(b) * 1.8 * S);
       G.fx.bolt(A, Bp, 0.1);
     }
     // au sol : poussière en anneau et cailloux qui lévitent

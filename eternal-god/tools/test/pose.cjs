@@ -10,9 +10,9 @@ const { chromium } = require('playwright');
   await p.goto('http://127.0.0.1:8765/app/src/main/assets/game/index.html');
   await p.waitForSelector('#title:not(.hidden)', { timeout: 1500000 });
   await p.mouse.click(450, 200); await p.waitForTimeout(1000);
-  await p.evaluate((mode) => { G.monster.respawnT = 1e9; if (G.dragon) G.dragon.respawnT = 1e9; const g = G.god; const x = 120, z = 140; g.pos.set(x, G.terrain.groundAt(x, z) + 8, z); g.state = 'fly'; g.vel.set(0, 0, 0); g.heading = 0; G.cam.zoomMul = 0.32; G.cam.pitch = 0.05; G.cam.lastInput = G.time + 1e6; G.env.dayTime = 0.42; if (mode === 'aura') { G.aura.transform(); } if (mode === 'cruise') G.ui.input.moveY = 0.6; }, mode);
+  await p.evaluate((mode) => { G.monster.respawnT = 1e9; if (G.dragon) G.dragon.respawnT = 1e9; const g = G.god; const x = 120, z = 140; g.pos.set(x, G.terrain.groundAt(x, z) + 8, z); g.state = 'fly'; g.vel.set(0, 0, 0); g.heading = 0; G.cam.zoomMul = 0.32; G.cam.pitch = 0.05; G.cam.lastInput = G.time + 1e6; G.env.dayTime = 0.42; if (mode.startsWith('human')) { g.setHuman(true); g.state = 'fly'; G.cam.zoomMul = 0.7; } if (mode === 'aura') { G.aura.transform(); } if (mode === 'cruise' || mode === 'humanboost') G.ui.input.moveY = mode === 'humanboost' ? 1 : 0.6; if (mode === 'humanland') { g.state = 'ground'; g.pos.y -= 8; g.land(40); G.slowmo = 0.05; } }, mode);
   const views = [['face', Math.PI], ['profil', Math.PI / 2], ['3q', Math.PI * 0.75]];
-  await p.waitForTimeout(mode === 'aura' ? 9000 : 4000);
+  await p.waitForTimeout(mode === 'aura' ? 9000 : mode === 'humanland' ? 2500 : 4000);
   for (const [n, yaw] of views) {
     await p.evaluate((yaw) => { G.cam.yaw = G.god.heading + yaw; if (G.ui.input.moveY) {} }, yaw);
     await p.waitForTimeout(1500);

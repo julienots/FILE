@@ -26,6 +26,7 @@ import { Monster } from './monster.js';
 import { Dragon, loadDragon } from './dragon.js';
 import { Aura } from './aura.js';
 import { Music } from './music.js';
+import { buildHuman } from './humanform.js';
 import { Audio } from './audio.js';
 import { UI } from './ui.js';
 
@@ -99,6 +100,7 @@ async function boot() {
   if (settings.hero && settings.hero !== 'celeste') {
     try { heroModel = await loadHero(settings.hero); } catch (e) { console.error('Héros indisponible, retour au Dieu Céleste', e); settings.hero = 'celeste'; saveSettings(); }
   }
+  G.humanAsset = peopleAssets.adventurer; G.buildHuman = buildHuman;
   const god = new God(scene, heroModel); G.god = god;
   G.cam = new CameraRig(camera);
   G.powers = new Powers(scene);
@@ -232,7 +234,7 @@ function snapshot() {
   const V = G.villages.villages;
   return {
     v: 1, time: G.time, dayTime: G.env.dayTime, day: G.env.day,
-    god: [G.god.pos.x, G.god.pos.y, G.god.pos.z, G.god.heading, G.god.state === 'fly' ? 1 : 0],
+    god: [G.god.pos.x, G.god.pos.y, G.god.pos.z, G.god.heading, G.god.state === 'fly' ? 1 : 0, G.god.human ? 1 : 0],
     villages: V.map((v) => [v.worship, v.fear]),
     buildings: G.villages.serialize(), trees: G.veg.serialize(),
     terrain: G.terrain.serialize(), journal: G.ui.journal.slice(-60), deaths: G.people.deaths,
@@ -251,7 +253,7 @@ function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) 
 function restore(s) {
   try {
     G.time = s.time || 0; G.env.dayTime = s.dayTime; G.env.day = s.day || 1;
-    G.god.pos.set(s.god[0], s.god[1], s.god[2]); G.god.heading = s.god[3]; G.god.state = s.god[4] ? 'fly' : 'air';
+    G.god.pos.set(s.god[0], s.god[1], s.god[2]); G.god.heading = s.god[3]; G.god.state = s.god[4] ? 'fly' : 'air'; if (s.god[5]) G.god.setHuman(true);
     s.villages.forEach((r, i) => { const v = G.villages.villages[i]; if (v) { v.worship = r[0]; v.fear = r[1]; } });
     G.terrain.restore(s.terrain);
     G.veg.restore(s.trees);

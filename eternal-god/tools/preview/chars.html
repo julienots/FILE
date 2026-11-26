@@ -26,7 +26,7 @@ for (const [ki, k] of kinds.entries()) {
   const bones = {}; o.traverse(b => { if (b.isBone) bones[b.name] = b; });
   const spec = (P.get('pose' + ki) || '').split(';').filter(Boolean);
   o.updateMatrixWorld(true);
-  const footOff = {}; for (const s of ['L', 'R']) footOff[s] = bones['LowerLeg' + s].worldToLocal(bones['Foot' + s].getWorldPosition(new THREE.Vector3()));
+  const footOff = {}; for (const s of ['L', 'R']) if (bones['LowerLeg' + s] && bones['Foot' + s]) footOff[s] = bones['LowerLeg' + s].worldToLocal(bones['Foot' + s].getWorldPosition(new THREE.Vector3()));
   for (const t of spec) { let [bn, ax, val] = t.split(':'); bn = bn.replace('.', ''); if (bn === 'drop') { o.position.y -= +val; continue; } const e = new THREE.Euler(); e[ax] = +val; bones[bn].quaternion.multiply(new THREE.Quaternion().setFromEuler(e)); }
   o.updateMatrixWorld(true);
   for (const s of ['L', 'R']) { const w = bones['LowerLeg' + s].localToWorld(footOff[s].clone()); bones['Foot' + s].position.copy(bones['Foot' + s].parent.worldToLocal(w)); }

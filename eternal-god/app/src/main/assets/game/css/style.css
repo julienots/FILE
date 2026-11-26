@@ -50,6 +50,7 @@ button { font-family: inherit; color: #fff4dc; }
 #btnDown { right: 84px; bottom: 140px; }
 #btnFly { right: 18px; bottom: 182px; }
 #btnTeleport { right: 182px; bottom: 30px; }
+#btnHuman { right: 150px; bottom: 170px; font-size: 20px; }
 #btnAura { right: 92px; bottom: 206px; font-size: 22px; color: #ffd86a; }
 #btnAura.on { background: radial-gradient(circle at 50% 40%, rgba(255, 220, 90, 0.7), rgba(120, 70, 10, 0.6)); box-shadow: 0 0 22px rgba(255, 210, 80, 0.9); animation: pulse 0.9s infinite; }
 .summon { margin-top: 14px; } .summon b { display: block; margin-bottom: 8px; color: var(--gold2); }

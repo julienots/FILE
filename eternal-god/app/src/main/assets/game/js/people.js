@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G, Q, WORLD, mulberry32, clamp, lerp, rand, pick, emit, dampAngle, angleDelta } from './core.js';
 
 const BASES = { man: 'adventurer', woman: 'hooded_adventurer', chief: 'monarch' };
@@ -18,7 +19,7 @@ const FABRICS = [0x6b4f2e, 0x8c6d46, 0x4d5a3a, 0x7a2e24, 0x3f4a5c, 0x9a8a6a, 0x5
 const HAIRS = [0x2a1d14, 0x3b2a1b, 0x6a4a2a, 0x8b6b3e, 0xb89a62, 0x1a1512, 0x9a9590];
 const MEN = ['Aubin', 'Bastien', 'Colin', 'Denis', 'Étienne', 'Firmin', 'Gaspard', 'Hugues', 'Jehan', 'Lucien', 'Mathis', 'Nicolas', 'Odon', 'Perrin', 'Renaud', 'Simon', 'Thibault', 'Urbain', 'Victor', 'Gautier', 'Anselme', 'Bertrand'];
 const WOMEN = ['Agnès', 'Blanche', 'Clémence', 'Denise', 'Éloïse', 'Flore', 'Gisèle', 'Hélène', 'Isabeau', 'Jeanne', 'Margot', 'Ninon', 'Perrine', 'Rose', 'Sibylle', 'Typhaine', 'Ysolde', 'Aliénor', 'Bertille', 'Mahaut'];
-const ROLE_FR = { farmer: 'fermier', smith: 'forgeron', merchant: 'marchand', guard: 'garde', priest: 'prêtre', innkeeper: 'aubergiste', fisher: 'pêcheur', woodcutter: 'bûcheron', shepherd: 'berger', crafter: 'artisan', child: 'enfant', chief: 'chef du village', miller: 'meunier', traveler: 'voyageur' };
+const ROLE_FR = { farmer: 'fermier', smith: 'forgeron', merchant: 'marchand', guard: 'garde', priest: 'prêtre', innkeeper: 'aubergiste', fisher: 'pêcheur', woodcutter: 'bûcheron', shepherd: 'berger', crafter: 'artisan', child: 'enfant', chief: 'chef du village', miller: 'meunier', traveler: 'voyageur', braggart: 'frimeur' };
 
 const SAY = {
   kneel: ['Gloire à toi, Seigneur !', 'Le Dieu est parmi nous…', 'Bénis-nous, Éternel !', 'Pardonne-nous nos fautes.', 'Il est descendu du ciel !'],
@@ -29,7 +30,11 @@ const SAY = {
   wonder: ['Qu\'est-ce que c\'est… ?', 'Par tous les saints…', 'Un dieu… ici ?'],
   mourn: ['Non… pas lui…', 'Pourquoi ?', 'Il nous a abandonnés…'],
   rebuild: ['On rebâtira, pierre après pierre.', 'Au travail, tous !'],
+  taunt: ['Même pas peur !', 'C\'est tout ce que t\'as, le dieu ?', 'Hé ! Descends te battre !', 'Regarde-moi ça, champion !', 'J\'suis plus fort que toi !', 'T\'as vu mes muscles ?', 'Il fait le malin, lui !', 'Allez, viens, viens !', 'Tiens, prends ça !', 'Pff… même ma grand-mère vole mieux.', 'Ouuuh, j\'ai peur !', 'Vas-y, frappe si t\'es un dieu !'],
+  chicken: ['D\'accord, d\'accord… t\'es le patron !', 'Je rigolais ! Je rigolais !', 'MAMAAAN !', 'Pardon, pardon, pardon !', 'C\'était une blague, Seigneur…'],
+  showoff: ['Regardez-moi les filles !', 'Admirez ce talent.', 'Qui veut un autographe ?', 'Trop facile.'],
 };
+const TRICKS = ['Wave', 'Punch_Left', 'Punch_Right', 'Kick_Left', 'Kick_Right', 'Roll', 'Wave', 'Kick_Right'];
 
 export async function loadPeople(onEach) {
   const gl = new GLTFLoader(); gl.setMeshoptDecoder(MeshoptDecoder);
@@ -38,7 +43,7 @@ export async function loadPeople(onEach) {
     const g = await gl.loadAsync(`models/chars/${k}.glb`);
     g.scene.updateMatrixWorld(true);
     const bb = new THREE.Box3().setFromObject(g.scene);
-    out[k] = { gltf: g, height: bb.max.y - bb.min.y, clips: Object.fromEntries(g.animations.map((c) => [c.name.split('|').pop(), c])) };
+    out[k] = { gltf: g, height: bb.max.y - bb.min.y, clips: Object.fromEntries(g.animations.map((c) => [c.name.split('|').pop(), c])), merged: mergeCharacter(g.scene, k) };
     if (onEach) onEach();
   }
   return out;
@@ -46,17 +51,79 @@ export async function loadPeople(onEach) {
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 
+// Fusion d'un personnage en UN SEUL maillage animé (1 appel de dessin au lieu de ~11) :
+// la couleur de chaque matériau passe dans les sommets ; les tissus et cheveux gardent un « emplacement »
+// teinté par habitant (uniforme), ce qui préserve la variété des tenues.
+function mergeCharacter(scene, base) {
+  const src = SkeletonUtils.clone(scene);
+  src.updateMatrixWorld(true);
+  const cloth = CLOTH[base] || [];
+  const parts = [];
+  src.traverse((o) => { if (o.isSkinnedMesh && !/Backpack/.test(o.name + (o.parent ? o.parent.name : ''))) parts.push(o); });
+  if (!parts.length) return null;
+  const bones = [], inv = [], index = new Map();
+  const geos = [];
+  for (const m of parts) {
+    for (const [i, b] of m.skeleton.bones.entries()) if (!index.has(b)) { index.set(b, bones.length); bones.push(b); inv.push(m.skeleton.boneInverses[i].clone()); }
+    const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
+    const n = g.attributes.position.count, si = g.attributes.skinIndex;
+    const remap = m.skeleton.bones.map((b) => index.get(b));
+    const sIdx = new Uint16Array(n * 4);
+    for (let i = 0; i < n * 4; i++) sIdx[i] = remap[si.array[i]] ?? 0;
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sIdx, 4));
+    if (!(g.attributes.skinWeight.array instanceof Float32Array)) { const w = g.attributes.skinWeight; const f = new Float32Array(n * 4); for (let i = 0; i < n * 4; i++) f[i] = w.getComponent(Math.floor(i / 4), i % 4); g.setAttribute('skinWeight', new THREE.BufferAttribute(f, 4)); }
+    const mat = m.material, slot = cloth.indexOf(mat.name) + 1 || (/^Hair/.test(mat.name) ? 6 : 0);
+    const col = slot ? new THREE.Color(1, 1, 1) : mat.color.clone();
+    const cs = new Float32Array(n * 3), ss = new Float32Array(n);
+    for (let i = 0; i < n; i++) { cs[i * 3] = col.r; cs[i * 3 + 1] = col.g; cs[i * 3 + 2] = col.b; ss[i] = slot; }
+    g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+    g.setAttribute('slot', new THREE.BufferAttribute(ss, 1));
+    geos.push(g);
+  }
+  const geo = mergeGeometries(geos, false);
+  if (!geo) return null;
+  const first = parts[0];
+  const mesh = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 }));
+  mesh.name = 'Merged';
+  first.parent.add(mesh);
+  mesh.bind(new THREE.Skeleton(bones, inv), first.bindMatrix.clone());
+  for (const m of parts) m.parent.remove(m);
+  src.traverse((o) => { if (o.name === 'Backpack' || /Backpack/.test(o.parent && o.parent.name)) o.visible = false; });
+  return src;
+}
+
+// matériau d'habitant : un seul programme partagé, des teintes propres à chacun
+function villagerMaterial(tints) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 });
+  const u = { uTint: { value: tints } };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTint = u.uTint;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float slot;\nuniform vec3 uTint[6];')
+      .replace('#include <color_vertex>', '#include <color_vertex>\n  if (slot > 0.5) vColor.rgb *= uTint[int(slot + 0.5) - 1];');
+  };
+  m.customProgramCacheKey = () => 'villagerTint';
+  return m;
+}
+
 class Villager {
   constructor(sys, base, opts) {
     this.sys = sys;
     Object.assign(this, opts);
     const A = sys.assets[base];
     this.base = base;
-    this.model = SkeletonUtils.clone(A.gltf.scene);
     const rnd = opts.rnd;
+    if (A.merged) {
+      this.model = SkeletonUtils.clone(A.merged);
+      const tints = [];
+      for (let i = 0; i < 5; i++) tints.push(new THREE.Color(pick(FABRICS)).multiplyScalar(0.85 + rnd() * 0.3));
+      tints.push(new THREE.Color(opts.old ? 0xc8c4bc : pick(HAIRS)));
+      this.model.traverse((o) => { if (o.isSkinnedMesh) { o.material = villagerMaterial(tints); o.castShadow = false; o.frustumCulled = false; } else if (o.isMesh) { o.castShadow = false; } });
+    } else this.model = SkeletonUtils.clone(A.gltf.scene);
     const cloth = new Set(CLOTH[base]);
     const tint = new Map();
-    this.model.traverse((o) => {
+    if (!A.merged) this.model.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = false; o.frustumCulled = false;
       if (o.name === 'Backpack' && rnd() < 0.85) o.visible = false;
@@ -193,6 +260,17 @@ class Villager {
       if (this.state === 'attack' && (!godNear || devotion > 0.2) && this.stateT > 6) this.setState('idle');
       return;
     }
+    // les frimeurs : narguent le dieu quand il approche… jusqu'à ce qu'il montre sa vraie puissance
+    if (this.role === 'braggart' && god) {
+      const dg = god.pos.distanceTo(this.pos), alt = god.pos.y - G.terrain.groundAt(god.pos.x, god.pos.z);
+      const scared = (god.aura && god.aura.active) || danger > 6;
+      if (dg < 70 && alt < 40) {
+        if (scared && this.state !== 'kneel' && this.state !== 'chicken') { this.setState('chicken'); this.say('chicken', true); return; }
+        if (!scared && !['taunt', 'chicken', 'kneel'].includes(this.state)) { this.setState('taunt'); this.say('taunt', true); }
+        return;
+      }
+      if (this.state === 'taunt' || this.state === 'chicken') this.setState('idle');
+    }
     if (godNear) {
       const already = ['kneel', 'pray', 'celebrate', 'wonder'].includes(this.state);
       if (!already) {
@@ -269,6 +347,32 @@ class Villager {
         if (god) this.face(god.pos.x, god.pos.z, dt, 4);
         this.play('Idle_Neutral');
         pose = this.stateT > 1.2 || this.state === 'pray' ? 'pray' : 'kneel';
+        break;
+      }
+      case 'taunt': {
+        if (!god) { this.setState('idle'); break; }
+        const dx = god.pos.x - this.pos.x, dz = god.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        this.face(god.pos.x, god.pos.z, dt, 6);
+        const want = god.human ? 5 : 11;
+        if (d > want + 3) { this.pos.x += dx / d * 3.8 * dt; this.pos.z += dz / d * 3.8 * dt; this.play('Run'); this.trickT = 0; }
+        else {
+          this.trickT = (this.trickT || 0) - dt;
+          if (this.trickT <= 0) { this.trickT = rand(1.1, 2); this.trick = pick(TRICKS); this.say('taunt'); }
+          this.play(this.trick || 'Wave', 0.15);
+          // de temps en temps, il lance un caillou sur le dieu
+          if (Math.random() < dt * 0.35 && G.fx) {
+            const from = this.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), to = god.pos.clone().add(new THREE.Vector3(0, god.height * 0.6, 0));
+            const T0 = Math.max(0.5, from.distanceTo(to) / 18), v = to.sub(from).divideScalar(T0); v.y += 0.5 * 20 * T0;
+            G.fx.norm.emit(from.x, from.y, from.z, v.x, v.y, v.z, 0.35, T0, 0.35, 0.32, 0.3, 1, 0, 20, 0);
+            this.sys.speech.push({ v: this, text: 'Tiens, prends ça !', t: 2 });
+          }
+        }
+        this.sys.villages.pushOut(this.pos, 0.45);
+        break;
+      }
+      case 'chicken': { // il ne fait plus le malin
+        if (god) this.face(god.pos.x, god.pos.z, dt, 4);
+        this.play('Idle_Neutral'); pose = this.stateT < 2.5 ? 'cower' : 'kneel';
         break;
       }
       case 'celebrate': this.play('Wave'); if (god) this.face(god.pos.x, god.pos.z, dt, 4); break;
@@ -410,11 +514,12 @@ export class People {
       const t = G.veg && G.veg.trees.reduce((best, t) => { const d = Math.hypot(t.x - v.x, t.z - v.z); return t.state === 0 && d > v.r * 0.7 && (!best || d < best.d) ? { t, d } : best; }, null);
       if (t) { p.workAt = new THREE.Vector3(t.t.x + 1.6, 0, t.t.z); p.workAnim = 'Sword_Slash'; p.workFace = new THREE.Vector3(t.t.x, 0, t.t.z); }
     } else if (r === 'miller' && v.mill) { p.workAt = v.mill.door; p.workAnim = 'Interact'; }
+    else if (r === 'braggart') { p.workAt = v.spots.plaza.clone().add(new THREE.Vector3(rand(-6, 6), 0, rand(-6, 6))); p.workAnim = pick(['Kick_Right', 'Punch_Left', 'Wave']); p.workFace = v.spots.plaza; p.bravery = 0.95; }
     if (!p.workAt) { p.workAt = p.home.door; p.workAnim = 'Interact'; }
   }
 
   populate() {
-    const scale = Q().label === 'Bas' ? 0.5 : Q().label === 'Moyen' ? 0.75 : 1;
+    const scale = Q().label === 'Bas' ? 0.65 : Q().label === 'Moyen' ? 1 : 1.25;
     for (const v of this.villages.villages) {
       const homes = v.buildings.filter((b) => b.type === 'house' || b.type === 'farmhouse' || b.type === 'tavern');
       const jobs = [];
@@ -427,10 +532,13 @@ export class People {
           const role = jobs.length ? jobs.shift() : (this.rnd() < 0.6 ? local : (this.rnd() < 0.5 ? 'farmer' : 'crafter'));
           this.spawn(v, h, role, { female: a === 1 ? true : undefined });
         }
-        const kids = this.rnd() < 0.3 ? 1 : 0;
+        const kids = (this.rnd() < 0.45 ? 1 : 0) + (this.rnd() < 0.15 ? 1 : 0);
         for (let c = 0; c < kids; c++) this.spawn(v, h, 'child');
       }
-      v.capacity = Math.round(homes.length * 3.2 * scale);
+      // deux à quatre frimeurs par village
+      const nb = (v.main ? 4 : 2) + (scale > 1 ? 1 : 0);
+      for (let i = 0; i < nb && homes.length; i++) this.spawn(v, homes[Math.floor(this.rnd() * homes.length)], 'braggart', { female: this.rnd() < 0.25 });
+      v.capacity = Math.round(homes.length * 3.6 * scale);
     }
   }
 
@@ -486,7 +594,7 @@ export class People {
     this.capT = (this.capT || 0) - dt;
     if (this.capT <= 0) {
       this.capT = 0.4;
-      const maxVis = Q().label === 'Bas' ? 18 : Q().label === 'Moyen' ? 28 : 40;
+      const maxVis = Q().label === 'Bas' ? 22 : Q().label === 'Moyen' ? 36 : 50;
       const sorted = this.list.filter((p) => !p.removed && p.state !== 'hidden').map((p) => [p.pos.distanceToSquared(cam), p]).sort((a, b) => a[0] - b[0]);
       this.allowed = new Set(sorted.slice(0, maxVis).map((x) => x[1]));
     }

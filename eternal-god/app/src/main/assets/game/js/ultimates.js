@@ -16,6 +16,10 @@ export const ULTIMATES = [
   { id: 'timestop', name: 'Arrêt du temps', icon: '⧗', cd: 20, desc: 'Le monde se fige. Seul le dieu se meut.' },
   { id: 'fissure', name: 'Fissure tellurique', icon: '⚡', cd: 8, desc: 'Une faille de lave déchire la terre devant le dieu.' },
   { id: 'supernova', name: 'Supernova', icon: '✹', cd: 30, desc: 'Le dieu concentre la puissance d\'une étoile et la libère.' },
+  { id: 'astral', name: 'Déferlante astrale', icon: '☀⟶', cd: 0, desc: 'Une boule d\'énergie entre les mains, puis un rayon colossal qui creuse un canyon jusqu\'à l\'horizon.' },
+  { id: 'moon', name: 'Chute de la lune', icon: '🌑', cd: 0, desc: 'Arrache une lune du ciel et l\'écrase sur le point visé. Rien ne survit.' },
+  { id: 'lance', name: 'Lance céleste', icon: '⇓', cd: 0, desc: 'Un pilier de lumière tombe de l\'orbite et suit votre regard en brûlant tout.' },
+  { id: 'quake', name: 'Séisme titanesque', icon: '⛰', cd: 0, desc: 'Le monde tremble : des pics de roche jaillissent de la terre tout autour.' },
 ];
 
 const glowTexture = () => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
@@ -35,6 +39,30 @@ export class Ultimates {
     // une seule lumière, créée une fois : le nombre de lumières ne change jamais en jeu
     this.light = new THREE.PointLight(0xffffff, 0, 300, 1.6);
     scene.add(this.light);
+    // rayon colossal (déferlante, lance) : trois cylindres additifs, créés une seule fois
+    const BV = 'varying float vF; void main(){ vec3 n = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vF = abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }';
+    const BF = 'uniform vec3 uC; uniform float uO; uniform float uT; varying float vF; void main(){ float w = 0.85 + 0.15 * sin(uT * 40.0); gl_FragColor = vec4(uC * pow(vF, 1.6) * uO * w * 1.5, 1.0); }';
+    this.mkBeam = () => {
+      const g = new THREE.Group();
+      for (const [rr, c, o] of [[0.35, 0xffffff, 1], [0.7, 0xffe08a, 0.45], [1.0, 0xff9a30, 0.18]]) {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 1, 20, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5),
+          new THREE.ShaderMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, uniforms: { uC: { value: new THREE.Color(c) }, uO: { value: 0 }, uT: { value: 0 } }, vertexShader: BV, fragmentShader: BF }));
+        m.frustumCulled = false; g.add(m);
+      }
+      g.visible = false; scene.add(g); return g;
+    };
+    this.beamA = this.mkBeam(); this.beamB = this.mkBeam();
+    // lune
+    const tl = new THREE.TextureLoader(), moonMap = tl.load('img/tex/mossy_rock_diffuse.jpg'); moonMap.colorSpace = THREE.SRGBColorSpace; moonMap.wrapS = moonMap.wrapT = THREE.RepeatWrapping; moonMap.repeat.set(4, 2);
+    this.moonMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 4), new THREE.MeshStandardMaterial({ map: moonMap, color: 0xb8b0a8, roughness: 1, emissive: 0xff5010, emissiveIntensity: 0 }));
+    { const pp = this.moonMesh.geometry.attributes.position; for (let i = 0; i < pp.count; i++) { const k = 1 + Math.sin(pp.getX(i) * 9.1 + pp.getY(i) * 4.3) * 0.03 + Math.sin(pp.getZ(i) * 13.7) * 0.02; pp.setXYZ(i, pp.getX(i) * k, pp.getY(i) * k, pp.getZ(i) * k); } this.moonMesh.geometry.computeVertexNormals(); }
+    this.moonMesh.visible = false; this.moonMesh.castShadow = true; scene.add(this.moonMesh);
+  }
+
+  setBeam(b, from, to, width, o, t) {
+    const L = from.distanceTo(to);
+    b.visible = o > 0.01; b.position.copy(from); b.lookAt(to); b.scale.set(width, width, L);
+    b.children.forEach((c, i) => { c.material.uniforms.uO.value = [1, 0.5, 0.2][i] * o; c.material.uniforms.uT.value = t; });
   }
 
   theme() { return (G.god.model && G.god.model.theme) || { main: 0xffd27a, alt: 0xff9a40, core: 0xfff4d0 }; }
@@ -424,6 +452,153 @@ export class Ultimates {
         if (G.audio) G.audio.explosion(c, 1.5);
       }
       return t < 4;
+    });
+  }
+
+  // ---------- 11. Déferlante astrale ----------
+  astral(aim) {
+    const god = G.god, T = this.theme();
+    if (this.beamBusy) return; this.beamBusy = true;
+    god.playAction('push', 4.2);
+    const ball = this.sprite(0xffe9a0, 1);
+    const L = this.light; L.color.set(0xffd27a); L.distance = 200;
+    emit('journal', { icon: '☀', text: 'Le dieu rassemble l\'énergie des astres entre ses mains…' });
+    let t = 0, front = 0, fired = false;
+    const B = this.beamA;
+    this.add((dt) => {
+      t += dt;
+      const a = G.cam.aim(1200);
+      const fwd = a.dir.clone(); fwd.y = Math.max(-0.6, Math.min(0.35, fwd.y)); fwd.normalize();
+      god.heading = Math.atan2(fwd.x, fwd.z);
+      const hand = god.pos.clone().add(V(0, god.height * 0.5, 0)).addScaledVector(fwd, god.height * 0.35);
+      if (t < 1.3) { // charge
+        const k = t / 1.3;
+        ball.position.copy(hand); ball.scale.setScalar(1 + k * 7 * (god.height / 5.2 + 0.4)); L.position.copy(hand); L.intensity = 1500 * k;
+        for (let n = 0; n < 6; n++) { const d = V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(); const r = rand(8, 20); G.fx.add.emit(hand.x + d.x * r, hand.y + d.y * r, hand.z + d.z * r, -d.x * r * 3, -d.y * r * 3, -d.z * r * 3, rand(0.6, 1.4), 0.33, 1, 0.9, 0.5, 1, 0.2, 0, 0); }
+        G.fx.shake(0.04 + k * 0.08, hand);
+        if (t + dt >= 1.3 && G.audio) { G.audio.laser(true); G.audio.explosion(hand, 0.6); }
+        return true;
+      }
+      if (!fired) { fired = true; G.fx.sphere(hand, 18, 0.5, 0xfff0c0); G.fx.ring(hand, 60, 0.7, 0xffd27a); G.fx.shake(0.8, hand); if (G.env) G.env.flash = 0.6; }
+      const k = t < 3.9 ? Math.min(1, (t - 1.3) * 5) : Math.max(0, 1 - (t - 3.9) / 0.4);
+      front = Math.min(650, front + dt * 520);
+      const hit = G.terrain.raycast(hand, fwd, front);
+      const end = hit ? hit.point.clone() : hand.clone().addScaledVector(fwd, front);
+      this.setBeam(B, hand, end, 9 * k * (G.god.power > 1 ? 1.4 : 1), k, t);
+      ball.position.copy(hand); ball.scale.setScalar(14 * k); L.position.copy(hand); L.intensity = 2500 * k;
+      // creuse un canyon le long du rayon (quelques points par image seulement)
+      this.astT = (this.astT || 0) - dt;
+      if (this.astT <= 0 && k > 0.5) {
+        this.astT = 0.06;
+        const len = hand.distanceTo(end);
+        for (let n = 0; n < 3; n++) {
+          const q = hand.clone().addScaledVector(fwd, rand(20, len));
+          const gy = G.terrain.heightAt(q.x, q.z);
+          if (q.y - gy < 22) { G.terrain.crater(q.x, q.z, 11, 5, { rim: 0.3, burn: 1, heat: 1 }); G.fx.fire(q.clone().setY(gy + 1), 10); G.fx.rocks(q.clone().setY(gy), 4, 20); }
+          G.powers.areaDamage(q, 22, 900, 'blast', 'astral');
+        }
+        if (hit) { G.terrain.crater(end.x, end.z, 22, 10, { rim: 0.4, burn: 1, heat: 1 }); G.fx.sphere(end, 26, 0.4, 0xffd890); G.fx.dust(end, 20, 10); G.powers.areaDamage(end, 45, 1800, 'blast', 'astral'); G.fx.shake(0.35, end); }
+      }
+      if (t > 4.3) { B.visible = false; this.scene.remove(ball); L.intensity = 0; this.beamBusy = false; if (G.audio) G.audio.laser(false); emit('journal', { icon: '☀', text: 'Un canyon fumant raye désormais le monde.' }); return false; }
+      return true;
+    });
+  }
+
+  // ---------- 12. Chute de la lune ----------
+  moon(aim) {
+    if (this.moonBusy) return; this.moonBusy = true;
+    const god = G.god, M = this.moonMesh;
+    god.playAction('summon', 2.5);
+    const tgt = aim.point.clone(); tgt.y = G.terrain.heightAt(tgt.x, tgt.z);
+    const R = 55;
+    const start = tgt.clone().add(V(rand(-300, 300), 900, rand(-300, 300)));
+    M.visible = true; M.scale.setScalar(R); M.position.copy(start); M.material.emissiveIntensity = 0;
+    emit('journal', { icon: '🌑', text: 'Le dieu arrache une lune au firmament…' });
+    if (G.audio) G.audio.meteorWhistle();
+    let t = 0, boom = false; const dur = 6.5;
+    this.add((dt) => {
+      t += dt;
+      if (t < dur) {
+        const k = t / dur, e = k * k * k;
+        M.position.lerpVectors(start, tgt.clone().add(V(0, R * 0.6, 0)), e);
+        M.rotation.x += dt * 0.15; M.rotation.z += dt * 0.08;
+        M.material.emissiveIntensity = k * 1.2;
+        if (k > 0.5) for (let n = 0; n < 6; n++) { const q = M.position.clone().add(V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(R)); G.fx.fire(q, 30); }
+        G.fx.shake(0.05 + k * 0.35, tgt);
+        if (k > 0.75) { this.pullTrees(tgt, 220, false, 10); G.uniforms.gust.value.set(tgt.x, tgt.y, tgt.z, 6); }
+        return true;
+      }
+      if (!boom) {
+        boom = true; M.visible = false;
+        const c = tgt.clone();
+        G.terrain.crater(c.x, c.z, 130, 38, { rim: 0.5, burn: 1, heat: 1 });
+        G.fx.sphere(c.clone().add(V(0, 20, 0)), 260, 3, 0xffb060); G.fx.sphere(c, 140, 1.8, 0xffffff);
+        G.fx.ring(c, 900, 4, 0xffc890); G.fx.ring(c, 500, 2.6, 0xffffff);
+        G.fx.flash(c.clone().add(V(0, 40, 0)), 40000, 3, 0xffa050); G.fx.shake(1, c); if (G.env) G.env.flash = 1;
+        G.fx.rocks(c, 160, 60); G.fx.dust(c, 80, 90, [0.33, 0.29, 0.26]);
+        for (let n = 0; n < 50; n++) G.fx.fire(c.clone().add(V(rand(-120, 120), rand(0, 20), rand(-120, 120))), 20);
+        G.powers.areaDamage(c, 260, 5000, 'blast', 'moon');
+        if (G.veg) G.veg.damageArea(c.x, c.z, 300, 3, 'burn');
+        if (G.audio) { G.audio.explosion(c, 2); setTimeout(() => G.audio.thunder(c, 1), 400); }
+        emit('journal', { icon: '🌑', text: 'La lune s\'est écrasée. Le monde ne sera plus jamais le même.' });
+      }
+      if (t > dur + 2) { this.moonBusy = false; return false; }
+      return true;
+    });
+  }
+
+  // ---------- 13. Lance céleste ----------
+  lance() {
+    if (this.lanceBusy) return; this.lanceBusy = true;
+    const god = G.god, B = this.beamB, L = this.light;
+    god.playAction('raise', 1.2);
+    L.color.set(0xd8e8ff); L.distance = 250;
+    emit('journal', { icon: '⇓', text: 'Une lance de lumière tombe de l\'orbite.' });
+    if (G.audio) G.audio.thunder(god.pos, 1);
+    let t = 0; const p = G.cam.aim(900).point.clone();
+    this.add((dt) => {
+      t += dt;
+      const a = G.cam.aim(900).point; p.lerp(a, 1 - Math.exp(-2.5 * dt)); // suit le regard
+      const gy = G.terrain.heightAt(p.x, p.z); p.y = gy;
+      const k = t < 0.3 ? t / 0.3 : (t > 5 ? Math.max(0, 1 - (t - 5) / 0.4) : 1);
+      this.setBeam(B, p.clone().add(V(0, 1400, 0)), p, 16 * k, k, t);
+      L.position.copy(p).add(V(0, 20, 0)); L.intensity = 5000 * k;
+      this.lanceT = (this.lanceT || 0) - dt;
+      if (this.lanceT <= 0 && k > 0.5) {
+        this.lanceT = 0.08;
+        G.terrain.crater(p.x, p.z, 14, 4, { rim: 0.4, burn: 1, heat: 1 });
+        G.fx.sparks(p, 30, [0.8, 0.9, 1], 40); G.fx.fire(p.clone().add(V(0, 2, 0)), 14); G.fx.smoke(p, 2, 16, 0.4); G.fx.shake(0.25, p);
+        G.powers.areaDamage(p, 26, 1100, 'burn', 'lance');
+        if (G.veg) G.veg.damageArea(p.x, p.z, 30, 2, 'burn');
+      }
+      if (t > 5.4) { B.visible = false; L.intensity = 0; this.lanceBusy = false; return false; }
+      return true;
+    });
+  }
+
+  // ---------- 14. Séisme titanesque ----------
+  quake() {
+    const god = G.god, c = god.pos.clone();
+    god.playAction('slam', 0.9);
+    emit('journal', { icon: '⛰', text: 'Le dieu frappe la terre : le monde se fend.' });
+    if (G.audio) G.audio.impact(c, 1.2);
+    let t = 0, n = 0;
+    this.add((dt) => {
+      t += dt;
+      G.fx.shake(0.35 * Math.max(0, 1 - t / 4), c);
+      if (t > 0.45 + n * 0.09 && n < 36) {
+        n++;
+        const a = rand(0, 6.28), d = 25 + n * 7 + rand(-10, 10);
+        const x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
+        const q = V(x, G.terrain.heightAt(x, z), z);
+        const r0 = rand(7, 13), h0 = rand(12, 28);
+        G.terrain.crater(x, z, r0, -h0 * 0.5, { rim: 0 }); G.terrain.crater(x, z, r0 * 0.45, -h0 * 0.6, { rim: 0 }); // pic de roche qui jaillit
+        G.fx.rocks(q, 10, 26); G.fx.dust(q, 10, 12); G.fx.ring(q, 22, 0.6, 0xc8b8a0);
+        G.powers.areaDamage(q, 18, 900, 'blast', 'quake');
+        if (n % 6 === 0 && G.audio) G.audio.impact(q, 0.7);
+      }
+      if (G.villages && t < 3 && Math.random() < dt * 6) G.villages.damageArea(c.x + rand(-250, 250), c.z + rand(-250, 250), 20, 400, c);
+      return t < 4.5;
     });
   }
 
