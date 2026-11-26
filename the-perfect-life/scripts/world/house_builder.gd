@@ -67,8 +67,42 @@ func _wall(axis_x: bool, fixed: float, from: float, to: float, y0: float, h: flo
 		if o.y1 < h - 0.001:
 			_wall_piece(axis_x, fixed, a, b, y0 + o.y1, y0 + h, t, mat, collide)
 		cursor = b
+		if o.get("idoor", false):
+			_interior_door(axis_x, fixed, o, y0, t)
 	if cursor < to:
 		_wall_piece(axis_x, fixed, cursor, to, y0, y0 + h, t, mat, collide)
+
+## Porte intérieure : chambranles des deux côtés + battant shaker entrouvert.
+func _interior_door(axis_x: bool, fixed: float, o: Dictionary, y0: float, t: float) -> void:
+	var holder := Node3D.new()
+	holder.name = "InteriorDoor"
+	add_child(holder)
+	holder.position = Vector3(o.c, y0, fixed) if axis_x else Vector3(fixed, y0, o.c)
+	if not axis_x:
+		holder.rotation.y = PI * 0.5
+	var w: float = o.w
+	var hh: float = o.y1
+	for side in [-1, 1]:
+		var z: float = side * (t * 0.5 + 0.012)
+		Geo.box(holder, Vector3(w + 0.16, 0.08, 0.024), Vector3(0, hh + 0.04, z), m_trim, 0.006)
+		for sx in [-1, 1]:
+			Geo.box(holder, Vector3(0.08, hh, 0.024), Vector3(sx * (w * 0.5 + 0.04), hh * 0.5, z), m_trim, 0.006)
+	# battant (ouvert à 80°), pivot sur le montant gauche
+	var leaf := Node3D.new()
+	leaf.name = "DoorLeaf"
+	holder.add_child(leaf)
+	leaf.position = Vector3(-w * 0.5 + 0.02, 0, -t * 0.5)
+	leaf.rotation.y = deg_to_rad(80)
+	var lw := w - 0.04
+	Geo.box(leaf, Vector3(lw, hh - 0.02, 0.04), Vector3(lw * 0.5, hh * 0.5, -0.02), m_trim, 0.004)
+	for r in 2:
+		Geo.box(leaf, Vector3(lw * 0.7, hh * 0.36, 0.012), Vector3(lw * 0.5, hh * (0.27 + r * 0.46), -0.045), m_trim, 0.006)
+		Geo.box(leaf, Vector3(lw * 0.7, hh * 0.36, 0.012), Vector3(lw * 0.5, hh * (0.27 + r * 0.46), 0.005), m_trim, 0.006)
+	var knob := MatLib.flat(Color(0.83, 0.66, 0.4), 0.28, 1.0)
+	for kz in [-0.07, 0.03]:
+		var k := Geo.cylinder(leaf, 0.028, 0.05, Vector3(lw - 0.07, 1.0, kz), knob, 16)
+		k.rotation.x = PI * 0.5
+	doors.append(leaf)
 
 func _wall_piece(axis_x: bool, fixed: float, a: float, b: float, y0: float, y1: float, t: float, mat: Material, collide: bool) -> void:
 	var len := b - a
@@ -267,17 +301,17 @@ func _interior_walls() -> void:
 	var h1 := CEIL1
 	var dy := 2.1
 	# RDC
-	_wall(false, 5.0, 5.0, D, 0.0, h1, INT_T, [{c = 6.0, w = 0.9, y0 = 0.0, y1 = dy}], m_plaster)           # garage | hall
+	_wall(false, 5.0, 5.0, D, 0.0, h1, INT_T, [{c = 6.0, w = 0.9, y0 = 0.0, y1 = dy, idoor = true}], m_plaster)           # garage | hall
 	_wall(true, 5.0, 0.0, 5.0, 0.0, h1, INT_T, [], m_plaster)                                                 # cuisine | garage
 	_wall(false, 8.0, 5.0, D, 0.0, h1, INT_T, [{c = 8.6, w = 2.4, y0 = 0.0, y1 = 2.5}], m_plaster)           # hall | salon (arche)
-	_wall(true, 5.0, 5.0, 8.0, 0.0, h1, INT_T, [{c = 6.8, w = 1.0, y0 = 0.0, y1 = dy}], m_plaster)           # hall | cuisine
+	_wall(true, 5.0, 5.0, 8.0, 0.0, h1, INT_T, [{c = 6.8, w = 1.0, y0 = 0.0, y1 = dy, idoor = true}], m_plaster)           # hall | cuisine
 	# Étage
 	var y2 := FLOOR2
 	var h2 := TOP - FLOOR2
-	_wall(false, 5.0, 0.0, D, y2, h2, INT_T, [{c = 3.6, w = 0.85, y0 = 0.0, y1 = dy}, {c = 7.0, w = 0.85, y0 = 0.0, y1 = dy}], m_plaster)
+	_wall(false, 5.0, 0.0, D, y2, h2, INT_T, [{c = 3.6, w = 0.85, y0 = 0.0, y1 = dy, idoor = true}, {c = 7.0, w = 0.85, y0 = 0.0, y1 = dy, idoor = true}], m_plaster)
 	_wall(true, 5.0, 0.0, 5.0, y2, h2, INT_T, [], m_plaster)
-	_wall(false, 8.0, 0.0, D, y2, h2, INT_T, [{c = 6.2, w = 0.9, y0 = 0.0, y1 = dy}, {c = 2.5, w = 0.85, y0 = 0.0, y1 = dy}], m_plaster)
-	_wall(true, 5.0, 8.0, W, y2, h2, INT_T, [{c = 9.5, w = 0.85, y0 = 0.0, y1 = dy}, {c = 13.5, w = 0.85, y0 = 0.0, y1 = dy}], m_plaster)
+	_wall(false, 8.0, 0.0, D, y2, h2, INT_T, [{c = 6.2, w = 0.9, y0 = 0.0, y1 = dy, idoor = true}, {c = 2.5, w = 0.85, y0 = 0.0, y1 = dy, idoor = true}], m_plaster)
+	_wall(true, 5.0, 8.0, W, y2, h2, INT_T, [{c = 9.5, w = 0.85, y0 = 0.0, y1 = dy, idoor = true}, {c = 13.5, w = 0.85, y0 = 0.0, y1 = dy, idoor = true}], m_plaster)
 	_wall(false, 11.0, 0.0, 5.0, y2, h2, INT_T, [], m_plaster)
 	# plinthes blanches
 	var bb := MatLib.flat(Color(0.96, 0.96, 0.95), 0.4)

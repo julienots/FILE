@@ -14,7 +14,7 @@ const ROAD_Z0 := 22.3
 const ROAD_Z1 := 30.3
 const LOT := 26.0
 ## Éléments interactifs jamais fusionnés.
-const KEEP := ["FrontDoor", "GarageDoor", "Fridge", "Wardrobe", "Television"]
+const KEEP := ["FrontDoor", "GarageDoor", "Fridge", "Wardrobe", "Television", "InteriorDoor"]
 
 func _ready() -> void:
 	_lots = Node3D.new()

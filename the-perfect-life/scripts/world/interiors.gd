@@ -362,7 +362,7 @@ func bedroom() -> void:
 	Geo.prop(h, "potted_plant_02", Vector3(15.35, y, 7.8), 0)
 	Geo.prop(h, "standing_picture_frame_01", Vector3(10.65, y + 0.62, 5.45), 15)
 	Geo.prop(h, "mid_century_lounge_chair", Vector3(14.6, y, 10.6), -135)
-	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 180)
+	Geo.prop(h, "hanging_picture_frame_01", Vector3(12.0, y + 1.75, 5.08), 0)
 	Geo.prop(h, "drawer_cabinet", Vector3(15.62, y, 9.2), -90)
 	Geo.prop(h, "ceramic_vase_03", Vector3(15.6, y + 0.82, 8.95), 0)
 	Geo.prop(h, "book_encyclopedia_set_01", Vector3(15.6, y + 0.82, 9.5), -90)
@@ -392,7 +392,10 @@ func _bed(head_pos: Vector3) -> void:
 		for c in 6:
 			Geo.box(root, Vector3(0.28, 0.4, 0.05), Vector3(-0.83 + c * 0.332, 0.78 + r * 0.42, 0.11), head, 0.05)
 	# cadre bois + pieds
-	Geo.box(root, Vector3(Wd + 0.06, 0.26, L), Vector3(0, 0.2, 0.1 + L * 0.5), wood, 0.015, true)
+	Geo.box(root, Vector3(Wd + 0.06, 0.3, L), Vector3(0, 0.2, 0.1 + L * 0.5), head, 0.03, true)
+	for sx in [-1, 1]:
+		for sz in [0.2, L - 0.05]:
+			Geo.box(root, Vector3(0.06, 0.06, 0.06), Vector3(sx * (Wd * 0.5 - 0.05), 0.03, sz), wood, 0.01)
 	# matelas (bords arrondis) + drap
 	Geo.box(root, Vector3(Wd - 0.04, 0.24, L - 0.06), Vector3(0, 0.45, 0.12 + L * 0.5), linen, 0.06)
 	# couette repliée
