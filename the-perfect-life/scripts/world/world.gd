@@ -77,6 +77,7 @@ func _environment() -> void:
 	env.fog_depth_end = 420.0
 	env.fog_density = 0.35
 	env.fog_sun_scatter = 0.15
+	env.fog_sky_affect = 0.0
 	env.volumetric_fog_density = 0.004
 	env.volumetric_fog_albedo = Color(0.9, 0.92, 0.95)
 	env.volumetric_fog_length = 48.0
@@ -98,7 +99,7 @@ func _environment() -> void:
 # ---------------------------------------------------------------- sol, rue
 
 func _ground() -> void:
-	var grass := MatLib.pbr("leafy_grass", 3.2, Color(0.82, 0.9, 0.72), 1.0, 1.0)
+	var grass := MatLib.pbr("leafy_grass", 2.6, Color(0.74, 0.86, 0.66), 1.0, 1.0)
 	# grande pelouse découpée autour de la piscine (x 3..12, z -12..-5)
 	var big := 600.0
 	var hole := Rect2(3.0, -12.0, 9.0, 7.0)
@@ -169,7 +170,7 @@ func _lot(t: Transform3D, siding: Color, roof: Color, door: Color, interior: boo
 		Geo.prop(root, shrubs[k % shrubs.size()], Vector3(8.8 + k * 1.3, 0.03, 12.8), k * 47.0, 0.0, 0.9 + (k % 3) * 0.15)
 	Geo.prop(root, "planter_box_01", Vector3(5.3, 0.18, 13.1), 0)
 	# arbre de façade
-	Geo.prop(root, "res://assets/drive/realistic_tree.glb", Vector3(12.0, 0.0, 17.5), randf() * 360.0, 0.0, 8.5)
+	Geo.prop(root, "island_tree_01", Vector3(15.2, 0.0, 18.2), randf() * 360.0, 0.0, 9.5)
 	# boîte aux lettres
 	var mb := Node3D.new(); root.add_child(mb); mb.position = Vector3(5.2, 0, 19.9)
 	Geo.box(mb, Vector3(0.09, 1.1, 0.09), Vector3(0, 0.55, 0), MatLib.flat(Color(0.95, 0.95, 0.93), 0.5), 0.01)
@@ -220,13 +221,12 @@ func _cars() -> void:
 	Geo.prop(self, "res://assets/drive/white_sports_car.glb", Vector3(-20.0, 0.0, 29.0), 0, 4.5)
 
 func _horizon_trees() -> void:
-	var names := ["island_tree_01", "jacaranda_tree", "realistic_tree"]
+	var names := ["island_tree_01", "jacaranda_tree", "tree_small_02"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	for k in 16:
 		var x := -80.0 + k * 10.5 + rng.randf_range(-2.0, 2.0)
 		for z in [-24.0 - rng.randf() * 6.0, 66.0 + rng.randf() * 6.0]:
 			var name: String = names[k % names.size()]
-			var path := "res://assets/drive/realistic_tree.glb" if name == "realistic_tree" else name
-			var t := Geo.prop(self, path, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
+						var t := Geo.prop(self, name, Vector3(x, 0, z), rng.randf() * 360.0, 0.0, rng.randf_range(8.0, 12.0))
 			Geo.far_settings(t, 260.0, false)

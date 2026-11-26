@@ -330,7 +330,7 @@ func _roof() -> void:
 	var eave_y := TOP + 0.15
 	for s in [-1.0, 1.0]:
 		var r := Geo.box(self, Vector3(W + over * 2, 0.12, slope_len), Vector3(W * 0.5, eave_y + rise * 0.5 - over * tan(pitch) * 0.5, D * 0.5 + s * half * 0.5), m_roof, 0.01, true)
-		r.rotation.x = -s * pitch
+		r.rotation.x = s * pitch
 		# bordure de rive / fascia
 		var f := Geo.box(self, Vector3(W + over * 2 + 0.04, 0.2, 0.04), Vector3(W * 0.5, eave_y - over * tan(pitch) - 0.08, D * 0.5 + s * (half + 0.01)), m_trim, 0.006)
 	# faîtage
